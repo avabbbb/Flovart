@@ -122,6 +122,8 @@ export function summarizeWorkflowValue(value: PortValue | undefined): string {
       ? `Video - ${value.width}x${value.height}`
       : `Video - ${value.mimeType}`;
   }
+  if (value.kind === 'empty') return 'No output yet';
+  if (value.kind !== 'json') return 'Unknown';
   if (Array.isArray(value.value)) return `JSON array - ${value.value.length} items`;
   if (value.value && typeof value.value === 'object') {
     return `JSON object - ${Object.keys(value.value as Record<string, unknown>).length} keys`;

@@ -34,7 +34,7 @@ type WorkspaceStore = UISlice;
 export const useWorkspaceStore = create<WorkspaceStore>()(
   persist(
     (...a) => ({
-      ...createUISlice(...a),
+      ...createUISlice(a[0]),
     }),
     {
       name: 'flovart-workspace',

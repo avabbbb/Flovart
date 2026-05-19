@@ -44,7 +44,6 @@ import { useGeneration } from './hooks/useGeneration';
 import { useToast } from './hooks/useToast';
 import ToastStack from './components/Toast';
 import { AppShell } from './components/AppShell';
-import { TopWorkspaceBar } from './components/TopWorkspaceBar';
 import { CanvasWorkspace } from './components/workspaces/CanvasWorkspace';
 import { WorkflowWorkspace } from './components/workspaces/WorkflowWorkspace';
 import type { WorkflowNode, WorkflowValue } from './components/nodeflow/types';
@@ -432,8 +431,6 @@ const App: React.FC = () => {
     const [inpaintPrompt, setInpaintPrompt] = useState('');
 
     // ── Zustand store: shell-level state ──
-    const activeView = useWorkspaceStore(s => s.activeView);
-    const setActiveView = useWorkspaceStore(s => s.setActiveView);
     const language = useWorkspaceStore(s => s.language);
     const setLanguage = useWorkspaceStore(s => s.setLanguage);
     const themeMode = useWorkspaceStore(s => s.themeMode);
@@ -2559,18 +2556,10 @@ const App: React.FC = () => {
     return (
         <AppShell
             themeBackground={themePalette.appBackground}
-            onDragOver={activeView === 'canvas' ? handleDragOver : undefined}
-            onDrop={activeView === 'canvas' ? handleDrop : undefined}
-            topBar={
-                <TopWorkspaceBar
-                    activeView={activeView}
-                    onChangeView={setActiveView}
-                    theme={resolvedTheme}
-                    onOpenSettings={() => setIsSettingsPanelOpen(true)}
-                    appVersionLabel={appVersionLabel}
-                />
-            }
-            leftSidebar={activeView === 'canvas' ? (
+            onDragOver={handleDragOver}
+            onDrop={handleDrop}
+            topBar={null}
+            leftSidebar={
                 <WorkspaceSidebar
                 isOpen={!isLayerMinimized}
                 onToggle={() => setIsLayerMinimized(prev => !prev)}
@@ -2617,8 +2606,8 @@ const App: React.FC = () => {
                     });
                 }}
             />
-            ) : null}
-            rightSidebar={activeView === 'canvas' ? (
+            }
+            rightSidebar={
                 <Suspense fallback={<div className="h-full w-full flex items-center justify-center opacity-40 text-sm">Loading…</div>}>
                 <RightPanel
                 theme={resolvedTheme}
@@ -2637,7 +2626,7 @@ const App: React.FC = () => {
                 onReversePrompt={handleReversePrompt}
             />
             </Suspense>
-            ) : null}
+            }
             overlays={<>
                 {isLoading && <Loader progressMessage={progressMessage} />}
                 <ToastStack toasts={toast.toasts} onDismiss={toast.dismiss} />
@@ -2794,7 +2783,7 @@ const App: React.FC = () => {
                 />
                 </Suspense>
             )}
-            {activeView === 'canvas' && (<>
+            
             <Toolbar
                 t={t}
                 theme={resolvedTheme}
@@ -3429,36 +3418,6 @@ const App: React.FC = () => {
                         <button className="underline-offset-2 hover:underline cursor-pointer bg-transparent border-none p-0 text-inherit text-[10px]" onClick={() => openLegalModal('privacy')}>隐私政策</button>
                     </div>
                 </div>
-            )}
-            </>)}
-            {activeView === 'workflow' && (
-                <WorkflowWorkspace workflowPanel={
-                    <Suspense fallback={<div className="w-full h-full flex items-center justify-center opacity-50 text-sm">Loading Workflow…</div>}>
-                    <NodeWorkflowPanel
-                        prompt={prompt}
-                        setPrompt={setPrompt}
-                        generationMode={generationMode}
-                        setGenerationMode={setGenerationMode}
-                        selectedImageModel={modelPreference.imageModel}
-                        selectedVideoModel={modelPreference.videoModel}
-                        imageModelOptions={dynamicModelOptions.image}
-                        videoModelOptions={dynamicModelOptions.video}
-                        onImageModelChange={(model) => setModelPreference(prev => ({ ...prev, imageModel: model }))}
-                        onVideoModelChange={(model) => setModelPreference(prev => ({ ...prev, videoModel: model }))}
-                        attachments={promptAttachments}
-                        canvasImages={elements
-                            .filter((el): el is Extract<typeof el, { type: 'image' }> => el.type === 'image')
-                            .map((el) => ({ id: el.id, name: el.name, href: el.href, mimeType: el.mimeType }))}
-                        onRemoveAttachment={handleRemovePromptAttachment}
-                        onUploadFiles={handleAddPromptAttachmentFiles}
-                        onDropCanvasImage={handleAddPromptAttachmentFromCanvas}
-                        userApiKeys={userApiKeys}
-                        language={language}
-                        onPlaceWorkflowValue={handlePlaceWorkflowValue}
-                        onSaveWorkflowValueToAssets={handleSaveWorkflowValueToAssets}
-                    />
-                    </Suspense>
-                } />
             )}
 
             {/* 法律文档弹窗 */}

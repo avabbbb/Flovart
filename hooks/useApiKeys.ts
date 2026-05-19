@@ -178,6 +178,7 @@ export function useApiKeys(isSettingsPanelOpen: boolean) {
             text: ensureModelOption(textSet.size > 0 ? Array.from(textSet) : [...FALLBACK_TEXT_OPTIONS], modelPreference.textModel),
             image: ensureModelOption(imageSet.size > 0 ? Array.from(imageSet) : [...FALLBACK_IMAGE_OPTIONS], modelPreference.imageModel),
             video: ensureModelOption(videoSet.size > 0 ? Array.from(videoSet) : [...FALLBACK_VIDEO_OPTIONS], modelPreference.videoModel),
+            agent: [] as string[],
         };
     }, [modelPreference.imageModel, modelPreference.textModel, modelPreference.videoModel, userApiKeys]);
 

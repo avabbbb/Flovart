@@ -214,7 +214,7 @@ const RichPromptEditor = forwardRef<RichPromptEditorHandle, RichPromptEditorProp
             },
             setText(text: string) {
                 if (!editor) return;
-                editor.commands.setContent(buildDocFromText(text), false);
+                editor.commands.setContent(buildDocFromText(text), false as unknown as Record<string, never>);
             },
             getJSON() {
                 return (editor?.getJSON() ?? {}) as Record<string, unknown>;

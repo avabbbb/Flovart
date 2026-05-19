@@ -147,7 +147,7 @@ export const CanvasMentionNode = Node.create({
     },
 
     addNodeView() {
-        return ReactNodeViewRenderer(MentionNodeView);
+        return ReactNodeViewRenderer(MentionNodeView as any);
     },
 });
 

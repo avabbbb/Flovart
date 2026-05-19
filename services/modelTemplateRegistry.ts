@@ -144,7 +144,7 @@ function buildTemplateDescription(provider: AIProvider, capability: ModelTemplat
 }
 
 function buildTemplateTags(provider: AIProvider, capability: ModelTemplateCapability, model: string): string[] {
-  const tags = [provider, capability];
+  const tags: string[] = [provider, capability];
   if (capability === 'image' && supportsReferenceImageEditing(model)) tags.push('reference-image');
   if (capability === 'image' && supportsMaskImageEditing(model)) tags.push('mask-edit');
   if (capability === 'video') tags.push('storyboard');

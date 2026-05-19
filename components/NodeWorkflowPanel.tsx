@@ -1964,7 +1964,7 @@ export const NodeWorkflowPanel: React.FC<NodeWorkflowPanelProps> = ({
       mediaName: file.name,
       mediaWidth: mediaMeta.width,
       mediaHeight: mediaMeta.height,
-      mediaDurationSec: isVideo ? mediaMeta.durationSec : undefined,
+      mediaDurationSec: isVideo ? (mediaMeta as { durationSec?: number }).durationSec : undefined,
       mediaPosterHref: undefined,
       mediaTrimInSec: undefined,
       mediaTrimOutSec: undefined,
@@ -2006,7 +2006,7 @@ export const NodeWorkflowPanel: React.FC<NodeWorkflowPanelProps> = ({
         mediaName: file.name,
         mediaWidth: mediaMeta.width,
         mediaHeight: mediaMeta.height,
-        mediaDurationSec: isVideo ? mediaMeta.durationSec : undefined,
+        mediaDurationSec: isVideo ? (mediaMeta as { durationSec?: number }).durationSec : undefined,
       });
     }
     setRunMessage(`Created ${mediaFiles.length} source node${mediaFiles.length > 1 ? 's' : ''} from dropped media.`);
@@ -2031,7 +2031,7 @@ export const NodeWorkflowPanel: React.FC<NodeWorkflowPanelProps> = ({
   const importWorkflowFromFile = async (file: File) => {
     const text = await file.text();
     const parsed = JSON.parse(text) as Partial<SavedWorkflow> | { workflow?: Partial<SavedWorkflow> };
-    const candidate = 'workflow' in parsed && parsed.workflow ? parsed.workflow : parsed;
+    const candidate: Partial<SavedWorkflow> = 'workflow' in parsed && parsed.workflow ? parsed.workflow : parsed as Partial<SavedWorkflow>;
     const sanitized = sanitizeSavedWorkflow({
       id: candidate.id || `imported_${Date.now()}`,
       name: candidate.name || file.name.replace(/\.json$/i, '') || 'Imported Workflow',
@@ -3533,7 +3533,7 @@ export const NodeWorkflowPanel: React.FC<NodeWorkflowPanelProps> = ({
                       <span className={`h-2 w-2 rounded-full ${RUN_STATUS_STYLES[event.status]}`} />
                       <span>{event.nodeId}</span>
                     </div>
-                    <span>{formatRunTimestamp(event.timestamp)}</span>
+                    <span>{formatPanelTimestamp(event.timestamp)}</span>
                   </div>
                   <div className="mt-1 text-xs text-white/75">{event.message}</div>
                 </div>
@@ -3598,7 +3598,7 @@ export const NodeWorkflowPanel: React.FC<NodeWorkflowPanelProps> = ({
               <div className="flex items-center justify-between gap-3 text-xs text-white/75">
                 <span>Status: {selectedNodeRuntime?.status || 'idle'}</span>
                 <span className="text-white/45">
-                  {selectedNodeRuntime ? formatRunTimestamp(selectedNodeRuntime.updatedAt) : '--:--:--'}
+                  {selectedNodeRuntime ?            formatPanelTimestamp(selectedNodeRuntime.updatedAt) : '--:--:--'}
                 </span>
               </div>
               <div className="mt-1 text-xs text-white/60">
@@ -3659,7 +3659,7 @@ export const NodeWorkflowPanel: React.FC<NodeWorkflowPanelProps> = ({
                       <span className={`h-2 w-2 rounded-full ${RUN_STATUS_STYLES[event.status]}`} />
                       <span>{event.status}</span>
                     </div>
-                    <span>{formatRunTimestamp(event.timestamp)}</span>
+                    <span>{formatPanelTimestamp(event.timestamp)}</span>
                   </div>
                   <div className="mt-1 text-xs text-white/75">{event.message}</div>
                 </div>

@@ -37,15 +37,6 @@ function getModelsForKey(key: UserApiKey): ModelItem[] {
   return all.map(id => ({ id, name: id }));
 }
 
-interface ConfigSelectorProps {
-  configs: APIConfig[];
-  activeConfigId: string | null;
-  activeModelId: string | null;
-  onConfigChange: (id: string) => void;
-  onModelChange: (modelId: string) => void;
-  isDark: boolean;
-}
-
 export const ConfigSelector: React.FC<ConfigSelectorProps> = ({
   configs,
   activeConfigId,
