@@ -1,22 +1,27 @@
 # Flovart - Tauri 全平台桌面应用构建
-# 
-# 触发条件：推送 v* 格式的 tag 时自动构建并发布 Release
-# 构建目标：Windows (x64) / macOS (x64 + ARM64) / Linux (x64)
-# 
+#
+# 触发条件：
+#   push 到 main / claude-code-integration → 构建并上传 artifacts（EXE / DMG / deb / AppImage）
+#   push v* tag → 构建 artifacts + 创建 GitHub Draft Release
+#
 # 必须在 GitHub Repo Settings → Secrets 中配置：
-#   TAURI_SIGNING_PRIVATE_KEY - 自动更新签名私钥（src-tauri/.tauri_private_key 文件内容）
-#   TAURI_SIGNING_PRIVATE_KEY_PASSWORD - 私钥密码（若生成时无密码则留空）
+#   TAURI_SIGNING_PRIVATE_KEY - 自动更新签名私钥
+#   TAURI_SIGNING_PRIVATE_KEY_PASSWORD - 私钥密码（无密码则留空）
 
 name: Build & Release Desktop App
 
 on:
   push:
+    branches:
+      - main
+      - claude-code-integration
     tags:
       - 'v*'
   workflow_dispatch:
 
 permissions:
   contents: write
+  actions: write
 
 jobs:
   build-tauri:
@@ -25,13 +30,17 @@ jobs:
       matrix:
         include:
           - platform: windows-latest
-            args: ''
+            target: x86_64-pc-windows-msvc
+            bundleExt: msi
           - platform: macos-latest
-            args: '--target aarch64-apple-darwin'
+            target: aarch64-apple-darwin
+            bundleExt: dmg
           - platform: macos-latest
-            args: '--target x86_64-apple-darwin'
+            target: x86_64-apple-darwin
+            bundleExt: dmg
           - platform: ubuntu-22.04
-            args: ''
+            target: x86_64-unknown-linux-gnu
+            bundleExt: deb
 
     runs-on: ${{ matrix.platform }}
 
@@ -39,20 +48,17 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Linux 构建需要系统级依赖
       - name: Install Linux dependencies
         if: matrix.platform == 'ubuntu-22.04'
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
-      # 安装 Rust 工具链
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+          targets: ${{ matrix.target }}
 
-      # 安装 Node.js 和前端依赖
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -62,8 +68,24 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
-      # 构建 Tauri 应用并生成安装包
-      - name: Build Tauri app
+      # ── Branch / workflow_dispatch: 仅构建 + 上传 artifacts ──
+      - name: Build Tauri (branch)
+        if: startsWith(github.ref, 'refs/heads/') || github.event_name == 'workflow_dispatch'
+        run: npx tauri build --target ${{ matrix.target }} --bundles ${{ matrix.bundleExt }}
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+
+      - name: Upload artifacts (branch)
+        if: startsWith(github.ref, 'refs/heads/') || github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: flovart-${{ matrix.platform }}-${{ matrix.target }}
+          path: src-tauri/target/${{ matrix.target }}/release/bundle/
+
+      # ── Tag: 构建 + 创建 Draft Release ──
+      - name: Build & Release (tag)
+        if: startsWith(github.ref, 'refs/tags/')
         uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -74,10 +96,10 @@ jobs:
           releaseName: 'Flovart v__VERSION__'
           releaseBody: |
             See the assets below to download and install this version.
-            
-            **Windows**: Download `.exe` (NSIS installer) or `.msi`
+
+            **Windows**: Download `.msi`
             **macOS**: Download `.dmg`
             **Linux**: Download `.deb` or `.AppImage`
           releaseDraft: true
           prerelease: false
-          args: ${{ matrix.args }}
+          args: --target ${{ matrix.target }}
