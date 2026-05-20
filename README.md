@@ -44,6 +44,18 @@ Flovart 是一个**开源的 AI 图片/视频设计工具**。你接入自己的
 
 **所有数据存在你本地，不经过任何中间服务器。**
 
+---
+
+## 关于这个名字
+
+Flovart，源自一个老哥记错了我项目的原名字，我觉得这个名字很好，于是保留了下来。这个 F 可以理解为 Fxxk，也可以理解为 Fake，怎么理解都可以。我很喜欢 Lovart 的交互设计，只是我想要有更自由的模型选择，并且我已经厌倦了节点式工作流，我只想要复刻 Lovart——简单快捷、好看的前端、舒服的交互和表达式动画、无限画板，用 `@` 来选用图层上的元素，最好支持 CLI 操作，可以用我的 CC、OC、Codex，whatever 来自由地操作画布上的每个节点。
+
+有这样想法的人很多，但是真正实践的人却不多。如果你也有相同的愿望，欢迎提交 PR。
+
+## 特别致谢
+
+**[Lovart](https://lovart.ai)** — Flovart 的交互设计灵感来源。感谢 Lovart 团队做出了如此优雅的 AI 创作工具。
+
 <p align="center">
   <a href="https://paker-kk.github.io/Flovart/" target="_blank">
     <img src="https://img.shields.io/badge/🌐_在线体验_Demo-点击打开-E8453C?style=for-the-badge" alt="Demo" />
@@ -195,6 +207,34 @@ npm run ext:build
 如果 Flovart 对你有帮助，给个 Star ⭐ 支持一下！
 
 [![Star History Chart](https://api.star-history.com/svg?repos=Paker-kk/Flovart&type=Date)](https://star-history.com/#Paker-kk/Flovart&Date)
+
+---
+
+## 免责声明
+
+### 非官方部署声明
+
+Flovart 官方发布渠道仅限于：
+
+- **GitHub 仓库**：[github.com/Paker-kk/Flovart-cc](https://github.com/Paker-kk/Flovart-cc)
+- **桌面版构建**：本仓库 Actions 签发的 EXE / DMG / deb / AppImage
+
+除上述地址外，任何第三方公开部署、镜像站点、托管服务、改版服务、整合包、网盘分发均为非官方行为，与作者无关。
+
+**请勿在非官方站点输入 API Key 或其他敏感信息。** 第三方部署可能收集、存储或篡改你的凭据，作者无法对此类行为负责。
+
+### AI 生成内容
+
+Flovart 是本地优先的 AI 创作工具，通过你自行配置的第三方 API Key 调用模型服务。你使用本工具生成的所有图片、视频、文本内容均由你控制的 API Key 和模型产出，**你需对生成内容的合规性、版权归属、使用合法性自行负责**。
+
+Flovart 不内置任何模型服务、不存储用户的 API Key、不对生成内容做任何知识产权声明。
+
+### 免责范围
+
+- 本软件按"现状"提供，不提供任何明示或暗示的担保，包括但不限于适销性、特定用途适用性或非侵权性担保
+- 因使用或无法使用本软件导致的任何直接、间接、附带、特殊或后果性损害，作者不承担责任
+- 第三方 API 提供商的定价、可用性、输出质量、内容审核、数据留存策略由各自提供商负责，与本项目无关
+- 修改版、非官方构建、第三方 fork 的行为不在本声明覆盖范围内
 
 ---
 
