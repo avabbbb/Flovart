@@ -7,6 +7,26 @@ type ImageInput = { href: string; mimeType: string };
 
 type ProviderModelMap = { text: string[]; image: string[]; video: string[] };
 
+type IgnitionReference = {
+    type: 'image' | 'video' | 'text' | 'shape';
+    href?: string;
+    mimeType?: string;
+    slotRole?: string;
+};
+
+export interface UnifiedIgnitionInput {
+    elementId: string;
+    prompt: string;
+    modelId: string;
+    apiKeyPayload?: UserApiKey;
+    references?: IgnitionReference[];
+    onProgress?: (progress: number, message: string) => void;
+}
+
+export type UnifiedIgnitionResult =
+    | { ok: true; elementId: string; mediaUrl: string; mimeType: string; capability: ElementMediaCapability; textResponse?: string | null }
+    | { ok: false; elementId: string; errorMessage: string; capability: ElementMediaCapability };
+
 export type ElementMediaCapability = 'image' | 'video';
 
 export interface ModelParamSchema {
@@ -397,6 +417,14 @@ export function getDynamicParamSchema(modelName: string): ModelParamSchema {
         hasCfgScale: !normalized.includes('flux'),
         hasAspectRatio: false,
     };
+}
+
+function getImageReferencesForIgnition(references: IgnitionReference[] = []): ImageInput[] {
+    return references
+        .filter((reference): reference is IgnitionReference & { type: 'image'; href: string; mimeType: string } => (
+            reference.type === 'image' && typeof reference.href === 'string' && reference.href.length > 0
+        ))
+        .map(reference => ({ href: reference.href, mimeType: reference.mimeType || 'image/png' }));
 }
 
 function parseTextResponseContent(json: any): string {
@@ -1830,6 +1858,62 @@ export async function generateVideoWithProvider(
         `当前暂不支持使用 ${PROVIDER_LABELS[provider] || provider} 进行视频生成。` +
         `请切换到 Google Veo、MiniMax video-01 或 Keling 视频模型。`
     );
+}
+
+export async function executeUnifiedIgnition(input: UnifiedIgnitionInput): Promise<UnifiedIgnitionResult> {
+    const capability = inferCapabilityFromModelName(input.modelId);
+    const prompt = input.prompt.trim();
+
+    if (!prompt) {
+        return { ok: false, elementId: input.elementId, capability, errorMessage: '请输入提示词后再点火。' };
+    }
+
+    try {
+        if (capability === 'video') {
+            const firstFrameReference = input.references?.find(reference => reference.type === 'image' && reference.slotRole === 'first_frame')
+                || input.references?.find(reference => reference.type === 'image');
+            const firstFrame = firstFrameReference?.href
+                ? { href: firstFrameReference.href, mimeType: firstFrameReference.mimeType || 'image/png' }
+                : undefined;
+            const result = await generateVideoWithProvider(prompt, input.modelId, input.apiKeyPayload, {
+                aspectRatio: getDynamicParamSchema(input.modelId).defaultAspectRatio || '16:9',
+                image: firstFrame,
+                onProgress: message => input.onProgress?.(35, message),
+            });
+            const mediaUrl = URL.createObjectURL(result.videoBlob);
+            return { ok: true, elementId: input.elementId, mediaUrl, mimeType: result.mimeType, capability };
+        }
+
+        const imageReferences = getImageReferencesForIgnition(input.references);
+        const result = imageReferences.length > 0
+            ? await editImageWithProvider(imageReferences, prompt, input.modelId, input.apiKeyPayload)
+            : await generateImageWithProvider(prompt, input.modelId, input.apiKeyPayload);
+
+        if (!result.newImageBase64 || !result.newImageMimeType) {
+            return {
+                ok: false,
+                elementId: input.elementId,
+                capability,
+                errorMessage: result.textResponse || '生成网关未返回可用图片。',
+            };
+        }
+
+        return {
+            ok: true,
+            elementId: input.elementId,
+            mediaUrl: `data:${result.newImageMimeType};base64,${result.newImageBase64}`,
+            mimeType: result.newImageMimeType,
+            capability,
+            textResponse: result.textResponse,
+        };
+    } catch (error) {
+        return {
+            ok: false,
+            elementId: input.elementId,
+            capability,
+            errorMessage: error instanceof Error ? error.message : '多模态点火失败。',
+        };
+    }
 }
 
 export interface ImageToolInput {

@@ -177,6 +177,58 @@ body {
     animation: compactDockLift var(--motion-slow) var(--ease-spring-soft);
 }
 
+.workflow-viewport-transition {
+    transition: transform 380ms cubic-bezier(0.16, 1, 0.3, 1);
+    will-change: transform;
+}
+
+.workflow-focus-chrome {
+    will-change: transform, opacity;
+    transition-timing-function: cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.inline-prompt-bar-shell {
+    border-color: #2a3140 !important;
+    background: rgba(18, 21, 27, 0.98) !important;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6), 0 0 1px rgba(255, 255, 255, 0.08) inset !important;
+    border-radius: 18px !important;
+}
+
+.inline-prompt-bar-surface .rounded-\[20px\] {
+    border-radius: 18px !important;
+}
+
+.inline-prompt-bar-surface .rounded-\[18px\] {
+    border-radius: 16px !important;
+}
+
+.inline-prompt-bar-surface .rich-prompt-editor {
+    max-height: 120px;
+}
+
+.inline-prompt-bar-surface .text-\[10px\] {
+    letter-spacing: -0.01em;
+}
+
+.inline-prompt-bar-surface .ProseMirror {
+    outline: none;
+    border: none;
+    background: transparent;
+    color: #e4e4e7;
+    font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 12px;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.inline-prompt-bar-surface .ProseMirror p.is-editor-empty:first-child::before {
+    content: attr(data-placeholder);
+    float: left;
+    height: 0;
+    color: #3f3f46;
+    pointer-events: none;
+}
+
 @keyframes compactDockFloat {
     from {
         opacity: 0;
@@ -206,7 +258,11 @@ body {
     .compact-right-panel,
     .compact-prompt-dock,
     .compact-prompt-dock__inner,
-    .compact-canvas-stage {
+    .compact-canvas-stage,
+    .workflow-viewport-transition,
+    .workflow-focus-chrome,
+    .inline-prompt-bar-shell,
+    .inline-prompt-bar-surface {
         animation: none !important;
         transition-duration: 0.01ms !important;
     }

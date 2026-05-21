@@ -67,6 +67,10 @@ interface PromptBarProps {
     // 批量生成
     batchCount?: number;
     onBatchCountChange?: (count: number) => void;
+    variant?: 'global' | 'inline';
+    className?: string;
+    shellClassName?: string;
+    hideApiStatus?: boolean;
 }
 
 type ExpandPanel = 'mode' | 'model' | 'more' | null;
@@ -178,6 +182,10 @@ export const PromptBar: React.FC<PromptBarProps> = ({
     onOpenSettings,
     batchCount = 1,
     onBatchCountChange,
+    variant = 'global',
+    className,
+    shellClassName,
+    hideApiStatus = false,
 }) => {
     const isDark = theme === 'dark';
     const rootRef = useRef<HTMLDivElement>(null);
@@ -276,9 +284,9 @@ export const PromptBar: React.FC<PromptBarProps> = ({
     }, [onAddAttachments]);
 
     return (
-        <div ref={rootRef} className="theme-aware w-full">
+        <div ref={rootRef} className={`theme-aware w-full ${className || ''}`.trim()}>
             <div
-                className={`relative overflow-visible rounded-[20px] border transition-all duration-200 ${shellClass} ${isDragActive ? (isDark ? 'scale-[1.01] border-[#4B5B78]' : 'scale-[1.01] border-[#B2CCFF]') : ''}`}
+                className={`relative overflow-visible rounded-[20px] border transition-all duration-200 ${shellClass} ${shellClassName || ''} ${isDragActive ? (isDark ? 'scale-[1.01] border-[#4B5B78]' : 'scale-[1.01] border-[#B2CCFF]') : ''}`.trim()}
                 onDragEnter={event => {
                     if (!Array.from(event.dataTransfer.items).some(item => isSupportedAttachment(item.type))) return;
                     event.preventDefault();
@@ -388,7 +396,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                     <div className="min-w-0 flex-1 overflow-visible">
                         <div className="flex flex-wrap items-center gap-2">
                             {/* API Key 状态指示器 — 与设置面板联动 */}
-                            {(() => {
+                            {!hideApiStatus && (() => {
                                 const defaultKey = userApiKeys.find(k => k.isDefault);
                                 const keyCount = userApiKeys.length;
                                 if (keyCount === 0) {
@@ -631,7 +639,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                     </div>
 
                     {/* Batch count toggle */}
-                    {generationMode === 'image' && onBatchCountChange && (
+                    {variant !== 'inline' && generationMode === 'image' && onBatchCountChange && (
                         <button
                             type="button"
                             onClick={() => {

@@ -39,6 +39,7 @@ export interface UseCanvasInteractionParams {
     commitAction: (updater: (prev: Element[]) => Element[]) => void;
     // Helpers
     getDescendants: (id: string, els: Element[]) => Element[];
+    onElementDoubleClick?: (element: Element) => void;
 }
 
 export function useCanvasInteraction(params: UseCanvasInteractionParams) {
@@ -53,6 +54,7 @@ export function useCanvasInteraction(params: UseCanvasInteractionParams) {
         contextMenu, setContextMenu,
         updateActiveBoard, setElements, commitAction,
         getDescendants,
+        onElementDoubleClick,
     } = params;
 
     // --- Interaction-only state ---
@@ -263,10 +265,16 @@ export function useCanvasInteraction(params: UseCanvasInteractionParams) {
             const selectableElementId = selectableElement?.id;
 
             if (selectableElementId) {
-                if (e.detail === 2 && elements.find(el => el.id === selectableElementId)?.type === 'text') {
-                     const textEl = elements.find(el => el.id === selectableElementId) as TextElement;
-                     setEditingElement({ id: textEl.id, text: textEl.text });
-                     return;
+                if (e.detail === 2) {
+                    const doubleClickedElement = elements.find(el => el.id === selectableElementId);
+                    if (doubleClickedElement?.type === 'text') {
+                         setEditingElement({ id: doubleClickedElement.id, text: doubleClickedElement.text });
+                         return;
+                    }
+                    if (doubleClickedElement) {
+                        onElementDoubleClick?.(doubleClickedElement);
+                        return;
+                    }
                 }
                 if (!e.shiftKey && !selectedElementIds.includes(selectableElementId)) {
                      setSelectedElementIds([selectableElementId]);

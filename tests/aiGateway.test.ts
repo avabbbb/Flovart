@@ -84,8 +84,11 @@ describe('inferProviderFromModel', () => {
 
     it('为内联控制台动态推断媒体能力和参数 Schema', () => {
         expect(inferCapabilityFromModelName('openrouter/google/veo-3.1-generate-preview')).toBe('video');
+        expect(inferCapabilityFromModelName('kling-v2-hq-movie')).toBe('video');
         expect(inferCapabilityFromModelName('runway-gen4-video')).toBe('video');
         expect(inferCapabilityFromModelName('luma-ray2')).toBe('video');
+        expect(inferCapabilityFromModelName('flux-schnell-dev')).toBe('image');
+        expect(inferCapabilityFromModelName('midjourney-v6-alpha')).toBe('image');
         expect(inferCapabilityFromModelName('flux-kontext-pro')).toBe('image');
         expect(getDynamicParamSchema('veo-3.1-generate-preview')).toEqual({
             hasSeed: true,
@@ -98,6 +101,7 @@ describe('inferProviderFromModel', () => {
             hasCfgScale: false,
             hasAspectRatio: false,
         });
+        expect(getDynamicParamSchema('kling-v2').hasAspectRatio).toBe(true);
         expect(getDynamicParamSchema('gpt-image-1')).toEqual({
             hasSeed: true,
             hasCfgScale: true,

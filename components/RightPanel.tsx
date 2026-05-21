@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { AssetCategory, AssetItem, AssetLibrary, GenerationHistoryItem } from '../types';
-import { AgentBridgePanel } from './AgentBridgePanel';
+import { AgentChatPanel } from './AgentChatPanel';
 import { rhGetWebAppNodes, rhRunWebApp, rhUploadWebAppDataUrl, type RHWebAppNodeInfo, type RHWebAppOutputItem, type RHWebAppTaskStatus } from '../services/runningHubService';
 
 type RightPanelTab = 'history' | 'inspiration' | 'agent' | 'runningHub';
@@ -20,6 +20,8 @@ interface RightPanelProps {
     onRename: (category: AssetCategory, id: string, name: string) => void;
     onWidthChange?: (width: number) => void;
     onReversePrompt?: (imageDataUrl: string, mimeType: string, width?: number, height?: number) => void;
+    onCreateImage?: (prompt: string, name?: string) => Promise<void>;
+    onCreateVideo?: (prompt: string, sourceImageIds?: string[]) => Promise<void>;
 }
 
 const CATEGORY_LABELS: Record<AssetCategory, string> = {
@@ -309,6 +311,8 @@ export const RightPanel: React.FC<RightPanelProps> = ({
     onRename,
     onWidthChange,
     onReversePrompt,
+    onCreateImage,
+    onCreateVideo,
 }) => {
     const isDark = theme === 'dark';
     const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
@@ -481,7 +485,7 @@ export const RightPanel: React.FC<RightPanelProps> = ({
                 <div className={`flex items-center justify-between border-b ${isDark ? 'border-[#2A3140]' : 'border-neutral-200/60'} ${compactMode ? 'px-3 py-2' : 'px-4 py-2.5'}`}>
                     <div className={`flex items-center gap-3 ${compactMode ? 'text-[12px]' : ''}`}>
                         {([
-                            { key: 'agent' as RightPanelTab, label: 'Agent Bridge', icon: null },
+                            { key: 'agent' as RightPanelTab, label: 'Agent Studio', icon: null },
                             { key: 'history' as RightPanelTab, label: '历史', icon: null },
                             { key: 'inspiration' as RightPanelTab, label: '素材库', icon: null },
                             { key: 'runningHub' as RightPanelTab, label: 'RH', icon: '🚀' },
@@ -669,9 +673,12 @@ export const RightPanel: React.FC<RightPanelProps> = ({
                     )}
 
                     {activeTab === 'agent' && (
-                        <AgentBridgePanel
+                        <AgentChatPanel
                             theme={theme}
                             compactMode={compactMode}
+                            generationHistory={generationHistory}
+                            onCreateImage={onCreateImage}
+                            onCreateVideo={onCreateVideo}
                         />
                     )}
 

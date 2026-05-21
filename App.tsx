@@ -26,7 +26,7 @@ const ABCompareOverlay = React.lazy(() => import('./components/ABCompareOverlay'
 const NodeWorkflowPanel = React.lazy(() => import('./components/NodeWorkflowPanel').then(m => ({ default: m.NodeWorkflowPanel })));
 import { loadAssetLibrary, addAsset, removeAsset, renameAsset, loadAssetLibraryAsync, saveAssetLibraryAsync } from './utils/assetStorage';
 import { loadGenerationHistory, addGenerationHistoryItem } from './utils/generationHistory';
-import { inferProviderFromModel, reversePromptStreamWithProvider, DEFAULT_PROVIDER_MODELS, generateImageWithProvider, generateVideoWithProvider } from './services/aiGateway';
+import { inferProviderFromModel, reversePromptStreamWithProvider, DEFAULT_PROVIDER_MODELS, generateImageWithProvider, generateVideoWithProvider, inferCapabilityFromModelName } from './services/aiGateway';
 import { fileToDataUrl, validateAndResizeImage } from './utils/fileUtils';
 import { translations } from './translations';
 // keyVault imports moved to hooks/useApiKeys.ts
@@ -470,6 +470,7 @@ const App: React.FC = () => {
     const [maskBrushSize, setMaskBrushSize] = useState(30);
     const [maskBrushMode, setMaskBrushMode] = useState<'erase' | 'reveal'>('erase'); // erase = paint black (hide), reveal = paint white (show)
     const maskCanvasRef = useRef<HTMLCanvasElement | null>(null);
+    const viewportAnimationRef = useRef<number | null>(null);
 
     // ── A/B 对比状态 ──────
     const [abCompare, setAbCompare] = useState<{
@@ -661,21 +662,63 @@ const App: React.FC = () => {
         }), false);
     }, [setElements]);
 
+    const updateElementMedia = useCallback((id: string, media: { href: string; mimeType: string }) => {
+        setElements(prev => prev.map(element => {
+            if (element.id !== id || (element.type !== 'image' && element.type !== 'video')) return element;
+            return {
+                ...element,
+                href: media.href,
+                mimeType: media.mimeType,
+                sourceKind: element.type === 'video' ? 'generation' : undefined,
+            } as Element;
+        }));
+    }, [setElements]);
+
     const animateViewportToElement = useCallback((targetX: number, targetY: number, targetZoom: number) => {
         const svgBounds = svgRef.current?.getBoundingClientRect();
         const viewportWidth = svgBounds?.width || window.innerWidth;
         const viewportHeight = svgBounds?.height || window.innerHeight;
+        const startPan = activeBoard.panOffset;
+        const startZoom = activeBoard.zoom;
         const nextPanOffset = {
             x: viewportWidth / 2 - targetX * targetZoom,
             y: viewportHeight / 2 - targetY * targetZoom,
         };
 
-        updateActiveBoard(board => ({
-            ...board,
-            zoom: targetZoom,
-            panOffset: nextPanOffset,
-        }));
-    }, [activeBoardId]);
+        if (viewportAnimationRef.current !== null) {
+            window.cancelAnimationFrame(viewportAnimationRef.current);
+        }
+
+        const durationMs = 420;
+        const startedAt = performance.now();
+        const easeOutExpo = (value: number) => value === 1 ? 1 : 1 - Math.pow(2, -10 * value);
+
+        const step = (now: number) => {
+            const t = Math.min(1, (now - startedAt) / durationMs);
+            const eased = easeOutExpo(t);
+            updateActiveBoard(board => ({
+                ...board,
+                zoom: startZoom + (targetZoom - startZoom) * eased,
+                panOffset: {
+                    x: startPan.x + (nextPanOffset.x - startPan.x) * eased,
+                    y: startPan.y + (nextPanOffset.y - startPan.y) * eased,
+                },
+            }));
+            if (t < 1) {
+                viewportAnimationRef.current = window.requestAnimationFrame(step);
+            } else {
+                viewportAnimationRef.current = null;
+            }
+        };
+
+        viewportAnimationRef.current = window.requestAnimationFrame(step);
+    }, [activeBoard.panOffset, activeBoard.zoom, activeBoardId]);
+
+    const handleElementDoubleClickFocus = useCallback((element: Element) => {
+        if (element.type !== 'image' && element.type !== 'video' && element.type !== 'shape' && element.type !== 'text' && element.type !== 'group') return;
+        const bounds = getElementBounds(element, elementsRef.current);
+        animateViewportToElement(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2, 1);
+    }, [animateViewportToElement]);
 
     const commitAction = useCallback((updater: (prev: Element[]) => Element[]) => {
         updateActiveBoard(board => {
@@ -740,6 +783,7 @@ const App: React.FC = () => {
         contextMenu, setContextMenu,
         updateActiveBoard, setElements, commitAction,
         getDescendants,
+        onElementDoubleClick: handleElementDoubleClickFocus,
     });
 
     // ── Extracted: generation (AI image/video/batch) ──
@@ -760,23 +804,11 @@ const App: React.FC = () => {
         commitAction, getPreferredApiKey,
     });
 
-    const handleInlinePromptGenerate = useCallback((elementId: string, inlinePrompt: string) => {
-        const target = elementsRef.current.find(element => element.id === elementId);
-        if (!target || (target.type !== 'image' && target.type !== 'video')) return;
-
-        const inlineMentionedIds = target.generationState?.promptPayload.resolvedReferences.map(reference => reference.targetElementId) || [];
-        const inlineSelectedIds = target.type === 'image' ? [elementId] : [];
-
-        setSelectedElementIds([elementId]);
-        setGenerationMode(target.type === 'video' ? 'video' : 'image');
-        handleGenerate(
-            inlinePrompt,
-            'prompt',
-            target.type === 'video' ? 'video' : 'image',
-            inlineSelectedIds,
-            inlineMentionedIds,
-        );
-    }, [handleGenerate, setSelectedElementIds, setGenerationMode]);
+    const getInlineApiKeyForElement = useCallback((element: CanvasElement) => {
+        const model = element.generationState?.modelId || (element.type === 'video' ? modelPreference.videoModel : modelPreference.imageModel);
+        const capability = inferCapabilityFromModelName(model);
+        return getPreferredApiKey(capability, inferProviderFromModel(model));
+    }, [getPreferredApiKey, modelPreference.imageModel, modelPreference.videoModel]);
 
     const resolveWorkflowImageSize = useCallback(async (value: Extract<WorkflowValue, { kind: 'image' }>) => (
         new Promise<{ width: number; height: number }>((resolve) => {
@@ -2676,6 +2708,14 @@ const App: React.FC = () => {
                 onRename={(cat, id, name) => setAssetLibrary(prev => renameAsset(prev, cat, id, name))}
                 onWidthChange={setRightPanelWidth}
                 onReversePrompt={handleReversePrompt}
+                onCreateImage={async (prompt, name) => {
+                    const result = await window.__flovartAPI?.generateImage?.({ prompt, name });
+                    if (!result?.ok) throw new Error(result?.error?.message || 'Agent image generation failed');
+                }}
+                onCreateVideo={async (prompt, sourceImageIds) => {
+                    const result = await window.__flovartAPI?.generateVideo?.({ prompt, sourceImageIds });
+                    if (!result?.ok) throw new Error(result?.error?.message || 'Agent video generation failed');
+                }}
             />
             </Suspense>
             }
@@ -2863,6 +2903,7 @@ const App: React.FC = () => {
                 canUndo={historyIndex > 0}
                 canRedo={historyIndex < history.length - 1}
             />
+            <div className={`workflow-focus-chrome transition-all duration-300 ${isInlineMediaPromptActive ? 'translate-y-8 opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'}`}>
             {addAssetModal?.open && (
                 <Suspense fallback={<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm"><div className="rounded-xl bg-neutral-800 px-6 py-4 text-sm text-white/60">Loading…</div></div>}>
                 <AssetAddModal
@@ -2886,6 +2927,7 @@ const App: React.FC = () => {
                 />
                 </Suspense>
             )}
+            </div>
             <div 
                 className="compact-canvas-stage flex-grow relative overflow-hidden"
                 style={{
@@ -2925,7 +2967,7 @@ const App: React.FC = () => {
                             return null;
                         })}
                     </defs>
-                    <g transform={`translate(${panOffset.x}, ${panOffset.y}) scale(${zoom})`}>
+                    <g className="workflow-viewport-transition" transform={`translate(${panOffset.x}, ${panOffset.y}) scale(${zoom})`}>
                         <rect x={-panOffset.x/zoom} y={-panOffset.y/zoom} width={`calc(100% / ${zoom})`} height={`calc(100% / ${zoom})`} fill="url(#grid)" />
                         
                         {elements.map(el => {
@@ -3215,8 +3257,25 @@ const App: React.FC = () => {
                                 status={selectedInlinePromptElement.generationState?.status || 'idle'}
                                 progress={selectedInlinePromptElement.generationState?.progress}
                                 isLoading={isLoading}
+                                apiKeyPayload={getInlineApiKeyForElement(selectedInlinePromptElement)}
+                                imageModelOptions={dynamicModelOptions.image}
+                                videoModelOptions={dynamicModelOptions.video}
+                                videoAspectRatio={videoAspectRatio}
+                                setVideoAspectRatio={setVideoAspectRatio}
+                                isAutoEnhanceEnabled={isAutoEnhanceEnabled}
+                                onAutoEnhanceToggle={() => setIsAutoEnhanceEnabled(prev => !prev)}
+                                onEnhancePrompt={handleEnhancePrompt}
+                                isEnhancingPrompt={isEnhancingPrompt}
+                                t={t}
+                                onModelChange={(nextModel) => {
+                                    if (selectedInlinePromptElement.type === 'video') {
+                                        setModelPreference(prev => ({ ...prev, videoModel: nextModel }));
+                                    } else {
+                                        setModelPreference(prev => ({ ...prev, imageModel: nextModel }));
+                                    }
+                                }}
                                 onPromptChange={updateElementGenerationState}
-                                onGenerate={handleInlinePromptGenerate}
+                                onMediaGenerated={updateElementMedia}
                                 animateViewport={animateViewportToElement}
                             />
                         )}
