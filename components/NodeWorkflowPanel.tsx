@@ -2376,6 +2376,24 @@ export const NodeWorkflowPanel: React.FC<NodeWorkflowPanelProps> = ({
     };
   }, [isExecuting, store]);
 
+  // Register workflow API on window.__flovartAPI for external CLI/MCP CDP access
+  useEffect(() => {
+    const api = (window as any).__flovartAPI;
+    if (!api) return;
+    api.workflow = {
+      inspect: () => ({ ok: true, nodes: store.nodes, edges: store.edges, groups: store.groups, viewport: store.viewport, selectedNodeIds: store.selectedNodeIds }),
+      load: (input: any) => {
+        const wf = (input && typeof input === 'object' && !Array.isArray(input)) ? (input.workflow || input) : {};
+        if (!Array.isArray(wf.nodes)) return { ok: false, error: { code: 'BAD_REQUEST', message: 'workflow.nodes is required' } };
+        store.loadTemplate({ nodes: wf.nodes, edges: wf.edges || [], groups: wf.groups || [], viewport: wf.viewport });
+        return { ok: true, nodeCount: wf.nodes.length };
+      },
+      updateNode: (nodeId: string, config: any) => { store.updateNodeConfig(nodeId, config || {}, true); return { ok: true, nodeId }; },
+      run: (input: any) => { runGraph(input?.scope || 'workflow', input?.nodeId); return { ok: true, accepted: true, scope: input?.scope || 'workflow' }; },
+    };
+    return () => { try { delete (window as any).__flovartAPI?.workflow; } catch { /* ignore */ } };
+  }, []);
+
   const minimap = useMemo(() => {
     const allXs: number[] = [];
     const allYs: number[] = [];

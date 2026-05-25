@@ -1,5 +1,5 @@
 /**
- * generationHistory 单元测试 — 测试生成历史的增删、去重、截断和 localStorage 持久化
+ * generationHistory 单元测试 — 测试生成历史的增删、去重和截断
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { addGenerationHistoryItem } from '../utils/generationHistory';
@@ -56,8 +56,4 @@ describe('generationHistory', () => {
         expect(result[0].id).toBe('new');
     });
 
-    it('自动保存到 localStorage', () => {
-        addGenerationHistoryItem([], makeItem('test'));
-        expect(localStorageMock.setItem).toHaveBeenCalled();
-    });
 });

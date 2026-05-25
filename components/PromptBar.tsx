@@ -14,12 +14,14 @@ import type { MentionItem } from './MentionList';
 import { extractMentions } from './CanvasMentionExtension';
 import { inferProviderFromModel, PROVIDER_LABELS, getModelCapabilityTags, getSupportedRatios } from '../services/aiGateway';
 import { SOCIAL_PRESETS } from '../utils/socialPresets';
+import { readColdMedia } from '../utils/mediaIndexedDB';
 
 interface PromptBarProps {
     t: (key: string, ...args: any[]) => string;
     theme: 'light' | 'dark';
     compactMode?: boolean;
     prompt: string;
+    promptDocument?: Record<string, unknown>;
     setPrompt: (prompt: string) => void;
     onGenerate: () => void;
     isLoading: boolean;
@@ -138,6 +140,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
     theme,
     compactMode = false,
     prompt,
+    promptDocument,
     setPrompt,
     onGenerate,
     isLoading,
@@ -195,6 +198,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
 
     const [expandedPanel, setExpandedPanel] = useState<ExpandPanel>(null);
     const [isDragActive, setIsDragActive] = useState(false);
+    const [resolvedAttachmentHrefs, setResolvedAttachmentHrefs] = useState<Record<string, string>>({});
 
     const triggerClass = `inline-flex ${compactMode ? 'h-7 gap-1 px-2.5 text-[11px]' : 'h-8 gap-1.5 px-3 text-xs'} items-center rounded-full border font-medium transition ${
         isDark ? 'border-[#2A3140] bg-[#1B2029] text-[#D0D5DD] hover:bg-[#252C39]' : 'border-[#E5E7EB] bg-[#F5F7FA] text-[#344054] hover:border-[#D0D5DD] hover:bg-white'
@@ -246,11 +250,26 @@ export const PromptBar: React.FC<PromptBarProps> = ({
 
     /** 外部 prompt 被清空时（如切换画板、生成完成后），同步清空富文本编辑器 */
     useEffect(() => {
-        if (!prompt && richEditorRef.current) {
-            const editorText = richEditorRef.current.getText();
-            if (editorText) richEditorRef.current.clear();
+        if (!richEditorRef.current) return;
+
+        const editor = richEditorRef.current;
+        if (promptDocument) {
+            const currentDocument = editor.getJSON();
+            if (JSON.stringify(currentDocument) !== JSON.stringify(promptDocument)) {
+                editor.setDocument(promptDocument);
+            }
+            return;
         }
-    }, [prompt]);
+
+        const editorText = editor.getText();
+        if (!prompt && editorText) {
+            editor.clear();
+            return;
+        }
+        if (prompt && editorText !== prompt) {
+            editor.setText(prompt);
+        }
+    }, [prompt, promptDocument]);
 
     useEffect(() => {
         const handleOutsideClick = (event: MouseEvent) => {
@@ -262,6 +281,20 @@ export const PromptBar: React.FC<PromptBarProps> = ({
         document.addEventListener('mousedown', handleOutsideClick);
         return () => document.removeEventListener('mousedown', handleOutsideClick);
     }, []);
+
+    useEffect(() => {
+        let isMounted = true;
+        const resolvePreviews = async () => {
+            const entries = await Promise.all(attachments.map(async attachment => {
+                if (!attachment.href.startsWith('cold-media:')) return [attachment.id, attachment.href] as const;
+                const hydrated = await readColdMedia(attachment.href.slice('cold-media:'.length));
+                return [attachment.id, hydrated || attachment.href] as const;
+            }));
+            if (isMounted) setResolvedAttachmentHrefs(Object.fromEntries(entries));
+        };
+        void resolvePreviews();
+        return () => { isMounted = false; };
+    }, [attachments]);
 
     const handleSaveEffect = useCallback(() => {
         if (!prompt.trim()) return;
@@ -353,6 +386,8 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                         placeholder={placeholder}
                         onTextChange={handleEditorChange}
                         onSubmit={handleEditorSubmit}
+                        initialText={prompt}
+                        initialDocument={promptDocument}
                     />
 
                     {attachments.length > 0 && (
@@ -365,9 +400,9 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                     >
                                         <div className="h-8 w-8 overflow-hidden rounded-lg border border-[var(--border-color)] bg-white">
                                             {attachment.mimeType.startsWith('video/') ? (
-                                                <video src={attachment.href} className="h-full w-full object-cover" muted playsInline />
+                                                <video src={resolvedAttachmentHrefs[attachment.id] || attachment.href} className="h-full w-full object-cover" muted playsInline />
                                             ) : (
-                                                <img src={attachment.href} alt={attachment.name} className="h-full w-full object-cover" />
+                                                <img src={resolvedAttachmentHrefs[attachment.id] || attachment.href} alt={attachment.name} className="h-full w-full object-cover" />
                                             )}
                                         </div>
                                         <div className="min-w-0">

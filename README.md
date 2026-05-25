@@ -67,7 +67,31 @@ npm run dev
 
 > 推荐 [Google AI Studio](https://aistudio.google.com/apikey) 免费获取 Gemini 凭据。
 
-### 方式二：第三方服务适配（持续进行中）
+### 方式二：Agent / MCP / CLI 控制画布
+
+Flovart 提供本地 agent-native 控制面，供 OpenCode、Claude Code、Codex、Cursor、Windsurf、Roo 等 MCP Host 或 CLI 脚本操作当前画布。
+
+```bash
+npm run dev
+chrome --remote-debugging-port=9222
+npm run flovart:cli -- status --json
+npm run flovart:cli -- init --host opencode
+npm run flovart:mcp
+```
+
+Agent 侧能力包括：
+
+- `flovart.status` / `canvas.inspect`：检查浏览器运行时、画布、媒体元素和任务状态
+- `flovart.generate_image` / `flovart.generate_video`：通过浏览器中已配置的 Provider 生成并放入画布
+- `flovart.search_inspiration` / `flovart.enhance_prompt`：本地灵感模板与提示词增强，不调用外部 LLM
+- `flovart.doctor` / `flovart.init_host`：检查本地 CLI/MCP、host 配置文件和 CDP 预期，并写入正确 MCP 配置
+- `flovart.plan_batch`：从一个 brief 生成多方向批量提示词计划，再交给 `flovart.generate_images_batch`
+- `flovart.manage_preferences` / `flovart.list_models`：本地偏好和 agent-facing 模型发现，不保存 API Key
+- `flovart.command_execute`：执行所有原子命令，适合 OpenCode/Codex 做确定性自动化
+
+API Key 只在 Flovart 浏览器 UI 中录入。CLI/MCP 不读取、不输出、不保存密钥。若未连接到带 `--remote-debugging-port=9222` 的浏览器，命令会落到 `shadow-runtime`，仅用于离线验证和任务暂存。
+
+### 方式三：第三方服务适配（持续进行中）
 
 Flovart 正在持续推进 **OpenAI-compatible** 第三方端点（如中转站、企业内网网关）适配。你可以在设置中选择 **自定义 Provider**，按以下方式接入：
 

@@ -22,6 +22,14 @@ interface RightPanelProps {
     onReversePrompt?: (imageDataUrl: string, mimeType: string, width?: number, height?: number) => void;
     onCreateImage?: (prompt: string, name?: string) => Promise<void>;
     onCreateVideo?: (prompt: string, sourceImageIds?: string[]) => Promise<void>;
+    runtimeStage?: string;
+    runtimeJobs?: Array<{
+        jobId: string;
+        command: string;
+        status: 'accepted' | 'running' | 'succeeded' | 'failed' | 'canceled';
+        progress: { pct: number; stage: string };
+        updatedAt: number;
+    }>;
 }
 
 const CATEGORY_LABELS: Record<AssetCategory, string> = {
@@ -313,6 +321,8 @@ export const RightPanel: React.FC<RightPanelProps> = ({
     onReversePrompt,
     onCreateImage,
     onCreateVideo,
+    runtimeStage,
+    runtimeJobs = [],
 }) => {
     const isDark = theme === 'dark';
     const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
@@ -673,13 +683,17 @@ export const RightPanel: React.FC<RightPanelProps> = ({
                     )}
 
                     {activeTab === 'agent' && (
-                        <AgentChatPanel
-                            theme={theme}
-                            compactMode={compactMode}
-                            generationHistory={generationHistory}
-                            onCreateImage={onCreateImage}
-                            onCreateVideo={onCreateVideo}
-                        />
+                        <div className="h-full min-h-0 px-0 py-0">
+                            <AgentChatPanel
+                                theme={theme}
+                                compactMode={compactMode}
+                                generationHistory={generationHistory}
+                                onCreateImage={onCreateImage}
+                                onCreateVideo={onCreateVideo}
+                                runtimeStage={runtimeStage}
+                                runtimeJobs={runtimeJobs}
+                            />
+                        </div>
                     )}
 
                     {activeTab === 'runningHub' && (

@@ -46,6 +46,7 @@ export interface UseGenerationParams {
     inpaintPrompt: string;
     modelPreference: ModelPreference;
     userApiKeys: UserApiKey[];
+    resolveMediaHref?: (href: string) => Promise<string>;
 
     // refs from useCanvasInteraction
     svgRef: React.RefObject<SVGSVGElement | null>;
@@ -73,7 +74,7 @@ export function useGeneration(params: UseGenerationParams) {
         elements, selectedElementIds, prompt, generationMode, videoAspectRatio,
         isAutoEnhanceEnabled, mentionedElementIds, chatAttachments, promptAttachments,
         activeCharacterLock, batchCount, inpaintState, inpaintPrompt,
-        modelPreference, userApiKeys,
+        modelPreference, userApiKeys, resolveMediaHref,
         svgRef, getCanvasPoint,
         setSelectedElementIds, setIsLoading, setError, setProgressMessage,
         setIsSettingsPanelOpen, setGenerationHistory, setInpaintState, setInpaintPrompt,
@@ -650,7 +651,10 @@ export function useGeneration(params: UseGenerationParams) {
             ? [{ href: activeCharacterLock.referenceImage, mimeType: getMimeFromDataUrl(activeCharacterLock.referenceImage) }]
             : [];
         const activeAttachments = source === 'right' ? chatAttachments : promptAttachments;
-        const attachmentReferenceImages = activeAttachments.map(item => ({ href: item.href, mimeType: item.mimeType }));
+        const attachmentReferenceImages = await Promise.all(activeAttachments.map(async item => ({
+            href: resolveMediaHref ? await resolveMediaHref(item.href) : item.href,
+            mimeType: item.mimeType,
+        })));
         const resolvedImageModel = imageResolved?.model || modelPreference.imageModel;
         const resolvedVideoModel = videoResolved?.model || modelPreference.videoModel;
         const imageProvider = imageResolved?.provider || inferProviderFromModel(modelPreference.imageModel);
@@ -759,7 +763,7 @@ export function useGeneration(params: UseGenerationParams) {
             try {
                 const selectedElements = elements.filter(el => activeSelectedElementIds.includes(el.id));
                 const imageElement = selectedElements.find(el => el.type === 'image') as ImageElement | undefined;
-                const attachmentImage = activeAttachments[0];
+                const attachmentImage = attachmentReferenceImages[0];
 
                 const mentionedImages = activeMentionedElementIds
                     .map(id => elements.find(el => el.id === id))

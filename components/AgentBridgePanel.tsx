@@ -8,16 +8,34 @@ interface AgentBridgePanelProps {
 
 const getRuntimeApi = () => (window as any).__flovartAPI;
 
+const setupCommands = [
+    'npm run flovart:cli -- doctor --json',
+    'npm run flovart:cli -- init --host opencode',
+    'npm run flovart:cli -- batch.plan --prompt "product launch" --count 4 --json',
+];
+
+const capabilityCards = [
+    { title: 'Runtime', body: 'Inspect canvas, media, provider readiness, and active jobs.', command: 'flovart.status' },
+    { title: 'Setup', body: 'Write host-specific MCP config for OpenCode, Claude, Cursor, Roo, Windsurf, or VS Code.', command: 'flovart.init_host' },
+    { title: 'Creative Ops', body: 'Search inspiration, enhance prompts, and plan multi-shot batches locally.', command: 'flovart.plan_batch' },
+    { title: 'Canvas', body: 'Create, update, select, generate, and watch image/video elements.', command: 'flovart.command_execute' },
+];
+
 export const AgentBridgePanel: React.FC<AgentBridgePanelProps> = ({ theme, compactMode }) => {
     const isDark = theme === 'dark';
     const [runtimeReady, setRuntimeReady] = useState(() => !!getRuntimeApi());
     const [status, setStatus] = useState<any>(null);
-    const [copied, setCopied] = useState(false);
+    const [copied, setCopied] = useState<string | null>(null);
 
-    const borderClass = isDark ? 'border-[#2A3140]' : 'border-neutral-200';
-    const strongText = isDark ? 'text-[#F3F4F6]' : 'text-neutral-900';
-    const mutedText = isDark ? 'text-[#98A2B3]' : 'text-neutral-500';
-    const panelClass = `flex h-full min-h-0 flex-col overflow-y-auto ${compactMode ? 'gap-3 p-3' : 'gap-4 p-4'}`;
+    const shell = isDark
+        ? 'border-white/8 bg-[radial-gradient(circle_at_18%_0%,rgba(16,185,129,0.12),transparent_30%),linear-gradient(180deg,#10141b_0%,#0a0d12_100%)] text-white'
+        : 'border-neutral-200 bg-[linear-gradient(180deg,#fbfaf7_0%,#f5f1e8_52%,#ffffff_100%)] text-neutral-950';
+    const card = isDark
+        ? 'border-white/10 bg-white/[0.045] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]'
+        : 'border-neutral-200 bg-white/78 shadow-sm';
+    const muted = isDark ? 'text-white/42' : 'text-neutral-500';
+    const strong = isDark ? 'text-white' : 'text-neutral-950';
+    const panelClass = `flex h-full min-h-0 flex-col overflow-y-auto ${compactMode ? 'gap-3 p-3' : 'gap-4 p-4'} ${shell}`;
 
     useEffect(() => {
         const refresh = () => {
@@ -40,89 +58,117 @@ export const AgentBridgePanel: React.FC<AgentBridgePanelProps> = ({ theme, compa
 
     const provider = status?.provider;
     const statusPill = useMemo(() => runtimeReady
-        ? 'bg-emerald-500/15 text-emerald-400'
-        : 'bg-yellow-500/15 text-yellow-500', [runtimeReady]);
+        ? isDark ? 'bg-emerald-300/12 text-emerald-100 ring-emerald-300/20' : 'bg-emerald-50 text-emerald-700 ring-emerald-200'
+        : isDark ? 'bg-amber-300/12 text-amber-100 ring-amber-300/20' : 'bg-amber-50 text-amber-700 ring-amber-200', [runtimeReady, isDark]);
 
-    const copySetup = async () => {
-        await navigator.clipboard.writeText(SETUP_TEXT);
-        setCopied(true);
-        window.setTimeout(() => setCopied(false), 1200);
+    const copyText = async (id: string, text: string) => {
+        await navigator.clipboard.writeText(text);
+        setCopied(id);
+        window.setTimeout(() => setCopied(null), 1200);
     };
 
     return (
         <div className={panelClass}>
-            <div className={`rounded-2xl border ${borderClass} ${isDark ? 'bg-[#161A22]' : 'bg-neutral-50'} p-3`}>
-                <div className="flex items-start justify-between gap-3">
-                    <div>
-                        <div className={`text-[11px] font-semibold uppercase tracking-[0.18em] ${mutedText}`}>Agent Bridge</div>
-                        <h3 className={`mt-1 text-sm font-bold ${strongText}`}>External agent control surface</h3>
-                        <p className={`mt-1 text-[11px] leading-relaxed ${mutedText}`}>
-                            Flovart only exposes deterministic media tools. Claude Code handles scripts, storyboards, prompts, and planning.
-                        </p>
-                    </div>
-                    <span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold ${statusPill}`}>
-                        {runtimeReady ? 'runtime on' : 'runtime off'}
-                    </span>
-                </div>
-            </div>
-
-            <div className={`rounded-2xl border ${borderClass} ${isDark ? 'bg-[#161A22]' : 'bg-white'} p-3`}>
-                <h4 className={`text-xs font-bold ${strongText}`}>Provider readiness</h4>
-                <div className="mt-3 grid grid-cols-3 gap-2 text-center text-[11px]">
-                    {(['image', 'video', 'text'] as const).map(kind => (
-                        <div key={kind} className={`rounded-xl border ${borderClass} ${isDark ? 'bg-[#12151B]' : 'bg-neutral-50'} px-2 py-2`}>
-                            <div className={mutedText}>{kind}</div>
-                            <div className={`mt-1 font-semibold ${provider?.configured?.[kind] ? 'text-emerald-400' : 'text-yellow-500'}`}>
-                                {provider?.configured?.[kind] ? 'configured' : 'missing'}
-                            </div>
+            <section className={`overflow-hidden rounded-[28px] border ${card}`}>
+                <div className="relative p-4">
+                    <div className={`absolute right-3 top-3 h-16 w-16 rounded-full blur-2xl ${isDark ? 'bg-emerald-300/20' : 'bg-amber-200/70'}`} />
+                    <div className={`text-[10px] font-bold uppercase tracking-[0.24em] ${muted}`}>Flovart Agent Bridge</div>
+                    <div className="mt-2 flex items-start justify-between gap-3">
+                        <div>
+                            <h3 className={`text-xl font-semibold tracking-[-0.04em] ${strong}`}>Canvas ops for coding agents</h3>
+                            <p className={`mt-2 max-w-[24rem] text-[11px] leading-relaxed ${muted}`}>
+                                A deterministic MCP and CLI control surface for OpenCode, Claude Code, Codex, Cursor, Roo, Windsurf, and VS Code. Secrets stay in the browser UI.
+                            </p>
                         </div>
-                    ))}
+                        <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold ring-1 ${statusPill}`}>
+                            {runtimeReady ? 'runtime online' : 'shadow mode'}
+                        </span>
+                    </div>
                 </div>
-                <div className={`mt-3 space-y-1 text-[11px] ${mutedText}`}>
-                    <div>Image model: <span className={strongText}>{provider?.selectedModels?.image || 'none'}</span></div>
-                    <div>Video model: <span className={strongText}>{provider?.selectedModels?.video || 'none'}</span></div>
-                </div>
-            </div>
+            </section>
 
-            <div className={`rounded-2xl border ${borderClass} ${isDark ? 'bg-[#161A22]' : 'bg-white'} p-3`}>
-                <h4 className={`text-xs font-bold ${strongText}`}>Media runtime</h4>
-                <div className={`mt-2 space-y-1 text-[11px] ${mutedText}`}>
-                    <div>Canvas media elements: <span className={strongText}>{status?.mediaElements ?? 0}</span></div>
-                    <div>Runtime jobs: <span className={strongText}>{status?.jobs ?? 0}</span></div>
-                    <div>Canvas contract: <span className={strongText}>images/videos only</span></div>
-                </div>
-            </div>
+            <section className="grid grid-cols-3 gap-2">
+                {(['image', 'video', 'text'] as const).map(kind => (
+                    <div key={kind} className={`rounded-2xl border p-3 ${card}`}>
+                        <div className={`text-[9px] font-bold uppercase tracking-[0.18em] ${muted}`}>{kind}</div>
+                        <div className={`mt-1 text-[12px] font-semibold ${provider?.configured?.[kind] ? 'text-emerald-400' : isDark ? 'text-amber-200' : 'text-amber-700'}`}>
+                            {provider?.configured?.[kind] ? 'ready' : 'setup'}
+                        </div>
+                    </div>
+                ))}
+            </section>
 
-            <div className={`rounded-2xl border ${borderClass} ${isDark ? 'bg-[#161A22]' : 'bg-white'} p-3`}>
-                <h4 className={`text-xs font-bold ${strongText}`}>Agent protocol</h4>
-                <ol className={`mt-2 list-decimal space-y-1 pl-4 text-[11px] leading-relaxed ${mutedText}`}>
-                    <li>Claude Code calls `flovart.status` and `flovart.provider_status`.</li>
-                    <li>If needed, it calls `flovart.provider_begin_setup`; API keys stay in Flovart UI.</li>
-                    <li>Claude Code creates storyboard prompts in its own interface.</li>
-                    <li>Flovart generates images/videos and places only media on canvas.</li>
-                </ol>
-            </div>
-
-            <div className={`rounded-2xl border ${borderClass} ${isDark ? 'bg-[#080B10]' : 'bg-neutral-950'} p-3 text-neutral-100`}>
+            <section className={`rounded-[24px] border p-3 ${card}`}>
                 <div className="flex items-center justify-between gap-2">
-                    <h4 className="text-xs font-bold">MCP / CLI setup</h4>
-                    <button type="button" onClick={copySetup} className="rounded-lg bg-white/10 px-2 py-1 text-[10px] font-semibold text-white/70 hover:bg-white/15 hover:text-white">
-                        {copied ? 'copied' : 'copy'}
+                    <div>
+                        <h4 className={`text-sm font-semibold tracking-[-0.02em] ${strong}`}>Runtime snapshot</h4>
+                        <p className={`mt-1 text-[10px] ${muted}`}>Live when CDP is connected, safe shadow fallback otherwise.</p>
+                    </div>
+                    <div className={`rounded-2xl px-3 py-2 text-right ${isDark ? 'bg-black/20' : 'bg-neutral-100'}`}>
+                        <div className={`text-[9px] uppercase tracking-[0.16em] ${muted}`}>jobs</div>
+                        <div className={`text-base font-semibold ${strong}`}>{status?.jobs ?? 0}</div>
+                    </div>
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-2 text-[11px]">
+                    <div className={`rounded-2xl border p-2.5 ${isDark ? 'border-white/8 bg-black/16' : 'border-neutral-200 bg-white'}`}>
+                        <div className={muted}>Media elements</div>
+                        <div className={`mt-1 font-semibold ${strong}`}>{status?.mediaElements ?? 0}</div>
+                    </div>
+                    <div className={`rounded-2xl border p-2.5 ${isDark ? 'border-white/8 bg-black/16' : 'border-neutral-200 bg-white'}`}>
+                        <div className={muted}>Selected models</div>
+                        <div className={`mt-1 truncate font-semibold ${strong}`}>{provider?.selectedModels?.image || 'browser default'}</div>
+                    </div>
+                </div>
+            </section>
+
+            <section className="grid gap-2">
+                {capabilityCards.map(item => (
+                    <div key={item.command} className={`rounded-[22px] border p-3 ${card}`}>
+                        <div className="flex items-start justify-between gap-3">
+                            <div>
+                                <h4 className={`text-[12px] font-semibold ${strong}`}>{item.title}</h4>
+                                <p className={`mt-1 text-[10px] leading-relaxed ${muted}`}>{item.body}</p>
+                            </div>
+                            <code className={`shrink-0 rounded-full px-2 py-1 text-[9px] ${isDark ? 'bg-black/24 text-emerald-100/80' : 'bg-neutral-100 text-neutral-700'}`}>{item.command}</code>
+                        </div>
+                    </div>
+                ))}
+            </section>
+
+            <section className={`rounded-[24px] border p-3 ${isDark ? 'border-white/10 bg-black/32' : 'border-neutral-900 bg-neutral-950 text-white'}`}>
+                <div className="flex items-center justify-between gap-2">
+                    <h4 className="text-sm font-semibold tracking-[-0.02em]">Command shelf</h4>
+                    <button type="button" onClick={() => copyText('setup', SETUP_TEXT)} className="rounded-full bg-white/10 px-2.5 py-1 text-[10px] font-semibold text-white/70 hover:bg-white/15 hover:text-white">
+                        {copied === 'setup' ? 'copied' : 'copy setup'}
                     </button>
                 </div>
-                <pre className="mt-2 whitespace-pre-wrap break-words font-mono text-[10px] leading-relaxed text-white/70">{SETUP_TEXT}</pre>
-            </div>
+                <div className="mt-3 grid gap-2">
+                    {setupCommands.map((command, index) => (
+                        <button
+                            key={command}
+                            type="button"
+                            onClick={() => copyText(`cmd-${index}`, command)}
+                            className="group flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-2 text-left font-mono text-[10px] text-white/68 transition hover:border-white/18 hover:bg-white/[0.07]"
+                        >
+                            <span className="truncate">{command}</span>
+                            <span className="shrink-0 text-white/35 group-hover:text-white/70">{copied === `cmd-${index}` ? 'copied' : 'copy'}</span>
+                        </button>
+                    ))}
+                </div>
+            </section>
 
-            <div className={`rounded-2xl border ${borderClass} ${isDark ? 'bg-[#161A22]' : 'bg-white'} p-3`}>
-                <h4 className={`text-xs font-bold ${strongText}`}>Available tool families</h4>
+            <section className={`rounded-[24px] border p-3 ${card}`}>
+                <h4 className={`text-sm font-semibold tracking-[-0.02em] ${strong}`}>Quick commands</h4>
                 <div className="mt-2 flex flex-wrap gap-1.5">
                     {QUICK_COMMANDS.map(command => (
-                        <span key={command} className={`rounded-full border px-2 py-1 text-[10px] ${isDark ? 'border-[#2A3140] text-[#98A2B3]' : 'border-neutral-200 text-neutral-500'}`}>
+                        <span key={command} className={`rounded-full border px-2.5 py-1 text-[10px] ${isDark ? 'border-white/10 bg-white/[0.03] text-white/45' : 'border-neutral-200 bg-white text-neutral-500'}`}>
                             {command}
                         </span>
                     ))}
                 </div>
-            </div>
+            </section>
         </div>
     );
 };
+
+export default AgentBridgePanel;

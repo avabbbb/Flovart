@@ -46,6 +46,7 @@ export interface ResolvedReference {
 export interface AdaptivePromptPayload {
   rawText: string;
   resolvedReferences: ResolvedReference[];
+  richTextDocument?: Record<string, unknown>;
 }
 
 export interface ElementGenerationState {

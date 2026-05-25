@@ -40,7 +40,7 @@
  */
 
 import type { AssetLibrary, AssetItem, AssetCategory } from '../types';
-import { putImages, getImages, isIdbRef, isDataUrl, toIdbRef, fromIdbRef } from './imageDB';
+import { offloadDataUrlRecords, rehydrateDataUrlRecords } from './mediaIndexedDBSentry';
 
 // localStorage 存储键名（带版本号）
 const STORAGE_KEY = 'making.assetLibrary.v1';
@@ -105,25 +105,12 @@ export const saveAssetLibrary = (lib: AssetLibrary) => {
     }
 };
 
-/** Offload asset images to IndexedDB — localStorage stores only idb: refs */
-const offloadAssetCategory = (items: AssetItem[], entries: { key: string; data: string }[]): AssetItem[] =>
-    items.map(a => {
-        if (isDataUrl(a.dataUrl)) {
-            const key = `asset:${a.id}`;
-            entries.push({ key, data: a.dataUrl });
-            return { ...a, dataUrl: toIdbRef(key) };
-        }
-        return a;
-    });
-
 export const saveAssetLibraryAsync = async (lib: AssetLibrary): Promise<void> => {
-    const entries: { key: string; data: string }[] = [];
     const slim: AssetLibrary = {
-        character: offloadAssetCategory(lib.character, entries),
-        scene: offloadAssetCategory(lib.scene, entries),
-        prop: offloadAssetCategory(lib.prop, entries),
+        character: await offloadDataUrlRecords(lib.character, 'asset'),
+        scene: await offloadDataUrlRecords(lib.scene, 'asset'),
+        prop: await offloadDataUrlRecords(lib.prop, 'asset'),
     };
-    if (entries.length > 0) await putImages(entries);
     try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(slim));
     } catch (err) {
@@ -131,27 +118,12 @@ export const saveAssetLibraryAsync = async (lib: AssetLibrary): Promise<void> =>
     }
 };
 
-/** Resolve idb: refs back to real base64 from IndexedDB */
-const resolveAssetCategory = (items: AssetItem[], resolved: Map<string, string>): AssetItem[] =>
-    items.map(a => {
-        if (isIdbRef(a.dataUrl)) {
-            const key = fromIdbRef(a.dataUrl);
-            const data = resolved.get(key);
-            return data ? { ...a, dataUrl: data } : a;
-        }
-        return a;
-    });
-
 export const loadAssetLibraryAsync = async (): Promise<AssetLibrary> => {
     const lib = loadAssetLibrary();
-    const allItems = [...lib.character, ...lib.scene, ...lib.prop];
-    const refs = allItems.filter(a => isIdbRef(a.dataUrl)).map(a => fromIdbRef(a.dataUrl));
-    if (refs.length === 0) return lib;
-    const resolved = await getImages(refs);
     return {
-        character: resolveAssetCategory(lib.character, resolved),
-        scene: resolveAssetCategory(lib.scene, resolved),
-        prop: resolveAssetCategory(lib.prop, resolved),
+        character: await rehydrateDataUrlRecords(lib.character),
+        scene: await rehydrateDataUrlRecords(lib.scene),
+        prop: await rehydrateDataUrlRecords(lib.prop),
     };
 };
 

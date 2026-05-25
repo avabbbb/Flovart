@@ -29,6 +29,15 @@
     --accent-text: #175cd3;
     --ui-bg-color: rgba(255, 255, 255, 0.92);
     --button-bg-color: #111827;
+    --flovart-panel-bg: rgba(244, 245, 248, 0.92);
+    --flovart-panel-border: rgba(212, 212, 216, 0.84);
+    --flovart-text-primary: #18181b;
+    --flovart-text-muted: #71717a;
+    --flovart-text-ghost: #a1a1aa;
+    --flovart-input-bg: rgba(255, 255, 255, 0.7);
+    --flovart-chip-bg: #f4f4f5;
+    --flovart-chip-border: #d4d4d8;
+    --flovart-shadow: 0 12px 32px rgba(24, 24, 27, 0.08), 0 0 1px rgba(0, 0, 0, 0.05) inset;
 }
 
 :root[data-theme='dark'] {
@@ -59,6 +68,15 @@
     --accent-text: #7cb4ff;
     --ui-bg-color: rgba(18, 21, 27, 0.94);
     --button-bg-color: #f3f4f6;
+    --flovart-panel-bg: rgba(18, 20, 26, 0.92);
+    --flovart-panel-border: rgba(39, 39, 42, 0.86);
+    --flovart-text-primary: #f4f4f5;
+    --flovart-text-muted: #a1a1aa;
+    --flovart-text-ghost: #52525b;
+    --flovart-input-bg: rgba(0, 0, 0, 0.26);
+    --flovart-chip-bg: rgba(9, 9, 11, 0.72);
+    --flovart-chip-border: #27272a;
+    --flovart-shadow: 0 12px 32px rgba(0, 0, 0, 0.7), 0 0 1px rgba(255, 255, 255, 0.05) inset;
 }
 
 html,
@@ -187,58 +205,263 @@ body {
     transition-timing-function: cubic-bezier(0.25, 1, 0.5, 1);
 }
 
-.inline-prompt-bar-shell {
-    border-color: #2a3140 !important;
-    background: rgba(18, 21, 27, 0.98) !important;
-    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6), 0 0 1px rgba(255, 255, 255, 0.08) inset !important;
-    border-radius: 20px !important;
-}
-
 .inline-prompt-bar-motion {
     transition: transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1.02);
 }
 
-.inline-prompt-bar-surface .rounded-\[20px\] {
-    border-radius: 20px !important;
+.inline-prompt-bar {
+    position: relative;
+    box-sizing: border-box;
+    color: var(--flovart-text-muted);
+    border: 1px solid var(--flovart-panel-border);
+    border-radius: 6px;
+    background: var(--flovart-panel-bg);
+    box-shadow: var(--flovart-shadow);
+    padding: 6px 8px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    backdrop-filter: blur(14px);
 }
 
-.inline-prompt-bar-surface .rounded-\[18px\] {
-    border-radius: 18px !important;
+.inline-prompt-bar__header,
+.inline-prompt-bar__footer,
+.inline-prompt-bar__title,
+.inline-prompt-bar__status,
+.inline-prompt-bar__refs {
+    display: flex;
+    align-items: center;
 }
 
-.inline-prompt-bar-surface .rich-prompt-editor {
-    max-height: 156px;
+.inline-prompt-bar__header,
+.inline-prompt-bar__footer {
+    justify-content: space-between;
+    gap: 8px;
 }
 
-.inline-prompt-bar-surface .text-\[10px\] {
-    letter-spacing: -0.01em;
+.inline-prompt-bar__header {
+    border-bottom: 1px solid var(--flovart-panel-border);
+    padding-bottom: 4px;
 }
 
-.inline-prompt-bar-surface .text-xs {
-    font-size: 13px;
+.inline-prompt-bar__title {
+    min-width: 0;
+    gap: 6px;
+    flex: 1;
 }
 
-.inline-prompt-bar-surface .text-sm {
-    font-size: 14px;
+.inline-prompt-bar__eyebrow {
+    color: var(--inline-prompt-accent);
+    font-size: 10px;
+    font-weight: 800;
+    flex-shrink: 0;
+    letter-spacing: var(--inline-prompt-title-tracking, 0.1em);
 }
 
-.inline-prompt-bar-surface .ProseMirror {
+.inline-prompt-bar__model {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--flovart-text-ghost);
+    font-size: 9px;
+    text-overflow: ellipsis;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.inline-prompt-bar__status {
+    gap: 4px;
+    color: var(--flovart-text-ghost);
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    flex-shrink: 0;
+}
+
+.inline-prompt-bar__status-dot {
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--flovart-panel-border);
+}
+
+.inline-prompt-bar__status-dot--running,
+.inline-prompt-bar__status-dot--queued {
+    background: var(--inline-prompt-accent);
+    box-shadow: 0 0 6px var(--inline-prompt-accent);
+}
+
+.inline-prompt-bar__status-dot--error {
+    background: #f43f5e;
+    box-shadow: 0 0 6px #f43f5e;
+}
+
+.inline-prompt-bar__editor {
+    margin-top: 6px;
+    border: 1px solid var(--flovart-panel-border);
+    border-radius: 4px;
+    background: var(--flovart-input-bg);
+    padding: 5px 6px;
+}
+
+.inline-prompt-bar__editor .rich-prompt-editor {
+    min-height: 34px;
+    max-height: 126px;
+    overflow-y: auto;
+}
+
+.inline-prompt-bar__editor .ProseMirror {
     outline: none;
     border: none;
     background: transparent;
-    color: #e4e4e7;
+    color: var(--flovart-text-primary);
     font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     font-size: 12px;
     white-space: pre-wrap;
     word-break: break-word;
 }
 
-.inline-prompt-bar-surface .ProseMirror p.is-editor-empty:first-child::before {
+.inline-prompt-bar__editor .ProseMirror p.is-editor-empty:first-child::before {
     content: attr(data-placeholder);
     float: left;
     height: 0;
-    color: #3f3f46;
+    color: var(--flovart-text-ghost);
     pointer-events: none;
+}
+
+.inline-prompt-bar__refs {
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 5px;
+}
+
+.inline-prompt-bar__ref-chip {
+    display: inline-flex;
+    max-width: 100%;
+    min-width: 0;
+    align-items: center;
+    gap: 4px;
+    border: 1px solid var(--flovart-chip-border);
+    border-radius: 4px;
+    background: var(--flovart-chip-bg);
+    color: var(--flovart-text-muted);
+    font-size: 10px;
+    padding: 1px 4px;
+}
+
+.inline-prompt-bar__ref-token {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.inline-prompt-bar__slot-toggle {
+    border: 1px solid transparent;
+    border-radius: 3px;
+    cursor: pointer;
+    flex-shrink: 0;
+    font-size: 9px;
+    font-weight: 800;
+    padding: 0 3px;
+    white-space: nowrap;
+}
+
+.inline-prompt-bar__footer {
+    border-top: 1px solid var(--flovart-panel-border);
+    margin-top: 6px;
+    padding-top: 4px;
+}
+
+.inline-prompt-bar__schema {
+    min-width: 0;
+    color: var(--flovart-text-ghost);
+    font-size: 9px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.inline-prompt-bar__ignite {
+    border: 1px solid var(--inline-prompt-accent);
+    border-radius: 3px;
+    background: transparent;
+    color: var(--inline-prompt-accent);
+    cursor: pointer;
+    flex-shrink: 0;
+    font-size: 10px;
+    font-weight: 800;
+    padding: 2px 8px;
+    white-space: nowrap;
+}
+
+.inline-prompt-bar__ignite:disabled {
+    cursor: not-allowed;
+    opacity: 0.42;
+}
+
+.inline-prompt-bar__ribbon {
+    position: absolute;
+    inset: -1px;
+    border-radius: 7px;
+    pointer-events: none;
+    background:
+        linear-gradient(90deg, transparent 0%, color-mix(in srgb, var(--inline-prompt-accent) 70%, transparent) 22%, transparent 42%) 0 0 / 200% 1px no-repeat,
+        linear-gradient(180deg, color-mix(in srgb, var(--inline-prompt-accent) 85%, transparent), transparent 55%) 0 0 / var(--inline-prompt-progress) 1px no-repeat,
+        linear-gradient(90deg, color-mix(in srgb, var(--inline-prompt-accent) 18%, transparent), transparent 45%) 0 100% / var(--inline-prompt-progress) 1px no-repeat;
+    box-shadow: 0 0 18px color-mix(in srgb, var(--inline-prompt-accent) 18%, transparent);
+    animation: inlinePromptRibbonSweep 1.8s linear infinite;
+}
+
+.inline-prompt-bar__queue-meta {
+    position: absolute;
+    top: -18px;
+    right: 0;
+    display: inline-flex;
+    gap: 6px;
+    border: 1px solid color-mix(in srgb, var(--inline-prompt-accent) 28%, var(--flovart-panel-border));
+    border-radius: 999px;
+    background: var(--flovart-panel-bg);
+    color: var(--inline-prompt-accent);
+    font-size: 9px;
+    font-weight: 800;
+    padding: 1px 6px;
+}
+
+.inline-prompt-bar__error-harness {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -15px;
+    pointer-events: none;
+}
+
+.inline-prompt-bar__error-line {
+    height: 1px;
+    background: #f43f5e;
+    box-shadow: 0 0 5px #f43f5e;
+}
+
+.inline-prompt-bar__error-text {
+    color: #f43f5e;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 8px;
+    overflow: hidden;
+    padding-left: 2px;
+    text-overflow: ellipsis;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+@keyframes inlinePromptRibbonSweep {
+    0% { background-position: 0% 0, 0 0, 0 100%; }
+    100% { background-position: 200% 0, 0 0, 0 100%; }
+}
+
+@keyframes inlinePromptShake {
+    0%, 100% { transform: translateX(0); }
+    20%, 60% { transform: translateX(-2px); }
+    40%, 80% { transform: translateX(2px); }
+}
+
+.animate-shake {
+    animation: inlinePromptShake 0.25s ease-out both;
 }
 
 @keyframes compactDockFloat {

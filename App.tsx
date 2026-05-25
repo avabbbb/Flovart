@@ -25,17 +25,20 @@ const AssetAddModal = React.lazy(() => import('./components/AssetAddModal').then
 const ABCompareOverlay = React.lazy(() => import('./components/ABCompareOverlay').then(m => ({ default: m.ABCompareOverlay })));
 const NodeWorkflowPanel = React.lazy(() => import('./components/NodeWorkflowPanel').then(m => ({ default: m.NodeWorkflowPanel })));
 import { loadAssetLibrary, addAsset, removeAsset, renameAsset, loadAssetLibraryAsync, saveAssetLibraryAsync } from './utils/assetStorage';
-import { loadGenerationHistory, addGenerationHistoryItem } from './utils/generationHistory';
+import { loadGenerationHistoryAsync, saveGenerationHistoryAsync } from './utils/generationHistory';
 import { inferProviderFromModel, reversePromptStreamWithProvider, DEFAULT_PROVIDER_MODELS, generateImageWithProvider, generateVideoWithProvider, inferCapabilityFromModelName } from './services/aiGateway';
 import { fileToDataUrl, validateAndResizeImage } from './utils/fileUtils';
 import { translations } from './translations';
 // keyVault imports moved to hooks/useApiKeys.ts
 // usageMonitor imports moved to hooks
 import { getCompactChromeMetrics } from './utils/uiScale';
-import { putImages, getImages, isIdbRef, isDataUrl, toIdbRef, fromIdbRef } from './utils/imageDB';
-import { putVideoBlob, getVideoBlob, isIdbVideoRef, toIdbVideoRef, fromIdbVideoRef } from './utils/mediaDB';
+import { putImages, getImages, isIdbRef, isDataUrl, toIdbRef, fromIdbRef, deleteImages, getAllKeys } from './utils/imageDB';
+import { putVideoBlob, getVideoBlob, isIdbVideoRef, toIdbVideoRef, fromIdbVideoRef, deleteVideoBlobs, getAllVideoKeys } from './utils/mediaDB';
 import { collectVideoObjectUrls, diffRemovedObjectUrls } from './utils/objectUrlRegistry';
 import { appendHistorySnapshot } from './utils/historyState';
+import { compilePromptReferences } from './utils/semanticCompiler';
+import { hydrateRawTextToTiptapJSON } from './utils/htmlHydrator';
+import { readColdMedia, writeColdMedia } from './utils/mediaIndexedDB';
 import termsRaw from './TERMS_OF_SERVICE.md?raw';
 import privacyRaw from './PRIVACY_POLICY.md?raw';
 import { generateId, getElementBounds, isPointInPolygon, rasterizeElement, rasterizeElements, rasterizeMask, createNewBoard, THEME_PALETTES, SNAP_THRESHOLD, type Rect, type Guide } from './utils/canvasHelpers';
@@ -50,6 +53,7 @@ import { WorkflowWorkspace } from './components/workspaces/WorkflowWorkspace';
 import type { WorkflowNode, WorkflowValue } from './components/nodeflow/types';
 import { useWorkspaceStore } from './stores/useWorkspaceStore';
 import type { CanvasElement, ElementGenerationState, WorkspaceView } from './types';
+import { getFlovartRuntimeApi, getRuntimeErrorMessage } from './services/flovartRuntime';
 
 
 
@@ -120,6 +124,8 @@ const safeSetItem = (key: string, value: string): boolean => {
 const persistBoardsToIDB = async (boards: Board[]): Promise<void> => {
     const imageEntries: { key: string; data: string }[] = [];
     const videoPromises: Promise<void>[] = [];
+    const usedImageKeys = new Set<string>();
+    const usedVideoKeys = new Set<string>();
     const slim = boards.map(b => ({
         ...b,
         history: [b.elements],   // 只保留当前快照, 丢弃 undo 栈
@@ -129,19 +135,26 @@ const persistBoardsToIDB = async (boards: Board[]): Promise<void> => {
                 const img = { ...el } as ImageElement;
                 if (isDataUrl(img.href)) {
                     const key = `board:${el.id}`;
+                    usedImageKeys.add(key);
                     imageEntries.push({ key, data: img.href });
                     img.href = toIdbRef(key);
+                } else if (isIdbRef(img.href)) {
+                    usedImageKeys.add(fromIdbRef(img.href));
                 }
                 if (img.mask && isDataUrl(img.mask)) {
                     const key = `board:${el.id}:mask`;
+                    usedImageKeys.add(key);
                     imageEntries.push({ key, data: img.mask });
                     img.mask = toIdbRef(key);
+                } else if (img.mask && isIdbRef(img.mask)) {
+                    usedImageKeys.add(fromIdbRef(img.mask));
                 }
                 return img;
             }
             if (el.type === 'video' && (el as VideoElement).href.startsWith('blob:')) {
                 const vid = { ...el } as VideoElement;
                 const key = `board:${el.id}`;
+                usedVideoKeys.add(key);
                 videoPromises.push(
                     fetch(vid.href)
                         .then(r => r.blob())
@@ -151,12 +164,23 @@ const persistBoardsToIDB = async (boards: Board[]): Promise<void> => {
                 vid.href = toIdbVideoRef(key);
                 return vid;
             }
+            if (el.type === 'video' && isIdbVideoRef((el as VideoElement).href)) {
+                usedVideoKeys.add(fromIdbVideoRef((el as VideoElement).href));
+            }
             return el;
         }),
     }));
     if (imageEntries.length > 0) await putImages(imageEntries);
     await Promise.all(videoPromises);
     localStorage.setItem(BOARDS_STORAGE_KEY, JSON.stringify(slim));
+
+    const [allImageKeys, allVideoKeys] = await Promise.all([getAllKeys(), getAllVideoKeys()]);
+    const staleImageKeys = allImageKeys.filter(key => key.startsWith('board:') && !usedImageKeys.has(key));
+    const staleVideoKeys = allVideoKeys.filter(key => key.startsWith('board:') && !usedVideoKeys.has(key));
+    await Promise.all([
+        deleteImages(staleImageKeys),
+        deleteVideoBlobs(staleVideoKeys),
+    ]);
 };
 
 /** Load boards from localStorage and resolve idb: refs from IndexedDB */
@@ -251,16 +275,25 @@ const loadCharacterLocksWithIDB = async (): Promise<CharacterLockProfile[]> => {
 /** Save character locks: offload referenceImage base64 to IDB */
 const persistCharacterLocksToIDB = async (locks: CharacterLockProfile[]): Promise<void> => {
     const entries: { key: string; data: string }[] = [];
+    const usedKeys = new Set<string>();
     const slim = locks.map(lock => {
         if (isDataUrl(lock.referenceImage)) {
             const key = `charlock:${lock.id}`;
+            usedKeys.add(key);
             entries.push({ key, data: lock.referenceImage });
             return { ...lock, referenceImage: toIdbRef(key) };
+        }
+        if (isIdbRef(lock.referenceImage)) {
+            usedKeys.add(fromIdbRef(lock.referenceImage));
         }
         return lock;
     });
     if (entries.length > 0) await putImages(entries);
     safeSetItem('characterLocks.v1', JSON.stringify(slim));
+
+    const allKeys = await getAllKeys();
+    const staleKeys = allKeys.filter(key => key.startsWith('charlock:') && !usedKeys.has(key));
+    await deleteImages(staleKeys);
 };
 
 const App: React.FC = () => {
@@ -318,7 +351,7 @@ const App: React.FC = () => {
     const [outpaintMenuId, setOutpaintMenuId] = useState<string | null>(null);
     const [contextMenu, setContextMenu] = useState<{ x: number; y: number; elementId: string | null } | null>(null);
     const [assetLibrary, setAssetLibrary] = useState<AssetLibrary>({ character: [], scene: [], prop: [] });
-    const [generationHistory, setGenerationHistory] = useState<GenerationHistoryItem[]>(() => loadGenerationHistory());
+    const [generationHistory, setGenerationHistory] = useState<GenerationHistoryItem[]>([]);
     const [isAssetPanelOpen, setIsAssetPanelOpen] = useState(false);
     const [addAssetModal, setAddAssetModal] = useState<{ open: boolean; dataUrl: string; mimeType: string; width: number; height: number } | null>(null);
     
@@ -346,11 +379,13 @@ const App: React.FC = () => {
         Promise.all([
             loadBoardsWithIDB(),
             loadAssetLibraryAsync(),
+            loadGenerationHistoryAsync(),
             loadCharacterLocksWithIDB(),
-        ]).then(([loadedBoards, loadedAssets, loadedLocks]) => {
+        ]).then(([loadedBoards, loadedAssets, loadedHistory, loadedLocks]) => {
             setBoards(loadedBoards);
             if (loadedBoards.length > 0) setActiveBoardId(prev => prev || loadedBoards[0].id);
             setAssetLibrary(loadedAssets);
+            setGenerationHistory(loadedHistory);
             setCharacterLocks(loadedLocks);
             setDataReady(true);
         }).catch(() => {
@@ -379,6 +414,11 @@ const App: React.FC = () => {
         if (!dataReady) return;
         saveAssetLibraryAsync(assetLibrary).catch(console.error);
     }, [assetLibrary, dataReady]);
+
+    useEffect(() => {
+        if (!dataReady) return;
+        saveGenerationHistoryAsync(generationHistory).catch(console.error);
+    }, [generationHistory, dataReady]);
 
     useEffect(() => {
         if (!activeBoardId) return;
@@ -766,6 +806,11 @@ const App: React.FC = () => {
         return descendants;
     }, []);
 
+    const resolveColdMediaRef = useCallback(async (href: string) => {
+        if (!href.startsWith('cold-media:')) return href;
+        return await readColdMedia(href.slice('cold-media:'.length)) || href;
+    }, []);
+
     // ── Extracted: canvas interaction (mouse, selection, refs) ──
     const {
         handleMouseDown, handleMouseMove, handleMouseUp, handleWheel,
@@ -798,6 +843,7 @@ const App: React.FC = () => {
         isAutoEnhanceEnabled, mentionedElementIds, chatAttachments, promptAttachments,
         activeCharacterLock, batchCount, inpaintState, inpaintPrompt,
         modelPreference, userApiKeys,
+        resolveMediaHref: resolveColdMediaRef,
         svgRef, getCanvasPoint,
         setSelectedElementIds, setIsLoading, setError, setProgressMessage,
         setIsSettingsPanelOpen, setGenerationHistory, setInpaintState, setInpaintPrompt,
@@ -965,21 +1011,27 @@ const App: React.FC = () => {
         return validateAndResizeImage(file);
     }, []);
 
+    const offloadAttachmentDataUrl = useCallback(async (scope: string, index: number, dataUrl: string) => {
+        const key = `${scope}:${Date.now()}:${index}:${Math.random().toString(36).slice(2, 8)}`;
+        await writeColdMedia(key, dataUrl);
+        return `cold-media:${key}`;
+    }, []);
+
     const handleAddAttachmentFiles = useCallback(async (files: FileList | File[]) => {
         const list = Array.from(files).filter(file => file.type.startsWith('image/') || file.type.startsWith('video/'));
         if (list.length === 0) return;
         try {
             const results = await Promise.all(list.map(f => readAttachmentFile(f)));
             let anyResized = false;
-            results.forEach((item, index) => {
+            await Promise.all(results.map(async (item, index) => {
                 if (item.resized) anyResized = true;
                 addChatAttachment({
                     name: list[index].name || `Upload ${index + 1}`,
-                    href: item.dataUrl,
+                    href: await offloadAttachmentDataUrl('chat-attachment', index, item.dataUrl),
                     mimeType: item.mimeType,
                     source: 'upload',
                 });
-            });
+            }));
             if (anyResized) {
                 toast.show('部分图片尺寸过大，已自动压缩。', 'warning');
             }
@@ -987,7 +1039,7 @@ const App: React.FC = () => {
             const message = error instanceof Error ? error.message : 'Attachment upload failed.';
             setError(message);
         }
-    }, [addChatAttachment, readAttachmentFile, toast]);
+    }, [addChatAttachment, offloadAttachmentDataUrl, readAttachmentFile, toast]);
 
     const handleAddPromptAttachmentFiles = useCallback(async (files: FileList | File[]) => {
         const list = Array.from(files).filter(file => file.type.startsWith('image/') || file.type.startsWith('video/'));
@@ -995,15 +1047,15 @@ const App: React.FC = () => {
         try {
             const results = await Promise.all(list.map(f => readAttachmentFile(f)));
             let anyResized = false;
-            results.forEach((item, index) => {
+            await Promise.all(results.map(async (item, index) => {
                 if (item.resized) anyResized = true;
                 addPromptAttachment({
                     name: list[index].name || `Upload ${index + 1}`,
-                    href: item.dataUrl,
+                    href: await offloadAttachmentDataUrl('prompt-attachment', index, item.dataUrl),
                     mimeType: item.mimeType,
                     source: 'upload',
                 });
-            });
+            }));
             if (anyResized) {
                 toast.show('部分图片尺寸过大，已自动压缩。', 'warning');
             }
@@ -1011,7 +1063,7 @@ const App: React.FC = () => {
             const message = error instanceof Error ? error.message : 'Attachment upload failed.';
             setError(message);
         }
-    }, [addPromptAttachment, readAttachmentFile, toast]);
+    }, [addPromptAttachment, offloadAttachmentDataUrl, readAttachmentFile, toast]);
 
     const handleRemoveChatAttachment = useCallback((id: string) => {
         setChatAttachments(prev => prev.filter(item => item.id !== id));
@@ -1036,10 +1088,11 @@ const App: React.FC = () => {
     useEffect(() => {
         const root = document.documentElement;
         root.dataset.theme = resolvedTheme;
+        root.dataset.lang = language === 'zho' ? 'zh' : 'en';
         root.style.setProperty('--ui-bg-color', themePalette.uiBgColor);
         root.style.setProperty('--button-bg-color', themePalette.buttonBgColor);
         document.body.style.backgroundColor = themePalette.appBackground;
-    }, [resolvedTheme, themePalette]);
+    }, [language, resolvedTheme, themePalette]);
 
     // (updateActiveBoard, setElements, commitAction moved up before useCanvasInteraction)
 
@@ -2031,6 +2084,258 @@ const App: React.FC = () => {
             return { ok: true, id: next.id, element: next };
         };
 
+        const inspectCanvasState = () => ({
+            ok: true,
+            selectedElementIds: [...selectedElementIds],
+            zoom,
+            panOffset: { ...panOffset },
+            elements: api.canvas.getElements(),
+            media: listMediaElements(),
+        });
+
+        const createAtomicElement = (input: {
+            id?: string;
+            type: 'image' | 'video' | 'text';
+            name: string;
+            x: number;
+            y: number;
+            width?: number;
+            height?: number;
+            href?: string;
+            mimeType?: string;
+        }) => {
+            if (input.type === 'image' || input.type === 'video') {
+                return addMediaElement({
+                    id: input.id,
+                    name: input.name,
+                    x: input.x,
+                    y: input.y,
+                    width: input.width,
+                    height: input.height,
+                    href: input.href,
+                    mimeType: input.mimeType,
+                }, input.type);
+            }
+
+            const next: TextElement = {
+                id: input.id || generateId(),
+                type: 'text',
+                name: input.name,
+                text: '',
+                x: input.x,
+                y: input.y,
+                width: input.width || 220,
+                height: input.height || 96,
+                fontSize: 24,
+                fontColor: resolvedTheme === 'dark' ? '#F8FAFC' : '#111827',
+            };
+            commitAction(prev => [...prev, next]);
+            setSelectedElementIds([next.id]);
+            return { ok: true, id: next.id, element: next };
+        };
+
+        const updateAtomicPrompt = (input: { elementId: string; textPrompt: string; modelId?: string }) => {
+            const target = elementsRef.current.find(item => item.id === input.elementId);
+            if (!target || (target.type !== 'image' && target.type !== 'video')) {
+                throw new Error(`BAD_REQUEST: media element not found (${input.elementId})`);
+            }
+
+            const canvasElements = elementsRef.current.filter((item): item is CanvasElement => (
+                item.type === 'image' || item.type === 'video' || item.type === 'text' || item.type === 'shape'
+            ));
+            const hydrated = hydrateRawTextToTiptapJSON(input.textPrompt, canvasElements);
+            const nextGenerationState: ElementGenerationState = {
+                promptPayload: {
+                    ...compilePromptReferences(input.textPrompt, canvasElements),
+                    richTextDocument: hydrated.json,
+                },
+                provider: target.generationState?.provider || 'openrouter',
+                modelId: input.modelId || target.generationState?.modelId || (target.type === 'video' ? modelPreference.videoModel : modelPreference.imageModel),
+                status: target.generationState?.status || 'idle',
+                error: undefined,
+                progress: target.generationState?.progress,
+            };
+
+            updateElementGenerationState(input.elementId, nextGenerationState);
+            return { ok: true, elementId: input.elementId, generationState: nextGenerationState };
+        };
+
+        const assignAtomicSlot = (input: { elementId: string; targetElementId: string; slotRole: 'first_frame' | 'style_ref' | 'control_net' | 'unassigned' }) => {
+            const target = elementsRef.current.find(item => item.id === input.elementId);
+            const source = elementsRef.current.find(item => item.id === input.targetElementId);
+            if (!target || (target.type !== 'image' && target.type !== 'video')) {
+                throw new Error(`BAD_REQUEST: target media element not found (${input.elementId})`);
+            }
+            if (!source || (source.type !== 'image' && source.type !== 'video' && source.type !== 'text' && source.type !== 'shape')) {
+                throw new Error(`BAD_REQUEST: source element not found (${input.targetElementId})`);
+            }
+
+            const token = `@${source.name || source.id}`;
+            const currentState = target.generationState || {
+                promptPayload: { rawText: '', resolvedReferences: [] },
+                provider: 'openrouter' as const,
+                modelId: target.type === 'video' ? modelPreference.videoModel : modelPreference.imageModel,
+                status: 'idle' as const,
+            };
+            const existing = currentState.promptPayload.resolvedReferences.filter(reference => reference.targetElementId !== source.id);
+            const targetType = source.type === 'image' || source.type === 'video' ? source.type : 'text';
+            const nextRawText = currentState.promptPayload.rawText.includes(token)
+                ? currentState.promptPayload.rawText
+                : `${currentState.promptPayload.rawText}${currentState.promptPayload.rawText ? '\n' : ''}${token}`;
+            const canvasElements = elementsRef.current.filter((item): item is CanvasElement => (
+                item.type === 'image' || item.type === 'video' || item.type === 'text' || item.type === 'shape'
+            ));
+            const hydrated = hydrateRawTextToTiptapJSON(nextRawText, canvasElements);
+            const nextGenerationState: ElementGenerationState = {
+                ...currentState,
+                promptPayload: {
+                    rawText: nextRawText,
+                    resolvedReferences: [...existing, {
+                        token,
+                        targetElementId: source.id,
+                        targetType,
+                        slotRole: input.slotRole,
+                    }],
+                    richTextDocument: hydrated.json,
+                },
+            };
+
+            updateElementGenerationState(input.elementId, nextGenerationState);
+            return { ok: true, elementId: input.elementId, targetElementId: input.targetElementId, slotRole: input.slotRole };
+        };
+
+        const igniteAtomicElement = async (input: { elementId: string }) => {
+            const target = elementsRef.current.find(item => item.id === input.elementId);
+            if (!target || (target.type !== 'image' && target.type !== 'video')) {
+                throw new Error(`BAD_REQUEST: media element not found (${input.elementId})`);
+            }
+
+            setSelectedElementIds([target.id]);
+            animateViewportToElement(target.x + target.width / 2, target.y + target.height / 2, 1);
+
+            const now = Date.now();
+            const sessionId = `inline-${target.id}`;
+            if (!runtimeSessionsRef.current[sessionId]) {
+                runtimeSessionsRef.current[sessionId] = {
+                    id: sessionId,
+                    name: 'atomic-inline',
+                    createdAt: now,
+                    lastActiveAt: now,
+                    idempotencyMap: {},
+                    jobIds: [],
+                };
+            }
+            const jobId = `ignite-${target.id}-${now}`;
+            runtimeJobsRef.current[jobId] = {
+                requestId: jobId,
+                sessionId,
+                jobId,
+                command: 'element.ignite',
+                args: input,
+                status: 'accepted',
+                progress: { pct: 8, stage: 'queued' },
+                source: 'agent',
+                timeoutMs: 120000,
+                createdAt: now,
+                updatedAt: now,
+            };
+            runtimeSessionsRef.current[sessionId].jobIds.push(jobId);
+
+            const currentState = target.generationState || {
+                promptPayload: { rawText: '', resolvedReferences: [] },
+                provider: 'openrouter' as const,
+                modelId: target.type === 'video' ? modelPreference.videoModel : modelPreference.imageModel,
+                status: 'idle' as const,
+            };
+            updateElementGenerationState(target.id, {
+                ...currentState,
+                status: 'queued',
+                progress: 8,
+                error: undefined,
+            });
+
+            window.setTimeout(() => {
+                const latestTarget = elementsRef.current.find(item => item.id === input.elementId);
+                if (!latestTarget || (latestTarget.type !== 'image' && latestTarget.type !== 'video')) return;
+
+                runtimeJobsRef.current[jobId].status = 'running';
+                runtimeJobsRef.current[jobId].progress = { pct: 12, stage: 'running' };
+                runtimeJobsRef.current[jobId].updatedAt = Date.now();
+
+                const latestState = latestTarget.generationState || currentState;
+                updateElementGenerationState(latestTarget.id, {
+                    ...latestState,
+                    status: 'running',
+                    progress: Math.max(12, latestState.progress || 0),
+                    error: undefined,
+                });
+
+                const run = latestTarget.type === 'video'
+                    ? api.generate.video({
+                        prompt: latestTarget.generationState?.promptPayload.rawText || '',
+                        sourceImageIds: (latestTarget.generationState?.promptPayload.resolvedReferences || [])
+                            .filter(reference => reference.slotRole === 'first_frame')
+                            .map(reference => reference.targetElementId),
+                        aspectRatio: videoAspectRatio,
+                    })
+                    : api.generate.image({
+                        prompt: latestTarget.generationState?.promptPayload.rawText || '',
+                        name: latestTarget.name,
+                    });
+
+                run.then((result) => {
+                    runtimeJobsRef.current[jobId].status = 'succeeded';
+                    runtimeJobsRef.current[jobId].progress = { pct: 100, stage: 'completed' };
+                    runtimeJobsRef.current[jobId].result = result;
+                    runtimeJobsRef.current[jobId].updatedAt = Date.now();
+                }).catch((error) => {
+                    runtimeJobsRef.current[jobId].status = 'failed';
+                    runtimeJobsRef.current[jobId].progress = { pct: runtimeJobsRef.current[jobId].progress.pct, stage: 'failed' };
+                    runtimeJobsRef.current[jobId].error = toRuntimeError(error);
+                    runtimeJobsRef.current[jobId].updatedAt = Date.now();
+                    const failedTarget = elementsRef.current.find(item => item.id === input.elementId);
+                    if (failedTarget?.type === 'image' || failedTarget?.type === 'video') {
+                        updateElementGenerationState(failedTarget.id, {
+                            ...(failedTarget.generationState || currentState),
+                            status: 'error',
+                            error: error instanceof Error ? error.message : String(error),
+                            progress: undefined,
+                        });
+                    }
+                });
+            }, 0);
+
+            return { ok: true, id: target.id, jobId, status: 'queued', accepted: true };
+        };
+
+        const watchAtomicElement = async (input: { elementId: string; timeoutMs?: number }) => {
+            const timeoutMs = Math.max(1000, Math.min(input.timeoutMs || 120000, 300000));
+            const startedAt = Date.now();
+            return await new Promise((resolve) => {
+                const tick = () => {
+                    const target = elementsRef.current.find(item => item.id === input.elementId);
+                    if (!target || (target.type !== 'image' && target.type !== 'video')) {
+                        resolve({ ok: false, error: { code: 'BAD_REQUEST', message: `media element not found (${input.elementId})` } });
+                        return;
+                    }
+
+                    const state = target.generationState;
+                    if (state?.status === 'success' || state?.status === 'error') {
+                        resolve({ ok: state.status === 'success', elementId: target.id, status: state.status, progress: state.progress, error: state.error, element: target });
+                        return;
+                    }
+
+                    if (Date.now() - startedAt >= timeoutMs) {
+                        resolve({ ok: false, elementId: target.id, status: state?.status || 'idle', progress: state?.progress, error: { code: 'WATCH_TIMEOUT', message: `element.watch timed out after ${timeoutMs}ms` } });
+                        return;
+                    }
+
+                    window.setTimeout(tick, 750);
+                };
+                tick();
+            });
+        };
+
         const resolveRuntimeModelKey = (capability: 'image' | 'video') => {
             const model = capability === 'image' ? modelPreference.imageModel : modelPreference.videoModel;
             const provider = inferProviderFromModel(model);
@@ -2148,12 +2453,30 @@ const App: React.FC = () => {
                 case 'canvas.removeElement':
                     api.canvas.removeElement(args?.id as string);
                     return { ok: true };
+                case 'canvas.remove-element':
+                    return api.canvas.removeElement(args?.id as string);
                 case 'canvas.updateElement':
                     api.canvas.updateElement(args?.id as string, (args?.updates || {}) as Record<string, unknown>);
                     return { ok: true };
+                case 'canvas.update-element':
+                    return api.canvas.updateElement(args?.id as string, (args?.updates || args?.updatesJson || {}) as Record<string, unknown>);
+                case 'canvas.select':
+                    return api.canvas.select(Array.isArray(args?.ids) ? args.ids as string[] : String(args?.ids || '').split(',').filter(Boolean));
                 case 'canvas.clear':
                     api.canvas.clear();
                     return { ok: true };
+                case 'canvas.inspect':
+                    return api.canvas.inspect();
+                case 'element.create':
+                    return api.element.create(args as Parameters<typeof createAtomicElement>[0]);
+                case 'element.update-prompt':
+                    return api.element.updatePrompt(args as Parameters<typeof updateAtomicPrompt>[0]);
+                case 'element.assign-slot':
+                    return api.element.assignSlot(args as Parameters<typeof assignAtomicSlot>[0]);
+                case 'element.ignite':
+                    return await api.element.ignite(args as Parameters<typeof igniteAtomicElement>[0]);
+                case 'element.watch':
+                    return await api.element.watch(args as Parameters<typeof watchAtomicElement>[0]);
                 case 'generate.image':
                     return api.generate.image(args);
                 case 'generate.imagesBatch':
@@ -2361,19 +2684,43 @@ const App: React.FC = () => {
                     };
                 }),
                 listMedia: listMediaElements,
+                inspect: inspectCanvasState,
                 addImage: (partial: Partial<ImageElement>) => addMediaElement(partial, 'image'),
                 addVideo: (partial: Partial<VideoElement>) => addMediaElement(partial, 'video'),
                 clearMedia: () => {
                     commitAction(prev => prev.filter(el => el.type !== 'image' && el.type !== 'video'));
                     return { ok: true };
                 },
-                removeElement: (id: string) => { commitAction(prev => prev.filter(e => e.id !== id)); },
+                removeElement: (id: string) => {
+                    const exists = elementsRef.current.some(element => element.id === id);
+                    commitAction(prev => prev.filter(e => e.id !== id && e.parentId !== id));
+                    setSelectedElementIds(prev => prev.filter(item => item !== id));
+                    return { ok: exists, id, removed: exists ? 1 : 0 };
+                },
                 updateElement: (id: string, updates: Record<string, unknown>) => {
-                    commitAction(prev => prev.map(e => e.id === id ? ({ ...e, ...updates } as Element) : e));
+                    const exists = elementsRef.current.some(element => element.id === id);
+                    if (!exists) return { ok: false, error: { code: 'BAD_REQUEST', message: `element not found (${id})` } };
+                    const safeUpdates = { ...updates };
+                    delete safeUpdates.id;
+                    delete safeUpdates.type;
+                    commitAction(prev => prev.map(e => e.id === id ? ({ ...e, ...safeUpdates } as Element) : e));
+                    return { ok: true, id, updates: safeUpdates };
                 },
                 clear: () => { commitAction(() => []); },
                 getSelected: () => [...selectedElementIds],
-                select: (ids: string[]) => { setSelectedElementIds(ids); },
+                select: (ids: string[]) => {
+                    const available = new Set(elementsRef.current.map(element => element.id));
+                    const selected = ids.filter(id => available.has(id));
+                    setSelectedElementIds(selected);
+                    return { ok: true, selectedElementIds: selected };
+                },
+            },
+            element: {
+                create: createAtomicElement,
+                updatePrompt: updateAtomicPrompt,
+                assignSlot: assignAtomicSlot,
+                ignite: igniteAtomicElement,
+                watch: watchAtomicElement,
             },
             generate: {
                 image: async (input: string | { prompt: string }) => {
@@ -2709,13 +3056,25 @@ const App: React.FC = () => {
                 onWidthChange={setRightPanelWidth}
                 onReversePrompt={handleReversePrompt}
                 onCreateImage={async (prompt, name) => {
-                    const result = await window.__flovartAPI?.generateImage?.({ prompt, name });
-                    if (!result?.ok) throw new Error(result?.error?.message || 'Agent image generation failed');
+                    const runtimeApi = getFlovartRuntimeApi();
+                    const result = await runtimeApi?.generate?.image?.({ prompt, name });
+                    if (!result || !result.id) throw new Error(getRuntimeErrorMessage(result, 'Agent image generation failed'));
                 }}
                 onCreateVideo={async (prompt, sourceImageIds) => {
-                    const result = await window.__flovartAPI?.generateVideo?.({ prompt, sourceImageIds });
-                    if (!result?.ok) throw new Error(result?.error?.message || 'Agent video generation failed');
+                    const runtimeApi = getFlovartRuntimeApi();
+                    const result = await runtimeApi?.generate?.video?.({ prompt, sourceImageIds });
+                    if (!result || !result.id) throw new Error(getRuntimeErrorMessage(result, 'Agent video generation failed'));
                 }}
+                runtimeStage={progressMessage}
+                runtimeJobs={Object.values(runtimeJobsRef.current)
+                    .map(job => ({
+                        jobId: job.jobId,
+                        command: job.command,
+                        status: job.status,
+                        progress: job.progress,
+                        updatedAt: job.updatedAt,
+                    }))
+                    .sort((a, b) => b.updatedAt - a.updatedAt)}
             />
             </Suspense>
             }
@@ -2903,7 +3262,7 @@ const App: React.FC = () => {
                 canUndo={historyIndex > 0}
                 canRedo={historyIndex < history.length - 1}
             />
-            <div className={`workflow-focus-chrome transition-all duration-300 ${isInlineMediaPromptActive ? 'translate-y-8 opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'}`}>
+            <div className={`workflow-focus-chrome transition-all duration-300 ${isInlineMediaPromptActive ? 'translate-y-6 opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'}`}>
             {addAssetModal?.open && (
                 <Suspense fallback={<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm"><div className="rounded-xl bg-neutral-800 px-6 py-4 text-sm text-white/60">Loading…</div></div>}>
                 <AssetAddModal
@@ -3099,7 +3458,11 @@ const App: React.FC = () => {
                                             className={croppingState && croppingState.elementId !== el.id ? 'opacity-30' : ''} 
                                             clipPath={hasBorderRadius ? `url(#${clipPathId})` : undefined}
                                             mask={maskId ? `url(#${maskId})` : undefined}
-                                            style={combinedFilter ? { filter: combinedFilter } : undefined}
+                                            style={{
+                                                filter: combinedFilter || undefined,
+                                                opacity: isInlineMediaPromptActive && !isSelected ? 0.82 : 1,
+                                                transition: 'opacity 160ms ease, filter 160ms ease',
+                                            }}
                                         />
                                         {selectionComponent}
                                     </g>
@@ -3112,7 +3475,7 @@ const App: React.FC = () => {
                                             <video 
                                                 src={el.href} 
                                                 controls 
-                                                style={{ width: '100%', height: '100%', borderRadius: '8px' }}
+                                                style={{ width: '100%', height: '100%', borderRadius: '8px', opacity: isInlineMediaPromptActive && !isSelected ? 0.82 : 1, transition: 'opacity 160ms ease' }}
                                                 className={croppingState ? 'opacity-30' : ''}
                                             ></video>
                                         </foreignObject>
@@ -3277,6 +3640,8 @@ const App: React.FC = () => {
                                 onPromptChange={updateElementGenerationState}
                                 onMediaGenerated={updateElementMedia}
                                 animateViewport={animateViewportToElement}
+                                progressLabel={progressMessage}
+                                activeTaskCount={Object.values(runtimeJobsRef.current).filter(job => job.status === 'running').length}
                             />
                         )}
 

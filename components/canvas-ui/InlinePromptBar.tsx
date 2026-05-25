@@ -1,17 +1,18 @@
 import React, { memo, useEffect, useMemo, useRef, useState } from 'react';
 import type {
     CanvasElement,
-    ChatAttachment,
     Element,
     ElementGenerationState,
     GenerationMode,
-    PromptEnhanceMode,
-    PromptEnhanceResult,
+    AssetSlotRole,
     UserApiKey,
 } from '../../types';
 import { compilePromptReferences } from '../../utils/semanticCompiler';
-import { executeUnifiedIgnition, inferCapabilityFromModelName } from '../../services/aiGateway';
-import { PromptBar } from '../PromptBar';
+import { hydrateRawTextToTiptapJSON } from '../../utils/htmlHydrator';
+import { executeUnifiedIgnition } from '../../services/aiGateway';
+import RichPromptEditor, { type RichPromptEditorHandle } from '../RichPromptEditor';
+import type { MentionItem } from '../MentionList';
+import { useWorkspaceStore } from '../../stores/useWorkspaceStore';
 
 interface InlinePromptBarProps {
     element: CanvasElement;
@@ -23,20 +24,76 @@ interface InlinePromptBarProps {
     progress?: number;
     isLoading: boolean;
     apiKeyPayload?: UserApiKey;
-    imageModelOptions: string[];
-    videoModelOptions: string[];
-    videoAspectRatio: '16:9' | '9:16' | '1:1' | '4:3' | '3:4' | '21:9';
-    setVideoAspectRatio: (ratio: '16:9' | '9:16' | '1:1' | '4:3' | '3:4' | '21:9') => void;
-    isAutoEnhanceEnabled?: boolean;
-    onAutoEnhanceToggle?: () => void;
-    onEnhancePrompt?: (payload: { prompt: string; mode: PromptEnhanceMode; stylePreset?: string }) => Promise<PromptEnhanceResult>;
-    isEnhancingPrompt?: boolean;
     t: (key: string, ...args: unknown[]) => string;
-    onModelChange: (modelId: string) => void;
     onPromptChange: (elementId: string, generationState: ElementGenerationState) => void;
     onMediaGenerated: (elementId: string, media: { href: string; mimeType: string }) => void;
     animateViewport: (targetX: number, targetY: number, targetZoom: number) => void;
+    progressLabel?: string;
+    activeTaskCount?: number;
 }
+
+type InlinePromptTranslations = {
+    imageTitle: string;
+    videoTitle: string;
+    imagePlaceholder: string;
+    videoPlaceholder: string;
+    statusIdle: string;
+    statusQueued: string;
+    statusRunning: string;
+    statusSuccess: string;
+    statusError: string;
+    statusReady: string;
+    slotFirstFrame: string;
+    slotStyleRef: string;
+    slotControlNet: string;
+    slotContext: string;
+    ignite: string;
+    computing: string;
+    queue: string;
+    model: string;
+    uploadReference: string;
+    removeReference: string;
+    noProvider: string;
+};
+
+const inlinePromptFallback: InlinePromptTranslations = {
+    imageTitle: 'IMG MATRIX',
+    videoTitle: 'FILM MATRIX',
+    imagePlaceholder: 'Enter prompt description or type @ to bind an asset...',
+    videoPlaceholder: 'Describe camera motion or type @ to bind a layer...',
+    statusIdle: 'IDLE',
+    statusQueued: 'QUEUED',
+    statusRunning: 'COMPUTING',
+    statusSuccess: 'READY',
+    statusError: 'ERROR',
+    statusReady: 'CORE READY',
+    slotFirstFrame: 'POSTER',
+    slotStyleRef: 'STYLE',
+    slotControlNet: 'CONTROL',
+    slotContext: 'TXT REF',
+    ignite: 'IGNITE',
+    computing: 'COMPUTING',
+    queue: 'QUEUE',
+    model: 'MODEL',
+    uploadReference: 'Upload reference',
+    removeReference: 'Remove reference',
+    noProvider: 'Provider key is not configured',
+};
+
+const canvasItemTypeLabels: Record<Element['type'], string> = {
+    image: '图片',
+    video: '视频',
+    shape: '形状',
+    text: '文字',
+    path: '画笔',
+    group: '组合',
+    arrow: '箭头',
+    line: '线条',
+};
+
+const isReferenceableCanvasElement = (item: Element): item is CanvasElement => (
+    item.type === 'image' || item.type === 'video' || item.type === 'text' || item.type === 'shape'
+);
 
 function createGenerationState(
     element: CanvasElement,
@@ -63,24 +120,49 @@ export const InlinePromptBar = memo(({
     progress,
     isLoading,
     apiKeyPayload,
-    imageModelOptions,
-    videoModelOptions,
-    videoAspectRatio,
-    setVideoAspectRatio,
-    isAutoEnhanceEnabled = false,
-    onAutoEnhanceToggle,
-    onEnhancePrompt,
-    isEnhancingPrompt = false,
     t,
-    onModelChange,
     onPromptChange,
     onMediaGenerated,
+    progressLabel,
+    activeTaskCount = 0,
 }: InlinePromptBarProps) => {
-    const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
+    const editorRef = useRef<RichPromptEditorHandle>(null);
     const animationFrameRef = useRef<number | null>(null);
+    const language = useWorkspaceStore(state => state.language);
     const generationState = createGenerationState(element, modelId, isLoading ? 'running' : status, progress);
     const effectiveModelId = generationState.modelId || modelId;
     const generationMode: GenerationMode = element.type === 'video' ? 'video' : 'image';
+    const isChinese = language === 'zho';
+    const inlineT = useMemo<InlinePromptTranslations>(() => {
+        const getValue = (key: keyof InlinePromptTranslations) => {
+            const value = t(`inlinePrompt.${key}`);
+            return value === `inlinePrompt.${key}` ? inlinePromptFallback[key] : value;
+        };
+
+        return {
+            imageTitle: getValue('imageTitle'),
+            videoTitle: getValue('videoTitle'),
+            imagePlaceholder: getValue('imagePlaceholder'),
+            videoPlaceholder: getValue('videoPlaceholder'),
+            statusIdle: getValue('statusIdle'),
+            statusQueued: getValue('statusQueued'),
+            statusRunning: getValue('statusRunning'),
+            statusSuccess: getValue('statusSuccess'),
+            statusError: getValue('statusError'),
+            statusReady: getValue('statusReady'),
+            slotFirstFrame: getValue('slotFirstFrame'),
+            slotStyleRef: getValue('slotStyleRef'),
+            slotControlNet: getValue('slotControlNet'),
+            slotContext: getValue('slotContext'),
+            ignite: getValue('ignite'),
+            computing: getValue('computing'),
+            queue: getValue('queue'),
+            model: getValue('model'),
+            uploadReference: getValue('uploadReference'),
+            removeReference: getValue('removeReference'),
+            noProvider: getValue('noProvider'),
+        };
+    }, [t]);
 
     useEffect(() => {
         if (!generationState.error) return;
@@ -88,16 +170,27 @@ export const InlinePromptBar = memo(({
             onPromptChange(element.id, { ...generationState, error: undefined });
         }, 3000);
         return () => window.clearTimeout(timer);
-    }, [element.id, generationState, onPromptChange]);
+    }, [element.id, generationState.error, onPromptChange]);
 
-    const syncPromptState = (rawText: string) => {
-        const canvasElements = allElements.filter((item): item is CanvasElement => (
-            item.type === 'image' || item.type === 'video' || item.type === 'text' || item.type === 'shape'
-        ));
+    const canvasItems = useMemo<MentionItem[]>(() => allElements
+        .filter(item => item.id !== element.id && item.isVisible !== false && isReferenceableCanvasElement(item))
+        .map(item => ({
+            id: item.id,
+            label: item.name?.trim() || `${canvasItemTypeLabels[item.type]} ${item.id.slice(-4)}`,
+            thumbnail: item.type === 'image' ? item.href : '',
+            elementType: item.type,
+        })), [allElements, element.id]);
+
+    const syncPromptState = (rawText: string, editorDocument?: Record<string, unknown>) => {
+        const canvasElements = allElements.filter(isReferenceableCanvasElement);
+        const hydrated = hydrateRawTextToTiptapJSON(rawText, canvasElements);
         onPromptChange(element.id, {
             ...generationState,
             modelId: effectiveModelId,
-            promptPayload: compilePromptReferences(rawText, canvasElements),
+            promptPayload: {
+                ...compilePromptReferences(rawText, canvasElements),
+                richTextDocument: editorDocument || hydrated.json,
+            },
         });
     };
 
@@ -107,7 +200,7 @@ export const InlinePromptBar = memo(({
             onPromptChange(element.id, {
                 ...generationState,
                 status: 'error',
-                error: `未配置 ${generationMode} Provider Key`,
+                error: `${inlineT.noProvider}: ${generationMode}`,
             });
             return;
         }
@@ -130,12 +223,6 @@ export const InlinePromptBar = memo(({
                     return { type: target.type, slotRole: reference.slotRole || 'unassigned' };
                 })
                 .filter((reference): reference is NonNullable<typeof reference> => reference !== null),
-            ...attachments.map((attachment) => ({
-                type: attachment.mimeType.startsWith('video/') ? 'video' as const : 'image' as const,
-                href: attachment.href,
-                mimeType: attachment.mimeType,
-                slotRole: 'unassigned',
-            })),
         ];
 
         const result = await executeUnifiedIgnition({
@@ -144,7 +231,7 @@ export const InlinePromptBar = memo(({
             modelId: effectiveModelId,
             apiKeyPayload,
             references,
-            onProgress: (nextProgress) => {
+            onProgress: (nextProgress: number) => {
                 onPromptChange(element.id, { ...generationState, status: 'running', error: undefined, progress: nextProgress });
             },
         });
@@ -159,11 +246,48 @@ export const InlinePromptBar = memo(({
 
     const targetScale = useMemo(() => {
         const safeZoom = Math.max(canvasZoom, 0.12);
-        return Math.max(0.92, Math.min(2.35, 1 / safeZoom));
+        return Math.max(0.9, Math.min(2.35, 1 / safeZoom));
     }, [canvasZoom]);
     const [displayScale, setDisplayScale] = useState(targetScale);
-    const panelWidth = 640;
-    const capability = inferCapabilityFromModelName(effectiveModelId);
+    const panelWidth = isChinese ? 360 : 390;
+    const accentColor = generationMode === 'video' ? '#D6A84F' : '#00FF88';
+    const runningProgress = generationState.status === 'running'
+        ? Math.max(6, Math.min(98, generationState.progress ?? progress ?? 12))
+        : 0;
+    const statusLabelMap: Record<ElementGenerationState['status'], string> = {
+        idle: inlineT.statusIdle,
+        queued: inlineT.statusQueued,
+        running: inlineT.statusRunning,
+        success: inlineT.statusSuccess,
+        error: inlineT.statusError,
+    };
+    const currentStatusLabel = statusLabelMap[generationState.status] || generationState.status;
+    const topPosition = element.y + element.height + 6;
+
+    const handleToggleRole = (targetElementId: string, currentRole: AssetSlotRole) => {
+        const roles: AssetSlotRole[] = ['first_frame', 'style_ref', 'control_net', 'unassigned'];
+        const nextRole = roles[(roles.indexOf(currentRole) + 1) % roles.length] || 'unassigned';
+        const updatedReferences = generationState.promptPayload.resolvedReferences.map((reference) => (
+            reference.targetElementId === targetElementId ? { ...reference, slotRole: nextRole } : reference
+        ));
+
+        onPromptChange(element.id, {
+            ...generationState,
+            promptPayload: {
+                ...generationState.promptPayload,
+                resolvedReferences: updatedReferences,
+            },
+        });
+    };
+
+    const getRoleBadge = (role: AssetSlotRole) => {
+        switch (role) {
+            case 'first_frame': return { text: inlineT.slotFirstFrame, cls: 'border-emerald-500/30 text-emerald-500 bg-emerald-500/5' };
+            case 'style_ref': return { text: inlineT.slotStyleRef, cls: 'border-amber-500/30 text-amber-500 bg-amber-500/5' };
+            case 'control_net': return { text: inlineT.slotControlNet, cls: 'border-blue-500/30 text-blue-500 bg-blue-500/5' };
+            default: return { text: inlineT.slotContext, cls: 'border-[var(--flovart-chip-border)] text-[var(--flovart-text-muted)] bg-transparent' };
+        }
+    };
 
     useEffect(() => {
         if (animationFrameRef.current !== null) {
@@ -190,28 +314,12 @@ export const InlinePromptBar = memo(({
         };
     }, [targetScale]);
 
-    const addAttachments = async (files: FileList | File[]) => {
-        const next = await Promise.all(Array.from(files).map(async (file, index) => ({
-            id: `inline_${element.id}_${Date.now()}_${index}`,
-            name: file.name,
-            href: await new Promise<string>((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = () => resolve(String(reader.result || ''));
-                reader.onerror = () => reject(reader.error);
-                reader.readAsDataURL(file);
-            }),
-            mimeType: file.type,
-            source: 'upload' as const,
-        })));
-        setAttachments(prev => [...prev, ...next.filter(item => item.href)]);
-    };
-
     return (
         <foreignObject
             x={element.x}
-            y={element.y + element.height + 8}
+            y={topPosition}
             width={panelWidth * displayScale}
-            height={460 * displayScale}
+            height={260 * displayScale}
             style={{ overflow: 'visible' }}
             onMouseDown={(event) => event.stopPropagation()}
             onPointerDown={(event) => event.stopPropagation()}
@@ -226,41 +334,95 @@ export const InlinePromptBar = memo(({
                     willChange: 'transform',
                 }}
             >
-                <PromptBar
-                    t={t}
-                    theme="dark"
-                    variant="inline"
-                    hideApiStatus
-                    className="inline-prompt-bar-surface"
-                    shellClassName="inline-prompt-bar-shell"
-                    prompt={generationState.promptPayload.rawText}
-                    setPrompt={syncPromptState}
-                    onGenerate={handleIgniteExecution}
-                    isLoading={isLoading || generationState.status === 'running'}
-                    isSelectionActive
-                    selectedElementCount={1}
-                    userEffects={[]}
-                    onAddUserEffect={() => undefined}
-                    onDeleteUserEffect={() => undefined}
-                    generationMode={generationMode}
-                    setGenerationMode={() => undefined}
-                    videoAspectRatio={videoAspectRatio}
-                    setVideoAspectRatio={setVideoAspectRatio}
-                    selectedImageModel={capability === 'image' ? effectiveModelId : undefined}
-                    selectedVideoModel={capability === 'video' ? effectiveModelId : undefined}
-                    imageModelOptions={imageModelOptions}
-                    videoModelOptions={videoModelOptions}
-                    onImageModelChange={generationMode === 'image' ? onModelChange : undefined}
-                    onVideoModelChange={generationMode === 'video' ? onModelChange : undefined}
-                    canvasElements={allElements}
-                    attachments={attachments}
-                    onAddAttachments={(files) => { void addAttachments(files); }}
-                    onRemoveAttachment={(id) => setAttachments(prev => prev.filter(item => item.id !== id))}
-                    onEnhancePrompt={onEnhancePrompt}
-                    isEnhancingPrompt={isEnhancingPrompt}
-                    isAutoEnhanceEnabled={isAutoEnhanceEnabled}
-                    onAutoEnhanceToggle={onAutoEnhanceToggle}
-                />
+                <div
+                    className="inline-prompt-bar"
+                    style={{
+                        '--inline-prompt-accent': accentColor,
+                        '--inline-prompt-progress': `${runningProgress}%`,
+                        '--inline-prompt-title-tracking': isChinese ? '0.02em' : '0.1em',
+                    } as React.CSSProperties}
+                >
+                    {generationState.status === 'running' && (
+                        <>
+                            <div className="inline-prompt-bar__ribbon" />
+                            <div className="inline-prompt-bar__queue-meta">
+                                <span>{activeTaskCount > 1 ? `${inlineT.queue} ${activeTaskCount}` : currentStatusLabel}</span>
+                                <span>{progressLabel || `${Math.round(runningProgress)}%`}</span>
+                            </div>
+                        </>
+                    )}
+
+                    <div className="inline-prompt-bar__header">
+                        <div className="inline-prompt-bar__title">
+                            <span className="inline-prompt-bar__eyebrow">{generationMode === 'video' ? inlineT.videoTitle : inlineT.imageTitle}</span>
+                            <span className="inline-prompt-bar__model" title={effectiveModelId}>{effectiveModelId}</span>
+                        </div>
+                        <div className="inline-prompt-bar__status">
+                            <span className={`inline-prompt-bar__status-dot inline-prompt-bar__status-dot--${generationState.status}`} />
+                            <span>{currentStatusLabel}</span>
+                        </div>
+                    </div>
+
+                    <div className="inline-prompt-bar__editor">
+                        <RichPromptEditor
+                            ref={editorRef}
+                            canvasItems={canvasItems}
+                            placeholder={generationMode === 'video' ? inlineT.videoPlaceholder : inlineT.imagePlaceholder}
+                            disabled={generationState.status === 'running'}
+                            initialText={generationState.promptPayload.rawText}
+                            initialDocument={generationState.promptPayload.richTextDocument}
+                            onTextChange={(plainText, json) => syncPromptState(plainText, json)}
+                            onSubmit={handleIgniteExecution}
+                        />
+                    </div>
+
+                    {generationState.promptPayload.resolvedReferences.length > 0 && (
+                        <div className="inline-prompt-bar__refs select-none">
+                            {generationState.promptPayload.resolvedReferences.map((reference) => {
+                                const badge = getRoleBadge(reference.slotRole || 'unassigned');
+                                return (
+                                    <div key={reference.targetElementId} className="inline-prompt-bar__ref-chip">
+                                        <span className="inline-prompt-bar__ref-token">@ {reference.token.replace(/^@/, '')}</span>
+                                        {reference.targetType === 'image' && (
+                                            <button
+                                                type="button"
+                                                onClick={() => handleToggleRole(reference.targetElementId, reference.slotRole || 'unassigned')}
+                                                className={`inline-prompt-bar__slot-toggle active:scale-95 ${badge.cls}`}
+                                            >
+                                                {badge.text}
+                                            </button>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+
+                    <div className="inline-prompt-bar__footer select-none">
+                        <div className="inline-prompt-bar__schema" title={progressLabel || effectiveModelId}>
+                            {generationState.status === 'running'
+                                ? `${inlineT.computing}: ${Math.round(runningProgress)}%`
+                                : progress !== undefined
+                                    ? `${Math.round(progress)}%`
+                                    : inlineT.statusReady}
+                        </div>
+                        <button
+                            type="button"
+                            className="inline-prompt-bar__ignite active:scale-95 transition-transform"
+                            disabled={generationState.status === 'running' || !generationState.promptPayload.rawText.trim()}
+                            onClick={handleIgniteExecution}
+                        >
+                            {generationState.status === 'running' ? inlineT.computing : inlineT.ignite}
+                        </button>
+                    </div>
+
+                    {generationState.error && (
+                        <div className="inline-prompt-bar__error-harness animate-shake">
+                            <div className="inline-prompt-bar__error-line" />
+                            <div className="inline-prompt-bar__error-text">{generationState.error}</div>
+                        </div>
+                    )}
+                </div>
             </div>
         </foreignObject>
     );

@@ -21,6 +21,16 @@ function buildDocFromText(text: string) {
     };
 }
 
+function normalizeDocument(
+    text: string,
+    document?: Record<string, unknown>,
+): Record<string, unknown> {
+    if (document && typeof document === 'object' && document.type === 'doc') {
+        return document;
+    }
+    return buildDocFromText(text);
+}
+
 function buildSuggestionExtension(getItems: (query: string) => MentionItem[]) {
     return Extension.create({
         name: 'canvasMentionSuggestion',
@@ -133,6 +143,7 @@ export interface RichPromptEditorHandle {
     clear: () => void;
     focus: () => void;
     setText: (text: string) => void;
+    setDocument: (document: Record<string, unknown>) => void;
     getJSON: () => Record<string, unknown>;
     getText: () => string;
     getMentions: () => MentionData[];
@@ -145,10 +156,11 @@ export interface RichPromptEditorProps {
     onTextChange?: (plainText: string, json: Record<string, unknown>) => void;
     onSubmit?: () => void;
     initialText?: string;
+    initialDocument?: Record<string, unknown>;
 }
 
 const RichPromptEditor = forwardRef<RichPromptEditorHandle, RichPromptEditorProps>(
-    ({ canvasItems, placeholder = '输入提示词，@ 引用画布元素...', disabled, onTextChange, onSubmit, initialText = '' }, ref) => {
+    ({ canvasItems, placeholder = '输入提示词，@ 引用画布元素...', disabled, onTextChange, onSubmit, initialText = '', initialDocument }, ref) => {
         const canvasItemsRef = useRef(canvasItems);
 
         useEffect(() => {
@@ -182,7 +194,7 @@ const RichPromptEditor = forwardRef<RichPromptEditorHandle, RichPromptEditorProp
                 CanvasMentionNode,
                 buildSuggestionExtension(getFilteredItems),
             ],
-            content: buildDocFromText(initialText),
+            content: normalizeDocument(initialText, initialDocument),
             editable: !disabled,
             editorProps: {
                 attributes: {
@@ -215,6 +227,10 @@ const RichPromptEditor = forwardRef<RichPromptEditorHandle, RichPromptEditorProp
             setText(text: string) {
                 if (!editor) return;
                 editor.commands.setContent(buildDocFromText(text), false as unknown as Record<string, never>);
+            },
+            setDocument(document: Record<string, unknown>) {
+                if (!editor) return;
+                editor.commands.setContent(normalizeDocument('', document), false as unknown as Record<string, never>);
             },
             getJSON() {
                 return (editor?.getJSON() ?? {}) as Record<string, unknown>;

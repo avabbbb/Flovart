@@ -90,12 +90,23 @@ export function createRuntimeFacade(client) {
     },
     canvas: {
       getElements: () => client.execute('canvas.getElements'),
+      inspect: () => client.execute('canvas.inspect'),
       addElement: partial => client.execute('canvas.addElement', partial),
       listMedia: () => client.execute('canvas.listMedia'),
       addImage: input => client.execute('canvas.addImage', input),
       addVideo: input => client.execute('canvas.addVideo', input),
+      updateElement: (id, updates) => client.execute('canvas.updateElement', id, updates),
+      removeElement: id => client.execute('canvas.removeElement', id),
       clearMedia: () => client.execute('canvas.clearMedia'),
       clear: () => client.execute('canvas.clear'),
+      select: ids => client.execute('canvas.select', ids),
+    },
+    element: {
+      create: input => client.execute('element.create', input),
+      updatePrompt: input => client.execute('element.updatePrompt', input),
+      assignSlot: input => client.execute('element.assignSlot', input),
+      ignite: input => client.execute('element.ignite', input),
+      watch: input => client.execute('element.watch', input),
     },
     session: {
       create: name => client.execute('session.create', name),
@@ -117,6 +128,12 @@ export function createRuntimeFacade(client) {
     },
     config: {
       getProviders: () => client.execute('config.getProviders'),
+    },
+    workflow: {
+      inspect: () => client.execute('workflow.inspect'),
+      load: input => client.execute('workflow.load', input),
+      updateNode: (nodeId, config) => client.execute('workflow.updateNode', nodeId, config),
+      run: input => client.execute('workflow.run', input),
     },
   };
 }

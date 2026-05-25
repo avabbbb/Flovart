@@ -1,4 +1,5 @@
 import type { GenerationHistoryItem } from '../types';
+import { offloadDataUrlRecords, rehydrateDataUrlRecords } from './mediaIndexedDBSentry';
 
 const STORAGE_KEY = 'making.generationHistory.v1';
 const MAX_HISTORY_ITEMS = 18;
@@ -26,6 +27,26 @@ export const saveGenerationHistory = (items: GenerationHistoryItem[]) => {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(items.slice(0, 6)));
         } catch {
             // 彻底放弃持久化, 不阻断业务
+        }
+    }
+};
+
+export const loadGenerationHistoryAsync = async (): Promise<GenerationHistoryItem[]> => {
+    const items = loadGenerationHistory();
+    return await rehydrateDataUrlRecords(items);
+};
+
+export const saveGenerationHistoryAsync = async (items: GenerationHistoryItem[]) => {
+    try {
+        const slim = await offloadDataUrlRecords(items, 'history');
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(slim));
+    } catch (err) {
+        console.error('[Storage] Failed to save generation history', err);
+        try {
+            const slim = await offloadDataUrlRecords(items.slice(0, 6), 'history');
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(slim));
+        } catch {
+            // Give up quietly. History is optional persistence.
         }
     }
 };
@@ -65,7 +86,5 @@ export const addGenerationHistoryItem = (
     items: GenerationHistoryItem[],
     item: GenerationHistoryItem
 ): GenerationHistoryItem[] => {
-    const next = [item, ...items.filter(existing => existing.dataUrl !== item.dataUrl)].slice(0, MAX_HISTORY_ITEMS);
-    saveGenerationHistory(next);
-    return next;
+    return [item, ...items.filter(existing => existing.dataUrl !== item.dataUrl)].slice(0, MAX_HISTORY_ITEMS);
 };
