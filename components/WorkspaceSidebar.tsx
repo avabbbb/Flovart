@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { Board, Element } from '../types';
+import { useWorkspaceStore } from '../stores/useWorkspaceStore';
 
 interface WorkspaceSidebarProps {
     isOpen: boolean;
@@ -21,6 +22,7 @@ interface WorkspaceSidebarProps {
     onToggleLock: (id: string) => void;
     onRenameElement: (id: string, name: string) => void;
     onReorder: (draggedId: string, targetId: string, position: 'before' | 'after') => void;
+    onElementDoubleClick?: (element: Element) => void;
 }
 
 const iconProps = {
@@ -80,23 +82,55 @@ function getElementLabel(element: Element): string {
     return `${fallback[element.type]} ${element.id.slice(-4)}`;
 }
 
+const layerCopy = {
+    zho: {
+        renameLayer: '重命名图层',
+        renameBoard: '重命名画板',
+        lock: '锁定',
+        unlock: '解锁',
+        hide: '隐藏',
+        show: '显示',
+        expand: '展开组合',
+        collapse: '折叠组合',
+        layer: '图层',
+        groupOpen: 'open',
+        groupClosed: 'group',
+    },
+    en: {
+        renameLayer: 'Rename layer',
+        renameBoard: 'Rename board',
+        lock: 'Lock',
+        unlock: 'Unlock',
+        hide: 'Hide',
+        show: 'Show',
+        expand: 'Expand group layer',
+        collapse: 'Collapse group layer',
+        layer: 'Layer',
+        groupOpen: 'open',
+        groupClosed: 'group',
+    },
+} as const;
+
 const BoardMenu: React.FC<{
     onRename: () => void;
     onDuplicate: () => void;
     onDelete: () => void;
-}> = ({ onRename, onDuplicate, onDelete }) => (
-    <div className="isl-pop absolute right-0 top-full z-20 mt-2 w-32 p-1">
-        <button type="button" onClick={onRename} className="isl-opt text-sm">
-            Rename
-        </button>
-        <button type="button" onClick={onDuplicate} className="isl-opt text-sm">
-            Duplicate
-        </button>
-        <button type="button" onClick={onDelete} className="isl-opt text-sm" style={{ color: 'var(--isl-coral-deep)' }}>
-            Delete
-        </button>
-    </div>
-);
+}> = ({ onRename, onDuplicate, onDelete }) => {
+    const language = useWorkspaceStore(state => state.language);
+    return (
+        <div className="isl-pop absolute right-0 top-full z-20 mt-2 w-32 p-1">
+            <button type="button" onClick={onRename} className="isl-opt text-sm">
+                {language === 'zho' ? '重命名' : 'Rename'}
+            </button>
+            <button type="button" onClick={onDuplicate} className="isl-opt text-sm">
+                {language === 'zho' ? '复制' : 'Duplicate'}
+            </button>
+            <button type="button" onClick={onDelete} className="isl-opt text-sm" style={{ color: 'var(--isl-coral-deep)' }}>
+                {language === 'zho' ? '删除' : 'Delete'}
+            </button>
+        </div>
+    );
+};
 
 const BoardRow: React.FC<{
     board: Board;
@@ -112,6 +146,8 @@ const BoardRow: React.FC<{
     const [menuOpen, setMenuOpen] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
     const menuRef = useRef<HTMLDivElement>(null);
+    const language = useWorkspaceStore(state => state.language);
+    const copy = language === 'zho' ? layerCopy.zho : layerCopy.en;
 
     useEffect(() => {
         setName(board.name);
@@ -178,15 +214,15 @@ const BoardRow: React.FC<{
                                 setIsEditing(false);
                             }
                         }}
-                        title="重命名画板"
-                        aria-label="重命名画板"
+                        title={copy.renameBoard}
+                        aria-label={copy.renameBoard}
                         className="w-full border-none bg-transparent text-sm font-bold outline-none"
                     />
                 ) : (
                     <div className="truncate text-sm font-bold">{board.name}</div>
                 )}
                 <div className={`text-xs ${isActive ? 'text-white/75' : ''}`} style={isActive ? undefined : { color: 'var(--isl-ink-soft)' }}>
-                    {board.elements.length} items
+                    {language === 'zho' ? `${board.elements.length} 个图层` : `${board.elements.length} items`}
                 </div>
             </div>
             <div className="relative" ref={menuRef}>
@@ -218,7 +254,7 @@ const BoardRow: React.FC<{
                         }}
                         onDelete={() => {
                             setMenuOpen(false);
-                            if (window.confirm(`Delete "${board.name}"?`)) {
+                            if (window.confirm(language === 'zho' ? `确定要删除画板「${board.name}」？` : `Delete board "${board.name}"?`)) {
                                 onDelete();
                             }
                         }}
@@ -240,6 +276,7 @@ const LayerRow: React.FC<{
     onToggleVisibility: () => void;
     onToggleLock: () => void;
     onRename: (name: string) => void;
+    onElementDoubleClick?: (element: Element) => void;
     onDragStart: (event: React.DragEvent<HTMLDivElement>) => void;
     onDragOver: (event: React.DragEvent<HTMLDivElement>) => void;
     onDrop: (event: React.DragEvent<HTMLDivElement>) => void;
@@ -255,11 +292,14 @@ const LayerRow: React.FC<{
     onToggleVisibility,
     onToggleLock,
     onRename,
+    onElementDoubleClick,
     ...dragProps
 }) => {
     const [isEditing, setIsEditing] = useState(false);
     const [name, setName] = useState(getElementLabel(element));
     const inputRef = useRef<HTMLInputElement>(null);
+    const language = useWorkspaceStore(state => state.language);
+    const copy = language === 'zho' ? layerCopy.zho : layerCopy.en;
 
     useEffect(() => {
         setName(getElementLabel(element));
@@ -287,35 +327,51 @@ const LayerRow: React.FC<{
             draggable
             {...dragProps}
             onClick={onSelect}
-            onDoubleClick={() => setIsEditing(true)}
-            className={`isl-layer-row group flex items-center gap-2 rounded-2xl border-[1.5px] border-transparent px-3 py-2 text-left text-sm transition ${
-                isSelected ? 'isl-row--active' : ''
+            onDoubleClick={() => {
+                onElementDoubleClick?.(element);
+                setIsEditing(true);
+            }}
+            className={`isl-layer-row group flex items-center gap-1.5 rounded-2xl border-[1.5px] border-transparent py-1.5 pl-1 pr-2 text-left text-sm transition ${
+                isSelected ? 'isl-row--active cursor-grab' : 'cursor-grab hover:bg-[var(--isl-surface-2)]'
             } ${element.isVisible === false ? 'opacity-55' : ''}`}
-            style={isSelected ? { paddingLeft: `${12 + level * 18}px` } : { paddingLeft: `${12 + level * 18}px`, color: 'var(--isl-ink)' }}
+            style={isSelected ? { paddingLeft: `${4 + level * 16}px` } : { paddingLeft: `${4 + level * 16}px`, color: 'var(--isl-ink)' }}
         >
+            <span
+                aria-hidden="true"
+                className="flex h-7 w-3 shrink-0 flex-col items-center justify-center gap-[2px] opacity-30 transition-opacity group-hover:opacity-70"
+                style={{ color: isSelected ? '#fff' : 'var(--isl-ink-soft)' }}
+            >
+                <span className="flex gap-[2px]">
+                    <span className="h-1 w-1 rounded-full bg-current" />
+                    <span className="h-1 w-1 rounded-full bg-current" />
+                </span>
+                <span className="flex gap-[2px]">
+                    <span className="h-1 w-1 rounded-full bg-current" />
+                    <span className="h-1 w-1 rounded-full bg-current" />
+                </span>
+                <span className="flex gap-[2px]">
+                    <span className="h-1 w-1 rounded-full bg-current" />
+                    <span className="h-1 w-1 rounded-full bg-current" />
+                </span>
+            </span>
             <button
                 type="button"
-                aria-label={isExpanded ? 'Collapse group layer' : 'Expand group layer'}
-                title={isExpanded ? 'Collapse group layer' : 'Expand group layer'}
+                aria-label={isExpanded ? copy.collapse : copy.expand}
+                title={hasChildren ? (isExpanded ? copy.collapse : copy.expand) : copy.layer}
                 onClick={(event) => {
                     event.stopPropagation();
                     if (hasChildren) onToggleExpanded();
                 }}
-                className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg transition ${
-                    hasChildren ? '' : 'opacity-40'
+                className={`flex h-6 w-5 shrink-0 items-center justify-center rounded-md transition ${
+                    hasChildren ? 'cursor-pointer' : 'cursor-default'
                 }`}
             >
                 {hasChildren ? (
-                    <svg {...iconProps} width={13} height={13} className={`transition-transform ${isExpanded ? 'rotate-90' : ''}`}>
+                    <svg {...iconProps} width={14} height={14} className={`transition-transform ${isExpanded ? 'rotate-90' : ''}`}>
                         <path d="m9 6-4 4-4-4" />
                     </svg>
-                ) : (
-                    <span className="h-1.5 w-1.5 rounded-full bg-current opacity-40" />
-                )}
+                ) : null}
             </button>
-            <span className="isl-avatar flex h-7 w-7 shrink-0 items-center justify-center" style={{ background: isSelected ? 'rgba(255,255,255,0.2)' : 'var(--isl-card)', color: isSelected ? '#fff' : 'var(--isl-ink-soft)' }}>
-                {getElementIcon(element)}
-            </span>
             <div className="min-w-0 flex-1">
                 {isEditing ? (
                     <input
@@ -331,32 +387,34 @@ const LayerRow: React.FC<{
                                 setIsEditing(false);
                             }
                         }}
-                        title="重命名图层"
-                        aria-label="重命名图层"
-                        className="w-full border-none bg-transparent text-sm outline-none"
+                        title={copy.renameLayer}
+                        aria-label={copy.renameLayer}
+                        className="w-full border-none bg-transparent text-sm font-semibold outline-none"
                     />
                 ) : (
-                    <div className="truncate font-semibold">{getElementLabel(element)}</div>
+                    <div className="truncate text-sm font-semibold" title={getElementLabel(element)}>{getElementLabel(element)}</div>
                 )}
             </div>
             {hasChildren && (
                 <span className="rounded-full px-1.5 py-0.5 text-[10px] font-bold" style={{ background: isSelected ? 'rgba(255,255,255,0.2)' : 'var(--isl-surface-2)', color: isSelected ? '#fff' : 'var(--isl-ink-soft)' }}>
-                    {isExpanded ? 'open' : 'group'}
+                    {isExpanded ? copy.groupOpen : copy.groupClosed}
                 </span>
             )}
-            <div className="flex shrink-0 items-center gap-1 opacity-0 transition group-hover:opacity-100">
+            <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition group-hover:opacity-100">
                 <button
                     type="button"
                     onClick={(event) => {
                         event.stopPropagation();
                         onToggleLock();
                     }}
-                    className="isl-icon-btn h-7 w-7"
+                    className="isl-icon-btn flex h-6 w-6 items-center justify-center"
+                    title={element.isLocked ? copy.unlock : copy.lock}
+                    aria-label={element.isLocked ? copy.unlock : copy.lock}
                 >
                     {element.isLocked ? (
-                        <svg {...iconProps}><rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></svg>
+                        <svg {...iconProps} width={14} height={14}><rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></svg>
                     ) : (
-                        <svg {...iconProps}><rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V8a4 4 0 0 1 7.2-2.4" /></svg>
+                        <svg {...iconProps} width={14} height={14}><rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V8a4 4 0 0 1 7.2-2.4" /></svg>
                     )}
                 </button>
                 <button
@@ -365,12 +423,14 @@ const LayerRow: React.FC<{
                         event.stopPropagation();
                         onToggleVisibility();
                     }}
-                    className="isl-icon-btn h-7 w-7"
+                    className="isl-icon-btn flex h-6 w-6 items-center justify-center"
+                    title={element.isVisible === false ? copy.show : copy.hide}
+                    aria-label={element.isVisible === false ? copy.show : copy.hide}
                 >
                     {element.isVisible === false ? (
-                        <svg {...iconProps}><path d="M3 3 21 21" /><path d="M10.6 10.6a3 3 0 0 0 4.2 4.2" /><path d="M9.4 5.5A11.1 11.1 0 0 1 12 5c7 0 10 7 10 7a17.7 17.7 0 0 1-4 4.9" /><path d="M6.2 6.2A18.7 18.7 0 0 0 2 12s3 7 10 7a10.7 10.7 0 0 0 3.3-.5" /></svg>
+                        <svg {...iconProps} width={14} height={14}><path d="M3 3 21 21" /><path d="M10.6 10.6a3 3 0 0 0 4.2 4.2" /><path d="M9.4 5.5A11.1 11.1 0 0 1 12 5c7 0 10 7 10 7a17.7 17.7 0 0 1-4 4.9" /><path d="M6.2 6.2A18.7 18.7 0 0 0 2 12s3 7 10 7a10.7 10.7 0 0 0 3.3-.5" /></svg>
                     ) : (
-                        <svg {...iconProps}><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7S2 12 2 12Z" /><circle cx="12" cy="12" r="3" /></svg>
+                        <svg {...iconProps} width={14} height={14}><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7S2 12 2 12Z" /><circle cx="12" cy="12" r="3" /></svg>
                     )}
                 </button>
             </div>
@@ -398,9 +458,12 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
     onToggleLock,
     onRenameElement,
     onReorder,
+    onElementDoubleClick,
 }) => {
     const [dragOverId, setDragOverId] = useState<string | null>(null);
+    const [dragOverPosition, setDragOverPosition] = useState<'before' | 'after' | null>(null);
     const [expandedGroupIds, setExpandedGroupIds] = useState<Set<string>>(() => new Set());
+    const language = useWorkspaceStore(state => state.language);
 
     const orderedElements = useMemo(() => [...elements].reverse(), [elements]);
     const childCountByParent = useMemo(() => {
@@ -419,19 +482,24 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
     const handleDragOver = (event: React.DragEvent<HTMLDivElement>) => {
         event.preventDefault();
         const nextId = event.currentTarget.getAttribute('data-id');
+        const rect = event.currentTarget.getBoundingClientRect();
+        const position: 'before' | 'after' = event.clientY - rect.top > rect.height / 2 ? 'after' : 'before';
         setDragOverId(nextId);
+        setDragOverPosition(position);
     };
 
     const handleDragLeave = () => {
         setDragOverId(null);
+        setDragOverPosition(null);
     };
 
     const handleDrop = (event: React.DragEvent<HTMLDivElement>, targetId: string) => {
         event.preventDefault();
-        setDragOverId(null);
         const draggedId = event.dataTransfer.getData('text/plain');
         const rect = event.currentTarget.getBoundingClientRect();
         const position = event.clientY - rect.top > rect.height / 2 ? 'after' : 'before';
+        setDragOverId(null);
+        setDragOverPosition(null);
 
         if (draggedId && draggedId !== targetId) {
             onReorder(draggedId, targetId, position);
@@ -451,9 +519,14 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
                             onDragOver={handleDragOver}
                             onDragLeave={handleDragLeave}
                             onDrop={(event) => handleDrop(event, item.id)}
-                            className={dragOverId === item.id ? 'rounded-2xl' : ''}
-                            style={dragOverId === item.id ? { background: 'var(--isl-mint-bg)' } : undefined}
+                            className="relative"
                         >
+                            {dragOverId === item.id && dragOverPosition === 'before' && (
+                                <div className="pointer-events-none absolute inset-x-2 top-0 z-10 h-0.5 rounded-full" style={{ background: 'var(--isl-mint)', boxShadow: '0 0 0 2px var(--isl-mint-bg)' }} />
+                            )}
+                            {dragOverId === item.id && dragOverPosition === 'after' && (
+                                <div className="pointer-events-none absolute inset-x-2 bottom-0 z-10 h-0.5 rounded-full" style={{ background: 'var(--isl-mint)', boxShadow: '0 0 0 2px var(--isl-mint-bg)' }} />
+                            )}
                             <LayerRow
                                 element={item}
                                 level={level}
@@ -472,6 +545,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
                                 onToggleVisibility={() => onToggleVisibility(item.id)}
                                 onToggleLock={() => onToggleLock(item.id)}
                                 onRename={(name) => onRenameElement(item.id, name)}
+                                onElementDoubleClick={onElementDoubleClick}
                                 onDragStart={(event) => handleDragStart(event, item.id)}
                                 onDragOver={handleDragOver}
                                 onDragLeave={handleDragLeave}
@@ -500,7 +574,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
                 <div className="flex items-center justify-between border-b px-4 py-3" style={{ borderColor: 'var(--isl-border)' }}>
                     <div>
                         <div className="text-[11px] font-bold uppercase tracking-[0.18em]" style={{ color: 'var(--isl-ink-ghost)' }}>Workspace</div>
-                        <div className="text-base font-bold" style={{ color: 'var(--isl-ink)' }}>Boards & Layers</div>
+                        <div className="text-base font-bold" style={{ color: 'var(--isl-ink)' }}>{language === 'zho' ? '画板与图层' : 'Boards & Layers'}</div>
                     </div>
                     <button
                         type="button"
@@ -518,8 +592,8 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
                 <section className="min-h-[170px] basis-[28%] border-b px-3 py-3" style={{ borderColor: 'var(--isl-border)' }}>
                     <div className="mb-3 flex items-center justify-between">
                         <div>
-                            <div className="text-sm font-bold" style={{ color: 'var(--isl-ink)' }}>Boards</div>
-                            <div className="text-xs" style={{ color: 'var(--isl-ink-soft)' }}>Scenes and canvases</div>
+                            <div className="text-sm font-bold" style={{ color: 'var(--isl-ink)' }}>{language === 'zho' ? '画板' : 'Boards'}</div>
+                            <div className="text-xs" style={{ color: 'var(--isl-ink-soft)' }}>{language === 'zho' ? '场景与画布' : 'Scenes and canvases'}</div>
                         </div>
                         <button
                             type="button"
@@ -548,8 +622,8 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
                 <section className="flex min-h-0 flex-1 flex-col px-3 py-3">
                     <div className="mb-3 flex items-center justify-between">
                         <div>
-                            <div className="text-sm font-bold" style={{ color: 'var(--isl-ink)' }}>Layers</div>
-                            <div className="text-xs" style={{ color: 'var(--isl-ink-soft)' }}>{elements.length} items on canvas</div>
+                            <div className="text-sm font-bold" style={{ color: 'var(--isl-ink)' }}>{language === 'zho' ? '图层' : 'Layers'}</div>
+                            <div className="text-xs" style={{ color: 'var(--isl-ink-soft)' }}>{language === 'zho' ? `画布上 ${elements.length} 个图层` : `${elements.length} items on canvas`}</div>
                         </div>
                         {selectedElementIds.length > 0 && (
                             <button

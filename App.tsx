@@ -729,15 +729,17 @@ const App: React.FC = () => {
         }));
     }, [setElements]);
 
-    const animateViewportToElement = useCallback((targetX: number, targetY: number, targetZoom: number) => {
+    const animateViewportToElement = useCallback((targetX: number, targetY: number, targetZoom: number, centerX?: number, centerY?: number) => {
         const svgBounds = svgRef.current?.getBoundingClientRect();
         const viewportWidth = svgBounds?.width || window.innerWidth;
         const viewportHeight = svgBounds?.height || window.innerHeight;
         const startPan = activeBoard.panOffset;
         const startZoom = activeBoard.zoom;
+        const cx = centerX ?? viewportWidth / 2;
+        const cy = centerY ?? viewportHeight / 2;
         const nextPanOffset = {
-            x: viewportWidth / 2 - targetX * targetZoom,
-            y: viewportHeight / 2 - targetY * targetZoom,
+            x: cx - targetX * targetZoom,
+            y: cy - targetY * targetZoom,
         };
 
         if (viewportAnimationRef.current !== null) {
@@ -772,8 +774,63 @@ const App: React.FC = () => {
     const handleElementDoubleClickFocus = useCallback((element: Element) => {
         if (element.type !== 'image' && element.type !== 'video' && element.type !== 'shape' && element.type !== 'text' && element.type !== 'group') return;
         const bounds = getElementBounds(element, elementsRef.current);
-        animateViewportToElement(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2, 1);
-    }, [animateViewportToElement]);
+        if (bounds.width <= 0 || bounds.height <= 0) return;
+        const svgRect = svgRef.current?.getBoundingClientRect();
+        if (!svgRect) return;
+        const visibleLeft = chromeMetrics.outerGap + chromeMetrics.sidebarWidth;
+        const visibleTop = chromeMetrics.outerGap;
+        const visibleRight = svgRect.width - chromeMetrics.outerGap;
+        const visibleBottom = svgRect.height - chromeMetrics.canvasBottomInset;
+        const visibleWidth = Math.max(120, visibleRight - visibleLeft);
+        const visibleHeight = Math.max(120, visibleBottom - visibleTop);
+        const visibleCenterX = visibleLeft + visibleWidth / 2;
+        const visibleCenterY = visibleTop + visibleHeight / 2;
+        const fitZoom = Math.min(
+            (visibleHeight * (2 / 3)) / bounds.height,
+            (visibleWidth * 0.9) / Math.max(bounds.width, 1)
+        );
+        const targetZoom = Math.max(0.1, Math.min(2, fitZoom));
+        animateViewportToElement(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2, targetZoom, visibleCenterX, visibleCenterY);
+    }, [animateViewportToElement, chromeMetrics]);
+
+    const handleFitView = useCallback(() => {
+        const allElements = elementsRef.current;
+        const svgRect = svgRef.current?.getBoundingClientRect();
+        if (!svgRect) return;
+        const visibleLeft = chromeMetrics.outerGap + chromeMetrics.sidebarWidth;
+        const visibleTop = chromeMetrics.outerGap;
+        const visibleRight = svgRect.width - chromeMetrics.outerGap;
+        const visibleBottom = svgRect.height - chromeMetrics.canvasBottomInset;
+        const visibleWidth = Math.max(120, visibleRight - visibleLeft);
+        const visibleHeight = Math.max(120, visibleBottom - visibleTop);
+        const visibleCenterX = visibleLeft + visibleWidth / 2;
+        const visibleCenterY = visibleTop + visibleHeight / 2;
+        if (allElements.length === 0) {
+            animateViewportToElement(0, 0, 1, visibleCenterX, visibleCenterY);
+            return;
+        }
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        for (const element of allElements) {
+            const bounds = getElementBounds(element, allElements);
+            if (bounds.width <= 0 || bounds.height <= 0) continue;
+            minX = Math.min(minX, bounds.x);
+            minY = Math.min(minY, bounds.y);
+            maxX = Math.max(maxX, bounds.x + bounds.width);
+            maxY = Math.max(maxY, bounds.y + bounds.height);
+        }
+        if (!isFinite(minX) || !isFinite(minY)) {
+            animateViewportToElement(0, 0, 1, visibleCenterX, visibleCenterY);
+            return;
+        }
+        const contentWidth = Math.max(maxX - minX, 1);
+        const contentHeight = Math.max(maxY - minY, 1);
+        const margin = 0.9;
+        const targetZoom = Math.max(
+            0.05,
+            Math.min(2, Math.min((visibleWidth * margin) / contentWidth, (visibleHeight * margin) / contentHeight))
+        );
+        animateViewportToElement(minX + contentWidth / 2, minY + contentHeight / 2, targetZoom, visibleCenterX, visibleCenterY);
+    }, [animateViewportToElement, chromeMetrics]);
 
     const commitAction = useCallback((updater: (prev: Element[]) => Element[]) => {
         updateActiveBoard(board => {
@@ -844,6 +901,7 @@ const App: React.FC = () => {
         updateActiveBoard, setElements, commitAction,
         getDescendants,
         onElementDoubleClick: handleElementDoubleClickFocus,
+        onTripleClickEmpty: handleFitView,
     });
 
     // ── Extracted: generation (AI image/video/batch) ──
@@ -3084,6 +3142,7 @@ const App: React.FC = () => {
                         return newElements;
                     });
                 }}
+                onElementDoubleClick={handleElementDoubleClickFocus}
             />
             }
             rightSidebar={

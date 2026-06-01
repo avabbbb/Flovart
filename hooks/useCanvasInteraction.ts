@@ -40,6 +40,7 @@ export interface UseCanvasInteractionParams {
     // Helpers
     getDescendants: (id: string, els: Element[]) => Element[];
     onElementDoubleClick?: (element: Element) => void;
+    onTripleClickEmpty?: () => void;
 }
 
 export function useCanvasInteraction(params: UseCanvasInteractionParams) {
@@ -55,6 +56,7 @@ export function useCanvasInteraction(params: UseCanvasInteractionParams) {
         updateActiveBoard, setElements, commitAction,
         getDescendants,
         onElementDoubleClick,
+        onTripleClickEmpty,
     } = params;
 
     // --- Interaction-only state ---
@@ -320,6 +322,10 @@ export function useCanvasInteraction(params: UseCanvasInteractionParams) {
                 cachedStaticSnap.current = snap;
 
             } else {
+                if (e.detail === 3) {
+                    onTripleClickEmpty?.();
+                    return;
+                }
                 setSelectedElementIds([]);
                 interactionMode.current = 'selectBox';
                 setSelectionBox({ x: canvasStartPoint.x, y: canvasStartPoint.y, width: 0, height: 0 });

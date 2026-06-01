@@ -65,9 +65,9 @@ export const getCompactChromeMetrics = (viewportWidth: number): CompactChromeMet
         return {
             viewportWidth,
             outerGap: 14,
-            sidebarWidth: 228,
+            sidebarWidth: 264,
             toolbarLeftClosed: 14,
-            toolbarLeftOpen: 250,
+            toolbarLeftOpen: 286,
             toolbarScale: 0.88,
             rightPanelDefaultWidth: 320,
             rightPanelMinWidth: 296,
@@ -85,9 +85,9 @@ export const getCompactChromeMetrics = (viewportWidth: number): CompactChromeMet
     return {
         viewportWidth,
         outerGap: 16,
-        sidebarWidth: 216,
+        sidebarWidth: 256,
         toolbarLeftClosed: 16,
-        toolbarLeftOpen: 236,
+        toolbarLeftOpen: 276,
         toolbarScale: 0.8,
         rightPanelDefaultWidth: 304,
         rightPanelMinWidth: 280,
