@@ -2607,6 +2607,67 @@ input[type='range'].toolbar-range::-moz-range-thumb:hover {
   box-shadow: 0 2px 0 0 var(--isl-edge), var(--isl-shadow-sm);
 }
 
+/* ── Animal Crossing "island sign" tab bar ──
+   Chunky paper pill, mint dot indicator on the active tab,
+   micro-rotation on hover. Uses the project's tactile-shell
+   tokens only — no new colors, no decorative stitches. */
+.isl-tabbar--ac {
+  position: relative;
+  border-radius: 18px;
+  border: 1.5px solid var(--isl-border);
+  background:
+    radial-gradient(circle at 12% 0%, rgba(255, 255, 255, 0.5), transparent 35%),
+    linear-gradient(180deg, var(--isl-card), var(--isl-surface));
+  padding: 6px;
+  box-shadow: 0 3px 0 0 var(--isl-edge), var(--isl-shadow-sm);
+  overflow: visible;
+}
+:root[data-theme='dark'] .isl-tabbar--ac {
+  background:
+    radial-gradient(circle at 12% 0%, rgba(255, 255, 255, 0.05), transparent 35%),
+    linear-gradient(180deg, var(--isl-card), var(--isl-surface));
+}
+
+.isl-tabbar--ac .isl-tab {
+  border-radius: 14px;
+  color: var(--isl-ink-soft);
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+.isl-tabbar--ac .isl-tab:hover:not(.isl-tab--active) {
+  color: var(--isl-ink);
+  transform: translateY(-2px) rotate(-1deg);
+  background: var(--isl-surface-2);
+}
+
+.isl-tabbar--ac .isl-tab--active {
+  position: relative;
+  background: var(--isl-mint-bg);
+  color: var(--isl-mint-deep);
+  border: 1.5px solid var(--isl-mint);
+  box-shadow: 0 2px 0 0 var(--isl-edge-mint), var(--isl-shadow-sm);
+  transform: translateY(-1px);
+}
+
+.isl-tabbar--ac-collapse {
+  border-radius: 12px;
+  border: 1.5px solid var(--isl-border);
+  background: var(--isl-card);
+  color: var(--isl-ink-soft);
+  box-shadow: 0 2px 0 0 var(--isl-edge);
+  transition: transform 180ms cubic-bezier(.2, 1.4, .3, 1), box-shadow 180ms ease, background 180ms ease, color 180ms ease;
+}
+.isl-tabbar--ac-collapse:hover {
+  transform: translateY(-1px) rotate(-3deg);
+  background: var(--isl-surface);
+  color: var(--isl-mint-deep);
+  box-shadow: 0 3px 0 0 var(--isl-edge);
+}
+.isl-tabbar--ac-collapse:active {
+  transform: translateY(1px);
+  box-shadow: none;
+}
+
 /* ── Elastic interaction helpers (bouncy hover-lift + press-squish) ── */
 .isl-elastic {
   transition: transform 260ms cubic-bezier(.2, 1.45, .24, 1), box-shadow 200ms ease, filter 200ms ease;

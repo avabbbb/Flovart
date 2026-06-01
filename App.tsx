@@ -3119,10 +3119,9 @@ const App: React.FC = () => {
                         jobId: job.jobId,
                         command: job.command,
                         status: job.status,
-                        progress: job.progress,
+                        progress: { pct: job.progress?.pct ?? 0, stage: job.progress?.stage ?? '' },
                         updatedAt: job.updatedAt,
-                    }))
-                    .sort((a, b) => b.updatedAt - a.updatedAt)}
+                    }))}
             />
             </Suspense>
             }

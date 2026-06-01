@@ -1,9 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { AssetCategory, AssetItem, AssetLibrary, GenerationHistoryItem } from '../types';
 import { AgentChatPanel } from './AgentChatPanel';
-import { rhGetWebAppNodes, rhRunWebApp, rhUploadWebAppDataUrl, type RHWebAppNodeInfo, type RHWebAppOutputItem, type RHWebAppTaskStatus } from '../services/runningHubService';
 
-type RightPanelTab = 'history' | 'inspiration' | 'agent' | 'runningHub';
+type RightPanelTab = 'history' | 'inspiration' | 'agent';
 
 interface RightPanelProps {
     theme: 'light' | 'dark';
@@ -477,42 +476,42 @@ export const RightPanel: React.FC<RightPanelProps> = ({
                     onPointerDown={handleResizePointerDown}
                 />
 
-                <div className={`border-b ${compactMode ? 'px-3 py-3' : 'px-4 py-4'}`} style={{ borderColor: 'var(--isl-border)' }}>
-                    <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0 flex-1">
-                            <div className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: 'var(--isl-ink-ghost)' }}>
-                                Right Panel
-                            </div>
-                            <div className="mt-1 truncate text-[17px] font-bold tracking-[-0.02em]" style={{ color: 'var(--isl-ink)' }}>
-                                {activeTab === 'agent' ? 'Agent Chat' : activeTab === 'history' ? 'Generation History' : activeTab === 'inspiration' ? 'Asset Library' : 'RunningHub'}
-                            </div>
-                        </div>
-                        <button
-                            type="button"
-                            onClick={onToggleMinimize}
-                            className="isl-chip h-auto shrink-0 px-3 py-1.5 text-[11px]"
-                            title="Collapse"
-                        >
-                            Collapse
-                        </button>
-                    </div>
-
-                    <div className="isl-tabbar mt-3 grid w-full grid-cols-4 gap-1">
+                <div className={`border-b ${compactMode ? 'px-2 py-1.5' : 'px-2.5 py-2'}`} style={{ borderColor: 'var(--isl-border)' }}>
+                    <div className="isl-tabbar isl-tabbar--ac flex w-full items-center gap-1.5">
                         {[
                             { key: 'agent' as RightPanelTab, label: 'Agent' },
                             { key: 'history' as RightPanelTab, label: 'History' },
                             { key: 'inspiration' as RightPanelTab, label: 'Assets' },
-                            { key: 'runningHub' as RightPanelTab, label: 'Hub' },
                         ].map(tab => (
                             <button
                                 key={tab.key}
                                 type="button"
                                 onClick={() => setActiveTab(tab.key)}
-                                className={`isl-tab min-w-0 px-2 py-1.5 text-[11px] ${activeTab === tab.key ? 'isl-tab--active' : ''}`}
+                                className={`isl-tab min-w-0 flex-1 px-2 py-1.5 text-[12px] ${activeTab === tab.key ? 'isl-tab--active' : ''}`}
                             >
-                                <span className="block truncate">{tab.label}</span>
+                                <span className="flex items-center justify-center gap-1.5 truncate">
+                                    {activeTab === tab.key && (
+                                        <span
+                                            className="inline-block h-1.5 w-1.5 shrink-0 rounded-full"
+                                            style={{ background: 'var(--isl-mint)', boxShadow: '0 0 0 2px var(--isl-card)' }}
+                                        />
+                                    )}
+                                    <span className="truncate">{tab.label}</span>
+                                </span>
                             </button>
                         ))}
+                        <button
+                            type="button"
+                            onClick={onToggleMinimize}
+                            className="isl-icon-btn isl-tabbar--ac-collapse shrink-0"
+                            style={{ width: 26, height: 26 }}
+                            title="Collapse"
+                            aria-label="Collapse panel"
+                        >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                                <polyline points="9 18 15 12 9 6" />
+                            </svg>
+                        </button>
                     </div>
                 </div>
 
@@ -565,6 +564,20 @@ export const RightPanel: React.FC<RightPanelProps> = ({
                                     )}
                                 </div>
                             </div>
+                        </div>
+                    )}
+
+                    {activeTab === 'agent' && (
+                        <div className="h-full min-h-0 px-0 py-0">
+                            <AgentChatPanel
+                                theme={theme}
+                                compactMode={compactMode}
+                                generationHistory={generationHistory}
+                                onCreateImage={onCreateImage}
+                                onCreateVideo={onCreateVideo}
+                                runtimeStage={runtimeStage}
+                                runtimeJobs={runtimeJobs}
+                            />
                         </div>
                     )}
 
@@ -671,20 +684,6 @@ export const RightPanel: React.FC<RightPanelProps> = ({
                                     </div>
                                 )}
                             </div>
-                        </div>
-                    )}
-
-                    {activeTab === 'agent' && (
-                        <div className="h-full min-h-0 px-0 py-0">
-                            <AgentChatPanel
-                                theme={theme}
-                                compactMode={compactMode}
-                                generationHistory={generationHistory}
-                                onCreateImage={onCreateImage}
-                                onCreateVideo={onCreateVideo}
-                                runtimeStage={runtimeStage}
-                                runtimeJobs={runtimeJobs}
-                            />
                         </div>
                     )}
 

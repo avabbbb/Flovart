@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import type { GenerationHistoryItem } from '../types';
 import { getFlovartRuntimeApi, getRuntimeErrorMessage } from '../services/flovartRuntime';
 import { useWorkspaceStore } from '../stores/useWorkspaceStore';
@@ -34,20 +34,47 @@ interface MessageLog {
     status?: 'idle' | 'running' | 'error' | 'success';
 }
 
+const AGENT_CHAT_LOGS_STORAGE_KEY = 'agentChat.logs.v1';
+const AGENT_CHAT_LOG_MAX = 200;
+
+const isMessageLog = (value: unknown): value is MessageLog => (
+    Boolean(value) &&
+    typeof value === 'object' &&
+    typeof (value as MessageLog).id === 'string' &&
+    typeof (value as MessageLog).text === 'string' &&
+    typeof (value as MessageLog).time === 'string' &&
+    typeof (value as MessageLog).role === 'string' &&
+    typeof (value as MessageLog).sender === 'string'
+);
+
+const loadPersistedLogs = (): MessageLog[] | null => {
+    if (typeof localStorage === 'undefined') return null;
+    try {
+        const raw = localStorage.getItem(AGENT_CHAT_LOGS_STORAGE_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed)) return null;
+        const valid = parsed.filter(isMessageLog);
+        return valid.length > 0 ? valid : null;
+    } catch {
+        return null;
+    }
+};
+
 const panelCopy = {
     zho: {
-        eyebrow: 'Agent Chat',
         title: 'Agent 对话',
-        subtitle: '一句话描述需求，我会创建图层、写入提示词并开始生成。',
         initial: '我准备好了。直接告诉我你想做什么，越具体越好。',
         agentFailed: '任务执行失败。',
-        noHistory: '还没有生成历史。',
+        noHistory: '还没有对话历史。',
         inputPlaceholder: '例如：做一张电影感红色调海报，人物在雨夜街头。Shift+Enter 换行',
-        online: 'Agent 在线',
         openSystemPrompt: 'System Prompt',
+        clearHistory: '清空',
+        clearHistoryTitle: '清空对话历史',
         systemPromptTitle: '自定义 System Prompt',
         systemPromptHint: '控制 Agent 的语气、执行方式和提示词风格。',
-        history: '历史记录',
+        viewChat: '对话',
+        viewHistory: '历史',
         planTitle: '即将执行',
         exec: '执行',
         run: '执行中',
@@ -55,20 +82,22 @@ const panelCopy = {
         videoStarted: '视频任务已开始。完成后会出现在历史记录里。',
         imageSteps: ['创建图片图层', '写入增强后的提示词', '启动当前图片模型'],
         videoSteps: ['创建视频图层', '写入增强后的提示词', '启动当前视频模型'],
+        emptyHistory: '还没有对话。',
+        historyHint: '点击一条回到那个时刻。',
     },
     en: {
-        eyebrow: 'Agent Chat',
         title: 'Agent Chat',
-        subtitle: 'Describe the outcome once. I will create the layer, write the prompt, and start generation.',
         initial: 'I am ready. Tell me what you want to make. More detail helps.',
         agentFailed: 'Task execution failed.',
         noHistory: 'No generation history yet.',
         inputPlaceholder: 'Example: a cinematic red poster. Shift+Enter for newline',
-        online: 'Agent online',
         openSystemPrompt: 'System Prompt',
+        clearHistory: 'Clear',
+        clearHistoryTitle: 'Clear conversation history',
         systemPromptTitle: 'Custom System Prompt',
         systemPromptHint: 'Control the agent tone, execution behavior, and prompt style.',
-        history: 'History',
+        viewChat: 'Chat',
+        viewHistory: 'History',
         planTitle: 'Next action',
         exec: 'Execute',
         run: 'Running',
@@ -76,6 +105,8 @@ const panelCopy = {
         videoStarted: 'Video task started. It will appear in history when complete.',
         imageSteps: ['Create image layer', 'Write enhanced prompt', 'Start current image model'],
         videoSteps: ['Create video layer', 'Write enhanced prompt', 'Start current video model'],
+        emptyHistory: 'No conversation yet.',
+        historyHint: 'Click a message to jump there.',
     },
 } as const;
 
@@ -99,25 +130,29 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
     const [typedText, setTypedText] = useState('');
     const [isRunning, setIsRunning] = useState(false);
     const [showSystemPromptEditor, setShowSystemPromptEditor] = useState(false);
-    const [showHistory, setShowHistory] = useState(false);
+    const [view, setView] = useState<'chat' | 'history'>('chat');
     const [systemPrompt, setSystemPrompt] = useState(
         language === 'zho'
             ? '你是 Flovart 的内置创作助手。把用户需求转成简洁、可执行、适合图像或视频生成的提示词。'
             : 'You are Flovart\'s built-in creative assistant. Turn user requests into concise executable image or video prompts.'
     );
-    const [logs, setLogs] = useState<MessageLog[]>([
-        {
-            id: 'init_1',
-            sender: 'agent',
-            text: copy.initial,
-            time: nowLabel(),
-            role: 'Agent',
-            status: 'idle',
-        },
-    ]);
+    const [logs, setLogs] = useState<MessageLog[]>(() => {
+        const persisted = loadPersistedLogs();
+        if (persisted && persisted.length > 0) return persisted;
+        return [
+            {
+                id: 'init_1',
+                sender: 'agent',
+                text: copy.initial,
+                time: nowLabel(),
+                role: 'Agent',
+                status: 'idle',
+            },
+        ];
+    });
 
     const endRef = useRef<HTMLDivElement>(null);
-    const recentHistory = useMemo(() => generationHistory.slice(-5).reverse(), [generationHistory]);
+    const chatScrollRef = useRef<HTMLDivElement>(null);
     const pendingAction = inferAction(typedText.trim());
     const executionPlan = pendingAction === 'video' ? copy.videoSteps : copy.imageSteps;
 
@@ -130,6 +165,31 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
             index === 0 && log.id === 'init_1' ? { ...log, text: copy.initial } : log
         )));
     }, [copy.initial]);
+
+    useEffect(() => {
+        if (typeof localStorage === 'undefined') return;
+        try {
+            const trimmed = logs.length > AGENT_CHAT_LOG_MAX
+                ? logs.slice(logs.length - AGENT_CHAT_LOG_MAX)
+                : logs;
+            localStorage.setItem(AGENT_CHAT_LOGS_STORAGE_KEY, JSON.stringify(trimmed));
+        } catch {
+            // ignore quota / serialization errors
+        }
+    }, [logs]);
+
+    const handleClearLogs = () => {
+        setLogs([
+            {
+                id: 'init_1',
+                sender: 'agent',
+                text: copy.initial,
+                time: nowLabel(),
+                role: 'Agent',
+                status: 'idle',
+            },
+        ]);
+    };
 
     const pushLog = (entry: Omit<MessageLog, 'id' | 'time'>) => {
         setLogs(prev => [...prev, { ...entry, id: `${entry.sender}_${Date.now()}_${prev.length}`, time: nowLabel() }]);
@@ -203,29 +263,71 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
 
     return (
         <div className={`flv-agent-dock flex h-full min-h-0 flex-col ${compactMode ? 'text-[11px]' : 'text-xs'}`} style={{ background: 'var(--isl-surface)', borderLeft: '1.5px solid var(--isl-border)', color: 'var(--isl-ink)', fontFamily: 'var(--isl-font)' }}>
-            <div className="flex items-center justify-between gap-3 px-4 py-3" style={{ borderBottom: '1.5px solid var(--isl-border)' }}>
-                <div className="flex items-center gap-2.5 min-w-0">
-                    <span className="isl-avatar text-[15px]" style={{ background: 'var(--isl-mint)', color: '#fff' }}>🌱</span>
-                    <div className="min-w-0">
-                        <div className="text-[15px] font-extrabold tracking-[-0.01em]" style={{ color: 'var(--isl-ink)' }}>{copy.title}</div>
-                        <div className="flex items-center gap-1.5 text-[10px] font-semibold" style={{ color: 'var(--isl-mint-deep)' }}>
-                            <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: 'var(--isl-mint)' }} />
-                            {copy.online}
-                        </div>
-                    </div>
+            <div className="flex items-center justify-between gap-3 px-3.5 py-2.5" style={{ borderBottom: '1.5px solid var(--isl-border)' }}>
+                <div className="text-[14px] font-extrabold tracking-[-0.01em]" style={{ color: 'var(--isl-ink)' }}>
+                    {copy.title}
                 </div>
-                <button
-                    type="button"
-                    onClick={() => setShowSystemPromptEditor(prev => !prev)}
-                    className={`isl-chip h-7 px-3 text-[11px] ${showSystemPromptEditor ? 'isl-chip--active' : ''}`}
-                    title={copy.systemPromptTitle}
-                >
-                    {copy.openSystemPrompt}
-                </button>
+                <div className="flex items-center gap-1.5">
+                    <button
+                        type="button"
+                        onClick={handleClearLogs}
+                        disabled={logs.length <= 1}
+                        className="isl-chip h-7 px-2.5 text-[11px] disabled:opacity-40 disabled:cursor-not-allowed"
+                        title={copy.clearHistoryTitle}
+                    >
+                        {copy.clearHistory}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setShowSystemPromptEditor(prev => !prev)}
+                        className={`isl-chip h-7 px-3 text-[11px] ${showSystemPromptEditor ? 'isl-chip--active' : ''}`}
+                        title={copy.systemPromptTitle}
+                    >
+                        {copy.openSystemPrompt}
+                    </button>
+                </div>
+            </div>
+
+            <div className="flex items-center gap-1.5 px-3.5 pt-2" style={{ borderBottom: '1.5px solid var(--isl-border)', paddingBottom: 8 }}>
+                <div className="isl-tabbar isl-tabbar--ac flex flex-1 gap-0.5" style={{ padding: 3 }}>
+                    <button
+                        type="button"
+                        onClick={() => setView('chat')}
+                        className={`isl-tab min-w-0 flex-1 rounded-full px-2 py-1 text-[11px] ${view === 'chat' ? 'isl-tab--active' : ''}`}
+                    >
+                        <span className="flex items-center justify-center gap-1.5">
+                            {view === 'chat' && (
+                                <span
+                                    className="inline-block h-1.5 w-1.5 shrink-0 rounded-full"
+                                    style={{ background: 'var(--isl-mint)', boxShadow: '0 0 0 2px var(--isl-card)' }}
+                                />
+                            )}
+                            {copy.viewChat}
+                        </span>
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setView('history')}
+                        className={`isl-tab min-w-0 flex-1 rounded-full px-2 py-1 text-[11px] ${view === 'history' ? 'isl-tab--active' : ''}`}
+                    >
+                        <span className="flex items-center justify-center gap-1.5">
+                            {view === 'history' && (
+                                <span
+                                    className="inline-block h-1.5 w-1.5 shrink-0 rounded-full"
+                                    style={{ background: 'var(--isl-mint)', boxShadow: '0 0 0 2px var(--isl-card)' }}
+                                />
+                            )}
+                            {copy.viewHistory}
+                            <span className="ml-0.5 inline-block rounded-full px-1.5 py-px text-[9px] tabular-nums" style={{ background: 'var(--isl-surface-2)', color: 'var(--isl-ink-soft)' }}>
+                                {logs.filter(log => log.id !== 'init_1').length}
+                            </span>
+                        </span>
+                    </button>
+                </div>
             </div>
 
             {showSystemPromptEditor && (
-                <div className="px-4 pt-3">
+                <div className="px-3.5 pt-3">
                     <div className="isl-well p-3">
                         <div className="mb-2 flex items-center justify-between gap-3">
                             <div className="text-[12px] font-bold" style={{ color: 'var(--isl-ink)' }}>
@@ -248,129 +350,141 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
             )}
 
             <div className="flex min-h-0 flex-1 flex-col">
-                <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-4 select-text">
-                    {logs.map(log => {
-                        const isUser = log.sender === 'user';
-                        const isError = log.status === 'error';
-                        const avatar = isUser ? '🧑' : isError ? '⚠️' : '🌱';
-                        return (
-                            <div key={log.id} className={`flex items-end gap-2 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
-                                <span
-                                    className="isl-avatar"
-                                    style={{
-                                        background: isUser ? 'var(--isl-surface-2)' : isError ? 'rgba(232,97,90,0.18)' : 'var(--isl-mint)',
-                                    }}
-                                >
-                                    {avatar}
-                                </span>
-                                <div className={`min-w-0 max-w-[80%] ${isUser ? 'items-end' : 'items-start'} flex flex-col`}>
-                                    <div className="mb-1 px-1 text-[10px] font-semibold" style={{ color: 'var(--isl-ink-ghost)' }}>
-                                        {log.time}
-                                    </div>
-                                    <div className={`isl-bubble px-3.5 py-2.5 text-[13px] ${isUser ? 'isl-bubble--user' : isError ? 'isl-bubble--error' : 'isl-bubble--agent'}`}>
-                                        {log.text}
-                                    </div>
-                                </div>
-                            </div>
-                        );
-                    })}
-                    <div ref={endRef} />
-                </div>
-
-                <div className="px-4 py-3" style={{ borderTop: '1.5px solid var(--isl-border)' }}>
-                    <div className="mb-3">
-                        <button
-                            type="button"
-                            onClick={() => setShowHistory(prev => !prev)}
-                            className="mb-2 flex w-full items-center justify-between text-[11px] font-bold"
-                            style={{ color: 'var(--isl-ink-soft)' }}
-                        >
-                            <span className="flex items-center gap-1.5">
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" className={`transition-transform ${showHistory ? 'rotate-90' : ''}`}>
-                                    <path d="m9 18 6-6-6-6" />
-                                </svg>
-                                {copy.history}
-                            </span>
-                            <span className="rounded-full px-2 py-0.5 text-[10px] tabular-nums" style={{ background: 'var(--isl-surface-2)', color: 'var(--isl-ink-soft)' }}>
-                                {generationHistory.length}
-                            </span>
-                        </button>
-                        {showHistory && (
-                            <div className="max-h-[132px] space-y-2 overflow-y-auto pr-0.5">
-                                {recentHistory.length === 0 ? (
-                                    <div className="rounded-2xl border-[1.5px] px-3 py-3 text-[12px]" style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-card)', color: 'var(--isl-ink-ghost)' }}>
-                                        {copy.noHistory}
-                                    </div>
-                                ) : (
-                                    recentHistory.map(item => (
-                                        <div
-                                            key={item.id}
-                                            className="flex items-center gap-3 rounded-2xl border-[1.5px] px-3 py-2"
-                                            style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-card)', boxShadow: '0 2px 0 0 var(--isl-edge)' }}
+                {view === 'chat' ? (
+                    <>
+                        <div ref={chatScrollRef} className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-3.5 py-3 select-text">
+                            {logs.map(log => {
+                                const isUser = log.sender === 'user';
+                                const isError = log.status === 'error';
+                                return (
+                                    <div key={log.id} data-msg-id={log.id} className={`flex items-end gap-2 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
+                                        <span
+                                            className="isl-avatar"
+                                            style={{
+                                                background: isUser ? 'var(--isl-surface-2)' : isError ? 'rgba(232,97,90,0.18)' : 'var(--isl-mint)',
+                                            }}
                                         >
-                                            <div className="h-10 w-10 shrink-0 overflow-hidden rounded-xl" style={{ background: 'var(--isl-surface-2)' }}>
-                                                <img src={item.dataUrl} alt={item.name || item.prompt} className="h-full w-full object-cover" />
+                                            {isUser ? '🧑' : isError ? '⚠️' : '🌱'}
+                                        </span>
+                                        <div className={`min-w-0 max-w-[80%] ${isUser ? 'items-end' : 'items-start'} flex flex-col`}>
+                                            <div className="mb-1 px-1 text-[10px] font-semibold" style={{ color: 'var(--isl-ink-ghost)' }}>
+                                                {log.time}
                                             </div>
-                                            <div className="min-w-0 flex-1">
-                                                <div className="truncate text-[12px] font-bold" style={{ color: 'var(--isl-ink)' }}>
-                                                    {item.name || item.prompt}
-                                                </div>
-                                                <div className="mt-0.5 text-[10px]" style={{ color: 'var(--isl-ink-soft)' }}>
-                                                    {item.width} x {item.height}
-                                                </div>
+                                            <div className={`isl-bubble px-3.5 py-2.5 text-[13px] ${isUser ? 'isl-bubble--user' : isError ? 'isl-bubble--error' : 'isl-bubble--agent'}`}>
+                                                {log.text}
                                             </div>
                                         </div>
-                                    ))
-                                )}
-                            </div>
-                        )}
-                    </div>
-
-                    {typedText.trim() && (
-                        <div className="isl-bubble isl-bubble--agent mb-3 px-3 py-3">
-                            <div className="mb-2 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.14em]" style={{ color: 'var(--isl-mint-deep)' }}>
-                                <span>{pendingAction === 'video' ? '🎬' : '🖼️'}</span>
-                                {copy.planTitle}
-                            </div>
-                            <div className="space-y-1.5 text-[11px] leading-relaxed">
-                                {executionPlan.map((step, index) => (
-                                    <div key={step} className="flex items-center gap-2">
-                                        <span className="inline-flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold" style={{ background: 'var(--isl-mint-bg)', color: 'var(--isl-mint-deep)' }}>
-                                            {index + 1}
-                                        </span>
-                                        <span style={{ color: 'var(--isl-ink-soft)' }}>{step}</span>
                                     </div>
-                                ))}
+                                );
+                            })}
+                            <div ref={endRef} />
+                        </div>
+
+                        <div className="px-3.5 py-3" style={{ borderTop: '1.5px solid var(--isl-border)' }}>
+                            {typedText.trim() && (
+                                <div className="isl-bubble isl-bubble--agent mb-3 px-3 py-3">
+                                    <div className="mb-2 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.14em]" style={{ color: 'var(--isl-mint-deep)' }}>
+                                        <span>{pendingAction === 'video' ? '🎬' : '🖼️'}</span>
+                                        {copy.planTitle}
+                                    </div>
+                                    <div className="space-y-1.5 text-[11px] leading-relaxed">
+                                        {executionPlan.map((step, index) => (
+                                            <div key={step} className="flex items-center gap-2">
+                                                <span className="inline-flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold" style={{ background: 'var(--isl-mint-bg)', color: 'var(--isl-mint-deep)' }}>
+                                                    {index + 1}
+                                                </span>
+                                                <span style={{ color: 'var(--isl-ink-soft)' }}>{step}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="isl-well flex items-center gap-2 px-2 py-2">
+                                <textarea
+                                    rows={1}
+                                    className="min-h-9 max-h-32 min-w-0 flex-1 resize-none border-0 bg-transparent px-2 py-2 text-[13px] leading-relaxed outline-none"
+                                    style={{ color: 'var(--isl-ink)', fontFamily: 'var(--isl-font)' }}
+                                    placeholder={copy.inputPlaceholder}
+                                    value={typedText}
+                                    disabled={isRunning}
+                                    onChange={(event) => setTypedText(event.target.value)}
+                                    onKeyDown={(event) => {
+                                        if (event.key === 'Enter' && !event.shiftKey) {
+                                            event.preventDefault();
+                                            void handleCommitStream();
+                                        }
+                                    }}
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => void handleCommitStream()}
+                                    disabled={!typedText.trim() || isRunning}
+                                    className="isl-go h-9 px-4 text-[12px]"
+                                >
+                                    {isRunning ? copy.run : copy.exec}
+                                </button>
                             </div>
                         </div>
-                    )}
-
-                    <div className="isl-well flex items-center gap-2 px-2 py-2">
-                        <textarea
-                            rows={1}
-                            className="min-h-9 max-h-32 min-w-0 flex-1 resize-none border-0 bg-transparent px-2 py-2 text-[13px] leading-relaxed outline-none"
-                            style={{ color: 'var(--isl-ink)', fontFamily: 'var(--isl-font)' }}
-                            placeholder={copy.inputPlaceholder}
-                            value={typedText}
-                            disabled={isRunning}
-                            onChange={(event) => setTypedText(event.target.value)}
-                            onKeyDown={(event) => {
-                                if (event.key === 'Enter' && !event.shiftKey) {
-                                    event.preventDefault();
-                                    void handleCommitStream();
-                                }
-                            }}
-                        />
-                        <button
-                            type="button"
-                            onClick={() => void handleCommitStream()}
-                            disabled={!typedText.trim() || isRunning}
-                            className="isl-go h-9 px-4 text-[12px]"
-                        >
-                            {isRunning ? copy.run : copy.exec}
-                        </button>
+                    </>
+                ) : (
+                    <div className="flex min-h-0 flex-1 flex-col px-3.5 py-3">
+                        <div className="mb-2 text-[10px]" style={{ color: 'var(--isl-ink-ghost)' }}>
+                            {copy.historyHint}
+                        </div>
+                        <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-0.5">
+                            {logs.length <= 1 ? (
+                                <div className="rounded-2xl border-[1.5px] px-3 py-6 text-center text-[12px]" style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-card)', color: 'var(--isl-ink-ghost)' }}>
+                                    {copy.emptyHistory}
+                                </div>
+                            ) : (
+                                logs.map((log, index) => {
+                                    const isUser = log.sender === 'user';
+                                    const isError = log.status === 'error';
+                                    const isInit = log.id === 'init_1';
+                                    return (
+                                        <button
+                                            type="button"
+                                            key={log.id}
+                                            onClick={() => {
+                                                setView('chat');
+                                                requestAnimationFrame(() => {
+                                                    const node = document.querySelector(`[data-msg-id="${log.id}"]`);
+                                                    node?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                                });
+                                            }}
+                                            className="flex w-full items-start gap-2.5 rounded-2xl border-[1.5px] px-3 py-2 text-left transition-colors"
+                                            style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-card)', boxShadow: '0 2px 0 0 var(--isl-edge)' }}
+                                        >
+                                            <span
+                                                className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold"
+                                                style={{
+                                                    background: isUser ? 'var(--isl-surface-2)' : isError ? 'rgba(232,97,90,0.18)' : 'var(--isl-mint-bg)',
+                                                    color: isUser ? 'var(--isl-ink)' : isError ? 'var(--isl-coral-deep)' : 'var(--isl-mint-deep)',
+                                                }}
+                                            >
+                                                {isUser ? 'U' : isError ? '!' : isInit ? 'i' : 'A'}
+                                            </span>
+                                            <div className="min-w-0 flex-1">
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <div className="truncate text-[11px] font-bold" style={{ color: 'var(--isl-ink)' }}>
+                                                        {isUser ? 'You' : log.role}
+                                                    </div>
+                                                    <div className="shrink-0 text-[10px] tabular-nums" style={{ color: 'var(--isl-ink-ghost)' }}>
+                                                        {log.time}
+                                                    </div>
+                                                </div>
+                                                <div className="mt-0.5 line-clamp-2 text-[12px] leading-snug" style={{ color: 'var(--isl-ink-soft)' }}>
+                                                    {log.text}
+                                                </div>
+                                            </div>
+                                        </button>
+                                    );
+                                })
+                            )}
+                        </div>
                     </div>
-                </div>
+                )}
             </div>
         </div>
     );
