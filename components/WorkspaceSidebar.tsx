@@ -85,14 +85,14 @@ const BoardMenu: React.FC<{
     onDuplicate: () => void;
     onDelete: () => void;
 }> = ({ onRename, onDuplicate, onDelete }) => (
-    <div className="absolute right-0 top-full z-20 mt-2 w-32 rounded-2xl border border-neutral-200 bg-white p-1 shadow-xl">
-        <button type="button" onClick={onRename} className="block w-full rounded-xl px-3 py-2 text-left text-sm text-neutral-700 transition hover:bg-neutral-100">
+    <div className="isl-pop absolute right-0 top-full z-20 mt-2 w-32 p-1">
+        <button type="button" onClick={onRename} className="isl-opt text-sm">
             Rename
         </button>
-        <button type="button" onClick={onDuplicate} className="block w-full rounded-xl px-3 py-2 text-left text-sm text-neutral-700 transition hover:bg-neutral-100">
+        <button type="button" onClick={onDuplicate} className="isl-opt text-sm">
             Duplicate
         </button>
-        <button type="button" onClick={onDelete} className="block w-full rounded-xl px-3 py-2 text-left text-sm text-rose-600 transition hover:bg-rose-50">
+        <button type="button" onClick={onDelete} className="isl-opt text-sm" style={{ color: 'var(--isl-coral-deep)' }}>
             Delete
         </button>
     </div>
@@ -158,8 +158,8 @@ const BoardRow: React.FC<{
                     onClick();
                 }
             }}
-            className={`group flex w-full cursor-pointer items-center gap-3 rounded-2xl px-3 py-2 text-left transition ${
-                isActive ? 'bg-neutral-900 text-white' : 'bg-neutral-50 text-neutral-800 hover:bg-neutral-100'
+            className={`isl-row group flex w-full items-center gap-3 px-3 py-2 text-left ${
+                isActive ? 'isl-row--active' : ''
             }`}
         >
             <img src={thumbnail} alt={board.name} className="h-12 w-16 rounded-xl border border-white/20 object-cover" />
@@ -180,12 +180,12 @@ const BoardRow: React.FC<{
                         }}
                         title="重命名画板"
                         aria-label="重命名画板"
-                        className="w-full border-none bg-transparent text-sm font-medium outline-none"
+                        className="w-full border-none bg-transparent text-sm font-bold outline-none"
                     />
                 ) : (
-                    <div className="truncate text-sm font-medium">{board.name}</div>
+                    <div className="truncate text-sm font-bold">{board.name}</div>
                 )}
-                <div className={`text-xs ${isActive ? 'text-white/65' : 'text-neutral-500'}`}>
+                <div className={`text-xs ${isActive ? 'text-white/75' : ''}`} style={isActive ? undefined : { color: 'var(--isl-ink-soft)' }}>
                     {board.elements.length} items
                 </div>
             </div>
@@ -198,9 +198,7 @@ const BoardRow: React.FC<{
                     }}
                     title="画板操作"
                     aria-label="画板操作"
-                    className={`rounded-xl p-2 transition ${
-                        isActive ? 'hover:bg-white/10' : 'hover:bg-white'
-                    } ${menuOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                    className={`isl-icon-btn h-8 w-8 ${menuOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
                 >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
                         <circle cx="12" cy="5" r="2" />
@@ -290,10 +288,10 @@ const LayerRow: React.FC<{
             {...dragProps}
             onClick={onSelect}
             onDoubleClick={() => setIsEditing(true)}
-            className={`group flex items-center gap-2 rounded-2xl px-3 py-2 text-left text-sm transition ${
-                isSelected ? 'bg-[#EEF4FF] text-[#175CD3]' : 'text-neutral-700 hover:bg-neutral-100'
+            className={`isl-layer-row group flex items-center gap-2 rounded-2xl border-[1.5px] border-transparent px-3 py-2 text-left text-sm transition ${
+                isSelected ? 'isl-row--active' : ''
             } ${element.isVisible === false ? 'opacity-55' : ''}`}
-            style={{ paddingLeft: `${12 + level * 18}px` }}
+            style={isSelected ? { paddingLeft: `${12 + level * 18}px` } : { paddingLeft: `${12 + level * 18}px`, color: 'var(--isl-ink)' }}
         >
             <button
                 type="button"
@@ -304,7 +302,7 @@ const LayerRow: React.FC<{
                     if (hasChildren) onToggleExpanded();
                 }}
                 className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg transition ${
-                    hasChildren ? 'text-neutral-500 hover:bg-white hover:text-neutral-800' : 'text-neutral-300'
+                    hasChildren ? '' : 'opacity-40'
                 }`}
             >
                 {hasChildren ? (
@@ -315,7 +313,7 @@ const LayerRow: React.FC<{
                     <span className="h-1.5 w-1.5 rounded-full bg-current opacity-40" />
                 )}
             </button>
-            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl bg-white text-neutral-500 shadow-sm">
+            <span className="isl-avatar flex h-7 w-7 shrink-0 items-center justify-center" style={{ background: isSelected ? 'rgba(255,255,255,0.2)' : 'var(--isl-card)', color: isSelected ? '#fff' : 'var(--isl-ink-soft)' }}>
                 {getElementIcon(element)}
             </span>
             <div className="min-w-0 flex-1">
@@ -338,11 +336,11 @@ const LayerRow: React.FC<{
                         className="w-full border-none bg-transparent text-sm outline-none"
                     />
                 ) : (
-                    <div className="truncate">{getElementLabel(element)}</div>
+                    <div className="truncate font-semibold">{getElementLabel(element)}</div>
                 )}
             </div>
             {hasChildren && (
-                <span className="rounded-full bg-neutral-100 px-1.5 py-0.5 text-[10px] font-medium text-neutral-500">
+                <span className="rounded-full px-1.5 py-0.5 text-[10px] font-bold" style={{ background: isSelected ? 'rgba(255,255,255,0.2)' : 'var(--isl-surface-2)', color: isSelected ? '#fff' : 'var(--isl-ink-soft)' }}>
                     {isExpanded ? 'open' : 'group'}
                 </span>
             )}
@@ -353,7 +351,7 @@ const LayerRow: React.FC<{
                         event.stopPropagation();
                         onToggleLock();
                     }}
-                    className={`rounded-lg p-1.5 transition ${element.isLocked ? 'text-neutral-900' : 'text-neutral-400 hover:bg-white hover:text-neutral-700'}`}
+                    className="isl-icon-btn h-7 w-7"
                 >
                     {element.isLocked ? (
                         <svg {...iconProps}><rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></svg>
@@ -367,7 +365,7 @@ const LayerRow: React.FC<{
                         event.stopPropagation();
                         onToggleVisibility();
                     }}
-                    className="rounded-lg p-1.5 text-neutral-400 transition hover:bg-white hover:text-neutral-700"
+                    className="isl-icon-btn h-7 w-7"
                 >
                     {element.isVisible === false ? (
                         <svg {...iconProps}><path d="M3 3 21 21" /><path d="M10.6 10.6a3 3 0 0 0 4.2 4.2" /><path d="M9.4 5.5A11.1 11.1 0 0 1 12 5c7 0 10 7 10 7a17.7 17.7 0 0 1-4 4.9" /><path d="M6.2 6.2A18.7 18.7 0 0 0 2 12s3 7 10 7a10.7 10.7 0 0 0 3.3-.5" /></svg>
@@ -453,7 +451,8 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
                             onDragOver={handleDragOver}
                             onDragLeave={handleDragLeave}
                             onDrop={(event) => handleDrop(event, item.id)}
-                            className={dragOverId === item.id ? 'rounded-2xl bg-[#EEF4FF]' : ''}
+                            className={dragOverId === item.id ? 'rounded-2xl' : ''}
+                            style={dragOverId === item.id ? { background: 'var(--isl-mint-bg)' } : undefined}
                         >
                             <LayerRow
                                 element={item}
@@ -486,7 +485,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
 
     return (
         <div
-            className="compact-sidebar-panel theme-aware fixed z-[45] overflow-hidden rounded-[26px] border border-neutral-200 bg-white shadow-[0_24px_56px_rgba(15,23,42,0.14)] transition-all duration-300"
+            className="isl-panel compact-sidebar-panel theme-aware fixed z-[45] overflow-hidden transition-all duration-300"
             style={{
                 top: `${outerGap}px`,
                 bottom: `${outerGap}px`,
@@ -498,15 +497,15 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
             }}
         >
             <div className="flex h-full flex-col">
-                <div className="flex items-center justify-between border-b border-neutral-200 px-4 py-3">
+                <div className="flex items-center justify-between border-b px-4 py-3" style={{ borderColor: 'var(--isl-border)' }}>
                     <div>
-                        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-neutral-400">Workspace</div>
-                        <div className="text-base font-semibold text-neutral-900">Boards & Layers</div>
+                        <div className="text-[11px] font-bold uppercase tracking-[0.18em]" style={{ color: 'var(--isl-ink-ghost)' }}>Workspace</div>
+                        <div className="text-base font-bold" style={{ color: 'var(--isl-ink)' }}>Boards & Layers</div>
                     </div>
                     <button
                         type="button"
                         onClick={onToggle}
-                        className="rounded-2xl p-2 text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-900"
+                        className="isl-icon-btn h-9 w-9"
                         title="Toggle sidebar"
                     >
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -516,16 +515,16 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
                     </button>
                 </div>
 
-                <section className="min-h-[170px] basis-[28%] border-b border-neutral-200 px-3 py-3">
+                <section className="min-h-[170px] basis-[28%] border-b px-3 py-3" style={{ borderColor: 'var(--isl-border)' }}>
                     <div className="mb-3 flex items-center justify-between">
                         <div>
-                            <div className="text-sm font-semibold text-neutral-900">Boards</div>
-                            <div className="text-xs text-neutral-500">Scenes and canvases</div>
+                            <div className="text-sm font-bold" style={{ color: 'var(--isl-ink)' }}>Boards</div>
+                            <div className="text-xs" style={{ color: 'var(--isl-ink-soft)' }}>Scenes and canvases</div>
                         </div>
                         <button
                             type="button"
                             onClick={onAddBoard}
-                            className="rounded-2xl border border-neutral-200 px-3 py-2 text-sm font-medium text-neutral-700 transition hover:bg-neutral-100"
+                            className="isl-chip h-auto px-3 py-2 text-sm"
                         >
                             New
                         </button>
@@ -549,14 +548,14 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
                 <section className="flex min-h-0 flex-1 flex-col px-3 py-3">
                     <div className="mb-3 flex items-center justify-between">
                         <div>
-                            <div className="text-sm font-semibold text-neutral-900">Layers</div>
-                            <div className="text-xs text-neutral-500">{elements.length} items on canvas</div>
+                            <div className="text-sm font-bold" style={{ color: 'var(--isl-ink)' }}>Layers</div>
+                            <div className="text-xs" style={{ color: 'var(--isl-ink-soft)' }}>{elements.length} items on canvas</div>
                         </div>
                         {selectedElementIds.length > 0 && (
                             <button
                                 type="button"
                                 onClick={() => onSelectElement(null)}
-                                className="rounded-2xl px-3 py-1.5 text-xs font-medium text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-800"
+                                className="isl-chip h-auto px-3 py-1.5 text-xs"
                             >
                                 Clear
                             </button>
@@ -567,7 +566,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
                         {elements.length > 0 ? (
                             <div className="space-y-1">{renderLayers(orderedElements)}</div>
                         ) : (
-                            <div className="flex h-full items-center justify-center rounded-[24px] border border-dashed border-neutral-200 bg-neutral-50 px-4 text-center text-sm text-neutral-400">
+                            <div className="isl-well flex h-full items-center justify-center border-dashed px-4 text-center text-sm" style={{ color: 'var(--isl-ink-ghost)' }}>
                                 No layers yet.
                             </div>
                         )}

@@ -1,11 +1,7 @@
-<p align="center">
-  <img src="pic/LOGO.png" alt="Flovart Logo" width="120" />
-</p>
-
 <h1 align="center">Flovart</h1>
 
 <p align="center">
-  <img src="displayphoto1.png" alt="Flovart" width="100%" />
+  <img src="pic/Workspace.png" alt="Flovart" width="100%" />
 </p>
 
 <p align="center">
@@ -215,6 +211,10 @@ npm run ext:build
 ---
 
 ## ⭐ Star
+
+<p align="center">
+  <img src="pic/LOGO.png" alt="Flovart Logo" width="120" />
+</p>
 
 如果 Flovart 对你有帮助，给个 Star ⭐ 支持一下！
 

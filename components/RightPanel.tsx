@@ -38,18 +38,14 @@ const CATEGORY_LABELS: Record<AssetCategory, string> = {
     prop: '道具',
 };
 
-const CategoryTabs: React.FC<{ value: AssetCategory; onChange: (c: AssetCategory) => void; isDark?: boolean }> = ({ value, onChange, isDark }) => (
-    <div className="inline-flex items-center gap-3">
+const CategoryTabs: React.FC<{ value: AssetCategory; onChange: (c: AssetCategory) => void; isDark?: boolean }> = ({ value, onChange }) => (
+    <div className="isl-tabbar">
         {(Object.keys(CATEGORY_LABELS) as AssetCategory[]).map(category => (
             <button
                 key={category}
                 type="button"
                 onClick={() => onChange(category)}
-                className={`border-b px-0 py-2 text-xs font-medium transition-all ${
-                    value === category
-                        ? isDark ? 'border-[#F3F4F6] text-[#F3F4F6]' : 'border-neutral-900 text-neutral-900'
-                        : isDark ? 'border-transparent text-[#667085] hover:text-[#D0D5DD]' : 'border-transparent text-neutral-500 hover:text-neutral-800'
-                }`}
+                className={`isl-tab px-3 py-1.5 text-xs ${value === category ? 'isl-tab--active' : ''}`}
             >
                 {CATEGORY_LABELS[category]}
             </button>
@@ -57,25 +53,19 @@ const CategoryTabs: React.FC<{ value: AssetCategory; onChange: (c: AssetCategory
     </div>
 );
 
-const EmptyHistory: React.FC<{ isDark?: boolean }> = ({ isDark }) => (
-    <div className={`flex flex-1 items-center justify-center rounded-2xl border border-dashed px-6 py-10 text-center ${
-        isDark ? 'border-[#2A3140] bg-[#161A22]' : 'border-neutral-200 bg-neutral-50'
-    }`}>
+const EmptyHistory: React.FC<{ isDark?: boolean }> = () => (
+    <div className="isl-well flex flex-1 items-center justify-center border-dashed px-6 py-10 text-center">
         <div>
-            <div className={`mx-auto flex h-12 w-12 items-center justify-center rounded-xl ${
-                isDark ? 'bg-[#1B2029] text-[#667085]' : 'bg-white text-neutral-300 shadow-sm'
-            }`}>
+            <div className="isl-avatar mx-auto flex h-12 w-12 items-center justify-center" style={{ background: 'var(--isl-mint-bg)', color: 'var(--isl-mint-deep)' }}>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
                     <rect x="3" y="3" width="18" height="18" rx="3" />
                     <circle cx="8.5" cy="8.5" r="1.5" />
                     <path d="M21 15l-5-5L5 21" />
                 </svg>
             </div>
-            <p className={`mt-3 text-sm font-medium ${isDark ? 'text-[#D0D5DD]' : 'text-neutral-700'}`}>还没有历史生成内容</p>
-            <p className={`mt-1 text-xs ${isDark ? 'text-[#667085]' : 'text-neutral-500'}`}>在底部输入提示词并点击生成，结果会自动保存到这里。</p>
-            <div className={`mx-auto mt-4 inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium ${
-                isDark ? 'border-[#2A3140] bg-[#1B2029] text-[#D0D5DD]' : 'border-neutral-200 bg-white text-neutral-700 shadow-sm'
-            }`}>
+            <p className="mt-3 text-sm font-bold" style={{ color: 'var(--isl-ink)' }}>还没有历史生成内容</p>
+            <p className="mt-1 text-xs" style={{ color: 'var(--isl-ink-soft)' }}>在底部输入提示词并点击生成，结果会自动保存到这里。</p>
+            <div className="isl-chip mx-auto mt-4 inline-flex h-auto items-center gap-2 px-3 py-1.5 text-xs">
                 <span>向下看</span>
                 <span>↓</span>
                 <span>PromptBar</span>
@@ -99,17 +89,9 @@ const RunningHubWebAppPanel: React.FC<{ theme: 'light' | 'dark'; compactMode: bo
     const [taskStatus, setTaskStatus] = useState<RHWebAppTaskStatus | null>(null);
     const [outputs, setOutputs] = useState<RHWebAppOutputItem[]>([]);
 
-    const inputClass = `w-full rounded-xl border px-3 py-2 text-xs outline-none transition ${
-        isDark
-            ? 'border-[#2A3140] bg-[#161A22] text-[#F3F4F6] placeholder:text-[#667085] focus:border-[#4B5B78]'
-            : 'border-neutral-200 bg-white text-neutral-900 placeholder:text-neutral-400 focus:border-neutral-400'
-    }`;
+    const inputClass = 'isl-well w-full px-3 py-2 text-xs outline-none';
 
-    const btnClass = `rounded-lg border px-4 py-2 text-xs font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed ${
-        isDark
-            ? 'border-[#2A3140] bg-[#161A22] text-[#F3F4F6] hover:border-[#4B5B78] hover:bg-[#1B2029]'
-            : 'border-neutral-200 bg-white text-neutral-800 hover:border-neutral-300 hover:bg-neutral-50'
-    }`;
+    const btnClass = 'isl-chip h-auto justify-center px-4 py-2 text-xs disabled:opacity-50 disabled:cursor-not-allowed';
 
     // 持久化 apiKey & webappId
     useEffect(() => { try { localStorage.setItem('rh_webapp_apikey', apiKey); } catch { /* non-critical */ } }, [apiKey]);
@@ -176,17 +158,17 @@ const RunningHubWebAppPanel: React.FC<{ theme: 'light' | 'dark'; compactMode: bo
         <div className={`flex h-full flex-col ${compactMode ? 'gap-3 p-3' : 'gap-4 p-4'} overflow-y-auto`}>
             {/* 标题 */}
             <div>
-                <h3 className={`text-sm font-bold ${isDark ? 'text-[#F3F4F6]' : 'text-neutral-900'}`}>
+                <h3 className="text-sm font-bold" style={{ color: 'var(--isl-ink)' }}>
                     🚀 RunningHub AI 应用
                 </h3>
-                <p className={`mt-1 text-xs ${isDark ? 'text-[#667085]' : 'text-neutral-500'}`}>
+                <p className="mt-1 text-xs" style={{ color: 'var(--isl-ink-soft)' }}>
                     接入 RunningHub WebApp 工作流，输入 WebApp ID 即可调用。
                 </p>
             </div>
 
             {/* API Key */}
             <div>
-                <label className={`mb-1.5 block text-[11px] font-semibold uppercase tracking-wider ${isDark ? 'text-[#98A2B3]' : 'text-neutral-500'}`}>
+                <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--isl-ink-ghost)' }}>
                     API Key
                 </label>
                 <input
@@ -200,7 +182,8 @@ const RunningHubWebAppPanel: React.FC<{ theme: 'light' | 'dark'; compactMode: bo
                     href="https://www.runninghub.cn/enterprise-api/sharedApi"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="mt-1 block text-[10px] text-blue-500 hover:underline"
+                    className="mt-1 block text-[10px] hover:underline"
+                    style={{ color: 'var(--isl-mint-deep)' }}
                 >
                     获取 API Key ↗
                 </a>
@@ -208,7 +191,7 @@ const RunningHubWebAppPanel: React.FC<{ theme: 'light' | 'dark'; compactMode: bo
 
             {/* WebApp ID */}
             <div>
-                <label className={`mb-1.5 block text-[11px] font-semibold uppercase tracking-wider ${isDark ? 'text-[#98A2B3]' : 'text-neutral-500'}`}>
+                <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--isl-ink-ghost)' }}>
                     WebApp ID
                 </label>
                 <input
@@ -217,7 +200,7 @@ const RunningHubWebAppPanel: React.FC<{ theme: 'light' | 'dark'; compactMode: bo
                     placeholder="如: 1937084629516193794"
                     className={inputClass}
                 />
-                <p className={`mt-1 text-[10px] ${isDark ? 'text-[#667085]' : 'text-neutral-400'}`}>
+                <p className="mt-1 text-[10px]" style={{ color: 'var(--isl-ink-ghost)' }}>
                     WebApp 链接末尾的数字，如 runninghub.cn/ai-detail/<strong>1937...</strong>
                 </p>
             </div>
@@ -234,32 +217,30 @@ const RunningHubWebAppPanel: React.FC<{ theme: 'light' | 'dark'; compactMode: bo
 
             {/* 错误提示 */}
             {error && (
-                <div className={`rounded-xl px-3 py-2 text-xs ${isDark ? 'bg-red-900/30 text-red-300' : 'bg-red-50 text-red-600'}`}>
+                <div className="isl-bubble--error rounded-2xl px-3 py-2 text-xs">
                     ✗ {error}
                 </div>
             )}
 
             {/* 节点列表 */}
             {nodes.length > 0 && (
-                <div className={`rounded-xl border ${isDark ? 'border-[#2A3140]' : 'border-neutral-200'}`}>
-                    <div className={`px-3 py-2 text-[11px] font-semibold ${isDark ? 'bg-[#1B2029] text-[#98A2B3]' : 'bg-neutral-50 text-neutral-500'} rounded-t-xl`}>
+                <div className="isl-well overflow-hidden">
+                    <div className="px-3 py-2 text-[11px] font-bold" style={{ color: 'var(--isl-ink-soft)' }}>
                         可修改节点 ({nodes.length})
                     </div>
-                    <div className="max-h-[300px] overflow-y-auto divide-y divide-neutral-100">
+                    <div className="max-h-[300px] overflow-y-auto">
                         {nodes.map((node, i) => (
-                            <div key={`${node.nodeId}-${node.fieldName}-${i}`} className={`px-3 py-2.5 ${isDark ? 'divide-[#2A3140]' : ''}`}>
+                            <div key={`${node.nodeId}-${node.fieldName}-${i}`} className="border-t px-3 py-2.5" style={{ borderColor: 'var(--isl-border)' }}>
                                 <div className="flex items-center justify-between mb-1">
-                                    <span className={`text-[11px] font-medium ${isDark ? 'text-[#D0D5DD]' : 'text-neutral-700'}`}>
+                                    <span className="text-[11px] font-bold" style={{ color: 'var(--isl-ink)' }}>
                                         {node.description || node.nodeName}
                                     </span>
-                                    <span className={`rounded px-1.5 py-0.5 text-[9px] font-mono ${
-                                        isDark ? 'bg-[#1B2029] text-[#667085]' : 'bg-neutral-100 text-neutral-400'
-                                    }`}>
+                                    <span className="rounded-full px-1.5 py-0.5 text-[9px] font-mono" style={{ background: 'var(--isl-surface-2)', color: 'var(--isl-ink-ghost)' }}>
                                         {node.fieldType}
                                     </span>
                                 </div>
                                 {node.fieldType === 'IMAGE' || node.fieldType === 'AUDIO' || node.fieldType === 'VIDEO' ? (
-                                    <div className={`text-[10px] italic ${isDark ? 'text-[#667085]' : 'text-neutral-400'}`}>
+                                    <div className="text-[10px] italic" style={{ color: 'var(--isl-ink-ghost)' }}>
                                         📎 {node.fieldValue || '未设置'}
                                     </div>
                                 ) : (
@@ -290,8 +271,8 @@ const RunningHubWebAppPanel: React.FC<{ theme: 'light' | 'dark'; compactMode: bo
 
             {/* 输出结果 */}
             {outputs.length > 0 && (
-                <div className={`rounded-xl border ${isDark ? 'border-green-800 bg-green-900/20' : 'border-green-200 bg-green-50'} p-3`}>
-                    <div className={`mb-2 text-xs font-semibold ${isDark ? 'text-green-300' : 'text-green-700'}`}>
+                <div className="rounded-2xl border-[1.5px] p-3" style={{ borderColor: 'var(--isl-mint)', background: 'var(--isl-mint-bg)' }}>
+                    <div className="mb-2 text-xs font-bold" style={{ color: 'var(--isl-mint-deep)' }}>
                         🎉 生成结果
                     </div>
                     {outputs.map((out, i) => (
@@ -300,7 +281,8 @@ const RunningHubWebAppPanel: React.FC<{ theme: 'light' | 'dark'; compactMode: bo
                             href={out.fileUrl}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="mb-1 block truncate text-xs text-blue-500 hover:underline"
+                            className="mb-1 block truncate text-xs hover:underline"
+                            style={{ color: 'var(--isl-mint-deep)' }}
                         >
                             {out.fileUrl}
                         </a>
@@ -467,9 +449,7 @@ export const RightPanel: React.FC<RightPanelProps> = ({
                     transition: 'opacity 0.2s ease-out, transform 0.28s ease-out',
                     transform: isMinimized ? 'translateY(0)' : 'translateY(-6px)',
                 }}
-                className={`theme-aware fixed z-20 flex h-10 w-10 items-center justify-center rounded-xl border shadow-sm ${
-                    isDark ? 'border-[#2A3140] bg-[#12151B] text-[#98A2B3] hover:text-white' : 'border-neutral-200 bg-white text-neutral-600 hover:text-neutral-900'
-                }`}
+                className="isl-icon-btn theme-aware fixed z-20 flex h-10 w-10 items-center justify-center"
                 title="打开侧边栏"
             >
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -490,36 +470,34 @@ export const RightPanel: React.FC<RightPanelProps> = ({
                     transition: 'transform 0.35s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s ease-out, width 0.25s ease-out',
                     pointerEvents: isMinimized ? 'none' : 'auto',
                 }}
-                className={`compact-right-panel theme-aware fixed z-[30] flex flex-col overflow-hidden border shadow-xl backdrop-blur-xl ${
-                    compactMode ? 'rounded-[24px]' : 'rounded-[28px]'
-                } ${isDark ? 'border-[#2A3140] bg-[#12151B]/96' : 'border-neutral-200/60 bg-white/96'}`}
+                className="isl-panel compact-right-panel theme-aware fixed z-[30] flex flex-col overflow-hidden"
             >
                 <div
-                    className={`absolute left-0 top-0 z-10 h-full cursor-ew-resize transition-colors hover:bg-blue-400/70 ${compactMode ? 'w-1' : 'w-1.5'}`}
+                    className={`absolute left-0 top-0 z-10 h-full cursor-ew-resize transition-colors hover:bg-[#19c8b9]/40 ${compactMode ? 'w-1' : 'w-1.5'}`}
                     onPointerDown={handleResizePointerDown}
                 />
 
-                <div className={`border-b ${isDark ? 'border-[#2A3140] bg-white/[0.025]' : 'border-neutral-200/60 bg-white/62'} ${compactMode ? 'px-3 py-3' : 'px-4 py-4'}`}>
+                <div className={`border-b ${compactMode ? 'px-3 py-3' : 'px-4 py-4'}`} style={{ borderColor: 'var(--isl-border)' }}>
                     <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0 flex-1">
-                            <div className={`text-[10px] font-bold uppercase tracking-[0.18em] ${isDark ? 'text-white/36' : 'text-neutral-400'}`}>
+                            <div className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: 'var(--isl-ink-ghost)' }}>
                                 Right Panel
                             </div>
-                            <div className={`mt-1 truncate text-[17px] font-semibold tracking-[-0.03em] ${isDark ? 'text-[#F3F4F6]' : 'text-neutral-950'}`}>
+                            <div className="mt-1 truncate text-[17px] font-bold tracking-[-0.02em]" style={{ color: 'var(--isl-ink)' }}>
                                 {activeTab === 'agent' ? 'Agent Chat' : activeTab === 'history' ? 'Generation History' : activeTab === 'inspiration' ? 'Asset Library' : 'RunningHub'}
                             </div>
                         </div>
                         <button
                             type="button"
                             onClick={onToggleMinimize}
-                            className={`flv-elastic shrink-0 rounded-full border px-3 py-1.5 text-[11px] font-medium transition-colors ${isDark ? 'border-white/10 bg-white/[0.04] text-white/52 hover:border-white/18 hover:text-white' : 'border-neutral-200 bg-white text-neutral-500 shadow-sm hover:border-neutral-300 hover:text-neutral-900'}`}
+                            className="isl-chip h-auto shrink-0 px-3 py-1.5 text-[11px]"
                             title="Collapse"
                         >
                             Collapse
                         </button>
                     </div>
 
-                    <div className={`mt-3 grid grid-cols-4 gap-1.5 rounded-full border p-1 ${isDark ? 'border-white/10 bg-black/18' : 'border-neutral-200 bg-neutral-100/80'}`}>
+                    <div className="isl-tabbar mt-3 grid w-full grid-cols-4 gap-1">
                         {[
                             { key: 'agent' as RightPanelTab, label: 'Agent' },
                             { key: 'history' as RightPanelTab, label: 'History' },
@@ -530,7 +508,7 @@ export const RightPanel: React.FC<RightPanelProps> = ({
                                 key={tab.key}
                                 type="button"
                                 onClick={() => setActiveTab(tab.key)}
-                                className={`flv-elastic min-w-0 rounded-full px-2 py-1.5 text-[11px] font-semibold transition-all ${activeTab === tab.key ? 'bg-white text-neutral-950 shadow-sm' : isDark ? 'text-white/48 hover:text-white/82' : 'text-neutral-500 hover:text-neutral-900'}`}
+                                className={`isl-tab min-w-0 px-2 py-1.5 text-[11px] ${activeTab === tab.key ? 'isl-tab--active' : ''}`}
                             >
                                 <span className="block truncate">{tab.label}</span>
                             </button>
@@ -544,10 +522,10 @@ export const RightPanel: React.FC<RightPanelProps> = ({
                             <div className="flex min-h-0 flex-1 flex-col">
                                 <div className="mb-3 flex items-center justify-between">
                                     <div>
-                                        <h3 className={`text-sm font-semibold ${isDark ? 'text-[#F3F4F6]' : 'text-neutral-900'}`}>历史生成</h3>
-                                        <p className={`mt-0.5 text-xs ${isDark ? 'text-[#667085]' : 'text-neutral-500'}`}>自动保存到本地，可直接拖到画布。</p>
+                                        <h3 className="text-sm font-bold" style={{ color: 'var(--isl-ink)' }}>历史生成</h3>
+                                        <p className="mt-0.5 text-xs" style={{ color: 'var(--isl-ink-soft)' }}>自动保存到本地，可直接拖到画布。</p>
                                     </div>
-                                    <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium tabular-nums ${isDark ? 'bg-[#1B2029] text-[#98A2B3]' : 'bg-neutral-100 text-neutral-500'}`}>
+                                    <span className="rounded-full px-2 py-0.5 text-[11px] font-bold tabular-nums" style={{ background: 'var(--isl-mint-bg)', color: 'var(--isl-mint-deep)' }}>
                                         {generationHistory.length}
                                     </span>
                                 </div>
@@ -560,13 +538,12 @@ export const RightPanel: React.FC<RightPanelProps> = ({
                                             {generationHistory.map(item => (
                                                 <div
                                                     key={item.id}
-                                                    className={`history-card group border ${
-                                                        isDark ? 'border-[#2A3140] bg-[#161A22]' : 'border-neutral-100 bg-white'
-                                                    }`}
+                                                    className="history-card group border-[1.5px] isl-elastic"
+                                                    style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-card)' }}
                                                     draggable
                                                     onDragStart={event => handleHistoryDragStart(event, item)}
                                                 >
-                                                    <div className={`history-card-img m-1.5 ${isDark ? 'bg-[#1B2029]' : 'bg-neutral-50'}`}>
+                                                    <div className="history-card-img m-1.5" style={{ background: 'var(--isl-surface-2)' }}>
                                                         <img
                                                             src={item.dataUrl}
                                                             alt={item.name || item.prompt}
@@ -574,10 +551,10 @@ export const RightPanel: React.FC<RightPanelProps> = ({
                                                         />
                                                     </div>
                                                     <div className="px-2.5 pb-2.5 pt-1">
-                                                        <p className={`line-clamp-2 text-xs font-medium leading-[1.4] ${isDark ? 'text-[#D0D5DD]' : 'text-neutral-800'}`}>
+                                                        <p className="line-clamp-2 text-xs font-bold leading-[1.4]" style={{ color: 'var(--isl-ink)' }}>
                                                             {item.name || item.prompt}
                                                         </p>
-                                                        <div className={`mt-1.5 flex items-center justify-between text-[10px] ${isDark ? 'text-[#667085]' : 'text-neutral-400'}`}>
+                                                        <div className="mt-1.5 flex items-center justify-between text-[10px]" style={{ color: 'var(--isl-ink-ghost)' }}>
                                                             <span>{item.width}×{item.height}</span>
                                                             <span>{formatTime(item.createdAt)}</span>
                                                         </div>
@@ -593,16 +570,16 @@ export const RightPanel: React.FC<RightPanelProps> = ({
 
                     {activeTab === 'inspiration' && (
                         <div className="flex h-full min-h-0 flex-col">
-                            <div className={`flex items-center justify-between border-b ${isDark ? 'border-[#2A3140]' : 'border-neutral-200/60'} ${compactMode ? 'px-3 py-2' : 'px-4 py-2.5'}`}>
+                            <div className={`flex items-center justify-between border-b ${compactMode ? 'px-3 py-2' : 'px-4 py-2.5'}`} style={{ borderColor: 'var(--isl-border)' }}>
                                 <CategoryTabs value={category} onChange={setCategory} isDark={isDark} />
-                                <span className={`text-[11px] tabular-nums ${isDark ? 'text-[#667085]' : 'text-neutral-500'}`}>{items.length} 项</span>
+                                <span className="text-[11px] tabular-nums" style={{ color: 'var(--isl-ink-soft)' }}>{items.length} 项</span>
                             </div>
 
                             <div className={`min-h-0 flex-1 overflow-y-auto ${compactMode ? 'p-2.5' : 'p-3'}`}>
                                 {items.length === 0 ? (
-                                    <div className={`flex h-full items-center justify-center ${isDark ? 'text-[#667085]' : 'text-neutral-400'}`}>
+                                    <div className="flex h-full items-center justify-center" style={{ color: 'var(--isl-ink-ghost)' }}>
                                         <div className="text-center">
-                                            <svg className={`mx-auto mb-3 h-14 w-14 ${isDark ? 'opacity-30' : 'opacity-20'}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                                            <svg className="mx-auto mb-3 h-14 w-14 opacity-30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                                                 <rect x="3" y="7" width="7" height="10" rx="1" />
                                                 <rect x="14" y="4" width="7" height="16" rx="1" />
                                             </svg>
@@ -615,13 +592,12 @@ export const RightPanel: React.FC<RightPanelProps> = ({
                                         {items.map(item => (
                                             <div
                                                 key={item.id}
-                                                className={`inspiration-item group relative cursor-grab border active:cursor-grabbing ${
-                                                    isDark ? 'border-[#2A3140] bg-[#161A22]' : 'border-neutral-100 bg-white'
-                                                }`}
+                                                className="inspiration-item group relative cursor-grab border-[1.5px] active:cursor-grabbing isl-elastic"
+                                                style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-card)' }}
                                                 draggable
                                                 onDragStart={event => handleLibraryDragStart(event, item)}
                                             >
-                                                <img src={item.dataUrl} alt={item.name || ''} className={`w-full object-contain ${isDark ? 'bg-[#1B2029]' : 'bg-neutral-50'}`} />
+                                                <img src={item.dataUrl} alt={item.name || ''} className="w-full object-contain" style={{ background: 'var(--isl-surface-2)' }} />
 
                                                 {editingId === item.id ? (
                                                     <div className="absolute inset-x-2 bottom-2 flex items-center gap-2">
@@ -640,9 +616,7 @@ export const RightPanel: React.FC<RightPanelProps> = ({
                                                                     setEditingName('');
                                                                 }
                                                             }}
-                                                            className={`min-w-0 flex-1 rounded-lg border px-2 py-1 text-xs outline-none shadow-lg ${
-                                                                isDark ? 'border-[#4B5B78] bg-[#161A22]/95 text-[#F3F4F6]' : 'border-blue-400 bg-white/95 text-neutral-900'
-                                                            }`}
+                                                            className="isl-well min-w-0 flex-1 px-2 py-1 text-xs outline-none"
                                                             placeholder="输入名称"
                                                             aria-label="素材名称"
                                                             title="素材名称"

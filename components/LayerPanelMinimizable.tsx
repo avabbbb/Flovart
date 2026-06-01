@@ -189,11 +189,11 @@ const LayerItem: React.FC<{
             {...dragProps}
             onClick={onSelect}
             onDoubleClick={() => setIsEditing(true)}
-            className={`flex items-center space-x-2 p-1.5 rounded-md cursor-pointer text-sm transition-colors group ${isSelected ? 'bg-neutral-900/10' : 'hover:bg-neutral-100'
+            className={`isl-layer-row group flex items-center space-x-2 rounded-2xl border-[1.5px] border-transparent p-1.5 text-sm ${isSelected ? 'isl-row--active' : ''
                 } ${element.isVisible === false ? 'opacity-50' : ''}`}
-            style={{ paddingLeft: `${10 + level * 20}px` }}
+            style={isSelected ? { paddingLeft: `${10 + level * 20}px` } : { paddingLeft: `${10 + level * 20}px`, color: 'var(--isl-ink)' }}
         >
-            <span className="flex-shrink-0 w-4 h-4 flex items-center justify-center text-gray-400">{getElementIcon(element)}</span>
+            <span className="flex-shrink-0 w-4 h-4 flex items-center justify-center" style={{ color: isSelected ? '#fff' : 'var(--isl-ink-ghost)' }}>{getElementIcon(element)}</span>
             {isEditing ? (
                 <input
                     ref={inputRef}
@@ -202,18 +202,18 @@ const LayerItem: React.FC<{
                     onChange={(e) => setName(e.target.value)}
                     onBlur={handleBlur}
                     onKeyDown={(e) => e.key === 'Enter' && handleBlur()}
-                    className="flex-grow bg-transparent border-b border-neutral-400 outline-none text-neutral-900"
+                    className="flex-grow bg-transparent border-b border-current/40 outline-none"
                     onClick={e => e.stopPropagation()}
                     placeholder="图层名称"
                     aria-label="图层名称"
                 />
             ) : (
-                <span className="flex-grow truncate text-xs">{name}</span>
+                <span className="flex-grow truncate text-xs font-semibold">{name}</span>
             )}
-            <div className="flex-shrink-0 flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="flex-shrink-0 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                 <button
                     onClick={(e) => { e.stopPropagation(); onToggleLock(); }}
-                    className={`p-1 rounded-full hover:bg-neutral-100 ${element.isLocked ? 'text-neutral-900' : 'text-neutral-400'}`}
+                    className="isl-icon-btn h-6 w-6"
                     title={element.isLocked ? "Unlock" : "Lock"}
                 >
                     {element.isLocked ?
@@ -223,7 +223,7 @@ const LayerItem: React.FC<{
                 </button>
                 <button
                     onClick={(e) => { e.stopPropagation(); onToggleVisibility(); }}
-                    className="p-1 rounded-full hover:bg-neutral-100 text-neutral-400"
+                    className="isl-icon-btn h-6 w-6"
                     title={element.isVisible === false ? "Show" : "Hide"}
                 >
                     {element.isVisible === false ?
@@ -274,7 +274,7 @@ export const LayerPanelMinimizable: React.FC<LayerPanelMinimizableProps> = ({
         const target = e.currentTarget;
         const id = target.getAttribute('data-id');
         setDragOverId(id);
-        target.style.background = 'rgba(255,255,255,0.2)';  // 高亮显示
+        target.style.background = 'var(--isl-mint-bg)';  // 高亮显示
     };
 
     /**
@@ -391,14 +391,14 @@ export const LayerPanelMinimizable: React.FC<LayerPanelMinimizableProps> = ({
                 transition: 'transform 0.35s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s ease-out',
                 pointerEvents: isMinimized ? 'none' : 'auto',  // 最小化时禁用交互
             }}
-            className="fixed top-4 bottom-4 z-20 bg-white border border-neutral-200 rounded-2xl shadow-2xl overflow-hidden flex flex-col"
+            className="isl-panel theme-aware fixed top-4 bottom-4 z-20 overflow-hidden flex flex-col"
         >
             {/* 顶部标题栏 - 包含最小化按钮 */}
-            <div className="flex-shrink-0 flex justify-between items-center px-3 py-2 border-b border-neutral-200">
-                <h3 className="text-sm font-semibold">图层</h3>
+            <div className="flex-shrink-0 flex justify-between items-center px-3 py-2 border-b" style={{ borderColor: 'var(--isl-border)' }}>
+                <h3 className="text-sm font-bold" style={{ color: 'var(--isl-ink)' }}>图层</h3>
                 <button
                     onClick={onToggleMinimize}
-                    className="shrink-0 p-2.5 rounded-xl border border-neutral-200 hover:bg-neutral-100 transition-colors"
+                    className="isl-icon-btn h-9 w-9"
                     title="最小化"
                     aria-label="最小化"
                 >

@@ -37,16 +37,15 @@ export const ABCompareOverlay: React.FC<ABCompareOverlayProps> = ({ imageA, imag
         <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-black/70 backdrop-blur-sm"
              onClick={onClose}>
             {/* Header */}
-            <div className={`absolute top-4 left-1/2 -translate-x-1/2 flex items-center gap-4 px-5 py-2.5 rounded-2xl shadow-xl border z-10 ${isDark ? 'bg-[#1C2333] border-[#2A3142] text-white' : 'bg-white border-gray-200 text-gray-900'}`}
+            <div className="isl-shell theme-aware absolute top-4 left-1/2 -translate-x-1/2 flex items-center gap-4 px-5 py-2.5 z-10"
                  onClick={e => e.stopPropagation()}>
-                <span className="text-sm font-semibold">A/B 对比</span>
-                <div className={`h-5 w-px ${isDark ? 'bg-gray-600' : 'bg-gray-300'}`} />
-                <span className={`text-xs ${isDark ? 'text-blue-400' : 'text-blue-600'}`}>← {imageA.label}</span>
-                <span className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>|</span>
-                <span className={`text-xs ${isDark ? 'text-green-400' : 'text-green-600'}`}>{imageB.label} →</span>
-                <div className={`h-5 w-px ${isDark ? 'bg-gray-600' : 'bg-gray-300'}`} />
-                <button onClick={onClose}
-                    className={`px-3 py-1 rounded-lg text-xs font-medium transition ${isDark ? 'bg-[#2A3142] hover:bg-[#3A4458] text-gray-300' : 'bg-gray-100 hover:bg-gray-200 text-gray-600'}`}>
+                <span className="text-sm font-bold" style={{ color: 'var(--isl-ink)' }}>A/B 对比</span>
+                <div className="h-5 w-px" style={{ background: 'var(--isl-border)' }} />
+                <span className="text-xs font-bold" style={{ color: 'var(--isl-mint-deep)' }}>← {imageA.label}</span>
+                <span className="text-xs" style={{ color: 'var(--isl-ink-ghost)' }}>|</span>
+                <span className="text-xs font-bold" style={{ color: 'var(--isl-coral-deep)' }}>{imageB.label} →</span>
+                <div className="h-5 w-px" style={{ background: 'var(--isl-border)' }} />
+                <button onClick={onClose} className="isl-chip h-auto px-3 py-1 text-xs">
                     关闭
                 </button>
             </div>

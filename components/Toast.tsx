@@ -2,11 +2,11 @@ import React from 'react';
 import { Z } from '../utils/zLayers';
 import type { ToastItem } from '../hooks/useToast';
 
-const LEVEL_STYLES: Record<ToastItem['level'], { bg: string; border: string; text: string; icon: string }> = {
-  info:    { bg: 'bg-blue-100',   border: 'border-blue-400',   text: 'text-blue-700',   icon: '🔄' },
-  success: { bg: 'bg-green-100',  border: 'border-green-400',  text: 'text-green-700',  icon: '✅' },
-  warning: { bg: 'bg-yellow-100', border: 'border-yellow-400', text: 'text-yellow-700', icon: '⚠️' },
-  error:   { bg: 'bg-red-100',    border: 'border-red-400',    text: 'text-red-700',    icon: '' },
+const LEVEL_STYLES: Record<ToastItem['level'], { accent: string; icon: string }> = {
+  info:    { accent: 'var(--isl-mint)',  icon: '🔄' },
+  success: { accent: 'var(--isl-mint)',  icon: '✅' },
+  warning: { accent: 'var(--isl-sun)',   icon: '⚠️' },
+  error:   { accent: 'var(--isl-coral)', icon: '' },
 };
 
 interface ToastStackProps {
@@ -19,7 +19,7 @@ export default function ToastStack({ toasts, onDismiss }: ToastStackProps) {
 
   return (
     <div
-      className="fixed top-4 left-1/2 -translate-x-1/2 flex flex-col gap-2 pointer-events-none"
+      className="theme-aware fixed top-4 left-1/2 -translate-x-1/2 flex flex-col gap-2 pointer-events-none"
       style={{ zIndex: Z.notification }}
     >
       {toasts.map(t => {
@@ -27,13 +27,14 @@ export default function ToastStack({ toasts, onDismiss }: ToastStackProps) {
         return (
           <div
             key={t.id}
-            className={`pointer-events-auto p-3 ${s.bg} border ${s.border} ${s.text} rounded-md shadow-lg flex items-center max-w-lg animate-fade-in`}
+            className="isl-shell isl-bounce-in pointer-events-auto flex max-w-lg items-center p-3"
+            style={{ borderLeftWidth: '5px', borderLeftColor: s.accent }}
           >
             {s.icon && <span className="mr-2">{s.icon}</span>}
-            <span className="flex-grow text-sm">{t.message}</span>
+            <span className="flex-grow text-sm font-bold" style={{ color: 'var(--isl-ink)' }}>{t.message}</span>
             <button
               onClick={() => onDismiss(t.id)}
-              className={`ml-4 p-1 rounded-full hover:opacity-70`}
+              className="isl-icon-btn ml-4 h-7 w-7"
               aria-label="close"
             >
               <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">

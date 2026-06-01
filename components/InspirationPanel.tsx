@@ -49,12 +49,12 @@ interface InspirationPanelProps {
  * 渲染三个分类切换按钮：角色、场景、道具
  */
 const CategoryTabs: React.FC<{ value: AssetCategory; onChange: (c: AssetCategory) => void }> = ({ value, onChange }) => (
-    <div className="grid grid-cols-3 rounded-xl overflow-hidden border border-neutral-200 bg-white">
+    <div className="isl-tabbar">
         {(['character', 'scene', 'prop'] as AssetCategory[]).map(cat => (
             <button
                 key={cat}
                 onClick={() => onChange(cat)}
-                className={`px-2 py-1 text-xs transition-colors ${value === cat ? 'bg-neutral-900 text-white' : 'bg-white hover:bg-neutral-50 text-neutral-700'} border-r border-neutral-200 last:border-r-0`}
+                className={`isl-tab px-2 py-1 text-xs ${value === cat ? 'isl-tab--active' : ''}`}
             >
                 {cat === 'character' ? '角色' : cat === 'scene' ? '场景' : '道具'}
             </button>
@@ -229,7 +229,7 @@ export const InspirationPanel: React.FC<InspirationPanelProps> = ({
         return (
             <button
                 onClick={onToggleMinimize}
-                className="fixed top-4 right-4 z-20 w-12 h-12 rounded-xl bg-white border border-neutral-200 shadow-lg hover:shadow-xl transition-shadow flex items-center justify-center text-neutral-700 hover:text-neutral-900"
+                className="isl-icon-btn theme-aware fixed top-4 right-4 z-20 flex h-12 w-12 items-center justify-center"
                 title="打开灵感库"
             >
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -251,26 +251,26 @@ export const InspirationPanel: React.FC<InspirationPanelProps> = ({
     return (
         <div
             ref={panelRef}
-            className="fixed top-4 bottom-4 right-4 z-20 bg-white border border-neutral-200 rounded-2xl shadow-xl overflow-hidden flex flex-col"
+            className="isl-panel theme-aware fixed top-4 bottom-4 right-4 z-20 overflow-hidden flex flex-col"
             style={{ width: `${panelWidth}px` }}
         >
             {/* Resize handle (left edge) */}
             <div
-                className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize hover:bg-neutral-200/50 transition-colors z-10 group"
+                className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize transition-colors z-10 group"
                 onPointerDown={handleResizePointerDown}
             >
-                <div className="absolute left-1 top-1/2 -translate-y-1/2 w-1 h-12 bg-neutral-300 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
+                <div className="absolute left-1 top-1/2 -translate-y-1/2 w-1 h-12 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" style={{ background: 'var(--isl-border-strong)' }} />
             </div>
 
             {/* Header */}
-            <div className="flex-shrink-0 flex items-center justify-between gap-3 px-4 py-3 border-b border-neutral-200">
+            <div className="flex-shrink-0 flex items-center justify-between gap-3 px-4 py-3 border-b" style={{ borderColor: 'var(--isl-border)' }}>
                 <div className="flex items-center gap-3 flex-1 min-w-0">
-                    <strong className="text-sm shrink-0">灵感库</strong>
+                    <strong className="text-sm shrink-0" style={{ color: 'var(--isl-ink)' }}>灵感库</strong>
                     <CategoryTabs value={category} onChange={setCategory} />
                 </div>
                 <button
                     onClick={onToggleMinimize}
-                    className="shrink-0 text-neutral-400 hover:text-neutral-900 p-1 rounded-lg hover:bg-neutral-100 transition-colors"
+                    className="isl-icon-btn h-9 w-9 shrink-0"
                     title="最小化"
                 >
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
@@ -280,7 +280,7 @@ export const InspirationPanel: React.FC<InspirationPanelProps> = ({
             </div>
 
             {/* Generate input */}
-            <div className="flex-shrink-0 p-3 border-b border-neutral-200">
+            <div className="flex-shrink-0 p-3 border-b" style={{ borderColor: 'var(--isl-border)' }}>
                 <div className="flex items-center gap-2">
                     <input
                         ref={promptInputRef}
@@ -291,12 +291,12 @@ export const InspirationPanel: React.FC<InspirationPanelProps> = ({
                             if (e.key === 'Enter') handleGenerate();
                         }}
                         placeholder="描述你想要生成的图片..."
-                        className="flex-1 px-3 py-2 text-sm rounded-lg border border-neutral-200 bg-neutral-50 focus:bg-white outline-none focus:border-neutral-400 transition-colors"
+                        className="isl-well flex-1 px-3 py-2 text-sm outline-none"
                     />
                     <button
                         onClick={handleGenerate}
                         disabled={!prompt.trim()}
-                        className="shrink-0 px-4 py-2 text-sm rounded-lg bg-neutral-900 text-white hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                        className="isl-go h-auto shrink-0 px-4 py-2 text-sm"
                     >
                         生成
                     </button>
@@ -306,7 +306,7 @@ export const InspirationPanel: React.FC<InspirationPanelProps> = ({
             {/* Content area */}
             <div className="flex-1 overflow-y-auto p-3">
                 {items.length === 0 ? (
-                    <div className="text-center text-neutral-500 text-sm py-10">
+                    <div className="text-center text-sm py-10" style={{ color: 'var(--isl-ink-soft)' }}>
                         该分类暂无素材<br />选中图片后使用"加入灵感库"按钮添加
                     </div>
                 ) : (
@@ -314,11 +314,12 @@ export const InspirationPanel: React.FC<InspirationPanelProps> = ({
                         {items.map(item => (
                             <div
                                 key={item.id}
-                                className="group inline-block w-full mb-3 break-inside-avoid rounded-xl border border-neutral-200 overflow-hidden hover:shadow-md cursor-grab active:cursor-grabbing relative bg-neutral-50 transition-shadow"
+                                className="isl-elastic group inline-block w-full mb-3 break-inside-avoid rounded-2xl border-[1.5px] overflow-hidden cursor-grab active:cursor-grabbing relative"
+                                style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-surface-2)' }}
                                 draggable
                                 onDragStart={(e) => handleDragStart(e, item)}
                             >
-                                <img src={item.dataUrl} alt={item.name || ''} className="w-full h-auto object-contain bg-neutral-50" />
+                                <img src={item.dataUrl} alt={item.name || ''} className="w-full h-auto object-contain" style={{ background: 'var(--isl-surface-2)' }} />
 
                                 {/* Hover overlay */}
                                 {editingId === item.id ? (
@@ -330,7 +331,7 @@ export const InspirationPanel: React.FC<InspirationPanelProps> = ({
                                             onChange={(e) => setEditingName(e.target.value)}
                                             onBlur={() => handleSaveEdit(item.id)}
                                             onKeyDown={(e) => handleKeyDown(e, item.id)}
-                                            className="text-xs px-2 py-1 border border-blue-400 rounded-lg outline-none bg-white/95 backdrop-blur min-w-0 flex-1 shadow-lg"
+                                            className="isl-well text-xs px-2 py-1 outline-none min-w-0 flex-1"
                                             placeholder="输入素材名称"
                                             aria-label="素材名称"
                                         />

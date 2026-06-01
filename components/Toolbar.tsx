@@ -29,10 +29,9 @@ interface ToolbarProps {
     onHeightChange?: (heightPx: number) => void;
 }
 
-const baseButtonClass =
-    'flex h-10 w-10 items-center justify-center rounded-[18px] border border-transparent text-neutral-500 transition hover:bg-white hover:text-neutral-900';
+const baseButtonClass = 'isl-icon-btn h-9 w-9';
 
-const activeButtonClass = 'border-neutral-200 bg-white text-neutral-900 shadow-[0_10px_20px_rgba(15,23,42,0.10)]';
+const activeButtonClass = 'isl-icon-btn--active';
 
 const panelPosition = {
     leftClosed: 16,
@@ -53,9 +52,7 @@ const ToolButton: React.FC<{
         title={label}
         onClick={onClick}
         disabled={disabled}
-        className={`${baseButtonClass} ${active ? activeButtonClass : ''} ${
-            theme === 'dark' ? 'text-[#D0D5DD] hover:bg-[#1F2430] hover:text-white' : 'text-[#475467] hover:bg-white hover:text-[#111827]'
-        } disabled:cursor-not-allowed disabled:opacity-40`}
+        className={`${baseButtonClass} ${active ? activeButtonClass : ''}`}
     >
         {icon}
     </button>
@@ -93,9 +90,7 @@ const ToolGroupButton: React.FC<{
                 theme={theme}
             />
             {open && (
-                <div className={`absolute left-full top-0 ml-2.5 flex flex-col gap-1.5 rounded-[22px] border p-1.5 shadow-[0_20px_44px_rgba(15,23,42,0.16)] ${
-                    theme === 'dark' ? 'border-[#2A3140] bg-[#12151B]' : 'border-neutral-200 bg-white'
-                }`}>
+                <div className="isl-pop absolute left-full top-0 ml-2.5 flex flex-col gap-1.5 p-1.5">
                     {items.map(item => (
                         <ToolButton
                             key={item.id}
@@ -142,16 +137,25 @@ export const Toolbar: React.FC<ToolbarProps> = ({
     onHeightChange,
 }) => {
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const innerRef = useRef<HTMLDivElement>(null);
     const leftPosition = isLayerPanelExpanded ? leftOpen : leftClosed;
-    const isDark = theme === 'dark';
 
     useEffect(() => {
         onLeftChange?.(leftPosition);
     }, [leftPosition, onLeftChange]);
 
     useEffect(() => {
-        onHeightChange?.(452 * compactScale);
-    }, [compactScale, onHeightChange]);
+        if (!innerRef.current || !onHeightChange) return;
+        const measure = () => {
+            if (innerRef.current) {
+                onHeightChange(innerRef.current.getBoundingClientRect().height);
+            }
+        };
+        measure();
+        const observer = new ResizeObserver(measure);
+        observer.observe(innerRef.current);
+        return () => observer.disconnect();
+    }, [onHeightChange, compactScale]);
 
     const shapeTools = useMemo<Array<{ id: Tool; label: string; icon: React.ReactNode }>>(
         () => [
@@ -213,22 +217,31 @@ export const Toolbar: React.FC<ToolbarProps> = ({
     if (isCropping) {
         return (
             <div
-                className="absolute top-3 z-[50] flex w-52 flex-col gap-3 rounded-[24px] border border-neutral-200 bg-white p-4 shadow-[0_24px_60px_rgba(15,23,42,0.16)]"
-                style={{ left: `${leftPosition}px`, top: `${topOffset}px`, transform: `scale(${compactScale})`, transformOrigin: 'top left', transition: 'left 0.35s cubic-bezier(0.4, 0, 0.2, 1)' }}
+                className="theme-aware absolute top-3 z-50 flex w-52 flex-col gap-3 rounded-[1.25rem] border-[1.5px] p-4"
+                style={{
+                    left: `${leftPosition}px`,
+                    top: `${topOffset}px`,
+                    transform: `scale(${compactScale})`,
+                    transformOrigin: 'top left',
+                    transition: 'left 0.35s cubic-bezier(0.4, 0, 0.2, 1)',
+                    background: 'var(--isl-card)',
+                    borderColor: 'var(--isl-border)',
+                    boxShadow: '0 0.25rem 0 0 var(--isl-edge), var(--isl-shadow-lg)',
+                }}
             >
-                <div className="text-sm font-semibold text-neutral-900">{t('toolbar.crop.title')}</div>
+                <div className="text-sm font-bold" style={{ color: 'var(--isl-ink)' }}>{t('toolbar.crop.title')}</div>
                 <div className="grid grid-cols-2 gap-2">
                     <button
                         type="button"
                         onClick={onCancelCrop}
-                        className="rounded-2xl border border-neutral-200 px-3 py-2 text-sm text-neutral-700 transition hover:bg-neutral-100"
+                        className="isl-chip h-9 justify-center px-3 text-sm"
                     >
                         {t('toolbar.crop.cancel')}
                     </button>
                     <button
                         type="button"
                         onClick={onConfirmCrop}
-                        className="rounded-2xl bg-neutral-900 px-3 py-2 text-sm font-medium text-white transition hover:bg-neutral-800"
+                        className="isl-go h-9 px-3 text-sm"
                     >
                         {t('toolbar.crop.confirm')}
                     </button>
@@ -239,15 +252,22 @@ export const Toolbar: React.FC<ToolbarProps> = ({
 
     return (
         <div
-            className={`absolute z-[40] flex flex-col items-center gap-1.5 rounded-[24px] border px-1.5 py-2.5 shadow-[0_20px_48px_rgba(15,23,42,0.24)] ${
-                isDark ? 'border-[#2A3140] bg-[#12151B] text-white' : 'border-neutral-200 bg-white text-[#111827]'
-            }`}
+            className="theme-aware pointer-events-none absolute z-40"
             style={{
                 top: `${topOffset}px`,
                 left: `${leftPosition}px`,
                 transform: `scale(${compactScale})`,
                 transformOrigin: 'top left',
                 transition: 'left 0.35s cubic-bezier(0.4, 0, 0.2, 1)',
+            }}
+        >
+        <div
+            ref={innerRef}
+            className="pointer-events-auto flex flex-col items-center gap-1 rounded-2xl border-[1.5px] px-1 py-1.5"
+            style={{
+                background: 'var(--isl-card)',
+                borderColor: 'var(--isl-border)',
+                boxShadow: '0 0.25rem 0 0 var(--isl-edge), var(--isl-shadow)',
             }}
         >
             <ToolButton
@@ -258,7 +278,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                 theme={theme}
             />
 
-            <div className={`h-px w-7 ${isDark ? 'bg-white/10' : 'bg-neutral-200'}`} />
+            <div className="h-px w-6" style={{ background: 'var(--isl-border)' }} />
 
             <ToolButton
                 label={t('toolbar.select')}
@@ -305,7 +325,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                 theme={theme}
             />
 
-            <div className={`my-0.5 h-px w-7 ${isDark ? 'bg-white/10' : 'bg-neutral-200'}`} />
+            <div className="my-0.5 h-px w-6" style={{ background: 'var(--isl-border)' }} />
 
             <input
                 type="color"
@@ -313,7 +333,8 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                 title={t('toolbar.strokeColor')}
                 value={drawingOptions.strokeColor}
                 onChange={(event) => setDrawingOptions({ ...drawingOptions, strokeColor: event.target.value })}
-                className={`h-9 w-9 cursor-pointer rounded-[16px] border bg-transparent p-0 ${isDark ? 'border-white/10' : 'border-neutral-200'}`}
+                className="isl-elastic h-8 w-8 cursor-pointer rounded-xl border-[1.5px] bg-transparent p-0"
+                style={{ borderColor: 'var(--isl-border-strong)' }}
             />
             <input
                 type="range"
@@ -323,11 +344,11 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                 title={t('toolbar.strokeWidth')}
                 value={drawingOptions.strokeWidth}
                 onChange={(event) => setDrawingOptions({ ...drawingOptions, strokeWidth: Number(event.target.value) })}
-                className="toolbar-range h-20 w-9 cursor-pointer [writing-mode:vertical-lr]"
+                className="toolbar-range h-16 w-8 cursor-pointer [writing-mode:vertical-lr]"
             />
-            <span className={`text-[10px] font-medium tabular-nums ${isDark ? 'text-[#98A2B3]' : 'text-neutral-500'}`}>{drawingOptions.strokeWidth}</span>
+            <span className="text-[10px] font-bold tabular-nums" style={{ color: 'var(--isl-ink-soft)' }}>{drawingOptions.strokeWidth}</span>
 
-            <div className={`my-0.5 h-px w-7 ${isDark ? 'bg-white/10' : 'bg-neutral-200'}`} />
+            <div className="my-0.5 h-px w-6" style={{ background: 'var(--isl-border)' }} />
 
             <input
                 ref={fileInputRef}
@@ -365,7 +386,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                 theme={theme}
             />
 
-            <div className={`my-0.5 h-px w-7 ${isDark ? 'bg-white/10' : 'bg-neutral-200'}`} />
+            <div className="my-0.5 h-px w-6" style={{ background: 'var(--isl-border)' }} />
 
             <ToolButton
                 label={t('toolbar.undo')}
@@ -381,6 +402,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                 icon={<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m15 14 5-5-5-5" /><path d="M20 9H9.5A5.5 5.5 0 0 0 4 14.5 5.5 5.5 0 0 0 9.5 20H13" /></svg>}
                 theme={theme}
             />
+        </div>
         </div>
     );
 };

@@ -1,4 +1,4 @@
-import React, { memo, useEffect, useMemo, useRef, useState } from 'react';
+import React, { memo, useEffect, useMemo, useState } from 'react';
 import type {
     CanvasElement,
     Element,
@@ -42,6 +42,7 @@ interface InlinePromptBarProps {
     animateViewport: (targetX: number, targetY: number, targetZoom: number) => void;
     progressLabel?: string;
     activeTaskCount?: number;
+
 }
 
 type InlinePromptTranslations = {
@@ -131,6 +132,7 @@ export const InlinePromptBar = memo(({
     element,
     allElements,
     canvasZoom,
+    canvasPan,
     modelId,
     status,
     progress,
@@ -152,7 +154,6 @@ export const InlinePromptBar = memo(({
     progressLabel,
     activeTaskCount = 0,
 }: InlinePromptBarProps) => {
-    const animationFrameRef = useRef<number | null>(null);
     const language = useWorkspaceStore(state => state.language);
     const generationState = createGenerationState(element, modelId, videoAspectRatio, isLoading ? 'running' : status, progress);
     const effectiveModelId = generationState.modelId || modelId;
@@ -256,12 +257,14 @@ export const InlinePromptBar = memo(({
         }
     };
 
-    const targetScale = useMemo(() => {
-        const safeZoom = Math.max(canvasZoom, 0.12);
-        return Math.max(0.92, Math.min(2.35, 1 / safeZoom));
-    }, [canvasZoom]);
-    const [displayScale, setDisplayScale] = useState(targetScale);
-    const panelWidth = isChinese ? 560 : 620;
+    const [winW, setWinW] = useState(() => window.innerWidth);
+    const BAR_MAX_WIDTH = 720;
+    const barWidth = Math.min(BAR_MAX_WIDTH, Math.max(360, winW - 40));
+    const halfBarWidth = barWidth / 2;
+    const screenCenterX = canvasPan.x + (element.x + element.width / 2) * canvasZoom;
+    const screenTopY = canvasPan.y + (element.y + element.height) * canvasZoom + 16;
+    const clampedCenterX = Math.max(halfBarWidth + 4, Math.min(screenCenterX, winW - halfBarWidth - 4));
+    const clampedTopY = Math.max(8, screenTopY);
     const accentColor = generationMode === 'video' ? 'var(--isl-sun)' : 'var(--isl-mint)';
     const runningProgress = generationState.status === 'running'
         ? Math.max(6, Math.min(98, generationState.progress ?? progress ?? 12))
@@ -274,55 +277,30 @@ export const InlinePromptBar = memo(({
         error: inlineT.statusError,
     };
     const currentStatusLabel = statusLabelMap[generationState.status] || generationState.status;
-    const topPosition = element.y + element.height + 10;
-    const leftPosition = element.x + element.width / 2 - (panelWidth * displayScale) / 2;
 
     useEffect(() => {
-        if (animationFrameRef.current !== null) {
-            window.cancelAnimationFrame(animationFrameRef.current);
-        }
-
-        const animate = () => {
-            setDisplayScale(previous => {
-                const delta = targetScale - previous;
-                if (Math.abs(delta) < 0.002) {
-                    return targetScale;
-                }
-                animationFrameRef.current = window.requestAnimationFrame(animate);
-                return previous + delta * 0.18;
-            });
-        };
-
-        animationFrameRef.current = window.requestAnimationFrame(animate);
-        return () => {
-            if (animationFrameRef.current !== null) {
-                window.cancelAnimationFrame(animationFrameRef.current);
-                animationFrameRef.current = null;
-            }
-        };
-    }, [targetScale]);
+        const onResize = () => setWinW(window.innerWidth);
+        window.addEventListener('resize', onResize);
+        return () => window.removeEventListener('resize', onResize);
+    }, []);
 
     return (
-        <foreignObject
-            x={leftPosition}
-            y={topPosition}
-            width={panelWidth * displayScale}
-            height={600 * displayScale}
-            style={{ overflow: 'visible' }}
+        <div
+            data-testid="inline-prompt-bar"
+            className="inline-prompt-bar"
+            style={{
+                position: 'absolute',
+                left: `${clampedCenterX}px`,
+                top: `${clampedTopY}px`,
+                width: `${barWidth}px`,
+                transform: 'translateX(-50%)',
+                zIndex: 50,
+                pointerEvents: 'auto',
+            }}
             onMouseDown={(event) => event.stopPropagation()}
             onPointerDown={(event) => event.stopPropagation()}
-            data-testid="inline-prompt-bar"
         >
-            <div
-                className="inline-prompt-bar-motion"
-                style={{
-                    width: panelWidth,
-                    transform: `scale(${displayScale})`,
-                    transformOrigin: 'top left',
-                    willChange: 'transform',
-                }}
-            >
-                <div className="relative" style={{ '--inline-prompt-accent': accentColor } as React.CSSProperties}>
+            <div className="relative" style={{ '--inline-prompt-accent': accentColor } as React.CSSProperties}>
                     {generationState.status === 'running' && (
                         <div className="inline-prompt-bar__queue-meta">
                             <span>{activeTaskCount > 1 ? `${inlineT.queue} ${activeTaskCount}` : currentStatusLabel}</span>
@@ -333,7 +311,6 @@ export const InlinePromptBar = memo(({
                     <PromptBar
                         t={t as any}
                         theme={theme}
-                        compactMode
                         prompt={generationState.promptPayload.rawText}
                         promptDocument={generationState.promptPayload.richTextDocument}
                         setPrompt={(nextPrompt) => syncPromptState(nextPrompt, generationState.promptPayload.richTextDocument)}
@@ -395,9 +372,8 @@ export const InlinePromptBar = memo(({
                             <div className="inline-prompt-bar__error-text">{generationState.error}</div>
                         </div>
                     )}
-                </div>
             </div>
-        </foreignObject>
+        </div>
     );
 });
 

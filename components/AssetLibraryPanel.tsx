@@ -14,9 +14,9 @@ interface AssetLibraryPanelProps {
 }
 
 const CategoryTabs: React.FC<{ value: AssetCategory; onChange: (c: AssetCategory) => void }>=({ value, onChange }) => (
-    <div className="grid grid-cols-3 rounded-xl overflow-hidden border border-neutral-200">
+    <div className="isl-tabbar">
         {(['character','scene','prop'] as AssetCategory[]).map(cat => (
-            <button key={cat} onClick={() => onChange(cat)} className={`px-3 py-1.5 text-sm transition-colors ${value===cat? 'bg-neutral-900 text-white':'bg-white hover:bg-neutral-50'} border-r border-neutral-200 first:rounded-l-xl last:border-r-0 last:rounded-r-xl`}>{cat === 'character' ? '角色' : cat === 'scene' ? '场景' : '道具'}</button>
+            <button key={cat} onClick={() => onChange(cat)} className={`isl-tab px-3 py-1.5 text-sm ${value===cat ? 'isl-tab--active' : ''}`}>{cat === 'character' ? '角色' : cat === 'scene' ? '场景' : '道具'}</button>
         ))}
     </div>
 );
@@ -174,8 +174,8 @@ export const AssetLibraryPanel: React.FC<AssetLibraryPanelProps> = ({ isOpen, on
             )}
             
             {/* Draggable + Resizable panel */}
-            <div 
-                className={`fixed ${docked ? 'right-4 top-4' : ''} z-30 border border-neutral-200 rounded-2xl shadow-xl bg-white text-neutral-900 overflow-hidden`}
+            <div
+                className={`isl-panel theme-aware fixed ${docked ? 'right-4 top-4' : ''} z-30 overflow-hidden`}
                 ref={panelRef}
                 style={{
                     left: docked ? undefined : `${panelPosition.x}px`,
@@ -186,19 +186,21 @@ export const AssetLibraryPanel: React.FC<AssetLibraryPanelProps> = ({ isOpen, on
                 }}
             >
                 {/* Draggable header */}
-                <div 
+                <div
                     ref={headerRef}
-                    className={`flex flex-wrap items-center justify-between gap-3 p-3 border-b border-neutral-200 ${docked ? '' : 'cursor-move select-none'}`}
+                    className={`flex flex-wrap items-center justify-between gap-3 p-3 border-b ${docked ? '' : 'cursor-move select-none'}`}
+                    style={{ borderColor: 'var(--isl-border)' }}
                     onPointerDown={docked ? undefined : handlePanelPointerDown}
                 >
                     <div className="flex items-center gap-3">
-                        <strong>灵感库</strong>
+                        <strong style={{ color: 'var(--isl-ink)' }}>灵感库</strong>
                         <CategoryTabs value={category} onChange={setCategory} />
                     </div>
-                    <button 
-                        onClick={onClose} 
-                        className="text-neutral-400 hover:text-neutral-900 p-1 rounded-full cursor-pointer" 
+                    <button
+                        onClick={onClose}
+                        className="isl-icon-btn h-8 w-8"
                         aria-label="关闭"
+                        title="关闭"
                         onMouseDown={(e) => e.stopPropagation()}
                     >
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
@@ -206,11 +208,11 @@ export const AssetLibraryPanel: React.FC<AssetLibraryPanelProps> = ({ isOpen, on
                 </div>
             {/* prompt input */}
             {onGenerate && (
-                <div className="p-3 border-b border-neutral-200 flex items-center gap-2">
-                    <input 
-                        type="text" 
+                <div className="p-3 border-b flex items-center gap-2" style={{ borderColor: 'var(--isl-border)' }}>
+                    <input
+                        type="text"
                         placeholder="描述你想要生成的图片..."
-                        className="flex-1 px-3 py-2 rounded-lg border border-neutral-200 bg-neutral-50 focus:bg-white outline-none"
+                        className="isl-well flex-1 px-3 py-2 outline-none"
                         onKeyDown={(e) => {
                             const target = e.target as HTMLInputElement;
                             if (e.key === 'Enter' && target.value.trim()) {
@@ -219,8 +221,8 @@ export const AssetLibraryPanel: React.FC<AssetLibraryPanelProps> = ({ isOpen, on
                             }
                         }}
                     />
-                    <button 
-                        className="px-3 py-2 rounded-lg bg-neutral-900 text-white hover:brightness-110"
+                    <button
+                        className="isl-go h-auto px-4 py-2 text-sm"
                         onClick={() => {
                             const el = panelRef.current?.querySelector('input[type="text"]') as HTMLInputElement | null;
                             if (el && el.value.trim()) { onGenerate(el.value.trim()); el.value = ''; }
@@ -230,17 +232,18 @@ export const AssetLibraryPanel: React.FC<AssetLibraryPanelProps> = ({ isOpen, on
             )}
             <div className="p-3 overflow-y-auto" style={{ height: docked ? `calc(100% - ${onGenerate ? 56+48 : 56}px)` : `calc(${panelSize.height}px - ${onGenerate ? 56+48 : 56}px)` }}>
                 {items.length === 0 && (
-                    <div className="w-full text-center text-neutral-500 py-10">该分类暂无素材，选中图片后使用"加入素材库"按钮添加</div>
+                    <div className="w-full text-center py-10" style={{ color: 'var(--isl-ink-soft)' }}>该分类暂无素材，选中图片后使用"加入素材库"按钮添加</div>
                 )}
                 <div className="columns-2 md:columns-3 lg:columns-4 gap-3 [column-fill:balance]">
                     {items.map(item => (
-                        <div 
+                        <div
                             key={item.id}
-                            className="group inline-block w-full mb-3 break-inside-avoid rounded-xl border border-neutral-200 overflow-hidden hover:shadow cursor-grab active:cursor-grabbing relative bg-neutral-50"
+                            className="isl-elastic group inline-block w-full mb-3 break-inside-avoid rounded-2xl border-[1.5px] overflow-hidden cursor-grab active:cursor-grabbing relative"
+                            style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-surface-2)' }}
                             draggable
                             onDragStart={(e) => handleDragStart(e, item)}
                         >
-                            <img src={item.dataUrl} alt={item.name || ''} className="w-full h-auto object-contain bg-neutral-50" />
+                            <img src={item.dataUrl} alt={item.name || ''} className="w-full h-auto object-contain" style={{ background: 'var(--isl-surface-2)' }} />
 
                             {/* Hover overlay with info */}
                             {editingId === item.id ? (
@@ -252,7 +255,7 @@ export const AssetLibraryPanel: React.FC<AssetLibraryPanelProps> = ({ isOpen, on
                                         onChange={(e) => setEditingName(e.target.value)}
                                         onBlur={() => handleSaveEdit(item.id)}
                                         onKeyDown={(e) => handleKeyDown(e, item.id)}
-                                        className="text-xs px-2 py-1 border border-blue-400 rounded outline-none bg-white/95 backdrop-blur min-w-0 flex-1"
+                                        className="isl-well text-xs px-2 py-1 outline-none min-w-0 flex-1"
                                         placeholder="输入素材名称"
                                         aria-label="素材名称"
                                     />
@@ -291,8 +294,9 @@ export const AssetLibraryPanel: React.FC<AssetLibraryPanelProps> = ({ isOpen, on
                 </div>
             </div>
                 {/* Resize handle */}
-                <div 
-                    className={`absolute ${docked ? 'left-2 top-1/2 -translate-y-1/2 cursor-ew-resize' : 'right-2 bottom-2 cursor-se-resize'} w-4 h-4 text-neutral-400 hover:text-neutral-700`}
+                <div
+                    className={`absolute ${docked ? 'left-2 top-1/2 -translate-y-1/2 cursor-ew-resize' : 'right-2 bottom-2 cursor-se-resize'} w-4 h-4`}
+                    style={{ color: 'var(--isl-ink-ghost)' }}
                     onPointerDown={handleResizePointerDown}
                     aria-label="调整大小"
                 >

@@ -505,6 +505,20 @@ const App: React.FC = () => {
         try { return localStorage.getItem('autoEnhance.v1') === 'true'; } catch { return false; }
     });
     const [batchCount, setBatchCount] = useState<number>(1); // 1 = normal, 2/4 = batch mode
+    const promptDockRef = useRef<HTMLDivElement | null>(null);
+    const [promptDockHeight, setPromptDockHeight] = useState(0);
+
+    useEffect(() => {
+        const el = promptDockRef.current;
+        if (!el) return;
+        const ro = new ResizeObserver(entries => {
+            for (const entry of entries) {
+                setPromptDockHeight(entry.borderBoxSize?.[0]?.blockSize ?? entry.contentRect.height);
+            }
+        });
+        ro.observe(el);
+        return () => ro.disconnect();
+    }, []);
 
     // ── Layer Mask 编辑状态 ──────
     const [maskEditingId, setMaskEditingId] = useState<string | null>(null); // 正在编辑蒙版的 image element id
@@ -3325,7 +3339,7 @@ const App: React.FC = () => {
                 className="compact-canvas-stage flex-grow relative overflow-hidden"
                 style={{
                     paddingRight: chromeMetrics.isTablet ? `${chromeMetrics.outerGap}px` : `${rightPanelWidth + chromeMetrics.promptSideInset}px`,
-                    paddingBottom: croppingState ? '0px' : `${chromeMetrics.canvasBottomInset}px`,
+                    paddingBottom: croppingState || isInlineMediaPromptActive ? '0px' : `${promptDockHeight || chromeMetrics.canvasBottomInset}px`,
                     transition: 'padding-right 0.35s cubic-bezier(0.4, 0, 0.2, 1), padding-bottom 0.35s cubic-bezier(0.4, 0, 0.2, 1)'
                 }}
             >
@@ -3644,36 +3658,6 @@ const App: React.FC = () => {
                              <line key={i} x1={guide.type === 'v' ? guide.position : guide.start} y1={guide.type === 'h' ? guide.position : guide.start} x2={guide.type === 'v' ? guide.position : guide.end} y2={guide.type === 'h' ? guide.position : guide.end} stroke="red" strokeWidth={1/zoom} strokeDasharray={`${4/zoom} ${2/zoom}`} />
                         ))}
 
-                        {selectedInlinePromptElement && !croppingState && !editingElement && (
-                            <InlinePromptBar
-                                element={selectedInlinePromptElement}
-                                allElements={elements}
-                                canvasZoom={zoom}
-                                canvasPan={panOffset}
-                                modelId={selectedInlinePromptElement.type === 'video' ? modelPreference.videoModel : modelPreference.imageModel}
-                                status={selectedInlinePromptElement.generationState?.status || 'idle'}
-                                progress={selectedInlinePromptElement.generationState?.progress}
-                                isLoading={isLoading}
-                                theme={resolvedTheme}
-                                apiKeyPayload={getInlineApiKeyForElement(selectedInlinePromptElement)}
-                                userApiKeys={userApiKeys}
-                                imageModelOptions={dynamicModelOptions.image}
-                                videoModelOptions={dynamicModelOptions.video}
-                                videoAspectRatio={videoAspectRatio}
-                                setVideoAspectRatio={setVideoAspectRatio}
-                                isAutoEnhanceEnabled={isAutoEnhanceEnabled}
-                                onAutoEnhanceToggle={() => setIsAutoEnhanceEnabled(prev => !prev)}
-                                onEnhancePrompt={handleEnhancePrompt}
-                                isEnhancingPrompt={isEnhancingPrompt}
-                                t={t}
-                                onPromptChange={updateElementGenerationState}
-                                onMediaGenerated={updateElementMedia}
-                                animateViewport={animateViewportToElement}
-                                progressLabel={progressMessage}
-                                activeTaskCount={Object.values(runtimeJobsRef.current).filter(job => job.status === 'running').length}
-                            />
-                        )}
-
                         {elements.length === 0 && !croppingState && !editingElement && !selectedInlinePromptElement && (
                             <foreignObject x={0} y={0} width="100%" height="100%" style={{ overflow: 'visible', pointerEvents: 'none' }}>
                                 <div className="flex h-full w-full items-center justify-center">
@@ -3782,6 +3766,35 @@ const App: React.FC = () => {
                         )}
                     </g>
                 </svg>
+                {selectedInlinePromptElement && !croppingState && !editingElement && (
+                    <InlinePromptBar
+                        element={selectedInlinePromptElement}
+                        allElements={elements}
+                        canvasZoom={zoom}
+                        canvasPan={panOffset}
+                        modelId={selectedInlinePromptElement.type === 'video' ? modelPreference.videoModel : modelPreference.imageModel}
+                        status={selectedInlinePromptElement.generationState?.status || 'idle'}
+                        progress={selectedInlinePromptElement.generationState?.progress}
+                        isLoading={isLoading}
+                        theme={resolvedTheme}
+                        apiKeyPayload={getInlineApiKeyForElement(selectedInlinePromptElement)}
+                        userApiKeys={userApiKeys}
+                        imageModelOptions={dynamicModelOptions.image}
+                        videoModelOptions={dynamicModelOptions.video}
+                        videoAspectRatio={videoAspectRatio}
+                        setVideoAspectRatio={setVideoAspectRatio}
+                        isAutoEnhanceEnabled={isAutoEnhanceEnabled}
+                        onAutoEnhanceToggle={() => setIsAutoEnhanceEnabled(prev => !prev)}
+                        onEnhancePrompt={handleEnhancePrompt}
+                        isEnhancingPrompt={isEnhancingPrompt}
+                        t={t}
+                        onPromptChange={updateElementGenerationState}
+                        onMediaGenerated={updateElementMedia}
+                        animateViewport={animateViewportToElement}
+                        progressLabel={progressMessage}
+                        activeTaskCount={Object.values(runtimeJobsRef.current).filter(job => job.status === 'running').length}
+                    />
+                )}
                  {contextMenu && (() => {
                     const hasDrawableSelection = elements.some(el => selectedElementIds.includes(el.id) && el.type !== 'image' && el.type !== 'video');
                     const isGroupable = selectedElementIds.length > 1;
@@ -3872,6 +3885,7 @@ const App: React.FC = () => {
             </div>
             {!croppingState && (
                 <div 
+                    ref={promptDockRef}
                     className={`compact-prompt-dock absolute bottom-0 left-0 right-0 z-[48] transition-all duration-300 ease-out flex flex-col items-center pointer-events-none ${isInlineMediaPromptActive ? 'translate-y-12 opacity-0' : 'translate-y-0 opacity-100'}`}
                     style={{
                         paddingLeft: chromeMetrics.isTablet ? `${chromeMetrics.promptSideInset}px` : `${isLayerMinimized ? chromeMetrics.outerGap : chromeMetrics.sidebarWidth + chromeMetrics.outerGap + 8}px`,
@@ -3879,8 +3893,8 @@ const App: React.FC = () => {
                         paddingBottom: `${chromeMetrics.promptDockBottom}px`
                     }}
                 >
-                    {/* 自省诊断条 — 显示 API Key 能力覆盖状态 */}
-                    <div className="pointer-events-auto mb-1.5">
+                    {/* 自省诊断条 — PromptBar 上方原位置 */}
+                    <div className="pointer-events-auto pb-1">
                         <DiagnosticBar
                             userApiKeys={userApiKeys}
                             theme={resolvedTheme}

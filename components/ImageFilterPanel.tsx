@@ -72,10 +72,10 @@ export const ImageFilterPanel: React.FC<ImageFilterPanelProps> = ({
       className="image-filter-panel"
       style={{
         width: 260,
-        background: 'var(--panel-bg, #fff)',
-        borderRadius: 12,
-        boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
-        border: '1px solid var(--border-color, #e5e7eb)',
+        background: 'var(--isl-card)',
+        borderRadius: 'var(--isl-r)',
+        boxShadow: '0 0.375rem 1.25rem rgba(0,0,0,0.14)',
+        border: '1.5px solid var(--isl-border)',
         overflow: 'hidden',
         userSelect: 'none',
       }}
@@ -88,10 +88,10 @@ export const ImageFilterPanel: React.FC<ImageFilterPanelProps> = ({
           alignItems: 'center',
           justifyContent: 'space-between',
           padding: '10px 14px',
-          borderBottom: '1px solid var(--border-color, #e5e7eb)',
+          borderBottom: '1px solid var(--isl-border)',
         }}
       >
-        <span style={{ fontWeight: 600, fontSize: 13 }}>🎨 图片调色</span>
+        <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--isl-ink)' }}>🎨 图片调色</span>
         <div style={{ display: 'flex', gap: 6 }}>
           {isModified && (
             <button
@@ -99,12 +99,13 @@ export const ImageFilterPanel: React.FC<ImageFilterPanelProps> = ({
               title="重置所有调整"
               style={{
                 background: 'none',
-                border: '1px solid var(--border-color, #d1d5db)',
-                borderRadius: 6,
+                border: '1.5px solid var(--isl-border-strong)',
+                borderRadius: 'var(--isl-r-sm)',
                 padding: '2px 8px',
                 fontSize: 11,
                 cursor: 'pointer',
-                color: '#ef4444',
+                color: 'var(--isl-coral-deep)',
+                fontWeight: 700,
               }}
             >
               重置
@@ -112,14 +113,7 @@ export const ImageFilterPanel: React.FC<ImageFilterPanelProps> = ({
           )}
           <button
             onClick={onClose}
-            style={{
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              fontSize: 16,
-              lineHeight: 1,
-              color: 'var(--text-secondary, #6b7280)',
-            }}
+            className="isl-icon-btn h-6 w-6"
           >
             ✕
           </button>
@@ -143,18 +137,18 @@ export const ImageFilterPanel: React.FC<ImageFilterPanelProps> = ({
                   justifyContent: 'space-between',
                   width: '100%',
                   padding: '8px 14px',
-                  background: isExpanded ? 'var(--hover-bg, #f3f4f6)' : 'transparent',
+                  background: isExpanded ? 'var(--isl-surface-2)' : 'transparent',
                   border: 'none',
                   cursor: 'pointer',
                   fontSize: 12,
-                  fontWeight: 500,
-                  color: 'var(--text-primary, #374151)',
+                  fontWeight: 700,
+                  color: 'var(--isl-ink)',
                 }}
                 onMouseDown={() => setExpandedGroup(group.id)}
               >
                 <span>
                   {group.label}
-                  {groupModified && <span style={{ color: '#3b82f6', marginLeft: 4 }}>●</span>}
+                  {groupModified && <span style={{ color: 'var(--isl-mint-deep)', marginLeft: 4 }}>●</span>}
                 </span>
                 <span style={{ transform: isExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }}>▾</span>
               </button>
@@ -177,7 +171,7 @@ export const ImageFilterPanel: React.FC<ImageFilterPanelProps> = ({
                             marginBottom: 3,
                           }}
                         >
-                          <span style={{ fontSize: 11, color: modified ? '#3b82f6' : 'var(--text-secondary, #6b7280)' }}>
+                          <span style={{ fontSize: 11, fontWeight: 600, color: modified ? 'var(--isl-mint-deep)' : 'var(--isl-ink-soft)' }}>
                             {slider.icon} {slider.label}
                           </span>
                           <span style={{ fontSize: 11, fontFamily: 'monospace', minWidth: 40, textAlign: 'right' }}>

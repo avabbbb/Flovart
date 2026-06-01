@@ -206,7 +206,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
 
     const triggerClass = `isl-chip ${compactMode ? 'h-7 px-2.5 text-[11px]' : 'h-8 px-3 text-xs'}`;
     const activeTriggerClass = 'isl-chip--active';
-    const popoverCardClass = `isl-pop absolute ${popoverDirection === 'down' ? 'top-full left-0 mt-2' : 'bottom-full left-0 mb-2'} z-[80] ${compactMode ? 'min-w-[200px]' : 'min-w-[220px]'} p-1.5`;
+    const popoverCardClass = `isl-pop absolute ${popoverDirection === 'down' ? 'top-full left-0 mt-2' : 'bottom-full left-0 mb-2'} z-[80] ${compactMode ? 'min-w-[200px]' : 'min-w-[220px]'} p-1.5 max-h-[60vh] overflow-y-auto`;
     const shellClass = 'isl-shell';
 
     /** 将画布元素转换为 RichPromptEditor 需要的 MentionItem[] */
@@ -463,6 +463,194 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                     )}
                 </div>
 
+                {expandedPanel && (
+                    <div className="border-t border-[var(--isl-border)] bg-[var(--isl-card)]/90 backdrop-blur-md animate-slideDown">
+                        <div className="max-h-[45vh] overflow-y-auto isl-scrollbar p-3">
+                            {expandedPanel === 'mode' && (
+                                <>
+                                    <PopoverHeader title="生成类型" subtitle="选择图片、视频或首尾帧模式" />
+                                    <div className="space-y-1">
+                                        {modeOptions.map(mode => (
+                                            <MenuOptionButton key={mode} label={getModeLabel(mode)} active={generationMode === mode} onClick={() => { setGenerationMode(mode); setExpandedPanel(null); }} />
+                                        ))}
+                                    </div>
+                                </>
+                            )}
+                            {expandedPanel === 'model' && (
+                                <>
+                                    <PopoverHeader title="模型设置" subtitle="选择生成模型" />
+                                    <div className="max-h-[280px] space-y-1 overflow-y-auto pr-1">
+                                        <div className="px-2 pb-1 pt-1 text-[11px] font-bold uppercase tracking-[0.16em]" style={{ color: 'var(--isl-ink-ghost)' }}>{generationMode === 'video' ? '视频模型' : '图片模型'}</div>
+                                        {(() => {
+                                            const grouped = new Map<string, string[]>();
+                                            for (const model of currentModelOptions) {
+                                                const provider = inferProviderFromModel(model);
+                                                const label = PROVIDER_LABELS[provider] || provider;
+                                                if (!grouped.has(label)) grouped.set(label, []);
+                                                grouped.get(label)!.push(model);
+                                            }
+                                            const selectedModel = generationMode === 'video' ? selectedVideoModel : selectedImageModel;
+                                            return Array.from(grouped.entries()).map(([providerLabel, models]) => (
+                                                <div key={providerLabel}>
+                                                    {grouped.size > 1 && (
+                                                        <div className="mt-1.5 px-2 pb-0.5 text-[10px] font-bold tracking-wide" style={{ color: 'var(--isl-mint-deep)' }}>
+                                                            {providerLabel}
+                                                        </div>
+                                                    )}
+                                                    {models.map(model => {
+                                                        const capTags = getModelCapabilityTags(model);
+                                                        const shortName = model.replace(/^(google|openai|anthropic|openrouter)\//, '');
+                                                        return (
+                                                        <MenuOptionButton
+                                                            key={model}
+                                                            label={capTags ? `${capTags} ${shortName}` : shortName}
+                                                            active={selectedModel === model}
+                                                            onClick={() => {
+                                                                generationMode === 'video' ? onVideoModelChange?.(model) : onImageModelChange?.(model);
+                                                                setExpandedPanel(null);
+                                                            }}
+                                                        />
+                                                        );
+                                                    })}
+                                                </div>
+                                            ));
+                                        })()}
+
+                                        {generationMode === 'video' && (
+                                            <>
+                                            <div className="grid grid-cols-3 gap-2 px-1 pt-3">
+                                                {(['16:9', '9:16', '1:1', '4:3', '3:4', '21:9'] as const).map(ratio => {
+                                                    const supported = (supportedRatios as readonly string[]).includes(ratio);
+                                                    return (
+                                                    <button
+                                                        key={ratio}
+                                                        type="button"
+                                                        disabled={!supported}
+                                                        onClick={() => setVideoAspectRatio(ratio)}
+                                                        title={supported ? undefined : '当前视频模型不支持此比例'}
+                                                        className={`rounded-2xl border-[1.5px] px-3 py-2 text-sm font-bold transition ${!supported ? 'opacity-35 cursor-not-allowed' : ''} ${videoAspectRatio === ratio ? 'isl-chip--active' : 'isl-chip'}`}
+                                                    >
+                                                        {ratio}
+                                                    </button>
+                                                    );
+                                                })}
+                                            </div>
+                                            <div className="px-1 pt-2">
+                                                <p className="text-xs mb-1.5" style={{ color: 'var(--isl-ink-soft)' }}>平台预设</p>
+                                                <div className="flex flex-wrap gap-1.5">
+                                                    {Object.entries(SOCIAL_PRESETS).map(([key, preset]) => (
+                                                        <div key={key} className="relative group">
+                                                            <button
+                                                                type="button"
+                                                                className="isl-chip px-2.5 py-1 text-xs"
+                                                                onClick={() => setVideoAspectRatio(preset.ratios[0].ratio)}
+                                                                title={preset.ratios.map(r => `${r.desc}: ${r.ratio}`).join(', ')}
+                                                            >
+                                                                {preset.label}
+                                                            </button>
+                                                            {preset.ratios.length > 1 && (
+                                                                <div className="isl-pop absolute bottom-full left-0 mb-1 hidden group-hover:flex flex-col p-1 min-w-[140px]" style={{ zIndex: 1 }}>
+                                                                    {preset.ratios.map(r => (
+                                                                        <button
+                                                                            key={r.desc}
+                                                                            type="button"
+                                                                            className={`text-left rounded-md px-2 py-1 text-xs transition ${videoAspectRatio === r.ratio ? 'font-bold' : ''}`}
+                                                                            style={{ color: videoAspectRatio === r.ratio ? 'var(--isl-mint-deep)' : 'var(--isl-ink)' }}
+                                                                            onClick={() => setVideoAspectRatio(r.ratio)}
+                                                                        >
+                                                                            {r.desc} ({r.ratio})
+                                                                        </button>
+                                                                    ))}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                            </>
+                                        )}
+                                    </div>
+                                </>
+                            )}
+                            {expandedPanel === 'more' && (
+                                <>
+                                    <PopoverHeader title="更多操作" subtitle="参考图、角色锁定、效果存储" />
+                                    <div className="space-y-1">
+                                        {onAddAttachments && (
+                                            <MenuOptionButton
+                                                label="上传参考图"
+                                                description="点击选择，或直接把图片拖到输入框"
+                                                onClick={() => {
+                                                    fileInputRef.current?.click();
+                                                    setExpandedPanel(null);
+                                                }}
+                                            />
+                                        )}
+
+                                        {onLockCharacterFromSelection && (
+                                            <MenuOptionButton
+                                                label="从当前选择锁定角色"
+                                                description={canLockCharacter ? '把当前图片保存为后续生成参考' : '先选中一张图片元素'}
+                                                onClick={() => onLockCharacterFromSelection()}
+                                            />
+                                        )}
+
+                                        {characterLocks.length > 0 && (
+                                            <>
+                                                <div className="px-2 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#98A2B3]">角色锁定</div>
+                                                <MenuOptionButton label="不使用角色锁定" active={activeCharacterLockId == null} onClick={() => onSetActiveCharacterLock?.(null)} />
+                                                {characterLocks.map(lock => <MenuOptionButton key={lock.id} label={lock.name} active={activeCharacterLockId === lock.id} onClick={() => onSetActiveCharacterLock?.(lock.id)} />)}
+                                            </>
+                                        )}
+
+                                        {variant !== 'inline' && (
+                                            <MenuOptionButton label="保存当前提示词" description="存成一个可复用效果" onClick={handleSaveEffect} />
+                                        )}
+
+                                        {userEffects.length > 0 && (
+                                            <div className="max-h-40 space-y-1 overflow-y-auto pt-2 pr-1">
+                                                {userEffects.map(effect => (
+                                                    <div key={effect.id} className="flex items-center gap-2 rounded-2xl px-3 py-2" style={{ background: 'var(--isl-surface-2)' }}>
+                                                        <button
+                                                            type="button"
+                                                            className="min-w-0 flex-1 text-left"
+                                                            onClick={() => {
+                                                                setPrompt(effect.value);
+                                                                setExpandedPanel(null);
+                                                            }}
+                                                        >
+                                                            <div className="truncate text-sm font-bold" style={{ color: 'var(--isl-ink)' }}>{effect.name}</div>
+                                                            <div className="truncate text-xs" style={{ color: 'var(--isl-ink-soft)' }}>{effect.value}</div>
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => onDeleteUserEffect(effect.id)}
+                                                            className="flex h-8 w-8 items-center justify-center rounded-full transition hover:bg-black/5"
+                                                            style={{ color: 'var(--isl-ink-soft)' }}
+                                                            title="删除已保存提示词"
+                                                        >
+                                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                                <path d="M18 6 6 18" />
+                                                                <path d="m6 6 12 12" />
+                                                            </svg>
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+
+                                        {canvasElements.length > 0 && (
+                                            <div className="rounded-2xl px-3 py-3 text-sm" style={{ background: 'var(--isl-surface-2)', color: 'var(--isl-ink-soft)' }}>
+                                                在输入框里输入 <span className="font-bold" style={{ color: 'var(--isl-mint-deep)' }}>@</span>，可直接引用画布里的元素卡片。
+                                            </div>
+                                        )}
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    </div>
+                )}
+
                 <div className={`relative flex items-end gap-3 border-t ${compactMode ? 'px-2.5 py-2' : 'px-3 py-2.5'}`} style={{ borderColor: 'var(--isl-border)' }}>
                     <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
@@ -504,7 +692,6 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                             {getModeLabel(generationMode)}
                                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 9 6 6 6-6" /></svg>
                                         </button>
-                                        {expandedPanel === 'mode' && <div className={popoverCardClass}><PopoverHeader title="生成类型" subtitle="选择图片、视频或首尾帧模式" /><div className="space-y-1">{modeOptions.map(mode => <MenuOptionButton key={mode} label={getModeLabel(mode)} active={generationMode === mode} onClick={() => { setGenerationMode(mode); setExpandedPanel(null); }} />)}</div></div>}
                                     </>
                                 ) : (
                                     <div className={`${triggerClass} cursor-default`}>
@@ -518,103 +705,6 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                     <span className="max-w-[150px] truncate">{getModelLabel(generationMode, selectedImageModel, selectedVideoModel)}</span>
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 9 6 6 6-6" /></svg>
                                 </button>
-                                {expandedPanel === 'model' && (
-                                    <div className={`${popoverCardClass} w-[290px]`}>
-                                        <PopoverHeader title="模型设置" subtitle="向上弹出选择，不打断输入流程" />
-                                        <div className="max-h-[280px] space-y-1 overflow-y-auto pr-1">
-                                            <div className="px-2 pb-1 pt-1 text-[11px] font-bold uppercase tracking-[0.16em]" style={{ color: 'var(--isl-ink-ghost)' }}>{generationMode === 'video' ? '视频模型' : '图片模型'}</div>
-                                            {(() => {
-                                                // 按 provider 分组显示模型列表
-                                                const grouped = new Map<string, string[]>();
-                                                for (const model of currentModelOptions) {
-                                                    const provider = inferProviderFromModel(model);
-                                                    const label = PROVIDER_LABELS[provider] || provider;
-                                                    if (!grouped.has(label)) grouped.set(label, []);
-                                                    grouped.get(label)!.push(model);
-                                                }
-                                                const selectedModel = generationMode === 'video' ? selectedVideoModel : selectedImageModel;
-                                                return Array.from(grouped.entries()).map(([providerLabel, models]) => (
-                                                    <div key={providerLabel}>
-                                                        {grouped.size > 1 && (
-                                                            <div className="mt-1.5 px-2 pb-0.5 text-[10px] font-bold tracking-wide" style={{ color: 'var(--isl-mint-deep)' }}>
-                                                                {providerLabel}
-                                                            </div>
-                                                        )}
-                                                        {models.map(model => {
-                                                            const capTags = getModelCapabilityTags(model);
-                                                            const shortName = model.replace(/^(google|openai|anthropic|openrouter)\//, '');
-                                                            return (
-                                                            <MenuOptionButton
-                                                                key={model}
-                                                                label={capTags ? `${capTags} ${shortName}` : shortName}
-                                                                active={selectedModel === model}
-                                                                onClick={() => {
-                                                                    generationMode === 'video' ? onVideoModelChange?.(model) : onImageModelChange?.(model);
-                                                                    setExpandedPanel(null);
-                                                                }}
-                                                            />
-                                                            );
-                                                        })}
-                                                    </div>
-                                                ));
-                                            })()}
-
-                                            {generationMode === 'video' && (
-                                                <>
-                                                <div className="grid grid-cols-3 gap-2 px-1 pt-3">
-                                                    {(['16:9', '9:16', '1:1', '4:3', '3:4', '21:9'] as const).map(ratio => {
-                                                        const supported = (supportedRatios as readonly string[]).includes(ratio);
-                                                        return (
-                                                        <button
-                                                            key={ratio}
-                                                            type="button"
-                                                            disabled={!supported}
-                                                            onClick={() => setVideoAspectRatio(ratio)}
-                                                            title={supported ? undefined : '当前视频模型不支持此比例'}
-                                                            className={`rounded-2xl border-[1.5px] px-3 py-2 text-sm font-bold transition ${!supported ? 'opacity-35 cursor-not-allowed' : ''} ${videoAspectRatio === ratio ? 'isl-chip--active' : 'isl-chip'}`}
-                                                        >
-                                                            {ratio}
-                                                        </button>
-                                                        );
-                                                    })}
-                                                </div>
-                                                <div className="px-1 pt-2">
-                                                    <p className="text-xs mb-1.5" style={{ color: 'var(--isl-ink-soft)' }}>平台预设</p>
-                                                    <div className="flex flex-wrap gap-1.5">
-                                                        {Object.entries(SOCIAL_PRESETS).map(([key, preset]) => (
-                                                            <div key={key} className="relative group">
-                                                                <button
-                                                                    type="button"
-                                                                    className="isl-chip px-2.5 py-1 text-xs"
-                                                                    onClick={() => setVideoAspectRatio(preset.ratios[0].ratio)}
-                                                                    title={preset.ratios.map(r => `${r.desc}: ${r.ratio}`).join(', ')}
-                                                                >
-                                                                    {preset.label}
-                                                                </button>
-                                                                {preset.ratios.length > 1 && (
-                                                                    <div className="isl-pop absolute bottom-full left-0 mb-1 hidden group-hover:flex flex-col p-1 min-w-[140px]" style={{ zIndex: 1 }}>
-                                                                        {preset.ratios.map(r => (
-                                                                            <button
-                                                                                key={r.desc}
-                                                                                type="button"
-                                                                                className={`text-left rounded-md px-2 py-1 text-xs transition ${videoAspectRatio === r.ratio ? 'font-bold' : ''}`}
-                                                                                style={{ color: videoAspectRatio === r.ratio ? 'var(--isl-mint-deep)' : 'var(--isl-ink)' }}
-                                                                                onClick={() => setVideoAspectRatio(r.ratio)}
-                                                                            >
-                                                                                {r.desc} ({r.ratio})
-                                                                            </button>
-                                                                        ))}
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                                </>
-                                            )}
-                                        </div>
-                                    </div>
-                                )}
                             </div>
 
                             <button
@@ -633,81 +723,6 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                 <button type="button" onClick={() => setExpandedPanel(prev => (prev === 'more' ? null : 'more'))} className={`${triggerClass} ${expandedPanel === 'more' ? activeTriggerClass : ''}`} title="更多操作">
                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>
                                 </button>
-                                {expandedPanel === 'more' && (
-                                    <div className={`${popoverCardClass} left-auto right-0 w-[320px]`}>
-                                        <PopoverHeader title="更多操作" subtitle="参考图、角色锁定、效果存储" />
-                                        <div className="space-y-1">
-                                            {onAddAttachments && (
-                                                <MenuOptionButton
-                                                    label="上传参考图"
-                                                    description="点击选择，或直接把图片拖到输入框"
-                                                    onClick={() => {
-                                                        fileInputRef.current?.click();
-                                                        setExpandedPanel(null);
-                                                    }}
-                                                />
-                                            )}
-
-                                            {onLockCharacterFromSelection && (
-                                                <MenuOptionButton
-                                                    label="从当前选择锁定角色"
-                                                    description={canLockCharacter ? '把当前图片保存为后续生成参考' : '先选中一张图片元素'}
-                                                    onClick={() => onLockCharacterFromSelection()}
-                                                />
-                                            )}
-
-                                            {characterLocks.length > 0 && (
-                                                <>
-                                                    <div className="px-2 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#98A2B3]">角色锁定</div>
-                                                    <MenuOptionButton label="不使用角色锁定" active={activeCharacterLockId == null} onClick={() => onSetActiveCharacterLock?.(null)} />
-                                                    {characterLocks.map(lock => <MenuOptionButton key={lock.id} label={lock.name} active={activeCharacterLockId === lock.id} onClick={() => onSetActiveCharacterLock?.(lock.id)} />)}
-                                                </>
-                                            )}
-
-                                            {variant !== 'inline' && (
-                                                <MenuOptionButton label="保存当前提示词" description="存成一个可复用效果" onClick={handleSaveEffect} />
-                                            )}
-
-                                            {userEffects.length > 0 && (
-                                                <div className="max-h-40 space-y-1 overflow-y-auto pt-2 pr-1">
-                                                    {userEffects.map(effect => (
-                                                        <div key={effect.id} className="flex items-center gap-2 rounded-2xl px-3 py-2" style={{ background: 'var(--isl-surface-2)' }}>
-                                                            <button
-                                                                type="button"
-                                                                className="min-w-0 flex-1 text-left"
-                                                                onClick={() => {
-                                                                    setPrompt(effect.value);
-                                                                    setExpandedPanel(null);
-                                                                }}
-                                                            >
-                                                                <div className="truncate text-sm font-bold" style={{ color: 'var(--isl-ink)' }}>{effect.name}</div>
-                                                                <div className="truncate text-xs" style={{ color: 'var(--isl-ink-soft)' }}>{effect.value}</div>
-                                                            </button>
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => onDeleteUserEffect(effect.id)}
-                                                                className="flex h-8 w-8 items-center justify-center rounded-full transition hover:bg-black/5"
-                                                                style={{ color: 'var(--isl-ink-soft)' }}
-                                                                title="删除已保存提示词"
-                                                            >
-                                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                                                    <path d="M18 6 6 18" />
-                                                                    <path d="m6 6 12 12" />
-                                                                </svg>
-                                                            </button>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            )}
-
-                                            {canvasElements.length > 0 && (
-                                                <div className="rounded-2xl px-3 py-3 text-sm" style={{ background: 'var(--isl-surface-2)', color: 'var(--isl-ink-soft)' }}>
-                                                    在输入框里输入 <span className="font-bold" style={{ color: 'var(--isl-mint-deep)' }}>@</span>，可直接引用画布里的元素卡片。
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                )}
                             </div>
                         </div>
                     </div>

@@ -78,11 +78,11 @@ const BoardItem: React.FC<{
     };
 
     return (
-        <div 
+        <div
             onClick={onClick}
-            className={`group relative p-2 rounded-lg cursor-pointer transition-colors ${isActive ? 'bg-neutral-900/10' : 'hover:bg-neutral-100'}`}
+            className={`isl-row group relative cursor-pointer p-2 ${isActive ? 'isl-row--active' : ''}`}
         >
-            <div className={`aspect-[3/2] w-full rounded-md mb-2 overflow-hidden border-2 ${isActive ? 'border-neutral-900' : 'border-neutral-200'}`}>
+            <div className={`aspect-[3/2] w-full rounded-md mb-2 overflow-hidden border-2 ${isActive ? 'border-white/40' : ''}`} style={isActive ? undefined : { borderColor: 'var(--isl-border)' }}>
                 <img src={thumbnail} alt={`${board.name} thumbnail`} className="w-full h-full object-cover" />
             </div>
             <div className="flex items-center justify-between">
@@ -94,26 +94,29 @@ const BoardItem: React.FC<{
                         onChange={(e) => setName(e.target.value)}
                         onBlur={handleBlur}
                         onKeyDown={(e) => e.key === 'Enter' && handleBlur()}
-                        className="w-full bg-transparent border-b border-neutral-400 outline-none text-neutral-900 text-sm"
+                        className="w-full bg-transparent border-b border-current/40 outline-none text-sm font-bold"
                         onClick={e => e.stopPropagation()}
+                        title="重命名画板"
+                        aria-label="重命名画板"
                     />
                 ) : (
-                    <span className="text-sm truncate" onDoubleClick={() => setIsEditing(true)}>{board.name}</span>
+                    <span className="text-sm font-bold truncate" onDoubleClick={() => setIsEditing(true)}>{board.name}</span>
                 )}
-               
+
                 <div className="relative" ref={menuRef}>
-                    <button 
-                        onClick={(e) => { e.stopPropagation(); setMenuOpen(p => !p); }} 
-                        className="p-1 rounded-full opacity-0 group-hover:opacity-100 hover:bg-neutral-100 transition-opacity"
+                    <button
+                        onClick={(e) => { e.stopPropagation(); setMenuOpen(p => !p); }}
+                        className={`isl-icon-btn h-7 w-7 opacity-0 group-hover:opacity-100`}
+                        title="画板操作"
+                        aria-label="画板操作"
                     >
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="2"/><circle cx="12" cy="5" r="2"/><circle cx="12" cy="19" r="2"/></svg>
                     </button>
                     {menuOpen && (
-                        <div className="absolute right-0 bottom-full mb-1 z-10 w-32 bg-white rounded-md shadow-lg border border-neutral-200 py-1 text-sm">
-                            <button onClick={() => handleMenuAction('rename')} className="block w-full text-left px-3 py-1.5 hover:bg-neutral-100">Rename</button>
-                            <button onClick={() => handleMenuAction('duplicate')} className="block w-full text-left px-3 py-1.5 hover:bg-neutral-100">Duplicate</button>
-                            <div className="my-1 border-t border-neutral-200"></div>
-                            <button onClick={() => handleMenuAction('delete')} className="block w-full text-left px-3 py-1.5 hover:bg-red-100 text-red-600">Delete</button>
+                        <div className="isl-pop absolute right-0 bottom-full mb-1 z-10 w-32 p-1 text-sm">
+                            <button onClick={() => handleMenuAction('rename')} className="isl-opt text-sm">Rename</button>
+                            <button onClick={() => handleMenuAction('duplicate')} className="isl-opt text-sm">Duplicate</button>
+                            <button onClick={() => handleMenuAction('delete')} className="isl-opt text-sm" style={{ color: 'var(--isl-coral-deep)' }}>Delete</button>
                         </div>
                     )}
                 </div>
@@ -123,24 +126,23 @@ const BoardItem: React.FC<{
 };
 
 
-export const BoardPanel: React.FC<BoardPanelProps> = ({ 
-    isOpen, onClose, boards, activeBoardId, onSwitchBoard, onAddBoard, 
-    onRenameBoard, onDuplicateBoard, onDeleteBoard, generateBoardThumbnail 
+export const BoardPanel: React.FC<BoardPanelProps> = ({
+    isOpen, onClose, boards, activeBoardId, onSwitchBoard, onAddBoard,
+    onRenameBoard, onDuplicateBoard, onDeleteBoard, generateBoardThumbnail
 }) => {
     if (!isOpen) return null;
 
     return (
-         <div 
-            className="absolute top-4 left-4 z-20 flex flex-col w-64 h-[calc(100vh-2rem)] border border-neutral-200 rounded-2xl shadow-xl bg-white text-neutral-900 overflow-hidden"
-            style={{ backgroundColor: 'var(--ui-bg-color)' }}
+         <div
+            className="isl-panel theme-aware absolute top-4 left-4 z-20 flex flex-col w-64 h-[calc(100vh-2rem)] overflow-hidden"
         >
-            <div className="flex-shrink-0 flex justify-between items-center p-3 border-b border-neutral-200">
-                <h3 className="text-base font-semibold">Boards</h3>
-                <div className="flex items-center space-x-1">
-                    <button onClick={onAddBoard} className="text-neutral-700 hover:text-neutral-900 p-1.5 rounded-full hover:bg-neutral-100" title="New Board">
+            <div className="flex-shrink-0 flex justify-between items-center p-3 border-b" style={{ borderColor: 'var(--isl-border)' }}>
+                <h3 className="text-base font-bold" style={{ color: 'var(--isl-ink)' }}>Boards</h3>
+                <div className="flex items-center gap-1">
+                    <button onClick={onAddBoard} className="isl-icon-btn h-8 w-8" title="New Board">
                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                     </button>
-                    <button onClick={onClose} className="text-neutral-400 hover:text-neutral-900 p-1 rounded-full">
+                    <button onClick={onClose} className="isl-icon-btn h-8 w-8" title="关闭" aria-label="关闭">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                     </button>
                 </div>

@@ -14,11 +14,11 @@ export const LayerToggleButton: React.FC<LayerToggleButtonProps> = ({
     return (
         <button
             onClick={onToggle}
-            style={{ 
+            style={{
                 left: `${toolbarLeft}px`,
                 transition: 'left 0.35s cubic-bezier(0.4, 0, 0.2, 1)'
             }}
-            className="fixed bottom-4 z-50 w-10 h-10 rounded-lg bg-white border border-neutral-200 shadow-lg hover:shadow-xl hover:bg-neutral-50 transition-all duration-200 flex items-center justify-center text-neutral-500"
+            className="isl-icon-btn theme-aware fixed bottom-4 z-50 flex h-10 w-10 items-center justify-center"
             title={isLayerMinimized ? '展开图层面板' : '收起图层面板'}
             aria-label={isLayerMinimized ? '展开图层面板' : '收起图层面板'}
         >

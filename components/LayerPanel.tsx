@@ -104,12 +104,12 @@ const LayerItem: React.FC<{
             {...dragProps}
             onClick={onSelect}
             onDoubleClick={() => setIsEditing(true)}
-            className={`flex items-center space-x-2 p-1.5 rounded-md cursor-pointer text-sm transition-colors group ${
-                isSelected ? 'bg-neutral-900/10' : 'hover:bg-neutral-100'
+            className={`isl-layer-row group flex items-center space-x-2 rounded-2xl border-[1.5px] border-transparent p-1.5 text-sm ${
+                isSelected ? 'isl-row--active' : ''
             } ${element.isVisible === false ? 'opacity-50' : ''}`}
-            style={{ paddingLeft: `${10 + level * 20}px` }}
+            style={isSelected ? { paddingLeft: `${10 + level * 20}px` } : { paddingLeft: `${10 + level * 20}px`, color: 'var(--isl-ink)' }}
         >
-            <span className="flex-shrink-0 w-4 h-4 flex items-center justify-center text-gray-400">{getElementIcon(element)}</span>
+            <span className="flex-shrink-0 w-4 h-4 flex items-center justify-center" style={{ color: isSelected ? '#fff' : 'var(--isl-ink-ghost)' }}>{getElementIcon(element)}</span>
             {isEditing ? (
                 <input
                     ref={inputRef}
@@ -118,26 +118,28 @@ const LayerItem: React.FC<{
                     onChange={(e) => setName(e.target.value)}
                     onBlur={handleBlur}
                     onKeyDown={(e) => e.key === 'Enter' && handleBlur()}
-                    className="flex-grow bg-transparent border-b border-neutral-400 outline-none text-neutral-900"
+                    className="flex-grow bg-transparent border-b border-current/40 outline-none"
                     onClick={e => e.stopPropagation()}
+                    title="重命名图层"
+                    aria-label="重命名图层"
                 />
             ) : (
-                <span className="flex-grow truncate">{name}</span>
+                <span className="flex-grow truncate font-semibold">{name}</span>
             )}
-            <div className="flex-shrink-0 flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="flex-shrink-0 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                 <button
                     onClick={(e) => { e.stopPropagation(); onToggleLock(); }}
-                    className={`p-1 rounded-full hover:bg-neutral-100 ${element.isLocked ? 'text-neutral-900' : 'text-neutral-400'}`}
+                    className="isl-icon-btn h-6 w-6"
                     title={element.isLocked ? "Unlock" : "Lock"}
                 >
-                    {element.isLocked ? 
-                        <svg {...iconProps}><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg> : 
+                    {element.isLocked ?
+                        <svg {...iconProps}><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg> :
                         <svg {...iconProps}><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 9.9-1"></path></svg>
                     }
                 </button>
                 <button
                     onClick={(e) => { e.stopPropagation(); onToggleVisibility(); }}
-                    className="p-1 rounded-full hover:bg-neutral-100 text-neutral-400"
+                    className="isl-icon-btn h-6 w-6"
                     title={element.isVisible === false ? "Show" : "Hide"}
                 >
                     {element.isVisible === false ? 
@@ -164,7 +166,7 @@ export const LayerPanel: React.FC<LayerPanelProps> = ({ isOpen, onClose, element
         const target = e.currentTarget;
         const id = target.getAttribute('data-id');
         setDragOverId(id);
-        target.style.background = 'rgba(255,255,255,0.2)';
+        target.style.background = 'var(--isl-mint-bg)';
     };
     
     const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
@@ -249,22 +251,21 @@ export const LayerPanel: React.FC<LayerPanelProps> = ({ isOpen, onClose, element
     if (!isOpen) return null;
 
     return (
-        <div 
+        <div
             ref={panelRef}
-            className="absolute top-4 left-20 z-[30] flex flex-col w-64 h-[calc(100vh-2rem)] border border-neutral-200/50 rounded-2xl shadow-2xl bg-white/95 backdrop-blur-xl text-neutral-900 overflow-hidden transition-all duration-300 ease-out"
-            style={{ backgroundColor: 'var(--ui-bg-color)' }}
+            className="isl-panel theme-aware absolute top-4 left-20 z-[30] flex flex-col w-64 h-[calc(100vh-2rem)] overflow-hidden transition-all duration-300 ease-out"
         >
-            <div className="flex-shrink-0 flex justify-between items-center p-3 border-b border-neutral-200/50 cursor-move">
-                <h3 className="text-base font-semibold">Layers</h3>
-                <button onClick={onClose} className="text-neutral-400 hover:text-neutral-900 p-1 rounded-full">
+            <div className="flex-shrink-0 flex justify-between items-center p-3 border-b cursor-move" style={{ borderColor: 'var(--isl-border)' }}>
+                <h3 className="text-base font-bold" style={{ color: 'var(--isl-ink)' }}>Layers</h3>
+                <button onClick={onClose} className="isl-icon-btn h-8 w-8" title="关闭" aria-label="关闭">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                 </button>
             </div>
-            <div className="flex-grow p-2 overflow-y-auto">
+            <div className="flex-grow p-2 overflow-y-auto space-y-1">
                  {renderOrderedLayers([...elements].reverse())}
             </div>
-            <div className="flex-shrink-0 p-2 border-t border-neutral-200">
-                <button onClick={onClose} className="w-full text-sm py-1.5 rounded-md bg-neutral-50 hover:bg-white border border-neutral-200 text-neutral-700" title="收起图层">收起</button>
+            <div className="flex-shrink-0 p-2 border-t" style={{ borderColor: 'var(--isl-border)' }}>
+                <button onClick={onClose} className="isl-chip h-auto w-full justify-center py-1.5 text-sm" title="收起图层">收起</button>
             </div>
         </div>
     );
