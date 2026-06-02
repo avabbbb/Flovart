@@ -39,7 +39,8 @@ jobs:
         run: |
           export VITE_APP_VERSION="$(node -p "require('./package.json').version")"
           export VITE_APP_COMMIT_SHA="${GITHUB_SHA}"
-          npx vite build --base /Flovart/
+          export VITE_BASE_PATH="/Flovart/"
+          npx vite build
 
       # GitHub Pages SPA 需要 404.html 来处理客户端路由
       - name: Create 404 fallback

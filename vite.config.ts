@@ -9,8 +9,13 @@ const host = process.env.TAURI_DEV_HOST;
 
 export default defineConfig(() => {
     return {
-      // Cloudflare Pages 使用绝对路径，Tauri 使用相对路径
-      base: process.env.CF_PAGES ? '/' : './',
+      // Cloudflare Pages / GitHub Pages 用绝对路径，Tauri 用相对路径。
+      // 允许 VITE_BASE_PATH / CF_PAGES_BASEPATH / CLI --base 覆盖，
+      // 不再把 base 写死成 "./"——否则部署到 /Flovart/ 子路径会白屏。
+      base:
+        process.env.VITE_BASE_PATH ||
+        process.env.CF_PAGES_BASEPATH ||
+        (process.env.CF_PAGES ? '/' : './'),
       server: {
         port: 11451,
         host: host || '0.0.0.0',

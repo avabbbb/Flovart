@@ -298,11 +298,6 @@ const persistCharacterLocksToIDB = async (locks: CharacterLockProfile[]): Promis
 };
 
 const App: React.FC = () => {
-    const appVersionLabel = useMemo(() => {
-        const version = import.meta.env.VITE_APP_VERSION || 'dev';
-        const commitSha = import.meta.env.VITE_APP_COMMIT_SHA?.slice(0, 7);
-        return commitSha ? `v${version} · ${commitSha}` : `v${version}`;
-    }, []);
 
     const [boards, setBoards] = useState<Board[]>(() => [createNewBoard('Board 1')]);
     const [dataReady, setDataReady] = useState(false);
@@ -4018,15 +4013,66 @@ const App: React.FC = () => {
                             hideApiStatus
                         />
                     </div>
-                    {/* 底部法律链接 */}
-                    <div className="pointer-events-auto mt-1 flex items-center gap-2 text-[10px] opacity-55 hover:opacity-80 transition-opacity select-none">
-                        <span className="rounded-full border border-current/15 px-2 py-0.5 font-medium tracking-[0.04em]">
-                            {appVersionLabel}
-                        </span>
-                        <span>·</span>
-                        <button className="underline-offset-2 hover:underline cursor-pointer bg-transparent border-none p-0 text-inherit text-[10px]" onClick={() => openLegalModal('terms')}>使用条款</button>
-                        <span>·</span>
-                        <button className="underline-offset-2 hover:underline cursor-pointer bg-transparent border-none p-0 text-inherit text-[10px]" onClick={() => openLegalModal('privacy')}>隐私政策</button><span>·</span><button onClick={() => { const next = resolvedTheme === "dark" ? "light" : "dark"; setThemeMode(next); }} className="cursor-pointer bg-transparent border-none p-0 text-inherit text-[10px] hover:underline">{resolvedTheme === "dark" ? "☀️" : "🌙"}</button><span>·</span><button onClick={() => setLanguage(language === "zho" ? "en" : "zho")} className="cursor-pointer bg-transparent border-none p-0 text-inherit text-[10px] hover:underline">{language === "zho" ? "EN" : "中"}</button>
+                    {/* 底部法律链接 + 主题 / 语言切换 */}
+                    <div className="pointer-events-auto mt-1">
+                        <div className="isl-tabbar isl-tabbar--ac-sm flex items-center gap-0.5">
+                            <button
+                                type="button"
+                                onClick={() => openLegalModal('terms')}
+                                className="isl-tab"
+                            >
+                                {language === 'zho' ? '使用条款' : 'Terms'}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => openLegalModal('privacy')}
+                                className="isl-tab"
+                            >
+                                {language === 'zho' ? '隐私政策' : 'Privacy'}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    const next = resolvedTheme === 'dark' ? 'light' : 'dark';
+                                    setThemeMode(next);
+                                }}
+                                className="isl-tab inline-flex items-center gap-0.5"
+                                aria-label={resolvedTheme === 'dark' ? (language === 'zho' ? '切换到浅色模式' : 'Switch to light mode') : (language === 'zho' ? '切换到深色模式' : 'Switch to dark mode')}
+                                title={resolvedTheme === 'dark' ? (language === 'zho' ? '切换到浅色模式' : 'Switch to light mode') : (language === 'zho' ? '切换到深色模式' : 'Switch to dark mode')}
+                            >
+                                {resolvedTheme === 'dark' ? (
+                                    <svg width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round">
+                                        <circle cx="6" cy="6" r="2.2" fill="currentColor" stroke="none" />
+                                        <line x1="6" y1="0.5" x2="6" y2="2" />
+                                        <line x1="6" y1="10" x2="6" y2="11.5" />
+                                        <line x1="0.5" y1="6" x2="2" y2="6" />
+                                        <line x1="10" y1="6" x2="11.5" y2="6" />
+                                        <line x1="2.1" y1="2.1" x2="3.2" y2="3.2" />
+                                        <line x1="8.8" y1="8.8" x2="9.9" y2="9.9" />
+                                        <line x1="9.9" y1="2.1" x2="8.8" y2="3.2" />
+                                        <line x1="3.2" y1="8.8" x2="2.1" y2="9.9" />
+                                    </svg>
+                                ) : (
+                                    <svg width="9" height="9" viewBox="0 0 12 12" fill="currentColor">
+                                        <path d="M 9.2 2.4 A 4.6 4.6 0 1 0 9.2 9.6 A 3.6 3.6 0 0 1 9.2 2.4 Z" />
+                                    </svg>
+                                )}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setLanguage(language === 'zho' ? 'en' : 'zho')}
+                                className="isl-tab inline-flex items-center gap-0.5"
+                                aria-label={language === 'zho' ? 'Switch language to English' : '切换到中文'}
+                                title={language === 'zho' ? 'Switch to English' : '切换到中文'}
+                            >
+                                <svg width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="0.9" strokeLinecap="round" strokeLinejoin="round">
+                                    <circle cx="6" cy="6" r="4.2" />
+                                    <ellipse cx="6" cy="6" rx="1.8" ry="4.2" />
+                                    <line x1="1.8" y1="6" x2="10.2" y2="6" />
+                                </svg>
+                                {language === 'zho' ? 'EN' : '中'}
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

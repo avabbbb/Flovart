@@ -9,6 +9,14 @@ edition = "2021"
 name = "flovart_lib"
 crate-type = ["lib", "cdylib", "staticlib"]
 
+[[bin]]
+name = "flovart"
+path = "src/main.rs"
+
+[[bin]]
+name = "flovart-host"
+path = "src/bin/host.rs"
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
@@ -16,5 +24,18 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = [] }
 tauri-plugin-opener = "2"
 tauri-plugin-updater = "2"
+tauri-plugin-deep-link = "2"
+tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+keyring = { version = "3", features = ["apple-native", "windows-native", "linux-native-sync-persistent", "crypto-rust"] }
+rusqlite = { version = "0.32", features = ["bundled"] }
+parking_lot = "0.12"
+once_cell = "1"
+tiny_http = "0.12"
+url = "2"
+chrono = { version = "0.4", features = ["serde"] }
+anyhow = "1"
+thiserror = "1"
+log = "0.4"
+env_logger = "0.11"

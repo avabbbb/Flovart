@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <strong>开源版 Lovart — 自带 Key，接入所有模型，在无限画布上创作</strong>
+  <strong>开源版 Lovart — 自带 Key、接入所有模型、把画布变成 Agent 的运行时</strong>
 </p>
 
 <p align="center">
@@ -40,7 +40,14 @@
 
 ## 这是什么？
 
-Flovart，源自一个老哥记错了我项目的原名字，我觉得这个名字很好，于是保留了下来。这个 F 可以理解为 Future Lovart，也可以理解为 Fxxk Lovart，这取决于你对 Lovart 的态度。我想要有更自由的模型选择，并且我已经厌倦了节点式工作流，我只想要更加定制化的 Lovart——简单快捷、好看的前端、舒服的交互和表达式动画、无限画板，用 `@` 来选用图层上的元素，最好支持 CLI 操作，可以用我的 CC、OC、Codex，whatever 来自由地操作画布上的每个节点。
+我想要一个真正为 AI 创作而生的画布——
+
+- **更自由的模型**：BYOK 自带 Key，Google / OpenAI / DeepSeek / MiniMax / 火山引擎 / Qwen 等 12+ Provider 原生接入，再加一层 OpenAI-compatible 中转站适配器，自己接任何端点。
+- **更彻底的工作流**：节点流（Workflow）、分镜（Storyboard）、发布审核（Publish）三个 Workspace 各司其职，但都共享同一份 Canvas 状态；节点式太重我就把节点流收起来当工具人。
+- **更可被驱动**：CLI（`tools/flovart/cli.js`）、MCP（`flovart.*`）、SKILL.md（Claude Code / OpenCode / Codex 可直接调用）三条确定性入口，画布上的每个媒体元素都暴露成命令。外部 Agent 负责规划，Flovart 负责执行。
+- **更好看的前端**：Animal Crossing 风的 Tactile Shell 视觉语言、无限画板、`@` 引用图层、双击聚焦 / 三击适配、双语 + 亮暗主题自适应。
+
+四种部署形态可选：在线 Demo、Tauri 桌面端、Chrome/Edge 浏览器扩展、Docker 自托管。
 
 如果你也有相同的愿望，欢迎提交 PR。
 
@@ -168,33 +175,44 @@ npm run ext:build
 - [X] 无限画布 + 基础设计工具
 - [X] 多 Provider BYOK 系统（12+ Provider）
 - [X] AI 文生图 / 图生图 / 文生视频
-- [X] Multi-Agent 协作群聊
+- [X] Multi-Agent 协作群聊（含历史子视图 + 日志持久化）
 - [X] 滤镜/调色/图层蒙版
 - [X] AI 局部重绘 / 扩图
 - [X] 用量监控 + Key 批量管理
-- [X] 浏览器扩展 MVP
+- [X] 浏览器扩展 MVP（v1.2.0）
 - [X] Docker 部署
+- [X] Tauri 2 桌面端（Win / macOS / Linux）
+- [X] 在线 Demo（GitHub Pages）
 - [X] 第三方 API 聚合端点全兼容（自动 baseUrl 裁剪、/chat/completions 降级、多图片格式解析）
 - [X] SSE 流式图片反推提示词 + 取消
+- [X] App.tsx 模块化拆分（hooks 抽离：`useCanvasInteraction` / `useGeneration` / `useApiKeys` / `useToast`）
+- [X] Storyboard Workspace（多镜头项目化分镜 + 状态持久化）
+- [X] Publish Workspace（导出预设 + 候选审核 + 状态机）
+- [X] Agent-Native CLI（`tools/flovart/cli.js`，30+ 确定性命令）
+- [X] MCP 工具桥（`flovart.*`） + SKILL.md（Claude Code / OpenCode / Codex 直接驱动）
+- [X] 图层拖拽排序 + 实时 drop indicator
+- [X] 双击图层聚焦 / 三击空白适配视图
+- [X] Tactile Shell AC 视觉语言（tab bar / 图层卡片 / 弹窗 / 页脚统一）
+- [X] 紧凑化页脚（4 chip：使用条款 / 隐私政策 / 主题 / 语言切换）
 
 ### 进行中 🚧
 
-- [ ] App.tsx 模块化拆分（hooks 抽离：useCanvas / useGeneration / useElements / useMask）
 - [ ] Chrome / Edge 商店上架
-- [ ] 扩展端服务凭据加密存储 + 删除同步
-- [ ] ComfyUI / RunningHub 集成（本地模型）
+- [ ] 扩展端服务凭据加密存储 + 跨设备同步
+- [ ] Tauri 自动更新通道（Updater plugin 已接入，待签发测试版）
+- [ ] 节点流可视化编辑器迭代（多选 / 折叠 / 模板导入）
+- [ ] 第三方端点适配规则扩充（中转站 / 企业内网网关 / 自定义鉴权）
 
 ### 规划中 📝
 
-- [ ] **Claude Code Skill 支持** — 通过 SKILL.md 定义 Flovart 专属技能包，实现 Claude Code / Copilot Agent 直接驱动画布生图、编辑工作流
-- [ ] LangGraph.js Agent 编排 + 自定义 Skills（类 GPTs）
-- [ ] Agent 工作流可视化编排
-- [ ] Canvas 2D / WebGL 画布迁移（Konva.js / PixiJS）
-- [ ] 多页面/画板导航
-- [ ] AI 短剧一键生图流水线
-- [ ] 实时协作（多人编辑）
-- [ ] 移动端适配
-- [ ] 插件市场
+- [ ] **LangGraph.js Agent 编排** — 节点流背后的运行时换成 LangGraph，支持自定义 Skills（类 GPTs）
+- [ ] **AI 短剧一键流水线** — Brief → Storyboard → 镜头分镜 → 视频成片
+- [ ] **多画板 / 多页面** — Workspace 间共享同一画布集合
+- [ ] **实时协作（CRDT）** — 多人编辑同一画布，光标 / 选区同步
+- [ ] **画布性能迁移** — SVG → Konva.js / PixiJS，>500 元素仍 60fps
+- [ ] **插件市场** — Provider / 节点 / 模板可打包分发
+- [ ] **移动端适配** — 触屏手势 + 简化版 Toolbar
+- [ ] **桌面端系统集成** — 系统托盘 / 全局快捷键 / 文件拖入
 
 ---
 

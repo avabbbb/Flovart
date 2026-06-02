@@ -50,6 +50,7 @@ show.jpg
 
 # Tauri
 src-tauri/target/
+src-tauri/binaries/   # 平台特定的 sidecar 二进制由 CI 在 build 阶段从 src/bin/host.rs 编译，不入库
 src-tauri/.tauri_private_key
 src-tauri/.tauri_private_key.pub
 .flovart/

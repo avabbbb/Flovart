@@ -2668,6 +2668,37 @@ input[type='range'].toolbar-range::-moz-range-thumb:hover {
   box-shadow: none;
 }
 
+/* Compact variant for the bottom footer — same AC family, but small
+   and low-weight. No 3px edge, no rotate-on-hover, 1px border. */
+.isl-tabbar--ac-sm {
+  position: relative;
+  border-radius: 8px;
+  border: 1px solid var(--isl-border);
+  background: var(--isl-card);
+  padding: 1px;
+  box-shadow: 0 1px 0 0 var(--isl-edge);
+  overflow: visible;
+}
+.isl-tabbar--ac-sm .isl-tab {
+  border-radius: 6px;
+  color: var(--isl-ink-soft);
+  font-weight: 500;
+  letter-spacing: 0;
+  padding: 1px 6px;
+  min-height: 16px;
+  font-size: 9px;
+  line-height: 1;
+  transition: color 160ms ease, background 160ms ease;
+}
+.isl-tabbar--ac-sm .isl-tab:hover {
+  color: var(--isl-ink);
+  background: var(--isl-surface-2);
+}
+.isl-tabbar--ac-sm .isl-tab--active {
+  color: var(--isl-mint-deep);
+  background: var(--isl-mint-bg);
+}
+
 /* ── Elastic interaction helpers (bouncy hover-lift + press-squish) ── */
 .isl-elastic {
   transition: transform 260ms cubic-bezier(.2, 1.45, .24, 1), box-shadow 200ms ease, filter 200ms ease;
