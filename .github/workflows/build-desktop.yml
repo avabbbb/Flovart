@@ -1,83 +1,170 @@
-# Flovart - Tauri 全平台桌面应用构建
-# 
-# 触发条件：推送 v* 格式的 tag 时自动构建并发布 Release
-# 构建目标：Windows (x64) / macOS (x64 + ARM64) / Linux (x64)
-# 
+# Flovart - Tauri 桌面应用全平台构建 + 自动发布
+#
+# 触发条件：
+#   1. 推送到 main          → 出 Prerelease  (nightly 频道)
+#   2. 推送 v* tag         → 出正式 Release  (stable 频道)
+#   3. workflow_dispatch   → 手动触发，默认 Prerelease
+#
+# 构建矩阵：Windows x64 / macOS (Apple Silicon + Intel) / Linux x64
+#
 # 必须在 GitHub Repo Settings → Secrets 中配置：
-#   TAURI_SIGNING_PRIVATE_KEY - 自动更新签名私钥（src-tauri/.tauri_private_key 文件内容）
-#   TAURI_SIGNING_PRIVATE_KEY_PASSWORD - 私钥密码（若生成时无密码则留空）
+#   TAURI_SIGNING_PRIVATE_KEY         - 自动更新签名私钥（src-tauri/.tauri_private_key 文件内容）
+#   TAURI_SIGNING_PRIVATE_KEY_PASSWORD - 私钥密码（生成时无密码则留空）
+#
+# 包含组件：
+#   - Flovart 主程序（React 19 + Tauri 2）
+#   - flovart-host 启动器（Chrome / Edge Native Messaging 宿主，源在 src/bin/host.rs）
+#   - 平台原生安装包（Windows: NSIS .exe / .msi，macOS: .dmg，Linux: .deb / .AppImage）
+#
+# Sidecar 编译：
+#   src-tauri/binaries/ 已在 .gitignore 排除（只有 Windows binary 会破坏跨平台构建），
+#   每个 job 在 tauri build 之前会从 src/bin/host.rs 编译对应 target 的 sidecar。
 
-name: Build & Release Desktop App
+name: Build Desktop
 
 on:
   push:
+    branches:
+      - main
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      prerelease:
+        description: '标记为 Prerelease（nightly 频道）'
+        type: boolean
+        default: true
 
 permissions:
   contents: write
 
+# 串行跑同一组的 job，避免 prerelease 标签 race condition
+concurrency:
+  group: 'desktop-build'
+  cancel-in-progress: false
+
 jobs:
-  build-tauri:
+  build:
+    name: Build ${{ matrix.label }}
     strategy:
       fail-fast: false
       matrix:
         include:
           - platform: windows-latest
-            args: ''
+            rust_target: x86_64-pc-windows-msvc
+            binary_name: flovart-host.exe
+            sidecar_ext: .exe
+            installer_glob: |
+              **/*.exe
+              **/*.msi
+            label: Windows x64
           - platform: macos-latest
-            args: '--target aarch64-apple-darwin'
+            rust_target: aarch64-apple-darwin
+            binary_name: flovart-host
+            sidecar_ext: ''
+            installer_glob: |
+              **/*.dmg
+              **/*.app
+              **/*.app.tar.gz
+            label: macOS Apple Silicon
           - platform: macos-latest
-            args: '--target x86_64-apple-darwin'
+            rust_target: x86_64-apple-darwin
+            binary_name: flovart-host
+            sidecar_ext: ''
+            installer_glob: |
+              **/*.dmg
+              **/*.app
+              **/*.app.tar.gz
+            label: macOS Intel
           - platform: ubuntu-22.04
-            args: ''
+            rust_target: x86_64-unknown-linux-gnu
+            binary_name: flovart-host
+            sidecar_ext: ''
+            installer_glob: |
+              **/*.deb
+              **/*.AppImage
+            label: Linux x64
 
     runs-on: ${{ matrix.platform }}
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      # Linux 构建需要系统级依赖
+      # ── Linux 桌面环境依赖 ──
       - name: Install Linux dependencies
         if: matrix.platform == 'ubuntu-22.04'
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
-      # 安装 Rust 工具链
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
-
-      # 安装 Node.js 和前端依赖
-      - name: Setup Node.js
+      # ── Node + Rust 工具链 ──
+      - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: 'npm'
 
-      - name: Install frontend dependencies
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust_target }}
+
+      - name: Cache cargo registry + build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+          shared-key: ${{ matrix.rust_target }}
+
+      - name: Install npm dependencies
         run: npm ci
 
-      # 构建 Tauri 应用并生成安装包
-      - name: Build Tauri app
-        uses: tauri-apps/tauri-action@v1
+      # ── Sidecar pre-build ──
+      # 从 src/bin/host.rs 编译 flovart-host（Chrome Native Messaging 宿主），
+      # 放到 src-tauri/binaries/，文件名带 target triple 后缀，供 Tauri externalBin 查找。
+      - name: Build sidecar flovart-host
+        working-directory: src-tauri
+        run: |
+          cargo build --bin flovart-host --target ${{ matrix.rust_target }} --release
+          mkdir -p binaries
+          cp "target/${{ matrix.rust_target }}/release/${{ matrix.binary_name }}" \
+             "binaries/flovart-host-${{ matrix.rust_target }}${{ matrix.sidecar_ext }}"
+          echo "=== Sidecar ready ==="
+          ls -la binaries/
+          file binaries/* 2>/dev/null || true
+
+      # ── Tauri build + 自动签名 + 创建 release ──
+      # prerelease 表达式：push 到 main 分支 → nightly；tag → stable；手动触发 → 按 input。
+      - name: Compute short SHA
+        id: sha
+        run: echo "short=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - name: Build & publish Tauri app
+        uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: 'Flovart v__VERSION__'
+          tagName: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('nightly-{0}-{1}', github.run_number, steps.sha.outputs.short) }}
+          releaseName: ${{ startsWith(github.ref, 'refs/tags/') && format('Flovart v__VERSION__') || format('Flovart Nightly v__VERSION__ (build #{0} · {1})', github.run_number, steps.sha.outputs.short) }}
           releaseBody: |
-            See the assets below to download and install this version.
-            
-            **Windows**: Download `.exe` (NSIS installer) or `.msi`
-            **macOS**: Download `.dmg`
-            **Linux**: Download `.deb` or `.AppImage`
-          releaseDraft: true
-          prerelease: false
-          args: ${{ matrix.args }}
+            ## Flovart ${{ startsWith(github.ref, 'refs/tags/') && 'Stable Release' || 'Nightly Build' }}
+
+            **包含组件：**
+            - Flovart 主程序（React 19 + Tauri 2）
+            - flovart-host 启动器（Chrome / Edge Native Messaging 宿主）
+
+            **安装包：**
+            - 🪟 Windows: `.exe` (NSIS 安装器) / `.msi`
+            - 🍎 macOS: `.dmg`（Apple Silicon / Intel 各一份）
+            - 🐧 Linux: `.deb` / `.AppImage`
+
+            **构建信息：**
+            - 触发 commit: `${{ steps.sha.outputs.short }}`
+            - 触发条件: `${{ github.event_name }}` ${{ startsWith(github.ref, 'refs/tags/') && format('({0})', github.ref_name) || format('(branch: {0})', github.ref_name) }}
+            - 工作流: #${{ github.run_number }}
+          releaseDraft: false
+          prerelease: ${{ startsWith(github.ref, 'refs/tags/') == false }}
+          includeUpdaterJson: ${{ startsWith(github.ref, 'refs/tags/') }}
+          args: --target ${{ matrix.rust_target }}
