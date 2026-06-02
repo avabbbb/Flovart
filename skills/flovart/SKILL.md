@@ -634,6 +634,29 @@ node skills/flovart/scripts/flovart-client.js canvas.addElement '{"type":"text",
 node skills/flovart/scripts/flovart-client.js generate.image "a cat"
 ```
 
+### 一站式 CLI 入口（推荐）
+
+装完 skill 后只跑一个文件即可——不用记 `npm run flovart:cli --`：
+
+```bash
+# 任何位置、任何环境只要在 Flovart 仓库根目录就能跑
+node skills/flovart/scripts/flovart-cli.mjs status --json
+node skills/flovart/scripts/flovart-cli.mjs canvas.inspect --json
+node skills/flovart/scripts/flovart-cli.mjs canvas.add-image --url "https://..." --x 100 --y 100
+node skills/flovart/scripts/flovart-cli.mjs generate.image "a cat"
+node skills/flovart/scripts/flovart-cli.mjs provider.status --json
+```
+
+**自动路径搜索**（找到第一个存在就停）：
+1. 环境变量 `FLOVART_CLI`（强制覆盖）
+2. `../../tools/flovart/cli.js`（skill 在仓库内）
+3. `../../../tools/flovart/cli.js`（skill 装到 `~/.claude/skills/`）
+4. 当前工作目录 `tools/flovart/cli.js`（在仓库根跑）
+
+**等价于：** `npm run flovart:cli -- <command> --json`
+
+用户装完桌面 app 之后，`FLOVART_CLI` 也可指向安装路径（未来 Release 把 CLI 集成进安装包时用）。
+
 ### 扩展 Bridge（可选）
 
 安装 Flovart 浏览器扩展后，外部网页可通过 `chrome.runtime.sendMessage(extensionId, { type: 'FLOVART_COMMAND', method, args })` 调用 API，无需 CDP。
