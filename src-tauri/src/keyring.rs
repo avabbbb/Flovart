@@ -1,6 +1,6 @@
 //! 操作系统 Keyring 包装。
 //!
-//! 使用 keyring v3 `default_credential_builder()` API，
+//! 使用 keyring v3 `Entry::new(service, user)` API，
 //! 在每个平台上自动选合适的 native store（macOS Keychain /
 //! Windows Credential Manager / Linux Secret Service）。
 //!
@@ -8,6 +8,11 @@
 //! password 直接存 raw API Key（Keyring 自身加密）。
 //!
 //! 元数据（label / updated_at）走 SQLite KV 表。
+
+// 关键：把外部 `keyring` crate 的类型 re-export 进 `crate::keyring` 命名空间。
+// 否则 `use crate::keyring` 会 shadow crate 名，业务代码里的 `keyring::Entry` /
+// `keyring::Error` 解析不到外部 crate。
+pub use ::keyring::{Credential, CredentialBuilder, Entry, Error, Result};
 
 use crate::errors::{FlovartError, FlovartResult};
 use crate::FlovartContext;
@@ -35,10 +40,8 @@ pub fn parse_account(account: &str) -> Option<(String, String)> {
     Some((provider, key_id))
 }
 
-fn build_credential(account: &str) -> FlovartResult<Box<dyn keyring::Credential>> {
-    let builder = keyring::default::default_credential_builder();
-    builder
-        .build(None, KEYRING_SERVICE, account)
+fn build_entry(account: &str) -> FlovartResult<keyring::Entry> {
+    keyring::Entry::new(KEYRING_SERVICE, account)
         .map_err(|e| FlovartError::Keyring(e.to_string()))
 }
 
@@ -51,8 +54,8 @@ pub fn keyring_set(
     label: Option<String>,
 ) -> FlovartResult<KeyringEntry> {
     let account = entry_account(&provider, &key_id);
-    let credential = build_credential(&account)?;
-    credential.set_password(&secret).map_err(|e| FlovartError::Keyring(e.to_string()))?;
+    let entry = build_entry(&account)?;
+    entry.set_password(&secret).map_err(|e| FlovartError::Keyring(e.to_string()))?;
 
     let now = chrono::Utc::now().timestamp_millis();
     let json = serde_json::json!({
@@ -78,8 +81,8 @@ pub fn keyring_get(
     key_id: String,
 ) -> FlovartResult<Option<String>> {
     let account = entry_account(&provider, &key_id);
-    let credential = build_credential(&account)?;
-    match credential.get_password() {
+    let entry = build_entry(&account)?;
+    match entry.get_password() {
         Ok(secret) => Ok(Some(secret)),
         Err(keyring::Error::NoEntry) => Ok(None),
         Err(e) => Err(FlovartError::Keyring(e.to_string())),
@@ -93,8 +96,8 @@ pub fn keyring_delete(
     key_id: String,
 ) -> FlovartResult<bool> {
     let account = entry_account(&provider, &key_id);
-    let credential = build_credential(&account)?;
-    match credential.delete_credential() {
+    let entry = build_entry(&account)?;
+    match entry.delete_credential() {
         Ok(()) => {
             let metadata_key = format!("keyring:meta:{provider}:{key_id}");
             let _ = ctx.state_db.kv_delete(&metadata_key);

@@ -32,7 +32,7 @@ pub fn handle_deeplink_url(app: &AppHandle, raw: &str) {
     }
 
     // 解析 + 分发
-    let parsed = Url::parse(raw).ok();
+    let parsed = Url::parse(raw);
     let params: std::collections::HashMap<String, String> = match &parsed {
         Ok(u) => u
             .query_pairs()

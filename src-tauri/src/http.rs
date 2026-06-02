@@ -83,7 +83,8 @@ fn build_response(
 
 fn handle_request(ctx: Arc<FlovartContext>, app: AppHandle, mut req: tiny_http::Request) {
     if req.method().as_str() == "OPTIONS" {
-        let _ = req.respond(build_response(&req, 204, serde_json::json!({})));
+        let response = build_response(&req, 204, serde_json::json!({}));
+        let _ = req.respond(response);
         return;
     }
 
@@ -130,8 +131,8 @@ fn handle_request(ctx: Arc<FlovartContext>, app: AppHandle, mut req: tiny_http::
                 match m {
                     "GET" => {
                         let account = keyring::entry_account(provider, key_id);
-                        let credential = build_credential_pub(&account)?;
-                        match credential.get_password() {
+                        let entry = build_entry_pub(&account)?;
+                        match entry.get_password() {
                             Ok(secret) => Ok(serde_json::json!({ "secret": secret })),
                             Err(keyring::Error::NoEntry) => Ok(serde_json::json!({ "secret": null })),
                             Err(e) => Err(FlovartError::Keyring(e.to_string())),
@@ -139,8 +140,8 @@ fn handle_request(ctx: Arc<FlovartContext>, app: AppHandle, mut req: tiny_http::
                     }
                     "DELETE" => {
                         let account = keyring::entry_account(provider, key_id);
-                        let credential = build_credential_pub(&account)?;
-                        let removed = match credential.delete_credential() {
+                        let entry = build_entry_pub(&account)?;
+                        let removed = match entry.delete_credential() {
                             Ok(()) => true,
                             Err(keyring::Error::NoEntry) => false,
                             Err(e) => return Err(FlovartError::Keyring(e.to_string())),
@@ -209,7 +210,8 @@ fn handle_request(ctx: Arc<FlovartContext>, app: AppHandle, mut req: tiny_http::
         }
     };
 
-    let _ = req.respond(build_response(&req, status, body));
+    let response = build_response(&req, status, body);
+    let _ = req.respond(response);
 }
 
 fn list_keyring_metadata(ctx: &Arc<FlovartContext>) -> FlovartResult<Vec<KeyringEntry>> {
@@ -241,8 +243,8 @@ fn keyring_set_via_ctx(
     label: Option<String>,
 ) -> FlovartResult<KeyringEntry> {
     let account = keyring::entry_account(&provider, &key_id);
-    let credential = build_credential_pub(&account)?;
-    credential.set_password(&secret).map_err(|e| FlovartError::Keyring(e.to_string()))?;
+    let entry = build_entry_pub(&account)?;
+    entry.set_password(&secret).map_err(|e| FlovartError::Keyring(e.to_string()))?;
     let now = chrono::Utc::now().timestamp_millis();
     let json = serde_json::json!({
         "provider": provider,
@@ -255,10 +257,8 @@ fn keyring_set_via_ctx(
     Ok(KeyringEntry { provider, key_id, label, updated_at: now })
 }
 
-fn build_credential_pub(account: &str) -> FlovartResult<Box<dyn keyring::Credential>> {
-    let builder = keyring::default::default_credential_builder();
-    builder
-        .build(None, keyring::KEYRING_SERVICE, account)
+fn build_entry_pub(account: &str) -> FlovartResult<keyring::Entry> {
+    keyring::Entry::new(keyring::KEYRING_SERVICE, account)
         .map_err(|e| FlovartError::Keyring(e.to_string()))
 }
 
