@@ -108,6 +108,7 @@ jobs:
       # 放到 src-tauri/binaries/，文件名带 target triple 后缀，供 Tauri externalBin 查找。
       - name: Build sidecar flovart-host
         working-directory: src-tauri
+        shell: bash
         run: |
           cargo build --bin flovart-host --target ${{ matrix.rust_target }} --release
           mkdir -p binaries
@@ -119,20 +120,53 @@ jobs:
 
       # ── Tauri build + 自动签名 + 创建 release ──
       # prerelease 表达式：push 到 main 分支 → nightly；tag → stable；手动触发 → 按 input。
-      - name: Compute short SHA
-        id: sha
-        run: echo "short=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+      - name: Compute release metadata
+        id: meta
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            {
+              echo "is_tag=true"
+              echo "tag_name=${GITHUB_REF_NAME}"
+              echo "release_name=Flovart v__VERSION__"
+              echo "release_body<<EOF"
+              echo "## Flovart Stable Release"
+              echo ""
+              echo "- Flovart main app + flovart-host launcher"
+              echo "- All-platform installers (Win/macOS/Linux)"
+              echo "EOF"
+              echo "prerelease=false"
+              echo "updater=true"
+            } >> "$GITHUB_OUTPUT"
+          else
+            {
+              echo "is_tag=false"
+              echo "tag_name=nightly-${GITHUB_RUN_NUMBER}-${GITHUB_SHA::7}"
+              echo "release_name=Flovart Nightly v__VERSION__ (build #${GITHUB_RUN_NUMBER})"
+              echo "release_body<<EOF"
+              echo "## Flovart Nightly Build"
+              echo ""
+              echo "- Flovart main app + flovart-host launcher"
+              echo "- Windows + Linux installers (macOS disabled in CI for quota)"
+              echo "- This is a pre-release, may be unstable"
+              echo "EOF"
+              echo "prerelease=true"
+              echo "updater=false"
+            } >> "$GITHUB_OUTPUT"
+          fi
+          echo "=== GITHUB_OUTPUT ==="
+          cat "$GITHUB_OUTPUT"
 
       - name: Build & publish Tauri app
-        uses: tauri-apps/tauri-action@v0
+        uses: tauri-apps/tauri-action@action-v0.6.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          tagName: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('nightly-{0}-{1}', github.run_number, steps.sha.outputs.short) }}
-          releaseName: ${{ startsWith(github.ref, 'refs/tags/') && 'Flovart v__VERSION__' || format('Flovart Nightly v__VERSION__ (build #{0})', github.run_number) }}
-          releaseBody: ${{ startsWith(github.ref, 'refs/tags/') && '## Flovart Stable Release\n\n- 包含 Flovart 主程序 + flovart-host 启动器\n- 全平台安装包（Win/macOS/Linux）' || '## Flovart Nightly Build\n\n- 包含 Flovart 主程序 + flovart-host 启动器\n- 全平台安装包（Win/Linux，macOS 暂未在 CI 构建）\n- 这是预发布版本，可能不稳定' }}
-          prerelease: ${{ startsWith(github.ref, 'refs/tags/') == false }}
-          includeUpdaterJson: ${{ startsWith(github.ref, 'refs/tags/') }}
+          tagName: ${{ steps.meta.outputs.tag_name }}
+          releaseName: ${{ steps.meta.outputs.release_name }}
+          releaseBody: ${{ steps.meta.outputs.release_body }}
+          prerelease: ${{ steps.meta.outputs.prerelease }}
+          includeUpdaterJson: ${{ steps.meta.outputs.updater }}
           args: --target ${{ matrix.rust_target }}
