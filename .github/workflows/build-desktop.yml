@@ -58,24 +58,8 @@ jobs:
               **/*.exe
               **/*.msi
             label: Windows x64
-          - platform: macos-latest
-            rust_target: aarch64-apple-darwin
-            binary_name: flovart-host
-            sidecar_ext: ''
-            installer_glob: |
-              **/*.dmg
-              **/*.app
-              **/*.app.tar.gz
-            label: macOS Apple Silicon
-          - platform: macos-latest
-            rust_target: x86_64-apple-darwin
-            binary_name: flovart-host
-            sidecar_ext: ''
-            installer_glob: |
-              **/*.dmg
-              **/*.app
-              **/*.app.tar.gz
-            label: macOS Intel
+          # macOS runner 是 10x minutes multiplier（极费配额），
+          # 暂时只跑 Windows + Linux。macOS 在本地 / 推 tag 时手跑。
           - platform: ubuntu-22.04
             rust_target: x86_64-unknown-linux-gnu
             binary_name: flovart-host
@@ -147,24 +131,8 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('nightly-{0}-{1}', github.run_number, steps.sha.outputs.short) }}
-          releaseName: ${{ startsWith(github.ref, 'refs/tags/') && format('Flovart v__VERSION__') || format('Flovart Nightly v__VERSION__ (build #{0} · {1})', github.run_number, steps.sha.outputs.short) }}
-          releaseBody: |
-            ## Flovart ${{ startsWith(github.ref, 'refs/tags/') && 'Stable Release' || 'Nightly Build' }}
-
-            **包含组件：**
-            - Flovart 主程序（React 19 + Tauri 2）
-            - flovart-host 启动器（Chrome / Edge Native Messaging 宿主）
-
-            **安装包：**
-            - 🪟 Windows: `.exe` (NSIS 安装器) / `.msi`
-            - 🍎 macOS: `.dmg`（Apple Silicon / Intel 各一份）
-            - 🐧 Linux: `.deb` / `.AppImage`
-
-            **构建信息：**
-            - 触发 commit: `${{ steps.sha.outputs.short }}`
-            - 触发条件: `${{ github.event_name }}` ${{ startsWith(github.ref, 'refs/tags/') && format('({0})', github.ref_name) || format('(branch: {0})', github.ref_name) }}
-            - 工作流: #${{ github.run_number }}
-          releaseDraft: false
+          releaseName: ${{ startsWith(github.ref, 'refs/tags/') && 'Flovart v__VERSION__' || format('Flovart Nightly v__VERSION__ (build #{0})', github.run_number) }}
+          releaseBody: ${{ startsWith(github.ref, 'refs/tags/') && '## Flovart Stable Release\n\n- 包含 Flovart 主程序 + flovart-host 启动器\n- 全平台安装包（Win/macOS/Linux）' || '## Flovart Nightly Build\n\n- 包含 Flovart 主程序 + flovart-host 启动器\n- 全平台安装包（Win/Linux，macOS 暂未在 CI 构建）\n- 这是预发布版本，可能不稳定' }}
           prerelease: ${{ startsWith(github.ref, 'refs/tags/') == false }}
           includeUpdaterJson: ${{ startsWith(github.ref, 'refs/tags/') }}
           args: --target ${{ matrix.rust_target }}
