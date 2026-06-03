@@ -368,15 +368,13 @@ async function executeImageGen(
   }
 
   if (provider === 'google' || provider === 'openai' || provider === 'openrouter' || provider === 'custom' || key.provider === 'google' || key.provider === 'openai' || key.provider === 'openrouter' || key.provider === 'custom') {
-    const { editImageWithProvider, generateImageWithProvider } = await import('../services/aiGateway');
-    const result = refImage
-      ? await editImageWithProvider(
-          [{ href: refImage.href, mimeType: refImage.mimeType }],
-          prompt,
-          model,
-          key,
-        )
-      : await generateImageWithProvider(prompt, model, key);
+    const { generateImageWithProvider } = await import('../services/aiGateway');
+    const result = await generateImageWithProvider(
+      prompt,
+      model,
+      key,
+      refImage ? [{ href: refImage.href, mimeType: refImage.mimeType }] : [],
+    );
 
     if (result?.newImageBase64 && result?.newImageMimeType) {
       return {
@@ -453,7 +451,7 @@ async function executeVideoGen(
     {
       onProgress: (status) => ctx.onProgress?.(node.id, status),
       aspectRatio: getSupportedVideoAspectRatio(node.config?.aspectRatio),
-      image: firstFrame ? { href: firstFrame.href, mimeType: firstFrame.mimeType } : undefined,
+      references: firstFrame ? [{ href: firstFrame.href, mimeType: firstFrame.mimeType }] : [],
     },
   );
   if (result?.videoBlob) {

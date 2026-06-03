@@ -693,7 +693,7 @@ export function useGeneration(params: UseGenerationParams) {
                     {
                         aspectRatio: videoAspectRatio,
                         onProgress: (message) => setProgressMessage(message),
-                        image: { href: startFrame.href, mimeType: startFrame.mimeType },
+                        references: [{ href: startFrame.href, mimeType: startFrame.mimeType }],
                     },
                 );
 
@@ -790,7 +790,7 @@ export function useGeneration(params: UseGenerationParams) {
                     {
                         aspectRatio: videoAspectRatio,
                         onProgress: (message) => setProgressMessage(message),
-                        image: baseVideoReference,
+                        references: baseVideoReference ? [baseVideoReference] : [],
                     },
                 );
 
@@ -946,11 +946,12 @@ export function useGeneration(params: UseGenerationParams) {
                 const imagesToProcess = await Promise.all(imagePromises);
 
                 const { prompt: mentionPrompt, orderedMentionImages } = buildMentionAwarePrompt(effectivePrompt, mentionedImageElements);
-                const result = await editImageWithProvider(
-                    [...imagesToProcess, ...orderedMentionImages, ...attachmentReferenceImages, ...characterReferenceImages],
+                const allEditRefs = [...imagesToProcess, ...orderedMentionImages, ...attachmentReferenceImages, ...characterReferenceImages];
+                const result = await generateImageWithProvider(
                     mentionPrompt,
                     resolvedImageModel,
                     resolvedImageKey,
+                    allEditRefs,
                 );
 
                 if (result.newImageBase64 && result.newImageMimeType) {
@@ -997,11 +998,12 @@ export function useGeneration(params: UseGenerationParams) {
                 }
                 setProgressMessage('Generating with reference images...');
                 const { prompt: mentionPrompt2, orderedMentionImages: orderedRefs } = buildMentionAwarePrompt(effectivePrompt, mentionedImageElements);
-                const result = await editImageWithProvider(
-                    [...orderedRefs, ...attachmentReferenceImages, ...characterReferenceImages],
+                const allRefs = [...orderedRefs, ...attachmentReferenceImages, ...characterReferenceImages];
+                const result = await generateImageWithProvider(
                     mentionPrompt2,
                     resolvedImageModel,
                     resolvedImageKey,
+                    allRefs,
                 );
 
                 if (result.newImageBase64 && result.newImageMimeType) {
@@ -1042,17 +1044,11 @@ export function useGeneration(params: UseGenerationParams) {
                     setError('当前图片模型不支持参考图生成。请切换到支持参考图编辑的 Gemini、GPT Image 或 OpenRouter 图像模型。');
                     return;
                 }
-                const result = baseRefs.length > 0
-                    ? await editImageWithProvider(
+                const result = await generateImageWithProvider(
+                        effectivePrompt,
+                        resolvedImageModel,
+                        resolvedImageKey,
                         baseRefs,
-                        effectivePrompt,
-                        resolvedImageModel,
-                        resolvedImageKey,
-                    )
-                    : await generateImageWithProvider(
-                        effectivePrompt,
-                        resolvedImageModel,
-                        resolvedImageKey,
                     );
 
                 if (result.newImageBase64 && result.newImageMimeType) {

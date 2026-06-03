@@ -1,0 +1,64 @@
+{
+  "extension_name": {
+    "message": "Flovart — AI 画布与图像工作室",
+    "description": "扩展名称，显示在 chrome://extensions 页面"
+  },
+  "extension_description": {
+    "message": "BYOK 多 Provider AI 画布，支持第三方 OpenAI 兼容端点、Multi-Agent 协作、图片生成、滤镜、图层分离、右键图片处理",
+    "description": "扩展描述，显示在 Chrome 应用商店"
+  },
+  "popup_title": {
+    "message": "Flovart 扩展",
+    "description": "popup 的 HTML <title>"
+  },
+  "popup_open_canvas": {
+    "message": "打开 AI 画布",
+    "description": "主 CTA 按钮，打开画布应用"
+  },
+  "popup_quick_actions": {
+    "message": "快捷操作",
+    "description": "快捷操作区标题"
+  },
+  "popup_capture_tab": {
+    "message": "截取页面",
+    "description": "把当前页面截为参考图的按钮"
+  },
+  "popup_capture_tab_tooltip": {
+    "message": "截取当前页面作为参考"
+  },
+  "popup_collect_images": {
+    "message": "采集灵感",
+    "description": "采集当前页面所有图片的按钮"
+  },
+  "popup_collect_images_tooltip": {
+    "message": "采集当前页面所有图片"
+  },
+  "popup_contact_feedback": {
+    "message": "联系与反馈",
+    "description": "联系/反馈区标题"
+  },
+  "popup_open_demo": {
+    "message": "在线 Demo"
+  },
+  "popup_open_demo_tooltip": {
+    "message": "打开在线 Demo"
+  },
+  "popup_open_github": {
+    "message": "GitHub"
+  },
+  "popup_open_github_tooltip": {
+    "message": "打开 GitHub 仓库"
+  },
+  "popup_open_issues": {
+    "message": "反馈 Issue"
+  },
+  "popup_open_issues_tooltip": {
+    "message": "打开 Issues 反馈问题"
+  },
+  "popup_link_note": {
+    "message": "产品更新看仓库，问题反馈和合作沟通先走 GitHub Issues。"
+  },
+  "popup_status_rightclick": {
+    "message": "右键任意图片可快速操作"
+  }
+}

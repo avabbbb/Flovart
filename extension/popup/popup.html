@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src https://*;" />
-  <title>Flovart Extension</title>
+  <title data-i18n="popup_title"></title>
   <link rel="stylesheet" href="popup.css" />
 </head>
 <body>
@@ -29,20 +29,20 @@
         <circle cx="8.5" cy="8.5" r="1.5" />
         <path d="M21 15l-5-5L5 21" />
       </svg>
-      打开 AI 画布
+      <span data-i18n="popup_open_canvas"></span>
     </button>
 
     <!-- Quick Actions -->
     <div class="popup-section">
-      <div class="popup-section-title">快捷操作</div>
+      <div class="popup-section-title" data-i18n="popup_quick_actions"></div>
       <div class="popup-actions">
-        <button id="captureTab" class="popup-action" title="截取当前页面作为参考">
+        <button id="captureTab" class="popup-action" data-i18n-attr="title:popup_capture_tab_tooltip">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 3v18"/></svg>
-          <span>截取页面</span>
+          <span data-i18n="popup_capture_tab"></span>
         </button>
-        <button id="collectImages" class="popup-action" title="采集当前页面所有图片">
+        <button id="collectImages" class="popup-action" data-i18n-attr="title:popup_collect_images_tooltip">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
-          <span>采集灵感</span>
+          <span data-i18n="popup_collect_images"></span>
         </button>
       </div>
     </div>
@@ -85,22 +85,23 @@
     </div>
 
     <div class="popup-section">
-      <div class="popup-section-title">联系与反馈</div>
+      <div class="popup-section-title" data-i18n="popup_contact_feedback"></div>
       <div class="popup-links">
-        <button id="openDemoLink" class="popup-link-card" title="打开在线 Demo">在线 Demo</button>
-        <button id="openGithubLink" class="popup-link-card" title="打开 GitHub 仓库">GitHub</button>
-        <button id="openIssuesLink" class="popup-link-card" title="打开 Issues 反馈问题">反馈 Issue</button>
+        <button id="openDemoLink" class="popup-link-card" data-i18n-attr="title:popup_open_demo_tooltip" data-i18n="popup_open_demo"></button>
+        <button id="openGithubLink" class="popup-link-card" data-i18n-attr="title:popup_open_github_tooltip" data-i18n="popup_open_github"></button>
+        <button id="openIssuesLink" class="popup-link-card" data-i18n-attr="title:popup_open_issues_tooltip" data-i18n="popup_open_issues"></button>
       </div>
-      <div class="popup-inline-note">产品更新看仓库，问题反馈和合作沟通先走 GitHub Issues。</div>
+      <div class="popup-inline-note" data-i18n="popup_link_note"></div>
     </div>
 
     <!-- Status -->
     <div class="popup-footer">
       <div class="popup-status" id="statusDot"></div>
-      <span id="statusText">右键任意图片可快速操作</span>
+      <span id="statusText" data-i18n="popup_status_rightclick"></span>
     </div>
   </div>
 
   <script src="popup.js"></script>
+  <script src="i18n.js"></script>
 </body>
 </html>

@@ -196,10 +196,15 @@ describe('aiGateway - generateImageWithProvider', () => {
         );
     });
 
-    it('不支持的 provider 抛出错误', async () => {
-        await expect(
-            generateImageWithProvider('test prompt', 'claude-3-haiku', { id: '1', provider: 'anthropic', capabilities: ['text'], key: 'test', createdAt: 0, updatedAt: 0 })
-        ).rejects.toThrow('暂不支持');
+    it('不支持的 provider 现在通过 generic chat/completions 支持', async () => {
+        globalThis.fetch = vi.fn()
+            .mockResolvedValueOnce(mockJsonResponse({
+                data: [{ b64_json: 'YWJjZA==' }],
+            }));
+        const result = await generateImageWithProvider('test prompt', 'claude-3-haiku', { id: '1', provider: 'anthropic', capabilities: ['text'], key: 'test', createdAt: 0, updatedAt: 0 });
+        expect(result.newImageBase64).toBe('YWJjZA==');
+        expect(result.newImageMimeType).toBe('image/png');
+        expect(globalThis.fetch).toHaveBeenCalledTimes(1);
     });
     it('custom provider applies model mapping and custom auth header', async () => {
         globalThis.fetch = vi.fn().mockResolvedValue(mockJsonResponse({

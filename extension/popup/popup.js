@@ -32,14 +32,7 @@ document.addEventListener('DOMContentLoaded', () => {
     custom: '第三方 API Key',
   };
 
-  // ─── Unified Storage V2 (shared with Web App) ───
-  const STORAGE_KEY_V2 = 'flovart_api_keys_v2';
-  const STORAGE_KEY_OLD = 'flovart_user_api_keys';
-
-  /**
-   * PROVIDER_CAPABILITIES: 与 Web App 的 DEFAULT_PROVIDER_MODELS 对齐
-   * 供 popup 快捷添加 Key 时推断 capabilities
-   */
+  // ─── Provider capability defaults (与 Web App DEFAULT_PROVIDER_MODELS 对齐) ───
   const PROVIDER_CAPABILITIES = {
     google: ['text', 'image', 'video'],
     openai: ['text', 'image'],
@@ -53,112 +46,9 @@ document.addEventListener('DOMContentLoaded', () => {
     custom: ['text', 'image', 'video'],
   };
 
-  // ─── AES-GCM Encryption for Chrome Storage ───
-  // Uses chrome.runtime.id as key material (unique per extension install)
-  // This replaces the old base64 obfuscation with real encryption
-  const ENC_SALT = 'flovart-ext-v3';
-
-  async function deriveEncryptionKey() {
-    const enc = new TextEncoder();
-    const keyMaterial = await crypto.subtle.importKey(
-      'raw', enc.encode(chrome.runtime.id), 'PBKDF2', false, ['deriveKey']
-    );
-    return crypto.subtle.deriveKey(
-      { name: 'PBKDF2', salt: enc.encode(ENC_SALT), iterations: 100000, hash: 'SHA-256' },
-      keyMaterial, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']
-    );
-  }
-
-  async function encodeKeys(data) {
-    const enc = new TextEncoder();
-    const aesKey = await deriveEncryptionKey();
-    const iv = crypto.getRandomValues(new Uint8Array(12));
-    const ct = await crypto.subtle.encrypt(
-      { name: 'AES-GCM', iv }, aesKey, enc.encode(JSON.stringify(data))
-    );
-    // Store iv + ciphertext as arrays for JSON serialization
-    return { iv: Array.from(iv), ct: Array.from(new Uint8Array(ct)) };
-  }
-
-  async function decodeKeys(encoded) {
-    try {
-      if (!encoded || !encoded.iv || !encoded.ct) {
-        // Fallback: try legacy base64 format
-        if (typeof encoded === 'string') {
-          const s = atob(encoded);
-          const bytes = new Uint8Array(s.length);
-          for (let i = 0; i < s.length; i++) bytes[i] = s.charCodeAt(i);
-          return JSON.parse(new TextDecoder().decode(bytes));
-        }
-        return null;
-      }
-      const aesKey = await deriveEncryptionKey();
-      const iv = new Uint8Array(encoded.iv);
-      const ct = new Uint8Array(encoded.ct);
-      const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, aesKey, ct);
-      return JSON.parse(new TextDecoder().decode(pt));
-    } catch {
-      return null;
-    }
-  }
-
-  /** 生成唯一 ID（与 Web App 的 generateId 一致） */
-  function generateId() {
-    if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
-    return `id_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  }
-
-  /**
-   * 读取 V2 格式 Keys，自动迁移旧格式
-   * @returns {Promise<Array>} UserApiKey[]
-   */
-  async function loadKeysV2() {
-    const result = await chrome.storage.local.get([STORAGE_KEY_V2, STORAGE_KEY_OLD]);
-
-    // 优先读 V2 (encrypted or legacy base64)
-    if (result[STORAGE_KEY_V2]?.d) {
-      const decoded = await decodeKeys(result[STORAGE_KEY_V2].d);
-      if (Array.isArray(decoded)) return decoded;
-    }
-
-    // Fallback: 旧格式迁移
-    const oldKeys = result[STORAGE_KEY_OLD];
-    if (Array.isArray(oldKeys) && oldKeys.length > 0) {
-      const migrated = oldKeys.map(k => ({
-        id: generateId(),
-        provider: k.provider || 'custom',
-        capabilities: k.capabilities || PROVIDER_CAPABILITIES[k.provider] || ['text'],
-        key: k.key || '',
-        baseUrl: k.baseUrl,
-        name: k.name,
-        isDefault: false,
-        status: 'unknown',
-        customModels: k.customModels,
-        defaultModel: k.defaultModel,
-        models: k.models,
-        extraConfig: k.extraConfig,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      }));
-      // 写入 V2 格式，清理旧格式
-      await saveKeysV2(migrated);
-      await chrome.storage.local.remove(STORAGE_KEY_OLD);
-      return migrated;
-    }
-
-    return [];
-  }
-
-  /**
-   * 写入 V2 格式 Keys
-   * @param {Array} keys UserApiKey[]
-   */
-  async function saveKeysV2(keys) {
-    const encrypted = await encodeKeys(keys);
-    await chrome.storage.local.set({
-      [STORAGE_KEY_V2]: { d: encrypted, v: 3 },
-    });
-  }
+  // 桥必须由 popup.html 提前注入（shared/crypto.js + shared/keyBridge.js）
+  const Bridge = globalThis.FlovartKeyBridge;
+  const Crypto = globalThis.FlovartCrypto;
 
   function trimTrailingSlashes(value) {
     return (value || '').trim().replace(/\/+$/, '');
@@ -454,17 +344,39 @@ document.addEventListener('DOMContentLoaded', () => {
     syncProviderUi();
   }
 
-  // Load existing keys and show status (V2 unified format)
-  loadKeysV2().then(keys => {
+  // 渲染 key 状态：列出所有 key，附数据源标签 (Tauri / 本地)
+  function renderKeyStatus(keys) {
+    if (!keyIndicator || !keyStatusText) return;
     if (keys.length > 0) {
+      keyIndicator.classList.remove('empty');
       keyIndicator.classList.add('active');
       const providers = [...new Set(keys.map(k => k.provider))];
-      keyStatusText.textContent = `已配置 ${keys.length} 个 Key（${providers.join(', ')}）`;
+      const tauri = Bridge?.isTauriAvailable();
+      // 异步探测 Tauri 可用性 → 显示数据源
+      Promise.resolve(tauri).then((onTauri) => {
+        const source = onTauri ? 'Tauri 桌面' : '本地';
+        keyStatusText.textContent = `已配置 ${keys.length} 个 Key（${providers.join(', ')}）· ${source}`;
+      });
     } else {
+      keyIndicator.classList.remove('active');
       keyIndicator.classList.add('empty');
       keyStatusText.textContent = '未配置 API Key — 右键反推需要 Key';
     }
-  });
+  }
+
+  // Load existing keys and show status (通过 keyBridge 走 Tauri 优先 + 本地 fallback)
+  if (Bridge) {
+    Bridge.listKeys()
+      .then(renderKeyStatus)
+      .catch((err) => {
+        console.warn('[Flovart] listKeys failed:', err);
+        if (keyIndicator) keyIndicator.classList.add('empty');
+        if (keyStatusText) keyStatusText.textContent = '未配置 API Key — 右键反推需要 Key';
+      });
+  } else {
+    if (keyIndicator) keyIndicator.classList.add('empty');
+    if (keyStatusText) keyStatusText.textContent = '扩展脚本加载异常';
+  }
 
   // Toggle key setup panel
   if (toggleKeySetup) {
@@ -479,22 +391,21 @@ document.addEventListener('DOMContentLoaded', () => {
   if (saveKeyBtn) {
     saveKeyBtn.addEventListener('click', async () => {
       const provider = providerSelect.value;
-      const key = apiKeyInput.value.trim();
+      const apiKey = apiKeyInput.value.trim();
       const requestedBaseUrl = trimTrailingSlashes(baseUrlInput?.value || '');
-      
-      if (!key) {
+
+      if (!apiKey) {
         showKeySaveStatus('请输入 API Key', 'error');
         return;
       }
 
-      // Validate key format (basic check)
-      if (key.length < 10) {
+      if (apiKey.length < 10) {
         showKeySaveStatus('API Key 格式不正确', 'error');
         return;
       }
 
       try {
-        const keys = await loadKeysV2();
+        const existing = await Bridge.listKeys();
         let effectiveBaseUrl = '';
         let discoveredModels = [];
         let capabilities = PROVIDER_CAPABILITIES[provider] || ['text'];
@@ -507,7 +418,7 @@ document.addEventListener('DOMContentLoaded', () => {
           }
 
           showKeySaveStatus('正在识别兼容端点与模型...', 'info');
-          const detection = await detectCompatibleBaseUrl(provider, requestedBaseUrl, key);
+          const detection = await detectCompatibleBaseUrl(provider, requestedBaseUrl, apiKey);
           if (!detection.ok) {
             showKeySaveStatus(`识别失败：${detection.error}`, 'error');
             return;
@@ -521,53 +432,58 @@ document.addEventListener('DOMContentLoaded', () => {
             baseUrlInput.value = effectiveBaseUrl;
           }
         }
-        
-        // Check for duplicate
-        const fingerprint = getKeyFingerprint({ provider, key, baseUrl: effectiveBaseUrl || requestedBaseUrl });
-        const existing = keys.findIndex(k => getKeyFingerprint(k) === fingerprint);
-        if (existing >= 0) {
+
+        // 重复检测
+        const fingerprint = getKeyFingerprint({
+          provider,
+          key: apiKey,
+          baseUrl: effectiveBaseUrl || requestedBaseUrl,
+        });
+        const duplicate = existing.findIndex(k => getKeyFingerprint(k) === fingerprint);
+        if (duplicate >= 0) {
           showKeySaveStatus('该 Key 已存在', 'error');
           return;
         }
 
-        // Add new key — full UserApiKey structure (与 Web App 统一)
         const now = Date.now();
-        keys.push({
-          id: generateId(),
+        const newKey = {
           provider,
+          key: apiKey,
           capabilities,
-          key,
           baseUrl: effectiveBaseUrl || undefined,
-          name: provider === 'custom' && effectiveBaseUrl ? new URL(effectiveBaseUrl).host : undefined,
-          isDefault: keys.length === 0,
+          name: provider === 'custom' && effectiveBaseUrl
+            ? new URL(effectiveBaseUrl).host
+            : undefined,
+          isDefault: existing.length === 0,
           status: 'unknown',
           models: discoveredModels,
           extraConfig,
           createdAt: now,
           updatedAt: now,
-        });
+        };
 
-        await saveKeysV2(keys);
-        
-        // Update status
-        keyIndicator.classList.remove('empty');
-        keyIndicator.classList.add('active');
-        const providers = [...new Set(keys.map(k => k.provider))];
-        keyStatusText.textContent = `已配置 ${keys.length} 个 Key（${providers.join(', ')}）`;
-        
+        const saved = await Bridge.saveKey(newKey);
+
+        // 重新拉取并刷新 UI
+        const allKeys = await Bridge.listKeys();
+        renderKeyStatus(allKeys);
+
         apiKeyInput.value = '';
-        if (baseUrlInput && provider === 'custom') {
-          showKeySaveStatus(`保存成功，已识别 ${discoveredModels.length || 0} 个模型`, 'success');
+        if (saved?._source === 'tauri') {
+          showKeySaveStatus(`保存成功 · 同步到 Flovart 桌面`, 'success');
+        } else if (provider === 'custom') {
+          showKeySaveStatus(
+            `保存成功（本地），已识别 ${discoveredModels.length || 0} 个模型`,
+            'success'
+          );
         } else {
-          showKeySaveStatus('保存成功，画布中也可使用此 Key', 'success');
+          showKeySaveStatus('保存成功（本地），画布中也可使用此 Key', 'success');
         }
       } catch (err) {
         showKeySaveStatus('保存失败: ' + err.message, 'error');
       }
     });
   }
-
-  // getDefaultCapabilities is superseded by PROVIDER_CAPABILITIES map above
 
   function showKeySaveStatus(text, type) {
     if (keySaveStatus) {

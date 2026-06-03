@@ -13,7 +13,8 @@
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
-    "ext:build": "node extension/build.mjs"
+    "ext:build": "node extension/build.mjs",
+    "publish:cli": "cd tools/flovart && npm publish"
   },
   "dependencies": {
     "@cfworker/json-schema": "^4.1.1",

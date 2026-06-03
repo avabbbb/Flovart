@@ -1,0 +1,64 @@
+{
+  "extension_name": {
+    "message": "Flovart — AI Canvas & Image Studio",
+    "description": "Extension name shown in chrome://extensions"
+  },
+  "extension_description": {
+    "message": "BYOK multi-provider AI canvas, supports third-party OpenAI-compatible endpoints, multi-agent collaboration, image generation, filters, layer split, right-click image processing",
+    "description": "Extension description in chrome web store"
+  },
+  "popup_title": {
+    "message": "Flovart Extension",
+    "description": "HTML <title> of the popup"
+  },
+  "popup_open_canvas": {
+    "message": "Open AI Canvas",
+    "description": "Main CTA button to open the canvas app"
+  },
+  "popup_quick_actions": {
+    "message": "Quick Actions",
+    "description": "Quick actions section title"
+  },
+  "popup_capture_tab": {
+    "message": "Capture Page",
+    "description": "Button to capture the current page as reference"
+  },
+  "popup_capture_tab_tooltip": {
+    "message": "Capture the current page as reference"
+  },
+  "popup_collect_images": {
+    "message": "Collect Inspiration",
+    "description": "Button to scrape all images on the current page"
+  },
+  "popup_collect_images_tooltip": {
+    "message": "Collect all images on the current page"
+  },
+  "popup_contact_feedback": {
+    "message": "Contact & Feedback",
+    "description": "Contact / feedback section title"
+  },
+  "popup_open_demo": {
+    "message": "Online Demo"
+  },
+  "popup_open_demo_tooltip": {
+    "message": "Open the online demo"
+  },
+  "popup_open_github": {
+    "message": "GitHub"
+  },
+  "popup_open_github_tooltip": {
+    "message": "Open the GitHub repository"
+  },
+  "popup_open_issues": {
+    "message": "Report Issue"
+  },
+  "popup_open_issues_tooltip": {
+    "message": "Open GitHub Issues to report a problem"
+  },
+  "popup_link_note": {
+    "message": "For product updates see the repo. For bug reports and partnership inquiries please open a GitHub Issue first."
+  },
+  "popup_status_rightclick": {
+    "message": "Right-click any image to take quick action"
+  }
+}

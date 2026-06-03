@@ -17,8 +17,8 @@ export default defineConfig(() => {
         process.env.CF_PAGES_BASEPATH ||
         (process.env.CF_PAGES ? '/' : './'),
       server: {
-        port: 11451,
-        host: host || '0.0.0.0',
+        port: 3217,
+        host: host || '127.0.0.1',
         strictPort: true,
       },
       plugins: [tailwindcss(), react(), flovartBridge()],

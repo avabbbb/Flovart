@@ -1,0 +1,32 @@
+{
+  "name": "flovart-cli",
+  "version": "0.2.0",
+  "description": "Flovart CLI – deterministic command bridge for AI coding agents to operate Flovart canvas, workflow, and providers",
+  "type": "module",
+  "bin": {
+    "flovart": "./cli.js"
+  },
+  "files": [
+    "cli.js",
+    "core.js",
+    "flovart-bridge.js",
+    "shadow-runtime.js",
+    "agent-kit.js",
+    "runtime-client.js"
+  ],
+  "keywords": [
+    "flovart",
+    "ai",
+    "canvas",
+    "agent",
+    "cli",
+    "image-generation",
+    "video-generation",
+    "workflow"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/anomalyco/flovart"
+  }
+}

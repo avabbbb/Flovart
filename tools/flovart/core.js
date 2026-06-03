@@ -116,10 +116,10 @@ export const SETUP_TEXT = [
   'Flovart CLI file bridge setup:',
   '1. npm run dev',
   '2. Open the Flovart browser app from the dev server when a command needs provider execution',
-  '3. npm run flovart:cli -- status --json',
-  '4. npm run flovart:cli -- generate.image --prompt <prompt> --json',
+  '3. npx flovart-cli status --json',
+  '4. npx flovart-cli generate.image --prompt <prompt> --json',
   '',
-  'API keys must be entered in the Flovart browser UI only. Do not paste secrets into Claude Code transcripts.',
+  'API keys must be entered in the Flovart browser UI only. Do not paste secrets into AI agent transcripts.',
 ].join('\n');
 
 export function formatValue(value) {

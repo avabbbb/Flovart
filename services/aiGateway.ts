@@ -4,6 +4,7 @@ import { fetchModelsForProvider, type FetchModelsResult } from './modelFetcher';
 import { normalizeProviderBaseUrl } from './baseUrl';
 
 type ImageInput = { href: string; mimeType: string };
+type VideoImage = ImageInput & { slotRole?: string };
 
 type ProviderModelMap = { text: string[]; image: string[]; video: string[] };
 
@@ -96,7 +97,7 @@ export const DEFAULT_PROVIDER_MODELS: Partial<Record<AIProvider, ProviderModelMa
     volcengine: {
         text: ['doubao-1.5-pro-256k', 'doubao-1.5-pro-32k'],
         image: [],
-        video: [],
+        video: ['doubao-seedance-2-0-260128'],
     },
     openrouter: {
         text: ['openrouter/auto', 'google/gemini-3-flash-preview', 'anthropic/claude-opus-4-6', 'deepseek/deepseek-r1'],
@@ -127,9 +128,10 @@ type VideoAspectRatio = '16:9' | '9:16' | '1:1' | '4:3' | '3:4' | '21:9';
  * If a provider is not listed, all 6 ratios are assumed to pass through as-is (custom/openrouter).
  */
 export const PROVIDER_VIDEO_RATIOS: Partial<Record<AIProvider, VideoAspectRatio[]>> = {
-    google:  ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9'], // Veo accepts all 6
-    minimax: ['16:9', '9:16', '1:1'],                        // MiniMax only supports 16:9/9:16/1:1
-    keling:  ['16:9', '9:16', '1:1'],                        // Kling AI: 16:9/9:16/1:1
+    google:     ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9'], // Veo accepts all 6
+    minimax:    ['16:9', '9:16', '1:1'],                        // MiniMax only supports 16:9/9:16/1:1
+    keling:     ['16:9', '9:16', '1:1'],                        // Kling AI: 16:9/9:16/1:1
+    volcengine: ['16:9', '9:16', '1:1'],                        // Seedance
 };
 
 /** Check whether a given ratio is supported by the inferred video provider. */
@@ -420,12 +422,12 @@ export function getDynamicParamSchema(modelName: string): ModelParamSchema {
     };
 }
 
-function getImageReferencesForIgnition(references: IgnitionReference[] = []): ImageInput[] {
+function getImageReferencesForIgnition(references: IgnitionReference[] = []): VideoImage[] {
     return references
         .filter((reference): reference is IgnitionReference & { type: 'image'; href: string; mimeType: string } => (
             reference.type === 'image' && typeof reference.href === 'string' && reference.href.length > 0
         ))
-        .map(reference => ({ href: reference.href, mimeType: reference.mimeType || 'image/png' }));
+        .map(reference => ({ href: reference.href, mimeType: reference.mimeType || 'image/png', slotRole: reference.slotRole }));
 }
 
 function parseTextResponseContent(json: any): string {
@@ -525,9 +527,7 @@ function isOpenAIImageEditModel(model: string): boolean {
 export function supportsReferenceImageEditing(model: string): boolean {
     const provider = inferProviderFromModel(model);
     if (provider === 'google') return isGoogleImageEditModel(model);
-    if (provider === 'openai' || provider === 'custom') return isOpenAIImageEditModel(model);
-    if (provider === 'openrouter') return true;
-    return false;
+    return true;
 }
 
 export function supportsMaskImageEditing(model: string): boolean {
@@ -820,7 +820,7 @@ async function generateVideoWithUnifiedAsyncApi(
     options?: {
         aspectRatio?: '16:9' | '9:16' | '1:1' | '4:3' | '3:4' | '21:9';
         onProgress?: (message: string) => void;
-        image?: ImageInput;
+        references?: VideoImage[];
     },
 ): Promise<{ videoBlob: Blob; mimeType: string }> {
     const apiKey = requireApiKey('custom', key);
@@ -839,8 +839,11 @@ async function generateVideoWithUnifiedAsyncApi(
                 aspect_ratio: aspectRatio,
             };
 
-            if (options?.image) {
-                createBody.images = [options.image.href];
+            const imageHrefs = (options?.references ?? [])
+                .map(r => r.href)
+                .filter(Boolean);
+            if (imageHrefs.length) {
+                createBody.images = imageHrefs;
             }
 
             const createRes = await fetch(`${apiBase}/v2/videos/generations`, {
@@ -1390,24 +1393,35 @@ export async function reversePromptStreamWithProvider(
 export async function generateImageWithProvider(
     prompt: string,
     model: string,
-    key?: UserApiKey
+    key?: UserApiKey,
+    images?: VideoImage[],
 ): Promise<{ newImageBase64: string | null; newImageMimeType: string | null; textResponse: string | null }> {
     const provider = resolveGenerationProvider(model, key);
+    const refs = images ?? [];
 
     if (provider === 'google') {
-        // 传入 key?.key 确保使用用户 UI 中配置的 API Key
+        if (refs.length > 0) {
+            if (!supportsReferenceImageEditing(model)) {
+                return generateImageFromText(prompt, key?.key);
+            }
+            return editImage(refs, prompt, undefined, key?.key);
+        }
         return generateImageFromText(prompt, key?.key);
     }
 
     if (provider === 'openrouter') {
         const apiKey = requireApiKey(provider, key);
         const baseUrl = getBaseUrl(provider, key);
+        const content: any[] = [{ type: 'text', text: prompt }];
+        for (const image of refs) {
+            content.push({ type: 'image_url', image_url: { url: image.href } });
+        }
         const response = await fetch(`${baseUrl}/chat/completions`, {
             method: 'POST',
             headers: buildOpenRouterHeaders(apiKey),
             body: JSON.stringify({
                 model,
-                messages: [{ role: 'user', content: prompt }],
+                messages: [{ role: 'user', content }],
                 modalities: ['image', 'text'],
                 stream: false,
             }),
@@ -1435,9 +1449,66 @@ export async function generateImageWithProvider(
         const baseUrl = getBaseUrl(provider, key);
         const mappedModel = mapProviderModel(model, key);
 
-        // 先尝试标准 /images/generations 端点
-        // custom provider 请求 url 格式（代理/聚合端点对大图片 b64_json 响应可能断连），
-        // OpenAI 官方端点请求 b64_json（避免额外下载且链接有时效）
+        // With reference images: use /images/edits (multipart) or chat/completions fallback
+        if (refs.length > 0) {
+            const formData = new FormData();
+            formData.append('model', mappedModel);
+            formData.append('prompt', prompt);
+            formData.append('response_format', provider === 'custom' ? 'url' : 'b64_json');
+
+            refs.forEach((image, index) => {
+                const parsed = parseDataUrl(image.href, image.mimeType);
+                formData.append(
+                    'image',
+                    createBlobFromBase64(parsed.base64, image.mimeType),
+                    `reference-${index}.${image.mimeType.split('/')[1] || 'png'}`,
+                );
+            });
+
+            try {
+                const editsRes = await fetch(`${baseUrl}/images/edits`, {
+                    method: 'POST',
+                    headers: buildProviderHeaders(apiKey, key, { contentType: false }),
+                    body: formData,
+                });
+                if (editsRes.ok) {
+                    const json = await readJsonResponse<any>(editsRes, `${PROVIDER_LABELS[provider]} 图片编辑响应`);
+                    const parsed = await parseOpenAIImageResponse(json);
+                    if (parsed.newImageBase64) return parsed;
+                }
+                if (provider !== 'custom') {
+                    throw new Error(await readErrorResponse(editsRes, `${PROVIDER_LABELS[provider]} 图片生成失败`));
+                }
+            } catch (err) {
+                if (provider !== 'custom') throw err;
+            }
+
+            // Custom fallback: chat/completions with images
+            if (provider === 'custom') {
+                const chatContent: any[] = [{ type: 'text', text: prompt }];
+                for (const image of refs) {
+                    chatContent.push({ type: 'image_url', image_url: { url: image.href } });
+                }
+                const chatResponse = await fetch(`${baseUrl}/chat/completions`, {
+                    method: 'POST',
+                    headers: buildProviderHeaders(apiKey, key),
+                    body: JSON.stringify({
+                        model: mappedModel,
+                        messages: [{ role: 'user', content: chatContent }],
+                        stream: false,
+                    }),
+                });
+                if (!chatResponse.ok) {
+                    throw new Error(await readErrorResponse(chatResponse, `${PROVIDER_LABELS[provider]} 图片生成失败`));
+                }
+                const chatJson = await readJsonResponse<any>(chatResponse, `${PROVIDER_LABELS[provider]} 图片生成响应`);
+                return parseOpenAIImageResponse(chatJson);
+            }
+
+            return { newImageBase64: null, newImageMimeType: null, textResponse: null };
+        }
+
+        // Text-only: try /images/generations first
         const preferredFormat = provider === 'custom' ? 'url' : 'b64_json';
         try {
             const response = await fetch(`${baseUrl}/images/generations`, {
@@ -1457,16 +1528,14 @@ export async function generateImageWithProvider(
                 if (parsed.newImageBase64) return parsed;
             }
 
-            // 对于 custom provider，/images/generations 失败后 fallback 到 chat/completions
             if (provider !== 'custom') {
                 throw new Error(await readErrorResponse(response, `${PROVIDER_LABELS[provider]} 图片生成失败`));
             }
         } catch (err) {
-            // custom provider 允许 fallback
             if (provider !== 'custom') throw err;
         }
 
-        // Custom fallback: 通过 chat/completions 生图（聚合端点通用方式）
+        // Custom fallback: chat/completions text-only
         if (provider === 'custom') {
             const chatResponse = await fetch(`${baseUrl}/chat/completions`, {
                 method: 'POST',
@@ -1489,7 +1558,31 @@ export async function generateImageWithProvider(
         return { newImageBase64: null, newImageMimeType: null, textResponse: null };
     }
 
-    throw new Error(`当前暂不支持使用 ${PROVIDER_LABELS[provider] || provider} 进行图片生成。请切换到 Google Gemini、OpenAI 或 OpenRouter 图片模型。`);
+    // Generic chat/completions path for all other providers (anthropic, qwen, deepseek, siliconflow, volcengine, etc.)
+    const apiKey = requireApiKey(provider, key);
+    const baseUrl = getBaseUrl(provider, key);
+    const mappedModel = mapProviderModel(model, key);
+    const content: any[] = [{ type: 'text', text: prompt }];
+    for (const image of refs) {
+        content.push({ type: 'image_url', image_url: { url: image.href } });
+    }
+
+    const response = await fetch(`${baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: buildProviderHeaders(apiKey, key),
+        body: JSON.stringify({
+            model: mappedModel,
+            messages: [{ role: 'user', content }],
+            stream: false,
+        }),
+    });
+
+    if (!response.ok) {
+        throw new Error(await readErrorResponse(response, `${PROVIDER_LABELS[provider] || provider} 图片生成失败`));
+    }
+
+    const json = await readJsonResponse<any>(response, `${PROVIDER_LABELS[provider] || provider} 图片生成响应`);
+    return parseOpenAIImageResponse(json);
 }
 
 export async function editImageWithProvider(
@@ -1665,15 +1758,17 @@ export async function generateVideoWithProvider(
     options?: {
         aspectRatio?: '16:9' | '9:16' | '1:1' | '4:3' | '3:4' | '21:9';
         onProgress?: (message: string) => void;
-        image?: ImageInput;
+        references?: VideoImage[];
     },
 ): Promise<{ videoBlob: Blob; mimeType: string }> {
     const provider = resolveGenerationProvider(model, key);
     const onProgress = options?.onProgress || (() => {});
     const aspectRatio = options?.aspectRatio || '16:9';
+    const references = options?.references ?? [];
+    const firstFrame = references.find(r => r.slotRole === 'first_frame') || references[0];
 
     if (provider === 'google') {
-        return generateVideo(prompt, aspectRatio, onProgress, options?.image, key?.key);
+        return generateVideo(prompt, aspectRatio, onProgress, firstFrame, key?.key);
     }
 
     if (provider === 'minimax') {
@@ -1683,8 +1778,8 @@ export async function generateVideoWithProvider(
         // Step 1: Submit video generation task
         onProgress('Submitting video generation task...');
         const createBody: Record<string, unknown> = { model, prompt };
-        if (options?.image) {
-            createBody.first_frame_image = options.image.href;
+        if (firstFrame) {
+            createBody.first_frame_image = firstFrame.href;
         }
 
         const createRes = await fetch(`${baseUrl}/video_generation`, {
@@ -1781,8 +1876,8 @@ export async function generateVideoWithProvider(
             aspect_ratio: aspectRatio.replace(':', ':'),
             duration: '5',
         };
-        if (options?.image) {
-            createBody.image = options.image.href;
+        if (firstFrame) {
+            createBody.image = firstFrame.href;
             createBody.type = 'img2video';
         } else {
             createBody.type = 'text2video';
@@ -1848,6 +1943,88 @@ export async function generateVideoWithProvider(
         return { videoBlob, mimeType };
     }
 
+    if (provider === 'volcengine') {
+        const apiKey = requireApiKey(provider, key);
+        const baseUrl = getBaseUrl(provider, key);
+
+        // Seedance via Ark API: all reference images sent as role="reference_image"
+        onProgress('Submitting video generation task...');
+        const contentItems: Array<Record<string, unknown>> = [
+            { type: 'text', text: prompt },
+        ];
+        for (const ref of references) {
+            contentItems.push({
+                type: 'image_url',
+                image_url: { url: ref.href },
+                role: 'reference_image',
+            });
+        }
+        const createBody: Record<string, unknown> = {
+            model: model || 'doubao-seedance-2-0-260128',
+            content: contentItems,
+            generate_audio: true,
+            ratio: aspectRatio,
+            duration: 5,
+            watermark: false,
+        };
+
+        const createRes = await fetch(`${baseUrl}/contents/generations/tasks`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${apiKey}`,
+            },
+            body: JSON.stringify(createBody),
+        });
+        if (!createRes.ok) {
+            throw new Error(await readErrorResponse(createRes, 'Seedance 视频生成请求失败'));
+        }
+        const createJson = await readJsonResponse<any>(createRes, 'Seedance 视频生成创建响应');
+        const taskId = createJson?.id;
+        if (!taskId) throw new Error('Seedance 视频生成未返回 task_id');
+
+        // Poll for completion
+        const seedanceProgressMessages = ['Rendering frames...', 'Compositing video...', 'Applying final touches...', 'Almost there...'];
+        let seedanceMsgIndex = 0;
+        onProgress('Generation started, this may take a few minutes.');
+        const seedancePollStart = Date.now();
+        let seedanceVideoUrl: string | undefined;
+        while (true) {
+            if (Date.now() - seedancePollStart > 600_000) {
+                throw new Error('Seedance 视频生成超时（已等待超过 10 分钟）');
+            }
+            onProgress(seedanceProgressMessages[seedanceMsgIndex % seedanceProgressMessages.length]);
+            seedanceMsgIndex++;
+            await new Promise(resolve => setTimeout(resolve, 10000));
+
+            const queryRes = await fetch(`${baseUrl}/contents/generations/tasks/${encodeURIComponent(taskId)}`, {
+                headers: { Authorization: `Bearer ${apiKey}` },
+            });
+            if (!queryRes.ok) {
+                throw new Error(await readErrorResponse(queryRes, 'Seedance 任务查询失败'));
+            }
+            const queryJson = await readJsonResponse<any>(queryRes, 'Seedance 任务查询响应');
+            const status = queryJson?.status || queryJson?.data?.status;
+
+            if (status === 'failed') {
+                throw new Error(`Seedance 视频生成失败: ${queryJson?.error?.message || 'Unknown error'}`);
+            }
+            if (status === 'succeeded') {
+                seedanceVideoUrl = queryJson?.content?.video_url;
+                break;
+            }
+        }
+
+        if (!seedanceVideoUrl) throw new Error('Seedance 视频生成完成但未返回下载链接');
+
+        onProgress('Downloading generated video...');
+        const seedanceVideoRes = await fetch(seedanceVideoUrl);
+        if (!seedanceVideoRes.ok) throw new Error(`视频下载失败: ${seedanceVideoRes.statusText}`);
+        const seedanceVideoBlob = await seedanceVideoRes.blob();
+        const seedanceMimeType = seedanceVideoRes.headers.get('Content-Type') || 'video/mp4';
+        return { videoBlob: seedanceVideoBlob, mimeType: seedanceMimeType };
+    }
+
     if (provider === 'custom') {
         if (!key) {
             throw new Error('未配置自定义视频端点的 API Key。');
@@ -1857,7 +2034,7 @@ export async function generateVideoWithProvider(
 
     throw new Error(
         `当前暂不支持使用 ${PROVIDER_LABELS[provider] || provider} 进行视频生成。` +
-        `请切换到 Google Veo、MiniMax video-01 或 Keling 视频模型。`
+        `请切换到 Google Veo、MiniMax video-01、Keling 或 Seedance 视频模型。`
     );
 }
 
@@ -1871,14 +2048,10 @@ export async function executeUnifiedIgnition(input: UnifiedIgnitionInput): Promi
 
     try {
         if (capability === 'video') {
-            const firstFrameReference = input.references?.find(reference => reference.type === 'image' && reference.slotRole === 'first_frame')
-                || input.references?.find(reference => reference.type === 'image');
-            const firstFrame = firstFrameReference?.href
-                ? { href: firstFrameReference.href, mimeType: firstFrameReference.mimeType || 'image/png' }
-                : undefined;
+            const videoRefs = getImageReferencesForIgnition(input.references);
             const result = await generateVideoWithProvider(prompt, input.modelId, input.apiKeyPayload, {
                 aspectRatio: input.aspectRatio || getDynamicParamSchema(input.modelId).defaultAspectRatio || '16:9',
-                image: firstFrame,
+                references: videoRefs,
                 onProgress: message => input.onProgress?.(35, message),
             });
             const mediaUrl = URL.createObjectURL(result.videoBlob);
@@ -1886,9 +2059,7 @@ export async function executeUnifiedIgnition(input: UnifiedIgnitionInput): Promi
         }
 
         const imageReferences = getImageReferencesForIgnition(input.references);
-        const result = imageReferences.length > 0
-            ? await editImageWithProvider(imageReferences, prompt, input.modelId, input.apiKeyPayload)
-            : await generateImageWithProvider(prompt, input.modelId, input.apiKeyPayload);
+        const result = await generateImageWithProvider(prompt, input.modelId, input.apiKeyPayload, imageReferences);
 
         if (!result.newImageBase64 || !result.newImageMimeType) {
             return {

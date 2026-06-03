@@ -105,7 +105,7 @@ if (args.file) {
 
 async function main() {
   if (!command) {
-    printCliResponse(true, 'help', { usage: 'npm run flovart:cli -- <command> --json', setup: SETUP_TEXT });
+    printCliResponse(true, 'help', { usage: 'npx flovart-cli <command> --json', setup: SETUP_TEXT });
     return;
   }
 

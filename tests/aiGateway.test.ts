@@ -72,7 +72,7 @@ describe('inferProviderFromModel', () => {
         expect(supportsReferenceImageEditing('gemini-3.1-flash-image-preview')).toBe(true);
         expect(supportsReferenceImageEditing('gpt-image-1')).toBe(true);
         expect(supportsReferenceImageEditing('openai/gpt-image-1')).toBe(true);
-        expect(supportsReferenceImageEditing('dall-e-3')).toBe(false);
+        expect(supportsReferenceImageEditing('dall-e-3')).toBe(true);
         expect(supportsMaskImageEditing('gpt-image-1')).toBe(true);
         expect(supportsMaskImageEditing('openai/gpt-image-1')).toBe(false);
     });

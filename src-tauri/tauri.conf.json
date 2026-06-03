@@ -42,7 +42,23 @@
     "windows": {
       "certificateThumbprint": null,
       "digestAlgorithm": "sha256",
-      "timestampUrl": ""
+      "timestampUrl": "",
+      "nsis": {
+        "languages": [
+          "English",
+          "SimpChinese",
+          "TradChinese",
+          "Japanese",
+          "Korean",
+          "French",
+          "German",
+          "Spanish",
+          "Italian",
+          "PortugueseBR",
+          "Russian"
+        ],
+        "displayLanguageSelector": true
+      }
     },
     "createUpdaterArtifacts": true
   },

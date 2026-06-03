@@ -2483,7 +2483,7 @@ const App: React.FC = () => {
                 const result = await generateVideoWithProvider(input.prompt, model, key, {
                     aspectRatio: (input.aspectRatio || videoAspectRatio) as typeof videoAspectRatio,
                     onProgress: message => setProgressMessage(message),
-                    image: sourceImage ? { href: sourceImage.href, mimeType: sourceImage.mimeType } : undefined,
+                    references: sourceImage ? [{ href: sourceImage.href, mimeType: sourceImage.mimeType }] : [],
                 });
                 const href = URL.createObjectURL(result.videoBlob);
                 const size = await loadVideoSize(href);

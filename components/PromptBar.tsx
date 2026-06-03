@@ -465,7 +465,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
 
                 {expandedPanel && (
                     <div className="border-t border-[var(--isl-border)] bg-[var(--isl-card)]/90 backdrop-blur-md animate-slideDown">
-                        <div className="max-h-[45vh] overflow-y-auto isl-scrollbar p-3">
+                        <div className="max-h-[45vh] isl-scrollbar p-3">
                             {expandedPanel === 'mode' && (
                                 <>
                                     <PopoverHeader title="生成类型" subtitle="选择图片、视频或首尾帧模式" />
@@ -479,7 +479,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                             {expandedPanel === 'model' && (
                                 <>
                                     <PopoverHeader title="模型设置" subtitle="选择生成模型" />
-                                    <div className="max-h-[280px] space-y-1 overflow-y-auto pr-1">
+                                    <div className="max-h-[280px] space-y-1 pr-1">
                                         <div className="px-2 pb-1 pt-1 text-[11px] font-bold uppercase tracking-[0.16em]" style={{ color: 'var(--isl-ink-ghost)' }}>{generationMode === 'video' ? '视频模型' : '图片模型'}</div>
                                         {(() => {
                                             const grouped = new Map<string, string[]>();

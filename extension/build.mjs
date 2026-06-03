@@ -50,6 +50,12 @@ console.log('  → Cleaned index.html (removed CDN scripts, updated title)');
 // Copy manifest
 cpSync(resolve(EXT_SRC, 'manifest.json'), resolve(OUT, 'manifest.json'));
 
+// Copy _locales (i18n)
+const localesSrc = resolve(EXT_SRC, '_locales');
+if (existsSync(localesSrc)) {
+  cpSync(localesSrc, resolve(OUT, '_locales'), { recursive: true });
+}
+
 // Copy popup
 mkdirSync(resolve(OUT, 'popup'), { recursive: true });
 cpSync(resolve(EXT_SRC, 'popup'), resolve(OUT, 'popup'), { recursive: true });
