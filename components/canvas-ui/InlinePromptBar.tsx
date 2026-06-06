@@ -266,9 +266,6 @@ export const InlinePromptBar = memo(({
     const clampedCenterX = Math.max(halfBarWidth + 4, Math.min(screenCenterX, winW - halfBarWidth - 4));
     const clampedTopY = Math.max(8, screenTopY);
     const accentColor = generationMode === 'video' ? 'var(--isl-sun)' : 'var(--isl-mint)';
-    const runningProgress = generationState.status === 'running'
-        ? Math.max(6, Math.min(98, generationState.progress ?? progress ?? 12))
-        : 0;
     const statusLabelMap: Record<ElementGenerationState['status'], string> = {
         idle: inlineT.statusIdle,
         queued: inlineT.statusQueued,
@@ -304,7 +301,7 @@ export const InlinePromptBar = memo(({
                     {generationState.status === 'running' && (
                         <div className="inline-prompt-bar__queue-meta">
                             <span>{activeTaskCount > 1 ? `${inlineT.queue} ${activeTaskCount}` : currentStatusLabel}</span>
-                            <span>{progressLabel || `${Math.round(runningProgress)}%`}</span>
+                            <span>{progressLabel || currentStatusLabel}</span>
                         </div>
                     )}
 
@@ -316,6 +313,9 @@ export const InlinePromptBar = memo(({
                         setPrompt={(nextPrompt) => syncPromptState(nextPrompt, generationState.promptPayload.richTextDocument)}
                         onPromptDocumentChange={(document) => syncPromptState(generationState.promptPayload.rawText, document)}
                         onGenerate={handleIgniteExecution}
+                        onRetry={generationState.status === 'error' ? handleIgniteExecution : undefined}
+                        error={generationState.error || null}
+                        progressStage={progressLabel}
                         isLoading={generationState.status === 'running' || isLoading}
                         isSelectionActive={false}
                         selectedElementCount={1}
@@ -360,7 +360,6 @@ export const InlinePromptBar = memo(({
                         onAutoEnhanceToggle={onAutoEnhanceToggle}
                         apiConfigs={userApiKeys}
                         userApiKeys={userApiKeys}
-                        hideApiStatus
                         variant="inline"
                         shellClassName="inline-prompt-bar-shell"
                         popoverDirection="down"

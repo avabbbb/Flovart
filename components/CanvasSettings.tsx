@@ -214,6 +214,7 @@ export const CanvasSettings: React.FC<CanvasSettingsProps> = ({
     const [autoDetectedProvider, setAutoDetectedProvider] = React.useState<AIProvider | null>(null);
     const [endpointFlavor, setEndpointFlavor] = React.useState<'google' | 'openai-compatible' | 'openrouter-compatible' | null>(null);
     const [detectedCapabilities, setDetectedCapabilities] = React.useState<AICapability[]>([]);
+    const [modelSearch, setModelSearch] = React.useState({ text: '', image: '', video: '' });
 
     const modelOptions = React.useMemo(() => ({
         text: ensureModelOption(
@@ -926,20 +927,41 @@ export const CanvasSettings: React.FC<CanvasSettingsProps> = ({
                         <div className="grid gap-3 md:grid-cols-2">
                             <label className={`rounded-2xl p-3 ${isDark ? 'bg-[#161A22]' : 'bg-[#F8FAFC]'}`}>
                                 <div className={`mb-2 text-sm font-medium ${isDark ? 'text-[#D0D5DD]' : 'text-[#344054]'}`}>LLM 润色模型</div>
+                                <input
+                                    type="text"
+                                    placeholder="搜索模型..."
+                                    value={modelSearch.text}
+                                    onChange={(e) => setModelSearch(s => ({ ...s, text: e.target.value }))}
+                                    className={`mb-2 ${inputClass} flv-safe-input text-xs`}
+                                />
                                 <select value={modelPreference.textModel} onChange={(event) => setModelPreference({ ...modelPreference, textModel: event.target.value })} className={`${inputClass} flv-safe-input`}>
-                                    {modelOptions.text.map(model => <option key={model} value={model}>{model}</option>)}
+                                    {modelOptions.text.filter(m => !modelSearch.text || m.toLowerCase().includes(modelSearch.text.toLowerCase())).map(model => <option key={model} value={model}>{model}</option>)}
                                 </select>
                             </label>
                             <label className={`rounded-2xl p-3 ${isDark ? 'bg-[#161A22]' : 'bg-[#F8FAFC]'}`}>
                                 <div className={`mb-2 text-sm font-medium ${isDark ? 'text-[#D0D5DD]' : 'text-[#344054]'}`}>图片模型</div>
+                                <input
+                                    type="text"
+                                    placeholder="搜索模型..."
+                                    value={modelSearch.image}
+                                    onChange={(e) => setModelSearch(s => ({ ...s, image: e.target.value }))}
+                                    className={`mb-2 ${inputClass} flv-safe-input text-xs`}
+                                />
                                 <select value={modelPreference.imageModel} onChange={(event) => setModelPreference({ ...modelPreference, imageModel: event.target.value })} className={`${inputClass} flv-safe-input`}>
-                                    {modelOptions.image.map(model => <option key={model} value={model}>{model}</option>)}
+                                    {modelOptions.image.filter(m => !modelSearch.image || m.toLowerCase().includes(modelSearch.image.toLowerCase())).map(model => <option key={model} value={model}>{model}</option>)}
                                 </select>
                             </label>
                             <label className={`rounded-2xl p-3 ${isDark ? 'bg-[#161A22]' : 'bg-[#F8FAFC]'}`}>
                                 <div className={`mb-2 text-sm font-medium ${isDark ? 'text-[#D0D5DD]' : 'text-[#344054]'}`}>视频模型</div>
+                                <input
+                                    type="text"
+                                    placeholder="搜索模型..."
+                                    value={modelSearch.video}
+                                    onChange={(e) => setModelSearch(s => ({ ...s, video: e.target.value }))}
+                                    className={`mb-2 ${inputClass} flv-safe-input text-xs`}
+                                />
                                 <select value={modelPreference.videoModel} onChange={(event) => setModelPreference({ ...modelPreference, videoModel: event.target.value })} className={`${inputClass} flv-safe-input`}>
-                                    {modelOptions.video.map(model => <option key={model} value={model}>{model}</option>)}
+                                    {modelOptions.video.filter(m => !modelSearch.video || m.toLowerCase().includes(modelSearch.video.toLowerCase())).map(model => <option key={model} value={model}>{model}</option>)}
                                 </select>
                             </label>
                         </div>

@@ -4,9 +4,12 @@ import React from 'react';
 
 interface LoaderProps {
     progressMessage: string;
+    batchTotal?: number;
+    batchDone?: number;
 }
 
-export const Loader: React.FC<LoaderProps> = ({ progressMessage }) => {
+export const Loader: React.FC<LoaderProps> = ({ progressMessage, batchTotal, batchDone }) => {
+    const showBatch = batchTotal && batchTotal > 1 && typeof batchDone === 'number';
     return (
         <div className="theme-aware absolute top-4 right-4 z-50 flex items-center space-x-2">
              <div className="isl-shell isl-pop-in flex h-10 w-auto items-center justify-center gap-3 px-4 py-2" style={{ borderRadius: 'var(--isl-r-pill)' }}>
@@ -15,6 +18,11 @@ export const Loader: React.FC<LoaderProps> = ({ progressMessage }) => {
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
                 <span className="text-sm font-bold" style={{ color: 'var(--isl-ink)' }}>{progressMessage || 'Generating...'}</span>
+                {showBatch && (
+                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: 'var(--isl-mint)', color: 'var(--isl-mint-deep)' }}>
+                        {batchDone}/{batchTotal}
+                    </span>
+                )}
             </div>
         </div>
     );

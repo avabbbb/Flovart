@@ -203,7 +203,7 @@ const RichPromptEditor = forwardRef<RichPromptEditorHandle, RichPromptEditorProp
                     'data-placeholder': placeholder,
                 },
                 handleKeyDown(_, event) {
-                    if (event.key === 'Enter' && !event.shiftKey) {
+                    if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
                         event.preventDefault();
                         onSubmit?.();
                         return true;

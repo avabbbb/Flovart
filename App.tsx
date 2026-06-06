@@ -494,6 +494,9 @@ const App: React.FC = () => {
     const [generationMode, setGenerationMode] = useState<'image' | 'video' | 'keyframe'>('image');
     const [videoAspectRatio, setVideoAspectRatio] = useState<'16:9' | '9:16' | '1:1' | '4:3' | '3:4' | '21:9'>('16:9');
     const [progressMessage, setProgressMessage] = useState<string>('');
+    const [hoveredElementId, setHoveredElementId] = useState<string | null>(null);
+    const [recentlyCompleted, setRecentlyCompleted] = useState<Set<string>>(new Set());
+    const prevGeneratingIdsRef = useRef<Set<string>>(new Set());
     const runtimeSessionsRef = useRef<Record<string, RuntimeSession>>({});
     const runtimeJobsRef = useRef<Record<string, RuntimeJob>>({});
     const [isAutoEnhanceEnabled, setIsAutoEnhanceEnabled] = useState<boolean>(() => {
@@ -514,6 +517,30 @@ const App: React.FC = () => {
         ro.observe(el);
         return () => ro.disconnect();
     }, []);
+
+    useEffect(() => {
+        const currentGenerating = new Set<string>();
+        for (const el of elements) {
+            if ((el as CanvasElement).generationState?.status === 'running') {
+                currentGenerating.add(el.id);
+            }
+        }
+        const newlyCompleted = new Set<string>();
+        prevGeneratingIdsRef.current.forEach(id => {
+            if (!currentGenerating.has(id)) newlyCompleted.add(id);
+        });
+        if (newlyCompleted.size > 0) {
+            setRecentlyCompleted(prev => new Set([...prev, ...newlyCompleted]));
+            setTimeout(() => {
+                setRecentlyCompleted(prev => {
+                    const next = new Set(prev);
+                    newlyCompleted.forEach(id => next.delete(id));
+                    return next;
+                });
+            }, 2000);
+        }
+        prevGeneratingIdsRef.current = currentGenerating;
+    }, [elements]);
 
     // ── Layer Mask 编辑状态 ──────
     const [maskEditingId, setMaskEditingId] = useState<string | null>(null); // 正在编辑蒙版的 image element id
@@ -3180,7 +3207,7 @@ const App: React.FC = () => {
             </Suspense>
             }
             overlays={<>
-                {isLoading && <Loader progressMessage={progressMessage} />}
+                {isLoading && <Loader progressMessage={progressMessage} batchTotal={batchCount} batchDone={recentlyCompleted.size} />}
                 <ToastStack toasts={toast.toasts} onDismiss={toast.dismiss} />
                 {error && (
                     <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 p-3 bg-red-100 border border-red-400 text-red-700 rounded-md shadow-lg flex items-center max-w-lg">
@@ -3403,6 +3430,11 @@ const App: React.FC = () => {
                     onMouseMove={handleMouseMove}
                     onMouseUp={handleMouseUp}
                     onMouseLeave={handleMouseUp}
+                    onMouseOver={(e) => {
+                        const target = e.target as SVGElement;
+                        const el = target.closest('[data-id]');
+                        setHoveredElementId(el ? (el as HTMLElement).dataset.id || null : null);
+                    }}
                     onContextMenu={handleContextMenu}
                     style={{ cursor }}
                 >
@@ -3426,11 +3458,27 @@ const App: React.FC = () => {
                             }
                             return null;
                         })}
+                        <linearGradient id="flv-shimmer-grad" x1="0" y1="0" x2="1" y2="0">
+                            <stop offset="0" stopColor="white" stopOpacity="0" />
+                            <stop offset="0.4" stopColor="white" stopOpacity="0" />
+                            <stop offset="0.5" stopColor="white" stopOpacity="0.14" />
+                            <stop offset="0.6" stopColor="white" stopOpacity="0" />
+                            <stop offset="1" stopColor="white" stopOpacity="0" />
+                        </linearGradient>
                     </defs>
-                    <g className="workflow-viewport-transition" transform={`translate(${panOffset.x}, ${panOffset.y}) scale(${zoom})`}>
-                        <rect x={-panOffset.x/zoom} y={-panOffset.y/zoom} width={`calc(100% / ${zoom})`} height={`calc(100% / ${zoom})`} fill="url(#grid)" />
-                        
-                        {elements.map(el => {
+                    {(() => {
+                        const genIds = new Set<string>();
+                        for (const e of elements) {
+                            if ((e as CanvasElement).generationState?.status === 'running') genIds.add(e.id);
+                        }
+                        const anyGenerating = genIds.size > 0;
+                        const stageLabelMap: Record<string, string> = { running: '生成中', queued: '排队中' };
+
+                        return (
+                            <g className="workflow-viewport-transition" transform={`translate(${panOffset.x}, ${panOffset.y}) scale(${zoom})`} data-gen-active={anyGenerating ? 'true' : undefined}>
+                                <rect x={-panOffset.x/zoom} y={-panOffset.y/zoom} width={`calc(100% / ${zoom})`} height={`calc(100% / ${zoom})`} fill="url(#grid)" />
+                                
+                                {elements.map(el => {
                             if (!isElementVisible(el, elements)) return null;
 
                             const isSelected = selectedElementIds.includes(el.id);
@@ -3515,7 +3563,54 @@ const App: React.FC = () => {
                                             stroke: el.strokeColor, 
                                             strokeWidth: el.strokeWidth / zoom,
                                             strokeDasharray: el.strokeDashArray ? el.strokeDashArray.join(' ') : 'none'
-                                        })}
+                        })}
+
+                        {/* Reference visualisation lines */}
+                        {(() => {
+                            type RefEdge = { fromEl: CanvasElement; toEl: CanvasElement; key: string };
+                            const edges: RefEdge[] = [];
+                            const elementMap = new Map(elements.map(el => [el.id, el]));
+                            for (const el of elements) {
+                                if (el.type === 'group') continue;
+                                const refs = (el as CanvasElement).generationState?.promptPayload?.resolvedReferences;
+                                if (!refs?.length) continue;
+                                for (const ref of refs) {
+                                    const targetEl = elementMap.get(ref.targetElementId);
+                                    if (!targetEl || targetEl.type === 'group') continue;
+                                    const fromBounds = getElementBounds(el, elements);
+                                    const toBounds = getElementBounds(targetEl, elements);
+                                    edges.push({
+                                        fromEl: el as CanvasElement,
+                                        toEl: targetEl as CanvasElement,
+                                        key: `${el.id}-ref-${targetEl.id}`,
+                                    });
+                                }
+                            }
+                            if (!edges.length) return null;
+                            return (
+                                <g className="reference-lines-layer" pointerEvents="none">
+                                    {edges.map(({ fromEl, toEl, key }) => {
+                                        const fromBounds = getElementBounds(fromEl, elements);
+                                        const toBounds = getElementBounds(toEl, elements);
+                                        const x1 = fromBounds.x + fromBounds.width / 2;
+                                        const y1 = fromBounds.y + fromBounds.height / 2;
+                                        const x2 = toBounds.x + toBounds.width / 2;
+                                        const y2 = toBounds.y + toBounds.height / 2;
+                                        const isHighlighted = hoveredElementId === fromEl.id || hoveredElementId === toEl.id;
+                                        return (
+                                            <line
+                                                key={key}
+                                                x1={x1} y1={y1} x2={x2} y2={y2}
+                                                stroke={isHighlighted ? 'rgb(59 130 246)' : 'rgba(148 163 184 / 0.6)'}
+                                                strokeWidth={isHighlighted ? 2.5 / zoom : 1.5 / zoom}
+                                                strokeDasharray={`${6/zoom} ${4/zoom}`}
+                                                style={{ transition: 'stroke 160ms ease, stroke-width 160ms ease' }}
+                                            />
+                                        );
+                                    })}
+                                </g>
+                            );
+                        })()}
                                         {selectionComponent && React.cloneElement(selectionComponent, { transform: `translate(${-el.x}, ${-el.y})` })}
                                     </g>
                                 );
@@ -3529,10 +3624,17 @@ const App: React.FC = () => {
                                 const hasSharpen = el.filters?.sharpen && el.filters.sharpen > 0;
                                 const svgFilterId = (hasTemp || hasSharpen) ? `imgfilter-${el.id}` : undefined;
                                 const combinedFilter = [cssFilter, svgFilterId ? `url(#${svgFilterId})` : ''].filter(Boolean).join(' ');
+                                const isGenerating = genIds.has(el.id);
+                                const isRevealing = recentlyCompleted.has(el.id);
+                                const isDimmed = anyGenerating && !isGenerating;
+                                const genStatus = (el as CanvasElement).generationState?.status;
+                                const stageLabel = genStatus ? stageLabelMap[genStatus] : undefined;
+                                const perimeter = 2 * (el.width + el.height);
                                 return (
                                     <g
                                         key={el.id}
                                         data-id={el.id}
+                                        data-generating={isGenerating ? 'true' : undefined}
                                     >
                                         {/* SVG filter defs for temperature / sharpen */}
                                         {svgFilterId && (
@@ -3556,30 +3658,116 @@ const App: React.FC = () => {
                                             href={el.href} 
                                             width={el.width} 
                                             height={el.height} 
-                                            className={croppingState && croppingState.elementId !== el.id ? 'opacity-30' : ''} 
+                                            className={`${croppingState && croppingState.elementId !== el.id ? 'opacity-30' : ''} ${isRevealing ? 'flv-gen-reveal' : ''}`}
                                             clipPath={hasBorderRadius ? `url(#${clipPathId})` : undefined}
                                             mask={maskId ? `url(#${maskId})` : undefined}
                                             style={{
                                                 filter: combinedFilter || undefined,
                                                 opacity: isInlineMediaPromptActive && !isSelected ? 0.82 : 1,
-                                                transition: 'opacity 160ms ease, filter 160ms ease',
+                                                transition: 'opacity 320ms ease, filter 160ms ease',
+                                                transformOrigin: `${el.x + el.width / 2}px ${el.y + el.height / 2}px`,
                                             }}
                                         />
+                                        {isGenerating && (
+                                            <g transform={`translate(${el.x}, ${el.y})`} pointerEvents="none">
+                                                <rect
+                                                    width={el.width}
+                                                    height={el.height}
+                                                    fill="none"
+                                                    stroke="var(--isl-mint, #00e68a)"
+                                                    strokeWidth={2.5 / zoom}
+                                                    strokeDasharray={`${perimeter * 0.12} ${perimeter * 0.88}`}
+                                                    strokeLinecap="round"
+                                                    rx={hasBorderRadius ? el.borderRadius : 0}
+                                                    style={{
+                                                        filter: 'drop-shadow(0 0 6px rgba(0, 230, 138, 0.6))',
+                                                        animation: `flv-gen-neon-sweep ${Math.max(1.8, perimeter / 300)}s linear infinite`,
+                                                    }}
+                                                />
+                                                <g clipPath={hasBorderRadius ? `url(#${clipPathId})` : undefined}>
+                                                    <rect
+                                                        x={-el.width * 0.5}
+                                                        width={el.width * 0.6}
+                                                        height={el.height}
+                                                        fill="url(#flv-shimmer-grad)"
+                                                        style={{ animation: 'flv-gen-shimmer 2.2s ease-in-out infinite' }}
+                                                    />
+                                                </g>
+                                                <rect width={el.width} height={el.height} fill="rgba(0,0,0,0.06)" rx={hasBorderRadius ? el.borderRadius : 0} />
+                                            </g>
+                                        )}
+                                        {isGenerating && stageLabel && (
+                                            <foreignObject x={el.x} y={el.y + el.height + 4 / zoom} width={el.width} height={24 / zoom} pointerEvents="none">
+                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, transform: `scale(${1 / zoom})`, transformOrigin: 'top center', width: el.width * zoom, height: 24 }}>
+                                                    <span className="flv-gen-stage-label" style={{
+                                                        fontSize: 11,
+                                                        fontWeight: 600,
+                                                        color: 'var(--isl-mint, #00e68a)',
+                                                        background: 'rgba(0,0,0,0.55)',
+                                                        backdropFilter: 'blur(6px)',
+                                                        padding: '2px 10px',
+                                                        borderRadius: 10,
+                                                        whiteSpace: 'nowrap',
+                                                    }}>{stageLabel}</span>
+                                                </div>
+                                            </foreignObject>
+                                        )}
                                         {selectionComponent}
                                     </g>
                                 );
                             }
                              if (el.type === 'video') {
+                                const isGenerating = genIds.has(el.id);
+                                const isRevealing = recentlyCompleted.has(el.id);
+                                const isDimmed = anyGenerating && !isGenerating;
+                                const genStatus = (el as CanvasElement).generationState?.status;
+                                const stageLabel = genStatus ? stageLabelMap[genStatus] : undefined;
+                                const perimeter = 2 * (el.width + el.height);
                                 return (
-                                    <g key={el.id} data-id={el.id}>
+                                    <g key={el.id} data-id={el.id} data-generating={isGenerating ? 'true' : undefined}>
                                         <foreignObject x={el.x} y={el.y} width={el.width} height={el.height}>
                                             <video 
                                                 src={el.href} 
                                                 controls 
-                                                style={{ width: '100%', height: '100%', borderRadius: '8px', opacity: isInlineMediaPromptActive && !isSelected ? 0.82 : 1, transition: 'opacity 160ms ease' }}
-                                                className={croppingState ? 'opacity-30' : ''}
+                                                style={{ width: '100%', height: '100%', borderRadius: '8px', opacity: isInlineMediaPromptActive && !isSelected ? 0.82 : 1, transition: 'opacity 320ms ease' }}
+                                                className={`${croppingState ? 'opacity-30' : ''} ${isRevealing ? 'flv-gen-reveal' : ''}`}
                                             ></video>
                                         </foreignObject>
+                                        {isGenerating && (
+                                            <g transform={`translate(${el.x}, ${el.y})`} pointerEvents="none">
+                                                <rect
+                                                    width={el.width}
+                                                    height={el.height}
+                                                    fill="none"
+                                                    stroke="var(--isl-sun, #fbbf24)"
+                                                    strokeWidth={2.5 / zoom}
+                                                    strokeDasharray={`${perimeter * 0.12} ${perimeter * 0.88}`}
+                                                    strokeLinecap="round"
+                                                    rx={8}
+                                                    style={{
+                                                        filter: 'drop-shadow(0 0 6px rgba(251, 191, 36, 0.6))',
+                                                        animation: `flv-gen-neon-sweep ${Math.max(1.8, perimeter / 300)}s linear infinite`,
+                                                    }}
+                                                />
+                                                <rect width={el.width} height={el.height} fill="rgba(0,0,0,0.06)" rx={8} />
+                                            </g>
+                                        )}
+                                        {isGenerating && stageLabel && (
+                                            <foreignObject x={el.x} y={el.y + el.height + 4 / zoom} width={el.width} height={24 / zoom} pointerEvents="none">
+                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, transform: `scale(${1 / zoom})`, transformOrigin: 'top center', width: el.width * zoom, height: 24 }}>
+                                                    <span className="flv-gen-stage-label" style={{
+                                                        fontSize: 11,
+                                                        fontWeight: 600,
+                                                        color: 'var(--isl-sun, #fbbf24)',
+                                                        background: 'rgba(0,0,0,0.55)',
+                                                        backdropFilter: 'blur(6px)',
+                                                        padding: '2px 10px',
+                                                        borderRadius: 10,
+                                                        whiteSpace: 'nowrap',
+                                                    }}>{stageLabel}</span>
+                                                </div>
+                                            </foreignObject>
+                                        )}
                                         {selectionComponent}
                                     </g>
                                 );
@@ -3818,6 +4006,8 @@ const App: React.FC = () => {
                             />
                         )}
                     </g>
+                );
+            })()}
                 </svg>
                 {selectedInlinePromptElement && !croppingState && !editingElement && (
                     <InlinePromptBar
@@ -4010,7 +4200,6 @@ const App: React.FC = () => {
                             onOpenSettings={() => setIsSettingsPanelOpen(true)}
                             batchCount={batchCount}
                             onBatchCountChange={setBatchCount}
-                            hideApiStatus
                         />
                     </div>
                     {/* 底部法律链接 + 主题 / 语言切换 */}

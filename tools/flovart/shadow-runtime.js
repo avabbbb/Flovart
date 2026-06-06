@@ -5,6 +5,9 @@ import { dirname, join } from 'node:path';
 export const SHADOW_STATE_FILE = process.env.FLOVART_SHADOW_STATE_FILE
   || join(process.env.LOCALAPPDATA || process.cwd(), 'Flovart', 'shadow-runtime-state.json');
 
+export const FLOVART_CONTEXT_FILE = process.env.FLOVART_CONTEXT_FILE
+  || join(process.cwd(), '.flovart', 'project.json');
+
 function ensureParentDir(filePath) {
   const parent = dirname(filePath);
   if (!existsSync(parent)) {
@@ -20,6 +23,8 @@ function createEmptyState() {
     zoom: 1,
     panOffset: { x: 0, y: 0 },
     elements: [],
+    projects: [],
+    groups: [],
     jobs: [],
     provider: {
       configured: { image: false, video: false, text: false },
@@ -74,6 +79,33 @@ export function saveShadowState(state) {
   writeFileSync(SHADOW_STATE_FILE, JSON.stringify(state, null, 2), 'utf8');
 }
 
+function readContext() {
+  try {
+    if (!existsSync(FLOVART_CONTEXT_FILE)) return {};
+    return JSON.parse(readFileSync(FLOVART_CONTEXT_FILE, 'utf8'));
+  } catch {
+    return {};
+  }
+}
+
+function writeContext(patch = {}) {
+  const current = readContext();
+  const next = {
+    ...current,
+    ...patch,
+    updatedAt: Date.now(),
+  };
+  if (patch.projectUuid === null) delete next.projectUuid;
+  if (patch.groupNodeKey === null) delete next.groupNodeKey;
+  ensureParentDir(FLOVART_CONTEXT_FILE);
+  writeFileSync(FLOVART_CONTEXT_FILE, JSON.stringify(next, null, 2), 'utf8');
+  return next;
+}
+
+function activeContext() {
+  return readContext();
+}
+
 function inferTargetType(type) {
   if (type === 'image' || type === 'video') return type;
   return 'text';
@@ -110,12 +142,15 @@ function ensureGenerationState(element, state) {
 }
 
 function createShadowElement(input, state) {
+  const context = activeContext();
   const width = Number.isFinite(input.width) ? input.width : input.type === 'text' ? 220 : input.type === 'video' ? 240 : 180;
   const height = Number.isFinite(input.height) ? input.height : input.type === 'text' ? 96 : input.type === 'video' ? 140 : 180;
   const next = {
     id: input.id || randomUUID(),
     type: input.type,
     name: input.name,
+    projectUuid: input.projectUuid || context.projectUuid,
+    groupNodeKey: input.groupNodeKey || context.groupNodeKey,
     x: Number.isFinite(input.x) ? input.x : 0,
     y: Number.isFinite(input.y) ? input.y : 0,
     width,
@@ -133,6 +168,112 @@ function createShadowElement(input, state) {
   state.selectedElementIds = [next.id];
   saveShadowState(state);
   return { ok: true, id: next.id, element: next, shadow: true };
+}
+
+function summarizeProject(project, state) {
+  const context = activeContext();
+  const projectUuid = project?.projectUuid || context.projectUuid;
+  const groups = state.groups.filter((group) => !projectUuid || group.projectUuid === projectUuid);
+  const elements = state.elements.filter((element) => !projectUuid || element.projectUuid === projectUuid);
+  return {
+    ok: true,
+    shadow: true,
+    project: project || state.projects.find((item) => item.projectUuid === projectUuid) || null,
+    context,
+    groupCount: groups.length,
+    elementCount: elements.length,
+    mediaCount: elements.filter((item) => item.type === 'image' || item.type === 'video').length,
+  };
+}
+
+function createShadowProject(input = {}, state) {
+  const projectUuid = input.projectUuid || input.uuid || randomUUID();
+  const now = Date.now();
+  const project = {
+    projectUuid,
+    name: input.name || `Flovart Project ${state.projects.length + 1}`,
+    description: input.description || '',
+    createdAt: now,
+    updatedAt: now,
+  };
+  state.projects = state.projects.filter((item) => item.projectUuid !== projectUuid);
+  state.projects.push(project);
+  saveShadowState(state);
+  const shouldUse = input.use !== false && input.use !== 'false';
+  const context = shouldUse ? writeContext({ projectUuid, groupNodeKey: null }) : activeContext();
+  return { ok: true, shadow: true, project, context };
+}
+
+function listShadowProjects(state) {
+  return { ok: true, shadow: true, projects: state.projects, context: activeContext() };
+}
+
+function useShadowProject(input = {}, state) {
+  const projectUuid = input.projectUuid || input.uuid || input.id;
+  if (!projectUuid) return { ok: false, error: { code: 'BAD_REQUEST', message: 'projectUuid is required' } };
+  let project = state.projects.find((item) => item.projectUuid === projectUuid);
+  if (!project && input.create !== false) {
+    project = {
+      projectUuid,
+      name: input.name || projectUuid,
+      description: '',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+    state.projects.push(project);
+    saveShadowState(state);
+  }
+  if (!project) return { ok: false, error: { code: 'NOT_FOUND', message: `project not found (${projectUuid})` } };
+  const context = writeContext({ projectUuid, groupNodeKey: null });
+  return { ok: true, shadow: true, project, context };
+}
+
+function unuseShadowProject() {
+  const context = writeContext({ projectUuid: null, groupNodeKey: null });
+  return { ok: true, shadow: true, context };
+}
+
+function createShadowGroup(input = {}, state) {
+  const context = activeContext();
+  const projectUuid = input.projectUuid || context.projectUuid;
+  const groupNodeKey = input.groupNodeKey || input.key || input.id || `group_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const now = Date.now();
+  const group = {
+    groupNodeKey,
+    projectUuid,
+    name: input.name || groupNodeKey,
+    x: Number.isFinite(Number(input.x)) ? Number(input.x) : 0,
+    y: Number.isFinite(Number(input.y)) ? Number(input.y) : 0,
+    createdAt: now,
+    updatedAt: now,
+  };
+  state.groups = state.groups.filter((item) => item.groupNodeKey !== groupNodeKey);
+  state.groups.push(group);
+  saveShadowState(state);
+  const shouldUse = input.use !== false && input.use !== 'false';
+  const nextContext = shouldUse ? writeContext({ projectUuid, groupNodeKey }) : context;
+  return { ok: true, shadow: true, group, context: nextContext };
+}
+
+function listShadowGroups(state) {
+  const context = activeContext();
+  const groups = state.groups.filter((group) => !context.projectUuid || group.projectUuid === context.projectUuid);
+  return { ok: true, shadow: true, groups, context };
+}
+
+function useShadowGroup(input = {}, state) {
+  const context = activeContext();
+  const groupNodeKey = input.groupNodeKey || input.key || input.id || input.name;
+  if (!groupNodeKey) return { ok: false, error: { code: 'BAD_REQUEST', message: 'groupNodeKey is required' } };
+  const group = state.groups.find((item) => item.groupNodeKey === groupNodeKey || item.name === groupNodeKey);
+  if (!group) return { ok: false, error: { code: 'NOT_FOUND', message: `group not found (${groupNodeKey})` } };
+  const nextContext = writeContext({ projectUuid: group.projectUuid || context.projectUuid, groupNodeKey: group.groupNodeKey });
+  return { ok: true, shadow: true, group, context: nextContext };
+}
+
+function unuseShadowGroup() {
+  const context = writeContext({ groupNodeKey: null });
+  return { ok: true, shadow: true, context };
 }
 
 function updateShadowPrompt(input, state) {
@@ -285,6 +426,9 @@ function inspectShadowCanvas(state) {
     elements: state.elements,
     media: state.elements.filter((item) => item.type === 'image' || item.type === 'video'),
     jobs: state.jobs,
+    projects: state.projects,
+    groups: state.groups,
+    context: activeContext(),
   };
 }
 
@@ -459,6 +603,20 @@ export function createShadowRuntimeFacade() {
         };
       },
     },
+    project: {
+      create: async (input = {}) => createShadowProject(input, loadShadowState()),
+      list: async () => listShadowProjects(loadShadowState()),
+      use: async (input = {}) => useShadowProject(input, loadShadowState()),
+      unuse: async () => unuseShadowProject(),
+      summary: async () => summarizeProject(null, loadShadowState()),
+    },
+    group: {
+      create: async (input = {}) => createShadowGroup(input, loadShadowState()),
+      list: async () => listShadowGroups(loadShadowState()),
+      use: async (input = {}) => useShadowGroup(input, loadShadowState()),
+      unuse: async () => unuseShadowGroup(),
+      summary: async () => ({ ok: true, shadow: true, context: activeContext(), groups: loadShadowState().groups }),
+    },
     canvas: {
       inspect: async () => inspectShadowCanvas(loadShadowState()),
       listMedia: async () => loadShadowState().elements.filter((item) => item.type === 'image' || item.type === 'video'),
@@ -516,6 +674,9 @@ export function createShadowRuntimeFacade() {
         return {
           ok: true,
           shadow: true,
+          context: activeContext(),
+          projects: state.projects,
+          groups: state.groups,
           mediaElements: state.elements.filter((item) => item.type === 'image' || item.type === 'video'),
           assets: [],
         };

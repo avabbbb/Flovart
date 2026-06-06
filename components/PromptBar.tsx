@@ -73,9 +73,11 @@ interface PromptBarProps {
     variant?: 'global' | 'inline';
     className?: string;
     shellClassName?: string;
-    hideApiStatus?: boolean;
     modeOptions?: GenerationMode[];
     popoverDirection?: 'up' | 'down';
+    onRetry?: () => void;
+    error?: string | null;
+    progressStage?: string;
 }
 
 type ExpandPanel = 'mode' | 'model' | 'more' | null;
@@ -136,6 +138,18 @@ const MenuOptionButton: React.FC<{ label: string; active?: boolean; description?
 
 const isSupportedAttachment = (type: string) => type.startsWith('image/') || type.startsWith('video/');
 
+const RECENT_MODELS_KEY = 'flovart-recent-models';
+const MAX_RECENT_MODELS = 5;
+function getRecentModels(): string[] {
+    try { const raw = localStorage.getItem(RECENT_MODELS_KEY); return raw ? JSON.parse(raw) : []; }
+    catch { return []; }
+}
+function addRecentModel(model: string) {
+    const recent = getRecentModels().filter(m => m !== model);
+    recent.unshift(model);
+    try { localStorage.setItem(RECENT_MODELS_KEY, JSON.stringify(recent.slice(0, MAX_RECENT_MODELS))); } catch {}
+}
+
 export const PromptBar: React.FC<PromptBarProps> = ({
     t,
     theme,
@@ -190,9 +204,11 @@ export const PromptBar: React.FC<PromptBarProps> = ({
     variant = 'global',
     className,
     shellClassName,
-    hideApiStatus = false,
     popoverDirection = 'up',
     modeOptions = ['image', 'video', 'keyframe'],
+    onRetry,
+    error,
+    progressStage,
 }) => {
     const isDark = theme === 'dark';
     const rootRef = useRef<HTMLDivElement>(null);
@@ -203,6 +219,8 @@ export const PromptBar: React.FC<PromptBarProps> = ({
     const [expandedPanel, setExpandedPanel] = useState<ExpandPanel>(null);
     const [isDragActive, setIsDragActive] = useState(false);
     const [resolvedAttachmentHrefs, setResolvedAttachmentHrefs] = useState<Record<string, string>>({});
+    const [modelSearchQuery, setModelSearchQuery] = useState('');
+    const [recentModels, setRecentModels] = useState<string[]>(() => getRecentModels());
 
     const triggerClass = `isl-chip ${compactMode ? 'h-7 px-2.5 text-[11px]' : 'h-8 px-3 text-xs'}`;
     const activeTriggerClass = 'isl-chip--active';
@@ -234,18 +252,22 @@ export const PromptBar: React.FC<PromptBarProps> = ({
     const promptCharCount = prompt.trim().length;
     const readyState = !activeKey
         ? 'missing-key'
-        : !prompt.trim()
-            ? 'empty'
-            : isLoading
-                ? 'generating'
-                : 'ready';
+        : error
+            ? 'error'
+            : !prompt.trim()
+                ? 'empty'
+                : isLoading
+                    ? 'generating'
+                    : 'ready';
     const readyCopy = readyState === 'missing-key'
         ? '先连接一个 AI 供应商'
-        : readyState === 'empty'
-            ? '输入你想生成或修改的画面'
-            : readyState === 'generating'
-                ? '正在生成，保持画布打开'
-                : '准备就绪，Enter 生成';
+        : readyState === 'error'
+            ? (error || '生成失败')
+            : readyState === 'empty'
+                ? '输入你想生成或修改的画面'
+                : readyState === 'generating'
+                    ? (progressStage || '正在生成，保持画布打开')
+                    : '准备就绪，Ctrl+Enter 生成';
     const promptHints = isSelectionActive
         ? [`已选中 ${selectedElementCount} 个元素`, '描述“怎么改”比描述“是什么”更有效']
         : attachments.length > 0
@@ -417,7 +439,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                         <div className="mt-1.5 flex items-center gap-1.5 text-[11px]" style={{ color: 'var(--isl-ink-soft)', fontFamily: 'var(--isl-font)' }}>
                             <span
                                 className="inline-block h-1.5 w-1.5 rounded-full"
-                                style={{ background: readyState === 'ready' ? 'var(--isl-mint)' : readyState === 'missing-key' ? 'var(--isl-coral)' : readyState === 'generating' ? 'var(--isl-sun)' : 'var(--isl-ink-ghost)' }}
+                                style={{ background: readyState === 'ready' ? 'var(--isl-mint)' : readyState === 'error' ? 'var(--isl-coral)' : readyState === 'missing-key' ? 'var(--isl-coral)' : readyState === 'generating' ? 'var(--isl-sun)' : 'var(--isl-ink-ghost)' }}
                             />
                             <span className="truncate font-semibold">{readyState === 'ready' ? promptHints[0] : readyCopy}</span>
                             {promptCharCount > 0 && <span className="ml-auto tabular-nums" style={{ color: 'var(--isl-ink-ghost)' }}>{promptCharCount}</span>}
@@ -480,16 +502,56 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                 <>
                                     <PopoverHeader title="模型设置" subtitle="选择生成模型" />
                                     <div className="max-h-[280px] space-y-1 pr-1">
+                                        <div className="px-1 pb-2">
+                                            <input
+                                                type="text"
+                                                value={modelSearchQuery}
+                                                onChange={(e) => setModelSearchQuery(e.target.value)}
+                                                placeholder="搜索模型..."
+                                                className="w-full rounded-[14px] border-[1.5px] px-3 py-1.5 text-xs"
+                                                style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-surface-2)', color: 'var(--isl-ink)', outline: 'none' }}
+                                            />
+                                        </div>
+                                        {!modelSearchQuery && recentModels.filter(m => currentModelOptions.includes(m)).length > 0 && (
+                                            <>
+                                                <div className="px-2 pb-1 pt-1 text-[11px] font-bold uppercase tracking-[0.16em]" style={{ color: 'var(--isl-ink-ghost)' }}>常用</div>
+                                                {recentModels.filter(m => currentModelOptions.includes(m)).slice(0, MAX_RECENT_MODELS).map(model => {
+                                                    const capTags = getModelCapabilityTags(model);
+                                                    const shortName = model.replace(/^(google|openai|anthropic|openrouter)\//, '');
+                                                    const selectedModel = generationMode === 'video' ? selectedVideoModel : selectedImageModel;
+                                                    return (
+                                                        <MenuOptionButton
+                                                            key={`recent-${model}`}
+                                                            label={capTags ? `${capTags} ${shortName}` : shortName}
+                                                            active={selectedModel === model}
+                                                            onClick={() => {
+                                                                addRecentModel(model);
+                                                                setRecentModels(getRecentModels());
+                                                                generationMode === 'video' ? onVideoModelChange?.(model) : onImageModelChange?.(model);
+                                                                setExpandedPanel(null);
+                                                            }}
+                                                        />
+                                                    );
+                                                })}
+                                                <div className="border-t border-[var(--isl-border)] my-1" />
+                                            </>
+                                        )}
                                         <div className="px-2 pb-1 pt-1 text-[11px] font-bold uppercase tracking-[0.16em]" style={{ color: 'var(--isl-ink-ghost)' }}>{generationMode === 'video' ? '视频模型' : '图片模型'}</div>
                                         {(() => {
+                                            const filtered = modelSearchQuery
+                                                ? currentModelOptions.filter(m => m.toLowerCase().includes(modelSearchQuery.toLowerCase()))
+                                                : currentModelOptions;
                                             const grouped = new Map<string, string[]>();
-                                            for (const model of currentModelOptions) {
+                                            for (const model of filtered) {
                                                 const provider = inferProviderFromModel(model);
                                                 const label = PROVIDER_LABELS[provider] || provider;
                                                 if (!grouped.has(label)) grouped.set(label, []);
                                                 grouped.get(label)!.push(model);
                                             }
                                             const selectedModel = generationMode === 'video' ? selectedVideoModel : selectedImageModel;
+                                            if (filtered.length === 0 && modelSearchQuery) {
+                                                return <div className="px-2 py-3 text-xs" style={{ color: 'var(--isl-ink-soft)' }}>没有匹配的模型</div>;
+                                            }
                                             return Array.from(grouped.entries()).map(([providerLabel, models]) => (
                                                 <div key={providerLabel}>
                                                     {grouped.size > 1 && (
@@ -506,6 +568,8 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                                             label={capTags ? `${capTags} ${shortName}` : shortName}
                                                             active={selectedModel === model}
                                                             onClick={() => {
+                                                                addRecentModel(model);
+                                                                setRecentModels(getRecentModels());
                                                                 generationMode === 'video' ? onVideoModelChange?.(model) : onImageModelChange?.(model);
                                                                 setExpandedPanel(null);
                                                             }}
@@ -654,8 +718,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                 <div className={`relative flex items-end gap-3 border-t ${compactMode ? 'px-2.5 py-2' : 'px-3 py-2.5'}`} style={{ borderColor: 'var(--isl-border)' }}>
                     <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
-                            {/* API Key 状态指示器 — 与设置面板联动 */}
-                            {!hideApiStatus && (() => {
+                            {(() => {
                                 const defaultKey = userApiKeys.find(k => k.isDefault);
                                 const keyCount = userApiKeys.length;
                                 if (keyCount === 0) {
@@ -728,7 +791,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                     </div>
 
                     <div className="flex shrink-0 items-center gap-2">
-                        {variant !== 'inline' && generationMode === 'image' && onBatchCountChange && (
+                        {generationMode === 'image' && onBatchCountChange && (
                             <div
                                 className="isl-well flex h-9 items-center p-1"
                                 title="批量方案数量"
@@ -754,6 +817,19 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                             </div>
                         )}
 
+                        {error && onRetry && (
+                            <button
+                                type="button"
+                                onClick={onRetry}
+                                className={`isl-chip ${compactMode ? 'h-9 px-3 text-xs' : 'h-10 px-4 text-sm'}`}
+                                style={{ borderColor: 'var(--isl-coral)', color: 'var(--isl-coral-deep)' }}
+                                title="使用相同参数重新生成"
+                            >
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 4v6h6"/><path d="M3.5 16.5A9 9 0 1 0 2 12"/></svg>
+                                <span className="ml-1">重试</span>
+                            </button>
+                        )}
+
                         <button
                             type="button"
                             onClick={() => {
@@ -771,7 +847,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                 </svg>
                             ) : (
                                 <div className="flex items-center gap-1.5">
-                                    <span className="text-xs font-semibold">{batchCount > 1 ? `生成 ${batchCount} 版` : '开始生成'}</span>
+                                    <span className="text-xs font-semibold">{error ? '重试' : batchCount > 1 ? `生成 ${batchCount} 版` : '开始生成'}</span>
                                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
                                         <path d="M5 12h14" />
                                         <path d="m12 5 7 7-7 7" />
