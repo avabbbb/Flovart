@@ -4,12 +4,32 @@ import { fetchModelsForProvider, type FetchModelsResult } from './modelFetcher';
 import { normalizeProviderBaseUrl } from './baseUrl';
 
 type ImageInput = { href: string; mimeType: string };
+
+export type MultimodalSlotKind = 'image' | 'video' | 'audio';
+export type MultimodalSlotRole =
+    | 'first_frame'
+    | 'last_frame'
+    | 'reference_image'
+    | 'reference_video'
+    | 'reference_audio'
+    | 'style_ref'
+    | 'control_net'
+    | 'unassigned';
+
+export type MultimodalSlot = {
+    kind: MultimodalSlotKind;
+    href: string;
+    mimeType: string;
+    role?: MultimodalSlotRole | string;
+    label?: string;
+};
+
 type VideoImage = ImageInput & { slotRole?: string };
 
 type ProviderModelMap = { text: string[]; image: string[]; video: string[] };
 
 type IgnitionReference = {
-    type: 'image' | 'video' | 'text' | 'shape';
+    type: 'image' | 'video' | 'audio' | 'text' | 'shape';
     href?: string;
     mimeType?: string;
     slotRole?: string;
@@ -122,6 +142,101 @@ export interface ApiKeyValidationResult {
 type CustomProviderExtraConfig = Record<string, string> | undefined;
 
 type VideoAspectRatio = '16:9' | '9:16' | '1:1' | '4:3' | '3:4' | '21:9';
+
+type CapabilityDictionary = {
+    multimodalSlots: Partial<Record<MultimodalSlotKind, {
+        max: number;
+        roles: string[];
+    }>>;
+    requestParams: string[];
+    aspectRatios?: VideoAspectRatio[];
+    defaults?: Record<string, unknown>;
+};
+
+const DEFAULT_VIDEO_CAPABILITY: CapabilityDictionary = {
+    multimodalSlots: {
+        image: { max: 1, roles: ['first_frame', 'reference_image', 'unassigned'] },
+    },
+    requestParams: ['ratio'],
+    aspectRatios: ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9'],
+};
+
+const SEEDANCE_CAPABILITY: CapabilityDictionary = {
+    multimodalSlots: {
+        image: { max: 9, roles: ['reference_image', 'first_frame', 'last_frame', 'style_ref', 'unassigned'] },
+        video: { max: 3, roles: ['reference_video', 'unassigned'] },
+        audio: { max: 3, roles: ['reference_audio', 'unassigned'] },
+    },
+    requestParams: [
+        'ratio',
+        'duration',
+        'resolution',
+        'frames',
+        'seed',
+        'camera_fixed',
+        'watermark',
+        'return_last_frame',
+        'generate_audio',
+        'service_tier',
+        'safety_identifier',
+    ],
+    aspectRatios: ['16:9', '9:16', '1:1'],
+    defaults: {
+        generate_audio: true,
+        duration: 5,
+        watermark: false,
+    },
+};
+
+export function getCapabilityDictionary(model: string, provider: AIProvider = inferProviderFromModel(model)): CapabilityDictionary {
+    const normalized = normalizeModelName(model);
+    if (provider === 'volcengine' || normalized.includes('seedance')) {
+        return SEEDANCE_CAPABILITY;
+    }
+    return DEFAULT_VIDEO_CAPABILITY;
+}
+
+function normalizeMultimodalRole(slot: MultimodalSlot): string {
+    if (slot.role === 'first_frame' || slot.role === 'last_frame') return 'reference_image';
+    if (slot.kind === 'image') return slot.role && slot.role !== 'unassigned' ? String(slot.role) : 'reference_image';
+    if (slot.kind === 'video') return slot.role && slot.role !== 'unassigned' ? String(slot.role) : 'reference_video';
+    if (slot.kind === 'audio') return slot.role && slot.role !== 'unassigned' ? String(slot.role) : 'reference_audio';
+    return 'unassigned';
+}
+
+function filterMultimodalSlots(slots: MultimodalSlot[], capability: CapabilityDictionary): MultimodalSlot[] {
+    const counts: Partial<Record<MultimodalSlotKind, number>> = {};
+    return slots.filter((slot) => {
+        const slotCapability = capability.multimodalSlots[slot.kind];
+        if (!slotCapability || !slot.href) return false;
+        const count = counts[slot.kind] || 0;
+        if (count >= slotCapability.max) return false;
+        const role = normalizeMultimodalRole(slot);
+        if (
+            slotCapability.roles.length > 0
+            && !slotCapability.roles.includes(role)
+            && !slotCapability.roles.includes(String(slot.role || ''))
+        ) {
+            return false;
+        }
+        counts[slot.kind] = count + 1;
+        return true;
+    });
+}
+
+function withSupportedParams(
+    capability: CapabilityDictionary,
+    input: Record<string, unknown>,
+): Record<string, unknown> {
+    const allowed = new Set(capability.requestParams);
+    const output: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries({ ...(capability.defaults || {}), ...input })) {
+        if (!allowed.has(key)) continue;
+        if (value === undefined || value === null || value === '') continue;
+        output[key] = value;
+    }
+    return output;
+}
 
 /**
  * Provider → supported video aspect ratios.
@@ -428,6 +543,30 @@ function getImageReferencesForIgnition(references: IgnitionReference[] = []): Vi
             reference.type === 'image' && typeof reference.href === 'string' && reference.href.length > 0
         ))
         .map(reference => ({ href: reference.href, mimeType: reference.mimeType || 'image/png', slotRole: reference.slotRole }));
+}
+
+function getMultimodalSlotsForIgnition(references: IgnitionReference[] = []): MultimodalSlot[] {
+    return references
+        .filter((reference): reference is IgnitionReference & { type: 'image' | 'video' | 'audio'; href: string; mimeType: string } => (
+            (reference.type === 'image' || reference.type === 'video' || reference.type === 'audio')
+            && typeof reference.href === 'string'
+            && reference.href.length > 0
+        ))
+        .map(reference => ({
+            kind: reference.type,
+            href: reference.href,
+            mimeType: reference.mimeType || (reference.type === 'audio' ? 'audio/mpeg' : reference.type === 'video' ? 'video/mp4' : 'image/png'),
+            role: reference.slotRole,
+        }));
+}
+
+function multimodalSlotsFromLegacyReferences(references: VideoImage[] = []): MultimodalSlot[] {
+    return references.map(reference => ({
+        kind: 'image',
+        href: reference.href,
+        mimeType: reference.mimeType || 'image/png',
+        role: reference.slotRole,
+    }));
 }
 
 function parseTextResponseContent(json: any): string {
@@ -763,7 +902,7 @@ export function inferProviderFromModel(model: string): AIProvider {
     if (/^flux/i.test(model)) return 'flux';
     if (/^midjourney/i.test(model)) return 'midjourney';
     if (/^(minimax|abab|video-01)/i.test(model)) return 'minimax';
-    if (/^(doubao|skylark|ep-)/i.test(model)) return 'volcengine';
+    if (/^(doubao|skylark|ep-|seedance|dreamina-seedance|doubao-seedance)/i.test(model) || normalized.includes('seedance')) return 'volcengine';
     if (/^(openrouter\/|google\/|anthropic\/|openai\/|meta-llama\/|x-ai\/)/i.test(model)) return 'openrouter';
     return 'custom';
 }
@@ -809,7 +948,9 @@ function extractVideoOutputUrl(payload: any) {
         || payload?.data?.outputs?.[0]
         || payload?.output
         || payload?.outputs?.[0]
+        || payload?.content?.video_url
         || payload?.data?.video_url
+        || payload?.data?.content?.video_url
         || payload?.data?.task_result?.videos?.[0]?.url;
 }
 
@@ -918,6 +1059,33 @@ async function generateVideoWithUnifiedAsyncApi(
     }
 
     throw lastError || new Error('当前自定义端点未暴露可用的视频统一接口。');
+}
+
+function buildSeedanceContentItems(prompt: string, slots: MultimodalSlot[], capability: CapabilityDictionary): Array<Record<string, unknown>> {
+    const contentItems: Array<Record<string, unknown>> = [{ type: 'text', text: prompt }];
+    for (const slot of filterMultimodalSlots(slots, capability)) {
+        const role = normalizeMultimodalRole(slot);
+        if (slot.kind === 'image') {
+            contentItems.push({
+                type: 'image_url',
+                image_url: { url: slot.href },
+                role,
+            });
+        } else if (slot.kind === 'video') {
+            contentItems.push({
+                type: 'video_url',
+                video_url: { url: slot.href },
+                role,
+            });
+        } else if (slot.kind === 'audio') {
+            contentItems.push({
+                type: 'audio_url',
+                audio_url: { url: slot.href },
+                role,
+            });
+        }
+    }
+    return contentItems;
 }
 
 /** 返回模型支持的能力标签（emoji 形式） */
@@ -1759,13 +1927,29 @@ export async function generateVideoWithProvider(
         aspectRatio?: '16:9' | '9:16' | '1:1' | '4:3' | '3:4' | '21:9';
         onProgress?: (message: string) => void;
         references?: VideoImage[];
+        slots?: MultimodalSlot[];
+        durationSec?: number;
+        resolution?: string;
+        frames?: number;
+        seed?: number;
+        cameraFixed?: boolean;
+        watermark?: boolean;
+        returnLastFrame?: boolean;
+        generateAudio?: boolean;
+        serviceTier?: string;
+        safetyIdentifier?: string;
     },
 ): Promise<{ videoBlob: Blob; mimeType: string }> {
     const provider = resolveGenerationProvider(model, key);
     const onProgress = options?.onProgress || (() => {});
     const aspectRatio = options?.aspectRatio || '16:9';
     const references = options?.references ?? [];
-    const firstFrame = references.find(r => r.slotRole === 'first_frame') || references[0];
+    const multimodalSlots = options?.slots?.length ? options.slots : multimodalSlotsFromLegacyReferences(references);
+    const firstImageSlot = multimodalSlots.find(slot => slot.kind === 'image' && slot.role === 'first_frame')
+        || multimodalSlots.find(slot => slot.kind === 'image');
+    const firstFrame = references.find(r => r.slotRole === 'first_frame')
+        || references[0]
+        || (firstImageSlot ? { href: firstImageSlot.href, mimeType: firstImageSlot.mimeType, slotRole: String(firstImageSlot.role || 'unassigned') } : undefined);
 
     if (provider === 'google') {
         return generateVideo(prompt, aspectRatio, onProgress, firstFrame, key?.key);
@@ -1946,26 +2130,27 @@ export async function generateVideoWithProvider(
     if (provider === 'volcengine') {
         const apiKey = requireApiKey(provider, key);
         const baseUrl = getBaseUrl(provider, key);
+        const mappedModel = mapProviderModel(model || 'doubao-seedance-2-0-260128', key);
+        const capability = getCapabilityDictionary(mappedModel, provider);
 
-        // Seedance via Ark API: all reference images sent as role="reference_image"
+        // Seedance via Ark API: text plus typed multimodal slots in content[].
         onProgress('Submitting video generation task...');
-        const contentItems: Array<Record<string, unknown>> = [
-            { type: 'text', text: prompt },
-        ];
-        for (const ref of references) {
-            contentItems.push({
-                type: 'image_url',
-                image_url: { url: ref.href },
-                role: 'reference_image',
-            });
-        }
         const createBody: Record<string, unknown> = {
-            model: model || 'doubao-seedance-2-0-260128',
-            content: contentItems,
-            generate_audio: true,
-            ratio: aspectRatio,
-            duration: 5,
-            watermark: false,
+            model: mappedModel,
+            content: buildSeedanceContentItems(prompt, multimodalSlots, capability),
+            ...withSupportedParams(capability, {
+                ratio: aspectRatio,
+                duration: options?.durationSec,
+                resolution: options?.resolution,
+                frames: options?.frames,
+                seed: options?.seed,
+                camera_fixed: options?.cameraFixed,
+                watermark: options?.watermark,
+                return_last_frame: options?.returnLastFrame,
+                generate_audio: options?.generateAudio,
+                service_tier: options?.serviceTier,
+                safety_identifier: options?.safetyIdentifier,
+            }),
         };
 
         const createRes = await fetch(`${baseUrl}/contents/generations/tasks`, {
@@ -1980,7 +2165,7 @@ export async function generateVideoWithProvider(
             throw new Error(await readErrorResponse(createRes, 'Seedance 视频生成请求失败'));
         }
         const createJson = await readJsonResponse<any>(createRes, 'Seedance 视频生成创建响应');
-        const taskId = createJson?.id;
+        const taskId = extractTaskId(createJson);
         if (!taskId) throw new Error('Seedance 视频生成未返回 task_id');
 
         // Poll for completion
@@ -2004,13 +2189,13 @@ export async function generateVideoWithProvider(
                 throw new Error(await readErrorResponse(queryRes, 'Seedance 任务查询失败'));
             }
             const queryJson = await readJsonResponse<any>(queryRes, 'Seedance 任务查询响应');
-            const status = queryJson?.status || queryJson?.data?.status;
+            const status = extractVideoStatus(queryJson);
 
-            if (status === 'failed') {
+            if (status === 'failed' || status === 'cancelled' || status === 'expired') {
                 throw new Error(`Seedance 视频生成失败: ${queryJson?.error?.message || 'Unknown error'}`);
             }
             if (status === 'succeeded') {
-                seedanceVideoUrl = queryJson?.content?.video_url;
+                seedanceVideoUrl = extractVideoOutputUrl(queryJson);
                 break;
             }
         }
@@ -2049,9 +2234,11 @@ export async function executeUnifiedIgnition(input: UnifiedIgnitionInput): Promi
     try {
         if (capability === 'video') {
             const videoRefs = getImageReferencesForIgnition(input.references);
+            const videoSlots = getMultimodalSlotsForIgnition(input.references);
             const result = await generateVideoWithProvider(prompt, input.modelId, input.apiKeyPayload, {
                 aspectRatio: input.aspectRatio || getDynamicParamSchema(input.modelId).defaultAspectRatio || '16:9',
                 references: videoRefs,
+                slots: videoSlots,
                 onProgress: message => input.onProgress?.(35, message),
             });
             const mediaUrl = URL.createObjectURL(result.videoBlob);

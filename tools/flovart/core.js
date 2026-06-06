@@ -61,7 +61,7 @@ export const COMMAND_REGISTRY = {
   'asset.list': { summary: 'List local generated media assets/history.', args: {} },
   'generate.image': { summary: 'Generate one image from an explicit prompt.', args: { prompt: 'string', aspectRatio: 'string?', placeOnCanvas: 'boolean?' } },
   'generate.images-batch': { summary: 'Generate multiple images from explicit prompt items.', args: { items: 'array', placeOnCanvas: 'boolean?', layout: 'string?' } },
-  'generate.video': { summary: 'Generate one video from prompt and optional source image IDs.', args: { prompt: 'string', sourceImageIds: 'string[]?', durationSec: 'number?', aspectRatio: 'string?' } },
+  'generate.video': { summary: 'Generate one video from prompt and optional multimodal source IDs.', args: { prompt: 'string', sourceImageIds: 'string[]?', sourceVideoIds: 'string[]?', slots: 'array?', durationSec: 'number?', aspectRatio: 'string?', resolution: 'string?', seed: 'number?' } },
   'video.status': { summary: 'Query a video/runtime job status.', args: { jobId: 'string' } },
   'export.project': { summary: 'Export project metadata.', args: { format: 'json?' } },
 };
@@ -138,7 +138,7 @@ export const HELP_TEXT = [
   'asset.list                                      List local generated media assets',
   'generate.image --prompt <prompt>                Generate one image',
   'generate.images-batch --file shots.json         Trigger multiple image generations',
-  'generate.video --prompt <prompt> [--source-image-ids id1,id2]',
+  'generate.video --prompt <prompt> [--source-image-ids id1,id2] [--source-video-ids id3] [--slots-json <json>]',
   'video.status --job-id <id>                      Query video job status',
   'export.project                                  Export project metadata when supported',
   '',
@@ -238,13 +238,22 @@ export function normalizeCommandName(name = '') {
   const aliases = {
     inspect: 'canvas.inspect',
     create: 'element.create',
+    flovart_element_create: 'element.create',
     'update.prompt': 'element.update-prompt',
+    flovart_element_update_prompt: 'element.update-prompt',
     'assign.slot': 'element.assign-slot',
+    flovart_element_assign_slot: 'element.assign-slot',
     ignite: 'element.ignite',
+    flovart_element_ignite: 'element.ignite',
     watch: 'element.watch',
+    flovart_element_watch: 'element.watch',
     remove: 'canvas.remove-element',
+    flovart_canvas_remove_element: 'canvas.remove-element',
     select: 'canvas.select',
+    flovart_canvas_select: 'canvas.select',
     gen: 'generate.image',
+    flovart_generate_image: 'generate.image',
+    flovart_generate_video: 'generate.video',
     models: 'models.list',
     doctor: 'doctor',
     preferences: 'preferences.manage',
@@ -281,6 +290,12 @@ function parseListOption(value) {
   if (Array.isArray(value)) return value;
   if (typeof value !== 'string') return [];
   return value.split(',').map(item => item.trim()).filter(Boolean);
+}
+
+function parseOptionalNumber(value) {
+  if (value === undefined || value === null || value === '') return undefined;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : undefined;
 }
 
 function updatePayloadFromArgs(args = {}) {
@@ -885,9 +900,13 @@ export async function executeFlovartCommand(commandName, args = {}, runtime = {}
     case 'generate.video':
       return await runtime.generate?.video?.({
         prompt: required(args.prompt, 'prompt'),
-        sourceImageIds: typeof args['source-image-ids'] === 'string' ? args['source-image-ids'].split(',').filter(Boolean) : [],
-        durationSec: args.duration ? Number(args.duration) : undefined,
+        sourceImageIds: parseListOption(args['source-image-ids'] || args.sourceImageIds),
+        sourceVideoIds: parseListOption(args['source-video-ids'] || args.sourceVideoIds),
+        slots: args.slots || parseJsonOption(args.slotsJson || args['slots-json'], undefined),
+        durationSec: parseOptionalNumber(args.durationSec ?? args['duration-sec'] ?? args.duration),
         aspectRatio: args['aspect-ratio'] || args.aspectRatio,
+        resolution: args.resolution,
+        seed: parseOptionalNumber(args.seed),
       });
     case 'video.status':
       return await runtime.generate?.videoStatus?.({ jobId: required(args['job-id'] || args.jobId, 'job-id') });

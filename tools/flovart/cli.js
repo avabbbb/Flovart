@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { executeFlovartCommand, formatValue, parseCliArgs, SETUP_TEXT } from './core.js';
+import { executeFlovartCommand, formatValue, normalizeCommandName, parseCliArgs, SETUP_TEXT } from './core.js';
 import { createShadowRuntimeFacade } from './shadow-runtime.js';
 import { enqueueAndWait, enqueueCommand } from './flovart-bridge.js';
 import { readFile } from 'node:fs/promises';
@@ -90,7 +90,9 @@ function normalizeCommandForRouting(command) {
 
 const rawCommand = argv[0];
 const parsedArgs = parseCliArgs(argv.slice(1));
-const { command, args } = normalizeAtomicAlias(rawCommand, parsedArgs);
+const normalizedAtomic = normalizeAtomicAlias(rawCommand, parsedArgs);
+const command = normalizeCommandName(normalizedAtomic.command);
+const args = normalizedAtomic.args;
 
 if (args.file) {
   try {

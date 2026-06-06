@@ -6,6 +6,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
     validateApiKey,
+    getCapabilityDictionary,
     inferProviderFromModel,
     generateImageWithProvider,
     generateVideoWithProvider,
@@ -121,6 +122,79 @@ describe('aiGateway - validateApiKey', () => {
                 }),
             }),
         );
+    });
+});
+
+describe('aiGateway - Seedance multimodal slots', () => {
+    beforeEach(() => {
+        vi.restoreAllMocks();
+        vi.useRealTimers();
+    });
+
+    it('builds multimodal content slots and filters provider params by capability', async () => {
+        vi.useFakeTimers();
+        globalThis.fetch = vi.fn()
+            .mockResolvedValueOnce(mockJsonResponse({ id: 'seedance-task-1' }))
+            .mockResolvedValueOnce(mockJsonResponse({ status: 'succeeded', content: { video_url: 'https://cdn.example.com/seedance.mp4' } }))
+            .mockResolvedValueOnce(mockBinaryResponse('seedance-video'));
+
+        const promise = generateVideoWithProvider('two characters cross the room', 'seedance-2-0-260128', {
+            id: 'seedance-key',
+            provider: 'volcengine',
+            capabilities: ['video'],
+            key: 'ark-test-key',
+            baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
+            createdAt: 0,
+            updatedAt: 0,
+        }, {
+            aspectRatio: '16:9',
+            durationSec: 8,
+            resolution: '1080p',
+            seed: 42,
+            cameraFixed: true,
+            watermark: false,
+            returnLastFrame: true,
+            slots: [
+                { kind: 'image', href: 'data:image/png;base64,aW1hZ2Ux', mimeType: 'image/png', role: 'reference_image', label: 'role-a' },
+                { kind: 'image', href: 'data:image/png;base64,aW1hZ2Uy', mimeType: 'image/png', role: 'first_frame', label: 'role-b' },
+                { kind: 'video', href: 'https://cdn.example.com/ref.mp4', mimeType: 'video/mp4', role: 'reference_video' },
+                { kind: 'audio', href: 'https://cdn.example.com/ref.mp3', mimeType: 'audio/mpeg', role: 'reference_audio' },
+            ],
+        });
+
+        await vi.advanceTimersByTimeAsync(10_000);
+        const result = await promise;
+
+        expect(result.mimeType).toBe('video/mp4');
+        const [createUrl, createInit] = vi.mocked(globalThis.fetch).mock.calls[0];
+        expect(createUrl).toBe('https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks');
+        const body = JSON.parse(String(createInit?.body));
+        expect(body).toMatchObject({
+            model: 'seedance-2-0-260128',
+            ratio: '16:9',
+            duration: 8,
+            resolution: '1080p',
+            seed: 42,
+            camera_fixed: true,
+            watermark: false,
+            return_last_frame: true,
+        });
+        expect(body.content).toEqual([
+            { type: 'text', text: 'two characters cross the room' },
+            { type: 'image_url', image_url: { url: 'data:image/png;base64,aW1hZ2Ux' }, role: 'reference_image' },
+            { type: 'image_url', image_url: { url: 'data:image/png;base64,aW1hZ2Uy' }, role: 'reference_image' },
+            { type: 'video_url', video_url: { url: 'https://cdn.example.com/ref.mp4' }, role: 'reference_video' },
+            { type: 'audio_url', audio_url: { url: 'https://cdn.example.com/ref.mp3' }, role: 'reference_audio' },
+        ]);
+        vi.useRealTimers();
+    });
+
+    it('exposes Seedance video slot capability dictionary', () => {
+        expect(inferProviderFromModel('dreamina-seedance-2-0-260128')).toBe('volcengine');
+        const capability = getCapabilityDictionary('dreamina-seedance-2-0-260128', 'volcengine');
+        expect(capability.multimodalSlots.image?.max).toBe(9);
+        expect(capability.multimodalSlots.video?.max).toBe(3);
+        expect(capability.requestParams).toContain('duration');
     });
 });
 
@@ -393,6 +467,10 @@ describe('aiGateway - unified agent provider actions', () => {
 });
 
 describe('aiGateway - generateVideoWithProvider', () => {
+    beforeEach(() => {
+        vi.restoreAllMocks();
+        vi.useRealTimers();
+    });
     it('custom 聚合端点支持 v2 统一视频接口', async () => {
         globalThis.fetch = vi.fn()
             .mockResolvedValueOnce(mockJsonResponse({ task_id: 'task-123' }))

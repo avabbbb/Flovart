@@ -10,6 +10,7 @@ import {
     inferProviderFromModel, inferCapabilitiesByProvider, PROVIDER_LABELS, supportsMaskImageEditing, supportsReferenceImageEditing,
     DEFAULT_PROVIDER_MODELS, splitImageLayersWithProvider, runImageAgentWithProvider,
 } from '../services/aiGateway';
+import type { MultimodalSlot } from '../services/aiGateway';
 import { addGenerationHistoryItem, createThumbnailDataUrl } from '../utils/generationHistory';
 import { recordApiUsage } from '../utils/usageMonitor';
 
@@ -476,6 +477,11 @@ export function useGeneration(params: UseGenerationParams) {
 
     /* ---- buildMentionAwarePrompt ---- */
 
+    const buildMentionRegex = (name: string, flags = 'i') => {
+        const escapedName = (name || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        return new RegExp(`@${escapedName}(?![a-zA-Z0-9_\\u4e00-\\u9fa5-])`, flags);
+    };
+
     const buildMentionAwarePrompt = useCallback((
         rawPrompt: string,
         mentionedImages: ImageElement[],
@@ -486,8 +492,7 @@ export function useGeneration(params: UseGenerationParams) {
 
         const mentionOrder: { element: ImageElement; index: number }[] = [];
         for (const el of mentionedImages) {
-            const escapedName = (el.name || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            const regex = new RegExp(`@${escapedName}\\b`, 'i');
+            const regex = buildMentionRegex(el.name || el.id);
             const match = rawPrompt.match(regex);
             mentionOrder.push({ element: el, index: match ? match.index! : Infinity });
         }
@@ -496,8 +501,7 @@ export function useGeneration(params: UseGenerationParams) {
         let processedPrompt = rawPrompt;
         const orderedImages: { href: string; mimeType: string }[] = [];
         mentionOrder.forEach(({ element }, idx) => {
-            const escapedName = (element.name || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            const regex = new RegExp(`@${escapedName}\\b`, 'gi');
+            const regex = buildMentionRegex(element.name || element.id, 'gi');
             processedPrompt = processedPrompt.replace(regex, `[参考图${idx + 1}]`);
             orderedImages.push({ href: element.href, mimeType: element.mimeType });
         });
@@ -508,6 +512,31 @@ export function useGeneration(params: UseGenerationParams) {
         }
 
         return { prompt: processedPrompt, orderedMentionImages: orderedImages };
+    }, []);
+
+    const buildMediaMentionPrompt = useCallback((
+        rawPrompt: string,
+        mentionedMedia: Array<ImageElement | VideoElement>,
+    ): string => {
+        if (mentionedMedia.length === 0) return rawPrompt;
+
+        const mentionOrder = mentionedMedia
+            .map((element) => {
+                const match = rawPrompt.match(buildMentionRegex(element.name || element.id));
+                return { element, index: match ? match.index! : Infinity };
+            })
+            .sort((a, b) => a.index - b.index);
+
+        let processedPrompt = rawPrompt;
+        const bindingLines: string[] = [];
+        mentionOrder.forEach(({ element }, index) => {
+            const label = element.name?.trim() || element.id;
+            const placeholder = `[参考素材${index + 1}: ${label}]`;
+            processedPrompt = processedPrompt.replace(buildMentionRegex(label, 'gi'), placeholder);
+            bindingLines.push(`${placeholder} = ${element.type === 'video' ? 'video' : 'image'} slot ${index + 1}`);
+        });
+
+        return `${processedPrompt.trim()}\n\n参考素材绑定:\n${bindingLines.join('\n')}`;
     }, []);
 
     /* ---- Inpaint ---- */
@@ -655,6 +684,27 @@ export function useGeneration(params: UseGenerationParams) {
             href: resolveMediaHref ? await resolveMediaHref(item.href) : item.href,
             mimeType: item.mimeType,
         })));
+        const attachmentSlots: MultimodalSlot[] = attachmentReferenceImages
+            .map((item): MultimodalSlot | null => {
+                if (item.mimeType.startsWith('image/')) {
+                    return { kind: 'image', href: item.href, mimeType: item.mimeType, role: 'reference_image' };
+                }
+                if (item.mimeType.startsWith('video/')) {
+                    return { kind: 'video', href: item.href, mimeType: item.mimeType, role: 'reference_video' };
+                }
+                if (item.mimeType.startsWith('audio/')) {
+                    return { kind: 'audio', href: item.href, mimeType: item.mimeType, role: 'reference_audio' };
+                }
+                return null;
+            })
+            .filter((slot): slot is MultimodalSlot => slot !== null);
+        const characterReferenceSlots: MultimodalSlot[] = characterReferenceImages.map(item => ({
+            kind: 'image',
+            href: item.href,
+            mimeType: item.mimeType,
+            role: 'reference_image',
+            label: activeCharacterLock?.name,
+        }));
         const resolvedImageModel = imageResolved?.model || modelPreference.imageModel;
         const resolvedVideoModel = videoResolved?.model || modelPreference.videoModel;
         const imageProvider = imageResolved?.provider || inferProviderFromModel(modelPreference.imageModel);
@@ -762,35 +812,61 @@ export function useGeneration(params: UseGenerationParams) {
         if (effectiveGenerationMode === 'video') {
             try {
                 const selectedElements = elements.filter(el => activeSelectedElementIds.includes(el.id));
-                const imageElement = selectedElements.find(el => el.type === 'image') as ImageElement | undefined;
-                const attachmentImage = attachmentReferenceImages[0];
+                const selectedMediaSlots: MultimodalSlot[] = selectedElements
+                    .map((el): MultimodalSlot | null => {
+                        if (el.type === 'image') {
+                            return { kind: 'image', href: el.href, mimeType: el.mimeType, role: 'first_frame', label: el.name };
+                        }
+                        if (el.type === 'video') {
+                            return { kind: 'video', href: el.href, mimeType: el.mimeType, role: 'reference_video', label: el.name };
+                        }
+                        return null;
+                    })
+                    .filter((slot): slot is MultimodalSlot => slot !== null);
 
-                const mentionedImages = activeMentionedElementIds
+                const mentionedMediaElements = activeMentionedElementIds
                     .map(id => elements.find(el => el.id === id))
-                    .filter((el): el is ImageElement => !!el && el.type === 'image');
+                    .filter((el): el is ImageElement | VideoElement => !!el && (el.type === 'image' || el.type === 'video'));
 
-                const baseVideoReference = imageElement
-                    ? { href: imageElement.href, mimeType: imageElement.mimeType }
-                    : mentionedImages.length > 0
-                        ? { href: mentionedImages[0].href, mimeType: mentionedImages[0].mimeType }
-                        : attachmentImage
-                            ? { href: attachmentImage.href, mimeType: attachmentImage.mimeType }
-                            : undefined;
+                const mentionedMediaSlots: MultimodalSlot[] = mentionedMediaElements
+                    .map((el): MultimodalSlot | null => {
+                        if (el.type === 'image') {
+                            return { kind: 'image', href: el.href, mimeType: el.mimeType, role: 'reference_image', label: el.name };
+                        }
+                        if (el.type === 'video') {
+                            return { kind: 'video', href: el.href, mimeType: el.mimeType, role: 'reference_video', label: el.name };
+                        }
+                        return null;
+                    })
+                    .filter((slot): slot is MultimodalSlot => slot !== null);
 
-                if (activeSelectedElementIds.length > 1 || (activeSelectedElementIds.length === 1 && !imageElement)) {
-                    setError('For video generation, please select a single image or no elements.');
+                const invalidSelected = selectedElements.filter(el => el.type !== 'image' && el.type !== 'video');
+                if (invalidSelected.length > 0) {
+                    setError('For video generation, please select only image or video reference elements.');
                     setIsLoading(false);
                     return;
                 }
 
+                const slots = [
+                    ...selectedMediaSlots,
+                    ...mentionedMediaSlots,
+                    ...attachmentSlots,
+                    ...characterReferenceSlots,
+                ];
+                const legacyImageRefs = slots
+                    .filter(slot => slot.kind === 'image')
+                    .map(slot => ({ href: slot.href, mimeType: slot.mimeType, slotRole: String(slot.role || 'unassigned') }));
+                const videoPrompt = buildMediaMentionPrompt(effectivePrompt, mentionedMediaElements);
+
                 const { videoBlob, mimeType } = await generateVideoWithProvider(
-                    effectivePrompt,
+                    videoPrompt,
                     resolvedVideoModel,
                     resolvedVideoKey,
                     {
                         aspectRatio: videoAspectRatio,
                         onProgress: (message) => setProgressMessage(message),
-                        references: baseVideoReference ? [baseVideoReference] : [],
+                        references: legacyImageRefs,
+                        slots,
                     },
                 );
 
@@ -842,7 +918,7 @@ export function useGeneration(params: UseGenerationParams) {
                                 mimeType: 'image/png',
                                 width: video.videoWidth,
                                 height: video.videoHeight,
-                                prompt: effectivePrompt,
+                                prompt: videoPrompt,
                                 mediaType: 'video',
                             });
                         }

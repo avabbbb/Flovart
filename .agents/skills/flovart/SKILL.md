@@ -20,6 +20,16 @@ npm run flovart:cli -- command.schema --command <command> --json
 
 If this skill disagrees with `command.list` or `command.schema`, trust the CLI output and update the skill docs.
 
+MCP-style aliases are accepted for atomic canvas orchestration:
+
+```bash
+npm run flovart:cli -- flovart_element_create --type image --name keyframe --json
+npm run flovart:cli -- flovart_element_update_prompt --element-id <id> --text-prompt "..." --json
+npm run flovart:cli -- flovart_element_assign_slot --element-id <id> --target-element-id <ref-id> --slot-role reference_image --json
+npm run flovart:cli -- flovart_element_ignite --element-id <id> --wait --json
+npm run flovart:cli -- flovart_generate_video --prompt "..." --source-image-ids img1,img2 --source-video-ids vid1 --json
+```
+
 ## Non-Negotiable Rules
 
 - Flovart is not the planner. The external agent writes scripts, shot lists, prompts, retry strategy, and final summaries.
@@ -108,6 +118,15 @@ npm run flovart:cli -- element.ignite --element-id <id> --wait --timeout-ms 1200
 npm run flovart:cli -- generate.image --prompt "premium product hero shot..." --aspect-ratio 16:9 --place-on-canvas true --wait --json
 npm run flovart:cli -- generate.video --prompt "8 second locked-off product reveal..." --source-image-ids id1,id2 --duration 8 --aspect-ratio 16:9 --wait --json
 ```
+
+For Seedance-style models, `generate.video` accepts multimodal slots. Prefer existing canvas IDs when possible; use `--slots-json` for external URLs or data URLs:
+
+```bash
+npm run flovart:cli -- generate.video --prompt "8 second scene..." --source-image-ids roleA,roleB --source-video-ids motionRef --duration 8 --resolution 1080p --json
+npm run flovart:cli -- generate.video --prompt "8 second scene..." --slots-json "[{\"kind\":\"image\",\"href\":\"https://example.com/a.png\",\"mimeType\":\"image/png\",\"role\":\"reference_image\"},{\"kind\":\"video\",\"href\":\"https://example.com/ref.mp4\",\"mimeType\":\"video/mp4\",\"role\":\"reference_video\"}]" --json
+```
+
+Supported slot kinds are `image`, `video`, and `audio`. The gateway filters slot roles and request parameters through the selected model capability dictionary before calling the provider.
 
 ## Delivery Checklist
 

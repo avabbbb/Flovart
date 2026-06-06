@@ -27,6 +27,7 @@ const NodeWorkflowPanel = React.lazy(() => import('./components/NodeWorkflowPane
 import { loadAssetLibrary, addAsset, removeAsset, renameAsset, loadAssetLibraryAsync, saveAssetLibraryAsync } from './utils/assetStorage';
 import { loadGenerationHistoryAsync, saveGenerationHistoryAsync } from './utils/generationHistory';
 import { inferProviderFromModel, reversePromptStreamWithProvider, DEFAULT_PROVIDER_MODELS, generateImageWithProvider, generateVideoWithProvider, inferCapabilityFromModelName } from './services/aiGateway';
+import type { MultimodalSlot } from './services/aiGateway';
 import { fileToDataUrl, validateAndResizeImage } from './utils/fileUtils';
 import { translations } from './utils/translations';
 // keyVault imports moved to hooks/useApiKeys.ts
@@ -2498,11 +2499,49 @@ const App: React.FC = () => {
             video.src = href;
         });
 
-        const placeGeneratedVideo = async (input: { prompt: string; sourceImageIds?: string[]; aspectRatio?: string }) => {
+        const placeGeneratedVideo = async (input: {
+            prompt: string;
+            sourceImageIds?: string[];
+            sourceVideoIds?: string[];
+            slots?: MultimodalSlot[];
+            aspectRatio?: string;
+            durationSec?: number;
+            resolution?: string;
+            seed?: number;
+        }) => {
             const { model, key } = resolveRuntimeModelKey('video');
-            const sourceImage = input.sourceImageIds?.length
-                ? elementsRef.current.find(el => el.id === input.sourceImageIds?.[0] && el.type === 'image') as ImageElement | undefined
-                : undefined;
+            const sourceImageSlots: MultimodalSlot[] = (input.sourceImageIds || [])
+                .map((id, index) => {
+                    const source = elementsRef.current.find(el => el.id === id && el.type === 'image') as ImageElement | undefined;
+                    return source ? {
+                        kind: 'image' as const,
+                        href: source.href,
+                        mimeType: source.mimeType,
+                        role: index === 0 ? 'first_frame' : 'reference_image',
+                        label: source.name,
+                    } : null;
+                })
+                .filter((slot): slot is MultimodalSlot => slot !== null);
+            const sourceVideoSlots: MultimodalSlot[] = (input.sourceVideoIds || [])
+                .map((id) => {
+                    const source = elementsRef.current.find(el => el.id === id && el.type === 'video') as VideoElement | undefined;
+                    return source ? {
+                        kind: 'video' as const,
+                        href: source.href,
+                        mimeType: source.mimeType,
+                        role: 'reference_video',
+                        label: source.name,
+                    } : null;
+                })
+                .filter((slot): slot is MultimodalSlot => slot !== null);
+            const slots = [
+                ...sourceImageSlots,
+                ...sourceVideoSlots,
+                ...(input.slots || []),
+            ];
+            const legacyImageRefs = slots
+                .filter(slot => slot.kind === 'image')
+                .map(slot => ({ href: slot.href, mimeType: slot.mimeType, slotRole: String(slot.role || 'unassigned') }));
             setIsLoading(true);
             setError(null);
             setProgressMessage('Agent video generation...');
@@ -2510,7 +2549,11 @@ const App: React.FC = () => {
                 const result = await generateVideoWithProvider(input.prompt, model, key, {
                     aspectRatio: (input.aspectRatio || videoAspectRatio) as typeof videoAspectRatio,
                     onProgress: message => setProgressMessage(message),
-                    references: sourceImage ? [{ href: sourceImage.href, mimeType: sourceImage.mimeType }] : [],
+                    references: legacyImageRefs,
+                    slots,
+                    durationSec: input.durationSec,
+                    resolution: input.resolution,
+                    seed: input.seed,
                 });
                 const href = URL.createObjectURL(result.videoBlob);
                 const size = await loadVideoSize(href);
@@ -2524,7 +2567,7 @@ const App: React.FC = () => {
                     name: 'Agent Video',
                     sourceKind: 'generation',
                 }, 'video');
-                return { ...placed, prompt: input.prompt, model, sourceImageId: sourceImage?.id };
+                return { ...placed, prompt: input.prompt, model, sourceImageIds: input.sourceImageIds || [], sourceVideoIds: input.sourceVideoIds || [] };
             } finally {
                 setIsLoading(false);
                 setTimeout(() => setProgressMessage(''), 1500);
@@ -2842,7 +2885,16 @@ const App: React.FC = () => {
                     }
                     return { ok: results.every(item => item.ok), items: results };
                 },
-                video: async (input: { prompt: string; sourceImageIds?: string[]; aspectRatio?: string }) => {
+                video: async (input: {
+                    prompt: string;
+                    sourceImageIds?: string[];
+                    sourceVideoIds?: string[];
+                    slots?: MultimodalSlot[];
+                    aspectRatio?: string;
+                    durationSec?: number;
+                    resolution?: string;
+                    seed?: number;
+                }) => {
                     return placeGeneratedVideo(input);
                 },
                 videoStatus: (input: { jobId: string }) => api.command.get(input.jobId),
@@ -3675,6 +3727,19 @@ const App: React.FC = () => {
                                                     height={el.height}
                                                     fill="none"
                                                     stroke="var(--isl-mint, #00e68a)"
+                                                    strokeWidth={5 / zoom}
+                                                    rx={hasBorderRadius ? el.borderRadius : 0}
+                                                    opacity={0.28}
+                                                    style={{
+                                                        filter: 'drop-shadow(0 0 12px rgba(0, 230, 138, 0.55))',
+                                                        animation: 'flv-gen-neon-breathe 1.8s ease-in-out infinite',
+                                                    }}
+                                                />
+                                                <rect
+                                                    width={el.width}
+                                                    height={el.height}
+                                                    fill="none"
+                                                    stroke="var(--isl-mint, #00e68a)"
                                                     strokeWidth={2.5 / zoom}
                                                     strokeDasharray={`${perimeter * 0.12} ${perimeter * 0.88}`}
                                                     strokeLinecap="round"
@@ -3735,6 +3800,19 @@ const App: React.FC = () => {
                                         </foreignObject>
                                         {isGenerating && (
                                             <g transform={`translate(${el.x}, ${el.y})`} pointerEvents="none">
+                                                <rect
+                                                    width={el.width}
+                                                    height={el.height}
+                                                    fill="none"
+                                                    stroke="var(--isl-sun, #fbbf24)"
+                                                    strokeWidth={5 / zoom}
+                                                    rx={8}
+                                                    opacity={0.28}
+                                                    style={{
+                                                        filter: 'drop-shadow(0 0 12px rgba(251, 191, 36, 0.55))',
+                                                        animation: 'flv-gen-neon-breathe 1.8s ease-in-out infinite',
+                                                    }}
+                                                />
                                                 <rect
                                                     width={el.width}
                                                     height={el.height}

@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:f
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
-import { executeFlovartCommand, parseCliArgs } from '../tools/flovart/core.js';
+import { executeFlovartCommand, normalizeCommandName, parseCliArgs } from '../tools/flovart/core.js';
 
 describe('flovart LibTV-style CLI compatibility', () => {
   let tempDir = '';
@@ -35,6 +35,42 @@ describe('flovart LibTV-style CLI compatibility', () => {
     expect(args.n).toBe('hero');
     expect(args.s).toEqual(['prompt=hello', 'count=2']);
     expect(args.u).toEqual(['x=120']);
+  });
+
+  it('normalizes MCP-style atomic aliases and forwards video multimodal options', async () => {
+    expect(normalizeCommandName('flovart_element_create')).toBe('element.create');
+    expect(normalizeCommandName('flovart_generate_video')).toBe('generate.video');
+
+    const calls: any[] = [];
+    const runtime = {
+      generate: {
+        video: async (input: any) => {
+          calls.push(input);
+          return { ok: true, jobId: 'video-job-1' };
+        },
+      },
+    };
+
+    const result = await executeFlovartCommand('flovart_generate_video', {
+      prompt: 'seedance multimodal scene',
+      'source-image-ids': 'img-a,img-b',
+      'source-video-ids': 'vid-a',
+      'slots-json': '[{"kind":"audio","href":"https://example.com/ref.mp3","mimeType":"audio/mpeg","role":"reference_audio"}]',
+      duration: '8',
+      resolution: '1080p',
+      seed: '42',
+    }, runtime);
+
+    expect(result).toEqual({ ok: true, jobId: 'video-job-1' });
+    expect(calls[0]).toMatchObject({
+      prompt: 'seedance multimodal scene',
+      sourceImageIds: ['img-a', 'img-b'],
+      sourceVideoIds: ['vid-a'],
+      durationSec: 8,
+      resolution: '1080p',
+      seed: 42,
+      slots: [{ kind: 'audio', href: 'https://example.com/ref.mp3', mimeType: 'audio/mpeg', role: 'reference_audio' }],
+    });
   });
 
   it('creates projects and groups, then uses the active group for new nodes', async () => {
