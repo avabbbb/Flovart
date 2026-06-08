@@ -3,6 +3,7 @@ import type {
     Element, ImageElement, PathElement, GroupElement, VideoElement,
     UserApiKey, ModelPreference, PromptEnhanceMode, GenerationHistoryItem,
     CharacterLockProfile, ChatAttachment, AICapability, AIProvider,
+    CanvasElement, ElementGenerationState, ResolvedReference,
 } from '../types';
 import { generateId, getElementBounds, rasterizeElement, rasterizeMask } from '../utils/canvasHelpers';
 import {
@@ -122,6 +123,52 @@ export function useGeneration(params: UseGenerationParams) {
         }
         return null;
     }, [keyOwnsModel, userApiKeys]);
+
+    const toInlineProvider = useCallback((provider: AIProvider): ElementGenerationState['provider'] => {
+        if (provider === 'openrouter') return 'openrouter';
+        if (provider === 'siliconflow') return 'siliconflow';
+        if (provider === 'google') return 'google';
+        if (provider === 'keling') return 'keling';
+        if (provider === 'midjourney') return 'midjourney';
+        return 'openai_compatible';
+    }, []);
+
+    const buildCanvasGenerationState = useCallback((
+        rawText: string,
+        modelId: string,
+        provider: AIProvider,
+        status: ElementGenerationState['status'],
+        referenceIds: string[],
+    ): ElementGenerationState => {
+        const seen = new Set<string>();
+        const resolvedReferences = referenceIds
+            .map((id): ResolvedReference | null => {
+                if (seen.has(id)) return null;
+                seen.add(id);
+                const target = elements.find((item): item is CanvasElement => (
+                    item.id === id && (item.type === 'image' || item.type === 'video' || item.type === 'text' || item.type === 'shape')
+                ));
+                if (!target) return null;
+                return {
+                    token: target.name?.trim() ? `@${target.name.trim()}` : `@${target.id}`,
+                    targetElementId: target.id,
+                    targetType: target.type === 'image' ? 'image' : target.type === 'video' ? 'video' : 'text',
+                    slotRole: target.type === 'image' ? 'first_frame' : 'unassigned',
+                };
+            })
+            .filter((reference): reference is ResolvedReference => reference !== null);
+
+        return {
+            promptPayload: {
+                rawText,
+                resolvedReferences,
+            },
+            provider: toInlineProvider(provider),
+            modelId,
+            aspectRatio: videoAspectRatio,
+            status,
+        };
+    }, [elements, toInlineProvider, videoAspectRatio]);
 
     const handleEnhancePrompt = useCallback(async (payload: {
         prompt: string;
@@ -772,6 +819,13 @@ export function useGeneration(params: UseGenerationParams) {
                         x: canvasPoint.x - (newWidth / 2), y: canvasPoint.y - (newHeight / 2),
                         width: newWidth, height: newHeight,
                         href: videoUrl, mimeType,
+                        generationState: buildCanvasGenerationState(
+                            keyframePrompt,
+                            resolvedVideoModel,
+                            videoProvider,
+                            'success',
+                            allFrameRefs.map(ref => ref.id),
+                        ),
                     };
                     commitAction(prev => [...prev, newVideoElement]);
                     setSelectedElementIds([newVideoElement.id]);
@@ -899,6 +953,17 @@ export function useGeneration(params: UseGenerationParams) {
                         height: newHeight,
                         href: videoUrl,
                         mimeType,
+                        generationState: buildCanvasGenerationState(
+                            videoPrompt,
+                            resolvedVideoModel,
+                            videoProvider,
+                            'success',
+                            [
+                                ...selectedElements.map(ref => ref.id),
+                                ...mentionedMediaElements.map(ref => ref.id),
+                                ...(activeCharacterLock?.anchorElementId ? [activeCharacterLock.anchorElementId] : []),
+                            ],
+                        ),
                     };
 
                     commitAction(prev => [...prev, newVideoElement]);
@@ -990,6 +1055,17 @@ export function useGeneration(params: UseGenerationParams) {
                                             href: nextDataUrl,
                                             width: img.width,
                                             height: img.height,
+                                            generationState: buildCanvasGenerationState(
+                                                effectivePrompt,
+                                                resolvedImageModel,
+                                                imageProvider,
+                                                'success',
+                                                [
+                                                    baseImage.id,
+                                                    ...mentionedImageElements.map(ref => ref.id),
+                                                    ...(activeCharacterLock?.anchorElementId ? [activeCharacterLock.anchorElementId] : []),
+                                                ],
+                                            ),
                                         };
                                     }
                                     return el;
@@ -1049,6 +1125,17 @@ export function useGeneration(params: UseGenerationParams) {
                             id: generateId(), type: 'image', x, y, name: imageOutputName,
                             width: img.width, height: img.height,
                             href: `data:${newImageMimeType};base64,${newImageBase64}`, mimeType: newImageMimeType,
+                            generationState: buildCanvasGenerationState(
+                                mentionPrompt,
+                                resolvedImageModel,
+                                imageProvider,
+                                'success',
+                                [
+                                    ...selectedElements.map(ref => ref.id),
+                                    ...mentionedImageElements.map(ref => ref.id),
+                                    ...(activeCharacterLock?.anchorElementId ? [activeCharacterLock.anchorElementId] : []),
+                                ],
+                            ),
                         };
                         commitAction(prev => [...prev, newImage]);
                         setSelectedElementIds([newImage.id]);
@@ -1096,6 +1183,16 @@ export function useGeneration(params: UseGenerationParams) {
                             id: generateId(), type: 'image', x, y, name: imageOutputName,
                             width: img.width, height: img.height,
                             href: `data:${newImageMimeType};base64,${newImageBase64}`, mimeType: newImageMimeType,
+                            generationState: buildCanvasGenerationState(
+                                mentionPrompt2,
+                                resolvedImageModel,
+                                imageProvider,
+                                'success',
+                                [
+                                    ...mentionedImageElements.map(ref => ref.id),
+                                    ...(activeCharacterLock?.anchorElementId ? [activeCharacterLock.anchorElementId] : []),
+                                ],
+                            ),
                         };
                         commitAction(prev => [...prev, newImage]);
                         setSelectedElementIds([newImage.id]);
@@ -1143,6 +1240,13 @@ export function useGeneration(params: UseGenerationParams) {
                             id: generateId(), type: 'image', x, y, name: imageOutputName,
                             width: img.width, height: img.height,
                             href: `data:${newImageMimeType};base64,${newImageBase64}`, mimeType: newImageMimeType,
+                            generationState: buildCanvasGenerationState(
+                                effectivePrompt,
+                                resolvedImageModel,
+                                imageProvider,
+                                'success',
+                                activeCharacterLock?.anchorElementId ? [activeCharacterLock.anchorElementId] : [],
+                            ),
                         };
                         commitAction(prev => [...prev, newImage]);
                         setSelectedElementIds([newImage.id]);

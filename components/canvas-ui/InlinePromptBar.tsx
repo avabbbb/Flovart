@@ -1,4 +1,4 @@
-import React, { memo, useEffect, useMemo, useState } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
     CanvasElement,
     Element,
@@ -15,6 +15,7 @@ import { hydrateRawTextToTiptapJSON } from '../../utils/htmlHydrator';
 import { executeUnifiedIgnition } from '../../services/aiGateway';
 import { PromptBar } from '../PromptBar';
 import { useWorkspaceStore } from '../../stores/useWorkspaceStore';
+import { generateId } from '../../utils/canvasHelpers';
 
 interface InlinePromptBarProps {
     element: CanvasElement;
@@ -42,7 +43,7 @@ interface InlinePromptBarProps {
     animateViewport: (targetX: number, targetY: number, targetZoom: number) => void;
     progressLabel?: string;
     activeTaskCount?: number;
-
+    variant?: 'overlay' | 'canvas';
 }
 
 type InlinePromptTranslations = {
@@ -126,8 +127,9 @@ function createGenerationState(
     };
 }
 
-const EMPTY_ATTACHMENTS: ChatAttachment[] = [];
 const EMPTY_EFFECTS: UserEffect[] = [];
+const isSupportedAttachment = (type: string) => type.startsWith('image/') || type.startsWith('video/');
+
 export const InlinePromptBar = memo(({
     element,
     allElements,
@@ -153,8 +155,35 @@ export const InlinePromptBar = memo(({
     onMediaGenerated,
     progressLabel,
     activeTaskCount = 0,
+    variant = 'overlay',
 }: InlinePromptBarProps) => {
     const language = useWorkspaceStore(state => state.language);
+    const [inlineAttachments, setInlineAttachments] = useState<ChatAttachment[]>([]);
+
+    const handleAddAttachments = useCallback(async (files: FileList | File[]) => {
+        const media = Array.from(files).filter(file => isSupportedAttachment(file.type));
+        if (media.length === 0) return;
+        const results = await Promise.all(media.map(async (file) => {
+            const dataUrl = await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result as string);
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+            return {
+                id: generateId(),
+                name: file.name || 'Reference',
+                href: dataUrl,
+                mimeType: file.type,
+                source: 'upload' as const,
+            };
+        }));
+        setInlineAttachments(prev => [...prev, ...results]);
+    }, []);
+
+    const handleRemoveAttachment = useCallback((id: string) => {
+        setInlineAttachments(prev => prev.filter(item => item.id !== id));
+    }, []);
     const generationState = createGenerationState(element, modelId, videoAspectRatio, isLoading ? 'running' : status, progress);
     const effectiveModelId = generationState.modelId || modelId;
     const generationMode: GenerationMode = element.type === 'video' ? 'video' : 'image';
@@ -281,6 +310,100 @@ export const InlinePromptBar = memo(({
         return () => window.removeEventListener('resize', onResize);
     }, []);
 
+    const isCanvas = variant === 'canvas';
+
+    const inner = (
+        <div className="relative" style={{ '--inline-prompt-accent': accentColor } as React.CSSProperties}>
+            {generationState.status === 'running' && (
+                <div className="inline-prompt-bar__queue-meta">
+                    <span>{activeTaskCount > 1 ? `${inlineT.queue} ${activeTaskCount}` : currentStatusLabel}</span>
+                    <span>{progressLabel || currentStatusLabel}</span>
+                </div>
+            )}
+            <PromptBar
+                t={t as any}
+                theme={theme}
+                prompt={generationState.promptPayload.rawText}
+                promptDocument={generationState.promptPayload.richTextDocument}
+                setPrompt={(nextPrompt) => syncPromptState(nextPrompt, generationState.promptPayload.richTextDocument)}
+                onPromptDocumentChange={(document) => syncPromptState(generationState.promptPayload.rawText, document)}
+                onGenerate={handleIgniteExecution}
+                onRetry={generationState.status === 'error' ? handleIgniteExecution : undefined}
+                error={generationState.error || null}
+                progressStage={progressLabel}
+                isLoading={generationState.status === 'running' || isLoading}
+                isSelectionActive={false}
+                selectedElementCount={1}
+                userEffects={EMPTY_EFFECTS}
+                onAddUserEffect={() => undefined}
+                onDeleteUserEffect={() => undefined}
+                generationMode={generationMode}
+                setGenerationMode={() => undefined}
+                modeOptions={[generationMode]}
+                videoAspectRatio={effectiveAspectRatio}
+                setVideoAspectRatio={(ratio) => {
+                    onPromptChange(element.id, {
+                        ...generationState,
+                        aspectRatio: ratio,
+                    });
+                    setVideoAspectRatio(ratio);
+                }}
+                selectedImageModel={generationMode === 'image' ? effectiveModelId : undefined}
+                selectedVideoModel={generationMode === 'video' ? effectiveModelId : undefined}
+                imageModelOptions={imageModelOptions}
+                videoModelOptions={videoModelOptions}
+                onImageModelChange={generationMode === 'image' ? (nextModel) => {
+                    onPromptChange(element.id, {
+                        ...generationState,
+                        modelId: nextModel,
+                        aspectRatio: effectiveAspectRatio,
+                    });
+                } : undefined}
+                onVideoModelChange={generationMode === 'video' ? (nextModel) => {
+                    onPromptChange(element.id, {
+                        ...generationState,
+                        modelId: nextModel,
+                        aspectRatio: effectiveAspectRatio,
+                    });
+                } : undefined}
+                canvasElements={allElements.filter(item => item.id !== element.id)}
+                attachments={inlineAttachments}
+                onAddAttachments={handleAddAttachments}
+                onRemoveAttachment={handleRemoveAttachment}
+                onMentionedElementIds={() => undefined}
+                onEnhancePrompt={onEnhancePrompt}
+                isEnhancingPrompt={isEnhancingPrompt}
+                isAutoEnhanceEnabled={isAutoEnhanceEnabled}
+                onAutoEnhanceToggle={onAutoEnhanceToggle}
+                apiConfigs={userApiKeys}
+                userApiKeys={userApiKeys}
+                variant="inline"
+                shellClassName="inline-prompt-bar-shell"
+                popoverDirection="down"
+            />
+
+            {generationState.error && (
+                <div className="inline-prompt-bar__error-harness flv-message-card">
+                    <div className="inline-prompt-bar__error-line" />
+                    <div className="inline-prompt-bar__error-text">{generationState.error}</div>
+                </div>
+            )}
+        </div>
+    );
+
+    if (isCanvas) {
+        return (
+            <div
+                data-testid="inline-prompt-bar"
+                className="inline-prompt-bar"
+                style={{ width: `${barWidth}px`, pointerEvents: 'auto' }}
+                onMouseDown={(event) => event.stopPropagation()}
+            >
+                {inner}
+            </div>
+        );
+    }
+
     return (
         <div
             data-testid="inline-prompt-bar"
@@ -297,81 +420,7 @@ export const InlinePromptBar = memo(({
             onMouseDown={(event) => event.stopPropagation()}
             onPointerDown={(event) => event.stopPropagation()}
         >
-            <div className="relative" style={{ '--inline-prompt-accent': accentColor } as React.CSSProperties}>
-                    {generationState.status === 'running' && (
-                        <div className="inline-prompt-bar__queue-meta">
-                            <span>{activeTaskCount > 1 ? `${inlineT.queue} ${activeTaskCount}` : currentStatusLabel}</span>
-                            <span>{progressLabel || currentStatusLabel}</span>
-                        </div>
-                    )}
-
-                    <PromptBar
-                        t={t as any}
-                        theme={theme}
-                        prompt={generationState.promptPayload.rawText}
-                        promptDocument={generationState.promptPayload.richTextDocument}
-                        setPrompt={(nextPrompt) => syncPromptState(nextPrompt, generationState.promptPayload.richTextDocument)}
-                        onPromptDocumentChange={(document) => syncPromptState(generationState.promptPayload.rawText, document)}
-                        onGenerate={handleIgniteExecution}
-                        onRetry={generationState.status === 'error' ? handleIgniteExecution : undefined}
-                        error={generationState.error || null}
-                        progressStage={progressLabel}
-                        isLoading={generationState.status === 'running' || isLoading}
-                        isSelectionActive={false}
-                        selectedElementCount={1}
-                        userEffects={EMPTY_EFFECTS}
-                        onAddUserEffect={() => undefined}
-                        onDeleteUserEffect={() => undefined}
-                        generationMode={generationMode}
-                        setGenerationMode={() => undefined}
-                        modeOptions={[generationMode]}
-                        videoAspectRatio={effectiveAspectRatio}
-                        setVideoAspectRatio={(ratio) => {
-                            onPromptChange(element.id, {
-                                ...generationState,
-                                aspectRatio: ratio,
-                            });
-                            setVideoAspectRatio(ratio);
-                        }}
-                        selectedImageModel={generationMode === 'image' ? effectiveModelId : undefined}
-                        selectedVideoModel={generationMode === 'video' ? effectiveModelId : undefined}
-                        imageModelOptions={imageModelOptions}
-                        videoModelOptions={videoModelOptions}
-                        onImageModelChange={generationMode === 'image' ? (nextModel) => {
-                            onPromptChange(element.id, {
-                                ...generationState,
-                                modelId: nextModel,
-                                aspectRatio: effectiveAspectRatio,
-                            });
-                        } : undefined}
-                        onVideoModelChange={generationMode === 'video' ? (nextModel) => {
-                            onPromptChange(element.id, {
-                                ...generationState,
-                                modelId: nextModel,
-                                aspectRatio: effectiveAspectRatio,
-                            });
-                        } : undefined}
-                        canvasElements={allElements.filter(item => item.id !== element.id)}
-                        attachments={EMPTY_ATTACHMENTS}
-                        onMentionedElementIds={() => undefined}
-                        onEnhancePrompt={onEnhancePrompt}
-                        isEnhancingPrompt={isEnhancingPrompt}
-                        isAutoEnhanceEnabled={isAutoEnhanceEnabled}
-                        onAutoEnhanceToggle={onAutoEnhanceToggle}
-                        apiConfigs={userApiKeys}
-                        userApiKeys={userApiKeys}
-                        variant="inline"
-                        shellClassName="inline-prompt-bar-shell"
-                        popoverDirection="down"
-                    />
-
-                    {generationState.error && (
-                        <div className="inline-prompt-bar__error-harness flv-message-card">
-                            <div className="inline-prompt-bar__error-line" />
-                            <div className="inline-prompt-bar__error-text">{generationState.error}</div>
-                        </div>
-                    )}
-            </div>
+            {inner}
         </div>
     );
 });

@@ -35,6 +35,9 @@ export interface ElementToolbarProps {
     setOutpaintMenuId: (id: string | null) => void;
     setAddAssetModal: (modal: { open: boolean; dataUrl: string; mimeType: string; width: number; height: number }) => void;
     startMaskEditing: (elementId: string) => void;
+    relationFocusCount?: number;
+    isRelationFocusActive?: boolean;
+    onToggleRelationFocus?: () => void;
 }
 
 export function ElementToolbar(props: ElementToolbarProps) {
@@ -46,6 +49,7 @@ export function ElementToolbar(props: ElementToolbarProps) {
         handlePropertyChange, handleStartCrop, handleReversePrompt, cancelReversePrompt,
         handleSplitImageLayers, handleUpscaleImage, handleRemoveImageBackground,
         handleOutpaint, setFilterPanelElementId, setOutpaintMenuId, setAddAssetModal, startMaskEditing,
+        relationFocusCount = 0, isRelationFocusActive = false, onToggleRelationFocus,
     } = props;
 
     if (selectedElementIds.length > 1) {
@@ -103,8 +107,8 @@ export function ElementToolbar(props: ElementToolbarProps) {
     }
     if (element.type === 'text') toolbarScreenWidth = 220;
     if (element.type === 'arrow' || element.type === 'line') toolbarScreenWidth = 220;
-    if (element.type === 'image') toolbarScreenWidth = 620;
-    if (element.type === 'video') toolbarScreenWidth = 160;
+    if (element.type === 'image') toolbarScreenWidth = relationFocusCount > 0 ? 670 : 620;
+    if (element.type === 'video') toolbarScreenWidth = relationFocusCount > 0 ? 220 : 160;
     if (element.type === 'group') toolbarScreenWidth = 80;
 
     const toolbarScreenHeight = 56;
@@ -121,6 +125,22 @@ export function ElementToolbar(props: ElementToolbarProps) {
     >
         <div className="isl-shell isl-pop-in flex items-center justify-start gap-2 overflow-x-auto p-1.5">
             <button title={t('contextMenu.copy')} onClick={() => handleCopyElement(element)} className="isl-icon-btn h-9 w-9"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg></button>
+            {(element.type === 'image' || element.type === 'video') && relationFocusCount > 0 && onToggleRelationFocus && (
+                <button
+                    title={isRelationFocusActive ? '收起关联节点高亮' : '高亮和当前媒体有关的画布节点'}
+                    aria-label={isRelationFocusActive ? '收起关联节点高亮' : '高亮关联节点'}
+                    onClick={onToggleRelationFocus}
+                    className={`isl-icon-btn h-9 w-9 ${isRelationFocusActive ? 'isl-icon-btn--active' : ''}`}
+                >
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="6" cy="12" r="3" />
+                        <circle cx="18" cy="6" r="3" />
+                        <circle cx="18" cy="18" r="3" />
+                        <path d="M8.7 10.8 15.3 7.2" />
+                        <path d="M8.7 13.2 15.3 16.8" />
+                    </svg>
+                </button>
+            )}
             {element.type === 'image' && <button title={t('contextMenu.download')} onClick={() => handleDownloadImage(element as ImageElement)} className="isl-icon-btn h-9 w-9"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg></button>}
             {element.type === 'image' && <button title="Add to asset library" onClick={async () => {
                     const { href, mimeType, width, height } = element as ImageElement;

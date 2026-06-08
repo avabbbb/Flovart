@@ -508,6 +508,7 @@ const App: React.FC = () => {
     const [videoAspectRatio, setVideoAspectRatio] = useState<'16:9' | '9:16' | '1:1' | '4:3' | '3:4' | '21:9'>('16:9');
     const [progressMessage, setProgressMessage] = useState<string>('');
     const [hoveredElementId, setHoveredElementId] = useState<string | null>(null);
+    const [relationFocusElementId, setRelationFocusElementId] = useState<string | null>(null);
     const [recentlyCompleted, setRecentlyCompleted] = useState<Set<string>>(new Set());
     const prevGeneratingIdsRef = useRef<Set<string>>(new Set());
     const runtimeSessionsRef = useRef<Record<string, RuntimeSession>>({});
@@ -670,6 +671,45 @@ const App: React.FC = () => {
         const selected = elements.find(el => el.id === selectedElementIds[0]);
         return selected && (selected.type === 'image' || selected.type === 'video') ? selected : null;
     }, [elements, selectedElementIds]);
+
+    const getRelatedCanvasElementIds = useCallback((sourceId: string, allElements: Element[]) => {
+        const related = new Set<string>([sourceId]);
+        for (const element of allElements) {
+            if (element.id === sourceId) {
+                element.generationState?.promptPayload.resolvedReferences.forEach(reference => {
+                    related.add(reference.targetElementId);
+                });
+                if (element.parentId) related.add(element.parentId);
+            }
+
+            if (element.parentId === sourceId) {
+                related.add(element.id);
+            }
+
+            if (element.generationState?.promptPayload.resolvedReferences.some(reference => reference.targetElementId === sourceId)) {
+                related.add(element.id);
+            }
+        }
+        return related;
+    }, []);
+
+    const relationFocusIds = useMemo(() => (
+        relationFocusElementId
+            ? getRelatedCanvasElementIds(relationFocusElementId, elements)
+            : new Set<string>()
+    ), [elements, getRelatedCanvasElementIds, relationFocusElementId]);
+
+    const selectedRelationIds = useMemo(() => (
+        selectedInlinePromptElement
+            ? getRelatedCanvasElementIds(selectedInlinePromptElement.id, elements)
+            : new Set<string>()
+    ), [elements, getRelatedCanvasElementIds, selectedInlinePromptElement]);
+
+    useEffect(() => {
+        if (relationFocusElementId && !selectedElementIds.includes(relationFocusElementId)) {
+            setRelationFocusElementId(null);
+        }
+    }, [relationFocusElementId, selectedElementIds]);
 
     const activeCharacterLock = useMemo(() => {
         if (!activeCharacterLockId) return null;
@@ -3427,6 +3467,29 @@ const App: React.FC = () => {
                 </Suspense>
             )}
             
+            {addAssetModal?.open && (
+                <Suspense fallback={<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm"><div className="rounded-xl bg-neutral-800 px-6 py-4 text-sm text-white/60">Loading…</div></div>}>
+                <AssetAddModal
+                    isOpen={addAssetModal.open}
+                    onClose={() => setAddAssetModal(null)}
+                    previewDataUrl={addAssetModal.dataUrl}
+                    onConfirm={(category, name) => {
+                        const newItem: AssetItem = {
+                            id: generateId(),
+                            name,
+                            category,
+                            dataUrl: addAssetModal.dataUrl,
+                            mimeType: addAssetModal.mimeType,
+                            width: addAssetModal.width,
+                            height: addAssetModal.height,
+                            createdAt: Date.now(),
+                        };
+                        setAssetLibrary(prev => addAsset(prev, newItem));
+                        setAddAssetModal(null);
+                    }}
+                />
+                </Suspense>
+            )}
             <Toolbar
                 t={t}
                 theme={resolvedTheme}
@@ -3454,31 +3517,7 @@ const App: React.FC = () => {
                 canUndo={historyIndex > 0}
                 canRedo={historyIndex < history.length - 1}
             />
-            <div className={`workflow-focus-chrome transition-all duration-300 ${isInlineMediaPromptActive ? 'translate-y-6 opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'}`}>
-            {addAssetModal?.open && (
-                <Suspense fallback={<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm"><div className="rounded-xl bg-neutral-800 px-6 py-4 text-sm text-white/60">Loading…</div></div>}>
-                <AssetAddModal
-                    isOpen={addAssetModal.open}
-                    onClose={() => setAddAssetModal(null)}
-                    previewDataUrl={addAssetModal.dataUrl}
-                    onConfirm={(category, name) => {
-                        const newItem: AssetItem = {
-                            id: generateId(),
-                            name,
-                            category,
-                            dataUrl: addAssetModal.dataUrl,
-                            mimeType: addAssetModal.mimeType,
-                            width: addAssetModal.width,
-                            height: addAssetModal.height,
-                            createdAt: Date.now(),
-                        };
-                        setAssetLibrary(prev => addAsset(prev, newItem));
-                        setAddAssetModal(null);
-                    }}
-                />
-                </Suspense>
-            )}
-            </div>
+            <div className={`workflow-focus-chrome transition-all duration-300 ${isInlineMediaPromptActive ? 'translate-y-6 opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'}`} />
             <div 
                 className="compact-canvas-stage flex-grow relative overflow-hidden"
                 style={{
@@ -3546,7 +3585,29 @@ const App: React.FC = () => {
                             if (!isElementVisible(el, elements)) return null;
 
                             const isSelected = selectedElementIds.includes(el.id);
+                            const isRelationFocused = relationFocusIds.size > 1 && relationFocusIds.has(el.id);
                             let selectionComponent = null;
+                            let relationFocusComponent = null;
+
+                            if (isRelationFocused && !croppingState) {
+                                const bounds = getElementBounds(el, elements);
+                                const isRoot = relationFocusElementId === el.id;
+                                relationFocusComponent = (
+                                    <rect
+                                        x={bounds.x - 5 / zoom}
+                                        y={bounds.y - 5 / zoom}
+                                        width={bounds.width + 10 / zoom}
+                                        height={bounds.height + 10 / zoom}
+                                        fill="none"
+                                        stroke={isRoot ? 'rgb(124 58 237)' : 'rgb(14 165 233)'}
+                                        strokeWidth={(isRoot ? 3 : 2.25) / zoom}
+                                        strokeDasharray={`${8 / zoom} ${5 / zoom}`}
+                                        rx={10 / zoom}
+                                        pointerEvents="none"
+                                        opacity={isRoot ? 0.98 : 0.9}
+                                    />
+                                );
+                            }
 
                             if (isSelected && !croppingState) {
                                 if (selectedElementIds.length > 1 || el.type === 'path' || el.type === 'arrow' || el.type === 'line' || el.type === 'group') {
@@ -3568,7 +3629,7 @@ const App: React.FC = () => {
                            
                             if (el.type === 'path') {
                                 const pathData = el.points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
-                                return <g key={el.id} data-id={el.id} className="cursor-pointer"><path d={pathData} stroke={el.strokeColor} strokeWidth={el.strokeWidth / zoom} fill="none" strokeLinecap="round" strokeLinejoin="round" pointerEvents="stroke" strokeOpacity={el.strokeOpacity} />{selectionComponent}</g>;
+                                return <g key={el.id} data-id={el.id} className="cursor-pointer"><path d={pathData} stroke={el.strokeColor} strokeWidth={el.strokeWidth / zoom} fill="none" strokeLinecap="round" strokeLinejoin="round" pointerEvents="stroke" strokeOpacity={el.strokeOpacity} />{selectionComponent}{relationFocusComponent}</g>;
                             }
                             if (el.type === 'arrow') {
                                 const [start, end] = el.points;
@@ -3588,6 +3649,7 @@ const App: React.FC = () => {
                                         <line x1={start.x} y1={start.y} x2={lineEnd.x} y2={lineEnd.y} stroke={el.strokeColor} strokeWidth={el.strokeWidth / zoom} strokeLinecap="round" />
                                         <polygon points={`${end.x},${end.y} ${headPoint1.x},${headPoint1.y} ${headPoint2.x},${headPoint2.y}`} fill={el.strokeColor} />
                                         {selectionComponent}
+                                        {relationFocusComponent}
                                     </g>
                                 );
                             }
@@ -3597,6 +3659,7 @@ const App: React.FC = () => {
                                     <g key={el.id} data-id={el.id} className="cursor-pointer">
                                         <line x1={start.x} y1={start.y} x2={end.x} y2={end.y} stroke={el.strokeColor} strokeWidth={el.strokeWidth / zoom} strokeLinecap="round" />
                                         {selectionComponent}
+                                        {relationFocusComponent}
                                     </g>
                                 );
                             }
@@ -3612,6 +3675,7 @@ const App: React.FC = () => {
                                             </foreignObject>
                                         )}
                                         {selectionComponent && React.cloneElement(selectionComponent, { transform: `translate(${-el.x}, ${-el.y})` })}
+                                        {relationFocusComponent && React.cloneElement(relationFocusComponent, { transform: `translate(${-el.x}, ${-el.y})` })}
                                     </g>
                                 )
                             }
@@ -3660,13 +3724,15 @@ const App: React.FC = () => {
                                         const y1 = fromBounds.y + fromBounds.height / 2;
                                         const x2 = toBounds.x + toBounds.width / 2;
                                         const y2 = toBounds.y + toBounds.height / 2;
-                                        const isHighlighted = hoveredElementId === fromEl.id || hoveredElementId === toEl.id;
+                                        const isHighlighted = hoveredElementId === fromEl.id
+                                            || hoveredElementId === toEl.id
+                                            || (relationFocusIds.has(fromEl.id) && relationFocusIds.has(toEl.id));
                                         return (
                                             <line
                                                 key={key}
                                                 x1={x1} y1={y1} x2={x2} y2={y2}
-                                                stroke={isHighlighted ? 'rgb(59 130 246)' : 'rgba(148 163 184 / 0.6)'}
-                                                strokeWidth={isHighlighted ? 2.5 / zoom : 1.5 / zoom}
+                                                stroke={isHighlighted ? 'rgb(14 165 233)' : 'rgba(148 163 184 / 0.6)'}
+                                                strokeWidth={isHighlighted ? 2.75 / zoom : 1.5 / zoom}
                                                 strokeDasharray={`${6/zoom} ${4/zoom}`}
                                                 style={{ transition: 'stroke 160ms ease, stroke-width 160ms ease' }}
                                             />
@@ -3676,6 +3742,7 @@ const App: React.FC = () => {
                             );
                         })()}
                                         {selectionComponent && React.cloneElement(selectionComponent, { transform: `translate(${-el.x}, ${-el.y})` })}
+                                        {relationFocusComponent && React.cloneElement(relationFocusComponent, { transform: `translate(${-el.x}, ${-el.y})` })}
                                     </g>
                                 );
                             }
@@ -3774,6 +3841,47 @@ const App: React.FC = () => {
                                             </foreignObject>
                                         )}
                                         {selectionComponent}
+                                        {relationFocusComponent}
+                                        {selectedInlinePromptElement?.id === el.id && !croppingState && !editingElement && (
+                                            <foreignObject
+                                                x={el.x + el.width / 2 - (360 / zoom)}
+                                                y={el.y + el.height + (16 / zoom)}
+                                                width={720 / zoom}
+                                                height={800 / zoom}
+                                                style={{ overflow: 'visible' }}
+                                            >
+                                                <div style={{ transform: `scale(${1 / zoom})`, transformOrigin: 'top left', width: '720px' }}>
+                                                    <InlinePromptBar
+                                                        variant="canvas"
+                                                        element={selectedInlinePromptElement}
+                                                        allElements={elements}
+                                                        canvasZoom={zoom}
+                                                        canvasPan={panOffset}
+                                                        modelId={selectedInlinePromptElement.type === 'video' ? modelPreference.videoModel : modelPreference.imageModel}
+                                                        status={selectedInlinePromptElement.generationState?.status || 'idle'}
+                                                        progress={selectedInlinePromptElement.generationState?.progress}
+                                                        isLoading={isLoading}
+                                                        theme={resolvedTheme}
+                                                        apiKeyPayload={getInlineApiKeyForElement(selectedInlinePromptElement)}
+                                                        userApiKeys={userApiKeys}
+                                                        imageModelOptions={dynamicModelOptions.image}
+                                                        videoModelOptions={dynamicModelOptions.video}
+                                                        videoAspectRatio={videoAspectRatio}
+                                                        setVideoAspectRatio={setVideoAspectRatio}
+                                                        isAutoEnhanceEnabled={isAutoEnhanceEnabled}
+                                                        onAutoEnhanceToggle={() => setIsAutoEnhanceEnabled(prev => !prev)}
+                                                        onEnhancePrompt={handleEnhancePrompt}
+                                                        isEnhancingPrompt={isEnhancingPrompt}
+                                                        t={t}
+                                                        onPromptChange={updateElementGenerationState}
+                                                        onMediaGenerated={updateElementMedia}
+                                                        animateViewport={animateViewportToElement}
+                                                        progressLabel={progressMessage}
+                                                        activeTaskCount={Object.values(runtimeJobsRef.current).filter(job => job.status === 'running').length}
+                                                    />
+                                                </div>
+                                            </foreignObject>
+                                        )}
                                     </g>
                                 );
                             }
@@ -3827,11 +3935,52 @@ const App: React.FC = () => {
                                             </foreignObject>
                                         )}
                                         {selectionComponent}
+                                        {relationFocusComponent}
+                                        {selectedInlinePromptElement?.id === el.id && !croppingState && !editingElement && (
+                                            <foreignObject
+                                                x={el.x + el.width / 2 - (360 / zoom)}
+                                                y={el.y + el.height + (16 / zoom)}
+                                                width={720 / zoom}
+                                                height={800 / zoom}
+                                                style={{ overflow: 'visible' }}
+                                            >
+                                                <div style={{ transform: `scale(${1 / zoom})`, transformOrigin: 'top left', width: '720px' }}>
+                                                    <InlinePromptBar
+                                                        variant="canvas"
+                                                        element={selectedInlinePromptElement}
+                                                        allElements={elements}
+                                                        canvasZoom={zoom}
+                                                        canvasPan={panOffset}
+                                                        modelId={selectedInlinePromptElement.type === 'video' ? modelPreference.videoModel : modelPreference.imageModel}
+                                                        status={selectedInlinePromptElement.generationState?.status || 'idle'}
+                                                        progress={selectedInlinePromptElement.generationState?.progress}
+                                                        isLoading={isLoading}
+                                                        theme={resolvedTheme}
+                                                        apiKeyPayload={getInlineApiKeyForElement(selectedInlinePromptElement)}
+                                                        userApiKeys={userApiKeys}
+                                                        imageModelOptions={dynamicModelOptions.image}
+                                                        videoModelOptions={dynamicModelOptions.video}
+                                                        videoAspectRatio={videoAspectRatio}
+                                                        setVideoAspectRatio={setVideoAspectRatio}
+                                                        isAutoEnhanceEnabled={isAutoEnhanceEnabled}
+                                                        onAutoEnhanceToggle={() => setIsAutoEnhanceEnabled(prev => !prev)}
+                                                        onEnhancePrompt={handleEnhancePrompt}
+                                                        isEnhancingPrompt={isEnhancingPrompt}
+                                                        t={t}
+                                                        onPromptChange={updateElementGenerationState}
+                                                        onMediaGenerated={updateElementMedia}
+                                                        animateViewport={animateViewportToElement}
+                                                        progressLabel={progressMessage}
+                                                        activeTaskCount={Object.values(runtimeJobsRef.current).filter(job => job.status === 'running').length}
+                                                    />
+                                                </div>
+                                            </foreignObject>
+                                        )}
                                     </g>
                                 );
                             }
                              if (el.type === 'group') {
-                                return <g key={el.id} data-id={el.id}>{selectionComponent}</g>
+                                return <g key={el.id} data-id={el.id}>{selectionComponent}{relationFocusComponent}</g>
                              }
                             return null;
                         })}
@@ -3990,6 +4139,15 @@ const App: React.FC = () => {
                                 setOutpaintMenuId={setOutpaintMenuId}
                                 setAddAssetModal={setAddAssetModal}
                                 startMaskEditing={startMaskEditing}
+                                relationFocusCount={Math.max(0, selectedRelationIds.size - 1)}
+                                isRelationFocusActive={!!singleSelectedElement && relationFocusElementId === singleSelectedElement.id}
+                                onToggleRelationFocus={singleSelectedElement && (singleSelectedElement.type === 'image' || singleSelectedElement.type === 'video')
+                                    ? () => {
+                                        setRelationFocusElementId(prev => (
+                                            prev === singleSelectedElement.id ? null : singleSelectedElement.id
+                                        ));
+                                    }
+                                    : undefined}
                             />
                         )}
                         {editingElement && (() => {
@@ -4049,36 +4207,7 @@ const App: React.FC = () => {
                     </g>
                 );
             })()}
-                </svg>
-                {selectedInlinePromptElement && !croppingState && !editingElement && (
-                    <InlinePromptBar
-                        element={selectedInlinePromptElement}
-                        allElements={elements}
-                        canvasZoom={zoom}
-                        canvasPan={panOffset}
-                        modelId={selectedInlinePromptElement.type === 'video' ? modelPreference.videoModel : modelPreference.imageModel}
-                        status={selectedInlinePromptElement.generationState?.status || 'idle'}
-                        progress={selectedInlinePromptElement.generationState?.progress}
-                        isLoading={isLoading}
-                        theme={resolvedTheme}
-                        apiKeyPayload={getInlineApiKeyForElement(selectedInlinePromptElement)}
-                        userApiKeys={userApiKeys}
-                        imageModelOptions={dynamicModelOptions.image}
-                        videoModelOptions={dynamicModelOptions.video}
-                        videoAspectRatio={videoAspectRatio}
-                        setVideoAspectRatio={setVideoAspectRatio}
-                        isAutoEnhanceEnabled={isAutoEnhanceEnabled}
-                        onAutoEnhanceToggle={() => setIsAutoEnhanceEnabled(prev => !prev)}
-                        onEnhancePrompt={handleEnhancePrompt}
-                        isEnhancingPrompt={isEnhancingPrompt}
-                        t={t}
-                        onPromptChange={updateElementGenerationState}
-                        onMediaGenerated={updateElementMedia}
-                        animateViewport={animateViewportToElement}
-                        progressLabel={progressMessage}
-                        activeTaskCount={Object.values(runtimeJobsRef.current).filter(job => job.status === 'running').length}
-                    />
-                )}
+                 </svg>
                  {contextMenu && (() => {
                     const hasDrawableSelection = elements.some(el => selectedElementIds.includes(el.id) && el.type !== 'image' && el.type !== 'video');
                     const isGroupable = selectedElementIds.length > 1;
