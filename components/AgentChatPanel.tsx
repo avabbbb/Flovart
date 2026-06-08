@@ -118,6 +118,43 @@ const inferAction = (text: string): 'image' | 'video' => (
     /视频|短片|镜头|运镜|motion|camera|video|clip/i.test(text) ? 'video' : 'image'
 );
 
+export interface AgentAtomicCommand {
+    command: 'element.create' | 'element.update-prompt' | 'element.ignite';
+    args: Record<string, unknown>;
+}
+
+export function buildAgentAtomicPlan(input: {
+    action: 'image' | 'video';
+    elementId: string;
+    layerName: string;
+    prompt: string;
+    historyLength: number;
+}): AgentAtomicCommand[] {
+    const { action, elementId, layerName, prompt, historyLength } = input;
+    return [
+        {
+            command: 'element.create',
+            args: {
+                id: elementId,
+                type: action,
+                name: layerName,
+                x: 120 + historyLength * 32,
+                y: 140 + historyLength * 28,
+                width: action === 'video' ? 240 : 180,
+                height: action === 'video' ? 140 : 180,
+            },
+        },
+        {
+            command: 'element.update-prompt',
+            args: { elementId, textPrompt: prompt },
+        },
+        {
+            command: 'element.ignite',
+            args: { elementId },
+        },
+    ];
+}
+
 export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
     theme,
     compactMode,
@@ -213,29 +250,20 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
             const runtimeApi = getFlovartRuntimeApi();
 
             if (runtimeApi) {
-                const created = await executeFlovartCommand('element.create', {
-                    id: createAgentElementId(),
-                    type: action,
-                    name: layerName,
-                    x: 120 + generationHistory.length * 32,
-                    y: 140 + generationHistory.length * 28,
-                    width: action === 'video' ? 240 : 180,
-                    height: action === 'video' ? 140 : 180,
-                }, runtimeApi);
+                const elementId = createAgentElementId();
+                const plan = buildAgentAtomicPlan({
+                    action,
+                    elementId,
+                    layerName,
+                    prompt: finalPrompt,
+                    historyLength: generationHistory.length,
+                });
 
-                const elementId = typeof created.id === 'string' ? created.id : '';
-                if (created.ok === false || !elementId) {
-                    throw new Error(getRuntimeErrorMessage(created, 'Agent 创建图层失败。'));
-                }
-
-                const updated = await executeFlovartCommand('element.update-prompt', { elementId, textPrompt: finalPrompt }, runtimeApi);
-                if (updated.ok === false) {
-                    throw new Error(getRuntimeErrorMessage(updated, 'Agent 写入提示词失败。'));
-                }
-
-                const ignited = await executeFlovartCommand('element.ignite', { elementId }, runtimeApi);
-                if (ignited.ok === false) {
-                    throw new Error(getRuntimeErrorMessage(ignited, 'Agent 启动生成失败。'));
+                for (const step of plan) {
+                    const result = await executeFlovartCommand(step.command, step.args, runtimeApi);
+                    if (result?.ok === false) {
+                        throw new Error(getRuntimeErrorMessage(result, `Agent command failed: ${step.command}`));
+                    }
                 }
             } else if (action === 'video') {
                 await onCreateVideo?.(finalPrompt);

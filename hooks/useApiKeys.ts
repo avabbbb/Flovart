@@ -18,8 +18,8 @@ const generateId = () => `id_${Date.now()}_${Math.random().toString(36).substr(2
 
 export const DEFAULT_MODEL_PREFS: ModelPreference = {
     textModel: 'gemini-3-flash-preview',
-    imageModel: 'gemini-3.1-flash-image-preview',
-    videoModel: 'veo-3.1-generate-preview',
+    imageModel: 'gpt-image-2',
+    videoModel: 'dreamina-seedance-2-0-260128',
 };
 
 const PROVIDER_MODELS = DEFAULT_PROVIDER_MODELS;
@@ -65,8 +65,14 @@ const getRequestedModelByCapability = (modelPreference: ModelPreference, capabil
 };
 
 const FALLBACK_TEXT_OPTIONS = ensureModelOption([...(PROVIDER_MODELS.google?.text || [])], DEFAULT_MODEL_PREFS.textModel);
-const FALLBACK_IMAGE_OPTIONS = ensureModelOption([...(PROVIDER_MODELS.google?.image || [])], DEFAULT_MODEL_PREFS.imageModel);
-const FALLBACK_VIDEO_OPTIONS = ensureModelOption([...(PROVIDER_MODELS.google?.video || [])], DEFAULT_MODEL_PREFS.videoModel);
+const FALLBACK_IMAGE_OPTIONS = ensureModelOption([
+    ...(PROVIDER_MODELS.openai?.image || []),
+    ...(PROVIDER_MODELS.google?.image || []),
+], DEFAULT_MODEL_PREFS.imageModel);
+const FALLBACK_VIDEO_OPTIONS = ensureModelOption([
+    ...(PROVIDER_MODELS.volcengine?.video || []),
+    ...(PROVIDER_MODELS.google?.video || []),
+], DEFAULT_MODEL_PREFS.videoModel);
 
 export const normalizeApiKeyEntry = (item: Partial<UserApiKey>): UserApiKey | null => {
     if (!item || !item.id || !item.provider || !item.key) return null;

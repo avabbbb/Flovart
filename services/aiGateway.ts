@@ -66,7 +66,7 @@ export const DEFAULT_PROVIDER_MODELS: Partial<Record<AIProvider, ProviderModelMa
     },
     openai: {
         text: ['gpt-5.4', 'gpt-5.4-mini', 'gpt-5.4-nano', 'gpt-4o-mini'],
-        image: ['gpt-image-1', 'dall-e-3'],
+        image: ['gpt-image-2', 'gpt-image-1.5', 'gpt-image-1', 'dall-e-3'],
         video: [],
     },
     anthropic: {
@@ -117,7 +117,7 @@ export const DEFAULT_PROVIDER_MODELS: Partial<Record<AIProvider, ProviderModelMa
     volcengine: {
         text: ['doubao-1.5-pro-256k', 'doubao-1.5-pro-32k'],
         image: [],
-        video: ['doubao-seedance-2-0-260128'],
+        video: ['dreamina-seedance-2-0-260128', 'doubao-seedance-2-0-260128'],
     },
     openrouter: {
         text: ['openrouter/auto', 'google/gemini-3-flash-preview', 'anthropic/claude-opus-4-6', 'deepseek/deepseek-r1'],
@@ -151,6 +151,24 @@ type CapabilityDictionary = {
     requestParams: string[];
     aspectRatios?: VideoAspectRatio[];
     defaults?: Record<string, unknown>;
+    endpoint?: 'images/generations' | 'images/edits' | 'contents/generations/tasks';
+    responseFormat?: 'b64_json' | 'url' | 'implicit';
+    outputFormat?: 'png' | 'jpeg' | 'webp';
+};
+
+const OPENAI_GPT_IMAGE_CAPABILITY: CapabilityDictionary = {
+    multimodalSlots: {
+        image: { max: 16, roles: ['reference_image', 'first_frame', 'last_frame', 'style_ref', 'unassigned'] },
+    },
+    requestParams: ['size', 'quality', 'background', 'moderation', 'output_format', 'output_compression'],
+    defaults: {
+        size: '1024x1024',
+        quality: 'auto',
+        output_format: 'png',
+    },
+    endpoint: 'images/generations',
+    responseFormat: 'implicit',
+    outputFormat: 'png',
 };
 
 const DEFAULT_VIDEO_CAPABILITY: CapabilityDictionary = {
@@ -186,6 +204,7 @@ const SEEDANCE_CAPABILITY: CapabilityDictionary = {
         duration: 5,
         watermark: false,
     },
+    endpoint: 'contents/generations/tasks',
 };
 
 export function getCapabilityDictionary(model: string, provider: AIProvider = inferProviderFromModel(model)): CapabilityDictionary {
@@ -193,11 +212,13 @@ export function getCapabilityDictionary(model: string, provider: AIProvider = in
     if (provider === 'volcengine' || normalized.includes('seedance')) {
         return SEEDANCE_CAPABILITY;
     }
+    if ((provider === 'openai' || provider === 'custom') && isOpenAIImageEditModel(model)) {
+        return OPENAI_GPT_IMAGE_CAPABILITY;
+    }
     return DEFAULT_VIDEO_CAPABILITY;
 }
 
 function normalizeMultimodalRole(slot: MultimodalSlot): string {
-    if (slot.role === 'first_frame' || slot.role === 'last_frame') return 'reference_image';
     if (slot.kind === 'image') return slot.role && slot.role !== 'unassigned' ? String(slot.role) : 'reference_image';
     if (slot.kind === 'video') return slot.role && slot.role !== 'unassigned' ? String(slot.role) : 'reference_video';
     if (slot.kind === 'audio') return slot.role && slot.role !== 'unassigned' ? String(slot.role) : 'reference_audio';
@@ -457,7 +478,7 @@ function parseModelMappings(config: CustomProviderExtraConfig): Record<string, s
 }
 
 function mapProviderModel(model: string, key?: UserApiKey): string {
-    return parseModelMappings(key.extraConfig)[model] || model;
+    return parseModelMappings(key?.extraConfig)[model] || model;
 }
 
 function buildProviderHeaders(
@@ -660,7 +681,19 @@ export function isGoogleTextToImageModel(model: string): boolean {
 
 function isOpenAIImageEditModel(model: string): boolean {
     const normalized = normalizeModelName(model).replace(/^openai\//, '');
-    return /^(gpt-image-1(?:\.5|-mini)?|gpt-image-1)$/.test(normalized);
+    return /^(gpt-image-2|gpt-image-1\.5|gpt-image-1(?:-mini)?|gpt-image-1)$/.test(normalized);
+}
+
+const GPT_IMAGE_INPUT_IMAGE_LIMIT = 16;
+
+function limitProviderImageInputs<T>(images: T[], provider: AIProvider, model: string, key?: UserApiKey): T[] {
+    const mappedModel = mapProviderModel(model, key);
+    const capability = getCapabilityDictionary(mappedModel, provider);
+    const maxImages = capability.multimodalSlots.image?.max;
+    if (maxImages) {
+        return images.slice(0, maxImages);
+    }
+    return images;
 }
 
 export function supportsReferenceImageEditing(model: string): boolean {
@@ -696,6 +729,24 @@ function createBlobFromBase64(base64: string, mimeType: string) {
         bytes[i] = binary.charCodeAt(i);
     }
     return new Blob([bytes], { type: mimeType });
+}
+
+function buildOpenAIImageRequestParams(
+    capability: CapabilityDictionary,
+    input: Record<string, unknown>,
+): Record<string, unknown> {
+    const params = withSupportedParams(capability, input);
+    if (capability.outputFormat && !params.output_format) {
+        params.output_format = capability.outputFormat;
+    }
+    return params;
+}
+
+function appendOpenAIImageFormParams(formData: FormData, params: Record<string, unknown>) {
+    for (const [key, value] of Object.entries(params)) {
+        if (value === undefined || value === null || value === '') continue;
+        formData.append(key, String(value));
+    }
 }
 
 function decodeDataUrlImage(dataUrl: string) {
@@ -931,12 +982,26 @@ function getUnifiedApiBaseCandidates(baseUrl: string) {
 }
 
 function extractTaskId(payload: any) {
-    return payload?.task_id || payload?.data?.task_id || payload?.id || payload?.data?.id;
+    return payload?.task_id
+        || payload?.data?.task_id
+        || payload?.id
+        || payload?.data?.id
+        || payload?.task?.id
+        || payload?.data?.task?.id;
 }
 
 function extractVideoStatus(payload: any) {
-    const rawStatus = payload?.status || payload?.data?.status || payload?.data?.task_status || payload?.state;
-    return typeof rawStatus === 'string' ? rawStatus.toLowerCase() : '';
+    const rawStatus = payload?.status
+        || payload?.data?.status
+        || payload?.data?.task_status
+        || payload?.state
+        || payload?.task?.status
+        || payload?.data?.task?.status;
+    const normalized = typeof rawStatus === 'string' ? rawStatus.toLowerCase() : '';
+    if (['success', 'succeed', 'succeeded', 'completed', 'complete', 'done'].includes(normalized)) return 'succeeded';
+    if (['fail', 'failed', 'error', 'cancelled', 'canceled', 'expired'].includes(normalized)) return 'failed';
+    if (['queued', 'pending', 'running', 'processing', 'in_progress', 'created'].includes(normalized)) return 'running';
+    return normalized;
 }
 
 function extractFailureReason(payload: any) {
@@ -951,6 +1016,12 @@ function extractVideoOutputUrl(payload: any) {
         || payload?.content?.video_url
         || payload?.data?.video_url
         || payload?.data?.content?.video_url
+        || payload?.video?.url
+        || payload?.data?.video?.url
+        || payload?.result?.video_url
+        || payload?.data?.result?.video_url
+        || payload?.result?.videos?.[0]?.url
+        || payload?.data?.result?.videos?.[0]?.url
         || payload?.data?.task_result?.videos?.[0]?.url;
 }
 
@@ -1030,11 +1101,11 @@ async function generateVideoWithUnifiedAsyncApi(
                 const queryJson = await readJsonResponse<any>(queryRes, '统一视频接口查询响应');
                 const status = extractVideoStatus(queryJson);
 
-                if (['failure', 'failed', 'fail', 'error', 'cancelled', 'canceled'].includes(status)) {
+                if (status === 'failed') {
                     throw new Error(`视频生成失败: ${extractFailureReason(queryJson) || 'Unknown error'}`);
                 }
 
-                if (['success', 'succeed', 'completed', 'done'].includes(status)) {
+                if (status === 'succeeded') {
                     const outputUrl = extractVideoOutputUrl(queryJson);
                     if (!outputUrl) {
                         throw new Error('视频生成完成但未返回下载链接');
@@ -1565,7 +1636,7 @@ export async function generateImageWithProvider(
     images?: VideoImage[],
 ): Promise<{ newImageBase64: string | null; newImageMimeType: string | null; textResponse: string | null }> {
     const provider = resolveGenerationProvider(model, key);
-    const refs = images ?? [];
+    const refs = limitProviderImageInputs(images ?? [], provider, model, key);
 
     if (provider === 'google') {
         if (refs.length > 0) {
@@ -1616,13 +1687,25 @@ export async function generateImageWithProvider(
         const apiKey = requireApiKey(provider, key);
         const baseUrl = getBaseUrl(provider, key);
         const mappedModel = mapProviderModel(model, key);
+        const capability = getCapabilityDictionary(mappedModel, provider);
+        const officialGptImage = provider === 'openai' && isOpenAIImageEditModel(mappedModel);
 
         // With reference images: use /images/edits (multipart) or chat/completions fallback
         if (refs.length > 0) {
             const formData = new FormData();
             formData.append('model', mappedModel);
             formData.append('prompt', prompt);
-            formData.append('response_format', provider === 'custom' ? 'url' : 'b64_json');
+            if (!officialGptImage) {
+                formData.append('response_format', provider === 'custom' ? 'url' : 'b64_json');
+            }
+            appendOpenAIImageFormParams(formData, buildOpenAIImageRequestParams(capability, {
+                size: '1024x1024',
+                quality: key?.extraConfig?.imageQuality,
+                background: key?.extraConfig?.imageBackground,
+                moderation: key?.extraConfig?.moderation,
+                output_format: key?.extraConfig?.outputFormat,
+                output_compression: key?.extraConfig?.outputCompression ? Number(key.extraConfig.outputCompression) : undefined,
+            }));
 
             refs.forEach((image, index) => {
                 const parsed = parseDataUrl(image.href, image.mimeType);
@@ -1678,6 +1761,14 @@ export async function generateImageWithProvider(
 
         // Text-only: try /images/generations first
         const preferredFormat = provider === 'custom' ? 'url' : 'b64_json';
+        const imageParams = buildOpenAIImageRequestParams(capability, {
+            size: '1024x1024',
+            quality: key?.extraConfig?.imageQuality,
+            background: key?.extraConfig?.imageBackground,
+            moderation: key?.extraConfig?.moderation,
+            output_format: key?.extraConfig?.outputFormat,
+            output_compression: key?.extraConfig?.outputCompression ? Number(key.extraConfig.outputCompression) : undefined,
+        });
         try {
             const response = await fetch(`${baseUrl}/images/generations`, {
                 method: 'POST',
@@ -1685,8 +1776,8 @@ export async function generateImageWithProvider(
                 body: JSON.stringify({
                     model: mappedModel,
                     prompt,
-                    size: '1024x1024',
-                    response_format: preferredFormat,
+                    ...imageParams,
+                    ...(!officialGptImage ? { response_format: preferredFormat } : {}),
                 }),
             });
 
@@ -1761,12 +1852,13 @@ export async function editImageWithProvider(
     options?: { mask?: ImageInput }
 ): Promise<{ newImageBase64: string | null; newImageMimeType: string | null; textResponse: string | null }> {
     const provider = resolveGenerationProvider(model, key);
+    const inputImages = limitProviderImageInputs(images, provider, model, key);
 
     if (provider === 'google') {
         if (!supportsReferenceImageEditing(model)) {
             throw new Error('当前 Google 图片模型只支持纯文本生图，请切换到 Gemini 图像编辑模型。');
         }
-        return editImage(images, prompt, options?.mask, key?.key);
+        return editImage(inputImages, prompt, options?.mask, key?.key);
     }
 
     if (provider === 'openrouter') {
@@ -1778,7 +1870,7 @@ export async function editImageWithProvider(
         const baseUrl = getBaseUrl(provider, key);
         const content = [
             { type: 'text', text: prompt },
-            ...images.map((image) => ({
+            ...inputImages.map((image) => ({
                 type: 'image_url',
                 image_url: { url: image.href },
             })),
@@ -1826,12 +1918,24 @@ export async function editImageWithProvider(
         const apiKey = requireApiKey(provider, key);
         const baseUrl = getBaseUrl(provider, key);
         const mappedModel = mapProviderModel(model, key);
+        const capability = getCapabilityDictionary(mappedModel, provider);
+        const officialGptImage = provider === 'openai' && isOpenAIImageEditModel(mappedModel);
         const formData = new FormData();
         formData.append('model', mappedModel);
         formData.append('prompt', prompt);
-        formData.append('response_format', provider === 'custom' ? 'url' : 'b64_json');
+        if (!officialGptImage) {
+            formData.append('response_format', provider === 'custom' ? 'url' : 'b64_json');
+        }
+        appendOpenAIImageFormParams(formData, buildOpenAIImageRequestParams(capability, {
+            size: '1024x1024',
+            quality: key?.extraConfig?.imageQuality,
+            background: key?.extraConfig?.imageBackground,
+            moderation: key?.extraConfig?.moderation,
+            output_format: key?.extraConfig?.outputFormat,
+            output_compression: key?.extraConfig?.outputCompression ? Number(key.extraConfig.outputCompression) : undefined,
+        }));
 
-        images.forEach((image, index) => {
+        inputImages.forEach((image, index) => {
             const parsed = parseDataUrl(image.href, image.mimeType);
             formData.append(
                 'image',
@@ -2130,7 +2234,7 @@ export async function generateVideoWithProvider(
     if (provider === 'volcengine') {
         const apiKey = requireApiKey(provider, key);
         const baseUrl = getBaseUrl(provider, key);
-        const mappedModel = mapProviderModel(model || 'doubao-seedance-2-0-260128', key);
+        const mappedModel = mapProviderModel(model || 'dreamina-seedance-2-0-260128', key);
         const capability = getCapabilityDictionary(mappedModel, provider);
 
         // Seedance via Ark API: text plus typed multimodal slots in content[].
@@ -2191,8 +2295,8 @@ export async function generateVideoWithProvider(
             const queryJson = await readJsonResponse<any>(queryRes, 'Seedance 任务查询响应');
             const status = extractVideoStatus(queryJson);
 
-            if (status === 'failed' || status === 'cancelled' || status === 'expired') {
-                throw new Error(`Seedance 视频生成失败: ${queryJson?.error?.message || 'Unknown error'}`);
+            if (status === 'failed') {
+                throw new Error(`Seedance 视频生成失败: ${extractFailureReason(queryJson) || 'Unknown error'}`);
             }
             if (status === 'succeeded') {
                 seedanceVideoUrl = extractVideoOutputUrl(queryJson);

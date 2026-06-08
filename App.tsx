@@ -67,6 +67,8 @@ const BOARDS_STORAGE_KEY = 'boards.v1';
 const ACTIVE_BOARD_STORAGE_KEY = 'boards.activeId.v1';
 
 const STORAGE_QUOTA_ERROR_NAMES = new Set(['QuotaExceededError', 'NS_ERROR_DOM_QUOTA_REACHED']);
+const STORAGE_QUOTA_MESSAGE = '本地存储空间不足，无法保存最新画布。请删除部分历史图片或导出后清理项目。';
+const STORAGE_SAVE_FAILED_MESSAGE = '保存画布失败，请刷新后重试。';
 
 type RuntimeJobStatus = 'accepted' | 'running' | 'succeeded' | 'failed' | 'canceled';
 
@@ -128,11 +130,8 @@ const persistBoardsToIDB = async (boards: Board[]): Promise<void> => {
     const videoPromises: Promise<void>[] = [];
     const usedImageKeys = new Set<string>();
     const usedVideoKeys = new Set<string>();
-    const slim = boards.map(b => ({
-        ...b,
-        history: [b.elements],   // 只保留当前快照, 丢弃 undo 栈
-        historyIndex: 0,
-        elements: b.elements.map(el => {
+    const slim = boards.map(b => {
+        const persistedElements = b.elements.map(el => {
             if (el.type === 'image') {
                 const img = { ...el } as ImageElement;
                 if (isDataUrl(img.href)) {
@@ -170,11 +169,25 @@ const persistBoardsToIDB = async (boards: Board[]): Promise<void> => {
                 usedVideoKeys.add(fromIdbVideoRef((el as VideoElement).href));
             }
             return el;
-        }),
-    }));
+        });
+
+        return {
+            ...b,
+            elements: persistedElements,
+            history: [persistedElements],   // 只保留当前快照, 丢弃 undo 栈；必须使用已转成 idb: 的元素
+            historyIndex: 0,
+        };
+    });
     if (imageEntries.length > 0) await putImages(imageEntries);
     await Promise.all(videoPromises);
-    localStorage.setItem(BOARDS_STORAGE_KEY, JSON.stringify(slim));
+    const serialized = JSON.stringify(slim);
+    try {
+        localStorage.setItem(BOARDS_STORAGE_KEY, serialized);
+    } catch (err) {
+        if (!isStorageQuotaError(err)) throw err;
+        localStorage.removeItem(BOARDS_STORAGE_KEY);
+        localStorage.setItem(BOARDS_STORAGE_KEY, serialized);
+    }
 
     const [allImageKeys, allVideoKeys] = await Promise.all([getAllKeys(), getAllVideoKeys()]);
     const staleImageKeys = allImageKeys.filter(key => key.startsWith('board:') && !usedImageKeys.has(key));
@@ -395,13 +408,12 @@ const App: React.FC = () => {
         if (!dataReady) return;
         persistBoardsToIDB(boards).then(() => {
             hasShownStorageErrorRef.current = false;
+            setError(prev => (prev === STORAGE_QUOTA_MESSAGE || prev === STORAGE_SAVE_FAILED_MESSAGE ? null : prev));
         }).catch(err => {
             if (!hasShownStorageErrorRef.current) {
                 hasShownStorageErrorRef.current = true;
                 console.error('Failed to persist boards to localStorage', err);
-                setError(isStorageQuotaError(err)
-                    ? '本地存储空间不足，无法保存最新画布。请删除部分历史图片或导出后清理项目。'
-                    : '保存画布失败，请刷新后重试。');
+                setError(isStorageQuotaError(err) ? STORAGE_QUOTA_MESSAGE : STORAGE_SAVE_FAILED_MESSAGE);
             }
         });
     }, [boards, dataReady]);
@@ -3727,27 +3739,11 @@ const App: React.FC = () => {
                                                     height={el.height}
                                                     fill="none"
                                                     stroke="var(--isl-mint, #00e68a)"
-                                                    strokeWidth={5 / zoom}
-                                                    rx={hasBorderRadius ? el.borderRadius : 0}
-                                                    opacity={0.28}
-                                                    style={{
-                                                        filter: 'drop-shadow(0 0 12px rgba(0, 230, 138, 0.55))',
-                                                        animation: 'flv-gen-neon-breathe 1.8s ease-in-out infinite',
-                                                    }}
-                                                />
-                                                <rect
-                                                    width={el.width}
-                                                    height={el.height}
-                                                    fill="none"
-                                                    stroke="var(--isl-mint, #00e68a)"
                                                     strokeWidth={2.5 / zoom}
                                                     strokeDasharray={`${perimeter * 0.12} ${perimeter * 0.88}`}
                                                     strokeLinecap="round"
                                                     rx={hasBorderRadius ? el.borderRadius : 0}
-                                                    style={{
-                                                        filter: 'drop-shadow(0 0 6px rgba(0, 230, 138, 0.6))',
-                                                        animation: `flv-gen-neon-sweep ${Math.max(1.8, perimeter / 300)}s linear infinite`,
-                                                    }}
+                                                    opacity={0.7}
                                                 />
                                                 <g clipPath={hasBorderRadius ? `url(#${clipPathId})` : undefined}>
                                                     <rect
@@ -3805,27 +3801,11 @@ const App: React.FC = () => {
                                                     height={el.height}
                                                     fill="none"
                                                     stroke="var(--isl-sun, #fbbf24)"
-                                                    strokeWidth={5 / zoom}
-                                                    rx={8}
-                                                    opacity={0.28}
-                                                    style={{
-                                                        filter: 'drop-shadow(0 0 12px rgba(251, 191, 36, 0.55))',
-                                                        animation: 'flv-gen-neon-breathe 1.8s ease-in-out infinite',
-                                                    }}
-                                                />
-                                                <rect
-                                                    width={el.width}
-                                                    height={el.height}
-                                                    fill="none"
-                                                    stroke="var(--isl-sun, #fbbf24)"
                                                     strokeWidth={2.5 / zoom}
                                                     strokeDasharray={`${perimeter * 0.12} ${perimeter * 0.88}`}
                                                     strokeLinecap="round"
                                                     rx={8}
-                                                    style={{
-                                                        filter: 'drop-shadow(0 0 6px rgba(251, 191, 36, 0.6))',
-                                                        animation: `flv-gen-neon-sweep ${Math.max(1.8, perimeter / 300)}s linear infinite`,
-                                                    }}
+                                                    opacity={0.7}
                                                 />
                                                 <rect width={el.width} height={el.height} fill="rgba(0,0,0,0.06)" rx={8} />
                                             </g>
@@ -3976,23 +3956,6 @@ const App: React.FC = () => {
                         {alignmentGuides.map((guide, i) => (
                              <line key={i} x1={guide.type === 'v' ? guide.position : guide.start} y1={guide.type === 'h' ? guide.position : guide.start} x2={guide.type === 'v' ? guide.position : guide.end} y2={guide.type === 'h' ? guide.position : guide.end} stroke="red" strokeWidth={1/zoom} strokeDasharray={`${4/zoom} ${2/zoom}`} />
                         ))}
-
-                        {elements.length === 0 && !croppingState && !editingElement && !selectedInlinePromptElement && (
-                            <foreignObject x={0} y={0} width="100%" height="100%" style={{ overflow: 'visible', pointerEvents: 'none' }}>
-                                <div className="flex h-full w-full items-center justify-center">
-                                    <div className={`rounded-[28px] border px-6 py-4 text-center shadow-[0_24px_70px_rgba(15,23,42,0.16)] ${
-                                        resolvedTheme === 'dark'
-                                            ? 'border-white/10 bg-[#11151D]/84 text-white/82'
-                                            : 'border-white/70 bg-white/88 text-neutral-700 backdrop-blur-xl'
-                                    }`}>
-                                        <div className="text-sm font-semibold">输入你想要生成的画面</div>
-                                        <div className={`mt-1 text-xs ${resolvedTheme === 'dark' ? 'text-white/48' : 'text-neutral-500'}`}>
-                                            先在底部 PromptBar 写一句，再按 Enter 开始。
-                                        </div>
-                                    </div>
-                                </div>
-                            </foreignObject>
-                        )}
 
                         {selectedElementIds.length > 0 && !croppingState && !editingElement && (
                             <ElementToolbar

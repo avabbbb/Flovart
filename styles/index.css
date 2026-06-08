@@ -24,8 +24,8 @@
     --primary-text: #ffffff;
     --input-bg: rgba(255, 255, 255, 0.92);
     --canvas-bg: #f4f1ea;
-    --shadow-panel: 0 4px 12px rgba(0, 0, 0, 0.08);
-    --shadow-soft: 0 4px 12px rgba(0, 0, 0, 0.08);
+    --shadow-panel: 0 14px 36px rgba(31, 29, 26, 0.14);
+    --shadow-soft: 0 6px 18px rgba(31, 29, 26, 0.1);
     --accent-bg: #e3f7f4;
     --accent-text: #12a89b;
     --ui-bg-color: rgba(250, 249, 246, 0.92);
@@ -38,7 +38,7 @@
     --flovart-input-bg: rgba(255, 255, 255, 0.7);
     --flovart-chip-bg: #f4f4f5;
     --flovart-chip-border: #d4d4d8;
-    --flovart-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    --flovart-shadow: 0 12px 32px rgba(24, 24, 27, 0.08), 0 0 1px rgba(0, 0, 0, 0.05) inset;
 }
 
 :root[data-theme='light'] {
@@ -62,8 +62,8 @@
     --primary-text: #ffffff;
     --input-bg: rgba(255, 255, 255, 0.92);
     --canvas-bg: #f4f1ea;
-    --shadow-panel: 0 4px 12px rgba(0, 0, 0, 0.08);
-    --shadow-soft: 0 4px 12px rgba(0, 0, 0, 0.08);
+    --shadow-panel: 0 14px 36px rgba(31, 29, 26, 0.14);
+    --shadow-soft: 0 6px 18px rgba(31, 29, 26, 0.1);
     --accent-bg: #e3f7f4;
     --accent-text: #12a89b;
     --ui-bg-color: rgba(250, 249, 246, 0.94);
@@ -76,7 +76,7 @@
     --flovart-input-bg: rgba(255, 255, 255, 0.75);
     --flovart-chip-bg: rgba(228, 228, 231, 0.6);
     --flovart-chip-border: #d4d4d8;
-    --flovart-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    --flovart-shadow: 0 12px 32px rgba(24, 24, 27, 0.06), 0 0 1px rgba(0, 0, 0, 0.05) inset;
 }
 
 :root[data-theme='dark'] {
@@ -102,8 +102,8 @@
     --primary-text: #131210;
     --input-bg: rgba(21, 20, 18, 0.92);
     --canvas-bg: #15140f;
-    --shadow-panel: 0 4px 12px rgba(0, 0, 0, 0.28);
-    --shadow-soft: 0 4px 12px rgba(0, 0, 0, 0.24);
+    --shadow-panel: 0 16px 40px rgba(0, 0, 0, 0.54);
+    --shadow-soft: 0 6px 18px rgba(0, 0, 0, 0.46);
     --accent-bg: rgba(58, 217, 201, 0.16);
     --accent-text: #3ad9c9;
     --ui-bg-color: rgba(32, 31, 29, 0.94);
@@ -116,7 +116,7 @@
     --flovart-input-bg: rgba(0, 0, 0, 0.3);
     --flovart-chip-bg: #09090b;
     --flovart-chip-border: #27272a;
-    --flovart-shadow: 0 4px 12px rgba(0, 0, 0, 0.28);
+    --flovart-shadow: 0 12px 32px rgba(0, 0, 0, 0.7), 0 0 1px rgba(255, 255, 255, 0.05) inset;
 }
 
 html,
@@ -272,36 +272,13 @@ body {
 }
 
 .compact-sidebar-panel,
-.compact-right-panel,
-.compact-prompt-dock__inner {
+.compact-right-panel {
     will-change: transform, opacity;
 }
 
 .compact-sidebar-panel,
 .compact-right-panel {
     backface-visibility: hidden;
-}
-
-.compact-prompt-dock {
-    animation: compactDockFloat var(--motion-slow) var(--ease-spring-soft);
-}
-
-.compact-prompt-dock::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    bottom: auto;
-    height: 80px;
-    top: -80px;
-    left: 0;
-    right: 0;
-    background: linear-gradient(to bottom, transparent, var(--isl-card, rgba(255, 255, 255, 0.92)));
-    pointer-events: none;
-    z-index: -1;
-}
-
-.compact-prompt-dock__inner {
-    animation: compactDockLift var(--motion-slow) var(--ease-spring-soft);
 }
 
 .workflow-viewport-transition {
@@ -608,30 +585,6 @@ body {
 
 .animate-shake {
     animation: inlinePromptShake 0.25s ease-out both;
-}
-
-@keyframes compactDockFloat {
-    from {
-        opacity: 0;
-        transform: translateY(10px);
-    }
-
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-@keyframes compactDockLift {
-    from {
-        opacity: 0;
-        transform: translateY(14px) scale(0.985);
-    }
-
-    to {
-        opacity: 1;
-        transform: translateY(0) scale(1);
-    }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -2013,16 +1966,6 @@ input[type='range'].toolbar-range::-moz-range-thumb:hover {
 /* ==========================================================
    Generation lifecycle animations — neon, shimmer, reveal, stage
    ========================================================== */
-
-@keyframes flv-gen-neon-sweep {
-    from { stroke-dashoffset: 0; }
-    to { stroke-dashoffset: -100; }
-}
-
-@keyframes flv-gen-neon-breathe {
-    0%, 100% { opacity: 0.22; }
-    50% { opacity: 0.52; }
-}
 
 @keyframes flv-gen-shimmer {
     0% { transform: translateX(-150%); }

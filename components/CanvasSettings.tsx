@@ -121,6 +121,32 @@ const PROVIDER_PRESETS: ProviderPreset[] = [
         models: ['deepseek-chat', 'deepseek-reasoner'],
     },
     {
+        id: 'openai-gpt-image',
+        name: 'OpenAI GPT Image 2',
+        shortName: 'GI',
+        provider: 'openai',
+        websiteUrl: 'https://platform.openai.com/docs/guides/image-generation',
+        baseUrl: providerBaseUrl.openai,
+        capabilities: ['image'],
+        requestFormat: 'openai',
+        defaultModel: 'gpt-image-2',
+        models: ['gpt-image-2', 'gpt-image-1.5', 'gpt-image-1'],
+        featured: true,
+    },
+    {
+        id: 'seedance-2',
+        name: 'Seedance 2.0',
+        shortName: 'S2',
+        provider: 'volcengine',
+        websiteUrl: 'https://console.volcengine.com/ark',
+        baseUrl: providerBaseUrl.volcengine,
+        capabilities: ['video'],
+        requestFormat: 'openai',
+        defaultModel: 'dreamina-seedance-2-0-260128',
+        models: ['dreamina-seedance-2-0-260128', 'doubao-seedance-2-0-260128'],
+        featured: true,
+    },
+    {
         id: 'openrouter',
         name: 'OpenRouter',
         shortName: 'OR',
@@ -130,7 +156,7 @@ const PROVIDER_PRESETS: ProviderPreset[] = [
         capabilities: ['text', 'image'],
         requestFormat: 'openai',
         defaultModel: 'openrouter/auto',
-        models: ['openrouter/auto', 'anthropic/claude-sonnet-4-6', 'openai/gpt-image-1', 'google/gemini-3-flash-preview'],
+        models: ['openrouter/auto', 'anthropic/claude-sonnet-4-6', 'openai/gpt-image-2', 'openai/gpt-image-1', 'google/gemini-3-flash-preview'],
         featured: true,
     },
     {
@@ -144,18 +170,6 @@ const PROVIDER_PRESETS: ProviderPreset[] = [
         requestFormat: 'openai',
         defaultModel: 'deepseek-ai/DeepSeek-V3',
         models: ['deepseek-ai/DeepSeek-V3', 'Qwen/Qwen2.5-72B-Instruct'],
-    },
-    {
-        id: 'google',
-        name: 'Gemini Native',
-        shortName: 'G',
-        provider: 'google',
-        websiteUrl: 'https://aistudio.google.com',
-        baseUrl: providerBaseUrl.google,
-        capabilities: ['text', 'image', 'video'],
-        requestFormat: 'google',
-        defaultModel: 'gemini-3-flash-preview',
-        models: ['gemini-3-flash-preview', 'gemini-3.1-flash-image-preview', 'veo-3.1-generate-preview'],
     },
 ];
 
@@ -187,12 +201,12 @@ export const CanvasSettings: React.FC<CanvasSettingsProps> = ({
     usageSummary,
     dynamicModelOptions,
 }) => {
-    const [provider, setProvider] = React.useState<AIProvider>('google');
+    const [provider, setProvider] = React.useState<AIProvider>('openai');
     const [apiKey, setApiKey] = React.useState('');
-    const [baseUrl, setBaseUrl] = React.useState(providerBaseUrl.google);
+    const [baseUrl, setBaseUrl] = React.useState(providerBaseUrl.openai);
     const [displayName, setDisplayName] = React.useState('');
     const [showKey, setShowKey] = React.useState(false);
-    const [capabilities, setCapabilities] = React.useState<AICapability[]>(['text', 'image', 'video']);
+    const [capabilities, setCapabilities] = React.useState<AICapability[]>(['image']);
     const [isValidating, setIsValidating] = React.useState(false);
     const [validationResult, setValidationResult] = React.useState<Awaited<ReturnType<typeof validateApiKey>> | null>(null);
     // 当前正在编辑的 API Key（null = 新增模式）
@@ -228,12 +242,14 @@ export const CanvasSettings: React.FC<CanvasSettingsProps> = ({
         ),
         image: ensureModelOption(
             dynamicModelOptions?.image?.length ? dynamicModelOptions.image : [
+                ...(DEFAULT_PROVIDER_MODELS.openai?.image || []),
                 ...(DEFAULT_PROVIDER_MODELS.google?.image || []),
             ],
             modelPreference.imageModel
         ),
         video: ensureModelOption(
             dynamicModelOptions?.video?.length ? dynamicModelOptions.video : [
+                ...(DEFAULT_PROVIDER_MODELS.volcengine?.video || []),
                 ...(DEFAULT_PROVIDER_MODELS.google?.video || []),
             ],
             modelPreference.videoModel
@@ -804,7 +820,7 @@ export const CanvasSettings: React.FC<CanvasSettingsProps> = ({
                                     onClick={() => {
                                         setEditingKeyId(null);
                                         setDisplayName('');
-                                        applyProviderPreset(PROVIDER_PRESETS[0], { resetKey: true });
+                                        applyProviderPreset(PROVIDER_PRESETS.find(preset => preset.id === 'openai-gpt-image') || PROVIDER_PRESETS[0], { resetKey: true });
                                         setShowKeyModal(true);
                                     }}
                                     className="isl-chip isl-chip--active px-3 py-1.5 text-xs"
@@ -1034,22 +1050,34 @@ export const CanvasSettings: React.FC<CanvasSettingsProps> = ({
                                             可继续手动修改
                                         </div>
                                     </div>
-                                    <div className="flex flex-wrap gap-2">
+                                    <div className="grid gap-2 sm:grid-cols-2">
                                         {PROVIDER_PRESETS.map(preset => {
                                             const presetActive = provider === preset.provider && (displayName === preset.name || (preset.id === 'custom' && !displayName));
+                                            const rainbowStyle: React.CSSProperties = {
+                                                background: presetActive
+                                                    ? 'linear-gradient(135deg, rgba(255,75,145,.92), rgba(124,92,255,.92) 42%, rgba(0,214,255,.92) 72%, rgba(64,225,139,.92))'
+                                                    : 'linear-gradient(135deg, rgba(255,255,255,.9), rgba(255,75,145,.13), rgba(124,92,255,.14), rgba(0,214,255,.13), rgba(64,225,139,.12))',
+                                                borderColor: presetActive ? 'rgba(255,255,255,.45)' : 'rgba(124,92,255,.22)',
+                                                color: presetActive ? '#fff' : 'var(--isl-ink)',
+                                                boxShadow: presetActive ? '0 10px 28px rgba(124,92,255,.24)' : '0 6px 18px rgba(31,29,26,.08)',
+                                            };
                                             return (
                                             <button
                                                 key={preset.id}
                                                 type="button"
                                                 onClick={() => applyProviderPreset(preset, { fillName: true })}
-                                                className={`isl-chip px-3 py-2 text-sm ${presetActive ? 'isl-chip--active' : ''}`}
+                                                className="flex min-h-[54px] items-center gap-2 rounded-2xl border px-3 py-2 text-left text-sm transition hover:-translate-y-0.5"
+                                                style={rainbowStyle}
                                             >
-                                                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl bg-[var(--isl-surface-2)] text-[11px] font-bold text-[var(--isl-ink-soft)]">
+                                                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white/70 text-[11px] font-black text-[#4F46E5]">
                                                     {preset.shortName}
                                                 </span>
-                                                <span>{preset.name}</span>
+                                                <span className="min-w-0 flex-1">
+                                                    <span className="block truncate font-bold">{preset.name}</span>
+                                                    <span className="mt-0.5 block truncate text-[11px] opacity-75">{preset.defaultModel || preset.provider}</span>
+                                                </span>
                                                 {preset.featured && (
-                                                    <span className="rounded-full bg-[var(--isl-mint-bg)] px-1.5 py-0.5 text-[10px] font-bold text-[var(--isl-mint-deep)]">
+                                                    <span className="rounded-full bg-white/70 px-1.5 py-0.5 text-[10px] font-bold text-[#7C3AED]">
                                                         推荐
                                                     </span>
                                                 )}

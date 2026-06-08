@@ -73,6 +73,24 @@ describe('flovart LibTV-style CLI compatibility', () => {
     });
   });
 
+  it('returns canonical command schema with MCP-style aliases', async () => {
+    const schema = await executeFlovartCommand('command.schema', { command: 'flovart_generate_video' }, {});
+
+    expect(schema).toMatchObject({
+      ok: true,
+      command: 'generate.video',
+      schema: {
+        summary: expect.stringContaining('video'),
+        args: expect.objectContaining({
+          sourceVideoIds: 'string[]?',
+          slots: 'array?',
+          resolution: 'string?',
+        }),
+        aliases: expect.arrayContaining(['flovart_generate_video']),
+      },
+    });
+  });
+
   it('creates projects and groups, then uses the active group for new nodes', async () => {
     const runtime = await runtimeForTest();
 

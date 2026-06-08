@@ -68,6 +68,40 @@ export const COMMAND_REGISTRY = {
 
 export const COMMANDS = Object.keys(COMMAND_REGISTRY);
 
+export const COMMAND_ALIASES = {
+  inspect: 'canvas.inspect',
+  create: 'element.create',
+  flovart_element_create: 'element.create',
+  'update.prompt': 'element.update-prompt',
+  flovart_element_update_prompt: 'element.update-prompt',
+  'assign.slot': 'element.assign-slot',
+  flovart_element_assign_slot: 'element.assign-slot',
+  ignite: 'element.ignite',
+  flovart_element_ignite: 'element.ignite',
+  watch: 'element.watch',
+  flovart_element_watch: 'element.watch',
+  remove: 'canvas.remove-element',
+  flovart_canvas_remove_element: 'canvas.remove-element',
+  select: 'canvas.select',
+  flovart_canvas_select: 'canvas.select',
+  gen: 'generate.image',
+  flovart_generate_image: 'generate.image',
+  flovart_generate_video: 'generate.video',
+  models: 'models.list',
+  doctor: 'doctor',
+  preferences: 'preferences.manage',
+  prefs: 'preferences.manage',
+  inspire: 'inspiration.search',
+  enhance: 'prompt.enhance',
+  plan: 'batch.plan',
+};
+
+function getCommandAliases(command) {
+  return Object.entries(COMMAND_ALIASES)
+    .filter(([, target]) => target === command)
+    .map(([alias]) => alias);
+}
+
 export const QUICK_COMMANDS = [
   'status',
   'provider.status',
@@ -235,34 +269,7 @@ export function parseCliArgs(argv = []) {
 
 export function normalizeCommandName(name = '') {
   const normalized = String(name).trim().replace(/-/g, '.');
-  const aliases = {
-    inspect: 'canvas.inspect',
-    create: 'element.create',
-    flovart_element_create: 'element.create',
-    'update.prompt': 'element.update-prompt',
-    flovart_element_update_prompt: 'element.update-prompt',
-    'assign.slot': 'element.assign-slot',
-    flovart_element_assign_slot: 'element.assign-slot',
-    ignite: 'element.ignite',
-    flovart_element_ignite: 'element.ignite',
-    watch: 'element.watch',
-    flovart_element_watch: 'element.watch',
-    remove: 'canvas.remove-element',
-    flovart_canvas_remove_element: 'canvas.remove-element',
-    select: 'canvas.select',
-    flovart_canvas_select: 'canvas.select',
-    gen: 'generate.image',
-    flovart_generate_image: 'generate.image',
-    flovart_generate_video: 'generate.video',
-    models: 'models.list',
-    doctor: 'doctor',
-    preferences: 'preferences.manage',
-    prefs: 'preferences.manage',
-    inspire: 'inspiration.search',
-    enhance: 'prompt.enhance',
-    plan: 'batch.plan',
-  };
-  return aliases[normalized] || normalized;
+  return COMMAND_ALIASES[normalized] || normalized;
 }
 
 function findRegisteredCommand(name = '') {
@@ -482,14 +489,14 @@ export async function executeFlovartCommand(commandName, args = {}, runtime = {}
       });
     }
     case 'command.list':
-      return { ok: true, commands: COMMAND_REGISTRY };
+      return { ok: true, commands: COMMAND_REGISTRY, aliases: COMMAND_ALIASES };
     case 'command.schema': {
       const requested = args.command || args.name;
-      if (!requested) return { ok: true, commands: COMMAND_REGISTRY };
+      if (!requested) return { ok: true, commands: COMMAND_REGISTRY, aliases: COMMAND_ALIASES };
       const commandKey = findRegisteredCommand(requested);
       const schema = COMMAND_REGISTRY[commandKey];
       return schema
-        ? { ok: true, command: commandKey, schema }
+        ? { ok: true, command: commandKey, schema: { ...schema, aliases: getCommandAliases(commandKey) } }
         : { ok: false, error: { code: 'UNKNOWN_COMMAND', message: `Unknown Flovart command: ${requested}` } };
     }
     case 'inspiration.search': {

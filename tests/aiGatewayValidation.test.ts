@@ -157,6 +157,7 @@ describe('aiGateway - Seedance multimodal slots', () => {
             slots: [
                 { kind: 'image', href: 'data:image/png;base64,aW1hZ2Ux', mimeType: 'image/png', role: 'reference_image', label: 'role-a' },
                 { kind: 'image', href: 'data:image/png;base64,aW1hZ2Uy', mimeType: 'image/png', role: 'first_frame', label: 'role-b' },
+                { kind: 'image', href: 'data:image/png;base64,aW1hZ2Uz', mimeType: 'image/png', role: 'last_frame', label: 'role-c' },
                 { kind: 'video', href: 'https://cdn.example.com/ref.mp4', mimeType: 'video/mp4', role: 'reference_video' },
                 { kind: 'audio', href: 'https://cdn.example.com/ref.mp3', mimeType: 'audio/mpeg', role: 'reference_audio' },
             ],
@@ -182,7 +183,8 @@ describe('aiGateway - Seedance multimodal slots', () => {
         expect(body.content).toEqual([
             { type: 'text', text: 'two characters cross the room' },
             { type: 'image_url', image_url: { url: 'data:image/png;base64,aW1hZ2Ux' }, role: 'reference_image' },
-            { type: 'image_url', image_url: { url: 'data:image/png;base64,aW1hZ2Uy' }, role: 'reference_image' },
+            { type: 'image_url', image_url: { url: 'data:image/png;base64,aW1hZ2Uy' }, role: 'first_frame' },
+            { type: 'image_url', image_url: { url: 'data:image/png;base64,aW1hZ2Uz' }, role: 'last_frame' },
             { type: 'video_url', video_url: { url: 'https://cdn.example.com/ref.mp4' }, role: 'reference_video' },
             { type: 'audio_url', audio_url: { url: 'https://cdn.example.com/ref.mp3' }, role: 'reference_audio' },
         ]);
@@ -199,6 +201,67 @@ describe('aiGateway - Seedance multimodal slots', () => {
 });
 
 describe('aiGateway - generateImageWithProvider', () => {
+    it('limits GPT Image multipart reference inputs to the official 16-image cap', async () => {
+        globalThis.fetch = vi.fn().mockResolvedValue(mockJsonResponse({
+            data: [{ b64_json: 'ZmFrZQ==' }],
+        }));
+
+        const refs = Array.from({ length: 18 }, (_, index) => ({
+            href: `data:image/png;base64,${btoa(`image-${index}`)}`,
+            mimeType: 'image/png',
+        }));
+
+        const result = await generateImageWithProvider('compose the references', 'gpt-image-2', {
+            id: 'openai-image-key',
+            provider: 'openai',
+            capabilities: ['image'],
+            key: 'sk-test-key',
+            createdAt: 0,
+            updatedAt: 0,
+        }, refs);
+
+        expect(result.newImageBase64).toBe('ZmFrZQ==');
+        const [, init] = vi.mocked(globalThis.fetch).mock.calls[0];
+        expect(init?.body).toBeInstanceOf(FormData);
+        expect((init?.body as FormData).getAll('image')).toHaveLength(16);
+        expect((init?.body as FormData).get('model')).toBe('gpt-image-2');
+        expect((init?.body as FormData).get('response_format')).toBeNull();
+        expect((init?.body as FormData).get('output_format')).toBe('png');
+    });
+
+    it('uses official GPT Image 2 generation params without legacy response_format', async () => {
+        globalThis.fetch = vi.fn().mockResolvedValue(mockJsonResponse({
+            data: [{ b64_json: 'ZmFrZQ==' }],
+        }));
+
+        const result = await generateImageWithProvider('test prompt', 'gpt-image-2', {
+            id: 'openai-image-key',
+            provider: 'openai',
+            capabilities: ['image'],
+            key: 'sk-test-key',
+            extraConfig: {
+                imageQuality: 'high',
+                outputFormat: 'webp',
+                outputCompression: '80',
+            },
+            createdAt: 0,
+            updatedAt: 0,
+        });
+
+        expect(result.newImageBase64).toBe('ZmFrZQ==');
+        const [, init] = vi.mocked(globalThis.fetch).mock.calls[0];
+        const body = JSON.parse(String(init?.body));
+        expect(body).toEqual(expect.objectContaining({
+            model: 'gpt-image-2',
+            prompt: 'test prompt',
+            size: '1024x1024',
+            quality: 'high',
+            output_format: 'webp',
+            output_compression: 80,
+        }));
+        expect(body.response_format).toBeUndefined();
+    });
+
     it('OpenRouter 使用 chat completions 返回图片 data url', async () => {
         globalThis.fetch = vi.fn().mockResolvedValue(mockJsonResponse({
             choices: [{
