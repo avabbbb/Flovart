@@ -56,6 +56,7 @@ import {
   createWorkflowTemplatePackage,
   serializeWorkflowTemplatePackage,
 } from '../utils/workflowTemplatePackage';
+import { CanvasElementPicker } from './nodeflow/CanvasElementPicker';
 
 interface NodeWorkflowPanelProps {
   prompt: string;
@@ -629,6 +630,7 @@ export const NodeWorkflowPanel: React.FC<NodeWorkflowPanelProps> = ({
   const [savedWorkflows, setSavedWorkflows] = useState<SavedWorkflow[]>(() => loadSavedWorkflows());
   const [workflowTitle, setWorkflowTitle] = useState('Untitled Flow');
   const [activeTraceMeta, setActiveTraceMeta] = useState<{ sessionId: string; jobId: string; eventCount: number } | null>(null);
+  const [canvasPickerAnchor, setCanvasPickerAnchor] = useState<{ nodeId: string; type: 'image' | 'video'; rect: DOMRect } | null>(null);
   const activeTraceRef = useRef<{ sessionId: string; jobId: string } | null>(null);
   const copy = WORKFLOW_COPY[language] || WORKFLOW_COPY.en;
   const getToolPanelTitle = (tab: ToolPanelTab): string => {
@@ -3097,25 +3099,46 @@ export const NodeWorkflowPanel: React.FC<NodeWorkflowPanelProps> = ({
                   )}
 
                   {node.kind === 'loadImage' && (
-                    <div
-                      className={`rounded-lg border p-2 ${
-                        isImageDropOver ? 'border-emerald-300 bg-emerald-500/10' : 'border-white/10 bg-black/25'
-                      }`}
-                      onDragOver={(e) => {
-                        e.preventDefault();
-                        setIsImageDropOver(true);
-                      }}
-                      onDragLeave={() => setIsImageDropOver(false)}
-                      onDrop={(e) => {
-                        e.preventDefault();
-                        setIsImageDropOver(false);
-                        handleDropPayload(e);
-                      }}
-                    >
-                      <button onClick={() => fileInputRef.current?.click()} className="rounded-md border border-neutral-200 bg-white px-2 py-1 text-[11px] text-neutral-700 hover:bg-neutral-50">
-                        Upload
-                      </button>
-                      <div className="mt-2 text-[11px] text-neutral-500">Loaded: {attachments.length}</div>
+                    <div className="space-y-2">
+                      <div
+                        className={`rounded-lg border p-2 ${
+                          isImageDropOver ? 'border-emerald-300 bg-emerald-500/10' : 'border-white/10 bg-black/25'
+                        }`}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          setIsImageDropOver(true);
+                        }}
+                        onDragLeave={() => setIsImageDropOver(false)}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          setIsImageDropOver(false);
+                          handleDropPayload(e);
+                        }}
+                      >
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => fileInputRef.current?.click()}
+                            className="isl-chip text-xs px-3 py-1.5"
+                            style={{ boxShadow: '0 2px 0 0 var(--isl-edge)' }}
+                          >
+                            📤 Upload
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              const rect = e.currentTarget.getBoundingClientRect();
+                              setCanvasPickerAnchor({ nodeId: node.id, type: 'image', rect });
+                            }}
+                            className="isl-chip text-xs px-3 py-1.5"
+                            style={{ boxShadow: '0 2px 0 0 var(--isl-edge)' }}
+                            disabled={canvasImages.length === 0}
+                          >
+                            🖼️ From Canvas
+                          </button>
+                        </div>
+                        <div className="mt-2 text-[11px]" style={{ color: 'var(--isl-ink-soft)' }}>
+                          Loaded: {attachments.length}
+                        </div>
+                      </div>
                     </div>
                   )}
 
@@ -3123,26 +3146,60 @@ export const NodeWorkflowPanel: React.FC<NodeWorkflowPanelProps> = ({
                     const selectedVideo = getCanvasVideoForNode(node.config);
                     if (!selectedVideo) {
                       return (
-                        <div className="rounded-lg border border-dashed border-white/15 bg-black/25 p-3 text-xs text-white/60">
-                          Import a video on the Canvas first, then choose it in the inspector.
+                        <div className="space-y-2">
+                          <div className="isl-well rounded-lg p-3 text-xs" style={{ color: 'var(--isl-ink-soft)' }}>
+                            Select a video from Canvas or import one first.
+                          </div>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              const rect = e.currentTarget.getBoundingClientRect();
+                              setCanvasPickerAnchor({ nodeId: node.id, type: 'video', rect });
+                            }}
+                            className="isl-chip text-xs px-3 py-1.5 w-full justify-center"
+                            style={{ boxShadow: '0 2px 0 0 var(--isl-edge)' }}
+                            disabled={canvasVideos.length === 0}
+                          >
+                            🎬 Select from Canvas
+                          </button>
                         </div>
                       );
                     }
                     return (
-                      <div className="space-y-2 rounded-lg border border-white/10 bg-black/25 p-2">
-                        <video
-                          src={selectedVideo.href}
-                          poster={selectedVideo.poster}
-                          controls
-                          className="max-h-28 w-full rounded bg-black/50 object-cover"
-                        />
-                        <div className="space-y-1 text-[11px] text-neutral-500">
-                          <div className="font-medium text-neutral-800">{selectedVideo.name || 'Canvas video'}</div>
-                          <div>{selectedVideo.width || '?'}x{selectedVideo.height || '?'} - {formatVideoDuration(selectedVideo.durationSec)}</div>
+                      <div className="space-y-2">
+                        <div className="isl-row overflow-hidden">
+                          <video
+                            src={selectedVideo.href}
+                            poster={selectedVideo.poster}
+                            controls
+                            className="max-h-28 w-full rounded object-cover"
+                            style={{ background: 'var(--isl-surface-sunk)' }}
+                          />
+                        </div>
+                        <div className="space-y-1 text-[11px]" style={{ color: 'var(--isl-ink-soft)' }}>
+                          <div className="font-bold" style={{ color: 'var(--isl-ink)' }}>
+                            {selectedVideo.name || 'Canvas video'}
+                          </div>
+                          <div>
+                            {selectedVideo.width || '?'}x{selectedVideo.height || '?'} · {formatVideoDuration(selectedVideo.durationSec)}
+                          </div>
                           {(selectedVideo.trimInSec != null || selectedVideo.trimOutSec != null) && (
-                            <div>Trim: {selectedVideo.trimInSec ?? 0}s - {selectedVideo.trimOutSec ?? selectedVideo.durationSec ?? '?'}s</div>
+                            <div>
+                              Trim: {selectedVideo.trimInSec ?? 0}s - {selectedVideo.trimOutSec ?? selectedVideo.durationSec ?? '?'}s
+                            </div>
                           )}
                         </div>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            setCanvasPickerAnchor({ nodeId: node.id, type: 'video', rect });
+                          }}
+                          className="isl-chip text-xs px-3 py-1.5 w-full justify-center"
+                          style={{ boxShadow: '0 2px 0 0 var(--isl-edge)' }}
+                        >
+                          🔄 Change Video
+                        </button>
                       </div>
                     );
                   })()}
@@ -3845,6 +3902,48 @@ export const NodeWorkflowPanel: React.FC<NodeWorkflowPanelProps> = ({
           }
         }}
       />
+
+      {/* Canvas Element Picker Overlay */}
+      {canvasPickerAnchor && (
+        <>
+          <div
+            className="fixed inset-0 z-40"
+            onClick={() => setCanvasPickerAnchor(null)}
+          />
+          <div
+            className="fixed z-50"
+            style={{
+              left: `${canvasPickerAnchor.rect.left}px`,
+              top: `${canvasPickerAnchor.rect.bottom + 8}px`,
+            }}
+          >
+            <CanvasElementPicker
+              canvasImages={canvasImages}
+              canvasVideos={canvasVideos}
+              mode={canvasPickerAnchor.type}
+              language={language}
+              onSelectImage={(img) => {
+                // Handle image selection for loadImage node
+                onDropCanvasImage(img);
+                setCanvasPickerAnchor(null);
+              }}
+              onSelectVideo={(vid) => {
+                // Handle video selection for loadVideo node
+                const targetNode = store.nodeMap.get(canvasPickerAnchor.nodeId);
+                if (targetNode) {
+                  store.updateNode(canvasPickerAnchor.nodeId, {
+                    config: {
+                      ...targetNode.config,
+                      canvasVideoId: vid.id,
+                    },
+                  });
+                }
+                setCanvasPickerAnchor(null);
+              }}
+            />
+          </div>
+        </>
+      )}
     </div>
   );
 };

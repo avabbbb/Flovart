@@ -186,7 +186,6 @@ npm run ext:build
 - [X] 第三方 API 聚合端点全兼容（自动 baseUrl 裁剪、/chat/completions 降级、多图片格式解析）
 - [X] SSE 流式图片反推提示词 + 取消
 - [X] App.tsx 模块化拆分（hooks 抽离：`useCanvasInteraction` / `useGeneration` / `useApiKeys` / `useToast`）
-- [X] Storyboard Workspace（多镜头项目化分镜 + 状态持久化）
 - [X] Publish Workspace（导出预设 + 候选审核 + 状态机）
 - [X] Agent-Native CLI（`tools/flovart/cli.js`，30+ 确定性命令）
 - [X] MCP 工具桥（`flovart.*`） + SKILL.md（Claude Code / OpenCode / Codex 直接驱动）
