@@ -962,7 +962,7 @@ const App: React.FC = () => {
     const {
         handleMouseDown, handleMouseMove, handleMouseUp, handleWheel,
         getCanvasPoint, getSelectableElement,
-        selectionBox, setSelectionBox, alignmentGuides, lassoPath,
+        selectionBox, setSelectionBox, alignmentGuides, lassoPath, dragTick,
         svgRef, editingTextareaRef, elementsRef, interactionMode, previousToolRef, spacebarDownTime,
     } = useCanvasInteraction({
         elements, zoom, panOffset,
@@ -3609,7 +3609,7 @@ const App: React.FC = () => {
                                 );
                             }
 
-                            if (isSelected && !croppingState) {
+                            if (isSelected && !croppingState && interactionMode.current !== 'dragElements') {
                                 if (selectedElementIds.length > 1 || el.type === 'path' || el.type === 'arrow' || el.type === 'line' || el.type === 'group') {
                                      const bounds = getElementBounds(el, elements);
                                      selectionComponent = <rect x={bounds.x} y={bounds.y} width={bounds.width} height={bounds.height} fill="none" stroke="rgb(59 130 246)" strokeWidth={2/zoom} strokeDasharray={`${6/zoom} ${4/zoom}`} pointerEvents="none" />
@@ -3842,50 +3842,50 @@ const App: React.FC = () => {
                                         )}
                                         {selectionComponent}
                                         {relationFocusComponent}
-                                        {selectedInlinePromptElement?.id === el.id && !croppingState && !editingElement && (
-                                            <foreignObject
-                                                x={el.x + el.width / 2 - (360 / zoom)}
-                                                y={el.y + el.height + (16 / zoom)}
-                                                width={720 / zoom}
-                                                height={800 / zoom}
-                                                style={{ overflow: 'visible' }}
-                                            >
-                                                <div style={{ transform: `scale(${1 / zoom})`, transformOrigin: 'top left', width: '720px' }}>
-                                                    <InlinePromptBar
-                                                        variant="canvas"
-                                                        element={selectedInlinePromptElement}
-                                                        allElements={elements}
-                                                        canvasZoom={zoom}
-                                                        canvasPan={panOffset}
-                                                        modelId={selectedInlinePromptElement.type === 'video' ? modelPreference.videoModel : modelPreference.imageModel}
-                                                        status={selectedInlinePromptElement.generationState?.status || 'idle'}
-                                                        progress={selectedInlinePromptElement.generationState?.progress}
-                                                        isLoading={isLoading}
-                                                        theme={resolvedTheme}
-                                                        apiKeyPayload={getInlineApiKeyForElement(selectedInlinePromptElement)}
-                                                        userApiKeys={userApiKeys}
-                                                        imageModelOptions={dynamicModelOptions.image}
-                                                        videoModelOptions={dynamicModelOptions.video}
-                                                        videoAspectRatio={videoAspectRatio}
-                                                        setVideoAspectRatio={setVideoAspectRatio}
-                                                        isAutoEnhanceEnabled={isAutoEnhanceEnabled}
-                                                        onAutoEnhanceToggle={() => setIsAutoEnhanceEnabled(prev => !prev)}
-                                                        onEnhancePrompt={handleEnhancePrompt}
-                                                        isEnhancingPrompt={isEnhancingPrompt}
-                                                        t={t}
-                                                        onPromptChange={updateElementGenerationState}
-                                                        onMediaGenerated={updateElementMedia}
-                                                        animateViewport={animateViewportToElement}
-                                                        progressLabel={progressMessage}
-                                                        activeTaskCount={Object.values(runtimeJobsRef.current).filter(job => job.status === 'running').length}
-                                                    />
-                                                </div>
-                                            </foreignObject>
-                                        )}
-                                    </g>
-                                );
-                            }
-                             if (el.type === 'video') {
+                                        {selectedInlinePromptElement?.id === el.id && !croppingState && !editingElement && interactionMode.current !== 'dragElements' && (
+                                             <foreignObject
+                                                 x={el.x + el.width / 2 - (360 / zoom)}
+                                                 y={el.y + el.height + (16 / zoom)}
+                                                 width={720 / zoom}
+                                                 height={800 / zoom}
+                                                 style={{ overflow: 'visible' }}
+                                             >
+                                                 <div style={{ transform: `scale(${1 / zoom})`, transformOrigin: 'top left', width: '720px' }}>
+                                                     <InlinePromptBar
+                                                         variant="canvas"
+                                                         element={selectedInlinePromptElement}
+                                                         allElements={elements}
+                                                         canvasZoom={zoom}
+                                                         canvasPan={panOffset}
+                                                         modelId={selectedInlinePromptElement.type === 'video' ? modelPreference.videoModel : modelPreference.imageModel}
+                                                         status={selectedInlinePromptElement.generationState?.status || 'idle'}
+                                                         progress={selectedInlinePromptElement.generationState?.progress}
+                                                         isLoading={isLoading}
+                                                         theme={resolvedTheme}
+                                                         apiKeyPayload={getInlineApiKeyForElement(selectedInlinePromptElement)}
+                                                         userApiKeys={userApiKeys}
+                                                         imageModelOptions={dynamicModelOptions.image}
+                                                         videoModelOptions={dynamicModelOptions.video}
+                                                         videoAspectRatio={videoAspectRatio}
+                                                         setVideoAspectRatio={setVideoAspectRatio}
+                                                         isAutoEnhanceEnabled={isAutoEnhanceEnabled}
+                                                         onAutoEnhanceToggle={() => setIsAutoEnhanceEnabled(prev => !prev)}
+                                                         onEnhancePrompt={handleEnhancePrompt}
+                                                         isEnhancingPrompt={isEnhancingPrompt}
+                                                         t={t}
+                                                         onPromptChange={updateElementGenerationState}
+                                                         onMediaGenerated={updateElementMedia}
+                                                         animateViewport={animateViewportToElement}
+                                                         progressLabel={progressMessage}
+                                                         activeTaskCount={Object.values(runtimeJobsRef.current).filter(job => job.status === 'running').length}
+                                                     />
+                                                 </div>
+                                             </foreignObject>
+                                         )}
+                                     </g>
+                                 );
+                              }
+                              if (el.type === 'video') {
                                 const isGenerating = genIds.has(el.id);
                                 const isRevealing = recentlyCompleted.has(el.id);
                                 const isDimmed = anyGenerating && !isGenerating;
@@ -3936,50 +3936,50 @@ const App: React.FC = () => {
                                         )}
                                         {selectionComponent}
                                         {relationFocusComponent}
-                                        {selectedInlinePromptElement?.id === el.id && !croppingState && !editingElement && (
-                                            <foreignObject
-                                                x={el.x + el.width / 2 - (360 / zoom)}
-                                                y={el.y + el.height + (16 / zoom)}
-                                                width={720 / zoom}
-                                                height={800 / zoom}
-                                                style={{ overflow: 'visible' }}
-                                            >
-                                                <div style={{ transform: `scale(${1 / zoom})`, transformOrigin: 'top left', width: '720px' }}>
-                                                    <InlinePromptBar
-                                                        variant="canvas"
-                                                        element={selectedInlinePromptElement}
-                                                        allElements={elements}
-                                                        canvasZoom={zoom}
-                                                        canvasPan={panOffset}
-                                                        modelId={selectedInlinePromptElement.type === 'video' ? modelPreference.videoModel : modelPreference.imageModel}
-                                                        status={selectedInlinePromptElement.generationState?.status || 'idle'}
-                                                        progress={selectedInlinePromptElement.generationState?.progress}
-                                                        isLoading={isLoading}
-                                                        theme={resolvedTheme}
-                                                        apiKeyPayload={getInlineApiKeyForElement(selectedInlinePromptElement)}
-                                                        userApiKeys={userApiKeys}
-                                                        imageModelOptions={dynamicModelOptions.image}
-                                                        videoModelOptions={dynamicModelOptions.video}
-                                                        videoAspectRatio={videoAspectRatio}
-                                                        setVideoAspectRatio={setVideoAspectRatio}
-                                                        isAutoEnhanceEnabled={isAutoEnhanceEnabled}
-                                                        onAutoEnhanceToggle={() => setIsAutoEnhanceEnabled(prev => !prev)}
-                                                        onEnhancePrompt={handleEnhancePrompt}
-                                                        isEnhancingPrompt={isEnhancingPrompt}
-                                                        t={t}
-                                                        onPromptChange={updateElementGenerationState}
-                                                        onMediaGenerated={updateElementMedia}
-                                                        animateViewport={animateViewportToElement}
-                                                        progressLabel={progressMessage}
-                                                        activeTaskCount={Object.values(runtimeJobsRef.current).filter(job => job.status === 'running').length}
-                                                    />
-                                                </div>
-                                            </foreignObject>
-                                        )}
-                                    </g>
-                                );
-                            }
-                             if (el.type === 'group') {
+                                        {selectedInlinePromptElement?.id === el.id && !croppingState && !editingElement && interactionMode.current !== 'dragElements' && (
+                                             <foreignObject
+                                                 x={el.x + el.width / 2 - (360 / zoom)}
+                                                 y={el.y + el.height + (16 / zoom)}
+                                                 width={720 / zoom}
+                                                 height={800 / zoom}
+                                                 style={{ overflow: 'visible' }}
+                                             >
+                                                 <div style={{ transform: `scale(${1 / zoom})`, transformOrigin: 'top left', width: '720px' }}>
+                                                     <InlinePromptBar
+                                                         variant="canvas"
+                                                         element={selectedInlinePromptElement}
+                                                         allElements={elements}
+                                                         canvasZoom={zoom}
+                                                         canvasPan={panOffset}
+                                                         modelId={selectedInlinePromptElement.type === 'video' ? modelPreference.videoModel : modelPreference.imageModel}
+                                                         status={selectedInlinePromptElement.generationState?.status || 'idle'}
+                                                         progress={selectedInlinePromptElement.generationState?.progress}
+                                                         isLoading={isLoading}
+                                                         theme={resolvedTheme}
+                                                         apiKeyPayload={getInlineApiKeyForElement(selectedInlinePromptElement)}
+                                                         userApiKeys={userApiKeys}
+                                                         imageModelOptions={dynamicModelOptions.image}
+                                                         videoModelOptions={dynamicModelOptions.video}
+                                                         videoAspectRatio={videoAspectRatio}
+                                                         setVideoAspectRatio={setVideoAspectRatio}
+                                                         isAutoEnhanceEnabled={isAutoEnhanceEnabled}
+                                                         onAutoEnhanceToggle={() => setIsAutoEnhanceEnabled(prev => !prev)}
+                                                         onEnhancePrompt={handleEnhancePrompt}
+                                                         isEnhancingPrompt={isEnhancingPrompt}
+                                                         t={t}
+                                                         onPromptChange={updateElementGenerationState}
+                                                         onMediaGenerated={updateElementMedia}
+                                                         animateViewport={animateViewportToElement}
+                                                         progressLabel={progressMessage}
+                                                         activeTaskCount={Object.values(runtimeJobsRef.current).filter(job => job.status === 'running').length}
+                                                     />
+                                                 </div>
+                                             </foreignObject>
+                                         )}
+                                     </g>
+                                 );
+                              }
+                              if (el.type === 'group') {
                                 return <g key={el.id} data-id={el.id}>{selectionComponent}{relationFocusComponent}</g>
                              }
                             return null;
@@ -4105,8 +4105,9 @@ const App: React.FC = () => {
                         {alignmentGuides.map((guide, i) => (
                              <line key={i} x1={guide.type === 'v' ? guide.position : guide.start} y1={guide.type === 'h' ? guide.position : guide.start} x2={guide.type === 'v' ? guide.position : guide.end} y2={guide.type === 'h' ? guide.position : guide.end} stroke="red" strokeWidth={1/zoom} strokeDasharray={`${4/zoom} ${2/zoom}`} />
                         ))}
+                        <g id="flv-drag-guides" />
 
-                        {selectedElementIds.length > 0 && !croppingState && !editingElement && (
+                        {selectedElementIds.length > 0 && !croppingState && !editingElement && interactionMode.current !== 'dragElements' && (
                             <ElementToolbar
                                 selectedElementIds={selectedElementIds}
                                 singleSelectedElement={singleSelectedElement}

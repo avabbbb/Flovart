@@ -63,6 +63,7 @@ export function useCanvasInteraction(params: UseCanvasInteractionParams) {
     const [selectionBox, setSelectionBox] = useState<Rect | null>(null);
     const [alignmentGuides, setAlignmentGuides] = useState<Guide[]>([]);
     const [lassoPath, setLassoPath] = useState<Point[] | null>(null);
+    const [dragTick, setDragTick] = useState(0);
 
     // --- Interaction refs ---
     const interactionMode = useRef<string | null>(null);
@@ -73,6 +74,7 @@ export function useCanvasInteraction(params: UseCanvasInteractionParams) {
     const dragStartElementPositions = useRef<Map<string, { x: number; y: number } | Point[]>>(new Map());
     const cachedStaticSnap = useRef<{ v: Set<number>; h: Set<number> } | null>(null);
     const dragRafBatcher = useRef<RafBatcher<Point> | null>(null);
+    const lastDragOffsets = useRef<Map<string, { dx: number; dy: number }>>(new Map());
     const elementsRef = useRef(elements);
     const svgRef = useRef<SVGSVGElement>(null);
     const editingTextareaRef = useRef<HTMLTextAreaElement>(null);
@@ -286,6 +288,7 @@ export function useCanvasInteraction(params: UseCanvasInteractionParams) {
                     );
                 }
                 interactionMode.current = 'dragElements';
+                setDragTick(t => t + 1);
                 const idsToDrag = new Set<string>();
                  if (selectableElement.type === 'group') {
                     idsToDrag.add(selectableElement.id);
@@ -518,8 +521,6 @@ export function useCanvasInteraction(params: UseCanvasInteractionParams) {
                 break;
             }
             case 'dragElements': {
-                // Defer the heavy snap + position work to the next animation frame.
-                // Only the latest pointer position is kept; earlier moves are dropped.
                 if (!dragRafBatcher.current) {
                     dragRafBatcher.current = createRafBatcher<Point>(latestPoint => {
                         const dx = latestPoint.x - startCanvasPoint.x;
@@ -531,18 +532,16 @@ export function useCanvasInteraction(params: UseCanvasInteractionParams) {
 
                         let finalDx = dx;
                         let finalDy = dy;
-                        let activeGuides: Guide[] = [];
 
                         const getSnapPoints = (bounds: Rect) => ({
                             v: [bounds.x, bounds.x + bounds.width / 2, bounds.x + bounds.width],
                             h: [bounds.y, bounds.y + bounds.height / 2, bounds.y + bounds.height],
                         });
 
-                        // Use cached snap points computed at drag start
                         const staticSnapPoints = cachedStaticSnap.current ?? { v: new Set<number>(), h: new Set<number>() };
                 
-                        let bestSnapX = { dist: Infinity, val: finalDx, guide: null as Guide | null };
-                        let bestSnapY = { dist: Infinity, val: finalDy, guide: null as Guide | null };
+                        let bestSnapX = { dist: Infinity, val: finalDx, guideVals: [] as { v: number; start: number; end: number }[] };
+                        let bestSnapY = { dist: Infinity, val: finalDy, guideVals: [] as { h: number; start: number; end: number }[] };
                 
                         movingElements.forEach(movingEl => {
                             const startPos = dragStartElementPositions.current.get(movingEl.id);
@@ -565,7 +564,7 @@ export function useCanvasInteraction(params: UseCanvasInteractionParams) {
                                 staticSnapPoints.v.forEach(staticP => {
                                     const dist = Math.abs((p + finalDx) - staticP);
                                     if (dist < snapThresholdCanvas && dist < bestSnapX.dist) {
-                                        bestSnapX = { dist, val: staticP - p, guide: { type: 'v', position: staticP, start: movingBounds.y, end: movingBounds.y + movingBounds.height }};
+                                        bestSnapX = { dist, val: staticP - p, guideVals: [{ v: staticP, start: movingBounds.y, end: movingBounds.y + movingBounds.height }] };
                                     }
                                 });
                             });
@@ -573,43 +572,72 @@ export function useCanvasInteraction(params: UseCanvasInteractionParams) {
                                 staticSnapPoints.h.forEach(staticP => {
                                     const dist = Math.abs((p + finalDy) - staticP);
                                     if (dist < snapThresholdCanvas && dist < bestSnapY.dist) {
-                                        bestSnapY = { dist, val: staticP - p, guide: { type: 'h', position: staticP, start: movingBounds.x, end: movingBounds.x + movingBounds.width }};
+                                        bestSnapY = { dist, val: staticP - p, guideVals: [{ h: staticP, start: movingBounds.x, end: movingBounds.x + movingBounds.width }] };
                                     }
                                 });
                             });
                         });
                 
-                        if (bestSnapX.guide) { finalDx = bestSnapX.val; activeGuides.push(bestSnapX.guide); }
-                        if (bestSnapY.guide) { finalDy = bestSnapY.val; activeGuides.push(bestSnapY.guide); }
-                
-                        setAlignmentGuides(activeGuides);
+                        if (bestSnapX.guideVals.length) finalDx = bestSnapX.val;
+                        if (bestSnapY.guideVals.length) finalDy = bestSnapY.val;
 
-                        setElements(prev => prev.map(el => {
-                            if (movingElementIds.includes(el.id)) {
-                                const startPos = dragStartElementPositions.current.get(el.id);
-                                if (!startPos) return el;
-                        
-                                if (el.type !== 'path' && el.type !== 'arrow' && el.type !== 'line') {
-                                    return { ...el, x: (startPos as Point).x + finalDx, y: (startPos as Point).y + finalDy };
+                        // Update lastDragOffsets for final commit
+                        const offsets = new Map<string, { dx: number; dy: number }>();
+                        movingElementIds.forEach(id => offsets.set(id, { dx: finalDx, dy: finalDy }));
+                        lastDragOffsets.current = offsets;
+                
+                        // DOM-based element transforms
+                        const svgEl = svgRef.current;
+                        if (svgEl) {
+                            movingElementIds.forEach(id => {
+                                const g = svgEl.querySelector(`[data-id="${CSS.escape(id)}"]`);
+                                if (!(g instanceof SVGGElement)) return;
+                                const el = elementsRef.current.find(e => e.id === id);
+                                if (!el) return;
+                                const startPos = dragStartElementPositions.current.get(id);
+                                if (!startPos) return;
+
+                                if (el.type === 'text' || el.type === 'shape') {
+                                    const startP = startPos as Point;
+                                    g.setAttribute('transform', `translate(${startP.x + finalDx}, ${startP.y + finalDy})`);
+                                } else if (el.type === 'image' || el.type === 'video' || el.type === 'path' || el.type === 'arrow' || el.type === 'line' || el.type === 'group') {
+                                    g.setAttribute('transform', `translate(${finalDx}, ${finalDy})`);
                                 }
-                        
-                                if (el.type === 'path') {
-                                    const startPoints = startPos as Point[];
-                                    const newPoints = startPoints.map(p => ({ x: p.x + finalDx, y: p.y + finalDy }));
-                                    const updatedEl: PathElement = { ...el, points: newPoints };
-                                    return updatedEl;
-                                } else if (el.type === 'arrow' || el.type === 'line') {
-                                    const startPoints = startPos as [Point, Point];
-                                    const newPoints: [Point, Point] = [
-                                        { x: startPoints[0].x + finalDx, y: startPoints[0].y + finalDy },
-                                        { x: startPoints[1].x + finalDx, y: startPoints[1].y + finalDy },
-                                    ];
-                                    const updatedEl = { ...el, points: newPoints };
-                                    return updatedEl;
-                                }
-                            }
-                            return el;
-                        }), false);
+                            });
+                        }
+
+                        // DOM-based alignment guides
+                        let guidesContainer = svgRef.current?.querySelector('#flv-drag-guides');
+                        if (!guidesContainer && svgRef.current) {
+                            guidesContainer = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                            guidesContainer.setAttribute('id', 'flv-drag-guides');
+                            svgRef.current.appendChild(guidesContainer);
+                        }
+                        if (guidesContainer) {
+                            guidesContainer.innerHTML = '';
+                            bestSnapX.guideVals.forEach(gv => {
+                                const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                                line.setAttribute('x1', String(gv.v));
+                                line.setAttribute('y1', String(gv.start));
+                                line.setAttribute('x2', String(gv.v));
+                                line.setAttribute('y2', String(gv.end));
+                                line.setAttribute('stroke', 'red');
+                                line.setAttribute('stroke-width', String(1 / zoom));
+                                line.setAttribute('stroke-dasharray', `${4 / zoom} ${2 / zoom}`);
+                                guidesContainer.appendChild(line);
+                            });
+                            bestSnapY.guideVals.forEach(gv => {
+                                const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                                line.setAttribute('x1', String(gv.start));
+                                line.setAttribute('y1', String(gv.h));
+                                line.setAttribute('x2', String(gv.end));
+                                line.setAttribute('y2', String(gv.h));
+                                line.setAttribute('stroke', 'red');
+                                line.setAttribute('stroke-width', String(1 / zoom));
+                                line.setAttribute('stroke-dasharray', `${4 / zoom} ${2 / zoom}`);
+                                guidesContainer.appendChild(line);
+                            });
+                        }
                     });
                 }
                 dragRafBatcher.current.schedule(point);
@@ -694,7 +722,39 @@ export function useCanvasInteraction(params: UseCanvasInteractionParams) {
                   if (dragRafBatcher.current) {
                       dragRafBatcher.current.flush();
                  }
-                 commitAction(els => els); // This effectively commits the current state to history
+                 // Clear DOM element transforms before commit
+                 if (interactionMode.current === 'dragElements') {
+                     const svgEl = svgRef.current;
+                     if (svgEl) {
+                         lastDragOffsets.current.forEach((_, id) => {
+                             const g = svgEl.querySelector(`[data-id="${CSS.escape(id)}"]`);
+                             if (g) g.removeAttribute('transform');
+                         });
+                     }
+                     // Clear DOM alignment guides
+                     const guidesG = svgRef.current?.querySelector('#flv-drag-guides');
+                     if (guidesG) guidesG.remove();
+                     // Commit final positions via setElements (runs through the reducer for undo stack)
+                     if (lastDragOffsets.current.size > 0) {
+                         commitAction(prev => prev.map(el => {
+                             const offset = lastDragOffsets.current.get(el.id);
+                             if (!offset) return el;
+                             if (el.type !== 'path' && el.type !== 'arrow' && el.type !== 'line') {
+                                 return { ...el, x: el.x + offset.dx, y: el.y + offset.dy };
+                             }
+                             if (el.type === 'path') {
+                                 return { ...el, points: (el as PathElement).points.map(p => ({ x: p.x + offset.dx, y: p.y + offset.dy })) };
+                             }
+                             return {
+                                 ...el,
+                                 points: (el as ArrowElement | LineElement).points.map(p => ({ x: p.x + offset.dx, y: p.y + offset.dy })) as [Point, Point],
+                             };
+                         }));
+                     }
+                     lastDragOffsets.current.clear();
+                 } else {
+                     commitAction(els => els);
+                 }
             }
         }
         
@@ -754,6 +814,8 @@ export function useCanvasInteraction(params: UseCanvasInteractionParams) {
         setSelectionBox,
         alignmentGuides,
         lassoPath,
+        dragTick,
+        lastDragOffsets,
         // Refs needed by parent
         svgRef,
         editingTextareaRef,
