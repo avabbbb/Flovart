@@ -16,6 +16,7 @@ import { AssetLibraryPanel } from './components/AssetLibraryPanel';
 import { ImageFilterPanel, buildCssFilter, temperatureMatrix, sharpenKernel } from './components/ImageFilterPanel';
 import { ElementToolbar } from './components/ElementToolbar';
 import { InlinePromptBar } from './components/canvas-ui/InlinePromptBar';
+import { shouldRenderMediaInKonva } from './utils/canvasKonvaMediaEligibility';
 
 // Lazy-loaded components (not needed for first paint)
 const CanvasSettings = React.lazy(() => import('./components/CanvasSettings').then(m => ({ default: m.CanvasSettings })));
@@ -24,6 +25,7 @@ const RightPanel = React.lazy(() => import('./components/RightPanel').then(m => 
 const AssetAddModal = React.lazy(() => import('./components/AssetAddModal').then(m => ({ default: m.AssetAddModal })));
 const ABCompareOverlay = React.lazy(() => import('./components/ABCompareOverlay').then(m => ({ default: m.ABCompareOverlay })));
 const NodeWorkflowPanel = React.lazy(() => import('./components/NodeWorkflowPanel').then(m => ({ default: m.NodeWorkflowPanel })));
+const CanvasKonvaMediaLayer = React.lazy(() => import('./components/canvas/CanvasKonvaMediaLayer').then(m => ({ default: m.CanvasKonvaMediaLayer })));
 import { loadAssetLibrary, addAsset, removeAsset, renameAsset, loadAssetLibraryAsync, saveAssetLibraryAsync } from './utils/assetStorage';
 import { loadGenerationHistoryAsync, saveGenerationHistoryAsync } from './utils/generationHistory';
 import { inferProviderFromModel, reversePromptStreamWithProvider, DEFAULT_PROVIDER_MODELS, generateImageWithProvider, generateVideoWithProvider, inferCapabilityFromModelName } from './services/aiGateway';
@@ -53,9 +55,11 @@ import { CanvasWorkspace } from './components/workspaces/CanvasWorkspace';
 import { WorkflowWorkspace } from './components/workspaces/WorkflowWorkspace';
 import type { WorkflowNode, WorkflowValue } from './components/nodeflow/types';
 import { useWorkspaceStore } from './stores/useWorkspaceStore';
+import { useRuntimeStore } from './stores/useRuntimeStore';
 import type { CanvasElement, ElementGenerationState, WorkspaceView } from './types';
 import { getFlovartRuntimeApi, getRuntimeErrorMessage } from './services/flovartRuntime';
 import { executeFlovartCommand } from './tools/flovart/core.js';
+import { syncCanvasElementsIntoRuntime } from './services/projectRuntimeBridge';
 
 
 
@@ -314,6 +318,7 @@ const persistCharacterLocksToIDB = async (locks: CharacterLockProfile[]): Promis
 const App: React.FC = () => {
 
     const [boards, setBoards] = useState<Board[]>(() => [createNewBoard('Board 1')]);
+    const replaceRuntime = useRuntimeStore(state => state.replaceRuntime);
     const [dataReady, setDataReady] = useState(false);
     const [activeBoardId, setActiveBoardId] = useState<string>(() => {
         try {
@@ -355,6 +360,9 @@ const App: React.FC = () => {
     const [toolbarLeft, setToolbarLeft] = useState(68); // 瀹搞儱鍙块弽蹇曟畱 left 娴ｅ秶鐤?
     const [rightPanelWidth, setRightPanelWidth] = useState(2); // 閸欏厖鏅堕棃銏℃緲鐎圭偤妾€硅棄瀹抽敍鍫㈡暏閿?PromptBar 閸氬本顒為敓?
     const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
+    const [canvasStageSize, setCanvasStageSize] = useState({ width: 1, height: 1 });
+    const [canvasKonvaReadyIds, setCanvasKonvaReadyIds] = useState<Set<string>>(() => new Set());
+    const [canvasKonvaFailedIds, setCanvasKonvaFailedIds] = useState<Set<string>>(() => new Set());
     const [wheelAction, setWheelAction] = useState<WheelAction>('zoom');
     const [croppingState, setCroppingState] = useState<{ elementId: string; originalElement: ImageElement; cropBox: Rect } | null>(null);
     const [filterPanelElementId, setFilterPanelElementId] = useState<string | null>(null);
@@ -364,6 +372,17 @@ const App: React.FC = () => {
     const [generationHistory, setGenerationHistory] = useState<GenerationHistoryItem[]>([]);
     const [isAssetPanelOpen, setIsAssetPanelOpen] = useState(false);
     const [addAssetModal, setAddAssetModal] = useState<{ open: boolean; dataUrl: string; mimeType: string; width: number; height: number } | null>(null);
+
+    useEffect(() => {
+        if (!activeBoard) return;
+        const current = useRuntimeStore.getState().runtime;
+        replaceRuntime(syncCanvasElementsIntoRuntime(current, {
+            projectId: activeBoard.id,
+            canvasElements: elements,
+            assetLibrary,
+            viewport: { x: panOffset.x, y: panOffset.y, zoom },
+        }));
+    }, [activeBoard, assetLibrary, elements, panOffset.x, panOffset.y, replaceRuntime, zoom]);
     
     // Persist minimize state
     useEffect(() => {
@@ -485,6 +504,8 @@ const App: React.FC = () => {
     const setLanguage = useWorkspaceStore(s => s.setLanguage);
     const themeMode = useWorkspaceStore(s => s.themeMode);
     const setThemeMode = useWorkspaceStore(s => s.setThemeMode);
+    const activeView = useWorkspaceStore(s => s.activeView);
+    const setActiveView = useWorkspaceStore(s => s.setActiveView);
     const [systemTheme, setSystemTheme] = useState<'light' | 'dark'>(() => {
         if (typeof window === 'undefined') return 'light';
         return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
@@ -978,6 +999,29 @@ const App: React.FC = () => {
         onElementDoubleClick: handleElementDoubleClickFocus,
         onTripleClickEmpty: handleFitView,
     });
+
+    useEffect(() => {
+        const element = svgRef.current;
+        if (!element) return;
+
+        const updateSize = () => {
+            const rect = element.getBoundingClientRect();
+            setCanvasStageSize({
+                width: Math.max(1, Math.round(rect.width)),
+                height: Math.max(1, Math.round(rect.height)),
+            });
+        };
+
+        updateSize();
+        if (typeof ResizeObserver === 'undefined') {
+            window.addEventListener('resize', updateSize);
+            return () => window.removeEventListener('resize', updateSize);
+        }
+
+        const observer = new ResizeObserver(updateSize);
+        observer.observe(element);
+        return () => observer.disconnect();
+    }, [svgRef]);
 
     // ── Extracted: generation (AI image/video/batch) ──
     const {
@@ -2898,9 +2942,10 @@ const App: React.FC = () => {
                 },
                 clear: () => { commitAction(() => []); },
                 getSelected: () => [...selectedElementIds],
-                select: (ids: string[]) => {
+                select: (ids?: string[] | string | null) => {
                     const available = new Set(elementsRef.current.map(element => element.id));
-                    const selected = ids.filter(id => available.has(id));
+                    const requestedIds = Array.isArray(ids) ? ids : (ids ? [ids] : []);
+                    const selected = requestedIds.filter(id => available.has(id));
                     setSelectedElementIds(selected);
                     return { ok: true, selectedElementIds: selected };
                 },
@@ -3216,6 +3261,68 @@ const App: React.FC = () => {
         return `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(fullSvg)))}`;
     }, []);
 
+    const workflowCanvasImages = useMemo(() => (
+        elements
+            .filter((element): element is ImageElement => element.type === 'image')
+            .map((element) => ({
+                id: element.id,
+                name: element.name,
+                href: element.href,
+                mimeType: element.mimeType,
+            }))
+    ), [elements]);
+
+    const workflowCanvasVideos = useMemo(() => (
+        elements
+            .filter((element): element is VideoElement => element.type === 'video')
+            .map((element) => ({
+                id: element.id,
+                name: element.name,
+                href: element.href,
+                mimeType: element.mimeType,
+                poster: element.poster,
+                width: element.width,
+                height: element.height,
+                durationSec: element.durationSec,
+            }))
+    ), [elements]);
+
+    const canvasKonvaDisabledIds = useMemo(() => {
+        const disabled = new Set<string>(canvasKonvaFailedIds);
+        for (const id of selectedElementIds) {
+            const element = elements.find(item => item.id === id);
+            if (element?.type === 'video') disabled.add(id);
+        }
+        if (selectedInlinePromptElement) disabled.add(selectedInlinePromptElement.id);
+        if (croppingState) disabled.add(croppingState.elementId);
+        if (maskEditingId) disabled.add(maskEditingId);
+        return disabled;
+    }, [canvasKonvaFailedIds, croppingState, elements, maskEditingId, selectedElementIds, selectedInlinePromptElement]);
+
+    useEffect(() => {
+        if (canvasKonvaFailedIds.size === 0 && canvasKonvaReadyIds.size === 0) return;
+        const availableIds = new Set(elements.map(element => element.id));
+        setCanvasKonvaFailedIds(prev => {
+            const next = new Set([...prev].filter(id => availableIds.has(id)));
+            return next.size === prev.size ? prev : next;
+        });
+        setCanvasKonvaReadyIds(prev => {
+            const next = new Set([...prev].filter(id => availableIds.has(id)));
+            return next.size === prev.size ? prev : next;
+        });
+    }, [canvasKonvaFailedIds.size, canvasKonvaReadyIds.size, elements]);
+
+    const canvasKonvaDimmedIds = useMemo(() => {
+        if (!isInlineMediaPromptActive) return new Set<string>();
+        const dimmed = new Set<string>();
+        for (const element of elements) {
+            if ((element.type === 'image' || element.type === 'video') && element.id !== selectedInlinePromptElement?.id) {
+                dimmed.add(element.id);
+            }
+        }
+        return dimmed;
+    }, [elements, isInlineMediaPromptActive, selectedInlinePromptElement]);
+
     return (
         <AppShell
             themeBackground={themePalette.appBackground}
@@ -3329,6 +3436,50 @@ const App: React.FC = () => {
                 )}
             </>}
             main={<>
+            {activeView === 'workflow' ? (
+                <Suspense fallback={<div className="h-full w-full flex items-center justify-center opacity-40 text-sm">Loading Workflow…</div>}>
+                    <WorkflowWorkspace
+                        workflowPanel={
+                            <NodeWorkflowPanel
+                                prompt={prompt}
+                                setPrompt={setPrompt}
+                                generationMode={generationMode}
+                                setGenerationMode={setGenerationMode}
+                                selectedImageModel={modelPreference.imageModel}
+                                selectedVideoModel={modelPreference.videoModel}
+                                imageModelOptions={dynamicModelOptions.image}
+                                videoModelOptions={dynamicModelOptions.video}
+                                onImageModelChange={(model) => setModelPreference(prev => ({ ...prev, imageModel: model }))}
+                                onVideoModelChange={(model) => setModelPreference(prev => ({ ...prev, videoModel: model }))}
+                                attachments={promptAttachments}
+                                canvasImages={workflowCanvasImages}
+                                canvasVideos={workflowCanvasVideos}
+                                onRemoveAttachment={handleRemovePromptAttachment}
+                                onUploadFiles={handleAddPromptAttachmentFiles}
+                                onDropCanvasImage={handleAddPromptAttachmentFromCanvas}
+                                userApiKeys={userApiKeys}
+                                assetLibrary={assetLibrary}
+                                generationHistory={generationHistory}
+                                language={language}
+                                onSwitchWorkspace={setActiveView}
+                                onPlaceWorkflowValue={handlePlaceWorkflowValue}
+                                onSaveWorkflowValueToAssets={handleSaveWorkflowValueToAssets}
+                                workflowRenderer="hybrid"
+                            />
+                        }
+                        language={language}
+                        theme={resolvedTheme}
+                        onSwitchToCanvas={() => setActiveView('canvas')}
+                        onToggleTheme={() => {
+                            const next = resolvedTheme === 'dark' ? 'light' : 'dark';
+                            setThemeMode(next);
+                        }}
+                        onToggleLanguage={() => setLanguage(language === 'zho' ? 'en' : 'zho')}
+                        onOpenLegal={openLegalModal}
+                    />
+                </Suspense>
+            ) : (
+            <>
             <Suspense fallback={<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm"><div className="rounded-xl bg-neutral-800 px-6 py-4 text-sm text-white/60">Loading Settings…</div></div>}>
             <CanvasSettings
                 isOpen={isSettingsPanelOpen} 
@@ -3526,9 +3677,34 @@ const App: React.FC = () => {
                     transition: 'padding-right 0.35s cubic-bezier(0.4, 0, 0.2, 1), padding-bottom 0.35s cubic-bezier(0.4, 0, 0.2, 1)'
                 }}
             >
+                <div className="pointer-events-none absolute inset-0 z-0" aria-hidden="true">
+                    <Suspense fallback={null}>
+                        <CanvasKonvaMediaLayer
+                            elements={elements}
+                            width={canvasStageSize.width}
+                            height={canvasStageSize.height}
+                            panOffset={panOffset}
+                            zoom={zoom}
+                            dimmedElementIds={canvasKonvaDimmedIds}
+                            disabledElementIds={canvasKonvaDisabledIds}
+                            onMediaReady={(elementId) => {
+                                setCanvasKonvaReadyIds(prev => {
+                                    if (prev.has(elementId)) return prev;
+                                    return new Set([...prev, elementId]);
+                                });
+                            }}
+                            onMediaLoadError={(elementId) => {
+                                setCanvasKonvaFailedIds(prev => {
+                                    if (prev.has(elementId)) return prev;
+                                    return new Set([...prev, elementId]);
+                                });
+                            }}
+                        />
+                    </Suspense>
+                </div>
                 <svg
                     ref={svgRef}
-                    className="w-full h-full"
+                    className="relative z-10 w-full h-full"
                     onMouseDown={handleMouseDown}
                     onMouseMove={handleMouseMove}
                     onMouseUp={handleMouseUp}
@@ -3761,6 +3937,7 @@ const App: React.FC = () => {
                                 const genStatus = (el as CanvasElement).generationState?.status;
                                 const stageLabel = genStatus ? stageLabelMap[genStatus] : undefined;
                                 const perimeter = 2 * (el.width + el.height);
+                                const renderMediaInKonva = shouldRenderMediaInKonva(el, canvasKonvaDisabledIds) && canvasKonvaReadyIds.has(el.id);
                                 return (
                                     <g
                                         key={el.id}
@@ -3784,21 +3961,32 @@ const App: React.FC = () => {
                                                 </mask>
                                             </defs>
                                         )}
-                                        <image 
-                                            transform={`translate(${el.x}, ${el.y})`} 
-                                            href={el.href} 
-                                            width={el.width} 
-                                            height={el.height} 
-                                            className={`${croppingState && croppingState.elementId !== el.id ? 'opacity-30' : ''} ${isRevealing ? 'flv-gen-reveal' : ''}`}
-                                            clipPath={hasBorderRadius ? `url(#${clipPathId})` : undefined}
-                                            mask={maskId ? `url(#${maskId})` : undefined}
-                                            style={{
-                                                filter: combinedFilter || undefined,
-                                                opacity: isInlineMediaPromptActive && !isSelected ? 0.82 : 1,
-                                                transition: 'opacity 320ms ease, filter 160ms ease',
-                                                transformOrigin: `${el.x + el.width / 2}px ${el.y + el.height / 2}px`,
-                                            }}
-                                        />
+                                        {renderMediaInKonva ? (
+                                            <rect
+                                                x={el.x}
+                                                y={el.y}
+                                                width={el.width}
+                                                height={el.height}
+                                                fill="transparent"
+                                                pointerEvents="all"
+                                            />
+                                        ) : (
+                                            <image
+                                                transform={`translate(${el.x}, ${el.y})`}
+                                                href={el.href}
+                                                width={el.width}
+                                                height={el.height}
+                                                className={`${croppingState && croppingState.elementId !== el.id ? 'opacity-30' : ''} ${isRevealing ? 'flv-gen-reveal' : ''}`}
+                                                clipPath={hasBorderRadius ? `url(#${clipPathId})` : undefined}
+                                                mask={maskId ? `url(#${maskId})` : undefined}
+                                                style={{
+                                                    filter: combinedFilter || undefined,
+                                                    opacity: isInlineMediaPromptActive && !isSelected ? 0.82 : 1,
+                                                    transition: 'opacity 320ms ease, filter 160ms ease',
+                                                    transformOrigin: `${el.x + el.width / 2}px ${el.y + el.height / 2}px`,
+                                                }}
+                                            />
+                                        )}
                                         {isGenerating && (
                                             <g transform={`translate(${el.x}, ${el.y})`} pointerEvents="none">
                                                 <rect
@@ -3892,16 +4080,28 @@ const App: React.FC = () => {
                                 const genStatus = (el as CanvasElement).generationState?.status;
                                 const stageLabel = genStatus ? stageLabelMap[genStatus] : undefined;
                                 const perimeter = 2 * (el.width + el.height);
+                                const renderMediaInKonva = shouldRenderMediaInKonva(el, canvasKonvaDisabledIds) && canvasKonvaReadyIds.has(el.id);
                                 return (
                                     <g key={el.id} data-id={el.id} data-generating={isGenerating ? 'true' : undefined}>
-                                        <foreignObject x={el.x} y={el.y} width={el.width} height={el.height}>
-                                            <video 
-                                                src={el.href} 
-                                                controls 
-                                                style={{ width: '100%', height: '100%', borderRadius: '8px', opacity: isInlineMediaPromptActive && !isSelected ? 0.82 : 1, transition: 'opacity 320ms ease' }}
-                                                className={`${croppingState ? 'opacity-30' : ''} ${isRevealing ? 'flv-gen-reveal' : ''}`}
-                                            ></video>
-                                        </foreignObject>
+                                        {renderMediaInKonva ? (
+                                            <rect
+                                                x={el.x}
+                                                y={el.y}
+                                                width={el.width}
+                                                height={el.height}
+                                                fill="transparent"
+                                                pointerEvents="all"
+                                            />
+                                        ) : (
+                                            <foreignObject x={el.x} y={el.y} width={el.width} height={el.height}>
+                                                <video
+                                                    src={el.href}
+                                                    controls
+                                                    style={{ width: '100%', height: '100%', borderRadius: '8px', opacity: isInlineMediaPromptActive && !isSelected ? 0.82 : 1, transition: 'opacity 320ms ease' }}
+                                                    className={`${croppingState ? 'opacity-30' : ''} ${isRevealing ? 'flv-gen-reveal' : ''}`}
+                                                ></video>
+                                            </foreignObject>
+                                        )}
                                         {isGenerating && (
                                             <g transform={`translate(${el.x}, ${el.y})`} pointerEvents="none">
                                                 <rect
@@ -4418,6 +4618,35 @@ const App: React.FC = () => {
                                     </svg>
                                 )}
                             </button>
+                            <div className="h-3 w-px" style={{ background: 'var(--isl-border)' }}></div>
+                            <button
+                                type="button"
+                                onClick={() => setActiveView(activeView === 'canvas' ? 'workflow' : 'canvas')}
+                                className={`isl-tab inline-flex items-center gap-1 ${activeView === 'workflow' ? 'isl-tab--active' : ''}`}
+                                title={activeView === 'canvas' ? (language === 'zho' ? '切换到工作流模式' : 'Switch to Workflow') : (language === 'zho' ? '切换到画布模式' : 'Switch to Canvas')}
+                            >
+                                {activeView === 'canvas' ? (
+                                    <>
+                                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                            <rect x="3" y="3" width="7" height="7" rx="1" />
+                                            <rect x="14" y="3" width="7" height="7" rx="1" />
+                                            <rect x="14" y="14" width="7" height="7" rx="1" />
+                                            <rect x="3" y="14" width="7" height="7" rx="1" />
+                                        </svg>
+                                        <span className="text-[10px]">{language === 'zho' ? '画布' : 'Canvas'}</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                            <circle cx="12" cy="6" r="3" />
+                                            <circle cx="6" cy="18" r="3" />
+                                            <circle cx="18" cy="18" r="3" />
+                                            <path d="M12 9v3M9 15l3-3M15 15l-3-3" />
+                                        </svg>
+                                        <span className="text-[10px]">{language === 'zho' ? '工作流' : 'Workflow'}</span>
+                                    </>
+                                )}
+                            </button>
                             <button
                                 type="button"
                                 onClick={() => setLanguage(language === 'zho' ? 'en' : 'zho')}
@@ -4454,6 +4683,8 @@ const App: React.FC = () => {
                         </div>
                     </div>
                 </div>
+            )}
+            </>
             )}
         </>}
         />

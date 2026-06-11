@@ -10,7 +10,9 @@ import {
     inferProviderFromModel,
     generateImageWithProvider,
     generateVideoWithProvider,
+    pollSeedanceVideoTask,
     reversePromptWithProvider,
+    submitSeedanceVideoTask,
     splitImageLayersWithProvider,
     runImageAgentWithProvider,
 } from '../services/aiGateway';
@@ -191,9 +193,98 @@ describe('aiGateway - Seedance multimodal slots', () => {
         vi.useRealTimers();
     });
 
+    it('matches the Tokenhub Seedance 2.0 task API shape and prefers the query id', async () => {
+        globalThis.fetch = vi.fn().mockResolvedValueOnce(mockJsonResponse({
+            id: 'task_DKMeQXBNP0rrYJeiy1fg599NCBNXdfzD',
+            status: 'submitted',
+            task_id: 'cgt-20260610160326-929cb',
+        }));
+
+        const handle = await submitSeedanceVideoTask('first-person tea commercial', 'seedance-2.0', {
+            id: 'seedance-tokenhub-key',
+            provider: 'volcengine',
+            capabilities: ['video'],
+            key: 'tokenhub-test-key',
+            baseUrl: 'https://tokenhub.linkstor.com',
+            createdAt: 0,
+            updatedAt: 0,
+        }, {
+            aspectRatio: '16:9',
+            durationSec: 11,
+            watermark: false,
+            generateAudio: true,
+            slots: [
+                { kind: 'image', href: 'https://ark-project.tos-cn-beijing.volces.com/doc_image/r2v_tea_pic1.jpg', mimeType: 'image/jpeg', role: 'reference_image' },
+                { kind: 'video', href: 'https://ark-project.tos-cn-beijing.volces.com/doc_video/r2v_tea_video1.mp4', mimeType: 'video/mp4', role: 'reference_video' },
+                { kind: 'audio', href: 'https://ark-project.tos-cn-beijing.volces.com/doc_audio/r2v_tea_audio1.mp3', mimeType: 'audio/mpeg', role: 'reference_audio' },
+            ],
+        });
+
+        expect(handle.taskId).toBe('task_DKMeQXBNP0rrYJeiy1fg599NCBNXdfzD');
+        expect(handle.metadata?.upstreamTaskId).toBe('cgt-20260610160326-929cb');
+        const [createUrl, createInit] = vi.mocked(globalThis.fetch).mock.calls[0];
+        expect(createUrl).toBe('https://tokenhub.linkstor.com/api/v3/contents/generations/tasks');
+        const body = JSON.parse(String(createInit?.body));
+        expect(body).toMatchObject({
+            model: 'doubao-seedance-2.0',
+            generate_audio: true,
+            ratio: '16:9',
+            duration: 11,
+            watermark: false,
+        });
+        expect(body.content).toEqual([
+            { type: 'text', text: 'first-person tea commercial' },
+            { type: 'image_url', image_url: { url: 'https://ark-project.tos-cn-beijing.volces.com/doc_image/r2v_tea_pic1.jpg' }, role: 'reference_image' },
+            { type: 'video_url', video_url: { url: 'https://ark-project.tos-cn-beijing.volces.com/doc_video/r2v_tea_video1.mp4' }, role: 'reference_video' },
+            { type: 'audio_url', audio_url: { url: 'https://ark-project.tos-cn-beijing.volces.com/doc_audio/r2v_tea_audio1.mp3' }, role: 'reference_audio' },
+        ]);
+    });
+
+    it('parses the Tokenhub Seedance 2.0 status response video URL', async () => {
+        globalThis.fetch = vi.fn().mockResolvedValueOnce(mockJsonResponse({
+            id: 'task_2YCpPYe6kWzNxQAJOhwOnVvtpBtNfMiK',
+            model: 'doubao-seedance-2.0',
+            status: 'succeeded',
+            content: {
+                video_url: 'https://maas-task.example.com/prod-upload/result.mp4',
+            },
+            created_at: 1781070515,
+            updated_at: 1781070907,
+            usage: {
+                total_tokens: 1000000,
+                completion_tokens: 1000000,
+            },
+        }));
+
+        const result = await pollSeedanceVideoTask({
+            providerId: 'volcengine',
+            modelId: 'doubao-seedance-2.0',
+            taskId: 'task_2YCpPYe6kWzNxQAJOhwOnVvtpBtNfMiK',
+            baseUrl: 'https://tokenhub.linkstor.com/api/v3',
+            createdAt: 1781070515,
+        }, {
+            id: 'seedance-tokenhub-key',
+            provider: 'volcengine',
+            capabilities: ['video'],
+            key: 'tokenhub-test-key',
+            baseUrl: 'https://tokenhub.linkstor.com',
+            createdAt: 0,
+            updatedAt: 0,
+        });
+
+        expect(result).toMatchObject({
+            status: 'succeeded',
+            videoUrl: 'https://maas-task.example.com/prod-upload/result.mp4',
+        });
+        expect(vi.mocked(globalThis.fetch).mock.calls[0][0]).toBe(
+            'https://tokenhub.linkstor.com/api/v3/contents/generations/tasks/task_2YCpPYe6kWzNxQAJOhwOnVvtpBtNfMiK',
+        );
+    });
+
     it('exposes Seedance video slot capability dictionary', () => {
         expect(inferProviderFromModel('dreamina-seedance-2-0-260128')).toBe('volcengine');
-        const capability = getCapabilityDictionary('dreamina-seedance-2-0-260128', 'volcengine');
+        expect(inferProviderFromModel('doubao-seedance-2.0')).toBe('volcengine');
+        const capability = getCapabilityDictionary('doubao-seedance-2.0', 'volcengine');
         expect(capability.multimodalSlots.image?.max).toBe(9);
         expect(capability.multimodalSlots.video?.max).toBe(3);
         expect(capability.requestParams).toContain('duration');

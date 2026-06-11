@@ -23,6 +23,7 @@ import type {
   WorkflowValue,
 } from '../components/nodeflow/types';
 import { NODE_DEFS } from '../components/nodeflow/defs';
+import { normalizeWorkflowEdges } from '../components/nodeflow/graph';
 import type { AIProvider, UserApiKey } from '../types';
 import { normalizeVideoTrim } from '../utils/videoEdit';
 
@@ -180,6 +181,7 @@ export function topologicalSort(
   nodes: WorkflowNode[],
   edges: WorkflowEdge[],
 ): WorkflowNode[] {
+  const normalizedEdges = normalizeWorkflowEdges(nodes, edges);
   const nodeMap = new Map(nodes.map((n) => [n.id, n]));
   const inDegree = new Map<string, number>();
   const adjacency = new Map<string, string[]>();
@@ -189,7 +191,7 @@ export function topologicalSort(
     adjacency.set(n.id, []);
   }
 
-  for (const e of edges) {
+  for (const e of normalizedEdges) {
     inDegree.set(e.toNode, (inDegree.get(e.toNode) || 0) + 1);
     adjacency.get(e.fromNode)?.push(e.toNode);
   }
@@ -224,18 +226,19 @@ export function createExecutionPlan(
   scope: WorkflowExecutionScope,
   focusNodeId?: string,
 ): WorkflowExecutionPlan {
+  const normalizedEdges = normalizeWorkflowEdges(nodes, edges);
   const allNodeIds = new Set(nodes.map((node) => node.id));
   if (scope === 'workflow' || !focusNodeId || !allNodeIds.has(focusNodeId)) {
     return {
       nodes: [...nodes],
-      edges: [...edges],
+      edges: normalizedEdges,
       includedNodeIds: allNodeIds,
     };
   }
 
   const incomingByNode = new Map<string, string[]>();
   const outgoingByNode = new Map<string, string[]>();
-  for (const edge of edges) {
+  for (const edge of normalizedEdges) {
     const incoming = incomingByNode.get(edge.toNode) ?? [];
     incoming.push(edge.fromNode);
     incomingByNode.set(edge.toNode, incoming);
@@ -274,7 +277,7 @@ export function createExecutionPlan(
 
   return {
     nodes: nodes.filter((node) => includedNodeIds.has(node.id)),
-    edges: edges.filter((edge) => includedNodeIds.has(edge.fromNode) && includedNodeIds.has(edge.toNode)),
+    edges: normalizedEdges.filter((edge) => includedNodeIds.has(edge.fromNode) && includedNodeIds.has(edge.toNode)),
     includedNodeIds,
   };
 }
@@ -1009,14 +1012,15 @@ export async function executeWorkflow(
   edges: WorkflowEdge[],
   ctx: ExecutionContext,
 ): Promise<ExecutionResult> {
-  const sorted = topologicalSort(nodes, edges);
+  const normalizedEdges = normalizeWorkflowEdges(nodes, edges);
+  const sorted = topologicalSort(nodes, normalizedEdges);
   const nodeOutputs = new Map<string, NodeIOMap>();
   const errors: { nodeId: string; error: string }[] = [];
   const skippedNodes = new Set<string>();
 
   // Build reverse mapping: nodeId → upstream condition/switch ports that feed it
   const conditionalParents = new Map<string, { fromNode: string; fromPort: string }[]>();
-  for (const edge of edges) {
+  for (const edge of normalizedEdges) {
     const sourceNode = nodes.find(n => n.id === edge.fromNode);
     if (sourceNode && (sourceNode.kind === 'condition' || sourceNode.kind === 'switch')) {
       const arr = conditionalParents.get(edge.toNode) || [];
@@ -1048,7 +1052,7 @@ export async function executeWorkflow(
       if (allNull) {
         skippedNodes.add(node.id);
         // Propagate: mark all downstream nodes fed only by this node as skipped
-        propagateSkip(node.id, nodes, edges, skippedNodes, conditionalParents);
+        propagateSkip(node.id, nodes, normalizedEdges, skippedNodes, conditionalParents);
         nodeOutputs.set(node.id, {});
         ctx.onProgress?.(node.id, 'skipped');
         continue;
@@ -1080,7 +1084,7 @@ export async function executeWorkflow(
 
     // Collect inputs from connected edges
     const inputs: NodeIOMap = {};
-    const incomingEdges = edges.filter((e) => e.toNode === node.id);
+    const incomingEdges = normalizedEdges.filter((e) => e.toNode === node.id);
     for (const edge of incomingEdges) {
       const sourceOutputs = nodeOutputs.get(edge.fromNode);
       if (sourceOutputs) {

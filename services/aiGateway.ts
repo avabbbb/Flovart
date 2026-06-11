@@ -117,7 +117,7 @@ export const DEFAULT_PROVIDER_MODELS: Partial<Record<AIProvider, ProviderModelMa
     volcengine: {
         text: ['doubao-1.5-pro-256k', 'doubao-1.5-pro-32k'],
         image: [],
-        video: ['dreamina-seedance-2-0-260128', 'doubao-seedance-2-0-260128'],
+        video: ['doubao-seedance-2.0', 'seedance-2.0', 'dreamina-seedance-2-0-260128', 'doubao-seedance-2-0-260128'],
     },
     openrouter: {
         text: ['openrouter/auto', 'google/gemini-3-flash-preview', 'anthropic/claude-opus-4-6', 'deepseek/deepseek-r1'],
@@ -142,6 +142,8 @@ export interface ApiKeyValidationResult {
 type CustomProviderExtraConfig = Record<string, string> | undefined;
 
 type VideoAspectRatio = '16:9' | '9:16' | '1:1' | '4:3' | '3:4' | '21:9';
+
+const DEFAULT_SEEDANCE_MODEL = 'doubao-seedance-2.0';
 
 type CapabilityDictionary = {
     multimodalSlots: Partial<Record<MultimodalSlotKind, {
@@ -990,6 +992,30 @@ function extractTaskId(payload: any) {
         || payload?.data?.task?.id;
 }
 
+function normalizeSeedanceModel(model: string) {
+    const normalized = normalizeModelName(model);
+    if (normalized === 'seedance-2.0' || normalized === 'seedance-2-0') {
+        return DEFAULT_SEEDANCE_MODEL;
+    }
+    return model || DEFAULT_SEEDANCE_MODEL;
+}
+
+function extractSeedanceQueryTaskId(payload: any) {
+    return payload?.id
+        || payload?.data?.id
+        || payload?.task?.id
+        || payload?.data?.task?.id
+        || payload?.task_id
+        || payload?.data?.task_id;
+}
+
+function extractSeedanceUpstreamTaskId(payload: any) {
+    return payload?.task_id
+        || payload?.data?.task_id
+        || payload?.metadata?.upstream_task_id
+        || payload?.data?.metadata?.upstream_task_id;
+}
+
 function extractVideoStatus(payload: any) {
     const rawStatus = payload?.status
         || payload?.data?.status
@@ -1000,7 +1026,7 @@ function extractVideoStatus(payload: any) {
     const normalized = typeof rawStatus === 'string' ? rawStatus.toLowerCase() : '';
     if (['success', 'succeed', 'succeeded', 'completed', 'complete', 'done'].includes(normalized)) return 'succeeded';
     if (['fail', 'failed', 'error', 'cancelled', 'canceled', 'expired'].includes(normalized)) return 'failed';
-    if (['queued', 'pending', 'running', 'processing', 'in_progress', 'created'].includes(normalized)) return 'running';
+    if (['queued', 'pending', 'running', 'processing', 'in_progress', 'created', 'submitted'].includes(normalized)) return 'running';
     return normalized;
 }
 
@@ -2012,6 +2038,142 @@ export async function editImageWithProvider(
     throw new Error(`当前模型 ${model} 暂不支持参考图编辑。`);
 }
 
+export interface SeedanceVideoTaskHandle {
+    providerId: 'volcengine';
+    modelId: string;
+    taskId: string;
+    baseUrl: string;
+    createdAt: number;
+    metadata?: Record<string, unknown>;
+}
+
+export type SeedanceVideoPollResult =
+    | { status: 'running'; remoteStatus?: string; raw?: unknown }
+    | { status: 'succeeded'; videoUrl: string; raw?: unknown }
+    | { status: 'failed'; error: string; remoteStatus?: string; raw?: unknown };
+
+export async function submitSeedanceVideoTask(
+    prompt: string,
+    model: string,
+    key?: UserApiKey,
+    options?: {
+        aspectRatio?: VideoAspectRatio;
+        slots?: MultimodalSlot[];
+        references?: VideoImage[];
+        durationSec?: number;
+        resolution?: string;
+        frames?: number;
+        seed?: number;
+        cameraFixed?: boolean;
+        watermark?: boolean;
+        returnLastFrame?: boolean;
+        generateAudio?: boolean;
+        serviceTier?: string;
+        safetyIdentifier?: string;
+    },
+): Promise<SeedanceVideoTaskHandle> {
+    const apiKey = requireApiKey('volcengine', key);
+    const baseUrl = getBaseUrl('volcengine', key);
+    const mappedModel = normalizeSeedanceModel(mapProviderModel(model || DEFAULT_SEEDANCE_MODEL, key));
+    const capability = getCapabilityDictionary(mappedModel, 'volcengine');
+    const slots = options?.slots?.length ? options.slots : multimodalSlotsFromLegacyReferences(options?.references ?? []);
+
+    const createBody: Record<string, unknown> = {
+        model: mappedModel,
+        content: buildSeedanceContentItems(prompt, slots, capability),
+        ...withSupportedParams(capability, {
+            ratio: options?.aspectRatio || '16:9',
+            duration: options?.durationSec,
+            resolution: options?.resolution,
+            frames: options?.frames,
+            seed: options?.seed,
+            camera_fixed: options?.cameraFixed,
+            watermark: options?.watermark,
+            return_last_frame: options?.returnLastFrame,
+            generate_audio: options?.generateAudio,
+            service_tier: options?.serviceTier,
+            safety_identifier: options?.safetyIdentifier,
+        }),
+    };
+
+    const createRes = await fetch(`${baseUrl}/contents/generations/tasks`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify(createBody),
+    });
+    if (!createRes.ok) {
+        throw new Error(await readErrorResponse(createRes, 'Seedance 视频生成请求失败'));
+    }
+    const createJson = await readJsonResponse<any>(createRes, 'Seedance 视频生成创建响应');
+    const taskId = extractSeedanceQueryTaskId(createJson);
+    const upstreamTaskId = extractSeedanceUpstreamTaskId(createJson);
+    if (!taskId) throw new Error('Seedance 视频生成未返回任务 id');
+
+    return {
+        providerId: 'volcengine',
+        modelId: mappedModel,
+        taskId: String(taskId),
+        baseUrl,
+        createdAt: Date.now(),
+        metadata: {
+            rawSubmission: createJson,
+            upstreamTaskId: upstreamTaskId ? String(upstreamTaskId) : undefined,
+        },
+    };
+}
+
+export async function pollSeedanceVideoTask(
+    handle: SeedanceVideoTaskHandle,
+    key?: UserApiKey,
+): Promise<SeedanceVideoPollResult> {
+    const apiKey = requireApiKey('volcengine', key);
+    const baseUrl = handle.baseUrl || getBaseUrl('volcengine', key);
+    const queryRes = await fetch(`${baseUrl}/contents/generations/tasks/${encodeURIComponent(handle.taskId)}`, {
+        headers: { Authorization: `Bearer ${apiKey}` },
+    });
+    if (!queryRes.ok) {
+        throw new Error(await readErrorResponse(queryRes, 'Seedance 任务查询失败'));
+    }
+    const queryJson = await readJsonResponse<any>(queryRes, 'Seedance 任务查询响应');
+    const status = extractVideoStatus(queryJson);
+
+    if (status === 'failed') {
+        return {
+            status: 'failed',
+            error: extractFailureReason(queryJson) || 'Unknown error',
+            remoteStatus: status,
+            raw: queryJson,
+        };
+    }
+
+    if (status === 'succeeded') {
+        const videoUrl = extractVideoOutputUrl(queryJson);
+        if (!videoUrl) {
+            return {
+                status: 'failed',
+                error: 'Seedance 视频生成完成但未返回下载链接',
+                remoteStatus: status,
+                raw: queryJson,
+            };
+        }
+        return { status: 'succeeded', videoUrl, raw: queryJson };
+    }
+
+    return { status: 'running', remoteStatus: status || undefined, raw: queryJson };
+}
+
+export async function downloadSeedanceVideoResult(videoUrl: string): Promise<{ videoBlob: Blob; mimeType: string }> {
+    const response = await fetch(videoUrl);
+    if (!response.ok) throw new Error(`视频下载失败: ${response.statusText}`);
+    return {
+        videoBlob: await response.blob(),
+        mimeType: response.headers.get('Content-Type') || 'video/mp4',
+    };
+}
+
 /**
  * 【函数】统一的视频生成入口
  *
@@ -2232,52 +2394,16 @@ export async function generateVideoWithProvider(
     }
 
     if (provider === 'volcengine') {
-        const apiKey = requireApiKey(provider, key);
-        const baseUrl = getBaseUrl(provider, key);
-        const mappedModel = mapProviderModel(model || 'dreamina-seedance-2-0-260128', key);
-        const capability = getCapabilityDictionary(mappedModel, provider);
-
-        // Seedance via Ark API: text plus typed multimodal slots in content[].
-        onProgress('Submitting video generation task...');
-        const createBody: Record<string, unknown> = {
-            model: mappedModel,
-            content: buildSeedanceContentItems(prompt, multimodalSlots, capability),
-            ...withSupportedParams(capability, {
-                ratio: aspectRatio,
-                duration: options?.durationSec,
-                resolution: options?.resolution,
-                frames: options?.frames,
-                seed: options?.seed,
-                camera_fixed: options?.cameraFixed,
-                watermark: options?.watermark,
-                return_last_frame: options?.returnLastFrame,
-                generate_audio: options?.generateAudio,
-                service_tier: options?.serviceTier,
-                safety_identifier: options?.safetyIdentifier,
-            }),
-        };
-
-        const createRes = await fetch(`${baseUrl}/contents/generations/tasks`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${apiKey}`,
-            },
-            body: JSON.stringify(createBody),
+        const handle = await submitSeedanceVideoTask(prompt, model, key, {
+            ...options,
+            aspectRatio,
+            slots: multimodalSlots,
         });
-        if (!createRes.ok) {
-            throw new Error(await readErrorResponse(createRes, 'Seedance 视频生成请求失败'));
-        }
-        const createJson = await readJsonResponse<any>(createRes, 'Seedance 视频生成创建响应');
-        const taskId = extractTaskId(createJson);
-        if (!taskId) throw new Error('Seedance 视频生成未返回 task_id');
-
-        // Poll for completion
         const seedanceProgressMessages = ['Rendering frames...', 'Compositing video...', 'Applying final touches...', 'Almost there...'];
         let seedanceMsgIndex = 0;
         onProgress('Generation started, this may take a few minutes.');
         const seedancePollStart = Date.now();
-        let seedanceVideoUrl: string | undefined;
+
         while (true) {
             if (Date.now() - seedancePollStart > 600_000) {
                 throw new Error('Seedance 视频生成超时（已等待超过 10 分钟）');
@@ -2286,32 +2412,15 @@ export async function generateVideoWithProvider(
             seedanceMsgIndex++;
             await new Promise(resolve => setTimeout(resolve, 10000));
 
-            const queryRes = await fetch(`${baseUrl}/contents/generations/tasks/${encodeURIComponent(taskId)}`, {
-                headers: { Authorization: `Bearer ${apiKey}` },
-            });
-            if (!queryRes.ok) {
-                throw new Error(await readErrorResponse(queryRes, 'Seedance 任务查询失败'));
+            const result = await pollSeedanceVideoTask(handle, key);
+            if (result.status === 'failed') {
+                throw new Error(`Seedance 视频生成失败: ${result.error || 'Unknown error'}`);
             }
-            const queryJson = await readJsonResponse<any>(queryRes, 'Seedance 任务查询响应');
-            const status = extractVideoStatus(queryJson);
-
-            if (status === 'failed') {
-                throw new Error(`Seedance 视频生成失败: ${extractFailureReason(queryJson) || 'Unknown error'}`);
-            }
-            if (status === 'succeeded') {
-                seedanceVideoUrl = extractVideoOutputUrl(queryJson);
-                break;
+            if (result.status === 'succeeded') {
+                onProgress('Downloading generated video...');
+                return downloadSeedanceVideoResult(result.videoUrl);
             }
         }
-
-        if (!seedanceVideoUrl) throw new Error('Seedance 视频生成完成但未返回下载链接');
-
-        onProgress('Downloading generated video...');
-        const seedanceVideoRes = await fetch(seedanceVideoUrl);
-        if (!seedanceVideoRes.ok) throw new Error(`视频下载失败: ${seedanceVideoRes.statusText}`);
-        const seedanceVideoBlob = await seedanceVideoRes.blob();
-        const seedanceMimeType = seedanceVideoRes.headers.get('Content-Type') || 'video/mp4';
-        return { videoBlob: seedanceVideoBlob, mimeType: seedanceMimeType };
     }
 
     if (provider === 'custom') {

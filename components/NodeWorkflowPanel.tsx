@@ -20,7 +20,7 @@ import type {
   UserApiKey,
 } from '../types';
 import { NODE_DEFS } from './nodeflow/defs';
-import { canConnectEdge, clampScale, getBezierPath, getPortPosition, selectionBoxRect } from './nodeflow/graph';
+import { canConnectEdge, clampScale, getBezierPath, getPortPosition, normalizeWorkflowEdges, selectionBoxRect } from './nodeflow/graph';
 import { getNodeInspectorSections } from './nodeflow/inspectorSchema';
 import type { NodeInspectorField } from './nodeflow/inspectorSchema';
 import { STARTER_WORKFLOW_TEMPLATES } from './nodeflow/starterTemplates';
@@ -57,6 +57,10 @@ import {
   serializeWorkflowTemplatePackage,
 } from '../utils/workflowTemplatePackage';
 import { CanvasElementPicker } from './nodeflow/CanvasElementPicker';
+import { WorkflowKonvaShell } from './workflow/WorkflowKonvaShell';
+import { useRuntimeStore } from '../stores/useRuntimeStore';
+import { syncWorkflowGraphIntoRuntime } from '../services/projectRuntimeBridge';
+import { selectWorkflowGraph } from '../utils/runtimeSelectors';
 
 interface NodeWorkflowPanelProps {
   prompt: string;
@@ -69,22 +73,23 @@ interface NodeWorkflowPanelProps {
   videoModelOptions?: string[];
   onImageModelChange?: (model: string) => void;
   onVideoModelChange?: (model: string) => void;
-  attachments: ChatAttachment[];
-  canvasImages: Array<{ id: string; name?: string; href: string; mimeType: string }>;
-  canvasVideos: Array<{ id: string; name?: string; href: string; mimeType: string; poster?: string; width?: number; height?: number; durationSec?: number; trimInSec?: number; trimOutSec?: number }>;
+  attachments?: ChatAttachment[] | null;
+  canvasImages?: Array<{ id: string; name?: string; href: string; mimeType: string }> | null;
+  canvasVideos?: Array<{ id: string; name?: string; href: string; mimeType: string; poster?: string; width?: number; height?: number; durationSec?: number; trimInSec?: number; trimOutSec?: number }> | null;
   onRemoveAttachment: (id: string) => void;
   onUploadFiles: (files: FileList | File[]) => void;
   onDropCanvasImage: (payload: { id: string; name?: string; href: string; mimeType: string }) => void;
-  userApiKeys: UserApiKey[];
-  assetLibrary?: AssetLibrary;
-  generationHistory?: GenerationHistoryItem[];
+  userApiKeys?: UserApiKey[] | null;
+  assetLibrary?: Partial<AssetLibrary> | null;
+  generationHistory?: GenerationHistoryItem[] | null;
   language?: 'en' | 'zho';
   onSwitchWorkspace?: (view: 'canvas' | 'workflow') => void;
-  onPlaceWorkflowValue: (value: WorkflowValue) => Promise<void> | void;
-  onSaveWorkflowValueToAssets: (value: WorkflowValue, node: WorkflowNode) => Promise<void> | void;
+  onPlaceWorkflowValue?: (value: WorkflowValue) => Promise<void> | void;
+  onSaveWorkflowValueToAssets?: (value: WorkflowValue, node: WorkflowNode) => Promise<void> | void;
+  workflowRenderer?: 'dom' | 'hybrid' | 'konva';
 }
 
-type CanvasVideo = NodeWorkflowPanelProps['canvasVideos'][number];
+type CanvasVideo = NonNullable<NodeWorkflowPanelProps['canvasVideos']>[number];
 
 type ContextMenuState = {
   x: number;
@@ -161,6 +166,18 @@ type SharedAssetPanelItem = {
 };
 
 const EMPTY_ASSET_LIBRARY: AssetLibrary = { character: [], scene: [], prop: [] };
+
+function safeArray<T>(value: T[] | null | undefined): T[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function normalizeAssetLibrary(value: Partial<AssetLibrary> | null | undefined): AssetLibrary {
+  return {
+    character: safeArray(value?.character),
+    scene: safeArray(value?.scene),
+    prop: safeArray(value?.prop),
+  };
+}
 const SAVED_WORKFLOWS_STORAGE_KEY = 'flovart.savedWorkflows.v1';
 
 const NODE_LIBRARY_KINDS: NodeKind[] = [
@@ -492,6 +509,10 @@ function sanitizeSavedWorkflow(raw: unknown): SavedWorkflow | null {
   ));
   if (nodes.length === 0) return null;
   const nodeIds = new Set(nodes.map((node) => node.id));
+  const edges = normalizeWorkflowEdges(
+    nodes,
+    item.edges.filter((edge): edge is WorkflowEdge => !!edge && typeof edge.id === 'string'),
+  );
   return {
     id: item.id,
     name: item.name,
@@ -499,12 +520,7 @@ function sanitizeSavedWorkflow(raw: unknown): SavedWorkflow | null {
     updatedAt: typeof item.updatedAt === 'number' ? item.updatedAt : Date.now(),
     favorite: !!item.favorite,
     nodes: cloneWorkflowNodes(nodes),
-    edges: item.edges.filter((edge): edge is WorkflowEdge => (
-      !!edge
-      && typeof edge.id === 'string'
-      && nodeIds.has(edge.fromNode)
-      && nodeIds.has(edge.toNode)
-    )).map((edge) => ({ ...edge })),
+    edges: cloneWorkflowEdges(edges),
     groups: Array.isArray(item.groups)
       ? item.groups
           .filter((group): group is WorkflowGroup => (
@@ -583,29 +599,34 @@ export const NodeWorkflowPanel: React.FC<NodeWorkflowPanelProps> = ({
   videoModelOptions = [],
   onImageModelChange,
   onVideoModelChange,
-  attachments = [],
-  canvasImages = [],
-  canvasVideos = [],
+  attachments: attachmentsInput,
+  canvasImages: canvasImagesInput,
+  canvasVideos: canvasVideosInput,
   onRemoveAttachment,
   onUploadFiles,
   onDropCanvasImage,
-  userApiKeys,
-  assetLibrary = EMPTY_ASSET_LIBRARY,
-  generationHistory = [],
+  userApiKeys: userApiKeysInput,
+  assetLibrary: assetLibraryInput = EMPTY_ASSET_LIBRARY,
+  generationHistory: generationHistoryInput,
   language = 'en',
   onSwitchWorkspace,
   onPlaceWorkflowValue,
   onSaveWorkflowValueToAssets,
+  workflowRenderer = 'dom',
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const nodeMediaInputRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
+  const [canvasSize, setCanvasSize] = useState({ width: 1, height: 1 });
   const minimapRef = useRef<SVGSVGElement>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
   const connectionMenuRef = useRef<HTMLDivElement>(null);
   const connectionMenuOpenRef = useRef(false);
   const importWorkflowInputRef = useRef<HTMLInputElement>(null);
   const store = useNodeWorkflowStore();
+  const runtime = useRuntimeStore((state) => state.runtime);
+  const replaceRuntime = useRuntimeStore((state) => state.replaceRuntime);
+  const hydratedFromRuntimeRef = useRef(false);
 
   const [isExecuting, setIsExecuting] = useState(false);
   const [runError, setRunError] = useState<string | null>(null);
@@ -633,6 +654,61 @@ export const NodeWorkflowPanel: React.FC<NodeWorkflowPanelProps> = ({
   const [canvasPickerAnchor, setCanvasPickerAnchor] = useState<{ nodeId: string; type: 'image' | 'video'; rect: DOMRect } | null>(null);
   const activeTraceRef = useRef<{ sessionId: string; jobId: string } | null>(null);
   const copy = WORKFLOW_COPY[language] || WORKFLOW_COPY.en;
+  const attachments = useMemo(() => safeArray(attachmentsInput), [attachmentsInput]);
+  const canvasImages = useMemo(() => safeArray(canvasImagesInput), [canvasImagesInput]);
+  const canvasVideos = useMemo(() => safeArray(canvasVideosInput), [canvasVideosInput]);
+  const userApiKeys = useMemo(() => safeArray(userApiKeysInput), [userApiKeysInput]);
+  const assetLibrary = useMemo(() => normalizeAssetLibrary(assetLibraryInput), [assetLibraryInput]);
+  const generationHistory = useMemo(() => safeArray(generationHistoryInput), [generationHistoryInput]);
+
+  useEffect(() => {
+    if (hydratedFromRuntimeRef.current) return;
+    hydratedFromRuntimeRef.current = true;
+    const graph = selectWorkflowGraph(runtime);
+    if (graph.nodes.length === 0) return;
+    store.replaceGraph(graph);
+  }, [runtime, store]);
+
+  useEffect(() => {
+    const current = useRuntimeStore.getState().runtime;
+    replaceRuntime(syncWorkflowGraphIntoRuntime(current, {
+      nodes: store.nodes,
+      edges: store.edges,
+      groups: store.groups,
+      viewport: store.viewport,
+    }));
+  }, [
+    replaceRuntime,
+    store.edges,
+    store.groups,
+    store.nodes,
+    store.viewport,
+  ]);
+
+  useEffect(() => {
+    const element = canvasRef.current;
+    if (!element) return;
+
+    const updateSize = () => {
+      const rect = element.getBoundingClientRect();
+      setCanvasSize({
+        width: Math.max(1, Math.round(rect.width)),
+        height: Math.max(1, Math.round(rect.height)),
+      });
+    };
+
+    updateSize();
+
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', updateSize);
+      return () => window.removeEventListener('resize', updateSize);
+    }
+
+    const observer = new ResizeObserver(updateSize);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
   const getToolPanelTitle = (tab: ToolPanelTab): string => {
     if (tab === 'nodes') return copy.workflowNodes;
     if (tab === 'workflows') return copy.savedWorkflows;
@@ -895,6 +971,7 @@ export const NodeWorkflowPanel: React.FC<NodeWorkflowPanelProps> = ({
   };
 
   const applyHistoryItemToCanvas = (item: GenerationHistoryItem) => {
+    if (!onPlaceWorkflowValue) return;
     void onPlaceWorkflowValue({
       kind: 'image',
       href: item.dataUrl,
@@ -1031,6 +1108,7 @@ export const NodeWorkflowPanel: React.FC<NodeWorkflowPanelProps> = ({
   };
 
   const saveNodeMediaToAssets = (nodeId: string) => {
+    if (!onSaveWorkflowValueToAssets) return;
     const node = store.nodeMap.get(nodeId);
     if (!node) return;
     const displayMedia = getNodeDisplayMedia(node);
@@ -2911,6 +2989,21 @@ export const NodeWorkflowPanel: React.FC<NodeWorkflowPanelProps> = ({
           }}
           data-graphbg="1"
         />
+
+        {workflowRenderer !== 'dom' && (
+          <div className="pointer-events-none absolute inset-0" aria-hidden="true">
+            <WorkflowKonvaShell
+              width={canvasSize.width}
+              height={canvasSize.height}
+              nodes={store.nodes}
+              edges={store.edges}
+              groups={store.groups}
+              viewport={store.viewport}
+              selectedNodeIds={store.selectedNodeIds}
+              activeNodeId={store.activeNodeId}
+            />
+          </div>
+        )}
 
         <div
           className="absolute inset-0"

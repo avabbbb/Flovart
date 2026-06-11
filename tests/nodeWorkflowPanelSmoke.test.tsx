@@ -1,9 +1,11 @@
 import React from 'react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import { NodeWorkflowPanel } from '../components/NodeWorkflowPanel';
 import { parseWorkflowTemplatePackageJson } from '../utils/workflowTemplatePackage';
+import { useRuntimeStore } from '../stores/useRuntimeStore';
+import type { UnifiedProjectRuntime } from '../types/runtime';
 
 function readBlobText(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -14,7 +16,35 @@ function readBlobText(blob: Blob): Promise<string> {
   });
 }
 
+function emptyRuntime(): UnifiedProjectRuntime {
+  return {
+    version: 1,
+    projectId: 'local',
+    entities: {},
+    connections: {},
+    canvasView: {
+      nodes: {},
+      viewport: { x: 0, y: 0, zoom: 1 },
+      showTechnicalEntities: false,
+    },
+    workflowView: {
+      nodes: {},
+      groups: {},
+      viewport: { x: 0, y: 0, scale: 1 },
+    },
+    jobs: {},
+    assets: { character: [], scene: [], prop: [] },
+    settings: {},
+    updatedAt: 0,
+  };
+}
+
 describe('NodeWorkflowPanel smoke', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    useRuntimeStore.getState().replaceRuntime(emptyRuntime());
+  });
+
   afterEach(() => {
     cleanup();
     localStorage.clear();
@@ -42,6 +72,46 @@ describe('NodeWorkflowPanel smoke', () => {
     expect(container.querySelector('.workflow-libtv')).toBeTruthy();
     expect(container.querySelectorAll('.workflow-node-card').length).toBeGreaterThan(0);
     expect(screen.queryByText('Connected Inputs')).toBeNull();
+  });
+
+  it('renders when workspace switch omits optional panel collections', () => {
+    const { container } = render(
+      <NodeWorkflowPanel
+        prompt=""
+        setPrompt={() => undefined}
+        generationMode="image"
+        setGenerationMode={() => undefined}
+        onRemoveAttachment={() => undefined}
+        onUploadFiles={() => undefined}
+        onDropCanvasImage={() => undefined}
+      />,
+    );
+
+    expect(container.querySelector('.workflow-libtv')).toBeTruthy();
+    expect(container.querySelectorAll('.workflow-node-card').length).toBeGreaterThan(0);
+  });
+
+  it('treats null workspace collections as empty runtime data', () => {
+    const { container } = render(
+      <NodeWorkflowPanel
+        prompt=""
+        setPrompt={() => undefined}
+        generationMode="image"
+        setGenerationMode={() => undefined}
+        attachments={null as never}
+        canvasImages={null as never}
+        canvasVideos={null as never}
+        userApiKeys={null as never}
+        assetLibrary={{ scene: null } as never}
+        generationHistory={null as never}
+        onRemoveAttachment={() => undefined}
+        onUploadFiles={() => undefined}
+        onDropCanvasImage={() => undefined}
+      />,
+    );
+
+    expect(container.querySelector('.workflow-libtv')).toBeTruthy();
+    expect(container.querySelectorAll('.workflow-node-card').length).toBeGreaterThan(0);
   });
 
   it('starts with only the simple image and video media nodes', () => {

@@ -1,6 +1,7 @@
 import { NODE_DEFS } from './defs';
 import type {
   NodeKind,
+  NodePort,
   PendingConnection,
   SelectionBox,
   WorkflowEdge,
@@ -116,6 +117,75 @@ export function canConnectEdge(
   const targetType = getPortType(targetNode.kind, targetPort, false);
   if (!sourceType || !targetType) return false;
   return arePortTypesCompatible(sourceType, targetType);
+}
+
+function findCompatiblePortPair(
+  sourceNode: WorkflowNode,
+  sourcePortKey: string,
+  targetNode: WorkflowNode,
+  targetPortKey: string,
+): { fromPort: string; toPort: string } | null {
+  if (sourceNode.id === targetNode.id) return null;
+  const sourcePorts = NODE_DEFS[sourceNode.kind].outputs;
+  const targetPorts = NODE_DEFS[targetNode.kind].inputs;
+  const requestedSource = sourcePorts.find((port) => port.key === sourcePortKey);
+  const requestedTarget = targetPorts.find((port) => port.key === targetPortKey);
+
+  const isCompatible = (source: NodePort, target: NodePort) => (
+    arePortTypesCompatible(source.type, target.type)
+  );
+
+  if (requestedSource && requestedTarget && isCompatible(requestedSource, requestedTarget)) {
+    return { fromPort: requestedSource.key, toPort: requestedTarget.key };
+  }
+
+  if (requestedSource) {
+    const target = targetPorts.find((port) => isCompatible(requestedSource, port));
+    return target ? { fromPort: requestedSource.key, toPort: target.key } : null;
+  }
+
+  if (requestedTarget) {
+    const source = sourcePorts.find((port) => isCompatible(port, requestedTarget));
+    return source ? { fromPort: source.key, toPort: requestedTarget.key } : null;
+  }
+
+  for (const source of sourcePorts) {
+    const target = targetPorts.find((port) => isCompatible(source, port));
+    if (target) return { fromPort: source.key, toPort: target.key };
+  }
+
+  return null;
+}
+
+export function normalizeWorkflowEdges(
+  nodes: WorkflowNode[],
+  edges: WorkflowEdge[],
+): WorkflowEdge[] {
+  const nodeMap = new Map(nodes.map((node) => [node.id, node]));
+  const usedInputs = new Set<string>();
+  const normalized: WorkflowEdge[] = [];
+
+  for (const edge of edges) {
+    const sourceNode = nodeMap.get(edge.fromNode);
+    const targetNode = nodeMap.get(edge.toNode);
+    if (!sourceNode || !targetNode) continue;
+
+    const pair = findCompatiblePortPair(sourceNode, edge.fromPort, targetNode, edge.toPort);
+    if (!pair) continue;
+
+    const inputKey = `${edge.toNode}:${pair.toPort}`;
+    if (usedInputs.has(inputKey)) continue;
+    usedInputs.add(inputKey);
+
+    normalized.push({
+      ...edge,
+      id: typeof edge.id === 'string' && edge.id ? edge.id : makeId('edge'),
+      fromPort: pair.fromPort,
+      toPort: pair.toPort,
+    });
+  }
+
+  return normalized;
 }
 
 export function upsertEdgeToInput(
