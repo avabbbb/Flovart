@@ -485,6 +485,8 @@ const App: React.FC = () => {
     const setLanguage = useWorkspaceStore(s => s.setLanguage);
     const themeMode = useWorkspaceStore(s => s.themeMode);
     const setThemeMode = useWorkspaceStore(s => s.setThemeMode);
+    const activeView = useWorkspaceStore(s => s.activeView);
+    const setActiveView = useWorkspaceStore(s => s.setActiveView);
     const [systemTheme, setSystemTheme] = useState<'light' | 'dark'>(() => {
         if (typeof window === 'undefined') return 'light';
         return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
@@ -3490,6 +3492,8 @@ const App: React.FC = () => {
                 />
                 </Suspense>
             )}
+            {activeView === 'canvas' ? (
+            <>
             <Toolbar
                 t={t}
                 theme={resolvedTheme}
@@ -4418,6 +4422,35 @@ const App: React.FC = () => {
                                     </svg>
                                 )}
                             </button>
+                            <div className="h-3 w-px" style={{ background: 'var(--isl-border)' }}></div>
+                            <button
+                                type="button"
+                                onClick={() => setActiveView(activeView === 'canvas' ? 'workflow' : 'canvas')}
+                                className={`isl-tab inline-flex items-center gap-1 ${activeView === 'workflow' ? 'isl-tab--active' : ''}`}
+                                title={activeView === 'canvas' ? (language === 'zho' ? '切换到工作流模式' : 'Switch to Workflow') : (language === 'zho' ? '切换到画布模式' : 'Switch to Canvas')}
+                            >
+                                {activeView === 'canvas' ? (
+                                    <>
+                                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                            <rect x="3" y="3" width="7" height="7" rx="1" />
+                                            <rect x="14" y="3" width="7" height="7" rx="1" />
+                                            <rect x="14" y="14" width="7" height="7" rx="1" />
+                                            <rect x="3" y="14" width="7" height="7" rx="1" />
+                                        </svg>
+                                        <span className="text-[10px]">{language === 'zho' ? '画布' : 'Canvas'}</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                            <circle cx="12" cy="6" r="3" />
+                                            <circle cx="6" cy="18" r="3" />
+                                            <circle cx="18" cy="18" r="3" />
+                                            <path d="M12 9v3M9 15l3-3M15 15l-3-3" />
+                                        </svg>
+                                        <span className="text-[10px]">{language === 'zho' ? '工作流' : 'Workflow'}</span>
+                                    </>
+                                )}
+                            </button>
                             <button
                                 type="button"
                                 onClick={() => setLanguage(language === 'zho' ? 'en' : 'zho')}
@@ -4435,6 +4468,93 @@ const App: React.FC = () => {
                         </div>
                     </div>
                 </div>
+            )}
+            </>
+            ) : (
+            <Suspense fallback={<div className="h-full w-full flex items-center justify-center opacity-40 text-sm">Loading Workflow…</div>}>
+                <WorkflowWorkspace
+                    workflowPanel={
+                        <NodeWorkflowPanel
+                            prompt={prompt}
+                            setPrompt={setPrompt}
+                            generationMode={generationMode}
+                            setGenerationMode={setGenerationMode}
+                            selectedImageModel={modelPreference.imageModel}
+                            selectedVideoModel={modelPreference.videoModel}
+                            imageModelOptions={dynamicModelOptions.image}
+                            videoModelOptions={dynamicModelOptions.video}
+                            onImageModelChange={(model) => setModelPreference(prev => ({ ...prev, imageModel: model }))}
+                            onVideoModelChange={(model) => setModelPreference(prev => ({ ...prev, videoModel: model }))}
+                            attachments={promptAttachments}
+                            canvasImages={elements.filter((el): el is ImageElement => el.type === 'image').map(el => ({
+                                id: el.id,
+                                name: el.name,
+                                href: el.href,
+                                mimeType: el.mimeType,
+                            }))}
+                            canvasVideos={elements.filter((el): el is VideoElement => el.type === 'video').map(el => ({
+                                id: el.id,
+                                name: el.name,
+                                href: el.href,
+                                mimeType: el.mimeType,
+                                poster: el.poster,
+                                width: el.width,
+                                height: el.height,
+                                durationSec: el.durationSec,
+                            }))}
+                            onRemoveAttachment={handleRemovePromptAttachment}
+                            onUploadFiles={handleAddPromptAttachmentFiles}
+                            onDropCanvasImage={(id) => {
+                                const el = elements.find(e => e.id === id && e.type === 'image') as ImageElement | undefined;
+                                if (el) handleAddPromptAttachmentFiles([{ dataUrl: el.href, mimeType: el.mimeType, name: el.name }]);
+                            }}
+                            userApiKeys={userApiKeys}
+                            assetLibrary={assetLibrary}
+                            generationHistory={generationHistory}
+                            language={language}
+                            onSwitchWorkspace={setActiveView}
+                            onPlaceWorkflowValue={(value: WorkflowValue) => {
+                                if (value.type === 'image' && value.data) {
+                                    commitAction(prev => [...prev, {
+                                        id: generateId(),
+                                        type: 'image' as const,
+                                        name: value.name || 'Workflow Output',
+                                        x: 100,
+                                        y: 100,
+                                        width: value.width || 512,
+                                        height: value.height || 512,
+                                        href: value.data,
+                                        mimeType: 'image/png',
+                                        isVisible: true,
+                                        isLocked: false,
+                                    }]);
+                                }
+                            }}
+                            onSaveWorkflowValueToAssets={(value: WorkflowValue) => {
+                                if (value.type === 'image' && value.data) {
+                                    const newItem: AssetItem = {
+                                        id: generateId(),
+                                        name: value.name || 'Workflow Output',
+                                        category: 'images' as AssetCategory,
+                                        dataUrl: value.data,
+                                        mimeType: 'image/png',
+                                        width: value.width || 512,
+                                        height: value.height || 512,
+                                        createdAt: Date.now(),
+                                    };
+                                    setAssetLibrary(prev => addAsset(prev, newItem));
+                                }
+                            }}
+                        />
+                    }
+                    language={language}
+                    theme={resolvedTheme}
+                    onSwitchToCanvas={() => setActiveView('canvas')}
+                    onToggleTheme={() => setThemeMode(resolvedTheme === 'dark' ? 'light' : 'dark')}
+                    onToggleLanguage={() => setLanguage(language === 'zho' ? 'en' : 'zho')}
+                    onOpenLegal={openLegalModal}
+                />
+            </Suspense>
             )}
 
             {/* 法律文档弹窗 */}
