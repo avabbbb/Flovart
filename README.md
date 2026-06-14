@@ -5,10 +5,6 @@
 <h1 align="center">Flovart</h1>
 
 <p align="center">
-  <img src="pic/Workspace.png" alt="Flovart" width="100%" />
-</p>
-
-<p align="center">
   <strong>开源版 Lovart — 自带 Key、接入所有模型、把画布变成 Agent 的运行时</strong>
 </p>
 
@@ -39,6 +35,23 @@
     <img src="https://img.shields.io/badge/🌐_在线体验_Demo-点击打开-E8453C?style=for-the-badge" alt="Demo" />
   </a>
 </p>
+
+---
+
+## 📸 双工作区预览
+
+<table>
+  <tr>
+    <td width="50%">
+      <img src="pic/Canvas.png" alt="Canvas 工作区" />
+      <p align="center"><strong>Canvas 工作区</strong> - 无限画布 + AI 创作</p>
+    </td>
+    <td width="50%">
+      <img src="pic/WorkFlow.png" alt="Workflow 工作区" />
+      <p align="center"><strong>Workflow 工作区</strong> - 节点式流程编排</p>
+    </td>
+  </tr>
+</table>
 
 ---
 
