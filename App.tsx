@@ -25,7 +25,6 @@ const RightPanel = React.lazy(() => import('./components/RightPanel').then(m => 
 const AssetAddModal = React.lazy(() => import('./components/AssetAddModal').then(m => ({ default: m.AssetAddModal })));
 const ABCompareOverlay = React.lazy(() => import('./components/ABCompareOverlay').then(m => ({ default: m.ABCompareOverlay })));
 const NodeWorkflowPanel = React.lazy(() => import('./components/NodeWorkflowPanel').then(m => ({ default: m.NodeWorkflowPanel })));
-const CanvasKonvaMediaLayer = React.lazy(() => import('./components/canvas/CanvasKonvaMediaLayer').then(m => ({ default: m.CanvasKonvaMediaLayer })));
 import { loadAssetLibrary, addAsset, removeAsset, renameAsset, loadAssetLibraryAsync, saveAssetLibraryAsync } from './utils/assetStorage';
 import { loadGenerationHistoryAsync, saveGenerationHistoryAsync } from './utils/generationHistory';
 import { inferProviderFromModel, reversePromptStreamWithProvider, DEFAULT_PROVIDER_MODELS, generateImageWithProvider, generateVideoWithProvider, inferCapabilityFromModelName } from './services/aiGateway';
@@ -3679,31 +3678,7 @@ const App: React.FC = () => {
                     transition: 'padding-right 0.35s cubic-bezier(0.4, 0, 0.2, 1), padding-bottom 0.35s cubic-bezier(0.4, 0, 0.2, 1)'
                 }}
             >
-                <div className="pointer-events-none absolute inset-0 z-0" aria-hidden="true">
-                    <Suspense fallback={null}>
-                        <CanvasKonvaMediaLayer
-                            elements={elements}
-                            width={canvasStageSize.width}
-                            height={canvasStageSize.height}
-                            panOffset={panOffset}
-                            zoom={zoom}
-                            dimmedElementIds={canvasKonvaDimmedIds}
-                            disabledElementIds={canvasKonvaDisabledIds}
-                            onMediaReady={(elementId) => {
-                                setCanvasKonvaReadyIds(prev => {
-                                    if (prev.has(elementId)) return prev;
-                                    return new Set([...prev, elementId]);
-                                });
-                            }}
-                            onMediaLoadError={(elementId) => {
-                                setCanvasKonvaFailedIds(prev => {
-                                    if (prev.has(elementId)) return prev;
-                                    return new Set([...prev, elementId]);
-                                });
-                            }}
-                        />
-                    </Suspense>
-                </div>
+                {/* Konva media layer removed in simplified version */}
                 <svg
                     ref={svgRef}
                     className="relative z-10 w-full h-full"

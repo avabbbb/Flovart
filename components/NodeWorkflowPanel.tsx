@@ -57,10 +57,6 @@ import {
   serializeWorkflowTemplatePackage,
 } from '../utils/workflowTemplatePackage';
 import { CanvasElementPicker } from './nodeflow/CanvasElementPicker';
-import { WorkflowKonvaShell } from './workflow/WorkflowKonvaShell';
-import { useRuntimeStore } from '../stores/useRuntimeStore';
-import { syncWorkflowGraphIntoRuntime } from '../services/projectRuntimeBridge';
-import { selectWorkflowGraph } from '../utils/runtimeSelectors';
 
 interface NodeWorkflowPanelProps {
   prompt: string;
@@ -624,8 +620,9 @@ export const NodeWorkflowPanel: React.FC<NodeWorkflowPanelProps> = ({
   const connectionMenuOpenRef = useRef(false);
   const importWorkflowInputRef = useRef<HTMLInputElement>(null);
   const store = useNodeWorkflowStore();
-  const runtime = useRuntimeStore((state) => state.runtime);
-  const replaceRuntime = useRuntimeStore((state) => state.replaceRuntime);
+  // Runtime sync removed in simplified version
+  // const runtime = useRuntimeStore((state) => state.runtime);
+  // const replaceRuntime = useRuntimeStore((state) => state.replaceRuntime);
   const hydratedFromRuntimeRef = useRef(false);
 
   const [isExecuting, setIsExecuting] = useState(false);
@@ -661,29 +658,31 @@ export const NodeWorkflowPanel: React.FC<NodeWorkflowPanelProps> = ({
   const assetLibrary = useMemo(() => normalizeAssetLibrary(assetLibraryInput), [assetLibraryInput]);
   const generationHistory = useMemo(() => safeArray(generationHistoryInput), [generationHistoryInput]);
 
-  useEffect(() => {
-    if (hydratedFromRuntimeRef.current) return;
-    hydratedFromRuntimeRef.current = true;
-    const graph = selectWorkflowGraph(runtime);
-    if (graph.nodes.length === 0) return;
-    store.replaceGraph(graph);
-  }, [runtime, store]);
+  // Runtime hydration removed in simplified version
+  // useEffect(() => {
+  //   if (hydratedFromRuntimeRef.current) return;
+  //   hydratedFromRuntimeRef.current = true;
+  //   const graph = selectWorkflowGraph(runtime);
+  //   if (graph.nodes.length === 0) return;
+  //   store.replaceGraph(graph);
+  // }, [runtime, store]);
 
-  useEffect(() => {
-    const current = useRuntimeStore.getState().runtime;
-    replaceRuntime(syncWorkflowGraphIntoRuntime(current, {
-      nodes: store.nodes,
-      edges: store.edges,
-      groups: store.groups,
-      viewport: store.viewport,
-    }));
-  }, [
-    replaceRuntime,
-    store.edges,
-    store.groups,
-    store.nodes,
-    store.viewport,
-  ]);
+  // Runtime sync removed in simplified version
+  // useEffect(() => {
+  //   const current = useRuntimeStore.getState().runtime;
+  //   replaceRuntime(syncWorkflowGraphIntoRuntime(current, {
+  //     nodes: store.nodes,
+  //     edges: store.edges,
+  //     groups: store.groups,
+  //     viewport: store.viewport,
+  //   }));
+  // }, [
+  //   replaceRuntime,
+  //   store.edges,
+  //   store.groups,
+  //   store.nodes,
+  //   store.viewport,
+  // ]);
 
   useEffect(() => {
     const element = canvasRef.current;
@@ -2990,7 +2989,8 @@ export const NodeWorkflowPanel: React.FC<NodeWorkflowPanelProps> = ({
           data-graphbg="1"
         />
 
-        {workflowRenderer !== 'dom' && (
+        {/* Konva renderer removed in simplified version */}
+        {/* {workflowRenderer !== 'dom' && (
           <div className="pointer-events-none absolute inset-0" aria-hidden="true">
             <WorkflowKonvaShell
               width={canvasSize.width}
@@ -3003,7 +3003,7 @@ export const NodeWorkflowPanel: React.FC<NodeWorkflowPanelProps> = ({
               activeNodeId={store.activeNodeId}
             />
           </div>
-        )}
+        )} */}
 
         <div
           className="absolute inset-0"
