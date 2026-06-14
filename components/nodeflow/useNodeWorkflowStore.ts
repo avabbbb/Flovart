@@ -11,6 +11,7 @@ import {
   clampScale,
   makeId,
   nodesInSelection,
+  normalizeWorkflowEdges,
   removeNodeAndEdges,
   snapPosition,
   updateGroupBounds,
@@ -88,11 +89,10 @@ function sanitizeStoredWorkflow(stored: StoredWorkflow): StoredWorkflow {
   }
 
   const nodeIds = new Set(nodes.map((node) => node.id));
-  const edges = (stored.edges ?? []).filter((edge): edge is WorkflowEdge => (
-    !!edge
-    && nodeIds.has(edge.fromNode)
-    && nodeIds.has(edge.toNode)
-  ));
+  const edges = normalizeWorkflowEdges(
+    nodes,
+    (stored.edges ?? []).filter((edge): edge is WorkflowEdge => !!edge),
+  );
   const groups = (stored.groups ?? [])
     .filter((group): group is WorkflowGroup => (
       !!group
@@ -636,10 +636,11 @@ export function useNodeWorkflowStore() {
     commitGraph((prev) => {
       const mergedNodes = [...prev.nodes, ...pastedNodes];
       const mergedGroups = updateGroupsWithNodes([...prev.groups, ...pastedGroups], mergedNodes);
+      const normalizedEdges = normalizeWorkflowEdges(mergedNodes, [...prev.edges, ...pastedEdges]);
       return {
         ...prev,
         nodes: mergedNodes,
-        edges: [...prev.edges, ...pastedEdges],
+        edges: normalizedEdges,
         groups: mergedGroups,
       };
     });
@@ -846,10 +847,16 @@ export function useNodeWorkflowStore() {
 
   /** Replace the entire graph from a template or imported workflow */
   const loadTemplate = (template: { nodes: WorkflowNode[]; edges: WorkflowEdge[]; groups?: WorkflowGroup[]; viewport?: WorkflowViewport }) => {
+    const nodes = template.nodes
+      .filter((node): node is WorkflowNode => !!node && isKnownNodeKind(node.kind))
+      .map(n => ({ ...n }));
+    const nodeIds = new Set(nodes.map((node) => node.id));
     const newGraph: GraphState = {
-      nodes: template.nodes.map(n => ({ ...n })),
-      edges: template.edges.map(e => ({ ...e })),
-      groups: (template.groups ?? []).map(g => ({ ...g, nodeIds: [...g.nodeIds] })),
+      nodes,
+      edges: normalizeWorkflowEdges(nodes, template.edges.map(e => ({ ...e }))),
+      groups: (template.groups ?? [])
+        .map(g => ({ ...g, nodeIds: [...g.nodeIds].filter((nodeId) => nodeIds.has(nodeId)) }))
+        .filter((group) => group.nodeIds.length > 0),
       viewport: template.viewport ?? { x: -120, y: -80, scale: 0.86 },
     };
     historyPastRef.current = [...historyPastRef.current, cloneGraph(graph)].slice(-HISTORY_LIMIT);
@@ -857,6 +864,29 @@ export function useNodeWorkflowStore() {
     hasLocalEditsRef.current = true;
     setGraph(newGraph);
     persistGraph(newGraph);
+    touchMeta();
+    clearSelection();
+  };
+
+  const replaceGraph = (template: { nodes: WorkflowNode[]; edges: WorkflowEdge[]; groups?: WorkflowGroup[]; viewport?: WorkflowViewport }) => {
+    const nodes = template.nodes
+      .filter((node): node is WorkflowNode => !!node && isKnownNodeKind(node.kind))
+      .map(n => ({ ...n }));
+    if (nodes.length === 0) return;
+    const nodeIds = new Set(nodes.map((node) => node.id));
+    const nextGraph: GraphState = {
+      nodes,
+      edges: normalizeWorkflowEdges(nodes, (template.edges ?? []).map(e => ({ ...e }))),
+      groups: (template.groups ?? [])
+        .map(g => ({ ...g, nodeIds: [...g.nodeIds].filter((nodeId) => nodeIds.has(nodeId)) }))
+        .filter((group) => group.nodeIds.length > 0),
+      viewport: template.viewport ?? graph.viewport,
+    };
+    historyPastRef.current = [];
+    historyFutureRef.current = [];
+    hasLocalEditsRef.current = false;
+    setGraph(nextGraph);
+    persistGraph(nextGraph);
     touchMeta();
     clearSelection();
   };
@@ -916,6 +946,7 @@ export function useNodeWorkflowStore() {
     redo,
     updateNodeConfig,
     loadTemplate,
+    replaceGraph,
   };
 }
 

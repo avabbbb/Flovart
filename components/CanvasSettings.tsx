@@ -142,8 +142,8 @@ const PROVIDER_PRESETS: ProviderPreset[] = [
         baseUrl: providerBaseUrl.volcengine,
         capabilities: ['video'],
         requestFormat: 'openai',
-        defaultModel: 'dreamina-seedance-2-0-260128',
-        models: ['dreamina-seedance-2-0-260128', 'doubao-seedance-2-0-260128'],
+        defaultModel: 'doubao-seedance-2.0',
+        models: ['doubao-seedance-2.0', 'seedance-2.0', 'dreamina-seedance-2-0-260128', 'doubao-seedance-2-0-260128'],
         featured: true,
     },
     {

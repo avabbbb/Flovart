@@ -23,16 +23,28 @@ const edges: WorkflowEdge[] = [
 describe('createExecutionPlan', () => {
   it('includes only the selected node and its required upstream closure for node execution', () => {
     const plan = createExecutionPlan(nodes, edges, 'node', 'llm');
-    expect(plan.nodes.map((node) => node.id)).toEqual(['prompt', 'template', 'llm', 'branch']);
-    expect(plan.edges.map((edge) => edge.id)).toEqual(['e1', 'e2', 'e3']);
+    expect(plan.nodes.map((node) => node.id)).toEqual(['prompt', 'template', 'llm']);
+    expect(plan.edges.map((edge) => edge.id)).toEqual(['e1', 'e2']);
     expect(plan.includedNodeIds.has('preview')).toBe(false);
     expect(plan.includedNodeIds.has('isolated')).toBe(false);
   });
 
   it('includes downstream targets and all dependencies for execute from here', () => {
     const plan = createExecutionPlan(nodes, edges, 'from-here', 'template');
-    expect(plan.nodes.map((node) => node.id)).toEqual(['prompt', 'template', 'llm', 'branch', 'preview', 'save']);
-    expect(plan.edges.map((edge) => edge.id)).toEqual(['e1', 'e2', 'e3', 'e4', 'e5']);
+    expect(plan.nodes.map((node) => node.id)).toEqual(['prompt', 'template', 'llm', 'preview']);
+    expect(plan.edges.map((edge) => edge.id)).toEqual(['e1', 'e2', 'e4']);
     expect(plan.includedNodeIds.has('isolated')).toBe(false);
+  });
+
+  it('normalizes legacy workflow ports and drops unusable edges before planning', () => {
+    const plan = createExecutionPlan(nodes, [
+      ...edges,
+      { id: 'missing', fromNode: 'missing', fromPort: 'text', toNode: 'llm', toPort: 'input' },
+      { id: 'bad-type', fromNode: 'prompt', fromPort: 'text', toNode: 'isolated', toPort: 'image' },
+    ], 'workflow');
+
+    expect(plan.edges.map((edge) => edge.id)).toEqual(['e1', 'e2', 'e4']);
+    expect(plan.edges.find((edge) => edge.id === 'e1')).toMatchObject({ toPort: 'var1' });
+    expect(plan.edges.find((edge) => edge.id === 'e2')).toMatchObject({ fromPort: 'text' });
   });
 });
