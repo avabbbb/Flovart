@@ -31,9 +31,8 @@
 </p>
 
 <p align="center">
-  <a href="https://avabbbb.github.io/Flovart/" target="_blank">
-    <img src="https://img.shields.io/badge/🌐_在线体验_Demo-点击打开-E8453C?style=for-the-badge" alt="Demo" />
-  </a>
+  <a href="./README.en.md">English</a> •
+  <a href="./README.md">简体中文</a>
 </p>
 
 ---
