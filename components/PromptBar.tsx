@@ -49,6 +49,7 @@ interface PromptBarProps {
     onRemoveAttachment?: (id: string) => void;
     onMentionedElementIds?: (ids: string[]) => void;
     onPromptDocumentChange?: (document: Record<string, unknown>) => void;
+    onPromptInputChange?: (payload: { plainText: string; document: Record<string, unknown>; mentionedElementIds: string[] }) => void;
     onEnhancePrompt?: (payload: { prompt: string; mode: PromptEnhanceMode; stylePreset?: string }) => Promise<PromptEnhanceResult>;
     isEnhancingPrompt?: boolean;
     isAutoEnhanceEnabled?: boolean;
@@ -183,6 +184,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
     onRemoveAttachment,
     onMentionedElementIds,
     onPromptDocumentChange,
+    onPromptInputChange,
     onEnhancePrompt,
     isEnhancingPrompt = false,
     isAutoEnhanceEnabled = false,
@@ -215,6 +217,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
     const richEditorRef = useRef<RichPromptEditorHandle>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const dragDepthRef = useRef(0);
+    const latestPromptRef = useRef(prompt);
 
     const [expandedPanel, setExpandedPanel] = useState<ExpandPanel>(null);
     const [isDragActive, setIsDragActive] = useState(false);
@@ -281,20 +284,26 @@ export const PromptBar: React.FC<PromptBarProps> = ({
 
     /** 编辑器文本 + mention 变化时同步到父组件 */
     const handleEditorChange = useCallback((plainText: string, json: Record<string, unknown>) => {
-        setPrompt(plainText);
-        onPromptDocumentChange?.(json);
         const mentions = extractMentions(json);
         const uniqueIds = [...new Set(mentions.map(m => m.id))];
+        latestPromptRef.current = plainText;
+        if (onPromptInputChange) {
+            onPromptInputChange({ plainText, document: json, mentionedElementIds: uniqueIds });
+            return;
+        }
+        setPrompt(plainText);
+        onPromptDocumentChange?.(json);
         onMentionedElementIds?.(uniqueIds);
-    }, [setPrompt, onPromptDocumentChange, onMentionedElementIds]);
+    }, [setPrompt, onPromptDocumentChange, onMentionedElementIds, onPromptInputChange]);
 
     /** 编辑器 Enter 提交 */
     const handleEditorSubmit = useCallback(() => {
-        if (prompt.trim() && !isLoading) onGenerate();
-    }, [prompt, isLoading, onGenerate]);
+        if (latestPromptRef.current.trim() && !isLoading) onGenerate();
+    }, [isLoading, onGenerate]);
 
     /** 外部 prompt 被清空时（如切换画板、生成完成后），同步清空富文本编辑器 */
     useEffect(() => {
+        latestPromptRef.current = prompt;
         if (!richEditorRef.current) return;
 
         const editor = richEditorRef.current;

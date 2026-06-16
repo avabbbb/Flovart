@@ -1,4 +1,4 @@
-
+﻿
 
 
 
@@ -15,7 +15,6 @@ import { DEFAULT_IMAGE_FILTERS } from './types';
 import { AssetLibraryPanel } from './components/AssetLibraryPanel';
 import { ImageFilterPanel, buildCssFilter, temperatureMatrix, sharpenKernel } from './components/ImageFilterPanel';
 import { ElementToolbar } from './components/ElementToolbar';
-import { InlinePromptBar } from './components/canvas-ui/InlinePromptBar';
 import { shouldRenderMediaInKonva } from './utils/canvasKonvaMediaEligibility';
 
 // Lazy-loaded components (not needed for first paint)
@@ -26,7 +25,7 @@ const AssetAddModal = React.lazy(() => import('./components/AssetAddModal').then
 const ABCompareOverlay = React.lazy(() => import('./components/ABCompareOverlay').then(m => ({ default: m.ABCompareOverlay })));
 import { loadAssetLibrary, addAsset, removeAsset, renameAsset, loadAssetLibraryAsync, saveAssetLibraryAsync } from './utils/assetStorage';
 import { loadGenerationHistoryAsync, saveGenerationHistoryAsync } from './utils/generationHistory';
-import { inferProviderFromModel, reversePromptStreamWithProvider, DEFAULT_PROVIDER_MODELS, generateImageWithProvider, generateVideoWithProvider, inferCapabilityFromModelName } from './services/aiGateway';
+import { inferProviderFromModel, reversePromptStreamWithProvider, DEFAULT_PROVIDER_MODELS, generateImageWithProvider, generateVideoWithProvider, inferCapabilityFromModelName, executeUnifiedIgnition } from './services/aiGateway';
 import type { MultimodalSlot } from './services/aiGateway';
 import { fileToDataUrl, validateAndResizeImage } from './utils/fileUtils';
 import { translations } from './utils/translations';
@@ -55,6 +54,13 @@ import type { CanvasElement, ElementGenerationState } from './types';
 import { getFlovartRuntimeApi, getRuntimeErrorMessage } from './services/flovartRuntime';
 import { executeFlovartCommand } from './tools/flovart/core.js';
 import { syncCanvasElementsIntoRuntime } from './services/projectRuntimeBridge';
+import {
+    buildElementIgnitionReferences,
+    buildElementPromptGenerationState,
+    createDefaultElementGenerationState,
+    getElementGenerationMode,
+    isPromptReferenceableElement,
+} from './utils/elementPromptState';
 
 
 
@@ -66,8 +72,8 @@ const BOARDS_STORAGE_KEY = 'boards.v1';
 const ACTIVE_BOARD_STORAGE_KEY = 'boards.activeId.v1';
 
 const STORAGE_QUOTA_ERROR_NAMES = new Set(['QuotaExceededError', 'NS_ERROR_DOM_QUOTA_REACHED']);
-const STORAGE_QUOTA_MESSAGE = '本地存储空间不足，无法保存最新画布。请删除部分历史图片或导出后清理项目。';
-const STORAGE_SAVE_FAILED_MESSAGE = '保存画布失败，请刷新后重试。';
+const STORAGE_QUOTA_MESSAGE = '鏈湴瀛樺偍绌洪棿涓嶈冻锛屾棤娉曀繚瀛樻渶鏂扮敾甯冦€傝鍒犻櫎閮ㄥ垎鍘嗗彶鍥剧墖鎴栧鍑哄悗娓呯悊椤圭洰銆?';
+const STORAGE_SAVE_FAILED_MESSAGE = '淇濆瓨鐢诲竷澶辫触锛岃鍒锋柊鍚庨噸璇曘€?';
 
 type RuntimeJobStatus = 'accepted' | 'running' | 'succeeded' | 'failed' | 'canceled';
 
@@ -112,7 +118,7 @@ const isStorageQuotaError = (error: unknown): boolean => {
     return STORAGE_QUOTA_ERROR_NAMES.has(error.name) || error.code === 22 || error.code === 1014;
 };
 
-/** 安全写 localStorage —— 捕获 QuotaExceeded 等异常, 返回是否成功 */
+/** 瀹夊叏鍐?localStorage 鈥斺€?鎹曡幏 QuotaExceeded 绛夊紓甯? 杩斿洖鏄惁鎴愬姛 */
 const safeSetItem = (key: string, value: string): boolean => {
     try {
         localStorage.setItem(key, value);
@@ -123,7 +129,7 @@ const safeSetItem = (key: string, value: string): boolean => {
     }
 };
 
-/** 序列化 boards 时剥离 undo history, 同时将图片 base64 转存到 IndexedDB */
+/** 搴忓垪鍖?boards 鏃跺墺绂?undo history, 鍚屾椂灏嗗浘鐗?base64 杞瓨鍒?IndexedDB */
 const persistBoardsToIDB = async (boards: Board[]): Promise<void> => {
     const imageEntries: { key: string; data: string }[] = [];
     const videoPromises: Promise<void>[] = [];
@@ -173,7 +179,7 @@ const persistBoardsToIDB = async (boards: Board[]): Promise<void> => {
         return {
             ...b,
             elements: persistedElements,
-            history: [persistedElements],   // 只保留当前快照, 丢弃 undo 栈；必须使用已转成 idb: 的元素
+            history: [persistedElements],   // 鍙繚鐣欏綋鍓嶅揩鐓? 涓㈠純 undo 鏍堬紱蹇呴』浣跨敤宸茶浆鎴?idb: 鐨勫厓绱?
             historyIndex: 0,
         };
     });
@@ -335,8 +341,9 @@ const App: React.FC = () => {
     const [selectedElementIds, setSelectedElementIds] = useState<string[]>([]);
     const [prompt, setPrompt] = useState('');
     const [promptAttachments, setPromptAttachments] = useState<ChatAttachment[]>([]);
+    const [nodePromptAttachments, setNodePromptAttachments] = useState<Record<string, ChatAttachment[]>>({});
     const [chatAttachments, setChatAttachments] = useState<ChatAttachment[]>([]);
-    // @ 瀵洜鏁ら崗鍐 id 閸掓銆冮敍鍫㈡暠 PromptBar 閸︺劎鏁ら幋椋庡仯閸戣崵鏁撻幋鎰閸氬本顒炴潻鍥ㄦ降閿?
+    // @ 鐎殿喗娲滈弫銈夊礂閸愵亞顦?id 闁告帗顨夐妴鍐晬閸垺鏆?PromptBar 闁革负鍔庨弫銈夊箣妞嬪骸浠柛鎴ｅ吹閺佹捇骞嬮幇顒€顤呴柛姘湰椤掔偞娼婚崶銊﹂檷闁?
     const [mentionedElementIds, setMentionedElementIds] = useState<string[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -352,8 +359,8 @@ const App: React.FC = () => {
         const saved = localStorage.getItem('inspirationPanelMinimized');
         return saved === 'true';
     });
-    const [toolbarLeft, setToolbarLeft] = useState(68); // 瀹搞儱鍙块弽蹇曟畱 left 娴ｅ秶鐤?
-    const [rightPanelWidth, setRightPanelWidth] = useState(2); // 閸欏厖鏅堕棃銏℃緲鐎圭偤妾€硅棄瀹抽敍鍫㈡暏閿?PromptBar 閸氬本顒為敓?
+    const [toolbarLeft, setToolbarLeft] = useState(68); // 鐎规悶鍎遍崣鍧楀冀韫囨洘鐣?left 濞达絽绉堕悿?
+    const [rightPanelWidth, setRightPanelWidth] = useState(2); // 闁告瑥鍘栭弲鍫曟閵忊剝绶查悗鍦仱濡绢垳鈧妫勭€规娊鏁嶉崼銏℃殢闁?PromptBar 闁告艾鏈鐐烘晸?
     const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
     const [canvasStageSize, setCanvasStageSize] = useState({ width: 1, height: 1 });
     const [canvasKonvaReadyIds, setCanvasKonvaReadyIds] = useState<Set<string>>(() => new Set());
@@ -398,7 +405,7 @@ const App: React.FC = () => {
 
     const hasShownStorageErrorRef = useRef(false);
 
-    // ── Async boot: load boards, assets, character locks from IndexedDB ──
+    // 鈹€鈹€ Async boot: load boards, assets, character locks from IndexedDB 鈹€鈹€
     useEffect(() => {
         Promise.all([
             loadBoardsWithIDB(),
@@ -417,7 +424,7 @@ const App: React.FC = () => {
         });
     }, []);
 
-    // ── Persist boards to IDB ──
+    // 鈹€鈹€ Persist boards to IDB 鈹€鈹€
     useEffect(() => {
         if (!dataReady) return;
         persistBoardsToIDB(boards).then(() => {
@@ -432,7 +439,7 @@ const App: React.FC = () => {
         });
     }, [boards, dataReady]);
 
-    // ── Persist asset library to IDB ──
+    // 鈹€鈹€ Persist asset library to IDB 鈹€鈹€
     useEffect(() => {
         if (!dataReady) return;
         saveAssetLibraryAsync(assetLibrary).catch(console.error);
@@ -452,7 +459,7 @@ const App: React.FC = () => {
         }
     }, [activeBoardId]);
 
-    // ── Revoke blob: URLs for removed video elements ──
+    // 鈹€鈹€ Revoke blob: URLs for removed video elements 鈹€鈹€
     const activeVideoUrlsRef = useRef<Set<string>>(new Set());
     useEffect(() => {
         const nextUrls = collectVideoObjectUrls(elements);
@@ -486,7 +493,7 @@ const App: React.FC = () => {
 
     const [editingElement, setEditingElement] = useState<{ id: string; text: string; } | null>(null);
 
-    // Inpaint (局部重绘) state
+    // Inpaint (灞€閮ㄩ噸缁? state
     const [inpaintState, setInpaintState] = useState<{
         targetImageId: string;
         maskPoints: Point[];  // lasso polygon in canvas coords
@@ -494,7 +501,7 @@ const App: React.FC = () => {
     } | null>(null);
     const [inpaintPrompt, setInpaintPrompt] = useState('');
 
-    // ── Zustand store: shell-level state ──
+    // 鈹€鈹€ Zustand store: shell-level state 鈹€鈹€
     const language = useWorkspaceStore(s => s.language);
     const setLanguage = useWorkspaceStore(s => s.setLanguage);
     const themeMode = useWorkspaceStore(s => s.themeMode);
@@ -531,20 +538,6 @@ const App: React.FC = () => {
         try { return localStorage.getItem('autoEnhance.v1') === 'true'; } catch { return false; }
     });
     const [batchCount, setBatchCount] = useState<number>(1); // 1 = normal, 2/4 = batch mode
-    const promptDockRef = useRef<HTMLDivElement | null>(null);
-    const [promptDockHeight, setPromptDockHeight] = useState(0);
-
-    useEffect(() => {
-        const el = promptDockRef.current;
-        if (!el) return;
-        const ro = new ResizeObserver(entries => {
-            for (const entry of entries) {
-                setPromptDockHeight(entry.borderBoxSize?.[0]?.blockSize ?? entry.contentRect.height);
-            }
-        });
-        ro.observe(el);
-        return () => ro.disconnect();
-    }, []);
 
     useEffect(() => {
         const currentGenerating = new Set<string>();
@@ -570,14 +563,14 @@ const App: React.FC = () => {
         prevGeneratingIdsRef.current = currentGenerating;
     }, [elements]);
 
-    // ── Layer Mask 编辑状态 ──────
-    const [maskEditingId, setMaskEditingId] = useState<string | null>(null); // 正在编辑蒙版的 image element id
+    // 鈹€鈹€ Layer Mask 缂栬緫鐘舵€?鈹€鈹€鈹€鈹€鈹€鈹€
+    const [maskEditingId, setMaskEditingId] = useState<string | null>(null); // 姝ｅ湪缂栬緫钂欑増鐨?image element id
     const [maskBrushSize, setMaskBrushSize] = useState(30);
     const [maskBrushMode, setMaskBrushMode] = useState<'erase' | 'reveal'>('erase'); // erase = paint black (hide), reveal = paint white (show)
     const maskCanvasRef = useRef<HTMLCanvasElement | null>(null);
     const viewportAnimationRef = useRef<number | null>(null);
 
-    // ── A/B 对比状态 ──────
+    // 鈹€鈹€ A/B 瀵规瘮鐘舵€?鈹€鈹€鈹€鈹€鈹€鈹€
     const [abCompare, setAbCompare] = useState<{
         imageA: { src: string; label: string };
         imageB: { src: string; label: string };
@@ -585,11 +578,11 @@ const App: React.FC = () => {
 
 
 
-    // 根据用户已配置的 API Key 动态计算可选模型列表
+    // 鏍规嵁鐢ㄦ埛宸查厤缃殑 API Key 鍔ㄦ€佽绠楀彲閫夋ā鍨嬪垪琛?
 
     // Usage monitoring summary (recomputed when settings panel opens or keys change)
 
-    // 持久化 autoEnhance 开关
+    // 鎸佷箙鍖?autoEnhance 寮€鍏?
     useEffect(() => {
         safeSetItem('autoEnhance.v1', isAutoEnhanceEnabled.toString());
     }, [isAutoEnhanceEnabled]);
@@ -612,7 +605,7 @@ const App: React.FC = () => {
     const themePalette = THEME_PALETTES[resolvedTheme];
     const canvasBackgroundColor = themePalette.canvasBackground;
 
-    // ── Extracted: API key management ──
+    // 鈹€鈹€ Extracted: API key management 鈹€鈹€
     const {
         userApiKeys, setUserApiKeys, apiKeysLoaded, showOnboarding, setShowOnboarding,
         clearKeysOnExit, setClearKeysOnExit, modelPreference, setModelPreference,
@@ -680,7 +673,7 @@ const App: React.FC = () => {
         return selected && selected.type === 'image' ? selected : null;
     }, [elements, selectedElementIds]);
 
-    const selectedInlinePromptElement = useMemo<CanvasElement | null>(() => {
+    const selectedNodePromptElement = useMemo<CanvasElement | null>(() => {
         if (selectedElementIds.length !== 1) return null;
         const selected = elements.find(el => el.id === selectedElementIds[0]);
         return selected && (selected.type === 'image' || selected.type === 'video') ? selected : null;
@@ -714,10 +707,10 @@ const App: React.FC = () => {
     ), [elements, getRelatedCanvasElementIds, relationFocusElementId]);
 
     const selectedRelationIds = useMemo(() => (
-        selectedInlinePromptElement
-            ? getRelatedCanvasElementIds(selectedInlinePromptElement.id, elements)
+        selectedNodePromptElement
+            ? getRelatedCanvasElementIds(selectedNodePromptElement.id, elements)
             : new Set<string>()
-    ), [elements, getRelatedCanvasElementIds, selectedInlinePromptElement]);
+    ), [elements, getRelatedCanvasElementIds, selectedNodePromptElement]);
 
     useEffect(() => {
         if (relationFocusElementId && !selectedElementIds.includes(relationFocusElementId)) {
@@ -770,7 +763,7 @@ const App: React.FC = () => {
         );
     }, []);
 
-    // ── Board mutation helpers (needed before useCanvasInteraction) ──
+    // 鈹€鈹€ Board mutation helpers (needed before useCanvasInteraction) 鈹€鈹€
     const updateActiveBoard = (updater: (board: Board) => Board) => {
         setBoards(prevBoards => prevBoards.map(board =>
             board.id === activeBoardId ? updater(board) : board
@@ -934,7 +927,7 @@ const App: React.FC = () => {
         });
     }, [activeBoardId]);
 
-    // ── Paint mask callback (needed by useCanvasInteraction) ──
+    // 鈹€鈹€ Paint mask callback (needed by useCanvasInteraction) 鈹€鈹€
     const paintMask = useCallback((canvasX: number, canvasY: number) => {
         const el = elements.find(e => e.id === maskEditingId && e.type === 'image') as ImageElement | undefined;
         if (!el || !maskCanvasRef.current) return;
@@ -954,7 +947,7 @@ const App: React.FC = () => {
         ));
     }, [maskEditingId, maskBrushSize, maskBrushMode, elements, setElements]);
 
-    // ── getDescendants (needed by useCanvasInteraction) ──
+    // 鈹€鈹€ getDescendants (needed by useCanvasInteraction) 鈹€鈹€
     const getDescendants = useCallback((elementId: string, allElements: Element[]): Element[] => {
         const descendants: Element[] = [];
         const children = allElements.filter(el => el.parentId === elementId);
@@ -972,7 +965,7 @@ const App: React.FC = () => {
         return await readColdMedia(href.slice('cold-media:'.length)) || href;
     }, []);
 
-    // ── Extracted: canvas interaction (mouse, selection, refs) ──
+    // 鈹€鈹€ Extracted: canvas interaction (mouse, selection, refs) 鈹€鈹€
     const {
         handleMouseDown, handleMouseMove, handleMouseUp, handleWheel,
         getCanvasPoint, getSelectableElement,
@@ -1016,7 +1009,7 @@ const App: React.FC = () => {
         return () => observer.disconnect();
     }, [svgRef]);
 
-    // ── Extracted: generation (AI image/video/batch) ──
+    // 鈹€鈹€ Extracted: generation (AI image/video/batch) 鈹€鈹€
     const {
         isEnhancingPrompt, batchResults, setBatchResults,
         handleEnhancePrompt, saveGenerationToHistory,
@@ -1153,6 +1146,144 @@ const App: React.FC = () => {
     const handleRemovePromptAttachment = useCallback((id: string) => {
         setPromptAttachments(prev => prev.filter(item => item.id !== id));
     }, []);
+
+    const handleAddNodePromptAttachmentFiles = useCallback(async (elementId: string, files: FileList | File[]) => {
+        const list = Array.from(files).filter(file => file.type.startsWith('image/') || file.type.startsWith('video/'));
+        if (list.length === 0) return;
+        try {
+            const results = await Promise.all(list.map(f => readAttachmentFile(f)));
+            let anyResized = false;
+            const nextAttachments = await Promise.all(results.map(async (item, index) => {
+                if (item.resized) anyResized = true;
+                return {
+                    id: generateId(),
+                    name: list[index].name || `Upload ${index + 1}`,
+                    href: await offloadAttachmentDataUrl(`node-prompt-${elementId}`, index, item.dataUrl),
+                    mimeType: item.mimeType,
+                    source: 'upload' as const,
+                };
+            }));
+            setNodePromptAttachments(prev => ({
+                ...prev,
+                [elementId]: [...(prev[elementId] || []), ...nextAttachments],
+            }));
+            if (anyResized) {
+                toast.show('部分图片尺寸过大，已自动压缩。', 'warning');
+            }
+        } catch (error) {
+            console.error(error);
+            toast.show('参考媒体读取失败，请换一个文件重试。', 'error');
+        }
+    }, [offloadAttachmentDataUrl, readAttachmentFile, toast]);
+
+    const handleRemoveNodePromptAttachment = useCallback((elementId: string, id: string) => {
+        setNodePromptAttachments(prev => ({
+            ...prev,
+            [elementId]: (prev[elementId] || []).filter(item => item.id !== id),
+        }));
+    }, []);
+
+    const updateNodePromptPayload = useCallback((element: CanvasElement, rawText: string, richTextDocument?: Record<string, unknown>) => {
+        const modelId = element.generationState?.modelId || (element.type === 'video' ? modelPreference.videoModel : modelPreference.imageModel);
+        const aspectRatio = element.generationState?.aspectRatio || videoAspectRatio;
+        updateElementGenerationState(element.id, buildElementPromptGenerationState({
+            currentState: element.generationState,
+            target: element,
+            allElements: elements,
+            modelId,
+            aspectRatio,
+            rawText,
+            richTextDocument,
+        }));
+    }, [elements, modelPreference.imageModel, modelPreference.videoModel, updateElementGenerationState, videoAspectRatio]);
+
+    const updateNodePromptStatePatch = useCallback((
+        elementId: string,
+        patch: Partial<Omit<ElementGenerationState, 'promptPayload'>>,
+    ) => {
+        const target = elementsRef.current.find(item => item.id === elementId);
+        if (!target || !isPromptReferenceableElement(target)) return;
+        const fallbackModel = target.type === 'video' ? modelPreference.videoModel : modelPreference.imageModel;
+        const currentState = createDefaultElementGenerationState(target, fallbackModel, videoAspectRatio);
+        updateElementGenerationState(elementId, {
+            ...currentState,
+            ...patch,
+            promptPayload: currentState.promptPayload,
+        });
+    }, [modelPreference.imageModel, modelPreference.videoModel, updateElementGenerationState, videoAspectRatio]);
+
+    const handleNodePromptGenerate = useCallback(async (elementId: string) => {
+        const target = elementsRef.current.find(item => item.id === elementId);
+        if (!target || !isPromptReferenceableElement(target)) return;
+
+        const fallbackModel = target.type === 'video' ? modelPreference.videoModel : modelPreference.imageModel;
+        const currentState = createDefaultElementGenerationState(target, fallbackModel, videoAspectRatio);
+        if (currentState.status === 'running') return;
+
+        const apiKeyPayload = getInlineApiKeyForElement(target);
+        if (!apiKeyPayload) {
+            updateElementGenerationState(target.id, {
+                ...currentState,
+                status: 'error',
+                error: `Provider key is not configured: ${getElementGenerationMode(target)}`,
+                progress: undefined,
+            });
+            return;
+        }
+
+        updateElementGenerationState(target.id, {
+            ...currentState,
+            status: 'running',
+            error: undefined,
+            progress: 5,
+        });
+
+        const references = buildElementIgnitionReferences(currentState.promptPayload, elementsRef.current);
+        const result = await executeUnifiedIgnition({
+            elementId: target.id,
+            prompt: currentState.promptPayload.rawText,
+            modelId: currentState.modelId,
+            apiKeyPayload,
+            aspectRatio: currentState.aspectRatio || videoAspectRatio,
+            references,
+            onProgress: (nextProgress, message) => {
+                setProgressMessage(message);
+                const latest = elementsRef.current.find(item => item.id === elementId);
+                if (!latest || !isPromptReferenceableElement(latest)) return;
+                const latestState = createDefaultElementGenerationState(latest, currentState.modelId, currentState.aspectRatio);
+                updateElementGenerationState(elementId, {
+                    ...latestState,
+                    status: 'running',
+                    error: undefined,
+                    progress: nextProgress,
+                });
+            },
+        });
+
+        const latest = elementsRef.current.find(item => item.id === elementId);
+        if (!latest || !isPromptReferenceableElement(latest)) return;
+        const latestState = createDefaultElementGenerationState(latest, currentState.modelId, currentState.aspectRatio);
+
+        if (result.ok) {
+            updateElementMedia(elementId, { href: result.mediaUrl, mimeType: result.mimeType });
+            updateElementGenerationState(elementId, {
+                ...latestState,
+                status: 'success',
+                error: undefined,
+                progress: 100,
+            });
+            setProgressMessage(null);
+            return;
+        }
+
+        updateElementGenerationState(elementId, {
+            ...latestState,
+            status: 'error',
+            error: result.errorMessage,
+            progress: undefined,
+        });
+        setProgressMessage(null);
+    }, [getInlineApiKeyForElement, modelPreference.imageModel, modelPreference.videoModel, updateElementGenerationState, updateElementMedia, videoAspectRatio]);
 
     const t = useCallback((key: string, ...args: any[]): any => {
         const keys = key.split('.');
@@ -1332,7 +1463,7 @@ const App: React.FC = () => {
         try {
             const { dataUrl, mimeType, width, height, resized } = await validateAndResizeImage(file);
             if (resized) {
-                toast.show(`图片尺寸过大，已自动缩小到 ${width}×${height}。`, 'warning');
+                toast.show(`图片尺寸过大，已自动缩小到 ${width}x${height}。`, 'warning');
             }
             if (!svgRef.current) return;
             const svgBounds = svgRef.current.getBoundingClientRect();
@@ -1428,7 +1559,7 @@ const App: React.FC = () => {
     useEffect(() => {
         if (typeof chrome === 'undefined' || !chrome?.storage?.local) return;
         chrome.storage.local.get(['flovart_pending_image', 'flovart_pending_prompt', 'flovart_collected_images'], (result) => {
-            // Pending single image → add to canvas
+            // Pending single image 鈫?add to canvas
             if (result.flovart_pending_image) {
                 const { dataUrl, name } = result.flovart_pending_image;
                 if (dataUrl) {
@@ -1452,13 +1583,13 @@ const App: React.FC = () => {
                 }
                 chrome.storage.local.remove('flovart_pending_image');
             }
-            // Pending prompt → fill prompt bar
+            // Pending prompt 鈫?fill prompt bar
             if (result.flovart_pending_prompt) {
                 const { prompt: pendingPrompt } = result.flovart_pending_prompt;
                 if (pendingPrompt) setPrompt(pendingPrompt);
                 chrome.storage.local.remove('flovart_pending_prompt');
             }
-            // Collected images are available for the inspiration panel — stored for future use
+            // Collected images are available for the inspiration panel 鈥?stored for future use
             if (result.flovart_collected_images) {
                 chrome.storage.local.remove('flovart_collected_images');
             }
@@ -1551,19 +1682,19 @@ const App: React.FC = () => {
         const textProvider = inferProviderFromModel(modelPreference.textModel);
         const key = getPreferredApiKey('text', textProvider);
         if (!key) {
-            setError('请先配置支持视觉功能的文本模型 API Key（如 Gemini、GPT-5.4、Claude）。');
+            setError('请先配置支持视觉能力的文本模型 API Key（如 Gemini、GPT-5.4、Claude）。');
             return;
         }
-        // 取消上一次进行中的请求
+        // 鍙栨秷涓婁竴娆¤繘琛屼腑鐨勮姹?
         reversePromptAbortRef.current?.abort();
         const abortCtrl = new AbortController();
         reversePromptAbortRef.current = abortCtrl;
 
         setReversePromptLoading(true);
         setPrompt('');
-        setProgressMessage(language === 'zho' ? '正在分析图片...' : 'Analyzing image...');
+        setProgressMessage(language === 'zho' ? '姝ｅ湪鍒嗘瀽鍥剧墖...' : 'Analyzing image...');
 
-        // 节流缓冲: 攒 chunk 后按 ~60ms 间隔 flush, 降低 React 重渲染频次
+        // 鑺傛祦缂撳啿: 鏀?chunk 鍚庢寜 ~60ms 闂撮殧 flush, 闄嶄綆 React 閲嶆覆鏌撻娆?
         let chunkBuffer = '';
         let flushTimer: ReturnType<typeof setTimeout> | null = null;
         let firstChunkReceived = false;
@@ -1578,7 +1709,7 @@ const App: React.FC = () => {
         const onChunk = (chunk: string) => {
             if (!firstChunkReceived) {
                 firstChunkReceived = true;
-                setProgressMessage(language === 'zho' ? '正在生成...' : 'Generating...');
+                setProgressMessage(language === 'zho' ? '姝ｅ湪鐢熸垚...' : 'Generating...');
             }
             chunkBuffer += chunk;
             if (!flushTimer) {
@@ -1598,7 +1729,7 @@ const App: React.FC = () => {
                 language,
                 imgWidth && imgHeight ? { width: imgWidth, height: imgHeight } : undefined,
             );
-            // flush 剩余缓冲
+            // flush 鍓╀綑缂撳啿
             if (flushTimer) { clearTimeout(flushTimer); flushBuffer(); }
             if (!result && !abortCtrl.signal.aborted) {
                 setError(language === 'zho' ? '反推 Prompt 未返回结果，请重试。' : 'Reverse prompt returned no result. Please retry.');
@@ -1606,12 +1737,12 @@ const App: React.FC = () => {
             setProgressMessage('');
         } catch (err) {
             if (flushTimer) { clearTimeout(flushTimer); flushBuffer(); }
-            if ((err as Error).name === 'AbortError') return; // 用户取消
-            // 网络中断且已有部分内容: 追加视觉提示
+            if ((err as Error).name === 'AbortError') return; // 鐢ㄦ埛鍙栨秷
+            // 缃戠粶涓柇涓斿凡鏈夐儴鍒嗗唴瀹? 杩藉姞瑙嗚鎻愮ず
             if (partialReceived) {
-                setPrompt(prev => prev + (language === 'zho' ? '\n⚠️ [传输中断，内容不完整]' : '\n⚠️ [Stream interrupted, content incomplete]'));
+                setPrompt(prev => prev + (language === 'zho' ? '\n鈿狅笍 [浼犺緭涓柇锛屽唴瀹逛笉瀹屾暣]' : '\n鈿狅笍 [Stream interrupted, content incomplete]'));
             }
-            setError(`${language === 'zho' ? '反推 Prompt 失败' : 'Reverse prompt failed'}: ${(err as Error).message}`);
+            setError(`${language === 'zho' ? '鍙嶆帹 Prompt 澶辫触' : 'Reverse prompt failed'}: ${(err as Error).message}`);
         } finally {
             if (reversePromptAbortRef.current === abortCtrl) {
                 reversePromptAbortRef.current = null;
@@ -1721,7 +1852,7 @@ const App: React.FC = () => {
 
 
     /**
-     * ======== 图层蒙版编辑 (Layer Mask) ========
+     * ======== 鍥惧眰钂欑増缂栬緫 (Layer Mask) ========
      */
     const startMaskEditing = useCallback((elementId: string) => {
         const el = elements.find(e => e.id === elementId && e.type === 'image') as ImageElement | undefined;
@@ -1947,7 +2078,7 @@ const App: React.FC = () => {
         return () => window.removeEventListener('paste', handlePaste);
     }, [handleAddMediaElement]);
 
-    // 用原生事件监听器挂载 wheel，确保 { passive: false } 以允许 preventDefault()
+    // 鐢ㄥ師鐢熶簨浠剁洃鍚櫒鎸傝浇 wheel锛岀‘淇?{ passive: false } 浠ュ厑璁?preventDefault()
     useEffect(() => {
         const svg = svgRef.current;
         if (!svg) return;
@@ -1966,7 +2097,7 @@ const App: React.FC = () => {
         };
     }, [handleMouseUp]);
 
-    // ── Phase 2: Expose runtime API for AI Agent control ──
+    // 鈹€鈹€ Phase 2: Expose runtime API for AI Agent control 鈹€鈹€
     useEffect(() => {
         const normalizeApiElement = (partial: Partial<Element>): Element => {
             const base = {
@@ -3061,7 +3192,7 @@ const App: React.FC = () => {
 
     const isSelectionActive = selectedElementIds.length > 0;
     const singleSelectedElement = selectedElementIds.length === 1 ? elements.find(el => el.id === selectedElementIds[0]) : null;
-    const isInlineMediaPromptActive = !!selectedInlinePromptElement && !croppingState && !editingElement;
+    const isNodePromptActive = !!selectedNodePromptElement && !croppingState && !editingElement;
 
     let cursor = 'default';
     if (maskEditingId) cursor = 'crosshair';
@@ -3156,11 +3287,11 @@ const App: React.FC = () => {
             const element = elements.find(item => item.id === id);
             if (element?.type === 'video') disabled.add(id);
         }
-        if (selectedInlinePromptElement) disabled.add(selectedInlinePromptElement.id);
+        if (selectedNodePromptElement) disabled.add(selectedNodePromptElement.id);
         if (croppingState) disabled.add(croppingState.elementId);
         if (maskEditingId) disabled.add(maskEditingId);
         return disabled;
-    }, [canvasKonvaFailedIds, croppingState, elements, maskEditingId, selectedElementIds, selectedInlinePromptElement]);
+    }, [canvasKonvaFailedIds, croppingState, elements, maskEditingId, selectedElementIds, selectedNodePromptElement]);
 
     useEffect(() => {
         if (canvasKonvaFailedIds.size === 0 && canvasKonvaReadyIds.size === 0) return;
@@ -3176,15 +3307,15 @@ const App: React.FC = () => {
     }, [canvasKonvaFailedIds.size, canvasKonvaReadyIds.size, elements]);
 
     const canvasKonvaDimmedIds = useMemo(() => {
-        if (!isInlineMediaPromptActive) return new Set<string>();
+        if (!isNodePromptActive) return new Set<string>();
         const dimmed = new Set<string>();
         for (const element of elements) {
-            if ((element.type === 'image' || element.type === 'video') && element.id !== selectedInlinePromptElement?.id) {
+            if ((element.type === 'image' || element.type === 'video') && element.id !== selectedNodePromptElement?.id) {
                 dimmed.add(element.id);
             }
         }
         return dimmed;
-    }, [elements, isInlineMediaPromptActive, selectedInlinePromptElement]);
+    }, [elements, isNodePromptActive, selectedNodePromptElement]);
 
     return (
         <AppShell
@@ -3242,7 +3373,7 @@ const App: React.FC = () => {
             />
             }
             rightSidebar={
-                <Suspense fallback={<div className="h-full w-full flex items-center justify-center opacity-40 text-sm">Loading…</div>}>
+                <Suspense fallback={<div className="h-full w-full flex items-center justify-center opacity-40 text-sm">Loading...</div>}>
                 <RightPanel
                 theme={resolvedTheme}
                 isMinimized={isInspirationMinimized}
@@ -3293,13 +3424,13 @@ const App: React.FC = () => {
                 )}
                 {modelAutoSwitchNotice && (
                     <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 p-3 bg-blue-100 border border-blue-400 text-blue-700 rounded-md shadow-lg flex items-center max-w-lg animate-fade-in">
-                        <span className="mr-2">🔄</span>
+                        <span className="mr-2">馃攧</span>
                         <span className="flex-grow text-sm">{modelAutoSwitchNotice}</span>
                     </div>
                 )}
             </>}
             main={<>
-<Suspense fallback={<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm"><div className="rounded-xl bg-neutral-800 px-6 py-4 text-sm text-white/60">Loading Settings…</div></div>}>
+<Suspense fallback={<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm"><div className="rounded-xl bg-neutral-800 px-6 py-4 text-sm text-white/60">Loading Settings...</div></div>}>
             <CanvasSettings
                 isOpen={isSettingsPanelOpen} 
                 onClose={() => setIsSettingsPanelOpen(false)} 
@@ -3324,11 +3455,11 @@ const App: React.FC = () => {
                 dynamicModelOptions={dynamicModelOptions}
             />
             </Suspense>
-            {/* ============ 图层蒙版编辑浮动面板 ============ */}
+            {/* ============ 鍥惧眰钂欑増缂栬緫娴姩闈㈡澘 ============ */}
 
-            {/* ============ A/B 对比弹窗 ============ */}
+            {/* ============ A/B 瀵规瘮寮圭獥 ============ */}
             {abCompare && (
-                <Suspense fallback={<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm"><div className="rounded-xl bg-neutral-800 px-6 py-4 text-sm text-white/60">Loading…</div></div>}>
+                <Suspense fallback={<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm"><div className="rounded-xl bg-neutral-800 px-6 py-4 text-sm text-white/60">Loading...</div></div>}>
                 <ABCompareOverlay
                     imageA={abCompare.imageA}
                     imageB={abCompare.imageB}
@@ -3338,81 +3469,81 @@ const App: React.FC = () => {
                 </Suspense>
             )}
 
-            {/* ============ 图层蒙版编辑浮动面板 (controls) ============ */}
+            {/* ============ 鍥惧眰钂欑増缂栬緫娴姩闈㈡澘 (controls) ============ */}
             {maskEditingId && (() => {
                 const maskEl = elements.find(e => e.id === maskEditingId) as ImageElement | undefined;
                 if (!maskEl) return null;
                 return (
                     <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[9998] flex items-center gap-3 px-4 py-2.5 rounded-2xl shadow-2xl border"
                          style={{ background: resolvedTheme === 'dark' ? '#1C2333' : '#ffffff', borderColor: resolvedTheme === 'dark' ? '#2A3142' : '#e5e7eb' }}>
-                        <span className={`text-sm font-medium ${resolvedTheme === 'dark' ? 'text-white' : 'text-gray-900'}`}>蒙版编辑</span>
+                        <span className={`text-sm font-medium ${resolvedTheme === 'dark' ? 'text-white' : 'text-gray-900'}`}>钂欑増缂栬緫</span>
                         <div className="h-5 w-px bg-gray-300" />
                         <button onClick={() => setMaskBrushMode('erase')}
                             className={`px-3 py-1 rounded-lg text-xs font-medium transition ${maskBrushMode === 'erase' ? 'bg-red-500 text-white' : (resolvedTheme === 'dark' ? 'bg-[#2A3142] text-gray-300' : 'bg-gray-100 text-gray-600')}`}>
-                            擦除
+                            鎿﹂櫎
                         </button>
                         <button onClick={() => setMaskBrushMode('reveal')}
                             className={`px-3 py-1 rounded-lg text-xs font-medium transition ${maskBrushMode === 'reveal' ? 'bg-green-500 text-white' : (resolvedTheme === 'dark' ? 'bg-[#2A3142] text-gray-300' : 'bg-gray-100 text-gray-600')}`}>
-                            恢复
+                            鎭㈠
                         </button>
                         <div className="h-5 w-px bg-gray-300" />
-                        <label className={`text-xs ${resolvedTheme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>笔刷</label>
+                        <label className={`text-xs ${resolvedTheme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>绗斿埛</label>
                         <input type="range" min="5" max="100" value={maskBrushSize} onChange={e => setMaskBrushSize(Number(e.target.value))} className="w-20 h-1 accent-blue-500" />
                         <span className={`text-xs w-6 text-center ${resolvedTheme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>{maskBrushSize}</span>
                         <div className="h-5 w-px bg-gray-300" />
                         <button onClick={clearMask}
                             className={`px-3 py-1 rounded-lg text-xs font-medium transition ${resolvedTheme === 'dark' ? 'bg-[#2A3142] hover:bg-[#3A4458] text-gray-300' : 'bg-gray-100 hover:bg-gray-200 text-gray-600'}`}>
-                            清除蒙版
+                            娓呴櫎钂欑増
                         </button>
                         <button onClick={commitMask}
                             className="px-3 py-1 rounded-lg text-xs font-medium bg-blue-500 hover:bg-blue-600 text-white transition">
-                            完成
+                            瀹屾垚
                         </button>
                         <button onClick={cancelMask}
                             className={`px-3 py-1 rounded-lg text-xs font-medium transition ${resolvedTheme === 'dark' ? 'bg-[#2A3142] hover:bg-[#3A4458] text-gray-300' : 'bg-gray-100 hover:bg-gray-200 text-gray-600'}`}>
-                            取消
+                            鍙栨秷
                         </button>
                     </div>
                 );
             })()}
 
-            {/* ============ 批量生成结果对比弹窗 ============ */}
+            {/* ============ 鎵归噺鐢熸垚缁撴灉瀵规瘮寮圭獥 ============ */}
             {batchResults && (
                 <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm"
                      onClick={() => setBatchResults(null)}>
                     <div className={`relative rounded-2xl shadow-2xl p-6 max-w-[90vw] max-h-[90vh] overflow-auto ${resolvedTheme === 'dark' ? 'bg-[#1C2333] text-white' : 'bg-white text-gray-900'}`}
                          onClick={e => e.stopPropagation()}>
                         <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-lg font-semibold">批量生成结果 — 选择最佳方案</h3>
+                            <h3 className="text-lg font-semibold">批量生成结果 - 选择最佳方案</h3>
                             <div className="flex gap-2">
                                 <button onClick={handleSelectAllBatchResults}
                                     className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${resolvedTheme === 'dark' ? 'bg-[#2A3142] hover:bg-[#3A4458] text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}`}>
-                                    全部放入画布
+                                    鍏ㄩ儴鏀惧叆鐢诲竷
                                 </button>
                                 <button onClick={() => setBatchResults(null)}
                                     className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${resolvedTheme === 'dark' ? 'bg-[#2A3142] hover:bg-[#3A4458] text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}`}>
-                                    关闭
+                                    鍏抽棴
                                 </button>
                             </div>
                         </div>
                         <p className={`text-sm mb-4 ${resolvedTheme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
-                            提示词: {batchResults.prompt}
+                            鎻愮ず璇? {batchResults.prompt}
                         </p>
                         <div className={`grid gap-4 ${batchResults.images.length <= 2 ? 'grid-cols-2' : 'grid-cols-2'}`}>
                             {batchResults.images.map((img, idx) => (
                                 <div key={idx}
                                      className={`group relative rounded-xl overflow-hidden border-2 transition cursor-pointer hover:scale-[1.02] ${resolvedTheme === 'dark' ? 'border-[#2A3142] hover:border-blue-500' : 'border-gray-200 hover:border-blue-400'}`}
                                      onClick={() => handleSelectBatchResult(img)}>
-                                    <img src={img.href} alt={`方案 ${idx + 1}`}
+                                    <img src={img.href} alt={`鏂规 ${idx + 1}`}
                                          className="w-full h-auto max-h-[40vh] object-contain"
                                          style={{ background: resolvedTheme === 'dark' ? '#0D1117' : '#F9FAFB' }} />
                                     <div className={`absolute bottom-0 inset-x-0 p-3 bg-gradient-to-t ${resolvedTheme === 'dark' ? 'from-black/80' : 'from-black/50'} to-transparent opacity-0 group-hover:opacity-100 transition`}>
                                         <div className="flex items-center justify-between">
-                                            <span className="text-white text-sm font-medium">方案 {idx + 1}</span>
-                                            <span className="text-white/80 text-xs">{img.width}×{img.height}</span>
+                                            <span className="text-white text-sm font-medium">鏂规 {idx + 1}</span>
+                                            <span className="text-white/80 text-xs">{img.width}脳{img.height}</span>
                                         </div>
                                         <button className="mt-2 w-full py-1.5 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-xs font-medium transition">
-                                            选择此方案
+                                            閫夋嫨姝ゆ柟妗?
                                         </button>
                                     </div>
                                 </div>
@@ -3422,9 +3553,9 @@ const App: React.FC = () => {
                 </div>
             )}
 
-            {/* 新用户引导弹窗 — 无 API Key 时自动出现 */}
+            {/* 鏂扮敤鎴峰紩瀵煎脊绐?鈥?鏃?API Key 鏃惰嚜鍔ㄥ嚭鐜?*/}
             {showOnboarding && (
-                <Suspense fallback={<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm"><div className="rounded-xl bg-neutral-800 px-6 py-4 text-sm text-white/60">Loading…</div></div>}>
+                <Suspense fallback={<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm"><div className="rounded-xl bg-neutral-800 px-6 py-4 text-sm text-white/60">Loading...</div></div>}>
                 <OnboardingWizard
                     isOpen={showOnboarding}
                     onClose={() => {
@@ -3438,7 +3569,7 @@ const App: React.FC = () => {
             )}
             
             {addAssetModal?.open && (
-                <Suspense fallback={<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm"><div className="rounded-xl bg-neutral-800 px-6 py-4 text-sm text-white/60">Loading…</div></div>}>
+                <Suspense fallback={<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm"><div className="rounded-xl bg-neutral-800 px-6 py-4 text-sm text-white/60">Loading...</div></div>}>
                 <AssetAddModal
                     isOpen={addAssetModal.open}
                     onClose={() => setAddAssetModal(null)}
@@ -3491,7 +3622,7 @@ const App: React.FC = () => {
                 className="compact-canvas-stage flex-grow relative overflow-hidden"
                 style={{
                     paddingRight: chromeMetrics.isTablet ? `${chromeMetrics.outerGap}px` : `${rightPanelWidth + chromeMetrics.promptSideInset}px`,
-                    paddingBottom: croppingState || isInlineMediaPromptActive ? '0px' : `${promptDockHeight || chromeMetrics.canvasBottomInset}px`,
+                    paddingBottom: croppingState || isNodePromptActive ? '0px' : `${chromeMetrics.canvasBottomInset}px`,
                     transition: 'padding-right 0.35s cubic-bezier(0.4, 0, 0.2, 1), padding-bottom 0.35s cubic-bezier(0.4, 0, 0.2, 1)'
                 }}
             >
@@ -3747,7 +3878,7 @@ const App: React.FC = () => {
                                                 </filter>
                                             </defs>
                                         )}
-                                        {/* Non-destructive layer mask — coordinates in element-local space (0,0) to match transform-based positioning */}
+                                        {/* Non-destructive layer mask 鈥?coordinates in element-local space (0,0) to match transform-based positioning */}
                                         {maskId && (
                                             <defs>
                                                 <mask id={maskId} maskUnits="userSpaceOnUse" x={0} y={0} width={el.width} height={el.height}>
@@ -3775,7 +3906,7 @@ const App: React.FC = () => {
                                                 mask={maskId ? `url(#${maskId})` : undefined}
                                                 style={{
                                                     filter: combinedFilter || undefined,
-                                                    opacity: isInlineMediaPromptActive && !isSelected ? 0.82 : 1,
+                                                    opacity: isNodePromptActive && !isSelected ? 0.82 : 1,
                                                     transition: 'opacity 320ms ease, filter 160ms ease',
                                                     transformOrigin: `${el.x + el.width / 2}px ${el.y + el.height / 2}px`,
                                                 }}
@@ -3824,7 +3955,7 @@ const App: React.FC = () => {
                                         )}
                                         {selectionComponent}
                                         {relationFocusComponent}
-                                        {selectedInlinePromptElement?.id === el.id && !croppingState && !editingElement && interactionMode.current !== 'dragElements' && (
+                                        {selectedNodePromptElement?.id === el.id && !croppingState && !editingElement && interactionMode.current !== 'dragElements' && (
                                              <foreignObject
                                                  x={el.x + el.width / 2 - (360 / zoom)}
                                                  y={el.y + el.height + (16 / zoom)}
@@ -3833,34 +3964,58 @@ const App: React.FC = () => {
                                                  style={{ overflow: 'visible' }}
                                              >
                                                  <div style={{ transform: `scale(${1 / zoom})`, transformOrigin: 'top left', width: '720px' }}>
-                                                     <InlinePromptBar
-                                                         variant="canvas"
-                                                         element={selectedInlinePromptElement}
-                                                         allElements={elements}
-                                                         canvasZoom={zoom}
-                                                         canvasPan={panOffset}
-                                                         modelId={selectedInlinePromptElement.type === 'video' ? modelPreference.videoModel : modelPreference.imageModel}
-                                                         status={selectedInlinePromptElement.generationState?.status || 'idle'}
-                                                         progress={selectedInlinePromptElement.generationState?.progress}
-                                                         isLoading={isLoading}
-                                                         theme={resolvedTheme}
-                                                         apiKeyPayload={getInlineApiKeyForElement(selectedInlinePromptElement)}
-                                                         userApiKeys={userApiKeys}
-                                                         imageModelOptions={dynamicModelOptions.image}
-                                                         videoModelOptions={dynamicModelOptions.video}
-                                                         videoAspectRatio={videoAspectRatio}
-                                                         setVideoAspectRatio={setVideoAspectRatio}
-                                                         isAutoEnhanceEnabled={isAutoEnhanceEnabled}
-                                                         onAutoEnhanceToggle={() => setIsAutoEnhanceEnabled(prev => !prev)}
-                                                         onEnhancePrompt={handleEnhancePrompt}
-                                                         isEnhancingPrompt={isEnhancingPrompt}
-                                                         t={t}
-                                                         onPromptChange={updateElementGenerationState}
-                                                         onMediaGenerated={updateElementMedia}
-                                                         animateViewport={animateViewportToElement}
-                                                         progressLabel={progressMessage}
-                                                         activeTaskCount={Object.values(runtimeJobsRef.current).filter(job => job.status === 'running').length}
-                                                     />
+                                                     <div
+                                                         data-testid="node-prompt-bar"
+                                                         className="inline-prompt-bar"
+                                                         style={{ width: '720px', pointerEvents: 'auto', '--inline-prompt-accent': 'var(--isl-mint)' } as React.CSSProperties}
+                                                         onMouseDown={(event) => event.stopPropagation()}
+                                                         onPointerDown={(event) => event.stopPropagation()}
+                                                     >
+                                                         <PromptBar
+                                                             t={t}
+                                                             theme={resolvedTheme}
+                                                             compactMode
+                                                             prompt={selectedNodePromptElement.generationState?.promptPayload.rawText || ''}
+                                                             promptDocument={selectedNodePromptElement.generationState?.promptPayload.richTextDocument}
+                                                             setPrompt={(nextPrompt) => updateNodePromptPayload(selectedNodePromptElement, nextPrompt, selectedNodePromptElement.generationState?.promptPayload.richTextDocument)}
+                                                             onPromptInputChange={({ plainText, document }) => updateNodePromptPayload(selectedNodePromptElement, plainText, document)}
+                                                             onGenerate={() => void handleNodePromptGenerate(selectedNodePromptElement.id)}
+                                                             onRetry={selectedNodePromptElement.generationState?.status === 'error' ? () => void handleNodePromptGenerate(selectedNodePromptElement.id) : undefined}
+                                                             error={selectedNodePromptElement.generationState?.error || null}
+                                                             progressStage={progressMessage}
+                                                             isLoading={selectedNodePromptElement.generationState?.status === 'running'}
+                                                             isSelectionActive={false}
+                                                             selectedElementCount={1}
+                                                             userEffects={[]}
+                                                             onAddUserEffect={() => undefined}
+                                                             onDeleteUserEffect={() => undefined}
+                                                             generationMode={getElementGenerationMode(selectedNodePromptElement)}
+                                                             setGenerationMode={() => undefined}
+                                                             modeOptions={[getElementGenerationMode(selectedNodePromptElement)]}
+                                                             videoAspectRatio={selectedNodePromptElement.generationState?.aspectRatio || videoAspectRatio}
+                                                             setVideoAspectRatio={(ratio) => updateNodePromptStatePatch(selectedNodePromptElement.id, { aspectRatio: ratio })}
+                                                             selectedImageModel={selectedNodePromptElement.type === 'image' ? (selectedNodePromptElement.generationState?.modelId || modelPreference.imageModel) : undefined}
+                                                             selectedVideoModel={selectedNodePromptElement.type === 'video' ? (selectedNodePromptElement.generationState?.modelId || modelPreference.videoModel) : undefined}
+                                                             imageModelOptions={dynamicModelOptions.image}
+                                                             videoModelOptions={dynamicModelOptions.video}
+                                                             onImageModelChange={selectedNodePromptElement.type === 'image' ? (model) => updateNodePromptStatePatch(selectedNodePromptElement.id, { modelId: model }) : undefined}
+                                                             onVideoModelChange={selectedNodePromptElement.type === 'video' ? (model) => updateNodePromptStatePatch(selectedNodePromptElement.id, { modelId: model }) : undefined}
+                                                             canvasElements={elements.filter(item => item.id !== selectedNodePromptElement.id)}
+                                                             attachments={nodePromptAttachments[selectedNodePromptElement.id] || []}
+                                                             onAddAttachments={(files) => void handleAddNodePromptAttachmentFiles(selectedNodePromptElement.id, files)}
+                                                             onRemoveAttachment={(id) => handleRemoveNodePromptAttachment(selectedNodePromptElement.id, id)}
+                                                             onEnhancePrompt={handleEnhancePrompt}
+                                                             isEnhancingPrompt={isEnhancingPrompt}
+                                                             isAutoEnhanceEnabled={isAutoEnhanceEnabled}
+                                                             onAutoEnhanceToggle={() => setIsAutoEnhanceEnabled(prev => !prev)}
+                                                             apiConfigs={userApiKeys}
+                                                             userApiKeys={userApiKeys}
+                                                             onOpenSettings={() => setIsSettingsPanelOpen(true)}
+                                                             variant="inline"
+                                                             shellClassName="inline-prompt-bar-shell"
+                                                             popoverDirection="down"
+                                                         />
+                                                     </div>
                                                  </div>
                                              </foreignObject>
                                          )}
@@ -3891,7 +4046,7 @@ const App: React.FC = () => {
                                                 <video
                                                     src={el.href}
                                                     controls
-                                                    style={{ width: '100%', height: '100%', borderRadius: '8px', opacity: isInlineMediaPromptActive && !isSelected ? 0.82 : 1, transition: 'opacity 320ms ease' }}
+                                                    style={{ width: '100%', height: '100%', borderRadius: '8px', opacity: isNodePromptActive && !isSelected ? 0.82 : 1, transition: 'opacity 320ms ease' }}
                                                     className={`${croppingState ? 'opacity-30' : ''} ${isRevealing ? 'flv-gen-reveal' : ''}`}
                                                 ></video>
                                             </foreignObject>
@@ -3930,7 +4085,7 @@ const App: React.FC = () => {
                                         )}
                                         {selectionComponent}
                                         {relationFocusComponent}
-                                        {selectedInlinePromptElement?.id === el.id && !croppingState && !editingElement && interactionMode.current !== 'dragElements' && (
+                                        {selectedNodePromptElement?.id === el.id && !croppingState && !editingElement && interactionMode.current !== 'dragElements' && (
                                              <foreignObject
                                                  x={el.x + el.width / 2 - (360 / zoom)}
                                                  y={el.y + el.height + (16 / zoom)}
@@ -3939,34 +4094,58 @@ const App: React.FC = () => {
                                                  style={{ overflow: 'visible' }}
                                              >
                                                  <div style={{ transform: `scale(${1 / zoom})`, transformOrigin: 'top left', width: '720px' }}>
-                                                     <InlinePromptBar
-                                                         variant="canvas"
-                                                         element={selectedInlinePromptElement}
-                                                         allElements={elements}
-                                                         canvasZoom={zoom}
-                                                         canvasPan={panOffset}
-                                                         modelId={selectedInlinePromptElement.type === 'video' ? modelPreference.videoModel : modelPreference.imageModel}
-                                                         status={selectedInlinePromptElement.generationState?.status || 'idle'}
-                                                         progress={selectedInlinePromptElement.generationState?.progress}
-                                                         isLoading={isLoading}
-                                                         theme={resolvedTheme}
-                                                         apiKeyPayload={getInlineApiKeyForElement(selectedInlinePromptElement)}
-                                                         userApiKeys={userApiKeys}
-                                                         imageModelOptions={dynamicModelOptions.image}
-                                                         videoModelOptions={dynamicModelOptions.video}
-                                                         videoAspectRatio={videoAspectRatio}
-                                                         setVideoAspectRatio={setVideoAspectRatio}
-                                                         isAutoEnhanceEnabled={isAutoEnhanceEnabled}
-                                                         onAutoEnhanceToggle={() => setIsAutoEnhanceEnabled(prev => !prev)}
-                                                         onEnhancePrompt={handleEnhancePrompt}
-                                                         isEnhancingPrompt={isEnhancingPrompt}
-                                                         t={t}
-                                                         onPromptChange={updateElementGenerationState}
-                                                         onMediaGenerated={updateElementMedia}
-                                                         animateViewport={animateViewportToElement}
-                                                         progressLabel={progressMessage}
-                                                         activeTaskCount={Object.values(runtimeJobsRef.current).filter(job => job.status === 'running').length}
-                                                     />
+                                                     <div
+                                                         data-testid="node-prompt-bar"
+                                                         className="inline-prompt-bar"
+                                                         style={{ width: '720px', pointerEvents: 'auto', '--inline-prompt-accent': 'var(--isl-sun)' } as React.CSSProperties}
+                                                         onMouseDown={(event) => event.stopPropagation()}
+                                                         onPointerDown={(event) => event.stopPropagation()}
+                                                     >
+                                                         <PromptBar
+                                                             t={t}
+                                                             theme={resolvedTheme}
+                                                             compactMode
+                                                             prompt={selectedNodePromptElement.generationState?.promptPayload.rawText || ''}
+                                                             promptDocument={selectedNodePromptElement.generationState?.promptPayload.richTextDocument}
+                                                             setPrompt={(nextPrompt) => updateNodePromptPayload(selectedNodePromptElement, nextPrompt, selectedNodePromptElement.generationState?.promptPayload.richTextDocument)}
+                                                             onPromptInputChange={({ plainText, document }) => updateNodePromptPayload(selectedNodePromptElement, plainText, document)}
+                                                             onGenerate={() => void handleNodePromptGenerate(selectedNodePromptElement.id)}
+                                                             onRetry={selectedNodePromptElement.generationState?.status === 'error' ? () => void handleNodePromptGenerate(selectedNodePromptElement.id) : undefined}
+                                                             error={selectedNodePromptElement.generationState?.error || null}
+                                                             progressStage={progressMessage}
+                                                             isLoading={selectedNodePromptElement.generationState?.status === 'running'}
+                                                             isSelectionActive={false}
+                                                             selectedElementCount={1}
+                                                             userEffects={[]}
+                                                             onAddUserEffect={() => undefined}
+                                                             onDeleteUserEffect={() => undefined}
+                                                             generationMode={getElementGenerationMode(selectedNodePromptElement)}
+                                                             setGenerationMode={() => undefined}
+                                                             modeOptions={[getElementGenerationMode(selectedNodePromptElement)]}
+                                                             videoAspectRatio={selectedNodePromptElement.generationState?.aspectRatio || videoAspectRatio}
+                                                             setVideoAspectRatio={(ratio) => updateNodePromptStatePatch(selectedNodePromptElement.id, { aspectRatio: ratio })}
+                                                             selectedImageModel={selectedNodePromptElement.type === 'image' ? (selectedNodePromptElement.generationState?.modelId || modelPreference.imageModel) : undefined}
+                                                             selectedVideoModel={selectedNodePromptElement.type === 'video' ? (selectedNodePromptElement.generationState?.modelId || modelPreference.videoModel) : undefined}
+                                                             imageModelOptions={dynamicModelOptions.image}
+                                                             videoModelOptions={dynamicModelOptions.video}
+                                                             onImageModelChange={selectedNodePromptElement.type === 'image' ? (model) => updateNodePromptStatePatch(selectedNodePromptElement.id, { modelId: model }) : undefined}
+                                                             onVideoModelChange={selectedNodePromptElement.type === 'video' ? (model) => updateNodePromptStatePatch(selectedNodePromptElement.id, { modelId: model }) : undefined}
+                                                             canvasElements={elements.filter(item => item.id !== selectedNodePromptElement.id)}
+                                                             attachments={nodePromptAttachments[selectedNodePromptElement.id] || []}
+                                                             onAddAttachments={(files) => void handleAddNodePromptAttachmentFiles(selectedNodePromptElement.id, files)}
+                                                             onRemoveAttachment={(id) => handleRemoveNodePromptAttachment(selectedNodePromptElement.id, id)}
+                                                             onEnhancePrompt={handleEnhancePrompt}
+                                                             isEnhancingPrompt={isEnhancingPrompt}
+                                                             isAutoEnhanceEnabled={isAutoEnhanceEnabled}
+                                                             onAutoEnhanceToggle={() => setIsAutoEnhanceEnabled(prev => !prev)}
+                                                             apiConfigs={userApiKeys}
+                                                             userApiKeys={userApiKeys}
+                                                             onOpenSettings={() => setIsSettingsPanelOpen(true)}
+                                                             variant="inline"
+                                                             shellClassName="inline-prompt-bar-shell"
+                                                             popoverDirection="down"
+                                                         />
+                                                     </div>
                                                  </div>
                                              </foreignObject>
                                          )}
@@ -4029,12 +4208,12 @@ const App: React.FC = () => {
                                                     padding: 12,
                                                 }}>
                                                     <div style={{ fontSize: 12, fontWeight: 600, color: '#ef4444', marginBottom: 8 }}>
-                                                        🎯 AI 局部重绘
+                                                        馃幆 AI 灞€閮ㄩ噸缁?
                                                     </div>
                                                     <textarea
                                                         value={inpaintPrompt}
                                                         onChange={e => setInpaintPrompt(e.target.value)}
-                                                        placeholder="描述你想在选区内生成的内容..."
+                                                        placeholder="鎻忚堪浣犳兂鍦ㄩ€夊尯鍐呯敓鎴愮殑鍐呭..."
                                                         autoFocus
                                                         style={{
                                                             width: '100%',
@@ -4069,7 +4248,7 @@ const App: React.FC = () => {
                                                                 cursor: 'pointer',
                                                             }}
                                                         >
-                                                            取消
+                                                            鍙栨秷
                                                         </button>
                                                         <button
                                                             onClick={handleInpaint}
@@ -4085,7 +4264,7 @@ const App: React.FC = () => {
                                                                 fontWeight: 600,
                                                             }}
                                                         >
-                                                            {isLoading ? '重绘中...' : '✨ 重绘'}
+                                                            {isLoading ? '閲嶇粯涓?..' : '鉁?閲嶇粯'}
                                                         </button>
                                                     </div>
                                                 </div>
@@ -4246,19 +4425,19 @@ const App: React.FC = () => {
                                                 });
                                                 setContextMenu(null);
                                             }} className="block w-full text-left px-4 py-1.5 hover:bg-gray-100 truncate max-w-[200px]">
-                                                A/B 对比: {other.name || other.id.slice(0, 6)}
+                                                A/B 瀵规瘮: {other.name || other.id.slice(0, 6)}
                                             </button>
                                         ))}
                                         {generationHistory.length > 0 && (
                                             <button onClick={() => {
                                                 const latest = generationHistory[0];
                                                 setAbCompare({
-                                                    imageA: { src: (ctxEl as ImageElement).href, label: ctxEl.name || '当前' },
-                                                    imageB: { src: latest.dataUrl, label: latest.name || latest.prompt.slice(0, 20) || '历史' },
+                                                    imageA: { src: (ctxEl as ImageElement).href, label: ctxEl.name || '褰撳墠' },
+                                                    imageB: { src: latest.dataUrl, label: latest.name || latest.prompt.slice(0, 20) || '鍘嗗彶' },
                                                 });
                                                 setContextMenu(null);
                                             }} className="block w-full text-left px-4 py-1.5 hover:bg-gray-100">
-                                                A/B 对比: 最近生成
+                                                A/B 瀵规瘮: 鏈€杩戠敓鎴?
                                             </button>
                                         )}
                                     </>
@@ -4282,7 +4461,7 @@ const App: React.FC = () => {
                                             }}
                                             className="block w-full text-left px-4 py-1.5 hover:bg-gray-100 disabled:opacity-50"
                                         >
-                                            {reversePromptLoading ? (language === 'zho' ? '分析中...' : 'Analyzing...') : (language === 'zho' ? '反推 Prompt' : 'Reverse Prompt')}
+                                            {reversePromptLoading ? (language === 'zho' ? '鍒嗘瀽涓?..' : 'Analyzing...') : (language === 'zho' ? '鍙嶆帹 Prompt' : 'Reverse Prompt')}
                                         </button>
                                     </>
                                 );
@@ -4293,15 +4472,14 @@ const App: React.FC = () => {
             </div>
             {!croppingState && (
                 <div 
-                    ref={promptDockRef}
-                    className={`compact-prompt-dock absolute bottom-0 left-0 right-0 z-[48] transition-all duration-300 ease-out flex flex-col items-center pointer-events-none ${isInlineMediaPromptActive ? 'translate-y-12 opacity-0' : 'translate-y-0 opacity-100'}`}
+                    className={`compact-prompt-dock absolute bottom-0 left-0 right-0 z-[48] transition-all duration-300 ease-out flex flex-col items-center pointer-events-none ${isNodePromptActive ? 'translate-y-12 opacity-0' : 'translate-y-0 opacity-100'}`}
                     style={{
                         paddingLeft: chromeMetrics.isTablet ? `${chromeMetrics.promptSideInset}px` : `${isLayerMinimized ? chromeMetrics.outerGap : chromeMetrics.sidebarWidth + chromeMetrics.outerGap + 8}px`,
                         paddingRight: chromeMetrics.isTablet ? `${chromeMetrics.promptSideInset}px` : `${rightPanelWidth + chromeMetrics.promptSideInset}px`,
                         paddingBottom: `${chromeMetrics.promptDockBottom}px`
                     }}
                 >
-                    {/* 自省诊断条 — PromptBar 上方原位置 */}
+                    {/* 鑷渷璇婃柇鏉?鈥?PromptBar 涓婃柟鍘熶綅缃?*/}
                     <div className="pointer-events-auto pb-1">
                         <DiagnosticBar
                             userApiKeys={userApiKeys}
@@ -4309,65 +4487,7 @@ const App: React.FC = () => {
                             onOpenSettings={() => setIsSettingsPanelOpen(true)}
                         />
                     </div>
-                    <div className="compact-prompt-dock__inner pointer-events-auto w-full transition-transform hover:-translate-y-0.5 duration-300 drop-shadow-xl" style={{ maxWidth: `${chromeMetrics.promptMaxWidth}px` }}>
-                        <PromptBar 
-                            t={t}
-                            theme={resolvedTheme}
-                            compactMode={chromeMetrics.isTablet}
-                            prompt={prompt} 
-                            setPrompt={setPrompt} 
-                            onGenerate={() => {
-                                if (batchCount > 1) {
-                                    handleBatchGenerate();
-                                } else {
-                                    handleGenerate(undefined, 'prompt');
-                                }
-                            }} 
-                            isLoading={isLoading} 
-                            isSelectionActive={isSelectionActive} 
-                            selectedElementCount={selectedElementIds.length}
-                            onAddUserEffect={handleAddUserEffect}
-                            userEffects={userEffects}
-                            onDeleteUserEffect={handleDeleteUserEffect}
-                            generationMode={generationMode}
-                            setGenerationMode={setGenerationMode}
-                            videoAspectRatio={videoAspectRatio}
-                            setVideoAspectRatio={setVideoAspectRatio}
-                            selectedTextModel={modelPreference.textModel}
-                            selectedImageModel={modelPreference.imageModel}
-                            selectedVideoModel={modelPreference.videoModel}
-                            textModelOptions={dynamicModelOptions.text}
-                            imageModelOptions={dynamicModelOptions.image}
-                            videoModelOptions={dynamicModelOptions.video}
-                            onTextModelChange={(model) => setModelPreference(prev => ({ ...prev, textModel: model }))}
-                            onImageModelChange={(model) => setModelPreference(prev => ({ ...prev, imageModel: model }))}
-                            onVideoModelChange={(model) => setModelPreference(prev => ({ ...prev, videoModel: model }))}
-                            canvasElements={elements}
-                            attachments={promptAttachments}
-                            onAddAttachments={handleAddPromptAttachmentFiles}
-                            onRemoveAttachment={handleRemovePromptAttachment}
-                            onMentionedElementIds={setMentionedElementIds}
-                            onEnhancePrompt={handleEnhancePrompt}
-                            isEnhancingPrompt={isEnhancingPrompt}
-                            isAutoEnhanceEnabled={isAutoEnhanceEnabled}
-                            onAutoEnhanceToggle={() => setIsAutoEnhanceEnabled(prev => !prev)}
-                            onLockCharacterFromSelection={handleLockCharacterFromSelection}
-                            canLockCharacter={!!selectedSingleImage}
-                            characterLocks={characterLocks}
-                            activeCharacterLockId={activeCharacterLockId}
-                            onSetActiveCharacterLock={handleSetActiveCharacterLock}
-                            apiConfigs={userApiKeys}
-                            activeApiConfigId={activeUserKeyId}
-                            activeApiModelId={activeUserModelId}
-                            onApiConfigChange={handleUserKeyChange}
-                            onApiModelChange={setActiveUserModelId}
-                            userApiKeys={userApiKeys}
-                            onOpenSettings={() => setIsSettingsPanelOpen(true)}
-                            batchCount={batchCount}
-                            onBatchCountChange={setBatchCount}
-                        />
-                    </div>
-                    {/* 底部法律链接 + 主题 / 语言切换 */}
+                    {/* 搴曢儴娉曞緥閾炬帴 + 涓婚 / 璇█鍒囨崲 */}
                     <div className="pointer-events-auto mt-1">
                         <div className="isl-tabbar isl-tabbar--ac-sm flex items-center gap-0.5">
                             <button
@@ -4375,14 +4495,14 @@ const App: React.FC = () => {
                                 onClick={() => openLegalModal('terms')}
                                 className="isl-tab"
                             >
-                                {language === 'zho' ? '使用条款' : 'Terms'}
+                                {language === 'zho' ? '浣跨敤鏉℃' : 'Terms'}
                             </button>
                             <button
                                 type="button"
                                 onClick={() => openLegalModal('privacy')}
                                 className="isl-tab"
                             >
-                                {language === 'zho' ? '隐私政策' : 'Privacy'}
+                                {language === 'zho' ? '闅愮鏀跨瓥' : 'Privacy'}
                             </button>
                             <button
                                 type="button"
@@ -4432,7 +4552,7 @@ const App: React.FC = () => {
             )}
 
 
-            {/* 法律文档弹窗 */}
+            {/* 娉曞緥鏂囨。寮圭獥 */}
             {legalModal && (
                 <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setLegalModal(null)}>
                     <div
@@ -4441,11 +4561,11 @@ const App: React.FC = () => {
                         onClick={e => e.stopPropagation()}
                     >
                         <div className="flex items-center justify-between px-6 py-4 border-b" style={{ borderColor: resolvedTheme === 'dark' ? '#333' : '#e5e5e5' }}>
-                            <h2 className="text-lg font-semibold m-0">{legalModal === 'terms' ? '使用条款' : '隐私政策'}</h2>
-                            <button className="text-2xl leading-none cursor-pointer bg-transparent border-none p-1" style={{ color: resolvedTheme === 'dark' ? '#888' : '#666' }} onClick={() => setLegalModal(null)}>×</button>
+                            <h2 className="text-lg font-semibold m-0">{legalModal === 'terms' ? '浣跨敤鏉℃' : '闅愮鏀跨瓥'}</h2>
+                            <button className="text-2xl leading-none cursor-pointer bg-transparent border-none p-1" style={{ color: resolvedTheme === 'dark' ? '#888' : '#666' }} onClick={() => setLegalModal(null)}>脳</button>
                         </div>
                         <div className="overflow-y-auto px-6 py-5 text-sm leading-relaxed legal-markdown" style={{ whiteSpace: 'pre-wrap' }}>
-                            {legalContent || '加载中…'}
+                            {legalContent || '加载中...'}
                         </div>
                     </div>
                 </div>
