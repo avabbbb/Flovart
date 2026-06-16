@@ -5,7 +5,6 @@ import type {
   ImageElement,
   VideoElement,
 } from '../types';
-import type { WorkflowEdge, WorkflowNode } from '../components/nodeflow/types';
 import type {
   RuntimeConnection,
   RuntimeEntity,
@@ -18,8 +17,6 @@ import { normalizeRuntimeConnections } from './runtimeConnectionNormalizer';
 interface LegacyMigrationInput {
   projectId: string;
   canvasElements: Element[];
-  workflowNodes: WorkflowNode[];
-  workflowEdges: WorkflowEdge[];
   assetLibrary: AssetLibrary;
   now?: number;
 }
@@ -64,10 +61,6 @@ function runtimeKindFromElement(element: Element): RuntimeEntityKind {
   return element.type;
 }
 
-function runtimeKindFromWorkflowNode(node: WorkflowNode): RuntimeEntityKind {
-  return node.kind;
-}
-
 export function migrateLegacyStateToRuntime(input: LegacyMigrationInput): UnifiedProjectRuntime {
   const now = input.now ?? Date.now();
   const entities: Record<string, RuntimeEntity> = {};
@@ -76,11 +69,6 @@ export function migrateLegacyStateToRuntime(input: LegacyMigrationInput): Unifie
     nodes: {},
     viewport: { x: 0, y: 0, zoom: 1 },
     showTechnicalEntities: false,
-  };
-  const workflowView: UnifiedProjectRuntime['workflowView'] = {
-    nodes: {},
-    groups: {},
-    viewport: { x: 0, y: 0, scale: 1 },
   };
 
   input.canvasElements.forEach((element, index) => {
@@ -109,59 +97,12 @@ export function migrateLegacyStateToRuntime(input: LegacyMigrationInput): Unifie
     };
   });
 
-  input.workflowNodes.forEach((node) => {
-    const existing = entities[node.id];
-    const promptText = node.config?.prompt || existing?.promptPayload?.rawText || '';
-    entities[node.id] = {
-      ...existing,
-      id: node.id,
-      kind: runtimeKindFromWorkflowNode(node),
-      name: node.config?.label || existing?.name,
-      promptPayload: existing?.promptPayload || { rawText: promptText, resolvedReferences: [] },
-      generationState: existing?.generationState,
-      media: existing?.media,
-      provider: node.config?.provider || existing?.provider,
-      modelId: node.config?.model || existing?.modelId,
-      apiKeyRef: node.config?.apiKeyRef || existing?.apiKeyRef,
-      params: {
-        ...existing?.params,
-        aspectRatio: node.config?.aspectRatio,
-        resolution: node.config?.resolution,
-        durationSec: node.config?.durationSec,
-        generationMode: node.config?.generationMode,
-      },
-      createdAt: existing?.createdAt || now,
-      updatedAt: now,
-    };
-
-    workflowView.nodes[node.id] = {
-      entityId: node.id,
-      nodeKind: runtimeKindFromWorkflowNode(node),
-      x: node.x,
-      y: node.y,
-    };
-  });
-
-  input.workflowEdges.forEach((edge) => {
-    connections.push({
-      id: edge.id,
-      sourceEntityId: edge.fromNode,
-      targetEntityId: edge.toNode,
-      kind: 'workflow_edge',
-      sourcePort: edge.fromPort,
-      targetPort: edge.toPort,
-      createdBy: 'migration',
-      createdAt: now,
-    });
-  });
-
   return {
     version: 1,
     projectId: input.projectId,
     entities,
     connections: normalizeRuntimeConnections(entities, connections),
     canvasView,
-    workflowView,
     jobs: {},
     assets: input.assetLibrary,
     settings: {},

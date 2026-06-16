@@ -36,19 +36,6 @@ function createEmptyState() {
       availableModels: { image: [], video: [], text: [] },
       providers: [],
     },
-    workflow: {
-      nodes: [
-        { id: 'image_1', kind: 'imageGen', x: 240, y: 180, config: { label: 'Image' } },
-        { id: 'video_1', kind: 'videoGen', x: 680, y: 180, config: { label: 'Video' } },
-      ],
-      edges: [
-        { id: 'edge_1', fromNode: 'image_1', fromPort: 'image', toNode: 'video_1', toPort: 'image' },
-      ],
-      groups: [],
-      viewport: { x: -120, y: -80, scale: 0.86 },
-      selectedNodeIds: [],
-      runs: [],
-    },
   };
 }
 
@@ -62,10 +49,6 @@ export function loadShadowState() {
     provider: {
       ...createEmptyState().provider,
       ...(parsed.provider || {}),
-    },
-    workflow: {
-      ...createEmptyState().workflow,
-      ...(parsed.workflow || {}),
     },
   };
   } catch {
@@ -432,80 +415,6 @@ function inspectShadowCanvas(state) {
   };
 }
 
-function runShadowWorkflow(input, state) {
-  const scope = input.scope || 'workflow';
-  const nodeId = input.nodeId;
-  const jobId = `shadow_workflow_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-  const nodes = scope === 'workflow'
-    ? state.workflow.nodes
-    : state.workflow.nodes.filter((node) => node.id === nodeId || scope === 'from-here');
-  state.workflow.runs.unshift({
-    jobId,
-    scope,
-    nodeId,
-    status: 'queued',
-    nodeCount: nodes.length,
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
-  });
-  state.jobs.unshift({
-    jobId,
-    command: 'workflow.run',
-    status: 'queued',
-    progress: { pct: 8, stage: 'shadow-queued' },
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
-  });
-  saveShadowState(state);
-  return {
-    ok: true,
-    shadow: true,
-    accepted: true,
-    jobId,
-    scope,
-    nodeId,
-    nodeCount: nodes.length,
-    message: 'Runtime UI unavailable. Workflow run stored in shadow runtime and ready to execute in Flovart UI.',
-  };
-}
-
-function inspectShadowWorkflow(state) {
-  return { ok: true, shadow: true, ...state.workflow };
-}
-
-function loadShadowWorkflow(input, state) {
-  const workflow = input.workflow || input;
-  if (!Array.isArray(workflow.nodes) || !Array.isArray(workflow.edges)) {
-    return { ok: false, error: { code: 'BAD_REQUEST', message: 'workflow.nodes and workflow.edges are required' } };
-  }
-  state.workflow = {
-    nodes: workflow.nodes,
-    edges: workflow.edges,
-    groups: Array.isArray(workflow.groups) ? workflow.groups : [],
-    viewport: workflow.viewport || { x: -120, y: -80, scale: 0.86 },
-    selectedNodeIds: [],
-    runs: state.workflow.runs || [],
-    name: workflow.name,
-  };
-  saveShadowState(state);
-  return { ok: true, shadow: true, nodeCount: state.workflow.nodes.length, edgeCount: state.workflow.edges.length, workflow: state.workflow };
-}
-
-function updateShadowWorkflowNode(nodeId, config, state) {
-  const index = state.workflow.nodes.findIndex((node) => node.id === nodeId);
-  if (index < 0) return { ok: false, error: { code: 'BAD_REQUEST', message: `workflow node not found (${nodeId})` } };
-  state.workflow.nodes[index] = {
-    ...state.workflow.nodes[index],
-    config: {
-      ...(state.workflow.nodes[index].config || {}),
-      ...(config || {}),
-    },
-  };
-  state.workflow.selectedNodeIds = [nodeId];
-  saveShadowState(state);
-  return { ok: true, shadow: true, node: state.workflow.nodes[index] };
-}
-
 function createShadowGeneration(input, type, state) {
   const jobId = `shadow_gen_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   const element = createShadowElement({
@@ -563,11 +472,6 @@ export function createShadowRuntimeFacade() {
         mediaElements: state.elements.filter((item) => item.type === 'image' || item.type === 'video').length,
         jobs: state.jobs.length,
         provider: state.provider,
-        workflow: {
-          nodes: state.workflow.nodes.length,
-          edges: state.workflow.edges.length,
-          runs: state.workflow.runs.length,
-        },
         stateFile: SHADOW_STATE_FILE,
       };
     },
@@ -645,12 +549,6 @@ export function createShadowRuntimeFacade() {
       assignSlot: async (input) => assignShadowSlot(input, loadShadowState()),
       ignite: async (input) => igniteShadowElement(input, loadShadowState()),
       watch: async (input) => watchShadowElement(input, loadShadowState()),
-    },
-    workflow: {
-      inspect: async () => inspectShadowWorkflow(loadShadowState()),
-      load: async (input) => loadShadowWorkflow(input, loadShadowState()),
-      updateNode: async (nodeId, config) => updateShadowWorkflowNode(nodeId, config, loadShadowState()),
-      run: async (input = {}) => runShadowWorkflow(input, loadShadowState()),
     },
     assets: {
       list: async () => [],

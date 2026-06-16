@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Import RunningHub workflow results into Flovart canvas.
+ * Import RunningHub generation results into Flovart canvas.
  *
  * Usage:
  *   node import-from-runninghub.js --task <taskId> [--layout grid|row]

@@ -38,14 +38,6 @@ const runtime = (): UnifiedProjectRuntime => ({
     viewport: { x: 0, y: 0, zoom: 1 },
     showTechnicalEntities: false,
   },
-  workflowView: {
-    nodes: {
-      target: { entityId: 'target', nodeKind: 'videoGen', x: 100, y: 120 },
-      ref: { entityId: 'ref', nodeKind: 'imageGen', x: 0, y: 120 },
-    },
-    groups: {},
-    viewport: { x: 0, y: 0, scale: 1 },
-  },
   jobs: {},
   assets: { character: [], scene: [], prop: [] },
   settings: {},
@@ -74,7 +66,6 @@ describe('useRuntimeStore', () => {
     const state = useRuntimeStore.getState().runtime;
     expect(state.entities.target.name).toBe('Renamed');
     expect(state.canvasView.nodes.target).toMatchObject({ entityId: 'target', x: 10, y: 20 });
-    expect(state.workflowView.nodes.target).toMatchObject({ entityId: 'target', x: 100, y: 120 });
   });
 
   it('removes related view records and connections when deleting an entity', () => {
@@ -93,7 +84,6 @@ describe('useRuntimeStore', () => {
     const state = useRuntimeStore.getState().runtime;
     expect(state.entities.ref).toBeUndefined();
     expect(state.canvasView.nodes.ref).toBeUndefined();
-    expect(state.workflowView.nodes.ref).toBeUndefined();
     expect(state.connections.slot).toBeUndefined();
   });
 });

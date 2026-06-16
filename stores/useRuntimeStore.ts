@@ -1,12 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import type {
-  CanvasViewNode,
-  RuntimeConnection,
-  RuntimeEntity,
-  UnifiedProjectRuntime,
-  WorkflowViewNode,
-} from '../types/runtime';
+import type { CanvasViewNode, RuntimeConnection, RuntimeEntity, UnifiedProjectRuntime } from '../types/runtime';
 import { normalizeRuntimeConnections } from '../utils/runtimeConnectionNormalizer';
 
 const emptyRuntime = (): UnifiedProjectRuntime => ({
@@ -18,11 +12,6 @@ const emptyRuntime = (): UnifiedProjectRuntime => ({
     nodes: {},
     viewport: { x: 0, y: 0, zoom: 1 },
     showTechnicalEntities: false,
-  },
-  workflowView: {
-    nodes: {},
-    groups: {},
-    viewport: { x: 0, y: 0, scale: 1 },
   },
   jobs: {},
   assets: { character: [], scene: [], prop: [] },
@@ -43,7 +32,6 @@ interface RuntimeStore {
   upsertConnection: (connection: RuntimeConnection) => void;
   removeConnection: (connectionId: string) => void;
   upsertCanvasViewNode: (node: CanvasViewNode) => void;
-  upsertWorkflowViewNode: (node: WorkflowViewNode) => void;
   setCanvasTechnicalOverlay: (enabled: boolean) => void;
 }
 
@@ -157,7 +145,6 @@ export const useRuntimeStore = create<RuntimeStore>()(
       removeEntity: (entityId) => set((state) => {
         const { [entityId]: _removedEntity, ...entities } = state.runtime.entities;
         const { [entityId]: _removedCanvasNode, ...canvasNodes } = state.runtime.canvasView.nodes;
-        const { [entityId]: _removedWorkflowNode, ...workflowNodes } = state.runtime.workflowView.nodes;
         const connections = Object.values(state.runtime.connections).filter((connection) => (
           connection.sourceEntityId !== entityId && connection.targetEntityId !== entityId
         ));
@@ -169,10 +156,6 @@ export const useRuntimeStore = create<RuntimeStore>()(
             canvasView: {
               ...state.runtime.canvasView,
               nodes: canvasNodes,
-            },
-            workflowView: {
-              ...state.runtime.workflowView,
-              nodes: workflowNodes,
             },
           }),
         };
@@ -205,18 +188,6 @@ export const useRuntimeStore = create<RuntimeStore>()(
             ...state.runtime.canvasView,
             nodes: {
               ...state.runtime.canvasView.nodes,
-              [node.entityId]: node,
-            },
-          },
-        }),
-      })),
-      upsertWorkflowViewNode: (node) => set((state) => ({
-        runtime: touch({
-          ...state.runtime,
-          workflowView: {
-            ...state.runtime.workflowView,
-            nodes: {
-              ...state.runtime.workflowView.nodes,
               [node.entityId]: node,
             },
           },

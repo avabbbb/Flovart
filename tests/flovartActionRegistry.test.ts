@@ -15,7 +15,6 @@ describe('flovartActionRegistry', () => {
         expect.objectContaining({ action: 'canvas.describe', targetDomain: 'canvas' }),
         expect.objectContaining({ action: 'selection.describe', targetDomain: 'canvas' }),
         expect.objectContaining({ action: 'generate.image', targetDomain: 'canvas' }),
-        expect.objectContaining({ action: 'workflow.run', targetDomain: 'workflow' }),
         expect.objectContaining({ action: 'storyboard.listShots', targetDomain: 'storyboard' }),
         expect.objectContaining({ action: 'storyboard.createShot', targetDomain: 'storyboard' }),
         expect.objectContaining({ action: 'assets.list', targetDomain: 'assets' }),
@@ -26,14 +25,14 @@ describe('flovartActionRegistry', () => {
   it('creates traceable action requests with inferred targets', () => {
     const request = createFlovartActionRequest({
       source: 'skill',
-      action: 'workflow.run',
-      payload: { template: 'image-to-video' },
+      action: 'storyboard.createShot',
+      payload: { description: 'Test shot' },
     });
 
     expect(request.sessionId).toMatch(/^session_/);
     expect(request.traceId).toMatch(/^trace_/);
-    expect(request.target).toEqual({ domain: 'workflow' });
-    expect(findFlovartAction(request.action)?.targetDomain).toBe('workflow');
+    expect(request.target).toEqual({ domain: 'storyboard' });
+    expect(findFlovartAction(request.action)?.targetDomain).toBe('storyboard');
   });
 
   it('normalizes success and error responses', () => {

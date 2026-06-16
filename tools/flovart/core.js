@@ -9,7 +9,6 @@ export const COMMAND_REGISTRY = {
   'inspiration.get': { summary: 'Return one curated inspiration entry by ID.', args: { id: 'string' } },
   'prompt.enhance': { summary: 'Enhance a brief image/video prompt using Flovart agent preferences.', args: { prompt: 'string', style: 'string?', aspectRatio: 'string?', mode: 'image|video?' } },
   'batch.plan': { summary: 'Create a deterministic multi-shot generation plan from one brief.', args: { prompt: 'string', count: 'number?', aspectRatio: 'string?' } },
-  'workflow.plan-video': { summary: 'Create a deterministic multi-shot video workflow graph from one brief.', args: { prompt: 'string', count: 'number?', aspectRatio: 'string?', durationSec: 'number?', imageModel: 'string?', videoModel: 'string?' } },
   'preferences.manage': { summary: 'Get, set, reset, or add favorite agent preferences.', args: { action: 'get|set|reset|add-favorite', style: 'string?', aspectRatio: 'string?', prompt: 'string?' } },
   'models.list': { summary: 'List agent-facing image/video model IDs routed through Flovart browser providers.', args: { purpose: 'image|video|all?' } },
   project: { summary: 'Show active Flovart project context summary.', args: {} },
@@ -54,10 +53,6 @@ export const COMMAND_REGISTRY = {
   'canvas.remove-element': { summary: 'Remove one element by ID.', args: { id: 'string' } },
   'canvas.select': { summary: 'Replace current selection with explicit element IDs.', args: { ids: 'string[]' } },
   'canvas.clear-media': { summary: 'Remove image/video elements only.', args: {} },
-  'workflow.inspect': { summary: 'Inspect current workflow graph, node configs, run state, and selected nodes.', args: {} },
-  'workflow.load': { summary: 'Replace the current workflow graph with explicit nodes, edges, groups, and viewport.', args: { workflow: 'object', nodes: 'array?', edges: 'array?', groups: 'array?', viewport: 'object?' } },
-  'workflow.update-node': { summary: 'Patch one workflow node config.', args: { nodeId: 'string', config: 'object' } },
-  'workflow.run': { summary: 'Run the current workflow, a single node, or all downstream nodes from one node.', args: { scope: 'workflow|node|from-here?', nodeId: 'string?' } },
   'asset.list': { summary: 'List local generated media assets/history.', args: {} },
   'generate.image': { summary: 'Generate one image from an explicit prompt.', args: { prompt: 'string', aspectRatio: 'string?', placeOnCanvas: 'boolean?' } },
   'generate.images-batch': { summary: 'Generate multiple images from explicit prompt items.', args: { items: 'array', placeOnCanvas: 'boolean?', layout: 'string?' } },
@@ -455,7 +450,6 @@ async function loadAgentKit() {
       getInspiration: () => ({ ok: false, error: { code: 'UNSUPPORTED_RUNTIME', message: 'Inspiration lookup is only available in the Node CLI runtime.' } }),
       enhancePrompt: () => ({ ok: false, error: { code: 'UNSUPPORTED_RUNTIME', message: 'Prompt enhancement is only available in the Node CLI runtime.' } }),
       planBatchGeneration: () => ({ ok: false, error: { code: 'UNSUPPORTED_RUNTIME', message: 'Batch planning is only available in the Node CLI runtime.' } }),
-      planVideoWorkflow: () => ({ ok: false, error: { code: 'UNSUPPORTED_RUNTIME', message: 'Workflow planning is only available in the Node CLI runtime.' } }),
       prepareMediaUpload: () => ({ ok: false, error: { code: 'UNSUPPORTED_RUNTIME', message: 'Local media upload is only available in the Node CLI runtime.' } }),
       manageAgentPreferences: () => ({ ok: false, error: { code: 'UNSUPPORTED_RUNTIME', message: 'Agent preferences are only available in the Node CLI runtime.' } }),
       listAgentModels: () => ({ ok: false, error: { code: 'UNSUPPORTED_RUNTIME', message: 'Agent model listing is only available in the Node CLI runtime.' } }),
@@ -523,20 +517,6 @@ export async function executeFlovartCommand(commandName, args = {}, runtime = {}
         prompt: required(args.prompt || args._?.join(' '), 'prompt'),
         count: args.count ? Number(args.count) : undefined,
         aspectRatio: args['aspect-ratio'] || args.aspectRatio,
-      });
-    }
-    case 'workflow.plan.video':
-    case 'workflow.plan-video': {
-      const { planVideoWorkflow } = await loadAgentKit();
-      return planVideoWorkflow({
-        prompt: required(args.prompt || args._?.join(' '), 'prompt'),
-        count: args.count ? Number(args.count) : undefined,
-        aspectRatio: args['aspect-ratio'] || args.aspectRatio,
-        durationSec: args.duration ? Number(args.duration) : args['duration-sec'] ? Number(args['duration-sec']) : undefined,
-        imageModel: args['image-model'] || args.imageModel,
-        videoModel: args['video-model'] || args.videoModel,
-        name: args.name,
-        items: args.items || parseJsonOption(args.itemsJson, undefined),
       });
     }
     case 'preferences.manage': {
@@ -866,27 +846,6 @@ export async function executeFlovartCommand(commandName, args = {}, runtime = {}
     case 'canvas.clear.media':
     case 'canvas.clear-media':
       return await runtime.canvas?.clearMedia?.();
-    case 'workflow.inspect':
-      return await runtime.workflow?.inspect?.() || { ok: false, error: 'workflow.inspect unavailable' };
-    case 'workflow.load': {
-      const workflow = args.workflow || parseJsonOption(args.workflowJson || args['workflow-json'], null) || {
-        nodes: args.nodes || parseJsonOption(args.nodesJson || args['nodes-json'], []),
-        edges: args.edges || parseJsonOption(args.edgesJson || args['edges-json'], []),
-        groups: args.groups || parseJsonOption(args.groupsJson || args['groups-json'], []),
-        viewport: args.viewport || parseJsonOption(args.viewportJson || args['viewport-json'], undefined),
-      };
-      return await runtime.workflow?.load?.(workflow) || { ok: false, error: 'workflow.load unavailable' };
-    }
-    case 'workflow.update.node':
-    case 'workflow.update-node': {
-      const config = args.config || parseJsonOption(args.configJson || args['config-json'], null) || updatePayloadFromArgs(args);
-      return await runtime.workflow?.updateNode?.(required(args['node-id'] || args.nodeId || args.id, 'node-id'), config) || { ok: false, error: 'workflow.update-node unavailable' };
-    }
-    case 'workflow.run':
-      return await runtime.workflow?.run?.({
-        scope: args.scope || 'workflow',
-        nodeId: args['node-id'] || args.nodeId || args.id,
-      }) || { ok: false, error: 'workflow.run unavailable' };
     case 'asset.list':
       return await runtime.assets?.list?.();
     case 'generate.image':

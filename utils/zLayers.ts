@@ -11,7 +11,6 @@
  *   toolbarCrop   50   Toolbar crop submenu
  *   popover       80   PromptBar popovers (mode/model/more)
  *   configMenu    85   ConfigSelector dropdown (must beat popover)
- *   workflowMenu  120  NodeWorkflow context menu
  *   notification  9998 Success/error toast bar
  *   modal         9999 Full-screen modals (legal, batch, A/B compare)
  */
@@ -26,7 +25,6 @@ export const Z = {
     toolbarCrop: 50,
     popover: 80,
     configMenu: 85,
-    workflowMenu: 120,
     notification: 9998,
     modal: 9999,
 } as const;

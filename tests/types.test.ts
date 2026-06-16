@@ -7,8 +7,6 @@ import type {
   GenerationMode,
   ImageElement,
   PromptEnhanceMode,
-  StoryboardProject,
-  StoryboardShot,
   UserApiKey,
   VideoElement,
 } from '../types';
@@ -83,10 +81,10 @@ describe('types.ts', () => {
       mimeType: 'video/mp4',
       poster: 'data:image/png;base64,poster',
       durationSec: 4,
-      sourceKind: 'workflow',
+      sourceKind: 'generation',
     };
     expect(video.type).toBe('video');
-    expect(video.sourceKind).toBe('workflow');
+    expect(video.sourceKind).toBe('generation');
   });
 
   it('instantiates Board', () => {
@@ -121,39 +119,5 @@ describe('types.ts', () => {
     };
     expect(profile.isActive).toBe(true);
     expect(profile.descriptor).toContain('red hair');
-  });
-
-  it('instantiates StoryboardShot', () => {
-    const shot: StoryboardShot = {
-      id: 'shot-1',
-      title: 'Opening',
-      prompt: 'A slow dolly-in on the rainy street.',
-      notes: 'Establishing shot',
-      aspectRatio: '16:9',
-      durationSec: 5,
-      referenceImageIds: ['img-1'],
-      referenceVideoIds: ['vid-1'],
-      outputElementIds: ['vid-2'],
-      primaryOutputId: 'vid-2',
-      status: 'draft',
-      error: null,
-      workflowId: null,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    };
-    expect(shot.referenceImageIds).toContain('img-1');
-    expect(shot.outputElementIds).toContain('vid-2');
-  });
-
-  it('instantiates StoryboardProject', () => {
-    const project: StoryboardProject = {
-      id: 'storyboard-1',
-      name: 'Episode 01',
-      shots: [],
-      activeShotId: null,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    };
-    expect(project.name).toContain('Episode');
   });
 });

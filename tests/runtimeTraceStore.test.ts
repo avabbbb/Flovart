@@ -19,8 +19,8 @@ describe('runtimeTraceStore', () => {
 
   it('records sessions, jobs, and events in one trace snapshot', () => {
     const session = createRuntimeSession({
-      name: 'Workflow session',
-      source: 'workflow',
+      name: 'Canvas session',
+      source: 'canvas',
       linkedBridge: 'none',
       keyContext: {
         sharedWithExtension: false,
@@ -30,8 +30,8 @@ describe('runtimeTraceStore', () => {
     });
     const job = createRuntimeJob({
       sessionId: session.sessionId,
-      source: 'workflow',
-      command: 'workflow.run.workflow',
+      source: 'canvas',
+      command: 'canvas.generate.image',
       status: 'queued',
       inputSummary: {
         nodeCount: 4,
@@ -42,7 +42,7 @@ describe('runtimeTraceStore', () => {
       jobId: job.jobId,
       nodeId: 'video_1',
       level: 'info',
-      stage: 'workflow.running',
+      stage: 'generation.running',
       message: 'Generating video',
     });
 
@@ -55,7 +55,7 @@ describe('runtimeTraceStore', () => {
     expect(listTraceEventsForJob(job.jobId)).toEqual([
       expect.objectContaining({
         id: event.id,
-        stage: 'workflow.running',
+        stage: 'generation.running',
         nodeId: 'video_1',
       }),
     ]);
@@ -69,12 +69,12 @@ describe('runtimeTraceStore', () => {
   it('updates job state and keeps session activity fresh', () => {
     const session = createRuntimeSession({
       name: 'Trace session',
-      source: 'workflow',
+      source: 'canvas',
     });
     const job = createRuntimeJob({
       sessionId: session.sessionId,
-      source: 'workflow',
-      command: 'workflow.run.node',
+      source: 'canvas',
+      command: 'canvas.generate.node',
       status: 'queued',
     });
 
@@ -85,7 +85,7 @@ describe('runtimeTraceStore', () => {
       sessionId: session.sessionId,
       jobId: job.jobId,
       level: 'warn',
-      stage: 'workflow.retry',
+      stage: 'generation.retry',
       message: 'retry 1/2 (1200ms)',
     });
     const nextSnapshot = getRuntimeTraceSnapshot();
@@ -104,19 +104,19 @@ describe('runtimeTraceStore', () => {
 
     const session = createRuntimeSession({
       name: 'Subscriber session',
-      source: 'workflow',
+      source: 'canvas',
     });
     const job = createRuntimeJob({
       sessionId: session.sessionId,
-      source: 'workflow',
-      command: 'workflow.run.from-here',
+      source: 'canvas',
+      command: 'canvas.run.from-here',
       status: 'queued',
     });
     appendTraceEvent({
       sessionId: session.sessionId,
       jobId: job.jobId,
       level: 'info',
-      stage: 'workflow.complete',
+      stage: 'generation.complete',
       message: 'Done',
     });
     unsubscribe();
@@ -125,7 +125,7 @@ describe('runtimeTraceStore', () => {
     expect(snapshots.at(-1)).toMatchObject({
       sessions: [expect.objectContaining({ sessionId: session.sessionId })],
       jobs: [expect.objectContaining({ jobId: job.jobId })],
-      events: [expect.objectContaining({ jobId: job.jobId, stage: 'workflow.complete' })],
+      events: [expect.objectContaining({ jobId: job.jobId, stage: 'generation.complete' })],
     });
   });
 });

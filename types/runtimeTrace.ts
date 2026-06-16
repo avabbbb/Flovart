@@ -1,7 +1,5 @@
 export type RuntimeSource =
   | 'canvas'
-  | 'workflow'
-  | 'storyboard'
   | 'extension-popup'
   | 'extension-background'
   | 'extension-content'

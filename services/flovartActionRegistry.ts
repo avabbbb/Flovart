@@ -1,5 +1,5 @@
 export type FlovartActionSource = 'claude-code' | 'skill' | 'extension' | 'external-client';
-export type FlovartActionDomain = 'canvas' | 'workflow' | 'storyboard' | 'assets';
+export type FlovartActionDomain = 'canvas' | 'storyboard' | 'assets';
 
 export interface FlovartActionTarget {
   domain: FlovartActionDomain;
@@ -75,16 +75,6 @@ const BUILTIN_ACTIONS: FlovartActionDefinition[] = [
     action: 'generate.image',
     targetDomain: 'canvas',
     description: 'Generate an image using the current workspace model context.',
-  },
-  {
-    action: 'workflow.describe',
-    targetDomain: 'workflow',
-    description: 'Describe workflow runtime availability and trace context.',
-  },
-  {
-    action: 'workflow.run',
-    targetDomain: 'workflow',
-    description: 'Run a workflow or workflow slice with traceable output.',
   },
   {
     action: 'storyboard.listShots',

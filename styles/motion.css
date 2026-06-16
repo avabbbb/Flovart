@@ -130,105 +130,6 @@
 
 .storyboard-shot-card[data-shot-status='error'] {
     border-color: rgba(251, 113, 133, 0.45);
-    animation: workflowNodeError var(--motion-medium) var(--ease-emphasis);
-}
-
-.workflow-node-card {
-    transition:
-        transform var(--motion-base) var(--ease-soft-out),
-        box-shadow var(--motion-base) var(--ease-soft-out),
-        border-color var(--motion-base) var(--ease-standard),
-        background-color var(--motion-base) var(--ease-standard),
-        opacity var(--motion-base) var(--ease-standard);
-}
-
-.workflow-node-card:hover {
-    transform: translateY(-2px);
-    box-shadow: var(--shadow-floating-md);
-}
-
-.workflow-node-card.is-selected {
-    box-shadow: var(--shadow-floating-sm);
-}
-
-.workflow-node-card.is-active {
-    box-shadow: 0 0 0 1px rgba(52, 211, 153, 0.18), var(--shadow-floating-lg);
-}
-
-.workflow-node-card.is-running {
-    animation: workflowNodePulse 1.4s var(--ease-soft-out) infinite;
-}
-
-.workflow-node-card.is-success,
-.workflow-node-card.is-pinned {
-    box-shadow: 0 0 0 1px rgba(110, 231, 183, 0.14), var(--shadow-floating-md);
-}
-
-.workflow-node-card.is-error {
-    animation: workflowNodeError var(--motion-medium) var(--ease-emphasis);
-}
-
-.workflow-node-header {
-    transition:
-        background-color var(--motion-base) var(--ease-standard),
-        border-color var(--motion-base) var(--ease-standard),
-        color var(--motion-base) var(--ease-standard);
-}
-
-.workflow-node-status-dot.is-running,
-.workflow-node-status-dot.is-queued {
-    animation: workflowStatusPulse 1.2s var(--ease-soft-out) infinite;
-}
-
-.workflow-node-status-dot.is-success,
-.workflow-node-status-dot.is-pinned {
-    box-shadow: 0 0 0 4px rgba(110, 231, 183, 0.08);
-}
-
-.workflow-node-status-dot.is-error {
-    box-shadow: 0 0 0 4px rgba(251, 113, 133, 0.1);
-}
-
-.workflow-edge {
-    transition:
-        stroke var(--motion-base) var(--ease-standard),
-        stroke-opacity var(--motion-base) var(--ease-standard),
-        stroke-width var(--motion-base) var(--ease-soft-out);
-}
-
-.workflow-edge.is-running {
-    stroke-dasharray: 8 6;
-    animation: workflowEdgeFlow 0.95s linear infinite;
-}
-
-.workflow-edge.is-selected {
-    stroke-opacity: 0.9;
-}
-
-.workflow-edge.is-success,
-.workflow-edge.is-pinned {
-    stroke-opacity: 0.82;
-}
-
-.workflow-edge.is-error {
-    stroke-opacity: 0.88;
-}
-
-.workflow-pending-edge {
-    stroke-dasharray: 8 6;
-    animation: workflowEdgeFlow 0.95s linear infinite;
-}
-
-.workflow-minimap-node {
-    transition:
-        fill var(--motion-fast) var(--ease-standard),
-        stroke var(--motion-fast) var(--ease-standard),
-        opacity var(--motion-fast) var(--ease-standard);
-}
-
-.workflow-minimap-node.is-active,
-.workflow-minimap-node.is-running {
-    animation: workflowMiniMapPulse 1.2s var(--ease-soft-out) infinite;
 }
 
 @keyframes workspaceViewEnter {
@@ -240,74 +141,6 @@
     to {
         opacity: 1;
         transform: translateY(0) scale(1);
-    }
-}
-
-@keyframes workflowStatusPulse {
-    0%,
-    100% {
-        transform: scale(1);
-        opacity: 0.82;
-    }
-
-    50% {
-        transform: scale(1.16);
-        opacity: 1;
-    }
-}
-
-@keyframes workflowNodePulse {
-    0%,
-    100% {
-        transform: translateY(0);
-    }
-
-    50% {
-        transform: translateY(-1px);
-    }
-}
-
-@keyframes workflowNodeError {
-    0%,
-    100% {
-        transform: translateX(0);
-    }
-
-    20% {
-        transform: translateX(-2px);
-    }
-
-    40% {
-        transform: translateX(2px);
-    }
-
-    60% {
-        transform: translateX(-1px);
-    }
-
-    80% {
-        transform: translateX(1px);
-    }
-}
-
-@keyframes workflowEdgeFlow {
-    from {
-        stroke-dashoffset: 28;
-    }
-
-    to {
-        stroke-dashoffset: 0;
-    }
-}
-
-@keyframes workflowMiniMapPulse {
-    0%,
-    100% {
-        opacity: 0.76;
-    }
-
-    50% {
-        opacity: 1;
     }
 }
 
@@ -327,13 +160,7 @@
     .workspace-view,
     .workspace-pill,
     .workspace-pill::before,
-    .storyboard-shot-card,
-    .workflow-node-card,
-    .workflow-node-header,
-    .workflow-node-status-dot,
-    .workflow-edge,
-    .workflow-pending-edge,
-    .workflow-minimap-node {
+    .storyboard-shot-card {
         animation: none !important;
         transition-duration: 0.01ms !important;
     }

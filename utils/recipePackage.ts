@@ -17,7 +17,6 @@ export function createRecipePackageFromAsset(asset: AssetItem): RecipePackage {
     provider: asset.provider,
     model: asset.model,
     generationParams: asset.generationParams,
-    workflow: asset.workflow,
   };
 
   return {
@@ -50,7 +49,6 @@ export function createAssetFromHistoryItem(item: GenerationHistoryItem): AssetIt
     provider: item.provider,
     model: item.model,
     generationParams: item.generationParams,
-    workflow: item.workflow,
   };
 }
 
@@ -73,7 +71,6 @@ export function installRecipePackageToAssets(
     provider: pack.recipe.provider,
     model: pack.recipe.model,
     generationParams: pack.recipe.generationParams,
-    workflow: pack.recipe.workflow,
   };
 
   return addAsset(library, asset);
@@ -101,7 +98,6 @@ export function parseRecipePackageJson(input: string): RecipePackage | null {
       provider: typeof raw.recipe.provider === 'string' ? raw.recipe.provider : undefined,
       model: typeof raw.recipe.model === 'string' ? raw.recipe.model : undefined,
       generationParams: isRecord(raw.recipe.generationParams) ? raw.recipe.generationParams : undefined,
-      workflow: isRecord(raw.recipe.workflow) ? raw.recipe.workflow : undefined,
     };
 
     return {

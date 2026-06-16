@@ -66,7 +66,6 @@ export interface RuntimeEntity {
 }
 
 export type RuntimeConnectionKind =
-  | 'workflow_edge'
   | 'prompt_reference'
   | 'media_slot'
   | 'canvas_relation'
@@ -91,7 +90,7 @@ export interface RuntimeConnection {
   role?: RuntimeConnectionRole;
   sourcePort?: string;
   targetPort?: string;
-  createdBy: 'canvas' | 'workflow' | 'prompt' | 'migration' | 'cli';
+  createdBy: 'canvas' | 'prompt' | 'migration' | 'cli';
   createdAt: number;
 }
 
@@ -114,35 +113,8 @@ export interface CanvasViewState {
   showTechnicalEntities: boolean;
 }
 
-export interface WorkflowViewNode {
-  entityId: string;
-  nodeKind: RuntimeEntityKind;
-  x: number;
-  y: number;
-  width?: number;
-  height?: number;
-  collapsed?: boolean;
-}
-
-export interface WorkflowViewGroup {
-  id: string;
-  title: string;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  entityIds: string[];
-}
-
-export interface WorkflowViewState {
-  nodes: Record<string, WorkflowViewNode>;
-  groups: Record<string, WorkflowViewGroup>;
-  viewport: { x: number; y: number; scale: number };
-}
-
 export interface RuntimeProjectSettings {
   activeCanvasBoardId?: string;
-  activeWorkflowId?: string;
 }
 
 export interface UnifiedProjectRuntime {
@@ -151,7 +123,6 @@ export interface UnifiedProjectRuntime {
   entities: Record<string, RuntimeEntity>;
   connections: Record<string, RuntimeConnection>;
   canvasView: CanvasViewState;
-  workflowView: WorkflowViewState;
   jobs: Record<string, GenerationJobRecord>;
   assets: AssetLibrary;
   settings: RuntimeProjectSettings;

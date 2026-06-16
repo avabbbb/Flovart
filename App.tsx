@@ -24,7 +24,6 @@ const OnboardingWizard = React.lazy(() => import('./components/OnboardingWizard'
 const RightPanel = React.lazy(() => import('./components/RightPanel').then(m => ({ default: m.RightPanel })));
 const AssetAddModal = React.lazy(() => import('./components/AssetAddModal').then(m => ({ default: m.AssetAddModal })));
 const ABCompareOverlay = React.lazy(() => import('./components/ABCompareOverlay').then(m => ({ default: m.ABCompareOverlay })));
-const NodeWorkflowPanel = React.lazy(() => import('./components/NodeWorkflowPanel').then(m => ({ default: m.NodeWorkflowPanel })));
 import { loadAssetLibrary, addAsset, removeAsset, renameAsset, loadAssetLibraryAsync, saveAssetLibraryAsync } from './utils/assetStorage';
 import { loadGenerationHistoryAsync, saveGenerationHistoryAsync } from './utils/generationHistory';
 import { inferProviderFromModel, reversePromptStreamWithProvider, DEFAULT_PROVIDER_MODELS, generateImageWithProvider, generateVideoWithProvider, inferCapabilityFromModelName } from './services/aiGateway';
@@ -50,12 +49,9 @@ import { useGeneration } from './hooks/useGeneration';
 import { useToast } from './hooks/useToast';
 import ToastStack from './components/Toast';
 import { AppShell } from './components/AppShell';
-import { CanvasWorkspace } from './components/workspaces/CanvasWorkspace';
-import { WorkflowWorkspace } from './components/workspaces/WorkflowWorkspace';
-import type { WorkflowNode, WorkflowValue } from './components/nodeflow/types';
 import { useWorkspaceStore } from './stores/useWorkspaceStore';
 import { useRuntimeStore } from './stores/useRuntimeStore';
-import type { CanvasElement, ElementGenerationState, WorkspaceView } from './types';
+import type { CanvasElement, ElementGenerationState } from './types';
 import { getFlovartRuntimeApi, getRuntimeErrorMessage } from './services/flovartRuntime';
 import { executeFlovartCommand } from './tools/flovart/core.js';
 import { syncCanvasElementsIntoRuntime } from './services/projectRuntimeBridge';
@@ -503,8 +499,6 @@ const App: React.FC = () => {
     const setLanguage = useWorkspaceStore(s => s.setLanguage);
     const themeMode = useWorkspaceStore(s => s.themeMode);
     const setThemeMode = useWorkspaceStore(s => s.setThemeMode);
-    const activeView = useWorkspaceStore(s => s.activeView);
-    const setActiveView = useWorkspaceStore(s => s.setActiveView);
     const [systemTheme, setSystemTheme] = useState<'light' | 'dark'>(() => {
         if (typeof window === 'undefined') return 'light';
         return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
@@ -1046,110 +1040,6 @@ const App: React.FC = () => {
         const capability = inferCapabilityFromModelName(model);
         return getPreferredApiKey(capability, inferProviderFromModel(model));
     }, [getPreferredApiKey, modelPreference.imageModel, modelPreference.videoModel]);
-
-    const resolveWorkflowImageSize = useCallback(async (value: Extract<WorkflowValue, { kind: 'image' }>) => (
-        new Promise<{ width: number; height: number }>((resolve) => {
-            const img = new Image();
-            img.onload = () => resolve({
-                width: img.naturalWidth || value.width || 1024,
-                height: img.naturalHeight || value.height || 1024,
-            });
-            img.onerror = () => resolve({ width: value.width || 1024, height: value.height || 1024 });
-            img.src = value.href;
-        })
-    ), []);
-
-    const handlePlaceWorkflowValue = useCallback(async (value: WorkflowValue) => {
-        const visibleWidth = svgRef.current?.clientWidth || Math.max(960, viewportWidth - 360);
-        const visibleHeight = svgRef.current?.clientHeight || Math.max(640, window.innerHeight - 260);
-        const centerPoint = svgRef.current
-            ? (() => {
-                const rect = svgRef.current!.getBoundingClientRect();
-                return getCanvasPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
-            })()
-            : {
-                x: (visibleWidth * 0.5 - panOffset.x) / zoom,
-                y: (visibleHeight * 0.5 - panOffset.y) / zoom,
-            };
-
-        if (value.kind === 'image') {
-            const size = await resolveWorkflowImageSize(value);
-            const nextImage: ImageElement = {
-                id: generateId(),
-                type: 'image',
-                name: 'Workflow Output',
-                x: centerPoint.x - size.width / 2,
-                y: centerPoint.y - size.height / 2,
-                width: size.width,
-                height: size.height,
-                href: value.href,
-                mimeType: value.mimeType,
-            };
-            commitAction(prev => [...prev, nextImage]);
-            setSelectedElementIds([nextImage.id]);
-            return;
-        }
-
-        if (value.kind === 'video') {
-            const size = await new Promise<{ width: number; height: number }>((resolve) => {
-                const video = document.createElement('video');
-                video.preload = 'metadata';
-                video.onloadedmetadata = () => resolve({ width: video.videoWidth || value.width || 960, height: video.videoHeight || value.height || 540 });
-                video.onerror = () => resolve({ width: value.width || 960, height: value.height || 540 });
-                video.src = value.href;
-            });
-            const nextVideo: VideoElement = {
-                id: generateId(),
-                type: 'video',
-                name: 'Workflow Video',
-                x: centerPoint.x - size.width / 2,
-                y: centerPoint.y - size.height / 2,
-                width: size.width,
-                height: size.height,
-                href: value.href,
-                mimeType: value.mimeType,
-            };
-            commitAction(prev => [...prev, nextVideo]);
-            setSelectedElementIds([nextVideo.id]);
-            return;
-        }
-
-        if (value.kind === 'text' || value.kind === 'json') {
-            const text = value.kind === 'text' ? value.text : JSON.stringify(value.value, null, 2);
-            const nextText: TextElement = {
-                id: generateId(),
-                type: 'text',
-                name: 'Workflow Text',
-                x: centerPoint.x - 180,
-                y: centerPoint.y - 80,
-                width: 360,
-                height: 160,
-                text,
-                fontSize: 18,
-                fontColor: resolvedTheme === 'dark' ? '#f9fafb' : '#111827',
-            };
-            commitAction(prev => [...prev, nextText]);
-            setSelectedElementIds([nextText.id]);
-        }
-    }, [commitAction, getCanvasPoint, panOffset.x, panOffset.y, resolveWorkflowImageSize, resolvedTheme, viewportWidth, zoom]);
-
-    const handleSaveWorkflowValueToAssets = useCallback(async (value: WorkflowValue, node: WorkflowNode) => {
-        if (value.kind !== 'image') return;
-        const size = await resolveWorkflowImageSize(value);
-        const assetCategory: AssetCategory = node.config?.assetCategory || 'scene';
-        const assetName = node.config?.assetName?.trim() || node.config?.label?.trim() || 'Workflow Asset';
-        const newItem: AssetItem = {
-            id: generateId(),
-            name: assetName,
-            category: assetCategory,
-            dataUrl: value.href,
-            mimeType: value.mimeType,
-            width: size.width,
-            height: size.height,
-            createdAt: Date.now(),
-        };
-        setAssetLibrary(prev => addAsset(prev, newItem));
-    }, [resolveWorkflowImageSize]);
 
     useEffect(() => {
         setSelectedElementIds([]);
@@ -3260,32 +3150,6 @@ const App: React.FC = () => {
         return `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(fullSvg)))}`;
     }, []);
 
-    const workflowCanvasImages = useMemo(() => (
-        elements
-            .filter((element): element is ImageElement => element.type === 'image')
-            .map((element) => ({
-                id: element.id,
-                name: element.name,
-                href: element.href,
-                mimeType: element.mimeType,
-            }))
-    ), [elements]);
-
-    const workflowCanvasVideos = useMemo(() => (
-        elements
-            .filter((element): element is VideoElement => element.type === 'video')
-            .map((element) => ({
-                id: element.id,
-                name: element.name,
-                href: element.href,
-                mimeType: element.mimeType,
-                poster: element.poster,
-                width: element.width,
-                height: element.height,
-                durationSec: element.durationSec,
-            }))
-    ), [elements]);
-
     const canvasKonvaDisabledIds = useMemo(() => {
         const disabled = new Set<string>(canvasKonvaFailedIds);
         for (const id of selectedElementIds) {
@@ -3435,51 +3299,7 @@ const App: React.FC = () => {
                 )}
             </>}
             main={<>
-            {activeView === 'workflow' ? (
-                <Suspense fallback={<div className="h-full w-full flex items-center justify-center opacity-40 text-sm">Loading Workflow…</div>}>
-                    <WorkflowWorkspace
-                        workflowPanel={
-                            <NodeWorkflowPanel
-                                prompt={prompt}
-                                setPrompt={setPrompt}
-                                generationMode={generationMode}
-                                setGenerationMode={setGenerationMode}
-                                selectedImageModel={modelPreference.imageModel}
-                                selectedVideoModel={modelPreference.videoModel}
-                                imageModelOptions={dynamicModelOptions.image}
-                                videoModelOptions={dynamicModelOptions.video}
-                                onImageModelChange={(model) => setModelPreference(prev => ({ ...prev, imageModel: model }))}
-                                onVideoModelChange={(model) => setModelPreference(prev => ({ ...prev, videoModel: model }))}
-                                attachments={promptAttachments}
-                                canvasImages={workflowCanvasImages}
-                                canvasVideos={workflowCanvasVideos}
-                                onRemoveAttachment={handleRemovePromptAttachment}
-                                onUploadFiles={handleAddPromptAttachmentFiles}
-                                onDropCanvasImage={handleAddPromptAttachmentFromCanvas}
-                                userApiKeys={userApiKeys}
-                                assetLibrary={assetLibrary}
-                                generationHistory={generationHistory}
-                                language={language}
-                                onSwitchWorkspace={setActiveView}
-                                onPlaceWorkflowValue={handlePlaceWorkflowValue}
-                                onSaveWorkflowValueToAssets={handleSaveWorkflowValueToAssets}
-                                workflowRenderer="hybrid"
-                            />
-                        }
-                        language={language}
-                        theme={resolvedTheme}
-                        onSwitchToCanvas={() => setActiveView('canvas')}
-                        onToggleTheme={() => {
-                            const next = resolvedTheme === 'dark' ? 'light' : 'dark';
-                            setThemeMode(next);
-                        }}
-                        onToggleLanguage={() => setLanguage(language === 'zho' ? 'en' : 'zho')}
-                        onOpenLegal={openLegalModal}
-                    />
-                </Suspense>
-            ) : (
-            <>
-            <Suspense fallback={<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm"><div className="rounded-xl bg-neutral-800 px-6 py-4 text-sm text-white/60">Loading Settings…</div></div>}>
+<Suspense fallback={<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm"><div className="rounded-xl bg-neutral-800 px-6 py-4 text-sm text-white/60">Loading Settings…</div></div>}>
             <CanvasSettings
                 isOpen={isSettingsPanelOpen} 
                 onClose={() => setIsSettingsPanelOpen(false)} 
@@ -3640,8 +3460,6 @@ const App: React.FC = () => {
                 />
                 </Suspense>
             )}
-            {activeView === 'canvas' ? (
-            <>
             <Toolbar
                 t={t}
                 theme={resolvedTheme}
@@ -3669,7 +3487,6 @@ const App: React.FC = () => {
                 canUndo={historyIndex > 0}
                 canRedo={historyIndex < history.length - 1}
             />
-            <div className={`workflow-focus-chrome transition-all duration-300 ${isInlineMediaPromptActive ? 'translate-y-6 opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'}`} />
             <div 
                 className="compact-canvas-stage flex-grow relative overflow-hidden"
                 style={{
@@ -3731,7 +3548,7 @@ const App: React.FC = () => {
                         const stageLabelMap: Record<string, string> = { running: '生成中', queued: '排队中' };
 
                         return (
-                            <g className="workflow-viewport-transition" transform={`translate(${panOffset.x}, ${panOffset.y}) scale(${zoom})`} data-gen-active={anyGenerating ? 'true' : undefined}>
+                            <g transform={`translate(${panOffset.x}, ${panOffset.y}) scale(${zoom})`} data-gen-active={anyGenerating ? 'true' : undefined}>
                                 <rect x={-panOffset.x/zoom} y={-panOffset.y/zoom} width={`calc(100% / ${zoom})`} height={`calc(100% / ${zoom})`} fill="url(#grid)" />
                                 
                                 {elements.map(el => {
@@ -4595,35 +4412,6 @@ const App: React.FC = () => {
                                     </svg>
                                 )}
                             </button>
-                            <div className="h-3 w-px" style={{ background: 'var(--isl-border)' }}></div>
-                            <button
-                                type="button"
-                                onClick={() => setActiveView(activeView === 'canvas' ? 'workflow' : 'canvas')}
-                                className={`isl-tab inline-flex items-center gap-1 ${activeView === 'workflow' ? 'isl-tab--active' : ''}`}
-                                title={activeView === 'canvas' ? (language === 'zho' ? '切换到工作流模式' : 'Switch to Workflow') : (language === 'zho' ? '切换到画布模式' : 'Switch to Canvas')}
-                            >
-                                {activeView === 'canvas' ? (
-                                    <>
-                                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                            <rect x="3" y="3" width="7" height="7" rx="1" />
-                                            <rect x="14" y="3" width="7" height="7" rx="1" />
-                                            <rect x="14" y="14" width="7" height="7" rx="1" />
-                                            <rect x="3" y="14" width="7" height="7" rx="1" />
-                                        </svg>
-                                        <span className="text-[10px]">{language === 'zho' ? '画布' : 'Canvas'}</span>
-                                    </>
-                                ) : (
-                                    <>
-                                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                            <circle cx="12" cy="6" r="3" />
-                                            <circle cx="6" cy="18" r="3" />
-                                            <circle cx="18" cy="18" r="3" />
-                                            <path d="M12 9v3M9 15l3-3M15 15l-3-3" />
-                                        </svg>
-                                        <span className="text-[10px]">{language === 'zho' ? '工作流' : 'Workflow'}</span>
-                                    </>
-                                )}
-                            </button>
                             <button
                                 type="button"
                                 onClick={() => setLanguage(language === 'zho' ? 'en' : 'zho')}
@@ -4642,93 +4430,7 @@ const App: React.FC = () => {
                     </div>
                 </div>
             )}
-            </>
-            ) : (
-            <Suspense fallback={<div className="h-full w-full flex items-center justify-center opacity-40 text-sm">Loading Workflow…</div>}>
-                <WorkflowWorkspace
-                    workflowPanel={
-                        <NodeWorkflowPanel
-                            prompt={prompt}
-                            setPrompt={setPrompt}
-                            generationMode={generationMode}
-                            setGenerationMode={setGenerationMode}
-                            selectedImageModel={modelPreference.imageModel}
-                            selectedVideoModel={modelPreference.videoModel}
-                            imageModelOptions={dynamicModelOptions.image}
-                            videoModelOptions={dynamicModelOptions.video}
-                            onImageModelChange={(model) => setModelPreference(prev => ({ ...prev, imageModel: model }))}
-                            onVideoModelChange={(model) => setModelPreference(prev => ({ ...prev, videoModel: model }))}
-                            attachments={promptAttachments}
-                            canvasImages={elements.filter((el): el is ImageElement => el.type === 'image').map(el => ({
-                                id: el.id,
-                                name: el.name,
-                                href: el.href,
-                                mimeType: el.mimeType,
-                            }))}
-                            canvasVideos={elements.filter((el): el is VideoElement => el.type === 'video').map(el => ({
-                                id: el.id,
-                                name: el.name,
-                                href: el.href,
-                                mimeType: el.mimeType,
-                                poster: el.poster,
-                                width: el.width,
-                                height: el.height,
-                                durationSec: el.durationSec,
-                            }))}
-                            onRemoveAttachment={handleRemovePromptAttachment}
-                            onUploadFiles={handleAddPromptAttachmentFiles}
-                            onDropCanvasImage={(id) => {
-                                const el = elements.find(e => e.id === id && e.type === 'image') as ImageElement | undefined;
-                                if (el) handleAddPromptAttachmentFiles([{ dataUrl: el.href, mimeType: el.mimeType, name: el.name }]);
-                            }}
-                            userApiKeys={userApiKeys}
-                            assetLibrary={assetLibrary}
-                            generationHistory={generationHistory}
-                            language={language}
-                            onSwitchWorkspace={setActiveView}
-                            onPlaceWorkflowValue={(value: WorkflowValue) => {
-                                if (value.type === 'image' && value.data) {
-                                    commitAction(prev => [...prev, {
-                                        id: generateId(),
-                                        type: 'image' as const,
-                                        name: value.name || 'Workflow Output',
-                                        x: 100,
-                                        y: 100,
-                                        width: value.width || 512,
-                                        height: value.height || 512,
-                                        href: value.data,
-                                        mimeType: 'image/png',
-                                        isVisible: true,
-                                        isLocked: false,
-                                    }]);
-                                }
-                            }}
-                            onSaveWorkflowValueToAssets={(value: WorkflowValue) => {
-                                if (value.type === 'image' && value.data) {
-                                    const newItem: AssetItem = {
-                                        id: generateId(),
-                                        name: value.name || 'Workflow Output',
-                                        category: 'images' as AssetCategory,
-                                        dataUrl: value.data,
-                                        mimeType: 'image/png',
-                                        width: value.width || 512,
-                                        height: value.height || 512,
-                                        createdAt: Date.now(),
-                                    };
-                                    setAssetLibrary(prev => addAsset(prev, newItem));
-                                }
-                            }}
-                        />
-                    }
-                    language={language}
-                    theme={resolvedTheme}
-                    onSwitchToCanvas={() => setActiveView('canvas')}
-                    onToggleTheme={() => setThemeMode(resolvedTheme === 'dark' ? 'light' : 'dark')}
-                    onToggleLanguage={() => setLanguage(language === 'zho' ? 'en' : 'zho')}
-                    onOpenLegal={openLegalModal}
-                />
-            </Suspense>
-            )}
+
 
             {/* 法律文档弹窗 */}
             {legalModal && (
@@ -4747,8 +4449,6 @@ const App: React.FC = () => {
                         </div>
                     </div>
                 </div>
-            )}
-            </>
             )}
         </>}
         />

@@ -25,7 +25,6 @@ export interface CreativeProject {
   id: string;
   name: string;
   storyboardId?: string | null;
-  workflowIds?: string[];
   assetIds?: string[];
   outputCandidateIds?: string[];
   status: ReviewStatus;

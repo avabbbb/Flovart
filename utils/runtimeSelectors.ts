@@ -1,5 +1,3 @@
-import { NODE_DEFS } from '../components/nodeflow/defs';
-import type { WorkflowEdge, WorkflowGroup, WorkflowNode, WorkflowViewport } from '../components/nodeflow/types';
 import type {
   ArrowElement,
   Element,
@@ -123,7 +121,7 @@ function runtimeEntityToCanvasElement(entity: RuntimeEntity, view: UnifiedProjec
   return {
     ...base,
     type: 'text',
-    text: entity.name || NODE_DEFS[entity.kind as keyof typeof NODE_DEFS]?.title || entity.kind,
+    text: entity.name || entity.kind,
     fontSize: 13,
     fontColor: '#334155',
     width: view.width ?? 220,
@@ -141,63 +139,4 @@ export function selectCanvasElements(runtime: UnifiedProjectRuntime): Element[] 
       const element = runtimeEntityToCanvasElement(entity, view);
       return element ? [element] : [];
     });
-}
-
-export function selectWorkflowGraph(runtime: UnifiedProjectRuntime): {
-  nodes: WorkflowNode[];
-  edges: WorkflowEdge[];
-  groups: WorkflowGroup[];
-  viewport: WorkflowViewport;
-} {
-  const nodes = Object.values(runtime.workflowView.nodes).flatMap((view) => {
-    const entity = runtime.entities[view.entityId];
-    if (!entity) return [];
-    const node: WorkflowNode = {
-      id: entity.id,
-      kind: view.nodeKind as WorkflowNode['kind'],
-      x: view.x,
-      y: view.y,
-      config: {
-        label: entity.name,
-        prompt: entity.promptPayload?.rawText,
-        provider: entity.provider,
-        model: entity.modelId,
-        apiKeyRef: entity.apiKeyRef,
-        aspectRatio: typeof entity.params?.aspectRatio === 'string' ? entity.params.aspectRatio : undefined,
-        resolution: typeof entity.params?.resolution === 'string' ? entity.params.resolution : undefined,
-        durationSec: typeof entity.params?.durationSec === 'number' ? entity.params.durationSec : undefined,
-        generationMode: entity.params?.generationMode === 'image' || entity.params?.generationMode === 'video'
-          ? entity.params.generationMode
-          : undefined,
-      },
-    };
-    return [node];
-  });
-
-  const edges = Object.values(runtime.connections)
-    .filter((connection) => connection.kind === 'workflow_edge')
-    .map((connection): WorkflowEdge => ({
-      id: connection.id,
-      fromNode: connection.sourceEntityId,
-      fromPort: connection.sourcePort || 'output',
-      toNode: connection.targetEntityId,
-      toPort: connection.targetPort || 'input',
-    }));
-
-  const groups = Object.values(runtime.workflowView.groups).map((group): WorkflowGroup => ({
-    id: group.id,
-    title: group.title,
-    x: group.x,
-    y: group.y,
-    width: group.width,
-    height: group.height,
-    nodeIds: [...group.entityIds],
-  }));
-
-  return {
-    nodes,
-    edges,
-    groups,
-    viewport: runtime.workflowView.viewport,
-  };
 }

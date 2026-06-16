@@ -45,7 +45,6 @@ function now() {
 export function createCreativeProject(input: {
   name?: string;
   storyboardId?: string | null;
-  workflowIds?: string[];
   assetIds?: string[];
   outputCandidateIds?: string[];
   status?: ReviewStatus;
@@ -55,7 +54,6 @@ export function createCreativeProject(input: {
     id: createPipelineId('project'),
     name: input.name?.trim() || 'Creative Project',
     storyboardId: input.storyboardId ?? null,
-    workflowIds: input.workflowIds ?? [],
     assetIds: input.assetIds ?? [],
     outputCandidateIds: input.outputCandidateIds ?? [],
     status: input.status ?? 'draft',

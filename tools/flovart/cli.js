@@ -64,7 +64,7 @@ const LOCAL_COMMANDS = new Set([
   'help', 'setup', 'init', 'doctor',
   'command.list', 'command.schema',
   'inspiration.search', 'inspiration.get',
-  'prompt.enhance', 'batch.plan', 'workflow.plan-video',
+  'prompt.enhance', 'batch.plan',
   'preferences.manage', 'models.list',
 ]);
 
@@ -73,14 +73,12 @@ const FILE_STATE_COMMANDS = new Set([
   'canvas.inspect', 'canvas.list-media', 'canvas.add-image', 'canvas.add-video', 'canvas.upload-image', 'canvas.upload-video',
   'canvas.update-element', 'canvas.remove-element', 'canvas.select', 'canvas.clear-media',
   'element.create', 'element.update-prompt', 'element.assign-slot', 'element.watch',
-  'workflow.inspect', 'workflow.load', 'workflow.update-node',
   'asset.list', 'export.project', 'video.status',
 ]);
 
 const BROWSER_COMMANDS = new Set([
   'provider.begin-setup',
   'element.ignite',
-  'workflow.run',
   'generate.image', 'generate.images-batch', 'generate.video',
 ]);
 
@@ -97,8 +95,7 @@ const args = normalizedAtomic.args;
 if (args.file) {
   try {
     const payload = JSON.parse(await readFile(args.file, 'utf8'));
-    if (command === 'workflow.load') args.workflow = payload.workflow || payload;
-    else args.items = payload.items || payload;
+    if (command === 'generate.images-batch' || command === 'generate.video') args.items = payload.items || payload;
   } catch (error) {
     printCliResponse(false, command || 'unknown', null, { code: 'FILE_READ_ERROR', message: error instanceof Error ? error.message : String(error) });
     process.exit(1);

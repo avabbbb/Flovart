@@ -6,8 +6,6 @@ export type WheelAction = 'zoom' | 'pan';
 
 export type GenerationMode = 'image' | 'video' | 'keyframe';
 
-export type WorkspaceView = 'canvas' | 'workflow' | 'assets' | 'diagnostics' | 'publish';
-
 export interface Point {
   x: number;
   y: number;
@@ -106,7 +104,7 @@ export interface VideoElement extends CanvasElementBase {
   mimeType: string;
   poster?: string;
   durationSec?: number;
-  sourceKind?: 'upload' | 'workflow' | 'generation';
+  sourceKind?: 'upload' | 'generation';
   generationMeta?: {
     prompt?: string;
     provider?: string;
@@ -196,13 +194,12 @@ export interface AssetItem {
   width: number;
   height: number;
   createdAt: number;
-  source?: 'local' | 'extension' | 'workflow' | 'generation' | 'recipe' | 'market';
+  source?: 'local' | 'extension' | 'generation' | 'recipe' | 'market';
   sourceUrl?: string;
   prompt?: string;
   provider?: string;
   model?: string;
   generationParams?: Record<string, unknown>;
-  workflow?: Record<string, unknown>;
 }
 
 export interface AssetLibrary {
@@ -225,7 +222,6 @@ export interface GenerationHistoryItem {
   provider?: string;
   model?: string;
   generationParams?: Record<string, unknown>;
-  workflow?: Record<string, unknown>;
 }
 
 export interface GenerationRecipe {
@@ -233,7 +229,6 @@ export interface GenerationRecipe {
   provider?: string;
   model?: string;
   generationParams?: Record<string, unknown>;
-  workflow?: Record<string, unknown>;
 }
 
 export interface RecipePackage {

@@ -129,11 +129,5 @@ export function createRuntimeFacade(client) {
     config: {
       getProviders: () => client.execute('config.getProviders'),
     },
-    workflow: {
-      inspect: () => client.execute('workflow.inspect'),
-      load: input => client.execute('workflow.load', input),
-      updateNode: (nodeId, config) => client.execute('workflow.updateNode', nodeId, config),
-      run: input => client.execute('workflow.run', input),
-    },
   };
 }
