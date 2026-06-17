@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="pic/LOGO.png" alt="Flovart Logo" width="200" />
+  <img src="pic/LOGO_optimized.png" alt="Flovart Logo" width="200" />
 </p>
 
 <h1 align="center">Flovart</h1>
