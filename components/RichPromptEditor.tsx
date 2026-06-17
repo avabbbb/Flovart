@@ -128,6 +128,7 @@ function buildSuggestionExtension(getItems: (query: string) => MentionItem[]) {
                                     label: item.label,
                                     thumbnail: item.thumbnail,
                                     elementType: item.elementType,
+                                    description: item.description,
                                 },
                             })
                             .insertContent(' ')
@@ -172,7 +173,9 @@ const RichPromptEditor = forwardRef<RichPromptEditorHandle, RichPromptEditorProp
             return canvasItemsRef.current.filter(
                 item =>
                     item.label.toLowerCase().includes(normalized) ||
-                    item.elementType.toLowerCase().includes(normalized)
+                    item.elementType.toLowerCase().includes(normalized) ||
+                    item.description?.toLowerCase().includes(normalized) ||
+                    item.id.toLowerCase().includes(normalized)
             );
         }, []);
 

@@ -21,6 +21,7 @@ interface MentionNodeViewProps {
             label: string;
             thumbnail: string;
             elementType: string;
+            description?: string;
         };
     };
     deleteNode: () => void;
@@ -131,6 +132,7 @@ export const CanvasMentionNode = Node.create({
             label: { default: '' },
             thumbnail: { default: '' },
             elementType: { default: 'image' },
+            description: { default: '' },
         };
     },
 
@@ -158,6 +160,7 @@ export interface MentionData {
     label: string;
     thumbnail: string;
     elementType: string;
+    description?: string;
 }
 
 export function extractMentions(editorJSON: Record<string, unknown>): MentionData[] {

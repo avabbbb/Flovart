@@ -37,7 +37,7 @@ describe('flovart LibTV-style CLI compatibility', () => {
     expect(args.u).toEqual(['x=120']);
   });
 
-  it('normalizes MCP-style atomic aliases and forwards video multimodal options', async () => {
+  it('normalizes atomic CLI aliases and forwards video multimodal options', async () => {
     expect(normalizeCommandName('flovart_element_create')).toBe('element.create');
     expect(normalizeCommandName('flovart_generate_video')).toBe('generate.video');
 
@@ -73,7 +73,7 @@ describe('flovart LibTV-style CLI compatibility', () => {
     });
   });
 
-  it('returns canonical command schema with MCP-style aliases', async () => {
+  it('returns canonical command schema with CLI aliases', async () => {
     const schema = await executeFlovartCommand('command.schema', { command: 'flovart_generate_video' }, {});
 
     expect(schema).toMatchObject({

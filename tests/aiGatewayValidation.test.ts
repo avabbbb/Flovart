@@ -15,6 +15,7 @@ import {
     submitSeedanceVideoTask,
     splitImageLayersWithProvider,
     runImageAgentWithProvider,
+    executeUnifiedIgnition,
 } from '../services/aiGateway';
 
 function mockJsonResponse(body: unknown, status = 200) {
@@ -183,7 +184,7 @@ describe('aiGateway - Seedance multimodal slots', () => {
             return_last_frame: true,
         });
         expect(body.content).toEqual([
-            { type: 'text', text: 'two characters cross the room' },
+            { type: 'text', text: '参考素材编号：图片1=@role-a、图片2=@role-b、图片3=@role-c、视频1、音频1。请按这些编号理解提示词中的图片、视频和音频引用，角色和主体不要混淆。\n\ntwo characters cross the room' },
             { type: 'image_url', image_url: { url: 'data:image/png;base64,aW1hZ2Ux' }, role: 'reference_image' },
             { type: 'image_url', image_url: { url: 'data:image/png;base64,aW1hZ2Uy' }, role: 'first_frame' },
             { type: 'image_url', image_url: { url: 'data:image/png;base64,aW1hZ2Uz' }, role: 'last_frame' },
@@ -233,11 +234,63 @@ describe('aiGateway - Seedance multimodal slots', () => {
             watermark: false,
         });
         expect(body.content).toEqual([
-            { type: 'text', text: 'first-person tea commercial' },
+            { type: 'text', text: '参考素材编号：图片1、视频1、音频1。请按这些编号理解提示词中的图片、视频和音频引用，角色和主体不要混淆。\n\nfirst-person tea commercial' },
             { type: 'image_url', image_url: { url: 'https://ark-project.tos-cn-beijing.volces.com/doc_image/r2v_tea_pic1.jpg' }, role: 'reference_image' },
             { type: 'video_url', video_url: { url: 'https://ark-project.tos-cn-beijing.volces.com/doc_video/r2v_tea_video1.mp4' }, role: 'reference_video' },
             { type: 'audio_url', audio_url: { url: 'https://ark-project.tos-cn-beijing.volces.com/doc_audio/r2v_tea_audio1.mp3' }, role: 'reference_audio' },
         ]);
+    });
+
+    it('normalizes Seedance ratios, duration, and fast-model resolution before submit', async () => {
+        globalThis.fetch = vi.fn().mockResolvedValueOnce(mockJsonResponse({
+            id: 'seedance-task-normalized',
+            status: 'submitted',
+        }));
+
+        await submitSeedanceVideoTask('wide product scene', 'doubao-seedance-fast-2.0', {
+            id: 'seedance-key',
+            provider: 'volcengine',
+            capabilities: ['video'],
+            key: 'ark-test-key',
+            baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
+            createdAt: 0,
+            updatedAt: 0,
+        }, {
+            aspectRatio: '1280x720' as any,
+            durationSec: 20,
+            resolution: '1080p',
+            slots: [
+                { kind: 'image', href: 'data:image/png;base64,aW1hZ2U=', mimeType: 'image/png', role: 'reference_image' },
+            ],
+        });
+
+        const [, createInit] = vi.mocked(globalThis.fetch).mock.calls[0];
+        const body = JSON.parse(String(createInit?.body));
+        expect(body).toMatchObject({
+            ratio: '16:9',
+            duration: 15,
+            resolution: '720p',
+        });
+    });
+
+    it('rejects Seedance audio-only references before calling the provider', async () => {
+        globalThis.fetch = vi.fn();
+
+        await expect(submitSeedanceVideoTask('voice driven scene', 'seedance-2.0', {
+            id: 'seedance-key',
+            provider: 'volcengine',
+            capabilities: ['video'],
+            key: 'ark-test-key',
+            baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
+            createdAt: 0,
+            updatedAt: 0,
+        }, {
+            slots: [
+                { kind: 'audio', href: 'https://cdn.example.com/ref.mp3', mimeType: 'audio/mpeg', role: 'reference_audio' },
+            ],
+        })).rejects.toThrow('Seedance 参考音频不能单独使用');
+
+        expect(globalThis.fetch).not.toHaveBeenCalled();
     });
 
     it('parses the Tokenhub Seedance 2.0 status response video URL', async () => {
@@ -292,6 +345,48 @@ describe('aiGateway - Seedance multimodal slots', () => {
 });
 
 describe('aiGateway - generateImageWithProvider', () => {
+    it('executeUnifiedIgnition sends precise @ role bindings with image and text references', async () => {
+        globalThis.fetch = vi.fn().mockResolvedValue(mockJsonResponse({
+            choices: [{
+                message: {
+                    images: [{ image_url: { url: 'data:image/png;base64,ZmFrZQ==' } }],
+                },
+            }],
+        }));
+
+        const result = await executeUnifiedIgnition({
+            elementId: 'target',
+            prompt: '让 @角色A 和 @角色B 对视，保持 @角色设定 的服装差异',
+            modelId: 'openai/gpt-image-1',
+            apiKeyPayload: {
+                id: 'or-key',
+                provider: 'openrouter',
+                capabilities: ['image'],
+                key: 'sk-or-test-key',
+                createdAt: 0,
+                updatedAt: 0,
+            },
+            references: [
+                { type: 'image', href: 'data:image/png;base64,YS0=', mimeType: 'image/png', slotRole: 'reference_image', label: '角色A', sourceName: '角色A' },
+                { type: 'image', href: 'data:image/png;base64,Yi0=', mimeType: 'image/png', slotRole: 'reference_image', label: '角色B', sourceName: '角色B' },
+                { type: 'text', slotRole: 'unassigned', label: '角色设定', sourceName: '角色设定', text: '角色A红夹克。角色B蓝外套。' },
+            ],
+        });
+
+        expect(result.ok).toBe(true);
+        const [, init] = vi.mocked(globalThis.fetch).mock.calls[0];
+        const body = JSON.parse(String(init?.body));
+        const text = body.messages[0].content[0].text;
+        expect(text).toContain('图片1 = @角色A，slot=reference_image');
+        expect(text).toContain('图片2 = @角色B，slot=reference_image');
+        expect(text).toContain('文本1 = @角色设定: 角色A红夹克。角色B蓝外套。');
+        expect(text).toContain('用户提示词：');
+        expect(body.messages[0].content.slice(1)).toEqual([
+            { type: 'image_url', image_url: { url: 'data:image/png;base64,YS0=' } },
+            { type: 'image_url', image_url: { url: 'data:image/png;base64,Yi0=' } },
+        ]);
+    });
+
     it('limits GPT Image multipart reference inputs to the official 16-image cap', async () => {
         globalThis.fetch = vi.fn().mockResolvedValue(mockJsonResponse({
             data: [{ b64_json: 'ZmFrZQ==' }],

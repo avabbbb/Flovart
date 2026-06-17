@@ -12,9 +12,10 @@ import type {
 import RichPromptEditor, { type RichPromptEditorHandle } from './RichPromptEditor';
 import type { MentionItem } from './MentionList';
 import { extractMentions } from './CanvasMentionExtension';
-import { inferProviderFromModel, PROVIDER_LABELS, getModelCapabilityTags, getSupportedRatios } from '../services/aiGateway';
+import { inferProviderFromModel, PROVIDER_LABELS, getModelCapabilityTags, getSupportedRatios, type VideoAspectRatio } from '../services/aiGateway';
 import { SOCIAL_PRESETS } from '../utils/socialPresets';
 import { readColdMedia } from '../utils/mediaIndexedDB';
+import { modelRefLabel, modelRefModelId, modelRefProvider, modelRefSearchText } from '../utils/modelRefs';
 
 interface PromptBarProps {
     t: (key: string, ...args: any[]) => string;
@@ -32,8 +33,16 @@ interface PromptBarProps {
     onDeleteUserEffect: (id: string) => void;
     generationMode: GenerationMode;
     setGenerationMode: (mode: GenerationMode) => void;
-    videoAspectRatio: '16:9' | '9:16' | '1:1' | '4:3' | '3:4' | '21:9';
-    setVideoAspectRatio: (ratio: '16:9' | '9:16' | '1:1' | '4:3' | '3:4' | '21:9') => void;
+    videoAspectRatio: VideoAspectRatio;
+    setVideoAspectRatio: (ratio: VideoAspectRatio) => void;
+    videoDurationSec?: number;
+    onVideoDurationSecChange?: (durationSec: number) => void;
+    videoResolution?: string;
+    onVideoResolutionChange?: (resolution: string) => void;
+    videoGenerateAudio?: boolean;
+    onVideoGenerateAudioChange?: (enabled: boolean) => void;
+    videoWatermark?: boolean;
+    onVideoWatermarkChange?: (enabled: boolean) => void;
     selectedTextModel?: string;
     selectedImageModel?: string;
     selectedVideoModel?: string;
@@ -98,18 +107,33 @@ function getElementLabel(element: Element): string {
     return element.name?.trim() || `${TYPE_LABELS[element.type]} ${element.id.slice(-4)}`;
 }
 
+function getMentionDescription(element: Element): string {
+    const typeLabel = TYPE_LABELS[element.type] || element.type;
+    if (element.type === 'image' || element.type === 'video') {
+        return `${typeLabel} · ${Math.round(element.width)}×${Math.round(element.height)}`;
+    }
+    if (element.type === 'text') {
+        const text = element.text.replace(/\s+/g, ' ').trim();
+        return text ? `${typeLabel} · ${text.slice(0, 24)}` : typeLabel;
+    }
+    if (element.type === 'shape') {
+        return `${typeLabel} · ${element.shapeType}`;
+    }
+    return typeLabel;
+}
+
 function getModeLabel(mode: GenerationMode): string {
     if (mode === 'video') return '视频';
     if (mode === 'keyframe') return '首尾帧';
     return '图片';
 }
 
-function getModelLabel(mode: GenerationMode, imageModel?: string, videoModel?: string): string {
+function getModelLabel(mode: GenerationMode, imageModel?: string, videoModel?: string, userApiKeys: UserApiKey[] = []): string {
     const model = mode === 'video' ? videoModel : imageModel;
     if (!model) return mode === 'video' ? '选择视频模型' : '选择图片模型';
-    const provider = inferProviderFromModel(model);
+    const provider = modelRefProvider(model, userApiKeys);
     const shortProvider = PROVIDER_LABELS[provider]?.split(' ')[0] || provider;
-    return `${shortProvider} · ${model.replace(/^(google|openai|anthropic|openrouter)\//, '')}`;
+    return `${shortProvider} · ${modelRefModelId(model).replace(/^(google|openai|anthropic|openrouter)\//, '')}`;
 }
 
 const PopoverHeader: React.FC<{ title: string; subtitle?: string }> = ({ title, subtitle }) => (
@@ -137,7 +161,11 @@ const MenuOptionButton: React.FC<{ label: string; active?: boolean; description?
     </button>
 );
 
-const isSupportedAttachment = (type: string) => type.startsWith('image/') || type.startsWith('video/');
+const isSupportedAttachment = (type: string) => type.startsWith('image/') || type.startsWith('video/') || type.startsWith('audio/');
+
+const SEEDANCE_DURATIONS = [-1, 4, 5, 6, 8, 10, 12, 15] as const;
+const SEEDANCE_RESOLUTIONS = ['480p', '720p', '1080p'] as const;
+const DEFAULT_VIDEO_RATIOS: VideoAspectRatio[] = ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9'];
 
 const RECENT_MODELS_KEY = 'flovart-recent-models';
 const MAX_RECENT_MODELS = 5;
@@ -169,6 +197,14 @@ export const PromptBar: React.FC<PromptBarProps> = ({
     setGenerationMode,
     videoAspectRatio,
     setVideoAspectRatio,
+    videoDurationSec = 5,
+    onVideoDurationSecChange,
+    videoResolution = '720p',
+    onVideoResolutionChange,
+    videoGenerateAudio = true,
+    onVideoGenerateAudioChange,
+    videoWatermark = false,
+    onVideoWatermarkChange,
     selectedTextModel,
     selectedImageModel,
     selectedVideoModel,
@@ -237,16 +273,21 @@ export const PromptBar: React.FC<PromptBarProps> = ({
             .map(el => ({
                 id: el.id,
                 label: getElementLabel(el),
-                thumbnail: el.type === 'image' ? el.href : '',
+                thumbnail: el.type === 'image' || el.type === 'video' ? el.href : '',
                 elementType: el.type,
+                description: getMentionDescription(el),
             })),
         [canvasElements]
     );
 
     /** 当前视频模型支持的比例列表 */
+    const isSeedanceVideoModel = useMemo(() => {
+        return generationMode === 'video' && !!selectedVideoModel && modelRefModelId(selectedVideoModel).toLowerCase().includes('seedance');
+    }, [generationMode, selectedVideoModel]);
+    const isSeedanceFastModel = isSeedanceVideoModel && modelRefModelId(selectedVideoModel).toLowerCase().includes('fast');
     const supportedRatios = useMemo(() => {
-        if (!selectedVideoModel) return ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9'] as const;
-        return getSupportedRatios(selectedVideoModel);
+        if (!selectedVideoModel) return DEFAULT_VIDEO_RATIOS;
+        return getSupportedRatios(modelRefModelId(selectedVideoModel));
     }, [selectedVideoModel]);
 
     const currentModelOptions = generationMode === 'video' ? videoModelOptions : imageModelOptions;
@@ -275,7 +316,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
         ? [`已选中 ${selectedElementCount} 个元素`, '描述“怎么改”比描述“是什么”更有效']
         : attachments.length > 0
             ? [`已添加 ${attachments.length} 个参考`, '可以继续输入 @ 引用画布元素']
-            : ['支持拖入图片/视频参考', '输入 @ 可引用画布元素'];
+            : ['支持拖入图片/视频/音频参考', '输入 @ 可引用画布元素'];
     const placeholder = useMemo(() => {
         if (!isSelectionActive) return '使用 @ 引用画布中的图片，例如：把 @图片1 的人物替换为 @图片2 的兔子';
         if (selectedElementCount === 1) return '描述你想对当前元素做什么';
@@ -401,7 +442,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                 <input
                     ref={fileInputRef}
                     type="file"
-                    accept="image/*,video/*"
+                    accept="image/*,video/*,audio/*"
                     multiple
                     className="hidden"
                     title="上传参考媒体"
@@ -465,7 +506,9 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                         style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-surface-2)' }}
                                     >
                                         <div className="h-8 w-8 overflow-hidden rounded-lg border bg-white" style={{ borderColor: 'var(--isl-border)' }}>
-                                            {attachment.mimeType.startsWith('video/') ? (
+                                            {attachment.mimeType.startsWith('audio/') ? (
+                                                <div className="flex h-full w-full items-center justify-center text-xs font-bold" style={{ color: 'var(--isl-mint-deep)', background: 'var(--isl-mint-bg)' }}>AU</div>
+                                            ) : attachment.mimeType.startsWith('video/') ? (
                                                 <video src={resolvedAttachmentHrefs[attachment.id] || attachment.href} className="h-full w-full object-cover" muted playsInline />
                                             ) : (
                                                 <img src={resolvedAttachmentHrefs[attachment.id] || attachment.href} alt={attachment.name} className="h-full w-full object-cover" />
@@ -473,7 +516,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                         </div>
                                         <div className="min-w-0">
                                             <div className="max-w-[120px] truncate text-xs font-bold" style={{ color: 'var(--isl-ink)' }}>{attachment.name}</div>
-                                            <div className="text-[10px]" style={{ color: 'var(--isl-ink-soft)' }}>{attachment.mimeType.startsWith('video/') ? '参考视频' : '参考图'}</div>
+                                            <div className="text-[10px]" style={{ color: 'var(--isl-ink-soft)' }}>{attachment.mimeType.startsWith('audio/') ? '参考音频' : attachment.mimeType.startsWith('video/') ? '参考视频' : '参考图'}</div>
                                         </div>
                                         <button
                                             type="button"
@@ -525,8 +568,9 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                             <>
                                                 <div className="px-2 pb-1 pt-1 text-[11px] font-bold uppercase tracking-[0.16em]" style={{ color: 'var(--isl-ink-ghost)' }}>常用</div>
                                                 {recentModels.filter(m => currentModelOptions.includes(m)).slice(0, MAX_RECENT_MODELS).map(model => {
-                                                    const capTags = getModelCapabilityTags(model);
-                                                    const shortName = model.replace(/^(google|openai|anthropic|openrouter)\//, '');
+                                                    const bareModel = modelRefModelId(model);
+                                                    const capTags = getModelCapabilityTags(bareModel);
+                                                    const shortName = modelRefLabel(model, userApiKeys).replace(/^(google|openai|anthropic|openrouter)\//, '');
                                                     const selectedModel = generationMode === 'video' ? selectedVideoModel : selectedImageModel;
                                                     return (
                                                         <MenuOptionButton
@@ -548,11 +592,11 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                         <div className="px-2 pb-1 pt-1 text-[11px] font-bold uppercase tracking-[0.16em]" style={{ color: 'var(--isl-ink-ghost)' }}>{generationMode === 'video' ? '视频模型' : '图片模型'}</div>
                                         {(() => {
                                             const filtered = modelSearchQuery
-                                                ? currentModelOptions.filter(m => m.toLowerCase().includes(modelSearchQuery.toLowerCase()))
+                                                ? currentModelOptions.filter(m => modelRefSearchText(m, userApiKeys).includes(modelSearchQuery.toLowerCase()))
                                                 : currentModelOptions;
                                             const grouped = new Map<string, string[]>();
                                             for (const model of filtered) {
-                                                const provider = inferProviderFromModel(model);
+                                                const provider = modelRefProvider(model, userApiKeys);
                                                 const label = PROVIDER_LABELS[provider] || provider;
                                                 if (!grouped.has(label)) grouped.set(label, []);
                                                 grouped.get(label)!.push(model);
@@ -569,8 +613,9 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                                         </div>
                                                     )}
                                                     {models.map(model => {
-                                                        const capTags = getModelCapabilityTags(model);
-                                                        const shortName = model.replace(/^(google|openai|anthropic|openrouter)\//, '');
+                                                        const bareModel = modelRefModelId(model);
+                                                        const capTags = getModelCapabilityTags(bareModel);
+                                                        const shortName = modelRefLabel(model, userApiKeys).replace(/^(google|openai|anthropic|openrouter)\//, '');
                                                         return (
                                                         <MenuOptionButton
                                                             key={model}
@@ -591,8 +636,8 @@ export const PromptBar: React.FC<PromptBarProps> = ({
 
                                         {generationMode === 'video' && (
                                             <>
-                                            <div className="grid grid-cols-3 gap-2 px-1 pt-3">
-                                                {(['16:9', '9:16', '1:1', '4:3', '3:4', '21:9'] as const).map(ratio => {
+                                            <div className="grid grid-cols-4 gap-2 px-1 pt-3">
+                                                {((isSeedanceVideoModel ? [...DEFAULT_VIDEO_RATIOS, 'adaptive'] : DEFAULT_VIDEO_RATIOS) as VideoAspectRatio[]).map(ratio => {
                                                     const supported = (supportedRatios as readonly string[]).includes(ratio);
                                                     return (
                                                     <button
@@ -603,7 +648,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                                         title={supported ? undefined : '当前视频模型不支持此比例'}
                                                         className={`rounded-2xl border-[1.5px] px-3 py-2 text-sm font-bold transition ${!supported ? 'opacity-35 cursor-not-allowed' : ''} ${videoAspectRatio === ratio ? 'isl-chip--active' : 'isl-chip'}`}
                                                     >
-                                                        {ratio}
+                                                        {ratio === 'adaptive' ? '自适应' : ratio}
                                                     </button>
                                                     );
                                                 })}
@@ -640,6 +685,78 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                                     ))}
                                                 </div>
                                             </div>
+                                            {isSeedanceVideoModel && (
+                                                <div className="mx-1 mt-3 rounded-[18px] border-[1.5px] p-3" style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-surface-2)' }}>
+                                                    <div className="flex items-center justify-between gap-3">
+                                                        <div>
+                                                            <div className="text-xs font-bold" style={{ color: 'var(--isl-ink)' }}>Seedance 参数</div>
+                                                            <div className="mt-0.5 text-[10px]" style={{ color: 'var(--isl-ink-soft)' }}>节点级视频设置，会随当前节点保存</div>
+                                                        </div>
+                                                        {isSeedanceFastModel && (
+                                                            <span className="rounded-full px-2 py-1 text-[10px] font-bold" style={{ color: 'var(--isl-sun-deep)', background: 'rgba(251,191,36,0.14)' }}>
+                                                                Fast 最高 720p
+                                                            </span>
+                                                        )}
+                                                    </div>
+
+                                                    <div className="mt-3">
+                                                        <div className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.12em]" style={{ color: 'var(--isl-ink-soft)' }}>时长</div>
+                                                        <div className="grid grid-cols-4 gap-1.5">
+                                                            {SEEDANCE_DURATIONS.map(duration => (
+                                                                <button
+                                                                    key={duration}
+                                                                    type="button"
+                                                                    onClick={() => onVideoDurationSecChange?.(duration)}
+                                                                    className={`rounded-[12px] px-2 py-1.5 text-xs font-bold transition ${videoDurationSec === duration ? 'isl-chip--active' : 'isl-chip'}`}
+                                                                    title={duration === -1 ? '智能时长' : `${duration} 秒`}
+                                                                >
+                                                                    {duration === -1 ? '智能' : `${duration}s`}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="mt-3">
+                                                        <div className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.12em]" style={{ color: 'var(--isl-ink-soft)' }}>分辨率</div>
+                                                        <div className="grid grid-cols-3 gap-1.5">
+                                                            {SEEDANCE_RESOLUTIONS.map(resolution => {
+                                                                const disabled = isSeedanceFastModel && resolution === '1080p';
+                                                                return (
+                                                                    <button
+                                                                        key={resolution}
+                                                                        type="button"
+                                                                        disabled={disabled}
+                                                                        onClick={() => onVideoResolutionChange?.(resolution)}
+                                                                        className={`rounded-[12px] px-2 py-1.5 text-xs font-bold transition ${disabled ? 'cursor-not-allowed opacity-35' : ''} ${videoResolution === resolution ? 'isl-chip--active' : 'isl-chip'}`}
+                                                                        title={disabled ? 'Fast 模型不支持 1080p，会自动降到 720p' : resolution}
+                                                                    >
+                                                                        {resolution}
+                                                                    </button>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="mt-3 grid grid-cols-2 gap-1.5">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => onVideoGenerateAudioChange?.(!videoGenerateAudio)}
+                                                            className={`rounded-[12px] px-3 py-2 text-left text-xs font-bold transition ${videoGenerateAudio ? 'isl-chip--active' : 'isl-chip'}`}
+                                                            aria-pressed={videoGenerateAudio}
+                                                        >
+                                                            生成声音 {videoGenerateAudio ? 'ON' : 'OFF'}
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => onVideoWatermarkChange?.(!videoWatermark)}
+                                                            className={`rounded-[12px] px-3 py-2 text-left text-xs font-bold transition ${videoWatermark ? 'isl-chip--active' : 'isl-chip'}`}
+                                                            aria-pressed={videoWatermark}
+                                                        >
+                                                            水印 {videoWatermark ? 'ON' : 'OFF'}
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            )}
                                             </>
                                         )}
                                     </div>
@@ -774,7 +891,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
 
                             <div className="relative">
                                 <button type="button" onClick={() => setExpandedPanel(prev => (prev === 'model' ? null : 'model'))} className={`${triggerClass} ${expandedPanel === 'model' ? activeTriggerClass : ''}`}>
-                                    <span className="max-w-[150px] truncate">{getModelLabel(generationMode, selectedImageModel, selectedVideoModel)}</span>
+                                    <span className="max-w-[150px] truncate">{getModelLabel(generationMode, selectedImageModel, selectedVideoModel, userApiKeys)}</span>
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 9 6 6 6-6" /></svg>
                                 </button>
                             </div>

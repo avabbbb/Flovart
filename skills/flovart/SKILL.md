@@ -23,7 +23,7 @@ If this skill disagrees with `command.list` or `command.schema`, trust the CLI o
 ## Non-Negotiable Rules
 
 - Flovart is not the planner. The external agent writes scripts, shot lists, prompts, retry strategy, and final summaries.
-- Use the CLI or available MCP tools for canvas/project/model/media operations. Do not hand-roll private HTTP requests.
+- Use the CLI for canvas/project/model/media operations. Do not hand-roll private HTTP requests or add protocol servers.
 - Never read, print, copy, or store API keys in CLI output or chat transcripts.
 - Provider-backed generation requires the browser UI because keys stay in browser storage.
 - Canvas automation for external agents is media-first. Prefer image/video elements for production artifacts; use text elements only when explicitly documenting canvas structure.

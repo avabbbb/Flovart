@@ -4,7 +4,8 @@
   "description": "Flovart CLI – deterministic command bridge for AI coding agents to operate Flovart canvas, workflow, and providers",
   "type": "module",
   "bin": {
-    "flovart": "./cli.js"
+    "flovart": "./cli.js",
+    "flovart-cli": "./cli.js"
   },
   "files": [
     "cli.js",

@@ -11,9 +11,10 @@ import {
     inferProviderFromModel, inferCapabilitiesByProvider, PROVIDER_LABELS, supportsMaskImageEditing, supportsReferenceImageEditing,
     DEFAULT_PROVIDER_MODELS, splitImageLayersWithProvider, runImageAgentWithProvider,
 } from '../services/aiGateway';
-import type { MultimodalSlot } from '../services/aiGateway';
+import type { MultimodalSlot, VideoAspectRatio } from '../services/aiGateway';
 import { addGenerationHistoryItem, createThumbnailDataUrl } from '../utils/generationHistory';
 import { recordApiUsage } from '../utils/usageMonitor';
+import { findBestModelSelection, modelRefModelId, resolveModelSelection } from '../utils/modelRefs';
 
 /**
  * Compute the max canvas display dimension based on the user's screen.
@@ -37,7 +38,11 @@ export interface UseGenerationParams {
     selectedElementIds: string[];
     prompt: string;
     generationMode: 'image' | 'video' | 'keyframe';
-    videoAspectRatio: '16:9' | '9:16' | '1:1' | '4:3' | '3:4' | '21:9';
+    videoAspectRatio: VideoAspectRatio;
+    videoDurationSec: number;
+    videoResolution: string;
+    videoGenerateAudio: boolean;
+    videoWatermark: boolean;
     isAutoEnhanceEnabled: boolean;
     mentionedElementIds: string[];
     chatAttachments: ChatAttachment[];
@@ -74,6 +79,7 @@ export interface UseGenerationParams {
 export function useGeneration(params: UseGenerationParams) {
     const {
         elements, selectedElementIds, prompt, generationMode, videoAspectRatio,
+        videoDurationSec, videoResolution, videoGenerateAudio, videoWatermark,
         isAutoEnhanceEnabled, mentionedElementIds, chatAttachments, promptAttachments,
         activeCharacterLock, batchCount, inpaintState, inpaintPrompt,
         modelPreference, userApiKeys, resolveMediaHref,
@@ -92,37 +98,13 @@ export function useGeneration(params: UseGenerationParams) {
 
     /* ---- helpers ---- */
 
-    const keyOwnsModel = useCallback((key: UserApiKey, model?: string) => {
-        const normalizedModel = model?.trim().toLowerCase();
-        if (!normalizedModel) return false;
-
-        const knownModels = [
-            key.defaultModel,
-            ...(key.customModels || []),
-            ...((key.models || []).map(item => item.id)),
-        ];
-
-        return knownModels.some(candidate => candidate?.trim().toLowerCase() === normalizedModel);
-    }, []);
-
     /** 智能解析模型+Key：如果当前模型的 Provider 没有健康 Key，自动降级到任意可用 Key */
     const resolveModelKey = useCallback((capability: 'image' | 'video' | 'text', currentModel: string) => {
-        const provider = inferProviderFromModel(currentModel);
-        const healthyKeys = userApiKeys.filter(k => k.status !== 'error');
-        const directKey = healthyKeys.find(k => {
-            const caps = k.capabilities?.length ? k.capabilities : inferCapabilitiesByProvider(k.provider);
-            return caps.includes(capability) && (k.provider === provider || (k.provider === 'custom' && keyOwnsModel(k, currentModel)));
-        });
-        if (directKey) return { model: currentModel, provider, key: directKey };
-        for (const key of healthyKeys) {
-            const caps = key.capabilities?.length ? key.capabilities : inferCapabilitiesByProvider(key.provider);
-            if (!caps.includes(capability)) continue;
-            const models = DEFAULT_PROVIDER_MODELS[key.provider]?.[capability];
-            const fallbackModel = models?.[0] || key.customModels?.[0] || key.defaultModel;
-            if (fallbackModel) return { model: fallbackModel, provider: key.provider, key };
-        }
-        return null;
-    }, [keyOwnsModel, userApiKeys]);
+        const direct = resolveModelSelection(currentModel, userApiKeys, capability);
+        if (direct) return direct;
+        const fallback = findBestModelSelection(userApiKeys, capability);
+        return fallback ? resolveModelSelection(fallback, userApiKeys, capability) : null;
+    }, [userApiKeys]);
 
     const toInlineProvider = useCallback((provider: AIProvider): ElementGenerationState['provider'] => {
         if (provider === 'openrouter') return 'openrouter';
@@ -166,9 +148,13 @@ export function useGeneration(params: UseGenerationParams) {
             provider: toInlineProvider(provider),
             modelId,
             aspectRatio: videoAspectRatio,
+            durationSec: videoDurationSec,
+            resolution: videoResolution,
+            generateAudio: videoGenerateAudio,
+            watermark: videoWatermark,
             status,
         };
-    }, [elements, toInlineProvider, videoAspectRatio]);
+    }, [elements, toInlineProvider, videoAspectRatio, videoDurationSec, videoGenerateAudio, videoResolution, videoWatermark]);
 
     const handleEnhancePrompt = useCallback(async (payload: {
         prompt: string;
@@ -177,13 +163,15 @@ export function useGeneration(params: UseGenerationParams) {
     }) => {
         setIsEnhancingPrompt(true);
         try {
-            const provider = inferProviderFromModel(modelPreference.textModel);
-            const key = getPreferredApiKey('text', provider);
-            return await enhancePromptWithProvider(payload, modelPreference.textModel, key);
+            const resolved = resolveModelKey('text', modelPreference.textModel);
+            const model = resolved?.model || modelRefModelId(modelPreference.textModel);
+            const provider = resolved?.provider || inferProviderFromModel(model);
+            const key = resolved?.key || getPreferredApiKey('text', provider);
+            return await enhancePromptWithProvider(payload, model, key);
         } finally {
             setIsEnhancingPrompt(false);
         }
-    }, [getPreferredApiKey, modelPreference.textModel]);
+    }, [getPreferredApiKey, modelPreference.textModel, resolveModelKey]);
 
     const saveGenerationToHistory = useCallback(async (payload: {
         name?: string;
@@ -212,13 +200,15 @@ export function useGeneration(params: UseGenerationParams) {
 
         const genType = payload.mediaType ?? 'image';
         const activeModel = genType === 'video' ? modelPreference.videoModel : modelPreference.imageModel;
-        const provider = inferProviderFromModel(activeModel);
-        const usageKey = userApiKeys.find(k => k.provider === provider);
+        const capability = genType === 'video' ? 'video' : 'image';
+        const resolved = resolveModelSelection(activeModel, userApiKeys, capability);
+        const provider = resolved?.provider || inferProviderFromModel(modelRefModelId(activeModel));
+        const usageKey = resolved?.key || userApiKeys.find(k => k.provider === provider);
         if (usageKey) {
             recordApiUsage({
                 keyId: usageKey.id,
                 provider: usageKey.provider,
-                model: activeModel,
+                model: resolved?.model || modelRefModelId(activeModel),
                 type: genType,
                 success: true,
             });
@@ -789,6 +779,10 @@ export function useGeneration(params: UseGenerationParams) {
                     resolvedVideoKey,
                     {
                         aspectRatio: videoAspectRatio,
+                        durationSec: videoDurationSec,
+                        resolution: videoResolution,
+                        generateAudio: videoGenerateAudio,
+                        watermark: videoWatermark,
                         onProgress: (message) => setProgressMessage(message),
                         references: [{ href: startFrame.href, mimeType: startFrame.mimeType }],
                     },
@@ -918,6 +912,10 @@ export function useGeneration(params: UseGenerationParams) {
                     resolvedVideoKey,
                     {
                         aspectRatio: videoAspectRatio,
+                        durationSec: videoDurationSec,
+                        resolution: videoResolution,
+                        generateAudio: videoGenerateAudio,
+                        watermark: videoWatermark,
                         onProgress: (message) => setProgressMessage(message),
                         references: legacyImageRefs,
                         slots,

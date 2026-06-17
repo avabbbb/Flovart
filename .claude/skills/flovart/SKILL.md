@@ -1,6 +1,6 @@
 ---
 name: flovart
-description: Use when Claude Code needs to operate Flovart as an agent-native media runtime. Flovart generates and manages images/videos through deterministic CLI commands. Claude Code handles scripts, storyboards, prompts, and planning. No MCP required — CLI is the universal interface.
+description: Use when Claude Code needs to operate Flovart as an agent-native media runtime. Flovart generates and manages images/videos through deterministic CLI commands. Claude Code handles scripts, storyboards, prompts, and planning. CLI is the universal interface.
 ---
 
 # Flovart Skill
@@ -19,7 +19,7 @@ Without a browser, commands fall back to **shadow runtime** — state persists t
 
 - Never ask the user to paste API keys. Use `provider.begin-setup` to open the browser UI.
 - Do not add text nodes to the Flovart canvas. Canvas is media-only: images and videos.
-- Use CLI as the only external interface. No MCP or CDP port is required.
+- Use CLI as the only external interface. No protocol server or CDP port is required.
 - Keep all tool calls explicit and JSON-safe.
 
 ## Atomic CLI Commands

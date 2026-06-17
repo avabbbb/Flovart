@@ -1,0 +1,66 @@
+GARBLED: 浣跨敤鏉℃
+FIXED:   使用条�
+
+GARBLED: 闅愮鏀跨瓥
+FIXED:   隐�政策
+
+GARBLED: 娉曞緥鏂囨。寮圭獥
+FIXED:   法律文档弹窗
+
+GARBLED: 搴曢儴娉曞緥閾炬帴
+FIXED:   底部法律链接
+
+GARBLED: 鍥惧眰钂欑増缂栬緫
+FIXED:   图层蒙版编辑
+
+GARBLED: 閫夋嫨姝ゆ柟妗?
+FIXED:   选择此方�?
+
+GARBLED: 鎺ㄨ枬
+FIXED:   推薝
+
+GARBLED: 鏈焺湴瀛樺偍绌洪棿涓嶈冻
+FIXED:   期���存储空间不足
+
+GARBLED: 淇濆瓨鐢诲竷澶辫触
+FIXED:   保存画布失败
+
+GARBLED: 钂欑増缂栬緫
+FIXED:   蒙版编辑
+
+GARBLED: 娓呴櫎钂欑増
+FIXED:   清除蒙版
+
+GARBLED: 瀹屾垚
+FIXED:   完成
+
+GARBLED: 鍙栨秷
+FIXED:   取消
+
+GARBLED: 鑷渷璇婃柇鏉?
+FIXED:   臜�诊断�?
+
+GARBLED: 閲嶇粯涓?..
+FIXED:   重绘�?..
+
+GARBLED: 鉁?閲嶇粯
+FIXED:   �?重绘
+
+GARBLED: 褰撳墠
+FIXED:   当前
+
+GARBLED: 鍘嗗彶
+FIXED:   历史
+
+GARBLED: 鎭㈠
+FIXED:   恢�
+
+GARBLED: 鎿﹂櫎
+FIXED:   擦除
+
+GARBLED: 绗斿埛
+FIXED:   笔刷
+
+GARBLED: 鐢ㄥ師鐢熶簨浠剁洃鍚鍣ㄦ寕杞?
+FIXED:   用原生事件监�器挂�?
+

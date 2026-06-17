@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "flovart": {
-      "command": "node",
-      "args": ["tools/flovart/mcp-server.js"]
-    }
-  }
-}

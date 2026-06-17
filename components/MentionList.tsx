@@ -15,6 +15,7 @@ export interface MentionItem {
     label: string;
     thumbnail: string;
     elementType: string;
+    description?: string;
 }
 
 interface MentionListProps {
@@ -114,7 +115,7 @@ const MentionList = forwardRef<MentionListHandle, MentionListProps>(({ items, co
                     {/* 名称 + 类型 */}
                     <span style={styles.info}>
                         <span style={styles.label}>{item.label}</span>
-                        <span style={styles.type}>{item.elementType}</span>
+                        <span style={styles.type}>{item.description || item.elementType}</span>
                     </span>
                 </button>
             ))}

@@ -51,16 +51,19 @@ import { AppShell } from './components/AppShell';
 import { useWorkspaceStore } from './stores/useWorkspaceStore';
 import { useRuntimeStore } from './stores/useRuntimeStore';
 import type { CanvasElement, ElementGenerationState } from './types';
+import type { VideoAspectRatio } from './services/aiGateway';
 import { getFlovartRuntimeApi, getRuntimeErrorMessage } from './services/flovartRuntime';
 import { executeFlovartCommand } from './tools/flovart/core.js';
 import { syncCanvasElementsIntoRuntime } from './services/projectRuntimeBridge';
 import {
+    buildAttachmentIgnitionReferences,
     buildElementIgnitionReferences,
     buildElementPromptGenerationState,
     createDefaultElementGenerationState,
     getElementGenerationMode,
     isPromptReferenceableElement,
 } from './utils/elementPromptState';
+import { modelRefModelId, resolveModelSelection } from './utils/modelRefs';
 
 
 
@@ -526,7 +529,11 @@ const App: React.FC = () => {
     });
     
     const [generationMode, setGenerationMode] = useState<'image' | 'video' | 'keyframe'>('image');
-    const [videoAspectRatio, setVideoAspectRatio] = useState<'16:9' | '9:16' | '1:1' | '4:3' | '3:4' | '21:9'>('16:9');
+    const [videoAspectRatio, setVideoAspectRatio] = useState<VideoAspectRatio>('16:9');
+    const [videoDurationSec, setVideoDurationSec] = useState<number>(5);
+    const [videoResolution, setVideoResolution] = useState<string>('720p');
+    const [videoGenerateAudio, setVideoGenerateAudio] = useState<boolean>(true);
+    const [videoWatermark, setVideoWatermark] = useState<boolean>(false);
     const [progressMessage, setProgressMessage] = useState<string>('');
     const [hoveredElementId, setHoveredElementId] = useState<string | null>(null);
     const [relationFocusElementId, setRelationFocusElementId] = useState<string | null>(null);
@@ -1018,6 +1025,7 @@ const App: React.FC = () => {
         handleSelectBatchResult, handleSelectAllBatchResults,
     } = useGeneration({
         elements, selectedElementIds, prompt, generationMode, videoAspectRatio,
+        videoDurationSec, videoResolution, videoGenerateAudio, videoWatermark,
         isAutoEnhanceEnabled, mentionedElementIds, chatAttachments, promptAttachments,
         activeCharacterLock, batchCount, inpaintState, inpaintPrompt,
         modelPreference, userApiKeys,
@@ -1031,8 +1039,9 @@ const App: React.FC = () => {
     const getInlineApiKeyForElement = useCallback((element: CanvasElement) => {
         const model = element.generationState?.modelId || (element.type === 'video' ? modelPreference.videoModel : modelPreference.imageModel);
         const capability = inferCapabilityFromModelName(model);
-        return getPreferredApiKey(capability, inferProviderFromModel(model));
-    }, [getPreferredApiKey, modelPreference.imageModel, modelPreference.videoModel]);
+        const resolved = resolveModelSelection(model, userApiKeys, capability);
+        return resolved?.key || getPreferredApiKey(capability, inferProviderFromModel(modelRefModelId(model)));
+    }, [getPreferredApiKey, modelPreference.imageModel, modelPreference.videoModel, userApiKeys]);
 
     useEffect(() => {
         setSelectedElementIds([]);
@@ -1238,13 +1247,22 @@ const App: React.FC = () => {
             progress: 5,
         });
 
-        const references = buildElementIgnitionReferences(currentState.promptPayload, elementsRef.current);
+        const promptReferences = buildElementIgnitionReferences(currentState.promptPayload, elementsRef.current);
+        const attachmentReferences = await buildAttachmentIgnitionReferences(
+            nodePromptAttachments[elementId] || [],
+            resolveColdMediaRef,
+        );
+        const references = [...promptReferences, ...attachmentReferences];
         const result = await executeUnifiedIgnition({
             elementId: target.id,
             prompt: currentState.promptPayload.rawText,
             modelId: currentState.modelId,
             apiKeyPayload,
             aspectRatio: currentState.aspectRatio || videoAspectRatio,
+            durationSec: currentState.durationSec ?? videoDurationSec,
+            resolution: currentState.resolution || videoResolution,
+            generateAudio: currentState.generateAudio ?? videoGenerateAudio,
+            watermark: currentState.watermark ?? videoWatermark,
             references,
             onProgress: (nextProgress, message) => {
                 setProgressMessage(message);
@@ -1283,7 +1301,7 @@ const App: React.FC = () => {
             progress: undefined,
         });
         setProgressMessage(null);
-    }, [getInlineApiKeyForElement, modelPreference.imageModel, modelPreference.videoModel, updateElementGenerationState, updateElementMedia, videoAspectRatio]);
+    }, [getInlineApiKeyForElement, modelPreference.imageModel, modelPreference.videoModel, nodePromptAttachments, resolveColdMediaRef, updateElementGenerationState, updateElementMedia, videoAspectRatio, videoDurationSec, videoGenerateAudio, videoResolution, videoWatermark]);
 
     const t = useCallback((key: string, ...args: any[]): any => {
         const keys = key.split('.');
@@ -3994,6 +4012,14 @@ const App: React.FC = () => {
                                                              modeOptions={[getElementGenerationMode(selectedNodePromptElement)]}
                                                              videoAspectRatio={selectedNodePromptElement.generationState?.aspectRatio || videoAspectRatio}
                                                              setVideoAspectRatio={(ratio) => updateNodePromptStatePatch(selectedNodePromptElement.id, { aspectRatio: ratio })}
+                                                             videoDurationSec={selectedNodePromptElement.generationState?.durationSec ?? videoDurationSec}
+                                                             onVideoDurationSecChange={(durationSec) => updateNodePromptStatePatch(selectedNodePromptElement.id, { durationSec })}
+                                                             videoResolution={selectedNodePromptElement.generationState?.resolution || videoResolution}
+                                                             onVideoResolutionChange={(resolution) => updateNodePromptStatePatch(selectedNodePromptElement.id, { resolution })}
+                                                             videoGenerateAudio={selectedNodePromptElement.generationState?.generateAudio ?? videoGenerateAudio}
+                                                             onVideoGenerateAudioChange={(generateAudio) => updateNodePromptStatePatch(selectedNodePromptElement.id, { generateAudio })}
+                                                             videoWatermark={selectedNodePromptElement.generationState?.watermark ?? videoWatermark}
+                                                             onVideoWatermarkChange={(watermark) => updateNodePromptStatePatch(selectedNodePromptElement.id, { watermark })}
                                                              selectedImageModel={selectedNodePromptElement.type === 'image' ? (selectedNodePromptElement.generationState?.modelId || modelPreference.imageModel) : undefined}
                                                              selectedVideoModel={selectedNodePromptElement.type === 'video' ? (selectedNodePromptElement.generationState?.modelId || modelPreference.videoModel) : undefined}
                                                              imageModelOptions={dynamicModelOptions.image}
@@ -4124,6 +4150,14 @@ const App: React.FC = () => {
                                                              modeOptions={[getElementGenerationMode(selectedNodePromptElement)]}
                                                              videoAspectRatio={selectedNodePromptElement.generationState?.aspectRatio || videoAspectRatio}
                                                              setVideoAspectRatio={(ratio) => updateNodePromptStatePatch(selectedNodePromptElement.id, { aspectRatio: ratio })}
+                                                             videoDurationSec={selectedNodePromptElement.generationState?.durationSec ?? videoDurationSec}
+                                                             onVideoDurationSecChange={(durationSec) => updateNodePromptStatePatch(selectedNodePromptElement.id, { durationSec })}
+                                                             videoResolution={selectedNodePromptElement.generationState?.resolution || videoResolution}
+                                                             onVideoResolutionChange={(resolution) => updateNodePromptStatePatch(selectedNodePromptElement.id, { resolution })}
+                                                             videoGenerateAudio={selectedNodePromptElement.generationState?.generateAudio ?? videoGenerateAudio}
+                                                             onVideoGenerateAudioChange={(generateAudio) => updateNodePromptStatePatch(selectedNodePromptElement.id, { generateAudio })}
+                                                             videoWatermark={selectedNodePromptElement.generationState?.watermark ?? videoWatermark}
+                                                             onVideoWatermarkChange={(watermark) => updateNodePromptStatePatch(selectedNodePromptElement.id, { watermark })}
                                                              selectedImageModel={selectedNodePromptElement.type === 'image' ? (selectedNodePromptElement.generationState?.modelId || modelPreference.imageModel) : undefined}
                                                              selectedVideoModel={selectedNodePromptElement.type === 'video' ? (selectedNodePromptElement.generationState?.modelId || modelPreference.videoModel) : undefined}
                                                              imageModelOptions={dynamicModelOptions.image}

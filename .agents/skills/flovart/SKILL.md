@@ -20,7 +20,7 @@ npm run flovart:cli -- command.schema --command <command> --json
 
 If this skill disagrees with `command.list` or `command.schema`, trust the CLI output and update the skill docs.
 
-MCP-style aliases are accepted for atomic canvas orchestration:
+CLI aliases are accepted for atomic canvas orchestration:
 
 ```bash
 npm run flovart:cli -- flovart_element_create --type image --name keyframe --json
@@ -33,7 +33,7 @@ npm run flovart:cli -- flovart_generate_video --prompt "..." --source-image-ids 
 ## Non-Negotiable Rules
 
 - Flovart is not the planner. The external agent writes scripts, shot lists, prompts, retry strategy, and final summaries.
-- Use the CLI or available MCP tools for canvas/project/model/media operations. Do not hand-roll private HTTP requests.
+- Use the CLI for canvas/project/model/media operations. Do not hand-roll private HTTP requests or add protocol servers.
 - Never read, print, copy, or store API keys in CLI output or chat transcripts.
 - Provider-backed generation requires the browser UI because keys stay in browser storage.
 - Canvas automation for external agents is media-first. Prefer image/video elements for production artifacts; use text elements only when explicitly documenting canvas structure.

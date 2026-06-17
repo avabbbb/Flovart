@@ -24,7 +24,15 @@ export interface CanvasElementBase {
 
 export type GenerationStatus = 'idle' | 'queued' | 'running' | 'success' | 'error';
 
-export type AssetSlotRole = 'first_frame' | 'style_ref' | 'control_net' | 'unassigned';
+export type AssetSlotRole =
+  | 'first_frame'
+  | 'last_frame'
+  | 'reference_image'
+  | 'reference_video'
+  | 'reference_audio'
+  | 'style_ref'
+  | 'control_net'
+  | 'unassigned';
 
 export type InlineGenerationProvider =
   | 'openrouter'
@@ -51,7 +59,11 @@ export interface ElementGenerationState {
   promptPayload: AdaptivePromptPayload;
   provider: InlineGenerationProvider;
   modelId: string;
-  aspectRatio?: '16:9' | '9:16' | '1:1' | '4:3' | '3:4' | '21:9';
+  aspectRatio?: '16:9' | '9:16' | '1:1' | '4:3' | '3:4' | '21:9' | 'adaptive';
+  durationSec?: number;
+  resolution?: '480p' | '720p' | '1080p' | string;
+  generateAudio?: boolean;
+  watermark?: boolean;
   status: GenerationStatus;
   error?: string;
   progress?: number;

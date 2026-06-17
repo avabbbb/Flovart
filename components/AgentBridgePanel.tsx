@@ -16,7 +16,7 @@ const setupCommands = [
 
 const capabilityCards = [
     { title: 'Runtime', body: 'Inspect canvas, media, provider readiness, and active jobs.', command: 'flovart.status' },
-    { title: 'Setup', body: 'Write host-specific MCP config for OpenCode, Claude, Cursor, Roo, Windsurf, or VS Code.', command: 'flovart.init_host' },
+    { title: 'Setup', body: 'Write host-specific CLI config for OpenCode, Claude, Cursor, Roo, Windsurf, or VS Code.', command: 'flovart.init_host' },
     { title: 'Creative Ops', body: 'Search inspiration, enhance prompts, and plan multi-shot batches locally.', command: 'flovart.plan_batch' },
     { title: 'Canvas', body: 'Create, update, select, generate, and watch image/video elements.', command: 'flovart.command_execute' },
 ];
@@ -77,7 +77,7 @@ export const AgentBridgePanel: React.FC<AgentBridgePanelProps> = ({ theme, compa
                         <div>
                             <h3 className={`text-xl font-semibold tracking-[-0.04em] ${strong}`}>Canvas ops for coding agents</h3>
                             <p className={`mt-2 max-w-[24rem] text-[11px] leading-relaxed ${muted}`}>
-                                A deterministic MCP and CLI control surface for OpenCode, Claude Code, Codex, Cursor, Roo, Windsurf, and VS Code. Secrets stay in the browser UI.
+                                A deterministic CLI control surface for OpenCode, Claude Code, Codex, Cursor, Roo, Windsurf, and VS Code. Secrets stay in the browser UI.
                             </p>
                         </div>
                         <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold ring-1 ${statusPill}`}>

@@ -10,6 +10,7 @@ import {
 import { formatCost, type KeyUsageSummary } from '../utils/usageMonitor';
 import { fetchModelsForProvider, type FetchedModel } from '../services/modelFetcher';
 import { normalizeProviderBaseUrl } from '../services/baseUrl';
+import { modelRefLabel, modelRefSearchText } from '../utils/modelRefs';
 
 interface CanvasSettingsProps {
     isOpen: boolean;
@@ -951,7 +952,9 @@ export const CanvasSettings: React.FC<CanvasSettingsProps> = ({
                                     className={`mb-2 ${inputClass} flv-safe-input text-xs`}
                                 />
                                 <select value={modelPreference.textModel} onChange={(event) => setModelPreference({ ...modelPreference, textModel: event.target.value })} className={`${inputClass} flv-safe-input`}>
-                                    {modelOptions.text.filter(m => !modelSearch.text || m.toLowerCase().includes(modelSearch.text.toLowerCase())).map(model => <option key={model} value={model}>{model}</option>)}
+                                    {modelOptions.text
+                                        .filter(model => !modelSearch.text || modelRefSearchText(model, userApiKeys).includes(modelSearch.text.toLowerCase()))
+                                        .map(model => <option key={model} value={model}>{modelRefLabel(model, userApiKeys)}</option>)}
                                 </select>
                             </label>
                             <label className={`rounded-2xl p-3 ${isDark ? 'bg-[#161A22]' : 'bg-[#F8FAFC]'}`}>
@@ -964,7 +967,9 @@ export const CanvasSettings: React.FC<CanvasSettingsProps> = ({
                                     className={`mb-2 ${inputClass} flv-safe-input text-xs`}
                                 />
                                 <select value={modelPreference.imageModel} onChange={(event) => setModelPreference({ ...modelPreference, imageModel: event.target.value })} className={`${inputClass} flv-safe-input`}>
-                                    {modelOptions.image.filter(m => !modelSearch.image || m.toLowerCase().includes(modelSearch.image.toLowerCase())).map(model => <option key={model} value={model}>{model}</option>)}
+                                    {modelOptions.image
+                                        .filter(model => !modelSearch.image || modelRefSearchText(model, userApiKeys).includes(modelSearch.image.toLowerCase()))
+                                        .map(model => <option key={model} value={model}>{modelRefLabel(model, userApiKeys)}</option>)}
                                 </select>
                             </label>
                             <label className={`rounded-2xl p-3 ${isDark ? 'bg-[#161A22]' : 'bg-[#F8FAFC]'}`}>
@@ -977,7 +982,9 @@ export const CanvasSettings: React.FC<CanvasSettingsProps> = ({
                                     className={`mb-2 ${inputClass} flv-safe-input text-xs`}
                                 />
                                 <select value={modelPreference.videoModel} onChange={(event) => setModelPreference({ ...modelPreference, videoModel: event.target.value })} className={`${inputClass} flv-safe-input`}>
-                                    {modelOptions.video.filter(m => !modelSearch.video || m.toLowerCase().includes(modelSearch.video.toLowerCase())).map(model => <option key={model} value={model}>{model}</option>)}
+                                    {modelOptions.video
+                                        .filter(model => !modelSearch.video || modelRefSearchText(model, userApiKeys).includes(modelSearch.video.toLowerCase()))
+                                        .map(model => <option key={model} value={model}>{modelRefLabel(model, userApiKeys)}</option>)}
                                 </select>
                             </label>
                         </div>

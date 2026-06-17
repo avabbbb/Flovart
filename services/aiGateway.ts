@@ -24,7 +24,7 @@ export type MultimodalSlot = {
     label?: string;
 };
 
-type VideoImage = ImageInput & { slotRole?: string };
+type VideoImage = ImageInput & { slotRole?: string; label?: string; sourceName?: string; elementId?: string };
 
 type ProviderModelMap = { text: string[]; image: string[]; video: string[] };
 
@@ -33,6 +33,10 @@ type IgnitionReference = {
     href?: string;
     mimeType?: string;
     slotRole?: string;
+    label?: string;
+    sourceName?: string;
+    text?: string;
+    elementId?: string;
 };
 
 export interface UnifiedIgnitionInput {
@@ -41,6 +45,10 @@ export interface UnifiedIgnitionInput {
     modelId: string;
     apiKeyPayload?: UserApiKey;
     aspectRatio?: VideoAspectRatio;
+    durationSec?: number;
+    resolution?: string;
+    generateAudio?: boolean;
+    watermark?: boolean;
     references?: IgnitionReference[];
     onProgress?: (progress: number, message: string) => void;
 }
@@ -141,9 +149,16 @@ export interface ApiKeyValidationResult {
 
 type CustomProviderExtraConfig = Record<string, string> | undefined;
 
-type VideoAspectRatio = '16:9' | '9:16' | '1:1' | '4:3' | '3:4' | '21:9';
+export type VideoAspectRatio = '16:9' | '9:16' | '1:1' | '4:3' | '3:4' | '21:9' | 'adaptive';
 
 const DEFAULT_SEEDANCE_MODEL = 'doubao-seedance-2.0';
+const SEEDANCE_RESOLUTIONS = ['480p', '720p', '1080p'] as const;
+const SEEDANCE_RATIOS: VideoAspectRatio[] = ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9', 'adaptive'];
+const SEEDANCE_REFERENCE_LIMITS: Record<MultimodalSlotKind, number> = {
+    image: 9,
+    video: 3,
+    audio: 3,
+};
 
 type CapabilityDictionary = {
     multimodalSlots: Partial<Record<MultimodalSlotKind, {
@@ -200,7 +215,7 @@ const SEEDANCE_CAPABILITY: CapabilityDictionary = {
         'service_tier',
         'safety_identifier',
     ],
-    aspectRatios: ['16:9', '9:16', '1:1'],
+    aspectRatios: SEEDANCE_RATIOS,
     defaults: {
         generate_audio: true,
         duration: 5,
@@ -213,6 +228,9 @@ export function getCapabilityDictionary(model: string, provider: AIProvider = in
     const normalized = normalizeModelName(model);
     if (provider === 'volcengine' || normalized.includes('seedance')) {
         return SEEDANCE_CAPABILITY;
+    }
+    if (provider === 'openrouter' && inferCapabilityFromModelName(model) === 'image') {
+        return OPENAI_GPT_IMAGE_CAPABILITY;
     }
     if ((provider === 'openai' || provider === 'custom') && isOpenAIImageEditModel(model)) {
         return OPENAI_GPT_IMAGE_CAPABILITY;
@@ -247,6 +265,86 @@ function filterMultimodalSlots(slots: MultimodalSlot[], capability: CapabilityDi
     });
 }
 
+function isSeedanceFastModel(model: string): boolean {
+    const normalized = normalizeModelName(model);
+    return normalized.includes('seedance') && normalized.includes('fast');
+}
+
+function normalizeSeedanceResolution(value: string | undefined, model = ''): string {
+    const token = String(value || '720p').trim().toLowerCase();
+    const normalized = token === 'low'
+        ? '480p'
+        : token === 'auto' || token === 'medium' || token === 'high'
+            ? '720p'
+            : `${(token.replace(/p$/i, '') || '720')}p`;
+
+    if (isSeedanceFastModel(model) && normalized === '1080p') return '720p';
+    return (SEEDANCE_RESOLUTIONS as readonly string[]).includes(normalized) ? normalized : '720p';
+}
+
+function normalizeSeedanceDuration(value: number | string | undefined): number {
+    if (String(value ?? '').trim() === '-1') return -1;
+    const seconds = Math.floor(Number(value) || 5);
+    return Math.max(4, Math.min(15, seconds));
+}
+
+function normalizeSeedanceRatio(value: string | undefined): VideoAspectRatio {
+    const raw = String(value || '').trim();
+    if (!raw || raw === 'auto' || raw === 'adaptive') return 'adaptive';
+    if ((SEEDANCE_RATIOS as string[]).includes(raw)) return raw as VideoAspectRatio;
+
+    const match = raw.match(/^(\d+)x(\d+)$/);
+    if (!match) return 'adaptive';
+    const width = Number(match[1]);
+    const height = Number(match[2]);
+    if (!width || !height) return 'adaptive';
+
+    const ratio = width / height;
+    const options: Array<[Exclude<VideoAspectRatio, 'adaptive'>, number]> = [
+        ['16:9', 16 / 9],
+        ['4:3', 4 / 3],
+        ['1:1', 1],
+        ['3:4', 3 / 4],
+        ['9:16', 9 / 16],
+        ['21:9', 21 / 9],
+    ];
+    return options.reduce((best, item) => (
+        Math.abs(item[1] - ratio) < Math.abs(best[1] - ratio) ? item : best
+    ), options[0])[0];
+}
+
+function isProviderFetchableMediaUrl(value: string): boolean {
+    return /^https?:\/\//i.test(value) || value.startsWith('asset://');
+}
+
+function validateSeedanceSlots(slots: MultimodalSlot[], capability: CapabilityDictionary): void {
+    const counts: Partial<Record<MultimodalSlotKind, number>> = {};
+    for (const slot of slots) {
+        if (!slot.href) continue;
+        counts[slot.kind] = (counts[slot.kind] || 0) + 1;
+    }
+
+    for (const kind of Object.keys(SEEDANCE_REFERENCE_LIMITS) as MultimodalSlotKind[]) {
+        const count = counts[kind] || 0;
+        const max = capability.multimodalSlots[kind]?.max ?? SEEDANCE_REFERENCE_LIMITS[kind];
+        if (count > max) {
+            const label = kind === 'image' ? '图片' : kind === 'video' ? '视频' : '音频';
+            throw new Error(`Seedance 参考${label}最多支持 ${max} 个，当前传入 ${count} 个。`);
+        }
+    }
+
+    if ((counts.audio || 0) > 0 && (counts.image || 0) === 0 && (counts.video || 0) === 0) {
+        throw new Error('Seedance 参考音频不能单独使用，请同时添加参考图或参考视频。');
+    }
+
+    for (const slot of slots) {
+        if ((slot.kind === 'video' || slot.kind === 'audio') && !isProviderFetchableMediaUrl(slot.href)) {
+            const label = slot.kind === 'video' ? '参考视频' : '参考音频';
+            throw new Error(`Seedance ${label}必须使用公网 URL 或 asset:// 素材 ID；本地 blob/data URL 需要先上传成可被火山访问的地址。`);
+        }
+    }
+}
+
 function withSupportedParams(
     capability: CapabilityDictionary,
     input: Record<string, unknown>,
@@ -269,7 +367,7 @@ export const PROVIDER_VIDEO_RATIOS: Partial<Record<AIProvider, VideoAspectRatio[
     google:     ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9'], // Veo accepts all 6
     minimax:    ['16:9', '9:16', '1:1'],                        // MiniMax only supports 16:9/9:16/1:1
     keling:     ['16:9', '9:16', '1:1'],                        // Kling AI: 16:9/9:16/1:1
-    volcengine: ['16:9', '9:16', '1:1'],                        // Seedance
+    volcengine: SEEDANCE_RATIOS,                                // Seedance 2.0
 };
 
 /** Check whether a given ratio is supported by the inferred video provider. */
@@ -479,8 +577,14 @@ function parseModelMappings(config: CustomProviderExtraConfig): Record<string, s
     }
 }
 
+function stripModelSelectionRef(model: string): string {
+    const index = model.indexOf('::');
+    return index >= 0 ? model.slice(index + 2) : model;
+}
+
 function mapProviderModel(model: string, key?: UserApiKey): string {
-    return parseModelMappings(key?.extraConfig)[model] || model;
+    const bareModel = stripModelSelectionRef(model);
+    return parseModelMappings(key?.extraConfig)[bareModel] || bareModel;
 }
 
 function buildProviderHeaders(
@@ -506,7 +610,7 @@ function usesAnthropicRequestFormat(key?: UserApiKey): boolean {
 }
 
 function normalizeModelName(model: string): string {
-    return model.trim().toLowerCase();
+    return stripModelSelectionRef(model).trim().toLowerCase();
 }
 
 function stripModelProviderPrefix(model: string): string {
@@ -565,7 +669,14 @@ function getImageReferencesForIgnition(references: IgnitionReference[] = []): Vi
         .filter((reference): reference is IgnitionReference & { type: 'image'; href: string; mimeType: string } => (
             reference.type === 'image' && typeof reference.href === 'string' && reference.href.length > 0
         ))
-        .map(reference => ({ href: reference.href, mimeType: reference.mimeType || 'image/png', slotRole: reference.slotRole }));
+        .map(reference => ({
+            href: reference.href,
+            mimeType: reference.mimeType || 'image/png',
+            slotRole: reference.slotRole,
+            label: reference.label,
+            sourceName: reference.sourceName,
+            elementId: reference.elementId,
+        }));
 }
 
 function getMultimodalSlotsForIgnition(references: IgnitionReference[] = []): MultimodalSlot[] {
@@ -580,6 +691,7 @@ function getMultimodalSlotsForIgnition(references: IgnitionReference[] = []): Mu
             href: reference.href,
             mimeType: reference.mimeType || (reference.type === 'audio' ? 'audio/mpeg' : reference.type === 'video' ? 'video/mp4' : 'image/png'),
             role: reference.slotRole,
+            label: reference.label || reference.sourceName,
         }));
 }
 
@@ -589,7 +701,70 @@ function multimodalSlotsFromLegacyReferences(references: VideoImage[] = []): Mul
         href: reference.href,
         mimeType: reference.mimeType || 'image/png',
         role: reference.slotRole,
+        label: reference.label || reference.sourceName,
     }));
+}
+
+function referenceOrdinalLabel(kind: MultimodalSlotKind | 'text' | 'shape', index: number): string {
+    if (kind === 'image') return `图片${index + 1}`;
+    if (kind === 'video') return `视频${index + 1}`;
+    if (kind === 'audio') return `音频${index + 1}`;
+    if (kind === 'text') return `文本${index + 1}`;
+    return `形状${index + 1}`;
+}
+
+function normalizeMentionLabel(label?: string): string {
+    const trimmed = label?.trim();
+    if (!trimmed) return '';
+    return trimmed.startsWith('@') ? trimmed : `@${trimmed}`;
+}
+
+function trimReferenceText(value?: string): string {
+    const normalized = value?.replace(/\s+/g, ' ').trim() || '';
+    if (normalized.length <= 500) return normalized;
+    return `${normalized.slice(0, 500)}...`;
+}
+
+function buildPromptWithReferenceBindings(prompt: string, references: IgnitionReference[] = []): string {
+    const text = prompt.trim();
+    const counts: Record<MultimodalSlotKind | 'text' | 'shape', number> = {
+        image: 0,
+        video: 0,
+        audio: 0,
+        text: 0,
+        shape: 0,
+    };
+    const lines: string[] = [];
+
+    for (const reference of references) {
+        if (reference.type === 'image' || reference.type === 'video' || reference.type === 'audio') {
+            if (!reference.href) continue;
+        }
+        const index = counts[reference.type]++;
+        const ordinal = referenceOrdinalLabel(reference.type, index);
+        const mention = normalizeMentionLabel(reference.label || reference.sourceName);
+        const nameNote = reference.sourceName && mention && reference.sourceName !== mention.replace(/^@/, '')
+            ? `（${reference.sourceName}）`
+            : '';
+        if (reference.type === 'text' || reference.type === 'shape') {
+            const referenceText = trimReferenceText(reference.text);
+            lines.push(referenceText
+                ? `${ordinal} = ${mention || reference.sourceName || reference.elementId || '未命名引用'}${nameNote}: ${referenceText}`
+                : `${ordinal} = ${mention || reference.sourceName || reference.elementId || '未命名引用'}${nameNote}`);
+        } else {
+            const role = reference.slotRole && reference.slotRole !== 'unassigned' ? `，slot=${reference.slotRole}` : '';
+            lines.push(`${ordinal} = ${mention || reference.sourceName || reference.elementId || '未命名引用'}${nameNote}${role}`);
+        }
+    }
+
+    if (lines.length === 0) return text;
+    return [
+        '引用绑定（请严格按这些绑定理解提示词中的 @名称，尤其不要混淆不同角色、主体、首尾帧或风格参考）：',
+        ...lines.map(line => `- ${line}`),
+        '',
+        '用户提示词：',
+        text,
+    ].join('\n');
 }
 
 function parseTextResponseContent(json: any): string {
@@ -1056,7 +1231,7 @@ async function generateVideoWithUnifiedAsyncApi(
     model: string,
     key: UserApiKey,
     options?: {
-        aspectRatio?: '16:9' | '9:16' | '1:1' | '4:3' | '3:4' | '21:9';
+        aspectRatio?: VideoAspectRatio;
         onProgress?: (message: string) => void;
         references?: VideoImage[];
     },
@@ -1158,9 +1333,31 @@ async function generateVideoWithUnifiedAsyncApi(
     throw lastError || new Error('当前自定义端点未暴露可用的视频统一接口。');
 }
 
+function seedanceReferenceLabel(kind: MultimodalSlotKind, index: number): string {
+    if (kind === 'image') return `图片${index + 1}`;
+    if (kind === 'video') return `视频${index + 1}`;
+    return `音频${index + 1}`;
+}
+
+function buildSeedancePromptText(prompt: string, slots: MultimodalSlot[]): string {
+    const counts: Partial<Record<MultimodalSlotKind, number>> = {};
+    const labels = slots.map((slot) => {
+        counts[slot.kind] = counts[slot.kind] || 0;
+        const label = seedanceReferenceLabel(slot.kind, counts[slot.kind]);
+        counts[slot.kind] = counts[slot.kind] + 1;
+        const alias = normalizeMentionLabel(slot.label);
+        return alias ? `${label}=${alias}` : label;
+    });
+    const text = prompt.trim();
+    if (!labels.length) return text;
+    return `参考素材编号：${labels.join('、')}。请按这些编号理解提示词中的图片、视频和音频引用，角色和主体不要混淆。\n\n${text}`;
+}
+
 function buildSeedanceContentItems(prompt: string, slots: MultimodalSlot[], capability: CapabilityDictionary): Array<Record<string, unknown>> {
-    const contentItems: Array<Record<string, unknown>> = [{ type: 'text', text: prompt }];
-    for (const slot of filterMultimodalSlots(slots, capability)) {
+    const filteredSlots = filterMultimodalSlots(slots, capability);
+    const text = buildSeedancePromptText(prompt, filteredSlots);
+    const contentItems: Array<Record<string, unknown>> = text ? [{ type: 'text', text }] : [];
+    for (const slot of filteredSlots) {
         const role = normalizeMultimodalRole(slot);
         if (slot.kind === 'image') {
             contentItems.push({
@@ -2077,14 +2274,15 @@ export async function submitSeedanceVideoTask(
     const mappedModel = normalizeSeedanceModel(mapProviderModel(model || DEFAULT_SEEDANCE_MODEL, key));
     const capability = getCapabilityDictionary(mappedModel, 'volcengine');
     const slots = options?.slots?.length ? options.slots : multimodalSlotsFromLegacyReferences(options?.references ?? []);
+    validateSeedanceSlots(slots, capability);
 
     const createBody: Record<string, unknown> = {
         model: mappedModel,
         content: buildSeedanceContentItems(prompt, slots, capability),
         ...withSupportedParams(capability, {
-            ratio: options?.aspectRatio || '16:9',
-            duration: options?.durationSec,
-            resolution: options?.resolution,
+            ratio: normalizeSeedanceRatio(options?.aspectRatio || '16:9'),
+            duration: normalizeSeedanceDuration(options?.durationSec),
+            resolution: normalizeSeedanceResolution(options?.resolution, mappedModel),
             frames: options?.frames,
             seed: options?.seed,
             camera_fixed: options?.cameraFixed,
@@ -2190,7 +2388,7 @@ export async function generateVideoWithProvider(
     model: string,
     key?: UserApiKey,
     options?: {
-        aspectRatio?: '16:9' | '9:16' | '1:1' | '4:3' | '3:4' | '21:9';
+        aspectRatio?: VideoAspectRatio;
         onProgress?: (message: string) => void;
         references?: VideoImage[];
         slots?: MultimodalSlot[];
@@ -2445,11 +2643,16 @@ export async function executeUnifiedIgnition(input: UnifiedIgnitionInput): Promi
     }
 
     try {
+        const effectivePrompt = buildPromptWithReferenceBindings(prompt, input.references);
         if (capability === 'video') {
             const videoRefs = getImageReferencesForIgnition(input.references);
             const videoSlots = getMultimodalSlotsForIgnition(input.references);
-            const result = await generateVideoWithProvider(prompt, input.modelId, input.apiKeyPayload, {
+            const result = await generateVideoWithProvider(effectivePrompt, input.modelId, input.apiKeyPayload, {
                 aspectRatio: input.aspectRatio || getDynamicParamSchema(input.modelId).defaultAspectRatio || '16:9',
+                durationSec: input.durationSec,
+                resolution: input.resolution,
+                generateAudio: input.generateAudio,
+                watermark: input.watermark,
                 references: videoRefs,
                 slots: videoSlots,
                 onProgress: message => input.onProgress?.(35, message),
@@ -2459,7 +2662,7 @@ export async function executeUnifiedIgnition(input: UnifiedIgnitionInput): Promi
         }
 
         const imageReferences = getImageReferencesForIgnition(input.references);
-        const result = await generateImageWithProvider(prompt, input.modelId, input.apiKeyPayload, imageReferences);
+        const result = await generateImageWithProvider(effectivePrompt, input.modelId, input.apiKeyPayload, imageReferences);
 
         if (!result.newImageBase64 || !result.newImageMimeType) {
             return {

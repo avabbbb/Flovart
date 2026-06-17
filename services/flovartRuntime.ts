@@ -1,4 +1,5 @@
 import type { AssetSlotRole } from '../types';
+import type { MultimodalSlot } from './aiGateway';
 
 type MaybePromise<T> = T | Promise<T>;
 
@@ -18,7 +19,16 @@ export interface RuntimeCommandResult {
 export interface FlovartRuntimeApi {
   generate?: {
     image?: (input: { prompt: string; name?: string }) => MaybePromise<RuntimeCommandResult>;
-    video?: (input: { prompt: string; sourceImageIds?: string[] }) => MaybePromise<RuntimeCommandResult>;
+    video?: (input: {
+      prompt: string;
+      sourceImageIds?: string[];
+      sourceVideoIds?: string[];
+      slots?: MultimodalSlot[];
+      durationSec?: number;
+      aspectRatio?: string;
+      resolution?: string;
+      seed?: number;
+    }) => MaybePromise<RuntimeCommandResult>;
   };
   element?: {
     create?: (input: {

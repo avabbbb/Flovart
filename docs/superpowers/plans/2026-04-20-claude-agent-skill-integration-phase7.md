@@ -69,7 +69,7 @@ P7 完成后，产品应具备：
 
 ### 本阶段不做
 - 远程托管 agent runtime
-- 完整 MCP server 改造
+- 完整 CLI-first agent bridge 改造
 - 云端多用户协同命令总线
 - 完整自然语言规划器直接嵌入白板前端
 
