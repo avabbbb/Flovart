@@ -29,12 +29,15 @@ const makeProject = (): WorkflowProject => ({
 function Harness({ initial = makeProject() }: { initial?: WorkflowProject }) {
   const [project, setProject] = useState(initial);
   return (
-    <InfiniteWorkflow
-      project={project}
-      updateProject={patch => setProject(current => ({ ...current, ...patch }))}
-      onRunNode={() => undefined}
-      onOpenAgent={() => undefined}
-    />
+    <>
+      <InfiniteWorkflow
+        project={project}
+        updateProject={patch => setProject(current => ({ ...current, ...patch }))}
+        onRunNode={() => undefined}
+        onOpenAgent={() => undefined}
+      />
+      <output data-testid="workflow-project-state" hidden>{JSON.stringify(project)}</output>
+    </>
   );
 }
 
@@ -507,11 +510,22 @@ describe('InfiniteWorkflow surface interactions', () => {
     expect(await screen.findByRole('status')).toHaveTextContent('仅支持图片、视频或音频文件');
   });
 
-  it('shows a recoverable shell for missing media and replaces it without moving its center', async () => {
+  it('shows a recoverable shell for missing durable media', async () => {
     const initial = makeProject();
+    initial.nodes[1] = { ...initial.nodes[1], metadata: { storageKey: 'missing-media', mimeType: 'image/png' } };
+    render(<Harness initial={initial} />);
+
+    expect(await screen.findByText('媒体文件不存在，请重新选择文件')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '重新选择媒体文件' })).toBeInTheDocument();
+  });
+
+  it('replaces media without moving its center and preserves the old Blob for undo', async () => {
+    const initial = makeProject();
+    const oldBlob = new Blob(['old-image'], { type: 'image/png' });
+    await workflowMediaStorage.set('old-media', oldBlob);
     initial.nodes[1] = {
       ...initial.nodes[1],
-      metadata: { storageKey: 'missing-media', mimeType: 'image/png', naturalWidth: 1600, naturalHeight: 900 },
+      metadata: { storageKey: 'old-media', mimeType: 'image/png', naturalWidth: 1600, naturalHeight: 900 },
     };
     initial.selectedNodeIds = ['target'];
     initial.connections = [{ id: 'media-connection', fromNodeId: 'source', toNodeId: 'target' }];
@@ -523,20 +537,26 @@ describe('InfiniteWorkflow surface interactions', () => {
       set src(_value: string) { queueMicrotask(() => this.onload?.()); }
     }
     vi.stubGlobal('Image', TestImage);
-    const remove = vi.spyOn(workflowMediaStorage, 'remove');
     render(<Harness initial={initial} />);
 
-    expect(await screen.findByText('媒体文件不存在，请重新选择文件')).toBeInTheDocument();
+    await waitFor(() => expect(node('target').querySelector('img')).toBeInTheDocument());
     const input = node('target').querySelector<HTMLInputElement>('input[accept="image/*"]')!;
     fireEvent.change(input, { target: { files: [new File(['new-image'], 'replacement.png', { type: 'image/png' })] } });
 
-    await waitFor(() => expect(node('target').querySelector('img')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByTestId('workflow-project-state')).not.toHaveTextContent('old-media'));
     expect(node('target').style.transform).toBe('translate(480px, 82.5px)');
     expect(node('target').style.width).toBe('420px');
     expect(node('target').style.height).toBe('315px');
     expect(node('target')).toHaveClass('is-selected');
     expect(editor().querySelector('[data-workflow-connection-id="media-connection"]')).toBeInTheDocument();
-    expect(remove).toHaveBeenCalledWith('missing-media');
+
+    fireEvent.click(screen.getByRole('button', { name: '撤销' }));
+    await waitFor(() => expect(screen.getByTestId('workflow-project-state')).toHaveTextContent('"storageKey":"old-media"'));
+    const restoredBlob = await workflowMediaStorage.get('old-media');
+    expect(restoredBlob).toBeInstanceOf(Blob);
+    expect(await restoredBlob?.text()).toBe('old-image');
+    expect(node('target')).toHaveClass('is-selected');
+    expect(editor().querySelector('[data-workflow-connection-id="media-connection"]')).toBeInTheDocument();
   });
 
   it('keeps the natural ratio while resizing image and video nodes by default', () => {

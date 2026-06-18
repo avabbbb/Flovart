@@ -515,9 +515,6 @@ export function InfiniteWorkflow({
         metadata: { ...item.metadata, ...metadata, href: undefined, error: undefined },
       } : item);
       commitFrame(updated, projectRef.current.connections);
-      const oldKey = node.metadata.storageKey;
-      const oldKeyStillUsed = oldKey && projectRef.current.nodes.some(item => item.id !== node.id && item.metadata.storageKey === oldKey);
-      if (oldKey && !oldKeyStillUsed) await workflowMediaStorage.remove(oldKey);
       setNotice(null);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : '媒体文件替换失败');
