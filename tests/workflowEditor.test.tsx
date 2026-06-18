@@ -119,7 +119,22 @@ describe('InfiniteWorkflow surface interactions', () => {
     view.rerender(<InfiniteWorkflow project={project} updateProject={updateProject} onRunNode={() => undefined} onOpenAgent={() => undefined} />);
     expect(node('source')).not.toHaveClass('is-selected');
     expect(node('target')).toHaveClass('is-selected');
+    expect(screen.getByTestId('workflow-node-toolbar')).toBeInTheDocument();
+    expect(screen.getByTestId('workflow-node-prompt-bar')).toBeInTheDocument();
     expect(updateProject).not.toHaveBeenCalled();
+  });
+
+  it('keeps node overlays in screen space and dismisses them with the background', () => {
+    render(<Harness />);
+    fireEvent.pointerDown(node('target'), { button: 0, pointerId: 1, clientX: 540, clientY: 140 });
+    fireEvent.pointerUp(window, { pointerId: 1, clientX: 540, clientY: 140 });
+    const overlay = screen.getByTestId('workflow-node-toolbar').parentElement!;
+    expect(overlay.style.transform).not.toContain('scale(');
+    fireEvent.wheel(editor(), { clientX: 400, clientY: 300, deltaY: -200 });
+    expect(screen.getByTestId('workflow-node-toolbar')).toBeInTheDocument();
+    fireEvent.pointerDown(editor(), { button: 0, pointerId: 2, clientX: 20, clientY: 20 });
+    fireEvent.pointerUp(window, { pointerId: 2, clientX: 20, clientY: 20 });
+    expect(screen.queryByTestId('workflow-node-toolbar')).not.toBeInTheDocument();
   });
 
   it('records a multi-move node drag as one undoable history entry', () => {

@@ -11,13 +11,14 @@ import type {
 } from '../types';
 import RichPromptEditor, { type RichPromptEditorHandle } from './RichPromptEditor';
 import type { MentionItem } from './MentionList';
+export type { MentionItem } from './MentionList';
 import { extractMentions } from './CanvasMentionExtension';
 import { inferProviderFromModel, PROVIDER_LABELS, getModelCapabilityTags, getSupportedRatios, type VideoAspectRatio } from '../services/aiGateway';
 import { SOCIAL_PRESETS } from '../utils/socialPresets';
 import { readColdMedia } from '../utils/mediaIndexedDB';
 import { modelRefLabel, modelRefModelId, modelRefProvider, modelRefSearchText } from '../utils/modelRefs';
 
-interface PromptBarProps {
+export interface PromptBarProps {
     t: (key: string, ...args: any[]) => string;
     theme: 'light' | 'dark';
     compactMode?: boolean;
@@ -53,6 +54,7 @@ interface PromptBarProps {
     onImageModelChange?: (model: string) => void;
     onVideoModelChange?: (model: string) => void;
     canvasElements?: Element[];
+    mentionItems?: MentionItem[];
     attachments?: ChatAttachment[];
     onAddAttachments?: (files: FileList | File[]) => void;
     onRemoveAttachment?: (id: string) => void;
@@ -215,6 +217,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
     onImageModelChange,
     onVideoModelChange,
     canvasElements = [],
+    mentionItems,
     attachments = [],
     onAddAttachments,
     onRemoveAttachment,
@@ -268,7 +271,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
 
     /** 将画布元素转换为 RichPromptEditor 需要的 MentionItem[] */
     const canvasItems = useMemo<MentionItem[]>(() =>
-        canvasElements
+        mentionItems || canvasElements
             .filter(el => el.isVisible !== false)
             .map(el => ({
                 id: el.id,
@@ -277,7 +280,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                 elementType: el.type,
                 description: getMentionDescription(el),
             })),
-        [canvasElements]
+        [canvasElements, mentionItems]
     );
 
     /** 当前视频模型支持的比例列表 */

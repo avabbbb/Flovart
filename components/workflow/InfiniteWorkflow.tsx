@@ -1,6 +1,7 @@
 import { nanoid } from 'nanoid';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
+import type { ModelPreference, UserApiKey } from '../../types';
 import { createWorkflowNode } from './constants';
 import {
   discardWorkflowMediaRecord,
@@ -20,6 +21,9 @@ import { WorkflowCreateMenu, type WorkflowCreateMenuState } from './WorkflowCrea
 import type { WorkflowSharedMedia } from './WorkflowConfigPanel';
 import { WorkflowMiniMap } from './WorkflowMiniMap';
 import { WorkflowNode } from './WorkflowNode';
+import { WorkflowNodePromptBar, type WorkflowModelOptions } from './WorkflowNodePromptBar';
+import { WorkflowNodeToolbar } from './WorkflowNodeToolbar';
+import { WorkflowConfigPanel } from './WorkflowConfigPanel';
 import { WorkflowToolbar, type WorkflowTool } from './WorkflowToolbar';
 import type { WorkflowConnection, WorkflowNode as WorkflowNodeData, WorkflowNodeType, WorkflowOp, WorkflowPoint, WorkflowProject, WorkflowSnapshot, WorkflowViewport } from './types';
 
@@ -48,11 +52,25 @@ export function InfiniteWorkflow({
   updateProject,
   onRunNode,
   onOpenAgent,
+  t = key => key,
+  theme = 'light',
+  language = 'zho',
+  userApiKeys = [],
+  modelPreference = { textModel: '', imageModel: '', videoModel: '' },
+  dynamicModelOptions = { text: [], image: [], video: [] },
+  onOpenSettings,
 }: {
   project: WorkflowProject;
   updateProject: (patch: Partial<WorkflowProject>) => void;
   onRunNode: (nodeId: string) => void;
-  onOpenAgent: () => void;
+  onOpenAgent?: () => void;
+  t?: (key: string, ...args: any[]) => string;
+  theme?: 'light' | 'dark';
+  language?: 'en' | 'zho';
+  userApiKeys?: UserApiKey[];
+  modelPreference?: ModelPreference;
+  dynamicModelOptions?: WorkflowModelOptions;
+  onOpenSettings?: () => void;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
   const worldRef = useRef<HTMLDivElement>(null);
@@ -79,6 +97,7 @@ export function InfiniteWorkflow({
   const [createMenu, setCreateMenu] = useState<WorkflowCreateMenuState | null>(null);
   const [contextMenu, setContextMenu] = useState<WorkflowContextMenuState | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [overlayHidden, setOverlayHidden] = useState(false);
 
   projectRef.current = project;
   viewportRef.current = project.viewport;
@@ -372,6 +391,7 @@ export function InfiniteWorkflow({
     flushPendingMove();
     updateInteraction(clientX, clientY, pointerId);
     interactionRef.current = null;
+    setOverlayHidden(false);
     if (interaction.type === 'node' || interaction.type === 'resize') {
       if (interaction.moved) pushHistory(interaction.frame);
       return;
@@ -402,6 +422,7 @@ export function InfiniteWorkflow({
     animationFrameRef.current = null;
     pendingMoveRef.current = null;
     interactionRef.current = null;
+    setOverlayHidden(false);
     if (interaction?.type === 'node' || interaction?.type === 'resize') patchProject(interaction.frame);
     if (interaction?.type === 'pan') patchProject({ viewport: interaction.viewport });
     if (interaction?.type === 'selection') selectNodes(interaction.box.initialIds);
@@ -658,6 +679,7 @@ export function InfiniteWorkflow({
       event.stopPropagation();
       event.preventDefault();
       startPan(event.clientX, event.clientY, event.pointerId);
+      setOverlayHidden(true);
       return;
     }
     if (event.target instanceof Element && event.target.closest(BLOCKED_TARGET)) return;
@@ -680,6 +702,7 @@ export function InfiniteWorkflow({
       frame,
       moved: false,
     };
+    setOverlayHidden(true);
   };
 
   const isTrueBackground = (target: EventTarget | null) => {
@@ -699,6 +722,7 @@ export function InfiniteWorkflow({
       const point = screenToWorkflow(event.clientX, event.clientY);
       const box = { start: point, current: point, additive: event.shiftKey, initialIds: [...selectedIdsRef.current] };
       interactionRef.current = { type: 'selection', pointerId: event.pointerId, box };
+      setOverlayHidden(true);
       setSelectionBox(box);
       if (!event.shiftKey) selectNodes([]);
       return;
@@ -706,6 +730,7 @@ export function InfiniteWorkflow({
     if (event.button === 0 || event.button === 1) {
       event.preventDefault();
       startPan(event.clientX, event.clientY, event.pointerId);
+      setOverlayHidden(true);
       if (!event.shiftKey && !event.ctrlKey && !event.metaKey) selectNodes([]);
     }
   };
@@ -717,6 +742,19 @@ export function InfiniteWorkflow({
     height: Math.abs(selectionBox.current.y - selectionBox.start.y),
   } : undefined;
   const selectedNodes = useMemo(() => new Set(selectedNodeIds), [selectedNodeIds]);
+  const selectedNodeData = project.nodes.filter(node => selectedNodes.has(node.id));
+  const overlayBounds = selectedNodeData.length ? selectedNodeData.reduce((bounds, node) => ({
+    left: Math.min(bounds.left, node.position.x),
+    top: Math.min(bounds.top, node.position.y),
+    right: Math.max(bounds.right, node.position.x + node.width),
+    bottom: Math.max(bounds.bottom, node.position.y + node.height),
+  }), { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity }) : null;
+  const rootRect = rootRef.current?.getBoundingClientRect();
+  const overlayCenter = overlayBounds ? project.viewport.x + ((overlayBounds.left + overlayBounds.right) / 2) * project.viewport.k : 0;
+  const toolbarLeft = Math.max(8, Math.min(overlayCenter - 180, (rootRect?.width || 1000) - 368));
+  const toolbarTop = overlayBounds ? Math.max(8, project.viewport.y + overlayBounds.top * project.viewport.k - 60) : 0;
+  const promptLeft = Math.max(8, Math.min(overlayCenter - 360, (rootRect?.width || 1000) - 728));
+  const promptTop = overlayBounds ? Math.max(64, Math.min(project.viewport.y + overlayBounds.bottom * project.viewport.k + 12, (rootRect?.height || 700) - 190)) : 0;
   const gridSize = (project.backgroundMode === 'dots' ? 20 : 24) * project.viewport.k;
 
   return (
@@ -814,6 +852,7 @@ export function InfiniteWorkflow({
               event.stopPropagation();
               const frame = currentFrame();
               interactionRef.current = { type: 'resize', pointerId: event.pointerId, id: node.id, start: screenToWorkflow(event.clientX, event.clientY), width: node.width, height: node.height, frame, moved: false };
+              setOverlayHidden(true);
             }}
             onChangeText={content => patchProject({ nodes: projectRef.current.nodes.map(item => item.id === node.id ? { ...item, metadata: { ...item.metadata, content } } : item) })}
             onChangeMetadata={metadata => patchProject({
@@ -833,6 +872,29 @@ export function InfiniteWorkflow({
         ))}
         {selectionStyle && <div className="workflow-selection-box" style={selectionStyle} />}
       </div>
+      {!overlayHidden && overlayBounds && selectedNodeData.length > 0 && <>
+        <div data-workflow-overlay style={{ position: 'absolute', zIndex: 70, left: toolbarLeft, top: toolbarTop }}>
+          <WorkflowNodeToolbar
+            nodes={selectedNodeData}
+            onCopy={ids => { clipboardRef.current = projectRef.current.nodes.filter(node => ids.includes(node.id)); setClipboardVersion(version => version + 1); }}
+            onDelete={ids => applyOps([{ type: 'delete_nodes', ids }])}
+            onRun={id => onRunNode(id)}
+            onReplaceMedia={(id, file) => { const node = projectRef.current.nodes.find(item => item.id === id); if (node) void replaceMedia(node, file); }}
+            onToggleFreeResize={id => { const node = projectRef.current.nodes.find(item => item.id === id); if (node) applyOps([{ type: 'update_node', id, patch: { freeResize: !node.freeResize } }]); }}
+            onAlign={alignment => {
+              if (selectedNodeData.length < 2) return;
+              const target = alignment === 'left' ? Math.min(...selectedNodeData.map(node => node.position.x)) : alignment === 'right' ? Math.max(...selectedNodeData.map(node => node.position.x + node.width)) : selectedNodeData.reduce((sum, node) => sum + node.position.x + node.width / 2, 0) / selectedNodeData.length;
+              commitFrame(projectRef.current.nodes.map(node => !selectedNodes.has(node.id) ? node : { ...node, position: { ...node.position, x: alignment === 'left' ? target : alignment === 'right' ? target - node.width : target - node.width / 2 } }), projectRef.current.connections);
+            }}
+          />
+        </div>
+        {selectedNodeData.length === 1 && selectedNodeData[0].type === 'config' && <div data-workflow-overlay style={{ position: 'absolute', zIndex: 69, left: promptLeft, top: promptTop, width: 420 }} onWheel={event => event.stopPropagation()}>
+          <WorkflowConfigPanel node={selectedNodeData[0]} onChange={metadata => applyOps([{ type: 'update_node', id: selectedNodeData[0].id, metadata: { ...selectedNodeData[0].metadata, ...metadata } }])} onRun={() => onRunNode(selectedNodeData[0].id)} />
+        </div>}
+        {selectedNodeData.length === 1 && ['image', 'video', 'text'].includes(selectedNodeData[0].type) && <div data-workflow-overlay style={{ position: 'absolute', zIndex: 69, left: promptLeft, top: promptTop }}>
+          <WorkflowNodePromptBar node={selectedNodeData[0]} nodes={project.nodes} t={t} theme={theme} language={language} userApiKeys={userApiKeys} modelPreference={modelPreference} dynamicModelOptions={dynamicModelOptions} onOpenSettings={onOpenSettings} onChange={metadata => applyOps([{ type: 'update_node', id: selectedNodeData[0].id, metadata: { ...selectedNodeData[0].metadata, ...metadata } }])} onRun={() => onRunNode(selectedNodeData[0].id)} />
+        </div>}
+      </>}
       <WorkflowMiniMap nodes={project.nodes} viewport={project.viewport} onCenter={(x, y) => {
         const rect = rootRef.current?.getBoundingClientRect();
         patchProject({ viewport: { ...viewportRef.current, x: (rect?.width || 1000) / 2 - x * viewportRef.current.k, y: (rect?.height || 700) / 2 - y * viewportRef.current.k } });

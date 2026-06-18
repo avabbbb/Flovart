@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { type ReactNode } from 'react';
 import type { Element, ImageElement, VideoElement, ShapeElement, TextElement, ArrowElement, LineElement, ImageFilters } from '../types';
 import { ImageFilterPanel } from './ImageFilterPanel';
 import type { Rect } from '../utils/canvasHelpers';
@@ -38,6 +38,22 @@ export interface ElementToolbarProps {
     relationFocusCount?: number;
     isRelationFocusActive?: boolean;
     onToggleRelationFocus?: () => void;
+}
+
+export function ElementToolbarShell({ children, className = '', testId }: { children: ReactNode; className?: string; testId?: string }) {
+    const stop = (event: React.SyntheticEvent) => event.stopPropagation();
+    return (
+        <div
+            data-workflow-overlay
+            data-testid={testId}
+            className={`isl-shell isl-pop-in flex items-center justify-start gap-2 overflow-x-auto p-1.5 ${className}`}
+            onMouseDown={stop}
+            onPointerDown={stop}
+            onWheel={stop}
+        >
+            {children}
+        </div>
+    );
 }
 
 export function ElementToolbar(props: ElementToolbarProps) {

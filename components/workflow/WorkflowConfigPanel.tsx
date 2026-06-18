@@ -45,7 +45,7 @@ export function WorkflowConfigPanel({ node, onChange, onRun }: {
   const audioUnsupported = config.mode === 'audio';
 
   return (
-    <div className="workflow-config" onPointerDown={event => event.stopPropagation()}>
+    <div data-workflow-overlay data-testid="workflow-config-panel" className="workflow-config" onPointerDown={event => event.stopPropagation()} onWheel={event => event.stopPropagation()}>
       <div className="workflow-config__row">
         <label>类型</label>
         <select value={config.mode} onChange={event => {
@@ -95,9 +95,10 @@ export function WorkflowConfigPanel({ node, onChange, onRun }: {
         </div>
       )}
       {node.metadata.error && <p className="workflow-config__error">{node.metadata.error}</p>}
+      {status === 'loading' && <p role="status">生成中{node.metadata.progress === undefined ? '' : ` · ${Math.round(node.metadata.progress)}%`}</p>}
       {audioUnsupported && <p className="workflow-config__error">音频生成暂未支持</p>}
       <button type="button" onClick={onRun} disabled={audioUnsupported || status === 'loading'}>
-        <Play size={13} />{audioUnsupported ? '暂不支持' : status === 'loading' ? '生成中...' : '生成'}
+        <Play size={13} />{audioUnsupported ? '暂不支持' : status === 'loading' ? '生成中...' : status === 'error' ? '重试' : '生成'}
       </button>
     </div>
   );

@@ -30,7 +30,7 @@ export function WorkflowToolbar({
   onRedo: () => void;
   onFit: () => void;
   onToggleGrid: () => void;
-  onOpenAgent: () => void;
+  onOpenAgent?: () => void;
 }) {
   const imageInput = useRef<HTMLInputElement>(null);
   const videoInput = useRef<HTMLInputElement>(null);
@@ -56,8 +56,7 @@ export function WorkflowToolbar({
       <button type="button" aria-label="重做" disabled={!canRedo} onClick={onRedo}><Redo2 size={16} /></button>
       <button type="button" aria-label="适应视图" onClick={onFit}><Focus size={16} /></button>
       <button type="button" aria-label="切换网格" onClick={onToggleGrid}><Grid2X2 size={16} /></button>
-      <span className="workflow-toolbar__divider" />
-      <button type="button" aria-label="打开 Agent" onClick={onOpenAgent}><Bot size={16} /></button>
+      {onOpenAgent && <><span className="workflow-toolbar__divider" /><button type="button" aria-label="打开 Agent" onClick={onOpenAgent}><Bot size={16} /></button></>}
       {libraryOpen && <div className="workflow-toolbar__library">{sharedMedia.length ? sharedMedia.map(media => <button type="button" key={media.id} onClick={() => { onAddSharedMedia(media); setLibraryOpen(false); }}><img src={media.href} alt="" /><span>{media.name}</span></button>) : <p>素材库和生成历史为空。</p>}</div>}
     </div>
   );

@@ -42,6 +42,7 @@ export interface WorkflowNodeMetadata {
   content?: string;
   prompt?: string;
   richTextDocument?: WorkflowRichPromptDocument;
+  mentionedNodeIds?: string[];
   href?: string;
   poster?: string;
   storageKey?: string;
