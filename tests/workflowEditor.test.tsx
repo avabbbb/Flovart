@@ -581,13 +581,22 @@ describe('InfiniteWorkflow surface interactions', () => {
     expect(node('target')).toHaveClass('is-selected');
     expect(editor().querySelector('[data-workflow-connection-id="media-connection"]')).toBeInTheDocument();
 
+    fireEvent.pointerDown(editor(), { button: 0, clientX: 20, clientY: 20 });
+    fireEvent.pointerUp(window, { clientX: 20, clientY: 20 });
     fireEvent.click(screen.getByRole('button', { name: '撤销' }));
     await waitFor(() => expect(screen.getByTestId('workflow-project-state')).toHaveTextContent('"storageKey":"old-media"'));
     const restoredBlob = await workflowMediaStorage.get('old-media');
     expect(restoredBlob).toBeInstanceOf(Blob);
     expect(await restoredBlob?.text()).toBe('old-image');
-    expect(node('target')).toHaveClass('is-selected');
     expect(editor().querySelector('[data-workflow-connection-id="media-connection"]')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '移除媒体文件' }));
+    await waitFor(() => expect(screen.getByTestId('workflow-project-state')).not.toHaveTextContent('old-media'));
+    fireEvent.pointerDown(editor(), { button: 0, clientX: 20, clientY: 20 });
+    fireEvent.pointerUp(window, { clientX: 20, clientY: 20 });
+    fireEvent.click(screen.getByRole('button', { name: '撤销' }));
+    await waitFor(() => expect(screen.getByTestId('workflow-project-state')).toHaveTextContent('"storageKey":"old-media"'));
+    expect(await workflowMediaStorage.get('old-media')).toBeInstanceOf(Blob);
   });
 
   it('keeps only the latest concurrent replacement and uses the node center after movement', async () => {
@@ -608,6 +617,8 @@ describe('InfiniteWorkflow surface interactions', () => {
     fireEvent.change(input, { target: { files: [new File(['first'], 'first.png', { type: 'image/png' })] } });
     fireEvent.change(input, { target: { files: [new File(['second'], 'second.png', { type: 'image/png' })] } });
     await waitFor(() => expect(writes).toHaveLength(2));
+    fireEvent.pointerDown(editor(), { button: 0, clientX: 20, clientY: 20 });
+    fireEvent.pointerUp(window, { clientX: 20, clientY: 20 });
     fireEvent.pointerDown(node('target'), { button: 0, clientX: 540, clientY: 140 });
     fireEvent.pointerUp(window, { clientX: 640, clientY: 190 });
 
@@ -684,6 +695,8 @@ describe('InfiniteWorkflow surface interactions', () => {
     fireEvent.pointerDown(node('source'), { button: 0, clientX: 120, clientY: 120 });
     fireEvent.pointerUp(window, { clientX: 120, clientY: 120 });
     fireEvent.keyDown(window, { key: 'c', ctrlKey: true });
+    fireEvent.pointerDown(editor(), { button: 0, clientX: 20, clientY: 20 });
+    fireEvent.pointerUp(window, { clientX: 20, clientY: 20 });
     fireEvent.keyDown(window, { key: 'v', ctrlKey: true });
     expect(read).not.toHaveBeenCalled();
     expect(editor().querySelectorAll('[data-workflow-node-id]')).toHaveLength(3);

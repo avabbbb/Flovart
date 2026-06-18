@@ -69,6 +69,7 @@ export function InfiniteWorkflow({
   const replaceSequenceRef = useRef(new Map<string, number>());
   const mediaReferenceOwnerRef = useRef(`workflow-editor-${nanoid()}`);
   const [tool, setTool] = useState<WorkflowTool>('select');
+  const [clipboardVersion, setClipboardVersion] = useState(0);
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>(project.selectedNodeIds || []);
   const [selectedConnectionId, setSelectedConnectionId] = useState<string | null>(null);
   const [past, setPast] = useState<Frame[]>([]);
@@ -99,7 +100,7 @@ export function InfiniteWorkflow({
       clipboardRef.current,
     ]);
     void pruneWorkflowMedia();
-  }, [future, past, project.nodes]);
+  }, [clipboardVersion, future, past, project.nodes]);
 
   const patchProject = useCallback((patch: Partial<WorkflowProject>) => {
     projectRef.current = { ...projectRef.current, ...patch };
@@ -116,10 +117,6 @@ export function InfiniteWorkflow({
 
   const closeCreateMenu = useCallback(() => {
     setCreateMenu(null);
-    clipboardRef.current = [];
-    replaceSequenceRef.current.clear();
-    registerWorkflowMediaTransientReferences(mediaReferenceOwnerRef.current, [project.nodes]);
-    void pruneWorkflowMedia();
     const opener = createMenuOpenerRef.current || rootRef.current;
     createMenuOpenerRef.current = null;
     opener?.focus({ preventScroll: true });
@@ -135,6 +132,9 @@ export function InfiniteWorkflow({
     setSelectionBox(null);
     setConnectionDrag(null);
     setCreateMenu(null);
+    clipboardRef.current = [];
+    setClipboardVersion(version => version + 1);
+    replaceSequenceRef.current.clear();
     createMenuOpenerRef.current = null;
     interactionRef.current = null;
   }, [project.id]);
@@ -449,13 +449,8 @@ export function InfiniteWorkflow({
 
   const copySelection = useCallback(() => {
     clipboardRef.current = projectRef.current.nodes.filter(node => selectedIdsRef.current.includes(node.id));
-    registerWorkflowMediaTransientReferences(mediaReferenceOwnerRef.current, [
-      projectRef.current.nodes,
-      ...past.map(frame => frame.nodes),
-      ...future.map(frame => frame.nodes),
-      clipboardRef.current,
-    ]);
-  }, [future, past]);
+    setClipboardVersion(version => version + 1);
+  }, []);
 
   const pasteSelection = useCallback(async () => {
     const expectedProjectId = projectRef.current.id;
@@ -851,12 +846,7 @@ export function InfiniteWorkflow({
           onCopy={() => {
             if (contextMenu.type === 'node') {
               clipboardRef.current = projectRef.current.nodes.filter(node => node.id === contextMenu.id);
-              registerWorkflowMediaTransientReferences(mediaReferenceOwnerRef.current, [
-                projectRef.current.nodes,
-                ...past.map(frame => frame.nodes),
-                ...future.map(frame => frame.nodes),
-                clipboardRef.current,
-              ]);
+              setClipboardVersion(version => version + 1);
             }
             setContextMenu(null);
           }}
