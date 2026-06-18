@@ -2,7 +2,9 @@ import { nanoid } from 'nanoid';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import { createWorkflowNode } from './constants';
+import { fitWorkflowMediaSize, ingestWorkflowMedia, workflowMediaType, type WorkflowMediaRecord } from './media';
 import { applyWorkflowOps, validateWorkflowConnection } from './ops';
+import { workflowMediaStorage } from './storage';
 import { WorkflowConnections } from './WorkflowConnections';
 import { WorkflowContextMenu, type WorkflowContextMenuState } from './WorkflowContextMenu';
 import { WorkflowCreateMenu, type WorkflowCreateMenuState } from './WorkflowCreateMenu';
@@ -161,6 +163,27 @@ export function InfiniteWorkflow({
     };
   }, []);
 
+  const viewportCenter = useCallback(() => {
+    const rect = rootRef.current?.getBoundingClientRect();
+    return screenToWorkflow((rect?.left || 0) + (rect?.width || 1000) / 2, (rect?.top || 0) + (rect?.height || 700) / 2);
+  }, [screenToWorkflow]);
+
+  const addMediaAt = useCallback(async (file: File, center: WorkflowPoint) => {
+    try {
+      const record = await ingestWorkflowMedia(file);
+      const { type, ...metadata } = record;
+      const size = fitWorkflowMediaSize(type, record.naturalWidth, record.naturalHeight);
+      const node = {
+        ...createWorkflowNode(nanoid(), type, { x: center.x - size.width / 2, y: center.y - size.height / 2 }, metadata),
+        ...size,
+        freeResize: false,
+      };
+      if (!applyOps([{ type: 'add_node', node }])) await workflowMediaStorage.remove(record.storageKey);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : '媒体文件导入失败');
+    }
+  }, [applyOps]);
+
   const localPoint = useCallback((clientX: number, clientY: number): WorkflowPoint => {
     const rect = rootRef.current?.getBoundingClientRect();
     return { x: clientX - (rect?.left || 0), y: clientY - (rect?.top || 0) };
@@ -234,8 +257,20 @@ export function InfiniteWorkflow({
       const point = screenToWorkflow(clientX, clientY);
       const dx = point.x - interaction.start.x;
       const dy = point.y - interaction.start.y;
-      const width = Math.max(180, interaction.width + dx);
-      const height = Math.max(100, interaction.height + dy);
+      let width = Math.max(180, interaction.width + dx);
+      let height = Math.max(100, interaction.height + dy);
+      const resizingNode = interaction.frame.nodes.find(node => node.id === interaction.id);
+      if (resizingNode && (resizingNode.type === 'image' || resizingNode.type === 'video') && resizingNode.freeResize !== true) {
+        const ratio = (resizingNode.metadata.naturalWidth || interaction.width) / (resizingNode.metadata.naturalHeight || interaction.height);
+        height = width / ratio;
+        if (height < 100) {
+          height = 100;
+          width = height * ratio;
+        }
+        width = Math.round(width);
+        height = Math.round(height);
+      }
+      if (resizingNode?.type === 'audio') height = 120;
       interaction.moved = width !== interaction.width || height !== interaction.height;
       patchProject({ nodes: interaction.frame.nodes.map(node => node.id === interaction.id
         ? { ...node, width, height }
@@ -374,17 +409,47 @@ export function InfiniteWorkflow({
     clipboardRef.current = projectRef.current.nodes.filter(node => selectedIdsRef.current.includes(node.id));
   }, []);
 
-  const pasteSelection = useCallback(() => {
-    if (clipboardRef.current.length === 0) return;
-    const nodes = clipboardRef.current.map(node => ({
-      ...node,
-      id: nanoid(),
-      position: { x: node.position.x + 32, y: node.position.y + 32 },
-      metadata: { ...node.metadata },
-    }));
-    commitFrame([...projectRef.current.nodes, ...nodes], projectRef.current.connections);
-    selectNodes(nodes.map(node => node.id));
-  }, [commitFrame, selectNodes]);
+  const pasteSelection = useCallback(async () => {
+    if (clipboardRef.current.length > 0) {
+      const nodes = clipboardRef.current.map(node => ({
+        ...node,
+        id: nanoid(),
+        position: { x: node.position.x + 32, y: node.position.y + 32 },
+        metadata: { ...node.metadata },
+      }));
+      commitFrame([...projectRef.current.nodes, ...nodes], projectRef.current.connections);
+      selectNodes(nodes.map(node => node.id));
+      return;
+    }
+    try {
+      const clipboard = navigator.clipboard;
+      const items = clipboard?.read ? await clipboard.read() : [];
+      for (const item of items) {
+        const imageType = item.types.find(type => type.startsWith('image/'));
+        if (imageType) {
+          const blob = await item.getType(imageType);
+          await addMediaAt(new File([blob], `clipboard.${imageType.split('/')[1] || 'png'}`, { type: imageType }), viewportCenter());
+          return;
+        }
+        if (item.types.includes('text/plain')) {
+          const text = await (await item.getType('text/plain')).text();
+          if (text) {
+            const center = viewportCenter();
+            const node = createWorkflowNode(nanoid(), 'text', { x: center.x - 170, y: center.y - 110 }, { content: text });
+            applyOps([{ type: 'add_node', node }]);
+          }
+          return;
+        }
+      }
+      const text = clipboard?.readText ? await clipboard.readText() : '';
+      if (text) {
+        const center = viewportCenter();
+        applyOps([{ type: 'add_node', node: createWorkflowNode(nanoid(), 'text', { x: center.x - 170, y: center.y - 110 }, { content: text }) }]);
+      }
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : '无法读取剪贴板内容');
+    }
+  }, [addMediaAt, applyOps, commitFrame, selectNodes, viewportCenter]);
 
   const deleteSelection = useCallback(() => {
     if (selectedConnectionId) {
@@ -410,7 +475,7 @@ export function InfiniteWorkflow({
       if (modifier && key === 'z') { event.preventDefault(); event.shiftKey ? redo() : undo(); return; }
       if (modifier && key === 'y') { event.preventDefault(); redo(); return; }
       if (modifier && key === 'c') { event.preventDefault(); copySelection(); return; }
-      if (modifier && key === 'v') { event.preventDefault(); pasteSelection(); return; }
+      if (modifier && key === 'v') { event.preventDefault(); void pasteSelection(); return; }
       if (event.key === 'Delete' || event.key === 'Backspace') { event.preventDefault(); deleteSelection(); return; }
       if (event.key === 'Escape') {
         closeCreateMenu();
@@ -430,16 +495,53 @@ export function InfiniteWorkflow({
   }, [cancelInteraction, closeCreateMenu, copySelection, deleteSelection, pasteSelection, redo, undo]);
 
   const addNode = useCallback((type: WorkflowNodeType, metadata: WorkflowNodeData['metadata'] = {}) => {
-    const rect = rootRef.current?.getBoundingClientRect();
-    const center = screenToWorkflow((rect?.left || 0) + (rect?.width || 1000) / 2, (rect?.top || 0) + (rect?.height || 700) / 2);
+    const center = viewportCenter();
     applyOps([{ type: 'add_node', node: createWorkflowNode(nanoid(), type, { x: center.x - 170, y: center.y - 110 }, metadata) }]);
-  }, [applyOps, screenToWorkflow]);
+  }, [applyOps, viewportCenter]);
 
-  const importFile = useCallback((file: File, type: 'image' | 'video') => {
-    const reader = new FileReader();
-    reader.onload = () => addNode(type, { href: String(reader.result || ''), mimeType: file.type, status: 'success' });
-    reader.readAsDataURL(file);
-  }, [addNode]);
+  const importFile = useCallback((file: File) => addMediaAt(file, viewportCenter()), [addMediaAt, viewportCenter]);
+
+  const replaceMedia = useCallback(async (node: WorkflowNodeData, file: File) => {
+    try {
+      if (workflowMediaType(file) !== node.type) throw new Error(`请选择${node.type === 'image' ? '图片' : node.type === 'video' ? '视频' : '音频'}文件`);
+      const record: WorkflowMediaRecord = await ingestWorkflowMedia(file);
+      const { type: _type, ...metadata } = record;
+      const size = fitWorkflowMediaSize(node.type as WorkflowMediaRecord['type'], record.naturalWidth, record.naturalHeight);
+      const center = { x: node.position.x + node.width / 2, y: node.position.y + node.height / 2 };
+      const updated = projectRef.current.nodes.map(item => item.id === node.id ? {
+        ...item,
+        ...size,
+        position: { x: center.x - size.width / 2, y: center.y - size.height / 2 },
+        metadata: { ...item.metadata, ...metadata, href: undefined, error: undefined },
+      } : item);
+      commitFrame(updated, projectRef.current.connections);
+      const oldKey = node.metadata.storageKey;
+      const oldKeyStillUsed = oldKey && projectRef.current.nodes.some(item => item.id !== node.id && item.metadata.storageKey === oldKey);
+      if (oldKey && !oldKeyStillUsed) await workflowMediaStorage.remove(oldKey);
+      setNotice(null);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : '媒体文件替换失败');
+    }
+  }, [commitFrame]);
+
+  const removeMedia = useCallback((node: WorkflowNodeData) => {
+    const {
+      storageKey: _storageKey,
+      name: _name,
+      mimeType: _mimeType,
+      bytes: _bytes,
+      naturalWidth: _naturalWidth,
+      naturalHeight: _naturalHeight,
+      durationMs: _durationMs,
+      href: _href,
+      poster: _poster,
+      error: _error,
+      ...metadata
+    } = node.metadata;
+    commitFrame(projectRef.current.nodes.map(item => item.id === node.id
+      ? { ...item, metadata: { ...metadata, status: 'idle' as const } }
+      : item), projectRef.current.connections);
+  }, [commitFrame]);
 
   const createFromMenu = useCallback((type: WorkflowNodeType) => {
     if (!createMenu) return;
@@ -553,6 +655,19 @@ export function InfiniteWorkflow({
         backgroundPosition: `${project.viewport.x % gridSize}px ${project.viewport.y % gridSize}px`,
       }}
       onPointerDown={onSurfacePointerDown}
+      onDragOver={event => event.preventDefault()}
+      onDrop={event => {
+        event.preventDefault();
+        const files = Array.from(event.dataTransfer.files || []);
+        const file = files.find(item => {
+          try { workflowMediaType(item); return true; } catch { return false; }
+        });
+        if (!file) {
+          if (files.length) setNotice('仅支持图片、视频或音频文件');
+          return;
+        }
+        void addMediaAt(file, screenToWorkflow(event.clientX, event.clientY));
+      }}
       onDoubleClick={event => {
         if (!isTrueBackground(event.target)) return;
         event.preventDefault();
@@ -632,6 +747,8 @@ export function InfiniteWorkflow({
                 : item),
             })}
             onRun={() => onRunNode(node.id)}
+            onReplaceMedia={file => { void replaceMedia(node, file); }}
+            onRemoveMedia={() => removeMedia(node)}
             onContextMenu={event => {
               setSelectedConnectionId(null);
               selectNodes([node.id]);

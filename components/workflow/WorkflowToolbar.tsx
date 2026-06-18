@@ -1,4 +1,4 @@
-import { Bot, Focus, Grid2X2, Hand, ImagePlus, Library, Redo2, Settings2, Type, Undo2, Video } from 'lucide-react';
+import { Bot, Focus, Grid2X2, Hand, ImagePlus, Library, Music2, Redo2, Settings2, Type, Undo2, Video } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { useWorkflowSharedMedia, type WorkflowSharedMedia } from './WorkflowConfigPanel';
 import type { WorkflowNodeType } from './types';
@@ -24,7 +24,7 @@ export function WorkflowToolbar({
   canRedo: boolean;
   onToolChange: (tool: WorkflowTool) => void;
   onAddNode: (type: WorkflowNodeType) => void;
-  onImport: (file: File, type: 'image' | 'video') => void;
+  onImport: (file: File) => Promise<void>;
   onAddSharedMedia: (media: WorkflowSharedMedia) => void;
   onUndo: () => void;
   onRedo: () => void;
@@ -34,6 +34,7 @@ export function WorkflowToolbar({
 }) {
   const imageInput = useRef<HTMLInputElement>(null);
   const videoInput = useRef<HTMLInputElement>(null);
+  const audioInput = useRef<HTMLInputElement>(null);
   const sharedMedia = useWorkflowSharedMedia();
   const [libraryOpen, setLibraryOpen] = useState(false);
   return (
@@ -44,10 +45,12 @@ export function WorkflowToolbar({
       <button type="button" aria-label="添加文本节点" onClick={() => onAddNode('text')}><Type size={16} /></button>
       <button type="button" aria-label="添加图片节点" onClick={() => imageInput.current?.click()}><ImagePlus size={16} /></button>
       <button type="button" aria-label="添加视频节点" onClick={() => videoInput.current?.click()}><Video size={16} /></button>
+      <button type="button" aria-label="添加音频节点" onClick={() => audioInput.current?.click()}><Music2 size={16} /></button>
       <button type="button" aria-label="打开共享素材" onClick={() => setLibraryOpen(open => !open)}><Library size={16} /></button>
       <button type="button" aria-label="添加配置节点" onClick={() => onAddNode('config')}><Settings2 size={16} /></button>
-      <input ref={imageInput} hidden type="file" accept="image/*" onChange={event => { const file = event.target.files?.[0]; if (file) onImport(file, 'image'); event.currentTarget.value = ''; }} />
-      <input ref={videoInput} hidden type="file" accept="video/*" onChange={event => { const file = event.target.files?.[0]; if (file) onImport(file, 'video'); event.currentTarget.value = ''; }} />
+      <input ref={imageInput} hidden type="file" accept="image/*" onChange={event => { const file = event.target.files?.[0]; if (file) void onImport(file); event.currentTarget.value = ''; }} />
+      <input ref={videoInput} hidden type="file" accept="video/*" onChange={event => { const file = event.target.files?.[0]; if (file) void onImport(file); event.currentTarget.value = ''; }} />
+      <input ref={audioInput} hidden type="file" accept="audio/*" onChange={event => { const file = event.target.files?.[0]; if (file) void onImport(file); event.currentTarget.value = ''; }} />
       <span className="workflow-toolbar__divider" />
       <button type="button" aria-label="撤销" disabled={!canUndo} onClick={onUndo}><Undo2 size={16} /></button>
       <button type="button" aria-label="重做" disabled={!canRedo} onClick={onRedo}><Redo2 size={16} /></button>

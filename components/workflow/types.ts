@@ -45,6 +45,7 @@ export interface WorkflowNodeMetadata {
   href?: string;
   poster?: string;
   storageKey?: string;
+  name?: string;
   mimeType?: string;
   bytes?: number;
   naturalWidth?: number;
@@ -65,6 +66,7 @@ export interface WorkflowNode {
   position: WorkflowPoint;
   width: number;
   height: number;
+  freeResize?: boolean;
   metadata: WorkflowNodeMetadata;
 }
 

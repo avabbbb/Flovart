@@ -1,6 +1,7 @@
-import { Image as ImageIcon, LoaderCircle, Music2, Settings2, Type, Video } from 'lucide-react';
-import type { PointerEvent as ReactPointerEvent } from 'react';
+import { Image as ImageIcon, LoaderCircle, Music2, Settings2, Type, Upload, Video, X } from 'lucide-react';
+import { useRef, type PointerEvent as ReactPointerEvent } from 'react';
 import { WorkflowConfigPanel } from './WorkflowConfigPanel';
+import { useWorkflowMediaUrl } from './media';
 import type { WorkflowNode as WorkflowNodeData } from './types';
 
 const iconByType = {
@@ -21,6 +22,8 @@ export function WorkflowNode({
   onChangeMetadata,
   onRun,
   onContextMenu,
+  onReplaceMedia,
+  onRemoveMedia,
 }: {
   node: WorkflowNodeData;
   selected: boolean;
@@ -31,9 +34,23 @@ export function WorkflowNode({
   onChangeMetadata: (metadata: WorkflowNodeData['metadata']) => void;
   onRun: () => void;
   onContextMenu: (event: React.MouseEvent<HTMLDivElement>) => void;
+  onReplaceMedia: (file: File) => void;
+  onRemoveMedia: () => void;
 }) {
   const Icon = iconByType[node.type];
   const status = node.metadata.status || 'idle';
+  const mediaInput = useRef<HTMLInputElement>(null);
+  const media = useWorkflowMediaUrl(node.metadata.storageKey, node.metadata.href);
+  const isMedia = node.type === 'image' || node.type === 'video' || node.type === 'audio';
+  const accept = isMedia ? `${node.type}/*` : undefined;
+  const mediaError = isMedia ? (media.error || node.metadata.error) : null;
+  const mediaActions = isMedia && (
+    <div className="workflow-node__media-actions" data-workflow-overlay>
+      <button type="button" aria-label="重新选择媒体文件" onClick={() => mediaInput.current?.click()}><Upload size={14} />重新选择</button>
+      {(node.metadata.storageKey || node.metadata.href) && <button type="button" aria-label="移除媒体文件" onClick={onRemoveMedia}><X size={14} />移除</button>}
+      <input ref={mediaInput} hidden type="file" accept={accept} onChange={event => { const file = event.target.files?.[0]; if (file) onReplaceMedia(file); event.currentTarget.value = ''; }} />
+    </div>
+  );
   return (
     <div
       data-workflow-node-id={node.id}
@@ -51,15 +68,15 @@ export function WorkflowNode({
         {status === 'error' && <span className="workflow-node__error-dot" title={node.metadata.error}>!</span>}
       </header>
       <div className="workflow-node__body">
-        {node.type === 'image' && (node.metadata.href
-          ? <img src={node.metadata.href} alt={node.title} draggable={false} />
-          : <div className="workflow-node__empty"><ImageIcon size={26} /><span>图片节点</span></div>)}
-        {node.type === 'video' && (node.metadata.href
-          ? <video src={node.metadata.href} poster={node.metadata.poster} controls preload="metadata" />
-          : <div className="workflow-node__empty"><Video size={26} /><span>视频节点</span></div>)}
-        {node.type === 'audio' && (node.metadata.href
-          ? <audio src={node.metadata.href} controls preload="metadata" style={{ width: '100%' }} />
-          : <div className="workflow-node__empty"><Music2 size={26} /><span>音频节点</span></div>)}
+        {node.type === 'image' && (media.url
+          ? <><img src={media.url} alt={node.title} draggable={false} />{mediaActions}</>
+          : <div className="workflow-node__empty"><ImageIcon size={26} /><span>{mediaError || '图片节点'}</span>{mediaActions}</div>)}
+        {node.type === 'video' && (media.url
+          ? <><video src={media.url} poster={node.metadata.poster} controls preload="metadata" playsInline />{mediaActions}</>
+          : <div className="workflow-node__empty"><Video size={26} /><span>{mediaError || '视频节点'}</span>{mediaActions}</div>)}
+        {node.type === 'audio' && (media.url
+          ? <><audio src={media.url} controls preload="metadata" style={{ width: '100%' }} />{mediaActions}</>
+          : <div className="workflow-node__empty"><Music2 size={26} /><span>{mediaError || '音频节点'}</span>{mediaActions}</div>)}
         {node.type === 'text' && (
           <textarea
             value={node.metadata.content || ''}

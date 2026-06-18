@@ -1,10 +1,11 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useState } from 'react';
 import { createWorkflowNode } from '../components/workflow/constants';
 import { InfiniteWorkflow } from '../components/workflow/InfiniteWorkflow';
 import { WorkflowConfigPanel } from '../components/workflow/WorkflowConfigPanel';
 import { WorkflowMiniMap } from '../components/workflow/WorkflowMiniMap';
+import { workflowMediaStorage } from '../components/workflow/storage';
 import type { WorkflowProject } from '../components/workflow/types';
 import { getGenerationCapability } from '../services/generationCapabilities';
 
@@ -466,5 +467,126 @@ describe('InfiniteWorkflow surface interactions', () => {
     expect(screen.getByRole('button', { name: '暂不支持' })).toBeDisabled();
     fireEvent.click(screen.getByRole('button', { name: '暂不支持' }));
     expect(onRun).not.toHaveBeenCalled();
+  });
+
+  it('uses the same durable ingestion for toolbar import and world-positioned drop', async () => {
+    class TestImage {
+      naturalWidth = 1600;
+      naturalHeight = 900;
+      onload: null | (() => void) = null;
+      onerror: null | (() => void) = null;
+      set src(_value: string) { queueMicrotask(() => this.onload?.()); }
+    }
+    vi.stubGlobal('Image', TestImage);
+    const persist = vi.spyOn(workflowMediaStorage, 'set');
+    render(<Harness />);
+    const file = new File(['image'], 'drop.png', { type: 'image/png' });
+
+    fireEvent.dragOver(editor());
+    fireEvent.drop(editor(), { clientX: 500, clientY: 350, dataTransfer: { files: [file] } });
+    await waitFor(() => expect(editor().querySelectorAll('[data-workflow-node-id]')).toHaveLength(3));
+    const dropped = editor().querySelector<HTMLElement>('.workflow-node--image.is-selected')!;
+    expect(dropped.style.transform).toBe('translate(290px, 232px)');
+    expect(dropped.style.width).toBe('420px');
+    expect(dropped.style.height).toBe('236px');
+
+    fireEvent.click(screen.getByRole('button', { name: '添加图片节点' }));
+    const input = editor().querySelector<HTMLInputElement>('input[accept="image/*"]')!;
+    fireEvent.change(input, { target: { files: [file] } });
+    await waitFor(() => expect(editor().querySelectorAll('[data-workflow-node-id]')).toHaveLength(4));
+    expect(persist).toHaveBeenCalledTimes(2);
+  });
+
+  it('rejects unsupported drops with the existing visible status notice', async () => {
+    render(<Harness />);
+    fireEvent.drop(editor(), {
+      clientX: 500,
+      clientY: 350,
+      dataTransfer: { files: [new File(['pdf'], 'notes.pdf', { type: 'application/pdf' })] },
+    });
+    expect(await screen.findByRole('status')).toHaveTextContent('仅支持图片、视频或音频文件');
+  });
+
+  it('shows a recoverable shell for missing media and replaces it without moving its center', async () => {
+    const initial = makeProject();
+    initial.nodes[1] = {
+      ...initial.nodes[1],
+      metadata: { storageKey: 'missing-media', mimeType: 'image/png', naturalWidth: 1600, naturalHeight: 900 },
+    };
+    initial.selectedNodeIds = ['target'];
+    initial.connections = [{ id: 'media-connection', fromNodeId: 'source', toNodeId: 'target' }];
+    class TestImage {
+      naturalWidth = 800;
+      naturalHeight = 600;
+      onload: null | (() => void) = null;
+      onerror: null | (() => void) = null;
+      set src(_value: string) { queueMicrotask(() => this.onload?.()); }
+    }
+    vi.stubGlobal('Image', TestImage);
+    const remove = vi.spyOn(workflowMediaStorage, 'remove');
+    render(<Harness initial={initial} />);
+
+    expect(await screen.findByText('媒体文件不存在，请重新选择文件')).toBeInTheDocument();
+    const input = node('target').querySelector<HTMLInputElement>('input[accept="image/*"]')!;
+    fireEvent.change(input, { target: { files: [new File(['new-image'], 'replacement.png', { type: 'image/png' })] } });
+
+    await waitFor(() => expect(node('target').querySelector('img')).toBeInTheDocument());
+    expect(node('target').style.transform).toBe('translate(480px, 82.5px)');
+    expect(node('target').style.width).toBe('420px');
+    expect(node('target').style.height).toBe('315px');
+    expect(node('target')).toHaveClass('is-selected');
+    expect(editor().querySelector('[data-workflow-connection-id="media-connection"]')).toBeInTheDocument();
+    expect(remove).toHaveBeenCalledWith('missing-media');
+  });
+
+  it('keeps the natural ratio while resizing image and video nodes by default', () => {
+    const initial = makeProject();
+    initial.nodes = [
+      { ...createWorkflowNode('image-ratio', 'image', { x: 100, y: 100 }, { naturalWidth: 1600, naturalHeight: 900 }), width: 400, height: 225 },
+      { ...createWorkflowNode('video-ratio', 'video', { x: 600, y: 100 }, { naturalWidth: 1080, naturalHeight: 1920 }), width: 180, height: 320 },
+    ];
+    render(<Harness initial={initial} />);
+
+    const imageNode = node('image-ratio');
+    fireEvent.pointerDown(imageNode.querySelector('[aria-label="调整节点大小"]')!, { button: 0, clientX: 500, clientY: 325 });
+    fireEvent.pointerUp(window, { clientX: 600, clientY: 425 });
+    expect(Number.parseFloat(imageNode.style.width) / Number.parseFloat(imageNode.style.height)).toBeCloseTo(16 / 9, 2);
+
+    const videoNode = node('video-ratio');
+    fireEvent.pointerDown(videoNode.querySelector('[aria-label="调整节点大小"]')!, { button: 0, clientX: 780, clientY: 420 });
+    fireEvent.pointerUp(window, { clientX: 880, clientY: 520 });
+    expect(Number.parseFloat(videoNode.style.width) / Number.parseFloat(videoNode.style.height)).toBeCloseTo(1080 / 1920, 2);
+  });
+
+  it('prefers the internal node clipboard, then imports external image and text clipboard items', async () => {
+    class TestImage {
+      naturalWidth = 800;
+      naturalHeight = 600;
+      onload: null | (() => void) = null;
+      onerror: null | (() => void) = null;
+      set src(_value: string) { queueMicrotask(() => this.onload?.()); }
+    }
+    vi.stubGlobal('Image', TestImage);
+    const read = vi.fn();
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { read } });
+    render(<Harness />);
+
+    fireEvent.pointerDown(node('source'), { button: 0, clientX: 120, clientY: 120 });
+    fireEvent.pointerUp(window, { clientX: 120, clientY: 120 });
+    fireEvent.keyDown(window, { key: 'c', ctrlKey: true });
+    fireEvent.keyDown(window, { key: 'v', ctrlKey: true });
+    expect(read).not.toHaveBeenCalled();
+    expect(editor().querySelectorAll('[data-workflow-node-id]')).toHaveLength(3);
+
+    fireEvent.pointerDown(editor(), { button: 0, clientX: 20, clientY: 20 });
+    fireEvent.pointerUp(window, { clientX: 20, clientY: 20 });
+    fireEvent.keyDown(window, { key: 'c', ctrlKey: true });
+    read.mockResolvedValueOnce([{ types: ['image/png'], getType: () => Promise.resolve(new Blob(['image'], { type: 'image/png' })) }]);
+    fireEvent.keyDown(window, { key: 'v', ctrlKey: true });
+    await waitFor(() => expect(editor().querySelectorAll('[data-workflow-node-id]')).toHaveLength(4));
+
+    read.mockResolvedValueOnce([{ types: ['text/plain'], getType: () => Promise.resolve(new Blob(['剪贴板文本'], { type: 'text/plain' })) }]);
+    fireEvent.keyDown(window, { key: 'v', ctrlKey: true });
+    expect(await screen.findByDisplayValue('剪贴板文本')).toBeInTheDocument();
   });
 });
