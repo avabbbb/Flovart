@@ -1,0 +1,29 @@
+import type { WorkflowNode, WorkflowNodeMetadata, WorkflowNodeType, WorkflowPoint } from './types';
+
+export const WORKFLOW_NODE_SPECS: Record<WorkflowNodeType, { title: string; width: number; height: number; metadata: WorkflowNodeMetadata }> = {
+  image: { title: '图片', width: 340, height: 240, metadata: { status: 'idle' } },
+  text: { title: '文本', width: 340, height: 220, metadata: { content: '', status: 'idle' } },
+  video: { title: '视频', width: 420, height: 236, metadata: { status: 'idle' } },
+  audio: { title: '音频', width: 340, height: 120, metadata: { status: 'idle' } },
+  config: {
+    title: '生成配置',
+    width: 360,
+    height: 260,
+    metadata: { prompt: '', status: 'idle', config: { mode: 'image' } },
+  },
+};
+
+export const INITIAL_WORKFLOW_VIEWPORT = { x: 0, y: 0, k: 1 } as const;
+
+export function createWorkflowNode(id: string, type: WorkflowNodeType, position: WorkflowPoint, metadata: WorkflowNodeMetadata = {}): WorkflowNode {
+  const spec = WORKFLOW_NODE_SPECS[type];
+  return {
+    id,
+    type,
+    title: spec.title,
+    position,
+    width: spec.width,
+    height: spec.height,
+    metadata: { ...spec.metadata, ...metadata },
+  };
+}
