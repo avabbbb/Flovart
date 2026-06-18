@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useState } from 'react';
 import { createWorkflowNode } from '../components/workflow/constants';
 import { InfiniteWorkflow } from '../components/workflow/InfiniteWorkflow';
+import { WorkflowMiniMap } from '../components/workflow/WorkflowMiniMap';
 import type { WorkflowProject } from '../components/workflow/types';
 
 const makeProject = (): WorkflowProject => ({
@@ -104,6 +105,63 @@ describe('InfiniteWorkflow surface interactions', () => {
     expect(screen.getByRole('button', { name: '撤销' })).toBeDisabled();
   });
 
+  it('records every actual node and resize delta while a click stays out of history', () => {
+    render(<Harness />);
+
+    fireEvent.pointerDown(node('source'), { button: 0, clientX: 120, clientY: 120 });
+    fireEvent.pointerUp(window, { clientX: 120, clientY: 120 });
+    expect(screen.getByRole('button', { name: '撤销' })).toBeDisabled();
+
+    fireEvent.pointerDown(node('source'), { button: 0, clientX: 120, clientY: 120 });
+    fireEvent.pointerUp(window, { clientX: 121, clientY: 121 });
+    expect(node('source').style.transform).toBe('translate(101px, 101px)');
+    fireEvent.click(screen.getByRole('button', { name: '撤销' }));
+    expect(node('source').style.transform).toBe('translate(100px, 100px)');
+
+    const resize = node('source').querySelector<HTMLButtonElement>('[aria-label="调整节点大小"]')!;
+    fireEvent.pointerDown(resize, { button: 0, clientX: 440, clientY: 320 });
+    fireEvent.pointerUp(window, { clientX: 441, clientY: 321 });
+    expect(node('source').style.width).toBe('341px');
+    fireEvent.click(screen.getByRole('button', { name: '撤销' }));
+    expect(node('source').style.width).toBe('340px');
+  });
+
+  it('rolls back node, resize, and pan state when their gesture is cancelled', () => {
+    render(<Harness />);
+
+    fireEvent.pointerDown(node('source'), { button: 0, clientX: 120, clientY: 120 });
+    fireEvent.pointerMove(window, { clientX: 170, clientY: 150 });
+    fireEvent.pointerCancel(window);
+    expect(node('source').style.transform).toBe('translate(100px, 100px)');
+
+    const resize = node('source').querySelector<HTMLButtonElement>('[aria-label="调整节点大小"]')!;
+    fireEvent.pointerDown(resize, { button: 0, clientX: 440, clientY: 320 });
+    fireEvent.pointerMove(window, { clientX: 500, clientY: 370 });
+    fireEvent.blur(window);
+    expect(node('source').style.width).toBe('340px');
+    expect(node('source').style.height).toBe('220px');
+
+    fireEvent.pointerDown(editor(), { button: 0, clientX: 100, clientY: 100 });
+    fireEvent.pointerMove(window, { clientX: 150, clientY: 130 });
+    fireEvent.pointerCancel(window);
+    expect(worldTransform()).toContain('translate(0px, 0px)');
+    expect(screen.getByRole('button', { name: '撤销' })).toBeDisabled();
+
+    fireEvent.pointerDown(node('source'), { button: 0, clientX: 120, clientY: 120 });
+    fireEvent.pointerUp(window, { clientX: 120, clientY: 120 });
+    fireEvent.pointerDown(editor(), { button: 0, ctrlKey: true, clientX: 480, clientY: 80 });
+    fireEvent.pointerMove(window, { buttons: 1, clientX: 900, clientY: 500 });
+    fireEvent.pointerCancel(window);
+    expect(node('source')).toHaveClass('is-selected');
+    expect(node('target')).not.toHaveClass('is-selected');
+
+    fireEvent.pointerDown(sourceHandle(), { button: 0, clientX: 440, clientY: 210 });
+    fireEvent.pointerMove(window, { clientX: 450, clientY: 520 });
+    fireEvent.pointerCancel(window);
+    expect(editor().querySelector('.workflow-connection.is-active')).not.toBeInTheDocument();
+    expect(screen.queryByRole('menu', { name: '新建节点' })).not.toBeInTheDocument();
+  });
+
   it('opens the node create menu only from a true background double-click', () => {
     render(<Harness />);
 
@@ -172,5 +230,32 @@ describe('InfiniteWorkflow surface interactions', () => {
     expect(node('source')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '重做' }));
     expect(editor().querySelector('[data-workflow-node-id="source"]')).not.toBeInTheDocument();
+  });
+
+  it('maps a minimap node center back to the same workflow center', () => {
+    const project = makeProject();
+    const onCenter = vi.fn();
+    render(<WorkflowMiniMap nodes={project.nodes} viewport={project.viewport} onCenter={onCenter} />);
+    const minimap = screen.getByRole('button', { name: '工作流小地图' });
+    vi.spyOn(minimap, 'getBoundingClientRect').mockReturnValue({
+      x: 200,
+      y: 100,
+      left: 200,
+      top: 100,
+      right: 366,
+      bottom: 212,
+      width: 166,
+      height: 112,
+      toJSON: () => ({}),
+    });
+    const target = minimap.querySelector<HTMLElement>('.workflow-minimap__node--image')!;
+    fireEvent.click(minimap, {
+      clientX: 200 + parseFloat(target.style.left) + parseFloat(target.style.width) / 2,
+      clientY: 100 + parseFloat(target.style.top) + parseFloat(target.style.height) / 2,
+    });
+
+    const [x, y] = onCenter.mock.calls[0];
+    expect(x).toBeCloseTo(690);
+    expect(y).toBeCloseTo(240);
   });
 });

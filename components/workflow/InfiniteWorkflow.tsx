@@ -203,7 +203,7 @@ export function InfiniteWorkflow({
       const point = screenToWorkflow(clientX, clientY);
       const dx = point.x - interaction.start.x;
       const dy = point.y - interaction.start.y;
-      interaction.moved ||= Math.abs(dx) > 2 || Math.abs(dy) > 2;
+      interaction.moved = dx !== 0 || dy !== 0;
       patchProject({ nodes: interaction.frame.nodes.map(node => {
         const start = interaction.positions.get(node.id);
         return start ? { ...node, position: { x: start.x + dx, y: start.y + dy } } : node;
@@ -214,9 +214,11 @@ export function InfiniteWorkflow({
       const point = screenToWorkflow(clientX, clientY);
       const dx = point.x - interaction.start.x;
       const dy = point.y - interaction.start.y;
-      interaction.moved ||= Math.abs(dx) > 2 || Math.abs(dy) > 2;
+      const width = Math.max(180, interaction.width + dx);
+      const height = Math.max(100, interaction.height + dy);
+      interaction.moved = width !== interaction.width || height !== interaction.height;
       patchProject({ nodes: interaction.frame.nodes.map(node => node.id === interaction.id
-        ? { ...node, width: Math.max(180, interaction.width + dx), height: Math.max(100, interaction.height + dy) }
+        ? { ...node, width, height }
         : node) });
       return;
     }
@@ -273,25 +275,30 @@ export function InfiniteWorkflow({
     }
   }, [applyOps, getConnectionDropTarget, openCreateMenu, pushHistory, updateInteraction]);
 
+  const cancelInteraction = useCallback(() => {
+    const interaction = interactionRef.current;
+    interactionRef.current = null;
+    if (interaction?.type === 'node' || interaction?.type === 'resize') patchProject(interaction.frame);
+    if (interaction?.type === 'pan') patchProject({ viewport: interaction.viewport });
+    if (interaction?.type === 'selection') selectNodes(interaction.box.initialIds);
+    setSelectionBox(null);
+    setConnectionDrag(null);
+  }, [patchProject, selectNodes]);
+
   useEffect(() => {
     const move = (event: PointerEvent) => updateInteraction(event.clientX, event.clientY);
     const up = (event: PointerEvent) => finishInteraction(event.clientX, event.clientY);
-    const cancel = () => {
-      interactionRef.current = null;
-      setSelectionBox(null);
-      setConnectionDrag(null);
-    };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
-    window.addEventListener('pointercancel', cancel);
-    window.addEventListener('blur', cancel);
+    window.addEventListener('pointercancel', cancelInteraction);
+    window.addEventListener('blur', cancelInteraction);
     return () => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
-      window.removeEventListener('pointercancel', cancel);
-      window.removeEventListener('blur', cancel);
+      window.removeEventListener('pointercancel', cancelInteraction);
+      window.removeEventListener('blur', cancelInteraction);
     };
-  }, [finishInteraction, updateInteraction]);
+  }, [cancelInteraction, finishInteraction, updateInteraction]);
 
   const undo = useCallback(() => {
     const previous = past[past.length - 1];
@@ -348,14 +355,12 @@ export function InfiniteWorkflow({
       if (event.key === 'Escape') {
         setCreateMenu(null);
         setContextMenu(null);
-        setConnectionDrag(null);
-        setSelectionBox(null);
-        interactionRef.current = null;
+        cancelInteraction();
       }
     };
     window.addEventListener('keydown', keydown);
     return () => window.removeEventListener('keydown', keydown);
-  }, [copySelection, deleteSelection, pasteSelection, redo, undo]);
+  }, [cancelInteraction, copySelection, deleteSelection, pasteSelection, redo, undo]);
 
   const addNode = useCallback((type: WorkflowNodeType, metadata: WorkflowNodeData['metadata'] = {}) => {
     const rect = rootRef.current?.getBoundingClientRect();
@@ -427,7 +432,7 @@ export function InfiniteWorkflow({
     if (event.button === 0 && (event.ctrlKey || event.metaKey) && tool === 'select') {
       event.preventDefault();
       const point = screenToWorkflow(event.clientX, event.clientY);
-      const box = { start: point, current: point, additive: event.shiftKey, initialIds: event.shiftKey ? selectedIdsRef.current : [] };
+      const box = { start: point, current: point, additive: event.shiftKey, initialIds: [...selectedIdsRef.current] };
       interactionRef.current = { type: 'selection', box };
       setSelectionBox(box);
       if (!event.shiftKey) selectNodes([]);
