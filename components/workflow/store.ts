@@ -2,6 +2,7 @@ import { nanoid } from 'nanoid';
 import { create } from 'zustand';
 import { persist, type PersistStorage, type StorageValue } from 'zustand/middleware';
 import { INITIAL_WORKFLOW_VIEWPORT } from './constants';
+import { pruneWorkflowMedia, setWorkflowMediaCanonicalProjects } from './media';
 import { workflowStorage } from './storage';
 import type { WorkflowProject } from './types';
 
@@ -142,7 +143,11 @@ export const useWorkflowStore = create<WorkflowStore>()(
       setHydrated: hydrated => set({ hydrated }),
       createProject: (title) => {
         const project = createWorkflowProject(title);
-        set(state => ({ projects: [project, ...state.projects], activeProjectId: project.id }));
+        set(state => {
+          const projects = [project, ...state.projects];
+          setWorkflowMediaCanonicalProjects(projects);
+          return { projects, activeProjectId: project.id };
+        });
         return project.id;
       },
       setActiveProject: activeProjectId => set({ activeProjectId }),
@@ -157,13 +162,17 @@ export const useWorkflowStore = create<WorkflowStore>()(
         const activeProjectId = state.activeProjectId && !removed.has(state.activeProjectId)
           ? state.activeProjectId
           : projects[0]?.id || null;
+        setWorkflowMediaCanonicalProjects(projects);
+        queueMicrotask(() => { void pruneWorkflowMedia(); });
         return { projects, activeProjectId };
       }),
-      updateProject: (id, patch) => set(state => ({
-        projects: state.projects.map(project => project.id === id
+      updateProject: (id, patch) => set(state => {
+        const projects = state.projects.map(project => project.id === id
           ? { ...project, ...patch, updatedAt: new Date().toISOString() }
-          : project),
-      })),
+          : project);
+        setWorkflowMediaCanonicalProjects(projects);
+        return { projects };
+      }),
     }),
     {
       name: WORKFLOW_STORE_KEY,
@@ -171,9 +180,11 @@ export const useWorkflowStore = create<WorkflowStore>()(
       partialize: state => ({ projects: state.projects, activeProjectId: state.activeProjectId }),
       merge: (persisted, current) => {
         const state = persisted as Partial<PersistedWorkflowState> | undefined;
+        const projects = Array.isArray(state?.projects) ? state.projects.map(normalizeWorkflowProject) : current.projects;
+        setWorkflowMediaCanonicalProjects(projects);
         return {
           ...current,
-          projects: Array.isArray(state?.projects) ? state.projects.map(normalizeWorkflowProject) : current.projects,
+          projects,
           activeProjectId: typeof state?.activeProjectId === 'string' || state?.activeProjectId === null
             ? state.activeProjectId
             : current.activeProjectId,

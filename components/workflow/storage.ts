@@ -37,6 +37,9 @@ export const workflowMediaStorage = {
   async remove(key: string): Promise<void> {
     await mediaStorage.removeItem(key);
   },
+  async keys(): Promise<string[]> {
+    return mediaStorage.keys();
+  },
   async clear(): Promise<void> {
     await mediaStorage.clear();
   },

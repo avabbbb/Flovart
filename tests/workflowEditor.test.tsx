@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useState } from 'react';
 import { createWorkflowNode } from '../components/workflow/constants';
 import { InfiniteWorkflow } from '../components/workflow/InfiniteWorkflow';
-import { WorkflowConfigPanel } from '../components/workflow/WorkflowConfigPanel';
+import { WorkflowConfigPanel, WorkflowGenerationCapabilitiesProvider, type WorkflowSharedMedia } from '../components/workflow/WorkflowConfigPanel';
 import { WorkflowMiniMap } from '../components/workflow/WorkflowMiniMap';
 import { workflowMediaStorage } from '../components/workflow/storage';
 import type { WorkflowProject } from '../components/workflow/types';
@@ -26,16 +26,18 @@ const makeProject = (): WorkflowProject => ({
   updatedAt: '2026-06-18T00:00:00.000Z',
 });
 
-function Harness({ initial = makeProject() }: { initial?: WorkflowProject }) {
+function Harness({ initial = makeProject(), sharedMedia = [] }: { initial?: WorkflowProject; sharedMedia?: WorkflowSharedMedia[] }) {
   const [project, setProject] = useState(initial);
   return (
     <>
-      <InfiniteWorkflow
-        project={project}
-        updateProject={patch => setProject(current => ({ ...current, ...patch }))}
-        onRunNode={() => undefined}
-        onOpenAgent={() => undefined}
-      />
+      <WorkflowGenerationCapabilitiesProvider sharedMedia={sharedMedia}>
+        <InfiniteWorkflow
+          project={project}
+          updateProject={patch => setProject(current => ({ ...current, ...patch }))}
+          onRunNode={() => undefined}
+          onOpenAgent={() => undefined}
+        />
+      </WorkflowGenerationCapabilitiesProvider>
       <output data-testid="workflow-project-state" hidden>{JSON.stringify(project)}</output>
     </>
   );
@@ -500,6 +502,35 @@ describe('InfiniteWorkflow surface interactions', () => {
     expect(persist).toHaveBeenCalledTimes(2);
   });
 
+  it('discards an import that completes after switching projects', async () => {
+    class TestImage {
+      naturalWidth = 800;
+      naturalHeight = 600;
+      onload: null | (() => void) = null;
+      onerror: null | (() => void) = null;
+      set src(_value: string) { queueMicrotask(() => this.onload?.()); }
+    }
+    vi.stubGlobal('Image', TestImage);
+    let finishWrite: (() => void) | undefined;
+    vi.spyOn(workflowMediaStorage, 'set').mockImplementation(() => new Promise<void>(resolve => { finishWrite = resolve; }));
+    const remove = vi.spyOn(workflowMediaStorage, 'remove');
+    const updateA = vi.fn();
+    const updateB = vi.fn();
+    const projectA = makeProject();
+    const projectB = { ...makeProject(), id: 'project-2', nodes: [] };
+    const view = render(<InfiniteWorkflow project={projectA} updateProject={updateA} onRunNode={() => undefined} onOpenAgent={() => undefined} />);
+
+    fireEvent.drop(editor(), { clientX: 500, clientY: 350, dataTransfer: { files: [new File(['image'], 'late.png', { type: 'image/png' })] } });
+    await waitFor(() => expect(finishWrite).toBeTypeOf('function'));
+    view.rerender(<InfiniteWorkflow project={projectB} updateProject={updateB} onRunNode={() => undefined} onOpenAgent={() => undefined} />);
+    finishWrite?.();
+
+    await waitFor(() => expect(remove).toHaveBeenCalled());
+    expect(updateA).not.toHaveBeenCalled();
+    expect(updateB).not.toHaveBeenCalled();
+    expect(editor().querySelectorAll('[data-workflow-node-id]')).toHaveLength(0);
+  });
+
   it('rejects unsupported drops with the existing visible status notice', async () => {
     render(<Harness />);
     fireEvent.drop(editor(), {
@@ -557,6 +588,65 @@ describe('InfiniteWorkflow surface interactions', () => {
     expect(await restoredBlob?.text()).toBe('old-image');
     expect(node('target')).toHaveClass('is-selected');
     expect(editor().querySelector('[data-workflow-connection-id="media-connection"]')).toBeInTheDocument();
+  });
+
+  it('keeps only the latest concurrent replacement and uses the node center after movement', async () => {
+    class TestImage {
+      naturalWidth = 800;
+      naturalHeight = 600;
+      onload: null | (() => void) = null;
+      onerror: null | (() => void) = null;
+      set src(_value: string) { queueMicrotask(() => this.onload?.()); }
+    }
+    vi.stubGlobal('Image', TestImage);
+    const writes: Array<{ resolve: () => void }> = [];
+    vi.spyOn(workflowMediaStorage, 'set').mockImplementation(() => new Promise<void>(resolve => writes.push({ resolve })));
+    const remove = vi.spyOn(workflowMediaStorage, 'remove');
+    render(<Harness />);
+    const input = node('target').querySelector<HTMLInputElement>('input[accept="image/*"]')!;
+
+    fireEvent.change(input, { target: { files: [new File(['first'], 'first.png', { type: 'image/png' })] } });
+    fireEvent.change(input, { target: { files: [new File(['second'], 'second.png', { type: 'image/png' })] } });
+    await waitFor(() => expect(writes).toHaveLength(2));
+    fireEvent.pointerDown(node('target'), { button: 0, clientX: 540, clientY: 140 });
+    fireEvent.pointerUp(window, { clientX: 640, clientY: 190 });
+
+    writes[1].resolve();
+    await waitFor(() => expect(screen.getByTestId('workflow-project-state')).toHaveTextContent('second.png'));
+    expect(node('target').style.transform).toBe('translate(580px, 132.5px)');
+    writes[0].resolve();
+    await waitFor(() => expect(remove).toHaveBeenCalled());
+    expect(screen.getByTestId('workflow-project-state')).not.toHaveTextContent('first.png');
+    expect(screen.getByTestId('workflow-project-state')).toHaveTextContent('second.png');
+  });
+
+  it('persists data and blob shared media without temporary hrefs in project JSON', async () => {
+    class TestImage {
+      naturalWidth = 800;
+      naturalHeight = 600;
+      onload: null | (() => void) = null;
+      onerror: null | (() => void) = null;
+      set src(_value: string) { queueMicrotask(() => this.onload?.()); }
+    }
+    vi.stubGlobal('Image', TestImage);
+    vi.stubGlobal('fetch', vi.fn(async () => ({ blob: async () => new Blob(['shared'], { type: 'image/png' }) })));
+    const sharedMedia: WorkflowSharedMedia[] = [
+      { id: 'data', name: 'data.png', href: 'data:image/png;base64,c2hhcmVk', mimeType: 'image/png', type: 'image' },
+      { id: 'blob', name: 'blob.png', href: 'blob:shared-media', mimeType: 'image/png', type: 'image' },
+    ];
+    render(<Harness sharedMedia={sharedMedia} />);
+
+    fireEvent.click(screen.getByRole('button', { name: '打开共享素材' }));
+    fireEvent.click(screen.getByRole('button', { name: 'data.png' }));
+    await waitFor(() => expect(editor().querySelectorAll('[data-workflow-node-id]')).toHaveLength(3));
+    fireEvent.click(screen.getByRole('button', { name: '打开共享素材' }));
+    fireEvent.click(screen.getByRole('button', { name: 'blob.png' }));
+    await waitFor(() => expect(editor().querySelectorAll('[data-workflow-node-id]')).toHaveLength(4));
+
+    const json = screen.getByTestId('workflow-project-state').textContent || '';
+    expect(json).toContain('storageKey');
+    expect(json).not.toContain('data:image');
+    expect(json).not.toContain('blob:shared-media');
   });
 
   it('keeps the natural ratio while resizing image and video nodes by default', () => {

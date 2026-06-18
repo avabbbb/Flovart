@@ -4,6 +4,10 @@ import {
   fitWorkflowMediaSize,
   ingestWorkflowMedia,
   inspectWorkflowMedia,
+  pruneWorkflowMedia,
+  registerWorkflowMediaTransientReferences,
+  setWorkflowMediaCanonicalProjects,
+  unregisterWorkflowMediaTransientReferences,
   useWorkflowMediaUrl,
   workflowMediaType,
 } from '../components/workflow/media';
@@ -107,5 +111,45 @@ describe('workflow media', () => {
     const { result } = renderHook(() => useWorkflowMediaUrl('missing-key', 'https://example.com/fallback.png'));
     await waitFor(() => expect(result.current.error).toBe('媒体文件不存在，请重新选择文件'));
     expect(result.current.url).toBeNull();
+  });
+
+  it('returns an empty loading URL immediately when the durable key changes', async () => {
+    await workflowMediaStorage.set('media-one', new Blob(['one'], { type: 'image/png' }));
+    await workflowMediaStorage.set('media-two', new Blob(['two'], { type: 'image/png' }));
+    const revoke = vi.spyOn(URL, 'revokeObjectURL');
+    const hook = renderHook(({ storageKey }) => useWorkflowMediaUrl(storageKey), { initialProps: { storageKey: 'media-one' } });
+    await waitFor(() => expect(hook.result.current.url).toMatch(/^blob:/));
+    const oldUrl = hook.result.current.url;
+
+    hook.rerender({ storageKey: 'media-two' });
+    expect(hook.result.current.url).toBeNull();
+    await waitFor(() => expect(hook.result.current.url).toMatch(/^blob:/));
+    expect(revoke).toHaveBeenCalledWith(oldUrl);
+  });
+
+  it('keeps history-reachable media and prunes it after the transient history is dropped', async () => {
+    const node = (id: string, storageKey: string) => ({
+      id,
+      type: 'image' as const,
+      title: '图片',
+      position: { x: 0, y: 0 },
+      width: 100,
+      height: 100,
+      metadata: { storageKey },
+    });
+    await workflowMediaStorage.set('current-key', new Blob(['current']));
+    await workflowMediaStorage.set('history-key', new Blob(['history']));
+    await workflowMediaStorage.set('orphan-key', new Blob(['orphan']));
+    setWorkflowMediaCanonicalProjects([{ nodes: [node('current', 'current-key')] }]);
+    registerWorkflowMediaTransientReferences('history-test', [[node('history', 'history-key')]]);
+
+    await pruneWorkflowMedia();
+    expect(await workflowMediaStorage.keys()).toEqual(expect.arrayContaining(['current-key', 'history-key']));
+    expect(await workflowMediaStorage.get('orphan-key')).toBeNull();
+
+    unregisterWorkflowMediaTransientReferences('history-test');
+    await pruneWorkflowMedia();
+    expect(await workflowMediaStorage.get('history-key')).toBeNull();
+    expect(await workflowMediaStorage.get('current-key')).toBeInstanceOf(Blob);
   });
 });

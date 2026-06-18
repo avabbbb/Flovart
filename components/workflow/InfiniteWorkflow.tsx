@@ -2,9 +2,18 @@ import { nanoid } from 'nanoid';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import { createWorkflowNode } from './constants';
-import { fitWorkflowMediaSize, ingestWorkflowMedia, workflowMediaType, type WorkflowMediaRecord } from './media';
+import {
+  discardWorkflowMediaRecord,
+  fitWorkflowMediaSize,
+  ingestWorkflowMedia,
+  pruneWorkflowMedia,
+  registerWorkflowMediaTransientReferences,
+  releaseWorkflowMediaRecord,
+  unregisterWorkflowMediaTransientReferences,
+  workflowMediaType,
+  type WorkflowMediaRecord,
+} from './media';
 import { applyWorkflowOps, validateWorkflowConnection } from './ops';
-import { workflowMediaStorage } from './storage';
 import { WorkflowConnections } from './WorkflowConnections';
 import { WorkflowContextMenu, type WorkflowContextMenuState } from './WorkflowContextMenu';
 import { WorkflowCreateMenu, type WorkflowCreateMenuState } from './WorkflowCreateMenu';
@@ -56,6 +65,9 @@ export function InfiniteWorkflow({
   const spacePressedRef = useRef(false);
   const createMenuOpenerRef = useRef<HTMLElement | null>(null);
   const clipboardRef = useRef<WorkflowNodeData[]>([]);
+  const mountedRef = useRef(true);
+  const replaceSequenceRef = useRef(new Map<string, number>());
+  const mediaReferenceOwnerRef = useRef(`workflow-editor-${nanoid()}`);
   const [tool, setTool] = useState<WorkflowTool>('select');
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>(project.selectedNodeIds || []);
   const [selectedConnectionId, setSelectedConnectionId] = useState<string | null>(null);
@@ -69,6 +81,25 @@ export function InfiniteWorkflow({
 
   projectRef.current = project;
   viewportRef.current = project.viewport;
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      unregisterWorkflowMediaTransientReferences(mediaReferenceOwnerRef.current);
+      void pruneWorkflowMedia();
+    };
+  }, []);
+
+  useEffect(() => {
+    registerWorkflowMediaTransientReferences(mediaReferenceOwnerRef.current, [
+      project.nodes,
+      ...past.map(frame => frame.nodes),
+      ...future.map(frame => frame.nodes),
+      clipboardRef.current,
+    ]);
+    void pruneWorkflowMedia();
+  }, [future, past, project.nodes]);
 
   const patchProject = useCallback((patch: Partial<WorkflowProject>) => {
     projectRef.current = { ...projectRef.current, ...patch };
@@ -85,6 +116,10 @@ export function InfiniteWorkflow({
 
   const closeCreateMenu = useCallback(() => {
     setCreateMenu(null);
+    clipboardRef.current = [];
+    replaceSequenceRef.current.clear();
+    registerWorkflowMediaTransientReferences(mediaReferenceOwnerRef.current, [project.nodes]);
+    void pruneWorkflowMedia();
     const opener = createMenuOpenerRef.current || rootRef.current;
     createMenuOpenerRef.current = null;
     opener?.focus({ preventScroll: true });
@@ -168,9 +203,14 @@ export function InfiniteWorkflow({
     return screenToWorkflow((rect?.left || 0) + (rect?.width || 1000) / 2, (rect?.top || 0) + (rect?.height || 700) / 2);
   }, [screenToWorkflow]);
 
-  const addMediaAt = useCallback(async (file: File, center: WorkflowPoint) => {
+  const addMediaAt = useCallback(async (file: File, center: WorkflowPoint, expectedProjectId = projectRef.current.id) => {
+    let record: WorkflowMediaRecord | undefined;
     try {
-      const record = await ingestWorkflowMedia(file);
+      record = await ingestWorkflowMedia(file);
+      if (!mountedRef.current || projectRef.current.id !== expectedProjectId) {
+        await discardWorkflowMediaRecord(record.storageKey);
+        return;
+      }
       const { type, ...metadata } = record;
       const size = fitWorkflowMediaSize(type, record.naturalWidth, record.naturalHeight);
       const node = {
@@ -178,9 +218,11 @@ export function InfiniteWorkflow({
         ...size,
         freeResize: false,
       };
-      if (!applyOps([{ type: 'add_node', node }])) await workflowMediaStorage.remove(record.storageKey);
+      if (!applyOps([{ type: 'add_node', node }])) await discardWorkflowMediaRecord(record.storageKey);
+      else releaseWorkflowMediaRecord(record.storageKey);
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : '媒体文件导入失败');
+      if (record) await discardWorkflowMediaRecord(record.storageKey);
+      if (mountedRef.current && projectRef.current.id === expectedProjectId) setNotice(error instanceof Error ? error.message : '媒体文件导入失败');
     }
   }, [applyOps]);
 
@@ -407,9 +449,16 @@ export function InfiniteWorkflow({
 
   const copySelection = useCallback(() => {
     clipboardRef.current = projectRef.current.nodes.filter(node => selectedIdsRef.current.includes(node.id));
-  }, []);
+    registerWorkflowMediaTransientReferences(mediaReferenceOwnerRef.current, [
+      projectRef.current.nodes,
+      ...past.map(frame => frame.nodes),
+      ...future.map(frame => frame.nodes),
+      clipboardRef.current,
+    ]);
+  }, [future, past]);
 
   const pasteSelection = useCallback(async () => {
+    const expectedProjectId = projectRef.current.id;
     if (clipboardRef.current.length > 0) {
       const nodes = clipboardRef.current.map(node => ({
         ...node,
@@ -424,11 +473,12 @@ export function InfiniteWorkflow({
     try {
       const clipboard = navigator.clipboard;
       const items = clipboard?.read ? await clipboard.read() : [];
+      if (!mountedRef.current || projectRef.current.id !== expectedProjectId) return;
       for (const item of items) {
         const imageType = item.types.find(type => type.startsWith('image/'));
         if (imageType) {
           const blob = await item.getType(imageType);
-          await addMediaAt(new File([blob], `clipboard.${imageType.split('/')[1] || 'png'}`, { type: imageType }), viewportCenter());
+          await addMediaAt(new File([blob], `clipboard.${imageType.split('/')[1] || 'png'}`, { type: imageType }), viewportCenter(), expectedProjectId);
           return;
         }
         if (item.types.includes('text/plain')) {
@@ -442,12 +492,12 @@ export function InfiniteWorkflow({
         }
       }
       const text = clipboard?.readText ? await clipboard.readText() : '';
-      if (text) {
+      if (text && mountedRef.current && projectRef.current.id === expectedProjectId) {
         const center = viewportCenter();
         applyOps([{ type: 'add_node', node: createWorkflowNode(nanoid(), 'text', { x: center.x - 170, y: center.y - 110 }, { content: text }) }]);
       }
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : '无法读取剪贴板内容');
+      if (mountedRef.current && projectRef.current.id === expectedProjectId) setNotice(error instanceof Error ? error.message : '无法读取剪贴板内容');
     }
   }, [addMediaAt, applyOps, commitFrame, selectNodes, viewportCenter]);
 
@@ -502,12 +552,24 @@ export function InfiniteWorkflow({
   const importFile = useCallback((file: File) => addMediaAt(file, viewportCenter()), [addMediaAt, viewportCenter]);
 
   const replaceMedia = useCallback(async (node: WorkflowNodeData, file: File) => {
+    const expectedProjectId = projectRef.current.id;
+    const sequence = (replaceSequenceRef.current.get(node.id) || 0) + 1;
+    replaceSequenceRef.current.set(node.id, sequence);
+    let record: WorkflowMediaRecord | undefined;
     try {
       if (workflowMediaType(file) !== node.type) throw new Error(`请选择${node.type === 'image' ? '图片' : node.type === 'video' ? '视频' : '音频'}文件`);
-      const record: WorkflowMediaRecord = await ingestWorkflowMedia(file);
+      record = await ingestWorkflowMedia(file);
+      const currentNode = projectRef.current.nodes.find(item => item.id === node.id);
+      if (!mountedRef.current
+        || projectRef.current.id !== expectedProjectId
+        || replaceSequenceRef.current.get(node.id) !== sequence
+        || !currentNode) {
+        await discardWorkflowMediaRecord(record.storageKey);
+        return;
+      }
       const { type: _type, ...metadata } = record;
-      const size = fitWorkflowMediaSize(node.type as WorkflowMediaRecord['type'], record.naturalWidth, record.naturalHeight);
-      const center = { x: node.position.x + node.width / 2, y: node.position.y + node.height / 2 };
+      const size = fitWorkflowMediaSize(currentNode.type as WorkflowMediaRecord['type'], record.naturalWidth, record.naturalHeight);
+      const center = { x: currentNode.position.x + currentNode.width / 2, y: currentNode.position.y + currentNode.height / 2 };
       const updated = projectRef.current.nodes.map(item => item.id === node.id ? {
         ...item,
         ...size,
@@ -515,11 +577,32 @@ export function InfiniteWorkflow({
         metadata: { ...item.metadata, ...metadata, href: undefined, error: undefined },
       } : item);
       commitFrame(updated, projectRef.current.connections);
+      releaseWorkflowMediaRecord(record.storageKey);
       setNotice(null);
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : '媒体文件替换失败');
+      if (record) await discardWorkflowMediaRecord(record.storageKey);
+      if (mountedRef.current
+        && projectRef.current.id === expectedProjectId
+        && replaceSequenceRef.current.get(node.id) === sequence) {
+        setNotice(error instanceof Error ? error.message : '媒体文件替换失败');
+      }
     }
   }, [commitFrame]);
+
+  const addSharedMedia = useCallback(async (media: WorkflowSharedMedia) => {
+    if (/^https?:\/\//i.test(media.href)) {
+      addNode(media.type, { href: media.href, mimeType: media.mimeType, status: 'success' });
+      return;
+    }
+    const expectedProjectId = projectRef.current.id;
+    try {
+      const blob = await (await fetch(media.href)).blob();
+      if (!mountedRef.current || projectRef.current.id !== expectedProjectId) return;
+      await addMediaAt(new File([blob], media.name, { type: blob.type || media.mimeType }), viewportCenter(), expectedProjectId);
+    } catch (error) {
+      if (mountedRef.current && projectRef.current.id === expectedProjectId) setNotice(error instanceof Error ? error.message : '共享素材导入失败');
+    }
+  }, [addMediaAt, addNode, viewportCenter]);
 
   const removeMedia = useCallback((node: WorkflowNodeData) => {
     const {
@@ -691,7 +774,7 @@ export function InfiniteWorkflow({
         onToolChange={setTool}
         onAddNode={addNode}
         onImport={importFile}
-        onAddSharedMedia={(media: WorkflowSharedMedia) => addNode(media.type, { href: media.href, mimeType: media.mimeType, status: 'success' })}
+        onAddSharedMedia={media => { void addSharedMedia(media); }}
         onUndo={undo}
         onRedo={redo}
         onFit={fitView}
@@ -766,7 +849,15 @@ export function InfiniteWorkflow({
         <WorkflowContextMenu
           state={contextMenu}
           onCopy={() => {
-            if (contextMenu.type === 'node') clipboardRef.current = projectRef.current.nodes.filter(node => node.id === contextMenu.id);
+            if (contextMenu.type === 'node') {
+              clipboardRef.current = projectRef.current.nodes.filter(node => node.id === contextMenu.id);
+              registerWorkflowMediaTransientReferences(mediaReferenceOwnerRef.current, [
+                projectRef.current.nodes,
+                ...past.map(frame => frame.nodes),
+                ...future.map(frame => frame.nodes),
+                clipboardRef.current,
+              ]);
+            }
             setContextMenu(null);
           }}
           onRun={() => { if (contextMenu.type === 'node') onRunNode(contextMenu.id); setContextMenu(null); }}

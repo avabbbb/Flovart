@@ -9,7 +9,7 @@ import {
   type PersistedWorkflowState,
 } from '../components/workflow/store';
 import type { WorkflowProject } from '../components/workflow/types';
-import { workflowStorage } from '../components/workflow/storage';
+import { workflowMediaStorage, workflowStorage } from '../components/workflow/storage';
 
 const metadata: WorkflowProject['nodes'][number]['metadata'] = {
   content: '视频说明',
@@ -68,6 +68,7 @@ describe('workflow project persistence', () => {
     useWorkflowStore.setState({ hydrated: true, projects: [], activeProjectId: null });
     await vi.advanceTimersByTimeAsync(400);
     await workflowStorage.clear();
+    await workflowMediaStorage.clear();
   });
 
   afterEach(async () => {
@@ -213,5 +214,23 @@ describe('workflow project persistence', () => {
     await useWorkflowStore.persist.rehydrate();
 
     expect(useWorkflowStore.getState().projects[0].selectedNodeIds).toEqual(['text-1']);
+  });
+
+  it('prunes media from deleted projects without touching remaining project media', async () => {
+    const deletedId = useWorkflowStore.getState().createProject('删除');
+    const keptId = useWorkflowStore.getState().createProject('保留');
+    await workflowMediaStorage.set('deleted-media', new Blob(['deleted']));
+    await workflowMediaStorage.set('kept-media', new Blob(['kept']));
+    useWorkflowStore.getState().updateProject(deletedId, {
+      nodes: [{ ...videoNode(), id: 'deleted-node', metadata: { storageKey: 'deleted-media' } }],
+    });
+    useWorkflowStore.getState().updateProject(keptId, {
+      nodes: [{ ...videoNode(), id: 'kept-node', metadata: { storageKey: 'kept-media' } }],
+    });
+
+    useWorkflowStore.getState().deleteProjects([deletedId]);
+    await vi.waitFor(async () => expect(await workflowMediaStorage.get('deleted-media')).toBeNull());
+
+    expect(await workflowMediaStorage.get('kept-media')).toBeInstanceOf(Blob);
   });
 });

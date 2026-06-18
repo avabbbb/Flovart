@@ -1,7 +1,7 @@
 import { nanoid } from 'nanoid';
 import { useEffect, useState } from 'react';
 import { workflowMediaStorage } from './storage';
-import type { WorkflowNodeMetadata, WorkflowNodeType } from './types';
+import type { WorkflowNode, WorkflowNodeMetadata, WorkflowNodeType, WorkflowProject } from './types';
 
 export type WorkflowMediaType = Extract<WorkflowNodeType, 'image' | 'video' | 'audio'>;
 
@@ -11,6 +11,49 @@ export interface WorkflowMediaRecord extends WorkflowNodeMetadata {
   name: string;
   mimeType: string;
   bytes: number;
+}
+
+const transientReferences = new Map<string, Set<string>>();
+const pendingReferences = new Set<string>();
+let canonicalReferences = new Set<string>();
+
+function collectNodeKeys(nodes: WorkflowNode[], keys = new Set<string>()) {
+  nodes.forEach(node => {
+    if (node.metadata.storageKey) keys.add(node.metadata.storageKey);
+  });
+  return keys;
+}
+
+export function collectWorkflowMediaKeys(projects: Array<Pick<WorkflowProject, 'nodes'>>) {
+  return projects.reduce((keys, project) => collectNodeKeys(project.nodes, keys), new Set<string>());
+}
+
+export function setWorkflowMediaCanonicalProjects(projects: Array<Pick<WorkflowProject, 'nodes'>>) {
+  canonicalReferences = collectWorkflowMediaKeys(projects);
+}
+
+export function registerWorkflowMediaTransientReferences(owner: string, nodeGroups: WorkflowNode[][]) {
+  transientReferences.set(owner, nodeGroups.reduce((keys, nodes) => collectNodeKeys(nodes, keys), new Set<string>()));
+}
+
+export function unregisterWorkflowMediaTransientReferences(owner: string) {
+  transientReferences.delete(owner);
+}
+
+export async function pruneWorkflowMedia() {
+  const keys = await workflowMediaStorage.keys();
+  const reachable = new Set([...canonicalReferences, ...pendingReferences]);
+  transientReferences.forEach(keys => keys.forEach(key => reachable.add(key)));
+  await Promise.all(keys.filter(key => !reachable.has(key)).map(key => workflowMediaStorage.remove(key)));
+}
+
+export function releaseWorkflowMediaRecord(storageKey: string) {
+  pendingReferences.delete(storageKey);
+}
+
+export async function discardWorkflowMediaRecord(storageKey: string) {
+  pendingReferences.delete(storageKey);
+  await workflowMediaStorage.remove(storageKey).catch(() => undefined);
 }
 
 export function workflowMediaType(file: Pick<File, 'type'>): WorkflowMediaType {
@@ -72,6 +115,7 @@ export async function ingestWorkflowMedia(file: File): Promise<WorkflowMediaReco
   const type = workflowMediaType(file);
   const inspected = await inspectWorkflowMedia(file);
   const storageKey = `workflow-media-${nanoid()}`;
+  pendingReferences.add(storageKey);
   try {
     await workflowMediaStorage.set(storageKey, file);
     return {
@@ -84,13 +128,16 @@ export async function ingestWorkflowMedia(file: File): Promise<WorkflowMediaReco
       status: 'success',
     };
   } catch (error) {
+    pendingReferences.delete(storageKey);
     await workflowMediaStorage.remove(storageKey).catch(() => undefined);
     throw error;
   }
 }
 
 export function useWorkflowMediaUrl(storageKey?: string, fallbackHref?: string) {
-  const [state, setState] = useState<{ url: string | null; error: string | null }>({
+  const mediaKey = storageKey || fallbackHref || '';
+  const [state, setState] = useState<{ key: string; url: string | null; error: string | null }>({
+    key: mediaKey,
     url: storageKey ? null : fallbackHref || null,
     error: null,
   });
@@ -98,24 +145,24 @@ export function useWorkflowMediaUrl(storageKey?: string, fallbackHref?: string) 
   useEffect(() => {
     let active = true;
     let objectUrl: string | null = null;
-    setState({ url: storageKey ? null : fallbackHref || null, error: null });
+    setState({ key: mediaKey, url: storageKey ? null : fallbackHref || null, error: null });
     if (!storageKey) return () => undefined;
     void workflowMediaStorage.get(storageKey).then(blob => {
       if (!active) return;
       if (!blob) {
-        setState({ url: null, error: '媒体文件不存在，请重新选择文件' });
+        setState({ key: mediaKey, url: null, error: '媒体文件不存在，请重新选择文件' });
         return;
       }
       objectUrl = URL.createObjectURL(blob);
-      setState({ url: objectUrl, error: null });
+      setState({ key: mediaKey, url: objectUrl, error: null });
     }).catch(() => {
-      if (active) setState({ url: null, error: '媒体文件读取失败，请重新选择文件' });
+      if (active) setState({ key: mediaKey, url: null, error: '媒体文件读取失败，请重新选择文件' });
     });
     return () => {
       active = false;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [fallbackHref, storageKey]);
+  }, [fallbackHref, mediaKey, storageKey]);
 
-  return state;
+  return state.key === mediaKey ? state : { url: storageKey ? null : fallbackHref || null, error: null };
 }
