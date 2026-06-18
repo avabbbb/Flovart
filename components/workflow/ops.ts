@@ -4,6 +4,13 @@ import type { WorkflowConnection, WorkflowOp, WorkflowSnapshot } from './types';
 export interface WorkflowOpResult {
   snapshot: WorkflowSnapshot;
   runRequests: Array<{ nodeId: string }>;
+  rejections: WorkflowOpRejection[];
+}
+
+export interface WorkflowOpRejection {
+  opIndex: number;
+  opType: WorkflowOp['type'];
+  reason: string;
 }
 
 export type WorkflowConnectionValidationResult = { ok: true } | { ok: false; reason: string };
@@ -23,6 +30,12 @@ function createsCycle(connections: WorkflowConnection[], fromNodeId: string, toN
     pending.push(...(outgoing.get(current) || []));
   }
   return false;
+}
+
+function createUniqueConnectionId(connections: WorkflowConnection[]): string {
+  let id = nanoid();
+  while (connections.some(connection => connection.id === id)) id = nanoid();
+  return id;
 }
 
 export function validateWorkflowConnection(
@@ -52,21 +65,39 @@ export function applyWorkflowOps(initial: WorkflowSnapshot, ops: WorkflowOp[]): 
     viewport: { ...initial.viewport },
   };
   const runRequests: Array<{ nodeId: string }> = [];
+  const rejections: WorkflowOpRejection[] = [];
+  const reject = (opIndex: number, op: WorkflowOp, reason: string) => {
+    rejections.push({ opIndex, opType: op.type, reason });
+  };
 
-  ops.forEach(op => {
+  ops.forEach((op, opIndex) => {
     if (op.type === 'add_node') {
       if (!snapshot.nodes.some(node => node.id === op.node.id)) {
         snapshot = { ...snapshot, nodes: [...snapshot.nodes, op.node], selectedNodeIds: [op.node.id] };
+      } else {
+        reject(opIndex, op, '节点 ID 已存在');
       }
       return;
     }
     if (op.type === 'create_connected_node') {
       const duplicateNode = snapshot.nodes.some(node => node.id === op.node.id);
       const candidate = duplicateNode ? snapshot : { ...snapshot, nodes: [...snapshot.nodes, op.node] };
-      if (!validateWorkflowConnection(candidate, op.fromNodeId, op.node.id).ok || duplicateNode) return;
+      const validation = validateWorkflowConnection(candidate, op.fromNodeId, op.node.id);
+      if (duplicateNode) {
+        reject(opIndex, op, '节点 ID 已存在');
+        return;
+      }
+      if (!validation.ok) {
+        reject(opIndex, op, validation.reason);
+        return;
+      }
       snapshot = {
         ...candidate,
-        connections: [...candidate.connections, { id: nanoid(), fromNodeId: op.fromNodeId, toNodeId: op.node.id }],
+        connections: [...candidate.connections, {
+          id: createUniqueConnectionId(candidate.connections),
+          fromNodeId: op.fromNodeId,
+          toNodeId: op.node.id,
+        }],
         selectedNodeIds: [op.node.id],
       };
       return;
@@ -96,10 +127,22 @@ export function applyWorkflowOps(initial: WorkflowSnapshot, ops: WorkflowOp[]): 
       return;
     }
     if (op.type === 'connect_nodes') {
-      if (!validateWorkflowConnection(snapshot, op.fromNodeId, op.toNodeId).ok) return;
+      const validation = validateWorkflowConnection(snapshot, op.fromNodeId, op.toNodeId);
+      if (op.id && snapshot.connections.some(connection => connection.id === op.id)) {
+        reject(opIndex, op, '连接 ID 已存在');
+        return;
+      }
+      if (!validation.ok) {
+        reject(opIndex, op, validation.reason);
+        return;
+      }
       snapshot = {
         ...snapshot,
-        connections: [...snapshot.connections, { id: op.id || nanoid(), fromNodeId: op.fromNodeId, toNodeId: op.toNodeId }],
+        connections: [...snapshot.connections, {
+          id: op.id || createUniqueConnectionId(snapshot.connections),
+          fromNodeId: op.fromNodeId,
+          toNodeId: op.toNodeId,
+        }],
       };
       return;
     }
@@ -117,7 +160,7 @@ export function applyWorkflowOps(initial: WorkflowSnapshot, ops: WorkflowOp[]): 
     }
   });
 
-  return { snapshot, runRequests };
+  return { snapshot, runRequests, rejections };
 }
 
 export function summarizeWorkflowOps(ops: WorkflowOp[]): string {

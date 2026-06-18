@@ -36,24 +36,53 @@ interface WorkflowStore {
   updateProject: (id: string, patch: Partial<Omit<WorkflowProject, 'id' | 'createdAt'>>) => void;
 }
 
-type PersistedWorkflowState = Pick<WorkflowStore, 'projects' | 'activeProjectId'>;
+export type PersistedWorkflowState = Pick<WorkflowStore, 'projects' | 'activeProjectId'>;
+type PersistWriteWaiter = { resolve: () => void; reject: (error: unknown) => void };
+type PendingPersistWrite = {
+  name: string;
+  value: StorageValue<PersistedWorkflowState>;
+  waiters: PersistWriteWaiter[];
+};
 let writeTimer: ReturnType<typeof setTimeout> | null = null;
+let pendingWrite: PendingPersistWrite | null = null;
 
 export function normalizeWorkflowProject(project: WorkflowProject): WorkflowProject {
   const nodeIds = new Set(project.nodes.map(node => node.id));
   return { ...project, selectedNodeIds: project.selectedNodeIds.filter(id => nodeIds.has(id)) };
 }
 
-const persistStorage: PersistStorage<WorkflowStore> = {
+export const workflowPersistStorage: PersistStorage<PersistedWorkflowState, Promise<void>> = {
   async getItem(name) {
-    return workflowStorage.get<StorageValue<WorkflowStore>>(name);
+    try {
+      return await workflowStorage.get<StorageValue<PersistedWorkflowState>>(name);
+    } catch (error) {
+      console.warn('[Workflow] Failed to read persisted projects.', error);
+      return null;
+    }
   },
   setItem(name, value) {
-    if (writeTimer) clearTimeout(writeTimer);
-    writeTimer = setTimeout(() => {
-      writeTimer = null;
-      void workflowStorage.set(name, value);
-    }, 400);
+    return new Promise<void>((resolve, reject) => {
+      if (pendingWrite) {
+        pendingWrite.name = name;
+        pendingWrite.value = value;
+        pendingWrite.waiters.push({ resolve, reject });
+      } else {
+        pendingWrite = { name, value, waiters: [{ resolve, reject }] };
+      }
+      if (writeTimer) clearTimeout(writeTimer);
+      writeTimer = setTimeout(async () => {
+        const write = pendingWrite;
+        pendingWrite = null;
+        writeTimer = null;
+        if (!write) return;
+        try {
+          await workflowStorage.set(write.name, write.value);
+          write.waiters.forEach(waiter => waiter.resolve());
+        } catch (error) {
+          write.waiters.forEach(waiter => waiter.reject(error));
+        }
+      }, 400);
+    });
   },
   removeItem(name) {
     return workflowStorage.remove(name);
@@ -61,8 +90,8 @@ const persistStorage: PersistStorage<WorkflowStore> = {
 };
 
 export const useWorkflowStore = create<WorkflowStore>()(
-  persist(
-    (set, get) => ({
+  persist<WorkflowStore, [], [], PersistedWorkflowState>(
+    set => ({
       hydrated: false,
       projects: [],
       activeProjectId: null,
@@ -94,8 +123,8 @@ export const useWorkflowStore = create<WorkflowStore>()(
     }),
     {
       name: WORKFLOW_STORE_KEY,
-      storage: persistStorage,
-      partialize: state => ({ projects: state.projects, activeProjectId: state.activeProjectId }) as WorkflowStore,
+      storage: workflowPersistStorage,
+      partialize: state => ({ projects: state.projects, activeProjectId: state.activeProjectId }),
       merge: (persisted, current) => {
         const state = persisted as Partial<PersistedWorkflowState> | undefined;
         return {
