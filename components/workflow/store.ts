@@ -37,14 +37,48 @@ interface WorkflowStore {
 }
 
 export type PersistedWorkflowState = Pick<WorkflowStore, 'projects' | 'activeProjectId'>;
-type PersistWriteWaiter = { resolve: () => void; reject: (error: unknown) => void };
+export interface WorkflowPersistenceError {
+  operation: 'read' | 'write' | 'remove';
+  error: unknown;
+}
+
+type WorkflowPersistenceErrorListener = (error: WorkflowPersistenceError | null) => void;
 type PendingPersistWrite = {
   name: string;
   value: StorageValue<PersistedWorkflowState>;
-  waiters: PersistWriteWaiter[];
+  waiters: Array<() => void>;
 };
 let writeTimer: ReturnType<typeof setTimeout> | null = null;
 let pendingWrite: PendingPersistWrite | null = null;
+let persistenceError: WorkflowPersistenceError | null = null;
+const persistenceErrorListeners = new Set<WorkflowPersistenceErrorListener>();
+
+export const getWorkflowPersistenceError = () => persistenceError;
+
+export function subscribeWorkflowPersistenceError(listener: WorkflowPersistenceErrorListener): () => void {
+  persistenceErrorListeners.add(listener);
+  return () => persistenceErrorListeners.delete(listener);
+}
+
+function setWorkflowPersistenceError(error: WorkflowPersistenceError | null) {
+  if (persistenceError === error) return;
+  persistenceError = error;
+  persistenceErrorListeners.forEach(listener => {
+    try {
+      listener(error);
+    } catch (listenerError) {
+      console.error('[Workflow] Persistence error listener failed.', listenerError);
+    }
+  });
+}
+
+function cancelPendingWrite() {
+  if (writeTimer) clearTimeout(writeTimer);
+  writeTimer = null;
+  const write = pendingWrite;
+  pendingWrite = null;
+  write?.waiters.forEach(resolve => resolve());
+}
 
 export function normalizeWorkflowProject(project: WorkflowProject): WorkflowProject {
   const nodeIds = new Set(project.nodes.map(node => node.id));
@@ -54,20 +88,23 @@ export function normalizeWorkflowProject(project: WorkflowProject): WorkflowProj
 export const workflowPersistStorage: PersistStorage<PersistedWorkflowState, Promise<void>> = {
   async getItem(name) {
     try {
-      return await workflowStorage.get<StorageValue<PersistedWorkflowState>>(name);
+      const value = await workflowStorage.get<StorageValue<PersistedWorkflowState>>(name);
+      setWorkflowPersistenceError(null);
+      return value;
     } catch (error) {
       console.warn('[Workflow] Failed to read persisted projects.', error);
+      setWorkflowPersistenceError({ operation: 'read', error });
       return null;
     }
   },
   setItem(name, value) {
-    return new Promise<void>((resolve, reject) => {
+    return new Promise<void>(resolve => {
       if (pendingWrite) {
         pendingWrite.name = name;
         pendingWrite.value = value;
-        pendingWrite.waiters.push({ resolve, reject });
+        pendingWrite.waiters.push(resolve);
       } else {
-        pendingWrite = { name, value, waiters: [{ resolve, reject }] };
+        pendingWrite = { name, value, waiters: [resolve] };
       }
       if (writeTimer) clearTimeout(writeTimer);
       writeTimer = setTimeout(async () => {
@@ -77,15 +114,22 @@ export const workflowPersistStorage: PersistStorage<PersistedWorkflowState, Prom
         if (!write) return;
         try {
           await workflowStorage.set(write.name, write.value);
-          write.waiters.forEach(waiter => waiter.resolve());
+          setWorkflowPersistenceError(null);
         } catch (error) {
-          write.waiters.forEach(waiter => waiter.reject(error));
+          setWorkflowPersistenceError({ operation: 'write', error });
         }
+        write.waiters.forEach(resolveWrite => resolveWrite());
       }, 400);
     });
   },
-  removeItem(name) {
-    return workflowStorage.remove(name);
+  async removeItem(name) {
+    cancelPendingWrite();
+    try {
+      await workflowStorage.remove(name);
+      setWorkflowPersistenceError(null);
+    } catch (error) {
+      setWorkflowPersistenceError({ operation: 'remove', error });
+    }
   },
 };
 

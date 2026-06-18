@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createWorkflowProject,
+  getWorkflowPersistenceError,
+  subscribeWorkflowPersistenceError,
   useWorkflowStore,
   workflowPersistStorage,
   WORKFLOW_STORE_KEY,
@@ -155,18 +157,36 @@ describe('workflow project persistence', () => {
     expect(set).toHaveBeenCalledWith(WORKFLOW_STORE_KEY, lastValue);
   });
 
-  it('rejects every coalesced write waiter when storage fails', async () => {
+  it('exposes store action persistence failures without an unhandled rejection', async () => {
     const failure = new Error('storage unavailable');
     vi.spyOn(workflowStorage, 'set').mockRejectedValue(failure);
-    const project = createWorkflowProject('A');
-    const value = { state: { projects: [project], activeProjectId: project.id } };
-    const first = expect(workflowPersistStorage.setItem(WORKFLOW_STORE_KEY, value)).rejects.toBe(failure);
-    const last = expect(workflowPersistStorage.setItem(WORKFLOW_STORE_KEY, value)).rejects.toBe(failure);
+    const listener = vi.fn();
+    const unsubscribe = subscribeWorkflowPersistenceError(listener);
+
+    const projectId = useWorkflowStore.getState().createProject('A');
+    useWorkflowStore.getState().updateProject(projectId, { backgroundMode: 'lines' });
 
     await vi.advanceTimersByTimeAsync(400);
+    unsubscribe();
 
-    await first;
-    await last;
+    expect(getWorkflowPersistenceError()).toEqual({ operation: 'write', error: failure });
+    expect(listener).toHaveBeenLastCalledWith({ operation: 'write', error: failure });
+  });
+
+  it('clearStorage cancels a queued write and resolves its waiter', async () => {
+    const set = vi.spyOn(workflowStorage, 'set').mockResolvedValue();
+    const remove = vi.spyOn(workflowStorage, 'remove').mockResolvedValue();
+    const project = createWorkflowProject('A');
+    const pending = workflowPersistStorage.setItem(WORKFLOW_STORE_KEY, {
+      state: { projects: [project], activeProjectId: project.id },
+    });
+
+    useWorkflowStore.persist.clearStorage();
+
+    await expect(pending).resolves.toBeUndefined();
+    await vi.advanceTimersByTimeAsync(400);
+    expect(set).not.toHaveBeenCalled();
+    expect(remove).toHaveBeenCalledWith(WORKFLOW_STORE_KEY);
   });
 
   it('finishes hydration with an empty state when storage reads fail', async () => {
@@ -178,6 +198,7 @@ describe('workflow project persistence', () => {
 
     expect(useWorkflowStore.getState()).toMatchObject({ hydrated: true, projects: [], activeProjectId: null });
     expect(useWorkflowStore.persist.hasHydrated()).toBe(true);
+    expect(getWorkflowPersistenceError()).toMatchObject({ operation: 'read' });
   });
 
   it('removes missing node ids while rehydrating persisted projects', async () => {
