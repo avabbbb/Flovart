@@ -52,6 +52,7 @@ export function InfiniteWorkflow({
   const pendingMoveRef = useRef<{ clientX: number; clientY: number; pointerId: number } | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const spacePressedRef = useRef(false);
+  const createMenuOpenerRef = useRef<HTMLElement | null>(null);
   const clipboardRef = useRef<WorkflowNodeData[]>([]);
   const [tool, setTool] = useState<WorkflowTool>('select');
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>(project.selectedNodeIds || []);
@@ -80,6 +81,13 @@ export function InfiniteWorkflow({
     patchProject({ selectedNodeIds: ids });
   }, [patchProject]);
 
+  const closeCreateMenu = useCallback(() => {
+    setCreateMenu(null);
+    const opener = createMenuOpenerRef.current || rootRef.current;
+    createMenuOpenerRef.current = null;
+    opener?.focus({ preventScroll: true });
+  }, []);
+
   useEffect(() => {
     if (animationFrameRef.current !== null) window.cancelAnimationFrame(animationFrameRef.current);
     animationFrameRef.current = null;
@@ -90,6 +98,7 @@ export function InfiniteWorkflow({
     setSelectionBox(null);
     setConnectionDrag(null);
     setCreateMenu(null);
+    createMenuOpenerRef.current = null;
     interactionRef.current = null;
   }, [project.id]);
 
@@ -160,6 +169,7 @@ export function InfiniteWorkflow({
   const openCreateMenu = useCallback((clientX: number, clientY: number, sourceId?: string) => {
     const rect = rootRef.current?.getBoundingClientRect();
     const local = localPoint(clientX, clientY);
+    if (!sourceId || !createMenuOpenerRef.current) createMenuOpenerRef.current = rootRef.current;
     setCreateMenu({
       world: screenToWorkflow(clientX, clientY),
       anchor: {
@@ -298,8 +308,10 @@ export function InfiniteWorkflow({
     const dropTarget = getConnectionDropTarget(clientX, clientY, interaction.sourceId);
     setConnectionDrag(null);
     if (dropTarget.nodeId) {
+      createMenuOpenerRef.current = null;
       applyOps([{ type: 'connect_nodes', fromNodeId: interaction.sourceId, toNodeId: dropTarget.nodeId }]);
     } else if (dropTarget.isNearNode) {
+      createMenuOpenerRef.current = null;
       setNotice(dropTarget.reason || '无法连接到该节点');
     } else {
       openCreateMenu(clientX, clientY, interaction.sourceId);
@@ -316,6 +328,7 @@ export function InfiniteWorkflow({
     if (interaction?.type === 'node' || interaction?.type === 'resize') patchProject(interaction.frame);
     if (interaction?.type === 'pan') patchProject({ viewport: interaction.viewport });
     if (interaction?.type === 'selection') selectNodes(interaction.box.initialIds);
+    if (interaction?.type === 'connection') createMenuOpenerRef.current = null;
     setSelectionBox(null);
     setConnectionDrag(null);
     spacePressedRef.current = false;
@@ -400,7 +413,7 @@ export function InfiniteWorkflow({
       if (modifier && key === 'v') { event.preventDefault(); pasteSelection(); return; }
       if (event.key === 'Delete' || event.key === 'Backspace') { event.preventDefault(); deleteSelection(); return; }
       if (event.key === 'Escape') {
-        setCreateMenu(null);
+        closeCreateMenu();
         setContextMenu(null);
         cancelInteraction();
       }
@@ -414,7 +427,7 @@ export function InfiniteWorkflow({
       window.removeEventListener('keydown', keydown);
       window.removeEventListener('keyup', keyup);
     };
-  }, [cancelInteraction, copySelection, deleteSelection, pasteSelection, redo, undo]);
+  }, [cancelInteraction, closeCreateMenu, copySelection, deleteSelection, pasteSelection, redo, undo]);
 
   const addNode = useCallback((type: WorkflowNodeType, metadata: WorkflowNodeData['metadata'] = {}) => {
     const rect = rootRef.current?.getBoundingClientRect();
@@ -434,8 +447,8 @@ export function InfiniteWorkflow({
     const success = createMenu.sourceId
       ? applyOps([{ type: 'create_connected_node', fromNodeId: createMenu.sourceId, node }])
       : applyOps([{ type: 'add_node', node }]);
-    if (success) setCreateMenu(null);
-  }, [applyOps, createMenu]);
+    if (success) closeCreateMenu();
+  }, [applyOps, closeCreateMenu, createMenu]);
 
   const fitView = useCallback(() => {
     const rect = rootRef.current?.getBoundingClientRect();
@@ -450,6 +463,10 @@ export function InfiniteWorkflow({
   }, [patchProject]);
 
   const startPan = (clientX: number, clientY: number, pointerId: number) => {
+    closeCreateMenu();
+    setContextMenu(null);
+    setSelectedConnectionId(null);
+    setConnectionDrag(null);
     interactionRef.current = {
       type: 'pan',
       pointerId,
@@ -459,15 +476,17 @@ export function InfiniteWorkflow({
   };
 
   const startNodeDrag = (event: ReactPointerEvent<HTMLDivElement>, node: WorkflowNodeData) => {
-    if (event.button !== 0 || (event.target instanceof Element && event.target.closest(BLOCKED_TARGET))) return;
-    event.stopPropagation();
+    if (event.button !== 0) return;
     if (tool === 'pan' || spacePressedRef.current) {
+      event.stopPropagation();
       event.preventDefault();
       startPan(event.clientX, event.clientY, event.pointerId);
       return;
     }
+    if (event.target instanceof Element && event.target.closest(BLOCKED_TARGET)) return;
+    event.stopPropagation();
     setContextMenu(null);
-    setCreateMenu(null);
+    closeCreateMenu();
     setSelectedConnectionId(null);
     const modifier = event.shiftKey || event.ctrlKey || event.metaKey;
     let ids = selectedIdsRef.current;
@@ -495,7 +514,7 @@ export function InfiniteWorkflow({
   const onSurfacePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (!isTrueBackground(event.target)) return;
     setContextMenu(null);
-    setCreateMenu(null);
+    closeCreateMenu();
     setNotice(null);
     setSelectedConnectionId(null);
     if (event.button === 0 && (event.ctrlKey || event.metaKey) && tool === 'select') {
@@ -526,6 +545,7 @@ export function InfiniteWorkflow({
   return (
     <div
       ref={rootRef}
+      tabIndex={-1}
       data-testid="workflow-editor"
       className={`workflow-editor workflow-editor--${tool} workflow-bg--${project.backgroundMode}`}
       style={project.backgroundMode === 'none' ? { backgroundImage: 'none' } : {
@@ -587,16 +607,19 @@ export function InfiniteWorkflow({
             onPointerDown={event => startNodeDrag(event, node)}
             onConnectStart={event => {
               if (event.button !== 0) return;
+              if (tool === 'pan' || spacePressedRef.current) return;
               event.preventDefault();
               event.stopPropagation();
-              setCreateMenu(null);
+              closeCreateMenu();
               setContextMenu(null);
               setSelectedConnectionId(null);
+              createMenuOpenerRef.current = event.currentTarget;
               interactionRef.current = { type: 'connection', pointerId: event.pointerId, sourceId: node.id };
               setConnectionDrag({ sourceId: node.id, point: screenToWorkflow(event.clientX, event.clientY), targetId: null });
             }}
             onResizeStart={event => {
               if (event.button !== 0) return;
+              if (tool === 'pan' || spacePressedRef.current) return;
               event.preventDefault();
               event.stopPropagation();
               const frame = currentFrame();
@@ -624,7 +647,7 @@ export function InfiniteWorkflow({
       }} />
       <div className="workflow-zoom" data-workflow-overlay>{Math.round(project.viewport.k * 100)}%</div>
       {notice && <div role="status" aria-live="polite" data-workflow-overlay style={{ position: 'absolute', zIndex: 80, right: 14, top: 58, maxWidth: 320, padding: '7px 10px', border: '1px solid var(--wf-border)', borderRadius: 7, color: 'var(--wf-text)', background: 'var(--wf-panel)', fontSize: 12 }}>{notice}</div>}
-      {createMenu && <WorkflowCreateMenu state={createMenu} onCreate={createFromMenu} onClose={() => setCreateMenu(null)} />}
+      {createMenu && <WorkflowCreateMenu state={createMenu} onCreate={createFromMenu} onClose={closeCreateMenu} />}
       {contextMenu && (
         <WorkflowContextMenu
           state={contextMenu}

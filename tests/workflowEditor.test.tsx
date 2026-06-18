@@ -38,6 +38,7 @@ function Harness({ initial = makeProject() }: { initial?: WorkflowProject }) {
 const editor = () => screen.getByTestId('workflow-editor');
 const node = (id: string) => editor().querySelector<HTMLElement>(`[data-workflow-node-id="${id}"]`)!;
 const sourceHandle = () => node('source').querySelector<HTMLButtonElement>('[aria-label="从此节点连接"]')!;
+const resizeHandle = () => node('source').querySelector<HTMLButtonElement>('[aria-label="调整节点大小"]')!;
 const worldTransform = () => (editor().querySelector<HTMLElement>('.workflow-world')?.style.transform || '');
 
 describe('InfiniteWorkflow surface interactions', () => {
@@ -180,6 +181,32 @@ describe('InfiniteWorkflow surface interactions', () => {
     expect(node('source').style.transform).toBe('translate(100px, 100px)');
   });
 
+  it('pans from source and resize handles without connecting or resizing', () => {
+    const initial = makeProject();
+    initial.connections = [{ id: 'connection-1', fromNodeId: 'source', toNodeId: 'target' }];
+    render(<Harness initial={initial} />);
+    const connection = editor().querySelector<SVGPathElement>('[data-workflow-connection-id="connection-1"]')!;
+    fireEvent.keyDown(connection, { key: 'Enter' });
+    fireEvent.click(screen.getByRole('button', { name: '平移工具' }));
+    fireEvent.doubleClick(editor(), { clientX: 900, clientY: 600 });
+
+    fireEvent.pointerDown(sourceHandle(), { button: 0, pointerId: 11, clientX: 440, clientY: 210 });
+    fireEvent.pointerUp(window, { pointerId: 11, clientX: 480, clientY: 230 });
+    expect(worldTransform()).toContain('translate(40px, 20px)');
+    expect(screen.queryByRole('menu', { name: '新建节点' })).not.toBeInTheDocument();
+    expect(editor().querySelector('.workflow-connection.is-selected')).not.toBeInTheDocument();
+    expect(editor().querySelector('.workflow-connection.is-active')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '选择工具' }));
+    fireEvent.keyDown(window, { code: 'Space', key: ' ' });
+    fireEvent.pointerDown(resizeHandle(), { button: 0, pointerId: 12, clientX: 440, clientY: 320 });
+    fireEvent.pointerUp(window, { pointerId: 12, clientX: 470, clientY: 340 });
+    fireEvent.keyUp(window, { code: 'Space', key: ' ' });
+    expect(worldTransform()).toContain('translate(70px, 40px)');
+    expect(node('source').style.width).toBe('340px');
+    expect(node('source').style.height).toBe('220px');
+  });
+
   it('records every actual node and resize delta while a click stays out of history', () => {
     render(<Harness />);
 
@@ -272,6 +299,25 @@ describe('InfiniteWorkflow surface interactions', () => {
     fireEvent.doubleClick(editor(), { clientX: 900, clientY: 600 });
     fireEvent.keyDown(screen.getByRole('menu', { name: '新建节点' }), { key: 'Escape' });
     expect(screen.queryByRole('menu', { name: '新建节点' })).not.toBeInTheDocument();
+  });
+
+  it('restores focus to the surface or source handle after closing the create menu', () => {
+    render(<Harness />);
+    expect(editor()).toHaveAttribute('tabindex', '-1');
+
+    fireEvent.doubleClick(editor(), { clientX: 900, clientY: 600 });
+    fireEvent.keyDown(screen.getByRole('menu', { name: '新建节点' }), { key: 'Escape' });
+    expect(editor()).toHaveFocus();
+
+    fireEvent.pointerDown(sourceHandle(), { button: 0, pointerId: 21, clientX: 440, clientY: 210 });
+    fireEvent.pointerUp(window, { pointerId: 21, clientX: 450, clientY: 520 });
+    fireEvent.click(screen.getByRole('menuitem', { name: /文本生成/ }));
+    expect(sourceHandle()).toHaveFocus();
+
+    fireEvent.pointerDown(sourceHandle(), { button: 0, pointerId: 22, clientX: 440, clientY: 210 });
+    fireEvent.pointerUp(window, { pointerId: 22, clientX: 900, clientY: 650 });
+    fireEvent.click(screen.getByRole('button', { name: '关闭新建节点' }));
+    expect(sourceHandle()).toHaveFocus();
   });
 
   it('opens the same create menu when a source connection is dropped on blank space and can cancel it', () => {
