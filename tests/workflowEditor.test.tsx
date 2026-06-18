@@ -42,6 +42,8 @@ const worldTransform = () => (editor().querySelector<HTMLElement>('.workflow-wor
 
 describe('InfiniteWorkflow surface interactions', () => {
   beforeEach(() => {
+    vi.stubGlobal('requestAnimationFrame', vi.fn(() => 1));
+    vi.stubGlobal('cancelAnimationFrame', vi.fn());
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
       x: 0,
       y: 0,
@@ -55,7 +57,10 @@ describe('InfiniteWorkflow surface interactions', () => {
     });
   });
 
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
 
   it('keeps the workflow point under the cursor fixed while zooming', () => {
     render(<Harness />);
@@ -91,6 +96,23 @@ describe('InfiniteWorkflow surface interactions', () => {
     expect(node('target')).toHaveClass('is-selected');
   });
 
+  it('patches UI selection immediately and adopts later canonical selection', () => {
+    let project = makeProject();
+    const updateProject = vi.fn((patch: Partial<WorkflowProject>) => { project = { ...project, ...patch }; });
+    const view = render(<InfiniteWorkflow project={project} updateProject={updateProject} onRunNode={() => undefined} onOpenAgent={() => undefined} />);
+
+    fireEvent.pointerDown(node('source'), { button: 0, pointerId: 1, clientX: 120, clientY: 120 });
+    fireEvent.pointerUp(window, { pointerId: 1, clientX: 120, clientY: 120 });
+    expect(updateProject).toHaveBeenCalledWith({ selectedNodeIds: ['source'] });
+
+    updateProject.mockClear();
+    project = { ...project, selectedNodeIds: ['target'] };
+    view.rerender(<InfiniteWorkflow project={project} updateProject={updateProject} onRunNode={() => undefined} onOpenAgent={() => undefined} />);
+    expect(node('source')).not.toHaveClass('is-selected');
+    expect(node('target')).toHaveClass('is-selected');
+    expect(updateProject).not.toHaveBeenCalled();
+  });
+
   it('records a multi-move node drag as one undoable history entry', () => {
     render(<Harness />);
 
@@ -103,6 +125,59 @@ describe('InfiniteWorkflow surface interactions', () => {
     fireEvent.click(screen.getByRole('button', { name: '撤销' }));
     expect(node('source').style.transform).toBe('translate(100px, 100px)');
     expect(screen.getByRole('button', { name: '撤销' })).toBeDisabled();
+  });
+
+  it('batches native pointer moves and flushes the latest position before pointerup', () => {
+    const frames = new Map<number, FrameRequestCallback>();
+    let frameId = 0;
+    vi.stubGlobal('requestAnimationFrame', vi.fn((callback: FrameRequestCallback) => {
+      frames.set(++frameId, callback);
+      return frameId;
+    }));
+    vi.stubGlobal('cancelAnimationFrame', vi.fn((id: number) => frames.delete(id)));
+    render(<Harness />);
+
+    fireEvent.pointerDown(node('source'), { button: 0, pointerId: 7, clientX: 120, clientY: 120 });
+    fireEvent.pointerMove(window, { pointerId: 7, clientX: 160, clientY: 150 });
+    fireEvent.pointerMove(window, { pointerId: 7, clientX: 200, clientY: 180 });
+    expect(node('source').style.transform).toBe('translate(100px, 100px)');
+    expect(frames.size).toBe(1);
+
+    frames.values().next().value?.(0);
+    expect(node('source').style.transform).toBe('translate(180px, 160px)');
+    fireEvent.pointerMove(window, { pointerId: 7, clientX: 220, clientY: 190 });
+    fireEvent.pointerUp(window, { pointerId: 7, clientX: 230, clientY: 200 });
+    expect(node('source').style.transform).toBe('translate(210px, 180px)');
+  });
+
+  it('ignores move, up, and cancel events from a different pointer', () => {
+    render(<Harness />);
+
+    fireEvent.pointerDown(node('source'), { button: 0, pointerId: 3, clientX: 120, clientY: 120 });
+    fireEvent.pointerMove(window, { pointerId: 4, clientX: 500, clientY: 500 });
+    fireEvent.pointerUp(window, { pointerId: 4, clientX: 500, clientY: 500 });
+    fireEvent.pointerCancel(window, { pointerId: 4 });
+    fireEvent.pointerUp(window, { pointerId: 3, clientX: 140, clientY: 130 });
+
+    expect(node('source').style.transform).toBe('translate(120px, 110px)');
+  });
+
+  it('pans from a node with the pan tool or Space without moving the node', () => {
+    render(<Harness />);
+
+    fireEvent.click(screen.getByRole('button', { name: '平移工具' }));
+    fireEvent.pointerDown(node('source'), { button: 0, pointerId: 1, clientX: 120, clientY: 120 });
+    fireEvent.pointerUp(window, { pointerId: 1, clientX: 170, clientY: 150 });
+    expect(worldTransform()).toContain('translate(50px, 30px)');
+    expect(node('source').style.transform).toBe('translate(100px, 100px)');
+
+    fireEvent.click(screen.getByRole('button', { name: '选择工具' }));
+    fireEvent.keyDown(window, { code: 'Space', key: ' ' });
+    fireEvent.pointerDown(node('source'), { button: 0, pointerId: 2, clientX: 170, clientY: 150 });
+    fireEvent.pointerUp(window, { pointerId: 2, clientX: 200, clientY: 170 });
+    fireEvent.keyUp(window, { code: 'Space', key: ' ' });
+    expect(worldTransform()).toContain('translate(80px, 50px)');
+    expect(node('source').style.transform).toBe('translate(100px, 100px)');
   });
 
   it('records every actual node and resize delta while a click stays out of history', () => {
@@ -172,6 +247,33 @@ describe('InfiniteWorkflow surface interactions', () => {
     expect(screen.getByRole('menu', { name: '新建节点' })).toBeInTheDocument();
   });
 
+  it('supports keyboard navigation in the create menu and renders audio nodes', () => {
+    render(<Harness />);
+
+    fireEvent.doubleClick(editor(), { clientX: 360, clientY: 260 });
+    const menu = screen.getByRole('menu', { name: '新建节点' });
+    const items = screen.getAllByRole('menuitem');
+    expect(items[0]).toHaveFocus();
+    fireEvent.keyDown(menu, { key: 'End' });
+    expect(items[4]).toHaveFocus();
+    fireEvent.keyDown(menu, { key: 'Home' });
+    expect(items[0]).toHaveFocus();
+    fireEvent.keyDown(menu, { key: 'ArrowUp' });
+    expect(items[4]).toHaveFocus();
+    fireEvent.keyDown(menu, { key: 'Home' });
+    fireEvent.keyDown(menu, { key: 'ArrowDown' });
+    fireEvent.keyDown(menu, { key: 'ArrowDown' });
+    fireEvent.keyDown(menu, { key: 'ArrowDown' });
+    expect(items[3]).toHaveFocus();
+    fireEvent.keyDown(menu, { key: 'Enter' });
+    expect(editor().querySelector('.workflow-node--audio')).toBeInTheDocument();
+    expect(screen.getByText('音频节点')).toBeInTheDocument();
+
+    fireEvent.doubleClick(editor(), { clientX: 900, clientY: 600 });
+    fireEvent.keyDown(screen.getByRole('menu', { name: '新建节点' }), { key: 'Escape' });
+    expect(screen.queryByRole('menu', { name: '新建节点' })).not.toBeInTheDocument();
+  });
+
   it('opens the same create menu when a source connection is dropped on blank space and can cancel it', () => {
     render(<Harness />);
 
@@ -193,6 +295,23 @@ describe('InfiniteWorkflow surface interactions', () => {
 
     expect(editor().querySelectorAll('[data-workflow-connection-id]')).toHaveLength(1);
     expect(screen.queryByRole('menu', { name: '新建节点' })).not.toBeInTheDocument();
+  });
+
+  it('makes the wide connection hit path keyboard selectable', () => {
+    const initial = makeProject();
+    initial.connections = [{ id: 'connection-1', fromNodeId: 'source', toNodeId: 'target' }];
+    render(<Harness initial={initial} />);
+    const path = editor().querySelector<SVGPathElement>('[data-workflow-connection-id="connection-1"]')!;
+
+    expect(path).toHaveAttribute('tabindex', '0');
+    expect(path).toHaveAccessibleName('选择连接：文本 到 图片');
+    expect(screen.getByRole('group', { name: '工作流连接' })).not.toHaveAttribute('aria-hidden');
+    fireEvent.keyDown(path, { key: ' ' });
+    expect(editor().querySelector('.workflow-connection.is-selected')).toBeInTheDocument();
+    fireEvent.pointerDown(node('source'), { button: 0, pointerId: 9, clientX: 120, clientY: 120 });
+    fireEvent.pointerUp(window, { pointerId: 9, clientX: 120, clientY: 120 });
+    fireEvent.keyDown(path, { key: 'Enter' });
+    expect(editor().querySelector('.workflow-connection.is-selected')).toBeInTheDocument();
   });
 
   it('creates and connects a selected menu node atomically', () => {
@@ -232,7 +351,7 @@ describe('InfiniteWorkflow surface interactions', () => {
     expect(editor().querySelector('[data-workflow-node-id="source"]')).not.toBeInTheDocument();
   });
 
-  it('maps a minimap node center back to the same workflow center', () => {
+  it('maps a wide minimap node center and letterbox edge to content bounds', () => {
     const project = makeProject();
     const onCenter = vi.fn();
     render(<WorkflowMiniMap nodes={project.nodes} viewport={project.viewport} onCenter={onCenter} />);
@@ -257,5 +376,24 @@ describe('InfiniteWorkflow surface interactions', () => {
     const [x, y] = onCenter.mock.calls[0];
     expect(x).toBeCloseTo(690);
     expect(y).toBeCloseTo(240);
+
+    fireEvent.click(minimap, { clientX: 200 + 75, clientY: 100 });
+    expect(onCenter.mock.calls[1][1]).toBeCloseTo(100);
+  });
+
+  it('centers tall minimap content and clamps horizontal letterbox clicks', () => {
+    const nodes = [
+      createWorkflowNode('top', 'text', { x: 50, y: 0 }),
+      createWorkflowNode('bottom', 'image', { x: 50, y: 2000 }),
+    ];
+    const onCenter = vi.fn();
+    render(<WorkflowMiniMap nodes={nodes} viewport={{ x: 0, y: 0, k: 1 }} onCenter={onCenter} />);
+    const minimap = screen.getByRole('button', { name: '工作流小地图' });
+    vi.spyOn(minimap, 'getBoundingClientRect').mockReturnValue({
+      x: 200, y: 100, left: 200, top: 100, right: 366, bottom: 212, width: 166, height: 112, toJSON: () => ({}),
+    });
+
+    fireEvent.click(minimap, { clientX: 200, clientY: 148 });
+    expect(onCenter.mock.calls[0][0]).toBeCloseTo(50);
   });
 });

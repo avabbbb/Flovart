@@ -1,5 +1,9 @@
 import type { WorkflowNode, WorkflowViewport } from './types';
 
+const MAP_WIDTH = 150;
+const MAP_HEIGHT = 96;
+const MAP_INSET = 8;
+
 export function WorkflowMiniMap({ nodes, viewport, onCenter }: { nodes: WorkflowNode[]; viewport: WorkflowViewport; onCenter: (x: number, y: number) => void }) {
   if (nodes.length === 0) return null;
   const minX = Math.min(...nodes.map(node => node.position.x));
@@ -8,7 +12,11 @@ export function WorkflowMiniMap({ nodes, viewport, onCenter }: { nodes: Workflow
   const maxY = Math.max(...nodes.map(node => node.position.y + node.height));
   const width = Math.max(1, maxX - minX);
   const height = Math.max(1, maxY - minY);
-  const scale = Math.min(150 / width, 96 / height);
+  const scale = Math.min(MAP_WIDTH / width, MAP_HEIGHT / height);
+  const contentWidth = width * scale;
+  const contentHeight = height * scale;
+  const offsetX = MAP_INSET + (MAP_WIDTH - contentWidth) / 2;
+  const offsetY = MAP_INSET + (MAP_HEIGHT - contentHeight) / 2;
   return (
     <button
       type="button"
@@ -18,16 +26,18 @@ export function WorkflowMiniMap({ nodes, viewport, onCenter }: { nodes: Workflow
       onPointerDown={event => event.stopPropagation()}
       onClick={event => {
         const rect = event.currentTarget.getBoundingClientRect();
-        const x = minX + Math.max(0, Math.min(150, event.clientX - rect.left)) / scale;
-        const y = minY + Math.max(0, Math.min(96, event.clientY - rect.top)) / scale;
+        const localX = Math.max(offsetX, Math.min(offsetX + contentWidth, event.clientX - rect.left));
+        const localY = Math.max(offsetY, Math.min(offsetY + contentHeight, event.clientY - rect.top));
+        const x = minX + (localX - offsetX) / scale;
+        const y = minY + (localY - offsetY) / scale;
         onCenter(x, y);
       }}
     >
       {nodes.map(node => {
         const nodeWidth = Math.max(3, node.width * scale);
         const nodeHeight = Math.max(3, node.height * scale);
-        const centerX = (node.position.x + node.width / 2 - minX) * scale;
-        const centerY = (node.position.y + node.height / 2 - minY) * scale;
+        const centerX = offsetX + (node.position.x + node.width / 2 - minX) * scale;
+        const centerY = offsetY + (node.position.y + node.height / 2 - minY) * scale;
         return (
           <span
             key={node.id}

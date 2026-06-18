@@ -29,7 +29,7 @@ export function WorkflowConnections({
   const source = active ? byId.get(active.sourceId) : undefined;
   const target = active?.targetId ? byId.get(active.targetId) : undefined;
   return (
-    <svg className="workflow-connections" aria-hidden="true">
+    <svg className="workflow-connections" role="group" aria-label="工作流连接">
       {connections.map(connection => {
         const from = byId.get(connection.fromNodeId);
         const to = byId.get(connection.toNodeId);
@@ -39,6 +39,10 @@ export function WorkflowConnections({
           <g key={connection.id}>
             <path
               data-workflow-connection-id={connection.id}
+              role="button"
+              tabIndex={0}
+              aria-label={`选择连接：${from.title} 到 ${to.title}`}
+              aria-pressed={selectedId === connection.id}
               d={path}
               fill="none"
               stroke="transparent"
@@ -47,6 +51,12 @@ export function WorkflowConnections({
               className="workflow-connection-hit"
               onPointerDown={event => event.stopPropagation()}
               onClick={event => { event.stopPropagation(); onSelect(connection.id); }}
+              onKeyDown={event => {
+                if (event.key !== 'Enter' && event.key !== ' ') return;
+                event.preventDefault();
+                event.stopPropagation();
+                onSelect(connection.id);
+              }}
               onContextMenu={event => { event.preventDefault(); event.stopPropagation(); onContextMenu(event, connection.id); }}
             />
             <path d={path} fill="none" className={selectedId === connection.id ? 'workflow-connection is-selected' : 'workflow-connection'} />

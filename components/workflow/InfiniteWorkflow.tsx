@@ -14,15 +14,17 @@ import type { WorkflowConnection, WorkflowNode as WorkflowNodeData, WorkflowNode
 
 type Frame = Pick<WorkflowProject, 'nodes' | 'connections'>;
 type SelectionBox = { start: WorkflowPoint; current: WorkflowPoint; additive: boolean; initialIds: string[] };
-type Interaction =
+type Interaction = { pointerId: number } & (
   | { type: 'node'; start: WorkflowPoint; positions: Map<string, WorkflowPoint>; frame: Frame; moved: boolean }
   | { type: 'resize'; id: string; start: WorkflowPoint; width: number; height: number; frame: Frame; moved: boolean }
   | { type: 'pan'; start: WorkflowPoint; viewport: WorkflowViewport }
   | { type: 'selection'; box: SelectionBox }
-  | { type: 'connection'; sourceId: string };
+  | { type: 'connection'; sourceId: string });
 type ConnectionDropTarget = { nodeId: string | null; isNearNode: boolean; reason?: string };
 
 const BLOCKED_TARGET = 'button,textarea,input,select,video,audio,[contenteditable="true"],[role="dialog"],[data-workflow-overlay],.workflow-toolbar';
+const EDITABLE_TARGET = 'textarea,input,select,video,audio,[contenteditable="true"]';
+const SPACE_BLOCKED_TARGET = `${EDITABLE_TARGET},[role="menu"],[role="dialog"]`;
 const CONNECTION_NODE_PADDING = 24;
 const CONNECTION_HANDLE_RADIUS = 18;
 
@@ -47,6 +49,9 @@ export function InfiniteWorkflow({
   const viewportRef = useRef(project.viewport);
   const selectedIdsRef = useRef(project.selectedNodeIds || []);
   const interactionRef = useRef<Interaction | null>(null);
+  const pendingMoveRef = useRef<{ clientX: number; clientY: number; pointerId: number } | null>(null);
+  const animationFrameRef = useRef<number | null>(null);
+  const spacePressedRef = useRef(false);
   const clipboardRef = useRef<WorkflowNodeData[]>([]);
   const [tool, setTool] = useState<WorkflowTool>('select');
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>(project.selectedNodeIds || []);
@@ -69,14 +74,16 @@ export function InfiniteWorkflow({
   }, [updateProject]);
 
   const selectNodes = useCallback((ids: string[]) => {
+    if (sameIds(selectedIdsRef.current, ids) && sameIds(projectRef.current.selectedNodeIds || [], ids)) return;
     selectedIdsRef.current = ids;
     setSelectedNodeIds(ids);
-  }, []);
+    patchProject({ selectedNodeIds: ids });
+  }, [patchProject]);
 
   useEffect(() => {
-    const ids = project.selectedNodeIds || [];
-    selectedIdsRef.current = ids;
-    setSelectedNodeIds(ids);
+    if (animationFrameRef.current !== null) window.cancelAnimationFrame(animationFrameRef.current);
+    animationFrameRef.current = null;
+    pendingMoveRef.current = null;
     setSelectedConnectionId(null);
     setPast([]);
     setFuture([]);
@@ -87,8 +94,11 @@ export function InfiniteWorkflow({
   }, [project.id]);
 
   useEffect(() => {
-    if (!sameIds(project.selectedNodeIds || [], selectedNodeIds)) updateProject({ selectedNodeIds });
-  }, [project.selectedNodeIds, selectedNodeIds, updateProject]);
+    const ids = project.selectedNodeIds || [];
+    if (sameIds(selectedIdsRef.current, ids)) return;
+    selectedIdsRef.current = ids;
+    setSelectedNodeIds(ids);
+  }, [project.id, project.selectedNodeIds]);
 
   const currentFrame = useCallback((): Frame => ({
     nodes: projectRef.current.nodes,
@@ -196,9 +206,9 @@ export function InfiniteWorkflow({
     return { nodeId: bestId, isNearNode, reason };
   }, [currentSnapshot, screenToWorkflow]);
 
-  const updateInteraction = useCallback((clientX: number, clientY: number) => {
+  const updateInteraction = useCallback((clientX: number, clientY: number, pointerId: number) => {
     const interaction = interactionRef.current;
-    if (!interaction) return;
+    if (!interaction || interaction.pointerId !== pointerId) return;
     if (interaction.type === 'node') {
       const point = screenToWorkflow(clientX, clientY);
       const dx = point.x - interaction.start.x;
@@ -249,10 +259,31 @@ export function InfiniteWorkflow({
     setConnectionDrag({ sourceId: interaction.sourceId, point: screenToWorkflow(clientX, clientY), targetId: dropTarget.nodeId });
   }, [getConnectionDropTarget, localPoint, patchProject, screenToWorkflow, selectNodes]);
 
-  const finishInteraction = useCallback((clientX: number, clientY: number) => {
+  const scheduleInteractionMove = useCallback((clientX: number, clientY: number, pointerId: number) => {
+    if (interactionRef.current?.pointerId !== pointerId) return;
+    pendingMoveRef.current = { clientX, clientY, pointerId };
+    if (animationFrameRef.current !== null) return;
+    animationFrameRef.current = window.requestAnimationFrame(() => {
+      animationFrameRef.current = null;
+      const pending = pendingMoveRef.current;
+      pendingMoveRef.current = null;
+      if (pending) updateInteraction(pending.clientX, pending.clientY, pending.pointerId);
+    });
+  }, [updateInteraction]);
+
+  const flushPendingMove = useCallback(() => {
+    if (animationFrameRef.current !== null) window.cancelAnimationFrame(animationFrameRef.current);
+    animationFrameRef.current = null;
+    const pending = pendingMoveRef.current;
+    pendingMoveRef.current = null;
+    if (pending) updateInteraction(pending.clientX, pending.clientY, pending.pointerId);
+  }, [updateInteraction]);
+
+  const finishInteraction = useCallback((clientX: number, clientY: number, pointerId: number) => {
     const interaction = interactionRef.current;
-    if (!interaction) return;
-    updateInteraction(clientX, clientY);
+    if (!interaction || interaction.pointerId !== pointerId) return;
+    flushPendingMove();
+    updateInteraction(clientX, clientY, pointerId);
     interactionRef.current = null;
     if (interaction.type === 'node' || interaction.type === 'resize') {
       if (interaction.moved) pushHistory(interaction.frame);
@@ -273,32 +304,42 @@ export function InfiniteWorkflow({
     } else {
       openCreateMenu(clientX, clientY, interaction.sourceId);
     }
-  }, [applyOps, getConnectionDropTarget, openCreateMenu, pushHistory, updateInteraction]);
+  }, [applyOps, flushPendingMove, getConnectionDropTarget, openCreateMenu, pushHistory, updateInteraction]);
 
-  const cancelInteraction = useCallback(() => {
+  const cancelInteraction = useCallback((pointerId?: number) => {
     const interaction = interactionRef.current;
+    if (pointerId !== undefined && interaction?.pointerId !== pointerId) return;
+    if (animationFrameRef.current !== null) window.cancelAnimationFrame(animationFrameRef.current);
+    animationFrameRef.current = null;
+    pendingMoveRef.current = null;
     interactionRef.current = null;
     if (interaction?.type === 'node' || interaction?.type === 'resize') patchProject(interaction.frame);
     if (interaction?.type === 'pan') patchProject({ viewport: interaction.viewport });
     if (interaction?.type === 'selection') selectNodes(interaction.box.initialIds);
     setSelectionBox(null);
     setConnectionDrag(null);
+    spacePressedRef.current = false;
   }, [patchProject, selectNodes]);
 
   useEffect(() => {
-    const move = (event: PointerEvent) => updateInteraction(event.clientX, event.clientY);
-    const up = (event: PointerEvent) => finishInteraction(event.clientX, event.clientY);
+    const move = (event: PointerEvent) => scheduleInteractionMove(event.clientX, event.clientY, event.pointerId);
+    const up = (event: PointerEvent) => finishInteraction(event.clientX, event.clientY, event.pointerId);
+    const cancel = (event: PointerEvent) => cancelInteraction(event.pointerId);
+    const blur = () => cancelInteraction();
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
-    window.addEventListener('pointercancel', cancelInteraction);
-    window.addEventListener('blur', cancelInteraction);
+    window.addEventListener('pointercancel', cancel);
+    window.addEventListener('blur', blur);
     return () => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
-      window.removeEventListener('pointercancel', cancelInteraction);
-      window.removeEventListener('blur', cancelInteraction);
+      window.removeEventListener('pointercancel', cancel);
+      window.removeEventListener('blur', blur);
+      if (animationFrameRef.current !== null) window.cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+      pendingMoveRef.current = null;
     };
-  }, [cancelInteraction, finishInteraction, updateInteraction]);
+  }, [cancelInteraction, finishInteraction, scheduleInteractionMove]);
 
   const undo = useCallback(() => {
     const previous = past[past.length - 1];
@@ -344,6 +385,12 @@ export function InfiniteWorkflow({
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
       const target = event.target instanceof Element ? event.target : null;
+      if (event.code === 'Space') {
+        if (target?.closest(SPACE_BLOCKED_TARGET)) return;
+        event.preventDefault();
+        spacePressedRef.current = true;
+        return;
+      }
       if (target?.closest(BLOCKED_TARGET)) return;
       const modifier = event.ctrlKey || event.metaKey;
       const key = event.key.toLowerCase();
@@ -358,8 +405,15 @@ export function InfiniteWorkflow({
         cancelInteraction();
       }
     };
+    const keyup = (event: KeyboardEvent) => {
+      if (event.code === 'Space') spacePressedRef.current = false;
+    };
     window.addEventListener('keydown', keydown);
-    return () => window.removeEventListener('keydown', keydown);
+    window.addEventListener('keyup', keyup);
+    return () => {
+      window.removeEventListener('keydown', keydown);
+      window.removeEventListener('keyup', keyup);
+    };
   }, [cancelInteraction, copySelection, deleteSelection, pasteSelection, redo, undo]);
 
   const addNode = useCallback((type: WorkflowNodeType, metadata: WorkflowNodeData['metadata'] = {}) => {
@@ -395,9 +449,23 @@ export function InfiniteWorkflow({
     patchProject({ viewport: { x: rect.width / 2 - ((minX + maxX) / 2) * k, y: rect.height / 2 - ((minY + maxY) / 2) * k, k } });
   }, [patchProject]);
 
+  const startPan = (clientX: number, clientY: number, pointerId: number) => {
+    interactionRef.current = {
+      type: 'pan',
+      pointerId,
+      start: localPoint(clientX, clientY),
+      viewport: { ...viewportRef.current },
+    };
+  };
+
   const startNodeDrag = (event: ReactPointerEvent<HTMLDivElement>, node: WorkflowNodeData) => {
     if (event.button !== 0 || (event.target instanceof Element && event.target.closest(BLOCKED_TARGET))) return;
     event.stopPropagation();
+    if (tool === 'pan' || spacePressedRef.current) {
+      event.preventDefault();
+      startPan(event.clientX, event.clientY, event.pointerId);
+      return;
+    }
     setContextMenu(null);
     setCreateMenu(null);
     setSelectedConnectionId(null);
@@ -410,6 +478,7 @@ export function InfiniteWorkflow({
     const frame = currentFrame();
     interactionRef.current = {
       type: 'node',
+      pointerId: event.pointerId,
       start: screenToWorkflow(event.clientX, event.clientY),
       positions: new Map(frame.nodes.filter(item => ids.includes(item.id)).map(item => [item.id, { ...item.position }])),
       frame,
@@ -433,15 +502,14 @@ export function InfiniteWorkflow({
       event.preventDefault();
       const point = screenToWorkflow(event.clientX, event.clientY);
       const box = { start: point, current: point, additive: event.shiftKey, initialIds: [...selectedIdsRef.current] };
-      interactionRef.current = { type: 'selection', box };
+      interactionRef.current = { type: 'selection', pointerId: event.pointerId, box };
       setSelectionBox(box);
       if (!event.shiftKey) selectNodes([]);
       return;
     }
     if (event.button === 0 || event.button === 1) {
       event.preventDefault();
-      const point = localPoint(event.clientX, event.clientY);
-      interactionRef.current = { type: 'pan', start: point, viewport: { ...viewportRef.current } };
+      startPan(event.clientX, event.clientY, event.pointerId);
       if (!event.shiftKey && !event.ctrlKey && !event.metaKey) selectNodes([]);
     }
   };
@@ -524,7 +592,7 @@ export function InfiniteWorkflow({
               setCreateMenu(null);
               setContextMenu(null);
               setSelectedConnectionId(null);
-              interactionRef.current = { type: 'connection', sourceId: node.id };
+              interactionRef.current = { type: 'connection', pointerId: event.pointerId, sourceId: node.id };
               setConnectionDrag({ sourceId: node.id, point: screenToWorkflow(event.clientX, event.clientY), targetId: null });
             }}
             onResizeStart={event => {
@@ -532,7 +600,7 @@ export function InfiniteWorkflow({
               event.preventDefault();
               event.stopPropagation();
               const frame = currentFrame();
-              interactionRef.current = { type: 'resize', id: node.id, start: screenToWorkflow(event.clientX, event.clientY), width: node.width, height: node.height, frame, moved: false };
+              interactionRef.current = { type: 'resize', pointerId: event.pointerId, id: node.id, start: screenToWorkflow(event.clientX, event.clientY), width: node.width, height: node.height, frame, moved: false };
             }}
             onChangeText={content => patchProject({ nodes: projectRef.current.nodes.map(item => item.id === node.id ? { ...item, metadata: { ...item.metadata, content } } : item) })}
             onChangeMetadata={metadata => patchProject({
