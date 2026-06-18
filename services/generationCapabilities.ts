@@ -2,7 +2,7 @@ import type { UserApiKey } from '../types';
 import { buildCapabilityModelOptions, modelRefModelId, modelRefProvider } from '../utils/modelRefs';
 import { DEFAULT_PROVIDER_MODELS, getCapabilityDictionary, type VideoAspectRatio } from './aiGateway';
 
-export type GenerationMode = 'text' | 'image' | 'video';
+export type GenerationMode = 'text' | 'image' | 'video' | 'audio';
 
 export interface GenerationCapability {
   mode: GenerationMode;
@@ -13,9 +13,12 @@ export interface GenerationCapability {
   supportsReferences: Array<'image' | 'video'>;
 }
 
-const fallbackModels = (mode: GenerationMode) => Array.from(new Set(
-  Object.values(DEFAULT_PROVIDER_MODELS).flatMap(models => models?.[mode] || []),
-));
+const fallbackModels = (mode: GenerationMode) => {
+  if (mode === 'audio') return [];
+  return Array.from(new Set(
+    Object.values(DEFAULT_PROVIDER_MODELS).flatMap(models => models?.[mode] || []),
+  ));
+};
 
 export function getGenerationCapability(
   keys: UserApiKey[],
@@ -23,6 +26,9 @@ export function getGenerationCapability(
   selectedModel?: string,
   fallback: string[] = fallbackModels(mode),
 ): GenerationCapability {
+  if (mode === 'audio') {
+    return { mode, models: [], aspectRatios: [], resolutions: [], durations: [], supportsReferences: [] };
+  }
   const models = buildCapabilityModelOptions(keys, mode, fallback, selectedModel);
   if (mode === 'text') {
     return { mode, models, aspectRatios: [], resolutions: [], durations: [], supportsReferences: [] };

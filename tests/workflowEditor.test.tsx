@@ -3,8 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useState } from 'react';
 import { createWorkflowNode } from '../components/workflow/constants';
 import { InfiniteWorkflow } from '../components/workflow/InfiniteWorkflow';
+import { WorkflowConfigPanel } from '../components/workflow/WorkflowConfigPanel';
 import { WorkflowMiniMap } from '../components/workflow/WorkflowMiniMap';
 import type { WorkflowProject } from '../components/workflow/types';
+import { getGenerationCapability } from '../services/generationCapabilities';
 
 const makeProject = (): WorkflowProject => ({
   id: 'project-1',
@@ -441,5 +443,28 @@ describe('InfiniteWorkflow surface interactions', () => {
 
     fireEvent.click(minimap, { clientX: 200, clientY: 148 });
     expect(onCenter.mock.calls[0][0]).toBeCloseTo(50);
+  });
+
+  it('defines audio as a valid but unsupported generation capability', () => {
+    expect(getGenerationCapability([], 'audio')).toEqual({
+      mode: 'audio',
+      models: [],
+      aspectRatios: [],
+      resolutions: [],
+      durations: [],
+      supportsReferences: [],
+    });
+  });
+
+  it('keeps audio mode visible in config while disabling unsupported generation', () => {
+    const config = createWorkflowNode('audio-config', 'config', { x: 0, y: 0 }, { config: { mode: 'audio' } });
+    const onRun = vi.fn();
+    render(<WorkflowConfigPanel node={config} onChange={() => undefined} onRun={onRun} />);
+
+    expect(screen.getAllByRole('combobox')[0]).toHaveValue('audio');
+    expect(screen.getByText('音频生成暂未支持')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '暂不支持' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: '暂不支持' }));
+    expect(onRun).not.toHaveBeenCalled();
   });
 });
