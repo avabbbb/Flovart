@@ -351,11 +351,19 @@ function activeSessionMessages(project: WorkflowProject) {
 }
 
 function toStoredMessage(message: WorkflowAgentDisplayMessage): WorkflowAgentMessage {
-  return { id: message.id, role: message.role, text: message.text, createdAt: message.createdAt || new Date().toISOString() };
+  return {
+    id: message.id,
+    role: message.role,
+    text: message.text,
+    title: message.title,
+    detail: message.detail === undefined ? undefined : redactWorkflowAgentSnapshot(message.detail),
+    status: message.status,
+    createdAt: message.createdAt || new Date().toISOString(),
+  };
 }
 
 function toDisplayMessage(message: WorkflowAgentMessage): WorkflowAgentDisplayMessage {
-  return { id: message.id, role: message.role, text: message.text, createdAt: message.createdAt };
+  return { id: message.id, role: message.role, text: message.text, title: message.title, detail: message.detail, status: message.status, createdAt: message.createdAt };
 }
 
 function normalizeThreadMessages(response: any): WorkflowAgentDisplayMessage[] {

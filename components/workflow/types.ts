@@ -84,6 +84,9 @@ export interface WorkflowAgentMessage {
   id: string;
   role: 'user' | 'assistant' | 'system' | 'tool' | 'error';
   text: string;
+  title?: string;
+  detail?: unknown;
+  status?: 'pending' | 'success' | 'error' | 'denied';
   createdAt: string;
 }
 
