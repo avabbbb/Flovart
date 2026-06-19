@@ -1,9 +1,11 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { ThemeMode } from '../types';
+import type { ThemeMode, WorkspaceView } from '../types';
 
 // ── UI Shell Slice ──────────────────────────────────────────────
 interface UISlice {
+  activeView: WorkspaceView;
+  setActiveView: (view: WorkspaceView) => void;
   themeMode: ThemeMode;
   setThemeMode: (mode: ThemeMode) => void;
   language: 'en' | 'zho';
@@ -11,6 +13,8 @@ interface UISlice {
 }
 
 const createUISlice = (set: any): UISlice => ({
+  activeView: 'canvas',
+  setActiveView: (activeView) => set({ activeView }),
   themeMode: (() => {
     try {
       const saved = localStorage.getItem('themeMode.v1');
@@ -35,6 +39,7 @@ export const useWorkspaceStore = create<WorkspaceStore>()(
     {
       name: 'flovart-workspace',
       partialize: (state) => ({
+        activeView: state.activeView,
         themeMode: state.themeMode,
         language: state.language,
       }),
