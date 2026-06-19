@@ -1,6 +1,6 @@
 import { nanoid } from 'nanoid';
 import { createWorkflowNode } from '../components/workflow/constants';
-import { discardWorkflowMediaRecord, ingestWorkflowMedia, releaseWorkflowMediaRecord, type WorkflowMediaRecord } from '../components/workflow/media';
+import { createWorkflowVideoPoster, discardWorkflowMediaRecord, ingestWorkflowMedia, releaseWorkflowMediaRecord, type WorkflowMediaRecord } from '../components/workflow/media';
 import { workflowMediaStorage } from '../components/workflow/storage';
 import type { WorkflowGenerationMode, WorkflowNode, WorkflowProject } from '../components/workflow/types';
 import type { ModelPreference, UserApiKey } from '../types';
@@ -30,6 +30,8 @@ export interface WorkflowGenerationRuntime {
   loadMedia?: (storageKey: string) => Promise<Blob | null>;
   fetchMedia?: (href: string) => Promise<Blob>;
   ingestMedia?: (file: File) => Promise<WorkflowMediaRecord>;
+  encodeDataUrl?: (blob: Blob) => Promise<string>;
+  createVideoPoster?: (blob: Blob) => Promise<Blob | null>;
 }
 
 interface ActiveRequest {
@@ -90,14 +92,18 @@ async function resolveMediaHref(node: WorkflowNode, runtime: WorkflowGenerationR
 }
 
 async function mediaResult(result: Extract<UnifiedIgnitionResult, { ok: true }>, mode: 'image' | 'video', runtime: WorkflowGenerationRuntime) {
-  const blob = await (runtime.fetchMedia || (href => fetch(href).then(response => {
-    if (!response.ok) throw new Error('无法下载生成结果');
-    return response.blob();
-  })))(result.mediaUrl);
-  const extension = mode === 'video' ? 'mp4' : 'png';
-  const file = typeof File === 'undefined' ? Object.assign(blob, { name: `workflow-result.${extension}`, lastModified: Date.now() }) as File : new File([blob], `workflow-result.${extension}`, { type: result.mimeType || blob.type, lastModified: Date.now() });
-  const record = await (runtime.ingestMedia || ingestWorkflowMedia)(file);
-  return { blob, record };
+  try {
+    const blob = await (runtime.fetchMedia || (href => fetch(href).then(response => {
+      if (!response.ok) throw new Error('无法下载生成结果');
+      return response.blob();
+    })))(result.mediaUrl);
+    const extension = mode === 'video' ? 'mp4' : 'png';
+    const file = typeof File === 'undefined' ? Object.assign(blob, { name: `workflow-result.${extension}`, lastModified: Date.now() }) as File : new File([blob], `workflow-result.${extension}`, { type: result.mimeType || blob.type, lastModified: Date.now() });
+    const record = await (runtime.ingestMedia || ingestWorkflowMedia)(file);
+    return { blob, record };
+  } finally {
+    if (result.mediaUrl.startsWith('blob:')) URL.revokeObjectURL(result.mediaUrl);
+  }
 }
 
 function raceAbort<T>(promise: Promise<T>, signal: AbortSignal) {
@@ -132,6 +138,10 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
   let current = patchInitiator(canonical(runtime, project), nodeId, { status: 'loading', error: undefined, progress: 0, generationRequestId: requestId });
   await publish(runtime, current);
   const temporaryUrls: string[] = [];
+  const preparedNodes: WorkflowNode[] = [];
+  const preparedConnections: WorkflowProject['connections'] = [];
+  const preparedHistory: WorkflowHistoryPayload[] = [];
+  let committed = false;
 
   const stillActive = () => {
     if (activeRequests.get(key)?.requestId !== requestId || controller.signal.aborted) return false;
@@ -149,16 +159,17 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
     const mentionedIds = initiating.metadata.mentionedNodeIds || [];
     const relatedIds = [...new Set([...incomingIds, ...mentionedIds])];
     const related = relatedIds.map(id => source.nodes.find(node => node.id === id)).filter((node): node is WorkflowNode => Boolean(node));
-    const prompt = [initiating.metadata.prompt, initiating.metadata.content, ...related.filter(node => node.type === 'text').map(node => node.metadata.content || node.metadata.prompt)]
+    const mediaLabels = mode === 'text' ? related.filter(node => node.type === 'image' || node.type === 'video' || node.type === 'audio').map(node => `[参考媒体: ${node.title} (${node.type})]`) : [];
+    const prompt = [initiating.metadata.prompt, initiating.metadata.content, ...related.filter(node => node.type === 'text').map(node => node.metadata.content || node.metadata.prompt), ...mediaLabels]
       .map(value => value?.trim()).filter(Boolean).join('\n\n');
     if (!prompt) throw new Error('请填写提示词，或连接一个包含文本的上游节点。');
 
     const capability = getGenerationCapability(runtime.userApiKeys, mode, modelRef);
-    const mediaSources = [...new Map([initiating, ...related].filter(node => node.type === 'image' || node.type === 'video').map(node => [node.id, node])).values()];
+    const mediaSources = [...new Map([initiating, ...related].filter(node => node.type === 'image' || node.type === 'video' || node.type === 'audio').map(node => [node.id, node])).values()];
     const references = (await Promise.all(mediaSources.map(async node => {
-      if (!capability.supportsReferences.includes(node.type as 'image' | 'video')) return null;
+      if (!capability.supportsReferences.includes(node.type as 'image' | 'video' | 'audio')) return null;
       const href = await resolveMediaHref(node, runtime, temporaryUrls);
-      return href ? { type: node.type as 'image' | 'video', href, mimeType: node.metadata.mimeType, label: node.title, sourceName: node.title, elementId: node.id, slotRole: node.type === 'video' ? 'reference_video' as const : 'reference_image' as const } : null;
+      return href ? { type: node.type as 'image' | 'video' | 'audio', href, mimeType: node.metadata.mimeType, label: node.title, sourceName: node.title, elementId: node.id, slotRole: node.type === 'video' ? 'reference_video' as const : node.type === 'audio' ? 'reference_audio' as const : 'reference_image' as const } : null;
     }))).filter(Boolean) as NonNullable<UnifiedIgnitionInput['references']>;
 
     const createId = runtime.createId || nanoid;
@@ -169,12 +180,12 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
       await publish(runtime, current);
 
       let resultNode: WorkflowNode;
-      let history: WorkflowHistoryPayload | null = null;
       if (mode === 'text') {
         const content = await (runtime.executeText || generateTextWithProvider)(prompt, resolved.model, resolved.key, { signal: controller.signal });
         if (!stillActive()) throw abortError();
         resultNode = createWorkflowNode(createId(), 'text', { x: initiating.position.x + initiating.width + 80, y: initiating.position.y + index * 48 }, { content, status: 'success' });
         resultNode.title = '生成文本';
+        preparedNodes.push(resultNode);
       } else {
         const provider = (runtime.executeMedia || executeUnifiedIgnition)({
           elementId: nodeId, prompt, modelId: resolved.model, apiKeyPayload: resolved.key,
@@ -196,30 +207,37 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
         }
         resultNode = createWorkflowNode(createId(), mode, { x: initiating.position.x + initiating.width + 80, y: initiating.position.y + index * 48 }, { ...record, href: undefined, status: 'success' });
         resultNode.title = mode === 'video' ? '生成视频' : '生成图片';
+        preparedNodes.push(resultNode);
         const size = { width: record.naturalWidth || resultNode.width, height: record.naturalHeight || resultNode.height };
-        history = { name: resultNode.title, dataUrl: await toDataUrl(blob).catch(() => ''), mimeType: record.mimeType, ...size, prompt, mediaType: mode };
+        const historyBlob = mode === 'video' ? await (runtime.createVideoPoster || createWorkflowVideoPoster)(blob).catch(() => null) : blob;
+        if (!stillActive()) throw abortError();
+        const dataUrl = historyBlob ? await (runtime.encodeDataUrl || toDataUrl)(historyBlob).catch(() => '') : '';
+        if (!stillActive()) throw abortError();
+        preparedHistory.push({ name: resultNode.title, dataUrl, mimeType: mode === 'video' ? 'image/jpeg' : record.mimeType, ...size, prompt, mediaType: mode });
       }
-
-      const latest = canonical(runtime, current);
-      current = {
-        ...latest,
-        nodes: [...latest.nodes, resultNode],
-        connections: [...latest.connections, { id: createId(), fromNodeId: nodeId, toNodeId: resultNode.id }],
-      };
-      await publish(runtime, current);
-      if (resultNode.metadata.storageKey) releaseWorkflowMediaRecord(resultNode.metadata.storageKey);
-      if (history && runtime.saveHistory) {
-        try { await runtime.saveHistory(history); }
-        catch (error) { console.warn('[Workflow] Generation succeeded but history persistence failed.', error); }
-      }
+      if (!stillActive()) throw abortError();
+      preparedConnections.push({ id: createId(), fromNodeId: nodeId, toNodeId: resultNode.id });
     }
 
     if (!stillActive()) throw abortError();
+    const latest = canonical(runtime, current);
+    current = {
+      ...latest,
+      nodes: [...latest.nodes.map(node => node.id === nodeId ? { ...node, metadata: { ...node.metadata, status: 'success' as const, error: undefined, progress: 100, generationRequestId: undefined } } : node), ...preparedNodes],
+      connections: [...latest.connections, ...preparedConnections],
+    };
     activeRequests.delete(key);
-    current = patchInitiator(canonical(runtime, current), nodeId, { status: 'success', error: undefined, progress: 100, generationRequestId: undefined });
-    return publish(runtime, current);
+    await publish(runtime, current);
+    committed = true;
+    preparedNodes.forEach(node => { if (node.metadata.storageKey) releaseWorkflowMediaRecord(node.metadata.storageKey); });
+    if (runtime.saveHistory) for (const history of preparedHistory) {
+      try { await runtime.saveHistory(history); }
+      catch (error) { console.warn('[Workflow] Generation succeeded but history persistence failed.', error); }
+    }
+    return current;
   } catch (error) {
     const active = activeRequests.get(key);
+    if (!committed) await Promise.all(preparedNodes.map(node => node.metadata.storageKey ? discardWorkflowMediaRecord(node.metadata.storageKey) : Promise.resolve()));
     if (active && active.requestId !== requestId) return canonical(runtime, current);
     if (activeRequests.get(key)?.requestId === requestId) activeRequests.delete(key);
     const latest = canonical(runtime, current);

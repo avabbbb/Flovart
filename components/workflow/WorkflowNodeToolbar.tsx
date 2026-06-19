@@ -1,4 +1,4 @@
-import { AlignCenter, AlignLeft, AlignRight, ArrowDownToLine, ArrowUpToLine, Copy, Download, Expand, FilePenLine, Library, MessageSquareText, Play, RefreshCw, Square, Trash2 } from 'lucide-react';
+import { AlignCenter, AlignLeft, AlignRight, ArrowDownToLine, ArrowUpToLine, Copy, Crop, Download, Eraser, Expand, FilePenLine, Layers3, Library, MessageSquareText, Play, RefreshCw, ScanLine, SlidersHorizontal, Square, Trash2, ZoomIn } from 'lucide-react';
 import { useRef } from 'react';
 import { ElementToolbarActions, ElementToolbarShell, type ElementToolbarAction } from '../ElementToolbar';
 import { useWorkflowMediaUrl } from './media';
@@ -6,7 +6,17 @@ import type { WorkflowNode } from './types';
 
 type Alignment = 'left' | 'horizontal-center' | 'right' | 'top' | 'vertical-center' | 'bottom';
 
-export function WorkflowNodeToolbar({ nodes, onCopy, onDelete, onRun, onStop, onPromptFocus, onSaveMedia, onReplaceMedia, onToggleFreeResize, onAlign }: {
+export interface WorkflowImageToolHandlers {
+  crop?: (id: string) => void;
+  filter?: (id: string) => void;
+  upscale?: (id: string) => void;
+  removeBackground?: (id: string) => void;
+  outpaint?: (id: string) => void;
+  mask?: (id: string) => void;
+  splitLayers?: (id: string) => void;
+}
+
+export function WorkflowNodeToolbar({ nodes, onCopy, onDelete, onRun, onStop, onPromptFocus, onSaveMedia, onReplaceMedia, onToggleFreeResize, onAlign, imageTools }: {
   nodes: WorkflowNode[];
   onCopy: (ids: string[]) => void;
   onDelete: (ids: string[]) => void;
@@ -17,6 +27,7 @@ export function WorkflowNodeToolbar({ nodes, onCopy, onDelete, onRun, onStop, on
   onReplaceMedia?: (id: string, file: File) => void;
   onToggleFreeResize?: (id: string) => void;
   onAlign?: (alignment: Alignment) => void;
+  imageTools?: WorkflowImageToolHandlers;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   if (!nodes.length) return null;
@@ -30,6 +41,13 @@ export function WorkflowNodeToolbar({ nodes, onCopy, onDelete, onRun, onStop, on
     media && mediaUrl && { key: 'download', label: '下载媒体', icon: <Download size={18} />, href: mediaUrl, download: media.metadata.name || media.id },
     media?.type === 'image' && onSaveMedia && { key: 'save', label: '保存到素材库', icon: <Library size={18} />, onClick: () => onSaveMedia(media.id) },
     media && onReplaceMedia && { key: 'replace', label: '替换媒体', icon: <FilePenLine size={18} />, onClick: () => inputRef.current?.click() },
+    node?.type === 'image' && imageTools?.crop && { key: 'crop', label: '裁剪图片', icon: <Crop size={18} />, onClick: () => imageTools.crop?.(node.id) },
+    node?.type === 'image' && imageTools?.filter && { key: 'filter', label: '图片滤镜', icon: <SlidersHorizontal size={18} />, onClick: () => imageTools.filter?.(node.id) },
+    node?.type === 'image' && imageTools?.upscale && { key: 'upscale', label: '高清放大', icon: <ZoomIn size={18} />, onClick: () => imageTools.upscale?.(node.id) },
+    node?.type === 'image' && imageTools?.removeBackground && { key: 'remove-background', label: '移除背景', icon: <Eraser size={18} />, onClick: () => imageTools.removeBackground?.(node.id) },
+    node?.type === 'image' && imageTools?.outpaint && { key: 'outpaint', label: '扩展画面', icon: <Expand size={18} />, onClick: () => imageTools.outpaint?.(node.id) },
+    node?.type === 'image' && imageTools?.mask && { key: 'mask', label: '编辑蒙版', icon: <ScanLine size={18} />, onClick: () => imageTools.mask?.(node.id) },
+    node?.type === 'image' && imageTools?.splitLayers && { key: 'split', label: '拆分图层', icon: <Layers3 size={18} />, onClick: () => imageTools.splitLayers?.(node.id) },
     node && (node.type === 'image' || node.type === 'video') && onToggleFreeResize && { key: 'resize', label: '切换自由缩放', icon: <Expand size={18} />, active: Boolean(node.freeResize), onClick: () => onToggleFreeResize(node.id) },
     node && node.type !== 'audio' && node.metadata.status === 'loading' && onStop
       ? { key: 'stop', label: '停止节点', icon: <Square size={17} />, onClick: () => onStop(node.id) }

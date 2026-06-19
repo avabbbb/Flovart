@@ -111,6 +111,38 @@ export async function inspectWorkflowMedia(file: File) {
   }
 }
 
+export async function createWorkflowVideoPoster(blob: Blob, maxWidth = 640): Promise<Blob | null> {
+  if (typeof document === 'undefined') return null;
+  const url = URL.createObjectURL(blob);
+  try {
+    const video = document.createElement('video');
+    video.preload = 'metadata';
+    video.muted = true;
+    video.playsInline = true;
+    await new Promise<void>((resolve, reject) => {
+      video.addEventListener('loadeddata', () => resolve(), { once: true });
+      video.addEventListener('error', () => reject(new Error('无法提取视频封面')), { once: true });
+      video.src = url;
+      video.load();
+    });
+    const sourceWidth = video.videoWidth || 1280;
+    const sourceHeight = video.videoHeight || 720;
+    const width = Math.min(maxWidth, sourceWidth);
+    const height = Math.max(1, Math.round(width * sourceHeight / sourceWidth));
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext('2d');
+    if (!context) return null;
+    context.drawImage(video, 0, 0, width, height);
+    return await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', .76));
+  } catch {
+    return null;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
 export async function ingestWorkflowMedia(file: File): Promise<WorkflowMediaRecord> {
   const type = workflowMediaType(file);
   const inspected = await inspectWorkflowMedia(file);

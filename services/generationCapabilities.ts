@@ -10,7 +10,7 @@ export interface GenerationCapability {
   aspectRatios: VideoAspectRatio[];
   resolutions: string[];
   durations: number[];
-  supportsReferences: Array<'image' | 'video'>;
+  supportsReferences: Array<'image' | 'video' | 'audio'>;
 }
 
 const fallbackModels = (mode: GenerationMode) => {
@@ -37,7 +37,7 @@ export function getGenerationCapability(
   const modelRef = selectedModel || models[0] || '';
   const model = modelRefModelId(modelRef);
   const dictionary = getCapabilityDictionary(model, modelRefProvider(modelRef, keys));
-  const supportsReferences = (['image', 'video'] as const).filter(kind => Boolean(dictionary.multimodalSlots[kind]?.max));
+  const supportsReferences = (['image', 'video', 'audio'] as const).filter(kind => Boolean(dictionary.multimodalSlots[kind]?.max));
 
   return {
     mode,

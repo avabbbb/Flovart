@@ -32,6 +32,7 @@ describe('generation capabilities', () => {
     expect(capability.resolutions).toContain('1080p');
     expect(capability.durations.length).toBeGreaterThan(0);
     expect(capability.supportsReferences).toEqual(expect.arrayContaining(['image', 'video']));
+    expect(capability.supportsReferences).toContain('audio');
   });
 
   it('uses text models without media controls and disables unsupported audio generation', () => {

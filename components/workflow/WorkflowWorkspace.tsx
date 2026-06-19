@@ -9,6 +9,7 @@ import { WorkflowGenerationCapabilitiesProvider, type WorkflowSharedMedia } from
 import { useWorkflowStore } from './store';
 import type { WorkflowModelOptions } from './WorkflowNodePromptBar';
 import { WorkflowAgentPanel } from './WorkflowAgentPanel';
+import type { WorkflowImageToolHandlers } from './WorkflowNodeToolbar';
 
 export interface WorkflowWorkspaceProps {
   theme: 'light' | 'dark';
@@ -21,6 +22,7 @@ export interface WorkflowWorkspaceProps {
   onRunNode?: (projectId: string, nodeId: string) => Promise<void> | void;
   onStopNode?: (projectId: string, nodeId: string) => void;
   onSaveWorkflowMedia?: (projectId: string, nodeId: string) => void;
+  imageTools?: WorkflowImageToolHandlers;
   t: (key: string, ...args: any[]) => string;
   userApiKeys: UserApiKey[];
   modelPreference: ModelPreference;
@@ -29,7 +31,7 @@ export interface WorkflowWorkspaceProps {
   onOpenAgent?: () => void;
 }
 
-export function WorkflowWorkspace({ theme, language, onSwitchToCanvas, onToggleTheme, onToggleLanguage, resolveGenerationCapability, sharedMedia, onRunNode, onStopNode, onSaveWorkflowMedia, t, userApiKeys, modelPreference, dynamicModelOptions, onOpenSettings, onOpenAgent }: WorkflowWorkspaceProps) {
+export function WorkflowWorkspace({ theme, language, onSwitchToCanvas, onToggleTheme, onToggleLanguage, resolveGenerationCapability, sharedMedia, onRunNode, onStopNode, onSaveWorkflowMedia, imageTools, t, userApiKeys, modelPreference, dynamicModelOptions, onOpenSettings, onOpenAgent }: WorkflowWorkspaceProps) {
   const [agentOpen, setAgentOpen] = useState(false);
   const hydrated = useWorkflowStore(state => state.hydrated);
   const projects = useWorkflowStore(state => state.projects);
@@ -62,6 +64,7 @@ export function WorkflowWorkspace({ theme, language, onSwitchToCanvas, onToggleT
             }}
             onStopNode={nodeId => onStopNode?.(activeProject.id, nodeId)}
             onSaveWorkflowMedia={nodeId => onSaveWorkflowMedia?.(activeProject.id, nodeId)}
+            imageTools={imageTools}
             onOpenAgent={() => { setAgentOpen(true); onOpenAgent?.(); }}
             t={t}
             theme={theme}

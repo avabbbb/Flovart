@@ -22,7 +22,7 @@ import type { WorkflowSharedMedia } from './WorkflowConfigPanel';
 import { WorkflowMiniMap } from './WorkflowMiniMap';
 import { WorkflowNode } from './WorkflowNode';
 import { WorkflowNodePromptBar, type WorkflowModelOptions } from './WorkflowNodePromptBar';
-import { WorkflowNodeToolbar } from './WorkflowNodeToolbar';
+import { WorkflowNodeToolbar, type WorkflowImageToolHandlers } from './WorkflowNodeToolbar';
 import { WorkflowConfigPanel } from './WorkflowConfigPanel';
 import { WorkflowToolbar, type WorkflowTool } from './WorkflowToolbar';
 import type { WorkflowConnection, WorkflowNode as WorkflowNodeData, WorkflowNodeType, WorkflowOp, WorkflowPoint, WorkflowProject, WorkflowSnapshot, WorkflowViewport } from './types';
@@ -53,6 +53,7 @@ export function InfiniteWorkflow({
   onRunNode,
   onStopNode,
   onSaveWorkflowMedia,
+  imageTools,
   onOpenAgent,
   t = key => key,
   theme = 'light',
@@ -67,6 +68,7 @@ export function InfiniteWorkflow({
   onRunNode: (nodeId: string) => void;
   onStopNode?: (nodeId: string) => void;
   onSaveWorkflowMedia?: (nodeId: string) => void;
+  imageTools?: WorkflowImageToolHandlers;
   onOpenAgent?: () => void;
   t?: (key: string, ...args: any[]) => string;
   theme?: 'light' | 'dark';
@@ -887,6 +889,7 @@ export function InfiniteWorkflow({
             onStop={onStopNode}
             onPromptFocus={() => setPromptFocusSignal(value => value + 1)}
             onSaveMedia={onSaveWorkflowMedia}
+            imageTools={imageTools}
             onReplaceMedia={(id, file) => { const node = projectRef.current.nodes.find(item => item.id === id); if (node) void replaceMedia(node, file); }}
             onToggleFreeResize={id => { const node = projectRef.current.nodes.find(item => item.id === id); if (node) applyOps([{ type: 'update_node', id, patch: { freeResize: !node.freeResize } }]); }}
             onAlign={alignment => {

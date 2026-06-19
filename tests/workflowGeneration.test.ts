@@ -63,6 +63,7 @@ describe('workflow generation', () => {
       modelPreference: { textModel: '', imageModel: nodeType === 'image' ? model : '', videoModel: nodeType === 'video' ? model : '' },
       executeMedia, fetchMedia: vi.fn().mockResolvedValue(new Blob(['result'])),
       ingestMedia: vi.fn().mockResolvedValue({ type: nodeType, storageKey: `${nodeType}-key`, name: `result.${nodeType}`, mimeType: nodeType === 'video' ? 'video/mp4' : 'image/png', bytes: 6 }),
+      encodeDataUrl: vi.fn().mockResolvedValue('data:image/png;base64,AA=='), createVideoPoster: vi.fn().mockResolvedValue(null),
       onProjectChange: vi.fn(),
     });
     expect(executeMedia).toHaveBeenCalledWith(expect.objectContaining({ modelId: model }));
@@ -157,5 +158,117 @@ describe('workflow generation', () => {
 
     expect(result.nodes).toHaveLength(3);
     expect(result.nodes[2].metadata).toMatchObject({ status: 'error', error: 'provider unavailable' });
+  });
+
+  it('filters an actual unsupported video and audio reference from image generation', async () => {
+    const source = project();
+    source.nodes.push(
+      { id: 'video-ref', type: 'video', title: '视频参考', position: { x: 0, y: 0 }, width: 100, height: 100, metadata: { href: 'data:video/mp4;base64,AA==', mimeType: 'video/mp4' } },
+      { id: 'audio-ref', type: 'audio', title: '音频参考', position: { x: 0, y: 0 }, width: 100, height: 100, metadata: { href: 'data:audio/mp3;base64,AA==', mimeType: 'audio/mp3' } },
+    );
+    source.connections.push({ id: 'video-link', fromNodeId: 'video-ref', toNodeId: 'config-1' }, { id: 'audio-link', fromNodeId: 'audio-ref', toNodeId: 'config-1' });
+    const executeMedia = vi.fn().mockResolvedValue({ ok: true, elementId: 'config-1', capability: 'image', mediaUrl: 'https://output/image', mimeType: 'image/png' });
+    await runWorkflowGeneration(source, 'config-1', {
+      userApiKeys: [imageKey], modelPreference: { textModel: '', imageModel: 'gpt-image-2', videoModel: '' }, executeMedia,
+      fetchMedia: vi.fn().mockResolvedValue(new Blob(['image'])), ingestMedia: vi.fn().mockResolvedValue({ type: 'image', storageKey: 'result', name: 'result.png', mimeType: 'image/png', bytes: 5 }), onProjectChange: vi.fn(), encodeDataUrl: vi.fn().mockResolvedValue('data:image/png;base64,AA=='),
+    });
+    const references = executeMedia.mock.calls[0][0].references;
+    expect(references.some((reference: any) => reference.type === 'image')).toBe(true);
+    expect(references.some((reference: any) => reference.type === 'video' || reference.type === 'audio')).toBe(false);
+  });
+
+  it('passes audio references only when the selected video capability supports the audio slot', async () => {
+    const source = project();
+    source.nodes[2].metadata.config = { mode: 'video', modelId: 'seedance-2.0' };
+    source.nodes.push({ id: 'audio-ref', type: 'audio', title: '配乐', position: { x: 0, y: 0 }, width: 100, height: 100, metadata: { href: 'data:audio/mp3;base64,AA==', mimeType: 'audio/mp3' } });
+    source.connections.push({ id: 'audio-link', fromNodeId: 'audio-ref', toNodeId: 'config-1' });
+    const executeMedia = vi.fn().mockResolvedValue({ ok: true, elementId: 'config-1', capability: 'video', mediaUrl: 'https://output/video', mimeType: 'video/mp4' });
+    await runWorkflowGeneration(source, 'config-1', {
+      userApiKeys: [{ ...imageKey, provider: 'volcengine', capabilities: ['video'], customModels: ['seedance-2.0'] }], modelPreference: { textModel: '', imageModel: '', videoModel: 'seedance-2.0' }, executeMedia,
+      fetchMedia: vi.fn().mockResolvedValue(new Blob(['video'])), ingestMedia: vi.fn().mockResolvedValue({ type: 'video', storageKey: 'video', name: 'video.mp4', mimeType: 'video/mp4', bytes: 5 }), createVideoPoster: vi.fn().mockResolvedValue(null), onProjectChange: vi.fn(),
+    });
+    expect(executeMedia.mock.calls[0][0].references).toEqual(expect.arrayContaining([expect.objectContaining({ type: 'audio', slotRole: 'reference_audio' })]));
+  });
+
+  it('describes connected media by label for text generation without claiming media transport', async () => {
+    const source = project();
+    source.nodes[0].metadata = { prompt: '写说明', config: { mode: 'text', modelId: 'text-model' }, mentionedNodeIds: ['image-1'] };
+    const executeText = vi.fn().mockResolvedValue('完成');
+    await runWorkflowGeneration(source, 'text-1', {
+      userApiKeys: [{ ...imageKey, capabilities: ['text'], customModels: ['text-model'] }], modelPreference: { textModel: 'text-model', imageModel: '', videoModel: '' }, executeText, onProjectChange: vi.fn(),
+    });
+    expect(executeText.mock.calls[0][0]).toContain('[参考媒体: 参考图 (image)]');
+  });
+
+  it.each(['ingest', 'encode'] as const)('cancels safely during async %s preparation', async stage => {
+    const source = project();
+    let latest = source;
+    let release!: () => void;
+    let started!: () => void;
+    const stageStarted = new Promise<void>(resolve => { started = resolve; });
+    const wait = new Promise<void>(resolve => { release = resolve; });
+    const run = runWorkflowGeneration(source, 'config-1', {
+      userApiKeys: [imageKey], modelPreference: { textModel: '', imageModel: 'gpt-image-2', videoModel: '' }, executeMedia: vi.fn().mockResolvedValue({ ok: true, elementId: 'config-1', capability: 'image', mediaUrl: 'https://output/image', mimeType: 'image/png' }), fetchMedia: vi.fn().mockResolvedValue(new Blob(['image'])),
+      ingestMedia: async () => { if (stage === 'ingest') { started(); await wait; } return { type: 'image', storageKey: 'cancelled-key', name: 'cancelled.png', mimeType: 'image/png', bytes: 5 }; },
+      encodeDataUrl: async () => { if (stage === 'encode') { started(); await wait; } return 'data:image/png;base64,CANCELLED'; }, getProject: () => latest, onProjectChange: next => { latest = next; },
+    });
+    await stageStarted;
+    cancelWorkflowGeneration(source.id, 'config-1');
+    release();
+    await run;
+    expect(latest.nodes.some(node => node.metadata.storageKey === 'cancelled-key')).toBe(false);
+    expect(latest.nodes.find(node => node.id === 'config-1')?.metadata.status).toBe('idle');
+  });
+
+  it('publishes results, connections and success atomically before history', async () => {
+    const updates: WorkflowProject[] = [];
+    const events: string[] = [];
+    const saveHistory = vi.fn(() => { events.push('history'); });
+    await runWorkflowGeneration(project(), 'config-1', {
+      userApiKeys: [imageKey], modelPreference: { textModel: '', imageModel: 'gpt-image-2', videoModel: '' },
+      executeMedia: vi.fn().mockResolvedValue({ ok: true, elementId: 'config-1', capability: 'image', mediaUrl: 'https://output/image', mimeType: 'image/png' }),
+      fetchMedia: vi.fn().mockResolvedValue(new Blob(['image'])), ingestMedia: vi.fn().mockResolvedValue({ type: 'image', storageKey: 'result', name: 'result.png', mimeType: 'image/png', bytes: 5 }), encodeDataUrl: vi.fn().mockResolvedValue('data:image/png;base64,AA=='), onProjectChange: next => { updates.push(next); events.push(next.nodes.find(node => node.id === 'config-1')?.metadata.status || 'unknown'); }, saveHistory,
+    });
+    const successUpdates = updates.filter(update => update.nodes.find(node => node.id === 'config-1')?.metadata.status === 'success');
+    expect(successUpdates).toHaveLength(1);
+    expect(successUpdates[0].nodes).toHaveLength(4);
+    expect(successUpdates[0].connections).toHaveLength(3);
+    expect(successUpdates[0].nodes[2].metadata).toMatchObject({ progress: 100, generationRequestId: undefined });
+    expect(events.indexOf('success')).toBeLessThan(events.indexOf('history'));
+  });
+
+  it('does not commit a stale result when a newer run starts during history preparation', async () => {
+    const source = project();
+    let latest = source;
+    let releaseEncoding!: () => void;
+    let markEncodingStarted!: () => void;
+    const encodingStarted = new Promise<void>(resolve => { markEncodingStarted = resolve; });
+    const encoding = new Promise<string>(resolve => { releaseEncoding = () => resolve('data:image/png;base64,OLD'); });
+    const first = runWorkflowGeneration(source, 'config-1', {
+      userApiKeys: [imageKey], modelPreference: { textModel: '', imageModel: 'gpt-image-2', videoModel: '' },
+      executeMedia: vi.fn().mockResolvedValue({ ok: true, elementId: 'config-1', capability: 'image', mediaUrl: 'https://old', mimeType: 'image/png' }), fetchMedia: vi.fn().mockResolvedValue(new Blob(['old'])), ingestMedia: vi.fn().mockResolvedValue({ type: 'image', storageKey: 'old-key', name: 'old.png', mimeType: 'image/png', bytes: 3 }), encodeDataUrl: () => { markEncodingStarted(); return encoding; }, getProject: () => latest, onProjectChange: next => { latest = next; },
+    });
+    await encodingStarted;
+    const second = runWorkflowGeneration(latest, 'config-1', {
+      userApiKeys: [imageKey], modelPreference: { textModel: '', imageModel: 'gpt-image-2', videoModel: '' }, executeMedia: vi.fn().mockResolvedValue({ ok: true, elementId: 'config-1', capability: 'image', mediaUrl: 'https://new', mimeType: 'image/png' }), fetchMedia: vi.fn().mockResolvedValue(new Blob(['new'])), ingestMedia: vi.fn().mockResolvedValue({ type: 'image', storageKey: 'new-key', name: 'new.png', mimeType: 'image/png', bytes: 3 }), encodeDataUrl: vi.fn().mockResolvedValue('data:image/png;base64,NEW'), getProject: () => latest, onProjectChange: next => { latest = next; },
+    });
+    releaseEncoding();
+    await Promise.all([first, second]);
+    expect(latest.nodes.some(node => node.metadata.storageKey === 'old-key')).toBe(false);
+    expect(latest.nodes.some(node => node.metadata.storageKey === 'new-key')).toBe(true);
+  });
+
+  it('uses a JPEG poster for video history and revokes provider blob URLs', async () => {
+    const source = project();
+    source.nodes[2].metadata.config = { mode: 'video', modelId: 'seedance-2.0' };
+    const saveHistory = vi.fn();
+    const revoke = vi.spyOn(URL, 'revokeObjectURL');
+    await runWorkflowGeneration(source, 'config-1', {
+      userApiKeys: [{ ...imageKey, provider: 'volcengine', capabilities: ['video'], customModels: ['seedance-2.0'] }], modelPreference: { textModel: '', imageModel: '', videoModel: 'seedance-2.0' },
+      executeMedia: vi.fn().mockResolvedValue({ ok: true, elementId: 'config-1', capability: 'video', mediaUrl: 'blob:provider-result', mimeType: 'video/mp4' }), fetchMedia: vi.fn().mockResolvedValue(new Blob(['video'], { type: 'video/mp4' })), ingestMedia: vi.fn().mockResolvedValue({ type: 'video', storageKey: 'video', name: 'video.mp4', mimeType: 'video/mp4', bytes: 5 }), createVideoPoster: vi.fn().mockResolvedValue(new Blob(['poster'], { type: 'image/jpeg' })), encodeDataUrl: vi.fn().mockResolvedValue('data:image/jpeg;base64,POSTER'), saveHistory, onProjectChange: vi.fn(),
+    });
+    expect(saveHistory).toHaveBeenCalledWith(expect.objectContaining({ dataUrl: 'data:image/jpeg;base64,POSTER', mimeType: 'image/jpeg', mediaType: 'video' }));
+    expect(revoke).toHaveBeenCalledWith('blob:provider-result');
+    revoke.mockRestore();
   });
 });
