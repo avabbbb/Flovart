@@ -71,7 +71,7 @@ export function WorkflowAgentPanel({ project, onClose, onProjectChange, onOnline
   useEffect(() => { messagesRef.current = messages; }, [messages]);
   useEffect(() => {
     if (mode !== 'online') return;
-    setMessages(activeSessionMessages(project));
+    replaceMessages(activeSessionMessages(project));
   }, [mode, project.activeAgentSessionId, project.agentSessions]);
   useEffect(() => () => {
     bridge.current?.disconnect();
@@ -94,6 +94,11 @@ export function WorkflowAgentPanel({ project, onClose, onProjectChange, onOnline
 
   function updateMessages(updater: (items: WorkflowAgentDisplayMessage[]) => WorkflowAgentDisplayMessage[]) {
     const next = updater(messagesRef.current);
+    messagesRef.current = next;
+    setMessages(next);
+  }
+
+  function replaceMessages(next: WorkflowAgentDisplayMessage[]) {
     messagesRef.current = next;
     setMessages(next);
   }
@@ -255,7 +260,7 @@ export function WorkflowAgentPanel({ project, onClose, onProjectChange, onOnline
     try {
       const response = await bridge.current?.resumeThread(project.id, nextThreadId);
       setThreadId(nextThreadId);
-      setMessages(normalizeThreadMessages(response));
+      replaceMessages(normalizeThreadMessages(response));
       setTab('chat');
     } catch (cause) { addLog('error', errorMessage(cause)); }
   }
@@ -263,13 +268,13 @@ export function WorkflowAgentPanel({ project, onClose, onProjectChange, onOnline
   async function archiveThread(nextThreadId: string) {
     try {
       await bridge.current?.archiveThread(project.id, nextThreadId);
-      if (threadId === nextThreadId) { setThreadId(''); setMessages([]); }
+      if (threadId === nextThreadId) { setThreadId(''); replaceMessages([]); }
       await loadThreads();
     } catch (cause) { addLog('error', errorMessage(cause)); }
   }
 
   async function newConversation() {
-    setMessages([]);
+    replaceMessages([]);
     if (mode === 'online') {
       const nextId = id();
       onProjectChange?.({ agentSessions: project.agentSessions, activeAgentSessionId: nextId });
@@ -311,7 +316,7 @@ export function WorkflowAgentPanel({ project, onClose, onProjectChange, onOnline
     localStorage.setItem('flovart.workflow.agent.mode', nextMode);
     if (nextMode === 'online') bridge.current?.disconnect();
     setMode(nextMode);
-    setMessages(nextMode === 'online' ? activeSessionMessages(project) : []);
+    replaceMessages(nextMode === 'online' ? activeSessionMessages(project) : []);
     setTab(nextMode === 'local' && status !== 'connected' ? 'setup' : 'chat');
   }
 
