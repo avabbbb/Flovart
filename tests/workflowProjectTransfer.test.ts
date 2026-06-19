@@ -73,6 +73,18 @@ describe('workflow project transfer', () => {
     expect(await workflowMediaStorage.keys()).toEqual([]);
   });
 
+  it('rejects non-media or mismatched embedded data before persistence', async () => {
+    const invalid = {
+      app: WORKFLOW_EXPORT_APP,
+      version: WORKFLOW_EXPORT_VERSION,
+      exportedAt: '2026-06-19T00:00:00.000Z',
+      projects: [{ project: { ...project(), nodes: project().nodes.map(node => ({ ...node, metadata: { ...node.metadata, storageKey: undefined } })) }, assets: [{ nodeId: 'image-1', dataUrl: 'data:text/plain;base64,dGV4dA==', mimeType: 'image/png' }] }],
+    };
+
+    await expect(parseWorkflowProjectFile(new File([JSON.stringify(invalid)], 'bad-media.json'))).rejects.toThrow('包含无效媒体');
+    expect(await workflowMediaStorage.keys()).toEqual([]);
+  });
+
   it('fails instead of exporting a missing or temporary local media source', async () => {
     await expect(serializeWorkflowProjects([project()])).rejects.toThrow('本地媒体不存在');
     const temporary = project();

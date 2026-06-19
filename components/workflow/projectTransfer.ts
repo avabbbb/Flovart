@@ -160,12 +160,16 @@ function validateExport(value: unknown): asserts value is WorkflowExportFile {
     const nodeIds = new Set(entry.project.nodes.map(node => node.id));
     const assetNodeIds = new Set<string>();
     entry.assets.forEach(asset => {
+      const dataMimeType = isRecord(asset) && typeof asset.dataUrl === 'string'
+        ? asset.dataUrl.match(/^data:((?:image|video|audio)\/[^;,]+);base64,/i)?.[1]
+        : undefined;
       if (!isRecord(asset)
         || typeof asset.nodeId !== 'string'
         || !nodeIds.has(asset.nodeId)
         || typeof asset.dataUrl !== 'string'
-        || !asset.dataUrl.startsWith('data:')
-        || typeof asset.mimeType !== 'string') {
+        || !dataMimeType
+        || typeof asset.mimeType !== 'string'
+        || asset.mimeType.toLowerCase() !== dataMimeType.toLowerCase()) {
         throw new Error(`第 ${index + 1} 个工作流包含无效媒体`);
       }
       if (assetNodeIds.has(asset.nodeId)) throw new Error(`第 ${index + 1} 个工作流包含重复媒体`);
