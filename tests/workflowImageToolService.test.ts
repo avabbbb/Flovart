@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { UserApiKey } from '../types';
 import type { WorkflowProject } from '../components/workflow/types';
 import { runWorkflowImageEdit, runWorkflowImageAgent, runWorkflowImageSplit } from '../services/workflowImageTools';
+import { workflowMediaStorage } from '../components/workflow/storage';
 
 const apiKey: UserApiKey = {
   id: 'image-key', provider: 'openai', capabilities: ['image'], key: 'secret', baseUrl: 'https://tools.example/v1',
@@ -35,7 +36,8 @@ describe('workflow image tool service', () => {
   it.each(['upscale', 'remove-background'] as const)('runs %s through the image agent and adds a durable connected result', async task => {
     const state = runtime();
     const executeAgent = vi.fn().mockResolvedValue({ dataUrl: 'data:image/png;base64,UkVTVUxU', mimeType: 'image/png', width: 640, height: 360 });
-    await runWorkflowImageAgent('project', 'source', task, { ...state.deps, executeAgent });
+    const outcome = await runWorkflowImageAgent('project', 'source', task, { ...state.deps, executeAgent });
+    expect(outcome.status).toBe('committed');
     expect(executeAgent).toHaveBeenCalledWith(expect.objectContaining({ mimeType: 'image/png' }), task, 'gpt-image-2', apiKey, expect.anything());
     expect(state.current.nodes.at(-1)).toMatchObject({ id: 'result', type: 'image', metadata: { storageKey: 'result-key', href: undefined } });
     expect(state.current.connections.at(-1)).toMatchObject({ fromNodeId: 'source', toNodeId: 'result' });
@@ -47,7 +49,8 @@ describe('workflow image tool service', () => {
   ] as const)('runs %s through provider image editing', async (_kind, mask) => {
     const state = runtime();
     const executeEdit = vi.fn().mockResolvedValue({ newImageBase64: 'UkVTVUxU', newImageMimeType: 'image/png', textResponse: null });
-    await runWorkflowImageEdit('project', 'source', '扩展右侧画面', mask, { ...state.deps, executeEdit });
+    const outcome = await runWorkflowImageEdit('project', 'source', '扩展右侧画面', mask, { ...state.deps, executeEdit });
+    expect(outcome.status).toBe('committed');
     expect(executeEdit).toHaveBeenCalledWith(expect.any(Array), '扩展右侧画面', 'gpt-image-2', apiKey, mask ? { mask } : undefined);
     expect(state.current.nodes.at(-1)?.metadata.storageKey).toBe('result-key');
   });
@@ -62,7 +65,8 @@ describe('workflow image tool service', () => {
       { name: 'A', dataUrl: 'data:image/png;base64,QQ==', width: 100, height: 80, offsetX: 4, offsetY: 6 },
       { name: 'B', dataUrl: 'data:image/png;base64,Qg==', width: 120, height: 90, offsetX: 8, offsetY: 10 },
     ]);
-    await runWorkflowImageSplit('project', 'source', { ...state.deps, executeSplit });
+    const outcome = await runWorkflowImageSplit('project', 'source', { ...state.deps, executeSplit });
+    expect(outcome.status).toBe('committed');
     expect(state.current.nodes.slice(1).map(node => node.metadata.storageKey)).toEqual(['layer-a', 'layer-b']);
     expect(state.current.connections).toHaveLength(2);
     expect(state.deps.onProjectChange).toHaveBeenCalledTimes(2);
@@ -82,8 +86,25 @@ describe('workflow image tool service', () => {
     const operation = runWorkflowImageAgent('project', 'source', 'upscale', { ...state.deps, executeAgent: vi.fn(() => pending) as any });
     state.deps.onProjectChange({ ...state.current, nodes: [] });
     resolve({ dataUrl: 'data:image/png;base64,UkVTVUxU', mimeType: 'image/png', width: 1, height: 1 });
-    await operation;
+    await expect(operation).resolves.toMatchObject({ status: 'stale' });
     expect(state.current.nodes).toHaveLength(0);
     expect(state.deps.ingestMedia).not.toHaveBeenCalled();
+  });
+
+  it('discards a newly ingested Blob when the source disappears before commit', async () => {
+    const state = runtime();
+    let finishIngest!: (value: any) => void;
+    state.deps.ingestMedia = vi.fn(() => new Promise(resolve => { finishIngest = resolve; }));
+    const operation = runWorkflowImageAgent('project', 'source', 'upscale', {
+      ...state.deps,
+      executeAgent: vi.fn().mockResolvedValue({ dataUrl: 'data:image/png;base64,UkVTVUxU', mimeType: 'image/png', width: 640, height: 360 }),
+    });
+    await vi.waitFor(() => expect(state.deps.ingestMedia).toHaveBeenCalled());
+    state.deps.onProjectChange({ ...state.current, nodes: [] });
+    await workflowMediaStorage.set('pending-result', new Blob(['pending'], { type: 'image/png' }));
+    finishIngest({ type: 'image', storageKey: 'pending-result', name: 'result.png', mimeType: 'image/png', bytes: 6, naturalWidth: 640, naturalHeight: 360 });
+    await expect(operation).resolves.toMatchObject({ status: 'stale' });
+    expect(state.current.nodes).toHaveLength(0);
+    expect(await workflowMediaStorage.get('pending-result')).toBeNull();
   });
 });

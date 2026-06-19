@@ -21,6 +21,10 @@ export interface WorkflowImageToolRuntime {
   executeSplit?: typeof splitImageLayersWithProvider;
 }
 
+export type WorkflowImageToolOutcome =
+  | { status: 'committed'; project: WorkflowProject }
+  | { status: 'stale'; project: WorkflowProject | null };
+
 const activeRequests = new Map<string, string>();
 const requestKey = (projectId: string, nodeId: string) => `${projectId}:${nodeId}:image-tool`;
 const canonical = (runtime: WorkflowImageToolRuntime) => runtime.getProject();
@@ -86,10 +90,10 @@ async function fail(projectId: string, nodeId: string, requestId: string, runtim
   if (project) await publish(runtime, patchSource(project, nodeId, { status: 'error', error: error instanceof Error ? error.message : '图片处理失败', progress: undefined, generationRequestId: undefined }));
 }
 
-async function commitResults(projectId: string, source: WorkflowNode, requestId: string, records: Array<{ record: WorkflowMediaRecord; title: string; offsetX?: number; offsetY?: number }>, runtime: WorkflowImageToolRuntime, createId: () => string) {
+async function commitResults(projectId: string, source: WorkflowNode, requestId: string, records: Array<{ record: WorkflowMediaRecord; title: string; offsetX?: number; offsetY?: number }>, runtime: WorkflowImageToolRuntime, createId: () => string): Promise<WorkflowImageToolOutcome> {
   if (!stillActive(projectId, source.id, requestId, runtime)) {
     await Promise.all(records.map(({ record }) => discardWorkflowMediaRecord(record.storageKey)));
-    return canonical(runtime);
+    return { status: 'stale', project: canonical(runtime) };
   }
   const project = canonical(runtime)!;
   const nodes = records.map(({ record, title, offsetX = 0, offsetY = 0 }, index) => {
@@ -106,10 +110,10 @@ async function commitResults(projectId: string, source: WorkflowNode, requestId:
   };
   await publish(runtime, next);
   records.forEach(({ record }) => releaseWorkflowMediaRecord(record.storageKey));
-  return next;
+  return { status: 'committed', project: next };
 }
 
-export async function runWorkflowImageAgent(projectId: string, nodeId: string, task: ImageToolTask, runtime: WorkflowImageToolRuntime, options: Record<string, unknown> = {}) {
+export async function runWorkflowImageAgent(projectId: string, nodeId: string, task: ImageToolTask, runtime: WorkflowImageToolRuntime, options: Record<string, unknown> = {}): Promise<WorkflowImageToolOutcome> {
   const { node, requestId, createId } = await start(projectId, nodeId, runtime);
   try {
     const { input } = await sourceInput(node, runtime);
@@ -117,7 +121,7 @@ export async function runWorkflowImageAgent(projectId: string, nodeId: string, t
     const result: ImageToolResult = await (runtime.executeAgent || runImageAgentWithProvider)(input, task, resolved.model, resolved.key, options);
     if (!stillActive(projectId, nodeId, requestId, runtime)) {
       if (activeRequests.get(requestKey(projectId, nodeId)) === requestId) activeRequests.delete(requestKey(projectId, nodeId));
-      return canonical(runtime);
+      return { status: 'stale', project: canonical(runtime) };
     }
     const record = await ingestDataUrl(result.dataUrl, `${task}.png`, result.mimeType, runtime);
     return commitResults(projectId, node, requestId, [{ record, title: task === 'upscale' ? '高清放大' : '移除背景' }], runtime, createId);
@@ -127,7 +131,7 @@ export async function runWorkflowImageAgent(projectId: string, nodeId: string, t
   }
 }
 
-export async function runWorkflowImageEdit(projectId: string, nodeId: string, prompt: string, mask: { href: string; mimeType: string } | undefined, runtime: WorkflowImageToolRuntime) {
+export async function runWorkflowImageEdit(projectId: string, nodeId: string, prompt: string, mask: { href: string; mimeType: string } | undefined, runtime: WorkflowImageToolRuntime): Promise<WorkflowImageToolOutcome> {
   const { node, requestId, createId } = await start(projectId, nodeId, runtime);
   try {
     const { input } = await sourceInput(node, runtime);
@@ -136,7 +140,7 @@ export async function runWorkflowImageEdit(projectId: string, nodeId: string, pr
     if (!result.newImageBase64) throw new Error(result.textResponse || '图片编辑没有返回可用结果');
     if (!stillActive(projectId, nodeId, requestId, runtime)) {
       if (activeRequests.get(requestKey(projectId, nodeId)) === requestId) activeRequests.delete(requestKey(projectId, nodeId));
-      return canonical(runtime);
+      return { status: 'stale', project: canonical(runtime) };
     }
     const mimeType = result.newImageMimeType || 'image/png';
     const record = await ingestDataUrl(result.newImageBase64, 'edited.png', mimeType, runtime);
@@ -147,7 +151,7 @@ export async function runWorkflowImageEdit(projectId: string, nodeId: string, pr
   }
 }
 
-export async function runWorkflowImageSplit(projectId: string, nodeId: string, runtime: WorkflowImageToolRuntime) {
+export async function runWorkflowImageSplit(projectId: string, nodeId: string, runtime: WorkflowImageToolRuntime): Promise<WorkflowImageToolOutcome> {
   const { node, requestId, createId } = await start(projectId, nodeId, runtime);
   const records: Array<{ record: WorkflowMediaRecord; title: string; offsetX: number; offsetY: number }> = [];
   try {
@@ -157,7 +161,7 @@ export async function runWorkflowImageSplit(projectId: string, nodeId: string, r
     if (!layers.length) throw new Error('图层拆分没有返回可用结果');
     if (!stillActive(projectId, nodeId, requestId, runtime)) {
       if (activeRequests.get(requestKey(projectId, nodeId)) === requestId) activeRequests.delete(requestKey(projectId, nodeId));
-      return canonical(runtime);
+      return { status: 'stale', project: canonical(runtime) };
     }
     for (const [index, layer] of layers.entries()) {
       const record = await ingestDataUrl(layer.dataUrl, `${layer.name || `layer-${index + 1}`}.png`, 'image/png', runtime);

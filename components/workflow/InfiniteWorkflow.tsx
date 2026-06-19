@@ -30,7 +30,7 @@ import { WorkflowImageToolDialogs, type WorkflowImageToolConfirmation, type Work
 import { WorkflowConfigPanel } from './WorkflowConfigPanel';
 import { WorkflowToolbar, type WorkflowTool } from './WorkflowToolbar';
 import type { WorkflowConnection, WorkflowNode as WorkflowNodeData, WorkflowNodeType, WorkflowOp, WorkflowPoint, WorkflowProject, WorkflowSnapshot, WorkflowViewport } from './types';
-import { runWorkflowImageAgent, runWorkflowImageEdit, runWorkflowImageSplit, type WorkflowImageToolRuntime } from '../../services/workflowImageTools';
+import { runWorkflowImageAgent, runWorkflowImageEdit, runWorkflowImageSplit, type WorkflowImageToolOutcome, type WorkflowImageToolRuntime } from '../../services/workflowImageTools';
 
 type Frame = Pick<WorkflowProject, 'nodes' | 'connections'>;
 type SelectionBox = { start: WorkflowPoint; current: WorkflowPoint; additive: boolean; initialIds: string[] };
@@ -113,7 +113,7 @@ export function InfiniteWorkflow({
   const [imageTool, setImageTool] = useState<WorkflowImageToolState | null>(null);
   const [imageToolBusy, setImageToolBusy] = useState(false);
   const [imageToolError, setImageToolError] = useState<string | null>(null);
-  const imageToolHistoryRef = useRef<Frame | null>(null);
+  const imageToolOriginRef = useRef<{ projectId: string; frame: Frame } | null>(null);
 
   projectRef.current = project;
   viewportRef.current = project.viewport;
@@ -152,9 +152,6 @@ export function InfiniteWorkflow({
 
   const closeCreateMenu = useCallback(() => {
     setCreateMenu(null);
-    setImageTool(null);
-    setImageToolBusy(false);
-    setImageToolError(null);
     const opener = createMenuOpenerRef.current || rootRef.current;
     createMenuOpenerRef.current = null;
     opener?.focus({ preventScroll: true });
@@ -170,6 +167,10 @@ export function InfiniteWorkflow({
     setSelectionBox(null);
     setConnectionDrag(null);
     setCreateMenu(null);
+    setImageTool(null);
+    setImageToolBusy(false);
+    setImageToolError(null);
+    imageToolOriginRef.current = null;
     clipboardRef.current = [];
     setClipboardVersion(version => version + 1);
     replaceSequenceRef.current.clear();
@@ -230,12 +231,16 @@ export function InfiniteWorkflow({
   const openImageTool = useCallback((kind: WorkflowImageToolState['kind'], nodeId: string) => {
     if (projectRef.current.nodes.find(node => node.id === nodeId)?.metadata.status === 'loading') return;
     setImageToolError(null);
-    imageToolHistoryRef.current = currentFrame();
+    imageToolOriginRef.current = { projectId: projectRef.current.id, frame: currentFrame() };
     if (kind === 'remove-background') {
       setImageToolBusy(true);
       void runWorkflowImageAgent(projectRef.current.id, nodeId, kind, imageToolRuntime).then(result => {
-        if (result && imageToolHistoryRef.current) pushHistory(imageToolHistoryRef.current);
-        setNotice('背景移除完成');
+        const origin = imageToolOriginRef.current;
+        if (result.status === 'committed' && origin?.projectId === result.project.id && projectRef.current.id === result.project.id) {
+          pushHistory(origin.frame);
+          setNotice('背景移除完成');
+        }
+        imageToolOriginRef.current = null;
       }).catch(error => setNotice(error instanceof Error ? error.message : '背景移除失败')).finally(() => setImageToolBusy(false));
       return;
     }
@@ -250,6 +255,26 @@ export function InfiniteWorkflow({
   const activeImageToolNode = imageTool ? project.nodes.find(node => node.id === imageTool.nodeId) || null : null;
   const activeImageToolMedia = useWorkflowMediaUrl(activeImageToolNode?.metadata.storageKey, activeImageToolNode?.metadata.href);
 
+  const previewImageFilters = useCallback((filters: NonNullable<WorkflowNodeData['metadata']['filters']>) => {
+    if (!imageTool || imageTool.kind !== 'filter') return;
+    const origin = imageToolOriginRef.current;
+    if (!origin || origin.projectId !== projectRef.current.id) return;
+    patchProject({ nodes: projectRef.current.nodes.map(node => node.id === imageTool.nodeId ? { ...node, metadata: { ...node.metadata, filters } } : node) });
+  }, [imageTool, patchProject]);
+
+  const closeImageTool = useCallback(() => {
+    const origin = imageToolOriginRef.current;
+    if (imageTool?.kind === 'filter' && origin?.projectId === projectRef.current.id) {
+      const original = origin.frame.nodes.find(node => node.id === imageTool.nodeId);
+      if (original && projectRef.current.nodes.some(node => node.id === imageTool.nodeId)) {
+        patchProject({ nodes: projectRef.current.nodes.map(node => node.id === imageTool.nodeId ? { ...node, metadata: { ...node.metadata, filters: original.metadata.filters } } : node) });
+      }
+    }
+    imageToolOriginRef.current = null;
+    setImageTool(null);
+    setImageToolError(null);
+  }, [imageTool, patchProject]);
+
   const confirmImageTool = useCallback(async (confirmation: WorkflowImageToolConfirmation) => {
     if (!imageTool) return;
     const expectedProjectId = projectRef.current.id;
@@ -259,7 +284,11 @@ export function InfiniteWorkflow({
     setImageToolError(null);
     try {
       if (confirmation.kind === 'filter') {
-        commitFrame(projectRef.current.nodes.map(item => item.id === node.id ? { ...item, metadata: { ...item.metadata, filters: confirmation.filters } } : item), projectRef.current.connections);
+        const origin = imageToolOriginRef.current;
+        if (!origin || origin.projectId !== projectRef.current.id || !projectRef.current.nodes.some(item => item.id === node.id)) return;
+        patchProject({ nodes: projectRef.current.nodes.map(item => item.id === node.id ? { ...item, metadata: { ...item.metadata, filters: confirmation.filters } } : item) });
+        pushHistory(origin.frame);
+        imageToolOriginRef.current = null;
         setImageTool(null);
         return;
       }
@@ -269,6 +298,9 @@ export function InfiniteWorkflow({
         const record = await ingestWorkflowMedia(new File([cropped], `crop-${node.metadata.name || 'image.png'}`, { type: cropped.type || node.metadata.mimeType || 'image/png' }));
         if (projectRef.current.id !== expectedProjectId || !projectRef.current.nodes.some(item => item.id === node.id)) {
           await discardWorkflowMediaRecord(record.storageKey);
+          imageToolOriginRef.current = null;
+          setImageTool(null);
+          setImageToolError(null);
           return;
         }
         const width = record.naturalWidth || node.width;
@@ -280,13 +312,21 @@ export function InfiniteWorkflow({
         setImageTool(null);
         return;
       }
-      let result: WorkflowProject | null = null;
+      let result: WorkflowImageToolOutcome | null = null;
       if (confirmation.kind === 'upscale') result = await runWorkflowImageAgent(expectedProjectId, node.id, 'upscale', imageToolRuntime, { targetLongEdge: confirmation.targetLongEdge, algorithm: confirmation.algorithm });
       if (confirmation.kind === 'split') result = await runWorkflowImageSplit(expectedProjectId, node.id, imageToolRuntime);
       if (confirmation.kind === 'outpaint') result = await runWorkflowImageEdit(expectedProjectId, node.id, `向${{ left: '左侧', right: '右侧', top: '上方', bottom: '下方', all: '四周' }[confirmation.direction]}扩展画面。${confirmation.prompt}`, undefined, imageToolRuntime);
       if (confirmation.kind === 'mask') result = await runWorkflowImageEdit(expectedProjectId, node.id, confirmation.prompt, { href: confirmation.maskDataUrl, mimeType: 'image/png' }, imageToolRuntime);
-      if (result && imageToolHistoryRef.current) pushHistory(imageToolHistoryRef.current);
-      setImageTool(null);
+      const origin = imageToolOriginRef.current;
+      if (result?.status === 'committed' && origin?.projectId === result.project.id && projectRef.current.id === result.project.id) {
+        pushHistory(origin.frame);
+        imageToolOriginRef.current = null;
+        setImageTool(null);
+      } else if (result?.status === 'stale') {
+        imageToolOriginRef.current = null;
+        setImageTool(null);
+        setImageToolError(null);
+      }
     } catch (error) {
       setImageToolError(error instanceof Error ? error.message : '图片处理失败');
     } finally {
@@ -1043,7 +1083,8 @@ export function InfiniteWorkflow({
         mediaUrl={activeImageToolMedia.url || ''}
         busy={imageToolBusy}
         error={imageToolError || activeImageToolMedia.error}
-        onClose={() => { setImageTool(null); setImageToolError(null); }}
+        onClose={closeImageTool}
+        onPreview={previewImageFilters}
         onConfirm={confirmation => { void confirmImageTool(confirmation); }}
       />
     </div>

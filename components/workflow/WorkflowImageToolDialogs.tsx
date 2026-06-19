@@ -15,19 +15,20 @@ export type WorkflowImageToolConfirmation =
   | { kind: 'mask'; prompt: string; maskDataUrl: string }
   | { kind: 'split' };
 
-export function WorkflowImageToolDialogs({ tool, node, mediaUrl, busy, error, onClose, onConfirm }: {
+export function WorkflowImageToolDialogs({ tool, node, mediaUrl, busy, error, onClose, onPreview, onConfirm }: {
   tool: WorkflowImageToolState | null;
   node: WorkflowNode | null;
   mediaUrl: string;
   busy: boolean;
   error: string | null;
   onClose: () => void;
+  onPreview?: (filters: Partial<ImageFilters>) => void;
   onConfirm: (payload: WorkflowImageToolConfirmation) => void;
 }) {
   if (!tool || !node || !mediaUrl) return null;
   const common = { open: true, mediaUrl, busy, error, onClose };
   if (tool.kind === 'crop') return <CropDialog {...common} onConfirm={crop => onConfirm({ kind: 'crop', crop })} />;
-  if (tool.kind === 'filter') return <FilterDialog {...common} filters={node.metadata.filters || {}} onConfirm={filters => onConfirm({ kind: 'filter', filters })} />;
+  if (tool.kind === 'filter') return <FilterDialog {...common} filters={node.metadata.filters || {}} onPreview={onPreview} onConfirm={filters => onConfirm({ kind: 'filter', filters })} />;
   if (tool.kind === 'upscale') return <UpscaleDialog {...common} onConfirm={(targetLongEdge, algorithm) => onConfirm({ kind: 'upscale', targetLongEdge, algorithm })} />;
   if (tool.kind === 'outpaint') return <OutpaintDialog {...common} onConfirm={(direction, prompt) => onConfirm({ kind: 'outpaint', direction, prompt })} />;
   if (tool.kind === 'mask') return <MaskDialog {...common} onConfirm={(prompt, maskDataUrl) => onConfirm({ kind: 'mask', prompt, maskDataUrl })} />;
@@ -65,13 +66,13 @@ function CropDialog(props: CommonProps & { onConfirm: (crop: WorkflowCropRect) =
   </Modal>;
 }
 
-function FilterDialog(props: CommonProps & { filters: Partial<ImageFilters>; onConfirm: (filters: Partial<ImageFilters>) => void }) {
+function FilterDialog(props: CommonProps & { filters: Partial<ImageFilters>; onPreview?: (filters: Partial<ImageFilters>) => void; onConfirm: (filters: Partial<ImageFilters>) => void }) {
   const [filters, setFilters] = useState(props.filters);
   useEffect(() => setFilters(props.filters), [props.filters]);
   return <Modal {...modalProps(props)} title="图片调色">
     <div className="workflow-image-tool__grid" data-workflow-overlay>
       <div className="workflow-image-tool__preview"><img src={props.mediaUrl} alt="滤镜预览" style={{ filter: buildCssFilter(filters) }} /></div>
-      <div className="workflow-image-tool__controls"><ImageFilterPanel filters={filters} onChange={setFilters} onReset={() => setFilters({})} onClose={props.onClose} /><DialogError error={props.error} /><Button type="primary" loading={props.busy} onClick={() => props.onConfirm(filters)}>完成调色</Button></div>
+      <div className="workflow-image-tool__controls"><ImageFilterPanel filters={filters} onChange={next => { setFilters(next); props.onPreview?.(next); }} onReset={() => { setFilters({}); props.onPreview?.({}); }} onClose={props.onClose} /><DialogError error={props.error} /><Button type="primary" loading={props.busy} disabled={props.busy} onClick={() => props.onConfirm(filters)}>完成调色</Button></div>
     </div>
   </Modal>;
 }
