@@ -34,6 +34,13 @@ export class FlovartRuntimeClient {
       if (msg.error) pending.reject(new Error(msg.error.message));
       else pending.resolve(msg.result);
     });
+    const failPending = () => {
+      this._pending.forEach(item => item.reject(new Error('Flovart browser connection closed')));
+      this._pending.clear();
+      this._ws = null;
+    };
+    this._ws.addEventListener('close', failPending, { once: true });
+    this._ws.addEventListener('error', failPending, { once: true });
   }
 
   async execute(method, ...args) {
@@ -52,14 +59,19 @@ export class FlovartRuntimeClient {
     `;
 
     return await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this._pending.delete(id);
+        reject(new Error(`Flovart runtime request timed out: ${method}`));
+      }, 45_000);
       this._pending.set(id, {
         resolve: (result) => {
+          clearTimeout(timer);
           if (result?.result?.type === 'undefined') resolve(undefined);
           else if (result?.result?.value !== undefined) resolve(result.result.value);
           else if (result?.exceptionDetails) reject(new Error(result.exceptionDetails.text || 'Execution failed'));
           else resolve(result?.result);
         },
-        reject,
+        reject: error => { clearTimeout(timer); reject(error); },
       });
       this._ws.send(JSON.stringify({
         id,
@@ -81,6 +93,9 @@ export class FlovartRuntimeClient {
 export function createRuntimeFacade(client) {
   return {
     _version: 'external-cdp',
+    workflow: {
+      dispatch: envelope => client.execute('workflow.dispatch', envelope),
+    },
     status: () => client.execute('status'),
     provider: {
       status: () => client.execute('provider.status'),

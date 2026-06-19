@@ -24,6 +24,8 @@ function createEmptyState() {
     panOffset: { x: 0, y: 0 },
     elements: [],
     projects: [],
+    workflowProjects: [],
+    activeWorkflowProjectId: null,
     groups: [],
     jobs: [],
     provider: {
@@ -460,9 +462,158 @@ function createShadowGeneration(input, type, state) {
   };
 }
 
+function createShadowWorkflowProject(title = '未命名工作流') {
+  const now = new Date().toISOString();
+  return {
+    id: randomUUID(), title, nodes: [], connections: [], selectedNodeIds: [],
+    viewport: { x: 0, y: 0, k: 1 }, backgroundMode: 'dots',
+    agentSessions: [], activeAgentSessionId: null, createdAt: now, updatedAt: now,
+  };
+}
+
+function shadowWorkflowNode(type, args) {
+  const spec = {
+    image: ['图片', 340, 240, { status: 'idle' }],
+    text: ['文本', 340, 220, { content: '', status: 'idle' }],
+    video: ['视频', 420, 236, { status: 'idle' }],
+    audio: ['音频', 380, 168, { status: 'idle' }],
+    config: ['生成配置', 360, 260, { prompt: '', status: 'idle', config: { mode: 'image' } }],
+  }[type];
+  if (!spec) return null;
+  return {
+    id: args.id || randomUUID(), type, title: args.title || spec[0],
+    position: { x: Number(args.x ?? 0), y: Number(args.y ?? 0) },
+    width: Number(args.width || spec[1]), height: Number(args.height || spec[2]),
+    metadata: { ...spec[3], ...(args.metadata || {}) },
+  };
+}
+
+function shadowWorkflowCreatesCycle(project, fromNodeId, toNodeId) {
+  const outgoing = new Map();
+  [...project.connections, { fromNodeId, toNodeId }].forEach(connection => outgoing.set(connection.fromNodeId, [...(outgoing.get(connection.fromNodeId) || []), connection.toNodeId]));
+  const pending = [toNodeId];
+  const visited = new Set();
+  while (pending.length) {
+    const current = pending.pop();
+    if (current === fromNodeId) return true;
+    if (visited.has(current)) continue;
+    visited.add(current);
+    pending.push(...(outgoing.get(current) || []));
+  }
+  return false;
+}
+
+function dispatchShadowWorkflow(envelope, state) {
+  const { command, args = {} } = envelope;
+  const done = (result) => ({ ok: true, commandId: envelope.id, result: { shadow: true, ...result } });
+  const fail = (code, message) => ({ ok: false, commandId: envelope.id, error: { code, message } });
+
+  if (command === 'workflow.project.list') {
+    return done({ projects: state.workflowProjects.map(({ id, title, createdAt, updatedAt }) => ({ id, title, createdAt, updatedAt })) });
+  }
+  if (command === 'workflow.project.create') {
+    const project = createShadowWorkflowProject(args.title);
+    state.workflowProjects.unshift(project);
+    state.activeWorkflowProjectId = project.id;
+    saveShadowState(state);
+    return done({ projectId: project.id });
+  }
+
+  const projectId = args.projectId || state.activeWorkflowProjectId;
+  const project = state.workflowProjects.find(item => item.id === projectId);
+  if (command === 'workflow.project.use') {
+    if (!project) return fail('NOT_FOUND', `Workflow project not found (${projectId})`);
+    state.activeWorkflowProjectId = project.id;
+    saveShadowState(state);
+    return done({ projectId: project.id });
+  }
+  if (command === 'workflow.project.delete') {
+    if (!project) return fail('NOT_FOUND', `Workflow project not found (${projectId})`);
+    state.workflowProjects = state.workflowProjects.filter(item => item.id !== project.id);
+    if (state.activeWorkflowProjectId === project.id) state.activeWorkflowProjectId = state.workflowProjects[0]?.id || null;
+    saveShadowState(state);
+    return done({ projectId: project.id });
+  }
+  if (!project) return fail('NOT_FOUND', 'No active Workflow project.');
+  if (command === 'workflow.inspect') {
+    const redact = value => {
+      if (Array.isArray(value)) return value.map(redact);
+      if (!value || typeof value !== 'object') return typeof value === 'string' && /^(?:data:|blob:|file:|[a-z]:\\|\\\\)/i.test(value) ? '[media]' : value;
+      return Object.fromEntries(Object.entries(value).map(([key, child]) => [key, /(?:api.?key|authorization|token|secret|password|storage.?key|file.?path|local.?path|data.?url)/i.test(key) ? '[redacted]' : /^(?:href|poster|src|url)$/i.test(key) && child ? '[media]' : redact(child)]));
+    };
+    return done(redact(project));
+  }
+  if (command === 'workflow.node.run' || command === 'workflow.node.stop') {
+    return fail('BROWSER_REQUIRED', 'Workflow provider generation requires an open Flovart browser tab.');
+  }
+
+  const nodeId = args.nodeId || args.id;
+  if (command === 'workflow.node.create' || command === 'workflow.node.create-connected') {
+    const node = shadowWorkflowNode(args.type || 'text', args);
+    if (!node) return fail('BAD_REQUEST', `Unsupported Workflow node type (${args.type})`);
+    if (project.nodes.some(item => item.id === node.id)) return fail('BAD_REQUEST', `Workflow node ID already exists (${node.id})`);
+    if (command === 'workflow.node.create-connected') {
+      const fromNodeId = args.fromNodeId || args.from;
+      if (!project.nodes.some(item => item.id === fromNodeId)) return fail('BAD_REQUEST', 'Workflow source node not found.');
+      project.connections.push({ id: randomUUID(), fromNodeId, toNodeId: node.id });
+    }
+    project.nodes.push(node);
+    project.selectedNodeIds = [node.id];
+  } else if (command === 'workflow.node.update') {
+    const node = project.nodes.find(item => item.id === nodeId);
+    if (!node) return fail('NOT_FOUND', `Workflow node not found (${nodeId})`);
+    const patch = args.patch || args.updates || {};
+    if (patch.id) return fail('BAD_REQUEST', 'Workflow node ID cannot be changed.');
+    Object.assign(node, patch, { metadata: { ...node.metadata, ...(patch.metadata || {}) } });
+  } else if (command === 'workflow.node.delete') {
+    if (!project.nodes.some(item => item.id === nodeId)) return fail('NOT_FOUND', `Workflow node not found (${nodeId})`);
+    project.nodes = project.nodes.filter(item => item.id !== nodeId);
+    project.connections = project.connections.filter(item => item.fromNodeId !== nodeId && item.toNodeId !== nodeId);
+    project.selectedNodeIds = project.selectedNodeIds.filter(id => id !== nodeId);
+  } else if (command === 'workflow.node.move') {
+    const node = project.nodes.find(item => item.id === nodeId);
+    if (!node) return fail('NOT_FOUND', `Workflow node not found (${nodeId})`);
+    node.position = { x: Number(args.x), y: Number(args.y) };
+  } else if (command === 'workflow.node.resize') {
+    const node = project.nodes.find(item => item.id === nodeId);
+    if (!node) return fail('NOT_FOUND', `Workflow node not found (${nodeId})`);
+    node.width = Number(args.width);
+    node.height = Number(args.height);
+  } else if (command === 'workflow.connect') {
+    const fromNodeId = args.fromNodeId || args.from;
+    const toNodeId = args.toNodeId || args.to;
+    const fromNode = project.nodes.find(item => item.id === fromNodeId);
+    const toNode = project.nodes.find(item => item.id === toNodeId);
+    const valid = fromNodeId !== toNodeId
+      && fromNode && toNode
+      && !(fromNode.type === 'config' && toNode.type === 'config')
+      && !project.connections.some(item => item.fromNodeId === fromNodeId && item.toNodeId === toNodeId)
+      && !shadowWorkflowCreatesCycle(project, fromNodeId, toNodeId);
+    if (!valid) return fail('BAD_REQUEST', 'Invalid or duplicate Workflow connection.');
+    project.connections.push({ id: args.id || randomUUID(), fromNodeId, toNodeId });
+  } else if (command === 'workflow.disconnect') {
+    if (!project.connections.some(item => item.id === (args.connectionId || args.id))) return fail('NOT_FOUND', 'Workflow connection not found.');
+    project.connections = project.connections.filter(item => item.id !== (args.connectionId || args.id));
+  } else if (command === 'workflow.select') {
+    const ids = Array.isArray(args.ids) ? args.ids : [nodeId].filter(Boolean);
+    project.selectedNodeIds = ids.filter(id => project.nodes.some(node => node.id === id));
+  } else if (command === 'workflow.viewport.set') {
+    project.viewport = { x: Number(args.x || 0), y: Number(args.y || 0), k: Number(args.k || args.zoom || 1) };
+  } else {
+    return fail('UNKNOWN_COMMAND', `Unknown Workflow command (${command})`);
+  }
+
+  project.updatedAt = new Date().toISOString();
+  saveShadowState(state);
+  return done({ projectId: project.id, nodeId });
+}
+
 export function createShadowRuntimeFacade() {
   return {
     _version: 'shadow-runtime',
+    workflow: {
+      dispatch: async envelope => dispatchShadowWorkflow(envelope, loadShadowState()),
+    },
     status: async () => {
       const state = loadShadowState();
       return {

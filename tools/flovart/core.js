@@ -53,6 +53,23 @@ export const COMMAND_REGISTRY = {
   'canvas.remove-element': { summary: 'Remove one element by ID.', args: { id: 'string' } },
   'canvas.select': { summary: 'Replace current selection with explicit element IDs.', args: { ids: 'string[]' } },
   'canvas.clear-media': { summary: 'Remove image/video elements only.', args: {} },
+  'workflow.project.list': { summary: 'List isolated Workflow projects.', args: {} },
+  'workflow.project.create': { summary: 'Create an isolated Workflow project.', args: { title: 'string?' } },
+  'workflow.project.use': { summary: 'Select the active Workflow project.', args: { projectId: 'string' } },
+  'workflow.project.delete': { summary: 'Delete one Workflow project.', args: { projectId: 'string' } },
+  'workflow.inspect': { summary: 'Inspect the active Workflow graph with media redacted.', args: { projectId: 'string?' } },
+  'workflow.node.create': { summary: 'Create one Workflow image/text/video/audio/config node.', args: { projectId: 'string?', id: 'string?', type: 'image|text|video|audio|config', title: 'string?', x: 'number?', y: 'number?', width: 'number?', height: 'number?', metadata: 'object?', metadataJson: 'string?' } },
+  'workflow.node.create-connected': { summary: 'Create one Workflow node and connect it from an existing node atomically.', args: { projectId: 'string?', fromNodeId: 'string', id: 'string?', type: 'image|text|video|audio|config', title: 'string?', x: 'number?', y: 'number?', width: 'number?', height: 'number?', metadata: 'object?', metadataJson: 'string?' } },
+  'workflow.node.update': { summary: 'Patch one Workflow node.', args: { projectId: 'string?', nodeId: 'string', patch: 'object?', patchJson: 'string?' } },
+  'workflow.node.delete': { summary: 'Delete one Workflow node and incident connections.', args: { projectId: 'string?', nodeId: 'string' } },
+  'workflow.node.move': { summary: 'Move one Workflow node.', args: { projectId: 'string?', nodeId: 'string', x: 'number', y: 'number' } },
+  'workflow.node.resize': { summary: 'Resize one Workflow node.', args: { projectId: 'string?', nodeId: 'string', width: 'number', height: 'number' } },
+  'workflow.connect': { summary: 'Connect two Workflow nodes.', args: { projectId: 'string?', fromNodeId: 'string', toNodeId: 'string' } },
+  'workflow.disconnect': { summary: 'Delete one Workflow connection.', args: { projectId: 'string?', connectionId: 'string' } },
+  'workflow.select': { summary: 'Select Workflow node IDs.', args: { projectId: 'string?', ids: 'string[]' } },
+  'workflow.viewport.set': { summary: 'Set Workflow viewport pan and zoom.', args: { projectId: 'string?', x: 'number', y: 'number', k: 'number' } },
+  'workflow.node.run': { summary: 'Run one Workflow config node through browser providers.', args: { projectId: 'string?', nodeId: 'string' } },
+  'workflow.node.stop': { summary: 'Stop the active generation for one Workflow node.', args: { projectId: 'string?', nodeId: 'string' } },
   'asset.list': { summary: 'List local generated media assets/history.', args: {} },
   'generate.image': { summary: 'Generate one image from an explicit prompt.', args: { prompt: 'string', aspectRatio: 'string?', placeOnCanvas: 'boolean?' } },
   'generate.images-batch': { summary: 'Generate multiple images from explicit prompt items.', args: { items: 'array', placeOnCanvas: 'boolean?', layout: 'string?' } },
@@ -79,6 +96,23 @@ export const COMMAND_ALIASES = {
   flovart_canvas_remove_element: 'canvas.remove-element',
   select: 'canvas.select',
   flovart_canvas_select: 'canvas.select',
+  flovart_workflow_project_list: 'workflow.project.list',
+  flovart_workflow_project_create: 'workflow.project.create',
+  flovart_workflow_project_use: 'workflow.project.use',
+  flovart_workflow_project_delete: 'workflow.project.delete',
+  flovart_workflow_inspect: 'workflow.inspect',
+  flovart_workflow_node_create: 'workflow.node.create',
+  flovart_workflow_node_create_connected: 'workflow.node.create-connected',
+  flovart_workflow_node_update: 'workflow.node.update',
+  flovart_workflow_node_delete: 'workflow.node.delete',
+  flovart_workflow_node_move: 'workflow.node.move',
+  flovart_workflow_node_resize: 'workflow.node.resize',
+  flovart_workflow_connect: 'workflow.connect',
+  flovart_workflow_disconnect: 'workflow.disconnect',
+  flovart_workflow_select: 'workflow.select',
+  flovart_workflow_viewport_set: 'workflow.viewport.set',
+  flovart_workflow_node_run: 'workflow.node.run',
+  flovart_workflow_node_stop: 'workflow.node.stop',
   gen: 'generate.image',
   flovart_generate_image: 'generate.image',
   flovart_generate_video: 'generate.video',
@@ -462,6 +496,29 @@ async function loadAgentKit() {
 
 export async function executeFlovartCommand(commandName, args = {}, runtime = {}) {
   const command = normalizeCommandName(commandName);
+
+  if (command.startsWith('workflow.')) {
+    if (!runtime.workflow?.dispatch) return { ok: false, error: { code: 'WORKFLOW_UNAVAILABLE', message: 'Workflow dispatcher unavailable.' } };
+    const workflowArgs = {
+      ...args,
+      projectId: args.projectId || args['project-id'],
+      nodeId: args.nodeId || args['node-id'],
+      fromNodeId: args.fromNodeId || args['from-node-id'],
+      toNodeId: args.toNodeId || args['to-node-id'],
+      connectionId: args.connectionId || args['connection-id'],
+      idempotencyKey: args.idempotencyKey || args['idempotency-key'],
+      metadata: args.metadata || parseJsonOption(args.metadataJson || args['metadata-json'], undefined),
+      patch: args.patch || parseJsonOption(args.patchJson || args['patch-json'], undefined),
+      ids: Array.isArray(args.ids) ? args.ids : parseListOption(args.ids),
+    };
+    return await runtime.workflow.dispatch({
+      id: args.commandId || `cli_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      command,
+      args: workflowArgs,
+      source: 'cli',
+      idempotencyKey: workflowArgs.idempotencyKey,
+    });
+  }
 
   switch (command) {
     case 'help':

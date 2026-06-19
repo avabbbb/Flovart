@@ -74,11 +74,16 @@ const FILE_STATE_COMMANDS = new Set([
   'canvas.update-element', 'canvas.remove-element', 'canvas.select', 'canvas.clear-media',
   'element.create', 'element.update-prompt', 'element.assign-slot', 'element.watch',
   'asset.list', 'export.project', 'video.status',
+  'workflow.project.list', 'workflow.project.create', 'workflow.project.use', 'workflow.project.delete',
+  'workflow.inspect', 'workflow.node.create', 'workflow.node.create-connected', 'workflow.node.update', 'workflow.node.delete',
+  'workflow.node.move', 'workflow.node.resize', 'workflow.connect', 'workflow.disconnect',
+  'workflow.select', 'workflow.viewport.set',
 ]);
 
 const BROWSER_COMMANDS = new Set([
   'provider.begin-setup',
   'element.ignite',
+  'workflow.node.run', 'workflow.node.stop',
   'generate.image', 'generate.images-batch', 'generate.video',
 ]);
 

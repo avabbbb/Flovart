@@ -8,7 +8,7 @@ import { WorkflowProjectList } from './WorkflowProjectList';
 import { WorkflowGenerationCapabilitiesProvider, type WorkflowSharedMedia } from './WorkflowConfigPanel';
 import { useWorkflowStore } from './store';
 import type { WorkflowModelOptions } from './WorkflowNodePromptBar';
-import { WorkflowAgentPanel } from './WorkflowAgentPanel';
+import { WorkflowAgentPanel, type WorkflowOnlineTurnInput } from './WorkflowAgentPanel';
 import type { WorkflowImageToolHandlers } from './WorkflowNodeToolbar';
 
 export interface WorkflowWorkspaceProps {
@@ -29,9 +29,10 @@ export interface WorkflowWorkspaceProps {
   dynamicModelOptions: WorkflowModelOptions;
   onOpenSettings?: () => void;
   onOpenAgent?: () => void;
+  onOnlineAgentTurn?: (input: WorkflowOnlineTurnInput) => Promise<void>;
 }
 
-export function WorkflowWorkspace({ theme, language, onSwitchToCanvas, onToggleTheme, onToggleLanguage, resolveGenerationCapability, sharedMedia, onRunNode, onStopNode, onSaveWorkflowMedia, imageTools, t, userApiKeys, modelPreference, dynamicModelOptions, onOpenSettings, onOpenAgent }: WorkflowWorkspaceProps) {
+export function WorkflowWorkspace({ theme, language, onSwitchToCanvas, onToggleTheme, onToggleLanguage, resolveGenerationCapability, sharedMedia, onRunNode, onStopNode, onSaveWorkflowMedia, imageTools, t, userApiKeys, modelPreference, dynamicModelOptions, onOpenSettings, onOpenAgent, onOnlineAgentTurn }: WorkflowWorkspaceProps) {
   const [agentOpen, setAgentOpen] = useState(false);
   const hydrated = useWorkflowStore(state => state.hydrated);
   const projects = useWorkflowStore(state => state.projects);
@@ -83,7 +84,7 @@ export function WorkflowWorkspace({ theme, language, onSwitchToCanvas, onToggleT
         )}
         </WorkflowGenerationCapabilitiesProvider>
       </main>
-      {activeProject && agentOpen && <WorkflowAgentPanel project={activeProject} onClose={() => setAgentOpen(false)} />}
+      {activeProject && agentOpen && <WorkflowAgentPanel project={activeProject} onClose={() => setAgentOpen(false)} onOnlineTurn={onOnlineAgentTurn} onProjectChange={patch => updateProject(activeProject.id, patch)} />}
       <div className="workflow-bottom-bar">
         <button type="button" onClick={onSwitchToCanvas}><ArrowLeft size={14} />Canvas</button>
         <span>{activeProject?.title || 'Workflow'}</span>
