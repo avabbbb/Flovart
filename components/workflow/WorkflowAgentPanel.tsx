@@ -93,11 +93,9 @@ export function WorkflowAgentPanel({ project, onClose, onProjectChange, onOnline
   }
 
   function updateMessages(updater: (items: WorkflowAgentDisplayMessage[]) => WorkflowAgentDisplayMessage[]) {
-    setMessages(items => {
-      const next = updater(items);
-      messagesRef.current = next;
-      return next;
-    });
+    const next = updater(messagesRef.current);
+    messagesRef.current = next;
+    setMessages(next);
   }
 
   function handleEvent(type: string, payload: any) {

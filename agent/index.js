@@ -58,10 +58,11 @@ function validateAttachments(value) {
   return value.map(item => {
     const type = String(item?.type || '');
     const name = String(item?.name || '未命名图片').slice(0, 180);
-    const size = Number(item?.size || 0);
     const dataUrl = String(item?.dataUrl || '');
-    if (!type.startsWith('image/') || !/^data:image\/(?:png|jpe?g|webp|gif);base64,/i.test(dataUrl)) throw new Error(`图片附件格式无效：${name}`);
-    if (!Number.isFinite(size) || size <= 0 || size > MAX_ATTACHMENT_BYTES) throw new Error(`单张图片不能超过 8MB：${name}`);
+    const matched = dataUrl.match(/^data:image\/(?:png|jpe?g|webp|gif);base64,(.+)$/i);
+    if (!type.startsWith('image/') || !matched) throw new Error(`图片附件格式无效：${name}`);
+    const size = Buffer.byteLength(matched[1], 'base64');
+    if (size <= 0 || size > MAX_ATTACHMENT_BYTES) throw new Error(`单张图片不能超过 8MB：${name}`);
     total += size;
     return { type, name, size, dataUrl };
   }).filter(item => {
