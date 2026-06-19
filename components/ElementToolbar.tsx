@@ -56,6 +56,25 @@ export function ElementToolbarShell({ children, className = '', testId }: { chil
     );
 }
 
+export interface ElementToolbarAction {
+    key: string;
+    label: string;
+    icon: ReactNode;
+    onClick?: () => void;
+    href?: string;
+    download?: string;
+    active?: boolean;
+    danger?: boolean;
+}
+
+export function ElementToolbarActions({ actions }: { actions: Array<ElementToolbarAction | null | false | undefined> }) {
+    return <>{actions.filter((action): action is ElementToolbarAction => Boolean(action)).map(action => action.href ? (
+        <a key={action.key} className="isl-icon-btn h-9 w-9" aria-label={action.label} title={action.label} href={action.href} download={action.download}>{action.icon}</a>
+    ) : (
+        <button key={action.key} type="button" className={`isl-icon-btn h-9 w-9 ${action.active ? 'isl-icon-btn--active' : ''}`} aria-label={action.label} title={action.label} style={action.danger ? { color: 'var(--isl-coral-deep)' } : undefined} onClick={action.onClick}>{action.icon}</button>
+    ))}</>;
+}
+
 export function ElementToolbar(props: ElementToolbarProps) {
     const {
         selectedElementIds, singleSelectedElement, elements, zoom, isLoading, language,

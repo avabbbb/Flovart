@@ -26,6 +26,7 @@ export interface PromptBarProps {
     promptDocument?: Record<string, unknown>;
     setPrompt: (prompt: string) => void;
     onGenerate: () => void;
+    onStop?: () => void;
     isLoading: boolean;
     isSelectionActive: boolean;
     selectedElementCount: number;
@@ -82,6 +83,7 @@ export interface PromptBarProps {
     // 批量生成
     batchCount?: number;
     onBatchCountChange?: (count: number) => void;
+    allowVideoBatch?: boolean;
     variant?: 'global' | 'inline';
     className?: string;
     shellClassName?: string;
@@ -90,6 +92,8 @@ export interface PromptBarProps {
     onRetry?: () => void;
     error?: string | null;
     progressStage?: string;
+    autoFocus?: boolean;
+    focusSignal?: number;
 }
 
 type ExpandPanel = 'mode' | 'model' | 'more' | null;
@@ -125,14 +129,15 @@ function getMentionDescription(element: Element): string {
 }
 
 function getModeLabel(mode: GenerationMode): string {
+    if (mode === 'text') return '文本';
     if (mode === 'video') return '视频';
     if (mode === 'keyframe') return '首尾帧';
     return '图片';
 }
 
-function getModelLabel(mode: GenerationMode, imageModel?: string, videoModel?: string, userApiKeys: UserApiKey[] = []): string {
-    const model = mode === 'video' ? videoModel : imageModel;
-    if (!model) return mode === 'video' ? '选择视频模型' : '选择图片模型';
+function getModelLabel(mode: GenerationMode, textModel?: string, imageModel?: string, videoModel?: string, userApiKeys: UserApiKey[] = []): string {
+    const model = mode === 'text' ? textModel : mode === 'video' ? videoModel : imageModel;
+    if (!model) return mode === 'text' ? '选择文本模型' : mode === 'video' ? '选择视频模型' : '选择图片模型';
     const provider = modelRefProvider(model, userApiKeys);
     const shortProvider = PROVIDER_LABELS[provider]?.split(' ')[0] || provider;
     return `${shortProvider} · ${modelRefModelId(model).replace(/^(google|openai|anthropic|openrouter)\//, '')}`;
@@ -189,6 +194,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
     promptDocument,
     setPrompt,
     onGenerate,
+    onStop,
     isLoading,
     isSelectionActive,
     selectedElementCount,
@@ -242,6 +248,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
     onOpenSettings,
     batchCount = 1,
     onBatchCountChange,
+    allowVideoBatch = false,
     variant = 'global',
     className,
     shellClassName,
@@ -250,6 +257,8 @@ export const PromptBar: React.FC<PromptBarProps> = ({
     onRetry,
     error,
     progressStage,
+    autoFocus = false,
+    focusSignal,
 }) => {
     const isDark = theme === 'dark';
     const rootRef = useRef<HTMLDivElement>(null);
@@ -293,9 +302,10 @@ export const PromptBar: React.FC<PromptBarProps> = ({
         return getSupportedRatios(modelRefModelId(selectedVideoModel));
     }, [selectedVideoModel]);
 
-    const currentModelOptions = generationMode === 'video' ? videoModelOptions : imageModelOptions;
+    const currentModelOptions = generationMode === 'text' ? textModelOptions : generationMode === 'video' ? videoModelOptions : imageModelOptions;
     const activeKey = userApiKeys.find(k => k.isDefault) || userApiKeys[0];
-    const activeModel = generationMode === 'video' ? selectedVideoModel : selectedImageModel;
+    const activeModel = generationMode === 'text' ? selectedTextModel : generationMode === 'video' ? selectedVideoModel : selectedImageModel;
+    const changeActiveModel = (model: string) => generationMode === 'text' ? onTextModelChange?.(model) : generationMode === 'video' ? onVideoModelChange?.(model) : onImageModelChange?.(model);
     const promptCharCount = prompt.trim().length;
     const readyState = !activeKey
         ? 'missing-key'
@@ -344,6 +354,22 @@ export const PromptBar: React.FC<PromptBarProps> = ({
     const handleEditorSubmit = useCallback(() => {
         if (latestPromptRef.current.trim() && !isLoading) onGenerate();
     }, [isLoading, onGenerate]);
+
+    const replacePrompt = useCallback((value: string) => {
+        latestPromptRef.current = value;
+        richEditorRef.current?.setText(value);
+        if (onPromptInputChange) {
+            onPromptInputChange({ plainText: value, document: { type: 'doc', content: value ? [{ type: 'paragraph', content: [{ type: 'text', text: value }] }] : [] }, mentionedElementIds: [] });
+        } else {
+            setPrompt(value);
+            onPromptDocumentChange?.({ type: 'doc', content: value ? [{ type: 'paragraph', content: [{ type: 'text', text: value }] }] : [] });
+            onMentionedElementIds?.([]);
+        }
+    }, [onMentionedElementIds, onPromptDocumentChange, onPromptInputChange, setPrompt]);
+
+    useEffect(() => {
+        if (autoFocus || focusSignal !== undefined) richEditorRef.current?.focus();
+    }, [autoFocus, focusSignal]);
 
     /** 外部 prompt 被清空时（如切换画板、生成完成后），同步清空富文本编辑器 */
     useEffect(() => {
@@ -574,7 +600,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                                     const bareModel = modelRefModelId(model);
                                                     const capTags = getModelCapabilityTags(bareModel);
                                                     const shortName = modelRefLabel(model, userApiKeys).replace(/^(google|openai|anthropic|openrouter)\//, '');
-                                                    const selectedModel = generationMode === 'video' ? selectedVideoModel : selectedImageModel;
+                                                    const selectedModel = activeModel;
                                                     return (
                                                         <MenuOptionButton
                                                             key={`recent-${model}`}
@@ -583,7 +609,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                                             onClick={() => {
                                                                 addRecentModel(model);
                                                                 setRecentModels(getRecentModels());
-                                                                generationMode === 'video' ? onVideoModelChange?.(model) : onImageModelChange?.(model);
+                                                                changeActiveModel(model);
                                                                 setExpandedPanel(null);
                                                             }}
                                                         />
@@ -592,7 +618,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                                 <div className="border-t border-[var(--isl-border)] my-1" />
                                             </>
                                         )}
-                                        <div className="px-2 pb-1 pt-1 text-[11px] font-bold uppercase tracking-[0.16em]" style={{ color: 'var(--isl-ink-ghost)' }}>{generationMode === 'video' ? '视频模型' : '图片模型'}</div>
+                                        <div className="px-2 pb-1 pt-1 text-[11px] font-bold uppercase tracking-[0.16em]" style={{ color: 'var(--isl-ink-ghost)' }}>{generationMode === 'text' ? '文本模型' : generationMode === 'video' ? '视频模型' : '图片模型'}</div>
                                         {(() => {
                                             const filtered = modelSearchQuery
                                                 ? currentModelOptions.filter(m => modelRefSearchText(m, userApiKeys).includes(modelSearchQuery.toLowerCase()))
@@ -604,7 +630,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                                 if (!grouped.has(label)) grouped.set(label, []);
                                                 grouped.get(label)!.push(model);
                                             }
-                                            const selectedModel = generationMode === 'video' ? selectedVideoModel : selectedImageModel;
+                                            const selectedModel = activeModel;
                                             if (filtered.length === 0 && modelSearchQuery) {
                                                 return <div className="px-2 py-3 text-xs" style={{ color: 'var(--isl-ink-soft)' }}>没有匹配的模型</div>;
                                             }
@@ -627,7 +653,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                                             onClick={() => {
                                                                 addRecentModel(model);
                                                                 setRecentModels(getRecentModels());
-                                                                generationMode === 'video' ? onVideoModelChange?.(model) : onImageModelChange?.(model);
+                                                                changeActiveModel(model);
                                                                 setExpandedPanel(null);
                                                             }}
                                                         />
@@ -808,7 +834,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                                             type="button"
                                                             className="min-w-0 flex-1 text-left"
                                                             onClick={() => {
-                                                                setPrompt(effect.value);
+                                                                replacePrompt(effect.value);
                                                                 setExpandedPanel(null);
                                                             }}
                                                         >
@@ -894,7 +920,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
 
                             <div className="relative">
                                 <button type="button" onClick={() => setExpandedPanel(prev => (prev === 'model' ? null : 'model'))} className={`${triggerClass} ${expandedPanel === 'model' ? activeTriggerClass : ''}`}>
-                                    <span className="max-w-[150px] truncate">{getModelLabel(generationMode, selectedImageModel, selectedVideoModel, userApiKeys)}</span>
+                                    <span className="max-w-[150px] truncate">{getModelLabel(generationMode, selectedTextModel, selectedImageModel, selectedVideoModel, userApiKeys)}</span>
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 9 6 6 6-6" /></svg>
                                 </button>
                             </div>
@@ -920,7 +946,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                     </div>
 
                     <div className="flex shrink-0 items-center gap-2">
-                        {generationMode === 'image' && onBatchCountChange && (
+                        {(generationMode === 'image' || generationMode === 'video' && allowVideoBatch) && onBatchCountChange && (
                             <div
                                 className="isl-well flex h-9 items-center p-1"
                                 title="批量方案数量"
@@ -962,19 +988,20 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                         <button
                             type="button"
                             onClick={() => {
-                                if (prompt.trim() && !isLoading) onGenerate();
+                                if (isLoading && onStop) onStop();
+                                else if (prompt.trim()) onGenerate();
                             }}
-                            disabled={isLoading || !prompt.trim()}
-                            aria-label={t('promptBar.generate')}
-                            title={t('promptBar.generate')}
+                            disabled={(isLoading && !onStop) || (!isLoading && !prompt.trim())}
+                            aria-label={isLoading && onStop ? '停止生成' : t('promptBar.generate')}
+                            title={isLoading && onStop ? '停止生成' : t('promptBar.generate')}
                             className={`isl-go ${compactMode ? 'h-9 min-w-[104px] px-4 text-xs' : 'h-10 min-w-[116px] px-5 text-sm'}`}
                         >
-                            {isLoading ? (
+                            {isLoading && !onStop ? (
                                 <svg className="h-3.5 w-3.5 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                     <circle className="opacity-30" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                                     <path className="opacity-80" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4Z" />
                                 </svg>
-                            ) : (
+                            ) : isLoading ? <span className="text-xs font-semibold">停止</span> : (
                                 <div className="flex items-center gap-1.5">
                                     <span className="text-xs font-semibold">{error ? '重试' : batchCount > 1 ? `生成 ${batchCount} 版` : '开始生成'}</span>
                                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">

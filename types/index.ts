@@ -4,7 +4,7 @@ export type Tool = 'select' | 'pan' | 'draw' | 'erase' | 'rectangle' | 'circle' 
 
 export type WheelAction = 'zoom' | 'pan';
 
-export type GenerationMode = 'image' | 'video' | 'keyframe';
+export type GenerationMode = 'text' | 'image' | 'video' | 'keyframe';
 
 export interface Point {
   x: number;

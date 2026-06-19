@@ -32,10 +32,11 @@ export function WorkflowGenerationCapabilitiesProvider({ resolve, sharedMedia = 
 
 export const useWorkflowSharedMedia = () => useContext(SharedMediaContext);
 
-export function WorkflowConfigPanel({ node, onChange, onRun }: {
+export function WorkflowConfigPanel({ node, onChange, onRun, onStop }: {
   node: WorkflowNode;
   onChange: (metadata: WorkflowNodeMetadata) => void;
   onRun: () => void;
+  onStop?: () => void;
 }) {
   const resolve = useContext(CapabilityContext);
   const config = node.metadata.config || { mode: 'image' as const };
@@ -94,11 +95,12 @@ export function WorkflowConfigPanel({ node, onChange, onRun }: {
           </select>
         </div>
       )}
+      {config.mode !== 'text' && <div className="workflow-config__row"><label>数量</label><select value={config.count || 1} onChange={event => updateConfig({ count: Number(event.target.value) })}>{[1, 2, 4].map(value => <option key={value} value={value}>{value}</option>)}</select></div>}
       {node.metadata.error && <p className="workflow-config__error">{node.metadata.error}</p>}
       {status === 'loading' && <p role="status">生成中{node.metadata.progress === undefined ? '' : ` · ${Math.round(node.metadata.progress)}%`}</p>}
       {audioUnsupported && <p className="workflow-config__error">音频生成暂未支持</p>}
-      <button type="button" onClick={onRun} disabled={audioUnsupported || status === 'loading'}>
-        <Play size={13} />{audioUnsupported ? '暂不支持' : status === 'loading' ? '生成中...' : status === 'error' ? '重试' : '生成'}
+      <button type="button" onClick={status === 'loading' && onStop ? onStop : onRun} disabled={audioUnsupported || status === 'loading' && !onStop}>
+        <Play size={13} />{audioUnsupported ? '暂不支持' : status === 'loading' ? '停止' : status === 'error' ? '重试' : '生成'}
       </button>
     </div>
   );

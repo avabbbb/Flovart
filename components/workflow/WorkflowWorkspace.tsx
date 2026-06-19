@@ -1,5 +1,5 @@
 import { ArrowLeft, Languages, Moon, Sun } from 'lucide-react';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import type { ModelPreference, UserApiKey } from '../../types';
 import '../../styles/workflow.css';
 import type { GenerationCapability, GenerationMode } from '../../services/generationCapabilities';
@@ -8,6 +8,7 @@ import { WorkflowProjectList } from './WorkflowProjectList';
 import { WorkflowGenerationCapabilitiesProvider, type WorkflowSharedMedia } from './WorkflowConfigPanel';
 import { useWorkflowStore } from './store';
 import type { WorkflowModelOptions } from './WorkflowNodePromptBar';
+import { WorkflowAgentPanel } from './WorkflowAgentPanel';
 
 export interface WorkflowWorkspaceProps {
   theme: 'light' | 'dark';
@@ -18,6 +19,8 @@ export interface WorkflowWorkspaceProps {
   resolveGenerationCapability?: (mode: GenerationMode, modelId?: string) => GenerationCapability;
   sharedMedia?: WorkflowSharedMedia[];
   onRunNode?: (projectId: string, nodeId: string) => Promise<void> | void;
+  onStopNode?: (projectId: string, nodeId: string) => void;
+  onSaveWorkflowMedia?: (projectId: string, nodeId: string) => void;
   t: (key: string, ...args: any[]) => string;
   userApiKeys: UserApiKey[];
   modelPreference: ModelPreference;
@@ -26,7 +29,8 @@ export interface WorkflowWorkspaceProps {
   onOpenAgent?: () => void;
 }
 
-export function WorkflowWorkspace({ theme, language, onSwitchToCanvas, onToggleTheme, onToggleLanguage, resolveGenerationCapability, sharedMedia, onRunNode, t, userApiKeys, modelPreference, dynamicModelOptions, onOpenSettings, onOpenAgent }: WorkflowWorkspaceProps) {
+export function WorkflowWorkspace({ theme, language, onSwitchToCanvas, onToggleTheme, onToggleLanguage, resolveGenerationCapability, sharedMedia, onRunNode, onStopNode, onSaveWorkflowMedia, t, userApiKeys, modelPreference, dynamicModelOptions, onOpenSettings, onOpenAgent }: WorkflowWorkspaceProps) {
+  const [agentOpen, setAgentOpen] = useState(false);
   const hydrated = useWorkflowStore(state => state.hydrated);
   const projects = useWorkflowStore(state => state.projects);
   const activeProjectId = useWorkflowStore(state => state.activeProjectId);
@@ -56,7 +60,9 @@ export function WorkflowWorkspace({ theme, language, onSwitchToCanvas, onToggleT
                 nodes: activeProject.nodes.map(node => node.id === nodeId ? { ...node, metadata: { ...node.metadata, status: 'error', error: '生成适配器尚未连接' } } : node),
               });
             }}
-            onOpenAgent={onOpenAgent}
+            onStopNode={nodeId => onStopNode?.(activeProject.id, nodeId)}
+            onSaveWorkflowMedia={nodeId => onSaveWorkflowMedia?.(activeProject.id, nodeId)}
+            onOpenAgent={() => { setAgentOpen(true); onOpenAgent?.(); }}
             t={t}
             theme={theme}
             language={language}
@@ -74,6 +80,7 @@ export function WorkflowWorkspace({ theme, language, onSwitchToCanvas, onToggleT
         )}
         </WorkflowGenerationCapabilitiesProvider>
       </main>
+      {activeProject && agentOpen && <WorkflowAgentPanel project={activeProject} onClose={() => setAgentOpen(false)} />}
       <div className="workflow-bottom-bar">
         <button type="button" onClick={onSwitchToCanvas}><ArrowLeft size={14} />Canvas</button>
         <span>{activeProject?.title || 'Workflow'}</span>

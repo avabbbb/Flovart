@@ -51,6 +51,8 @@ export function InfiniteWorkflow({
   project,
   updateProject,
   onRunNode,
+  onStopNode,
+  onSaveWorkflowMedia,
   onOpenAgent,
   t = key => key,
   theme = 'light',
@@ -63,6 +65,8 @@ export function InfiniteWorkflow({
   project: WorkflowProject;
   updateProject: (patch: Partial<WorkflowProject>) => void;
   onRunNode: (nodeId: string) => void;
+  onStopNode?: (nodeId: string) => void;
+  onSaveWorkflowMedia?: (nodeId: string) => void;
   onOpenAgent?: () => void;
   t?: (key: string, ...args: any[]) => string;
   theme?: 'light' | 'dark';
@@ -98,6 +102,7 @@ export function InfiniteWorkflow({
   const [contextMenu, setContextMenu] = useState<WorkflowContextMenuState | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [overlayHidden, setOverlayHidden] = useState(false);
+  const [promptFocusSignal, setPromptFocusSignal] = useState(0);
 
   projectRef.current = project;
   viewportRef.current = project.viewport;
@@ -879,20 +884,34 @@ export function InfiniteWorkflow({
             onCopy={ids => { clipboardRef.current = projectRef.current.nodes.filter(node => ids.includes(node.id)); setClipboardVersion(version => version + 1); }}
             onDelete={ids => applyOps([{ type: 'delete_nodes', ids }])}
             onRun={id => onRunNode(id)}
+            onStop={onStopNode}
+            onPromptFocus={() => setPromptFocusSignal(value => value + 1)}
+            onSaveMedia={onSaveWorkflowMedia}
             onReplaceMedia={(id, file) => { const node = projectRef.current.nodes.find(item => item.id === id); if (node) void replaceMedia(node, file); }}
             onToggleFreeResize={id => { const node = projectRef.current.nodes.find(item => item.id === id); if (node) applyOps([{ type: 'update_node', id, patch: { freeResize: !node.freeResize } }]); }}
             onAlign={alignment => {
               if (selectedNodeData.length < 2) return;
-              const target = alignment === 'left' ? Math.min(...selectedNodeData.map(node => node.position.x)) : alignment === 'right' ? Math.max(...selectedNodeData.map(node => node.position.x + node.width)) : selectedNodeData.reduce((sum, node) => sum + node.position.x + node.width / 2, 0) / selectedNodeData.length;
-              commitFrame(projectRef.current.nodes.map(node => !selectedNodes.has(node.id) ? node : { ...node, position: { ...node.position, x: alignment === 'left' ? target : alignment === 'right' ? target - node.width : target - node.width / 2 } }), projectRef.current.connections);
+              const horizontal = alignment === 'left' || alignment === 'horizontal-center' || alignment === 'right';
+              const target = alignment === 'left' ? Math.min(...selectedNodeData.map(node => node.position.x))
+                : alignment === 'right' ? Math.max(...selectedNodeData.map(node => node.position.x + node.width))
+                  : alignment === 'horizontal-center' ? selectedNodeData.reduce((sum, node) => sum + node.position.x + node.width / 2, 0) / selectedNodeData.length
+                    : alignment === 'top' ? Math.min(...selectedNodeData.map(node => node.position.y))
+                      : alignment === 'bottom' ? Math.max(...selectedNodeData.map(node => node.position.y + node.height))
+                        : selectedNodeData.reduce((sum, node) => sum + node.position.y + node.height / 2, 0) / selectedNodeData.length;
+              commitFrame(projectRef.current.nodes.map(node => {
+                if (!selectedNodes.has(node.id)) return node;
+                return horizontal
+                  ? { ...node, position: { ...node.position, x: alignment === 'left' ? target : alignment === 'right' ? target - node.width : target - node.width / 2 } }
+                  : { ...node, position: { ...node.position, y: alignment === 'top' ? target : alignment === 'bottom' ? target - node.height : target - node.height / 2 } };
+              }), projectRef.current.connections);
             }}
           />
         </div>
         {selectedNodeData.length === 1 && selectedNodeData[0].type === 'config' && <div data-workflow-overlay style={{ position: 'absolute', zIndex: 69, left: promptLeft, top: promptTop, width: 420 }} onWheel={event => event.stopPropagation()}>
-          <WorkflowConfigPanel node={selectedNodeData[0]} onChange={metadata => applyOps([{ type: 'update_node', id: selectedNodeData[0].id, metadata: { ...selectedNodeData[0].metadata, ...metadata } }])} onRun={() => onRunNode(selectedNodeData[0].id)} />
+          <WorkflowConfigPanel node={selectedNodeData[0]} onChange={metadata => applyOps([{ type: 'update_node', id: selectedNodeData[0].id, metadata: { ...selectedNodeData[0].metadata, ...metadata } }])} onRun={() => onRunNode(selectedNodeData[0].id)} onStop={onStopNode ? () => onStopNode(selectedNodeData[0].id) : undefined} />
         </div>}
         {selectedNodeData.length === 1 && ['image', 'video', 'text'].includes(selectedNodeData[0].type) && <div data-workflow-overlay style={{ position: 'absolute', zIndex: 69, left: promptLeft, top: promptTop }}>
-          <WorkflowNodePromptBar node={selectedNodeData[0]} nodes={project.nodes} t={t} theme={theme} language={language} userApiKeys={userApiKeys} modelPreference={modelPreference} dynamicModelOptions={dynamicModelOptions} onOpenSettings={onOpenSettings} onChange={metadata => applyOps([{ type: 'update_node', id: selectedNodeData[0].id, metadata: { ...selectedNodeData[0].metadata, ...metadata } }])} onRun={() => onRunNode(selectedNodeData[0].id)} />
+          <WorkflowNodePromptBar node={selectedNodeData[0]} nodes={project.nodes} t={t} theme={theme} language={language} userApiKeys={userApiKeys} modelPreference={modelPreference} dynamicModelOptions={dynamicModelOptions} onOpenSettings={onOpenSettings} onChange={metadata => applyOps([{ type: 'update_node', id: selectedNodeData[0].id, metadata: { ...selectedNodeData[0].metadata, ...metadata } }])} onRun={() => onRunNode(selectedNodeData[0].id)} onStop={onStopNode ? () => onStopNode(selectedNodeData[0].id) : undefined} focusSignal={promptFocusSignal} />
         </div>}
       </>}
       <WorkflowMiniMap nodes={project.nodes} viewport={project.viewport} onCenter={(x, y) => {
