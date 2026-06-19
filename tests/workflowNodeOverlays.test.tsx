@@ -83,6 +83,14 @@ describe('workflow node overlays', () => {
     expect(screen.queryByRole('button', { name: '保存到素材库' })).not.toBeInTheDocument();
   });
 
+  it('moves selected nodes to the front or back through the shared toolbar', () => {
+    const onLayer = vi.fn();
+    render(<WorkflowNodeToolbar nodes={[node]} onCopy={vi.fn()} onDelete={vi.fn()} onLayer={onLayer} />);
+    fireEvent.click(screen.getByRole('button', { name: '移到最前' }));
+    fireEvent.click(screen.getByRole('button', { name: '移到最后' }));
+    expect(onLayer.mock.calls.map(call => call[0])).toEqual(['front', 'back']);
+  });
+
   it('wires prompt focus, save, replace, free resize, download, run and stop actions', () => {
     const callbacks = { focus: vi.fn(), save: vi.fn(), replace: vi.fn(), resize: vi.fn(), run: vi.fn(), stop: vi.fn() };
     const media = { ...node, metadata: { ...node.metadata, href: 'data:image/png;base64,AA==', name: 'image.png' } };

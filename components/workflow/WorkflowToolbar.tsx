@@ -1,5 +1,5 @@
 import { Bot, Focus, Grid2X2, Hand, ImagePlus, Library, Music2, Redo2, Settings2, Type, Undo2, Video } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useWorkflowSharedMedia, type WorkflowSharedMedia } from './WorkflowConfigPanel';
 import type { WorkflowNodeType } from './types';
 
@@ -37,6 +37,12 @@ export function WorkflowToolbar({
   const audioInput = useRef<HTMLInputElement>(null);
   const sharedMedia = useWorkflowSharedMedia();
   const [libraryOpen, setLibraryOpen] = useState(false);
+  const [libraryQuery, setLibraryQuery] = useState('');
+  const [libraryType, setLibraryType] = useState<'all' | 'image' | 'video'>('all');
+  const visibleMedia = useMemo(() => sharedMedia.filter(media => {
+    if (libraryType !== 'all' && media.type !== libraryType) return false;
+    return !libraryQuery.trim() || media.name.toLowerCase().includes(libraryQuery.trim().toLowerCase());
+  }), [libraryQuery, libraryType, sharedMedia]);
   return (
     <div className="workflow-toolbar" role="toolbar" aria-label="工作流工具栏">
       <button type="button" className={tool === 'select' ? 'is-active' : ''} aria-label="选择工具" onClick={() => onToolChange('select')}><Focus size={16} /></button>
@@ -57,7 +63,11 @@ export function WorkflowToolbar({
       <button type="button" aria-label="适应视图" onClick={onFit}><Focus size={16} /></button>
       <button type="button" aria-label="切换网格" onClick={onToggleGrid}><Grid2X2 size={16} /></button>
       {onOpenAgent && <><span className="workflow-toolbar__divider" /><button type="button" aria-label="打开 Agent" onClick={onOpenAgent}><Bot size={16} /></button></>}
-      {libraryOpen && <div className="workflow-toolbar__library">{sharedMedia.length ? sharedMedia.map(media => <button type="button" key={media.id} onClick={() => { onAddSharedMedia(media); setLibraryOpen(false); }}><img src={media.href} alt="" /><span>{media.name}</span></button>) : <p>素材库和生成历史为空。</p>}</div>}
+      {libraryOpen && <div className="workflow-toolbar__library">
+        <input value={libraryQuery} placeholder="搜索素材" aria-label="搜索共享素材" onChange={event => setLibraryQuery(event.target.value)} />
+        <div className="workflow-toolbar__library-filters">{(['all', 'image', 'video'] as const).map(type => <button type="button" key={type} className={libraryType === type ? 'is-active' : ''} onClick={() => setLibraryType(type)}>{type === 'all' ? '全部' : type === 'image' ? '图片' : '视频'}</button>)}</div>
+        <div className="workflow-toolbar__library-grid">{visibleMedia.length ? visibleMedia.map(media => <button type="button" key={media.id} onClick={() => { onAddSharedMedia(media); setLibraryOpen(false); }}>{media.type === 'video' ? <video src={media.href} muted preload="metadata" /> : <img src={media.href} alt="" />}<span>{media.name}</span></button>) : <p>{sharedMedia.length ? '没有匹配的素材。' : '素材库和生成历史为空。'}</p>}</div>
+      </div>}
     </div>
   );
 }

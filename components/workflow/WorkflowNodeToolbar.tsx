@@ -1,4 +1,4 @@
-import { AlignCenter, AlignLeft, AlignRight, ArrowDownToLine, ArrowUpToLine, Copy, Crop, Download, Eraser, Expand, FilePenLine, Layers3, Library, MessageSquareText, Play, RefreshCw, ScanLine, SlidersHorizontal, Square, Trash2, ZoomIn } from 'lucide-react';
+import { AlignCenter, AlignLeft, AlignRight, ArrowDownToLine, ArrowUpToLine, ChevronsDown, ChevronsUp, Copy, Crop, Download, Eraser, Expand, FilePenLine, Layers3, Library, MessageSquareText, Play, RefreshCw, ScanLine, SlidersHorizontal, Square, Trash2, ZoomIn } from 'lucide-react';
 import { useRef } from 'react';
 import { ElementToolbarActions, ElementToolbarShell, type ElementToolbarAction } from '../ElementToolbar';
 import { useWorkflowMediaUrl } from './media';
@@ -16,7 +16,7 @@ export interface WorkflowImageToolHandlers {
   splitLayers?: (id: string) => void;
 }
 
-export function WorkflowNodeToolbar({ nodes, onCopy, onDelete, onRun, onStop, onPromptFocus, onSaveMedia, onReplaceMedia, onToggleFreeResize, onAlign, imageTools, imageToolBusy = false }: {
+export function WorkflowNodeToolbar({ nodes, onCopy, onDelete, onRun, onStop, onPromptFocus, onSaveMedia, onReplaceMedia, onToggleFreeResize, onAlign, onLayer, imageTools, imageToolBusy = false }: {
   nodes: WorkflowNode[];
   onCopy: (ids: string[]) => void;
   onDelete: (ids: string[]) => void;
@@ -27,6 +27,7 @@ export function WorkflowNodeToolbar({ nodes, onCopy, onDelete, onRun, onStop, on
   onReplaceMedia?: (id: string, file: File) => void;
   onToggleFreeResize?: (id: string) => void;
   onAlign?: (alignment: Alignment) => void;
+  onLayer?: (position: 'front' | 'back') => void;
   imageTools?: WorkflowImageToolHandlers;
   imageToolBusy?: boolean;
 }) {
@@ -39,6 +40,8 @@ export function WorkflowNodeToolbar({ nodes, onCopy, onDelete, onRun, onStop, on
   const advancedToolBusy = imageToolBusy || node?.metadata.status === 'loading';
   const actions: Array<ElementToolbarAction | null | false | undefined> = [
     { key: 'copy', label: '复制节点', icon: <Copy size={18} />, onClick: () => onCopy(ids) },
+    onLayer && { key: 'front', label: '移到最前', icon: <ChevronsUp size={18} />, onClick: () => onLayer('front') },
+    onLayer && { key: 'back', label: '移到最后', icon: <ChevronsDown size={18} />, onClick: () => onLayer('back') },
     node && onPromptFocus && node.type !== 'audio' && { key: 'prompt', label: '编辑提示词', icon: <MessageSquareText size={18} />, onClick: () => onPromptFocus(node.id) },
     media && mediaUrl && { key: 'download', label: '下载媒体', icon: <Download size={18} />, href: mediaUrl, download: media.metadata.name || media.id },
     media?.type === 'image' && onSaveMedia && { key: 'save', label: '保存到素材库', icon: <Library size={18} />, onClick: () => onSaveMedia(media.id) },

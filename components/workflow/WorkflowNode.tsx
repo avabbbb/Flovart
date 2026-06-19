@@ -45,6 +45,11 @@ export function WorkflowNode({
   const isMedia = node.type === 'image' || node.type === 'video' || node.type === 'audio';
   const accept = isMedia ? `${node.type}/*` : undefined;
   const mediaError = isMedia ? (media.error || node.metadata.error) : null;
+  const mediaDetails = isMedia ? [
+    node.metadata.naturalWidth && node.metadata.naturalHeight ? `${node.metadata.naturalWidth}×${node.metadata.naturalHeight}` : '',
+    node.metadata.durationMs ? formatDuration(node.metadata.durationMs) : '',
+    node.metadata.bytes ? formatBytes(node.metadata.bytes) : '',
+  ].filter(Boolean).join(' · ') : '';
   const mediaActions = isMedia && (
     <div className="workflow-node__media-actions" data-workflow-overlay>
       <button type="button" aria-label="重新选择媒体文件" onClick={() => mediaInput.current?.click()}><Upload size={14} />重新选择</button>
@@ -89,8 +94,19 @@ export function WorkflowNode({
         {node.type === 'config' && (
           <WorkflowConfigPanel node={node} onChange={onChangeMetadata} onRun={onRun} />
         )}
+        {mediaDetails && <span className="workflow-node__media-details">{mediaDetails}</span>}
       </div>
       <button className="workflow-resize" aria-label="调整节点大小" onPointerDown={onResizeStart} />
     </div>
   );
+}
+
+function formatDuration(durationMs: number) {
+  const seconds = Math.max(0, Math.round(durationMs / 1000));
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+}
+
+function formatBytes(bytes: number) {
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }

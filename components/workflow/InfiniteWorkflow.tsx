@@ -1056,6 +1056,11 @@ export function InfiniteWorkflow({
             imageToolBusy={Boolean(imageTool || imageToolBusy || imageToolTransactionRef.current)}
             onReplaceMedia={(id, file) => { const node = projectRef.current.nodes.find(item => item.id === id); if (node) void replaceMedia(node, file); }}
             onToggleFreeResize={id => { const node = projectRef.current.nodes.find(item => item.id === id); if (node) applyOps([{ type: 'update_node', id, patch: { freeResize: !node.freeResize } }]); }}
+            onLayer={position => {
+              const selected = projectRef.current.nodes.filter(node => selectedNodes.has(node.id));
+              const remaining = projectRef.current.nodes.filter(node => !selectedNodes.has(node.id));
+              commitFrame(position === 'front' ? [...remaining, ...selected] : [...selected, ...remaining], projectRef.current.connections);
+            }}
             onAlign={alignment => {
               if (selectedNodeData.length < 2) return;
               const horizontal = alignment === 'left' || alignment === 'horizontal-center' || alignment === 'right';
@@ -1075,7 +1080,7 @@ export function InfiniteWorkflow({
           />
         </div>
         {selectedNodeData.length === 1 && selectedNodeData[0].type === 'config' && <div data-workflow-overlay style={{ position: 'absolute', zIndex: 69, left: promptLeft, top: promptTop, width: 420 }} onWheel={event => event.stopPropagation()}>
-          <WorkflowConfigPanel node={selectedNodeData[0]} onChange={metadata => applyOps([{ type: 'update_node', id: selectedNodeData[0].id, metadata: { ...selectedNodeData[0].metadata, ...metadata } }])} onRun={() => onRunNode(selectedNodeData[0].id)} onStop={onStopNode ? () => onStopNode(selectedNodeData[0].id) : undefined} />
+          <WorkflowConfigPanel node={selectedNodeData[0]} nodes={project.nodes} onChange={metadata => applyOps([{ type: 'update_node', id: selectedNodeData[0].id, metadata: { ...selectedNodeData[0].metadata, ...metadata } }])} onRun={() => onRunNode(selectedNodeData[0].id)} onStop={onStopNode ? () => onStopNode(selectedNodeData[0].id) : undefined} />
         </div>}
         {selectedNodeData.length === 1 && ['image', 'video', 'text'].includes(selectedNodeData[0].type) && <div data-workflow-overlay style={{ position: 'absolute', zIndex: 69, left: promptLeft, top: promptTop }}>
           <WorkflowNodePromptBar node={selectedNodeData[0]} nodes={project.nodes} t={t} theme={theme} language={language} userApiKeys={userApiKeys} modelPreference={modelPreference} dynamicModelOptions={dynamicModelOptions} onOpenSettings={onOpenSettings} onChange={metadata => applyOps([{ type: 'update_node', id: selectedNodeData[0].id, metadata: { ...selectedNodeData[0].metadata, ...metadata } }])} onRun={() => onRunNode(selectedNodeData[0].id)} onStop={onStopNode ? () => onStopNode(selectedNodeData[0].id) : undefined} focusSignal={promptFocusSignal} />

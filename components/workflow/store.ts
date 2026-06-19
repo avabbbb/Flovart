@@ -31,6 +31,7 @@ interface WorkflowStore {
   activeProjectId: string | null;
   setHydrated: (hydrated: boolean) => void;
   createProject: (title?: string) => string;
+  importProjects: (projects: WorkflowProject[]) => void;
   setActiveProject: (id: string | null) => void;
   renameProject: (id: string, title: string) => void;
   deleteProjects: (ids: string[]) => void;
@@ -150,6 +151,11 @@ export const useWorkflowStore = create<WorkflowStore>()(
         });
         return project.id;
       },
+      importProjects: imported => set(state => {
+        const projects = [...imported.map(normalizeWorkflowProject), ...state.projects];
+        setWorkflowMediaCanonicalProjects(projects);
+        return { projects, activeProjectId: imported[0]?.id || state.activeProjectId };
+      }),
       setActiveProject: activeProjectId => set({ activeProjectId }),
       renameProject: (id, title) => set(state => ({
         projects: state.projects.map(project => project.id === id

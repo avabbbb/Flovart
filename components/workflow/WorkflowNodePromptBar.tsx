@@ -1,3 +1,5 @@
+import { BookOpen } from 'lucide-react';
+import { useState } from 'react';
 import type { ModelPreference, UserApiKey, GenerationMode } from '../../types';
 import { PromptBar, type MentionItem } from '../PromptBar';
 import type { WorkflowGenerationConfig, WorkflowNode, WorkflowNodeMetadata } from './types';
@@ -28,6 +30,7 @@ export function WorkflowNodePromptBar({ node, nodes, t, theme, language, userApi
   onStop?: () => void;
   focusSignal?: number;
 }) {
+  const [libraryOpen, setLibraryOpen] = useState(false);
   const config = node.metadata.config || { mode: node.type === 'text' ? 'text' : node.type === 'video' ? 'video' : 'image' };
   const generationMode = modeFor(node, config);
   const mentionItems: MentionItem[] = nodes.filter(item => item.id !== node.id).map(item => ({
@@ -38,9 +41,13 @@ export function WorkflowNodePromptBar({ node, nodes, t, theme, language, userApi
     description: item.metadata.content?.trim().slice(0, 36) || item.type,
   }));
   const patchConfig = (patch: Partial<WorkflowGenerationConfig>) => onChange({ config: { ...config, ...patch } });
+  const translatedPrompts = t('quickPrompts');
+  const prompts = Array.isArray(translatedPrompts) ? translatedPrompts.filter((item): item is { name: string; value: string } => Boolean(item) && typeof item.name === 'string' && typeof item.value === 'string') : [];
 
   return (
-    <div data-workflow-overlay data-testid="workflow-node-prompt-bar" data-language={language} className="inline-prompt-bar" style={{ width: 720 }} onPointerDown={event => event.stopPropagation()} onWheel={event => event.stopPropagation()}>
+    <div data-workflow-overlay data-testid="workflow-node-prompt-bar" data-language={language} className="inline-prompt-bar workflow-node-prompt" style={{ width: 720 }} onPointerDown={event => event.stopPropagation()} onWheel={event => event.stopPropagation()}>
+      {prompts.length > 0 && <button type="button" className="workflow-node-prompt__library-button" aria-label="提示词库" title="提示词库" onClick={() => setLibraryOpen(open => !open)}><BookOpen size={15} /></button>}
+      {libraryOpen && <div className="workflow-node-prompt__library" role="menu" aria-label="提示词库">{prompts.map((item, index) => <button type="button" role="menuitem" key={`${item.name}-${index}`} onClick={() => { onChange({ prompt: item.value, richTextDocument: undefined, mentionedNodeIds: [] }); setLibraryOpen(false); }}><strong>{item.name}</strong><span>{item.value}</span></button>)}</div>}
       <PromptBar
         t={t}
         theme={theme}
