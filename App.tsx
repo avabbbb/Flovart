@@ -21,6 +21,7 @@ import { shouldRenderMediaInKonva } from './utils/canvasKonvaMediaEligibility';
 const CanvasSettings = React.lazy(() => import('./components/CanvasSettings').then(m => ({ default: m.CanvasSettings })));
 const OnboardingWizard = React.lazy(() => import('./components/OnboardingWizard').then(m => ({ default: m.OnboardingWizard })));
 const RightPanel = React.lazy(() => import('./components/RightPanel').then(m => ({ default: m.RightPanel })));
+const WorkflowWorkspace = React.lazy(() => import('./components/workflow/WorkflowWorkspace').then(m => ({ default: m.WorkflowWorkspace })));
 const AssetAddModal = React.lazy(() => import('./components/AssetAddModal').then(m => ({ default: m.AssetAddModal })));
 const ABCompareOverlay = React.lazy(() => import('./components/ABCompareOverlay').then(m => ({ default: m.ABCompareOverlay })));
 import { loadAssetLibrary, addAsset, removeAsset, renameAsset, loadAssetLibraryAsync, saveAssetLibraryAsync } from './utils/assetStorage';
@@ -49,12 +50,19 @@ import { useToast } from './hooks/useToast';
 import ToastStack from './components/Toast';
 import { AppShell } from './components/AppShell';
 import { useWorkspaceStore } from './stores/useWorkspaceStore';
+import { useWorkflowStore } from './components/workflow/store';
 import { useRuntimeStore } from './stores/useRuntimeStore';
 import type { CanvasElement, ElementGenerationState } from './types';
 import type { VideoAspectRatio } from './services/aiGateway';
 import { getFlovartRuntimeApi, getRuntimeErrorMessage } from './services/flovartRuntime';
 import { executeFlovartCommand } from './tools/flovart/core.js';
 import { syncCanvasElementsIntoRuntime } from './services/projectRuntimeBridge';
+import { getGenerationCapability, type GenerationMode } from './services/generationCapabilities';
+import { cancelWorkflowGeneration, runWorkflowGeneration } from './services/workflowGeneration';
+import { workflowMediaStorage } from './components/workflow/storage';
+import { dispatchWorkflowCommand, setWorkflowNodeRunner } from './services/workflowDispatcher';
+import { runWorkflowOnlineAgent } from './services/workflowOnlineAgent';
+import type { WorkflowOnlineTurnInput } from './components/workflow/WorkflowAgentPanel';
 import {
     buildAttachmentIgnitionReferences,
     buildElementIgnitionReferences,
@@ -507,6 +515,8 @@ const App: React.FC = () => {
     // 鈹€鈹€ Zustand store: shell-level state 鈹€鈹€
     const language = useWorkspaceStore(s => s.language);
     const setLanguage = useWorkspaceStore(s => s.setLanguage);
+    const activeView = useWorkspaceStore(s => s.activeView);
+    const setActiveView = useWorkspaceStore(s => s.setActiveView);
     const themeMode = useWorkspaceStore(s => s.themeMode);
     const setThemeMode = useWorkspaceStore(s => s.setThemeMode);
     const [systemTheme, setSystemTheme] = useState<'light' | 'dark'>(() => {
@@ -1035,6 +1045,71 @@ const App: React.FC = () => {
         setIsSettingsPanelOpen, setGenerationHistory, setInpaintState, setInpaintPrompt,
         commitAction, getPreferredApiKey,
     });
+
+    const resolveWorkflowGenerationCapability = useCallback((mode: GenerationMode, modelId?: string) => {
+        const fallbackModel = mode === 'text'
+            ? modelPreference.textModel
+            : mode === 'video' ? modelPreference.videoModel : modelPreference.imageModel;
+        return getGenerationCapability(userApiKeys, mode, modelId || fallbackModel);
+    }, [modelPreference.imageModel, modelPreference.textModel, modelPreference.videoModel, userApiKeys]);
+
+    const workflowSharedMedia = useMemo(() => {
+        const mediaType = (mimeType: string) => mimeType.startsWith('image/')
+            ? 'image' as const
+            : mimeType.startsWith('video/') ? 'video' as const : null;
+        return [
+            ...Object.values(assetLibrary).flat().flatMap(item => {
+                const type = mediaType(item.mimeType);
+                return type ? [{ id: `asset:${item.id}`, name: item.name || '我的素材', href: item.dataUrl, mimeType: item.mimeType, type }] : [];
+            }),
+            ...generationHistory.flatMap(item => {
+                const type = mediaType(item.mimeType);
+                return type ? [{ id: `history:${item.id}`, name: item.name || item.prompt || '生成历史', href: item.dataUrl, mimeType: item.mimeType, type }] : [];
+            }),
+        ];
+    }, [assetLibrary, generationHistory]);
+
+    const handleRunWorkflowNode = useCallback(async (projectId: string, nodeId: string) => {
+        const project = useWorkflowStore.getState().projects.find(item => item.id === projectId);
+        if (!project) return;
+        await runWorkflowGeneration(project, nodeId, {
+            userApiKeys,
+            modelPreference,
+            saveHistory: saveGenerationToHistory,
+            getProject: () => useWorkflowStore.getState().projects.find(item => item.id === projectId) || null,
+            onProjectChange: nextProject => {
+                useWorkflowStore.getState().updateProject(projectId, {
+                    nodes: nextProject.nodes,
+                    connections: nextProject.connections,
+                });
+            },
+        });
+    }, [modelPreference, saveGenerationToHistory, userApiKeys]);
+
+    const handleSaveWorkflowMedia = useCallback(async (projectId: string, nodeId: string) => {
+        const node = useWorkflowStore.getState().projects.find(item => item.id === projectId)?.nodes.find(item => item.id === nodeId);
+        if (!node || node.type !== 'image') return;
+        let dataUrl = node.metadata.href || '';
+        if (node.metadata.storageKey) {
+            const blob = await workflowMediaStorage.get(node.metadata.storageKey);
+            if (!blob) return;
+            dataUrl = (await fileToDataUrl(new File([blob], node.metadata.name || 'workflow-image', { type: node.metadata.mimeType || blob.type }))).dataUrl;
+        }
+        if (!dataUrl) return;
+        setAddAssetModal({ open: true, dataUrl, mimeType: node.metadata.mimeType || 'image/png', width: node.metadata.naturalWidth || node.width, height: node.metadata.naturalHeight || node.height });
+    }, []);
+
+    const handleWorkflowOnlineAgentTurn = useCallback((input: WorkflowOnlineTurnInput) => runWorkflowOnlineAgent(input, {
+        userApiKeys,
+        modelPreference,
+    }), [modelPreference, userApiKeys]);
+
+    useEffect(() => {
+        setWorkflowNodeRunner(handleRunWorkflowNode, (projectId, nodeId) => {
+            if (!cancelWorkflowGeneration(projectId, nodeId)) throw new Error('该节点当前没有运行中的生成任务。');
+        });
+        return () => setWorkflowNodeRunner(undefined);
+    }, [handleRunWorkflowNode]);
 
     const getInlineApiKeyForElement = useCallback((element: CanvasElement) => {
         const model = element.generationState?.modelId || (element.type === 'video' ? modelPreference.videoModel : modelPreference.imageModel);
@@ -2827,6 +2902,9 @@ const App: React.FC = () => {
         };
 
         const api = {
+            workflow: {
+                dispatch: dispatchWorkflowCommand,
+            },
             status: () => ({
                 ok: true,
                 runtime: 'flovart-browser',
@@ -3335,6 +3413,37 @@ const App: React.FC = () => {
         return dimmed;
     }, [elements, isNodePromptActive, selectedNodePromptElement]);
 
+    if (activeView === 'workflow') {
+        return (
+            <AppShell
+                themeBackground={themePalette.appBackground}
+                topBar={null}
+                main={
+                    <Suspense fallback={<div className="h-full w-full flex items-center justify-center opacity-40 text-sm">正在加载 Workflow...</div>}>
+                        <WorkflowWorkspace
+                            theme={resolvedTheme}
+                            language={language}
+                            onSwitchToCanvas={() => setActiveView('canvas')}
+                            onToggleTheme={() => setThemeMode(resolvedTheme === 'dark' ? 'light' : 'dark')}
+                            onToggleLanguage={() => setLanguage(language === 'zho' ? 'en' : 'zho')}
+                            resolveGenerationCapability={resolveWorkflowGenerationCapability}
+                            sharedMedia={workflowSharedMedia}
+                            onRunNode={handleRunWorkflowNode}
+                            onStopNode={(projectId, nodeId) => { cancelWorkflowGeneration(projectId, nodeId); }}
+                            onSaveWorkflowMedia={handleSaveWorkflowMedia}
+                            onOnlineAgentTurn={handleWorkflowOnlineAgentTurn}
+                            t={t}
+                            userApiKeys={userApiKeys}
+                            modelPreference={modelPreference}
+                            dynamicModelOptions={dynamicModelOptions}
+                            onOpenSettings={() => setIsSettingsPanelOpen(true)}
+                        />
+                    </Suspense>
+                }
+            />
+        );
+    }
+
     return (
         <AppShell
             themeBackground={themePalette.appBackground}
@@ -3812,54 +3921,6 @@ const App: React.FC = () => {
                                             strokeDasharray: el.strokeDashArray ? el.strokeDashArray.join(' ') : 'none'
                         })}
 
-                        {/* Reference visualisation lines */}
-                        {(() => {
-                            type RefEdge = { fromEl: CanvasElement; toEl: CanvasElement; key: string };
-                            const edges: RefEdge[] = [];
-                            const elementMap = new Map(elements.map(el => [el.id, el]));
-                            for (const el of elements) {
-                                if (el.type === 'group') continue;
-                                const refs = (el as CanvasElement).generationState?.promptPayload?.resolvedReferences;
-                                if (!refs?.length) continue;
-                                for (const ref of refs) {
-                                    const targetEl = elementMap.get(ref.targetElementId);
-                                    if (!targetEl || targetEl.type === 'group') continue;
-                                    const fromBounds = getElementBounds(el, elements);
-                                    const toBounds = getElementBounds(targetEl, elements);
-                                    edges.push({
-                                        fromEl: el as CanvasElement,
-                                        toEl: targetEl as CanvasElement,
-                                        key: `${el.id}-ref-${targetEl.id}`,
-                                    });
-                                }
-                            }
-                            if (!edges.length) return null;
-                            return (
-                                <g className="reference-lines-layer" pointerEvents="none">
-                                    {edges.map(({ fromEl, toEl, key }) => {
-                                        const fromBounds = getElementBounds(fromEl, elements);
-                                        const toBounds = getElementBounds(toEl, elements);
-                                        const x1 = fromBounds.x + fromBounds.width / 2;
-                                        const y1 = fromBounds.y + fromBounds.height / 2;
-                                        const x2 = toBounds.x + toBounds.width / 2;
-                                        const y2 = toBounds.y + toBounds.height / 2;
-                                        const isHighlighted = hoveredElementId === fromEl.id
-                                            || hoveredElementId === toEl.id
-                                            || (relationFocusIds.has(fromEl.id) && relationFocusIds.has(toEl.id));
-                                        return (
-                                            <line
-                                                key={key}
-                                                x1={x1} y1={y1} x2={x2} y2={y2}
-                                                stroke={isHighlighted ? 'rgb(14 165 233)' : 'rgba(148 163 184 / 0.6)'}
-                                                strokeWidth={isHighlighted ? 2.75 / zoom : 1.5 / zoom}
-                                                strokeDasharray={`${6/zoom} ${4/zoom}`}
-                                                style={{ transition: 'stroke 160ms ease, stroke-width 160ms ease' }}
-                                            />
-                                        );
-                                    })}
-                                </g>
-                            );
-                        })()}
                                         {selectionComponent && React.cloneElement(selectionComponent, { transform: `translate(${-el.x}, ${-el.y})` })}
                                         {relationFocusComponent && React.cloneElement(relationFocusComponent, { transform: `translate(${-el.x}, ${-el.y})` })}
                                     </g>
@@ -4565,6 +4626,21 @@ const App: React.FC = () => {
                                         <path d="M 9.2 2.4 A 4.6 4.6 0 1 0 9.2 9.6 A 3.6 3.6 0 0 1 9.2 2.4 Z" />
                                     </svg>
                                 )}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setActiveView('workflow')}
+                                className="isl-tab inline-flex items-center gap-1"
+                                aria-label={language === 'zho' ? '切换到工作流' : 'Switch to Workflow'}
+                                title={language === 'zho' ? '切换到工作流' : 'Switch to Workflow'}
+                            >
+                                <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round">
+                                    <circle cx="2" cy="6" r="1.25" />
+                                    <circle cx="10" cy="3" r="1.25" />
+                                    <circle cx="10" cy="9" r="1.25" />
+                                    <path d="M3.25 6h2.1c1.8 0 1.7-3 3.4-3M5.35 6c1.8 0 1.7 3 3.4 3" />
+                                </svg>
+                                {language === 'zho' ? '工作流' : 'Workflow'}
                             </button>
                             <button
                                 type="button"
