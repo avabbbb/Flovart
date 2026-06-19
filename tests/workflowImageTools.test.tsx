@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useState } from 'react';
 import { createWorkflowNode } from '../components/workflow/constants';
@@ -28,6 +28,10 @@ function imageProject(filters: WorkflowProject['nodes'][number]['metadata']['fil
     id: 'image-project', title: '图片工具', nodes: [{ ...image, metadata: { ...image.metadata, filters } }], connections: [], selectedNodeIds: ['image'], viewport: { x: 0, y: 0, k: 1 }, backgroundMode: 'dots' as const,
     agentSessions: [], activeAgentSessionId: null, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
   } satisfies WorkflowProject;
+}
+
+function imageNode(id: string, x: number) {
+  return { ...image, id, position: { x, y: 0 }, metadata: { ...image.metadata, name: id } };
 }
 
 describe('workflow image tools UI', () => {
@@ -108,5 +112,56 @@ describe('workflow image tools UI', () => {
     finish({ status: 'stale', project: projectB });
     expect(screen.queryByText('背景移除完成')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: '撤销' })).toBeDisabled();
+  });
+
+  it('keeps one image-tool transaction so pending node A blocks node B and records only A origin', async () => {
+    let finish!: (value: imageToolService.WorkflowImageToolOutcome) => void;
+    let runtime!: imageToolService.WorkflowImageToolRuntime;
+    vi.spyOn(imageToolService, 'runWorkflowImageAgent').mockImplementation((_projectId, _nodeId, _action, nextRuntime) => {
+      runtime = nextRuntime;
+      return new Promise(resolve => { finish = resolve; });
+    });
+    const project = { ...imageProject(), nodes: [imageNode('image-a', 0), imageNode('image-b', 440)], selectedNodeIds: ['image-a'] };
+    render(<ImageHarness initial={project} />);
+
+    fireEvent.click(screen.getByRole('button', { name: '移除背景' }));
+    fireEvent.pointerDown(document.querySelector('[data-workflow-node-id="image-b"]')!, { button: 0, pointerId: 2, clientX: 520, clientY: 120 });
+    fireEvent.pointerUp(window, { pointerId: 2, clientX: 520, clientY: 120 });
+    const filterButton = await screen.findByRole('button', { name: '图片滤镜' });
+    expect(filterButton).toBeDisabled();
+    fireEvent.click(filterButton);
+    expect(screen.queryByText('图片调色')).not.toBeInTheDocument();
+    expect(imageToolService.runWorkflowImageAgent).toHaveBeenCalledTimes(1);
+    expect(imageToolService.runWorkflowImageAgent).toHaveBeenCalledWith(project.id, 'image-a', 'remove-background', expect.any(Object));
+
+    const completed = { ...project, nodes: project.nodes.map(node => node.id === 'image-a' ? { ...node, metadata: { ...node.metadata, href: 'data:image/png;base64,BB==' } } : node) };
+    runtime.onProjectChange(completed);
+    finish({ status: 'committed', project: completed });
+    await waitFor(() => expect(screen.getByText('背景移除完成')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: '撤销' }));
+    expect(document.querySelector('[data-workflow-node-id="image-a"] img')).toHaveAttribute('src', image.metadata.href);
+  });
+
+  it('does not let an old transaction finally release a newer project transaction', async () => {
+    const pending = new Map<string, (value: imageToolService.WorkflowImageToolOutcome) => void>();
+    vi.spyOn(imageToolService, 'runWorkflowImageAgent').mockImplementation(projectId => new Promise(resolve => { pending.set(projectId, resolve); }));
+    const projectA = { ...imageProject(), id: 'project-a', nodes: [imageNode('image-a', 0)], selectedNodeIds: ['image-a'] };
+    const projectB = { ...imageProject(), id: 'project-b', nodes: [imageNode('image-b', 0)], selectedNodeIds: ['image-b'] };
+    const view = render(<WorkflowGenerationCapabilitiesProvider><InfiniteWorkflow project={projectA} updateProject={vi.fn()} onRunNode={vi.fn()} /></WorkflowGenerationCapabilitiesProvider>);
+    fireEvent.click(screen.getByRole('button', { name: '移除背景' }));
+
+    view.rerender(<WorkflowGenerationCapabilitiesProvider><InfiniteWorkflow project={projectB} updateProject={vi.fn()} onRunNode={vi.fn()} /></WorkflowGenerationCapabilitiesProvider>);
+    fireEvent.click(screen.getByRole('button', { name: '移除背景' }));
+    expect(imageToolService.runWorkflowImageAgent).toHaveBeenCalledTimes(2);
+    await act(async () => {
+      pending.get('project-a')?.({ status: 'stale', project: projectA });
+      await Promise.resolve();
+    });
+
+    const filterButton = screen.getByRole('button', { name: '图片滤镜' });
+    expect(filterButton).toBeDisabled();
+    fireEvent.click(filterButton);
+    expect(screen.queryByText('图片调色')).not.toBeInTheDocument();
+    await act(async () => { pending.get('project-b')?.({ status: 'stale', project: projectB }); });
   });
 });

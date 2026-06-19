@@ -33,6 +33,7 @@ import type { WorkflowConnection, WorkflowNode as WorkflowNodeData, WorkflowNode
 import { runWorkflowImageAgent, runWorkflowImageEdit, runWorkflowImageSplit, type WorkflowImageToolOutcome, type WorkflowImageToolRuntime } from '../../services/workflowImageTools';
 
 type Frame = Pick<WorkflowProject, 'nodes' | 'connections'>;
+type ImageToolTransaction = { id: string; projectId: string; nodeId: string; frame: Frame };
 type SelectionBox = { start: WorkflowPoint; current: WorkflowPoint; additive: boolean; initialIds: string[] };
 type Interaction = { pointerId: number } & (
   | { type: 'node'; start: WorkflowPoint; positions: Map<string, WorkflowPoint>; frame: Frame; moved: boolean }
@@ -113,7 +114,8 @@ export function InfiniteWorkflow({
   const [imageTool, setImageTool] = useState<WorkflowImageToolState | null>(null);
   const [imageToolBusy, setImageToolBusy] = useState(false);
   const [imageToolError, setImageToolError] = useState<string | null>(null);
-  const imageToolOriginRef = useRef<{ projectId: string; frame: Frame } | null>(null);
+  const imageToolBusyRef = useRef(false);
+  const imageToolTransactionRef = useRef<ImageToolTransaction | null>(null);
 
   projectRef.current = project;
   viewportRef.current = project.viewport;
@@ -170,7 +172,8 @@ export function InfiniteWorkflow({
     setImageTool(null);
     setImageToolBusy(false);
     setImageToolError(null);
-    imageToolOriginRef.current = null;
+    imageToolBusyRef.current = false;
+    imageToolTransactionRef.current = null;
     clipboardRef.current = [];
     setClipboardVersion(version => version + 1);
     replaceSequenceRef.current.clear();
@@ -228,24 +231,44 @@ export function InfiniteWorkflow({
     },
   }), [modelPreference, patchProject, userApiKeys]);
 
+  const ownsImageToolTransaction = useCallback((transaction: ImageToolTransaction) => {
+    const current = imageToolTransactionRef.current;
+    return current?.id === transaction.id && current.projectId === transaction.projectId && current.nodeId === transaction.nodeId;
+  }, []);
+
+  const releaseImageToolTransaction = useCallback((transaction: ImageToolTransaction) => {
+    if (!ownsImageToolTransaction(transaction)) return false;
+    imageToolTransactionRef.current = null;
+    imageToolBusyRef.current = false;
+    setImageToolBusy(false);
+    return true;
+  }, [ownsImageToolTransaction]);
+
   const openImageTool = useCallback((kind: WorkflowImageToolState['kind'], nodeId: string) => {
+    if (imageToolTransactionRef.current || imageTool || imageToolBusyRef.current) {
+      setNotice('请先完成或关闭当前图片工具');
+      return;
+    }
     if (projectRef.current.nodes.find(node => node.id === nodeId)?.metadata.status === 'loading') return;
     setImageToolError(null);
-    imageToolOriginRef.current = { projectId: projectRef.current.id, frame: currentFrame() };
+    const transaction = { id: nanoid(), projectId: projectRef.current.id, nodeId, frame: currentFrame() };
+    imageToolTransactionRef.current = transaction;
     if (kind === 'remove-background') {
+      imageToolBusyRef.current = true;
       setImageToolBusy(true);
-      void runWorkflowImageAgent(projectRef.current.id, nodeId, kind, imageToolRuntime).then(result => {
-        const origin = imageToolOriginRef.current;
-        if (result.status === 'committed' && origin?.projectId === result.project.id && projectRef.current.id === result.project.id) {
-          pushHistory(origin.frame);
+      void runWorkflowImageAgent(transaction.projectId, nodeId, kind, imageToolRuntime).then(result => {
+        if (!ownsImageToolTransaction(transaction)) return;
+        if (result.status === 'committed' && result.project.id === transaction.projectId && projectRef.current.id === transaction.projectId && result.project.nodes.some(node => node.id === transaction.nodeId)) {
+          pushHistory(transaction.frame);
           setNotice('背景移除完成');
         }
-        imageToolOriginRef.current = null;
-      }).catch(error => setNotice(error instanceof Error ? error.message : '背景移除失败')).finally(() => setImageToolBusy(false));
+      }).catch(error => {
+        if (ownsImageToolTransaction(transaction)) setNotice(error instanceof Error ? error.message : '背景移除失败');
+      }).finally(() => { releaseImageToolTransaction(transaction); });
       return;
     }
     setImageTool({ kind, nodeId });
-  }, [currentFrame, imageToolRuntime, pushHistory]);
+  }, [currentFrame, imageTool, imageToolRuntime, ownsImageToolTransaction, pushHistory, releaseImageToolTransaction]);
 
   const builtInImageTools = useMemo<WorkflowImageToolHandlers>(() => ({
     crop: id => openImageTool('crop', id), filter: id => openImageTool('filter', id), upscale: id => openImageTool('upscale', id),
@@ -257,82 +280,90 @@ export function InfiniteWorkflow({
 
   const previewImageFilters = useCallback((filters: NonNullable<WorkflowNodeData['metadata']['filters']>) => {
     if (!imageTool || imageTool.kind !== 'filter') return;
-    const origin = imageToolOriginRef.current;
-    if (!origin || origin.projectId !== projectRef.current.id) return;
+    const transaction = imageToolTransactionRef.current;
+    if (!transaction || transaction.projectId !== projectRef.current.id || transaction.nodeId !== imageTool.nodeId) return;
     patchProject({ nodes: projectRef.current.nodes.map(node => node.id === imageTool.nodeId ? { ...node, metadata: { ...node.metadata, filters } } : node) });
   }, [imageTool, patchProject]);
 
   const closeImageTool = useCallback(() => {
-    const origin = imageToolOriginRef.current;
-    if (imageTool?.kind === 'filter' && origin?.projectId === projectRef.current.id) {
-      const original = origin.frame.nodes.find(node => node.id === imageTool.nodeId);
+    const transaction = imageToolTransactionRef.current;
+    if (!imageTool || !transaction || imageToolBusyRef.current || transaction.projectId !== projectRef.current.id || transaction.nodeId !== imageTool.nodeId) return;
+    if (imageTool.kind === 'filter') {
+      const original = transaction.frame.nodes.find(node => node.id === imageTool.nodeId);
       if (original && projectRef.current.nodes.some(node => node.id === imageTool.nodeId)) {
         patchProject({ nodes: projectRef.current.nodes.map(node => node.id === imageTool.nodeId ? { ...node, metadata: { ...node.metadata, filters: original.metadata.filters } } : node) });
       }
     }
-    imageToolOriginRef.current = null;
     setImageTool(null);
     setImageToolError(null);
-  }, [imageTool, patchProject]);
+    releaseImageToolTransaction(transaction);
+  }, [imageTool, patchProject, releaseImageToolTransaction]);
 
   const confirmImageTool = useCallback(async (confirmation: WorkflowImageToolConfirmation) => {
-    if (!imageTool) return;
-    const expectedProjectId = projectRef.current.id;
+    const transaction = imageToolTransactionRef.current;
+    if (!imageTool || !transaction || imageToolBusyRef.current || transaction.projectId !== projectRef.current.id || transaction.nodeId !== imageTool.nodeId) return;
     const node = projectRef.current.nodes.find(item => item.id === imageTool.nodeId);
     if (!node) return;
+    imageToolBusyRef.current = true;
     setImageToolBusy(true);
     setImageToolError(null);
     try {
       if (confirmation.kind === 'filter') {
-        const origin = imageToolOriginRef.current;
-        if (!origin || origin.projectId !== projectRef.current.id || !projectRef.current.nodes.some(item => item.id === node.id)) return;
+        if (!ownsImageToolTransaction(transaction) || !projectRef.current.nodes.some(item => item.id === node.id)) return;
         patchProject({ nodes: projectRef.current.nodes.map(item => item.id === node.id ? { ...item, metadata: { ...item.metadata, filters: confirmation.filters } } : item) });
-        pushHistory(origin.frame);
-        imageToolOriginRef.current = null;
+        pushHistory(transaction.frame);
         setImageTool(null);
+        releaseImageToolTransaction(transaction);
         return;
       }
       if (confirmation.kind === 'crop') {
         const blob = await loadWorkflowMediaBlob(node.metadata.storageKey, node.metadata.href);
         const cropped = await cropWorkflowImage(blob, confirmation.crop);
         const record = await ingestWorkflowMedia(new File([cropped], `crop-${node.metadata.name || 'image.png'}`, { type: cropped.type || node.metadata.mimeType || 'image/png' }));
-        if (projectRef.current.id !== expectedProjectId || !projectRef.current.nodes.some(item => item.id === node.id)) {
+        if (!ownsImageToolTransaction(transaction) || projectRef.current.id !== transaction.projectId || !projectRef.current.nodes.some(item => item.id === node.id)) {
           await discardWorkflowMediaRecord(record.storageKey);
-          imageToolOriginRef.current = null;
-          setImageTool(null);
-          setImageToolError(null);
+          if (ownsImageToolTransaction(transaction)) {
+            setImageTool(null);
+            setImageToolError(null);
+            releaseImageToolTransaction(transaction);
+          }
           return;
         }
         const width = record.naturalWidth || node.width;
         const height = record.naturalHeight || node.height;
         const center = { x: node.position.x + node.width / 2, y: node.position.y + node.height / 2 };
         const size = fitWorkflowMediaSize('image', width, height);
-        commitFrame(projectRef.current.nodes.map(item => item.id === node.id ? { ...item, position: { x: center.x - size.width / 2, y: center.y - size.height / 2 }, width: size.width, height: size.height, metadata: { ...item.metadata, ...record, href: undefined } } : item), projectRef.current.connections);
+        pushHistory(transaction.frame);
+        patchProject({ nodes: projectRef.current.nodes.map(item => item.id === node.id ? { ...item, position: { x: center.x - size.width / 2, y: center.y - size.height / 2 }, width: size.width, height: size.height, metadata: { ...item.metadata, ...record, href: undefined } } : item) });
         releaseWorkflowMediaRecord(record.storageKey);
         setImageTool(null);
+        releaseImageToolTransaction(transaction);
         return;
       }
       let result: WorkflowImageToolOutcome | null = null;
-      if (confirmation.kind === 'upscale') result = await runWorkflowImageAgent(expectedProjectId, node.id, 'upscale', imageToolRuntime, { targetLongEdge: confirmation.targetLongEdge, algorithm: confirmation.algorithm });
-      if (confirmation.kind === 'split') result = await runWorkflowImageSplit(expectedProjectId, node.id, imageToolRuntime);
-      if (confirmation.kind === 'outpaint') result = await runWorkflowImageEdit(expectedProjectId, node.id, `向${{ left: '左侧', right: '右侧', top: '上方', bottom: '下方', all: '四周' }[confirmation.direction]}扩展画面。${confirmation.prompt}`, undefined, imageToolRuntime);
-      if (confirmation.kind === 'mask') result = await runWorkflowImageEdit(expectedProjectId, node.id, confirmation.prompt, { href: confirmation.maskDataUrl, mimeType: 'image/png' }, imageToolRuntime);
-      const origin = imageToolOriginRef.current;
-      if (result?.status === 'committed' && origin?.projectId === result.project.id && projectRef.current.id === result.project.id) {
-        pushHistory(origin.frame);
-        imageToolOriginRef.current = null;
+      if (confirmation.kind === 'upscale') result = await runWorkflowImageAgent(transaction.projectId, node.id, 'upscale', imageToolRuntime, { targetLongEdge: confirmation.targetLongEdge, algorithm: confirmation.algorithm });
+      if (confirmation.kind === 'split') result = await runWorkflowImageSplit(transaction.projectId, node.id, imageToolRuntime);
+      if (confirmation.kind === 'outpaint') result = await runWorkflowImageEdit(transaction.projectId, node.id, `向${{ left: '左侧', right: '右侧', top: '上方', bottom: '下方', all: '四周' }[confirmation.direction]}扩展画面。${confirmation.prompt}`, undefined, imageToolRuntime);
+      if (confirmation.kind === 'mask') result = await runWorkflowImageEdit(transaction.projectId, node.id, confirmation.prompt, { href: confirmation.maskDataUrl, mimeType: 'image/png' }, imageToolRuntime);
+      if (!ownsImageToolTransaction(transaction)) return;
+      if (result?.status === 'committed' && result.project.id === transaction.projectId && projectRef.current.id === transaction.projectId && result.project.nodes.some(item => item.id === transaction.nodeId)) {
+        pushHistory(transaction.frame);
         setImageTool(null);
+        releaseImageToolTransaction(transaction);
       } else if (result?.status === 'stale') {
-        imageToolOriginRef.current = null;
         setImageTool(null);
         setImageToolError(null);
+        releaseImageToolTransaction(transaction);
       }
     } catch (error) {
-      setImageToolError(error instanceof Error ? error.message : '图片处理失败');
+      if (ownsImageToolTransaction(transaction)) setImageToolError(error instanceof Error ? error.message : '图片处理失败');
     } finally {
-      setImageToolBusy(false);
+      if (ownsImageToolTransaction(transaction)) {
+        imageToolBusyRef.current = false;
+        setImageToolBusy(false);
+      }
     }
-  }, [commitFrame, imageTool, imageToolRuntime, pushHistory]);
+  }, [imageTool, imageToolRuntime, ownsImageToolTransaction, patchProject, pushHistory, releaseImageToolTransaction]);
 
   const applyOps = useCallback((ops: WorkflowOp[]) => {
     const result = applyWorkflowOps(currentSnapshot(), ops);
@@ -1022,6 +1053,7 @@ export function InfiniteWorkflow({
             onPromptFocus={() => setPromptFocusSignal(value => value + 1)}
             onSaveMedia={onSaveWorkflowMedia}
             imageTools={{ ...builtInImageTools, ...imageTools }}
+            imageToolBusy={Boolean(imageTool || imageToolBusy || imageToolTransactionRef.current)}
             onReplaceMedia={(id, file) => { const node = projectRef.current.nodes.find(item => item.id === id); if (node) void replaceMedia(node, file); }}
             onToggleFreeResize={id => { const node = projectRef.current.nodes.find(item => item.id === id); if (node) applyOps([{ type: 'update_node', id, patch: { freeResize: !node.freeResize } }]); }}
             onAlign={alignment => {
