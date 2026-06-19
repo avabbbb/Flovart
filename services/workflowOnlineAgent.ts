@@ -40,6 +40,14 @@ const SYSTEM_PROMPT = `你是 Flovart 网站内置 Workflow Agent。你会收到
 只能返回一个 JSON 对象，不要输出 Markdown。格式：
 {"message":"说明你的意图，不要声称尚未执行的操作已经成功","commands":[{"command":"workflow.node.create","args":{}}]}
 commands 最多 8 条。只可使用下列命令：workflow.project.list、workflow.inspect、workflow.node.create、workflow.node.create-connected、workflow.node.update、workflow.node.delete、workflow.node.move、workflow.node.resize、workflow.node.run、workflow.node.stop、workflow.connect、workflow.disconnect、workflow.select、workflow.viewport.set。
+参数契约：
+- workflow.node.create: {type,title?,x?,y?,width?,height?,metadata?}
+- workflow.node.create-connected: {fromNodeId,type,title?,x?,y?,width?,height?,metadata?}
+- workflow.node.update: {nodeId,patch}，prompt/content/config 放在 patch.metadata 内
+- workflow.node.delete/run/stop: {nodeId}
+- workflow.node.move: {nodeId,x,y}；workflow.node.resize: {nodeId,width,height}
+- workflow.connect: {fromNodeId,toNodeId}；workflow.disconnect: {connectionId}
+- workflow.select: {ids}；workflow.viewport.set: {x,y,k}
 节点类型仅限 text、image、video、audio、config。涉及已有节点时必须使用 Workflow JSON 中真实 id；信息不足时 commands 返回空数组并在 message 中说明。不要在参数中放 API Key、data URL、blob URL、storageKey 或本地路径。写操作会由用户确认并通过 Flovart dispatcher 执行。`;
 
 export async function runWorkflowOnlineAgent(input: WorkflowOnlineTurnInput, runtime: WorkflowOnlineAgentRuntime) {
