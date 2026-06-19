@@ -1,3 +1,5 @@
+import type { ImageFilters } from '../../types';
+
 export type WorkflowNodeType = 'image' | 'text' | 'video' | 'audio' | 'config';
 export type WorkflowNodeStatus = 'idle' | 'loading' | 'success' | 'error';
 export type WorkflowGenerationMode = 'text' | 'image' | 'video' | 'audio';
@@ -58,6 +60,7 @@ export interface WorkflowNodeMetadata {
   config?: WorkflowGenerationConfig;
   generationRequestId?: string;
   generationHistoryId?: string;
+  filters?: Partial<ImageFilters>;
 }
 
 export interface WorkflowNode {

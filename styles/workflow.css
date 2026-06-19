@@ -38,6 +38,17 @@
 .workflow-node__header span:nth-child(2) { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .workflow-node__body { position: relative; flex: 1; min-height: 0; overflow: hidden; border-radius: 0 0 9px 9px; }
 .workflow-node__body img,.workflow-node__body video { display: block; width: 100%; height: 100%; object-fit: contain; background: #101318; }
+.workflow-image-tool__grid { display:grid;grid-template-columns:minmax(280px,1fr) 300px;gap:24px; }
+.workflow-image-tool__preview,.workflow-image-tool__mask { position:relative;display:grid;place-items:center;min-height:360px;overflow:hidden;border:1px solid var(--wf-border);border-radius:10px;background:#101318; }
+.workflow-image-tool__preview img,.workflow-image-tool__mask img { display:block;max-width:100%;max-height:520px;object-fit:contain; }
+.workflow-image-tool__crop { position:absolute;border:2px solid #fff;box-shadow:0 0 0 9999px rgba(0,0,0,.55);pointer-events:none; }
+.workflow-image-tool__controls { display:flex;flex-direction:column;gap:16px;min-width:0; }
+.workflow-image-tool__controls label { display:flex;flex-direction:column;gap:7px;color:var(--wf-text);font-size:13px;font-weight:600; }
+.workflow-image-tool__error { padding:8px 10px;border-radius:7px;color:#ef4444;background:rgba(239,68,68,.1);font-size:12px; }
+.workflow-image-tool__mask img { width:100%;height:100%;object-fit:contain; }
+.workflow-image-tool__mask canvas { position:absolute;inset:0;width:100%;height:100%;cursor:crosshair;touch-action:none;opacity:.55; }
+.workflow-image-tool__simple { display:flex;flex-direction:column;gap:14px; }
+@media (max-width:760px) { .workflow-image-tool__grid { grid-template-columns:1fr; } .workflow-image-tool__preview,.workflow-image-tool__mask { min-height:260px; } }
 .workflow-node__body textarea { box-sizing: border-box; width: 100%; height: 100%; resize: none; border: 0; outline: 0; padding: 12px; color: inherit; background: transparent; font: inherit; user-select: text; }
 .workflow-node__empty { display: grid; place-content: center; justify-items: center; gap: 8px; height: 100%; color: var(--wf-muted); font-size: 12px; }
 .workflow-config { display: flex; flex-direction: column; gap: 7px; height: 100%; box-sizing: border-box; padding: 10px; overflow: auto; user-select: text; }

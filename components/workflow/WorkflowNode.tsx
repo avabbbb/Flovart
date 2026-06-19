@@ -1,6 +1,7 @@
 import { Image as ImageIcon, LoaderCircle, Music2, Settings2, Type, Upload, Video, X } from 'lucide-react';
 import { useRef, type PointerEvent as ReactPointerEvent } from 'react';
 import { WorkflowConfigPanel } from './WorkflowConfigPanel';
+import { buildCssFilter } from '../ImageFilterPanel';
 import { useWorkflowMediaUrl } from './media';
 import type { WorkflowNode as WorkflowNodeData } from './types';
 
@@ -69,7 +70,7 @@ export function WorkflowNode({
       </header>
       <div className="workflow-node__body">
         {node.type === 'image' && (media.url
-          ? <><img src={media.url} alt={node.title} draggable={false} />{mediaActions}</>
+          ? <><img src={media.url} alt={node.title} draggable={false} style={{ filter: buildCssFilter(node.metadata.filters) }} />{mediaActions}</>
           : <div className="workflow-node__empty"><ImageIcon size={26} /><span>{mediaError || '图片节点'}</span>{mediaActions}</div>)}
         {node.type === 'video' && (media.url
           ? <><video src={media.url} poster={node.metadata.poster} controls preload="metadata" playsInline />{mediaActions}</>

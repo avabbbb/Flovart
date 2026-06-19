@@ -35,19 +35,20 @@ export function WorkflowNodeToolbar({ nodes, onCopy, onDelete, onRun, onStop, on
   const node = nodes.length === 1 ? nodes[0] : null;
   const media = node && (node.type === 'image' || node.type === 'video' || node.type === 'audio') ? node : null;
   const mediaUrl = useWorkflowMediaUrl(media?.metadata.storageKey, media?.metadata.href).url;
+  const imageToolBusy = node?.metadata.status === 'loading';
   const actions: Array<ElementToolbarAction | null | false | undefined> = [
     { key: 'copy', label: '复制节点', icon: <Copy size={18} />, onClick: () => onCopy(ids) },
     node && onPromptFocus && node.type !== 'audio' && { key: 'prompt', label: '编辑提示词', icon: <MessageSquareText size={18} />, onClick: () => onPromptFocus(node.id) },
     media && mediaUrl && { key: 'download', label: '下载媒体', icon: <Download size={18} />, href: mediaUrl, download: media.metadata.name || media.id },
     media?.type === 'image' && onSaveMedia && { key: 'save', label: '保存到素材库', icon: <Library size={18} />, onClick: () => onSaveMedia(media.id) },
     media && onReplaceMedia && { key: 'replace', label: '替换媒体', icon: <FilePenLine size={18} />, onClick: () => inputRef.current?.click() },
-    node?.type === 'image' && imageTools?.crop && { key: 'crop', label: '裁剪图片', icon: <Crop size={18} />, onClick: () => imageTools.crop?.(node.id) },
-    node?.type === 'image' && imageTools?.filter && { key: 'filter', label: '图片滤镜', icon: <SlidersHorizontal size={18} />, onClick: () => imageTools.filter?.(node.id) },
-    node?.type === 'image' && imageTools?.upscale && { key: 'upscale', label: '高清放大', icon: <ZoomIn size={18} />, onClick: () => imageTools.upscale?.(node.id) },
-    node?.type === 'image' && imageTools?.removeBackground && { key: 'remove-background', label: '移除背景', icon: <Eraser size={18} />, onClick: () => imageTools.removeBackground?.(node.id) },
-    node?.type === 'image' && imageTools?.outpaint && { key: 'outpaint', label: '扩展画面', icon: <Expand size={18} />, onClick: () => imageTools.outpaint?.(node.id) },
-    node?.type === 'image' && imageTools?.mask && { key: 'mask', label: '编辑蒙版', icon: <ScanLine size={18} />, onClick: () => imageTools.mask?.(node.id) },
-    node?.type === 'image' && imageTools?.splitLayers && { key: 'split', label: '拆分图层', icon: <Layers3 size={18} />, onClick: () => imageTools.splitLayers?.(node.id) },
+    node?.type === 'image' && mediaUrl && imageTools?.crop && { key: 'crop', label: '裁剪图片', icon: <Crop size={18} />, disabled: imageToolBusy, onClick: () => imageTools.crop?.(node.id) },
+    node?.type === 'image' && mediaUrl && imageTools?.filter && { key: 'filter', label: '图片滤镜', icon: <SlidersHorizontal size={18} />, disabled: imageToolBusy, onClick: () => imageTools.filter?.(node.id) },
+    node?.type === 'image' && mediaUrl && imageTools?.upscale && { key: 'upscale', label: '高清放大', icon: <ZoomIn size={18} />, disabled: imageToolBusy, onClick: () => imageTools.upscale?.(node.id) },
+    node?.type === 'image' && mediaUrl && imageTools?.removeBackground && { key: 'remove-background', label: '移除背景', icon: <Eraser size={18} />, disabled: imageToolBusy, onClick: () => imageTools.removeBackground?.(node.id) },
+    node?.type === 'image' && mediaUrl && imageTools?.outpaint && { key: 'outpaint', label: '扩展画面', icon: <Expand size={18} />, disabled: imageToolBusy, onClick: () => imageTools.outpaint?.(node.id) },
+    node?.type === 'image' && mediaUrl && imageTools?.mask && { key: 'mask', label: '编辑蒙版', icon: <ScanLine size={18} />, disabled: imageToolBusy, onClick: () => imageTools.mask?.(node.id) },
+    node?.type === 'image' && mediaUrl && imageTools?.splitLayers && { key: 'split', label: '拆分图层', icon: <Layers3 size={18} />, disabled: imageToolBusy, onClick: () => imageTools.splitLayers?.(node.id) },
     node && (node.type === 'image' || node.type === 'video') && onToggleFreeResize && { key: 'resize', label: '切换自由缩放', icon: <Expand size={18} />, active: Boolean(node.freeResize), onClick: () => onToggleFreeResize(node.id) },
     node && node.type !== 'audio' && node.metadata.status === 'loading' && onStop
       ? { key: 'stop', label: '停止节点', icon: <Square size={17} />, onClick: () => onStop(node.id) }

@@ -101,10 +101,11 @@ describe('workflow node overlays', () => {
 
   it('shows image tools only when real handlers are supplied', () => {
     const imageTools = { crop: vi.fn(), filter: vi.fn(), upscale: vi.fn(), removeBackground: vi.fn(), outpaint: vi.fn(), mask: vi.fn(), splitLayers: vi.fn() };
-    const { rerender } = render(<WorkflowNodeToolbar nodes={[node]} onCopy={vi.fn()} onDelete={vi.fn()} imageTools={imageTools} />);
+    const mediaNode = { ...node, metadata: { ...node.metadata, href: 'data:image/png;base64,AA==' } };
+    const { rerender } = render(<WorkflowNodeToolbar nodes={[mediaNode]} onCopy={vi.fn()} onDelete={vi.fn()} imageTools={imageTools} />);
     ['裁剪图片', '图片滤镜', '高清放大', '移除背景', '扩展画面', '编辑蒙版', '拆分图层'].forEach(name => fireEvent.click(screen.getByRole('button', { name })));
-    expect(Object.values(imageTools).every(handler => handler.mock.calls[0][0] === node.id)).toBe(true);
-    rerender(<WorkflowNodeToolbar nodes={[node]} onCopy={vi.fn()} onDelete={vi.fn()} />);
+    expect(Object.values(imageTools).every(handler => handler.mock.calls[0][0] === mediaNode.id)).toBe(true);
+    rerender(<WorkflowNodeToolbar nodes={[mediaNode]} onCopy={vi.fn()} onDelete={vi.fn()} />);
     expect(screen.queryByRole('button', { name: '裁剪图片' })).not.toBeInTheDocument();
   });
 });

@@ -166,6 +166,64 @@ export async function ingestWorkflowMedia(file: File): Promise<WorkflowMediaReco
   }
 }
 
+export async function workflowBlobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(reader.error || new Error('无法读取图片'));
+    reader.readAsDataURL(blob);
+  });
+}
+
+export async function workflowDataUrlToBlob(dataUrl: string): Promise<Blob> {
+  const response = await fetch(dataUrl);
+  if (!response.ok) throw new Error('无法读取图片结果');
+  return response.blob();
+}
+
+export async function loadWorkflowMediaBlob(storageKey?: string, href?: string): Promise<Blob> {
+  if (storageKey) {
+    const blob = await workflowMediaStorage.get(storageKey);
+    if (!blob) throw new Error('图片文件不存在，请重新选择文件');
+    return blob;
+  }
+  if (!href) throw new Error('图片节点没有可用媒体');
+  const response = await fetch(href);
+  if (!response.ok) throw new Error('无法读取图片文件');
+  return response.blob();
+}
+
+export interface WorkflowCropRect { x: number; y: number; width: number; height: number }
+
+export async function cropWorkflowImage(blob: Blob, crop: WorkflowCropRect): Promise<Blob> {
+  const sourceUrl = URL.createObjectURL(blob);
+  try {
+    const image = await inspectImageElement(sourceUrl);
+    const x = Math.max(0, Math.min(1, crop.x));
+    const y = Math.max(0, Math.min(1, crop.y));
+    const width = Math.max(.01, Math.min(1 - x, crop.width));
+    const height = Math.max(.01, Math.min(1 - y, crop.height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(image.naturalWidth * width));
+    canvas.height = Math.max(1, Math.round(image.naturalHeight * height));
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('当前浏览器无法裁剪图片');
+    context.drawImage(image, image.naturalWidth * x, image.naturalHeight * y, image.naturalWidth * width, image.naturalHeight * height, 0, 0, canvas.width, canvas.height);
+    return await new Promise<Blob>((resolve, reject) => canvas.toBlob(result => result ? resolve(result) : reject(new Error('图片裁剪失败')), blob.type || 'image/png'));
+  } finally {
+    URL.revokeObjectURL(sourceUrl);
+  }
+}
+
+function inspectImageElement(url: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error('无法读取图片信息'));
+    image.src = url;
+  });
+}
+
 export function useWorkflowMediaUrl(storageKey?: string, fallbackHref?: string) {
   const mediaKey = storageKey || fallbackHref || '';
   const [state, setState] = useState<{ key: string; url: string | null; error: string | null }>({
