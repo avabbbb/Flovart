@@ -137,6 +137,27 @@ describe('InfiniteWorkflow surface interactions', () => {
     expect(screen.queryByTestId('workflow-node-toolbar')).not.toBeInTheDocument();
   });
 
+  it('mounts image and video overlays without a prompt attachment render loop', () => {
+    const initial = makeProject();
+    initial.nodes = [
+      createWorkflowNode('image-media', 'image', { x: 100, y: 100 }, { href: 'data:image/png;base64,aW1hZ2U=' }),
+      createWorkflowNode('video-media', 'video', { x: 520, y: 100 }, { href: 'data:video/mp4;base64,dmlkZW8=' }),
+    ];
+    render(<Harness initial={initial} />);
+
+    fireEvent.pointerDown(node('image-media').querySelector('img')!, { button: 0, pointerId: 21, clientX: 140, clientY: 150 });
+    expect(node('image-media')).toHaveClass('is-selected');
+    fireEvent.pointerUp(window, { pointerId: 21, clientX: 140, clientY: 150 });
+    expect(screen.getByTestId('workflow-node-toolbar')).toBeInTheDocument();
+    expect(screen.getByTestId('workflow-node-prompt-bar')).toBeInTheDocument();
+
+    fireEvent.pointerDown(node('video-media').querySelector('video')!, { button: 0, pointerId: 22, clientX: 560, clientY: 150 });
+    expect(node('video-media')).toHaveClass('is-selected');
+    expect(node('image-media')).not.toHaveClass('is-selected');
+    expect(screen.getByTestId('workflow-node-toolbar')).toBeInTheDocument();
+    expect(screen.getByTestId('workflow-node-prompt-bar')).toBeInTheDocument();
+  });
+
   it('records a multi-move node drag as one undoable history entry', () => {
     render(<Harness />);
 
@@ -500,7 +521,7 @@ describe('InfiniteWorkflow surface interactions', () => {
     vi.stubGlobal('Image', TestImage);
     const persist = vi.spyOn(workflowMediaStorage, 'set');
     render(<Harness />);
-    const file = new File(['image'], 'drop.png', { type: 'image/png' });
+    const file = new File(['image'], 'drop.png');
 
     fireEvent.dragOver(editor());
     fireEvent.drop(editor(), { clientX: 500, clientY: 350, dataTransfer: { files: [file] } });

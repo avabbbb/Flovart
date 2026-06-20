@@ -174,6 +174,7 @@ const SEEDANCE_DURATIONS = [-1, 4, 5, 6, 8, 10, 12, 15] as const;
 const SEEDANCE_RESOLUTIONS = ['480p', '720p', '1080p'] as const;
 const DEFAULT_VIDEO_RATIOS: VideoAspectRatio[] = ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9'];
 
+const EMPTY_ATTACHMENTS: ChatAttachment[] = [];
 const RECENT_MODELS_KEY = 'flovart-recent-models';
 const MAX_RECENT_MODELS = 5;
 function getRecentModels(): string[] {
@@ -224,7 +225,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
     onVideoModelChange,
     canvasElements = [],
     mentionItems,
-    attachments = [],
+    attachments = EMPTY_ATTACHMENTS,
     onAddAttachments,
     onRemoveAttachment,
     onMentionedElementIds,
@@ -407,6 +408,10 @@ export const PromptBar: React.FC<PromptBarProps> = ({
     }, []);
 
     useEffect(() => {
+        if (!attachments.length) {
+            setResolvedAttachmentHrefs(current => Object.keys(current).length ? {} : current);
+            return;
+        }
         let isMounted = true;
         const resolvePreviews = async () => {
             const entries = await Promise.all(attachments.map(async attachment => {

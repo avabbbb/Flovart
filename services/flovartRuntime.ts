@@ -1,5 +1,6 @@
 import type { AssetSlotRole } from '../types';
 import type { MultimodalSlot } from './aiGateway';
+import type { WorkflowCommandEnvelope, WorkflowCommandResult } from './workflowDispatcher';
 
 type MaybePromise<T> = T | Promise<T>;
 
@@ -17,6 +18,9 @@ export interface RuntimeCommandResult {
 }
 
 export interface FlovartRuntimeApi {
+  workflow?: {
+    dispatch?: (envelope: WorkflowCommandEnvelope) => MaybePromise<WorkflowCommandResult>;
+  };
   generate?: {
     image?: (input: { prompt: string; name?: string }) => MaybePromise<RuntimeCommandResult>;
     video?: (input: {

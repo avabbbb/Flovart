@@ -148,7 +148,7 @@ describe('flovart LibTV-style CLI compatibility', () => {
   it('exposes upload, model search, image shortcuts, and script storyboard commands', async () => {
     const runtime = await runtimeForTest();
 
-    const upload = await executeFlovartCommand('upload', { path: join(process.cwd(), 'pic', 'LOGO.png'), name: 'logo-ref' }, runtime);
+    const upload = await executeFlovartCommand('upload', { path: join(process.cwd(), 'pic', 'LOGO_optimized.png'), name: 'logo-ref' }, runtime);
     expect(upload).toMatchObject({ ok: true, element: { type: 'image', name: 'logo-ref' } });
 
     const models = await executeFlovartCommand('model.search', { type: 'image', query: 'flux' }, runtime);

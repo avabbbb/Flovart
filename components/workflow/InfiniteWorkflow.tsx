@@ -1,6 +1,6 @@
 import { nanoid } from 'nanoid';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { PointerEvent as ReactPointerEvent } from 'react';
+import type { DragEvent as ReactDragEvent, PointerEvent as ReactPointerEvent } from 'react';
 import type { ModelPreference, UserApiKey } from '../../types';
 import { createWorkflowNode } from './constants';
 import {
@@ -43,7 +43,8 @@ type Interaction = { pointerId: number } & (
   | { type: 'connection'; sourceId: string });
 type ConnectionDropTarget = { nodeId: string | null; isNearNode: boolean; reason?: string };
 
-const BLOCKED_TARGET = 'button,textarea,input,select,video,audio,[contenteditable="true"],[role="dialog"],[data-workflow-overlay],.workflow-toolbar';
+const NODE_ACTION_TARGET = 'button,textarea,input,select,[contenteditable="true"],[role="dialog"],[data-workflow-overlay],.workflow-toolbar';
+const BLOCKED_TARGET = `${NODE_ACTION_TARGET},video,audio`;
 const EDITABLE_TARGET = 'textarea,input,select,video,audio,[contenteditable="true"]';
 const SPACE_BLOCKED_TARGET = `${EDITABLE_TARGET},[role="menu"],[role="dialog"]`;
 const CONNECTION_NODE_PADDING = 24;
@@ -51,6 +52,15 @@ const CONNECTION_HANDLE_RADIUS = 18;
 
 function sameIds(a: string[], b: string[]) {
   return a.length === b.length && a.every((id, index) => id === b[index]);
+}
+
+function workflowDropFiles(dataTransfer: DataTransfer) {
+  const files = Array.from(dataTransfer.files || []);
+  if (files.length) return files;
+  return Array.from(dataTransfer.items || [])
+    .filter(item => item.kind === 'file')
+    .map(item => item.getAsFile())
+    .filter((file): file is File => Boolean(file));
 }
 
 export function InfiniteWorkflow({
@@ -414,6 +424,20 @@ export function InfiniteWorkflow({
       if (mountedRef.current && projectRef.current.id === expectedProjectId) setNotice(error instanceof Error ? error.message : '媒体文件导入失败');
     }
   }, [applyOps]);
+
+  const dropMedia = useCallback((event: ReactDragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const files = workflowDropFiles(event.dataTransfer);
+    const file = files.find(item => {
+      try { workflowMediaType(item); return true; } catch { return false; }
+    });
+    if (!file) {
+      if (files.length) setNotice('仅支持图片、视频或音频文件');
+      return;
+    }
+    void addMediaAt(file, screenToWorkflow(event.clientX, event.clientY));
+  }, [addMediaAt, screenToWorkflow]);
 
   const localPoint = useCallback((clientX: number, clientY: number): WorkflowPoint => {
     const rect = rootRef.current?.getBoundingClientRect();
@@ -852,7 +876,8 @@ export function InfiniteWorkflow({
       setOverlayHidden(true);
       return;
     }
-    if (event.target instanceof Element && event.target.closest(BLOCKED_TARGET)) return;
+    const target = event.target instanceof Element ? event.target : null;
+    if (target?.closest(NODE_ACTION_TARGET)) return;
     event.stopPropagation();
     setContextMenu(null);
     closeCreateMenu();
@@ -863,6 +888,10 @@ export function InfiniteWorkflow({
     else if (!ids.includes(node.id)) ids = [node.id];
     selectNodes(ids);
     if (!ids.includes(node.id)) return;
+    if (target?.closest('video,audio')) {
+      setOverlayHidden(false);
+      return;
+    }
     const frame = currentFrame();
     interactionRef.current = {
       type: 'node',
@@ -938,19 +967,12 @@ export function InfiniteWorkflow({
         backgroundPosition: `${project.viewport.x % gridSize}px ${project.viewport.y % gridSize}px`,
       }}
       onPointerDown={onSurfacePointerDown}
-      onDragOver={event => event.preventDefault()}
-      onDrop={event => {
+      onDragEnterCapture={event => event.preventDefault()}
+      onDragOverCapture={event => {
         event.preventDefault();
-        const files = Array.from(event.dataTransfer.files || []);
-        const file = files.find(item => {
-          try { workflowMediaType(item); return true; } catch { return false; }
-        });
-        if (!file) {
-          if (files.length) setNotice('仅支持图片、视频或音频文件');
-          return;
-        }
-        void addMediaAt(file, screenToWorkflow(event.clientX, event.clientY));
+        if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
       }}
+      onDropCapture={dropMedia}
       onDoubleClick={event => {
         if (!isTrueBackground(event.target)) return;
         event.preventDefault();

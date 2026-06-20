@@ -1,0 +1,1 @@
+{"type":"click","text":"▶\n      \n      \n      DOM: image / video / bars\n      SVG: edges / vector tools\n    \n    \n      推荐\n      A. 混合 DOM 媒体节点层\n      像参考项目一样用原生 img/video 节点并做视口裁剪；连线保留独立 SVG 层。改动集中，同时避开 foreignObject 和逐帧 Canvas 复制。","choice":"hybrid-dom-media","id":null,"timestamp":1781681476617}

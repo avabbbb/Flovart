@@ -1,0 +1,83 @@
+<style>
+  .architecture-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; }
+  .arch-card { cursor:pointer; border:2px solid transparent; border-radius:8px; background:#fff; overflow:hidden; box-shadow:0 8px 24px rgba(15,23,42,.08); transition:.18s ease; }
+  .arch-card:hover { transform:translateY(-2px); box-shadow:0 12px 30px rgba(15,23,42,.13); }
+  .arch-card.selected { border-color:#10a894; }
+  .arch-body { padding:14px 15px 16px; }
+  .arch-body h3 { margin:0 0 6px; font-size:16px; }
+  .arch-body p { margin:0; font-size:13px; line-height:1.55; color:#667085; }
+  .recommended { display:inline-flex; padding:3px 7px; margin-bottom:8px; border-radius:4px; background:#dff8f2; color:#08796b; font-size:11px; font-weight:700; }
+  .canvas-mini { position:relative; height:260px; overflow:hidden; background-color:#f7f8fa; background-image:radial-gradient(#c8ced8 1px,transparent 1px); background-size:20px 20px; }
+  .media-node { position:absolute; width:126px; height:90px; border:2px solid #253040; border-radius:7px; background:#202630; box-shadow:0 8px 18px rgba(15,23,42,.18); }
+  .media-node.a { left:18px; top:44px; }
+  .media-node.b { right:18px; top:118px; border-color:#10a894; }
+  .media-node img { width:100%; height:100%; object-fit:cover; border-radius:5px; opacity:.84; }
+  .video-preview { width:100%; height:100%; display:grid; place-items:center; border-radius:5px; background:linear-gradient(135deg,#232936,#555f70); color:#fff; font-size:26px; }
+  .port { position:absolute; top:50%; width:10px; height:10px; margin-top:-5px; border-radius:50%; background:#fff; border:2px solid #10a894; }
+  .port.left { left:-7px; } .port.right { right:-7px; }
+  .prompt { position:absolute; right:8px; top:218px; width:230px; height:28px; border:1px solid #c9d2dc; border-radius:6px; background:#fff; box-shadow:0 5px 16px rgba(15,23,42,.13); }
+  .toolbar { position:absolute; right:33px; top:92px; width:176px; height:22px; border:1px solid #d4dae2; border-radius:5px; background:#fff; }
+  .edge { position:absolute; left:141px; top:88px; width:104px; height:76px; border-top:2px solid #10a894; border-right:2px solid #10a894; border-radius:0 55px 0 0; transform:skewX(-12deg); opacity:.8; }
+  .layer-label { position:absolute; left:8px; padding:3px 6px; border-radius:4px; color:#fff; font-size:10px; font-weight:700; }
+  .svg-label { bottom:8px; background:#667085; }
+  .dom-label { bottom:30px; background:#10a894; }
+  .warning-line { position:absolute; inset:0; background:repeating-linear-gradient(135deg,transparent,transparent 12px,rgba(224,84,84,.08) 12px,rgba(224,84,84,.08) 24px); }
+  .risk { color:#b54708 !important; }
+  @media(max-width:900px){.architecture-grid{grid-template-columns:1fr}.canvas-mini{height:230px}}
+</style>
+
+<h2>图片 / 视频节点与渲染层怎么重构？</h2>
+<p class="subtitle">三种路线都保留 Flovart 自己的 ElementBar 与 PromptBar。请选择节点和大视频渲染的底层结构。</p>
+
+<div class="architecture-grid">
+  <div class="arch-card option" data-choice="hybrid-dom-media" onclick="toggleSelect(this)">
+    <div class="canvas-mini">
+      <div class="edge"></div>
+      <div class="media-node a"><div class="video-preview">▶</div><i class="port right"></i></div>
+      <div class="media-node b"><img src="https://images.unsplash.com/photo-1513364776144-60967b0f800f?auto=format&fit=crop&w=300&q=70"><i class="port left"></i><i class="port right"></i></div>
+      <div class="toolbar"></div><div class="prompt"></div>
+      <span class="layer-label dom-label">DOM: image / video / bars</span>
+      <span class="layer-label svg-label">SVG: edges / vector tools</span>
+    </div>
+    <div class="arch-body">
+      <span class="recommended">推荐</span>
+      <h3>A. 混合 DOM 媒体节点层</h3>
+      <p>像参考项目一样用原生 img/video 节点并做视口裁剪；连线保留独立 SVG 层。改动集中，同时避开 foreignObject 和逐帧 Canvas 复制。</p>
+    </div>
+  </div>
+
+  <div class="arch-card option" data-choice="svg-components" onclick="toggleSelect(this)">
+    <div class="canvas-mini">
+      <div class="warning-line"></div><div class="edge"></div>
+      <div class="media-node a"><div class="video-preview">▶</div><i class="port right"></i></div>
+      <div class="media-node b"><img src="https://images.unsplash.com/photo-1513364776144-60967b0f800f?auto=format&fit=crop&w=300&q=70"><i class="port left"></i></div>
+      <div class="toolbar"></div><div class="prompt"></div>
+      <span class="layer-label svg-label">SVG + foreignObject: everything</span>
+    </div>
+    <div class="arch-body">
+      <h3>B. 继续使用 SVG foreignObject</h3>
+      <p class="risk">只把 App.tsx 拆成组件，迁移最小；但大视频仍被 SVG 合成层约束，长期稳定性最弱。</p>
+    </div>
+  </div>
+
+  <div class="arch-card option" data-choice="full-dom-canvas" onclick="toggleSelect(this)">
+    <div class="canvas-mini">
+      <div class="edge"></div>
+      <div class="media-node a"><div class="video-preview">▶</div><i class="port right"></i></div>
+      <div class="media-node b"><img src="https://images.unsplash.com/photo-1513364776144-60967b0f800f?auto=format&fit=crop&w=300&q=70"><i class="port left"></i></div>
+      <div class="toolbar"></div><div class="prompt"></div>
+      <span class="layer-label dom-label">DOM: entire canvas interaction</span>
+    </div>
+    <div class="arch-body">
+      <h3>C. 整个画布迁到 DOM 节点</h3>
+      <p>最接近参考项目，但会波及路径、形状、裁剪、蒙版和现有选择交互，重写面最大，也最容易伤到你已有优势。</p>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:18px">
+  <div class="pros-cons">
+    <div class="pros"><h4>A 路线会保留</h4><ul><li>现有 ElementBar</li><li>现有 PromptBar 与 @ 引用</li><li>图片/视频生成链路</li><li>原 SVG 白板工具</li></ul></div>
+    <div class="cons"><h4>A 路线会删除</h4><ul><li>当前 App.tsx 内联端口和连线 JSX</li><li>拖空白自动造 data-SVG 占位图</li><li>视频进入 Konva 的强制路由</li><li>点击细线立即删除的危险交互</li></ul></div>
+  </div>
+</div>

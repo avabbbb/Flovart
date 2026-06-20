@@ -160,13 +160,15 @@ const SEEDANCE_REFERENCE_LIMITS: Record<MultimodalSlotKind, number> = {
     audio: 3,
 };
 
-type CapabilityDictionary = {
+export type CapabilityDictionary = {
     multimodalSlots: Partial<Record<MultimodalSlotKind, {
         max: number;
         roles: string[];
     }>>;
     requestParams: string[];
     aspectRatios?: VideoAspectRatio[];
+    resolutions?: string[];
+    durations?: number[];
     defaults?: Record<string, unknown>;
     endpoint?: 'images/generations' | 'images/edits' | 'contents/generations/tasks';
     responseFormat?: 'b64_json' | 'url' | 'implicit';
@@ -216,6 +218,8 @@ const SEEDANCE_CAPABILITY: CapabilityDictionary = {
         'safety_identifier',
     ],
     aspectRatios: SEEDANCE_RATIOS,
+    resolutions: [...SEEDANCE_RESOLUTIONS],
+    durations: [5, 10],
     defaults: {
         generate_audio: true,
         duration: 5,

@@ -13,8 +13,8 @@ import {
 } from '../services/aiGateway';
 import { setGeminiRuntimeConfig } from '../services/geminiService';
 import { refreshAllProviderModels } from '../services/modelFetcher';
+import { getGenerationCapability } from '../services/generationCapabilities';
 import {
-    buildCapabilityModelOptions,
     findBestModelSelection,
     keyOwnsBareModel,
     modelRefModelId,
@@ -144,18 +144,9 @@ export function useApiKeys(isSettingsPanelOpen: boolean) {
     // 根据用户已配置的 API Key 动态计算可选模型列表
     const dynamicModelOptions = useMemo(() => {
         return {
-            text: ensureModelOption(
-                buildCapabilityModelOptions(userApiKeys, 'text', FALLBACK_TEXT_OPTIONS, modelPreference.textModel),
-                modelPreference.textModel,
-            ),
-            image: ensureModelOption(
-                buildCapabilityModelOptions(userApiKeys, 'image', FALLBACK_IMAGE_OPTIONS, modelPreference.imageModel),
-                modelPreference.imageModel,
-            ),
-            video: ensureModelOption(
-                buildCapabilityModelOptions(userApiKeys, 'video', FALLBACK_VIDEO_OPTIONS, modelPreference.videoModel),
-                modelPreference.videoModel,
-            ),
+            text: getGenerationCapability(userApiKeys, 'text', modelPreference.textModel, FALLBACK_TEXT_OPTIONS).models,
+            image: getGenerationCapability(userApiKeys, 'image', modelPreference.imageModel, FALLBACK_IMAGE_OPTIONS).models,
+            video: getGenerationCapability(userApiKeys, 'video', modelPreference.videoModel, FALLBACK_VIDEO_OPTIONS).models,
         };
     }, [modelPreference.imageModel, modelPreference.textModel, modelPreference.videoModel, userApiKeys]);
 

@@ -83,8 +83,8 @@ const BOARDS_STORAGE_KEY = 'boards.v1';
 const ACTIVE_BOARD_STORAGE_KEY = 'boards.activeId.v1';
 
 const STORAGE_QUOTA_ERROR_NAMES = new Set(['QuotaExceededError', 'NS_ERROR_DOM_QUOTA_REACHED']);
-const STORAGE_QUOTA_MESSAGE = '鏈湴瀛樺偍绌洪棿涓嶈冻锛屾棤娉曀繚瀛樻渶鏂扮敾甯冦€傝鍒犻櫎閮ㄥ垎鍘嗗彶鍥剧墖鎴栧鍑哄悗娓呯悊椤圭洰銆?';
-const STORAGE_SAVE_FAILED_MESSAGE = '淇濆瓨鐢诲竷澶辫触锛岃鍒锋柊鍚庨噸璇曘€?';
+const STORAGE_QUOTA_MESSAGE = '本地存储空间不足，无法保存最新画布。请删除部分历史图片或导出后清理项目。';
+const STORAGE_SAVE_FAILED_MESSAGE = '保存画布失败，请刷新后重试。';
 
 type RuntimeJobStatus = 'accepted' | 'running' | 'succeeded' | 'failed' | 'canceled';
 
@@ -129,7 +129,7 @@ const isStorageQuotaError = (error: unknown): boolean => {
     return STORAGE_QUOTA_ERROR_NAMES.has(error.name) || error.code === 22 || error.code === 1014;
 };
 
-/** 瀹夊叏鍐?localStorage 鈥斺€?鎹曡幏 QuotaExceeded 绛夊紓甯? 杩斿洖鏄惁鎴愬姛 */
+/** Safely write to localStorage, catching QuotaExceeded etc. Returns whether write succeeded. */
 const safeSetItem = (key: string, value: string): boolean => {
     try {
         localStorage.setItem(key, value);
@@ -140,7 +140,7 @@ const safeSetItem = (key: string, value: string): boolean => {
     }
 };
 
-/** 搴忓垪鍖?boards 鏃跺墺绂?undo history, 鍚屾椂灏嗗浘鐗?base64 杞瓨鍒?IndexedDB */
+/** Serialize boards (strip undo history), persist image base64 to IndexedDB */
 const persistBoardsToIDB = async (boards: Board[]): Promise<void> => {
     const imageEntries: { key: string; data: string }[] = [];
     const videoPromises: Promise<void>[] = [];
@@ -190,7 +190,7 @@ const persistBoardsToIDB = async (boards: Board[]): Promise<void> => {
         return {
             ...b,
             elements: persistedElements,
-            history: [persistedElements],   // 鍙繚鐣欏綋鍓嶅揩鐓? 涓㈠純 undo 鏍堬紱蹇呴』浣跨敤宸茶浆鎴?idb: 鐨勫厓绱?
+            history: [persistedElements],
             historyIndex: 0,
         };
     });
@@ -354,7 +354,7 @@ const App: React.FC = () => {
     const [promptAttachments, setPromptAttachments] = useState<ChatAttachment[]>([]);
     const [nodePromptAttachments, setNodePromptAttachments] = useState<Record<string, ChatAttachment[]>>({});
     const [chatAttachments, setChatAttachments] = useState<ChatAttachment[]>([]);
-    // @ 鐎殿喗娲滈弫銈夊礂閸愵亞顦?id 闁告帗顨夐妴鍐晬閸垺鏆?PromptBar 闁革负鍔庨弫銈夊箣妞嬪骸浠柛鎴ｅ吹閺佹捇骞嬮幇顒€顤呴柛姘湰椤掔偞娼婚崶銊﹂檷闁?
+    // @mention id tracking for PromptBar integration
     const [mentionedElementIds, setMentionedElementIds] = useState<string[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -370,8 +370,8 @@ const App: React.FC = () => {
         const saved = localStorage.getItem('inspirationPanelMinimized');
         return saved === 'true';
     });
-    const [toolbarLeft, setToolbarLeft] = useState(68); // 鐎规悶鍎遍崣鍧楀冀韫囨洘鐣?left 濞达絽绉堕悿?
-    const [rightPanelWidth, setRightPanelWidth] = useState(2); // 闁告瑥鍘栭弲鍫曟閵忊剝绶查悗鍦仱濡绢垳鈧妫勭€规娊鏁嶉崼銏℃殢闁?PromptBar 闁告艾鏈鐐烘晸?
+    const [toolbarLeft, setToolbarLeft] = useState(68); // toolbar vertical bar left position
+    const [rightPanelWidth, setRightPanelWidth] = useState(2); // right panel width for PromptBar
     const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
     const [canvasStageSize, setCanvasStageSize] = useState({ width: 1, height: 1 });
     const [canvasKonvaReadyIds, setCanvasKonvaReadyIds] = useState<Set<string>>(() => new Set());
@@ -580,8 +580,8 @@ const App: React.FC = () => {
         prevGeneratingIdsRef.current = currentGenerating;
     }, [elements]);
 
-    // 鈹€鈹€ Layer Mask 缂栬緫鐘舵€?鈹€鈹€鈹€鈹€鈹€鈹€
-    const [maskEditingId, setMaskEditingId] = useState<string | null>(null); // 姝ｅ湪缂栬緫钂欑増鐨?image element id
+    // ======== Layer Mask 编辑状态 ========
+    const [maskEditingId, setMaskEditingId] = useState<string | null>(null); // 正在编辑蒙版的 image element id
     const [maskBrushSize, setMaskBrushSize] = useState(30);
     const [maskBrushMode, setMaskBrushMode] = useState<'erase' | 'reveal'>('erase'); // erase = paint black (hide), reveal = paint white (show)
     const maskCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -595,7 +595,7 @@ const App: React.FC = () => {
 
 
 
-    // 鏍规嵁鐢ㄦ埛宸查厤缃殑 API Key 鍔ㄦ€佽绠楀彲閫夋ā鍨嬪垪琛?
+  // Dynamically compute available models from user-configured API keys
 
     // Usage monitoring summary (recomputed when settings panel opens or keys change)
 
@@ -1778,7 +1778,7 @@ const App: React.FC = () => {
             setError('请先配置支持视觉能力的文本模型 API Key（如 Gemini、GPT-5.4、Claude）。');
             return;
         }
-        // 鍙栨秷涓婁竴娆¤繘琛屼腑鐨勮姹?
+        // Cancel any in-progress request
         reversePromptAbortRef.current?.abort();
         const abortCtrl = new AbortController();
         reversePromptAbortRef.current = abortCtrl;
@@ -1787,7 +1787,7 @@ const App: React.FC = () => {
         setPrompt('');
         setProgressMessage(language === 'zho' ? '姝ｅ湪鍒嗘瀽鍥剧墖...' : 'Analyzing image...');
 
-        // 鑺傛祦缂撳啿: 鏀?chunk 鍚庢寜 ~60ms 闂撮殧 flush, 闄嶄綆 React 閲嶆覆鏌撻娆?
+        // Stream buffer: after each chunk, flush at ~60ms interval to reduce React re-render frequency
         let chunkBuffer = '';
         let flushTimer: ReturnType<typeof setTimeout> | null = null;
         let firstChunkReceived = false;
@@ -1831,9 +1831,9 @@ const App: React.FC = () => {
         } catch (err) {
             if (flushTimer) { clearTimeout(flushTimer); flushBuffer(); }
             if ((err as Error).name === 'AbortError') return; // 鐢ㄦ埛鍙栨秷
-            // 缃戠粶涓柇涓斿凡鏈夐儴鍒嗗唴瀹? 杩藉姞瑙嗚鎻愮ず
+            // Network interrupted with partial content - append visual warning
             if (partialReceived) {
-                setPrompt(prev => prev + (language === 'zho' ? '\n鈿狅笍 [浼犺緭涓柇锛屽唴瀹逛笉瀹屾暣]' : '\n鈿狅笍 [Stream interrupted, content incomplete]'));
+                setPrompt(prev => prev + (language === 'zho' ? '⚠️ [传输中断，内容不完整]' : '\n鈿狅笍 [Stream interrupted, content incomplete]'));
             }
             setError(`${language === 'zho' ? '鍙嶆帹 Prompt 澶辫触' : 'Reverse prompt failed'}: ${(err as Error).message}`);
         } finally {
@@ -1945,7 +1945,7 @@ const App: React.FC = () => {
 
 
     /**
-     * ======== 鍥惧眰钂欑増缂栬緫 (Layer Mask) ========
+     * ======== 鍥惧眰蒙版编辑 (Layer Mask) ========
      */
     const startMaskEditing = useCallback((elementId: string) => {
         const el = elements.find(e => e.id === elementId && e.type === 'image') as ImageElement | undefined;
@@ -2171,7 +2171,7 @@ const App: React.FC = () => {
         return () => window.removeEventListener('paste', handlePaste);
     }, [handleAddMediaElement]);
 
-    // 鐢ㄥ師鐢熶簨浠剁洃鍚櫒鎸傝浇 wheel锛岀‘淇?{ passive: false } 浠ュ厑璁?preventDefault()
+    // Use native event listener for wheel, ensure { passive: false } to allow preventDefault()
     useEffect(() => {
         const svg = svgRef.current;
         if (!svg) return;
@@ -3582,9 +3582,9 @@ const App: React.FC = () => {
                 dynamicModelOptions={dynamicModelOptions}
             />
             </Suspense>
-            {/* ============ 鍥惧眰钂欑増缂栬緫娴姩闈㈡澘 ============ */}
+            {/* ============ 图层蒙版编辑 (Layer Mask) ============ */}
 
-            {/* ============ A/B 瀵规瘮寮圭獥 ============ */}
+            {/* ============ A/B 对比弹窗 ============ */}
             {abCompare && (
                 <Suspense fallback={<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm"><div className="rounded-xl bg-neutral-800 px-6 py-4 text-sm text-white/60">Loading...</div></div>}>
                 <ABCompareOverlay
@@ -3596,35 +3596,35 @@ const App: React.FC = () => {
                 </Suspense>
             )}
 
-            {/* ============ 鍥惧眰钂欑増缂栬緫娴姩闈㈡澘 (controls) ============ */}
+            {/* ============ 图层蒙版编辑 (Layer Mask) ============ */}
             {maskEditingId && (() => {
                 const maskEl = elements.find(e => e.id === maskEditingId) as ImageElement | undefined;
                 if (!maskEl) return null;
                 return (
                     <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[9998] flex items-center gap-3 px-4 py-2.5 rounded-2xl shadow-2xl border"
                          style={{ background: resolvedTheme === 'dark' ? '#1C2333' : '#ffffff', borderColor: resolvedTheme === 'dark' ? '#2A3142' : '#e5e7eb' }}>
-                        <span className={`text-sm font-medium ${resolvedTheme === 'dark' ? 'text-white' : 'text-gray-900'}`}>钂欑増缂栬緫</span>
+                        <span className={`text-sm font-medium ${resolvedTheme === 'dark' ? 'text-white' : 'text-gray-900'}`}>蒙版编辑</span>
                         <div className="h-5 w-px bg-gray-300" />
                         <button onClick={() => setMaskBrushMode('erase')}
                             className={`px-3 py-1 rounded-lg text-xs font-medium transition ${maskBrushMode === 'erase' ? 'bg-red-500 text-white' : (resolvedTheme === 'dark' ? 'bg-[#2A3142] text-gray-300' : 'bg-gray-100 text-gray-600')}`}>
-                            鎿﹂櫎
+                            擦除
                         </button>
                         <button onClick={() => setMaskBrushMode('reveal')}
                             className={`px-3 py-1 rounded-lg text-xs font-medium transition ${maskBrushMode === 'reveal' ? 'bg-green-500 text-white' : (resolvedTheme === 'dark' ? 'bg-[#2A3142] text-gray-300' : 'bg-gray-100 text-gray-600')}`}>
-                            鎭㈠
+                            恢复
                         </button>
                         <div className="h-5 w-px bg-gray-300" />
-                        <label className={`text-xs ${resolvedTheme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>绗斿埛</label>
+                        <label className={`text-xs ${resolvedTheme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>笔刷</label>
                         <input type="range" min="5" max="100" value={maskBrushSize} onChange={e => setMaskBrushSize(Number(e.target.value))} className="w-20 h-1 accent-blue-500" />
                         <span className={`text-xs w-6 text-center ${resolvedTheme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>{maskBrushSize}</span>
                         <div className="h-5 w-px bg-gray-300" />
                         <button onClick={clearMask}
                             className={`px-3 py-1 rounded-lg text-xs font-medium transition ${resolvedTheme === 'dark' ? 'bg-[#2A3142] hover:bg-[#3A4458] text-gray-300' : 'bg-gray-100 hover:bg-gray-200 text-gray-600'}`}>
-                            娓呴櫎钂欑増
+                            清除蒙版
                         </button>
                         <button onClick={commitMask}
                             className="px-3 py-1 rounded-lg text-xs font-medium bg-blue-500 hover:bg-blue-600 text-white transition">
-                            瀹屾垚
+                            完成
                         </button>
                         <button onClick={cancelMask}
                             className={`px-3 py-1 rounded-lg text-xs font-medium transition ${resolvedTheme === 'dark' ? 'bg-[#2A3142] hover:bg-[#3A4458] text-gray-300' : 'bg-gray-100 hover:bg-gray-200 text-gray-600'}`}>
@@ -3634,7 +3634,7 @@ const App: React.FC = () => {
                 );
             })()}
 
-            {/* ============ 鎵归噺鐢熸垚缁撴灉瀵规瘮寮圭獥 ============ */}
+            {/* ============ 鎵归噺鐢熸垚缁撴灉对比弹窗 ============ */}
             {batchResults && (
                 <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm"
                      onClick={() => setBatchResults(null)}>
@@ -3661,12 +3661,12 @@ const App: React.FC = () => {
                                 <div key={idx}
                                      className={`group relative rounded-xl overflow-hidden border-2 transition cursor-pointer hover:scale-[1.02] ${resolvedTheme === 'dark' ? 'border-[#2A3142] hover:border-blue-500' : 'border-gray-200 hover:border-blue-400'}`}
                                      onClick={() => handleSelectBatchResult(img)}>
-                                    <img src={img.href} alt={`鏂规 ${idx + 1}`}
+                                    <img src={img.href} alt={`方案 ${idx + 1}`}
                                          className="w-full h-auto max-h-[40vh] object-contain"
                                          style={{ background: resolvedTheme === 'dark' ? '#0D1117' : '#F9FAFB' }} />
                                     <div className={`absolute bottom-0 inset-x-0 p-3 bg-gradient-to-t ${resolvedTheme === 'dark' ? 'from-black/80' : 'from-black/50'} to-transparent opacity-0 group-hover:opacity-100 transition`}>
                                         <div className="flex items-center justify-between">
-                                            <span className="text-white text-sm font-medium">鏂规 {idx + 1}</span>
+                                            <span className="text-white text-sm font-medium">方案 {idx + 1}</span>
                                             <span className="text-white/80 text-xs">{img.width}脳{img.height}</span>
                                         </div>
                                         <button className="mt-2 w-full py-1.5 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-xs font-medium transition">
@@ -4308,7 +4308,7 @@ const App: React.FC = () => {
                                                     <textarea
                                                         value={inpaintPrompt}
                                                         onChange={e => setInpaintPrompt(e.target.value)}
-                                                        placeholder="鎻忚堪浣犳兂鍦ㄩ€夊尯鍐呯敓鎴愮殑鍐呭..."
+                                                        placeholder="描述你想在选区内生成的内容..."
                                                         autoFocus
                                                         style={{
                                                             width: '100%',
@@ -4574,7 +4574,7 @@ const App: React.FC = () => {
                         paddingBottom: `${chromeMetrics.promptDockBottom}px`
                     }}
                 >
-                    {/* 鑷渷璇婃柇鏉?鈥?PromptBar 涓婃柟鍘熶綅缃?*/}
+                    {/* Diagnostic bar - original position above PromptBar */}
                     <div className="pointer-events-auto pb-1">
                         <DiagnosticBar
                             userApiKeys={userApiKeys}
@@ -4582,7 +4582,7 @@ const App: React.FC = () => {
                             onOpenSettings={() => setIsSettingsPanelOpen(true)}
                         />
                     </div>
-                    {/* 搴曢儴娉曞緥閾炬帴 + 涓婚 / 璇█鍒囨崲 */}
+                    {/* 底部法律链接 + 主题 / 语言切换 */}
                     <div className="pointer-events-auto mt-1">
                         <div className="isl-tabbar isl-tabbar--ac-sm flex items-center gap-0.5">
                             <button
@@ -4590,14 +4590,14 @@ const App: React.FC = () => {
                                 onClick={() => openLegalModal('terms')}
                                 className="isl-tab"
                             >
-                                {language === 'zho' ? '浣跨敤鏉℃' : 'Terms'}
+                                {language === 'zho' ? '使用条款' : 'Terms'}
                             </button>
                             <button
                                 type="button"
                                 onClick={() => openLegalModal('privacy')}
                                 className="isl-tab"
                             >
-                                {language === 'zho' ? '闅愮鏀跨瓥' : 'Privacy'}
+                                {language === 'zho' ? '隐私政策' : 'Privacy'}
                             </button>
                             <button
                                 type="button"
@@ -4662,7 +4662,7 @@ const App: React.FC = () => {
             )}
 
 
-            {/* 娉曞緥鏂囨。寮圭獥 */}
+            {/* 法律文档弹窗 */}
             {legalModal && (
                 <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setLegalModal(null)}>
                     <div
@@ -4671,7 +4671,7 @@ const App: React.FC = () => {
                         onClick={e => e.stopPropagation()}
                     >
                         <div className="flex items-center justify-between px-6 py-4 border-b" style={{ borderColor: resolvedTheme === 'dark' ? '#333' : '#e5e5e5' }}>
-                            <h2 className="text-lg font-semibold m-0">{legalModal === 'terms' ? '浣跨敤鏉℃' : '闅愮鏀跨瓥'}</h2>
+                            <h2 className="text-lg font-semibold m-0">{legalModal === 'terms' ? '使用条款' : '隐私政策'}</h2>
                             <button className="text-2xl leading-none cursor-pointer bg-transparent border-none p-1" style={{ color: resolvedTheme === 'dark' ? '#888' : '#666' }} onClick={() => setLegalModal(null)}>脳</button>
                         </div>
                         <div className="overflow-y-auto px-6 py-5 text-sm leading-relaxed legal-markdown" style={{ whiteSpace: 'pre-wrap' }}>
@@ -4686,4 +4686,3 @@ const App: React.FC = () => {
 };
 
 export default App;
-

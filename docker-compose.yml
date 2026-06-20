@@ -5,7 +5,7 @@ services:
   making-app:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: docker/Dockerfile
       # 如果需要传递构建参数
       # args:
       #   - NODE_ENV=production
