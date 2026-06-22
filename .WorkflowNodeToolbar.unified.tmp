@@ -16,11 +16,10 @@ export interface WorkflowImageToolHandlers {
   splitLayers?: (id: string) => void;
 }
 
-export function WorkflowNodeToolbar({ nodes, onCopy, onDelete, onExport, onRun, onStop, onPromptFocus, onSaveMedia, onReversePrompt, onReplaceMedia, onToggleFreeResize, onAlign, onLayer, imageTools, imageToolBusy = false }: {
+export function WorkflowNodeToolbar({ nodes, onCopy, onDelete, onRun, onStop, onPromptFocus, onSaveMedia, onReversePrompt, onReplaceMedia, onToggleFreeResize, onAlign, onLayer, imageTools, imageToolBusy = false }: {
   nodes: WorkflowNode[];
   onCopy: (ids: string[]) => void;
   onDelete: (ids: string[]) => void;
-  onExport?: (nodes: WorkflowNode[]) => void;
   onRun?: (id: string) => void;
   onStop?: (id: string) => void;
   onPromptFocus?: (id: string) => void;
@@ -38,12 +37,10 @@ export function WorkflowNodeToolbar({ nodes, onCopy, onDelete, onExport, onRun, 
   const ids = nodes.map(node => node.id);
   const node = nodes.length === 1 ? nodes[0] : null;
   const media = node && (node.type === 'image' || node.type === 'video' || node.type === 'audio') ? node : null;
-  const selectedMedia = nodes.filter(item => item.type === 'image' || item.type === 'video' || item.type === 'audio');
   const mediaUrl = useWorkflowMediaUrl(media?.metadata.storageKey, media?.metadata.href).url;
   const advancedToolBusy = imageToolBusy || node?.metadata.status === 'loading';
   const actions: Array<ElementToolbarAction | null | false | undefined> = [
     { key: 'copy', label: '复制节点', icon: <Copy size={18} />, onClick: () => onCopy(ids) },
-    nodes.length > 1 && selectedMedia.length > 0 && onExport && { key: 'export-selection', label: '批量导出所选媒体', icon: <Download size={18} />, onClick: () => onExport(nodes) },
     onLayer && { key: 'front', label: '移到最前', icon: <ChevronsUp size={18} />, onClick: () => onLayer('front') },
     onLayer && { key: 'back', label: '移到最后', icon: <ChevronsDown size={18} />, onClick: () => onLayer('back') },
     node && onPromptFocus && node.type !== 'audio' && { key: 'prompt', label: '编辑提示词', icon: <MessageSquareText size={18} />, onClick: () => onPromptFocus(node.id) },

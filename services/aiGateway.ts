@@ -50,6 +50,7 @@ export interface UnifiedIgnitionInput {
     generateAudio?: boolean;
     watermark?: boolean;
     references?: IgnitionReference[];
+    signal?: AbortSignal;
     onProgress?: (progress: number, message: string) => void;
 }
 
@@ -1861,6 +1862,7 @@ export async function generateImageWithProvider(
     model: string,
     key?: UserApiKey,
     images?: VideoImage[],
+    options?: { signal?: AbortSignal },
 ): Promise<{ newImageBase64: string | null; newImageMimeType: string | null; textResponse: string | null }> {
     const provider = resolveGenerationProvider(model, key);
     const refs = limitProviderImageInputs(images ?? [], provider, model, key);
@@ -1868,11 +1870,11 @@ export async function generateImageWithProvider(
     if (provider === 'google') {
         if (refs.length > 0) {
             if (!supportsReferenceImageEditing(model)) {
-                return generateImageFromText(prompt, key?.key);
+                return generateImageFromText(prompt, key?.key, options?.signal);
             }
-            return editImage(refs, prompt, undefined, key?.key);
+            return editImage(refs, prompt, undefined, key?.key, options?.signal);
         }
-        return generateImageFromText(prompt, key?.key);
+        return generateImageFromText(prompt, key?.key, options?.signal);
     }
 
     if (provider === 'openrouter') {
@@ -1883,6 +1885,7 @@ export async function generateImageWithProvider(
             content.push({ type: 'image_url', image_url: { url: image.href } });
         }
         const response = await fetch(`${baseUrl}/chat/completions`, {
+            signal: options?.signal,
             method: 'POST',
             headers: buildOpenRouterHeaders(apiKey),
             body: JSON.stringify({
@@ -1945,6 +1948,7 @@ export async function generateImageWithProvider(
 
             try {
                 const editsRes = await fetch(`${baseUrl}/images/edits`, {
+                    signal: options?.signal,
                     method: 'POST',
                     headers: buildProviderHeaders(apiKey, key, { contentType: false }),
                     body: formData,
@@ -1958,6 +1962,7 @@ export async function generateImageWithProvider(
                     throw new Error(await readErrorResponse(editsRes, `${PROVIDER_LABELS[provider]} 图片生成失败`));
                 }
             } catch (err) {
+                if (options?.signal?.aborted) throw err;
                 if (provider !== 'custom') throw err;
             }
 
@@ -1968,6 +1973,7 @@ export async function generateImageWithProvider(
                     chatContent.push({ type: 'image_url', image_url: { url: image.href } });
                 }
                 const chatResponse = await fetch(`${baseUrl}/chat/completions`, {
+                    signal: options?.signal,
                     method: 'POST',
                     headers: buildProviderHeaders(apiKey, key),
                     body: JSON.stringify({
@@ -1998,6 +2004,7 @@ export async function generateImageWithProvider(
         });
         try {
             const response = await fetch(`${baseUrl}/images/generations`, {
+                signal: options?.signal,
                 method: 'POST',
                 headers: buildProviderHeaders(apiKey, key),
                 body: JSON.stringify({
@@ -2018,12 +2025,14 @@ export async function generateImageWithProvider(
                 throw new Error(await readErrorResponse(response, `${PROVIDER_LABELS[provider]} 图片生成失败`));
             }
         } catch (err) {
+            if (options?.signal?.aborted) throw err;
             if (provider !== 'custom') throw err;
         }
 
         // Custom fallback: chat/completions text-only
         if (provider === 'custom') {
             const chatResponse = await fetch(`${baseUrl}/chat/completions`, {
+                signal: options?.signal,
                 method: 'POST',
                 headers: buildProviderHeaders(apiKey, key),
                 body: JSON.stringify({
@@ -2054,6 +2063,7 @@ export async function generateImageWithProvider(
     }
 
     const response = await fetch(`${baseUrl}/chat/completions`, {
+        signal: options?.signal,
         method: 'POST',
         headers: buildProviderHeaders(apiKey, key),
         body: JSON.stringify({
@@ -2647,6 +2657,7 @@ export async function executeUnifiedIgnition(input: UnifiedIgnitionInput): Promi
     }
 
     try {
+        if (input.signal?.aborted) throw input.signal.reason || new DOMException('生成已停止', 'AbortError');
         const effectivePrompt = buildPromptWithReferenceBindings(prompt, input.references);
         if (capability === 'video') {
             const videoRefs = getImageReferencesForIgnition(input.references);
@@ -2666,7 +2677,7 @@ export async function executeUnifiedIgnition(input: UnifiedIgnitionInput): Promi
         }
 
         const imageReferences = getImageReferencesForIgnition(input.references);
-        const result = await generateImageWithProvider(effectivePrompt, input.modelId, input.apiKeyPayload, imageReferences);
+        const result = await generateImageWithProvider(effectivePrompt, input.modelId, input.apiKeyPayload, imageReferences, { signal: input.signal });
 
         if (!result.newImageBase64 || !result.newImageMimeType) {
             return {
@@ -2686,11 +2697,15 @@ export async function executeUnifiedIgnition(input: UnifiedIgnitionInput): Promi
             textResponse: result.textResponse,
         };
     } catch (error) {
+        const reason = input.signal?.aborted ? input.signal.reason : error;
+        const aborted = input.signal?.aborted || (error instanceof Error && error.name === 'AbortError');
         return {
             ok: false,
             elementId: input.elementId,
             capability,
-            errorMessage: error instanceof Error ? error.message : '多模态点火失败。',
+            errorMessage: aborted
+                ? (reason instanceof Error && reason.name === 'TimeoutError' ? reason.message : '生成已停止，可重新发起。')
+                : error instanceof Error ? error.message : '多模态点火失败。',
         };
     }
 }

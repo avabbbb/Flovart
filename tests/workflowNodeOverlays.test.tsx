@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { createWorkflowNode } from '../components/workflow/constants';
 import { WorkflowNodeToolbar } from '../components/workflow/WorkflowNodeToolbar';
+import { WorkflowNode } from '../components/workflow/WorkflowNode';
 import { WorkflowNodePromptBar } from '../components/workflow/WorkflowNodePromptBar';
 import { PromptBar } from '../components/PromptBar';
 
@@ -77,10 +78,32 @@ describe('workflow node overlays', () => {
 
   it('provides six-way multi alignment and only renders real optional actions', () => {
     const onAlign = vi.fn();
-    render(<WorkflowNodeToolbar nodes={[node, { ...node, id: 'second' }]} onCopy={vi.fn()} onDelete={vi.fn()} onAlign={onAlign} />);
+    const onExport = vi.fn();
+    const nodes = [node, { ...node, id: 'second' }];
+    render(<WorkflowNodeToolbar nodes={nodes} onCopy={vi.fn()} onDelete={vi.fn()} onAlign={onAlign} onExport={onExport} />);
     ['左对齐节点', '水平居中节点', '右对齐节点', '顶部对齐节点', '垂直居中节点', '底部对齐节点'].forEach(name => fireEvent.click(screen.getByRole('button', { name })));
+    fireEvent.click(screen.getByRole('button', { name: '批量导出所选媒体' }));
     expect(onAlign.mock.calls.map(call => call[0])).toEqual(['left', 'horizontal-center', 'right', 'top', 'vertical-center', 'bottom']);
+    expect(onExport).toHaveBeenCalledWith(nodes);
     expect(screen.queryByRole('button', { name: '保存到素材库' })).not.toBeInTheDocument();
+  });
+
+  it('covers a generating workflow media node with the shared frosted state', () => {
+    render(<WorkflowNode
+      node={{ ...node, metadata: { ...node.metadata, status: 'loading', progress: 42 } }}
+      selected={false}
+      onPointerDown={vi.fn()}
+      onConnectStart={vi.fn()}
+      onResizeStart={vi.fn()}
+      onChangeText={vi.fn()}
+      onChangeMetadata={vi.fn()}
+      onRun={vi.fn()}
+      onContextMenu={vi.fn()}
+      onReplaceMedia={vi.fn()}
+      onRemoveMedia={vi.fn()}
+    />);
+    expect(screen.getByTestId('workflow-generation-glass')).toHaveTextContent('图片生成中');
+    expect(screen.getByTestId('workflow-generation-glass')).toHaveTextContent('42%');
   });
 
   it('moves selected nodes to the front or back through the shared toolbar', () => {

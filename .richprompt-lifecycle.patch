@@ -1,0 +1,29 @@
+diff --git a/components/RichPromptEditor.tsx b/components/RichPromptEditor.tsx
+index 2f80b4c..32f13d1 100644
+--- a/components/RichPromptEditor.tsx
++++ b/components/RichPromptEditor.tsx
+@@ -150,6 +150,14 @@ export interface RichPromptEditorHandle {
+     getMentions: () => MentionData[];
+ }
+ 
++export function applyEditorPlaceholder(
++    editor: { isDestroyed: boolean; view: { dom: HTMLElement } } | null,
++    placeholder: string,
++): void {
++    if (!editor || editor.isDestroyed) return;
++    editor.view.dom.setAttribute('data-placeholder', placeholder);
++}
++
+ export interface RichPromptEditorProps {
+     canvasItems: MentionItem[];
+     placeholder?: string;
+@@ -253,8 +261,7 @@ const RichPromptEditor = forwardRef<RichPromptEditorHandle, RichPromptEditorProp
+         }, [disabled, editor]);
+ 
+         useEffect(() => {
+-            if (!editor) return;
+-            editor.view.dom.setAttribute('data-placeholder', placeholder);
++            applyEditorPlaceholder(editor, placeholder);
+         }, [editor, placeholder]);
+ 
+         return (

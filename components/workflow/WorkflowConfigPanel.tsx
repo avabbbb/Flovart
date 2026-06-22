@@ -6,16 +6,11 @@ import RichPromptEditor from '../RichPromptEditor';
 import type { GenerationCapability, GenerationMode } from '../../services/generationCapabilities';
 import { modelRefModelId } from '../../utils/modelRefs';
 import type { WorkflowNode, WorkflowNodeMetadata } from './types';
+import type { StudioMediaItem } from '../studio/StudioMediaBrowser';
 
 type CapabilityResolver = (mode: GenerationMode, modelId?: string) => GenerationCapability;
 
-export interface WorkflowSharedMedia {
-  id: string;
-  name: string;
-  href: string;
-  mimeType: string;
-  type: 'image' | 'video';
-}
+export interface WorkflowSharedMedia extends StudioMediaItem {}
 
 const emptyCapability: CapabilityResolver = mode => ({
   mode,

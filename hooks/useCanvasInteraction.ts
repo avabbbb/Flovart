@@ -734,10 +734,11 @@ export function useCanvasInteraction(params: UseCanvasInteractionParams) {
                      // Clear DOM alignment guides
                      const guidesG = svgRef.current?.querySelector('#flv-drag-guides');
                      if (guidesG) guidesG.remove();
-                     // Commit final positions via setElements (runs through the reducer for undo stack)
-                     if (lastDragOffsets.current.size > 0) {
-                         commitAction(prev => prev.map(el => {
-                             const offset = lastDragOffsets.current.get(el.id);
+                      // Commit final positions via setElements (runs through the reducer for undo stack)
+                      if (lastDragOffsets.current.size > 0) {
+                          const finalDragOffsets = new Map(lastDragOffsets.current);
+                          commitAction(prev => prev.map(el => {
+                              const offset = finalDragOffsets.get(el.id);
                              if (!offset) return el;
                              if (el.type !== 'path' && el.type !== 'arrow' && el.type !== 'line') {
                                  return { ...el, x: el.x + offset.dx, y: el.y + offset.dy };

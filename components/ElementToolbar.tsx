@@ -20,6 +20,7 @@ export interface ElementToolbarProps {
     getElementBounds: (el: Element, elements: Element[]) => Rect;
     handleAlignSelection: (alignment: 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom') => void;
     handleGroupSelection: () => void;
+    handleExportSelection: () => void;
     handleCopyElement: (el: Element) => void;
     handleDownloadImage: (el: ImageElement) => void;
     handleDeleteElement: (id: string) => void;
@@ -81,7 +82,7 @@ export function ElementToolbar(props: ElementToolbarProps) {
         selectedElementIds, singleSelectedElement, elements, zoom, isLoading, language,
         filterPanelElementId, outpaintMenuId, maskEditingId, reversePromptLoading,
         t, getSelectionBounds, getElementBounds,
-        handleAlignSelection, handleGroupSelection, handleCopyElement, handleDownloadImage, handleDeleteElement,
+        handleAlignSelection, handleGroupSelection, handleExportSelection, handleCopyElement, handleDownloadImage, handleDeleteElement,
         handlePropertyChange, handleStartCrop, handleReversePrompt, cancelReversePrompt,
         handleSplitImageLayers, handleUpscaleImage, handleRemoveImageBackground,
         handleOutpaint, setFilterPanelElementId, setOutpaintMenuId, setAddAssetModal, startMaskEditing,
@@ -90,8 +91,9 @@ export function ElementToolbar(props: ElementToolbarProps) {
 
     if (selectedElementIds.length > 1) {
         const bounds = getSelectionBounds(selectedElementIds);
-        const toolbarScreenWidth = 330;
+        const toolbarScreenWidth = 378;
         const toolbarScreenHeight = 56;
+        const hasSelectedMedia = elements.some(element => selectedElementIds.includes(element.id) && (element.type === 'image' || element.type === 'video'));
 
         const toolbarCanvasWidth = toolbarScreenWidth / zoom;
         const toolbarCanvasHeight = toolbarScreenHeight / zoom;
@@ -112,6 +114,9 @@ export function ElementToolbar(props: ElementToolbarProps) {
                 <button title={t('contextMenu.alignment.alignMiddle')} onClick={() => handleAlignSelection('middle')} className="isl-icon-btn h-9 w-9"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="3" y1="12" x2="21" y2="12" strokeDasharray="2 2"></line><rect x="6" y="7" width="4" height="10" rx="1"></rect><rect x="14" y="4" width="4" height="16" rx="1"></rect></svg></button>
                 <button title={t('contextMenu.alignment.alignBottom')} onClick={() => handleAlignSelection('bottom')} className="isl-icon-btn h-9 w-9"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="3" y1="20" x2="21" y2="20"></line><rect x="6" y="12" width="4" height="8" rx="1"></rect><rect x="14" y="8" width="4" height="12" rx="1"></rect></svg></button>
                 <div className="h-6 w-px" style={{ background: 'var(--isl-border)' }}></div>
+                {hasSelectedMedia && <button title="批量导出所选媒体" aria-label="批量导出所选媒体" onClick={handleExportSelection} className="isl-icon-btn h-9 w-9">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 3v12" /><path d="m7 10 5 5 5-5" /><path d="M5 21h14" /></svg>
+                </button>}
                 <button
                     title={t('contextMenu.group')}
                     aria-label="Group selected canvas layers"

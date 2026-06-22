@@ -1,4 +1,4 @@
-
+﻿
 
 
 
@@ -7,6 +7,7 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo, Suspense } from 'react';
 import { Toolbar } from './components/Toolbar';
 import { PromptBar } from './components/PromptBar';
+import { DiagnosticBar } from './components/DiagnosticBar';
 import { Loader } from './components/Loader';
 import { WorkspaceSidebar } from './components/WorkspaceSidebar';
 import type { Tool, Point, Element, ImageElement, PathElement, ShapeElement, TextElement, ArrowElement, UserEffect, LineElement, WheelAction, GroupElement, Board, VideoElement, AssetLibrary, AssetCategory, AssetItem, UserApiKey, ModelPreference, AIProvider, AICapability, PromptEnhanceMode, CharacterLockProfile, GenerationHistoryItem, ThemeMode, ChatAttachment, ImageFilters } from './types';
@@ -25,7 +26,7 @@ const AssetAddModal = React.lazy(() => import('./components/AssetAddModal').then
 const ABCompareOverlay = React.lazy(() => import('./components/ABCompareOverlay').then(m => ({ default: m.ABCompareOverlay })));
 import { loadAssetLibrary, addAsset, removeAsset, renameAsset, loadAssetLibraryAsync, saveAssetLibraryAsync } from './utils/assetStorage';
 import { loadGenerationHistoryAsync, saveGenerationHistoryAsync } from './utils/generationHistory';
-import { diagnoseKeyCapabilities, inferProviderFromModel, reversePromptStreamWithProvider, DEFAULT_PROVIDER_MODELS, generateImageWithProvider, generateVideoWithProvider, inferCapabilityFromModelName, executeUnifiedIgnition } from './services/aiGateway';
+import { inferProviderFromModel, reversePromptStreamWithProvider, DEFAULT_PROVIDER_MODELS, generateImageWithProvider, generateVideoWithProvider, inferCapabilityFromModelName, executeUnifiedIgnition } from './services/aiGateway';
 import type { MultimodalSlot } from './services/aiGateway';
 import { fileToDataUrl, validateAndResizeImage } from './utils/fileUtils';
 import { translations } from './utils/translations';
@@ -39,6 +40,8 @@ import { appendHistorySnapshot } from './utils/historyState';
 import { compilePromptReferences } from './utils/semanticCompiler';
 import { hydrateRawTextToTiptapJSON } from './utils/htmlHydrator';
 import { readColdMedia, writeColdMedia } from './utils/mediaIndexedDB';
+import termsRaw from './docs/TERMS_OF_SERVICE.md?raw';
+import privacyRaw from './docs/PRIVACY_POLICY.md?raw';
 import { generateId, getElementBounds, isPointInPolygon, rasterizeElement, rasterizeElements, rasterizeMask, createNewBoard, THEME_PALETTES, SNAP_THRESHOLD, type Rect, type Guide } from './utils/canvasHelpers';
 import { useApiKeys, DEFAULT_MODEL_PREFS, normalizeApiKeyEntry } from './hooks/useApiKeys';
 import { useCanvasInteraction } from './hooks/useCanvasInteraction';
@@ -46,8 +49,7 @@ import { useGeneration } from './hooks/useGeneration';
 import { useToast } from './hooks/useToast';
 import ToastStack from './components/Toast';
 import { AppShell } from './components/AppShell';
-import { StudioTopMenu, type StudioMenuModel } from './components/studio/StudioTopMenu';
-import './styles/generation.css';
+import { StudioTopMenu } from './components/studio/StudioTopMenu';
 import { useWorkspaceStore } from './stores/useWorkspaceStore';
 import { useWorkflowStore } from './components/workflow/store';
 import { useRuntimeStore } from './stores/useRuntimeStore';
@@ -71,8 +73,6 @@ import {
     isPromptReferenceableElement,
 } from './utils/elementPromptState';
 import { modelRefModelId, resolveModelSelection } from './utils/modelRefs';
-import { getCanvasVisibleRegion } from './utils/canvasViewport';
-import { exportMediaArchive } from './utils/batchMediaExport';
 
 
 
@@ -86,8 +86,6 @@ const ACTIVE_BOARD_STORAGE_KEY = 'boards.activeId.v1';
 const STORAGE_QUOTA_ERROR_NAMES = new Set(['QuotaExceededError', 'NS_ERROR_DOM_QUOTA_REACHED']);
 const STORAGE_QUOTA_MESSAGE = '本地存储空间不足，无法保存最新画布。请删除部分历史图片或导出后清理项目。';
 const STORAGE_SAVE_FAILED_MESSAGE = '保存画布失败，请刷新后重试。';
-const IMAGE_GENERATION_TIMEOUT_MS = 180_000;
-const VIDEO_GENERATION_TIMEOUT_MS = 660_000;
 
 type RuntimeJobStatus = 'accepted' | 'running' | 'succeeded' | 'failed' | 'canceled';
 
@@ -362,8 +360,9 @@ const App: React.FC = () => {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const toast = useToast();
-    const nodeGenerationRequestsRef = useRef(new Map<string, { controller: AbortController; timeoutId: number }>());
     const [isSettingsPanelOpen, setIsSettingsPanelOpen] = useState(false);
+    const [legalModal, setLegalModal] = useState<'terms' | 'privacy' | null>(null);
+    const [legalContent, setLegalContent] = useState('');
     const [isLayerMinimized, setIsLayerMinimized] = useState(() => {
         const saved = localStorage.getItem('layerPanelMinimized');
         return saved === 'true';
@@ -383,14 +382,6 @@ const App: React.FC = () => {
     const [outpaintMenuId, setOutpaintMenuId] = useState<string | null>(null);
     const [contextMenu, setContextMenu] = useState<{ x: number; y: number; elementId: string | null } | null>(null);
     const [assetLibrary, setAssetLibrary] = useState<AssetLibrary>({ character: [], scene: [], prop: [] });
-
-    useEffect(() => () => {
-        nodeGenerationRequestsRef.current.forEach(request => {
-            window.clearTimeout(request.timeoutId);
-            request.controller.abort();
-        });
-        nodeGenerationRequestsRef.current.clear();
-    }, []);
     const [generationHistory, setGenerationHistory] = useState<GenerationHistoryItem[]>([]);
     const [isAssetPanelOpen, setIsAssetPanelOpen] = useState(false);
     const [addAssetModal, setAddAssetModal] = useState<{ open: boolean; dataUrl: string; mimeType: string; width: number; height: number } | null>(null);
@@ -779,6 +770,12 @@ const App: React.FC = () => {
         setError(null);
     }, [selectedSingleImage, characterLocks.length]);
 
+    const openLegalModal = useCallback((type: 'terms' | 'privacy') => {
+        setLegalModal(type);
+        setLegalContent(type === 'terms' ? termsRaw : privacyRaw);
+    }, []);
+
+
     const handleSetActiveCharacterLock = useCallback((id: string | null) => {
         setActiveCharacterLockId(id);
         setCharacterLocks(prev =>
@@ -834,12 +831,6 @@ const App: React.FC = () => {
         }));
     }, [setElements]);
 
-    const cancelViewportAnimation = useCallback(() => {
-        if (viewportAnimationRef.current === null) return;
-        window.cancelAnimationFrame(viewportAnimationRef.current);
-        viewportAnimationRef.current = null;
-    }, []);
-
     const animateViewportToElement = useCallback((targetX: number, targetY: number, targetZoom: number, centerX?: number, centerY?: number) => {
         const svgBounds = svgRef.current?.getBoundingClientRect();
         const viewportWidth = svgBounds?.width || window.innerWidth;
@@ -853,7 +844,9 @@ const App: React.FC = () => {
             y: cy - targetY * targetZoom,
         };
 
-        cancelViewportAnimation();
+        if (viewportAnimationRef.current !== null) {
+            window.cancelAnimationFrame(viewportAnimationRef.current);
+        }
 
         const durationMs = 420;
         const startedAt = performance.now();
@@ -878,7 +871,7 @@ const App: React.FC = () => {
         };
 
         viewportAnimationRef.current = window.requestAnimationFrame(step);
-    }, [activeBoard.panOffset, activeBoard.zoom, activeBoardId, cancelViewportAnimation]);
+    }, [activeBoard.panOffset, activeBoard.zoom, activeBoardId]);
 
     const handleElementDoubleClickFocus = useCallback((element: Element) => {
         if (element.type !== 'image' && element.type !== 'video' && element.type !== 'shape' && element.type !== 'text' && element.type !== 'group') return;
@@ -886,36 +879,36 @@ const App: React.FC = () => {
         if (bounds.width <= 0 || bounds.height <= 0) return;
         const svgRect = svgRef.current?.getBoundingClientRect();
         if (!svgRect) return;
-        const visible = getCanvasVisibleRegion({
-            width: svgRect.width,
-            height: svgRect.height,
-            outerGap: chromeMetrics.outerGap,
-            bottomInset: chromeMetrics.canvasBottomInset,
-            leftPanelOpen: !isLayerMinimized,
-            leftPanelWidth: chromeMetrics.sidebarWidth,
-        });
+        const visibleLeft = chromeMetrics.outerGap + chromeMetrics.sidebarWidth;
+        const visibleTop = chromeMetrics.outerGap;
+        const visibleRight = svgRect.width - chromeMetrics.outerGap;
+        const visibleBottom = svgRect.height - chromeMetrics.canvasBottomInset;
+        const visibleWidth = Math.max(120, visibleRight - visibleLeft);
+        const visibleHeight = Math.max(120, visibleBottom - visibleTop);
+        const visibleCenterX = visibleLeft + visibleWidth / 2;
+        const visibleCenterY = visibleTop + visibleHeight / 2;
         const fitZoom = Math.min(
-            (visible.height * (2 / 3)) / bounds.height,
-            (visible.width * 0.9) / Math.max(bounds.width, 1)
+            (visibleHeight * (2 / 3)) / bounds.height,
+            (visibleWidth * 0.9) / Math.max(bounds.width, 1)
         );
         const targetZoom = Math.max(0.1, Math.min(2, fitZoom));
-        animateViewportToElement(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2, targetZoom, visible.centerX, visible.centerY);
-    }, [animateViewportToElement, chromeMetrics, isLayerMinimized]);
+        animateViewportToElement(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2, targetZoom, visibleCenterX, visibleCenterY);
+    }, [animateViewportToElement, chromeMetrics]);
 
     const handleFitView = useCallback(() => {
         const allElements = elementsRef.current;
         const svgRect = svgRef.current?.getBoundingClientRect();
         if (!svgRect) return;
-        const visible = getCanvasVisibleRegion({
-            width: svgRect.width,
-            height: svgRect.height,
-            outerGap: chromeMetrics.outerGap,
-            bottomInset: chromeMetrics.canvasBottomInset,
-            leftPanelOpen: !isLayerMinimized,
-            leftPanelWidth: chromeMetrics.sidebarWidth,
-        });
+        const visibleLeft = chromeMetrics.outerGap + chromeMetrics.sidebarWidth;
+        const visibleTop = chromeMetrics.outerGap;
+        const visibleRight = svgRect.width - chromeMetrics.outerGap;
+        const visibleBottom = svgRect.height - chromeMetrics.canvasBottomInset;
+        const visibleWidth = Math.max(120, visibleRight - visibleLeft);
+        const visibleHeight = Math.max(120, visibleBottom - visibleTop);
+        const visibleCenterX = visibleLeft + visibleWidth / 2;
+        const visibleCenterY = visibleTop + visibleHeight / 2;
         if (allElements.length === 0) {
-            animateViewportToElement(0, 0, 1, visible.centerX, visible.centerY);
+            animateViewportToElement(0, 0, 1, visibleCenterX, visibleCenterY);
             return;
         }
         let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
@@ -928,7 +921,7 @@ const App: React.FC = () => {
             maxY = Math.max(maxY, bounds.y + bounds.height);
         }
         if (!isFinite(minX) || !isFinite(minY)) {
-            animateViewportToElement(0, 0, 1, visible.centerX, visible.centerY);
+            animateViewportToElement(0, 0, 1, visibleCenterX, visibleCenterY);
             return;
         }
         const contentWidth = Math.max(maxX - minX, 1);
@@ -936,10 +929,10 @@ const App: React.FC = () => {
         const margin = 0.9;
         const targetZoom = Math.max(
             0.05,
-            Math.min(2, Math.min((visible.width * margin) / contentWidth, (visible.height * margin) / contentHeight))
+            Math.min(2, Math.min((visibleWidth * margin) / contentWidth, (visibleHeight * margin) / contentHeight))
         );
-        animateViewportToElement(minX + contentWidth / 2, minY + contentHeight / 2, targetZoom, visible.centerX, visible.centerY);
-    }, [animateViewportToElement, chromeMetrics, isLayerMinimized]);
+        animateViewportToElement(minX + contentWidth / 2, minY + contentHeight / 2, targetZoom, visibleCenterX, visibleCenterY);
+    }, [animateViewportToElement, chromeMetrics]);
 
     const commitAction = useCallback((updater: (prev: Element[]) => Element[]) => {
         updateActiveBoard(board => {
@@ -1068,13 +1061,13 @@ const App: React.FC = () => {
             ? 'image' as const
             : mimeType.startsWith('video/') ? 'video' as const : null;
         return [
-            ...Object.entries(assetLibrary).flatMap(([category, items]) => items.flatMap(item => {
+            ...Object.values(assetLibrary).flat().flatMap(item => {
                 const type = mediaType(item.mimeType);
-                return type ? [{ id: `asset:${item.id}`, source: 'asset' as const, sourceId: item.id, name: item.name || '我的素材', href: item.dataUrl, mimeType: item.mimeType, type, category: category as AssetCategory, width: item.width, height: item.height, createdAt: item.createdAt, prompt: item.prompt }] : [];
-            })),
+                return type ? [{ id: `asset:${item.id}`, name: item.name || '我的素材', href: item.dataUrl, mimeType: item.mimeType, type }] : [];
+            }),
             ...generationHistory.flatMap(item => {
                 const type = mediaType(item.mimeType);
-                return type ? [{ id: `history:${item.id}`, source: 'history' as const, sourceId: item.id, name: item.name || item.prompt || '生成历史', href: item.dataUrl, mimeType: item.mimeType, type, width: item.width, height: item.height, createdAt: item.createdAt, prompt: item.prompt }] : [];
+                return type ? [{ id: `history:${item.id}`, name: item.name || item.prompt || '生成历史', href: item.dataUrl, mimeType: item.mimeType, type }] : [];
             }),
         ];
     }, [assetLibrary, generationHistory]);
@@ -1306,25 +1299,13 @@ const App: React.FC = () => {
         });
     }, [modelPreference.imageModel, modelPreference.videoModel, updateElementGenerationState, videoAspectRatio]);
 
-    const handleStopNodePromptGeneration = useCallback((elementId: string) => {
-        const request = nodeGenerationRequestsRef.current.get(elementId);
-        if (request) {
-            nodeGenerationRequestsRef.current.delete(elementId);
-            window.clearTimeout(request.timeoutId);
-            request.controller.abort(new DOMException('生成已停止', 'AbortError'));
-        }
-        updateNodePromptStatePatch(elementId, { status: 'error', error: '生成已停止，可重新发起。', progress: undefined });
-        setProgressMessage(null);
-        toast.show('已停止当前节点生成。', 'info');
-    }, [toast.show, updateNodePromptStatePatch]);
-
     const handleNodePromptGenerate = useCallback(async (elementId: string) => {
         const target = elementsRef.current.find(item => item.id === elementId);
         if (!target || !isPromptReferenceableElement(target)) return;
 
         const fallbackModel = target.type === 'video' ? modelPreference.videoModel : modelPreference.imageModel;
         const currentState = createDefaultElementGenerationState(target, fallbackModel, videoAspectRatio);
-        if (currentState.status === 'running' && nodeGenerationRequestsRef.current.has(elementId)) return;
+        if (currentState.status === 'running') return;
 
         const apiKeyPayload = getInlineApiKeyForElement(target);
         if (!apiKeyPayload) {
@@ -1337,18 +1318,6 @@ const App: React.FC = () => {
             return;
         }
 
-        const previousRequest = nodeGenerationRequestsRef.current.get(elementId);
-        if (previousRequest) {
-            window.clearTimeout(previousRequest.timeoutId);
-            previousRequest.controller.abort();
-        }
-        const controller = new AbortController();
-        const timeoutMessage = target.type === 'video'
-            ? '视频生成超时（已等待超过 11 分钟），请重试或检查 Provider 状态。'
-            : '图片生成超时（已等待超过 3 分钟），请重试或检查 Provider 状态。';
-        const timeoutId = window.setTimeout(() => controller.abort(new DOMException(timeoutMessage, 'TimeoutError')), target.type === 'video' ? VIDEO_GENERATION_TIMEOUT_MS : IMAGE_GENERATION_TIMEOUT_MS);
-        nodeGenerationRequestsRef.current.set(elementId, { controller, timeoutId });
-
         updateElementGenerationState(target.id, {
             ...currentState,
             status: 'running',
@@ -1356,50 +1325,61 @@ const App: React.FC = () => {
             progress: 5,
         });
 
-        try {
-            const promptReferences = buildElementIgnitionReferences(currentState.promptPayload, elementsRef.current);
-            const attachmentReferences = await buildAttachmentIgnitionReferences(nodePromptAttachments[elementId] || [], resolveColdMediaRef);
-            const result = await executeUnifiedIgnition({
-                elementId: target.id,
-                prompt: currentState.promptPayload.rawText,
-                modelId: currentState.modelId,
-                apiKeyPayload,
-                aspectRatio: currentState.aspectRatio || videoAspectRatio,
-                durationSec: currentState.durationSec ?? videoDurationSec,
-                resolution: currentState.resolution || videoResolution,
-                generateAudio: currentState.generateAudio ?? videoGenerateAudio,
-                watermark: currentState.watermark ?? videoWatermark,
-                references: [...promptReferences, ...attachmentReferences],
-                signal: controller.signal,
-                onProgress: (nextProgress, message) => {
-                    if (nodeGenerationRequestsRef.current.get(elementId)?.controller !== controller) return;
-                    setProgressMessage(message);
-                    updateNodePromptStatePatch(elementId, { status: 'running', error: undefined, progress: nextProgress });
-                },
-            });
+        const promptReferences = buildElementIgnitionReferences(currentState.promptPayload, elementsRef.current);
+        const attachmentReferences = await buildAttachmentIgnitionReferences(
+            nodePromptAttachments[elementId] || [],
+            resolveColdMediaRef,
+        );
+        const references = [...promptReferences, ...attachmentReferences];
+        const result = await executeUnifiedIgnition({
+            elementId: target.id,
+            prompt: currentState.promptPayload.rawText,
+            modelId: currentState.modelId,
+            apiKeyPayload,
+            aspectRatio: currentState.aspectRatio || videoAspectRatio,
+            durationSec: currentState.durationSec ?? videoDurationSec,
+            resolution: currentState.resolution || videoResolution,
+            generateAudio: currentState.generateAudio ?? videoGenerateAudio,
+            watermark: currentState.watermark ?? videoWatermark,
+            references,
+            onProgress: (nextProgress, message) => {
+                setProgressMessage(message);
+                const latest = elementsRef.current.find(item => item.id === elementId);
+                if (!latest || !isPromptReferenceableElement(latest)) return;
+                const latestState = createDefaultElementGenerationState(latest, currentState.modelId, currentState.aspectRatio);
+                updateElementGenerationState(elementId, {
+                    ...latestState,
+                    status: 'running',
+                    error: undefined,
+                    progress: nextProgress,
+                });
+            },
+        });
 
-            if (nodeGenerationRequestsRef.current.get(elementId)?.controller !== controller) return;
-            if (result.ok) {
-                updateElementMedia(elementId, { href: result.mediaUrl, mimeType: result.mimeType });
-                updateNodePromptStatePatch(elementId, { status: 'success', error: undefined, progress: 100 });
-                return;
-            }
-            updateNodePromptStatePatch(elementId, { status: 'error', error: result.errorMessage, progress: undefined });
-            toast.show(result.errorMessage, 'error');
-        } catch (generationError) {
-            if (nodeGenerationRequestsRef.current.get(elementId)?.controller !== controller) return;
-            const reason = controller.signal.aborted ? controller.signal.reason : generationError;
-            const message = reason instanceof Error ? reason.message : '生成失败，请重试。';
-            updateNodePromptStatePatch(elementId, { status: 'error', error: message, progress: undefined });
-            toast.show(message, 'error');
-        } finally {
-            window.clearTimeout(timeoutId);
-            if (nodeGenerationRequestsRef.current.get(elementId)?.controller === controller) {
-                nodeGenerationRequestsRef.current.delete(elementId);
-                setProgressMessage(null);
-            }
+        const latest = elementsRef.current.find(item => item.id === elementId);
+        if (!latest || !isPromptReferenceableElement(latest)) return;
+        const latestState = createDefaultElementGenerationState(latest, currentState.modelId, currentState.aspectRatio);
+
+        if (result.ok) {
+            updateElementMedia(elementId, { href: result.mediaUrl, mimeType: result.mimeType });
+            updateElementGenerationState(elementId, {
+                ...latestState,
+                status: 'success',
+                error: undefined,
+                progress: 100,
+            });
+            setProgressMessage(null);
+            return;
         }
-    }, [getInlineApiKeyForElement, modelPreference.imageModel, modelPreference.videoModel, nodePromptAttachments, resolveColdMediaRef, toast.show, updateElementGenerationState, updateElementMedia, updateNodePromptStatePatch, videoAspectRatio, videoDurationSec, videoGenerateAudio, videoResolution, videoWatermark]);
+
+        updateElementGenerationState(elementId, {
+            ...latestState,
+            status: 'error',
+            error: result.errorMessage,
+            progress: undefined,
+        });
+        setProgressMessage(null);
+    }, [getInlineApiKeyForElement, modelPreference.imageModel, modelPreference.videoModel, nodePromptAttachments, resolveColdMediaRef, updateElementGenerationState, updateElementMedia, videoAspectRatio, videoDurationSec, videoGenerateAudio, videoResolution, videoWatermark]);
 
     const t = useCallback((key: string, ...args: any[]): any => {
         const keys = key.split('.');
@@ -1789,45 +1769,6 @@ const App: React.FC = () => {
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-     };
-
-    const handleExportSelectedMedia = async () => {
-        const media = elementsRef.current.filter((element): element is ImageElement | VideoElement => (
-            selectedElementIds.includes(element.id) && (element.type === 'image' || element.type === 'video')
-        ));
-        if (!media.length) {
-            toast.show('所选内容中没有可导出的图片或视频。', 'warning');
-            return;
-        }
-        try {
-            const count = await exportMediaArchive(media.map(element => ({
-                id: element.id,
-                x: element.x,
-                y: element.y,
-                name: element.name || (element.type === 'video' ? '视频' : '图片'),
-                mimeType: element.mimeType,
-                loadBlob: async () => {
-                    if (element.type === 'video' && isIdbVideoRef(element.href)) {
-                        const blob = await getVideoBlob(fromIdbVideoRef(element.href));
-                        if (!blob) throw new Error(`无法读取视频：${element.name || element.id}`);
-                        return blob;
-                    }
-                    let href = element.href;
-                    if (element.type === 'image' && isIdbRef(href)) {
-                        const key = fromIdbRef(href);
-                        href = (await getImages([key])).get(key) || '';
-                    }
-                    href = await resolveColdMediaRef(href);
-                    if (!href) throw new Error(`无法读取媒体：${element.name || element.id}`);
-                    const response = await fetch(href);
-                    if (!response.ok) throw new Error(`导出媒体失败：${element.name || element.id}`);
-                    return response.blob();
-                },
-            })), `Flovart-Canvas-${new Date().toISOString().slice(0, 10)}`);
-            toast.show(`已按画布顺序导出 ${count} 个媒体文件。`, 'success');
-        } catch (exportError) {
-            toast.show(exportError instanceof Error ? exportError.message : '批量导出失败。', 'error');
-        }
     };
 
     const [reversePromptLoading, setReversePromptLoading] = useState(false);
@@ -2258,13 +2199,10 @@ const App: React.FC = () => {
     useEffect(() => {
         const svg = svgRef.current;
         if (!svg) return;
-        const onWheel = (e: WheelEvent) => {
-            cancelViewportAnimation();
-            handleWheel(e);
-        };
+        const onWheel = (e: WheelEvent) => handleWheel(e);
         svg.addEventListener('wheel', onWheel, { passive: false });
         return () => svg.removeEventListener('wheel', onWheel);
-    }, [cancelViewportAnimation, handleWheel]);
+    }, [handleWheel]);
 
     useEffect(() => {
         const endCanvasInteraction = () => handleMouseUp();
@@ -3499,57 +3437,36 @@ const App: React.FC = () => {
         return dimmed;
     }, [elements, isNodePromptActive, selectedNodePromptElement]);
 
-    const capabilityDiagnosis = diagnoseKeyCapabilities(userApiKeys);
-    const studioMenuModel: StudioMenuModel = {
-        mode: activeView,
-        title: activeView === 'canvas' ? activeBoard.name : activeWorkflowTitle,
-        theme: resolvedTheme,
-        language,
-        status: capabilityDiagnosis.missing.length === 0
-            ? {
-                tone: 'ready',
-                label: language === 'zho' ? 'API 已就绪' : 'API ready',
-                detail: language === 'zho' ? '文本、图片和视频能力均已配置' : 'Text, image, and video capabilities are configured',
-            }
-            : {
-                tone: 'warning',
-                label: `API ${capabilityDiagnosis.covered.length}/3`,
-                detail: capabilityDiagnosis.warnings.join('\n'),
-            },
-        actions: {
-            changeMode: setActiveView,
-            toggleTheme: () => setThemeMode(resolvedTheme === 'dark' ? 'light' : 'dark'),
-            toggleLanguage: () => setLanguage(language === 'zho' ? 'en' : 'zho'),
-            openSettings: () => setIsSettingsPanelOpen(true),
-        },
-    };
-
     if (activeView === 'workflow') {
         return (
             <AppShell
                 themeBackground={themePalette.appBackground}
                 topBar={
-                    <StudioTopMenu model={studioMenuModel} />
+                    <StudioTopMenu
+                        mode="workflow"
+                        title={activeWorkflowTitle}
+                        theme={resolvedTheme}
+                        language={language}
+                        onModeChange={setActiveView}
+                        onToggleTheme={() => setThemeMode(resolvedTheme === 'dark' ? 'light' : 'dark')}
+                        onToggleLanguage={() => setLanguage(language === 'zho' ? 'en' : 'zho')}
+                        onOpenSettings={() => setIsSettingsPanelOpen(true)}
+                    />
                 }
                 main={
                     <Suspense fallback={<div className="h-full w-full flex items-center justify-center opacity-40 text-sm">正在加载 Workflow...</div>}>
                         <WorkflowWorkspace
                             theme={resolvedTheme}
                             language={language}
+                            onSwitchToCanvas={() => setActiveView('canvas')}
+                            onToggleTheme={() => setThemeMode(resolvedTheme === 'dark' ? 'light' : 'dark')}
+                            onToggleLanguage={() => setLanguage(language === 'zho' ? 'en' : 'zho')}
                             resolveGenerationCapability={resolveWorkflowGenerationCapability}
                             sharedMedia={workflowSharedMedia}
                             onReversePrompt={handleWorkflowReversePrompt}
                             onRunNode={handleRunWorkflowNode}
                             onStopNode={(projectId, nodeId) => { cancelWorkflowGeneration(projectId, nodeId); }}
                             onSaveWorkflowMedia={handleSaveWorkflowMedia}
-                            onRenameSharedMedia={(media, name) => {
-                                if (media.source !== 'asset' || !media.category || !media.sourceId) return;
-                                setAssetLibrary(prev => renameAsset(prev, media.category!, media.sourceId!, name));
-                            }}
-                            onRemoveSharedMedia={media => {
-                                if (media.source !== 'asset' || !media.category || !media.sourceId) return;
-                                setAssetLibrary(prev => removeAsset(prev, media.category!, media.sourceId!));
-                            }}
                             onOnlineAgentTurn={handleWorkflowOnlineAgentTurn}
                             t={t}
                             userApiKeys={userApiKeys}
@@ -3596,13 +3513,22 @@ const App: React.FC = () => {
             onDragOver={handleDragOver}
             onDrop={handleDrop}
             topBar={
-                <StudioTopMenu model={studioMenuModel} />
+                <StudioTopMenu
+                    mode="canvas"
+                    title={activeBoard.name}
+                    theme={resolvedTheme}
+                    language={language}
+                    onModeChange={setActiveView}
+                    onToggleTheme={() => setThemeMode(resolvedTheme === 'dark' ? 'light' : 'dark')}
+                    onToggleLanguage={() => setLanguage(language === 'zho' ? 'en' : 'zho')}
+                    onOpenSettings={() => setIsSettingsPanelOpen(true)}
+                />
             }
             leftSidebar={
                 <WorkspaceSidebar
                 isOpen={!isLayerMinimized}
                 onToggle={() => setIsLayerMinimized(prev => !prev)}
-                outerGap={chromeMetrics.outerGap}
+                outerGap={chromeMetrics.outerGap + 48}
                 panelWidth={chromeMetrics.sidebarWidth}
                 boards={boards}
                 activeBoardId={activeBoardId}
@@ -3653,7 +3579,7 @@ const App: React.FC = () => {
                 theme={resolvedTheme}
                 isMinimized={isInspirationMinimized}
                 onToggleMinimize={() => setIsInspirationMinimized(prev => !prev)}
-                outerGap={chromeMetrics.outerGap}
+                outerGap={chromeMetrics.outerGap + 48}
                 defaultWidth={chromeMetrics.rightPanelDefaultWidth}
                 minWidth={chromeMetrics.rightPanelMinWidth}
                 widthCap={chromeMetrics.rightPanelWidthCap}
@@ -3719,7 +3645,7 @@ const App: React.FC = () => {
                 {isLoading && <Loader progressMessage={progressMessage} batchTotal={batchCount} batchDone={recentlyCompleted.size} />}
                 <ToastStack toasts={toast.toasts} onDismiss={toast.dismiss} />
                 {error && (
-                    <div className="absolute top-16 left-1/2 -translate-x-1/2 z-50 p-3 bg-red-100 border border-red-400 text-red-700 rounded-md shadow-lg flex items-center max-w-lg">
+                    <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 p-3 bg-red-100 border border-red-400 text-red-700 rounded-md shadow-lg flex items-center max-w-lg">
                         <span className="flex-grow">{error}</span>
                         <button onClick={() => setError(null)} className="ml-4 p-1 rounded-full hover:bg-red-200" title={t('common.close')} aria-label={t('common.close')}>
                             <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd"></path></svg>
@@ -3727,7 +3653,7 @@ const App: React.FC = () => {
                     </div>
                 )}
                 {modelAutoSwitchNotice && (
-                    <div className="absolute top-16 left-1/2 -translate-x-1/2 z-50 p-3 bg-blue-100 border border-blue-400 text-blue-700 rounded-md shadow-lg flex items-center max-w-lg animate-fade-in">
+                    <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 p-3 bg-blue-100 border border-blue-400 text-blue-700 rounded-md shadow-lg flex items-center max-w-lg animate-fade-in">
                         <span className="mr-2">馃攧</span>
                         <span className="flex-grow text-sm">{modelAutoSwitchNotice}</span>
                     </div>
@@ -3907,10 +3833,7 @@ const App: React.FC = () => {
                 <svg
                     ref={svgRef}
                     className="relative z-10 w-full h-full"
-                    onMouseDown={(event) => {
-                        cancelViewportAnimation();
-                        handleMouseDown(event);
-                    }}
+                    onMouseDown={handleMouseDown}
                     onMouseMove={handleMouseMove}
                     onMouseUp={handleMouseUp}
                     onMouseLeave={handleMouseUp}
@@ -3956,6 +3879,8 @@ const App: React.FC = () => {
                             if ((e as CanvasElement).generationState?.status === 'running') genIds.add(e.id);
                         }
                         const anyGenerating = genIds.size > 0;
+                        const stageLabelMap: Record<string, string> = { running: '生成中', queued: '排队中' };
+
                         return (
                             <g transform={`translate(${panOffset.x}, ${panOffset.y}) scale(${zoom})`} data-gen-active={anyGenerating ? 'true' : undefined}>
                                 <rect x={-panOffset.x/zoom} y={-panOffset.y/zoom} width={`calc(100% / ${zoom})`} height={`calc(100% / ${zoom})`} fill="url(#grid)" />
@@ -4089,7 +4014,9 @@ const App: React.FC = () => {
                                 const isGenerating = genIds.has(el.id);
                                 const isRevealing = recentlyCompleted.has(el.id);
                                 const isDimmed = anyGenerating && !isGenerating;
-                                const generationProgress = Math.max(0, Math.min(100, Math.round((el as CanvasElement).generationState?.progress || 0)));
+                                const genStatus = (el as CanvasElement).generationState?.status;
+                                const stageLabel = genStatus ? stageLabelMap[genStatus] : undefined;
+                                const perimeter = 2 * (el.width + el.height);
                                 const renderMediaInKonva = shouldRenderMediaInKonva(el, canvasKonvaDisabledIds) && canvasKonvaReadyIds.has(el.id);
                                 return (
                                     <g
@@ -4141,13 +4068,43 @@ const App: React.FC = () => {
                                             />
                                         )}
                                         {isGenerating && (
-                                            <foreignObject x={el.x} y={el.y} width={el.width} height={el.height} pointerEvents="none" style={{ overflow: 'hidden', borderRadius: hasBorderRadius ? el.borderRadius : 12 }}>
-                                                <div style={{ position: 'relative', width: '100%', height: '100%' }}>
-                                                    <div className="flv-generation-glass" style={{ borderRadius: hasBorderRadius ? el.borderRadius : 12, borderWidth: `${1.5 / zoom}px` }}>
-                                                        <span className="flv-generation-glass__status" style={{ top: `${12 / zoom}px`, left: `${12 / zoom}px`, padding: `${5 / zoom}px ${8 / zoom}px`, gap: `${7 / zoom}px`, borderRadius: `${5 / zoom}px`, fontSize: `${12 / zoom}px` }}>
-                                                            {el.type === 'video' ? '视频生成中' : '图片生成中'}<b>{generationProgress}%</b>
-                                                        </span>
-                                                    </div>
+                                            <g transform={`translate(${el.x}, ${el.y})`} pointerEvents="none">
+                                                <rect
+                                                    width={el.width}
+                                                    height={el.height}
+                                                    fill="none"
+                                                    stroke="var(--isl-mint, #00e68a)"
+                                                    strokeWidth={2.5 / zoom}
+                                                    strokeDasharray={`${perimeter * 0.12} ${perimeter * 0.88}`}
+                                                    strokeLinecap="round"
+                                                    rx={hasBorderRadius ? el.borderRadius : 0}
+                                                    opacity={0.7}
+                                                />
+                                                <g clipPath={hasBorderRadius ? `url(#${clipPathId})` : undefined}>
+                                                    <rect
+                                                        x={-el.width * 0.5}
+                                                        width={el.width * 0.6}
+                                                        height={el.height}
+                                                        fill="url(#flv-shimmer-grad)"
+                                                        style={{ animation: 'flv-gen-shimmer 2.2s ease-in-out infinite' }}
+                                                    />
+                                                </g>
+                                                <rect width={el.width} height={el.height} fill="rgba(0,0,0,0.06)" rx={hasBorderRadius ? el.borderRadius : 0} />
+                                            </g>
+                                        )}
+                                        {isGenerating && stageLabel && (
+                                            <foreignObject x={el.x} y={el.y + el.height + 4 / zoom} width={el.width} height={24 / zoom} pointerEvents="none">
+                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, transform: `scale(${1 / zoom})`, transformOrigin: 'top center', width: el.width * zoom, height: 24 }}>
+                                                    <span className="flv-gen-stage-label" style={{
+                                                        fontSize: 11,
+                                                        fontWeight: 600,
+                                                        color: 'var(--isl-mint, #00e68a)',
+                                                        background: 'rgba(0,0,0,0.55)',
+                                                        backdropFilter: 'blur(6px)',
+                                                        padding: '2px 10px',
+                                                        borderRadius: 10,
+                                                        whiteSpace: 'nowrap',
+                                                    }}>{stageLabel}</span>
                                                 </div>
                                             </foreignObject>
                                         )}
@@ -4177,8 +4134,7 @@ const App: React.FC = () => {
                                                              promptDocument={selectedNodePromptElement.generationState?.promptPayload.richTextDocument}
                                                              setPrompt={(nextPrompt) => updateNodePromptPayload(selectedNodePromptElement, nextPrompt, selectedNodePromptElement.generationState?.promptPayload.richTextDocument)}
                                                              onPromptInputChange={({ plainText, document }) => updateNodePromptPayload(selectedNodePromptElement, plainText, document)}
-                                                              onGenerate={() => void handleNodePromptGenerate(selectedNodePromptElement.id)}
-                                                              onStop={() => handleStopNodePromptGeneration(selectedNodePromptElement.id)}
+                                                             onGenerate={() => void handleNodePromptGenerate(selectedNodePromptElement.id)}
                                                              onRetry={selectedNodePromptElement.generationState?.status === 'error' ? () => void handleNodePromptGenerate(selectedNodePromptElement.id) : undefined}
                                                              error={selectedNodePromptElement.generationState?.error || null}
                                                              progressStage={progressMessage}
@@ -4316,8 +4272,7 @@ const App: React.FC = () => {
                                                              promptDocument={selectedNodePromptElement.generationState?.promptPayload.richTextDocument}
                                                              setPrompt={(nextPrompt) => updateNodePromptPayload(selectedNodePromptElement, nextPrompt, selectedNodePromptElement.generationState?.promptPayload.richTextDocument)}
                                                              onPromptInputChange={({ plainText, document }) => updateNodePromptPayload(selectedNodePromptElement, plainText, document)}
-                                                              onGenerate={() => void handleNodePromptGenerate(selectedNodePromptElement.id)}
-                                                              onStop={() => handleStopNodePromptGeneration(selectedNodePromptElement.id)}
+                                                             onGenerate={() => void handleNodePromptGenerate(selectedNodePromptElement.id)}
                                                              onRetry={selectedNodePromptElement.generationState?.status === 'error' ? () => void handleNodePromptGenerate(selectedNodePromptElement.id) : undefined}
                                                              error={selectedNodePromptElement.generationState?.error || null}
                                                              progressStage={progressMessage}
@@ -4514,7 +4469,6 @@ const App: React.FC = () => {
                                 getElementBounds={getElementBounds}
                                 handleAlignSelection={handleAlignSelection}
                                 handleGroupSelection={handleGroup}
-                                handleExportSelection={() => void handleExportSelectedMedia()}
                                 handleCopyElement={handleCopyElement}
                                 handleDownloadImage={handleDownloadImage}
                                 handleDeleteElement={handleDeleteElement}
@@ -4687,6 +4641,121 @@ const App: React.FC = () => {
                     );
                 })()}
             </div>
+            {!croppingState && (
+                <div 
+                    className={`compact-prompt-dock absolute bottom-0 left-0 right-0 z-[48] transition-all duration-300 ease-out flex flex-col items-center pointer-events-none ${isNodePromptActive ? 'translate-y-12 opacity-0' : 'translate-y-0 opacity-100'}`}
+                    style={{
+                        paddingLeft: chromeMetrics.isTablet ? `${chromeMetrics.promptSideInset}px` : `${isLayerMinimized ? chromeMetrics.outerGap : chromeMetrics.sidebarWidth + chromeMetrics.outerGap + 8}px`,
+                        paddingRight: chromeMetrics.isTablet ? `${chromeMetrics.promptSideInset}px` : `${rightPanelWidth + chromeMetrics.promptSideInset}px`,
+                        paddingBottom: `${chromeMetrics.promptDockBottom}px`
+                    }}
+                >
+                    {/* Diagnostic bar - original position above PromptBar */}
+                    <div className="pointer-events-auto pb-1">
+                        <DiagnosticBar
+                            userApiKeys={userApiKeys}
+                            theme={resolvedTheme}
+                            onOpenSettings={() => setIsSettingsPanelOpen(true)}
+                        />
+                    </div>
+                    {/* 底部法律链接 + 主题 / 语言切换 */}
+                    <div className="pointer-events-auto mt-1">
+                        <div className="isl-tabbar isl-tabbar--ac-sm flex items-center gap-0.5">
+                            <button
+                                type="button"
+                                onClick={() => openLegalModal('terms')}
+                                className="isl-tab"
+                            >
+                                {language === 'zho' ? '使用条款' : 'Terms'}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => openLegalModal('privacy')}
+                                className="isl-tab"
+                            >
+                                {language === 'zho' ? '隐私政策' : 'Privacy'}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    const next = resolvedTheme === 'dark' ? 'light' : 'dark';
+                                    setThemeMode(next);
+                                }}
+                                className="isl-tab inline-flex items-center gap-0.5"
+                                aria-label={resolvedTheme === 'dark' ? (language === 'zho' ? '切换到浅色模式' : 'Switch to light mode') : (language === 'zho' ? '切换到深色模式' : 'Switch to dark mode')}
+                                title={resolvedTheme === 'dark' ? (language === 'zho' ? '切换到浅色模式' : 'Switch to light mode') : (language === 'zho' ? '切换到深色模式' : 'Switch to dark mode')}
+                            >
+                                {resolvedTheme === 'dark' ? (
+                                    <svg width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round">
+                                        <circle cx="6" cy="6" r="2.2" fill="currentColor" stroke="none" />
+                                        <line x1="6" y1="0.5" x2="6" y2="2" />
+                                        <line x1="6" y1="10" x2="6" y2="11.5" />
+                                        <line x1="0.5" y1="6" x2="2" y2="6" />
+                                        <line x1="10" y1="6" x2="11.5" y2="6" />
+                                        <line x1="2.1" y1="2.1" x2="3.2" y2="3.2" />
+                                        <line x1="8.8" y1="8.8" x2="9.9" y2="9.9" />
+                                        <line x1="9.9" y1="2.1" x2="8.8" y2="3.2" />
+                                        <line x1="3.2" y1="8.8" x2="2.1" y2="9.9" />
+                                    </svg>
+                                ) : (
+                                    <svg width="9" height="9" viewBox="0 0 12 12" fill="currentColor">
+                                        <path d="M 9.2 2.4 A 4.6 4.6 0 1 0 9.2 9.6 A 3.6 3.6 0 0 1 9.2 2.4 Z" />
+                                    </svg>
+                                )}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setActiveView('workflow')}
+                                className="isl-tab inline-flex items-center gap-1"
+                                aria-label={language === 'zho' ? '切换到工作流' : 'Switch to Workflow'}
+                                title={language === 'zho' ? '切换到工作流' : 'Switch to Workflow'}
+                            >
+                                <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round">
+                                    <circle cx="2" cy="6" r="1.25" />
+                                    <circle cx="10" cy="3" r="1.25" />
+                                    <circle cx="10" cy="9" r="1.25" />
+                                    <path d="M3.25 6h2.1c1.8 0 1.7-3 3.4-3M5.35 6c1.8 0 1.7 3 3.4 3" />
+                                </svg>
+                                {language === 'zho' ? '工作流' : 'Workflow'}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setLanguage(language === 'zho' ? 'en' : 'zho')}
+                                className="isl-tab inline-flex items-center gap-0.5"
+                                aria-label={language === 'zho' ? 'Switch language to English' : '切换到中文'}
+                                title={language === 'zho' ? 'Switch to English' : '切换到中文'}
+                            >
+                                <svg width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="0.9" strokeLinecap="round" strokeLinejoin="round">
+                                    <circle cx="6" cy="6" r="4.2" />
+                                    <ellipse cx="6" cy="6" rx="1.8" ry="4.2" />
+                                    <line x1="1.8" y1="6" x2="10.2" y2="6" />
+                                </svg>
+                                {language === 'zho' ? 'EN' : '中'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+
+            {/* 法律文档弹窗 */}
+            {legalModal && (
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setLegalModal(null)}>
+                    <div
+                        className="relative w-[90vw] max-w-[680px] max-h-[80vh] rounded-2xl shadow-2xl overflow-hidden flex flex-col"
+                        style={{ background: resolvedTheme === 'dark' ? '#1e1e24' : '#fff', color: resolvedTheme === 'dark' ? '#e0e0e0' : '#222' }}
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <div className="flex items-center justify-between px-6 py-4 border-b" style={{ borderColor: resolvedTheme === 'dark' ? '#333' : '#e5e5e5' }}>
+                            <h2 className="text-lg font-semibold m-0">{legalModal === 'terms' ? '使用条款' : '隐私政策'}</h2>
+                            <button className="text-2xl leading-none cursor-pointer bg-transparent border-none p-1" style={{ color: resolvedTheme === 'dark' ? '#888' : '#666' }} onClick={() => setLegalModal(null)}>脳</button>
+                        </div>
+                        <div className="overflow-y-auto px-6 py-5 text-sm leading-relaxed legal-markdown" style={{ whiteSpace: 'pre-wrap' }}>
+                            {legalContent || '加载中...'}
+                        </div>
+                    </div>
+                </div>
+            )}
         </>}
         />
     );

@@ -448,7 +448,7 @@ export const RightPanel: React.FC<RightPanelProps> = ({
                     transition: 'opacity 0.2s ease-out, transform 0.28s ease-out',
                     transform: isMinimized ? 'translateY(0)' : 'translateY(-6px)',
                 }}
-                className="isl-icon-btn theme-aware fixed z-20 flex h-10 w-10 items-center justify-center"
+                className="isl-icon-btn theme-aware absolute z-20 flex h-10 w-10 items-center justify-center"
                 title="打开侧边栏"
             >
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -469,7 +469,7 @@ export const RightPanel: React.FC<RightPanelProps> = ({
                     transition: 'transform 0.35s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s ease-out, width 0.25s ease-out',
                     pointerEvents: isMinimized ? 'none' : 'auto',
                 }}
-                className="isl-panel compact-right-panel theme-aware fixed z-[30] flex flex-col overflow-hidden"
+                className="isl-panel compact-right-panel theme-aware absolute z-[30] flex flex-col overflow-hidden"
             >
                 <div
                     className={`absolute left-0 top-0 z-10 h-full cursor-ew-resize transition-colors hover:bg-[#19c8b9]/40 ${compactMode ? 'w-1' : 'w-1.5'}`}

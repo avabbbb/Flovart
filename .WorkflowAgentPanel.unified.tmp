@@ -323,13 +323,7 @@ export function WorkflowAgentPanel({ project, onClose, onProjectChange, onOnline
 
   return (
     <aside className={`workflow-agent ${embedded ? 'is-embedded' : ''}`}>
-      <header className={embedded ? 'workflow-agent__utility' : undefined}>
-        {!embedded && <><Bot size={16} /><strong>Workflow Agent</strong></>}
-        <div className="workflow-agent__mode"><button type="button" className={mode === 'online' ? 'is-active' : ''} onClick={() => switchMode('online')}>网站</button><button type="button" className={mode === 'local' ? 'is-active' : ''} onClick={() => switchMode('local')}>本机</button></div>
-        <span className={`workflow-agent__status is-${visibleStatus}`}><Circle size={8} />{statusLabel(visibleStatus)}</span>
-        <button type="button" title="新对话" aria-label="新对话" onClick={() => void newConversation()}><Plus size={15} /></button>
-        {!embedded && <button type="button" aria-label="关闭 Agent" onClick={onClose}><X size={15} /></button>}
-      </header>
+      <header><Bot size={16} /><strong>Workflow Agent</strong><div className="workflow-agent__mode"><button type="button" className={mode === 'online' ? 'is-active' : ''} onClick={() => switchMode('online')}>网站</button><button type="button" className={mode === 'local' ? 'is-active' : ''} onClick={() => switchMode('local')}>本机</button></div><span className={`workflow-agent__status is-${visibleStatus}`}><Circle size={8} />{statusLabel(visibleStatus)}</span><button type="button" title="新对话" onClick={() => void newConversation()}><Plus size={15} /></button><button type="button" aria-label="关闭 Agent" onClick={onClose}><X size={15} /></button></header>
       <nav>{tabs.map(item => { const Icon = item.icon; return <button key={item.id} type="button" className={tab === item.id ? 'is-active' : ''} onClick={() => { setTab(item.id); if (item.id === 'history') void loadThreads(); }}><Icon size={13} />{item.label}</button>; })}</nav>
       <section className="workflow-agent__body">
         {tab === 'setup' && (mode === 'local' ? <div className="workflow-agent__connect"><label>Agent 地址<input value={url} onChange={event => setUrl(event.target.value)} /></label><label>连接 Token<input type="password" value={token} onChange={event => setToken(event.target.value)} /></label><button type="button" onClick={connect}>{status === 'connecting' ? '连接中...' : '连接本机 Agent'}</button><p>运行 <code>npm run flovart:agent</code>，再填入终端显示的 Token。连接仅绑定当前网页 Origin。</p></div> : <div className="workflow-agent__connect"><strong>网站 Agent</strong><p>{onOnlineTurn ? '已连接项目现有 Provider 与 Agent 编排。API Key 仍只保存在浏览器本地。' : '网站 Agent 尚未连接 Provider 编排，请先在设置中配置文本模型。'}</p></div>)}

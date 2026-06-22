@@ -538,6 +538,35 @@ describe('InfiniteWorkflow surface interactions', () => {
     expect(persist).toHaveBeenCalledTimes(2);
   });
 
+  it('drops a right-panel media card at the pointer instead of the viewport center', async () => {
+    render(<Harness />);
+    const media = {
+      id: 'asset:hero',
+      source: 'asset',
+      sourceId: 'hero',
+      name: '主图',
+      href: 'https://example.com/hero.png',
+      mimeType: 'image/png',
+      type: 'image',
+      width: 320,
+      height: 180,
+    };
+
+    fireEvent.drop(editor(), {
+      clientX: 500,
+      clientY: 350,
+      dataTransfer: {
+        files: [],
+        items: [],
+        getData: (type: string) => type === 'application/x-flovart-studio-media' ? JSON.stringify(media) : '',
+      },
+    });
+
+    await waitFor(() => expect(editor().querySelectorAll('[data-workflow-node-id]')).toHaveLength(3));
+    const dropped = editor().querySelector<HTMLElement>('.workflow-node--image.is-selected')!;
+    expect(dropped.style.transform).toBe('translate(290px, 232px)');
+  });
+
   it('discards an import that completes after switching projects', async () => {
     class TestImage {
       naturalWidth = 800;

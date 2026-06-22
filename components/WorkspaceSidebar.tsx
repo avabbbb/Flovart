@@ -559,7 +559,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
 
     return (
         <div
-            className="isl-panel compact-sidebar-panel theme-aware fixed z-[45] overflow-hidden transition-all duration-300"
+            className="isl-panel compact-sidebar-panel theme-aware absolute z-[45] overflow-hidden transition-all duration-300"
             style={{
                 top: `${outerGap}px`,
                 bottom: `${outerGap}px`,

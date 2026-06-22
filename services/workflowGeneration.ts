@@ -191,6 +191,7 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
           elementId: nodeId, prompt, modelId: resolved.model, apiKeyPayload: resolved.key,
           aspectRatio: config.aspectRatio as UnifiedIgnitionInput['aspectRatio'], durationSec: config.durationSec,
           resolution: config.resolution, generateAudio: config.generateAudio, watermark: config.watermark, references,
+          signal: controller.signal,
           onProgress: progress => {
             if (!stillActive()) return;
             current = patchInitiator(canonical(runtime, current), nodeId, { status: 'loading', progress: Math.max(0, Math.min(99, progress)), generationRequestId: requestId });

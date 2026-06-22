@@ -223,9 +223,8 @@ export const Toolbar: React.FC<ToolbarProps> = ({
     if (isCropping) {
         return (
             <div
-                data-testid="canvas-crop-controls"
-                className={`theme-aware pointer-events-auto z-50 flex w-52 flex-col gap-3 rounded-[1.25rem] border-[1.5px] p-4 ${embedded ? 'relative' : 'absolute'}`}
-                style={embedded ? {
+                className={`theme-aware z-50 flex gap-3 rounded-[1.25rem] border-[1.5px] ${isHorizontal ? 'pointer-events-auto relative w-auto flex-row items-center p-2' : 'absolute top-3 w-52 flex-col p-4'}`}
+                style={isHorizontal ? {
                     transform: `scale(${compactScale})`,
                     transformOrigin: 'bottom center',
                     background: 'var(--isl-card)',
@@ -280,8 +279,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
         >
         <div
             ref={innerRef}
-            data-testid="canvas-toolbar"
-            className={`pointer-events-auto flex items-center gap-1 rounded-2xl border-[1.5px] px-1.5 py-1 ${isHorizontal ? 'max-w-[calc(100vw-2rem)] flex-row flex-wrap justify-center overflow-visible' : 'flex-col'}`}
+            className={`pointer-events-auto flex items-center gap-1 rounded-2xl border-[1.5px] px-1.5 py-1 ${isHorizontal ? 'max-w-[calc(100vw-2rem)] flex-row overflow-x-auto' : 'flex-col'}`}
             style={{
                 background: 'var(--isl-card)',
                 borderColor: 'var(--isl-border)',

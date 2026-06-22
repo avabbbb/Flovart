@@ -345,6 +345,28 @@ describe('aiGateway - Seedance multimodal slots', () => {
 });
 
 describe('aiGateway - generateImageWithProvider', () => {
+    it('forwards cancellation to the provider request and returns a readable stop message', async () => {
+        const controller = new AbortController();
+        globalThis.fetch = vi.fn((_url, init) => new Promise((_resolve, reject) => {
+            init?.signal?.addEventListener('abort', () => reject(new DOMException('生成已停止', 'AbortError')), { once: true });
+        }));
+
+        const pending = executeUnifiedIgnition({
+            elementId: 'target',
+            prompt: '生成一张图片',
+            modelId: 'openai/gpt-image-1',
+            apiKeyPayload: {
+                id: 'or-key', provider: 'openrouter', capabilities: ['image'], key: 'sk-test', createdAt: 0, updatedAt: 0,
+            },
+            signal: controller.signal,
+        });
+        controller.abort();
+        const result = await pending;
+
+        expect(vi.mocked(globalThis.fetch).mock.calls[0][1]?.signal).toBe(controller.signal);
+        expect(result).toMatchObject({ ok: false, errorMessage: '生成已停止，可重新发起。' });
+    });
+
     it('executeUnifiedIgnition sends precise @ role bindings with image and text references', async () => {
         globalThis.fetch = vi.fn().mockResolvedValue(mockJsonResponse({
             choices: [{

@@ -269,7 +269,8 @@ export async function editImage(
   images: ImageInput[], 
   prompt: string,
   mask?: ImageInput,
-  apiKey?: string
+  apiKey?: string,
+  signal?: AbortSignal,
 ): Promise<{ newImageBase64: string | null; newImageMimeType: string | null; textResponse: string | null; }> {
   
   // 步骤1：转换图片格式 - 提取 base64 数据
@@ -311,6 +312,7 @@ export async function editImage(
         parts: parts,  // 传入组装好的内容
       },
       config: {
+        abortSignal: signal,
         responseModalities: [Modality.IMAGE, Modality.TEXT],  // 请求返回图片和文本
       },
     });
@@ -384,13 +386,14 @@ export async function editImage(
  * - 不需要输入图片，纯文本生成
  * - 生成速度较快
  */
-export async function generateImageFromText(prompt: string, apiKey?: string): Promise<{ newImageBase64: string | null; newImageMimeType: string | null; textResponse: string | null; }> {
+export async function generateImageFromText(prompt: string, apiKey?: string, signal?: AbortSignal): Promise<{ newImageBase64: string | null; newImageMimeType: string | null; textResponse: string | null; }> {
   try {
     const ai = getClient("image", apiKey);
     const response = await ai.models.generateImages({
         model: runtimeConfig.textToImageModel || 'imagen-4.0-generate-001',  // 使用 Imagen 4.0 模型
         prompt: prompt,
         config: {
+          abortSignal: signal,
           numberOfImages: 1,              // 生成1张图片
           outputMimeType: 'image/png',    // PNG 格式
         },

@@ -1,4 +1,4 @@
-import { Image as ImageIcon, LoaderCircle, Music2, Settings2, Type, Upload, Video, X } from 'lucide-react';
+import { Image as ImageIcon, Music2, Settings2, Type, Upload, Video, X } from 'lucide-react';
 import { useRef, type PointerEvent as ReactPointerEvent } from 'react';
 import { WorkflowConfigPanel } from './WorkflowConfigPanel';
 import { buildCssFilter } from '../ImageFilterPanel';
@@ -40,6 +40,9 @@ export function WorkflowNode({
 }) {
   const Icon = iconByType[node.type];
   const status = node.metadata.status || 'idle';
+  const progress = Math.max(0, Math.min(100, Math.round(node.metadata.progress || 0)));
+  const generationMode = node.metadata.config?.mode || node.type;
+  const generationLabel = generationMode === 'video' ? '视频生成中' : generationMode === 'text' ? '文本生成中' : '图片生成中';
   const mediaInput = useRef<HTMLInputElement>(null);
   const media = useWorkflowMediaUrl(node.metadata.storageKey, node.metadata.href);
   const isMedia = node.type === 'image' || node.type === 'video' || node.type === 'audio';
@@ -70,7 +73,6 @@ export function WorkflowNode({
       <header className="workflow-node__header">
         <Icon size={14} />
         <span>{node.title}</span>
-        {status === 'loading' && <LoaderCircle size={13} className="workflow-spin" />}
         {status === 'error' && <span className="workflow-node__error-dot" title={node.metadata.error}>!</span>}
       </header>
       <div className="workflow-node__body">
@@ -95,6 +97,10 @@ export function WorkflowNode({
           <WorkflowConfigPanel node={node} onChange={onChangeMetadata} onRun={onRun} />
         )}
         {mediaDetails && <span className="workflow-node__media-details">{mediaDetails}</span>}
+        {status === 'loading' && <div className="flv-generation-glass workflow-node__generation-glass" data-testid="workflow-generation-glass">
+          <span className="flv-generation-glass__status">{generationLabel}<b>{progress}%</b></span>
+        </div>}
+        {status === 'error' && node.metadata.error && <div className="workflow-node__generation-error" title={node.metadata.error}>{node.metadata.error}</div>}
       </div>
       <button className="workflow-resize" aria-label="调整节点大小" onPointerDown={onResizeStart} />
     </div>

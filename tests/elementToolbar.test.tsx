@@ -27,7 +27,7 @@ const elements: Element[] = [
   },
 ];
 
-function renderToolbar(handleGroupSelection = vi.fn()) {
+function renderToolbar(handleGroupSelection = vi.fn(), handleExportSelection = vi.fn()) {
   render(
     <svg>
       <ElementToolbar
@@ -47,6 +47,7 @@ function renderToolbar(handleGroupSelection = vi.fn()) {
         getElementBounds={(element) => ({ x: element.x, y: element.y, width: 'width' in element ? element.width : 0, height: 'height' in element ? element.height : 0 })}
         handleAlignSelection={() => undefined}
         handleGroupSelection={handleGroupSelection}
+        handleExportSelection={handleExportSelection}
         handleCopyElement={() => undefined}
         handleDownloadImage={() => undefined}
         handleDeleteElement={() => undefined}
@@ -65,16 +66,22 @@ function renderToolbar(handleGroupSelection = vi.fn()) {
       />
     </svg>,
   );
-  return handleGroupSelection;
+  return { handleGroupSelection, handleExportSelection };
 }
 
 describe('ElementToolbar', () => {
   it('shows an icon-only Group action for multi-selected canvas layers', () => {
-    const handleGroupSelection = renderToolbar();
+    const { handleGroupSelection } = renderToolbar();
 
     const groupButton = screen.getByLabelText('Group selected canvas layers');
     expect(groupButton.textContent).toBe('');
     fireEvent.click(groupButton);
     expect(handleGroupSelection).toHaveBeenCalled();
+  });
+
+  it('exports media from a multi-selection through the canvas toolbar', () => {
+    const { handleExportSelection } = renderToolbar();
+    fireEvent.click(screen.getByRole('button', { name: '批量导出所选媒体' }));
+    expect(handleExportSelection).toHaveBeenCalledTimes(1);
   });
 });

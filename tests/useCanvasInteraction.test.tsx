@@ -81,7 +81,16 @@ function CanvasHarness({
       onMouseMove={interaction.handleMouseMove}
       onMouseUp={interaction.handleMouseUp}
       onWheel={interaction.handleWheel}
-    />
+    >
+      {board.elements.map(element => {
+        if (element.type !== 'shape') return null;
+        return (
+          <g key={element.id} data-id={element.id} transform={`translate(${element.x}, ${element.y})`}>
+            <rect width={element.width} height={element.height} />
+          </g>
+        );
+      })}
+    </svg>
   );
 }
 
@@ -170,5 +179,39 @@ describe('useCanvasInteraction edge cases', () => {
 
     expect(latestBoard.elements).toEqual([expect.objectContaining({ type: 'line' }) as Element]);
     expect(commitSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the final React transform after dragging an element', () => {
+    Object.defineProperty(globalThis, 'CSS', {
+      configurable: true,
+      value: { escape: (value: string) => value },
+    });
+    let latestBoard = createBoard({
+      elements: [{
+        id: 'shape-1',
+        type: 'shape',
+        shapeType: 'rectangle',
+        x: 100,
+        y: 100,
+        width: 120,
+        height: 80,
+        fillColor: '#38bdf8',
+        strokeColor: '#111827',
+        strokeWidth: 2,
+      }],
+    });
+    const { getByTestId } = render(
+      <CanvasHarness initialBoard={latestBoard} onBoard={board => { latestBoard = board; }} />,
+    );
+    const svg = getByTestId('canvas') as unknown as SVGSVGElement;
+    mockCanvasRect(svg);
+    const shape = svg.querySelector('[data-id="shape-1"]') as SVGGElement;
+
+    fireEvent.mouseDown(shape, { button: 0, clientX: 130, clientY: 140 });
+    fireEvent.mouseMove(svg, { clientX: 230, clientY: 190 });
+    fireEvent.mouseUp(svg, { button: 0, clientX: 230, clientY: 190 });
+
+    expect(latestBoard.elements[0]).toEqual(expect.objectContaining({ x: 200, y: 150 }));
+    expect(svg.querySelector('[data-id="shape-1"]')?.getAttribute('transform')).toBe('translate(200, 150)');
   });
 });

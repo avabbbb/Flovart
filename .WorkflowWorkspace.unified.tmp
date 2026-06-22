@@ -5,7 +5,6 @@ import type { ModelPreference, UserApiKey } from '../../types';
 import '../../styles/workflow.css';
 import type { GenerationCapability, GenerationMode } from '../../services/generationCapabilities';
 import { StudioRightDrawer } from '../studio/StudioRightDrawer';
-import { StudioMediaBrowser, type StudioMediaItem } from '../studio/StudioMediaBrowser';
 import { createWorkflowNode } from './constants';
 import { InfiniteWorkflow } from './InfiniteWorkflow';
 import { WorkflowGenerationCapabilitiesProvider, type WorkflowSharedMedia } from './WorkflowConfigPanel';
@@ -14,19 +13,19 @@ import type { WorkflowModelOptions } from './WorkflowNodePromptBar';
 import { WorkflowAgentPanel, type WorkflowOnlineTurnInput } from './WorkflowAgentPanel';
 import type { WorkflowImageToolHandlers } from './WorkflowNodeToolbar';
 import { WorkflowSidebar } from './WorkflowSidebar';
-import { discardWorkflowMediaRecord, fitWorkflowMediaSize, ingestWorkflowMedia, releaseWorkflowMediaRecord, type WorkflowMediaRecord } from './media';
 
 export interface WorkflowWorkspaceProps {
   theme: 'light' | 'dark';
   language: 'en' | 'zho';
+  onSwitchToCanvas: () => void;
+  onToggleTheme?: () => void;
+  onToggleLanguage?: () => void;
   resolveGenerationCapability?: (mode: GenerationMode, modelId?: string) => GenerationCapability;
   sharedMedia?: WorkflowSharedMedia[];
   onReversePrompt?: (imageHref: string, mimeType: string, width?: number, height?: number) => Promise<string>;
   onRunNode?: (projectId: string, nodeId: string) => Promise<void> | void;
   onStopNode?: (projectId: string, nodeId: string) => void;
   onSaveWorkflowMedia?: (projectId: string, nodeId: string) => void;
-  onRenameSharedMedia?: (media: WorkflowSharedMedia, name: string) => void;
-  onRemoveSharedMedia?: (media: WorkflowSharedMedia) => void;
   imageTools?: WorkflowImageToolHandlers;
   t: (key: string, ...args: any[]) => string;
   userApiKeys: UserApiKey[];
@@ -48,8 +47,6 @@ export function WorkflowWorkspace({
   onRunNode,
   onStopNode,
   onSaveWorkflowMedia,
-  onRenameSharedMedia,
-  onRemoveSharedMedia,
   imageTools,
   t,
   userApiKeys,
@@ -67,7 +64,7 @@ export function WorkflowWorkspace({
   const updateProject = useWorkflowStore(state => state.updateProject);
   const activeProject = projects.find(project => project.id === activeProjectId) || null;
   const [leftOpen, setLeftOpen] = useState(true);
-  const [rightOpen, setRightOpen] = useState(() => localStorage.getItem('workflowRightPanelOpen') !== 'false');
+  const [rightOpen, setRightOpen] = useState(false);
   const [rightTab, setRightTab] = useState<WorkflowRightTab>('agent');
   const [rightWidth, setRightWidth] = useState(() => Number(localStorage.getItem('workflowRightPanelWidth')) || 390);
 
@@ -79,47 +76,26 @@ export function WorkflowWorkspace({
     localStorage.setItem('workflowRightPanelWidth', String(rightWidth));
   }, [rightWidth]);
 
-  useEffect(() => {
-    localStorage.setItem('workflowRightPanelOpen', String(rightOpen));
-  }, [rightOpen]);
-
-  const insertSharedMedia = async (media: WorkflowSharedMedia) => {
+  const insertSharedMedia = (media: WorkflowSharedMedia) => {
     if (!activeProject) return;
-    const expectedProjectId = activeProject.id;
-    let record: WorkflowMediaRecord | undefined;
-    try {
-      if (!/^https?:\/\//i.test(media.href)) {
-        const blob = await (await fetch(media.href)).blob();
-        record = await ingestWorkflowMedia(new File([blob], media.name, { type: blob.type || media.mimeType }));
-      }
-      const current = useWorkflowStore.getState().projects.find(project => project.id === expectedProjectId);
-      if (!current) {
-        if (record) await discardWorkflowMediaRecord(record.storageKey);
-        return;
-      }
-      const type = record?.type || media.type;
-      const size = fitWorkflowMediaSize(type, record?.naturalWidth || media.width, record?.naturalHeight || media.height);
-      const k = Math.max(current.viewport.k, 0.12);
-      const center = { x: (360 - current.viewport.x) / k, y: (220 - current.viewport.y) / k };
-      const storedMetadata = record && (({ type: _type, ...metadata }) => metadata)(record);
-      const node = {
-        ...createWorkflowNode(nanoid(), type, { x: center.x - size.width / 2, y: center.y - size.height / 2 }, storedMetadata
-          ? storedMetadata
-          : { href: media.href, mimeType: media.mimeType, name: media.name, naturalWidth: media.width, naturalHeight: media.height, status: 'success' }),
-        ...size,
-        freeResize: false,
-        title: media.name,
-      };
-      updateProject(current.id, { nodes: [...current.nodes, node], selectedNodeIds: [node.id] });
-      if (record) releaseWorkflowMediaRecord(record.storageKey);
-    } catch {
-      if (record) await discardWorkflowMediaRecord(record.storageKey);
-    }
+    const k = Math.max(activeProject.viewport.k, 0.12);
+    const node = createWorkflowNode(
+      nanoid(),
+      media.type,
+      {
+        x: (360 - activeProject.viewport.x) / k,
+        y: (220 - activeProject.viewport.y) / k,
+      },
+      { href: media.href, mimeType: media.mimeType, name: media.name, status: 'success' },
+    );
+    node.title = media.name;
+    updateProject(activeProject.id, {
+      nodes: [...activeProject.nodes, node],
+      selectedNodeIds: [node.id],
+    });
   };
 
-  const mediaForTab = sharedMedia.filter(media => rightTab === 'history'
-    ? (media.source || (media.id.startsWith('history:') ? 'history' : 'asset')) === 'history'
-    : (media.source || (media.id.startsWith('history:') ? 'history' : 'asset')) === 'asset');
+  const mediaForTab = sharedMedia.filter(media => rightTab === 'history' ? media.id.startsWith('history:') : media.id.startsWith('asset:'));
 
   if (!hydrated) return <div className="workflow-loading">正在加载 Workflow...</div>;
 
@@ -128,7 +104,7 @@ export function WorkflowWorkspace({
       <WorkflowSidebar
         open={leftOpen}
         onOpenChange={setLeftOpen}
-        outerGap={12}
+        outerGap={60}
         project={activeProject}
         onProjectChange={patch => activeProject && updateProject(activeProject.id, patch)}
       />
@@ -174,7 +150,7 @@ export function WorkflowWorkspace({
       <StudioRightDrawer
         open={rightOpen}
         onOpenChange={setRightOpen}
-        outerGap={12}
+        outerGap={60}
         width={rightWidth}
         minWidth={320}
         maxWidth={520}
@@ -197,15 +173,19 @@ export function WorkflowWorkspace({
           />
         )}
         {rightTab !== 'agent' && (
-          <StudioMediaBrowser
-            mode={rightTab}
-            items={mediaForTab}
-            language={language}
-            onInsert={media => { void insertSharedMedia(media as WorkflowSharedMedia); }}
-            onRename={rightTab === 'assets' && onRenameSharedMedia ? (media: StudioMediaItem, name: string) => onRenameSharedMedia(media as WorkflowSharedMedia, name) : undefined}
-            onRemove={rightTab === 'assets' && onRemoveSharedMedia ? (media: StudioMediaItem) => onRemoveSharedMedia(media as WorkflowSharedMedia) : undefined}
-            onReversePrompt={onReversePrompt ? media => onReversePrompt(media.href, media.mimeType, media.width, media.height) : undefined}
-          />
+          <div className="workflow-shared-media">
+            {mediaForTab.length === 0 && <p>{rightTab === 'history' ? '还没有生成历史' : '素材库为空'}</p>}
+            <div>
+              {mediaForTab.map(media => (
+                <button key={media.id} type="button" onClick={() => insertSharedMedia(media)} title="添加到当前 Workflow">
+                  {media.type === 'image'
+                    ? <img src={media.href} alt={media.name} />
+                    : <video src={media.href} muted playsInline preload="metadata" />}
+                  <span>{media.name}</span>
+                </button>
+              ))}
+            </div>
+          </div>
         )}
       </StudioRightDrawer>
     </section>

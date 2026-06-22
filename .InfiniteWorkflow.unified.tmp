@@ -2,7 +2,6 @@ import { nanoid } from 'nanoid';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { DragEvent as ReactDragEvent, PointerEvent as ReactPointerEvent } from 'react';
 import type { ModelPreference, UserApiKey } from '../../types';
-import { STUDIO_MEDIA_DRAG_TYPE } from '../studio/StudioMediaBrowser';
 import { createWorkflowNode } from './constants';
 import {
   discardWorkflowMediaRecord,
@@ -32,7 +31,6 @@ import { WorkflowConfigPanel } from './WorkflowConfigPanel';
 import { WorkflowToolbar, type WorkflowTool } from './WorkflowToolbar';
 import type { WorkflowConnection, WorkflowNode as WorkflowNodeData, WorkflowNodeType, WorkflowOp, WorkflowPoint, WorkflowProject, WorkflowSnapshot, WorkflowViewport } from './types';
 import { runWorkflowImageAgent, runWorkflowImageEdit, runWorkflowImageSplit, type WorkflowImageToolOutcome, type WorkflowImageToolRuntime } from '../../services/workflowImageTools';
-import { exportMediaArchive } from '../../utils/batchMediaExport';
 
 type Frame = Pick<WorkflowProject, 'nodes' | 'connections'>;
 type ImageToolTransaction = { id: string; projectId: string; nodeId: string; frame: Frame };
@@ -63,17 +61,6 @@ function workflowDropFiles(dataTransfer: DataTransfer) {
     .filter(item => item.kind === 'file')
     .map(item => item.getAsFile())
     .filter((file): file is File => Boolean(file));
-}
-
-function workflowDropSharedMedia(dataTransfer: DataTransfer): WorkflowSharedMedia | null {
-  try {
-    const raw = dataTransfer.getData(STUDIO_MEDIA_DRAG_TYPE);
-    if (!raw) return null;
-    const media = JSON.parse(raw) as WorkflowSharedMedia;
-    return media?.id && media?.href && ['image', 'video'].includes(media.type) ? media : null;
-  } catch {
-    return null;
-  }
 }
 
 export function InfiniteWorkflow({
@@ -440,46 +427,9 @@ export function InfiniteWorkflow({
     }
   }, [applyOps]);
 
-  const addSharedMediaAt = useCallback(async (media: WorkflowSharedMedia, center: WorkflowPoint) => {
-    if (/^https?:\/\//i.test(media.href)) {
-      const size = fitWorkflowMediaSize(media.type, media.width, media.height);
-      const node = {
-        ...createWorkflowNode(nanoid(), media.type, { x: center.x - size.width / 2, y: center.y - size.height / 2 }, {
-          href: media.href,
-          mimeType: media.mimeType,
-          name: media.name,
-          naturalWidth: media.width,
-          naturalHeight: media.height,
-          status: 'success',
-        }),
-        ...size,
-        freeResize: false,
-        title: media.name,
-      };
-      applyOps([{ type: 'add_node', node }]);
-      return;
-    }
-    const expectedProjectId = projectRef.current.id;
-    try {
-      const blob = await (await fetch(media.href)).blob();
-      if (!mountedRef.current || projectRef.current.id !== expectedProjectId) return;
-      await addMediaAt(new File([blob], media.name, { type: blob.type || media.mimeType }), center, expectedProjectId);
-    } catch (error) {
-      if (mountedRef.current && projectRef.current.id === expectedProjectId) setNotice(error instanceof Error ? error.message : '共享素材导入失败');
-    }
-  }, [addMediaAt, applyOps]);
-
   const dropMedia = useCallback((event: ReactDragEvent<HTMLDivElement>) => {
     event.preventDefault();
     event.stopPropagation();
-    const sharedMedia = workflowDropSharedMedia(event.dataTransfer);
-    if (sharedMedia) {
-      const point = Number.isFinite(event.clientX) && Number.isFinite(event.clientY)
-        ? screenToWorkflow(event.clientX, event.clientY)
-        : viewportCenter();
-      void addSharedMediaAt(sharedMedia, point);
-      return;
-    }
     const files = workflowDropFiles(event.dataTransfer);
     const file = files.find(item => {
       try { workflowMediaType(item); return true; } catch { return false; }
@@ -489,7 +439,7 @@ export function InfiniteWorkflow({
       return;
     }
     void addMediaAt(file, screenToWorkflow(event.clientX, event.clientY));
-  }, [addMediaAt, addSharedMediaAt, screenToWorkflow, viewportCenter]);
+  }, [addMediaAt, screenToWorkflow]);
 
   const localPoint = useCallback((clientX: number, clientY: number): WorkflowPoint => {
     const rect = rootRef.current?.getBoundingClientRect();
@@ -854,8 +804,19 @@ export function InfiniteWorkflow({
   }, [commitFrame]);
 
   const addSharedMedia = useCallback(async (media: WorkflowSharedMedia) => {
-    await addSharedMediaAt(media, viewportCenter());
-  }, [addSharedMediaAt, viewportCenter]);
+    if (/^https?:\/\//i.test(media.href)) {
+      addNode(media.type, { href: media.href, mimeType: media.mimeType, status: 'success' });
+      return;
+    }
+    const expectedProjectId = projectRef.current.id;
+    try {
+      const blob = await (await fetch(media.href)).blob();
+      if (!mountedRef.current || projectRef.current.id !== expectedProjectId) return;
+      await addMediaAt(new File([blob], media.name, { type: blob.type || media.mimeType }), viewportCenter(), expectedProjectId);
+    } catch (error) {
+      if (mountedRef.current && projectRef.current.id === expectedProjectId) setNotice(error instanceof Error ? error.message : '共享素材导入失败');
+    }
+  }, [addMediaAt, addNode, viewportCenter]);
 
   const removeMedia = useCallback((node: WorkflowNodeData) => {
     if (node.isLocked) return;
@@ -986,22 +947,6 @@ export function InfiniteWorkflow({
   } : undefined;
   const selectedNodes = useMemo(() => new Set(selectedNodeIds), [selectedNodeIds]);
   const selectedNodeData = project.nodes.filter(node => node.isVisible !== false && selectedNodes.has(node.id));
-  const exportSelectedMedia = async (nodes: WorkflowNodeData[]) => {
-    const media = nodes.filter(node => node.type === 'image' || node.type === 'video' || node.type === 'audio');
-    try {
-      const count = await exportMediaArchive(media.map(node => ({
-        id: node.id,
-        x: node.position.x,
-        y: node.position.y,
-        name: node.metadata.name || node.title,
-        mimeType: node.metadata.mimeType,
-        loadBlob: () => loadWorkflowMediaBlob(node.metadata.storageKey, node.metadata.href),
-      })), `Flovart-Workflow-${project.title}`);
-      setNotice(`已按画布顺序导出 ${count} 个媒体文件。`);
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : '批量导出失败。');
-    }
-  };
   const overlayBounds = selectedNodeData.length ? selectedNodeData.reduce((bounds, node) => ({
     left: Math.min(bounds.left, node.position.x),
     top: Math.min(bounds.top, node.position.y),
@@ -1130,7 +1075,6 @@ export function InfiniteWorkflow({
             nodes={selectedNodeData}
             onCopy={ids => { clipboardRef.current = projectRef.current.nodes.filter(node => ids.includes(node.id)); setClipboardVersion(version => version + 1); }}
             onDelete={ids => applyOps([{ type: 'delete_nodes', ids }])}
-            onExport={nodes => { void exportSelectedMedia(nodes); }}
             onRun={id => onRunNode(id)}
             onStop={onStopNode}
             onPromptFocus={() => setPromptFocusSignal(value => value + 1)}
