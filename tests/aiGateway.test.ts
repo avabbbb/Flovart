@@ -77,6 +77,13 @@ describe('inferProviderFromModel', () => {
         expect(supportsMaskImageEditing('openai/gpt-image-1')).toBe(false);
     });
 
+    it('识别 RunningHub 标准模型', () => {
+        expect(inferProviderFromModel('rhart-image/f-2-dev/text-to-image-lora')).toBe('runningHub');
+        expect(inferCapabilityFromModel('rhart-image/f-2-dev/text-to-image-lora')).toBe('image');
+        expect(inferCapabilityFromModel('rhart-video-v3.1-fast/image-to-video')).toBe('video');
+        expect(inferCapabilityFromModel('rhart-image-g-2/image-to-image')).toBe('image');
+    });
+
     it('未知模型回退到 custom', () => {
         expect(inferProviderFromModel('some-unknown-model')).toBe('custom');
         expect(inferProviderFromModel('')).toBe('custom');

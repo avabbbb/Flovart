@@ -63,7 +63,7 @@ describe('workflow reference parity', () => {
       { id: 'image', name: '产品主图', href: 'data:image/png;base64,AA==', mimeType: 'image/png', type: 'image' },
       { id: 'video', name: '运动参考', href: 'https://example.com/motion.mp4', mimeType: 'video/mp4', type: 'video' },
     ]}>
-      <WorkflowToolbar tool="select" canUndo={false} canRedo={false} onToolChange={vi.fn()} onAddNode={vi.fn()} onImport={vi.fn()} onAddSharedMedia={onAddSharedMedia} onUndo={vi.fn()} onRedo={vi.fn()} onFit={vi.fn()} onToggleGrid={vi.fn()} />
+      <WorkflowToolbar tool="select" canUndo={false} canRedo={false} onToolChange={vi.fn()} onAddNode={vi.fn()} onAddSharedMedia={onAddSharedMedia} onUndo={vi.fn()} onRedo={vi.fn()} onFit={vi.fn()} onToggleGrid={vi.fn()} />
     </WorkflowGenerationCapabilitiesProvider>);
 
     fireEvent.click(screen.getByRole('button', { name: '打开共享素材' }));

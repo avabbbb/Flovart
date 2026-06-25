@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
-import type { UserApiKey, ModelPreference, AIProvider, AICapability } from '../types';
+import type { UserApiKey, ModelPreference, AIProvider, AICapability, ModelItem } from '../types';
 import { saveKeysEncrypted, loadKeysDecrypted, clearAllKeyData, migrateLegacyKeys } from '../utils/keyVault';
 import { getUsageSummary } from '../utils/usageMonitor';
 import {
@@ -11,8 +11,13 @@ import {
     isGoogleTextToImageModel,
     PROVIDER_LABELS,
 } from '../services/aiGateway';
+import { normalizeProviderBaseUrl } from '../services/baseUrl';
 import { setGeminiRuntimeConfig } from '../services/geminiService';
 import { refreshAllProviderModels } from '../services/modelFetcher';
+import {
+    isLikelyRunningHubModelEndpoint,
+    normalizeRunningHubModelEndpoint,
+} from '../services/runningHubService';
 import { getGenerationCapability } from '../services/generationCapabilities';
 import {
     findBestModelSelection,
@@ -71,8 +76,54 @@ const FALLBACK_VIDEO_OPTIONS = ensureModelOption([
     ...(PROVIDER_MODELS.google?.video || []),
 ], DEFAULT_MODEL_PREFS.videoModel);
 
+const sanitizeRunningHubModelId = (model?: string) => {
+    const normalized = normalizeRunningHubModelEndpoint(model);
+    if (!normalized) return '';
+    return isLikelyRunningHubModelEndpoint(normalized) ? normalized : '';
+};
+
+const sanitizeRunningHubModelItems = (models?: ModelItem[]) => (models || [])
+    .map(model => {
+        const id = sanitizeRunningHubModelId(model.id);
+        return id ? { ...model, id, name: model.name || id } : null;
+    })
+    .filter((model): model is ModelItem => Boolean(model));
+
+const mergeFetchedModelsIntoKey = (key: UserApiKey, modelItems: ModelItem[]) => {
+    if (modelItems.length === 0) return key;
+    if (key.provider !== 'runningHub') {
+        return { ...key, models: modelItems, updatedAt: Date.now() };
+    }
+    const fetchedIds = new Set(modelItems.map(model => model.id));
+    const preservedCustomModels = (key.customModels || [])
+        .map(sanitizeRunningHubModelId)
+        .filter((model): model is string => Boolean(model) && !fetchedIds.has(model));
+    const mergedModels = [
+        ...modelItems,
+        ...preservedCustomModels.map(id => ({ id, name: id })),
+    ];
+    const validIds = new Set(mergedModels.map(model => model.id));
+    const defaultModel = key.defaultModel && validIds.has(key.defaultModel)
+        ? key.defaultModel
+        : mergedModels[0]?.id;
+    return {
+        ...key,
+        models: mergedModels,
+        customModels: mergedModels.map(model => model.id),
+        defaultModel,
+        updatedAt: Date.now(),
+    };
+};
+
 export const normalizeApiKeyEntry = (item: Partial<UserApiKey>): UserApiKey | null => {
     if (!item || !item.id || !item.provider || !item.key) return null;
+    const runningHubModels = item.provider === 'runningHub' ? sanitizeRunningHubModelItems(item.models) : item.models;
+    const runningHubCustomModels = item.provider === 'runningHub'
+        ? (item.customModels || []).map(sanitizeRunningHubModelId).filter((model): model is string => Boolean(model))
+        : item.customModels;
+    const runningHubDefaultModel = item.provider === 'runningHub'
+        ? sanitizeRunningHubModelId(item.defaultModel) || runningHubModels?.[0]?.id || runningHubCustomModels?.[0]
+        : item.defaultModel;
     return {
         id: item.id,
         provider: item.provider,
@@ -81,13 +132,13 @@ export const normalizeApiKeyEntry = (item: Partial<UserApiKey>): UserApiKey | nu
                 ? item.capabilities
                 : inferCapabilitiesByProvider(item.provider),
         key: item.key,
-        baseUrl: item.baseUrl,
+        baseUrl: item.provider === 'runningHub' ? normalizeProviderBaseUrl('runningHub', item.baseUrl) : item.baseUrl,
         name: item.name,
         isDefault: item.isDefault,
         status: item.status,
-        customModels: item.customModels,
-        defaultModel: item.defaultModel,
-        models: item.models,
+        customModels: runningHubCustomModels,
+        defaultModel: runningHubDefaultModel,
+        models: runningHubModels,
         extraConfig: item.extraConfig,
         createdAt: item.createdAt || Date.now(),
         updatedAt: item.updatedAt || Date.now(),
@@ -130,6 +181,8 @@ export function useApiKeys(isSettingsPanelOpen: boolean) {
             return DEFAULT_MODEL_PREFS;
         }
     });
+    const [modelPreferenceSavedAt, setModelPreferenceSavedAt] = useState<number | null>(null);
+    const [modelPreferenceSaveError, setModelPreferenceSaveError] = useState<string | null>(null);
     const [activeUserKeyId, setActiveUserKeyId] = useState<string | null>(null);
     const [activeUserModelId, setActiveUserModelId] = useState<string | null>(null);
 
@@ -378,7 +431,7 @@ export function useApiKeys(isSettingsPanelOpen: boolean) {
         if (!apiKeysLoaded || userApiKeys.length === 0 || autoRefreshRan.current) return;
         autoRefreshRan.current = true;
         const keysToFetch = userApiKeys
-            .filter(k => k.key && k.status !== 'error' && k.provider !== 'runningHub')
+            .filter(k => k.key && k.status !== 'error')
             .map(k => ({ id: k.id, provider: k.provider, key: k.key, baseUrl: k.baseUrl }));
         if (keysToFetch.length === 0) return;
         refreshAllProviderModels(keysToFetch).then(results => {
@@ -387,14 +440,20 @@ export function useApiKeys(isSettingsPanelOpen: boolean) {
                 const fetched = results.get(k.id);
                 if (!fetched || fetched.length === 0) return k;
                 const modelItems = fetched.map(m => ({ id: m.id, name: m.name || m.id }));
-                return { ...k, models: modelItems, updatedAt: Date.now() };
+                return mergeFetchedModelsIntoKey(k, modelItems);
             }));
         }).catch(() => { /* silent background refresh failure */ });
     }, [apiKeysLoaded, userApiKeys.length]);
 
     // 持久化 modelPreference
     useEffect(() => {
-        try { localStorage.setItem('modelPreference.v1', JSON.stringify(modelPreference)); } catch { /* non-critical */ }
+        try {
+            localStorage.setItem('modelPreference.v1', JSON.stringify(modelPreference));
+            setModelPreferenceSavedAt(Date.now());
+            setModelPreferenceSaveError(null);
+        } catch (error) {
+            setModelPreferenceSaveError(error instanceof Error ? error.message : '本机存储不可用');
+        }
     }, [modelPreference]);
 
     const getPreferredApiKey = useCallback((capability: AICapability, provider?: AIProvider) => {
@@ -474,19 +533,17 @@ export function useApiKeys(isSettingsPanelOpen: boolean) {
             return [{ ...nextKey, isDefault: shouldSetDefault }, ...withDefault];
         });
         // 新增 Key 后自动拉取模型列表（后台静默）
-        if (payload.provider !== 'runningHub') {
-            refreshAllProviderModels([{ id: nextKey.id, provider: payload.provider, key: payload.key, baseUrl: payload.baseUrl }], true)
-                .then(results => {
-                    const fetched = results.get(nextKey.id);
-                    if (fetched && fetched.length > 0) {
-                        const modelItems = fetched.map(m => ({ id: m.id, name: m.name || m.id }));
-                        setUserApiKeys(prev => prev.map(k =>
-                            k.id === nextKey.id ? { ...k, models: modelItems, updatedAt: Date.now() } : k
-                        ));
-                    }
-                })
-                .catch(() => {});
-        }
+        refreshAllProviderModels([{ id: nextKey.id, provider: payload.provider, key: payload.key, baseUrl: payload.baseUrl }], true)
+            .then(results => {
+                const fetched = results.get(nextKey.id);
+                if (fetched && fetched.length > 0) {
+                    const modelItems = fetched.map(m => ({ id: m.id, name: m.name || m.id }));
+                    setUserApiKeys(prev => prev.map(k =>
+                        k.id === nextKey.id ? mergeFetchedModelsIntoKey(k, modelItems) : k
+                    ));
+                }
+            })
+            .catch(() => {});
     }, []);
 
     const handleDeleteApiKey = useCallback((id: string) => {
@@ -523,6 +580,8 @@ export function useApiKeys(isSettingsPanelOpen: boolean) {
         setClearKeysOnExit,
         modelPreference,
         setModelPreference,
+        modelPreferenceSavedAt,
+        modelPreferenceSaveError,
         activeUserKeyId,
         activeUserModelId,
         setActiveUserModelId,

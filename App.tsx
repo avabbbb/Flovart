@@ -59,6 +59,7 @@ import { syncCanvasElementsIntoRuntime } from './services/projectRuntimeBridge';
 import { getGenerationCapability, type GenerationMode } from './services/generationCapabilities';
 import { cancelWorkflowGeneration, runWorkflowGeneration } from './services/workflowGeneration';
 import { workflowMediaStorage } from './components/workflow/storage';
+import { loadWorkflowMediaBlob } from './components/workflow/media';
 import { dispatchWorkflowCommand, setWorkflowNodeRunner } from './services/workflowDispatcher';
 import { runWorkflowOnlineAgent } from './services/workflowOnlineAgent';
 import type { WorkflowOnlineTurnInput } from './components/workflow/WorkflowAgentPanel';
@@ -377,7 +378,7 @@ const App: React.FC = () => {
     const [canvasStageSize, setCanvasStageSize] = useState({ width: 1, height: 1 });
     const [canvasKonvaReadyIds, setCanvasKonvaReadyIds] = useState<Set<string>>(() => new Set());
     const [canvasKonvaFailedIds, setCanvasKonvaFailedIds] = useState<Set<string>>(() => new Set());
-    const [wheelAction, setWheelAction] = useState<WheelAction>('zoom');
+    const [wheelAction, setWheelAction] = useState<WheelAction>('pan');
     const [croppingState, setCroppingState] = useState<{ elementId: string; originalElement: ImageElement; cropBox: Rect } | null>(null);
     const [filterPanelElementId, setFilterPanelElementId] = useState<string | null>(null);
     const [outpaintMenuId, setOutpaintMenuId] = useState<string | null>(null);
@@ -638,6 +639,7 @@ const App: React.FC = () => {
     const {
         userApiKeys, setUserApiKeys, apiKeysLoaded, showOnboarding, setShowOnboarding,
         clearKeysOnExit, setClearKeysOnExit, modelPreference, setModelPreference,
+        modelPreferenceSavedAt, modelPreferenceSaveError,
         activeUserKeyId, activeUserModelId, setActiveUserModelId, handleUserKeyChange,
         dynamicModelOptions, usageSummaryMap, getPreferredApiKey,
         handleAddApiKey, handleDeleteApiKey, handleUpdateApiKey, handleSetDefaultApiKey,
@@ -1357,7 +1359,14 @@ const App: React.FC = () => {
         });
 
         try {
-            const promptReferences = buildElementIgnitionReferences(currentState.promptPayload, elementsRef.current);
+            const rawPromptReferences = buildElementIgnitionReferences(currentState.promptPayload, elementsRef.current);
+            const promptReferences = await Promise.all(rawPromptReferences.map(async ref => {
+                if ('href' in ref && ref.href) {
+                    const resolvedHref = await resolveColdMediaRef(ref.href);
+                    return { ...ref, href: resolvedHref };
+                }
+                return ref;
+            }));
             const attachmentReferences = await buildAttachmentIgnitionReferences(nodePromptAttachments[elementId] || [], resolveColdMediaRef);
             const result = await executeUnifiedIgnition({
                 elementId: target.id,
@@ -1913,8 +1922,8 @@ const App: React.FC = () => {
         if (!key) throw new Error('请先配置支持视觉能力的文本模型 API Key。');
         let providerHref = imageHref;
         if (!providerHref.startsWith('data:')) {
-            const blob = await (await fetch(providerHref)).blob();
-            providerHref = await fileToDataUrl(new File([blob], 'workflow-image', { type: blob.type || mimeType }));
+            const blob = await loadWorkflowMediaBlob(undefined, providerHref);
+            providerHref = (await fileToDataUrl(new File([blob], 'workflow-image', { type: blob.type || mimeType }))).dataUrl;
         }
         return reversePromptStreamWithProvider(
             providerHref,
@@ -3578,6 +3587,8 @@ const App: React.FC = () => {
                             onSetDefaultApiKey={handleSetDefaultApiKey}
                             modelPreference={modelPreference}
                             setModelPreference={setModelPreference}
+                            modelPreferenceSavedAt={modelPreferenceSavedAt}
+                            modelPreferenceSaveError={modelPreferenceSaveError}
                             t={t}
                             clearKeysOnExit={clearKeysOnExit}
                             setClearKeysOnExit={setClearKeysOnExit}
@@ -3713,6 +3724,8 @@ const App: React.FC = () => {
                     canRedo={historyIndex < history.length - 1}
                     orientation="horizontal"
                     embedded
+                    wheelAction={wheelAction}
+                    setWheelAction={setWheelAction}
                 />
             }
             overlays={<>
@@ -3734,30 +3747,32 @@ const App: React.FC = () => {
                 )}
             </>}
             main={<>
-<Suspense fallback={<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm"><div className="rounded-xl bg-neutral-800 px-6 py-4 text-sm text-white/60">Loading Settings...</div></div>}>
-            <CanvasSettings
-                isOpen={isSettingsPanelOpen} 
-                onClose={() => setIsSettingsPanelOpen(false)} 
-                language={language}
-                setLanguage={setLanguage}
-                themeMode={themeMode}
-                resolvedTheme={resolvedTheme}
-                setThemeMode={setThemeMode}
-                wheelAction={wheelAction}
-                setWheelAction={setWheelAction}
-                userApiKeys={userApiKeys}
-                onAddApiKey={handleAddApiKey}
-                onDeleteApiKey={handleDeleteApiKey}
-                onUpdateApiKey={handleUpdateApiKey}
-                onSetDefaultApiKey={handleSetDefaultApiKey}
-                modelPreference={modelPreference}
-                setModelPreference={setModelPreference}
-                t={t}
-                clearKeysOnExit={clearKeysOnExit}
-                setClearKeysOnExit={setClearKeysOnExit}
-                usageSummary={usageSummaryMap}
-                dynamicModelOptions={dynamicModelOptions}
-            />
+            <Suspense fallback={<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm"><div className="rounded-xl bg-neutral-800 px-6 py-4 text-sm text-white/60">Loading Settings...</div></div>}>
+                <CanvasSettings
+                    isOpen={isSettingsPanelOpen}
+                    onClose={() => setIsSettingsPanelOpen(false)}
+                    language={language}
+                    setLanguage={setLanguage}
+                    themeMode={themeMode}
+                    resolvedTheme={resolvedTheme}
+                    setThemeMode={setThemeMode}
+                    wheelAction={wheelAction}
+                    setWheelAction={setWheelAction}
+                    userApiKeys={userApiKeys}
+                    onAddApiKey={handleAddApiKey}
+                    onDeleteApiKey={handleDeleteApiKey}
+                    onUpdateApiKey={handleUpdateApiKey}
+                    onSetDefaultApiKey={handleSetDefaultApiKey}
+                    modelPreference={modelPreference}
+                    setModelPreference={setModelPreference}
+                    modelPreferenceSavedAt={modelPreferenceSavedAt}
+                    modelPreferenceSaveError={modelPreferenceSaveError}
+                    t={t}
+                    clearKeysOnExit={clearKeysOnExit}
+                    setClearKeysOnExit={setClearKeysOnExit}
+                    usageSummary={usageSummaryMap}
+                    dynamicModelOptions={dynamicModelOptions}
+                />
             </Suspense>
             {/* ============ 图层蒙版编辑 (Layer Mask) ============ */}
 

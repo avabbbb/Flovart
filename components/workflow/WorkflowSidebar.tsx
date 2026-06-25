@@ -89,7 +89,7 @@ export const WorkflowSidebar: React.FC<WorkflowSidebarProps> = ({ open, onOpenCh
               <div
                 key={node.id}
                 draggable
-                onDragStart={() => setDraggedId(node.id)}
+                onDragStart={event => { event.dataTransfer.setData('text/plain', node.id); event.dataTransfer.effectAllowed = 'move'; setDraggedId(node.id); }}
                 onDragOver={event => event.preventDefault()}
                 onDrop={() => reorder(node.id)}
                 className={`group mb-1 flex h-9 items-center gap-2 rounded-lg px-2 text-xs ${project?.selectedNodeIds.includes(node.id) ? 'isl-tab--active' : ''}`}

@@ -1,5 +1,8 @@
 import { nanoid } from 'nanoid';
 import { useEffect, useState } from 'react';
+import { fromIdbRef, getImage, isDataUrl, isIdbRef } from '../../utils/imageDB';
+import { fromIdbVideoRef, getVideoBlob, isIdbVideoRef } from '../../utils/mediaDB';
+import { readColdMedia } from '../../utils/mediaIndexedDB';
 import { workflowMediaStorage } from './storage';
 import type { WorkflowNode, WorkflowNodeMetadata, WorkflowNodeType, WorkflowProject } from './types';
 
@@ -196,6 +199,34 @@ export async function workflowDataUrlToBlob(dataUrl: string): Promise<Blob> {
   return response.blob();
 }
 
+function isFetchableMediaHref(href: string) {
+  return /^(https?:|blob:)/i.test(href) || isDataUrl(href);
+}
+
+async function loadFallbackMediaBlob(href: string): Promise<Blob> {
+  if (isIdbRef(href)) {
+    const dataUrl = await getImage(fromIdbRef(href));
+    if (!dataUrl) throw new Error('本地图片文件不存在，请重新选择文件');
+    return workflowDataUrlToBlob(dataUrl);
+  }
+  if (isIdbVideoRef(href)) {
+    const blob = await getVideoBlob(fromIdbVideoRef(href));
+    if (!blob) throw new Error('本地视频文件不存在，请重新选择文件');
+    return blob;
+  }
+  if (href.startsWith('cold-media:')) {
+    const dataUrl = await readColdMedia(href.slice('cold-media:'.length));
+    if (!dataUrl) throw new Error('本地媒体文件不存在，请重新选择文件');
+    return workflowDataUrlToBlob(dataUrl);
+  }
+  if (!isFetchableMediaHref(href)) {
+    throw new Error('无法读取本地媒体引用，请重新导入素材');
+  }
+  const response = await fetch(href);
+  if (!response.ok) throw new Error('无法读取图片文件');
+  return response.blob();
+}
+
 export async function loadWorkflowMediaBlob(storageKey?: string, href?: string): Promise<Blob> {
   if (storageKey) {
     const blob = await workflowMediaStorage.get(storageKey);
@@ -203,9 +234,7 @@ export async function loadWorkflowMediaBlob(storageKey?: string, href?: string):
     return blob;
   }
   if (!href) throw new Error('图片节点没有可用媒体');
-  const response = await fetch(href);
-  if (!response.ok) throw new Error('无法读取图片文件');
-  return response.blob();
+  return loadFallbackMediaBlob(href);
 }
 
 export interface WorkflowCropRect { x: number; y: number; width: number; height: number }
@@ -243,16 +272,17 @@ export function useWorkflowMediaUrl(storageKey?: string, fallbackHref?: string) 
   const mediaKey = storageKey || fallbackHref || '';
   const [state, setState] = useState<{ key: string; url: string | null; error: string | null }>({
     key: mediaKey,
-    url: storageKey ? null : fallbackHref || null,
+    url: storageKey || (fallbackHref && !isFetchableMediaHref(fallbackHref)) ? null : fallbackHref || null,
     error: null,
   });
 
   useEffect(() => {
     let active = true;
     let objectUrl: string | null = null;
-    setState({ key: mediaKey, url: storageKey ? null : fallbackHref || null, error: null });
-    if (!storageKey) return () => undefined;
-    void workflowMediaStorage.get(storageKey).then(blob => {
+    const immediateUrl = storageKey || (fallbackHref && !isFetchableMediaHref(fallbackHref)) ? null : fallbackHref || null;
+    setState({ key: mediaKey, url: immediateUrl, error: null });
+    if (!storageKey && (!fallbackHref || isFetchableMediaHref(fallbackHref))) return () => undefined;
+    void loadWorkflowMediaBlob(storageKey, fallbackHref).then(blob => {
       if (!active) return;
       if (!blob) {
         setState({ key: mediaKey, url: null, error: '媒体文件不存在，请重新选择文件' });
@@ -269,5 +299,5 @@ export function useWorkflowMediaUrl(storageKey?: string, fallbackHref?: string) 
     };
   }, [fallbackHref, mediaKey, storageKey]);
 
-  return state.key === mediaKey ? state : { url: storageKey ? null : fallbackHref || null, error: null };
+  return state.key === mediaKey ? state : { url: storageKey || (fallbackHref && !isFetchableMediaHref(fallbackHref)) ? null : fallbackHref || null, error: null };
 }

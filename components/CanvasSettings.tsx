@@ -29,6 +29,8 @@ interface CanvasSettingsProps {
     onSetDefaultApiKey: (id: string) => void;
     modelPreference: ModelPreference;
     setModelPreference: (prefs: ModelPreference) => void;
+    modelPreferenceSavedAt?: number | null;
+    modelPreferenceSaveError?: string | null;
     t: (key: string) => string;
     clearKeysOnExit: boolean;
     setClearKeysOnExit: (v: boolean) => void;
@@ -78,6 +80,8 @@ type ProviderPreset = {
     authScheme?: string;
     defaultModel?: string;
     models?: string[];
+    modelItems?: ModelItem[];
+    extraConfig?: Record<string, string>;
     featured?: boolean;
 };
 
@@ -132,6 +136,19 @@ const PROVIDER_PRESETS: ProviderPreset[] = [
         requestFormat: 'openai',
         defaultModel: 'gpt-image-2',
         models: ['gpt-image-2', 'gpt-image-1.5', 'gpt-image-1'],
+        featured: true,
+    },
+    {
+        id: 'runninghub-standard',
+        name: 'RunningHub 标准模型',
+        shortName: 'RH',
+        provider: 'runningHub',
+        websiteUrl: 'https://www.runninghub.cn/call-api/search-api/standard-model?search=',
+        baseUrl: providerBaseUrl.runningHub,
+        capabilities: ['image', 'video'],
+        requestFormat: 'native',
+        authHeaderName: 'Authorization',
+        authScheme: 'Bearer',
         featured: true,
     },
     {
@@ -197,6 +214,8 @@ export const CanvasSettings: React.FC<CanvasSettingsProps> = ({
     onSetDefaultApiKey,
     modelPreference,
     setModelPreference,
+    modelPreferenceSavedAt,
+    modelPreferenceSaveError,
     clearKeysOnExit,
     setClearKeysOnExit,
     usageSummary,
@@ -257,6 +276,16 @@ export const CanvasSettings: React.FC<CanvasSettingsProps> = ({
         ),
     }), [dynamicModelOptions, modelPreference.imageModel, modelPreference.textModel, modelPreference.videoModel]);
 
+    const updateModelPreference = (patch: Partial<ModelPreference>) => {
+        setModelPreference({ ...modelPreference, ...patch });
+    };
+
+    const modelPreferenceStatusText = modelPreferenceSaveError
+        ? `保存失败：${modelPreferenceSaveError}`
+        : modelPreferenceSavedAt
+            ? `已自动保存 ${new Date(modelPreferenceSavedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}`
+            : '选择后会自动保存到本机';
+
     if (!isOpen) return null;
 
     const isDark = resolvedTheme === 'dark';
@@ -278,9 +307,10 @@ export const CanvasSettings: React.FC<CanvasSettingsProps> = ({
     };
 
     const applyProviderPreset = (preset: ProviderPreset, options: { resetKey?: boolean; fillName?: boolean } = {}) => {
-        const modelItems: ModelItem[] = (preset.models || []).map(id => ({ id, name: id }));
+        const modelItems: ModelItem[] = preset.modelItems || (preset.models || []).map(id => ({ id, name: id }));
         const presetExtra: Record<string, string> = {
             requestFormat: preset.requestFormat,
+            ...(preset.extraConfig || {}),
             ...(preset.websiteUrl ? { websiteUrl: preset.websiteUrl } : {}),
             ...(preset.authHeaderName ? { authHeaderName: preset.authHeaderName } : {}),
             ...(preset.authScheme !== undefined ? { authScheme: preset.authScheme } : {}),
@@ -383,8 +413,23 @@ export const CanvasSettings: React.FC<CanvasSettingsProps> = ({
             return;
         }
 
-        const modelsToSave = editModels.length > 0 ? editModels : undefined;
-        const customModelsToSave = editModels.map(m => m.id);
+        const detectedModelItems: ModelItem[] = result.models?.length
+            ? result.models.map(model => ({ id: model.id, name: model.name || model.id }))
+            : [];
+        if (detectedModelItems.length > 0) {
+            setFetchedModels(result.models || []);
+            setEditModels(detectedModelItems);
+            if (!editDefaultModel || !detectedModelItems.some(model => model.id === editDefaultModel)) {
+                setEditDefaultModel(detectedModelItems[0].id);
+            }
+        }
+
+        const finalModels = detectedModelItems.length > 0 ? detectedModelItems : editModels;
+        const finalDefaultModel = editDefaultModel && finalModels.some(model => model.id === editDefaultModel)
+            ? editDefaultModel
+            : finalModels[0]?.id;
+        const modelsToSave = finalModels.length > 0 ? finalModels : undefined;
+        const customModelsToSave = finalModels.map(m => m.id);
         const fallbackEndpointFlavor = provider === 'custom'
             ? (result.endpointFlavor || endpointFlavor || (/openrouter/i.test(baseUrl) ? 'openrouter-compatible' : 'openai-compatible'))
             : undefined;
@@ -403,7 +448,7 @@ export const CanvasSettings: React.FC<CanvasSettingsProps> = ({
                 status: 'ok',
                 models: modelsToSave,
                 customModels: customModelsToSave.length > 0 ? customModelsToSave : undefined,
-                defaultModel: editDefaultModel || undefined,
+                defaultModel: finalDefaultModel || undefined,
                 extraConfig: extraToSave,
             });
         } else {
@@ -418,7 +463,7 @@ export const CanvasSettings: React.FC<CanvasSettingsProps> = ({
                 isDefault: false,
                 models: modelsToSave,
                 customModels: customModelsToSave.length > 0 ? customModelsToSave : undefined,
-                defaultModel: editDefaultModel || undefined,
+                defaultModel: finalDefaultModel || undefined,
                 extraConfig: extraToSave,
             });
         }
@@ -466,7 +511,7 @@ export const CanvasSettings: React.FC<CanvasSettingsProps> = ({
         setIsFetchingModels(true);
         setFetchError(null);
         const requestFormat = targetProvider === 'custom' ? extraConfig.requestFormat : undefined;
-        if (requestFormat === 'anthropic' || requestFormat === 'native') {
+        if (requestFormat === 'anthropic' || (requestFormat === 'native' && targetProvider !== 'runningHub')) {
             setFetchedModels([]);
             setFetchError(requestFormat === 'native'
                 ? '供应商原生接口通常不提供公开模型列表，请手动添加模型 ID。'
@@ -495,6 +540,9 @@ export const CanvasSettings: React.FC<CanvasSettingsProps> = ({
                 if (result.endpointFlavor) {
                     setExtraConfig(prev => ({ ...prev, endpointFlavor: result.endpointFlavor }));
                 }
+            } else if (result.ok && targetProvider === 'runningHub') {
+                setFetchedModels([]);
+                setFetchError('未从 RunningHub 官方模型页解析到可用模型，请稍后重试或手动添加模型 ID。');
             } else if (!result.ok) {
                 setFetchError(result.error || '拉取失败');
             }
@@ -938,8 +986,17 @@ export const CanvasSettings: React.FC<CanvasSettingsProps> = ({
                     </section>
 
                     <section className="space-y-3">
-                        <div className={`text-xs font-semibold uppercase tracking-[0.18em] ${isDark ? 'text-[#667085]' : 'text-[#98A2B3]'}`}>
-                            模型偏好
+                        <div className="flex items-center justify-between gap-3">
+                            <div className={`text-xs font-semibold uppercase tracking-[0.18em] ${isDark ? 'text-[#667085]' : 'text-[#98A2B3]'}`}>
+                                模型偏好
+                            </div>
+                            <div className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${
+                                modelPreferenceSaveError
+                                    ? isDark ? 'bg-[#3A1616] text-[#FDA29B]' : 'bg-[#FEF3F2] text-[#B42318]'
+                                    : isDark ? 'bg-[#123524] text-[#75E0A7]' : 'bg-[#ECFDF3] text-[#027A48]'
+                            }`}>
+                                {modelPreferenceStatusText}
+                            </div>
                         </div>
                         <div className="grid gap-3 md:grid-cols-2">
                             <label className={`rounded-2xl p-3 ${isDark ? 'bg-[#161A22]' : 'bg-[#F8FAFC]'}`}>
@@ -951,7 +1008,7 @@ export const CanvasSettings: React.FC<CanvasSettingsProps> = ({
                                     onChange={(e) => setModelSearch(s => ({ ...s, text: e.target.value }))}
                                     className={`mb-2 ${inputClass} flv-safe-input text-xs`}
                                 />
-                                <select value={modelPreference.textModel} onChange={(event) => setModelPreference({ ...modelPreference, textModel: event.target.value })} className={`${inputClass} flv-safe-input`}>
+                                <select value={modelPreference.textModel} onChange={(event) => updateModelPreference({ textModel: event.target.value })} className={`${inputClass} flv-safe-input`}>
                                     {modelOptions.text
                                         .filter(model => !modelSearch.text || modelRefSearchText(model, userApiKeys).includes(modelSearch.text.toLowerCase()))
                                         .map(model => <option key={model} value={model}>{modelRefLabel(model, userApiKeys)}</option>)}
@@ -966,7 +1023,7 @@ export const CanvasSettings: React.FC<CanvasSettingsProps> = ({
                                     onChange={(e) => setModelSearch(s => ({ ...s, image: e.target.value }))}
                                     className={`mb-2 ${inputClass} flv-safe-input text-xs`}
                                 />
-                                <select value={modelPreference.imageModel} onChange={(event) => setModelPreference({ ...modelPreference, imageModel: event.target.value })} className={`${inputClass} flv-safe-input`}>
+                                <select value={modelPreference.imageModel} onChange={(event) => updateModelPreference({ imageModel: event.target.value })} className={`${inputClass} flv-safe-input`}>
                                     {modelOptions.image
                                         .filter(model => !modelSearch.image || modelRefSearchText(model, userApiKeys).includes(modelSearch.image.toLowerCase()))
                                         .map(model => <option key={model} value={model}>{modelRefLabel(model, userApiKeys)}</option>)}
@@ -981,7 +1038,7 @@ export const CanvasSettings: React.FC<CanvasSettingsProps> = ({
                                     onChange={(e) => setModelSearch(s => ({ ...s, video: e.target.value }))}
                                     className={`mb-2 ${inputClass} flv-safe-input text-xs`}
                                 />
-                                <select value={modelPreference.videoModel} onChange={(event) => setModelPreference({ ...modelPreference, videoModel: event.target.value })} className={`${inputClass} flv-safe-input`}>
+                                <select value={modelPreference.videoModel} onChange={(event) => updateModelPreference({ videoModel: event.target.value })} className={`${inputClass} flv-safe-input`}>
                                     {modelOptions.video
                                         .filter(model => !modelSearch.video || modelRefSearchText(model, userApiKeys).includes(modelSearch.video.toLowerCase()))
                                         .map(model => <option key={model} value={model}>{modelRefLabel(model, userApiKeys)}</option>)}
@@ -1081,7 +1138,9 @@ export const CanvasSettings: React.FC<CanvasSettingsProps> = ({
                                                 </span>
                                                 <span className="min-w-0 flex-1">
                                                     <span className="block truncate font-bold">{preset.name}</span>
-                                                    <span className="mt-0.5 block truncate text-[11px] opacity-75">{preset.defaultModel || preset.provider}</span>
+                                                    <span className="mt-0.5 block truncate text-[11px] opacity-75">
+                                                        {preset.defaultModel || (preset.provider === 'runningHub' ? '点击获取官方模型' : preset.provider)}
+                                                    </span>
                                                 </span>
                                                 {preset.featured && (
                                                     <span className="rounded-full bg-white/70 px-1.5 py-0.5 text-[10px] font-bold text-[#7C3AED]">
@@ -1169,6 +1228,13 @@ export const CanvasSettings: React.FC<CanvasSettingsProps> = ({
                             {provider === 'custom' && (
                                 <div className={`rounded-xl px-3 py-2 text-xs ${isDark ? 'bg-[#161A22] text-[#98A2B3]' : 'bg-[#F8FAFC] text-[#667085]'}`}>
                                     兼容说明：模型列表默认探测 <strong>/v1/models</strong>，图片走 <strong>/v1/images/generations</strong>，部分聚合端点的视频会自动尝试 <strong>/v2/videos/generations</strong>。
+                                </div>
+                            )}
+
+                            {provider === 'runningHub' && (
+                                <div className={`rounded-xl px-3 py-2 text-xs leading-5 ${isDark ? 'bg-[#161A22] text-[#98A2B3]' : 'bg-[#F8FAFC] text-[#667085]'}`}>
+                                    不再内置 RunningHub 旧预设模型。请先点 <strong>获取模型</strong> 拉取官方标准模型列表，再选择或手动补充模型 ID；
+                                    调用时会按详情页字段自动填充 <strong>imageUrls</strong>、<strong>firstFrameUrl</strong>、<strong>ratio</strong>、<strong>videoUrls</strong>、<strong>audioUrls</strong> 等。
                                 </div>
                             )}
 

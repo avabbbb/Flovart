@@ -1,5 +1,6 @@
 import { Download, Plus, Search, Sparkles, Trash2 } from 'lucide-react';
 import { useMemo, useState, type DragEvent } from 'react';
+import { useWorkflowMediaUrl } from '../workflow/media';
 
 export const STUDIO_MEDIA_DRAG_TYPE = 'application/x-flovart-studio-media';
 
@@ -37,6 +38,36 @@ const categoryLabels: Record<CategoryFilter, string> = {
   scene: '场景',
   prop: '道具',
 };
+
+function StudioMediaPreview({ item }: { item: StudioMediaItem }) {
+  const media = useWorkflowMediaUrl(undefined, item.href);
+  if (!media.url) {
+    return (
+      <div className="grid h-full w-full place-content-center px-3 text-center text-[10px]" style={{ color: 'var(--isl-ink-ghost)' }}>
+        {media.error || '读取中...'}
+      </div>
+    );
+  }
+  return item.type === 'image'
+    ? <img src={media.url} alt={item.name} width={item.width || 320} height={item.height || 240} loading="lazy" className="h-full w-full object-cover" />
+    : <video src={media.url} aria-label={item.name} muted playsInline preload="metadata" className="h-full w-full object-cover" />;
+}
+
+function StudioMediaDownload({ item, isChinese }: { item: StudioMediaItem; isChinese: boolean }) {
+  const media = useWorkflowMediaUrl(undefined, item.href);
+  return (
+    <a
+      className="isl-icon-btn flex h-7 w-7 items-center justify-center"
+      href={media.url || '#'}
+      download={item.name}
+      aria-disabled={!media.url}
+      aria-label={`${isChinese ? '下载' : 'Download'} ${item.name}`}
+      onClick={event => { if (!media.url) event.preventDefault(); }}
+    >
+      <Download size={13} aria-hidden="true" />
+    </a>
+  );
+}
 
 export function StudioMediaBrowser({ mode, items, language, onInsert, onRename, onRemove, onReversePrompt }: StudioMediaBrowserProps) {
   const [query, setQuery] = useState('');
@@ -143,9 +174,7 @@ export function StudioMediaBrowser({ mode, items, language, onInsert, onRename, 
                 style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-card)' }}
               >
                 <div className="relative aspect-[4/3] overflow-hidden" style={{ background: 'var(--isl-surface-2)' }}>
-                  {item.type === 'image'
-                    ? <img src={item.href} alt={item.name} width={item.width || 320} height={item.height || 240} loading="lazy" className="h-full w-full object-cover" />
-                    : <video src={item.href} aria-label={item.name} muted playsInline preload="metadata" className="h-full w-full object-cover" />}
+                  <StudioMediaPreview item={item} />
                   <button type="button" className="isl-icon-btn absolute bottom-2 right-2 h-8 w-8 bg-[var(--isl-card)]" aria-label={`${isChinese ? '添加' : 'Add'} ${item.name}`} title={isChinese ? '添加到当前 Workflow' : 'Add to Workflow'} onClick={() => onInsert(item)}>
                     <Plus size={15} aria-hidden="true" />
                   </button>
@@ -175,7 +204,7 @@ export function StudioMediaBrowser({ mode, items, language, onInsert, onRename, 
                   </div>
                   <div className="mt-2 flex items-center justify-end gap-1">
                     {item.type === 'image' && onReversePrompt && <button type="button" className="isl-icon-btn h-7 w-7" aria-label={`${isChinese ? '反推 Prompt' : 'Analyze Prompt'} ${item.name}`} onClick={() => void reversePrompt(item)}><Sparkles size={13} aria-hidden="true" /></button>}
-                    <a className="isl-icon-btn flex h-7 w-7 items-center justify-center" href={item.href} download={item.name} aria-label={`${isChinese ? '下载' : 'Download'} ${item.name}`}><Download size={13} aria-hidden="true" /></a>
+                    <StudioMediaDownload item={item} isChinese={isChinese} />
                     {onRemove && <button type="button" className="isl-icon-btn h-7 w-7" aria-label={`${isChinese ? '删除' : 'Delete'} ${item.name}`} onClick={() => { if (window.confirm(isChinese ? `删除素材“${item.name}”？` : `Delete “${item.name}”?`)) onRemove(item); }}><Trash2 size={13} aria-hidden="true" /></button>}
                   </div>
                 </div>

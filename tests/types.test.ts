@@ -27,9 +27,10 @@ describe('types.ts', () => {
       'minimax',
       'volcengine',
       'openrouter',
+      'openai_compatible',
       'custom',
     ];
-    expect(providers).toHaveLength(14);
+    expect(providers).toHaveLength(15);
   });
 
   it('covers the supported generation modes', () => {

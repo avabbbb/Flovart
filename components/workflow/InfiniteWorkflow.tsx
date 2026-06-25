@@ -124,6 +124,7 @@ export function InfiniteWorkflow({
   const replaceSequenceRef = useRef(new Map<string, number>());
   const mediaReferenceOwnerRef = useRef(`workflow-editor-${nanoid()}`);
   const [tool, setTool] = useState<WorkflowTool>('select');
+  const [wheelMode, setWheelMode] = useState<'pan' | 'zoom'>('pan');
   const [clipboardVersion, setClipboardVersion] = useState(0);
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>(project.selectedNodeIds || []);
   const [selectedConnectionId, setSelectedConnectionId] = useState<string | null>(null);
@@ -461,7 +462,7 @@ export function InfiniteWorkflow({
     }
     const expectedProjectId = projectRef.current.id;
     try {
-      const blob = await (await fetch(media.href)).blob();
+      const blob = await loadWorkflowMediaBlob(undefined, media.href);
       if (!mountedRef.current || projectRef.current.id !== expectedProjectId) return;
       await addMediaAt(new File([blob], media.name, { type: blob.type || media.mimeType }), center, expectedProjectId);
     } catch (error) {
@@ -812,8 +813,6 @@ export function InfiniteWorkflow({
     applyOps([{ type: 'add_node', node: createWorkflowNode(nanoid(), type, { x: center.x - 170, y: center.y - 110 }, metadata) }]);
   }, [applyOps, viewportCenter]);
 
-  const importFile = useCallback((file: File) => addMediaAt(file, viewportCenter()), [addMediaAt, viewportCenter]);
-
   const replaceMedia = useCallback(async (node: WorkflowNodeData, file: File) => {
     if (node.isLocked) return;
     const expectedProjectId = projectRef.current.id;
@@ -1041,14 +1040,22 @@ export function InfiniteWorkflow({
       onWheel={event => {
         if (event.target instanceof Element && event.target.closest(BLOCKED_TARGET)) return;
         event.preventDefault();
-        const rect = rootRef.current?.getBoundingClientRect();
-        const world = screenToWorkflow(event.clientX, event.clientY);
-        const k = Math.min(3, Math.max(0.12, viewportRef.current.k * Math.exp(-event.deltaY * 0.0015)));
-        patchProject({ viewport: {
-          x: event.clientX - (rect?.left || 0) - world.x * k,
-          y: event.clientY - (rect?.top || 0) - world.y * k,
-          k,
-        } });
+        if (event.ctrlKey || wheelMode === 'zoom') {
+          const rect = rootRef.current?.getBoundingClientRect();
+          const world = screenToWorkflow(event.clientX, event.clientY);
+          const k = Math.min(3, Math.max(0.12, viewportRef.current.k * Math.exp(-event.deltaY * 0.0015)));
+          patchProject({ viewport: {
+            x: event.clientX - (rect?.left || 0) - world.x * k,
+            y: event.clientY - (rect?.top || 0) - world.y * k,
+            k,
+          } });
+        } else {
+          patchProject({ viewport: {
+            ...viewportRef.current,
+            x: viewportRef.current.x - event.deltaX,
+            y: viewportRef.current.y - event.deltaY,
+          } });
+        }
       }}
       onContextMenu={event => event.preventDefault()}
     >
@@ -1058,13 +1065,14 @@ export function InfiniteWorkflow({
         canRedo={future.length > 0}
         onToolChange={setTool}
         onAddNode={addNode}
-        onImport={importFile}
         onAddSharedMedia={media => { void addSharedMedia(media); }}
         onUndo={undo}
         onRedo={redo}
         onFit={fitView}
         onToggleGrid={() => patchProject({ backgroundMode: projectRef.current.backgroundMode === 'none' ? 'dots' : projectRef.current.backgroundMode === 'dots' ? 'lines' : 'none' })}
         onOpenAgent={onOpenAgent}
+        wheelMode={wheelMode}
+        setWheelMode={setWheelMode}
       />
       <div ref={worldRef} className="workflow-world" style={{ transform: `translate(${project.viewport.x}px, ${project.viewport.y}px) scale(${project.viewport.k})` }}>
         <WorkflowConnections

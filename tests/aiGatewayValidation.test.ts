@@ -75,6 +75,54 @@ describe('aiGateway - validateApiKey', () => {
         );
     });
 
+    it('RunningHub provider 使用标准模型查询端点验证', async () => {
+        globalThis.fetch = vi.fn()
+            .mockResolvedValueOnce(mockJsonResponse({
+                taskId: 'missing-task',
+                status: 'FAILED',
+                errorCode: '404',
+                errorMessage: 'task not found',
+                results: null,
+                clientId: '',
+            }))
+            .mockResolvedValueOnce({
+                ok: true,
+                text: () => Promise.resolve(
+                    `<script id="__NUXT_DATA__">${JSON.stringify([
+                        {
+                            name: 'nano-banana2-gemini31flash/image-to-image-channel-low-price',
+                            categoryName: 'image-to-image',
+                            sourceTypeName: 'standard-model',
+                            description: 'image model',
+                        },
+                        {
+                            name: 'google/veo3.1-fast/start-end-to-video-channel-low-price',
+                            categoryName: 'start-end-to-video',
+                            sourceTypeName: 'standard-model',
+                            description: 'video model',
+                        },
+                    ])}</script>`,
+                ),
+            } as Response);
+
+        const result = await validateApiKey('runningHub', '0123456789abcdef0123456789abcdef', 'https://www.runninghub.cn');
+
+        expect(result.ok).toBe(true);
+        expect(result.capabilitySummary).toEqual(['image', 'video']);
+        expect(result.models?.map(model => model.id)).toEqual([
+            'nano-banana2-gemini31flash/image-to-image-channel-low-price',
+            'google/veo3.1-fast/start-end-to-video-channel-low-price',
+        ]);
+        expect(globalThis.fetch).toHaveBeenCalledWith(
+            'https://www.runninghub.cn/openapi/v2/query',
+            expect.objectContaining({
+                method: 'POST',
+                headers: expect.objectContaining({ Authorization: 'Bearer 0123456789abcdef0123456789abcdef' }),
+            }),
+        );
+        expect(globalThis.fetch).toHaveBeenNthCalledWith(2, 'https://www.runninghub.ai/page-api');
+    });
+
     it('Anthropic provider 验证逻辑', async () => {
         globalThis.fetch = vi.fn().mockResolvedValue({
             ok: true,
@@ -407,6 +455,271 @@ describe('aiGateway - generateImageWithProvider', () => {
             { type: 'image_url', image_url: { url: 'data:image/png;base64,YS0=' } },
             { type: 'image_url', image_url: { url: 'data:image/png;base64,Yi0=' } },
         ]);
+    });
+
+    it('routes RunningHub standard image models through the native standard-model API', async () => {
+        globalThis.fetch = vi.fn()
+            .mockResolvedValueOnce(mockJsonResponse({
+                data: { download_url: 'https://cdn.example.com/input.png' },
+            }))
+            .mockResolvedValueOnce(mockJsonResponse({
+                taskId: 'rh-task-1',
+                status: 'SUCCESS',
+                errorCode: '',
+                errorMessage: '',
+                results: [{ url: 'https://cdn.example.com/rh.png', outputType: 'png', text: null }],
+                clientId: 'client-1',
+            }))
+            .mockResolvedValueOnce(mockBinaryResponse('fake-image', 'image/png'));
+
+        const result = await generateImageWithProvider('把杯子变成磨砂玻璃材质', 'nano-banana2-gemini31flash/image-to-image-channel-low-price', {
+            id: 'rh-key',
+            provider: 'runningHub',
+            capabilities: ['image'],
+            key: '0123456789abcdef0123456789abcdef',
+            baseUrl: 'https://www.runninghub.cn/openapi/v2',
+            createdAt: 0,
+            updatedAt: 0,
+        }, [{ href: 'data:image/png;base64,ZmFrZQ==', mimeType: 'image/png' }]);
+
+        expect(result.newImageMimeType).toBe('image/png');
+        expect(globalThis.fetch).toHaveBeenNthCalledWith(
+            1,
+            'https://www.runninghub.cn/openapi/v2/media/upload/binary',
+            expect.objectContaining({
+                method: 'POST',
+                headers: expect.objectContaining({ Authorization: 'Bearer 0123456789abcdef0123456789abcdef' }),
+            }),
+        );
+        expect(globalThis.fetch).toHaveBeenNthCalledWith(
+            2,
+            'https://www.runninghub.cn/openapi/v2/nano-banana2-gemini31flash/image-to-image-channel-low-price',
+            expect.objectContaining({
+                method: 'POST',
+                headers: expect.objectContaining({ Authorization: 'Bearer 0123456789abcdef0123456789abcdef' }),
+                body: expect.stringContaining('"prompt":"把杯子变成磨砂玻璃材质"'),
+            }),
+        );
+        expect(JSON.parse((globalThis.fetch as any).mock.calls[1][1].body)).toMatchObject({
+            imageUrls: ['https://cdn.example.com/input.png'],
+        });
+        expect(globalThis.fetch).toHaveBeenNthCalledWith(
+            3,
+            'https://cdn.example.com/rh.png',
+            expect.anything(),
+        );
+    });
+
+    it('surfaces RunningHub submit error details instead of a generic missing taskId', async () => {
+        globalThis.fetch = vi.fn()
+            .mockResolvedValueOnce(mockJsonResponse({
+                data: { download_url: 'https://cdn.example.com/input.png' },
+            }))
+            .mockResolvedValueOnce(mockJsonResponse({
+                taskId: '',
+                status: '',
+                errorCode: '1001',
+                errorMessage: 'Invalid URL, please check your link | 请求链接无效，请检查您的调用链接',
+                results: null,
+                clientId: '',
+                promptTips: '',
+                failedReason: {},
+            }));
+
+        await expect(generateImageWithProvider('生成毛玻璃节点', 'nano-banana2-gemini31flash/image-to-image-channel-low-price', {
+            id: 'rh-key',
+            provider: 'runningHub',
+            capabilities: ['image'],
+            key: '0123456789abcdef0123456789abcdef',
+            baseUrl: 'https://www.runninghub.cn/openapi/v2',
+            createdAt: 0,
+            updatedAt: 0,
+        }, [{ href: 'data:image/png;base64,ZmFrZQ==', mimeType: 'image/png' }]))
+            .rejects.toThrow('Invalid URL, please check your link');
+    });
+
+    it('normalizes RunningHub absolute model URLs before submit', async () => {
+        globalThis.fetch = vi.fn()
+            .mockResolvedValueOnce(mockJsonResponse({
+                data: { download_url: 'https://cdn.example.com/input.png' },
+            }))
+            .mockResolvedValueOnce(mockJsonResponse({
+                taskId: 'rh-task-2',
+                status: 'SUCCESS',
+                errorCode: '',
+                errorMessage: '',
+                results: [{ url: 'https://cdn.example.com/rh-2.png', outputType: 'png', text: null }],
+                clientId: 'client-2',
+            }))
+            .mockResolvedValueOnce(mockBinaryResponse('fake-image', 'image/png'));
+
+        await generateImageWithProvider(
+            '做成磨砂玻璃海报',
+            'https://www.runninghub.cn/openapi/v2/nano-banana-pro/edit-channel-low-price?foo=bar',
+            {
+                id: 'rh-key',
+                provider: 'runningHub',
+                capabilities: ['image'],
+                key: '0123456789abcdef0123456789abcdef',
+                baseUrl: 'https://www.runninghub.cn/openapi/v2',
+                createdAt: 0,
+                updatedAt: 0,
+            },
+            [{ href: 'data:image/png;base64,ZmFrZQ==', mimeType: 'image/png' }],
+        );
+
+        expect(globalThis.fetch).toHaveBeenNthCalledWith(
+            2,
+            'https://www.runninghub.cn/openapi/v2/nano-banana-pro/edit-channel-low-price',
+            expect.objectContaining({ method: 'POST' }),
+        );
+    });
+
+    it('rejects RunningHub docs/search URLs before submit', async () => {
+        globalThis.fetch = vi.fn();
+
+        await expect(generateImageWithProvider(
+            '生成毛玻璃节点',
+            'https://www.runninghub.cn/call-api/search-api/standard-model?search=',
+            {
+                id: 'rh-key',
+                provider: 'runningHub',
+                capabilities: ['image'],
+                key: '0123456789abcdef0123456789abcdef',
+                baseUrl: 'https://www.runninghub.cn/openapi/v2',
+                createdAt: 0,
+                updatedAt: 0,
+            },
+            [{ href: 'data:image/png;base64,ZmFrZQ==', mimeType: 'image/png' }],
+        )).rejects.toThrow('请先在设置中点击“获取模型”');
+        expect(globalThis.fetch).not.toHaveBeenCalled();
+    });
+
+    it('stops before submit when RunningHub upload returns no usable media URL', async () => {
+        globalThis.fetch = vi.fn().mockResolvedValueOnce(mockJsonResponse({
+            data: { download_url: '' },
+        }));
+
+        await expect(generateImageWithProvider('生成毛玻璃节点', 'nano-banana2-gemini31flash/image-to-image-channel-low-price', {
+            id: 'rh-key',
+            provider: 'runningHub',
+            capabilities: ['image'],
+            key: '0123456789abcdef0123456789abcdef',
+            baseUrl: 'https://www.runninghub.cn/openapi/v2',
+            createdAt: 0,
+            updatedAt: 0,
+        }, [{ href: 'data:image/png;base64,ZmFrZQ==', mimeType: 'image/png' }]))
+            .rejects.toThrow('未返回可用媒体 URL');
+        expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not submit RunningHub image-to-image without a reference image', async () => {
+        globalThis.fetch = vi.fn();
+
+        await expect(generateImageWithProvider('生成毛玻璃节点', 'nano-banana2-gemini31flash/image-to-image-channel-low-price', {
+            id: 'rh-key',
+            provider: 'runningHub',
+            capabilities: ['image'],
+            key: '0123456789abcdef0123456789abcdef',
+            baseUrl: 'https://www.runninghub.cn/openapi/v2',
+            createdAt: 0,
+            updatedAt: 0,
+        }, []))
+            .rejects.toThrow('需要至少一张参考图');
+        expect(globalThis.fetch).not.toHaveBeenCalled();
+    });
+
+    it('routes RunningHub standard video models through the native standard-model API', async () => {
+        globalThis.fetch = vi.fn()
+            .mockResolvedValueOnce(mockJsonResponse({
+                taskId: 'rh-video-1',
+                status: 'SUCCESS',
+                errorCode: '',
+                errorMessage: '',
+                results: [{ url: 'https://cdn.example.com/rh.mp4', outputType: 'mp4', text: null }],
+                clientId: 'client-1',
+            }))
+            .mockResolvedValueOnce(mockBinaryResponse('fake-video', 'video/mp4'));
+
+        const result = await generateVideoWithProvider('镜头缓慢推进', 'google/veo3.1-fast/start-end-to-video-channel-low-price', {
+            id: 'rh-key',
+            provider: 'runningHub',
+            capabilities: ['video'],
+            key: '0123456789abcdef0123456789abcdef',
+            baseUrl: 'https://www.runninghub.cn/openapi/v2',
+            createdAt: 0,
+            updatedAt: 0,
+        }, {
+            aspectRatio: '16:9',
+            durationSec: 6,
+            resolution: '720p',
+            references: [
+                { href: 'https://cdn.example.com/first.png', mimeType: 'image/png', slotRole: 'first_frame' },
+                { href: 'https://cdn.example.com/last.png', mimeType: 'image/png', slotRole: 'last_frame' },
+            ],
+        });
+
+        expect(result.mimeType).toBe('video/mp4');
+        expect(globalThis.fetch).toHaveBeenNthCalledWith(
+            1,
+            'https://www.runninghub.cn/openapi/v2/google/veo3.1-fast/start-end-to-video-channel-low-price',
+            expect.objectContaining({
+                method: 'POST',
+                headers: expect.objectContaining({ Authorization: 'Bearer 0123456789abcdef0123456789abcdef' }),
+                body: expect.stringContaining('"prompt":"镜头缓慢推进"'),
+            }),
+        );
+        expect(JSON.parse((globalThis.fetch as any).mock.calls[0][1].body)).toMatchObject({
+            duration: '6',
+            resolution: '720p',
+            aspectRatio: '16:9',
+            firstFrameUrl: 'https://cdn.example.com/first.png',
+            lastFrameUrl: 'https://cdn.example.com/last.png',
+        });
+    });
+
+    it('maps RunningHub seedance multimodal slots to imageUrls, videoUrls, and audioUrls', async () => {
+        globalThis.fetch = vi.fn()
+            .mockResolvedValueOnce(mockJsonResponse({
+                taskId: 'rh-mm-1',
+                status: 'SUCCESS',
+                errorCode: '',
+                errorMessage: '',
+                results: [{ url: 'https://cdn.example.com/rh-mm.mp4', outputType: 'mp4', text: null }],
+                clientId: 'client-1',
+            }))
+            .mockResolvedValueOnce(mockBinaryResponse('fake-video', 'video/mp4'));
+
+        const result = await generateVideoWithProvider('角色看向镜头，音乐渐强', 'seedance-2.0-global-fast/multimodal-video', {
+            id: 'rh-key',
+            provider: 'runningHub',
+            capabilities: ['video'],
+            key: '0123456789abcdef0123456789abcdef',
+            baseUrl: 'https://www.runninghub.cn/openapi/v2',
+            createdAt: 0,
+            updatedAt: 0,
+        }, {
+            aspectRatio: '9:16',
+            durationSec: 5,
+            resolution: '720p',
+            slots: [
+                { kind: 'image', href: 'https://cdn.example.com/ref.png', mimeType: 'image/png', role: 'reference_image' },
+                { kind: 'video', href: 'https://cdn.example.com/ref.mp4', mimeType: 'video/mp4', role: 'reference_video' },
+                { kind: 'audio', href: 'https://cdn.example.com/ref.mp3', mimeType: 'audio/mpeg', role: 'reference_audio' },
+            ],
+        });
+
+        expect(result.mimeType).toBe('video/mp4');
+        const body = JSON.parse((globalThis.fetch as any).mock.calls[0][1].body);
+        expect(body).toMatchObject({
+            prompt: '角色看向镜头，音乐渐强',
+            duration: '5',
+            resolution: '720p',
+            ratio: '9:16',
+            imageUrls: ['https://cdn.example.com/ref.png'],
+            videoUrls: ['https://cdn.example.com/ref.mp4'],
+            audioUrls: ['https://cdn.example.com/ref.mp3'],
+        });
     });
 
     it('limits GPT Image multipart reference inputs to the official 16-image cap', async () => {

@@ -40,6 +40,7 @@ function buildSuggestionExtension(getItems: (query: string) => MentionItem[]) {
                     editor: this.editor,
                     char: '@',
                     allowSpaces: false,
+                    allowedPrefixes: null,
                     items: ({ query }) => getItems(query),
                     render() {
                         let reactRoot: ReactDOM.Root | null = null;
@@ -49,6 +50,7 @@ function buildSuggestionExtension(getItems: (query: string) => MentionItem[]) {
 
                         return {
                             onStart(props) {
+                                console.log('[RichPromptEditor] @ onStart', { itemsCount: (props.items as MentionItem[])?.length, hasClientRect: !!props.clientRect, clientRect: props.clientRect?.() });
                                 container = document.createElement('div');
                                 document.body.appendChild(container);
 
@@ -73,13 +75,14 @@ function buildSuggestionExtension(getItems: (query: string) => MentionItem[]) {
                                     theme: 'mention-popup',
                                     arrow: false,
                                     offset: [0, 4],
-                                    zIndex: 9999,
-                                    popperOptions: {
-                                        modifiers: [
-                                            { name: 'flip', enabled: true },
-                                            { name: 'preventOverflow', enabled: true },
-                                        ],
-                                    },
+                                    zIndex: 99999,
+                                popperOptions: {
+                                    strategy: 'fixed',
+                                    modifiers: [
+                                        { name: 'flip', enabled: true },
+                                        { name: 'preventOverflow', enabled: true },
+                                    ],
+                                },
                                 });
                             },
                             onUpdate(props) {

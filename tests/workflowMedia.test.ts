@@ -4,6 +4,7 @@ import {
   fitWorkflowMediaSize,
   ingestWorkflowMedia,
   inspectWorkflowMedia,
+  loadWorkflowMediaBlob,
   pruneWorkflowMedia,
   registerWorkflowMediaTransientReferences,
   setWorkflowMediaCanonicalProjects,
@@ -12,6 +13,7 @@ import {
   workflowMediaType,
 } from '../components/workflow/media';
 import { workflowMediaStorage } from '../components/workflow/storage';
+import { putImage, toIdbRef } from '../utils/imageDB';
 
 describe('workflow media', () => {
   beforeEach(async () => {
@@ -119,6 +121,18 @@ describe('workflow media', () => {
     const { result } = renderHook(() => useWorkflowMediaUrl('missing-key', 'https://example.com/fallback.png'));
     await waitFor(() => expect(result.current.error).toBe('媒体文件不存在，请重新选择文件'));
     expect(result.current.url).toBeNull();
+  });
+
+  it('resolves canvas IndexedDB image refs before workflow renders or imports them', async () => {
+    await putImage('board:workflow-idb-image', 'data:image/png;base64,aW1hZ2U=');
+
+    const blob = await loadWorkflowMediaBlob(undefined, toIdbRef('board:workflow-idb-image'));
+    expect(blob.type).toBe('image/png');
+
+    const hook = renderHook(() => useWorkflowMediaUrl(undefined, toIdbRef('board:workflow-idb-image')));
+    expect(hook.result.current.url).toBeNull();
+    await waitFor(() => expect(hook.result.current.url).toMatch(/^blob:/));
+    act(() => hook.unmount());
   });
 
   it('returns an empty loading URL immediately when the durable key changes', async () => {

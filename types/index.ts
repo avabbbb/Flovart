@@ -260,7 +260,7 @@ export interface RecipePackage {
 // API Key & Model Preferences
 export type ThemeMode = 'light' | 'dark' | 'system';
 export type WorkspaceView = 'canvas' | 'workflow';
-export type AIProvider = 'openai' | 'anthropic' | 'google' | 'qwen' | 'deepseek' | 'siliconflow' | 'keling' | 'flux' | 'midjourney' | 'runningHub' | 'minimax' | 'volcengine' | 'openrouter' | 'custom';
+export type AIProvider = 'openai' | 'anthropic' | 'google' | 'qwen' | 'deepseek' | 'siliconflow' | 'keling' | 'flux' | 'midjourney' | 'runningHub' | 'minimax' | 'volcengine' | 'openrouter' | 'openai_compatible' | 'custom';
 export type AICapability = 'text' | 'image' | 'video' | 'agent';
 
 /** 模型条目（用于结构化展示�?*/

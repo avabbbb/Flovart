@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import type { Tool } from '../types';
+import type { Tool, WheelAction } from '../types';
 
 interface ToolbarProps {
     t: (key: string) => string;
@@ -29,6 +29,8 @@ interface ToolbarProps {
     onHeightChange?: (heightPx: number) => void;
     orientation?: 'vertical' | 'horizontal';
     embedded?: boolean;
+    wheelAction?: WheelAction;
+    setWheelAction?: (action: WheelAction) => void;
 }
 
 const baseButtonClass = 'isl-icon-btn h-9 w-9';
@@ -140,6 +142,8 @@ export const Toolbar: React.FC<ToolbarProps> = ({
     onHeightChange,
     orientation = 'vertical',
     embedded = false,
+    wheelAction = 'pan',
+    setWheelAction,
 }) => {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const innerRef = useRef<HTMLDivElement>(null);
@@ -408,8 +412,21 @@ export const Toolbar: React.FC<ToolbarProps> = ({
 
             <div className={isHorizontal ? 'mx-0.5 h-6 w-px' : 'my-0.5 h-px w-6'} style={{ background: 'var(--isl-border)' }} />
 
+            {setWheelAction && (
+                <ToolButton
+                    label={wheelAction === 'pan' ? '滚轮：平移（点击切换为缩放）' : '滚轮：缩放（点击切换为平移）'}
+                    onClick={() => setWheelAction(wheelAction === 'pan' ? 'zoom' : 'pan')}
+                    active={wheelAction === 'zoom'}
+                    icon={wheelAction === 'pan'
+                        ? <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 9v6"/><path d="M9 5h6"/><path d="M5 9a4 4 0 0 0 4 4"/><path d="M15 19a4 4 0 0 0 4-4"/><path d="M19 15V9"/><path d="M15 19H9"/></svg>
+                        : <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/><path d="M11 8v6"/><path d="M8 11h6"/></svg>}
+                    theme={theme}
+                />
+            )}
+
+            <div className={isHorizontal ? 'mx-0.5 h-6 w-px' : 'my-0.5 h-px w-6'} style={{ background: 'var(--isl-border)' }} />
+
             <ToolButton
-                label={t('toolbar.undo')}
                 onClick={onUndo}
                 disabled={!canUndo}
                 icon={<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m9 14-5-5 5-5" /><path d="M4 9h10.5A5.5 5.5 0 0 1 20 14.5 5.5 5.5 0 0 1 14.5 20H11" /></svg>}

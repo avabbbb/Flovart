@@ -6,6 +6,7 @@
 
 import type { AIProvider, AICapability } from '../types';
 import { getOpenAICompatibleBaseUrlCandidates, normalizeProviderBaseUrl } from './baseUrl';
+import { isLikelyRunningHubModelEndpoint, normalizeRunningHubModelEndpoint, rhTestApiKey, BUILTIN_RUNNINGHUB_MODELS } from './runningHubService';
 
 export interface FetchedModel {
     id: string;
@@ -34,6 +35,10 @@ function stripProviderPrefix(modelId: string): string {
 }
 
 function inferCapability(modelId: string, model?: any): AICapability {
+    const categoryText = `${model?.categoryName || ''} ${model?.sourceTypeName || ''}`.toLowerCase();
+    if (/video/.test(categoryText)) return 'video';
+    if (/image/.test(categoryText)) return 'image';
+
     const outputModalities = model?.architecture?.output_modalities || model?.output_modalities || [];
     if (Array.isArray(outputModalities)) {
         if (outputModalities.includes('video')) return 'video';
@@ -41,8 +46,10 @@ function inferCapability(modelId: string, model?: any): AICapability {
     }
 
     const id = stripProviderPrefix(modelId);
-    if (/^(veo|video|wan|seedance|vidu|pika|runway|higgsfield|luma|kling|keling|sora|sdols|hailuo|qwen-video|liveportrait|videoretalk|emo)/.test(id)) return 'video';
-    if (/^(imagen|image-generation|dall-e|gpt-image|stable-diffusion|sdxl|flux|midjourney|recraft|ideogram|qwen-image|seededit|nano-banana|jimeng|doubao-image|omni-image|grok-image)/.test(id)) return 'image';
+    if (/^(veo|video|wan|seedance|vidu|pika|runway|higgsfield|luma|kling|keling|sora|sdols|hailuo|qwen-video|liveportrait|videoretalk|emo|gemini-omni|happyhorse|ltx|pixverse|skyreels)/.test(id)) return 'video';
+    if (/(^|[-_/])(text|image|reference|start|end|multimodal)?-?to-video|video-edit|edit-video|motion-control|video-extend/.test(id)) return 'video';
+    if (/^(imagen|image-generation|dall-e|gpt-image|stable-diffusion|sdxl|flux|midjourney|recraft|ideogram|qwen-image|seededit|seedream|nano-banana|jimeng|doubao-image|omni-image|grok-image|rhart-image|f-|z-image|xai\/rhart|xai\/grok-imagine-image)/.test(id)) return 'image';
+    if (/(^|[-_/])(text|image)-to-image|image-edit|edit-channel|edit-official|\/edit(?:-|$)/.test(id)) return 'image';
     if (/image/.test(id) && /gemini/.test(id)) return 'image';
     return 'text';
 }
@@ -67,6 +74,71 @@ function truncateResponseSnippet(text: string, maxLength = 200) {
 
 function looksLikeHtmlResponse(text: string) {
     return /^\s*<(?:!doctype|html|head|body)\b/i.test(text);
+}
+
+const RUNNINGHUB_DOCS_MODEL_URL = 'https://www.runninghub.ai/page-api';
+
+function runningHubModelToFetchedModel(id: string, model?: any): FetchedModel {
+    return {
+        id,
+        name: id,
+        capability: inferCapability(id, model),
+        description: model?.description?.slice?.(0, 160) || 'RunningHub 标准模型',
+    };
+}
+
+function derefNuxtValue(data: unknown[], value: unknown): unknown {
+    if (typeof value === 'number' && Number.isInteger(value) && value >= 0 && value < data.length) {
+        return data[value];
+    }
+    return value;
+}
+
+function nuxtString(data: unknown[], value: unknown): string {
+    const resolved = derefNuxtValue(data, value);
+    return typeof resolved === 'string' ? resolved : '';
+}
+
+function parseRunningHubPageModels(html: string): FetchedModel[] {
+    const match = html.match(/<script[^>]+id=["']__NUXT_DATA__["'][^>]*>([\s\S]*?)<\/script>/i);
+    if (!match) return [];
+    let data: unknown[];
+    try {
+        data = JSON.parse(match[1]);
+    } catch {
+        return [];
+    }
+    if (!Array.isArray(data)) return [];
+
+    const models: FetchedModel[] = [];
+    for (const raw of data) {
+        if (!raw || Array.isArray(raw) || typeof raw !== 'object') continue;
+        const item = raw as Record<string, unknown>;
+        if (!('name' in item) || !('categoryName' in item)) continue;
+        const rawName = nuxtString(data, item.name);
+        const id = normalizeRunningHubModelEndpoint(rawName);
+        if (!rawName || /\[Deprecated\]|Please use/i.test(rawName) || !isLikelyRunningHubModelEndpoint(id)) continue;
+        const categoryName = nuxtString(data, item.categoryName);
+        const sourceTypeName = nuxtString(data, item.sourceTypeName);
+        const description = nuxtString(data, item.description);
+        const capability = inferCapability(id, { categoryName, sourceTypeName });
+        if (capability !== 'image' && capability !== 'video') continue;
+        models.push(runningHubModelToFetchedModel(id, { categoryName, sourceTypeName, description }));
+    }
+    return models;
+}
+
+function mergeModelLists(...lists: FetchedModel[][]): FetchedModel[] {
+    const merged = new Map<string, FetchedModel>();
+    for (const list of lists) {
+        for (const model of list) {
+            if (!merged.has(model.id)) merged.set(model.id, model);
+        }
+    }
+    return Array.from(merged.values()).sort((a, b) => {
+        if (a.capability !== b.capability) return a.capability === 'image' ? -1 : 1;
+        return a.id.localeCompare(b.id);
+    });
 }
 
 async function readJsonResponse<T>(response: Response, requestLabel: string): Promise<T> {
@@ -233,6 +305,40 @@ async function fetchOpenAICompatibleModels(
     return { ok: false, models: [], error: lastError };
 }
 
+// ── RunningHub 标准模型 ─────────────────────────────
+async function fetchRunningHubModels(apiKey: string, baseUrl?: string): Promise<FetchModelsResult> {
+    const effectiveBaseUrl = normalizeProviderBaseUrl('runningHub', baseUrl || 'https://www.runninghub.cn/openapi/v2');
+    const valid = await rhTestApiKey(apiKey, effectiveBaseUrl);
+    if (!valid) {
+        return { ok: false, models: [], error: 'RunningHub API Key 无效或权限不足' };
+    }
+
+    let pageModels: FetchedModel[] = [];
+    try {
+        const response = await fetch(RUNNINGHUB_DOCS_MODEL_URL);
+        if (response.ok) {
+            pageModels = parseRunningHubPageModels(await response.text());
+        }
+    } catch {
+        // Public page fetch can fail behind strict networks; the user can still add model IDs manually.
+    }
+
+    const builtinModels: FetchedModel[] = BUILTIN_RUNNINGHUB_MODELS.map(item => ({
+        id: item.id,
+        name: item.id,
+        capability: item.capability,
+        description: item.description,
+    }));
+
+    const models = mergeModelLists(builtinModels, pageModels);
+    return {
+        ok: true,
+        models,
+        capabilitySummary: summarizeCapabilities(models),
+        effectiveBaseUrl,
+    };
+}
+
 // ── Provider 默认 Base URL ──────────────────────────
 const PROVIDER_BASE_URLS: Partial<Record<AIProvider, string>> = {
     openai: 'https://api.openai.com/v1',
@@ -242,6 +348,7 @@ const PROVIDER_BASE_URLS: Partial<Record<AIProvider, string>> = {
     qwen: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
     minimax: 'https://api.minimax.chat/v1',
     volcengine: 'https://ark.cn-beijing.volces.com/api/v3',
+    runningHub: 'https://www.runninghub.cn/openapi/v2',
 };
 
 // ── 主入口 ──────────────────────────────────────────
@@ -254,8 +361,12 @@ export async function fetchModelsForProvider(
         return fetchGoogleModels(apiKey, baseUrl);
     }
 
+    if (provider === 'runningHub') {
+        return fetchRunningHubModels(apiKey, baseUrl);
+    }
+
     // OpenAI 兼容类
-    if (['openai', 'openrouter', 'deepseek', 'siliconflow', 'qwen', 'minimax', 'volcengine', 'custom'].includes(provider)) {
+    if (['openai', 'openrouter', 'deepseek', 'siliconflow', 'qwen', 'minimax', 'volcengine', 'openai_compatible', 'custom'].includes(provider)) {
         const url = baseUrl || PROVIDER_BASE_URLS[provider];
         if (!url) {
             return { ok: false, models: [], error: '未指定 Base URL' };

@@ -17,8 +17,11 @@ title: 待测试确认
 - 点击图片内容或视频播放控件会先选中节点并显示 Flovart 自己的 PromptBar 和 ElementToolbar；PromptBar 支持 `@` 引用、模型、批量、状态、停止和重试。
 - Workflow 可导入/导出包含本地媒体的严格 JSON，导入会重建媒体存储；删除项目需要二次确认。
 - 共享素材支持搜索、图片/视频筛选和预览，并提供内置 Prompt Library。
-- Workflow 右侧面板默认展开并记住开关和宽度，复用 Canvas 的紧凑面板外壳；嵌入式 Agent 不再重复显示标题和关闭按钮。
+- Workflow 右侧面板默认展开并记住开关和宽度，复用 Canvas 的紧凑面板外壳；嵌入式 Agent 的模式栏和导航栏改为透明背景无边框，与抽屉 Tab 栏视觉统一，不再出现双层 header 叠摞。
+- Workflow 节点已移除顶部标题栏（图片/视频等标签边框），节点为纯媒体/纯内容；错误提示移至右上角小角标，拖动改为整节点可拖。
+- Workflow 底部工具栏已移除上传图片/视频/音频按钮，改用 Canvas 的 `isl-icon-btn` 扁平风格，保留选择/平移/文本/配置/共享素材/撤销/重做/适应/网格/Agent 入口。
 - Workflow 的生成历史与素材库支持搜索、图片/视频和素材分类筛选、点击添加、拖到画布落点、下载、反推 Prompt、重命名和删除；点击或拖入的本地媒体继续使用现有 Blob/IndexedDB 持久化，不把 base64 写进项目 JSON。
+- Workflow 右侧历史/素材、画布拖入和反推 Prompt 会先解析 `idb:board:*`、`idb-video:*`、`cold-media:*` 等本地媒体引用，不再把这些 IndexedDB 协议直接交给浏览器图片/视频标签。
 
 ## Workflow 生成
 
@@ -35,6 +38,16 @@ title: 待测试确认
 - Canvas 节点生成新增独立请求控制器、停止按钮、图片三分钟超时、视频十一分钟超时、旧请求结果隔离和可见错误信息；图片请求的取消信号会继续传入当前 Provider 与 Gemini SDK。
 - Canvas 与 Workflow 可框选多个节点后批量导出媒体 ZIP；文件按画布纵坐标、横坐标排序，以 `001_名称.ext` 形式编号，并保留可读中文、清理非法文件名字符。
 
+## Provider 与模型偏好
+
+- RunningHub 已作为原生标准模型 Provider 接入设置页、模型拉取、图片生成和视频生成网关；模型列表内置 7 个经实跑验证的标准模型端点（含 Flash 快速图生图/文生图、V3.1 Fast 视频等），page-api 拉取的模型作为补充，仍可手动补充模型 ID。
+- RunningHub API Key 验证会使用标准模型任务查询端点确认鉴权，并在保存或后台刷新时写入可选模型；模型生成返回的 `results[].url` 会转换成现有图片/视频结果格式。
+- RunningHub WebApp API（`/task/openapi/*`）已移除浏览器禁用的 `Host` 请求头，文件上传、AI App 提交和输出查询在浏览器环境可正常调用。
+- RunningHub 标准模型调用会按详情页字段自动映射 `imageUrls`、`firstFrameUrl`、`lastFrameUrl`、`aspectRatio`、`ratio`、`videoUrls` 和 `audioUrls`；本地 data URL 参考媒体会先上传为临时公网 URL。
+- RunningHub 标准模型提交、查询和上传会透出平台返回的 `errorCode` / `errorMessage`，并附带不含密钥的 `baseUrl`、最终提交 URL、模型 ID 与 payload 字段摘要；上传未返回公网 URL、模型 ID 仍是详情页/搜索页 URL，或 payload 中仍有本地引用时会在本地中断，不再退化成 `No taskId returned`。
+- 模型偏好新增本机保存状态提示，能显示已自动保存时间或浏览器存储失败原因；Canvas 与 Workflow 共用这套偏好状态。
+- 根级 `CONTEXT.md` 已补充 Provider、Model Preference、Standard Model 和 AI App 的领域词边界，并新增 ADR 记录 RunningHub 原生 Provider 的取舍。
+
 ## CLI、Agent 与 MCP
 
 - 网站 Agent 使用当前项目的文本模型/API Key，图片附件先走现有视觉能力，结构化命令通过统一 Workflow dispatcher 执行，写操作逐项确认。
@@ -44,6 +57,4 @@ title: 待测试确认
 - MCP 工具从同一 CLI registry 自动生成；Agent/MCP 写操作需要 Workflow 面板确认后才执行，幂等缓存、超时、断线清理和敏感字段脱敏已接入。
 - Codex app-server 按 Workflow 项目隔离线程工作区，图片附件作为临时 `localImage` 输入并在 turn 结束后删除。
 
-本文件中的测试项尚未由用户执行确认。本次 Workflow 右侧面板、嵌入式 Agent、右侧媒体拖放和 Studio 布局定向 Vitest 共 10 项通过；完整 Workflow Editor 套件仍有 12 项通过、24 项失败，其中多数因 jest-dom matcher 未加载，另有既存手势断言失败。本次未执行构建或语法检查。
-
-本次毛玻璃加载态、Canvas 生成中断/超时/错误回传及双画布批量导出已补充定向测试文件，但按项目约定未执行测试、构建或语法检查，等待用户实际验证。
+本文件中的测试项尚未由用户执行确认。本次变更包括：Workflow 节点 header 删除、底部工具栏重构、右侧抽屉 header 对齐、RunningHub Host 头修复与 LEGACY_PRESET 黑名单解封。RunningHub 链路已通过 Node.js 脚本实跑验证（`rhart-image-n-g31-flash/text-to-image` + Bearer + `{ prompt, resolution: '1k' }` → 成功生成图片，花费 ¥0.19）。按项目约定未执行前端测试、构建或语法检查，等待用户实际验证。

@@ -62,6 +62,16 @@ export function normalizeProviderBaseUrl(provider: AIProvider, baseUrl?: string)
     const trimmed = trimTrailingSlashes(baseUrl || '');
     if (!trimmed) return trimmed;
 
+    if (provider === 'runningHub') {
+        const parsed = safeParseUrl(trimmed);
+        if (!parsed) return trimmed;
+        const path = parsed.pathname.replace(/\/+$/, '');
+        if (!path || path === '/') return `${parsed.origin}/openapi/v2`;
+        const apiIndex = path.toLowerCase().indexOf('/openapi/v2');
+        if (apiIndex >= 0) return `${parsed.origin}${path.slice(0, apiIndex + '/openapi/v2'.length)}`;
+        return trimmed;
+    }
+
     if (provider === 'google') {
         return trimmed.replace(/\/models$/i, '');
     }

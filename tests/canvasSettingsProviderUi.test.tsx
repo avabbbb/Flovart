@@ -29,6 +29,8 @@ function renderSettings(userApiKeys: UserApiKey[] = []) {
       onSetDefaultApiKey={() => undefined}
       modelPreference={modelPreference}
       setModelPreference={() => undefined}
+      modelPreferenceSavedAt={1234567890}
+      modelPreferenceSaveError={null}
       t={(key) => key}
       clearKeysOnExit={false}
       setClearKeysOnExit={() => undefined}
@@ -68,6 +70,19 @@ describe('CanvasSettings provider configuration UI', () => {
     fireEvent.click(screen.getByRole('button', { name: /添加 API Key|添加供应商/i }));
 
     expect(screen.queryByText('Banana Vision')).toBeNull();
+  });
+
+  it('shows RunningHub provider entry without hardcoded preset models and preserves model preference save status', () => {
+    renderSettings();
+
+    expect(screen.getByText(/已自动保存/)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: /添加 API Key|添加供应商/i }));
+
+    expect(screen.getByText('RunningHub 标准模型')).toBeTruthy();
+    expect(screen.getByText('点击获取官方模型')).toBeTruthy();
+    expect(screen.queryByText('全能图片G-2.0-图生图-低价渠道版')).toBeNull();
+    expect(screen.queryByText('全能视频V3.1-fast-图生视频-低价渠道版')).toBeNull();
   });
 
   it('does not expose a separate Agent model preference in the creative model list', () => {

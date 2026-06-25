@@ -572,8 +572,8 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                 </div>
 
                 {expandedPanel && (
-                    <div className="border-t border-[var(--isl-border)] bg-[var(--isl-card)]/90 backdrop-blur-md animate-slideDown">
-                        <div className="max-h-[45vh] isl-scrollbar p-3">
+                    <div className="border-t border-[var(--isl-border)] bg-[var(--isl-card)]/90 backdrop-blur-md animate-slideDown" onWheel={event => event.stopPropagation()}>
+                        <div className="max-h-[45vh] isl-scrollbar p-3" onWheel={event => event.stopPropagation()}>
                             {expandedPanel === 'mode' && (
                                 <>
                                     <PopoverHeader title="生成类型" subtitle="选择图片、视频或首尾帧模式" />
@@ -587,7 +587,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                             {expandedPanel === 'model' && (
                                 <>
                                     <PopoverHeader title="模型设置" subtitle="选择生成模型" />
-                                    <div className="max-h-[280px] space-y-1 pr-1">
+                                    <div className="max-h-[280px] overflow-y-auto space-y-1 pr-1 isl-scrollbar" onWheel={event => event.stopPropagation()}>
                                         <div className="px-1 pb-2">
                                             <input
                                                 type="text"

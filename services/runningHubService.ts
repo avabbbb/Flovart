@@ -7,6 +7,18 @@ const RH_BASE = 'https://www.runninghub.cn/openapi/v2';
 const POLL_INTERVAL = 5000; // 5s
 const MAX_POLL_ATTEMPTS = 120; // 10 minutes max
 
+// 已通过实跑验证的 RunningHub 标准模型端点（2026-06-24 验证）
+// 这些端点使用 /openapi/v2/<endpoint> + Bearer 认证，字段为 prompt/resolution/imageUrls
+export const BUILTIN_RUNNINGHUB_MODELS: Array<{ id: string; capability: 'image' | 'video'; description: string }> = [
+  { id: 'rhart-image-n-g31-flash/text-to-image', capability: 'image', description: 'Flash 文生图（快、便宜，1k/2k/4k）' },
+  { id: 'rhart-image-n-g31-flash/image-to-image', capability: 'image', description: 'Flash 图生图（快、便宜，需 imageUrls + resolution）' },
+  { id: 'rhart-image-g-2/image-to-image', capability: 'image', description: 'G-2 图生图（高质量，需 imageUrls）' },
+  { id: 'rhart-video-v3.1-fast/image-to-video', capability: 'video', description: 'V3.1 Fast 图生视频（需 imageUrls + prompt）' },
+  { id: 'rhart-video-v3.1-fast/start-end-to-video', capability: 'video', description: 'V3.1 Fast 首尾帧生视频（需 firstFrameUrl/lastFrameUrl）' },
+  { id: 'rhart-video/sparkvideo-2.0/image-to-video', capability: 'video', description: 'SparkVideo 2.0 图生视频（需 imageUrls）' },
+  { id: 'rhart-video/sparkvideo-2.0/multimodal-video', capability: 'video', description: 'SparkVideo 2.0 多模态视频（需 imageUrls/videoUrls/audioUrls）' },
+];
+
 export interface RHTaskResult {
   url: string;
   nodeId: string;
@@ -30,13 +42,24 @@ export interface RHTaskResponse {
 }
 
 export interface RHSubmitPayload {
-  imageUrls?: string[];
-  prompt: string;
-  resolution?: '1k' | '2k' | '4k';
-  aspectRatio?: string;
   webhookUrl?: string;
-  [key: string]: unknown; // allow extra params for custom models
+  [key: string]: unknown; // RunningHub standard model fields, e.g. 12##text
 }
+
+export interface RHRunOptions {
+  baseUrl?: string;
+  signal?: AbortSignal;
+  onProgress?: (status: RHTaskResponse['status'], attempt: number) => void;
+}
+
+type RHDebugContext = {
+  baseUrl: string;
+  modelEndpoint?: string;
+  submitUrl?: string;
+  taskId?: string;
+  payload?: RHSubmitPayload;
+  response?: Partial<RHTaskResponse> & Record<string, unknown>;
+};
 
 function rhHeaders(apiKey: string): Record<string, string> {
   return {
@@ -45,17 +68,208 @@ function rhHeaders(apiKey: string): Record<string, string> {
   };
 }
 
+function firstString(...values: unknown[]) {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim().length > 0) return value.trim();
+    if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  }
+  return '';
+}
+
+function rhResponseError(json: any, phase: string) {
+  const code = firstString(json?.errorCode, json?.code);
+  const directMessage = firstString(
+    json?.errorMessage,
+    json?.msg,
+    json?.message,
+    json?.failedReason?.exception_message,
+    json?.failedReason?.message,
+  );
+  const message = firstString(
+    directMessage,
+    json?.promptTips,
+  );
+  const failed = String(json?.status || '').toUpperCase() === 'FAILED';
+  if (!failed && (!code || code === '0') && !directMessage) return '';
+  const codeText = code && code !== '0' ? ` (${code})` : '';
+  return `${phase} failed${codeText}: ${message || 'Unknown error'}`;
+}
+
+function rhBase(baseUrl?: string) {
+  return (baseUrl || RH_BASE).trim().replace(/\/+$/, '');
+}
+
+function truncateDebugText(value: string, max = 120) {
+  return value.length <= max ? value : `${value.slice(0, max)}...(${value.length})`;
+}
+
+function summarizeDebugUrl(value: string) {
+  try {
+    const parsed = new URL(value);
+    return `${parsed.origin}${truncateDebugText(parsed.pathname || '/', 72)}`;
+  } catch {
+    return truncateDebugText(value);
+  }
+}
+
+function summarizePayloadValue(key: string, value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return {
+      count: value.length,
+      sample: value.slice(0, 3).map(item => summarizePayloadValue(key, item)),
+    };
+  }
+  if (typeof value === 'string') {
+    if (/^https?:\/\//i.test(value)) return summarizeDebugUrl(value);
+    if (/(^|##)(text|prompt)$/i.test(key) || /(?:prompt|description|caption)/i.test(key)) {
+      return `[text ${value.length} chars]`;
+    }
+    return truncateDebugText(value, 48);
+  }
+  if (value && typeof value === 'object') {
+    return '[object]';
+  }
+  return value;
+}
+
+function summarizePayload(payload?: RHSubmitPayload) {
+  if (!payload) return undefined;
+  return Object.fromEntries(
+    Object.entries(payload)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, value]) => [key, summarizePayloadValue(key, value)]),
+  );
+}
+
+function summarizeResponse(response?: Partial<RHTaskResponse> & Record<string, unknown>) {
+  if (!response) return undefined;
+  return {
+    status: firstString(response.status),
+    taskId: firstString(response.taskId),
+    errorCode: firstString(response.errorCode, response.code),
+    errorMessage: firstString(
+      response.errorMessage,
+      response.message,
+      response.msg,
+      (response as any)?.failedReason?.exception_message,
+      (response as any)?.failedReason?.message,
+    ),
+    resultCount: Array.isArray(response.results) ? response.results.length : undefined,
+  };
+}
+
+function runningHubDebugContext(baseUrl: string, modelEndpoint?: string, payload?: RHSubmitPayload): RHDebugContext {
+  const normalizedEndpoint = modelEndpoint ? normalizeRunningHubModelEndpoint(modelEndpoint) : '';
+  const normalizedBaseUrl = rhBase(baseUrl);
+  return {
+    baseUrl: normalizedBaseUrl,
+    modelEndpoint: normalizedEndpoint || undefined,
+    submitUrl: normalizedEndpoint ? `${normalizedBaseUrl}/${normalizedEndpoint}` : undefined,
+    payload,
+  };
+}
+
+function formatRunningHubDebug(context: RHDebugContext) {
+  return `\n[RunningHub Debug] ${JSON.stringify({
+    baseUrl: context.baseUrl,
+    modelEndpoint: context.modelEndpoint,
+    submitUrl: context.submitUrl,
+    taskId: context.taskId,
+    payload: summarizePayload(context.payload),
+    response: summarizeResponse(context.response),
+  }, null, 2)}`;
+}
+
+function withRunningHubDebug(message: string, context: RHDebugContext) {
+  const debug = formatRunningHubDebug(context);
+  if (typeof console !== 'undefined') {
+    console.error('[RunningHub Debug]', {
+      baseUrl: context.baseUrl,
+      modelEndpoint: context.modelEndpoint,
+      submitUrl: context.submitUrl,
+      taskId: context.taskId,
+      payload: summarizePayload(context.payload),
+      response: summarizeResponse(context.response),
+    });
+  }
+  return `${message}${debug}`;
+}
+
+export function normalizeRunningHubModelEndpoint(modelEndpoint?: string) {
+  let value = (modelEndpoint || '').trim().replace(/\\/g, '/');
+  if (!value) return '';
+  if (/^https?:\/\//i.test(value)) {
+    try {
+      const parsed = new URL(value);
+      value = parsed.pathname || '';
+    } catch {
+      return '';
+    }
+  }
+  value = value
+    .split('#')[0]
+    .split('?')[0]
+    .trim()
+    .replace(/^\/+/, '')
+    .replace(/^openapi\/v2\/?/i, '')
+    .replace(/^runninghub\/+/i, '')
+    .replace(/\/+$/, '');
+  return value;
+}
+
+export function isLikelyRunningHubModelEndpoint(modelEndpoint?: string) {
+  const normalized = normalizeRunningHubModelEndpoint(modelEndpoint);
+  if (!normalized) return false;
+  if (!/^[A-Za-z0-9._/-]+$/.test(normalized)) return false;
+  if (/^(query|page-api)$/i.test(normalized)) return false;
+  if (/^media\/upload\/binary$/i.test(normalized)) return false;
+  if (/^(call-api|search-api|runninghub-api-doc)/i.test(normalized)) return false;
+  return true;
+}
+
+export function assertRunningHubModelEndpoint(modelEndpoint?: string) {
+  const normalized = normalizeRunningHubModelEndpoint(modelEndpoint);
+  if (!isLikelyRunningHubModelEndpoint(normalized)) {
+    throw new Error('RunningHub 模型 ID 无效，请先在设置中点击"获取模型"并重新选择官方标准模型。');
+  }
+  return normalized;
+}
+
+function rhTaskUrl(baseUrl: string, modelEndpoint: string) {
+  return `${rhBase(baseUrl)}/${assertRunningHubModelEndpoint(modelEndpoint)}`;
+}
+
+function assertNotAborted(signal?: AbortSignal) {
+  if (signal?.aborted) throw signal.reason || new DOMException('RunningHub request aborted', 'AbortError');
+}
+
+function delay(ms: number, signal?: AbortSignal) {
+  return new Promise<void>((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(signal.reason || new DOMException('RunningHub request aborted', 'AbortError'));
+      return;
+    }
+    const timer = setTimeout(resolve, ms);
+    signal?.addEventListener('abort', () => {
+      clearTimeout(timer);
+      reject(signal.reason || new DOMException('RunningHub request aborted', 'AbortError'));
+    }, { once: true });
+  });
+}
+
 /** Submit a task to a RunningHub model endpoint */
 export async function rhSubmitTask(
   apiKey: string,
   modelEndpoint: string,
   payload: RHSubmitPayload,
+  options: Pick<RHRunOptions, 'baseUrl' | 'signal'> = {},
 ): Promise<RHTaskResponse> {
-  const url = modelEndpoint.startsWith('http')
-    ? modelEndpoint
-    : `${RH_BASE}/${modelEndpoint}`;
+  assertNotAborted(options.signal);
+  const debugContext = runningHubDebugContext(options.baseUrl || RH_BASE, modelEndpoint, payload);
+  const url = rhTaskUrl(options.baseUrl || RH_BASE, modelEndpoint);
 
   const res = await fetch(url, {
+    signal: options.signal,
     method: 'POST',
     headers: rhHeaders(apiKey),
     body: JSON.stringify(payload),
@@ -63,17 +277,23 @@ export async function rhSubmitTask(
 
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`RunningHub submit failed (${res.status}): ${text}`);
+    throw new Error(withRunningHubDebug(`RunningHub submit failed (${res.status}): ${text}`, debugContext));
   }
-  return res.json();
+  const json = await res.json();
+  const error = rhResponseError(json, 'RunningHub submit');
+  if (error) throw new Error(withRunningHubDebug(error, { ...debugContext, response: json }));
+  return json;
 }
 
 /** Query task status */
 export async function rhQueryTask(
   apiKey: string,
   taskId: string,
+  options: Pick<RHRunOptions, 'baseUrl' | 'signal'> = {},
 ): Promise<RHTaskResponse> {
-  const res = await fetch(`${RH_BASE}/query`, {
+  assertNotAborted(options.signal);
+  const res = await fetch(`${rhBase(options.baseUrl)}/query`, {
+    signal: options.signal,
     method: 'POST',
     headers: rhHeaders(apiKey),
     body: JSON.stringify({ taskId }),
@@ -81,9 +301,19 @@ export async function rhQueryTask(
 
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`RunningHub query failed (${res.status}): ${text}`);
+    throw new Error(withRunningHubDebug(`RunningHub query failed (${res.status}): ${text}`, {
+      baseUrl: rhBase(options.baseUrl),
+      taskId,
+    }));
   }
-  return res.json();
+  const json = await res.json();
+  const error = rhResponseError(json, 'RunningHub query');
+  if (error) throw new Error(withRunningHubDebug(error, {
+    baseUrl: rhBase(options.baseUrl),
+    taskId,
+    response: json,
+  }));
+  return json;
 }
 
 /** Upload a file and get a temporary URL (valid 24h) */
@@ -91,11 +321,15 @@ export async function rhUploadFile(
   apiKey: string,
   file: File | Blob,
   fileName?: string,
+  options: Pick<RHRunOptions, 'baseUrl' | 'signal'> = {},
 ): Promise<string> {
+  assertNotAborted(options.signal);
   const formData = new FormData();
   formData.append('file', file, fileName || 'upload.png');
+  const uploadUrl = `${rhBase(options.baseUrl)}/media/upload/binary`;
 
-  const res = await fetch(`${RH_BASE}/media/upload/binary`, {
+  const res = await fetch(uploadUrl, {
+    signal: options.signal,
     method: 'POST',
     headers: { Authorization: `Bearer ${apiKey}` },
     body: formData,
@@ -103,11 +337,28 @@ export async function rhUploadFile(
 
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`RunningHub upload failed (${res.status}): ${text}`);
+    throw new Error(withRunningHubDebug(`RunningHub upload failed (${res.status}): ${text}`, {
+      baseUrl: rhBase(options.baseUrl),
+      submitUrl: uploadUrl,
+    }));
   }
 
   const json = await res.json();
-  return json.data?.download_url || '';
+  const error = rhResponseError(json, 'RunningHub upload');
+  if (error) throw new Error(withRunningHubDebug(error, {
+    baseUrl: rhBase(options.baseUrl),
+    submitUrl: uploadUrl,
+    response: json,
+  }));
+  const url = firstString(json.data?.download_url, json.data?.fileUrl, json.data?.url, json.download_url, json.fileUrl, json.url);
+  if (!/^https?:\/\//i.test(url)) {
+    throw new Error(withRunningHubDebug('RunningHub upload failed: 未返回可用媒体 URL。', {
+      baseUrl: rhBase(options.baseUrl),
+      submitUrl: uploadUrl,
+      response: json,
+    }));
+  }
+  return url;
 }
 
 /** Convert a data URL to a Blob for upload */
@@ -124,10 +375,11 @@ function dataUrlToBlob(dataUrl: string): Blob {
 export async function rhUploadDataUrl(
   apiKey: string,
   dataUrl: string,
+  options: Pick<RHRunOptions, 'baseUrl' | 'signal'> = {},
 ): Promise<string> {
   const blob = dataUrlToBlob(dataUrl);
   const ext = blob.type.split('/')[1] || 'png';
-  return rhUploadFile(apiKey, blob, `upload.${ext}`);
+  return rhUploadFile(apiKey, blob, `upload.${ext}`, options);
 }
 
 /**
@@ -138,38 +390,58 @@ export async function rhRunTask(
   apiKey: string,
   modelEndpoint: string,
   payload: RHSubmitPayload,
-  onProgress?: (status: string, attempt: number) => void,
+  onProgressOrOptions?: ((status: string, attempt: number) => void) | RHRunOptions,
 ): Promise<RHTaskResponse> {
-  const submitResult = await rhSubmitTask(apiKey, modelEndpoint, payload);
+  const options: RHRunOptions = typeof onProgressOrOptions === 'function'
+    ? { onProgress: onProgressOrOptions as RHRunOptions['onProgress'] }
+    : onProgressOrOptions || {};
+  const debugContext = runningHubDebugContext(options.baseUrl || RH_BASE, modelEndpoint, payload);
+  const submitResult = await rhSubmitTask(apiKey, modelEndpoint, payload, options);
+  if (submitResult.status === 'SUCCESS') return submitResult;
+  if (submitResult.status === 'FAILED') {
+    throw new Error(withRunningHubDebug(`RunningHub task failed: ${submitResult.errorMessage || 'Unknown error'}`, {
+      ...debugContext,
+      response: submitResult,
+    }));
+  }
   const taskId = submitResult.taskId;
-
   if (!taskId) {
-    throw new Error('RunningHub: No taskId returned');
+    throw new Error(withRunningHubDebug('RunningHub submit failed: 未返回 taskId，请检查模型端点和输入媒体 URL。', {
+      ...debugContext,
+      response: submitResult,
+    }));
   }
 
   for (let i = 0; i < MAX_POLL_ATTEMPTS; i++) {
-    await new Promise((r) => setTimeout(r, POLL_INTERVAL));
+    await delay(POLL_INTERVAL, options.signal);
 
-    const result = await rhQueryTask(apiKey, taskId);
-    onProgress?.(result.status, i + 1);
+    const result = await rhQueryTask(apiKey, taskId, options);
+    options.onProgress?.(result.status, i + 1);
 
     if (result.status === 'SUCCESS') return result;
     if (result.status === 'FAILED') {
       throw new Error(
-        `RunningHub task failed: ${result.errorMessage || 'Unknown error'}`,
+        withRunningHubDebug(`RunningHub task failed: ${result.errorMessage || 'Unknown error'}`, {
+          ...debugContext,
+          taskId,
+          response: result,
+        }),
       );
     }
     // QUEUED or RUNNING — continue polling
   }
 
-  throw new Error('RunningHub task timed out after polling');
+  throw new Error(withRunningHubDebug('RunningHub task timed out after polling', {
+    ...debugContext,
+    taskId,
+  }));
 }
 
 /** Quick test: verify API key validity */
-export async function rhTestApiKey(apiKey: string): Promise<boolean> {
+export async function rhTestApiKey(apiKey: string, baseUrl?: string): Promise<boolean> {
   try {
     // Use a lightweight query with a dummy task ID to test auth
-    const res = await fetch(`${RH_BASE}/query`, {
+    const res = await fetch(`${rhBase(baseUrl)}/query`, {
       method: 'POST',
       headers: rhHeaders(apiKey),
       body: JSON.stringify({ taskId: 'test-0000' }),
@@ -267,7 +539,6 @@ export async function rhUploadWebAppFile(
 
   const res = await fetch(`${RH_HOST}/task/openapi/upload`, {
     method: 'POST',
-    headers: { Host: 'www.runninghub.cn' },
     body: formData,
   });
 
@@ -312,7 +583,6 @@ export async function rhSubmitWebAppTask(
   const res = await fetch(`${RH_HOST}/task/openapi/ai-app/run`, {
     method: 'POST',
     headers: {
-      'Host': 'www.runninghub.cn',
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
@@ -373,7 +643,6 @@ export async function rhQueryWebAppOutputs(
   const res = await fetch(`${RH_HOST}/task/openapi/outputs`, {
     method: 'POST',
     headers: {
-      'Host': 'www.runninghub.cn',
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ apiKey, taskId }),

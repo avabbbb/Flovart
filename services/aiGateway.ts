@@ -2,6 +2,7 @@ import type { AICapability, AIProvider, PromptEnhanceRequest, PromptEnhanceResul
 import { editImage, enhancePromptWithGemini, generateImageFromText, generateVideo, validateGeminiApiKey, getGeminiRestBaseUrl } from './geminiService';
 import { fetchModelsForProvider, type FetchModelsResult } from './modelFetcher';
 import { normalizeProviderBaseUrl } from './baseUrl';
+import { assertRunningHubModelEndpoint } from './runningHubService';
 
 type ImageInput = { href: string; mimeType: string };
 
@@ -115,7 +116,7 @@ export const DEFAULT_PROVIDER_MODELS: Partial<Record<AIProvider, ProviderModelMa
     },
     runningHub: {
         text: [],
-        image: ['rhart-image-n-pro-official'],
+        image: [],
         video: [],
     },
     minimax: {
@@ -146,6 +147,7 @@ export interface ApiKeyValidationResult {
     endpointFlavor?: FetchModelsResult['endpointFlavor'];
     capabilitySummary?: AICapability[];
     effectiveBaseUrl?: string;
+    models?: FetchModelsResult['models'];
 }
 
 type CustomProviderExtraConfig = Record<string, string> | undefined;
@@ -237,7 +239,7 @@ export function getCapabilityDictionary(model: string, provider: AIProvider = in
     if (provider === 'openrouter' && inferCapabilityFromModelName(model) === 'image') {
         return OPENAI_GPT_IMAGE_CAPABILITY;
     }
-    if ((provider === 'openai' || provider === 'custom') && isOpenAIImageEditModel(model)) {
+    if ((provider === 'openai' || provider === 'custom' || provider === 'openai_compatible') && isOpenAIImageEditModel(model)) {
         return OPENAI_GPT_IMAGE_CAPABILITY;
     }
     return DEFAULT_VIDEO_CAPABILITY;
@@ -422,6 +424,7 @@ export async function validateApiKey(provider: AIProvider, apiKey: string, baseU
             endpointFlavor: result.endpointFlavor,
             capabilitySummary: result.capabilitySummary,
             effectiveBaseUrl: result.effectiveBaseUrl,
+            models: result.models,
         };
     }
 
@@ -437,6 +440,7 @@ export async function validateApiKey(provider: AIProvider, apiKey: string, baseU
             endpointFlavor: result.endpointFlavor,
             capabilitySummary: result.capabilitySummary,
             effectiveBaseUrl: result.effectiveBaseUrl,
+            models: result.models,
         };
     }
 
@@ -480,9 +484,17 @@ export async function validateApiKey(provider: AIProvider, apiKey: string, baseU
     // RunningHub: 32位 hex key 验证
     if (provider === 'runningHub') {
         try {
-            const { rhTestApiKey } = await import('./runningHubService');
-            const valid = await rhTestApiKey(apiKey);
-            return valid ? { ok: true, capabilitySummary: ['image'] } : { ok: false, message: 'API Key 无效' };
+            const result = await fetchModelsForProvider(provider, apiKey, normalizedInputBaseUrl);
+            if (!result.ok) return { ok: false, message: result.error || 'API Key 无效或权限不足' };
+            return {
+                ok: true,
+                message: result.models.length > 0
+                    ? `RunningHub Key 已验证，已获取 ${result.models.length} 个标准模型。`
+                    : 'RunningHub Key 已验证，可用于标准模型生成。',
+                capabilitySummary: result.capabilitySummary || ['image', 'video'],
+                effectiveBaseUrl: result.effectiveBaseUrl || normalizedInputBaseUrl || DEFAULT_BASE_URLS.runningHub,
+                models: result.models,
+            };
         } catch (err) {
             return { ok: false, message: err instanceof Error ? err.message : '网络错误' };
         }
@@ -532,6 +544,7 @@ export function inferProviderFromKey(apiKey: string): AIProvider | null {
  * Provider 默认 capabilities 推断
  */
 export function inferCapabilitiesByProvider(provider: AIProvider): import('../types').AICapability[] {
+    if (provider === 'runningHub') return ['image', 'video'];
     const caps = DEFAULT_PROVIDER_MODELS[provider];
     if (!caps) return ['text', 'image'];
     const result: import('../types').AICapability[] = [];
@@ -627,8 +640,10 @@ function stripModelProviderPrefix(model: string): string {
 export function inferCapabilityFromModel(model: string): AICapability | undefined {
     const normalized = stripModelProviderPrefix(model);
     if (!normalized) return undefined;
-    if (/^(veo([-.\d]|$)|video|wan|seedance|vidu|pika|runway|higgsfield|luma|kling|keling|sora|sdols|hailuo|qwen-video|liveportrait|videoretalk|emo)/.test(normalized)) return 'video';
-    if (/^(imagen|dall-e|gpt-image|flux|stable-diffusion|sdxl|midjourney|recraft|ideogram|qwen-image|seededit|nano-banana|jimeng|doubao-image|omni-image|grok-image)/.test(normalized)) return 'image';
+    if (/^(veo([-.\d]|$)|video|wan|seedance|vidu|pika|runway|higgsfield|luma|kling|keling|sora|sdols|hailuo|qwen-video|liveportrait|videoretalk|emo|gemini-omni|happyhorse|ltx|pixverse|skyreels)/.test(normalized)) return 'video';
+    if (/(^|[-_/])(text|image|reference|start|end|multimodal)?-?to-video|video-edit|edit-video|motion-control|video-extend/.test(normalized)) return 'video';
+    if (/^(rhart-image|runninghub-image|imagen|dall-e|gpt-image|flux|stable-diffusion|sdxl|midjourney|recraft|ideogram|qwen-image|seedream|seededit|nano-banana|jimeng|doubao-image|omni-image|grok-image|f-|z-image|xai\/rhart|xai\/grok-imagine-image)/.test(normalized)) return 'image';
+    if (/(^|[-_/])(text|image)-to-image|image-edit|edit-channel|edit-official|\/edit(?:-|$)/.test(normalized)) return 'image';
     if (/^gemini/.test(normalized)) return normalized.includes('image') ? 'image' : 'text';
     if (/^(gpt|o\d|claude|qwen|deepseek|llama|command|mistral|doubao|abab|minimax)/.test(normalized)) return 'text';
     return undefined;
@@ -887,7 +902,7 @@ export function supportsReferenceImageEditing(model: string): boolean {
 export function supportsMaskImageEditing(model: string): boolean {
     const provider = inferProviderFromModel(model);
     if (provider === 'google') return isGoogleImageEditModel(model);
-    if (provider === 'openai' || provider === 'custom') return isOpenAIImageEditModel(model);
+    if (provider === 'openai' || provider === 'custom' || provider === 'openai_compatible') return isOpenAIImageEditModel(model);
     return false;
 }
 
@@ -942,6 +957,199 @@ function decodeDataUrlImage(dataUrl: string) {
         newImageBase64: match[2],
         textResponse: null,
     };
+}
+
+const DEFAULT_RUNNINGHUB_PROMPT_FIELD = '12##text';
+const DEFAULT_RUNNINGHUB_IMAGE_PAYLOAD: Record<string, unknown> = {
+    '42##select': '1',
+    '43##value': 1024,
+    '30##value': 1024,
+    '44##file_type': 'PNG',
+};
+
+function parseProviderJsonObject(raw: string | undefined, label: string): Record<string, unknown> {
+    const trimmed = raw?.trim();
+    if (!trimmed) return {};
+    try {
+        const parsed = JSON.parse(trimmed);
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+            throw new Error(`${label} 必须是 JSON 对象。`);
+        }
+        return parsed as Record<string, unknown>;
+    } catch (error) {
+        if (error instanceof Error && error.message.includes(label)) throw error;
+        throw new Error(`${label} 不是有效 JSON，请检查逗号和引号。`);
+    }
+}
+
+function isRunningHubNodeFieldModel(modelEndpoint: string) {
+    return /^(?:rhart-image\/)?f(?:-|_|$)|^f-/i.test(modelEndpoint);
+}
+
+function isRunningHubSeedance20Model(modelEndpoint: string) {
+    return /(?:sparkvideo|seedance)-2\.0/i.test(modelEndpoint);
+}
+
+function runningHubAspectRatioField(modelEndpoint: string) {
+    return isRunningHubSeedance20Model(modelEndpoint) ? 'ratio' : 'aspectRatio';
+}
+
+function assertRunningHubPublicUrl(href: string | undefined, fieldName: string) {
+    const url = href?.trim() || '';
+    if (!/^https?:\/\//i.test(url)) {
+        throw new Error(`RunningHub ${fieldName} 需要公网 http(s) URL，当前为空或仍是本地引用。`);
+    }
+    return url;
+}
+
+function runningHubReferenceFields(modelEndpoint: string, references: VideoImage[] = []) {
+    if (/image-to-image|image-to-video|start-end-to-video/i.test(modelEndpoint) && references.length === 0) {
+        throw new Error(`RunningHub ${modelEndpoint} 需要至少一张参考图，请连接图片节点或拖入图片后再生成。`);
+    }
+    const first = references.find(ref => ref.slotRole === 'first_frame') || references[0];
+    const last = references.find(ref => ref.slotRole === 'last_frame') || references[1];
+    const urls = references.map((ref, index) => assertRunningHubPublicUrl(ref.href, `imageUrls[${index}]`));
+    const output: Record<string, unknown> = {};
+
+    if (/start-end-to-video/i.test(modelEndpoint) || /(?:sparkvideo|seedance)-2\.0\/image-to-video/i.test(modelEndpoint)) {
+        if (first?.href) output.firstFrameUrl = assertRunningHubPublicUrl(first.href, 'firstFrameUrl');
+        if (last?.href) output.lastFrameUrl = assertRunningHubPublicUrl(last.href, 'lastFrameUrl');
+        return output;
+    }
+
+    if (/kling|hailuo/i.test(modelEndpoint) && urls[0]) {
+        output.imageUrl = urls[0];
+        return output;
+    }
+
+    if (urls.length > 0) {
+        output.imageUrls = urls;
+    }
+    return output;
+}
+
+function runningHubMultimodalFields(
+    modelEndpoint: string,
+    references: VideoImage[] = [],
+    slots: MultimodalSlot[] = [],
+) {
+    if (!/(?:sparkvideo|seedance)-2\.0\/multimodal-video/i.test(modelEndpoint)) {
+        return runningHubReferenceFields(modelEndpoint, references);
+    }
+    const imageUrls = [
+        ...references.map(ref => ref.href),
+        ...slots.filter(slot => slot.kind === 'image').map(slot => slot.href),
+    ].map((href, index) => assertRunningHubPublicUrl(href, `imageUrls[${index}]`));
+    const videoUrls = slots.filter(slot => slot.kind === 'video').map((slot, index) => assertRunningHubPublicUrl(slot.href, `videoUrls[${index}]`));
+    const audioUrls = slots.filter(slot => slot.kind === 'audio').map((slot, index) => assertRunningHubPublicUrl(slot.href, `audioUrls[${index}]`));
+    const output: Record<string, unknown> = {};
+    if (imageUrls.length > 0) output.imageUrls = Array.from(new Set(imageUrls));
+    if (videoUrls.length > 0) output.videoUrls = Array.from(new Set(videoUrls));
+    if (audioUrls.length > 0) output.audioUrls = Array.from(new Set(audioUrls));
+    return output;
+}
+
+async function blobToDataUrl(href: string): Promise<string> {
+    const res = await fetch(href);
+    const blob = await res.blob();
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ''));
+        reader.onerror = () => reject(reader.error || new Error('无法读取本地媒体'));
+        reader.readAsDataURL(blob);
+    });
+}
+
+async function prepareRunningHubReferences(
+    apiKey: string,
+    references: VideoImage[] = [],
+    options?: { baseUrl?: string; signal?: AbortSignal },
+): Promise<VideoImage[]> {
+    if (references.length === 0) return [];
+    const needsUpload = references.some(ref => ref.href.startsWith('data:') || ref.href.startsWith('blob:'));
+    const uploadModule = needsUpload ? await import('./runningHubService') : null;
+    return Promise.all(references.map(async ref => {
+        if (/^https?:\/\//i.test(ref.href)) return ref;
+        if (ref.href.startsWith('data:') && uploadModule) {
+            return { ...ref, href: assertRunningHubPublicUrl(await uploadModule.rhUploadDataUrl(apiKey, ref.href, options), 'uploaded image URL') };
+        }
+        if (ref.href.startsWith('blob:') && uploadModule) {
+            const dataUrl = await blobToDataUrl(ref.href);
+            return { ...ref, href: assertRunningHubPublicUrl(await uploadModule.rhUploadDataUrl(apiKey, dataUrl, options), 'uploaded image URL') };
+        }
+        throw new Error('RunningHub 标准模型的参考媒体需要公网 URL；本地 data URL 会自动上传，其他本地地址暂不支持。');
+    }));
+}
+
+async function prepareRunningHubSlots(
+    apiKey: string,
+    slots: MultimodalSlot[] = [],
+    options?: { baseUrl?: string; signal?: AbortSignal },
+): Promise<MultimodalSlot[]> {
+    if (slots.length === 0) return [];
+    const needsUpload = slots.some(slot => slot.href.startsWith('data:') || slot.href.startsWith('blob:'));
+    const uploadModule = needsUpload ? await import('./runningHubService') : null;
+    return Promise.all(slots.map(async slot => {
+        if (/^https?:\/\//i.test(slot.href)) return slot;
+        if (slot.href.startsWith('data:') && uploadModule) {
+            return { ...slot, href: assertRunningHubPublicUrl(await uploadModule.rhUploadDataUrl(apiKey, slot.href, options), 'uploaded slot URL') };
+        }
+        if (slot.href.startsWith('blob:') && uploadModule) {
+            const dataUrl = await blobToDataUrl(slot.href);
+            return { ...slot, href: assertRunningHubPublicUrl(await uploadModule.rhUploadDataUrl(apiKey, dataUrl, options), 'uploaded slot URL') };
+        }
+        throw new Error('RunningHub 标准模型的参考媒体需要公网 URL；本地 data URL 会自动上传，其他本地地址暂不支持。');
+    }));
+}
+
+function buildRunningHubStandardPayload(
+    prompt: string,
+    modelEndpoint: string,
+    key?: UserApiKey,
+    options?: {
+        aspectRatio?: VideoAspectRatio;
+        durationSec?: number;
+        resolution?: string;
+        references?: VideoImage[];
+        slots?: MultimodalSlot[];
+    },
+): Record<string, unknown> {
+    const extra = key?.extraConfig || {};
+    const nodeFieldModel = isRunningHubNodeFieldModel(modelEndpoint);
+    const promptField = extra.runningHubPromptField || (nodeFieldModel ? DEFAULT_RUNNINGHUB_PROMPT_FIELD : 'prompt');
+    const disableDefaults = extra.runningHubDisableDefaultPayload === 'true';
+    const configuredPayload = {
+        ...parseProviderJsonObject(extra.configJson, 'RunningHub 配置 JSON'),
+        ...parseProviderJsonObject(extra.runningHubDefaultPayloadJson, 'RunningHub 默认载荷 JSON'),
+    };
+    const payload: Record<string, unknown> = {
+        ...(!disableDefaults && nodeFieldModel ? DEFAULT_RUNNINGHUB_IMAGE_PAYLOAD : {}),
+        ...configuredPayload,
+        [promptField]: prompt,
+    };
+    if (!nodeFieldModel) {
+        if (options?.aspectRatio) payload[runningHubAspectRatioField(modelEndpoint)] = options.aspectRatio;
+        if (options?.durationSec) payload.duration = String(options.durationSec);
+        if (options?.resolution) payload.resolution = options.resolution;
+        Object.assign(payload, runningHubMultimodalFields(modelEndpoint, options?.references, options?.slots));
+    }
+    if (extra.runningHubOutputFormatField && extra.runningHubOutputFormat) {
+        payload[extra.runningHubOutputFormatField] = extra.runningHubOutputFormat;
+    }
+    return payload;
+}
+
+function extractRunningHubMediaUrl(
+    result: { results?: Array<{ url?: string; outputType?: string; text?: string | null }> | null },
+    kind: 'image' | 'video',
+) {
+    const media = result.results?.find(item => {
+        if (!item.url) return false;
+        const hint = `${item.outputType || ''} ${item.url}`.toLowerCase();
+        const isVideo = /\.(mp4|mov|webm)(?:[?#].*)?$/.test(hint) || /\b(mp4|mov|webm|video)\b/.test(hint);
+        return kind === 'video' ? isVideo : !isVideo;
+    });
+    return media?.url || null;
 }
 
 /**
@@ -1077,6 +1285,7 @@ function resolveGenerationProvider(model: string, key?: UserApiKey): AIProvider 
         // 不再 fallthrough 到 inferProviderFromModel（否则 gemini-xxx 会误路由到 Google SDK）
         return 'custom';
     }
+    if (key?.provider) return key.provider;
     return inferProviderFromModel(model);
 }
 
@@ -1125,6 +1334,7 @@ function safeParsePromptResult(raw: string, fallbackPrompt: string): PromptEnhan
 
 export function inferProviderFromModel(model: string): AIProvider {
     const normalized = normalizeModelName(model);
+    if (/^(rhart-image|rhart-video|runninghub\/|runninghub-image|runninghub-video)/i.test(normalized)) return 'runningHub';
     if (/^(gemini|imagen|veo)/.test(normalized)) return 'google';
     if (/^(dall-e|gpt-image|gpt-5|gpt-4o|gpt-4\.1|o\d)/.test(normalized)) return 'openai';
     if (/^claude/i.test(model)) return 'anthropic';
@@ -1877,6 +2087,32 @@ export async function generateImageWithProvider(
         return generateImageFromText(prompt, key?.key, options?.signal);
     }
 
+    if (provider === 'runningHub') {
+        const apiKey = requireApiKey(provider, key);
+        const baseUrl = getBaseUrl(provider, key);
+        const modelEndpoint = assertRunningHubModelEndpoint(mapProviderModel(model, key) || key?.defaultModel || model);
+        const runningHubRefs = await prepareRunningHubReferences(apiKey, refs, {
+            baseUrl,
+            signal: options?.signal,
+        });
+        const { rhRunTask } = await import('./runningHubService');
+        const result = await rhRunTask(apiKey, modelEndpoint, buildRunningHubStandardPayload(prompt, modelEndpoint, key, {
+            references: runningHubRefs,
+        }), {
+            baseUrl,
+            signal: options?.signal,
+        });
+        const imageUrl = extractRunningHubMediaUrl(result, 'image');
+        if (!imageUrl) {
+            return {
+                newImageBase64: null,
+                newImageMimeType: null,
+                textResponse: result.results?.map(item => item.text).filter(Boolean).join('\n') || 'RunningHub 未返回图片 URL。',
+            };
+        }
+        return fetchImageUrlToBase64(imageUrl);
+    }
+
     if (provider === 'openrouter') {
         const apiKey = requireApiKey(provider, key);
         const baseUrl = getBaseUrl(provider, key);
@@ -1913,7 +2149,7 @@ export async function generateImageWithProvider(
         return decodeDataUrlImage(imageUrl);
     }
 
-    if (provider === 'openai' || provider === 'custom') {
+    if (provider === 'openai' || provider === 'custom' || provider === 'openai_compatible') {
         const apiKey = requireApiKey(provider, key);
         const baseUrl = getBaseUrl(provider, key);
         const mappedModel = mapProviderModel(model, key);
@@ -2141,8 +2377,8 @@ export async function editImageWithProvider(
         return decodeDataUrlImage(imageUrl);
     }
 
-    if (provider === 'openai' || provider === 'custom') {
-        // custom provider 跳过模型名检测——聚合端点的模型名不一定匹配 OpenAI 命名规则
+    if (provider === 'openai' || provider === 'custom' || provider === 'openai_compatible') {
+        // custom/openai_compatible provider 跳过模型名检测——聚合端点的模型名不一定匹配 OpenAI 命名规则
         if (provider === 'openai') {
             if (!supportsReferenceImageEditing(model)) {
                 throw new Error('当前 OpenAI 图片模型不支持参考图编辑。请切换到 GPT Image 模型。');
@@ -2161,7 +2397,7 @@ export async function editImageWithProvider(
         formData.append('model', mappedModel);
         formData.append('prompt', prompt);
         if (!officialGptImage) {
-            formData.append('response_format', provider === 'custom' ? 'url' : 'b64_json');
+            formData.append('response_format', provider === 'custom' || provider === 'openai_compatible' ? 'url' : 'b64_json');
         }
         appendOpenAIImageFormParams(formData, buildOpenAIImageRequestParams(capability, {
             size: '1024x1024',
@@ -2204,15 +2440,15 @@ export async function editImageWithProvider(
                 if (parsed.newImageBase64) return parsed;
             }
 
-            if (provider !== 'custom') {
+            if (provider !== 'custom' && provider !== 'openai_compatible') {
                 throw new Error(await readErrorResponse(response, `${PROVIDER_LABELS[provider]} 图片编辑失败`));
             }
         } catch (err) {
-            if (provider !== 'custom') throw err;
+            if (provider !== 'custom' && provider !== 'openai_compatible') throw err;
         }
 
         // Custom fallback: 通过 chat/completions 进行图片编辑
-        if (provider === 'custom') {
+        if (provider === 'custom' || provider === 'openai_compatible') {
             const content: any[] = [{ type: 'text', text: prompt }];
             for (const image of images) {
                 content.push({ type: 'image_url', image_url: { url: image.href } });
@@ -2416,18 +2652,56 @@ export async function generateVideoWithProvider(
         generateAudio?: boolean;
         serviceTier?: string;
         safetyIdentifier?: string;
+        signal?: AbortSignal;
     },
 ): Promise<{ videoBlob: Blob; mimeType: string }> {
     const provider = resolveGenerationProvider(model, key);
     const onProgress = options?.onProgress || (() => {});
     const aspectRatio = options?.aspectRatio || '16:9';
     const references = options?.references ?? [];
-    const multimodalSlots = options?.slots?.length ? options.slots : multimodalSlotsFromLegacyReferences(references);
+    const hasExplicitSlots = !!options?.slots?.length;
+    const multimodalSlots = hasExplicitSlots ? options.slots! : multimodalSlotsFromLegacyReferences(references);
     const firstImageSlot = multimodalSlots.find(slot => slot.kind === 'image' && slot.role === 'first_frame')
         || multimodalSlots.find(slot => slot.kind === 'image');
     const firstFrame = references.find(r => r.slotRole === 'first_frame')
         || references[0]
         || (firstImageSlot ? { href: firstImageSlot.href, mimeType: firstImageSlot.mimeType, slotRole: String(firstImageSlot.role || 'unassigned') } : undefined);
+
+    if (provider === 'runningHub') {
+        const apiKey = requireApiKey(provider, key);
+        const baseUrl = getBaseUrl(provider, key);
+        const modelEndpoint = assertRunningHubModelEndpoint(mapProviderModel(model, key) || key?.defaultModel || model);
+        const allImageRefs = hasExplicitSlots
+            ? [
+                ...references,
+                ...multimodalSlots
+                    .filter(slot => slot.kind === 'image')
+                    .map(slot => ({ href: slot.href, mimeType: slot.mimeType, slotRole: String(slot.role || 'unassigned') })),
+            ]
+            : references;
+        const uploadOptions = { baseUrl, signal: options?.signal };
+        const runningHubRefs = await prepareRunningHubReferences(apiKey, allImageRefs, uploadOptions);
+        const runningHubSlots = await prepareRunningHubSlots(apiKey, hasExplicitSlots ? multimodalSlots : [], uploadOptions);
+        const { rhRunTask } = await import('./runningHubService');
+        onProgress('Submitting RunningHub video task...');
+        const result = await rhRunTask(apiKey, modelEndpoint, buildRunningHubStandardPayload(prompt, modelEndpoint, key, {
+            aspectRatio,
+            durationSec: options?.durationSec,
+            resolution: options?.resolution,
+            references: runningHubRefs,
+            slots: runningHubSlots,
+        }), {
+            baseUrl,
+            signal: options?.signal,
+            onProgress: (status, attempt) => onProgress(`RunningHub ${status} (${attempt})`),
+        });
+        const videoUrl = extractRunningHubMediaUrl(result, 'video');
+        if (!videoUrl) {
+            throw new Error(result.results?.map(item => item.text).filter(Boolean).join('\n') || 'RunningHub 视频任务完成但未返回视频 URL。');
+        }
+        onProgress('Downloading generated video...');
+        return downloadSeedanceVideoResult(videoUrl);
+    }
 
     if (provider === 'google') {
         return generateVideo(prompt, aspectRatio, onProgress, firstFrame, key?.key);

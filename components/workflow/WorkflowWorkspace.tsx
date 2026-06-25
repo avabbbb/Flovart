@@ -14,7 +14,7 @@ import type { WorkflowModelOptions } from './WorkflowNodePromptBar';
 import { WorkflowAgentPanel, type WorkflowOnlineTurnInput } from './WorkflowAgentPanel';
 import type { WorkflowImageToolHandlers } from './WorkflowNodeToolbar';
 import { WorkflowSidebar } from './WorkflowSidebar';
-import { discardWorkflowMediaRecord, fitWorkflowMediaSize, ingestWorkflowMedia, releaseWorkflowMediaRecord, type WorkflowMediaRecord } from './media';
+import { discardWorkflowMediaRecord, fitWorkflowMediaSize, ingestWorkflowMedia, loadWorkflowMediaBlob, releaseWorkflowMediaRecord, workflowBlobToDataUrl, type WorkflowMediaRecord } from './media';
 
 export interface WorkflowWorkspaceProps {
   theme: 'light' | 'dark';
@@ -70,6 +70,7 @@ export function WorkflowWorkspace({
   const [rightOpen, setRightOpen] = useState(() => localStorage.getItem('workflowRightPanelOpen') !== 'false');
   const [rightTab, setRightTab] = useState<WorkflowRightTab>('agent');
   const [rightWidth, setRightWidth] = useState(() => Number(localStorage.getItem('workflowRightPanelWidth')) || 390);
+  const [workspaceNotice, setWorkspaceNotice] = useState('');
 
   useEffect(() => {
     if (hydrated && projects.length > 0 && !activeProjectId) setActiveProject(projects[0].id);
@@ -88,8 +89,9 @@ export function WorkflowWorkspace({
     const expectedProjectId = activeProject.id;
     let record: WorkflowMediaRecord | undefined;
     try {
+      setWorkspaceNotice('');
       if (!/^https?:\/\//i.test(media.href)) {
-        const blob = await (await fetch(media.href)).blob();
+        const blob = await loadWorkflowMediaBlob(undefined, media.href);
         record = await ingestWorkflowMedia(new File([blob], media.name, { type: blob.type || media.mimeType }));
       }
       const current = useWorkflowStore.getState().projects.find(project => project.id === expectedProjectId);
@@ -112,8 +114,9 @@ export function WorkflowWorkspace({
       };
       updateProject(current.id, { nodes: [...current.nodes, node], selectedNodeIds: [node.id] });
       if (record) releaseWorkflowMediaRecord(record.storageKey);
-    } catch {
+    } catch (error) {
       if (record) await discardWorkflowMediaRecord(record.storageKey);
+      setWorkspaceNotice(error instanceof Error ? error.message : '共享素材导入失败');
     }
   };
 
@@ -133,6 +136,7 @@ export function WorkflowWorkspace({
         onProjectChange={patch => activeProject && updateProject(activeProject.id, patch)}
       />
       <main className="workflow-workspace__main">
+        {workspaceNotice && <div className="workflow-workspace__notice" role="status">{workspaceNotice}</div>}
         <WorkflowGenerationCapabilitiesProvider resolve={resolveGenerationCapability} sharedMedia={sharedMedia}>
           {activeProject ? (
             <InfiniteWorkflow
@@ -204,7 +208,10 @@ export function WorkflowWorkspace({
             onInsert={media => { void insertSharedMedia(media as WorkflowSharedMedia); }}
             onRename={rightTab === 'assets' && onRenameSharedMedia ? (media: StudioMediaItem, name: string) => onRenameSharedMedia(media as WorkflowSharedMedia, name) : undefined}
             onRemove={rightTab === 'assets' && onRemoveSharedMedia ? (media: StudioMediaItem) => onRemoveSharedMedia(media as WorkflowSharedMedia) : undefined}
-            onReversePrompt={onReversePrompt ? media => onReversePrompt(media.href, media.mimeType, media.width, media.height) : undefined}
+            onReversePrompt={onReversePrompt ? async media => {
+              const blob = await loadWorkflowMediaBlob(undefined, media.href);
+              return onReversePrompt(await workflowBlobToDataUrl(blob), media.mimeType || blob.type, media.width, media.height);
+            } : undefined}
           />
         )}
       </StudioRightDrawer>

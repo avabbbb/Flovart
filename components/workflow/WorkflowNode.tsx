@@ -1,17 +1,9 @@
-import { Image as ImageIcon, Music2, Settings2, Type, Upload, Video, X } from 'lucide-react';
+import { Image as ImageIcon, Music2, Upload, Video, X } from 'lucide-react';
 import { useRef, type PointerEvent as ReactPointerEvent } from 'react';
 import { WorkflowConfigPanel } from './WorkflowConfigPanel';
 import { buildCssFilter } from '../ImageFilterPanel';
 import { useWorkflowMediaUrl } from './media';
 import type { WorkflowNode as WorkflowNodeData } from './types';
-
-const iconByType = {
-  image: ImageIcon,
-  text: Type,
-  video: Video,
-  audio: Music2,
-  config: Settings2,
-};
 
 export function WorkflowNode({
   node,
@@ -38,7 +30,6 @@ export function WorkflowNode({
   onReplaceMedia: (file: File) => void;
   onRemoveMedia: () => void;
 }) {
-  const Icon = iconByType[node.type];
   const status = node.metadata.status || 'idle';
   const progress = Math.max(0, Math.min(100, Math.round(node.metadata.progress || 0)));
   const generationMode = node.metadata.config?.mode || node.type;
@@ -70,11 +61,7 @@ export function WorkflowNode({
     >
       <button className="workflow-handle workflow-handle--target" aria-label="连接到此节点" data-workflow-target={node.id} />
       <button className="workflow-handle workflow-handle--source" aria-label="从此节点连接" onPointerDown={onConnectStart} />
-      <header className="workflow-node__header">
-        <Icon size={14} />
-        <span>{node.title}</span>
-        {status === 'error' && <span className="workflow-node__error-dot" title={node.metadata.error}>!</span>}
-      </header>
+      {status === 'error' && <span className="workflow-node__error-badge" title={node.metadata.error}>!</span>}
       <div className="workflow-node__body">
         {node.type === 'image' && (media.url
           ? <><img src={media.url} alt={node.title} draggable={false} style={{ filter: buildCssFilter(node.metadata.filters) }} />{mediaActions}</>
