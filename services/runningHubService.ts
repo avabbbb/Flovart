@@ -504,8 +504,12 @@ export async function rhGetWebAppNodes(
   apiKey: string,
   webappId: string,
 ): Promise<RHWebAppNodeInfo[]> {
+  // 注意：apiCallDemo 端点官方定义为 GET，apiKey 必须放在 query 中（端点限制）。
+  // 额外附加 Authorization Bearer header 作为认证双保险（AI 应用接口支持）。
   const url = `${RH_HOST}/api/webapp/apiCallDemo?apiKey=${encodeURIComponent(apiKey)}&webappId=${encodeURIComponent(webappId)}`;
-  const res = await fetch(url);
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${apiKey}` },
+  });
 
   if (!res.ok) {
     const text = await res.text().catch(() => '');
@@ -579,6 +583,7 @@ export async function rhSubmitWebAppTask(
   apiKey: string,
   webappId: string,
   nodeInfoList: RHWebAppNodeInfo[],
+  signal?: AbortSignal,
 ): Promise<RHWebAppSubmitResult> {
   const res = await fetch(`${RH_HOST}/task/openapi/ai-app/run`, {
     method: 'POST',
@@ -590,6 +595,7 @@ export async function rhSubmitWebAppTask(
       apiKey,
       nodeInfoList,
     }),
+    signal,
   });
 
   if (!res.ok) {
@@ -635,6 +641,7 @@ export async function rhSubmitWebAppTask(
 export async function rhQueryWebAppOutputs(
   apiKey: string,
   taskId: string,
+  signal?: AbortSignal,
 ): Promise<{
   status: RHWebAppTaskStatus;
   outputs: RHWebAppOutputItem[];
@@ -646,6 +653,7 @@ export async function rhQueryWebAppOutputs(
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ apiKey, taskId }),
+    signal,
   });
 
   if (!res.ok) {
@@ -684,7 +692,12 @@ export async function rhQueryWebAppOutputs(
   if (code === 804) return { status: 'RUNNING', outputs: [] };
   if (code === 813) return { status: 'QUEUED', outputs: [] };
 
-  return { status: 'UNKNOWN', outputs: [] };
+  // 其余非 0 code（含 802 认证错误、811 等）视为失败，避免静默 UNKNOWN
+  return {
+    status: 'FAILED',
+    outputs: [],
+    failedReason: json.msg || `RunningHub 错误码 ${code}`,
+  };
 }
 
 /**
@@ -701,13 +714,21 @@ export async function rhRunWebApp(
   webappId: string,
   nodeInfoList: RHWebAppNodeInfo[],
   onProgress?: (status: RHWebAppTaskStatus, attempt: number) => void,
+  signal?: AbortSignal,
 ): Promise<RHWebAppOutputItem[]> {
-  const { taskId } = await rhSubmitWebAppTask(apiKey, webappId, nodeInfoList);
+  const { taskId } = await rhSubmitWebAppTask(apiKey, webappId, nodeInfoList, signal);
 
   for (let i = 0; i < WEBAPP_MAX_POLL_ATTEMPTS; i++) {
-    await new Promise((r) => setTimeout(r, WEBAPP_POLL_INTERVAL));
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+    // abortible sleep：signal abort 时提前结束等待
+    await new Promise<void>((resolve) => {
+      if (signal?.aborted) { resolve(); return; }
+      const timer = setTimeout(resolve, WEBAPP_POLL_INTERVAL);
+      signal?.addEventListener('abort', () => { clearTimeout(timer); resolve(); }, { once: true });
+    });
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
 
-    const result = await rhQueryWebAppOutputs(apiKey, taskId);
+    const result = await rhQueryWebAppOutputs(apiKey, taskId, signal);
     onProgress?.(result.status, i + 1);
 
     if (result.status === 'SUCCESS') return result.outputs;

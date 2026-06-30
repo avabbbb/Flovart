@@ -1,5 +1,6 @@
-import { CircleAlert, CircleCheck, Languages, Moon, Settings, Sun } from 'lucide-react';
+import { CircleAlert, CircleCheck, Languages, Moon, Settings, Sun, Building2 } from 'lucide-react';
 import React from 'react';
+import { Link } from 'react-router';
 
 export interface StudioMenuStatus {
   tone: 'ready' | 'warning';
@@ -62,6 +63,14 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
       </nav>
 
       <div className="flex min-w-0 items-center justify-end gap-0.5 sm:gap-1">
+        <Link
+          to="/enterprise"
+          className="isl-icon-btn flex h-8 items-center gap-1.5 px-2"
+          title={isChinese ? '企业后台' : 'Enterprise console'}
+          aria-label={isChinese ? '企业后台' : 'Enterprise console'}
+        >
+          <Building2 size={15} />
+        </Link>
         <button
           type="button"
           className="isl-icon-btn flex h-8 min-w-8 items-center gap-1.5 px-2"

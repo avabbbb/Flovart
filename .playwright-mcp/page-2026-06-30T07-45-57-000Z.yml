@@ -1,0 +1,96 @@
+- generic [ref=f13e3]:
+  - banner [ref=f13e5]:
+    - generic [ref=f13e6]:
+      - generic "Flovart" [ref=f13e7]:
+        - generic [ref=f13e8]: Flovart
+      - strong [ref=f13e10]: Board 1
+    - navigation "Workspace switcher" [ref=f13e11]:
+      - button "Canvas" [ref=f13e12] [cursor=pointer]
+      - button "Workflow" [ref=f13e13] [cursor=pointer]
+    - generic [ref=f13e14]:
+      - link "Enterprise console" [ref=f13e15] [cursor=pointer]:
+        - /url: "#/enterprise"
+        - img [ref=f13e16]
+      - 'button "API 0/3: 未配置文本模型 API Key — 提示词润色、AI 对话功能不可用 未配置图片模型 API Key — AI 绘图、图片编辑功能不可用 未配置视频模型 API Key — AI 视频生成功能不可用 尚未配置任何 API Key — 所有 AI 功能不可用，请先在设置中添加" [ref=f13e20] [cursor=pointer]':
+        - img [ref=f13e21]
+        - generic [ref=f13e23]: API 0/3
+      - button "切换到中文" [ref=f13e24] [cursor=pointer]:
+        - img [ref=f13e25]
+        - generic [ref=f13e29]: 切换到中文
+      - button "Dark mode" [ref=f13e30] [cursor=pointer]:
+        - img [ref=f13e31]
+      - button "Settings" [ref=f13e33] [cursor=pointer]:
+        - img [ref=f13e34]
+  - generic [ref=f13e37]:
+    - generic [ref=f13e39]:
+      - generic [ref=f13e40]:
+        - generic [ref=f13e41]:
+          - generic [ref=f13e42]: Workspace
+          - generic [ref=f13e43]: Boards & Layers
+        - button "Toggle sidebar" [ref=f13e44] [cursor=pointer]:
+          - img [ref=f13e45]
+      - generic [ref=f13e48]:
+        - generic [ref=f13e49]:
+          - generic [ref=f13e50]:
+            - generic [ref=f13e51]: Boards
+            - generic [ref=f13e52]: Scenes and canvases
+          - button "New" [ref=f13e53] [cursor=pointer]
+        - button "Board 1 Board 1 1 items 画板操作" [ref=f13e55] [cursor=pointer]:
+          - img "Board 1" [ref=f13e56]
+          - generic [ref=f13e57]:
+            - generic [ref=f13e58]: Board 1
+            - generic [ref=f13e59]: 1 items
+          - button "画板操作" [ref=f13e61]:
+            - img [ref=f13e62]
+      - generic [ref=f13e66]:
+        - generic [ref=f13e68]:
+          - generic [ref=f13e69]: Layers
+          - generic [ref=f13e70]: 1 items on canvas
+        - generic [ref=f13e74] [cursor=pointer]:
+          - button "Expand group layer" [ref=f13e85]
+          - generic "Circle" [ref=f13e87]
+          - generic [ref=f13e88]:
+            - button "Lock" [ref=f13e89]:
+              - img [ref=f13e90]
+            - button "Hide" [ref=f13e93]:
+              - img [ref=f13e94]
+    - generic [ref=f13e97]:
+      - generic [ref=f13e99]: Loading Settings...
+      - generic [ref=f13e101]:
+        - generic:
+          - generic:
+            - generic:
+              - img
+          - generic: Loading scene…
+    - generic [ref=f13e103]: Loading...
+  - generic [ref=f13e104]:
+    - generic [ref=f13e105]:
+      - button "Boards & Layers" [ref=f13e106] [cursor=pointer]:
+        - img [ref=f13e107]
+      - button "Upload Image" [ref=f13e110] [cursor=pointer]:
+        - img [ref=f13e111]
+      - button "Assets" [ref=f13e114] [cursor=pointer]:
+        - img [ref=f13e115]
+    - generic [ref=f13e118]:
+      - button "Select & Move" [ref=f13e119] [cursor=pointer]:
+        - img [ref=f13e120]
+      - button "Pan Canvas" [ref=f13e123] [cursor=pointer]:
+        - img [ref=f13e124]
+      - button "Shapes" [ref=f13e130] [cursor=pointer]:
+        - img [ref=f13e131]
+      - button "Drawing Tools" [ref=f13e134] [cursor=pointer]:
+        - img [ref=f13e135]
+      - button "Text" [ref=f13e137] [cursor=pointer]:
+        - img [ref=f13e138]
+      - textbox "Stroke Color" [ref=f13e141] [cursor=pointer]: "#111827"
+      - slider "Stroke Width" [ref=f13e142] [cursor=pointer]: "5"
+      - generic [ref=f13e143]: "5"
+    - generic [ref=f13e145]:
+      - button "滚轮：平移（点击切换为缩放）" [ref=f13e146] [cursor=pointer]:
+        - img [ref=f13e147]
+      - button "Canvas Settings" [ref=f13e150] [cursor=pointer]:
+        - img [ref=f13e151]
+      - button [disabled] [ref=f13e155]:
+        - img [ref=f13e156]
+      - button "Redo" [disabled] [ref=f13e159]:
+        - img [ref=f13e160]

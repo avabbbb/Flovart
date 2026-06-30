@@ -1,0 +1,116 @@
+---
+title: 后端数据库结构
+---
+
+# 后端数据库结构
+
+Flovart Hub（`backend/` 目录）使用 PostgreSQL，GORM AutoMigrate 自动建表。本文件随表结构变化同步更新。
+
+## users — 共享生态用户
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| id | uuid PK | `gen_random_uuid()` 默认 |
+| username | varchar(32) unique | 字母数字下划线，3-32 位 |
+| email | varchar(255) unique | 小写存储 |
+| password | varchar(255) | bcrypt hash，不出现在 JSON |
+| bio | varchar(500) | 个人简介 |
+| avatar_url | varchar(500) | 头像 URL（R2 链接） |
+| role | varchar(16) | `user` \| `admin` |
+| created_at | timestamptz | |
+| updated_at | timestamptz | |
+
+## prompt_packs — 提示词包
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| id | uuid PK | |
+| slug | varchar(80) unique | URL 友好标识 |
+| title | varchar(120) | |
+| description | varchar(1000) | |
+| author_id | uuid FK → users.id | |
+| mode | varchar(24) | `image` \| `video` \| `text` |
+| tags | text[] | PostgreSQL 数组 |
+| like_count | int | 反规范化计数 |
+| download_count | int | 反规范化计数 |
+| created_at | timestamptz | |
+| updated_at | timestamptz | |
+
+## prompt_items — 提示词包内单条提示词
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| id | uuid PK | |
+| pack_id | uuid FK → prompt_packs.id | |
+| name | varchar(120) | |
+| prompt | text | |
+| sort | int | 包内顺序 |
+
+## prompt_likes — 提示词包收藏关系
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| user_id | uuid PK | |
+| pack_id | uuid PK | |
+| created_at | timestamptz | |
+
+## 索引
+
+- `users.username` 唯一索引
+- `users.email` 唯一索引
+- `prompt_packs.slug` 唯一索引
+- `prompt_packs.title` 普通索引（关键词搜索）
+- `prompt_packs.author_id` 普通索引
+- `prompt_packs.mode` 普通索引
+- `prompt_packs.like_count` 普通索引（热门排序）
+- `prompt_likes(user_id, pack_id)` 复合主键
+
+## organizations — 企业组织（enterprise 服务）
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| id | uuid PK | |
+| slug | varchar(80) unique | URL 友好标识，字母数字短横线 3-80 位 |
+| name | varchar(120) | 组织名 |
+| owner_id | uuid FK → users.id | 组织创建者 |
+| created_at | timestamptz | |
+| updated_at | timestamptz | |
+
+## organization_members — 组织成员（enterprise 服务）
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| id | uuid PK | |
+| org_id | uuid FK → organizations.id | |
+| user_id | uuid FK → users.id | 复用 hub 共享 users 表 |
+| role | varchar(16) | `owner` \| `admin` \| `member` |
+| created_at | timestamptz | |
+| updated_at | timestamptz | |
+
+唯一约束 `(org_id, user_id)`：同一用户在同一组织只一条记录。
+owner 不能被直接添加/降级/移除，需要走转让流程（后续）。
+
+## 索引（enterprise）
+
+- `organizations.slug` 唯一
+- `organizations.owner_id` 普通
+- `organization_members (org_id, user_id)` 唯一复合
+- `organization_members.org_id` 普通（隐含）
+
+## 角色权限矩阵
+
+| 操作 | owner | admin | member |
+| --- | --- | --- | --- |
+| 删除组织 | ✅ | ❌ | ❌ |
+| 添加成员 | ✅ | ✅ | ❌ |
+| 调整成员角色 | ✅ | 仅 member | ❌ |
+| 移除成员 | ✅ | 仅 member | ❌ |
+| 查看成员列表 | ✅ | ✅ | ✅ |
+
+## 待扩展（工作流生态阶段）
+
+`workflow_packs` / `workflow_items` / `workflow_likes` 表将在工作流生态阶段加入，结构参考 prompt 系列；工作流包不会保存模型配置或 API Key。
+
+## 待扩展（额度池阶段）
+
+`credit_pools` / `credit_allocations` / `credit_ledger` 等表在企业额度池能力上线时加入，用于"企业采购额度 → 管理员分配给员工 → 调 Provider 扣减 → 财务报表"链路；当前角色用户管理模块已铺好基础关系。

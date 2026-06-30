@@ -6,3 +6,6 @@
 - [待测试确认](content/docs/progress/pending-test.mdx)
 - [第三方许可说明](THIRD_PARTY_NOTICES.md)
 - [Workflow CLI](../skills/flovart/commands/workflow.md)
+- [后端数据库结构](content/docs/backend/backend-database.mdx)
+- [接口响应规则](content/docs/backend/api-response.mdx)
+- [Enterprise 接口](content/docs/backend/enterprise-api.mdx)

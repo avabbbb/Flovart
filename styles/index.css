@@ -289,6 +289,19 @@ body {
     transition: left 100ms ease-out, top 100ms ease-out;
 }
 
+/* Fixed overlay layer — portal'd to document.body, sits above canvas chrome (z 40), below modals (z 9999).
+ * Tippy popovers spawned inside attach to body at z 99999 so mention dropdowns still stack above. */
+.canvas-overlay-fixed {
+    position: fixed;
+    z-index: 50;
+    pointer-events: auto;
+    transition: left 100ms ease-out, top 100ms ease-out;
+}
+
+.canvas-overlay-fixed[data-no-transition='true'] {
+    transition: none;
+}
+
 .inline-prompt-bar__header,
 .inline-prompt-bar__footer,
 .inline-prompt-bar__title,
@@ -833,7 +846,7 @@ input[type='range'].toolbar-range::-moz-range-thumb:hover {
     filter: brightness(1.08);
 }
 
-   🌊 Flovart-cc V3.0 �?Lovart 级多任务跑马灯发丝动能效�?
+   🌊 Flovart-cc V3.0 �?Lovart 级多任务跑马灯发丝动能效�?
    ========================================================== */
 
 @keyframes card-neon-flow-animation {
@@ -853,7 +866,7 @@ input[type='range'].toolbar-range::-moz-range-thumb:hover {
 }
 
 /* ==========================================================
-   Generation lifecycle animations �?neon, shimmer, reveal, stage
+   Generation lifecycle animations �?neon, shimmer, reveal, stage
    ========================================================== */
 
 @keyframes flv-gen-shimmer {
@@ -1118,7 +1131,7 @@ input[type='range'].toolbar-range::-moz-range-thumb:hover {
 }
 
 /* ============================================================
-   Island UI �?hand-drawn / tactile design system
+   Island UI �?hand-drawn / tactile design system
    Inspired by Animal Crossing-style warmth: parchment surfaces,
    pill shapes, zero-blur "pressable" drop shadows, rounded type.
    Self-built tokens (no external dep). Warm light + warm dark.
@@ -1126,18 +1139,18 @@ input[type='range'].toolbar-range::-moz-range-thumb:hover {
 :root {
   --isl-font: "Nunito", "Zen Maru Gothic", "Noto Sans SC", ui-rounded, "Segoe UI", system-ui, sans-serif;
 
-  /* Surfaces �?paper white / off-white */
+  /* Surfaces �?paper white / off-white */
   --isl-surface: #faf9f6;
   --isl-surface-2: #f1efe9;
   --isl-surface-sunk: #f4f2ec;
   --isl-card: #ffffff;
 
-  /* Ink �?pen-stroke charcoal */
+  /* Ink �?pen-stroke charcoal */
   --isl-ink: #1f1d1a;
   --isl-ink-soft: #6b6862;
   --isl-ink-ghost: #a8a49c;
 
-  /* Accents �?single mint pop */
+  /* Accents �?single mint pop */
   --isl-mint: #19c8b9;
   --isl-mint-deep: #12a89b;
   --isl-mint-bg: #e3f7f4;
@@ -1152,13 +1165,13 @@ input[type='range'].toolbar-range::-moz-range-thumb:hover {
   --isl-edge-mint: #0f9a8f;
   --isl-edge-coral: #b83f3a;
 
-  /* Radii �?chunky + rounded (rem-based so they scale with root font-size) */
+  /* Radii �?chunky + rounded (rem-based so they scale with root font-size) */
   --isl-r-sm: 0.875rem;
   --isl-r: 1.125rem;
   --isl-r-lg: 1.5rem;
   --isl-r-pill: 999px;
 
-  /* Soft ambient shadows (rem offsets �?elastic with device scale) */
+  /* Soft ambient shadows (rem offsets �?elastic with device scale) */
   --isl-shadow-sm: 0 0.125rem 0.375rem rgba(31, 29, 26, 0.06);
   --isl-shadow: 0 0.375rem 1.125rem rgba(31, 29, 26, 0.1);
   --isl-shadow-lg: 0 0.875rem 2.25rem rgba(31, 29, 26, 0.14);
@@ -1170,7 +1183,7 @@ input[type='range'].toolbar-range::-moz-range-thumb:hover {
 }
 
 :root[data-theme='dark'] {
-  /* Charcoal paper dark mapping �?ink-on-slate */
+  /* Charcoal paper dark mapping �?ink-on-slate */
   --isl-surface: #1a1917;
   --isl-surface-2: #232220;
   --isl-surface-sunk: #151412;
@@ -1217,7 +1230,7 @@ input[type='range'].toolbar-range::-moz-range-thumb:hover {
     linear-gradient(180deg, var(--isl-card), var(--isl-surface));
 }
 
-/* ── Pill chip / trigger button �?raised, pressable ── */
+/* ── Pill chip / trigger button �?raised, pressable ── */
 .isl-chip {
   display: inline-flex;
   align-items: center;
@@ -1258,7 +1271,7 @@ input[type='range'].toolbar-range::-moz-range-thumb:hover {
   box-shadow: none;
 }
 
-/* ── Primary "go" button �?the signature 5px drop ── */
+/* ── Primary "go" button �?the signature 5px drop ── */
 .isl-go {
   position: relative;
   display: inline-flex;
@@ -1396,7 +1409,7 @@ input[type='range'].toolbar-range::-moz-range-thumb:hover {
   box-shadow: 0 2px 0 0 var(--isl-edge);
 }
 
-/* ── Tactile icon button �?square pressable (toolbar / panel chrome) ── */
+/* ── Tactile icon button �?square pressable (toolbar / panel chrome) ── */
 .isl-icon-btn {
   display: inline-flex;
   align-items: center;
@@ -1434,7 +1447,7 @@ input[type='range'].toolbar-range::-moz-range-thumb:hover {
   cursor: not-allowed;
 }
 
-/* ── Panel surface �?chunky parchment container ── */
+/* ── Panel surface �?chunky parchment container ── */
 .isl-panel {
   border-radius: var(--isl-r-lg);
   background: var(--isl-card);
@@ -1472,7 +1485,7 @@ input[type='range'].toolbar-range::-moz-range-thumb:hover {
   box-shadow: 0 4px 0 0 var(--isl-edge-mint);
 }
 
-/* Layer row �?subtle hover when not selected (no lift, keeps list calm) */
+/* Layer row �?subtle hover when not selected (no lift, keeps list calm) */
 .isl-layer-row {
   cursor: pointer;
   transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
@@ -1522,7 +1535,7 @@ input[type='range'].toolbar-range::-moz-range-thumb:hover {
 /* ── Animal Crossing "island sign" tab bar ──
    Chunky paper pill, mint dot indicator on the active tab,
    micro-rotation on hover. Uses the project's tactile-shell
-   tokens only �?no new colors, no decorative stitches. */
+   tokens only �?no new colors, no decorative stitches. */
 .isl-tabbar--ac {
   position: relative;
   border-radius: 18px;
@@ -1580,7 +1593,7 @@ input[type='range'].toolbar-range::-moz-range-thumb:hover {
   box-shadow: none;
 }
 
-/* Compact variant for the bottom footer �?same AC family, but small
+/* Compact variant for the bottom footer �?same AC family, but small
    and low-weight. No 3px edge, no rotate-on-hover, 1px border. */
 .isl-tabbar--ac-sm {
   position: relative;
@@ -1645,6 +1658,45 @@ input[type='range'].toolbar-range::-moz-range-thumb:hover {
   animation: isl-pop-in 220ms cubic-bezier(.2, 1.4, .3, 1) both;
 }
 
+/* Sketch-style entrance for element toolbars — slight wobble + overshoot, like a quick pen stroke */
+@keyframes isl-sketch-in {
+  0%   { opacity: 0; transform: translateY(4px) scale(0.92) rotate(-1.2deg); }
+  60%  { opacity: 1; transform: translateY(-1px) scale(1.03) rotate(0.6deg); }
+  100% { opacity: 1; transform: translateY(0) scale(1) rotate(0deg); }
+}
+
+.isl-sketch-in {
+  animation: isl-sketch-in 280ms cubic-bezier(.2, 1.4, .3, 1) both;
+}
+
+/* Subtle hand-drawn underline / shimmer used on icon affordances */
+@keyframes isl-sketch-underline {
+  0%   { transform: scaleX(0); opacity: 0; }
+  40%  { transform: scaleX(1); opacity: 1; }
+  100% { transform: scaleX(1); opacity: 0.85; }
+}
+
+.isl-sketch-underline-hover {
+  position: relative;
+}
+.isl-sketch-underline-hover::after {
+  content: '';
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  bottom: 3px;
+  height: 2px;
+  background: currentColor;
+  border-radius: 2px;
+  transform: scaleX(0);
+  transform-origin: left center;
+  opacity: 0;
+  transition: transform 200ms ease, opacity 200ms ease;
+}
+.isl-sketch-underline-hover:hover::after {
+  animation: isl-sketch-underline 360ms cubic-bezier(.2, 1.4, .3, 1) both;
+}
+
 /* Gentle idle wobble for playful affordances (icons / badges) */
 @keyframes isl-wobble {
   0%, 100% { transform: rotate(0deg); }
@@ -1667,6 +1719,8 @@ input[type='range'].toolbar-range::-moz-range-thumb:hover {
   .isl-elastic,
   .isl-bounce-in,
   .isl-pop-in,
+  .isl-sketch-in,
+  .isl-sketch-underline-hover,
   .isl-wobble-hover {
     animation: none !important;
     transition: none !important;

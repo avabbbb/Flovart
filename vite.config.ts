@@ -20,11 +20,19 @@ export default defineConfig(() => {
         port: 3217,
         host: host || '127.0.0.1',
         strictPort: true,
+        headers: {
+          'Cross-Origin-Opener-Policy': 'same-origin',
+          'Cross-Origin-Embedder-Policy': 'require-corp',
+        },
       },
       plugins: [tailwindcss(), react(), flovartBridge()],
       // 排除独立 HTML 文件，避免 esbuild 扫描其内联脚本报错
       optimizeDeps: {
         entries: ['index.html'],
+        esbuildOptions: {
+          target: 'es2022',
+          treeShaking: true,
+        },
       },
       resolve: {
         alias: {
@@ -38,6 +46,7 @@ export default defineConfig(() => {
               'vendor-react': ['react', 'react-dom'],
               'vendor-genai': ['@google/genai'],
               'vendor-tiptap': ['@tiptap/core', '@tiptap/react', '@tiptap/starter-kit', '@tiptap/extension-mention', '@tiptap/suggestion'],
+              'vendor-ffmpeg': ['@ffmpeg/ffmpeg', '@ffmpeg/util'],
             },
           },
         },

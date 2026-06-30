@@ -1,0 +1,65 @@
+- generic [ref=f9e3]:
+  - banner [ref=f9e5]:
+    - generic [ref=f9e6]:
+      - generic "Flovart" [ref=f9e7]:
+        - generic [ref=f9e8]: Flovart
+      - strong [ref=f9e10]: Workflow
+    - navigation "Workspace switcher" [ref=f9e11]:
+      - button "Canvas" [ref=f9e12] [cursor=pointer]
+      - button "Workflow" [active] [ref=f9e13] [cursor=pointer]
+    - generic [ref=f9e14]:
+      - link "Enterprise console" [ref=f9e15] [cursor=pointer]:
+        - /url: "#/enterprise"
+        - img [ref=f9e16]
+      - 'button "API 0/3: 未配置文本模型 API Key — 提示词润色、AI 对话功能不可用 未配置图片模型 API Key — AI 绘图、图片编辑功能不可用 未配置视频模型 API Key — AI 视频生成功能不可用 尚未配置任何 API Key — 所有 AI 功能不可用，请先在设置中添加" [ref=f9e20] [cursor=pointer]':
+        - img [ref=f9e21]
+        - generic [ref=f9e23]: API 0/3
+      - button "切换到中文" [ref=f9e24] [cursor=pointer]:
+        - img [ref=f9e25]
+        - generic [ref=f9e29]: 切换到中文
+      - button "Dark mode" [ref=f9e30] [cursor=pointer]:
+        - img [ref=f9e31]
+      - button "Settings" [ref=f9e33] [cursor=pointer]:
+        - img [ref=f9e34]
+  - generic [ref=f9e320]:
+    - button "打开项目与图层":
+      - img
+    - complementary [ref=f9e321]:
+      - generic [ref=f9e322]:
+        - strong [ref=f9e323]: 项目与图层
+        - button "收起左侧面板" [ref=f9e324] [cursor=pointer]:
+          - img [ref=f9e325]
+      - complementary [ref=f9e329]:
+        - generic [ref=f9e330]:
+          - generic [ref=f9e331]:
+            - img [ref=f9e332]
+            - strong [ref=f9e336]: Workflow
+          - generic [ref=f9e337]:
+            - button "导入工作流" [ref=f9e338] [cursor=pointer]:
+              - img [ref=f9e339]
+            - button "导出全部工作流" [disabled] [ref=f9e342]:
+              - img [ref=f9e343]
+            - button "新建工作流" [ref=f9e346] [cursor=pointer]:
+              - img [ref=f9e347]
+        - paragraph [ref=f9e349]: 还没有工作流，创建一个开始。
+      - generic [ref=f9e350]:
+        - generic [ref=f9e351]:
+          - generic [ref=f9e352]: Layers
+          - generic [ref=f9e353]: "0"
+        - paragraph [ref=f9e355]: 双击画布或从底部工具栏添加节点
+    - main [ref=f9e356]:
+      - generic [ref=f9e357]:
+        - heading "Workflow" [level=1] [ref=f9e358]
+        - paragraph [ref=f9e359]: 使用节点组织提示词、参考素材和生成配置。
+        - button "新建工作流" [ref=f9e360] [cursor=pointer]
+    - button "打开右侧面板":
+      - img
+    - complementary [ref=f9e361]:
+      - separator [ref=f9e362]
+      - generic [ref=f9e363]:
+        - generic [ref=f9e364]:
+          - button "Agent" [ref=f9e365] [cursor=pointer]
+          - button "History" [ref=f9e366] [cursor=pointer]
+          - button "Assets" [ref=f9e367] [cursor=pointer]
+        - button "收起右侧面板" [ref=f9e368] [cursor=pointer]:
+          - img [ref=f9e369]

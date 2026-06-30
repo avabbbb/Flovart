@@ -99,7 +99,7 @@ export const WorkflowSidebar: React.FC<WorkflowSidebarProps> = ({ open, onOpenCh
                 <span style={{ color: 'var(--isl-ink-soft)' }}>{nodeIcon(node)}</span>
                 <input
                   value={node.title}
-                  className="min-w-0 flex-1 bg-transparent outline-none"
+                  className="min-w-0 flex-1 border-0 bg-transparent px-0 py-0 outline-none"
                   onClick={event => event.stopPropagation()}
                   onChange={event => patchNode(node.id, { title: event.target.value })}
                 />

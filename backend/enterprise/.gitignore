@@ -1,0 +1,5 @@
+.env
+flovart-enterprise
+flovart-enterprise.exe
+*.log
+vendor/

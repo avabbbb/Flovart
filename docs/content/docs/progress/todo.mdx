@@ -5,3 +5,38 @@ title: 后续待办
 - 用户确认新版 Workflow 的交互与 Agent 工作方式后，再将本次能力移入正式功能说明。
 - 等现有 Provider 层提供音频生成能力后，为 Workflow 配置节点启用音频生成；当前音频上传、播放、引用和配置元数据已保留，但运行时会明确提示暂不支持。
 - Docker 静态资源路径仍需单独验证，本次 Workflow 重构不改变该状态。
+- App.tsx 节点提示生成 hook 与画布渲染 JSX 提取已评估为净负面可读性（依赖参数数十个），保留在 `App.tsx` 直到后续重构方案明确。
+
+## Magic Canvas 迁移路线图（参照 jaaz + LibTV + infinite-canvas）
+
+完整路线图见 `docs/analysis/flovart-migration-roadmap.md`。
+
+- **Phase 1.2 — Magic Generate 入口**：✅ 已完成，待用户测试确认。工具栏切换两种模式——jaaz 截图范式（选中≥2 元素 → `exportToCanvas` → `toDataURL` → 创建 ImageElement → `handleGenerate`） + 现有 PromptBar 范式（选中任意元素 + 写 prompt + @引用）。详见 `pending-test.mdx` Phase 1.2 节。
+- **Phase 1.3-1.4 — Agent Chat 主交互 + Tool-Calling**：✅ 已完成，待用户测试确认。前端编排（API Key 不离开浏览器），模仿 infinite-canvas 在线助手 13 工具 + Tool-Calling 循环（最多 4 步，首轮 `tool_choice:"required"`），`/chat/completions` + `tools` + `stream:true` SSE 流式。Phase 1.3 "加入对话"入口已完成（pop-bar 选中单图→注入 Chat 附件）。详见 `pending-test.mdx` Phase 1.3-1.4 节。
+- **Phase 1.5 — Overlay 重写**：✅ 已完成，待用户测试确认。`canvasOverlayViewport.ts` 本身已是 viewport 无关设计（接受 `CanvasViewport { zoom, panScreenX, panScreenY }`），无需重写；在 `FlovartExcalidrawStage` 新增 `onViewportChange` + `containerRef` props 暴露 Excalidraw 视口和容器 rect，App.tsx 将 `ExcalidrawViewport { x, y, zoom }` 转换为 `CanvasViewport`（`panScreenX = scrollX * zoom`），`canvasContainerRect` 改用 Excalidraw 容器 ref。ElementToolbar 已补回，通过 `placeOverlay` + `CanvasFixedOverlay` 定位。详见 `pending-test.mdx` Phase 1.5 节。
+- **Phase 1.5 补充 — App.tsx 死代码清理（第一批）**：✅ 已完成，待用户测试确认。删除 Phase 1.1 SVG/Konva 移除后残留的死代码：`canvasStageSize`/`canvasKonva*` state 与 useMemo、`contextMenu`、`relationFocusElementId`/`selectedNodePromptElement`/`isNodePromptActive` 节点 prompt 高亮链路、`handleFitView`、wheel/mouseup useEffect、`cursor` 变量、`useCanvasInteraction` 解构中 11 个无消费者返回值，以及未使用 import。App.tsx 从 ~3876 行缩减到 ~3387 行。Category B 失效代码（`animateViewportToElement`/`editingElement`/`croppingState`/`maskEditingId`/`inpaintState` 等 UI 入口仍挂载但画布交互失效）保留待第二批清理。
+- **Phase 1.5 补充 — App.tsx 死代码清理（第二批）**：✅ 已完成，待用户测试确认。重建坐标转换：App.tsx 新增 `screenToCanvas()` + `getCanvasCenter()` 基于 `excalidrawContainerRef` + `excalidrawViewport`，替代死掉的 `svgRef`/`getCanvasPoint`；useGeneration.ts 6/6 处 + App.tsx 4/4 处 svgRef/getCanvasPoint 全部替换。删除 Category B 失效代码：`editingElement` state + `handleStopEditing` + 2 useEffects + keyboard branches；`animateViewportToElement`/`cancelViewportAnimation`/`viewportAnimationRef`/`handleElementDoubleClickFocus`；crop 全链路（`croppingState`/`handleStartCrop`/`handleCancelCrop`/`handleConfirmCrop` + Toolbar crop UI + ElementToolbar crop 按钮）；mask/inpaint 全链路（`maskEditingId`/`inpaintState`/`inpaintPrompt`/`paintMask`/`startMaskEditing`/`commitMask`/`clearMask`/`cancelMask` + mask toolbar JSX + ElementToolbar mask 按钮）；`handleCanvasImageDragStart`。清理 `useCanvasInteraction.ts` 接口/解构/refs/handlers（移除 editingElement/croppingState/maskEditingId/inpaintState/paintMask/svgRef/getCanvasPoint 等参数）；Toolbar.tsx 移除 `isCropping`/`onConfirmCrop`/`onCancelCrop` props；ElementToolbar.tsx 移除 `maskEditingId`/`handleStartCrop`/`startMaskEditing` props。详见 `pending-test.mdx` Phase 1.5 补充（第二批）节。
+- **Phase 2 — Workflow LibTV 全量对齐**：模块化分析已落盘到 `docs/analysis/libtv-modules/`（10 模块 + 总览），Script 节点放 Workflow 侧作为第 6 种节点类型。分 5 子阶段：
+  - Phase 2.1：模块 01+02 — Script 节点 + 工作流编排基础（Ctrl+G 打组 / 整组执行拓扑排序 / 连线数据传递）✅ 已完成，待用户测试确认。详见 `pending-test.mdx` Phase 2.1 节。
+  - Phase 2.2：模块 03+08+09 — Slash 命令面板 + 生成器增强（风格库 22 预设 / 运镜控制 21 预设 / 摄像机参数 / Slash 命令 6 条 / 网格拼图工具）✅ 已完成，待用户测试确认。详见 `pending-test.mdx` Phase 2.2 节。
+  - Phase 2.3：模块 04+05 — 图像工具补齐（旋转镜像 / 宫格切分 / 标注 / 分镜组拼接 / 打光面板 5 个） + 视频工具（ffmpeg.wasm 音视频分离 / 剪辑 / 合成 3 个）✅ 已完成，待用户测试确认。详见 `pending-test.mdx` Phase 2.3 节。视频超分与分镜自动拆解暂未实现（ffmpeg.wasm 浏览器端算力限制），后续视 WebCodecs/WebGPU 生态成熟度再补。
+  - Phase 2.4：模块 06+07 — 导演台 3D 构图（three.js / @react-three/fiber，P2 最低优先，暂未实现）+ 音频工具（截取 / 变速）✅ 音频工具已完成，待用户测试确认。导演台 3D 构图暂未实现，后续视需求再补。详见 `pending-test.mdx` Phase 2.4 节。
+  - Phase 2.5：模块 10 — 模型清单全量适配（模型注册表 / Seedance 12 参考图 / 合规校验 / 音色库）✅ 已完成，待用户测试确认。详见 `pending-test.mdx` Phase 2.5 节。
+- **Phase 3 — Agent Skill 双入口（操作模式）**：✅ 已完成，待用户测试确认。不建 Go 后端创作 Agent（"后端不碰 LLM"已拍板），改为纯前端工具层：MCP server（`tools/flovart/mcp-server.js`，`@modelcontextprotocol/sdk` `McpServer` + `StdioServerTransport`，自动注册全部 50+ CLI 命令为 MCP tools） + SKILL.md 更新（OpenClaw `metadata.openclaw` frontmatter + MCP server 使用说明） + `.mcp.json`（Claude Code 集成） + `flovart:mcp` npm script + CLI 包升级 v0.3.0（新增 `flovart-mcp` bin + SDK/zod 依赖）。外部 Agent（Claude Code / Codex / OpenClaw）通过标准 MCP stdio 协议直接操作画布。详见 `pending-test.mdx` Phase 3 节。
+- **Phase 4 — 后端补 basketikun 同款能力**：逐项请示用户后执行，保留 hub + enterprise 两服务不合并。
+- **Phase 5 — 文档与发版**。
+
+## 共享提示词与工作流生态（新方向）
+
+- 在 `backend/` 子目录新建 Go + Gin + GORM 后端，作为 monorepo 一部分独立部署。
+- 提示词生态：用户可上传节点级创作提示词包到服务器社区库；前端可浏览、搜索、下载并导入到 Workflow 节点提示词库。
+- 工作流生态：用户可上传工作流成品图/视频 + 工作流结构（节点 + 连线 + 提示词，**不含模型配置和 API Key**）；导入者需自备对应 Provider 的 Key 并自己选模型。
+- 前端新增社区库浏览/上传 UI；工作流导出范围默认"只结构 + 提示词"，导入后用户自己选模型，跨 Provider 兼容。
+- 后端数据表结构同步更新到 `docs/content/docs/backend/backend-database.mdx`。
+- 联调 hub/enterprise 骨架：起库、AutoMigrate、`/healthz` 通、JWT 跨服务复用生效。
+- 前端新增组织/成员管理页面：组织列表、创建组织、成员列表、添加/调整/移除成员（对应 enterprise 接口）。
+- 补齐 enterprise 服务的 owner 转让流程（创建 owner 转让→受让→确认）。
+- 接入 R2 上传服务：在 hub 内加 S3 兼容存储占位，先打通为工作流生态上传成品图/视频准备。✅ 已完成后续骨架，待联调验证
+- 前端提示词生态 UI：社区库浏览/上传/搜索/详情、节点提示词库从 hub 导入。
+- 前端新增组织/成员管理页面：组织列表、创建组织、成员列表、添加/调整/移除成员（对应 enterprise 接口）。
+- 前端登录/注册页面对接 hub `authApi`，token 持久化到 localStorage。

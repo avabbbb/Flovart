@@ -94,7 +94,7 @@ export const StudioRightDrawer: React.FC<StudioRightDrawerProps> = ({
               <button
                 key={tab.id}
                 type="button"
-                className={`isl-tab min-w-0 flex-1 gap-1.5 ${activeTab === tab.id ? 'isl-tab--active' : ''}`}
+                className={`isl-tab min-w-0 flex-1 justify-center gap-1.5 ${activeTab === tab.id ? 'isl-tab--active' : ''}`}
                 onClick={() => onTabChange(tab.id)}
                 title={tab.label}
               >

@@ -1,0 +1,96 @@
+- generic [ref=f12e3]:
+  - banner [ref=f12e5]:
+    - generic [ref=f12e6]:
+      - generic "Flovart" [ref=f12e7]:
+        - generic [ref=f12e8]: Flovart
+      - strong [ref=f12e10]: Board 1
+    - navigation "Workspace switcher" [ref=f12e11]:
+      - button "Canvas" [ref=f12e12] [cursor=pointer]
+      - button "Workflow" [ref=f12e13] [cursor=pointer]
+    - generic [ref=f12e14]:
+      - link "Enterprise console" [ref=f12e15] [cursor=pointer]:
+        - /url: "#/enterprise"
+        - img [ref=f12e16]
+      - 'button "API 0/3: 未配置文本模型 API Key — 提示词润色、AI 对话功能不可用 未配置图片模型 API Key — AI 绘图、图片编辑功能不可用 未配置视频模型 API Key — AI 视频生成功能不可用 尚未配置任何 API Key — 所有 AI 功能不可用，请先在设置中添加" [ref=f12e20] [cursor=pointer]':
+        - img [ref=f12e21]
+        - generic [ref=f12e23]: API 0/3
+      - button "切换到中文" [ref=f12e24] [cursor=pointer]:
+        - img [ref=f12e25]
+        - generic [ref=f12e29]: 切换到中文
+      - button "Dark mode" [ref=f12e30] [cursor=pointer]:
+        - img [ref=f12e31]
+      - button "Settings" [ref=f12e33] [cursor=pointer]:
+        - img [ref=f12e34]
+  - generic [ref=f12e37]:
+    - generic [ref=f12e39]:
+      - generic [ref=f12e40]:
+        - generic [ref=f12e41]:
+          - generic [ref=f12e42]: Workspace
+          - generic [ref=f12e43]: Boards & Layers
+        - button "Toggle sidebar" [ref=f12e44] [cursor=pointer]:
+          - img [ref=f12e45]
+      - generic [ref=f12e48]:
+        - generic [ref=f12e49]:
+          - generic [ref=f12e50]:
+            - generic [ref=f12e51]: Boards
+            - generic [ref=f12e52]: Scenes and canvases
+          - button "New" [ref=f12e53] [cursor=pointer]
+        - button "Board 1 Board 1 1 items 画板操作" [ref=f12e55] [cursor=pointer]:
+          - img "Board 1" [ref=f12e56]
+          - generic [ref=f12e57]:
+            - generic [ref=f12e58]: Board 1
+            - generic [ref=f12e59]: 1 items
+          - button "画板操作" [ref=f12e61]:
+            - img [ref=f12e62]
+      - generic [ref=f12e66]:
+        - generic [ref=f12e68]:
+          - generic [ref=f12e69]: Layers
+          - generic [ref=f12e70]: 1 items on canvas
+        - generic [ref=f12e74] [cursor=pointer]:
+          - button "Expand group layer" [ref=f12e85]
+          - generic "Rectangle" [ref=f12e87]
+          - generic [ref=f12e88]:
+            - button "Lock" [ref=f12e89]:
+              - img [ref=f12e90]
+            - button "Hide" [ref=f12e93]:
+              - img [ref=f12e94]
+    - generic [ref=f12e97]:
+      - generic [ref=f12e99]: Loading Settings...
+      - generic [ref=f12e101]:
+        - generic:
+          - generic:
+            - generic:
+              - img
+          - generic: Loading scene…
+    - generic [ref=f12e103]: Loading...
+  - generic [ref=f12e104]:
+    - generic [ref=f12e105]:
+      - button "Boards & Layers" [ref=f12e106] [cursor=pointer]:
+        - img [ref=f12e107]
+      - button "Upload Image" [ref=f12e110] [cursor=pointer]:
+        - img [ref=f12e111]
+      - button "Assets" [ref=f12e114] [cursor=pointer]:
+        - img [ref=f12e115]
+    - generic [ref=f12e118]:
+      - button "Select & Move" [ref=f12e119] [cursor=pointer]:
+        - img [ref=f12e120]
+      - button "Pan Canvas" [ref=f12e123] [cursor=pointer]:
+        - img [ref=f12e124]
+      - button "Shapes" [ref=f12e130] [cursor=pointer]:
+        - img [ref=f12e131]
+      - button "Drawing Tools" [ref=f12e134] [cursor=pointer]:
+        - img [ref=f12e135]
+      - button "Text" [ref=f12e137] [cursor=pointer]:
+        - img [ref=f12e138]
+      - textbox "Stroke Color" [ref=f12e141] [cursor=pointer]: "#111827"
+      - slider "Stroke Width" [ref=f12e142] [cursor=pointer]: "5"
+      - generic [ref=f12e143]: "5"
+    - generic [ref=f12e145]:
+      - button "滚轮：平移（点击切换为缩放）" [ref=f12e146] [cursor=pointer]:
+        - img [ref=f12e147]
+      - button "Canvas Settings" [ref=f12e150] [cursor=pointer]:
+        - img [ref=f12e151]
+      - button [disabled] [ref=f12e155]:
+        - img [ref=f12e156]
+      - button "Redo" [disabled] [ref=f12e159]:
+        - img [ref=f12e160]

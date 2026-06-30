@@ -1,5 +1,5 @@
 import { nanoid } from 'nanoid';
-import type { WorkflowConnection, WorkflowOp, WorkflowSnapshot } from './types';
+import type { WorkflowConnection, WorkflowNode, WorkflowOp, WorkflowSnapshot } from './types';
 
 export interface WorkflowOpResult {
   snapshot: WorkflowSnapshot;
@@ -38,6 +38,64 @@ function createUniqueConnectionId(connections: WorkflowConnection[]): string {
   return id;
 }
 
+export function topoSort(nodes: WorkflowNode[], connections: WorkflowConnection[], nodeIds: string[]): string[] {
+  const idSet = new Set(nodeIds);
+  const incoming = new Map<string, string[]>();
+  const outgoing = new Map<string, string[]>();
+  nodeIds.forEach(id => { incoming.set(id, []); outgoing.set(id, []); });
+  connections.forEach(conn => {
+    if (idSet.has(conn.fromNodeId) && idSet.has(conn.toNodeId)) {
+      outgoing.get(conn.fromNodeId)!.push(conn.toNodeId);
+      incoming.get(conn.toNodeId)!.push(conn.fromNodeId);
+    }
+  });
+  const queue = nodeIds.filter(id => incoming.get(id)!.length === 0);
+  const result: string[] = [];
+  const inDegree = new Map<string, number>();
+  nodeIds.forEach(id => inDegree.set(id, incoming.get(id)!.length));
+  while (queue.length > 0) {
+    const id = queue.shift()!;
+    result.push(id);
+    outgoing.get(id)!.forEach(next => {
+      const deg = inDegree.get(next)! - 1;
+      inDegree.set(next, deg);
+      if (deg === 0) queue.push(next);
+    });
+  }
+  return result.length === nodeIds.length ? result : nodeIds;
+}
+
+export interface UpstreamData {
+  imageHrefs: string[];
+  videoHrefs: string[];
+  audioHrefs: string[];
+  textContents: string[];
+  referenceNodeIds: string[];
+}
+
+export function getUpstreamData(
+  targetNode: WorkflowNode,
+  nodes: WorkflowNode[],
+  connections: WorkflowConnection[],
+): UpstreamData {
+  const explicitRefs = targetNode.metadata.referenceNodeIds || [];
+  const upstreamNodeIds = explicitRefs.length > 0
+    ? explicitRefs
+    : connections.filter(c => c.toNodeId === targetNode.id).map(c => c.fromNodeId);
+  const nodesById = new Map(nodes.map(n => [n.id, n]));
+  const data: UpstreamData = { imageHrefs: [], videoHrefs: [], audioHrefs: [], textContents: [], referenceNodeIds: upstreamNodeIds };
+  upstreamNodeIds.forEach(id => {
+    const node = nodesById.get(id);
+    if (!node) return;
+    if (node.type === 'image' && node.metadata.href) data.imageHrefs.push(node.metadata.href);
+    if (node.type === 'video' && node.metadata.href) data.videoHrefs.push(node.metadata.href);
+    if (node.type === 'audio' && node.metadata.href) data.audioHrefs.push(node.metadata.href);
+    if (node.type === 'text' && node.metadata.content) data.textContents.push(node.metadata.content);
+    if (node.type === 'config' && node.metadata.prompt) data.textContents.push(node.metadata.prompt);
+  });
+  return data;
+}
+
 export function validateWorkflowConnection(
   snapshot: WorkflowSnapshot,
   fromNodeId: string,
@@ -49,6 +107,8 @@ export function validateWorkflowConnection(
   if (!toNode) return { ok: false, reason: '目标节点不存在' };
   if (fromNodeId === toNodeId) return { ok: false, reason: '不能连接节点自身' };
   if (fromNode.type === 'config' && toNode.type === 'config') return { ok: false, reason: '生成配置节点之间不能连接' };
+  if (fromNode.type === 'script' && toNode.type !== 'image' && toNode.type !== 'video') return { ok: false, reason: '脚本节点只能连向图片或视频节点' };
+  if (toNode.type === 'script' && fromNode.type !== 'image' && fromNode.type !== 'video' && fromNode.type !== 'text') return { ok: false, reason: '脚本节点只能接收图片、视频或文本输入' };
   if (snapshot.connections.some(connection => connection.fromNodeId === fromNodeId && connection.toNodeId === toNodeId)) {
     return { ok: false, reason: '节点之间已存在连接' };
   }
@@ -157,6 +217,30 @@ export function applyWorkflowOps(initial: WorkflowSnapshot, ops: WorkflowOp[]): 
     }
     if (op.type === 'run_generation' && snapshot.nodes.some(node => node.id === op.nodeId)) {
       runRequests.push({ nodeId: op.nodeId });
+    }
+    if (op.type === 'group_nodes') {
+      const ids = new Set(op.ids);
+      snapshot = {
+        ...snapshot,
+        nodes: snapshot.nodes.map(node => ids.has(node.id)
+          ? { ...node, batchId: op.batchId, batchGroupSource: op.source || 'manual' }
+          : node),
+      };
+      return;
+    }
+    if (op.type === 'ungroup_nodes') {
+      const ids = new Set(op.ids);
+      snapshot = {
+        ...snapshot,
+        nodes: snapshot.nodes.map(node => ids.has(node.id)
+          ? { ...node, batchId: undefined, batchIndex: undefined, batchGroupSource: undefined }
+          : node),
+      };
+      return;
+    }
+    if (op.type === 'execute_group') {
+      const order = topoSort(snapshot.nodes, snapshot.connections, op.nodeIds);
+      order.forEach(nodeId => runRequests.push({ nodeId }));
     }
   });
 

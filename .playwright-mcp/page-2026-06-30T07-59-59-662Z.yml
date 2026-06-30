@@ -1,0 +1,96 @@
+- generic [ref=f20e3]:
+  - banner [ref=f20e5]:
+    - generic [ref=f20e6]:
+      - generic "Flovart" [ref=f20e7]:
+        - generic [ref=f20e8]: Flovart
+      - strong [ref=f20e10]: Board 1
+    - navigation "Workspace switcher" [ref=f20e11]:
+      - button "Canvas" [ref=f20e12] [cursor=pointer]
+      - button "Workflow" [ref=f20e13] [cursor=pointer]
+    - generic [ref=f20e14]:
+      - link "Enterprise console" [ref=f20e15] [cursor=pointer]:
+        - /url: "#/enterprise"
+        - img [ref=f20e16]
+      - 'button "API 0/3: 未配置文本模型 API Key — 提示词润色、AI 对话功能不可用 未配置图片模型 API Key — AI 绘图、图片编辑功能不可用 未配置视频模型 API Key — AI 视频生成功能不可用 尚未配置任何 API Key — 所有 AI 功能不可用，请先在设置中添加" [ref=f20e20] [cursor=pointer]':
+        - img [ref=f20e21]
+        - generic [ref=f20e23]: API 0/3
+      - button "切换到中文" [ref=f20e24] [cursor=pointer]:
+        - img [ref=f20e25]
+        - generic [ref=f20e29]: 切换到中文
+      - button "Dark mode" [ref=f20e30] [cursor=pointer]:
+        - img [ref=f20e31]
+      - button "Settings" [ref=f20e33] [cursor=pointer]:
+        - img [ref=f20e34]
+  - generic [ref=f20e37]:
+    - generic [ref=f20e39]:
+      - generic [ref=f20e40]:
+        - generic [ref=f20e41]:
+          - generic [ref=f20e42]: Workspace
+          - generic [ref=f20e43]: Boards & Layers
+        - button "Toggle sidebar" [ref=f20e44] [cursor=pointer]:
+          - img [ref=f20e45]
+      - generic [ref=f20e48]:
+        - generic [ref=f20e49]:
+          - generic [ref=f20e50]:
+            - generic [ref=f20e51]: Boards
+            - generic [ref=f20e52]: Scenes and canvases
+          - button "New" [ref=f20e53] [cursor=pointer]
+        - button "Board 1 Board 1 1 items 画板操作" [ref=f20e55] [cursor=pointer]:
+          - img "Board 1" [ref=f20e56]
+          - generic [ref=f20e57]:
+            - generic [ref=f20e58]: Board 1
+            - generic [ref=f20e59]: 1 items
+          - button "画板操作" [ref=f20e61]:
+            - img [ref=f20e62]
+      - generic [ref=f20e66]:
+        - generic [ref=f20e68]:
+          - generic [ref=f20e69]: Layers
+          - generic [ref=f20e70]: 1 items on canvas
+        - generic [ref=f20e74] [cursor=pointer]:
+          - button "Expand group layer" [ref=f20e85]
+          - generic "Circle" [ref=f20e87]
+          - generic [ref=f20e88]:
+            - button "Lock" [ref=f20e89]:
+              - img [ref=f20e90]
+            - button "Hide" [ref=f20e93]:
+              - img [ref=f20e94]
+    - generic [ref=f20e97]:
+      - generic [ref=f20e99]: Loading Settings...
+      - generic [ref=f20e101]:
+        - generic:
+          - generic:
+            - generic:
+              - img
+          - generic: Loading scene…
+    - generic [ref=f20e103]: Loading...
+  - generic [ref=f20e104]:
+    - generic [ref=f20e105]:
+      - button "Boards & Layers" [ref=f20e106] [cursor=pointer]:
+        - img [ref=f20e107]
+      - button "Upload Image" [ref=f20e110] [cursor=pointer]:
+        - img [ref=f20e111]
+      - button "Assets" [ref=f20e114] [cursor=pointer]:
+        - img [ref=f20e115]
+    - generic [ref=f20e118]:
+      - button "Select & Move" [ref=f20e119] [cursor=pointer]:
+        - img [ref=f20e120]
+      - button "Pan Canvas" [ref=f20e123] [cursor=pointer]:
+        - img [ref=f20e124]
+      - button "Shapes" [ref=f20e130] [cursor=pointer]:
+        - img [ref=f20e131]
+      - button "Drawing Tools" [ref=f20e134] [cursor=pointer]:
+        - img [ref=f20e135]
+      - button "Text" [ref=f20e137] [cursor=pointer]:
+        - img [ref=f20e138]
+      - textbox "Stroke Color" [ref=f20e141] [cursor=pointer]: "#111827"
+      - slider "Stroke Width" [ref=f20e142] [cursor=pointer]: "5"
+      - generic [ref=f20e143]: "5"
+    - generic [ref=f20e145]:
+      - button "滚轮：平移（点击切换为缩放）" [ref=f20e146] [cursor=pointer]:
+        - img [ref=f20e147]
+      - button "Canvas Settings" [ref=f20e150] [cursor=pointer]:
+        - img [ref=f20e151]
+      - button [disabled] [ref=f20e155]:
+        - img [ref=f20e156]
+      - button "Redo" [disabled] [ref=f20e159]:
+        - img [ref=f20e160]

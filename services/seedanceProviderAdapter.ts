@@ -84,6 +84,8 @@ export const seedanceProviderAdapter: ProviderAdapter = {
       raw: result.raw,
     };
   },
+  // generate 是可选快捷路径：调用方（aiGateway）可优先走 generate 一步出结果，
+  // 也可走 registry 的 submit + poll 分步流程。两者复用同一 submitTask/pollTask，无重复实现。
   generate: async (request: ProviderRequest): Promise<ProviderResult> => {
     const submitted = await seedanceProviderAdapter.submitTask(request);
     if (submitted.status === 'succeeded') return submitted.result;

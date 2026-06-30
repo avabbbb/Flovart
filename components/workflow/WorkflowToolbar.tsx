@@ -1,4 +1,4 @@
-import { Bot, Focus, Grid2X2, Hand, Library, MousePointer2, Redo2, Settings2, Type, Undo2, ZoomIn } from 'lucide-react';
+import { Bot, FileText, Focus, Grid2X2, Hand, Library, MousePointer2, Redo2, Settings2, Type, Undo2, ZoomIn } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useWorkflowSharedMedia, type WorkflowSharedMedia } from './WorkflowConfigPanel';
 import type { WorkflowNodeType } from './types';
@@ -50,6 +50,7 @@ export function WorkflowToolbar({
       <button type="button" className={btn(tool === 'pan')} aria-label="平移工具" onClick={() => onToolChange('pan')}><Hand size={18} /></button>
       {divider}
       <button type="button" className={btn()} aria-label="添加文本节点" onClick={() => onAddNode('text')}><Type size={18} /></button>
+      <button type="button" className={btn()} aria-label="添加脚本节点" onClick={() => onAddNode('script')}><FileText size={18} /></button>
       <button type="button" className={btn()} aria-label="添加配置节点" onClick={() => onAddNode('config')}><Settings2 size={18} /></button>
       <button type="button" className={btn(libraryOpen)} aria-label="打开共享素材" onClick={() => setLibraryOpen(open => !open)}><Library size={18} /></button>
       {divider}

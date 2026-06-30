@@ -1,11 +1,12 @@
-import { Button, Input, Modal, Segmented, Slider } from 'antd';
+import { Button, Input, Modal, Segmented, Slider, ColorPicker } from 'antd';
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { ImageFilterPanel, buildCssFilter } from '../ImageFilterPanel';
 import type { ImageFilters } from '../../types';
 import type { WorkflowCropRect } from './media';
 import type { WorkflowNode } from './types';
+import { LIGHTING_PRESETS, type LightingPreset } from './LightingPresets';
 
-export type WorkflowImageToolKind = 'crop' | 'filter' | 'upscale' | 'remove-background' | 'outpaint' | 'mask' | 'split';
+export type WorkflowImageToolKind = 'crop' | 'filter' | 'upscale' | 'remove-background' | 'outpaint' | 'mask' | 'split' | 'rotate' | 'splitGrid' | 'annotate' | 'relight' | 'storyboard';
 export interface WorkflowImageToolState { kind: WorkflowImageToolKind; nodeId: string }
 export type WorkflowImageToolConfirmation =
   | { kind: 'crop'; crop: WorkflowCropRect }
@@ -13,7 +14,12 @@ export type WorkflowImageToolConfirmation =
   | { kind: 'upscale'; targetLongEdge: number; algorithm: 'high' | 'bilinear' | 'nearest' }
   | { kind: 'outpaint'; direction: 'left' | 'right' | 'top' | 'bottom' | 'all'; prompt: string }
   | { kind: 'mask'; prompt: string; maskDataUrl: string }
-  | { kind: 'split' };
+  | { kind: 'split' }
+  | { kind: 'rotate'; action: 'rotate-90' | 'rotate-180' | 'rotate-270' | 'flip-h' | 'flip-v' }
+  | { kind: 'splitGrid'; rows: number; cols: number }
+  | { kind: 'annotate'; annotatedDataUrl: string }
+  | { kind: 'relight'; preset: string; intensity: number; color: string; smart: boolean }
+  | { kind: 'storyboard'; cols: number; showIndex: boolean };
 
 export function WorkflowImageToolDialogs({ tool, node, mediaUrl, busy, error, onClose, onPreview, onConfirm }: {
   tool: WorkflowImageToolState | null;
@@ -33,6 +39,11 @@ export function WorkflowImageToolDialogs({ tool, node, mediaUrl, busy, error, on
   if (tool.kind === 'outpaint') return <OutpaintDialog {...common} onConfirm={(direction, prompt) => onConfirm({ kind: 'outpaint', direction, prompt })} />;
   if (tool.kind === 'mask') return <MaskDialog {...common} onConfirm={(prompt, maskDataUrl) => onConfirm({ kind: 'mask', prompt, maskDataUrl })} />;
   if (tool.kind === 'split') return <SimpleConfirmDialog {...common} title="拆分图层" description="AI 会识别主体、背景和独立物体，并在右侧创建相连的图片节点。" action="拆分图层" onConfirm={() => onConfirm({ kind: 'split' })} />;
+  if (tool.kind === 'rotate') return <RotateFlipDialog {...common} onConfirm={action => onConfirm({ kind: 'rotate', action })} />;
+  if (tool.kind === 'splitGrid') return <SplitGridDialog {...common} onConfirm={(rows, cols) => onConfirm({ kind: 'splitGrid', rows, cols })} />;
+  if (tool.kind === 'annotate') return <AnnotateDialog {...common} onConfirm={dataUrl => onConfirm({ kind: 'annotate', annotatedDataUrl: dataUrl })} />;
+  if (tool.kind === 'relight') return <RelightDialog {...common} onConfirm={(preset, intensity, color, smart) => onConfirm({ kind: 'relight', preset, intensity, color, smart })} />;
+  if (tool.kind === 'storyboard') return <StoryboardDialog {...common} onConfirm={(cols, showIndex) => onConfirm({ kind: 'storyboard', cols, showIndex })} />;
   return null;
 }
 
@@ -132,4 +143,150 @@ function MaskDialog(props: CommonProps & { onConfirm: (prompt: string, mask: str
 
 function SimpleConfirmDialog(props: CommonProps & { title: string; description: string; action: string; onConfirm: () => void }) {
   return <Modal {...modalProps(props, 620)} title={props.title}><div className="workflow-image-tool__simple" data-workflow-overlay><div className="workflow-image-tool__preview"><img src={props.mediaUrl} alt="工具预览" /></div><p>{props.description}</p><DialogError error={props.error} /><Button type="primary" loading={props.busy} onClick={props.onConfirm}>{props.action}</Button></div></Modal>;
+}
+
+function RotateFlipDialog(props: CommonProps & { onConfirm: (action: 'rotate-90' | 'rotate-180' | 'rotate-270' | 'flip-h' | 'flip-v') => void }) {
+  return <Modal {...modalProps(props, 620)} title="旋转镜像">
+    <div className="workflow-image-tool__simple" data-workflow-overlay>
+      <div className="workflow-image-tool__preview"><img src={props.mediaUrl} alt="旋转预览" /></div>
+      <div className="workflow-rotate-grid">
+        <Button size="large" onClick={() => props.onConfirm('rotate-90')} loading={props.busy}>↻ 顺时针 90°</Button>
+        <Button size="large" onClick={() => props.onConfirm('rotate-180')} loading={props.busy}>↻ 旋转 180°</Button>
+        <Button size="large" onClick={() => props.onConfirm('rotate-270')} loading={props.busy}>↺ 逆时针 90°</Button>
+        <Button size="large" onClick={() => props.onConfirm('flip-h')} loading={props.busy}>⇄ 水平翻转</Button>
+        <Button size="large" onClick={() => props.onConfirm('flip-v')} loading={props.busy}>⇅ 垂直翻转</Button>
+      </div>
+      <DialogError error={props.error} />
+    </div>
+  </Modal>;
+}
+
+function SplitGridDialog(props: CommonProps & { onConfirm: (rows: number, cols: number) => void }) {
+  const [rows, setRows] = useState(3);
+  const [cols, setCols] = useState(3);
+  return <Modal {...modalProps(props, 620)} title="宫格切分">
+    <div className="workflow-image-tool__simple" data-workflow-overlay>
+      <div className="workflow-image-tool__preview">
+        <div className="workflow-grid-preview" style={{ gridTemplateRows: `repeat(${rows}, 1fr)`, gridTemplateColumns: `repeat(${cols}, 1fr)` }}>
+          {Array.from({ length: rows * cols }, (_, i) => <div key={i} className="workflow-grid-cell" style={{ backgroundImage: `url(${props.mediaUrl})`, backgroundSize: `${cols * 100}% ${rows * 100}%`, backgroundPosition: `${(i % cols) / (cols - 1) * 100}% ${Math.floor(i / cols) / (rows - 1) * 100}%` }} />)}
+        </div>
+      </div>
+      <div className="workflow-image-tool__controls">
+        <label>行数<Segmented block value={rows} options={[2, 3, 4, 5].map(n => ({ label: `${n} 行`, value: n }))} onChange={v => setRows(Number(v))} /></label>
+        <label>列数<Segmented block value={cols} options={[2, 3, 4, 5].map(n => ({ label: `${n} 列`, value: n }))} onChange={v => setCols(Number(v))} /></label>
+        <p className="workflow-image-tool__hint">将切分为 {rows * cols} 张独立图片，每张在右侧创建相连的图片节点。</p>
+        <DialogError error={props.error} />
+        <Button type="primary" loading={props.busy} onClick={() => props.onConfirm(rows, cols)}>切分为 {rows * cols} 张</Button>
+      </div>
+    </div>
+  </Modal>;
+}
+
+function AnnotateDialog(props: CommonProps & { onConfirm: (annotatedDataUrl: string) => void }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const drawing = useRef(false);
+  const last = useRef({ x: 0, y: 0 });
+  const [tool, setTool] = useState<'brush' | 'rect'>('brush');
+  const [color, setColor] = useState('#ff4d4f');
+  const [size, setSize] = useState(6);
+  const startRect = useRef({ x: 0, y: 0 });
+  const [hasAnnotation, setHasAnnotation] = useState(false);
+  const [snapshot, setSnapshot] = useState<string | null>(null);
+
+  const point = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    return { x: (event.clientX - rect.left) / rect.width * event.currentTarget.width, y: (event.clientY - rect.top) / rect.height * event.currentTarget.height };
+  };
+  const begin = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    drawing.current = true;
+    last.current = point(event);
+    startRect.current = last.current;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    if (tool === 'rect') {
+      const ctx = event.currentTarget.getContext('2d');
+      if (ctx) setSnapshot(event.currentTarget.toDataURL());
+    }
+  };
+  const move = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    if (!drawing.current) return;
+    const ctx = event.currentTarget.getContext('2d');
+    if (!ctx) return;
+    const next = point(event);
+    if (tool === 'brush') {
+      ctx.strokeStyle = color; ctx.lineWidth = size; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(last.current.x, last.current.y); ctx.lineTo(next.x, next.y); ctx.stroke(); last.current = next;
+    } else {
+      if (snapshot) { const img = new Image(); img.onload = () => { ctx.clearRect(0, 0, event.currentTarget.width, event.currentTarget.height); ctx.drawImage(img, 0, 0); ctx.strokeStyle = color; ctx.lineWidth = size; ctx.strokeRect(startRect.current.x, startRect.current.y, next.x - startRect.current.x, next.y - startRect.current.y); }; img.src = snapshot; }
+    }
+    setHasAnnotation(true);
+  };
+  const end = () => { drawing.current = false; };
+  const submit = () => { const canvas = canvasRef.current; if (!canvas) return; props.onConfirm(canvas.toDataURL('image/png')); };
+  const clear = () => { const canvas = canvasRef.current; canvas?.getContext('2d')?.clearRect(0, 0, canvas.width, canvas.height); setHasAnnotation(false); };
+
+  return <Modal {...modalProps(props, 900)} title="标注涂鸦">
+    <div className="workflow-image-tool__grid" data-workflow-overlay>
+      <div className="workflow-image-tool__mask">
+        <img src={props.mediaUrl} alt="标注" onLoad={event => { const canvas = canvasRef.current; if (!canvas) return; canvas.width = event.currentTarget.naturalWidth || 1024; canvas.height = event.currentTarget.naturalHeight || 768; }} />
+        <canvas ref={canvasRef} width={1024} height={768} onPointerDown={begin} onPointerMove={move} onPointerUp={end} />
+      </div>
+      <div className="workflow-image-tool__controls">
+        <label>工具<Segmented block value={tool} options={[{ label: '画笔', value: 'brush' }, { label: '框选', value: 'rect' }]} onChange={v => setTool(v as typeof tool)} /></label>
+        <label>颜色<ColorPicker value={color} onChange={c => setColor(c.toHexString())} /></label>
+        <label>粗细<Slider min={2} max={40} value={size} onChange={setSize} /></label>
+        <Button onClick={clear}>清空标注</Button>
+        <DialogError error={props.error} />
+        <Button type="primary" loading={props.busy} disabled={!hasAnnotation} onClick={submit}>发送给 AI</Button>
+      </div>
+    </div>
+  </Modal>;
+}
+
+function RelightDialog(props: CommonProps & { onConfirm: (preset: string, intensity: number, color: string, smart: boolean) => void }) {
+  const [presetId, setPresetId] = useState('rembrandt');
+  const [intensity, setIntensity] = useState(5);
+  const [color, setColor] = useState('#ffffff');
+  const [smart, setSmart] = useState(true);
+  const preset = LIGHTING_PRESETS.find(p => p.id === presetId)!;
+  return <Modal {...modalProps(props, 720)} title="打光面板">
+    <div className="workflow-image-tool__grid" data-workflow-overlay>
+      <div className="workflow-image-tool__preview"><img src={props.mediaUrl} alt="打光预览" style={{ filter: `brightness(${1 + intensity * 0.05}) sepia(${color !== '#ffffff' ? 0.1 : 0})` }} /></div>
+      <div className="workflow-image-tool__controls workflow-relight-controls">
+        <div className="workflow-relight-presets">
+          {(['main', 'rim'] as const).map(group => (
+            <div key={group} className="workflow-relight-group">
+              <span className="workflow-relight-group-label">{group === 'main' ? '主光' : '轮廓光'}</span>
+              <div className="workflow-relight-buttons">
+                {LIGHTING_PRESETS.filter(p => p.type === group).map(p => (
+                  <button key={p.id} className={`workflow-relight-btn ${presetId === p.id ? 'active' : ''}`} onClick={() => setPresetId(p.id)} title={p.description}>{p.name}</button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+        <label>强度<Slider min={1} max={10} value={intensity} onChange={setIntensity} /></label>
+        <label>色温<ColorPicker value={color} onChange={c => setColor(c.toHexString())} /></label>
+        <label className="workflow-relight-smart"><input type="checkbox" checked={smart} onChange={e => setSmart(e.target.checked)} />智能分析场景后再打光</label>
+        <p className="workflow-image-tool__hint">当前: {preset.name} · {preset.description}</p>
+        <DialogError error={props.error} />
+        <Button type="primary" loading={props.busy} onClick={() => props.onConfirm(presetId, intensity, color, smart)}>开始打光</Button>
+      </div>
+    </div>
+  </Modal>;
+}
+
+function StoryboardDialog(props: CommonProps & { onConfirm: (cols: number, showIndex: boolean) => void }) {
+  const [cols, setCols] = useState(3);
+  const [showIndex, setShowIndex] = useState(true);
+  return <Modal {...modalProps(props, 620)} title="分镜组拼接">
+    <div className="workflow-image-tool__simple" data-workflow-overlay>
+      <div className="workflow-image-tool__preview"><img src={props.mediaUrl} alt="分镜预览" /></div>
+      <div className="workflow-image-tool__controls">
+        <label>每行列数<Segmented block value={cols} options={[2, 3, 4, 5].map(n => ({ label: `${n} 列`, value: n }))} onChange={v => setCols(Number(v))} /></label>
+        <label className="workflow-relight-smart"><input type="checkbox" checked={showIndex} onChange={e => setShowIndex(e.target.checked)} />显示镜头编号</label>
+        <p className="workflow-image-tool__hint">将选中节点按时间线拼接为分镜组图片节点。</p>
+        <DialogError error={props.error} />
+        <Button type="primary" loading={props.busy} onClick={() => props.onConfirm(cols, showIndex)}>生成分镜组</Button>
+      </div>
+    </div>
+  </Modal>;
 }

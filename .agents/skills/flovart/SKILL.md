@@ -1,6 +1,19 @@
 ---
 name: flovart
 description: Flovart official agent skill. Use when operating Flovart canvas, media, workflow, providers, models, assets, or project state through the deterministic Flovart CLI. External agents plan; Flovart CLI executes explicit commands. Do not invent HTTP calls, scrape the UI, or expose API keys.
+metadata:
+  openclaw:
+    category: creative
+    tags:
+      - canvas
+      - image-generation
+      - video-generation
+      - workflow
+      - mcp
+      - agent
+    entrypoints:
+      - cli
+      - mcp
 ---
 
 # Flovart CLI Skill
@@ -29,6 +42,43 @@ npm run flovart:cli -- flovart_element_assign_slot --element-id <id> --target-el
 npm run flovart:cli -- flovart_element_ignite --element-id <id> --wait --json
 npm run flovart:cli -- flovart_generate_video --prompt "..." --source-image-ids img1,img2 --source-video-ids vid1 --json
 ```
+
+## MCP Server
+
+Flovart also ships an MCP server that exposes all CLI commands as MCP tools via stdio. This is the recommended integration for Claude Code, Codex CLI, and OpenClaw agents that support the Model Context Protocol.
+
+### Start the MCP server
+
+```bash
+npm run flovart:mcp
+```
+
+Or directly:
+
+```bash
+node tools/flovart/mcp-server.js
+```
+
+### Claude Code configuration
+
+Add to `.mcp.json` in the project root:
+
+```json
+{
+  "mcpServers": {
+    "flovart": {
+      "command": "node",
+      "args": ["tools/flovart/mcp-server.js"]
+    }
+  }
+}
+```
+
+All 50+ CLI commands are automatically registered as MCP tools. Tool names use underscores (e.g., `canvas_inspect`, `element_create`, `generate_image`). Browser commands (generate.*, element.ignite, workflow.node.run/stop) accept optional `wait` (default true) and `timeoutMs` (default 60000) parameters.
+
+### Codex CLI / OpenClaw
+
+Codex and OpenClaw can spawn `flovart-mcp` as a subprocess via the MCP stdio protocol. The server auto-registers all tools from the CLI command registry.
 
 ## Non-Negotiable Rules
 

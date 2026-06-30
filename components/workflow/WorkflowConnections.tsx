@@ -1,4 +1,5 @@
 import type { MouseEvent as ReactMouseEvent } from 'react';
+import { motion } from 'motion/react';
 import type { WorkflowConnection, WorkflowNode, WorkflowPoint } from './types';
 
 function connectionPath(from: WorkflowNode, to: WorkflowNode): string {
@@ -59,7 +60,19 @@ export function WorkflowConnections({
               }}
               onContextMenu={event => { event.preventDefault(); event.stopPropagation(); onContextMenu(event, connection.id); }}
             />
-            <path d={path} fill="none" className={selectedId === connection.id ? 'workflow-connection is-selected' : 'workflow-connection'} />
+            <motion.path
+              d={path}
+              fill="none"
+              className={selectedId === connection.id ? 'workflow-connection is-selected' : 'workflow-connection'}
+              initial={{ pathLength: 0, opacity: 0 }}
+              animate={{ pathLength: 1, opacity: 1 }}
+              transition={{ pathLength: { type: 'spring', stiffness: 120, damping: 18, mass: 1 }, opacity: { duration: 0.2 } }}
+            />
+            {selectedId === connection.id && (
+              <circle r="3.5" pointerEvents="none" style={{ fill: 'var(--wf-accent)' }}>
+                <animateMotion dur="1.8s" repeatCount="indefinite" path={path} />
+              </circle>
+            )}
           </g>
         );
       })}

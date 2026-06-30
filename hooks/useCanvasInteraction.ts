@@ -18,28 +18,15 @@ export interface UseCanvasInteractionParams {
     // Selection
     selectedElementIds: string[];
     setSelectedElementIds: React.Dispatch<React.SetStateAction<string[]>>;
-    // Editing
-    editingElement: { id: string; text: string } | null;
-    setEditingElement: React.Dispatch<React.SetStateAction<{ id: string; text: string } | null>>;
-    // Cropping
-    croppingState: { elementId: string; originalElement: ImageElement; cropBox: Rect } | null;
-    setCroppingState: React.Dispatch<React.SetStateAction<{ elementId: string; originalElement: ImageElement; cropBox: Rect } | null>>;
-    // Inpaint
-    setInpaintState: React.Dispatch<React.SetStateAction<{ targetImageId: string; maskPoints: Point[]; promptVisible: boolean } | null>>;
-    setInpaintPrompt: React.Dispatch<React.SetStateAction<string>>;
-    // Mask
-    maskEditingId: string | null;
-    paintMask: (x: number, y: number) => void;
     // Context menu
-    contextMenu: { x: number; y: number; elementId: string | null } | null;
-    setContextMenu: React.Dispatch<React.SetStateAction<{ x: number; y: number; elementId: string | null } | null>>;
+    contextMenu?: { x: number; y: number; elementId: string | null } | null;
+    setContextMenu?: React.Dispatch<React.SetStateAction<{ x: number; y: number; elementId: string | null } | null>>;
     // Board management
     updateActiveBoard: (updater: (board: Board) => Board) => void;
     setElements: (updater: (prev: Element[]) => Element[], commit?: boolean) => void;
     commitAction: (updater: (prev: Element[]) => Element[]) => void;
     // Helpers
     getDescendants: (id: string, els: Element[]) => Element[];
-    onElementDoubleClick?: (element: Element) => void;
     onTripleClickEmpty?: () => void;
 }
 
@@ -48,14 +35,9 @@ export function useCanvasInteraction(params: UseCanvasInteractionParams) {
         elements, zoom, panOffset,
         activeTool, setActiveTool, drawingOptions, wheelAction,
         selectedElementIds, setSelectedElementIds,
-        editingElement, setEditingElement,
-        croppingState, setCroppingState,
-        setInpaintState, setInpaintPrompt,
-        maskEditingId, paintMask,
         contextMenu, setContextMenu,
         updateActiveBoard, setElements, commitAction,
         getDescendants,
-        onElementDoubleClick,
         onTripleClickEmpty,
     } = params;
 
@@ -77,7 +59,6 @@ export function useCanvasInteraction(params: UseCanvasInteractionParams) {
     const lastDragOffsets = useRef<Map<string, { dx: number; dy: number }>>(new Map());
     const elementsRef = useRef(elements);
     const svgRef = useRef<SVGSVGElement>(null);
-    const editingTextareaRef = useRef<HTMLTextAreaElement>(null);
     const previousToolRef = useRef<Tool>('select');
     const spacebarDownTime = useRef<number | null>(null);
     elementsRef.current = elements;
@@ -143,16 +124,7 @@ export function useCanvasInteraction(params: UseCanvasInteractionParams) {
 
     // --- Mouse handlers ---
     const handleMouseDown = (e: React.MouseEvent<SVGSVGElement>) => {
-        // Layer mask painting intercept
-        if (maskEditingId && e.button === 0) {
-            const pt = getCanvasPoint(e.clientX, e.clientY);
-            paintMask(pt.x, pt.y);
-            interactionMode.current = 'mask-paint' as any;
-            e.preventDefault();
-            return;
-        }
-        if (editingElement) return;
-        if (contextMenu) setContextMenu(null);
+        if (contextMenu) setContextMenu?.(null);
 
         if (e.button === 1) { // Middle mouse button for panning
             interactionMode.current = 'pan';
@@ -171,13 +143,6 @@ export function useCanvasInteraction(params: UseCanvasInteractionParams) {
         const target = e.target as SVGElement;
         const handleName = target.getAttribute('data-handle');
 
-        if (croppingState) {
-             if (handleName) {
-                 interactionMode.current = `crop-${handleName}`;
-                 cropStartInfo.current = { originalCropBox: { ...croppingState.cropBox }, startCanvasPoint: canvasStartPoint };
-             }
-             return;
-        }
          if (activeTool === 'text') {
             const newText: TextElement = {
                 id: generateId(), type: 'text', name: 'Text',
@@ -187,7 +152,6 @@ export function useCanvasInteraction(params: UseCanvasInteractionParams) {
             };
             setElements(prev => [...prev, newText]);
             setSelectedElementIds([newText.id]);
-            setEditingElement({ id: newText.id, text: newText.text });
             setActiveTool('select');
             return;
         }
@@ -269,17 +233,6 @@ export function useCanvasInteraction(params: UseCanvasInteractionParams) {
             const selectableElementId = selectableElement?.id;
 
             if (selectableElementId) {
-                if (e.detail === 2) {
-                    const doubleClickedElement = elements.find(el => el.id === selectableElementId);
-                    if (doubleClickedElement?.type === 'text') {
-                         setEditingElement({ id: doubleClickedElement.id, text: doubleClickedElement.text });
-                         return;
-                    }
-                    if (doubleClickedElement) {
-                        onElementDoubleClick?.(doubleClickedElement);
-                        return;
-                    }
-                }
                 if (!e.shiftKey && !selectedElementIds.includes(selectableElementId)) {
                      setSelectedElementIds([selectableElementId]);
                 } else if (e.shiftKey) {
@@ -337,12 +290,6 @@ export function useCanvasInteraction(params: UseCanvasInteractionParams) {
     };
 
     const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
-        // Layer mask painting intercept
-        if (interactionMode.current === ('mask-paint' as any)) {
-            const pt = getCanvasPoint(e.clientX, e.clientY);
-            paintMask(pt.x, pt.y);
-            return;
-        }
         if (!interactionMode.current) return;
         const point = getCanvasPoint(e.clientX, e.clientY);
         const startCanvasPoint = getCanvasPoint(startPoint.current.x, startPoint.current.y);
@@ -400,48 +347,6 @@ export function useCanvasInteraction(params: UseCanvasInteractionParams) {
             setElements(prev => prev.map(el =>
                 el.id === originalElement.id ? { ...el, x, y, width, height } : el
             ), false);
-            return;
-        }
-
-        if (interactionMode.current.startsWith('crop-')) {
-            if (!croppingState || !cropStartInfo.current) return;
-            const handle = interactionMode.current.split('-')[1];
-            const { originalCropBox, startCanvasPoint: cropStartPoint } = cropStartInfo.current;
-            let { x, y, width, height } = { ...originalCropBox };
-            const { originalElement } = croppingState;
-            const dx = point.x - cropStartPoint.x;
-            const dy = point.y - cropStartPoint.y;
-
-            if (handle.includes('r')) { width = originalCropBox.width + dx; }
-            if (handle.includes('l')) { width = originalCropBox.width - dx; x = originalCropBox.x + dx; }
-            if (handle.includes('b')) { height = originalCropBox.height + dy; }
-            if (handle.includes('t')) { height = originalCropBox.height - dy; y = originalCropBox.y + dy; }
-            
-            if (x < originalElement.x) {
-                width += x - originalElement.x;
-                x = originalElement.x;
-            }
-            if (y < originalElement.y) {
-                height += y - originalElement.y;
-                y = originalElement.y;
-            }
-            if (x + width > originalElement.x + originalElement.width) {
-                width = originalElement.x + originalElement.width - x;
-            }
-            if (y + height > originalElement.y + originalElement.height) {
-                height = originalElement.y + originalElement.height - y;
-            }
-
-            if (width < 1) {
-                width = 1;
-                if (handle.includes('l')) { x = originalCropBox.x + originalCropBox.width - 1; }
-            }
-            if (height < 1) {
-                height = 1;
-                if (handle.includes('t')) { y = originalCropBox.y + originalCropBox.height - 1; }
-            }
-
-            setCroppingState(prev => prev ? { ...prev, cropBox: { x, y, width, height } } : null);
             return;
         }
 
@@ -655,11 +560,6 @@ export function useCanvasInteraction(params: UseCanvasInteractionParams) {
     };
     
     const handleMouseUp = () => {
-        // Layer mask painting intercept
-        if (interactionMode.current === ('mask-paint' as any)) {
-            interactionMode.current = null;
-            return;
-        }
         if (interactionMode.current) {
             if (interactionMode.current === 'selectBox' && selectionBox) {
                 const selectedIds: string[] = [];
@@ -676,33 +576,6 @@ export function useCanvasInteraction(params: UseCanvasInteractionParams) {
                 });
                 setSelectedElementIds([...new Set(selectedIds)]);
             } else if (interactionMode.current === 'lasso' && lassoPath && lassoPath.length > 2) {
-                // Check if lasso is drawn ON TOP of a single selected image → trigger inpaint mode
-                const singleImg = selectedElementIds.length === 1
-                    ? elements.find(el => el.id === selectedElementIds[0] && el.type === 'image') as ImageElement | undefined
-                    : undefined;
-                if (singleImg) {
-                    const imgBounds = getElementBounds(singleImg, elements);
-                    const lassoCenter: Point = {
-                        x: lassoPath.reduce((s, p) => s + p.x, 0) / lassoPath.length,
-                        y: lassoPath.reduce((s, p) => s + p.y, 0) / lassoPath.length,
-                    };
-                    const isOnImage = lassoCenter.x >= imgBounds.x && lassoCenter.x <= imgBounds.x + imgBounds.width
-                        && lassoCenter.y >= imgBounds.y && lassoCenter.y <= imgBounds.y + imgBounds.height;
-                    if (isOnImage) {
-                        // Enter inpaint mode
-                        setInpaintState({ targetImageId: singleImg.id, maskPoints: [...lassoPath], promptVisible: true });
-                        setInpaintPrompt('');
-                        setLassoPath(null);
-                        interactionMode.current = null;
-                        currentDrawingElementId.current = null;
-                        setSelectionBox(null);
-                        resizeStartInfo.current = null;
-                        cropStartInfo.current = null;
-                        setAlignmentGuides([]);
-                        dragStartElementPositions.current.clear();
-                        return; // early exit — don't clear selection
-                    }
-                }
                 // Normal lasso selection
                 const selectedIds = elements.filter(el => {
                     const bounds = getElementBounds(el, elements);
@@ -777,7 +650,6 @@ export function useCanvasInteraction(params: UseCanvasInteractionParams) {
     };
 
     const handleWheel = (e: WheelEvent | React.WheelEvent<SVGSVGElement>) => {
-        if (croppingState || editingElement) { e.preventDefault(); return; }
         e.preventDefault();
         const { clientX, clientY, deltaX, deltaY, ctrlKey } = e;
 
@@ -808,7 +680,6 @@ export function useCanvasInteraction(params: UseCanvasInteractionParams) {
         handleMouseMove,
         handleMouseUp,
         handleWheel,
-        getCanvasPoint,
         getSelectableElement,
         // Interaction-only state
         selectionBox,
@@ -818,8 +689,6 @@ export function useCanvasInteraction(params: UseCanvasInteractionParams) {
         dragTick,
         lastDragOffsets,
         // Refs needed by parent
-        svgRef,
-        editingTextareaRef,
         elementsRef,
         interactionMode,
         previousToolRef,

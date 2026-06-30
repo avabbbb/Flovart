@@ -1,0 +1,156 @@
+- generic [ref=f6e3]:
+  - banner [ref=f6e5]:
+    - generic [ref=f6e6]:
+      - generic "Flovart" [ref=f6e7]:
+        - generic [ref=f6e8]: Flovart
+      - strong [ref=f6e10]: 未命名工作流
+    - navigation "Workspace switcher" [ref=f6e11]:
+      - button "Canvas" [ref=f6e12] [cursor=pointer]
+      - button "Workflow" [ref=f6e13] [cursor=pointer]
+    - generic [ref=f6e14]:
+      - link "Enterprise console" [ref=f6e15] [cursor=pointer]:
+        - /url: "#/enterprise"
+        - img [ref=f6e16]
+      - 'button "API 0/3: 未配置文本模型 API Key — 提示词润色、AI 对话功能不可用 未配置图片模型 API Key — AI 绘图、图片编辑功能不可用 未配置视频模型 API Key — AI 视频生成功能不可用 尚未配置任何 API Key — 所有 AI 功能不可用，请先在设置中添加" [ref=f6e20] [cursor=pointer]':
+        - img [ref=f6e21]
+        - generic [ref=f6e23]: API 0/3
+      - button "切换到中文" [ref=f6e24] [cursor=pointer]:
+        - img [ref=f6e25]
+        - generic [ref=f6e29]: 切换到中文
+      - button "Dark mode" [ref=f6e30] [cursor=pointer]:
+        - img [ref=f6e31]
+      - button "Settings" [ref=f6e33] [cursor=pointer]:
+        - img [ref=f6e34]
+  - generic [ref=f6e42]:
+    - button "打开项目与图层":
+      - img
+    - complementary [ref=f6e43]:
+      - generic [ref=f6e44]:
+        - strong [ref=f6e45]: 项目与图层
+        - button "收起左侧面板" [ref=f6e46] [cursor=pointer]:
+          - img [ref=f6e47]
+      - complementary [ref=f6e51]:
+        - generic [ref=f6e52]:
+          - generic [ref=f6e53]:
+            - img [ref=f6e54]
+            - strong [ref=f6e58]: Workflow
+          - generic [ref=f6e59]:
+            - button "导入工作流" [ref=f6e60] [cursor=pointer]:
+              - img [ref=f6e61]
+            - button "导出全部工作流" [ref=f6e64] [cursor=pointer]:
+              - img [ref=f6e65]
+            - button "新建工作流" [ref=f6e68] [cursor=pointer]:
+              - img [ref=f6e69]
+        - generic [ref=f6e71]:
+          - button "未命名工作流" [ref=f6e72] [cursor=pointer]
+          - button "重命名 未命名工作流" [ref=f6e73] [cursor=pointer]:
+            - img [ref=f6e74]
+          - button "删除 未命名工作流" [ref=f6e77] [cursor=pointer]:
+            - img [ref=f6e78]
+      - generic [ref=f6e81]:
+        - generic [ref=f6e82]:
+          - generic [ref=f6e83]: Layers
+          - generic [ref=f6e84]: "0"
+        - paragraph [ref=f6e86]: 双击画布或从底部工具栏添加节点
+    - main [ref=f6e87]:
+      - generic [ref=f6e88]:
+        - toolbar "工作流工具栏" [ref=f6e89]:
+          - button "选择工具" [ref=f6e90] [cursor=pointer]:
+            - img [ref=f6e91]
+          - button "平移工具" [ref=f6e97] [cursor=pointer]:
+            - img [ref=f6e98]
+          - button "添加文本节点" [ref=f6e104] [cursor=pointer]:
+            - img [ref=f6e105]
+          - button "添加脚本节点" [ref=f6e107] [cursor=pointer]:
+            - img [ref=f6e108]
+          - button "添加配置节点" [ref=f6e111] [cursor=pointer]:
+            - img [ref=f6e112]
+          - button "打开共享素材" [ref=f6e115] [cursor=pointer]:
+            - img [ref=f6e116]
+          - button "撤销" [disabled] [ref=f6e119]:
+            - img [ref=f6e120]
+          - button "重做" [disabled] [ref=f6e123]:
+            - img [ref=f6e124]
+          - button "适应视图" [ref=f6e127] [cursor=pointer]:
+            - img [ref=f6e128]
+          - button "切换网格" [ref=f6e134] [cursor=pointer]:
+            - img [ref=f6e135]
+          - button "滚轮：平移（点击切换为缩放）" [ref=f6e137] [cursor=pointer]:
+            - img [ref=f6e138]
+          - button "打开 Agent" [ref=f6e141] [cursor=pointer]:
+            - img [ref=f6e142]
+        - generic [ref=f6e145]:
+          - group "工作流连接"
+        - generic [ref=f6e146]: 100%
+        - menu "新建节点" [ref=f6e199]:
+          - generic [ref=f6e200]:
+            - generic [ref=f6e201]: 新建节点
+            - button "关闭新建节点" [ref=f6e202] [cursor=pointer]:
+              - img [ref=f6e203]
+          - generic [ref=f6e206]:
+            - menuitem "文本生成 脚本、文案和提示词" [active] [ref=f6e207] [cursor=pointer]:
+              - img [ref=f6e209]
+              - generic [ref=f6e211]: 文本生成
+              - generic [ref=f6e212]: 脚本、文案和提示词
+            - menuitem "图片生成 创建图片生成节点" [ref=f6e213] [cursor=pointer]:
+              - img [ref=f6e215]
+              - generic [ref=f6e219]: 图片生成
+              - generic [ref=f6e220]: 创建图片生成节点
+            - menuitem "视频生成 创建视频生成节点" [ref=f6e221] [cursor=pointer]:
+              - img [ref=f6e223]
+              - generic [ref=f6e226]: 视频生成
+              - generic [ref=f6e227]: 创建视频生成节点
+            - menuitem "音频参考 添加音频参考输入" [ref=f6e228] [cursor=pointer]:
+              - img [ref=f6e230]
+              - generic [ref=f6e233]: 音频参考
+              - generic [ref=f6e234]: 添加音频参考输入
+            - menuitem "配置节点 模型、尺寸和生成参数" [ref=f6e235] [cursor=pointer]:
+              - img [ref=f6e237]
+              - generic [ref=f6e240]: 配置节点
+              - generic [ref=f6e241]: 模型、尺寸和生成参数
+            - menuitem "脚本节点 剧本拆解、分镜编排和批量生成" [ref=f6e242] [cursor=pointer]:
+              - img [ref=f6e244]
+              - generic [ref=f6e247]: 脚本节点
+              - generic [ref=f6e248]: 剧本拆解、分镜编排和批量生成
+    - button "打开右侧面板":
+      - img
+    - complementary [ref=f6e147]:
+      - separator [ref=f6e148]
+      - generic [ref=f6e149]:
+        - generic [ref=f6e150]:
+          - button "Agent" [ref=f6e151] [cursor=pointer]
+          - button "History" [ref=f6e152] [cursor=pointer]
+          - button "Assets" [ref=f6e153] [cursor=pointer]
+        - button "收起右侧面板" [ref=f6e154] [cursor=pointer]:
+          - img [ref=f6e155]
+      - complementary [ref=f6e159]:
+        - generic [ref=f6e160]:
+          - generic [ref=f6e161]:
+            - button "网站" [ref=f6e162] [cursor=pointer]
+            - button "本机" [ref=f6e163] [cursor=pointer]
+          - generic [ref=f6e164]:
+            - img [ref=f6e165]
+            - text: 已连接
+          - button "新对话" [ref=f6e167] [cursor=pointer]:
+            - img [ref=f6e168]
+        - navigation [ref=f6e169]:
+          - button "连接" [ref=f6e170] [cursor=pointer]:
+            - img [ref=f6e171]
+            - text: 连接
+          - button "对话" [ref=f6e174] [cursor=pointer]:
+            - img [ref=f6e175]
+            - text: 对话
+          - button "历史" [ref=f6e177] [cursor=pointer]:
+            - img [ref=f6e178]
+            - text: 历史
+          - button "日志" [ref=f6e182] [cursor=pointer]:
+            - img [ref=f6e183]
+            - text: 日志
+        - generic [ref=f6e186]:
+          - generic [ref=f6e187]: 描述你希望 Agent 对当前 Workflow 做什么。
+          - generic [ref=f6e188]:
+            - button "添加图片" [ref=f6e189] [cursor=pointer]:
+              - img [ref=f6e190]
+            - textbox "让 Agent 读取并修改当前 Workflow" [ref=f6e194]
+            - button [ref=f6e195] [cursor=pointer]:
+              - img [ref=f6e196]

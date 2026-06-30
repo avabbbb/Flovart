@@ -38,17 +38,23 @@ export function sanitizeMediaFileStem(value: string | undefined, fallback: strin
   return safe || fallback;
 }
 
-export function prepareOrderedMediaFiles(sources: PositionedMediaSource[]): OrderedMediaFile[] {
+export function prepareOrderedMediaFiles(sources: PositionedMediaSource[], projectName?: string): OrderedMediaFile[] {
   const ordered = [...sources].sort((a, b) => a.y - b.y || a.x - b.x || a.id.localeCompare(b.id, 'zh-CN'));
   const digits = Math.max(3, String(ordered.length).length);
-  return ordered.map((source, index) => ({
-    ...source,
-    fileName: `${String(index + 1).padStart(digits, '0')}_${sanitizeMediaFileStem(source.name, '媒体')}.${extensionFor(source.mimeType)}`,
-  }));
+  const safeProject = projectName ? sanitizeMediaFileStem(projectName, 'Flovart') : undefined;
+  return ordered.map((source, index) => {
+    const ext = extensionFor(source.mimeType);
+    const safeName = sanitizeMediaFileStem(source.name, '媒体');
+    const seq = String(index + 1).padStart(digits, '0');
+    const fileName = safeProject
+      ? `${safeProject}_${safeName}_${seq}.${ext}`
+      : `${seq}_${safeName}.${ext}`;
+    return { ...source, fileName };
+  });
 }
 
-export async function exportMediaArchive(sources: PositionedMediaSource[], archiveName: string) {
-  const files = prepareOrderedMediaFiles(sources);
+export async function exportMediaArchive(sources: PositionedMediaSource[], archiveName: string, projectName?: string) {
+  const files = prepareOrderedMediaFiles(sources, projectName);
   if (!files.length) throw new Error('所选内容中没有可导出的图片、视频或音频。');
 
   const writer = new ZipWriter(new BlobWriter('application/zip'));

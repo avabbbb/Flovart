@@ -1,5 +1,6 @@
-import { Image as ImageIcon, Music2, Upload, Video, X } from 'lucide-react';
+import { ChevronsDown, Clapperboard, FileText, Image as ImageIcon, Music2, Upload, Video, X } from 'lucide-react';
 import { useRef, type PointerEvent as ReactPointerEvent } from 'react';
+import { motion } from 'motion/react';
 import { WorkflowConfigPanel } from './WorkflowConfigPanel';
 import { buildCssFilter } from '../ImageFilterPanel';
 import { useWorkflowMediaUrl } from './media';
@@ -17,6 +18,8 @@ export function WorkflowNode({
   onContextMenu,
   onReplaceMedia,
   onRemoveMedia,
+  onCollapseBatch,
+  onDoubleClick,
 }: {
   node: WorkflowNodeData;
   selected: boolean;
@@ -29,6 +32,8 @@ export function WorkflowNode({
   onContextMenu: (event: React.MouseEvent<HTMLDivElement>) => void;
   onReplaceMedia: (file: File) => void;
   onRemoveMedia: () => void;
+  onCollapseBatch?: () => void;
+  onDoubleClick?: () => void;
 }) {
   const status = node.metadata.status || 'idle';
   const progress = Math.max(0, Math.min(100, Math.round(node.metadata.progress || 0)));
@@ -52,16 +57,37 @@ export function WorkflowNode({
     </div>
   );
   return (
-    <div
+    <motion.div
       data-workflow-node-id={node.id}
       className={`workflow-node workflow-node--${node.type}${selected ? ' is-selected' : ''}`}
-      style={{ transform: `translate(${node.position.x}px, ${node.position.y}px)`, width: node.width, height: node.height }}
+      style={{ x: node.position.x, y: node.position.y, width: node.width, height: node.height }}
+      initial={{ scale: 0.85, opacity: 0 }}
+      animate={{ scale: status === 'loading' ? [1, 1.015, 1] : 1, opacity: 1 }}
+      exit={{ scale: 0.85, opacity: 0 }}
+      whileHover={status === 'loading' ? undefined : { scale: 1.02 }}
+      transition={{
+        scale: status === 'loading'
+          ? { duration: 1.8, repeat: Infinity, ease: 'easeInOut' }
+          : { type: 'spring', stiffness: 420, damping: 20, mass: 0.7 },
+        opacity: { duration: 0.2 },
+        default: { type: 'spring', stiffness: 400, damping: 22 },
+      }}
       onPointerDown={onPointerDown}
+      onDoubleClick={event => { if (node.type === 'script') { event.stopPropagation(); onDoubleClick?.(); } }}
       onContextMenu={event => { event.preventDefault(); event.stopPropagation(); onContextMenu(event); }}
     >
       <button className="workflow-handle workflow-handle--target" aria-label="连接到此节点" data-workflow-target={node.id} />
       <button className="workflow-handle workflow-handle--source" aria-label="从此节点连接" onPointerDown={onConnectStart} />
       {status === 'error' && <span className="workflow-node__error-badge" title={node.metadata.error}>!</span>}
+      {onCollapseBatch && (
+        <button
+          type="button"
+          className="workflow-node__batch-collapse"
+          title="折叠批次"
+          onPointerDown={event => { event.stopPropagation(); }}
+          onClick={event => { event.stopPropagation(); onCollapseBatch(); }}
+        ><ChevronsDown size={14} /></button>
+      )}
       <div className="workflow-node__body">
         {node.type === 'image' && (media.url
           ? <><img src={media.url} alt={node.title} draggable={false} style={{ filter: buildCssFilter(node.metadata.filters) }} />{mediaActions}</>
@@ -83,14 +109,29 @@ export function WorkflowNode({
         {node.type === 'config' && (
           <WorkflowConfigPanel node={node} onChange={onChangeMetadata} onRun={onRun} />
         )}
+        {node.type === 'script' && <ScriptNodeCard node={node} />}
         {mediaDetails && <span className="workflow-node__media-details">{mediaDetails}</span>}
-        {status === 'loading' && <div className="flv-generation-glass workflow-node__generation-glass" data-testid="workflow-generation-glass">
-          <span className="flv-generation-glass__status">{generationLabel}<b>{progress}%</b></span>
-        </div>}
+        {status === 'loading' && (
+          <motion.div
+            className="flv-generation-glass workflow-node__generation-glass"
+            data-testid="workflow-generation-glass"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: [0.82, 1, 0.82] }}
+            transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
+          >
+            <motion.div
+              className="workflow-node__shimmer"
+              initial={{ x: '-120%' }}
+              animate={{ x: '120%' }}
+              transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut', repeatDelay: 0.5 }}
+            />
+            <span className="flv-generation-glass__status">{generationLabel}<b>{progress}%</b></span>
+          </motion.div>
+        )}
         {status === 'error' && node.metadata.error && <div className="workflow-node__generation-error" title={node.metadata.error}>{node.metadata.error}</div>}
       </div>
       <button className="workflow-resize" aria-label="调整节点大小" onPointerDown={onResizeStart} />
-    </div>
+    </motion.div>
   );
 }
 
@@ -102,4 +143,38 @@ function formatDuration(durationMs: number) {
 function formatBytes(bytes: number) {
   if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function ScriptNodeCard({ node }: { node: WorkflowNodeData }) {
+  const breakdown = node.metadata.scriptBreakdown;
+  const shotCount = breakdown?.shots?.length || 0;
+  const assetCount = breakdown?.assets?.length || 0;
+  const completedShots = breakdown?.shots?.filter(shot => shot.status === 'success').length || 0;
+  return (
+    <div className="workflow-node__script-card">
+      <div className="workflow-node__script-header">
+        <Clapperboard size={20} />
+        <span>{breakdown?.sourceText ? '剧本分镜' : '空脚本'}</span>
+      </div>
+      {shotCount > 0 ? (
+        <div className="workflow-node__script-stats">
+          <span>{assetCount} 资产</span>
+          <span>{shotCount} 分镜</span>
+          <span>{completedShots}/{shotCount} 完成</span>
+        </div>
+      ) : (
+        <div className="workflow-node__script-empty">
+          <FileText size={22} />
+          <span>双击打开编辑器拆解剧本</span>
+        </div>
+      )}
+      {breakdown?.shots?.slice(0, 4).map(shot => (
+        <div key={shot.id} className="workflow-node__script-shot-row">
+          <span className="workflow-node__script-shot-index">#{shot.index + 1}</span>
+          <span className="workflow-node__script-shot-desc">{shot.dialogue || shot.action || shot.promptOverride || '未描述'}</span>
+        </div>
+      ))}
+      {shotCount > 4 && <div className="workflow-node__script-more">+{shotCount - 4} 更多分镜</div>}
+    </div>
+  );
 }

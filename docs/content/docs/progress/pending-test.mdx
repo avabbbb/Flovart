@@ -32,11 +32,25 @@ title: 待测试确认
 - 图片节点提供裁剪、滤镜、高清放大、移除背景、扩图、蒙版修改和图层拆分；并发工具使用单事务，撤销历史不会串到其他节点。
 - 音频媒体节点可上传、播放、引用和编辑音色/格式/语速等配置；音频生成仍明确标记为 Provider 未支持。
 
+## Workflow 节点动效
+
+- Workflow 节点入场/退场使用 Framer Motion spring 物理（scale 0.85→1，stiffness 380 damping 24），悬停时轻微放大 1.02；生成中状态启用呼吸动效（scale `[1, 1.015, 1]` 1.8s 循环）、脉冲遮罩和扫光条（`.workflow-node__shimmer`，Framer Motion `animate.x` -120%→120% 1.6s 循环）。
+- 生成中节点禁用 `whileHover` 避免与呼吸动效冲突；选中态边框/阴影用 `cubic-bezier(.34,1.56,.64,1)` overshoot 过渡。
+- Workflow 连线使用 `motion.path` + `pathLength` spring 入场（stiffness 120 damping 18）；选中连线添加 SVG 原生 `<animateMotion>` 数据流粒子和 CSS `@keyframes workflow-connection-flow` dash 流动。
+- AGENTS.md 已更新：Canvas 保留生成中动画禁令，Workflow 放开限制允许弹性呼吸/脉冲/扫光等动效，动效统一使用 Framer Motion spring 物理，不手写 CSS keyframes 模拟弹性。
+
 ## 生成状态与批量导出
 
-- Canvas 与 Workflow 的生成中节点复用同一套静态毛玻璃占位：蓝灰至紫色半透明渐变、轻磨砂噪点、青绿色细描边和左上角进度标签；已移除横向扫光动画。
+- Canvas 生成中节点复用静态毛玻璃占位：蓝灰至紫色半透明渐变、轻磨砂噪点、青绿色细描边和左上角进度标签；Canvas 保留横向扫光动画禁令。
 - Canvas 节点生成新增独立请求控制器、停止按钮、图片三分钟超时、视频十一分钟超时、旧请求结果隔离和可见错误信息；图片请求的取消信号会继续传入当前 Provider 与 Gemini SDK。
-- Canvas 与 Workflow 可框选多个节点后批量导出媒体 ZIP；文件按画布纵坐标、横坐标排序，以 `001_名称.ext` 形式编号，并保留可读中文、清理非法文件名字符。
+- Canvas 与 Workflow 可框选多个节点后批量导出媒体 ZIP；文件按画布纵坐标、横坐标排序，保留可读中文、清理非法文件名字符。
+
+## Workflow 批量结果堆叠与导出
+
+- 批量生成（count > 1）的结果节点自动分配同一 `batchId` 和 `batchIndex`；折叠态下同批次节点全部隐藏，显示堆叠卡片（两层背景偏移 + 头图预览 + 数量徽章），点击展开/折叠。
+- 堆叠卡片使用 Framer Motion spring 入场/退场，`whileHover` 轻微放大；展开时各节点通过 `AnimatePresence` spring 入场。
+- 折叠态下连向隐藏节点的连线同步隐藏；展开后恢复。
+- 批量导出 ZIP 文件名格式改为 `项目名_节点标题_序号.ext`（通过 `exportMediaArchive` 新增 `projectName` 参数）；未传 `projectName` 时回退原 `序号_名称.ext` 格式，向后兼容。
 
 ## Provider 与模型偏好
 
@@ -57,4 +71,529 @@ title: 待测试确认
 - MCP 工具从同一 CLI registry 自动生成；Agent/MCP 写操作需要 Workflow 面板确认后才执行，幂等缓存、超时、断线清理和敏感字段脱敏已接入。
 - Codex app-server 按 Workflow 项目隔离线程工作区，图片附件作为临时 `localImage` 输入并在 turn 结束后删除。
 
-本文件中的测试项尚未由用户执行确认。本次变更包括：Workflow 节点 header 删除、底部工具栏重构、右侧抽屉 header 对齐、RunningHub Host 头修复与 LEGACY_PRESET 黑名单解封。RunningHub 链路已通过 Node.js 脚本实跑验证（`rhart-image-n-g31-flash/text-to-image` + Bearer + `{ prompt, resolution: '1k' }` → 成功生成图片，花费 ¥0.19）。按项目约定未执行前端测试、构建或语法检查，等待用户实际验证。
+## Overlay 迁移与画布主题
+
+- 旧 SVG/Konva 画布中嵌入在 `<foreignObject transform="scale(1/zoom)">` 内的所有 overlay UI 已全部迁出为 `CanvasFixedOverlay`（`createPortal` 到 `document.body`，z-index 50）+ `placeOverlay` 纯函数定位，不再随 zoom 缩放变换：
+    - image / video 节点 PromptBar、视频生成中 stageLabel、多选/单选/滤镜面板 ElementToolbar、inpaint 蒙版 prompt、文本编辑 textarea 均已迁移。
+    - 内容本体类 foreignObject（text 显示态、HTML cover/typesetting、video 内容控件本体）按决策保留在 `<g>` 变换组内，避免破坏 selection/分组逻辑与性能。
+- 新增 `utils/canvasOverlayViewport.ts`：`placeOverlay()` 支持四向智能翻转（上/下/左/右）+ 边界避让 clamping，锚点类型含 `above-center` / `below-center` / `center`（centroid 锚点）；`canvasToScreen()` 用于 textarea 等无需 flip/clamp 的直角映射。
+- 新增 `components/canvas/CanvasFixedOverlay.tsx`：portal 容器 + `useElementContainerRect` hook；新增 `styles/index.css` 的 `.canvas-overlay-fixed` 基类（`data-no-transition` 开关瞬贴），同时修复该文件字体拼写 `BlinkMacMacSystemFont` → `BlinkMacSystemFont`。
+- `ElementToolbar.tsx` 已重新整合 AI 动作（Split/Upscale/RemoveBG/Outpaint/Mask/ReversePrompt 及对应 state props）回单一工具栏；原独立的 `ElementAIPopBar.tsx` 因无任何 import 引用，已作为死代码删除。
+- Canvas 视频节点未选中时叠加透明 `<rect>` 覆盖层捕获点击以触发选中；选中后覆盖层移除，放行到 `<video controls>` 原生播放控件，修复视频无法选中导致 ElementToolbar 不出现的交互问题。
+- `Toolbar.tsx` 重组为左/中/右三簇布局并用 `ClusterDivider` 分隔：左 Boards&Layers + Upload + Assets；中 Select/Pan/Shapes/Drawing/Text + 颜色 + 粗细；右 WheelAction + Settings + Undo/Redo；水平 `justify-between`，垂直时线性排列。
+
+## Excalidraw 阶段 A 托管渲染
+
+- ~~通过 `?excalidraw=1` dev 路径渲染 `FlovartExcalidrawStage`~~（Phase 1.1 已移除 dev gate，Excalidraw 现为主路径，见下方 Phase 1.1 节）。
+- Flovart Element 仍是单一数据源，Excalidraw 仅作视图+输入层、不保留自有状态；`onChange → api.updateScene` 回环用 `isSyncingRef` 守卫避免重入。
+- 新增 `components/canvas/ExcalidrawInner.tsx`：Excalidraw 用 `memo(() => true)` 包裹，防止 React 19 + StrictMode 下内部 Zustand store 无限循环；图片通过 `api.addFiles([{ id, dataURL, mimeType }])` 注册。
+- 新增 `utils/excalidrawAdapter.ts`（Flovart ↔ Excalidraw 元素双向转换层，645 行）、`components/canvas/FlovartToolbar.tsx`（自定义工具栏）、`components/canvas/ExcalidrawLayerPanel.tsx`（图层面板）、`components/canvas/excalidraw-canvas.css`（隐藏 Excalidraw 原生 UI + isl-\* 主题映射）。旧 Canvas overlay 服务路径为后续 Phase 1.5 在 Excalidraw 挂同套 overlay 预留。
+
+## 编辑器与画布交互修复
+
+- `RichPromptEditor.tsx`：Tiptap Suggestion 设为 `allowedPrefixes: null`，中文用户在 `@` 前不输入空格也可触发引用；tippy 改为 `strategy: 'fixed'`、z-index 99999，避免被 SVG 容器裁剪。
+- `PromptBar.tsx` 模型下拉新增 `overflow-y-auto` + 滚轮 `stopPropagation`，长列表不再撑出面板、滚动不再误触画布。
+- Workflow 侧 `WorkflowSidebar.tsx` 图层拖拽补 `dataTransfer.setData`，修复拖入接收。
+- `aiGateway.ts` 新增 `blobToDataUrl()`，RunningHub 上传前把 `blob:` URL 转 data:，避免浏览器拒绝 fetch blob 跨域。
+- `handleNodePromptGenerate` 中通过 `resolveColdMediaRef` 解析 `idb:board:*`、`idb-video:*`、`cold-media:*` 等本地媒体引用，不再把 IndexedDB 协议 URL 直接传给 Provider。
+- Canvas `wheelAction` 默认 `'pan'`，Workflow 侧新增 `wheelMode`，滚轮默认平移，按住修饰键才 invertzoom。
+- 新增 `hooks/useIdbImageResolution.ts`：SVG 渲染路径中 `idb:board:*` 协议的图片 href 和 mask 通过异步 IDB 查询解析为 data URL，不再直接传给 `<image href>` 导致 `ERR_UNKNOWN_URL_SCHEME`；`resolveHref` 在 `<image>`、mask canvas、SVG 导出字符串三处统一使用。
+
+## App.tsx 重构阶段 1
+
+- IDB 持久化逻辑提取到 `utils/boardPersistence.ts`，运行时类型提取到 `types/runtime.ts`。
+- 移除 `App.tsx` 重复的 `BOARDS_STORAGE_KEY` / `ACTIVE_BOARD_STORAGE_KEY` 声明。
+- 大量节点提示生成 hook (~20+ 依赖参数) 与画布渲染 JSX (~800 行) 提取评估为净负面可读性，按决策暂不拆分。
+
+---
+
+本文件中的测试项尚未由用户执行确认。本次累计变更包括：Workflow 节点 header 删除、底部工具栏重构、右侧抽屉 header 对齐、RunningHub Host 头修复与 LEGACY_PRESET 黑名单解封、@ mention 前缀修复、滚轮默认平移、模型下拉溢出修复、图层拖拽数据传输修复、blob→data URL 转换、cold-media 引用解析、App.tsx 阶段 1 持久化/类型提取、overlay 全量迁移、ElementAIPopBar 气泡新增、ElementToolbar AI 动作剥离、底部工具栏三簇重组、Excalidraw 阶段 A 托管渲染验证、Workflow 节点 Framer Motion 弹性动效（入场/退场/悬停/生成中呼吸/扫光/连线 pathLength/数据流粒子）、Workflow 批量结果堆叠折叠与展开、批量导出自动命名 `项目名_节点标题_序号.ext`、`idb:board:*` 协议 SVG 渲染路径异步解析修复。RunningHub 链路已通过 Node.js 脚本实跑验证（`rhart-image-n-g31-flash/text-to-image` + Bearer + `{ prompt, resolution: '1k' }` → 成功生成图片，花费 ¥0.19）。按项目约定未执行前端测试、构建或语法检查，等待用户实际验证。
+
+## 全量代码 Review 后统一修复（本轮）
+
+- **B1 安全**：`rhGetWebAppNodes` 在保留 `apiCallDemo` GET 端点必需的 query apiKey 之外，额外附加 `Authorization: Bearer` header 作为认证双保险，并添加注释说明端点限制。
+- **B4 错误码**：RunningHub WebApp 查询返回的非 0 / 非 804 / 非 813 code（含 802 认证错误等）不再静默落 `UNKNOWN`，统一视为 `FAILED` 并透出 `failedReason`，避免 key 无效时无反馈。
+- **C1 视频选中**：Canvas 视频节点（非 Konva 渲染分支）在未选中且非生成中时叠加透明 `<rect pointerEvents="all">` 覆盖层捕获 mousedown，触发 SVG 既有的 `data-id` 选中链路；选中或生成中时移除覆盖层，放行到 `<video controls>` 原生播放控件。
+- **死代码清理**：`components/ElementAIPopBar.tsx`、`components/KonvaDemoPage.tsx`、`components/LayerPanel.tsx`、`components/LayerPanelMinimizable.tsx` 经全仓 grep 确认零 import 引用，已删除；旧 Canvas 图层面板实际由 `components/canvas/ExcalidrawLayerPanel.tsx` 承载。
+- **临时文件污染**：根目录 14 个 `.App.unified.tmp` / `.InfiniteWorkflow.unified.tmp` / `.workflow-*.unified.tmp` 等 `.tmp` 临时文件已物理清理（仍在 `.gitignore` 中）。
+- **B6/B7 注释澄清**：`providerAdapterRegistry.resolve` 在无 explicit `providerId` 时按 Map 插入顺序匹配首个 `supportsModel` 的适配器（ES2015+ Map 顺序规范保证，且每个 modelId 通常只被一个 provider 支持故无歧义）；`seedanceProviderAdapter.generate` 是可选快捷路径，调用方（aiGateway）可走 registry submit+poll 分步流程，两者复用同一 `submitTask`/`pollTask`，无重复实现。已加注释说明。
+- **B8 可取消**：`rhRunWebApp` / `rhSubmitWebAppTask` / `rhQueryWebAppOutputs` 新增可选 `signal?: AbortSignal` 参数并透传给 `fetch`；轮询循环改为 abortible sleep（signal abort 时提前结束 setTimeout 等待），取消时抛出 `AbortError`，不再继续空转直到 10 分钟超时。
+- **D4 部署按钮**：README 顶部新增 Vercel / Render 一键部署按钮（指向 `vercel.com/new/clone` 与 `render.com/deploy`），新增 `render.yaml` 静态站点配置（`npm ci && npm run build`，`staticPath: /dist`，SPA rewrite），部署形态文案从"四种"更新为"六种"。
+
+## 共享生态后端骨架（待测）
+
+- 在 `backend/` 子目录新建 Go + Gin + GORM 后端 `flovart/hub`，作为 monorepo 一部分独立部署，耗材托管在 Cloudflare R2（S3 兼容）。
+- 已分层落地：`config/config.go` 加载环境变量；`model/` 定义 `User` / `PromptPack` / `PromptItem` / `PromptLike` 及列表 `Query` / `PageResult`；`repository/` 仅做 GORM 访问；`service/` 负责鉴权、bcrypt、JWT（HS256，默认 168h）、默认值与校验；`handler/` 只解入参调用 service 返回 `{code,data,msg}`；`middleware/auth.go` JWT 解析中间件。
+- 提示词生态 MVP 路由：`/api/v1/auth/{register,login,me}`、`/api/v1/prompts` 列表/详情/`by-slug`/`download`/上传/修改/删除/`like`。
+- 同步新增：`backend/go.mod`、`backend/.env.example`、`backend/docker-compose.yml`（PostgreSQL 16 本地起库）、`backend/.gitignore`。
+- `/healthz` 健康检查与 `gin.ReleaseMode` 在生产时启用。
+- `AutoMigrate` 启动时自动建表；表结构同步落入 `docs/content/docs/backend/backend-database.mdx`，接口规则落入 `docs/content/docs/backend/api-response.mdx`，并已在 `docs/index.md` 添加入口。
+- 待用户验证：本地 `docker compose up -d db` 起库后 `go run ./cmd/server` 能正常 AutoMigrate 并通过 `/healthz`；登录/注册/JWT 鉴权在 `Authorization: Bearer <token>` 下生效。
+
+## 企业后台角色用户管理骨架（待测）
+
+- 新建 `backend/enterprise` 独立服务 `flovart/enterprise`，作为 monorepo 一部分独立部署，复用 hub 同一 PostgreSQL 与 `JWT_SECRET`，共享 `users` 表（不重建该表，仅 AutoMigrate 自有 `organizations` / `organization_members` 两张表）。
+- 角色固定三枚：`owner` / `admin` / `member`，无独立角色表（遵循 AGENTS.md"只实现当前明确需要的功能"）。
+- 权限矩阵：owner 一切；admin 仅管理 `member`，不可动 owner 或其他 admin；member 只读成员列表。
+- owner 不可通过成员接口被添加/降级/移除，需走转让流程（后续版本）。
+- 成员添加通过 `byUsername`，被加者必须已是 flovart 平台注册用户。
+- 路由：`POST /api/v1/enterprise/orgs`、`GET /api/v1/enterprise/orgs`、`GET /api/v1/enterprise/orgs/:id`、`DELETE /api/v1/enterprise/orgs/:id`、`GET /orgs/:id/members`、`POST /orgs/:id/members`、`PUT /orgs/:id/members/:userId`、`DELETE /orgs/:id/members/:userId`、`GET /healthz`。
+- 同步新增：`backend/enterprise/go.mod`、`.env.example`、`.gitignore`；数据库结构补充到 `docs/content/docs/backend/backend-database.mdx`；接口规则新落 `docs/content/docs/backend/enterprise-api.mdx` 并已加入 `docs/index.md`。
+- 待用户验证：hub 起库注册一个用户后，用同 `JWT_SECRET` 起 enterprise 服务，创建组织、添加成员（同 hub 用户名）、修改/降级角色、移除成员，对照权限矩阵确认拒绝路径与放行路径都正确。
+
+## R2 上传服务 + 前端 API 客户端（待测）
+
+- 在 `backend/storage/r2.go` 封装 Cloudflare R2（S3 兼容）客户端，包含 `PutObject` / `PresignPut`（默认 15 分钟）/ `PresignGet`（默认 1 小时）/ `DeleteObject` / `HeadObject` / `PublicURL`。
+- hub 新增 `service/upload_service.go`（`Presign` 生成 `uploads/<purpose>/yyyy/MM/dd/<uuid>.ext` 格式 key 并预签名；`ConfirmUpload` 用 `HeadObject` 验对象真实存在）与 `handler/upload_handler.go`（`/api/v1/uploads/presign` 与 `/api/v1/uploads/confirm`）。
+- 启动行为：R2 配置不完整时不返回错误，仅日志提示"upload routes disabled"，对应路由不会注册；hub 在 dev 环境可零存储启动。
+- `purpose` 白名单：`prompt_cover` / `workflow_showcase` / `avatar` / `workflow_media` / `misc`，未知值统一回退 `misc`。
+- go.mod 引入 `aws-sdk-go-v2` 系列依赖（config / credentials / s3）。
+- 前端新增三个 API 客户端文件（沿用 `services/` 目录约定）：
+  - `services/hubClient.ts`：`HUB_BASE_URL` / `ENTERPRISE_BASE_URL`（读 `VITE_HUB_BASE_URL` / `VITE_ENTERPRISE_BASE_URL` 环境变量，默认 `localhost:8080/8081`）、`authApi`（register / login / me）、`getToken` / `setToken`（localStorage 持久化）、统一 `request<T>` 自动注入 `Authorization: Bearer` 与 `{code,data,msg}` 解码。
+  - `services/promptApi.ts`：列表/详情/`by-slug`/下载/创建/修改/删除/`toggleLike`。
+  - `services/uploadApi.ts`：`uploadApi.presign` / `confirm` + 一站式 `uploadFileToR2(file, filename, contentType, purpose)`——拿 presign 后直传 R2 再 confirm。
+  - `services/orgApi.ts`：组织 CRUD + 成员 CRUD。
+- 待用户验证：① R2 配上 4 个环境变量后 hub 启动日志显示"R2 storage ready"；② 前端用 `uploadFileToR2` 跑完整 presign → PUT → confirm 链路后能通过 `publicUrl` 访问对象；③ 无 R2 配置时 hub 仍能正常启动且 `/api/v1/prompts/*` 可用，`/api/v1/uploads/*` 不会返回 404 也不会 panic。
+
+## 前端企业后台路由 + 登录/组织/成员管理 UI（待测）
+
+- 在 `package.json` 新增依赖 `react-router: ^7.16.0`（v7 已将 `react-router-dom` 合并到 `react-router`；DOM 端 import 直接从 `react-router` 取）。
+- 新增 `RouterHost.tsx` 顶层路由容器：`<HashRouter>` 兼容 Tauri / CF Pages 子路径 / GH Pages / Vercel；`/` 渲染现有 `App.tsx`（其内部 canvas/workflow 视图切换保持不变），`/enterprise/*` 渲染 `EnterpriseApp`，其余路径回退到 `/`。
+- `index.tsx` 改为渲染 `<RouterHost>`，移除直接渲染 App 的代码；保留 `React.StrictMode` 与 `./styles/index.css` 加载次序。
+- 新增 `components/enterprise/EnterpriseApp.tsx` 默认导出（遵循"页面里只有一个主业务组件时直接写在 page.tsx"），未登录显示登录/注册面板（复用 OnboardingWizard 视觉风格，isl-tabbar 切登录/注册、isl-surface 卡片），登录后展示组织列表 + 创建组织表单 + 进入组织详情后展示成员表格 + 添加/修改角色/移除成员。
+- 角色显示使用 `RoleBadge`：owner（mint 盾勾）、admin（灰盾）、member（默认）；可管理的当前用户自动出现下拉切换角色与删除按钮，owner 不可被普通动作移除/降级（前端+后端双重）。
+- 鉴权流程：`authApi.register`/`login` → `setToken` 存 `localStorage['flovart.hub.token']`；进入组件时若有 token 调 `authApi.me` 验证，无效则清空 token，回到登录面板。
+- `components/studio/StudioTopMenu.tsx` 在右上角加一个 `<Link to="/enterprise">` 按钮（lucide `Building2` 图标），不破坏 `StudioMenuModel` 接口，从主页可一键进后台。
+- toast 反馈复用 `hooks/useToast.ts` + `components/Toast.tsx`。
+- 待用户验证：① `npm install` 装 `react-router` 后 `npm run dev` 主程序启动正常、`/#/` 主路由仍可访问；② 点 StudioTopMenu 右上 Building2 进入 `/#/enterprise` 显示登录面板；③ 注册/登录成功，token 写入 localStorage；④ 创建组织、添加成员（同 hub 用户名）、修改角色、移除成员，对照权限矩阵确认拒绝/放行都正确；⑤ 在 Tauri dev 与 build 后 hash 路由都正常工作。
+
+## Phase 1.1 — Excalidraw 上提主路径（Magic Canvas 迁移第一步）
+
+- `vite.config.ts` 的 `optimizeDeps` 新增 `esbuildOptions: { target: 'es2022', treeShaking: true }`，确保 Excalidraw 0.18.1 在 Vite 6.2 下正确预构建。
+- `App.tsx` 移除 `?excalidraw=1` dev gate（原 3378-3389 行），`FlovartExcalidrawStage` 不再只在 dev 路径渲染，而是直接作为 AppShell `main` prop 内容在主路径渲染。
+- `App.tsx` 删除旧 SVG + CanvasFixedOverlay 混合 Canvas 主体（原 3700-4543 行，843 行），替换为 `<FlovartExcalidrawStage>`。AppShell 外壳（顶栏 / 左侧栏 / 右侧 dock / 工具栏 / 图层面板）保留不变。
+- `FlovartExcalidrawStage` 新增 `onSelectionChange` prop，在 `handleSceneChange` 中将 Excalidraw `selectedElementIds` 转发到宿主 `setSelectedElementIds`，图层面板高亮与 Excalidraw 选中同步。
+- 删除 `components/canvas/KonvaCanvas.tsx` + `components/canvas/KonvaCanvasDemo.tsx`（零引用死代码）。
+- **Overlay 暂下线**：原 SVG 内的 PromptBar / ElementToolbar / inpaint textarea / stageLabel / 属性面板浮层（CanvasFixedOverlay 实例）随 SVG 主体一并移除，Phase 1.5 已补回 ElementToolbar（viewport 通过 `onViewportChange` 暴露 + `containerRef` 附着 Excalidraw 容器）。inpaint prompt / stageLabel 未补回（需重新设计交互或属 Phase 2 范畴）。bottomDock / 侧边栏 / 顶栏 / 图层面板不受影响。
+- App.tsx 从 4549 行缩减到 3700 行；旧 SVG 交互变量（`svgRef` / `handleMouseDown` / `zoom` / `panOffset` / `canvasToScreen` / `selectionBox` / `croppingState` / `contextMenu` 等）仍保留在组件中但不再被 JSX 引用，`tsconfig.json` 未开启 `noUnusedLocals` 故不阻塞编译，后续 Phase 清理。
+- 待用户验证：① `npm run dev` 后主路径（非 `?excalidraw=1`）直接显示 Excalidraw 画布；② 侧边栏 / 顶栏 / 工具栏 / 图层面板正常显示和操作；③ 在 Excalidraw 中画矩形 / 椭圆 / 文字 / 自由绘制，元素同步到图层面板；④ 选中元素时图层面板对应项高亮；⑤ 切换深色/浅色主题时 Excalidraw 主题跟随；⑥ 切换到 Workflow 视图再切回 Canvas，Excalidraw 画布恢复正常。
+
+## Phase 1.2 — Magic Generate 入口 + 底部 PromptBar
+
+- `FlovartExcalidrawStage.tsx` 新增 `bottomBar` prop（React 节点，绝对定位在 Stage 容器底部）和 `onMagicGenerate` 回调（截图 dataUrl + 宽高 + 选区 bounds）。
+- `FlovartExcalidrawStage.tsx` 新增 pop-bar 浮动按钮：选中 ≥2 元素时在选区 bounding box 顶部上方 44px 处显示 Magic Generate 按钮（motion 弹入/弹出 + Wand2 图标 + backdrop-blur 毛玻璃背景），点击触发 `exportToCanvas` → `toDataURL('image/png', 0.8)` → 调用 `onMagicGenerate` 回调。
+- `App.tsx` 新增 `promptDocument` state（Tiptap 富文本编辑器 JSON）、`mentionItems` useMemo（从当前画板元素排除已选中元素构建 @ 引用列表）、`handleMagicGenerate` handler（创建 `ImageElement` href=截图 dataUrl → `commitAction` 加入画布 → 清空选中 → 设置 mentionedElementIds → 调 `handleGenerate`）。
+- `App.tsx` 在 `<FlovartExcalidrawStage>` 上传入 `bottomBar={<PromptBar ... />}`（inline variant + popoverDirection up + 全量 props：prompt/promptDocument/setPrompt/onPromptInputChange/onGenerate/isLoading/isSelectionActive/selectedElementCount/userEffects/generationMode/videoAspectRatio/videoDurationSec/videoResolution/videoGenerateAudio/videoWatermark/canvasElements/mentionItems/isAutoEnhanceEnabled/characterLocks/batchCount/error/progressStage）和 `onMagicGenerate={handleMagicGenerate}`。
+- 两种生成入口均已接入：① jaaz 截图范式（选中 ≥2 元素 → pop-bar Magic Generate → 截图 → 创建 ImageElement → handleGenerate）；② PromptBar 范式（底部 PromptBar 写 prompt + @ 引用 → onGenerate → handleGenerate）。
+- 待用户验证：① 底部 PromptBar 正常显示，输入 prompt 后点击生成按钮触发 `handleGenerate`；② @ 引用弹出列表显示当前画板元素（排除已选中）；③ 选中 ≥2 元素时选区上方出现 Magic Generate 浮动按钮；④ 点击 Magic Generate 后截图作为新 ImageElement 出现在画布上并自动触发生成；⑤ pop-bar 在选中 <2 元素时消失；⑥ PromptBar 的 mode 切换（image/video）、视频参数、批量、角色锁、auto-enhance 等控件正常工作。
+
+## Phase 1.3-1.4 — Agent Chat 主交互（Tool-Calling 循环 + 13 画布工具）
+
+- 新建 `services/agentChatStream.ts`：`chatCompletionWithTools(opts)` 调 `/chat/completions` + `tools` + `stream:true`，SSE 流式解析 `delta.content` + `delta.tool_calls`（按 index 拼接），支持 `onDelta` 增量回调 + `AbortSignal` 取消；复用 `aiGateway.ts` 的 `inferProviderFromModel` + `normalizeProviderBaseUrl` + `DEFAULT_BASE_URLS` 解析 provider/baseUrl/apiKey。
+- 新建 `components/agent-chat/ChatMessage.tsx`：消息组件（用户/Agent/系统 + 工具调用卡片），工具卡片显示工具中文名 + 参数摘要 + 结果 + 状态图标（pending …/success ✓/error ✕/confirmed ✓），附件预览（图片缩略图/文件占位）。
+- 新建 `components/agent-chat/ChatTextarea.tsx`：输入框（文本 + 图片附件拖拽/粘贴 + 模型选择下拉 + 发送/停止按钮），Enter 发送 Shift+Enter 换行，自动高度，附件可删除。
+- 新建 `components/agent-chat/Chat.tsx`：主面板，13 工具定义（读类 3 + 创建类 3 + 编辑类 4 + 视口类 1 + 生成类 2），Tool-Calling 循环（最多 4 步，首轮 `tool_choice:"required"`，`parallel_tool_calls: false`），工具执行函数（`canvas_get_state`/`get_selection`/`export_snapshot` 读画布快照；`create_text`/`create_image`/`create_video`/`generate_image`/`generate_video` 创建元素 + `handleGenerate`；`update_element`/`move_elements`/`delete_elements`/`select_elements` 操作元素），compactSnapshot 上下文注入，confirmTools 人工确认开关（默认自动执行），会话日志 localStorage 持久化（`flovart.agentChat.logs.v2`，最近 100 条）。
+- `RightPanel.tsx` agent tab 替换：props 齐全时渲染新 `<Chat>`（传入 elements/selectedElementIds/setSelectedElementIds/commitAction/handleGenerate/userApiKeys/modelPreference），否则回退旧 `<AgentChatPanel>`。
+- `App.tsx` RightPanel 调用处新增 7 个 props 传入（elements/selectedElementIds/setSelectedElementIds/commitAction/handleGenerate/userApiKeys/modelPreference）。
+- 系统提示（ONLINE_AGENT_PROMPT 适配版）：首轮必须调用工具；不输出 JSON ops；不编造执行结果；用真实 id；意图不明直接问用户。
+- 待用户验证：① RightPanel agent tab 显示新"画布助手"面板（非旧 Agent Chat）；② 输入 prompt 后 Agent 流式回复文本；③ Agent 调用工具时显示工具卡片（如"读取画布"）；④ `canvas_generate_image` 工具触发后画布上出现新 ImageElement 并开始生成；⑤ `canvas_create_text` 工具创建文本元素出现在画布上；⑥ `canvas_delete_elements`/`move_elements` 工具操作反映到画布；⑦ 停止按钮可中断流式；⑧ 清空按钮重置对话；⑨ confirmTools 开关切换不影响自动执行（当前默认自动）；⑩ 对话日志刷新页面后保留。
+- Phase 1.3 "加入对话"入口：⑪ 选中画布上 1 个图片元素时，选区上方出现"加入对话"浮动按钮（MessageCircle 图标）；⑫ 点击"加入对话"后按钮消失、选区清空，Agent Chat 输入框附件区出现该图片缩略图；⑬ 选中 ≥2 元素时只显示"Magic Generate"不显示"加入对话"（互斥）；⑭ 选中非图片元素（如文本/形状）时不显示"加入对话"；⑮ "加入对话"注入的附件可正常随消息发送给 Agent。
+
+## Phase 1.5 — Overlay 适配 Excalidraw viewport + ElementToolbar 补回
+
+- `FlovartExcalidrawStage.tsx` 新增两个 props：`onViewportChange?: (vp: ExcalidrawViewport) => void`（在 `handleSceneChange` 中每次视口变化时回调）和 `containerRef?: React.RefObject<HTMLDivElement | null>`（ref 附着到 `.excalidraw-container` div）。
+- `App.tsx` 新增 `excalidrawViewport` state（`{ x: 0, y: 0, zoom: 1 }`）+ `excalidrawContainerRef` ref；`canvasViewport: CanvasViewport` 通过 `useMemo` 从 `ExcalidrawViewport` 转换（`panScreenX = x * zoom, panScreenY = y * zoom`）。
+- `canvasContainerRect` 从旧 `svgRef`（null ref，Phase 1.1 SVG 已删除）切换到 `excalidrawContainerRef`，`useElementContainerRect` 恢复正常 rect 读取。
+- `handleGroupSelection`（选中 ≥2 元素 → 创建 `GroupElement` 加入画板）和 `handleExportSelection`（选中媒体元素 → 逐个触发 `<a download>` 下载）新建为 App.tsx 内函数。
+- `<ElementToolbar>` JSX 补回到 `main` 片段中 `<FlovartExcalidrawStage>` 之前，传入 `viewport={canvasViewport}` + `containerRect={canvasContainerRect}` + 全量 handlers（align/group/export/copy/download/delete/property/crop/filter/upscale/removeBg/outpaint/mask/split/reversePrompt）。
+- `<FlovartExcalidrawStage>` 新增 `onViewportChange={setExcalidrawViewport}` + `containerRef={excalidrawContainerRef}` 传入。
+- `canvasOverlayViewport.ts` 本身无需修改——它早已设计为 viewport 无关（`CanvasViewport` 接口的 `panScreenX/Y` 对 Konva 和 Excalidraw 均适用，注释已说明 Excalidraw 转换公式）。
+- 未补回的 overlay：inpaint 蒙版 prompt（旧 SVG lasso 工作流，Excalidraw 需重新设计交互）、stageLabel（视频生成中状态标签，属 Phase 2 视频工具范畴）、属性面板（Excalidraw 自带属性面板，冗余）、文本编辑 textarea（Excalidraw 自带双击编辑文本）。
+- 待用户验证：① 选中单个元素时 ElementToolbar 浮动工具栏出现在元素上方（含对齐/复制/删除/属性等按钮）；② 选中 ≥2 元素时多选工具栏出现（含对齐/导出/打组）；③ 滚动画布（pan）后 ElementToolbar 跟随元素位置移动；④ 缩放画布（zoom）后 ElementToolbar 定位正确、不偏移；⑤ ElementToolbar 中的 AI 工具按钮（裁剪/滤镜/高清/抠图/扩图/蒙版/拆层/反推）点击后弹窗正常打开；⑥ ElementToolbar 超出视口上沿时自动翻转到下方；⑦ 切换深色/浅色主题后 ElementToolbar 样式跟随。
+
+## Phase 1.5 补充（第二批）— 坐标转换重建 + Category B 死代码清理
+
+- **坐标转换重建**：App.tsx 新增 `screenToCanvas(screenX, screenY)` 和 `getCanvasCenter()` 两个函数，基于 `excalidrawContainerRef.current.getBoundingClientRect()` + `excalidrawViewport`（Excalidraw screen = (canvas + scrollX) * zoom，故 canvasX = (screenX - rect.left) / zoom - viewport.x）。
+- **useGeneration.ts 替换完成**：6/6 处 `svgRef`/`getCanvasPoint` 全部替换为 `getCanvasCenter()`——video keyframe、video main、image with mentions(mentionPrompt2)、image plain(effectivePrompt)、handleSelectBatchResult、handleSelectAllBatchResults。params 接口移除 svgRef/getCanvasPoint，新增 getCanvasCenter。grep 确认 0 残留。
+- **App.tsx 替换完成**：4/4 处 `svgRef`/`getCanvasPoint` 全部替换——handleAddImageElement→getCanvasCenter()、handleAddVideoElement→getCanvasCenter()、handleAssetDrop→screenToCanvas()、agent runtime 删除内部重复 getCanvasCenter 定义（复用外部传入）。useGeneration 调用更新：移除 handleInpaint/inpaintState/inpaintPrompt/svgRef/getCanvasPoint/setInpaintState/setInpaintPrompt，新增 getCanvasCenter。
+- **editingElement 死代码删除**：state + handleStopEditing + 2 useEffects + keyboard branches（Delete/Backspace/Esc）+ board-switch setEditingElement(null) 全部删除。grep 确认 0 残留（仅 useCanvasInteraction 解构待清理，已在本批完成）。
+- **视口动画死代码删除**：`animateViewportToElement`/`cancelViewportAnimation`/`viewportAnimationRef`/`handleElementDoubleClickFocus` 全部删除（函数 + ref + agent runtime 调用 + WorkspaceSidebar onElementDoubleClick prop + getCanvasVisibleRegion import）。grep 确认 0 残留。这些函数驱动的 `activeBoard.panOffset`/`zoom` 不再渲染，后续 Phase 如需视口动画需基于 Excalidraw API 重建。
+- **crop 死代码删除**：`croppingState`/`setCroppingState` state + `handleStartCrop`/`handleCancelCrop`/`handleConfirmCrop` 函数 + board-switch setCroppingState(null) + useCanvasInteraction call params + Toolbar `isCropping`/`onConfirmCrop`/`onCancelCrop` props + Toolbar crop UI 块（crop controls 弹层）+ ElementToolbar `handleStartCrop` prop + crop 按钮 全部删除。grep 确认 0 残留。
+- **mask/inpaint 死代码删除**：`inpaintState`/`inpaintPrompt`/`maskEditingId`/`maskBrushSize`/`maskBrushMode`/`maskCanvasRef` state + `paintMask` + `startMaskEditing`/`commitMask`/`cancelMask`/`clearMask` 函数 + mask toolbar JSX + ElementToolbar `maskEditingId`/`startMaskEditing` props + mask 按钮 + useCanvasInteraction call params 全部删除。grep 确认 0 残留。
+- **handleCanvasImageDragStart 删除**：旧 SVG 拖拽事件，SVG 已删除，死代码。
+- **useCanvasInteraction.ts 清理**：接口 `UseCanvasInteractionParams` 移除 editingElement/setEditingElement/croppingState/setCroppingState/setInpaintState/setInpaintPrompt/maskEditingId/paintMask/onElementDoubleClick；解构移除对应参数；refs 移除 svgRef（保留为内部 ref 供 handleWheel）、editingTextareaRef；handleMouseDown 移除 mask painting intercept、cropping block、setEditingElement(text tool)、double-click setEditingElement/onElementDoubleClick；handleMouseMove 移除 mask painting intercept、crop handling block；handleMouseUp 移除 mask painting intercept、inpaint lasso block；handleWheel 移除 croppingState/editingElement check；return 移除 svgRef/editingTextareaRef/getCanvasPoint。
+- **App.tsx useCanvasInteraction 解构更新**：移除 `getCanvasPoint`/`svgRef`/`editingTextareaRef`，仅保留 `elementsRef`/`previousToolRef`/`spacebarDownTime`。
+- **Toolbar.tsx 清理**：接口移除 `isCropping`/`onConfirmCrop`/`onCancelCrop`；解构移除对应参数；删除 `if (isCropping) { return <crop controls> }` 整个 UI 块。
+- **ElementToolbar.tsx 清理**：接口移除 `maskEditingId`/`handleStartCrop`/`startMaskEditing`；解构移除对应参数；删除 crop 按钮（`{element.type === 'image' && <button title={t('contextMenu.crop')} ...>}`）和 mask 按钮（`<button title="图层蒙版 / Layer Mask (Inpaint)" ...>`）。
+- 待用户验证：① `npm run dev` 编译无报错、无未定义引用；② 画布主路径正常显示 Excalidraw；③ 选中图片元素时 ElementToolbar 不再显示裁剪和蒙版按钮（已删除）；④ Toolbar 不再显示 crop 确认/取消弹层（已删除）；⑤ Agent Chat 生成图片/视频功能正常（getCanvasCenter 替换后）；⑥ 从本地拖入图片/视频到画布落点正确（screenToCanvas 替换后）；⑦ 键盘快捷键（删除/复制/撤销/重做/空格临时切换平移工具）不报错（editingElement 分支已清理）。
+
+## Phase 1.5 补充（第一批）— App.tsx 死代码清理
+
+- 删除 `canvasStageSize` state + ResizeObserver useEffect（SVG 已删除，`svgRef.current` 恒为 null，state 从未被读取）。
+- 删除 `canvasKonvaReadyIds`/`canvasKonvaFailedIds` state + `canvasKonvaDisabledIds`/`canvasKonvaDimmedIds` useMemo + 清理 useEffect（Konva 在 Phase 1.1 已移除，这些计算结果从未被 JSX 消费）。
+- 删除 `contextMenu`/`setContextMenu` state + `handleContextMenu` 函数 + 4 处 `setContextMenu(null)` 调用（右键菜单仅由旧 SVG 渲染，现已无 JSX 消费；`useCanvasInteraction` 的 `contextMenu`/`setContextMenu` 参数改为 optional）。
+- 删除 `relationFocusElementId`/`setRelationFocusElementId` state + `getRelatedCanvasElementIds` callback + `relationFocusIds`/`selectedRelationIds` useMemo + 关联 useEffect + `selectedNodePromptElement` useMemo + `isNodePromptActive`（"节点 prompt 高亮"是旧 SVG overlay 特性，Excalidraw 不需要；`setRelationFocusElementId` 从未被设为非 null 值，整条链路恒为空）。
+- 删除 `handleFitView`（仅作为 `onTripleClickEmpty` 传给 `useCanvasInteraction`，SVG 三击空白事件已不可能触发）。
+- 删除 wheel useEffect（绑定 `svgRef.current` 的 wheel 监听，null → no-op）+ mouseup/blur useEffect（`handleMouseUp` 在 interactionMode 恒 null 时空转）。
+- 删除 `cursor` 变量计算（引用已删的 `interactionMode`，且从未被任何 style 消费）。
+- 从 `useCanvasInteraction` 解构中移除 `handleMouseDown`/`handleMouseMove`/`handleMouseUp`/`handleWheel`/`getSelectableElement`/`selectionBox`/`setSelectionBox`/`alignmentGuides`/`lassoPath`/`dragTick`/`interactionMode`（全部无 JSX 消费）；保留 `getCanvasPoint`/`svgRef`/`editingTextareaRef`/`elementsRef`/`previousToolRef`/`spacebarDownTime`（仍有活跃消费者）。
+- 清理未使用 import：`placeOverlay`/`canvasToScreen`/`OverlayAnchor`（canvasOverlayViewport）、`isPointInPolygon`/`rasterizeElement`/`rasterizeMask`/`SNAP_THRESHOLD`/`Guide`（canvasHelpers）、`PathElement`/`ShapeElement`/`ArrowElement`/`LineElement`（types）。
+- App.tsx 从 ~3876 行缩减到 ~3387 行（净删 ~489 行）。
+- 保留但已失效（Category B，需后续 Phase 重建为 Excalidraw 等价物，本次不动）：`animateViewportToElement`/`cancelViewportAnimation`/`viewportAnimationRef`（仍被 agent API `igniteAtomicElement` 和 LayerPanel `onElementDoubleClick` 调用，但驱动的 `activeBoard.panOffset`/`zoom` 不再渲染）、`editingElement`/`editingTextareaRef`（commitAction 文本分支仍引用，但 `editingElement` 恒为 null）、`croppingState`/`maskEditingId`/`inpaintState`（UI 入口仍挂载但画布交互已失效）。
+- 待用户验证：① `npm run dev` 编译无报错、无未定义引用；② 画布主路径正常显示 Excalidraw；③ 图层面板双击元素不再报错（no-op 可接受）；④ 键盘快捷键（删除/复制/撤销/重做/空格临时切换平移工具）不报错；⑤ 工具栏、侧边栏、右栏 dock 正常显示。
+
+## Phase 2.1 — Script 节点 + 工作流编排基础
+
+### 类型与数据结构
+- **新增 Script 节点类型**：`WorkflowNodeType` 新增 `'script'`，作为 Workflow 第 6 种节点类型。Script 节点定位为"剧本拆解 + 分镜编排 + 批量生成"容器，Canvas 纯视觉不背复杂状态机。
+- **新增类型定义**（`types.ts`）：`ScriptAsset{id,kind:'character'|'scene'|'prop',name,description?,settingImageNodeId?}`、`ScriptShot{id,index,emotion?,action?,dialogue?,sfx?,scene?,promptOverride?,colorTag?,imageNodeId?,videoNodeId?,status?}`、`ScriptBreakdown{assets,shots,sourceText?,referenceVideoNodeId?,modelId?}`、`WorkflowBatchGroupSource='auto'|'manual'`。
+- **WorkflowNode 扩展**：新增 `batchGroupSource?: WorkflowBatchGroupSource` 字段，区分手动打组（Ctrl+G）和自动打组（批量生成 count>1）。
+- **WorkflowNodeMetadata 扩展**：新增 `referenceNodeIds?: string[]`（显式声明上游引用节点，覆盖连线推断）、`scriptBreakdown?: ScriptBreakdown`（Script 节点的分镜数据）。
+- **新增 3 种 WorkflowOp**：`group_nodes{ids,batchId,source}`、`ungroup_nodes{ids}`、`execute_group{nodeIds}`。
+
+### 常量与节点规格
+- **Script 节点默认尺寸**：480×560，`metadata.scriptBreakdown` 默认 `{ assets: [], shots: [] }`。
+
+### 操作与算法（ops.ts）
+- **`topoSort(nodes, connections, nodeIds)`**：Kahn BFS 拓扑排序，用于整组执行时确定节点运行顺序。含 cycle fallback（检测到环时退回原始顺序，不阻塞执行）。
+- **`getUpstreamData(targetNode, nodes, connections)`**：连线数据推断函数。`referenceNodeIds` 优先（显式声明），否则用入边推断。返回 `UpstreamData{imageHrefs,videoHrefs,audioHrefs,textContents,referenceNodeIds}`，供 `workflowGeneration.ts` 后续注入下游参考输入。
+- **Script 连线规则**：`validateWorkflowConnection` 新增——Script 节点只能连向 image/video 节点；Script 节点只能接收 image/video/text 输入。
+- **`group_nodes` op 处理**：给选中节点分配同一 `batchId` + `batchGroupSource`，复用现有 batch 折叠/展开 UI。
+- **`ungroup_nodes` op 处理**：清除 `batchId`/`batchIndex`/`batchGroupSource`。
+- **`execute_group` op 处理**：`topoSort` 排序后推入 `runRequests`，由 `applyOps` 依次调用 `onRunNode`。
+
+### UI 集成
+- **工具栏**：`WorkflowToolbar` 新增脚本节点按钮（FileText 图标）；`WorkflowCreateMenu` 新增"脚本节点"选项。
+- **Script 节点缩略卡片**（`WorkflowNode.tsx` → `ScriptNodeCard`）：480×560 节点内显示 Clapperboard 图标 + 统计（N 资产 / N 分镜 / N/N 完成）+ 前 4 个分镜摘要行 + "+N 更多分镜"。空脚本显示"双击打开编辑器拆解剧本"。
+- **双击打开编辑器**：`WorkflowNode` 新增 `onDoubleClick` prop，Script 节点双击触发 `setScriptEditorNodeId` → 挂载 `ScriptNodeEditor` 全屏 Modal。
+- **Ctrl+G 打组快捷键**：`InfiniteWorkflow` keydown handler 新增 `Ctrl/Cmd+G`，选中≥2 节点时 `applyOps([{type:'group_nodes',ids,batchId:nanoid(),source:'manual'}])`。
+- **工具栏打组/取消打组/整组执行按钮**：`WorkflowNodeToolbar` 新增 `onGroup`/`onUngroup`/`onExecuteGroup` props，多选时显示 Group/Ungroup/Play 图标按钮。
+- **applyOps 处理 runRequests**：`applyOps` 新增 `result.runRequests.forEach(({nodeId}) => onRunNode(nodeId))`，使 `execute_group` op 能触发实际生成。
+- **Script 节点不显示 Run/Stop/PromptFocus 按钮**：`WorkflowNodeToolbar` 排除 `node.type === 'script'` 的 run/stop/prompt-focus 操作。
+- **workflowGeneration.ts 防护**：`runWorkflowGeneration` 检测 `initialNode.type === 'script'` 时直接返回错误状态"脚本节点请双击打开编辑器进行拆解和批量生成"。
+
+### ScriptNodeEditor（全屏 Modal 分镜编辑器）
+- **左侧栏（280px）**：剧本原文 textarea + "AI 拆解剧本"按钮（直调 `generateTextWithProvider`，system prompt 要求输出结构化 JSON）+ 资产列表（角色/场景/道具卡片，可增删改）。
+- **右侧主区域**：Segmented 切换"分镜/资产"Tab。分镜列表为 ShotCard 网格，每张卡片含 #序号 + 情绪/动作/场景/台词/音效/生图Prompt 字段 + 已关联图片/视频节点角标 + 删除按钮。支持添加空白分镜。
+- **AI 拆解**：调用 `generateTextWithProvider(sourceText, model, undefined, {systemPrompt, temperature:0.7, maxTokens:8192})`，响应解析为 `ScriptBreakdown`（assets + shots），失败时显示错误。
+- **模型选择**：优先 `modelPreference.textModel`，无则取第一个有模型的文本 Key。无可用 Key 时提示并调用 `onOpenSettings`。
+
+### CSS 样式
+- `workflow.css` 新增 `.workflow-node__script-card`/`__script-header`/`__script-stats`/`__script-empty`/`__script-shot-row`/`__script-shot-index`/`__script-shot-desc`/`__script-more` 样式。
+
+### 连线数据传递（workflowGeneration.ts）
+- **`getUpstreamData` 集成**：`runWorkflowGeneration` 改用 `getUpstreamData(initiating, source.nodes, source.connections)` 推断上游节点，支持 `metadata.referenceNodeIds` 显式覆盖连线推断。
+- **prompt 构建**：使用 `upstream.textContents`（包含上游文本节点 content + 配置节点 prompt）替代手动 filter，同时保留 `mentionedNodeIds`（@-引用）union。
+- **references 构建**：保持 `resolveMediaHref`（支持 storageKey → blob URL 解析），`mediaSources` 从 `related` 节点构建。
+
+### ScriptNodeEditor 批量生图/生视频
+- **批量生成按钮**：分镜 Tab 头部新增"批量生图"和"批量生视频"按钮（无分镜时 disabled），点击触发 `onBatchGenerate(mode)` 回调。
+- **InfiniteWorkflow `handleScriptBatchGenerate`**：
+  - 读取 Script 节点的 `scriptBreakdown.shots`，过滤出有 prompt（`promptOverride` 或 `action`/`scene`）且未已关联节点的分镜。
+  - 在 Script 节点右侧创建网格布局（每行 5 个，间距 20px），自动避碰：检测右侧已有节点，若有碰撞则将网格起点右移到已有节点右边缘之后。
+  - 每个分镜创建一个 image/video 节点：`prompt` = `shot.promptOverride` 或从 `scene/action/emotion` 拼接，`referenceNodeIds: [scriptNodeId]`，标题 `分镜 N`。
+  - 创建 script→image/video 连线。
+  - 更新 `scriptBreakdown.shots` 中每个分镜的 `imageNodeId`/`videoNodeId` 指向新建节点。
+  - `group_nodes` op 将所有新节点打组（`batchGroupSource: 'auto'`）。
+  - `applyOps` 成功后依次调用 `onRunNode` 触发生成，并选中所有新节点。
+
+### 待用户验证
+- ① `npm run dev` 编译无报错；② 工具栏和双击空白菜单出现"脚本节点"选项，可创建 Script 节点；③ Script 节点缩略卡片正确显示统计和分镜摘要；④ 双击 Script 节点打开全屏 Modal 编辑器；⑤ 输入剧本 + 点击"AI 拆解剧本"能正确调用 LLM 并生成分镜列表；⑥ 分镜卡片可编辑/删除，资产列表可增删改；⑦ Ctrl+G 选中多个节点能打组（batchId + batchGroupSource:'manual'）；⑧ 工具栏出现"打组"/"整组执行"/"取消打组"按钮；⑨ "整组执行"按钮按拓扑顺序依次运行节点；⑩ Script 节点不显示 Run/Stop/PromptFocus 按钮；⑪ "批量生图"/"批量生视频"按钮在分镜 Tab 出现，无分镜时 disabled；⑫ 点击批量生图后右侧出现网格布局的图片节点，每个节点 prompt 为分镜的 promptOverride，且自动开始生成；⑬ 批量生成的节点自动打组（batchGroupSource:'auto'）并选中；⑭ 已关联图片节点的分镜不会被重复生成；⑮ script→image/video 连线自动创建。
+
+## Phase 2.2 — Slash 命令面板 + 生成器增强（风格库 / 运镜 / 摄像机参数）
+
+### 类型与数据结构
+- **新增类型**（`types.ts`）：`CameraParams{camera,lens,focalLength,aperture}`、`StylePreset{id,name,category,promptPrefix,previewUrl?,isCustom?}`、`CameraMovement{id,name,description,promptKeyword,isCustom?}`、`SlashCommand{id,label,description,icon,category,mode,minSources,maxSources,generateCount,gridCols,promptBuilder}`。
+- **WorkflowGenerationConfig 扩展**：新增 `camera?: CameraParams`、`styleId?: string`、`cameraMovement?: string`、`customMovement?: string` 字段。
+
+### 常量库
+- **`CAMERA_MOVEMENTS`**（21 项）：推进/拉远/平移/俯仰/移动/环绕/升降/手持/固定/变焦推进/变焦拉远/甩镜头/荷兰角/第一人称/航拍/跟随/建立镜头/特写/过肩/仰拍/俯拍，每项含 `id`/`name`/`description`/`promptKeyword`。
+- **`STYLE_PRESETS`**（22 项）：anime/realistic/oil-painting/watercolor/cyberpunk/ghibli/pixar/claymation/lowpoly/voxel/ink-wash/pencil-sketch/charcoal/3d-render/isometric/neon-punk/vaporwave/surreal/gothic/baroque/pop-art/comic-book，每项含 `id`/`name`/`category`/`promptPrefix`，按 `category` 分为 `cinematic`/`illustration`/`art`/`stylized` 四组。
+- **`CAMERA_OPTIONS`**：6 种相机（ARRI Alexa/RED Komodo/Canon EOS R5/Sony A7S III/35mm Film/IMAX）、6 种镜头（24mm/35mm/50mm/85mm/135mm/Anamorphic）、5 种焦距（14mm/24mm/35mm/50mm/85mm）、5 种光圈（f/1.4/f/2.0/f/2.8/f/4.0/f/5.6）。
+
+### 配置面板（WorkflowConfigPanel.tsx）
+- **风格下拉**：按 `category` optgroup 分组，选中后注入 `styleId` 到 config。
+- **相机/镜头/焦距/光圈下拉**：仅 image 模式显示，选中后注入 `camera` 到 config。
+- **运镜下拉**：仅 video 模式显示，选中预设运镜或输入自定义运镜关键词。
+
+### Prompt 前缀注入（workflowGeneration.ts）
+- **注入逻辑**：`promptPrefix = [stylePreset?.promptPrefix, cameraPrefix, movementKeyword].filter(Boolean).join(', ')`，拼到用户 prompt 最前面。
+- **cameraPrefix 构建**：`camera: {camera} {lens}, {focalLength} lens, {aperture}`（有 camera 参数时才构建）。
+- **movementKeyword**：优先 `customMovement`，其次从 `CAMERA_MOVEMENTS` 查找 `cameraMovement` 对应的 `promptKeyword`。
+- **纯前端 prompt 工程**：不改 Provider 层，不传额外参数给 API。
+
+### Slash 命令面板（SlashMenu.tsx）
+- **6 条 Slash 命令**：
+  - `multi-camera-9`（多机位九宫格）：从 1 张图生成 9 个不同机位视角（3×3 网格），promptBuilder 按 index 注入 front/front-left/left/back-left/back/back-right/right/front-right/top-down 9 个角度。
+  - `character-3-view`（角色三视图）：从 1 张角色图生成前/侧/后三视图（3 列），promptBuilder 注入 front view/side profile view/back view。
+  - `story-4-grid`（剧情推演四宫格）：将描述拆为 4 格剧情演绎图（2×2 网格），promptBuilder 注入 `scene N of 4`。
+  - `lighting-fix`（电影级光影矫正）：修复不稳定光线，专业色彩分级，单图输出。
+  - `portrait-enhance`（人像质感增强）：增强皮肤质感、光影细节，单图输出。
+  - `storyboard-25`（25宫格连贯分镜）：将描述拆为 25 帧连贯分镜（5×5 网格），promptBuilder 注入 `frame N of 25`。
+- **搜索过滤**：输入关键词过滤命令列表（label + description + 分类标签匹配）。
+- **键盘导航**：ArrowUp/Down 切换高亮，Enter 执行，Escape 关闭。
+- **分类标签**：分镜/角色/机位/增强，显示在每条命令右侧。
+
+### Slash 命令集成（InfiniteWorkflow.tsx）
+- **`/` 键触发**：在画布空白处按 `/` 键打开 SlashMenu（居中定位），在 textarea/input/select 等 BLOCKED_TARGET 中不触发。
+- **命令执行**（`handleSlashCommand`）：
+  - 从当前选中节点中筛选 `command.mode` 类型且 `status:'success'` 的节点作为源（最多 `maxSources` 个）。
+  - 源不足 `minSources` 时显示 notice 提示用户先选择源节点。
+  - 按 `gridCols` 网格布局创建 `generateCount` 个新节点（居中放置），每个节点 prompt 由 `command.promptBuilder(index, total)` 生成。
+  - `referenceNodeIds` 设为源节点 ID 列表，`metadata.status` 为 `idle`。
+  - 每个源节点 → 每个新节点创建 `connect_nodes` op。
+  - `group_nodes` op 自动打组（`batchGroupSource:'auto'`）。
+  - `applyOps` 成功后依次 `onRunNode` 触发生成 + `selectNodes` 选中所有新节点。
+- **Escape 关闭**：SlashMenu 打开时按 Escape 优先关闭 SlashMenu（不触发其他 Escape 行为）。
+- **点击空白关闭**：`onSurfacePointerDown` 新增 `setSlashMenu(null)`。
+
+### 网格拼图工具（gridComposer.ts）
+- **`composeImageGrid(sources, options)`**：将多张图片加载后 cover-fit 绘制到 Canvas 网格中，返回合成 PNG Blob。
+- **参数**：`cols`/`cellWidth`(512)/`cellHeight`(512)/`gap`(8)/`padding`(12)/`background`(#1a1a2e)/`labels`/`labelColor`/`labelBackground`。
+- **图片加载**：复用 `loadWorkflowMediaBlob`，支持 storageKey 和 href 两种来源；加载失败的格子绘制占位色块。
+- **标签绘制**：可选在每格左上角绘制文字标签（带半透明背景条）。
+
+### CSS 样式
+- `workflow.css` 新增 `.workflow-slash-menu`/`__search`/`__search-icon`/`__input`/`__list`/`__empty`/`__item`/`__item--active`/`__item-icon`/`__item-text`/`__item-label`/`__item-desc`/`__item-badge` 样式。
+
+### 待用户验证
+- ① `npm run dev` 编译无报错；② 选中配置节点时配置面板出现风格/相机/镜头/焦距/光圈/运镜下拉；③ 选择风格后生成的图片 prompt 前缀包含风格关键词（如 `anime style, ...`）；④ 选择运镜后生成的视频 prompt 前缀包含运镜关键词（如 `camera push in, ...`）；⑤ 在画布空白处按 `/` 键弹出 Slash 命令面板；⑥ Slash 面板支持搜索过滤和键盘导航（Arrow/Enter/Escape）；⑦ 选中 1 张已生成图片后执行"多机位九宫格"，右侧出现 3×3 网格的 9 个图片节点并自动开始生成；⑧ 选中 1 张角色图后执行"角色三视图"，出现 3 列图片节点（前/侧/后视图）；⑨ 执行"25宫格连贯分镜"，出现 5×5 网格的 25 个图片节点；⑩ Slash 命令生成的节点自动打组并选中；⑪ 源节点不足时显示提示信息；⑫ `gridComposer.ts` 的 `composeImageGrid` 能正确合成网格图片（需后续 Phase 在 UI 中接入使用）；⑬ Escape 键能正确关闭 Slash 面板；⑭ 点击画布空白处能关闭 Slash 面板。
+
+## Phase 2.3 — 图像工具补齐 + 视频工具（ffmpeg.wasm）
+
+### 依赖与构建配置
+- **新增依赖**：`@ffmpeg/ffmpeg@0.12.15` + `@ffmpeg/util@0.12.2`，懒加载 `@ffmpeg/core@0.12.6`（从 unpkg CDN，~31MB），仅用户首次点击视频工具时下载。
+- **vite.config.ts**：`server.headers` 添加 `Cross-Origin-Opener-Policy: same-origin` + `Cross-Origin-Embedder-Policy: require-corp`，启用 SharedArrayBuffer 多线程；`build.rollupOptions.output.manualChunks` 新增 `vendor-ffmpeg` chunk，把 `@ffmpeg/ffmpeg` + `@ffmpeg/util` 单独打包便于懒加载。
+- **COOP/COEP 影响**：开启后所有跨域资源必须带 CORP 头；当前项目图片主要走本地 blob/同源，未受影响。生产部署需在反代/CDN 上同样下发这两个头。
+
+### ffmpeg 客户端（services/ffmpegClient.ts）
+- **`getFFmpeg()`**：单例懒加载，首次调用 `FFmpegWASM.load()` 时根据 `isMultiThreadAvailable()` 决定加载单线程或多线程 core URL（`unpkg.com/@ffmpeg/core@0.12.6/dist/umd` 或 `@ffmpeg/core-mt@0.12.6`）。
+- **`isFFmpegSupported()`**：检测 `SharedArrayBuffer` + `WebAssembly` 是否可用。
+- **`isMultiThreadAvailable()`**：检测 `SharedArrayBuffer` + 多线程 core 可用性，决定是否启用 MT core。
+
+### 视频工具服务（services/videoTools.ts）
+- **`trimVideo(file, startSec, endSec)`**：用 ffmpeg `-ss` + `-to` + `-c copy` 流复制剪裁，不重编码，极快；返回 `Blob { type: video/mp4 }`。
+- **`splitAudioVideo(file)`**：`-vn -c:a copy` 提取音频 + `-an -c:v copy` 提取纯视频；返回 `{ video: Blob, audio: Blob }`。
+- **`mergeVideos(files)`**：先为每个输入生成 ts 片段（`-c copy -bsf:v h264_mp4toannexb`），再 concat demuxer 合并 + `-c copy` 输出 MP4；要求所有输入编码参数一致。
+- **`getVideoDuration(file)`**：`-i` 解析 stdout 中 `Duration: hh:mm:ss.xx` 行。
+- 所有命令统一通过 `ffmpeg.exec([...])` 调用；文件挂载/卸载通过 `ffmpeg.writeFile` / `ffmpeg.deleteFile`。
+
+### 图像变换服务（services/imageTransform.ts）
+- **`transformImage(src, action)`**：纯 Canvas 实现，`action` 支持 `rotate-90`/`rotate-180`/`rotate-270`/`flip-h`/`flip-v`；返回 PNG Blob。无 AI、无网络。
+
+### 宫格切分服务（services/gridSplitter.ts）
+- **`splitGrid(src, rows, cols)`**：纯 Canvas 按 `rows × cols` 切分源图，返回 `SplitGridResult[]`（含 `blob` + `row` + `col` + `index`）。无 AI、无网络。
+
+### 打光预设库（components/workflow/LightingPresets.ts）
+- **主光预设 26 项**：按 7 大类分组（自然光/电影感/戏剧光/时尚/恐怖/科幻/古典），每项含 `id`/`name`/`category`/`prompt`（如 `soft window light from the left`、`hard rim light from behind`、`neon under-lighting cyan` 等）。
+- **轮廓光预设 9 项**：`rim-back`/`rim-left`/`rim-right`/`kicker`/`hair-light`/`backlight`/`edge-light`/`halo`/`split-rim`。
+- **`buildRelightPrompt(keyLight, rimLight, intensity)`**：拼接成图生图 prompt，如 `cinematic relighting, key: soft window light from the left, rim: hard rim light from behind, intensity: strong, preserve identity and composition, relight only`。
+
+### 视频工具对话框（components/workflow/WorkflowVideoToolDialogs.tsx）— 新建
+- **`WorkflowVideoToolKind`**：`trim` | `av-split` | `merge`（3 种）。
+- **TrimDialog**：双 `Slider` 选择起止时间（0~duration），实时显示 `MM:SS` 标签，`FFmpegStatus` 显示加载/进度/错误。
+- **SimpleVideoDialog**：用于 `av-split`（提示"将拆为纯视频 + 纯音频两个节点"）和 `merge`（要求至少选中 2 个视频节点）。
+- **FFmpegStatus 组件**：进度条 + 状态文案 + 多线程指示徽章。
+
+### 图像工具对话框扩展（components/workflow/WorkflowImageToolDialogs.tsx）
+- **`WorkflowImageToolKind` 现有 12 种**：crop / filter / upscale / remove-background / outpaint / mask / split / **rotate** / **splitGrid** / **annotate** / **relight** / **storyboard**（后 5 个为 Phase 2.3 新增）。
+- **RotateFlipDialog**：4 旋转按钮 + 2 翻转按钮 + 预览网格（`.workflow-rotate-grid`），确认后调 `transformImage`。
+- **SplitGridDialog**：行/列 Slider（1~5），实时预览切分网格（`.workflow-grid-preview` + `.workflow-grid-cell`），确认后调 `splitGrid` 生成 `rows*cols` 个新节点。
+- **AnnotateDialog**：提示词输入 + 颜色选择（`ColorPicker`）+ 笔刷/箭头/文字说明，确认后将 prompt 注入 `runWorkflowImageEdit`（复用现有图生图链路，annotation prompt 作为 mask 引导）。
+- **RelightDialog**：主光选择列表（按 category 分组）+ 轮廓光选择列表 + 强度 Slider（low/medium/strong）+ 实时预览 `buildRelightPrompt` 结果；确认后调 `runWorkflowImageEdit`。
+- **StoryboardDialog**：源节点选择（多选已成功图像节点）+ 网格布局选择（2×2/3×3/4×4/5×5）+ 标签开关；确认后调 `composeImageGrid`（复用 Phase 2.2 `gridComposer.ts`）生成单张拼图节点。
+
+### WorkflowNodeToolbar 扩展
+- **新增 `WorkflowVideoToolHandlers` 接口**：`trim`/`avSplit`/`merge` 三个方法。
+- **`WorkflowImageToolHandlers` 新增 5 方法**：`rotate`/`splitGrid`/`annotate`/`relight`/`storyboard`。
+- **新增 6 个工具按钮**（lucide 图标）：`RotateCw`（旋转镜像）+ `Grid2x2`（宫格切分）+ `Frame`（分镜组拼接）+ `Lightbulb`（打光面板）+ `Scissors`（音视频分离）+ `ScissorsLineDashed`（剪辑）；`merge` 复用 `Combine` 图标。
+- **视频按钮仅在 video 节点显示**：trim/av-split 单选视频节点时显示；merge 选中≥2 视频节点时显示。
+- **图像按钮仅在 image 节点显示**：rotate/splitGrid/annotate/relight/storyboard 单选或多选图像节点时显示。
+
+### InfiniteWorkflow 集成
+- **新增 state**：`videoTool`（当前打开的视频工具 kind + source 节点）/`videoToolBusy`/`videoToolError`/`storyboardNodeIds`；`videoToolBusyRef` + `videoToolTransactionRef` 防止重复触发。
+- **`builtInVideoTools` useMemo**：构造 `WorkflowVideoToolHandlers` 实现，绑定当前 state。
+- **`openVideoTool`/`closeVideoTool`/`confirmVideoTool`**：打开/关闭/确认视频工具对话框。
+- **`confirmVideoTool` 行为**：
+  - `trim`：调 `trimVideo` → 用结果创建新视频节点（连接 source → new）。
+  - `av-split`：调 `splitAudioVideo` → 创建 1 个纯视频节点 + 1 个纯音频节点（均连接 source）。
+  - `merge`：调 `mergeVideos` → 用合并结果替换或新建视频节点（连接所有 source → new，自动打组 `batchGroupSource:'auto'`）。
+- **`confirmImageTool` 新增 5 handler**：
+  - `rotate`：调 `transformImage` → 用结果创建新图像节点（连接 source）。
+  - `splitGrid`：调 `splitGrid` → 为每个 cell 创建新图像节点（连接 source，自动打组）。
+  - `annotate`：将 annotation prompt 作为 mask 注入 `runWorkflowImageEdit`，生成新图像节点。
+  - `relight`：调 `buildRelightPrompt` 生成 prompt → `runWorkflowImageEdit` 生成新图像节点。
+  - `storyboard`：调 `composeImageGrid` 合成 → 创建单张拼图图像节点（连接所有选中 source）。
+- **新增 imports**：`trimVideo`/`splitAudioVideo`/`mergeVideos` from `videoTools` + `composeImageGrid` from `gridComposer` + `buildRelightPrompt` from `LightingPresets` + `transformImage` + `splitGrid` service + `workflowBlobToDataUrl`。
+- **`videoTools`/`videoToolBusy` props 传给 `WorkflowNodeToolbar`** + **`WorkflowVideoToolDialogs` 渲染**在 Stage 底部。
+
+### CSS 样式（styles/workflow.css）
+- 新增 `.workflow-rotate-grid` / `.workflow-grid-preview` / `.workflow-grid-cell` / `.workflow-image-tool__hint` / `.workflow-relight-*` 样式。
+- 视频工具对话框复用现有 `.workflow-image-tool-*` 样式骨架，仅新增 ffmpeg 进度条样式。
+
+### 待用户验证
+- ① `npm install` 无报错（`@ffmpeg/ffmpeg` + `@ffmpeg/util` 安装成功，可能有 Excalidraw radix-ui peer dep warnings，非阻塞）；② `npm run dev` 编译无报错，浏览器控制台无 COOP/COEP 报错；③ 选中 1 张图像节点 → 工具栏出现"旋转镜像"按钮 → 点击打开对话框 → 选择 90° → 确认后画布出现新图像节点且方向正确；④ 选中 1 张图像节点 → 点击"宫格切分" → 选 3×3 → 确认后画布出现 9 个新图像节点（自动打组）；⑤ 选中 1 张图像节点 → 点击"打光面板" → 选主光 + 轮廓光 → 确认后调用图生图生成新节点；⑥ 选中多张图像节点 → 点击"分镜组拼接" → 选 2×2 → 确认后出现 1 张拼图节点；⑦ 选中 1 张图像节点 → 点击"标注" → 输入标注文字 → 确认后调用图生图生成带标注的新节点；⑧ 选中 1 个视频节点 → 工具栏出现"剪辑"按钮 → 点击打开 TrimDialog → 首次加载 ffmpeg.wasm（显示加载进度，~31MB）→ 拖动双 Slider 选区间 → 确认后生成新视频节点；⑨ 选中 1 个视频节点 → 点击"音视频分离" → 确认后生成 1 个纯视频 + 1 个纯音频节点；⑩ 选中 ≥2 个视频节点 → 点击"合成" → 确认后生成合并后的新视频节点；⑪ ffmpeg.wasm 多线程在支持 SharedArrayBuffer 的浏览器（Chrome/Edge 桌面端）自动启用，控制台可见 MT core 加载日志；⑫ 不支持 SharedArrayBuffer 的环境（Safari/Firefox 部分 版本）自动降级单线程，功能仍可用但速度较慢；⑬ ffmpeg 加载失败时显示明确错误提示，不阻塞其他工具使用。
+
+## Phase 2.5 — 模型清单全量适配（模块 10）
+
+对齐 LibTV 模型清单模块的 P0+P1+P2 全量适配，覆盖模型注册表能力派生、配置面板能力徽章、Seedance 12 槽位参考输入、合规校验+prompt 优化 pre-flight、音色库 UI。
+
+### 模型注册表能力派生（services/modelTemplateRegistry.ts）
+- **ModelTemplate 新增 6 字段**：`referenceSlots`（`ModelReferenceSlotInfo[]`）/ `maxReferences`（number）/ `referenceTypes`（`ModelReferenceKind[]`）/ `complianceCheck`（boolean）/ `promptOptimization`（boolean）/ `notes`（string）。
+- **新增类型**：`ModelReferenceSlotInfo` `{ kind: ModelReferenceKind; max: number; label?: string }` + `ModelReferenceKind` = `'image' | 'video' | 'audio'`。
+- **`deriveReferenceSlots(model, provider, capability)`**：从 `getCapabilityDictionary` 的 `multimodalSlots` 提取 referenceSlots/maxReferences/referenceTypes，派生到 ModelTemplate。
+- **`deriveComplianceAndPromptOptimization(model, provider, capability)`**：按 provider+model 名匹配 Seedance → `complianceCheck:true` + `promptOptimization:true` + notes 文案。
+- **新增导出函数**：
+  - `getModelCapabilities(model, capability?)` → 返回 `{ referenceSlots, maxReferences, referenceTypes, complianceCheck, promptOptimization, notes, supportsReferenceImage, supportsMaskEdit }`。
+  - `isSeedanceModel(model)` → 检测模型名包含 'seedance'。
+  - `getReferenceSlotMax(model, kind, capability?)` → 获取指定 kind 的最大槽位数。
+
+### 能力徽章 UI（components/workflow/WorkflowConfigPanel.tsx）
+- **`modelCapabilities` useMemo**：调 `getModelCapabilities(config.modelId, mode)` 获取能力信息。
+- **5 种能力徽章**（模型下拉下方，`.workflow-config__badges`）：
+  - `refs`：`{maxReferences} 参考输入`（如 `12 参考输入`），仅在 maxReferences > 0 时显示。
+  - `compliance`：`合规校验`，仅在 complianceCheck 为 true 时显示。
+  - `prompt-opt`：`Prompt 优化`，仅在 promptOptimization 为 true 时显示。
+  - `ref-edit`：`参考图编辑`，仅在 supportsReferenceImage 为 true 时显示。
+  - `mask`：`蒙版编辑`，仅在 supportsMaskEdit 为 true 时显示。
+- **Seedance hint 文案**：`isSeedance && mode === 'video'` 时显示说明文字（`.workflow-config__hint`）。
+- **SeedanceSlotPicker 集成**：`isSeedance && mode === 'video' && nodes 存在` 时渲染 `<SeedanceSlotPicker>`。
+
+### Seedance 12 槽位参考输入 UI（components/workflow/SeedanceSlotPicker.tsx — 新建）
+- **`SeedanceReferences` 接口**（types.ts）：`{ imageRefs: string[]; videoRefs: string[]; audioRefs: string[] }`，存 WorkflowNode ID。
+- **`WorkflowGenerationConfig.seedanceRefs`** 字段新增到 types.ts。
+- **SLOT_CONFIGS**：3 组配置 — image（max 9）/ video（max 3）/ audio（max 3），总计 12 槽位。
+- **每槽位 UI**：`<select>` 从画布候选节点选择（过滤已被占用的节点），已选显示缩略图（image）或节点名 + 清空按钮。
+- **实时计数**：`{已选数}/12` 显示在顶部，超过限制时禁用多余 select。
+- **音频单独使用警告**：只选音频没选图/视频时显示提示文案。
+
+### Seedance 参考注入集成（services/workflowGeneration.ts）
+- **seedanceRefs → references 注入**：将 `config.seedanceRefs` 中的 node ID 解析为媒体 href，构造 `UnifiedIgnitionInput.references`，与自动检测的 references 合并去重（seedance 优先）。
+- **去重逻辑**：`seenIds` Set 按 `elementId` 去重，seedanceReferences 排在前。
+
+### 合规校验 + Prompt 优化 Pre-flight（services/promptPreflight.ts — 新建）
+- **`runPreflight(prompt, modelId, userApiKeys, capability)`** → `PreflightResult`：
+  - `optimizedPrompt`：优化后的 prompt（未优化时等于原 prompt）。
+  - `complianceWarnings`：命中的敏感关键词列表。
+  - `skippedOptimization` / `skippedCompliance`：是否跳过。
+- **合规校验**：基础客户端关键词匹配（暴力/色情/恐怖主义等 11 个中英文关键词），命中时 workflowGeneration.ts 将节点标记 error 并终止生成。
+- **Prompt 优化**：用用户 text-capable Key 调 `generateTextWithProvider` 调用 LLM 优化 prompt（Seedance 专用 system prompt，英文输出 ≤200 词）。
+- **BYOK 优雅降级**：无 text-capable Key 或调用失败/超时（15s）时，`skippedOptimization = true`，静默跳过，不阻塞生成。
+- **workflowGeneration.ts 集成**：在 prompt 组装后、references 构建前调用 `runPreflight`，使用 `effectivePrompt` 替代原始 prompt 传给生成器 + 历史记录。
+
+### 音色库（services/voiceCatalog.ts — 新建 + WorkflowConfigPanel 集成）
+- **`VoicePreset` 接口**：`{ id, provider, voiceId, name, description, language, gender, emotionCapable }`。
+- **MiniMax Speech 2.8 音色**（17 个）：Wise_Woman / Friendly_Person / Inspirational_girl / Deep_Voice_Man / Calm_Woman / Casual_Guy / Lively_Girl / Patient_Man / Young_Knight / Determined_Man / Lovely_Girl / Decent_Boy / Imposing_Manner / Elegant_Man / Abbess / Sweet_Girl_2 / Exuberant_Girl。
+- **OpenAI TTS 音色**（9 个）：alloy / echo / fable / onyx / nova / shimmer / corral / ash / sage。
+- **`getVoicesByProvider(provider)`** / **`findVoice(voiceId)`** / **`isCustomVoiceId(value)`** 导出函数。
+- **WorkflowConfigPanel 音频模式音色选择器**：原 free-text input 替换为 `<select>` 分组下拉（MiniMax optgroup + OpenAI optgroup），26 个音色可选 + "默认"选项。
+
+### CSS 样式（styles/workflow.css）
+- 新增 `.workflow-config__badges`（flex wrap 容器）/ `.workflow-badge--*`（5 种 badge 颜色，CSS color-mix 实现深浅变体）/ `.workflow-config__hint`（Seedance 说明文字样式）。
+- 新增 `.workflow-seedance-picker*` 系列样式（容器/标题/计数/槽位行/select/缩略图/清空按钮/警告）。
+
+### 待用户验证
+- ① `npm run dev` 编译无报错；② 在 Workflow 配置节点选择 Seedance 视频模型 → 模型下拉下方出现徽章（`12 参考输入` + `合规校验` + `Prompt 优化`）+ Seedance hint 文案 + SeedanceSlotPicker 出现；③ 在 SeedanceSlotPicker 中选择画布上的图片节点 → 计数器更新 `x/12`，已选节点显示缩略图；④ 选择视频节点到 video 槽位 → 计数器更新；⑤ 清空某槽位 → 计数器递减；⑥ 选 Seedance 模型 + 写 prompt + 运行节点 → 生成时先执行合规校验（敏感词 prompt 会被拦截显示 error）→ 有 text Key 时 prompt 被优化为英文 → 生成结果使用优化后的 prompt；⑦ 无 text Key 时 prompt 优化静默跳过，生成正常进行（使用原始 prompt）；⑧ 选非 Seedance 模型 → 不出现徽章和 SeedanceSlotPicker，合规/prompt 优化不触发；⑨ 音频模式 → 音色下拉显示 MiniMax 17 个 + OpenAI 9 个共 26 个选项，分组显示；⑩ `getVoicesByProvider('minimax')` 返回 17 项，`getVoicesByProvider('openai')` 返回 9 项，`findVoice('Wise_Woman')` 返回非 null。
+
+## Phase 2.4 — 音频工具（截取 / 变速）
+
+对齐 LibTV 模块 06+07 音频工具部分。导演台 3D 构图（three.js / @react-three/fiber）为 P2 最低优先级，本轮未实现，后续视用户需求再补。
+
+### 音频工具服务（services/audioTools.ts — 新建）
+- **`trimAudio(blob, startSec, endSec, name)`**：用 ffmpeg.wasm `-ss` + `-to` + `-c copy` 流复制截取音频片段，不重编码，极快；返回 `AudioTrimResult { blob, durationSec }`，输出格式延续源文件 MIME（默认 `audio/mpeg`）。
+- **`changeAudioSpeed(blob, speed, name)`**：用 ffmpeg `atempo` 滤镜变速不变调。`buildAtempoChain(speed)` 将超出单级范围（0.5~2.0）的速度链式拆解（如 4.0x = `atempo=2.0,atempo=2.0`；0.25x = `atempo=0.5,atempo=0.5`），输出 `audio/mp3`。
+- **`getAudioDuration(blob)`**：`-i` 解析 stdout 中 `Duration: hh:mm:ss.xx` 行，返回秒数（number）。
+- **复用 `ffmpegClient.ts`**：与视频工具共享 `getFFmpeg()` 单例 + COOP/COEP 配置 + 懒加载 core。
+
+### 音频工具对话框（components/workflow/WorkflowAudioToolDialogs.tsx — 新建）
+- **`WorkflowAudioToolKind`**：`trim` | `speed`（2 种）。
+- **`AudioTrimDialog`**：双 `Slider` 选择起止时间（0~duration），实时显示 `MM:SS` 标签 + `<audio>` 预览源音频，`FFmpegStatus` 显示加载/进度/错误（复用视频工具的 FFmpegStatus 组件）。
+- **`AudioSpeedDialog`**：`Slider`（0.25~4.0，步进 0.05）+ 实时显示 `x` 倍速 + atempo 链式提示（如 `2.0 → 2.0` 表示两级串联）+ `<audio>` 预览源音频。
+- **`WorkflowAudioToolState`**：`{ kind, nodeId }`；**`WorkflowAudioToolConfirmation`**：trim 为 `{ kind:'trim', startSec, endSec }`，speed 为 `{ kind:'speed', speed }`。
+
+### WorkflowNodeToolbar 扩展
+- **新增 `WorkflowAudioToolHandlers` 接口**：`trim(id)` / `speed(id)` 两个方法。
+- **新增 2 个工具按钮**（lucide 图标）：`Scissors`（音频截取）+ `Gauge`（音频变速），仅在 `node.type === 'audio'` 且 `mediaUrl` 存在时显示。
+- **`audioTools` / `audioToolBusy` props 新增**，传递给工具栏。
+
+### InfiniteWorkflow 集成
+- **新增 state**：`audioTool` / `audioToolBusy` / `audioToolError`；`audioToolBusyRef` + `audioToolTransactionRef` 防止重复触发（与 videoTool 同款事务机制）。
+- **`openAudioTool` / `closeAudioTool` / `confirmAudioTool`**：打开/关闭/确认音频工具对话框。
+- **`builtInAudioTools` useMemo**：构造 `WorkflowAudioToolHandlers` 实现，绑定当前 state。
+- **`confirmAudioTool` 行为**：
+  - `trim`：调 `trimAudio` → 用结果创建新音频节点（位于源节点右侧偏移 +40/-40，连接 source → new），节点标题 `trim-{源名}`。
+  - `speed`：调 `changeAudioSpeed` → 用结果创建新音频节点（mimeType `audio/mp3`，位于源节点右侧），节点标题 `speed-{speed}x-{源名}`。
+- **`audioTools` / `audioToolBusy` props 传给 `WorkflowNodeToolbar`** + **`WorkflowAudioToolDialogs` 渲染**在 Stage 底部（与 `WorkflowVideoToolDialogs` 同级）。
+- **新增 imports**：`trimAudio` / `changeAudioSpeed` from `audioTools` + `WorkflowAudioToolDialogs` + `WorkflowAudioToolHandlers` 类型。
+
+### CSS 样式
+- 音频工具对话框复用现有 `.workflow-image-tool__*` 样式骨架，无新增 CSS。
+
+### 待用户验证
+- ① `npm run dev` 编译无报错；② 选中 1 个音频节点 → 工具栏出现"音频截取"（Scissors）和"音频变速"（Gauge）按钮；③ 点击"音频截取" → 打开 AudioTrimDialog → 首次加载 ffmpeg.wasm（若此前视频工具已加载则复用单例）→ 拖动双 Slider 选区间 → `<audio>` 预览正常 → 确认后画布出现新音频节点（截取片段，连接源节点）；④ 点击"音频变速" → 打开 AudioSpeedDialog → Slider 0.25~4.0 → 选 2.0x → 确认后画布出现新音频节点（2 倍速，连接源节点）；⑤ 选 4.0x 时 atempo 链式提示显示 `2.0 → 2.0`，变速后音调不变；⑥ 选 0.25x 时 atempo 链式提示显示 `0.5 → 0.5`，变速后音调不变；⑦ 工具进行中（busy）时关闭按钮禁用，避免事务中断；⑧ 同时打开视频工具和音频工具时，第二个工具打开会提示"请先完成或关闭当前音频/视频工具"；⑨ 非音频节点（image/video/text）不显示音频工具按钮；⑩ 音频节点无 mediaUrl 时不显示音频工具按钮。
+
+## Phase 3 — Agent Skill 双入口（操作模式）
+
+对齐 LibTV 双入口哲学：外部 Agent（Claude Code / Codex CLI / OpenClaw）通过标准 MCP stdio 协议直接操作 Flovart 画布。不建 Go 后端创作 Agent FSM（"后端不碰 LLM"已拍板），改为纯前端工具层。
+
+### MCP Server（tools/flovart/mcp-server.js — 新建）
+- **技术栈**：`@modelcontextprotocol/sdk` v1.29.0 `McpServer` + `StdioServerTransport` + `zod` v4.0.17。
+- **自动注册**：遍历 `COMMAND_REGISTRY` 全部 50+ 命令，每个命令自动转为 MCP tool。tool name 将命令名中的 `.` 和 `-` 替换为 `_`（如 `canvas.inspect` → `canvas_inspect`，`element.update-prompt` → `element_update_prompt`）。
+- **类型映射**：`argTypeToZod()` 将 COMMAND_REGISTRY 的类型标注（`string`/`number?`/`boolean`/`object`/`array`/`string[]`/`key=value[]`/`image|video|all?` 枚举等）自动转为 Zod schema。
+- **命令路由**：与 `cli.js` 完全一致——LOCAL_COMMANDS 调 `executeFlovartCommand(command, args, {})`；BROWSER_COMMANDS 调 `enqueueAndWait`/`enqueueCommand`（默认 `wait:true`，`timeoutMs:60000`）；其余调 `executeFlovartCommand(command, args, createShadowRuntimeFacade())`。
+- **Browser 命令扩展参数**：`generate.*`、`element.ignite`、`workflow.node.run/stop` 自动添加可选 `wait`（boolean，默认 true）和 `timeoutMs`（number，默认 60000）参数。超时后返回 pending 结果，Agent 可用 `video.status` 或 `element.watch` 轮询。
+- **参数转换**：`toCliArgs()` 将 camelCase 同时生成 kebab-case 键（如 `aspectRatio` → `aspect-ratio`），兼容 `executeFlovartCommand` 内部两种读取方式。
+- **错误处理**：`executeFlovartCommand` 返回 `{ ok: false }` 时，MCP response 标记 `isError: true`；异常被 catch 后返回 error message 作为 text content。
+
+### CLI 包升级（tools/flovart/package.json）
+- **版本**：0.2.0 → 0.3.0。
+- **新增 bin**：`flovart-mcp` → `./mcp-server.js`（与 `flovart`/`flovart-cli` 并列）。
+- **新增 dependencies**：`@modelcontextprotocol/sdk: ^1.29.0` + `zod: ^4.0.17`。
+- **files 字段**：新增 `mcp-server.js`。
+
+### SKILL.md 更新（.agents/skills/flovart/SKILL.md）
+- **YAML frontmatter**：新增 `metadata.openclaw`（category: creative, tags: [canvas, image-generation, video-generation, workflow, mcp, agent], entrypoints: [cli, mcp]）。
+- **新增 MCP Server 章节**：说明启动方式（`npm run flovart:mcp` 或 `node tools/flovart/mcp-server.js`）、Claude Code 配置（`.mcp.json`）、Codex/OpenClaw 子进程集成、tool name 命名规则、browser 命令 `wait`/`timeoutMs` 参数。
+
+### Claude Code 集成（.mcp.json — 新建）
+- 项目根目录新建 `.mcp.json`，配置 `flovart` MCP server 指向 `node tools/flovart/mcp-server.js`。Claude Code 自动读取项目级 `.mcp.json` 注册 MCP server。
+
+### Root package.json
+- 新增 `flovart:mcp` script：`node tools/flovart/mcp-server.js`。
+
+### 待用户验证
+- ① `npm run flovart:mcp` 能启动 MCP server（stdio 模式，无报错）；② Claude Code 打开项目后自动识别 `.mcp.json` 并注册 `flovart` MCP server，工具列表显示 50+ 个 `flovart_*` tool；③ 调用 `flovart_status` 返回运行时状态 JSON；④ 调用 `flovart_canvas_inspect` 返回画布检视结果；⑤ 调用 `flovart_generate_image`（prompt + aspectRatio）在浏览器打开时触发生成并返回结果或 pending；⑥ `flovart_command_list` 返回完整命令注册表；⑦ `flovart_doctor` 诊断本地文件桥接设置无报错；⑧ OpenClaw `openclaw skills install @flovart/agent-skill` 能识别 SKILL.md frontmatter（待 ClawHub 发布后验证）；⑨ Codex CLI 通过 `codex app-server --stdio` 子进程模式能发现并调用 flovart MCP tools。
+
+## Canvas 持久化 Bug 修复（Canvas ↔ Workflow 往返丢数据）
+
+- **根因 #1 — `isSyncingRef` 异步时序**：`FlovartExcalidrawStage.tsx` 中 `pushFlovartToExcalidraw` 的 `finally` 块清 `isSyncingRef.current = false`，但 `updateScene` 是异步生效，Excalidraw 会在 flag 清除后再次触发 `onChange` → 重入。修复：不在 `finally` 中清，改在 `handleSceneChange` 中通过 `getSceneElements()` 的 ID 与 `lastExSnapshotRef.current` 比对确认同步完成后才清。
+- **根因 #2 — `lastFlovartRef` 未更新**：`pushFlovartToExcalidraw` 在 booted 跳过 push 时也未更新 `lastFlovartRef.current`，导致下次 `handleSceneChange` diff 永远判定为"远端变更" → 死循环。修复：始终更新 ref，只在 booted 时跳过 `updateScene` push。
+- **根因 #3 — `initialData` 覆盖 `updateScene`**：React 19 + StrictMode 下 `ExcalidrawInner` 的 `initialData` prop 在 `updateScene` 调用之后又被 React 重新应用，覆盖刚 push 的元素。修复：用 `setTimeout(0)` 延迟 push 到下一个事件循环，避开 React 重渲染窗口。
+- **验证**：通过 Playwright 自动化在 Canvas 创建 2 个元素 → 切到 Workflow → 切回 Canvas，确认 2 items 完整保留、图层列表正确、Excalidraw scene 不被重置。
+- **Debug trace 清理**：`[TRACE pushFlovart]` / `[TRACE sceneChange]` / `[TRACE guard]` / `[TRACE diff]` 四处 `console.warn` 已从 `FlovartExcalidrawStage.tsx` 移除。
+
+## Canvas 图片不显示 Bug 修复（Excalidraw 0.18.1 图片渲染机制）
+
+- **Excalidraw 0.18.1 图片渲染链路分析**（源码定位）：
+  - 图片通过 **canvas 2D context.drawImage()** 渲染，不是 DOM `<img>` 标签；`.SVGLayer` 为空 `<svg></svg>` 是 0.18.x 正常行为。
+  - 渲染链：`addFiles()` → `addMissingFiles()` → `addNewImagesToImageCache()` → `updateImageCache()` → `loadHTMLImageElement(dataURL)` → `imageCache.set(fileId, {image, mimeType})` → `scene.triggerUpdate()` → 重新渲染 → `drawElementOnCanvas` 从 `renderConfig.imageCache.get(fileId).image` 取 HTMLImageElement → `context.drawImage()`。
+  - **关键发现**：`updateScene()` **不触发** `addNewImagesToImageCache()` — 必须通过 `addFiles()` 或 action 路径。`refresh()` 会强制 canvas 重绘但不重新加载 image cache。
+- **根因 #1 — `baseFields` width/height 回退错误**：`utils/excalidrawAdapter.ts:117` 用 `overrides.width ?? 0`，但 Flovart ImageElement 的 `width` 字段在旧路径中可能未设置，应从 `boundsOf(el).width` 取真实宽高。修复：`baseFields` 改为 `overrides.width ?? bw ?? 0` / `overrides.height ?? bh ?? 0`（bw/bh 来自 `boundsOf(el)`）。此修复同时影响 `convertImage`/`convertVideo`/`convertShape`/`convertText`。
+- **根因 #2 — `pushFlovartToExcalidraw` 调用顺序错误**：原顺序是 `registerImageFiles`（→ `addFiles` → `addNewImagesToImageCache`）在 `updateScene` 之前调用，但 `addNewImagesToImageCache` 扫描 scene 时图片元素还没进去 → imageCache 为空。修复：重排顺序为 **先 `updateScene`**（元素进 scene）→ **后 `registerImageFiles`**（`addFiles` → `addNewImagesToImageCache` 能找到元素）→ **`setTimeout(refresh, 120)`** 强制重绘。
+- **验证**：通过 Playwright 自动化在 Canvas 创建红色 200×200 图片元素 → 像素采样确认 144 个红色像素 (255,0,0) 在正确坐标渲染，w:200 h:200 ✅。
+
+## Workflow CreateMenu 手绘涂鸦风重构
+
+- **设计方向**：联网搜索 2026 手绘 UI 趋势，确认 Excalidraw 官方设计系统（indigo #6965db + Excalifont + 8px radius）+ TypeUI Hand Drawn skill + Rough.js 模式为当前主流。本项目采用 Excalidraw 原生风 + 2×3 网格卡片 + Caveat 手写字体 + CSS 模拟手绘边框（不引入 rough.js）。
+- **Caveat 字体引入**：`index.html` 添加 Google Fonts preconnect + Caveat wght 500/600/700。
+- **CreateMenu 重构**（`components/workflow/WorkflowCreateMenu.tsx`）：
+  - 从垂直列表（280×428px）改为 2×3 网格（360×388px）。
+  - Caveat 手写字体用于 header + card title。
+  - 不规则 border-radius 变化（每张卡片通过 `:nth-child` 选择器设置不同圆角组合）模拟手绘感。
+  - hover：translateY(-2px) + 轻微旋转（±0.6deg）+ accent border + tint。
+  - 键盘导航适配 2D 网格（ArrowLeft/Right/Up/Down，Down/Up 移动 2 格=列数）。
+- **CSS 新增**（`styles/workflow.css`）：`.workflow-create-menu*` 系列类（`.workflow-create-menu` 360px 宽不规则 border-radius + `.workflow-create-menu__grid` 2 列 grid gap 8px + `.workflow-create-menu__card` 不规则圆角变化 + `.workflow-create-menu__card-icon` 36px 圆形 accent 色 + `.workflow-create-menu__card-title` Caveat 700 16px）。
+- **验证**：浅色/深色双模式视觉验证通过；节点创建（click + Enter）验证通过；键盘导航 2D 网格验证通过。
+
+### 待用户验证
+- ① Canvas → Workflow → Canvas 往返后画布元素完整保留（不丢数据）；② Canvas 中创建的图片元素正确显示（非空白/非占位）；③ `index.html` 加载 Caveat 字体成功（Network 面板无失败）；④ Workflow 双击空白或从连线拖出 CreateMenu 显示 2×3 网格手绘风卡片；⑤ CreateMenu 卡片 hover 有轻微上抬 + 旋转 + accent 描边效果；⑥ CreateMenu 键盘箭头键导航 2D 网格正确（Down/Up 跨列移动）；⑦ 深色主题下 CreateMenu 样式正常；⑧ Console 无 `[TRACE *]` debug 日志输出。

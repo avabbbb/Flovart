@@ -1,0 +1,74 @@
+---
+title: 接口响应规则
+---
+
+# 接口响应规则
+
+Flovart Hub 后端所有业务接口遵循统一响应结构。
+
+## 响应体
+
+```json
+{ "code": 0, "data": {}, "msg": "ok" }
+```
+
+- `code`: 0 表示成功；非 0 表示业务错误，此时与 HTTP 状态码一致
+- `data`: 成功时的业务数据；失败时为 `null`
+- `msg`: 成功时为 `"ok"`；失败时为具体错误原因
+
+## 鉴权
+
+受保护接口需要在 `Authorization` 头携带 `Bearer <jwt>`。
+登录/注册成功后返回 `token` 字段即 JWT，有效期默认 168 小时（可由 `JWT_EXP_HOURS` 配置）。
+
+| HTTP | code | 含义 |
+| --- | --- | --- |
+| 200 | 0 | 成功 |
+| 400 | 400 | 入参错误、状态冲突 |
+| 401 | 401 | 未登录或 token 失效 |
+| 403 | 403 | 已登录但无权限 |
+| 404 | 404 | 资源不存在 |
+| 500 | 500 | 服务器错误 |
+
+## 列表接口
+
+`GET /api/v1/prompts?page=1&size=20&sort=latest&keyword=&mode=image&authorId=&tags=a&tags=b`
+
+- `page` 默认 1；`size` 默认 20，上限 50
+- `sort`: `latest`（默认）/ `popular` / `downloads`
+- `tags` 可重复传值
+
+响应 `data`：
+
+```json
+{ "list": [], "total": 0, "page": 1, "size": 20 }
+```
+
+## 现有路由
+
+- `POST /api/v1/auth/register` — 注册
+- `POST /api/v1/auth/login` — 登录
+- `GET /api/v1/auth/me` — 当前用户（需鉴权）
+- `GET /api/v1/prompts` — 提示词包列表
+- `GET /api/v1/prompts/:id` — 详情
+- `GET /api/v1/prompts/by-slug/:slug` — 按 slug 获取
+- `GET /api/v1/prompts/:id/download` — 下载并 +1 计数
+- `POST /api/v1/prompts` — 上传（需鉴权）
+- `PUT /api/v1/prompts/:id` — 修改（需鉴权 + 作者）
+- `DELETE /api/v1/prompts/:id` — 删除（需鉴权 + 作者）
+- `POST /api/v1/prompts/:id/like` — 切换收藏（需鉴权）
+- `GET /healthz` — 健康检查
+
+## 上传接口（R2 预签名直传）
+
+仅在 R2 配置完整（`R2_ACCOUNT_ID` / `R2_ACCESS_KEY` / `R2_SECRET_KEY` / `R2_BUCKET` 四者齐备）时启用，否则启动日志提示"upload routes disabled"。
+
+- `POST /api/v1/uploads/presign` — 请求预签名 PUT URL（需鉴权）
+  - body: `{ filename, contentType, purpose }`
+  - purpose 白名单：`prompt_cover` / `workflow_showcase` / `avatar` / `workflow_media` / `misc`
+  - 返回 `data`: `{ key, putUrl, publicUrl, expiresAt }`
+- `POST /api/v1/uploads/confirm` — 前端直传完成后回服务端确认（需鉴权）
+  - body: `{ key }`
+  - 返回 `data`: `{ key, url }`
+
+上传流程：前端拿到 `putUrl` 后用 `PUT` 直接传输字节流到 R2（不经过 hub），完成后再调 `confirm` 让 hub `HeadObject` 校验对象真实存在并返回最终可访问 URL。

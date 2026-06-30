@@ -1,0 +1,136 @@
+- generic [ref=f11e3]:
+  - banner [ref=f11e5]:
+    - generic [ref=f11e6]:
+      - generic "Flovart" [ref=f11e7]:
+        - generic [ref=f11e8]: Flovart
+      - strong [ref=f11e10]: Board 1
+    - navigation "Workspace switcher" [ref=f11e11]:
+      - button "Canvas" [ref=f11e12] [cursor=pointer]
+      - button "Workflow" [ref=f11e13] [cursor=pointer]
+    - generic [ref=f11e14]:
+      - link "Enterprise console" [ref=f11e15] [cursor=pointer]:
+        - /url: "#/enterprise"
+        - img [ref=f11e16]
+      - 'button "API 0/3: 未配置文本模型 API Key — 提示词润色、AI 对话功能不可用 未配置图片模型 API Key — AI 绘图、图片编辑功能不可用 未配置视频模型 API Key — AI 视频生成功能不可用 尚未配置任何 API Key — 所有 AI 功能不可用，请先在设置中添加" [ref=f11e20] [cursor=pointer]':
+        - img [ref=f11e21]
+        - generic [ref=f11e23]: API 0/3
+      - button "切换到中文" [ref=f11e24] [cursor=pointer]:
+        - img [ref=f11e25]
+        - generic [ref=f11e29]: 切换到中文
+      - button "Dark mode" [ref=f11e30] [cursor=pointer]:
+        - img [ref=f11e31]
+      - button "Settings" [ref=f11e33] [cursor=pointer]:
+        - img [ref=f11e34]
+  - generic [ref=f11e37]:
+    - generic [ref=f11e352]:
+      - generic [ref=f11e353]:
+        - generic [ref=f11e354]:
+          - generic [ref=f11e355]: Workspace
+          - generic [ref=f11e356]: Boards & Layers
+        - button "Toggle sidebar" [ref=f11e357] [cursor=pointer]:
+          - img [ref=f11e358]
+      - generic [ref=f11e361]:
+        - generic [ref=f11e362]:
+          - generic [ref=f11e363]:
+            - generic [ref=f11e364]: Boards
+            - generic [ref=f11e365]: Scenes and canvases
+          - button "New" [ref=f11e366] [cursor=pointer]
+        - button "Board 1 Board 1 1 items 画板操作" [ref=f11e368] [cursor=pointer]:
+          - img "Board 1" [ref=f11e369]
+          - generic [ref=f11e370]:
+            - generic [ref=f11e371]: Board 1
+            - generic [ref=f11e372]: 1 items
+          - button "画板操作" [ref=f11e374]:
+            - img [ref=f11e375]
+      - generic [ref=f11e379]:
+        - generic [ref=f11e381]:
+          - generic [ref=f11e382]: Layers
+          - generic [ref=f11e383]: 1 items on canvas
+        - generic [ref=f11e387] [cursor=pointer]:
+          - button "Expand group layer" [ref=f11e398]
+          - generic "Rectangle" [ref=f11e400]
+          - generic [ref=f11e401]:
+            - button "Lock" [ref=f11e402]:
+              - img [ref=f11e403]
+            - button "Hide" [ref=f11e406]:
+              - img [ref=f11e407]
+    - generic [ref=f11e412]:
+      - generic:
+        - contentinfo:
+          - region "Canvas actions" [ref=f11e414]:
+            - heading "Canvas actions" [level=2] [ref=f11e415]
+            - generic [ref=f11e417]:
+              - button "Zoom out" [ref=f11e418] [cursor=pointer]:
+                - img [ref=f11e420]
+              - button "Reset zoom" [ref=f11e422] [cursor=pointer]: 100%
+              - button "Zoom in" [ref=f11e423] [cursor=pointer]:
+                - img [ref=f11e425]
+            - generic [ref=f11e427]:
+              - button "Undo" [disabled] [ref=f11e430]:
+                - img [ref=f11e432]
+              - button "Redo" [disabled] [ref=f11e436]:
+                - img [ref=f11e438]
+          - button "Help" [ref=f11e441] [cursor=pointer]:
+            - img [ref=f11e442]
+      - generic:
+        - img
+      - generic [ref=f11e447]: Drawing canvas
+    - generic:
+      - button "打开侧边栏":
+        - img
+      - generic [ref=f11e448]:
+        - generic [ref=f11e451]:
+          - button "Agent" [ref=f11e452] [cursor=pointer]:
+            - generic [ref=f11e455]: Agent
+          - button "History" [ref=f11e456] [cursor=pointer]:
+            - generic [ref=f11e458]: History
+          - button "Assets" [ref=f11e459] [cursor=pointer]:
+            - generic [ref=f11e461]: Assets
+          - button "Collapse panel" [ref=f11e462] [cursor=pointer]:
+            - img [ref=f11e463]
+        - generic [ref=f11e467]:
+          - generic [ref=f11e468]:
+            - generic [ref=f11e469]: 画布助手
+            - generic [ref=f11e470]:
+              - button "自动执行" [ref=f11e471] [cursor=pointer]
+              - button "清空" [disabled] [ref=f11e472]
+          - generic [ref=f11e474]:
+            - generic [ref=f11e475]: 🌱
+            - generic [ref=f11e476]:
+              - generic [ref=f11e477]: 11:35
+              - generic [ref=f11e478]: 我是画布助手。告诉我你想做什么——生成图片、创建文本、移动元素，都可以。
+          - generic [ref=f11e480]:
+            - button "📎" [ref=f11e481]
+            - textbox "告诉画布助手你想做什么…Enter 发送，Shift+Enter 换行" [ref=f11e482]
+            - button "发送" [disabled] [ref=f11e483]
+  - generic [ref=f11e484]:
+    - generic [ref=f11e485]:
+      - button "Boards & Layers" [ref=f11e486] [cursor=pointer]:
+        - img [ref=f11e487]
+      - button "Upload Image" [ref=f11e490] [cursor=pointer]:
+        - img [ref=f11e491]
+      - button "Assets" [ref=f11e494] [cursor=pointer]:
+        - img [ref=f11e495]
+    - generic [ref=f11e498]:
+      - button "Select & Move" [ref=f11e499] [cursor=pointer]:
+        - img [ref=f11e500]
+      - button "Pan Canvas" [ref=f11e503] [cursor=pointer]:
+        - img [ref=f11e504]
+      - button "Shapes" [ref=f11e510] [cursor=pointer]:
+        - img [ref=f11e511]
+      - button "Drawing Tools" [ref=f11e514] [cursor=pointer]:
+        - img [ref=f11e515]
+      - button "Text" [ref=f11e517] [cursor=pointer]:
+        - img [ref=f11e518]
+      - textbox "Stroke Color" [ref=f11e521] [cursor=pointer]: "#111827"
+      - slider "Stroke Width" [ref=f11e522] [cursor=pointer]: "5"
+      - generic [ref=f11e523]: "5"
+    - generic [ref=f11e525]:
+      - button "滚轮：平移（点击切换为缩放）" [ref=f11e526] [cursor=pointer]:
+        - img [ref=f11e527]
+      - button "Canvas Settings" [ref=f11e530] [cursor=pointer]:
+        - img [ref=f11e531]
+      - button [ref=f11e535] [cursor=pointer]:
+        - img [ref=f11e536]
+      - button "Redo" [disabled] [ref=f11e539]:
+        - img [ref=f11e540]

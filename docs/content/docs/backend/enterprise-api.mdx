@@ -1,0 +1,42 @@
+---
+title: Enterprise 接口
+---
+
+# Enterprise 服务接口
+
+`backend/enterprise` 独立服务，默认端口 8081，复用 hub 的 PostgreSQL 与 JWT。
+JWT 在 hub 注册/登录获得后，可直接用于 enterprise 的 `Authorization: Bearer <token>` 请求。
+
+## 响应规则
+
+沿用 `{ code, data, msg }` 结构（见 hub 接口响应规则）。
+
+## 角色与权限
+
+| 角色 | 说明 |
+| --- | --- |
+| owner | 组织所有者，一切操作 |
+| admin | 管理员，可添加/调整/移除 member，但不可动 owner 与其他 admin |
+| member | 普通成员，只读组织与成员列表 |
+
+owner 不能通过成员接口直接创建、降级或移除，需要走转让流程（后续版本）。
+管理员通过 `byUsername` 添加成员，被加者必须已是 flovart 平台注册用户（共享 users 表）。
+
+## 路由
+
+- `POST /api/v1/enterprise/orgs` — 创建组织（创建者成为 owner）
+  - body: `{ slug, name }`
+- `GET /api/v1/enterprise/orgs` — 当前用户加入的组织列表
+- `GET /api/v1/enterprise/orgs/:id` — 组织详情
+- `DELETE /api/v1/enterprise/orgs/:id` — 删除组织（仅 owner）
+- `GET /api/v1/enterprise/orgs/:id/members` — 成员列表
+- `POST /api/v1/enterprise/orgs/:id/members` — 添加成员
+  - body: `{ byUsername, role }`，role ∈ `admin` | `member`
+- `PUT /api/v1/enterprise/orgs/:id/members/:userId` — 修改成员角色
+  - body: `{ role }`
+- `DELETE /api/v1/enterprise/orgs/:id/members/:userId` — 移除成员
+- `GET /healthz` — 健康检查
+
+## 后续扩展
+
+额度池、积分分配、Provider 消耗扣减、财务报表等接口在下一阶段加入。

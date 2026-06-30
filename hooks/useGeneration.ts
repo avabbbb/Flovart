@@ -49,15 +49,12 @@ export interface UseGenerationParams {
     promptAttachments: ChatAttachment[];
     activeCharacterLock: CharacterLockProfile | null;
     batchCount: number;
-    inpaintState: { targetImageId: string; maskPoints: { x: number; y: number }[]; promptVisible: boolean } | null;
-    inpaintPrompt: string;
     modelPreference: ModelPreference;
     userApiKeys: UserApiKey[];
     resolveMediaHref?: (href: string) => Promise<string>;
 
-    // refs from useCanvasInteraction
-    svgRef: React.RefObject<SVGSVGElement | null>;
-    getCanvasPoint: (clientX: number, clientY: number) => { x: number; y: number };
+    // canvas center for placing newly generated elements
+    getCanvasCenter: () => { x: number; y: number };
 
     // setters
     setSelectedElementIds: (ids: string[]) => void;
@@ -66,8 +63,6 @@ export interface UseGenerationParams {
     setProgressMessage: (v: string) => void;
     setIsSettingsPanelOpen: (v: boolean) => void;
     setGenerationHistory: React.Dispatch<React.SetStateAction<GenerationHistoryItem[]>>;
-    setInpaintState: (v: null) => void;
-    setInpaintPrompt: (v: string) => void;
     commitAction: (updater: (prev: Element[]) => Element[]) => void;
     getPreferredApiKey: (capability: AICapability, provider?: AIProvider) => UserApiKey | undefined;
 }
@@ -81,11 +76,11 @@ export function useGeneration(params: UseGenerationParams) {
         elements, selectedElementIds, prompt, generationMode, videoAspectRatio,
         videoDurationSec, videoResolution, videoGenerateAudio, videoWatermark,
         isAutoEnhanceEnabled, mentionedElementIds, chatAttachments, promptAttachments,
-        activeCharacterLock, batchCount, inpaintState, inpaintPrompt,
+        activeCharacterLock, batchCount,
         modelPreference, userApiKeys, resolveMediaHref,
-        svgRef, getCanvasPoint,
+        getCanvasCenter,
         setSelectedElementIds, setIsLoading, setError, setProgressMessage,
-        setIsSettingsPanelOpen, setGenerationHistory, setInpaintState, setInpaintPrompt,
+        setIsSettingsPanelOpen, setGenerationHistory,
         commitAction, getPreferredApiKey,
     } = params;
 
@@ -576,88 +571,6 @@ export function useGeneration(params: UseGenerationParams) {
         return `${processedPrompt.trim()}\n\n参考素材绑定:\n${bindingLines.join('\n')}`;
     }, []);
 
-    /* ---- Inpaint ---- */
-
-    const handleInpaint = async () => {
-        if (!inpaintState || !inpaintPrompt.trim()) return;
-        const targetImage = elements.find(el => el.id === inpaintState.targetImageId) as ImageElement | undefined;
-        if (!targetImage) { setInpaintState(null); return; }
-
-        const inpaintResolved = resolveModelKey('image', modelPreference.imageModel);
-        if (!inpaintResolved) {
-            setError('未找到可用于图片编辑的 API Key，请先在设置中配置。');
-            setIsSettingsPanelOpen(true);
-            return;
-        }
-
-        setIsLoading(true);
-        setError(null);
-        setProgressMessage('正在生成 AI 局部重绘 mask...');
-
-        try {
-            const { width, height, x: imgX, y: imgY } = targetImage;
-            const maskCanvas = document.createElement('canvas');
-            maskCanvas.width = width;
-            maskCanvas.height = height;
-            const maskCtx = maskCanvas.getContext('2d')!;
-
-            maskCtx.fillStyle = 'black';
-            maskCtx.fillRect(0, 0, width, height);
-
-            maskCtx.fillStyle = 'white';
-            maskCtx.beginPath();
-            const pts = inpaintState.maskPoints;
-            maskCtx.moveTo(pts[0].x - imgX, pts[0].y - imgY);
-            for (let i = 1; i < pts.length; i++) {
-                maskCtx.lineTo(pts[i].x - imgX, pts[i].y - imgY);
-            }
-            maskCtx.closePath();
-            maskCtx.fill();
-
-            const maskDataUrl = maskCanvas.toDataURL('image/png');
-
-            setProgressMessage('正在 AI 局部重绘...');
-
-            const result = await editImageWithProvider(
-                [{ href: targetImage.href, mimeType: targetImage.mimeType }],
-                inpaintPrompt.trim(),
-                inpaintResolved.model,
-                inpaintResolved.key,
-                { mask: { href: maskDataUrl, mimeType: 'image/png' } },
-            );
-
-            if (result && result.newImageBase64) {
-                const newMime = result.newImageMimeType || 'image/png';
-                commitAction(prev => prev.map(el =>
-                    el.id === targetImage.id
-                        ? { ...el, href: `data:${newMime};base64,${result.newImageBase64}`, mimeType: newMime }
-                        : el
-                ));
-
-                saveGenerationToHistory({
-                    name: `Inpaint: ${inpaintPrompt.trim().slice(0, 30)}`,
-                    dataUrl: `data:${newMime};base64,${result.newImageBase64}`,
-                    mimeType: newMime,
-                    width: targetImage.width,
-                    height: targetImage.height,
-                    prompt: inpaintPrompt.trim(),
-                });
-
-                setProgressMessage('局部重绘完成！');
-            } else {
-                setError('AI 局部重绘未返回结果，请重试。');
-            }
-        } catch (err) {
-            const error = err as Error;
-            setError(`局部重绘失败: ${error.message}`);
-        } finally {
-            setIsLoading(false);
-            setInpaintState(null);
-            setInpaintPrompt('');
-            setTimeout(() => setProgressMessage(''), 1500);
-        }
-    };
-
     /* ---- Main generate ---- */
 
     const handleGenerate = async (
@@ -793,8 +706,6 @@ export function useGeneration(params: UseGenerationParams) {
                 const video = document.createElement('video');
 
                 video.onloadedmetadata = () => {
-                    if (!svgRef.current) return;
-
                     let newWidth = video.videoWidth;
                     let newHeight = video.videoHeight;
                     const MAX_DIM = getResponsiveMaxDim();
@@ -804,9 +715,7 @@ export function useGeneration(params: UseGenerationParams) {
                         else { newHeight = MAX_DIM; newWidth = MAX_DIM * ratio; }
                     }
 
-                    const svgBounds = svgRef.current!.getBoundingClientRect();
-                    const screenCenter = { x: svgBounds.left + svgBounds.width / 2, y: svgBounds.top + svgBounds.height / 2 };
-                    const canvasPoint = getCanvasPoint(screenCenter.x, screenCenter.y);
+                    const canvasPoint = getCanvasCenter();
 
                     const newVideoElement: VideoElement = {
                         id: generateId(), type: 'video', name: 'Keyframe Animation',
@@ -927,8 +836,6 @@ export function useGeneration(params: UseGenerationParams) {
                 const video = document.createElement('video');
 
                 video.onloadedmetadata = () => {
-                    if (!svgRef.current) return;
-
                     let newWidth = video.videoWidth;
                     let newHeight = video.videoHeight;
                     const MAX_DIM = getResponsiveMaxDim();
@@ -938,9 +845,7 @@ export function useGeneration(params: UseGenerationParams) {
                         else { newHeight = MAX_DIM; newWidth = MAX_DIM * ratio; }
                     }
 
-                    const svgBounds = svgRef.current!.getBoundingClientRect();
-                    const screenCenter = { x: svgBounds.left + svgBounds.width / 2, y: svgBounds.top + svgBounds.height / 2 };
-                    const canvasPoint = getCanvasPoint(screenCenter.x, screenCenter.y);
+                    const canvasPoint = getCanvasCenter();
                     const x = canvasPoint.x - (newWidth / 2);
                     const y = canvasPoint.y - (newHeight / 2);
 
@@ -1171,10 +1076,7 @@ export function useGeneration(params: UseGenerationParams) {
                     const { newImageBase64, newImageMimeType } = result;
                     const img = new Image();
                     img.onload = () => {
-                        if (!svgRef.current) return;
-                        const svgBounds = svgRef.current.getBoundingClientRect();
-                        const screenCenter = { x: svgBounds.left + svgBounds.width / 2, y: svgBounds.top + svgBounds.height / 2 };
-                        const canvasPoint = getCanvasPoint(screenCenter.x, screenCenter.y);
+                        const canvasPoint = getCanvasCenter();
                         const x = canvasPoint.x - (img.width / 2);
                         const y = canvasPoint.y - (img.height / 2);
                         const newImage: ImageElement = {
@@ -1227,10 +1129,7 @@ export function useGeneration(params: UseGenerationParams) {
 
                     const img = new Image();
                     img.onload = () => {
-                        if (!svgRef.current) return;
-                        const svgBounds = svgRef.current.getBoundingClientRect();
-                        const screenCenter = { x: svgBounds.left + svgBounds.width / 2, y: svgBounds.top + svgBounds.height / 2 };
-                        const canvasPoint = getCanvasPoint(screenCenter.x, screenCenter.y);
+                        const canvasPoint = getCanvasCenter();
                         const x = canvasPoint.x - (img.width / 2);
                         const y = canvasPoint.y - (img.height / 2);
 
@@ -1350,12 +1249,7 @@ export function useGeneration(params: UseGenerationParams) {
     };
 
     const handleSelectBatchResult = (img: { href: string; mimeType: string; width: number; height: number }) => {
-        if (!svgRef.current) return;
-        const svgBounds = svgRef.current.getBoundingClientRect();
-        const canvasPoint = getCanvasPoint(
-            svgBounds.left + svgBounds.width / 2,
-            svgBounds.top + svgBounds.height / 2,
-        );
+        const canvasPoint = getCanvasCenter();
         const newImage: ImageElement = {
             id: generateId(), type: 'image',
             x: canvasPoint.x - img.width / 2,
@@ -1378,12 +1272,8 @@ export function useGeneration(params: UseGenerationParams) {
     };
 
     const handleSelectAllBatchResults = () => {
-        if (!batchResults || !svgRef.current) return;
-        const svgBounds = svgRef.current.getBoundingClientRect();
-        const center = getCanvasPoint(
-            svgBounds.left + svgBounds.width / 2,
-            svgBounds.top + svgBounds.height / 2,
-        );
+        if (!batchResults) return;
+        const center = getCanvasCenter();
         const cols = batchResults.images.length <= 2 ? 2 : 2;
         const gap = 20;
         const newEls: ImageElement[] = batchResults.images.map((img, i) => {
@@ -1415,7 +1305,6 @@ export function useGeneration(params: UseGenerationParams) {
         handleUpscaleImage,
         handleRemoveImageBackground,
         handleOutpaint,
-        handleInpaint,
         handleGenerate,
         handleBatchGenerate,
         handleSelectBatchResult,

@@ -13,6 +13,12 @@
 </p>
 
 <p align="center">
+  <a href="https://vercel.com/new/clone?repository-url=https://github.com/avabbbb/Flovart"><img src="https://vercel.com/button" alt="Deploy with Vercel" height="32" /></a>
+  &nbsp;
+  <a href="https://render.com/deploy?repo=https://github.com/avabbbb/Flovart"><img src="https://render.com/images/deploy-to-render-button.svg" alt="Deploy to Render" height="32" /></a>
+</p>
+
+<p align="center">
   <a href="https://avabbbb.github.io/Flovart/">在线体验</a> •
   <a href="docs/overview/quick-start.md">快速开始</a> •
   <a href="docs/overview/features.md">功能特性</a> •
@@ -26,8 +32,9 @@
   <img src="https://img.shields.io/badge/Vite-6-E8453C?logo=vite&logoColor=white" alt="Vite 6" />
 </p>
 
-<p align="center">
-  <img src="https://count.getloli.com/get/@flovart-readme?theme=rule34" alt="Flovart Popular Counter" />
+`<p align="center">`
+  `<img src="https://count.getloli.com/get/@flovart-readme?theme=rule34" alt="Flovart Popular Counter" />`
+
 </p>
 
 <p align="center">
@@ -63,7 +70,7 @@
 - **更可被驱动**：CLI（`tools/flovart/cli.js`）、SKILL.md 和 host config 三条确定性入口，画布上的每个媒体元素都暴露成命令。外部 Agent 负责规划，Flovart 负责执行。
 - **更好看的前端**：Animal Crossing 风的 Tactile Shell 视觉语言、无限画板、`@` 引用图层、双击聚焦 / 三击适配、双语 + 亮暗主题自适应。
 
-四种部署形态可选：在线 Demo、Tauri 桌面端、Chrome/Edge 浏览器扩展、Docker 自托管。
+六种部署形态可选：在线 Demo、Vercel/Render 一键部署、Tauri 桌面端、Chrome/Edge 浏览器扩展、Docker 自托管。
 
 如果你也有相同的愿望，欢迎提交 PR。
 
@@ -94,14 +101,14 @@ npm run dev
 
 Flovart 更推荐按创作链路使用，而不是把每个能力拆开记：
 
-| 工作流 | 你会怎么用 |
-| ------ | ---------- |
-| **导入参考图** | 把角色、场景、产品或草图拖进画布，作为后续生成的视觉锚点。 |
-| **@ 引用画布节点** | 在节点下方的 PromptBar 输入 `@`，直接把画布里的图片、视频或文本节点作为上下文。 |
-| **生成 4 个方案** | 围绕同一组参考图批量生成 2/4 个方向，快速比较构图、风格和细节。 |
-| **A/B 对比与局部修正** | 用对比视图挑选结果，再对选中图片做局部重绘、扩图、去背景、超分或滤镜调整。 |
-| **保存为素材** | 把满意的角色、场景、道具沉淀进素材库，后续直接拖回画布复用。 |
-| **让 Agent 继续扩展** | 外部 Agent 可以通过 CLI / SKILL 读取画布、点火节点、重试失败任务，并继续扩展镜头或视频。 |
+| 工作流                       | 你会怎么用                                                                               |
+| ---------------------------- | ---------------------------------------------------------------------------------------- |
+| **导入参考图**         | 把角色、场景、产品或草图拖进画布，作为后续生成的视觉锚点。                               |
+| **@ 引用画布节点**     | 在节点下方的 PromptBar 输入`@`，直接把画布里的图片、视频或文本节点作为上下文。         |
+| **生成 4 个方案**      | 围绕同一组参考图批量生成 2/4 个方向，快速比较构图、风格和细节。                          |
+| **A/B 对比与局部修正** | 用对比视图挑选结果，再对选中图片做局部重绘、扩图、去背景、超分或滤镜调整。               |
+| **保存为素材**         | 把满意的角色、场景、道具沉淀进素材库，后续直接拖回画布复用。                             |
+| **让 Agent 继续扩展**  | 外部 Agent 可以通过 CLI / SKILL 读取画布、点火节点、重试失败任务，并继续扩展镜头或视频。 |
 
 **核心能力**：无限画布、AI 文生图/图生图/文生视频、Multi-Agent 协作、局部重绘/扩图、滤镜调色、图层蒙版、批量生成、提示词润色、角色锁定、素材库、12+ Provider、双语主题切换。
 

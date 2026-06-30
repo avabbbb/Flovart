@@ -65,6 +65,8 @@ export class ProviderAdapterRegistry {
       const direct = this.adapters.get(providerId);
       if (direct?.supportsModel(modelId)) return direct;
     }
+    // 无 explicit providerId 时按适配器注册顺序匹配首个 supportsModel 的。
+    // ES2015+ Map 按插入顺序迭代（规范保证），且每个 modelId 通常只被一个 provider 支持，故无歧义。
     return [...this.adapters.values()].find((adapter) => adapter.supportsModel(modelId));
   }
 

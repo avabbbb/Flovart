@@ -1,9 +1,41 @@
 import type { ImageFilters } from '../../types';
 
-export type WorkflowNodeType = 'image' | 'text' | 'video' | 'audio' | 'config';
+export type WorkflowNodeType = 'image' | 'text' | 'video' | 'audio' | 'config' | 'script';
 export type WorkflowNodeStatus = 'idle' | 'loading' | 'success' | 'error';
 export type WorkflowGenerationMode = 'text' | 'image' | 'video' | 'audio';
 export type WorkflowBackgroundMode = 'dots' | 'lines' | 'none';
+export type WorkflowBatchGroupSource = 'auto' | 'manual';
+
+export interface ScriptAsset {
+  id: string;
+  kind: 'character' | 'scene' | 'prop';
+  name: string;
+  description?: string;
+  settingImageNodeId?: string;
+}
+
+export interface ScriptShot {
+  id: string;
+  index: number;
+  emotion?: string;
+  action?: string;
+  dialogue?: string;
+  sfx?: string;
+  scene?: string;
+  promptOverride?: string;
+  colorTag?: string;
+  imageNodeId?: string;
+  videoNodeId?: string;
+  status?: WorkflowNodeStatus;
+}
+
+export interface ScriptBreakdown {
+  assets: ScriptAsset[];
+  shots: ScriptShot[];
+  sourceText?: string;
+  referenceVideoNodeId?: string;
+  modelId?: string;
+}
 
 export interface WorkflowPoint {
   x: number;
@@ -25,6 +57,13 @@ export interface WorkflowProviderConfig {
   modelId?: string;
 }
 
+export interface CameraParams {
+  camera?: string;
+  lens?: string;
+  focalLength?: string;
+  aperture?: string;
+}
+
 export interface WorkflowGenerationConfig extends WorkflowProviderConfig {
   mode: WorkflowGenerationMode;
   aspectRatio?: string;
@@ -38,6 +77,17 @@ export interface WorkflowGenerationConfig extends WorkflowProviderConfig {
   audioFormat?: string;
   audioSpeed?: string;
   audioInstructions?: string;
+  camera?: CameraParams;
+  styleId?: string;
+  cameraMovement?: string;
+  customMovement?: string;
+  seedanceRefs?: SeedanceReferences;
+}
+
+export interface SeedanceReferences {
+  imageRefs: string[];
+  videoRefs: string[];
+  audioRefs: string[];
 }
 
 export interface WorkflowNodeMetadata {
@@ -45,6 +95,7 @@ export interface WorkflowNodeMetadata {
   prompt?: string;
   richTextDocument?: WorkflowRichPromptDocument;
   mentionedNodeIds?: string[];
+  referenceNodeIds?: string[];
   href?: string;
   poster?: string;
   storageKey?: string;
@@ -61,6 +112,7 @@ export interface WorkflowNodeMetadata {
   generationRequestId?: string;
   generationHistoryId?: string;
   filters?: Partial<ImageFilters>;
+  scriptBreakdown?: ScriptBreakdown;
 }
 
 export interface WorkflowNode {
@@ -73,6 +125,9 @@ export interface WorkflowNode {
   freeResize?: boolean;
   isVisible?: boolean;
   isLocked?: boolean;
+  batchId?: string;
+  batchIndex?: number;
+  batchGroupSource?: WorkflowBatchGroupSource;
   metadata: WorkflowNodeMetadata;
 }
 
@@ -132,4 +187,38 @@ export type WorkflowOp =
   | { type: 'connect_nodes'; id?: string; fromNodeId: string; toNodeId: string }
   | { type: 'select_nodes'; ids: string[] }
   | { type: 'set_viewport'; viewport: WorkflowViewport }
-  | { type: 'run_generation'; nodeId: string };
+  | { type: 'run_generation'; nodeId: string }
+  | { type: 'group_nodes'; ids: string[]; batchId: string; source?: WorkflowBatchGroupSource }
+  | { type: 'ungroup_nodes'; ids: string[] }
+  | { type: 'execute_group'; nodeIds: string[] };
+
+export interface StylePreset {
+  id: string;
+  name: string;
+  category: string;
+  promptPrefix: string;
+  previewUrl?: string;
+  isCustom?: boolean;
+}
+
+export interface CameraMovement {
+  id: string;
+  name: string;
+  description: string;
+  promptKeyword: string;
+  isCustom?: boolean;
+}
+
+export interface SlashCommand {
+  id: string;
+  label: string;
+  description: string;
+  icon: string;
+  category: 'storyboard' | 'character' | 'camera' | 'enhance';
+  mode: 'image' | 'video';
+  minSources: number;
+  maxSources: number;
+  generateCount: number;
+  gridCols: number;
+  promptBuilder: (index: number, total: number) => string;
+}

@@ -10,6 +10,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "flovart:cli": "node tools/flovart/cli.js",
+    "flovart:mcp": "node tools/flovart/mcp-server.js",
     "flovart:agent": "node agent/index.js",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
@@ -19,6 +20,9 @@
   },
   "dependencies": {
     "@cfworker/json-schema": "^4.1.1",
+    "@excalidraw/excalidraw": "^0.18.1",
+    "@ffmpeg/ffmpeg": "^0.12.15",
+    "@ffmpeg/util": "^0.12.2",
     "@google/genai": "^1.48.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@tauri-apps/api": "^2.10.1",
@@ -39,6 +43,7 @@
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "react-konva": "^19.2.4",
+    "react-router": "^7.18.0",
     "tippy.js": "^6.3.7",
     "zod": "^4.0.17",
     "zustand": "^5.0.12"

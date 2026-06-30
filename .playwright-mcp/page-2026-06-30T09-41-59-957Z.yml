@@ -1,0 +1,25 @@
+- generic [ref=f8e3]:
+  - banner [ref=f8e5]:
+    - generic [ref=f8e6]:
+      - generic "Flovart" [ref=f8e7]:
+        - generic [ref=f8e8]: Flovart
+      - strong [ref=f8e10]: 未命名工作流
+    - navigation "Workspace switcher" [ref=f8e11]:
+      - button "Canvas" [ref=f8e12] [cursor=pointer]
+      - button "Workflow" [ref=f8e13] [cursor=pointer]
+    - generic [ref=f8e14]:
+      - link "Enterprise console" [ref=f8e15] [cursor=pointer]:
+        - /url: "#/enterprise"
+        - img [ref=f8e16]
+      - 'button "API 0/3: 未配置文本模型 API Key — 提示词润色、AI 对话功能不可用 未配置图片模型 API Key — AI 绘图、图片编辑功能不可用 未配置视频模型 API Key — AI 视频生成功能不可用 尚未配置任何 API Key — 所有 AI 功能不可用，请先在设置中添加" [ref=f8e20] [cursor=pointer]':
+        - img [ref=f8e21]
+        - generic [ref=f8e23]: API 0/3
+      - button "切换到中文" [ref=f8e24] [cursor=pointer]:
+        - img [ref=f8e25]
+        - generic [ref=f8e29]: 切换到中文
+      - button "Dark mode" [ref=f8e30] [cursor=pointer]:
+        - img [ref=f8e31]
+      - button "Settings" [ref=f8e33] [cursor=pointer]:
+        - img [ref=f8e34]
+  - generic [ref=f8e39]: 正在加载 Workflow...
+  - generic [ref=f8e41]: Loading Settings...

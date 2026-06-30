@@ -13,9 +13,6 @@ interface ToolbarProps {
     drawingOptions: { strokeColor: string; strokeWidth: number };
     setDrawingOptions: (options: { strokeColor: string; strokeWidth: number }) => void;
     onUpload: (file: File) => void;
-    isCropping: boolean;
-    onConfirmCrop: () => void;
-    onCancelCrop: () => void;
     onSettingsClick: () => void;
     onLayersClick: () => void;
     onBoardsClick: () => void;
@@ -127,9 +124,6 @@ export const Toolbar: React.FC<ToolbarProps> = ({
     drawingOptions,
     setDrawingOptions,
     onUpload,
-    isCropping,
-    onConfirmCrop,
-    onCancelCrop,
     onSettingsClick,
     onLayersClick,
     onAssetsClick,
@@ -224,74 +218,38 @@ export const Toolbar: React.FC<ToolbarProps> = ({
         [t]
     );
 
-    if (isCropping) {
-        return (
-            <div
-                data-testid="canvas-crop-controls"
-                className={`theme-aware pointer-events-auto z-50 flex w-52 flex-col gap-3 rounded-[1.25rem] border-[1.5px] p-4 ${embedded ? 'relative' : 'absolute'}`}
-                style={embedded ? {
-                    transform: `scale(${compactScale})`,
-                    transformOrigin: 'bottom center',
-                    background: 'var(--isl-card)',
-                    borderColor: 'var(--isl-border)',
-                    boxShadow: '0 0.25rem 0 0 var(--isl-edge), var(--isl-shadow-lg)',
-                } : {
-                    left: `${leftPosition}px`,
-                    top: `${topOffset}px`,
-                    transform: `scale(${compactScale})`,
-                    transformOrigin: 'top left',
-                    transition: 'left 0.35s cubic-bezier(0.4, 0, 0.2, 1)',
-                    background: 'var(--isl-card)',
-                    borderColor: 'var(--isl-border)',
-                    boxShadow: '0 0.25rem 0 0 var(--isl-edge), var(--isl-shadow-lg)',
+const FileInput = (
+        <>
+            <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*,video/*"
+                className="hidden"
+                title={t('toolbar.upload')}
+                aria-label={t('toolbar.upload')}
+                onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (file) {
+                        onUpload(file);
+                    }
+                    event.target.value = '';
                 }}
-            >
-                <div className="text-sm font-bold" style={{ color: 'var(--isl-ink)' }}>{t('toolbar.crop.title')}</div>
-                <div className="grid grid-cols-2 gap-2">
-                    <button
-                        type="button"
-                        onClick={onCancelCrop}
-                        className="isl-chip h-9 justify-center px-3 text-sm"
-                    >
-                        {t('toolbar.crop.cancel')}
-                    </button>
-                    <button
-                        type="button"
-                        onClick={onConfirmCrop}
-                        className="isl-go h-9 px-3 text-sm"
-                    >
-                        {t('toolbar.crop.confirm')}
-                    </button>
-                </div>
-            </div>
-        );
-    }
+            />
+            <ToolButton
+                label={t('toolbar.upload')}
+                onClick={() => fileInputRef.current?.click()}
+                icon={<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 16V4" /><path d="m7 9 5-5 5 5" /><path d="M20 16v3a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-3" /></svg>}
+                theme={theme}
+            />
+        </>
+    );
 
-    return (
-        <div
-            className={`theme-aware pointer-events-none z-40 ${embedded ? 'relative' : 'absolute'}`}
-            style={embedded ? {
-                transform: `scale(${compactScale})`,
-                transformOrigin: 'bottom center',
-            } : {
-                top: isHorizontal ? undefined : `${topOffset}px`,
-                bottom: isHorizontal ? `${topOffset}px` : undefined,
-                left: isHorizontal ? '50%' : `${leftPosition}px`,
-                transform: isHorizontal ? `translateX(-50%) scale(${compactScale})` : `scale(${compactScale})`,
-                transformOrigin: isHorizontal ? 'bottom center' : 'top left',
-                transition: 'left 0.35s cubic-bezier(0.4, 0, 0.2, 1)',
-            }}
-        >
-        <div
-            ref={innerRef}
-            data-testid="canvas-toolbar"
-            className={`pointer-events-auto flex items-center gap-1 rounded-2xl border-[1.5px] px-1.5 py-1 ${isHorizontal ? 'max-w-[calc(100vw-2rem)] flex-row flex-wrap justify-center overflow-visible' : 'flex-col'}`}
-            style={{
-                background: 'var(--isl-card)',
-                borderColor: 'var(--isl-border)',
-                boxShadow: '0 0.25rem 0 0 var(--isl-edge), var(--isl-shadow)',
-            }}
-        >
+    const ClusterDivider = () => (
+        <div className={isHorizontal ? 'mx-1.5 h-6 w-px' : 'my-0.5 h-px w-6'} style={{ background: 'var(--isl-border)' }} />
+    );
+
+    const LeftCluster = (
+        <>
             <ToolButton
                 label="Boards & Layers"
                 onClick={onLayersClick}
@@ -299,9 +257,20 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                 active={isLayerPanelExpanded}
                 theme={theme}
             />
+            {FileInput}
+            {onAssetsClick && (
+                <ToolButton
+                    label="Assets"
+                    onClick={onAssetsClick}
+                    icon={<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="4" y="4" width="16" height="16" rx="2" /><path d="M4 10h16" /><path d="M10 4v16" /></svg>}
+                    theme={theme}
+                />
+            )}
+        </>
+    );
 
-            <div className={isHorizontal ? 'mx-0.5 h-6 w-px' : 'h-px w-6'} style={{ background: 'var(--isl-border)' }} />
-
+    const CenterCluster = (
+        <>
             <ToolButton
                 label={t('toolbar.select')}
                 icon={<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m4 3 7 17 2.5-7.5L21 10 4 3Z" /><path d="m13 13 6 6" /></svg>}
@@ -348,9 +317,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                 onClick={() => setActiveTool('text')}
                 theme={theme}
             />
-
             <div className={isHorizontal ? 'mx-0.5 h-6 w-px' : 'my-0.5 h-px w-6'} style={{ background: 'var(--isl-border)' }} />
-
             <input
                 type="color"
                 aria-label={t('toolbar.strokeColor')}
@@ -371,47 +338,11 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                 className={isHorizontal ? 'toolbar-range h-8 w-16 cursor-pointer' : 'toolbar-range h-16 w-8 cursor-pointer [writing-mode:vertical-lr]'}
             />
             <span className="text-[10px] font-bold tabular-nums" style={{ color: 'var(--isl-ink-soft)' }}>{drawingOptions.strokeWidth}</span>
+        </>
+    );
 
-            <div className={isHorizontal ? 'mx-0.5 h-6 w-px' : 'my-0.5 h-px w-6'} style={{ background: 'var(--isl-border)' }} />
-
-            <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*,video/*"
-                className="hidden"
-                title={t('toolbar.upload')}
-                aria-label={t('toolbar.upload')}
-                onChange={(event) => {
-                    const file = event.target.files?.[0];
-                    if (file) {
-                        onUpload(file);
-                    }
-                    event.target.value = '';
-                }}
-            />
-            <ToolButton
-                label={t('toolbar.upload')}
-                onClick={() => fileInputRef.current?.click()}
-                icon={<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 16V4" /><path d="m7 9 5-5 5 5" /><path d="M20 16v3a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-3" /></svg>}
-                theme={theme}
-            />
-            {onAssetsClick && (
-                <ToolButton
-                    label="Assets"
-                    onClick={onAssetsClick}
-                    icon={<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="4" y="4" width="16" height="16" rx="2" /><path d="M4 10h16" /><path d="M10 4v16" /></svg>}
-                    theme={theme}
-                />
-            )}
-            <ToolButton
-                label={t('toolbar.settings')}
-                onClick={onSettingsClick}
-                icon={<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 0 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 0 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 0 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 0 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 0 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 0 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 0 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9c0 .7.4 1.3 1.1 1.6.2.1.5.1.7.1H21a2 2 0 0 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z" /></svg>}
-                theme={theme}
-            />
-
-            <div className={isHorizontal ? 'mx-0.5 h-6 w-px' : 'my-0.5 h-px w-6'} style={{ background: 'var(--isl-border)' }} />
-
+    const RightCluster = (
+        <>
             {setWheelAction && (
                 <ToolButton
                     label={wheelAction === 'pan' ? '滚轮：平移（点击切换为缩放）' : '滚轮：缩放（点击切换为平移）'}
@@ -423,9 +354,13 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                     theme={theme}
                 />
             )}
-
+            <ToolButton
+                label={t('toolbar.settings')}
+                onClick={onSettingsClick}
+                icon={<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 0 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 0 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 0 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 0 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 0 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 0 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 0 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9c0 .7.4 1.3 1.1 1.6.2.1.5.1.7.1H21a2 2 0 0 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z" /></svg>}
+                theme={theme}
+            />
             <div className={isHorizontal ? 'mx-0.5 h-6 w-px' : 'my-0.5 h-px w-6'} style={{ background: 'var(--isl-border)' }} />
-
             <ToolButton
                 onClick={onUndo}
                 disabled={!canUndo}
@@ -439,6 +374,51 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                 icon={<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m15 14 5-5-5-5" /><path d="M20 9H9.5A5.5 5.5 0 0 0 4 14.5 5.5 5.5 0 0 0 9.5 20H13" /></svg>}
                 theme={theme}
             />
+        </>
+    );
+
+    return (
+        <div
+            className={`theme-aware pointer-events-none z-40 ${embedded ? 'relative' : 'absolute'}`}
+            style={embedded ? {
+                transform: `scale(${compactScale})`,
+                transformOrigin: 'bottom center',
+            } : {
+                top: isHorizontal ? undefined : `${topOffset}px`,
+                bottom: isHorizontal ? `${topOffset}px` : undefined,
+                left: isHorizontal ? '50%' : `${leftPosition}px`,
+                transform: isHorizontal ? `translateX(-50%) scale(${compactScale})` : `scale(${compactScale})`,
+                transformOrigin: isHorizontal ? 'bottom center' : 'top left',
+                transition: 'left 0.35s cubic-bezier(0.4, 0, 0.2, 1)',
+            }}
+        >
+        <div
+            ref={innerRef}
+            data-testid="canvas-toolbar"
+            className={`pointer-events-auto flex items-center gap-1 rounded-2xl border-[1.5px] px-2 py-1 ${isHorizontal ? 'max-w-[calc(100vw-2rem)] flex-row justify-between overflow-visible' : 'flex-col'}`}
+            style={{
+                background: 'var(--isl-card)',
+                borderColor: 'var(--isl-border)',
+                boxShadow: '0 0.25rem 0 0 var(--isl-edge), var(--isl-shadow)',
+            }}
+        >
+            {isHorizontal ? (
+                <>
+                    <div className="flex items-center gap-1">{LeftCluster}</div>
+                    <ClusterDivider />
+                    <div className="flex items-center gap-1">{CenterCluster}</div>
+                    <ClusterDivider />
+                    <div className="flex items-center gap-1">{RightCluster}</div>
+                </>
+            ) : (
+                <>
+                    {LeftCluster}
+                    <ClusterDivider />
+                    {CenterCluster}
+                    <ClusterDivider />
+                    {RightCluster}
+                </>
+            )}
         </div>
         </div>
     );

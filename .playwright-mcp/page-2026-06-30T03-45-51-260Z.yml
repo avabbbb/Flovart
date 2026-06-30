@@ -1,0 +1,89 @@
+- generic [ref=f3e3]:
+  - banner [ref=f3e5]:
+    - generic [ref=f3e6]:
+      - generic "Flovart" [ref=f3e7]:
+        - generic [ref=f3e8]: Flovart
+      - strong [ref=f3e10]: Board 1
+    - navigation "Workspace switcher" [ref=f3e11]:
+      - button "Canvas" [ref=f3e12] [cursor=pointer]
+      - button "Workflow" [ref=f3e13] [cursor=pointer]
+    - generic [ref=f3e14]:
+      - link "Enterprise console" [ref=f3e15] [cursor=pointer]:
+        - /url: "#/enterprise"
+        - img [ref=f3e16]
+      - 'button "API 0/3: 未配置文本模型 API Key — 提示词润色、AI 对话功能不可用 未配置图片模型 API Key — AI 绘图、图片编辑功能不可用 未配置视频模型 API Key — AI 视频生成功能不可用 尚未配置任何 API Key — 所有 AI 功能不可用，请先在设置中添加" [ref=f3e20] [cursor=pointer]':
+        - img [ref=f3e21]
+        - generic [ref=f3e23]: API 0/3
+      - button "切换到中文" [ref=f3e24] [cursor=pointer]:
+        - img [ref=f3e25]
+        - generic [ref=f3e29]: 切换到中文
+      - button "Dark mode" [ref=f3e30] [cursor=pointer]:
+        - img [ref=f3e31]
+      - button "Settings" [ref=f3e33] [cursor=pointer]:
+        - img [ref=f3e34]
+  - generic [ref=f3e37]:
+    - generic [ref=f3e39]:
+      - generic [ref=f3e40]:
+        - generic [ref=f3e41]:
+          - generic [ref=f3e42]: Workspace
+          - generic [ref=f3e43]: Boards & Layers
+        - button "Toggle sidebar" [ref=f3e44] [cursor=pointer]:
+          - img [ref=f3e45]
+      - generic [ref=f3e48]:
+        - generic [ref=f3e49]:
+          - generic [ref=f3e50]:
+            - generic [ref=f3e51]: Boards
+            - generic [ref=f3e52]: Scenes and canvases
+          - button "New" [ref=f3e53] [cursor=pointer]
+        - button "Board 1 Board 1 0 items 画板操作" [ref=f3e55] [cursor=pointer]:
+          - img "Board 1" [ref=f3e56]
+          - generic [ref=f3e57]:
+            - generic [ref=f3e58]: Board 1
+            - generic [ref=f3e59]: 0 items
+          - button "画板操作" [ref=f3e61]:
+            - img [ref=f3e62]
+      - generic [ref=f3e66]:
+        - generic [ref=f3e68]:
+          - generic [ref=f3e69]: Layers
+          - generic [ref=f3e70]: 0 items on canvas
+        - generic [ref=f3e72]: No layers yet.
+    - generic [ref=f3e73]:
+      - generic [ref=f3e75]: Loading Settings...
+      - generic [ref=f3e77]:
+        - generic:
+          - generic:
+            - generic:
+              - img
+          - generic: Loading scene…
+    - generic [ref=f3e79]: Loading...
+  - generic [ref=f3e80]:
+    - generic [ref=f3e81]:
+      - button "Boards & Layers" [ref=f3e82] [cursor=pointer]:
+        - img [ref=f3e83]
+      - button "Upload Image" [ref=f3e86] [cursor=pointer]:
+        - img [ref=f3e87]
+      - button "Assets" [ref=f3e90] [cursor=pointer]:
+        - img [ref=f3e91]
+    - generic [ref=f3e94]:
+      - button "Select & Move" [ref=f3e95] [cursor=pointer]:
+        - img [ref=f3e96]
+      - button "Pan Canvas" [ref=f3e99] [cursor=pointer]:
+        - img [ref=f3e100]
+      - button "Shapes" [ref=f3e106] [cursor=pointer]:
+        - img [ref=f3e107]
+      - button "Drawing Tools" [ref=f3e110] [cursor=pointer]:
+        - img [ref=f3e111]
+      - button "Text" [ref=f3e113] [cursor=pointer]:
+        - img [ref=f3e114]
+      - textbox "Stroke Color" [ref=f3e117] [cursor=pointer]: "#111827"
+      - slider "Stroke Width" [ref=f3e118] [cursor=pointer]: "5"
+      - generic [ref=f3e119]: "5"
+    - generic [ref=f3e121]:
+      - button "滚轮：平移（点击切换为缩放）" [ref=f3e122] [cursor=pointer]:
+        - img [ref=f3e123]
+      - button "Canvas Settings" [ref=f3e126] [cursor=pointer]:
+        - img [ref=f3e127]
+      - button [disabled] [ref=f3e131]:
+        - img [ref=f3e132]
+      - button "Redo" [disabled] [ref=f3e135]:
+        - img [ref=f3e136]

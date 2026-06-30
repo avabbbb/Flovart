@@ -1,4 +1,3 @@
-import { Bot, History, Images } from 'lucide-react';
 import { nanoid } from 'nanoid';
 import { useEffect, useState } from 'react';
 import type { ModelPreference, UserApiKey } from '../../types';
@@ -186,9 +185,9 @@ export function WorkflowWorkspace({
         activeTab={rightTab}
         onTabChange={tab => setRightTab(tab as WorkflowRightTab)}
         tabs={[
-          { id: 'agent', label: 'Agent', icon: <Bot size={14} /> },
-          { id: 'history', label: language === 'zho' ? '生成历史' : 'History', icon: <History size={14} /> },
-          { id: 'assets', label: language === 'zho' ? '素材库' : 'Assets', icon: <Images size={14} /> },
+          { id: 'agent', label: 'Agent', icon: undefined },
+          { id: 'history', label: language === 'zho' ? '生成历史' : 'History', icon: undefined },
+          { id: 'assets', label: language === 'zho' ? '素材库' : 'Assets', icon: undefined },
         ]}
       >
         {activeProject && rightTab === 'agent' && (

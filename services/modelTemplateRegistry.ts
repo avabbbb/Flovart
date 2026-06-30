@@ -2,12 +2,15 @@ import type { AIProvider } from '../types';
 import {
   DEFAULT_PROVIDER_MODELS,
   PROVIDER_LABELS,
+  getCapabilityDictionary,
   supportsMaskImageEditing,
   supportsReferenceImageEditing,
+  type MultimodalSlotKind,
 } from './aiGateway';
 
 export type ModelTemplateCapability = 'text' | 'image' | 'video' | 'videoEdit';
 export type ModelParamFieldType = 'text' | 'number' | 'boolean' | 'select';
+export type ModelReferenceKind = MultimodalSlotKind;
 
 export interface ModelParamOption {
   label: string;
@@ -27,6 +30,12 @@ export interface ModelParamSchemaField {
   group?: 'basic' | 'advanced' | 'provider';
 }
 
+export interface ModelReferenceSlotInfo {
+  kind: ModelReferenceKind;
+  max: number;
+  roles: string[];
+}
+
 export interface ModelTemplate {
   id: string;
   provider: AIProvider;
@@ -41,6 +50,12 @@ export interface ModelTemplate {
   supportsVideoRestyle?: boolean;
   paramsSchema: ModelParamSchemaField[];
   defaultParams: Record<string, unknown>;
+  referenceSlots?: ModelReferenceSlotInfo[];
+  maxReferences?: number;
+  referenceTypes?: ModelReferenceKind[];
+  complianceCheck?: boolean;
+  promptOptimization?: boolean;
+  notes?: string;
 }
 
 const ASPECT_RATIO_OPTIONS: ModelParamOption[] = [
@@ -149,6 +164,48 @@ function buildTemplateTags(provider: AIProvider, capability: ModelTemplateCapabi
   return tags;
 }
 
+function deriveReferenceSlots(model: string, provider: AIProvider, capability: ModelTemplateCapability): {
+  referenceSlots?: ModelReferenceSlotInfo[];
+  maxReferences?: number;
+  referenceTypes?: ModelReferenceKind[];
+} {
+  if (capability !== 'video' && capability !== 'image') return {};
+  const dict = getCapabilityDictionary(model, provider);
+  const slots = dict.multimodalSlots;
+  const kinds = Object.keys(slots) as ModelReferenceKind[];
+  if (kinds.length === 0) return {};
+  const referenceSlots: ModelReferenceSlotInfo[] = kinds
+    .map(kind => {
+      const info = slots[kind];
+      if (!info || info.max <= 0) return null;
+      return { kind, max: info.max, roles: info.roles };
+    })
+    .filter((entry): entry is ModelReferenceSlotInfo => entry !== null);
+  if (referenceSlots.length === 0) return {};
+  const total = referenceSlots.reduce((sum, slot) => sum + slot.max, 0);
+  return {
+    referenceSlots,
+    maxReferences: total,
+    referenceTypes: referenceSlots.map(slot => slot.kind),
+  };
+}
+
+function deriveComplianceAndPromptOptimization(model: string, provider: AIProvider, capability: ModelTemplateCapability): {
+  complianceCheck?: boolean;
+  promptOptimization?: boolean;
+  notes?: string;
+} {
+  const normalized = model.trim().toLowerCase();
+  if (provider === 'volcengine' && normalized.includes('seedance')) {
+    return {
+      complianceCheck: true,
+      promptOptimization: true,
+      notes: 'Seedance 2.0 支持 9 图 + 3 视频 + 3 音频参考输入；生成前自动做合规校验和 prompt 优化。',
+    };
+  }
+  return {};
+}
+
 function buildBuiltinTemplates(): ModelTemplate[] {
   const templates: ModelTemplate[] = [];
 
@@ -159,6 +216,8 @@ function buildBuiltinTemplates(): ModelTemplate[] {
     for (const capability of ['text', 'image', 'video'] as const) {
       const models = modelMap[capability] ?? [];
       for (const model of models) {
+        const refInfo = deriveReferenceSlots(model, provider, capability);
+        const complianceInfo = deriveComplianceAndPromptOptimization(model, provider, capability);
         templates.push({
           id: `${provider}:${capability}:${model}`,
           provider,
@@ -173,6 +232,8 @@ function buildBuiltinTemplates(): ModelTemplate[] {
           supportsVideoRestyle: capability === 'video' ? true : undefined,
           paramsSchema: PARAM_SCHEMAS[capability],
           defaultParams: DEFAULT_PARAMS[capability],
+          ...refInfo,
+          ...complianceInfo,
         });
       }
     }
@@ -211,4 +272,31 @@ export function findModelTemplateByModel(
       || normalizeModelId(template.model).endsWith(`/${normalizedInput}`)
     )
   )) ?? null;
+}
+
+export function getModelCapabilities(model: string | null | undefined, capability?: ModelTemplateCapability) {
+  const template = findModelTemplateByModel(model, capability);
+  if (!template) return null;
+  return {
+    referenceSlots: template.referenceSlots,
+    maxReferences: template.maxReferences,
+    referenceTypes: template.referenceTypes,
+    complianceCheck: template.complianceCheck,
+    promptOptimization: template.promptOptimization,
+    notes: template.notes,
+    supportsReferenceImage: template.supportsReferenceImage,
+    supportsMaskEdit: template.supportsMaskEdit,
+  };
+}
+
+export function isSeedanceModel(model: string | null | undefined): boolean {
+  const normalized = model?.trim().toLowerCase();
+  if (!normalized) return false;
+  return normalized.includes('seedance');
+}
+
+export function getReferenceSlotMax(model: string | null | undefined, kind: ModelReferenceKind, capability?: ModelTemplateCapability): number {
+  const template = findModelTemplateByModel(model, capability);
+  if (!template?.referenceSlots) return kind === 'image' ? 1 : 0;
+  return template.referenceSlots.find(slot => slot.kind === kind)?.max ?? 0;
 }

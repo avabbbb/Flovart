@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import type { AssetCategory, AssetItem, AssetLibrary, GenerationHistoryItem } from '../types';
+import type { AssetCategory, AssetItem, AssetLibrary, GenerationHistoryItem, Element, UserApiKey, ModelPreference } from '../types';
 import { AgentChatPanel } from './AgentChatPanel';
+import { Chat } from './agent-chat/Chat';
 
 type RightPanelTab = 'history' | 'inspiration' | 'agent';
 
@@ -29,6 +30,23 @@ interface RightPanelProps {
         progress: { pct: number; stage: string };
         updatedAt: number;
     }>;
+    // Agent Chat (new)
+    elements?: Element[];
+    selectedElementIds?: string[];
+    setSelectedElementIds?: (ids: string[]) => void;
+    commitAction?: (updater: (prev: Element[]) => Element[]) => void;
+    handleGenerate?: (
+        promptOverride?: string,
+        source?: 'prompt' | 'right' | 'agent',
+        modeOverride?: 'image' | 'video' | 'keyframe',
+        selectedElementIdsOverride?: string[],
+        mentionedElementIdsOverride?: string[],
+    ) => Promise<void>;
+    userApiKeys?: UserApiKey[];
+    modelPreference?: ModelPreference;
+    // Phase 1.3: pending attachments from canvas pop-bar "加入对话"
+    pendingChatAttachments?: Array<{ url: string; mimeType: string }>;
+    onConsumeChatAttachments?: () => void;
 }
 
 const CATEGORY_LABELS: Record<AssetCategory, string> = {
@@ -311,6 +329,15 @@ export const RightPanel: React.FC<RightPanelProps> = ({
     onCreateVideo,
     runtimeStage,
     runtimeJobs = [],
+    elements,
+    selectedElementIds = [],
+    setSelectedElementIds,
+    commitAction,
+    handleGenerate,
+    userApiKeys = [],
+    modelPreference,
+    pendingChatAttachments,
+    onConsumeChatAttachments,
 }) => {
     const isDark = theme === 'dark';
     const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
@@ -569,15 +596,31 @@ export const RightPanel: React.FC<RightPanelProps> = ({
 
                     {activeTab === 'agent' && (
                         <div className="h-full min-h-0 px-0 py-0">
-                            <AgentChatPanel
-                                theme={theme}
-                                compactMode={compactMode}
-                                generationHistory={generationHistory}
-                                onCreateImage={onCreateImage}
-                                onCreateVideo={onCreateVideo}
-                                runtimeStage={runtimeStage}
-                                runtimeJobs={runtimeJobs}
-                            />
+                            {elements && commitAction && handleGenerate && setSelectedElementIds && modelPreference ? (
+                                <Chat
+                                    theme={theme}
+                                    compactMode={compactMode}
+                                    elements={elements}
+                                    selectedElementIds={selectedElementIds}
+                                    setSelectedElementIds={setSelectedElementIds}
+                                    commitAction={commitAction}
+                                    handleGenerate={handleGenerate}
+                                    userApiKeys={userApiKeys}
+                                    modelPreference={modelPreference}
+                                    pendingAttachments={pendingChatAttachments}
+                                    onConsumeAttachments={onConsumeChatAttachments}
+                                />
+                            ) : (
+                                <AgentChatPanel
+                                    theme={theme}
+                                    compactMode={compactMode}
+                                    generationHistory={generationHistory}
+                                    onCreateImage={onCreateImage}
+                                    onCreateVideo={onCreateVideo}
+                                    runtimeStage={runtimeStage}
+                                    runtimeJobs={runtimeJobs}
+                                />
+                            )}
                         </div>
                     )}
 

@@ -1,5 +1,6 @@
 import { nanoid } from 'nanoid';
-import { createWorkflowNode } from '../components/workflow/constants';
+import { getUpstreamData } from '../components/workflow/ops';
+import { CAMERA_MOVEMENTS, createWorkflowNode, STYLE_PRESETS } from '../components/workflow/constants';
 import { createWorkflowVideoPoster, discardWorkflowMediaRecord, ingestWorkflowMedia, releaseWorkflowMediaRecord, type WorkflowMediaRecord } from '../components/workflow/media';
 import { workflowMediaStorage } from '../components/workflow/storage';
 import type { WorkflowGenerationMode, WorkflowNode, WorkflowProject } from '../components/workflow/types';
@@ -7,6 +8,7 @@ import type { ModelPreference, UserApiKey } from '../types';
 import { resolveModelSelection } from '../utils/modelRefs';
 import { executeUnifiedIgnition, generateTextWithProvider, type UnifiedIgnitionInput, type UnifiedIgnitionResult } from './aiGateway';
 import { getGenerationCapability } from './generationCapabilities';
+import { runPreflight } from './promptPreflight';
 
 export interface WorkflowHistoryPayload {
   name?: string;
@@ -125,6 +127,7 @@ export function cancelWorkflowGeneration(projectId: string, nodeId: string) {
 export async function runWorkflowGeneration(project: WorkflowProject, nodeId: string, runtime: WorkflowGenerationRuntime): Promise<WorkflowProject> {
   const initialNode = project.nodes.find(node => node.id === nodeId);
   if (!initialNode) return project;
+  if (initialNode.type === 'script') return publish(runtime, patchInitiator(canonical(runtime, project), nodeId, { status: 'error', error: '脚本节点请双击打开编辑器进行拆解和批量生成', progress: undefined }));
   const mode = modeFor(initialNode);
   if (mode === 'audio') {
     return publish(runtime, patchInitiator(canonical(runtime, project), nodeId, { status: 'error', error: '音频生成暂未支持', progress: undefined }));
@@ -155,25 +158,59 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
     if (!resolved) throw new Error(`未找到可用于${mode === 'video' ? '视频' : mode === 'text' ? '文本' : '图片'}生成的 API Key。`);
 
     const source = canonical(runtime, current);
-    const incomingIds = source.connections.filter(connection => connection.toNodeId === nodeId).map(connection => connection.fromNodeId);
+    const upstream = getUpstreamData(initiating, source.nodes, source.connections);
     const mentionedIds = initiating.metadata.mentionedNodeIds || [];
-    const relatedIds = [...new Set([...incomingIds, ...mentionedIds])];
+    const relatedIds = [...new Set([...upstream.referenceNodeIds, ...mentionedIds])];
     const related = relatedIds.map(id => source.nodes.find(node => node.id === id)).filter((node): node is WorkflowNode => Boolean(node));
     const mediaLabels = mode === 'text' ? related.filter(node => node.type === 'image' || node.type === 'video' || node.type === 'audio').map(node => `[参考媒体: ${node.title} (${node.type})]`) : [];
-    const prompt = [initiating.metadata.prompt, initiating.metadata.content, ...related.filter(node => node.type === 'text').map(node => node.metadata.content || node.metadata.prompt), ...mediaLabels]
+    const stylePreset = config.styleId ? STYLE_PRESETS.find(s => s.id === config.styleId) : undefined;
+    const cameraPrefix = config.camera ? [config.camera.camera, config.camera.lens, config.camera.focalLength, config.camera.aperture].filter(Boolean).join(', ') : '';
+    const movement = mode === 'video' && config.cameraMovement ? CAMERA_MOVEMENTS.find(m => m.id === config.cameraMovement) : undefined;
+    const movementKeyword = movement?.promptKeyword || (mode === 'video' ? config.customMovement : '');
+    const promptPrefix = [stylePreset?.promptPrefix, cameraPrefix, movementKeyword].filter(Boolean).join(', ');
+    const prompt = [promptPrefix, initiating.metadata.prompt, initiating.metadata.content, ...upstream.textContents, ...mediaLabels]
       .map(value => value?.trim()).filter(Boolean).join('\n\n');
     if (!prompt) throw new Error('请填写提示词，或连接一个包含文本的上游节点。');
 
+    const preflight = await runPreflight(prompt, modelRef, runtime.userApiKeys, mode);
+    const effectivePrompt = preflight.optimizedPrompt;
+    if (preflight.complianceWarnings.length > 0) {
+      current = patchInitiator(canonical(runtime, current), nodeId, { status: 'error', error: `合规警告：检测到敏感关键词 ${preflight.complianceWarnings.join(', ')}，请修改提示词后重试。`, generationRequestId: requestId });
+      await publish(runtime, current);
+      throw new Error(`合规校验未通过：${preflight.complianceWarnings.join(', ')}`);
+    }
+
     const capability = getGenerationCapability(runtime.userApiKeys, mode, modelRef);
     const mediaSources = [...new Map([initiating, ...related].filter(node => node.type === 'image' || node.type === 'video' || node.type === 'audio').map(node => [node.id, node])).values()];
-    const references = (await Promise.all(mediaSources.map(async node => {
+    const autoReferences = (await Promise.all(mediaSources.map(async node => {
       if (!capability.supportsReferences.includes(node.type as 'image' | 'video' | 'audio')) return null;
       const href = await resolveMediaHref(node, runtime, temporaryUrls);
       return href ? { type: node.type as 'image' | 'video' | 'audio', href, mimeType: node.metadata.mimeType, label: node.title, sourceName: node.title, elementId: node.id, slotRole: node.type === 'video' ? 'reference_video' as const : node.type === 'audio' ? 'reference_audio' as const : 'reference_image' as const } : null;
     }))).filter(Boolean) as NonNullable<UnifiedIgnitionInput['references']>;
 
+    const seedanceRefIds = config.seedanceRefs ? [
+      ...config.seedanceRefs.imageRefs,
+      ...config.seedanceRefs.videoRefs,
+      ...config.seedanceRefs.audioRefs,
+    ] : [];
+    const seedanceReferences = seedanceRefIds.length > 0 ? (await Promise.all(seedanceRefIds.map(async id => {
+      const node = source.nodes.find(n => n.id === id);
+      if (!node) return null;
+      const href = await resolveMediaHref(node, runtime, temporaryUrls);
+      return href ? { type: node.type as 'image' | 'video' | 'audio', href, mimeType: node.metadata.mimeType, label: node.title, sourceName: node.title, elementId: node.id, slotRole: node.type === 'video' ? 'reference_video' as const : node.type === 'audio' ? 'reference_audio' as const : 'reference_image' as const } : null;
+    }))).filter(Boolean) as NonNullable<UnifiedIgnitionInput['references']> : [];
+
+    const seenIds = new Set<string>();
+    const references = [...seedanceReferences, ...autoReferences].filter(ref => {
+      if (!ref.elementId) return true;
+      if (seenIds.has(ref.elementId)) return false;
+      seenIds.add(ref.elementId);
+      return true;
+    });
+
     const createId = runtime.createId || nanoid;
     const count = mode === 'text' ? 1 : Math.max(1, Math.min(4, config.count || 1));
+    const batchId = count > 1 ? createId() : undefined;
     for (let index = 0; index < count; index += 1) {
       if (!stillActive()) throw abortError();
       current = patchInitiator(canonical(runtime, current), nodeId, { status: 'loading', progress: Math.round(index / count * 90), generationRequestId: requestId });
@@ -181,14 +218,14 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
 
       let resultNode: WorkflowNode;
       if (mode === 'text') {
-        const content = await (runtime.executeText || generateTextWithProvider)(prompt, resolved.model, resolved.key, { signal: controller.signal });
+        const content = await (runtime.executeText || generateTextWithProvider)(effectivePrompt, resolved.model, resolved.key, { signal: controller.signal });
         if (!stillActive()) throw abortError();
         resultNode = createWorkflowNode(createId(), 'text', { x: initiating.position.x + initiating.width + 80, y: initiating.position.y + index * 48 }, { content, status: 'success' });
         resultNode.title = '生成文本';
         preparedNodes.push(resultNode);
       } else {
         const provider = (runtime.executeMedia || executeUnifiedIgnition)({
-          elementId: nodeId, prompt, modelId: resolved.model, apiKeyPayload: resolved.key,
+          elementId: nodeId, prompt: effectivePrompt, modelId: resolved.model, apiKeyPayload: resolved.key,
           aspectRatio: config.aspectRatio as UnifiedIgnitionInput['aspectRatio'], durationSec: config.durationSec,
           resolution: config.resolution, generateAudio: config.generateAudio, watermark: config.watermark, references,
           signal: controller.signal,
@@ -214,11 +251,13 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
         if (!stillActive()) throw abortError();
         const dataUrl = historyBlob ? await (runtime.encodeDataUrl || toDataUrl)(historyBlob).catch(() => '') : '';
         if (!stillActive()) throw abortError();
-        preparedHistory.push({ name: resultNode.title, dataUrl, mimeType: mode === 'video' ? 'image/jpeg' : record.mimeType, ...size, prompt, mediaType: mode });
+        preparedHistory.push({ name: resultNode.title, dataUrl, mimeType: mode === 'video' ? 'image/jpeg' : record.mimeType, ...size, prompt: effectivePrompt, mediaType: mode });
       }
       if (!stillActive()) throw abortError();
       preparedConnections.push({ id: createId(), fromNodeId: nodeId, toNodeId: resultNode.id });
     }
+
+    if (batchId) preparedNodes.forEach((node, index) => { node.batchId = batchId; node.batchIndex = index; });
 
     if (!stillActive()) throw abortError();
     const latest = canonical(runtime, current);
