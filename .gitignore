@@ -31,6 +31,10 @@ dist-extension.zip
 displayphoto0.png
 displayphoto1.png
 show.jpg
+*-fullpage.png
+
+# Playwright MCP temp files
+.playwright-mcp/
 
 # Environment variables (may contain API keys)
 .env

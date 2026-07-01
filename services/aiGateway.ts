@@ -970,6 +970,29 @@ const DEFAULT_RUNNINGHUB_IMAGE_PAYLOAD: Record<string, unknown> = {
     '44##file_type': 'PNG',
 };
 
+const RUNNINGHUB_STANDARD_MODEL_DEFAULTS: Array<{ pattern: RegExp; payload: Record<string, unknown> }> = [
+    { pattern: /^rhart-image-(?:g-2|n-g31-flash)\/(?:text-to-image|image-to-image)$/i, payload: { resolution: '1k' } },
+    {
+        pattern: /^rhart-video\/sparkvideo-2\.0\/multimodal-video$/i,
+        payload: {
+            resolution: '720p',
+            duration: '5',
+            generateAudio: false,
+            realPersonMode: true,
+            conversionSlots: ['all'],
+            returnLastFrame: false,
+            seed: -1,
+        },
+    },
+];
+
+function runningHubStandardModelDefaults(modelEndpoint: string) {
+    return RUNNINGHUB_STANDARD_MODEL_DEFAULTS.reduce<Record<string, unknown>>((payload, preset) => {
+        if (preset.pattern.test(modelEndpoint)) Object.assign(payload, preset.payload);
+        return payload;
+    }, {});
+}
+
 function parseProviderJsonObject(raw: string | undefined, label: string): Record<string, unknown> {
     const trimmed = raw?.trim();
     if (!trimmed) return {};
@@ -1131,14 +1154,15 @@ function buildRunningHubStandardPayload(
     };
     const payload: Record<string, unknown> = {
         ...(!disableDefaults && nodeFieldModel ? DEFAULT_RUNNINGHUB_IMAGE_PAYLOAD : {}),
+        ...(!disableDefaults && !nodeFieldModel ? runningHubStandardModelDefaults(modelEndpoint) : {}),
         ...configuredPayload,
         [promptField]: prompt,
     };
     if (!nodeFieldModel) {
         if (options?.aspectRatio) payload[runningHubAspectRatioField(modelEndpoint)] = options.aspectRatio;
         if (isRunningHubVideoEndpoint(modelEndpoint)) {
-            payload.resolution = options?.resolution || '720p';
-            payload.duration = String(options?.durationSec || 5);
+            payload.resolution = options?.resolution || payload.resolution || '720p';
+            payload.duration = String(options?.durationSec || payload.duration || 5);
         } else {
             if (options?.durationSec) payload.duration = String(options.durationSec);
             if (options?.resolution) payload.resolution = options.resolution;

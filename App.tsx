@@ -56,6 +56,7 @@ import { CanvasFixedOverlay, useElementContainerRect } from './components/canvas
 import { type CanvasViewport } from './utils/canvasOverlayViewport';
 import { StudioTopMenu, type StudioMenuModel } from './components/studio/StudioTopMenu';
 import './styles/generation.css';
+import { LANDING_TEMPLATES } from './components/landing/templates';
 import { useWorkspaceStore } from './stores/useWorkspaceStore';
 import { useWorkflowStore } from './components/workflow/store';
 import { useRuntimeStore } from './stores/useRuntimeStore';
@@ -425,6 +426,28 @@ const App: React.FC = () => {
         handleAddApiKey, handleDeleteApiKey, handleUpdateApiKey, handleSetDefaultApiKey,
         modelAutoSwitchNotice,
     } = useApiKeys(isSettingsPanelOpen);
+
+    // 鈹€鈹€ Load template from URL ?templateId=xxx (landing page one-click reuse) 鈹€鈹€
+    const templateAppliedRef = useRef(false);
+    useEffect(() => {
+        if (!dataReady || !apiKeysLoaded || templateAppliedRef.current) return;
+        const hash = window.location.hash;
+        const queryIndex = hash.indexOf('?');
+        if (queryIndex === -1) return;
+        const params = new URLSearchParams(hash.slice(queryIndex + 1));
+        const templateId = params.get('templateId');
+        if (!templateId) return;
+        const tpl = LANDING_TEMPLATES.find(t => t.id === templateId);
+        if (!tpl) return;
+        templateAppliedRef.current = true;
+        setPrompt(tpl.prompt);
+        setModelPreference(prev => ({
+            ...prev,
+            imageModel: tpl.type === 'image' ? tpl.model : prev.imageModel,
+            videoModel: tpl.type === 'video' ? tpl.model : prev.videoModel,
+        }));
+        toast.show(`已加载模板：${tpl.title}`, 'success');
+    }, [dataReady, apiKeysLoaded, setModelPreference, toast]);
 
     useEffect(() => {
         if (!boards.length) return;

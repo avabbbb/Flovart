@@ -1,65 +1,59 @@
-version: '3.8'
-
 services:
-  # Making 前端应用
-  making-app:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile
-      # 如果需要传递构建参数
-      # args:
-      #   - NODE_ENV=production
-    
-    container_name: making-app
-    
-    # 端口映射
-    ports:
-      - "3217:80"
-    
-    # 环境变量
+  db:
+    image: postgres:16-alpine
     environment:
-      - NODE_ENV=production
-    
-    # 重启策略
-    restart: unless-stopped
-    
-    # 健康检查
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: flovart
+    ports:
+      - "5432:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/"]
-      interval: 30s
+      test: ["CMD-SHELL", "pg_isready -U postgres -d flovart"]
+      interval: 5s
       timeout: 3s
-      retries: 3
-      start_period: 5s
-    
-    # 资源限制
-    deploy:
-      resources:
-        limits:
-          cpus: '1.0'
-          memory: 512M
-        reservations:
-          cpus: '0.5'
-          memory: 256M
-    
-    # 网络
-    networks:
-      - making-network
-    
-    # 日志配置
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
+      retries: 10
 
-# 网络配置
-networks:
-  making-network:
-    driver: bridge
+  hub:
+    build: ./backend
+    environment:
+      PORT: "8080"
+      DATABASE_URL: "postgres://postgres:postgres@db:5432/flovart?sslmode=disable"
+      JWT_SECRET: "flovart-dev-secret-change-in-production"
+      JWT_EXP_HOURS: "168"
+      CORS_ALLOW: "*"
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
 
-# 卷配置（如果需要持久化数据）
-# volumes:
-#   making-data:
-#     driver: local
+  enterprise:
+    build: ./backend/enterprise
+    environment:
+      ENTERPRISE_PORT: "8081"
+      DATABASE_URL: "postgres://postgres:postgres@db:5432/flovart?sslmode=disable"
+      JWT_SECRET: "flovart-dev-secret-change-in-production"
+      CORS_ALLOW: "*"
+    ports:
+      - "8081:8081"
+    depends_on:
+      db:
+        condition: service_healthy
 
+  web:
+    build: .
+    ports:
+      - "3217:3217"
+    environment:
+      CHOKIDAR_USEPOLLING: "true"
+    volumes:
+      - .:/app
+      - /app/node_modules
+    depends_on:
+      - hub
+      - enterprise
 
+volumes:
+  db-data:

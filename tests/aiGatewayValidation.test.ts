@@ -31,10 +31,20 @@ function mockJsonResponse(body: unknown, status = 200) {
 }
 
 function mockBinaryResponse(body: BlobPart, mimeType = 'video/mp4', status = 200) {
+    const bytes = typeof body === 'string'
+        ? new TextEncoder().encode(body)
+        : body instanceof ArrayBuffer
+            ? new Uint8Array(body)
+            : ArrayBuffer.isView(body)
+                ? new Uint8Array(body.buffer, body.byteOffset, body.byteLength)
+                : new Uint8Array();
+    const blob = Object.assign(new Blob([bytes], { type: mimeType }), {
+        arrayBuffer: () => Promise.resolve(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)),
+    });
     return {
         ok: status >= 200 && status < 300,
         status,
-        blob: () => Promise.resolve(new Blob([body], { type: mimeType })),
+        blob: () => Promise.resolve(blob),
         headers: {
             get: (name: string) => (name.toLowerCase() === 'content-type' ? mimeType : null),
         },
@@ -111,7 +121,10 @@ describe('aiGateway - validateApiKey', () => {
         expect(result.capabilitySummary).toEqual(['image', 'video']);
         expect(result.models?.map(model => model.id)).toEqual([
             'nano-banana2-gemini31flash/image-to-image-channel-low-price',
+            'rhart-image-g-2/image-to-image',
+            'rhart-image-n-g31-flash/image-to-image',
             'google/veo3.1-fast/start-end-to-video-channel-low-price',
+            'rhart-video/sparkvideo-2.0/multimodal-video',
         ]);
         expect(globalThis.fetch).toHaveBeenCalledWith(
             'https://www.runninghub.cn/openapi/v2/query',
@@ -501,7 +514,7 @@ describe('aiGateway - generateImageWithProvider', () => {
             }))
             .mockResolvedValueOnce(mockBinaryResponse('fake-image', 'image/png'));
 
-        const result = await generateImageWithProvider('把杯子变成磨砂玻璃材质', 'nano-banana2-gemini31flash/image-to-image-channel-low-price', {
+        const result = await generateImageWithProvider('把杯子变成磨砂玻璃材质', 'rhart-image-n-g31-flash/image-to-image', {
             id: 'rh-key',
             provider: 'runningHub',
             capabilities: ['image'],
@@ -522,7 +535,7 @@ describe('aiGateway - generateImageWithProvider', () => {
         );
         expect(globalThis.fetch).toHaveBeenNthCalledWith(
             2,
-            'https://www.runninghub.cn/openapi/v2/nano-banana2-gemini31flash/image-to-image-channel-low-price',
+            'https://www.runninghub.cn/openapi/v2/rhart-image-n-g31-flash/image-to-image',
             expect.objectContaining({
                 method: 'POST',
                 headers: expect.objectContaining({ Authorization: 'Bearer 0123456789abcdef0123456789abcdef' }),
@@ -531,6 +544,7 @@ describe('aiGateway - generateImageWithProvider', () => {
         );
         expect(JSON.parse((globalThis.fetch as any).mock.calls[1][1].body)).toMatchObject({
             imageUrls: ['https://cdn.example.com/input.png'],
+            resolution: '1k',
         });
         expect(globalThis.fetch).toHaveBeenNthCalledWith(
             3,
@@ -565,6 +579,47 @@ describe('aiGateway - generateImageWithProvider', () => {
             updatedAt: 0,
         }, [{ href: 'data:image/png;base64,ZmFrZQ==', mimeType: 'image/png' }]))
             .rejects.toThrow('Invalid URL, please check your link');
+    });
+
+    it('maps packaged RunningHub detail URLs before submit', async () => {
+        globalThis.fetch = vi.fn()
+            .mockResolvedValueOnce(mockJsonResponse({
+                data: { download_url: 'https://cdn.example.com/input.png' },
+            }))
+            .mockResolvedValueOnce(mockJsonResponse({
+                taskId: 'rh-task-detail',
+                status: 'SUCCESS',
+                errorCode: '',
+                errorMessage: '',
+                results: [{ url: 'https://cdn.example.com/rh-detail.png', outputType: 'png', text: null }],
+                clientId: 'client-detail',
+            }))
+            .mockResolvedValueOnce(mockBinaryResponse('fake-image', 'image/png'));
+
+        await generateImageWithProvider(
+            '保留主体，增强质感',
+            'https://www.runninghub.cn/call-api/api-detail/2046503667076751361',
+            {
+                id: 'rh-key',
+                provider: 'runningHub',
+                capabilities: ['image'],
+                key: '0123456789abcdef0123456789abcdef',
+                baseUrl: 'https://www.runninghub.cn/openapi/v2',
+                createdAt: 0,
+                updatedAt: 0,
+            },
+            [{ href: 'data:image/png;base64,ZmFrZQ==', mimeType: 'image/png' }],
+        );
+
+        expect(globalThis.fetch).toHaveBeenNthCalledWith(
+            2,
+            'https://www.runninghub.cn/openapi/v2/rhart-image-g-2/image-to-image',
+            expect.objectContaining({ method: 'POST' }),
+        );
+        expect(JSON.parse((globalThis.fetch as any).mock.calls[1][1].body)).toMatchObject({
+            imageUrls: ['https://cdn.example.com/input.png'],
+            resolution: '1k',
+        });
     });
 
     it('normalizes RunningHub absolute model URLs before submit', async () => {
@@ -620,7 +675,7 @@ describe('aiGateway - generateImageWithProvider', () => {
                 updatedAt: 0,
             },
             [{ href: 'data:image/png;base64,ZmFrZQ==', mimeType: 'image/png' }],
-        )).rejects.toThrow('请先在设置中点击“获取模型”');
+        )).rejects.toThrow('获取模型');
         expect(globalThis.fetch).not.toHaveBeenCalled();
     });
 
@@ -719,7 +774,7 @@ describe('aiGateway - generateImageWithProvider', () => {
             }))
             .mockResolvedValueOnce(mockBinaryResponse('fake-video', 'video/mp4'));
 
-        const result = await generateVideoWithProvider('角色看向镜头，音乐渐强', 'seedance-2.0-global-fast/multimodal-video', {
+        const result = await generateVideoWithProvider('角色看向镜头，音乐渐强', 'rhart-video/sparkvideo-2.0/multimodal-video', {
             id: 'rh-key',
             provider: 'runningHub',
             capabilities: ['video'],
@@ -748,6 +803,11 @@ describe('aiGateway - generateImageWithProvider', () => {
             imageUrls: ['https://cdn.example.com/ref.png'],
             videoUrls: ['https://cdn.example.com/ref.mp4'],
             audioUrls: ['https://cdn.example.com/ref.mp3'],
+            generateAudio: false,
+            realPersonMode: true,
+            conversionSlots: ['all'],
+            returnLastFrame: false,
+            seed: -1,
         });
     });
 

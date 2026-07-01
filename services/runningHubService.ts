@@ -7,16 +7,18 @@ const RH_BASE = 'https://www.runninghub.cn/openapi/v2';
 const POLL_INTERVAL = 5000; // 5s
 const MAX_POLL_ATTEMPTS = 120; // 10 minutes max
 
-// 已通过实跑验证的 RunningHub 标准模型端点（2026-06-24 验证）
-// 这些端点使用 /openapi/v2/<endpoint> + Bearer 认证，字段为 prompt/resolution/imageUrls
+const RUNNINGHUB_DETAIL_ENDPOINTS: Record<string, string> = {
+  '2046503667076751361': 'rhart-image-g-2/image-to-image',
+  '2027196343409463297': 'rhart-image-n-g31-flash/image-to-image',
+  '2034917373414539277': 'rhart-video/sparkvideo-2.0/multimodal-video',
+};
+
+// RunningHub 标准模型包：只内置当前项目实际使用的官方详情页端点。
+// 这些端点使用 /openapi/v2/<endpoint> + Bearer 认证。
 export const BUILTIN_RUNNINGHUB_MODELS: Array<{ id: string; capability: 'image' | 'video'; description: string }> = [
-  { id: 'rhart-image-n-g31-flash/text-to-image', capability: 'image', description: 'Flash 文生图（快、便宜，1k/2k/4k）' },
-  { id: 'rhart-image-n-g31-flash/image-to-image', capability: 'image', description: 'Flash 图生图（快、便宜，需 imageUrls + resolution）' },
-  { id: 'rhart-image-g-2/image-to-image', capability: 'image', description: 'G-2 图生图（高质量，需 imageUrls）' },
-  { id: 'rhart-video-v3.1-fast/image-to-video', capability: 'video', description: 'V3.1 Fast 图生视频（需 imageUrls + prompt）' },
-  { id: 'rhart-video-v3.1-fast/start-end-to-video', capability: 'video', description: 'V3.1 Fast 首尾帧生视频（需 firstFrameUrl/lastFrameUrl）' },
-  { id: 'rhart-video/sparkvideo-2.0/image-to-video', capability: 'video', description: 'SparkVideo 2.0 图生视频（需 imageUrls）' },
-  { id: 'rhart-video/sparkvideo-2.0/multimodal-video', capability: 'video', description: 'SparkVideo 2.0 多模态视频（需 imageUrls/videoUrls/audioUrls）' },
+  { id: RUNNINGHUB_DETAIL_ENDPOINTS['2046503667076751361'], capability: 'image', description: '全能图片 G-2.0 图生图' },
+  { id: RUNNINGHUB_DETAIL_ENDPOINTS['2027196343409463297'], capability: 'image', description: '全能图片 V2 图生图' },
+  { id: RUNNINGHUB_DETAIL_ENDPOINTS['2034917373414539277'], capability: 'video', description: 'Seedance 2.0 多模态视频' },
 ];
 
 export interface RHTaskResult {
@@ -201,6 +203,8 @@ export function normalizeRunningHubModelEndpoint(modelEndpoint?: string) {
   if (/^https?:\/\//i.test(value)) {
     try {
       const parsed = new URL(value);
+      const detailId = parsed.pathname.match(/\/call-api\/api-detail\/(\d+)/i)?.[1];
+      if (detailId && RUNNINGHUB_DETAIL_ENDPOINTS[detailId]) return RUNNINGHUB_DETAIL_ENDPOINTS[detailId];
       value = parsed.pathname || '';
     } catch {
       return '';

@@ -7,6 +7,14 @@ title: 后续待办
 - Docker 静态资源路径仍需单独验证，本次 Workflow 重构不改变该状态。
 - App.tsx 节点提示生成 hook 与画布渲染 JSX 提取已评估为净负面可读性（依赖参数数十个），保留在 `App.tsx` 直到后续重构方案明确。
 
+## Landing Page（ToC 社区版 + ToB 企业版）
+
+- **路由重构**：✅ `/` → ToCLanding，`/business` → ToBLanding，`/app` → App（画布/工作流），`/enterprise/*` → 企业后台。RouterHost 已加 Suspense 边界。待用户测试确认。
+- **ToC Landing（`/`）**：✅ 6 个 section 全部完成——Hero（手绘风暗色 + 手绘下划线/箭头/星标装饰 + Canvas 演示视频占位）+ Features（01-04 编号卡片）+ Template Gallery（8 模板 + 6 分类 tab + 一键使用跳转 `/app?templateId=xxx`）+ Showcase（8 作品 masonry 瀑布流 + 创作同款）+ Bottom CTA + Footer。待用户测试确认。
+- **ToB Landing（`/business`）**：✅ 7 个 section 全部完成——Hero（企业级定位 + 信任指标）+ Features（4 企业优势）+ Model Ecosystem（8 模型卡片）+ Comparison（vs Krea/即梦 8 项对比表）+ Pricing（社区版免费 vs 企业版联系我们）+ FAQ（5 问）+ CTA + Footer。待用户测试确认。
+- **模板一键复用**：✅ `components/landing/templates.ts` 导出 8 模板 + 8 展示作品；App.tsx 启动时解析 URL `?templateId=xxx`，匹配模板后自动填充 prompt + 切换对应模型 + toast 提示。待用户测试确认。
+- **Hero Canvas 演示视频**：⬜ 待录制真实 canvas 操作视频替换占位。
+
 ## Magic Canvas 迁移路线图（参照 jaaz + LibTV + infinite-canvas）
 
 完整路线图见 `docs/analysis/flovart-migration-roadmap.md`。

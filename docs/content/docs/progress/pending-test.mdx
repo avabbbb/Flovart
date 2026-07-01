@@ -54,11 +54,12 @@ title: 待测试确认
 
 ## Provider 与模型偏好
 
-- RunningHub 已作为原生标准模型 Provider 接入设置页、模型拉取、图片生成和视频生成网关；模型列表内置 7 个经实跑验证的标准模型端点（含 Flash 快速图生图/文生图、V3.1 Fast 视频等），page-api 拉取的模型作为补充，仍可手动补充模型 ID。
+- RunningHub 已作为原生标准模型 Provider 接入设置页、模型拉取、图片生成和视频生成网关；模型列表内置 3 个当前项目使用的官方标准模型端点（全能图片 G-2.0 图生图、全能图片 V2 图生图、seedance2.0 多模态视频），page-api 拉取的模型作为补充，仍可手动补充模型 ID。
 - RunningHub API Key 验证会使用标准模型任务查询端点确认鉴权，并在保存或后台刷新时写入可选模型；模型生成返回的 `results[].url` 会转换成现有图片/视频结果格式。
+- RunningHub 设置页入口文案已改为"3 个官方模型包"，并说明"获取模型"只是补充拉取官方列表；不再提示必须先拉取旧预设。
 - RunningHub WebApp API（`/task/openapi/*`）已移除浏览器禁用的 `Host` 请求头，文件上传、AI App 提交和输出查询在浏览器环境可正常调用。
-- RunningHub 标准模型调用会按详情页字段自动映射 `imageUrls`、`firstFrameUrl`、`lastFrameUrl`、`aspectRatio`、`ratio`、`videoUrls` 和 `audioUrls`；本地 data URL 参考媒体会先上传为临时公网 URL。
-- RunningHub 标准模型提交、查询和上传会透出平台返回的 `errorCode` / `errorMessage`，并附带不含密钥的 `baseUrl`、最终提交 URL、模型 ID 与 payload 字段摘要；上传未返回公网 URL、模型 ID 仍是详情页/搜索页 URL，或 payload 中仍有本地引用时会在本地中断，不再退化成 `No taskId returned`。
+- RunningHub 标准模型调用会按详情页字段自动映射 `imageUrls`、`ratio`、`videoUrls` 和 `audioUrls`，并为内置模型包补齐 `resolution`、`duration`、`generateAudio`、`conversionSlots` 等默认载荷；本地 data URL 参考媒体会先上传为临时公网 URL。
+- RunningHub 标准模型提交、查询和上传会透出平台返回的 `errorCode` / `errorMessage`，并附带不含密钥的 `baseUrl`、最终提交 URL、模型 ID 与 payload 字段摘要；上传未返回公网 URL、模型 ID 仍是未知详情页/搜索页 URL，或 payload 中仍有本地引用时会在本地中断，不再退化成 `No taskId returned`。
 - 模型偏好新增本机保存状态提示，能显示已自动保存时间或浏览器存储失败原因；Canvas 与 Workflow 共用这套偏好状态。
 - 根级 `CONTEXT.md` 已补充 Provider、Model Preference、Standard Model 和 AI App 的领域词边界，并新增 ADR 记录 RunningHub 原生 Provider 的取舍。
 
@@ -623,3 +624,38 @@ title: 待测试确认
 
 ### 待用户验证
 - ① Workflow 空图片节点双击 → 弹出文件选择器，选择图片后节点显示该图片；② Workflow 已有图片节点双击 → 弹出 Lightbox 放大预览，ESC/点遮罩关闭；③ Workflow 已有视频节点双击 → Lightbox 内视频可播放；④ 从 OS 拖图片到已有图片节点 → 节点高亮（accent 描边）→ 松手后替换为新图片；⑤ 从 OS 拖视频到已有视频节点 → 替换为新视频；⑥ 从 OS 拖文件到非媒体节点（text/config）→ 不替换，而是创建新节点；⑦ 上传大视频时节点显示"上传中 · X MB"毛玻璃动画（蓝灰紫 + 青绿描边 + 扫光）；⑧ 上传完成后动画消失，节点显示新媒体；⑨ 上传失败时动画消失并显示错误提示。
+
+## Landing Page（ToC 社区版 + ToB 企业版）
+
+### 路由重构（RouterHost.tsx）
+- `/` → `ToCLanding`（lazy + Suspense），`/business` → `ToBLanding`（lazy + Suspense），`/app` → `App`（原 `/` 主应用移至此路径），`/enterprise/*` → `EnterpriseApp`（不变），`*` → `Navigate to="/"`。
+- ToCLanding / ToBLanding 均为 `React.lazy` + `Suspense` 包裹，fallback 显示"加载中..."。
+
+### ToC Landing — `components/landing/ToCLanding.tsx`（社区类，`/`）
+- **整体风格**：暗色背景 `#0a0a0a` + 手绘装饰元素（SVG 手绘下划线 `HandDrawnUnderline`、手绘箭头 `HandDrawnArrow`、手绘星标 `SketchStar`）+ 噪点纹理 + radial-gradient 光晕。
+- **Header**：fixed 毛玻璃导航——Flovart logo + 跳转锚点（功能/模板/展示/企业版/GitHub）+ "开始创作" CTA（teal `#19c8b9` + glow）→ `/app`。
+- **Hero**：badge（"开源免费 · 本地优先 · 多模型融合"）+ 大标题"用画布造梦"（"造梦"手绘下划线）+ 副标题 + 双 CTA（"开始创作" → `/app`，"探索模板" → `#templates`）+ Canvas 演示视频占位（16:9 渐变卡片 + Play 图标 + "Canvas 操作演示视频即将上线"文案，待录制真实操作视频替换）。
+- **Features**（`#features`）：4 张编号卡片 01-04——画布+工作流融合 / 多模型一站式 / 原生中文创作 / 本地优先·开源免费。每张含图标 + 编号 + 标题 + 描述，spring 入场动画。
+- **Template Gallery**（`#templates`）：6 分类 tab（全部/人物/风景/产品/动漫/视频）+ 8 模板卡片网格（3:4 竖图，渐变占位背景 + badge 热门/视频 + 模型名 + "一键使用" → `/app?templateId=xxx`）。`motion.div layout` 切换分类有动画。
+- **Showcase**（`#showcase`）：8 作品 masonry 瀑布流（columns 2/3/4 响应式，交替 3:4 和 1:1 比例），hover 显示标题/作者/"创作同款"，右上角常显类型图标。
+- **Bottom CTA**：radial 光晕 + 星标 + "开启你的创作之旅" + 大按钮 → `/app`。
+- **Footer**：Flovart logo + GitHub / 企业版 / 文档链接 + MIT 版权。
+
+### ToB Landing — `components/landing/ToBLanding.tsx`（SaaS 类，`/business`）
+- **整体风格**：同暗色 `#0a0a0a`，企业级定位。
+- **Header**：Building2 图标 + "企业版"标签 + 导航（功能/模型/对比/定价/FAQ/社区版）+ "免费开始" CTA。
+- **Hero**：badge（"开源 · 自部署 · 企业级 AI 创作平台"）+ 标题"企业级 AI 创作画布 / 私有部署 · 数据自主" + 双 CTA + 4 信任指标（MIT 开源 / 数据本地化 / 20+ 模型 / 私有化部署）。
+- **Features**（`#features`）：4 卡片——开源可自部署 / 画布+工作流融合 / 原生中文创作 / 本地优先·隐私安全。
+- **Model Ecosystem**（`#models`）：8 模型卡片网格——Seedance 2.0 / Kling 2.0 / Seedream 4.5 / Flux Pro / Nano Banana / RunningHub / OpenAI 兼容 / Qwen Image，每张含供应商 + 类型。
+- **Comparison**（`#comparison`）：8 行对比表——开源协议 / 私有化部署 / 画布+工作流 / 本地数据存储 / 中文原生 / 多模型聚合 / API Key 自管 / 按量付费。Flovart 列 teal 高亮，✓/—/文字三种状态。
+- **Pricing**（`#pricing`）：2 方案——社区版（免费，5 项功能）vs 企业版（联系我们，7 项功能含 SSO/SLA，"推荐"badge + teal 描边）。
+- **FAQ**（`#faq`）：5 问答——是否免费 / 数据存储 / 支持模型 / 企业版区别 / 商业化使用。
+- **CTA**："让 AI 创作能力成为企业基础设施" + "免费开始" + "联系销售"（mailto）。
+- **Footer**：企业版 logo + 社区版 / GitHub / 联系我们 + MIT 版权。
+
+### 模板一键复用（`components/landing/templates.ts` + App.tsx）
+- **`templates.ts`**：导出 `LANDING_TEMPLATES`（8 模板：portrait-cinematic / landscape-fantasy / product-minimal / anime-character / video-cinematic / video-product-ad / portrait-ink / landscape-ink）+ `SHOWCASE_WORKS`（8 作品）+ `TEMPLATE_CATEGORIES`（6 分类）。每个模板含 id/title/category/prompt/model/type/gradient/badge。
+- **App.tsx 模板加载**：启动后 `dataReady` 时解析 `window.location.hash` 中的 `?templateId=xxx`，匹配 `LANDING_TEMPLATES` 后 `setPrompt(tpl.prompt)` + `setModelPreference`（image/video 对应切换）+ toast `已加载模板：xxx`。`templateAppliedRef` 防止重复执行。
+
+### 待用户验证
+- ① 访问 `/#/` → 看到 ToC Landing（暗色手绘风，Hero + Features + Templates + Showcase + CTA + Footer）；② 访问 `/#/business` → 看到 ToB Landing（企业级 SaaS 风，Hero + Features + Models + Comparison + Pricing + FAQ + CTA + Footer）；③ 访问 `/#/app` → 进入画布主应用（原 `/` 的功能全部保留）；④ ToC Landing 点击"开始创作" → 跳转 `/#/app`；⑤ ToC Landing 模板 tab 切换（全部/人物/风景/产品/动漫/视频）→ 模板网格筛选刷新有动画；⑥ 点击模板卡片"一键使用" → 跳转 `/#/app?templateId=portrait-cinematic` → 画布加载后 PromptBar 自动填充"电影质感特写..."文案 + toast 提示"已加载模板：电影质感人像" + 模型切换为 Seedream 4.5；⑦ 点击视频模板 → 模型切换为对应视频模型（Seedance 2.0 / Kling 2.0）；⑧ ToC Landing Showcase hover 作品 → 显示标题/作者/"创作同款"；⑨ ToB Landing 对比表正确显示 Flovart 全 ✓、Krea/即梦部分 ✓；⑩ ToB Landing Pricing 两方案卡片显示正确，企业版有"推荐"badge；⑪ 任意未知路径 → 重定向到 `/#/`。

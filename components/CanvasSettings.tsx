@@ -1139,7 +1139,7 @@ export const CanvasSettings: React.FC<CanvasSettingsProps> = ({
                                                 <span className="min-w-0 flex-1">
                                                     <span className="block truncate font-bold">{preset.name}</span>
                                                     <span className="mt-0.5 block truncate text-[11px] opacity-75">
-                                                        {preset.defaultModel || (preset.provider === 'runningHub' ? '点击获取官方模型' : preset.provider)}
+                                                        {preset.defaultModel || (preset.provider === 'runningHub' ? '3 个官方模型包' : preset.provider)}
                                                     </span>
                                                 </span>
                                                 {preset.featured && (
@@ -1233,8 +1233,8 @@ export const CanvasSettings: React.FC<CanvasSettingsProps> = ({
 
                             {provider === 'runningHub' && (
                                 <div className={`rounded-xl px-3 py-2 text-xs leading-5 ${isDark ? 'bg-[#161A22] text-[#98A2B3]' : 'bg-[#F8FAFC] text-[#667085]'}`}>
-                                    不再内置 RunningHub 旧预设模型。请先点 <strong>获取模型</strong> 拉取官方标准模型列表，再选择或手动补充模型 ID；
-                                    调用时会按详情页字段自动填充 <strong>imageUrls</strong>、<strong>firstFrameUrl</strong>、<strong>ratio</strong>、<strong>videoUrls</strong>、<strong>audioUrls</strong> 等。
+                                    已内置 3 个当前项目使用的 RunningHub 官方模型包；<strong>获取模型</strong> 用于补充拉取官方列表，仍可手动补充模型 ID；
+                                    调用时会按详情页字段自动填充 <strong>imageUrls</strong>、<strong>ratio</strong>、<strong>videoUrls</strong>、<strong>audioUrls</strong>，并补齐 <strong>resolution</strong>、<strong>duration</strong> 等默认载荷。
                                 </div>
                             )}
 
