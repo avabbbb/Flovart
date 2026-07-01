@@ -12,6 +12,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 const EnterpriseApp = React.lazy(() => import('./components/enterprise/EnterpriseApp'));
 const ToCLanding = React.lazy(() => import('./components/landing/ToCLanding'));
 const ToBLanding = React.lazy(() => import('./components/landing/ToBLanding'));
+const PromptsPage = React.lazy(() => import('./components/community/PromptsPage'));
 
 export function RouterHost() {
   return (
@@ -35,6 +36,14 @@ export function RouterHost() {
             }
           />
           <Route path="/app" element={<App />} />
+          <Route
+            path="/prompts"
+            element={
+              <Suspense fallback={<div className="flex h-screen items-center justify-center text-sm" style={{ color: '#a8a49c' }}>加载中...</div>}>
+                <PromptsPage />
+              </Suspense>
+            }
+          />
           <Route
             path="/enterprise/*"
             element={

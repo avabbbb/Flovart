@@ -103,5 +103,5 @@ export const authApi = {
     api.post<{ user: HubUser; token: string }>(HUB_BASE_URL, '/auth/register', body),
   login: (body: { identifier: string; password: string }) =>
     api.post<{ user: HubUser; token: string }>(HUB_BASE_URL, '/auth/login', body),
-  me: () => api.get<{ userId: string }>(HUB_BASE_URL, '/auth/me'),
+  me: () => api.get<{ userId: string; username: string; email: string; role: string }>(HUB_BASE_URL, '/auth/me'),
 };

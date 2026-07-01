@@ -2,6 +2,8 @@ import { useState, useMemo } from 'react';
 import { motion } from 'motion/react';
 import { Brush, Sparkles, ArrowRight, Play, BookOpen, Image as ImageIcon, Video, Wand2, Shield, Zap } from 'lucide-react';
 import { LANDING_TEMPLATES, SHOWCASE_WORKS, TEMPLATE_CATEGORIES, type TemplateCategory } from './templates';
+import { useAuth } from '../../hooks/useAuth';
+import { AuthModal } from '../auth/AuthModal';
 
 const linkTo = (path: string) => (window.location.hash = path);
 
@@ -38,6 +40,7 @@ const FEATURES = [
 
 export default function ToCLanding() {
   const [activeCategory, setActiveCategory] = useState<TemplateCategory>('全部');
+  const { user, isLoggedIn, authOpen, setAuthOpen } = useAuth();
 
   const filteredTemplates = useMemo(() => {
     if (activeCategory === '全部') return LANDING_TEMPLATES;
@@ -60,13 +63,29 @@ export default function ToCLanding() {
             <a href="#/business" className="hover:text-white transition-colors">企业版</a>
             <a href="https://github.com/avabbbb/Flovart" target="_blank" rel="noreferrer" className="hover:text-white transition-colors">GitHub</a>
           </nav>
-          <button
-            onClick={() => linkTo('/app')}
-            className="text-sm font-medium px-5 py-2 rounded-full transition-all hover:scale-105"
-            style={{ background: '#19c8b9', color: '#fff', boxShadow: '0 0 20px rgba(25,200,185,0.3)' }}
-          >
-            开始创作
-          </button>
+          <div className="flex items-center gap-3">
+            <button onClick={() => linkTo('/prompts')} className="text-sm hover:text-white transition-colors" style={{ color: '#a8a49c' }}>
+              提示词社区
+            </button>
+            {isLoggedIn ? (
+              <span className="text-sm" style={{ color: '#19c8b9' }}>{user?.username}</span>
+            ) : (
+              <button
+                onClick={() => setAuthOpen(true)}
+                className="text-sm hover:text-white transition-colors"
+                style={{ color: '#a8a49c' }}
+              >
+                登录
+              </button>
+            )}
+            <button
+              onClick={() => linkTo('/app')}
+              className="text-sm font-medium px-5 py-2 rounded-full transition-all hover:scale-105"
+              style={{ background: '#19c8b9', color: '#fff', boxShadow: '0 0 20px rgba(25,200,185,0.3)' }}
+            >
+              开始创作
+            </button>
+          </div>
         </div>
       </header>
 
@@ -357,6 +376,7 @@ export default function ToCLanding() {
           </div>
         </div>
       </footer>
+      <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} />
     </div>
   );
 }

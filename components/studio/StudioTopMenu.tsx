@@ -1,6 +1,8 @@
-import { CircleAlert, CircleCheck, Languages, Moon, Settings, Sun, Building2 } from 'lucide-react';
-import React from 'react';
+import { CircleAlert, CircleCheck, Languages, Moon, Settings, Sun, Building2, BookOpen, User } from 'lucide-react';
+import React, { useState } from 'react';
 import { Link } from 'react-router';
+import { useAuth } from '../../hooks/useAuth';
+import { AuthModal } from '../auth/AuthModal';
 
 export interface StudioMenuStatus {
   tone: 'ready' | 'warning';
@@ -30,8 +32,11 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
   const { actions, language, mode, status, theme, title } = model;
   const isChinese = language === 'zho';
   const settingsLabel = isChinese ? '设置' : 'Settings';
+  const { user, isLoggedIn } = useAuth();
+  const [authOpen, setAuthOpen] = useState(false);
 
   return (
+    <>
     <header
       className="theme-aware relative z-50 grid min-h-12 shrink-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-1 px-2 py-1.5 sm:px-4"
       style={{ background: 'var(--app-bg)' }}
@@ -64,6 +69,14 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
 
       <div className="flex min-w-0 items-center justify-end gap-0.5 sm:gap-1">
         <Link
+          to="/prompts"
+          className="isl-icon-btn flex h-8 items-center gap-1.5 px-2"
+          title={isChinese ? '提示词社区' : 'Prompt community'}
+          aria-label={isChinese ? '提示词社区' : 'Prompt community'}
+        >
+          <BookOpen size={15} />
+        </Link>
+        <Link
           to="/enterprise"
           className="isl-icon-btn flex h-8 items-center gap-1.5 px-2"
           title={isChinese ? '企业后台' : 'Enterprise console'}
@@ -71,6 +84,16 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
         >
           <Building2 size={15} />
         </Link>
+        <button
+          type="button"
+          className="isl-icon-btn flex h-8 items-center gap-1.5 px-2"
+          onClick={() => setAuthOpen(true)}
+          title={isLoggedIn ? user?.username : (isChinese ? '登录' : 'Login')}
+          aria-label={isChinese ? '登录' : 'Login'}
+        >
+          <User size={15} />
+          {isLoggedIn && <span className="hidden text-[11px] font-semibold sm:inline" style={{ color: 'var(--isl-ink-soft)' }}>{user?.username}</span>}
+        </button>
         <button
           type="button"
           className="isl-icon-btn flex h-8 min-w-8 items-center gap-1.5 px-2"
@@ -94,5 +117,7 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
         </button>
       </div>
     </header>
+    <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} />
+    </>
   );
 };

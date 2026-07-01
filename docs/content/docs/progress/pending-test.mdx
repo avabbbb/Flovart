@@ -657,5 +657,27 @@ title: 待测试确认
 - **`templates.ts`**：导出 `LANDING_TEMPLATES`（8 模板：portrait-cinematic / landscape-fantasy / product-minimal / anime-character / video-cinematic / video-product-ad / portrait-ink / landscape-ink）+ `SHOWCASE_WORKS`（8 作品）+ `TEMPLATE_CATEGORIES`（6 分类）。每个模板含 id/title/category/prompt/model/type/gradient/badge。
 - **App.tsx 模板加载**：启动后 `dataReady` 时解析 `window.location.hash` 中的 `?templateId=xxx`，匹配 `LANDING_TEMPLATES` 后 `setPrompt(tpl.prompt)` + `setModelPreference`（image/video 对应切换）+ toast `已加载模板：xxx`。`templateAppliedRef` 防止重复执行。
 
-### 待用户验证
-- ① 访问 `/#/` → 看到 ToC Landing（暗色手绘风，Hero + Features + Templates + Showcase + CTA + Footer）；② 访问 `/#/business` → 看到 ToB Landing（企业级 SaaS 风，Hero + Features + Models + Comparison + Pricing + FAQ + CTA + Footer）；③ 访问 `/#/app` → 进入画布主应用（原 `/` 的功能全部保留）；④ ToC Landing 点击"开始创作" → 跳转 `/#/app`；⑤ ToC Landing 模板 tab 切换（全部/人物/风景/产品/动漫/视频）→ 模板网格筛选刷新有动画；⑥ 点击模板卡片"一键使用" → 跳转 `/#/app?templateId=portrait-cinematic` → 画布加载后 PromptBar 自动填充"电影质感特写..."文案 + toast 提示"已加载模板：电影质感人像" + 模型切换为 Seedream 4.5；⑦ 点击视频模板 → 模型切换为对应视频模型（Seedance 2.0 / Kling 2.0）；⑧ ToC Landing Showcase hover 作品 → 显示标题/作者/"创作同款"；⑨ ToB Landing 对比表正确显示 Flovart 全 ✓、Krea/即梦部分 ✓；⑩ ToB Landing Pricing 两方案卡片显示正确，企业版有"推荐"badge；⑪ 任意未知路径 → 重定向到 `/#/`。
+### 社区版 P1-P2：用户系统 + 提示词社区（`stores/useAuthStore.ts` + `components/auth/AuthModal.tsx` + `hooks/useAuth.ts` + `components/community/`）
+
+- **P1 用户系统**：
+  - `useAuthStore`（Zustand）：`login`/`register`/`logout`/`init` 方法，token 持久化到 localStorage（`flovart.hub.token`），`init` 通过 `authApi.me()` 恢复登录态。
+  - `AuthModal`：登录/注册弹窗组件，模式下可切换，字段校验 + loading + 成功/失败 toast。兼容 Ant Design Modal/Input/Button。
+  - `useAuth` hook：封装 `useAuthStore` + `authOpen` 状态 + `requireAuth` 方法（需登录才能操作时自动弹出 AuthModal）。
+  - 后端 `Me` 接口已升级：返回 `{ userId, username, email, role }` 而非仅 `userId`，确保页面刷新后用户名正确恢复。
+  - `StudioTopMenu`：右上角新增"用户"图标，未登录点击弹出 AuthModal，已登录显示用户名。
+  - ToC Landing Header：新增"提示词社区"链接 + "登录"入口（已登录显示用户名）。
+- **P2 提示词社区**：
+  - `PromptsPage`（`/prompts`）：公共提示词浏览页。顶部搜索栏（关键词） + 类型筛选（全部/图片/视频/文本） + 排序（最新/最热/下载最多） + 卡片网格（标题/标签/作者/赞/下载/条目数） + hover 操作（点赞/下载） + 分页。
+  - `PromptDetailDrawer`：点击卡片弹出抽屉，展示标签/描述/作者 + 条目列表（名称 + prompt 内容 + 单条复制按钮） + 点赞/下载全部。
+  - `PromptUploadModal`：创建提示词包弹窗，字段包括标题/slug/类型/描述/标签（最多5个）/多条目增删。需登录才能上传，未登录点击"分享提示词"弹出 AuthModal。
+  - 路由：`/prompts` 已加入 RouterHost，lazy 加载 + Suspense。
+- **待用户验证**：
+  - ① 访问 `/#/` ToC Landing → Header 右侧出现"提示词社区"链接和"登录"按钮。
+  - ② 点击"登录" → 弹出 AuthModal → 切换到注册模式 → 输入用户名/邮箱/密码 → 注册成功 → Header 显示用户名。
+  - ③ 点击"提示词社区" → 跳转 `/#/prompts` → 看到提示词浏览页（无数据时显示空状态引导上传）。
+  - ④ 搜索关键词 + 切换类型 + 切换排序 → 列表刷新。
+  - ⑤ 点击"分享提示词"（未登录） → 弹出 AuthModal；登录后 → 弹出 PromptUploadModal。
+  - ⑥ 填写标题/slug/类型/描述/标签/条目 → 发布 → 列表刷新出现新提示词包。
+  - ⑦ 点击卡片 → 弹出 PromptDetailDrawer → 看到条目列表 → 点击复制按钮 → toast"已复制"。
+  - ⑧ 画布内（`/#/app`）右上角出现用户图标 → 点击弹出 AuthModal → 登录后显示用户名。
+  - ⑨ 后端 `/api/v1/auth/me` 返回 `{ userId, username, email, role }`，前端刷新页面后用户名正确恢复。

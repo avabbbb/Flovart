@@ -36,15 +36,12 @@ title: 后续待办
 
 ## 共享提示词与工作流生态（新方向）
 
-- 在 `backend/` 子目录新建 Go + Gin + GORM 后端，作为 monorepo 一部分独立部署。
-- 提示词生态：用户可上传节点级创作提示词包到服务器社区库；前端可浏览、搜索、下载并导入到 Workflow 节点提示词库。
+- ~~前端登录/注册页面对接 hub `authApi`，token 持久化到 localStorage。~~ ✅ P1 用户系统已完成（`useAuthStore` + `AuthModal` + `useAuth` hook），待用户测试确认。
+- ~~前端提示词生态 UI：社区库浏览/上传/搜索/详情、节点提示词库从 hub 导入。~~ ✅ P2 提示词社区已完成（`PromptsPage` + `PromptDetailDrawer` + `PromptUploadModal`），路由 `/prompts`，待用户测试确认。
+- **P3 — 画布项目云端同步**：⬜ `CanvasProject` 后端模型 + API + 前端"保存到云端"/"打开云端项目"。
+- **P4 — 作品/图片分享画廊**：⬜ `Work` 后端模型 + API + `/gallery` 前端画廊页面。
+- **P5 — 素材库共享**：⬜ `SharedAsset` 后端模型 + API + "我的素材"增加"公共素材库"tab。
 - 工作流生态：用户可上传工作流成品图/视频 + 工作流结构（节点 + 连线 + 提示词，**不含模型配置和 API Key**）；导入者需自备对应 Provider 的 Key 并自己选模型。
-- 前端新增社区库浏览/上传 UI；工作流导出范围默认"只结构 + 提示词"，导入后用户自己选模型，跨 Provider 兼容。
 - 后端数据表结构同步更新到 `docs/content/docs/backend/backend-database.mdx`。
-- 联调 hub/enterprise 骨架：起库、AutoMigrate、`/healthz` 通、JWT 跨服务复用生效。
-- 前端新增组织/成员管理页面：组织列表、创建组织、成员列表、添加/调整/移除成员（对应 enterprise 接口）。
 - 补齐 enterprise 服务的 owner 转让流程（创建 owner 转让→受让→确认）。
 - 接入 R2 上传服务：在 hub 内加 S3 兼容存储占位，先打通为工作流生态上传成品图/视频准备。✅ 已完成后续骨架，待联调验证
-- 前端提示词生态 UI：社区库浏览/上传/搜索/详情、节点提示词库从 hub 导入。
-- 前端新增组织/成员管理页面：组织列表、创建组织、成员列表、添加/调整/移除成员（对应 enterprise 接口）。
-- 前端登录/注册页面对接 hub `authApi`，token 持久化到 localStorage。

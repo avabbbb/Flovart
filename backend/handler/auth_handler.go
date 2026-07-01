@@ -63,6 +63,11 @@ func (h *AuthHandler) Me(c *gin.Context) {
 		Fail(c, http.StatusUnauthorized, "未登录")
 		return
 	}
-	OK(c, gin.H{"userId": uid})
+	user, err := h.svc.GetUserByID(uid)
+	if err != nil || user == nil {
+		Fail(c, http.StatusUnauthorized, "用户不存在")
+		return
+	}
+	OK(c, gin.H{"userId": user.ID, "username": user.Username, "email": user.Email, "role": user.Role})
 	_ = strings.TrimSpace
 }

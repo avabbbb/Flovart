@@ -104,3 +104,8 @@ var (
 
 func validUsername(v string) bool { return usernameRe.MatchString(v) }
 func validEmail(v string) bool    { return emailRe.MatchString(v) }
+
+// GetUserByID 根据 ID 查询用户
+func (s *AuthService) GetUserByID(id string) (*model.User, error) {
+	return s.users.FindByID(id)
+}
