@@ -26,7 +26,13 @@ func main() {
 		log.Fatalf("db open: %v", err)
 	}
 	// 仅 AutoMigrate 本服务拥有的表；users 表由 hub 维护，这里不重建
-	if err := db.AutoMigrate(&model.Organization{}, &model.OrganizationMember{}); err != nil {
+	if err := db.AutoMigrate(
+		&model.Organization{},
+		&model.OrganizationMember{}, // 旧表，M3/M4 渐进废弃
+		&model.Department{},
+		&model.DepartmentMember{},
+		&model.Role{},
+	); err != nil {
 		log.Fatalf("migrate: %v", err)
 	}
 
