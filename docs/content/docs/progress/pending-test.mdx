@@ -597,3 +597,29 @@ title: 待测试确认
 
 ### 待用户验证
 - ① Canvas → Workflow → Canvas 往返后画布元素完整保留（不丢数据）；② Canvas 中创建的图片元素正确显示（非空白/非占位）；③ `index.html` 加载 Caveat 字体成功（Network 面板无失败）；④ Workflow 双击空白或从连线拖出 CreateMenu 显示 2×3 网格手绘风卡片；⑤ CreateMenu 卡片 hover 有轻微上抬 + 旋转 + accent 描边效果；⑥ CreateMenu 键盘箭头键导航 2D 网格正确（Down/Up 跨列移动）；⑦ 深色主题下 CreateMenu 样式正常；⑧ Console 无 `[TRACE *]` debug 日志输出。
+
+## Canvas 视频上传 Bug 修复（Excalidraw 拦截 + MIME 空值）
+
+- **根因 — Excalidraw 捕获阶段拦截**：Excalidraw 内部 `onDrop` 会尝试把拖入的文件解析为场景 JSON，视频文件解析失败时抛 `couldNotLoadInvalidFile`（"Couldn't load invalid file"）。原 `AppShell` 的 `onDrop` 处于冒泡阶段，Excalidraw 的 drop handler 先执行 → 视频被吞掉并报错。
+- **根因 — Windows Chrome MIME 空值**：Windows Chrome 对 `.mov`/`.mkv` 等格式返回空 `file.type`，原 `file.type.startsWith('video/')` 判断失效 → 视频被误判为非媒体文件。
+- **修复 #1 — 捕获阶段拦截**（`components/AppShell.tsx`）：新增 `onDragOverCapture` + `onDropCapture` props 并挂到根 div。`App.tsx` 新增 `handleDragOverCapture`（检查 `dataTransfer.items` 含 file kind 时 `preventDefault` + `dropEffect:'copy'`）和 `handleDropCapture`（遍历 `dataTransfer.files` 调 `handleAddMediaElement`，最后 `stopPropagation()` 阻断 Excalidraw）；在 `AppShell` 使用处（~3024 行）接入。原冒泡阶段 `handleDrop` 保留作为 text/asset 路径 fallback。
+- **修复 #2 — 扩展名 MIME 回退**（`utils/fileUtils.ts` — 新增）：`MIME_BY_EXTENSION` 覆盖 png/jpg/jpeg/webp/gif/avif/bmp/svg/mp4/m4v/mov/webm/ogv/mkv/avi/mp3/wav/m4a/aac/flac/ogg/opus；`detectMediaType(file)` 返回 `'image'|'video'|'audio'|null`（优先 `file.type`，空值回退扩展名）；`resolveMimeType(file)` 返回 MIME 字符串。
+- **修复 #3 — 路由统一**（`App.tsx`）：`handleAddMediaElement`（~1266）改用 `detectMediaType` 分发 → video 调 `handleAddVideoElement`，audio 提示"音频请通过 PromptBar 上传"，image 调 `handleAddImageElement`；`handleAddVideoElement`（~1230）用 `resolveMimeType` 写 `mimeType` 字段；`handleAddImageElement`（~1179）用 `detectMediaType` 做守卫。错误文案统一中文。
+- **Workflow 拖拽确认正常**：`InfiniteWorkflow.tsx` 根 div（1490-1495）已有捕获阶段 handler，`dropMedia`（863）处理 `workflowDropSharedMedia`（Studio 媒体，`STUDIO_MEDIA_DRAG_TYPE`）和 `workflowDropFiles`（OS 文件），`workflowMediaMimeType`（media.ts:74）已含扩展名回退。本次未改动 Workflow 拖拽链路。
+
+### 待用户验证
+- ① 从 OS 拖 `.mp4` 文件到 Canvas → 出现视频节点，不报 "Couldn't load invalid file"；② 从 OS 拖 `.mov`/`.mkv` 文件到 Canvas → 正确识别为视频（Windows Chrome 空 MIME 回退扩展名）；③ 从 OS 拖图片到 Canvas → 出现图片节点；④ 从 OS 拖 `.mp3` 文件到 Canvas → 提示"音频请通过 PromptBar 上传"，不创建节点；⑤ 从 Studio 媒体浏览器拖媒体到 Workflow → 正常创建节点；⑥ 从 OS 拖视频/图片到 Workflow → 正常创建节点；⑦ Toolbar 上传按钮（accept `image/*,video/*`）选择视频 → 正确创建视频节点；⑧ Canvas 刷新/切板后视频节点仍在（持久化已由 boardPersistence.ts IDB 落盘）。
+
+## Workflow 节点上传交互升级（双击上传 / 拖拽替换 / 上传动画 / 预览放大）
+
+- **双击上传**（`WorkflowNode.tsx:82-85`）：空媒体节点双击 → 打开文件选择器；已有媒体节点双击 → 弹出 Lightbox 预览放大；文本/脚本/配置节点保留原双击行为（脚本双击打开编辑器）。
+- **拖拽替换**（`WorkflowNode.tsx:87-89`）：文件拖到媒体节点上 → 直接替换该节点媒体（无需确认弹窗）；拖拽时节点显示 accent 色描边高亮（`.is-drop-target`）；`onDragLeave` 用 `relatedTarget.contains` 检查避免子元素穿越闪烁。文件拖到非媒体节点或画布空白 → 沿用原 `dropMedia` 创建新节点逻辑。
+- **根 dropMedia 早期返回**（`InfiniteWorkflow.tsx:867-870`）：根 `onDropCapture` 检测到 file 拖拽落在 `.workflow-node--image/video/audio` 上时直接 return（不 stopPropagation），让节点冒泡阶段 `onDrop` 接管替换；非媒体节点不拦截 → fall through 到创建新节点。
+- **上传加载动画**（`WorkflowNode.tsx:143-157`）：复用生成中节点同套视觉（`flv-generation-glass` 蓝灰紫毛玻璃 + 青绿描边 + shimmer 扫光 + opacity 呼吸），状态标签显示 `上传中 · X MB`（总字节数来自 `file.size`，不造假进度条）；节点体 `scale` 呼吸在 `uploading` 时也触发（`isLoading = status === 'loading' || uploading`）。
+- **上传状态模型**（`types.ts:111-112`）：新增 `metadata.uploading?: boolean` + `metadata.uploadBytes?: number`，独立于 `status:'loading'`（生成专用），互不影响。
+- **replaceMedia 上传态置位**（`InfiniteWorkflow.tsx:1234-1236`）：`ingestWorkflowMedia` 调用前 `commitFrame` 设 `uploading:true, uploadBytes:file.size`；成功后 metadata 合并时 `uploading:false`（1253）；catch 分支也 `commitFrame` 清 `uploading:false`（1263-1265）。
+- **预览 Lightbox**（`components/workflow/MediaPreviewModal.tsx` — 新增）：`position:fixed` 全屏遮罩 + 居中 `img`/`video`/`audio`，ESC 键 / 点遮罩关闭，`AnimatePresence` + `motion` 淡入淡出；复用 `useWorkflowMediaUrl` 解析 media URL。
+- **CSS 新增**（`styles/workflow.css`）：`.workflow-node.is-drop-target`（accent 描边 + 3px glow）；`.workflow-preview-modal`（z-index 200 全屏遮罩 blur 8px）；`.workflow-preview-modal__media img/video`（max 92vw/92vh object-fit contain）。
+
+### 待用户验证
+- ① Workflow 空图片节点双击 → 弹出文件选择器，选择图片后节点显示该图片；② Workflow 已有图片节点双击 → 弹出 Lightbox 放大预览，ESC/点遮罩关闭；③ Workflow 已有视频节点双击 → Lightbox 内视频可播放；④ 从 OS 拖图片到已有图片节点 → 节点高亮（accent 描边）→ 松手后替换为新图片；⑤ 从 OS 拖视频到已有视频节点 → 替换为新视频；⑥ 从 OS 拖文件到非媒体节点（text/config）→ 不替换，而是创建新节点；⑦ 上传大视频时节点显示"上传中 · X MB"毛玻璃动画（蓝灰紫 + 青绿描边 + 扫光）；⑧ 上传完成后动画消失，节点显示新媒体；⑨ 上传失败时动画消失并显示错误提示。

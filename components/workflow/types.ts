@@ -108,6 +108,8 @@ export interface WorkflowNodeMetadata {
   status?: WorkflowNodeStatus;
   error?: string;
   progress?: number;
+  uploading?: boolean;
+  uploadBytes?: number;
   config?: WorkflowGenerationConfig;
   generationRequestId?: string;
   generationHistoryId?: string;

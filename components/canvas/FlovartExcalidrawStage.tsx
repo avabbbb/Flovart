@@ -1,7 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { exportToCanvas } from '@excalidraw/excalidraw';
-import { motion, AnimatePresence } from 'motion/react';
-import { Wand2, MessageCircle } from 'lucide-react';
 import { ExcalidrawInner, type ExcalidrawElementInfo, type ExcalidrawViewport } from './ExcalidrawInner';
 import {
   flovartToExcalidraw,
@@ -26,10 +23,9 @@ interface FlovartExcalidrawStageProps {
   onSelectionChange?: (selectedIds: string[]) => void;
   /** Optional React node rendered as a docked bar at the bottom of the stage. */
   bottomBar?: React.ReactNode;
-  /** Called when user triggers Magic Generate; Stage exports selected elements to a screenshot. */
-  onMagicGenerate?: (dataUrl: string, width: number, height: number, bounds: { x: number; y: number; width: number; height: number }) => void;
-  /** Called when user clicks "加入对话" on a single selected image element; receives resolved dataUrl + mimeType. */
-  onAddToChat?: (dataUrl: string, mimeType: string) => void;
+  /** Called once after Excalidraw API becomes available; host stores it in a ref to drive
+   *  Magic Generate screenshot export and "加入对话" href resolution from ElementToolbar. */
+  onApiReady?: (api: any) => void;
   /** Called whenever Excalidraw viewport (scroll/zoom) changes, so host can position fixed overlays. */
   onViewportChange?: (vp: ExcalidrawViewport) => void;
   /** Ref attached to the .excalidraw-container div so host can track its bounding rect for overlay positioning. */
@@ -55,8 +51,7 @@ export function FlovartExcalidrawStage({
   resolveHref,
   onSelectionChange,
   bottomBar,
-  onMagicGenerate,
-  onAddToChat,
+  onApiReady,
   onViewportChange,
   containerRef,
   activeTool,
@@ -71,15 +66,11 @@ export function FlovartExcalidrawStage({
   onCommitRef.current = onFlovartCommit;
   const onSelectionRef = useRef(onSelectionChange);
   onSelectionRef.current = onSelectionChange;
-  const onMagicGenerateRef = useRef(onMagicGenerate);
-  onMagicGenerateRef.current = onMagicGenerate;
-  const onAddToChatRef = useRef(onAddToChat);
-  onAddToChatRef.current = onAddToChat;
+  const onApiReadyRef = useRef(onApiReady);
+  onApiReadyRef.current = onApiReady;
   const onViewportRef = useRef(onViewportChange);
   onViewportRef.current = onViewportChange;
-  const [popbar, setPopbar] = useState<{ pos: { x: number; y: number }; mode: 'addToChat' | 'magicGenerate' } | null>(null);
   const [promptBarPos, setPromptBarPos] = useState<{ left: number; top: number } | null>(null);
-  const selectedIdsRef = useRef<string[]>([]);
 
   const pushFlovartToExcalidraw = useCallback(async (els: FlovartElement[]) => {
     const api = apiRef.current;
@@ -130,6 +121,7 @@ export function FlovartExcalidrawStage({
 
   const handleApiReady = useCallback((api: any) => {
     apiRef.current = api;
+    onApiReadyRef.current?.(api);
     if (!bootedRef.current) {
       bootedRef.current = true;
       // Delay push to next tick — Excalidraw's initialData processing may
@@ -159,46 +151,6 @@ export function FlovartExcalidrawStage({
       if (!api) return;
       onSelectionRef.current?.(selIds);
       onViewportRef.current?.(vp);
-      selectedIdsRef.current = selIds;
-
-      // Pop-bar logic:
-      //   - 1 selected image element → "加入对话"
-      //   - ≥2 selected elements     → "Magic Generate"
-      if (selIds.length >= 1) {
-        const allScene = api.getSceneElements() as ExcalidrawElementLike[];
-        const selected = allScene.filter(e => selIds.includes(e.id) && !e.isDeleted);
-        if (selected.length > 0) {
-          const minX = Math.min(...selected.map(e => e.x));
-          const minY = Math.min(...selected.map(e => e.y));
-          const maxX = Math.max(...selected.map(e => e.x + (e.width || 0)));
-          const maxY = Math.max(...selected.map(e => e.y + (e.height || 0)));
-          const centerX = (minX + maxX) / 2;
-          const topY = minY;
-
-          let mode: 'addToChat' | 'magicGenerate' | null = null;
-          if (selIds.length === 1) {
-            const cd = selected[0].customData as { flovartType?: string } | undefined;
-            if (cd?.flovartType === 'image' || selected[0].type === 'image') {
-              mode = 'addToChat';
-            }
-          } else if (selIds.length >= 2) {
-            mode = 'magicGenerate';
-          }
-
-          if (mode) {
-            setPopbar({
-              pos: { x: (vp.x + centerX) * vp.zoom, y: (vp.y + topY) * vp.zoom - 44 },
-              mode,
-            });
-          } else {
-            setPopbar(null);
-          }
-        } else {
-          setPopbar(null);
-        }
-      } else {
-        setPopbar(null);
-      }
 
       // PromptBar follows selection: position below selected elements' bounding box.
       if (selIds.length >= 1) {
@@ -268,59 +220,6 @@ export function FlovartExcalidrawStage({
     [],
   );
 
-  const handleMagicGenerate = useCallback(async () => {
-    const api = apiRef.current;
-    if (!api) return;
-    const selectedIds = selectedIdsRef.current;
-    if (selectedIds.length < 2) return;
-
-    const appState = api.getAppState();
-    const files = api.getFiles();
-    const allElements = api.getSceneElements();
-    const selectedElements = allElements.filter((e: any) => selectedIds.includes(e.id) && !e.isDeleted);
-    if (selectedElements.length === 0) return;
-
-    const minX = Math.min(...selectedElements.map((e: any) => e.x));
-    const minY = Math.min(...selectedElements.map((e: any) => e.y));
-    const maxX = Math.max(...selectedElements.map((e: any) => e.x + (e.width || 0)));
-    const maxY = Math.max(...selectedElements.map((e: any) => e.y + (e.height || 0)));
-    const bounds = { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
-
-    const canvas = await exportToCanvas({
-      elements: selectedElements,
-      appState: { ...appState, selectedElementIds: Object.fromEntries(selectedIds.map(id => [id, true])) },
-      files,
-      mimeType: 'image/png',
-      maxWidthOrHeight: 2048,
-      quality: 1,
-    } as any);
-
-    const dataUrl = canvas.toDataURL('image/png', 0.8);
-    onMagicGenerateRef.current?.(dataUrl, canvas.width, canvas.height, bounds);
-
-    api.updateScene({ appState: { selectedElementIds: {} } });
-  }, []);
-
-  const handleAddToChat = useCallback(async () => {
-    const api = apiRef.current;
-    if (!api) return;
-    const selectedIds = selectedIdsRef.current;
-    if (selectedIds.length !== 1) return;
-
-    const id = selectedIds[0];
-    const flovartEl = lastFlovartRef.current.find(e => e.id === id);
-    if (!flovartEl || flovartEl.type !== 'image') return;
-    const imgEl = flovartEl as ImageElement;
-    const href = (imgEl as { href?: string }).href;
-    if (!href) return;
-
-    const resolved = resolveHref ? await resolveHref(href) : href;
-    if (!resolved) return;
-    onAddToChatRef.current?.(resolved, (imgEl as { mimeType?: string }).mimeType || 'image/png');
-
-    api.updateScene({ appState: { selectedElementIds: {} } });
-  }, [resolveHref]);
-
   useEffect(() => {
     const prev = lastFlovartRef.current;
     lastFlovartRef.current = flovartElements;
@@ -338,54 +237,6 @@ export function FlovartExcalidrawStage({
           onSceneChange={handleSceneChange}
           onContextMenu={() => undefined}
         />
-
-        {/* Pop-bar: floating action button above selection (absolute, follows selection) */}
-        <div className="excalidraw-popbar-layer">
-          <AnimatePresence>
-            {popbar?.pos && (
-              <motion.div
-                initial={{ opacity: 0, y: -3 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -3 }}
-                transition={{ duration: 0.2, ease: 'easeInOut' }}
-                className="excalidraw-popbar"
-                style={{ left: `${popbar.pos.x}px`, top: `${popbar.pos.y}px` }}
-              >
-                <div
-                  className="excalidraw-popbar__inner"
-                  style={{
-                    background: theme === 'dark' ? 'rgba(30,30,30,0.75)' : 'rgba(255,255,255,0.75)',
-                    border: `1px solid ${theme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)'}`,
-                  }}
-                >
-                  {popbar.mode === 'magicGenerate' ? (
-                    <button
-                      type="button"
-                      onClick={handleMagicGenerate}
-                      className="excalidraw-popbar__btn"
-                      style={{ color: theme === 'dark' ? '#e5e5e5' : '#1a1a1a' }}
-                      title="Magic Generate (选中≥2元素 → 截图生成)"
-                    >
-                      <Wand2 size={14} />
-                      Magic Generate
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={handleAddToChat}
-                      className="excalidraw-popbar__btn"
-                      style={{ color: theme === 'dark' ? '#e5e5e5' : '#1a1a1a' }}
-                      title="加入对话 (选中图片 → 发送到画布助手)"
-                    >
-                      <MessageCircle size={14} />
-                      加入对话
-                    </button>
-                  )}
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
 
         {/* PromptBar: only shows when elements are selected, follows selection */}
         {bottomBar && promptBarPos && (

@@ -35,44 +35,6 @@
 .excalidraw-container { flex: 1; min-height: 0; position: relative; }
 .excalidraw-container .excalidraw { height: 100%; }
 
-/* ── Pop-bar layer (absolute overlay inside container, follows selection) ── */
-.excalidraw-popbar-layer {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  z-index: 20;
-  overflow: hidden;
-}
-.excalidraw-popbar {
-  position: absolute;
-  transform: translateX(-50%);
-  pointer-events: auto;
-}
-.excalidraw-popbar__inner {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  border-radius: var(--isl-r-sm);
-  padding: 4px;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-}
-.excalidraw-popbar__btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  font-size: 12px;
-  font-weight: 500;
-  border-radius: var(--isl-r-sm);
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  transition: background 150ms ease;
-}
-.excalidraw-popbar__btn:hover { background: rgba(0,0,0,0.06); }
-
 /* ── PromptBar: floating overlay, follows selection ── */
 .excalidraw-stage-bottombar {
   position: absolute;

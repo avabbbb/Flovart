@@ -320,10 +320,6 @@ function normalizeSeedanceRatio(value: string | undefined): VideoAspectRatio {
     ), options[0])[0];
 }
 
-function isProviderFetchableMediaUrl(value: string): boolean {
-    return /^https?:\/\//i.test(value) || value.startsWith('asset://');
-}
-
 function validateSeedanceSlots(slots: MultimodalSlot[], capability: CapabilityDictionary): void {
     const counts: Partial<Record<MultimodalSlotKind, number>> = {};
     for (const slot of slots) {
@@ -343,13 +339,20 @@ function validateSeedanceSlots(slots: MultimodalSlot[], capability: CapabilityDi
     if ((counts.audio || 0) > 0 && (counts.image || 0) === 0 && (counts.video || 0) === 0) {
         throw new Error('Seedance 参考音频不能单独使用，请同时添加参考图或参考视频。');
     }
+}
 
-    for (const slot of slots) {
-        if ((slot.kind === 'video' || slot.kind === 'audio') && !isProviderFetchableMediaUrl(slot.href)) {
-            const label = slot.kind === 'video' ? '参考视频' : '参考音频';
-            throw new Error(`Seedance ${label}必须使用公网 URL 或 asset:// 素材 ID；本地 blob/data URL 需要先上传成可被火山访问的地址。`);
+async function resolveSeedanceSlotUrls(slots: MultimodalSlot[]): Promise<MultimodalSlot[]> {
+    return Promise.all(slots.map(async slot => {
+        const href = slot.href?.trim() || '';
+        if (!href) return slot;
+        if (/^https?:\/\//i.test(href) || href.startsWith('asset://')) return slot;
+        if (href.startsWith('data:')) return slot;
+        if (href.startsWith('blob:')) {
+            const dataUrl = await blobToDataUrl(href);
+            return { ...slot, href: dataUrl };
         }
-    }
+        throw new Error(`Seedance 参考${slot.kind === 'image' ? '图片' : slot.kind === 'video' ? '视频' : '音频'}地址无法解析，请使用公网 URL、asset:// 素材或本地画布元素。`);
+    }));
 }
 
 function withSupportedParams(
@@ -990,6 +993,10 @@ function isRunningHubSeedance20Model(modelEndpoint: string) {
     return /(?:sparkvideo|seedance)-2\.0/i.test(modelEndpoint);
 }
 
+function isRunningHubVideoEndpoint(modelEndpoint: string) {
+    return /rhart-video\/|image-to-video|start-end-to-video|multimodal-video/i.test(modelEndpoint);
+}
+
 function runningHubAspectRatioField(modelEndpoint: string) {
     return isRunningHubSeedance20Model(modelEndpoint) ? 'ratio' : 'aspectRatio';
 }
@@ -1129,8 +1136,13 @@ function buildRunningHubStandardPayload(
     };
     if (!nodeFieldModel) {
         if (options?.aspectRatio) payload[runningHubAspectRatioField(modelEndpoint)] = options.aspectRatio;
-        if (options?.durationSec) payload.duration = String(options.durationSec);
-        if (options?.resolution) payload.resolution = options.resolution;
+        if (isRunningHubVideoEndpoint(modelEndpoint)) {
+            payload.resolution = options?.resolution || '720p';
+            payload.duration = String(options?.durationSec || 5);
+        } else {
+            if (options?.durationSec) payload.duration = String(options.durationSec);
+            if (options?.resolution) payload.resolution = options.resolution;
+        }
         Object.assign(payload, runningHubMultimodalFields(modelEndpoint, options?.references, options?.slots));
     }
     if (extra.runningHubOutputFormatField && extra.runningHubOutputFormat) {
@@ -2525,10 +2537,11 @@ export async function submitSeedanceVideoTask(
     const capability = getCapabilityDictionary(mappedModel, 'volcengine');
     const slots = options?.slots?.length ? options.slots : multimodalSlotsFromLegacyReferences(options?.references ?? []);
     validateSeedanceSlots(slots, capability);
+    const resolvedSlots = await resolveSeedanceSlotUrls(slots);
 
     const createBody: Record<string, unknown> = {
         model: mappedModel,
-        content: buildSeedanceContentItems(prompt, slots, capability),
+        content: buildSeedanceContentItems(prompt, resolvedSlots, capability),
         ...withSupportedParams(capability, {
             ratio: normalizeSeedanceRatio(options?.aspectRatio || '16:9'),
             duration: normalizeSeedanceDuration(options?.durationSec),

@@ -240,3 +240,10 @@
 .workflow-create-menu__card-icon { display: grid; place-content: center; width: 36px; height: 36px; margin-bottom: 2px; border-radius: 50%; color: var(--wf-accent); background: color-mix(in srgb,var(--wf-accent) 12%,transparent); }
 .workflow-create-menu__card-title { font: 700 16px/1.2 'Caveat', cursive; color: var(--wf-text); }
 .workflow-create-menu__card-desc { font-size: 10px; line-height: 1.35; color: var(--wf-muted); }
+
+.workflow-node.is-drop-target { border-color: var(--wf-accent); box-shadow: 0 0 0 3px color-mix(in srgb,var(--wf-accent) 30%,transparent),0 12px 30px rgba(20,24,31,.14); }
+
+.workflow-preview-modal { position: fixed; inset: 0; z-index: 200; display: grid; place-items: center; background: rgba(10,12,16,.78); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+.workflow-preview-modal__media { display: grid; place-items: center; max-width: 92vw; max-height: 92vh; }
+.workflow-preview-modal__media img, .workflow-preview-modal__media video { max-width: 92vw; max-height: 92vh; object-fit: contain; border-radius: 8px; box-shadow: 0 20px 60px rgba(0,0,0,.4); }
+.workflow-preview-modal__empty { color: rgba(255,255,255,.7); font-size: 14px; }

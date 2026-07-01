@@ -135,9 +135,14 @@ function getModeLabel(mode: GenerationMode): string {
     return '图片';
 }
 
+function usesVideoModel(mode: GenerationMode): boolean {
+    return mode === 'video' || mode === 'keyframe';
+}
+
 function getModelLabel(mode: GenerationMode, textModel?: string, imageModel?: string, videoModel?: string, userApiKeys: UserApiKey[] = []): string {
-    const model = mode === 'text' ? textModel : mode === 'video' ? videoModel : imageModel;
-    if (!model) return mode === 'text' ? '选择文本模型' : mode === 'video' ? '选择视频模型' : '选择图片模型';
+    const videoMode = usesVideoModel(mode);
+    const model = mode === 'text' ? textModel : videoMode ? videoModel : imageModel;
+    if (!model) return mode === 'text' ? '选择文本模型' : videoMode ? '选择视频模型' : '选择图片模型';
     const provider = modelRefProvider(model, userApiKeys);
     const shortProvider = PROVIDER_LABELS[provider]?.split(' ')[0] || provider;
     return `${shortProvider} · ${modelRefModelId(model).replace(/^(google|openai|anthropic|openrouter)\//, '')}`;

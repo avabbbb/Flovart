@@ -10,6 +10,8 @@ interface AppShellProps {
   overlays?: React.ReactNode;
   onDragOver?: (e: React.DragEvent) => void;
   onDrop?: (e: React.DragEvent) => void;
+  onDragOverCapture?: (e: React.DragEvent) => void;
+  onDropCapture?: (e: React.DragEvent) => void;
 }
 
 export const AppShell: React.FC<AppShellProps> = ({
@@ -22,12 +24,16 @@ export const AppShell: React.FC<AppShellProps> = ({
   overlays,
   onDragOver,
   onDrop,
+  onDragOverCapture,
+  onDropCapture,
 }) => (
   <div
     className="theme-aware relative w-screen h-screen flex flex-col overflow-hidden font-sans"
     style={{ backgroundColor: themeBackground }}
     onDragOver={onDragOver}
     onDrop={onDrop}
+    onDragOverCapture={onDragOverCapture}
+    onDropCapture={onDropCapture}
   >
     <div className="shrink-0">{topBar}</div>
     <div className="min-h-0 flex flex-1 relative">

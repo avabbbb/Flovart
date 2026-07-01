@@ -341,6 +341,35 @@ describe('aiGateway - Seedance multimodal slots', () => {
         expect(globalThis.fetch).not.toHaveBeenCalled();
     });
 
+    it('rejects local Seedance video and audio references before calling the provider', async () => {
+        globalThis.fetch = vi.fn();
+        const key = {
+            id: 'seedance-key',
+            provider: 'volcengine' as const,
+            capabilities: ['video' as const],
+            key: 'ark-test-key',
+            baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
+            createdAt: 0,
+            updatedAt: 0,
+        };
+
+        await expect(submitSeedanceVideoTask('video ref scene', 'seedance-2.0', key, {
+            slots: [
+                { kind: 'image', href: 'https://cdn.example.com/ref.png', mimeType: 'image/png', role: 'reference_image' },
+                { kind: 'video', href: 'data:video/mp4;base64,AA==', mimeType: 'video/mp4', role: 'reference_video' },
+            ],
+        })).rejects.toThrow('Seedance 参考视频必须使用公网 URL 或 asset:// 素材 ID');
+
+        await expect(submitSeedanceVideoTask('audio ref scene', 'seedance-2.0', key, {
+            slots: [
+                { kind: 'image', href: 'https://cdn.example.com/ref.png', mimeType: 'image/png', role: 'reference_image' },
+                { kind: 'audio', href: 'blob:audio-ref', mimeType: 'audio/mpeg', role: 'reference_audio' },
+            ],
+        })).rejects.toThrow('Seedance 参考音频必须使用公网 URL 或 asset:// 素材 ID');
+
+        expect(globalThis.fetch).not.toHaveBeenCalled();
+    });
+
     it('parses the Tokenhub Seedance 2.0 status response video URL', async () => {
         globalThis.fetch = vi.fn().mockResolvedValueOnce(mockJsonResponse({
             id: 'task_2YCpPYe6kWzNxQAJOhwOnVvtpBtNfMiK',

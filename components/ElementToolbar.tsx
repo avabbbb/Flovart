@@ -38,6 +38,8 @@ export interface ElementToolbarProps {
     relationFocusCount?: number;
     isRelationFocusActive?: boolean;
     onToggleRelationFocus?: () => void;
+    onAddToChat?: () => void;
+    onMagicGenerate?: () => void;
     viewport: CanvasViewport;
     containerRect: CanvasContainerRect | null;
 }
@@ -90,6 +92,7 @@ const {
         handleOutpaint, handleReversePrompt, cancelReversePrompt,
         setOutpaintMenuId,
         relationFocusCount = 0, isRelationFocusActive = false, onToggleRelationFocus,
+        onAddToChat, onMagicGenerate,
         viewport, containerRect,
     } = props;
 
@@ -98,7 +101,7 @@ const {
     if (selectedElementIds.length > 1) {
         if (!containerRect) return null;
         const bounds = getSelectionBounds(selectedElementIds);
-        const toolbarScreenWidth = 378;
+        const toolbarScreenWidth = 420;
         const toolbarScreenHeight = 56;
         const hasSelectedMedia = elements.some(element => selectedElementIds.includes(element.id) && (element.type === 'image' || element.type === 'video'));
 
@@ -128,6 +131,9 @@ const {
                 <div className="h-6 w-px" style={{ background: 'var(--isl-border)' }}></div>
                 {hasSelectedMedia && <button title="批量导出所选媒体" aria-label="批量导出所选媒体" onClick={handleExportSelection} className="isl-icon-btn h-9 w-9">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 3v12" /><path d="m7 10 5 5 5-5" /><path d="M5 21h14" /></svg>
+                </button>}
+                {onMagicGenerate && <button title="Magic Generate (选中≥2元素 → 截图生成)" aria-label="Magic Generate" onClick={onMagicGenerate} className="isl-icon-btn h-9 w-9 isl-wobble-hover">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M15 4V2" /><path d="M15 16v-6" /><path d="M3 21l3-3 3 3-3 3-3-3z" /><path d="M21 21l3-3-3-3-3 3 3 3z" /><path d="M9 8h6" /><path d="M9 12h6" /><path d="M15 4l3 3" /></svg>
                 </button>}
                 <button
                     title={t('contextMenu.group')}
@@ -160,7 +166,7 @@ const element = singleSelectedElement;
     }
     if (element.type === 'text') toolbarScreenWidth = 220;
     if (element.type === 'arrow' || element.type === 'line') toolbarScreenWidth = 220;
-    if (element.type === 'image') toolbarScreenWidth = relationFocusCount > 0 ? 600 : 560;
+    if (element.type === 'image') toolbarScreenWidth = relationFocusCount > 0 ? 600 : (onAddToChat ? 612 : 560);
     if (element.type === 'video') toolbarScreenWidth = relationFocusCount > 0 ? 220 : 160;
     if (element.type === 'group') toolbarScreenWidth = 80;
 
@@ -206,6 +212,9 @@ const element = singleSelectedElement;
                 }} className="isl-icon-btn h-9 w-9">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/><path d="M12 8v8"/></svg>
                 </button>}
+            {element.type === 'image' && onAddToChat && <button title="加入对话 (选中图片 → 发送到画布助手)" aria-label="加入对话" onClick={onAddToChat} className="isl-icon-btn h-9 w-9 isl-wobble-hover">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+            </button>}
             {element.type === 'video' && <a title={t('contextMenu.download')} href={(element as VideoElement).href} download={`video-${element.id}.mp4`} className="isl-icon-btn h-9 w-9"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg></a>}
             {element.type === 'image' && <button title="调色 / Filters" onClick={() => setFilterPanelElementId(filterPanelElementId === element.id ? null : element.id)} className={`isl-icon-btn h-9 w-9 ${filterPanelElementId === element.id ? 'isl-icon-btn--active' : ''}`}>
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="13.5" cy="6.5" r="2.5"></circle><circle cx="17.5" cy="10.5" r="2.5"></circle><circle cx="8.5" cy="7.5" r="2.5"></circle><circle cx="6.5" cy="12.5" r="2.5"></circle><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"></path></svg>

@@ -5,6 +5,7 @@
 
 
 import React, { useState, useRef, useCallback, useEffect, useMemo, Suspense } from 'react';
+import { exportToCanvas } from '@excalidraw/excalidraw';
 import { Toolbar } from './components/Toolbar';
 import { PromptBar } from './components/PromptBar';
 import { Loader } from './components/Loader';
@@ -27,7 +28,7 @@ import { loadAssetLibrary, addAsset, removeAsset, renameAsset, loadAssetLibraryA
 import { loadGenerationHistoryAsync, saveGenerationHistoryAsync } from './utils/generationHistory';
 import { diagnoseKeyCapabilities, inferProviderFromModel, reversePromptStreamWithProvider, DEFAULT_PROVIDER_MODELS, generateImageWithProvider, generateVideoWithProvider, inferCapabilityFromModelName, executeUnifiedIgnition } from './services/aiGateway';
 import type { MultimodalSlot } from './services/aiGateway';
-import { fileToDataUrl, validateAndResizeImage } from './utils/fileUtils';
+import { fileToDataUrl, validateAndResizeImage, detectMediaType, resolveMimeType } from './utils/fileUtils';
 import { translations } from './utils/translations';
 // keyVault imports moved to hooks/useApiKeys.ts
 // usageMonitor imports moved to hooks
@@ -121,11 +122,14 @@ const App: React.FC = () => {
     const [mentionedElementIds, setMentionedElementIds] = useState<string[]>([]);
     // Rich prompt editor document (TipTap JSON) for the docked PromptBar
     const [promptDocument, setPromptDocument] = useState<Record<string, unknown> | undefined>(undefined);
-    // Phase 1.3: pending attachments injected from canvas pop-bar "加入对话" → Agent Chat
+    // Phase 1.3: pending attachments injected from canvas ElementToolbar "加入对话" → Agent Chat
     const [pendingChatAttachments, setPendingChatAttachments] = useState<Array<{ url: string; mimeType: string }>>([]);
     // Phase 1.5: Excalidraw viewport + container ref for fixed overlay positioning
     const [excalidrawViewport, setExcalidrawViewport] = useState<ExcalidrawViewport>({ x: 0, y: 0, zoom: 1 });
     const excalidrawContainerRef = useRef<HTMLDivElement>(null);
+    // Excalidraw API ref lifted from FlovartExcalidrawStage so App.tsx can drive
+    // Magic Generate screenshot export + "加入对话" href resolution from ElementToolbar.
+    const excalidrawApiRef = useRef<any>(null);
 
     // Phase 1.5 cleanup: Excalidraw-based screen→canvas coordinate conversion.
     // Replaces dead svgRef/getCanvasPoint (SVG deleted in Phase 1.1).
@@ -236,7 +240,7 @@ const App: React.FC = () => {
         }).catch(err => {
             if (!hasShownStorageErrorRef.current) {
                 hasShownStorageErrorRef.current = true;
-                console.error('Failed to persist boards to localStorage', err);
+                console.error('Failed to persist boards to IDB', err);
                 setError(isStorageQuotaError(err) ? STORAGE_QUOTA_MESSAGE : STORAGE_SAVE_FAILED_MESSAGE);
             }
         });
@@ -674,6 +678,52 @@ const App: React.FC = () => {
         setMentionedElementIds([newId]);
         handleGenerate(undefined, 'prompt', 'image', [], [newId]);
     }, [commitAction, handleGenerate]);
+
+    // Lifted Magic Generate trigger: ElementToolbar calls this when ≥2 elements selected.
+    // Uses excalidrawApiRef to export selection → screenshot → handleMagicGenerate.
+    const triggerMagicGenerate = useCallback(async () => {
+        const api = excalidrawApiRef.current;
+        if (!api) return;
+        if (selectedElementIds.length < 2) return;
+        const appState = api.getAppState();
+        const files = api.getFiles();
+        const allElements = api.getSceneElements();
+        const selected = allElements.filter((e: any) => selectedElementIds.includes(e.id) && !e.isDeleted);
+        if (selected.length === 0) return;
+        const minX = Math.min(...selected.map((e: any) => e.x));
+        const minY = Math.min(...selected.map((e: any) => e.y));
+        const maxX = Math.max(...selected.map((e: any) => e.x + (e.width || 0)));
+        const maxY = Math.max(...selected.map((e: any) => e.y + (e.height || 0)));
+        const bounds = { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+        const canvas = await exportToCanvas({
+            elements: selected,
+            appState: { ...appState, selectedElementIds: Object.fromEntries(selectedElementIds.map(id => [id, true])) },
+            files,
+            mimeType: 'image/png',
+            maxWidthOrHeight: 2048,
+            quality: 1,
+        } as any);
+        const dataUrl = canvas.toDataURL('image/png', 0.8);
+        handleMagicGenerate(dataUrl, canvas.width, canvas.height, bounds);
+        api.updateScene({ appState: { selectedElementIds: {} } });
+    }, [handleMagicGenerate, selectedElementIds]);
+
+    // Lifted "加入对话" trigger: ElementToolbar calls this when a single image is selected.
+    // Resolves href via resolveColdMediaRef → setPendingChatAttachments.
+    const triggerAddToChat = useCallback(async () => {
+        if (selectedElementIds.length !== 1) return;
+        const id = selectedElementIds[0];
+        const el = (activeBoard?.elements ?? []).find(e => e.id === id);
+        if (!el || el.type !== 'image') return;
+        const imgEl = el as ImageElement;
+        const href = (imgEl as { href?: string }).href;
+        if (!href) return;
+        const resolved = await resolveColdMediaRef(href);
+        if (!resolved) return;
+        setPendingChatAttachments([{ url: resolved, mimeType: (imgEl as { mimeType?: string }).mimeType || 'image/png' }]);
+        excalidrawApiRef.current?.updateScene({ appState: { selectedElementIds: {} } });
+        setSelectedElementIds([]);
+    }, [activeBoard, resolveColdMediaRef, selectedElementIds]);
 
     const resolveWorkflowGenerationCapability = useCallback((mode: GenerationMode, modelId?: string) => {
         const fallbackModel = mode === 'text'
@@ -1177,8 +1227,8 @@ const App: React.FC = () => {
     
 
     const handleAddImageElement = useCallback(async (file: File) => {
-        if (!file.type.startsWith('image/')) {
-            setError('Only image files are supported.');
+        if (detectMediaType(file) !== 'image') {
+            setError('仅支持图片文件。');
             return;
         }
         setError(null);
@@ -1204,7 +1254,7 @@ const App: React.FC = () => {
             setSelectedElementIds([newImage.id]);
             setActiveTool('select');
         } catch (err) {
-            const message = err instanceof Error ? err.message : 'Failed to load image.';
+            const message = err instanceof Error ? err.message : '图片加载失败。';
             setError(message);
             console.error(err);
         }
@@ -1228,8 +1278,8 @@ const App: React.FC = () => {
     ), []);
 
     const handleAddVideoElement = useCallback(async (file: File) => {
-        if (!file.type.startsWith('video/')) {
-            setError('Only video files are supported.');
+        if (detectMediaType(file) !== 'video') {
+            setError('仅支持视频文件。');
             return;
         }
         setError(null);
@@ -1250,22 +1300,27 @@ const App: React.FC = () => {
                 width,
                 height,
                 href,
-                mimeType: file.type || 'video/mp4',
+                mimeType: resolveMimeType(file) || 'video/mp4',
                 durationSec: metadata.durationSec,
             };
             setElements(prev => [...prev, newVideo]);
             setSelectedElementIds([newVideo.id]);
             setActiveTool('select');
         } catch (err) {
-            const message = err instanceof Error ? err.message : 'Failed to load video.';
+            const message = err instanceof Error ? err.message : '视频加载失败。';
             setError(message);
             console.error(err);
         }
     }, [getCanvasCenter, readLocalVideoMetadata, setElements]);
 
     const handleAddMediaElement = useCallback((file: File) => {
-        if (file.type.startsWith('video/')) {
+        const mediaType = detectMediaType(file);
+        if (mediaType === 'video') {
             void handleAddVideoElement(file);
+            return;
+        }
+        if (mediaType === 'audio') {
+            setError('暂不支持在画布上添加音频文件，请在 PromptBar 中添加。');
             return;
         }
         void handleAddImageElement(file);
@@ -1573,6 +1628,44 @@ const App: React.FC = () => {
 
 
     const handleDragOver = useCallback((e: React.DragEvent) => { e.preventDefault(); }, []);
+
+    // Capture-phase handler: intercept media files and asset drops BEFORE Excalidraw sees them.
+    // Excalidraw's internal drop handler rejects video files with "Couldn't load invalid file".
+    const handleDragOverCapture = useCallback((e: React.DragEvent) => {
+        const items = e.dataTransfer.items;
+        if (items && Array.from(items).some(item => item.kind === 'file')) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+            return;
+        }
+        if (e.dataTransfer.types?.includes('text/plain')) {
+            e.preventDefault();
+            if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+        }
+    }, []);
+
+    const handleDropCapture = useCallback((e: React.DragEvent) => {
+        const files = e.dataTransfer.files;
+        if (files && files.length > 0) {
+            e.preventDefault();
+            e.stopPropagation();
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                if (detectMediaType(file)) {
+                    handleAddMediaElement(file);
+                }
+            }
+            return;
+        }
+        const text = e.dataTransfer.getData('text/plain');
+        if (text && handleAssetDropRef.current) {
+            e.preventDefault();
+            e.stopPropagation();
+            handleAssetDropRef.current(e);
+        }
+    }, [handleAddMediaElement]);
+
     const handleDrop = useCallback((e: React.DragEvent) => { 
         e.preventDefault(); 
         const text = e.dataTransfer.getData('text/plain');
@@ -2979,6 +3072,8 @@ const App: React.FC = () => {
             themeBackground={themePalette.appBackground}
             onDragOver={handleDragOver}
             onDrop={handleDrop}
+            onDragOverCapture={handleDragOverCapture}
+            onDropCapture={handleDropCapture}
             topBar={
                 <StudioTopMenu model={studioMenuModel} />
             }
@@ -3282,6 +3377,8 @@ const App: React.FC = () => {
                 setOutpaintMenuId={setOutpaintMenuId}
                 viewport={canvasViewport}
                 containerRect={canvasContainerRect}
+                onMagicGenerate={triggerMagicGenerate}
+                onAddToChat={triggerAddToChat}
             />
             <FlovartExcalidrawStage
                 flovartElements={activeBoard?.elements ?? []}
@@ -3289,8 +3386,7 @@ const App: React.FC = () => {
                 theme={resolvedTheme}
                 resolveHref={resolveColdMediaRef}
                 onSelectionChange={setSelectedElementIds}
-                onMagicGenerate={handleMagicGenerate}
-                onAddToChat={(dataUrl, mimeType) => setPendingChatAttachments([{ url: dataUrl, mimeType }])}
+                onApiReady={(api) => { excalidrawApiRef.current = api; }}
                 onViewportChange={setExcalidrawViewport}
                 containerRef={excalidrawContainerRef}
                 activeTool={activeTool}

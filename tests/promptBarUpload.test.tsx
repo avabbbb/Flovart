@@ -60,4 +60,36 @@ describe('PromptBar media attachments', () => {
     expect(screen.getByText('生成声音 ON')).toBeTruthy();
     expect(screen.getByText('水印 OFF')).toBeTruthy();
   });
+
+  it('uses video model controls for keyframe mode', () => {
+    render(
+      <PromptBar
+        t={(key) => key}
+        theme="light"
+        prompt="animate between two frames"
+        setPrompt={() => undefined}
+        onGenerate={() => undefined}
+        isLoading={false}
+        isSelectionActive={false}
+        selectedElementCount={0}
+        userEffects={[]}
+        onAddUserEffect={() => undefined}
+        onDeleteUserEffect={() => undefined}
+        generationMode="keyframe"
+        setGenerationMode={() => undefined}
+        videoAspectRatio="16:9"
+        setVideoAspectRatio={() => undefined}
+        selectedImageModel="gpt-image-2"
+        selectedVideoModel="seedance-2.0"
+        imageModelOptions={['gpt-image-2']}
+        videoModelOptions={['seedance-2.0']}
+      />,
+    );
+
+    const modelLabel = screen.getByText((content) => content.includes('seedance-2.0'));
+    fireEvent.click(modelLabel.closest('button')!);
+
+    expect(screen.getByText('视频模型')).toBeTruthy();
+    expect(screen.getByText('Seedance 参数')).toBeTruthy();
+  });
 });

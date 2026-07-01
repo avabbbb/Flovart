@@ -27,6 +27,7 @@ import { WorkflowCreateMenu, type WorkflowCreateMenuState } from './WorkflowCrea
 import type { WorkflowSharedMedia } from './WorkflowConfigPanel';
 import { WorkflowMiniMap } from './WorkflowMiniMap';
 import { WorkflowNode } from './WorkflowNode';
+import { MediaPreviewModal } from './MediaPreviewModal';
 import { WorkflowNodePromptBar, type WorkflowModelOptions } from './WorkflowNodePromptBar';
 import { WorkflowNodeToolbar, type WorkflowImageToolHandlers, type WorkflowVideoToolHandlers, type WorkflowAudioToolHandlers } from './WorkflowNodeToolbar';
 import { WorkflowImageToolDialogs, type WorkflowImageToolConfirmation, type WorkflowImageToolState } from './WorkflowImageToolDialogs';
@@ -162,6 +163,7 @@ export function InfiniteWorkflow({
   const [expandedBatches, setExpandedBatches] = useState<Set<string>>(new Set());
   const [scriptEditorNodeId, setScriptEditorNodeId] = useState<string | null>(null);
   const [slashMenu, setSlashMenu] = useState<{ x: number; y: number } | null>(null);
+  const [previewNode, setPreviewNode] = useState<WorkflowNodeData | null>(null);
   const slashMenuRef = useRef<{ x: number; y: number } | null>(null);
   slashMenuRef.current = slashMenu;
   const toggleBatch = useCallback((batchId: string) => {
@@ -862,6 +864,12 @@ export function InfiniteWorkflow({
 
   const dropMedia = useCallback((event: ReactDragEvent<HTMLDivElement>) => {
     event.preventDefault();
+    if (event.dataTransfer?.types?.includes('Files')) {
+      const dropTarget = event.target instanceof Element
+        ? event.target.closest('.workflow-node--image, .workflow-node--video, .workflow-node--audio')
+        : null;
+      if (dropTarget) return;
+    }
     event.stopPropagation();
     const sharedMedia = workflowDropSharedMedia(event.dataTransfer);
     if (sharedMedia) {
@@ -1225,6 +1233,9 @@ export function InfiniteWorkflow({
     let record: WorkflowMediaRecord | undefined;
     try {
       if (workflowMediaType(file) !== node.type) throw new Error(`请选择${node.type === 'image' ? '图片' : node.type === 'video' ? '视频' : '音频'}文件`);
+      commitFrame(projectRef.current.nodes.map(item => item.id === node.id
+        ? { ...item, metadata: { ...item.metadata, uploading: true, uploadBytes: file.size } }
+        : item), projectRef.current.connections);
       record = await ingestWorkflowMedia(file);
       const currentNode = projectRef.current.nodes.find(item => item.id === node.id);
       if (!mountedRef.current
@@ -1241,7 +1252,7 @@ export function InfiniteWorkflow({
         ...item,
         ...size,
         position: { x: center.x - size.width / 2, y: center.y - size.height / 2 },
-        metadata: { ...item.metadata, ...metadata, href: undefined, error: undefined },
+        metadata: { ...item.metadata, ...metadata, href: undefined, error: undefined, uploading: false },
       } : item);
       commitFrame(updated, projectRef.current.connections);
       releaseWorkflowMediaRecord(record.storageKey);
@@ -1251,6 +1262,9 @@ export function InfiniteWorkflow({
       if (mountedRef.current
         && projectRef.current.id === expectedProjectId
         && replaceSequenceRef.current.get(node.id) === sequence) {
+        commitFrame(projectRef.current.nodes.map(item => item.id === node.id
+          ? { ...item, metadata: { ...item.metadata, uploading: false } }
+          : item), projectRef.current.connections);
         setNotice(error instanceof Error ? error.message : '媒体文件替换失败');
       }
     }
@@ -1614,6 +1628,7 @@ export function InfiniteWorkflow({
             }}
             onCollapseBatch={node.batchId && node.batchIndex === 0 && expandedBatches.has(node.batchId) ? () => toggleBatch(node.batchId!) : undefined}
             onDoubleClick={node.type === 'script' ? () => setScriptEditorNodeId(node.id) : undefined}
+            onPreviewMedia={setPreviewNode}
           />
         ))}
         </AnimatePresence>
@@ -1758,6 +1773,7 @@ export function InfiniteWorkflow({
           />
         );
       })()}
+      <MediaPreviewModal node={previewNode} onClose={() => setPreviewNode(null)} />
     </div>
   );
 }

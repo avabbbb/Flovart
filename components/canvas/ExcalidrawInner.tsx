@@ -78,6 +78,7 @@ const ExcalidrawInner = memo<ExcalidrawInnerProps>(({ theme, onApiReady, onScene
       viewModeEnabled={false}
       zenModeEnabled={false}
       gridModeEnabled={false}
+      validateEmbeddable
       renderEmbeddable={(element: any) => {
         if (element.link && (element.link.includes('.mp4') || element.link.includes('.webm') || element.link.startsWith('blob:'))) {
           return <video src={element.link} controls style={{ width: '100%', height: '100%', objectFit: 'contain' }} />;

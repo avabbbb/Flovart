@@ -1,3 +1,4 @@
+import localforage from 'localforage';
 import type { Board, ImageElement, VideoElement, CharacterLockProfile } from '../types';
 import { createNewBoard } from './canvasHelpers';
 import { putImages, getImages, isIdbRef, isDataUrl, toIdbRef, fromIdbRef, deleteImages, getAllKeys } from './imageDB';
@@ -11,6 +12,11 @@ export const STORAGE_QUOTA_MESSAGE = '本地存储空间不足，无法保存最
 export const STORAGE_SAVE_FAILED_MESSAGE = '保存画布失败，请刷新后重试。';
 export const IMAGE_GENERATION_TIMEOUT_MS = 180_000;
 export const VIDEO_GENERATION_TIMEOUT_MS = 660_000;
+
+const boardsStore = localforage.createInstance({
+    name: 'flovart',
+    storeName: 'boards',
+});
 
 const isStorageQuotaError = (error: unknown): boolean => {
     if (!(error instanceof DOMException)) return false;
@@ -29,6 +35,7 @@ export const safeSetItem = (key: string, value: string): boolean => {
 
 export async function persistBoardsToIDB(boards: Board[]): Promise<void> {
     const imageEntries: { key: string; data: string }[] = [];
+    const imageFetchPromises: Promise<void>[] = [];
     const videoPromises: Promise<void>[] = [];
     const usedImageKeys = new Set<string>();
     const usedVideoKeys = new Set<string>();
@@ -43,6 +50,20 @@ export async function persistBoardsToIDB(boards: Board[]): Promise<void> {
                     img.href = toIdbRef(key);
                 } else if (isIdbRef(img.href)) {
                     usedImageKeys.add(fromIdbRef(img.href));
+                } else if (img.href.startsWith('blob:')) {
+                    const key = `board:${el.id}`;
+                    const blobUrl = img.href;
+                    imageFetchPromises.push(
+                        fetch(blobUrl)
+                            .then(r => r.blob())
+                            .then(blobToDataUrlFromBlob)
+                            .then(dataUrl => {
+                                imageEntries.push({ key, data: dataUrl });
+                                usedImageKeys.add(key);
+                                img.href = toIdbRef(key);
+                            })
+                            .catch(() => { /* best-effort: leave href as original blob URL; no false IDB ref */ })
+                    );
                 }
                 if (img.mask && isDataUrl(img.mask)) {
                     const key = `board:${el.id}:mask`;
@@ -57,14 +78,17 @@ export async function persistBoardsToIDB(boards: Board[]): Promise<void> {
             if (el.type === 'video' && (el as VideoElement).href.startsWith('blob:')) {
                 const vid = { ...el } as VideoElement;
                 const key = `board:${el.id}`;
-                usedVideoKeys.add(key);
+                const blobUrl = vid.href;
                 videoPromises.push(
-                    fetch(vid.href)
+                    fetch(blobUrl)
                         .then(r => r.blob())
                         .then(blob => putVideoBlob(key, blob))
-                        .catch(() => { /* best-effort */ })
+                        .then(() => {
+                            usedVideoKeys.add(key);
+                            vid.href = toIdbVideoRef(key);
+                        })
+                        .catch(() => { /* best-effort: leave href as original blob URL; no false IDB ref */ })
                 );
-                vid.href = toIdbVideoRef(key);
                 return vid;
             }
             if (el.type === 'video' && isIdbVideoRef((el as VideoElement).href)) {
@@ -80,16 +104,10 @@ export async function persistBoardsToIDB(boards: Board[]): Promise<void> {
             historyIndex: 0,
         };
     });
+    await Promise.all([...imageFetchPromises, ...videoPromises]);
     if (imageEntries.length > 0) await putImages(imageEntries);
-    await Promise.all(videoPromises);
-    const serialized = JSON.stringify(slim);
-    try {
-        localStorage.setItem(BOARDS_STORAGE_KEY, serialized);
-    } catch (err) {
-        if (!isStorageQuotaError(err)) throw err;
-        localStorage.removeItem(BOARDS_STORAGE_KEY);
-        localStorage.setItem(BOARDS_STORAGE_KEY, serialized);
-    }
+
+    await boardsStore.setItem(BOARDS_STORAGE_KEY, slim);
 
     const [allImageKeys, allVideoKeys] = await Promise.all([getAllKeys(), getAllVideoKeys()]);
     const staleImageKeys = allImageKeys.filter(key => key.startsWith('board:') && !usedImageKeys.has(key));
@@ -101,20 +119,38 @@ export async function persistBoardsToIDB(boards: Board[]): Promise<void> {
 }
 
 export async function loadBoardsWithIDB(): Promise<Board[]> {
-    let boards: Board[];
+    let boards: Board[] | null = null;
     try {
-        const raw = localStorage.getItem(BOARDS_STORAGE_KEY);
-        const parsed = raw ? JSON.parse(raw) : null;
-        if (!Array.isArray(parsed) || parsed.length === 0) {
-            return [createNewBoard('Board 1')];
+        const stored = await boardsStore.getItem<Board[]>(BOARDS_STORAGE_KEY);
+        if (Array.isArray(stored) && stored.length > 0) {
+            boards = stored;
         }
-        boards = parsed.filter((board): board is Board =>
-            !!board && typeof board.id === 'string' && typeof board.name === 'string' && Array.isArray(board.elements)
-        );
-        if (boards.length === 0) return [createNewBoard('Board 1')];
     } catch {
+        /* fall through to localStorage migration */
+    }
+
+    if (!boards) {
+        try {
+            const raw = localStorage.getItem(BOARDS_STORAGE_KEY);
+            const parsed = raw ? JSON.parse(raw) : null;
+            if (Array.isArray(parsed) && parsed.length > 0) {
+                boards = parsed.filter((board: Board): board is Board =>
+                    !!board && typeof board.id === 'string' && typeof board.name === 'string' && Array.isArray(board.elements)
+                );
+                if (boards.length > 0) {
+                    await boardsStore.setItem(BOARDS_STORAGE_KEY, boards);
+                    localStorage.removeItem(BOARDS_STORAGE_KEY);
+                }
+            }
+        } catch {
+            /* ignore */
+        }
+    }
+
+    if (!boards || boards.length === 0) {
         return [createNewBoard('Board 1')];
     }
+
     const refs: string[] = [];
     const videoRefs: { boardIdx: number; elIdx: number; key: string }[] = [];
     for (let bi = 0; bi < boards.length; bi++) {
@@ -204,4 +240,13 @@ export async function persistCharacterLocksToIDB(locks: CharacterLockProfile[]):
     const allKeys = await getAllKeys();
     const staleKeys = allKeys.filter(key => key.startsWith('charlock:') && !usedKeys.has(key));
     await deleteImages(staleKeys);
+}
+
+function blobToDataUrlFromBlob(blob: Blob): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ''));
+        reader.onerror = () => reject(reader.error || new Error('无法读取本地媒体'));
+        reader.readAsDataURL(blob);
+    });
 }

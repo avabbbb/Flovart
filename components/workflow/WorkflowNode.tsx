@@ -1,5 +1,5 @@
 import { ChevronsDown, Clapperboard, FileText, Image as ImageIcon, Music2, Upload, Video, X } from 'lucide-react';
-import { useRef, type PointerEvent as ReactPointerEvent } from 'react';
+import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { motion } from 'motion/react';
 import { WorkflowConfigPanel } from './WorkflowConfigPanel';
 import { buildCssFilter } from '../ImageFilterPanel';
@@ -20,6 +20,7 @@ export function WorkflowNode({
   onRemoveMedia,
   onCollapseBatch,
   onDoubleClick,
+  onPreviewMedia,
 }: {
   node: WorkflowNodeData;
   selected: boolean;
@@ -34,6 +35,7 @@ export function WorkflowNode({
   onRemoveMedia: () => void;
   onCollapseBatch?: () => void;
   onDoubleClick?: () => void;
+  onPreviewMedia?: (node: WorkflowNodeData) => void;
 }) {
   const status = node.metadata.status || 'idle';
   const progress = Math.max(0, Math.min(100, Math.round(node.metadata.progress || 0)));
@@ -42,6 +44,10 @@ export function WorkflowNode({
   const mediaInput = useRef<HTMLInputElement>(null);
   const media = useWorkflowMediaUrl(node.metadata.storageKey, node.metadata.href);
   const isMedia = node.type === 'image' || node.type === 'video' || node.type === 'audio';
+  const uploading = Boolean(node.metadata.uploading);
+  const uploadBytes = node.metadata.uploadBytes || 0;
+  const isLoading = status === 'loading' || uploading;
+  const [isDropTarget, setDropTarget] = useState(false);
   const accept = isMedia ? `${node.type}/*` : undefined;
   const mediaError = isMedia ? (media.error || node.metadata.error) : null;
   const mediaDetails = isMedia ? [
@@ -59,22 +65,28 @@ export function WorkflowNode({
   return (
     <motion.div
       data-workflow-node-id={node.id}
-      className={`workflow-node workflow-node--${node.type}${selected ? ' is-selected' : ''}`}
+      className={`workflow-node workflow-node--${node.type}${selected ? ' is-selected' : ''}${isDropTarget ? ' is-drop-target' : ''}`}
       style={{ x: node.position.x, y: node.position.y, width: node.width, height: node.height }}
       initial={{ scale: 0.85, opacity: 0 }}
-      animate={{ scale: status === 'loading' ? [1, 1.015, 1] : 1, opacity: 1 }}
+      animate={{ scale: isLoading ? [1, 1.015, 1] : 1, opacity: 1 }}
       exit={{ scale: 0.85, opacity: 0 }}
-      whileHover={status === 'loading' ? undefined : { scale: 1.02 }}
+      whileHover={isLoading ? undefined : { scale: 1.02 }}
       transition={{
-        scale: status === 'loading'
+        scale: isLoading
           ? { duration: 1.8, repeat: Infinity, ease: 'easeInOut' }
           : { type: 'spring', stiffness: 420, damping: 20, mass: 0.7 },
         opacity: { duration: 0.2 },
         default: { type: 'spring', stiffness: 400, damping: 22 },
       }}
       onPointerDown={onPointerDown}
-      onDoubleClick={event => { if (node.type === 'script') { event.stopPropagation(); onDoubleClick?.(); } }}
+      onDoubleClick={event => {
+        if (node.type === 'script') { event.stopPropagation(); onDoubleClick?.(); return; }
+        if (isMedia) { event.stopPropagation(); if (media.url) onPreviewMedia?.(node); else mediaInput.current?.click(); }
+      }}
       onContextMenu={event => { event.preventDefault(); event.stopPropagation(); onContextMenu(event); }}
+      onDragOver={event => { if (isMedia && event.dataTransfer?.types?.includes('Files')) { event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; setDropTarget(true); } }}
+      onDragLeave={event => { if (!isMedia) return; const related = event.relatedTarget as Node | null; if (related && (event.currentTarget as HTMLElement).contains(related)) return; setDropTarget(false); }}
+      onDrop={event => { if (!isMedia) return; event.preventDefault(); event.stopPropagation(); setDropTarget(false); const file = event.dataTransfer.files?.[0]; if (file) onReplaceMedia(file); }}
     >
       <button className="workflow-handle workflow-handle--target" aria-label="连接到此节点" data-workflow-target={node.id} />
       <button className="workflow-handle workflow-handle--source" aria-label="从此节点连接" onPointerDown={onConnectStart} />
@@ -126,6 +138,22 @@ export function WorkflowNode({
               transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut', repeatDelay: 0.5 }}
             />
             <span className="flv-generation-glass__status">{generationLabel}<b>{progress}%</b></span>
+          </motion.div>
+        )}
+        {uploading && (
+          <motion.div
+            className="flv-generation-glass workflow-node__generation-glass"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: [0.82, 1, 0.82] }}
+            transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
+          >
+            <motion.div
+              className="workflow-node__shimmer"
+              initial={{ x: '-120%' }}
+              animate={{ x: '120%' }}
+              transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut', repeatDelay: 0.5 }}
+            />
+            <span className="flv-generation-glass__status">上传中<b>{formatBytes(uploadBytes)}</b></span>
           </motion.div>
         )}
         {status === 'error' && node.metadata.error && <div className="workflow-node__generation-error" title={node.metadata.error}>{node.metadata.error}</div>}

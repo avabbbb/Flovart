@@ -1,4 +1,29 @@
 
+const MIME_BY_EXTENSION: Record<string, string> = {
+  png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif', avif: 'image/avif', bmp: 'image/bmp', svg: 'image/svg+xml',
+  mp4: 'video/mp4', m4v: 'video/x-m4v', mov: 'video/quicktime', webm: 'video/webm', ogv: 'video/ogg', mkv: 'video/x-matroska', avi: 'video/x-msvideo',
+  mp3: 'audio/mpeg', wav: 'audio/wav', m4a: 'audio/mp4', aac: 'audio/aac', flac: 'audio/flac', ogg: 'audio/ogg', oga: 'audio/ogg', opus: 'audio/opus',
+};
+
+export function detectMediaType(file: Pick<File, 'name' | 'type'>): 'image' | 'video' | 'audio' | null {
+  if (file.type.startsWith('image/')) return 'image';
+  if (file.type.startsWith('video/')) return 'video';
+  if (file.type.startsWith('audio/')) return 'audio';
+  const ext = file.name.split('.').pop()?.toLowerCase() || '';
+  const mime = MIME_BY_EXTENSION[ext];
+  if (!mime) return null;
+  if (mime.startsWith('image/')) return 'image';
+  if (mime.startsWith('video/')) return 'video';
+  if (mime.startsWith('audio/')) return 'audio';
+  return null;
+}
+
+export function resolveMimeType(file: Pick<File, 'name' | 'type'>): string {
+  if (file.type.startsWith('image/') || file.type.startsWith('video/') || file.type.startsWith('audio/')) return file.type;
+  const ext = file.name.split('.').pop()?.toLowerCase() || '';
+  return MIME_BY_EXTENSION[ext] || file.type;
+}
+
 export const fileToDataUrl = (file: File): Promise<{ dataUrl: string; mimeType: string }> => {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
