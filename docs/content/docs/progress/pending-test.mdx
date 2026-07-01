@@ -60,6 +60,7 @@ title: 待测试确认
 - RunningHub WebApp API（`/task/openapi/*`）已移除浏览器禁用的 `Host` 请求头，文件上传、AI App 提交和输出查询在浏览器环境可正常调用。
 - RunningHub 标准模型调用会按详情页字段自动映射 `imageUrls`、`ratio`、`videoUrls` 和 `audioUrls`，并为内置模型包补齐 `resolution`、`duration`、`generateAudio`、`conversionSlots` 等默认载荷；本地 data URL 参考媒体会先上传为临时公网 URL。
 - RunningHub 标准模型提交、查询和上传会透出平台返回的 `errorCode` / `errorMessage`，并附带不含密钥的 `baseUrl`、最终提交 URL、模型 ID 与 payload 字段摘要；上传未返回公网 URL、模型 ID 仍是未知详情页/搜索页 URL，或 payload 中仍有本地引用时会在本地中断，不再退化成 `No taskId returned`。
+- Seedance 2.0 后端路由修正：`doubao-seedance-2.0` 不再被误判为文本/图片模型；Seedance 视频/音频参考在本地 `data:` / `blob:` 时会在调用 Provider 前明确失败，视频任务停止信号贯穿提交、轮询和下载。
 - 模型偏好新增本机保存状态提示，能显示已自动保存时间或浏览器存储失败原因；Canvas 与 Workflow 共用这套偏好状态。
 - 根级 `CONTEXT.md` 已补充 Provider、Model Preference、Standard Model 和 AI App 的领域词边界，并新增 ADR 记录 RunningHub 原生 Provider 的取舍。
 
@@ -70,6 +71,8 @@ title: 待测试确认
 - CLI 新增 `workflow.project.*`、`workflow.node.*`、创建并连接、运行/停止、连接、选择和视口命令及 `flovart_workflow_*` 别名。
 - `npm run flovart:agent` 启动仅监听本机的 token/SSE Agent，首次认证时绑定网页 Origin。
 - MCP 工具从同一 CLI registry 自动生成；Agent/MCP 写操作需要 Workflow 面板确认后才执行，幂等缓存、超时、断线清理和敏感字段脱敏已接入。
+- CLI/Agent 默认视频模型改为 `doubao-seedance-2.0`，`models.list` 暴露 Seedance 2.0 的 9 图、3 视频、3 音频、4-15 秒与分辨率能力；`provider.status` / `provider.test` 新增不含密钥的 readiness 和下一步 setup/model action。
+- `flovart:cli -- doctor --json` 新增一键 Seedance 2.0 自检：读取本机 shadow runtime 状态，输出 Volcengine credential、Seedance 模型、参考素材限制、Canvas/Workflow 生成面是否就绪及下一步动作，不输出密钥。
 - Codex app-server 按 Workflow 项目隔离线程工作区，图片附件作为临时 `localImage` 输入并在 turn 结束后删除。
 
 ## Overlay 迁移与画布主题
@@ -133,6 +136,8 @@ title: 待测试确认
 
 ## 企业后台角色用户管理骨架（待测）
 
+> ⚠️ 本节描述的 `organization_members` 表与 owner/admin/member 三角色设计已被 E1 M1-M5 取代（M4 删除 `organization_members` 表，改为部门级角色绑定 + 11 权限点 + 递归 CTE 继承；M5 重写前端为三标签页）。以下保留为历史记录，实际可测变更见下方「E1 M1-M5」节。
+
 - 新建 `backend/enterprise` 独立服务 `flovart/enterprise`，作为 monorepo 一部分独立部署，复用 hub 同一 PostgreSQL 与 `JWT_SECRET`，共享 `users` 表（不重建该表，仅 AutoMigrate 自有 `organizations` / `organization_members` 两张表）。
 - 角色固定三枚：`owner` / `admin` / `member`，无独立角色表（遵循 AGENTS.md"只实现当前明确需要的功能"）。
 - 权限矩阵：owner 一切；admin 仅管理 `member`，不可动 owner 或其他 admin；member 只读成员列表。
@@ -158,6 +163,8 @@ title: 待测试确认
 
 ## 前端企业后台路由 + 登录/组织/成员管理 UI（待测）
 
+> ⚠️ 本节中 `RoleBadge`、角色下拉切换、`orgApi.ts` 旧成员 CRUD 已被 E1 M5 重写：前端改为三标签页（成员名册只读+增删 / 部门左树右面板 / 角色 checkbox 网格），`orgApi.ts` 全量对齐 M4 部门级角色绑定契约。路由容器与登录面板部分仍有效。实际可测变更见下方「E1 M1-M5」节。
+
 - 在 `package.json` 新增依赖 `react-router: ^7.16.0`（v7 已将 `react-router-dom` 合并到 `react-router`；DOM 端 import 直接从 `react-router` 取）。
 - 新增 `RouterHost.tsx` 顶层路由容器：`<HashRouter>` 兼容 Tauri / CF Pages 子路径 / GH Pages / Vercel；`/` 渲染现有 `App.tsx`（其内部 canvas/workflow 视图切换保持不变），`/enterprise/*` 渲染 `EnterpriseApp`，其余路径回退到 `/`。
 - `index.tsx` 改为渲染 `<RouterHost>`，移除直接渲染 App 的代码；保留 `React.StrictMode` 与 `./styles/index.css` 加载次序。
@@ -167,6 +174,25 @@ title: 待测试确认
 - `components/studio/StudioTopMenu.tsx` 在右上角加一个 `<Link to="/enterprise">` 按钮（lucide `Building2` 图标），不破坏 `StudioMenuModel` 接口，从主页可一键进后台。
 - toast 反馈复用 `hooks/useToast.ts` + `components/Toast.tsx`。
 - 待用户验证：① `npm install` 装 `react-router` 后 `npm run dev` 主程序启动正常、`/#/` 主路由仍可访问；② 点 StudioTopMenu 右上 Building2 进入 `/#/enterprise` 显示登录面板；③ 注册/登录成功，token 写入 localStorage；④ 创建组织、添加成员（同 hub 用户名）、修改角色、移除成员，对照权限矩阵确认拒绝/放行都正确；⑤ 在 Tauri dev 与 build 后 hash 路由都正常工作。
+
+## E1 M1-M5 — 企业后台组织/部门/角色权限（待测）
+
+取代上方两个历史节（M4 删除 `organization_members` 表 + org 级三角色；M5 重写前端 UI）。
+
+- **M1 模型**：`backend/enterprise` AutoMigrate 改为 `Organization` + `Department` + `DepartmentMember` + `Role` 四张表。`OrganizationMember` 完全删除。
+  - `Department`：邻接表 `parent_id`（nullable，根部门 `_all` 的 `hidden=true` 对前端隐藏）+ `slug/name/sort/hidden`。
+  - `DepartmentMember`：`dept_id` + `user_id` + `is_lead` + `roles uuid[]`（部门级角色绑定，非 org 级）。
+  - `Role`：`org_id` + `name` + `is_builtin` + `permissions text[]` + `sort`；`permissions` 存 11 个硬编码权限点。
+  - `model/permissions.go`：11 权限常量（`org:manage` / `member:invite` / `member:manage` / `dept:manage` / `role:manage` / `credit:grant` / `credit:adjust` / `asset:approve` / `asset:publish` / `workflow:publish` / `view:audit_log`）+ `BuiltinOwnerPerms` / `BuiltinAdminPerms`。
+- **M2 RBAC 引擎**：`repository/rbac_repository.go` 用 PostgreSQL `WITH RECURSIVE` CTE 求用户在（本部门 ∪ 祖先部门）上所有角色的 `perms` 并集；`owner` 走 `Organization.OwnerID` 快通道不等 CTE。`service/rbac_service.go` 暴露 `Satisfy` / `IsMember` / `EffectivePerms`；`middleware/rbac.go` 注入 `RequirePerm` 中间件。
+- **M3 部门/角色 CRUD**：`dept_handler.go` 8 端点（树查询 `GET /orgs/:id/departments` 返回 `DeptNode[]`、建/改/删部门、部门成员增查改删）；`role_handler.go` 4 端点（列表/建/改/删）+ `GET /orgs/:id/me/permissions` 返回当前用户有效权限 `{ permissions: string[] }`。建组织时自动 seed `Owner` / `Admin` 两个 builtin 角色。
+- **M4 org 级成员 API 重构**：`org_service.go` 的 `Create` 改为事务（建 org → seed builtin 角色 → 建根部门 `_all` → owner 加入根部门）；`ListByUser` 改为 `JOIN department_members`；`ListMembers` 改为跨部门汇总按 `user_id` 去重返回 `[]DepartmentMember`（根部门绑定记录，非有效权限集）；`AddMember` = 加入根部门默认空角色；删除 `UpdateMemberRole`。
+- **M5 前端管理 UI 重写**：`services/orgApi.ts` 全量重写——删除 `OrgRole/OrgMember/updateMemberRole`，新增 `Department/DeptNode/DepartmentMember/Role/ALL_PERMISSIONS/Permission` 类型 + dept/role/myPerms API 对齐 M4 契约。`components/enterprise/EnterpriseApp.tsx` 全量重写——`EnterpriseApp` root 瘦身（`openOrg` 仅设状态不拉数据）；`OrgDetailPanel` 拥有自己的数据（`useEffect` 4 并行拉取 members/perms/depts/roles）+ `can(p)` 权限助手（来自 `myPerms`）+ targeted refreshers；三标签页：
+  - **成员名册**：只读表（username/email/joinedAt）+ add（byUsername）+ remove，无角色下拉（`ListMembers` 返回根部门去重记录，旧 per-member role 已无意义）。
+  - **部门**：左 `DeptTree` 递归树（`border-l` 缩进）+ 右面板——选中节点展示该部门成员，add 从组织已有成员里选、toggle `isLead`（Star 图标）、toggle role checkboxes、remove。
+  - **角色**：角色卡片列表 + create(name) + 11 权限 checkbox 网格 + builtin 只读锁定 + dirty 检测（`JSON.stringify` 比对）+ save + delete 保护（builtin 不可删）。
+  - `AuthPanel` / `FormInput` / `OrgListPanel` 原样保留；`RoleBadge` 已删除。
+- 待用户验证：① 启动 enterprise 后端（需 `DATABASE_URL` + `JWT_SECRET`）+ `npm run dev`，进 `/#/enterprise` 登录；② 创建组织后确认自动生成 `_all` 根部门 + Owner/Admin builtin 角色；③ 三标签页分别测试：成员名册 add/remove；部门树建子部门 + 加成员 + toggle isLead + toggle role + remove；角色 create + 改权限 + save + delete 保护；④ `can(p)` 权限助手在前端正确放行/隐藏按钮（用非 owner 账号验证）；⑤ `GET /orgs/:id/me/permissions` 返回的权限集与前端 `can()` 行为一致。
 
 ## Phase 1.1 — Excalidraw 上提主路径（Magic Canvas 迁移第一步）
 
@@ -681,3 +707,36 @@ title: 待测试确认
   - ⑦ 点击卡片 → 弹出 PromptDetailDrawer → 看到条目列表 → 点击复制按钮 → toast"已复制"。
   - ⑧ 画布内（`/#/app`）右上角出现用户图标 → 点击弹出 AuthModal → 登录后显示用户名。
   - ⑨ 后端 `/api/v1/auth/me` 返回 `{ userId, username, email, role }`，前端刷新页面后用户名正确恢复。
+
+## Tauri 桌面端打包 + CLI 开发环境命令
+
+- **NSIS 安装包打包**：`tauri.conf.json` 的 `bundle.targets` 从 `"all"` 改为 `["nsis"]`（绕过 WiX `light.exe` 依赖 VBSCRIPT 可选功能导致 MSI 失败的问题）。`npm run tauri -- bundle --bundles nsis` 成功生成 `Flovart_0.2.0_x64-setup.exe`（11.1MB）。updater 签名密钥与自动更新流程见下方「Tauri 自动更新 + GitHub Actions CI」节。
+- **CLI 新增开发环境命令**（`tools/flovart/cli.js` 扩展，`tools/flovart/dev-commands.js` 新增）：
+  - `flovart install`：git clone `https://github.com/avabbbb/Flovart.git` 到 `~/.flovart/project` + `npm install` + 从 `.env.example` 复制创建 `backend/.env` 与 `backend/enterprise/.env`（已存在则跳过） + `go mod download`（hub + enterprise 两个模块，Go 不可用时跳过）。
+  - `flovart start`：若当前目录含 `package.json`+`backend/` 则用当前目录，否则用 `~/.flovart/project`。检查 Docker → 自动起 `flovart-pg` PostgreSQL 容器（`postgres:16-alpine`，user/postgres/postgres，db=flovart，不存在则创建，已停止则启动，已在跑则跳过） → 并行启动三进程：`npm run dev`（vite 前端 :3217） + `go run cmd/server/main.go`（hub 后端 :8080，auth/prompts/uploads） + `go run cmd/server/main.go`（enterprise 后端 :8081，org/dept/role）。后端各自读自身 `.env`（`DATABASE_URL`/`JWT_SECRET`/端口） → Ctrl+C 一键停止全部。
+  - `flovart update`：`git pull` + `npm install` + `go mod download`（hub + enterprise 两个模块）。
+  - 三个命令在 `cli.js` 顶层拦截，不进入画布命令路由；现有 `canvas.*`/`element.*`/`workflow.*` 等画布命令不受影响。
+  - `package.json` 的 `files` 数组已加入 `dev-commands.js`，`npm publish` 会包含新文件。
+- **待用户验证**：
+  - ① `npm run tauri -- bundle --bundles nsis` → 生成 `src-tauri/target/release/bundle/nsis/Flovart_0.2.0_x64-setup.exe`。
+  - ② 双击 `Flovart_0.2.0_x64-setup.exe` → 安装 Flovart 桌面端 → 启动后看到 1280x800 窗口。
+  - ③ `npx flovart-cli install` → 源码 clone 到 `~/.flovart/project` → `.env` 从 `.env.example` 创建 → `npm install` + `go mod download`（hub+enterprise）完成。
+  - ④ `npx flovart-cli start` → Docker PG 容器启动（postgres/postgres） → vite + hub(:8080) + enterprise(:8081) 三进程并行 → `http://localhost:3217` 前端可访问 → 注册/登录走 :8080 → 企业后台走 :8081 → Ctrl+C 停止全部。
+  - ⑤ `npx flovart-cli update` → `git pull` + 依赖更新完成。
+  - ⑥ 从工作区根目录直接 `node tools/flovart/cli.js start` → 检测到 CWD 是项目根 → 同 ④（无需先 install）。
+
+## Tauri 自动更新 + GitHub Actions CI
+
+- **签名密钥**：`npm run tauri signer generate -w "C:\Users\ava\.tauri\flovart.key" --password "" --ci` 生成新 Ed25519 密钥对（非模板旧 key）。私钥 `flovart.key` 存本地、永不提交；公钥已嵌入 `tauri.conf.json` 的 `bundle.windows.updater.pubkey`。
+- **tauri.conf.json 更新**：pubkey 替换为新公钥；`endpoints` 修正为 `["https://github.com/avabbbb/Flovart/releases/latest/download/latest.json"]`；`createUpdaterArtifacts: true` + `installMode: "passive"` 已启用。
+- **前端 updater store**（`stores/useUpdaterStore.ts` 新增）：Zustand store 提供 `checkForUpdates`/`applyUpdate`/`autoCheckOnStartup`。动态 `import('@tauri-apps/plugin-updater')` 避免把 Tauri API 打进 web bundle；模块级 `currentUpdate` ref + `autoChecked` guard 防重；`downloadAndInstall` 事件回调跟踪下载进度。
+- **tauri-plugin-process**：为更新后 `relaunch()` 添加。`Cargo.toml` 加 `tauri-plugin-process = "2"`，`lib.rs` 加 `.plugin(tauri_plugin_process::init())`，`capabilities/default.json` 加 `process:default`，`package.json` 加 `@tauri-apps/plugin-process: ^2.4.0`。
+- **自动检查**：`RouterHost.tsx` 挂载时 `useEffect` 调用 `autoCheckOnStartup()`（静默检查，模块级防重）。
+- **手动检查**：`StudioTopMenu.tsx` 新增 isTauri 检测 + updater 按钮——idle=「检查更新」(RefreshCw)/available=「更新 vX」(Download, 绿色)/checking=spinner/downloading=进度%/up-to-date/error(红色)，busy 时 disabled。
+- **GitHub Actions CI**（`.github/workflows/release.yml` 新增）：`v*` tag push 触发，`tauri-action` 矩阵构建 Windows(nsis)/macOS(app,dmg)/Linux(deb,appimage)。每平台先 `cargo build --release --bin flovart-host` 构建 sidecar 并复制到 `binaries/flovart-host-{target-triple}[.exe]`，再 tauri build。`updaterJsonPreferNsis: true` 让 `latest.json` 优先 NSIS。`TAURI_SIGNING_PRIVATE_KEY` / `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` 从 repo secrets 读取。
+- **待用户验证**：
+  - ① `npm install` 安装新增的 `@tauri-apps/plugin-process`。
+  - ② `cargo build`（或 `npm run tauri build`）验证 `tauri-plugin-process` Rust 依赖编译通过。
+  - ③ `npm run dev` → Tauri 窗口顶部 StudioTopMenu 出现「检查更新」按钮 → 点击 → 首次返回「已是最新」或报错（无 Release 时正常）。
+  - ④ GitHub repo Settings → Secrets → 添加 `TAURI_SIGNING_PRIVATE_KEY`（粘贴 `flovart.key` 私钥文件内容）+ `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`（空字符串）。
+  - ⑤ `git tag v0.2.1 && git push origin v0.2.1` → CI 三平台并行构建 → Release 发布 → `latest.json` 生成 → 应用内检查更新可发现新版本并下载安装重启。

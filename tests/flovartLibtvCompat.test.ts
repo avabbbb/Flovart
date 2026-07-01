@@ -90,6 +90,21 @@ describe('flovart LibTV-style CLI compatibility', () => {
       },
     });
   });
+  it('reports Seedance provider readiness from the shadow runtime without secrets', async () => {
+    const runtime = await runtimeForTest();
+
+    const status = await executeFlovartCommand('provider.status', {}, runtime);
+    const test = await executeFlovartCommand('provider.test', { purpose: 'video' }, runtime);
+
+    expect(status.selectedModels.video).toBe('doubao-seedance-2.0');
+    expect(status.readiness).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'video.providerConfigured', ok: false }),
+      expect.objectContaining({ id: 'video.seedance2Model', ok: true, slots: { image: 9, video: 3, audio: 3 } }),
+    ]));
+    expect(test).toMatchObject({ ok: false, purpose: 'video' });
+    expect(test.nextActions).toContain('provider.begin-setup --provider volcengine --purpose video');
+    expect(JSON.stringify(status)).not.toMatch(/api[_-]?key|token|secret/i);
+  });
 
   it('creates projects and groups, then uses the active group for new nodes', async () => {
     const runtime = await runtimeForTest();

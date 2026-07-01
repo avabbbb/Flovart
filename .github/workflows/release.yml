@@ -1,0 +1,72 @@
+name: release
+
+# 推送 v* 标签触发：构建 Windows/macOS/Linux 安装包并发布到 GitHub Release
+# tauri-action 自动生成 latest.json（含签名）作为 updater 端点
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-latest
+            args: '--bundles nsis'
+            target: 'x86_64-pc-windows-msvc'
+          - platform: macos-latest
+            args: '--bundles app,dmg'
+            target: 'aarch64-apple-darwin'
+          - platform: ubuntu-22.04
+            args: '--bundles deb,appimage'
+            target: 'x86_64-unknown-linux-gnu'
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux system dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf libdbus-1-dev pkg-config
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: 'npm'
+
+      - run: npm ci
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      - name: Build flovart-host sidecar
+        shell: bash
+        working-directory: src-tauri
+        run: |
+          cargo build --release --bin flovart-host
+          mkdir -p binaries
+          case "${{ matrix.platform }}" in
+            windows-latest) cp target/release/flovart-host.exe "binaries/flovart-host-${{ matrix.target }}.exe" ;;
+            *) cp target/release/flovart-host "binaries/flovart-host-${{ matrix.target }}" ;;
+          esac
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: 'Flovart ${{ github.ref_name }}'
+          releaseBody: 'See the assets to download and install this version.'
+          releaseDraft: false
+          prerelease: false
+          updaterJsonPreferNsis: true
+          args: ${{ matrix.args }}

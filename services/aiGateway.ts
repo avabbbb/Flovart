@@ -346,6 +346,9 @@ async function resolveSeedanceSlotUrls(slots: MultimodalSlot[]): Promise<Multimo
         const href = slot.href?.trim() || '';
         if (!href) return slot;
         if (/^https?:\/\//i.test(href) || href.startsWith('asset://')) return slot;
+        if (slot.kind === 'video' || slot.kind === 'audio') {
+            throw new Error(`Seedance 参考${slot.kind === 'video' ? '视频' : '音频'}必须使用公网 URL 或 asset:// 素材 ID`);
+        }
         if (href.startsWith('data:')) return slot;
         if (href.startsWith('blob:')) {
             const dataUrl = await blobToDataUrl(href);
@@ -643,6 +646,7 @@ function stripModelProviderPrefix(model: string): string {
 export function inferCapabilityFromModel(model: string): AICapability | undefined {
     const normalized = stripModelProviderPrefix(model);
     if (!normalized) return undefined;
+    if (normalized.includes('seedance')) return 'video';
     if (/^(veo([-.\d]|$)|video|wan|seedance|vidu|pika|runway|higgsfield|luma|kling|keling|sora|sdols|hailuo|qwen-video|liveportrait|videoretalk|emo|gemini-omni|happyhorse|ltx|pixverse|skyreels)/.test(normalized)) return 'video';
     if (/(^|[-_/])(text|image|reference|start|end|multimodal)?-?to-video|video-edit|edit-video|motion-control|video-extend/.test(normalized)) return 'video';
     if (/^(rhart-image|runninghub-image|imagen|dall-e|gpt-image|flux|stable-diffusion|sdxl|midjourney|recraft|ideogram|qwen-image|seedream|seededit|nano-banana|jimeng|doubao-image|omni-image|grok-image|f-|z-image|xai\/rhart|xai\/grok-imagine-image)/.test(normalized)) return 'image';
@@ -655,6 +659,10 @@ export function inferCapabilityFromModel(model: string): AICapability | undefine
 export function inferCapabilityFromModelName(modelName: string): ElementMediaCapability {
     const stripped = stripModelProviderPrefix(modelName);
     const normalized = stripped.includes('/') ? stripped.split('/').pop() || stripped : stripped;
+
+    if (normalized.includes('seedance')) {
+        return 'video';
+    }
 
     if (/^(veo([-.\d]|$)|video|wan|seedance|vidu|pika|runway|higgsfield|luma|kling|keling|sora|sdols|hailuo|qwen-video|liveportrait|videoretalk|emo|cogvideo|hunyuan-video)/.test(normalized)) {
         return 'video';
@@ -1386,8 +1394,38 @@ export function inferProviderFromModel(model: string): AIProvider {
     return 'custom';
 }
 
-function sleep(ms: number) {
-    return new Promise(resolve => setTimeout(resolve, ms));
+function abortError(signal?: AbortSignal): Error {
+    const reason = signal?.reason;
+    if (reason instanceof Error) return reason;
+    if (typeof DOMException !== 'undefined') {
+        return new DOMException(typeof reason === 'string' ? reason : '生成已停止', 'AbortError');
+    }
+    const error = new Error(typeof reason === 'string' ? reason : '生成已停止');
+    error.name = 'AbortError';
+    return error;
+}
+
+function throwIfAborted(signal?: AbortSignal): void {
+    if (signal?.aborted) throw abortError(signal);
+}
+
+function sleep(ms: number, signal?: AbortSignal) {
+    return new Promise<void>((resolve, reject) => {
+        if (signal?.aborted) {
+            reject(abortError(signal));
+            return;
+        }
+        let timeout: ReturnType<typeof setTimeout>;
+        const onAbort = () => {
+            clearTimeout(timeout);
+            reject(abortError(signal));
+        };
+        timeout = setTimeout(() => {
+            signal?.removeEventListener('abort', onAbort);
+            resolve();
+        }, ms);
+        signal?.addEventListener('abort', onAbort, { once: true });
+    });
 }
 
 function uniqueUrls(values: Array<string | undefined>) {
@@ -2553,8 +2591,10 @@ export async function submitSeedanceVideoTask(
         generateAudio?: boolean;
         serviceTier?: string;
         safetyIdentifier?: string;
+        signal?: AbortSignal;
     },
 ): Promise<SeedanceVideoTaskHandle> {
+    throwIfAborted(options?.signal);
     const apiKey = requireApiKey('volcengine', key);
     const baseUrl = getBaseUrl('volcengine', key);
     const mappedModel = normalizeSeedanceModel(mapProviderModel(model || DEFAULT_SEEDANCE_MODEL, key));
@@ -2562,6 +2602,7 @@ export async function submitSeedanceVideoTask(
     const slots = options?.slots?.length ? options.slots : multimodalSlotsFromLegacyReferences(options?.references ?? []);
     validateSeedanceSlots(slots, capability);
     const resolvedSlots = await resolveSeedanceSlotUrls(slots);
+    throwIfAborted(options?.signal);
 
     const createBody: Record<string, unknown> = {
         model: mappedModel,
@@ -2587,6 +2628,7 @@ export async function submitSeedanceVideoTask(
             'Content-Type': 'application/json',
             Authorization: `Bearer ${apiKey}`,
         },
+        signal: options?.signal,
         body: JSON.stringify(createBody),
     });
     if (!createRes.ok) {
@@ -2613,11 +2655,14 @@ export async function submitSeedanceVideoTask(
 export async function pollSeedanceVideoTask(
     handle: SeedanceVideoTaskHandle,
     key?: UserApiKey,
+    options?: { signal?: AbortSignal },
 ): Promise<SeedanceVideoPollResult> {
+    throwIfAborted(options?.signal);
     const apiKey = requireApiKey('volcengine', key);
     const baseUrl = handle.baseUrl || getBaseUrl('volcengine', key);
     const queryRes = await fetch(`${baseUrl}/contents/generations/tasks/${encodeURIComponent(handle.taskId)}`, {
         headers: { Authorization: `Bearer ${apiKey}` },
+        signal: options?.signal,
     });
     if (!queryRes.ok) {
         throw new Error(await readErrorResponse(queryRes, 'Seedance 任务查询失败'));
@@ -2650,8 +2695,9 @@ export async function pollSeedanceVideoTask(
     return { status: 'running', remoteStatus: status || undefined, raw: queryJson };
 }
 
-export async function downloadSeedanceVideoResult(videoUrl: string): Promise<{ videoBlob: Blob; mimeType: string }> {
-    const response = await fetch(videoUrl);
+export async function downloadSeedanceVideoResult(videoUrl: string, options?: { signal?: AbortSignal }): Promise<{ videoBlob: Blob; mimeType: string }> {
+    throwIfAborted(options?.signal);
+    const response = await fetch(videoUrl, { signal: options?.signal });
     if (!response.ok) throw new Error(`视频下载失败: ${response.statusText}`);
     return {
         videoBlob: await response.blob(),
@@ -2703,6 +2749,7 @@ export async function generateVideoWithProvider(
     const firstFrame = references.find(r => r.slotRole === 'first_frame')
         || references[0]
         || (firstImageSlot ? { href: firstImageSlot.href, mimeType: firstImageSlot.mimeType, slotRole: String(firstImageSlot.role || 'unassigned') } : undefined);
+    throwIfAborted(options?.signal);
 
     if (provider === 'runningHub') {
         const apiKey = requireApiKey(provider, key);
@@ -2737,7 +2784,7 @@ export async function generateVideoWithProvider(
             throw new Error(result.results?.map(item => item.text).filter(Boolean).join('\n') || 'RunningHub 视频任务完成但未返回视频 URL。');
         }
         onProgress('Downloading generated video...');
-        return downloadSeedanceVideoResult(videoUrl);
+        return downloadSeedanceVideoResult(videoUrl, { signal: options?.signal });
     }
 
     if (provider === 'google') {
@@ -2787,7 +2834,7 @@ export async function generateVideoWithProvider(
             }
             onProgress(progressMessages[messageIndex % progressMessages.length]);
             messageIndex++;
-            await new Promise(resolve => setTimeout(resolve, 10000));
+            await sleep(10000, options?.signal);
 
             const queryRes = await fetch(`${baseUrl}/query/video_generation?task_id=${encodeURIComponent(taskId)}`, {
                 headers: { Authorization: `Bearer ${apiKey}` },
@@ -2886,7 +2933,7 @@ export async function generateVideoWithProvider(
             }
             onProgress(progressMessages[messageIndex % progressMessages.length]);
             messageIndex++;
-            await new Promise(resolve => setTimeout(resolve, 10000));
+            await sleep(10000, options?.signal);
 
             const queryRes = await fetch(`${baseUrl}/videos/generations/${encodeURIComponent(taskId)}`, {
                 headers: { Authorization: `Bearer ${apiKey}` },
@@ -2933,15 +2980,15 @@ export async function generateVideoWithProvider(
             }
             onProgress(seedanceProgressMessages[seedanceMsgIndex % seedanceProgressMessages.length]);
             seedanceMsgIndex++;
-            await new Promise(resolve => setTimeout(resolve, 10000));
+            await sleep(10000, options?.signal);
 
-            const result = await pollSeedanceVideoTask(handle, key);
+            const result = await pollSeedanceVideoTask(handle, key, { signal: options?.signal });
             if (result.status === 'failed') {
                 throw new Error(`Seedance 视频生成失败: ${result.error || 'Unknown error'}`);
             }
             if (result.status === 'succeeded') {
                 onProgress('Downloading generated video...');
-                return downloadSeedanceVideoResult(result.videoUrl);
+                return downloadSeedanceVideoResult(result.videoUrl, { signal: options?.signal });
             }
         }
     }
@@ -2981,6 +3028,7 @@ export async function executeUnifiedIgnition(input: UnifiedIgnitionInput): Promi
                 watermark: input.watermark,
                 references: videoRefs,
                 slots: videoSlots,
+                signal: input.signal,
                 onProgress: message => input.onProgress?.(35, message),
             });
             const mediaUrl = URL.createObjectURL(result.videoBlob);

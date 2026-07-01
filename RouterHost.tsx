@@ -4,10 +4,11 @@
 // /business → ToB SaaS 类 Landing Page
 // /app      → 画布/工作流 主应用 (App.tsx)
 // /enterprise/* → 企业后台
-import React, { Suspense } from 'react';
+import React, { Suspense, useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router';
 import App from './App';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { useUpdaterStore } from './stores/useUpdaterStore';
 
 const EnterpriseApp = React.lazy(() => import('./components/enterprise/EnterpriseApp'));
 const ToCLanding = React.lazy(() => import('./components/landing/ToCLanding'));
@@ -15,6 +16,10 @@ const ToBLanding = React.lazy(() => import('./components/landing/ToBLanding'));
 const PromptsPage = React.lazy(() => import('./components/community/PromptsPage'));
 
 export function RouterHost() {
+  useEffect(() => {
+    useUpdaterStore.getState().autoCheckOnStartup();
+  }, []);
+
   return (
     <ErrorBoundary>
       <HashRouter>

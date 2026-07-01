@@ -92,6 +92,13 @@ function normalizeCommandForRouting(command) {
 }
 
 const rawCommand = argv[0];
+
+if (['install', 'start', 'update'].includes(rawCommand)) {
+  const mod = await import('./dev-commands.js');
+  await mod[rawCommand]();
+  process.exit(0);
+}
+
 const parsedArgs = parseCliArgs(argv.slice(1));
 const normalizedAtomic = normalizeAtomicAlias(rawCommand, parsedArgs);
 const command = normalizeCommandName(normalizedAtomic.command);
@@ -109,7 +116,7 @@ if (args.file) {
 
 async function main() {
   if (!command) {
-    printCliResponse(true, 'help', { usage: 'npx flovart-cli <command> --json', setup: SETUP_TEXT });
+    printCliResponse(true, 'help', { usage: 'npx flovart-cli <command> --json', setup: SETUP_TEXT, devCommands: { install: 'Clone source + install deps to ~/.flovart/project', start: 'Launch dev servers (vite + Go backend + Docker PG)', update: 'Pull latest + update deps' } });
     return;
   }
 

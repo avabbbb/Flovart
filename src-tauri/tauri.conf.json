@@ -28,7 +28,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": ["nsis"],
     "externalBin": [
       "binaries/flovart-host"
     ],
@@ -64,9 +64,9 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEYwMTU2MjhEQTQ0RTU5RTYKUldUbVdVNmtqV0lWOEY5RE1aZVhvNzZwUm05cWdoK1h2N1g4bk1rWVV0R2xtSFV3YWRNQXB3RnoK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEY4NUIyQTRCQkVBNzFCMTgKUldRWUc2ZStTeXBiK0twR3kwVlp1YkV4UVN5cUhJVldlVzErc1BjYXZoS2JJdU1FT3BNU3Z3NmYK",
       "endpoints": [
-        "https://github.com/Paker-kk/Flovart/releases/latest/download/latest.json"
+        "https://github.com/avabbbb/Flovart/releases/latest/download/latest.json"
       ],
       "windows": {
         "installMode": "passive"

@@ -5,6 +5,16 @@ import { homedir } from 'node:os';
 const CONFIG_DIR = process.env.FLOVART_AGENT_CONFIG_DIR || join(process.env.APPDATA || process.env.HOME || homedir(), 'Flovart');
 const PREFS_FILE = join(CONFIG_DIR, 'agent-preferences.json');
 
+const SEEDANCE2_MODELS = ['doubao-seedance-2.0', 'seedance-2.0', 'dreamina-seedance-2-0-260128', 'doubao-seedance-2-0-260128'];
+const SEEDANCE2_REQUIREMENTS = {
+  provider: 'volcengine',
+  models: SEEDANCE2_MODELS,
+  slots: { image: 9, video: 3, audio: 3 },
+  durationSec: { min: 4, max: 15 },
+  resolutions: ['480p', '720p', '1080p'],
+  videoAudioReferenceUrls: 'public-url-or-asset',
+};
+
 const STYLE_PRESETS = {
   cinematic: 'cinematic composition, expressive lighting, controlled contrast, production design details',
   product: 'premium product photography, clean surface, controlled reflections, commercial lighting',
@@ -90,12 +100,107 @@ function writeJson(filePath, value) {
   writeFileSync(filePath, JSON.stringify(value, null, 2), 'utf8');
 }
 
+function shadowStateFile() {
+  return process.env.FLOVART_SHADOW_STATE_FILE
+    || join(process.env.LOCALAPPDATA || process.cwd(), 'Flovart', 'shadow-runtime-state.json');
+}
+
+function readShadowStateSnapshot() {
+  const file = shadowStateFile();
+  const state = readJson(file, null);
+  return { exists: existsSync(file), file, state };
+}
+
+function providerSnapshot(provider = {}) {
+  const snapshot = {
+    configured: { image: false, video: false, text: false, ...(provider.configured || {}) },
+    selectedModels: {
+      image: 'flux-schnell',
+      video: 'doubao-seedance-2.0',
+      text: 'gpt-4.1-mini',
+      ...(provider.selectedModels || {}),
+    },
+    providers: Array.isArray(provider.providers) ? provider.providers : [],
+  };
+  if (snapshot.selectedModels.video === 'kling-v2' && !snapshot.configured.video && snapshot.providers.length === 0) {
+    snapshot.selectedModels.video = 'doubao-seedance-2.0';
+  }
+  return snapshot;
+}
+
+function diagnoseSeedance2(provider) {
+  const videoModel = String(provider.selectedModels.video || '');
+  const normalizedModel = videoModel.toLowerCase();
+  const modelOk = SEEDANCE2_MODELS.includes(normalizedModel) || normalizedModel.includes('seedance');
+  const providerOk = !!provider.configured.video;
+  const checks = [
+    {
+      id: 'video.providerConfigured',
+      ok: providerOk,
+      model: videoModel,
+      message: providerOk ? 'Video provider credential is configured.' : 'Video provider credential is missing.',
+      nextAction: providerOk ? undefined : 'provider.begin-setup --provider volcengine --purpose video',
+    },
+    {
+      id: 'video.seedance2Model',
+      ok: modelOk,
+      model: videoModel,
+      expectedModels: SEEDANCE2_MODELS,
+      message: modelOk ? 'Seedance 2.0 model is selected.' : 'Selected video model is not a Seedance 2.0 model.',
+      nextAction: modelOk ? undefined : 'provider.select-model --video-model doubao-seedance-2.0',
+    },
+    {
+      id: 'seedance2.multimodalLimits',
+      ok: true,
+      slots: SEEDANCE2_REQUIREMENTS.slots,
+      durationSec: SEEDANCE2_REQUIREMENTS.durationSec,
+      resolutions: SEEDANCE2_REQUIREMENTS.resolutions,
+      videoAudioReferenceUrls: SEEDANCE2_REQUIREMENTS.videoAudioReferenceUrls,
+      message: 'Seedance 2.0 gateway supports image, video, and audio reference slots.',
+    },
+  ];
+  return {
+    ok: checks.every(check => check.ok),
+    provider: SEEDANCE2_REQUIREMENTS.provider,
+    model: videoModel,
+    requirements: SEEDANCE2_REQUIREMENTS,
+    checks,
+    nextActions: checks.filter(check => !check.ok && check.nextAction).map(check => check.nextAction),
+  };
+}
+
+function diagnoseGenerationSurfaces(shadowSnapshot, seedance2) {
+  const state = shadowSnapshot.state || {};
+  const elements = Array.isArray(state.elements) ? state.elements : [];
+  const workflowProjects = Array.isArray(state.workflowProjects) ? state.workflowProjects : [];
+  const providerReady = seedance2.ok;
+  return {
+    canvas: {
+      ok: providerReady,
+      commandSurface: true,
+      providerBackedGenerationReady: providerReady,
+      browserRequired: true,
+      mediaElements: elements.filter(item => item.type === 'image' || item.type === 'video').length,
+      commands: ['element.create', 'element.update-prompt', 'element.assign-slot', 'element.ignite', 'generate.video'],
+    },
+    workflow: {
+      ok: providerReady,
+      commandSurface: true,
+      providerBackedGenerationReady: providerReady,
+      browserRequired: true,
+      projectCount: workflowProjects.length,
+      activeProjectId: state.activeWorkflowProjectId || null,
+      commands: ['workflow.project.create', 'workflow.node.create', 'workflow.connect', 'workflow.node.run'],
+    },
+  };
+}
+
 function defaultPreferences() {
   return {
     style: 'cinematic',
     aspectRatio: '16:9',
     imageModel: 'flux-schnell',
-    videoModel: 'kling-v2',
+    videoModel: 'doubao-seedance-2.0',
     styleNotes: '',
     favoritePrompts: [],
     updatedAt: Date.now(),
@@ -197,9 +302,12 @@ export function listAgentModels(input = {}) {
       { id: 'imagen', label: 'Imagen', routing: 'browser-provider', selected: prefs.imageModel === 'imagen' },
     ],
     video: [
-      { id: 'kling-v2', label: 'Kling v2', routing: 'browser-provider', selected: prefs.videoModel === 'kling-v2' },
-      { id: 'veo-3', label: 'Veo 3', routing: 'browser-provider', selected: prefs.videoModel === 'veo-3' },
-      { id: 'seedance', label: 'Seedance', routing: 'browser-provider', selected: prefs.videoModel === 'seedance' },
+      { id: 'doubao-seedance-2.0', label: 'Seedance 2.0 · Volcengine', routing: 'browser-provider', provider: 'volcengine', capability: 'video', slots: { image: 9, video: 3, audio: 3 }, durationSec: { min: 4, max: 15 }, resolutions: ['480p', '720p', '1080p'], selected: prefs.videoModel === 'doubao-seedance-2.0' },
+      { id: 'seedance-2.0', label: 'Seedance 2.0 · Alias', routing: 'browser-provider', provider: 'volcengine', capability: 'video', slots: { image: 9, video: 3, audio: 3 }, durationSec: { min: 4, max: 15 }, resolutions: ['480p', '720p', '1080p'], selected: prefs.videoModel === 'seedance-2.0' },
+      { id: 'dreamina-seedance-2-0-260128', label: 'Seedance 2.0 · Dreamina Ark', routing: 'browser-provider', provider: 'volcengine', capability: 'video', slots: { image: 9, video: 3, audio: 3 }, durationSec: { min: 4, max: 15 }, resolutions: ['480p', '720p', '1080p'], selected: prefs.videoModel === 'dreamina-seedance-2-0-260128' },
+      { id: 'doubao-seedance-2-0-260128', label: 'Seedance 2.0 · Doubao Ark', routing: 'browser-provider', provider: 'volcengine', capability: 'video', slots: { image: 9, video: 3, audio: 3 }, durationSec: { min: 4, max: 15 }, resolutions: ['480p', '720p', '1080p'], selected: prefs.videoModel === 'doubao-seedance-2-0-260128' },
+      { id: 'kling-v2', label: 'Kling v2', routing: 'browser-provider', provider: 'keling', capability: 'video', selected: prefs.videoModel === 'kling-v2' },
+      { id: 'veo-3.1-generate-preview', label: 'Veo 3.1', routing: 'browser-provider', provider: 'google', capability: 'video', selected: prefs.videoModel === 'veo-3.1-generate-preview' },
     ],
   };
   return { ok: true, purpose, models: purpose === 'image' ? { image: models.image } : purpose === 'video' ? { video: models.video } : models };
@@ -301,16 +409,33 @@ export function diagnoseAgentSetup(input = {}) {
       wrapperKey: hostConfig.wrapperKey,
     };
   });
+  const shadowState = readShadowStateSnapshot();
+  const provider = providerSnapshot(shadowState.state?.provider);
+  const seedance2 = diagnoseSeedance2(provider);
+  const surfaces = diagnoseGenerationSurfaces(shadowState, seedance2);
+  const nextSteps = Array.from(new Set([
+    'Run npm run flovart:cli -- status --json to verify local file-state runtime.',
+    'Run npm run flovart:cli -- init --host <host> to write missing CLI config.',
+    ...seedance2.nextActions,
+    'Run npm run dev and keep the browser app open for provider-backed generation.',
+  ]));
   return {
     ok: checks.every(check => check.ok || check.optional),
+    readyForSeedance2: seedance2.ok,
+    readyForCanvasSeedance2: surfaces.canvas.ok,
+    readyForWorkflowSeedance2: surfaces.workflow.ok,
     projectDir,
     checks,
     hostConfigs,
-    nextSteps: [
-      'Run npm run flovart:cli -- status --json to verify local file-state runtime.',
-      'Run npm run flovart:cli -- init --host <host> to write missing CLI config.',
-      'Run npm run dev and keep the browser app open for provider-backed generation.',
-    ],
+    shadowState: { exists: shadowState.exists, file: shadowState.file },
+    provider: {
+      configured: provider.configured,
+      selectedModels: provider.selectedModels,
+      providers: provider.providers,
+    },
+    seedance2,
+    surfaces,
+    nextSteps,
   };
 }
 

@@ -32,9 +32,8 @@
   <img src="https://img.shields.io/badge/Vite-6-E8453C?logo=vite&logoColor=white" alt="Vite 6" />
 </p>
 
-`<p align="center">`
-  `<img src="https://count.getloli.com/get/@flovart-readme?theme=rule34" alt="Flovart Popular Counter" />`
-
+<p align="center">
+  <img src="https://count.getloli.com/get/@flovart-readme?theme=rule34" alt="Flovart Popular Counter" />
 </p>
 
 <p align="center">
@@ -154,7 +153,7 @@ Flovart 更推荐按创作链路使用，而不是把每个能力拆开记：
 4. 推送 `git push origin feature/xxx`
 5. 提交 Pull Request
 
-> [CONTRIBUTING.md](./CONTRIBUTING.md) · [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md)
+> 欢迎提交 Pull Request，一起让 Flovart 更好。
 
 ---
 
@@ -170,7 +169,7 @@ Flovart 更推荐按创作链路使用，而不是把每个能力拆开记：
 
 本项目基于 [GNU Affero General Public License v3.0 only](./LICENSE) 开源。
 
-使用本产品即表示同意 [使用条款](./TERMS_OF_SERVICE.md) 和 [隐私政策](./PRIVACY_POLICY.md)。
+使用本产品即表示同意 [使用条款](./docs/TERMS_OF_SERVICE.md) 和 [隐私政策](./docs/PRIVACY_POLICY.md)。
 
 ### 非官方部署声明
 

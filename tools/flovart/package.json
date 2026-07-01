@@ -11,6 +11,7 @@
   "files": [
     "cli.js",
     "core.js",
+    "dev-commands.js",
     "flovart-bridge.js",
     "shadow-runtime.js",
     "agent-kit.js",

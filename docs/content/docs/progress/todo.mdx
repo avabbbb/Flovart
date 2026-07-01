@@ -45,3 +45,11 @@ title: 后续待办
 - 后端数据表结构同步更新到 `docs/content/docs/backend/backend-database.mdx`。
 - 补齐 enterprise 服务的 owner 转让流程（创建 owner 转让→受让→确认）。
 - 接入 R2 上传服务：在 hub 内加 S3 兼容存储占位，先打通为工作流生态上传成品图/视频准备。✅ 已完成后续骨架，待联调验证
+
+## Tauri 桌面端 + CLI 分发
+
+- **Tauri NSIS 打包**：✅ 已完成，待用户测试确认。`targets` 改 `["nsis"]` 绕过 MSI/WiX VBSCRIPT 问题，`Flovart_0.2.0_x64-setup.exe` 已生成。详见 `pending-test.mdx`。
+- **CLI 开发环境命令**：✅ 已完成，待用户测试确认。`flovart install`/`start`/`update` 三个命令已加入 `flovart-cli` 包。详见 `pending-test.mdx`。
+- **Tauri updater 签名**：✅ 已完成，待用户测试确认。生成新 Ed25519 密钥对替换模板 pubkey，`tauri.conf.json` 启用 `createUpdaterArtifacts` + 修正 endpoint 指向 `avabbbb/Flovart`，前端 `useUpdaterStore` 实现自动检查 + 手动更新。详见 `pending-test.mdx`。
+- **GitHub Actions CI**：✅ 已完成，待用户测试确认。`.github/workflows/release.yml` 用 `tauri-action` 矩阵构建 Windows/macOS/Linux，tag push 自动发布 + 生成 `latest.json`。详见 `pending-test.mdx`。
+- **flovart-cli 发版**：⬜ `npm publish` 发布包含 `dev-commands.js` 的新版 `flovart-cli`，用户可 `npm i -g flovart-cli` 全局安装。

@@ -35,6 +35,16 @@ describe('generation capabilities', () => {
     expect(capability.supportsReferences).toContain('audio');
   });
 
+  it('keeps Doubao Seedance 2.0 in video capability options', () => {
+    const capability = getGenerationCapability([
+      key({ provider: 'volcengine', capabilities: ['video'], defaultModel: 'doubao-seedance-2.0' }),
+    ], 'video', 'doubao-seedance-2.0');
+
+    expect(capability.models.some(model => model.includes('doubao-seedance-2.0'))).toBe(true);
+    expect(capability.resolutions).toEqual(expect.arrayContaining(['720p', '1080p']));
+    expect(capability.supportsReferences).toEqual(expect.arrayContaining(['image', 'video', 'audio']));
+  });
+
   it('uses text models without media controls and disables unsupported audio generation', () => {
     const text = getGenerationCapability([key({ capabilities: ['text'], customModels: ['gpt-4.1-mini'] })], 'text', 'gpt-4.1-mini');
     expect(text.models.some(model => model.includes('gpt-4.1-mini'))).toBe(true);

@@ -1,7 +1,8 @@
-import { CircleAlert, CircleCheck, Languages, Moon, Settings, Sun, Building2, BookOpen, User } from 'lucide-react';
+import { CircleAlert, CircleCheck, Languages, Moon, Settings, Sun, Building2, BookOpen, User, Download, RefreshCw, Loader2 } from 'lucide-react';
 import React, { useState } from 'react';
 import { Link } from 'react-router';
 import { useAuth } from '../../hooks/useAuth';
+import { useUpdaterStore } from '../../stores/useUpdaterStore';
 import { AuthModal } from '../auth/AuthModal';
 
 export interface StudioMenuStatus {
@@ -34,6 +35,23 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
   const settingsLabel = isChinese ? '设置' : 'Settings';
   const { user, isLoggedIn } = useAuth();
   const [authOpen, setAuthOpen] = useState(false);
+  const isTauri = Boolean((window as any)?.__TAURI__ || (window as any)?.__TAURI_INTERNALS__);
+  const upStatus = useUpdaterStore(s => s.status);
+  const upVersion = useUpdaterStore(s => s.availableVersion);
+  const upProgress = useUpdaterStore(s => s.downloadProgress);
+  const checkForUpdates = useUpdaterStore(s => s.checkForUpdates);
+  const applyUpdate = useUpdaterStore(s => s.applyUpdate);
+  const upBusy = upStatus === 'checking' || upStatus === 'downloading';
+  const upClick = () => (upStatus === 'available' ? applyUpdate() : checkForUpdates());
+  const upTitle = upStatus === 'available'
+    ? (isChinese ? `更新到 v${upVersion}` : `Update to v${upVersion}`)
+    : upStatus === 'downloading'
+      ? (isChinese ? `下载中 ${Math.round(upProgress * 100)}%` : `Downloading ${Math.round(upProgress * 100)}%`)
+      : upStatus === 'checking'
+        ? (isChinese ? '检查更新中...' : 'Checking...')
+        : upStatus === 'up-to-date'
+          ? (isChinese ? '已是最新版本' : 'Up to date')
+          : (isChinese ? '检查更新' : 'Check for updates');
 
   return (
     <>
@@ -94,6 +112,28 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
           <User size={15} />
           {isLoggedIn && <span className="hidden text-[11px] font-semibold sm:inline" style={{ color: 'var(--isl-ink-soft)' }}>{user?.username}</span>}
         </button>
+        {isTauri && (
+          <button
+            type="button"
+            className="isl-icon-btn flex h-8 items-center gap-1.5 px-2"
+            onClick={upClick}
+            disabled={upBusy}
+            title={upTitle}
+            aria-label={upTitle}
+            style={upStatus === 'available' ? { color: 'var(--isl-mint-deep)' } : upStatus === 'error' ? { color: 'var(--isl-coral-deep)' } : undefined}
+          >
+            {upStatus === 'available'
+              ? <Download size={15} />
+              : upStatus === 'downloading'
+                ? <Loader2 size={15} className="animate-spin" />
+                : upStatus === 'checking'
+                  ? <Loader2 size={15} className="animate-spin" />
+                  : <RefreshCw size={15} />}
+            {upStatus === 'available' && (
+              <span className="hidden text-[11px] font-semibold lg:inline">{isChinese ? '更新' : 'Update'}</span>
+            )}
+          </button>
+        )}
         <button
           type="button"
           className="isl-icon-btn flex h-8 min-w-8 items-center gap-1.5 px-2"

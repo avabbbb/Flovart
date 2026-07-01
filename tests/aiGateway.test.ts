@@ -52,6 +52,7 @@ describe('inferProviderFromModel', () => {
         expect(inferCapabilityFromModel('gemini-3-pro-image-preview')).toBe('image');
         expect(inferCapabilityFromModel('imagen-4.0-generate-001')).toBe('image');
         expect(inferCapabilityFromModel('veo-3.1-generate-preview')).toBe('video');
+        expect(inferCapabilityFromModel('doubao-seedance-2.0')).toBe('video');
         expect(inferCapabilityFromModel('gpt-5.4')).toBe('text');
         expect(inferCapabilityFromModel('gpt-image-1.5')).toBe('image');
     });
@@ -92,6 +93,7 @@ describe('inferProviderFromModel', () => {
     it('为内联控制台动态推断媒体能力和参数 Schema', () => {
         expect(inferCapabilityFromModelName('openrouter/google/veo-3.1-generate-preview')).toBe('video');
         expect(inferCapabilityFromModelName('kling-v2-hq-movie')).toBe('video');
+        expect(inferCapabilityFromModelName('doubao-seedance-2.0')).toBe('video');
         expect(inferCapabilityFromModelName('runway-gen4-video')).toBe('video');
         expect(inferCapabilityFromModelName('luma-ray2')).toBe('video');
         expect(inferCapabilityFromModelName('flux-schnell-dev')).toBe('image');

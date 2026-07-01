@@ -32,7 +32,7 @@ function createEmptyState() {
       configured: { image: false, video: false, text: false },
       selectedModels: {
         image: 'flux-schnell',
-        video: 'kling-v2',
+        video: 'doubao-seedance-2.0',
         text: 'gpt-4.1-mini',
       },
       availableModels: { image: [], video: [], text: [] },
@@ -45,14 +45,27 @@ export function loadShadowState() {
   try {
     if (!existsSync(SHADOW_STATE_FILE)) return createEmptyState();
     const parsed = JSON.parse(readFileSync(SHADOW_STATE_FILE, 'utf8'));
-    return {
-    ...createEmptyState(),
-    ...parsed,
-    provider: {
-      ...createEmptyState().provider,
+    const empty = createEmptyState();
+    const provider = {
+      ...empty.provider,
       ...(parsed.provider || {}),
-    },
-  };
+      selectedModels: {
+        ...empty.provider.selectedModels,
+        ...(parsed.provider?.selectedModels || {}),
+      },
+    };
+    if (
+      provider.selectedModels.video === 'kling-v2'
+      && !provider.configured?.video
+      && (!Array.isArray(provider.providers) || provider.providers.length === 0)
+    ) {
+      provider.selectedModels.video = 'doubao-seedance-2.0';
+    }
+    return {
+      ...empty,
+      ...parsed,
+      provider,
+    };
   } catch {
     return createEmptyState();
   }
@@ -94,6 +107,62 @@ function activeContext() {
 function inferTargetType(type) {
   if (type === 'image' || type === 'video') return type;
   return 'text';
+}
+
+function buildProviderReadiness(provider = {}, purpose = 'both') {
+  const configured = provider.configured || {};
+  const selectedModels = provider.selectedModels || {};
+  const include = (target) => purpose === 'both' || purpose === 'all' || purpose === target;
+  const checks = [];
+
+  if (include('image')) {
+    checks.push({
+      id: 'image.providerConfigured',
+      purpose: 'image',
+      ok: !!configured.image,
+      model: selectedModels.image,
+      message: configured.image ? 'Image provider configured.' : 'Image provider credential missing.',
+      nextAction: configured.image ? undefined : 'provider.begin-setup --purpose image',
+    });
+  }
+
+  if (include('video')) {
+    const videoModel = String(selectedModels.video || '');
+    const seedanceReady = videoModel.toLowerCase().includes('seedance');
+    checks.push({
+      id: 'video.providerConfigured',
+      purpose: 'video',
+      ok: !!configured.video,
+      model: videoModel,
+      message: configured.video ? 'Video provider configured.' : 'Video provider credential missing.',
+      nextAction: configured.video ? undefined : 'provider.begin-setup --provider volcengine --purpose video',
+    });
+    checks.push({
+      id: 'video.seedance2Model',
+      purpose: 'video',
+      ok: seedanceReady,
+      model: videoModel,
+      message: seedanceReady ? 'Seedance 2.0 model is selected.' : 'Selected video model is not a Seedance 2.0 model.',
+      expectedModels: ['doubao-seedance-2.0', 'seedance-2.0', 'dreamina-seedance-2-0-260128', 'doubao-seedance-2-0-260128'],
+      slots: { image: 9, video: 3, audio: 3 },
+      durationSec: { min: 4, max: 15 },
+      resolutions: ['480p', '720p', '1080p'],
+      nextAction: seedanceReady ? undefined : 'provider.select-model --video-model doubao-seedance-2.0',
+    });
+  }
+
+  if (include('text')) {
+    checks.push({
+      id: 'text.providerConfigured',
+      purpose: 'text',
+      ok: !!configured.text,
+      model: selectedModels.text,
+      message: configured.text ? 'Text provider configured.' : 'Text provider credential missing.',
+      nextAction: configured.text ? undefined : 'provider.begin-setup --purpose text',
+    });
+  }
+
+  return checks;
 }
 
 function compilePromptReferences(rawText, elements) {
@@ -627,7 +696,11 @@ export function createShadowRuntimeFacade() {
       };
     },
     provider: {
-      status: async () => ({ ok: true, shadow: true, ...loadShadowState().provider }),
+      status: async () => {
+        const provider = loadShadowState().provider;
+        const readiness = buildProviderReadiness(provider, 'both');
+        return { ok: true, shadow: true, ...provider, readiness, nextActions: readiness.filter(item => !item.ok && item.nextAction).map(item => item.nextAction) };
+      },
       beginSetup: async (input = {}) => ({
         ok: true,
         shadow: true,
@@ -650,10 +723,13 @@ export function createShadowRuntimeFacade() {
         const state = loadShadowState();
         const purpose = input.purpose || 'both';
         const checks = state.provider.configured;
+        const readiness = buildProviderReadiness(state.provider, purpose);
         return {
-          ok: purpose === 'both' ? checks.image && checks.video : checks[purpose],
+          ok: readiness.length ? readiness.every(item => item.ok) : false,
           purpose,
           checks,
+          readiness,
+          nextActions: readiness.filter(item => !item.ok && item.nextAction).map(item => item.nextAction),
           shadow: true,
         };
       },

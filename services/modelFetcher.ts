@@ -46,6 +46,7 @@ function inferCapability(modelId: string, model?: any): AICapability {
     }
 
     const id = stripProviderPrefix(modelId);
+    if (id.includes('seedance')) return 'video';
     if (/^(veo|video|wan|seedance|vidu|pika|runway|higgsfield|luma|kling|keling|sora|sdols|hailuo|qwen-video|liveportrait|videoretalk|emo|gemini-omni|happyhorse|ltx|pixverse|skyreels)/.test(id)) return 'video';
     if (/(^|[-_/])(text|image|reference|start|end|multimodal)?-?to-video|video-edit|edit-video|motion-control|video-extend/.test(id)) return 'video';
     if (/^(imagen|image-generation|dall-e|gpt-image|stable-diffusion|sdxl|flux|midjourney|recraft|ideogram|qwen-image|seededit|seedream|nano-banana|jimeng|doubao-image|omni-image|grok-image|rhart-image|f-|z-image|xai\/rhart|xai\/grok-imagine-image)/.test(id)) return 'image';

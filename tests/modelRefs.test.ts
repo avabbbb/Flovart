@@ -56,4 +56,21 @@ describe('modelRefs', () => {
 
     expect(normalizeModelSelectionWithKeys('shared-image', keys, 'image')).toBe('shared-image');
   });
+  it('lists Doubao Seedance 2.0 as a video model owned by a Volcengine key', () => {
+    const key = makeKey({
+      id: 'volc-key',
+      provider: 'volcengine',
+      name: 'Seedance Ark',
+      capabilities: ['video'],
+      defaultModel: 'doubao-seedance-2.0',
+    });
+
+    const options = buildCapabilityModelOptions([key], 'video', [], '');
+
+    expect(options).toContain(encodeModelRef('volc-key', 'doubao-seedance-2.0'));
+    expect(resolveModelSelection(options[0], [key], 'video')).toMatchObject({
+      model: 'doubao-seedance-2.0',
+      provider: 'volcengine',
+    });
+  });
 });

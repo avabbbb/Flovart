@@ -382,6 +382,28 @@ describe('aiGateway - Seedance multimodal slots', () => {
 
         expect(globalThis.fetch).not.toHaveBeenCalled();
     });
+    it('does not call Seedance provider when the request is already aborted', async () => {
+        globalThis.fetch = vi.fn();
+        const controller = new AbortController();
+        controller.abort(new DOMException('用户停止', 'AbortError'));
+
+        await expect(submitSeedanceVideoTask('aborted scene', 'doubao-seedance-2.0', {
+            id: 'seedance-key',
+            provider: 'volcengine',
+            capabilities: ['video'],
+            key: 'ark-test-key',
+            baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
+            createdAt: 0,
+            updatedAt: 0,
+        }, {
+            signal: controller.signal,
+            slots: [
+                { kind: 'image', href: 'https://cdn.example.com/ref.png', mimeType: 'image/png', role: 'reference_image' },
+            ],
+        })).rejects.toMatchObject({ name: 'AbortError' });
+
+        expect(globalThis.fetch).not.toHaveBeenCalled();
+    });
 
     it('parses the Tokenhub Seedance 2.0 status response video URL', async () => {
         globalThis.fetch = vi.fn().mockResolvedValueOnce(mockJsonResponse({
