@@ -27,7 +27,7 @@
 </p>
 
 <p align="center">
-  <img src="https://count.getloli.com/get/@flovart-readme?theme=rule34" alt="Flovart Popular Counter" />
+  <img src="https://tally.yuki.sh/hits/flovart/readme.svg?theme=rule34" alt="Flovart Popular Counter" />
 </p>
 
 <p align="center">
