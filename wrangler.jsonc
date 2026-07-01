@@ -1,7 +1,7 @@
 {
   "name": "flovart",
   "pages_build_output_dir": "./dist",
-  "compatibility_date": "2026-04-30",
+  "compatibility_date": "2026-07-01",
   "compatibility_flags": ["nodejs_compat"],
   "r2_buckets": [
     {

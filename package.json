@@ -16,7 +16,8 @@
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
     "ext:build": "node extension/build.mjs",
-    "publish:cli": "cd tools/flovart && npm publish"
+    "publish:cli": "cd tools/flovart && npm publish",
+    "deploy:cf": "vite build && npx wrangler pages deploy dist"
   },
   "dependencies": {
     "@cfworker/json-schema": "^4.1.1",
