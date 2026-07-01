@@ -1,6 +1,6 @@
 Flovart Privacy Policy
 
-Last updated: 2026-04-25
+Last updated: 2026-07-01
 
 This Privacy Policy explains how Flovart handles data when you use the local web app, desktop builds, browser extension bridge, source code, and related project features.
 
@@ -32,6 +32,8 @@ Storage locations may include browser localStorage, IndexedDB, extension storage
 By default, Flovart does not operate a central account system for your local project data.
 
 By default, Flovart does not run a project-owned cloud database for your prompts, canvas files, generated media, or API keys.
+
+If you deploy or use a self-hosted backend (community hub or enterprise API), that backend may store user account credentials (hashed passwords, JWT tokens), organization data, department structures, role assignments, and prompt community content. This data is stored on the deployer's server. The deployer is responsible for securing, backing up, and managing this data.
 
 By default, Flovart does not sell personal information.
 
@@ -141,7 +143,7 @@ Your continued use of Flovart after an update means you acknowledge the updated 
 11. Contact
 
 Project repository:
-https://github.com/Paker-kk/Flovart
+https://github.com/avabbbb/Flovart
 
 Issues:
-https://github.com/Paker-kk/Flovart/issues
+https://github.com/avabbbb/Flovart/issues

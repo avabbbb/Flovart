@@ -79,7 +79,20 @@
 
 ---
 
+## 个人版 / 企业版
+
+Flovart 同时面向个人创作者和企业团队：
+
+- **个人版**（社区版）：开源自部署，BYOK 自带 Key，画布 + 工作流，浏览器本地存储。永久免费。
+- **企业版**：在社区版基础上增加组织/部门/角色 RBAC 权限体系、权限继承与部门树、桌面端自动更新、全栈 CLI 工具链。适合私有化部署到企业内部。
+
+两个版本在同一代码库中，通过 landing 页的 [个人版 | 企业版] 切换器选择入口。
+
+---
+
 ## 🚀 快速开始
+
+**前端 only（最简）：**
 
 ```bash
 git clone https://github.com/avabbbb/Flovart.git
@@ -89,6 +102,14 @@ npm run dev
 ```
 
 打开 http://localhost:3217，在设置中填入你的服务凭据即可。
+
+**全栈启动（含后端 API + 企业版）：**
+
+```bash
+node tools/flovart/cli.js start
+```
+
+一键启动前端(:3217) + 社区版后端(:8080) + 企业版后端(:8081)，首次运行自动创建 `.env`。
 
 > 推荐 [Google AI Studio](https://aistudio.google.com/apikey) 免费获取 Gemini 凭据。
 
@@ -127,6 +148,9 @@ Flovart 更推荐按创作链路使用，而不是把每个能力拆开记：
 - [X] Docker / Tauri 桌面端 / 在线 Demo
 - [X] 第三方 API 聚合端点全兼容
 - [X] Tactile Shell AC 视觉语言
+- [X] Tauri 自动更新（Ed25519 签名 + CI 三平台矩阵）
+- [X] 企业版 RBAC（组织/部门/角色/权限继承）
+- [X] 全栈 CLI（flovart start 一键启动）
 
 ### 进行中 🚧
 

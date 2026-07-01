@@ -375,7 +375,7 @@ export default function ToCLanding() {
             </a>
           </div>
           <div className="text-xs" style={{ color: '#4a463f' }}>
-            © 2026 Flovart · MIT License
+            © 2026 Flovart · AGPL-3.0-only
           </div>
         </div>
       </footer>

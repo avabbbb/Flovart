@@ -7,7 +7,7 @@ import {
 const linkTo = (path: string) => (window.location.hash = path);
 
 const ENTERPRISE_FEATURES = [
-  { icon: Code2, title: '开源可自部署', desc: '完整源码 MIT 协议，支持私有化部署，数据完全掌控在企业内部' },
+  { icon: Code2, title: '开源可自部署', desc: '完整源码 AGPL-3.0 协议，支持私有化部署，数据完全掌控在企业内部' },
   { icon: Workflow, title: '画布 + 工作流融合', desc: '可视化画布与工作流无缝切换，拖拽组合多模型，构建团队专属创作流水线' },
   { icon: Globe, title: '原生中文创作', desc: '中文提示词精准理解，中文管理后台，贴合国内团队协作与审批场景' },
   { icon: Lock, title: '本地优先 · 隐私安全', desc: 'API Key 加密存储，生成数据浏览器本地保存，无需上传云端' },
@@ -25,7 +25,7 @@ const MODELS = [
 ];
 
 const COMPARISON = [
-  { feature: '开源协议', flovart: 'MIT', krea: '闭源', jimeng: '闭源' },
+  { feature: '开源协议', flovart: 'AGPL-3.0', krea: '闭源', jimeng: '闭源' },
   { feature: '私有化部署', flovart: true, krea: false, jimeng: false },
   { feature: '画布 + 工作流', flovart: true, krea: false, jimeng: true },
   { feature: '本地数据存储', flovart: true, krea: false, jimeng: false },
@@ -38,22 +38,22 @@ const COMPARISON = [
 const PRICING = [
   {
     name: '社区版', price: '免费', desc: '开源自部署，适合个人和小团队',
-    features: ['完整画布 + 工作流', '所有模型接入', '本地浏览器存储', 'MIT 开源协议', '社区支持'],
+    features: ['完整画布 + 工作流', '所有模型接入', '本地浏览器存储', 'AGPL-3.0 开源协议', '社区支持'],
     cta: '立即使用', highlight: false,
   },
   {
     name: '企业版', price: '联系我们', desc: '私有化部署，适合中大型企业',
-    features: ['社区版全部功能', '私有化部署支持', '团队协作空间', '统一 API Key 管理', 'SSO 单点登录', 'SLA 服务保障', '专属技术支持'],
+    features: ['社区版全部功能', '私有化部署支持', '组织/部门/角色 RBAC', '权限继承与部门树', '桌面端自动更新', '全栈 CLI 工具链', 'AGPL-3.0 开源协议'],
     cta: '咨询方案', highlight: true,
   },
 ];
 
 const FAQS = [
-  { q: 'Flovart 是完全免费的吗？', a: '是的，社区版基于 MIT 协议开源，完全免费。你只需为使用的 AI 模型 API 付费（由模型提供商收取）。' },
+  { q: 'Flovart 是完全免费的吗？', a: '是的，社区版基于 AGPL-3.0 协议开源，完全免费。你只需为使用的 AI 模型 API 付费（由模型提供商收取）。' },
   { q: '数据存储在哪里？', a: '所有生成数据和 API Key 都存储在你的浏览器本地（localforage），不会上传到任何服务器。私有化部署后数据完全在企业内部。' },
   { q: '支持哪些 AI 模型？', a: '支持 Seedance、Kling、Seedream、Flux、Nano Banana 等主流模型，以及任何 OpenAI 兼容接口。通过 RunningHub 还可接入更多模型。' },
-  { q: '企业版和社区版有什么区别？', a: '企业版提供私有化部署支持、团队协作、统一密钥管理、SSO 登录和 SLA 服务保障。功能上与社区版一致。' },
-  { q: '可以商业化使用吗？', a: 'MIT 协议允许任意商业化使用，包括修改和分发，仅需保留版权声明。' },
+  { q: '企业版和社区版有什么区别？', a: '企业版提供私有化部署支持、组织/部门/角色权限体系、桌面端自动更新和全栈 CLI 工具链。功能上与社区版一致。' },
+  { q: '可以商业化使用吗？', a: 'AGPL-3.0 协议允许商业化使用，但如果你修改后提供网络服务，需要开源你的修改。详见 LICENSE 文件。' },
 ];
 
 function CheckIcon({ value }: { value: boolean | string }) {
@@ -108,7 +108,7 @@ export default function ToBLanding() {
               <span style={{ color: '#19c8b9' }}>私有部署 · 数据自主</span>
             </h1>
             <p className="text-lg md:text-xl mb-10" style={{ color: '#a8a49c', lineHeight: 1.7 }}>
-              开源 MIT 协议，画布 + 工作流融合，聚合 20+ 主流 AI 模型<br />
+              开源 AGPL-3.0 协议，画布 + 工作流融合，聚合 20+ 主流 AI 模型<br />
               部署在企业内部，数据完全掌控，告别云端依赖
             </p>
             <div className="flex items-center justify-center gap-4 flex-wrap">
@@ -131,7 +131,7 @@ export default function ToBLanding() {
 
             {/* trust indicators */}
             <div className="mt-14 flex items-center justify-center gap-8 flex-wrap text-sm" style={{ color: '#6b6862' }}>
-              <span className="flex items-center gap-1.5"><Code2 size={14} /> MIT 开源</span>
+              <span className="flex items-center gap-1.5"><Code2 size={14} /> AGPL-3.0 开源</span>
               <span className="flex items-center gap-1.5"><Shield size={14} /> 数据本地化</span>
               <span className="flex items-center gap-1.5"><Cpu size={14} /> 20+ 模型接入</span>
               <span className="flex items-center gap-1.5"><Star size={14} /> 私有化部署</span>
@@ -332,7 +332,7 @@ export default function ToBLanding() {
             <a href="https://github.com/avabbbb/Flovart" target="_blank" rel="noreferrer" className="flex items-center gap-1.5 hover:text-white transition-colors"><Code2 size={14} /> GitHub</a>
             <a href="mailto:contact@flovart.com" className="hover:text-white transition-colors">联系我们</a>
           </div>
-          <div className="text-xs" style={{ color: '#4a463f' }}>© 2026 Flovart · MIT License</div>
+          <div className="text-xs" style={{ color: '#4a463f' }}>© 2026 Flovart · AGPL-3.0-only</div>
         </div>
       </footer>
     </div>

@@ -1,6 +1,6 @@
 Flovart Terms of Service
 
-Last updated: 2026-04-25
+Last updated: 2026-07-01
 
 Welcome to Flovart. These Terms govern your access to and use of Flovart, including the local web app, desktop builds, browser extension bridge, source code, documentation, and related project materials.
 
@@ -13,7 +13,9 @@ This document is written as plain text for clarity. It is not legal advice.
 
 Flovart is a local-first AI creative workspace. It provides an infinite canvas, AI-assisted creation tools, node-based workflows, browser bridge features, and project utilities.
 
-Flovart does not provide AI model service, hosted inference, API credits, payment accounts, account registration, cloud storage, or guaranteed access to any third-party provider by default.
+Self-hosted deployments may optionally include backend services (community hub and enterprise API) for user authentication, prompt sharing, organization management, department/role-based access control, and desktop auto-update distribution. These backend services are operated and secured by the deployer.
+
+Flovart does not provide AI model service, hosted inference, API credits, payment accounts, or guaranteed access to any third-party provider by default.
 
 You choose the providers, models, API keys, custom endpoints, local files, prompts, references, and workflows you use.
 
@@ -157,7 +159,7 @@ If you do not agree to updated Terms, stop using Flovart.
 14. Contact
 
 Project repository:
-https://github.com/Paker-kk/Flovart
+https://github.com/avabbbb/Flovart
 
 Issues:
-https://github.com/Paker-kk/Flovart/issues
+https://github.com/avabbbb/Flovart/issues
