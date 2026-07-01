@@ -79,7 +79,10 @@ export default function ToBLanding() {
             <a href="#comparison" className="hover:text-white transition-colors">对比</a>
             <a href="#pricing" className="hover:text-white transition-colors">定价</a>
             <a href="#faq" className="hover:text-white transition-colors">FAQ</a>
-            <a href="#/" className="hover:text-white transition-colors">社区版</a>
+            <div className="flex items-center gap-1 p-1 rounded-full" style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}>
+              <button onClick={() => linkTo('/')} className="px-3 py-1 rounded-full text-xs font-medium transition-all hover:text-white" style={{ color: '#a8a49c' }}>个人版</button>
+              <span className="px-3 py-1 rounded-full text-xs font-medium" style={{ background: '#19c8b9', color: '#fff' }}>企业版</span>
+            </div>
           </nav>
           <button
             onClick={() => linkTo('/app')}

@@ -60,7 +60,10 @@ export default function ToCLanding() {
             <a href="#features" className="hover:text-white transition-colors">功能</a>
             <a href="#templates" className="hover:text-white transition-colors">模板</a>
             <a href="#showcase" className="hover:text-white transition-colors">展示</a>
-            <a href="#/business" className="hover:text-white transition-colors">企业版</a>
+            <div className="flex items-center gap-1 p-1 rounded-full" style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}>
+              <span className="px-3 py-1 rounded-full text-xs font-medium" style={{ background: '#19c8b9', color: '#fff' }}>个人版</span>
+              <button onClick={() => linkTo('/business')} className="px-3 py-1 rounded-full text-xs font-medium transition-all hover:text-white" style={{ color: '#a8a49c' }}>企业版</button>
+            </div>
             <a href="https://github.com/avabbbb/Flovart" target="_blank" rel="noreferrer" className="hover:text-white transition-colors">GitHub</a>
           </nav>
           <div className="flex items-center gap-3">
