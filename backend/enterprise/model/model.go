@@ -5,22 +5,6 @@ import (
 	"time"
 )
 
-// 角色枚举：owner 组织所有者；admin 管理员；member 普通成员
-const (
-	RoleOwner  = "owner"
-	RoleAdmin  = "admin"
-	RoleMember = "member"
-)
-
-func ValidRole(r string) bool {
-	return r == RoleOwner || r == RoleAdmin || r == RoleMember
-}
-
-// CanManage 判断角色是否具备成员管理权
-func CanManage(role string) bool {
-	return role == RoleOwner || role == RoleAdmin
-}
-
 // Organization 企业组织
 type Organization struct {
 	ID        string    `gorm:"primaryKey;type:uuid;default:gen_random_uuid()" json:"id"`
@@ -30,18 +14,6 @@ type Organization struct {
 	Owner     *User     `gorm:"foreignKey:OwnerID" json:"owner,omitempty"`
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
-}
-
-// OrganizationMember 组织成员：组织 + 用户 + 角色
-type OrganizationMember struct {
-	ID        string       `gorm:"primaryKey;type:uuid;default:gen_random_uuid()" json:"id"`
-	OrgID     string       `gorm:"type:uuid;uniqueIndex:idx_org_user;not null" json:"orgId"`
-	Org       *Organization `gorm:"foreignKey:OrgID" json:"org,omitempty"`
-	UserID    string       `gorm:"type:uuid;uniqueIndex:idx_org_user;not null" json:"userId"`
-	User      *User        `gorm:"foreignKey:UserID" json:"user,omitempty"`
-	Role      string       `gorm:"size:16;not null;default:'member'" json:"role"`
-	CreatedAt time.Time    `json:"createdAt"`
-	UpdatedAt time.Time    `json:"updatedAt"`
 }
 
 // User 只读引用 hub.users，本服务不创建。字段精简到管理后台需要

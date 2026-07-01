@@ -5,17 +5,23 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/lib/pq"
+	"gorm.io/gorm"
+
 	"flovart/enterprise/model"
 	"flovart/enterprise/repository"
 )
 
 type OrgService struct {
+	db    *gorm.DB
 	orgs  *repository.OrgRepository
 	users *repository.UserRepository
+	depts *repository.DeptRepository
+	roles *repository.RoleRepository
 }
 
-func NewOrgService(orgs *repository.OrgRepository, users *repository.UserRepository) *OrgService {
-	return &OrgService{orgs: orgs, users: users}
+func NewOrgService(db *gorm.DB, orgs *repository.OrgRepository, users *repository.UserRepository, depts *repository.DeptRepository, roles *repository.RoleRepository) *OrgService {
+	return &OrgService{db: db, orgs: orgs, users: users, depts: depts, roles: roles}
 }
 
 type CreateOrgInput struct {
@@ -23,6 +29,7 @@ type CreateOrgInput struct {
 	Name string
 }
 
+// Create 创建组织：事务内同时 seed builtin roles + _all 根部门 + owner 加入根部门
 func (s *OrgService) Create(ownerID string, in CreateOrgInput) (*model.Organization, error) {
 	in.Slug = strings.TrimSpace(in.Slug)
 	in.Name = strings.TrimSpace(in.Name)
@@ -35,8 +42,31 @@ func (s *OrgService) Create(ownerID string, in CreateOrgInput) (*model.Organizat
 	if existing, _ := s.orgs.FindBySlug(in.Slug); existing != nil {
 		return nil, errors.New("slug 已存在")
 	}
+
 	org := &model.Organization{Slug: in.Slug, Name: in.Name, OwnerID: ownerID}
-	if err := s.orgs.Create(org, ownerID); err != nil {
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(org).Error; err != nil {
+			return err
+		}
+		// seed builtin roles
+		ownerRole := &model.Role{OrgID: org.ID, Name: "owner", IsBuiltin: true, Permissions: model.BuiltinOwnerPerms, Sort: 0}
+		if err := tx.Create(ownerRole).Error; err != nil {
+			return err
+		}
+		adminRole := &model.Role{OrgID: org.ID, Name: "admin", IsBuiltin: true, Permissions: model.BuiltinAdminPerms, Sort: 1}
+		if err := tx.Create(adminRole).Error; err != nil {
+			return err
+		}
+		// _all 根部门
+		rootDept := &model.Department{OrgID: org.ID, Slug: "_all", Name: "全体成员", Hidden: true, Sort: 0}
+		if err := tx.Create(rootDept).Error; err != nil {
+			return err
+		}
+		// owner 加入根部门，绑定 owner 角色
+		m := &model.DepartmentMember{DeptID: rootDept.ID, UserID: ownerID, Roles: pq.StringArray{ownerRole.ID}}
+		return tx.Create(m).Error
+	})
+	if err != nil {
 		return nil, err
 	}
 	return org, nil
@@ -61,108 +91,64 @@ func (s *OrgService) Delete(orgID, requesterID string) error {
 	return s.orgs.Delete(orgID, requesterID)
 }
 
-func (s *OrgService) ListMembers(orgID string) ([]model.OrganizationMember, error) {
-	return s.orgs.ListMembers(orgID)
-}
-
-func (s *OrgService) MemberRole(orgID, userID string) (string, error) {
-	m, err := s.orgs.FindMember(orgID, userID)
-	if err != nil {
-		return "", err
-	}
-	if m == nil {
-		return "", nil
-	}
-	return m.Role, nil
-}
-
-type AddMemberInput struct {
-	OrgID      string
-	ByUsername string
-	Role       string
-}
-
-func (s *OrgService) AddMember(requesterID string, in AddMemberInput) (*model.OrganizationMember, error) {
-	if !model.ValidRole(in.Role) {
-		return nil, errors.New("角色非法")
-	}
-	if in.Role == model.RoleOwner {
-		return nil, errors.New("不可直接添加 owner，请使用转让流程")
-	}
-	role, err := s.MemberRole(in.OrgID, requesterID)
+// ListMembers 跨部门汇总组织全部成员，按 userID 去重（保留首条记录）
+func (s *OrgService) ListMembers(orgID string) ([]model.DepartmentMember, error) {
+	var list []model.DepartmentMember
+	err := s.db.Preload("User").
+		Where("dept_id IN (SELECT id FROM departments WHERE org_id = ?)", orgID).
+		Order("created_at ASC").
+		Find(&list).Error
 	if err != nil {
 		return nil, err
 	}
-	if !model.CanManage(role) {
-		return nil, model.ErrNotManaged
+	seen := map[string]bool{}
+	var result []model.DepartmentMember
+	for _, m := range list {
+		if seen[m.UserID] {
+			continue
+		}
+		seen[m.UserID] = true
+		result = append(result, m)
 	}
+	return result, nil
+}
+
+type AddOrgMemberInput struct {
+	OrgID      string
+	ByUsername string
+}
+
+// AddMember 查用户后加入 _all 根部门，默认空角色（普通成员无特殊权限）
+func (s *OrgService) AddMember(requesterID string, in AddOrgMemberInput) (*model.DepartmentMember, error) {
 	target, err := s.users.FindByUsername(strings.TrimSpace(in.ByUsername))
 	if err != nil || target == nil {
 		return nil, errors.New("用户不存在，需先在 flovart 平台注册")
 	}
-	if existing, _ := s.orgs.FindMember(in.OrgID, target.ID); existing != nil {
+	rootDept, err := s.depts.FindByOrgSlug(in.OrgID, "_all")
+	if err != nil || rootDept == nil {
+		return nil, errors.New("组织根部门不存在")
+	}
+	if existing, _ := s.depts.FindMember(rootDept.ID, target.ID); existing != nil {
 		return nil, errors.New("该用户已是组织成员")
 	}
-	m := &model.OrganizationMember{
-		OrgID:  in.OrgID,
+	m := &model.DepartmentMember{
+		DeptID: rootDept.ID,
 		UserID: target.ID,
-		Role:   in.Role,
+		Roles:  pq.StringArray{},
 	}
-	if err := s.orgs.AddMember(m); err != nil {
+	if err := s.depts.AddMember(m); err != nil {
 		return nil, err
 	}
 	m.User = target
 	return m, nil
 }
 
-func (s *OrgService) UpdateMemberRole(requesterID, orgID, targetUserID, newRole string) error {
-	if !model.ValidRole(newRole) {
-		return errors.New("角色非法")
-	}
-	if newRole == model.RoleOwner {
-		return errors.New("不可直接提升为 owner，请使用转让流程")
-	}
-	role, err := s.MemberRole(orgID, requesterID)
-	if err != nil {
-		return err
-	}
-	if role != model.RoleOwner && role != model.RoleAdmin {
-		return model.ErrNotManaged
-	}
-	// admin 不可调整其他 admin（只有 owner 能）
-	if role == model.RoleAdmin {
-		target, err := s.orgs.FindMember(orgID, targetUserID)
-		if err != nil || target == nil {
-			return errors.New("成员不存在")
-		}
-		if target.Role == model.RoleAdmin || target.Role == model.RoleOwner {
-			return errors.New("admin 不可调整其他 admin/owner")
-		}
-	}
-	return s.orgs.UpdateMemberRole(orgID, targetUserID, newRole)
-}
-
+// RemoveMember 将用户从组织所有部门移除
 func (s *OrgService) RemoveMember(requesterID, orgID, targetUserID string) error {
 	if requesterID == targetUserID {
 		return errors.New("不可移除自己，请使用退出或转让流程")
 	}
-	role, err := s.MemberRole(orgID, requesterID)
-	if err != nil {
-		return err
-	}
-	if !model.CanManage(role) {
-		return model.ErrNotManaged
-	}
-	if role == model.RoleAdmin {
-		target, err := s.orgs.FindMember(orgID, targetUserID)
-		if err != nil || target == nil {
-			return errors.New("成员不存在")
-		}
-		if target.Role == model.RoleAdmin || target.Role == model.RoleOwner {
-			return errors.New("admin 不可移除其他 admin/owner")
-		}
-	}
-	return s.orgs.RemoveMember(orgID, targetUserID)
+	return s.depts.RemoveUserFromOrg(orgID, targetUserID)
 }
 
 func validSlug(s string) bool {

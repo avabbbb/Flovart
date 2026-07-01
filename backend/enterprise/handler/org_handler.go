@@ -74,44 +74,25 @@ func (h *OrgHandler) ListMembers(c *gin.Context) {
 	OK(c, list)
 }
 
-type addMemberReq struct {
+type addOrgMemberReq struct {
 	ByUsername string `json:"byUsername"`
-	Role       string `json:"role"`
 }
 
 func (h *OrgHandler) AddMember(c *gin.Context) {
 	uid := c.GetString(middleware.ContextUserID)
-	var req addMemberReq
+	var req addOrgMemberReq
 	if err := c.ShouldBindJSON(&req); err != nil || strings.TrimSpace(req.ByUsername) == "" {
 		Fail(c, http.StatusBadRequest, "入参格式错误")
 		return
 	}
-	m, err := h.svc.AddMember(uid, service.AddMemberInput{
-		OrgID: c.Param("id"), ByUsername: req.ByUsername, Role: req.Role,
+	m, err := h.svc.AddMember(uid, service.AddOrgMemberInput{
+		OrgID: c.Param("id"), ByUsername: req.ByUsername,
 	})
 	if err != nil {
 		Fail(c, http.StatusBadRequest, err.Error())
 		return
 	}
 	OK(c, m)
-}
-
-type updateRoleReq struct {
-	Role string `json:"role"`
-}
-
-func (h *OrgHandler) UpdateMemberRole(c *gin.Context) {
-	uid := c.GetString(middleware.ContextUserID)
-	var req updateRoleReq
-	if err := c.ShouldBindJSON(&req); err != nil {
-		Fail(c, http.StatusBadRequest, "入参格式错误")
-		return
-	}
-	if err := h.svc.UpdateMemberRole(uid, c.Param("id"), c.Param("userId"), req.Role); err != nil {
-		Fail(c, http.StatusBadRequest, err.Error())
-		return
-	}
-	OK(c, gin.H{"updated": c.Param("userId")})
 }
 
 func (h *OrgHandler) RemoveMember(c *gin.Context) {

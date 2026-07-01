@@ -28,7 +28,6 @@ func main() {
 	// 仅 AutoMigrate 本服务拥有的表；users 表由 hub 维护，这里不重建
 	if err := db.AutoMigrate(
 		&model.Organization{},
-		&model.OrganizationMember{}, // 旧表，M4 渐进废弃
 		&model.Department{},
 		&model.DepartmentMember{},
 		&model.Role{},
@@ -42,7 +41,7 @@ func main() {
 	roleRepo := repository.NewRoleRepository(db)
 	rbacRepo := repository.NewRbacRepository(db)
 
-	orgSvc := service.NewOrgService(orgRepo, userRepo)
+	orgSvc := service.NewOrgService(db, orgRepo, userRepo, deptRepo, roleRepo)
 	rbacSvc := service.NewRbacService(orgRepo, rbacRepo)
 	deptSvc := service.NewDeptService(deptRepo)
 	roleSvc := service.NewRoleService(roleRepo)
@@ -64,10 +63,9 @@ func main() {
 		api.GET("/orgs/:id", middleware.RequireMember(rbacSvc), orgH.Get)
 		api.DELETE("/orgs/:id", middleware.RequirePerm(rbacSvc, model.PermOrgManage), orgH.Delete)
 
-		// 成员名册（沿用旧 OrganizationMember 表，M4 换成部门汇总）
+		// 成员名册（M4：改为部门汇总 + 根部门快捷加入）
 		api.GET("/orgs/:id/members", middleware.RequireMember(rbacSvc), orgH.ListMembers)
 		api.POST("/orgs/:id/members", middleware.RequirePerm(rbacSvc, model.PermMemberInvite), orgH.AddMember)
-		api.PUT("/orgs/:id/members/:userId", middleware.RequirePerm(rbacSvc, model.PermMemberManage), orgH.UpdateMemberRole)
 		api.DELETE("/orgs/:id/members/:userId", middleware.RequirePerm(rbacSvc, model.PermMemberManage), orgH.RemoveMember)
 
 		// 部门树（M3 新增）
