@@ -107,19 +107,25 @@ export async function start() {
     warn('Go not found. Only frontend will start. Install Go from https://go.dev to run backends.');
   }
   if (pgReady) log('  PostgreSQL:            localhost:' + PG_PORT);
+  if (!pgReady && hasGo) {
+    warn('PostgreSQL not ready. Go backends will start but may fail to connect.');
+  }
   log('  Press Ctrl+C to stop all servers.\n');
 
-  const children = [];
+  let viteChild = null;
+  const backendChildren = [];
 
-  children.push(spawn('npm', ['run', 'dev'], { stdio: 'inherit', shell: true, cwd: projectDir, env }));
+  viteChild = spawn('npm', ['run', 'dev'], { stdio: 'inherit', shell: true, cwd: projectDir, env });
 
   if (hasGo) {
-    children.push(spawn('go', ['run', 'cmd/server/main.go'], { stdio: 'inherit', shell: true, cwd: hubDir, env }));
-    children.push(spawn('go', ['run', 'cmd/server/main.go'], { stdio: 'inherit', shell: true, cwd: entDir, env }));
+    backendChildren.push(spawn('go', ['run', 'cmd/server/main.go'], { stdio: 'inherit', shell: true, cwd: hubDir, env }));
+    backendChildren.push(spawn('go', ['run', 'cmd/server/main.go'], { stdio: 'inherit', shell: true, cwd: entDir, env }));
   }
 
+  const allChildren = [viteChild, ...backendChildren];
+
   const cleanup = () => {
-    for (const c of children) {
+    for (const c of allChildren) {
       try { c.kill(); } catch {}
     }
     process.exit(0);
@@ -127,8 +133,12 @@ export async function start() {
   process.on('SIGINT', cleanup);
   process.on('SIGTERM', cleanup);
 
-  for (const c of children) {
-    c.on('close', cleanup);
+  viteChild.on('close', cleanup);
+
+  for (const c of backendChildren) {
+    c.on('close', (code) => {
+      if (code !== 0) warn('A backend process exited (code ' + code + '). Frontend keeps running. Press Ctrl+C to stop all.');
+    });
   }
 }
 
