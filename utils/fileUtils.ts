@@ -94,7 +94,7 @@ export const validateAndResizeImage = async (
     if (!ctx) throw new Error('无法创建 canvas 上下文来压缩图片。');
     ctx.drawImage(img, 0, 0, newW, newH);
 
-    const outMime = mimeType === 'image/png' ? 'image/png' : 'image/jpeg';
+    const outMime = mimeType === 'image/png' ? 'image/png' : mimeType === 'image/webp' ? 'image/webp' : 'image/jpeg';
     const outDataUrl = canvas.toDataURL(outMime, IMAGE_COMPRESS_QUALITY);
     return { dataUrl: outDataUrl, mimeType: outMime, width: newW, height: newH, resized: true };
 };

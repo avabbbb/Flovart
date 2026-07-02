@@ -1150,14 +1150,18 @@ const App: React.FC = () => {
                 const canvasPoint = screenToCanvas(e.clientX, e.clientY);
                 const img = new Image();
                 img.onload = () => {
+                    const maxWidth = 960;
+                    const scale = img.width > maxWidth ? maxWidth / img.width : 1;
+                    const w = Math.round(img.width * scale);
+                    const h = Math.round(img.height * scale);
                     const newImage: ImageElement = {
                         id: generateId(),
                         type: 'image',
                         name: item.name || 'Asset',
-                        x: canvasPoint.x - img.width / 2,
-                        y: canvasPoint.y - img.height / 2,
-                        width: img.width,
-                        height: img.height,
+                        x: canvasPoint.x - w / 2,
+                        y: canvasPoint.y - h / 2,
+                        width: w,
+                        height: h,
                         href: item.dataUrl,
                         mimeType: item.mimeType,
                     };
@@ -1257,11 +1261,16 @@ const App: React.FC = () => {
         }
         setError(null);
         try {
-            const { dataUrl, mimeType, width, height, resized } = await validateAndResizeImage(file);
+            const { dataUrl, mimeType, width: natW, height: natH, resized } = await validateAndResizeImage(file);
             if (resized) {
-                toast.show(`图片尺寸过大，已自动缩小到 ${width}x${height}。`, 'warning');
+                toast.show(`图片尺寸过大，已自动缩小到 ${natW}x${natH}。`, 'warning');
             }
             const canvasPoint = getCanvasCenter();
+
+            const maxWidth = 960;
+            const scale = natW > maxWidth ? maxWidth / natW : 1;
+            const width = Math.round(natW * scale);
+            const height = Math.round(natH * scale);
 
             const newImage: ImageElement = {
                 id: generateId(),

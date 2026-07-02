@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useMemo } from 'react';
 
 export type ToastLevel = 'info' | 'success' | 'warning' | 'error';
 
@@ -35,5 +35,5 @@ export function useToast() {
     return id;
   }, [dismiss]);
 
-  return { toasts, show, dismiss } as const;
+  return useMemo(() => ({ toasts, show, dismiss }), [toasts, show, dismiss]);
 }

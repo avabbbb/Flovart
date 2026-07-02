@@ -1452,7 +1452,7 @@ export function InfiniteWorkflow({
   }), { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity }) : null;
   const rootRect = rootRef.current?.getBoundingClientRect();
   const overlayCenter = overlayBounds ? project.viewport.x + ((overlayBounds.left + overlayBounds.right) / 2) * project.viewport.k : 0;
-  const toolbarLeft = Math.max(8, Math.min(overlayCenter - 180, (rootRect?.width || 1000) - 368));
+  const toolbarLeft = Math.max(8, Math.min(overlayCenter, (rootRect?.width || 1000) - 8));
   const toolbarTop = overlayBounds ? Math.max(8, project.viewport.y + overlayBounds.top * project.viewport.k - 60) : 0;
   const promptLeft = Math.max(8, Math.min(overlayCenter - 360, (rootRect?.width || 1000) - 728));
   const promptTop = overlayBounds ? Math.max(64, Math.min(project.viewport.y + overlayBounds.bottom * project.viewport.k + 12, (rootRect?.height || 700) - 190)) : 0;
@@ -1635,7 +1635,7 @@ export function InfiniteWorkflow({
         {selectionStyle && <div className="workflow-selection-box" style={selectionStyle} />}
       </div>
       {!overlayHidden && overlayBounds && selectedNodeData.length > 0 && selectedNodeData.every(node => !node.isLocked) && <>
-        <div data-workflow-overlay style={{ position: 'absolute', zIndex: 70, left: toolbarLeft, top: toolbarTop }}>
+        <div data-workflow-overlay style={{ position: 'absolute', zIndex: 70, left: toolbarLeft, top: toolbarTop, transform: 'translateX(-50%)' }}>
           <WorkflowNodeToolbar
             nodes={selectedNodeData}
             onCopy={ids => { clipboardRef.current = projectRef.current.nodes.filter(node => ids.includes(node.id)); setClipboardVersion(version => version + 1); }}

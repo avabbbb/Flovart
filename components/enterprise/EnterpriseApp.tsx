@@ -72,7 +72,12 @@ export default function EnterpriseApp() {
     setCurrentOrg(null);
   }, []);
 
-  if (!user) return <AuthPanel onAuthed={handleAuthed} toast={toast} />;
+  if (!user) return (
+    <>
+      <AuthPanel onAuthed={handleAuthed} toast={toast} />
+      <ToastStack toasts={toast.toasts} onDismiss={toast.dismiss} />
+    </>
+  );
 
   return (
     <div className="theme-aware min-h-screen" style={{ background: 'var(--app-bg)', color: 'var(--isl-ink)' }}>

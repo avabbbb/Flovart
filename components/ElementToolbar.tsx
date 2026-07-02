@@ -342,7 +342,7 @@ const element = singleSelectedElement;
             <CanvasFixedOverlay left={placement.left} top={placement.top} width={toolbarScreenWidth} noTransition>
                 {toolbar}
             </CanvasFixedOverlay>
-            {inpaintElementId === element.id && element.type === 'image' && (() => {
+            {filterPanelElementId === element.id && element.type === 'image' && (() => {
                 const filterPlacement = placeOverlay({
                     viewport,
                     containerRect,
