@@ -103,6 +103,7 @@ export function buildCapabilityModelOptions(
   const current = currentModel?.trim();
   if (current && !options.includes(current)) {
     options.unshift(current);
+    seen.add(normalizeModelId(current));
   }
 
   if (options.length === 0) {
