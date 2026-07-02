@@ -8,7 +8,7 @@ import React, { useState, useRef, useCallback, useEffect, useMemo, Suspense } fr
 import { exportToCanvas } from '@excalidraw/excalidraw';
 import { Toolbar } from './components/Toolbar';
 import { PromptBar } from './components/PromptBar';
-import { Loader } from './components/Loader';
+import { AgentThinkingPanel } from './components/AgentThinkingPanel';
 import { WorkspaceSidebar } from './components/WorkspaceSidebar';
 import type { Tool, Point, Element, ImageElement, TextElement, UserEffect, WheelAction, GroupElement, Board, VideoElement, AssetLibrary, AssetCategory, AssetItem, UserApiKey, ModelPreference, AIProvider, AICapability, PromptEnhanceMode, CharacterLockProfile, GenerationHistoryItem, ThemeMode, ChatAttachment, ImageFilters } from './types';
 import { DEFAULT_IMAGE_FILTERS } from './types';
@@ -170,6 +170,7 @@ const App: React.FC = () => {
     const [wheelAction, setWheelAction] = useState<WheelAction>('pan');
     const [filterPanelElementId, setFilterPanelElementId] = useState<string | null>(null);
     const [outpaintMenuId, setOutpaintMenuId] = useState<string | null>(null);
+    const [inpaintElementId, setInpaintElementId] = useState<string | null>(null);
     const [assetLibrary, setAssetLibrary] = useState<AssetLibrary>({ character: [], scene: [], prop: [] });
 
     useEffect(() => () => {
@@ -666,7 +667,7 @@ const App: React.FC = () => {
         isEnhancingPrompt, batchResults, setBatchResults,
         handleEnhancePrompt, saveGenerationToHistory,
         handleSplitImageLayers, handleUpscaleImage, handleRemoveImageBackground,
-        handleOutpaint, handleGenerate, handleBatchGenerate,
+        handleOutpaint, handleInpaint, handleGenerate, handleBatchGenerate,
         handleSelectBatchResult, handleSelectAllBatchResults,
     } = useGeneration({
         elements, selectedElementIds, prompt, generationMode, videoAspectRatio,
@@ -3225,7 +3226,7 @@ const App: React.FC = () => {
                 />
             }
             overlays={<>
-                {isLoading && <Loader progressMessage={progressMessage} batchTotal={batchCount} batchDone={recentlyCompleted.size} />}
+                {isLoading && <AgentThinkingPanel progressMessage={progressMessage} batchTotal={batchCount} batchDone={recentlyCompleted.size} />}
                 <ToastStack toasts={toast.toasts} onDismiss={toast.dismiss} />
                 {error && (
                     <div className="absolute top-16 left-1/2 -translate-x-1/2 z-50 p-3 bg-red-100 border border-red-400 text-red-700 rounded-md shadow-lg flex items-center max-w-lg">
@@ -3395,9 +3396,12 @@ const App: React.FC = () => {
                 handleUpscaleImage={handleUpscaleImage}
                 handleRemoveImageBackground={handleRemoveImageBackground}
                 handleOutpaint={handleOutpaint}
+                handleInpaint={handleInpaint}
                 handleReversePrompt={handleReversePrompt}
                 cancelReversePrompt={cancelReversePrompt}
                 setOutpaintMenuId={setOutpaintMenuId}
+                inpaintElementId={inpaintElementId}
+                setInpaintElementId={setInpaintElementId}
                 viewport={canvasViewport}
                 containerRect={canvasContainerRect}
                 onMagicGenerate={triggerMagicGenerate}

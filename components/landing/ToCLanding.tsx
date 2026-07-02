@@ -4,8 +4,10 @@ import { Brush, Sparkles, ArrowRight, Play, BookOpen, Image as ImageIcon, Video,
 import { LANDING_TEMPLATES, SHOWCASE_WORKS, TEMPLATE_CATEGORIES, type TemplateCategory } from './templates';
 import { useAuth } from '../../hooks/useAuth';
 import { AuthModal } from '../auth/AuthModal';
+import AgentDemoAnimation from './AgentDemoAnimation';
 
 const linkTo = (path: string) => (window.location.hash = path);
+const scrollTo = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
 
 function HandDrawnUnderline({ color = '#19c8b9', width = 200 }: { color?: string; width?: number }) {
   return (
@@ -57,9 +59,9 @@ export default function ToCLanding() {
             <SketchStar size={14} color="#19c8b9" />
           </div>
           <nav className="hidden md:flex items-center gap-7 text-sm" style={{ color: '#a8a49c' }}>
-            <a href="#features" className="hover:text-white transition-colors">功能</a>
-            <a href="#templates" className="hover:text-white transition-colors">模板</a>
-            <a href="#showcase" className="hover:text-white transition-colors">展示</a>
+            <a onClick={() => scrollTo('features')} className="hover:text-white transition-colors cursor-pointer">功能</a>
+            <a onClick={() => scrollTo('templates')} className="hover:text-white transition-colors cursor-pointer">模板</a>
+            <a onClick={() => scrollTo('showcase')} className="hover:text-white transition-colors cursor-pointer">展示</a>
             <div className="flex items-center gap-1 p-1 rounded-full" style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}>
               <span className="px-3 py-1 rounded-full text-xs font-medium" style={{ background: '#19c8b9', color: '#fff' }}>个人版</span>
               <button onClick={() => linkTo('/business')} className="px-3 py-1 rounded-full text-xs font-medium transition-all hover:text-white" style={{ color: '#a8a49c' }}>企业版</button>
@@ -134,8 +136,8 @@ export default function ToCLanding() {
                 <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
               </button>
               <a
-                href="#templates"
-                className="flex items-center gap-2 px-8 py-3.5 rounded-full text-base font-medium transition-all hover:bg-white/10"
+                onClick={() => scrollTo('templates')}
+                className="flex items-center gap-2 px-8 py-3.5 rounded-full text-base font-medium transition-all hover:bg-white/10 cursor-pointer"
                 style={{ border: '1px solid rgba(255,255,255,0.15)', color: '#f5f5f0' }}
               >
                 <Play size={16} />
@@ -144,25 +146,16 @@ export default function ToCLanding() {
             </div>
           </motion.div>
 
-          {/* demo placeholder — will be replaced with real canvas recording */}
+          {/* live agent demo animation */}
           <motion.div
             initial={{ opacity: 0, y: 40 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ type: 'spring', stiffness: 80, damping: 16, delay: 0.3 }}
-            className="mt-16 mx-auto rounded-2xl overflow-hidden relative"
-            style={{ maxWidth: 800, aspectRatio: '16/9', background: 'linear-gradient(135deg, #111 0%, #1a1a2e 100%)', border: '1px solid rgba(255,255,255,0.08)', boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }}
+            className="mt-16 mx-auto relative"
           >
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="text-center">
-                <div className="inline-flex items-center justify-center w-16 h-16 rounded-full mb-4" style={{ background: 'rgba(25,200,185,0.15)', border: '1px solid rgba(25,200,185,0.3)' }}>
-                  <Play size={24} color="#19c8b9" />
-                </div>
-                <p className="text-sm" style={{ color: '#6b6862' }}>Canvas 操作演示视频即将上线</p>
-              </div>
-            </div>
-            {/* hand-drawn decorative arrows */}
-            <HandDrawnArrow color="#d4a574" className="absolute top-4 right-8" />
-            <SketchStar size={16} color="#19c8b9" className="absolute bottom-6 left-6" />
+            <AgentDemoAnimation />
+            <HandDrawnArrow color="#d4a574" className="absolute top-4 -right-4" />
+            <SketchStar size={16} color="#19c8b9" className="absolute -bottom-2 -left-2" />
           </motion.div>
         </div>
       </section>

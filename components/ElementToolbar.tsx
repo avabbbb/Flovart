@@ -3,6 +3,7 @@ import type { Element, ImageElement, VideoElement, ShapeElement, TextElement, Ar
 import { ImageFilterPanel } from './ImageFilterPanel';
 import type { Rect } from '../utils/canvasHelpers';
 import { CanvasFixedOverlay } from './canvas/CanvasFixedOverlay';
+import { InpaintDialog } from './canvas/InpaintDialog';
 import { placeOverlay, type CanvasViewport, type CanvasContainerRect } from '../utils/canvasOverlayViewport';
 
 export interface ElementToolbarProps {
@@ -32,9 +33,12 @@ export interface ElementToolbarProps {
     handleUpscaleImage: (el: Element) => void;
     handleRemoveImageBackground: (el: Element) => void;
     handleOutpaint: (el: Element, dir: 'all' | 'up' | 'down' | 'left' | 'right') => void;
+    handleInpaint: (el: ImageElement, maskDataUrl: string, prompt: string) => void;
     handleReversePrompt: (href: string, mimeType: string, w?: number, h?: number) => void;
     cancelReversePrompt: () => void;
     setOutpaintMenuId: (id: string | null) => void;
+    inpaintElementId: string | null;
+    setInpaintElementId: (id: string | null) => void;
     relationFocusCount?: number;
     isRelationFocusActive?: boolean;
     onToggleRelationFocus?: () => void;
@@ -89,8 +93,9 @@ const {
         handlePropertyChange,
         setFilterPanelElementId, setAddAssetModal,
         handleSplitImageLayers, handleUpscaleImage, handleRemoveImageBackground,
-        handleOutpaint, handleReversePrompt, cancelReversePrompt,
+        handleOutpaint, handleInpaint, handleReversePrompt, cancelReversePrompt,
         setOutpaintMenuId,
+        inpaintElementId, setInpaintElementId,
         relationFocusCount = 0, isRelationFocusActive = false, onToggleRelationFocus,
         onAddToChat, onMagicGenerate,
         viewport, containerRect,
@@ -166,7 +171,7 @@ const element = singleSelectedElement;
     }
     if (element.type === 'text') toolbarScreenWidth = 220;
     if (element.type === 'arrow' || element.type === 'line') toolbarScreenWidth = 220;
-    if (element.type === 'image') toolbarScreenWidth = relationFocusCount > 0 ? 600 : (onAddToChat ? 612 : 560);
+    if (element.type === 'image') toolbarScreenWidth = relationFocusCount > 0 ? 660 : (onAddToChat ? 672 : 620);
     if (element.type === 'video') toolbarScreenWidth = relationFocusCount > 0 ? 220 : 160;
     if (element.type === 'group') toolbarScreenWidth = 80;
 
@@ -299,6 +304,14 @@ const element = singleSelectedElement;
                             </div>
                         )}
                     </div>
+                    <button
+                        title="局部重绘 / Touch Edit (涂抹要修改的区域)"
+                        onClick={() => setInpaintElementId(inpaintElementId === element.id ? null : element.id)}
+                        className={`isl-icon-btn h-9 w-9 isl-wobble-hover ${inpaintElementId === element.id ? 'isl-icon-btn--active' : ''} ${aiDisabled ? 'disabled:opacity-40' : ''}`}
+                        disabled={aiDisabled}
+                    >
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z" /><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" /><path d="M2 2l7.586 7.586" /><circle cx="11" cy="11" r="2" /></svg>
+                    </button>
                     {reversePromptLoading ? (
                         <button
                             title={language === 'zho' ? '取消分析' : 'Cancel analysis'}
@@ -329,7 +342,7 @@ const element = singleSelectedElement;
             <CanvasFixedOverlay left={placement.left} top={placement.top} width={toolbarScreenWidth} noTransition>
                 {toolbar}
             </CanvasFixedOverlay>
-            {filterPanelElementId === element.id && element.type === 'image' && (() => {
+            {inpaintElementId === element.id && element.type === 'image' && (() => {
                 const filterPlacement = placeOverlay({
                     viewport,
                     containerRect,
@@ -352,6 +365,17 @@ const element = singleSelectedElement;
                     </CanvasFixedOverlay>
                 );
             })()}
+            <InpaintDialog
+                element={inpaintElementId === element.id && element.type === 'image' ? (element as ImageElement) : null}
+                open={inpaintElementId === element.id && element.type === 'image'}
+                busy={isLoading}
+                error={null}
+                onClose={() => setInpaintElementId(null)}
+                onConfirm={(imgEl, maskDataUrl, inpaintPrompt) => {
+                    setInpaintElementId(null);
+                    handleInpaint(imgEl, maskDataUrl, inpaintPrompt);
+                }}
+            />
         </>
     );
 }

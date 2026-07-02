@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 
 const linkTo = (path: string) => (window.location.hash = path);
+const scrollTo = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
 
 const ENTERPRISE_FEATURES = [
   { icon: Code2, title: '开源可自部署', desc: '完整源码 AGPL-3.0 协议，支持私有化部署，数据完全掌控在企业内部' },
@@ -74,11 +75,11 @@ export default function ToBLanding() {
             <span className="text-xs ml-1 px-2 py-0.5 rounded" style={{ background: 'rgba(25,200,185,0.1)', color: '#19c8b9' }}>企业版</span>
           </div>
           <nav className="hidden md:flex items-center gap-7 text-sm" style={{ color: '#a8a49c' }}>
-            <a href="#features" className="hover:text-white transition-colors">功能</a>
-            <a href="#models" className="hover:text-white transition-colors">模型</a>
-            <a href="#comparison" className="hover:text-white transition-colors">对比</a>
-            <a href="#pricing" className="hover:text-white transition-colors">定价</a>
-            <a href="#faq" className="hover:text-white transition-colors">FAQ</a>
+            <a onClick={() => scrollTo('features')} className="hover:text-white transition-colors cursor-pointer">功能</a>
+            <a onClick={() => scrollTo('models')} className="hover:text-white transition-colors cursor-pointer">模型</a>
+            <a onClick={() => scrollTo('comparison')} className="hover:text-white transition-colors cursor-pointer">对比</a>
+            <a onClick={() => scrollTo('pricing')} className="hover:text-white transition-colors cursor-pointer">定价</a>
+            <a onClick={() => scrollTo('faq')} className="hover:text-white transition-colors cursor-pointer">FAQ</a>
             <div className="flex items-center gap-1 p-1 rounded-full" style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}>
               <button onClick={() => linkTo('/')} className="px-3 py-1 rounded-full text-xs font-medium transition-all hover:text-white" style={{ color: '#a8a49c' }}>个人版</button>
               <span className="px-3 py-1 rounded-full text-xs font-medium" style={{ background: '#19c8b9', color: '#fff' }}>企业版</span>
@@ -121,8 +122,8 @@ export default function ToBLanding() {
                 <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
               </button>
               <a
-                href="#pricing"
-                className="flex items-center gap-2 px-8 py-3.5 rounded-full text-base font-medium transition-all hover:bg-white/10"
+                onClick={() => scrollTo('pricing')}
+                className="flex items-center gap-2 px-8 py-3.5 rounded-full text-base font-medium transition-all hover:bg-white/10 cursor-pointer"
                 style={{ border: '1px solid rgba(255,255,255,0.15)' }}
               >
                 查看定价

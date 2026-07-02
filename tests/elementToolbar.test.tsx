@@ -40,7 +40,7 @@ function renderToolbar(handleGroupSelection = vi.fn(), handleExportSelection = v
         language="en"
         filterPanelElementId={null}
         outpaintMenuId={null}
-        maskEditingId={null}
+        inpaintElementId={null}
         reversePromptLoading={false}
         t={(key) => key}
         getSelectionBounds={() => ({ x: 10, y: 10, width: 230, height: 90 })}
@@ -52,17 +52,19 @@ function renderToolbar(handleGroupSelection = vi.fn(), handleExportSelection = v
         handleDownloadImage={() => undefined}
         handleDeleteElement={() => undefined}
         handlePropertyChange={() => undefined}
-        handleStartCrop={() => undefined}
         handleReversePrompt={() => undefined}
         cancelReversePrompt={() => undefined}
         handleSplitImageLayers={() => undefined}
         handleUpscaleImage={() => undefined}
         handleRemoveImageBackground={() => undefined}
         handleOutpaint={() => undefined}
+        handleInpaint={() => undefined}
         setFilterPanelElementId={() => undefined}
         setOutpaintMenuId={() => undefined}
+        setInpaintElementId={() => undefined}
         setAddAssetModal={() => undefined}
-        startMaskEditing={() => undefined}
+        viewport={{ zoom: 1, panScreenX: 0, panScreenY: 0 }}
+        containerRect={{ left: 0, top: 0, width: 800, height: 600 }}
       />
     </svg>,
   );

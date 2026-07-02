@@ -660,7 +660,7 @@ title: 待测试确认
 ### ToC Landing — `components/landing/ToCLanding.tsx`（社区类，`/`）
 - **整体风格**：暗色背景 `#0a0a0a` + 手绘装饰元素（SVG 手绘下划线 `HandDrawnUnderline`、手绘箭头 `HandDrawnArrow`、手绘星标 `SketchStar`）+ 噪点纹理 + radial-gradient 光晕。
 - **Header**：fixed 毛玻璃导航——Flovart logo + 跳转锚点（功能/模板/展示/企业版/GitHub）+ "开始创作" CTA（teal `#19c8b9` + glow）→ `/app`。
-- **Hero**：badge（"开源免费 · 本地优先 · 多模型融合"）+ 大标题"用画布造梦"（"造梦"手绘下划线）+ 副标题 + 双 CTA（"开始创作" → `/app`，"探索模板" → `#templates`）+ Canvas 演示视频占位（16:9 渐变卡片 + Play 图标 + "Canvas 操作演示视频即将上线"文案，待录制真实操作视频替换）。
+- **Hero**：badge（"开源免费 · 本地优先 · 多模型融合"）+ 大标题"用画布造梦"（"造梦"手绘下划线）+ 副标题 + 双 CTA（"开始创作" → `/app`，"探索模板" → `#templates`）+ `AgentDemoAnimation` 脚本动画演示（5 场景循环：input 打字机 → thinking 步骤动画 → generating 渐变卡片 → touchEdit 弹窗 → done CTA，Framer Motion spring 物理，替换原"视频即将上线"占位符）。
 - **Features**（`#features`）：4 张编号卡片 01-04——画布+工作流融合 / 多模型一站式 / 原生中文创作 / 本地优先·开源免费。每张含图标 + 编号 + 标题 + 描述，spring 入场动画。
 - **Template Gallery**（`#templates`）：6 分类 tab（全部/人物/风景/产品/动漫/视频）+ 8 模板卡片网格（3:4 竖图，渐变占位背景 + badge 热门/视频 + 模型名 + "一键使用" → `/app?templateId=xxx`）。`motion.div layout` 切换分类有动画。
 - **Showcase**（`#showcase`）：8 作品 masonry 瀑布流（columns 2/3/4 响应式，交替 3:4 和 1:1 比例），hover 显示标题/作者/"创作同款"，右上角常显类型图标。
@@ -741,3 +741,48 @@ title: 待测试确认
   - ③ `npm run dev` → Tauri 窗口顶部 StudioTopMenu 出现「检查更新」按钮 → 点击 → 首次返回「已是最新」或报错（无 Release 时正常）。
   - ④ GitHub repo Settings → Secrets → 添加 `TAURI_SIGNING_PRIVATE_KEY`（粘贴 `flovart.key` 私钥文件内容）+ `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`（空字符串）。
   - ⑤ `git tag v0.2.1 && git push origin v0.2.1` → CI 三平台并行构建 → Release 发布 → `latest.json` 生成 → 应用内检查更新可发现新版本并下载安装重启。
+
+## Lovart 启发改进（Landing 演示动画 + Touch Edit + Agent 思考可视化）
+
+参照竞品 Lovart.ai 的 Talk.Tab.Tune 模型与 MCoT 可视化理念，在保持 Flovart 画布优先+本地优先定位的前提下实现三项 UX 改进。
+
+### Landing 页 Agent 脚本动画演示（`components/landing/AgentDemoAnimation.tsx` — 新增）
+- **5 场景循环动画**（Framer Motion spring 物理，~12s 循环）：
+  1. **input**：模拟用户输入 prompt（打字机效果逐字显示）
+  2. **thinking**：Agent 思考步骤动画（3-4 个步骤逐个显示 ✓ 完成标记）
+  3. **generating**：渐变卡片网格展示生成中的图片（呼吸动效 + 扫光）
+  4. **touchEdit**：模拟 Touch Edit 弹窗（选中区域高亮 + 蒙版绘制 + prompt 修改）
+  5. **done**：最终结果展示 + CTA 按钮"开始创作"
+- **替换占位符**：ToCLanding Hero 区原"Canvas 操作演示视频即将上线"渐变占位卡片替换为 `<AgentDemoAnimation />`。
+- **纯前端实现**：不依赖后端 API Key，全部用 Framer Motion + CSS 动画模拟。
+
+### Touch Edit / 局部重绘（`components/canvas/InpaintDialog.tsx` — 新增）
+- **交互流程**：选中图片元素 → ElementToolbar 点击"局部重绘"按钮 → 弹出 InpaintDialog（Ant Design Modal）→ 在 canvas 上手绘白色蒙版（要修改的区域）→ 输入修改 prompt → 确认调用 `editImageWithProvider` with mask。
+- **蒙版绘制**：复用 Workflow MaskDialog 的 canvas 手绘模式——白线绘制 → `destination-out` 反转 → 白色=保持/透明=重绘。
+- **`handleInpaint`**（`hooks/useGeneration.ts` 新增）：调 `supportsMaskImageEditing()` 检查模型能力 → 调 `editImageWithProvider(element.href, prompt, maskDataUrl)` → 结果替换元素 href。
+- **ElementToolbar 集成**：新增 `handleInpaint`/`inpaintElementId`/`setInpaintElementId` props；图片类型工具栏新增"局部重绘"按钮（Brush 图标）；`toolbarScreenWidth` 从 560/612/600 调整为 620/672/660 以容纳新按钮。
+- **App.tsx 集成**：新增 `inpaintElementId` state，传 `handleInpaint`/`inpaintElementId`/`setInpaintElementId` 给 ElementToolbar。
+
+### Agent 思考可视化（`components/AgentThinkingPanel.tsx` — 新增，替换 Loader）
+- **替换 Loader**：原 `Loader.tsx` 组件（简单 spinner）完全被 `AgentThinkingPanel` 替代，App.tsx 中 `<Loader>` 替换为 `<AgentThinkingPanel>`。
+- **步骤累积逻辑**：`progressMessage` 变化时 push 到 `steps` 数组（去重）；`isLoading=false` 后 2s 自动清空；显示最后 5 步。
+- **UI 设计**：每步显示 ✓（完成，绿色）/ →（进行中，脉冲动画）；Framer Motion `AnimatePresence` + spring 入场/退场；毛玻璃背景 + 青绿色描边高亮，符合 AGENTS.md Canvas 生成中节点视觉规范。
+- **`progressMessage` 来源**：复用 `useGeneration` hook 已有的 progressMessage 状态（Provider 轮询/流式返回的进度文本）。
+
+### Landing 页内导航 Bug 修复（HashRouter anchor 冲突）
+- **根因**：ToCLanding / ToBLanding 的导航链接使用 `<a href="#features">` 等锚点。HashRouter 下 URL hash 是路由路径（如 `#/business`），点击 `href="#features"` 会把 hash 覆盖为 `#features` → 路由跳转到不存在的 `/features` → 回退到 `/`（ToC 页面）。导致在 ToB 页面点击"功能""模型"等会跳到 ToC 页面。
+- **修复**：两个 Landing 组件新增 `scrollTo(id)` 辅助函数（`document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' })`），所有 `<a href="#xxx">` 替换为 `<a onClick={() => scrollTo('xxx')}>`，不修改 hash，纯页面内滚动。
+- **影响范围**：ToCLanding 3 个导航链接 + 1 个 CTA 按钮；ToBLanding 5 个导航链接 + 1 个 CTA 按钮。
+
+### 待用户验证
+- ① 访问 `/#/` ToC Landing → Hero 区显示 AgentDemoAnimation 脚本动画（5 场景循环），不再是"视频即将上线"占位符。
+- ② 动画循环：input 打字机 → thinking 步骤 → generating 渐变卡片 → touchEdit 弹窗 → done CTA → 循环。
+- ③ 在画布选中一张图片元素 → ElementToolbar 出现"局部重绘"按钮（Brush 图标）→ 点击弹出 InpaintDialog。
+- ④ InpaintDialog 中用鼠标在图片上绘制白色蒙版区域 → 输入修改 prompt → 确认后图片被局部重绘。
+- ⑤ 模型不支持 mask editing 时，`handleInpaint` 会提示错误。
+- ⑥ 生成中时画布显示 AgentThinkingPanel（步骤列表 + ✓/→ 状态图标），不再是简单 spinner。
+- ⑦ 生成完成后 AgentThinkingPanel 2s 后自动消失。
+- ⑧ ToB Landing（`/#/business`）点击导航"功能""模型""对比""定价""FAQ"→ 页面内平滑滚动到对应 section，不跳转到 ToC 页面。
+- ⑨ ToC Landing（`/#/`）点击导航"功能""模板""展示"→ 页面内平滑滚动，不跳路由。
+- ⑩ ToC Landing Hero 区"探索模板"按钮 → 平滑滚动到模板 section。
+- ⑪ ToB Landing Hero 区"查看定价"按钮 → 平滑滚动到定价 section。

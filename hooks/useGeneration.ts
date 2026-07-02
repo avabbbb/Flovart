@@ -507,6 +507,65 @@ export function useGeneration(params: UseGenerationParams) {
         }
     };
 
+    /* ---- Inpaint (Touch Edit) ---- */
+
+    const handleInpaint = async (element: ImageElement, maskDataUrl: string, inpaintPrompt: string) => {
+        const resolved = resolveModelKey('image', modelPreference.imageModel);
+        if (!resolved) {
+            setError('未找到可用于局部重绘的 API Key，请先在设置中配置。');
+            setIsSettingsPanelOpen(true);
+            return;
+        }
+
+        if (!supportsMaskImageEditing(resolved.model)) {
+            setError(`当前模型 ${resolved.model} 不支持蒙版局部重绘，请切换到 Gemini 图像编辑或 GPT Image 模型。`);
+            return;
+        }
+
+        setIsLoading(true);
+        setError(null);
+        setProgressMessage('正在局部重绘...');
+
+        try {
+            const result = await editImageWithProvider(
+                [{ href: element.href, mimeType: element.mimeType }],
+                inpaintPrompt,
+                resolved.model,
+                resolved.key,
+                { mask: { href: maskDataUrl, mimeType: 'image/png' } },
+            );
+
+            if (result && result.newImageBase64) {
+                const newMime = result.newImageMimeType || 'image/png';
+                const newHref = `data:${newMime};base64,${result.newImageBase64}`;
+                commitAction(prev => prev.map(el =>
+                    el.id === element.id
+                        ? { ...el, href: newHref, mimeType: newMime }
+                        : el
+                ));
+
+                saveGenerationToHistory({
+                    name: `Inpaint: ${inpaintPrompt.slice(0, 30)}`,
+                    dataUrl: newHref,
+                    mimeType: newMime,
+                    width: element.width,
+                    height: element.height,
+                    prompt: inpaintPrompt,
+                });
+
+                setProgressMessage('局部重绘完成！');
+            } else {
+                setError('局部重绘未返回结果，请重试。');
+            }
+        } catch (err) {
+            const error = err as Error;
+            setError(`局部重绘失败: ${error.message}`);
+        } finally {
+            setIsLoading(false);
+            setTimeout(() => setProgressMessage(''), 1500);
+        }
+    };
+
     /* ---- buildMentionAwarePrompt ---- */
 
     const buildMentionRegex = (name: string, flags = 'i') => {
@@ -1305,6 +1364,7 @@ export function useGeneration(params: UseGenerationParams) {
         handleUpscaleImage,
         handleRemoveImageBackground,
         handleOutpaint,
+        handleInpaint,
         handleGenerate,
         handleBatchGenerate,
         handleSelectBatchResult,
