@@ -10,7 +10,7 @@ npm run dev
 npm run flovart:cli -- status --json
 ```
 
-The Vite dev server uses port `3217`. Provider-backed commands require the browser app to stay open because API keys remain in browser storage.
+The Vite dev server uses port `11451`. Provider-backed commands require the browser app to stay open because API keys remain in browser storage.
 
 ## Agent Host Init
 

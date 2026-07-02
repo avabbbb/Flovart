@@ -82,7 +82,7 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:3217 and enter your service credentials in Settings.
+Open http://localhost:11451 and enter your service credentials in Settings.
 
 > We recommend [Google AI Studio](https://aistudio.google.com/apikey) to get free Gemini credentials.
 

@@ -28,7 +28,7 @@ type StorageConfig struct {
 func Load() (*Config, error) {
 	_ = godotenv.Load()
 	cfg := &Config{
-		Port:        env("PORT", "8080"),
+		Port:        env("PORT", "11452"),
 		DatabaseURL: os.Getenv("DATABASE_URL"),
 		JWTSecret:   env("JWT_SECRET", ""),
 		JWTExpHours: env("JWT_EXP_HOURS", "168"),

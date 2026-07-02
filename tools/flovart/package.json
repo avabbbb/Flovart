@@ -1,5 +1,5 @@
 {
-  "name": "flovart-cli",
+  "name": "flovart",
   "version": "0.3.0",
   "description": "Flovart CLI – deterministic command bridge for AI coding agents to operate Flovart canvas, workflow, and providers",
   "type": "module",
@@ -12,6 +12,7 @@
     "cli.js",
     "core.js",
     "dev-commands.js",
+    "tui.js",
     "flovart-bridge.js",
     "shadow-runtime.js",
     "agent-kit.js",

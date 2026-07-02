@@ -17,7 +17,7 @@ type Config struct {
 func Load() (*Config, error) {
 	_ = godotenv.Load()
 	cfg := &Config{
-		Port:        env("ENTERPRISE_PORT", "8081"),
+		Port:        env("ENTERPRISE_PORT", "11453"),
 		DatabaseURL: os.Getenv("DATABASE_URL"),
 		JWTSecret:   os.Getenv("JWT_SECRET"),
 		CORSAllow:   env("CORS_ALLOW", "*"),

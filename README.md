@@ -101,7 +101,7 @@ npm install
 npm run dev
 ```
 
-打开 http://localhost:3217，在设置中填入你的服务凭据即可。
+打开 http://localhost:11451，在设置中填入你的服务凭据即可。
 
 **全栈启动（含后端 API + 企业版）：**
 
@@ -109,7 +109,7 @@ npm run dev
 node tools/flovart/cli.js start
 ```
 
-一键启动前端(:3217) + 社区版后端(:8080) + 企业版后端(:8081)，首次运行自动创建 `.env`。
+一键启动前端(:11451) + 社区版后端(:11452) + 企业版后端(:11453)，首次运行自动创建 `.env`。
 
 > 推荐 [Google AI Studio](https://aistudio.google.com/apikey) 免费获取 Gemini 凭据。
 

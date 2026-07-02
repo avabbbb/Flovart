@@ -93,9 +93,15 @@ function normalizeCommandForRouting(command) {
 
 const rawCommand = argv[0];
 
+if (rawCommand === 'tui' || rawCommand === 'ui' || rawCommand === 'interactive' || (!rawCommand && process.stdin.isTTY)) {
+  const mod = await import('./tui.js');
+  await mod.runTui(rawCommand ? argv.slice(1) : []);
+  process.exit(0);
+}
+
 if (['install', 'start', 'update'].includes(rawCommand)) {
   const mod = await import('./dev-commands.js');
-  await mod[rawCommand]();
+  await mod[rawCommand](argv.slice(1));
   process.exit(0);
 }
 
@@ -116,7 +122,7 @@ if (args.file) {
 
 async function main() {
   if (!command) {
-    printCliResponse(true, 'help', { usage: 'npx flovart-cli <command> --json', setup: SETUP_TEXT, devCommands: { install: 'Clone source + install deps to ~/.flovart/project', start: 'Launch dev servers (vite + Go backend + Docker PG)', update: 'Pull latest + update deps' } });
+    printCliResponse(true, 'help', { usage: 'flovart  # opens TUI; or flovart <command> --json', setup: SETUP_TEXT, devCommands: { tui: 'Open slash-command TUI', install: 'Clone source + install deps to ~/.flovart/project', start: 'Launch dev servers (vite + Go backend + Docker PG)', update: 'Pull latest + update deps' } });
     return;
   }
 

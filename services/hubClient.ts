@@ -1,8 +1,8 @@
 // Flovart Hub 后端 API 客户端
 // 所有 backend/* 服务的统一入口：auth、prompts、uploads、enterprise
 
-const DEFAULT_HUB_BASE = 'http://localhost:8080/api/v1';
-const DEFAULT_ENTERPRISE_BASE = 'http://localhost:8081/api/v1/enterprise';
+const DEFAULT_HUB_BASE = 'http://localhost:11452/api/v1';
+const DEFAULT_ENTERPRISE_BASE = 'http://localhost:11453/api/v1/enterprise';
 
 function readEnvBase(key: string, fallback: string): string {
   // 仅在 web 环境可用；Tauri 也会注入 import.meta.env

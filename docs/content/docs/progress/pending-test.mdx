@@ -155,7 +155,7 @@ title: 待测试确认
 - `purpose` 白名单：`prompt_cover` / `workflow_showcase` / `avatar` / `workflow_media` / `misc`，未知值统一回退 `misc`。
 - go.mod 引入 `aws-sdk-go-v2` 系列依赖（config / credentials / s3）。
 - 前端新增三个 API 客户端文件（沿用 `services/` 目录约定）：
-  - `services/hubClient.ts`：`HUB_BASE_URL` / `ENTERPRISE_BASE_URL`（读 `VITE_HUB_BASE_URL` / `VITE_ENTERPRISE_BASE_URL` 环境变量，默认 `localhost:8080/8081`）、`authApi`（register / login / me）、`getToken` / `setToken`（localStorage 持久化）、统一 `request<T>` 自动注入 `Authorization: Bearer` 与 `{code,data,msg}` 解码。
+  - `services/hubClient.ts`：`HUB_BASE_URL` / `ENTERPRISE_BASE_URL`（读 `VITE_HUB_BASE_URL` / `VITE_ENTERPRISE_BASE_URL` 环境变量，默认 `localhost:11452/8081`）、`authApi`（register / login / me）、`getToken` / `setToken`（localStorage 持久化）、统一 `request<T>` 自动注入 `Authorization: Bearer` 与 `{code,data,msg}` 解码。
   - `services/promptApi.ts`：列表/详情/`by-slug`/下载/创建/修改/删除/`toggleLike`。
   - `services/uploadApi.ts`：`uploadApi.presign` / `confirm` + 一站式 `uploadFileToR2(file, filename, contentType, purpose)`——拿 presign 后直传 R2 再 confirm。
   - `services/orgApi.ts`：组织 CRUD + 成员 CRUD。
@@ -713,15 +713,16 @@ title: 待测试确认
 - **NSIS 安装包打包**：`tauri.conf.json` 的 `bundle.targets` 从 `"all"` 改为 `["nsis"]`（绕过 WiX `light.exe` 依赖 VBSCRIPT 可选功能导致 MSI 失败的问题）。`npm run tauri -- bundle --bundles nsis` 成功生成 `Flovart_0.2.0_x64-setup.exe`（11.1MB）。updater 签名密钥与自动更新流程见下方「Tauri 自动更新 + GitHub Actions CI」节。
 - **CLI 新增开发环境命令**（`tools/flovart/cli.js` 扩展，`tools/flovart/dev-commands.js` 新增）：
   - `flovart install`：git clone `https://github.com/avabbbb/Flovart.git` 到 `~/.flovart/project` + `npm install` + 从 `.env.example` 复制创建 `backend/.env` 与 `backend/enterprise/.env`（已存在则跳过） + `go mod download`（hub + enterprise 两个模块，Go 不可用时跳过）。
-  - `flovart start`：若当前目录含 `package.json`+`backend/` 则用当前目录，否则用 `~/.flovart/project`。检查 Docker → 自动起 `flovart-pg` PostgreSQL 容器（`postgres:16-alpine`，user/postgres/postgres，db=flovart，不存在则创建，已停止则启动，已在跑则跳过） → 并行启动三进程：`npm run dev`（vite 前端 :3217） + `go run cmd/server/main.go`（hub 后端 :8080，auth/prompts/uploads） + `go run cmd/server/main.go`（enterprise 后端 :8081，org/dept/role）。后端各自读自身 `.env`（`DATABASE_URL`/`JWT_SECRET`/端口） → Ctrl+C 一键停止全部。
+  - `flovart start`：若当前目录含 `package.json`+`backend/` 则用当前目录，否则用 `~/.flovart/project`。检查 Docker → 自动起 `flovart-pg` PostgreSQL 容器（`postgres:16-alpine`，user/postgres/postgres，db=flovart，不存在则创建，已停止则启动，已在跑则跳过） → 并行启动三进程：`npm run dev`（vite 前端 :11451） + `go run cmd/server/main.go`（hub 后端 :11452，auth/prompts/uploads） + `go run cmd/server/main.go`（enterprise 后端 :11453，org/dept/role）。后端各自读自身 `.env`（`DATABASE_URL`/`JWT_SECRET`/端口） → Ctrl+C 一键停止全部。
   - `flovart update`：`git pull` + `npm install` + `go mod download`（hub + enterprise 两个模块）。
   - 三个命令在 `cli.js` 顶层拦截，不进入画布命令路由；现有 `canvas.*`/`element.*`/`workflow.*` 等画布命令不受影响。
   - `package.json` 的 `files` 数组已加入 `dev-commands.js`，`npm publish` 会包含新文件。
+- **启动方式重构**（本轮）：CLI npm 包名改为 `flovart`，发布后可直接 `npx flovart` 进入 TUI；`flovart start` 支持 `--web` / `--backend` / `--db` / `--docker` / `--open` / `--plan` 组合；`flovart` / `flovart tui` 新增 slash-command TUI，可用 `/install`、`/start`、`/web`、`/backend`、`/docker`、`/doctor`、`/plan`；根目录 `启动.bat` 默认打开 TUI，`FlovartLauncher.exe` 与 `tools/launcher/` 构建脚本保留为可选可视化入口；Docker Compose 与 Makefile 统一到 web/hub/enterprise/db 四服务和 11451/11452/11453/5433 端口。
 - **待用户验证**：
   - ① `npm run tauri -- bundle --bundles nsis` → 生成 `src-tauri/target/release/bundle/nsis/Flovart_0.2.0_x64-setup.exe`。
   - ② 双击 `Flovart_0.2.0_x64-setup.exe` → 安装 Flovart 桌面端 → 启动后看到 1280x800 窗口。
   - ③ `npx flovart-cli install` → 源码 clone 到 `~/.flovart/project` → `.env` 从 `.env.example` 创建 → `npm install` + `go mod download`（hub+enterprise）完成。
-  - ④ `npx flovart-cli start` → Docker PG 容器启动（postgres/postgres） → vite + hub(:8080) + enterprise(:8081) 三进程并行 → `http://localhost:3217` 前端可访问 → 注册/登录走 :8080 → 企业后台走 :8081 → Ctrl+C 停止全部。
+  - ④ `npx flovart-cli start` → Docker PG 容器启动（postgres/postgres） → vite + hub(:11452) + enterprise(:11453) 三进程并行 → `http://localhost:11451` 前端可访问 → 注册/登录走 :11452 → 企业后台走 :11453 → Ctrl+C 停止全部。
   - ⑤ `npx flovart-cli update` → `git pull` + 依赖更新完成。
   - ⑥ 从工作区根目录直接 `node tools/flovart/cli.js start` → 检测到 CWD 是项目根 → 同 ④（无需先 install）。
 

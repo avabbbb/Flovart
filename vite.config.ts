@@ -17,7 +17,7 @@ export default defineConfig(() => {
         process.env.CF_PAGES_BASEPATH ||
         (process.env.CF_PAGES ? '/' : './'),
       server: {
-        port: 3217,
+        port: 11451,
         host: host || '127.0.0.1',
         strictPort: true,
         headers: {

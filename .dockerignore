@@ -26,8 +26,11 @@ build
 # 测试相关
 coverage
 .nyc_output
+tests
+*.test.js
 *.test.ts
 *.test.tsx
+*.spec.js
 *.spec.ts
 *.spec.tsx
 
@@ -52,6 +55,10 @@ LICENSE
 Dockerfile
 docker-compose.yml
 .dockerignore
+
+# Windows 启动器
+*.exe
+tools/launcher
 
 # 其他
 tmp

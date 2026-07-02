@@ -6,7 +6,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"flovart/hub/middleware"
-	"flovart/hub/model"
 	"flovart/hub/service"
 )
 
