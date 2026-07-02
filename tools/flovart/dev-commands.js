@@ -21,7 +21,8 @@ function run(cmd, args, opts = {}) {
 }
 
 function checkCommand(cmd) {
-  try { execSync(`${cmd} --version`, { stdio: 'pipe' }); return true; }
+  const flag = cmd === 'go' ? 'version' : '--version';
+  try { execSync(`${cmd} ${flag}`, { stdio: 'pipe' }); return true; }
   catch { return false; }
 }
 
