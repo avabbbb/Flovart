@@ -48,7 +48,7 @@ export interface Role {
   updatedAt: string;
 }
 
-// 权限点全集（镜像后端 model.AllPermissions）
+// 权限点全集（镜像后端 model.AllPermissions — 14 个）
 export const ALL_PERMISSIONS = [
   'org:manage',
   'member:invite',
@@ -57,6 +57,9 @@ export const ALL_PERMISSIONS = [
   'role:manage',
   'credit:grant',
   'credit:adjust',
+  'apikey:manage',
+  'pricing:manage',
+  'quota:manage',
   'asset:approve',
   'asset:publish',
   'workflow:publish',

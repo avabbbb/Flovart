@@ -76,41 +76,332 @@ Flovart Hub（`backend/` 目录）使用 PostgreSQL，GORM AutoMigrate 自动建
 | created_at | timestamptz | |
 | updated_at | timestamptz | |
 
-## organization_members — 组织成员（enterprise 服务）
+## departments — 部门树（enterprise 服务）
+
+邻接表结构，`parent_id` 为 nullable（根部门 `_all` 的 `hidden=true` 对前端隐藏）。
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
 | id | uuid PK | |
 | org_id | uuid FK → organizations.id | |
-| user_id | uuid FK → users.id | 复用 hub 共享 users 表 |
-| role | varchar(16) | `owner` \| `admin` \| `member` |
+| parent_id | uuid nullable FK → departments.id | 邻接表父节点 |
+| slug | varchar(80) | URL 友好标识 |
+| name | varchar(120) | 部门名 |
+| sort | int | 排序 |
+| hidden | bool | 根部门 `_all` 对前端隐藏 |
 | created_at | timestamptz | |
 | updated_at | timestamptz | |
 
-唯一约束 `(org_id, user_id)`：同一用户在同一组织只一条记录。
-owner 不能被直接添加/降级/移除，需要走转让流程（后续）。
+## department_members — 部门成员绑定（enterprise 服务）
 
-## 索引（enterprise）
+部门级角色绑定（非 org 级）。同一用户可在多个部门。
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| id | uuid PK | |
+| dept_id | uuid FK → departments.id | |
+| user_id | uuid FK → users.id | 复用 hub 共享 users 表 |
+| is_lead | bool | 是否部门负责人 |
+| roles | uuid[] | 绑定的角色 ID 列表 |
+| created_at | timestamptz | |
+| updated_at | timestamptz | |
+
+唯一约束 `(dept_id, user_id)`：同一用户在同一部门只一条记录。
+
+## roles — 组织角色（enterprise 服务）
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| id | uuid PK | |
+| org_id | uuid FK → organizations.id | |
+| name | varchar(60) | 角色名 |
+| is_builtin | bool | `Owner` / `Admin` 两个预置角色 |
+| permissions | text[] | 权限点列表（14 个硬编码权限点子集） |
+| sort | int | |
+| created_at | timestamptz | |
+| updated_at | timestamptz | |
+
+建组织时自动 seed `Owner`（全权限）和 `Admin`（除 `org:manage` + `view:audit_log`）两个 builtin 角色。
+权限通过 PostgreSQL `WITH RECURSIVE` CTE 求用户在（本部门 ∪ 祖先部门）上所有角色的 `permissions` 并集。
+
+## 索引（enterprise 基础）
 
 - `organizations.slug` 唯一
 - `organizations.owner_id` 普通
-- `organization_members (org_id, user_id)` 唯一复合
-- `organization_members.org_id` 普通（隐含）
 
-## 角色权限矩阵
+## 权限点（14 个硬编码常量）
 
-| 操作 | owner | admin | member |
+| 权限点 | 说明 | owner | admin |
 | --- | --- | --- | --- |
-| 删除组织 | ✅ | ❌ | ❌ |
-| 添加成员 | ✅ | ✅ | ❌ |
-| 调整成员角色 | ✅ | 仅 member | ❌ |
-| 移除成员 | ✅ | 仅 member | ❌ |
-| 查看成员列表 | ✅ | ✅ | ✅ |
+| `org:manage` | 改名/删除组织 | ✅ | ❌ |
+| `member:invite` | 邀请成员 | ✅ | ✅ |
+| `member:manage` | 调整/移除成员、部门角色 | ✅ | ✅ |
+| `dept:manage` | 部门 CRUD | ✅ | ✅ |
+| `role:manage` | 角色增删改 | ✅ | ✅ |
+| `credit:grant` | 提交充值申请 | ✅ | ✅ |
+| `credit:adjust` | 人工调整余额 | ✅ | ✅ |
+| `apikey:manage` | API Key 池增删改 | ✅ | ✅ |
+| `pricing:manage` | 模型单价配置 | ✅ | ✅ |
+| `quota:manage` | 成员月度额度配置 | ✅ | ✅ |
+| `asset:approve` | 资源审批 | ✅ | ✅ |
+| `asset:publish` | 资源发布 | ✅ | ✅ |
+| `workflow:publish` | 发布工作流 | ✅ | ✅ |
+| `view:audit_log` | 审计日志 | ✅ | ❌ |
+
+owner 走 `Organization.OwnerID` 快通道拥有全部权限；admin 预置角色拥有除 `org:manage` 与 `view:audit_log` 外的全部权限。member 无管理权限，只读组织信息。
+
+## org_credits — 组织积分余额（enterprise）
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| id | uuid PK | |
+| org_id | uuid uniqueIndex | 每个组织至多一行 |
+| balance | int64 | 当前可用余额（整数积分） |
+| total_in | int64 | 历史累计充值 |
+| total_out | int64 | 历史累计消耗 |
+| created_at | timestamptz | |
+| updated_at | timestamptz | |
+
+余额变动必须在事务内配合 `credit_transactions` 一同写入。
+
+## credit_transactions — 积分变动流水（enterprise）
+
+不可变。每笔变动一条记录。
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| id | uuid PK | |
+| org_id | uuid index | |
+| user_id | uuid index nullable | 触发者（消耗/退还时为调用成员） |
+| kind | varchar(16) index | `recharge` \| `consume` \| `refund` \| `adjust` \| `grant` |
+| amount | int64 | 正数入账，负数扣减 |
+| balance_after | int64 | 本次变动后余额，便于审计 |
+| ref_request_id | uuid index nullable | 关联 RechargeRequest ID |
+| ref_usage_id | uuid index nullable | 关联 UsageRecord ID |
+| reason | varchar(200) nullable | 人工备注/失败原因 |
+| created_at | timestamptz index | |
+
+## recharge_requests — 充值申请（enterprise）
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| id | uuid PK | |
+| org_id | uuid index | |
+| requested_by | uuid | 提交人（通常 org owner） |
+| amount | int64 | 申请入账的积分数 |
+| price_cents | int64 | 约定人民币金额（分），仅账面 |
+| note | varchar(500) | 合同号/转账证明等 |
+| status | varchar(16) index | `pending` \| `approved` \| `rejected` \| `cancelled` |
+| reviewed_by | uuid index nullable | 平台 admin ID |
+| review_note | varchar(500) | |
+| reviewed_at | timestamptz nullable | |
+| created_at | timestamptz index | |
+| updated_at | timestamptz | |
+
+## usage_records — AI 调用用量记录（enterprise）
+
+即使最终被退款也保留记录，退款方向用 `refund` 流水表达。
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| id | uuid PK | |
+| org_id | uuid index | |
+| user_id | uuid index | 发起调用的成员 |
+| provider | varchar(32) index | `runninghub` \| `openai` \| ... |
+| endpoint | varchar(120) index | 具体接口标识 |
+| model | varchar(120) | |
+| mode | varchar(24) index | `image` \| `video` \| `text` |
+| cost_credits | int64 | 本次被扣额度 |
+| duration_ms | int64 | |
+| status | varchar(16) index | `success` \| `failed` \| `refunded` |
+| request_ref | varchar(120) index | 业务侧 requestId |
+| error_msg | varchar(500) | |
+| created_at | timestamptz index | |
+
+## org_api_keys — 组织 API Key 池（enterprise）
+
+成员不接触明文 Key，只通过代理端点间接使用。API 响应始终掩码（仅末 4 位）。
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| id | uuid PK | |
+| org_id | uuid uniqueIndex(org,label) | |
+| label | varchar(120) uniqueIndex(org,label) | "OpenAI 主Key" |
+| provider | varchar(32) index | `openai` \| `runninghub` \| `anthropic` \| `custom` |
+| base_url | varchar(255) | |
+| api_key | varchar(500) | 明文存储（依赖 DB 访问控制），JSON 响应永不返回 |
+| key_hint | varchar(16) | 末 4 位 |
+| enabled | bool | |
+| created_by_id | uuid | |
+| created_at | timestamptz | |
+| updated_at | timestamptz | |
+
+## model_pricings — 模型单价配置（enterprise）
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| id | uuid PK | |
+| org_id | uuid uniqueIndex(org,provider,model) | |
+| provider | varchar(32) uniqueIndex(org,provider,model) | |
+| model | varchar(120) uniqueIndex(org,provider,model) | |
+| mode | varchar(24) | `image` \| `video` \| `text` |
+| cost_credits | int64 | 每次调用消耗积分数 |
+| enabled | bool | |
+| created_at | timestamptz | |
+| updated_at | timestamptz | |
+
+## member_quotas — 成员月度额度（enterprise）
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| id | uuid PK | |
+| org_id | uuid uniqueIndex(org,user) | |
+| user_id | uuid uniqueIndex(org,user) index | |
+| monthly_limit | int64 | 0 = 不限 |
+| used_this_month | int64 | 当前周期已消耗 |
+| period_start | timestamptz | 当前计费周期起始日 |
+| created_at | timestamptz | |
+| updated_at | timestamptz | |
+
+## resource_levels — 资源密级（enterprise）
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| id | uuid PK | |
+| org_id | uuid uniqueIndex(org,name) | |
+| name | varchar(60) uniqueIndex(org,name) | 公开/内部/机密 |
+| sort | int | |
+| created_at | timestamptz | |
+| updated_at | timestamptz | |
+
+## resources — 组织资源库（enterprise）
+
+画布生成的图片/视频自动上传到组织资源库。
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| id | uuid PK | |
+| org_id | uuid index | |
+| uploader_id | uuid index | |
+| type | varchar(16) | `image` \| `video` |
+| title | varchar(200) | |
+| storage_key | varchar(500) | R2 key |
+| href | varchar(1000) | 公网访问 URL |
+| thumbnail | varchar(1000) | |
+| level_id | uuid index nullable FK → resource_levels.id | 密级 |
+| status | varchar(16) index | `pending` \| `approved` \| `rejected` \| `published` |
+| metadata | jsonb | width/height/mimeType 等 |
+| created_at | timestamptz index | |
+| updated_at | timestamptz | |
+
+## approval_workflows — 审批流定义（enterprise）
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| id | uuid PK | |
+| org_id | uuid index | |
+| name | varchar(120) | |
+| target_type | varchar(32) | `resource_publish` \| `resource_level` |
+| enabled | bool | |
+| created_at | timestamptz | |
+| updated_at | timestamptz | |
+
+## approval_nodes — 审批流节点（enterprise）
+
+按 `node_index` 顺序流转。
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| id | uuid PK | |
+| workflow_id | uuid uniqueIndex(wf,idx) index | |
+| node_index | int uniqueIndex(wf,idx) | |
+| node_type | varchar(16) | `sequential` \| `parallel` \| `any` |
+| approver_type | varchar(16) | `user` \| `role` \| `dept_lead` |
+| approver_ids | uuid[] | 指定审批人/角色/部门负责人 |
+| created_at | timestamptz | |
+| updated_at | timestamptz | |
+
+## approval_records — 审批实例（enterprise）
+
+每次提交审批生成一条。
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| id | uuid PK | |
+| org_id | uuid index | |
+| workflow_id | uuid index | |
+| target_type | varchar(32) | |
+| target_id | uuid index | 被审批对象 ID |
+| initiator_id | uuid | 发起人 |
+| status | varchar(16) index | `pending` \| `approved` \| `rejected` \| `cancelled` |
+| current_node_index | int | 当前流转到的节点 |
+| created_at | timestamptz index | |
+| updated_at | timestamptz | |
+
+## approval_steps — 审批步骤记录（enterprise）
+
+不可变。每个节点的实际审批动作。
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| id | uuid PK | |
+| record_id | uuid index | |
+| node_index | int | |
+| approver_id | uuid | |
+| action | varchar(16) | `approve` \| `reject` |
+| note | varchar(500) | |
+| acted_at | timestamptz | |
+
+## sensitive_words — 敏感词库（enterprise）
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| id | uuid PK | |
+| org_id | uuid uniqueIndex(org,word) index | |
+| word | varchar(120) uniqueIndex(org,word) | |
+| category | varchar(60) index | `politics` \| `violence` \| `adult` \| `custom` |
+| action | varchar(16) | `block` \| `warn` \| `review` |
+| created_at | timestamptz index | |
+
+## projects — 画布项目镜像（enterprise）
+
+前端画布保存时同步到组织库，供管理员查看。不存完整画布数据，只存元信息。
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| id | uuid PK | |
+| org_id | uuid index | |
+| owner_id | uuid index | |
+| title | varchar(200) | |
+| node_count | int | |
+| connection_count | int | |
+| last_synced_at | timestamptz nullable | |
+| created_at | timestamptz index | |
+| updated_at | timestamptz | |
+
+## 索引（enterprise 全量）
+
+- `organizations.slug` 唯一
+- `organizations.owner_id` 普通
+- `departments (org_id, parent_id)` 邻接表
+- `department_members (dept_id, user_id)` 唯一复合
+- `roles (org_id, name)` 唯一
+- `org_credits.org_id` 唯一
+- `credit_transactions.org_id` / `credit_transactions.created_at` 普通
+- `recharge_requests.org_id` / `recharge_requests.status` 普通
+- `usage_records.org_id` / `usage_records.user_id` / `usage_records.status` 普通
+- `org_api_keys (org_id, label)` 唯一复合
+- `model_pricings (org_id, provider, model)` 唯一复合
+- `member_quotas (org_id, user_id)` 唯一复合
+- `resource_levels (org_id, name)` 唯一复合
+- `resources.org_id` / `resources.status` 普通
+- `approval_workflows.org_id` 普通
+- `approval_nodes.workflow_id` 普通
+- `approval_records.org_id` / `approval_records.status` 普通
+- `approval_steps.record_id` 普通
+- `sensitive_words (org_id, word)` 唯一复合
+- `projects.org_id` / `projects.owner_id` 普通
 
 ## 待扩展（工作流生态阶段）
 
 `workflow_packs` / `workflow_items` / `workflow_likes` 表将在工作流生态阶段加入，结构参考 prompt 系列；工作流包不会保存模型配置或 API Key。
-
-## 待扩展（额度池阶段）
-
-`credit_pools` / `credit_allocations` / `credit_ledger` 等表在企业额度池能力上线时加入，用于"企业采购额度 → 管理员分配给员工 → 调 Provider 扣减 → 财务报表"链路；当前角色用户管理模块已铺好基础关系。

@@ -15,8 +15,18 @@ export const SLASH_COMMANDS: SlashCommand[] = [
     generateCount: 9,
     gridCols: 3,
     promptBuilder: index => {
-      const angles = ['front view', 'front-left 3/4 view', 'left side profile', 'back-left 3/4 view', 'back view', 'back-right 3/4 view', 'right side profile', 'front-right 3/4 view', 'top-down bird\'s eye view'];
-      return `same subject, ${angles[index] || 'front view'}, different camera angle, consistent identity`;
+      const angles = [
+        'front view, eye-level',
+        'front-left 3/4 view, slight high angle',
+        'left side profile, eye-level',
+        'back-left 3/4 view, slight low angle',
+        'back view, eye-level',
+        'back-right 3/4 view, slight high angle',
+        'right side profile, eye-level',
+        'front-right 3/4 view, slight low angle',
+        "top-down bird's eye view",
+      ];
+      return `same subject, ${angles[index] || 'front view'}, different camera angle only, keep identical subject identity, pose, clothing, hairstyle and style, do not alter the subject itself`;
     },
   },
   {
@@ -31,8 +41,8 @@ export const SLASH_COMMANDS: SlashCommand[] = [
     generateCount: 3,
     gridCols: 3,
     promptBuilder: index => {
-      const views = ['front view', 'side profile view', 'back view'];
-      return `character turnaround, ${views[index] || 'front view'}, consistent design`;
+      const views = ['front view (T-pose)', 'side profile view (T-pose)', 'back view (T-pose)'];
+      return `character turnaround sheet, ${views[index] || 'front view'}, maintain identical character design, colors, proportions, clothing and accessories, clean concept art reference background`;
     },
   },
   {
@@ -46,7 +56,10 @@ export const SLASH_COMMANDS: SlashCommand[] = [
     maxSources: 1,
     generateCount: 4,
     gridCols: 2,
-    promptBuilder: index => `story progression, scene ${index + 1} of 4, cinematic narrative beat`,
+    promptBuilder: index => {
+      const beats = ['opening scene, establishing shot', 'rising action, conflict begins', 'climax, dramatic peak moment', 'resolution, aftermath and conclusion'];
+      return `story progression, scene ${index + 1} of 4 — ${beats[index] || 'narrative beat'}, cinematic narrative, consistent characters and art style across all frames`;
+    },
   },
   {
     id: 'lighting-fix',
@@ -59,7 +72,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
     maxSources: 1,
     generateCount: 1,
     gridCols: 1,
-    promptBuilder: () => 'cinematic lighting correction, professional color grading, balanced exposure, dramatic but natural light',
+    promptBuilder: () => 'cinematic lighting correction, professional color grading, balanced exposure, dramatic but natural light, remove harsh shadows and blown highlights',
   },
   {
     id: 'portrait-enhance',
@@ -72,7 +85,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
     maxSources: 1,
     generateCount: 1,
     gridCols: 1,
-    promptBuilder: () => 'enhanced skin texture, detailed facial features, soft studio lighting, shallow depth of field, high quality portrait',
+    promptBuilder: () => 'enhanced skin texture, detailed facial features, soft studio lighting, shallow depth of field, high quality portrait, preserve original identity and expression',
   },
   {
     id: 'storyboard-25',
@@ -85,7 +98,11 @@ export const SLASH_COMMANDS: SlashCommand[] = [
     maxSources: 1,
     generateCount: 25,
     gridCols: 5,
-    promptBuilder: index => `storyboard frame ${index + 1} of 25, sequential narrative beat, consistent style and characters`,
+    promptBuilder: index => {
+      const act = Math.floor(index / 7);
+      const acts = ['opening act', 'development act', 'midpoint turn', 'escalation act', 'climax and resolution'];
+      return `storyboard frame ${index + 1} of 25, ${acts[act] || 'narrative beat'}, sequential narrative progression, consistent style and characters across all frames, cinematic composition`;
+    },
   },
 ];
 

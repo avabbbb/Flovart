@@ -13,30 +13,121 @@ JWT 在 hub 注册/登录获得后，可直接用于 enterprise 的 `Authorizati
 
 ## 角色与权限
 
-| 角色 | 说明 |
-| --- | --- |
-| owner | 组织所有者，一切操作 |
-| admin | 管理员，可添加/调整/移除 member，但不可动 owner 与其他 admin |
-| member | 普通成员，只读组织与成员列表 |
-
-owner 不能通过成员接口直接创建、降级或移除，需要走转让流程（后续版本）。
-管理员通过 `byUsername` 添加成员，被加者必须已是 flovart 平台注册用户（共享 users 表）。
+权限通过部门级角色绑定 + 递归 CTE 继承求并集。owner 走 `Organization.OwnerID` 快通道拥有全部 14 个权限点；admin 预置角色拥有除 `org:manage` 与 `view:audit_log` 外的 12 个权限点。14 个硬编码权限点见 `backend-database.mdx`。
 
 ## 路由
 
-- `POST /api/v1/enterprise/orgs` — 创建组织（创建者成为 owner）
-  - body: `{ slug, name }`
+### 组织与成员
+
+- `POST /api/v1/enterprise/orgs` — 创建组织（创建者成为 owner，自动 seed builtin 角色 + 根部门）
 - `GET /api/v1/enterprise/orgs` — 当前用户加入的组织列表
-- `GET /api/v1/enterprise/orgs/:id` — 组织详情
-- `DELETE /api/v1/enterprise/orgs/:id` — 删除组织（仅 owner）
-- `GET /api/v1/enterprise/orgs/:id/members` — 成员列表
-- `POST /api/v1/enterprise/orgs/:id/members` — 添加成员
-  - body: `{ byUsername, role }`，role ∈ `admin` | `member`
-- `PUT /api/v1/enterprise/orgs/:id/members/:userId` — 修改成员角色
-  - body: `{ role }`
-- `DELETE /api/v1/enterprise/orgs/:id/members/:userId` — 移除成员
+- `GET /api/v1/enterprise/orgs/:id` — 组织详情（RequireMember）
+- `DELETE /api/v1/enterprise/orgs/:id` — 删除组织（PermOrgManage）
+- `GET /api/v1/enterprise/orgs/:id/members` — 成员名册（跨部门去重）
+- `POST /api/v1/enterprise/orgs/:id/members` — 添加成员到根部门（PermMemberInvite）
+- `DELETE /api/v1/enterprise/orgs/:id/members/:userId` — 移除成员（PermMemberManage）
+
+### 部门
+
+- `POST /api/v1/enterprise/orgs/:id/departments` — 建部门（PermDeptManage）
+- `GET /api/v1/enterprise/orgs/:id/departments` — 部门树（RequireMember）
+- `PUT /api/v1/enterprise/departments/:deptId` — 改部门（PermDeptManage）
+- `DELETE /api/v1/enterprise/departments/:deptId` — 删部门（PermDeptManage）
+- `GET /api/v1/enterprise/departments/:deptId/members` — 部门成员列表
+- `POST /api/v1/enterprise/departments/:deptId/members` — 加入成员到部门
+- `PUT /api/v1/enterprise/departments/:deptId/members/:userId` — 改部门成员（isLead / roles）
+- `DELETE /api/v1/enterprise/departments/:deptId/members/:userId` — 从部门移除
+
+### 角色
+
+- `GET /api/v1/enterprise/orgs/:id/roles` — 角色列表（RequireMember）
+- `POST /api/v1/enterprise/orgs/:id/roles` — 建角色（PermRoleManage）
+- `PUT /api/v1/enterprise/roles/:roleId` — 改角色权限（PermRoleManage）
+- `DELETE /api/v1/enterprise/roles/:roleId` — 删角色（PermRoleManage，builtin 不可删）
+- `GET /api/v1/enterprise/orgs/:id/me/permissions` — 当前用户有效权限集
+
+### 积分与计费
+
+- `GET /api/v1/enterprise/orgs/:id/credit` — 余额（RequireMember）
+- `GET /api/v1/enterprise/orgs/:id/credit/transactions` — 流水（RequireMember）
+- `POST /api/v1/enterprise/orgs/:id/credit/recharges` — 提交充值申请（PermCreditGrant）
+  - body: `{ amount, priceCents?, note? }`
+- `GET /api/v1/enterprise/orgs/:id/credit/recharges` — 充值申请列表（RequireMember）
+- `PUT /api/v1/enterprise/orgs/:id/credit/recharges/:rechargeId/cancel` — 撤销充值申请（PermCreditGrant）
+- `GET /api/v1/enterprise/orgs/:id/credit/usage` — 用量记录（RequireMember）
+
+### API Key 池
+
+- `GET /api/v1/enterprise/orgs/:id/api-keys` — Key 列表（RequireMember，响应掩码）
+- `POST /api/v1/enterprise/orgs/:id/api-keys` — 添加 Key（PermApiKeyManage）
+  - body: `{ label, provider, baseUrl?, apiKey }`
+- `PUT /api/v1/enterprise/orgs/:id/api-keys/:keyId` — 启用/禁用 Key（PermApiKeyManage）
+- `DELETE /api/v1/enterprise/orgs/:id/api-keys/:keyId` — 删除 Key（PermApiKeyManage）
+
+### 模型单价
+
+- `GET /api/v1/enterprise/orgs/:id/pricing` — 单价列表（RequireMember）
+- `POST /api/v1/enterprise/orgs/:id/pricing` — 设置单价（PermPricingManage）
+  - body: `{ provider, model, mode, costCredits }`
+- `DELETE /api/v1/enterprise/orgs/:id/pricing/:pricingId` — 删除单价（PermPricingManage）
+
+### 成员额度
+
+- `GET /api/v1/enterprise/orgs/:id/quotas` — 额度列表（PermQuotaManage）
+- `PUT /api/v1/enterprise/orgs/:id/quotas` — 批量设置额度（PermQuotaManage）
+  - body: `{ quotas: [{ userId, monthlyLimit }] }`
+
+### AI 代理
+
+- `POST /api/v1/enterprise/orgs/:id/ai/proxy` — 组织成员间接使用 org API Key（RequireMember）
+  - body: `{ provider, endpoint, model, mode, payload }`
+  - 预检余额 + 额度 → 转发 HTTP → 成功扣分 / 失败记录不扣
+
+### 资源密级
+
+- `GET /api/v1/enterprise/orgs/:id/resource-levels` — 密级列表（RequireMember）
+- `POST /api/v1/enterprise/orgs/:id/resource-levels` — 建密级（PermAssetApprove）
+- `DELETE /api/v1/enterprise/orgs/:id/resource-levels/:levelId` — 删密级（PermAssetApprove）
+
+### 资源库
+
+- `GET /api/v1/enterprise/orgs/:id/resources` — 资源列表（RequireMember）
+- `POST /api/v1/enterprise/orgs/:id/resources` — 上传资源（RequireMember）
+- `GET /api/v1/enterprise/orgs/:id/resources/:resId` — 资源详情（RequireMember）
+- `PUT /api/v1/enterprise/orgs/:id/resources/:resId/review` — 审核（PermAssetApprove）
+  - body: `{ status: 'approved'|'rejected', note? }`
+- `PUT /api/v1/enterprise/orgs/:id/resources/:resId/publish` — 发布上架（PermAssetPublish）
+
+### 审批流
+
+- `GET /api/v1/enterprise/orgs/:id/approval-workflows` — 审批流列表（RequireMember）
+- `POST /api/v1/enterprise/orgs/:id/approval-workflows` — 建审批流（PermAssetApprove）
+  - body: `{ name, targetType, nodes: [{ nodeType, approverType, approverIds }] }`
+- `GET /api/v1/enterprise/orgs/:id/approval-workflows/:wfId` — 审批流详情含节点（RequireMember）
+- `DELETE /api/v1/enterprise/orgs/:id/approval-workflows/:wfId` — 删审批流（PermAssetApprove）
+- `POST /api/v1/enterprise/orgs/:id/approvals/submit` — 提交审批（RequireMember）
+  - body: `{ workflowId, targetType, targetId }`
+- `GET /api/v1/enterprise/orgs/:id/approvals` — 审批记录列表（RequireMember）
+- `GET /api/v1/enterprise/orgs/:id/approvals/:recId` — 审批记录详情含步骤（RequireMember）
+- `PUT /api/v1/enterprise/orgs/:id/approvals/:recId/act` — 审批动作（RequireMember）
+  - body: `{ action: 'approve'|'reject', note? }`
+
+### 敏感词
+
+- `GET /api/v1/enterprise/orgs/:id/sensitive-words` — 敏感词列表（RequireMember）
+- `POST /api/v1/enterprise/orgs/:id/sensitive-words` — 添加敏感词（PermAssetApprove）
+  - body: `{ word, category?, action? }`
+- `DELETE /api/v1/enterprise/orgs/:id/sensitive-words/:wordId` — 删除敏感词（PermAssetApprove）
+- `POST /api/v1/enterprise/orgs/:id/sensitive-words/check` — 文本检测（RequireMember）
+  - body: `{ text }` → `{ hits: [{ word, action }] }`
+
+### 项目镜像
+
+- `POST /api/v1/enterprise/orgs/:id/projects/sync` — 同步画布项目元信息（RequireMember）
+  - body: `{ title, nodeCount, connectionCount }`
+- `GET /api/v1/enterprise/orgs/:id/projects` — 项目列表（RequireMember）
+- `DELETE /api/v1/enterprise/orgs/:id/projects/:projId` — 删除项目镜像（PermOrgManage）
+
+### 健康检查
+
 - `GET /healthz` — 健康检查
-
-## 后续扩展
-
-额度池、积分分配、Provider 消耗扣减、财务报表等接口在下一阶段加入。

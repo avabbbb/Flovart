@@ -31,6 +31,27 @@ func main() {
 		&model.Department{},
 		&model.DepartmentMember{},
 		&model.Role{},
+		// 信用与计费
+		&model.OrgCredit{},
+		&model.CreditTransaction{},
+		&model.RechargeRequest{},
+		&model.UsageRecord{},
+		// API Key 池与额度
+		&model.OrgApiKey{},
+		&model.ModelPricing{},
+		&model.MemberQuota{},
+		// 资源管理
+		&model.ResourceLevel{},
+		&model.Resource{},
+		// 审批流
+		&model.ApprovalWorkflow{},
+		&model.ApprovalNode{},
+		&model.ApprovalRecord{},
+		&model.ApprovalStep{},
+		// 敏感词
+		&model.SensitiveWord{},
+		// 项目镜像
+		&model.Project{},
 	); err != nil {
 		log.Fatalf("migrate: %v", err)
 	}
@@ -40,15 +61,35 @@ func main() {
 	deptRepo := repository.NewDeptRepository(db)
 	roleRepo := repository.NewRoleRepository(db)
 	rbacRepo := repository.NewRbacRepository(db)
+	creditRepo := repository.NewCreditRepository(db)
+	apiKeyRepo := repository.NewApiKeyRepository(db)
+	resourceRepo := repository.NewResourceRepository(db)
+	approvalRepo := repository.NewApprovalRepository(db)
+	sensitiveRepo := repository.NewSensitiveRepository(db)
+	projectRepo := repository.NewProjectRepository(db)
 
 	orgSvc := service.NewOrgService(db, orgRepo, userRepo, deptRepo, roleRepo)
 	rbacSvc := service.NewRbacService(orgRepo, rbacRepo)
 	deptSvc := service.NewDeptService(deptRepo)
 	roleSvc := service.NewRoleService(roleRepo)
+	creditSvc := service.NewCreditService(db, creditRepo)
+	apiKeySvc := service.NewApiKeyService(db, apiKeyRepo, creditRepo)
+	proxySvc := service.NewProxyService(db, apiKeyRepo, creditRepo, creditSvc, apiKeySvc)
+	resourceSvc := service.NewResourceService(db, resourceRepo)
+	approvalSvc := service.NewApprovalService(db, approvalRepo)
+	sensitiveSvc := service.NewSensitiveService(sensitiveRepo)
+	projectSvc := service.NewProjectService(projectRepo)
 
 	orgH := handler.NewOrgHandler(orgSvc)
 	deptH := handler.NewDeptHandler(deptSvc)
 	roleH := handler.NewRoleHandler(roleSvc)
+	creditH := handler.NewCreditHandler(creditSvc)
+	apiKeyH := handler.NewApiKeyHandler(apiKeySvc)
+	proxyH := handler.NewProxyHandler(proxySvc)
+	resourceH := handler.NewResourceHandler(resourceSvc)
+	approvalH := handler.NewApprovalHandler(approvalSvc)
+	sensitiveH := handler.NewSensitiveHandler(sensitiveSvc)
+	projectH := handler.NewProjectHandler(projectSvc)
 
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.Default()
@@ -93,6 +134,65 @@ func main() {
 
 		// 我的有效权限集
 		api.GET("/orgs/:id/me/permissions", middleware.RequireMember(rbacSvc), roleH.MyPerms(rbacSvc))
+
+		// 积分与计费
+		api.GET("/orgs/:id/credit", middleware.RequireMember(rbacSvc), creditH.Balance)
+		api.GET("/orgs/:id/credit/transactions", middleware.RequireMember(rbacSvc), creditH.Transactions)
+		api.POST("/orgs/:id/credit/recharges", middleware.RequirePerm(rbacSvc, model.PermCreditGrant), creditH.CreateRecharge)
+		api.GET("/orgs/:id/credit/recharges", middleware.RequireMember(rbacSvc), creditH.ListRecharges)
+		api.PUT("/orgs/:id/credit/recharges/:rechargeId/cancel", middleware.RequirePerm(rbacSvc, model.PermCreditGrant), creditH.CancelRecharge)
+		api.GET("/orgs/:id/credit/usage", middleware.RequireMember(rbacSvc), creditH.ListUsage)
+
+		// API Key 池
+		api.GET("/orgs/:id/api-keys", middleware.RequireMember(rbacSvc), apiKeyH.List)
+		api.POST("/orgs/:id/api-keys", middleware.RequirePerm(rbacSvc, model.PermApiKeyManage), apiKeyH.Create)
+		api.PUT("/orgs/:id/api-keys/:keyId", middleware.RequirePerm(rbacSvc, model.PermApiKeyManage), apiKeyH.Toggle)
+		api.DELETE("/orgs/:id/api-keys/:keyId", middleware.RequirePerm(rbacSvc, model.PermApiKeyManage), apiKeyH.Delete)
+
+		// 模型单价
+		api.GET("/orgs/:id/pricing", middleware.RequireMember(rbacSvc), apiKeyH.ListPricing)
+		api.POST("/orgs/:id/pricing", middleware.RequirePerm(rbacSvc, model.PermPricingManage), apiKeyH.CreatePricing)
+		api.DELETE("/orgs/:id/pricing/:pricingId", middleware.RequirePerm(rbacSvc, model.PermPricingManage), apiKeyH.DeletePricing)
+
+		// 成员额度
+		api.GET("/orgs/:id/quotas", middleware.RequirePerm(rbacSvc, model.PermQuotaManage), apiKeyH.ListQuotas)
+		api.PUT("/orgs/:id/quotas", middleware.RequirePerm(rbacSvc, model.PermQuotaManage), apiKeyH.UpdateQuota)
+
+		// AI 代理 — 组织成员通过此端点间接使用 org 的 API Key
+		api.POST("/orgs/:id/ai/proxy", middleware.RequireMember(rbacSvc), proxyH.Forward)
+
+		// 资源密级
+		api.GET("/orgs/:id/resource-levels", middleware.RequireMember(rbacSvc), resourceH.ListLevels)
+		api.POST("/orgs/:id/resource-levels", middleware.RequirePerm(rbacSvc, model.PermAssetApprove), resourceH.CreateLevel)
+		api.DELETE("/orgs/:id/resource-levels/:levelId", middleware.RequirePerm(rbacSvc, model.PermAssetApprove), resourceH.DeleteLevel)
+
+		// 资源库
+		api.GET("/orgs/:id/resources", middleware.RequireMember(rbacSvc), resourceH.List)
+		api.POST("/orgs/:id/resources", middleware.RequireMember(rbacSvc), resourceH.Create)
+		api.GET("/orgs/:id/resources/:resId", middleware.RequireMember(rbacSvc), resourceH.Get)
+		api.PUT("/orgs/:id/resources/:resId/review", middleware.RequirePerm(rbacSvc, model.PermAssetApprove), resourceH.Review)
+		api.PUT("/orgs/:id/resources/:resId/publish", middleware.RequirePerm(rbacSvc, model.PermAssetPublish), resourceH.Publish)
+
+		// 审批流
+		api.GET("/orgs/:id/approval-workflows", middleware.RequireMember(rbacSvc), approvalH.List)
+		api.POST("/orgs/:id/approval-workflows", middleware.RequirePerm(rbacSvc, model.PermAssetApprove), approvalH.Create)
+		api.GET("/orgs/:id/approval-workflows/:wfId", middleware.RequireMember(rbacSvc), approvalH.Get)
+		api.DELETE("/orgs/:id/approval-workflows/:wfId", middleware.RequirePerm(rbacSvc, model.PermAssetApprove), approvalH.Delete)
+		api.POST("/orgs/:id/approvals/submit", middleware.RequireMember(rbacSvc), approvalH.Submit)
+		api.GET("/orgs/:id/approvals", middleware.RequireMember(rbacSvc), approvalH.ListRecords)
+		api.GET("/orgs/:id/approvals/:recId", middleware.RequireMember(rbacSvc), approvalH.GetRecord)
+		api.PUT("/orgs/:id/approvals/:recId/act", middleware.RequireMember(rbacSvc), approvalH.Act)
+
+		// 敏感词
+		api.GET("/orgs/:id/sensitive-words", middleware.RequireMember(rbacSvc), sensitiveH.List)
+		api.POST("/orgs/:id/sensitive-words", middleware.RequirePerm(rbacSvc, model.PermAssetApprove), sensitiveH.Create)
+		api.DELETE("/orgs/:id/sensitive-words/:wordId", middleware.RequirePerm(rbacSvc, model.PermAssetApprove), sensitiveH.Delete)
+		api.POST("/orgs/:id/sensitive-words/check", middleware.RequireMember(rbacSvc), sensitiveH.Check)
+
+		// 项目镜像
+		api.POST("/orgs/:id/projects/sync", middleware.RequireMember(rbacSvc), projectH.Sync)
+		api.GET("/orgs/:id/projects", middleware.RequireMember(rbacSvc), projectH.List)
+		api.DELETE("/orgs/:id/projects/:projId", middleware.RequirePerm(rbacSvc, model.PermOrgManage), projectH.Delete)
 	}
 
 	log.Printf("flovart/enterprise listening on :%s", cfg.Port)

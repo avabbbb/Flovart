@@ -19,7 +19,24 @@ export const BUILTIN_RUNNINGHUB_MODELS: Array<{ id: string; capability: 'image' 
   { id: RUNNINGHUB_DETAIL_ENDPOINTS['2046503667076751361'], capability: 'image', description: '全能图片 G-2.0 图生图' },
   { id: RUNNINGHUB_DETAIL_ENDPOINTS['2027196343409463297'], capability: 'image', description: '全能图片 V2 图生图' },
   { id: RUNNINGHUB_DETAIL_ENDPOINTS['2034917373414539277'], capability: 'video', description: 'Seedance 2.0 多模态视频' },
+  { id: 'rhart-image-n-pro/edit', capability: 'image', description: 'Nano Banana Pro 编辑 (低价通道)' },
 ];
+
+// RunningHub 产品展示名 → 真实 API endpoint 的别名映射。
+// 用户在设置页手填 RH 官网"产品名"（如 nano-banana-pro/edit-channel-low-price）时，
+// 通过这里自动重写为真实的 /openapi/v2/<endpoint> 路径，避免 404。
+const RUNNINGHUB_PRODUCT_ALIASES: Record<string, string> = {
+  'nano-banana/edit-channel-low-price': 'rhart-image-v1/edit',
+  'nano-banana/edit-official-stable': 'rhart-image-v1-official/edit',
+  'nano-banana/text-to-image-channel-low-price': 'rhart-image-v1/text-to-image',
+  'nano-banana-pro/edit-channel-low-price': 'rhart-image-n-pro/edit',
+  'nano-banana-pro/edit-official-stable': 'rhart-image-n-pro-official/edit',
+  'nano-banana-pro/edit-ultra-official-stable': 'rhart-image-n-pro-official/edit-ultra',
+  'nano-banana-pro/text-to-image-channel-low-price': 'rhart-image-n-pro/text-to-image',
+  'nano-banana-pro/text-to-image-official-stable': 'rhart-image-n-pro-official/text-to-image',
+  'nano-banana2-gemini31flash/image-to-image-channel-low-price': 'rhart-image-n-g31-flash/image-to-image',
+  'nano-banana2-gemini31flash/image-to-image-official-stable': 'rhart-image-n-g31-flash/image-to-image',
+};
 
 export interface RHTaskResult {
   url: string;
@@ -91,8 +108,13 @@ function rhResponseError(json: any, phase: string) {
     directMessage,
     json?.promptTips,
   );
-  const failed = String(json?.status || '').toUpperCase() === 'FAILED';
-  if (!failed && (!code || code === '0') && !directMessage) return '';
+  const statusUpper = String(json?.status || '').toUpperCase();
+  const failed = statusUpper === 'FAILED' || statusUpper === 'ERROR';
+  if (!failed) {
+    const code0 = !code || code === '0';
+    const msgIsSuccess = !directMessage || /^(success|成功)$/i.test(directMessage.trim());
+    if (code0 && msgIsSuccess) return '';
+  }
   const codeText = code && code !== '0' ? ` (${code})` : '';
   return `${phase} failed${codeText}: ${message || 'Unknown error'}`;
 }
@@ -145,6 +167,7 @@ function summarizePayload(payload?: RHSubmitPayload) {
 
 function summarizeResponse(response?: Partial<RHTaskResponse> & Record<string, unknown>) {
   if (!response) return undefined;
+  const dataObj = (response as any)?.data;
   return {
     status: firstString(response.status),
     taskId: firstString(response.taskId),
@@ -157,6 +180,10 @@ function summarizeResponse(response?: Partial<RHTaskResponse> & Record<string, u
       (response as any)?.failedReason?.message,
     ),
     resultCount: Array.isArray(response.results) ? response.results.length : undefined,
+    // Upload binary endpoint returns { code, message, data: { download_url, fileName, ... } }.
+    // Include it here so upload failures actually show the URL field instead of looking empty.
+    dataDownloadUrl: dataObj && typeof dataObj === 'object' ? firstString(dataObj.download_url, dataObj.fileUrl, dataObj.url) : undefined,
+    dataFileName: dataObj && typeof dataObj === 'object' ? firstString(dataObj.fileName) : undefined,
   };
 }
 
@@ -218,6 +245,8 @@ export function normalizeRunningHubModelEndpoint(modelEndpoint?: string) {
     .replace(/^openapi\/v2\/?/i, '')
     .replace(/^runninghub\/+/i, '')
     .replace(/\/+$/, '');
+  const alias = RUNNINGHUB_PRODUCT_ALIASES[value.toLowerCase()];
+  if (alias) return alias;
   return value;
 }
 
@@ -272,20 +301,28 @@ export async function rhSubmitTask(
   const debugContext = runningHubDebugContext(options.baseUrl || RH_BASE, modelEndpoint, payload);
   const url = rhTaskUrl(options.baseUrl || RH_BASE, modelEndpoint);
 
+  console.log('[RH Debug] rhSubmitTask fetch start', { url, payloadKeys: Object.keys(payload || {}), payloadSize: JSON.stringify(payload).length });
   const res = await fetch(url, {
     signal: options.signal,
     method: 'POST',
     headers: rhHeaders(apiKey),
     body: JSON.stringify(payload),
   });
+  console.log('[RH Debug] rhSubmitTask response raw', { status: res.status, ok: res.ok, contentType: res.headers.get('content-length'), ct: res.headers.get('content-type') });
 
   if (!res.ok) {
     const text = await res.text();
+    console.error('[RH Debug] rhSubmitTask !res.ok body', text);
     throw new Error(withRunningHubDebug(`RunningHub submit failed (${res.status}): ${text}`, debugContext));
   }
   const json = await res.json();
+  console.log('[RH Debug] rhSubmitTask json', json);
   const error = rhResponseError(json, 'RunningHub submit');
-  if (error) throw new Error(withRunningHubDebug(error, { ...debugContext, response: json }));
+  if (error) {
+    console.error('[RH Debug] rhSubmitTask flagged error', { rhErr: error, json });
+    throw new Error(withRunningHubDebug(error, { ...debugContext, response: json }));
+  }
+  console.log('[RH Debug] rhSubmitTask OK', { taskId: json?.taskId, status: json?.status });
   return json;
 }
 
@@ -331,6 +368,7 @@ export async function rhUploadFile(
   const formData = new FormData();
   formData.append('file', file, fileName || 'upload.png');
   const uploadUrl = `${rhBase(options.baseUrl)}/media/upload/binary`;
+  console.log('[RH Debug] rhUploadFile fetch start', { url: uploadUrl, hasKey: !!apiKey, blobSize: file.size, blobType: file.type, fileName: fileName || 'upload.png' });
 
   const res = await fetch(uploadUrl, {
     signal: options.signal,
@@ -338,6 +376,7 @@ export async function rhUploadFile(
     headers: { Authorization: `Bearer ${apiKey}` },
     body: formData,
   });
+  console.log('[RH Debug] rhUploadFile response', { status: res.status, ok: res.ok, contentType: res.headers.get('content-length'), ct: res.headers.get('content-type') });
 
   if (!res.ok) {
     const text = await res.text();
@@ -348,6 +387,7 @@ export async function rhUploadFile(
   }
 
   const json = await res.json();
+  console.log('[RH Debug] rhUploadFile json', json);
   const error = rhResponseError(json, 'RunningHub upload');
   if (error) throw new Error(withRunningHubDebug(error, {
     baseUrl: rhBase(options.baseUrl),

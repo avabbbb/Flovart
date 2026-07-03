@@ -34,6 +34,39 @@ title: 后续待办
 - **Phase 4 — 后端补 basketikun 同款能力**：逐项请示用户后执行，保留 hub + enterprise 两服务不合并。
 - **Phase 5 — 文档与发版**。
 
+## Lovart/LibTV 2026 启发改进（UI 优化）
+
+参照 2026 年 Lovart.ai 与 LibTV 最新功能调研结果，对现有 Canvas/Workflow 进行新功能 + 升级现有功能。用户选择"同时做 4 个新功能 + 6 个已有功能升级"。
+
+### 新功能（4 项）
+
+- **Prompt 历史 Ctrl+K 命令面板**：✅ 已完成，待用户测试确认。`usePromptHistoryStore` + `PromptHistoryPalette` + Ctrl+K 全局快捷键 + Canvas/Workflow 双侧记录与插入。详见 `pending-test.mdx`。
+- **Version History 画布版本回滚**：✅ 已完成，待用户测试确认。`useVersionHistoryStore`（in-memory Zustand, max 30 版本）+ `commitAction` 可选 `versionMeta` 参数在 12 处生成调用注入元数据 + `VersionHistoryPanel` 浮动面板（毛玻璃、时间线列表、类型徽章、恢复/删除/清空）+ Toolbar `onHistoryClick` 开关。手动 move/resize/delete 不创建版本。详见 `pending-test.mdx`。
+- **Scene Prediction 场景预测**：⬜ 利用现有 `start-end-to-video` 能力（`aiGateway.ts:1052` 支持 firstFrameUrl/lastFrameUrl）。抽末帧 → 续 3s / 抽首帧 → 倒推 5s。需 canvas 抽帧工具（canvas.drawImage → toDataURL）。
+- **3D Director Stage**：⬜ 推迟。需引入 three.js + @react-three/fiber + drei 全新依赖链，用户确认"3D 先不做"。
+
+### 升级现有功能（6 项）
+
+- **Compare Mode + Batch 升级**：✅ 已完成，待用户测试确认。移除 `batchResults` 弹窗 + `handleBatchGenerate`/`handleSelectBatchResult`/`handleSelectAllBatchResults` 旧代码；batch 逻辑合并进 `handleGenerate` 的两个图片生成分支（纯文生图 + @参考图），`batchCount > 1` 时并行 N 次 `generateImageWithProvider`，结果直接放画布 2 列网格 + 分组 + 选中。详见 `pending-test.mdx`。
+- **角色三视图升级**：✅ 已完成，待用户测试确认。SlashMenu `character-3-view` promptBuilder 改为 T-pose 三视图 + 保持角色设计一致性描述；`handleSlashCommand` 创建节点时同时设置 `mentionedNodeIds` + `referenceNodeIds`。详见 `pending-test.mdx`。
+- **25/9 宫格升级**：✅ 已完成，待用户测试确认。SlashMenu `storyboard-25` promptBuilder 按剧情五幕分配帧位描述；`story-4-grid` promptBuilder 改为开场/发展/高潮/结局四拍描述。详见 `pending-test.mdx`。
+- **Multi-Camera Grid 升级**：✅ 已完成，待用户测试确认。SlashMenu `multi-camera-9` promptBuilder 改为 9 个带俯仰角度的具体机位描述 + "保持主体身份/姿势/服装/发型一致"约束。详见 `pending-test.mdx`。
+- **Edit Elements 升级**：✅ 已完成，待用户测试确认。`handleSplitImageLayers` 改为保持原图可见（`hideOriginalAfterSplit = false`），拆分图层排列在原图右侧水平排列（垂直居中对齐），便于对比和独立编辑。详见 `pending-test.mdx`。
+- **Batch 升级**：✅ 已与 Compare Mode 一并完成。batch 逻辑从独立 `handleBatchGenerate` 合并进 `handleGenerate`，PromptBar 按钮 `batchCount > 1` 时自动触发并行生成 + 画布网格展示。
+
+## ToB 企业后台 — 积分/Key 池/资源/审批/敏感词/项目
+
+- **后端已实现**（enterprise 服务）：11 张新表 AutoMigrate + credit/apikey/pricing/quota/ai-proxy/resource/approval/sensitive/project 全链路 repo→service→handler→路由注册。权限从 11→14 个（新增 `apikey:manage` / `pricing:manage` / `quota:manage`）。待用户编译验证。
+- **前端已实现**：`services/enterpriseApi.ts` 全量 API 客户端；`EnterpriseApp.tsx` 重写为侧边栏导航（9 项分 7 组）；6 个新面板（credit/apikey/resource/approval/sensitive/project）。待用户测试确认。
+- **待办**：
+  - 用户手动编译验证后端（`cd backend/enterprise && go build ./cmd/server`）。
+  - 前端 EnterpriseApp 接入真实后端联调。
+  - owner 转让流程（创建 owner 转让→受让→确认）。
+  - R2 上传接入资源库 `POST /resources` 的 `storageKey` + `href`。
+  - 画布保存时自动 `POST /projects/sync` 同步项目镜像。
+  - 敏感词检测接入 AI 代理端点 `POST /ai/proxy` 前预检。
+  - 审批流 `submit` 接入资源上架流程（`asset:publish` 前自动提交审批）。
+
 ## 共享提示词与工作流生态（新方向）
 
 - ~~前端登录/注册页面对接 hub `authApi`，token 持久化到 localStorage。~~ ✅ P1 用户系统已完成（`useAuthStore` + `AuthModal` + `useAuth` hook），待用户测试确认。

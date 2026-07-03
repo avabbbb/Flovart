@@ -1,5 +1,5 @@
 // EnterpriseApp — 企业后台主页面（路由 /enterprise/*）
-// 登录后：组织列表 + 组织详情（成员名册 / 部门 / 角色 三标签）
+// 登录后：组织列表 + 组织详情（侧边栏导航 9 大管理面板）
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router';
@@ -14,9 +14,45 @@ import {
   orgApi, type Organization, type DeptNode,
   type DepartmentMember, type Role, ALL_PERMISSIONS,
 } from '../../services/orgApi';
+import { FormInput, type PanelProps } from './shared';
+import CreditPanel from './panels/credit-panel';
+import ApiKeyPanel from './panels/apikey-panel';
+import ResourcePanel from './panels/resource-panel';
+import ApprovalPanel from './panels/approval-panel';
+import SensitivePanel from './panels/sensitive-panel';
+import ProjectPanel from './panels/project-panel';
 
 type View = 'list' | 'org';
-type Tab = 'members' | 'depts' | 'roles';
+type Section =
+  | 'members' | 'depts' | 'roles'
+  | 'credit' | 'apikeys' | 'resources'
+  | 'approval' | 'sensitive' | 'projects';
+
+const SIDEBAR_GROUPS: { label: string; items: { key: Section; label: string }[] }[] = [
+  { label: '组织管理', items: [
+    { key: 'members', label: '成员名册' },
+    { key: 'depts', label: '部门' },
+    { key: 'roles', label: '角色' },
+  ]},
+  { label: '积分与计费', items: [
+    { key: 'credit', label: '积分管理' },
+  ]},
+  { label: 'API 配置', items: [
+    { key: 'apikeys', label: 'API 与额度' },
+  ]},
+  { label: '资源管理', items: [
+    { key: 'resources', label: '资源库' },
+  ]},
+  { label: '审批管理', items: [
+    { key: 'approval', label: '审批中心' },
+  ]},
+  { label: '安全', items: [
+    { key: 'sensitive', label: '敏感词' },
+  ]},
+  { label: '项目', items: [
+    { key: 'projects', label: '项目列表' },
+  ]},
+];
 
 export default function EnterpriseApp() {
   const toast = useToast();
@@ -127,7 +163,7 @@ export default function EnterpriseApp() {
   );
 }
 
-// ===== 组织详情（三标签页）=====
+// ===== 组织详情（侧边栏导航）=====
 function OrgDetailPanel({ org, user, onDeleted, toast }: {
   org: Organization;
   user: HubUser;
@@ -139,7 +175,7 @@ function OrgDetailPanel({ org, user, onDeleted, toast }: {
   const [depts, setDepts] = useState<DeptNode[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<Tab>('members');
+  const [section, setSection] = useState<Section>('members');
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -190,57 +226,85 @@ function OrgDetailPanel({ org, user, onDeleted, toast }: {
     }
   }, [org, onDeleted, toast]);
 
-  const tabs: { key: Tab; label: string }[] = [
-    { key: 'members', label: '成员名册' },
-    { key: 'depts', label: '部门' },
-    { key: 'roles', label: '角色' },
-  ];
+  const panelProps: PanelProps = { org, perms, toast };
 
   return (
-    <section className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <div>
-          <h2 className="text-lg font-bold">{org.name}</h2>
-          <p className="text-[11px]" style={{ color: 'var(--isl-ink-ghost)' }}>/{org.slug}</p>
+    <div className="flex gap-4">
+      {/* Sidebar */}
+      <aside className="sticky top-14 hidden h-[calc(100vh-3.5rem)] w-52 shrink-0 overflow-y-auto md:block">
+        <div className="rounded-xl p-3" style={{ background: 'var(--isl-surface)', border: '1.5px solid var(--isl-border)' }}>
+          <div className="mb-3">
+            <h2 className="truncate text-sm font-bold">{org.name}</h2>
+            <p className="truncate text-[10px]" style={{ color: 'var(--isl-ink-ghost)' }}>/{org.slug}</p>
+          </div>
+          {isOwner && (
+            <button type="button" onClick={handleDelete}
+              className="mb-3 flex w-full items-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] font-semibold"
+              style={{ background: 'rgba(232,97,90,0.10)', border: '1px solid var(--isl-coral)', color: 'var(--isl-coral-deep)' }}>
+              <Trash2 size={11} />删除组织
+            </button>
+          )}
+          <nav className="space-y-3">
+            {SIDEBAR_GROUPS.map((group) => (
+              <div key={group.label}>
+                <div className="mb-1 px-2 text-[10px] font-bold uppercase" style={{ color: 'var(--isl-ink-ghost)' }}>{group.label}</div>
+                <ul className="space-y-0.5">
+                  {group.items.map((item) => (
+                    <li key={item.key}>
+                      <button type="button" onClick={() => setSection(item.key)}
+                        className="flex w-full items-center rounded-md px-2 py-1.5 text-left text-xs font-semibold"
+                        style={section === item.key
+                          ? { background: 'var(--isl-mint-bg)', color: 'var(--isl-mint-deep)' }
+                          : { color: 'var(--isl-ink)' }}>
+                        {item.label}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </nav>
         </div>
-        {isOwner && (
-          <button
-            type="button"
-            onClick={handleDelete}
-            className="isl-icon-btn ml-auto flex h-8 items-center gap-1.5 px-3"
-            style={{ background: 'rgba(232,97,90,0.10)', border: '1.5px solid var(--isl-coral)', color: 'var(--isl-coral-deep)' }}
-          >
-            <Trash2 size={14} />
-            <span className="text-xs font-semibold">删除组织</span>
-          </button>
-        )}
-      </div>
+      </aside>
 
-      <div className="isl-tabbar">
-        {tabs.map((t) => (
-          <button
-            key={t.key}
-            type="button"
-            className={`isl-tab px-3 py-1.5 text-xs ${tab === t.key ? 'isl-tab--active' : ''}`}
-            onClick={() => setTab(t.key)}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      {loading ? (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="animate-spin" size={18} style={{ color: 'var(--isl-ink-ghost)' }} />
+      {/* Content */}
+      <div className="min-w-0 flex-1">
+        {/* Mobile section selector */}
+        <div className="mb-3 md:hidden">
+          <select value={section} onChange={(e) => setSection(e.target.value as Section)}
+            className="w-full rounded-lg px-3 py-2 text-xs"
+            style={{ background: 'var(--isl-surface)', border: '1.5px solid var(--isl-border)', color: 'var(--isl-ink)' }}>
+            {SIDEBAR_GROUPS.map((g) => g.items.map((item) => (
+              <option key={item.key} value={item.key}>{g.label} · {item.label}</option>
+            )))}
+          </select>
         </div>
-      ) : tab === 'members' ? (
-        <MemberRoster org={org} members={members} canInvite={can('member:invite')} canManage={can('member:manage')} onRefresh={refreshMembers} toast={toast} />
-      ) : tab === 'depts' ? (
-        <DeptPanel org={org} depts={depts} roles={roles} orgMembers={members} canManage={can('dept:manage')} onTreeChanged={refreshTree} onMembersChanged={refreshMembers} toast={toast} />
-      ) : (
-        <RolePanel org={org} roles={roles} canManage={can('role:manage')} onRefresh={refreshRoles} toast={toast} />
-      )}
-    </section>
+
+        {loading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="animate-spin" size={18} style={{ color: 'var(--isl-ink-ghost)' }} />
+          </div>
+        ) : section === 'members' ? (
+          <MemberRoster org={org} members={members} canInvite={can('member:invite')} canManage={can('member:manage')} onRefresh={refreshMembers} toast={toast} />
+        ) : section === 'depts' ? (
+          <DeptPanel org={org} depts={depts} roles={roles} orgMembers={members} canManage={can('dept:manage')} onTreeChanged={refreshTree} onMembersChanged={refreshMembers} toast={toast} />
+        ) : section === 'roles' ? (
+          <RolePanel org={org} roles={roles} canManage={can('role:manage')} onRefresh={refreshRoles} toast={toast} />
+        ) : section === 'credit' ? (
+          <CreditPanel {...panelProps} />
+        ) : section === 'apikeys' ? (
+          <ApiKeyPanel {...panelProps} />
+        ) : section === 'resources' ? (
+          <ResourcePanel {...panelProps} />
+        ) : section === 'approval' ? (
+          <ApprovalPanel {...panelProps} />
+        ) : section === 'sensitive' ? (
+          <SensitivePanel {...panelProps} />
+        ) : section === 'projects' ? (
+          <ProjectPanel {...panelProps} />
+        ) : null}
+      </div>
+    </div>
   );
 }
 
@@ -836,30 +900,6 @@ function AuthPanel({ onAuthed, toast }: { onAuthed: (u: HubUser) => void; toast:
         </p>
       </div>
     </div>
-  );
-}
-
-function FormInput({ value, onChange, placeholder, type = 'text', autoFocus }: {
-  value: string;
-  onChange: (v: string) => void;
-  placeholder: string;
-  type?: string;
-  autoFocus?: boolean;
-}) {
-  return (
-    <input
-      type={type}
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      placeholder={placeholder}
-      autoFocus={autoFocus}
-      className="w-full rounded-lg px-3 py-2.5 text-sm"
-      style={{
-        background: 'var(--isl-surface-sunk)',
-        border: '1.5px solid var(--isl-border)',
-        color: 'var(--isl-ink)',
-      }}
-    />
   );
 }
 

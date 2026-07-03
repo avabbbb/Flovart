@@ -58,6 +58,11 @@ import { StudioTopMenu, type StudioMenuModel } from './components/studio/StudioT
 import './styles/generation.css';
 import { LANDING_TEMPLATES } from './components/landing/templates';
 import { useWorkspaceStore } from './stores/useWorkspaceStore';
+import { usePromptHistoryStore } from './stores/usePromptHistoryStore';
+import { useVersionHistoryStore } from './stores/useVersionHistoryStore';
+import type { VersionType } from './stores/useVersionHistoryStore';
+import { VersionHistoryPanel } from './components/VersionHistoryPanel';
+import { PromptHistoryPalette } from './components/PromptHistoryPalette';
 import { useWorkflowStore } from './components/workflow/store';
 import { useRuntimeStore } from './stores/useRuntimeStore';
 import type { CanvasElement, ElementGenerationState } from './types';
@@ -171,6 +176,7 @@ const App: React.FC = () => {
     const [filterPanelElementId, setFilterPanelElementId] = useState<string | null>(null);
     const [outpaintMenuId, setOutpaintMenuId] = useState<string | null>(null);
     const [inpaintElementId, setInpaintElementId] = useState<string | null>(null);
+    const [isHistoryPanelOpen, setIsHistoryPanelOpen] = useState(false);
     const [assetLibrary, setAssetLibrary] = useState<AssetLibrary>({ character: [], scene: [], prop: [] });
 
     useEffect(() => () => {
@@ -608,10 +614,13 @@ const App: React.FC = () => {
         }));
     }, [setElements]);
 
-    const commitAction = useCallback((updater: (prev: Element[]) => Element[]) => {
+    const commitAction = useCallback((updater: (prev: Element[]) => Element[], versionMeta?: { description: string; type: VersionType }) => {
         updateActiveBoard(board => {
             const newElements = updater(board.elements);
             const next = appendHistorySnapshot(board.history, board.historyIndex, newElements);
+            if (versionMeta) {
+                useVersionHistoryStore.getState().addVersion(newElements, versionMeta.description, versionMeta.type);
+            }
             return {
                 ...board,
                 elements: newElements,
@@ -664,11 +673,10 @@ const App: React.FC = () => {
 
     // 鈹€鈹€ Extracted: generation (AI image/video/batch) 鈹€鈹€
     const {
-        isEnhancingPrompt, batchResults, setBatchResults,
+        isEnhancingPrompt,
         handleEnhancePrompt, saveGenerationToHistory,
         handleSplitImageLayers, handleUpscaleImage, handleRemoveImageBackground,
-        handleOutpaint, handleInpaint, handleGenerate, handleBatchGenerate,
-        handleSelectBatchResult, handleSelectAllBatchResults,
+        handleOutpaint, handleInpaint, handleGenerate,
     } = useGeneration({
         elements, selectedElementIds, prompt, generationMode, videoAspectRatio,
         videoDurationSec, videoResolution, videoGenerateAudio, videoWatermark,
@@ -3032,8 +3040,31 @@ const App: React.FC = () => {
         },
     };
 
+    const { toggle: togglePromptHistory, pendingInsert, consumeInsert: consumePromptInsert } = usePromptHistoryStore();
+
+    useEffect(() => {
+        const onKey = (e: KeyboardEvent) => {
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+                e.preventDefault();
+                togglePromptHistory();
+            }
+        };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, [togglePromptHistory]);
+
+    useEffect(() => {
+        if (!pendingInsert) return;
+        if (activeView === 'workflow') return;
+        setPrompt(pendingInsert.text);
+        setPromptDocument(undefined);
+        setMentionedElementIds([]);
+        consumePromptInsert();
+    }, [pendingInsert, consumePromptInsert, setPrompt, setPromptDocument, setMentionedElementIds, activeView]);
+
     if (activeView === 'workflow') {
         return (
+            <>
             <AppShell
                 themeBackground={themePalette.appBackground}
                 topBar={
@@ -3097,10 +3128,13 @@ const App: React.FC = () => {
                     </Suspense>
                 }
             />
+            <PromptHistoryPalette theme={resolvedTheme} />
+            </>
         );
     }
 
     return (
+        <>
         <AppShell
             themeBackground={themePalette.appBackground}
             onDragOver={handleDragOver}
@@ -3223,6 +3257,7 @@ const App: React.FC = () => {
                     onLayersClick={() => setIsLayerMinimized(prev => !prev)}
                     onBoardsClick={() => setIsLayerMinimized(prev => !prev)}
                     onAssetsClick={() => setIsInspirationMinimized(prev => !prev)}
+                    onHistoryClick={() => setIsHistoryPanelOpen(prev => !prev)}
                     onUndo={handleUndo}
                     onRedo={handleRedo}
                     isLayerPanelExpanded={!isLayerMinimized}
@@ -3236,6 +3271,15 @@ const App: React.FC = () => {
             }
             overlays={<>
                 {isLoading && <AgentThinkingPanel progressMessage={progressMessage} batchTotal={batchCount} batchDone={recentlyCompleted.size} />}
+                <VersionHistoryPanel
+                    open={isHistoryPanelOpen}
+                    onClose={() => setIsHistoryPanelOpen(false)}
+                    onRestore={(version) => {
+                        commitAction(() => version.elements, { description: `恢复版本: ${version.description}`, type: 'restore' });
+                        toast.show('已恢复到所选版本', 'success');
+                    }}
+                    theme={resolvedTheme}
+                />
                 <ToastStack toasts={toast.toasts} onDismiss={toast.dismiss} />
                 {error && (
                     <div className="absolute top-16 left-1/2 -translate-x-1/2 z-50 p-3 bg-red-100 border border-red-400 text-red-700 rounded-md shadow-lg flex items-center max-w-lg">
@@ -3292,52 +3336,6 @@ const App: React.FC = () => {
                     theme={resolvedTheme}
                 />
                 </Suspense>
-            )}
-
-            {/* ============ 鎵归噺鐢熸垚缁撴灉对比弹窗 ============ */}
-            {batchResults && (
-                <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm"
-                     onClick={() => setBatchResults(null)}>
-                    <div className={`relative rounded-2xl shadow-2xl p-6 max-w-[90vw] max-h-[90vh] overflow-auto ${resolvedTheme === 'dark' ? 'bg-[#1C2333] text-white' : 'bg-white text-gray-900'}`}
-                         onClick={e => e.stopPropagation()}>
-                        <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-lg font-semibold">批量生成结果 - 选择最佳方案</h3>
-                            <div className="flex gap-2">
-                                <button onClick={handleSelectAllBatchResults}
-                                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${resolvedTheme === 'dark' ? 'bg-[#2A3142] hover:bg-[#3A4458] text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}`}>
-                                    鍏ㄩ儴鏀惧叆鐢诲竷
-                                </button>
-                                <button onClick={() => setBatchResults(null)}
-                                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${resolvedTheme === 'dark' ? 'bg-[#2A3142] hover:bg-[#3A4458] text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}`}>
-                                    鍏抽棴
-                                </button>
-                            </div>
-                        </div>
-                        <p className={`text-sm mb-4 ${resolvedTheme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
-                            鎻愮ず璇? {batchResults.prompt}
-                        </p>
-                        <div className={`grid gap-4 ${batchResults.images.length <= 2 ? 'grid-cols-2' : 'grid-cols-2'}`}>
-                            {batchResults.images.map((img, idx) => (
-                                <div key={idx}
-                                     className={`group relative rounded-xl overflow-hidden border-2 transition cursor-pointer hover:scale-[1.02] ${resolvedTheme === 'dark' ? 'border-[#2A3142] hover:border-blue-500' : 'border-gray-200 hover:border-blue-400'}`}
-                                     onClick={() => handleSelectBatchResult(img)}>
-                                    <img src={img.href} alt={`方案 ${idx + 1}`}
-                                         className="w-full h-auto max-h-[40vh] object-contain"
-                                         style={{ background: resolvedTheme === 'dark' ? '#0D1117' : '#F9FAFB' }} />
-                                    <div className={`absolute bottom-0 inset-x-0 p-3 bg-gradient-to-t ${resolvedTheme === 'dark' ? 'from-black/80' : 'from-black/50'} to-transparent opacity-0 group-hover:opacity-100 transition`}>
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-white text-sm font-medium">方案 {idx + 1}</span>
-                                            <span className="text-white/80 text-xs">{img.width}脳{img.height}</span>
-                                        </div>
-                                        <button className="mt-2 w-full py-1.5 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-xs font-medium transition">
-                                            閫夋嫨姝ゆ柟妗?
-                                        </button>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                </div>
             )}
 
             {/* 鏂扮敤鎴峰紩瀵煎脊绐?鈥?鏃?API Key 鏃惰嚜鍔ㄥ嚭鐜?*/}
@@ -3479,6 +3477,8 @@ const App: React.FC = () => {
             />
         </>}
         />
+        <PromptHistoryPalette theme={resolvedTheme} />
+        </>
     );
 };
 

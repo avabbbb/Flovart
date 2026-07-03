@@ -59,6 +59,7 @@ title: 待测试确认
 - RunningHub 设置页入口文案已改为"3 个官方模型包"，并说明"获取模型"只是补充拉取官方列表；不再提示必须先拉取旧预设。
 - RunningHub WebApp API（`/task/openapi/*`）已移除浏览器禁用的 `Host` 请求头，文件上传、AI App 提交和输出查询在浏览器环境可正常调用。
 - RunningHub 标准模型调用会按详情页字段自动映射 `imageUrls`、`ratio`、`videoUrls` 和 `audioUrls`，并为内置模型包补齐 `resolution`、`duration`、`generateAudio`、`conversionSlots` 等默认载荷；本地 data URL 参考媒体会先上传为临时公网 URL。
+- RunningHub 产品展示 slug（如 `nano-banana-pro/edit-channel-low-price`）会在提交前重写为真实 API endpoint（如 `rhart-image-n-pro/edit`），避免上传成功后打到错误路径。
 - RunningHub 标准模型提交、查询和上传会透出平台返回的 `errorCode` / `errorMessage`，并附带不含密钥的 `baseUrl`、最终提交 URL、模型 ID 与 payload 字段摘要；上传未返回公网 URL、模型 ID 仍是未知详情页/搜索页 URL，或 payload 中仍有本地引用时会在本地中断，不再退化成 `No taskId returned`。
 - Seedance 2.0 后端路由修正：`doubao-seedance-2.0` 不再被误判为文本/图片模型；Seedance 视频/音频参考在本地 `data:` / `blob:` 时会在调用 Provider 前明确失败，视频任务停止信号贯穿提交、轮询和下载。
 - 模型偏好新增本机保存状态提示，能显示已自动保存时间或浏览器存储失败原因；Canvas 与 Workflow 共用这套偏好状态。
@@ -786,3 +787,229 @@ title: 待测试确认
 - ⑨ ToC Landing（`/#/`）点击导航"功能""模板""展示"→ 页面内平滑滚动，不跳路由。
 - ⑩ ToC Landing Hero 区"探索模板"按钮 → 平滑滚动到模板 section。
 - ⑪ ToB Landing Hero 区"查看定价"按钮 → 平滑滚动到定价 section。
+
+## ToB 企业后台 — 积分/Key 池/资源/审批/敏感词/项目
+
+### 后端（enterprise 服务，`backend/enterprise/`）
+
+- **11 张新表 AutoMigrate**：`OrgCredit`/`CreditTransaction`/`RechargeRequest`/`UsageRecord`（积分）、`OrgApiKey`/`ModelPricing`/`MemberQuota`（Key 池+定价+额度）、`ResourceLevel`/`Resource`（资源库+密级）、`ApprovalWorkflow`/`ApprovalNode`/`ApprovalRecord`/`ApprovalStep`（审批流）、`SensitiveWord`（敏感词）、`Project`（项目镜像）。`cmd/server/main.go` 现注册全部 15 张表（4 旧 + 11 新）。
+- **权限点扩展 11→14**：`model/permissions.go` 新增 `apikey:manage` / `pricing:manage` / `quota:manage`；owner 全权限，admin 除 `org:manage` + `view:audit_log` 外全部。
+- **积分链路**：`credit_repository.go` + `credit_service.go` + `credit_handler.go` — 余额查询、流水列表、充值申请（待审批）、用量记录；`ConsumeCredits` 在事务内同时写 `UsageRecord` + `CreditTransaction` + 扣 `OrgCredit.Balance` + 累加 `MemberQuota.UsedThisMonth`；`RefundCredits` 仅退已成功记录。
+- **Key 池+定价+额度链路**：`apikey_repository.go` + `apikey_service.go` + `apikey_handler.go` — OrgApiKey 增删改查（`json:"-"` 永不返回明文，响应只返回 `KeyHint` 末 4 位）、ModelPricing 增删改查、MemberQuota 按月配额管理。
+- **AI 代理链路**：`proxy_service.go` + `proxy_handler.go` — 预检余额+额度 → 转发 HTTP 到 OpenAI 兼容接口 → 成功扣分 / 失败记录不扣；用 `minInt` 而非内置 `min` 避免 Go 1.21+ 冲突。
+- **资源库链路**：`resource_repository.go` + `resource_service.go` + `resource_handler.go` — ResourceLevel 密级管理、Resource 上架/审核/发布流程。
+- **审批流链路**：`approval_repository.go` + `approval_service.go` + `approval_handler.go` — ApprovalWorkflow 多节点配置（sequential 全员审 / parallel 全员审 / any 任一人审；reject 直接驳回整条）、ApprovalRecord 提交+审批、ApprovalStep 记录每步。
+- **敏感词链路**：`sensitive_repository.go` + `sensitive_service.go` + `sensitive_handler.go` — SensitiveWord 词库 CRUD + 文本检测接口。
+- **项目镜像链路**：`project_repository.go` + `project_service.go` + `project_handler.go` — Project 增删改查。
+- **路由全部注册**：`cmd/server/main.go` 按 `/api/v1/enterprise/credit` `/apikeys` `/pricing` `/quota` `/ai/proxy` `/resources` `/resource-levels` `/approvals` `/approval-workflows` `/sensitive` `/projects` 前缀分组注册。
+
+### 前端（`services/` + `components/enterprise/`）
+
+- **`services/enterpriseApi.ts`（新增）**：封装 `creditApi` / `apiKeyApi` / `resourceApi` / `approvalApi` / `sensitiveApi` / `projectApi` 全部端点 + TypeScript 类型定义，统一走 `hubClient.ts` 的 `api` 工具（自动带 token + `ENTERPRISE_BASE_URL`）。
+- **`services/orgApi.ts` 更新**：`ALL_PERMISSIONS` 从 11→14 个，与后端 `permissions.go` 对齐。
+- **`components/enterprise/shared.tsx`（新增）**：`FormInput` / `PanelCard` / `EmptyState` / `PageHeader` / `PanelProps` 共享组件，统一面板视觉风格（`isl-*` CSS 类 + `var(--isl-*)` 主题变量）。
+- **`EnterpriseApp.tsx` 重写**：从 3-tab 布局改为侧边栏导航；`Section` 类型覆盖 9 个管理区域（members/depts/roles/credit/apikeys/resources/approval/sensitive/projects），分 7 组；移动端降级为 `<select>` 选择器；删除本地 FormInput 改用 shared 导入；保留 MemberRoster/DeptPanel/RolePanel/AuthPanel/OrgListPanel 在文件内。
+- **`panels/credit-panel.tsx`**：余额与流水 / 充值申请 / 用量记录（3 个 sub-tabs）。
+- **`panels/apikey-panel.tsx`**：API Key 池 / 模型定价 / 成员额度（3 个 sub-tabs）。
+- **`panels/resource-panel.tsx`**：资源库 / 资源密级（2 个 sub-tabs，含审核+发布流程）。
+- **`panels/approval-panel.tsx`**：审批流配置（多节点）/ 审批记录（2 个 sub-tabs）。
+- **`panels/sensitive-panel.tsx`**：敏感词库 + 文本检测器。
+- **`panels/project-panel.tsx`**：项目镜像列表。
+
+### 待用户验证
+
+- ① 后端编译通过：`cd backend/enterprise && go build ./cmd/server`（需 `GOPROXY=https://goproxy.cn,direct` + `GOSUMDB=off`）。
+- ② 启动 enterprise 服务（`:11453`），AutoMigrate 成功创建 11 张新表（PostgreSQL `flovart-pg` 容器 `:5433`）。
+- ③ 企业后台（`/#/enterprise`）侧边栏显示 9 个管理区域，分 7 组，移动端降级为 select。
+- ④ 积分面板 3 个 sub-tab 切换正常，余额/流水/充值申请/用量记录 UI 渲染。
+- ⑤ API Key 面板 3 个 sub-tab：Key 池列表（只显示末 4 位 KeyHint，不返回明文）、模型定价、成员额度。
+- ⑥ 资源面板 2 个 sub-tab：资源库 + 密级，含审核+发布流程按钮。
+- ⑦ 审批面板 2 个 sub-tab：审批流配置（可添加多节点，选 sequential/parallel/any）+ 审批记录。
+- ⑧ 敏感词面板：词库 CRUD + 文本检测器输入文本后返回命中词。
+- ⑨ 项目面板：项目镜像列表渲染。
+- ⑩ 权限矩阵：owner 可见全部 9 区域，admin 不可见"组织设置"中 owner 转让 + 审计日志。
+- ⑪ AI 代理 `POST /api/v1/enterprise/ai/proxy` 转发请求，成功扣分、失败不扣；额度超限或余额不足时预检拦截。
+
+## Prompt 历史 Ctrl+K 命令面板（Lovart 启发改进 #4）
+
+参照 Lovart.ai 的 Ctrl+K Prompt 历史搜索，实现全局面板，搜索历史提示词并一键插入到当前 PromptBar 或 Workflow 节点。
+
+### 实现
+
+- **`stores/usePromptHistoryStore.ts`（新增）**：Zustand store + localforage `flovart/prompt-history` 持久化。`record()` 去重（同 prompt 更新 timestamp 移到顶部），最多 500 条。`search(query)` 子串匹配返回最多 50 条。`insert(text)` 设置 `pendingInsert { text, nonce }` 并关闭面板。`consumeInsert()` 清除 pendingInsert。
+- **`components/PromptHistoryPalette.tsx`（新增）**：Ctrl+K 命令面板 UI。搜索框 + 结果列表 + 键盘导航（↑↓ 导航 / Enter 插入 / ESC 关闭）。每条记录显示 prompt 文本（2 行截断）、来源（画布/工作流）、模式图标（图片/视频/文本）、时间（刚刚/N 分钟前/N 小时前/M/D）。底部清空按钮 + 操作提示。主题适配（light/dark）。
+- **Ctrl+K 全局快捷键**（`App.tsx`）：`useEffect` 监听 `(ctrlKey || metaKey) && key === 'k'` → `togglePromptHistory()`。无现有 Ctrl+K 冲突。
+- **Prompt 记录**：
+  - Canvas 侧（`hooks/useGeneration.ts:handleGenerate`）：生成前调 `usePromptHistoryStore.getState().record({ prompt, mode, source: 'canvas' })`。
+  - Workflow 侧（`services/workflowGeneration.ts:runWorkflowGeneration`）：prompt 组装后调 `usePromptHistoryStore.getState().record({ prompt, mode, source: 'workflow' })`。
+- **Prompt 插入**：
+  - Canvas（`App.tsx`）：`pendingInsert` watcher 设置 `setPrompt(text)` + 清空 `promptDocument` + `mentionedElementIds` → PromptBar useEffect 同步 TipTap editor。
+  - Workflow（`InfiniteWorkflow.tsx`）：`pendingInsert` watcher 设置选中节点的 `metadata.prompt` + 清空 `richTextDocument` + `mentionedNodeIds` → WorkflowNodePromptBar 同步。仅当单选 image/video/text 节点时生效。
+- **面板渲染**：`<PromptHistoryPalette theme={resolvedTheme} />` 在 workflow 和 canvas 两条返回路径中都渲染。
+
+### 待用户验证
+
+- ① 在画布输入 prompt 生成图片 → prompt 自动记录到历史。
+- ② 在 Workflow 节点输入 prompt 生成 → prompt 自动记录到历史（source 标记为"工作流"）。
+- ③ 按 Ctrl+K（或 Cmd+K）打开命令面板。
+- ④ 面板中搜索关键词 → 实时过滤匹配的历史 prompt。
+- ⑤ ↑↓ 键导航 → 高亮项跟随。Enter 插入选中 prompt 到当前 PromptBar（Canvas）或选中节点（Workflow）。
+- ⑥ ESC 关闭面板。
+- ⑦ Canvas 侧：插入后 TipTap 编辑器显示 prompt 文本，可直接生成。
+- ⑧ Workflow 侧：选中一个 image/video/text 节点 → Ctrl+K → 选 prompt → 节点 prompt 更新。
+- ⑨ Workflow 侧：未选中节点 → Ctrl+K → 选 prompt → 无效果（静默消费，不报错）。
+- ⑩ 点击"清空"按钮 → 二次确认后清空全部历史。
+- ⑪ 刷新页面后历史仍在（localforage 持久化生效）。
+
+## Lovart/LibTV 2026 启发改进 — 升级现有功能（6 项）
+
+参照 2026 年 Lovart.ai 与 LibTV 最新功能，对 6 个已有功能进行升级。用户选择"6 项升级一起做"。
+
+### Compare Mode + Batch 升级
+
+**问题**：原有 `batchCount` 1/2/4 选择只影响 PromptBar 按钮文案（"生成 N 版"），但 `onGenerate` 永远调 `handleGenerate()`，不检查 `batchCount`。`handleBatchGenerate`（独立函数）从未被 UI 调用，批量生成实际是坏的。批量结果通过 `batchResults` 模态弹窗展示，用户需点击"选择此方案"或"全部放入画布"。
+
+**升级内容**：
+- 移除 `batchResults` state、`handleBatchGenerate`、`handleSelectBatchResult`、`handleSelectAllBatchResults` 函数及 App.tsx 中的批量结果弹窗 JSX。
+- 将 batch 逻辑合并进 `handleGenerate` 的两个图片生成分支：
+  - **纯文生图分支**（无选中元素 + 无 @引用）：`batchCount > 1` 时并行 N 次 `generateImageWithProvider`（同一 prompt + 同一参考图），结果放画布 2 列网格，每张图垂直居中，分组成组（`批量生成 (N)`），选中所有新元素。
+  - **@参考图分支**（有 mentionedImageElements）：同样 `batchCount > 1` 时并行 N 次，使用 `mentionPrompt2` + `allRefs`，结果放画布网格。
+- 每个结果保留 `generationState`（prompt/model/provider/referenceIds）。
+- 生成进度消息：`正在批量生成 N 张方案...` → `生成完成: M/N 张成功`。
+- 失败容错：每个并行请求 `.catch(() => null)`，只放置成功的结果。
+- PromptBar 按钮行为不变（`batchCount > 1` 显示"生成 N 版"），但 `onGenerate` 调 `handleGenerate()` 即可自动处理 batch。
+
+**测试要点**：
+- ① Canvas 中设置 `batchCount = 2` → 输入 prompt → 点生成 → 画布上出现 2 张图并排排列，均被选中。
+- ② 设置 `batchCount = 4` → 生成 → 4 张图 2×2 网格排列。
+- ③ @引用一张图 + `batchCount = 2` → 生成 → 2 张图均使用参考图。
+- ④ 原 `batchResults` 弹窗不再出现。
+- ⑤ 部分请求失败时，只放置成功的图，进度消息显示 `M/N 张成功`。
+
+### 角色三视图升级
+
+**升级内容**：
+- SlashMenu `character-3-view` 的 `promptBuilder` 从 `character turnaround, front view, consistent design` 升级为 `character turnaround sheet, front view (T-pose), maintain identical character design, colors, proportions, clothing and accessories, clean concept art reference background`。
+- `handleSlashCommand`（InfiniteWorkflow.tsx）创建节点时同时设置 `mentionedNodeIds: sourceIds`（此前只有 `referenceNodeIds`）。workflow generation 同时读取两者，源图片作为 @参考图传入生成 API。
+
+**测试要点**：
+- ① Workflow 中选中 1 张角色图 → 角色三视图 → 生成 3 张前/侧/后视图，角色设计保持一致。
+- ② 节点元数据含 `mentionedNodeIds`（可通过节点检查器或日志确认）。
+
+### 25/9 宫格升级
+
+**升级内容**：
+- `storyboard-25` 的 `promptBuilder` 从统一 `storyboard frame N of 25, sequential narrative beat` 升级为按剧情五幕分配：`opening act`（帧 1-7）/ `development act`（帧 8-14）/ `midpoint turn`（帧 15-21）/ `escalation act`（帧 22-25）/ `climax and resolution`（帧 26-25 降级为通用描述）。
+- `story-4-grid` 的 `promptBuilder` 从 `story progression, scene N of 4` 升级为四拍结构：`opening scene, establishing shot` / `rising action, conflict begins` / `climax, dramatic peak moment` / `resolution, aftermath and conclusion`。
+- 连接的文本节点内容通过 `upstream.textContents` 自动拼入 prompt（已有机制，无需额外改动）。
+
+**测试要点**：
+- ① Workflow 中 `story-4-grid`（无源）→ 生成 4 格，每格对应开场/发展/高潮/结局。
+- ② 连接一个文本节点写故事 → `storyboard-25` → 25 帧按五幕分配。
+- ③ 文本节点内容出现在生成 prompt 中。
+
+### Multi-Camera Grid 升级
+
+**升级内容**：
+- `multi-camera-9` 的 `promptBuilder` 从 `same subject, front view, different camera angle, consistent identity` 升级为 9 个带俯仰角度的具体机位：`front view, eye-level` / `front-left 3/4 view, slight high angle` / `left side profile, eye-level` / `back-left 3/4 view, slight low angle` / `back view, eye-level` / `back-right 3/4 view, slight high angle` / `right side profile, eye-level` / `front-right 3/4 view, slight low angle` / `top-down bird's eye view`。
+- 增加约束描述：`keep identical subject identity, pose, clothing, hairstyle and style, do not alter the subject itself`。
+- 同样设置 `mentionedNodeIds`。
+
+**测试要点**：
+- ① 选中 1 张图 → 多机位九宫格 → 9 张图分别为不同机位角度，主体一致。
+- ② 角度描述更具体（含俯仰角度），不再是简单的 `front view`。
+
+### Edit Elements 升级
+
+**升级内容**：
+- `handleSplitImageLayers`（useGeneration.ts）的 `hideOriginalAfterSplit` 从 `true` 改为 `false`——原图保持可见。
+- 拆分图层不再重叠放在原图位置（`element.x + layer.offsetX`），改为排列在原图右侧水平排列：`layerBaseX = element.x + element.width + 40`，每层垂直居中对齐。
+- 分组名从 `Layer Group` 改为 `拆分图层`。
+- 便于对比原图和拆分后的图层，独立编辑各层。
+
+**测试要点**：
+- ① 选中一张图 → ElementToolbar 点"拆分图层" → 原图保持可见，拆分出的图层排列在右侧。
+- ② 各层水平排列，垂直居中对齐。
+- ③ 分组名为 `图片名 / 拆分图层`。
+- ④ 选中所有新拆分图层。
+
+### Batch 升级（与 Compare Mode 一并完成）
+
+Batch 逻辑已从独立 `handleBatchGenerate` 合并进 `handleGenerate`。PromptBar 的 `batchCount` 选择（1/2/4）现在真正生效——`batchCount > 1` 时自动并行生成 N 张直接放画布网格。不再有弹窗选择步骤。
+
+## 画布视觉打磨
+
+### Canvas 背景点阵网格 + 环境光晕
+
+**变更内容**：
+- `excalidraw-canvas.css` 中 `.excalidrawCanvasWrapper / .excalidrawCanvas` 背景从纯色 `var(--isl-surface-2)` 升级为：顶部 mint 环境光晕 `radial-gradient(ellipse 70% 45% at 50% 0%, var(--isl-mint-bg), transparent 60%)` + 22px 间距点阵网格 `radial-gradient(circle, var(--isl-border) 1px, transparent 1.5px)`。
+- 点阵颜色跟随主题（light: `#e3e0d8` / dark: `#3a3834`），间距 22px，点径 1px，视觉上类似 Figma/Lovart 的专业画布背景。
+
+### 浮动面板毛玻璃修复 + 暗色适配
+
+**问题**：所有浮动面板（工具栏 / ElementToolbar / 图层面板 / 右键菜单）的 `backdrop-filter: blur()` 完全失效——背景使用不透明 `var(--isl-card)`（纯白/纯黑），backdrop-filter 无法穿透。
+
+**修复**：
+- 4 个浮动面板背景从 `var(--isl-card)` 改为 `rgba(255,255,255,0.68)`（light）/ `rgba(32,31,29,0.68)`（dark），`backdrop-filter` 升级为 `blur(24px) saturate(180%)`。
+- 边框从 `1.5px` 减至 `1px`，更精致。
+- 新增 `inset 0 1px rgba(255,255,255,0.5)` 高光（light）/ `inset 0 1px rgba(255,255,255,0.06)`（dark）模拟玻璃顶部光泽。
+- 阴影升级为 `var(--isl-shadow-lg)`（工具栏/右键菜单）或 `var(--isl-shadow)`（ElementToolbar/图层面板）。
+- 所有 4 个面板新增 `:root[data-theme='dark']` 暗色覆盖。
+
+### PromptBar 毛玻璃覆盖
+
+- `.excalidraw-stage-bottombar .isl-shell` 和 `.canvas-overlay-fixed .isl-shell` 新增 scoped 覆盖：背景从不透明渐变改为半透明渐变 `rgba(255,255,255,0.72)` + `backdrop-filter: blur(24px) saturate(180%)`，暗色对应 `rgba(32,31,29,0.72)`。
+- 不影响其他页面（enterprise / landing）的 `.isl-shell` 默认样式。
+
+### Excalidraw 原生组件毛玻璃
+
+- `.excalidraw .context-menu` 和 `.excalidraw .color-picker-container` 背景从 `var(--isl-card)` 改为半透明 + `backdrop-filter`，暗色对应覆盖。
+
+**测试要点**：
+- ① 画布背景出现点阵网格（22px 间距），浅色主题下点为暖灰色，暗色主题下点为深灰色。
+- ② 画布顶部有微弱的 mint 色环境光晕，向下渐隐。
+- ③ 底部浮动工具栏呈现半透明毛玻璃效果（能透过看到画布内容），暗色主题同样有效。
+- ④ ElementToolbar（选中元素时出现的浮动工具栏）同样呈现毛玻璃效果。
+- ⑤ 左侧图层面板呈现毛玻璃效果。
+- ⑥ 右键菜单呈现毛玻璃效果。
+- ⑦ 底部 PromptBar 呈现毛玻璃效果，不影响其他页面的 PromptBar 样式。
+- ⑧ 暗色主题下所有面板的毛玻璃和高光效果正常。
+
+### 画布视觉打磨第二轮
+
+**变更内容**：
+- `excalidraw-canvas.css` 新增 `.excalidraw-container::after` 伪元素：画布边缘微妙内阴影暗角（`inset box-shadow`），增加画布物理纵深感；暗色主题阴影加深。
+- Excalidraw 滚动条细化：宽度 6px→5px，新增 `scrollbar-track: transparent`、`scrollbar-thumb:hover` 状态（悬停变深）、`scrollbar-corner: transparent`。
+- `generation.css` 生成中毛玻璃占位边框 1.5px→1px，新增外发光 `0 0 0 1px rgba(25,200,185,.08)`；状态标签微调间距/圆角/阴影/字号。
+- `.excalidraw-layer-panel__header` 边框 1.5px→1px，新增 `linear-gradient(180deg, var(--isl-surface), transparent)` 渐变背景。
+- `.excalidraw` 新增 Excalidraw 内部主题变量覆盖：`--color-primary`/`--color-primary-hover`/`--color-primary-light`/`--island-bg-color`/`--color-surface-*`/`--color-on-surface`/`--color-muted`/`--color-border-outline*` 全部对齐 Flovart `isl-` 色系；暗色 `--island-bg-color` 覆盖。
+
+**测试要点**：
+- ① 画布四边有微弱内阴影暗角（浅色主题极淡，暗色主题稍明显），不影响画布交互。
+- ② 画布内滚动条更细（5px），悬停时滚动条颜色加深。
+- ③ 生成中节点边框更细（1px），外圈有极淡青绿发光。
+- ④ 生成中状态标签视觉更精致（间距、圆角、阴影微调）。
+- ⑤ 图层面板标题区有渐变背景过渡。
+- ⑥ Excalidraw 原生 UI（颜色选择器等）的主色、背景色、文字色与 Flovart 主题一致，暗色主题下 island 背景为半透明深色。
+### Version History 画布版本回滚
+
+**实现要点**：
+- `stores/useVersionHistoryStore.ts`：in-memory Zustand store，`CanvasVersion` 接口（id/timestamp/type/description/elements），最多 30 个版本，超出自动淘汰最旧。`addVersion`/`removeVersion`/`clearVersions`/`getVersion`。
+- `App.tsx commitAction` 新增可选 `versionMeta: { description, type: VersionType }` 参数；有 meta 时在 `updateActiveBoard` 内部用当前 `newElements` 调 `useVersionHistoryStore.getState().addVersion()`，避免 stale closure。
+- `useGeneration.ts` 全部 12 处生成相关 `commitAction` 调用已注入版本元数据（split/inpaint/video/generate 等）；手动 move/resize/delete 不传 meta，不创建版本。
+- `useCanvasInteraction.ts` `commitAction` 类型签名同步更新（可选 versionMeta），line 614 手动编辑调用不传 meta。
+- `components/VersionHistoryPanel.tsx`：浮动毛玻璃面板（右上，z-40），时间线倒序列表，每项含类型徽章+时间+描述+元素数+恢复/删除按钮，顶部清空/关闭；恢复时 `commitAction(() => version.elements, { description: '恢复版本: ...', type: 'restore' })`，并 toast 提示。
+- `components/Toolbar.tsx` 新增 `onHistoryClick?` prop，在 LeftCluster 渲染历史按钮（时钟+环形箭头 SVG），仅在传入时显示。
+- App.tsx `isHistoryPanelOpen` state + Toolbar `onHistoryClick` 切换 + overlays 渲染面板。
+
+**测试要点**：
+- 1. 主工具栏点击历史按钮，面板应从右上滑出，为空时显示"暂无历史版本"。
+- 2. 生成一张图（文生图/批量/@参考图/编辑生成）后，面板应出现一条"生成"记录，含时间、描述、元素数。
+- 3. 拆分图层应出现"拆分图层"记录；局部重绘应出现"局部重绘"记录；视频生成应出现"视频生成"记录。
+- 4. 手动移动/缩放/删除元素不应产生新的版本记录（仅在生成类操作时记录）。
+- 5. 鼠标 hover 列表项，右侧出现"恢复"+"删除"两个按钮。
+- 6. 点击"恢复"，画布回滚到该版本元素，并新增一条"恢复版本"记录。
+- 7. 点击"删除"移除单条；点击顶部"清空"并确认后清空全部。
+- 8. 超过 30 条后，最旧的自动被淘汰。
+- 9. 切换深色/浅色主题，面板配色应跟随。
+

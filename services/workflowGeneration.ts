@@ -9,6 +9,7 @@ import { resolveModelSelection } from '../utils/modelRefs';
 import { executeUnifiedIgnition, generateTextWithProvider, type UnifiedIgnitionInput, type UnifiedIgnitionResult } from './aiGateway';
 import { getGenerationCapability } from './generationCapabilities';
 import { runPreflight } from './promptPreflight';
+import { usePromptHistoryStore } from '../stores/usePromptHistoryStore';
 
 export interface WorkflowHistoryPayload {
   name?: string;
@@ -171,6 +172,12 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
     const prompt = [promptPrefix, initiating.metadata.prompt, initiating.metadata.content, ...upstream.textContents, ...mediaLabels]
       .map(value => value?.trim()).filter(Boolean).join('\n\n');
     if (!prompt) throw new Error('请填写提示词，或连接一个包含文本的上游节点。');
+
+    usePromptHistoryStore.getState().record({
+        prompt,
+        mode: mode === 'video' ? 'video' : mode === 'text' ? 'text' : 'image',
+        source: 'workflow',
+    });
 
     const preflight = await runPreflight(prompt, modelRef, runtime.userApiKeys, mode);
     const effectivePrompt = preflight.optimizedPrompt;

@@ -980,6 +980,8 @@ const DEFAULT_RUNNINGHUB_IMAGE_PAYLOAD: Record<string, unknown> = {
 
 const RUNNINGHUB_STANDARD_MODEL_DEFAULTS: Array<{ pattern: RegExp; payload: Record<string, unknown> }> = [
     { pattern: /^rhart-image-(?:g-2|n-g31-flash)\/(?:text-to-image|image-to-image)$/i, payload: { resolution: '1k' } },
+    { pattern: /^rhart-image-n-pro(?:-official)?\/(?:text-to-image|edit(?:-ultra)?)$/i, payload: { resolution: '1k' } },
+    { pattern: /^rhart-image-v1(?:-official)?\/(?:text-to-image|edit)$/i, payload: { resolution: '1k' } },
     {
         pattern: /^rhart-video\/sparkvideo-2\.0\/multimodal-video$/i,
         payload: {
@@ -1103,8 +1105,12 @@ async function prepareRunningHubReferences(
     references: VideoImage[] = [],
     options?: { baseUrl?: string; signal?: AbortSignal },
 ): Promise<VideoImage[]> {
-    if (references.length === 0) return [];
+    if (references.length === 0) {
+        console.log('[RH Debug] prepareRunningHubReferences: 0 refs, skip');
+        return [];
+    }
     const needsUpload = references.some(ref => ref.href.startsWith('data:') || ref.href.startsWith('blob:'));
+    console.log('[RH Debug] prepareRunningHubReferences', { count: references.length, needsUpload, hrefs: references.map(r => r.href.slice(0, 40)) });
     const uploadModule = needsUpload ? await import('./runningHubService') : null;
     return Promise.all(references.map(async ref => {
         if (/^https?:\/\//i.test(ref.href)) return ref;

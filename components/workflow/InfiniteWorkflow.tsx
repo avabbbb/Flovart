@@ -46,6 +46,7 @@ import { splitGrid as splitGridService } from '../../services/gridSplitter';
 import { trimVideo, splitAudioVideo, mergeVideos } from '../../services/videoTools';
 import { trimAudio, changeAudioSpeed } from '../../services/audioTools';
 import { exportMediaArchive } from '../../utils/batchMediaExport';
+import { usePromptHistoryStore } from '../../stores/usePromptHistoryStore';
 
 type Frame = Pick<WorkflowProject, 'nodes' | 'connections'>;
 type ImageToolTransaction = { id: string; projectId: string; nodeId: string; frame: Frame };
@@ -795,7 +796,7 @@ export function InfiniteWorkflow({
       const newNode = createWorkflowNode(nodeId, command.mode, {
         x: startX + col * (nodeWidth + gapX),
         y: startY + row * (nodeHeight + gapY),
-      }, { prompt, status: 'idle', referenceNodeIds: sourceIds.length > 0 ? sourceIds : undefined });
+      }, { prompt, status: 'idle', referenceNodeIds: sourceIds.length > 0 ? sourceIds : undefined, mentionedNodeIds: sourceIds.length > 0 ? sourceIds : undefined });
       newNode.title = `${command.label} ${i + 1}`;
       ops.push({ type: 'add_node', node: newNode });
       for (const sourceId of sourceIds) {
@@ -1489,6 +1490,17 @@ export function InfiniteWorkflow({
     }
     return result;
   }, [batchGroups, expandedBatches]);
+
+  const { pendingInsert: wfPendingInsert, consumeInsert: wfConsumeInsert } = usePromptHistoryStore();
+  useEffect(() => {
+    if (!wfPendingInsert) return;
+    const target = selectedNodeData.length === 1 && ['image', 'video', 'text'].includes(selectedNodeData[0].type) ? selectedNodeData[0] : null;
+    if (target) {
+      applyOps([{ type: 'update_node', id: target.id, metadata: { ...target.metadata, prompt: wfPendingInsert.text, richTextDocument: undefined, mentionedNodeIds: [] } }]);
+      setPromptFocusSignal(value => value + 1);
+    }
+    wfConsumeInsert();
+  }, [wfPendingInsert, wfConsumeInsert, selectedNodeData, applyOps]);
 
   return (
     <div

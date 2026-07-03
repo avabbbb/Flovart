@@ -106,6 +106,12 @@ describe('aiGateway - validateApiKey', () => {
                             description: 'image model',
                         },
                         {
+                            name: 'nano-banana-pro/edit-channel-low-price',
+                            categoryName: 'image-to-image',
+                            sourceTypeName: 'standard-model',
+                            description: 'image pro model',
+                        },
+                        {
                             name: 'google/veo3.1-fast/start-end-to-video-channel-low-price',
                             categoryName: 'start-end-to-video',
                             sourceTypeName: 'standard-model',
@@ -120,9 +126,9 @@ describe('aiGateway - validateApiKey', () => {
         expect(result.ok).toBe(true);
         expect(result.capabilitySummary).toEqual(['image', 'video']);
         expect(result.models?.map(model => model.id)).toEqual([
-            'nano-banana2-gemini31flash/image-to-image-channel-low-price',
             'rhart-image-g-2/image-to-image',
             'rhart-image-n-g31-flash/image-to-image',
+            'rhart-image-n-pro/edit',
             'google/veo3.1-fast/start-end-to-video-channel-low-price',
             'rhart-video/sparkvideo-2.0/multimodal-video',
         ]);
@@ -676,9 +682,13 @@ describe('aiGateway - generateImageWithProvider', () => {
 
         expect(globalThis.fetch).toHaveBeenNthCalledWith(
             2,
-            'https://www.runninghub.cn/openapi/v2/nano-banana-pro/edit-channel-low-price',
+            'https://www.runninghub.cn/openapi/v2/rhart-image-n-pro/edit',
             expect.objectContaining({ method: 'POST' }),
         );
+        expect(JSON.parse((globalThis.fetch as any).mock.calls[1][1].body)).toMatchObject({
+            imageUrls: ['https://cdn.example.com/input.png'],
+            resolution: '1k',
+        });
     });
 
     it('rejects RunningHub docs/search URLs before submit', async () => {

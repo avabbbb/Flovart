@@ -5,6 +5,7 @@ import type {
     CharacterLockProfile, ChatAttachment, AICapability, AIProvider,
     CanvasElement, ElementGenerationState, ResolvedReference,
 } from '../types';
+import type { VersionType } from '../stores/useVersionHistoryStore';
 import { generateId, getElementBounds, rasterizeElement, rasterizeMask } from '../utils/canvasHelpers';
 import {
     editImageWithProvider, enhancePromptWithProvider, generateImageWithProvider, generateVideoWithProvider,
@@ -14,6 +15,7 @@ import {
 import type { MultimodalSlot, VideoAspectRatio } from '../services/aiGateway';
 import { addGenerationHistoryItem, createThumbnailDataUrl } from '../utils/generationHistory';
 import { recordApiUsage } from '../utils/usageMonitor';
+import { usePromptHistoryStore } from '../stores/usePromptHistoryStore';
 import { findBestModelSelection, modelRefModelId, resolveModelSelection } from '../utils/modelRefs';
 
 /**
@@ -63,7 +65,7 @@ export interface UseGenerationParams {
     setProgressMessage: (v: string) => void;
     setIsSettingsPanelOpen: (v: boolean) => void;
     setGenerationHistory: React.Dispatch<React.SetStateAction<GenerationHistoryItem[]>>;
-    commitAction: (updater: (prev: Element[]) => Element[]) => void;
+    commitAction: (updater: (prev: Element[]) => Element[], versionMeta?: { description: string; type: VersionType }) => void;
     getPreferredApiKey: (capability: AICapability, provider?: AIProvider) => UserApiKey | undefined;
 }
 
@@ -86,10 +88,6 @@ export function useGeneration(params: UseGenerationParams) {
 
     /* ---- local state ---- */
     const [isEnhancingPrompt, setIsEnhancingPrompt] = useState(false);
-    const [batchResults, setBatchResults] = useState<{
-        prompt: string;
-        images: { href: string; mimeType: string; width: number; height: number }[];
-    } | null>(null);
 
     /* ---- helpers ---- */
 
@@ -242,7 +240,7 @@ export function useGeneration(params: UseGenerationParams) {
             mimeType: outputMimeType || source.mimeType,
         };
 
-        commitAction(prev => [...prev, newImage]);
+        commitAction(prev => [...prev, newImage], { description: '智能编辑结果', type: 'split' });
         setSelectedElementIds([newImage.id]);
     };
 
@@ -282,40 +280,44 @@ export function useGeneration(params: UseGenerationParams) {
             );
 
             const insertedIds: string[] = [];
-            const hideOriginalAfterSplit = true;
+            const hideOriginalAfterSplit = false;
             commitAction((prev) => {
                 const sourceIndex = prev.findIndex((el) => el.id === element.id);
                 const groupId = generateId();
 
+                const maxLayerH = Math.max(...normalizedLayers.map(l => l.height || element.height), 1);
+                const gap = 16;
+                const layerBaseX = element.x + element.width + 40;
+                const layerBaseY = element.y;
+
                 const newLayerElements: ImageElement[] = normalizedLayers.map((layer, idx) => {
                     const id = generateId();
                     insertedIds.push(id);
+                    const lw = layer.width || element.width;
+                    const lh = layer.height || element.height;
                     return {
                         id,
                         type: 'image',
                         name: `${element.name || 'Image'} / ${layer.name || `Layer ${idx + 1}`}`,
-                        x: element.x + layer.offsetX,
-                        y: element.y + layer.offsetY,
-                        width: layer.width || element.width,
-                        height: layer.height || element.height,
+                        x: layerBaseX + idx * (lw + gap),
+                        y: layerBaseY + (maxLayerH - lh) / 2,
+                        width: lw,
+                        height: lh,
                         href: layer.dataUrl,
                         mimeType: 'image/png',
                         parentId: groupId,
                     };
                 });
 
-                const minX = Math.min(...newLayerElements.map(layer => layer.x));
-                const minY = Math.min(...newLayerElements.map(layer => layer.y));
-                const maxX = Math.max(...newLayerElements.map(layer => layer.x + layer.width));
-                const maxY = Math.max(...newLayerElements.map(layer => layer.y + layer.height));
+                const totalW = newLayerElements.reduce((sum, el) => sum + el.width, 0) + (newLayerElements.length - 1) * gap;
                 const groupElement: GroupElement = {
                     id: groupId,
                     type: 'group',
-                    name: `${element.name || 'Image'} / Layer Group`,
-                    x: minX,
-                    y: minY,
-                    width: Math.max(1, maxX - minX),
-                    height: Math.max(1, maxY - minY),
+                    name: `${element.name || 'Image'} / 拆分图层`,
+                    x: layerBaseX,
+                    y: layerBaseY,
+                    width: Math.max(1, totalW),
+                    height: Math.max(1, maxLayerH),
                 };
 
                 const next = [...prev];
@@ -331,7 +333,7 @@ export function useGeneration(params: UseGenerationParams) {
                     }
                 }
                 return next;
-            });
+            }, { description: '拆分图层', type: 'split' });
 
             if (insertedIds.length > 0) {
                 setSelectedElementIds(insertedIds);
@@ -483,7 +485,7 @@ export function useGeneration(params: UseGenerationParams) {
                             height: element.height * (nh / oh),
                         }
                         : el
-                ));
+                ), { description: '扩图', type: 'inpaint' });
 
                 saveGenerationToHistory({
                     name: `Outpaint (${direction})`,
@@ -542,7 +544,7 @@ export function useGeneration(params: UseGenerationParams) {
                     el.id === element.id
                         ? { ...el, href: newHref, mimeType: newMime }
                         : el
-                ));
+                ), { description: `局部重绘: ${inpaintPrompt.slice(0, 30)}`, type: 'inpaint' });
 
                 saveGenerationToHistory({
                     name: `Inpaint: ${inpaintPrompt.slice(0, 30)}`,
@@ -649,6 +651,12 @@ export function useGeneration(params: UseGenerationParams) {
         const activeSelectedElementIds = selectedElementIdsOverride ?? selectedElementIds;
         const activeMentionedElementIds = mentionedElementIdsOverride ?? mentionedElementIds;
 
+        usePromptHistoryStore.getState().record({
+            prompt: rawPrompt,
+            mode: effectiveGenerationMode === 'video' ? 'video' : 'image',
+            source: 'canvas',
+        });
+
         if (isAutoEnhanceEnabled && !promptOverride) {
             try {
                 setProgressMessage('正在 LLM 润色提示词...');
@@ -675,6 +683,7 @@ export function useGeneration(params: UseGenerationParams) {
         }
 
         setIsLoading(true);
+        console.log('[RH Debug] handleGenerate', { mode: effectiveGenerationMode, imageModel: resolvedImageModel, imageProvider, mentions: activeMentionedElementIds.length, selected: activeSelectedElementIds.length, batch: batchCount, hasKey: !!activeResolved?.key });
         setError(null);
         setProgressMessage('正在准备生成...');
 
@@ -789,7 +798,7 @@ export function useGeneration(params: UseGenerationParams) {
                             allFrameRefs.map(ref => ref.id),
                         ),
                     };
-                    commitAction(prev => [...prev, newVideoElement]);
+                    commitAction(prev => [...prev, newVideoElement], { description: '关键帧动画生成', type: 'video' });
                     setSelectedElementIds([newVideoElement.id]);
 
                     try {
@@ -928,7 +937,7 @@ export function useGeneration(params: UseGenerationParams) {
                         ),
                     };
 
-                    commitAction(prev => [...prev, newVideoElement]);
+                    commitAction(prev => [...prev, newVideoElement], { description: '视频生成', type: 'video' });
                     setSelectedElementIds([newVideoElement.id]);
 
                     try {
@@ -1032,7 +1041,7 @@ export function useGeneration(params: UseGenerationParams) {
                                     }
                                     return el;
                                 }).filter(el => !maskPathIds.has(el.id))
-                            );
+                            , { description: `编辑生成: ${effectivePrompt.slice(0, 30)}`, type: 'generate' });
                             setSelectedElementIds([baseImage.id]);
                             saveGenerationToHistory({
                                 name: baseImage.name || 'Edited image',
@@ -1099,7 +1108,7 @@ export function useGeneration(params: UseGenerationParams) {
                                 ],
                             ),
                         };
-                        commitAction(prev => [...prev, newImage]);
+                        commitAction(prev => [...prev, newImage], { description: `生成: ${effectivePrompt.slice(0, 30)}`, type: 'generate' });
                         setSelectedElementIds([newImage.id]);
                         saveGenerationToHistory({
                             name: newImage.name,
@@ -1124,50 +1133,86 @@ export function useGeneration(params: UseGenerationParams) {
                 setProgressMessage('Generating with reference images...');
                 const { prompt: mentionPrompt2, orderedMentionImages: orderedRefs } = buildMentionAwarePrompt(effectivePrompt, mentionedImageElements);
                 const allRefs = [...orderedRefs, ...attachmentReferenceImages, ...characterReferenceImages];
-                const result = await generateImageWithProvider(
-                    mentionPrompt2,
-                    resolvedImageModel,
-                    resolvedImageKey,
-                    allRefs,
-                );
+                const refIds = [
+                    ...mentionedImageElements.map(ref => ref.id),
+                    ...(activeCharacterLock?.anchorElementId ? [activeCharacterLock.anchorElementId] : []),
+                ];
 
-                if (result.newImageBase64 && result.newImageMimeType) {
-                    const { newImageBase64, newImageMimeType } = result;
-                    const img = new Image();
-                    img.onload = () => {
-                        const canvasPoint = getCanvasCenter();
-                        const x = canvasPoint.x - (img.width / 2);
-                        const y = canvasPoint.y - (img.height / 2);
-                        const newImage: ImageElement = {
-                            id: generateId(), type: 'image', x, y, name: imageOutputName,
-                            width: img.width, height: img.height,
-                            href: `data:${newImageMimeType};base64,${newImageBase64}`, mimeType: newImageMimeType,
-                            generationState: buildCanvasGenerationState(
-                                mentionPrompt2,
-                                resolvedImageModel,
-                                imageProvider,
-                                'success',
-                                [
-                                    ...mentionedImageElements.map(ref => ref.id),
-                                    ...(activeCharacterLock?.anchorElementId ? [activeCharacterLock.anchorElementId] : []),
-                                ],
-                            ),
+                if (batchCount > 1) {
+                    setProgressMessage(`正在批量生成 ${batchCount} 张方案...`);
+                    const tasks = Array.from({ length: batchCount }, () =>
+                        generateImageWithProvider(mentionPrompt2, resolvedImageModel, resolvedImageKey, allRefs).catch(() => null),
+                    );
+                    const raw = await Promise.all(tasks);
+                    const valid = raw.filter(r => r?.newImageBase64 && r?.newImageMimeType);
+                    if (valid.length === 0) {
+                        setError('批量生成失败，所有请求均未返回图片。');
+                    } else {
+                        const dims = await Promise.all(valid.map(r => new Promise<{ w: number; h: number; href: string; mime: string }>(resolve => {
+                            const im = new Image();
+                            im.onload = () => resolve({ w: im.width, h: im.height, href: `data:${r!.newImageMimeType};base64,${r!.newImageBase64}`, mime: r!.newImageMimeType! });
+                            im.onerror = () => resolve({ w: 512, h: 512, href: `data:${r!.newImageMimeType};base64,${r!.newImageBase64}`, mime: r!.newImageMimeType! });
+                            im.src = `data:${r!.newImageMimeType};base64,${r!.newImageBase64}`;
+                        })));
+                        const cols = dims.length <= 2 ? dims.length : 2;
+                        const gap = 20;
+                        const center = getCanvasCenter();
+                        const totalW = cols * (dims[0].w + gap) - gap;
+                        const rowsN = Math.ceil(dims.length / cols);
+                        const totalH = rowsN * (dims[0].h + gap) - gap;
+                        const startX = center.x - totalW / 2;
+                        const startY = center.y - totalH / 2;
+                        const groupId = generateId();
+                        const newEls: ImageElement[] = dims.map((dim, i) => ({
+                            id: generateId(), type: 'image' as const,
+                            x: startX + (i % cols) * (dim.w + gap),
+                            y: startY + Math.floor(i / cols) * (dim.h + gap),
+                            name: `${imageOutputName} ${i + 1}`,
+                            width: dim.w, height: dim.h,
+                            href: dim.href, mimeType: dim.mime,
+                            parentId: groupId,
+                            generationState: buildCanvasGenerationState(mentionPrompt2, resolvedImageModel, imageProvider, 'success', refIds),
+                        }));
+                        const groupEl: GroupElement = {
+                            id: groupId, type: 'group', name: `批量方案 (${dims.length})`,
+                            x: startX, y: startY, width: totalW, height: totalH,
                         };
-                        commitAction(prev => [...prev, newImage]);
-                        setSelectedElementIds([newImage.id]);
-                        saveGenerationToHistory({
-                            name: newImage.name,
-                            dataUrl: newImage.href,
-                            mimeType: newImage.mimeType,
-                            width: newImage.width,
-                            height: newImage.height,
-                            prompt: effectivePrompt,
-                        });
-                    };
-                    img.onerror = () => setError('Failed to load the generated image.');
-                    img.src = `data:${newImageMimeType};base64,${newImageBase64}`;
+                        commitAction(prev => [...prev, ...newEls, groupEl], { description: `批量生成(@参考): ${effectivePrompt.slice(0, 30)}`, type: 'generate' });
+                        setSelectedElementIds(newEls.map(e => e.id));
+                        newEls.forEach(el => saveGenerationToHistory({
+                            name: el.name, dataUrl: el.href, mimeType: el.mimeType,
+                            width: el.width, height: el.height, prompt: effectivePrompt,
+                        }));
+                        setProgressMessage(`生成完成: ${dims.length}/${batchCount} 张成功`);
+                        setTimeout(() => setProgressMessage(''), 1500);
+                    }
                 } else {
-                    setError(result.textResponse || 'Generation failed to produce an image.');
+                    const result = await generateImageWithProvider(mentionPrompt2, resolvedImageModel, resolvedImageKey, allRefs);
+                    if (result.newImageBase64 && result.newImageMimeType) {
+                        const { newImageBase64, newImageMimeType } = result;
+                        const img = new Image();
+                        img.onload = () => {
+                            const canvasPoint = getCanvasCenter();
+                            const x = canvasPoint.x - (img.width / 2);
+                            const y = canvasPoint.y - (img.height / 2);
+                            const newImage: ImageElement = {
+                                id: generateId(), type: 'image', x, y, name: imageOutputName,
+                                width: img.width, height: img.height,
+                                href: `data:${newImageMimeType};base64,${newImageBase64}`, mimeType: newImageMimeType,
+                                generationState: buildCanvasGenerationState(mentionPrompt2, resolvedImageModel, imageProvider, 'success', refIds),
+                            };
+                            commitAction(prev => [...prev, newImage], { description: `生成(@参考): ${effectivePrompt.slice(0, 30)}`, type: 'generate' });
+                            setSelectedElementIds([newImage.id]);
+                            saveGenerationToHistory({
+                                name: newImage.name, dataUrl: newImage.href, mimeType: newImage.mimeType,
+                                width: newImage.width, height: newImage.height, prompt: effectivePrompt,
+                            });
+                        };
+                        img.onerror = () => setError('Failed to load the generated image.');
+                        img.src = `data:${newImageMimeType};base64,${newImageBase64}`;
+                    } else {
+                        setError(result.textResponse || 'Generation failed to produce an image.');
+                    }
                 }
 
             } else {
@@ -1176,49 +1221,89 @@ export function useGeneration(params: UseGenerationParams) {
                     setError('当前图片模型不支持参考图生成。请切换到支持参考图编辑的 Gemini、GPT Image 或 OpenRouter 图像模型。');
                     return;
                 }
-                const result = await generateImageWithProvider(
-                        effectivePrompt,
-                        resolvedImageModel,
-                        resolvedImageKey,
-                        baseRefs,
+                if (batchCount > 1) {
+                    setProgressMessage(`正在批量生成 ${batchCount} 张方案...`);
+                    const tasks = Array.from({ length: batchCount }, () =>
+                        generateImageWithProvider(effectivePrompt, resolvedImageModel, resolvedImageKey, baseRefs).catch(() => null),
                     );
-
-                if (result.newImageBase64 && result.newImageMimeType) {
-                    const { newImageBase64, newImageMimeType } = result;
-
-                    const img = new Image();
-                    img.onload = () => {
-                        const canvasPoint = getCanvasCenter();
-                        const x = canvasPoint.x - (img.width / 2);
-                        const y = canvasPoint.y - (img.height / 2);
-
-                        const newImage: ImageElement = {
-                            id: generateId(), type: 'image', x, y, name: imageOutputName,
-                            width: img.width, height: img.height,
-                            href: `data:${newImageMimeType};base64,${newImageBase64}`, mimeType: newImageMimeType,
+                    const raw = await Promise.all(tasks);
+                    const valid = raw.filter(r => r?.newImageBase64 && r?.newImageMimeType);
+                    if (valid.length === 0) {
+                        setError('批量生成失败，所有请求均未返回图片。');
+                    } else {
+                        const dims = await Promise.all(valid.map(r => new Promise<{ w: number; h: number; href: string; mime: string }>(resolve => {
+                            const im = new Image();
+                            im.onload = () => resolve({ w: im.width, h: im.height, href: `data:${r!.newImageMimeType};base64,${r!.newImageBase64}`, mime: r!.newImageMimeType! });
+                            im.onerror = () => resolve({ w: 512, h: 512, href: `data:${r!.newImageMimeType};base64,${r!.newImageBase64}`, mime: r!.newImageMimeType! });
+                            im.src = `data:${r!.newImageMimeType};base64,${r!.newImageBase64}`;
+                        })));
+                        const cols = dims.length <= 2 ? dims.length : 2;
+                        const gap = 20;
+                        const center = getCanvasCenter();
+                        const totalW = cols * (dims[0].w + gap) - gap;
+                        const rowsN = Math.ceil(dims.length / cols);
+                        const totalH = rowsN * (dims[0].h + gap) - gap;
+                        const startX = center.x - totalW / 2;
+                        const startY = center.y - totalH / 2;
+                        const groupId = generateId();
+                        const newEls: ImageElement[] = dims.map((dim, i) => ({
+                            id: generateId(), type: 'image' as const,
+                            x: startX + (i % cols) * (dim.w + gap),
+                            y: startY + Math.floor(i / cols) * (dim.h + gap),
+                            name: `${imageOutputName} ${i + 1}`,
+                            width: dim.w, height: dim.h,
+                            href: dim.href, mimeType: dim.mime,
+                            parentId: groupId,
                             generationState: buildCanvasGenerationState(
-                                effectivePrompt,
-                                resolvedImageModel,
-                                imageProvider,
-                                'success',
+                                effectivePrompt, resolvedImageModel, imageProvider, 'success',
                                 activeCharacterLock?.anchorElementId ? [activeCharacterLock.anchorElementId] : [],
                             ),
+                        }));
+                        const groupEl: GroupElement = {
+                            id: groupId, type: 'group', name: `批量方案 (${dims.length})`,
+                            x: startX, y: startY, width: totalW, height: totalH,
                         };
-                        commitAction(prev => [...prev, newImage]);
-                        setSelectedElementIds([newImage.id]);
-                        saveGenerationToHistory({
-                            name: newImage.name,
-                            dataUrl: newImage.href,
-                            mimeType: newImage.mimeType,
-                            width: newImage.width,
-                            height: newImage.height,
-                            prompt: effectivePrompt,
-                        });
-                    };
-                    img.onerror = () => setError('Failed to load the generated image.');
-                    img.src = `data:${newImageMimeType};base64,${newImageBase64}`;
+                        commitAction(prev => [...prev, ...newEls, groupEl], { description: `批量生成: ${effectivePrompt.slice(0, 30)}`, type: 'generate' });
+                        setSelectedElementIds(newEls.map(e => e.id));
+                        newEls.forEach(el => saveGenerationToHistory({
+                            name: el.name, dataUrl: el.href, mimeType: el.mimeType,
+                            width: el.width, height: el.height, prompt: effectivePrompt,
+                        }));
+                        setProgressMessage(`生成完成: ${dims.length}/${batchCount} 张成功`);
+                        setTimeout(() => setProgressMessage(''), 1500);
+                    }
                 } else {
-                    setError(result.textResponse || 'Generation failed to produce an image.');
+                    const result = await generateImageWithProvider(
+                        effectivePrompt, resolvedImageModel, resolvedImageKey, baseRefs,
+                    );
+                    if (result.newImageBase64 && result.newImageMimeType) {
+                        const { newImageBase64, newImageMimeType } = result;
+                        const img = new Image();
+                        img.onload = () => {
+                            const canvasPoint = getCanvasCenter();
+                            const x = canvasPoint.x - (img.width / 2);
+                            const y = canvasPoint.y - (img.height / 2);
+                            const newImage: ImageElement = {
+                                id: generateId(), type: 'image', x, y, name: imageOutputName,
+                                width: img.width, height: img.height,
+                                href: `data:${newImageMimeType};base64,${newImageBase64}`, mimeType: newImageMimeType,
+                                generationState: buildCanvasGenerationState(
+                                    effectivePrompt, resolvedImageModel, imageProvider, 'success',
+                                    activeCharacterLock?.anchorElementId ? [activeCharacterLock.anchorElementId] : [],
+                                ),
+                            };
+                            commitAction(prev => [...prev, newImage], { description: `生成: ${effectivePrompt.slice(0, 30)}`, type: 'generate' });
+                            setSelectedElementIds([newImage.id]);
+                            saveGenerationToHistory({
+                                name: newImage.name, dataUrl: newImage.href, mimeType: newImage.mimeType,
+                                width: newImage.width, height: newImage.height, prompt: effectivePrompt,
+                            });
+                        };
+                        img.onerror = () => setError('Failed to load the generated image.');
+                        img.src = `data:${newImageMimeType};base64,${newImageBase64}`;
+                    } else {
+                        setError(result.textResponse || 'Generation failed to produce an image.');
+                    }
                 }
             }
         } catch (err) {
@@ -1252,111 +1337,9 @@ export function useGeneration(params: UseGenerationParams) {
         }
     };
 
-    /* ---- Batch generate ---- */
-
-    const handleBatchGenerate = async () => {
-        const rawPrompt = prompt.trim();
-        if (!rawPrompt || batchCount <= 1) return;
-
-        const batchResolved = resolveModelKey('image', modelPreference.imageModel);
-        if (!batchResolved) {
-            setError('未找到可用于图片生成的 API Key。');
-            setIsSettingsPanelOpen(true);
-            return;
-        }
-
-        setIsLoading(true);
-        setError(null);
-        setProgressMessage(`正在批量生成 ${batchCount} 张方案...`);
-
-        try {
-            const tasks = Array.from({ length: batchCount }, (_, i) =>
-                generateImageWithProvider(
-                    rawPrompt + (i > 0 ? ` (variation ${i + 1})` : ''),
-                    batchResolved.model,
-                    batchResolved.key,
-                ).catch(() => null)
-            );
-            const results = await Promise.all(tasks);
-
-            const images: { href: string; mimeType: string; width: number; height: number }[] = [];
-            for (const res of results) {
-                if (res && res.newImageBase64 && res.newImageMimeType) {
-                    const href = `data:${res.newImageMimeType};base64,${res.newImageBase64}`;
-                    const dim = await new Promise<{ w: number; h: number }>((resolve) => {
-                        const img = new Image();
-                        img.onload = () => resolve({ w: img.width, h: img.height });
-                        img.onerror = () => resolve({ w: 512, h: 512 });
-                        img.src = href;
-                    });
-                    images.push({ href, mimeType: res.newImageMimeType, width: dim.w, height: dim.h });
-                }
-            }
-
-            if (images.length === 0) {
-                setError('批量生成失败，所有请求均未返回图片。');
-            } else {
-                setBatchResults({ prompt: rawPrompt, images });
-                setProgressMessage(`生成完成: ${images.length}/${batchCount} 张成功`);
-            }
-        } catch (err) {
-            setError(`批量生成出错: ${(err as Error).message}`);
-        } finally {
-            setIsLoading(false);
-            setTimeout(() => setProgressMessage(''), 1500);
-        }
-    };
-
-    const handleSelectBatchResult = (img: { href: string; mimeType: string; width: number; height: number }) => {
-        const canvasPoint = getCanvasCenter();
-        const newImage: ImageElement = {
-            id: generateId(), type: 'image',
-            x: canvasPoint.x - img.width / 2,
-            y: canvasPoint.y - img.height / 2,
-            name: 'Batch Pick',
-            width: img.width, height: img.height,
-            href: img.href, mimeType: img.mimeType,
-        };
-        commitAction(prev => [...prev, newImage]);
-        setSelectedElementIds([newImage.id]);
-        saveGenerationToHistory({
-            name: 'Batch Pick',
-            dataUrl: img.href,
-            mimeType: img.mimeType,
-            width: img.width,
-            height: img.height,
-            prompt: batchResults?.prompt || '',
-        });
-        setBatchResults(null);
-    };
-
-    const handleSelectAllBatchResults = () => {
-        if (!batchResults) return;
-        const center = getCanvasCenter();
-        const cols = batchResults.images.length <= 2 ? 2 : 2;
-        const gap = 20;
-        const newEls: ImageElement[] = batchResults.images.map((img, i) => {
-            const col = i % cols;
-            const row = Math.floor(i / cols);
-            return {
-                id: generateId(), type: 'image',
-                x: center.x + (col - cols / 2) * (img.width + gap),
-                y: center.y + (row - 0.5) * (img.height + gap),
-                name: `Batch ${i + 1}`,
-                width: img.width, height: img.height,
-                href: img.href, mimeType: img.mimeType,
-            };
-        });
-        commitAction(prev => [...prev, ...newEls]);
-        setSelectedElementIds(newEls.map(e => e.id));
-        setBatchResults(null);
-    };
-
     return {
         // state
         isEnhancingPrompt,
-        batchResults,
-        setBatchResults,
         // handlers
         handleEnhancePrompt,
         saveGenerationToHistory,
@@ -1366,8 +1349,5 @@ export function useGeneration(params: UseGenerationParams) {
         handleOutpaint,
         handleInpaint,
         handleGenerate,
-        handleBatchGenerate,
-        handleSelectBatchResult,
-        handleSelectAllBatchResults,
     };
 }

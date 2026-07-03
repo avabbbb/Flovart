@@ -1,5 +1,6 @@
 import { useRef, useState, useCallback } from 'react';
 import type { Tool, Point, Element, ImageElement, PathElement, ShapeElement, TextElement, ArrowElement, LineElement, WheelAction, Board, VideoElement } from '../types';
+import type { VersionType } from '../stores/useVersionHistoryStore';
 import { generateId, getElementBounds, isPointInPolygon, SNAP_THRESHOLD, type Rect, type Guide } from '../utils/canvasHelpers';
 import { createRafBatcher, type RafBatcher } from '../utils/rafBatcher';
 
@@ -24,7 +25,7 @@ export interface UseCanvasInteractionParams {
     // Board management
     updateActiveBoard: (updater: (board: Board) => Board) => void;
     setElements: (updater: (prev: Element[]) => Element[], commit?: boolean) => void;
-    commitAction: (updater: (prev: Element[]) => Element[]) => void;
+    commitAction: (updater: (prev: Element[]) => Element[], versionMeta?: { description: string; type: VersionType }) => void;
     // Helpers
     getDescendants: (id: string, els: Element[]) => Element[];
     onTripleClickEmpty?: () => void;
