@@ -164,6 +164,7 @@ export function resolveModelSelection(
   const direct = healthyKeys.find(key => {
     const caps = getKeyCapabilities(key);
     if (!caps.includes(capability)) return false;
+    if (keyOwnsBareModel(key, bareModel)) return true;
     if (key.provider === inferredProvider) return true;
     return key.provider === 'custom' && keyOwnsBareModel(key, bareModel);
   });

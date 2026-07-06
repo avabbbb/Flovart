@@ -13,6 +13,23 @@ const RUNNINGHUB_DETAIL_ENDPOINTS: Record<string, string> = {
   '2034917373414539277': 'rhart-video/sparkvideo-2.0/multimodal-video',
 };
 
+const RUNNINGHUB_API_DOC_ENDPOINTS: Record<string, string> = {
+  '448183084': 'rhart-video-v3.1-fast-official/image-to-video',
+  '448183085': 'rhart-video-v3.1-pro/start-end-to-video',
+  '448183086': 'rhart-video-v3.1-fast/start-end-to-video',
+  '448183087': 'rhart-video-v3.1-fast/image-to-video',
+  '448183115': 'rhart-video/sparkvideo-2.0-fast/image-to-video',
+  '448183116': 'rhart-video/sparkvideo-2.0/image-to-video',
+  '448183127': 'rhart-video/sparkvideo-2.0/multimodal-video',
+  '448183128': 'rhart-video/sparkvideo-2.0-fast/multimodal-video',
+  '448183140': 'rhart-video-v3.1-pro/text-to-video',
+  '448183144': 'rhart-video-v3.1-fast/text-to-video',
+  '448183145': 'rhart-video-v3.1-fast-official/text-to-video',
+  '448183166': 'rhart-video/sparkvideo-2.0-fast/text-to-video',
+  '448183167': 'rhart-video/sparkvideo-2.0/text-to-video',
+  '471297129': 'rhart-video-v3.1-pro/image-to-video',
+};
+
 // RunningHub 标准模型包：只内置当前项目实际使用的官方详情页端点。
 // 这些端点使用 /openapi/v2/<endpoint> + Bearer 认证。
 export const BUILTIN_RUNNINGHUB_MODELS: Array<{ id: string; capability: 'image' | 'video'; description: string }> = [
@@ -25,15 +42,43 @@ export const BUILTIN_RUNNINGHUB_MODELS: Array<{ id: string; capability: 'image' 
   { id: 'kling-v2.5-turbo-std/text-to-video', capability: 'video', description: '可灵 v2.5 Turbo 文生视频' },
   { id: 'kling-video-o3-std/reference-to-video', capability: 'video', description: '可灵 O3 参考生视频' },
   { id: 'kling-v3.0-std/motion-control', capability: 'video', description: '可灵 v3.0 动作控制' },
-  { id: 'bytedance/seedance-2.0-global/multimodal-video', capability: 'video', description: 'Seedance 2.0 多模态视频 (global)' },
-  { id: 'bytedance/seedance-2.0-global-fast/text-to-video', capability: 'video', description: 'Seedance 2.0 Fast 文生视频' },
-  { id: 'bytedance/seedance-2.0-global-fast/image-to-video', capability: 'video', description: 'Seedance 2.0 Fast 图生视频' },
+  { id: 'rhart-video/sparkvideo-2.0/text-to-video', capability: 'video', description: 'Seedance 2.0 文生视频' },
+  { id: 'rhart-video/sparkvideo-2.0/image-to-video', capability: 'video', description: 'Seedance 2.0 图生视频' },
+  { id: 'rhart-video/sparkvideo-2.0/multimodal-video', capability: 'video', description: 'Seedance 2.0 多模态视频' },
+  { id: 'rhart-video/sparkvideo-2.0-fast/text-to-video', capability: 'video', description: 'Seedance 2.0 Fast 文生视频' },
+  { id: 'rhart-video/sparkvideo-2.0-fast/image-to-video', capability: 'video', description: 'Seedance 2.0 Fast 图生视频' },
+  { id: 'rhart-video/sparkvideo-2.0-fast/multimodal-video', capability: 'video', description: 'Seedance 2.0 Fast 多模态视频' },
   { id: 'vidu/text-to-video', capability: 'video', description: 'Vidu Q2 文生视频' },
   { id: 'vidu/text-to-video-q3-pro', capability: 'video', description: 'Vidu Q3 Pro 文生视频 (音画同出)' },
   { id: 'vidu/image-to-video-q3-pro', capability: 'video', description: 'Vidu Q3 Pro 图生视频' },
   { id: 'vidu/image-to-video-q2-pro', capability: 'video', description: 'Vidu Q2 Pro 图生视频' },
   { id: 'vidu/image-to-video-q2-turbo', capability: 'video', description: 'Vidu Q2 Turbo 图生视频' },
   { id: 'rhart-video/wan-2.2/image-to-video', capability: 'video', description: 'Wan 2.2 图生视频' },
+  // Veo 3.1 系列（Google DeepMind 旗舰视频模型，原生音频同步 + 口型同步）
+  { id: 'rhart-video-v3.1-fast/text-to-video', capability: 'video', description: '全能视频 V3.1 Fast 文生视频 (低价通道)' },
+  { id: 'rhart-video-v3.1-fast-official/text-to-video', capability: 'video', description: 'Veo 3.1 Fast 文生视频 (官方稳定)' },
+  { id: 'rhart-video-v3.1-fast/image-to-video', capability: 'video', description: '全能视频 V3.1 Fast 图生视频 (低价通道)' },
+  { id: 'rhart-video-v3.1-fast/start-end-to-video', capability: 'video', description: '全能视频 V3.1 Fast 首尾帧生视频 (低价通道)' },
+  { id: 'rhart-video-v3.1-fast-official/image-to-video', capability: 'video', description: 'Veo 3.1 Fast 图生视频 (官方稳定)' },
+  { id: 'rhart-video-v3.1-pro/text-to-video', capability: 'video', description: '全能视频 V3.1 Pro 文生视频 (低价通道)' },
+  { id: 'rhart-video-v3.1-pro/image-to-video', capability: 'video', description: '全能视频 V3.1 Pro 图生视频 (低价通道)' },
+  { id: 'rhart-video-v3.1-pro/start-end-to-video', capability: 'video', description: '全能视频 V3.1 Pro 首尾帧生视频 (低价通道)' },
+  { id: 'rhart-video-v3.1-pro-official/text-to-video', capability: 'video', description: 'Veo 3.1 Pro 文生视频 (官方稳定)' },
+  { id: 'rhart-video-v3.1-pro-official/image-to-video', capability: 'video', description: 'Veo 3.1 Pro 图生视频 (官方稳定)' },
+  { id: 'rhart-video-v3.1-pro-official/reference-to-video', capability: 'video', description: 'Veo 3.1 Pro 参考生视频 (官方稳定)' },
+  { id: 'rhart-video-v3.1-lite-official/text-to-video', capability: 'video', description: 'Veo 3.1 Lite 文生视频 (官方稳定)' },
+  { id: 'rhart-video-v3.1-lite-official/image-to-video', capability: 'video', description: 'Veo 3.1 Lite 图生视频 (官方稳定)' },
+  { id: 'rhart-video-v3.1-lite-official/start-end-to-video', capability: 'video', description: 'Veo 3.1 Lite 首尾帧视频 (官方稳定)' },
+  // SkyReels V4 Omni（天工 AI 统一多模态视频生成）
+  { id: 'skyreels-v4/omni-reference-fast', capability: 'video', description: 'SkyReels V4 Omni 参考生视频 (fast)' },
+  // 全能视频S（低价渠道版，duration 10/15s，aspectRatio 16:9/9:16）
+  { id: 'rhart-video-s/text-to-video', capability: 'video', description: '全能视频S 文生视频 (低价渠道)' },
+  // Veo 3.1 Fast 参考生视频（官方稳定版，1-3 张参考图，固定 8s，有 aspectRatio）
+  { id: 'rhart-video-v3.1-fast-official/reference-to-video', capability: 'video', description: 'Veo 3.1 Fast 参考生视频 (官方稳定)' },
+  // 悠船文生图 v8.1（语义真实时代，文本渲染 + 全景光照，required: hd）
+  { id: 'youchuan/text-to-image-v81', capability: 'image', description: '悠船文生图 v8.1' },
+  // 全能图片G-2.0 文生图（低价渠道版，顶级图像底座，文本渲染）
+  { id: 'rhart-image-g-2/text-to-image', capability: 'image', description: '全能图片G-2.0 文生图 (低价渠道)' },
 ];
 
 // RunningHub 产品展示名 → 真实 API endpoint 的别名映射。
@@ -50,16 +95,41 @@ const RUNNINGHUB_PRODUCT_ALIASES: Record<string, string> = {
   'nano-banana-pro/text-to-image-official-stable': 'rhart-image-n-pro-official/text-to-image',
   'nano-banana2-gemini31flash/image-to-image-channel-low-price': 'rhart-image-n-g31-flash/image-to-image',
   'nano-banana2-gemini31flash/image-to-image-official-stable': 'rhart-image-n-g31-flash/image-to-image',
-  // Seedance 2.0 global 系列在 RH 官方文档展示名不带 bytedance/ 前缀，真实 endpoint 需要补前缀
-  'seedance-2.0-global/multimodal-video': 'bytedance/seedance-2.0-global/multimodal-video',
-  'seedance-2.0-global/image-to-video': 'bytedance/seedance-2.0-global/image-to-video',
-  'seedance-2.0-global/text-to-video': 'bytedance/seedance-2.0-global/text-to-video',
-  'seedance-2.0-global-fast/multimodal-video': 'bytedance/seedance-2.0-global-fast/multimodal-video',
-  'seedance-2.0-global-fast/image-to-video': 'bytedance/seedance-2.0-global-fast/image-to-video',
-  'seedance-2.0-global-fast/text-to-video': 'bytedance/seedance-2.0-global-fast/text-to-video',
+  // Seedance 2.0 官方标准模型在 RH API 里使用 rhart-video/sparkvideo-2.0 命名空间。
+  'seedance-2.0-global/multimodal-video': 'rhart-video/sparkvideo-2.0/multimodal-video',
+  'seedance-2.0-global/image-to-video': 'rhart-video/sparkvideo-2.0/image-to-video',
+  'seedance-2.0-global/text-to-video': 'rhart-video/sparkvideo-2.0/text-to-video',
+  'seedance-2.0-global-fast/multimodal-video': 'rhart-video/sparkvideo-2.0-fast/multimodal-video',
+  'seedance-2.0-global-fast/image-to-video': 'rhart-video/sparkvideo-2.0-fast/image-to-video',
+  'seedance-2.0-global-fast/text-to-video': 'rhart-video/sparkvideo-2.0-fast/text-to-video',
+  'bytedance/seedance-2.0-global/multimodal-video': 'rhart-video/sparkvideo-2.0/multimodal-video',
+  'bytedance/seedance-2.0-global/image-to-video': 'rhart-video/sparkvideo-2.0/image-to-video',
+  'bytedance/seedance-2.0-global/text-to-video': 'rhart-video/sparkvideo-2.0/text-to-video',
+  'bytedance/seedance-2.0-global-fast/multimodal-video': 'rhart-video/sparkvideo-2.0-fast/multimodal-video',
+  'bytedance/seedance-2.0-global-fast/image-to-video': 'rhart-video/sparkvideo-2.0-fast/image-to-video',
+  'bytedance/seedance-2.0-global-fast/text-to-video': 'rhart-video/sparkvideo-2.0-fast/text-to-video',
+  'seedance2.0/文生视频': 'rhart-video/sparkvideo-2.0/text-to-video',
+  'seedance2.0/图生视频': 'rhart-video/sparkvideo-2.0/image-to-video',
+  'seedance2.0/多模态视频': 'rhart-video/sparkvideo-2.0/multimodal-video',
+  'seedance2.0-fast/文生视频': 'rhart-video/sparkvideo-2.0-fast/text-to-video',
+  'seedance2.0-fast/图生视频': 'rhart-video/sparkvideo-2.0-fast/image-to-video',
+  'seedance2.0-fast/多模态视频': 'rhart-video/sparkvideo-2.0-fast/multimodal-video',
+  'seedance2.0/text-to-video': 'rhart-video/sparkvideo-2.0/text-to-video',
+  'seedance2.0/image-to-video': 'rhart-video/sparkvideo-2.0/image-to-video',
+  'seedance2.0/multimodal-video': 'rhart-video/sparkvideo-2.0/multimodal-video',
+  'seedance2.0-fast/text-to-video': 'rhart-video/sparkvideo-2.0-fast/text-to-video',
+  'seedance2.0-fast/image-to-video': 'rhart-video/sparkvideo-2.0-fast/image-to-video',
+  'seedance2.0-fast/multimodal-video': 'rhart-video/sparkvideo-2.0-fast/multimodal-video',
   // Wan 2.2 真实 endpoint 在 rhart-video/ 子命名空间下
   'wan-2.2/image-to-video': 'rhart-video/wan-2.2/image-to-video',
   'wan-2.2/text-to-video': 'rhart-video/wan-2.2/text-to-video',
+  // 全能视频 V3.1 低价渠道展示名（页面 slug）→ 官方标准模型 endpoint
+  'google/veo3.1-fast/text-to-video-channel-low-price': 'rhart-video-v3.1-fast/text-to-video',
+  'google/veo3.1-fast/image-to-video-channel-low-price': 'rhart-video-v3.1-fast/image-to-video',
+  'google/veo3.1-fast/start-end-to-video-channel-low-price': 'rhart-video-v3.1-fast/start-end-to-video',
+  'google/veo3.1-pro/text-to-video-channel-low-price': 'rhart-video-v3.1-pro/text-to-video',
+  'google/veo3.1-pro/image-to-video-channel-low-price': 'rhart-video-v3.1-pro/image-to-video',
+  'google/veo3.1-pro/start-end-to-video-channel-low-price': 'rhart-video-v3.1-pro/start-end-to-video',
 };
 
 export interface RHTaskResult {
@@ -135,7 +205,7 @@ function rhResponseError(json: any, phase: string) {
   const statusUpper = String(json?.status || '').toUpperCase();
   const failed = statusUpper === 'FAILED' || statusUpper === 'ERROR';
   if (!failed) {
-    const code0 = !code || code === '0';
+    const code0 = !code || code === '0' || code === '200';
     const msgIsSuccess = !directMessage || /^(success|成功)$/i.test(directMessage.trim());
     if (code0 && msgIsSuccess) return '';
   }
@@ -145,6 +215,12 @@ function rhResponseError(json: any, phase: string) {
 
 function rhBase(baseUrl?: string) {
   return (baseUrl || RH_BASE).trim().replace(/\/+$/, '');
+}
+
+function runningHubApiDocEndpoint(value: string) {
+  const docId = value.match(/(?:^|\/)runninghub-api-doc(?:-cn)?\/api-(\d+)(?:\.md)?$/i)?.[1]
+    || value.match(/^api-(\d+)(?:\.md)?$/i)?.[1];
+  return docId ? RUNNINGHUB_API_DOC_ENDPOINTS[docId] : undefined;
 }
 
 function truncateDebugText(value: string, max = 120) {
@@ -256,6 +332,8 @@ export function normalizeRunningHubModelEndpoint(modelEndpoint?: string) {
       const parsed = new URL(value);
       const detailId = parsed.pathname.match(/\/call-api\/api-detail\/(\d+)/i)?.[1];
       if (detailId && RUNNINGHUB_DETAIL_ENDPOINTS[detailId]) return RUNNINGHUB_DETAIL_ENDPOINTS[detailId];
+      const docEndpoint = runningHubApiDocEndpoint(parsed.pathname);
+      if (docEndpoint) return docEndpoint;
       value = parsed.pathname || '';
     } catch {
       return '';
@@ -269,6 +347,8 @@ export function normalizeRunningHubModelEndpoint(modelEndpoint?: string) {
     .replace(/^openapi\/v2\/?/i, '')
     .replace(/^runninghub\/+/i, '')
     .replace(/\/+$/, '');
+  const docEndpoint = runningHubApiDocEndpoint(value);
+  if (docEndpoint) return docEndpoint;
   const alias = RUNNINGHUB_PRODUCT_ALIASES[value.toLowerCase()];
   if (alias) return alias;
   return value;
@@ -300,6 +380,25 @@ function assertNotAborted(signal?: AbortSignal) {
   if (signal?.aborted) throw signal.reason || new DOMException('RunningHub request aborted', 'AbortError');
 }
 
+const RH_FETCH_TIMEOUT_MS = 30_000;
+
+function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number, userSignal?: AbortSignal): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(new DOMException('RunningHub request timeout', 'TimeoutError')), timeoutMs);
+  if (userSignal) {
+    if (userSignal.aborted) {
+      clearTimeout(timer);
+      controller.abort(userSignal.reason);
+    } else {
+      userSignal.addEventListener('abort', () => {
+        clearTimeout(timer);
+        controller.abort(userSignal.reason);
+      }, { once: true });
+    }
+  }
+  return fetch(url, { ...init, signal: controller.signal }).finally(() => clearTimeout(timer));
+}
+
 function delay(ms: number, signal?: AbortSignal) {
   return new Promise<void>((resolve, reject) => {
     if (signal?.aborted) {
@@ -326,12 +425,11 @@ export async function rhSubmitTask(
   const url = rhTaskUrl(options.baseUrl || RH_BASE, modelEndpoint);
 
   console.log('[RH Debug] rhSubmitTask fetch start', { url, payloadKeys: Object.keys(payload || {}), payloadSize: JSON.stringify(payload).length });
-  const res = await fetch(url, {
-    signal: options.signal,
+  const res = await fetchWithTimeout(url, {
     method: 'POST',
     headers: rhHeaders(apiKey),
     body: JSON.stringify(payload),
-  });
+  }, 60_000, options.signal);
   console.log('[RH Debug] rhSubmitTask response raw', { status: res.status, ok: res.ok, contentType: res.headers.get('content-length'), ct: res.headers.get('content-type') });
 
   if (!res.ok) {
@@ -357,21 +455,22 @@ export async function rhQueryTask(
   options: Pick<RHRunOptions, 'baseUrl' | 'signal'> = {},
 ): Promise<RHTaskResponse> {
   assertNotAborted(options.signal);
-  const res = await fetch(`${rhBase(options.baseUrl)}/query`, {
-    signal: options.signal,
+  const res = await fetchWithTimeout(`${rhBase(options.baseUrl)}/query`, {
     method: 'POST',
     headers: rhHeaders(apiKey),
     body: JSON.stringify({ taskId }),
-  });
+  }, RH_FETCH_TIMEOUT_MS, options.signal);
 
   if (!res.ok) {
     const text = await res.text();
+    console.error('[RH Debug] rhQueryTask !res.ok', { status: res.status, taskId, body: text });
     throw new Error(withRunningHubDebug(`RunningHub query failed (${res.status}): ${text}`, {
       baseUrl: rhBase(options.baseUrl),
       taskId,
     }));
   }
   const json = await res.json();
+  console.log('[RH Debug] rhQueryTask result', { taskId, status: json?.status, hasResults: !!json?.results, resultsCount: json?.results?.length });
   const error = rhResponseError(json, 'RunningHub query');
   if (error) throw new Error(withRunningHubDebug(error, {
     baseUrl: rhBase(options.baseUrl),
@@ -379,6 +478,43 @@ export async function rhQueryTask(
     response: json,
   }));
   return json;
+}
+
+/**
+ * Cancel a RunningHub server task (best-effort).
+ *
+ * Endpoint: POST {RH_HOST}/task/openapi/cancel with body {apiKey, taskId}.
+ * Documented under ComfyUI Workflows but works for any taskId returned by the
+ * v2 standard model API (unified task system). Swallows all errors so abort
+ * flow is never blocked by a failed cancel.
+ */
+export async function rhCancelTask(
+  apiKey: string,
+  taskId: string,
+  options: Pick<RHRunOptions, 'baseUrl'> = {},
+): Promise<void> {
+  if (!apiKey || !taskId) return;
+  const host = (options.baseUrl || RH_HOST).replace(/\/openapi\/v2\/?$/i, '').replace(/\/+$/, '');
+  const url = `${host}/task/openapi/cancel`;
+  try {
+    const res = await fetchWithTimeout(url, {
+      method: 'POST',
+      headers: rhHeaders(apiKey),
+      body: JSON.stringify({ apiKey, taskId }),
+    }, 15_000);
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      console.warn('[RunningHub] cancel request failed', { status: res.status, taskId, body: text });
+      return;
+    }
+    const json = await res.json();
+    const code = firstString(json?.code);
+    if (code && code !== '0') {
+      console.warn('[RunningHub] cancel returned non-success', { code, msg: json?.msg, taskId });
+    }
+  } catch (err) {
+    console.warn('[RunningHub] cancel request threw', { taskId, error: err });
+  }
 }
 
 /** Upload a file and get a temporary URL (valid 24h) */
@@ -481,22 +617,36 @@ export async function rhRunTask(
   }
 
   for (let i = 0; i < MAX_POLL_ATTEMPTS; i++) {
-    await delay(POLL_INTERVAL, options.signal);
+    try {
+      await delay(POLL_INTERVAL, options.signal);
+      const result = await rhQueryTask(apiKey, taskId, options);
+      options.onProgress?.(result.status, i + 1);
 
-    const result = await rhQueryTask(apiKey, taskId, options);
-    options.onProgress?.(result.status, i + 1);
-
-    if (result.status === 'SUCCESS') return result;
-    if (result.status === 'FAILED') {
-      throw new Error(
-        withRunningHubDebug(`RunningHub task failed: ${result.errorMessage || 'Unknown error'}`, {
-          ...debugContext,
-          taskId,
-          response: result,
-        }),
-      );
+      if (result.status === 'SUCCESS') return result;
+      if (result.status === 'FAILED') {
+        throw new Error(
+          withRunningHubDebug(`RunningHub task failed: ${result.errorMessage || 'Unknown error'}`, {
+            ...debugContext,
+            taskId,
+            response: result,
+          }),
+        );
+      }
+      // QUEUED or RUNNING — continue polling
+    } catch (err) {
+      // User abort: stop polling AND cancel the server task so it stops consuming quota.
+      if (options.signal?.aborted) {
+        await rhCancelTask(apiKey, taskId, { baseUrl: options.baseUrl });
+        throw err;
+      }
+      // Query timeout: log and continue polling (server task may still be running fine).
+      if (err instanceof DOMException && err.name === 'TimeoutError') {
+        console.warn('[RH Debug] rhQueryTask timeout, retrying next poll', { taskId, attempt: i + 1 });
+        options.onProgress?.('RUNNING', i + 1);
+        continue;
+      }
+      throw err;
     }
-    // QUEUED or RUNNING — continue polling
   }
 
   throw new Error(withRunningHubDebug('RunningHub task timed out after polling', {
@@ -512,10 +662,18 @@ export async function rhTestApiKey(apiKey: string, baseUrl?: string): Promise<bo
     const res = await fetch(`${rhBase(baseUrl)}/query`, {
       method: 'POST',
       headers: rhHeaders(apiKey),
-      body: JSON.stringify({ taskId: 'test-0000' }),
+      body: JSON.stringify({ taskId: '1234567890123456789' }),
     });
-    // If 401/403 → bad key; any other response (including 404 for bad taskId) → key works
-    return res.status !== 401 && res.status !== 403;
+    // If auth fails, RunningHub may still return HTTP 200 with a business error code.
+    // A missing dummy task means the key reached the API; auth codes/messages mean it did not.
+    if (res.status === 401 || res.status === 403) return false;
+    const json = await res.json().catch(() => null);
+    const code = firstString(json?.errorCode, json?.code);
+    const message = firstString(json?.errorMessage, json?.msg, json?.message);
+    if (/^(401|403|802|806)$/i.test(code) || /api\s*key|apikey|unauthori[sz]ed|forbidden|permission|token|认证|鉴权|权限/i.test(message)) {
+      return false;
+    }
+    return true;
   } catch {
     return false;
   }

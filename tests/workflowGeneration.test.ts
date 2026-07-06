@@ -86,6 +86,57 @@ describe('workflow generation', () => {
     expect(ingestMedia).toHaveBeenCalled();
   });
 
+  it('passes only connected and mentioned media refs, never the initiating media node itself', async () => {
+    const source = project();
+    source.nodes = [
+      { id: 'ref-a', type: 'image', title: '参考 A', position: { x: 0, y: 0 }, width: 120, height: 90, metadata: { href: 'https://cdn.example.com/a.png', mimeType: 'image/png' } },
+      { id: 'ref-b', type: 'image', title: '参考 B', position: { x: 0, y: 120 }, width: 120, height: 90, metadata: { href: 'https://cdn.example.com/b.png', mimeType: 'image/png' } },
+      { id: 'ref-c', type: 'image', title: '参考 C', position: { x: 0, y: 240 }, width: 120, height: 90, metadata: { href: 'https://cdn.example.com/c.png', mimeType: 'image/png' } },
+      { id: 'self-video', type: 'video', title: '当前视频节点', position: { x: 420, y: 0 }, width: 360, height: 240, metadata: { href: 'https://cdn.example.com/self.mp4', mimeType: 'video/mp4', prompt: '让画面动起来', config: { mode: 'video', modelId: 'seedance-2.0' } } },
+    ];
+    source.connections = [
+      { id: 'a', fromNodeId: 'ref-a', toNodeId: 'self-video' },
+      { id: 'b', fromNodeId: 'ref-b', toNodeId: 'self-video' },
+    ];
+    source.nodes[3].metadata.mentionedNodeIds = ['ref-c'];
+    const executeMedia = vi.fn().mockResolvedValue({ ok: true, elementId: 'self-video', capability: 'video', mediaUrl: 'https://output/video', mimeType: 'video/mp4' });
+
+    await runWorkflowGeneration(source, 'self-video', {
+      userApiKeys: [{ ...imageKey, provider: 'volcengine', capabilities: ['video'], customModels: ['seedance-2.0'] }],
+      modelPreference: { textModel: '', imageModel: '', videoModel: 'seedance-2.0' },
+      executeMedia,
+      fetchMedia: vi.fn().mockResolvedValue(new Blob(['video'])),
+      ingestMedia: vi.fn().mockResolvedValue({ type: 'video', storageKey: 'video', name: 'video.mp4', mimeType: 'video/mp4', bytes: 5 }),
+      createVideoPoster: vi.fn().mockResolvedValue(null),
+      onProjectChange: vi.fn(),
+    });
+
+    const references = executeMedia.mock.calls[0][0].references;
+    expect(references.map((reference: any) => reference.elementId)).toEqual(['ref-a', 'ref-b', 'ref-c']);
+    expect(references.some((reference: any) => reference.elementId === 'self-video')).toBe(false);
+  });
+
+  it('ignores stale hidden referenceNodeIds when there is no visible connection or @mention', async () => {
+    const source = project();
+    source.nodes.push({ id: 'stale', type: 'image', title: '旧隐藏引用', position: { x: 0, y: 440 }, width: 120, height: 90, metadata: { href: 'https://cdn.example.com/stale.png', mimeType: 'image/png' } });
+    source.nodes[2].metadata.referenceNodeIds = ['stale'];
+    source.connections = source.connections.filter(connection => connection.fromNodeId !== 'image-1');
+    const executeMedia = vi.fn().mockResolvedValue({ ok: true, elementId: 'config-1', capability: 'image', mediaUrl: 'https://output/image', mimeType: 'image/png' });
+
+    await runWorkflowGeneration(source, 'config-1', {
+      userApiKeys: [imageKey],
+      modelPreference: { textModel: '', imageModel: 'gpt-image-2', videoModel: '' },
+      executeMedia,
+      fetchMedia: vi.fn().mockResolvedValue(new Blob(['image'])),
+      ingestMedia: vi.fn().mockResolvedValue({ type: 'image', storageKey: 'result', name: 'result.png', mimeType: 'image/png', bytes: 5 }),
+      onProjectChange: vi.fn(),
+      encodeDataUrl: vi.fn().mockResolvedValue('data:image/png;base64,AA=='),
+    });
+
+    const references = executeMedia.mock.calls[0][0].references;
+    expect(references.map((reference: any) => reference.elementId)).toEqual([]);
+  });
+
   it('cancels an active request and ignores its late provider result', async () => {
     const source = project();
     let resolve!: (value: any) => void;

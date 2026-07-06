@@ -45,7 +45,7 @@ interface ActiveRequest {
 
 const activeRequests = new Map<string, ActiveRequest>();
 const requestKey = (projectId: string, nodeId: string) => `${projectId}:${nodeId}`;
-const isAbort = (error: unknown) => error instanceof Error && error.name === 'AbortError';
+const isAbort = (error: unknown) => Boolean(error && typeof error === 'object' && 'name' in error && error.name === 'AbortError');
 const abortError = () => new DOMException('生成已停止', 'AbortError');
 
 const preferredModel = (preferences: ModelPreference, mode: WorkflowGenerationMode) => (
@@ -188,7 +188,7 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
     }
 
     const capability = getGenerationCapability(runtime.userApiKeys, mode, modelRef);
-    const mediaSources = [...new Map([initiating, ...related].filter(node => node.type === 'image' || node.type === 'video' || node.type === 'audio').map(node => [node.id, node])).values()];
+    const mediaSources = [...new Map(related.filter(node => node.type === 'image' || node.type === 'video' || node.type === 'audio').map(node => [node.id, node])).values()];
     const autoReferences = (await Promise.all(mediaSources.map(async node => {
       if (!capability.supportsReferences.includes(node.type as 'image' | 'video' | 'audio')) return null;
       const href = await resolveMediaHref(node, runtime, temporaryUrls);

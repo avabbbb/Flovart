@@ -78,10 +78,7 @@ export function getUpstreamData(
   nodes: WorkflowNode[],
   connections: WorkflowConnection[],
 ): UpstreamData {
-  const explicitRefs = targetNode.metadata.referenceNodeIds || [];
-  const upstreamNodeIds = explicitRefs.length > 0
-    ? explicitRefs
-    : connections.filter(c => c.toNodeId === targetNode.id).map(c => c.fromNodeId);
+  const upstreamNodeIds = Array.from(new Set(connections.filter(c => c.toNodeId === targetNode.id).map(c => c.fromNodeId)));
   const nodesById = new Map(nodes.map(n => [n.id, n]));
   const data: UpstreamData = { imageHrefs: [], videoHrefs: [], audioHrefs: [], textContents: [], referenceNodeIds: upstreamNodeIds };
   upstreamNodeIds.forEach(id => {

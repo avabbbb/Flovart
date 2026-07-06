@@ -982,17 +982,46 @@ const RUNNINGHUB_STANDARD_MODEL_DEFAULTS: Array<{ pattern: RegExp; payload: Reco
     { pattern: /^rhart-image-(?:g-2|n-g31-flash)\/(?:text-to-image|image-to-image)$/i, payload: { resolution: '1k' } },
     { pattern: /^rhart-image-n-pro(?:-official)?\/(?:text-to-image|edit(?:-ultra)?)$/i, payload: { resolution: '1k' } },
     { pattern: /^rhart-image-v1(?:-official)?\/(?:text-to-image|edit)$/i, payload: { resolution: '1k' } },
+    { pattern: /^youchuan\/text-to-image-v81$/i, payload: { hd: false } },
     {
-        pattern: /^rhart-video\/sparkvideo-2\.0\/multimodal-video$/i,
+        pattern: /^rhart-video\/sparkvideo-2\.0(?:-fast)?\/(?:text-to-video|image-to-video|multimodal-video)$/i,
         payload: {
             resolution: '720p',
             duration: '5',
-            generateAudio: false,
+            generateAudio: true,
+            ratio: 'adaptive',
             realPersonMode: true,
             conversionSlots: ['all'],
             returnLastFrame: false,
             seed: -1,
         },
+    },
+    {
+        pattern: /^rhart-video\/sparkvideo-2\.0(?:-fast)?\/text-to-video$/i,
+        payload: { webSearch: false },
+    },
+    {
+        pattern: /^rhart-video\/sparkvideo-2\.0(?:-fast)?\/(?:image-to-video|multimodal-video)$/i,
+        payload: { realPersonMode: true, conversionSlots: ['all'] },
+    },
+    // Veo 3.1 系列（Google DeepMind 旗舰视频，原生音频 + 口型同步）
+    {
+        pattern: /^rhart-video-v3\.1(?:-[\w-]+)?\/(?:text-to-video|image-to-video|start-end-to-video)$/i,
+        payload: { resolution: '720p', duration: '8', generateAudio: false },
+    },
+    {
+        pattern: /^rhart-video-v3\.1-pro-official\/reference-to-video$/i,
+        payload: { resolution: '1080p', generateAudio: false },
+    },
+    // SkyReels V4 Omni（天工 AI 统一多模态视频，@tag 引用机制）
+    {
+        pattern: /^skyreels-v4\/omni-reference(?:-(?:fast|std))?$/i,
+        payload: { resolution: '1080p', duration: 5, promptOptimizer: true },
+    },
+    // 全能视频S（低价渠道版，duration '10'/'15'，aspectRatio 16:9/9:16）
+    {
+        pattern: /^rhart-video-s\/text-to-video$/i,
+        payload: { duration: '10' },
     },
 ];
 
@@ -1027,7 +1056,31 @@ function isRunningHubSeedance20Model(modelEndpoint: string) {
 }
 
 function isRunningHubVideoEndpoint(modelEndpoint: string) {
-    return /rhart-video\/|image-to-video|start-end-to-video|multimodal-video/i.test(modelEndpoint);
+    return /rhart-video[-\/]|skyreels-v4|image-to-video|start-end-to-video|reference-to-video|multimodal-video/i.test(modelEndpoint);
+}
+
+function isRunningHubVeo31Model(modelEndpoint: string) {
+    return /rhart-video-v3\.1/i.test(modelEndpoint);
+}
+
+function isRunningHubVeo31LowPriceModel(modelEndpoint: string) {
+    return /rhart-video-v3\.1-(?:fast|pro)\//i.test(modelEndpoint);
+}
+
+function isRunningHubVeo31ReferenceModel(modelEndpoint: string) {
+    return /rhart-video-v3\.1[\w.-]*\/reference-to-video/i.test(modelEndpoint);
+}
+
+function isRunningHubVeo31LiteModel(modelEndpoint: string) {
+    return /rhart-video-v3\.1-lite/i.test(modelEndpoint);
+}
+
+function isRunningHubOmniModel(modelEndpoint: string) {
+    return /skyreels-v4\/omni-reference/i.test(modelEndpoint);
+}
+
+function isRunningHubVideoSModel(modelEndpoint: string) {
+    return /rhart-video-s\//i.test(modelEndpoint);
 }
 
 function runningHubAspectRatioField(modelEndpoint: string) {
@@ -1042,8 +1095,12 @@ function assertRunningHubPublicUrl(href: string | undefined, fieldName: string) 
     return url;
 }
 
+function uniqueLimitedUrls(urls: string[], max: number) {
+    return Array.from(new Set(urls)).slice(0, max);
+}
+
 function runningHubReferenceFields(modelEndpoint: string, references: VideoImage[] = []) {
-    if (/image-to-image|image-to-video|start-end-to-video/i.test(modelEndpoint) && references.length === 0) {
+    if (/image-to-image|image-to-video|start-end-to-video|reference-to-video/i.test(modelEndpoint) && references.length === 0) {
         throw new Error(`RunningHub ${modelEndpoint} 需要至少一张参考图，请连接图片节点或拖入图片后再生成。`);
     }
     const first = references.find(ref => ref.slotRole === 'first_frame') || references[0];
@@ -1051,7 +1108,31 @@ function runningHubReferenceFields(modelEndpoint: string, references: VideoImage
     const urls = references.map((ref, index) => assertRunningHubPublicUrl(ref.href, `imageUrls[${index}]`));
     const output: Record<string, unknown> = {};
 
-    if (/start-end-to-video/i.test(modelEndpoint) || /(?:sparkvideo|seedance)-2\.0\/image-to-video/i.test(modelEndpoint)) {
+    if (isRunningHubOmniModel(modelEndpoint) && references.length > 0) {
+        throw new Error('SkyReels V4 Omni 参考输入（refImages/refVideos）暂未支持，请去掉参考图后使用文生视频。');
+    }
+
+    // Veo 3.1 Fast official image-to-video：imageUrl + optional lastImageUrl。
+    if (/rhart-video-v3\.1-fast-official\/image-to-video/i.test(modelEndpoint)) {
+        if (first?.href) output.imageUrl = assertRunningHubPublicUrl(first.href, 'imageUrl');
+        if (last?.href) output.lastImageUrl = assertRunningHubPublicUrl(last.href, 'lastImageUrl');
+        return output;
+    }
+
+    // Veo 3.1 Pro image-to-video：imageUrl 单数；Fast 低价图生视频仍用 imageUrls 数组。
+    if (/rhart-video-v3\.1-pro(?:-official)?\/image-to-video/i.test(modelEndpoint)) {
+        if (first?.href) output.imageUrl = assertRunningHubPublicUrl(first.href, 'imageUrl');
+        return output;
+    }
+
+    // Veo 3.1 start-end-to-video：firstFrameUrl + lastFrameUrl
+    if (/rhart-video-v3\.1[\w.-]*\/start-end-to-video/i.test(modelEndpoint)) {
+        if (first?.href) output.firstFrameUrl = assertRunningHubPublicUrl(first.href, 'firstFrameUrl');
+        if (last?.href) output.lastFrameUrl = assertRunningHubPublicUrl(last.href, 'lastFrameUrl');
+        return output;
+    }
+
+    if (/start-end-to-video/i.test(modelEndpoint) || /(?:sparkvideo|seedance)-2\.0(?:-[\w-]+)?\/image-to-video/i.test(modelEndpoint)) {
         if (first?.href) output.firstFrameUrl = assertRunningHubPublicUrl(first.href, 'firstFrameUrl');
         if (last?.href) output.lastFrameUrl = assertRunningHubPublicUrl(last.href, 'lastFrameUrl');
         return output;
@@ -1059,6 +1140,19 @@ function runningHubReferenceFields(modelEndpoint: string, references: VideoImage
 
     if (/kling|hailuo/i.test(modelEndpoint) && urls[0]) {
         output.imageUrl = urls[0];
+        return output;
+    }
+
+    // youchuan/text-to-image-v81 垫图用 imageUrl 单数（非 imageUrls 数组）
+    if (/youchuan\/text-to-image/i.test(modelEndpoint) && urls[0]) {
+        output.imageUrl = urls[0];
+        return output;
+    }
+
+    // Veo 3.1 Fast 低价图生视频 + 各 reference-to-video：imageUrls 数组 max 3 (schema api-448183087/459865180)
+    if (/rhart-video-v3\.1[\w.-]*\/(?:image-to-video|reference-to-video)/i.test(modelEndpoint)) {
+        if (urls.length > 3) console.warn(`[RunningHub] ${modelEndpoint} 仅支持最多 3 张参考图，已截断 ${urls.length} → 3`);
+        output.imageUrls = uniqueLimitedUrls(urls, 3);
         return output;
     }
 
@@ -1073,7 +1167,7 @@ function runningHubMultimodalFields(
     references: VideoImage[] = [],
     slots: MultimodalSlot[] = [],
 ) {
-    if (!/(?:sparkvideo|seedance)-2\.0\/multimodal-video/i.test(modelEndpoint)) {
+    if (!/(?:sparkvideo|seedance)-2\.0(?:-[\w-]+)?\/multimodal-video/i.test(modelEndpoint)) {
         return runningHubReferenceFields(modelEndpoint, references);
     }
     const imageUrls = [
@@ -1083,9 +1177,9 @@ function runningHubMultimodalFields(
     const videoUrls = slots.filter(slot => slot.kind === 'video').map((slot, index) => assertRunningHubPublicUrl(slot.href, `videoUrls[${index}]`));
     const audioUrls = slots.filter(slot => slot.kind === 'audio').map((slot, index) => assertRunningHubPublicUrl(slot.href, `audioUrls[${index}]`));
     const output: Record<string, unknown> = {};
-    if (imageUrls.length > 0) output.imageUrls = Array.from(new Set(imageUrls));
-    if (videoUrls.length > 0) output.videoUrls = Array.from(new Set(videoUrls));
-    if (audioUrls.length > 0) output.audioUrls = Array.from(new Set(audioUrls));
+    if (imageUrls.length > 0) output.imageUrls = uniqueLimitedUrls(imageUrls, 9);
+    if (videoUrls.length > 0) output.videoUrls = uniqueLimitedUrls(videoUrls, 3);
+    if (audioUrls.length > 0) output.audioUrls = uniqueLimitedUrls(audioUrls, 3);
     return output;
 }
 
@@ -1173,10 +1267,54 @@ function buildRunningHubStandardPayload(
         [promptField]: prompt,
     };
     if (!nodeFieldModel) {
-        if (options?.aspectRatio) payload[runningHubAspectRatioField(modelEndpoint)] = options.aspectRatio;
+        const isVeo31Ref = isRunningHubVeo31ReferenceModel(modelEndpoint);
+        const isVeo31 = isRunningHubVeo31Model(modelEndpoint);
+        const isVeo31LowPrice = isRunningHubVeo31LowPriceModel(modelEndpoint);
+        const isProOfficialRef = /rhart-video-v3\.1-pro-official\/reference-to-video/i.test(modelEndpoint);
+        if (options?.aspectRatio && !isProOfficialRef) payload[runningHubAspectRatioField(modelEndpoint)] = options.aspectRatio;
         if (isRunningHubVideoEndpoint(modelEndpoint)) {
             payload.resolution = options?.resolution || payload.resolution || '720p';
-            payload.duration = String(options?.durationSec || payload.duration || 5);
+            if (isVeo31Ref) {
+                // Veo 3.1 reference-to-video：无 duration；fast-official 保留 aspectRatio (16:9/9:16)，pro-official 无 aspectRatio 字段
+                delete payload.duration;
+                if (isProOfficialRef) {
+                    delete payload.aspectRatio;
+                } else if (payload.aspectRatio !== '9:16' && payload.aspectRatio !== '16:9') {
+                    payload.aspectRatio = '16:9';
+                }
+            } else if (isVeo31) {
+                // Veo 3.1：duration 必须是 '4'/'6'/'8' 字符串
+                const isStartEnd = /start-end-to-video/i.test(modelEndpoint);
+                const isLiteOfficial = isRunningHubVeo31LiteModel(modelEndpoint);
+                if (isVeo31LowPrice) {
+                    if (payload.aspectRatio !== '9:16' && payload.aspectRatio !== '16:9') payload.aspectRatio = '16:9';
+                    delete payload.generateAudio;
+                    payload.duration = '8';
+                } else if (isStartEnd) {
+                    // Veo 3.1 start-end-to-video: schema 只有 duration='8' (lite-official 无 duration 无 generateAudio 字段)
+                    if (isLiteOfficial) {
+                        delete payload.duration;
+                        delete payload.generateAudio;
+                    } else {
+                        payload.duration = '8';
+                    }
+                } else {
+                    const requested = (options?.durationSec && options.durationSec > 0) ? options.durationSec : Number(payload.duration) || 8;
+                    const snapped = [4, 6, 8].reduce((best, v) => Math.abs(v - requested) < Math.abs(best - requested) ? v : best, 4);
+                    payload.duration = String(snapped);
+                }
+            } else if (isRunningHubOmniModel(modelEndpoint)) {
+                // Omni：duration 是 3-15 数字
+                const requested = (options?.durationSec && options.durationSec > 0) ? options.durationSec : Number(payload.duration) || 5;
+                payload.duration = Math.max(3, Math.min(15, Math.round(requested)));
+            } else if (isRunningHubVideoSModel(modelEndpoint)) {
+                // 全能视频S：duration 是 '10'/'15' 字符串，aspectRatio 只支持 '9:16'/'16:9'
+                const requested = (options?.durationSec && options.durationSec > 0) ? options.durationSec : Number(payload.duration) || 10;
+                payload.duration = requested >= 15 ? '15' : '10';
+                if (payload.aspectRatio !== '9:16' && payload.aspectRatio !== '16:9') payload.aspectRatio = '16:9';
+            } else {
+                payload.duration = String((options?.durationSec && options.durationSec > 0) ? options.durationSec : (payload.duration || 5));
+            }
         } else {
             if (options?.durationSec) payload.duration = String(options.durationSec);
             if (options?.resolution) payload.resolution = options.resolution;
@@ -2703,12 +2841,16 @@ export async function pollSeedanceVideoTask(
 
 export async function downloadSeedanceVideoResult(videoUrl: string, options?: { signal?: AbortSignal }): Promise<{ videoBlob: Blob; mimeType: string }> {
     throwIfAborted(options?.signal);
+    console.log('[RH Debug] downloadSeedanceVideoResult start', { url: videoUrl.slice(0, 80) });
     const response = await fetch(videoUrl, { signal: options?.signal });
-    if (!response.ok) throw new Error(`视频下载失败: ${response.statusText}`);
-    return {
-        videoBlob: await response.blob(),
-        mimeType: response.headers.get('Content-Type') || 'video/mp4',
-    };
+    if (!response.ok) {
+        console.error('[RH Debug] downloadSeedanceVideoResult !ok', { status: response.status, statusText: response.statusText });
+        throw new Error(`视频下载失败: ${response.statusText}`);
+    }
+    const blob = await response.blob();
+    const mimeType = response.headers.get('Content-Type') || 'video/mp4';
+    console.log('[RH Debug] downloadSeedanceVideoResult done', { size: blob.size, mimeType });
+    return { videoBlob: blob, mimeType };
 }
 
 /**

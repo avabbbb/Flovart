@@ -54,11 +54,25 @@ title: 待测试确认
 
 ## Provider 与模型偏好
 
-- RunningHub 已作为原生标准模型 Provider 接入设置页、模型拉取、图片生成和视频生成网关；模型列表内置 3 个当前项目使用的官方标准模型端点（全能图片 G-2.0 图生图、全能图片 V2 图生图、seedance2.0 多模态视频），page-api 拉取的模型作为补充，仍可手动补充模型 ID。
+- RunningHub 已作为原生标准模型 Provider 接入设置页、模型拉取、图片生成和视频生成网关；模型列表内置当前项目使用的官方标准模型端点（全能图片、Seedance 2.0、V3.1 视频等），page-api 拉取的模型作为补充，仍可手动补充模型 ID。
 - RunningHub API Key 验证会使用标准模型任务查询端点确认鉴权，并在保存或后台刷新时写入可选模型；模型生成返回的 `results[].url` 会转换成现有图片/视频结果格式。
 - RunningHub 设置页入口文案已改为"3 个官方模型包"，并说明"获取模型"只是补充拉取官方列表；不再提示必须先拉取旧预设。
 - RunningHub WebApp API（`/task/openapi/*`）已移除浏览器禁用的 `Host` 请求头，文件上传、AI App 提交和输出查询在浏览器环境可正常调用。
-- RunningHub 标准模型调用会按详情页字段自动映射 `imageUrls`、`ratio`、`videoUrls` 和 `audioUrls`，并为内置模型包补齐 `resolution`、`duration`、`generateAudio`、`conversionSlots` 等默认载荷；本地 data URL 参考媒体会先上传为临时公网 URL。
+- RunningHub 标准模型调用会按详情页字段自动映射 `imageUrls`、`firstFrameUrl`、`lastFrameUrl`、`ratio`、`videoUrls` 和 `audioUrls`，并为内置模型包补齐 `resolution`、`duration`、`generateAudio`、`returnLastFrame`、`seed` 等默认载荷；本地 data URL 参考媒体会先上传为临时公网 URL。
+- Workflow 生成节点的参考输入收窄为可见连线、Prompt `@` 引用和显式配置槽位；不再把当前媒体节点自身或历史遗留的隐藏 `referenceNodeIds` 自动传给 Provider，避免 RunningHub 视频节点暗中多出参考图。
+- RunningHub API Key 验证已改为解析 HTTP 200 内的业务认证错误码，避免 `APIKEY_USER_NOT_FOUND` 被误判为验证成功；标准模型上传也兼容官方 `code: 200` + `success` 响应，不再把成功上传误报为失败。
+- RunningHub Seedance 2.0 已对齐官方 `rhart-video/sparkvideo-2.0` 命名空间：内置文生、图生、多模态及 Fast 三种端点；旧 `seedance-2.0-global*`、`bytedance/seedance-2.0-global*` 和 `seedance2.0/图生视频` 等展示名会在提交前归一到官方 endpoint。图生视频发送 `firstFrameUrl` / `lastFrameUrl`，多模态发送 `imageUrls` / `videoUrls` / `audioUrls`；RunningHub Seedance 默认载荷改为 `generateAudio: true`，图生/多模态补齐 `realPersonMode: true` 与 `conversionSlots: ['all']`。
+- RunningHub 视频 polling 挂死修复：`rhSubmitTask` / `rhQueryTask` / `rhCancelTask` 改用新增 `fetchWithTimeout`（submit 60s / query 30s / cancel 15s），组合 user signal + timeout AbortController；旧代码 fetch 无 timeout，RunningHub 服务器某次查询不响应时 fetch 永远挂起导致 polling 循环卡死。polling 循环 catch 重构：user abort → 调 `rhCancelTask` 后 throw；query timeout（TimerError）→ console.warn + continue（短暂网络抖动不让整次生成失败）；其他错误 → throw。
+- RunningHub 停止按钮真正取消服务器任务：新增 `rhCancelTask`（`POST {host}/task/openapi/cancel`，body `{apiKey, taskId}`，best-effort，swallow 所有错误），`handleStopNodePromptGeneration` abort 时调用该端点；旧代码 abort 只停客户端 polling，RunningHub 服务器任务继续运行继续扣费。
+- RunningHub Seedance `duration: "-1"` bug 修复：`SEEDANCE_DURATIONS` 首项 `-1` 是 truthy，`payload.duration = String(durationSec || payload.duration || 5)` 在用户选 `-1` 时传 `"−1"` 给 RunningHub 导致参数错误；改为 `(durationSec && durationSec > 0) ? durationSec : (payload.duration || 5)`。
+- RunningHub 新增全能视频 V3.1 低价渠道：Fast/Pro 的文生视频、图生视频、首尾帧生视频共 6 个官方 endpoint，并保留已接入的官方稳定版条目。低价展示名（如 `google/veo3.1-fast/start-end-to-video-channel-low-price`）和 RunningHub API 文档页 URL（如 `runninghub-api-doc-cn/api-448183085`）会归一到 `rhart-video-v3.1-*`。字段映射：Fast 低价图生视频用 `imageUrls`，Pro 低价图生视频用 `imageUrl`，低价首尾帧用 `firstFrameUrl` / `lastFrameUrl`；官方 Fast 图生视频用 `imageUrl` / `lastImageUrl`。低价 V3.1 发送 `aspectRatio`（仅 `'16:9'` / `'9:16'`，其他值降级为 `'16:9'`），duration 固定为 `'8'`，不发送文档中没有的 `generateAudio`。
+- RunningHub 新增 SkyReels V4 Omni 模型（天工 AI 统一多模态视频，`@tag` 引用机制）：`skyreels-v4/omni-reference-fast`。当前仅支持文生视频模式（`prompt` + `aspectRatio` + `duration`(数字 3-15) + `resolution` + `promptOptimizer`）；参考输入（`refImages`/`refVideos` 结构需 `tag`/`type`/`image_urls`）暂未支持，连参考图时抛清晰错误提示用户去掉参考图。
+- RunningHub 新增全能视频S 低价渠道版：`rhart-video-s/text-to-video`（文生视频，¥0.9/次）。duration 为 `'10'` / `'15'` 字符串枚举（snap 逻辑：≥15 → `'15'`，否则 `'10'`）；`aspectRatio` 只支持 `'9:16'` / `'16:9'`，其他值（如 `'1:1'`）会自动降级为 `'16:9'`；含可选 `storyboard` 布尔字段（默认 `false`，当前不暴露到 UI）。
+- RunningHub 新增 Veo 3.1 官方稳定版（lite-official）三端点：`rhart-video-v3.1-lite-official/text-to-video`、`rhart-video-v3.1-lite-official/image-to-video`、`rhart-video-v3.1-lite-official/start-end-to-video`。Lite 文生/图生沿用官方字段（duration 4/6/8 snap、generateAudio 兼容），Lite 首尾帧按 schema `api-448184431` 删除 `duration` 和 `generateAudio` 字段（只保留 `aspectRatio` / `resolution`）。
+- RunningHub 新增 Veo 3.1 fast-official 端点：`rhart-video-v3.1-fast-official/reference-to-video`，发送 `imageUrls` 数组（最多 3）+ `aspectRatio`（`'16:9'` / `'9:16'`，其他降级 `'16:9'`）+ `resolution`（`'720p'` / `'1080p'`）+ `generateAudio`，无 `duration`。Pro-official reference 字段映射修正：删除 `aspectRatio`（schema 无此字段），保留 `resolution` + `generateAudio:false` 等官方字段。
+- RunningHub 标准模型新增 schema 数量兜底：V3.1 `imageUrls` 最多 3；Seedance 2.0 多模态最多 9 张图片、3 个视频、3 个音频，超过时提交前裁剪，避免平台返回 `1007 maximum number of inputs`。
+- RunningHub 新增悠船文生图 v8.1：`youchuan/text-to-image-v81`，发送必填 `hd:false`，参考图（垫图）映射到 `imageUrl`（单数）而非 `imageUrls` 数组；包含 `aspectRatio`(`'1:1'`/`'4:3'`/`'3:2'`/`'16:9'`/`'3:4'`/`'2:3'`/`'9:16'`) 字段。
+- RunningHub 新增全能图片 G-2.0 文生图官方端点：`rhart-image-g-2/text-to-image`，发送 `prompt` + `aspectRatio` + `resolution`(`'1k'`/`'2k'`/`'4k'`)。
 - RunningHub 产品展示 slug（如 `nano-banana-pro/edit-channel-low-price`）会在提交前重写为真实 API endpoint（如 `rhart-image-n-pro/edit`），避免上传成功后打到错误路径。
 - RunningHub 标准模型提交、查询和上传会透出平台返回的 `errorCode` / `errorMessage`，并附带不含密钥的 `baseUrl`、最终提交 URL、模型 ID 与 payload 字段摘要；上传未返回公网 URL、模型 ID 仍是未知详情页/搜索页 URL，或 payload 中仍有本地引用时会在本地中断，不再退化成 `No taskId returned`。
 - Seedance 2.0 后端路由修正：`doubao-seedance-2.0` 不再被误判为文本/图片模型；Seedance 视频/音频参考在本地 `data:` / `blob:` 时会在调用 Provider 前明确失败，视频任务停止信号贯穿提交、轮询和下载。
