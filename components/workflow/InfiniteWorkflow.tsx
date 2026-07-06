@@ -1502,6 +1502,35 @@ export function InfiniteWorkflow({
     wfConsumeInsert();
   }, [wfPendingInsert, wfConsumeInsert, selectedNodeData, applyOps]);
 
+  // Native wheel listener with passive:false so Ctrl+scroll zooms the canvas instead of the browser.
+  // React's synthetic onWheel is passive on the root and silently ignores preventDefault.
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    const onWheel = (event: WheelEvent) => {
+      if (event.target instanceof Element && event.target.closest(BLOCKED_TARGET)) return;
+      event.preventDefault();
+      if (event.ctrlKey || wheelMode === 'zoom') {
+        const rect = root.getBoundingClientRect();
+        const world = screenToWorkflow(event.clientX, event.clientY);
+        const k = Math.min(3, Math.max(0.12, viewportRef.current.k * Math.exp(-event.deltaY * 0.0015)));
+        patchProject({ viewport: {
+          x: event.clientX - (rect?.left || 0) - world.x * k,
+          y: event.clientY - (rect?.top || 0) - world.y * k,
+          k,
+        } });
+      } else {
+        patchProject({ viewport: {
+          ...viewportRef.current,
+          x: viewportRef.current.x - event.deltaX,
+          y: viewportRef.current.y - event.deltaY,
+        } });
+      }
+    };
+    root.addEventListener('wheel', onWheel, { passive: false });
+    return () => root.removeEventListener('wheel', onWheel);
+  }, [wheelMode, patchProject, screenToWorkflow]);
+
   return (
     <div
       ref={rootRef}
@@ -1523,26 +1552,6 @@ export function InfiniteWorkflow({
         if (!isTrueBackground(event.target)) return;
         event.preventDefault();
         openCreateMenu(event.clientX, event.clientY);
-      }}
-      onWheel={event => {
-        if (event.target instanceof Element && event.target.closest(BLOCKED_TARGET)) return;
-        event.preventDefault();
-        if (event.ctrlKey || wheelMode === 'zoom') {
-          const rect = rootRef.current?.getBoundingClientRect();
-          const world = screenToWorkflow(event.clientX, event.clientY);
-          const k = Math.min(3, Math.max(0.12, viewportRef.current.k * Math.exp(-event.deltaY * 0.0015)));
-          patchProject({ viewport: {
-            x: event.clientX - (rect?.left || 0) - world.x * k,
-            y: event.clientY - (rect?.top || 0) - world.y * k,
-            k,
-          } });
-        } else {
-          patchProject({ viewport: {
-            ...viewportRef.current,
-            x: viewportRef.current.x - event.deltaX,
-            y: viewportRef.current.y - event.deltaY,
-          } });
-        }
       }}
       onContextMenu={event => event.preventDefault()}
     >
