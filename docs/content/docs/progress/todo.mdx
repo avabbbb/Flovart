@@ -3,6 +3,7 @@ title: 后续待办
 ---
 
 - 用户确认新版 Workflow 的交互与 Agent 工作方式后，再将本次能力移入正式功能说明。
+- **画布回退到 5d2fc18 SVG/Konva 版 + Agent Chat 接线 + insertBefore 修复**：✅ 已完成，待用户测试确认。Excalidraw 主路径化重构反复回归，决定回退 2026-06-25 的 `5d2fc18`（纯 SVG/Konva 渲染），删除全部 Excalidraw 专属文件，保留 Phase 1.3-1.4 Agent Chat 整套组件，并在 5d2fc18 版 `App.tsx` 重新挂接 Agent Chat 接线（`pendingChatAttachments` state + `triggerAddToChat` callback + RightPanel 9 props + ElementToolbar `onAddToChat` 按钮）；同时给 5d2fc18 预存的 `renderMediaInKonva ? <rect> : <image|foreignObject>` ternary 两分支添加显式 `key`，修复拖图片到画布时 React `insertBefore` NotFoundError。详见 `pending-test.mdx` "画布从 Excalidraw 回退" 节。
 - 等现有 Provider 层提供音频生成能力后，为 Workflow 配置节点启用音频生成；当前音频上传、播放、引用和配置元数据已保留，但运行时会明确提示暂不支持。
 - Docker 静态资源路径仍需单独验证，本次 Workflow 重构不改变该状态。
 - App.tsx 节点提示生成 hook 与画布渲染 JSX 提取已评估为净负面可读性（依赖参数数十个），保留在 `App.tsx` 直到后续重构方案明确。
@@ -59,7 +60,6 @@ title: 后续待办
 - **后端已实现**（enterprise 服务）：11 张新表 AutoMigrate + credit/apikey/pricing/quota/ai-proxy/resource/approval/sensitive/project 全链路 repo→service→handler→路由注册。权限从 11→14 个（新增 `apikey:manage` / `pricing:manage` / `quota:manage`）。待用户编译验证。
 - **前端已实现**：`services/enterpriseApi.ts` 全量 API 客户端；`EnterpriseApp.tsx` 重写为侧边栏导航（9 项分 7 组）；6 个新面板（credit/apikey/resource/approval/sensitive/project）。待用户测试确认。
 - **待办**：
-  - 用户手动编译验证后端（`cd backend/enterprise && go build ./cmd/server`）。
   - 前端 EnterpriseApp 接入真实后端联调。
   - owner 转让流程（创建 owner 转让→受让→确认）。
   - R2 上传接入资源库 `POST /resources` 的 `storageKey` + `href`。

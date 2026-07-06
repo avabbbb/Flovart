@@ -5,12 +5,11 @@
 
 
 import React, { useState, useRef, useCallback, useEffect, useMemo, Suspense } from 'react';
-import { exportToCanvas } from '@excalidraw/excalidraw';
 import { Toolbar } from './components/Toolbar';
 import { PromptBar } from './components/PromptBar';
-import { AgentThinkingPanel } from './components/AgentThinkingPanel';
+import { Loader } from './components/Loader';
 import { WorkspaceSidebar } from './components/WorkspaceSidebar';
-import type { Tool, Point, Element, ImageElement, TextElement, UserEffect, WheelAction, GroupElement, Board, VideoElement, AssetLibrary, AssetCategory, AssetItem, UserApiKey, ModelPreference, AIProvider, AICapability, PromptEnhanceMode, CharacterLockProfile, GenerationHistoryItem, ThemeMode, ChatAttachment, ImageFilters } from './types';
+import type { Tool, Point, Element, ImageElement, PathElement, ShapeElement, TextElement, ArrowElement, UserEffect, LineElement, WheelAction, GroupElement, Board, VideoElement, AssetLibrary, AssetCategory, AssetItem, UserApiKey, ModelPreference, AIProvider, AICapability, PromptEnhanceMode, CharacterLockProfile, GenerationHistoryItem, ThemeMode, ChatAttachment, ImageFilters } from './types';
 import { DEFAULT_IMAGE_FILTERS } from './types';
 import { AssetLibraryPanel } from './components/AssetLibraryPanel';
 import { ImageFilterPanel, buildCssFilter, temperatureMatrix, sharpenKernel } from './components/ImageFilterPanel';
@@ -28,7 +27,7 @@ import { loadAssetLibrary, addAsset, removeAsset, renameAsset, loadAssetLibraryA
 import { loadGenerationHistoryAsync, saveGenerationHistoryAsync } from './utils/generationHistory';
 import { diagnoseKeyCapabilities, inferProviderFromModel, reversePromptStreamWithProvider, DEFAULT_PROVIDER_MODELS, generateImageWithProvider, generateVideoWithProvider, inferCapabilityFromModelName, executeUnifiedIgnition } from './services/aiGateway';
 import type { MultimodalSlot } from './services/aiGateway';
-import { fileToDataUrl, validateAndResizeImage, detectMediaType, resolveMimeType } from './utils/fileUtils';
+import { fileToDataUrl, validateAndResizeImage } from './utils/fileUtils';
 import { translations } from './utils/translations';
 // keyVault imports moved to hooks/useApiKeys.ts
 // usageMonitor imports moved to hooks
@@ -40,29 +39,16 @@ import { appendHistorySnapshot } from './utils/historyState';
 import { compilePromptReferences } from './utils/semanticCompiler';
 import { hydrateRawTextToTiptapJSON } from './utils/htmlHydrator';
 import { readColdMedia, writeColdMedia } from './utils/mediaIndexedDB';
-import { generateId, getElementBounds, rasterizeElements, createNewBoard, THEME_PALETTES, type Rect } from './utils/canvasHelpers';
-import { persistBoardsToIDB, loadBoardsWithIDB, loadCharacterLocksWithIDB, persistCharacterLocksToIDB, safeSetItem, BOARDS_STORAGE_KEY, ACTIVE_BOARD_STORAGE_KEY, STORAGE_QUOTA_MESSAGE, STORAGE_SAVE_FAILED_MESSAGE, IMAGE_GENERATION_TIMEOUT_MS, VIDEO_GENERATION_TIMEOUT_MS } from './utils/boardPersistence';
-import type { RuntimeJob, RuntimeSession, RuntimeError } from './types/runtime';
+import { generateId, getElementBounds, isPointInPolygon, rasterizeElement, rasterizeElements, rasterizeMask, createNewBoard, THEME_PALETTES, SNAP_THRESHOLD, type Rect, type Guide } from './utils/canvasHelpers';
 import { useApiKeys, DEFAULT_MODEL_PREFS, normalizeApiKeyEntry } from './hooks/useApiKeys';
 import { useCanvasInteraction } from './hooks/useCanvasInteraction';
-import { useIdbImageResolution } from './hooks/useIdbImageResolution';
 import { useGeneration } from './hooks/useGeneration';
 import { useToast } from './hooks/useToast';
 import ToastStack from './components/Toast';
 import { AppShell } from './components/AppShell';
-import { FlovartExcalidrawStage } from './components/canvas/FlovartExcalidrawStage';
-import type { ExcalidrawViewport } from './components/canvas/ExcalidrawInner';
-import { CanvasFixedOverlay, useElementContainerRect } from './components/canvas/CanvasFixedOverlay';
-import { type CanvasViewport } from './utils/canvasOverlayViewport';
 import { StudioTopMenu, type StudioMenuModel } from './components/studio/StudioTopMenu';
 import './styles/generation.css';
-import { LANDING_TEMPLATES } from './components/landing/templates';
 import { useWorkspaceStore } from './stores/useWorkspaceStore';
-import { usePromptHistoryStore } from './stores/usePromptHistoryStore';
-import { useVersionHistoryStore } from './stores/useVersionHistoryStore';
-import type { VersionType } from './stores/useVersionHistoryStore';
-import { VersionHistoryPanel } from './components/VersionHistoryPanel';
-import { PromptHistoryPalette } from './components/PromptHistoryPalette';
 import { useWorkflowStore } from './components/workflow/store';
 import { useRuntimeStore } from './stores/useRuntimeStore';
 import type { CanvasElement, ElementGenerationState } from './types';
@@ -86,16 +72,264 @@ import {
     isPromptReferenceableElement,
 } from './utils/elementPromptState';
 import { modelRefModelId, resolveModelSelection } from './utils/modelRefs';
+import { getCanvasVisibleRegion } from './utils/canvasViewport';
 import { exportMediaArchive } from './utils/batchMediaExport';
 
-const TRANSPARENT_PIXEL = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
 
 
 
 
 
 
+const BOARDS_STORAGE_KEY = 'boards.v1';
+const ACTIVE_BOARD_STORAGE_KEY = 'boards.activeId.v1';
 
+const STORAGE_QUOTA_ERROR_NAMES = new Set(['QuotaExceededError', 'NS_ERROR_DOM_QUOTA_REACHED']);
+const STORAGE_QUOTA_MESSAGE = '本地存储空间不足，无法保存最新画布。请删除部分历史图片或导出后清理项目。';
+const STORAGE_SAVE_FAILED_MESSAGE = '保存画布失败，请刷新后重试。';
+const IMAGE_GENERATION_TIMEOUT_MS = 180_000;
+const VIDEO_GENERATION_TIMEOUT_MS = 660_000;
+
+type RuntimeJobStatus = 'accepted' | 'running' | 'succeeded' | 'failed' | 'canceled';
+
+type RuntimeProgress = {
+    pct: number;
+    stage: string;
+};
+
+type RuntimeError = {
+    code: 'BAD_REQUEST' | 'UNAUTHORIZED' | 'RATE_LIMITED' | 'PAYLOAD_TOO_LARGE' | 'PROVIDER_UNAVAILABLE' | 'TIMEOUT' | 'INTERNAL_ERROR';
+    message: string;
+    retryAfterMs?: number;
+};
+
+type RuntimeJob = {
+    requestId: string;
+    sessionId: string;
+    jobId: string;
+    command: string;
+    args: unknown;
+    status: RuntimeJobStatus;
+    progress: RuntimeProgress;
+    result?: unknown;
+    error?: RuntimeError;
+    source: 'agent' | 'ui' | 'script';
+    timeoutMs: number;
+    createdAt: number;
+    updatedAt: number;
+};
+
+type RuntimeSession = {
+    id: string;
+    name: string;
+    createdAt: number;
+    lastActiveAt: number;
+    idempotencyMap: Record<string, string>;
+    jobIds: string[];
+};
+
+const isStorageQuotaError = (error: unknown): boolean => {
+    if (!(error instanceof DOMException)) return false;
+    return STORAGE_QUOTA_ERROR_NAMES.has(error.name) || error.code === 22 || error.code === 1014;
+};
+
+/** Safely write to localStorage, catching QuotaExceeded etc. Returns whether write succeeded. */
+const safeSetItem = (key: string, value: string): boolean => {
+    try {
+        localStorage.setItem(key, value);
+        return true;
+    } catch (err) {
+        console.error(`[Storage] Failed to write "${key}" (${(value.length / 1024).toFixed(0)} KB)`, err);
+        return false;
+    }
+};
+
+/** Serialize boards (strip undo history), persist image base64 to IndexedDB */
+const persistBoardsToIDB = async (boards: Board[]): Promise<void> => {
+    const imageEntries: { key: string; data: string }[] = [];
+    const videoPromises: Promise<void>[] = [];
+    const usedImageKeys = new Set<string>();
+    const usedVideoKeys = new Set<string>();
+    const slim = boards.map(b => {
+        const persistedElements = b.elements.map(el => {
+            if (el.type === 'image') {
+                const img = { ...el } as ImageElement;
+                if (isDataUrl(img.href)) {
+                    const key = `board:${el.id}`;
+                    usedImageKeys.add(key);
+                    imageEntries.push({ key, data: img.href });
+                    img.href = toIdbRef(key);
+                } else if (isIdbRef(img.href)) {
+                    usedImageKeys.add(fromIdbRef(img.href));
+                }
+                if (img.mask && isDataUrl(img.mask)) {
+                    const key = `board:${el.id}:mask`;
+                    usedImageKeys.add(key);
+                    imageEntries.push({ key, data: img.mask });
+                    img.mask = toIdbRef(key);
+                } else if (img.mask && isIdbRef(img.mask)) {
+                    usedImageKeys.add(fromIdbRef(img.mask));
+                }
+                return img;
+            }
+            if (el.type === 'video' && (el as VideoElement).href.startsWith('blob:')) {
+                const vid = { ...el } as VideoElement;
+                const key = `board:${el.id}`;
+                usedVideoKeys.add(key);
+                videoPromises.push(
+                    fetch(vid.href)
+                        .then(r => r.blob())
+                        .then(blob => putVideoBlob(key, blob))
+                        .catch(() => { /* best-effort: keep blob URL as fallback */ })
+                );
+                vid.href = toIdbVideoRef(key);
+                return vid;
+            }
+            if (el.type === 'video' && isIdbVideoRef((el as VideoElement).href)) {
+                usedVideoKeys.add(fromIdbVideoRef((el as VideoElement).href));
+            }
+            return el;
+        });
+
+        return {
+            ...b,
+            elements: persistedElements,
+            history: [persistedElements],
+            historyIndex: 0,
+        };
+    });
+    if (imageEntries.length > 0) await putImages(imageEntries);
+    await Promise.all(videoPromises);
+    const serialized = JSON.stringify(slim);
+    try {
+        localStorage.setItem(BOARDS_STORAGE_KEY, serialized);
+    } catch (err) {
+        if (!isStorageQuotaError(err)) throw err;
+        localStorage.removeItem(BOARDS_STORAGE_KEY);
+        localStorage.setItem(BOARDS_STORAGE_KEY, serialized);
+    }
+
+    const [allImageKeys, allVideoKeys] = await Promise.all([getAllKeys(), getAllVideoKeys()]);
+    const staleImageKeys = allImageKeys.filter(key => key.startsWith('board:') && !usedImageKeys.has(key));
+    const staleVideoKeys = allVideoKeys.filter(key => key.startsWith('board:') && !usedVideoKeys.has(key));
+    await Promise.all([
+        deleteImages(staleImageKeys),
+        deleteVideoBlobs(staleVideoKeys),
+    ]);
+};
+
+/** Load boards from localStorage and resolve idb: refs from IndexedDB */
+const loadBoardsWithIDB = async (): Promise<Board[]> => {
+    let boards: Board[];
+    try {
+        const raw = localStorage.getItem(BOARDS_STORAGE_KEY);
+        const parsed = raw ? JSON.parse(raw) : null;
+        if (!Array.isArray(parsed) || parsed.length === 0) {
+            return [createNewBoard('Board 1')];
+        }
+        boards = parsed.filter((board): board is Board =>
+            !!board && typeof board.id === 'string' && typeof board.name === 'string' && Array.isArray(board.elements)
+        );
+        if (boards.length === 0) return [createNewBoard('Board 1')];
+    } catch {
+        return [createNewBoard('Board 1')];
+    }
+    // Collect all idb: refs (images)
+    const refs: string[] = [];
+    // Collect all idb-video: element ids
+    const videoRefs: { boardIdx: number; elIdx: number; key: string }[] = [];
+    for (let bi = 0; bi < boards.length; bi++) {
+        const b = boards[bi];
+        for (let ei = 0; ei < b.elements.length; ei++) {
+            const el = b.elements[ei];
+            if (el.type === 'image') {
+                const img = el as ImageElement;
+                if (isIdbRef(img.href)) refs.push(fromIdbRef(img.href));
+                if (img.mask && isIdbRef(img.mask)) refs.push(fromIdbRef(img.mask));
+            }
+            if (el.type === 'video' && isIdbVideoRef((el as VideoElement).href)) {
+                videoRefs.push({ boardIdx: bi, elIdx: ei, key: fromIdbVideoRef((el as VideoElement).href) });
+            }
+        }
+    }
+    // Resolve images
+    const resolved = refs.length > 0 ? await getImages(refs) : new Map<string, string>();
+    // Resolve videos
+    const videoBlobs = new Map<string, Blob>();
+    await Promise.all(videoRefs.map(async ({ key }) => {
+        const blob = await getVideoBlob(key);
+        if (blob) videoBlobs.set(key, blob);
+    }));
+
+    return boards.map(b => ({
+        ...b,
+        elements: b.elements.map(el => {
+            if (el.type === 'image') {
+                const img = { ...el } as ImageElement;
+                if (isIdbRef(img.href)) {
+                    const data = resolved.get(fromIdbRef(img.href));
+                    if (data) img.href = data;
+                }
+                if (img.mask && isIdbRef(img.mask)) {
+                    const data = resolved.get(fromIdbRef(img.mask));
+                    if (data) img.mask = data;
+                }
+                return img;
+            }
+            if (el.type === 'video' && isIdbVideoRef((el as VideoElement).href)) {
+                const key = fromIdbVideoRef((el as VideoElement).href);
+                const blob = videoBlobs.get(key);
+                if (blob) return { ...el, href: URL.createObjectURL(blob) } as VideoElement;
+            }
+            return el;
+        }),
+    }));
+};
+
+/** Load character locks from localStorage, resolving idb: referenceImage refs */
+const loadCharacterLocksWithIDB = async (): Promise<CharacterLockProfile[]> => {
+    try {
+        const raw = localStorage.getItem('characterLocks.v1');
+        if (!raw) return [];
+        const locks: CharacterLockProfile[] = JSON.parse(raw);
+        const refs = locks.filter(l => isIdbRef(l.referenceImage)).map(l => fromIdbRef(l.referenceImage));
+        if (refs.length === 0) return locks;
+        const resolved = await getImages(refs);
+        return locks.map(lock => {
+            if (isIdbRef(lock.referenceImage)) {
+                const data = resolved.get(fromIdbRef(lock.referenceImage));
+                if (data) return { ...lock, referenceImage: data };
+            }
+            return lock;
+        });
+    } catch {
+        return [];
+    }
+};
+
+/** Save character locks: offload referenceImage base64 to IDB */
+const persistCharacterLocksToIDB = async (locks: CharacterLockProfile[]): Promise<void> => {
+    const entries: { key: string; data: string }[] = [];
+    const usedKeys = new Set<string>();
+    const slim = locks.map(lock => {
+        if (isDataUrl(lock.referenceImage)) {
+            const key = `charlock:${lock.id}`;
+            usedKeys.add(key);
+            entries.push({ key, data: lock.referenceImage });
+            return { ...lock, referenceImage: toIdbRef(key) };
+        }
+        if (isIdbRef(lock.referenceImage)) {
+            usedKeys.add(fromIdbRef(lock.referenceImage));
+        }
+        return lock;
+    });
+    if (entries.length > 0) await putImages(entries);
+    safeSetItem('characterLocks.v1', JSON.stringify(slim));
+
+    const allKeys = await getAllKeys();
+    const staleKeys = allKeys.filter(key => key.startsWith('charlock:') && !usedKeys.has(key));
+    await deleteImages(staleKeys);
+};
 
 const App: React.FC = () => {
 
@@ -124,39 +358,9 @@ const App: React.FC = () => {
     const [promptAttachments, setPromptAttachments] = useState<ChatAttachment[]>([]);
     const [nodePromptAttachments, setNodePromptAttachments] = useState<Record<string, ChatAttachment[]>>({});
     const [chatAttachments, setChatAttachments] = useState<ChatAttachment[]>([]);
+    const [pendingChatAttachments, setPendingChatAttachments] = useState<Array<{ url: string; mimeType: string }>>([]);
     // @mention id tracking for PromptBar integration
     const [mentionedElementIds, setMentionedElementIds] = useState<string[]>([]);
-    // Rich prompt editor document (TipTap JSON) for the docked PromptBar
-    const [promptDocument, setPromptDocument] = useState<Record<string, unknown> | undefined>(undefined);
-    // Phase 1.3: pending attachments injected from canvas ElementToolbar "加入对话" → Agent Chat
-    const [pendingChatAttachments, setPendingChatAttachments] = useState<Array<{ url: string; mimeType: string }>>([]);
-    // Phase 1.5: Excalidraw viewport + container ref for fixed overlay positioning
-    const [excalidrawViewport, setExcalidrawViewport] = useState<ExcalidrawViewport>({ x: 0, y: 0, zoom: 1 });
-    const excalidrawContainerRef = useRef<HTMLDivElement>(null);
-    // Excalidraw API ref lifted from FlovartExcalidrawStage so App.tsx can drive
-    // Magic Generate screenshot export + "加入对话" href resolution from ElementToolbar.
-    const excalidrawApiRef = useRef<any>(null);
-
-    // Phase 1.5 cleanup: Excalidraw-based screen→canvas coordinate conversion.
-    // Replaces dead svgRef/getCanvasPoint (SVG deleted in Phase 1.1).
-    // Excalidraw: screenX = (canvasX + scrollX) * zoom → canvasX = screenX / zoom - scrollX
-    const screenToCanvas = useCallback((screenX: number, screenY: number): { x: number; y: number } => {
-        const rect = excalidrawContainerRef.current?.getBoundingClientRect();
-        if (!rect) return { x: 0, y: 0 };
-        const xOnContainer = screenX - rect.left;
-        const yOnContainer = screenY - rect.top;
-        return {
-            x: xOnContainer / excalidrawViewport.zoom - excalidrawViewport.x,
-            y: yOnContainer / excalidrawViewport.zoom - excalidrawViewport.y,
-        };
-    }, [excalidrawViewport]);
-
-    const getCanvasCenter = useCallback((): { x: number; y: number } => {
-        const rect = excalidrawContainerRef.current?.getBoundingClientRect();
-        if (!rect) return { x: 0, y: 0 };
-        return screenToCanvas(rect.left + rect.width / 2, rect.top + rect.height / 2);
-    }, [screenToCanvas]);
-
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const toast = useToast();
@@ -172,11 +376,14 @@ const App: React.FC = () => {
     });
     const [rightPanelWidth, setRightPanelWidth] = useState(2); // right panel width for PromptBar
     const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
+    const [canvasStageSize, setCanvasStageSize] = useState({ width: 1, height: 1 });
+    const [canvasKonvaReadyIds, setCanvasKonvaReadyIds] = useState<Set<string>>(() => new Set());
+    const [canvasKonvaFailedIds, setCanvasKonvaFailedIds] = useState<Set<string>>(() => new Set());
     const [wheelAction, setWheelAction] = useState<WheelAction>('pan');
+    const [croppingState, setCroppingState] = useState<{ elementId: string; originalElement: ImageElement; cropBox: Rect } | null>(null);
     const [filterPanelElementId, setFilterPanelElementId] = useState<string | null>(null);
     const [outpaintMenuId, setOutpaintMenuId] = useState<string | null>(null);
-    const [inpaintElementId, setInpaintElementId] = useState<string | null>(null);
-    const [isHistoryPanelOpen, setIsHistoryPanelOpen] = useState(false);
+    const [contextMenu, setContextMenu] = useState<{ x: number; y: number; elementId: string | null } | null>(null);
     const [assetLibrary, setAssetLibrary] = useState<AssetLibrary>({ character: [], scene: [], prop: [] });
 
     useEffect(() => () => {
@@ -248,7 +455,7 @@ const App: React.FC = () => {
         }).catch(err => {
             if (!hasShownStorageErrorRef.current) {
                 hasShownStorageErrorRef.current = true;
-                console.error('Failed to persist boards to IDB', err);
+                console.error('Failed to persist boards to localStorage', err);
                 setError(isStorageQuotaError(err) ? STORAGE_QUOTA_MESSAGE : STORAGE_SAVE_FAILED_MESSAGE);
             }
         });
@@ -288,19 +495,7 @@ const App: React.FC = () => {
             activeVideoUrlsRef.current.clear();
         };
     }, []);
-
-    const idbImageHrefs = elements.flatMap(el => {
-        if (el.type !== 'image') return [];
-        const hrefs = [el.href];
-        if (el.mask) hrefs.push(el.mask);
-        return hrefs.filter(h => isIdbRef(h));
-    });
-    const resolvedIdbImages = useIdbImageResolution(idbImageHrefs);
-    const resolveHref = (href: string) => {
-        if (isIdbRef(href)) return resolvedIdbImages[href] || TRANSPARENT_PIXEL;
-        return href;
-    };
-
+    
     useEffect(() => {
         if (typeof window === 'undefined') return;
         const media = window.matchMedia('(prefers-color-scheme: dark)');
@@ -317,6 +512,16 @@ const App: React.FC = () => {
         media.addListener(updateTheme);
         return () => media.removeListener(updateTheme);
     }, []);
+
+    const [editingElement, setEditingElement] = useState<{ id: string; text: string; } | null>(null);
+
+    // Inpaint (灞€閮ㄩ噸缁? state
+    const [inpaintState, setInpaintState] = useState<{
+        targetImageId: string;
+        maskPoints: Point[];  // lasso polygon in canvas coords
+        promptVisible: boolean;
+    } | null>(null);
+    const [inpaintPrompt, setInpaintPrompt] = useState('');
 
     // 鈹€鈹€ Zustand store: shell-level state 鈹€鈹€
     const language = useWorkspaceStore(s => s.language);
@@ -355,6 +560,7 @@ const App: React.FC = () => {
     const [videoWatermark, setVideoWatermark] = useState<boolean>(false);
     const [progressMessage, setProgressMessage] = useState<string>('');
     const [hoveredElementId, setHoveredElementId] = useState<string | null>(null);
+    const [relationFocusElementId, setRelationFocusElementId] = useState<string | null>(null);
     const [recentlyCompleted, setRecentlyCompleted] = useState<Set<string>>(new Set());
     const prevGeneratingIdsRef = useRef<Set<string>>(new Set());
     const runtimeSessionsRef = useRef<Record<string, RuntimeSession>>({});
@@ -387,6 +593,13 @@ const App: React.FC = () => {
         }
         prevGeneratingIdsRef.current = currentGenerating;
     }, [elements]);
+
+    // ======== Layer Mask 编辑状态 ========
+    const [maskEditingId, setMaskEditingId] = useState<string | null>(null); // 正在编辑蒙版的 image element id
+    const [maskBrushSize, setMaskBrushSize] = useState(30);
+    const [maskBrushMode, setMaskBrushMode] = useState<'erase' | 'reveal'>('erase'); // erase = paint black (hide), reveal = paint white (show)
+    const maskCanvasRef = useRef<HTMLCanvasElement | null>(null);
+    const viewportAnimationRef = useRef<number | null>(null);
 
     // 鈹€鈹€ A/B 瀵规瘮鐘舵€?鈹€鈹€鈹€鈹€鈹€鈹€
     const [abCompare, setAbCompare] = useState<{
@@ -433,28 +646,6 @@ const App: React.FC = () => {
         handleAddApiKey, handleDeleteApiKey, handleUpdateApiKey, handleSetDefaultApiKey,
         modelAutoSwitchNotice,
     } = useApiKeys(isSettingsPanelOpen);
-
-    // 鈹€鈹€ Load template from URL ?templateId=xxx (landing page one-click reuse) 鈹€鈹€
-    const templateAppliedRef = useRef(false);
-    useEffect(() => {
-        if (!dataReady || !apiKeysLoaded || templateAppliedRef.current) return;
-        const hash = window.location.hash;
-        const queryIndex = hash.indexOf('?');
-        if (queryIndex === -1) return;
-        const params = new URLSearchParams(hash.slice(queryIndex + 1));
-        const templateId = params.get('templateId');
-        if (!templateId) return;
-        const tpl = LANDING_TEMPLATES.find(t => t.id === templateId);
-        if (!tpl) return;
-        templateAppliedRef.current = true;
-        setPrompt(tpl.prompt);
-        setModelPreference(prev => ({
-            ...prev,
-            imageModel: tpl.type === 'image' ? tpl.model : prev.imageModel,
-            videoModel: tpl.type === 'video' ? tpl.model : prev.videoModel,
-        }));
-        toast.show(`已加载模板：${tpl.title}`, 'success');
-    }, [dataReady, apiKeysLoaded, setModelPreference, toast]);
 
     useEffect(() => {
         if (!boards.length) return;
@@ -514,23 +705,55 @@ const App: React.FC = () => {
         return selected && selected.type === 'image' ? selected : null;
     }, [elements, selectedElementIds]);
 
+    const selectedNodePromptElement = useMemo<CanvasElement | null>(() => {
+        if (selectedElementIds.length !== 1) return null;
+        const selected = elements.find(el => el.id === selectedElementIds[0]);
+        return selected && (selected.type === 'image' || selected.type === 'video') ? selected : null;
+    }, [elements, selectedElementIds]);
+
+    const getRelatedCanvasElementIds = useCallback((sourceId: string, allElements: Element[]) => {
+        const related = new Set<string>([sourceId]);
+        for (const element of allElements) {
+            if (element.id === sourceId) {
+                element.generationState?.promptPayload.resolvedReferences.forEach(reference => {
+                    related.add(reference.targetElementId);
+                });
+                if (element.parentId) related.add(element.parentId);
+            }
+
+            if (element.parentId === sourceId) {
+                related.add(element.id);
+            }
+
+            if (element.generationState?.promptPayload.resolvedReferences.some(reference => reference.targetElementId === sourceId)) {
+                related.add(element.id);
+            }
+        }
+        return related;
+    }, []);
+
+    const relationFocusIds = useMemo(() => (
+        relationFocusElementId
+            ? getRelatedCanvasElementIds(relationFocusElementId, elements)
+            : new Set<string>()
+    ), [elements, getRelatedCanvasElementIds, relationFocusElementId]);
+
+    const selectedRelationIds = useMemo(() => (
+        selectedNodePromptElement
+            ? getRelatedCanvasElementIds(selectedNodePromptElement.id, elements)
+            : new Set<string>()
+    ), [elements, getRelatedCanvasElementIds, selectedNodePromptElement]);
+
+    useEffect(() => {
+        if (relationFocusElementId && !selectedElementIds.includes(relationFocusElementId)) {
+            setRelationFocusElementId(null);
+        }
+    }, [relationFocusElementId, selectedElementIds]);
+
     const activeCharacterLock = useMemo(() => {
         if (!activeCharacterLockId) return null;
         return characterLocks.find(lock => lock.id === activeCharacterLockId) || null;
     }, [activeCharacterLockId, characterLocks]);
-
-    // Mention items for the docked PromptBar: all elements except currently selected ones.
-    const mentionItems = useMemo(() => {
-        return (activeBoard?.elements ?? [])
-            .filter(el => !selectedElementIds.includes(el.id))
-            .map(el => ({
-                id: el.id,
-                label: el.name || `${el.type} ${el.id.slice(-4)}`,
-                thumbnail: '',
-                elementType: el.type === 'embeddable' ? 'video' : el.type === 'image' ? 'image' : 'text',
-                description: el.type,
-            }));
-    }, [activeBoard?.elements, selectedElementIds]);
 
     const handleLockCharacterFromSelection = useCallback((name?: string) => {
         if (!selectedSingleImage) {
@@ -614,13 +837,117 @@ const App: React.FC = () => {
         }));
     }, [setElements]);
 
-    const commitAction = useCallback((updater: (prev: Element[]) => Element[], versionMeta?: { description: string; type: VersionType }) => {
+    const cancelViewportAnimation = useCallback(() => {
+        if (viewportAnimationRef.current === null) return;
+        window.cancelAnimationFrame(viewportAnimationRef.current);
+        viewportAnimationRef.current = null;
+    }, []);
+
+    const animateViewportToElement = useCallback((targetX: number, targetY: number, targetZoom: number, centerX?: number, centerY?: number) => {
+        const svgBounds = svgRef.current?.getBoundingClientRect();
+        const viewportWidth = svgBounds?.width || window.innerWidth;
+        const viewportHeight = svgBounds?.height || window.innerHeight;
+        const startPan = activeBoard.panOffset;
+        const startZoom = activeBoard.zoom;
+        const cx = centerX ?? viewportWidth / 2;
+        const cy = centerY ?? viewportHeight / 2;
+        const nextPanOffset = {
+            x: cx - targetX * targetZoom,
+            y: cy - targetY * targetZoom,
+        };
+
+        cancelViewportAnimation();
+
+        const durationMs = 420;
+        const startedAt = performance.now();
+        const easeOutExpo = (value: number) => value === 1 ? 1 : 1 - Math.pow(2, -10 * value);
+
+        const step = (now: number) => {
+            const t = Math.min(1, (now - startedAt) / durationMs);
+            const eased = easeOutExpo(t);
+            updateActiveBoard(board => ({
+                ...board,
+                zoom: startZoom + (targetZoom - startZoom) * eased,
+                panOffset: {
+                    x: startPan.x + (nextPanOffset.x - startPan.x) * eased,
+                    y: startPan.y + (nextPanOffset.y - startPan.y) * eased,
+                },
+            }));
+            if (t < 1) {
+                viewportAnimationRef.current = window.requestAnimationFrame(step);
+            } else {
+                viewportAnimationRef.current = null;
+            }
+        };
+
+        viewportAnimationRef.current = window.requestAnimationFrame(step);
+    }, [activeBoard.panOffset, activeBoard.zoom, activeBoardId, cancelViewportAnimation]);
+
+    const handleElementDoubleClickFocus = useCallback((element: Element) => {
+        if (element.type !== 'image' && element.type !== 'video' && element.type !== 'shape' && element.type !== 'text' && element.type !== 'group') return;
+        const bounds = getElementBounds(element, elementsRef.current);
+        if (bounds.width <= 0 || bounds.height <= 0) return;
+        const svgRect = svgRef.current?.getBoundingClientRect();
+        if (!svgRect) return;
+        const visible = getCanvasVisibleRegion({
+            width: svgRect.width,
+            height: svgRect.height,
+            outerGap: chromeMetrics.outerGap,
+            bottomInset: chromeMetrics.canvasBottomInset,
+            leftPanelOpen: !isLayerMinimized,
+            leftPanelWidth: chromeMetrics.sidebarWidth,
+        });
+        const fitZoom = Math.min(
+            (visible.height * (2 / 3)) / bounds.height,
+            (visible.width * 0.9) / Math.max(bounds.width, 1)
+        );
+        const targetZoom = Math.max(0.1, Math.min(2, fitZoom));
+        animateViewportToElement(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2, targetZoom, visible.centerX, visible.centerY);
+    }, [animateViewportToElement, chromeMetrics, isLayerMinimized]);
+
+    const handleFitView = useCallback(() => {
+        const allElements = elementsRef.current;
+        const svgRect = svgRef.current?.getBoundingClientRect();
+        if (!svgRect) return;
+        const visible = getCanvasVisibleRegion({
+            width: svgRect.width,
+            height: svgRect.height,
+            outerGap: chromeMetrics.outerGap,
+            bottomInset: chromeMetrics.canvasBottomInset,
+            leftPanelOpen: !isLayerMinimized,
+            leftPanelWidth: chromeMetrics.sidebarWidth,
+        });
+        if (allElements.length === 0) {
+            animateViewportToElement(0, 0, 1, visible.centerX, visible.centerY);
+            return;
+        }
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        for (const element of allElements) {
+            const bounds = getElementBounds(element, allElements);
+            if (bounds.width <= 0 || bounds.height <= 0) continue;
+            minX = Math.min(minX, bounds.x);
+            minY = Math.min(minY, bounds.y);
+            maxX = Math.max(maxX, bounds.x + bounds.width);
+            maxY = Math.max(maxY, bounds.y + bounds.height);
+        }
+        if (!isFinite(minX) || !isFinite(minY)) {
+            animateViewportToElement(0, 0, 1, visible.centerX, visible.centerY);
+            return;
+        }
+        const contentWidth = Math.max(maxX - minX, 1);
+        const contentHeight = Math.max(maxY - minY, 1);
+        const margin = 0.9;
+        const targetZoom = Math.max(
+            0.05,
+            Math.min(2, Math.min((visible.width * margin) / contentWidth, (visible.height * margin) / contentHeight))
+        );
+        animateViewportToElement(minX + contentWidth / 2, minY + contentHeight / 2, targetZoom, visible.centerX, visible.centerY);
+    }, [animateViewportToElement, chromeMetrics, isLayerMinimized]);
+
+    const commitAction = useCallback((updater: (prev: Element[]) => Element[]) => {
         updateActiveBoard(board => {
             const newElements = updater(board.elements);
             const next = appendHistorySnapshot(board.history, board.historyIndex, newElements);
-            if (versionMeta) {
-                useVersionHistoryStore.getState().addVersion(newElements, versionMeta.description, versionMeta.type);
-            }
             return {
                 ...board,
                 elements: newElements,
@@ -631,6 +958,25 @@ const App: React.FC = () => {
     }, [activeBoardId]);
 
     // 鈹€鈹€ Paint mask callback (needed by useCanvasInteraction) 鈹€鈹€
+    const paintMask = useCallback((canvasX: number, canvasY: number) => {
+        const el = elements.find(e => e.id === maskEditingId && e.type === 'image') as ImageElement | undefined;
+        if (!el || !maskCanvasRef.current) return;
+        const ctx = maskCanvasRef.current.getContext('2d');
+        if (!ctx) return;
+        const localX = (canvasX - el.x) / el.width * maskCanvasRef.current.width;
+        const localY = (canvasY - el.y) / el.height * maskCanvasRef.current.height;
+        const brushR = maskBrushSize / el.width * maskCanvasRef.current.width;
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.fillStyle = maskBrushMode === 'erase' ? '#000000' : '#ffffff';
+        ctx.beginPath();
+        ctx.arc(localX, localY, brushR / 2, 0, Math.PI * 2);
+        ctx.fill();
+        const dataUrl = maskCanvasRef.current.toDataURL('image/png');
+        setElements(prev => prev.map(e =>
+            e.id === maskEditingId && e.type === 'image' ? { ...e, mask: dataUrl } : e
+        ));
+    }, [maskEditingId, maskBrushSize, maskBrushMode, elements, setElements]);
+
     // 鈹€鈹€ getDescendants (needed by useCanvasInteraction) 鈹€鈹€
     const getDescendants = useCallback((elementId: string, allElements: Element[]): Element[] => {
         const descendants: Element[] = [];
@@ -649,99 +995,8 @@ const App: React.FC = () => {
         return await readColdMedia(href.slice('cold-media:'.length)) || href;
     }, []);
 
-    // 鈹€鈹€ Extracted: canvas interaction (mouse, selection, refs) 鈹€鈹€
-    const {
-        elementsRef, previousToolRef, spacebarDownTime,
-    } = useCanvasInteraction({
-        elements, zoom, panOffset,
-        activeTool, setActiveTool, drawingOptions, wheelAction,
-        selectedElementIds, setSelectedElementIds,
-        updateActiveBoard, setElements, commitAction,
-        getDescendants,
-    });
-
-    // Fixed-overlay container rect. Drives position:fixed toolbars via placeOverlay.
-    // Phase 1.5: switched from legacy svgRef to Excalidraw container ref.
-    const canvasContainerRect = useElementContainerRect(excalidrawContainerRef);
-    // Phase 1.5: Convert Excalidraw viewport → CanvasViewport for placeOverlay calls.
-    // Excalidraw scrollX/Y are canvas-space scroll offsets; panScreenX/Y = scroll * zoom.
-    const canvasViewport: CanvasViewport = useMemo(() => ({
-        zoom: excalidrawViewport.zoom,
-        panScreenX: excalidrawViewport.x * excalidrawViewport.zoom,
-        panScreenY: excalidrawViewport.y * excalidrawViewport.zoom,
-    }), [excalidrawViewport]);
-
-    // 鈹€鈹€ Extracted: generation (AI image/video/batch) 鈹€鈹€
-    const {
-        isEnhancingPrompt,
-        handleEnhancePrompt, saveGenerationToHistory,
-        handleSplitImageLayers, handleUpscaleImage, handleRemoveImageBackground,
-        handleOutpaint, handleInpaint, handleGenerate,
-    } = useGeneration({
-        elements, selectedElementIds, prompt, generationMode, videoAspectRatio,
-        videoDurationSec, videoResolution, videoGenerateAudio, videoWatermark,
-        isAutoEnhanceEnabled, mentionedElementIds, chatAttachments, promptAttachments,
-        activeCharacterLock, batchCount,
-        modelPreference, userApiKeys,
-        resolveMediaHref: resolveColdMediaRef,
-        getCanvasCenter,
-        setSelectedElementIds, setIsLoading, setError, setProgressMessage,
-        setIsSettingsPanelOpen, setGenerationHistory,
-        commitAction, getPreferredApiKey,
-    });
-
-    // Magic Generate handler: screenshot from Excalidraw selection → commit as ImageElement → run handleGenerate.
-    const handleMagicGenerate = useCallback((dataUrl: string, width: number, height: number, bounds: { x: number; y: number; width: number; height: number }) => {
-        const newId = generateId();
-        const screenshotEl: ImageElement = {
-            id: newId,
-            type: 'image',
-            x: bounds.x + bounds.width / 2 - width / 2,
-            y: bounds.y + bounds.height + 24,
-            width,
-            height,
-            href: dataUrl,
-            mimeType: 'image/png',
-            name: `Magic ${newId.slice(-4)}`,
-        };
-        commitAction(prev => [...prev, screenshotEl]);
-        // Clear prompt selection; mention the new screenshot so handleGenerate picks it as reference_image.
-        setSelectedElementIds([]);
-        setMentionedElementIds([newId]);
-        handleGenerate(undefined, 'prompt', 'image', [], [newId]);
-    }, [commitAction, handleGenerate]);
-
-    // Lifted Magic Generate trigger: ElementToolbar calls this when ≥2 elements selected.
-    // Uses excalidrawApiRef to export selection → screenshot → handleMagicGenerate.
-    const triggerMagicGenerate = useCallback(async () => {
-        const api = excalidrawApiRef.current;
-        if (!api) return;
-        if (selectedElementIds.length < 2) return;
-        const appState = api.getAppState();
-        const files = api.getFiles();
-        const allElements = api.getSceneElements();
-        const selected = allElements.filter((e: any) => selectedElementIds.includes(e.id) && !e.isDeleted);
-        if (selected.length === 0) return;
-        const minX = Math.min(...selected.map((e: any) => e.x));
-        const minY = Math.min(...selected.map((e: any) => e.y));
-        const maxX = Math.max(...selected.map((e: any) => e.x + (e.width || 0)));
-        const maxY = Math.max(...selected.map((e: any) => e.y + (e.height || 0)));
-        const bounds = { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
-        const canvas = await exportToCanvas({
-            elements: selected,
-            appState: { ...appState, selectedElementIds: Object.fromEntries(selectedElementIds.map(id => [id, true])) },
-            files,
-            mimeType: 'image/png',
-            maxWidthOrHeight: 2048,
-            quality: 1,
-        } as any);
-        const dataUrl = canvas.toDataURL('image/png', 0.8);
-        handleMagicGenerate(dataUrl, canvas.width, canvas.height, bounds);
-        api.updateScene({ appState: { selectedElementIds: {} } });
-    }, [handleMagicGenerate, selectedElementIds]);
-
     // Lifted "加入对话" trigger: ElementToolbar calls this when a single image is selected.
-    // Resolves href via resolveColdMediaRef → setPendingChatAttachments.
+    // Resolves href via resolveColdMediaRef → setPendingChatAttachments → Chat textarea consumes.
     const triggerAddToChat = useCallback(async () => {
         if (selectedElementIds.length !== 1) return;
         const id = selectedElementIds[0];
@@ -753,9 +1008,72 @@ const App: React.FC = () => {
         const resolved = await resolveColdMediaRef(href);
         if (!resolved) return;
         setPendingChatAttachments([{ url: resolved, mimeType: (imgEl as { mimeType?: string }).mimeType || 'image/png' }]);
-        excalidrawApiRef.current?.updateScene({ appState: { selectedElementIds: {} } });
         setSelectedElementIds([]);
     }, [activeBoard, resolveColdMediaRef, selectedElementIds]);
+
+    // 鈹€鈹€ Extracted: canvas interaction (mouse, selection, refs) 鈹€鈹€
+    const {
+        handleMouseDown, handleMouseMove, handleMouseUp, handleWheel,
+        getCanvasPoint, getSelectableElement,
+        selectionBox, setSelectionBox, alignmentGuides, lassoPath, dragTick,
+        svgRef, editingTextareaRef, elementsRef, interactionMode, previousToolRef, spacebarDownTime,
+    } = useCanvasInteraction({
+        elements, zoom, panOffset,
+        activeTool, setActiveTool, drawingOptions, wheelAction,
+        selectedElementIds, setSelectedElementIds,
+        editingElement, setEditingElement,
+        croppingState, setCroppingState,
+        setInpaintState, setInpaintPrompt,
+        maskEditingId, paintMask,
+        contextMenu, setContextMenu,
+        updateActiveBoard, setElements, commitAction,
+        getDescendants,
+        onElementDoubleClick: handleElementDoubleClickFocus,
+        onTripleClickEmpty: handleFitView,
+    });
+
+    useEffect(() => {
+        const element = svgRef.current;
+        if (!element) return;
+
+        const updateSize = () => {
+            const rect = element.getBoundingClientRect();
+            setCanvasStageSize({
+                width: Math.max(1, Math.round(rect.width)),
+                height: Math.max(1, Math.round(rect.height)),
+            });
+        };
+
+        updateSize();
+        if (typeof ResizeObserver === 'undefined') {
+            window.addEventListener('resize', updateSize);
+            return () => window.removeEventListener('resize', updateSize);
+        }
+
+        const observer = new ResizeObserver(updateSize);
+        observer.observe(element);
+        return () => observer.disconnect();
+    }, [svgRef]);
+
+    // 鈹€鈹€ Extracted: generation (AI image/video/batch) 鈹€鈹€
+    const {
+        isEnhancingPrompt, batchResults, setBatchResults,
+        handleEnhancePrompt, saveGenerationToHistory,
+        handleSplitImageLayers, handleUpscaleImage, handleRemoveImageBackground,
+        handleOutpaint, handleInpaint, handleGenerate, handleBatchGenerate,
+        handleSelectBatchResult, handleSelectAllBatchResults,
+    } = useGeneration({
+        elements, selectedElementIds, prompt, generationMode, videoAspectRatio,
+        videoDurationSec, videoResolution, videoGenerateAudio, videoWatermark,
+        isAutoEnhanceEnabled, mentionedElementIds, chatAttachments, promptAttachments,
+        activeCharacterLock, batchCount, inpaintState, inpaintPrompt,
+        modelPreference, userApiKeys,
+        resolveMediaHref: resolveColdMediaRef,
+        svgRef, getCanvasPoint,
+        setSelectedElementIds, setIsLoading, setError, setProgressMessage,
+        setIsSettingsPanelOpen, setGenerationHistory, setInpaintState, setInpaintPrompt,
+        commitAction, getPreferredApiKey,
+    });
 
     const resolveWorkflowGenerationCapability = useCallback((mode: GenerationMode, modelId?: string) => {
         const fallbackModel = mode === 'text'
@@ -831,8 +1149,11 @@ const App: React.FC = () => {
 
     useEffect(() => {
         setSelectedElementIds([]);
+        setEditingElement(null);
+        setCroppingState(null);
+        setSelectionBox(null);
         setPrompt('');
-    }, [activeBoardId]);
+    }, [activeBoardId, setSelectionBox]);
 
 
     const addChatAttachment = useCallback((payload: Omit<ChatAttachment, 'id'>) => {
@@ -1147,7 +1468,7 @@ const App: React.FC = () => {
         });
     }, [activeBoardId]);
 
-    // Handle drop from AssetLibraryPanel (after commitAction and getCanvasCenter are defined)
+    // Handle drop from AssetLibraryPanel (after commitAction and getCanvasPoint are defined)
     const handleAssetDropRef = useRef<((e: React.DragEvent) => void) | null>(null);
     handleAssetDropRef.current = (e: React.DragEvent) => {
         const payload = e.dataTransfer.getData('text/plain');
@@ -1155,21 +1476,17 @@ const App: React.FC = () => {
             const parsed = JSON.parse(payload);
             if (parsed?.__makingAsset && parsed.item) {
                 const item: AssetItem = parsed.item as AssetItem;
-                const canvasPoint = screenToCanvas(e.clientX, e.clientY);
+                const canvasPoint = getCanvasPoint(e.clientX, e.clientY);
                 const img = new Image();
                 img.onload = () => {
-                    const maxWidth = 960;
-                    const scale = img.width > maxWidth ? maxWidth / img.width : 1;
-                    const w = Math.round(img.width * scale);
-                    const h = Math.round(img.height * scale);
                     const newImage: ImageElement = {
                         id: generateId(),
                         type: 'image',
                         name: item.name || 'Asset',
-                        x: canvasPoint.x - w / 2,
-                        y: canvasPoint.y - h / 2,
-                        width: w,
-                        height: h,
+                        x: canvasPoint.x - img.width / 2,
+                        y: canvasPoint.y - img.height / 2,
+                        width: img.width,
+                        height: img.height,
                         href: item.dataUrl,
                         mimeType: item.mimeType,
                     };
@@ -1194,8 +1511,25 @@ const App: React.FC = () => {
         setSelectedElementIds([]);
     }, [selectedElementIds, commitAction, getDescendants]);
 
+    const handleStopEditing = useCallback(() => {
+        if (!editingElement) return;
+        commitAction(prev => prev.map(el =>
+            el.id === editingElement.id && el.type === 'text'
+                ? { ...el, text: editingElement.text }
+                // Persist auto-height change on blur
+                : el.id === editingElement.id && el.type === 'text' && editingTextareaRef.current ? { ...el, text: editingElement.text, height: editingTextareaRef.current.scrollHeight }
+                : el
+        ));
+        setEditingElement(null);
+    }, [commitAction, editingElement]);
+
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
+            if (editingElement) {
+                if(e.key === 'Escape') handleStopEditing();
+                return;
+            }
+
             const target = e.target as HTMLElement;
             const isTyping = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
 
@@ -1226,7 +1560,7 @@ const App: React.FC = () => {
         };
 
         const handleKeyUp = (e: KeyboardEvent) => {
-            if (e.key === ' ') {
+            if (e.key === ' ' && !editingElement) {
                 const target = e.target as HTMLElement;
                 const isTyping = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA';
                 if (isTyping || spacebarDownTime.current === null) return;
@@ -1259,26 +1593,24 @@ const App: React.FC = () => {
             window.removeEventListener('keydown', handleKeyDown);
             window.removeEventListener('keyup', handleKeyUp);
         };
-    }, [handleUndo, handleRedo, selectedElementIds, activeTool, commitAction, getDescendants]);
+    }, [handleUndo, handleRedo, selectedElementIds, editingElement, activeTool, commitAction, getDescendants, handleStopEditing]);
     
 
     const handleAddImageElement = useCallback(async (file: File) => {
-        if (detectMediaType(file) !== 'image') {
-            setError('仅支持图片文件。');
+        if (!file.type.startsWith('image/')) {
+            setError('Only image files are supported.');
             return;
         }
         setError(null);
         try {
-            const { dataUrl, mimeType, width: natW, height: natH, resized } = await validateAndResizeImage(file);
+            const { dataUrl, mimeType, width, height, resized } = await validateAndResizeImage(file);
             if (resized) {
-                toast.show(`图片尺寸过大，已自动缩小到 ${natW}x${natH}。`, 'warning');
+                toast.show(`图片尺寸过大，已自动缩小到 ${width}x${height}。`, 'warning');
             }
-            const canvasPoint = getCanvasCenter();
-
-            const maxWidth = 960;
-            const scale = natW > maxWidth ? maxWidth / natW : 1;
-            const width = Math.round(natW * scale);
-            const height = Math.round(natH * scale);
+            if (!svgRef.current) return;
+            const svgBounds = svgRef.current.getBoundingClientRect();
+            const screenCenter = { x: svgBounds.left + svgBounds.width / 2, y: svgBounds.top + svgBounds.height / 2 };
+            const canvasPoint = getCanvasPoint(screenCenter.x, screenCenter.y);
 
             const newImage: ImageElement = {
                 id: generateId(),
@@ -1295,11 +1627,11 @@ const App: React.FC = () => {
             setSelectedElementIds([newImage.id]);
             setActiveTool('select');
         } catch (err) {
-            const message = err instanceof Error ? err.message : '图片加载失败。';
+            const message = err instanceof Error ? err.message : 'Failed to load image.';
             setError(message);
             console.error(err);
         }
-    }, [getCanvasCenter, activeBoardId, setElements]);
+    }, [getCanvasPoint, activeBoardId, setElements]);
 
     const readLocalVideoMetadata = useCallback((href: string): Promise<{ width: number; height: number; durationSec?: number }> => (
         new Promise((resolve) => {
@@ -1319,19 +1651,22 @@ const App: React.FC = () => {
     ), []);
 
     const handleAddVideoElement = useCallback(async (file: File) => {
-        if (detectMediaType(file) !== 'video') {
-            setError('仅支持视频文件。');
+        if (!file.type.startsWith('video/')) {
+            setError('Only video files are supported.');
             return;
         }
         setError(null);
         try {
+            if (!svgRef.current) return;
             const href = URL.createObjectURL(file);
             const metadata = await readLocalVideoMetadata(href);
             const maxWidth = 960;
             const scale = metadata.width > maxWidth ? maxWidth / metadata.width : 1;
             const width = Math.max(160, Math.round(metadata.width * scale));
             const height = Math.max(90, Math.round(metadata.height * scale));
-            const canvasPoint = getCanvasCenter();
+            const svgBounds = svgRef.current.getBoundingClientRect();
+            const screenCenter = { x: svgBounds.left + svgBounds.width / 2, y: svgBounds.top + svgBounds.height / 2 };
+            const canvasPoint = getCanvasPoint(screenCenter.x, screenCenter.y);
             const newVideo: VideoElement = {
                 id: generateId(),
                 type: 'video',
@@ -1341,27 +1676,22 @@ const App: React.FC = () => {
                 width,
                 height,
                 href,
-                mimeType: resolveMimeType(file) || 'video/mp4',
+                mimeType: file.type || 'video/mp4',
                 durationSec: metadata.durationSec,
             };
             setElements(prev => [...prev, newVideo]);
             setSelectedElementIds([newVideo.id]);
             setActiveTool('select');
         } catch (err) {
-            const message = err instanceof Error ? err.message : '视频加载失败。';
+            const message = err instanceof Error ? err.message : 'Failed to load video.';
             setError(message);
             console.error(err);
         }
-    }, [getCanvasCenter, readLocalVideoMetadata, setElements]);
+    }, [getCanvasPoint, readLocalVideoMetadata, setElements]);
 
     const handleAddMediaElement = useCallback((file: File) => {
-        const mediaType = detectMediaType(file);
-        if (mediaType === 'video') {
+        if (file.type.startsWith('video/')) {
             void handleAddVideoElement(file);
-            return;
-        }
-        if (mediaType === 'audio') {
-            setError('暂不支持在画布上添加音频文件，请在 PromptBar 中添加。');
             return;
         }
         void handleAddImageElement(file);
@@ -1420,35 +1750,6 @@ const App: React.FC = () => {
             return prev.filter(el => !idsToDelete.has(el.id));
         });
         setSelectedElementIds(prev => prev.filter(selId => selId !== id));
-    };
-
-    const handleGroupSelection = () => {
-        if (selectedElementIds.length < 2) return;
-        commitAction(prev => {
-            const groupId = generateId();
-            const groupEl: GroupElement = {
-                id: groupId,
-                type: 'group',
-                name: `Group ${prev.filter(e => e.type === 'group').length + 1}`,
-                childIds: [...selectedElementIds],
-            };
-            return [...prev, groupEl];
-        });
-    };
-
-    const handleExportSelection = () => {
-        const selected = elements.filter(el => selectedElementIds.includes(el.id) && (el.type === 'image' || el.type === 'video'));
-        selected.forEach(el => {
-            const href = (el as { href?: string }).href;
-            if (!href) return;
-            const name = el.name || el.id;
-            const a = document.createElement('a');
-            a.href = href;
-            a.download = name;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-        });
     };
 
     const handleCopyElement = (elementToCopy: Element) => {
@@ -1666,47 +1967,158 @@ const App: React.FC = () => {
 
 
 
+    const handleStartCrop = (element: ImageElement) => {
+        setActiveTool('select');
+        setCroppingState({
+            elementId: element.id,
+            originalElement: { ...element },
+            cropBox: { x: element.x, y: element.y, width: element.width, height: element.height },
+        });
+    };
 
+    const handleCancelCrop = () => setCroppingState(null);
 
-    const handleDragOver = useCallback((e: React.DragEvent) => { e.preventDefault(); }, []);
+    const handleConfirmCrop = () => {
+        if (!croppingState) return;
+        const { elementId, cropBox } = croppingState;
+        const elementToCrop = elementsRef.current.find(el => el.id === elementId) as ImageElement;
 
-    // Capture-phase handler: intercept media files and asset drops BEFORE Excalidraw sees them.
-    // Excalidraw's internal drop handler rejects video files with "Couldn't load invalid file".
-    const handleDragOverCapture = useCallback((e: React.DragEvent) => {
-        const items = e.dataTransfer.items;
-        if (items && Array.from(items).some(item => item.kind === 'file')) {
-            e.preventDefault();
-            e.stopPropagation();
-            if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
-            return;
+        if (!elementToCrop) { handleCancelCrop(); return; }
+        
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = cropBox.width;
+            canvas.height = cropBox.height;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) { setError("Failed to create canvas context for cropping."); handleCancelCrop(); return; }
+            const sx = cropBox.x - elementToCrop.x;
+            const sy = cropBox.y - elementToCrop.y;
+            ctx.drawImage(img, sx, sy, cropBox.width, cropBox.height, 0, 0, cropBox.width, cropBox.height);
+            const newHref = canvas.toDataURL(elementToCrop.mimeType);
+
+            commitAction(prev => prev.map(el => {
+                if (el.id === elementId && el.type === 'image') {
+                    const updatedEl: ImageElement = {
+                        ...el,
+                        href: newHref,
+                        x: cropBox.x,
+                        y: cropBox.y,
+                        width: cropBox.width,
+                        height: cropBox.height
+                    };
+                    return updatedEl;
+                }
+                return el;
+            }));
+            handleCancelCrop();
+        };
+        img.onerror = () => { setError("Failed to load image for cropping."); handleCancelCrop(); }
+        img.src = elementToCrop.href;
+    };
+    
+    useEffect(() => {
+        if (editingElement && editingTextareaRef.current) {
+            setTimeout(() => {
+                if (editingTextareaRef.current) {
+                    editingTextareaRef.current.focus();
+                    editingTextareaRef.current.select();
+                }
+            }, 0);
         }
-        if (e.dataTransfer.types?.includes('text/plain')) {
-            e.preventDefault();
-            if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+    }, [editingElement]);
+    
+    useEffect(() => {
+        if (editingElement && editingTextareaRef.current) {
+            const textarea = editingTextareaRef.current;
+            textarea.style.height = 'auto';
+            const newHeight = textarea.scrollHeight;
+            textarea.style.height = ''; 
+
+            const currentElement = elementsRef.current.find(el => el.id === editingElement.id);
+            if (currentElement && currentElement.type === 'text' && currentElement.height !== newHeight) {
+                setElements(prev => prev.map(el => 
+                    el.id === editingElement.id && el.type === 'text' 
+                    ? { ...el, height: newHeight } 
+                    : el
+                ), false);
+            }
         }
+    }, [editingElement?.text, setElements]);
+
+
+
+
+
+
+
+    /**
+     * ======== 鍥惧眰蒙版编辑 (Layer Mask) ========
+     */
+    const startMaskEditing = useCallback((elementId: string) => {
+        const el = elements.find(e => e.id === elementId && e.type === 'image') as ImageElement | undefined;
+        if (!el) return;
+        // Create an offscreen canvas to hold mask data
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(el.width);
+        canvas.height = Math.round(el.height);
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+        // If existing mask, draw it; otherwise fill white (fully visible)
+        if (el.mask) {
+            const img = new Image();
+            img.onload = () => {
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                maskCanvasRef.current = canvas;
+                setMaskEditingId(elementId);
+            };
+            img.src = el.mask;
+        } else {
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            maskCanvasRef.current = canvas;
+            setMaskEditingId(elementId);
+        }
+    }, [elements]);
+
+    const commitMask = useCallback(() => {
+        if (!maskCanvasRef.current || !maskEditingId) return;
+        const dataUrl = maskCanvasRef.current.toDataURL('image/png');
+        commitAction(prev => prev.map(el =>
+            el.id === maskEditingId && el.type === 'image' ? { ...el, mask: dataUrl } : el
+        ));
+        setMaskEditingId(null);
+        maskCanvasRef.current = null;
+    }, [maskEditingId, commitAction]);
+
+    const cancelMask = useCallback(() => {
+        setMaskEditingId(null);
+        maskCanvasRef.current = null;
     }, []);
 
-    const handleDropCapture = useCallback((e: React.DragEvent) => {
-        const files = e.dataTransfer.files;
-        if (files && files.length > 0) {
-            e.preventDefault();
-            e.stopPropagation();
-            for (let i = 0; i < files.length; i++) {
-                const file = files[i];
-                if (detectMediaType(file)) {
-                    handleAddMediaElement(file);
-                }
-            }
-            return;
-        }
-        const text = e.dataTransfer.getData('text/plain');
-        if (text && handleAssetDropRef.current) {
-            e.preventDefault();
-            e.stopPropagation();
-            handleAssetDropRef.current(e);
-        }
-    }, [handleAddMediaElement]);
+    const clearMask = useCallback(() => {
+        if (!maskEditingId) return;
+        commitAction(prev => prev.map(el =>
+            el.id === maskEditingId && el.type === 'image' ? { ...el, mask: undefined } : el
+        ));
+        setMaskEditingId(null);
+        maskCanvasRef.current = null;
+    }, [maskEditingId, commitAction]);
 
+    const handleCanvasImageDragStart = useCallback((image: ImageElement, e: React.DragEvent<SVGGElement>) => {
+        const payload = {
+            id: image.id,
+            name: image.name,
+            href: image.href,
+            mimeType: image.mimeType,
+        };
+        e.dataTransfer.setData('application/x-canvas-image', JSON.stringify(payload));
+        e.dataTransfer.setData('text/plain', image.name || image.id);
+        e.dataTransfer.effectAllowed = 'copy';
+    }, []);
+    
+    const handleDragOver = useCallback((e: React.DragEvent) => { e.preventDefault(); }, []);
     const handleDrop = useCallback((e: React.DragEvent) => { 
         e.preventDefault(); 
         const text = e.dataTransfer.getData('text/plain');
@@ -1744,8 +2156,9 @@ const App: React.FC = () => {
             }
             return elementsCopy;
         });
+        setContextMenu(null);
     };
-
+    
     const handleRasterizeSelection = async () => {
         const elementsToRasterize = elements.filter(
             el => selectedElementIds.includes(el.id) && el.type !== 'image' && el.type !== 'video'
@@ -1753,6 +2166,7 @@ const App: React.FC = () => {
 
         if (elementsToRasterize.length === 0) return;
 
+        setContextMenu(null);
         setIsLoading(true);
         setError(null);
 
@@ -1820,6 +2234,7 @@ const App: React.FC = () => {
         });
 
         setSelectedElementIds([newGroupId]);
+        setContextMenu(null);
     };
 
     const handleUngroup = () => {
@@ -1840,8 +2255,52 @@ const App: React.FC = () => {
         });
 
         setSelectedElementIds(childrenIds);
+        setContextMenu(null);
     };
 
+
+    const handleContextMenu = (e: React.MouseEvent<SVGSVGElement>) => {
+        e.preventDefault();
+        setContextMenu(null);
+        const target = e.target as SVGElement;
+        const elementId = target.closest('[data-id]')?.getAttribute('data-id');
+        setContextMenu({ x: e.clientX, y: e.clientY, elementId: elementId || null });
+    };
+
+
+    useEffect(() => {
+        const handlePaste = (e: ClipboardEvent) => {
+            const file = e.clipboardData?.files[0];
+            if (file && (file.type.startsWith('image/') || file.type.startsWith('video/'))) {
+                e.preventDefault();
+                handleAddMediaElement(file);
+            }
+        };
+        window.addEventListener('paste', handlePaste);
+        return () => window.removeEventListener('paste', handlePaste);
+    }, [handleAddMediaElement]);
+
+    // Use native event listener for wheel, ensure { passive: false } to allow preventDefault()
+    useEffect(() => {
+        const svg = svgRef.current;
+        if (!svg) return;
+        const onWheel = (e: WheelEvent) => {
+            cancelViewportAnimation();
+            handleWheel(e);
+        };
+        svg.addEventListener('wheel', onWheel, { passive: false });
+        return () => svg.removeEventListener('wheel', onWheel);
+    }, [cancelViewportAnimation, handleWheel]);
+
+    useEffect(() => {
+        const endCanvasInteraction = () => handleMouseUp();
+        window.addEventListener('mouseup', endCanvasInteraction);
+        window.addEventListener('blur', endCanvasInteraction);
+        return () => {
+            window.removeEventListener('mouseup', endCanvasInteraction);
+            window.removeEventListener('blur', endCanvasInteraction);
+        };
+    }, [handleMouseUp]);
 
     // 鈹€鈹€ Phase 2: Expose runtime API for AI Agent control 鈹€鈹€
     useEffect(() => {
@@ -2016,6 +2475,12 @@ const App: React.FC = () => {
 
         const listMediaElements = () => api.canvas.getElements().filter((el: any) => el.type === 'image' || el.type === 'video');
 
+        const getCanvasCenter = () => {
+            if (!svgRef.current) return { x: -300, y: -200 };
+            const bounds = svgRef.current.getBoundingClientRect();
+            return getCanvasPoint(bounds.left + bounds.width / 2, bounds.top + bounds.height / 2);
+        };
+
         const addMediaElement = (partial: Partial<ImageElement | VideoElement>, type: 'image' | 'video') => {
             const center = getCanvasCenter();
             const width = Number(partial.width) || (type === 'image' ? 1024 : 960);
@@ -2163,6 +2628,7 @@ const App: React.FC = () => {
             }
 
             setSelectedElementIds([target.id]);
+            animateViewportToElement(target.x + target.width / 2, target.y + target.height / 2, 1);
 
             const now = Date.now();
             const sessionId = `inline-${target.id}`;
@@ -2221,18 +2687,21 @@ const App: React.FC = () => {
                     error: undefined,
                 });
 
-                const run = latestTarget.type === 'video'
-                    ? api.generate.video({
-                        prompt: latestTarget.generationState?.promptPayload.rawText || '',
-                        sourceImageIds: (latestTarget.generationState?.promptPayload.resolvedReferences || [])
-                            .filter(reference => reference.slotRole === 'first_frame')
-                            .map(reference => reference.targetElementId),
-                        aspectRatio: videoAspectRatio,
-                    })
-                    : api.generate.image({
-                        prompt: latestTarget.generationState?.promptPayload.rawText || '',
-                        name: latestTarget.name,
-                    });
+                const run = handleNodePromptGenerate(latestTarget.id).then(() => {
+                    const finishedTarget = elementsRef.current.find(item => item.id === input.elementId);
+                    if (!finishedTarget || (finishedTarget.type !== 'image' && finishedTarget.type !== 'video')) {
+                        throw new Error(`BAD_REQUEST: media element not found (${input.elementId})`);
+                    }
+                    if (finishedTarget.generationState?.status === 'error') {
+                        throw new Error(finishedTarget.generationState.error || '生成失败');
+                    }
+                    return {
+                        ok: true,
+                        elementId: finishedTarget.id,
+                        status: finishedTarget.generationState?.status || 'success',
+                        element: finishedTarget,
+                    };
+                });
 
                 run.then((result) => {
                     runtimeJobsRef.current[jobId].status = 'succeeded';
@@ -2362,6 +2831,8 @@ const App: React.FC = () => {
             aspectRatio?: string;
             durationSec?: number;
             resolution?: string;
+            generateAudio?: boolean;
+            watermark?: boolean;
             seed?: number;
         }) => {
             const { model, key } = resolveRuntimeModelKey('video');
@@ -2408,6 +2879,8 @@ const App: React.FC = () => {
                     slots,
                     durationSec: input.durationSec,
                     resolution: input.resolution,
+                    generateAudio: input.generateAudio,
+                    watermark: input.watermark,
                     seed: input.seed,
                 });
                 const href = URL.createObjectURL(result.videoBlob);
@@ -2752,6 +3225,8 @@ const App: React.FC = () => {
                     aspectRatio?: string;
                     durationSec?: number;
                     resolution?: string;
+                    generateAudio?: boolean;
+                    watermark?: boolean;
                     seed?: number;
                 }) => {
                     return placeGeneratedVideo(input);
@@ -2839,7 +3314,7 @@ const App: React.FC = () => {
         window.addEventListener('message', handleApiMessage);
         window.dispatchEvent(new CustomEvent('flovart:api-ready'));
         return () => { window.clearInterval(bridgeInterval); delete (window as any).__flovartAPI; window.removeEventListener('message', handleApiMessage); };
-    }, [commitAction, selectedElementIds, zoom, panOffset, handleGenerate]);
+    }, [commitAction, selectedElementIds, zoom, panOffset, handleGenerate, handleNodePromptGenerate]);
 
     const getSelectionBounds = useCallback((selectionIds: string[]): Rect => {
         const selectedElements = elementsRef.current.filter(el => selectionIds.includes(el.id));
@@ -2934,6 +3409,14 @@ const App: React.FC = () => {
 
     const isSelectionActive = selectedElementIds.length > 0;
     const singleSelectedElement = selectedElementIds.length === 1 ? elements.find(el => el.id === selectedElementIds[0]) : null;
+    const isNodePromptActive = !!selectedNodePromptElement && !croppingState && !editingElement;
+
+    let cursor = 'default';
+    if (maskEditingId) cursor = 'crosshair';
+    else if (croppingState) cursor = 'default';
+    else if (interactionMode.current === 'pan') cursor = 'grabbing';
+    else if (activeTool === 'pan') cursor = 'grab';
+    else if (['draw', 'erase', 'rectangle', 'circle', 'triangle', 'arrow', 'line', 'text', 'highlighter', 'lasso'].includes(activeTool)) cursor = 'crosshair';
 
     // Board Management
     const handleAddBoard = () => {
@@ -3005,7 +3488,7 @@ const App: React.FC = () => {
                 return `<path d="${pathData}" stroke="${el.strokeColor}" stroke-width="${el.strokeWidth}" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-opacity="${el.strokeOpacity || 1}" />`;
              }
              if (el.type === 'image') {
-                 return `<image href="${resolveHref(el.href)}" x="${el.x}" y="${el.y}" width="${el.width}" height="${el.height}" />`;
+                 return `<image href="${el.href}" x="${el.x}" y="${el.y}" width="${el.width}" height="${el.height}" />`;
              }
              // Add other element types for more accurate thumbnails if needed
              return '';
@@ -3014,6 +3497,42 @@ const App: React.FC = () => {
         const fullSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="${THUMB_WIDTH}" height="${THUMB_HEIGHT}"><rect width="100%" height="100%" fill="${bgColor}" /><g transform="translate(${dx} ${dy}) scale(${scale})">${svgContent}</g></svg>`;
         return `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(fullSvg)))}`;
     }, []);
+
+    const canvasKonvaDisabledIds = useMemo(() => {
+        const disabled = new Set<string>(canvasKonvaFailedIds);
+        for (const id of selectedElementIds) {
+            const element = elements.find(item => item.id === id);
+            if (element?.type === 'video') disabled.add(id);
+        }
+        if (selectedNodePromptElement) disabled.add(selectedNodePromptElement.id);
+        if (croppingState) disabled.add(croppingState.elementId);
+        if (maskEditingId) disabled.add(maskEditingId);
+        return disabled;
+    }, [canvasKonvaFailedIds, croppingState, elements, maskEditingId, selectedElementIds, selectedNodePromptElement]);
+
+    useEffect(() => {
+        if (canvasKonvaFailedIds.size === 0 && canvasKonvaReadyIds.size === 0) return;
+        const availableIds = new Set(elements.map(element => element.id));
+        setCanvasKonvaFailedIds(prev => {
+            const next = new Set([...prev].filter(id => availableIds.has(id)));
+            return next.size === prev.size ? prev : next;
+        });
+        setCanvasKonvaReadyIds(prev => {
+            const next = new Set([...prev].filter(id => availableIds.has(id)));
+            return next.size === prev.size ? prev : next;
+        });
+    }, [canvasKonvaFailedIds.size, canvasKonvaReadyIds.size, elements]);
+
+    const canvasKonvaDimmedIds = useMemo(() => {
+        if (!isNodePromptActive) return new Set<string>();
+        const dimmed = new Set<string>();
+        for (const element of elements) {
+            if ((element.type === 'image' || element.type === 'video') && element.id !== selectedNodePromptElement?.id) {
+                dimmed.add(element.id);
+            }
+        }
+        return dimmed;
+    }, [elements, isNodePromptActive, selectedNodePromptElement]);
 
     const capabilityDiagnosis = diagnoseKeyCapabilities(userApiKeys);
     const studioMenuModel: StudioMenuModel = {
@@ -3040,31 +3559,8 @@ const App: React.FC = () => {
         },
     };
 
-    const { toggle: togglePromptHistory, pendingInsert, consumeInsert: consumePromptInsert } = usePromptHistoryStore();
-
-    useEffect(() => {
-        const onKey = (e: KeyboardEvent) => {
-            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
-                e.preventDefault();
-                togglePromptHistory();
-            }
-        };
-        window.addEventListener('keydown', onKey);
-        return () => window.removeEventListener('keydown', onKey);
-    }, [togglePromptHistory]);
-
-    useEffect(() => {
-        if (!pendingInsert) return;
-        if (activeView === 'workflow') return;
-        setPrompt(pendingInsert.text);
-        setPromptDocument(undefined);
-        setMentionedElementIds([]);
-        consumePromptInsert();
-    }, [pendingInsert, consumePromptInsert, setPrompt, setPromptDocument, setMentionedElementIds, activeView]);
-
     if (activeView === 'workflow') {
         return (
-            <>
             <AppShell
                 themeBackground={themePalette.appBackground}
                 topBar={
@@ -3128,19 +3624,14 @@ const App: React.FC = () => {
                     </Suspense>
                 }
             />
-            <PromptHistoryPalette theme={resolvedTheme} />
-            </>
         );
     }
 
     return (
-        <>
         <AppShell
             themeBackground={themePalette.appBackground}
             onDragOver={handleDragOver}
             onDrop={handleDrop}
-            onDragOverCapture={handleDragOverCapture}
-            onDropCapture={handleDropCapture}
             topBar={
                 <StudioTopMenu model={studioMenuModel} />
             }
@@ -3190,6 +3681,7 @@ const App: React.FC = () => {
                         return newElements;
                     });
                 }}
+                onElementDoubleClick={handleElementDoubleClickFocus}
             />
             }
             rightSidebar={
@@ -3253,11 +3745,13 @@ const App: React.FC = () => {
                     drawingOptions={drawingOptions}
                     setDrawingOptions={setDrawingOptions}
                     onUpload={handleAddMediaElement}
+                    isCropping={!!croppingState}
+                    onConfirmCrop={handleConfirmCrop}
+                    onCancelCrop={handleCancelCrop}
                     onSettingsClick={() => setIsSettingsPanelOpen(true)}
                     onLayersClick={() => setIsLayerMinimized(prev => !prev)}
                     onBoardsClick={() => setIsLayerMinimized(prev => !prev)}
                     onAssetsClick={() => setIsInspirationMinimized(prev => !prev)}
-                    onHistoryClick={() => setIsHistoryPanelOpen(prev => !prev)}
                     onUndo={handleUndo}
                     onRedo={handleRedo}
                     isLayerPanelExpanded={!isLayerMinimized}
@@ -3270,16 +3764,7 @@ const App: React.FC = () => {
                 />
             }
             overlays={<>
-                {isLoading && <AgentThinkingPanel progressMessage={progressMessage} batchTotal={batchCount} batchDone={recentlyCompleted.size} />}
-                <VersionHistoryPanel
-                    open={isHistoryPanelOpen}
-                    onClose={() => setIsHistoryPanelOpen(false)}
-                    onRestore={(version) => {
-                        commitAction(() => version.elements, { description: `恢复版本: ${version.description}`, type: 'restore' });
-                        toast.show('已恢复到所选版本', 'success');
-                    }}
-                    theme={resolvedTheme}
-                />
+                {isLoading && <Loader progressMessage={progressMessage} batchTotal={batchCount} batchDone={recentlyCompleted.size} />}
                 <ToastStack toasts={toast.toasts} onDismiss={toast.dismiss} />
                 {error && (
                     <div className="absolute top-16 left-1/2 -translate-x-1/2 z-50 p-3 bg-red-100 border border-red-400 text-red-700 rounded-md shadow-lg flex items-center max-w-lg">
@@ -3338,6 +3823,90 @@ const App: React.FC = () => {
                 </Suspense>
             )}
 
+            {/* ============ 图层蒙版编辑 (Layer Mask) ============ */}
+            {maskEditingId && (() => {
+                const maskEl = elements.find(e => e.id === maskEditingId) as ImageElement | undefined;
+                if (!maskEl) return null;
+                return (
+                    <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[9998] flex items-center gap-3 px-4 py-2.5 rounded-2xl shadow-2xl border"
+                         style={{ background: resolvedTheme === 'dark' ? '#1C2333' : '#ffffff', borderColor: resolvedTheme === 'dark' ? '#2A3142' : '#e5e7eb' }}>
+                        <span className={`text-sm font-medium ${resolvedTheme === 'dark' ? 'text-white' : 'text-gray-900'}`}>蒙版编辑</span>
+                        <div className="h-5 w-px bg-gray-300" />
+                        <button onClick={() => setMaskBrushMode('erase')}
+                            className={`px-3 py-1 rounded-lg text-xs font-medium transition ${maskBrushMode === 'erase' ? 'bg-red-500 text-white' : (resolvedTheme === 'dark' ? 'bg-[#2A3142] text-gray-300' : 'bg-gray-100 text-gray-600')}`}>
+                            擦除
+                        </button>
+                        <button onClick={() => setMaskBrushMode('reveal')}
+                            className={`px-3 py-1 rounded-lg text-xs font-medium transition ${maskBrushMode === 'reveal' ? 'bg-green-500 text-white' : (resolvedTheme === 'dark' ? 'bg-[#2A3142] text-gray-300' : 'bg-gray-100 text-gray-600')}`}>
+                            恢复
+                        </button>
+                        <div className="h-5 w-px bg-gray-300" />
+                        <label className={`text-xs ${resolvedTheme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>笔刷</label>
+                        <input type="range" min="5" max="100" value={maskBrushSize} onChange={e => setMaskBrushSize(Number(e.target.value))} className="w-20 h-1 accent-blue-500" />
+                        <span className={`text-xs w-6 text-center ${resolvedTheme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>{maskBrushSize}</span>
+                        <div className="h-5 w-px bg-gray-300" />
+                        <button onClick={clearMask}
+                            className={`px-3 py-1 rounded-lg text-xs font-medium transition ${resolvedTheme === 'dark' ? 'bg-[#2A3142] hover:bg-[#3A4458] text-gray-300' : 'bg-gray-100 hover:bg-gray-200 text-gray-600'}`}>
+                            清除蒙版
+                        </button>
+                        <button onClick={commitMask}
+                            className="px-3 py-1 rounded-lg text-xs font-medium bg-blue-500 hover:bg-blue-600 text-white transition">
+                            完成
+                        </button>
+                        <button onClick={cancelMask}
+                            className={`px-3 py-1 rounded-lg text-xs font-medium transition ${resolvedTheme === 'dark' ? 'bg-[#2A3142] hover:bg-[#3A4458] text-gray-300' : 'bg-gray-100 hover:bg-gray-200 text-gray-600'}`}>
+                            鍙栨秷
+                        </button>
+                    </div>
+                );
+            })()}
+
+            {/* ============ 鎵归噺鐢熸垚缁撴灉对比弹窗 ============ */}
+            {batchResults && (
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm"
+                     onClick={() => setBatchResults(null)}>
+                    <div className={`relative rounded-2xl shadow-2xl p-6 max-w-[90vw] max-h-[90vh] overflow-auto ${resolvedTheme === 'dark' ? 'bg-[#1C2333] text-white' : 'bg-white text-gray-900'}`}
+                         onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-lg font-semibold">批量生成结果 - 选择最佳方案</h3>
+                            <div className="flex gap-2">
+                                <button onClick={handleSelectAllBatchResults}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${resolvedTheme === 'dark' ? 'bg-[#2A3142] hover:bg-[#3A4458] text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}`}>
+                                    鍏ㄩ儴鏀惧叆鐢诲竷
+                                </button>
+                                <button onClick={() => setBatchResults(null)}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${resolvedTheme === 'dark' ? 'bg-[#2A3142] hover:bg-[#3A4458] text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}`}>
+                                    鍏抽棴
+                                </button>
+                            </div>
+                        </div>
+                        <p className={`text-sm mb-4 ${resolvedTheme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                            鎻愮ず璇? {batchResults.prompt}
+                        </p>
+                        <div className={`grid gap-4 ${batchResults.images.length <= 2 ? 'grid-cols-2' : 'grid-cols-2'}`}>
+                            {batchResults.images.map((img, idx) => (
+                                <div key={idx}
+                                     className={`group relative rounded-xl overflow-hidden border-2 transition cursor-pointer hover:scale-[1.02] ${resolvedTheme === 'dark' ? 'border-[#2A3142] hover:border-blue-500' : 'border-gray-200 hover:border-blue-400'}`}
+                                     onClick={() => handleSelectBatchResult(img)}>
+                                    <img src={img.href} alt={`方案 ${idx + 1}`}
+                                         className="w-full h-auto max-h-[40vh] object-contain"
+                                         style={{ background: resolvedTheme === 'dark' ? '#0D1117' : '#F9FAFB' }} />
+                                    <div className={`absolute bottom-0 inset-x-0 p-3 bg-gradient-to-t ${resolvedTheme === 'dark' ? 'from-black/80' : 'from-black/50'} to-transparent opacity-0 group-hover:opacity-100 transition`}>
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-white text-sm font-medium">方案 {idx + 1}</span>
+                                            <span className="text-white/80 text-xs">{img.width}脳{img.height}</span>
+                                        </div>
+                                        <button className="mt-2 w-full py-1.5 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-xs font-medium transition">
+                                            閫夋嫨姝ゆ柟妗?
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* 鏂扮敤鎴峰紩瀵煎脊绐?鈥?鏃?API Key 鏃惰嚜鍔ㄥ嚭鐜?*/}
             {showOnboarding && (
                 <Suspense fallback={<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm"><div className="rounded-xl bg-neutral-800 px-6 py-4 text-sm text-white/60">Loading...</div></div>}>
@@ -3376,109 +3945,804 @@ const App: React.FC = () => {
                 />
                 </Suspense>
             )}
-            <ElementToolbar
-                selectedElementIds={selectedElementIds}
-                singleSelectedElement={singleSelectedElement}
-                elements={elements}
-                zoom={excalidrawViewport.zoom}
-                resolvedTheme={resolvedTheme}
-                isLoading={isLoading}
-                language={language}
-                filterPanelElementId={filterPanelElementId}
-                outpaintMenuId={outpaintMenuId}
-                reversePromptLoading={reversePromptLoading}
-                t={t}
-                getSelectionBounds={getSelectionBounds}
-                getElementBounds={getElementBounds}
-                handleAlignSelection={handleAlignSelection}
-                handleGroupSelection={handleGroupSelection}
-                handleExportSelection={handleExportSelection}
-                handleCopyElement={handleCopyElement}
-                handleDownloadImage={handleDownloadImage}
-                handleDeleteElement={handleDeleteElement}
-                handlePropertyChange={handlePropertyChange}
-                setFilterPanelElementId={setFilterPanelElementId}
-                setAddAssetModal={setAddAssetModal}
-                handleSplitImageLayers={handleSplitImageLayers}
-                handleUpscaleImage={handleUpscaleImage}
-                handleRemoveImageBackground={handleRemoveImageBackground}
-                handleOutpaint={handleOutpaint}
-                handleInpaint={handleInpaint}
-                handleReversePrompt={handleReversePrompt}
-                cancelReversePrompt={cancelReversePrompt}
-                setOutpaintMenuId={setOutpaintMenuId}
-                inpaintElementId={inpaintElementId}
-                setInpaintElementId={setInpaintElementId}
-                viewport={canvasViewport}
-                containerRect={canvasContainerRect}
-                onMagicGenerate={triggerMagicGenerate}
-                onAddToChat={triggerAddToChat}
-            />
-            <FlovartExcalidrawStage
-                flovartElements={activeBoard?.elements ?? []}
-                onFlovartCommit={(next) => setElements(() => next, true)}
-                theme={resolvedTheme}
-                resolveHref={resolveColdMediaRef}
-                onSelectionChange={setSelectedElementIds}
-                onApiReady={(api) => { excalidrawApiRef.current = api; }}
-                onViewportChange={setExcalidrawViewport}
-                containerRef={excalidrawContainerRef}
-                activeTool={activeTool}
-                bottomBar={(activeBoard?.elements ?? []).length > 0 ? (
-                    <PromptBar
-                        t={t}
-                        theme={resolvedTheme}
-                        variant="inline"
-                        compactMode
-                        shellClassName="inline-prompt-bar-shell"
-                        popoverDirection="up"
-                        prompt={prompt}
-                        promptDocument={promptDocument}
-                        setPrompt={v => { setPrompt(v); setPromptDocument(undefined); setMentionedElementIds([]); }}
-                        onPromptInputChange={({ plainText, document, mentionedElementIds: mentions }) => {
-                            setPrompt(plainText);
-                            setPromptDocument(document);
-                            setMentionedElementIds(mentions);
-                        }}
-                        onGenerate={() => handleGenerate()}
-                        isLoading={isLoading}
-                        isSelectionActive={selectedElementIds.length > 0}
-                        selectedElementCount={selectedElementIds.length}
-                        userEffects={userEffects}
-                        onAddUserEffect={(effect) => setUserEffects(prev => [...prev, effect])}
-                        onDeleteUserEffect={(id) => setUserEffects(prev => prev.filter(e => e.id !== id))}
-                        generationMode={generationMode}
-                        setGenerationMode={setGenerationMode}
-                        videoAspectRatio={videoAspectRatio}
-                        setVideoAspectRatio={setVideoAspectRatio}
-                        videoDurationSec={videoDurationSec}
-                        onVideoDurationSecChange={setVideoDurationSec}
-                        videoResolution={videoResolution}
-                        onVideoResolutionChange={setVideoResolution}
-                        videoGenerateAudio={videoGenerateAudio}
-                        onVideoGenerateAudioChange={setVideoGenerateAudio}
-                        videoWatermark={videoWatermark}
-                        onVideoWatermarkChange={setVideoWatermark}
-                        canvasElements={activeBoard?.elements ?? []}
-                        mentionItems={mentionItems}
-                        isAutoEnhanceEnabled={isAutoEnhanceEnabled}
-                        onAutoEnhanceToggle={() => setIsAutoEnhanceEnabled(v => !v)}
-                        onLockCharacterFromSelection={handleLockCharacterFromSelection}
-                        canLockCharacter={!!selectedSingleImage}
-                        characterLocks={characterLocks}
-                        activeCharacterLockId={activeCharacterLockId}
-                        onSetActiveCharacterLock={setActiveCharacterLockId}
-                        batchCount={batchCount}
-                        onBatchCountChange={setBatchCount}
-                        error={error}
-                        progressStage={progressMessage}
-                    />
-                ) : undefined}
-            />
+            <div 
+                className="compact-canvas-stage flex-grow relative overflow-hidden"
+                style={{
+                    paddingRight: chromeMetrics.isTablet ? `${chromeMetrics.outerGap}px` : `${rightPanelWidth + chromeMetrics.promptSideInset}px`,
+                    paddingBottom: croppingState || isNodePromptActive ? '0px' : `${chromeMetrics.canvasBottomInset}px`,
+                    transition: 'padding-right 0.35s cubic-bezier(0.4, 0, 0.2, 1), padding-bottom 0.35s cubic-bezier(0.4, 0, 0.2, 1)'
+                }}
+            >
+                {/* Konva media layer removed in simplified version */}
+                <svg
+                    ref={svgRef}
+                    className="relative z-10 w-full h-full"
+                    onMouseDown={(event) => {
+                        cancelViewportAnimation();
+                        handleMouseDown(event);
+                    }}
+                    onMouseMove={handleMouseMove}
+                    onMouseUp={handleMouseUp}
+                    onMouseLeave={handleMouseUp}
+                    onMouseOver={(e) => {
+                        const target = e.target as SVGElement;
+                        const el = target.closest('[data-id]');
+                        setHoveredElementId(el ? (el as HTMLElement).dataset.id || null : null);
+                    }}
+                    onContextMenu={handleContextMenu}
+                    style={{ cursor }}
+                >
+                    <defs>
+                        <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
+                            <circle cx="1" cy="1" r="1" className="fill-gray-400 opacity-50"/>
+                        </pattern>
+                         {elements.map(el => {
+                            if (el.type === 'image' && el.borderRadius && el.borderRadius > 0) {
+                                const clipPathId = `clip-${el.id}`;
+                                return (
+                                    <clipPath id={clipPathId} key={clipPathId}>
+                                        <rect
+                                            width={el.width}
+                                            height={el.height}
+                                            rx={el.borderRadius}
+                                            ry={el.borderRadius}
+                                        />
+                                    </clipPath>
+                                );
+                            }
+                            return null;
+                        })}
+                        <linearGradient id="flv-shimmer-grad" x1="0" y1="0" x2="1" y2="0">
+                            <stop offset="0" stopColor="white" stopOpacity="0" />
+                            <stop offset="0.4" stopColor="white" stopOpacity="0" />
+                            <stop offset="0.5" stopColor="white" stopOpacity="0.14" />
+                            <stop offset="0.6" stopColor="white" stopOpacity="0" />
+                            <stop offset="1" stopColor="white" stopOpacity="0" />
+                        </linearGradient>
+                    </defs>
+                    {(() => {
+                        const genIds = new Set<string>();
+                        for (const e of elements) {
+                            if ((e as CanvasElement).generationState?.status === 'running') genIds.add(e.id);
+                        }
+                        const anyGenerating = genIds.size > 0;
+                        return (
+                            <g transform={`translate(${panOffset.x}, ${panOffset.y}) scale(${zoom})`} data-gen-active={anyGenerating ? 'true' : undefined}>
+                                <rect x={-panOffset.x/zoom} y={-panOffset.y/zoom} width={`calc(100% / ${zoom})`} height={`calc(100% / ${zoom})`} fill="url(#grid)" />
+                                
+                                {elements.map(el => {
+                            if (!isElementVisible(el, elements)) return null;
+
+                            const isSelected = selectedElementIds.includes(el.id);
+                            const isRelationFocused = relationFocusIds.size > 1 && relationFocusIds.has(el.id);
+                            let selectionComponent = null;
+                            let relationFocusComponent = null;
+
+                            if (isRelationFocused && !croppingState) {
+                                const bounds = getElementBounds(el, elements);
+                                const isRoot = relationFocusElementId === el.id;
+                                relationFocusComponent = (
+                                    <rect
+                                        x={bounds.x - 5 / zoom}
+                                        y={bounds.y - 5 / zoom}
+                                        width={bounds.width + 10 / zoom}
+                                        height={bounds.height + 10 / zoom}
+                                        fill="none"
+                                        stroke={isRoot ? 'rgb(124 58 237)' : 'rgb(14 165 233)'}
+                                        strokeWidth={(isRoot ? 3 : 2.25) / zoom}
+                                        strokeDasharray={`${8 / zoom} ${5 / zoom}`}
+                                        rx={10 / zoom}
+                                        pointerEvents="none"
+                                        opacity={isRoot ? 0.98 : 0.9}
+                                    />
+                                );
+                            }
+
+                            if (isSelected && !croppingState && interactionMode.current !== 'dragElements') {
+                                if (selectedElementIds.length > 1 || el.type === 'path' || el.type === 'arrow' || el.type === 'line' || el.type === 'group') {
+                                     const bounds = getElementBounds(el, elements);
+                                     selectionComponent = <rect x={bounds.x} y={bounds.y} width={bounds.width} height={bounds.height} fill="none" stroke="rgb(59 130 246)" strokeWidth={2/zoom} strokeDasharray={`${6/zoom} ${4/zoom}`} pointerEvents="none" />
+                                } else if ((el.type === 'image' || el.type === 'shape' || el.type === 'text' || el.type === 'video')) {
+                                    const handleSize = 8 / zoom;
+                                    const handles = [
+                                        { name: 'tl', x: el.x, y: el.y, cursor: 'nwse-resize' }, { name: 'tm', x: el.x + el.width / 2, y: el.y, cursor: 'ns-resize' }, { name: 'tr', x: el.x + el.width, y: el.y, cursor: 'nesw-resize' },
+                                        { name: 'ml', x: el.x, y: el.y + el.height / 2, cursor: 'ew-resize' }, { name: 'mr', x: el.x + el.width, y: el.y + el.height / 2, cursor: 'ew-resize' },
+                                        { name: 'bl', x: el.x, y: el.y + el.height, cursor: 'nesw-resize' }, { name: 'bm', x: el.x + el.width / 2, y: el.y + el.height, cursor: 'ns-resize' }, { name: 'br', x: el.x + el.width, y: el.y + el.height, cursor: 'nwse-resize' },
+                                    ];
+                                     selectionComponent = <g>
+                                        <rect x={el.x} y={el.y} width={el.width} height={el.height} fill="none" stroke="rgb(59 130 246)" strokeWidth={2 / zoom} pointerEvents="none" />
+                                        {handles.map(h => <rect key={h.name} data-handle={h.name} x={h.x - handleSize / 2} y={h.y - handleSize / 2} width={handleSize} height={handleSize} fill="white" stroke="#3b82f6" strokeWidth={1 / zoom} style={{ cursor: h.cursor }} />)}
+                                    </g>;
+                                }
+                            }
+                           
+                            if (el.type === 'path') {
+                                const pathData = el.points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+                                return <g key={el.id} data-id={el.id} className="cursor-pointer"><path d={pathData} stroke={el.strokeColor} strokeWidth={el.strokeWidth / zoom} fill="none" strokeLinecap="round" strokeLinejoin="round" pointerEvents="stroke" strokeOpacity={el.strokeOpacity} />{selectionComponent}{relationFocusComponent}</g>;
+                            }
+                            if (el.type === 'arrow') {
+                                const [start, end] = el.points;
+                                const angle = Math.atan2(end.y - start.y, end.x - start.x);
+                                const headLength = el.strokeWidth * 4;
+
+                                const arrowHeadHeight = headLength * Math.cos(Math.PI / 6);
+                                const lineEnd = {
+                                    x: end.x - arrowHeadHeight * Math.cos(angle),
+                                    y: end.y - arrowHeadHeight * Math.sin(angle),
+                                };
+
+                                const headPoint1 = { x: end.x - headLength * Math.cos(angle - Math.PI / 6), y: end.y - headLength * Math.sin(angle - Math.PI / 6) };
+                                const headPoint2 = { x: end.x - headLength * Math.cos(angle + Math.PI / 6), y: end.y - headLength * Math.sin(angle + Math.PI / 6) };
+                                return (
+                                    <g key={el.id} data-id={el.id} className="cursor-pointer">
+                                        <line x1={start.x} y1={start.y} x2={lineEnd.x} y2={lineEnd.y} stroke={el.strokeColor} strokeWidth={el.strokeWidth / zoom} strokeLinecap="round" />
+                                        <polygon points={`${end.x},${end.y} ${headPoint1.x},${headPoint1.y} ${headPoint2.x},${headPoint2.y}`} fill={el.strokeColor} />
+                                        {selectionComponent}
+                                        {relationFocusComponent}
+                                    </g>
+                                );
+                            }
+                            if (el.type === 'line') {
+                                const [start, end] = el.points;
+                                return (
+                                    <g key={el.id} data-id={el.id} className="cursor-pointer">
+                                        <line x1={start.x} y1={start.y} x2={end.x} y2={end.y} stroke={el.strokeColor} strokeWidth={el.strokeWidth / zoom} strokeLinecap="round" />
+                                        {selectionComponent}
+                                        {relationFocusComponent}
+                                    </g>
+                                );
+                            }
+                            if (el.type === 'text') {
+                                const isEditing = editingElement?.id === el.id;
+                                return (
+                                    <g key={el.id} data-id={el.id} transform={`translate(${el.x}, ${el.y})`} className="cursor-pointer">
+                                        {!isEditing && (
+                                            <foreignObject width={el.width} height={el.height} style={{ overflow: 'visible' }}>
+                                                <div style={{ fontSize: el.fontSize, color: el.fontColor, width: '100%', height: '100%', wordBreak: 'break-word' }}>
+                                                    {el.text}
+                                                </div>
+                                            </foreignObject>
+                                        )}
+                                        {selectionComponent && React.cloneElement(selectionComponent, { transform: `translate(${-el.x}, ${-el.y})` })}
+                                        {relationFocusComponent && React.cloneElement(relationFocusComponent, { transform: `translate(${-el.x}, ${-el.y})` })}
+                                    </g>
+                                )
+                            }
+                             if (el.type === 'shape') {
+                                let shapeJsx;
+                                if (el.shapeType === 'rectangle') shapeJsx = <rect width={el.width} height={el.height} rx={el.borderRadius || 0} ry={el.borderRadius || 0} />
+                                else if (el.shapeType === 'circle') shapeJsx = <ellipse cx={el.width/2} cy={el.height/2} rx={el.width/2} ry={el.height/2} />
+                                else if (el.shapeType === 'triangle') shapeJsx = <polygon points={`${el.width/2},0 0,${el.height} ${el.width},${el.height}`} />
+                                return (
+                                     <g key={el.id} data-id={el.id} transform={`translate(${el.x}, ${el.y})`} className="cursor-pointer">
+                                        {shapeJsx && React.cloneElement(shapeJsx, { 
+                                            fill: el.fillColor, 
+                                            stroke: el.strokeColor, 
+                                            strokeWidth: el.strokeWidth / zoom,
+                                            strokeDasharray: el.strokeDashArray ? el.strokeDashArray.join(' ') : 'none'
+                        })}
+
+                                        {selectionComponent && React.cloneElement(selectionComponent, { transform: `translate(${-el.x}, ${-el.y})` })}
+                                        {relationFocusComponent && React.cloneElement(relationFocusComponent, { transform: `translate(${-el.x}, ${-el.y})` })}
+                                    </g>
+                                );
+                            }
+                            if (el.type === 'image') {
+                                const hasBorderRadius = el.borderRadius && el.borderRadius > 0;
+                                const clipPathId = `clip-${el.id}`;
+                                const maskId = el.mask ? `mask-${el.id}` : undefined;
+                                const cssFilter = buildCssFilter(el.filters);
+                                const hasTemp = el.filters?.temperature && el.filters.temperature !== 0;
+                                const hasSharpen = el.filters?.sharpen && el.filters.sharpen > 0;
+                                const svgFilterId = (hasTemp || hasSharpen) ? `imgfilter-${el.id}` : undefined;
+                                const combinedFilter = [cssFilter, svgFilterId ? `url(#${svgFilterId})` : ''].filter(Boolean).join(' ');
+                                const isGenerating = genIds.has(el.id);
+                                const isRevealing = recentlyCompleted.has(el.id);
+                                const isDimmed = anyGenerating && !isGenerating;
+                                const generationProgress = Math.max(0, Math.min(100, Math.round((el as CanvasElement).generationState?.progress || 0)));
+                                const renderMediaInKonva = shouldRenderMediaInKonva(el, canvasKonvaDisabledIds) && canvasKonvaReadyIds.has(el.id);
+                                return (
+                                    <g
+                                        key={el.id}
+                                        data-id={el.id}
+                                        data-generating={isGenerating ? 'true' : undefined}
+                                    >
+                                        {/* SVG filter defs for temperature / sharpen */}
+                                        {svgFilterId && (
+                                            <defs>
+                                                <filter id={svgFilterId} colorInterpolationFilters="sRGB">
+                                                    {hasTemp && <feColorMatrix type="matrix" values={temperatureMatrix(el.filters!.temperature!)} />}
+                                                    {hasSharpen && <feConvolveMatrix order="3" kernelMatrix={sharpenKernel(el.filters!.sharpen!)} preserveAlpha="true" />}
+                                                </filter>
+                                            </defs>
+                                        )}
+                                        {/* Non-destructive layer mask 鈥?coordinates in element-local space (0,0) to match transform-based positioning */}
+                                        {maskId && (
+                                            <defs>
+                                                <mask id={maskId} maskUnits="userSpaceOnUse" x={0} y={0} width={el.width} height={el.height}>
+                                                    <image href={el.mask} x={0} y={0} width={el.width} height={el.height} />
+                                                </mask>
+                                            </defs>
+                                        )}
+                                        {renderMediaInKonva ? (
+                                            <rect
+                                                key="konva-placeholder"
+                                                x={el.x}
+                                                y={el.y}
+                                                width={el.width}
+                                                height={el.height}
+                                                fill="transparent"
+                                                pointerEvents="all"
+                                            />
+                                        ) : (
+                                            <image
+                                                key="svg-media"
+                                                transform={`translate(${el.x}, ${el.y})`}
+                                                href={el.href}
+                                                width={el.width}
+                                                height={el.height}
+                                                className={`${croppingState && croppingState.elementId !== el.id ? 'opacity-30' : ''} ${isRevealing ? 'flv-gen-reveal' : ''}`}
+                                                clipPath={hasBorderRadius ? `url(#${clipPathId})` : undefined}
+                                                mask={maskId ? `url(#${maskId})` : undefined}
+                                                style={{
+                                                    filter: combinedFilter || undefined,
+                                                    opacity: isNodePromptActive && !isSelected ? 0.82 : 1,
+                                                    transition: 'opacity 320ms ease, filter 160ms ease',
+                                                    transformOrigin: `${el.x + el.width / 2}px ${el.y + el.height / 2}px`,
+                                                }}
+                                            />
+                                        )}
+                                        {isGenerating && (
+                                            <foreignObject x={el.x} y={el.y} width={el.width} height={el.height} pointerEvents="none" style={{ overflow: 'hidden', borderRadius: hasBorderRadius ? el.borderRadius : 12 }}>
+                                                <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+                                                    <div className="flv-generation-glass" style={{ borderRadius: hasBorderRadius ? el.borderRadius : 12, borderWidth: `${1.5 / zoom}px` }}>
+                                                        <span className="flv-generation-glass__status" style={{ top: `${12 / zoom}px`, left: `${12 / zoom}px`, padding: `${5 / zoom}px ${8 / zoom}px`, gap: `${7 / zoom}px`, borderRadius: `${5 / zoom}px`, fontSize: `${12 / zoom}px` }}>
+                                                            {el.type === 'video' ? '视频生成中' : '图片生成中'}<b>{generationProgress}%</b>
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </foreignObject>
+                                        )}
+                                        {selectionComponent}
+                                        {relationFocusComponent}
+                                        {selectedNodePromptElement?.id === el.id && !croppingState && !editingElement && interactionMode.current !== 'dragElements' && (
+                                             <foreignObject
+                                                 x={el.x + el.width / 2 - (360 / zoom)}
+                                                 y={el.y + el.height + (16 / zoom)}
+                                                 width={720 / zoom}
+                                                 height={800 / zoom}
+                                                 style={{ overflow: 'visible' }}
+                                             >
+                                                 <div style={{ transform: `scale(${1 / zoom})`, transformOrigin: 'top left', width: '720px' }}>
+                                                     <div
+                                                         data-testid="node-prompt-bar"
+                                                         className="inline-prompt-bar"
+                                                         style={{ width: '720px', pointerEvents: 'auto', '--inline-prompt-accent': 'var(--isl-mint)' } as React.CSSProperties}
+                                                         onMouseDown={(event) => event.stopPropagation()}
+                                                         onPointerDown={(event) => event.stopPropagation()}
+                                                     >
+                                                         <PromptBar
+                                                             t={t}
+                                                             theme={resolvedTheme}
+                                                             compactMode
+                                                             prompt={selectedNodePromptElement.generationState?.promptPayload.rawText || ''}
+                                                             promptDocument={selectedNodePromptElement.generationState?.promptPayload.richTextDocument}
+                                                             setPrompt={(nextPrompt) => updateNodePromptPayload(selectedNodePromptElement, nextPrompt, selectedNodePromptElement.generationState?.promptPayload.richTextDocument)}
+                                                             onPromptInputChange={({ plainText, document }) => updateNodePromptPayload(selectedNodePromptElement, plainText, document)}
+                                                              onGenerate={() => void handleNodePromptGenerate(selectedNodePromptElement.id)}
+                                                              onStop={() => handleStopNodePromptGeneration(selectedNodePromptElement.id)}
+                                                             onRetry={selectedNodePromptElement.generationState?.status === 'error' ? () => void handleNodePromptGenerate(selectedNodePromptElement.id) : undefined}
+                                                             error={selectedNodePromptElement.generationState?.error || null}
+                                                             progressStage={progressMessage}
+                                                             isLoading={selectedNodePromptElement.generationState?.status === 'running'}
+                                                             isSelectionActive={false}
+                                                             selectedElementCount={1}
+                                                             userEffects={[]}
+                                                             onAddUserEffect={() => undefined}
+                                                             onDeleteUserEffect={() => undefined}
+                                                             generationMode={getElementGenerationMode(selectedNodePromptElement)}
+                                                             setGenerationMode={() => undefined}
+                                                             modeOptions={[getElementGenerationMode(selectedNodePromptElement)]}
+                                                             videoAspectRatio={selectedNodePromptElement.generationState?.aspectRatio || videoAspectRatio}
+                                                             setVideoAspectRatio={(ratio) => updateNodePromptStatePatch(selectedNodePromptElement.id, { aspectRatio: ratio })}
+                                                             videoDurationSec={selectedNodePromptElement.generationState?.durationSec ?? videoDurationSec}
+                                                             onVideoDurationSecChange={(durationSec) => updateNodePromptStatePatch(selectedNodePromptElement.id, { durationSec })}
+                                                             videoResolution={selectedNodePromptElement.generationState?.resolution || videoResolution}
+                                                             onVideoResolutionChange={(resolution) => updateNodePromptStatePatch(selectedNodePromptElement.id, { resolution })}
+                                                             videoGenerateAudio={selectedNodePromptElement.generationState?.generateAudio ?? videoGenerateAudio}
+                                                             onVideoGenerateAudioChange={(generateAudio) => updateNodePromptStatePatch(selectedNodePromptElement.id, { generateAudio })}
+                                                             videoWatermark={selectedNodePromptElement.generationState?.watermark ?? videoWatermark}
+                                                             onVideoWatermarkChange={(watermark) => updateNodePromptStatePatch(selectedNodePromptElement.id, { watermark })}
+                                                             selectedImageModel={selectedNodePromptElement.type === 'image' ? (selectedNodePromptElement.generationState?.modelId || modelPreference.imageModel) : undefined}
+                                                             selectedVideoModel={selectedNodePromptElement.type === 'video' ? (selectedNodePromptElement.generationState?.modelId || modelPreference.videoModel) : undefined}
+                                                             imageModelOptions={dynamicModelOptions.image}
+                                                             videoModelOptions={dynamicModelOptions.video}
+                                                             onImageModelChange={selectedNodePromptElement.type === 'image' ? (model) => updateNodePromptStatePatch(selectedNodePromptElement.id, { modelId: model }) : undefined}
+                                                             onVideoModelChange={selectedNodePromptElement.type === 'video' ? (model) => updateNodePromptStatePatch(selectedNodePromptElement.id, { modelId: model }) : undefined}
+                                                             canvasElements={elements.filter(item => item.id !== selectedNodePromptElement.id)}
+                                                             attachments={nodePromptAttachments[selectedNodePromptElement.id] || []}
+                                                             onAddAttachments={(files) => void handleAddNodePromptAttachmentFiles(selectedNodePromptElement.id, files)}
+                                                             onRemoveAttachment={(id) => handleRemoveNodePromptAttachment(selectedNodePromptElement.id, id)}
+                                                             onEnhancePrompt={handleEnhancePrompt}
+                                                             isEnhancingPrompt={isEnhancingPrompt}
+                                                             isAutoEnhanceEnabled={isAutoEnhanceEnabled}
+                                                             onAutoEnhanceToggle={() => setIsAutoEnhanceEnabled(prev => !prev)}
+                                                             apiConfigs={userApiKeys}
+                                                             userApiKeys={userApiKeys}
+                                                             onOpenSettings={() => setIsSettingsPanelOpen(true)}
+                                                             variant="inline"
+                                                             shellClassName="inline-prompt-bar-shell"
+                                                             popoverDirection="down"
+                                                         />
+                                                     </div>
+                                                 </div>
+                                             </foreignObject>
+                                         )}
+                                     </g>
+                                 );
+                              }
+                              if (el.type === 'video') {
+                                const isGenerating = genIds.has(el.id);
+                                const isRevealing = recentlyCompleted.has(el.id);
+                                const isDimmed = anyGenerating && !isGenerating;
+                                const genStatus = (el as CanvasElement).generationState?.status;
+                                const stageLabel = genStatus ? stageLabelMap[genStatus] : undefined;
+                                const perimeter = 2 * (el.width + el.height);
+                                const renderMediaInKonva = shouldRenderMediaInKonva(el, canvasKonvaDisabledIds) && canvasKonvaReadyIds.has(el.id);
+                                return (
+                                    <g key={el.id} data-id={el.id} data-generating={isGenerating ? 'true' : undefined}>
+                                        {renderMediaInKonva ? (
+                                            <rect
+                                                key="konva-placeholder"
+                                                x={el.x}
+                                                y={el.y}
+                                                width={el.width}
+                                                height={el.height}
+                                                fill="transparent"
+                                                pointerEvents="all"
+                                            />
+                                        ) : (
+                                            <foreignObject key="svg-media" x={el.x} y={el.y} width={el.width} height={el.height}>
+                                                <video
+                                                    src={el.href}
+                                                    controls
+                                                    style={{ width: '100%', height: '100%', borderRadius: '8px', opacity: isNodePromptActive && !isSelected ? 0.82 : 1, transition: 'opacity 320ms ease' }}
+                                                    className={`${croppingState ? 'opacity-30' : ''} ${isRevealing ? 'flv-gen-reveal' : ''}`}
+                                                ></video>
+                                            </foreignObject>
+                                        )}
+                                        {isGenerating && (
+                                            <g transform={`translate(${el.x}, ${el.y})`} pointerEvents="none">
+                                                <rect
+                                                    width={el.width}
+                                                    height={el.height}
+                                                    fill="none"
+                                                    stroke="var(--isl-sun, #fbbf24)"
+                                                    strokeWidth={2.5 / zoom}
+                                                    strokeDasharray={`${perimeter * 0.12} ${perimeter * 0.88}`}
+                                                    strokeLinecap="round"
+                                                    rx={8}
+                                                    opacity={0.7}
+                                                />
+                                                <rect width={el.width} height={el.height} fill="rgba(0,0,0,0.06)" rx={8} />
+                                            </g>
+                                        )}
+                                        {isGenerating && stageLabel && (
+                                            <foreignObject x={el.x} y={el.y + el.height + 4 / zoom} width={el.width} height={24 / zoom} pointerEvents="none">
+                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, transform: `scale(${1 / zoom})`, transformOrigin: 'top center', width: el.width * zoom, height: 24 }}>
+                                                    <span className="flv-gen-stage-label" style={{
+                                                        fontSize: 11,
+                                                        fontWeight: 600,
+                                                        color: 'var(--isl-sun, #fbbf24)',
+                                                        background: 'rgba(0,0,0,0.55)',
+                                                        backdropFilter: 'blur(6px)',
+                                                        padding: '2px 10px',
+                                                        borderRadius: 10,
+                                                        whiteSpace: 'nowrap',
+                                                    }}>{stageLabel}</span>
+                                                </div>
+                                            </foreignObject>
+                                        )}
+                                        {selectionComponent}
+                                        {relationFocusComponent}
+                                        {selectedNodePromptElement?.id === el.id && !croppingState && !editingElement && interactionMode.current !== 'dragElements' && (
+                                             <foreignObject
+                                                 x={el.x + el.width / 2 - (360 / zoom)}
+                                                 y={el.y + el.height + (16 / zoom)}
+                                                 width={720 / zoom}
+                                                 height={800 / zoom}
+                                                 style={{ overflow: 'visible' }}
+                                             >
+                                                 <div style={{ transform: `scale(${1 / zoom})`, transformOrigin: 'top left', width: '720px' }}>
+                                                     <div
+                                                         data-testid="node-prompt-bar"
+                                                         className="inline-prompt-bar"
+                                                         style={{ width: '720px', pointerEvents: 'auto', '--inline-prompt-accent': 'var(--isl-sun)' } as React.CSSProperties}
+                                                         onMouseDown={(event) => event.stopPropagation()}
+                                                         onPointerDown={(event) => event.stopPropagation()}
+                                                     >
+                                                         <PromptBar
+                                                             t={t}
+                                                             theme={resolvedTheme}
+                                                             compactMode
+                                                             prompt={selectedNodePromptElement.generationState?.promptPayload.rawText || ''}
+                                                             promptDocument={selectedNodePromptElement.generationState?.promptPayload.richTextDocument}
+                                                             setPrompt={(nextPrompt) => updateNodePromptPayload(selectedNodePromptElement, nextPrompt, selectedNodePromptElement.generationState?.promptPayload.richTextDocument)}
+                                                             onPromptInputChange={({ plainText, document }) => updateNodePromptPayload(selectedNodePromptElement, plainText, document)}
+                                                              onGenerate={() => void handleNodePromptGenerate(selectedNodePromptElement.id)}
+                                                              onStop={() => handleStopNodePromptGeneration(selectedNodePromptElement.id)}
+                                                             onRetry={selectedNodePromptElement.generationState?.status === 'error' ? () => void handleNodePromptGenerate(selectedNodePromptElement.id) : undefined}
+                                                             error={selectedNodePromptElement.generationState?.error || null}
+                                                             progressStage={progressMessage}
+                                                             isLoading={selectedNodePromptElement.generationState?.status === 'running'}
+                                                             isSelectionActive={false}
+                                                             selectedElementCount={1}
+                                                             userEffects={[]}
+                                                             onAddUserEffect={() => undefined}
+                                                             onDeleteUserEffect={() => undefined}
+                                                             generationMode={getElementGenerationMode(selectedNodePromptElement)}
+                                                             setGenerationMode={() => undefined}
+                                                             modeOptions={[getElementGenerationMode(selectedNodePromptElement)]}
+                                                             videoAspectRatio={selectedNodePromptElement.generationState?.aspectRatio || videoAspectRatio}
+                                                             setVideoAspectRatio={(ratio) => updateNodePromptStatePatch(selectedNodePromptElement.id, { aspectRatio: ratio })}
+                                                             videoDurationSec={selectedNodePromptElement.generationState?.durationSec ?? videoDurationSec}
+                                                             onVideoDurationSecChange={(durationSec) => updateNodePromptStatePatch(selectedNodePromptElement.id, { durationSec })}
+                                                             videoResolution={selectedNodePromptElement.generationState?.resolution || videoResolution}
+                                                             onVideoResolutionChange={(resolution) => updateNodePromptStatePatch(selectedNodePromptElement.id, { resolution })}
+                                                             videoGenerateAudio={selectedNodePromptElement.generationState?.generateAudio ?? videoGenerateAudio}
+                                                             onVideoGenerateAudioChange={(generateAudio) => updateNodePromptStatePatch(selectedNodePromptElement.id, { generateAudio })}
+                                                             videoWatermark={selectedNodePromptElement.generationState?.watermark ?? videoWatermark}
+                                                             onVideoWatermarkChange={(watermark) => updateNodePromptStatePatch(selectedNodePromptElement.id, { watermark })}
+                                                             selectedImageModel={selectedNodePromptElement.type === 'image' ? (selectedNodePromptElement.generationState?.modelId || modelPreference.imageModel) : undefined}
+                                                             selectedVideoModel={selectedNodePromptElement.type === 'video' ? (selectedNodePromptElement.generationState?.modelId || modelPreference.videoModel) : undefined}
+                                                             imageModelOptions={dynamicModelOptions.image}
+                                                             videoModelOptions={dynamicModelOptions.video}
+                                                             onImageModelChange={selectedNodePromptElement.type === 'image' ? (model) => updateNodePromptStatePatch(selectedNodePromptElement.id, { modelId: model }) : undefined}
+                                                             onVideoModelChange={selectedNodePromptElement.type === 'video' ? (model) => updateNodePromptStatePatch(selectedNodePromptElement.id, { modelId: model }) : undefined}
+                                                             canvasElements={elements.filter(item => item.id !== selectedNodePromptElement.id)}
+                                                             attachments={nodePromptAttachments[selectedNodePromptElement.id] || []}
+                                                             onAddAttachments={(files) => void handleAddNodePromptAttachmentFiles(selectedNodePromptElement.id, files)}
+                                                             onRemoveAttachment={(id) => handleRemoveNodePromptAttachment(selectedNodePromptElement.id, id)}
+                                                             onEnhancePrompt={handleEnhancePrompt}
+                                                             isEnhancingPrompt={isEnhancingPrompt}
+                                                             isAutoEnhanceEnabled={isAutoEnhanceEnabled}
+                                                             onAutoEnhanceToggle={() => setIsAutoEnhanceEnabled(prev => !prev)}
+                                                             apiConfigs={userApiKeys}
+                                                             userApiKeys={userApiKeys}
+                                                             onOpenSettings={() => setIsSettingsPanelOpen(true)}
+                                                             variant="inline"
+                                                             shellClassName="inline-prompt-bar-shell"
+                                                             popoverDirection="down"
+                                                         />
+                                                     </div>
+                                                 </div>
+                                             </foreignObject>
+                                         )}
+                                     </g>
+                                 );
+                              }
+                              if (el.type === 'group') {
+                                return <g key={el.id} data-id={el.id}>{selectionComponent}{relationFocusComponent}</g>
+                             }
+                            return null;
+                        })}
+
+                        {lassoPath && (
+                            <path d={lassoPath.map((p, i) => i === 0 ? `M ${p.x} ${p.y}` : `L ${p.x} ${p.y}`).join(' ')} stroke="rgb(59 130 246)" strokeWidth={1 / zoom} strokeDasharray={`${4/zoom} ${4/zoom}`} fill="rgba(59, 130, 246, 0.1)" />
+                        )}
+
+                        {/* Inpaint mask overlay + prompt input */}
+                        {inpaintState && (() => {
+                            const pts = inpaintState.maskPoints;
+                            const pathD = pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ') + ' Z';
+                            const cx = pts.reduce((s, p) => s + p.x, 0) / pts.length;
+                            const cy = pts.reduce((s, p) => s + p.y, 0) / pts.length;
+                            const promptBoxW = 320 / zoom;
+                            const promptBoxH = 120 / zoom;
+                            return (
+                                <>
+                                    {/* Animated dashed mask outline */}
+                                    <path
+                                        d={pathD}
+                                        fill="rgba(239, 68, 68, 0.15)"
+                                        stroke="#ef4444"
+                                        strokeWidth={2 / zoom}
+                                        strokeDasharray={`${6/zoom} ${4/zoom}`}
+                                        pointerEvents="none"
+                                    >
+                                        <animate attributeName="stroke-dashoffset" from="0" to={`${20/zoom}`} dur="1s" repeatCount="indefinite" />
+                                    </path>
+                                    {/* Floating inpaint prompt box */}
+                                    {inpaintState.promptVisible && (
+                                        <foreignObject
+                                            x={cx - promptBoxW / 2}
+                                            y={cy - promptBoxH / 2}
+                                            width={promptBoxW}
+                                            height={promptBoxH}
+                                            style={{ overflow: 'visible' }}
+                                        >
+                                            <div
+                                                style={{
+                                                    transform: `scale(${1 / zoom})`,
+                                                    transformOrigin: 'top left',
+                                                    width: 320,
+                                                }}
+                                                onMouseDown={e => e.stopPropagation()}
+                                            >
+                                                <div style={{
+                                                    background: 'white',
+                                                    borderRadius: 12,
+                                                    boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
+                                                    border: '2px solid #ef4444',
+                                                    padding: 12,
+                                                }}>
+                                                    <div style={{ fontSize: 12, fontWeight: 600, color: '#ef4444', marginBottom: 8 }}>
+                                                        馃幆 AI 灞€閮ㄩ噸缁?
+                                                    </div>
+                                                    <textarea
+                                                        value={inpaintPrompt}
+                                                        onChange={e => setInpaintPrompt(e.target.value)}
+                                                        placeholder="描述你想在选区内生成的内容..."
+                                                        autoFocus
+                                                        style={{
+                                                            width: '100%',
+                                                            height: 48,
+                                                            border: '1px solid #d1d5db',
+                                                            borderRadius: 8,
+                                                            padding: '6px 10px',
+                                                            fontSize: 13,
+                                                            resize: 'none',
+                                                            outline: 'none',
+                                                        }}
+                                                        onKeyDown={e => {
+                                                            if (e.key === 'Enter' && !e.shiftKey) {
+                                                                e.preventDefault();
+                                                                handleInpaint();
+                                                            }
+                                                            if (e.key === 'Escape') {
+                                                                setInpaintState(null);
+                                                                setInpaintPrompt('');
+                                                            }
+                                                        }}
+                                                    />
+                                                    <div style={{ display: 'flex', gap: 8, marginTop: 8, justifyContent: 'flex-end' }}>
+                                                        <button
+                                                            onClick={() => { setInpaintState(null); setInpaintPrompt(''); }}
+                                                            style={{
+                                                                padding: '4px 12px',
+                                                                fontSize: 12,
+                                                                borderRadius: 6,
+                                                                border: '1px solid #d1d5db',
+                                                                background: 'white',
+                                                                cursor: 'pointer',
+                                                            }}
+                                                        >
+                                                            鍙栨秷
+                                                        </button>
+                                                        <button
+                                                            onClick={handleInpaint}
+                                                            disabled={!inpaintPrompt.trim() || isLoading}
+                                                            style={{
+                                                                padding: '4px 16px',
+                                                                fontSize: 12,
+                                                                borderRadius: 6,
+                                                                border: 'none',
+                                                                background: inpaintPrompt.trim() ? '#ef4444' : '#fca5a5',
+                                                                color: 'white',
+                                                                cursor: inpaintPrompt.trim() ? 'pointer' : 'not-allowed',
+                                                                fontWeight: 600,
+                                                            }}
+                                                        >
+                                                            {isLoading ? '閲嶇粯涓?..' : '鉁?閲嶇粯'}
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </foreignObject>
+                                    )}
+                                </>
+                            );
+                        })()}
+                        
+                        {alignmentGuides.map((guide, i) => (
+                             <line key={i} x1={guide.type === 'v' ? guide.position : guide.start} y1={guide.type === 'h' ? guide.position : guide.start} x2={guide.type === 'v' ? guide.position : guide.end} y2={guide.type === 'h' ? guide.position : guide.end} stroke="red" strokeWidth={1/zoom} strokeDasharray={`${4/zoom} ${2/zoom}`} />
+                        ))}
+                        <g id="flv-drag-guides" />
+
+                        {selectedElementIds.length > 0 && !croppingState && !editingElement && interactionMode.current !== 'dragElements' && (
+                            <ElementToolbar
+                                selectedElementIds={selectedElementIds}
+                                singleSelectedElement={singleSelectedElement}
+                                elements={elements}
+                                zoom={zoom}
+                                resolvedTheme={resolvedTheme}
+                                isLoading={isLoading}
+                                language={language}
+                                filterPanelElementId={filterPanelElementId}
+                                outpaintMenuId={outpaintMenuId}
+                                maskEditingId={maskEditingId}
+                                reversePromptLoading={reversePromptLoading}
+                                t={t}
+                                getSelectionBounds={getSelectionBounds}
+                                getElementBounds={getElementBounds}
+                                handleAlignSelection={handleAlignSelection}
+                                handleGroupSelection={handleGroup}
+                                handleExportSelection={() => void handleExportSelectedMedia()}
+                                handleCopyElement={handleCopyElement}
+                                handleDownloadImage={handleDownloadImage}
+                                handleDeleteElement={handleDeleteElement}
+                                handlePropertyChange={handlePropertyChange}
+                                handleStartCrop={handleStartCrop}
+                                handleReversePrompt={handleReversePrompt}
+                                cancelReversePrompt={cancelReversePrompt}
+                                handleSplitImageLayers={handleSplitImageLayers}
+                                handleUpscaleImage={handleUpscaleImage}
+                                handleRemoveImageBackground={handleRemoveImageBackground}
+                                handleOutpaint={handleOutpaint}
+                                setFilterPanelElementId={setFilterPanelElementId}
+                                setOutpaintMenuId={setOutpaintMenuId}
+                                setAddAssetModal={setAddAssetModal}
+                                startMaskEditing={startMaskEditing}
+                                onAddToChat={triggerAddToChat}
+                                relationFocusCount={Math.max(0, selectedRelationIds.size - 1)}
+                                isRelationFocusActive={!!singleSelectedElement && relationFocusElementId === singleSelectedElement.id}
+                                onToggleRelationFocus={singleSelectedElement && (singleSelectedElement.type === 'image' || singleSelectedElement.type === 'video')
+                                    ? () => {
+                                        setRelationFocusElementId(prev => (
+                                            prev === singleSelectedElement.id ? null : singleSelectedElement.id
+                                        ));
+                                    }
+                                    : undefined}
+                            />
+                        )}
+                        {editingElement && (() => {
+                             const element = elements.find(el => el.id === editingElement.id) as TextElement;
+                             if (!element) return null;
+                             return <foreignObject 
+                                x={element.x} y={element.y} width={element.width} height={element.height}
+                                onMouseDown={(e) => e.stopPropagation()}
+                             >
+                                <textarea
+                                    ref={editingTextareaRef}
+                                    value={editingElement.text}
+                                    onChange={(e) => setEditingElement({ ...editingElement, text: e.target.value })}
+                                    onBlur={() => handleStopEditing()}
+                                    placeholder={t('editor.editText')}
+                                    title={t('editor.editText')}
+                                    style={{
+                                        width: '100%', height: '100%', border: 'none', padding: 0, margin: 0,
+                                        outline: 'none', resize: 'none', background: 'transparent',
+                                        fontSize: element.fontSize, color: element.fontColor,
+                                        overflow: 'hidden'
+                                    }}
+                                 />
+                             </foreignObject>
+                        })()}
+                        {croppingState && (
+                             <g>
+                                <path
+                                    d={`M ${-panOffset.x/zoom},${-panOffset.y/zoom} H ${window.innerWidth/zoom - panOffset.x/zoom} V ${window.innerHeight/zoom - panOffset.y/zoom} H ${-panOffset.x/zoom} Z M ${croppingState.cropBox.x},${croppingState.cropBox.y} v ${croppingState.cropBox.height} h ${croppingState.cropBox.width} v ${-croppingState.cropBox.height} Z`}
+                                    fill="rgba(0,0,0,0.5)"
+                                    fillRule="evenodd"
+                                    pointerEvents="none"
+                                />
+                                <rect x={croppingState.cropBox.x} y={croppingState.cropBox.y} width={croppingState.cropBox.width} height={croppingState.cropBox.height} fill="none" stroke="white" strokeWidth={2 / zoom} pointerEvents="all" />
+                                {(() => {
+                                    const { x, y, width, height } = croppingState.cropBox;
+                                    const handleSize = 10 / zoom;
+                                    const handles = [
+                                        { name: 'tl', x, y, cursor: 'nwse-resize' }, { name: 'tr', x: x + width, y, cursor: 'nesw-resize' },
+                                        { name: 'bl', x, y: y + height, cursor: 'nesw-resize' }, { name: 'br', x: x + width, y: y + height, cursor: 'nwse-resize' },
+                                    ];
+                                    return handles.map(h => <rect key={h.name} data-handle={h.name} x={h.x - handleSize/2} y={h.y - handleSize/2} width={handleSize} height={handleSize} fill="white" stroke="#3b82f6" strokeWidth={1/zoom} style={{ cursor: h.cursor }}/>)
+                                })()}
+                            </g>
+                        )}
+                        {selectionBox && (
+                             <rect
+                                x={selectionBox.x}
+                                y={selectionBox.y}
+                                width={selectionBox.width}
+                                height={selectionBox.height}
+                                fill="rgba(59, 130, 246, 0.1)"
+                                stroke="rgb(59, 130, 246)"
+                                strokeWidth={1 / zoom}
+                            />
+                        )}
+                    </g>
+                );
+            })()}
+                 </svg>
+                 {contextMenu && (() => {
+                    const hasDrawableSelection = elements.some(el => selectedElementIds.includes(el.id) && el.type !== 'image' && el.type !== 'video');
+                    const isGroupable = selectedElementIds.length > 1;
+                    const isUngroupable = selectedElementIds.length === 1 && elements.find(el => el.id === selectedElementIds[0])?.type === 'group';
+
+                    return (
+                        <div style={{ top: contextMenu.y, left: contextMenu.x }} className="absolute z-30 bg-white rounded-md shadow-lg border border-gray-200 text-sm py-1 text-gray-800" onContextMenu={e => e.stopPropagation()}>
+                           {isGroupable && <button onClick={handleGroup} className="block w-full text-left px-4 py-1.5 hover:bg-gray-100">{t('contextMenu.group')}</button>}
+                           {isUngroupable && <button onClick={handleUngroup} className="block w-full text-left px-4 py-1.5 hover:bg-gray-100">{t('contextMenu.ungroup')}</button>}
+                           {(isGroupable || isUngroupable) && <div className="border-t border-gray-100 my-1"></div>}
+                            
+                            {contextMenu.elementId && (<>
+                                <button onClick={() => handleLayerAction(contextMenu.elementId!, 'forward')} className="block w-full text-left px-4 py-1.5 hover:bg-gray-100">{t('contextMenu.bringForward')}</button>
+                                <button onClick={() => handleLayerAction(contextMenu.elementId!, 'backward')} className="block w-full text-left px-4 py-1.5 hover:bg-gray-100">{t('contextMenu.sendBackward')}</button>
+                                <div className="border-t border-gray-100 my-1"></div>
+                                <button onClick={() => handleLayerAction(contextMenu.elementId!, 'front')} className="block w-full text-left px-4 py-1.5 hover:bg-gray-100">{t('contextMenu.bringToFront')}</button>
+                                <button onClick={() => handleLayerAction(contextMenu.elementId!, 'back')} className="block w-full text-left px-4 py-1.5 hover:bg-gray-100">{t('contextMenu.sendToBack')}</button>
+                            </>)}
+                            
+                            {hasDrawableSelection && (
+                                <>
+                                    <div className="border-t border-gray-100 my-1"></div>
+                                    <button onClick={handleRasterizeSelection} className="block w-full text-left px-4 py-1.5 hover:bg-gray-100">{t('contextMenu.rasterize')}</button>
+                                </>
+                            )}
+                            {/* A/B Compare: show when right-clicking an image and there's at least 1 other image or history item */}
+                            {contextMenu.elementId && (() => {
+                                const ctxEl = elements.find(e => e.id === contextMenu.elementId);
+                                if (!ctxEl || ctxEl.type !== 'image') return null;
+                                const otherImages = elements.filter(e => e.type === 'image' && e.id !== ctxEl.id) as ImageElement[];
+                                const hasCompareTarget = otherImages.length > 0 || generationHistory.length > 0;
+                                if (!hasCompareTarget) return null;
+                                return (
+                                    <>
+                                        <div className="border-t border-gray-100 my-1"></div>
+                                        {otherImages.slice(0, 3).map(other => (
+                                            <button key={other.id} onClick={() => {
+                                                setAbCompare({
+                                                    imageA: { src: (ctxEl as ImageElement).href, label: ctxEl.name || 'A' },
+                                                    imageB: { src: other.href, label: other.name || 'B' },
+                                                });
+                                                setContextMenu(null);
+                                            }} className="block w-full text-left px-4 py-1.5 hover:bg-gray-100 truncate max-w-[200px]">
+                                                A/B 瀵规瘮: {other.name || other.id.slice(0, 6)}
+                                            </button>
+                                        ))}
+                                        {generationHistory.length > 0 && (
+                                            <button onClick={() => {
+                                                const latest = generationHistory[0];
+                                                setAbCompare({
+                                                    imageA: { src: (ctxEl as ImageElement).href, label: ctxEl.name || '褰撳墠' },
+                                                    imageB: { src: latest.dataUrl, label: latest.name || latest.prompt.slice(0, 20) || '鍘嗗彶' },
+                                                });
+                                                setContextMenu(null);
+                                            }} className="block w-full text-left px-4 py-1.5 hover:bg-gray-100">
+                                                A/B 瀵规瘮: 鏈€杩戠敓鎴?
+                                            </button>
+                                        )}
+                                    </>
+                                );
+                            })()}
+                            {/* Reverse Prompt: show for image elements */}
+                            {contextMenu.elementId && (() => {
+                                const ctxEl = elements.find(e => e.id === contextMenu.elementId);
+                                if (!ctxEl || ctxEl.type !== 'image') return null;
+                                return (
+                                    <>
+                                        <div className="border-t border-gray-100 my-1"></div>
+                                        <button
+                                            disabled={reversePromptLoading}
+                                            onClick={() => {
+                                                if (reversePromptLoading) { cancelReversePrompt(); }
+                                                else {
+                                                    handleReversePrompt((ctxEl as ImageElement).href, (ctxEl as ImageElement).mimeType, (ctxEl as ImageElement).width, (ctxEl as ImageElement).height);
+                                                }
+                                                setContextMenu(null);
+                                            }}
+                                            className="block w-full text-left px-4 py-1.5 hover:bg-gray-100 disabled:opacity-50"
+                                        >
+                                            {reversePromptLoading ? (language === 'zho' ? '鍒嗘瀽涓?..' : 'Analyzing...') : (language === 'zho' ? '鍙嶆帹 Prompt' : 'Reverse Prompt')}
+                                        </button>
+                                    </>
+                                );
+                            })()}
+                        </div>
+                    );
+                })()}
+            </div>
         </>}
         />
-        <PromptHistoryPalette theme={resolvedTheme} />
-        </>
     );
 };
 

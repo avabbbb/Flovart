@@ -788,6 +788,23 @@ title: 待测试确认
 - ⑩ ToC Landing Hero 区"探索模板"按钮 → 平滑滚动到模板 section。
 - ⑪ ToB Landing Hero 区"查看定价"按钮 → 平滑滚动到定价 section。
 
+## ToB 企业后台后端安全修复
+
+- Enterprise 部门和角色 CRUD 改为按 `deptId` / `roleId` 反查组织后再做 RBAC，部门成员列表/新增/更新/删除不再裸奔；部门成员写入会校验用户存在和角色属于同组织。
+- Hub 与 Enterprise JWT 中间件限制 HS256，并检查 token 有效性、`subject` 和 `audience`，避免畸形 token 触发 panic。
+- Enterprise API Key 新写入时使用 AES-GCM 密文存储；生产环境应配置独立 `API_KEY_ENCRYPTION_SECRET`，旧明文 Key 需重新保存。
+- Enterprise AI proxy 增加 provider/endpoint 白名单，覆盖 OpenAI、Anthropic、RunningHub、Volcengine、OpenAI-compatible 和 custom 的受控路径；成功返回前必须完成扣费。
+- 积分扣费和退款对余额与成员额度使用事务行锁；审批流当前节点指针错误和 pricing repository 包名遮蔽编译错误已修复。
+- Canvas/Agent 的 `element.ignite` 复用节点级生成链路，视频会沿用节点自己的模型、比例、时长、分辨率、音频、水印和 `@`/附件引用；CLI `generate.video` 新增 `generateAudio` 和 `watermark` 参数。
+
+### 待用户验证
+
+- ① 非管理员/无权限成员访问 `/departments/:deptId/members` 新增/更新/删除应返回 403；有 `member:manage` 权限的成员可正常操作。
+- ② `/departments/:deptId` 与 `/roles/:roleId` 更新/删除不再返回“缺少组织 id”。
+- ③ 新保存 Enterprise API Key 后数据库 `org_api_keys.api_key` 为 `v1:` 密文，列表接口仍只返回 `keyHint`。
+- ④ Enterprise AI proxy 对未知 endpoint 返回错误；RunningHub `/openapi/v2/...` 与 Volcengine `/contents/generations/tasks` 可进入受控转发。
+- ⑤ 通过 MCP/CLI 对已有视频节点执行 `element.ignite`，应使用该节点 PromptBar 里设置的模型、时长、分辨率、音频和水印参数。
+
 ## ToB 企业后台 — 积分/Key 池/资源/审批/敏感词/项目
 
 ### 后端（enterprise 服务，`backend/enterprise/`）
@@ -1012,4 +1029,37 @@ Batch 逻辑已从独立 `handleBatchGenerate` 合并进 `handleGenerate`。Prom
 - 7. 点击"删除"移除单条；点击顶部"清空"并确认后清空全部。
 - 8. 超过 30 条后，最旧的自动被淘汰。
 - 9. 切换深色/浅色主题，面板配色应跟随。
+
+## 画布从 Excalidraw 回退到 5d2fc18 SVG/Konva 版 + Agent Chat 接线
+
+**背景**：Excalidraw 主路径化重构（97d416a 及之后）在画布交互和持久化上反复出现回归，决定回退到 2026-06-25最后一个稳定版本 `5d2fc18`（"修复UI BUG"，纯 SVG/Konva 渲染路径），同时保留 Phase 1.3-1.4 的 Agent Chat 整套组件不丢。
+
+**回退范围**（不回退 Git 历史，用 `git checkout 5d2fc18 -- <files>` + 新 commit）：
+
+- 画布核心文件回退到 `5d2fc18`：`App.tsx` / `AppShell.tsx` / `ABCompareOverlay.tsx` / `CanvasMentionExtension.tsx` / `CanvasSettings.tsx` / `RichPromptEditor.tsx` / `canvas-ui/CanvasChrome.tsx` / `Toolbar.tsx` / `ElementToolbar.tsx` / `PromptBar.tsx` / `useCanvasInteraction.ts` / `useGeneration.ts` / `KonvaCanvas.tsx` / `KonvaCanvasDemo.tsx` / `CanvasKonvaMediaLayer.tsx`。
+- 删除 Excalidraw 专属文件（不留死代码）：`CanvasFixedOverlay` / `ExcalidrawCanvas` / `ExcalidrawInner` / `ExcalidrawLayerPanel` / `FlovartExcalidrawStage` / `FlovartToolbar` / `excalidraw-canvas.css` / `utils/excalidrawAdapter.ts`。
+- 其他业务扩展（Tauri / Landing / 企业后台 / Seedance 2.0 / RunningHub 模型扩展 / Prompt 历史面板 / Version History 面板 / Workflow 模块）保留当前状态不动。
+- `RightPanel.tsx` 保留当前 HEAD 版（已挂接新 Chat 与旧 AgentChatPanel 条件渲染）。
+- `components/agent-chat/Chat.tsx` 整套工具调用 + SSE 流式组件保留不动。
+- `types/index.ts` / `utils/boardPersistence.ts` / `utils/canvasHelpers.ts` 已无 `viewport` 字段与 backfill，无需再手动清理。
+- 死代码 `components/canvas/InpaintDialog.tsx` 保留文件但不接入（5d2fc18 版 `App.tsx` 不引用）。
+
+**Agent Chat 接线**（在 5d2fc18 版 `App.tsx` 重新接入 Phase 1.3-1.4 能力，去掉 Excalidraw 专属调用）：
+
+- `App.tsx` 新增 `pendingChatAttachments` state（`Array<{ url, mimeType }>`）。
+- `App.tsx` 新增 `triggerAddToChat` callback：选中单图元 → `resolveColdMediaRef` 解析 href → `setPendingChatAttachments([{ url, mimeType }])` → `setSelectedElementIds([])` 清选中。已删除原 79b2d2d 版中的 `excalidrawApiRef.current?.updateScene(...)` 行（Excalidraw 专属）。
+- `App.tsx` `RightPanel` 调用新增 9 个 props：`elements` / `selectedElementIds` / `setSelectedElementIds` / `commitAction` / `handleGenerate` / `userApiKeys` / `modelPreference` / `pendingChatAttachments` / `onConsumeChatAttachments={() => setPendingChatAttachments([])}`。
+- `App.tsx` `ElementToolbar` 调用新增 `onAddToChat={triggerAddToChat}` prop。
+- `ElementToolbar.tsx` `ElementToolbarProps` 新增 `onAddToChat?: () => void`；选中单图元时渲染"加入对话"按钮（聊天气泡图标，位于"加入素材库"之后），点击调 `onAddToChat`；`toolbarScreenWidth` 在 `onAddToChat` 启用时增加 52px 容纳新按钮。
+
+**测试要点**：
+
+- ① 画布渲染使用 5d2fc18 SVG/Konva 路径，`components/canvas/` 下只剩 KonvaCanvas/KonvaCanvasDemo/CanvasKonvaMediaLayer/InpaintDialog 文件。
+- ② 选中一张图片 → ElementToolbar 在"加入素材库"旁出现"加入对话"气泡按钮 → 点击后选中态清空。
+- ③ 右侧 RightPanel 切换到 Agent tab 显示新版 Chat（13 工具 + Tool-Calling 流式），第②步点击的图片作为附件出现在输入框上方。
+- ④ 在 Chat 输入 prompt + 附件 → 流式 Agent 调用工具操作画布（element.create/update-prompt/ignite 等）。
+- ⑤ `commitAction` / `handleGenerate` / `userApiKeys` / `modelPreference` 等下游 store/util/Provider 路径与 5d2fc18 版一致。
+- ⑥ 画布持久化、视频上传、Landing、企业后台等保留功能仍可正常访问。
+- ⑦ 拖图片上画布时不再触发 React `insertBefore` NotFoundError：在 image (`App.tsx` 4167) 与 video (`App.tsx` 4292) 两条 `renderMediaInKonva ? <rect> : <image|foreignObject>` ternary 各分支加显式 `key="konva-placeholder"` / `key="svg-media"`，让 React 在 Konva 异步 ready 后由占位 `<rect>` 切到真实媒体节点时走 unmount/mount，而不是 position-reuse mutation placement，消除 5d2fc18 原版预存的 placement 失败。
+- ⑧ 控制台 `transparent 不符合 #rrggbb 格式` 的告警属于 5d2fc18 原版预存（4 处 `fill="transparent"` / `background: transparent` 来自 5d2fc18 行 4173/4298/4611 等），为 React DevTools dev 模式对 SVG `fill` 属性的 HTML5 一致性提示，不影响渲染，未改；用户若要求清理可后续单独处理。
 
