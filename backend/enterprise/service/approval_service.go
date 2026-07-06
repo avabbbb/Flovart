@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"gorm.io/gorm"
 	"flovart/enterprise/model"
 	"flovart/enterprise/repository"
+	"gorm.io/gorm"
 )
 
 type ApprovalService struct {
@@ -28,8 +28,8 @@ type CreateWorkflowInput struct {
 }
 
 type NodeInput struct {
-	NodeType     string   // sequential|parallel|any
-	ApproverType string   // user|role|dept_lead
+	NodeType     string // sequential|parallel|any
+	ApproverType string // user|role|dept_lead
 	ApproverIDs  []string
 }
 
@@ -160,10 +160,10 @@ func (s *ApprovalService) Act(in ActApprovalInput) (*model.ApprovalRecord, error
 	if len(nodes) == 0 {
 		return nil, errors.New("审批流没有节点")
 	}
-	currentNode := nodes[rec.CurrentNodeIndex]
-	if currentNode == nil {
+	if rec.CurrentNodeIndex < 0 || rec.CurrentNodeIndex >= len(nodes) {
 		return nil, errors.New("当前节点不存在")
 	}
+	currentNode := &nodes[rec.CurrentNodeIndex]
 
 	// 记录 step
 	step := &model.ApprovalStep{

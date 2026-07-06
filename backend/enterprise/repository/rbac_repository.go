@@ -1,12 +1,15 @@
 package repository
 
 import (
+	"errors"
+
 	"gorm.io/gorm"
 )
 
 // RbacRepository 用 Postgres 递归 CTE 计算 user 在 org 的有效权限并集
 // 算法：user 直接所属部门 ∪ 所有祖先部门 上该用户的 DeptMember.Roles 并集
-//       再求这些 role 的 permissions 并集
+//
+//	再求这些 role 的 permissions 并集
 type RbacRepository struct {
 	db *gorm.DB
 }
@@ -64,4 +67,21 @@ func (r *RbacRepository) UserInOrg(orgID, userID string) (bool, error) {
 		Where("dm.user_id = ?", userID).
 		Count(&n).Error
 	return n > 0, err
+}
+func (r *RbacRepository) OrgIDByDeptID(deptID string) (string, error) {
+	var orgID string
+	err := r.db.Table("departments").Select("org_id").Where("id = ?", deptID).Take(&orgID).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return "", nil
+	}
+	return orgID, err
+}
+
+func (r *RbacRepository) OrgIDByRoleID(roleID string) (string, error) {
+	var orgID string
+	err := r.db.Table("roles").Select("org_id").Where("id = ?", roleID).Take(&orgID).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return "", nil
+	}
+	return orgID, err
 }

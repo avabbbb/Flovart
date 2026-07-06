@@ -3,63 +3,113 @@ package middleware
 import (
 	"net/http"
 
-	"github.com/gin-gonic/gin"
 	"flovart/enterprise/service"
+	"github.com/gin-gonic/gin"
 )
 
 // RequirePerm 鉴权中间件。约定路由路径参数名为 :id（组织 ID）
-// 1. 未登录 → 401
-// 2. 不在 org 内 → 403（即便 owner 也走 Auth 已注入 user）
-// 3. 满足 perm → 通过
-//
-// 用法：api.POST("/orgs/:id/departments", middleware.RequirePerm(rbacSvc, model.PermDeptManage), h.Create)
 func RequirePerm(svc *service.RbacService, perm string) gin.HandlerFunc {
+	return requireOrgPerm(svc, perm, func(c *gin.Context) (string, bool) {
+		return c.Param("id"), false
+	})
+}
+
+// RequireMember 组织成员即可通过的中间件（如 GET 部门树、GET 成员列表）
+func RequireMember(svc *service.RbacService) gin.HandlerFunc {
+	return requireOrgMember(svc, func(c *gin.Context) (string, bool) {
+		return c.Param("id"), false
+	})
+}
+
+func RequireDeptPerm(svc *service.RbacService, perm string) gin.HandlerFunc {
+	return requireOrgPerm(svc, perm, func(c *gin.Context) (string, bool) {
+		orgID, err := svc.OrgIDByDeptID(c.Param("deptId"))
+		if err != nil {
+			abort(c, http.StatusInternalServerError, "鉴权失败")
+			return "", true
+		}
+		return orgID, false
+	})
+}
+
+func RequireDeptMember(svc *service.RbacService) gin.HandlerFunc {
+	return requireOrgMember(svc, func(c *gin.Context) (string, bool) {
+		orgID, err := svc.OrgIDByDeptID(c.Param("deptId"))
+		if err != nil {
+			abort(c, http.StatusInternalServerError, "鉴权失败")
+			return "", true
+		}
+		return orgID, false
+	})
+}
+
+func RequireRolePerm(svc *service.RbacService, perm string) gin.HandlerFunc {
+	return requireOrgPerm(svc, perm, func(c *gin.Context) (string, bool) {
+		orgID, err := svc.OrgIDByRoleID(c.Param("roleId"))
+		if err != nil {
+			abort(c, http.StatusInternalServerError, "鉴权失败")
+			return "", true
+		}
+		return orgID, false
+	})
+}
+
+func requireOrgPerm(svc *service.RbacService, perm string, resolveOrg func(*gin.Context) (string, bool)) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		uid := c.GetString(ContextUserID)
 		if uid == "" {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"code": 401, "msg": "未登录"})
+			abort(c, http.StatusUnauthorized, "未登录")
 			return
 		}
-		orgID := c.Param("id")
+		orgID, aborted := resolveOrg(c)
+		if aborted {
+			return
+		}
 		if orgID == "" {
-			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": 400, "msg": "缺少组织 id"})
+			abort(c, http.StatusNotFound, "组织资源不存在")
 			return
 		}
 		ok, err := svc.Satisfy(orgID, uid, perm)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "鉴权失败"})
+			abort(c, http.StatusInternalServerError, "鉴权失败")
 			return
 		}
 		if !ok {
-			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"code": 403, "msg": "权限不足"})
+			abort(c, http.StatusForbidden, "权限不足")
 			return
 		}
 		c.Next()
 	}
 }
 
-// RequireMember 组织成员即可通过的中间件（如 GET 部门树、GET 成员列表）
-func RequireMember(svc *service.RbacService) gin.HandlerFunc {
+func requireOrgMember(svc *service.RbacService, resolveOrg func(*gin.Context) (string, bool)) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		uid := c.GetString(ContextUserID)
 		if uid == "" {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"code": 401, "msg": "未登录"})
+			abort(c, http.StatusUnauthorized, "未登录")
 			return
 		}
-		orgID := c.Param("id")
+		orgID, aborted := resolveOrg(c)
+		if aborted {
+			return
+		}
 		if orgID == "" {
-			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": 400, "msg": "缺少组织 id"})
+			abort(c, http.StatusNotFound, "组织资源不存在")
 			return
 		}
 		ok, err := svc.IsMember(orgID, uid)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "鉴权失败"})
+			abort(c, http.StatusInternalServerError, "鉴权失败")
 			return
 		}
 		if !ok {
-			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"code": 403, "msg": "非组织成员"})
+			abort(c, http.StatusForbidden, "非组织成员")
 			return
 		}
 		c.Next()
 	}
+}
+
+func abort(c *gin.Context, status int, msg string) {
+	c.AbortWithStatusJSON(status, gin.H{"code": status, "msg": msg})
 }

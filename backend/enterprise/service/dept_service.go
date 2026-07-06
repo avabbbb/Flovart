@@ -177,6 +177,10 @@ type AddDeptMemberInput struct {
 }
 
 func (s *DeptService) AddMember(in AddDeptMemberInput) (*model.DepartmentMember, error) {
+	_, roleIDs, err := s.validateDeptMemberRoles(in.DeptID, in.UserID, in.RoleIDs)
+	if err != nil {
+		return nil, err
+	}
 	if existing, _ := s.depts.FindMember(in.DeptID, in.UserID); existing != nil {
 		return nil, errors.New("该用户已在此部门")
 	}
@@ -184,7 +188,7 @@ func (s *DeptService) AddMember(in AddDeptMemberInput) (*model.DepartmentMember,
 		DeptID: in.DeptID,
 		UserID: in.UserID,
 		IsLead: in.IsLead,
-		Roles:  in.RoleIDs,
+		Roles:  roleIDs,
 	}
 	if err := s.depts.AddMember(m); err != nil {
 		return nil, err
@@ -209,16 +213,59 @@ func (s *DeptService) UpdateMember(deptID, userID string, in UpdateMemberInput) 
 		m.IsLead = *in.IsLead
 	}
 	if in.RoleIDs != nil {
-		m.Roles = in.RoleIDs
+		_, roleIDs, err := s.validateDeptMemberRoles(deptID, userID, in.RoleIDs)
+		if err != nil {
+			return nil, err
+		}
+		m.Roles = roleIDs
 	}
 	if err := s.depts.UpdateMember(m); err != nil {
 		return nil, err
 	}
 	return m, nil
 }
-
 func (s *DeptService) RemoveMember(deptID, userID string) error {
 	return s.depts.RemoveMember(deptID, userID)
+}
+
+func (s *DeptService) validateDeptMemberRoles(deptID, userID string, roleIDs []string) (*model.Department, []string, error) {
+	dept, err := s.depts.FindByID(deptID)
+	if err != nil {
+		return nil, nil, err
+	}
+	if dept == nil {
+		return nil, nil, errors.New("部门不存在")
+	}
+	ok, err := s.depts.UserExists(userID)
+	if err != nil {
+		return nil, nil, err
+	}
+	if !ok {
+		return nil, nil, errors.New("用户不存在")
+	}
+	normalized := normalizeRoleIDs(roleIDs)
+	count, err := s.depts.CountRolesByOrg(dept.OrgID, normalized)
+	if err != nil {
+		return nil, nil, err
+	}
+	if count != int64(len(normalized)) {
+		return nil, nil, errors.New("角色必须属于该部门所在组织")
+	}
+	return dept, normalized, nil
+}
+
+func normalizeRoleIDs(in []string) []string {
+	seen := make(map[string]bool, len(in))
+	out := make([]string, 0, len(in))
+	for _, id := range in {
+		id = strings.TrimSpace(id)
+		if id == "" || seen[id] {
+			continue
+		}
+		seen[id] = true
+		out = append(out, id)
+	}
+	return out
 }
 
 // buildDeptTree 从平铺列表构建树，过滤 Hidden 根 _all（前端不展示）

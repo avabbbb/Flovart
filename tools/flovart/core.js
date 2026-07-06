@@ -73,7 +73,7 @@ export const COMMAND_REGISTRY = {
   'asset.list': { summary: 'List local generated media assets/history.', args: {} },
   'generate.image': { summary: 'Generate one image from an explicit prompt.', args: { prompt: 'string', aspectRatio: 'string?', placeOnCanvas: 'boolean?' } },
   'generate.images-batch': { summary: 'Generate multiple images from explicit prompt items.', args: { items: 'array', placeOnCanvas: 'boolean?', layout: 'string?' } },
-  'generate.video': { summary: 'Generate one video from prompt and optional multimodal source IDs.', args: { prompt: 'string', sourceImageIds: 'string[]?', sourceVideoIds: 'string[]?', slots: 'array?', durationSec: 'number?', aspectRatio: 'string?', resolution: 'string?', seed: 'number?' } },
+  'generate.video': { summary: 'Generate one video from prompt and optional multimodal source IDs.', args: { prompt: 'string', sourceImageIds: 'string[]?', sourceVideoIds: 'string[]?', slots: 'array?', durationSec: 'number?', aspectRatio: 'string?', resolution: 'string?', generateAudio: 'boolean?', watermark: 'boolean?', seed: 'number?' } },
   'video.status': { summary: 'Query a video/runtime job status.', args: { jobId: 'string' } },
   'export.project': { summary: 'Export project metadata.', args: { format: 'json?' } },
 };
@@ -332,6 +332,15 @@ function parseOptionalNumber(value) {
   if (value === undefined || value === null || value === '') return undefined;
   const numeric = Number(value);
   return Number.isFinite(numeric) ? numeric : undefined;
+}
+
+function parseOptionalBoolean(value) {
+  if (value === undefined || value === null || value === '') return undefined;
+  if (typeof value === 'boolean') return value;
+  const normalized = String(value).trim().toLowerCase();
+  if (['1', 'true', 'yes', 'on'].includes(normalized)) return true;
+  if (['0', 'false', 'no', 'off'].includes(normalized)) return false;
+  return undefined;
 }
 
 function updatePayloadFromArgs(args = {}) {
@@ -929,6 +938,8 @@ export async function executeFlovartCommand(commandName, args = {}, runtime = {}
         durationSec: parseOptionalNumber(args.durationSec ?? args['duration-sec'] ?? args.duration),
         aspectRatio: args['aspect-ratio'] || args.aspectRatio,
         resolution: args.resolution,
+        generateAudio: parseOptionalBoolean(args.generateAudio ?? args['generate-audio']),
+        watermark: parseOptionalBoolean(args.watermark),
         seed: parseOptionalNumber(args.seed),
       });
     case 'video.status':

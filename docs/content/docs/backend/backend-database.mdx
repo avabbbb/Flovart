@@ -220,16 +220,16 @@ owner 走 `Organization.OwnerID` 快通道拥有全部权限；admin 预置角�
 
 ## org_api_keys — 组织 API Key 池（enterprise）
 
-成员不接触明文 Key，只通过代理端点间接使用。API 响应始终掩码（仅末 4 位）。
+成员不接触明文 Key，只通过代理端点间接使用。Key 入库前使用 AES-GCM 加密，API 响应始终掩码（仅末 4 位）。
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
 | id | uuid PK | |
 | org_id | uuid uniqueIndex(org,label) | |
 | label | varchar(120) uniqueIndex(org,label) | "OpenAI 主Key" |
-| provider | varchar(32) index | `openai` \| `runninghub` \| `anthropic` \| `custom` |
+| provider | varchar(32) index | `openai` \| `runninghub` \| `anthropic` \| `volcengine` \| `openai_compatible` \| `custom` |
 | base_url | varchar(255) | |
-| api_key | varchar(500) | 明文存储（依赖 DB 访问控制），JSON 响应永不返回 |
+| api_key | varchar(1000) | AES-GCM 密文存储，JSON 响应永不返回 |
 | key_hint | varchar(16) | 末 4 位 |
 | enabled | bool | |
 | created_by_id | uuid | |

@@ -3,8 +3,8 @@ package repository
 import (
 	"errors"
 
-	"gorm.io/gorm"
 	"flovart/enterprise/model"
+	"gorm.io/gorm"
 )
 
 type DeptRepository struct {
@@ -106,4 +106,18 @@ func (r *DeptRepository) RemoveMember(deptID, userID string) error {
 func (r *DeptRepository) RemoveUserFromOrg(orgID, userID string) error {
 	return r.db.Where("user_id = ? AND dept_id IN (SELECT id FROM departments WHERE org_id = ?)", userID, orgID).
 		Delete(&model.DepartmentMember{}).Error
+}
+func (r *DeptRepository) UserExists(userID string) (bool, error) {
+	var n int64
+	err := r.db.Model(&model.User{}).Where("id = ?", userID).Count(&n).Error
+	return n > 0, err
+}
+
+func (r *DeptRepository) CountRolesByOrg(orgID string, roleIDs []string) (int64, error) {
+	if len(roleIDs) == 0 {
+		return 0, nil
+	}
+	var n int64
+	err := r.db.Model(&model.Role{}).Where("org_id = ? AND id IN ?", orgID, roleIDs).Count(&n).Error
+	return n, err
 }

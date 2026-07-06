@@ -5,14 +5,15 @@ import (
 	"fmt"
 	"time"
 
-	"gorm.io/gorm"
 	"flovart/enterprise/model"
 	"flovart/enterprise/repository"
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type CreditService struct {
-	db       *gorm.DB
-	credits  *repository.CreditRepository
+	db      *gorm.DB
+	credits *repository.CreditRepository
 }
 
 func NewCreditService(db *gorm.DB, credits *repository.CreditRepository) *CreditService {
@@ -25,8 +26,8 @@ func (s *CreditService) GetBalance(orgID string) (*model.OrgCredit, error) {
 }
 
 type ListTxInput struct {
-	OrgID   string
-	Page    int
+	OrgID    string
+	Page     int
 	PageSize int
 }
 
@@ -191,7 +192,7 @@ func (s *CreditService) ListUsage(in ListUsageInput) ([]model.UsageRecord, int64
 func (s *CreditService) ConsumeCredits(orgID, userID string, usage *model.UsageRecord) error {
 	return s.db.Transaction(func(tx *gorm.DB) error {
 		var credit model.OrgCredit
-		if err := tx.Where("org_id = ?", orgID).First(&credit).Error; err != nil {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("org_id = ?", orgID).First(&credit).Error; err != nil {
 			return err
 		}
 		if credit.Balance < usage.CostCredits {
@@ -218,9 +219,11 @@ func (s *CreditService) ConsumeCredits(orgID, userID string, usage *model.UsageR
 		}
 		// quota 累加
 		var quota model.MemberQuota
-		if err := tx.Where("org_id = ? AND user_id = ?", orgID, userID).First(&quota).Error; err == nil {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("org_id = ? AND user_id = ?", orgID, userID).First(&quota).Error; err == nil {
 			quota.UsedThisMonth += usage.CostCredits
-			tx.Save(&quota)
+			if err := tx.Save(&quota).Error; err != nil {
+				return err
+			}
 		}
 		return nil
 	})
@@ -237,7 +240,7 @@ func (s *CreditService) RefundCredits(usageID string) error {
 	}
 	return s.db.Transaction(func(tx *gorm.DB) error {
 		var credit model.OrgCredit
-		if err := tx.Where("org_id = ?", usage.OrgID).First(&credit).Error; err != nil {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("org_id = ?", usage.OrgID).First(&credit).Error; err != nil {
 			return err
 		}
 		credit.Balance += usage.CostCredits

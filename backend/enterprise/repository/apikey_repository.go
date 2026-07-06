@@ -4,8 +4,8 @@ import (
 	"errors"
 	"time"
 
-	"gorm.io/gorm"
 	"flovart/enterprise/model"
+	"gorm.io/gorm"
 )
 
 type ApiKeyRepository struct {
@@ -59,9 +59,9 @@ func (r *ApiKeyRepository) CreatePricing(p *model.ModelPricing) error {
 	return r.db.Create(p).Error
 }
 
-func (r *ApiKeyRepository) FindPricing(orgID, provider, model string) (*model.ModelPricing, error) {
+func (r *ApiKeyRepository) FindPricing(orgID, provider, modelID string) (*model.ModelPricing, error) {
 	var p model.ModelPricing
-	err := r.db.Where("org_id = ? AND provider = ? AND model = ?", orgID, provider, model).First(&p).Error
+	err := r.db.Where("org_id = ? AND provider = ? AND model = ?", orgID, provider, modelID).First(&p).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, nil
 	}

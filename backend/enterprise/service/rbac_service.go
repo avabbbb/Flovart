@@ -67,3 +67,10 @@ func (s *RbacService) EffectivePerms(orgID, userID string) ([]string, error) {
 	}
 	return out, nil
 }
+func (s *RbacService) OrgIDByDeptID(deptID string) (string, error) {
+	return s.rbac.OrgIDByDeptID(deptID)
+}
+
+func (s *RbacService) OrgIDByRoleID(roleID string) (string, error) {
+	return s.rbac.OrgIDByRoleID(roleID)
+}

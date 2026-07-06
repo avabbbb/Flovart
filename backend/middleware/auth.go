@@ -25,10 +25,10 @@ func Auth(secret string) gin.HandlerFunc {
 			return
 		}
 		claims := &jwt.RegisteredClaims{}
-		_, err := jwt.ParseWithClaims(token, claims, func(t *jwt.Token) (any, error) {
+		parsed, err := jwt.ParseWithClaims(token, claims, func(t *jwt.Token) (any, error) {
 			return []byte(secret), nil
-		})
-		if err != nil {
+		}, jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}))
+		if err != nil || parsed == nil || !parsed.Valid || claims.Subject == "" || len(claims.Audience) == 0 || claims.Audience[0] == "" {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"code": 401, "msg": "登录已过期"})
 			return
 		}

@@ -18,8 +18,22 @@ const RUNNINGHUB_DETAIL_ENDPOINTS: Record<string, string> = {
 export const BUILTIN_RUNNINGHUB_MODELS: Array<{ id: string; capability: 'image' | 'video'; description: string }> = [
   { id: RUNNINGHUB_DETAIL_ENDPOINTS['2046503667076751361'], capability: 'image', description: '全能图片 G-2.0 图生图' },
   { id: RUNNINGHUB_DETAIL_ENDPOINTS['2027196343409463297'], capability: 'image', description: '全能图片 V2 图生图' },
-  { id: RUNNINGHUB_DETAIL_ENDPOINTS['2034917373414539277'], capability: 'video', description: 'Seedance 2.0 多模态视频' },
+  { id: RUNNINGHUB_DETAIL_ENDPOINTS['2034917373414539277'], capability: 'video', description: 'Seedance 2.0 多模态视频 (Sparkvideo)' },
   { id: 'rhart-image-n-pro/edit', capability: 'image', description: 'Nano Banana Pro 编辑 (低价通道)' },
+  { id: 'kling-v3.0-std/text-to-video', capability: 'video', description: '可灵 v3.0 文生视频' },
+  { id: 'kling-v2.5-turbo-pro/text-to-video', capability: 'video', description: '可灵 v2.5 Turbo Pro 文生视频' },
+  { id: 'kling-v2.5-turbo-std/text-to-video', capability: 'video', description: '可灵 v2.5 Turbo 文生视频' },
+  { id: 'kling-video-o3-std/reference-to-video', capability: 'video', description: '可灵 O3 参考生视频' },
+  { id: 'kling-v3.0-std/motion-control', capability: 'video', description: '可灵 v3.0 动作控制' },
+  { id: 'bytedance/seedance-2.0-global/multimodal-video', capability: 'video', description: 'Seedance 2.0 多模态视频 (global)' },
+  { id: 'bytedance/seedance-2.0-global-fast/text-to-video', capability: 'video', description: 'Seedance 2.0 Fast 文生视频' },
+  { id: 'bytedance/seedance-2.0-global-fast/image-to-video', capability: 'video', description: 'Seedance 2.0 Fast 图生视频' },
+  { id: 'vidu/text-to-video', capability: 'video', description: 'Vidu Q2 文生视频' },
+  { id: 'vidu/text-to-video-q3-pro', capability: 'video', description: 'Vidu Q3 Pro 文生视频 (音画同出)' },
+  { id: 'vidu/image-to-video-q3-pro', capability: 'video', description: 'Vidu Q3 Pro 图生视频' },
+  { id: 'vidu/image-to-video-q2-pro', capability: 'video', description: 'Vidu Q2 Pro 图生视频' },
+  { id: 'vidu/image-to-video-q2-turbo', capability: 'video', description: 'Vidu Q2 Turbo 图生视频' },
+  { id: 'rhart-video/wan-2.2/image-to-video', capability: 'video', description: 'Wan 2.2 图生视频' },
 ];
 
 // RunningHub 产品展示名 → 真实 API endpoint 的别名映射。
@@ -36,6 +50,16 @@ const RUNNINGHUB_PRODUCT_ALIASES: Record<string, string> = {
   'nano-banana-pro/text-to-image-official-stable': 'rhart-image-n-pro-official/text-to-image',
   'nano-banana2-gemini31flash/image-to-image-channel-low-price': 'rhart-image-n-g31-flash/image-to-image',
   'nano-banana2-gemini31flash/image-to-image-official-stable': 'rhart-image-n-g31-flash/image-to-image',
+  // Seedance 2.0 global 系列在 RH 官方文档展示名不带 bytedance/ 前缀，真实 endpoint 需要补前缀
+  'seedance-2.0-global/multimodal-video': 'bytedance/seedance-2.0-global/multimodal-video',
+  'seedance-2.0-global/image-to-video': 'bytedance/seedance-2.0-global/image-to-video',
+  'seedance-2.0-global/text-to-video': 'bytedance/seedance-2.0-global/text-to-video',
+  'seedance-2.0-global-fast/multimodal-video': 'bytedance/seedance-2.0-global-fast/multimodal-video',
+  'seedance-2.0-global-fast/image-to-video': 'bytedance/seedance-2.0-global-fast/image-to-video',
+  'seedance-2.0-global-fast/text-to-video': 'bytedance/seedance-2.0-global-fast/text-to-video',
+  // Wan 2.2 真实 endpoint 在 rhart-video/ 子命名空间下
+  'wan-2.2/image-to-video': 'rhart-video/wan-2.2/image-to-video',
+  'wan-2.2/text-to-video': 'rhart-video/wan-2.2/text-to-video',
 };
 
 export interface RHTaskResult {

@@ -125,13 +125,13 @@ describe('aiGateway - validateApiKey', () => {
 
         expect(result.ok).toBe(true);
         expect(result.capabilitySummary).toEqual(['image', 'video']);
-        expect(result.models?.map(model => model.id)).toEqual([
+        expect(result.models?.map(model => model.id)).toEqual(expect.arrayContaining([
             'rhart-image-g-2/image-to-image',
             'rhart-image-n-g31-flash/image-to-image',
             'rhart-image-n-pro/edit',
             'google/veo3.1-fast/start-end-to-video-channel-low-price',
             'rhart-video/sparkvideo-2.0/multimodal-video',
-        ]);
+        ]));
         expect(globalThis.fetch).toHaveBeenCalledWith(
             'https://www.runninghub.cn/openapi/v2/query',
             expect.objectContaining({

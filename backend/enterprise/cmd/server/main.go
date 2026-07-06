@@ -112,25 +112,20 @@ func main() {
 		// 部门树（M3 新增）
 		api.POST("/orgs/:id/departments", middleware.RequirePerm(rbacSvc, model.PermDeptManage), deptH.Create)
 		api.GET("/orgs/:id/departments", middleware.RequireMember(rbacSvc), deptH.Tree)
-		api.PUT("/departments/:deptId", middleware.RequirePerm(rbacSvc, model.PermDeptManage), deptH.Update)
-		api.DELETE("/departments/:deptId", middleware.RequirePerm(rbacSvc, model.PermDeptManage), deptH.Delete)
+		api.PUT("/departments/:deptId", middleware.RequireDeptPerm(rbacSvc, model.PermDeptManage), deptH.Update)
+		api.DELETE("/departments/:deptId", middleware.RequireDeptPerm(rbacSvc, model.PermDeptManage), deptH.Delete)
 
-		// 部门成员（M3 新增）
-		// 注意：部门 API 路径 :id 在 RequirePerm 里读不到（部门路径是 :deptId）
-		//       故部门级鉴权也走 orgID 查 dept.org_id 的方式 — 这里暂用 RequireMember on :id
-		//       …但部门成员路径上没有 :id。M5 前统一改成 DeptPerm。
-		// MVP 简化：部门成员 CRUD 暂只要求已登录成员（组织内），不再细分权限点。
-		// 完整鉴权待 M5 部门级 middleware 实现。
-		api.GET("/departments/:deptId/members", deptH.ListMembers)
-		api.POST("/departments/:deptId/members", deptH.AddMember)
-		api.PUT("/departments/:deptId/members/:userId", deptH.UpdateMember)
-		api.DELETE("/departments/:deptId/members/:userId", deptH.RemoveMember)
+		// 部门成员通过 deptId 反查 org_id 后再鉴权。
+		api.GET("/departments/:deptId/members", middleware.RequireDeptMember(rbacSvc), deptH.ListMembers)
+		api.POST("/departments/:deptId/members", middleware.RequireDeptPerm(rbacSvc, model.PermMemberManage), deptH.AddMember)
+		api.PUT("/departments/:deptId/members/:userId", middleware.RequireDeptPerm(rbacSvc, model.PermMemberManage), deptH.UpdateMember)
+		api.DELETE("/departments/:deptId/members/:userId", middleware.RequireDeptPerm(rbacSvc, model.PermMemberManage), deptH.RemoveMember)
 
 		// 角色 CRUD（M3 新增）
 		api.GET("/orgs/:id/roles", middleware.RequireMember(rbacSvc), roleH.List)
 		api.POST("/orgs/:id/roles", middleware.RequirePerm(rbacSvc, model.PermRoleManage), roleH.Create)
-		api.PUT("/roles/:roleId", middleware.RequirePerm(rbacSvc, model.PermRoleManage), roleH.Update)
-		api.DELETE("/roles/:roleId", middleware.RequirePerm(rbacSvc, model.PermRoleManage), roleH.Delete)
+		api.PUT("/roles/:roleId", middleware.RequireRolePerm(rbacSvc, model.PermRoleManage), roleH.Update)
+		api.DELETE("/roles/:roleId", middleware.RequireRolePerm(rbacSvc, model.PermRoleManage), roleH.Delete)
 
 		// 我的有效权限集
 		api.GET("/orgs/:id/me/permissions", middleware.RequireMember(rbacSvc), roleH.MyPerms(rbacSvc))

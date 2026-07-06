@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"strings"
 
-	"gorm.io/gorm"
 	"flovart/enterprise/model"
 	"flovart/enterprise/repository"
+	"gorm.io/gorm"
 )
 
 type ApiKeyService struct {
@@ -30,7 +30,7 @@ type CreateApiKeyInput struct {
 
 func (s *ApiKeyService) Create(createdBy string, in CreateApiKeyInput) (*model.OrgApiKey, error) {
 	in.Label = strings.TrimSpace(in.Label)
-	in.Provider = strings.TrimSpace(in.Provider)
+	in.Provider = strings.ToLower(strings.TrimSpace(in.Provider))
 	in.APIKey = strings.TrimSpace(in.APIKey)
 	if in.Label == "" {
 		return nil, errors.New("标签不能为空")
@@ -45,12 +45,16 @@ func (s *ApiKeyService) Create(createdBy string, in CreateApiKeyInput) (*model.O
 	if len(in.APIKey) >= 4 {
 		hint = "****" + in.APIKey[len(in.APIKey)-4:]
 	}
+	encrypted, err := encryptSecret(in.APIKey)
+	if err != nil {
+		return nil, err
+	}
 	key := &model.OrgApiKey{
 		OrgID:       in.OrgID,
 		Label:       in.Label,
 		Provider:    in.Provider,
 		BaseURL:     in.BaseURL,
-		APIKey:      in.APIKey,
+		APIKey:      encrypted,
 		KeyHint:     hint,
 		Enabled:     true,
 		CreatedByID: createdBy,
@@ -179,5 +183,11 @@ func (s *ApiKeyService) ResolveKeyForProxy(orgID, provider string) (*model.OrgAp
 	if len(list) == 0 {
 		return nil, errors.New("没有可用的 API Key")
 	}
-	return &list[0], nil
+	key := list[0]
+	plain, err := decryptSecret(key.APIKey)
+	if err != nil {
+		return nil, err
+	}
+	key.APIKey = plain
+	return &key, nil
 }
