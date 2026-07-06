@@ -4286,6 +4286,7 @@ const App: React.FC = () => {
                                 const isRevealing = recentlyCompleted.has(el.id);
                                 const isDimmed = anyGenerating && !isGenerating;
                                 const genStatus = (el as CanvasElement).generationState?.status;
+                                const stageLabelMap: Record<string, string> = { running: '视频生成中', queued: '排队中' };
                                 const stageLabel = genStatus ? stageLabelMap[genStatus] : undefined;
                                 const perimeter = 2 * (el.width + el.height);
                                 const renderMediaInKonva = shouldRenderMediaInKonva(el, canvasKonvaDisabledIds) && canvasKonvaReadyIds.has(el.id);
