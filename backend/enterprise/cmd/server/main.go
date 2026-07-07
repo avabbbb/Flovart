@@ -136,6 +136,7 @@ func main() {
 		api.POST("/orgs/:id/credit/recharges", middleware.RequirePerm(rbacSvc, model.PermCreditGrant), creditH.CreateRecharge)
 		api.GET("/orgs/:id/credit/recharges", middleware.RequireMember(rbacSvc), creditH.ListRecharges)
 		api.PUT("/orgs/:id/credit/recharges/:rechargeId/cancel", middleware.RequirePerm(rbacSvc, model.PermCreditGrant), creditH.CancelRecharge)
+		api.PUT("/orgs/:id/credit/recharges/:rechargeId/review", middleware.RequirePerm(rbacSvc, model.PermCreditAdjust), creditH.ReviewRecharge)
 		api.GET("/orgs/:id/credit/usage", middleware.RequireMember(rbacSvc), creditH.ListUsage)
 
 		// API Key 池

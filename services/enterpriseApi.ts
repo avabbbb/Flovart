@@ -67,6 +67,8 @@ export const creditApi = {
     api.get<{ list: RechargeRequest[]; total: number }>(ENTERPRISE_BASE_URL, `/orgs/${orgId}/credit/recharges?page=${page}&pageSize=${pageSize}`),
   cancelRecharge: (orgId: string, rechargeId: string) =>
     api.put<RechargeRequest>(ENTERPRISE_BASE_URL, `/orgs/${orgId}/credit/recharges/${rechargeId}/cancel`, {}),
+  reviewRecharge: (orgId: string, rechargeId: string, body: { approve: boolean; reviewNote?: string }) =>
+    api.put<RechargeRequest>(ENTERPRISE_BASE_URL, `/orgs/${orgId}/credit/recharges/${rechargeId}/review`, body),
   listUsage: (orgId: string, page = 1, pageSize = 20) =>
     api.get<{ list: UsageRecord[]; total: number }>(ENTERPRISE_BASE_URL, `/orgs/${orgId}/credit/usage?page=${page}&pageSize=${pageSize}`),
 };

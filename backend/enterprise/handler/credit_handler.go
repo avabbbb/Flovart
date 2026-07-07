@@ -86,6 +86,31 @@ func (h *CreditHandler) CancelRecharge(c *gin.Context) {
 	OK(c, r)
 }
 
+type reviewRechargeReq struct {
+	Approve    bool   `json:"approve"`
+	ReviewNote string `json:"reviewNote"`
+}
+
+func (h *CreditHandler) ReviewRecharge(c *gin.Context) {
+	uid := c.GetString(middleware.ContextUserID)
+	var req reviewRechargeReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		Fail(c, http.StatusBadRequest, "入参格式错误")
+		return
+	}
+	r, err := h.svc.ReviewRecharge(service.ReviewRechargeInput{
+		RechargeID: c.Param("rechargeId"),
+		ReviewedBy: uid,
+		Approve:    req.Approve,
+		ReviewNote: req.ReviewNote,
+	})
+	if err != nil {
+		Fail(c, http.StatusBadRequest, err.Error())
+		return
+	}
+	OK(c, r)
+}
+
 func (h *CreditHandler) ListUsage(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	size, _ := strconv.Atoi(c.DefaultQuery("pageSize", "20"))

@@ -827,7 +827,7 @@ title: 待测试确认
 
 - **11 张新表 AutoMigrate**：`OrgCredit`/`CreditTransaction`/`RechargeRequest`/`UsageRecord`（积分）、`OrgApiKey`/`ModelPricing`/`MemberQuota`（Key 池+定价+额度）、`ResourceLevel`/`Resource`（资源库+密级）、`ApprovalWorkflow`/`ApprovalNode`/`ApprovalRecord`/`ApprovalStep`（审批流）、`SensitiveWord`（敏感词）、`Project`（项目镜像）。`cmd/server/main.go` 现注册全部 15 张表（4 旧 + 11 新）。
 - **权限点扩展 11→14**：`model/permissions.go` 新增 `apikey:manage` / `pricing:manage` / `quota:manage`；owner 全权限，admin 除 `org:manage` + `view:audit_log` 外全部。
-- **积分链路**：`credit_repository.go` + `credit_service.go` + `credit_handler.go` — 余额查询、流水列表、充值申请（待审批）、用量记录；`ConsumeCredits` 在事务内同时写 `UsageRecord` + `CreditTransaction` + 扣 `OrgCredit.Balance` + 累加 `MemberQuota.UsedThisMonth`；`RefundCredits` 仅退已成功记录。
+- **积分链路**：`credit_repository.go` + `credit_service.go` + `credit_handler.go` — 余额查询、流水列表、充值申请（待审批）、用量记录、`ReviewRecharge` 审批（approve=true 事务内入账+写流水，reject 仅改状态）；`ConsumeCredits` 在事务内同时写 `UsageRecord` + `CreditTransaction` + 扣 `OrgCredit.Balance` + 累加 `MemberQuota.UsedThisMonth`；`RefundCredits` 仅退已成功记录。路由 `PUT /orgs/:id/credit/recharges/:rechargeId/review` 由 `credit:adjust` 权限守门。
 - **Key 池+定价+额度链路**：`apikey_repository.go` + `apikey_service.go` + `apikey_handler.go` — OrgApiKey 增删改查（`json:"-"` 永不返回明文，响应只返回 `KeyHint` 末 4 位）、ModelPricing 增删改查、MemberQuota 按月配额管理。
 - **AI 代理链路**：`proxy_service.go` + `proxy_handler.go` — 预检余额+额度 → 转发 HTTP 到 OpenAI 兼容接口 → 成功扣分 / 失败记录不扣；用 `minInt` 而非内置 `min` 避免 Go 1.21+ 冲突。
 - **资源库链路**：`resource_repository.go` + `resource_service.go` + `resource_handler.go` — ResourceLevel 密级管理、Resource 上架/审核/发布流程。
@@ -842,7 +842,7 @@ title: 待测试确认
 - **`services/orgApi.ts` 更新**：`ALL_PERMISSIONS` 从 11→14 个，与后端 `permissions.go` 对齐。
 - **`components/enterprise/shared.tsx`（新增）**：`FormInput` / `PanelCard` / `EmptyState` / `PageHeader` / `PanelProps` 共享组件，统一面板视觉风格（`isl-*` CSS 类 + `var(--isl-*)` 主题变量）。
 - **`EnterpriseApp.tsx` 重写**：从 3-tab 布局改为侧边栏导航；`Section` 类型覆盖 9 个管理区域（members/depts/roles/credit/apikeys/resources/approval/sensitive/projects），分 7 组；移动端降级为 `<select>` 选择器；删除本地 FormInput 改用 shared 导入；保留 MemberRoster/DeptPanel/RolePanel/AuthPanel/OrgListPanel 在文件内。
-- **`panels/credit-panel.tsx`**：余额与流水 / 充值申请 / 用量记录（3 个 sub-tabs）。
+- **`panels/credit-panel.tsx`**：余额与流水 / 充值申请 / 用量记录（3 个 sub-tabs）。充值申请 pending 行对有 `credit:adjust` 权限的用户显示 ✓通过 / ✗拒绝 行内按钮（reject 弹 prompt 输入原因），对仅有 `credit:grant` 权限的用户显示取消按钮。流水类型（充值/消耗/退款）和用量状态（成功/失败/已退款）已本地化。
 - **`panels/apikey-panel.tsx`**：API Key 池 / 模型定价 / 成员额度（3 个 sub-tabs）。
 - **`panels/resource-panel.tsx`**：资源库 / 资源密级（2 个 sub-tabs，含审核+发布流程）。
 - **`panels/approval-panel.tsx`**：审批流配置（多节点）/ 审批记录（2 个 sub-tabs）。
@@ -854,7 +854,7 @@ title: 待测试确认
 - ① 后端编译通过：`cd backend/enterprise && go build ./cmd/server`（需 `GOPROXY=https://goproxy.cn,direct` + `GOSUMDB=off`）。
 - ② 启动 enterprise 服务（`:11453`），AutoMigrate 成功创建 11 张新表（PostgreSQL `flovart-pg` 容器 `:5433`）。
 - ③ 企业后台（`/#/enterprise`）侧边栏显示 9 个管理区域，分 7 组，移动端降级为 select。
-- ④ 积分面板 3 个 sub-tab 切换正常，余额/流水/充值申请/用量记录 UI 渲染。
+- ④ 积分面板 3 个 sub-tab 切换正常，余额/流水/充值申请/用量记录 UI 渲染；有 `credit:adjust` 权限的用户在 pending 充值申请行可见 ✓通过/✗拒绝 按钮，通过后自动入账并写流水，拒绝可填原因；仅有 `credit:grant` 权限的用户只见取消按钮。流水类型和用量状态显示中文。
 - ⑤ API Key 面板 3 个 sub-tab：Key 池列表（只显示末 4 位 KeyHint，不返回明文）、模型定价、成员额度。
 - ⑥ 资源面板 2 个 sub-tab：资源库 + 密级，含审核+发布流程按钮。
 - ⑦ 审批面板 2 个 sub-tab：审批流配置（可添加多节点，选 sequential/parallel/any）+ 审批记录。

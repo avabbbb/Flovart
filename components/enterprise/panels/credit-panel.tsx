@@ -1,11 +1,23 @@
 // 积分管理面板 — 余额/流水/充值/用量
 import React, { useState, useEffect, useCallback } from 'react';
-import { Loader2, Plus, Trash2, Wallet, TrendingUp, Receipt } from 'lucide-react';
+import { Loader2, Plus, Trash2, Wallet, TrendingUp, Receipt, Check, X } from 'lucide-react';
 import { creditApi, type OrgCredit, type CreditTransaction, type RechargeRequest, type UsageRecord } from '../../../services/enterpriseApi';
 import { ApiError } from '../../../services/hubClient';
 import { FormInput, PanelCard, EmptyState, PageHeader, type PanelProps } from '../shared';
 
 type SubTab = 'balance' | 'recharges' | 'usage';
+
+const TX_KIND_LABEL: Record<string, string> = {
+  recharge: '充值',
+  consume: '消耗',
+  refund: '退款',
+};
+
+const USAGE_STATUS_LABEL: Record<string, { label: string; color: string }> = {
+  success: { label: '成功', color: 'var(--isl-mint-deep)' },
+  failed: { label: '失败', color: 'var(--isl-coral-deep)' },
+  refunded: { label: '已退款', color: 'var(--isl-ink-soft)' },
+};
 
 export default function CreditPanel({ org, perms, toast }: PanelProps) {
   const [sub, setSub] = useState<SubTab>('balance');
@@ -28,7 +40,7 @@ export default function CreditPanel({ org, perms, toast }: PanelProps) {
         ))}
       </div>
       {sub === 'balance' && <BalanceTab org={org} canAdjust={canAdjust} toast={toast} />}
-      {sub === 'recharges' && <RechargeTab org={org} canGrant={canGrant} toast={toast} />}
+      {sub === 'recharges' && <RechargeTab org={org} canGrant={canGrant} canAdjust={canAdjust} toast={toast} />}
       {sub === 'usage' && <UsageTab org={org} toast={toast} />}
     </div>
   );
@@ -110,7 +122,7 @@ function BalanceTab({ org, canAdjust, toast }: { org: PanelProps['org']; canAdju
                 {txs.map((tx) => (
                   <tr key={tx.id} style={{ borderBottom: '1px solid var(--isl-border)' }}>
                     <td className="py-2 pr-3 whitespace-nowrap" style={{ color: 'var(--isl-ink-ghost)' }}>{new Date(tx.createdAt).toLocaleString()}</td>
-                    <td className="py-2 pr-3 font-semibold">{tx.kind}</td>
+                    <td className="py-2 pr-3 font-semibold">{TX_KIND_LABEL[tx.kind] || tx.kind}</td>
                     <td className="py-2 pr-3 font-bold" style={{ color: tx.amount >= 0 ? 'var(--isl-mint-deep)' : 'var(--isl-coral-deep)' }}>
                       {tx.amount >= 0 ? '+' : ''}{tx.amount}
                     </td>
@@ -134,7 +146,7 @@ function BalanceTab({ org, canAdjust, toast }: { org: PanelProps['org']; canAdju
   );
 }
 
-function RechargeTab({ org, canGrant, toast }: { org: PanelProps['org']; canGrant: boolean; toast: PanelProps['toast'] }) {
+function RechargeTab({ org, canGrant, canAdjust, toast }: { org: PanelProps['org']; canGrant: boolean; canAdjust: boolean; toast: PanelProps['toast'] }) {
   const [recharges, setRecharges] = useState<RechargeRequest[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -182,6 +194,29 @@ function RechargeTab({ org, canGrant, toast }: { org: PanelProps['org']; canGran
       await fetch();
     } catch (e) {
       toast.show(e instanceof ApiError ? e.message : '取消失败', 'error');
+    }
+  }, [org.id, fetch, toast]);
+
+  const approve = useCallback(async (id: string) => {
+    if (!confirm('确认通过此充值申请？通过后将自动入账。')) return;
+    try {
+      await creditApi.reviewRecharge(org.id, id, { approve: true });
+      toast.show('已通过并入账', 'success');
+      await fetch();
+    } catch (e) {
+      toast.show(e instanceof ApiError ? e.message : '审核失败', 'error');
+    }
+  }, [org.id, fetch, toast]);
+
+  const reject = useCallback(async (id: string) => {
+    const reviewNote = prompt('请输入拒绝原因（可选）');
+    if (reviewNote === null) return;
+    try {
+      await creditApi.reviewRecharge(org.id, id, { approve: false, reviewNote: reviewNote || undefined });
+      toast.show('已拒绝', 'success');
+      await fetch();
+    } catch (e) {
+      toast.show(e instanceof ApiError ? e.message : '审核失败', 'error');
     }
   }, [org.id, fetch, toast]);
 
@@ -245,8 +280,17 @@ function RechargeTab({ org, canGrant, toast }: { org: PanelProps['org']; canGran
                     <td className="py-2 pr-3"><span className="font-semibold" style={{ color: st.color }}>{st.label}</span></td>
                     <td className="py-2 pr-3 truncate" style={{ color: 'var(--isl-ink-ghost)' }}>{r.note || '—'}</td>
                     <td className="py-2 pr-3">
-                      {r.status === 'pending' && canGrant && (
-                        <button type="button" onClick={() => cancel(r.id)} className="isl-icon-btn h-7 w-7" title="取消"><Trash2 size={12} /></button>
+                      {r.status === 'pending' && (
+                        <div className="flex items-center gap-1">
+                          {canAdjust ? (
+                            <>
+                              <button type="button" onClick={() => approve(r.id)} className="isl-icon-btn h-7 w-7" title="通过"><Check size={12} style={{ color: 'var(--isl-mint-deep)' }} /></button>
+                              <button type="button" onClick={() => reject(r.id)} className="isl-icon-btn h-7 w-7" title="拒绝"><X size={12} style={{ color: 'var(--isl-coral-deep)' }} /></button>
+                            </>
+                          ) : canGrant && (
+                            <button type="button" onClick={() => cancel(r.id)} className="isl-icon-btn h-7 w-7" title="取消"><Trash2 size={12} /></button>
+                          )}
+                        </div>
                       )}
                     </td>
                   </tr>
@@ -301,15 +345,18 @@ function UsageTab({ org, toast }: { org: PanelProps['org']; toast: PanelProps['t
               </tr>
             </thead>
             <tbody>
-              {records.map((r) => (
-                <tr key={r.id} style={{ borderBottom: '1px solid var(--isl-border)' }}>
-                  <td className="py-2 pr-3 whitespace-nowrap" style={{ color: 'var(--isl-ink-ghost)' }}>{new Date(r.createdAt).toLocaleString()}</td>
-                  <td className="py-2 pr-3 font-mono">{r.model || r.provider || '—'}</td>
-                  <td className="py-2 pr-3 font-bold" style={{ color: 'var(--isl-coral-deep)' }}>{r.costCredits}</td>
-                  <td className="py-2 pr-3" style={{ color: 'var(--isl-ink-ghost)' }}>{r.durationMs ? `${(r.durationMs / 1000).toFixed(1)}s` : '—'}</td>
-                  <td className="py-2 pr-3"><span className="font-semibold" style={{ color: r.status === 'success' ? 'var(--isl-mint-deep)' : 'var(--isl-coral-deep)' }}>{r.status}</span></td>
-                </tr>
-              ))}
+              {records.map((r) => {
+                const st = USAGE_STATUS_LABEL[r.status] || { label: r.status, color: 'var(--isl-ink)' };
+                return (
+                  <tr key={r.id} style={{ borderBottom: '1px solid var(--isl-border)' }}>
+                    <td className="py-2 pr-3 whitespace-nowrap" style={{ color: 'var(--isl-ink-ghost)' }}>{new Date(r.createdAt).toLocaleString()}</td>
+                    <td className="py-2 pr-3 font-mono">{r.model || r.provider || '—'}</td>
+                    <td className="py-2 pr-3 font-bold" style={{ color: 'var(--isl-coral-deep)' }}>{r.costCredits}</td>
+                    <td className="py-2 pr-3" style={{ color: 'var(--isl-ink-ghost)' }}>{r.durationMs ? `${(r.durationMs / 1000).toFixed(1)}s` : '—'}</td>
+                    <td className="py-2 pr-3"><span className="font-semibold" style={{ color: st.color }}>{st.label}</span></td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
