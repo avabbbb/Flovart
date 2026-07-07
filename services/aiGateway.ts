@@ -1147,8 +1147,8 @@ function runningHubReferenceFields(modelEndpoint: string, references: VideoImage
         return output;
     }
 
-    // Veo 3.1 Pro image-to-video：imageUrl 单数；Fast 低价图生视频仍用 imageUrls 数组。
-    if (/rhart-video-v3\.1-pro(?:-official)?\/image-to-video/i.test(modelEndpoint)) {
+    // Veo 3.1 Pro / Lite official image-to-video：imageUrl 单数；Fast 低价图生视频仍用 imageUrls 数组。
+    if (/rhart-video-v3\.1-(?:pro(?:-official)?|lite-official)\/image-to-video/i.test(modelEndpoint)) {
         if (first?.href) output.imageUrl = assertRunningHubPublicUrl(first.href, 'imageUrl');
         return output;
     }

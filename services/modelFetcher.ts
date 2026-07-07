@@ -453,11 +453,21 @@ export async function fetchModelsWithCache(
     if (!forceRefresh) {
         const cached = getCachedModels(provider, fp);
         if (cached) {
+            let models = cached.models;
+            if (provider === 'runningHub') {
+                const builtinModels: FetchedModel[] = BUILTIN_RUNNINGHUB_MODELS.map(item => ({
+                    id: item.id,
+                    name: item.id,
+                    capability: item.capability,
+                    description: item.description,
+                }));
+                models = mergeModelLists(builtinModels, models);
+            }
             return {
                 ok: true,
-                models: cached.models,
+                models,
                 endpointFlavor: cached.endpointFlavor as FetchModelsResult['endpointFlavor'],
-                capabilitySummary: summarizeCapabilities(cached.models),
+                capabilitySummary: summarizeCapabilities(models),
             };
         }
     }
