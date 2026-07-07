@@ -13,7 +13,7 @@ import RichPromptEditor, { type RichPromptEditorHandle } from './RichPromptEdito
 import type { MentionItem } from './MentionList';
 export type { MentionItem } from './MentionList';
 import { extractMentions } from './CanvasMentionExtension';
-import { inferProviderFromModel, PROVIDER_LABELS, getModelCapabilityTags, getSupportedRatios, type VideoAspectRatio } from '../services/aiGateway';
+import { inferProviderFromModel, PROVIDER_LABELS, getModelCapabilityTags, getSupportedRatios, getSupportedDurations, getSupportedImageRatios, DEFAULT_IMAGE_RATIOS, type VideoAspectRatio } from '../services/aiGateway';
 import { SOCIAL_PRESETS } from '../utils/socialPresets';
 import { readColdMedia } from '../utils/mediaIndexedDB';
 import { modelRefLabel, modelRefModelId, modelRefProvider, modelRefSearchText } from '../utils/modelRefs';
@@ -37,6 +37,8 @@ export interface PromptBarProps {
     setGenerationMode: (mode: GenerationMode) => void;
     videoAspectRatio: VideoAspectRatio;
     setVideoAspectRatio: (ratio: VideoAspectRatio) => void;
+    imageAspectRatio?: VideoAspectRatio;
+    setImageAspectRatio?: (ratio: VideoAspectRatio) => void;
     videoDurationSec?: number;
     onVideoDurationSecChange?: (durationSec: number) => void;
     videoResolution?: string;
@@ -96,7 +98,7 @@ export interface PromptBarProps {
     focusSignal?: number;
 }
 
-type ExpandPanel = 'mode' | 'model' | 'more' | null;
+type ExpandPanel = 'mode' | 'model' | 'ratio' | 'duration' | 'more' | null;
 
 const TYPE_LABELS: Record<Element['type'], string> = {
     image: '图片',
@@ -170,7 +172,6 @@ const MenuOptionButton: React.FC<{ label: string; active?: boolean; description?
 
 const isSupportedAttachment = (type: string) => type.startsWith('image/') || type.startsWith('video/') || type.startsWith('audio/');
 
-const SEEDANCE_DURATIONS = [-1, 4, 5, 6, 8, 10, 12, 15] as const;
 const SEEDANCE_RESOLUTIONS = ['480p', '720p', '1080p'] as const;
 const DEFAULT_VIDEO_RATIOS: VideoAspectRatio[] = ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9'];
 
@@ -206,6 +207,8 @@ export const PromptBar: React.FC<PromptBarProps> = ({
     setGenerationMode,
     videoAspectRatio,
     setVideoAspectRatio,
+    imageAspectRatio = '1:1',
+    setImageAspectRatio,
     videoDurationSec = 5,
     onVideoDurationSecChange,
     videoResolution = '720p',
@@ -293,15 +296,46 @@ export const PromptBar: React.FC<PromptBarProps> = ({
         [canvasElements, mentionItems]
     );
 
-    /** 当前视频模型支持的比例列表 */
+    /** 当前视频模型是否为 Seedance（用于 Fast 限制 1080p 等模型专属逻辑） */
     const isSeedanceVideoModel = useMemo(() => {
         return generationMode === 'video' && !!selectedVideoModel && modelRefModelId(selectedVideoModel).toLowerCase().includes('seedance');
     }, [generationMode, selectedVideoModel]);
     const isSeedanceFastModel = isSeedanceVideoModel && modelRefModelId(selectedVideoModel).toLowerCase().includes('fast');
+
+    /** 视频模型支持的比例 */
     const supportedRatios = useMemo(() => {
         if (!selectedVideoModel) return DEFAULT_VIDEO_RATIOS;
         return getSupportedRatios(modelRefModelId(selectedVideoModel));
     }, [selectedVideoModel]);
+
+    /** 图片模型支持的比例 */
+    const supportedImageRatios = useMemo(() => {
+        if (!selectedImageModel) return DEFAULT_IMAGE_RATIOS;
+        return getSupportedImageRatios(modelRefModelId(selectedImageModel));
+    }, [selectedImageModel]);
+
+    /** 视频模型支持的时长（空数组则不挂「时长」tab） */
+    const supportedDurations = useMemo<number[]>(() => {
+        if (generationMode !== 'video' || !selectedVideoModel) return [];
+        return getSupportedDurations(modelRefModelId(selectedVideoModel));
+    }, [generationMode, selectedVideoModel]);
+
+    /** 是否应当挂「比例」trigger（图片或视频模式且模型已选） */
+    const showRatioTrigger = (generationMode === 'image' && !!selectedImageModel) || (generationMode === 'video' && !!selectedVideoModel);
+
+    /** 是否应当挂「时长」trigger */
+    const showDurationTrigger = supportedDurations.length > 0;
+
+    /** 当前生效的比例及其 setter（图片走 imageAspectRatio，视频走 videoAspectRatio） */
+    const activeRatio = generationMode === 'image' ? imageAspectRatio : videoAspectRatio;
+    const setActiveRatio = (ratio: VideoAspectRatio) => {
+        if (generationMode === 'image') setImageAspectRatio?.(ratio);
+        else setVideoAspectRatio(ratio);
+    };
+    /** 当前模式应当展示的比例候选集 */
+    const activeRatioOptions = generationMode === 'image' ? supportedImageRatios : supportedRatios;
+    /** 视频模式独有：是否含自适应 */
+    const showAdaptiveRatio = generationMode === 'video' && (supportedRatios as readonly string[]).includes('adaptive');
 
     const currentModelOptions = generationMode === 'text' ? textModelOptions : generationMode === 'video' ? videoModelOptions : imageModelOptions;
     const activeKey = userApiKeys.find(k => k.isDefault) || userApiKeys[0];
@@ -667,26 +701,31 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                                 </div>
                                             ));
                                         })()}
-
-                                        {generationMode === 'video' && (
-                                            <>
-                                            <div className="grid grid-cols-4 gap-2 px-1 pt-3">
-                                                {((isSeedanceVideoModel ? [...DEFAULT_VIDEO_RATIOS, 'adaptive'] : DEFAULT_VIDEO_RATIOS) as VideoAspectRatio[]).map(ratio => {
-                                                    const supported = (supportedRatios as readonly string[]).includes(ratio);
-                                                    return (
+                                    </div>
+                                </>
+                            )}
+                            {expandedPanel === 'ratio' && showRatioTrigger && (
+                                <>
+                                    <PopoverHeader title="画面比例" subtitle={generationMode === 'video' ? '当前视频模型支持的比例' : '当前图片模型支持的比例'} />
+                                    <div className="space-y-2">
+                                        <div className="grid grid-cols-4 gap-2 px-1 pt-1">
+                                            {((showAdaptiveRatio ? [...activeRatioOptions, 'adaptive'] : activeRatioOptions) as VideoAspectRatio[]).map(ratio => {
+                                                const supported = (activeRatioOptions as readonly string[]).includes(ratio) || ratio === 'adaptive';
+                                                return (
                                                     <button
                                                         key={ratio}
                                                         type="button"
                                                         disabled={!supported}
-                                                        onClick={() => setVideoAspectRatio(ratio)}
-                                                        title={supported ? undefined : '当前视频模型不支持此比例'}
-                                                        className={`rounded-2xl border-[1.5px] px-3 py-2 text-sm font-bold transition ${!supported ? 'opacity-35 cursor-not-allowed' : ''} ${videoAspectRatio === ratio ? 'isl-chip--active' : 'isl-chip'}`}
+                                                        onClick={() => setActiveRatio(ratio)}
+                                                        title={supported ? undefined : '当前模型不支持此比例'}
+                                                        className={`rounded-2xl border-[1.5px] px-3 py-2 text-sm font-bold transition ${!supported ? 'opacity-35 cursor-not-allowed' : ''} ${activeRatio === ratio ? 'isl-chip--active' : 'isl-chip'}`}
                                                     >
                                                         {ratio === 'adaptive' ? '自适应' : ratio}
                                                     </button>
-                                                    );
-                                                })}
-                                            </div>
+                                                );
+                                            })}
+                                        </div>
+                                        {generationMode === 'video' && (
                                             <div className="px-1 pt-2">
                                                 <p className="text-xs mb-1.5" style={{ color: 'var(--isl-ink-soft)' }}>平台预设</p>
                                                 <div className="flex flex-wrap gap-1.5">
@@ -719,86 +758,84 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                                     ))}
                                                 </div>
                                             </div>
-                                            {isSeedanceVideoModel && (
-                                                <div className="mx-1 mt-3 rounded-[18px] border-[1.5px] p-3" style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-surface-2)' }}>
-                                                    <div className="flex items-center justify-between gap-3">
-                                                        <div>
-                                                            <div className="text-xs font-bold" style={{ color: 'var(--isl-ink)' }}>Seedance 参数</div>
-                                                            <div className="mt-0.5 text-[10px]" style={{ color: 'var(--isl-ink-soft)' }}>节点级视频设置，会随当前节点保存</div>
-                                                        </div>
-                                                        {isSeedanceFastModel && (
-                                                            <span className="rounded-full px-2 py-1 text-[10px] font-bold" style={{ color: 'var(--isl-sun-deep)', background: 'rgba(251,191,36,0.14)' }}>
-                                                                Fast 最高 720p
-                                                            </span>
-                                                        )}
-                                                    </div>
-
-                                                    <div className="mt-3">
-                                                        <div className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.12em]" style={{ color: 'var(--isl-ink-soft)' }}>时长</div>
-                                                        <div className="grid grid-cols-4 gap-1.5">
-                                                            {SEEDANCE_DURATIONS.map(duration => (
-                                                                <button
-                                                                    key={duration}
-                                                                    type="button"
-                                                                    onClick={() => onVideoDurationSecChange?.(duration)}
-                                                                    className={`rounded-[12px] px-2 py-1.5 text-xs font-bold transition ${videoDurationSec === duration ? 'isl-chip--active' : 'isl-chip'}`}
-                                                                    title={duration === -1 ? '智能时长' : `${duration} 秒`}
-                                                                >
-                                                                    {duration === -1 ? '智能' : `${duration}s`}
-                                                                </button>
-                                                            ))}
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="mt-3">
-                                                        <div className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.12em]" style={{ color: 'var(--isl-ink-soft)' }}>分辨率</div>
-                                                        <div className="grid grid-cols-3 gap-1.5">
-                                                            {SEEDANCE_RESOLUTIONS.map(resolution => {
-                                                                const disabled = isSeedanceFastModel && resolution === '1080p';
-                                                                return (
-                                                                    <button
-                                                                        key={resolution}
-                                                                        type="button"
-                                                                        disabled={disabled}
-                                                                        onClick={() => onVideoResolutionChange?.(resolution)}
-                                                                        className={`rounded-[12px] px-2 py-1.5 text-xs font-bold transition ${disabled ? 'cursor-not-allowed opacity-35' : ''} ${videoResolution === resolution ? 'isl-chip--active' : 'isl-chip'}`}
-                                                                        title={disabled ? 'Fast 模型不支持 1080p，会自动降到 720p' : resolution}
-                                                                    >
-                                                                        {resolution}
-                                                                    </button>
-                                                                );
-                                                            })}
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="mt-3 grid grid-cols-2 gap-1.5">
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => onVideoGenerateAudioChange?.(!videoGenerateAudio)}
-                                                            className={`rounded-[12px] px-3 py-2 text-left text-xs font-bold transition ${videoGenerateAudio ? 'isl-chip--active' : 'isl-chip'}`}
-                                                            aria-pressed={videoGenerateAudio}
-                                                        >
-                                                            生成声音 {videoGenerateAudio ? 'ON' : 'OFF'}
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => onVideoWatermarkChange?.(!videoWatermark)}
-                                                            className={`rounded-[12px] px-3 py-2 text-left text-xs font-bold transition ${videoWatermark ? 'isl-chip--active' : 'isl-chip'}`}
-                                                            aria-pressed={videoWatermark}
-                                                        >
-                                                            水印 {videoWatermark ? 'ON' : 'OFF'}
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            )}
-                                            </>
                                         )}
+                                    </div>
+                                </>
+                            )}
+                            {expandedPanel === 'duration' && showDurationTrigger && (
+                                <>
+                                    <PopoverHeader title="视频时长" subtitle="选择生成时长，-1 为智能" />
+                                    <div className="grid grid-cols-4 gap-1.5 px-1 pt-1">
+                                        {supportedDurations.map(duration => (
+                                            <button
+                                                key={duration}
+                                                type="button"
+                                                onClick={() => onVideoDurationSecChange?.(duration)}
+                                                className={`rounded-[12px] px-2 py-1.5 text-xs font-bold transition ${videoDurationSec === duration ? 'isl-chip--active' : 'isl-chip'}`}
+                                                title={duration === -1 ? '智能时长' : `${duration} 秒`}
+                                            >
+                                                {duration === -1 ? '智能' : `${duration}s`}
+                                            </button>
+                                        ))}
                                     </div>
                                 </>
                             )}
                             {expandedPanel === 'more' && (
                                 <>
                                     <PopoverHeader title="更多操作" subtitle="参考图、角色锁定、效果存储" />
+                                    {isSeedanceVideoModel && (
+                                        <div className="mx-1 mb-2 rounded-[18px] border-[1.5px] p-3" style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-surface-2)' }}>
+                                            <div className="flex items-center justify-between gap-3">
+                                                <div>
+                                                    <div className="text-xs font-bold" style={{ color: 'var(--isl-ink)' }}>Seedance 视频参数</div>
+                                                    <div className="mt-0.5 text-[10px]" style={{ color: 'var(--isl-ink-soft)' }}>分辨率、声音、水印</div>
+                                                </div>
+                                                {isSeedanceFastModel && (
+                                                    <span className="rounded-full px-2 py-1 text-[10px] font-bold" style={{ color: 'var(--isl-sun-deep)', background: 'rgba(251,191,36,0.14)' }}>
+                                                        Fast 最高 720p
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <div className="mt-3">
+                                                <div className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.12em]" style={{ color: 'var(--isl-ink-soft)' }}>分辨率</div>
+                                                <div className="grid grid-cols-3 gap-1.5">
+                                                    {SEEDANCE_RESOLUTIONS.map(resolution => {
+                                                        const disabled = isSeedanceFastModel && resolution === '1080p';
+                                                        return (
+                                                            <button
+                                                                key={resolution}
+                                                                type="button"
+                                                                disabled={disabled}
+                                                                onClick={() => onVideoResolutionChange?.(resolution)}
+                                                                className={`rounded-[12px] px-2 py-1.5 text-xs font-bold transition ${disabled ? 'cursor-not-allowed opacity-35' : ''} ${videoResolution === resolution ? 'isl-chip--active' : 'isl-chip'}`}
+                                                                title={disabled ? 'Fast 模型不支持 1080p，会自动降到 720p' : resolution}
+                                                            >
+                                                                {resolution}
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                            <div className="mt-3 grid grid-cols-2 gap-1.5">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => onVideoGenerateAudioChange?.(!videoGenerateAudio)}
+                                                    className={`rounded-[12px] px-3 py-2 text-left text-xs font-bold transition ${videoGenerateAudio ? 'isl-chip--active' : 'isl-chip'}`}
+                                                    aria-pressed={videoGenerateAudio}
+                                                >
+                                                    生成声音 {videoGenerateAudio ? 'ON' : 'OFF'}
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => onVideoWatermarkChange?.(!videoWatermark)}
+                                                    className={`rounded-[12px] px-3 py-2 text-left text-xs font-bold transition ${videoWatermark ? 'isl-chip--active' : 'isl-chip'}`}
+                                                    aria-pressed={videoWatermark}
+                                                >
+                                                    水印 {videoWatermark ? 'ON' : 'OFF'}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
                                     <div className="space-y-1">
                                         {onAddAttachments && (
                                             <MenuOptionButton
@@ -929,6 +966,24 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 9 6 6 6-6" /></svg>
                                 </button>
                             </div>
+
+                            {showRatioTrigger && (
+                                <div className="relative">
+                                    <button type="button" onClick={() => setExpandedPanel(prev => (prev === 'ratio' ? null : 'ratio'))} className={`${triggerClass} ${expandedPanel === 'ratio' ? activeTriggerClass : ''}`} title="画面比例">
+                                        <span>{activeRatio === 'adaptive' ? '自适应' : activeRatio}</span>
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 9 6 6 6-6" /></svg>
+                                    </button>
+                                </div>
+                            )}
+
+                            {showDurationTrigger && (
+                                <div className="relative">
+                                    <button type="button" onClick={() => setExpandedPanel(prev => (prev === 'duration' ? null : 'duration'))} className={`${triggerClass} ${expandedPanel === 'duration' ? activeTriggerClass : ''}`} title="视频时长">
+                                        <span>{videoDurationSec === -1 ? '智能时长' : `${videoDurationSec}s`}</span>
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 9 6 6 6-6" /></svg>
+                                    </button>
+                                </div>
+                            )}
 
                             <button
                                 type="button"

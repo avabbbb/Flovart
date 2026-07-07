@@ -19,6 +19,8 @@ title: 待测试确认
 - 共享素材支持搜索、图片/视频筛选和预览，并提供内置 Prompt Library。
 - Workflow 右侧面板默认展开并记住开关和宽度，复用 Canvas 的紧凑面板外壳；嵌入式 Agent 的模式栏和导航栏改为透明背景无边框，与抽屉 Tab 栏视觉统一，不再出现双层 header 叠摞。
 - Workflow 节点已移除顶部标题栏（图片/视频等标签边框），节点为纯媒体/纯内容；错误提示移至右上角小角标，拖动改为整节点可拖。
+- 媒体节点（image/video/audio）顶部 22px 区域为拖动条（`data-workflow-drag-handle`），可从此处拖动节点；视频原生控件在拖动条下方仍可正常使用。
+- Workflow 配置节点的比例和时长设置从普通行改为胶囊可展开标签（`.workflow-config__chip`），提到模型选择正下方独立横排展示；标签收起时显示当前值 + 下拉箭头，点击展开原生下拉。选项仍来自模型 capability 数组，模型未声明时标签不出现。
 - Workflow 底部工具栏已移除上传图片/视频/音频按钮，改用 Canvas 的 `isl-icon-btn` 扁平风格，保留选择/平移/文本/配置/共享素材/撤销/重做/适应/网格/Agent 入口。
 - Workflow 的生成历史与素材库支持搜索、图片/视频和素材分类筛选、点击添加、拖到画布落点、下载、反推 Prompt、重命名和删除；点击或拖入的本地媒体继续使用现有 Blob/IndexedDB 持久化，不把 base64 写进项目 JSON。
 - Workflow 右侧历史/素材、画布拖入和反推 Prompt 会先解析 `idb:board:*`、`idb-video:*`、`cold-media:*` 等本地媒体引用，不再把这些 IndexedDB 协议直接交给浏览器图片/视频标签。
@@ -28,7 +30,7 @@ title: 待测试确认
 - 配置节点复用 Canvas 当前 API Key、模型选择和 Provider 能力元数据。
 - 上游文本和 `@` 文档会合并到提示词，上游图片、视频和音频只在当前模型支持时作为参考输入。
 - 文本、图片和视频生成支持请求身份、停止、过期结果隔离、错误、重试、批量和进度状态。
-- 生成成功后在右侧创建结果节点并自动连线，不覆盖来源节点；图片和视频结果写入现有生成历史。
+- 单次生成（count=1）时发起节点原地替换为对应媒体类型（config→image/video，text 节点保留 type=text 并写入 content），不新建节点不连线；批量生成（count>1）仍创建新结果节点并自动连线。生成中状态直接在发起节点显示 loading。图片和视频结果写入现有生成历史。
 - 图片节点提供裁剪、滤镜、高清放大、移除背景、扩图、蒙版修改和图层拆分；并发工具使用单事务，撤销历史不会串到其他节点。
 - 音频媒体节点可上传、播放、引用和编辑音色/格式/语速等配置；音频生成仍明确标记为 Provider 未支持。
 
@@ -59,7 +61,7 @@ title: 待测试确认
 - RunningHub 设置页入口文案已改为"3 个官方模型包"，并说明"获取模型"只是补充拉取官方列表；不再提示必须先拉取旧预设。
 - RunningHub WebApp API（`/task/openapi/*`）已移除浏览器禁用的 `Host` 请求头，文件上传、AI App 提交和输出查询在浏览器环境可正常调用。
 - RunningHub 标准模型调用会按详情页字段自动映射 `imageUrls`、`firstFrameUrl`、`lastFrameUrl`、`ratio`、`videoUrls` 和 `audioUrls`，并为内置模型包补齐 `resolution`、`duration`、`generateAudio`、`returnLastFrame`、`seed` 等默认载荷；本地 data URL 参考媒体会先上传为临时公网 URL。
-- Workflow 生成节点的参考输入收窄为可见连线、Prompt `@` 引用和显式配置槽位；不再把当前媒体节点自身或历史遗留的隐藏 `referenceNodeIds` 自动传给 Provider，避免 RunningHub 视频节点暗中多出参考图。
+- Workflow 生成节点的媒体参考输入收窄为"连到当前节点的上游节点 + Prompt `@` 引用"同时满足；未连线的节点不会出现在 `@` 候选里，连线但未 `@` 的媒体也不会作为参考传给 Provider。Seedance 显式参考槽位同样只允许选择已连到当前节点的上游媒体；当前媒体节点自身和历史遗留的隐藏 `referenceNodeIds` 不再自动传参，避免 RunningHub 视频节点暗中多出参考图。上游文本节点仍按 Workflow 规则自动合并到提示词。
 - RunningHub API Key 验证已改为解析 HTTP 200 内的业务认证错误码，避免 `APIKEY_USER_NOT_FOUND` 被误判为验证成功；标准模型上传也兼容官方 `code: 200` + `success` 响应，不再把成功上传误报为失败。
 - RunningHub Seedance 2.0 已对齐官方 `rhart-video/sparkvideo-2.0` 命名空间：内置文生、图生、多模态及 Fast 三种端点；旧 `seedance-2.0-global*`、`bytedance/seedance-2.0-global*` 和 `seedance2.0/图生视频` 等展示名会在提交前归一到官方 endpoint。图生视频发送 `firstFrameUrl` / `lastFrameUrl`，多模态发送 `imageUrls` / `videoUrls` / `audioUrls`；RunningHub Seedance 默认载荷改为 `generateAudio: true`，图生/多模态补齐 `realPersonMode: true` 与 `conversionSlots: ['all']`。
 - RunningHub 视频 polling 挂死修复：`rhSubmitTask` / `rhQueryTask` / `rhCancelTask` 改用新增 `fetchWithTimeout`（submit 60s / query 30s / cancel 15s），组合 user signal + timeout AbortController；旧代码 fetch 无 timeout，RunningHub 服务器某次查询不响应时 fetch 永远挂起导致 polling 循环卡死。polling 循环 catch 重构：user abort → 调 `rhCancelTask` 后 throw；query timeout（TimerError）→ console.warn + continue（短暂网络抖动不让整次生成失败）；其他错误 → throw。
@@ -1076,4 +1078,11 @@ Batch 逻辑已从独立 `handleBatchGenerate` 合并进 `handleGenerate`。Prom
 - ⑥ 画布持久化、视频上传、Landing、企业后台等保留功能仍可正常访问。
 - ⑦ 拖图片上画布时不再触发 React `insertBefore` NotFoundError：在 image (`App.tsx` 4167) 与 video (`App.tsx` 4292) 两条 `renderMediaInKonva ? <rect> : <image|foreignObject>` ternary 各分支加显式 `key="konva-placeholder"` / `key="svg-media"`，让 React 在 Konva 异步 ready 后由占位 `<rect>` 切到真实媒体节点时走 unmount/mount，而不是 position-reuse mutation placement，消除 5d2fc18 原版预存的 placement 失败。
 - ⑧ 控制台 `transparent 不符合 #rrggbb 格式` 的告警属于 5d2fc18 原版预存（4 处 `fill="transparent"` / `background: transparent` 来自 5d2fc18 行 4173/4298/4611 等），为 React DevTools dev 模式对 SVG `fill` 属性的 HTML5 一致性提示，不影响渲染，未改；用户若要求清理可后续单独处理。
+
+### Workflow 生成修复（原地替换 pendingReferences 保活 + 停止生成 AbortError 误吞 + 进度 UI CSS）
+
+- **RunningHub 画布不返回图片修复**（`services/workflowGeneration.ts:300-310`）：非批量原地替换路径此前在 `ingestWorkflowMedia` 返回后立即调 `releaseWorkflowMediaRecord(record.storageKey)`，把新 storageKey 从 `pendingReferences` 移除；此后到 `publish`（`updateProject` → `setWorkflowMediaCanonicalProjects`）之间有多个 `await`（history poster / dataUrl 编码），此窗口内 `InfiniteWorkflow.tsx:203` 的 nodes effect 会触发 `pruneWorkflowMedia`，新 key 既不在 `pendingReferences` 又不在 `canonicalReferences`，blob 被 IDB 删除，`useWorkflowMediaUrl` 读到 null → 画布不显示。修复：推迟 release 到 `publish` 之后（与批量路径在 commit 后释放的时机对齐）。
+- **停止生成功能失效修复**（`services/workflowGeneration.ts:268`）：`executeUnifiedIgnition` 的 catch 块把 abort 错误吞成 `{ ok: false, errorMessage: '生成已停止，可重新发起。' }`，`workflowGeneration.ts:268` 随后 `throw new Error(result.errorMessage)` 抛出的是普通 `Error` 而非 `AbortError`；catch 块 `isAbort(error)` 判否，节点被设成 `status:'error'` 覆盖 `cancelWorkflowGeneration` 已发布的 `status:'idle'`。修复：在 `raceAbort` 返回后、检查 `result.ok` 之前加 `if (controller.signal.aborted) throw abortError()`，确保 abort 路径走 `isAbort → idle` 分支。
+- **进度 UI CSS 补全**（`styles/workflow.css:124-127`）：新增 `.workflow-node__generation-meta`（右上角 flex 列）、`.workflow-node__generation-message`（半透明黑底毛玻璃胶囊，max 140px 截断）、`.workflow-node__generation-elapsed`（tabular-nums 计时）、`.workflow-node__generation-stale`（底部居中过期提示）。
+
 

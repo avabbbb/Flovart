@@ -61,7 +61,7 @@ describe('workflow node overlays', () => {
 
   it('replaces a rich prompt preset without retaining stale mention ids', () => {
     const onPromptInputChange = vi.fn();
-    render(<PromptBar t={t} theme="light" prompt="@旧引用" promptDocument={{ type: 'doc', content: [] }} setPrompt={vi.fn()} onPromptInputChange={onPromptInputChange} onGenerate={vi.fn()} isLoading={false} isSelectionActive={false} selectedElementCount={0} userEffects={[{ id: 'effect', name: '干净预设', value: '新的提示词' }]} onAddUserEffect={vi.fn()} onDeleteUserEffect={vi.fn()} generationMode="image" setGenerationMode={vi.fn()} videoAspectRatio="16:9" setVideoAspectRatio={vi.fn()} />);
+    render(<PromptBar t={t} theme="light" prompt="@旧引用" promptDocument={{ type: 'doc', content: [] }} setPrompt={vi.fn()} onPromptInputChange={onPromptInputChange} onGenerate={vi.fn()} isLoading={false} isSelectionActive={false} selectedElementCount={0} userEffects={[{ id: 'effect', name: '干净预设', value: '新的提示词' }]} onAddUserEffect={vi.fn()} onDeleteUserEffect={vi.fn()} generationMode="image" setGenerationMode={vi.fn()} videoAspectRatio="16:9" setVideoAspectRatio={vi.fn()} imageAspectRatio="1:1" setImageAspectRatio={vi.fn()} />);
     fireEvent.click(screen.getByTitle('更多操作'));
     fireEvent.click(screen.getByRole('button', { name: /干净预设/ }));
     expect(onPromptInputChange).toHaveBeenCalledWith(expect.objectContaining({ plainText: '新的提示词', mentionedElementIds: [] }));

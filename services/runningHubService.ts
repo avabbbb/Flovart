@@ -203,10 +203,11 @@ function rhResponseError(json: any, phase: string) {
     json?.promptTips,
   );
   const statusUpper = String(json?.status || '').toUpperCase();
+  if (statusUpper === 'SUCCESS') return '';
   const failed = statusUpper === 'FAILED' || statusUpper === 'ERROR';
   if (!failed) {
     const code0 = !code || code === '0' || code === '200';
-    const msgIsSuccess = !directMessage || /^(success|成功)$/i.test(directMessage.trim());
+    const msgIsSuccess = !directMessage || /(success|成功)/i.test(directMessage);
     if (code0 && msgIsSuccess) return '';
   }
   const codeText = code && code !== '0' ? ` (${code})` : '';

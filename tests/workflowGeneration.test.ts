@@ -35,7 +35,7 @@ const project = (): WorkflowProject => ({
 });
 
 describe('workflow generation', () => {
-  it('runs a text node directly with text mode and creates a connected text result', async () => {
+  it('runs a text node directly with text mode and replaces the initiator in place', async () => {
     const source = project();
     let latest = source;
     source.nodes[0].metadata = { prompt: '写一段银色机器人的旁白', config: { mode: 'text', modelId: 'text-model' } };
@@ -47,14 +47,17 @@ describe('workflow generation', () => {
       getProject: () => latest,
       createId: (() => { let index = 0; return () => `text-result-${index++}`; })(),
     });
-    expect(result.nodes.at(-1)).toMatchObject({ type: 'text', metadata: { content: '生成的旁白' } });
-    expect(result.connections.at(-1)).toMatchObject({ fromNodeId: 'text-1', toNodeId: result.nodes.at(-1)?.id });
+    const initiator = result.nodes.find(node => node.id === 'text-1');
+    expect(initiator?.type).toBe('text');
+    expect(initiator?.metadata.content).toBe('生成的旁白');
+    expect(result.nodes).toHaveLength(source.nodes.length);
+    expect(result.connections).toHaveLength(source.connections.length);
   });
 
   it.each([
     ['image', 'image-model', 'image'],
     ['video', 'video-model', 'video'],
-  ] as const)('runs a %s node directly through the media provider', async (nodeType, model, capability) => {
+  ] as const)('runs a %s node directly and replaces the initiator in place', async (nodeType, model, capability) => {
     const source = project();
     source.nodes[0] = { ...source.nodes[0], type: nodeType, metadata: { prompt: `生成${nodeType}`, config: { mode: nodeType, modelId: model } } };
     const executeMedia = vi.fn().mockResolvedValue({ ok: true, elementId: 'text-1', capability, mediaUrl: 'https://output/result', mimeType: nodeType === 'video' ? 'video/mp4' : 'image/png' });
@@ -67,7 +70,11 @@ describe('workflow generation', () => {
       onProjectChange: vi.fn(),
     });
     expect(executeMedia).toHaveBeenCalledWith(expect.objectContaining({ modelId: model }));
-    expect(result.nodes.at(-1)).toMatchObject({ type: nodeType, metadata: { storageKey: `${nodeType}-key`, href: undefined } });
+    const initiator = result.nodes.find(node => node.id === 'text-1');
+    expect(initiator?.type).toBe(nodeType);
+    expect(initiator?.metadata).toMatchObject({ storageKey: `${nodeType}-key`, href: undefined });
+    expect(result.nodes).toHaveLength(source.nodes.length);
+    expect(result.connections).toHaveLength(source.connections.length);
   });
 
   it('uses mentioned durable media, filters unsupported references, and persists generated blobs', async () => {
@@ -86,7 +93,7 @@ describe('workflow generation', () => {
     expect(ingestMedia).toHaveBeenCalled();
   });
 
-  it('passes only connected and mentioned media refs, never the initiating media node itself', async () => {
+  it('passes only connected @mentioned media refs, never unconnected mentions or the initiating media node itself', async () => {
     const source = project();
     source.nodes = [
       { id: 'ref-a', type: 'image', title: '参考 A', position: { x: 0, y: 0 }, width: 120, height: 90, metadata: { href: 'https://cdn.example.com/a.png', mimeType: 'image/png' } },
@@ -98,7 +105,7 @@ describe('workflow generation', () => {
       { id: 'a', fromNodeId: 'ref-a', toNodeId: 'self-video' },
       { id: 'b', fromNodeId: 'ref-b', toNodeId: 'self-video' },
     ];
-    source.nodes[3].metadata.mentionedNodeIds = ['ref-c'];
+    source.nodes[3].metadata.mentionedNodeIds = ['ref-a', 'ref-b', 'ref-c'];
     const executeMedia = vi.fn().mockResolvedValue({ ok: true, elementId: 'self-video', capability: 'video', mediaUrl: 'https://output/video', mimeType: 'video/mp4' });
 
     await runWorkflowGeneration(source, 'self-video', {
@@ -112,8 +119,26 @@ describe('workflow generation', () => {
     });
 
     const references = executeMedia.mock.calls[0][0].references;
-    expect(references.map((reference: any) => reference.elementId)).toEqual(['ref-a', 'ref-b', 'ref-c']);
+    expect(references.map((reference: any) => reference.elementId)).toEqual(['ref-a', 'ref-b']);
     expect(references.some((reference: any) => reference.elementId === 'self-video')).toBe(false);
+  });
+
+  it('does not pass connected media unless it is explicitly @mentioned', async () => {
+    const source = project();
+    const executeMedia = vi.fn().mockResolvedValue({ ok: true, elementId: 'config-1', capability: 'image', mediaUrl: 'https://output/image', mimeType: 'image/png' });
+
+    await runWorkflowGeneration(source, 'config-1', {
+      userApiKeys: [imageKey],
+      modelPreference: { textModel: '', imageModel: 'gpt-image-2', videoModel: '' },
+      executeMedia,
+      fetchMedia: vi.fn().mockResolvedValue(new Blob(['image'])),
+      ingestMedia: vi.fn().mockResolvedValue({ type: 'image', storageKey: 'result', name: 'result.png', mimeType: 'image/png', bytes: 5 }),
+      onProjectChange: vi.fn(),
+      encodeDataUrl: vi.fn().mockResolvedValue('data:image/png;base64,AA=='),
+    });
+
+    const references = executeMedia.mock.calls[0][0].references;
+    expect(references).toEqual([]);
   });
 
   it('ignores stale hidden referenceNodeIds when there is no visible connection or @mention', async () => {
@@ -168,6 +193,8 @@ describe('workflow generation', () => {
     expect(result.nodes.find(node => node.id === 'config-1')?.position).toEqual({ x: 900, y: 400 });
   });
   it('merges direct upstream inputs and creates a connected result node', async () => {
+    const source = project();
+    source.nodes[2].metadata.mentionedNodeIds = ['image-1'];
     const executeMedia = vi.fn(async input => {
       input.onProgress?.(42, 'generating');
       return { ok: true as const, elementId: 'config-1', capability: 'image' as const, mediaUrl: 'data:image/png;base64,RESULT', mimeType: 'image/png' };
@@ -175,7 +202,7 @@ describe('workflow generation', () => {
     const updates: WorkflowProject[] = [];
     const saveHistory = vi.fn();
 
-    const result = await runWorkflowGeneration(project(), 'config-1', {
+    const result = await runWorkflowGeneration(source, 'config-1', {
       userApiKeys: [imageKey],
       modelPreference: { textModel: '', imageModel: 'gpt-image-2', videoModel: '' },
       executeMedia,
@@ -191,8 +218,11 @@ describe('workflow generation', () => {
       prompt: expect.stringContaining('银色机器人'),
       references: [expect.objectContaining({ type: 'image', elementId: 'image-1' })],
     }));
-    expect(result.nodes).toHaveLength(4);
-    expect(result.connections.some(connection => connection.fromNodeId === 'config-1' && connection.toNodeId === result.nodes[3].id)).toBe(true);
+    expect(result.nodes).toHaveLength(3);
+    const initiator = result.nodes.find(node => node.id === 'config-1');
+    expect(initiator?.type).toBe('image');
+    expect(initiator?.metadata).toMatchObject({ status: 'success', storageKey: 'result-key' });
+    expect(result.connections).toHaveLength(2);
     expect(result.nodes[2].metadata.status).toBe('success');
     expect(updates.some(update => update.nodes[2].metadata.progress === 42)).toBe(true);
     expect(saveHistory).toHaveBeenCalledTimes(1);
@@ -218,6 +248,7 @@ describe('workflow generation', () => {
       { id: 'audio-ref', type: 'audio', title: '音频参考', position: { x: 0, y: 0 }, width: 100, height: 100, metadata: { href: 'data:audio/mp3;base64,AA==', mimeType: 'audio/mp3' } },
     );
     source.connections.push({ id: 'video-link', fromNodeId: 'video-ref', toNodeId: 'config-1' }, { id: 'audio-link', fromNodeId: 'audio-ref', toNodeId: 'config-1' });
+    source.nodes[2].metadata.mentionedNodeIds = ['image-1', 'video-ref', 'audio-ref'];
     const executeMedia = vi.fn().mockResolvedValue({ ok: true, elementId: 'config-1', capability: 'image', mediaUrl: 'https://output/image', mimeType: 'image/png' });
     await runWorkflowGeneration(source, 'config-1', {
       userApiKeys: [imageKey], modelPreference: { textModel: '', imageModel: 'gpt-image-2', videoModel: '' }, executeMedia,
@@ -233,6 +264,7 @@ describe('workflow generation', () => {
     source.nodes[2].metadata.config = { mode: 'video', modelId: 'seedance-2.0' };
     source.nodes.push({ id: 'audio-ref', type: 'audio', title: '配乐', position: { x: 0, y: 0 }, width: 100, height: 100, metadata: { href: 'data:audio/mp3;base64,AA==', mimeType: 'audio/mp3' } });
     source.connections.push({ id: 'audio-link', fromNodeId: 'audio-ref', toNodeId: 'config-1' });
+    source.nodes[2].metadata.mentionedNodeIds = ['audio-ref'];
     const executeMedia = vi.fn().mockResolvedValue({ ok: true, elementId: 'config-1', capability: 'video', mediaUrl: 'https://output/video', mimeType: 'video/mp4' });
     await runWorkflowGeneration(source, 'config-1', {
       userApiKeys: [{ ...imageKey, provider: 'volcengine', capabilities: ['video'], customModels: ['seedance-2.0'] }], modelPreference: { textModel: '', imageModel: '', videoModel: 'seedance-2.0' }, executeMedia,
@@ -244,6 +276,7 @@ describe('workflow generation', () => {
   it('describes connected media by label for text generation without claiming media transport', async () => {
     const source = project();
     source.nodes[0].metadata = { prompt: '写说明', config: { mode: 'text', modelId: 'text-model' }, mentionedNodeIds: ['image-1'] };
+    source.connections.push({ id: 'image-to-text', fromNodeId: 'image-1', toNodeId: 'text-1' });
     const executeText = vi.fn().mockResolvedValue('完成');
     await runWorkflowGeneration(source, 'text-1', {
       userApiKeys: [{ ...imageKey, capabilities: ['text'], customModels: ['text-model'] }], modelPreference: { textModel: 'text-model', imageModel: '', videoModel: '' }, executeText, onProjectChange: vi.fn(),
@@ -282,9 +315,10 @@ describe('workflow generation', () => {
     });
     const successUpdates = updates.filter(update => update.nodes.find(node => node.id === 'config-1')?.metadata.status === 'success');
     expect(successUpdates).toHaveLength(1);
-    expect(successUpdates[0].nodes).toHaveLength(4);
-    expect(successUpdates[0].connections).toHaveLength(3);
+    expect(successUpdates[0].nodes).toHaveLength(3);
+    expect(successUpdates[0].connections).toHaveLength(2);
     expect(successUpdates[0].nodes[2].metadata).toMatchObject({ progress: 100, generationRequestId: undefined });
+    expect(successUpdates[0].nodes[2].type).toBe('image');
     expect(events.indexOf('success')).toBeLessThan(events.indexOf('history'));
   });
 

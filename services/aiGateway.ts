@@ -188,6 +188,7 @@ const OPENAI_GPT_IMAGE_CAPABILITY: CapabilityDictionary = {
         quality: 'auto',
         output_format: 'png',
     },
+    aspectRatios: ['1:1', '3:2', '2:3', '16:9', '9:16'],
     endpoint: 'images/generations',
     responseFormat: 'implicit',
     outputFormat: 'png',
@@ -199,6 +200,16 @@ const DEFAULT_VIDEO_CAPABILITY: CapabilityDictionary = {
     },
     requestParams: ['ratio'],
     aspectRatios: ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9'],
+};
+
+const DEFAULT_IMAGE_RATIOS: VideoAspectRatio[] = ['1:1', '3:2', '2:3', '16:9', '9:16', '4:3', '3:4'];
+
+const DEFAULT_IMAGE_CAPABILITY: CapabilityDictionary = {
+    multimodalSlots: {
+        image: { max: 8, roles: ['reference_image', 'first_frame', 'last_frame', 'style_ref', 'unassigned'] },
+    },
+    requestParams: ['size', 'aspect_ratio', 'ratio'],
+    aspectRatios: [...DEFAULT_IMAGE_RATIOS],
 };
 
 const SEEDANCE_CAPABILITY: CapabilityDictionary = {
@@ -222,7 +233,7 @@ const SEEDANCE_CAPABILITY: CapabilityDictionary = {
     ],
     aspectRatios: SEEDANCE_RATIOS,
     resolutions: [...SEEDANCE_RESOLUTIONS],
-    durations: [5, 10],
+    durations: [-1, 4, 5, 6, 8, 10, 12, 15],
     defaults: {
         generate_audio: true,
         duration: 5,
@@ -242,8 +253,25 @@ export function getCapabilityDictionary(model: string, provider: AIProvider = in
     if ((provider === 'openai' || provider === 'custom' || provider === 'openai_compatible') && isOpenAIImageEditModel(model)) {
         return OPENAI_GPT_IMAGE_CAPABILITY;
     }
+    if (inferCapabilityFromModelName(model) === 'image') {
+        return DEFAULT_IMAGE_CAPABILITY;
+    }
     return DEFAULT_VIDEO_CAPABILITY;
 }
+
+export function getSupportedDurations(model: string, key?: UserApiKey): number[] {
+    const provider = resolveGenerationProvider(model, key);
+    const capability = getCapabilityDictionary(model, provider);
+    return capability?.durations ?? [];
+}
+
+export function getSupportedImageRatios(model: string, key?: UserApiKey): VideoAspectRatio[] {
+    const provider = resolveGenerationProvider(model, key);
+    const capability = getCapabilityDictionary(model, provider);
+    return capability?.aspectRatios ?? DEFAULT_IMAGE_RATIOS;
+}
+
+export { DEFAULT_IMAGE_RATIOS };
 
 function normalizeMultimodalRole(slot: MultimodalSlot): string {
     if (slot.kind === 'image') return slot.role && slot.role !== 'unassigned' ? String(slot.role) : 'reference_image';
@@ -1331,13 +1359,14 @@ function extractRunningHubMediaUrl(
     result: { results?: Array<{ url?: string; outputType?: string; text?: string | null }> | null },
     kind: 'image' | 'video',
 ) {
-    const media = result.results?.find(item => {
-        if (!item.url) return false;
+    const items = result.results?.filter(item => item.url) || [];
+    if (items.length === 0) return null;
+    const typed = items.find(item => {
         const hint = `${item.outputType || ''} ${item.url}`.toLowerCase();
         const isVideo = /\.(mp4|mov|webm)(?:[?#].*)?$/.test(hint) || /\b(mp4|mov|webm|video)\b/.test(hint);
         return kind === 'video' ? isVideo : !isVideo;
     });
-    return media?.url || null;
+    return typed?.url || items[0].url || null;
 }
 
 /**
@@ -2320,6 +2349,7 @@ export async function generateImageWithProvider(
             baseUrl,
             signal: options?.signal,
         });
+        console.log('[RH Debug] rhRunTask image done', { status: result.status, resultsCount: result.results?.length, results: result.results?.map(r => ({ url: r.url?.slice(0, 60), outputType: r.outputType })) });
         const imageUrl = extractRunningHubMediaUrl(result, 'image');
         if (!imageUrl) {
             return {
@@ -2927,6 +2957,7 @@ export async function generateVideoWithProvider(
             signal: options?.signal,
             onProgress: (status, attempt) => onProgress(`RunningHub ${status} (${attempt})`),
         });
+        console.log('[RH Debug] rhRunTask video done', { status: result.status, resultsCount: result.results?.length, results: result.results?.map(r => ({ url: r.url?.slice(0, 60), outputType: r.outputType })) });
         const videoUrl = extractRunningHubMediaUrl(result, 'video');
         if (!videoUrl) {
             throw new Error(result.results?.map(item => item.text).filter(Boolean).join('\n') || 'RunningHub 视频任务完成但未返回视频 URL。');

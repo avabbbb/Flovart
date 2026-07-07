@@ -1,5 +1,5 @@
 import { ChevronsDown, Clapperboard, FileText, Image as ImageIcon, Music2, Upload, Video, X } from 'lucide-react';
-import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { motion } from 'motion/react';
 import { WorkflowConfigPanel } from './WorkflowConfigPanel';
 import { buildCssFilter } from '../ImageFilterPanel';
@@ -41,6 +41,18 @@ export function WorkflowNode({
   const progress = Math.max(0, Math.min(100, Math.round(node.metadata.progress || 0)));
   const generationMode = node.metadata.config?.mode || node.type;
   const generationLabel = generationMode === 'video' ? '视频生成中' : generationMode === 'text' ? '文本生成中' : '图片生成中';
+  const generationMessage = node.metadata.generationMessage;
+  const generationStartedAt = node.metadata.generationStartedAt;
+  const [elapsedSec, setElapsedSec] = useState(0);
+  useEffect(() => {
+    if (status !== 'loading' || !generationStartedAt) { setElapsedSec(0); return; }
+    const tick = () => setElapsedSec(Math.floor((Date.now() - generationStartedAt) / 1000));
+    tick();
+    const timer = window.setInterval(tick, 1000);
+    return () => window.clearInterval(timer);
+  }, [status, generationStartedAt]);
+  const elapsedLabel = elapsedSec > 0 ? `${Math.floor(elapsedSec / 60)}:${String(elapsedSec % 60).padStart(2, '0')}` : '';
+  const staleHint = status === 'loading' && elapsedSec >= 180 ? '已等待较久，如长时间无响应可点击停止' : '';
   const mediaInput = useRef<HTMLInputElement>(null);
   const media = useWorkflowMediaUrl(node.metadata.storageKey, node.metadata.href);
   const isMedia = node.type === 'image' || node.type === 'video' || node.type === 'audio';
@@ -101,6 +113,7 @@ export function WorkflowNode({
         ><ChevronsDown size={14} /></button>
       )}
       <div className="workflow-node__body">
+        {isMedia && media.url && <div className="workflow-node__drag-handle" data-workflow-drag-handle />}
         {node.type === 'image' && (media.url
           ? <><img src={media.url} alt={node.title} draggable={false} style={{ filter: buildCssFilter(node.metadata.filters) }} />{mediaActions}</>
           : <div className="workflow-node__empty"><ImageIcon size={26} /><span>{mediaError || '图片节点'}</span>{mediaActions}</div>)}
@@ -138,6 +151,13 @@ export function WorkflowNode({
               transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut', repeatDelay: 0.5 }}
             />
             <span className="flv-generation-glass__status">{generationLabel}<b>{progress}%</b></span>
+            {(generationMessage || elapsedLabel) && (
+              <div className="workflow-node__generation-meta" data-workflow-overlay>
+                {generationMessage && <span className="workflow-node__generation-message">{generationMessage}</span>}
+                {elapsedLabel && <span className="workflow-node__generation-elapsed">{elapsedLabel}</span>}
+              </div>
+            )}
+            {staleHint && <div className="workflow-node__generation-stale" data-workflow-overlay>{staleHint}</div>}
           </motion.div>
         )}
         {uploading && (

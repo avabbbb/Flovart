@@ -1,8 +1,9 @@
 import { BookOpen } from 'lucide-react';
 import { useState } from 'react';
 import type { ModelPreference, UserApiKey, GenerationMode } from '../../types';
-import { PromptBar, type MentionItem } from '../PromptBar';
-import type { WorkflowGenerationConfig, WorkflowNode, WorkflowNodeMetadata } from './types';
+import { PromptBar } from '../PromptBar';
+import { filterWorkflowInputIds, getWorkflowInputNodes, toWorkflowMentionItems } from './references';
+import type { WorkflowConnection, WorkflowGenerationConfig, WorkflowNode, WorkflowNodeMetadata } from './types';
 
 export interface WorkflowModelOptions {
   text: string[];
@@ -15,9 +16,10 @@ const modeFor = (node: WorkflowNode, config?: WorkflowGenerationConfig): Generat
   return mode === 'text' || mode === 'video' ? mode : 'image';
 };
 
-export function WorkflowNodePromptBar({ node, nodes, t, theme, language, userApiKeys, modelPreference, dynamicModelOptions, onOpenSettings, onChange, onRun, onStop, focusSignal }: {
+export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme, language, userApiKeys, modelPreference, dynamicModelOptions, onOpenSettings, onChange, onRun, onStop, focusSignal }: {
   node: WorkflowNode;
   nodes: WorkflowNode[];
+  connections?: WorkflowConnection[];
   t: (key: string, ...args: any[]) => string;
   theme: 'light' | 'dark';
   language: 'en' | 'zho';
@@ -33,13 +35,8 @@ export function WorkflowNodePromptBar({ node, nodes, t, theme, language, userApi
   const [libraryOpen, setLibraryOpen] = useState(false);
   const config = node.metadata.config || { mode: node.type === 'text' ? 'text' : node.type === 'video' ? 'video' : 'image' };
   const generationMode = modeFor(node, config);
-  const mentionItems: MentionItem[] = nodes.filter(item => item.id !== node.id).map(item => ({
-    id: item.id,
-    label: item.title,
-    thumbnail: item.metadata.href || '',
-    elementType: item.type,
-    description: item.metadata.content?.trim().slice(0, 36) || item.type,
-  }));
+  const mentionItems = toWorkflowMentionItems(getWorkflowInputNodes(node, nodes, connections));
+  const keepConnectedMentions = (ids: string[]) => filterWorkflowInputIds(ids, node.id, connections);
   const patchConfig = (patch: Partial<WorkflowGenerationConfig>) => onChange({ config: { ...config, ...patch } });
   const translatedPrompts = t('quickPrompts');
   const prompts = Array.isArray(translatedPrompts) ? translatedPrompts.filter((item): item is { name: string; value: string } => Boolean(item) && typeof item.name === 'string' && typeof item.value === 'string') : [];
@@ -55,7 +52,7 @@ export function WorkflowNodePromptBar({ node, nodes, t, theme, language, userApi
         prompt={node.metadata.prompt || ''}
         promptDocument={node.metadata.richTextDocument}
         setPrompt={prompt => onChange({ prompt, richTextDocument: undefined, mentionedNodeIds: [] })}
-        onPromptInputChange={({ plainText, document, mentionedElementIds }) => onChange({ prompt: plainText, richTextDocument: document as typeof node.metadata.richTextDocument, mentionedNodeIds: mentionedElementIds })}
+        onPromptInputChange={({ plainText, document, mentionedElementIds }) => onChange({ prompt: plainText, richTextDocument: document as typeof node.metadata.richTextDocument, mentionedNodeIds: keepConnectedMentions(mentionedElementIds) })}
         mentionItems={mentionItems}
         onGenerate={onRun}
         onStop={onStop}
@@ -73,6 +70,8 @@ export function WorkflowNodePromptBar({ node, nodes, t, theme, language, userApi
         modeOptions={['text', 'image', 'video']}
         videoAspectRatio={(config.aspectRatio as any) || '16:9'}
         setVideoAspectRatio={aspectRatio => patchConfig({ aspectRatio })}
+        imageAspectRatio={(config.aspectRatio as any) || '1:1'}
+        setImageAspectRatio={aspectRatio => patchConfig({ aspectRatio })}
         videoDurationSec={config.durationSec}
         onVideoDurationSecChange={durationSec => patchConfig({ durationSec })}
         videoResolution={config.resolution}

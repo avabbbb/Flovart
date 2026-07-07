@@ -554,6 +554,7 @@ const App: React.FC = () => {
     
     const [generationMode, setGenerationMode] = useState<'image' | 'video' | 'keyframe'>('image');
     const [videoAspectRatio, setVideoAspectRatio] = useState<VideoAspectRatio>('16:9');
+    const [imageAspectRatio, setImageAspectRatio] = useState<VideoAspectRatio>('1:1');
     const [videoDurationSec, setVideoDurationSec] = useState<number>(5);
     const [videoResolution, setVideoResolution] = useState<string>('720p');
     const [videoGenerateAudio, setVideoGenerateAudio] = useState<boolean>(true);
@@ -4243,9 +4244,11 @@ const App: React.FC = () => {
                                                              generationMode={getElementGenerationMode(selectedNodePromptElement)}
                                                              setGenerationMode={() => undefined}
                                                              modeOptions={[getElementGenerationMode(selectedNodePromptElement)]}
-                                                             videoAspectRatio={selectedNodePromptElement.generationState?.aspectRatio || videoAspectRatio}
-                                                             setVideoAspectRatio={(ratio) => updateNodePromptStatePatch(selectedNodePromptElement.id, { aspectRatio: ratio })}
-                                                             videoDurationSec={selectedNodePromptElement.generationState?.durationSec ?? videoDurationSec}
+videoAspectRatio={selectedNodePromptElement.generationState?.aspectRatio || videoAspectRatio}
+                                                              setVideoAspectRatio={(ratio) => updateNodePromptStatePatch(selectedNodePromptElement.id, { aspectRatio: ratio })}
+                                                              imageAspectRatio={selectedNodePromptElement.generationState?.aspectRatio || imageAspectRatio}
+                                                              setImageAspectRatio={(ratio) => updateNodePromptStatePatch(selectedNodePromptElement.id, { aspectRatio: ratio })}
+                                                              videoDurationSec={selectedNodePromptElement.generationState?.durationSec ?? videoDurationSec}
                                                              onVideoDurationSecChange={(durationSec) => updateNodePromptStatePatch(selectedNodePromptElement.id, { durationSec })}
                                                              videoResolution={selectedNodePromptElement.generationState?.resolution || videoResolution}
                                                              onVideoResolutionChange={(resolution) => updateNodePromptStatePatch(selectedNodePromptElement.id, { resolution })}
@@ -4384,9 +4387,11 @@ const App: React.FC = () => {
                                                              generationMode={getElementGenerationMode(selectedNodePromptElement)}
                                                              setGenerationMode={() => undefined}
                                                              modeOptions={[getElementGenerationMode(selectedNodePromptElement)]}
-                                                             videoAspectRatio={selectedNodePromptElement.generationState?.aspectRatio || videoAspectRatio}
-                                                             setVideoAspectRatio={(ratio) => updateNodePromptStatePatch(selectedNodePromptElement.id, { aspectRatio: ratio })}
-                                                             videoDurationSec={selectedNodePromptElement.generationState?.durationSec ?? videoDurationSec}
+videoAspectRatio={selectedNodePromptElement.generationState?.aspectRatio || videoAspectRatio}
+                                                              setVideoAspectRatio={(ratio) => updateNodePromptStatePatch(selectedNodePromptElement.id, { aspectRatio: ratio })}
+                                                              imageAspectRatio={selectedNodePromptElement.generationState?.aspectRatio || imageAspectRatio}
+                                                              setImageAspectRatio={(ratio) => updateNodePromptStatePatch(selectedNodePromptElement.id, { aspectRatio: ratio })}
+                                                              videoDurationSec={selectedNodePromptElement.generationState?.durationSec ?? videoDurationSec}
                                                              onVideoDurationSecChange={(durationSec) => updateNodePromptStatePatch(selectedNodePromptElement.id, { durationSec })}
                                                              videoResolution={selectedNodePromptElement.generationState?.resolution || videoResolution}
                                                              onVideoResolutionChange={(resolution) => updateNodePromptStatePatch(selectedNodePromptElement.id, { resolution })}

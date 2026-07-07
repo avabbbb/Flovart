@@ -23,6 +23,8 @@ describe('PromptBar media attachments', () => {
         setGenerationMode={() => undefined}
         videoAspectRatio="16:9"
         setVideoAspectRatio={() => undefined}
+        imageAspectRatio="1:1"
+        setImageAspectRatio={() => undefined}
       />,
     );
 
@@ -48,15 +50,17 @@ describe('PromptBar media attachments', () => {
         setGenerationMode={() => undefined}
         videoAspectRatio="16:9"
         setVideoAspectRatio={() => undefined}
+        imageAspectRatio="1:1"
+        setImageAspectRatio={() => undefined}
         selectedVideoModel="seedance-2.0"
         videoModelOptions={['seedance-2.0']}
       />,
     );
 
-    const modelLabel = screen.getByText((content) => content.includes('seedance-2.0'));
-    fireEvent.click(modelLabel.closest('button')!);
+    const moreButton = screen.getByTitle('更多操作');
+    fireEvent.click(moreButton);
 
-    expect(screen.getByText('Seedance 参数')).toBeTruthy();
+    expect(screen.getByText('Seedance 视频参数')).toBeTruthy();
     expect(screen.getByText('生成声音 ON')).toBeTruthy();
     expect(screen.getByText('水印 OFF')).toBeTruthy();
   });
@@ -79,6 +83,8 @@ describe('PromptBar media attachments', () => {
         setGenerationMode={() => undefined}
         videoAspectRatio="16:9"
         setVideoAspectRatio={() => undefined}
+        imageAspectRatio="1:1"
+        setImageAspectRatio={() => undefined}
         selectedImageModel="gpt-image-2"
         selectedVideoModel="seedance-2.0"
         imageModelOptions={['gpt-image-2']}
@@ -90,6 +96,10 @@ describe('PromptBar media attachments', () => {
     fireEvent.click(modelLabel.closest('button')!);
 
     expect(screen.getByText('视频模型')).toBeTruthy();
-    expect(screen.getByText('Seedance 参数')).toBeTruthy();
+
+    const moreButton = screen.getByTitle('更多操作');
+    fireEvent.click(moreButton);
+
+    expect(screen.getByText('Seedance 视频参数')).toBeTruthy();
   });
 });

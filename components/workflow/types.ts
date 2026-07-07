@@ -113,6 +113,8 @@ export interface WorkflowNodeMetadata {
   config?: WorkflowGenerationConfig;
   generationRequestId?: string;
   generationHistoryId?: string;
+  generationStartedAt?: number;
+  generationMessage?: string;
   filters?: Partial<ImageFilters>;
   scriptBreakdown?: ScriptBreakdown;
 }

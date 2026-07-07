@@ -1,4 +1,4 @@
-import { Play } from 'lucide-react';
+import { ChevronDown, Play } from 'lucide-react';
 import { createContext, useContext, useMemo, type CSSProperties, type ReactNode } from 'react';
 import { extractMentions } from '../CanvasMentionExtension';
 import type { MentionItem } from '../MentionList';
@@ -7,9 +7,10 @@ import type { GenerationCapability, GenerationMode } from '../../services/genera
 import { getModelCapabilities, isSeedanceModel } from '../../services/modelTemplateRegistry';
 import { getVoicesByProvider } from '../../services/voiceCatalog';
 import { modelRefModelId } from '../../utils/modelRefs';
-import type { WorkflowNode, WorkflowNodeMetadata } from './types';
+import type { WorkflowConnection, WorkflowNode, WorkflowNodeMetadata } from './types';
 import type { StudioMediaItem } from '../studio/StudioMediaBrowser';
 import { CAMERA_MOVEMENTS, CAMERA_OPTIONS, STYLE_PRESETS } from './constants';
+import { EMPTY_SEEDANCE_REFERENCES, filterSeedanceReferences, filterWorkflowInputIds, getWorkflowInputNodes, toWorkflowMentionItems } from './references';
 import { SeedanceSlotPicker } from './SeedanceSlotPicker';
 
 type CapabilityResolver = (mode: GenerationMode, modelId?: string) => GenerationCapability;
@@ -34,9 +35,10 @@ export function WorkflowGenerationCapabilitiesProvider({ resolve, sharedMedia = 
 
 export const useWorkflowSharedMedia = () => useContext(SharedMediaContext);
 
-export function WorkflowConfigPanel({ node, nodes, onChange, onRun, onStop }: {
+export function WorkflowConfigPanel({ node, nodes, connections = [], onChange, onRun, onStop }: {
   node: WorkflowNode;
   nodes?: WorkflowNode[];
+  connections?: WorkflowConnection[];
   onChange: (metadata: WorkflowNodeMetadata) => void;
   onRun: () => void;
   onStop?: () => void;
@@ -58,13 +60,10 @@ export function WorkflowConfigPanel({ node, nodes, onChange, onRun, onStop }: {
   }, []);
   const status = node.metadata.status || 'idle';
   const audioUnsupported = config.mode === 'audio';
-  const mentionItems: MentionItem[] = (nodes || []).filter(item => item.id !== node.id).map(item => ({
-    id: item.id,
-    label: item.title,
-    thumbnail: item.metadata.href || '',
-    elementType: item.type,
-    description: item.metadata.content?.trim().slice(0, 36) || item.type,
-  }));
+  const inputNodes = nodes ? getWorkflowInputNodes(node, nodes, connections) : [];
+  const mentionItems: MentionItem[] = toWorkflowMentionItems(inputNodes);
+  const seedanceRefs = filterSeedanceReferences(config.seedanceRefs, node.id, connections);
+  const keepConnectedMentions = (ids: string[]) => filterWorkflowInputIds(ids, node.id, connections);
 
   return (
     <div data-workflow-overlay data-testid="workflow-config-panel" className="workflow-config" onPointerDown={event => event.stopPropagation()} onWheel={event => event.stopPropagation()}>
@@ -96,13 +95,33 @@ export function WorkflowConfigPanel({ node, nodes, onChange, onRun, onStop }: {
           {modelCapabilities.supportsMaskEdit ? <span className="workflow-badge workflow-badge--mask" title="支持 mask 局部重绘">mask重绘</span> : null}
         </div>
       )}
+      <div className="workflow-config__chips">
+        {capability.aspectRatios.length > 0 && (
+          <label className="workflow-config__chip">
+            <span>比例</span>
+            <select aria-label="比例" value={config.aspectRatio || capability.aspectRatios[0]} onChange={event => updateConfig({ aspectRatio: event.target.value })}>
+              {capability.aspectRatios.map(value => <option key={value}>{value}</option>)}
+            </select>
+            <ChevronDown size={10} className="workflow-config__chip-caret" />
+          </label>
+        )}
+        {capability.durations.length > 0 && (
+          <label className="workflow-config__chip">
+            <span>时长</span>
+            <select aria-label="时长" value={config.durationSec || capability.durations[0]} onChange={event => updateConfig({ durationSec: Number(event.target.value) })}>
+              {capability.durations.map(value => <option key={value} value={value}>{value} 秒</option>)}
+            </select>
+            <ChevronDown size={10} className="workflow-config__chip-caret" />
+          </label>
+        )}
+      </div>
       {isSeedance && config.mode === 'video' && (
         <p className="workflow-config__hint">Seedance 支持 12 槽位参考输入（9 图 + 3 视频 + 3 音频），请在下方"参考输入"区域配置。</p>
       )}
       {isSeedance && config.mode === 'video' && nodes && (
         <SeedanceSlotPicker
-          nodes={nodes}
-          value={config.seedanceRefs || { imageRefs: [], videoRefs: [], audioRefs: [] }}
+          nodes={inputNodes}
+          value={seedanceRefs || EMPTY_SEEDANCE_REFERENCES}
           onChange={refs => updateConfig({ seedanceRefs: refs })}
         />
       )}
@@ -113,30 +132,14 @@ export function WorkflowConfigPanel({ node, nodes, onChange, onRun, onStop }: {
           initialDocument={node.metadata.richTextDocument}
           placeholder="输入提示词，按 @ 引用节点"
           onSubmit={onRun}
-          onTextChange={(prompt, richTextDocument) => onChange({ prompt, richTextDocument, mentionedNodeIds: extractMentions(richTextDocument).map(item => item.id) })}
+          onTextChange={(prompt, richTextDocument) => onChange({ prompt, richTextDocument, mentionedNodeIds: keepConnectedMentions(extractMentions(richTextDocument).map(item => item.id)) })}
         />
       </div> : <textarea value={node.metadata.prompt || ''} placeholder="输入提示词；上游文本会自动合并" onChange={event => onChange({ prompt: event.target.value })} />}
-      {capability.aspectRatios.length > 0 && (
-        <div className="workflow-config__row">
-          <label>比例</label>
-          <select aria-label="比例" value={config.aspectRatio || capability.aspectRatios[0]} onChange={event => updateConfig({ aspectRatio: event.target.value })}>
-            {capability.aspectRatios.map(value => <option key={value}>{value}</option>)}
-          </select>
-        </div>
-      )}
       {capability.resolutions.length > 0 && (
         <div className="workflow-config__row">
           <label>清晰度</label>
           <select aria-label="清晰度" value={config.resolution || capability.resolutions[0]} onChange={event => updateConfig({ resolution: event.target.value })}>
             {capability.resolutions.map(value => <option key={value}>{value}</option>)}
-          </select>
-        </div>
-      )}
-      {capability.durations.length > 0 && (
-        <div className="workflow-config__row">
-          <label>时长</label>
-          <select aria-label="时长" value={config.durationSec || capability.durations[0]} onChange={event => updateConfig({ durationSec: Number(event.target.value) })}>
-            {capability.durations.map(value => <option key={value} value={value}>{value} 秒</option>)}
           </select>
         </div>
       )}
