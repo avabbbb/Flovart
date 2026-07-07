@@ -16,7 +16,7 @@ export default function ApiKeyPanel({ org, perms, toast }: PanelProps) {
   const tabs: { key: SubTab; label: string }[] = [
     { key: 'keys', label: 'API Key 池' },
     { key: 'pricing', label: '模型定价' },
-    { key: 'quotas', label: '成员额度' },
+    ...(canManageQuota ? [{ key: 'quotas' as SubTab, label: '成员额度' }] : []),
   ];
 
   return (

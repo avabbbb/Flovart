@@ -1,7 +1,7 @@
 // 审批管理面板 — 审批流/审批记录
 import React, { useState, useEffect, useCallback } from 'react';
-import { Loader2, Plus, Trash2, GitBranch, FileCheck, Check, X } from 'lucide-react';
-import { approvalApi, type ApprovalWorkflow, type ApprovalRecord } from '../../../services/enterpriseApi';
+import { Loader2, Plus, Trash2, GitBranch, FileCheck, Check, X, ChevronDown, ChevronRight, Send } from 'lucide-react';
+import { approvalApi, type ApprovalWorkflow, type ApprovalRecord, type ApprovalNode, type ApprovalStep } from '../../../services/enterpriseApi';
 import { ApiError } from '../../../services/hubClient';
 import { FormInput, PanelCard, EmptyState, PageHeader, type PanelProps } from '../shared';
 
@@ -9,7 +9,7 @@ type SubTab = 'workflows' | 'records';
 
 export default function ApprovalPanel({ org, perms, toast }: PanelProps) {
   const [sub, setSub] = useState<SubTab>('workflows');
-  const canManage = perms.includes('workflow:publish');
+  const canManage = perms.includes('asset:approve');
 
   const tabs: { key: SubTab; label: string }[] = [
     { key: 'workflows', label: '审批流' },
@@ -39,6 +39,9 @@ function WorkflowTab({ org, canManage, toast }: { org: PanelProps['org']; canMan
   const [targetType, setTargetType] = useState('resource');
   const [nodes, setNodes] = useState<{ nodeType: string; approverType: string; approverIds: string }[]>([{ nodeType: 'sequential', approverType: 'role', approverIds: '' }]);
   const [submitting, setSubmitting] = useState(false);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [detailNodes, setDetailNodes] = useState<ApprovalNode[]>([]);
+  const [loadingDetail, setLoadingDetail] = useState(false);
 
   const fetch = useCallback(async () => {
     setLoading(true);
@@ -52,6 +55,20 @@ function WorkflowTab({ org, canManage, toast }: { org: PanelProps['org']; canMan
   }, [org.id, toast]);
 
   useEffect(() => { fetch(); }, [fetch]);
+
+  const toggleExpand = useCallback(async (wfId: string) => {
+    if (expandedId === wfId) { setExpandedId(null); return; }
+    setExpandedId(wfId);
+    setLoadingDetail(true);
+    try {
+      const detail = await approvalApi.getWorkflow(org.id, wfId);
+      setDetailNodes(detail?.nodes || []);
+    } catch (e) {
+      toast.show(e instanceof ApiError ? e.message : '加载详情失败', 'error');
+    } finally {
+      setLoadingDetail(false);
+    }
+  }, [org.id, expandedId, toast]);
 
   const create = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
@@ -149,13 +166,38 @@ function WorkflowTab({ org, canManage, toast }: { org: PanelProps['org']; canMan
       ) : (
         <ul className="space-y-2">
           {workflows.map((wf) => (
-            <li key={wf.id} className="flex items-center gap-3 rounded-lg p-3" style={{ background: 'var(--isl-surface-sunk)', border: '1px solid var(--isl-border)' }}>
-              <GitBranch size={14} style={{ color: wf.enabled ? 'var(--isl-mint-deep)' : 'var(--isl-ink-ghost)' }} />
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-xs font-semibold">{wf.name}</div>
-                <div className="truncate text-[10px]" style={{ color: 'var(--isl-ink-ghost)' }}>{wf.targetType} · {wf.enabled ? '启用' : '停用'}</div>
+            <li key={wf.id} className="rounded-lg" style={{ background: 'var(--isl-surface-sunk)', border: '1px solid var(--isl-border)' }}>
+              <div className="flex items-center gap-3 p-3">
+                <button type="button" onClick={() => toggleExpand(wf.id)} className="isl-icon-btn h-6 w-6 shrink-0">
+                  {expandedId === wf.id ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                </button>
+                <GitBranch size={14} style={{ color: wf.enabled ? 'var(--isl-mint-deep)' : 'var(--isl-ink-ghost)' }} />
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-xs font-semibold">{wf.name}</div>
+                  <div className="truncate text-[10px]" style={{ color: 'var(--isl-ink-ghost)' }}>{wf.targetType} · {wf.enabled ? '启用' : '停用'}</div>
+                </div>
+                {canManage && <button type="button" onClick={() => remove(wf.id)} className="isl-icon-btn h-7 w-7" title="删除"><Trash2 size={12} /></button>}
               </div>
-              {canManage && <button type="button" onClick={() => remove(wf.id)} className="isl-icon-btn h-7 w-7" title="删除"><Trash2 size={12} /></button>}
+              {expandedId === wf.id && (
+                <div className="border-t px-3 py-2" style={{ borderColor: 'var(--isl-border)' }}>
+                  {loadingDetail ? (
+                    <div className="flex justify-center py-2"><Loader2 className="animate-spin" size={12} style={{ color: 'var(--isl-ink-ghost)' }} /></div>
+                  ) : detailNodes.length === 0 ? (
+                    <p className="py-1 text-[10px]" style={{ color: 'var(--isl-ink-ghost)' }}>无节点数据</p>
+                  ) : (
+                    <ol className="space-y-1">
+                      {detailNodes.map((n, i) => (
+                        <li key={n.id} className="flex items-center gap-2 text-[10px]">
+                          <span className="flex h-4 w-4 items-center justify-center rounded-full font-bold" style={{ background: 'var(--isl-mint-bg)', color: 'var(--isl-mint-deep)' }}>{i + 1}</span>
+                          <span className="font-semibold">{n.nodeType === 'sequential' ? '顺序' : n.nodeType === 'parallel' ? '并行' : '任一'}</span>
+                          <span style={{ color: 'var(--isl-ink-soft)' }}>{n.approverType === 'role' ? '按角色' : '按用户'}</span>
+                          <span className="truncate" style={{ color: 'var(--isl-ink-ghost)' }}>{n.approverIds.join(', ')}</span>
+                        </li>
+                      ))}
+                    </ol>
+                  )}
+                </div>
+              )}
             </li>
           ))}
         </ul>
@@ -169,6 +211,13 @@ function RecordTab({ org, toast }: { org: PanelProps['org']; toast: PanelProps['
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [detailSteps, setDetailSteps] = useState<ApprovalStep[]>([]);
+  const [loadingDetail, setLoadingDetail] = useState(false);
+  const [showSubmit, setShowSubmit] = useState(false);
+  const [submitTargetType, setSubmitTargetType] = useState('resource');
+  const [submitTargetId, setSubmitTargetId] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   const fetch = useCallback(async () => {
     setLoading(true);
@@ -195,6 +244,36 @@ function RecordTab({ org, toast }: { org: PanelProps['org']; toast: PanelProps['
     }
   }, [org.id, fetch, toast]);
 
+  const toggleExpand = useCallback(async (recId: string) => {
+    if (expandedId === recId) { setExpandedId(null); return; }
+    setExpandedId(recId);
+    setLoadingDetail(true);
+    try {
+      const detail = await approvalApi.getRecord(org.id, recId);
+      setDetailSteps(detail?.steps || []);
+    } catch (e) {
+      toast.show(e instanceof ApiError ? e.message : '加载详情失败', 'error');
+    } finally {
+      setLoadingDetail(false);
+    }
+  }, [org.id, expandedId, toast]);
+
+  const submit = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!submitTargetId.trim()) return;
+    setSubmitting(true);
+    try {
+      await approvalApi.submit(org.id, { targetType: submitTargetType, targetId: submitTargetId });
+      toast.show('已提交审批', 'success');
+      setSubmitTargetId(''); setShowSubmit(false);
+      await fetch();
+    } catch (e) {
+      toast.show(e instanceof ApiError ? e.message : '提交失败', 'error');
+    } finally {
+      setSubmitting(false);
+    }
+  }, [org.id, submitTargetType, submitTargetId, fetch, toast]);
+
   const statusBadge = (s: string) => {
     const map: Record<string, { label: string; color: string }> = {
       pending: { label: '审批中', color: 'var(--isl-ink-soft)' },
@@ -204,9 +283,36 @@ function RecordTab({ org, toast }: { org: PanelProps['org']; toast: PanelProps['
     return map[s] || { label: s, color: 'var(--isl-ink)' };
   };
 
+  const inputStyle = { background: 'var(--isl-surface-sunk)', border: '1.5px solid var(--isl-border)', color: 'var(--isl-ink)' } as const;
+
   return (
     <PanelCard>
-      <PageHeader title="审批记录" subtitle={`共 ${total} 条`} />
+      <PageHeader
+        title="审批记录"
+        subtitle={`共 ${total} 条`}
+        action={
+          <button type="button" onClick={() => setShowSubmit((v) => !v)}
+            className="isl-icon-btn flex h-8 items-center gap-1.5 px-3"
+            style={{ background: 'var(--isl-mint-bg)', border: '1.5px solid var(--isl-mint)', color: 'var(--isl-mint-deep)' }}>
+            <Send size={14} /><span className="text-xs font-semibold">提交审批</span>
+          </button>
+        }
+      />
+      {showSubmit && (
+        <form onSubmit={submit} className="mb-4 flex flex-wrap gap-2 rounded-lg p-3" style={{ background: 'var(--isl-surface-sunk)', border: '1px solid var(--isl-border)' }}>
+          <select value={submitTargetType} onChange={(e) => setSubmitTargetType(e.target.value)} className="rounded-lg px-3 py-2.5 text-xs" style={inputStyle}>
+            <option value="resource">resource</option>
+            <option value="project">project</option>
+            <option value="credit_recharge">credit_recharge</option>
+          </select>
+          <FormInput value={submitTargetId} onChange={setSubmitTargetId} placeholder="目标 ID" autoFocus />
+          <button type="submit" disabled={submitting || !submitTargetId.trim()}
+            className="rounded-lg px-4 py-2 text-xs font-semibold text-white disabled:opacity-60"
+            style={{ background: 'var(--isl-mint-deep)' }}>
+            {submitting ? '提交中...' : '提交'}
+          </button>
+        </form>
+      )}
       {loading ? (
         <div className="flex justify-center py-8"><Loader2 className="animate-spin" size={16} style={{ color: 'var(--isl-ink-ghost)' }} /></div>
       ) : records.length === 0 ? (
@@ -216,19 +322,47 @@ function RecordTab({ org, toast }: { org: PanelProps['org']; toast: PanelProps['
           {records.map((r) => {
             const badge = statusBadge(r.status);
             return (
-              <li key={r.id} className="flex items-center gap-3 rounded-lg p-3" style={{ background: 'var(--isl-surface-sunk)', border: '1px solid var(--isl-border)' }}>
-                <FileCheck size={14} style={{ color: 'var(--isl-ink-soft)' }} />
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-xs font-semibold">{r.targetType} · {r.targetId}</div>
-                  <div className="truncate text-[10px]" style={{ color: 'var(--isl-ink-ghost)' }}>
-                    节点 {r.currentNodeIndex} · {new Date(r.createdAt).toLocaleString()}
+              <li key={r.id} className="rounded-lg" style={{ background: 'var(--isl-surface-sunk)', border: '1px solid var(--isl-border)' }}>
+                <div className="flex items-center gap-3 p-3">
+                  <button type="button" onClick={() => toggleExpand(r.id)} className="isl-icon-btn h-6 w-6 shrink-0">
+                    {expandedId === r.id ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                  </button>
+                  <FileCheck size={14} style={{ color: 'var(--isl-ink-soft)' }} />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-xs font-semibold">{r.targetType} · {r.targetId}</div>
+                    <div className="truncate text-[10px]" style={{ color: 'var(--isl-ink-ghost)' }}>
+                      节点 {r.currentNodeIndex} · {new Date(r.createdAt).toLocaleString()}
+                    </div>
                   </div>
+                  <span className="rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ color: badge.color }}>{badge.label}</span>
+                  {r.status === 'pending' && (
+                    <div className="flex gap-1">
+                      <button type="button" onClick={() => act(r.id, 'approve')} className="isl-icon-btn h-7 w-7" title="通过" style={{ color: 'var(--isl-mint-deep)' }}><Check size={13} /></button>
+                      <button type="button" onClick={() => act(r.id, 'reject')} className="isl-icon-btn h-7 w-7" title="拒绝" style={{ color: 'var(--isl-coral-deep)' }}><X size={13} /></button>
+                    </div>
+                  )}
                 </div>
-                <span className="rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ color: badge.color }}>{badge.label}</span>
-                {r.status === 'pending' && (
-                  <div className="flex gap-1">
-                    <button type="button" onClick={() => act(r.id, 'approve')} className="isl-icon-btn h-7 w-7" title="通过" style={{ color: 'var(--isl-mint-deep)' }}><Check size={13} /></button>
-                    <button type="button" onClick={() => act(r.id, 'reject')} className="isl-icon-btn h-7 w-7" title="拒绝" style={{ color: 'var(--isl-coral-deep)' }}><X size={13} /></button>
+                {expandedId === r.id && (
+                  <div className="border-t px-3 py-2" style={{ borderColor: 'var(--isl-border)' }}>
+                    {loadingDetail ? (
+                      <div className="flex justify-center py-2"><Loader2 className="animate-spin" size={12} style={{ color: 'var(--isl-ink-ghost)' }} /></div>
+                    ) : detailSteps.length === 0 ? (
+                      <p className="py-1 text-[10px]" style={{ color: 'var(--isl-ink-ghost)' }}>尚无审批步骤</p>
+                    ) : (
+                      <ol className="space-y-1">
+                        {detailSteps.map((s, i) => (
+                          <li key={s.id} className="flex items-center gap-2 text-[10px]">
+                            <span className="flex h-4 w-4 items-center justify-center rounded-full font-bold" style={{ background: 'var(--isl-mint-bg)', color: 'var(--isl-mint-deep)' }}>{i + 1}</span>
+                            <span className="font-semibold" style={{ color: s.action === 'approve' ? 'var(--isl-mint-deep)' : s.action === 'reject' ? 'var(--isl-coral-deep)' : 'var(--isl-ink-soft)' }}>
+                              {s.action === 'approve' ? '通过' : s.action === 'reject' ? '拒绝' : s.action}
+                            </span>
+                            <span style={{ color: 'var(--isl-ink-ghost)' }}>{s.approverId}</span>
+                            {s.note && <span className="truncate" style={{ color: 'var(--isl-ink-soft)' }}>· {s.note}</span>}
+                            <span className="ml-auto" style={{ color: 'var(--isl-ink-ghost)' }}>{s.actedAt ? new Date(s.actedAt).toLocaleString() : ''}</span>
+                          </li>
+                        ))}
+                      </ol>
+                    )}
                   </div>
                 )}
               </li>

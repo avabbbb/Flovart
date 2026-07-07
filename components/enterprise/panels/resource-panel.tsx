@@ -1,6 +1,6 @@
 // 资源管理面板 — 资源库/密级
 import React, { useState, useEffect, useCallback } from 'react';
-import { Loader2, Plus, Trash2, Image, Layers, Check, X } from 'lucide-react';
+import { Loader2, Plus, Trash2, Image, Layers, Check, X, FolderPlus } from 'lucide-react';
 import { resourceApi, type Resource, type ResourceLevel } from '../../../services/enterpriseApi';
 import { ApiError } from '../../../services/hubClient';
 import { FormInput, PanelCard, EmptyState, PageHeader, type PanelProps } from '../shared';
@@ -27,7 +27,7 @@ export default function ResourcePanel({ org, perms, toast }: PanelProps) {
         ))}
       </div>
       {sub === 'library' && <LibraryTab org={org} canApprove={canApprove} canPublish={canPublish} toast={toast} />}
-      {sub === 'levels' && <LevelsTab org={org} canManage={canPublish} toast={toast} />}
+      {sub === 'levels' && <LevelsTab org={org} canManage={canApprove} toast={toast} />}
     </div>
   );
 }
@@ -38,6 +38,14 @@ function LibraryTab({ org, canApprove, canPublish, toast }: { org: PanelProps['o
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string>('');
+  const [showCreate, setShowCreate] = useState(false);
+  const [createType, setCreateType] = useState('link');
+  const [createTitle, setCreateTitle] = useState('');
+  const [createHref, setCreateHref] = useState('');
+  const [createThumbnail, setCreateThumbnail] = useState('');
+  const [createLevelId, setCreateLevelId] = useState('');
+  const [levels, setLevels] = useState<ResourceLevel[]>([]);
+  const [submitting, setSubmitting] = useState(false);
 
   const fetch = useCallback(async () => {
     setLoading(true);
@@ -53,6 +61,35 @@ function LibraryTab({ org, canApprove, canPublish, toast }: { org: PanelProps['o
   }, [org.id, page, statusFilter, toast]);
 
   useEffect(() => { fetch(); }, [fetch]);
+
+  const openCreate = useCallback(async () => {
+    setShowCreate((v) => !v);
+    if (!showCreate && levels.length === 0) {
+      try { setLevels((await resourceApi.listLevels(org.id)) || []); } catch { /* ignore */ }
+    }
+  }, [org.id, showCreate, levels.length]);
+
+  const create = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!createHref.trim()) return;
+    setSubmitting(true);
+    try {
+      await resourceApi.create(org.id, {
+        type: createType,
+        title: createTitle || undefined,
+        href: createHref,
+        thumbnail: createThumbnail || undefined,
+        levelId: createLevelId || undefined,
+      });
+      toast.show('资源已添加', 'success');
+      setCreateTitle(''); setCreateHref(''); setCreateThumbnail(''); setCreateLevelId(''); setShowCreate(false);
+      await fetch();
+    } catch (e) {
+      toast.show(e instanceof ApiError ? e.message : '添加失败', 'error');
+    } finally {
+      setSubmitting(false);
+    }
+  }, [org.id, createType, createTitle, createHref, createThumbnail, createLevelId, fetch, toast]);
 
   const review = useCallback(async (r: Resource, action: 'approved' | 'rejected') => {
     try {
@@ -84,9 +121,44 @@ function LibraryTab({ org, canApprove, canPublish, toast }: { org: PanelProps['o
     return map[s] || { label: s, color: 'var(--isl-ink)', bg: 'var(--isl-surface-sunk)' };
   };
 
+  const inputStyle = { background: 'var(--isl-surface-sunk)', border: '1.5px solid var(--isl-border)', color: 'var(--isl-ink)' } as const;
+
   return (
     <PanelCard>
-      <PageHeader title="资源库" subtitle={`共 ${total} 条`} />
+      <PageHeader
+        title="资源库"
+        subtitle={`共 ${total} 条`}
+        action={
+          <button type="button" onClick={openCreate}
+            className="isl-icon-btn flex h-8 items-center gap-1.5 px-3"
+            style={{ background: 'var(--isl-mint-bg)', border: '1.5px solid var(--isl-mint)', color: 'var(--isl-mint-deep)' }}>
+            <FolderPlus size={14} /><span className="text-xs font-semibold">添加资源</span>
+          </button>
+        }
+      />
+      {showCreate && (
+        <form onSubmit={create} className="mb-4 grid gap-2 rounded-lg p-3 sm:grid-cols-2" style={{ background: 'var(--isl-surface-sunk)', border: '1px solid var(--isl-border)' }}>
+          <select value={createType} onChange={(e) => setCreateType(e.target.value)} className="rounded-lg px-3 py-2.5 text-sm" style={inputStyle}>
+            <option value="link">link</option>
+            <option value="image">image</option>
+            <option value="video">video</option>
+            <option value="audio">audio</option>
+            <option value="document">document</option>
+          </select>
+          <FormInput value={createTitle} onChange={setCreateTitle} placeholder="标题（可选）" autoFocus />
+          <FormInput value={createHref} onChange={setCreateHref} placeholder="资源链接（必填）" />
+          <FormInput value={createThumbnail} onChange={setCreateThumbnail} placeholder="缩略图 URL（可选）" />
+          <select value={createLevelId} onChange={(e) => setCreateLevelId(e.target.value)} className="rounded-lg px-3 py-2.5 text-sm" style={inputStyle}>
+            <option value="">不指定密级</option>
+            {levels.map((lv) => <option key={lv.id} value={lv.id}>{lv.name}</option>)}
+          </select>
+          <button type="submit" disabled={submitting || !createHref.trim()}
+            className="rounded-lg px-4 py-2 text-xs font-semibold text-white disabled:opacity-60 sm:col-span-2"
+            style={{ background: 'var(--isl-mint-deep)' }}>
+            {submitting ? '添加中...' : '添加'}
+          </button>
+        </form>
+      )}
       <div className="mb-3 flex items-center gap-2">
         {['', 'pending', 'approved', 'rejected', 'published'].map((s) => (
           <button key={s} type="button" onClick={() => { setPage(1); setStatusFilter(s); }}

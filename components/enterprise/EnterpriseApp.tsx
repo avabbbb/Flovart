@@ -226,7 +226,7 @@ function OrgDetailPanel({ org, user, onDeleted, toast }: {
     }
   }, [org, onDeleted, toast]);
 
-  const panelProps: PanelProps = { org, perms, toast };
+  const panelProps: PanelProps = { org, perms, toast, userId: user.id };
 
   return (
     <div className="flex gap-4">

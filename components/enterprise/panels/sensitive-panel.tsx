@@ -6,7 +6,7 @@ import { ApiError } from '../../../services/hubClient';
 import { FormInput, PanelCard, EmptyState, PageHeader, type PanelProps } from '../shared';
 
 export default function SensitivePanel({ org, perms, toast }: PanelProps) {
-  const canManage = perms.includes('org:manage');
+  const canManage = perms.includes('asset:approve');
   const [words, setWords] = useState<SensitiveWord[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);

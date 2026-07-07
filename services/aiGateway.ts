@@ -244,8 +244,11 @@ const SEEDANCE_CAPABILITY: CapabilityDictionary = {
 
 export function getCapabilityDictionary(model: string, provider: AIProvider = inferProviderFromModel(model)): CapabilityDictionary {
     const normalized = normalizeModelName(model);
-    if (provider === 'volcengine' || normalized.includes('seedance')) {
+    if (provider === 'volcengine' || normalized.includes('seedance') || isRunningHubSeedance20Model(normalized)) {
         return SEEDANCE_CAPABILITY;
+    }
+    if (provider === 'runningHub' && (inferCapabilityFromModelName(model) === 'video' || isRunningHubVideoEndpoint(normalized))) {
+        return { ...DEFAULT_VIDEO_CAPABILITY, durations: resolveRunningHubVideoDurations(normalized) };
     }
     if (provider === 'openrouter' && inferCapabilityFromModelName(model) === 'image') {
         return OPENAI_GPT_IMAGE_CAPABILITY;
@@ -696,7 +699,7 @@ export function inferCapabilityFromModelName(modelName: string): ElementMediaCap
         return 'video';
     }
 
-    if (normalized.includes('video') || normalized.includes('movie')) {
+    if (normalized.includes('video') || normalized.includes('movie') || normalized.includes('motion-control')) {
         return 'video';
     }
 
@@ -1109,6 +1112,18 @@ function isRunningHubOmniModel(modelEndpoint: string) {
 
 function isRunningHubVideoSModel(modelEndpoint: string) {
     return /rhart-video-s\//i.test(modelEndpoint);
+}
+
+function resolveRunningHubVideoDurations(model: string): number[] {
+    if (isRunningHubVeo31ReferenceModel(model)) return [];
+    if (isRunningHubVeo31Model(model)) {
+        if (isRunningHubVeo31LowPriceModel(model)) return [8];
+        if (/start-end-to-video/i.test(model)) return isRunningHubVeo31LiteModel(model) ? [] : [8];
+        return [4, 6, 8];
+    }
+    if (isRunningHubOmniModel(model)) return [3, 5, 8, 10, 12, 15];
+    if (isRunningHubVideoSModel(model)) return [10, 15];
+    return [5, 8, 10];
 }
 
 function runningHubAspectRatioField(modelEndpoint: string) {

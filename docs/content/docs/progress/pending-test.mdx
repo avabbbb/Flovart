@@ -863,6 +863,38 @@ title: 待测试确认
 - ⑩ 权限矩阵：owner 可见全部 9 区域，admin 不可见"组织设置"中 owner 转让 + 审计日志。
 - ⑪ AI 代理 `POST /api/v1/enterprise/ai/proxy` 转发请求，成功扣分、失败不扣；额度超限或余额不足时预检拦截。
 
+## ToB 企业后台 6 面板审计与补全
+
+### 权限门修复（4 处前端权限与后端不匹配）
+
+- **sensitive-panel**：`canManage` 从 `org:manage` 改为 `asset:approve`，与后端 `POST/DELETE /sensitive-words` 守门一致；此前 Admin 角色无 `org:manage` 导致被锁死。
+- **resource-panel LevelsTab**：`canManage` 从 `canPublish`（`asset:publish`）改为 `canApprove`（`asset:approve`），与后端 `POST/DELETE /resource-levels` 守门一致。
+- **approval-panel**：`canManage` 从 `workflow:publish` 改为 `asset:approve`，与后端 `POST/DELETE /approval-workflows` 守门一致。
+- **apikey-panel QuotaTab**：仅 `canManageQuota`（`quota:manage`）时才显示"成员额度"tab；此前所有用户可见 tab 但后端 `GET /quotas` 要求 `quota:manage`，无权限用户点击后 403。
+
+### 功能补全（4 个已定义但未使用的 API 端点接入 UI）
+
+- **approval-panel 审批流详情展开**：点击审批流行首的展开箭头调用 `getWorkflow` 显示节点列表（序号 + 节点类型 + 审批人类型 + ID 列表）。
+- **approval-panel 审批记录详情展开**：点击审批记录行首的展开箭头调用 `getRecord` 显示步骤列表（序号 + 动作 + 审批人 + 备注 + 时间）。
+- **approval-panel 提交审批**：审批记录 tab 右上新增"提交审批"按钮，表单含 `targetType`（resource/project/credit_recharge）+ `targetId`，调用 `approvalApi.submit`。
+- **resource-panel 添加资源**：资源库 tab 右上新增"添加资源"按钮，表单含 type（link/image/video/audio/document）+ title + href（必填）+ thumbnail + levelId（从密级列表加载），调用 `resourceApi.create`。
+- **project-panel 同步项目**：项目列表右上新增"同步项目"按钮，表单含 项目 ID + 标题 + 所有者 ID（预填当前用户）+ 节点数 + 连接数，调用 `projectApi.sync`。
+
+### PanelProps 扩展
+
+- `shared.tsx` 的 `PanelProps` 新增 `userId: string`，`EnterpriseApp.tsx` 构造时传入 `user.id`，供 project-panel 同步表单预填所有者。
+
+### 待用户验证
+
+- ① 用 Admin 角色（无 `org:manage`）登录企业后台，敏感词面板可正常添加/删除词（此前被锁死）。
+- ② 资源密级 tab 仅 `asset:approve` 权限可操作（有 `asset:publish` 无 `asset:approve` 的自定义角色不再看到按钮）。
+- ③ 审批流 tab 仅 `asset:approve` 权限可创建/删除（`workflow:publish` 不再误开门）。
+- ④ 无 `quota:manage` 权限的用户在 API Key 面板看不到"成员额度"tab（此前可见但 403）。
+- ⑤ 审批流行点击展开箭头显示节点详情，审批记录行点击展开显示步骤详情。
+- ⑥ 审批记录 tab"提交审批"表单提交后生成新 pending 记录。
+- ⑦ 资源库 tab"添加资源"表单提交后新资源出现在列表。
+- ⑧ 项目列表"同步项目"表单提交后新项目镜像出现在列表。
+
 ## Prompt 历史 Ctrl+K 命令面板（Lovart 启发改进 #4）
 
 参照 Lovart.ai 的 Ctrl+K Prompt 历史搜索，实现全局面板，搜索历史提示词并一键插入到当前 PromptBar 或 Workflow 节点。

@@ -5,6 +5,7 @@ import type { Organization } from '../../services/orgApi';
 export type PanelProps = {
   org: Organization;
   perms: string[];
+  userId: string;
   toast: { show: (msg: string, type?: 'success' | 'error' | 'info') => void; toasts: unknown[]; dismiss: (id: string) => void };
 };
 
