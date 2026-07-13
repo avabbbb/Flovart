@@ -1,4 +1,4 @@
-import { AlignCenter, AlignLeft, AlignRight, ArrowDownToLine, ArrowUpToLine, ChevronsDown, ChevronsUp, Copy, Crop, Download, Eraser, Expand, FilePenLine, Frame, Grid2x2, Group, Layers3, Library, Lightbulb, MessageSquareText, Play, RefreshCw, RotateCw, ScanLine, ScanText, Scissors, SlidersHorizontal, Square, Trash2, Ungroup, ZoomIn, Gauge } from 'lucide-react';
+import { AlignCenter, AlignLeft, AlignRight, ArrowDownToLine, ArrowUpToLine, ChevronsDown, ChevronsUp, Copy, Crop, Download, Eraser, Expand, FilePenLine, Frame, Grid2x2, Group, Layers3, Library, Lightbulb, Maximize2, MessageSquareText, Play, RefreshCw, RotateCw, ScanLine, ScanText, Scissors, SlidersHorizontal, Square, Trash2, Ungroup, ZoomIn, Gauge } from 'lucide-react';
 import { useRef } from 'react';
 import { ElementToolbarActions, ElementToolbarShell, type ElementToolbarAction } from '../ElementToolbar';
 import { useWorkflowMediaUrl } from './media';
@@ -32,7 +32,7 @@ export interface WorkflowAudioToolHandlers {
   speed?: (id: string) => void;
 }
 
-export function WorkflowNodeToolbar({ nodes, onCopy, onDelete, onExport, onRun, onStop, onPromptFocus, onSaveMedia, onReversePrompt, onReplaceMedia, onToggleFreeResize, onAlign, onLayer, onGroup, onUngroup, onExecuteGroup, imageTools, imageToolBusy = false, videoTools, videoToolBusy = false, audioTools, audioToolBusy = false }: {
+export function WorkflowNodeToolbar({ nodes, onCopy, onDelete, onExport, onRun, onStop, onPromptFocus, onSaveMedia, onReversePrompt, onReplaceMedia, onToggleFreeResize, onAlign, onLayer, onGroup, onUngroup, onExecuteGroup, onPreviewMedia, imageTools, imageToolBusy = false, videoTools, videoToolBusy = false, audioTools, audioToolBusy = false }: {
   nodes: WorkflowNode[];
   onCopy: (ids: string[]) => void;
   onDelete: (ids: string[]) => void;
@@ -49,6 +49,7 @@ export function WorkflowNodeToolbar({ nodes, onCopy, onDelete, onExport, onRun, 
   onGroup?: (ids: string[]) => void;
   onUngroup?: (ids: string[]) => void;
   onExecuteGroup?: (ids: string[]) => void;
+  onPreviewMedia?: (id: string) => void;
   imageTools?: WorkflowImageToolHandlers;
   imageToolBusy?: boolean;
   videoTools?: WorkflowVideoToolHandlers;
@@ -75,6 +76,7 @@ export function WorkflowNodeToolbar({ nodes, onCopy, onDelete, onExport, onRun, 
     node && onPromptFocus && node.type !== 'audio' && node.type !== 'script' && { key: 'prompt', label: '编辑提示词', icon: <MessageSquareText size={18} />, onClick: () => onPromptFocus(node.id) },
     media && mediaUrl && { key: 'download', label: '下载媒体', icon: <Download size={18} />, href: mediaUrl, download: media.metadata.name || media.id },
     media?.type === 'image' && onSaveMedia && { key: 'save', label: '保存到素材库', icon: <Library size={18} />, onClick: () => onSaveMedia(media.id) },
+    media && mediaUrl && onPreviewMedia && { key: 'preview', label: '放大预览', icon: <Maximize2 size={18} />, onClick: () => onPreviewMedia(media.id) },
     media?.type === 'image' && mediaUrl && onReversePrompt && { key: 'reverse-prompt', label: '反推 Prompt', icon: <ScanText size={18} />, disabled: advancedToolBusy, onClick: () => onReversePrompt(media.id, mediaUrl) },
     media && onReplaceMedia && { key: 'replace', label: '替换媒体', icon: <FilePenLine size={18} />, onClick: () => inputRef.current?.click() },
     node?.type === 'image' && mediaUrl && imageTools?.crop && { key: 'crop', label: '裁剪图片', icon: <Crop size={18} />, disabled: advancedToolBusy, onClick: () => imageTools.crop?.(node.id) },

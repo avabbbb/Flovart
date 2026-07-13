@@ -1,8 +1,9 @@
 import { nanoid } from 'nanoid';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { DragEvent as ReactDragEvent, PointerEvent as ReactPointerEvent } from 'react';
-import { AnimatePresence } from 'motion/react';
-import type { ModelPreference, UserApiKey } from '../../types';
+import { AnimatePresence, motion } from 'motion/react';
+import { Plus, Maximize2, Undo2, Check } from 'lucide-react';
+import type { ModelPreference, PromptEnhanceMode, PromptEnhanceResult, UserApiKey } from '../../types';
 import { STUDIO_MEDIA_DRAG_TYPE } from '../studio/StudioMediaBrowser';
 import { createWorkflowNode } from './constants';
 import {
@@ -47,6 +48,7 @@ import { trimVideo, splitAudioVideo, mergeVideos } from '../../services/videoToo
 import { trimAudio, changeAudioSpeed } from '../../services/audioTools';
 import { exportMediaArchive } from '../../utils/batchMediaExport';
 import { usePromptHistoryStore } from '../../stores/usePromptHistoryStore';
+import { useClipboardStore, type ClipItem } from '../../stores/useClipboardStore';
 
 type Frame = Pick<WorkflowProject, 'nodes' | 'connections'>;
 type ImageToolTransaction = { id: string; projectId: string; nodeId: string; frame: Frame };
@@ -56,7 +58,7 @@ type Interaction = { pointerId: number } & (
   | { type: 'resize'; id: string; start: WorkflowPoint; width: number; height: number; frame: Frame; moved: boolean }
   | { type: 'pan'; start: WorkflowPoint; viewport: WorkflowViewport }
   | { type: 'selection'; box: SelectionBox }
-  | { type: 'connection'; sourceId: string });
+  | { type: 'connection'; originId: string; direction: 'out' | 'in' });
 type ConnectionDropTarget = { nodeId: string | null; isNearNode: boolean; reason?: string };
 
 const NODE_ACTION_TARGET = 'button,textarea,input,select,[contenteditable="true"],[role="dialog"],[data-workflow-overlay],.workflow-toolbar';
@@ -65,6 +67,52 @@ const EDITABLE_TARGET = 'textarea,input,select,video,audio,[contenteditable="tru
 const SPACE_BLOCKED_TARGET = `${EDITABLE_TARGET},[role="menu"],[role="dialog"]`;
 const CONNECTION_NODE_PADDING = 24;
 const CONNECTION_HANDLE_RADIUS = 18;
+const AUTO_LAYOUT_GAP_X = 100;
+const AUTO_LAYOUT_GAP_Y = 40;
+const AUTO_LAYOUT_DEFAULT_W = 280;
+const AUTO_LAYOUT_DEFAULT_H = 200;
+
+function computeHierarchicalLayout(nodes: WorkflowNodeData[], connections: WorkflowConnection[]): Map<string, { x: number; y: number }> {
+  const positions = new Map<string, { x: number; y: number }>();
+  if (!nodes.length) return positions;
+  const incoming = new Map<string, string[]>();
+  const outgoing = new Map<string, string[]>();
+  connections.forEach(conn => {
+    (outgoing.get(conn.fromNodeId) || (outgoing.set(conn.fromNodeId, []).get(conn.fromNodeId) as string[])).push(conn.toNodeId);
+    (incoming.get(conn.toNodeId) || (incoming.set(conn.toNodeId, []).get(conn.toNodeId) as string[])).push(conn.fromNodeId);
+  });
+  const hasIncoming = new Set<string>();
+  const hasOutgoing = new Set<string>();
+  connections.forEach(conn => { hasIncoming.add(conn.toNodeId); hasOutgoing.add(conn.fromNodeId); });
+  const isolatedIds = nodes.map(node => node.id).filter(id => !hasIncoming.has(id) && !hasOutgoing.has(id));
+  const layer = new Map<string, number>();
+  const computeLayer = (id: string, visiting = new Set<string>()): number => {
+    if (layer.has(id)) return layer.get(id) as number;
+    if (visiting.has(id)) return 0;
+    visiting.add(id);
+    const preds = incoming.get(id) || [];
+    const l = preds.length ? 1 + Math.max(...preds.map(p => computeLayer(p, visiting))) : 0;
+    layer.set(id, l);
+    visiting.delete(id);
+    return l;
+  };
+  nodes.forEach(node => { if (hasIncoming.has(node.id) || hasOutgoing.has(node.id)) computeLayer(node.id); });
+  const layers = new Map<number, string[]>();
+  layer.forEach((l, id) => { (layers.get(l) || (layers.set(l, []).get(l) as string[])).push(id); });
+  const maxLayer = layers.size ? Math.max(...layers.keys()) : -1;
+  if (isolatedIds.length) layers.set(maxLayer + 1, isolatedIds);
+  layers.forEach((ids, l) => {
+    const x = l * (AUTO_LAYOUT_DEFAULT_W + AUTO_LAYOUT_GAP_X);
+    let y = 0;
+    ids.forEach(id => {
+      const node = nodes.find(n => n.id === id);
+      const h = node?.height || AUTO_LAYOUT_DEFAULT_H;
+      positions.set(id, { x, y });
+      y += h + AUTO_LAYOUT_GAP_Y;
+    });
+  });
+  return positions;
+}
 
 function sameIds(a: string[], b: string[]) {
   return a.length === b.length && a.every((id, index) => id === b[index]);
@@ -106,6 +154,9 @@ export function InfiniteWorkflow({
   modelPreference = { textModel: '', imageModel: '', videoModel: '' },
   dynamicModelOptions = { text: [], image: [], video: [] },
   onOpenSettings,
+  onEnhancePrompt,
+  isEnhancingPrompt,
+  agentOpen,
 }: {
   project: WorkflowProject;
   updateProject: (patch: Partial<WorkflowProject>) => void;
@@ -115,6 +166,7 @@ export function InfiniteWorkflow({
   onReversePrompt?: (imageHref: string, mimeType: string, width?: number, height?: number) => Promise<string>;
   imageTools?: WorkflowImageToolHandlers;
   onOpenAgent?: () => void;
+  agentOpen?: boolean;
   t?: (key: string, ...args: any[]) => string;
   theme?: 'light' | 'dark';
   language?: 'en' | 'zho';
@@ -122,6 +174,8 @@ export function InfiniteWorkflow({
   modelPreference?: ModelPreference;
   dynamicModelOptions?: WorkflowModelOptions;
   onOpenSettings?: () => void;
+  onEnhancePrompt?: (payload: { prompt: string; mode: PromptEnhanceMode; stylePreset?: string }) => Promise<PromptEnhanceResult>;
+  isEnhancingPrompt?: boolean;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
   const worldRef = useRef<HTMLDivElement>(null);
@@ -131,24 +185,32 @@ export function InfiniteWorkflow({
   const interactionRef = useRef<Interaction | null>(null);
   const pendingMoveRef = useRef<{ clientX: number; clientY: number; pointerId: number } | null>(null);
   const animationFrameRef = useRef<number | null>(null);
+  const focusAnimRef = useRef<number | null>(null);
   const spacePressedRef = useRef(false);
   const createMenuOpenerRef = useRef<HTMLElement | null>(null);
   const clipboardRef = useRef<WorkflowNodeData[]>([]);
   const mountedRef = useRef(true);
+  const mousePosRef = useRef({ x: 0, y: 0 });
   const replaceSequenceRef = useRef(new Map<string, number>());
   const mediaReferenceOwnerRef = useRef(`workflow-editor-${nanoid()}`);
   const [tool, setTool] = useState<WorkflowTool>('select');
   const [wheelMode, setWheelMode] = useState<'pan' | 'zoom'>('pan');
+  const [minimapOpen, setMinimapOpen] = useState(true);
+  const [snapEnabled, setSnapEnabled] = useState(false);
+  const [edgesVisible, setEdgesVisible] = useState(true);
+  const [layoutToast, setLayoutToast] = useState<{ prev: WorkflowNodeData[]; deadline: number } | null>(null);
   const [clipboardVersion, setClipboardVersion] = useState(0);
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>(project.selectedNodeIds || []);
   const [selectedConnectionId, setSelectedConnectionId] = useState<string | null>(null);
   const [past, setPast] = useState<Frame[]>([]);
   const [future, setFuture] = useState<Frame[]>([]);
   const [selectionBox, setSelectionBox] = useState<SelectionBox | null>(null);
-  const [connectionDrag, setConnectionDrag] = useState<{ sourceId: string; point: WorkflowPoint; targetId: string | null } | null>(null);
+  const [connectionDrag, setConnectionDrag] = useState<{ sourceId: string; point: WorkflowPoint; targetId: string | null; direction: 'out' | 'in'; local: WorkflowPoint } | null>(null);
   const [createMenu, setCreateMenu] = useState<WorkflowCreateMenuState | null>(null);
   const [contextMenu, setContextMenu] = useState<WorkflowContextMenuState | null>(null);
+  const [renameSignal, setRenameSignal] = useState<{ nodeId: string; nonce: number } | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [focusBadge, setFocusBadge] = useState(false);
   const [overlayHidden, setOverlayHidden] = useState(false);
   const [promptFocusSignal, setPromptFocusSignal] = useState(0);
   const [imageTool, setImageTool] = useState<WorkflowImageToolState | null>(null);
@@ -194,6 +256,12 @@ export function InfiniteWorkflow({
   }, []);
 
   useEffect(() => {
+    const onMove = (e: MouseEvent) => { mousePosRef.current = { x: e.clientX, y: e.clientY }; };
+    window.addEventListener('mousemove', onMove);
+    return () => window.removeEventListener('mousemove', onMove);
+  }, []);
+
+  useEffect(() => {
     registerWorkflowMediaTransientReferences(mediaReferenceOwnerRef.current, [
       project.nodes,
       ...past.map(frame => frame.nodes),
@@ -226,6 +294,8 @@ export function InfiniteWorkflow({
   useEffect(() => {
     if (animationFrameRef.current !== null) window.cancelAnimationFrame(animationFrameRef.current);
     animationFrameRef.current = null;
+    if (focusAnimRef.current !== null) window.cancelAnimationFrame(focusAnimRef.current);
+    focusAnimRef.current = null;
     pendingMoveRef.current = null;
     setSelectedConnectionId(null);
     setPast([]);
@@ -281,6 +351,38 @@ export function InfiniteWorkflow({
     pushHistory(currentFrame());
     patchProject({ nodes, connections });
   }, [currentFrame, patchProject, pushHistory]);
+
+  const autoLayout = useCallback(() => {
+    const nodes = projectRef.current.nodes;
+    if (!nodes.length) return;
+    const positions = computeHierarchicalLayout(nodes, projectRef.current.connections);
+    if (!positions.size) return;
+    const prev = nodes.map(node => ({ ...node, position: { ...node.position } }));
+    const next = nodes.map(node => {
+      const p = positions.get(node.id);
+      return p ? { ...node, position: { x: p.x, y: p.y } } : node;
+    });
+    pushHistory(currentFrame());
+    patchProject({ nodes: next });
+    setLayoutToast({ prev, deadline: Date.now() + 6000 });
+  }, [currentFrame, patchProject, pushHistory]);
+
+  const restoreLayout = useCallback(() => {
+    setLayoutToast(prev => {
+      if (!prev) return null;
+      pushHistory(currentFrame());
+      patchProject({ nodes: prev.prev });
+      return null;
+    });
+  }, [currentFrame, patchProject, pushHistory]);
+
+  useEffect(() => {
+    if (!layoutToast) return;
+    const remaining = layoutToast.deadline - Date.now();
+    if (remaining <= 0) { setLayoutToast(null); return; }
+    const timer = window.setTimeout(() => setLayoutToast(null), remaining);
+    return () => window.clearTimeout(timer);
+  }, [layoutToast]);
 
   const imageToolRuntime = useMemo<WorkflowImageToolRuntime>(() => ({
     userApiKeys,
@@ -753,10 +855,51 @@ export function InfiniteWorkflow({
     };
   }, []);
 
+  const worldToScreen = useCallback((world: WorkflowPoint): WorkflowPoint => {
+    const viewport = viewportRef.current;
+    return { x: world.x * viewport.k + viewport.x, y: world.y * viewport.k + viewport.y };
+  }, []);
+
   const viewportCenter = useCallback(() => {
     const rect = rootRef.current?.getBoundingClientRect();
     return screenToWorkflow((rect?.left || 0) + (rect?.width || 1000) / 2, (rect?.top || 0) + (rect?.height || 700) / 2);
   }, [screenToWorkflow]);
+
+  const focusNode = useCallback((id: string) => {
+    const node = projectRef.current.nodes.find(n => n.id === id);
+    if (!node) return;
+    const rect = rootRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const padding = 120;
+    const targetK = Math.min(1.5, Math.max(0.12, Math.min((rect.width - padding) / Math.max(1, node.width), (rect.height - padding) / Math.max(1, node.height))));
+    const nodeCenterX = node.position.x + node.width / 2;
+    const nodeCenterY = node.position.y + node.height / 2;
+    const targetX = rect.width / 2 - nodeCenterX * targetK;
+    const targetY = rect.height / 2 - nodeCenterY * targetK;
+    const start = { ...viewportRef.current };
+    const dx = targetX - start.x;
+    const dy = targetY - start.y;
+    const dk = targetK - start.k;
+    if (Math.abs(dx) < 1 && Math.abs(dy) < 1 && Math.abs(dk) < 0.01) { setFocusBadge(true); return; }
+    if (focusAnimRef.current !== null) window.cancelAnimationFrame(focusAnimRef.current);
+    setFocusBadge(false);
+    const duration = 420;
+    const startTime = window.performance.now();
+    const easeInOutCubic = (t: number) => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+    const tick = (now: number) => {
+      const elapsed = now - startTime;
+      const t = Math.min(1, elapsed / duration);
+      const e = easeInOutCubic(t);
+      patchProject({ viewport: { x: start.x + dx * e, y: start.y + dy * e, k: start.k + dk * e } });
+      if (t < 1) {
+        focusAnimRef.current = window.requestAnimationFrame(tick);
+      } else {
+        focusAnimRef.current = null;
+        setFocusBadge(true);
+      }
+    };
+    focusAnimRef.current = window.requestAnimationFrame(tick);
+  }, [patchProject]);
 
   const handleSlashCommand = useCallback((command: SlashCommand) => {
     setSlashMenu(null);
@@ -896,10 +1039,10 @@ export function InfiniteWorkflow({
     return { x: clientX - (rect?.left || 0), y: clientY - (rect?.top || 0) };
   }, []);
 
-  const openCreateMenu = useCallback((clientX: number, clientY: number, sourceId?: string) => {
+  const openCreateMenu = useCallback((clientX: number, clientY: number, sourceId?: string, targetId?: string) => {
     const rect = rootRef.current?.getBoundingClientRect();
     const local = localPoint(clientX, clientY);
-    if (!sourceId || !createMenuOpenerRef.current) createMenuOpenerRef.current = rootRef.current;
+    if ((!sourceId && !targetId) || !createMenuOpenerRef.current) createMenuOpenerRef.current = rootRef.current;
     setCreateMenu({
       world: screenToWorkflow(clientX, clientY),
       anchor: {
@@ -907,11 +1050,12 @@ export function InfiniteWorkflow({
         y: Math.max(8, Math.min(local.y, (rect?.height || 700) - 360)),
       },
       sourceId,
+      targetId,
     });
     setContextMenu(null);
   }, [localPoint, screenToWorkflow]);
 
-  const getConnectionDropTarget = useCallback((clientX: number, clientY: number, sourceId: string): ConnectionDropTarget => {
+  const getConnectionDropTarget = useCallback((clientX: number, clientY: number, originId: string, direction: 'out' | 'in'): ConnectionDropTarget => {
     const world = screenToWorkflow(clientX, clientY);
     const scale = Math.max(viewportRef.current.k, 0.05);
     const padding = CONNECTION_NODE_PADDING / scale;
@@ -932,7 +1076,9 @@ export function InfiniteWorkflow({
       const hitsExpanded = world.x >= node.position.x - padding && world.x <= node.position.x + node.width + padding && world.y >= node.position.y - padding && world.y <= node.position.y + node.height + padding;
       if (!hitsHandle && !hitsInside && !hitsExpanded) return;
       isNearNode = true;
-      const validation = validateWorkflowConnection(snapshot, sourceId, node.id);
+      const validation = direction === 'in'
+        ? validateWorkflowConnection(snapshot, node.id, originId)
+        : validateWorkflowConnection(snapshot, originId, node.id);
       if (!validation.ok) {
         reason ||= validation.reason;
         return;
@@ -1007,8 +1153,8 @@ export function InfiniteWorkflow({
       setSelectionBox(interaction.box);
       return;
     }
-    const dropTarget = getConnectionDropTarget(clientX, clientY, interaction.sourceId);
-    setConnectionDrag({ sourceId: interaction.sourceId, point: screenToWorkflow(clientX, clientY), targetId: dropTarget.nodeId });
+    const dropTarget = getConnectionDropTarget(clientX, clientY, interaction.originId, interaction.direction);
+    setConnectionDrag({ sourceId: interaction.originId, point: screenToWorkflow(clientX, clientY), targetId: dropTarget.nodeId, direction: interaction.direction, local: localPoint(clientX, clientY) });
   }, [getConnectionDropTarget, localPoint, patchProject, screenToWorkflow, selectNodes]);
 
   const scheduleInteractionMove = useCallback((clientX: number, clientY: number, pointerId: number) => {
@@ -1049,16 +1195,22 @@ export function InfiniteWorkflow({
     }
     if (interaction.type !== 'connection') return;
 
-    const dropTarget = getConnectionDropTarget(clientX, clientY, interaction.sourceId);
+    const dropTarget = getConnectionDropTarget(clientX, clientY, interaction.originId, interaction.direction);
     setConnectionDrag(null);
     if (dropTarget.nodeId) {
       createMenuOpenerRef.current = null;
-      applyOps([{ type: 'connect_nodes', fromNodeId: interaction.sourceId, toNodeId: dropTarget.nodeId }]);
+      if (interaction.direction === 'in') {
+        applyOps([{ type: 'connect_nodes', fromNodeId: dropTarget.nodeId, toNodeId: interaction.originId }]);
+      } else {
+        applyOps([{ type: 'connect_nodes', fromNodeId: interaction.originId, toNodeId: dropTarget.nodeId }]);
+      }
     } else if (dropTarget.isNearNode) {
       createMenuOpenerRef.current = null;
       setNotice(dropTarget.reason || '无法连接到该节点');
+    } else if (interaction.direction === 'in') {
+      openCreateMenu(clientX, clientY, undefined, interaction.originId);
     } else {
-      openCreateMenu(clientX, clientY, interaction.sourceId);
+      openCreateMenu(clientX, clientY, interaction.originId, undefined);
     }
   }, [applyOps, flushPendingMove, getConnectionDropTarget, openCreateMenu, pushHistory, toggleBatch, updateInteraction]);
 
@@ -1115,10 +1267,43 @@ export function InfiniteWorkflow({
     applyFrame(next);
   }, [applyFrame, currentFrame, future]);
 
+  const syncToSharedClipboard = useCallback((nodes: WorkflowNodeData[]) => {
+    const mediaNodes = nodes.filter(node => (node.type === 'image' || node.type === 'video') && (node.metadata.storageKey || node.metadata.href));
+    if (mediaNodes.length === 0) return;
+    void (async () => {
+      const items: ClipItem[] = [];
+      for (const node of mediaNodes) {
+        try {
+          const blob = await loadWorkflowMediaBlob(node.metadata.storageKey, node.metadata.href);
+          items.push({
+            id: nanoid(),
+            kind: node.type as 'image' | 'video',
+            blob,
+            mimeType: node.metadata.mimeType || (node.type === 'image' ? 'image/png' : 'video/mp4'),
+            name: node.metadata.name || node.title || `workflow-${node.type}`,
+            naturalWidth: node.metadata.naturalWidth,
+            naturalHeight: node.metadata.naturalHeight,
+            sourceView: 'workflow',
+          });
+        } catch { /* skip unreadable */ }
+      }
+      if (items.length === 0) return;
+      useClipboardStore.getState().setItems(items);
+      const firstImage = items.find(item => item.kind === 'image');
+      if (firstImage && navigator.clipboard?.write) {
+        try {
+          const ci = new ClipboardItem({ [firstImage.mimeType]: firstImage.blob });
+          await navigator.clipboard.write([ci]);
+        } catch { /* ignore */ }
+      }
+    })();
+  }, []);
+
   const copySelection = useCallback(() => {
     clipboardRef.current = projectRef.current.nodes.filter(node => selectedIdsRef.current.includes(node.id));
     setClipboardVersion(version => version + 1);
-  }, []);
+    syncToSharedClipboard(clipboardRef.current);
+  }, [syncToSharedClipboard]);
 
   const pasteSelection = useCallback(async () => {
     const expectedProjectId = projectRef.current.id;
@@ -1131,6 +1316,20 @@ export function InfiniteWorkflow({
       }));
       commitFrame([...projectRef.current.nodes, ...nodes], projectRef.current.connections);
       selectNodes(nodes.map(node => node.id));
+      return;
+    }
+    const clipItems = useClipboardStore.getState().items;
+    if (clipItems.length > 0) {
+      const rect = rootRef.current?.getBoundingClientRect();
+      const mouse = mousePosRef.current;
+      const inBounds = rect && mouse.x >= rect.left && mouse.x <= rect.right && mouse.y >= rect.top && mouse.y <= rect.bottom;
+      const basePoint = inBounds ? screenToWorkflow(mouse.x, mouse.y) : viewportCenter();
+      for (let i = 0; i < clipItems.length; i++) {
+        const item = clipItems[i];
+        const offset = i * 32;
+        const file = new File([item.blob], item.name, { type: item.mimeType });
+        await addMediaAt(file, { x: basePoint.x + offset, y: basePoint.y + offset }, expectedProjectId);
+      }
       return;
     }
     try {
@@ -1162,7 +1361,7 @@ export function InfiniteWorkflow({
     } catch (error) {
       if (mountedRef.current && projectRef.current.id === expectedProjectId) setNotice(error instanceof Error ? error.message : '无法读取剪贴板内容');
     }
-  }, [addMediaAt, applyOps, commitFrame, selectNodes, viewportCenter]);
+  }, [addMediaAt, applyOps, commitFrame, screenToWorkflow, selectNodes, viewportCenter]);
 
   const deleteSelection = useCallback(() => {
     if (selectedConnectionId) {
@@ -1190,6 +1389,7 @@ export function InfiniteWorkflow({
       if (modifier && key === 'y') { event.preventDefault(); redo(); return; }
       if (modifier && key === 'c') { event.preventDefault(); copySelection(); return; }
       if (modifier && key === 'v') { event.preventDefault(); void pasteSelection(); return; }
+      if (modifier && key === 'a') { event.preventDefault(); selectNodes(projectRef.current.nodes.filter(node => node.isVisible !== false).map(node => node.id)); return; }
       if (modifier && key === 'g') {
         event.preventDefault();
         const ids = selectedIdsRef.current;
@@ -1219,7 +1419,7 @@ export function InfiniteWorkflow({
       window.removeEventListener('keydown', keydown);
       window.removeEventListener('keyup', keyup);
     };
-  }, [applyOps, cancelInteraction, closeCreateMenu, copySelection, deleteSelection, pasteSelection, redo, undo]);
+  }, [applyOps, cancelInteraction, closeCreateMenu, copySelection, deleteSelection, pasteSelection, redo, selectNodes, undo]);
 
   const addNode = useCallback((type: WorkflowNodeType, metadata: WorkflowNodeData['metadata'] = {}) => {
     const center = viewportCenter();
@@ -1298,13 +1498,22 @@ export function InfiniteWorkflow({
   const createFromMenu = useCallback((type: WorkflowNodeType) => {
     if (!createMenu) return;
     const node = createWorkflowNode(nanoid(), type, createMenu.world);
-    const success = createMenu.sourceId
-      ? applyOps([{ type: 'create_connected_node', fromNodeId: createMenu.sourceId, node }])
-      : applyOps([{ type: 'add_node', node }]);
+    let success: boolean;
+    if (createMenu.sourceId) {
+      success = applyOps([{ type: 'create_connected_node', fromNodeId: createMenu.sourceId, node }]);
+    } else if (createMenu.targetId) {
+      success = applyOps([
+        { type: 'add_node', node },
+        { type: 'connect_nodes', fromNodeId: node.id, toNodeId: createMenu.targetId },
+      ]);
+    } else {
+      success = applyOps([{ type: 'add_node', node }]);
+    }
     if (success) closeCreateMenu();
   }, [applyOps, closeCreateMenu, createMenu]);
 
   const fitView = useCallback(() => {
+    setFocusBadge(false);
     const rect = rootRef.current?.getBoundingClientRect();
     const nodes = projectRef.current.nodes.filter(node => node.isVisible !== false);
     if (!rect || nodes.length === 0) return;
@@ -1316,11 +1525,31 @@ export function InfiniteWorkflow({
     patchProject({ viewport: { x: rect.width / 2 - ((minX + maxX) / 2) * k, y: rect.height / 2 - ((minY + maxY) / 2) * k, k } });
   }, [patchProject]);
 
+  const zoomBy = useCallback((factor: number) => {
+    setFocusBadge(false);
+    const rect = rootRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const vp = viewportRef.current;
+    const k = Math.min(2.5, Math.max(0.12, vp.k * factor));
+    const cx = rect.width / 2;
+    const cy = rect.height / 2;
+    patchProject({ viewport: { x: cx - ((cx - vp.x) / vp.k) * k, y: cy - ((cy - vp.y) / vp.k) * k, k } });
+  }, [patchProject]);
+  const zoomIn = useCallback(() => zoomBy(1.2), [zoomBy]);
+  const zoomOut = useCallback(() => zoomBy(1 / 1.2), [zoomBy]);
+  const zoomReset = useCallback(() => {
+    setFocusBadge(false);
+    const rect = rootRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    patchProject({ viewport: { x: rect.width / 2, y: rect.height / 2, k: 1 } });
+  }, [patchProject]);
+
   const startPan = (clientX: number, clientY: number, pointerId: number) => {
     closeCreateMenu();
     setContextMenu(null);
     setSelectedConnectionId(null);
     setConnectionDrag(null);
+    setFocusBadge(false);
     interactionRef.current = {
       type: 'pan',
       pointerId,
@@ -1355,6 +1584,7 @@ export function InfiniteWorkflow({
 
   const startNodeDrag = (event: ReactPointerEvent<HTMLDivElement>, node: WorkflowNodeData) => {
     if (event.button !== 0) return;
+    if (focusAnimRef.current !== null) { window.cancelAnimationFrame(focusAnimRef.current); focusAnimRef.current = null; }
     if (tool === 'pan' || spacePressedRef.current) {
       event.stopPropagation();
       event.preventDefault();
@@ -1398,6 +1628,7 @@ export function InfiniteWorkflow({
 
   const onSurfacePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (!isTrueBackground(event.target)) return;
+    if (focusAnimRef.current !== null) { window.cancelAnimationFrame(focusAnimRef.current); focusAnimRef.current = null; }
     setContextMenu(null);
     closeCreateMenu();
     setSlashMenu(null);
@@ -1485,7 +1716,10 @@ export function InfiniteWorkflow({
     const result: { batchId: string; head: WorkflowNodeData; count: number }[] = [];
     for (const [batchId, group] of batchGroups) {
       if (group.length > 1 && !expandedBatches.has(batchId)) {
-        result.push({ batchId, head: group.find(n => n.batchIndex === 0) || group[0], count: group.length });
+        const root = group.find(n => n.batchIndex === 0) || group[0];
+        const primaryId = root?.metadata.primaryImageId;
+        const head = (primaryId && group.find(n => n.id === primaryId)) || root;
+        result.push({ batchId, head, count: group.length });
       }
     }
     return result;
@@ -1510,6 +1744,8 @@ export function InfiniteWorkflow({
     const onWheel = (event: WheelEvent) => {
       if (event.target instanceof Element && event.target.closest(BLOCKED_TARGET)) return;
       event.preventDefault();
+      if (focusAnimRef.current !== null) { window.cancelAnimationFrame(focusAnimRef.current); focusAnimRef.current = null; }
+      setFocusBadge(false);
       if (event.ctrlKey || wheelMode === 'zoom') {
         const rect = root.getBoundingClientRect();
         const world = screenToWorkflow(event.clientX, event.clientY);
@@ -1567,13 +1803,25 @@ export function InfiniteWorkflow({
         onFit={fitView}
         onToggleGrid={() => patchProject({ backgroundMode: projectRef.current.backgroundMode === 'none' ? 'dots' : projectRef.current.backgroundMode === 'dots' ? 'lines' : 'none' })}
         onOpenAgent={onOpenAgent}
+        agentOpen={agentOpen}
         wheelMode={wheelMode}
         setWheelMode={setWheelMode}
+        minimapOpen={minimapOpen}
+        onToggleMinimap={() => setMinimapOpen(open => !open)}
+        snapEnabled={snapEnabled}
+        onToggleSnap={() => setSnapEnabled(snap => !snap)}
+        edgesVisible={edgesVisible}
+        onToggleEdges={() => setEdgesVisible(v => !v)}
+        onAutoLayout={autoLayout}
+        zoomLevel={project.viewport.k}
+        onZoomIn={zoomIn}
+        onZoomOut={zoomOut}
+        onZoomReset={zoomReset}
       />
       <div ref={worldRef} className="workflow-world" style={{ transform: `translate(${project.viewport.x}px, ${project.viewport.y}px) scale(${project.viewport.k})` }}>
         <WorkflowConnections
           nodes={project.nodes.filter(node => node.isVisible !== false)}
-          connections={project.connections.filter(connection => {
+          connections={edgesVisible === false ? [] : project.connections.filter(connection => {
             const from = project.nodes.find(node => node.id === connection.fromNodeId);
             const to = project.nodes.find(node => node.id === connection.toNodeId);
             return from?.isVisible !== false && to?.isVisible !== false && !hiddenByBatch.has(connection.fromNodeId) && !hiddenByBatch.has(connection.toNodeId);
@@ -1621,8 +1869,20 @@ export function InfiniteWorkflow({
               setContextMenu(null);
               setSelectedConnectionId(null);
               createMenuOpenerRef.current = event.currentTarget;
-              interactionRef.current = { type: 'connection', pointerId: event.pointerId, sourceId: node.id };
-              setConnectionDrag({ sourceId: node.id, point: screenToWorkflow(event.clientX, event.clientY), targetId: null });
+              interactionRef.current = { type: 'connection', pointerId: event.pointerId, originId: node.id, direction: 'out' };
+              setConnectionDrag({ sourceId: node.id, point: screenToWorkflow(event.clientX, event.clientY), targetId: null, direction: 'out', local: localPoint(event.clientX, event.clientY) });
+            }}
+            onConnectStartTarget={event => {
+              if (event.button !== 0) return;
+              if (tool === 'pan' || spacePressedRef.current || node.isLocked) return;
+              event.preventDefault();
+              event.stopPropagation();
+              closeCreateMenu();
+              setContextMenu(null);
+              setSelectedConnectionId(null);
+              createMenuOpenerRef.current = event.currentTarget;
+              interactionRef.current = { type: 'connection', pointerId: event.pointerId, originId: node.id, direction: 'in' };
+              setConnectionDrag({ sourceId: node.id, point: screenToWorkflow(event.clientX, event.clientY), targetId: null, direction: 'in', local: localPoint(event.clientX, event.clientY) });
             }}
             onResizeStart={event => {
               if (event.button !== 0) return;
@@ -1650,6 +1910,9 @@ export function InfiniteWorkflow({
             onCollapseBatch={node.batchId && node.batchIndex === 0 && expandedBatches.has(node.batchId) ? () => toggleBatch(node.batchId!) : undefined}
             onDoubleClick={node.type === 'script' ? () => setScriptEditorNodeId(node.id) : undefined}
             onPreviewMedia={setPreviewNode}
+            onChangeTitle={title => { if (!node.isLocked) applyOps([{ type: 'update_node', id: node.id, patch: { title } }]); }}
+            renameSignal={renameSignal?.nodeId === node.id ? renameSignal.nonce : undefined}
+            onFocusNode={() => focusNode(node.id)}
           />
         ))}
         </AnimatePresence>
@@ -1659,7 +1922,7 @@ export function InfiniteWorkflow({
         <div data-workflow-overlay style={{ position: 'absolute', zIndex: 70, left: toolbarLeft, top: toolbarTop, transform: 'translateX(-50%)' }}>
           <WorkflowNodeToolbar
             nodes={selectedNodeData}
-            onCopy={ids => { clipboardRef.current = projectRef.current.nodes.filter(node => ids.includes(node.id)); setClipboardVersion(version => version + 1); }}
+            onCopy={ids => { const nodes = projectRef.current.nodes.filter(node => ids.includes(node.id)); clipboardRef.current = nodes; setClipboardVersion(version => version + 1); syncToSharedClipboard(nodes); }}
             onDelete={ids => applyOps([{ type: 'delete_nodes', ids }])}
             onExport={nodes => { void exportSelectedMedia(nodes); }}
             onRun={id => onRunNode(id)}
@@ -1687,6 +1950,7 @@ export function InfiniteWorkflow({
             audioTools={builtInAudioTools}
             audioToolBusy={Boolean(audioTool || audioToolBusy)}
             onReplaceMedia={(id, file) => { const node = projectRef.current.nodes.find(item => item.id === id); if (node) void replaceMedia(node, file); }}
+            onPreviewMedia={(id) => { const target = projectRef.current.nodes.find(n => n.id === id); if (target) setPreviewNode(target); }}
             onToggleFreeResize={id => { const node = projectRef.current.nodes.find(item => item.id === id); if (node) applyOps([{ type: 'update_node', id, patch: { freeResize: !node.freeResize } }]); }}
             onLayer={position => {
               const selected = projectRef.current.nodes.filter(node => selectedNodes.has(node.id));
@@ -1715,27 +1979,97 @@ export function InfiniteWorkflow({
           <WorkflowConfigPanel node={selectedNodeData[0]} nodes={project.nodes} connections={project.connections} onChange={metadata => applyOps([{ type: 'update_node', id: selectedNodeData[0].id, metadata: { ...selectedNodeData[0].metadata, ...metadata } }])} onRun={() => onRunNode(selectedNodeData[0].id)} onStop={onStopNode ? () => onStopNode(selectedNodeData[0].id) : undefined} />
         </div>}
         {selectedNodeData.length === 1 && ['image', 'video', 'text'].includes(selectedNodeData[0].type) && <div data-workflow-overlay style={{ position: 'absolute', zIndex: 69, left: promptLeft, top: promptTop }}>
-          <WorkflowNodePromptBar node={selectedNodeData[0]} nodes={project.nodes} connections={project.connections} t={t} theme={theme} language={language} userApiKeys={userApiKeys} modelPreference={modelPreference} dynamicModelOptions={dynamicModelOptions} onOpenSettings={onOpenSettings} onChange={metadata => applyOps([{ type: 'update_node', id: selectedNodeData[0].id, metadata: { ...selectedNodeData[0].metadata, ...metadata } }])} onRun={() => onRunNode(selectedNodeData[0].id)} onStop={onStopNode ? () => onStopNode(selectedNodeData[0].id) : undefined} focusSignal={promptFocusSignal} />
+          <WorkflowNodePromptBar node={selectedNodeData[0]} nodes={project.nodes} connections={project.connections} t={t} theme={theme} language={language} userApiKeys={userApiKeys} modelPreference={modelPreference} dynamicModelOptions={dynamicModelOptions} onOpenSettings={onOpenSettings} onEnhancePrompt={onEnhancePrompt} isEnhancingPrompt={isEnhancingPrompt} onChange={metadata => applyOps([{ type: 'update_node', id: selectedNodeData[0].id, metadata: { ...selectedNodeData[0].metadata, ...metadata } }])} onRun={() => onRunNode(selectedNodeData[0].id)} onStop={onStopNode ? () => onStopNode(selectedNodeData[0].id) : undefined} focusSignal={promptFocusSignal} />
         </div>}
       </>}
-      <WorkflowMiniMap nodes={project.nodes.filter(node => node.isVisible !== false)} viewport={project.viewport} onCenter={(x, y) => {
+      {minimapOpen && <WorkflowMiniMap nodes={project.nodes.filter(node => node.isVisible !== false)} viewport={project.viewport} onCenter={(x, y) => {
+        setFocusBadge(false);
         const rect = rootRef.current?.getBoundingClientRect();
         patchProject({ viewport: { ...viewportRef.current, x: (rect?.width || 1000) / 2 - x * viewportRef.current.k, y: (rect?.height || 700) / 2 - y * viewportRef.current.k } });
-      }} />
-      <div className="workflow-zoom" data-workflow-overlay>{Math.round(project.viewport.k * 100)}%</div>
+      }} />}
       {notice && <div role="status" aria-live="polite" data-workflow-overlay style={{ position: 'absolute', zIndex: 80, right: 14, top: 58, maxWidth: 320, padding: '7px 10px', border: '1px solid var(--wf-border)', borderRadius: 7, color: 'var(--wf-text)', background: 'var(--wf-panel)', fontSize: 12 }}>{notice}</div>}
-      {createMenu && <WorkflowCreateMenu state={createMenu} onCreate={createFromMenu} onClose={closeCreateMenu} />}
-      {contextMenu && (
+      <AnimatePresence>
+        {focusBadge && (
+          <motion.button
+            type="button"
+            data-workflow-overlay
+            aria-label="还原缩放"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 10 }}
+            transition={{ type: 'spring', stiffness: 420, damping: 30, mass: 0.7 }}
+            onPointerDown={event => event.stopPropagation()}
+            onClick={() => fitView()}
+            style={{ position: 'absolute', zIndex: 70, bottom: 28, left: '50%', translate: '-50% 0', display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 11px', border: 'none', borderRadius: 999, color: 'var(--wf-text-soft, var(--wf-text))', background: 'transparent', fontSize: 12, cursor: 'pointer' }}
+          >
+            <Maximize2 size={13} strokeWidth={2} />
+            还原缩放
+          </motion.button>
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {layoutToast && (
+          <motion.div
+            data-workflow-overlay
+            role="status"
+            aria-live="polite"
+            initial={{ opacity: 0, y: 14, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 14, scale: 0.96 }}
+            transition={{ type: 'spring', stiffness: 420, damping: 30, mass: 0.7 }}
+            onPointerDown={event => event.stopPropagation()}
+            style={{ position: 'absolute', zIndex: 80, bottom: 14, right: 14, display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 10px 6px 12px', borderRadius: 999, border: '1px solid var(--wf-border)', color: 'var(--wf-text)', background: 'var(--wf-panel)', fontSize: 12, boxShadow: 'var(--isl-shadow-sm, 0 4px 14px rgba(0,0,0,0.08))' }}
+          >
+            <span>已整理节点</span>
+            <button type="button" onClick={restoreLayout} aria-label="还原整理" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 9px', borderRadius: 999, border: '1px solid var(--wf-border)', background: 'transparent', color: 'var(--wf-text)', fontSize: 11, cursor: 'pointer' }}>
+              <Undo2 size={12} strokeWidth={2.4} />还原
+            </button>
+            <button type="button" onClick={() => setLayoutToast(null)} aria-label="保留整理结果" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 9px', borderRadius: 999, border: 'none', background: 'var(--wf-accent, #2563eb)', color: '#fff', fontSize: 11, cursor: 'pointer' }}>
+              <Check size={12} strokeWidth={2.6} />保留
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {connectionDrag && (
+          <motion.div
+            className="workflow-connection-bubble"
+            initial={{ opacity: 0, scale: 0.4 }}
+            animate={{ opacity: 1, scale: 1, x: connectionDrag.local.x, y: connectionDrag.local.y }}
+            exit={{ opacity: 0, scale: 0.4 }}
+            transition={{ type: 'spring', stiffness: 600, damping: 32, mass: 0.6 }}
+            data-direction={connectionDrag.direction}
+          >
+            <Plus size={16} strokeWidth={2.4} />
+          </motion.div>
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {createMenu && <WorkflowCreateMenu state={createMenu} onCreate={createFromMenu} onClose={closeCreateMenu} />}
+      </AnimatePresence>
+      {contextMenu && (() => {
+          const ctxNode = contextMenu.type === 'node' ? projectRef.current.nodes.find(n => n.id === contextMenu.id) : null;
+          const batch = ctxNode?.batchId ? batchGroups.get(ctxNode.batchId) : null;
+          const canSetPrimary = Boolean(ctxNode && ctxNode.type === 'image' && batch && batch.length > 1 && ctxNode.id !== (batch.find(n => n.batchIndex === 0)?.metadata.primaryImageId));
+          return (
         <WorkflowContextMenu
           state={contextMenu}
+          onSetPrimary={canSetPrimary ? (() => {
+            if (!ctxNode?.batchId) return;
+            applyOps([{ type: 'set_batch_primary', batchId: ctxNode.batchId, nodeId: ctxNode.id }]);
+            setContextMenu(null);
+          }) : undefined}
           onCopy={() => {
             if (contextMenu.type === 'node') {
-              clipboardRef.current = projectRef.current.nodes.filter(node => node.id === contextMenu.id);
+              const nodes = projectRef.current.nodes.filter(node => node.id === contextMenu.id);
+              clipboardRef.current = nodes;
               setClipboardVersion(version => version + 1);
+              syncToSharedClipboard(nodes);
             }
             setContextMenu(null);
           }}
           onRun={() => { if (contextMenu.type === 'node' && !projectRef.current.nodes.find(node => node.id === contextMenu.id)?.isLocked) onRunNode(contextMenu.id); setContextMenu(null); }}
+          onRename={contextMenu.type === 'node' && ctxNode && !ctxNode.isLocked ? (() => { setRenameSignal({ nodeId: ctxNode.id, nonce: Date.now() }); setContextMenu(null); }) : undefined}
           onDelete={() => {
             if (contextMenu.type === 'node' && !projectRef.current.nodes.find(node => node.id === contextMenu.id)?.isLocked) applyOps([{ type: 'delete_nodes', ids: [contextMenu.id] }]);
             else {
@@ -1745,7 +2079,8 @@ export function InfiniteWorkflow({
             setContextMenu(null);
           }}
         />
-      )}
+          );
+        })()}
       <WorkflowImageToolDialogs
         tool={imageTool}
         node={activeImageToolNode}

@@ -9,9 +9,8 @@ import { Toolbar } from './components/Toolbar';
 import { PromptBar } from './components/PromptBar';
 import { Loader } from './components/Loader';
 import { WorkspaceSidebar } from './components/WorkspaceSidebar';
-import type { Tool, Point, Element, ImageElement, PathElement, ShapeElement, TextElement, ArrowElement, UserEffect, LineElement, WheelAction, GroupElement, Board, VideoElement, AssetLibrary, AssetCategory, AssetItem, UserApiKey, ModelPreference, AIProvider, AICapability, PromptEnhanceMode, CharacterLockProfile, GenerationHistoryItem, ThemeMode, ChatAttachment, ImageFilters } from './types';
+import type { Tool, Point, Element, ImageElement, PathElement, ShapeElement, TextElement, ArrowElement, UserEffect, LineElement, WheelAction, GroupElement, Board, VideoElement, AssetLibrary, AssetItem, AssetFolder, UserApiKey, ModelPreference, AIProvider, AICapability, PromptEnhanceMode, CharacterLockProfile, GenerationHistoryItem, ThemeMode, ChatAttachment, ImageFilters } from './types';
 import { DEFAULT_IMAGE_FILTERS } from './types';
-import { AssetLibraryPanel } from './components/AssetLibraryPanel';
 import { ImageFilterPanel, buildCssFilter, temperatureMatrix, sharpenKernel } from './components/ImageFilterPanel';
 import { ElementToolbar } from './components/ElementToolbar';
 import { shouldRenderMediaInKonva } from './utils/canvasKonvaMediaEligibility';
@@ -23,7 +22,7 @@ const RightPanel = React.lazy(() => import('./components/RightPanel').then(m => 
 const WorkflowWorkspace = React.lazy(() => import('./components/workflow/WorkflowWorkspace').then(m => ({ default: m.WorkflowWorkspace })));
 const AssetAddModal = React.lazy(() => import('./components/AssetAddModal').then(m => ({ default: m.AssetAddModal })));
 const ABCompareOverlay = React.lazy(() => import('./components/ABCompareOverlay').then(m => ({ default: m.ABCompareOverlay })));
-import { loadAssetLibrary, addAsset, removeAsset, renameAsset, loadAssetLibraryAsync, saveAssetLibraryAsync } from './utils/assetStorage';
+import { addAsset, removeAsset, renameAsset, addFolder, renameFolder, removeFolder, loadAssetLibraryAsync, saveAssetLibraryAsync, updateAssetTags, removeAssetFromFolder, batchRemoveAssets, batchAddAssetsToFolder, batchAddAssetTags } from './utils/assetStorage';
 import { loadGenerationHistoryAsync, saveGenerationHistoryAsync } from './utils/generationHistory';
 import { diagnoseKeyCapabilities, inferProviderFromModel, reversePromptStreamWithProvider, DEFAULT_PROVIDER_MODELS, generateImageWithProvider, generateVideoWithProvider, inferCapabilityFromModelName, executeUnifiedIgnition } from './services/aiGateway';
 import type { MultimodalSlot } from './services/aiGateway';
@@ -49,6 +48,7 @@ import { AppShell } from './components/AppShell';
 import { StudioTopMenu, type StudioMenuModel } from './components/studio/StudioTopMenu';
 import './styles/generation.css';
 import { useWorkspaceStore } from './stores/useWorkspaceStore';
+import { useClipboardStore, type ClipItem } from './stores/useClipboardStore';
 import { useWorkflowStore } from './components/workflow/store';
 import { useRuntimeStore } from './stores/useRuntimeStore';
 import type { CanvasElement, ElementGenerationState } from './types';
@@ -365,6 +365,7 @@ const App: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const toast = useToast();
     const nodeGenerationRequestsRef = useRef(new Map<string, { controller: AbortController; timeoutId: number }>());
+    const canvasMousePosRef = useRef({ x: 0, y: 0 });
     const [isSettingsPanelOpen, setIsSettingsPanelOpen] = useState(false);
     const [isLayerMinimized, setIsLayerMinimized] = useState(() => {
         const saved = localStorage.getItem('layerPanelMinimized');
@@ -384,7 +385,7 @@ const App: React.FC = () => {
     const [filterPanelElementId, setFilterPanelElementId] = useState<string | null>(null);
     const [outpaintMenuId, setOutpaintMenuId] = useState<string | null>(null);
     const [contextMenu, setContextMenu] = useState<{ x: number; y: number; elementId: string | null } | null>(null);
-    const [assetLibrary, setAssetLibrary] = useState<AssetLibrary>({ character: [], scene: [], prop: [] });
+    const [assetLibrary, setAssetLibrary] = useState<AssetLibrary>({ folders: [], items: [] });
 
     useEffect(() => () => {
         nodeGenerationRequestsRef.current.forEach(request => {
@@ -522,6 +523,9 @@ const App: React.FC = () => {
         promptVisible: boolean;
     } | null>(null);
     const [inpaintPrompt, setInpaintPrompt] = useState('');
+
+    // Art mode state
+    
 
     // 鈹€鈹€ Zustand store: shell-level state 鈹€鈹€
     const language = useWorkspaceStore(s => s.language);
@@ -1088,10 +1092,10 @@ const App: React.FC = () => {
             ? 'image' as const
             : mimeType.startsWith('video/') ? 'video' as const : null;
         return [
-            ...Object.entries(assetLibrary).flatMap(([category, items]) => items.flatMap(item => {
+            ...assetLibrary.items.flatMap(item => {
                 const type = mediaType(item.mimeType);
-                return type ? [{ id: `asset:${item.id}`, source: 'asset' as const, sourceId: item.id, name: item.name || '我的素材', href: item.dataUrl, mimeType: item.mimeType, type, category: category as AssetCategory, width: item.width, height: item.height, createdAt: item.createdAt, prompt: item.prompt }] : [];
-            })),
+                return type ? [{ id: `asset:${item.id}`, source: 'asset' as const, sourceId: item.id, name: item.name || '我的素材', href: item.dataUrl, mimeType: item.mimeType, type, folderIds: item.folderIds, tags: item.tags, width: item.width, height: item.height, createdAt: item.createdAt, prompt: item.prompt }] : [];
+            }),
             ...generationHistory.flatMap(item => {
                 const type = mediaType(item.mimeType);
                 return type ? [{ id: `history:${item.id}`, source: 'history' as const, sourceId: item.id, name: item.name || item.prompt || '生成历史', href: item.dataUrl, mimeType: item.mimeType, type, width: item.width, height: item.height, createdAt: item.createdAt, prompt: item.prompt }] : [];
@@ -1469,7 +1473,7 @@ const App: React.FC = () => {
         });
     }, [activeBoardId]);
 
-    // Handle drop from AssetLibraryPanel (after commitAction and getCanvasPoint are defined)
+    // Handle drop from asset library (after commitAction and getCanvasPoint are defined)
     const handleAssetDropRef = useRef<((e: React.DragEvent) => void) | null>(null);
     handleAssetDropRef.current = (e: React.DragEvent) => {
         const payload = e.dataTransfer.getData('text/plain');
@@ -1524,6 +1528,9 @@ const App: React.FC = () => {
         setEditingElement(null);
     }, [commitAction, editingElement]);
 
+    const clipboardCopyRef = useRef<() => Promise<void>>(async () => {});
+    const clipboardPasteRef = useRef<() => Promise<void>>(async () => {});
+
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             if (editingElement) {
@@ -1536,6 +1543,20 @@ const App: React.FC = () => {
 
             if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); handleUndo(); return; }
             if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.shiftKey && e.key === 'z'))) { e.preventDefault(); handleRedo(); return; }
+
+            if (!isTyping && (e.ctrlKey || e.metaKey) && e.key === 'c' && selectedElementIds.length > 0) {
+                e.preventDefault();
+                void clipboardCopyRef.current();
+                return;
+            }
+            if (!isTyping && (e.ctrlKey || e.metaKey) && e.key === 'v') {
+                const clipItems = useClipboardStore.getState().items;
+                if (clipItems.length > 0) {
+                    e.preventDefault();
+                    void clipboardPasteRef.current();
+                    return;
+                }
+            }
             
             if (!isTyping && (e.key === 'Delete' || e.key === 'Backspace') && selectedElementIds.length > 0) {
                 e.preventDefault();
@@ -1752,6 +1773,106 @@ const App: React.FC = () => {
         });
         setSelectedElementIds(prev => prev.filter(selId => selId !== id));
     };
+
+    const handleClipboardCopy = useCallback(async () => {
+        const mediaElements = elementsRef.current.filter(
+            (el): el is ImageElement | VideoElement =>
+                selectedElementIds.includes(el.id) && (el.type === 'image' || el.type === 'video')
+        );
+        if (mediaElements.length === 0) return;
+        const items: ClipItem[] = [];
+        for (const el of mediaElements) {
+            try {
+                const response = await fetch(el.href);
+                const blob = await response.blob();
+                items.push({
+                    id: generateId(),
+                    kind: el.type,
+                    blob,
+                    mimeType: el.mimeType,
+                    name: el.name || `canvas-${el.type}`,
+                    naturalWidth: el.width,
+                    naturalHeight: el.height,
+                    sourceView: 'canvas',
+                });
+            } catch { /* skip unreadable */ }
+        }
+        if (items.length === 0) return;
+        useClipboardStore.getState().setItems(items);
+        const firstImage = items.find(item => item.kind === 'image');
+        if (firstImage && navigator.clipboard?.write) {
+            try {
+                const ci = new ClipboardItem({ [firstImage.mimeType]: firstImage.blob });
+                await navigator.clipboard.write([ci]);
+            } catch { /* permission or format issue — app-internal clipboard still works */ }
+        }
+    }, [selectedElementIds]);
+
+    const handleClipboardPaste = useCallback(async () => {
+        const clipItems = useClipboardStore.getState().items;
+        const svgBounds = svgRef.current?.getBoundingClientRect();
+        const mouse = canvasMousePosRef.current;
+        const inBounds = svgBounds && mouse.x >= svgBounds.left && mouse.x <= svgBounds.right && mouse.y >= svgBounds.top && mouse.y <= svgBounds.bottom;
+        const pastePoint = inBounds
+            ? getCanvasPoint(mouse.x, mouse.y)
+            : getCanvasPoint(svgBounds ? svgBounds.left + svgBounds.width / 2 : 0, svgBounds ? svgBounds.top + svgBounds.height / 2 : 0);
+
+        if (clipItems.length > 0) {
+            const newIds: string[] = [];
+            for (let i = 0; i < clipItems.length; i++) {
+                const item = clipItems[i];
+                const offset = i * 20 / zoom;
+                const file = new File([item.blob], item.name, { type: item.mimeType });
+                if (item.kind === 'image') {
+                    try {
+                        const { dataUrl, mimeType, width, height } = await validateAndResizeImage(file);
+                        const id = generateId();
+                        const newImage: ImageElement = {
+                            id, type: 'image', name: item.name,
+                            x: pastePoint.x - width / 2 + offset, y: pastePoint.y - height / 2 + offset,
+                            width, height, href: dataUrl, mimeType,
+                        };
+                        commitAction(prev => [...prev, newImage]);
+                        newIds.push(id);
+                    } catch { /* skip */ }
+                } else {
+                    const href = URL.createObjectURL(item.blob);
+                    const meta = await readLocalVideoMetadata(href);
+                    const maxWidth = 960;
+                    const scale = meta.width > maxWidth ? maxWidth / meta.width : 1;
+                    const w = Math.max(160, Math.round(meta.width * scale));
+                    const h = Math.max(90, Math.round(meta.height * scale));
+                    const id = generateId();
+                    const newVideo: VideoElement = {
+                        id, type: 'video', name: item.name,
+                        x: pastePoint.x - w / 2 + offset, y: pastePoint.y - h / 2 + offset,
+                        width: w, height: h, href, mimeType: item.mimeType, durationSec: meta.durationSec,
+                    };
+                    commitAction(prev => [...prev, newVideo]);
+                    newIds.push(id);
+                }
+            }
+            if (newIds.length) setSelectedElementIds(newIds);
+            return;
+        }
+
+        try {
+            const clipboard = navigator.clipboard;
+            const navItems = clipboard?.read ? await clipboard.read() : [];
+            for (const navItem of navItems) {
+                const imageType = navItem.types.find(type => type.startsWith('image/'));
+                if (imageType) {
+                    const blob = await navItem.getType(imageType);
+                    const file = new File([blob], `clipboard.${imageType.split('/')[1] || 'png'}`, { type: imageType });
+                    void handleAddMediaElement(file);
+                    return;
+                }
+            }
+        } catch { /* no clipboard permission or no image */ }
+    }, [commitAction, getCanvasPoint, handleAddMediaElement, readLocalVideoMetadata, zoom]);
+
+    clipboardCopyRef.current = handleClipboardCopy;
+    clipboardPasteRef.current = handleClipboardPaste;
 
     const handleCopyElement = (elementToCopy: Element) => {
         commitAction(prev => {
@@ -2119,14 +2240,6 @@ const App: React.FC = () => {
         e.dataTransfer.effectAllowed = 'copy';
     }, []);
     
-    const handleDragOver = useCallback((e: React.DragEvent) => { e.preventDefault(); }, []);
-    const handleDrop = useCallback((e: React.DragEvent) => { 
-        e.preventDefault(); 
-        const text = e.dataTransfer.getData('text/plain');
-        if (text && handleAssetDropRef.current) { handleAssetDropRef.current(e); return; }
-        if (e.dataTransfer.files && e.dataTransfer.files[0]) { handleAddMediaElement(e.dataTransfer.files[0]); }
-    }, [handleAddMediaElement]);
-
     const handlePropertyChange = (elementId: string, updates: Partial<Element>) => {
         commitAction(prev => prev.map(el => {
             if (el.id === elementId) {
@@ -2268,6 +2381,12 @@ const App: React.FC = () => {
         setContextMenu({ x: e.clientX, y: e.clientY, elementId: elementId || null });
     };
 
+
+    useEffect(() => {
+        const onMove = (e: MouseEvent) => { canvasMousePosRef.current = { x: e.clientX, y: e.clientY }; };
+        window.addEventListener('mousemove', onMove);
+        return () => window.removeEventListener('mousemove', onMove);
+    }, []);
 
     useEffect(() => {
         const handlePaste = (e: ClipboardEvent) => {
@@ -3536,10 +3655,16 @@ const App: React.FC = () => {
     }, [elements, isNodePromptActive, selectedNodePromptElement]);
 
     const capabilityDiagnosis = diagnoseKeyCapabilities(userApiKeys);
+    const workflowCreateProject = useWorkflowStore(s => s.createProject);
+    const workflowDeleteProjects = useWorkflowStore(s => s.deleteProjects);
+    const workflowRenameProject = useWorkflowStore(s => s.renameProject);
+    const workflowSetActiveProject = useWorkflowStore(s => s.setActiveProject);
+    const activeWorkflowIndex = Math.max(0, workflowProjects.findIndex(project => project.id === activeWorkflowProjectId));
     const studioMenuModel: StudioMenuModel = {
         mode: activeView,
-        title: activeView === 'canvas' ? activeBoard.name : activeWorkflowTitle,
-        theme: resolvedTheme,
+        title: activeView === 'art' ? (language === 'zho' ? 'Art 工作台' : 'Art Studio') : activeWorkflowTitle,
+        themeMode,
+        resolvedTheme,
         language,
         status: capabilityDiagnosis.missing.length === 0
             ? {
@@ -3554,10 +3679,18 @@ const App: React.FC = () => {
             },
         actions: {
             changeMode: setActiveView,
-            toggleTheme: () => setThemeMode(resolvedTheme === 'dark' ? 'light' : 'dark'),
+            setThemeMode,
             toggleLanguage: () => setLanguage(language === 'zho' ? 'en' : 'zho'),
             openSettings: () => setIsSettingsPanelOpen(true),
         },
+        projectList: activeView === 'workflow' ? workflowProjects.map(project => ({ id: project.id, title: project.title })) : undefined,
+        activeProjectIndex: activeView === 'workflow' ? activeWorkflowIndex : undefined,
+        projectActions: activeView === 'workflow' ? {
+            create: () => workflowCreateProject(language === 'zho' ? '未命名工作流' : 'Untitled workflow'),
+            remove: () => { if (activeWorkflowProjectId) workflowDeleteProjects([activeWorkflowProjectId]); },
+            rename: (newTitle: string) => { if (activeWorkflowProjectId) workflowRenameProject(activeWorkflowProjectId, newTitle); },
+            setActiveByIndex: (index: number) => { const target = workflowProjects[index]; if (target) workflowSetActiveProject(target.id); },
+        } : undefined,
     };
 
     if (activeView === 'workflow') {
@@ -3578,20 +3711,25 @@ const App: React.FC = () => {
                             onRunNode={handleRunWorkflowNode}
                             onStopNode={(projectId, nodeId) => { cancelWorkflowGeneration(projectId, nodeId); }}
                             onSaveWorkflowMedia={handleSaveWorkflowMedia}
-                            onRenameSharedMedia={(media, name) => {
-                                if (media.source !== 'asset' || !media.category || !media.sourceId) return;
-                                setAssetLibrary(prev => renameAsset(prev, media.category!, media.sourceId!, name));
-                            }}
-                            onRemoveSharedMedia={media => {
-                                if (media.source !== 'asset' || !media.category || !media.sourceId) return;
-                                setAssetLibrary(prev => removeAsset(prev, media.category!, media.sourceId!));
-                            }}
+                            assetLibrary={assetLibrary}
+                            onRenameAsset={(id, name) => setAssetLibrary(prev => renameAsset(prev, id, name))}
+                            onRemoveAsset={id => setAssetLibrary(prev => removeAsset(prev, id))}
+                            onUpdateAssetTags={(id, tags) => setAssetLibrary(prev => updateAssetTags(prev, id, tags))}
+                            onRemoveAssetFromFolder={(itemId, folderId) => setAssetLibrary(prev => removeAssetFromFolder(prev, itemId, folderId))}
+                            onBatchRemoveAssets={ids => setAssetLibrary(prev => batchRemoveAssets(prev, ids))}
+                            onBatchAddAssetsToFolder={(ids, folderId) => setAssetLibrary(prev => batchAddAssetsToFolder(prev, ids, folderId))}
+                            onBatchAddAssetTags={(ids, tags) => setAssetLibrary(prev => batchAddAssetTags(prev, ids, tags))}
+                            onCreateFolder={(parentId, name) => setAssetLibrary(prev => addFolder(prev, { id: generateId(), name, parentId, createdAt: Date.now() }))}
+                            onRenameFolder={(id, name) => setAssetLibrary(prev => renameFolder(prev, id, name))}
+                            onRemoveFolder={(id, deleteItems) => setAssetLibrary(prev => removeFolder(prev, id, deleteItems))}
                             onOnlineAgentTurn={handleWorkflowOnlineAgentTurn}
                             t={t}
                             userApiKeys={userApiKeys}
                             modelPreference={modelPreference}
                             dynamicModelOptions={dynamicModelOptions}
                             onOpenSettings={() => setIsSettingsPanelOpen(true)}
+                            onEnhancePrompt={handleEnhancePrompt}
+                            isEnhancingPrompt={isEnhancingPrompt}
                         />
                     </Suspense>
                 }
@@ -3600,13 +3738,7 @@ const App: React.FC = () => {
                         <CanvasSettings
                             isOpen={isSettingsPanelOpen}
                             onClose={() => setIsSettingsPanelOpen(false)}
-                            language={language}
-                            setLanguage={setLanguage}
-                            themeMode={themeMode}
                             resolvedTheme={resolvedTheme}
-                            setThemeMode={setThemeMode}
-                            wheelAction={wheelAction}
-                            setWheelAction={setWheelAction}
                             userApiKeys={userApiKeys}
                             onAddApiKey={handleAddApiKey}
                             onDeleteApiKey={handleDeleteApiKey}
@@ -3628,1128 +3760,7 @@ const App: React.FC = () => {
         );
     }
 
-    return (
-        <AppShell
-            themeBackground={themePalette.appBackground}
-            onDragOver={handleDragOver}
-            onDrop={handleDrop}
-            topBar={
-                <StudioTopMenu model={studioMenuModel} />
-            }
-            leftSidebar={
-                <WorkspaceSidebar
-                isOpen={!isLayerMinimized}
-                onToggle={() => setIsLayerMinimized(prev => !prev)}
-                outerGap={chromeMetrics.outerGap}
-                panelWidth={chromeMetrics.sidebarWidth}
-                boards={boards}
-                activeBoardId={activeBoardId}
-                onSwitchBoard={setActiveBoardId}
-                onAddBoard={handleAddBoard}
-                onRenameBoard={handleRenameBoard}
-                onDuplicateBoard={handleDuplicateBoard}
-                onDeleteBoard={handleDeleteBoard}
-                generateBoardThumbnail={(els) => generateBoardThumbnail(els, canvasBackgroundColor)}
-                elements={elements}
-                selectedElementIds={selectedElementIds}
-                onSelectElement={(id, additive) => {
-                    if (!id) {
-                        setSelectedElementIds([]);
-                        return;
-                    }
-                    setSelectedElementIds(prev => additive
-                        ? (prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id])
-                        : [id]);
-                }}
-                onToggleVisibility={id => handlePropertyChange(id, { isVisible: !(elements.find(el => el.id === id)?.isVisible ?? true) })}
-                onToggleLock={id => handlePropertyChange(id, { isLocked: !(elements.find(el => el.id === id)?.isLocked ?? false) })}
-                onRenameElement={(id, name) => handlePropertyChange(id, { name })}
-                onReorder={(draggedId, targetId, position) => {
-                    commitAction(prev => {
-                        const newElements = [...prev];
-                        const draggedIndex = newElements.findIndex(el => el.id === draggedId);
-                        if (draggedIndex === -1) return prev;
-
-                        const [draggedItem] = newElements.splice(draggedIndex, 1);
-                        const targetIndex = newElements.findIndex(el => el.id === targetId);
-                        if (targetIndex === -1) {
-                            newElements.push(draggedItem);
-                            return newElements;
-                        }
-
-                        const finalIndex = position === 'before' ? targetIndex : targetIndex + 1;
-                        newElements.splice(finalIndex, 0, draggedItem);
-                        return newElements;
-                    });
-                }}
-                onElementDoubleClick={handleElementDoubleClickFocus}
-            />
-            }
-            rightSidebar={
-                <Suspense fallback={<div className="h-full w-full flex items-center justify-center opacity-40 text-sm">Loading...</div>}>
-                <RightPanel
-                theme={resolvedTheme}
-                isMinimized={isInspirationMinimized}
-                onToggleMinimize={() => setIsInspirationMinimized(prev => !prev)}
-                outerGap={chromeMetrics.outerGap}
-                defaultWidth={chromeMetrics.rightPanelDefaultWidth}
-                minWidth={chromeMetrics.rightPanelMinWidth}
-                widthCap={chromeMetrics.rightPanelWidthCap}
-                compactMode={chromeMetrics.isTablet}
-                library={assetLibrary}
-                generationHistory={generationHistory}
-                onRemove={(cat, id) => setAssetLibrary(prev => removeAsset(prev, cat, id))}
-                onRename={(cat, id, name) => setAssetLibrary(prev => renameAsset(prev, cat, id, name))}
-                onWidthChange={setRightPanelWidth}
-                onReversePrompt={handleReversePrompt}
-                onCreateImage={async (prompt, name) => {
-                    const runtimeApi = getFlovartRuntimeApi();
-                    const result = await runtimeApi?.generate?.image?.({ prompt, name });
-                    if (!result || !result.id) throw new Error(getRuntimeErrorMessage(result, 'Agent image generation failed'));
-                }}
-                onCreateVideo={async (prompt, sourceImageIds) => {
-                    const runtimeApi = getFlovartRuntimeApi();
-                    const result = await runtimeApi?.generate?.video?.({ prompt, sourceImageIds });
-                    if (!result || !result.id) throw new Error(getRuntimeErrorMessage(result, 'Agent video generation failed'));
-                }}
-                runtimeStage={progressMessage}
-                runtimeJobs={Object.values(runtimeJobsRef.current)
-                    .map(job => ({
-                        jobId: job.jobId,
-                        command: job.command,
-                        status: job.status,
-                        progress: { pct: job.progress?.pct ?? 0, stage: job.progress?.stage ?? '' },
-                        updatedAt: job.updatedAt,
-                    }))}
-                elements={elements}
-                selectedElementIds={selectedElementIds}
-                setSelectedElementIds={setSelectedElementIds}
-                commitAction={commitAction}
-                handleGenerate={handleGenerate}
-                userApiKeys={userApiKeys}
-                modelPreference={modelPreference}
-                pendingChatAttachments={pendingChatAttachments}
-                onConsumeChatAttachments={() => setPendingChatAttachments([])}
-            />
-            </Suspense>
-            }
-            bottomDock={
-                <Toolbar
-                    t={t}
-                    theme={resolvedTheme}
-                    compactScale={chromeMetrics.toolbarScale}
-                    topOffset={chromeMetrics.outerGap}
-                    leftClosed={chromeMetrics.toolbarLeftClosed}
-                    leftOpen={chromeMetrics.toolbarLeftOpen}
-                    activeTool={activeTool}
-                    setActiveTool={setActiveTool}
-                    drawingOptions={drawingOptions}
-                    setDrawingOptions={setDrawingOptions}
-                    onUpload={handleAddMediaElement}
-                    isCropping={!!croppingState}
-                    onConfirmCrop={handleConfirmCrop}
-                    onCancelCrop={handleCancelCrop}
-                    onSettingsClick={() => setIsSettingsPanelOpen(true)}
-                    onLayersClick={() => setIsLayerMinimized(prev => !prev)}
-                    onBoardsClick={() => setIsLayerMinimized(prev => !prev)}
-                    onAssetsClick={() => setIsInspirationMinimized(prev => !prev)}
-                    onUndo={handleUndo}
-                    onRedo={handleRedo}
-                    isLayerPanelExpanded={!isLayerMinimized}
-                    canUndo={historyIndex > 0}
-                    canRedo={historyIndex < history.length - 1}
-                    orientation="horizontal"
-                    embedded
-                    wheelAction={wheelAction}
-                    setWheelAction={setWheelAction}
-                />
-            }
-            overlays={<>
-                {isLoading && <Loader progressMessage={progressMessage} batchTotal={batchCount} batchDone={recentlyCompleted.size} />}
-                <ToastStack toasts={toast.toasts} onDismiss={toast.dismiss} />
-                {error && (
-                    <div className="absolute top-16 left-1/2 -translate-x-1/2 z-50 p-3 bg-red-100 border border-red-400 text-red-700 rounded-md shadow-lg flex items-center max-w-lg">
-                        <span className="flex-grow">{error}</span>
-                        <button onClick={() => setError(null)} className="ml-4 p-1 rounded-full hover:bg-red-200" title={t('common.close')} aria-label={t('common.close')}>
-                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd"></path></svg>
-                        </button>
-                    </div>
-                )}
-                {modelAutoSwitchNotice && (
-                    <div className="absolute top-16 left-1/2 -translate-x-1/2 z-50 p-3 bg-blue-100 border border-blue-400 text-blue-700 rounded-md shadow-lg flex items-center max-w-lg animate-fade-in">
-                        <span className="mr-2">馃攧</span>
-                        <span className="flex-grow text-sm">{modelAutoSwitchNotice}</span>
-                    </div>
-                )}
-            </>}
-            main={<>
-            <Suspense fallback={<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm"><div className="rounded-xl bg-neutral-800 px-6 py-4 text-sm text-white/60">Loading Settings...</div></div>}>
-                <CanvasSettings
-                    isOpen={isSettingsPanelOpen}
-                    onClose={() => setIsSettingsPanelOpen(false)}
-                    language={language}
-                    setLanguage={setLanguage}
-                    themeMode={themeMode}
-                    resolvedTheme={resolvedTheme}
-                    setThemeMode={setThemeMode}
-                    wheelAction={wheelAction}
-                    setWheelAction={setWheelAction}
-                    userApiKeys={userApiKeys}
-                    onAddApiKey={handleAddApiKey}
-                    onDeleteApiKey={handleDeleteApiKey}
-                    onUpdateApiKey={handleUpdateApiKey}
-                    onSetDefaultApiKey={handleSetDefaultApiKey}
-                    modelPreference={modelPreference}
-                    setModelPreference={setModelPreference}
-                    modelPreferenceSavedAt={modelPreferenceSavedAt}
-                    modelPreferenceSaveError={modelPreferenceSaveError}
-                    t={t}
-                    clearKeysOnExit={clearKeysOnExit}
-                    setClearKeysOnExit={setClearKeysOnExit}
-                    usageSummary={usageSummaryMap}
-                    dynamicModelOptions={dynamicModelOptions}
-                />
-            </Suspense>
-            {/* ============ 图层蒙版编辑 (Layer Mask) ============ */}
-
-            {/* ============ A/B 对比弹窗 ============ */}
-            {abCompare && (
-                <Suspense fallback={<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm"><div className="rounded-xl bg-neutral-800 px-6 py-4 text-sm text-white/60">Loading...</div></div>}>
-                <ABCompareOverlay
-                    imageA={abCompare.imageA}
-                    imageB={abCompare.imageB}
-                    onClose={() => setAbCompare(null)}
-                    theme={resolvedTheme}
-                />
-                </Suspense>
-            )}
-
-            {/* ============ 图层蒙版编辑 (Layer Mask) ============ */}
-            {maskEditingId && (() => {
-                const maskEl = elements.find(e => e.id === maskEditingId) as ImageElement | undefined;
-                if (!maskEl) return null;
-                return (
-                    <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[9998] flex items-center gap-3 px-4 py-2.5 rounded-2xl shadow-2xl border"
-                         style={{ background: resolvedTheme === 'dark' ? '#1C2333' : '#ffffff', borderColor: resolvedTheme === 'dark' ? '#2A3142' : '#e5e7eb' }}>
-                        <span className={`text-sm font-medium ${resolvedTheme === 'dark' ? 'text-white' : 'text-gray-900'}`}>蒙版编辑</span>
-                        <div className="h-5 w-px bg-gray-300" />
-                        <button onClick={() => setMaskBrushMode('erase')}
-                            className={`px-3 py-1 rounded-lg text-xs font-medium transition ${maskBrushMode === 'erase' ? 'bg-red-500 text-white' : (resolvedTheme === 'dark' ? 'bg-[#2A3142] text-gray-300' : 'bg-gray-100 text-gray-600')}`}>
-                            擦除
-                        </button>
-                        <button onClick={() => setMaskBrushMode('reveal')}
-                            className={`px-3 py-1 rounded-lg text-xs font-medium transition ${maskBrushMode === 'reveal' ? 'bg-green-500 text-white' : (resolvedTheme === 'dark' ? 'bg-[#2A3142] text-gray-300' : 'bg-gray-100 text-gray-600')}`}>
-                            恢复
-                        </button>
-                        <div className="h-5 w-px bg-gray-300" />
-                        <label className={`text-xs ${resolvedTheme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>笔刷</label>
-                        <input type="range" min="5" max="100" value={maskBrushSize} onChange={e => setMaskBrushSize(Number(e.target.value))} className="w-20 h-1 accent-blue-500" />
-                        <span className={`text-xs w-6 text-center ${resolvedTheme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>{maskBrushSize}</span>
-                        <div className="h-5 w-px bg-gray-300" />
-                        <button onClick={clearMask}
-                            className={`px-3 py-1 rounded-lg text-xs font-medium transition ${resolvedTheme === 'dark' ? 'bg-[#2A3142] hover:bg-[#3A4458] text-gray-300' : 'bg-gray-100 hover:bg-gray-200 text-gray-600'}`}>
-                            清除蒙版
-                        </button>
-                        <button onClick={commitMask}
-                            className="px-3 py-1 rounded-lg text-xs font-medium bg-blue-500 hover:bg-blue-600 text-white transition">
-                            完成
-                        </button>
-                        <button onClick={cancelMask}
-                            className={`px-3 py-1 rounded-lg text-xs font-medium transition ${resolvedTheme === 'dark' ? 'bg-[#2A3142] hover:bg-[#3A4458] text-gray-300' : 'bg-gray-100 hover:bg-gray-200 text-gray-600'}`}>
-                            鍙栨秷
-                        </button>
-                    </div>
-                );
-            })()}
-
-            {/* ============ 鎵归噺鐢熸垚缁撴灉对比弹窗 ============ */}
-            {batchResults && (
-                <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm"
-                     onClick={() => setBatchResults(null)}>
-                    <div className={`relative rounded-2xl shadow-2xl p-6 max-w-[90vw] max-h-[90vh] overflow-auto ${resolvedTheme === 'dark' ? 'bg-[#1C2333] text-white' : 'bg-white text-gray-900'}`}
-                         onClick={e => e.stopPropagation()}>
-                        <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-lg font-semibold">批量生成结果 - 选择最佳方案</h3>
-                            <div className="flex gap-2">
-                                <button onClick={handleSelectAllBatchResults}
-                                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${resolvedTheme === 'dark' ? 'bg-[#2A3142] hover:bg-[#3A4458] text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}`}>
-                                    鍏ㄩ儴鏀惧叆鐢诲竷
-                                </button>
-                                <button onClick={() => setBatchResults(null)}
-                                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${resolvedTheme === 'dark' ? 'bg-[#2A3142] hover:bg-[#3A4458] text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}`}>
-                                    鍏抽棴
-                                </button>
-                            </div>
-                        </div>
-                        <p className={`text-sm mb-4 ${resolvedTheme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
-                            鎻愮ず璇? {batchResults.prompt}
-                        </p>
-                        <div className={`grid gap-4 ${batchResults.images.length <= 2 ? 'grid-cols-2' : 'grid-cols-2'}`}>
-                            {batchResults.images.map((img, idx) => (
-                                <div key={idx}
-                                     className={`group relative rounded-xl overflow-hidden border-2 transition cursor-pointer hover:scale-[1.02] ${resolvedTheme === 'dark' ? 'border-[#2A3142] hover:border-blue-500' : 'border-gray-200 hover:border-blue-400'}`}
-                                     onClick={() => handleSelectBatchResult(img)}>
-                                    <img src={img.href} alt={`方案 ${idx + 1}`}
-                                         className="w-full h-auto max-h-[40vh] object-contain"
-                                         style={{ background: resolvedTheme === 'dark' ? '#0D1117' : '#F9FAFB' }} />
-                                    <div className={`absolute bottom-0 inset-x-0 p-3 bg-gradient-to-t ${resolvedTheme === 'dark' ? 'from-black/80' : 'from-black/50'} to-transparent opacity-0 group-hover:opacity-100 transition`}>
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-white text-sm font-medium">方案 {idx + 1}</span>
-                                            <span className="text-white/80 text-xs">{img.width}脳{img.height}</span>
-                                        </div>
-                                        <button className="mt-2 w-full py-1.5 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-xs font-medium transition">
-                                            閫夋嫨姝ゆ柟妗?
-                                        </button>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* 鏂扮敤鎴峰紩瀵煎脊绐?鈥?鏃?API Key 鏃惰嚜鍔ㄥ嚭鐜?*/}
-            {showOnboarding && (
-                <Suspense fallback={<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm"><div className="rounded-xl bg-neutral-800 px-6 py-4 text-sm text-white/60">Loading...</div></div>}>
-                <OnboardingWizard
-                    isOpen={showOnboarding}
-                    onClose={() => {
-                        setShowOnboarding(false);
-                        localStorage.setItem('onboarding.skipped', 'true');
-                    }}
-                    onAddApiKey={handleAddApiKey}
-                    resolvedTheme={resolvedTheme}
-                />
-                </Suspense>
-            )}
-            
-            {addAssetModal?.open && (
-                <Suspense fallback={<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm"><div className="rounded-xl bg-neutral-800 px-6 py-4 text-sm text-white/60">Loading...</div></div>}>
-                <AssetAddModal
-                    isOpen={addAssetModal.open}
-                    onClose={() => setAddAssetModal(null)}
-                    previewDataUrl={addAssetModal.dataUrl}
-                    onConfirm={(category, name) => {
-                        const newItem: AssetItem = {
-                            id: generateId(),
-                            name,
-                            category,
-                            dataUrl: addAssetModal.dataUrl,
-                            mimeType: addAssetModal.mimeType,
-                            width: addAssetModal.width,
-                            height: addAssetModal.height,
-                            createdAt: Date.now(),
-                        };
-                        setAssetLibrary(prev => addAsset(prev, newItem));
-                        setAddAssetModal(null);
-                    }}
-                />
-                </Suspense>
-            )}
-            <div 
-                className="compact-canvas-stage flex-grow relative overflow-hidden"
-                style={{
-                    paddingRight: chromeMetrics.isTablet ? `${chromeMetrics.outerGap}px` : `${rightPanelWidth + chromeMetrics.promptSideInset}px`,
-                    paddingBottom: croppingState || isNodePromptActive ? '0px' : `${chromeMetrics.canvasBottomInset}px`,
-                    transition: 'padding-right 0.35s cubic-bezier(0.4, 0, 0.2, 1), padding-bottom 0.35s cubic-bezier(0.4, 0, 0.2, 1)'
-                }}
-            >
-                {/* Konva media layer removed in simplified version */}
-                <svg
-                    ref={svgRef}
-                    className="relative z-10 w-full h-full"
-                    onMouseDown={(event) => {
-                        cancelViewportAnimation();
-                        handleMouseDown(event);
-                    }}
-                    onMouseMove={handleMouseMove}
-                    onMouseUp={handleMouseUp}
-                    onMouseLeave={handleMouseUp}
-                    onMouseOver={(e) => {
-                        const target = e.target as SVGElement;
-                        const el = target.closest('[data-id]');
-                        setHoveredElementId(el ? (el as HTMLElement).dataset.id || null : null);
-                    }}
-                    onContextMenu={handleContextMenu}
-                    style={{ cursor }}
-                >
-                    <defs>
-                        <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
-                            <circle cx="1" cy="1" r="1" className="fill-gray-400 opacity-50"/>
-                        </pattern>
-                         {elements.map(el => {
-                            if (el.type === 'image' && el.borderRadius && el.borderRadius > 0) {
-                                const clipPathId = `clip-${el.id}`;
-                                return (
-                                    <clipPath id={clipPathId} key={clipPathId}>
-                                        <rect
-                                            width={el.width}
-                                            height={el.height}
-                                            rx={el.borderRadius}
-                                            ry={el.borderRadius}
-                                        />
-                                    </clipPath>
-                                );
-                            }
-                            return null;
-                        })}
-                        <linearGradient id="flv-shimmer-grad" x1="0" y1="0" x2="1" y2="0">
-                            <stop offset="0" stopColor="white" stopOpacity="0" />
-                            <stop offset="0.4" stopColor="white" stopOpacity="0" />
-                            <stop offset="0.5" stopColor="white" stopOpacity="0.14" />
-                            <stop offset="0.6" stopColor="white" stopOpacity="0" />
-                            <stop offset="1" stopColor="white" stopOpacity="0" />
-                        </linearGradient>
-                    </defs>
-                    {(() => {
-                        const genIds = new Set<string>();
-                        for (const e of elements) {
-                            if ((e as CanvasElement).generationState?.status === 'running') genIds.add(e.id);
-                        }
-                        const anyGenerating = genIds.size > 0;
-                        return (
-                            <g transform={`translate(${panOffset.x}, ${panOffset.y}) scale(${zoom})`} data-gen-active={anyGenerating ? 'true' : undefined}>
-                                <rect x={-panOffset.x/zoom} y={-panOffset.y/zoom} width={`calc(100% / ${zoom})`} height={`calc(100% / ${zoom})`} fill="url(#grid)" />
-                                
-                                {elements.map(el => {
-                            if (!isElementVisible(el, elements)) return null;
-
-                            const isSelected = selectedElementIds.includes(el.id);
-                            const isRelationFocused = relationFocusIds.size > 1 && relationFocusIds.has(el.id);
-                            let selectionComponent = null;
-                            let relationFocusComponent = null;
-
-                            if (isRelationFocused && !croppingState) {
-                                const bounds = getElementBounds(el, elements);
-                                const isRoot = relationFocusElementId === el.id;
-                                relationFocusComponent = (
-                                    <rect
-                                        x={bounds.x - 5 / zoom}
-                                        y={bounds.y - 5 / zoom}
-                                        width={bounds.width + 10 / zoom}
-                                        height={bounds.height + 10 / zoom}
-                                        fill="none"
-                                        stroke={isRoot ? 'rgb(124 58 237)' : 'rgb(14 165 233)'}
-                                        strokeWidth={(isRoot ? 3 : 2.25) / zoom}
-                                        strokeDasharray={`${8 / zoom} ${5 / zoom}`}
-                                        rx={10 / zoom}
-                                        pointerEvents="none"
-                                        opacity={isRoot ? 0.98 : 0.9}
-                                    />
-                                );
-                            }
-
-                            if (isSelected && !croppingState && interactionMode.current !== 'dragElements') {
-                                if (selectedElementIds.length > 1 || el.type === 'path' || el.type === 'arrow' || el.type === 'line' || el.type === 'group') {
-                                     const bounds = getElementBounds(el, elements);
-                                     selectionComponent = <rect x={bounds.x} y={bounds.y} width={bounds.width} height={bounds.height} fill="none" stroke="rgb(59 130 246)" strokeWidth={2/zoom} strokeDasharray={`${6/zoom} ${4/zoom}`} pointerEvents="none" />
-                                } else if ((el.type === 'image' || el.type === 'shape' || el.type === 'text' || el.type === 'video')) {
-                                    const handleSize = 8 / zoom;
-                                    const handles = [
-                                        { name: 'tl', x: el.x, y: el.y, cursor: 'nwse-resize' }, { name: 'tm', x: el.x + el.width / 2, y: el.y, cursor: 'ns-resize' }, { name: 'tr', x: el.x + el.width, y: el.y, cursor: 'nesw-resize' },
-                                        { name: 'ml', x: el.x, y: el.y + el.height / 2, cursor: 'ew-resize' }, { name: 'mr', x: el.x + el.width, y: el.y + el.height / 2, cursor: 'ew-resize' },
-                                        { name: 'bl', x: el.x, y: el.y + el.height, cursor: 'nesw-resize' }, { name: 'bm', x: el.x + el.width / 2, y: el.y + el.height, cursor: 'ns-resize' }, { name: 'br', x: el.x + el.width, y: el.y + el.height, cursor: 'nwse-resize' },
-                                    ];
-                                     selectionComponent = <g>
-                                        <rect x={el.x} y={el.y} width={el.width} height={el.height} fill="none" stroke="rgb(59 130 246)" strokeWidth={2 / zoom} pointerEvents="none" />
-                                        {handles.map(h => <rect key={h.name} data-handle={h.name} x={h.x - handleSize / 2} y={h.y - handleSize / 2} width={handleSize} height={handleSize} fill="white" stroke="#3b82f6" strokeWidth={1 / zoom} style={{ cursor: h.cursor }} />)}
-                                    </g>;
-                                }
-                            }
-                           
-                            if (el.type === 'path') {
-                                const pathData = el.points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
-                                return <g key={el.id} data-id={el.id} className="cursor-pointer"><path d={pathData} stroke={el.strokeColor} strokeWidth={el.strokeWidth / zoom} fill="none" strokeLinecap="round" strokeLinejoin="round" pointerEvents="stroke" strokeOpacity={el.strokeOpacity} />{selectionComponent}{relationFocusComponent}</g>;
-                            }
-                            if (el.type === 'arrow') {
-                                const [start, end] = el.points;
-                                const angle = Math.atan2(end.y - start.y, end.x - start.x);
-                                const headLength = el.strokeWidth * 4;
-
-                                const arrowHeadHeight = headLength * Math.cos(Math.PI / 6);
-                                const lineEnd = {
-                                    x: end.x - arrowHeadHeight * Math.cos(angle),
-                                    y: end.y - arrowHeadHeight * Math.sin(angle),
-                                };
-
-                                const headPoint1 = { x: end.x - headLength * Math.cos(angle - Math.PI / 6), y: end.y - headLength * Math.sin(angle - Math.PI / 6) };
-                                const headPoint2 = { x: end.x - headLength * Math.cos(angle + Math.PI / 6), y: end.y - headLength * Math.sin(angle + Math.PI / 6) };
-                                return (
-                                    <g key={el.id} data-id={el.id} className="cursor-pointer">
-                                        <line x1={start.x} y1={start.y} x2={lineEnd.x} y2={lineEnd.y} stroke={el.strokeColor} strokeWidth={el.strokeWidth / zoom} strokeLinecap="round" />
-                                        <polygon points={`${end.x},${end.y} ${headPoint1.x},${headPoint1.y} ${headPoint2.x},${headPoint2.y}`} fill={el.strokeColor} />
-                                        {selectionComponent}
-                                        {relationFocusComponent}
-                                    </g>
-                                );
-                            }
-                            if (el.type === 'line') {
-                                const [start, end] = el.points;
-                                return (
-                                    <g key={el.id} data-id={el.id} className="cursor-pointer">
-                                        <line x1={start.x} y1={start.y} x2={end.x} y2={end.y} stroke={el.strokeColor} strokeWidth={el.strokeWidth / zoom} strokeLinecap="round" />
-                                        {selectionComponent}
-                                        {relationFocusComponent}
-                                    </g>
-                                );
-                            }
-                            if (el.type === 'text') {
-                                const isEditing = editingElement?.id === el.id;
-                                return (
-                                    <g key={el.id} data-id={el.id} transform={`translate(${el.x}, ${el.y})`} className="cursor-pointer">
-                                        {!isEditing && (
-                                            <foreignObject width={el.width} height={el.height} style={{ overflow: 'visible' }}>
-                                                <div style={{ fontSize: el.fontSize, color: el.fontColor, width: '100%', height: '100%', wordBreak: 'break-word' }}>
-                                                    {el.text}
-                                                </div>
-                                            </foreignObject>
-                                        )}
-                                        {selectionComponent && React.cloneElement(selectionComponent, { transform: `translate(${-el.x}, ${-el.y})` })}
-                                        {relationFocusComponent && React.cloneElement(relationFocusComponent, { transform: `translate(${-el.x}, ${-el.y})` })}
-                                    </g>
-                                )
-                            }
-                             if (el.type === 'shape') {
-                                let shapeJsx;
-                                if (el.shapeType === 'rectangle') shapeJsx = <rect width={el.width} height={el.height} rx={el.borderRadius || 0} ry={el.borderRadius || 0} />
-                                else if (el.shapeType === 'circle') shapeJsx = <ellipse cx={el.width/2} cy={el.height/2} rx={el.width/2} ry={el.height/2} />
-                                else if (el.shapeType === 'triangle') shapeJsx = <polygon points={`${el.width/2},0 0,${el.height} ${el.width},${el.height}`} />
-                                return (
-                                     <g key={el.id} data-id={el.id} transform={`translate(${el.x}, ${el.y})`} className="cursor-pointer">
-                                        {shapeJsx && React.cloneElement(shapeJsx, { 
-                                            fill: el.fillColor, 
-                                            stroke: el.strokeColor, 
-                                            strokeWidth: el.strokeWidth / zoom,
-                                            strokeDasharray: el.strokeDashArray ? el.strokeDashArray.join(' ') : 'none'
-                        })}
-
-                                        {selectionComponent && React.cloneElement(selectionComponent, { transform: `translate(${-el.x}, ${-el.y})` })}
-                                        {relationFocusComponent && React.cloneElement(relationFocusComponent, { transform: `translate(${-el.x}, ${-el.y})` })}
-                                    </g>
-                                );
-                            }
-                            if (el.type === 'image') {
-                                const hasBorderRadius = el.borderRadius && el.borderRadius > 0;
-                                const clipPathId = `clip-${el.id}`;
-                                const maskId = el.mask ? `mask-${el.id}` : undefined;
-                                const cssFilter = buildCssFilter(el.filters);
-                                const hasTemp = el.filters?.temperature && el.filters.temperature !== 0;
-                                const hasSharpen = el.filters?.sharpen && el.filters.sharpen > 0;
-                                const svgFilterId = (hasTemp || hasSharpen) ? `imgfilter-${el.id}` : undefined;
-                                const combinedFilter = [cssFilter, svgFilterId ? `url(#${svgFilterId})` : ''].filter(Boolean).join(' ');
-                                const isGenerating = genIds.has(el.id);
-                                const isRevealing = recentlyCompleted.has(el.id);
-                                const isDimmed = anyGenerating && !isGenerating;
-                                const generationProgress = Math.max(0, Math.min(100, Math.round((el as CanvasElement).generationState?.progress || 0)));
-                                const renderMediaInKonva = shouldRenderMediaInKonva(el, canvasKonvaDisabledIds) && canvasKonvaReadyIds.has(el.id);
-                                return (
-                                    <g
-                                        key={el.id}
-                                        data-id={el.id}
-                                        data-generating={isGenerating ? 'true' : undefined}
-                                    >
-                                        {/* SVG filter defs for temperature / sharpen */}
-                                        {svgFilterId && (
-                                            <defs>
-                                                <filter id={svgFilterId} colorInterpolationFilters="sRGB">
-                                                    {hasTemp && <feColorMatrix type="matrix" values={temperatureMatrix(el.filters!.temperature!)} />}
-                                                    {hasSharpen && <feConvolveMatrix order="3" kernelMatrix={sharpenKernel(el.filters!.sharpen!)} preserveAlpha="true" />}
-                                                </filter>
-                                            </defs>
-                                        )}
-                                        {/* Non-destructive layer mask 鈥?coordinates in element-local space (0,0) to match transform-based positioning */}
-                                        {maskId && (
-                                            <defs>
-                                                <mask id={maskId} maskUnits="userSpaceOnUse" x={0} y={0} width={el.width} height={el.height}>
-                                                    <image href={el.mask} x={0} y={0} width={el.width} height={el.height} />
-                                                </mask>
-                                            </defs>
-                                        )}
-                                        {renderMediaInKonva ? (
-                                            <rect
-                                                key="konva-placeholder"
-                                                x={el.x}
-                                                y={el.y}
-                                                width={el.width}
-                                                height={el.height}
-                                                fill="transparent"
-                                                pointerEvents="all"
-                                            />
-                                        ) : (
-                                            <image
-                                                key="svg-media"
-                                                transform={`translate(${el.x}, ${el.y})`}
-                                                href={el.href}
-                                                width={el.width}
-                                                height={el.height}
-                                                className={`${croppingState && croppingState.elementId !== el.id ? 'opacity-30' : ''} ${isRevealing ? 'flv-gen-reveal' : ''}`}
-                                                clipPath={hasBorderRadius ? `url(#${clipPathId})` : undefined}
-                                                mask={maskId ? `url(#${maskId})` : undefined}
-                                                style={{
-                                                    filter: combinedFilter || undefined,
-                                                    opacity: isNodePromptActive && !isSelected ? 0.82 : 1,
-                                                    transition: 'opacity 320ms ease, filter 160ms ease',
-                                                    transformOrigin: `${el.x + el.width / 2}px ${el.y + el.height / 2}px`,
-                                                }}
-                                            />
-                                        )}
-                                        {isGenerating && (
-                                            <foreignObject x={el.x} y={el.y} width={el.width} height={el.height} pointerEvents="none" style={{ overflow: 'hidden', borderRadius: hasBorderRadius ? el.borderRadius : 12 }}>
-                                                <div style={{ position: 'relative', width: '100%', height: '100%' }}>
-                                                    <div className="flv-generation-glass" style={{ borderRadius: hasBorderRadius ? el.borderRadius : 12, borderWidth: `${1.5 / zoom}px` }}>
-                                                        <span className="flv-generation-glass__status" style={{ top: `${12 / zoom}px`, left: `${12 / zoom}px`, padding: `${5 / zoom}px ${8 / zoom}px`, gap: `${7 / zoom}px`, borderRadius: `${5 / zoom}px`, fontSize: `${12 / zoom}px` }}>
-                                                            {el.type === 'video' ? '视频生成中' : '图片生成中'}<b>{generationProgress}%</b>
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                            </foreignObject>
-                                        )}
-                                        {selectionComponent}
-                                        {relationFocusComponent}
-                                        {selectedNodePromptElement?.id === el.id && !croppingState && !editingElement && interactionMode.current !== 'dragElements' && (
-                                             <foreignObject
-                                                 x={el.x + el.width / 2 - (360 / zoom)}
-                                                 y={el.y + el.height + (16 / zoom)}
-                                                 width={720 / zoom}
-                                                 height={800 / zoom}
-                                                 style={{ overflow: 'visible' }}
-                                             >
-                                                 <div style={{ transform: `scale(${1 / zoom})`, transformOrigin: 'top left', width: '720px' }}>
-                                                     <div
-                                                         data-testid="node-prompt-bar"
-                                                         className="inline-prompt-bar"
-                                                         style={{ width: '720px', pointerEvents: 'auto', '--inline-prompt-accent': 'var(--isl-mint)' } as React.CSSProperties}
-                                                         onMouseDown={(event) => event.stopPropagation()}
-                                                         onPointerDown={(event) => event.stopPropagation()}
-                                                     >
-                                                         <PromptBar
-                                                             t={t}
-                                                             theme={resolvedTheme}
-                                                             compactMode
-                                                             prompt={selectedNodePromptElement.generationState?.promptPayload.rawText || ''}
-                                                             promptDocument={selectedNodePromptElement.generationState?.promptPayload.richTextDocument}
-                                                             setPrompt={(nextPrompt) => updateNodePromptPayload(selectedNodePromptElement, nextPrompt, selectedNodePromptElement.generationState?.promptPayload.richTextDocument)}
-                                                             onPromptInputChange={({ plainText, document }) => updateNodePromptPayload(selectedNodePromptElement, plainText, document)}
-                                                              onGenerate={() => void handleNodePromptGenerate(selectedNodePromptElement.id)}
-                                                              onStop={() => handleStopNodePromptGeneration(selectedNodePromptElement.id)}
-                                                             onRetry={selectedNodePromptElement.generationState?.status === 'error' ? () => void handleNodePromptGenerate(selectedNodePromptElement.id) : undefined}
-                                                             error={selectedNodePromptElement.generationState?.error || null}
-                                                             progressStage={progressMessage}
-                                                             isLoading={selectedNodePromptElement.generationState?.status === 'running'}
-                                                             isSelectionActive={false}
-                                                             selectedElementCount={1}
-                                                             userEffects={[]}
-                                                             onAddUserEffect={() => undefined}
-                                                             onDeleteUserEffect={() => undefined}
-                                                             generationMode={getElementGenerationMode(selectedNodePromptElement)}
-                                                             setGenerationMode={() => undefined}
-                                                             modeOptions={[getElementGenerationMode(selectedNodePromptElement)]}
-videoAspectRatio={selectedNodePromptElement.generationState?.aspectRatio || videoAspectRatio}
-                                                              setVideoAspectRatio={(ratio) => updateNodePromptStatePatch(selectedNodePromptElement.id, { aspectRatio: ratio })}
-                                                              imageAspectRatio={selectedNodePromptElement.generationState?.aspectRatio || imageAspectRatio}
-                                                              setImageAspectRatio={(ratio) => updateNodePromptStatePatch(selectedNodePromptElement.id, { aspectRatio: ratio })}
-                                                              videoDurationSec={selectedNodePromptElement.generationState?.durationSec ?? videoDurationSec}
-                                                             onVideoDurationSecChange={(durationSec) => updateNodePromptStatePatch(selectedNodePromptElement.id, { durationSec })}
-                                                             videoResolution={selectedNodePromptElement.generationState?.resolution || videoResolution}
-                                                             onVideoResolutionChange={(resolution) => updateNodePromptStatePatch(selectedNodePromptElement.id, { resolution })}
-                                                             videoGenerateAudio={selectedNodePromptElement.generationState?.generateAudio ?? videoGenerateAudio}
-                                                             onVideoGenerateAudioChange={(generateAudio) => updateNodePromptStatePatch(selectedNodePromptElement.id, { generateAudio })}
-                                                             videoWatermark={selectedNodePromptElement.generationState?.watermark ?? videoWatermark}
-                                                             onVideoWatermarkChange={(watermark) => updateNodePromptStatePatch(selectedNodePromptElement.id, { watermark })}
-                                                             selectedImageModel={selectedNodePromptElement.type === 'image' ? (selectedNodePromptElement.generationState?.modelId || modelPreference.imageModel) : undefined}
-                                                             selectedVideoModel={selectedNodePromptElement.type === 'video' ? (selectedNodePromptElement.generationState?.modelId || modelPreference.videoModel) : undefined}
-                                                             imageModelOptions={dynamicModelOptions.image}
-                                                             videoModelOptions={dynamicModelOptions.video}
-                                                             onImageModelChange={selectedNodePromptElement.type === 'image' ? (model) => updateNodePromptStatePatch(selectedNodePromptElement.id, { modelId: model }) : undefined}
-                                                             onVideoModelChange={selectedNodePromptElement.type === 'video' ? (model) => updateNodePromptStatePatch(selectedNodePromptElement.id, { modelId: model }) : undefined}
-                                                             canvasElements={elements.filter(item => item.id !== selectedNodePromptElement.id)}
-                                                             attachments={nodePromptAttachments[selectedNodePromptElement.id] || []}
-                                                             onAddAttachments={(files) => void handleAddNodePromptAttachmentFiles(selectedNodePromptElement.id, files)}
-                                                             onRemoveAttachment={(id) => handleRemoveNodePromptAttachment(selectedNodePromptElement.id, id)}
-                                                             onEnhancePrompt={handleEnhancePrompt}
-                                                             isEnhancingPrompt={isEnhancingPrompt}
-                                                             isAutoEnhanceEnabled={isAutoEnhanceEnabled}
-                                                             onAutoEnhanceToggle={() => setIsAutoEnhanceEnabled(prev => !prev)}
-                                                             apiConfigs={userApiKeys}
-                                                             userApiKeys={userApiKeys}
-                                                             onOpenSettings={() => setIsSettingsPanelOpen(true)}
-                                                             variant="inline"
-                                                             shellClassName="inline-prompt-bar-shell"
-                                                             popoverDirection="down"
-                                                         />
-                                                     </div>
-                                                 </div>
-                                             </foreignObject>
-                                         )}
-                                     </g>
-                                 );
-                              }
-                              if (el.type === 'video') {
-                                const isGenerating = genIds.has(el.id);
-                                const isRevealing = recentlyCompleted.has(el.id);
-                                const isDimmed = anyGenerating && !isGenerating;
-                                const genStatus = (el as CanvasElement).generationState?.status;
-                                const stageLabelMap: Record<string, string> = { running: '视频生成中', queued: '排队中' };
-                                const stageLabel = genStatus ? stageLabelMap[genStatus] : undefined;
-                                const perimeter = 2 * (el.width + el.height);
-                                const renderMediaInKonva = shouldRenderMediaInKonva(el, canvasKonvaDisabledIds) && canvasKonvaReadyIds.has(el.id);
-                                return (
-                                    <g key={el.id} data-id={el.id} data-generating={isGenerating ? 'true' : undefined}>
-                                        {renderMediaInKonva ? (
-                                            <rect
-                                                key="konva-placeholder"
-                                                x={el.x}
-                                                y={el.y}
-                                                width={el.width}
-                                                height={el.height}
-                                                fill="transparent"
-                                                pointerEvents="all"
-                                            />
-                                        ) : (
-                                            <foreignObject key="svg-media" x={el.x} y={el.y} width={el.width} height={el.height}>
-                                                <video
-                                                    src={el.href}
-                                                    controls
-                                                    style={{ width: '100%', height: '100%', borderRadius: '8px', opacity: isNodePromptActive && !isSelected ? 0.82 : 1, transition: 'opacity 320ms ease' }}
-                                                    className={`${croppingState ? 'opacity-30' : ''} ${isRevealing ? 'flv-gen-reveal' : ''}`}
-                                                ></video>
-                                            </foreignObject>
-                                        )}
-                                        {isGenerating && (
-                                            <g transform={`translate(${el.x}, ${el.y})`} pointerEvents="none">
-                                                <rect
-                                                    width={el.width}
-                                                    height={el.height}
-                                                    fill="none"
-                                                    stroke="var(--isl-sun, #fbbf24)"
-                                                    strokeWidth={2.5 / zoom}
-                                                    strokeDasharray={`${perimeter * 0.12} ${perimeter * 0.88}`}
-                                                    strokeLinecap="round"
-                                                    rx={8}
-                                                    opacity={0.7}
-                                                />
-                                                <rect width={el.width} height={el.height} fill="rgba(0,0,0,0.06)" rx={8} />
-                                            </g>
-                                        )}
-                                        {isGenerating && stageLabel && (
-                                            <foreignObject x={el.x} y={el.y + el.height + 4 / zoom} width={el.width} height={24 / zoom} pointerEvents="none">
-                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, transform: `scale(${1 / zoom})`, transformOrigin: 'top center', width: el.width * zoom, height: 24 }}>
-                                                    <span className="flv-gen-stage-label" style={{
-                                                        fontSize: 11,
-                                                        fontWeight: 600,
-                                                        color: 'var(--isl-sun, #fbbf24)',
-                                                        background: 'rgba(0,0,0,0.55)',
-                                                        backdropFilter: 'blur(6px)',
-                                                        padding: '2px 10px',
-                                                        borderRadius: 10,
-                                                        whiteSpace: 'nowrap',
-                                                    }}>{stageLabel}</span>
-                                                </div>
-                                            </foreignObject>
-                                        )}
-                                        {selectionComponent}
-                                        {relationFocusComponent}
-                                        {selectedNodePromptElement?.id === el.id && !croppingState && !editingElement && interactionMode.current !== 'dragElements' && (
-                                             <foreignObject
-                                                 x={el.x + el.width / 2 - (360 / zoom)}
-                                                 y={el.y + el.height + (16 / zoom)}
-                                                 width={720 / zoom}
-                                                 height={800 / zoom}
-                                                 style={{ overflow: 'visible' }}
-                                             >
-                                                 <div style={{ transform: `scale(${1 / zoom})`, transformOrigin: 'top left', width: '720px' }}>
-                                                     <div
-                                                         data-testid="node-prompt-bar"
-                                                         className="inline-prompt-bar"
-                                                         style={{ width: '720px', pointerEvents: 'auto', '--inline-prompt-accent': 'var(--isl-sun)' } as React.CSSProperties}
-                                                         onMouseDown={(event) => event.stopPropagation()}
-                                                         onPointerDown={(event) => event.stopPropagation()}
-                                                     >
-                                                         <PromptBar
-                                                             t={t}
-                                                             theme={resolvedTheme}
-                                                             compactMode
-                                                             prompt={selectedNodePromptElement.generationState?.promptPayload.rawText || ''}
-                                                             promptDocument={selectedNodePromptElement.generationState?.promptPayload.richTextDocument}
-                                                             setPrompt={(nextPrompt) => updateNodePromptPayload(selectedNodePromptElement, nextPrompt, selectedNodePromptElement.generationState?.promptPayload.richTextDocument)}
-                                                             onPromptInputChange={({ plainText, document }) => updateNodePromptPayload(selectedNodePromptElement, plainText, document)}
-                                                              onGenerate={() => void handleNodePromptGenerate(selectedNodePromptElement.id)}
-                                                              onStop={() => handleStopNodePromptGeneration(selectedNodePromptElement.id)}
-                                                             onRetry={selectedNodePromptElement.generationState?.status === 'error' ? () => void handleNodePromptGenerate(selectedNodePromptElement.id) : undefined}
-                                                             error={selectedNodePromptElement.generationState?.error || null}
-                                                             progressStage={progressMessage}
-                                                             isLoading={selectedNodePromptElement.generationState?.status === 'running'}
-                                                             isSelectionActive={false}
-                                                             selectedElementCount={1}
-                                                             userEffects={[]}
-                                                             onAddUserEffect={() => undefined}
-                                                             onDeleteUserEffect={() => undefined}
-                                                             generationMode={getElementGenerationMode(selectedNodePromptElement)}
-                                                             setGenerationMode={() => undefined}
-                                                             modeOptions={[getElementGenerationMode(selectedNodePromptElement)]}
-videoAspectRatio={selectedNodePromptElement.generationState?.aspectRatio || videoAspectRatio}
-                                                              setVideoAspectRatio={(ratio) => updateNodePromptStatePatch(selectedNodePromptElement.id, { aspectRatio: ratio })}
-                                                              imageAspectRatio={selectedNodePromptElement.generationState?.aspectRatio || imageAspectRatio}
-                                                              setImageAspectRatio={(ratio) => updateNodePromptStatePatch(selectedNodePromptElement.id, { aspectRatio: ratio })}
-                                                              videoDurationSec={selectedNodePromptElement.generationState?.durationSec ?? videoDurationSec}
-                                                             onVideoDurationSecChange={(durationSec) => updateNodePromptStatePatch(selectedNodePromptElement.id, { durationSec })}
-                                                             videoResolution={selectedNodePromptElement.generationState?.resolution || videoResolution}
-                                                             onVideoResolutionChange={(resolution) => updateNodePromptStatePatch(selectedNodePromptElement.id, { resolution })}
-                                                             videoGenerateAudio={selectedNodePromptElement.generationState?.generateAudio ?? videoGenerateAudio}
-                                                             onVideoGenerateAudioChange={(generateAudio) => updateNodePromptStatePatch(selectedNodePromptElement.id, { generateAudio })}
-                                                             videoWatermark={selectedNodePromptElement.generationState?.watermark ?? videoWatermark}
-                                                             onVideoWatermarkChange={(watermark) => updateNodePromptStatePatch(selectedNodePromptElement.id, { watermark })}
-                                                             selectedImageModel={selectedNodePromptElement.type === 'image' ? (selectedNodePromptElement.generationState?.modelId || modelPreference.imageModel) : undefined}
-                                                             selectedVideoModel={selectedNodePromptElement.type === 'video' ? (selectedNodePromptElement.generationState?.modelId || modelPreference.videoModel) : undefined}
-                                                             imageModelOptions={dynamicModelOptions.image}
-                                                             videoModelOptions={dynamicModelOptions.video}
-                                                             onImageModelChange={selectedNodePromptElement.type === 'image' ? (model) => updateNodePromptStatePatch(selectedNodePromptElement.id, { modelId: model }) : undefined}
-                                                             onVideoModelChange={selectedNodePromptElement.type === 'video' ? (model) => updateNodePromptStatePatch(selectedNodePromptElement.id, { modelId: model }) : undefined}
-                                                             canvasElements={elements.filter(item => item.id !== selectedNodePromptElement.id)}
-                                                             attachments={nodePromptAttachments[selectedNodePromptElement.id] || []}
-                                                             onAddAttachments={(files) => void handleAddNodePromptAttachmentFiles(selectedNodePromptElement.id, files)}
-                                                             onRemoveAttachment={(id) => handleRemoveNodePromptAttachment(selectedNodePromptElement.id, id)}
-                                                             onEnhancePrompt={handleEnhancePrompt}
-                                                             isEnhancingPrompt={isEnhancingPrompt}
-                                                             isAutoEnhanceEnabled={isAutoEnhanceEnabled}
-                                                             onAutoEnhanceToggle={() => setIsAutoEnhanceEnabled(prev => !prev)}
-                                                             apiConfigs={userApiKeys}
-                                                             userApiKeys={userApiKeys}
-                                                             onOpenSettings={() => setIsSettingsPanelOpen(true)}
-                                                             variant="inline"
-                                                             shellClassName="inline-prompt-bar-shell"
-                                                             popoverDirection="down"
-                                                         />
-                                                     </div>
-                                                 </div>
-                                             </foreignObject>
-                                         )}
-                                     </g>
-                                 );
-                              }
-                              if (el.type === 'group') {
-                                return <g key={el.id} data-id={el.id}>{selectionComponent}{relationFocusComponent}</g>
-                             }
-                            return null;
-                        })}
-
-                        {lassoPath && (
-                            <path d={lassoPath.map((p, i) => i === 0 ? `M ${p.x} ${p.y}` : `L ${p.x} ${p.y}`).join(' ')} stroke="rgb(59 130 246)" strokeWidth={1 / zoom} strokeDasharray={`${4/zoom} ${4/zoom}`} fill="rgba(59, 130, 246, 0.1)" />
-                        )}
-
-                        {/* Inpaint mask overlay + prompt input */}
-                        {inpaintState && (() => {
-                            const pts = inpaintState.maskPoints;
-                            const pathD = pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ') + ' Z';
-                            const cx = pts.reduce((s, p) => s + p.x, 0) / pts.length;
-                            const cy = pts.reduce((s, p) => s + p.y, 0) / pts.length;
-                            const promptBoxW = 320 / zoom;
-                            const promptBoxH = 120 / zoom;
-                            return (
-                                <>
-                                    {/* Animated dashed mask outline */}
-                                    <path
-                                        d={pathD}
-                                        fill="rgba(239, 68, 68, 0.15)"
-                                        stroke="#ef4444"
-                                        strokeWidth={2 / zoom}
-                                        strokeDasharray={`${6/zoom} ${4/zoom}`}
-                                        pointerEvents="none"
-                                    >
-                                        <animate attributeName="stroke-dashoffset" from="0" to={`${20/zoom}`} dur="1s" repeatCount="indefinite" />
-                                    </path>
-                                    {/* Floating inpaint prompt box */}
-                                    {inpaintState.promptVisible && (
-                                        <foreignObject
-                                            x={cx - promptBoxW / 2}
-                                            y={cy - promptBoxH / 2}
-                                            width={promptBoxW}
-                                            height={promptBoxH}
-                                            style={{ overflow: 'visible' }}
-                                        >
-                                            <div
-                                                style={{
-                                                    transform: `scale(${1 / zoom})`,
-                                                    transformOrigin: 'top left',
-                                                    width: 320,
-                                                }}
-                                                onMouseDown={e => e.stopPropagation()}
-                                            >
-                                                <div style={{
-                                                    background: 'white',
-                                                    borderRadius: 12,
-                                                    boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
-                                                    border: '2px solid #ef4444',
-                                                    padding: 12,
-                                                }}>
-                                                    <div style={{ fontSize: 12, fontWeight: 600, color: '#ef4444', marginBottom: 8 }}>
-                                                        馃幆 AI 灞€閮ㄩ噸缁?
-                                                    </div>
-                                                    <textarea
-                                                        value={inpaintPrompt}
-                                                        onChange={e => setInpaintPrompt(e.target.value)}
-                                                        placeholder="描述你想在选区内生成的内容..."
-                                                        autoFocus
-                                                        style={{
-                                                            width: '100%',
-                                                            height: 48,
-                                                            border: '1px solid #d1d5db',
-                                                            borderRadius: 8,
-                                                            padding: '6px 10px',
-                                                            fontSize: 13,
-                                                            resize: 'none',
-                                                            outline: 'none',
-                                                        }}
-                                                        onKeyDown={e => {
-                                                            if (e.key === 'Enter' && !e.shiftKey) {
-                                                                e.preventDefault();
-                                                                handleInpaint();
-                                                            }
-                                                            if (e.key === 'Escape') {
-                                                                setInpaintState(null);
-                                                                setInpaintPrompt('');
-                                                            }
-                                                        }}
-                                                    />
-                                                    <div style={{ display: 'flex', gap: 8, marginTop: 8, justifyContent: 'flex-end' }}>
-                                                        <button
-                                                            onClick={() => { setInpaintState(null); setInpaintPrompt(''); }}
-                                                            style={{
-                                                                padding: '4px 12px',
-                                                                fontSize: 12,
-                                                                borderRadius: 6,
-                                                                border: '1px solid #d1d5db',
-                                                                background: 'white',
-                                                                cursor: 'pointer',
-                                                            }}
-                                                        >
-                                                            鍙栨秷
-                                                        </button>
-                                                        <button
-                                                            onClick={handleInpaint}
-                                                            disabled={!inpaintPrompt.trim() || isLoading}
-                                                            style={{
-                                                                padding: '4px 16px',
-                                                                fontSize: 12,
-                                                                borderRadius: 6,
-                                                                border: 'none',
-                                                                background: inpaintPrompt.trim() ? '#ef4444' : '#fca5a5',
-                                                                color: 'white',
-                                                                cursor: inpaintPrompt.trim() ? 'pointer' : 'not-allowed',
-                                                                fontWeight: 600,
-                                                            }}
-                                                        >
-                                                            {isLoading ? '閲嶇粯涓?..' : '鉁?閲嶇粯'}
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </foreignObject>
-                                    )}
-                                </>
-                            );
-                        })()}
-                        
-                        {alignmentGuides.map((guide, i) => (
-                             <line key={i} x1={guide.type === 'v' ? guide.position : guide.start} y1={guide.type === 'h' ? guide.position : guide.start} x2={guide.type === 'v' ? guide.position : guide.end} y2={guide.type === 'h' ? guide.position : guide.end} stroke="red" strokeWidth={1/zoom} strokeDasharray={`${4/zoom} ${2/zoom}`} />
-                        ))}
-                        <g id="flv-drag-guides" />
-
-                        {selectedElementIds.length > 0 && !croppingState && !editingElement && interactionMode.current !== 'dragElements' && (
-                            <ElementToolbar
-                                selectedElementIds={selectedElementIds}
-                                singleSelectedElement={singleSelectedElement}
-                                elements={elements}
-                                zoom={zoom}
-                                resolvedTheme={resolvedTheme}
-                                isLoading={isLoading}
-                                language={language}
-                                filterPanelElementId={filterPanelElementId}
-                                outpaintMenuId={outpaintMenuId}
-                                maskEditingId={maskEditingId}
-                                reversePromptLoading={reversePromptLoading}
-                                t={t}
-                                getSelectionBounds={getSelectionBounds}
-                                getElementBounds={getElementBounds}
-                                handleAlignSelection={handleAlignSelection}
-                                handleGroupSelection={handleGroup}
-                                handleExportSelection={() => void handleExportSelectedMedia()}
-                                handleCopyElement={handleCopyElement}
-                                handleDownloadImage={handleDownloadImage}
-                                handleDeleteElement={handleDeleteElement}
-                                handlePropertyChange={handlePropertyChange}
-                                handleStartCrop={handleStartCrop}
-                                handleReversePrompt={handleReversePrompt}
-                                cancelReversePrompt={cancelReversePrompt}
-                                handleSplitImageLayers={handleSplitImageLayers}
-                                handleUpscaleImage={handleUpscaleImage}
-                                handleRemoveImageBackground={handleRemoveImageBackground}
-                                handleOutpaint={handleOutpaint}
-                                setFilterPanelElementId={setFilterPanelElementId}
-                                setOutpaintMenuId={setOutpaintMenuId}
-                                setAddAssetModal={setAddAssetModal}
-                                startMaskEditing={startMaskEditing}
-                                onAddToChat={triggerAddToChat}
-                                relationFocusCount={Math.max(0, selectedRelationIds.size - 1)}
-                                isRelationFocusActive={!!singleSelectedElement && relationFocusElementId === singleSelectedElement.id}
-                                onToggleRelationFocus={singleSelectedElement && (singleSelectedElement.type === 'image' || singleSelectedElement.type === 'video')
-                                    ? () => {
-                                        setRelationFocusElementId(prev => (
-                                            prev === singleSelectedElement.id ? null : singleSelectedElement.id
-                                        ));
-                                    }
-                                    : undefined}
-                            />
-                        )}
-                        {editingElement && (() => {
-                             const element = elements.find(el => el.id === editingElement.id) as TextElement;
-                             if (!element) return null;
-                             return <foreignObject 
-                                x={element.x} y={element.y} width={element.width} height={element.height}
-                                onMouseDown={(e) => e.stopPropagation()}
-                             >
-                                <textarea
-                                    ref={editingTextareaRef}
-                                    value={editingElement.text}
-                                    onChange={(e) => setEditingElement({ ...editingElement, text: e.target.value })}
-                                    onBlur={() => handleStopEditing()}
-                                    placeholder={t('editor.editText')}
-                                    title={t('editor.editText')}
-                                    style={{
-                                        width: '100%', height: '100%', border: 'none', padding: 0, margin: 0,
-                                        outline: 'none', resize: 'none', background: 'transparent',
-                                        fontSize: element.fontSize, color: element.fontColor,
-                                        overflow: 'hidden'
-                                    }}
-                                 />
-                             </foreignObject>
-                        })()}
-                        {croppingState && (
-                             <g>
-                                <path
-                                    d={`M ${-panOffset.x/zoom},${-panOffset.y/zoom} H ${window.innerWidth/zoom - panOffset.x/zoom} V ${window.innerHeight/zoom - panOffset.y/zoom} H ${-panOffset.x/zoom} Z M ${croppingState.cropBox.x},${croppingState.cropBox.y} v ${croppingState.cropBox.height} h ${croppingState.cropBox.width} v ${-croppingState.cropBox.height} Z`}
-                                    fill="rgba(0,0,0,0.5)"
-                                    fillRule="evenodd"
-                                    pointerEvents="none"
-                                />
-                                <rect x={croppingState.cropBox.x} y={croppingState.cropBox.y} width={croppingState.cropBox.width} height={croppingState.cropBox.height} fill="none" stroke="white" strokeWidth={2 / zoom} pointerEvents="all" />
-                                {(() => {
-                                    const { x, y, width, height } = croppingState.cropBox;
-                                    const handleSize = 10 / zoom;
-                                    const handles = [
-                                        { name: 'tl', x, y, cursor: 'nwse-resize' }, { name: 'tr', x: x + width, y, cursor: 'nesw-resize' },
-                                        { name: 'bl', x, y: y + height, cursor: 'nesw-resize' }, { name: 'br', x: x + width, y: y + height, cursor: 'nwse-resize' },
-                                    ];
-                                    return handles.map(h => <rect key={h.name} data-handle={h.name} x={h.x - handleSize/2} y={h.y - handleSize/2} width={handleSize} height={handleSize} fill="white" stroke="#3b82f6" strokeWidth={1/zoom} style={{ cursor: h.cursor }}/>)
-                                })()}
-                            </g>
-                        )}
-                        {selectionBox && (
-                             <rect
-                                x={selectionBox.x}
-                                y={selectionBox.y}
-                                width={selectionBox.width}
-                                height={selectionBox.height}
-                                fill="rgba(59, 130, 246, 0.1)"
-                                stroke="rgb(59, 130, 246)"
-                                strokeWidth={1 / zoom}
-                            />
-                        )}
-                    </g>
-                );
-            })()}
-                 </svg>
-                 {contextMenu && (() => {
-                    const hasDrawableSelection = elements.some(el => selectedElementIds.includes(el.id) && el.type !== 'image' && el.type !== 'video');
-                    const isGroupable = selectedElementIds.length > 1;
-                    const isUngroupable = selectedElementIds.length === 1 && elements.find(el => el.id === selectedElementIds[0])?.type === 'group';
-
-                    return (
-                        <div style={{ top: contextMenu.y, left: contextMenu.x }} className="absolute z-30 bg-white rounded-md shadow-lg border border-gray-200 text-sm py-1 text-gray-800" onContextMenu={e => e.stopPropagation()}>
-                           {isGroupable && <button onClick={handleGroup} className="block w-full text-left px-4 py-1.5 hover:bg-gray-100">{t('contextMenu.group')}</button>}
-                           {isUngroupable && <button onClick={handleUngroup} className="block w-full text-left px-4 py-1.5 hover:bg-gray-100">{t('contextMenu.ungroup')}</button>}
-                           {(isGroupable || isUngroupable) && <div className="border-t border-gray-100 my-1"></div>}
-                            
-                            {contextMenu.elementId && (<>
-                                <button onClick={() => handleLayerAction(contextMenu.elementId!, 'forward')} className="block w-full text-left px-4 py-1.5 hover:bg-gray-100">{t('contextMenu.bringForward')}</button>
-                                <button onClick={() => handleLayerAction(contextMenu.elementId!, 'backward')} className="block w-full text-left px-4 py-1.5 hover:bg-gray-100">{t('contextMenu.sendBackward')}</button>
-                                <div className="border-t border-gray-100 my-1"></div>
-                                <button onClick={() => handleLayerAction(contextMenu.elementId!, 'front')} className="block w-full text-left px-4 py-1.5 hover:bg-gray-100">{t('contextMenu.bringToFront')}</button>
-                                <button onClick={() => handleLayerAction(contextMenu.elementId!, 'back')} className="block w-full text-left px-4 py-1.5 hover:bg-gray-100">{t('contextMenu.sendToBack')}</button>
-                            </>)}
-                            
-                            {hasDrawableSelection && (
-                                <>
-                                    <div className="border-t border-gray-100 my-1"></div>
-                                    <button onClick={handleRasterizeSelection} className="block w-full text-left px-4 py-1.5 hover:bg-gray-100">{t('contextMenu.rasterize')}</button>
-                                </>
-                            )}
-                            {/* A/B Compare: show when right-clicking an image and there's at least 1 other image or history item */}
-                            {contextMenu.elementId && (() => {
-                                const ctxEl = elements.find(e => e.id === contextMenu.elementId);
-                                if (!ctxEl || ctxEl.type !== 'image') return null;
-                                const otherImages = elements.filter(e => e.type === 'image' && e.id !== ctxEl.id) as ImageElement[];
-                                const hasCompareTarget = otherImages.length > 0 || generationHistory.length > 0;
-                                if (!hasCompareTarget) return null;
-                                return (
-                                    <>
-                                        <div className="border-t border-gray-100 my-1"></div>
-                                        {otherImages.slice(0, 3).map(other => (
-                                            <button key={other.id} onClick={() => {
-                                                setAbCompare({
-                                                    imageA: { src: (ctxEl as ImageElement).href, label: ctxEl.name || 'A' },
-                                                    imageB: { src: other.href, label: other.name || 'B' },
-                                                });
-                                                setContextMenu(null);
-                                            }} className="block w-full text-left px-4 py-1.5 hover:bg-gray-100 truncate max-w-[200px]">
-                                                A/B 瀵规瘮: {other.name || other.id.slice(0, 6)}
-                                            </button>
-                                        ))}
-                                        {generationHistory.length > 0 && (
-                                            <button onClick={() => {
-                                                const latest = generationHistory[0];
-                                                setAbCompare({
-                                                    imageA: { src: (ctxEl as ImageElement).href, label: ctxEl.name || '褰撳墠' },
-                                                    imageB: { src: latest.dataUrl, label: latest.name || latest.prompt.slice(0, 20) || '鍘嗗彶' },
-                                                });
-                                                setContextMenu(null);
-                                            }} className="block w-full text-left px-4 py-1.5 hover:bg-gray-100">
-                                                A/B 瀵规瘮: 鏈€杩戠敓鎴?
-                                            </button>
-                                        )}
-                                    </>
-                                );
-                            })()}
-                            {/* Reverse Prompt: show for image elements */}
-                            {contextMenu.elementId && (() => {
-                                const ctxEl = elements.find(e => e.id === contextMenu.elementId);
-                                if (!ctxEl || ctxEl.type !== 'image') return null;
-                                return (
-                                    <>
-                                        <div className="border-t border-gray-100 my-1"></div>
-                                        <button
-                                            disabled={reversePromptLoading}
-                                            onClick={() => {
-                                                if (reversePromptLoading) { cancelReversePrompt(); }
-                                                else {
-                                                    handleReversePrompt((ctxEl as ImageElement).href, (ctxEl as ImageElement).mimeType, (ctxEl as ImageElement).width, (ctxEl as ImageElement).height);
-                                                }
-                                                setContextMenu(null);
-                                            }}
-                                            className="block w-full text-left px-4 py-1.5 hover:bg-gray-100 disabled:opacity-50"
-                                        >
-                                            {reversePromptLoading ? (language === 'zho' ? '鍒嗘瀽涓?..' : 'Analyzing...') : (language === 'zho' ? '鍙嶆帹 Prompt' : 'Reverse Prompt')}
-                                        </button>
-                                    </>
-                                );
-                            })()}
-                        </div>
-                    );
-                })()}
-            </div>
-        </>}
-        />
-    );
+    return null;
 };
 
 export default App;

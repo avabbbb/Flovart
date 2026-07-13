@@ -16,6 +16,11 @@ title: 后续待办
 - **模板一键复用**：✅ `components/landing/templates.ts` 导出 8 模板 + 8 展示作品；App.tsx 启动时解析 URL `?templateId=xxx`，匹配模板后自动填充 prompt + 切换对应模型 + toast 提示。待用户测试确认。
 - **Hero Canvas 演示**：✅ 已用 `AgentDemoAnimation` 脚本动画替换"视频即将上线"占位符，模拟 Agent 思考+生成+Touch Edit 全流程循环动画。待用户测试确认。
 
+## Landing Page v2 调整（应用内首页重构）
+
+- **ToCLanding 回退**：✅ 已完成，待用户测试确认。丢弃 ToCLanding（`/`）未提交的 UGC 社区 WIP，恢复到 HEAD（`4587b56`/`7498d65` 那版）无 UGC 旧版——手绘风 Hero + 4 Features + 8 模板画廊 + Showcase masonry + CTA + Footer。3 个 "开始创作" 按钮（顶栏 / Hero / 底部 CTA）改为 `linkTo('/app/home')` 跳转新首页。BannerCoverflow / CommunityFeed / PersonalProjects / useCloneWorkflow 四个未跟踪 WIP 文件已删除；communityTypes.ts 仍被 communityStore/WorkflowUploadModal 引用，保留。
+- **新增产品首页 `/app/home`**：✅ 已完成，待用户测试确认。RouterHost 加 Suspense + lazy route。新建 `components/home/FlovartHome.tsx`：参考 flova.tv/zh-CN/skill/ 生态——左侧固定 Sidebar（首页/项目/快速生成/资产库/Skill/FlovaTV/教程/FlovaCLI + 邀请社群 X/YouTube/Discord 入口）+ 右侧滚动主内容区。主内容从上到下：H1 "Flovart 1.0 — 你的专属AI视频创作Agent" + 副标题；70vw 占位输入框（placeholder "由一个想法或故事开始…" + 附件/模型/Skill/资产库胶囊 + 圆形发送按钮，回车发送创建同名新项目并跳 `/app`）；热门 Skills 横滚 7 张卡（前 2 张带"热门"badge + hover 显 description + "试一试"）+ 末尾"更多 Skill"卡片；最近项目横滚（首张虚线"创建新项目" + 后续按 updatedAt 排序读 useWorkflowStore.projects，点击设为 active 跳 `/app`）；FlovaTV 分类 tabs（全部/影视/短剧/漫剧/MV/TVC） + dense grid 视频卡（438px row-span-2 + 左上分类 + 右上静音/全屏 + 底部 avatar+@author+title + hover 显 Skill 胶囊 + "添加为我的Skill/已添加"toggle + "查看/查看创作过程" 按钮）；Footer 公司+社交+版权。设计为深色 `#0a0a0a` 主背景 + teal `#19c8b9` 品牌色 + lime `#9BC957` skill 强调色 + motion spring 入场。所有 Skill/FlovaTV 视频均为前端 mock（来自 `COMMUNITY_WORKFLOWS`），项目列表读 `useWorkflowStore`。
+
 ## Magic Canvas 迁移路线图（参照 jaaz + LibTV + infinite-canvas）
 
 完整路线图见 `docs/analysis/flovart-migration-roadmap.md`。
@@ -38,6 +43,11 @@ title: 后续待办
 ## Lovart/LibTV 2026 启发改进（UI 优化）
 
 参照 2026 年 Lovart.ai 与 LibTV 最新功能调研结果，对现有 Canvas/Workflow 进行新功能 + 升级现有功能。用户选择"同时做 4 个新功能 + 6 个已有功能升级"。
+
+### Workflow UI 精简（Phase A）
+
+- ✅ §1 顶栏 LOGO 下拉 + 画布名 inline + 序号切换器；§1.5 节点双击聚焦 + Maximize2 移位；§3 节点右键重命名；§4 工具栏整合缩放/小地图/磁吸；§5 select/pan 合并 + 3 加号合并为 1 个大"+"竖排弹菜单；左栏改浮层弹窗 + 右抽屉去 assets tab；§7 节点加号 mouse-follow 浮动气泡弹簧 + target 端反向连接。均见 `pending-test.mdx` "Workflow UI 精简与节点连接气泡" 节。
+- ⬜ config 节点删除（单独开任务）。
 
 ### 新功能（4 项）
 
@@ -67,6 +77,14 @@ title: 后续待办
   - 敏感词检测接入 AI 代理端点 `POST /ai/proxy` 前预检。
   - 审批流 `submit` 接入资源上架流程（`asset:publish` 前自动提交审批）。
 
+## UGC 社区主页（迭代）
+
+- ✅ Banner coverflow + 个人最近项目 + 社区瀑布流 三区块一次性全到位（已落 `pending-test.mdx`）。
+- ⬜ **后端 `CommunityWorkflow` 模型 + API**：列表分页/分类筛选/搜索/上传/详情/点赞/fork 计数；当前前端走 mock 数据，需补 hub 端模型与接口（沿用"共享提示词与工作流生态"节路线，新增 `community_workflows` 表）。
+- ⬜ **上传与发布回社区（后端）**：用户本地 workflow 项目走 `projectTransfer.serializeWorkflowProjects` 导出 JSON → R2 presign 上传 → `POST /community/workflows` 入库。✅ 前端模态 `WorkflowUploadModal` + localforage 持久化社区 store + ToCLanding 发布按钮已完成（见 `pending-test.mdx` "UGC 社区上传与发布闭环"）；待补 hub 后端 `community_workflows` 表 + API + R2 上传联调。
+- ⬜ **社区卡片媒体预览**：当前卡片仅用 gradient 占位；接入 R2 上传后改为 `thumbUrls[0]` 静态图 + hover 自动播放 `coverVideoUrl`（参考 liblib.tv hover 行为）。
+- ⬜ **作者系统接入**：mock 数据 `author.name` 改为真实 hub 用户；`PromptsPage` 已有 `useAuthStore`/`hubClient` 可复用。
+
 ## 共享提示词与工作流生态（新方向）
 
 - ~~前端登录/注册页面对接 hub `authApi`，token 持久化到 localStorage。~~ ✅ P1 用户系统已完成（`useAuthStore` + `AuthModal` + `useAuth` hook），待用户测试确认。
@@ -86,3 +104,46 @@ title: 后续待办
 - **Tauri updater 签名**：✅ 已完成，待用户测试确认。生成新 Ed25519 密钥对替换模板 pubkey，`tauri.conf.json` 启用 `createUpdaterArtifacts` + 修正 endpoint 指向 `avabbbb/Flovart`，前端 `useUpdaterStore` 实现自动检查 + 手动更新。详见 `pending-test.mdx`。
 - **GitHub Actions CI**：✅ 已完成，待用户测试确认。`.github/workflows/release.yml` 用 `tauri-action` 矩阵构建 Windows/macOS/Linux，tag push 自动发布 + 生成 `latest.json`。详见 `pending-test.mdx`。
 - **flovart-cli 发版**：⬜ `npm publish` 发布包含 `dev-commands.js` 的新版 `flovart-cli`，用户可 `npm i -g flovart-cli` 全局安装。
+
+## Art 工作台（工具背包 + 拖拽 + 全屏编辑）
+
+三工作区架构第三块。Canvas 作为抠图/合成底座，右侧 Agent 面板替换为可拖拽工具背包（故障/滤镜/深度/抠图/边缘线稿法线），拖拽工具到画布触发涟漪扩散动画后进入全屏编辑界面，处理完原地替换画布内容。Canvas 不再作为独立工作区入口对外暴露，但其 KonvaCanvas 渲染层 + useGeneration + idb:* 协议继续作为 Art 底座复用。
+
+### 框架（第一批）
+
+- **WorkspaceView 类型扩展**：✅ 已完成。`WorkspaceView` 改为 `'workflow' | 'art'`（`types/index.ts:262`，原 `'canvas'` 已删除），`useWorkspaceStore` 默认 `activeView` 改为 `'workflow'`，`StudioTopMenu` 导航 tab 改为 2 个（Workflow/Art），`StudioMenuModel.mode` 和 `changeMode` 加 `'art'` 去 `'canvas'`，`studioShell.test.tsx` 同步更新。待用户测试确认。
+- **ArtToolPack 工具背包组件**：✅ 已完成。`components/art/ArtToolPack.tsx` + `artTools.ts`，8 个工具按 风格化/特征提取/抠图 3 类分组（滤镜风格/故障风格/深度图/边缘/线稿/法线/姿态/智能抠图），卡片可拖拽（`draggable` + `dataTransfer 'application/x-art-tool'`）或点击直接打开，外观沿用 `isl-panel/isl-mint/theme-aware` Tactile Shell 视觉。待用户测试确认。
+- **ArtRippleOverlay 涟漪动画**：✅ 已完成。`components/art/ArtRippleOverlay.tsx`，Framer Motion（`motion` 包）三圈弹性扩散 + 中心工具图标回弹，drop 点触发 0.9s 动画。待用户测试确认。
+- **ArtEditDialog 全屏编辑框架**：✅ 已完成。`components/art/ArtEditDialog.tsx`，Ant Design Modal 框架（参考 `WorkflowImageToolDialogs`），图片/视频预览 + 占位确认按钮，`onConfirm(resultHref)` 回调原地替换画布元素。待用户测试确认。
+- **App.tsx Art 状态接线**：✅ 已完成。`artEdit`/`artBusy`/`artError`/`artRipple` state，`handleDrop` 检测 `application/x-art-tool` MIME 触发 `triggerArtTool`。待用户测试确认。
+- **App.tsx `activeView === 'art'` 分支**：✅ 已完成。复用 Canvas `leftSidebar` + `main` + `bottomDock`，`rightSidebar` 替换为 `ArtToolPack`，`overlays` 加 `ArtRippleOverlay` + `ArtEditDialog`。待用户测试确认。
+- **Workflow → Art 入口**：✅ 已完成。`WorkflowNodeToolbar` 选中图片/视频节点时新增「进 Art 工作台」按钮（`Palette` 图标），链路 `WorkflowNodeToolbar` → `InfiniteWorkflow` (`onOpenArt`) → `WorkflowWorkspace` (`onOpenArt`) → `App.tsx` `handleOpenArtFromWorkflow`：拉取节点 `storageKey`/`href` Blob 构造 File，`setActiveView('art')` 后双 `rAF` 调 `handleAddMediaElement` 等画布 SVG 挂载后再插入元素；失败走 `toast.show(..., 'error')`。同时修正既有 `openArtTool` 的 `toast.add` → `toast.show(..., 'warning')`。待用户测试确认。
+
+### 工具实现（第二批，进行中）
+
+- **Web Worker 框架**：✅ 已完成。新建 `workers/art-protocol.ts`（主线程/worker 双向消息协议）+ `workers/art-worker.ts`（统一 worker 入口，按 toolId 分派到 processor）+ `workers/art-processors/`（具体算法模块）+ `hooks/components/art/useArtWorker.ts`（主线程 hook，reference-count 管理 single worker 实例，cancel 支持）。Vite `new Worker(new URL(...), { type: 'module' })` 自动打包；`vite.config.ts` 已配置 `Cross-Origin-Opener-Policy: same-origin` + `Cross-Origin-Embedder-Policy: require-corp`。待用户测试确认。
+- **ArtEditDialog 处理流程接入**：✅ 已完成。从"占位确认"重写为端到端处理流程：dialog 进入即自动 `start()` 触发 worker 处理，显示 Spin + phase（decoding/processing/encoding/done/error）进度文案；处理完显示原图/结果 Segmented 切换对比，"替换画布内容"按钮调 `onConfirm(resultDataUrl)` 走原 `handleArtEditConfirm` 流程回写画布（含 toIdbRef 落盘）；错误可"重试"。`component/workflow/media.ts` `loadFallbackMediaBlob` 改 export 供 hook 复用。待用户测试确认。
+- **边缘提取工具（`edges`）**：✅ 已完成。`workers/art-processors/edges.ts` 实现完整 Canny 流水线（灰度 → 高斯模糊 → Sobel 梯度 → NMS 非极大值抑制 → 双阈值 + hysteresis），纯 JS Float32Array 像素操作，无外部依赖，输出黑白边缘图（黑边白底，可 `invert` 反相）。1536px 上限自动等比下采样。`edgesPipeline(src, w, h, { thresholdLow, thresholdHigh, blur, invert })`。待用户测试确认。
+- **深度图提取工具（`depth`）**：✅ 已完成。`workers/art-processors/depth.ts` 通过 transformers.js v4 `pipeline('depth-estimation', 'onnx-community/depth-anything-v2-small-ONNX')` 加载模型（~100MB，首次从 HF Hub 下载，之后走浏览器 IndexedDB 缓存），WebGPU 优先 `device:'webgpu'`、不支持时回落 `wasm`，`dtype:'fp32'`。dynamic `import('@huggingface/transformers')` 仅在 depth 工具被调用时拉取,不影响 edges/normals/lineart 像素工具的 worker bundle 体积。pipeline singleton 缓存,避免重复加载。输出 8bit 灰度 RGBA。待用户测试确认。
+- **法线提取工具（`normals`）**：✅ 已完成。`workers/art-processors/normals.ts` 从输入图（深度图或任意灰度源）做中心差分 → 归一化 → 编码成 RGB 法线图（标准 tangent-space normal map 约定，RGB = (nx*0.5+0.5)*255）。`normalsFromDepth(src, w, h, { strength, invert })`。可用于深度图转法线、或独立从图灰度生成伪法线。待用户测试确认。
+- **线稿提取工具（`lineart`）**：✅ 已完成（近似实现）。`workers/art-processors/lineart.ts` 当前路由到 Canny/edges 流水线，使用更细的预设（`thresholdLow: 0.12, thresholdHigh: 0.32, blur: 0.8`）产线稿近似输出。`LineartOptions` 同 `EdgesOptions`。专用的 anime line-art 模型（如 `rocca/informative-drawings-line-art-onnx` 走裸 onnxruntime-web 非标准 pipeline）后续可替换此路由而不改 worker 边界。待用户测试确认。
+- **滤镜风格化工具**：⬜ 预设库（复古DV/VHS/胶片等）+ 可微调参数，复用 `ImageFilterPanel` + `buildCssFilter`，图片 CSS filter + Canvas 像素操作。
+- **故障风格（Glitch）工具**：⬜ RGB 分离 / 扫描线 / 噪点 / 撕裂，Canvas 像素操作。
+- **智能抠图工具**：⬜ 复用现有 `removeBackground`（已实现）+ Canvas lasso 手动抠图（画布已有）。
+- **姿态提取工具**：⬜ OpenPose 骨架图（`@mediapipe/tasks-vision` Pose）。
+- **Art 与 Workflow 互通**：🚧 进行中。Workflow 选中节点 → 按钮进 Art 已打通（节点媒体载入画布）；处理结果存素材库（AssetLibrary）可回 Workflow ⬜。
+- **Art 独立导入入口**：✅ 已完成，复用 Canvas 顶栏 Toolbar 既有 `onUpload={handleAddMediaElement}`，Art 视图沿用 Canvas 主区，无需新增独立导入按钮。
+
+## 三工作区布局规范统一
+
+当前 Canvas / Workflow / Art 三个工作区布局规范不统一：
+- Canvas：`AppShell` + `chromeMetrics.outerGap`，右侧 `RightPanel` 绝对定位。
+- Workflow：`AppShell` main 内部包 `WorkflowWorkspace`，自带 `WorkflowSidebar` + `StudioRightDrawer`，硬编码 `outerGap=12`。
+- Art（规划）：`AppShell` + `chromeMetrics.outerGap`，右侧 `ArtToolPack` 绝对定位。
+
+- **统一目标**：⬜ 顶栏 / 左右侧栏 / 底部 Dock / 外边距 / 圆角 / 阴影 / 主题 token 统一一套规范；清理 Workflow 硬编码 `outerGap=12`；合并 `RightPanel` / `StudioRightDrawer` / `ArtToolPack` 双轨右侧实现；全局色板走 `ConfigProvider` token + `app-theme.ts`，清理硬编码 stone/slate/black-white。
+
+## Workflow API 账单与任务取消后续
+
+- **供应商任务级取消适配**：⬜ 仅对官方明确提供取消接口的模型保存 `providerTaskId` 并调用供应商取消能力；在没有确认取消成功前，UI 继续使用“停止等待”，不得显示“已取消任务”。
+- **实际账单回填**：⬜ 为能查询任务账单/用量的供应商增加 reconciliation 适配，把本机预估费用更新为实际费用；没有账单接口时继续保留“费用未知”，不自动退款或假定零消耗。

@@ -84,7 +84,7 @@ export default function ToCLanding() {
               </button>
             )}
             <button
-              onClick={() => linkTo('/app')}
+              onClick={() => linkTo('/app/home')}
               className="text-sm font-medium px-5 py-2 rounded-full transition-all hover:scale-105"
               style={{ background: '#19c8b9', color: '#fff', boxShadow: '0 0 20px rgba(25,200,185,0.3)' }}
             >
@@ -128,7 +128,7 @@ export default function ToCLanding() {
             {/* CTAs */}
             <div className="flex items-center justify-center gap-4 flex-wrap">
               <button
-                onClick={() => linkTo('/app')}
+                onClick={() => linkTo('/app/home')}
                 className="group flex items-center gap-2 px-8 py-3.5 rounded-full text-base font-semibold transition-all hover:scale-105"
                 style={{ background: '#19c8b9', color: '#fff', boxShadow: '0 8px 32px rgba(25,200,185,0.3)' }}
               >
@@ -340,7 +340,7 @@ export default function ToCLanding() {
           </h2>
           <p className="text-lg mb-10" style={{ color: '#a8a49c' }}>免费、开源、本地优先 — 现在就开始</p>
           <button
-            onClick={() => linkTo('/app')}
+            onClick={() => linkTo('/app/home')}
             className="group inline-flex items-center gap-2 px-10 py-4 rounded-full text-lg font-bold transition-all hover:scale-105"
             style={{ background: '#19c8b9', color: '#fff', boxShadow: '0 12px 40px rgba(25,200,185,0.35)' }}
           >

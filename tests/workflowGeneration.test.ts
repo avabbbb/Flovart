@@ -356,4 +356,35 @@ describe('workflow generation', () => {
     expect(revoke).toHaveBeenCalledWith('blob:provider-result');
     revoke.mockRestore();
   });
+
+  it('binds ordered image mentions to first and last frame roles', async () => {
+    const source = project();
+    source.nodes.push({ id: 'image-2', type: 'image', title: '尾帧', position: { x: 0, y: 440 }, width: 300, height: 200, metadata: { href: 'data:image/png;base64,BB==', mimeType: 'image/png' } });
+    source.connections.push({ id: 'c', fromNodeId: 'image-2', toNodeId: 'config-1' });
+    source.nodes[2].metadata = { prompt: '平滑转场', mentionedNodeIds: ['image-1', 'image-2'], config: { mode: 'video', submode: 'first-last-frame', modelId: 'veo-3.1-generate-preview' } };
+    const executeMedia = vi.fn().mockResolvedValue({ ok: true, elementId: 'config-1', capability: 'video', mediaUrl: 'https://output/video', mimeType: 'video/mp4' });
+
+    await runWorkflowGeneration(source, 'config-1', {
+      userApiKeys: [{ ...imageKey, provider: 'google', capabilities: ['video'], customModels: ['veo-3.1-generate-preview'] }],
+      modelPreference: { textModel: '', imageModel: '', videoModel: 'veo-3.1-generate-preview' }, executeMedia,
+      fetchMedia: vi.fn().mockResolvedValue(new Blob(['video'])), ingestMedia: vi.fn().mockResolvedValue({ type: 'video', storageKey: 'video', name: 'video.mp4', mimeType: 'video/mp4', bytes: 5 }), createVideoPoster: vi.fn().mockResolvedValue(null), onProjectChange: vi.fn(),
+    });
+
+    expect(executeMedia.mock.calls[0][0].references).toEqual([
+      expect.objectContaining({ elementId: 'image-1', slotRole: 'first_frame' }),
+      expect.objectContaining({ elementId: 'image-2', slotRole: 'last_frame' }),
+    ]);
+  });
+
+  it('rejects first-last-frame before submission when the second image is missing', async () => {
+    const source = project();
+    source.nodes[2].metadata = { prompt: '平滑转场', mentionedNodeIds: ['image-1'], config: { mode: 'video', submode: 'first-last-frame', modelId: 'veo-3.1-generate-preview' } };
+    const executeMedia = vi.fn();
+    const result = await runWorkflowGeneration(source, 'config-1', {
+      userApiKeys: [{ ...imageKey, provider: 'google', capabilities: ['video'], customModels: ['veo-3.1-generate-preview'] }],
+      modelPreference: { textModel: '', imageModel: '', videoModel: 'veo-3.1-generate-preview' }, executeMedia, onProjectChange: vi.fn(),
+    });
+    expect(executeMedia).not.toHaveBeenCalled();
+    expect(result.nodes.find(node => node.id === 'config-1')?.metadata.error).toContain('需要按顺序引用 2 张图片');
+  });
 });

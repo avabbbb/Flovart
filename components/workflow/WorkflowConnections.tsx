@@ -22,13 +22,14 @@ export function WorkflowConnections({
   nodes: WorkflowNode[];
   connections: WorkflowConnection[];
   selectedId: string | null;
-  active?: { sourceId: string; point: WorkflowPoint; targetId?: string | null } | null;
+  active?: { sourceId: string; point: WorkflowPoint; targetId?: string | null; direction?: 'out' | 'in' } | null;
   onSelect: (id: string) => void;
   onContextMenu: (event: ReactMouseEvent<SVGPathElement>, id: string) => void;
 }) {
   const byId = new Map(nodes.map(node => [node.id, node]));
   const source = active ? byId.get(active.sourceId) : undefined;
   const target = active?.targetId ? byId.get(active.targetId) : undefined;
+  const direction = active?.direction ?? 'out';
   return (
     <svg className="workflow-connections" role="group" aria-label="工作流连接">
       {connections.map(connection => {
@@ -90,6 +91,15 @@ export function WorkflowConnections({
         />
       )}
       {source && active && (() => {
+        if (direction === 'in') {
+          // origin is the target; the floating endpoint comes from a candidate source
+          const endX = source.position.x;
+          const endY = source.position.y + source.height / 2;
+          const startX = target ? target.position.x + target.width : active.point.x;
+          const startY = target ? target.position.y + target.height / 2 : active.point.y;
+          const curve = Math.max(Math.abs(endX - startX) * 0.5, 50);
+          return <path d={`M ${startX} ${startY} C ${startX + curve} ${startY}, ${endX - curve} ${endY}, ${endX} ${endY}`} fill="none" className="workflow-connection is-active" />;
+        }
         const startX = source.position.x + source.width;
         const startY = source.position.y + source.height / 2;
         const endX = target ? target.position.x : active.point.x;

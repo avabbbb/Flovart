@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>FLOVART · TAKE YOUR HEART — 作品路标</title>
+
+<!-- ===== P5R 风格 UI 层(CSS 2D 悬浮,不属于 3D 场景) ===== -->
+<style>
+  :root{
+    --p5r-red:#E60012;
+    --p5r-red2:#B8000E;
+    --p5r-ink:#0a0a0a;
+    --p5r-paper:#f6f1e7;
+    --p5r-white:#ffffff;
+  }
+  *{box-sizing:border-box;-webkit-user-select:none;user-select:none;}
+  html,body{margin:0;height:100%;overflow:hidden;background:#ffffff;}
+  #app{position:fixed;inset:0;}
+  canvas{display:block;touch-action:none;}
+
+  /* P5R 风格切角处理 */
+  .skew-cut{
+    transform:skewX(-8deg);
+    transform-origin:left center;
+  }
+  .ital{font-style:italic;font-weight:900;letter-spacing:.01em;}
+
+  /* 左上主标题 */
+  #title{
+    position:fixed;left:34px;top:30px;z-index:20;pointer-events:none;
+    font-family:"Arial Black","Impact","PingFang SC","Microsoft YaHei",sans-serif;
+    line-height:.82;
+  }
+  #title .row1{
+    font-size:60px;color:var(--p5r-red);
+    text-shadow:5px 5px 0 var(--p5r-ink);
+    transform:skewX(-8deg);
+  }
+  #title .row2{
+    margin-top:6px;font-size:60px;color:var(--p5r-ink);
+    text-shadow:5px 5px 0 var(--p5r-red);
+    transform:skewX(-8deg);
+    letter-spacing:-.02em;
+  }
+  #title .tag{
+    margin-top:14px;display:inline-block;
+    font-size:13px;letter-spacing:.32em;color:#fff;background:var(--p5r-ink);
+    padding:4px 14px 4px 10px;
+    clip-path:polygon(0 0,100% 0,92% 100%,0 100%);
+    transform:skewX(-8deg);
+  }
+  #title .tag b{color:var(--p5r-red);}
+
+  /* 右上提示 */
+  #hint{
+    position:fixed;right:28px;top:32px;z-index:20;text-align:right;pointer-events:none;
+    font-family:"Arial Black","Impact",sans-serif;color:var(--p5r-ink);
+  }
+  #hint .k{
+    display:inline-block;margin-left:8px;padding:3px 9px;background:var(--p5r-ink);
+    color:#fff;font-size:12px;letter-spacing:.18em;
+    clip-path:polygon(0 0,100% 0,88% 100%,0 100%);transform:skewX(-8deg);
+  }
+  #hint .l{font-size:11px;letter-spacing:.24em;color:#3a3a3a;margin-bottom:6px;}
+
+  /* 底部居中指引 */
+  #stamp{
+    position:fixed;left:50%;bottom:26px;transform:translateX(-50%) skewX(-8deg);
+    z-index:20;pointer-events:none;text-align:center;
+    font-family:"Arial Black",sans-serif;
+  }
+  #stamp .s1{font-size:20px;color:var(--p5r-ink);letter-spacing:.22em;}
+  #stamp .s2{margin-top:4px;font-size:11px;color:var(--p5r-red);letter-spacing:.5em;}
+
+  /* 聚焦后弹出的接口菜单 */
+  #panel{
+    position:fixed;right:36px;top:50%;transform:translateY(-50%) skewX(-8deg);
+    width:300px;z-index:30;display:none;
+    font-family:"Arial Black","PingFang SC","Microsoft YaHei",sans-serif;
+    background:var(--p5r-white);
+    border:5px solid var(--p5r-ink);
+    clip-path:polygon(0 0,100% 0,100% 0,100% 100%,0 100%,0 100%);
+    box-shadow:9px 9px 0 var(--p5r-red);
+    transition:opacity .25s ease, transform .25s ease;
+  }
+  #panel.show{display:block;}
+  #panel .ph{
+    background:var(--p5r-red);color:#fff;padding:12px 16px 12px 18px;
+    display:flex;justify-content:space-between;align-items:center;
+    border-bottom:4px solid var(--p5r-ink);
+  }
+  #panel .ph .t{font-size:18px;letter-spacing:.02em;}
+  #panel .ph .en{font-size:11px;letter-spacing:.28em;opacity:.85;}
+  #panel .pt{font-size:12px;color:#3a3a3a;letter-spacing:.18em;padding:10px 16px 4px;
+    background:var(--p5r-white);transform:skewX(0);}
+  #panel .items{padding:6px 0 12px;}
+  #panel .it{
+    display:flex;align-items:center;gap:12px;cursor:pointer;
+    padding:11px 16px;margin:0 8px;color:var(--p5r-ink);
+    font-size:15px;letter-spacing:.04em;
+    border-left:0 solid var(--p5r-red);
+    transition:background .12s ease, border-left-width .12s ease, transform .12s ease, color .12s ease;
+  }
+  #panel .it .dot{
+    width:10px;height:10px;background:var(--p5r-ink);transform:skewX(-8deg);
+    flex:0 0 auto;
+  }
+  #panel .it:hover{background:var(--p5r-ink);color:#fff;transform:translateX(6px);border-left:0;}
+  #panel .it:hover .dot{background:var(--p5r-red);}
+  #panel .it .en2{margin-left:auto;font-size:10px;letter-spacing:.18em;color:#888;}
+  #panel .it:hover .en2{color:var(--p5r-red);}
+
+  #panel .close{
+    cursor:pointer;text-align:center;padding:10px;font-size:11px;letter-spacing:.3em;
+    color:#fff;background:var(--p5r-ink);
+  }
+  #panel .close:hover{background:var(--p5r-red);}
+
+  #escmark{position:fixed;left:50%;top:32px;transform:translateX(-50%);
+    z-index:20;display:none;font-family:"Arial Black",sans-serif;}
+  #escmark.show{display:block;}
+  #escmark .k{display:inline-block;padding:3px 9px;background:var(--p5r-ink);color:#fff;
+    font-size:11px;letter-spacing:.2em; clip-path:polygon(10% 0,100% 0,90% 100%,0 100%);
+    transform:skewX(-8deg);}
+  #escmark .t{margin-left:8px;font-size:11px;letter-spacing:.22em;color:var(--p5r-ink);}
+
+  /* 载入 */
+  #load{position:fixed;inset:0;background:#fff;z-index:99;display:flex;
+    align-items:center;justify-content:center;flex-direction:column;
+    transition:opacity .5s ease;}
+  #load .l1{font-family:"Arial Black",sans-serif;font-size:30px;color:var(--p5r-red);
+    transform:skewX(-8deg);letter-spacing:.05em;text-shadow:4px 4px 0 var(--p5r-ink);}
+  #load .l2{margin-top:10px;font-size:11px;letter-spacing:.4em;color:#333;}
+</style>
+</head>
+<body>
+  <div id="app"></div>
+
+  <div id="title">
+    <div class="row1 ital">TAKE</div>
+    <div class="row2 ital">YOUR HEART</div>
+    <div class="tag"><b>×</b> FLOVART 历史项目路标台</div>
+  </div>
+
+  <div id="hint">
+    <div class="l">↻ DRAG · 水平环绕</div>
+    <div class="flex"><span class="k">LMB</span><span class="k" style="margin-left:6px">TOUCH</span></div>
+  </div>
+
+  <div id="escmark">
+    <span class="k">ESC</span><span class="t">/ 点空白 · 退出聚焦</span>
+  </div>
+
+  <div id="panel">
+    <div class="ph"><span class="t ital" id="p-cn">新建工作区</span><span class="en ital" id="p-en">NEW</span></div>
+    <div class="pt">SELECT AN ENTRY · 选择入口</div>
+    <div class="items" id="p-items"></div>
+    <div class="close" id="p-close">关 闭 · CLOSE  ×</div>
+  </div>
+
+  <div id="stamp">
+    <div class="s1 ital">CLICK A SIGN</div>
+    <div class="s2 ital">点 击 路 牌 进 入</div>
+  </div>
+
+  <div id="load">
+    <div class="l1 ital">LOADING…</div>
+    <div class="l2">PHANTOM SIGN POST</div>
+  </div>
+
+<!-- ===== Three.js via importmap ===== -->
+<script type="importmap">
+{
+  "imports":{
+    "three":"https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/":"https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+/* =========================================================
+   路牌数据：形状 / 角度 / 高度 / 标签 / 接口菜单
+   angle 绕杆方位(弧度), y 沿杆高度, w/h 路牌外接尺寸
+   ========================================================= */
+const SIGNS = [
+  { id:'new',        type:'rect-h',   angle: 0.10, y: 2.35, w:1.70, h:1.05,
+    en:'NEW',      cn:'新建工作区',
+    items:[ ['空白画板','BLANK'], ['从模板新建','TEMPLATE'], ['导入项目','IMPORT'] ] },
+
+  { id:'history',    type:'rect-v',   angle: 1.05, y: 1.05, w:0.92, h:1.55,
+    en:'HISTORY',  cn:'历史生成记录',
+    items:[ ['最近的生成','RECENT'], ['我的收藏','STARRED'], ['回收站','TRASH'] ] },
+
+  { id:'models',     type:'square',   angle: 2.35, y:-0.02, w:1.06, h:1.06,
+    en:'MODELS',   cn:'模型库',
+    items:[ ['图像模型','IMAGE'], ['视频模型','VIDEO'], ['我的收藏','FAV'] ] },
+
+  { id:'workflow',   type:'circle',   angle: 3.42, y:-1.15, w:1.05, h:1.05,
+    en:'WORKFLOW', cn:'工作流',
+    items:[ ['新建工作流','NEW'], ['我的工作流','MINE'], ['模板库','TEMPLATE'] ] },
+
+  { id:'canvas',     type:'rect-h',   angle: 4.55, y: 1.60, w:1.52, h:0.84,
+    en:'CANVAS',   cn:'画布',
+    items:[ ['新建画布','NEW'], ['打开画布','OPEN'] ] },
+
+  { id:'enterprise', type:'triangle', angle: 5.55, y:-0.25, w:1.35, h:1.15,
+    en:'CORP',     cn:'企业与团队',
+    items:[ ['团队管理','TEAM'], ['额度面板','CREDIT'], ['审批中心','APPROVE'] ] },
+
+  { id:'settings',   type:'rect-v',   angle: 0.62, y:-2.10, w:0.78, h:1.30,
+    en:'SETTINGS', cn:'设置',
+    items:[ ['偏好设置','PREF'], ['账号','ACCOUNT'], ['关于 FLOVART','ABOUT'] ] },
+];
+
+const POLE_RADIUS  = 0.07;        // 路杆半径
+const SIGN_OFFSET  = 1.95;       // 路牌中心距杆心的半径
+const FRAME_THICK  = 0.05;       // 外框 / 底板 比 正面 大出的边宽
+const DEPTH        = 0.11;       // 路牌厚度
+
+/* =========================================================
+   场景搭建
+   ========================================================= */
+const app = document.getElementById('app');
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xffffff);
+scene.fog = new THREE.Fog(0xffffff, 14, 30);
+
+const camera = new THREE.PerspectiveCamera(45, innerWidth/innerHeight, 0.1, 100);
+camera.position.set(0, 1.15, 7.3);
+
+const renderer = new THREE.WebGLRenderer({ antialias:true, alpha:false });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+app.appendChild(renderer.domElement);
+
+const orbit = new OrbitControls(camera, renderer.domElement);
+orbit.enablePan = false;
+orbit.enableDamping = true;
+orbit.dampingFactor = 0.08;
+orbit.rotateSpeed = 0.6;
+// 锁定上下，只允许水平环绕
+orbit.minPolarAngle = Math.PI * 0.498;
+orbit.maxPolarAngle = Math.PI * 0.502;
+orbit.minDistance = 5.0;
+orbit.maxDistance = 11.0;
+orbit.target.set(0, 0, 0);
+
+/* 灯光：主光 + 环境，让金属有层次但不压暗 P5R 红正面 */
+scene.add(new THREE.AmbientLight(0xffffff, 1.05));
+const key = new THREE.DirectionalLight(0xffffff, 0.75);
+key.position.set(4, 6, 6);
+scene.add(key);
+const rim = new THREE.DirectionalLight(0xddeeff, 0.30);
+rim.position.set(-5, 3, -4);
+scene.add(rim);
+
+/* =========================================================
+   材质
+   ========================================================= */
+const matPole  = new THREE.MeshStandardMaterial({ color:0x101010, roughness:0.55, metalness:0.35 });
+const matRing  = new THREE.MeshStandardMaterial({ color:0x4a4d52, roughness:0.38, metalness:0.85 });
+const matFrame = new THREE.MeshStandardMaterial({ color:0x0a0a0a, roughness:0.45, metalness:0.55 }); // 黑粗框
+const matBack  = new THREE.MeshStandardMaterial({ color:0x2b2e33, roughness:0.32, metalness:0.92 });  // 深灰金属背
+const matRod   = new THREE.MeshStandardMaterial({ color:0x0c0c0c, roughness:0.6,  metalness:0.4 });
+const matRedRim= new THREE.MeshStandardMaterial({ color:0xE60012, roughness:0.4, metalness:0.3, emissive:0x330004, emissiveIntensity:0.25 });
+
+/* 中央路杆 */
+const pole = new THREE.Mesh(
+  new THREE.CylinderGeometry(POLE_RADIUS, POLE_RADIUS*1.02, 6.2, 20),
+  matPole
+);
+scene.add(pole);
+
+/* 杆顶 / 杆底帽 */
+[3.1,-3.1].forEach(y=>{
+  const cap = new THREE.Mesh(new THREE.CylinderGeometry(POLE_RADIUS*1.35, POLE_RADIUS*1.35, 0.06, 20), matRing);
+  cap.position.y = y; scene.add(cap);
+});
+
+/* 金属箍环(深灰) 分布在不同高度 */
+[-2.55,-1.35,0.35,1.75,2.75].forEach(y=>{
+  const torus = new THREE.Mesh(new THREE.TorusGeometry(POLE_RADIUS+0.022, 0.042, 10, 28), matRing);
+  torus.rotation.x = Math.PI/2; torus.position.y = y; scene.add(torus);
+});
+
+/* =========================================================
+   路牌生成
+   ========================================================= */
+const signGroups = [];          // 用于 raycast / 聚焦
+const poleRoot = new THREE.Group(); scene.add(poleRoot); // 整体路标(聚焦时左移)
+
+/* --- 三角形圆角形状(轻微圆润，quadratic curve 在三处顶点) --- */
+function triShape(w, h, r){
+  const T = [
+    [0,   h/2],   // 顶点
+    [-w/2,-h/2],  // 左下
+    [ w/2,-h/2],  // 右下
+  ];
+  const rad = Math.min(r, w*0.16, h*0.16);
+  // 给第 i 个顶点带来的两条边端点处内缩 rad，中点作为控制点
+  function corner(i){
+    const p = T[i];
+    const a = T[(i+1)%3];   // 下一顶点
+    const b = T[(i+2)%3];   // 再下一顶点
+    const e1 = new THREE.Vector2(p[0]-a[0], p[1]-a[1]).normalize();
+    const e2 = new THREE.Vector2(b[0]-a[0], b[1]-a[1]).normalize();
+    return {
+      p1: new THREE.Vector2(a[0]+e1.x*rad, a[1]+e1.y*rad), // 靠 p 端
+      c1: new THREE.Vector2(a[0], a[1]),                    // 控制点(原顶点)
+      p2: new THREE.Vector2(a[0]+e2.x*rad, a[1]+e2.y*rad), // 靠 b 端
+    };
+  }
+  // 顺序：从右下(2)→顶点(0) 的内缩端开始绘
+  const C0 = corner(0), C1 = corner(1), C2 = corner(2);
+  const s = new THREE.Shape();
+  s.moveTo(C2.p2.x, C2.p2.y);
+  s.lineTo(C0.p1.x, C0.p1.y); s.quadraticCurveTo(C0.c1.x, C0.c1.y, C0.p2.x, C0.p2.y);
+  s.lineTo(C1.p1.x, C1.p1.y); s.quadraticCurveTo(C1.c1.x, C1.c1.y, C1.p2.x, C1.p2.y);
+  s.lineTo(C2.p1.x, C2.p1.y); s.quadraticCurveTo(C2.c1.x, C2.c1.y, C2.p2.x, C2.p2.y);
+  return s;
+}
+
+/* --- 归一化 UV：把 ShapeGeometry 的 uv 投影到 0..1(贴图避免黑图) --- */
+function normalizeUV(geo){
+  geo.computeBoundingBox();
+  const b=geo.boundingBox;
+  const sx = b.max.x - b.min.x || 1;
+  const sy = b.max.y - b.min.y || 1;
+  const pos = geo.attributes.position;
+  const uv  = geo.attributes.uv;
+  for(let i=0;i<pos.count;i++){
+    uv.setXY(i, (pos.getX(i)-b.min.x)/sx, (pos.getY(i)-b.min.y)/sy);
+  }
+  uv.needsUpdate = true;
+  return geo;
+}
+
+/* --- P5R 风格正面贴图(canvas → texture，红黑撞色 + 斜切条 + 粗斜体) --- */
+function makeFaceTexture(en, cn, wpx, hpx){
+  const c = document.createElement('canvas');
+  c.width = wpx; c.height = hpx;
+  const x = c.getContext('2d');
+
+  // 1) 红底
+  x.fillStyle = '#E60012'; x.fillRect(0,0,wpx,hpx);
+
+  // 2) 黑色斜切条带(左上→右下动感)
+  x.save();
+  const s = Math.min(wpx,hpx);
+  x.fillStyle = '#0a0a0a';
+  x.beginPath();
+  x.moveTo(0, hpx*0.78);
+  x.lineTo(wpx, hpx*0.40);
+  x.lineTo(wpx, hpx*0.62);
+  x.lineTo(0, hpx);
+  x.closePath(); x.fill();
+  x.restore();
+
+  // 3) 右上角小白缺口(切角感)
+  x.fillStyle='#ffffff';
+  x.beginPath();
+  x.moveTo(wpx,0); x.lineTo(wpx,wpx*0.14); x.lineTo(wpx-wpx*0.14,0); x.closePath(); x.fill();
+
+  // 4) 英文主标(粗斜体白)
+  x.save();
+  x.translate(wpx*0.5, hpx*0.40);
+  x.transform(1,0,-0.22,1,0,0); // skew
+  let fs = Math.floor(Math.min(wpx/ (en.length*0.62), hpx*0.40));
+  fs = Math.max(fs, 18);
+  x.font = `900 ${fs}px "Arial Black", Impact, sans-serif`;
+  x.textAlign='center'; x.textBaseline='middle';
+  x.fillStyle='#ffffff';
+  x.fillText(en, 0, 0);
+  // 黑色描边阴影
+  x.lineWidth = Math.max(3, fs*0.06);
+  x.strokeStyle='#0a0a0a'; x.strokeText(en, 0, 0);
+  x.restore();
+
+  // 5) 下方中文小字(黑)
+  x.save();
+  x.translate(wpx*0.5, hpx*0.72);
+  let cfs = Math.max(12, Math.floor(hpx*0.11));
+  if (cn.length>4) cfs = Math.max(12, Math.floor(min(wpx*0.86/cn.length, hpx*0.11)));
+  x.font = `700 ${cfs}px "PingFang SC","Microsoft YaHei",sans-serif`;
+  x.textAlign='center'; x.textBaseline='middle';
+  x.fillStyle='#0a0a0a';
+  x.fillText(cn, 0, 0);
+  x.restore();
+
+  // 6) 角落红黑菱形装饰
+  x.fillStyle='#ffffff';
+  x.beginPath(); x.moveTo(wpx*0.06,hpx*0.93);
+  x.lineTo(wpx*0.10,hpx*0.95); x.lineTo(wpx*0.06,hpx*0.97);
+  x.lineTo(wpx*0.02,hpx*0.95); x.closePath(); x.fill();
+
+  const tex = new THREE.CanvasTexture(c);
+  tex.anisotropy = 4;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+// 上面 cn 小字号用了 min，补全引用
+function min(...a){ return Math.min(...a); }
+
+/* --- 构建 1 个路牌 Group --- */
+function buildSign(def){
+  const g = new THREE.Group();
+  g.userData = { signId: def.id, def };
+  // 外框(略大黑底板，厚度 DEPTH)：暴露一圈形成粗框 + 兼做承载体
+  const FW = def.w + FRAME_THICK*2;
+  const FH = def.h + FRAME_THICK*2;
+
+  let frameShape;
+  let faceGeo;
+  let faceW = def.w, faceH = def.h;
+
+  if (def.type==='rect-h' || def.type==='rect-v' || def.type==='square'){
+    frameShape = new THREE.Shape();
+    frameShape.moveTo(-FW/2,-FH/2).lineTo(FW/2,-FH/2).lineTo(FW/2,FH/2).lineTo(-FW/2,FH/2).closePath();
+    faceGeo = new THREE.PlaneGeometry(faceW, faceH);
+  } else if (def.type==='circle'){
+    frameShape = new THREE.Shape();
+    frameShape.absarc(0,0,Math.max(FW,FH)/2,0,Math.PI*2,true);
+    faceGeo = new THREE.CircleGeometry(Math.max(faceW,faceH)/2, 48);
+  } else if (def.type==='triangle'){
+    frameShape = triShape(FW, FH, 0.20);
+    const fg = new THREE.ShapeGeometry(triShape(faceW, faceH, 0.20));
+    faceGeo = normalizeUV(fg);
+  }
+
+  // 底外框：黑色，略厚，正面略凸
+  const frameGeo = new THREE.ExtrudeGeometry(frameShape, {
+    depth: DEPTH, bevelEnabled:true, bevelThickness:0.012, bevelSize:0.012, bevelSegments:2
+  });
+  frameGeo.translate(0,0,-DEPTH/2);
+  const frame = new THREE.Mesh(frameGeo, matFrame);
+  g.add(frame);
+
+  // 圆形：额外一圈红金属外圈(P5R 点缀)
+  if (def.type==='circle'){
+    const rim = new THREE.Mesh(
+      new THREE.TorusGeometry(Math.max(FW,FH)/2+0.012, 0.020, 10, 48),
+      matRedRim
+    );
+    rim.position.z = 0.012;
+    g.add(rim);
+  }
+
+  // 背板：深灰金属薄板(略小于外框，落在背面)
+  let backShape;
+  if (def.type==='circle'){
+    backShape = new THREE.Shape(); backShape.absarc(0,0,Math.max(def.w,def.h)/2-0.01,0,Math.PI*2,true);
+  } else if (def.type==='triangle'){
+    backShape = triShape(def.w, def.h, 0.20);
+  } else {
+    backShape = new THREE.Shape();
+    backShape.moveTo(-def.w/2,-def.h/2).lineTo(def.w/2,-def.h/2).lineTo(def.w/2,def.h/2).lineTo(-def.w/2,def.h/2).closePath();
+  }
+  const backGeo = new THREE.ExtrudeGeometry(backShape, { depth:0.03, bevelEnabled:true, bevelThickness:0.005, bevelSize:0.005, bevelSegments:1 });
+  backGeo.translate(0,0,-DEPTH-0.03);
+  g.add(new THREE.Mesh(backGeo, matBack));
+
+  // 正面贴图层(MeshBasic 不受光，P5R 红色拉满)
+  const tex = makeFaceTexture(def.en, def.cn, 512, Math.max(256, Math.round(512*def.h/def.w)));
+  const faceMat = new THREE.MeshBasicMaterial({ map:tex, side:THREE.FrontSide });
+  const faceMesh = new THREE.Mesh(faceGeo, faceMat);
+  faceMesh.position.z = DEPTH/2 + 0.013 + 0.001;
+  // 给 raycast 命中面也打 signId 标记
+  faceMesh.userData = { signId: def.id };
+  g.add(faceMesh);
+  frame.userData = { signId: def.id };
+
+  return g;
+}
+
+/* --- 支撑横杆：从杆表面连到路牌背面中心(轻微倾斜随机感) --- */
+function buildRod(def, signParent){
+  const ang = def.angle;
+  const radial = new THREE.Vector3(Math.cos(ang), 0, Math.sin(ang));
+  // 杆端 y(略偏离路牌 y，制造倾斜)
+  const yPole = def.y + ( (def.id.charCodeAt(0)%5)-2 )*0.10;
+  const ySign = def.y;
+  const poleAttach = radial.clone().multiplyScalar(POLE_RADIUS+0.01);
+  poleAttach.y = yPole;
+  const signBack = radial.clone().multiplyScalar(SIGN_OFFSET - DEPTH/2 - 0.03);
+  signBack.y = ySign;
+
+  const dir = signBack.clone().sub(poleAttach);
+  const len = dir.length();
+  const rod = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.035, 0.04, len, 12), matRod
+  );
+  const mid = poleAttach.clone().add(signBack).multiplyScalar(0.5);
+  const up = new THREE.Vector3(0,1,0);
+  const quat = new THREE.Quaternion().setFromUnitVectors(up, dir.clone().normalize());
+  rod.position.copy(mid);
+  rod.quaternion.copy(quat);
+  return rod;
+}
+
+/* --- 把每一个路牌 + 横杆装到 poleRoot --- */
+SIGNS.forEach(def=>{
+  const g = buildSign(def);
+  const ang = def.angle;
+  // 位置：绕杆半径 SIGN_OFFSET
+  g.position.set(Math.cos(ang)*SIGN_OFFSET, def.y, Math.sin(ang)*SIGN_OFFSET);
+  // 朝向：正面(+Z) → 径向外。 rotation.y = PI/2 - angle
+  g.rotation.y = Math.PI/2 - ang;
+  poleRoot.add(g);
+
+  const rod = buildRod(def, g);
+  poleRoot.add(rod);
+
+  signGroups.push(g);
+});
+
+/* =========================================================
+   交互：点击路牌 → 聚焦；点空白/ESC → 恢复(到点击前视角)
+   ========================================================= */
+const raycaster = new THREE.Raycaster();
+const ndc = new THREE.Vector2();
+let mode = 'free';               // 'free' | 'focusing' | 'focus' | 'restoring'
+let anim = null;                 // 当前补间 { from, to, t, dur, onDone }
+let freeSnapshot = null;         // 进入聚焦前 快照(用于精确恢复)
+
+const panel    = document.getElementById('panel');
+const pCn      = document.getElementById('p-cn');
+const pEn      = document.getElementById('p-en');
+const pItems   = document.getElementById('p-items');
+const pClose   = document.getElementById('p-close');
+const escmark  = document.getElementById('escmark');
+
+function easeInOutCubic(t){ return t<0.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2,3)/2; }
+
+function snapshot(){
+  return {
+    camPos: camera.position.clone(),
+    target: orbit.target.clone(),
+    groupX: poleRoot.position.x
+  };
+}
+function applySnapshot(s){ camera.position.copy(s.camPos); orbit.target.copy(s.target); poleRoot.position.x = s.groupX; }
+
+/* 计算聚焦某路牌的目标相机参数：路牌正面平行屏幕、相机在其正前方 */
+function focusTargetFor(def){
+  // 路牌在世界中的位置(考虑 group 左移 X)
+  const gx = poleRoot.position.x;
+  const ang = def.angle;
+  const sw = new THREE.Vector3(gx + Math.cos(ang)*SIGN_OFFSET, def.y, Math.sin(ang)*SIGN_OFFSET);
+  // 路牌正面法线(径向外，世界)
+  const normal = new THREE.Vector3(Math.cos(ang),0,Math.sin(ang)).normalize();
+  const dist = Math.max(3.2, def.w*2.4);
+  const camPos = sw.clone().add(normal.multiplyScalar(dist));
+  return { camPos, target: sw.clone(), groupX: -2.6 }; // 整体路标向左移，被点击路牌居中
+}
+
+function startAnim(to, dur, onDone){
+  anim = { from: snapshot(), to, t:0, dur, onDone };
+}
+function focusSign(def){
+  if (mode!=='free') return;
+  freeSnapshot = snapshot();
+  mode='focusing';
+  orbit.enabled = false;
+  // 更新 UI 面板
+  pCn.textContent = def.cn;
+  pEn.textContent = def.en;
+  pItems.innerHTML='';
+  def.items.forEach(([cn,en])=>{
+    const d = document.createElement('div'); d.className='it';
+    d.innerHTML = `<span class="dot"></span><span>${cn}</span><span class="en2">${en}</span>`;
+    d.onclick = ()=> handleAction(def.id, cn);
+    pItems.appendChild(d);
+  });
+  startAnim(focusTargetFor(def), 0.85, ()=>{
+    mode='focus';
+    panel.classList.add('show');
+    escmark.classList.add('show');
+  });
+}
+
+function restore(){
+  if (mode==='free') return;
+  // 退出时回到进入聚焦前那个视角(而非初始)
+  mode='restoring';
+  panel.classList.remove('show');
+  escmark.classList.remove('show');
+  orbit.enabled = false;
+  startAnim(freeSnapshot, 0.7, ()=>{
+    mode='free';
+    orbit.enabled = true;
+  });
+}
+
+function pickAt(clientX, clientY){
+  const rect = renderer.domElement.getBoundingClientRect();
+  ndc.x = ((clientX-rect.left)/rect.width)*2-1;
+  ndc.y = -((clientY-rect.top)/rect.height)*2+1;
+  raycaster.setFromCamera(ndc, camera);
+  const hits = raycaster.intersectObjects(poleRoot.children, true);
+  for(const h of hits){
+    let o = h.object;
+    while(o){
+      if (o.userData && o.userData.signId){ return o.userData.signId; }
+      o = o.parent;
+    }
+  }
+  return null;
+}
+
+/* 点击判断(避免拖动误触) */
+let down={x:0,y:0,active:false};
+renderer.domElement.addEventListener('pointerdown', e=>{ down.x=e.clientX; down.y=e.clientY; down.active=true; });
+renderer.domElement.addEventListener('pointerup', e=>{
+  if(!down.active) return; down.active=false;
+  const dx=Math.abs(e.clientX-down.x), dy=Math.abs(e.clientY-down.y);
+  if(dx>6||dy>6) return; // 拖动，不视为点击
+  const id = pickAt(e.clientX, e.clientY);
+  if (id){
+    if (mode==='free'){ const def = SIGNS.find(s=>s.id===id); focusSign(def); }
+    else if (mode==='focus'){
+      // 聚焦中点击别的路牌 → 切换聚焦(经恢复后的视觉延续)
+      // 这里直接平滑切换到新路牌
+      focusAnother( SIGNS.find(s=>s.id===id) );
+    }
+  } else {
+    if (mode==='focus' || mode==='restoring') restore();
+  }
+});
+
+function focusAnother(def){
+  // 已在聚焦态，再点其它路牌
+  panel.classList.remove('show');
+  mode='focusing';
+  startAnim(focusTargetFor(def), 0.6, ()=>{
+    pCn.textContent=def.cn; pEn.textContent=def.en;
+    pItems.innerHTML='';
+    def.items.forEach(([cn,en])=>{
+      const d=document.createElement('div'); d.className='it';
+      d.innerHTML=`<span class="dot"></span><span>${cn}</span><span class="en2">${en}</span>`;
+      d.onclick=()=>handleAction(def.id,cn);
+      pItems.appendChild(d);
+    });
+    panel.classList.add('show');
+    mode='focus';
+  });
+}
+
+addEventListener('keydown', e=>{
+  if (e.key==='Escape' && (mode==='focus'||mode==='focusing')) restore();
+});
+pClose.addEventListener('click', ()=> { if(mode==='focus'||mode==='focusing') restore(); });
+
+/* 占位：接口点击行为(后续替换成跳真实路由) */
+function handleAction(signId, item){
+  console.log('[ACTION]', signId, '→', item);
+  // 视觉反馈：点击后路牌轻微闪烁(P5R take your heart 一闪)
+  flashSign(signId);
+}
+function flashSign(id){
+  const g = signGroups.find(s=>s.userData.signId===id);
+  if(!g) return;
+  const start = performance.now();
+  const tick = ()=>{
+    const t = (performance.now()-start)/220;
+    if (t>=1){ g.scale.set(1,1,1); return; }
+    const k = 1 + Math.sin(t*Math.PI)*0.06;
+    g.scale.set(k,k,k);
+    requestAnimationFrame(tick);
+  };
+  tick();
+}
+
+/* =========================================================
+   渲染循环
+   ========================================================= */
+const clock = new THREE.Clock();
+function render(){
+  requestAnimationFrame(render);
+  const dt = Math.min(clock.getDelta(), 0.05);
+
+  if (anim){
+    anim.t += dt;
+    const p = easeInOutCubic(Math.min(anim.t/anim.dur, 1));
+    camera.position.lerpVectors(anim.from.camPos, anim.to.camPos, p);
+    orbit.target.lerpVectors(anim.from.target,  anim.to.target,   p);
+    poleRoot.position.x = anim.from.groupX + (anim.to.groupX - anim.from.groupX) * p;
+    if (anim.t >= anim.dur){
+      const cb = anim.onDone; anim=null;
+      cb && cb();
+    }
+  }
+
+  orbit.update();
+  renderer.render(scene, camera);
+}
+render();
+
+/* 自适应 */
+addEventListener('resize', ()=>{
+  camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+/* 隐藏载入 */
+setTimeout(()=>{ const l=document.getElementById('load'); l.style.opacity='0'; setTimeout(()=>l.remove(), 500); }, 250);
+
+</script>
+</body>
+</html>

@@ -1,5 +1,5 @@
-import { ChevronsDown, Clapperboard, FileText, Image as ImageIcon, Music2, Upload, Video, X } from 'lucide-react';
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { ChevronsDown, Clapperboard, FileText, Image as ImageIcon, Music2, Pencil, Plus, Upload, Video, X } from 'lucide-react';
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type MouseEvent as ReactMouseEvent } from 'react';
 import { motion } from 'motion/react';
 import { WorkflowConfigPanel } from './WorkflowConfigPanel';
 import { buildCssFilter } from '../ImageFilterPanel';
@@ -11,6 +11,7 @@ export function WorkflowNode({
   selected,
   onPointerDown,
   onConnectStart,
+  onConnectStartTarget,
   onResizeStart,
   onChangeText,
   onChangeMetadata,
@@ -21,21 +22,28 @@ export function WorkflowNode({
   onCollapseBatch,
   onDoubleClick,
   onPreviewMedia,
+  onChangeTitle,
+  onFocusNode,
+  renameSignal,
 }: {
   node: WorkflowNodeData;
   selected: boolean;
   onPointerDown: (event: ReactPointerEvent<HTMLDivElement>) => void;
   onConnectStart: (event: ReactPointerEvent<HTMLButtonElement>) => void;
+  onConnectStartTarget?: (event: ReactPointerEvent<HTMLButtonElement>) => void;
   onResizeStart: (event: ReactPointerEvent<HTMLButtonElement>) => void;
   onChangeText: (value: string) => void;
   onChangeMetadata: (metadata: WorkflowNodeData['metadata']) => void;
   onRun: () => void;
-  onContextMenu: (event: React.MouseEvent<HTMLDivElement>) => void;
+  onContextMenu: (event: ReactMouseEvent<HTMLDivElement>) => void;
   onReplaceMedia: (file: File) => void;
   onRemoveMedia: () => void;
   onCollapseBatch?: () => void;
   onDoubleClick?: () => void;
   onPreviewMedia?: (node: WorkflowNodeData) => void;
+  onChangeTitle?: (title: string) => void;
+  onFocusNode?: () => void;
+  renameSignal?: number;
 }) {
   const status = node.metadata.status || 'idle';
   const progress = Math.max(0, Math.min(100, Math.round(node.metadata.progress || 0)));
@@ -60,6 +68,24 @@ export function WorkflowNode({
   const uploadBytes = node.metadata.uploadBytes || 0;
   const isLoading = status === 'loading' || uploading;
   const [isDropTarget, setDropTarget] = useState(false);
+  const [isEditingTitle, setEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState(node.title);
+  useEffect(() => {
+    if (isEditingTitle) setTitleDraft(node.title);
+  }, [isEditingTitle, node.title]);
+  const lastRenameSignalRef = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    if (renameSignal === undefined || renameSignal === lastRenameSignalRef.current) return;
+    lastRenameSignalRef.current = renameSignal;
+    if (!isEditingTitle) setEditingTitle(true);
+  }, [renameSignal, isEditingTitle]);
+  const titleIcon = node.type === 'image' ? ImageIcon : node.type === 'video' ? Video : node.type === 'audio' ? Music2 : node.type === 'script' ? Clapperboard : FileText;
+  const TitleIcon = titleIcon;
+  const commitTitle = () => {
+    const next = titleDraft.trim();
+    if (next && next !== node.title && onChangeTitle) onChangeTitle(next);
+    setEditingTitle(false);
+  };
   const accept = isMedia ? `${node.type}/*` : undefined;
   const mediaError = isMedia ? (media.error || node.metadata.error) : null;
   const mediaDetails = isMedia ? [
@@ -93,15 +119,21 @@ export function WorkflowNode({
       onPointerDown={onPointerDown}
       onDoubleClick={event => {
         if (node.type === 'script') { event.stopPropagation(); onDoubleClick?.(); return; }
-        if (isMedia) { event.stopPropagation(); if (media.url) onPreviewMedia?.(node); else mediaInput.current?.click(); }
+        event.stopPropagation();
+        if (isMedia && !media.url) { mediaInput.current?.click(); return; }
+        onFocusNode?.();
       }}
       onContextMenu={event => { event.preventDefault(); event.stopPropagation(); onContextMenu(event); }}
       onDragOver={event => { if (isMedia && event.dataTransfer?.types?.includes('Files')) { event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; setDropTarget(true); } }}
       onDragLeave={event => { if (!isMedia) return; const related = event.relatedTarget as Node | null; if (related && (event.currentTarget as HTMLElement).contains(related)) return; setDropTarget(false); }}
       onDrop={event => { if (!isMedia) return; event.preventDefault(); event.stopPropagation(); setDropTarget(false); const file = event.dataTransfer.files?.[0]; if (file) onReplaceMedia(file); }}
     >
-      <button className="workflow-handle workflow-handle--target" aria-label="连接到此节点" data-workflow-target={node.id} />
-      <button className="workflow-handle workflow-handle--source" aria-label="从此节点连接" onPointerDown={onConnectStart} />
+      <button className="workflow-handle workflow-handle--target" aria-label="连接到此节点" data-workflow-target={node.id} onPointerDown={onConnectStartTarget}>
+        <span className="workflow-handle__plus" aria-hidden="true"><Plus size={12} strokeWidth={2.5} /></span>
+      </button>
+      <button className="workflow-handle workflow-handle--source" aria-label="从此节点连接" onPointerDown={onConnectStart}>
+        <span className="workflow-handle__plus" aria-hidden="true"><Plus size={12} strokeWidth={2.5} /></span>
+      </button>
       {status === 'error' && <span className="workflow-node__error-badge" title={node.metadata.error}>!</span>}
       {onCollapseBatch && (
         <button
@@ -112,6 +144,38 @@ export function WorkflowNode({
           onClick={event => { event.stopPropagation(); onCollapseBatch(); }}
         ><ChevronsDown size={14} /></button>
       )}
+      {onChangeTitle && (isEditingTitle ? (
+        <div className="workflow-node__title is-editing" data-workflow-overlay>
+          <TitleIcon size={12} />
+          <input
+            value={titleDraft}
+            autoFocus
+            data-workflow-overlay
+            onChange={event => setTitleDraft(event.target.value)}
+            onPointerDown={event => event.stopPropagation()}
+            onKeyDown={(event: ReactKeyboardEvent<HTMLInputElement>) => {
+              if (event.key === 'Enter') { event.preventDefault(); commitTitle(); }
+              else if (event.key === 'Escape') { event.preventDefault(); setEditingTitle(false); }
+            }}
+            onBlur={commitTitle}
+            onClick={event => event.stopPropagation()}
+          />
+        </div>
+      ) : (
+        <div
+          className="workflow-node__title"
+          onPointerDown={event => event.stopPropagation()}
+          onDoubleClick={event => {
+            event.stopPropagation();
+            setEditingTitle(true);
+          }}
+          title="双击重命名"
+        >
+          <TitleIcon size={12} />
+          <span className="workflow-node__title-text">{node.title}</span>
+          <Pencil className="workflow-node__title-edit-icon" size={11} />
+        </div>
+      ))}
       <div className="workflow-node__body">
         {isMedia && media.url && <div className="workflow-node__drag-handle" data-workflow-drag-handle />}
         {node.type === 'image' && (media.url

@@ -27,8 +27,8 @@ npm run flovart:cli -- canvas.inspect --json
 
 ### How it Works
 
-- **Local data commands**: `canvas.inspect`, `canvas.add-image`, `workflow.load`, `provider.select-model`, etc., read and write the local file-state runtime directly.
-- **Browser execution commands**: `generate.image`, `generate.video`, `element.ignite`, `workflow.run`, etc., are written to `.flovart/command-queue.json` and polled & executed by an open Flovart browser tab via the Vite dev server.
+- **Local data commands**: `canvas.inspect`, `canvas.add-image`, `workflow.inspect`, etc., read and write the local file-state runtime directly.
+- **Browser execution commands**: `provider.status`, `provider.select-model`, `provider.test`, `generate.image`, `generate.video`, `element.ignite`, `workflow.node.run`, etc., are written to `.flovart/command-queue.json` and polled & executed by an open Flovart browser tab via the Vite dev server.
 - **Unified command registry**: All CLI commands are still defined in `tools/flovart/core.js`. External agents only plan; Flovart only executes deterministic commands.
 - **Key security**: API keys are only entered and used in the Flovart browser UI. The CLI never reads, outputs, or stores keys.
 

@@ -1,14 +1,16 @@
 import type { AssetItem, AssetLibrary, GenerationHistoryItem, GenerationRecipe, RecipePackage } from '../types';
 import { addAsset } from './assetStorage';
 
-const ASSET_CATEGORIES = new Set(['character', 'scene', 'prop']);
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
 }
 
 function isPositiveNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value > 0;
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((v) => typeof v === 'string');
 }
 
 export function createRecipePackageFromAsset(asset: AssetItem): RecipePackage {
@@ -23,7 +25,8 @@ export function createRecipePackageFromAsset(asset: AssetItem): RecipePackage {
     version: 1,
     asset: {
       name: asset.name,
-      category: asset.category,
+      folderIds: [],
+      tags: asset.tags ?? [],
       dataUrl: asset.dataUrl,
       mimeType: asset.mimeType,
       width: asset.width,
@@ -38,7 +41,8 @@ export function createAssetFromHistoryItem(item: GenerationHistoryItem): AssetIt
   return {
     id: item.id,
     name: item.name || 'Generated',
-    category: 'scene',
+    folderIds: [],
+    tags: [],
     dataUrl: item.dataUrl,
     mimeType: item.mimeType,
     width: item.width,
@@ -60,7 +64,8 @@ export function installRecipePackageToAssets(
   const asset: AssetItem = {
     id: `recipe_asset_${now}`,
     name: pack.asset.name || 'Recipe Asset',
-    category: pack.asset.category,
+    folderIds: pack.asset.folderIds ?? [],
+    tags: pack.asset.tags ?? [],
     dataUrl: pack.asset.dataUrl,
     mimeType: pack.asset.mimeType,
     width: pack.asset.width,
@@ -86,12 +91,13 @@ export function parseRecipePackageJson(input: string): RecipePackage | null {
     if (!isRecord(raw) || raw.version !== 1) return null;
     if (!isRecord(raw.asset) || !isRecord(raw.recipe)) return null;
 
-    const category = raw.asset.category;
-    if (typeof category !== 'string' || !ASSET_CATEGORIES.has(category)) return null;
     if (typeof raw.asset.dataUrl !== 'string' || !raw.asset.dataUrl.trim()) return null;
     if (typeof raw.asset.mimeType !== 'string' || !raw.asset.mimeType.trim()) return null;
     if (!isPositiveNumber(raw.asset.width) || !isPositiveNumber(raw.asset.height)) return null;
     if (typeof raw.recipe.prompt !== 'string') return null;
+
+    const folderIds = isStringArray(raw.asset.folderIds) ? raw.asset.folderIds : [];
+    const tags = isStringArray(raw.asset.tags) ? raw.asset.tags : [];
 
     const recipe: GenerationRecipe = {
       prompt: raw.recipe.prompt,
@@ -104,7 +110,8 @@ export function parseRecipePackageJson(input: string): RecipePackage | null {
       version: 1,
       asset: {
         name: typeof raw.asset.name === 'string' ? raw.asset.name : undefined,
-        category: category as RecipePackage['asset']['category'],
+        folderIds,
+        tags,
         dataUrl: raw.asset.dataUrl,
         mimeType: raw.asset.mimeType,
         width: raw.asset.width,

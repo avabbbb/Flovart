@@ -2,6 +2,7 @@
 import { executeFlovartCommand, formatValue, normalizeCommandName, parseCliArgs, SETUP_TEXT } from './core.js';
 import { createShadowRuntimeFacade } from './shadow-runtime.js';
 import { enqueueAndWait, enqueueCommand } from './flovart-bridge.js';
+import { BROWSER_COMMANDS, shouldWaitForBrowserCommand } from './browser-commands.js';
 import { readFile } from 'node:fs/promises';
 
 const argv = process.argv.slice(2);
@@ -69,7 +70,7 @@ const LOCAL_COMMANDS = new Set([
 ]);
 
 const FILE_STATE_COMMANDS = new Set([
-  'status', 'provider.status', 'provider.select-model', 'provider.test',
+  'status',
   'canvas.inspect', 'canvas.list-media', 'canvas.add-image', 'canvas.add-video', 'canvas.upload-image', 'canvas.upload-video',
   'canvas.update-element', 'canvas.remove-element', 'canvas.select', 'canvas.clear-media',
   'element.create', 'element.update-prompt', 'element.assign-slot', 'element.watch',
@@ -78,13 +79,6 @@ const FILE_STATE_COMMANDS = new Set([
   'workflow.inspect', 'workflow.node.create', 'workflow.node.create-connected', 'workflow.node.update', 'workflow.node.delete',
   'workflow.node.move', 'workflow.node.resize', 'workflow.connect', 'workflow.disconnect',
   'workflow.select', 'workflow.viewport.set',
-]);
-
-const BROWSER_COMMANDS = new Set([
-  'provider.begin-setup',
-  'element.ignite',
-  'workflow.node.run', 'workflow.node.stop',
-  'generate.image', 'generate.images-batch', 'generate.video',
 ]);
 
 function normalizeCommandForRouting(command) {
@@ -143,7 +137,7 @@ async function main() {
   }
 
   if (BROWSER_COMMANDS.has(routingCommand)) {
-    const shouldWait = args.wait === true || args.wait === 'true';
+    const shouldWait = shouldWaitForBrowserCommand(routingCommand, args.wait);
     const timeoutMs = args.timeout ? Number(args.timeout) : args['timeout-ms'] ? Number(args['timeout-ms']) : 30000;
     const result = shouldWait ? await enqueueAndWait(command, args, timeoutMs) : enqueueCommand(command, args);
     printCliResponse(isResultOk(result), command, result, isResultOk(result) ? null : result?.error || null, { runtime: 'file-bridge' });

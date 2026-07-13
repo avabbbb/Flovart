@@ -1,7 +1,8 @@
-import { Eye, EyeOff, Image, Lock, Music, PanelLeftClose, PanelLeftOpen, SlidersHorizontal, Type, Unlock, Video } from 'lucide-react';
-import React, { useState } from 'react';
+import { Eye, EyeOff, Folder, GripVertical, Image, Layers, Lock, Music, PanelLeftClose, SlidersHorizontal, Type, Unlock, Video, X } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
 import type { WorkflowNode, WorkflowProject } from './types';
-import { WorkflowProjectList } from './WorkflowProjectList';
+import { AssetLibraryBrowser } from '../studio/AssetLibraryBrowser';
+import type { AssetItem, AssetLibrary } from '../../types';
 
 export interface WorkflowSidebarProps {
   open: boolean;
@@ -9,7 +10,24 @@ export interface WorkflowSidebarProps {
   outerGap: number;
   project: WorkflowProject | null;
   onProjectChange: (patch: Partial<WorkflowProject>) => void;
+  // 资产 tab 数据
+  language: 'en' | 'zho';
+  assetLibrary: AssetLibrary;
+  onInsertAsset?: (item: AssetItem) => void;
+  onRenameAsset: (id: string, name: string) => void;
+  onRemoveAsset: (id: string) => void;
+  onUpdateAssetTags?: (id: string, tags: string[]) => void;
+  onRemoveAssetFromFolder?: (itemId: string, folderId: string) => void;
+  onBatchRemoveAssets?: (ids: string[]) => void;
+  onBatchAddAssetsToFolder?: (ids: string[], folderId: string) => void;
+  onBatchAddAssetTags?: (ids: string[], tags: string[]) => void;
+  onReverseAsset?: (item: AssetItem) => void;
+  onCreateFolder: (parentId: string | null, name: string) => void;
+  onRenameFolder: (id: string, name: string) => void;
+  onRemoveFolder: (id: string, deleteItems: boolean) => void;
 }
+
+type SidebarTab = 'layers' | 'assets';
 
 const nodeIcon = (node: WorkflowNode) => {
   if (node.type === 'image') return <Image size={14} />;
@@ -19,8 +37,44 @@ const nodeIcon = (node: WorkflowNode) => {
   return <Type size={14} />;
 };
 
-export const WorkflowSidebar: React.FC<WorkflowSidebarProps> = ({ open, onOpenChange, outerGap, project, onProjectChange }) => {
+export const WorkflowSidebar: React.FC<WorkflowSidebarProps> = ({
+  open,
+  onOpenChange,
+  outerGap,
+  project,
+  onProjectChange,
+  language,
+  assetLibrary,
+  onInsertAsset,
+  onRenameAsset,
+  onRemoveAsset,
+  onUpdateAssetTags,
+  onRemoveAssetFromFolder,
+  onBatchRemoveAssets,
+  onBatchAddAssetsToFolder,
+  onBatchAddAssetTags,
+  onReverseAsset,
+  onCreateFolder,
+  onRenameFolder,
+  onRemoveFolder,
+}) => {
   const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [tab, setTab] = useState<SidebarTab>('layers');
+  const panelRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+
+  // 点外部收起
+  useEffect(() => {
+    if (!open) return;
+    const onClick = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (panelRef.current && !panelRef.current.contains(target) && triggerRef.current && !triggerRef.current.contains(target)) {
+        onOpenChange(false);
+      }
+    };
+    document.addEventListener('mousedown', onClick);
+    return () => document.removeEventListener('mousedown', onClick);
+  }, [open, onOpenChange]);
 
   const patchNode = (id: string, patch: Partial<WorkflowNode>) => {
     if (!project) return;
@@ -44,76 +98,140 @@ export const WorkflowSidebar: React.FC<WorkflowSidebarProps> = ({ open, onOpenCh
 
   return (
     <>
+      {/* 左侧触发按钮：折叠态 */}
       <button
+        ref={triggerRef}
         type="button"
         className="isl-icon-btn theme-aware absolute z-40 h-10 w-10"
         style={{ left: outerGap, top: outerGap, opacity: open ? 0 : 1, pointerEvents: open ? 'none' : 'auto' }}
         onClick={() => onOpenChange(true)}
-        title="打开项目与图层"
+        title="打开图层与资产"
+        aria-label="打开图层与资产"
       >
-        <PanelLeftOpen size={18} />
+        <PanelLeftClose size={18} className="rotate-180" />
       </button>
 
-      <aside
-        className="workflow-sidebar theme-aware absolute z-40 flex min-h-0 flex-col overflow-hidden rounded-2xl border-[1.5px] transition-[transform,opacity] duration-200"
-        style={{
-          top: outerGap,
-          left: outerGap,
-          bottom: outerGap,
-          width: `min(17.5rem, calc(100% - ${outerGap * 2}px))`,
-          background: 'var(--isl-card)',
-          borderColor: 'var(--isl-border)',
-          boxShadow: 'var(--isl-shadow-lg)',
-          opacity: open ? 1 : 0,
-          pointerEvents: open ? 'auto' : 'none',
-          transform: open ? 'translateX(0)' : 'translateX(calc(-100% - 24px))',
-        }}
-      >
-        <div className="flex h-11 shrink-0 items-center justify-between px-3">
-          <strong className="text-xs" style={{ color: 'var(--isl-ink)' }}>项目与图层</strong>
-          <button type="button" className="isl-icon-btn h-8 w-8" onClick={() => onOpenChange(false)} title="收起左侧面板">
-            <PanelLeftClose size={16} />
-          </button>
-        </div>
-        <div className="max-h-[42%] shrink-0 overflow-auto border-y" style={{ borderColor: 'var(--isl-border)' }}>
-          <WorkflowProjectList />
-        </div>
-        <div className="flex min-h-0 flex-1 flex-col">
-          <div className="flex items-center justify-between px-3 py-2">
-            <span className="text-[11px] font-bold uppercase tracking-[0.12em]" style={{ color: 'var(--isl-ink-soft)' }}>Layers</span>
-            <span className="text-[10px] tabular-nums" style={{ color: 'var(--isl-ink-soft)' }}>{project?.nodes.length || 0}</span>
+      {/* 弹出浮层 */}
+      {open && (
+        <aside
+          ref={panelRef}
+          className="workflow-sidebar theme-aware absolute z-40 flex min-h-0 flex-col overflow-hidden rounded-2xl border-[1.5px]"
+          style={{
+            top: outerGap,
+            left: outerGap,
+            bottom: outerGap,
+            width: `min(17.5rem, calc(100% - ${outerGap * 2}px))`,
+            background: 'var(--isl-card)',
+            borderColor: 'var(--isl-border)',
+            boxShadow: 'var(--isl-shadow-lg)',
+          }}
+        >
+          <div className="flex h-11 shrink-0 items-center justify-between px-3">
+            <strong className="text-xs" style={{ color: 'var(--isl-ink)' }}>
+              {tab === 'layers' ? (language === 'zho' ? '图层' : 'Layers') : (language === 'zho' ? '资产' : 'Assets')}
+            </strong>
+            <button type="button" className="isl-icon-btn h-8 w-8" onClick={() => onOpenChange(false)} title={language === 'zho' ? '收起' : 'Close'} aria-label={language === 'zho' ? '收起' : 'Close'}>
+              <X size={16} />
+            </button>
           </div>
-          <div className="min-h-0 flex-1 overflow-auto px-2 pb-2">
-            {!project?.nodes.length && <p className="px-2 py-6 text-center text-xs" style={{ color: 'var(--isl-ink-soft)' }}>双击画布或从底部工具栏添加节点</p>}
-            {[...(project?.nodes || [])].reverse().map(node => (
-              <div
-                key={node.id}
-                draggable
-                onDragStart={event => { event.dataTransfer.setData('text/plain', node.id); event.dataTransfer.effectAllowed = 'move'; setDraggedId(node.id); }}
-                onDragOver={event => event.preventDefault()}
-                onDrop={() => reorder(node.id)}
-                className={`group mb-1 flex h-9 items-center gap-2 rounded-lg px-2 text-xs ${project?.selectedNodeIds.includes(node.id) ? 'isl-tab--active' : ''}`}
-                style={{ color: 'var(--isl-ink)' }}
-                onClick={() => project && onProjectChange({ selectedNodeIds: [node.id] })}
-              >
-                <span style={{ color: 'var(--isl-ink-soft)' }}>{nodeIcon(node)}</span>
-                <input
-                  value={node.title}
-                  className="min-w-0 flex-1 border-0 bg-transparent px-0 py-0 outline-none"
-                  onClick={event => event.stopPropagation()}
-                  onChange={event => patchNode(node.id, { title: event.target.value })}
-                />
-                <button type="button" className="opacity-60 hover:opacity-100" onClick={event => { event.stopPropagation(); patchNode(node.id, { isVisible: node.isVisible === false }); }} title={node.isVisible === false ? '显示' : '隐藏'}>
-                  {node.isVisible === false ? <EyeOff size={14} /> : <Eye size={14} />}
-                </button>
-                <button type="button" className="opacity-60 hover:opacity-100" onClick={event => { event.stopPropagation(); patchNode(node.id, { isLocked: !node.isLocked }); }} title={node.isLocked ? '解锁' : '锁定'}>
-                  {node.isLocked ? <Lock size={14} /> : <Unlock size={14} />}
-                </button>
+
+          {/* tab 切换 */}
+          <div className="flex shrink-0 items-center gap-1 px-3 pt-1 pb-2">
+            <button
+              type="button"
+              data-testid="sidebar-tab-layers"
+              onClick={() => setTab('layers')}
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] font-bold transition"
+              style={{
+                background: tab === 'layers' ? 'var(--isl-surface-2)' : 'transparent',
+                color: tab === 'layers' ? 'var(--isl-ink)' : 'var(--isl-ink-soft)',
+              }}
+            >
+              <Layers size={13} />
+              <span>{language === 'zho' ? '图层' : 'Layers'}</span>
+              <span className="text-[10px] tabular-nums opacity-70">{project?.nodes.length || 0}</span>
+            </button>
+            <button
+              type="button"
+              data-testid="sidebar-tab-assets"
+              onClick={() => setTab('assets')}
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] font-bold transition"
+              style={{
+                background: tab === 'assets' ? 'var(--isl-surface-2)' : 'transparent',
+                color: tab === 'assets' ? 'var(--isl-ink)' : 'var(--isl-ink-soft)',
+              }}
+            >
+              <Folder size={13} />
+              <span>{language === 'zho' ? '资产' : 'Assets'}</span>
+            </button>
+          </div>
+
+          <div className="flex min-h-0 flex-1 flex-col">
+            {tab === 'layers' ? (
+              <div className="min-h-0 flex-1 overflow-auto px-2 pb-2 pt-1">
+                {!project?.nodes.length && <p className="px-2 py-6 text-center text-xs" style={{ color: 'var(--isl-ink-soft)' }}>{language === 'zho' ? '双击画布或从顶部工具栏添加节点' : 'Double-click canvas or use toolbar to add nodes'}</p>}
+                {[...(project?.nodes || [])].reverse().map(node => {
+                  const selected = Boolean(project?.selectedNodeIds.includes(node.id));
+                  return (
+                    <div
+                      key={node.id}
+                      draggable
+                      onDragStart={event => { event.dataTransfer.setData('text/plain', node.id); event.dataTransfer.effectAllowed = 'move'; setDraggedId(node.id); }}
+                      onDragOver={event => event.preventDefault()}
+                      onDrop={() => reorder(node.id)}
+                      onClick={() => project && onProjectChange({ selectedNodeIds: [node.id] })}
+                      className={`workflow-layer-card group mb-0.5 flex h-9 items-center gap-1.5 rounded-lg pl-1 pr-1.5 text-xs transition-colors duration-150 ${selected ? 'workflow-layer-card--selected' : ''}`}
+                      style={{ color: 'var(--isl-ink)' }}
+                      title={node.title}
+                    >
+                      <span className="workflow-layer-card__handle shrink-0 cursor-grab" style={{ color: 'var(--isl-ink-soft)' }}>
+                        <GripVertical size={13} />
+                      </span>
+                      <span className="shrink-0" style={{ color: 'var(--isl-ink-soft)' }}>{nodeIcon(node)}</span>
+                      <span className="min-w-0 flex-1 truncate">{node.title}</span>
+                      <button
+                        type="button"
+                        className="workflow-layer-card__action shrink-0 rounded p-0.5 transition-opacity"
+                        onClick={event => { event.stopPropagation(); patchNode(node.id, { isVisible: node.isVisible === false }); }}
+                        title={node.isVisible === false ? (language === 'zho' ? '显示' : 'Show') : (language === 'zho' ? '隐藏' : 'Hide')}
+                      >
+                        {node.isVisible === false ? <EyeOff size={13} /> : <Eye size={13} />}
+                      </button>
+                      <button
+                        type="button"
+                        className="workflow-layer-card__action shrink-0 rounded p-0.5 transition-opacity"
+                        onClick={event => { event.stopPropagation(); patchNode(node.id, { isLocked: !node.isLocked }); }}
+                        title={node.isLocked ? (language === 'zho' ? '解锁' : 'Unlock') : (language === 'zho' ? '锁定' : 'Lock')}
+                      >
+                        {node.isLocked ? <Lock size={13} /> : <Unlock size={13} />}
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
-            ))}
+            ) : (
+              <div className="min-h-0 flex-1">
+                <AssetLibraryBrowser
+                  library={assetLibrary}
+                  language={language}
+                  onInsert={onInsertAsset}
+                  onRenameAsset={onRenameAsset}
+                  onRemoveAsset={onRemoveAsset}
+                  onUpdateAssetTags={onUpdateAssetTags}
+                  onRemoveAssetFromFolder={onRemoveAssetFromFolder}
+                  onBatchRemoveAssets={onBatchRemoveAssets}
+                  onBatchAddAssetsToFolder={onBatchAddAssetsToFolder}
+                  onBatchAddAssetTags={onBatchAddAssetTags}
+                  onReversePrompt={onReverseAsset}
+                  onCreateFolder={onCreateFolder}
+                  onRenameFolder={onRenameFolder}
+                  onRemoveFolder={onRemoveFolder}
+                />
+              </div>
+            )}
           </div>
-        </div>
-      </aside>
+        </aside>
+      )}
     </>
   );
 };

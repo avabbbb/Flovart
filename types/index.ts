@@ -59,7 +59,7 @@ export interface ElementGenerationState {
   promptPayload: AdaptivePromptPayload;
   provider: InlineGenerationProvider;
   modelId: string;
-  aspectRatio?: '16:9' | '9:16' | '1:1' | '4:3' | '3:4' | '21:9' | 'adaptive';
+  aspectRatio?: '16:9' | '9:16' | '1:1' | '4:3' | '3:4' | '3:2' | '2:3' | '21:9' | 'adaptive';
   durationSec?: number;
   resolution?: '480p' | '720p' | '1080p' | string;
   generateAudio?: boolean;
@@ -195,14 +195,27 @@ export interface Board {
 }
 
 // Asset Library
-export type AssetCategory = 'character' | 'scene' | 'prop';
+//
+// 资产模型：文件夹 + 标签双轴
+// - 文件夹（AssetFolder）支持无限嵌套树（parentId 串联），parentId 为 null 表示根级
+// - 一个 AssetItem 可同时归属多个文件夹（folderIds: string[]），类似 Eagle 的 Add To Folders
+// - 标签（tags: string[]）是跨文件夹横切组织维度，支持任意字符串
+// - 迁移自旧版 character/scene/prop 三桶结构时，旧 category 名作为标签兜底语义
+
+export interface AssetFolder {
+  id: string;
+  name: string;
+  parentId: string | null;
+  createdAt: number;
+}
 
 export interface AssetItem {
   id: string;
   name?: string;
-  category: AssetCategory;
-  dataUrl: string; // base64 image
-  mimeType: string; // image/png, image/jpeg
+  folderIds: string[];      // 所属文件夹 id 列表，空数组表示"未分类"
+  tags: string[];           // 跨文件夹横切标签
+  dataUrl: string;          // base64 或 blob URL
+  mimeType: string;        // image/png, image/jpeg, video/mp4...
   width: number;
   height: number;
   createdAt: number;
@@ -215,9 +228,8 @@ export interface AssetItem {
 }
 
 export interface AssetLibrary {
-  character: AssetItem[];
-  scene: AssetItem[];
-  prop: AssetItem[];
+  folders: AssetFolder[];   // 扁平文件夹数组，靠 parentId 串成树
+  items: AssetItem[];        // 扁平素材列表
 }
 
 export interface GenerationHistoryItem {
@@ -247,7 +259,8 @@ export interface RecipePackage {
   version: 1;
   asset: {
     name?: string;
-    category: AssetCategory;
+    folderIds: string[];   // 安装时归入哪些文件夹，空数组表示"未分类"
+    tags: string[];        // 附带标签
     dataUrl: string;
     mimeType: string;
     width: number;
@@ -259,7 +272,7 @@ export interface RecipePackage {
 
 // API Key & Model Preferences
 export type ThemeMode = 'light' | 'dark' | 'system';
-export type WorkspaceView = 'canvas' | 'workflow';
+export type WorkspaceView = 'workflow';
 export type AIProvider = 'openai' | 'anthropic' | 'google' | 'qwen' | 'deepseek' | 'siliconflow' | 'keling' | 'flux' | 'midjourney' | 'runningHub' | 'minimax' | 'volcengine' | 'openrouter' | 'openai_compatible' | 'custom';
 export type AICapability = 'text' | 'image' | 'video' | 'agent';
 
@@ -267,6 +280,45 @@ export type AICapability = 'text' | 'image' | 'video' | 'agent';
 export interface ModelItem {
   id: string;
   name: string;
+}
+
+export type ProductModelMode =
+  | 'text-to-image'
+  | 'image-to-image'
+  | 'text-to-video'
+  | 'image-to-video'
+  | 'reference-to-video'
+  | 'first-last-frame'
+  | 'video-extension';
+
+export interface ProductModelMapping {
+  productModelId: string;
+  upstreamModelId: string;
+  priority: number;
+  enabled: boolean;
+  confirmed: boolean;
+}
+
+export type ApiPricingUnit = 'request' | 'image' | 'video_second' | 'input_token' | 'output_token';
+
+export interface ApiPricingRule {
+  id: string;
+  productModelId?: string;
+  upstreamModelId?: string;
+  unit: ApiPricingUnit;
+  rate: number;
+  currency: 'USD' | 'CNY';
+  resolution?: string;
+  quality?: string;
+  source: 'official' | 'manual';
+}
+
+export interface ApiBudgetPolicy {
+  enabled: boolean;
+  monthlyLimit: number;
+  warningPercent: number;
+  hardStop: boolean;
+  currency: 'USD' | 'CNY';
 }
 
 export interface UserApiKey {
@@ -286,6 +338,12 @@ export interface UserApiKey {
   models?: ModelItem[];
   /** Provider 特有的额外配置（�?Google Veo �?projectId�?*/
   extraConfig?: Record<string, string>;
+  /** Flovart 固定产品模型到上游模型 ID 的显式映射。 */
+  modelMappings?: ProductModelMapping[];
+  /** 该 Key / 模型线路的计价规则。 */
+  pricingRules?: ApiPricingRule[];
+  /** 该 Key 的月度预算策略。 */
+  budgetPolicy?: ApiBudgetPolicy;
   createdAt: number;
   updatedAt: number;
 }

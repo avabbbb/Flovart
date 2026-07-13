@@ -1,6 +1,6 @@
 import { nanoid } from 'nanoid';
 import { useEffect, useState } from 'react';
-import type { ModelPreference, UserApiKey } from '../../types';
+import type { ModelPreference, PromptEnhanceMode, PromptEnhanceResult, UserApiKey } from '../../types';
 import '../../styles/workflow.css';
 import type { GenerationCapability, GenerationMode } from '../../services/generationCapabilities';
 import { StudioRightDrawer } from '../studio/StudioRightDrawer';
@@ -14,6 +14,7 @@ import { WorkflowAgentPanel, type WorkflowOnlineTurnInput } from './WorkflowAgen
 import type { WorkflowImageToolHandlers } from './WorkflowNodeToolbar';
 import { WorkflowSidebar } from './WorkflowSidebar';
 import { discardWorkflowMediaRecord, fitWorkflowMediaSize, ingestWorkflowMedia, loadWorkflowMediaBlob, releaseWorkflowMediaRecord, workflowBlobToDataUrl, type WorkflowMediaRecord } from './media';
+import type { AssetItem, AssetLibrary } from '../../types';
 
 export interface WorkflowWorkspaceProps {
   theme: 'light' | 'dark';
@@ -24,19 +25,30 @@ export interface WorkflowWorkspaceProps {
   onRunNode?: (projectId: string, nodeId: string) => Promise<void> | void;
   onStopNode?: (projectId: string, nodeId: string) => void;
   onSaveWorkflowMedia?: (projectId: string, nodeId: string) => void;
-  onRenameSharedMedia?: (media: WorkflowSharedMedia, name: string) => void;
-  onRemoveSharedMedia?: (media: WorkflowSharedMedia) => void;
   imageTools?: WorkflowImageToolHandlers;
   t: (key: string, ...args: any[]) => string;
   userApiKeys: UserApiKey[];
   modelPreference: ModelPreference;
   dynamicModelOptions: WorkflowModelOptions;
   onOpenSettings?: () => void;
+  onEnhancePrompt?: (payload: { prompt: string; mode: PromptEnhanceMode; stylePreset?: string }) => Promise<PromptEnhanceResult>;
+  isEnhancingPrompt?: boolean;
   onOpenAgent?: () => void;
   onOnlineAgentTurn?: (input: WorkflowOnlineTurnInput) => Promise<void>;
+  assetLibrary: AssetLibrary;
+  onRenameAsset: (id: string, name: string) => void;
+  onRemoveAsset: (id: string) => void;
+  onUpdateAssetTags?: (id: string, tags: string[]) => void;
+  onRemoveAssetFromFolder?: (itemId: string, folderId: string) => void;
+  onBatchRemoveAssets?: (ids: string[]) => void;
+  onBatchAddAssetsToFolder?: (ids: string[], folderId: string) => void;
+  onBatchAddAssetTags?: (ids: string[], tags: string[]) => void;
+  onCreateFolder: (parentId: string | null, name: string) => void;
+  onRenameFolder: (id: string, name: string) => void;
+  onRemoveFolder: (id: string, deleteItems: boolean) => void;
 }
 
-type WorkflowRightTab = 'agent' | 'history' | 'assets';
+type WorkflowRightTab = 'agent' | 'history';
 
 export function WorkflowWorkspace({
   theme,
@@ -47,16 +59,27 @@ export function WorkflowWorkspace({
   onRunNode,
   onStopNode,
   onSaveWorkflowMedia,
-  onRenameSharedMedia,
-  onRemoveSharedMedia,
   imageTools,
   t,
   userApiKeys,
   modelPreference,
   dynamicModelOptions,
   onOpenSettings,
+  onEnhancePrompt,
+  isEnhancingPrompt,
   onOpenAgent,
   onOnlineAgentTurn,
+  assetLibrary,
+  onRenameAsset,
+  onRemoveAsset,
+  onUpdateAssetTags,
+  onRemoveAssetFromFolder,
+  onBatchRemoveAssets,
+  onBatchAddAssetsToFolder,
+  onBatchAddAssetTags,
+  onCreateFolder,
+  onRenameFolder,
+  onRemoveFolder,
 }: WorkflowWorkspaceProps) {
   const hydrated = useWorkflowStore(state => state.hydrated);
   const projects = useWorkflowStore(state => state.projects);
@@ -119,9 +142,37 @@ export function WorkflowWorkspace({
     }
   };
 
-  const mediaForTab = sharedMedia.filter(media => rightTab === 'history'
-    ? (media.source || (media.id.startsWith('history:') ? 'history' : 'asset')) === 'history'
-    : (media.source || (media.id.startsWith('history:') ? 'history' : 'asset')) === 'asset');
+  const mediaSourceOf = (media: WorkflowSharedMedia) => media.source || (media.id.startsWith('history:') ? 'history' : 'asset');
+  const historyMedia = sharedMedia.filter(media => mediaSourceOf(media) === 'history');
+
+  const insertAssetItem = (item: AssetItem) => {
+    void insertSharedMedia({
+      id: `asset:${item.id}`,
+      source: 'asset',
+      sourceId: item.id,
+      name: item.name || '我的素材',
+      href: item.dataUrl,
+      mimeType: item.mimeType,
+      type: item.mimeType.startsWith('video') ? 'video' : 'image',
+      folderIds: item.folderIds,
+      tags: item.tags,
+      width: item.width,
+      height: item.height,
+      createdAt: item.createdAt,
+      prompt: item.prompt,
+    } as WorkflowSharedMedia);
+  };
+
+  const reverseAssetPrompt = async (item: AssetItem) => {
+    if (!onReversePrompt) return;
+    try {
+      const prompt = await onReversePrompt(item.dataUrl, item.mimeType, item.width, item.height);
+      await navigator.clipboard?.writeText(prompt);
+      setWorkspaceNotice(language === 'zho' ? 'Prompt 已复制' : 'Prompt Copied');
+    } catch (error) {
+      setWorkspaceNotice(error instanceof Error ? error.message : (language === 'zho' ? '反推失败' : 'Analysis Failed'));
+    }
+  };
 
   if (!hydrated) return <div className="workflow-loading">正在加载 Workflow...</div>;
 
@@ -133,6 +184,20 @@ export function WorkflowWorkspace({
         outerGap={12}
         project={activeProject}
         onProjectChange={patch => activeProject && updateProject(activeProject.id, patch)}
+        language={language}
+assetLibrary={assetLibrary}
+          onInsertAsset={insertAssetItem}
+          onRenameAsset={onRenameAsset}
+          onRemoveAsset={onRemoveAsset}
+          onUpdateAssetTags={onUpdateAssetTags}
+          onRemoveAssetFromFolder={onRemoveAssetFromFolder}
+          onBatchRemoveAssets={onBatchRemoveAssets}
+          onBatchAddAssetsToFolder={onBatchAddAssetsToFolder}
+          onBatchAddAssetTags={onBatchAddAssetTags}
+          onReverseAsset={reverseAssetPrompt}
+          onCreateFolder={onCreateFolder}
+          onRenameFolder={onRenameFolder}
+          onRemoveFolder={onRemoveFolder}
       />
       <main className="workflow-workspace__main">
         {workspaceNotice && <div className="workflow-workspace__notice" role="status">{workspaceNotice}</div>}
@@ -153,9 +218,13 @@ export function WorkflowWorkspace({
               onReversePrompt={onReversePrompt}
               onOpenAgent={() => {
                 setRightTab('agent');
-                setRightOpen(true);
-                onOpenAgent?.();
+                setRightOpen(prev => {
+                  const next = !prev;
+                  if (next) onOpenAgent?.();
+                  return next;
+                });
               }}
+              agentOpen={rightOpen && rightTab === 'agent'}
               t={t}
               theme={theme}
               language={language}
@@ -163,6 +232,8 @@ export function WorkflowWorkspace({
               modelPreference={modelPreference}
               dynamicModelOptions={dynamicModelOptions}
               onOpenSettings={onOpenSettings}
+              onEnhancePrompt={onEnhancePrompt}
+              isEnhancingPrompt={isEnhancingPrompt}
             />
           ) : (
             <div className="workflow-empty">
@@ -187,7 +258,6 @@ export function WorkflowWorkspace({
         tabs={[
           { id: 'agent', label: 'Agent', icon: undefined },
           { id: 'history', label: language === 'zho' ? '生成历史' : 'History', icon: undefined },
-          { id: 'assets', label: language === 'zho' ? '素材库' : 'Assets', icon: undefined },
         ]}
       >
         {activeProject && rightTab === 'agent' && (
@@ -199,14 +269,12 @@ export function WorkflowWorkspace({
             onProjectChange={patch => updateProject(activeProject.id, patch)}
           />
         )}
-        {rightTab !== 'agent' && (
+        {rightTab === 'history' && (
           <StudioMediaBrowser
-            mode={rightTab}
-            items={mediaForTab}
+            mode="history"
+            items={historyMedia}
             language={language}
             onInsert={media => { void insertSharedMedia(media as WorkflowSharedMedia); }}
-            onRename={rightTab === 'assets' && onRenameSharedMedia ? (media: StudioMediaItem, name: string) => onRenameSharedMedia(media as WorkflowSharedMedia, name) : undefined}
-            onRemove={rightTab === 'assets' && onRemoveSharedMedia ? (media: StudioMediaItem) => onRemoveSharedMedia(media as WorkflowSharedMedia) : undefined}
             onReversePrompt={onReversePrompt ? async media => {
               const blob = await loadWorkflowMediaBlob(undefined, media.href);
               return onReversePrompt(await workflowBlobToDataUrl(blob), media.mimeType || blob.type, media.width, media.height);

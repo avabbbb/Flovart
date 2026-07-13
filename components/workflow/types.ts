@@ -1,4 +1,4 @@
-import type { ImageFilters } from '../../types';
+import type { ImageFilters, ProductModelMode } from '../../types';
 
 export type WorkflowNodeType = 'image' | 'text' | 'video' | 'audio' | 'config' | 'script';
 export type WorkflowNodeStatus = 'idle' | 'loading' | 'success' | 'error';
@@ -66,6 +66,7 @@ export interface CameraParams {
 
 export interface WorkflowGenerationConfig extends WorkflowProviderConfig {
   mode: WorkflowGenerationMode;
+  submode?: ProductModelMode;
   aspectRatio?: string;
   resolution?: string;
   durationSec?: number;
@@ -73,6 +74,9 @@ export interface WorkflowGenerationConfig extends WorkflowProviderConfig {
   count?: number;
   generateAudio?: boolean;
   watermark?: boolean;
+  enhancePrompt?: boolean;
+  webSearch?: boolean;
+  realPersonCheck?: boolean;
   audioVoice?: string;
   audioFormat?: string;
   audioSpeed?: string;
@@ -117,6 +121,7 @@ export interface WorkflowNodeMetadata {
   generationMessage?: string;
   filters?: Partial<ImageFilters>;
   scriptBreakdown?: ScriptBreakdown;
+  primaryImageId?: string;
 }
 
 export interface WorkflowNode {
@@ -194,7 +199,8 @@ export type WorkflowOp =
   | { type: 'run_generation'; nodeId: string }
   | { type: 'group_nodes'; ids: string[]; batchId: string; source?: WorkflowBatchGroupSource }
   | { type: 'ungroup_nodes'; ids: string[] }
-  | { type: 'execute_group'; nodeIds: string[] };
+  | { type: 'execute_group'; nodeIds: string[] }
+  | { type: 'set_batch_primary'; batchId: string; nodeId: string };
 
 export interface StylePreset {
   id: string;

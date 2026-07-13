@@ -230,7 +230,19 @@ export function applyWorkflowOps(initial: WorkflowSnapshot, ops: WorkflowOp[]): 
       snapshot = {
         ...snapshot,
         nodes: snapshot.nodes.map(node => ids.has(node.id)
-          ? { ...node, batchId: undefined, batchIndex: undefined, batchGroupSource: undefined }
+          ? { ...node, batchId: undefined, batchIndex: undefined, batchGroupSource: undefined, metadata: { ...node.metadata, primaryImageId: undefined } }
+          : node),
+      };
+      return;
+    }
+    if (op.type === 'set_batch_primary') {
+      const groupNodes = snapshot.nodes.filter(node => node.batchId === op.batchId);
+      const root = groupNodes.find(node => node.batchIndex === 0) || groupNodes[0];
+      if (!root) return;
+      snapshot = {
+        ...snapshot,
+        nodes: snapshot.nodes.map(node => node.id === root.id
+          ? { ...node, metadata: { ...node.metadata, primaryImageId: op.nodeId } }
           : node),
       };
       return;

@@ -1,6 +1,6 @@
 import { BookOpen } from 'lucide-react';
 import { useState } from 'react';
-import type { ModelPreference, UserApiKey, GenerationMode } from '../../types';
+import type { ModelPreference, UserApiKey, GenerationMode, PromptEnhanceMode, PromptEnhanceResult } from '../../types';
 import { PromptBar } from '../PromptBar';
 import { filterWorkflowInputIds, getWorkflowInputNodes, toWorkflowMentionItems } from './references';
 import type { WorkflowConnection, WorkflowGenerationConfig, WorkflowNode, WorkflowNodeMetadata } from './types';
@@ -16,7 +16,7 @@ const modeFor = (node: WorkflowNode, config?: WorkflowGenerationConfig): Generat
   return mode === 'text' || mode === 'video' ? mode : 'image';
 };
 
-export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme, language, userApiKeys, modelPreference, dynamicModelOptions, onOpenSettings, onChange, onRun, onStop, focusSignal }: {
+export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme, language, userApiKeys, modelPreference, dynamicModelOptions, onOpenSettings, onEnhancePrompt, isEnhancingPrompt, onChange, onRun, onStop, focusSignal }: {
   node: WorkflowNode;
   nodes: WorkflowNode[];
   connections?: WorkflowConnection[];
@@ -27,6 +27,8 @@ export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme,
   modelPreference: ModelPreference;
   dynamicModelOptions: WorkflowModelOptions;
   onOpenSettings?: () => void;
+  onEnhancePrompt?: (payload: { prompt: string; mode: PromptEnhanceMode; stylePreset?: string }) => Promise<PromptEnhanceResult>;
+  isEnhancingPrompt?: boolean;
   onChange: (metadata: WorkflowNodeMetadata) => void;
   onRun: () => void;
   onStop?: () => void;
@@ -67,7 +69,7 @@ export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme,
         onDeleteUserEffect={() => undefined}
         generationMode={generationMode}
         setGenerationMode={mode => patchConfig({ mode: mode === 'text' ? 'text' : mode === 'video' ? 'video' : 'image', modelId: undefined })}
-        modeOptions={['text', 'image', 'video']}
+        modeOptions={node.type === 'video' ? ['video'] : node.type === 'text' ? ['text'] : ['image']}
         videoAspectRatio={(config.aspectRatio as any) || '16:9'}
         setVideoAspectRatio={aspectRatio => patchConfig({ aspectRatio })}
         imageAspectRatio={(config.aspectRatio as any) || '1:1'}
@@ -80,6 +82,14 @@ export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme,
         onVideoGenerateAudioChange={generateAudio => patchConfig({ generateAudio })}
         videoWatermark={config.watermark}
         onVideoWatermarkChange={watermark => patchConfig({ watermark })}
+        generationSubmode={config.submode}
+        onGenerationSubmodeChange={submode => patchConfig({ submode })}
+        generationQuality={config.quality}
+        onGenerationQualityChange={quality => patchConfig({ quality })}
+        webSearchEnabled={config.webSearch}
+        onWebSearchToggle={webSearch => patchConfig({ webSearch })}
+        realPersonCheckEnabled={config.realPersonCheck !== false}
+        onRealPersonCheckToggle={realPersonCheck => patchConfig({ realPersonCheck })}
         selectedTextModel={generationMode === 'text' ? (config.modelId || modelPreference.textModel) : undefined}
         selectedImageModel={generationMode === 'image' ? (config.modelId || modelPreference.imageModel) : undefined}
         selectedVideoModel={generationMode === 'video' ? (config.modelId || modelPreference.videoModel) : undefined}
@@ -92,6 +102,10 @@ export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme,
         apiConfigs={userApiKeys}
         userApiKeys={userApiKeys}
         onOpenSettings={onOpenSettings}
+        onEnhancePrompt={onEnhancePrompt}
+        isEnhancingPrompt={isEnhancingPrompt}
+        isAutoEnhanceEnabled={Boolean(config.enhancePrompt)}
+        onAutoEnhanceToggle={() => patchConfig({ enhancePrompt: !config.enhancePrompt })}
         batchCount={config.count || 1}
         onBatchCountChange={count => patchConfig({ count })}
         allowVideoBatch

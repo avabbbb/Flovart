@@ -2,9 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { UserApiKey } from '../types';
 import {
   buildCapabilityModelOptions,
-  encodeModelRef,
   modelRefLabel,
-  modelRefModelId,
   normalizeModelSelectionWithKeys,
   resolveModelSelection,
 } from '../utils/modelRefs';
@@ -21,6 +19,7 @@ const makeKey = (patch: Partial<UserApiKey>): UserApiKey => ({
   customModels: patch.customModels,
   defaultModel: patch.defaultModel,
   models: patch.models,
+  modelMappings: patch.modelMappings,
   extraConfig: patch.extraConfig,
   createdAt: 1,
   updatedAt: 1,
@@ -34,13 +33,13 @@ describe('modelRefs', () => {
       name: 'Seedance Ark',
       capabilities: ['video'],
       models: [{ id: 'dreamina-seedance-2-0-260128', name: 'Seedance 2' }],
+      modelMappings: [{ productModelId: 'flovart:seedance-2', upstreamModelId: 'dreamina-seedance-2-0-260128', priority: 0, enabled: true, confirmed: true }],
     });
 
     const option = buildCapabilityModelOptions([key], 'video', [], '')[0];
 
-    expect(option).toBe(encodeModelRef('volc-key', 'dreamina-seedance-2-0-260128'));
-    expect(modelRefModelId(option)).toBe('dreamina-seedance-2-0-260128');
-    expect(modelRefLabel(option, [key])).toBe('dreamina-seedance-2-0-260128 · Seedance Ark');
+    expect(option).toBe('flovart:seedance-2');
+    expect(modelRefLabel(option, [key])).toBe('Seedance 2.0 · Seedance Ark');
     expect(resolveModelSelection(option, [key], 'video')).toMatchObject({
       model: 'dreamina-seedance-2-0-260128',
       provider: 'volcengine',
@@ -63,11 +62,12 @@ describe('modelRefs', () => {
       name: 'Seedance Ark',
       capabilities: ['video'],
       defaultModel: 'doubao-seedance-2.0',
+      modelMappings: [{ productModelId: 'flovart:seedance-2', upstreamModelId: 'doubao-seedance-2.0', priority: 0, enabled: true, confirmed: true }],
     });
 
     const options = buildCapabilityModelOptions([key], 'video', [], '');
 
-    expect(options).toContain(encodeModelRef('volc-key', 'doubao-seedance-2.0'));
+    expect(options).toContain('flovart:seedance-2');
     expect(resolveModelSelection(options[0], [key], 'video')).toMatchObject({
       model: 'doubao-seedance-2.0',
       provider: 'volcengine',

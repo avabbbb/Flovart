@@ -1,26 +1,34 @@
-/**
- * API Usage Monitoring — per-key call tracking and cost estimation.
- * Data is persisted in localStorage.
- */
+import localforage from 'localforage';
+import { nanoid } from 'nanoid';
+import type { ApiPricingRule, UserApiKey } from '../types';
 
-const STORAGE_KEY = 'flovart.api_usage';
+const usageStore = localforage.createInstance({ name: 'flovart', storeName: 'api_usage_v2' });
+const RECORDS_KEY = 'records';
+
+export type UsageStatus = 'reserved' | 'submission_unknown' | 'queued' | 'running' | 'succeeded' | 'failed' | 'canceled' | 'polling_unknown';
+export type BillableState = 'estimated' | 'actual' | 'unknown' | 'not_billable' | 'refunded';
 
 export interface UsageRecord {
-  /** UserApiKey.id */
+  id: string;
   keyId: string;
-  /** Provider name */
   provider: string;
-  /** Model used */
+  productModelId?: string;
   model: string;
-  /** Timestamp (ms) */
   timestamp: number;
-  /** Type: text generation, image generation, video generation */
+  updatedAt: number;
   type: 'text' | 'image' | 'video';
-  /** Estimated cost in USD cents (rough estimate) */
-  estimatedCostCents: number;
-  /** Whether the call succeeded */
-  success: boolean;
-  /** Optional error message */
+  status: UsageStatus;
+  billableState: BillableState;
+  estimatedCost?: number;
+  actualCost?: number;
+  estimatedTokens?: number;
+  actualTokens?: number;
+  currency?: 'USD' | 'CNY';
+  providerTaskId?: string;
+  idempotencyKey?: string;
+  submitTime?: number;
+  startTime?: number;
+  finishTime?: number;
   error?: string;
 }
 
@@ -31,154 +39,159 @@ export interface KeyUsageSummary {
   successCalls: number;
   errorCalls: number;
   totalCostCents: number;
-  byType: {
-    text: number;
-    image: number;
-    video: number;
-  };
-  /** Calls in the last 24h */
+  currentMonthCostCents: number;
+  currency: 'USD' | 'CNY';
+  pendingCostCalls: number;
+  byType: { text: number; image: number; video: number };
   last24h: number;
-  /** Calls in the last 7d */
   last7d: number;
   lastUsed: number | null;
 }
 
-// ──── Cost estimates per call (rough, in USD cents) ────
-const COST_MAP: Record<string, Record<string, number>> = {
-  google:     { text: 0.5, image: 3, video: 10 },
-  openai:     { text: 1,   image: 4, video: 0  },
-  anthropic:  { text: 1.5, image: 0, video: 0  },
-  qwen:       { text: 0.3, image: 2, video: 5  },
-  deepseek:   { text: 0.2, image: 0, video: 0  },
-  siliconflow: { text: 0.2, image: 1.5, video: 5 },
-  keling:     { text: 0,   image: 2, video: 8  },
-  flux:       { text: 0,   image: 2, video: 0  },
-  midjourney: { text: 0,   image: 5, video: 0  },
-  runningHub: { text: 0,   image: 3, video: 8  },
-  custom:     { text: 0.5, image: 2, video: 5  },
-};
+const readRecords = async (): Promise<UsageRecord[]> => (await usageStore.getItem<UsageRecord[]>(RECORDS_KEY)) || [];
+const writeRecords = async (records: UsageRecord[]) => usageStore.setItem(RECORDS_KEY, records.slice(-10_000));
 
-function getEstimatedCost(provider: string, type: 'text' | 'image' | 'video'): number {
-  return COST_MAP[provider]?.[type] ?? 1;
+function pricingRulesFor(key: UserApiKey, productModelId: string | undefined, upstreamModelId: string, type: 'text' | 'image' | 'video'): ApiPricingRule[] {
+  const rules = key.pricingRules || [];
+  const supportedUnits = type === 'video' ? ['video_second', 'request'] : type === 'image' ? ['image', 'request'] : ['input_token', 'output_token', 'request'];
+  const supported = rules.filter(rule => supportedUnits.includes(rule.unit));
+  const productRules = supported.filter(rule => rule.productModelId === productModelId);
+  if (productRules.length) return productRules;
+  const upstreamRules = supported.filter(rule => rule.upstreamModelId === upstreamModelId);
+  return upstreamRules.length ? upstreamRules : supported.filter(rule => !rule.productModelId && !rule.upstreamModelId);
 }
 
-// ──── Storage ────
+export function estimateApiCost(input: {
+  key: UserApiKey;
+  productModelId?: string;
+  upstreamModelId: string;
+  type: 'text' | 'image' | 'video';
+  durationSec?: number;
+  count?: number;
+}): { amount: number; currency: 'USD' | 'CNY' } | null {
+  const rules = pricingRulesFor(input.key, input.productModelId, input.upstreamModelId, input.type)
+    .filter(rule => rule.unit !== 'input_token' && rule.unit !== 'output_token');
+  if (!rules.length || new Set(rules.map(rule => rule.currency)).size !== 1) return null;
+  const count = Math.max(1, input.count || 1);
+  const amount = rules.reduce((sum, rule) => {
+    const units = rule.unit === 'video_second' ? Math.max(1, input.durationSec || 1) * count : count;
+    return sum + rule.rate * units;
+  }, 0);
+  return { amount, currency: rules[0].currency };
+}
 
-function loadRecords(): UsageRecord[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    return JSON.parse(raw) as UsageRecord[];
-  } catch {
-    return [];
+export async function assertApiBudget(input: Parameters<typeof estimateApiCost>[0]): Promise<void> {
+  const policy = input.key.budgetPolicy;
+  if (!policy?.enabled || !policy.hardStop) return;
+  const estimate = estimateApiCost(input);
+  if (!estimate || estimate.currency !== policy.currency) return;
+  const start = new Date();
+  start.setDate(1); start.setHours(0, 0, 0, 0);
+  const records = await readRecords();
+  const used = records
+    .filter(record => record.keyId === input.key.id && record.timestamp >= start.getTime() && record.currency === policy.currency && record.billableState !== 'not_billable')
+    .reduce((sum, record) => sum + (record.actualCost ?? record.estimatedCost ?? 0), 0);
+  if (used + estimate.amount > policy.monthlyLimit) {
+    throw new Error(`已达到这把 API Key 的月度预算上限（${policy.currency} ${policy.monthlyLimit}），已阻止创建新任务。`);
   }
 }
 
-function saveRecords(records: UsageRecord[]): void {
-  // Keep at most 10000 records (trim oldest)
-  const trimmed = records.length > 10000 ? records.slice(-10000) : records;
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
-  } catch (err) {
-    console.error('[Storage] Failed to save usage records', err);
-  }
+export async function reserveApiUsage(input: Parameters<typeof estimateApiCost>[0]): Promise<UsageRecord> {
+  await assertApiBudget(input);
+  const estimate = estimateApiCost(input);
+  const now = Date.now();
+  const record: UsageRecord = {
+    id: nanoid(), keyId: input.key.id, provider: input.key.provider, productModelId: input.productModelId,
+    model: input.upstreamModelId, timestamp: now, updatedAt: now, type: input.type, status: 'reserved',
+    billableState: estimate ? 'estimated' : 'unknown', estimatedCost: estimate?.amount, currency: estimate?.currency,
+  };
+  const records = await readRecords(); records.push(record); await writeRecords(records);
+  return record;
 }
 
-// ──── Public API ────
+export async function updateApiUsage(id: string, patch: Partial<Omit<UsageRecord, 'id' | 'keyId' | 'timestamp'>>): Promise<void> {
+  const records = await readRecords();
+  await writeRecords(records.map(record => record.id === id ? { ...record, ...patch, updatedAt: Date.now() } : record));
+}
 
-/** Record a single API call */
-export function recordApiUsage(opts: {
-  keyId: string;
-  provider: string;
+/**
+ * 退款型终态：双簿记账（参考 NewAPI #4211）。
+ * 若 record 之前以 estimated 计入了 accumulatedCost，退款时必须同步把 actualCost 归零，
+ * 否则 getUsageSummary 会把 estimatedCost + 0 重复累计（虚增已用额度）。
+ *
+ * 调用方应在以下场景调用本函数：
+ *   - cancelTask 成功（上游已确认取消，且未产生任何费用）
+ *   - 上游 task 已知终态 failed / canceled / expired 且 reconcileUsage 未回填 actualCost
+ *
+ * 参数：
+ *   - reason: 仅用于 error 字段说明，可选
+ *   - status: usageRecord 的新状态，默认 'canceled'，task feedback 也可传 'failed'
+ */
+export async function refundApiUsage(id: string, reason?: string, status: UsageStatus = 'canceled'): Promise<void> {
+  const records = await readRecords();
+  const record = records.find(record => record.id === id);
+  if (!record) return;
+  const next: UsageRecord = {
+    ...record,
+    status,
+    billableState: 'refunded',
+    // 若 record.actualCost 之前已由 reconcileUsage 写成 actual 金额，则保留 actual（上游已计费）；
+    // 仅清除 estimatedCost 字段对 accumulatedCost 的影响（getUsageSummary 已优先取 actualCost ?? estimatedCost）。
+    actualCost: record.actualCost ?? 0,
+    estimatedCost: record.actualCost !== undefined ? record.estimatedCost : 0,
+    finishTime: record.finishTime ?? Date.now(),
+    error: reason || record.error,
+    updatedAt: Date.now(),
+  };
+  await writeRecords(records.map(item => item.id === id ? next : item));
+}
+
+export async function recordApiUsage(input: {
+  key: UserApiKey;
   model: string;
+  productModelId?: string;
   type: 'text' | 'image' | 'video';
   success: boolean;
   error?: string;
-}): void {
-  const records = loadRecords();
+}): Promise<void> {
+  const estimate = estimateApiCost({ key: input.key, productModelId: input.productModelId, upstreamModelId: input.model, type: input.type });
+  const now = Date.now();
+  const records = await readRecords();
   records.push({
-    keyId: opts.keyId,
-    provider: opts.provider,
-    model: opts.model,
-    timestamp: Date.now(),
-    type: opts.type,
-    estimatedCostCents: getEstimatedCost(opts.provider, opts.type),
-    success: opts.success,
-    error: opts.error,
+    id: nanoid(), keyId: input.key.id, provider: input.key.provider, productModelId: input.productModelId,
+    model: input.model, timestamp: now, updatedAt: now, type: input.type, status: input.success ? 'succeeded' : 'failed',
+    billableState: input.success ? (estimate ? 'estimated' : 'unknown') : 'unknown', estimatedCost: estimate?.amount,
+    currency: estimate?.currency, error: input.error,
   });
-  saveRecords(records);
+  await writeRecords(records);
 }
 
-/** Get usage summary for all keys */
-export function getUsageSummary(keyIds: string[]): Map<string, KeyUsageSummary> {
-  const records = loadRecords();
-  const now = Date.now();
-  const DAY = 86400000;
-  const WEEK = 7 * DAY;
-  const map = new Map<string, KeyUsageSummary>();
-
-  // Init summaries
-  for (const id of keyIds) {
-    map.set(id, {
-      keyId: id,
-      provider: '',
-      totalCalls: 0,
-      successCalls: 0,
-      errorCalls: 0,
-      totalCostCents: 0,
-      byType: { text: 0, image: 0, video: 0 },
-      last24h: 0,
-      last7d: 0,
-      lastUsed: null,
-    });
+export async function getUsageSummary(keys: UserApiKey[]): Promise<Map<string, KeyUsageSummary>> {
+  const records = await readRecords();
+  const now = Date.now(); const day = 86_400_000;
+  const map = new Map(keys.map(key => [key.id, {
+    keyId: key.id, provider: key.provider, totalCalls: 0, successCalls: 0, errorCalls: 0, totalCostCents: 0, currentMonthCostCents: 0,
+    currency: key.budgetPolicy?.currency || 'USD', pendingCostCalls: 0, byType: { text: 0, image: 0, video: 0 }, last24h: 0, last7d: 0, lastUsed: null,
+  } satisfies KeyUsageSummary]));
+  const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
+  for (const record of records) {
+    const summary = map.get(record.keyId); if (!summary) continue;
+    summary.totalCalls += 1; summary.byType[record.type] += 1;
+    if (record.status === 'succeeded') summary.successCalls += 1;
+    if (record.status === 'failed') summary.errorCalls += 1;
+    if (record.billableState === 'unknown') summary.pendingCostCalls += 1;
+    if (record.currency === summary.currency) {
+      const costCents = (record.actualCost ?? record.estimatedCost ?? 0) * 100;
+      summary.totalCostCents += costCents;
+      if (record.timestamp >= monthStart.getTime()) summary.currentMonthCostCents += costCents;
+    }
+    if (now - record.timestamp < day) summary.last24h += 1;
+    if (now - record.timestamp < 7 * day) summary.last7d += 1;
+    if (!summary.lastUsed || record.timestamp > summary.lastUsed) summary.lastUsed = record.timestamp;
   }
-
-  for (const rec of records) {
-    let s = map.get(rec.keyId);
-    if (!s) continue;
-    s.provider = rec.provider;
-    s.totalCalls++;
-    if (rec.success) s.successCalls++;
-    else s.errorCalls++;
-    s.totalCostCents += rec.estimatedCostCents;
-    s.byType[rec.type]++;
-    if (now - rec.timestamp < DAY) s.last24h++;
-    if (now - rec.timestamp < WEEK) s.last7d++;
-    if (!s.lastUsed || rec.timestamp > s.lastUsed) s.lastUsed = rec.timestamp;
-  }
-
   return map;
 }
 
-/** Get usage summary for a single key */
-export function getKeyUsage(keyId: string): KeyUsageSummary {
-  const map = getUsageSummary([keyId]);
-  return map.get(keyId) ?? {
-    keyId,
-    provider: '',
-    totalCalls: 0,
-    successCalls: 0,
-    errorCalls: 0,
-    totalCostCents: 0,
-    byType: { text: 0, image: 0, video: 0 },
-    last24h: 0,
-    last7d: 0,
-    lastUsed: null,
-  };
-}
-
-/** Get all records for a key (for detailed view) */
-export function getKeyRecords(keyId: string): UsageRecord[] {
-  return loadRecords().filter(r => r.keyId === keyId);
-}
-
-/** Clear all usage data */
-export function clearAllUsageData(): void {
-  localStorage.removeItem(STORAGE_KEY);
-}
-
-/** Format cost in cents to display string */
-export function formatCost(cents: number): string {
-  if (cents < 100) return `$${(cents / 100).toFixed(3)}`;
-  return `$${(cents / 100).toFixed(2)}`;
-}
+export async function getKeyRecords(keyId: string): Promise<UsageRecord[]> { return (await readRecords()).filter(record => record.keyId === keyId); }
+export async function clearAllUsageData(): Promise<void> { await usageStore.removeItem(RECORDS_KEY); }
+export function formatCost(cents: number, currency: 'USD' | 'CNY' = 'USD'): string { return `${currency === 'USD' ? '$' : '¥'}${(cents / 100).toFixed(cents < 100 ? 3 : 2)}`; }

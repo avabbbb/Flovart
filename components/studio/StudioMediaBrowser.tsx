@@ -1,6 +1,8 @@
 import { Download, Plus, Search, Sparkles, Trash2 } from 'lucide-react';
 import { useMemo, useState, type DragEvent } from 'react';
 import { useWorkflowMediaUrl } from '../workflow/media';
+import { FolderTree, type FolderTreeProps } from './FolderTree';
+import type { AssetFolder } from '../../types';
 
 export const STUDIO_MEDIA_DRAG_TYPE = 'application/x-flovart-studio-media';
 
@@ -12,7 +14,8 @@ export interface StudioMediaItem {
   href: string;
   mimeType: string;
   type: 'image' | 'video';
-  category?: 'character' | 'scene' | 'prop';
+  folderIds?: string[];
+  tags?: string[];
   width?: number;
   height?: number;
   createdAt?: number;
@@ -27,17 +30,13 @@ interface StudioMediaBrowserProps {
   onRename?: (item: StudioMediaItem, name: string) => void;
   onRemove?: (item: StudioMediaItem) => void;
   onReversePrompt?: (item: StudioMediaItem) => Promise<string>;
+  folders?: AssetFolder[];
+  onAddFolder?: FolderTreeProps['onAddFolder'];
+  onRenameFolder?: FolderTreeProps['onRenameFolder'];
+  onDeleteFolder?: FolderTreeProps['onDeleteFolder'];
 }
 
 type MediaFilter = 'all' | 'image' | 'video';
-type CategoryFilter = 'all' | 'character' | 'scene' | 'prop';
-
-const categoryLabels: Record<CategoryFilter, string> = {
-  all: '全部',
-  character: '角色',
-  scene: '场景',
-  prop: '道具',
-};
 
 function StudioMediaPreview({ item }: { item: StudioMediaItem }) {
   const media = useWorkflowMediaUrl(undefined, item.href);
@@ -69,25 +68,28 @@ function StudioMediaDownload({ item, isChinese }: { item: StudioMediaItem; isChi
   );
 }
 
-export function StudioMediaBrowser({ mode, items, language, onInsert, onRename, onRemove, onReversePrompt }: StudioMediaBrowserProps) {
+export function StudioMediaBrowser({ mode, items, language, onInsert, onRename, onRemove, onReversePrompt, folders, onAddFolder, onRenameFolder, onDeleteFolder }: StudioMediaBrowserProps) {
   const [query, setQuery] = useState('');
   const [mediaFilter, setMediaFilter] = useState<MediaFilter>('all');
-  const [category, setCategory] = useState<CategoryFilter>('all');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
   const [notice, setNotice] = useState('');
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const isChinese = language === 'zho';
   const title = mode === 'history' ? (isChinese ? '历史生成' : 'Generation History') : (isChinese ? '我的素材' : 'My Assets');
   const searchLabel = mode === 'history' ? (isChinese ? '搜索生成历史' : 'Search History') : (isChinese ? '搜索素材库' : 'Search Assets');
+  const hasFolders = mode === 'assets' && folders && onAddFolder && onRenameFolder && onDeleteFolder;
 
   const filtered = useMemo(() => {
     const keyword = query.trim().toLocaleLowerCase();
     return items.filter(item => {
       if (mediaFilter !== 'all' && item.type !== mediaFilter) return false;
-      if (mode === 'assets' && category !== 'all' && item.category !== category) return false;
+      if (hasFolders && selectedFolderId !== null) {
+        if (!item.folderIds?.includes(selectedFolderId)) return false;
+      }
       return !keyword || `${item.name} ${item.prompt || ''}`.toLocaleLowerCase().includes(keyword);
     });
-  }, [category, items, mediaFilter, mode, query]);
+  }, [items, mediaFilter, query, hasFolders, selectedFolderId]);
 
   const startDrag = (event: DragEvent<HTMLElement>, item: StudioMediaItem) => {
     const payload = JSON.stringify(item);
@@ -146,21 +148,27 @@ export function StudioMediaBrowser({ mode, items, language, onInsert, onRename, 
             </button>
           ))}
         </div>
-        {mode === 'assets' && (
-          <div className="mt-1 flex flex-wrap items-center gap-1" role="group" aria-label={isChinese ? '素材分类' : 'Asset Category'}>
-            {(Object.keys(categoryLabels) as CategoryFilter[]).map(key => (
-              <button key={key} type="button" className={`isl-tab h-7 px-2 text-[10px] ${category === key ? 'isl-tab--active' : ''}`} onClick={() => setCategory(key)}>
-                {isChinese ? categoryLabels[key] : key === 'all' ? 'All' : key[0].toUpperCase() + key.slice(1)}
-              </button>
-            ))}
-          </div>
-        )}
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3">
+        {hasFolders && (
+          <div className="mb-2 rounded-xl border-[1.5px]" style={{ borderColor: 'var(--isl-border)' }}>
+            <FolderTree
+              folders={folders!}
+              itemFolderIdLists={items.map(i => i.folderIds || [])}
+              totalItemCount={items.length}
+              selectedFolderId={selectedFolderId}
+              onSelectFolder={setSelectedFolderId}
+              onAddFolder={onAddFolder!}
+              onRenameFolder={onRenameFolder!}
+              onDeleteFolder={onDeleteFolder!}
+              language={language}
+            />
+          </div>
+        )}
         {filtered.length === 0 ? (
           <div className="grid min-h-44 place-content-center text-center text-xs" style={{ color: 'var(--isl-ink-ghost)' }}>
-            {query || mediaFilter !== 'all' || category !== 'all' ? (isChinese ? '没有匹配的素材' : 'No Matching Media') : (isChinese ? '这里还没有内容' : 'No Media Yet')}
+            {query || mediaFilter !== 'all' ? (isChinese ? '没有匹配的素材' : 'No Matching Media') : (isChinese ? '这里还没有内容' : 'No Media Yet')}
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-2.5">

@@ -14,6 +14,7 @@ const EnterpriseApp = React.lazy(() => import('./components/enterprise/Enterpris
 const ToCLanding = React.lazy(() => import('./components/landing/ToCLanding'));
 const ToBLanding = React.lazy(() => import('./components/landing/ToBLanding'));
 const PromptsPage = React.lazy(() => import('./components/community/PromptsPage'));
+const FlovartHome = React.lazy(() => import('./components/home/FlovartHome'));
 
 export function RouterHost() {
   useEffect(() => {
@@ -37,6 +38,14 @@ export function RouterHost() {
             element={
               <Suspense fallback={<div className="flex h-screen items-center justify-center text-sm" style={{ color: '#a8a49c' }}>加载中...</div>}>
                 <ToBLanding />
+              </Suspense>
+            }
+          />
+          <Route
+            path="/app/home"
+            element={
+              <Suspense fallback={<div className="flex h-screen items-center justify-center text-sm" style={{ color: '#a8a49c' }}>加载中...</div>}>
+                <FlovartHome />
               </Suspense>
             }
           />

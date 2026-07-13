@@ -1,5 +1,6 @@
 import React from 'react';
-import type { WheelAction, UserApiKey, ModelPreference, AIProvider, AICapability, ThemeMode, ModelItem } from '../types';
+import { AnimatePresence, motion } from 'motion/react';
+import type { UserApiKey, ModelPreference, AIProvider, AICapability, ModelItem, ProductModelMapping, ApiPricingRule, ApiBudgetPolicy } from '../types';
 import {
     DEFAULT_PROVIDER_MODELS,
     validateApiKey,
@@ -11,17 +12,12 @@ import { formatCost, type KeyUsageSummary } from '../utils/usageMonitor';
 import { fetchModelsForProvider, type FetchedModel } from '../services/modelFetcher';
 import { normalizeProviderBaseUrl } from '../services/baseUrl';
 import { modelRefLabel, modelRefSearchText } from '../utils/modelRefs';
+import { getProductModel, getProductModels, suggestProductModelMappings } from '../services/productModelCatalog';
 
 interface CanvasSettingsProps {
     isOpen: boolean;
     onClose: () => void;
-    language: 'en' | 'zho';
-    setLanguage: (lang: 'en' | 'zho') => void;
-    themeMode: ThemeMode;
     resolvedTheme: 'light' | 'dark';
-    setThemeMode: (mode: ThemeMode) => void;
-    wheelAction: WheelAction;
-    setWheelAction: (action: WheelAction) => void;
     userApiKeys: UserApiKey[];
     onAddApiKey: (payload: Omit<UserApiKey, 'id' | 'createdAt' | 'updatedAt'>) => void;
     onDeleteApiKey: (id: string) => void;
@@ -160,8 +156,32 @@ const PROVIDER_PRESETS: ProviderPreset[] = [
         baseUrl: providerBaseUrl.volcengine,
         capabilities: ['video'],
         requestFormat: 'openai',
-        defaultModel: 'doubao-seedance-2.0',
-        models: ['doubao-seedance-2.0', 'seedance-2.0', 'dreamina-seedance-2-0-260128', 'doubao-seedance-2-0-260128'],
+        defaultModel: 'doubao-seedance-2-0-260128',
+        models: ['doubao-seedance-2-0-260128', 'doubao-seedance-2-0-fast-260128'],
+        featured: true,
+    },
+    {
+        id: 'google-visual',
+        name: 'Google Visual Models',
+        shortName: 'GO',
+        provider: 'google',
+        websiteUrl: 'https://ai.google.dev/gemini-api/docs',
+        baseUrl: providerBaseUrl.google,
+        capabilities: ['image', 'video'],
+        requestFormat: 'google',
+        defaultModel: 'gemini-3-pro-image',
+        models: ['gemini-3-pro-image', 'veo-3.1-generate-preview', 'veo-3.1-fast-generate-preview', 'veo-3.1-lite-generate-preview'],
+        featured: true,
+    },
+    {
+        id: 'kling-video',
+        name: 'Kling VIDEO',
+        shortName: 'KL',
+        provider: 'keling',
+        websiteUrl: 'https://app.klingai.com/cn/dev/document-api/apiReference/updateNotice',
+        baseUrl: providerBaseUrl.keling,
+        capabilities: ['video'],
+        requestFormat: 'native',
         featured: true,
     },
     {
@@ -200,13 +220,7 @@ const ensureModelOption = (options: string[], model?: string) => {
 export const CanvasSettings: React.FC<CanvasSettingsProps> = ({
     isOpen,
     onClose,
-    language,
-    setLanguage,
-    themeMode,
     resolvedTheme,
-    setThemeMode,
-    wheelAction,
-    setWheelAction,
     userApiKeys,
     onAddApiKey,
     onDeleteApiKey,
@@ -236,6 +250,9 @@ export const CanvasSettings: React.FC<CanvasSettingsProps> = ({
     // 模型管理
     const [editModels, setEditModels] = React.useState<ModelItem[]>([]);
     const [editDefaultModel, setEditDefaultModel] = React.useState('');
+    const [editMappings, setEditMappings] = React.useState<ProductModelMapping[]>([]);
+    const [editPricingRules, setEditPricingRules] = React.useState<ApiPricingRule[]>([]);
+    const [editBudgetPolicy, setEditBudgetPolicy] = React.useState<ApiBudgetPolicy>({ enabled: false, monthlyLimit: 100, warningPercent: 80, hardStop: true, currency: 'USD' });
     const [newModelId, setNewModelId] = React.useState('');
     const [extraConfig, setExtraConfig] = React.useState<Record<string, string>>({});
     // 批量测试状态
@@ -249,6 +266,7 @@ export const CanvasSettings: React.FC<CanvasSettingsProps> = ({
     const [endpointFlavor, setEndpointFlavor] = React.useState<'google' | 'openai-compatible' | 'openrouter-compatible' | null>(null);
     const [detectedCapabilities, setDetectedCapabilities] = React.useState<AICapability[]>([]);
     const [modelSearch, setModelSearch] = React.useState({ text: '', image: '', video: '' });
+    const [activeTab, setActiveTab] = React.useState<'api' | 'models' | 'security'>('api');
 
     const modelOptions = React.useMemo(() => ({
         text: ensureModelOption(
@@ -286,12 +304,63 @@ export const CanvasSettings: React.FC<CanvasSettingsProps> = ({
             ? `已自动保存 ${new Date(modelPreferenceSavedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}`
             : '选择后会自动保存到本机';
 
-    if (!isOpen) return null;
-
     const isDark = resolvedTheme === 'dark';
     const inputClass = 'isl-well w-full px-3 py-2.5 text-sm text-[var(--isl-ink)] outline-none placeholder:text-[var(--isl-ink-ghost)]';
     const chipClass = 'isl-chip px-3 py-2 text-sm';
     const sectionPanelClass = 'rounded-2xl border-[1.5px] border-[var(--isl-border)] bg-[var(--isl-surface-2)] p-3';
+
+    React.useEffect(() => {
+        if (editModels.length === 0) return;
+        const suggested = suggestProductModelMappings({
+            id: editingKeyId || 'draft', provider, capabilities, key: apiKey || 'draft', models: editModels,
+            customModels: editModels.map(model => model.id), defaultModel: editDefaultModel, createdAt: Date.now(), updatedAt: Date.now(),
+        });
+        setEditMappings(current => {
+            const existingIds = new Set(current.map(mapping => mapping.productModelId));
+            const additions = suggested.filter(mapping => !existingIds.has(mapping.productModelId));
+            return additions.length ? [...current, ...additions] : current;
+        });
+    }, [apiKey, capabilities, editDefaultModel, editModels, editingKeyId, provider]);
+
+    if (!isOpen) return null;
+
+    const updateMapping = (productModelId: string, upstreamModelId: string) => {
+        setEditMappings(current => upstreamModelId
+            ? current.some(mapping => mapping.productModelId === productModelId)
+                ? current.map(mapping => mapping.productModelId === productModelId ? { ...mapping, upstreamModelId, enabled: true, confirmed: true } : mapping)
+                : [...current, { productModelId, upstreamModelId, priority: current.length, enabled: true, confirmed: true }]
+            : current.filter(mapping => mapping.productModelId !== productModelId));
+    };
+
+    const priorityLabel = (priority: number) => priority === 0 ? '主线' : `备线 ${priority}`;
+
+    const confirmMapping = (productModelId: string) => {
+        setEditMappings(current => current.map(mapping => mapping.productModelId === productModelId ? { ...mapping, confirmed: true, enabled: true } : mapping));
+    };
+
+    const confirmAllMappings = () => {
+        setEditMappings(current => current.map(mapping => ({ ...mapping, confirmed: true, enabled: true })));
+    };
+
+    const setMappingPriority = (productModelId: string, priority: number) => {
+        setEditMappings(current => current.map(mapping => mapping.productModelId === productModelId ? { ...mapping, priority: Math.max(0, priority) } : mapping));
+    };
+
+    const autoSuggestMappings = () => {
+        const suggested = suggestProductModelMappings({
+            id: editingKeyId || 'draft', provider, capabilities, key: apiKey || 'draft', models: editModels,
+            customModels: editModels.map(model => model.id), defaultModel: editDefaultModel, createdAt: Date.now(), updatedAt: Date.now(),
+        });
+        setEditMappings(current => {
+            const existingIds = new Set(current.map(m => m.productModelId));
+            const additions = suggested.filter(m => !existingIds.has(m.productModelId));
+            return [...current, ...additions];
+        });
+    };
+
+    const addPricingRule = () => setEditPricingRules(current => [...current, {
+        id: crypto.randomUUID(), unit: capabilities.includes('video') ? 'video_second' : 'image', rate: 0, currency: 'USD', source: 'manual',
+    }]);
 
     const toggleCapability = (capability: AICapability) => {
         setCapabilities(prev =>
@@ -308,6 +377,10 @@ export const CanvasSettings: React.FC<CanvasSettingsProps> = ({
 
     const applyProviderPreset = (preset: ProviderPreset, options: { resetKey?: boolean; fillName?: boolean } = {}) => {
         const modelItems: ModelItem[] = preset.modelItems || (preset.models || []).map(id => ({ id, name: id }));
+        const suggestedMappings = suggestProductModelMappings({
+            id: 'draft', provider: preset.provider, capabilities: preset.capabilities, key: 'draft', models: modelItems,
+            customModels: modelItems.map(model => model.id), defaultModel: preset.defaultModel, createdAt: Date.now(), updatedAt: Date.now(),
+        });
         const presetExtra: Record<string, string> = {
             requestFormat: preset.requestFormat,
             ...(preset.extraConfig || {}),
@@ -322,6 +395,8 @@ export const CanvasSettings: React.FC<CanvasSettingsProps> = ({
         setBaseUrl(preset.baseUrl);
         setCapabilities([...preset.capabilities]);
         setEditModels(modelItems);
+        setEditMappings(suggestedMappings);
+        setEditPricingRules([]);
         setEditDefaultModel(preset.defaultModel || modelItems[0]?.id || '');
         setExtraConfig(presetExtra);
         setEndpointFlavor(
@@ -364,7 +439,6 @@ export const CanvasSettings: React.FC<CanvasSettingsProps> = ({
                 ...(pm.text || []).map(id => ({ id, name: id })),
                 ...(pm.image || []).map(id => ({ id, name: id })),
                 ...(pm.video || []).map(id => ({ id, name: id })),
-                ...(pm.agent || []).map(id => ({ id, name: id })),
             ];
             setEditModels(models);
             setEditDefaultModel(models[0]?.id || '');
@@ -450,6 +524,9 @@ export const CanvasSettings: React.FC<CanvasSettingsProps> = ({
                 customModels: customModelsToSave.length > 0 ? customModelsToSave : undefined,
                 defaultModel: finalDefaultModel || undefined,
                 extraConfig: extraToSave,
+                modelMappings: editMappings,
+                pricingRules: editPricingRules,
+                budgetPolicy: editBudgetPolicy,
             });
         } else {
             // 新增模式
@@ -465,6 +542,9 @@ export const CanvasSettings: React.FC<CanvasSettingsProps> = ({
                 customModels: customModelsToSave.length > 0 ? customModelsToSave : undefined,
                 defaultModel: finalDefaultModel || undefined,
                 extraConfig: extraToSave,
+                modelMappings: editMappings,
+                pricingRules: editPricingRules,
+                budgetPolicy: editBudgetPolicy,
             });
         }
         handleCancelEdit();
@@ -481,6 +561,9 @@ export const CanvasSettings: React.FC<CanvasSettingsProps> = ({
         setEditModels(item.models || (item.customModels || []).map(id => ({ id, name: id })));
         setEditDefaultModel(item.defaultModel || '');
         setExtraConfig(item.extraConfig || {});
+        setEditMappings(item.modelMappings || []);
+        setEditPricingRules(item.pricingRules || []);
+        setEditBudgetPolicy(item.budgetPolicy || { enabled: false, monthlyLimit: 100, warningPercent: 80, hardStop: true, currency: 'USD' });
         setEndpointFlavor((item.extraConfig?.endpointFlavor as 'google' | 'openai-compatible' | 'openrouter-compatible' | undefined) || null);
         setDetectedCapabilities(item.capabilities?.length ? [...item.capabilities] : []);
         setValidationResult(null);
@@ -496,6 +579,9 @@ export const CanvasSettings: React.FC<CanvasSettingsProps> = ({
         setEditDefaultModel('');
         setNewModelId('');
         setExtraConfig({});
+        setEditMappings([]);
+        setEditPricingRules([]);
+        setEditBudgetPolicy({ enabled: false, monthlyLimit: 100, warningPercent: 80, hardStop: true, currency: 'USD' });
         setValidationResult(null);
         setFetchedModels([]);
         setFetchError(null);
@@ -610,6 +696,9 @@ export const CanvasSettings: React.FC<CanvasSettingsProps> = ({
             defaultModel: k.defaultModel,
             models: k.models,
             extraConfig: k.extraConfig,
+            modelMappings: k.modelMappings,
+            pricingRules: k.pricingRules,
+            budgetPolicy: k.budgetPolicy,
             key: '***', // 不导出明文 key
         }));
         const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
@@ -647,6 +736,9 @@ export const CanvasSettings: React.FC<CanvasSettingsProps> = ({
                         defaultModel: item.defaultModel,
                         models: item.models,
                         extraConfig: item.extraConfig,
+                        modelMappings: item.modelMappings,
+                        pricingRules: item.pricingRules,
+                        budgetPolicy: item.budgetPolicy,
                     });
                 }
             } catch {
@@ -669,6 +761,9 @@ export const CanvasSettings: React.FC<CanvasSettingsProps> = ({
             defaultModel: k.defaultModel,
             models: k.models,
             extraConfig: k.extraConfig,
+            modelMappings: k.modelMappings,
+            pricingRules: k.pricingRules,
+            budgetPolicy: k.budgetPolicy,
         }));
         const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
@@ -696,14 +791,14 @@ export const CanvasSettings: React.FC<CanvasSettingsProps> = ({
     return (
         <div className="theme-aware fixed inset-0 z-100 flex items-center justify-center bg-black/35 backdrop-blur-sm" onClick={onClose}>
             <div
-                className="isl-shell relative max-h-[88vh] w-[92%] max-w-170 overflow-y-auto p-6"
+                className="isl-shell relative max-h-[90vh] w-[94%] max-w-6xl overflow-y-auto p-6"
                 onClick={(event) => event.stopPropagation()}
             >
                 <div className="mb-6 flex items-center justify-between">
                     <div>
                         <h3 className="text-xl font-extrabold text-[var(--isl-ink)]">设置</h3>
                         <p className="mt-1 text-sm text-[var(--isl-ink-soft)]">
-                            管理主题模式、交互方式、API 能力和默认模型。
+                            管理 API 供应商、模型映射和本地安全策略。主题与语言请在顶栏切换。
                         </p>
                     </div>
                     <button
@@ -717,118 +812,42 @@ export const CanvasSettings: React.FC<CanvasSettingsProps> = ({
                     </button>
                 </div>
 
-                <div className="space-y-6">
-                    <section className="space-y-3">
-                        <div className={`text-xs font-semibold uppercase tracking-[0.18em] ${isDark ? 'text-[#667085]' : 'text-[#98A2B3]'}`}>
-                            界面主题
-                        </div>
-                        <div className="grid gap-3 md:grid-cols-3">
-                            {([
-                                ['light', '浅色模式', '明亮白板与柔和面板'],
-                                ['dark', '黑夜模式', '深色工作台与高对比内容'],
-                                ['system', '跟随系统', '自动跟随设备主题'],
-                            ] as Array<[ThemeMode, string, string]>).map(([mode, title, description]) => (
-                                <button
-                                    key={mode}
-                                    type="button"
-                                    onClick={() => setThemeMode(mode)}
-                                    className={`rounded-3xl border-[1.5px] p-4 text-left transition ${
-                                        themeMode === mode
-                                            ? 'border-[var(--isl-mint)] bg-[var(--isl-mint-bg)]'
-                                            : 'border-[var(--isl-border)] bg-[var(--isl-surface-2)] hover:border-[var(--isl-border-strong)]'
-                                    }`}
-                                >
-                                    <div className="mb-3 flex items-center justify-between">
-                                        <div className="text-sm font-bold text-[var(--isl-ink)]">{title}</div>
-                                        {themeMode === mode && (
-                                            <span className="rounded-full bg-[var(--isl-mint)] px-2 py-1 text-[11px] font-bold text-white">
-                                                当前
-                                            </span>
-                                        )}
-                                    </div>
-                                    <div className="mb-4 text-xs text-[var(--isl-ink-soft)]">{description}</div>
-                                    <div className={`grid h-16 grid-cols-[1fr_56px] gap-2 rounded-2xl p-2 ${
-                                        mode === 'dark' || (mode === 'system' && resolvedTheme === 'dark')
-                                            ? 'bg-[#0F141C]'
-                                            : 'bg-white'
-                                    }`}>
-                                        <div className={`rounded-xl border ${
-                                            mode === 'dark' || (mode === 'system' && resolvedTheme === 'dark')
-                                                ? 'border-[#2A3140] bg-[#161A22]'
-                                                : 'border-[#E4E7EC] bg-[#F8FAFC]'
-                                        }`} />
-                                        <div className={`rounded-xl border ${
-                                            mode === 'dark' || (mode === 'system' && resolvedTheme === 'dark')
-                                                ? 'border-[#2A3140] bg-[#12151B]'
-                                                : 'border-[#E4E7EC] bg-white'
-                                        }`} />
-                                    </div>
-                                </button>
-                            ))}
-                        </div>
-                    </section>
+                {/* Tab 导航 */}
+                <div className="mb-6 flex gap-1 border-b border-[var(--isl-border)]">
+                    {([
+                        { key: 'api', label: 'API 配置' },
+                        { key: 'models', label: '模型偏好' },
+                        { key: 'security', label: '安全' },
+                    ] as const).map(tab => (
+                        <button
+                            key={tab.key}
+                            type="button"
+                            onClick={() => setActiveTab(tab.key)}
+                            className={`relative px-4 py-2.5 text-sm font-bold transition-colors ${
+                                activeTab === tab.key
+                                    ? 'text-[var(--isl-ink)]'
+                                    : 'text-[var(--isl-ink-soft)] hover:text-[var(--isl-ink)]'
+                            }`}
+                        >
+                            {tab.label}
+                            {activeTab === tab.key && (
+                                <span className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-[var(--isl-mint)]" />
+                            )}
+                        </button>
+                    ))}
+                </div>
 
-                    <section className="space-y-3">
-                        <div className={`text-xs font-semibold uppercase tracking-[0.18em] ${isDark ? 'text-[#667085]' : 'text-[#98A2B3]'}`}>
-                            语言与交互
-                        </div>
-                        <div className="grid gap-3 md:grid-cols-2">
-                            <div className={`rounded-2xl p-3 ${isDark ? 'bg-[#161A22]' : 'bg-[#F8FAFC]'}`}>
-                                <div className={`mb-2 text-sm font-medium ${isDark ? 'text-[#D0D5DD]' : 'text-[#344054]'}`}>语言</div>
-                                <div className={`inline-flex w-full rounded-full border p-1 ${isDark ? 'border-[#2A3140] bg-[#12151B]' : 'border-[#E4E7EC] bg-white'}`}>
-                                    {([
-                                        ['en', 'English'],
-                                        ['zho', '中文'],
-                                    ] as Array<['en' | 'zho', string]>).map(([value, label]) => (
-                                        <button
-                                            key={value}
-                                            type="button"
-                                            onClick={() => setLanguage(value)}
-                                            className={`flex-1 rounded-full px-3 py-2 text-sm transition ${
-                                                language === value
-                                                    ? isDark
-                                                        ? 'bg-[#F3F4F6] text-[#111827]'
-                                                        : 'bg-[#111827] text-white'
-                                                    : isDark
-                                                        ? 'text-[#98A2B3]'
-                                                        : 'text-[#667085]'
-                                            }`}
-                                        >
-                                            {label}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-
-                            <div className={`rounded-2xl p-3 ${isDark ? 'bg-[#161A22]' : 'bg-[#F8FAFC]'}`}>
-                                <div className={`mb-2 text-sm font-medium ${isDark ? 'text-[#D0D5DD]' : 'text-[#344054]'}`}>滚轮行为</div>
-                                <div className={`inline-flex w-full rounded-full border p-1 ${isDark ? 'border-[#2A3140] bg-[#12151B]' : 'border-[#E4E7EC] bg-white'}`}>
-                                    {([
-                                        ['zoom', '缩放'],
-                                        ['pan', '平移'],
-                                    ] as Array<[WheelAction, string]>).map(([value, label]) => (
-                                        <button
-                                            key={value}
-                                            type="button"
-                                            onClick={() => setWheelAction(value)}
-                                            className={`flex-1 rounded-full px-3 py-2 text-sm transition ${
-                                                wheelAction === value
-                                                    ? isDark
-                                                        ? 'bg-[#F3F4F6] text-[#111827]'
-                                                        : 'bg-[#111827] text-white'
-                                                    : isDark
-                                                        ? 'text-[#98A2B3]'
-                                                        : 'text-[#667085]'
-                                            }`}
-                                        >
-                                            {label}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-                        </div>
-                    </section>
-
+                <AnimatePresence mode="wait">
+                <motion.div
+                    key={activeTab}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -8 }}
+                    transition={{ type: 'spring', stiffness: 420, damping: 34 }}
+                    className="space-y-6"
+                >
+                {activeTab === 'api' && (
+                    <>
                     {/* ── 统一 API 配置管理 ───────────────────────── */}
                     <section className="space-y-3">
                         <div className="flex items-center justify-between">
@@ -889,8 +908,16 @@ export const CanvasSettings: React.FC<CanvasSettingsProps> = ({
                                     <div className="mt-1 text-xs">点击右上方「+ 添加供应商」按钮开始配置第三方 API Key</div>
                                 </div>
                             ) : (
-                                userApiKeys.map(item => (
-                                    <div key={item.id} className={`flex items-center justify-between rounded-2xl border px-4 py-3 ${
+                                <AnimatePresence initial={false}>
+                                {userApiKeys.map(item => (
+                                    <motion.div
+                                        key={item.id}
+                                        layout
+                                        initial={{ opacity: 0, y: -6, scale: 0.98 }}
+                                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                                        exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                                        transition={{ type: 'spring', stiffness: 420, damping: 34 }}
+                                        className={`flex items-center justify-between rounded-2xl border px-4 py-3 ${
                                         editingKeyId === item.id
                                             ? isDark ? 'border-[#4B5B78] bg-[#1B2330]' : 'border-[#1D4ED8] bg-[#EFF6FF]'
                                             : isDark ? 'border-[#2A3140] bg-[#161A22]' : 'border-[#E4E7EC] bg-white'
@@ -929,6 +956,10 @@ export const CanvasSettings: React.FC<CanvasSettingsProps> = ({
                                                         {capabilityLabels[capability]}
                                                     </span>
                                                 ))}
+                                                <span className={`rounded-full px-2 py-1 text-[11px] ${isDark ? 'bg-[#1B2029] text-[#98A2B3]' : 'bg-[#F2F4F7] text-[#667085]'}`}>
+                                                    映射 {item.modelMappings?.filter(mapping => mapping.enabled).length || 0}
+                                                </span>
+                                                {item.budgetPolicy?.enabled && <span className="rounded-full bg-amber-500/10 px-2 py-1 text-[11px] text-amber-600">预算 {item.budgetPolicy.currency} {item.budgetPolicy.monthlyLimit}</span>}
                                             </div>
                                             {/* Usage stats */}
                                             {usageSummary?.get(item.id) && (() => {
@@ -938,8 +969,10 @@ export const CanvasSettings: React.FC<CanvasSettingsProps> = ({
                                                     <div className={`mt-1.5 flex gap-3 text-[10px] ${isDark ? 'text-[#667085]' : 'text-[#98A2B3]'}`}>
                                                         <span>调用 {u.totalCalls} 次</span>
                                                         {u.errorCalls > 0 && <span className="text-red-400">失败 {u.errorCalls}</span>}
-                                                        <span>≈ {formatCost(u.totalCostCents)}</span>
-                                                        <span>24h: {u.last24h}</span>
+                                                <span>累计≈ {formatCost(u.totalCostCents, u.currency)}</span>
+                                                <span>本月≈ {formatCost(u.currentMonthCostCents, u.currency)}</span>
+                                                {u.pendingCostCalls > 0 && <span className="text-amber-500">待核账 {u.pendingCostCalls}</span>}
+                                                <span>24h: {u.last24h}</span>
                                                     </div>
                                                 );
                                             })()}
@@ -979,12 +1012,16 @@ export const CanvasSettings: React.FC<CanvasSettingsProps> = ({
                                                 删除
                                             </button>
                                         </div>
-                                    </div>
-                                ))
+                                    </motion.div>
+                                ))}
+                                </AnimatePresence>
                             )}
                         </div>
                     </section>
+                    </>
+                )}
 
+                {activeTab === 'models' && (
                     <section className="space-y-3">
                         <div className="flex items-center justify-between gap-3">
                             <div className={`text-xs font-semibold uppercase tracking-[0.18em] ${isDark ? 'text-[#667085]' : 'text-[#98A2B3]'}`}>
@@ -1046,8 +1083,9 @@ export const CanvasSettings: React.FC<CanvasSettingsProps> = ({
                             </label>
                         </div>
                     </section>
+                )}
 
-                    {/* Security section */}
+                {activeTab === 'security' && (
                     <section className="space-y-3">
                         <div className={`text-xs font-semibold uppercase tracking-[0.18em] ${isDark ? 'text-[#667085]' : 'text-[#98A2B3]'}`}>
                             🔒 安全
@@ -1081,15 +1119,35 @@ export const CanvasSettings: React.FC<CanvasSettingsProps> = ({
                             ✅ API Key 已加密存储（AES-GCM），不再以明文保留在 localStorage 中。
                         </div>
                     </section>
-                </div>
+                )}
+                </motion.div>
+                </AnimatePresence>
             </div>
 
             {/* API Key 添加/编辑弹窗（统一版） */}
+            <AnimatePresence>
             {showKeyModal && (
-                <div className="fixed inset-0 z-150 overflow-y-auto bg-black/40 backdrop-blur-sm" onClick={handleCancelEdit}>
-                    <div className="flex min-h-[100dvh] items-end justify-center p-2 sm:min-h-full sm:items-center sm:p-6">
-                    <div
-                        className="isl-shell relative flex min-h-0 max-h-[calc(100dvh-1rem)] w-full max-w-140 flex-col overflow-hidden sm:max-h-[calc(100dvh-3rem)]"
+                <motion.div
+                    className="fixed inset-0 z-150 overflow-y-auto bg-black/40 backdrop-blur-sm"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.18 }}
+                    onClick={handleCancelEdit}
+                >
+                    <motion.div
+                        className="flex min-h-[100dvh] items-end justify-center p-2 sm:min-h-full sm:items-center sm:p-6"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.14 }}
+                    >
+                    <motion.div
+                        className="isl-shell relative flex min-h-0 max-h-[calc(100dvh-1rem)] w-full max-w-5xl flex-col overflow-hidden sm:max-h-[calc(100dvh-3rem)]"
+                        initial={{ opacity: 0, y: 24, scale: 0.97 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 16, scale: 0.98 }}
+                        transition={{ type: 'spring', stiffness: 380, damping: 30 }}
                         onClick={(e) => e.stopPropagation()}
                     >
                         <div className="mb-0 flex items-center justify-between px-6 pb-4 pt-6">
@@ -1126,11 +1184,14 @@ export const CanvasSettings: React.FC<CanvasSettingsProps> = ({
                                                 boxShadow: presetActive ? '0 10px 28px rgba(124,92,255,.24)' : '0 6px 18px rgba(31,29,26,.08)',
                                             };
                                             return (
-                                            <button
+                                            <motion.button
                                                 key={preset.id}
                                                 type="button"
                                                 onClick={() => applyProviderPreset(preset, { fillName: true })}
-                                                className="flex min-h-[54px] items-center gap-2 rounded-2xl border px-3 py-2 text-left text-sm transition hover:-translate-y-0.5"
+                                                whileHover={{ y: -2, scale: 1.01 }}
+                                                whileTap={{ y: 0, scale: 0.985 }}
+                                                transition={{ type: 'spring', stiffness: 400, damping: 26 }}
+                                                className="flex min-h-[54px] items-center gap-2 rounded-2xl border px-3 py-2 text-left text-sm"
                                                 style={rainbowStyle}
                                             >
                                                 <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white/70 text-[11px] font-black text-[#4F46E5]">
@@ -1147,7 +1208,7 @@ export const CanvasSettings: React.FC<CanvasSettingsProps> = ({
                                                         推荐
                                                     </span>
                                                 )}
-                                            </button>
+                                            </motion.button>
                                             );
                                         })}
                                     </div>
@@ -1315,6 +1376,122 @@ export const CanvasSettings: React.FC<CanvasSettingsProps> = ({
                                 )}
                             </div>
 
+                            <div className={sectionPanelClass}>
+                                <div className="mb-3 flex items-center justify-between gap-3">
+                                    <div>
+                                        <div className="text-sm font-bold text-[var(--isl-ink)]">固定模型映射</div>
+                                        <div className="mt-0.5 text-[11px] text-[var(--isl-ink-soft)]">PromptBar 只展示这些产品模型；在这里绑定这把 Key 实际可调用的模型 ID。</div>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="rounded-full bg-[var(--isl-card)] px-2.5 py-1 text-[11px] text-[var(--isl-ink-soft)]">PromptBar 可用 {editMappings.filter(m => m.enabled && m.confirmed && m.upstreamModelId).length}</span>
+                                        {editMappings.some(m => !m.confirmed) && (
+                                            <button type="button" onClick={confirmAllMappings} className="isl-chip px-3 py-1.5 text-xs isl-chip--active">全部确认</button>
+                                        )}
+                                        <button type="button" onClick={autoSuggestMappings} className="isl-chip px-3 py-1.5 text-xs">自动推荐</button>
+                                    </div>
+                                </div>
+                                <div className="space-y-2">
+                                    {[
+                                        ...(capabilities.includes('image') ? getProductModels('image') : []),
+                                        ...(capabilities.includes('video') ? getProductModels('video') : []),
+                                    ].map(product => {
+                                        const mapping = editMappings.find(item => item.productModelId === product.id);
+                                        const connected = mapping?.upstreamModelId;
+                                        const confirmed = mapping?.confirmed;
+                                        const enabled = mapping?.enabled;
+                                        const connectorColor = !connected ? 'var(--isl-border)' : !confirmed ? '#F59E0B' : enabled ? '#10B981' : 'var(--isl-border)';
+                                        const statusBadge = !mapping ? '未映射' : !confirmed ? '待确认' : enabled ? '已连接' : '已停用';
+                                        const badgeClass = !mapping ? 'bg-[var(--isl-surface-2)] text-[var(--isl-ink-soft)]' : !confirmed ? 'bg-amber-500/10 text-amber-600' : enabled ? 'bg-emerald-500/10 text-emerald-600' : 'bg-[var(--isl-surface-2)] text-[var(--isl-ink-soft)]';
+                                        return (
+                                            <motion.div key={product.id} layout transition={{ type: 'spring', stiffness: 420, damping: 34 }} className="rounded-2xl border border-[var(--isl-border)] bg-[var(--isl-card)] p-3">
+                                                <div className="flex items-center justify-between gap-3">
+                                                    <div className="flex min-w-0 items-center gap-2.5">
+                                                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[var(--isl-border)] bg-[var(--isl-surface-2)] text-[11px] font-black text-[var(--isl-ink-soft)]">{product.shortName}</span>
+                                                        <div className="min-w-0">
+                                                            <div className="truncate text-sm font-bold text-[var(--isl-ink)]">{product.name}</div>
+                                                            <div className="truncate text-[10px] text-[var(--isl-ink-soft)]">{product.company} · {product.badge || product.capability}</div>
+                                                        </div>
+                                                    </div>
+                                                    <span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-bold ${badgeClass}`}>{statusBadge}</span>
+                                                </div>
+                                                <div className="mt-2.5 flex items-center gap-2">
+                                                    <motion.div className="h-0.5 w-5 shrink-0 rounded-full" animate={{ backgroundColor: connectorColor }} transition={{ type: 'spring', stiffness: 380, damping: 30 }} />
+                                                    <svg width="14" height="14" viewBox="0 0 14 14" className="shrink-0"><motion.path d="M2 7 L11 7 M8 4 L11 7 L8 10" fill="none" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" animate={{ stroke: connectorColor }} transition={{ type: 'spring', stiffness: 380, damping: 30 }} /></svg>
+                                                    <select aria-label={`${product.name} 上游模型`} value={mapping?.upstreamModelId || ''} onChange={event => updateMapping(product.id, event.target.value)} className={`${inputClass} min-w-0 flex-1 text-xs`}>
+                                                        <option value="">不在这把 Key 上启用</option>
+                                                        {editModels.map(model => <option key={model.id} value={model.id}>{model.name || model.id}</option>)}
+                                                    </select>
+                                                </div>
+                                                <div className="mt-2 flex items-center justify-between gap-2">
+                                                    <select aria-label={`${product.name} 线路优先级`} value={mapping?.priority ?? 0} disabled={!mapping} onChange={event => setMappingPriority(product.id, Number(event.target.value) || 0)} className={`${inputClass} w-auto px-2 py-1 text-[10px] disabled:opacity-40`}>
+                                                        <option value={0}>主线</option>
+                                                        <option value={1}>备线 1</option>
+                                                        <option value={2}>备线 2</option>
+                                                        <option value={3}>备线 3</option>
+                                                    </select>
+                                                    <div className="flex items-center gap-1.5">
+                                                        {mapping && !confirmed && (
+                                                            <button type="button" onClick={() => confirmMapping(product.id)} className="rounded-full bg-amber-500/10 px-2.5 py-1 text-[10px] font-bold text-amber-600">确认使用</button>
+                                                        )}
+                                                        {mapping && confirmed && (
+                                                            <button type="button" disabled={!mapping} onClick={() => setEditMappings(current => current.map(item => item.productModelId === product.id ? { ...item, enabled: !item.enabled } : item))} className={`isl-chip px-2 text-[10px] disabled:opacity-40 ${enabled ? 'isl-chip--active' : ''}`}>{enabled ? '启用' : '停用'}</button>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </motion.div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+                            <div className={sectionPanelClass}>
+                                <div className="mb-3 flex items-center justify-between gap-3">
+                                    <div><div className="text-sm font-bold text-[var(--isl-ink)]">价格规则</div><div className="mt-0.5 text-[11px] text-[var(--isl-ink-soft)]">按 Key、产品模型和计费单位维护，可随时增删改。</div></div>
+                                    <button type="button" onClick={addPricingRule} className="isl-chip px-3 py-1.5 text-xs">+ 新增规则</button>
+                                </div>
+                                <div className="space-y-2">
+                                    {editPricingRules.map(rule => (
+                                        <motion.div key={rule.id} layout transition={{ type: 'spring', stiffness: 420, damping: 34 }} className="grid gap-2 rounded-2xl border border-[var(--isl-border)] bg-[var(--isl-card)] p-3 md:grid-cols-[1.4fr_1fr_1fr_1fr_auto]">
+                                            <select aria-label="计价模型" value={rule.productModelId || ''} onChange={event => setEditPricingRules(current => current.map(item => item.id === rule.id ? { ...item, productModelId: event.target.value || undefined, unit: event.target.value ? getProductModel(event.target.value)?.capability === 'video' ? 'video_second' : 'image' : 'request' } : item))} className={`${inputClass} text-xs`}>
+                                                <option value="">整把 Key</option>
+                                                {[...getProductModels('image'), ...getProductModels('video')].map(model => <option key={model.id} value={model.id}>{model.name}</option>)}
+                                            </select>
+                                            <select aria-label="计价单位" value={rule.unit} onChange={event => setEditPricingRules(current => current.map(item => item.id === rule.id ? { ...item, unit: event.target.value as ApiPricingRule['unit'] } : item))} className={`${inputClass} text-xs`}>
+                                                <option value="request">每次请求</option>
+                                                {(!rule.productModelId || getProductModel(rule.productModelId)?.capability === 'image') && <option value="image">每张图片</option>}
+                                                {(!rule.productModelId || getProductModel(rule.productModelId)?.capability === 'video') && <option value="video_second">每视频秒</option>}
+                                                {!rule.productModelId && <><option value="input_token">每百万输入 Token</option><option value="output_token">每百万输出 Token</option></>}
+                                            </select>
+                                            <input aria-label="单价" type="number" min="0" step="0.0001" value={rule.rate} onChange={event => setEditPricingRules(current => current.map(item => item.id === rule.id ? { ...item, rate: Number(event.target.value) || 0 } : item))} className={`${inputClass} text-xs`} />
+                                            <select aria-label="币种" value={rule.currency} onChange={event => setEditPricingRules(current => current.map(item => item.id === rule.id ? { ...item, currency: event.target.value as 'USD' | 'CNY' } : item))} className={`${inputClass} text-xs`}><option value="USD">USD</option><option value="CNY">CNY</option></select>
+                                            <button type="button" aria-label="删除价格规则" onClick={() => setEditPricingRules(current => current.filter(item => item.id !== rule.id))} className="isl-chip px-3 text-xs text-red-500">删除</button>
+                                        </motion.div>
+                                    ))}
+                                    {editPricingRules.length === 0 && <div className="rounded-2xl border border-dashed border-[var(--isl-border)] px-3 py-5 text-center text-xs text-[var(--isl-ink-soft)]">未配置价格时只记录用量，不假装给出精确成本。</div>}
+                                </div>
+                            </div>
+
+                            <div className={sectionPanelClass}>
+                                <div className="mb-3 flex items-center justify-between"><div><div className="text-sm font-bold text-[var(--isl-ink)]">预算策略</div><div className="mt-0.5 text-[11px] text-[var(--isl-ink-soft)]">硬上限只阻止新任务，不会终止供应商已经接受的任务。</div></div><button type="button" onClick={() => setEditBudgetPolicy(policy => ({ ...policy, enabled: !policy.enabled }))} className={`isl-chip px-3 py-1.5 text-xs ${editBudgetPolicy.enabled ? 'isl-chip--active' : ''}`}>{editBudgetPolicy.enabled ? '已开启' : '未开启'}</button></div>
+                                {editBudgetPolicy.enabled && editingKeyId && usageSummary?.get(editingKeyId) && (() => {
+                                    const usage = usageSummary.get(editingKeyId)!;
+                                    const sameCurrency = usage.currency === editBudgetPolicy.currency;
+                                    const used = sameCurrency ? usage.currentMonthCostCents / 100 : 0;
+                                    const percent = editBudgetPolicy.monthlyLimit > 0 ? Math.min(100, used / editBudgetPolicy.monthlyLimit * 100) : 0;
+                                    return <div className="mb-3 rounded-2xl bg-[var(--isl-card)] p-3">
+                                        <div className="mb-2 flex items-center justify-between text-[11px] text-[var(--isl-ink-soft)]"><span>本月已记录 {sameCurrency ? formatCost(usage.currentMonthCostCents, usage.currency) : '币种不一致'}</span><span>{Math.round(percent)}%</span></div>
+                                        <div className="h-2 overflow-hidden rounded-full bg-[var(--isl-surface-2)]"><motion.div initial={false} animate={{ width: `${percent}%` }} transition={{ type: 'spring', stiffness: 360, damping: 32 }} className={`h-full rounded-full ${percent >= editBudgetPolicy.warningPercent ? 'bg-amber-500' : 'bg-emerald-500'}`} /></div>
+                                        {usage.pendingCostCalls > 0 && <div className="mt-2 text-[10px] text-amber-600">另有 {usage.pendingCostCalls} 笔费用待供应商账单确认，预算占用按当前预估计算。</div>}
+                                    </div>;
+                                })()}
+                                {editBudgetPolicy.enabled && <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} transition={{ type: 'spring', stiffness: 380, damping: 32 }} className="grid gap-2 md:grid-cols-4">
+                                    <label className="text-[11px] text-[var(--isl-ink-soft)]">月度额度<input type="number" min="0" value={editBudgetPolicy.monthlyLimit} onChange={event => setEditBudgetPolicy(policy => ({ ...policy, monthlyLimit: Number(event.target.value) || 0 }))} className={`${inputClass} mt-1`} /></label>
+                                    <label className="text-[11px] text-[var(--isl-ink-soft)]">预警比例<input type="number" min="1" max="100" value={editBudgetPolicy.warningPercent} onChange={event => setEditBudgetPolicy(policy => ({ ...policy, warningPercent: Math.max(1, Math.min(100, Number(event.target.value) || 80)) }))} className={`${inputClass} mt-1`} /></label>
+                                    <label className="text-[11px] text-[var(--isl-ink-soft)]">币种<select value={editBudgetPolicy.currency} onChange={event => setEditBudgetPolicy(policy => ({ ...policy, currency: event.target.value as 'USD' | 'CNY' }))} className={`${inputClass} mt-1`}><option value="USD">USD</option><option value="CNY">CNY</option></select></label>
+                                    <label className="flex items-end"><button type="button" onClick={() => setEditBudgetPolicy(policy => ({ ...policy, hardStop: !policy.hardStop }))} className={`isl-chip w-full px-3 py-2.5 text-xs ${editBudgetPolicy.hardStop ? 'isl-chip--active' : ''}`}>超额阻止新任务 {editBudgetPolicy.hardStop ? 'ON' : 'OFF'}</button></label>
+                                </motion.div>}
+                            </div>
+
                             {/* extraConfig（如 Google Veo projectId） */}
                             <div>
                                 <div className={`mb-2 flex items-center justify-between`}>
@@ -1354,26 +1531,6 @@ export const CanvasSettings: React.FC<CanvasSettingsProps> = ({
                                         placeholder="Project ID / Organization（可选）"
                                         className={`${inputClass} flv-safe-input`}
                                     />
-                                    <div className={`md:col-span-2 mt-1 text-xs font-semibold ${isDark ? 'text-[#98A2B3]' : 'text-[#667085]'}`}>计费配置</div>
-                                    <input
-                                        value={extraConfig.costMultiplier || ''}
-                                        onChange={(e) => updateExtraConfig('costMultiplier', e.target.value)}
-                                        placeholder="成本倍率，如 1.2"
-                                        className={`${inputClass} flv-safe-input`}
-                                    />
-                                    <select
-                                        value={extraConfig.billingMode || ''}
-                                        onChange={(e) => updateExtraConfig('billingMode', e.target.value)}
-                                        className={`${inputClass} flv-safe-input`}
-                                        title="计费模式"
-                                        aria-label="计费模式"
-                                    >
-                                        <option value="">计费模式：自动</option>
-                                        <option value="per-token">按 Token</option>
-                                        <option value="per-image">按图片</option>
-                                        <option value="per-second">按秒</option>
-                                        <option value="flat">固定成本</option>
-                                    </select>
                                     <div className={`md:col-span-2 mt-1 text-xs font-semibold ${isDark ? 'text-[#98A2B3]' : 'text-[#667085]'}`}>模型测试配置</div>
                                     <input
                                         value={extraConfig.testTimeoutMs || ''}
@@ -1393,13 +1550,6 @@ export const CanvasSettings: React.FC<CanvasSettingsProps> = ({
                                     onChange={(e) => updateExtraConfig('testPrompt', e.target.value)}
                                     placeholder="测试提示词（可选）"
                                     className={`${inputClass} mt-2 min-h-18 resize-y`}
-                                />
-                                <div className={`mb-1 mt-3 text-xs font-semibold ${isDark ? 'text-[#98A2B3]' : 'text-[#667085]'}`}>模型映射</div>
-                                <textarea
-                                    value={extraConfig.modelMappingsJson || ''}
-                                    onChange={(e) => updateExtraConfig('modelMappingsJson', e.target.value)}
-                                    placeholder='模型映射 JSON，如 {"gpt-image":"vendor-image-model"}'
-                                    className={`${inputClass} mt-2 min-h-18 resize-y font-mono text-xs`}
                                 />
                                 <div className={`mb-1 mt-3 text-xs font-semibold ${isDark ? 'text-[#98A2B3]' : 'text-[#667085]'}`}>配置 JSON</div>
                                 <textarea
@@ -1443,11 +1593,11 @@ export const CanvasSettings: React.FC<CanvasSettingsProps> = ({
                                 </div>
                             )}
                         </div>
-                    </div>
-                    </div>
-                </div>
+                    </motion.div>
+                    </motion.div>
+                </motion.div>
             )}
+            </AnimatePresence>
         </div>
     );
 };
-

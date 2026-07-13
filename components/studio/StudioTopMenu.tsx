@@ -1,9 +1,10 @@
-import { CircleAlert, CircleCheck, Languages, Moon, Settings, Sun, Building2, BookOpen, User, Download, RefreshCw, Loader2 } from 'lucide-react';
-import React, { useState } from 'react';
-import { Link } from 'react-router';
+import { CircleAlert, CircleCheck, Languages, Moon, Settings, Sun, Monitor, Building2, BookOpen, User, Download, RefreshCw, Loader2, Home, Plus, Trash2, ChevronLeft, ChevronRight, Pencil, Check, X } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { Link, useNavigate } from 'react-router';
 import { useAuth } from '../../hooks/useAuth';
 import { useUpdaterStore } from '../../stores/useUpdaterStore';
 import { AuthModal } from '../auth/AuthModal';
+import type { ThemeMode } from '../../types';
 
 export interface StudioMenuStatus {
   tone: 'ready' | 'warning';
@@ -11,17 +12,32 @@ export interface StudioMenuStatus {
   detail: string;
 }
 
-export interface StudioMenuModel {
-  mode: 'canvas' | 'workflow';
+export interface StudioMenuProjectRef {
+  id: string;
   title: string;
-  theme: 'light' | 'dark';
+}
+
+export interface StudioMenuModel {
+  mode: 'workflow';
+  title: string;
+  themeMode: ThemeMode;
+  resolvedTheme: 'light' | 'dark';
   language: 'en' | 'zho';
   status: StudioMenuStatus;
   actions: {
-    changeMode: (mode: 'canvas' | 'workflow') => void;
-    toggleTheme: () => void;
+    changeMode: (mode: 'workflow') => void;
+    setThemeMode: (mode: ThemeMode) => void;
     toggleLanguage: () => void;
     openSettings: () => void;
+  };
+  // 画布管理（目前仅 workflow 视图使用，其他视图保持 undefined 即可）
+  projectList?: StudioMenuProjectRef[];
+  activeProjectIndex?: number;
+  projectActions?: {
+    create: () => void;
+    remove: () => void;
+    rename: (newTitle: string) => void;
+    setActiveByIndex: (index: number) => void;
   };
 }
 
@@ -30,12 +46,60 @@ export interface StudioTopMenuProps {
 }
 
 export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
-  const { actions, language, mode, status, theme, title } = model;
+  const { actions, language, mode, status, themeMode, resolvedTheme, title, projectList, activeProjectIndex, projectActions } = model;
+  const navigate = useNavigate();
   const isChinese = language === 'zho';
   const settingsLabel = isChinese ? '设置' : 'Settings';
   const { user, isLoggedIn } = useAuth();
   const [authOpen, setAuthOpen] = useState(false);
   const isTauri = Boolean((window as any)?.__TAURI__ || (window as any)?.__TAURI_INTERNALS__);
+
+  // LOGO 下拉（回主页/新建画布/删除画布）
+  const [logoMenuOpen, setLogoMenuOpen] = useState(false);
+  const logoMenuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!logoMenuOpen) return;
+    const onClick = (event: MouseEvent) => {
+      if (logoMenuRef.current && !logoMenuRef.current.contains(event.target as Node)) setLogoMenuOpen(false);
+    };
+    document.addEventListener('mousedown', onClick);
+    return () => document.removeEventListener('mousedown', onClick);
+  }, [logoMenuOpen]);
+
+  // 画布名 inline 编辑
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState(title);
+  useEffect(() => { if (!isEditingTitle) setTitleDraft(title); }, [title, isEditingTitle]);
+
+  // 主题下拉（浅色/深色/跟随系统）
+  const [themeMenuOpen, setThemeMenuOpen] = useState(false);
+  const themeMenuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!themeMenuOpen) return;
+    const onClick = (event: MouseEvent) => {
+      if (themeMenuRef.current && !themeMenuRef.current.contains(event.target as Node)) setThemeMenuOpen(false);
+    };
+    document.addEventListener('mousedown', onClick);
+    return () => document.removeEventListener('mousedown', onClick);
+  }, [themeMenuOpen]);
+  const themeIcon = themeMode === 'light' ? <Sun size={15} /> : themeMode === 'dark' ? <Moon size={15} /> : <Monitor size={15} />;
+  const themeLabel = themeMode === 'light' ? (isChinese ? '浅色' : 'Light') : themeMode === 'dark' ? (isChinese ? '深色' : 'Dark') : (isChinese ? '跟随系统' : 'System');
+  const commitTitle = () => {
+    const trimmed = titleDraft.trim();
+    if (trimmed && trimmed !== title) projectActions?.rename(trimmed);
+    else setTitleDraft(title);
+    setIsEditingTitle(false);
+  };
+  const cancelTitle = () => { setTitleDraft(title); setIsEditingTitle(false); };
+
+  const canManageProjects = Boolean(projectList && projectActions);
+  const hasMultipleProjects = (projectList?.length || 0) > 1;
+  const projectIndex = activeProjectIndex ?? 0;
+  const switchProject = (direction: 1 | -1) => {
+    if (!hasMultipleProjects) return;
+    const next = (projectIndex + direction + projectList!.length) % projectList!.length;
+    projectActions!.setActiveByIndex(next);
+  };
   const upStatus = useUpdaterStore(s => s.status);
   const upVersion = useUpdaterStore(s => s.availableVersion);
   const upProgress = useUpdaterStore(s => s.downloadProgress);
@@ -60,30 +124,96 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
       style={{ background: 'var(--app-bg)' }}
     >
       <div className="flex min-w-0 items-center gap-2">
-        <div className="flex shrink-0 items-center gap-2" aria-label="Flovart">
-          <img src="/favicon.png" alt="" className="h-7 w-7 rounded-lg" />
-          <span className="hidden text-sm font-black tracking-[-0.03em] sm:inline" style={{ color: 'var(--isl-ink)' }}>Flovart</span>
+        <div ref={logoMenuRef} className="relative shrink-0">
+          <button
+            type="button"
+            className="flex items-center gap-2 rounded-lg p-0.5 transition hover:bg-black/5"
+            aria-label="Flovart 菜单"
+            title={canManageProjects ? (isChinese ? '点击打开画布菜单' : 'Open canvas menu') : 'Flovart'}
+            onClick={() => { if (canManageProjects) setLogoMenuOpen(open => !open); }}
+          >
+            <img src="/favicon.png" alt="" className="h-7 w-7 rounded-lg" />
+            <span className="hidden text-sm font-black tracking-[-0.03em] sm:inline" style={{ color: 'var(--isl-ink)' }}>Flovart</span>
+          </button>
+          {logoMenuOpen && canManageProjects && (
+            <div
+              role="menu"
+              aria-label={isChinese ? '画布菜单' : 'Canvas menu'}
+              className="isl-pop absolute left-0 top-full z-[90] mt-1.5 min-w-[200px] p-1.5"
+              onPointerDown={event => event.stopPropagation()}
+            >
+<a
+                href="/"
+                className="isl-opt flex items-center gap-2"
+                role="menuitem"
+                onClick={event => { event.preventDefault(); setLogoMenuOpen(false); navigate('/app/home'); }}
+              >
+                <Home size={14} />
+                <span className="text-xs font-bold">{isChinese ? '回到首页' : 'Back to home'}</span>
+              </a>
+              <button type="button" role="menuitem" className="isl-opt flex items-center gap-2" onClick={() => { projectActions!.create(); setLogoMenuOpen(false); }}>
+                <Plus size={14} />
+                <span className="text-xs font-bold">{isChinese ? '新建画布' : 'New canvas'}</span>
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                className="isl-opt flex items-center gap-2"
+                disabled={(projectList?.length || 0) === 0}
+                style={{ color: 'var(--isl-coral-deep)' }}
+                onClick={() => { projectActions!.remove(); setLogoMenuOpen(false); }}
+              >
+                <Trash2 size={14} />
+                <span className="text-xs font-bold">{isChinese ? '删除当前画布' : 'Delete canvas'}</span>
+              </button>
+            </div>
+          )}
         </div>
         <span className="hidden h-4 w-px sm:block" style={{ background: 'var(--isl-border)' }} />
-        <strong className="hidden min-w-0 truncate text-xs font-semibold min-[540px]:block" style={{ color: 'var(--isl-ink-soft)' }}>
-          {title || (mode === 'canvas' ? 'Canvas' : 'Workflow')}
-        </strong>
+        {canManageProjects ? (
+          <div className="flex min-w-0 items-center gap-1.5">
+            {isEditingTitle ? (
+              <div className="flex min-w-0 items-center gap-0.5">
+                <input
+                  autoFocus
+                  value={titleDraft}
+                  onChange={event => setTitleDraft(event.target.value)}
+                  onKeyDown={event => { if (event.key === 'Enter') commitTitle(); if (event.key === 'Escape') cancelTitle(); }}
+                  onBlur={commitTitle}
+                  className="min-w-0 max-w-[180px] rounded-md border-[1.5px] px-1.5 py-0.5 text-xs font-semibold outline-none"
+                  style={{ borderColor: 'var(--isl-mint)', background: 'var(--isl-surface-2)', color: 'var(--isl-ink)' }}
+                  aria-label={isChinese ? '画布名' : 'Canvas name'}
+                />
+                <button type="button" className="isl-icon-btn h-6 w-6" onClick={commitTitle} aria-label={isChinese ? '确认' : 'Confirm'}><Check size={13} /></button>
+                <button type="button" className="isl-icon-btn h-6 w-6" onClick={cancelTitle} aria-label={isChinese ? '取消' : 'Cancel'}><X size={13} /></button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="group flex min-w-0 items-center gap-1 rounded-md px-1 py-0.5 transition hover:bg-black/5"
+                onClick={() => setIsEditingTitle(true)}
+                title={isChinese ? '点击修改画布名' : 'Click to rename canvas'}
+              >
+                <strong className="min-w-0 truncate text-xs font-semibold min-[540px]:block" style={{ color: 'var(--isl-ink-soft)' }}>
+                  {title || 'Workflow'}
+                </strong>
+                <Pencil size={10} className="shrink-0 opacity-0 transition group-hover:opacity-60" />
+              </button>
+            )}
+            {hasMultipleProjects && (
+              <div className="flex shrink-0 items-center gap-0.5">
+                <button type="button" className="isl-icon-btn h-6 w-6" onClick={() => switchProject(-1)} aria-label={isChinese ? '上一个画布' : 'Previous canvas'} disabled={projectList!.length < 2}><ChevronLeft size={13} /></button>
+                <span className="tabular-nums text-[11px] font-bold" style={{ color: 'var(--isl-ink-soft)' }} title={isChinese ? `${projectIndex + 1} / ${projectList!.length} 个画布` : `${projectIndex + 1} / ${projectList!.length} canvases`}>{projectIndex + 1}/{projectList!.length}</span>
+                <button type="button" className="isl-icon-btn h-6 w-6" onClick={() => switchProject(1)} aria-label={isChinese ? '下一个画布' : 'Next canvas'} disabled={projectList!.length < 2}><ChevronRight size={13} /></button>
+              </div>
+            )}
+          </div>
+        ) : (
+          <strong className="hidden min-w-0 truncate text-xs font-semibold min-[540px]:block" style={{ color: 'var(--isl-ink-soft)' }}>
+            {title || 'Workflow'}
+          </strong>
+        )}
       </div>
-
-      <nav className="flex shrink-0 items-center gap-0.5" aria-label={isChinese ? '工作区切换' : 'Workspace switcher'}>
-        {(['canvas', 'workflow'] as const).map(item => (
-          <button
-            key={item}
-            type="button"
-            onClick={() => actions.changeMode(item)}
-            className={`isl-tab px-2 py-1.5 text-[11px] font-semibold transition-colors sm:px-3 sm:text-xs ${mode === item ? 'isl-tab--active' : ''}`}
-            style={{ color: mode === item ? 'var(--isl-ink)' : 'var(--isl-ink-soft)' }}
-            aria-current={mode === item ? 'page' : undefined}
-          >
-            {item === 'canvas' ? 'Canvas' : 'Workflow'}
-          </button>
-        ))}
-      </nav>
 
       <div className="flex min-w-0 items-center justify-end gap-0.5 sm:gap-1">
         <Link
@@ -149,9 +279,37 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
           <Languages size={15} />
           <span className="sr-only">{isChinese ? 'Switch to English' : '切换到中文'}</span>
         </button>
-        <button type="button" className="isl-icon-btn h-8 w-8" onClick={actions.toggleTheme} title={theme === 'dark' ? (isChinese ? '切换到浅色' : 'Light mode') : (isChinese ? '切换到深色' : 'Dark mode')}>
-          {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
-        </button>
+        <div ref={themeMenuRef} className="relative shrink-0">
+          <button type="button" className="isl-icon-btn h-8 w-8" onClick={() => setThemeMenuOpen(open => !open)} title={isChinese ? '主题模式' : 'Theme mode'} aria-label={isChinese ? '主题模式' : 'Theme mode'}>
+            {themeIcon}
+          </button>
+          {themeMenuOpen && (
+            <div
+              role="menu"
+              aria-label={isChinese ? '主题选择' : 'Theme selection'}
+              className="isl-pop absolute right-0 top-full z-[90] mt-1.5 min-w-[140px] p-1.5"
+              onPointerDown={event => event.stopPropagation()}
+            >
+              {([
+                { mode: 'light' as ThemeMode, icon: <Sun size={13} />, label: isChinese ? '浅色模式' : 'Light' },
+                { mode: 'dark' as ThemeMode, icon: <Moon size={13} />, label: isChinese ? '深色模式' : 'Dark' },
+                { mode: 'system' as ThemeMode, icon: <Monitor size={13} />, label: isChinese ? '跟随系统' : 'System' },
+              ]).map(item => (
+                <button
+                  key={item.mode}
+                  type="button"
+                  role="menuitem"
+                  className={`isl-opt flex items-center gap-2 ${themeMode === item.mode ? 'isl-opt--active' : ''}`}
+                  onClick={() => { actions.setThemeMode(item.mode); setThemeMenuOpen(false); }}
+                >
+                  {item.icon}
+                  <span className="text-xs font-bold">{item.label}</span>
+                  {themeMode === item.mode && <Check size={11} className="ml-auto opacity-70" />}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
         <button type="button" className="isl-icon-btn h-8 w-8" onClick={actions.openSettings} title={settingsLabel} aria-label={settingsLabel}>
           <Settings size={15} />
         </button>

@@ -27,13 +27,14 @@ import {
     normalizeModelSelectionWithKeys,
     resolveModelSelection,
 } from '../utils/modelRefs';
+import { getProductModel, mergeSuggestedMappings } from '../services/productModelCatalog';
 
 const generateId = () => `id_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
 export const DEFAULT_MODEL_PREFS: ModelPreference = {
     textModel: 'gemini-3-flash-preview',
-    imageModel: 'gpt-image-2',
-    videoModel: 'dreamina-seedance-2-0-260128',
+    imageModel: 'flovart:gpt-image-2',
+    videoModel: 'flovart:seedance-2',
 };
 
 const PROVIDER_MODELS = DEFAULT_PROVIDER_MODELS;
@@ -92,7 +93,8 @@ const sanitizeRunningHubModelItems = (models?: ModelItem[]) => (models || [])
 const mergeFetchedModelsIntoKey = (key: UserApiKey, modelItems: ModelItem[]) => {
     if (modelItems.length === 0) return key;
     if (key.provider !== 'runningHub') {
-        return { ...key, models: modelItems, updatedAt: Date.now() };
+        const merged = { ...key, models: modelItems, updatedAt: Date.now() };
+        return { ...merged, modelMappings: mergeSuggestedMappings(merged) };
     }
     const fetchedIds = new Set(modelItems.map(model => model.id));
     const preservedCustomModels = (key.customModels || [])
@@ -140,6 +142,9 @@ export const normalizeApiKeyEntry = (item: Partial<UserApiKey>): UserApiKey | nu
         defaultModel: runningHubDefaultModel,
         models: runningHubModels,
         extraConfig: item.extraConfig,
+        modelMappings: item.modelMappings,
+        pricingRules: item.pricingRules,
+        budgetPolicy: item.budgetPolicy,
         createdAt: item.createdAt || Date.now(),
         updatedAt: item.updatedAt || Date.now(),
     };
@@ -176,7 +181,13 @@ export function useApiKeys(isSettingsPanelOpen: boolean) {
     const [modelPreference, setModelPreference] = useState<ModelPreference>(() => {
         try {
             const raw = localStorage.getItem('modelPreference.v1');
-            return raw ? { ...DEFAULT_MODEL_PREFS, ...JSON.parse(raw) } : DEFAULT_MODEL_PREFS;
+            if (!raw) return DEFAULT_MODEL_PREFS;
+            const parsed = { ...DEFAULT_MODEL_PREFS, ...JSON.parse(raw) } as ModelPreference;
+            return {
+                ...parsed,
+                imageModel: getProductModel(parsed.imageModel)?.id || parsed.imageModel,
+                videoModel: getProductModel(parsed.videoModel)?.id || parsed.videoModel,
+            };
         } catch {
             return DEFAULT_MODEL_PREFS;
         }
@@ -250,10 +261,15 @@ export function useApiKeys(isSettingsPanelOpen: boolean) {
         });
     }, [apiKeysLoaded, userApiKeys]);
 
-    // Usage monitoring summary (recomputed when settings panel opens or keys change)
-    const usageSummaryMap = useMemo(() => {
-        if (!isSettingsPanelOpen || userApiKeys.length === 0) return undefined;
-        return getUsageSummary(userApiKeys.map(k => k.id));
+    const [usageSummaryMap, setUsageSummaryMap] = useState<Awaited<ReturnType<typeof getUsageSummary>> | undefined>();
+    useEffect(() => {
+        if (!isSettingsPanelOpen || userApiKeys.length === 0) {
+            setUsageSummaryMap(undefined);
+            return;
+        }
+        let cancelled = false;
+        void getUsageSummary(userApiKeys).then(summary => { if (!cancelled) setUsageSummaryMap(summary); });
+        return () => { cancelled = true; };
     }, [isSettingsPanelOpen, userApiKeys]);
 
     // 从加密存储异步加载 API Key（首次挂载 + 兼容迁移旧明文）
@@ -507,13 +523,14 @@ export function useApiKeys(isSettingsPanelOpen: boolean) {
     const handleAddApiKey = useCallback((payload: Omit<UserApiKey, 'id' | 'createdAt' | 'updatedAt'>) => {
         const now = Date.now();
         const capabilities = payload.capabilities?.length ? payload.capabilities : inferCapabilitiesByProvider(payload.provider);
-        const nextKey: UserApiKey = {
+        const initialKey: UserApiKey = {
             ...payload,
             capabilities,
             id: generateId(),
             createdAt: now,
             updatedAt: now,
         };
+        const nextKey = { ...initialKey, modelMappings: mergeSuggestedMappings(initialKey) };
         setUserApiKeys(prev => {
             const isFirstOfCapabilities = !prev.some(k =>
                 hasCapabilityOverlap(

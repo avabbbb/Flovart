@@ -2,6 +2,16 @@
 title: 待测试确认
 ---
 
+## dev 构建链路修复
+
+- 删除近 265 个未跟踪的 `.js` 副本（源码 `.tsx/.ts` 的旧编译产物），这些副本因 Vite 默认 `resolve.extensions` 把 `.js` 排在 `.tsx/.ts` 之前而遮蔽源文件，导致 dev/vitest 偶尔加载陈旧实现。同时改 `vite.config.ts` 显式声明 `resolve.extensions = ['.tsx', '.ts', '.jsx', '.js', '.json', '.mjs']`，把 tsx/ts 提到最前。dev 服务器与测试现在强制加载源码，无法再被未跟踪副本遮蔽。
+
+## Landing Page v2 调整（应用内首页重构）
+
+- `/`（ToCLanding）回到无 UGC 社区生态的旧版（HEAD = `4587b56/7498d65` 那版手绘风）；3 个 "开始创作" 按钮跳转 `/app/home`；模板卡片仍跳 `/app?templateId=xxx`。
+- 新增路由 `/app/home`，对应新组件 `components/home/FlovartHome.tsx`：参考 flova.tv/zh-CN/skill/ 生态——左侧 Sidebar 导航 + 右侧 Hero + 大对话框 + 热门 Skills 横滚 + 最近项目横滚（读 `useWorkflowStore.projects`，首张为虚线"创建新项目"卡，点击进入 `/app`）+ FlovaTV dense grid（分类 tabs + 视频卡 hover 显 Skill 胶囊与"添加为我的 Skill/已添加" toggle）+ Footer。所有 Skill / FlovaTV 视频均前端 mock。
+- 删除 4 个未跟踪 WIP 文件：`BannerCoverflow.tsx`、`CommunityFeed.tsx`、`PersonalProjects.tsx`、`useCloneWorkflow.ts`。`communityTypes.ts` 保留（仍被 `community/communityStore.ts` / `community/WorkflowUploadModal.tsx` 引用）。
+
 ## Canvas 与 Workflow 双系统
 
 - Canvas 已移除节点引用连线可视化，保留原有 `@` 引用数据和生成传参，并继续使用元素历史与 SVG/Konva 渲染路径。
@@ -24,6 +34,7 @@ title: 待测试确认
 - Workflow 底部工具栏已移除上传图片/视频/音频按钮，改用 Canvas 的 `isl-icon-btn` 扁平风格，保留选择/平移/文本/配置/共享素材/撤销/重做/适应/网格/Agent 入口。
 - Workflow 的生成历史与素材库支持搜索、图片/视频和素材分类筛选、点击添加、拖到画布落点、下载、反推 Prompt、重命名和删除；点击或拖入的本地媒体继续使用现有 Blob/IndexedDB 持久化，不把 base64 写进项目 JSON。
 - Workflow 右侧历史/素材、画布拖入和反推 Prompt 会先解析 `idb:board:*`、`idb-video:*`、`cold-media:*` 等本地媒体引用，不再把这些 IndexedDB 协议直接交给浏览器图片/视频标签。
+- Canvas 与 Workflow 支持跨模块复制粘贴图片/视频：Ctrl+C 复制选中媒体元素到应用内共享剪贴板（`useClipboardStore`），图片同步写入系统剪贴板 `navigator.clipboard`；Ctrl+V 按当前鼠标位置粘贴，鼠标不在视口内时回退到视口中心。Workflow 工具栏复制按钮和右键菜单复制也同步写入共享剪贴板。粘贴优先级：Workflow 为 `clipboardRef` > `useClipboardStore` > `navigator.clipboard.read`；Canvas 为 `useClipboardStore` > `navigator.clipboard.read`。
 
 ## Workflow 生成
 
@@ -140,6 +151,37 @@ title: 待测试确认
 - **B6/B7 注释澄清**：`providerAdapterRegistry.resolve` 在无 explicit `providerId` 时按 Map 插入顺序匹配首个 `supportsModel` 的适配器（ES2015+ Map 顺序规范保证，且每个 modelId 通常只被一个 provider 支持故无歧义）；`seedanceProviderAdapter.generate` 是可选快捷路径，调用方（aiGateway）可走 registry submit+poll 分步流程，两者复用同一 `submitTask`/`pollTask`，无重复实现。已加注释说明。
 - **B8 可取消**：`rhRunWebApp` / `rhSubmitWebAppTask` / `rhQueryWebAppOutputs` 新增可选 `signal?: AbortSignal` 参数并透传给 `fetch`；轮询循环改为 abortible sleep（signal abort 时提前结束 setTimeout 等待），取消时抛出 `AbortError`，不再继续空转直到 10 分钟超时。
 - **D4 部署按钮**：README 顶部新增 Vercel / Render 一键部署按钮（指向 `vercel.com/new/clone` 与 `render.com/deploy`），新增 `render.yaml` 静态站点配置（`npm ci && npm run build`，`staticPath: /dist`，SPA rewrite），部署形态文案从"四种"更新为"六种"。
+
+## UGC 社区主页（Banner + 个人项目 + 社区瀑布流）
+
+- ToCLanding（`/` 路由）改造完成，从原"Hero + Features + 模板画廊 + Showcase"四区块改为 UGC 三区块：BannerCoverflow + PersonalProjects + CommunityFeed；保留 Header（导航 goto 社区/我的项目/提示词 + 个人版/企业版切换 + 登录 + 开始创作）+ Footer + Bottom CTA（文案改为"上传你的工作流，让社区一起做同款"）。
+- **BannerCoverflow**：`embla-carousel-react` coverflow 3D 轮播，6 个精选工作流卡片，中心卡片放大无旋转、两侧卡片缩放 + rotateY 透视；底部圆形 dot 指示器 + 顶部两个入口按钮（"开始创作""浏览社区作品"），中心卡片点击触发"一键做同款"。
+- **PersonalProjects**：读取 `useWorkflowStore` 已 hydrate 的本地项目，按 `updatedAt` 取前 6 个 + 一个"新建工作流"虚位卡片；预览图取首个 image/video 节点的 `metadata.href || metadata.poster`（过滤 blob:/file: 本地引用）；卡片点击跳 `/app`。
+- **CommunityFeed**：响应式 2/3/4 列 masonry（依据 `window.innerWidth` 切列数），12 个 mock 社区工作流卡片；搜索（title/description/tags/author）+ 7 分类 tab（`COMMUNITY_CATEGORIES = ['全部','TV Show','人物','风景','产品','动漫','抽象']`）；卡卡 hover 显示点赞按钮 + "做同款"按钮；点赞数 local state。
+- **数据类型 `CommunityWorkflow`**：`id/title/description/thumbUrls[]/coverVideoUrl/gradient/author{ name,avatar? }/likes/views/forks/category/tags[]/workflowJson: WorkflowProject/createdAt`。
+- **一键做同款 `useCloneWorkflow`**：深拷贝 `workflowJson`，重新生成项目 id（nanoid）+ 全节点 id 映射 + 重写连线 id/端点 + 清除生成状态/媒体引用/版本（storageKey/href/poster 若为 blob:/file: 也清空，避免本地引用暴露）；调 `useWorkflowStore.importProjects([normalizeWorkflowProject(cloned)])` + 跳转 `/app`，toast `已克隆到"我的项目"，正在打开工作流`。
+- 技术栈：`embla-carousel-react@8.6.0` + `@tanstack/react-virtual@3.14.5`（虚拟滚动 import 已加但 mock 数据量小，暂用响应式列数 + 非虚拟的 column masonry；后续接入真实后端大列表时再启用 `useVirtualizer`）。
+- 项目 mock 数据放在 `components/landing/communityTypes.ts`（`COMMUNITY_WORKFLOWS` 12 条 + `BANNER_WORKFLOWS` 前 6 条，覆盖 6 个 category + 12 套渐变色 + 7 个虚拟作者），后续接入真实后端时只需替换数据源。
+- typecheck 通过（仅 `tests/workflowImageTools.test.tsx(81,94)` 预存语法错误）。
+- 待用户验证：① 进入 `/` 看到 Banner coverflow 轮播并能切换；② 中心卡片点击触发做同款，跳 `/app` 后画布上有克隆出的项目（标题带"（做同款）"后缀）；③ 个人项目网格显示本地已有项目缩略图；④ 社区 feed 搜索/分类筛选/点赞按钮工作；⑤ 响应式列数随窗口宽度从 2 列变 3 列变 4 列。
+
+## UGC 社区上传与发布闭环
+
+- 新增 `components/community/communityStore.ts`：localforage 持久化 UGC 社区工作流上传（`storeName='community_workflows_v1'`，USER_KEY='user-uploads'）。3 个 API：`loadCommunityWorkflows()` 合并内置 mock + 用户上传按 `createdAt` 倒序、`publishCommunityWorkflow(input)` 写入用户上传条目、`toggleCommunityLike(id)` 内置/用户通用点赞。
+- 新增 `components/community/WorkflowUploadModal.tsx`：发布工作流模态，选择本地工作流（Select）+ 标题 + 简介 TextArea + 分类 Select + 渐变色预设 Select + 标签管理（回车添加、最多 8、点击删除）+ 发布按钮；克隆 `workflowJson` 时清空 `agentSessions/activeAgentSessionId/selectedNodeIds` 避免隐私泄漏；作者用 `user?.username || '匿名创作者'`。
+- `ToCLanding.tsx` 接入发布按钮：Header 新增"发布工作流"按钮（未登录跳 AuthModal）；动态 `items` 状态启动调 `loadCommunityWorkflows`；`bannerSeed` 用于发布成功后 remount Banner + Feed；底部 CTA 文案贴合 UGC 闭环。
+- 待用户验证：① 下载未登录点"发布工作流"弹出登录框；② 登录后选本地项目 + 填写信息 + 发布，Banner/Feed 刷新看到新条目；③ 点赞按钮可切换；④ 用户上传条目刷新后仍在（localforage 持久化）。
+
+## Workflow UI 精简与节点连接气泡
+
+- **顶部菜单**：`StudioTopMenu.tsx` 加 LOGO 下拉（项目切换/新建）+ 画布名 inline 编辑 + 画布序号切换器；`App.tsx` 接 `projectList/activeProjectIndex/projectActions`。
+- **节点交互**：节点双击改为聚焦动画（仅超出视野才居中），原"放大播放"移到 `WorkflowNodeToolbar.tsx` `Maximize2` 按钮；节点重命名改为右键菜单"重命名"入口 → `renameSignal` nonce → `WorkflowNode` 触发已有 inline 编辑。
+- **工具栏**：`WorkflowToolbar.tsx` select/pan 合并为单按钮切换（Framer Motion spring 旋转图标过渡）；3 个添加按钮合并为 1 个大"+"按钮，弹出竖排菜单（image/video/text/script/audio/config），click-away 关闭，AnimatePresence 出场动画；缩放/小地图/磁吸整合进工具栏。
+- **创建菜单**：`WorkflowCreateMenu.tsx` 从 2×3 网格卡片改为竖排单列列表项。
+- **左栏**：`WorkflowSidebar.tsx` 删除常驻 aside，改为折叠态触发按钮 → 从屏幕左侧滑出的临时浮层（图层/资产双 tab），点外部收起；资产 tab 嵌入 `StudioMediaBrowser(mode='assets')`。右抽屉 `WorkflowWorkspace.tsx` 移除 assets tab，仅保留 agent + history（生成历史固定 `mode="history"`）。
+- **节点加号 mouse-follow 吸附**：节点 source/target handle 各内嵌 `Plus` icon（22px，hover/选中才显）；从 handle 拖出连线时浮动"+"气泡（`.workflow-connection-bubble`，Framer Motion spring x/y 追踪 `connectionDrag.local` 世界→屏幕坐标，stiffness 600 damping 32）跟随光标，松手在节点上吸附连接、在空白处打开创建菜单。target handle 触发反向连接（新节点→当前节点）：`connectionDrag.direction='in'`，`WorkflowConnections` active path 反转，`getConnectionDropTarget` 校验反向 `validateWorkflowConnection`，空白处 drop 时为当前节点创建上游节点。
+- typecheck 通过（仅 `tests/workflowImageTools.test.tsx(81,94)` 预存语法错误）。
+- 待用户验证：① 工具栏单按钮切换 select/pan，图标 spring 旋转；② 点"+"弹出竖排菜单选类型建节点，点外部收起；③ 左栏按钮点开浮层，图层/资产 tab 切换，点外部收起；④ 节点双击聚焦（在视野内不硬居中）；⑤ 右键节点"重命名"进 inline 编辑；⑥ 从 source handle 拖出看到"+"气泡跟随光标，拖到另一节点吸附连线；⑦ 从 target handle 拖出，松手在空白处弹出"创建上游节点"菜单，建好后自动连回当前节点。
 
 ## 共享生态后端骨架（待测）
 
@@ -1116,5 +1158,153 @@ Batch 逻辑已从独立 `handleBatchGenerate` 合并进 `handleGenerate`。Prom
 - **RunningHub 画布不返回图片修复**（`services/workflowGeneration.ts:300-310`）：非批量原地替换路径此前在 `ingestWorkflowMedia` 返回后立即调 `releaseWorkflowMediaRecord(record.storageKey)`，把新 storageKey 从 `pendingReferences` 移除；此后到 `publish`（`updateProject` → `setWorkflowMediaCanonicalProjects`）之间有多个 `await`（history poster / dataUrl 编码），此窗口内 `InfiniteWorkflow.tsx:203` 的 nodes effect 会触发 `pruneWorkflowMedia`，新 key 既不在 `pendingReferences` 又不在 `canonicalReferences`，blob 被 IDB 删除，`useWorkflowMediaUrl` 读到 null → 画布不显示。修复：推迟 release 到 `publish` 之后（与批量路径在 commit 后释放的时机对齐）。
 - **停止生成功能失效修复**（`services/workflowGeneration.ts:268`）：`executeUnifiedIgnition` 的 catch 块把 abort 错误吞成 `{ ok: false, errorMessage: '生成已停止，可重新发起。' }`，`workflowGeneration.ts:268` 随后 `throw new Error(result.errorMessage)` 抛出的是普通 `Error` 而非 `AbortError`；catch 块 `isAbort(error)` 判否，节点被设成 `status:'error'` 覆盖 `cancelWorkflowGeneration` 已发布的 `status:'idle'`。修复：在 `raceAbort` 返回后、检查 `result.ok` 之前加 `if (controller.signal.aborted) throw abortError()`，确保 abort 路径走 `isAbort → idle` 分支。
 - **进度 UI CSS 补全**（`styles/workflow.css:124-127`）：新增 `.workflow-node__generation-meta`（右上角 flex 列）、`.workflow-node__generation-message`（半透明黑底毛玻璃胶囊，max 140px 截断）、`.workflow-node__generation-elapsed`（tabular-nums 计时）、`.workflow-node__generation-stale`（底部居中过期提示）。
+
+## Art 工作台
+
+### 框架（第一批）
+
+- **`WorkspaceView` 改为 2 值**：`'workflow' | 'art'`（`types/index.ts:262`，原 `'canvas'` 删除）；`useWorkspaceStore` 默认 `activeView` 改为 `'workflow'`；`StudioTopMenu` 2 tab 导航（Workflow/Art），不再暴露 Canvas 作为独立工作区；`StudioMenuModel.mode` + `changeMode` 改为 `'workflow' | 'art'`；`studioShell.test.tsx` `mode` 类型同步；`workspaceSwitch.test.tsx` 改为 workflow/art；logo 菜单「回到主页」改为切到 Art 而非 Canvas。Canvas 代码（KonvaCanvas + useGeneration + idb:* 协议 + 画笔/lasso/图层）保留作为 Art 底座，App.tsx 默认 render 分支即 Art 视图。
+- **ArtToolPack 工具背包**：`components/art/ArtToolPack.tsx` + `artTools.ts`，8 工具按 风格化/特征提取/抠图 3 类分组（滤镜/故障/深度图/边缘/线稿/法线/姿态/抠图）。卡片 `draggable` + `dataTransfer 'application/x-art-tool'` 或点击直接打开，沿用 `isl-panel/isl-mint/theme-aware` 视觉。
+- **ArtRippleOverlay 涟漪动画**：`components/art/ArtRippleOverlay.tsx`，Framer Motion 三圈弹性扩散 + 中心工具图标回弹，drop 点触发 0.9s。
+- **ArtEditDialog 全屏编辑框架**：`components/art/ArtEditDialog.tsx`，Ant Design Modal 框架（参考 `WorkflowImageToolDialogs`），图片/视频预览 + 占位确认按钮，`onConfirm(resultHref)` 原地替换画布元素。
+- **App.tsx Art 状态接线**：`artEdit`/`artBusy`/`artError`/`artRipple` state（`App.tsx:520-533`）；`handleDrop` 检测 `application/x-art-tool` MIME 触发 `triggerArtTool`；`triggerArtTool`/`openArtTool`/`handleArtEditConfirm`/`handleArtRippleComplete` 四个 callback（`App.tsx:2255-2310`）；`rightSidebar` 条件渲染 `ArtToolPack` vs `RightPanel`（`App.tsx:3871-3933`）；`overlays` 加 `ArtRippleOverlay` + `ArtEditDialog`（`App.tsx:3983-3997`）。Art 无独立 early return，复用 Canvas `leftSidebar` + `main` + `bottomDock`。
+- **Workflow → Art 入口**：`WorkflowNodeToolbar` 选中图片/视频节点时新增「进 Art 工作台」按钮（`Palette` 图标）→ `onOpenArt(nodeId)` → `InfiniteWorkflow` → `WorkflowWorkspace` → `App.tsx` `handleOpenArtFromWorkflow`：拉取节点 `storageKey`/`href` Blob 构造 File，`setActiveView('art')` 后双 `rAF` 调 `handleAddMediaElement`；失败走 `toast.show(..., 'error')`。修正既有 `openArtTool` 的 `toast.add` → `toast.show(..., 'warning')` bug。
+- **Art 独立导入入口**：复用 Canvas 顶栏 Toolbar 既有 `onUpload={handleAddMediaElement}`，Art 视图沿用 Canvas 主区，无需新增独立导入按钮。
+
+**测试要点**：
+
+- ① StudioTopMenu 2 tab 切换 Workflow/Art，不再暴露 Canvas 作为独立工作区，各自视图正确显示。
+- ② Art 视图右侧显示 ArtToolPack（8 工具卡片 3 类分组），非 Art 视图显示 RightPanel。
+- ③ 拖拽工具卡片到画布 → drop 点显示 ArtRippleOverlay 三圈弹性扩散 0.9s → 自动打开 ArtEditDialog。
+- ④ 未选中画布元素时点击工具卡片 → toast "请先在画布选中一张图片或视频"。
+- ⑤ 选中画布图片/视频后点击工具卡片 → 打开 ArtEditDialog。
+- ⑥ Workflow 选中图片/视频节点 → 节点工具栏出现「进 Art 工作台」按钮 → 点击自动切换到 Art 视图并将节点媒体载入画布并自动选中；未挂载媒体时 toast error。
+- ⑦ ArtEditDialog 确认后画布元素 href 被结果替换，localforage 持久化生效。
+
+### 工具实现（第二批）
+
+- **Web Worker 框架**：`workers/art-protocol.ts`（主线程/worker 双向消息协议 + `ArtRunHandle` + `ArtProgressCb`）+ `workers/art-worker.ts`（统一 worker 入口，按 `toolId` 分派到 processor，支持 cancel + progress 回调；像素工具走 OffscreenCanvas decode → processor → encode，模型工具走 transformers.js）+ `workers/art-processors/`（具体算法模块）+ `components/art/useArtWorker.ts`（主线程 hook，single worker 实例 + refcount 生命周期管理 + cancel）。Vite `new Worker(new URL(...), { type: 'module' })` 自动打包；`vite.config.ts` 已配置 `Cross-Origin-Opener-Policy: same-origin` + `Cross-Origin-Embedder-Policy: require-corp` 支持 SharedArrayBuffer/WebGPU。
+- **ArtEditDialog 处理流程接入**：从"占位确认"重写为端到端处理流程。dialog 进入即自动 `start()` 触发 worker 处理，显示 Spin + phase（decoding/processing/encoding/done/error）进度文案；处理完显示原图/结果 Segmented 切换对比，"替换画布内容"按钮调 `onConfirm(resultDataUrl)` 走 `handleArtEditConfirm` 流程回写画布（含 `toIdbRef` 落盘）；错误可"重试"。`components/workflow/media.ts` `loadFallbackMediaBlob` 改 export 供 hook 复用。
+- **边缘提取（`edges`）**：`workers/art-processors/edges.ts` 完整 Canny（灰度 → 高斯模糊 → Sobel → NMS → 双阈值 + hysteresis），纯 JS Float32Array，无外部依赖，输出黑白边缘图（可 `invert` 反相）。1536px 上限自动等比下采样。`edgesPipeline(src, w, h, { thresholdLow, thresholdHigh, blur, invert })`。
+- **深度图（`depth`）**：`workers/art-processors/depth.ts` transformers.js v4 `pipeline('depth-estimation', 'onnx-community/depth-anything-v2-small-ONNX')`（~100MB，首次从 HF Hub 下载，之后浏览器 IndexedDB 缓存），WebGPU 优先 `device:'webgpu'`、不支持时回落 `wasm`，`dtype:'fp32'`。dynamic `import('@huggingface/transformers')` 仅在 depth 工具调用时拉取，不影响像素工具 worker bundle。pipeline singleton 缓存。输出 8bit 灰度 RGBA。
+- **法线图（`normals`）**：`workers/art-processors/normals.ts` 从输入图（深度图或任意灰度源）中心差分 → 归一化 → 编码成 RGB tangent-space 法线图（RGB = (nx*0.5+0.5)*255）。`normalsFromDepth(src, w, h, { strength, invert })`。
+- **线稿（`lineart`）**：`workers/art-processors/lineart.ts` 当前路由到 Canny/edges 流水线，使用更细的预设（`thresholdLow: 0.12, thresholdHigh: 0.32, blur: 0.8`）产线稿近似。专用 anime line-art 模型（如 `rocca/informative-drawings-line-art-onnx` 走裸 onnxruntime-web，非 transformers.js 标准 pipeline）后续可替换此路由而不改 worker 边界。
+
+**测试要点**：
+
+- ① Art 视图选中图片 → 工具背包点击「边缘」→ ArtEditDialog 自动开始处理 → 完成 → 原图/结果切换可用 → "替换画布内容"后画布元素更新。
+- ② 深度图工具首次调用会下载 ~100MB 模型（可视网速等待），之后走浏览器缓存；WebGPU 环境优先，无 WebGPU 回落 WASM（较慢）。
+- ③ 法线工具输入深度图（先用深度图工具生成一张）→ 法线图 RGB 视觉正确（蓝紫主调，标准 tangent-space 编码）。
+- ④ 线稿工具产生细线条近似线稿（当前为 Canny 近似，非专用 anime 模型）；`invert:true` 默认黑底白线，`invert:false` 白底黑线。
+- ⑤ Worker 处理中点"取消"应中止当前任务，UI 回到 idle 状态。
+- ⑥ 大图（>1536px）自动等比下采样不超时。
+- ⑦ 错误状态下"重试"按钮可重新发起处理。
+
+## Workflow PromptBar 与 BYOK 模型路由
+
+- Workflow 继续复用共享 `PromptBar`：第一层固定展示 GPT Image 2、Gemini 3 Pro Image、Seedream 5 Pro、Seedance 2.0、Veo 3.1、Kling VIDEO 等产品模型；具体 API Key 与上游模型 ID 在设置页映射，PromptBar 不再直接暴露供应商返回的杂乱模型列表。
+- 模型切换后按产品能力渐进披露生成方式、画质、清晰度、比例、时长、音频、数量、联网搜索和真人素材预检测；不支持的选项隐藏，已选参数不受支持时才自动校正。
+- Veo 的文生视频、图生视频、参考图和首尾帧模式分别校验素材数量与顺序；参考图、高分辨率等官方限定场景会在界面和提交层共同约束为 8 秒，不再只在请求失败后提示。
+- GPT Image 的清晰度与比例改为使用满足官方边长、16 倍数、像素总量和宽高比限制的安全尺寸表；已下线的 Gemini 图片预览模型不会再被自动映射。
+- 设置页的供应商表单新增固定模型映射、主备优先级、价格规则增删改和月预算策略；预算硬上限只阻止新任务，不会伪装成可以撤回供应商已接受的任务。
+- API Key 卡片新增本月费用、累计费用、待核账次数和月预算进度；同一适用范围内的按请求与按图片/视频价格可组合预估，币种冲突时保留未知而不是错误相加。
+- Workflow 生成前会按 Key/模型价格规则预估并预留用量，结果按 `reserved / submission_unknown / queued / running / succeeded / failed / canceled` 记录在本机 `localforage`；失败或中止未取得供应商账单时标为费用未知，不自动退款。
+- Seedance 在提交请求开始后遇到网络错误会进入“提交结果未知”，不会自动重试或切换备用 Key；手动重试会提示可能二次扣费。“停止等待”只终止本机轮询，不声称已取消上游任务。
+- 真人素材预检测当前仅是本机提示词级基础检查，不代表供应商权威合规结果；仍需用真实 API Key 验证各供应商返回字段与最终账单。
+
+**测试要点**：
+
+- ① Workflow 新建图片/视频节点并选中，确认共享 PromptBar 出现；模型卡、参数面板和高级选项能正常展开，浏览器控制台无 Hook 或渲染错误。
+- ② 在设置中添加供应商，确认自动建议匹配的固定产品模型仍可手动改上游模型 ID、启停和优先级；未映射模型在 PromptBar 显示“去配置”且不能生成。
+- ③ 分别切换图片与视频产品模型，确认只出现该模型支持的生成方式和参数；Veo 高分辨率/参考模式自动约束为支持的时长。
+- ④ 新增/编辑/删除价格规则并开启月预算；低于预警、达到预警、超过硬上限时分别验证提示与新任务阻止行为。
+- ⑤ 模拟 Seedance POST 后断网，确认状态为“提交结果未知”且不自动重试；点击重试前必须二次确认可能重复计费。
+- ⑥ Prompt 编辑器空态应显示可见占位文案并具备文本框无障碍名称；低高度窗口展开参数时可纵向滚动，模型卡支持横向吸附浏览。
+- ⑦ 本轮隔离测试共 11 个文件、123 项通过；全量类型检查和浏览器复测仍受当前并行改造中的既有编译失败影响，不能作为本功能完成判据。
+
+## 顶栏三态主题 + 设置页 Tab 重构 + 节点聚焦动画 + PromptBar 模型过滤 + 文件夹 UI v2
+
+- **顶栏主题切换改为三态下拉**：`StudioTopMenu` 的 `StudioMenuModel` 接口从 `theme: 'light'|'dark'` + `actions.toggleTheme` 改为 `themeMode: ThemeMode`（`'light'|'dark'|'system'`）+ `resolvedTheme: 'light'|'dark'` + `actions.setThemeMode`。下拉菜单含三项（浅色 / 深色 / 跟随系统，图标 Sun / Moon / Monitor），click-outside 关闭，active 项带 Check icon。`App.tsx` `studioMenuModel` 同步改用 `themeMode` / `resolvedTheme` / `setThemeMode`（`useWorkspaceStore` 持久化 `themeMode`）。
+- **CanvasSettings 重构为 3-Tab 布局**：移除 props `language` / `setLanguage` / `themeMode` / `setThemeMode` / `wheelAction` / `setWheelAction`，新增内部 `activeTab: 'api'|'models'|'security'` state，三个 tab：API 配置 / 模型偏好 / 安全。移除主题三态卡片 section、语言 + 滚轮 section。header 描述改为"管理 API 供应商、模型映射和本地安全策略。主题与语言请在顶栏切换。" API Key 编辑弹窗（L1083+）保留不变。`App.tsx` 两处 `CanvasSettings` 渲染（L3811、L4033）同步精简 6 个废弃 props。
+- **Workflow 节点双击聚焦动画**：`InfiniteWorkflow.tsx` `focusNode` 重写为 `fitView` 风格 `k` 计算（`Math.min(1.5, Math.max(0.12, Math.min((w-160)/nodeW, (h-160)/nodeH)))`）+ `padding=120` + `rAF` 驱动 `easeInOutCubic` tween 420ms；修复 `node.x`/`node.y` → `node.position.x`/`node.position.y`。新增 `focusAnimRef`，用户拖拽 / 滚轮交互时立即取消未结束动画。
+- **PromptBar 按节点类型过滤模型**：`WorkflowNodePromptBar.tsx` `modeOptions` 按 `node.type` 过滤——`image` 节点只展示图像模型，`video` 节点只展示视频模型，`text` 节点锁定文本模式。
+- **未配置产品模型可点击打开设置**：`PromptBar.tsx` 未配置模型的卡片从 `disabled` 改为可点击，点击调用 `onOpenSettings` 打开设置页（不再禁用）。
+- **文件夹 UI v2 全链路**：新建 `components/studio/DeleteFolderDialog.tsx`（两选项：移动内容到未分类 / 永久删除文件夹及所有内容，红色危险按钮，空文件夹直接删除）；新建 `components/studio/FolderTree.tsx`（文件夹树 + 新建 / inline 重命名 / 删除，轻量 props）；`components/studio/StudioMediaBrowser.tsx` 集成 `FolderTree`；`components/workflow/WorkflowSidebar.tsx` / `WorkflowWorkspace.tsx` 透传 folder props；`App.tsx` 接入 folder callbacks（复用 `utils/assetStorage.ts` `addFolder` / `removeFolder` / `renameFolder`）。
+
+**测试要点**：
+
+- ① 顶栏点击主题下拉，分别选浅色 / 深色 / 跟随系统，确认画布与设置页主题立即切换且刷新后保持；第三方系统主题切换时"跟随系统"项应实时跟随。
+- ② 打开设置页，确认只有 API 配置 / 模型偏好 / 安全 3 个 tab，主题与语言 section 已移除；切到各 tab 内容正常显示，API Key 编辑弹窗能正常打开与保存。
+- ③ Workflow 双击图片 / 视频 / 文本节点，确认画布平滑缩放到该节点居中（padding 120，420ms easeInOutCubic）；动画过程中拖拽或滚轮应立即打断动画。
+- ④ Workflow 新建 image 节点选中，PromptBar 模型列表只含图像模型；video 节点只含视频模型；text 节点锁定文本模式不可切模型。
+- ⑤ 设置页未配置供应商的模型卡片在 PromptBar 显示"去配置"，点击应打开设置页而非禁用灰态。
+- ⑥ Studio 素材浏览器左侧文件夹树：新建文件夹、inline 重命名、删除空文件夹（直接删除）、删除非空文件夹（弹窗两选项）；选"移动到未分类"后内容保留，选"永久删除"后内容同步消失。
+- ⑦ 顶栏主题三态切换与设置页移除的主题/语言/滚轮 section 不应回退或重复出现；`studioShell.test.tsx` / `canvasSettingsProviderUi.test.tsx` 已更新 props，预存在失败（react-router Link context、workflowImageTools 语法）与本次改动无关。
+
+## 节点聚焦后"还原缩放"浮层
+
+- **聚焦后弹出可还原浮层**：`InfiniteWorkflow.tsx` 新增 `focusBadge` state。`focusNode` 动画结束（或节点已居中提前返回）时 `setFocusBadge(true)`，在画布底部居中渲染极简扁平按钮"还原缩放"（`Maximize2` 图标，无背景 / 无边框 / 透明胶囊，仅 hover 反馈，`motion.spring` 出入场）。点击调用 `fitView()` 还原全画布视图并隐藏浮层。任何用户主导的视口导航（`startPan`、滚轮、`zoomBy` / `zoomReset`、小地图 `onCenter`、`fitView`）都会 `setFocusBadge(false)` 关闭浮层；节点拖拽 / 框选等不改视口的操作不关闭。
+
+**测试要点**：
+
+- ① 双击图片 / 视频 / 文本节点聚焦后，画布底部居中弹出"还原缩放"浮层；点击后回到全画布适配视图，浮层消失。
+- ② 浮层显示期间拖拽空白平移、滚轮缩放、点击顶栏放大 / 缩小 / 重置、点击小地图任一位置，浮层应立即关闭。
+- ③ 浮层显示期间拖拽节点、框选节点不改视口，浮层保持可见。连续聚焦不同节点时浮层应在新动画结束后重新出现。
+
+## PromptBar 严格两栏结构重构
+
+- **模型面板按公司分组**：`PromptBar.tsx` 的 model 面板从 flat snap-x 横滚卡片改为按公司分组的 section 列表。每 section 顶部公司名（`uppercase tracking-[0.14em]`）+ 该公司模型卡片横向 snap-x 滚动。底层调用 `getProductModelsByCompany(activeProductModel.capability)`。无 `activeProductModel`（如纯文本模式）时回退旧的 flat 模型列表。搜索框保留，搜索同时匹配模型名/简称/公司/badge/描述。
+- **删除独立 mode / ratio / duration 面板**：`ExpandPanel` 类型从 `'mode'|'model'|'parameters'|'ratio'|'duration'|'advanced'|'more'` 精简为 `'model'|'parameters'|'advanced'|'more'|null`。图片/视频/首尾帧模式选择完全收进 parameters 面板「生成方式」一行（仅 `activeProductModel.capabilities.modes.length > 1` 时显示，即只有视频模型多 mode 时出现）。画面比例 chip 与时长 chip 不再作为独立 trigger 出现，全部并入 parameters 面板。同步删除 `showRatioTrigger` / `showDurationTrigger` / `showAdaptiveRatio` / `activeRatioOptions` / `supportedRatios` / `supportedImageRatios` / `supportedDurations` / `DEFAULT_VIDEO_RATIOS` / `DEFAULT_IMAGE_RATIOS` 等死代码与对应 import (`SOCIAL_PRESETS` / `getSupportedRatios` / `getSupportedDurations` / `getSupportedImageRatios` / `inferProviderFromModel` / `getModelCapabilityTags`)。
+- **数量行进入 parameters 面板**：原 trigger 行右侧的 `[X1/X2/X4]` 批量方案选择器（`batchCount`）移入 parameters 面板最后一行，标题"数量"，仅 `generationMode === 'image'` 或 video + `allowVideoBatch` 时显示。trigger 行不再展示批量选择。
+- **trigger 行四段结构**：[未配置 API Key 红框（仅 `keyCount===0` 时显示）] + [模型 chip] · [参数摘要 chip（`paramSummary` memo：低画质/标准/高画质 + 分辨率 + 比例 + 时长 + ×N）] · [润色][译][高级][更多] · [生成/停止]。已配置 API Key 时 trigger 行不再显示 key chip，全部折叠进「更多」面板。
+- **「更多」面板新增 API Key 状态行**：`expandedPanel === 'more'` 在 Seedance 视频参数之后、上传参考图之前新增 `MenuOptionButton`：label=`API Key · N 个`，description=默认 key 名或"点击打开设置管理 Key 与映射"，点击调 `onOpenSettings()` 并关闭浮层。
+- 同步养代码：PRECATED `getModeLabel` 仍被 trigger 行封装参数摘要内部间接使用，但 trigger 行不再展示独立 mode chip。
+- typecheck 通过（仅 `tests/workflowImageTools.test.tsx(81,94)` 预存语法错误）。
+
+**测试要点**：
+
+- ① 点击模型 chip → 模型卡片按公司分组排列（如 Google / 字节 / Kuaishou 等），每组顶部公司名 + 横向卡片滚动；搜索关键词能跨公司过滤单卡。
+- ② 切换到视频模型后 parameters chip 摘要展示「清晰度 · 比例 · 时长」，点击展开 parameters 面板，第一行是"生成方式"（仅多 mode 模型出现，如 Seedance 文生/图生/全能参考/首尾帧）；视频参数顺序为：生成方式 → 画质 → 清晰度 → 比例 → 时长 → 音频 → 数量。
+- ③ 切换到图片模型后 parameters 面板顺序为：画质 → 尺寸 → 比例 → 数量（无"生成方式"行）。
+- ④ trigger 行不再出现独立"图片/视频"mode chip、独立"比例" chip、独立"时长" chip。
+- ⑤ 未配置任何 API Key 时 trigger 行最左侧红色 dashed "🔑 未配置 API Key" chip 显示；配置至少 1 个 key 后该 chip 消失，进入「更多」面板才能看到 "API Key · N 个" 行。
+- ⑥ 批量 ×1 / ×2 / ×4 选择器不再出现在 trigger 行右侧"生成"按钮旁，只能在 parameters 面板"数量"行调整；trigger 行"生成"按钮文字仍反映 `×N` 数量（如 `生成 4 版`）。
+- ⑦ parameters chip 摘要文字应随画质 / 分辨率 / 比例 / 时长 / 数量变化即时更新，且点 chip 即开 parameters 全面板。
+
+## CLI Provider 与 Flovart 设置统一
+
+- `provider.status`、`provider.select-model`、`provider.test` 已从 CLI shadow runtime 改为通过 file bridge 在 Flovart 浏览器 runtime 中执行；CLI 与 MCP 共用同一份 browser command 路由表。
+- Provider 查询、选择模型和 readiness 检查默认等待浏览器返回；API Key 仍只保存在浏览器加密存储中，命令结果只返回脱敏状态。
+- 普通 `status` 仍用于查看本地 file-state 概览，其中的 Provider 字段只是 shadow metadata；真实 Provider 状态以 `provider.status` 为准。
+- 已用临时无 Key 浏览器上下文完成自动端到端验证：CLI 查询初始模型 → CLI 切换图片模型 → 浏览器 runtime 与 `modelPreference.v1` 同步 → CLI 再查询得到相同模型；测试未触发任何图片/视频生成。
+
+**测试要点**：
+
+- ① 保持 Flovart 浏览器页打开，在设置中切换图片/视频模型后运行 `npm run flovart:cli -- provider.status --json`，返回模型应与界面一致。
+- ② 运行 `npm run flovart:cli -- provider.select-model --image-model <产品模型ID> --json`，刷新设置页后模型偏好保持一致，随后生成使用该模型映射。
+- ③ 关闭 Flovart 浏览器页后运行 Provider 命令，应返回 pending/需要打开浏览器，而不是回退读取旧 shadow Provider 状态。
+- ④ CLI/MCP 输出不得出现 API Key、token 或 secret。
+
+## 中间工具栏：连线显示开关 + 一键整理画布
+
+- **位置**：`components/workflow/WorkflowToolbar.tsx`（在「磁吸」按钮之后新增两枚图标按钮）；`components/workflow/InfiniteWorkflow.tsx`（状态、布局算法、还原浮层）。
+- **连线显示开关**（`Spline` 图标）：
+  - 默认开启。关闭后 `<WorkflowConnections>` 的 `connections` 传空数组，已有连线不渲染；
+  - 正在拖拽的临时连接预览（`active={connectionDrag}`）仍正常显示，便于用户重新连接；
+  - 按钮高亮态对应「显示中」，弱化态对应「隐藏中」，Tooltip 文案随之切换。
+- **一键整理画布**（`Workflow` 图标）：
+  - 点击后调用 `computeHierarchicalLayout`：按 `connections` 做拓扑分层，从左到右排开（每列 `x = layerIndex * (280+100)`，列内节点纵向 `y += 节点高度 + 40`）；
+  - 无任何连线的孤立节点统一放到最右一列，避免与有向图混杂；
+  - 整理前通过 `pushHistory(currentFrame())` 记录旧位置，支持 Ctrl+Z 撤销；
+  - 整理后画布右下角弹出一颗 toast 浮层（motion spring 入场，不遮画面），文案「已整理节点」+「还原」「保留」两枚按钮，6 秒倒计时自动消失视为保留；
+  - 点「还原」会把 `prev` 节点位置回写并同样 pushHistory，保证撤销/重做两边可走；
+  - 浮层按钮 `onPointerDown` `stopPropagation`，避免触发画布平移/选择。
+- 测试要点：
+  - ① 空 workflow 点「一键整理」无副作用、无浮层。
+  - ② 多节点 + 连线场景下点整理，节点按拓扑分列、孤立节点归并到最右一列。
+  - ③ 浮层出现后点「还原」，节点回到原位；点「保留」浮层消失、节点位置保留。
+  - ④ 浮层 6 秒后自动消失。
+  - ⑤ 关闭连线开关后再从节点端点拖拽，临时虚线预览仍可见，松手后连线生成成功；再次打开开关后所有连线重新出现。
+  - ⑥ 隐藏连线开关对 Undo/Redo、小地图、批量折叠节点无干扰。
 
 

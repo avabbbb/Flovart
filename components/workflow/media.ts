@@ -203,7 +203,7 @@ function isFetchableMediaHref(href: string) {
   return /^(https?:|blob:)/i.test(href) || isDataUrl(href);
 }
 
-async function loadFallbackMediaBlob(href: string): Promise<Blob> {
+export async function loadFallbackMediaBlob(href: string): Promise<Blob> {
   if (isIdbRef(href)) {
     const dataUrl = await getImage(fromIdbRef(href));
     if (!dataUrl) throw new Error('本地图片文件不存在，请重新选择文件');

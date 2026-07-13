@@ -1,8 +1,9 @@
-import type { AICapability, AIProvider, PromptEnhanceRequest, PromptEnhanceResult, UserApiKey } from '../types';
+import type { AICapability, AIProvider, ProductModelMode, PromptEnhanceRequest, PromptEnhanceResult, UserApiKey } from '../types';
 import { editImage, enhancePromptWithGemini, generateImageFromText, generateVideo, validateGeminiApiKey, getGeminiRestBaseUrl } from './geminiService';
 import { fetchModelsForProvider, type FetchModelsResult } from './modelFetcher';
 import { normalizeProviderBaseUrl } from './baseUrl';
 import { assertRunningHubModelEndpoint } from './runningHubService';
+import { sanitizeProductGenerationParams } from './productModelCatalog';
 
 type ImageInput = { href: string; mimeType: string };
 
@@ -44,12 +45,17 @@ export interface UnifiedIgnitionInput {
     elementId: string;
     prompt: string;
     modelId: string;
+    productModelId?: string;
     apiKeyPayload?: UserApiKey;
     aspectRatio?: VideoAspectRatio;
     durationSec?: number;
     resolution?: string;
+    quality?: string;
+    generationSubmode?: ProductModelMode;
     generateAudio?: boolean;
     watermark?: boolean;
+    webSearch?: boolean;
+    realPersonCheck?: boolean;
     references?: IgnitionReference[];
     signal?: AbortSignal;
     onProgress?: (progress: number, message: string) => void;
@@ -71,8 +77,8 @@ export interface ModelParamSchema {
 export const DEFAULT_PROVIDER_MODELS: Partial<Record<AIProvider, ProviderModelMap>> = {
     google: {
         text: ['gemini-3-flash-preview', 'gemini-3.1-pro-preview', 'gemini-3.1-flash-lite-preview', 'gemini-2.5-pro', 'gemini-2.5-flash'],
-        image: ['gemini-3.1-flash-image-preview', 'gemini-3-pro-image-preview', 'gemini-2.5-flash-image', 'imagen-4.0-generate-001'],
-        video: ['veo-3.1-generate-preview', 'veo-3.1-lite-generate-preview', 'veo-2.0-generate-001'],
+        image: ['gemini-3.1-flash-image', 'gemini-3-pro-image', 'gemini-2.5-flash-image'],
+        video: ['veo-3.1-generate-preview', 'veo-3.1-fast-generate-preview', 'veo-3.1-lite-generate-preview'],
     },
     openai: {
         text: ['gpt-5.4', 'gpt-5.4-mini', 'gpt-5.4-nano', 'gpt-4o-mini'],
@@ -127,7 +133,7 @@ export const DEFAULT_PROVIDER_MODELS: Partial<Record<AIProvider, ProviderModelMa
     volcengine: {
         text: ['doubao-1.5-pro-256k', 'doubao-1.5-pro-32k'],
         image: [],
-        video: ['doubao-seedance-2.0', 'seedance-2.0', 'dreamina-seedance-2-0-260128', 'doubao-seedance-2-0-260128'],
+        video: ['doubao-seedance-2-0-260128', 'doubao-seedance-2-0-fast-260128'],
     },
     openrouter: {
         text: ['openrouter/auto', 'google/gemini-3-flash-preview', 'anthropic/claude-opus-4-6', 'deepseek/deepseek-r1'],
@@ -152,7 +158,7 @@ export interface ApiKeyValidationResult {
 
 type CustomProviderExtraConfig = Record<string, string> | undefined;
 
-export type VideoAspectRatio = '16:9' | '9:16' | '1:1' | '4:3' | '3:4' | '21:9' | 'adaptive';
+export type VideoAspectRatio = '16:9' | '9:16' | '1:1' | '4:3' | '3:4' | '3:2' | '2:3' | '21:9' | 'adaptive';
 
 const DEFAULT_SEEDANCE_MODEL = 'doubao-seedance-2.0';
 const SEEDANCE_RESOLUTIONS = ['480p', '720p', '1080p'] as const;
@@ -203,6 +209,16 @@ const DEFAULT_VIDEO_CAPABILITY: CapabilityDictionary = {
 };
 
 const DEFAULT_IMAGE_RATIOS: VideoAspectRatio[] = ['1:1', '3:2', '2:3', '16:9', '9:16', '4:3', '3:4'];
+const OPENAI_IMAGE_SIZES: Record<'1K' | '2K' | '4K', Record<string, string>> = {
+    '1K': { '1:1': '1024x1024', '3:2': '1536x1024', '2:3': '1024x1536', '16:9': '1792x1024', '9:16': '1024x1792', '4:3': '1344x1008', '3:4': '1008x1344' },
+    '2K': { '1:1': '2048x2048', '3:2': '2048x1360', '2:3': '1360x2048', '16:9': '2048x1152', '9:16': '1152x2048', '4:3': '2048x1536', '3:4': '1536x2048' },
+    '4K': { '1:1': '2880x2880', '3:2': '3520x2352', '2:3': '2352x3520', '16:9': '3840x2160', '9:16': '2160x3840', '4:3': '3312x2480', '3:4': '2480x3312' },
+};
+
+function getOpenAIImageSize(resolution?: string, aspectRatio?: VideoAspectRatio): string {
+    const tier = resolution?.toUpperCase() === '4K' ? '4K' : resolution?.toUpperCase() === '2K' ? '2K' : '1K';
+    return OPENAI_IMAGE_SIZES[tier][aspectRatio || '1:1'] || OPENAI_IMAGE_SIZES[tier]['1:1'];
+}
 
 const DEFAULT_IMAGE_CAPABILITY: CapabilityDictionary = {
     multimodalSlots: {
@@ -2334,12 +2350,20 @@ export async function generateImageWithProvider(
     model: string,
     key?: UserApiKey,
     images?: VideoImage[],
-    options?: { signal?: AbortSignal },
+    options?: { signal?: AbortSignal; aspectRatio?: VideoAspectRatio; resolution?: string; quality?: string; webSearch?: boolean },
 ): Promise<{ newImageBase64: string | null; newImageMimeType: string | null; textResponse: string | null }> {
     const provider = resolveGenerationProvider(model, key);
     const refs = limitProviderImageInputs(images ?? [], provider, model, key);
 
     if (provider === 'google') {
+        if (isGoogleImageEditModel(model)) {
+            return editImage(refs, prompt, undefined, key?.key, options?.signal, {
+                model,
+                aspectRatio: options?.aspectRatio === 'adaptive' ? undefined : options?.aspectRatio,
+                imageSize: options?.resolution,
+                webSearch: options?.webSearch,
+            });
+        }
         if (refs.length > 0) {
             if (!supportsReferenceImageEditing(model)) {
                 return generateImageFromText(prompt, key?.key, options?.signal);
@@ -2418,6 +2442,7 @@ export async function generateImageWithProvider(
         const mappedModel = mapProviderModel(model, key);
         const capability = getCapabilityDictionary(mappedModel, provider);
         const officialGptImage = provider === 'openai' && isOpenAIImageEditModel(mappedModel);
+        const imageSize = getOpenAIImageSize(options?.resolution, options?.aspectRatio);
 
         // With reference images: use /images/edits (multipart) or chat/completions fallback
         if (refs.length > 0) {
@@ -2428,8 +2453,8 @@ export async function generateImageWithProvider(
                 formData.append('response_format', provider === 'custom' ? 'url' : 'b64_json');
             }
             appendOpenAIImageFormParams(formData, buildOpenAIImageRequestParams(capability, {
-                size: '1024x1024',
-                quality: key?.extraConfig?.imageQuality,
+                size: imageSize,
+                quality: options?.quality || key?.extraConfig?.imageQuality,
                 background: key?.extraConfig?.imageBackground,
                 moderation: key?.extraConfig?.moderation,
                 output_format: key?.extraConfig?.outputFormat,
@@ -2494,8 +2519,8 @@ export async function generateImageWithProvider(
         // Text-only: try /images/generations first
         const preferredFormat = provider === 'custom' ? 'url' : 'b64_json';
         const imageParams = buildOpenAIImageRequestParams(capability, {
-            size: '1024x1024',
-            quality: key?.extraConfig?.imageQuality,
+            size: imageSize,
+            quality: options?.quality || key?.extraConfig?.imageQuality,
             background: key?.extraConfig?.imageBackground,
             moderation: key?.extraConfig?.moderation,
             output_format: key?.extraConfig?.outputFormat,
@@ -2762,6 +2787,14 @@ export type SeedanceVideoPollResult =
     | { status: 'succeeded'; videoUrl: string; raw?: unknown }
     | { status: 'failed'; error: string; remoteStatus?: string; raw?: unknown };
 
+export class SeedanceSubmissionUnknownError extends Error {
+    readonly code = 'SEEDANCE_SUBMISSION_UNKNOWN';
+    constructor(cause?: unknown) {
+        super('Seedance 提交结果未知：供应商可能已经创建并计费。已禁止自动重试或切换线路，请先到任务记录核对。', { cause });
+        this.name = 'SeedanceSubmissionUnknownError';
+    }
+}
+
 export async function submitSeedanceVideoTask(
     prompt: string,
     model: string,
@@ -2780,6 +2813,7 @@ export async function submitSeedanceVideoTask(
         generateAudio?: boolean;
         serviceTier?: string;
         safetyIdentifier?: string;
+        generationSubmode?: ProductModelMode;
         signal?: AbortSignal;
     },
 ): Promise<SeedanceVideoTaskHandle> {
@@ -2811,15 +2845,20 @@ export async function submitSeedanceVideoTask(
         }),
     };
 
-    const createRes = await fetch(`${baseUrl}/contents/generations/tasks`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${apiKey}`,
-        },
-        signal: options?.signal,
-        body: JSON.stringify(createBody),
-    });
+    let createRes: Response;
+    try {
+        createRes = await fetch(`${baseUrl}/contents/generations/tasks`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${apiKey}`,
+            },
+            signal: options?.signal,
+            body: JSON.stringify(createBody),
+        });
+    } catch (error) {
+        throw new SeedanceSubmissionUnknownError(error);
+    }
     if (!createRes.ok) {
         throw new Error(await readErrorResponse(createRes, 'Seedance 视频生成请求失败'));
     }
@@ -2899,6 +2938,193 @@ export async function downloadSeedanceVideoResult(videoUrl: string, options?: { 
 }
 
 /**
+ * 区分官方 Ark 与第三方 OpenAI-compatible 网关：
+ * - Ark 官方：baseUrl 含 `ark.*.volces.com` 或路径含 `/api/v3`，惯例 DELETE `/contents/generations/tasks/{id}`
+ * - 网关（如 Scnet）：路径含 `/api/llm/v1`，惯例 POST `/tasks/{id}/cancel`
+ * - 其他：fallback 到 Ark 风格（保留向后兼容）。
+ */
+function detectSeedanceCancelRoute(baseUrl: string): 'ark' | 'gateway' {
+    const lower = (baseUrl || '').toLowerCase();
+    if (lower.includes('/api/llm/v1') || lower.includes('/v1/tasks')) return 'gateway';
+    if (lower.includes('volces.com') || lower.includes('/api/v3')) return 'ark';
+    return 'ark';
+}
+
+export type SeedanceVideoCancelResult = {
+    canceled: boolean;
+    reason: 'ok' | 'not_queued' | 'not_cancellable' | 'unsupported' | 'network_error';
+    upstreamStillRunning?: boolean;
+    message?: string;
+    raw?: unknown;
+};
+
+/**
+ * 取消 Seedance 上游任务。仅对 queued 阶段的成功取消返回 `canceled: true`。
+ * 上游已开始 processing、或上游不支持取消时返回 `canceled:false, upstreamStillRunning:true`，
+ * 让前端走“放弃等待”的退路（仅本地 abortSignal 不再轮询上游）。
+ */
+export async function cancelSeedanceVideoTask(
+    handle: SeedanceVideoTaskHandle,
+    key?: UserApiKey,
+    options?: { signal?: AbortSignal; reason?: string },
+): Promise<SeedanceVideoCancelResult> {
+    throwIfAborted(options?.signal);
+    const apiKey = requireApiKey('volcengine', key);
+    const baseUrl = (handle.baseUrl || getBaseUrl('volcengine', key)).replace(/\/$/, '');
+    const route = detectSeedanceCancelRoute(baseUrl);
+    const taskId = encodeURIComponent(handle.taskId);
+
+    let res: Response;
+    try {
+        if (route === 'ark') {
+            // 官方 Ark：DELETE /contents/generations/tasks/{id}。409=不可取消；200/204=已取消。
+            res = await fetch(`${baseUrl}/contents/generations/tasks/${taskId}`, {
+                method: 'DELETE',
+                headers: { Authorization: `Bearer ${apiKey}` },
+                signal: options?.signal,
+            });
+        } else {
+            // 网关风格：POST /tasks/{id}/cancel；body 可携带 reason。
+            res = await fetch(`${baseUrl}/tasks/${taskId}/cancel`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+                body: JSON.stringify({ reason: options?.reason || 'user_abort' }),
+                signal: options?.signal,
+            });
+        }
+    } catch (error) {
+        return {
+            canceled: false,
+            reason: 'network_error',
+            upstreamStillRunning: true,
+            message: error instanceof Error ? error.message : '网络错误，无法确认取消结果',
+        };
+    }
+
+    if (res.status === 405 || res.status === 404) {
+        // 网关/官方未实现取消端点
+        return {
+            canceled: false,
+            reason: 'unsupported',
+            upstreamStillRunning: true,
+            message: '当前 Seedance 渠道不支持取消，请等待完成或放弃等待',
+        };
+    }
+
+    let raw: any = undefined;
+    try {
+        raw = await res.json();
+    } catch {
+        // 204 No Content 等成功无 body 的情况
+    }
+
+    if (res.ok) {
+        // Scnet 风格可能返回 { code: 0 } 或 { success: true }; Ark 200 返回 { cancelled: true }
+        // 兼容两种解析：cancelled=true / code===0 / success===true 视为成功
+        const okFlag =
+            raw?.cancelled === true
+            || raw?.data?.cancelled === true
+            || raw?.code === 0
+            || raw?.success === true
+            || (route === 'ark' && res.status === 200 && raw == null);
+        return {
+            canceled: Boolean(okFlag),
+            reason: okFlag ? 'ok' : 'not_cancellable',
+            upstreamStillRunning: !okFlag,
+            message: okFlag ? undefined : (raw?.message || raw?.msg || '上游响应未确认取消'),
+            raw,
+        };
+    }
+
+    if (res.status === 409 || res.status === 400) {
+        // Ark: 409 task_not_cancellable (已 processing)；网关: 400 已开始
+        return {
+            canceled: false,
+            reason: 'not_cancellable',
+            upstreamStillRunning: true,
+            message: raw?.message || raw?.msg || '任务已开始执行，上游无法取消',
+            raw,
+        };
+    }
+
+    return {
+        canceled: false,
+        reason: 'not_cancellable',
+        upstreamStillRunning: true,
+        message: raw?.message || raw?.msg || `上游返回 ${res.status}`,
+        raw,
+    };
+}
+
+export type SeedanceVideoReconcileResult = {
+    status: 'succeeded' | 'failed' | 'cancelled' | 'expired' | 'unknown';
+    amount?: number;
+    currency?: string;
+    totalTokens?: number;
+    reason?: string;
+    raw?: unknown;
+};
+
+/**
+ * 查询上游任务的真实账单/token 使用量。复用 GET 任务查询接口；不修改 handle。
+ *
+ * - 网关（Scnet/Lemondata）常见字段：`data.billing.amount` / `data.usage.billing.amount` + `currency`
+ * - Volcengine Ark 官方常见字段：`usage.total_tokens`（仅 token，无 billing 金额）
+ *
+ * 调用方拿到返回值后：
+ *   - amount 存在 → actualCost = amount，billableState = 'actual'
+ *   - 仅 totalTokens → actualTokens = totalTokens，billableState 保持 'unknown'
+ *   - status === 'unknown' → 不变更 usageRecord
+ */
+export async function reconcileSeedanceVideoUsage(
+    handle: SeedanceVideoTaskHandle,
+    key?: UserApiKey,
+    options?: { signal?: AbortSignal },
+): Promise<SeedanceVideoReconcileResult> {
+    throwIfAborted(options?.signal);
+    const apiKey = requireApiKey('volcengine', key);
+    const baseUrl = (handle.baseUrl || getBaseUrl('volcengine', key)).replace(/\/$/, '');
+    const taskId = encodeURIComponent(handle.taskId);
+
+    let res: Response;
+    try {
+        res = await fetch(`${baseUrl}/contents/generations/tasks/${taskId}`, {
+            headers: { Authorization: `Bearer ${apiKey}` },
+            signal: options?.signal,
+        });
+    } catch (error) {
+        return { status: 'unknown', reason: error instanceof Error ? error.message : '网络错误' };
+    }
+    if (!res.ok) {
+        return { status: 'unknown', reason: `上游返回 ${res.status}` };
+    }
+    let raw: any;
+    try {
+        raw = await res.json();
+    } catch {
+        return { status: 'unknown', reason: '响应不是合法 JSON' };
+    }
+
+    const remoteStatus = String(raw?.status || raw?.data?.status || raw?.data?.task_status || raw?.task?.status || raw?.state || '').toLowerCase();
+    let status: SeedanceVideoReconcileResult['status'] = 'unknown';
+    if (['succeeded', 'succeed', 'success', 'completed', 'complete', 'done'].includes(remoteStatus)) status = 'succeeded';
+    else if (['cancelled', 'canceled'].includes(remoteStatus)) status = 'cancelled';
+    else if (['failed', 'fail', 'error'].includes(remoteStatus)) status = 'failed';
+    else if (['expired', 'timeout'].includes(remoteStatus)) status = 'expired';
+
+    const billingRaw = raw?.data?.billing || raw?.data?.usage?.billing || raw?.billing || raw?.usage?.billing;
+    const amount = typeof billingRaw?.amount === 'number' ? billingRaw.amount : undefined;
+    const currency = typeof billingRaw?.currency === 'string' ? billingRaw.currency : raw?.data?.currency || raw?.currency;
+    const totalTokens =
+        typeof raw?.usage?.total_tokens === 'number' ? raw.usage.total_tokens
+        : typeof raw?.data?.usage?.total_tokens === 'number' ? raw.data.usage.total_tokens
+        : typeof raw?.usage?.token_usage?.total_tokens === 'number' ? raw.usage.token_usage.total_tokens
+        : undefined;
+
+    return { status, amount, currency, totalTokens, raw };
+}
+
+/**
  * 【函数】统一的视频生成入口
  *
  * 根据模型名称路由到 Google Veo / MiniMax video-01 等。
@@ -2928,6 +3154,7 @@ export async function generateVideoWithProvider(
         generateAudio?: boolean;
         serviceTier?: string;
         safetyIdentifier?: string;
+        generationSubmode?: ProductModelMode;
         signal?: AbortSignal;
     },
 ): Promise<{ videoBlob: Blob; mimeType: string }> {
@@ -2939,9 +3166,12 @@ export async function generateVideoWithProvider(
     const multimodalSlots = hasExplicitSlots ? options.slots! : multimodalSlotsFromLegacyReferences(references);
     const firstImageSlot = multimodalSlots.find(slot => slot.kind === 'image' && slot.role === 'first_frame')
         || multimodalSlots.find(slot => slot.kind === 'image');
-    const firstFrame = references.find(r => r.slotRole === 'first_frame')
-        || references[0]
-        || (firstImageSlot ? { href: firstImageSlot.href, mimeType: firstImageSlot.mimeType, slotRole: String(firstImageSlot.role || 'unassigned') } : undefined);
+    const usesFirstFrame = !options?.generationSubmode || options.generationSubmode === 'image-to-video' || options.generationSubmode === 'first-last-frame';
+    const firstFrame = usesFirstFrame
+        ? references.find(r => r.slotRole === 'first_frame')
+            || references[0]
+            || (firstImageSlot ? { href: firstImageSlot.href, mimeType: firstImageSlot.mimeType, slotRole: String(firstImageSlot.role || 'unassigned') } : undefined)
+        : undefined;
     throwIfAborted(options?.signal);
 
     if (provider === 'runningHub') {
@@ -2982,7 +3212,19 @@ export async function generateVideoWithProvider(
     }
 
     if (provider === 'google') {
-        return generateVideo(prompt, aspectRatio, onProgress, firstFrame, key?.key);
+        const lastFrameSlot = multimodalSlots.find(slot => slot.kind === 'image' && slot.role === 'last_frame');
+        const referenceImages = options?.generationSubmode === 'reference-to-video'
+            ? multimodalSlots.filter(slot => slot.kind === 'image' && slot.role !== 'first_frame' && slot.role !== 'last_frame').slice(0, 3)
+            : [];
+        return generateVideo(prompt, aspectRatio === '9:16' ? '9:16' : '16:9', onProgress, firstFrame, key?.key, {
+            model,
+            durationSec: options?.durationSec,
+            resolution: options?.resolution,
+            generateAudio: options?.generateAudio,
+            signal: options?.signal,
+            lastFrame: lastFrameSlot ? { href: lastFrameSlot.href, mimeType: lastFrameSlot.mimeType } : undefined,
+            referenceImages: referenceImages.map(reference => ({ href: reference.href, mimeType: reference.mimeType })),
+        });
     }
 
     if (provider === 'minimax') {
@@ -3210,16 +3452,28 @@ export async function executeUnifiedIgnition(input: UnifiedIgnitionInput): Promi
 
     try {
         if (input.signal?.aborted) throw input.signal.reason || new DOMException('生成已停止', 'AbortError');
+        const params = sanitizeProductGenerationParams(input.productModelId, {
+            mode: input.generationSubmode,
+            aspectRatio: input.aspectRatio,
+            resolution: input.resolution,
+            quality: input.quality,
+            durationSec: input.durationSec,
+            generateAudio: input.generateAudio,
+            webSearch: input.webSearch,
+            realPersonCheck: input.realPersonCheck,
+            referenceCount: input.references?.length || 0,
+        });
         const effectivePrompt = buildPromptWithReferenceBindings(prompt, input.references);
         if (capability === 'video') {
             const videoRefs = getImageReferencesForIgnition(input.references);
             const videoSlots = getMultimodalSlotsForIgnition(input.references);
             const result = await generateVideoWithProvider(effectivePrompt, input.modelId, input.apiKeyPayload, {
-                aspectRatio: input.aspectRatio || getDynamicParamSchema(input.modelId).defaultAspectRatio || '16:9',
-                durationSec: input.durationSec,
-                resolution: input.resolution,
-                generateAudio: input.generateAudio,
+                aspectRatio: params.aspectRatio || getDynamicParamSchema(input.modelId).defaultAspectRatio || '16:9',
+                durationSec: params.durationSec,
+                resolution: params.resolution,
+                generateAudio: params.generateAudio,
                 watermark: input.watermark,
+                generationSubmode: input.generationSubmode,
                 references: videoRefs,
                 slots: videoSlots,
                 signal: input.signal,
@@ -3230,7 +3484,13 @@ export async function executeUnifiedIgnition(input: UnifiedIgnitionInput): Promi
         }
 
         const imageReferences = getImageReferencesForIgnition(input.references);
-        const result = await generateImageWithProvider(effectivePrompt, input.modelId, input.apiKeyPayload, imageReferences, { signal: input.signal });
+        const result = await generateImageWithProvider(effectivePrompt, input.modelId, input.apiKeyPayload, imageReferences, {
+            signal: input.signal,
+            aspectRatio: params.aspectRatio,
+            resolution: params.resolution,
+            quality: params.quality,
+            webSearch: params.webSearch,
+        });
 
         if (!result.newImageBase64 || !result.newImageMimeType) {
             return {

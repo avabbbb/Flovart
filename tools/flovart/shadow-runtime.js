@@ -616,7 +616,8 @@ function dispatchShadowWorkflow(envelope, state) {
     return fail('BROWSER_REQUIRED', 'Workflow provider generation requires an open Flovart browser tab.');
   }
 
-  const nodeId = args.nodeId || args.id;
+  let nodeId = args.nodeId || args.id;
+  let connectionId = null;
   if (command === 'workflow.node.create' || command === 'workflow.node.create-connected') {
     const node = shadowWorkflowNode(args.type || 'text', args);
     if (!node) return fail('BAD_REQUEST', `Unsupported Workflow node type (${args.type})`);
@@ -624,10 +625,12 @@ function dispatchShadowWorkflow(envelope, state) {
     if (command === 'workflow.node.create-connected') {
       const fromNodeId = args.fromNodeId || args.from;
       if (!project.nodes.some(item => item.id === fromNodeId)) return fail('BAD_REQUEST', 'Workflow source node not found.');
-      project.connections.push({ id: randomUUID(), fromNodeId, toNodeId: node.id });
+      connectionId = args.connectionId || randomUUID();
+      project.connections.push({ id: connectionId, fromNodeId, toNodeId: node.id });
     }
     project.nodes.push(node);
     project.selectedNodeIds = [node.id];
+    nodeId = node.id;
   } else if (command === 'workflow.node.update') {
     const node = project.nodes.find(item => item.id === nodeId);
     if (!node) return fail('NOT_FOUND', `Workflow node not found (${nodeId})`);
@@ -674,7 +677,9 @@ function dispatchShadowWorkflow(envelope, state) {
 
   project.updatedAt = new Date().toISOString();
   saveShadowState(state);
-  return done({ projectId: project.id, nodeId });
+  const result = { projectId: project.id, nodeId };
+  if (connectionId) result.connectionId = connectionId;
+  return done(result);
 }
 
 export function createShadowRuntimeFacade() {

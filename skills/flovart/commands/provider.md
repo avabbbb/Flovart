@@ -1,10 +1,10 @@
 # Provider Commands
 
-Provider keys stay in the Flovart browser UI. The CLI may inspect readiness and select model IDs, but it must never expose keys.
+Provider keys and model preferences stay in the Flovart browser UI, which is the single source of truth. Provider commands use the browser bridge and must never expose keys. Keep the Flovart browser tab open while running them.
 
 ## provider.status
 
-Inspect configured capabilities and selected model IDs.
+Inspect the browser UI's configured capabilities and selected model IDs. The CLI waits for the browser result by default.
 
 ```bash
 npm run flovart:cli -- provider.status --json
@@ -33,14 +33,14 @@ If setup is needed, stop and ask the user to enter credentials in the browser UI
 Select model IDs for image, video, and text routing.
 
 ```bash
-npm run flovart:cli -- provider.select-model --image-model flux-schnell --video-model kling-v2 --text-model gpt-4.1-mini --json
+npm run flovart:cli -- provider.select-model --image-model flovart:gpt-image-2 --video-model flovart:seedance-2 --text-model gemini-3-flash-preview --json
 ```
 
-This changes local preference/state only. It does not validate key access by itself.
+This changes the same browser-local model preference used by Flovart generation. It does not validate key access by itself.
 
 ## provider.test
 
-Check provider readiness for a purpose.
+Check browser provider readiness for a purpose. The CLI waits for the browser result by default.
 
 ```bash
 npm run flovart:cli -- provider.test --purpose both --json

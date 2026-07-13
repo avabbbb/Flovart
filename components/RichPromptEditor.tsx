@@ -159,6 +159,7 @@ export function applyEditorPlaceholder(
 ): void {
     if (!editor || editor.isDestroyed) return;
     editor.view.dom.setAttribute('data-placeholder', placeholder);
+    editor.view.dom.setAttribute('aria-label', placeholder);
 }
 
 export interface RichPromptEditorProps {
@@ -213,7 +214,10 @@ const RichPromptEditor = forwardRef<RichPromptEditorHandle, RichPromptEditorProp
             editorProps: {
                 attributes: {
                     class: 'rich-prompt-editor',
+                    role: 'textbox',
                     spellcheck: 'false',
+                    'aria-multiline': 'true',
+                    'aria-label': placeholder,
                     'data-placeholder': placeholder,
                 },
                 handleKeyDown(_, event) {
@@ -283,6 +287,7 @@ export default RichPromptEditor;
 function editorStyles(): string {
     return `
 .rich-prompt-editor {
+    position: relative;
     flex: 1;
     min-height: var(--prompt-editor-min-height, 22px);
     max-height: var(--prompt-editor-max-height, 160px);
@@ -317,13 +322,14 @@ function editorStyles(): string {
 
 /* Placeholder when editor is empty */
 .rich-prompt-editor.ProseMirror:empty:before,
-.rich-prompt-editor p:first-child:empty:before,
-.rich-prompt-editor.ProseMirror > p:only-child:empty:before {
+.rich-prompt-editor.ProseMirror:has(> p:only-child:empty):before,
+.rich-prompt-editor.ProseMirror:has(> p:only-child > br.ProseMirror-trailingBreak:only-child):before {
     content: attr(data-placeholder);
     color: var(--prompt-editor-placeholder, #9ca3af) !important;
     pointer-events: none;
-    float: left;
-    height: 0;
+    position: absolute;
+    inset-inline-start: 4px;
+    top: 0;
 }
 
 .tippy-box[data-theme~='light-border'] {

@@ -3,20 +3,32 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { WorkflowWorkspace } from '../components/workflow/WorkflowWorkspace';
 import { createWorkflowProject, useWorkflowStore } from '../components/workflow/store';
 import { workflowMediaStorage } from '../components/workflow/storage';
+import type { AssetLibrary } from '../types';
+
+const TEST_ASSET_LIBRARY: AssetLibrary = {
+  folders: [],
+  items: [
+    { id: 'image', name: '产品主图', folderIds: [], tags: [], dataUrl: 'data:image/png;base64,AA==', mimeType: 'image/png', width: 320, height: 240, createdAt: 0 },
+    { id: 'video', name: '运动参考', folderIds: [], tags: [], dataUrl: 'https://example.com/motion.mp4', mimeType: 'video/mp4', width: 320, height: 240, createdAt: 0 },
+  ],
+};
 
 const renderWorkspace = () => render(
   <WorkflowWorkspace
     theme="light"
     language="zho"
-    sharedMedia={[
-      { id: 'asset:image', source: 'asset', sourceId: 'image', name: '产品主图', href: 'data:image/png;base64,AA==', mimeType: 'image/png', type: 'image', category: 'character' },
-      { id: 'asset:video', source: 'asset', sourceId: 'video', name: '运动参考', href: 'https://example.com/motion.mp4', mimeType: 'video/mp4', type: 'video', category: 'scene' },
-    ]}
+    sharedMedia={[]}
     t={key => key}
     userApiKeys={[]}
     modelPreference={{} as never}
     dynamicModelOptions={{} as never}
     onOpenSettings={vi.fn()}
+    assetLibrary={TEST_ASSET_LIBRARY}
+    onRenameAsset={vi.fn()}
+    onRemoveAsset={vi.fn()}
+    onCreateFolder={vi.fn()}
+    onRenameFolder={vi.fn()}
+    onRemoveFolder={vi.fn()}
   />,
 );
 
@@ -41,10 +53,11 @@ describe('Workflow right panel', () => {
     expect(localStorage.getItem('workflowRightPanelOpen')).toBe('false');
   });
 
-  it('searches and filters Workflow assets with the same compact media controls', () => {
+  it('searches and filters Workflow assets in the left sidebar popup', () => {
     renderWorkspace();
 
-    fireEvent.click(screen.getByRole('button', { name: '素材库' }));
+    // 左栏弹窗默认打开，切到"资产"tab
+    fireEvent.click(screen.getByTestId('sidebar-tab-assets'));
     fireEvent.click(screen.getByRole('button', { name: '视频' }));
     expect(screen.queryByText('产品主图')).toBeNull();
     expect(screen.getByText('运动参考')).toBeTruthy();
@@ -52,7 +65,7 @@ describe('Workflow right panel', () => {
     expect(screen.getByText('没有匹配的素材')).toBeTruthy();
   });
 
-  it('persists right-panel media inserts without embedding data URLs in the project', async () => {
+  it('persists left-sidebar media inserts without embedding data URLs in the project', async () => {
     class TestImage {
       naturalWidth = 800;
       naturalHeight = 600;
@@ -63,7 +76,7 @@ describe('Workflow right panel', () => {
     vi.stubGlobal('Image', TestImage);
     renderWorkspace();
 
-    fireEvent.click(screen.getByRole('button', { name: '素材库' }));
+    fireEvent.click(screen.getByTestId('sidebar-tab-assets'));
     fireEvent.click(screen.getByRole('button', { name: '添加 产品主图' }));
 
     await waitFor(() => expect(useWorkflowStore.getState().projects[0].nodes).toHaveLength(1));

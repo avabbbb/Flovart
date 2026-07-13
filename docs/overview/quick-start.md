@@ -27,8 +27,8 @@ npm run flovart:cli -- canvas.inspect --json
 
 ### 运行逻辑
 
-- **本地数据命令**：`canvas.inspect`、`canvas.add-image`、`workflow.load`、`provider.select-model` 等直接读写本地 file-state runtime。
-- **浏览器执行命令**：`generate.image`、`generate.video`、`element.ignite`、`workflow.run` 等写入 `.flovart/command-queue.json`，由打开中的 Flovart 浏览器页通过 Vite dev server 轮询并执行。
+- **本地数据命令**：`canvas.inspect`、`canvas.add-image`、`workflow.inspect` 等直接读写本地 file-state runtime。
+- **浏览器执行命令**：`provider.status`、`provider.select-model`、`provider.test`、`generate.image`、`generate.video`、`element.ignite`、`workflow.node.run` 等写入 `.flovart/command-queue.json`，由打开中的 Flovart 浏览器页通过 Vite dev server 轮询并执行。
 - **统一命令注册表**：所有 CLI 命令仍由 `tools/flovart/core.js` 定义，外部 Agent 只负责规划，Flovart 只执行确定性命令。
 - **密钥安全**：API Key 只在 Flovart 浏览器 UI 中录入和使用。CLI 不读取、不输出、不保存密钥。
 

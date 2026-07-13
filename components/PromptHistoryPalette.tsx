@@ -20,7 +20,7 @@ function formatTime(ts: number): string {
 }
 
 export function PromptHistoryPalette({ theme }: { theme: 'light' | 'dark' }) {
-    const { isOpen, close, insert, search, clearAll } = usePromptHistoryStore();
+    const { isOpen, close, insert, search, clearAll, remove } = usePromptHistoryStore();
     const [query, setQuery] = useState('');
     const [activeIndex, setActiveIndex] = useState(0);
     const inputRef = useRef<HTMLInputElement>(null);
@@ -46,10 +46,16 @@ export function PromptHistoryPalette({ theme }: { theme: 'light' | 'dark' }) {
             else if (e.key === 'ArrowDown') { e.preventDefault(); setActiveIndex(i => Math.min(i + 1, results.length - 1)); }
             else if (e.key === 'ArrowUp') { e.preventDefault(); setActiveIndex(i => Math.max(i - 1, 0)); }
             else if (e.key === 'Enter' && results[activeIndex]) { e.preventDefault(); insert(results[activeIndex].prompt); }
+            else if ((e.key === 'Delete' || e.key === 'Backspace') && results[activeIndex]) {
+                e.preventDefault();
+                const id = results[activeIndex].id;
+                void remove(id);
+                setActiveIndex(i => Math.max(0, i - 1));
+            }
         };
         window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);
-    }, [isOpen, results, activeIndex, close, insert]);
+    }, [isOpen, results, activeIndex, close, insert, remove]);
 
     useEffect(() => {
         const el = listRef.current?.querySelector<HTMLElement>(`[data-idx="${activeIndex}"]`);
@@ -101,6 +107,20 @@ export function PromptHistoryPalette({ theme }: { theme: 'light' | 'dark' }) {
                                     </div>
                                 </div>
                                 {isActive && <ArrowRight className="w-4 h-4 mt-0.5 opacity-30 shrink-0" />}
+                                {isActive && (
+                                    <button
+                                        type="button"
+                                        title="删除此条"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            void remove(entry.id);
+                                            setActiveIndex(i => Math.max(0, i - 1));
+                                        }}
+                                        className={`shrink-0 ml-1 p-1 rounded transition hover:text-red-500 ${dark ? 'hover:bg-[#2A3142]' : 'hover:bg-gray-100'} opacity-60 hover:opacity-100`}
+                                    >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                )}
                             </div>
                         );
                     })}

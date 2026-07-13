@@ -6,6 +6,12 @@ import {
   inferProviderFromModel,
   PROVIDER_LABELS,
 } from '../services/aiGateway';
+import {
+  getProductModel,
+  getProductModels,
+  productModelLabel,
+  resolveProductModelRoute,
+} from '../services/productModelCatalog';
 
 export const MODEL_REF_SEPARATOR = '::';
 
@@ -77,6 +83,8 @@ export function getKeyModelIds(key: UserApiKey, capability?: 'text' | 'image' | 
 
 export function keyOwnsBareModel(key: UserApiKey, model?: string): boolean {
   const bareModel = modelRefModelId(model);
+  const product = bareModel.startsWith('flovart:') ? getProductModel(bareModel) : undefined;
+  if (product) return (key.modelMappings || []).some(mapping => mapping.productModelId === product.id && mapping.enabled);
   const normalizedModel = normalizeModelId(bareModel);
   if (!normalizedModel) return false;
   return getKeyModelIds(key).some(candidate => normalizeModelId(candidate) === normalizedModel);
@@ -88,6 +96,12 @@ export function buildCapabilityModelOptions(
   fallbackModels: string[],
   currentModel?: string,
 ): string[] {
+  if (capability === 'image' || capability === 'video') {
+    const models = getProductModels(capability).map(model => model.id);
+    const product = getProductModel(currentModel);
+    if (product?.capability === capability && !models.includes(product.id)) models.unshift(product.id);
+    return models;
+  }
   const options: string[] = [];
   const seen = new Set<string>();
 
@@ -122,6 +136,8 @@ export function normalizeModelSelectionWithKeys(
   keys: UserApiKey[],
   capability: 'text' | 'image' | 'video',
 ): string {
+  const product = value.startsWith('flovart:') ? getProductModel(value) : undefined;
+  if (product?.capability === capability) return product.id;
   const decoded = decodeModelRef(value);
   if (decoded) {
     const key = keys.find(item => item.id === decoded.keyId);
@@ -148,6 +164,11 @@ export function resolveModelSelection(
   capability: 'text' | 'image' | 'video',
   requestedProvider?: AIProvider,
 ): { model: string; provider: AIProvider; key: UserApiKey } | null {
+  const product = value.startsWith('flovart:') ? getProductModel(value) : undefined;
+  if (product?.capability === capability) {
+    const route = resolveProductModelRoute(product.id, keys);
+    return route ? { model: route.upstreamModelId, provider: route.key.provider, key: route.key } : null;
+  }
   const decoded = decodeModelRef(value);
   const healthyKeys = keys.filter(key => key.status !== 'error');
 
@@ -176,6 +197,10 @@ export function findBestModelSelection(
   keys: UserApiKey[],
   capability: 'text' | 'image' | 'video',
 ): string | null {
+  if (capability === 'image' || capability === 'video') {
+    const configured = getProductModels(capability).find(model => resolveProductModelRoute(model.id, keys));
+    if (configured) return configured.id;
+  }
   for (const key of keys) {
     if (key.status === 'error') continue;
     if (!getKeyCapabilities(key).includes(capability)) continue;
@@ -186,12 +211,20 @@ export function findBestModelSelection(
 }
 
 export function modelRefProvider(value: string, keys: UserApiKey[]): AIProvider {
+  const product = getProductModel(value);
+  if (product) return resolveProductModelRoute(product.id, keys)?.key.provider || product.provider;
   const keyId = modelRefKeyId(value);
   const key = keyId ? keys.find(item => item.id === keyId) : undefined;
   return key?.provider || inferProviderFromModel(modelRefModelId(value));
 }
 
 export function modelRefLabel(value: string, keys: UserApiKey[] = []): string {
+  const product = getProductModel(value);
+  if (product) {
+    const route = resolveProductModelRoute(product.id, keys);
+    const owner = route?.key.name?.trim() || (route ? PROVIDER_LABELS[route.key.provider] || route.key.provider : undefined);
+    return owner ? `${product.name} · ${owner}` : product.name;
+  }
   const bareModel = modelRefModelId(value);
   const keyId = modelRefKeyId(value);
   const key = keyId ? keys.find(item => item.id === keyId) : undefined;
@@ -200,6 +233,11 @@ export function modelRefLabel(value: string, keys: UserApiKey[] = []): string {
 }
 
 export function modelRefSearchText(value: string, keys: UserApiKey[] = []): string {
+  const product = getProductModel(value);
+  if (product) {
+    const route = resolveProductModelRoute(product.id, keys);
+    return [product.id, product.name, product.shortName, product.company, product.description, productModelLabel(value), route?.key.name, route?.key.provider].filter(Boolean).join(' ').toLowerCase();
+  }
   const keyId = modelRefKeyId(value);
   const key = keyId ? keys.find(item => item.id === keyId) : undefined;
   return [

@@ -92,10 +92,9 @@ describe('PromptBar media attachments', () => {
       />,
     );
 
-    const modelLabel = screen.getByText((content) => content.includes('seedance-2.0'));
-    fireEvent.click(modelLabel.closest('button')!);
-
-    expect(screen.getByText('视频模型')).toBeTruthy();
+    fireEvent.click(screen.getByText('Seedance 2.0').closest('button')!);
+    expect(screen.getByText('选择模型')).toBeTruthy();
+    expect(screen.getAllByText('Seedance 2.0').length).toBeGreaterThan(0);
 
     const moreButton = screen.getByTitle('更多操作');
     fireEvent.click(moreButton);

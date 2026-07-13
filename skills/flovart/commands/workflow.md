@@ -10,6 +10,8 @@ npm run flovart:cli -- workflow.node.run --node-id <config-id> --wait --json
 npm run flovart:cli -- workflow.node.stop --node-id <config-id> --json
 ```
 
+`workflow.node.create` returns the new node id as `data.result.nodeId`. `workflow.node.create-connected` returns both `data.result.nodeId` and `data.result.connectionId`. Agents should read these two fields directly and only call `workflow.inspect` to verify the full graph, not to discover freshly created ids.
+
 Use `workflow.inspect` to read a media-redacted snapshot. The canonical schemas and MCP-safe aliases come from:
 
 ```bash

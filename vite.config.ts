@@ -35,6 +35,8 @@ export default defineConfig(() => {
         },
       },
       resolve: {
+        // 优先加载 .tsx/.ts 源文件，避免陈旧未跟踪 .js 副本遮蔽源码
+        extensions: ['.tsx', '.ts', '.jsx', '.js', '.json', '.mjs'],
         alias: {
           '@': path.resolve(__dirname, '.'),
         }

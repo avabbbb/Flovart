@@ -205,10 +205,10 @@ export function useGeneration(params: UseGenerationParams) {
         const provider = resolved?.provider || inferProviderFromModel(modelRefModelId(activeModel));
         const usageKey = resolved?.key || userApiKeys.find(k => k.provider === provider);
         if (usageKey) {
-            recordApiUsage({
-                keyId: usageKey.id,
-                provider: usageKey.provider,
+            void recordApiUsage({
+                key: usageKey,
                 model: resolved?.model || modelRefModelId(activeModel),
+                productModelId: activeModel,
                 type: genType,
                 success: true,
             });
@@ -1280,10 +1280,10 @@ export function useGeneration(params: UseGenerationParams) {
 
             const usageKey = activeResolved.key;
             if (usageKey) {
-                recordApiUsage({
-                    keyId: usageKey.id,
-                    provider: usageKey.provider,
+                void recordApiUsage({
+                    key: usageKey,
                     model: neededCapability === 'video' ? resolvedVideoModel : resolvedImageModel,
+                    productModelId: neededCapability === 'video' ? modelPreference.videoModel : modelPreference.imageModel,
                     type: neededCapability,
                     success: false,
                     error: error.message,

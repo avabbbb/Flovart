@@ -13,13 +13,13 @@ const key = (patch: Partial<UserApiKey>): UserApiKey => ({
 });
 
 describe('generation capabilities', () => {
-  it('uses configured key models instead of a Workflow-specific model list', () => {
+  it('uses the fixed product catalog instead of exposing fetched upstream ids', () => {
     const capability = getGenerationCapability([
       key({ customModels: ['gpt-image-2'] }),
       key({ id: 'broken', status: 'error', customModels: ['hidden-image-model'] }),
     ], 'image', 'gpt-image-2');
 
-    expect(capability.models.some(model => model.includes('gpt-image-2'))).toBe(true);
+    expect(capability.models).toContain('flovart:gpt-image-2');
     expect(capability.models.some(model => model.includes('hidden-image-model'))).toBe(false);
     expect(capability.supportsReferences).toContain('image');
   });
@@ -40,7 +40,7 @@ describe('generation capabilities', () => {
       key({ provider: 'volcengine', capabilities: ['video'], defaultModel: 'doubao-seedance-2.0' }),
     ], 'video', 'doubao-seedance-2.0');
 
-    expect(capability.models.some(model => model.includes('doubao-seedance-2.0'))).toBe(true);
+    expect(capability.models).toContain('flovart:seedance-2');
     expect(capability.resolutions).toEqual(expect.arrayContaining(['720p', '1080p']));
     expect(capability.supportsReferences).toEqual(expect.arrayContaining(['image', 'video', 'audio']));
   });

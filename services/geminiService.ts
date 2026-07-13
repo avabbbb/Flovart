@@ -13,7 +13,7 @@
  * 
  * 【使用的 AI 模型】
  * - gemini-3-flash-preview: 文本理解与提示词润色
- * - gemini-3.1-flash-image-preview: 图像编辑和生成
+ * - gemini-3.1-flash-image / gemini-3-pro-image: 图像编辑和生成
  * - imagen-4.0-generate-001: 文本直接生成图像
  * - veo-3.1-generate-preview: 视频生成
  * 
@@ -27,7 +27,7 @@
  * - 视频生成失败会中断操作并提示原因
  */
 
-import { GoogleGenAI, Modality, GenerateContentResponse, GenerateVideosOperation } from "@google/genai";
+import { GoogleGenAI, Modality, GenerateContentResponse, GenerateVideosOperation, VideoGenerationReferenceType } from "@google/genai";
 import type { PromptEnhanceRequest, PromptEnhanceResult } from "../types";
 
 // 从用户配置或 runtime config 获取 API Key（不在 bundle 中硬编码任何密钥）
@@ -271,6 +271,7 @@ export async function editImage(
   mask?: ImageInput,
   apiKey?: string,
   signal?: AbortSignal,
+  options?: { model?: string; aspectRatio?: string; imageSize?: string; webSearch?: boolean },
 ): Promise<{ newImageBase64: string | null; newImageMimeType: string | null; textResponse: string | null; }> {
   
   // 步骤1：转换图片格式 - 提取 base64 数据
@@ -307,13 +308,18 @@ export async function editImage(
     const ai = getClient("image", apiKey);
     // 步骤5：调用 Gemini API
     const response: GenerateContentResponse = await ai.models.generateContent({
-      model: runtimeConfig.imageModel || 'gemini-3.1-flash-image-preview',  // 使用 Gemini 3.1 Flash 图像模型
+      model: options?.model || runtimeConfig.imageModel || 'gemini-3.1-flash-image',
       contents: {
         parts: parts,  // 传入组装好的内容
       },
       config: {
         abortSignal: signal,
         responseModalities: [Modality.IMAGE, Modality.TEXT],  // 请求返回图片和文本
+        imageConfig: {
+          aspectRatio: options?.aspectRatio,
+          imageSize: options?.imageSize,
+        },
+        tools: options?.webSearch ? [{ googleSearch: {} }] : undefined,
       },
     });
 
@@ -458,7 +464,8 @@ export async function generateVideo(
   aspectRatio: '16:9' | '9:16' | '1:1' | '4:3' | '3:4' | '21:9',
   onProgress: (message: string) => void,
   image?: ImageInput,
-  apiKey?: string
+  apiKey?: string,
+  options?: { model?: string; durationSec?: number; resolution?: string; generateAudio?: boolean; signal?: AbortSignal; lastFrame?: ImageInput; referenceImages?: ImageInput[] },
 ): Promise<{ videoBlob: Blob; mimeType: string }> {
   const ai = getClient("video", apiKey);
   // 步骤1：初始化
@@ -469,15 +476,26 @@ export async function generateVideo(
     imageBytes: image.href.split(',')[1],  // 提取 base64 数据
     mimeType: image.mimeType,
   } : undefined;
+  const lastFramePart = options?.lastFrame ? { imageBytes: options.lastFrame.href.split(',')[1], mimeType: options.lastFrame.mimeType } : undefined;
+  const referenceImages = options?.referenceImages?.slice(0, 3).map(reference => ({
+    image: { imageBytes: reference.href.split(',')[1], mimeType: reference.mimeType },
+    referenceType: VideoGenerationReferenceType.ASSET,
+  }));
 
   // 步骤3：提交视频生成请求
   let operation: GenerateVideosOperation = await ai.models.generateVideos({
-    model: runtimeConfig.videoModel || 'veo-3.1-generate-preview',  // 使用 Veo 3.1 模型
+    model: options?.model || runtimeConfig.videoModel || 'veo-3.1-generate-preview',
     prompt: prompt,
     image: imagePart,
     config: {
       numberOfVideos: 1,
       aspectRatio: aspectRatio,
+      durationSeconds: options?.durationSec,
+      resolution: options?.resolution,
+      generateAudio: options?.generateAudio,
+      abortSignal: options?.signal,
+      lastFrame: lastFramePart,
+      referenceImages,
     }
   });
   
@@ -494,6 +512,7 @@ export async function generateVideo(
 
   // 步骤5：轮询检查生成状态
   while (!operation.done) {
+    if (options?.signal?.aborted) throw options.signal.reason || new DOMException('已停止等待；供应商任务可能仍在运行。', 'AbortError');
     onProgress(progressMessages[messageIndex % progressMessages.length]);
     messageIndex++;
     await new Promise(resolve => setTimeout(resolve, 10000));  // 每10秒检查一次
@@ -516,6 +535,7 @@ export async function generateVideo(
   const videoApiKey = getApiKey("video", apiKey);
   const response = await fetch(downloadLink, {
     headers: { 'x-goog-api-key': videoApiKey },
+    signal: options?.signal,
   });
   if (!response.ok) {
     throw new Error(`Failed to download video: ${response.statusText}`);

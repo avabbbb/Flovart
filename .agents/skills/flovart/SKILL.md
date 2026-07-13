@@ -109,8 +109,8 @@ npm run flovart:cli -- provider.begin-setup --purpose both --json
 
 ## Runtime Modes
 
-- `file-state`: local shadow runtime. Supports canvas inspection, media add/update/select/remove, workflow load/update, provider model selection, and export metadata without a browser.
-- `file-bridge`: queued browser execution. Used for image/video generation, workflow run, and element ignite. The Vite app polls `.flovart/command-queue.json` through `/__flovart/queue`.
+- `file-state`: local shadow runtime. Supports canvas inspection, media add/update/select/remove, workflow load/update, and export metadata without a browser.
+- `file-bridge`: queued browser execution. Used for provider status/model selection/readiness checks, image/video generation, workflow run, and element ignite. The Vite app polls `.flovart/command-queue.json` through `/__flovart/queue`.
 - Browser UI: the only place API keys are entered and used.
 
 ## Documentation Map

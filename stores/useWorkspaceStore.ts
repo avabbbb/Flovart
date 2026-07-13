@@ -13,7 +13,7 @@ interface UISlice {
 }
 
 const createUISlice = (set: any): UISlice => ({
-  activeView: 'canvas',
+  activeView: 'workflow',
   setActiveView: (activeView) => set({ activeView }),
   themeMode: (() => {
     try {

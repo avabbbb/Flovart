@@ -5,10 +5,11 @@ import { describe, expect, it, vi } from 'vitest';
 import { StudioTopMenu, type StudioMenuModel } from '../components/studio/StudioTopMenu';
 import { Toolbar } from '../components/Toolbar';
 
-const menuModel = (mode: 'canvas' | 'workflow'): StudioMenuModel => ({
+const menuModel = (mode: 'workflow' | 'art'): StudioMenuModel => ({
   mode,
-  title: mode === 'canvas' ? 'Canvas board' : 'Workflow project',
-  theme: 'light',
+  title: mode === 'art' ? 'Art board' : 'Workflow project',
+  themeMode: 'light',
+  resolvedTheme: 'light',
   language: 'zho',
   status: {
     tone: 'warning',
@@ -17,7 +18,7 @@ const menuModel = (mode: 'canvas' | 'workflow'): StudioMenuModel => ({
   },
   actions: {
     changeMode: vi.fn(),
-    toggleTheme: vi.fn(),
+    setThemeMode: vi.fn(),
     toggleLanguage: vi.fn(),
     openSettings: vi.fn(),
   },
@@ -47,7 +48,7 @@ const toolbarProps = {
 };
 
 describe('shared studio shell', () => {
-  it.each(['canvas', 'workflow'] as const)('uses the same menu model in %s mode', mode => {
+  it.each(['workflow', 'art'] as const)('uses the same menu model in %s mode', mode => {
     const model = menuModel(mode);
     render(<StudioTopMenu model={model} />);
 

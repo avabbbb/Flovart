@@ -14,7 +14,8 @@ describe('recipe packages', () => {
   it('exports an asset with prompt/provider/model recipe metadata', () => {
     const asset = {
       id: 'asset-1',
-      category: 'scene' as const,
+      folderIds: ['folder-art'],
+      tags: ['scene', 'castle'],
       name: 'Castle',
       dataUrl: 'data:image/png;base64,abc',
       mimeType: 'image/png',
@@ -30,6 +31,9 @@ describe('recipe packages', () => {
     const pack = createRecipePackageFromAsset(asset);
 
     expect(pack.asset.name).toBe('Castle');
+    // 导出时 folderIds 清空（本地 folder id 不可移植），tags 保留
+    expect(pack.asset.folderIds).toEqual([]);
+    expect(pack.asset.tags).toEqual(['scene', 'castle']);
     expect(pack.recipe).toMatchObject({
       prompt: 'A castle at dusk',
       provider: 'custom',
@@ -39,10 +43,11 @@ describe('recipe packages', () => {
   });
 
   it('installs a recipe package into the local asset library for one-click recreation', () => {
-    const empty: AssetLibrary = { character: [], scene: [], prop: [] };
+    const empty: AssetLibrary = { folders: [], items: [] };
     const pack = createRecipePackageFromAsset({
       id: 'asset-1',
-      category: 'scene',
+      folderIds: ['folder-art'],
+      tags: ['scene'],
       name: 'Castle',
       dataUrl: 'data:image/png;base64,abc',
       mimeType: 'image/png',
@@ -56,23 +61,25 @@ describe('recipe packages', () => {
 
     const next = installRecipePackageToAssets(empty, pack, 2000);
 
-    expect(next.scene).toHaveLength(1);
-    expect(next.scene[0]).toMatchObject({
+    expect(next.items).toHaveLength(1);
+    expect(next.items[0]).toMatchObject({
       name: 'Castle',
       prompt: 'A castle at dusk',
       provider: 'custom',
       model: 'third-party-image',
       source: 'recipe',
+      tags: ['scene'],
     });
 
-    const afterDuplicate = addAsset(next, next.scene[0]);
-    expect(afterDuplicate.scene).toHaveLength(1);
+    const afterDuplicate = addAsset(next, next.items[0]);
+    expect(afterDuplicate.items).toHaveLength(1);
   });
 
   it('serializes and validates imported recipe package JSON', () => {
     const pack = createRecipePackageFromAsset({
       id: 'asset-1',
-      category: 'scene',
+      folderIds: [],
+      tags: ['landscape'],
       name: 'Castle',
       dataUrl: 'data:image/png;base64,abc',
       mimeType: 'image/png',
@@ -87,7 +94,7 @@ describe('recipe packages', () => {
 
     expect(parsed).toMatchObject({
       version: 1,
-      asset: { name: 'Castle', category: 'scene' },
+      asset: { name: 'Castle', folderIds: [], tags: ['landscape'] },
       recipe: { prompt: 'A castle at dusk' },
     });
     expect(parseRecipePackageJson('{"version":1,"asset":{},"recipe":{}}')).toBeNull();
@@ -111,7 +118,8 @@ describe('recipe packages', () => {
 
     expect(asset).toMatchObject({
       id: 'history-1',
-      category: 'scene',
+      folderIds: [],
+      tags: [],
       name: 'Generated Castle',
       source: 'generation',
       prompt: 'A painterly castle',

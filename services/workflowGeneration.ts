@@ -7,10 +7,11 @@ import { workflowMediaStorage } from '../components/workflow/storage';
 import type { WorkflowGenerationMode, WorkflowNode, WorkflowProject } from '../components/workflow/types';
 import type { ModelPreference, UserApiKey } from '../types';
 import { resolveModelSelection } from '../utils/modelRefs';
-import { executeUnifiedIgnition, generateTextWithProvider, type UnifiedIgnitionInput, type UnifiedIgnitionResult } from './aiGateway';
+import { executeUnifiedIgnition, generateTextWithProvider, SeedanceSubmissionUnknownError, type UnifiedIgnitionInput, type UnifiedIgnitionResult } from './aiGateway';
 import { getGenerationCapability } from './generationCapabilities';
 import { runPreflight } from './promptPreflight';
 import { usePromptHistoryStore } from '../stores/usePromptHistoryStore';
+import { reserveApiUsage, updateApiUsage } from '../utils/usageMonitor';
 
 export interface WorkflowHistoryPayload {
   name?: string;
@@ -180,7 +181,10 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
         source: 'workflow',
     });
 
-    const preflight = await runPreflight(prompt, modelRef, runtime.userApiKeys, mode);
+    const preflight = await runPreflight(prompt, modelRef, runtime.userApiKeys, mode, {
+      optimize: Boolean(config.enhancePrompt),
+      localComplianceCheck: config.realPersonCheck !== false,
+    });
     const effectivePrompt = preflight.optimizedPrompt;
     if (preflight.complianceWarnings.length > 0) {
       current = patchInitiator(canonical(runtime, current), nodeId, { status: 'error', error: `合规警告：检测到敏感关键词 ${preflight.complianceWarnings.join(', ')}，请修改提示词后重试。`, generationRequestId: requestId });
@@ -210,12 +214,26 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
     }))).filter(Boolean) as NonNullable<UnifiedIgnitionInput['references']> : [];
 
     const seenIds = new Set<string>();
-    const references = [...seedanceReferences, ...autoReferences].filter(ref => {
+    let references = [...seedanceReferences, ...autoReferences].filter(ref => {
       if (!ref.elementId) return true;
       if (seenIds.has(ref.elementId)) return false;
       seenIds.add(ref.elementId);
       return true;
     });
+    if (mode === 'video' && config.submode) {
+      const imageReferences = references.filter(reference => reference.type === 'image');
+      if (config.submode === 'image-to-video' && imageReferences.length < 1) throw new Error('图生视频至少需要引用 1 张图片。');
+      if (config.submode === 'reference-to-video' && references.length < 1) throw new Error('全能参考至少需要引用 1 个媒体节点。');
+      if (config.submode === 'first-last-frame' && imageReferences.length < 2) throw new Error('首尾帧模式需要按顺序引用 2 张图片。');
+      let imageIndex = 0;
+      references = references.map(reference => {
+        if (reference.type !== 'image') return reference;
+        const index = imageIndex++;
+        if (config.submode === 'image-to-video' && index === 0) return { ...reference, slotRole: 'first_frame' };
+        if (config.submode === 'first-last-frame') return { ...reference, slotRole: index === 0 ? 'first_frame' : index === 1 ? 'last_frame' : 'reference_image' };
+        return { ...reference, slotRole: 'reference_image' };
+      });
+    }
 
     const createId = runtime.createId || nanoid;
     const count = mode === 'text' ? 1 : Math.max(1, Math.min(4, config.count || 1));
@@ -253,20 +271,40 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
         continue;
       }
 
-      const provider = (runtime.executeMedia || executeUnifiedIgnition)({
-        elementId: nodeId, prompt: effectivePrompt, modelId: resolved.model, apiKeyPayload: resolved.key,
-        aspectRatio: config.aspectRatio as UnifiedIgnitionInput['aspectRatio'], durationSec: config.durationSec,
-        resolution: config.resolution, generateAudio: config.generateAudio, watermark: config.watermark, references,
-        signal: controller.signal,
-        onProgress: (progress, message) => {
-          if (!stillActive()) return;
-          current = patchInitiator(canonical(runtime, current), nodeId, { status: 'loading', progress: Math.max(0, Math.min(99, progress)), generationRequestId: requestId, generationMessage: message, generationStartedAt: current.nodes.find(node => node.id === nodeId)?.metadata.generationStartedAt || Date.now() });
-          void publish(runtime, current);
-        },
-      });
-      const result = await raceAbort(provider, controller.signal);
+      const usage = runtime.executeMedia ? null : await reserveApiUsage({ key: resolved.key, productModelId: modelRef, upstreamModelId: resolved.model, type: mode === 'video' ? 'video' : 'image', durationSec: config.durationSec, count: 1 });
+      let result: UnifiedIgnitionResult;
+      try {
+        const provider = (runtime.executeMedia || executeUnifiedIgnition)({
+          elementId: nodeId, prompt: effectivePrompt, modelId: resolved.model, apiKeyPayload: resolved.key,
+          productModelId: modelRef,
+          generationSubmode: config.submode,
+          aspectRatio: config.aspectRatio as UnifiedIgnitionInput['aspectRatio'], durationSec: config.durationSec,
+          resolution: config.resolution, quality: config.quality, generateAudio: config.generateAudio, watermark: config.watermark,
+          webSearch: config.webSearch, realPersonCheck: config.realPersonCheck, references,
+          signal: controller.signal,
+          onProgress: (progress, message) => {
+            if (!stillActive()) return;
+            current = patchInitiator(canonical(runtime, current), nodeId, { status: 'loading', progress: Math.max(0, Math.min(99, progress)), generationRequestId: requestId, generationMessage: message, generationStartedAt: current.nodes.find(node => node.id === nodeId)?.metadata.generationStartedAt || Date.now() });
+            void publish(runtime, current);
+          },
+        });
+        result = await raceAbort(provider, controller.signal);
+      } catch (error) {
+        const isSeedance = resolved.model.toLowerCase().includes('seedance');
+        if (usage) await updateApiUsage(usage.id, {
+          status: error instanceof SeedanceSubmissionUnknownError || (isSeedance && isAbort(error)) ? 'submission_unknown' : isAbort(error) ? 'canceled' : 'failed',
+          billableState: 'unknown',
+          error: error instanceof Error ? error.message : '生成失败',
+        });
+        throw error;
+      }
       if (controller.signal.aborted) throw abortError();
-      if (!result.ok) throw new Error(result.errorMessage);
+      if (!result.ok) {
+        const errorMessage = 'errorMessage' in result ? result.errorMessage : '生成失败';
+        if (usage) await updateApiUsage(usage.id, { status: 'failed', billableState: 'unknown', error: errorMessage });
+        throw new Error(errorMessage);
+      }
+      if (usage) await updateApiUsage(usage.id, { status: 'succeeded', billableState: usage.estimatedCost === undefined ? 'unknown' : 'estimated' });
       if (!stillActive()) throw abortError();
       const { blob, record } = await mediaResult(result, mode, runtime);
       if (!stillActive()) {

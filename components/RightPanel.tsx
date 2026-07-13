@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import type { AssetCategory, AssetItem, AssetLibrary, GenerationHistoryItem, Element, UserApiKey, ModelPreference } from '../types';
+import React, { useEffect, useState } from 'react';
+import type { AssetItem, AssetLibrary, GenerationHistoryItem, Element, UserApiKey, ModelPreference } from '../types';
 import { AgentChatPanel } from './AgentChatPanel';
 import { Chat } from './agent-chat/Chat';
+import { AssetLibraryBrowser } from './studio/AssetLibraryBrowser';
 
 type RightPanelTab = 'history' | 'inspiration' | 'agent';
 
@@ -15,9 +16,13 @@ interface RightPanelProps {
     widthCap: number;
     compactMode: boolean;
     library: AssetLibrary;
+    language: 'en' | 'zho';
     generationHistory: GenerationHistoryItem[];
-    onRemove: (category: AssetCategory, id: string) => void;
-    onRename: (category: AssetCategory, id: string, name: string) => void;
+    onRemove: (id: string) => void;
+    onRename: (id: string, name: string) => void;
+    onCreateFolder: (parentId: string | null, name: string) => void;
+    onRenameFolder: (id: string, name: string) => void;
+    onRemoveFolder: (id: string, deleteItems: boolean) => void;
     onWidthChange?: (width: number) => void;
     onReversePrompt?: (imageDataUrl: string, mimeType: string, width?: number, height?: number) => void;
     onCreateImage?: (prompt: string, name?: string) => Promise<void>;
@@ -48,27 +53,6 @@ interface RightPanelProps {
     pendingChatAttachments?: Array<{ url: string; mimeType: string }>;
     onConsumeChatAttachments?: () => void;
 }
-
-const CATEGORY_LABELS: Record<AssetCategory, string> = {
-    character: '角色',
-    scene: '场景',
-    prop: '道具',
-};
-
-const CategoryTabs: React.FC<{ value: AssetCategory; onChange: (c: AssetCategory) => void; isDark?: boolean }> = ({ value, onChange }) => (
-    <div className="isl-tabbar">
-        {(Object.keys(CATEGORY_LABELS) as AssetCategory[]).map(category => (
-            <button
-                key={category}
-                type="button"
-                onClick={() => onChange(category)}
-                className={`isl-tab px-3 py-1.5 text-xs ${value === category ? 'isl-tab--active' : ''}`}
-            >
-                {CATEGORY_LABELS[category]}
-            </button>
-        ))}
-    </div>
-);
 
 const EmptyHistory: React.FC<{ isDark?: boolean }> = () => (
     <div className="isl-well flex flex-1 items-center justify-center border-dashed px-6 py-10 text-center">
@@ -107,7 +91,6 @@ const RunningHubWebAppPanel: React.FC<{ theme: 'light' | 'dark'; compactMode: bo
     const [outputs, setOutputs] = useState<RHWebAppOutputItem[]>([]);
 
     const inputClass = 'isl-well w-full px-3 py-2 text-xs outline-none';
-
     const btnClass = 'isl-chip h-auto justify-center px-4 py-2 text-xs disabled:opacity-50 disabled:cursor-not-allowed';
 
     // 持久化 apiKey & webappId
@@ -320,9 +303,13 @@ export const RightPanel: React.FC<RightPanelProps> = ({
     widthCap,
     compactMode,
     library,
+    language,
     generationHistory,
     onRemove,
     onRename,
+    onCreateFolder,
+    onRenameFolder,
+    onRemoveFolder,
     onWidthChange,
     onReversePrompt,
     onCreateImage,
@@ -342,9 +329,6 @@ export const RightPanel: React.FC<RightPanelProps> = ({
     const isDark = theme === 'dark';
     const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
     const [activeTab, setActiveTab] = useState<RightPanelTab>('agent');
-    const [category, setCategory] = useState<AssetCategory>('character');
-    const [editingId, setEditingId] = useState<string | null>(null);
-    const [editingName, setEditingName] = useState('');
     const [panelWidth, setPanelWidth] = useState(() => {
         const saved = localStorage.getItem('rightPanelWidth');
         return saved ? parseInt(saved, 10) : defaultWidth;
@@ -352,10 +336,6 @@ export const RightPanel: React.FC<RightPanelProps> = ({
     const [isResizing, setIsResizing] = useState(false);
     const [resizeStartX, setResizeStartX] = useState(0);
     const [resizeStartWidth, setResizeStartWidth] = useState(380);
-
-    const editInputRef = useRef<HTMLInputElement>(null);
-
-    const items = useMemo(() => library[category], [category, library]);
 
     useEffect(() => {
         const handleResize = () => setViewportWidth(window.innerWidth);
@@ -400,13 +380,6 @@ export const RightPanel: React.FC<RightPanelProps> = ({
         };
     }, [isResizing, minWidth, outerGap, resizeStartWidth, resizeStartX, widthCap]);
 
-    useEffect(() => {
-        if (editingId && editInputRef.current) {
-            editInputRef.current.focus();
-            editInputRef.current.select();
-        }
-    }, [editingId]);
-
     const handleResizePointerDown = (event: React.PointerEvent) => {
         if (event.pointerType === 'mouse' && event.button !== 0) return;
         setIsResizing(true);
@@ -414,11 +387,6 @@ export const RightPanel: React.FC<RightPanelProps> = ({
         setResizeStartWidth(panelWidth);
         event.stopPropagation();
         event.preventDefault();
-    };
-
-    const handleLibraryDragStart = (event: React.DragEvent, item: AssetItem) => {
-        event.dataTransfer.setData('text/plain', JSON.stringify({ __makingAsset: true, item }));
-        event.dataTransfer.effectAllowed = 'copy';
     };
 
     const handleHistoryDragStart = (event: React.DragEvent, item: GenerationHistoryItem) => {
@@ -429,29 +397,17 @@ export const RightPanel: React.FC<RightPanelProps> = ({
                 item: {
                     id: item.id,
                     name: item.name || 'Generated',
-                    category: 'scene',
+                    folderIds: [],
+                    tags: [],
                     dataUrl: item.dataUrl,
                     mimeType: item.mimeType,
                     width: item.width,
                     height: item.height,
                     createdAt: item.createdAt,
-                },
+                } as AssetItem,
             })
         );
         event.dataTransfer.effectAllowed = 'copy';
-    };
-
-    const handleDoubleClick = (item: AssetItem) => {
-        setEditingId(item.id);
-        setEditingName(item.name || '');
-    };
-
-    const handleSaveEdit = (itemId: string) => {
-        if (editingId === itemId && editingName.trim()) {
-            onRename(category, itemId, editingName.trim());
-        }
-        setEditingId(null);
-        setEditingName('');
     };
 
     const formatTime = (timestamp: number) =>
@@ -625,108 +581,17 @@ export const RightPanel: React.FC<RightPanelProps> = ({
                     )}
 
                     {activeTab === 'inspiration' && (
-                        <div className="flex h-full min-h-0 flex-col">
-                            <div className={`flex items-center justify-between border-b ${compactMode ? 'px-3 py-2' : 'px-4 py-2.5'}`} style={{ borderColor: 'var(--isl-border)' }}>
-                                <CategoryTabs value={category} onChange={setCategory} isDark={isDark} />
-                                <span className="text-[11px] tabular-nums" style={{ color: 'var(--isl-ink-soft)' }}>{items.length} 项</span>
-                            </div>
-
-                            <div className={`min-h-0 flex-1 overflow-y-auto ${compactMode ? 'p-2.5' : 'p-3'}`}>
-                                {items.length === 0 ? (
-                                    <div className="flex h-full items-center justify-center" style={{ color: 'var(--isl-ink-ghost)' }}>
-                                        <div className="text-center">
-                                            <svg className="mx-auto mb-3 h-14 w-14 opacity-30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                                                <rect x="3" y="7" width="7" height="10" rx="1" />
-                                                <rect x="14" y="4" width="7" height="16" rx="1" />
-                                            </svg>
-                                            <p className="text-sm">暂无{CATEGORY_LABELS[category]}</p>
-                                            <p className="mt-1 text-xs opacity-70">可把历史生成内容拖到画布，或稍后继续扩展素材库。</p>
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <div className={`inspiration-grid ${compactMode ? 'compact' : ''}`}>
-                                        {items.map(item => (
-                                            <div
-                                                key={item.id}
-                                                className="inspiration-item group relative cursor-grab border-[1.5px] active:cursor-grabbing isl-elastic"
-                                                style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-card)' }}
-                                                draggable
-                                                onDragStart={event => handleLibraryDragStart(event, item)}
-                                            >
-                                                <img src={item.dataUrl} alt={item.name || ''} className="w-full object-contain" style={{ background: 'var(--isl-surface-2)' }} />
-
-                                                {editingId === item.id ? (
-                                                    <div className="absolute inset-x-2 bottom-2 flex items-center gap-2">
-                                                        <input
-                                                            ref={editInputRef}
-                                                            type="text"
-                                                            value={editingName}
-                                                            onChange={event => setEditingName(event.target.value)}
-                                                            onBlur={() => handleSaveEdit(item.id)}
-                                                            onKeyDown={event => {
-                                                                if (event.key === 'Enter') {
-                                                                    event.preventDefault();
-                                                                    handleSaveEdit(item.id);
-                                                                } else if (event.key === 'Escape') {
-                                                                    setEditingId(null);
-                                                                    setEditingName('');
-                                                                }
-                                                            }}
-                                                            className="isl-well min-w-0 flex-1 px-2 py-1 text-xs outline-none"
-                                                            placeholder="输入名称"
-                                                            aria-label="素材名称"
-                                                            title="素材名称"
-                                                        />
-                                                    </div>
-                                                ) : (
-                                                    <div className="pointer-events-none absolute inset-0 opacity-0 transition-opacity group-hover:opacity-100">
-                                                        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
-                                                        <div className="absolute bottom-2 left-2 right-2 flex items-end justify-between gap-2 text-white">
-                                                            <div className="pointer-events-auto min-w-0 cursor-text" onDoubleClick={() => handleDoubleClick(item)}>
-                                                                <div className="truncate text-xs font-medium">{item.name || '未命名'}</div>
-                                                                <div className="text-[10px] opacity-80">{item.width}×{item.height}</div>
-                                                            </div>
-                                                            {onReversePrompt && (
-                                                                <button
-                                                                    type="button"
-                                                                    className="pointer-events-auto rounded-lg bg-white/10 p-1 backdrop-blur transition-colors hover:bg-white/20"
-                                                                    title="反推 Prompt"
-                                                                    onClick={event => {
-                                                                        event.stopPropagation();
-                                                                        onReversePrompt(item.dataUrl, item.mimeType || 'image/png', item.width, item.height);
-                                                                    }}
-                                                                >
-                                                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-white">
-                                                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                                                                        <polyline points="17 8 12 3 7 8" />
-                                                                        <line x1="12" y1="3" x2="12" y2="15" />
-                                                                    </svg>
-                                                                </button>
-                                                            )}
-                                                            <button
-                                                                type="button"
-                                                                className="pointer-events-auto rounded-lg bg-white/10 p-1 backdrop-blur transition-colors hover:bg-white/20"
-                                                                title="删除"
-                                                                onClick={event => {
-                                                                    event.stopPropagation();
-                                                                    onRemove(category, item.id);
-                                                                }}
-                                                            >
-                                                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-white">
-                                                                    <polyline points="3 6 5 6 21 6" />
-                                                                    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                                                                    <path d="M10 11v6" />
-                                                                    <path d="M14 11v6" />
-                                                                </svg>
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
+                        <div className="h-full min-h-0">
+                            <AssetLibraryBrowser
+                                library={library}
+                                language={language}
+                                onRenameAsset={onRename}
+                                onRemoveAsset={onRemove}
+                                onReversePrompt={item => onReversePrompt?.(item.dataUrl, item.mimeType || 'image/png', item.width, item.height)}
+                                onCreateFolder={onCreateFolder}
+                                onRenameFolder={onRenameFolder}
+                                onRemoveFolder={onRemoveFolder}
+                            />
                         </div>
                     )}
 

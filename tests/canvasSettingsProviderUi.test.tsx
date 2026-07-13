@@ -15,13 +15,7 @@ function renderSettings(userApiKeys: UserApiKey[] = []) {
     <CanvasSettings
       isOpen
       onClose={() => undefined}
-      language="zho"
-      setLanguage={() => undefined}
-      themeMode="dark"
       resolvedTheme="dark"
-      setThemeMode={() => undefined}
-      wheelAction="zoom"
-      setWheelAction={() => undefined}
       userApiKeys={userApiKeys}
       onAddApiKey={() => undefined}
       onDeleteApiKey={() => undefined}
@@ -59,7 +53,9 @@ describe('CanvasSettings provider configuration UI', () => {
     expect(screen.getByText('预设供应商')).toBeTruthy();
     expect(screen.getByText('自定义配置')).toBeTruthy();
     expect(screen.getByText('Claude Official')).toBeTruthy();
-    expect(screen.getByText('模型映射')).toBeTruthy();
+    expect(screen.getByText('固定模型映射')).toBeTruthy();
+    expect(screen.getByText('价格规则')).toBeTruthy();
+    expect(screen.getByText('预算策略')).toBeTruthy();
     expect(screen.getByText('配置 JSON')).toBeTruthy();
     expect(screen.getByText('模型测试配置')).toBeTruthy();
   });
@@ -80,7 +76,7 @@ describe('CanvasSettings provider configuration UI', () => {
     fireEvent.click(screen.getByRole('button', { name: /添加 API Key|添加供应商/i }));
 
     expect(screen.getByText('RunningHub 标准模型')).toBeTruthy();
-    expect(screen.getByText('3 个官方模型包')).toBeTruthy();
+    expect(screen.getByText('点击获取官方模型')).toBeTruthy();
     expect(screen.queryByText('全能图片G-2.0-图生图-低价渠道版')).toBeNull();
     expect(screen.queryByText('全能视频V3.1-fast-图生视频-低价渠道版')).toBeNull();
   });

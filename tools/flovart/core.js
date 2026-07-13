@@ -297,8 +297,13 @@ export function parseCliArgs(argv = []) {
 }
 
 export function normalizeCommandName(name = '') {
-  const normalized = String(name).trim().replace(/-/g, '.');
-  return COMMAND_ALIASES[normalized] || normalized;
+  const trimmed = String(name).trim();
+  if (COMMAND_REGISTRY[trimmed]) return trimmed;
+  if (COMMAND_ALIASES[trimmed]) return COMMAND_ALIASES[trimmed];
+  const dotted = trimmed.replace(/-/g, '.');
+  if (COMMAND_REGISTRY[dotted]) return dotted;
+  if (COMMAND_ALIASES[dotted]) return COMMAND_ALIASES[dotted];
+  return dotted;
 }
 
 function findRegisteredCommand(name = '') {

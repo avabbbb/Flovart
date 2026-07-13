@@ -28,6 +28,7 @@ interface PromptHistoryState {
     pendingInsert: { text: string; nonce: number } | null;
     load: () => Promise<void>;
     record: (input: Omit<PromptHistoryEntry, 'id' | 'timestamp'>) => void;
+    remove: (id: string) => Promise<void>;
     search: (query: string) => PromptHistoryEntry[];
     clearAll: () => Promise<void>;
     open: () => void;
@@ -63,6 +64,12 @@ export const usePromptHistoryStore = create<PromptHistoryState>((set, get) => ({
         if (next.length > MAX_ENTRIES) next = next.slice(0, MAX_ENTRIES);
         set({ entries: next });
         void historyStore.setItem('entries', next);
+    },
+
+    remove: async (id) => {
+        const next = get().entries.filter(e => e.id !== id);
+        set({ entries: next });
+        await historyStore.setItem('entries', next);
     },
 
     search: (query) => {

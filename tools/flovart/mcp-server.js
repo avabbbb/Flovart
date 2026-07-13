@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { COMMAND_REGISTRY, executeFlovartCommand } from './core.js';
 import { createShadowRuntimeFacade } from './shadow-runtime.js';
 import { enqueueCommand, enqueueAndWait } from './flovart-bridge.js';
+import { BROWSER_COMMANDS } from './browser-commands.js';
 
 const LOCAL_COMMANDS = new Set([
   'help', 'setup', 'init', 'doctor',
@@ -14,12 +15,6 @@ const LOCAL_COMMANDS = new Set([
   'inspiration.search', 'inspiration.get',
   'prompt.enhance', 'batch.plan',
   'preferences.manage', 'models.list',
-]);
-
-const BROWSER_COMMANDS = new Set([
-  'provider.begin-setup', 'element.ignite',
-  'workflow.node.run', 'workflow.node.stop',
-  'generate.image', 'generate.images-batch', 'generate.video',
 ]);
 
 function argTypeToZod(typeStr) {
@@ -83,7 +78,7 @@ const server = new McpServer({
   instructions: [
     'Flovart MCP Server — deterministic canvas/workflow/generation tools.',
     'All tools mirror flovart CLI commands. Keep the Flovart browser app open for provider-backed generation.',
-    'Browser commands (generate.*, element.ignite, workflow.node.run/stop) accept optional `wait` (default true) and `timeoutMs` (default 60000).',
+    'Browser commands (provider.*, generate.*, element.ignite, workflow.node.run/stop) accept optional `wait` (default true) and `timeoutMs` (default 60000).',
     'If a browser command times out, it returns a pending result — use video.status or element.watch to poll.',
     'Never read, print, or store API keys. Provider keys stay in the browser UI only.',
   ].join(' '),

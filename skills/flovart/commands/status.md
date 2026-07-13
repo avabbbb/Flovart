@@ -13,7 +13,7 @@ npm run flovart:cli -- status --json
 Read:
 
 - `runtime`: usually `file-state` for local shadow runtime.
-- `data.provider.configured`: whether image, video, and text providers are ready.
+- `data.provider`: shadow metadata only; use `provider.status` for the browser UI's authoritative provider readiness and selected models.
 - `data.mediaElements`: current image/video count.
 - `data.workflow.nodes`, `data.workflow.edges`, `data.workflow.runs`: workflow shape.
 - `data.stateFile`: local shadow runtime file path.
@@ -31,6 +31,8 @@ Use when:
 - The browser is not consuming queued commands.
 - `.flovart/command-queue.json` appears stale.
 - Agent host configuration may be missing.
+
+The Provider readiness fields in `doctor` come from shadow metadata for offline diagnostics. Use `provider.status` for the browser UI's authoritative Provider state.
 
 ## command.list
 

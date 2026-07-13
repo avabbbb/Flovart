@@ -42,6 +42,7 @@ export async function runPreflight(
   modelId: string | undefined,
   userApiKeys: UserApiKey[],
   capability?: 'text' | 'image' | 'video',
+  options: { optimize?: boolean; localComplianceCheck?: boolean } = {},
 ): Promise<PreflightResult> {
   const caps = getModelCapabilities(modelId, capability);
   const result: PreflightResult = {
@@ -53,7 +54,7 @@ export async function runPreflight(
 
   if (!caps) return result;
 
-  if (caps.complianceCheck) {
+  if (caps.complianceCheck && options.localComplianceCheck !== false) {
     const flagged = basicComplianceCheck(prompt);
     if (flagged.length > 0) {
       result.complianceWarnings = flagged;
@@ -61,7 +62,7 @@ export async function runPreflight(
     result.skippedCompliance = false;
   }
 
-  if (caps.promptOptimization && prompt.trim()) {
+  if (caps.promptOptimization && options.optimize !== false && prompt.trim()) {
     const textKey = findTextKey(userApiKeys);
     if (textKey) {
       try {

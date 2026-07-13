@@ -14,7 +14,7 @@ const emptyRuntime = (): UnifiedProjectRuntime => ({
     showTechnicalEntities: false,
   },
   jobs: {},
-  assets: { character: [], scene: [], prop: [] },
+  assets: { folders: [], items: [] },
   settings: {},
   updatedAt: 0,
 });
@@ -97,12 +97,12 @@ function stripLargeRuntimeFields(runtime: UnifiedProjectRuntime): UnifiedProject
   }
 
   return {
-    ...runtime,
-    entities: slimEntities,
-    jobs: {},
-    assets: { character: [], scene: [], prop: [] },
-  };
-}
+...runtime,
+     entities: slimEntities,
+     jobs: {},
+     assets: { folders: [], items: [] },
+   };
+ }
 
 function partializeRuntime(state: RuntimeStore) {
   return {

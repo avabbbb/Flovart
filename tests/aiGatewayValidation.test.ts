@@ -1537,6 +1537,24 @@ describe('aiGateway - generateImageWithProvider', () => {
         expect(body.response_format).toBeUndefined();
     });
 
+    it('keeps GPT Image 2 4K sizes inside the official edge and pixel limits', async () => {
+        globalThis.fetch = vi.fn().mockResolvedValue(mockJsonResponse({ data: [{ b64_json: 'ZmFrZQ==' }] }));
+        const apiKey = { id: 'openai-image-key', provider: 'openai' as const, capabilities: ['image' as const], key: 'sk-test-key', createdAt: 0, updatedAt: 0 };
+
+        await generateImageWithProvider('wide poster', 'gpt-image-2', apiKey, [], { aspectRatio: '16:9', resolution: '4K' });
+        expect(JSON.parse(String(vi.mocked(globalThis.fetch).mock.calls[0][1]?.body)).size).toBe('3840x2160');
+
+        vi.mocked(globalThis.fetch).mockClear();
+        await generateImageWithProvider('square poster', 'gpt-image-2', apiKey, [], { aspectRatio: '1:1', resolution: '4K' });
+        const size = JSON.parse(String(vi.mocked(globalThis.fetch).mock.calls[0][1]?.body)).size;
+        expect(size).toBe('2880x2880');
+        const [width, height] = size.split('x').map(Number);
+        expect(Math.max(width, height)).toBeLessThanOrEqual(3840);
+        expect(width * height).toBeLessThanOrEqual(8_294_400);
+        expect(width % 16).toBe(0);
+        expect(height % 16).toBe(0);
+    });
+
     it('OpenRouter 使用 chat completions 返回图片 data url', async () => {
         globalThis.fetch = vi.fn().mockResolvedValue(mockJsonResponse({
             choices: [{

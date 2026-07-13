@@ -1,16 +1,20 @@
 import {
+  cancelSeedanceVideoTask,
   downloadSeedanceVideoResult,
   pollSeedanceVideoTask,
+  reconcileSeedanceVideoUsage,
   submitSeedanceVideoTask,
   type SeedanceVideoTaskHandle,
 } from './aiGateway';
 import type {
   ProviderAdapter,
+  ProviderCancelResult,
   ProviderRequest,
   ProviderResult,
   ProviderTaskHandle,
   ProviderTaskPollResult,
   ProviderTaskSubmission,
+  ProviderUsageResult,
 } from './providerAdapter';
 
 const SEEDANCE_POLL_INTERVAL_MS = 10_000;
@@ -68,7 +72,14 @@ export const seedanceProviderAdapter: ProviderAdapter = {
       serviceTier: typeof request.extraParams?.serviceTier === 'string' ? request.extraParams.serviceTier : undefined,
       safetyIdentifier: typeof request.extraParams?.safetyIdentifier === 'string' ? request.extraParams.safetyIdentifier : undefined,
     });
-    return { status: 'queued', handle: toProviderHandle(handle) };
+    const providerHandle = toProviderHandle(handle);
+    // idempotencyKey 仅用于客户端侧重试语义识别，不影响上游请求头；
+    // 同一节点重新 submit 时若 request.extraParams.idempotencyKey 与已有缓存一致，
+    // 上层（workflowGeneration）可优先 pollTask 恢复轮询而非重新提交。
+    if (typeof request.extraParams?.idempotencyKey === 'string') {
+      providerHandle.metadata = { ...(providerHandle.metadata || {}), idempotencyKey: request.extraParams.idempotencyKey };
+    }
+    return { status: 'queued', handle: providerHandle };
   },
   pollTask: async (handle: ProviderTaskHandle): Promise<ProviderTaskPollResult> => {
     const result = await pollSeedanceVideoTask(toSeedanceHandle(handle));
@@ -83,6 +94,32 @@ export const seedanceProviderAdapter: ProviderAdapter = {
       result: { mediaUrl: result.videoUrl, mimeType: 'video/mp4', raw: result.raw },
       raw: result.raw,
     };
+  },
+  cancelTask: async (handle, options) => {
+    const result = await cancelSeedanceVideoTask(toSeedanceHandle(handle), options?.apiKey, {
+      signal: options?.signal,
+      reason: options?.reason,
+    });
+    return {
+      canceled: result.canceled,
+      reason: result.reason,
+      upstreamStillRunning: result.upstreamStillRunning,
+      message: result.message,
+      raw: result.raw,
+    } satisfies ProviderCancelResult;
+  },
+  reconcileUsage: async (handle, options) => {
+    const result = await reconcileSeedanceVideoUsage(toSeedanceHandle(handle), options?.apiKey, {
+      signal: options?.signal,
+    });
+    return {
+      status: result.status,
+      amount: result.amount,
+      currency: result.currency,
+      totalTokens: result.totalTokens,
+      reason: result.reason,
+      raw: result.raw,
+    } satisfies ProviderUsageResult;
   },
   // generate 是可选快捷路径：调用方（aiGateway）可优先走 generate 一步出结果，
   // 也可走 registry 的 submit + poll 分步流程。两者复用同一 submitTask/pollTask，无重复实现。
