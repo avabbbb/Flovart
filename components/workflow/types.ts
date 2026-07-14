@@ -100,6 +100,8 @@ export interface WorkflowNodeMetadata {
   richTextDocument?: WorkflowRichPromptDocument;
   mentionedNodeIds?: string[];
   referenceNodeIds?: string[];
+  /** 参考图 chip 面板顺序：上游 image/video/audio 节点 id 数组，拖拽排序只改这里 */
+  imageReferenceOrder?: string[];
   href?: string;
   poster?: string;
   storageKey?: string;

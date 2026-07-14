@@ -1,8 +1,16 @@
 import { BookOpen } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { ModelPreference, UserApiKey, GenerationMode, PromptEnhanceMode, PromptEnhanceResult } from '../../types';
 import { PromptBar } from '../PromptBar';
-import { filterWorkflowInputIds, getWorkflowInputNodes, toWorkflowMentionItems } from './references';
+import {
+  applyImageReferenceOrder,
+  filterWorkflowInputIds,
+  getOrderedImageReferences,
+  getWorkflowInputNodes,
+  reconcileImageReferenceOrder,
+  toImageReferenceChips,
+  toWorkflowMentionItems,
+} from './references';
 import type { WorkflowConnection, WorkflowGenerationConfig, WorkflowNode, WorkflowNodeMetadata } from './types';
 
 export interface WorkflowModelOptions {
@@ -16,7 +24,7 @@ const modeFor = (node: WorkflowNode, config?: WorkflowGenerationConfig): Generat
   return mode === 'text' || mode === 'video' ? mode : 'image';
 };
 
-export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme, language, userApiKeys, modelPreference, dynamicModelOptions, onOpenSettings, onEnhancePrompt, isEnhancingPrompt, onChange, onRun, onStop, focusSignal }: {
+export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme, language, userApiKeys, modelPreference, dynamicModelOptions, onOpenSettings, onEnhancePrompt, isEnhancingPrompt, onChange, onRun, onStop, focusSignal, onDisconnectReference }: {
   node: WorkflowNode;
   nodes: WorkflowNode[];
   connections?: WorkflowConnection[];
@@ -33,13 +41,40 @@ export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme,
   onRun: () => void;
   onStop?: () => void;
   focusSignal?: number;
+  /** 断开当前节点到指定上游节点的连线（由画布层执行 applyOps delete_connections） */
+  onDisconnectReference?: (fromNodeId: string) => void;
 }) {
   const [libraryOpen, setLibraryOpen] = useState(false);
   const config = node.metadata.config || { mode: node.type === 'text' ? 'text' : node.type === 'video' ? 'video' : 'image' };
   const generationMode = modeFor(node, config);
   const mentionItems = toWorkflowMentionItems(getWorkflowInputNodes(node, nodes, connections));
-  const keepConnectedMentions = (ids: string[]) => filterWorkflowInputIds(ids, node.id, connections);
+  const orderedImageRefs = getOrderedImageReferences(node, nodes, connections);
+  const referenceChips = toImageReferenceChips(orderedImageRefs, node.metadata.mentionedNodeIds);
+  const reconciledOrder = reconcileImageReferenceOrder(node.metadata.imageReferenceOrder, orderedImageRefs);
+  const currentOrder = node.metadata.imageReferenceOrder || [];
+  const orderDrifted = reconciledOrder.length !== currentOrder.length || reconciledOrder.some((id, i) => id !== currentOrder[i]);
+
+  // 连线增删或顺序失效时，自动同步 imageReferenceOrder 到节点 metadata（新增节点追加在尾部，断开的 id 被剔除）
+  useEffect(() => {
+    if (!orderDrifted) return;
+    onChange({ imageReferenceOrder: reconciledOrder });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orderDrifted, reconciledOrder.join('|')]);
+
+  const handleReorder = (nextIds: string[]) => {
+    const next = applyImageReferenceOrder(node.metadata.imageReferenceOrder, nextIds, orderedImageRefs);
+    if (next) onChange({ imageReferenceOrder: next });
+  };
+
+  const handleRemoveReference = (fromNodeId: string) => {
+    const remainingOrder = (node.metadata.imageReferenceOrder || orderedImageRefs.map(item => item.id)).filter(id => id !== fromNodeId);
+    const remainingMentions = (node.metadata.mentionedNodeIds || []).filter(id => id !== fromNodeId);
+    onChange({ imageReferenceOrder: remainingOrder, mentionedNodeIds: remainingMentions });
+    onDisconnectReference?.(fromNodeId);
+  };
+
   const patchConfig = (patch: Partial<WorkflowGenerationConfig>) => onChange({ config: { ...config, ...patch } });
+  const keepConnectedMentions = (ids: string[]) => filterWorkflowInputIds(ids, node.id, connections);
   const translatedPrompts = t('quickPrompts');
   const prompts = Array.isArray(translatedPrompts) ? translatedPrompts.filter((item): item is { name: string; value: string } => Boolean(item) && typeof item.name === 'string' && typeof item.value === 'string') : [];
 
@@ -56,6 +91,9 @@ export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme,
         setPrompt={prompt => onChange({ prompt, richTextDocument: undefined, mentionedNodeIds: [] })}
         onPromptInputChange={({ plainText, document, mentionedElementIds }) => onChange({ prompt: plainText, richTextDocument: document as typeof node.metadata.richTextDocument, mentionedNodeIds: keepConnectedMentions(mentionedElementIds) })}
         mentionItems={mentionItems}
+        imageReferenceChips={referenceChips}
+        onImageReferenceReorder={handleReorder}
+        onImageReferenceRemove={onDisconnectReference ? handleRemoveReference : undefined}
         onGenerate={onRun}
         onStop={onStop}
         onRetry={node.metadata.status === 'error' ? onRun : undefined}

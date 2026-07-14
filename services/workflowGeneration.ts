@@ -2,7 +2,7 @@ import { nanoid } from 'nanoid';
 import { getUpstreamData } from '../components/workflow/ops';
 import { CAMERA_MOVEMENTS, createWorkflowNode, STYLE_PRESETS } from '../components/workflow/constants';
 import { createWorkflowVideoPoster, discardWorkflowMediaRecord, fitWorkflowMediaSize, ingestWorkflowMedia, releaseWorkflowMediaRecord, type WorkflowMediaRecord } from '../components/workflow/media';
-import { filterSeedanceReferences, filterWorkflowInputIds } from '../components/workflow/references';
+import { filterSeedanceReferences, filterWorkflowInputIds, sortReferencesByOrder } from '../components/workflow/references';
 import { workflowMediaStorage } from '../components/workflow/storage';
 import type { WorkflowGenerationMode, WorkflowNode, WorkflowProject } from '../components/workflow/types';
 import type { ModelPreference, UserApiKey } from '../types';
@@ -10,6 +10,7 @@ import { resolveModelSelection } from '../utils/modelRefs';
 import { executeUnifiedIgnition, generateTextWithProvider, SeedanceSubmissionUnknownError, type UnifiedIgnitionInput, type UnifiedIgnitionResult } from './aiGateway';
 import { getGenerationCapability } from './generationCapabilities';
 import { runPreflight } from './promptPreflight';
+import { getProductModel } from './productModelCatalog';
 import { usePromptHistoryStore } from '../stores/usePromptHistoryStore';
 import { reserveApiUsage, updateApiUsage } from '../utils/usageMonitor';
 
@@ -157,7 +158,12 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
     const initiating = canonical(runtime, current).nodes.find(node => node.id === nodeId) || initialNode;
     const config = initiating.metadata.config || { mode };
     const modelRef = config.modelId || preferredModel(runtime.modelPreference, mode);
-    const resolved = resolveModelSelection(modelRef, runtime.userApiKeys, mode);
+    const productModel = mode === 'text' ? undefined : getProductModel(modelRef);
+    if (mode !== 'text' && productModel?.capability !== mode) {
+      throw new Error(`Workflow ${mode === 'video' ? '视频' : '图片'}生成仅支持平台预设产品模型，请重新选择模型。`);
+    }
+    const selectionRef = productModel?.id || modelRef;
+    const resolved = resolveModelSelection(selectionRef, runtime.userApiKeys, mode);
     if (!resolved) throw new Error(`未找到可用于${mode === 'video' ? '视频' : mode === 'text' ? '文本' : '图片'}生成的 API Key。`);
 
     const source = canonical(runtime, current);
@@ -181,7 +187,7 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
         source: 'workflow',
     });
 
-    const preflight = await runPreflight(prompt, modelRef, runtime.userApiKeys, mode, {
+    const preflight = await runPreflight(prompt, selectionRef, runtime.userApiKeys, mode, {
       optimize: Boolean(config.enhancePrompt),
       localComplianceCheck: config.realPersonCheck !== false,
     });
@@ -192,7 +198,7 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
       throw new Error(`合规校验未通过：${preflight.complianceWarnings.join(', ')}`);
     }
 
-    const capability = getGenerationCapability(runtime.userApiKeys, mode, modelRef);
+    const capability = getGenerationCapability(runtime.userApiKeys, mode, selectionRef);
     const mediaSources = [...new Map(related.filter(node => node.type === 'image' || node.type === 'video' || node.type === 'audio').map(node => [node.id, node])).values()];
     const autoReferences = (await Promise.all(mediaSources.map(async node => {
       if (!capability.supportsReferences.includes(node.type as 'image' | 'video' | 'audio')) return null;
@@ -214,12 +220,14 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
     }))).filter(Boolean) as NonNullable<UnifiedIgnitionInput['references']> : [];
 
     const seenIds = new Set<string>();
-    let references = [...seedanceReferences, ...autoReferences].filter(ref => {
+    const deduped = [...seedanceReferences, ...autoReferences].filter(ref => {
       if (!ref.elementId) return true;
       if (seenIds.has(ref.elementId)) return false;
       seenIds.add(ref.elementId);
       return true;
     });
+    // 按 PromptBar 参考图 chip 面板的拖拽顺序重排 Provider 引用，决定首帧/尾帧等角色分配
+    let references = sortReferencesByOrder(deduped, ref => ref.elementId || '', initiating.metadata.imageReferenceOrder);
     if (mode === 'video' && config.submode) {
       const imageReferences = references.filter(reference => reference.type === 'image');
       if (config.submode === 'image-to-video' && imageReferences.length < 1) throw new Error('图生视频至少需要引用 1 张图片。');
@@ -271,12 +279,12 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
         continue;
       }
 
-      const usage = runtime.executeMedia ? null : await reserveApiUsage({ key: resolved.key, productModelId: modelRef, upstreamModelId: resolved.model, type: mode === 'video' ? 'video' : 'image', durationSec: config.durationSec, count: 1 });
+      const usage = runtime.executeMedia ? null : await reserveApiUsage({ key: resolved.key, productModelId: selectionRef, upstreamModelId: resolved.model, type: mode === 'video' ? 'video' : 'image', durationSec: config.durationSec, count: 1 });
       let result: UnifiedIgnitionResult;
       try {
         const provider = (runtime.executeMedia || executeUnifiedIgnition)({
           elementId: nodeId, prompt: effectivePrompt, modelId: resolved.model, apiKeyPayload: resolved.key,
-          productModelId: modelRef,
+          productModelId: selectionRef,
           generationSubmode: config.submode,
           aspectRatio: config.aspectRatio as UnifiedIgnitionInput['aspectRatio'], durationSec: config.durationSec,
           resolution: config.resolution, quality: config.quality, generateAudio: config.generateAudio, watermark: config.watermark,

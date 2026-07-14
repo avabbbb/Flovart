@@ -1307,4 +1307,31 @@ Batch 逻辑已从独立 `handleBatchGenerate` 合并进 `handleGenerate`。Prom
   - ⑤ 关闭连线开关后再从节点端点拖拽，临时虚线预览仍可见，松手后连线生成成功；再次打开开关后所有连线重新出现。
   - ⑥ 隐藏连线开关对 Undo/Redo、小地图、批量折叠节点无干扰。
 
+## PromptBar 参考图 chip 面板（Phase 1）
+
+- **数据载体**：`WorkflowNodeMetadata.imageReferenceOrder: string[]`（`components/workflow/types.ts`），仅存上游 image/video/audio 节点的 id 顺序数组；其余 chip 样式（label/thumbnail/elementType/mentioned）运行时由 `references.ts` 从 nodes 派生。
+- **派生 + 协调工具**（`components/workflow/references.ts`）：
+  - `getOrderedImageReferences()` 按 `imageReferenceOrder` 已有条目排前，新连线节点按 connection 顺序尾部追加，断连 id 自动剔除。
+  - `toImageReferenceChips()` 把有序节点转成 chip UI 数据，`mentioned` 布尔值来自 `mentionedNodeIds` 区分「连线已上送」vs「连线未上送」。
+  - `reconcileImageReferenceOrder()` / `applyImageReferenceOrder()` / `sortReferencesByOrder()`。
+- **UI**（`components/PromptBar.tsx`）：在 `RichPromptEditor` 上方新增可选 chip 面板，使用 `Reorder.Group`/`Reorder.Item`（`motion/react`）实现拖拽排序；每个 chip 显示缩略图（img / video / audio 占位）+ 1-based 自动编号 + × 删除按钮。新增 props `imageReferenceChips?` / `onImageReferenceReorder?` / `onImageReferenceRemove?`，未传参时面板不渲染。
+- **接线**（`components/workflow/WorkflowNodePromptBar.tsx`）：
+  - 新增 `onDisconnectReference?` prop。
+  - `handleReorder()` 调 `applyImageReferenceOrder`，无变化时不触发 onChange。
+  - `handleRemoveReference()` 同时更新 `imageReferenceOrder` 与 `mentionedNodeIds`，再调 `onDisconnectReference`。
+  - `useEffect` 自动 reconcile：连线增删导致 drift 时把 `reconciledOrder` 写回 metadata，无需手动改 order。
+- **画布断连**（`components/workflow/InfiniteWorkflow.tsx`）：`onDisconnectReference` 找到当前节点到指定上游节点的 connection，执行 `applyOps([{type:'delete_connections', ids:[conn.id]}])`。
+- **Provider 排序同步**（`services/workflowGeneration.ts`）：去重 references 后用 `sortReferencesByOrder` 按 `initiating.metadata.imageReferenceOrder` 排序，再走 video submode slotRole 分配；order 缺省时保持原顺序。
+- **双源共存原则**（沿用决策）：
+  - `imageReferenceOrder` 决定 chip 顺序 + Provider 参考图排序 + 缩略图列表展示；
+  - `mentionedNodeIds` 决定是否上送 Provider（连线只是面板 chip 候选，必须有 @ 或拖入面板且 included 才进入 imageReferenceOrder → Provider）。
+  - 当前 Phase 1 只做「连线 → 面板 chip → × 断连 → Provider 排序」闭环，未引入 @ 素材库新建节点+连线+结构化 Token（Phase 2）。
+- **待用户验证**：
+  - ① 选中一个图片/视频/文本节点，连接上游 image/video/audio 节点，PromptBar 上方出现 chip 面板，按连线顺序展示缩略图 + 自动编号。
+  - ② 在面板上拖拽 chip 调整顺序，松手后顺序持久化，再次聚焦节点顺序保持。
+  - ③ 点击 chip 的 × 按钮，对应连线断开、节点从面板消失，`imageReferenceOrder` 与 `mentionedNodeIds` 同步剔除该 id。
+  - ④ 断开连线再重连，chip 在尾部重新出现；删除上游节点后 order 自动剔除该 id 而不报错。
+  - ⑤ 触发一次生成（即便未实现 Phase 2 @ 注入，原有连线+原有 @ 注入链路应不受影响），Provider 收到的参考图按 `imageReferenceOrder` 顺序排序。
+  - ⑥ chip `mentioned` 状态（连线 vs 已 @ 上送）在视觉上有可区分的边框/底色。
+
 

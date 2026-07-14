@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Reorder } from 'motion/react';
 import type {
     CharacterLockProfile,
     ChatAttachment,
@@ -14,6 +15,7 @@ import RichPromptEditor, { type RichPromptEditorHandle } from './RichPromptEdito
 import type { MentionItem } from './MentionList';
 export type { MentionItem } from './MentionList';
 import { extractMentions } from './CanvasMentionExtension';
+import type { ImageReferenceChip } from './workflow/references';
 import { PROVIDER_LABELS, type VideoAspectRatio } from '../services/aiGateway';
 
 import { readColdMedia } from '../utils/mediaIndexedDB';
@@ -43,6 +45,10 @@ export interface PromptBarProps {
     onDeleteUserEffect: (id: string) => void;
     generationMode: GenerationMode;
     setGenerationMode: (mode: GenerationMode) => void;
+    /** 参考图 chip 面板：由 WorkflowNodePromptBar 派生，连线即面板条目 */
+    imageReferenceChips?: ImageReferenceChip[];
+    onImageReferenceReorder?: (ids: string[]) => void;
+    onImageReferenceRemove?: (id: string) => void;
     videoAspectRatio: VideoAspectRatio;
     setVideoAspectRatio: (ratio: VideoAspectRatio) => void;
     imageAspectRatio?: VideoAspectRatio;
@@ -232,6 +238,9 @@ export const PromptBar: React.FC<PromptBarProps> = ({
     onDeleteUserEffect,
     generationMode,
     setGenerationMode,
+    imageReferenceChips,
+    onImageReferenceReorder,
+    onImageReferenceRemove,
     videoAspectRatio,
     setVideoAspectRatio,
     imageAspectRatio = '1:1',
@@ -415,8 +424,8 @@ const productModelGroups = useMemo(
 
     /** 编辑器 Enter 提交 */
     const handleEditorSubmit = useCallback(() => {
-        if (latestPromptRef.current.trim() && !isLoading) onGenerate();
-    }, [isLoading, onGenerate]);
+        if (latestPromptRef.current.trim() && !isLoading && readyState !== 'missing-key') onGenerate();
+    }, [isLoading, onGenerate, readyState]);
 
     const replacePrompt = useCallback((value: string) => {
         latestPromptRef.current = value;
@@ -607,6 +616,64 @@ const productModelGroups = useMemo(
                         '--prompt-editor-line-height': compactMode ? '1.4' : '1.5',
                     } as React.CSSProperties}
                 >
+                    {imageReferenceChips && imageReferenceChips.length > 0 && onImageReferenceReorder && (
+                        <div
+                            className={`${compactMode ? 'mb-2' : 'mb-2.5'} flex items-center gap-1.5 overflow-x-auto isl-scrollbar pb-1`}
+                            data-testid="prompt-image-refs"
+                        >
+                            <span className="shrink-0 text-[10px] font-bold uppercase tracking-[0.14em]" style={{ color: 'var(--isl-ink-soft)' }}>参考</span>
+                            <Reorder.Group
+                                axis="x"
+                                values={imageReferenceChips}
+                                onReorder={next => onImageReferenceReorder(next.map(chip => chip.id))}
+                                className="list-none m-0 p-0 flex items-center gap-1.5"
+                            >
+                                {imageReferenceChips.map((chip, index) => (
+                                    <Reorder.Item
+                                        key={chip.id}
+                                        value={chip}
+                                        className="group flex shrink-0 list-none items-center gap-1.5 rounded-[14px] border px-1.5 py-1"
+                                        style={{
+                                            borderColor: chip.mentioned ? 'var(--isl-mint)' : 'var(--isl-border)',
+                                            background: chip.mentioned ? 'var(--isl-mint-bg)' : 'var(--isl-surface-2)',
+                                            cursor: 'grab',
+                                        }}
+                                        title={chip.mentioned ? `${chip.label} · 已上送 Provider` : `${chip.label} · 连线但未 @ 引用（不会上送）`}
+                                        whileDrag={{ scale: 1.06, boxShadow: '0 6px 18px rgba(99,102,241,0.18)' }}
+                                    >
+                                        <span
+                                            className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] font-black"
+                                            style={{ background: chip.mentioned ? 'var(--isl-mint-deep)' : 'var(--isl-surface-2)', color: chip.mentioned ? '#fff' : 'var(--isl-ink-soft)' }}
+                                        >{index + 1}</span>
+                                        <div className="h-7 w-7 shrink-0 overflow-hidden rounded-lg border" style={{ borderColor: 'var(--isl-border)' }}>
+                                            {chip.elementType === 'audio' ? (
+                                                <div className="flex h-full w-full items-center justify-center text-[10px] font-bold" style={{ color: 'var(--isl-mint-deep)', background: 'var(--isl-mint-bg)' }}>AU</div>
+                                            ) : chip.elementType === 'video' ? (
+                                                chip.thumbnail ? <video src={chip.thumbnail} className="h-full w-full object-cover" muted playsInline /> : <div className="flex h-full w-full items-center justify-center text-[10px]">🎬</div>
+                                            ) : (
+                                                chip.thumbnail ? <img src={chip.thumbnail} alt={chip.label} className="h-full w-full object-cover" /> : <div className="flex h-full w-full items-center justify-center text-[10px]">🖼</div>
+                                            )}
+                                        </div>
+                                        <span className="max-w-[96px] truncate text-[11px] font-bold" style={{ color: 'var(--isl-ink)' }}>{chip.label}</span>
+                                        {onImageReferenceRemove && (
+                                            <button
+                                                type="button"
+                                                onClick={() => onImageReferenceRemove(chip.id)}
+                                                onPointerDown={event => event.stopPropagation()}
+                                                className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full transition hover:bg-black/5"
+                                                style={{ color: 'var(--isl-ink-soft)' }}
+                                                title="断开该参考图连线"
+                                                aria-label={`移除参考图 ${chip.label}`}
+                                            >
+                                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
+                                            </button>
+                                        )}
+                                    </Reorder.Item>
+                                ))}
+                            </Reorder.Group>
+                        </div>
+                    )}
+
                     <RichPromptEditor
                         ref={richEditorRef}
                         canvasItems={canvasItems}
@@ -1098,9 +1165,9 @@ const productModelGroups = useMemo(
                             type="button"
                             onClick={() => {
                                 if (isLoading && onStop) onStop();
-                                else if (prompt.trim()) onGenerate();
+                                else if (prompt.trim() && readyState !== 'missing-key') onGenerate();
                             }}
-                            disabled={(isLoading && !onStop) || (!isLoading && !prompt.trim())}
+                            disabled={(isLoading && !onStop) || (!isLoading && (!prompt.trim() || readyState === 'missing-key'))}
                             aria-label={isLoading && onStop ? (isSeedanceVideoModel ? '停止等待' : '停止生成') : t('promptBar.generate')}
                             title={isLoading && onStop ? (isSeedanceVideoModel ? '停止本地等待；不代表供应商任务已取消，仍可能消耗额度' : '停止生成') : t('promptBar.generate')}
                             className={`isl-go ${compactMode ? 'h-9 min-w-[104px] px-4 text-xs' : 'h-10 min-w-[116px] px-5 text-sm'}`}
