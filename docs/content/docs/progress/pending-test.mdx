@@ -1368,3 +1368,21 @@ Batch 逻辑已从独立 `handleBatchGenerate` 合并进 `handleGenerate`。Prom
   - ① 选中一个视频节点，切到不同产品模型（如切到 Seedance 1.0 fast 不支持首尾帧的模式），观察模式 chip、时长、比例、分辨率哪些变灰显且 hover 出 tooltip。
   - ② 视频节点工具栏右侧出现首/尾帧两个按钮，点击后在视频节点左侧 / 右侧分别生成图片节点并自动连线。
   - ③ 设置页填入 xAI API Key，在视频节点选 `grok-imagine-video` 或 `grok-imagine-video-1.5`，分别测文生视频 / 图生视频 / 视频扩展三种模式，确认 polling 拿到 `request_id` 后能下载到 mp4 并落地到画布。
+
+## Gemini 图像产品条目与路由收口（本轮新增）
+
+- **产品模型 catalog 补全**：`services/productModelCatalog.ts` 在 Google 图像区新增 3 条目：
+  - `flovart:gemini-3.1-flash-image`（Gemini 3.1 Flash Image，即 NB 2）：officialModelIds `['gemini-3.1-flash-image']`，aliases `['gemini-3.1-flash-image-preview']`，badge 「通用」，15 个 aspectRatio（含 `1:4` / `4:1` / `1:8` / `8:1` / `21:9` / `9:21`），resolutions `['512','1K','2K','4K']`，`supportsWebSearch: true`，`maxImageReferences: 14`。
+  - `flovart:gemini-3.1-flash-lite-image`（Gemini 3.1 Flash Lite Image，即 NB 2 Lite）：officialModelIds `['gemini-3.1-flash-lite-image']`，badge 「极速」，7 个 aspectRatio，resolutions `['512','1K','2K']`，`supportsWebSearch: true`，`maxImageReferences: 14`。
+  - `flovart:imagen-4`（Imagen 4）：officialModelIds `['imagen-4.0-generate-001']`，aliases `['imagen-4.0-fast-generate-001','imagen-4.0-ultra-generate-001']`，badge 「已弃用」，modes 仅 `['text-to-image']`，`maxImageReferences: 0`。
+- **DEFAULT_PROVIDER_MODELS 调整**：`services/aiGateway.ts` `google.image` 改为 `['gemini-3.1-flash-image','gemini-3.1-flash-lite-image','gemini-3-pro-image','imagen-4.0-generate-001']`——移除 NB 1 `gemini-2.5-flash-image`，新增 NB 2 Lite 与 Imagen 4。
+- **aiGateway google 图像分支简化**：`generateImageWithProvider` 中 google 分支删除 `refs.length > 0` + `supportsReferenceImageEditing` 三层冗余判断，简化为：`isGoogleImageEditModel(model)`（NB 系列含 `gemini-3.1-flash-lite-image`）走 `editImage` → `generateContent`（支持 `refs=[]` 纯文生图），`isGoogleTextToImageModel(model)`（Imagen 系列）走 `generateImageFromText` → `generateImages` API。
+- **CanvasSettings.tsx Google Visual Models 模板**：`defaultModel` 从 `gemini-3-pro-image` 改为 `gemini-3.1-flash-image`；`models` 列表追加 `gemini-3.1-flash-image` 与 `gemini-3.1-flash-lite-image`。
+- **geminiService.ts 注释**：标注 Imagen 4 已弃用（2026-08-17 关停）；`generateImageFromText` fallback 保持 `imagen-4.0-generate-001` 不变——该函数仅服务 Imagen `generateImages` API，NB 系列不走此路径。
+- typecheck 通过。
+- 待用户验证：
+  - ① 设置页 Google Visual Models 模板默认选 `gemini-3.1-flash-image`，下拉可看到 NB 2 / NB 2 Lite / NB Pro / Imagen 4（标注已弃用）四项。
+  - ② 在画布用 NB 2（`gemini-3.1-flash-image`）做纯文生图（不带参考图），确认能出图——NB 系列走 `generateContent` 接口 `refs=[]`，与 Imagen `generateImages` 路径不同。
+  - ③ 在画布用 NB 2 Lite（`gemini-3.1-flash-lite-image`）测带参考图的图像编辑，确认能出图且速度比 NB 2 快。
+  - ④ 在画布用 Imagen 4 仍可做纯文生图，确认 deprecated 模型当前仍可用（至 2026-08-17 关停前）。
+  - ⑤ 确认旧 `gemini-2.5-flash-image`（NB 1）已从设置页模板和默认模型列表消失，不再可选。

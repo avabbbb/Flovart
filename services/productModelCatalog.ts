@@ -85,6 +85,24 @@ export const PRODUCT_MODEL_CATALOG: ProductModelDefinition[] = [
     capabilities: { ...baseImage, supportsWebSearch: true, maxImageReferences: 14 },
   },
   {
+    id: 'flovart:gemini-3.1-flash-image', name: 'Gemini 3.1 Flash Image', shortName: 'NB 2', company: 'Google', capability: 'image', provider: 'google',
+    officialModelIds: ['gemini-3.1-flash-image'], aliases: ['gemini-3.1-flash-image-preview'], status: 'available', badge: '通用',
+    description: 'Nano Banana 2，设计与速度平衡，最多 14 张参考图',
+    capabilities: { ...baseImage, aspectRatios: ['1:1', '3:2', '2:3', '16:9', '9:16', '4:3', '3:4', '4:5', '5:4', '1:4', '4:1', '1:8', '8:1', '21:9', '9:21'], resolutions: ['512', '1K', '2K', '4K'], supportsWebSearch: true, maxImageReferences: 14 },
+  },
+  {
+    id: 'flovart:gemini-3.1-flash-lite-image', name: 'Gemini 3.1 Flash-Lite Image', shortName: 'NB 2 Lite', company: 'Google', capability: 'image', provider: 'google',
+    officialModelIds: ['gemini-3.1-flash-lite-image'], aliases: [], status: 'available', badge: '极速',
+    description: 'Nano Banana 2 Lite，亚秒延迟，推荐替代 NB 1',
+    capabilities: { ...baseImage, aspectRatios: ['1:1', '3:2', '2:3', '16:9', '9:16', '4:3', '3:4'], resolutions: ['512', '1K', '2K'], supportsWebSearch: true, maxImageReferences: 14 },
+  },
+  {
+    id: 'flovart:imagen-4', name: 'Imagen 4', shortName: 'Imagen 4', company: 'Google', capability: 'image', provider: 'google',
+    officialModelIds: ['imagen-4.0-generate-001'], aliases: ['imagen-4.0-fast-generate-001', 'imagen-4.0-ultra-generate-001'], status: 'available', badge: '已弃用',
+    description: 'Imagen 4，2026-08-17 关停，建议迁移到 Nano Banana 2 Lite',
+    capabilities: { ...baseImage, modes: ['text-to-image'], aspectRatios: ['1:1', '16:9', '9:16', '4:3', '3:4'], resolutions: ['1K', '2K', '4K'], maxImageReferences: 0 },
+  },
+  {
     id: 'flovart:seedream-5-pro', name: 'Seedream 5.0 Pro', shortName: 'S5 Pro', company: 'ByteDance', capability: 'image', provider: 'volcengine',
     officialModelIds: [], aliases: ['seedream-5.0-pro', 'doubao-seedream-5.0-pro'], status: 'mapping-required', badge: '待映射',
     description: '官方产品已发布，API 模型 ID 由用户映射',

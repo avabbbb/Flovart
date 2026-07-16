@@ -84,7 +84,7 @@ export interface ModelParamSchema {
 export const DEFAULT_PROVIDER_MODELS: Partial<Record<AIProvider, ProviderModelMap>> = {
     google: {
         text: ['gemini-3-flash-preview', 'gemini-3.1-pro-preview', 'gemini-3.1-flash-lite-preview', 'gemini-2.5-pro', 'gemini-2.5-flash'],
-        image: ['gemini-3.1-flash-image', 'gemini-3-pro-image', 'gemini-2.5-flash-image'],
+        image: ['gemini-3.1-flash-image', 'gemini-3.1-flash-lite-image', 'gemini-3-pro-image', 'imagen-4.0-generate-001'],
         video: ['veo-3.1-generate-preview', 'veo-3.1-fast-generate-preview', 'veo-3.1-lite-generate-preview'],
     },
     openai: {
@@ -2414,12 +2414,6 @@ export async function generateImageWithProvider(
                 webSearch: options?.webSearch,
                 baseUrl: key?.baseUrl,
             });
-        }
-        if (refs.length > 0) {
-            if (!supportsReferenceImageEditing(model)) {
-                return generateImageFromText(prompt, key?.key, options?.signal, { model, baseUrl: key?.baseUrl });
-            }
-            return editImage(refs, prompt, undefined, key?.key, options?.signal, { model, baseUrl: key?.baseUrl });
         }
         return generateImageFromText(prompt, key?.key, options?.signal, { model, baseUrl: key?.baseUrl });
     }

@@ -13,8 +13,8 @@
  * 
  * 【使用的 AI 模型】
  * - gemini-3-flash-preview: 文本理解与提示词润色
- * - gemini-3.1-flash-image / gemini-3-pro-image: 图像编辑和生成
- * - imagen-4.0-generate-001: 文本直接生成图像
+ * - gemini-3.1-flash-image / gemini-3.1-flash-lite-image / gemini-3-pro-image: 图像编辑和生成
+ * - imagen-4.0-generate-001: 文本直接生成图像（已弃用，2026-08-17 关停）
  * - veo-3.1-generate-preview: 视频生成
  * 
  * 【API Key 配置】
@@ -41,6 +41,9 @@ let runtimeConfig: {
   textToImageModel?: string;
   videoModel?: string;
   baseUrl?: string;
+  textBaseUrl?: string;
+  imageBaseUrl?: string;
+  videoBaseUrl?: string;
 } = {};
 
 export function setGeminiRuntimeConfig(config: {
@@ -52,8 +55,11 @@ export function setGeminiRuntimeConfig(config: {
   textToImageModel?: string;
   videoModel?: string;
   baseUrl?: string;
+  textBaseUrl?: string;
+  imageBaseUrl?: string;
+  videoBaseUrl?: string;
 }) {
-  runtimeConfig = { ...runtimeConfig, ...config };
+  runtimeConfig = { ...config };
 }
 
 /**
@@ -87,9 +93,18 @@ function getApiKey(capability: "text" | "image" | "video" = "text", explicitKey?
   return key;
 }
 
+export function resolveGeminiBaseUrl(capability: "text" | "image" | "video", explicitBaseUrl?: string): string {
+  const scopedBaseUrl = capability === 'text'
+    ? runtimeConfig.textBaseUrl
+    : capability === 'image'
+      ? runtimeConfig.imageBaseUrl
+      : runtimeConfig.videoBaseUrl;
+  return (explicitBaseUrl || scopedBaseUrl || runtimeConfig.baseUrl || 'https://generativelanguage.googleapis.com/v1beta').replace(/\/+$/, '');
+}
+
 /** 获取 Gemini REST API 的基础地址（供 aiGateway 内直接发 fetch 时使用） */
 export function getGeminiRestBaseUrl(): string {
-  return (runtimeConfig.baseUrl || 'https://generativelanguage.googleapis.com/v1beta').replace(/\/+$/, '');
+  return resolveGeminiBaseUrl('text');
 }
 
 /**
@@ -97,11 +112,11 @@ export function getGeminiRestBaseUrl(): string {
  * @param capability - 使用场景
  * @param explicitKey - 可选的显式 API Key
  */
-function getClient(capability: "text" | "image" | "video" = "text", explicitKey?: string) {
-  const base = runtimeConfig.baseUrl?.replace(/\/+$/, '');
+function getClient(capability: "text" | "image" | "video" = "text", explicitKey?: string, explicitBaseUrl?: string) {
+  const base = resolveGeminiBaseUrl(capability, explicitBaseUrl);
   return new GoogleGenAI({
     apiKey: getApiKey(capability, explicitKey),
-    ...(base ? { httpOptions: { baseUrl: base } } : {}),
+    httpOptions: { baseUrl: base },
   });
 }
 
@@ -271,7 +286,7 @@ export async function editImage(
   mask?: ImageInput,
   apiKey?: string,
   signal?: AbortSignal,
-  options?: { model?: string; aspectRatio?: string; imageSize?: string; webSearch?: boolean },
+  options?: { model?: string; aspectRatio?: string; imageSize?: string; webSearch?: boolean; baseUrl?: string },
 ): Promise<{ newImageBase64: string | null; newImageMimeType: string | null; textResponse: string | null; }> {
   
   // 步骤1：转换图片格式 - 提取 base64 数据
@@ -305,7 +320,7 @@ export async function editImage(
     : [...imageParts, textPart];            // 无遮罩：图片+提示词
 
   try {
-    const ai = getClient("image", apiKey);
+    const ai = getClient("image", apiKey, options?.baseUrl);
     // 步骤5：调用 Gemini API
     const response: GenerateContentResponse = await ai.models.generateContent({
       model: options?.model || runtimeConfig.imageModel || 'gemini-3.1-flash-image',
@@ -371,7 +386,7 @@ export async function editImage(
 /**
  * 【函数】文本生成图像 / AI 绘画
  * 
- * 使用 Imagen 4.0 模型直接从文本描述生成图片
+ * 使用 Imagen 4.0 模型直接从文本描述生成图片（已弃用，2026-08-17 关停）
  * 
  * @param {string} prompt - 图片描述提示词
  * @returns {Promise} 返回生成的图片数据
@@ -391,12 +406,13 @@ export async function editImage(
  * - 使用专门的文本生成图片模型，质量更高
  * - 不需要输入图片，纯文本生成
  * - 生成速度较快
+ * - 仅当用户显式选择 Imagen 模型时才走此分支；默认文生图已改走 NB 系列 generateContent
  */
-export async function generateImageFromText(prompt: string, apiKey?: string, signal?: AbortSignal): Promise<{ newImageBase64: string | null; newImageMimeType: string | null; textResponse: string | null; }> {
+export async function generateImageFromText(prompt: string, apiKey?: string, signal?: AbortSignal, options?: { model?: string; baseUrl?: string }): Promise<{ newImageBase64: string | null; newImageMimeType: string | null; textResponse: string | null; }> {
   try {
-    const ai = getClient("image", apiKey);
+    const ai = getClient("image", apiKey, options?.baseUrl);
     const response = await ai.models.generateImages({
-        model: runtimeConfig.textToImageModel || 'imagen-4.0-generate-001',  // 使用 Imagen 4.0 模型
+        model: options?.model || runtimeConfig.textToImageModel || 'imagen-4.0-generate-001',  // Imagen 专用接口；调用方必传 Imagen 模型
         prompt: prompt,
         config: {
           abortSignal: signal,
@@ -465,22 +481,32 @@ export async function generateVideo(
   onProgress: (message: string) => void,
   image?: ImageInput,
   apiKey?: string,
-  options?: { model?: string; durationSec?: number; resolution?: string; generateAudio?: boolean; signal?: AbortSignal; lastFrame?: ImageInput; referenceImages?: ImageInput[] },
+  options?: { model?: string; durationSec?: number; resolution?: string; generateAudio?: boolean; signal?: AbortSignal; lastFrame?: ImageInput; referenceImages?: ImageInput[]; baseUrl?: string },
 ): Promise<{ videoBlob: Blob; mimeType: string }> {
-  const ai = getClient("video", apiKey);
+  const ai = getClient("video", apiKey, options?.baseUrl);
   // 步骤1：初始化
   onProgress('Initializing video generation...');
   
   // 步骤2：处理输入图片（如果有）
-  const imagePart = image ? {
-    imageBytes: image.href.split(',')[1],  // 提取 base64 数据
-    mimeType: image.mimeType,
-  } : undefined;
-  const lastFramePart = options?.lastFrame ? { imageBytes: options.lastFrame.href.split(',')[1], mimeType: options.lastFrame.mimeType } : undefined;
-  const referenceImages = options?.referenceImages?.slice(0, 3).map(reference => ({
-    image: { imageBytes: reference.href.split(',')[1], mimeType: reference.mimeType },
-    referenceType: VideoGenerationReferenceType.ASSET,
-  }));
+  const toBase64 = (bytes: Uint8Array) => {
+    let binary = '';
+    for (let offset = 0; offset < bytes.length; offset += 0x8000) binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+    return btoa(binary);
+  };
+  const resolveImagePart = async (input?: ImageInput) => {
+    if (!input) return undefined;
+    const comma = input.href.indexOf(',');
+    if (input.href.startsWith('data:') && comma >= 0) return { imageBytes: input.href.slice(comma + 1), mimeType: input.mimeType };
+    const response = await fetch(input.href, { signal: options?.signal });
+    if (!response.ok) throw new Error(`无法读取 Veo 参考图 (${response.status} ${response.statusText})`);
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    return { imageBytes: toBase64(bytes), mimeType: input.mimeType || response.headers.get('Content-Type') || 'image/png' };
+  };
+  const imagePart = await resolveImagePart(image);
+  const lastFramePart = await resolveImagePart(options?.lastFrame);
+  const referenceImages = (await Promise.all((options?.referenceImages || []).slice(0, 3).map(resolveImagePart)))
+    .filter((part): part is NonNullable<typeof part> => Boolean(part))
+    .map(part => ({ image: part, referenceType: VideoGenerationReferenceType.ASSET }));
 
   // 步骤3：提交视频生成请求
   let operation: GenerateVideosOperation = await ai.models.generateVideos({

@@ -169,8 +169,8 @@ const PROVIDER_PRESETS: ProviderPreset[] = [
         baseUrl: providerBaseUrl.google,
         capabilities: ['image', 'video'],
         requestFormat: 'google',
-        defaultModel: 'gemini-3-pro-image',
-        models: ['gemini-3-pro-image', 'veo-3.1-generate-preview', 'veo-3.1-fast-generate-preview', 'veo-3.1-lite-generate-preview'],
+        defaultModel: 'gemini-3.1-flash-image',
+        models: ['gemini-3-pro-image', 'gemini-3.1-flash-image', 'gemini-3.1-flash-lite-image', 'veo-3.1-generate-preview', 'veo-3.1-fast-generate-preview', 'veo-3.1-lite-generate-preview'],
         featured: true,
     },
     {
