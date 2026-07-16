@@ -12,7 +12,7 @@ import { formatCost, type KeyUsageSummary } from '../utils/usageMonitor';
 import { fetchModelsForProvider, type FetchedModel } from '../services/modelFetcher';
 import { normalizeProviderBaseUrl } from '../services/baseUrl';
 import { modelRefLabel, modelRefSearchText } from '../utils/modelRefs';
-import { getProductModel, getProductModels, suggestProductModelMappings } from '../services/productModelCatalog';
+import { getProductModel, getProductModels, mergeSuggestedMappings, suggestProductModelMappings, PRODUCT_MODEL_CATALOG } from '../services/productModelCatalog';
 
 interface CanvasSettingsProps {
     isOpen: boolean;
@@ -296,6 +296,42 @@ export const CanvasSettings: React.FC<CanvasSettingsProps> = ({
 
     const updateModelPreference = (patch: Partial<ModelPreference>) => {
         setModelPreference({ ...modelPreference, ...patch });
+    };
+
+    const keyUpstreamOptions = (key: UserApiKey): string[] => Array.from(new Set([
+        key.defaultModel,
+        ...(key.models || []).map(m => m.id),
+        ...(key.customModels || []),
+    ].filter((v): v is string => Boolean(v?.trim()))));
+
+    const updateKeyMappings = (keyId: string, next: ProductModelMapping[]) => {
+        onUpdateApiKey(keyId, { modelMappings: next });
+    };
+
+    const patchMapping = (key: UserApiKey, index: number, patch: Partial<ProductModelMapping>) => {
+        const merged = mergeSuggestedMappings(key);
+        updateKeyMappings(key.id, merged.map((m, i) => i === index ? { ...m, ...patch, confirmed: true } : m));
+    };
+
+    const removeMapping = (key: UserApiKey, index: number) => {
+        const merged = mergeSuggestedMappings(key);
+        updateKeyMappings(key.id, merged.filter((_, i) => i !== index));
+    };
+
+    const addMapping = (key: UserApiKey, productModelId: string) => {
+        if (!productModelId) return;
+        const merged = mergeSuggestedMappings(key);
+        if (merged.some(m => m.productModelId === productModelId)) return;
+        updateKeyMappings(key.id, [...merged, { productModelId, upstreamModelId: '', priority: 0, enabled: false, confirmed: true }]);
+    };
+
+    const mappingCandidatesForKey = (key: UserApiKey) => {
+        const caps = key.capabilities?.length ? key.capabilities : inferCapabilitiesByProvider(key.provider);
+        const pool = PRODUCT_MODEL_CATALOG.filter(m =>
+            (caps.includes('image') && m.capability === 'image') || (caps.includes('video') && m.capability === 'video')
+        );
+        const existing = new Set(mergeSuggestedMappings(key).map(m => m.productModelId));
+        return pool.filter(m => !existing.has(m.id));
     };
 
     const modelPreferenceStatusText = modelPreferenceSaveError
@@ -1082,6 +1118,94 @@ export const CanvasSettings: React.FC<CanvasSettingsProps> = ({
                                 </select>
                             </label>
                         </div>
+                        <div className={`rounded-2xl border p-3 text-xs ${isDark ? 'border-[#2A3140] text-[#667085]' : 'border-[#E4E7EC] text-[#98A2B3]'}`}>
+                            下方按每条 API Key 管理产品模型 → 上游模型的路由映射。启用并确认后，画布选中该产品时会按优先级路由到对应 Key。
+                        </div>
+                        {userApiKeys.length === 0 ? (
+                            <div className={`rounded-2xl p-4 text-center text-xs ${isDark ? 'bg-[#161A22] text-[#667085]' : 'bg-[#F8FAFC] text-[#98A2B3]'}`}>
+                                还没有 API Key，请到「API」标签页添加。
+                            </div>
+                        ) : userApiKeys.map(key => {
+                            const mappings = mergeSuggestedMappings(key);
+                            const candidates = mappingCandidatesForKey(key);
+                            const upstreamOptions = keyUpstreamOptions(key);
+                            const keyCaps = key.capabilities?.length ? key.capabilities : inferCapabilitiesByProvider(key.provider);
+                            return (
+                                <div key={key.id} className={`rounded-2xl p-3 ${isDark ? 'bg-[#161A22]' : 'bg-[#F8FAFC]'}`}>
+                                    <div className="mb-2 flex items-center justify-between gap-2">
+                                        <div className="flex items-center gap-2">
+                                            <span className={`text-sm font-medium ${isDark ? 'text-[#D0D5DD]' : 'text-[#344054]'}`}>{key.name || key.provider}</span>
+                                            <span className={`rounded px-1.5 py-0.5 text-[10px] ${isDark ? 'bg-[#222A36] text-[#667085]' : 'bg-[#E4E7EC] text-[#98A2B3]'}`}>{PROVIDER_LABELS[key.provider]}</span>
+                                            {key.status === 'error' && <span className="text-[10px] text-[#F04438]">异常</span>}
+                                        </div>
+                                        <span className="text-[10px] text-[var(--isl-ink-ghost)]">{mappings.length} 条映射</span>
+                                    </div>
+                                    {mappings.length === 0 ? (
+                                        <div className={`text-xs ${isDark ? 'text-[#667085]' : 'text-[#98A2B3]'}`}>
+                                            该 Key（{keyCaps.join('/')}）暂无可映射的产品模型。
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-1.5">
+                                            {mappings.map((m, i) => {
+                                                const product = getProductModel(m.productModelId);
+                                                const routeReady = m.enabled && m.confirmed && Boolean(m.upstreamModelId?.trim());
+                                                return (
+                                                    <div key={`${m.productModelId}-${i}`} className="flex items-center gap-2">
+                                                        <span className="min-w-[110px] flex-1 truncate text-xs font-medium" title={m.productModelId} style={{ color: 'var(--isl-ink)' }}>
+                                                            {product?.shortName || product?.name || m.productModelId}
+                                                        </span>
+                                                        <input
+                                                            list={`upstream-${key.id}-${i}`}
+                                                            value={m.upstreamModelId}
+                                                            onChange={e => patchMapping(key, i, { upstreamModelId: e.target.value })}
+                                                            placeholder="上游模型 id"
+                                                            className={`min-w-0 flex-1 ${inputClass} flv-safe-input text-xs`}
+                                                        />
+                                                        <datalist id={`upstream-${key.id}-${i}`}>
+                                                            {upstreamOptions.map(id => <option key={id} value={id} />)}
+                                                        </datalist>
+                                                        <input
+                                                            type="number"
+                                                            value={m.priority}
+                                                            onChange={e => patchMapping(key, i, { priority: Number(e.target.value) || 0 })}
+                                                            className={`w-14 px-2 py-2 text-xs ${inputClass} flv-safe-input`}
+                                                            aria-label="优先级"
+                                                        />
+                                                        <button
+                                                            onClick={() => patchMapping(key, i, { enabled: !m.enabled })}
+                                                            className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                                                                m.enabled
+                                                                    ? isDark ? 'bg-[#123524] text-[#75E0A7]' : 'bg-[#ECFDF3] text-[#027A48]'
+                                                                    : isDark ? 'bg-[#222A36] text-[#667085]' : 'bg-[#F2F4F7] text-[#98A2B3]'
+                                                            }`}
+                                                            title={routeReady ? '已启用且确认，路由生效' : m.enabled ? '已启用但未确认上游模型' : '已停用'}
+                                                        >
+                                                            {routeReady ? '生效' : m.enabled ? '启用' : '停用'}
+                                                        </button>
+                                                        <button
+                                                            onClick={() => removeMapping(key, i)}
+                                                            className="shrink-0 px-1.5 text-xs text-[var(--isl-ink-ghost)] hover:text-[#F04438]"
+                                                            aria-label="删除映射"
+                                                        >✕</button>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                    {candidates.length > 0 && (
+                                        <select
+                                            value=""
+                                            onChange={e => { addMapping(key, e.target.value); }}
+                                            className={`mt-2 ${inputClass} flv-safe-input text-xs`}
+                                            aria-label="添加映射"
+                                        >
+                                            <option value="">+ 添加映射…</option>
+                                            {candidates.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                                        </select>
+                                    )}
+                                </div>
+                            );
+                        })}
                     </section>
                 )}
 
