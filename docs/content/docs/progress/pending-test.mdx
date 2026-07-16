@@ -25,6 +25,11 @@ title: 待测试确认
 - 双击空白处可新建节点；从节点连线拖到空白处可选择节点类型并一次完成创建、连接和选中。
 - 图片、视频和音频可直接拖入画布、从工具栏导入、粘贴或替换；拖入支持浏览器空 MIME 文件的扩展名识别，媒体使用本地持久化并在缺失时显示可恢复状态。
 - 点击图片内容或视频播放控件会先选中节点并显示 Flovart 自己的 PromptBar 和 ElementToolbar；PromptBar 支持 `@` 引用、模型、批量、状态、停止和重试。
+- Workflow 图片/视频 PromptBar 改为 880px 自适应宽度与单行底栏：固定产品模型采用“能力筛选 + 左侧模型家族 + 右侧具体版本”的两级渐进式选择，未完成 BYOK 映射的模型会引导到设置；参数按当前产品模型 capability 渐进披露（图片画质/尺寸/比例，视频模式/清晰度/比例/时长/音频）。
+- 模型、参数、高级和更多面板改为挂载到 `document.body` 的浮层：持续监听 PromptBar 位置、画布滚动、窗口缩放和面板尺寸，自动选择向上或向下展开并限制在视口内滚动；入场使用 Framer Motion spring。待用户重点验证靠近窗口顶部/底部的图片与视频节点、深浅主题和窄窗口。
+- PromptBar 参考行使用三态展示：0 张只显示左侧 `+`，1 张显示单缩略图和删除按钮，2 张以上叠放并在参考行悬停时展开；`+` 打开与资产管理共用数据的大型选择弹窗，可选择已存在的画布图片/视频、个人资产或本地图片。本地图片与个人资产会先创建为真实画布节点，再自动连线到当前节点。
+- Workflow 会从 PromptBar 正文解析 `@图片1`、`@图片2` 等已连接节点标题并保持文本顺序；生成前再次在 Provider 边界解析，只有“已连线且被 `@`”的媒体会作为参考输入。GPT Image multipart 请求会按官方上限发送最多 16 张参考图。
+- 左侧资产页改为紧凑的“个人 / Agent”布局，个人资产复用 PromptBar `@` 与参考弹窗的同一份本地 `assetLibrary` 数据，支持搜索、标签筛选、文件夹和素材操作；Agent 数据源尚未接入时显示明确空状态。
 - Workflow 可导入/导出包含本地媒体的严格 JSON，导入会重建媒体存储；删除项目需要二次确认。
 - 共享素材支持搜索、图片/视频筛选和预览，并提供内置 Prompt Library。
 - Workflow 右侧面板默认展开并记住开关和宽度，复用 Canvas 的紧凑面板外壳；嵌入式 Agent 的模式栏和导航栏改为透明背景无边框，与抽屉 Tab 栏视觉统一，不再出现双层 header 叠摞。
@@ -60,12 +65,20 @@ title: 待测试确认
 
 ## Workflow 批量结果堆叠与导出
 
-- 批量生成（count > 1）的结果节点自动分配同一 `batchId` 和 `batchIndex`；折叠态下同批次节点全部隐藏，显示堆叠卡片（两层背景偏移 + 头图预览 + 数量徽章），点击展开/折叠。
-- 堆叠卡片使用 Framer Motion spring 入场/退场，`whileHover` 轻微放大；展开时各节点通过 `AnimatePresence` spring 入场。
+- 批量生成（count > 1）的结果节点自动分配同一 `batchId` 和 `batchIndex`；折叠态下同批次节点全部隐藏，显示堆叠卡片（两层背景偏移 + 主图预览 + 明确的 `4张 / 16张` 展开按钮）。只有点击数量按钮才展开，悬停和拖动卡片本体不会触发展开。
+- 4 张及以内展开为独立结果节点，每张都可显式“设为主图”；超过 4 张展开为主预览 + 底部缩略图选择器，可切换当前预览并将其设为主图。节点标题默认透明，只有悬停或编辑时显示半透明玻璃底。
+- 堆叠卡片使用 Framer Motion spring 入场/退场和轻量 hover 反馈；展开时各节点或结果画廊通过 `AnimatePresence` spring 入场。
 - 折叠态下连向隐藏节点的连线同步隐藏；展开后恢复。
 - 批量导出 ZIP 文件名格式改为 `项目名_节点标题_序号.ext`（通过 `exportMediaArchive` 新增 `projectName` 参数）；未传 `projectName` 时回退原 `序号_名称.ext` 格式，向后兼容。
 
 ## Provider 与模型偏好
+
+- Workflow 图片/视频生成现在严格以平台产品模型为入口：节点中已存在的官方上游模型别名会先归一化为 `flovart:*` 产品 ID，再解析已启用且已确认的 BYOK 映射；未知裸上游模型会在提交前被拒绝，不能绕过固定产品目录。
+- 产品模型路由会同时校验 Key 的能力范围和当前模型清单；已失效、未确认、能力不匹配或上游模型已从 Key 清单移除的映射不会参与路由。相同优先级下优先默认 Key，再按 Key ID 保持稳定选择。
+- Workflow PromptBar 在所选产品模型没有可用映射时禁用生成（包括按钮和键盘提交）；AI 网关增加最终防线，任何未解析的 `flovart:*` 产品 ID 都不会被发送给供应商。
+- Google BYOK 运行时改为分别保存文本、图片、视频 Base URL，并在 Workflow 图片/视频调用时显式传递当前映射 Key 的 Base URL 与上游模型，避免不同能力使用不同代理时串线。
+- 浏览器扩展同步 API Key 时会合并同一 Key 的固定模型映射、价格规则和预算策略，不再因为 Key 已存在而丢弃新增路由字段；模型偏好加载时会把已知官方别名归一为产品 ID，未知图片/视频偏好回到平台默认产品模型。
+- 待用户验证：① 在设置页为 `GPT Image 2` 或视频产品模型确认一条映射后，从 Workflow 节点生成，供应商实际收到映射后的上游 ID；② 关闭/取消确认映射后，PromptBar 显示未就绪且生成按钮不可点击；③ 同一产品配置两条同优先级映射时默认 Key 稳定胜出；④ Google 图片与视频分别配置不同代理 Base URL 时，两类请求各走自己的地址；⑤ 在旧 Workflow 项目中写入未知裸媒体模型时显示“仅支持平台预设产品模型”，且没有供应商请求。
 
 - RunningHub 已作为原生标准模型 Provider 接入设置页、模型拉取、图片生成和视频生成网关；模型列表内置当前项目使用的官方标准模型端点（全能图片、Seedance 2.0、V3.1 视频等），page-api 拉取的模型作为补充，仍可手动补充模型 ID。
 - RunningHub API Key 验证会使用标准模型任务查询端点确认鉴权，并在保存或后台刷新时写入可选模型；模型生成返回的 `results[].url` 会转换成现有图片/视频结果格式。
@@ -1159,46 +1172,24 @@ Batch 逻辑已从独立 `handleBatchGenerate` 合并进 `handleGenerate`。Prom
 - **停止生成功能失效修复**（`services/workflowGeneration.ts:268`）：`executeUnifiedIgnition` 的 catch 块把 abort 错误吞成 `{ ok: false, errorMessage: '生成已停止，可重新发起。' }`，`workflowGeneration.ts:268` 随后 `throw new Error(result.errorMessage)` 抛出的是普通 `Error` 而非 `AbortError`；catch 块 `isAbort(error)` 判否，节点被设成 `status:'error'` 覆盖 `cancelWorkflowGeneration` 已发布的 `status:'idle'`。修复：在 `raceAbort` 返回后、检查 `result.ok` 之前加 `if (controller.signal.aborted) throw abortError()`，确保 abort 路径走 `isAbort → idle` 分支。
 - **进度 UI CSS 补全**（`styles/workflow.css:124-127`）：新增 `.workflow-node__generation-meta`（右上角 flex 列）、`.workflow-node__generation-message`（半透明黑底毛玻璃胶囊，max 140px 截断）、`.workflow-node__generation-elapsed`（tabular-nums 计时）、`.workflow-node__generation-stale`（底部居中过期提示）。
 
-## Art 工作台
+## Canvas / Art 代码删除 + Table 改名
 
-### 框架（第一批）
-
-- **`WorkspaceView` 改为 2 值**：`'workflow' | 'art'`（`types/index.ts:262`，原 `'canvas'` 删除）；`useWorkspaceStore` 默认 `activeView` 改为 `'workflow'`；`StudioTopMenu` 2 tab 导航（Workflow/Art），不再暴露 Canvas 作为独立工作区；`StudioMenuModel.mode` + `changeMode` 改为 `'workflow' | 'art'`；`studioShell.test.tsx` `mode` 类型同步；`workspaceSwitch.test.tsx` 改为 workflow/art；logo 菜单「回到主页」改为切到 Art 而非 Canvas。Canvas 代码（KonvaCanvas + useGeneration + idb:* 协议 + 画笔/lasso/图层）保留作为 Art 底座，App.tsx 默认 render 分支即 Art 视图。
-- **ArtToolPack 工具背包**：`components/art/ArtToolPack.tsx` + `artTools.ts`，8 工具按 风格化/特征提取/抠图 3 类分组（滤镜/故障/深度图/边缘/线稿/法线/姿态/抠图）。卡片 `draggable` + `dataTransfer 'application/x-art-tool'` 或点击直接打开，沿用 `isl-panel/isl-mint/theme-aware` 视觉。
-- **ArtRippleOverlay 涟漪动画**：`components/art/ArtRippleOverlay.tsx`，Framer Motion 三圈弹性扩散 + 中心工具图标回弹，drop 点触发 0.9s。
-- **ArtEditDialog 全屏编辑框架**：`components/art/ArtEditDialog.tsx`，Ant Design Modal 框架（参考 `WorkflowImageToolDialogs`），图片/视频预览 + 占位确认按钮，`onConfirm(resultHref)` 原地替换画布元素。
-- **App.tsx Art 状态接线**：`artEdit`/`artBusy`/`artError`/`artRipple` state（`App.tsx:520-533`）；`handleDrop` 检测 `application/x-art-tool` MIME 触发 `triggerArtTool`；`triggerArtTool`/`openArtTool`/`handleArtEditConfirm`/`handleArtRippleComplete` 四个 callback（`App.tsx:2255-2310`）；`rightSidebar` 条件渲染 `ArtToolPack` vs `RightPanel`（`App.tsx:3871-3933`）；`overlays` 加 `ArtRippleOverlay` + `ArtEditDialog`（`App.tsx:3983-3997`）。Art 无独立 early return，复用 Canvas `leftSidebar` + `main` + `bottomDock`。
-- **Workflow → Art 入口**：`WorkflowNodeToolbar` 选中图片/视频节点时新增「进 Art 工作台」按钮（`Palette` 图标）→ `onOpenArt(nodeId)` → `InfiniteWorkflow` → `WorkflowWorkspace` → `App.tsx` `handleOpenArtFromWorkflow`：拉取节点 `storageKey`/`href` Blob 构造 File，`setActiveView('art')` 后双 `rAF` 调 `handleAddMediaElement`；失败走 `toast.show(..., 'error')`。修正既有 `openArtTool` 的 `toast.add` → `toast.show(..., 'warning')` bug。
-- **Art 独立导入入口**：复用 Canvas 顶栏 Toolbar 既有 `onUpload={handleAddMediaElement}`，Art 视图沿用 Canvas 主区，无需新增独立导入按钮。
+- **Canvas 专用文件全部删除**：`components/canvas/{KonvaCanvas,KonvaCanvasDemo,InpaintDialog,CanvasKonvaMediaLayer}.tsx`、`hooks/{useGeneration,useCanvasInteraction,useIdbImageResolution}.ts`、`utils/{boardPersistence,canvasViewport,canvasKonvaMediaEligibility}.ts`、相关测试文件。共 13 个文件。
+- **Art 工具代码全部删除**：`components/art/` 5 文件（artTools/useArtWorker/ArtToolPack/ArtRippleOverlay/ArtEditDialog）+ `workers/art-*` 6 文件（art-worker/art-protocol/art-processors/{edges,normals,depth,lineart}）。
+- **Canvas Toolbar 删除**：`components/Toolbar.tsx` + `tests/toolbarUpload.test.tsx` + `tests/canvasKonvaMediaLayer.test.tsx`，`tests/studioShell.test.tsx` 移除 Toolbar 相关 2 个测试，仅保留 menu model 测试。
+- **`utils/canvasHelpers.ts` 重命名为 `utils/helpers.ts`**：只保留 `generateId` 和 `type Rect`，更新所有 import 路径（App.tsx、agent-chat/Chat.tsx、ElementToolbar.tsx）。
+- **`WorkspaceView` 类型扩展**：`'workflow'` → `'workflow' | 'table'`（`types/index.ts`）；`StudioMenuModel.mode` + `changeMode` 改为 `StudioMode`（`'workflow' | 'table'`）；`StudioTopMenu` 中间区域新增 Workflow/Table 切换 tabs；`studioShell.test.tsx` / `workspaceSwitch.test.tsx` 同步更新。
+- **App.tsx 重写**：从 3766 行精简到 ~400 行。删除所有 Canvas/Art state/handlers/渲染分支，保留 Workflow early return + Table 占位 return（"Table 工作台筹备中"居中占位）。`handleEnhancePrompt`/`saveGenerationToHistory` 改为内联实现。移除未使用的 `dispatchWorkflowCommand` import 和重复的模块级 `handleWorkflowReversePrompt`。`studioMenuModel` 补全 `title`/`resolvedTheme`/`status` 字段。
 
 **测试要点**：
 
-- ① StudioTopMenu 2 tab 切换 Workflow/Art，不再暴露 Canvas 作为独立工作区，各自视图正确显示。
-- ② Art 视图右侧显示 ArtToolPack（8 工具卡片 3 类分组），非 Art 视图显示 RightPanel。
-- ③ 拖拽工具卡片到画布 → drop 点显示 ArtRippleOverlay 三圈弹性扩散 0.9s → 自动打开 ArtEditDialog。
-- ④ 未选中画布元素时点击工具卡片 → toast "请先在画布选中一张图片或视频"。
-- ⑤ 选中画布图片/视频后点击工具卡片 → 打开 ArtEditDialog。
-- ⑥ Workflow 选中图片/视频节点 → 节点工具栏出现「进 Art 工作台」按钮 → 点击自动切换到 Art 视图并将节点媒体载入画布并自动选中；未挂载媒体时 toast error。
-- ⑦ ArtEditDialog 确认后画布元素 href 被结果替换，localforage 持久化生效。
-
-### 工具实现（第二批）
-
-- **Web Worker 框架**：`workers/art-protocol.ts`（主线程/worker 双向消息协议 + `ArtRunHandle` + `ArtProgressCb`）+ `workers/art-worker.ts`（统一 worker 入口，按 `toolId` 分派到 processor，支持 cancel + progress 回调；像素工具走 OffscreenCanvas decode → processor → encode，模型工具走 transformers.js）+ `workers/art-processors/`（具体算法模块）+ `components/art/useArtWorker.ts`（主线程 hook，single worker 实例 + refcount 生命周期管理 + cancel）。Vite `new Worker(new URL(...), { type: 'module' })` 自动打包；`vite.config.ts` 已配置 `Cross-Origin-Opener-Policy: same-origin` + `Cross-Origin-Embedder-Policy: require-corp` 支持 SharedArrayBuffer/WebGPU。
-- **ArtEditDialog 处理流程接入**：从"占位确认"重写为端到端处理流程。dialog 进入即自动 `start()` 触发 worker 处理，显示 Spin + phase（decoding/processing/encoding/done/error）进度文案；处理完显示原图/结果 Segmented 切换对比，"替换画布内容"按钮调 `onConfirm(resultDataUrl)` 走 `handleArtEditConfirm` 流程回写画布（含 `toIdbRef` 落盘）；错误可"重试"。`components/workflow/media.ts` `loadFallbackMediaBlob` 改 export 供 hook 复用。
-- **边缘提取（`edges`）**：`workers/art-processors/edges.ts` 完整 Canny（灰度 → 高斯模糊 → Sobel → NMS → 双阈值 + hysteresis），纯 JS Float32Array，无外部依赖，输出黑白边缘图（可 `invert` 反相）。1536px 上限自动等比下采样。`edgesPipeline(src, w, h, { thresholdLow, thresholdHigh, blur, invert })`。
-- **深度图（`depth`）**：`workers/art-processors/depth.ts` transformers.js v4 `pipeline('depth-estimation', 'onnx-community/depth-anything-v2-small-ONNX')`（~100MB，首次从 HF Hub 下载，之后浏览器 IndexedDB 缓存），WebGPU 优先 `device:'webgpu'`、不支持时回落 `wasm`，`dtype:'fp32'`。dynamic `import('@huggingface/transformers')` 仅在 depth 工具调用时拉取，不影响像素工具 worker bundle。pipeline singleton 缓存。输出 8bit 灰度 RGBA。
-- **法线图（`normals`）**：`workers/art-processors/normals.ts` 从输入图（深度图或任意灰度源）中心差分 → 归一化 → 编码成 RGB tangent-space 法线图（RGB = (nx*0.5+0.5)*255）。`normalsFromDepth(src, w, h, { strength, invert })`。
-- **线稿（`lineart`）**：`workers/art-processors/lineart.ts` 当前路由到 Canny/edges 流水线，使用更细的预设（`thresholdLow: 0.12, thresholdHigh: 0.32, blur: 0.8`）产线稿近似。专用 anime line-art 模型（如 `rocca/informative-drawings-line-art-onnx` 走裸 onnxruntime-web，非 transformers.js 标准 pipeline）后续可替换此路由而不改 worker 边界。
-
-**测试要点**：
-
-- ① Art 视图选中图片 → 工具背包点击「边缘」→ ArtEditDialog 自动开始处理 → 完成 → 原图/结果切换可用 → "替换画布内容"后画布元素更新。
-- ② 深度图工具首次调用会下载 ~100MB 模型（可视网速等待），之后走浏览器缓存；WebGPU 环境优先，无 WebGPU 回落 WASM（较慢）。
-- ③ 法线工具输入深度图（先用深度图工具生成一张）→ 法线图 RGB 视觉正确（蓝紫主调，标准 tangent-space 编码）。
-- ④ 线稿工具产生细线条近似线稿（当前为 Canny 近似，非专用 anime 模型）；`invert:true` 默认黑底白线，`invert:false` 白底黑线。
-- ⑤ Worker 处理中点"取消"应中止当前任务，UI 回到 idle 状态。
-- ⑥ 大图（>1536px）自动等比下采样不超时。
-- ⑦ 错误状态下"重试"按钮可重新发起处理。
+- ① StudioTopMenu 顶部出现 Workflow / Table 两个 tab，点击切换各自视图正确显示。
+- ② Workflow 视图功能与删除前一致：节点流编排、Agent Chat、素材库、生成历史、导入导出等全部正常。
+- ③ Table 视图显示"Table 工作台筹备中 / React Flow 故事板 + Agent SKILL 即将上线"居中占位。
+- ④ 设置面板（CanvasSettings）在两个视图下均能正常打开使用。
+- ⑤ `npx tsc --noEmit` 无新增类型错误（仅预存 `workflowImageTools.test.tsx:81` 语法错误）。
+- ⑥ `tests/workspaceSwitch.test.tsx` 测试通过。
+- ⑦ 项目中不再存在对 `components/canvas/`、`components/art/`、`components/Toolbar`、`workers/art-*`、`canvasHelpers` 的引用。
 
 ## Workflow PromptBar 与 BYOK 模型路由
 
@@ -1325,13 +1316,55 @@ Batch 逻辑已从独立 `handleBatchGenerate` 合并进 `handleGenerate`。Prom
 - **双源共存原则**（沿用决策）：
   - `imageReferenceOrder` 决定 chip 顺序 + Provider 参考图排序 + 缩略图列表展示；
   - `mentionedNodeIds` 决定是否上送 Provider（连线只是面板 chip 候选，必须有 @ 或拖入面板且 included 才进入 imageReferenceOrder → Provider）。
-  - 当前 Phase 1 只做「连线 → 面板 chip → × 断连 → Provider 排序」闭环，未引入 @ 素材库新建节点+连线+结构化 Token（Phase 2）。
+  - 当前 Phase 1 只做「连线 → 面板 chip → × 断连 → Provider 排序」闭环；@ 素材库新建节点+连线+结构化 Token 已在 Phase 2 实现（见下方 Phase 2 节）。
 - **待用户验证**：
   - ① 选中一个图片/视频/文本节点，连接上游 image/video/audio 节点，PromptBar 上方出现 chip 面板，按连线顺序展示缩略图 + 自动编号。
   - ② 在面板上拖拽 chip 调整顺序，松手后顺序持久化，再次聚焦节点顺序保持。
   - ③ 点击 chip 的 × 按钮，对应连线断开、节点从面板消失，`imageReferenceOrder` 与 `mentionedNodeIds` 同步剔除该 id。
   - ④ 断开连线再重连，chip 在尾部重新出现；删除上游节点后 order 自动剔除该 id 而不报错。
-  - ⑤ 触发一次生成（即便未实现 Phase 2 @ 注入，原有连线+原有 @ 注入链路应不受影响），Provider 收到的参考图按 `imageReferenceOrder` 顺序排序。
+  - ⑤ 触发一次生成（Phase 2 @ 注入已实现，原有连线+原有 @ 注入链路应不受影响），Provider 收到的参考图按 `imageReferenceOrder` 顺序排序。
   - ⑥ chip `mentioned` 状态（连线 vs 已 @ 上送）在视觉上有可区分的边框/底色。
 
+## PromptBar @ 素材库注入选站节点（Phase 2）
 
+- **目标**：在 PromptBar `@` 菜单中加入「个人素材库」分区，命中素材后在当前生成节点上方自动新建 image 节点实例 + 连线 Edge + `imageReferenceOrder` 项 + 插入绑定 newNodeId 的 Mention Token。
+- **数据源**：① 当前生成节点已连接上游节点（沿用 Phase 1 connected items）② `loadAssetLibraryAsync()` 返回的个人 AssetLibrary items；不纳入跨项目节点 / generationHistory / 游离媒体。
+- **作用域分区**：本轮只做「个人」作用域；Skill 显示灰色 disabled 占位 + tooltip「即将支持 Anthropic Claude Skills 作为参考资源」，不可点击，不实现数据接入。
+- **两级浏览结构**：第一层列出 `folders[parentId=null]`，第二层进入文件夹显示其 items；搜索时跨文件夹返回最多 50 条匹配；"个人素材库" 是 MentionList 上的虚拟根标题，不是 AssetFolder。
+- **基础设施层**：
+  - `utils/assetStorage.ts`：加 `cachedLibrary` 模块级缓存 + `setAssetLibraryCache(lib)` + `getAssetLibraryCache()` + `getAssetById(assetId): Promise<AssetItem|undefined>`（命中缓存同步返回，否则全量加载）。
+  - `App.tsx`：assetLibrary useEffect 中 `saveAssetLibraryAsync` 后调 `setAssetLibraryCache(assetLibrary)` 同步缓存。
+  - `components/workflow/types.ts`：`WorkflowNodeMetadata` 加 `sourceType?: 'assetLibrary'` + `assetId?: string`。
+  - `components/workflow/media.ts`：`loadFallbackMediaBlob` 加 `asset-library:` 分支调 `getAssetById` → `workflowDataUrlToBlob(asset.dataUrl)`。
+  - `components/CanvasMentionExtension.tsx`：`MentionNodeViewProps` + `addAttributes` + `MentionData` 三处加 `sourceType?` + `assetId?` 可选字段。
+- **Mention UI 层**：
+  - `components/MentionList.tsx` 完整重写：新增 `AssetSuggestion` 轻量接口（id/name/folderIds/tags/thumbnail/elementType，不含原图 dataUrl）；`MentionItem` 扩展 `kind?: 'item'|'folder'|'back'|'skillDisabled'` + `folderId?`；三区分区渲染（已连接 / 个人素材库 / Skill disabled）；内部 `activeFolderId` state 管理文件夹导航；query 非空时跨文件夹搜索 max 50；键盘 ArrowUp/Down 跨分区跳过不可点击项；文件夹点击触发内部导航不调 command；Skill 项 disabled + tooltip。
+  - `components/RichPromptEditor.tsx`：`buildSuggestionExtension` 签名扩展为 `(getItems, assetFoldersRef, assetItemsRef, onSelectAssetRef, skillEnabled)`；tippy `placement: 'top-start'` + `flip.behavior: ['bottom-start','top-start']` + `padding: 8`（自动判断方向，默认朝上，空间不够翻转朝下）；`command({editor,range,props})` 检测 `item.sourceType==='assetLibrary'` → 调 `onSelectAssetRef.current(assetId)` 同步拿 newNodeId → 用 newNodeId 插入 Mention；`RichPromptEditorProps` 加 `assetFolders?` / `assetItems?` / `onSelectAsset?` / `skillEnabled?`。
+- **Props 透传链**：`PromptBar.tsx` → `WorkflowNodePromptBar.tsx` → `InfiniteWorkflow.tsx`（`assetLibrary?` prop + `handleSelectAsset(assetId, fromNodeId)` 回调 + `assetFolders`/`assetSuggestions` useMemo）→ `WorkflowWorkspace.tsx`（传 `assetLibrary` 给 InfiniteWorkflow）。
+- **节点落位（D 方案）**：新建节点置于发起生成节点上方，`newNodeY = targetNodeY - 240 - 120`，`newNodeX = targetNodeX + (targetWidth - 340) / 2`（居中对齐，image node width=340），基础碰撞避让；不自动 fitView。
+- **原子写入**：通过 `applyOps([{type:'add_node'}, {type:'connect_nodes'}, {type:'update_node'(imageReferenceOrder)}])` 一次性 apply，保证 undo/redo 原子性；`applyWorkflowOps` 同步返回，`onSelectAsset` 同步返回 newNodeId 供 Tiptap command 立即插入 Mention。
+- **storageKey 命名空间**：节点 metadata 只存 `assetId` + `sourceType:'assetLibrary'` + `href='asset-library:<assetId>'`，不复制 base64/dataUrl，不设 storageKey（避免 workflowMediaStorage 查找截胡）；resolver 优先复用现有 `media.ts` 路径。
+- **去重范围**：仅在当前目标生成节点的已连接上游按 assetId 复用（命中同一 assetId 只插 Token，不新建节点）；项目其他分支存在同一 assetId 允许新建节点实例（实例共享同一 assetId），不跨画布复用。
+- **删除语义**：`sourceType` / `assetId` 只用于来源追踪、展示、素材匹配；Backspace 删 Token 只删正文 @ 文字，不删节点+连线+imageReferenceOrder；chip × 才断连。
+- **待用户验证**：
+  - ① 选中一个生成节点，在 PromptBar 输入框打 `@`，弹层默认朝上展开（空间不够自动翻转到朝下），三区分区可见：已连接上游节点 / 个人素材库（文件夹+items）/ Skill（灰色 disabled + tooltip）。
+  - ② 点「个人素材库」分区下的文件夹，进入第二层显示该文件夹 items；点「返回」回到文件夹列表；文件夹点击不触发 command、不关闭弹层。
+  - ③ 在搜索框输入关键词，跨文件夹返回最多 50 条匹配 items，不分文件夹平铺展示。
+  - ④ 选中一个素材 item：弹层关闭，正文插入 `@[素材名]` Mention Token；画布上当前生成节点上方自动出现一个新的 image 节点（按 D 方案落位），新节点与生成节点之间生成连线；chip 面板（Phase 1）出现该新节点 chip。
+  - ⑤ 再次 `@` 选中同一个素材（当前生成节点上游已存在同 assetId 节点）：只插入 Mention Token，不新建节点、不新增连线、chip 不重复。
+  - ⑥ 新建节点应能正确渲染素材图片（通过 `asset-library:<assetId>` → `getAssetById` → `workflowDataUrlToBlob` 路径），暗色主题下同样正常。
+  - ⑦ Backspace 删除 Mention Token：只删正文 @ 文字，节点、连线、chip 不受影响；chip × 删除才断连。
+  - ⑧ 触发一次生成：Provider 收到的参考图包含该新建节点（连线即上送），`imageReferenceOrder` 顺序正确。
+  - ⑨ 撤销（Ctrl+Z）：节点+连线+imageReferenceOrder+Mention Token 一并回退（原子性）；重做（Ctrl+Y）一并恢复。
+  - ⑩ Skill 分区项灰色不可点击，hover 显示 tooltip「即将支持 Anthropic Claude Skills 作为参考资源」。
+
+## 视频参数灰显 + 视频首/尾帧导出 + xAI Grok Imagine Video（本轮新增）
+
+- **视频 PromptBar 三面板灰显**：`PromptBar.tsx` 视频模式 chip 面板改为按 `VIDEO_MODE_ORDER` 全量渲染，对当前产品模型不支持的模式直接 `disabled + opacity-35 + cursor-not-allowed`，hover 显示 `explainUnsupportedVideoMode()` 返回的原因 tooltip；分辨率 / 比例 / 时长三个参数面板同步走新增的 `paramDisabledReason(kind, value)` callback，该 callback 基于 `sanitizeProductGenerationParams` 做 probe 校验，不可用的值统一灰显并带 tooltip。chip 入口触发条件由 `activeProductModel` 硬依赖改为 `generationMode === 'video' && VIDEO_MODE_ORDER.length > 1`，避免未选模型时整个面板崩塌。
+- **视频节点首/尾帧导出**：`components/workflow/WorkflowNodeToolbar.tsx` 在 AV 拆分后追加两个按钮（`ArrowUpToLine` 首帧、`ArrowDownToLine` 尾帧），`WorkflowVideoToolHandlers` 接口新增 `extractFrame?: (id, position) => void`。点击后由 `InfiniteWorkflow.tsx` `handleExtractFrame` 处理：经新增 `services/videoFrameExtractor.ts`（`extractVideoFrame(blob, 'first' | 'last')`：`<video>` 加载 → seek 到 0 或 `videoDuration - 0.1` → `canvas.drawImage` → `toBlob('image/png')`，含 `seekTo` 与 error 兜底）抽帧，再 `ingestWorkflowMedia` 落地，按 `fitWorkflowMediaSize('image', w, h)` 计算尺寸，在原视频节点左侧（首帧）或右侧（尾帧）生成图片节点并建立 video→image 连线。处理回调改用 `pushHistory + patchProject` 直接写 `nodes/connections`，不再经 `applyOps`（早先 `useCallback` 在 `applyOps` 声明前闭包引用造成 TDZ `ReferenceError: Cannot access 'applyOps' before initialization`）。
+- **xAI Grok Imagine Video Provider 适配**：`services/productModelCatalog.ts` 新增两条目录——`flovart:grok-imagine-video`（officialModelIds `['grok-imagine-video']`）与 `flovart:grok-imagine-video-1.5`（officialModelIds `['grok-imagine-video-1.5']`），provider `'xai'`，modes `['text-to-video', 'image-to-video', 'video-extension']`，7 个 aspectRatio，durations `[1,3,5,8,10,15]`，resolutions `['720p','1080p']`；`getRoutedVideoModes` 新增 `provider === 'xai'` 分支返回全三模。`services/aiGateway.ts` 新增 xai 分支：`POST /v1/videos/generations`（文生 / 图生，body 含 `prompt / duration / aspect_ratio / resolution / image.url`）与 `POST /v1/videos/extensions`（扩展，body 含 `prompt / video.url / duration`）返回 `{ request_id }`，`GET /v1/videos/{request_id}` 轮询直到 `status: 'done' | 'failed'` 后下载 `output.url`；Bearer 鉴权，默认 Base URL `https://api.x.ai/v1`。`types/index.ts` `AIProvider` union 新增 `'xai'`；`aiGateway` 的 `PROVIDER_LABELS / PROVIDER_VIDEO_RATIOS / DEFAULT_BASE_URLS / DEFAULT_PROVIDER_MODELS / inferProviderFromKey / inferProviderFromModel` 同步扩展。
+- typecheck 通过（仅 `tests/workflowImageTools.test.tsx(81,94)` 是 HEAD 已预存的语法错误，与本次无关）。
+- 待用户验证：
+  - ① 选中一个视频节点，切到不同产品模型（如切到 Seedance 1.0 fast 不支持首尾帧的模式），观察模式 chip、时长、比例、分辨率哪些变灰显且 hover 出 tooltip。
+  - ② 视频节点工具栏右侧出现首/尾帧两个按钮，点击后在视频节点左侧 / 右侧分别生成图片节点并自动连线。
+  - ③ 设置页填入 xAI API Key，在视频节点选 `grok-imagine-video` 或 `grok-imagine-video-1.5`，分别测文生视频 / 图生视频 / 视频扩展三种模式，确认 polling 拿到 `request_id` 后能下载到 mp4 并落地到画布。
