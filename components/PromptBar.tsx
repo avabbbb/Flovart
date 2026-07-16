@@ -139,7 +139,7 @@ export interface PromptBarProps {
     skillEnabled?: boolean;
 }
 
-type ExpandPanel = 'model' | 'submode' | 'parameters' | 'advanced' | 'more' | 'batch' | null;
+type ExpandPanel = 'model' | 'submode' | 'parameters' | 'more' | 'batch' | null;
 
 const TYPE_LABELS: Record<Element['type'], string> = {
     image: '图片',
@@ -216,13 +216,6 @@ function getModelLabel(mode: GenerationMode, textModel?: string, imageModel?: st
     const shortProvider = PROVIDER_LABELS[provider]?.split(' ')[0] || provider;
     return `${shortProvider} · ${modelRefModelId(model).replace(/^(google|openai|anthropic|openrouter)\//, '')}`;
 }
-
-const PopoverHeader: React.FC<{ title: string; subtitle?: string }> = ({ title, subtitle }) => (
-    <div className="px-1 pb-3">
-        <div className="text-[15px] font-extrabold" style={{ color: 'var(--isl-ink)' }}>{title}</div>
-        {subtitle && <div className="mt-1 text-[11px] leading-4" style={{ color: 'var(--isl-ink-soft)' }}>{subtitle}</div>}
-    </div>
-);
 
 const MenuOptionButton: React.FC<{ label: string; active?: boolean; description?: string; onClick: () => void }> = ({ label, active = false, description, onClick }) => (
     <button
@@ -466,9 +459,9 @@ export const PromptBar: React.FC<PromptBarProps> = ({
     const [isTranslating, setIsTranslating] = useState(false);
     const [preTranslatePrompt, setPreTranslatePrompt] = useState<string | null>(null);
 
-    const triggerClass = `isl-chip ${compactMode ? 'h-7 px-2.5 text-[11px]' : 'h-8 px-3 text-xs'}`;
-    const activeTriggerClass = 'isl-chip--active';
-    const popoverWidth = expandedPanel === 'model' ? 660 : expandedPanel === 'submode' ? 360 : expandedPanel === 'parameters' ? 430 : expandedPanel === 'more' ? 440 : expandedPanel === 'batch' ? 300 : 400;
+    const triggerClass = `inline-flex items-center gap-1 rounded-md px-2 font-bold transition-colors hover:bg-[var(--isl-surface-2)] ${compactMode ? 'h-7 text-[11px]' : 'h-8 text-xs'}`;
+    const activeTriggerClass = 'text-[var(--isl-mint-deep)]';
+    const popoverWidth = expandedPanel === 'model' ? 660 : expandedPanel === 'submode' ? 360 : expandedPanel === 'parameters' ? 430 : expandedPanel === 'more' ? 480 : expandedPanel === 'batch' ? 300 : 400;
     const shellClass = 'isl-shell';
 
     /** 将画布元素转换为 RichPromptEditor 需要的 MentionItem[] */
@@ -995,7 +988,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                     <AdaptivePromptPopover anchorRef={rootRef} preferredSide={popoverDirection} width={popoverWidth}>
                         <div
                             data-panel={expandedPanel}
-                            className="isl-pop overflow-hidden rounded-[24px] border border-[var(--isl-border)] bg-[var(--isl-card)]/95 shadow-2xl backdrop-blur-xl"
+                            className="isl-pop"
                         >
                             <div className={compactMode ? 'p-2.5' : 'p-4'} onWheel={event => event.stopPropagation()}>
                             {expandedPanel === 'model' && (
@@ -1066,7 +1059,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                             )}
                             {expandedPanel === 'submode' && generationMode === 'video' && (
                                 <div data-testid="prompt-video-mode-panel" data-density="compact">
-                                    <PopoverHeader title="生成方式" subtitle={activeProductModel ? `${activeProductModel.name} 支持的输入方式` : '请先选择视频模型'} />
+                                    <div className="mb-2 px-1 text-xs font-extrabold" style={{ color: 'var(--isl-ink)' }}>生成方式</div>
                                     <div className="grid grid-cols-2 gap-1.5 px-0.5 pb-0.5">
                                         {VIDEO_MODE_ORDER.map(mode => {
                                             const supported = !!activeProductModel && routedVideoModes.includes(mode);
@@ -1100,7 +1093,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                             )}
                             {expandedPanel === 'parameters' && activeProductModel && activeCapabilities && (
                                 <>
-                                    <PopoverHeader title="生成参数" subtitle={`${activeProductModel.name} 仅显示官方支持的选项`} />
+                                    <div className="mb-2 px-1 text-xs font-extrabold" style={{ color: 'var(--isl-ink)' }}>生成参数</div>
                                     <div data-testid="prompt-parameter-panel" data-density="compact" className="space-y-2 px-0.5 pb-0.5">
                                         {activeCapabilities.qualities.length > 0 && (
                                             <div>
@@ -1192,25 +1185,20 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                     </div>
                                 </>
                             )}
-                            {expandedPanel === 'advanced' && activeProductModel && activeCapabilities && (
-                                <>
-                                    <PopoverHeader title="高级选项" subtitle="不受支持的能力已隐藏" />
-                                    <div className="space-y-2 px-1 pb-1">
-                                        {activeCapabilities.supportsWebSearch && (
-                                            <button type="button" onClick={() => onWebSearchToggle?.(!webSearchEnabled)} className={`flex w-full items-center justify-between rounded-[14px] px-3 py-2.5 text-left text-xs font-bold ${webSearchEnabled ? 'isl-chip--active' : 'isl-chip'}`}><span>联网搜索</span><span>{webSearchEnabled ? 'ON' : 'OFF'}</span></button>
-                                        )}
-                                        {activeCapabilities.supportsRealPersonCheck && (
-                                            <button type="button" onClick={() => onRealPersonCheckToggle?.(!realPersonCheckEnabled)} className={`flex w-full items-center justify-between rounded-[14px] px-3 py-2.5 text-left text-xs font-bold ${realPersonCheckEnabled ? 'isl-chip--active' : 'isl-chip'}`}><span>真人素材预检测</span><span>{realPersonCheckEnabled ? 'ON' : 'OFF'}</span></button>
-                                        )}
-                                        {!activeCapabilities.supportsWebSearch && !activeCapabilities.supportsRealPersonCheck && (
-                                            <div className="rounded-[14px] bg-[var(--isl-surface-2)] px-3 py-3 text-xs" style={{ color: 'var(--isl-ink-soft)' }}>当前模型没有额外的高级选项。</div>
-                                        )}
-                                    </div>
-                                </>
-                            )}
                             {expandedPanel === 'more' && (
                                 <>
-                                    <PopoverHeader title="更多操作" subtitle="参考图、角色锁定、效果存储" />
+                                    {activeProductModel && activeCapabilities && (activeCapabilities.supportsWebSearch || activeCapabilities.supportsRealPersonCheck) && (
+                                        <div className="mb-2 space-y-1 border-b border-[var(--isl-border)] pb-2">
+                                            <div className="px-1 pb-1 text-[10px] font-bold uppercase tracking-[0.14em]" style={{ color: 'var(--isl-ink-soft)' }}>高级选项</div>
+                                            {activeCapabilities.supportsWebSearch && (
+                                                <button type="button" onClick={() => onWebSearchToggle?.(!webSearchEnabled)} className={`flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-xs font-bold transition-colors hover:bg-[var(--isl-surface-2)] ${webSearchEnabled ? 'text-[var(--isl-mint-deep)]' : ''}`}><span>联网搜索</span><span>{webSearchEnabled ? 'ON' : 'OFF'}</span></button>
+                                            )}
+                                            {activeCapabilities.supportsRealPersonCheck && (
+                                                <button type="button" onClick={() => onRealPersonCheckToggle?.(!realPersonCheckEnabled)} className={`flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-xs font-bold transition-colors hover:bg-[var(--isl-surface-2)] ${realPersonCheckEnabled ? 'text-[var(--isl-mint-deep)]' : ''}`}><span>真人素材预检测</span><span>{realPersonCheckEnabled ? 'ON' : 'OFF'}</span></button>
+                                            )}
+                                        </div>
+                                    )}
+                                    <div className="px-1 pb-1 text-[10px] font-bold uppercase tracking-[0.14em]" style={{ color: 'var(--isl-ink-soft)' }}>更多操作</div>
                                     {isSeedanceVideoModel && !activeProductModel && (
                                         <div className="mx-1 mb-2 rounded-[18px] border-[1.5px] p-3" style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-surface-2)' }}>
                                             <div className="flex items-center justify-between gap-3">
@@ -1345,7 +1333,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                             )}
                             {expandedPanel === 'batch' && onBatchCountChange && (
                                 <div className="px-1">
-                                    <PopoverHeader title="批量方案数量" subtitle="一次生成多张方案" />
+                                    <div className="mb-2 text-xs font-extrabold" style={{ color: 'var(--isl-ink)' }}>批量方案数量</div>
                                     <div className="flex items-center gap-2">
                                         {[1, 2, 4].map(count => {
                                             const active = batchCount === count;
@@ -1381,8 +1369,8 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                         <button
                                             type="button"
                                             onClick={onOpenSettings}
-                                            className={`isl-chip shrink-0 border-dashed ${compactMode ? 'h-7 w-7 px-0 text-[11px]' : 'h-8 px-3 text-xs'}`}
-                                            style={{ borderColor: 'var(--isl-coral)', color: 'var(--isl-coral-deep)' }}
+                                            className={`${triggerClass} shrink-0 ${compactMode ? 'h-7 w-7 px-0 text-[11px]' : 'h-8 px-3 text-xs'}`}
+                                            style={{ color: 'var(--isl-coral-deep)' }}
                                             aria-label="配置 API Key"
                                             title="尚未配置 API Key，点击打开设置"
                                         >
@@ -1396,21 +1384,21 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                             <div className="relative">
                                 <button type="button" aria-haspopup="dialog" aria-expanded={expandedPanel === 'model'} onClick={() => setExpandedPanel(prev => (prev === 'model' ? null : 'model'))} className={`${triggerClass} shrink-0 ${expandedPanel === 'model' ? activeTriggerClass : ''}`}>
                                     <span className="max-w-[150px] truncate">{getModelLabel(generationMode, selectedTextModel, selectedImageModel, selectedVideoModel, userApiKeys)}</span>
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 9 6 6 6-6" /></svg>
+                                    
                                 </button>
                             </div>
 
                             {generationMode === 'video' && VIDEO_MODE_ORDER.length > 1 && (
                                 <button type="button" aria-haspopup="dialog" aria-expanded={expandedPanel === 'submode'} onClick={() => setExpandedPanel(prev => (prev === 'submode' ? null : 'submode'))} className={`${triggerClass} shrink-0 ${expandedPanel === 'submode' ? activeTriggerClass : ''}`} title="视频生成方式">
                                     <span>{PRODUCT_MODE_LABELS[activeSubmode]}</span>
-                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 9 6 6 6-6" /></svg>
+                                    
                                 </button>
                             )}
 
                             {activeProductModel && (
                                 <button type="button" aria-haspopup="dialog" aria-expanded={expandedPanel === 'parameters'} onClick={() => setExpandedPanel(prev => (prev === 'parameters' ? null : 'parameters'))} className={`${triggerClass} shrink-0 ${expandedPanel === 'parameters' ? activeTriggerClass : ''}`} title="生成参数">
                                     <span className="max-w-[220px] truncate">{paramSummary || '参数'}</span>
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 9 6 6 6-6" /></svg>
+                                    
                                 </button>
                             )}
 
@@ -1418,7 +1406,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                 type="button"
                                 onClick={onAutoEnhanceToggle}
                                 title={isAutoEnhanceEnabled ? '关闭自动润色（生成前不再自动优化提示词）' : '开启自动润色（生成前自动用 LLM 优化提示词）'}
-                                className={`isl-chip shrink-0 ${compactMode ? 'h-7 px-2.5 text-[11px]' : 'h-8 px-3 text-xs'} ${isAutoEnhanceEnabled ? 'isl-chip--active' : ''}`}
+                                className={`${triggerClass} shrink-0 ${isAutoEnhanceEnabled ? activeTriggerClass : ''}`}
                             >
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                     <path d="M12 3l1.912 5.813a2 2 0 0 0 1.275 1.275L21 12l-5.813 1.912a2 2 0 0 0-1.275 1.275L12 21l-1.912-5.813a2 2 0 0 0-1.275-1.275L3 12l5.813-1.912a2 2 0 0 0 1.275-1.275L12 3Z" />
@@ -1436,13 +1424,6 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                 </button>
                             )}
 
-                            {activeProductModel && (
-                                <button type="button" aria-haspopup="dialog" aria-expanded={expandedPanel === 'advanced'} onClick={() => setExpandedPanel(prev => (prev === 'advanced' ? null : 'advanced'))} className={`${triggerClass} shrink-0 ${expandedPanel === 'advanced' ? activeTriggerClass : ''}`} title="高级选项">
-                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 7h10M18 7h2M4 17h2M10 17h10M14 4v6M6 14v6" /></svg>
-                                    <span className="sr-only">高级选项</span>
-                                </button>
-                            )}
-
                             <div className="relative">
                                 <button type="button" aria-haspopup="dialog" aria-expanded={expandedPanel === 'more'} aria-label="更多操作" onClick={() => setExpandedPanel(prev => (prev === 'more' ? null : 'more'))} className={`${triggerClass} shrink-0 ${expandedPanel === 'more' ? activeTriggerClass : ''}`} title="更多操作">
                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>
@@ -1453,7 +1434,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
 
                     <div className="flex shrink-0 items-center gap-2">
                         {activeProductModel && (
-                            <div className="isl-chip flex h-8 shrink-0 items-center px-2.5 text-[11px] font-bold" title={providerUsageLabel ? '供应商返回的本次用量' : estimatedCostLabel ? '按当前 API Key 计价规则估算；最终以供应商账单或 Token 回执为准' : '当前 API Key 尚未配置可计算的计价规则'}>
+                            <div className="flex h-8 shrink-0 items-center px-2.5 text-[11px] font-bold" title={providerUsageLabel ? '供应商返回的本次用量' : estimatedCostLabel ? '按当前 API Key 计价规则估算；最终以供应商账单或 Token 回执为准' : '当前 API Key 尚未配置可计算的计价规则'}>
                                 <span style={{ color: providerUsageLabel || estimatedCostLabel ? 'var(--isl-mint-deep)' : 'var(--isl-ink-ghost)' }}>{providerUsageLabel || estimatedCostLabel || '费用 --'}</span>
                             </div>
                         )}
@@ -1461,7 +1442,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                             <div className="relative">
                                 <button type="button" aria-haspopup="dialog" aria-expanded={expandedPanel === 'batch'} onClick={() => setExpandedPanel(prev => (prev === 'batch' ? null : 'batch'))} className={`${triggerClass} shrink-0 ${expandedPanel === 'batch' ? activeTriggerClass : ''}`} title="批量方案数量">
                                     <span className="text-xs font-bold">×{batchCount}</span>
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 9 6 6 6-6" /></svg>
+                                    
                                 </button>
                             </div>
                         )}
@@ -1473,8 +1454,8 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                     if (isSeedanceVideoModel && !window.confirm('Seedance 重试会创建一个全新任务，可能再次消耗额度。确定继续吗？')) return;
                                     onRetry();
                                 }}
-                                className={`isl-chip ${compactMode ? 'h-9 px-3 text-xs' : 'h-10 px-4 text-sm'}`}
-                                style={{ borderColor: 'var(--isl-coral)', color: 'var(--isl-coral-deep)' }}
+                                className={`${triggerClass} ${compactMode ? 'h-9 px-3 text-xs' : 'h-10 px-4 text-sm'}`}
+                                style={{ color: 'var(--isl-coral-deep)' }}
                                 title={isSeedanceVideoModel ? '创建新的 Seedance 任务，可能再次扣费' : '使用相同参数重新生成'}
                             >
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 4v6h6"/><path d="M3.5 16.5A9 9 0 1 0 2 12"/></svg>
