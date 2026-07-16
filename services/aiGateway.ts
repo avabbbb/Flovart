@@ -41,6 +41,12 @@ type IgnitionReference = {
     elementId?: string;
 };
 
+export type ProviderTaskLifecycleEvent =
+    | { phase: 'submitted'; providerTaskId: string; submittedAt: number }
+    | { phase: 'running'; providerTaskId: string; remoteStatus?: string }
+    | { phase: 'cancelled'; providerTaskId: string; canceled: boolean; upstreamStillRunning?: boolean; message?: string }
+    | { phase: 'usage'; providerTaskId: string; status: SeedanceVideoReconcileResult['status']; amount?: number; currency?: string; totalTokens?: number };
+
 export interface UnifiedIgnitionInput {
     elementId: string;
     prompt: string;
@@ -59,6 +65,7 @@ export interface UnifiedIgnitionInput {
     references?: IgnitionReference[];
     signal?: AbortSignal;
     onProgress?: (progress: number, message: string) => void;
+    onProviderTaskLifecycle?: (event: ProviderTaskLifecycleEvent) => void | Promise<void>;
 }
 
 export type UnifiedIgnitionResult =
@@ -144,6 +151,11 @@ export const DEFAULT_PROVIDER_MODELS: Partial<Record<AIProvider, ProviderModelMa
         text: [],
         image: [],
         video: [],
+    },
+    xai: {
+        text: ['grok-4-fast', 'grok-4'],
+        image: ['grok-2-image'],
+        video: ['grok-imagine-video', 'grok-imagine-video-1.5'],
     },
 };
 
@@ -428,6 +440,7 @@ export const PROVIDER_VIDEO_RATIOS: Partial<Record<AIProvider, VideoAspectRatio[
     minimax:    ['16:9', '9:16', '1:1'],                        // MiniMax only supports 16:9/9:16/1:1
     keling:     ['16:9', '9:16', '1:1'],                        // Kling AI: 16:9/9:16/1:1
     volcengine: SEEDANCE_RATIOS,                                // Seedance 2.0
+    xai:       ['1:1', '16:9', '9:16', '4:3', '3:4', '2:3', '3:2'], // Grok Imagine Video
 };
 
 /** Check whether a given ratio is supported by the inferred video provider. */
@@ -573,6 +586,7 @@ const DEFAULT_BASE_URLS: Record<AIProvider, string> = {
     volcengine: 'https://ark.cn-beijing.volces.com/api/v3',
     openrouter: 'https://openrouter.ai/api/v1',
     openai_compatible: '',
+    xai: 'https://api.x.ai/v1',
     custom: '',
 };
 
@@ -588,6 +602,7 @@ export function inferProviderFromKey(apiKey: string): AIProvider | null {
     if (/^sk-[a-f0-9]{32,}$/i.test(trimmed)) return 'deepseek';
     // Stability AI removed — sa- prefix keys no longer auto-detected
     if (/^sk-sf/i.test(trimmed)) return 'siliconflow';
+    if (/^xai-/i.test(trimmed)) return 'xai';
     if (/^eyJ/i.test(trimmed)) return 'minimax'; // MiniMax keys start with eyJ (JWT-like)
     if (/^[a-f0-9]{32}$/i.test(trimmed)) return 'runningHub'; // 32-char hex
     return null;
@@ -623,6 +638,7 @@ export const PROVIDER_LABELS: Record<AIProvider, string> = {
     volcengine: '火山引擎 (豆包)',
     openrouter: 'OpenRouter',
     openai_compatible: 'OpenAI Compatible',
+    xai: 'xAI Grok',
     custom: '自定义',
 };
 
@@ -651,6 +667,12 @@ function parseModelMappings(config: CustomProviderExtraConfig): Record<string, s
 function stripModelSelectionRef(model: string): string {
     const index = model.indexOf('::');
     return index >= 0 ? model.slice(index + 2) : model;
+}
+
+function assertResolvedUpstreamModel(model: string): void {
+    if (stripModelSelectionRef(model).trim().toLowerCase().startsWith('flovart:')) {
+        throw new Error(`产品模型 ${model} 尚未解析为供应商上游模型。请检查该产品模型的 BYOK 映射。`);
+    }
 }
 
 function mapProviderModel(model: string, key?: UserApiKey): string {
@@ -783,6 +805,31 @@ function multimodalSlotsFromLegacyReferences(references: VideoImage[] = []): Mul
     }));
 }
 
+function adaptVideoSlotsForMode(slots: MultimodalSlot[], mode?: ProductModelMode, provider?: AIProvider): MultimodalSlot[] {
+    if (!mode) return slots;
+    const images = slots.filter(slot => slot.kind === 'image');
+    if (mode === 'text-to-video') return [];
+    if (mode === 'image-to-video') {
+        if (!images[0]) throw new Error('图生视频至少需要 1 张图片。');
+        return [{ ...images[0], role: 'first_frame' }];
+    }
+    if (mode === 'first-last-frame') {
+        if (provider === 'keling') throw new Error('当前可灵 API 线路尚未适配首尾帧，请切换模式或重新映射线路。');
+        if (images.length < 2) throw new Error('首尾帧模式需要 2 张图片。');
+        return [{ ...images[0], role: 'first_frame' }, { ...images[1], role: 'last_frame' }];
+    }
+    if (mode === 'reference-to-video') {
+        if (provider === 'keling') throw new Error('当前可灵 API 线路尚未适配全能参考，请切换模式或重新映射线路。');
+        const references = provider === 'google' ? images.slice(0, 3) : slots;
+        if (!references.length) throw new Error(provider === 'google' ? 'Veo 全能参考至少需要 1 张图片。' : '全能参考至少需要 1 个媒体素材。');
+        return references.map(slot => ({
+            ...slot,
+            role: slot.kind === 'video' ? 'reference_video' : slot.kind === 'audio' ? 'reference_audio' : 'reference_image',
+        }));
+    }
+    return slots;
+}
+
 function referenceOrdinalLabel(kind: MultimodalSlotKind | 'text' | 'shape', index: number): string {
     if (kind === 'image') return `图片${index + 1}`;
     if (kind === 'video') return `视频${index + 1}`;
@@ -869,6 +916,7 @@ export async function generateTextWithProvider(
         signal?: AbortSignal;
     },
 ): Promise<string> {
+    assertResolvedUpstreamModel(model);
     const provider = resolveGenerationProvider(model, key);
     const apiKey = requireApiKey(provider, key);
     const baseUrl = getBaseUrl(provider, key);
@@ -1592,6 +1640,7 @@ export function inferProviderFromModel(model: string): AIProvider {
     if (/^(kling|keling)/i.test(model)) return 'keling';
     if (/^flux/i.test(model)) return 'flux';
     if (/^midjourney/i.test(model)) return 'midjourney';
+    if (/^(grok-|xai)/i.test(model)) return 'xai';
     if (/^(minimax|abab|video-01)/i.test(model)) return 'minimax';
     if (/^(doubao|skylark|ep-|seedance|dreamina-seedance|doubao-seedance)/i.test(model) || normalized.includes('seedance')) return 'volcengine';
     if (/^(openrouter\/|google\/|anthropic\/|openai\/|meta-llama\/|x-ai\/)/i.test(model)) return 'openrouter';
@@ -2352,6 +2401,7 @@ export async function generateImageWithProvider(
     images?: VideoImage[],
     options?: { signal?: AbortSignal; aspectRatio?: VideoAspectRatio; resolution?: string; quality?: string; webSearch?: boolean },
 ): Promise<{ newImageBase64: string | null; newImageMimeType: string | null; textResponse: string | null }> {
+    assertResolvedUpstreamModel(model);
     const provider = resolveGenerationProvider(model, key);
     const refs = limitProviderImageInputs(images ?? [], provider, model, key);
 
@@ -2362,15 +2412,16 @@ export async function generateImageWithProvider(
                 aspectRatio: options?.aspectRatio === 'adaptive' ? undefined : options?.aspectRatio,
                 imageSize: options?.resolution,
                 webSearch: options?.webSearch,
+                baseUrl: key?.baseUrl,
             });
         }
         if (refs.length > 0) {
             if (!supportsReferenceImageEditing(model)) {
-                return generateImageFromText(prompt, key?.key, options?.signal);
+                return generateImageFromText(prompt, key?.key, options?.signal, { model, baseUrl: key?.baseUrl });
             }
-            return editImage(refs, prompt, undefined, key?.key, options?.signal);
+            return editImage(refs, prompt, undefined, key?.key, options?.signal, { model, baseUrl: key?.baseUrl });
         }
-        return generateImageFromText(prompt, key?.key, options?.signal);
+        return generateImageFromText(prompt, key?.key, options?.signal, { model, baseUrl: key?.baseUrl });
     }
 
     if (provider === 'runningHub') {
@@ -2612,6 +2663,7 @@ export async function editImageWithProvider(
     key?: UserApiKey,
     options?: { mask?: ImageInput }
 ): Promise<{ newImageBase64: string | null; newImageMimeType: string | null; textResponse: string | null }> {
+    assertResolvedUpstreamModel(model);
     const provider = resolveGenerationProvider(model, key);
     const inputImages = limitProviderImageInputs(images, provider, model, key);
 
@@ -2619,7 +2671,7 @@ export async function editImageWithProvider(
         if (!supportsReferenceImageEditing(model)) {
             throw new Error('当前 Google 图片模型只支持纯文本生图，请切换到 Gemini 图像编辑模型。');
         }
-        return editImage(inputImages, prompt, options?.mask, key?.key);
+        return editImage(inputImages, prompt, options?.mask, key?.key, undefined, { model, baseUrl: key?.baseUrl });
     }
 
     if (provider === 'openrouter') {
@@ -2815,6 +2867,7 @@ export async function submitSeedanceVideoTask(
         safetyIdentifier?: string;
         generationSubmode?: ProductModelMode;
         signal?: AbortSignal;
+        onProviderTaskLifecycle?: (event: ProviderTaskLifecycleEvent) => void | Promise<void>;
     },
 ): Promise<SeedanceVideoTaskHandle> {
     throwIfAborted(options?.signal);
@@ -2822,7 +2875,8 @@ export async function submitSeedanceVideoTask(
     const baseUrl = getBaseUrl('volcengine', key);
     const mappedModel = normalizeSeedanceModel(mapProviderModel(model || DEFAULT_SEEDANCE_MODEL, key));
     const capability = getCapabilityDictionary(mappedModel, 'volcengine');
-    const slots = options?.slots?.length ? options.slots : multimodalSlotsFromLegacyReferences(options?.references ?? []);
+    const rawSlots = options?.slots?.length ? options.slots : multimodalSlotsFromLegacyReferences(options?.references ?? []);
+    const slots = adaptVideoSlotsForMode(rawSlots, options?.generationSubmode, 'volcengine');
     validateSeedanceSlots(slots, capability);
     const resolvedSlots = await resolveSeedanceSlotUrls(slots);
     throwIfAborted(options?.signal);
@@ -3065,6 +3119,23 @@ export type SeedanceVideoReconcileResult = {
     raw?: unknown;
 };
 
+function parseSeedanceVideoUsage(raw: any, fallbackStatus: SeedanceVideoReconcileResult['status'] = 'unknown'): SeedanceVideoReconcileResult {
+    const remoteStatus = String(raw?.status || raw?.data?.status || raw?.data?.task_status || raw?.task?.status || raw?.state || '').toLowerCase();
+    let status: SeedanceVideoReconcileResult['status'] = fallbackStatus;
+    if (['succeeded', 'succeed', 'success', 'completed', 'complete', 'done'].includes(remoteStatus)) status = 'succeeded';
+    else if (['cancelled', 'canceled'].includes(remoteStatus)) status = 'cancelled';
+    else if (['failed', 'fail', 'error'].includes(remoteStatus)) status = 'failed';
+    else if (['expired', 'timeout'].includes(remoteStatus)) status = 'expired';
+    const billingRaw = raw?.data?.billing || raw?.data?.usage?.billing || raw?.billing || raw?.usage?.billing;
+    const amount = typeof billingRaw?.amount === 'number' ? billingRaw.amount : undefined;
+    const currency = typeof billingRaw?.currency === 'string' ? billingRaw.currency : raw?.data?.currency || raw?.currency;
+    const totalTokens = typeof raw?.usage?.total_tokens === 'number' ? raw.usage.total_tokens
+        : typeof raw?.data?.usage?.total_tokens === 'number' ? raw.data.usage.total_tokens
+        : typeof raw?.usage?.token_usage?.total_tokens === 'number' ? raw.usage.token_usage.total_tokens
+        : undefined;
+    return { status, amount, currency, totalTokens, raw };
+}
+
 /**
  * 查询上游任务的真实账单/token 使用量。复用 GET 任务查询接口；不修改 handle。
  *
@@ -3105,23 +3176,7 @@ export async function reconcileSeedanceVideoUsage(
         return { status: 'unknown', reason: '响应不是合法 JSON' };
     }
 
-    const remoteStatus = String(raw?.status || raw?.data?.status || raw?.data?.task_status || raw?.task?.status || raw?.state || '').toLowerCase();
-    let status: SeedanceVideoReconcileResult['status'] = 'unknown';
-    if (['succeeded', 'succeed', 'success', 'completed', 'complete', 'done'].includes(remoteStatus)) status = 'succeeded';
-    else if (['cancelled', 'canceled'].includes(remoteStatus)) status = 'cancelled';
-    else if (['failed', 'fail', 'error'].includes(remoteStatus)) status = 'failed';
-    else if (['expired', 'timeout'].includes(remoteStatus)) status = 'expired';
-
-    const billingRaw = raw?.data?.billing || raw?.data?.usage?.billing || raw?.billing || raw?.usage?.billing;
-    const amount = typeof billingRaw?.amount === 'number' ? billingRaw.amount : undefined;
-    const currency = typeof billingRaw?.currency === 'string' ? billingRaw.currency : raw?.data?.currency || raw?.currency;
-    const totalTokens =
-        typeof raw?.usage?.total_tokens === 'number' ? raw.usage.total_tokens
-        : typeof raw?.data?.usage?.total_tokens === 'number' ? raw.data.usage.total_tokens
-        : typeof raw?.usage?.token_usage?.total_tokens === 'number' ? raw.usage.token_usage.total_tokens
-        : undefined;
-
-    return { status, amount, currency, totalTokens, raw };
+    return parseSeedanceVideoUsage(raw);
 }
 
 /**
@@ -3156,14 +3211,23 @@ export async function generateVideoWithProvider(
         safetyIdentifier?: string;
         generationSubmode?: ProductModelMode;
         signal?: AbortSignal;
+        onProviderTaskLifecycle?: (event: ProviderTaskLifecycleEvent) => void | Promise<void>;
     },
 ): Promise<{ videoBlob: Blob; mimeType: string }> {
+    assertResolvedUpstreamModel(model);
     const provider = resolveGenerationProvider(model, key);
     const onProgress = options?.onProgress || (() => {});
     const aspectRatio = options?.aspectRatio || '16:9';
-    const references = options?.references ?? [];
+    const legacyReferences = options?.references ?? [];
     const hasExplicitSlots = !!options?.slots?.length;
-    const multimodalSlots = hasExplicitSlots ? options.slots! : multimodalSlotsFromLegacyReferences(references);
+    const rawSlots = hasExplicitSlots ? options.slots! : multimodalSlotsFromLegacyReferences(legacyReferences);
+    const multimodalSlots = adaptVideoSlotsForMode(rawSlots, options?.generationSubmode, provider);
+    const references: VideoImage[] = multimodalSlots.filter(slot => slot.kind === 'image').map(slot => ({
+        href: slot.href,
+        mimeType: slot.mimeType,
+        slotRole: String(slot.role || 'unassigned'),
+        label: slot.label,
+    }));
     const firstImageSlot = multimodalSlots.find(slot => slot.kind === 'image' && slot.role === 'first_frame')
         || multimodalSlots.find(slot => slot.kind === 'image');
     const usesFirstFrame = !options?.generationSubmode || options.generationSubmode === 'image-to-video' || options.generationSubmode === 'first-last-frame';
@@ -3178,14 +3242,7 @@ export async function generateVideoWithProvider(
         const apiKey = requireApiKey(provider, key);
         const baseUrl = getBaseUrl(provider, key);
         const modelEndpoint = assertRunningHubModelEndpoint(mapProviderModel(model, key) || key?.defaultModel || model);
-        const allImageRefs = hasExplicitSlots
-            ? [
-                ...references,
-                ...multimodalSlots
-                    .filter(slot => slot.kind === 'image')
-                    .map(slot => ({ href: slot.href, mimeType: slot.mimeType, slotRole: String(slot.role || 'unassigned') })),
-            ]
-            : references;
+        const allImageRefs = references;
         const uploadOptions = { baseUrl, signal: options?.signal };
         const runningHubRefs = await prepareRunningHubReferences(apiKey, allImageRefs, uploadOptions);
         const runningHubSlots = await prepareRunningHubSlots(apiKey, hasExplicitSlots ? multimodalSlots : [], uploadOptions);
@@ -3212,7 +3269,9 @@ export async function generateVideoWithProvider(
     }
 
     if (provider === 'google') {
-        const lastFrameSlot = multimodalSlots.find(slot => slot.kind === 'image' && slot.role === 'last_frame');
+        const lastFrameSlot = options?.generationSubmode === 'first-last-frame'
+            ? multimodalSlots.find(slot => slot.kind === 'image' && slot.role === 'last_frame')
+            : undefined;
         const referenceImages = options?.generationSubmode === 'reference-to-video'
             ? multimodalSlots.filter(slot => slot.kind === 'image' && slot.role !== 'first_frame' && slot.role !== 'last_frame').slice(0, 3)
             : [];
@@ -3224,6 +3283,7 @@ export async function generateVideoWithProvider(
             signal: options?.signal,
             lastFrame: lastFrameSlot ? { href: lastFrameSlot.href, mimeType: lastFrameSlot.mimeType } : undefined,
             referenceImages: referenceImages.map(reference => ({ href: reference.href, mimeType: reference.mimeType })),
+            baseUrl: key?.baseUrl,
         });
     }
 
@@ -3245,6 +3305,7 @@ export async function generateVideoWithProvider(
                 Authorization: `Bearer ${apiKey}`,
             },
             body: JSON.stringify(createBody),
+            signal: options?.signal,
         });
 
         if (!createRes.ok) {
@@ -3274,6 +3335,7 @@ export async function generateVideoWithProvider(
 
             const queryRes = await fetch(`${baseUrl}/query/video_generation?task_id=${encodeURIComponent(taskId)}`, {
                 headers: { Authorization: `Bearer ${apiKey}` },
+                signal: options?.signal,
             });
             if (!queryRes.ok) {
                 throw new Error(await readErrorResponse(queryRes, 'MiniMax 任务查询失败'));
@@ -3299,6 +3361,7 @@ export async function generateVideoWithProvider(
         onProgress('Downloading generated video...');
         const fileRes = await fetch(`${baseUrl}/files/retrieve?file_id=${encodeURIComponent(fileId)}`, {
             headers: { Authorization: `Bearer ${apiKey}` },
+            signal: options?.signal,
         });
         if (!fileRes.ok) {
             throw new Error(await readErrorResponse(fileRes, 'MiniMax 文件下载失败'));
@@ -3309,7 +3372,7 @@ export async function generateVideoWithProvider(
             throw new Error('MiniMax 未返回视频下载链接');
         }
 
-        const videoRes = await fetch(downloadUrl);
+        const videoRes = await fetch(downloadUrl, { signal: options?.signal });
         if (!videoRes.ok) {
             throw new Error(`视频下载失败: ${videoRes.statusText}`);
         }
@@ -3328,9 +3391,9 @@ export async function generateVideoWithProvider(
             model_name: model || 'kling-v1',
             prompt,
             cfg_scale: 0.5,
-            mode: 'std',
+            mode: options?.resolution?.toLowerCase() === '1080p' ? 'pro' : 'std',
             aspect_ratio: aspectRatio.replace(':', ':'),
-            duration: '5',
+            duration: String(options?.durationSec || 5),
         };
         if (firstFrame) {
             createBody.image = firstFrame.href;
@@ -3346,6 +3409,7 @@ export async function generateVideoWithProvider(
                 Authorization: `Bearer ${apiKey}`,
             },
             body: JSON.stringify(createBody),
+            signal: options?.signal,
         });
 
         if (!createRes.ok) {
@@ -3373,6 +3437,7 @@ export async function generateVideoWithProvider(
 
             const queryRes = await fetch(`${baseUrl}/videos/generations/${encodeURIComponent(taskId)}`, {
                 headers: { Authorization: `Bearer ${apiKey}` },
+                signal: options?.signal,
             });
             if (!queryRes.ok) {
                 throw new Error(await readErrorResponse(queryRes, 'Keling 任务查询失败'));
@@ -3392,11 +3457,108 @@ export async function generateVideoWithProvider(
         if (!videoUrl) throw new Error('Keling 视频生成完成但未返回下载链接');
 
         onProgress('Downloading generated video...');
-        const videoRes = await fetch(videoUrl);
+        const videoRes = await fetch(videoUrl, { signal: options?.signal });
         if (!videoRes.ok) throw new Error(`视频下载失败: ${videoRes.statusText}`);
         const videoBlob = await videoRes.blob();
         const mimeType = videoRes.headers.get('Content-Type') || 'video/mp4';
         return { videoBlob, mimeType };
+    }
+
+    if (provider === 'xai') {
+        const apiKey = requireApiKey(provider, key);
+        const baseUrl = getBaseUrl(provider, key);
+        const submode: ProductModelMode = options?.generationSubmode || 'text-to-video';
+
+        onProgress('Submitting video generation task...');
+        let createPath: string;
+        const createBody: Record<string, unknown> = { model, prompt };
+
+        if (submode === 'video-extension') {
+            createPath = `${baseUrl}/videos/extensions`;
+            const videoSlot = multimodalSlots.find(slot => slot.kind === 'video');
+            if (!videoSlot) {
+                throw new Error('xAI 视频扩展至少需要 1 个视频素材作为驱动视频。');
+            }
+            createBody.video = { url: videoSlot.href };
+            if (options?.durationSec != null) {
+                createBody.duration = options.durationSec;
+            }
+        } else {
+            createPath = `${baseUrl}/videos/generations`;
+            if (aspectRatio) {
+                createBody.aspect_ratio = aspectRatio;
+            }
+            if (options?.resolution) {
+                createBody.resolution = options.resolution;
+            }
+            if (options?.durationSec != null) {
+                createBody.duration = options.durationSec;
+            }
+            if (firstFrame) {
+                createBody.image = { url: firstFrame.href };
+            }
+        }
+
+        const createRes = await fetch(createPath, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${apiKey}`,
+            },
+            body: JSON.stringify(createBody),
+            signal: options?.signal,
+        });
+
+        if (!createRes.ok) {
+            throw new Error(await readErrorResponse(createRes, 'xAI 视频生成请求失败'));
+        }
+
+        const createJson = await readJsonResponse<any>(createRes, 'xAI 视频生成创建响应');
+        const requestId = createJson?.request_id;
+        if (!requestId) {
+            throw new Error('xAI 视频生成未返回 request_id');
+        }
+
+        const progressMessages = ['Rendering frames...', 'Compositing video...', 'Applying final touches...', 'Almost there...'];
+        let messageIndex = 0;
+        onProgress('Generation started, this may take a few minutes.');
+
+        let videoUrl: string | undefined;
+        const xaiPollStart = Date.now();
+        while (true) {
+            if (Date.now() - xaiPollStart > 600_000) {
+                throw new Error('xAI 视频生成超时（已等待超过 10 分钟）');
+            }
+            onProgress(progressMessages[messageIndex % progressMessages.length]);
+            messageIndex++;
+            await sleep(10000, options?.signal);
+
+            const queryRes = await fetch(`${baseUrl}/videos/${encodeURIComponent(requestId)}`, {
+                headers: { Authorization: `Bearer ${apiKey}` },
+                signal: options?.signal,
+            });
+            if (!queryRes.ok) {
+                throw new Error(await readErrorResponse(queryRes, 'xAI 任务查询失败'));
+            }
+            const queryJson = await readJsonResponse<any>(queryRes, 'xAI 任务查询响应');
+            const status = queryJson?.status;
+
+            if (status === 'failed') {
+                throw new Error(`xAI 视频生成失败: ${queryJson?.error || queryJson?.message || 'Unknown error'}`);
+            }
+            if (status === 'done') {
+                videoUrl = queryJson?.output?.url;
+                break;
+            }
+            // Otherwise still processing, continue polling
+        }
+
+        if (!videoUrl) {
+            throw new Error('xAI 视频生成完成但未返回视频 URL');
+        }
+
+        onProgress('Downloading generated video...');
+        return downloadSeedanceVideoResult(videoUrl, { signal: options?.signal });
     }
 
     if (provider === 'volcengine') {
@@ -3405,27 +3567,51 @@ export async function generateVideoWithProvider(
             aspectRatio,
             slots: multimodalSlots,
         });
+        await options?.onProviderTaskLifecycle?.({ phase: 'submitted', providerTaskId: handle.taskId, submittedAt: handle.createdAt });
         const seedanceProgressMessages = ['Rendering frames...', 'Compositing video...', 'Applying final touches...', 'Almost there...'];
         let seedanceMsgIndex = 0;
         onProgress('Generation started, this may take a few minutes.');
         const seedancePollStart = Date.now();
+        let cancelPromise: Promise<SeedanceVideoCancelResult> | undefined;
+        const requestUpstreamCancel = () => cancelPromise ||= cancelSeedanceVideoTask(handle, key, { reason: 'user_abort' }).then(async result => {
+            await options?.onProviderTaskLifecycle?.({ phase: 'cancelled', providerTaskId: handle.taskId, canceled: result.canceled, upstreamStillRunning: result.upstreamStillRunning, message: result.message });
+            const usage = await reconcileSeedanceVideoUsage(handle, key);
+            if (usage.status !== 'unknown' || usage.amount !== undefined || usage.totalTokens !== undefined) {
+                await options?.onProviderTaskLifecycle?.({ phase: 'usage', providerTaskId: handle.taskId, status: usage.status, amount: usage.amount, currency: usage.currency, totalTokens: usage.totalTokens });
+            }
+            return result;
+        });
+        const handleAbort = () => { void requestUpstreamCancel(); };
+        options?.signal?.addEventListener('abort', handleAbort, { once: true });
 
-        while (true) {
-            if (Date.now() - seedancePollStart > 600_000) {
-                throw new Error('Seedance 视频生成超时（已等待超过 10 分钟）');
-            }
-            onProgress(seedanceProgressMessages[seedanceMsgIndex % seedanceProgressMessages.length]);
-            seedanceMsgIndex++;
-            await sleep(10000, options?.signal);
+        try {
+            while (true) {
+                if (Date.now() - seedancePollStart > 600_000) {
+                    throw new Error('Seedance 视频生成超时（已等待超过 10 分钟）');
+                }
+                onProgress(seedanceProgressMessages[seedanceMsgIndex % seedanceProgressMessages.length]);
+                seedanceMsgIndex++;
+                await sleep(10000, options?.signal);
 
-            const result = await pollSeedanceVideoTask(handle, key, { signal: options?.signal });
-            if (result.status === 'failed') {
-                throw new Error(`Seedance 视频生成失败: ${result.error || 'Unknown error'}`);
+                const result = await pollSeedanceVideoTask(handle, key, { signal: options?.signal });
+                if (result.status === 'failed') {
+                    const usage = parseSeedanceVideoUsage(result.raw, 'failed');
+                    await options?.onProviderTaskLifecycle?.({ phase: 'usage', providerTaskId: handle.taskId, status: usage.status, amount: usage.amount, currency: usage.currency, totalTokens: usage.totalTokens });
+                    throw new Error(`Seedance 视频生成失败: ${result.error || 'Unknown error'}`);
+                }
+                if (result.status === 'succeeded') {
+                    const usage = parseSeedanceVideoUsage(result.raw, 'succeeded');
+                    await options?.onProviderTaskLifecycle?.({ phase: 'usage', providerTaskId: handle.taskId, status: usage.status, amount: usage.amount, currency: usage.currency, totalTokens: usage.totalTokens });
+                    onProgress('Downloading generated video...');
+                    return downloadSeedanceVideoResult(result.videoUrl, { signal: options?.signal });
+                }
+                await options?.onProviderTaskLifecycle?.({ phase: 'running', providerTaskId: handle.taskId, remoteStatus: result.remoteStatus });
             }
-            if (result.status === 'succeeded') {
-                onProgress('Downloading generated video...');
-                return downloadSeedanceVideoResult(result.videoUrl, { signal: options?.signal });
-            }
+        } catch (error) {
+            if (options?.signal?.aborted || error instanceof Error && error.name === 'AbortError') await requestUpstreamCancel();
+            throw error;
+        } finally {
+            options?.signal?.removeEventListener('abort', handleAbort);
         }
     }
 
@@ -3473,11 +3659,12 @@ export async function executeUnifiedIgnition(input: UnifiedIgnitionInput): Promi
                 resolution: params.resolution,
                 generateAudio: params.generateAudio,
                 watermark: input.watermark,
-                generationSubmode: input.generationSubmode,
+                generationSubmode: params.mode,
                 references: videoRefs,
                 slots: videoSlots,
                 signal: input.signal,
                 onProgress: message => input.onProgress?.(35, message),
+                onProviderTaskLifecycle: input.onProviderTaskLifecycle,
             });
             const mediaUrl = URL.createObjectURL(result.videoBlob);
             return { ok: true, elementId: input.elementId, mediaUrl, mimeType: result.mimeType, capability };
