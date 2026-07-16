@@ -150,6 +150,13 @@ title: 待测试确认
 - 移除 `App.tsx` 重复的 `BOARDS_STORAGE_KEY` / `ACTIVE_BOARD_STORAGE_KEY` 声明。
 - 大量节点提示生成 hook (~20+ 依赖参数) 与画布渲染 JSX (~800 行) 提取评估为净负面可读性，按决策暂不拆分。
 
+## CanvasSettings 模型映射编辑器 + PromptBar 扁平化（本轮）
+
+- CanvasSettings 模型 Tab per-Key 映射编辑器：顶部三选下拉保留，下方按 Key 平铺映射行；可改 upstream/priority/enabled、增删映射；改后自动 `confirmed=true` 并经 `handleUpdateApiKey` 持久化，参与 `resolveProductModelRoute` 路由。
+- PromptBar 扁平化：合并「高级」chip 进「更多」popover（顶部分段「高级选项」）；popover 去卡片背景与 `PopoverHeader`，改 `isl-pop` 基础浮层 + 内联段标题；动作 chip 去 chevron 与 `isl-chip` 胶囊，改无边框 `triggerClass` + 轻 hover；`ExpandPanel` 删除 `'advanced'`。
+- typecheck 通过（仅 `tests/workflowImageTools.test.tsx(81,94)` 预存语法错误）。
+- 待用户验证：① 设置-模型 Tab 给某 Key 添加/启用一条映射后，Workflow 生成路由到该上游模型；② 禁用/删除映射后 PromptBar 生成按钮不可点；③ PromptBar 各 popover 为扁平浮层（无卡片边框/阴影），段标题为内联文本；④ 「更多」popover 顶部含「高级选项」分段（联网搜索/真人素材预检测）；⑤ 动作按钮（润色/翻译/重试/+Key）为无边框文本 + 图标 + 轻 hover。
+
 ---
 
 本文件中的测试项尚未由用户执行确认。本次累计变更包括：Workflow 节点 header 删除、底部工具栏重构、右侧抽屉 header 对齐、RunningHub Host 头修复与 LEGACY_PRESET 黑名单解封、@ mention 前缀修复、滚轮默认平移、模型下拉溢出修复、图层拖拽数据传输修复、blob→data URL 转换、cold-media 引用解析、App.tsx 阶段 1 持久化/类型提取、overlay 全量迁移、ElementAIPopBar 气泡新增、ElementToolbar AI 动作剥离、底部工具栏三簇重组、Excalidraw 阶段 A 托管渲染验证、Workflow 节点 Framer Motion 弹性动效（入场/退场/悬停/生成中呼吸/扫光/连线 pathLength/数据流粒子）、Workflow 批量结果堆叠折叠与展开、批量导出自动命名 `项目名_节点标题_序号.ext`、`idb:board:*` 协议 SVG 渲染路径异步解析修复。RunningHub 链路已通过 Node.js 脚本实跑验证（`rhart-image-n-g31-flash/text-to-image` + Bearer + `{ prompt, resolution: '1k' }` → 成功生成图片，花费 ¥0.19）。按项目约定未执行前端测试、构建或语法检查，等待用户实际验证。
