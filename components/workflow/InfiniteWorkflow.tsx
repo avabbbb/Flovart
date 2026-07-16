@@ -2,9 +2,10 @@ import { nanoid } from 'nanoid';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { DragEvent as ReactDragEvent, PointerEvent as ReactPointerEvent } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Plus, Maximize2, Undo2, Check } from 'lucide-react';
-import type { ModelPreference, PromptEnhanceMode, PromptEnhanceResult, UserApiKey } from '../../types';
+import { Check, ChevronRight, ChevronsDown, Maximize2, Plus, Star, Undo2 } from 'lucide-react';
+import type { AssetLibrary, ModelPreference, PromptEnhanceMode, PromptEnhanceResult, UserApiKey } from '../../types';
 import { STUDIO_MEDIA_DRAG_TYPE } from '../studio/StudioMediaBrowser';
+import type { AssetSuggestion } from '../MentionList';
 import { createWorkflowNode } from './constants';
 import {
   discardWorkflowMediaRecord,
@@ -45,6 +46,7 @@ import { runWorkflowImageAgent, runWorkflowImageEdit, runWorkflowImageSplit, typ
 import { transformImage } from '../../services/imageTransform';
 import { splitGrid as splitGridService } from '../../services/gridSplitter';
 import { trimVideo, splitAudioVideo, mergeVideos } from '../../services/videoTools';
+import { extractVideoFrame } from '../../services/videoFrameExtractor';
 import { trimAudio, changeAudioSpeed } from '../../services/audioTools';
 import { exportMediaArchive } from '../../utils/batchMediaExport';
 import { usePromptHistoryStore } from '../../stores/usePromptHistoryStore';
@@ -138,6 +140,70 @@ function workflowDropSharedMedia(dataTransfer: DataTransfer): WorkflowSharedMedi
   }
 }
 
+function WorkflowBatchStack({ head, count, onPointerDown, onExpand }: {
+  head: WorkflowNodeData;
+  count: number;
+  onPointerDown: (event: ReactPointerEvent<HTMLDivElement>) => void;
+  onExpand: () => void;
+}) {
+  const media = useWorkflowMediaUrl(head.metadata.storageKey, head.metadata.href);
+  return (
+    <motion.div
+      className="workflow-batch-stack"
+      style={{ x: head.position.x, y: head.position.y, width: head.width, height: head.height }}
+      initial={{ opacity: 0, scale: 0.9 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.9 }}
+      transition={{ type: 'spring', stiffness: 380, damping: 24, mass: 0.8 }}
+      whileHover={{ scale: 1.02 }}
+      onPointerDown={onPointerDown}
+    >
+      <div className="workflow-batch-stack__layer" style={{ transform: 'translate(7px, 7px)' }} />
+      <div className="workflow-batch-stack__layer" style={{ transform: 'translate(3.5px, 3.5px)' }} />
+      {media.url && (head.type === 'video'
+        ? <video src={media.url} className="workflow-batch-stack__preview" muted playsInline preload="metadata" />
+        : <img src={media.url} alt={head.title} className="workflow-batch-stack__preview" draggable={false} />)}
+      <div className="workflow-batch-stack__title"><span>{head.title}</span></div>
+      <button type="button" className="workflow-batch-stack__expand" data-workflow-overlay onPointerDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); onExpand(); }} aria-label={`展开 ${count} 个结果`}>
+        <span>{count}张</span><ChevronRight size={16} />
+      </button>
+    </motion.div>
+  );
+}
+
+function WorkflowBatchThumb({ node, active, primary, onSelect }: { node: WorkflowNodeData; active: boolean; primary: boolean; onSelect: () => void }) {
+  const media = useWorkflowMediaUrl(node.metadata.storageKey, node.metadata.href);
+  return <button type="button" className={`workflow-batch-gallery__thumb${active ? ' is-active' : ''}`} onPointerDown={event => event.stopPropagation()} onClick={onSelect} title={`${node.title}${primary ? ' · 主图' : ''}`}>
+    {media.url && (node.type === 'video' ? <video src={media.url} muted playsInline preload="metadata" /> : <img src={media.url} alt={node.title} />)}
+    {primary && <Check size={11} className="workflow-batch-gallery__primary-mark" />}
+  </button>;
+}
+
+function WorkflowBatchGallery({ group, selectedId, onSelect, onCollapse, onSetPrimary, onPointerDown }: {
+  group: WorkflowNodeData[];
+  selectedId?: string;
+  onSelect: (nodeId: string) => void;
+  onCollapse: () => void;
+  onSetPrimary: (nodeId: string) => void;
+  onPointerDown: (event: ReactPointerEvent<HTMLDivElement>) => void;
+}) {
+  const root = group.find(node => node.batchIndex === 0) || group[0];
+  const primaryId = root.metadata.primaryImageId || root.id;
+  const selected = group.find(node => node.id === selectedId) || group.find(node => node.id === primaryId) || root;
+  const media = useWorkflowMediaUrl(selected.metadata.storageKey, selected.metadata.href);
+  const index = Math.max(0, group.findIndex(node => node.id === selected.id));
+  return <motion.div className="workflow-batch-gallery" style={{ x: root.position.x, y: root.position.y, width: root.width, height: root.height }} initial={{ opacity: 0, scale: .94 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: .94 }} transition={{ type: 'spring', stiffness: 360, damping: 28 }} onPointerDown={onPointerDown}>
+    {media.url && (selected.type === 'video' ? <video src={media.url} className="workflow-batch-gallery__media" controls playsInline preload="metadata" /> : <img src={media.url} alt={selected.title} className="workflow-batch-gallery__media" draggable={false} />)}
+    <div className="workflow-batch-stack__title"><span>{selected.title}</span></div>
+    <button type="button" className="workflow-batch-stack__expand" data-workflow-overlay onPointerDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); onCollapse(); }}><span>{group.length}张</span><ChevronsDown size={15} /></button>
+    {selected.id !== primaryId && <button type="button" className="workflow-batch-gallery__set-primary" data-workflow-overlay onPointerDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); onSetPrimary(selected.id); }}><Star size={13} />设为主图</button>}
+    <div className="workflow-batch-gallery__rail" data-workflow-overlay onPointerDown={event => event.stopPropagation()}>
+      <span className="workflow-batch-gallery__counter">{index + 1} / {group.length}</span>
+      <div className="workflow-batch-gallery__thumbs">{group.map(node => <WorkflowBatchThumb key={node.id} node={node} active={node.id === selected.id} primary={node.id === primaryId} onSelect={() => onSelect(node.id)} />)}</div>
+    </div>
+  </motion.div>;
+}
+
 export function InfiniteWorkflow({
   project,
   updateProject,
@@ -157,6 +223,7 @@ export function InfiniteWorkflow({
   onEnhancePrompt,
   isEnhancingPrompt,
   agentOpen,
+  assetLibrary,
 }: {
   project: WorkflowProject;
   updateProject: (patch: Partial<WorkflowProject>) => void;
@@ -176,6 +243,7 @@ export function InfiniteWorkflow({
   onOpenSettings?: () => void;
   onEnhancePrompt?: (payload: { prompt: string; mode: PromptEnhanceMode; stylePreset?: string }) => Promise<PromptEnhanceResult>;
   isEnhancingPrompt?: boolean;
+  assetLibrary?: AssetLibrary;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
   const worldRef = useRef<HTMLDivElement>(null);
@@ -198,6 +266,9 @@ export function InfiniteWorkflow({
   const [minimapOpen, setMinimapOpen] = useState(true);
   const [snapEnabled, setSnapEnabled] = useState(false);
   const [edgesVisible, setEdgesVisible] = useState(true);
+  const snapEnabledRef = useRef(false);
+  snapEnabledRef.current = snapEnabled;
+  const [snapGuides, setSnapGuides] = useState<{ x?: number[]; y?: number[] } | null>(null);
   const [layoutToast, setLayoutToast] = useState<{ prev: WorkflowNodeData[]; deadline: number } | null>(null);
   const [clipboardVersion, setClipboardVersion] = useState(0);
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>(project.selectedNodeIds || []);
@@ -224,6 +295,7 @@ export function InfiniteWorkflow({
   const [audioToolError, setAudioToolError] = useState<string | null>(null);
   const [storyboardNodeIds, setStoryboardNodeIds] = useState<string[] | null>(null);
   const [expandedBatches, setExpandedBatches] = useState<Set<string>>(new Set());
+  const [batchPreviewIds, setBatchPreviewIds] = useState<Record<string, string>>({});
   const [scriptEditorNodeId, setScriptEditorNodeId] = useState<string | null>(null);
   const [slashMenu, setSlashMenu] = useState<{ x: number; y: number } | null>(null);
   const [previewNode, setPreviewNode] = useState<WorkflowNodeData | null>(null);
@@ -455,11 +527,48 @@ export function InfiniteWorkflow({
     setVideoTool({ kind, nodeId });
   }, [currentFrame, videoTool]);
 
+  const handleExtractFrame = useCallback(async (id: string, position: 'first' | 'last') => {
+    if (videoToolBusyRef.current) return;
+    const node = projectRef.current.nodes.find(item => item.id === id);
+    if (!node || node.type !== 'video') return;
+    videoToolBusyRef.current = true;
+    setVideoToolBusy(true);
+    setVideoToolError(null);
+    let record: WorkflowMediaRecord | undefined;
+    try {
+      const blob = await loadWorkflowMediaBlob(node.metadata.storageKey, node.metadata.href);
+      const frame = await extractVideoFrame(blob, position);
+      const baseName = node.metadata.name || 'video';
+      const frameName = `${position === 'first' ? 'first-frame' : 'last-frame'}-${baseName.replace(/\.[^.]+$/, '')}.png`;
+      record = await ingestWorkflowMedia(new File([frame.blob], frameName, { type: 'image/png' }));
+      const size = fitWorkflowMediaSize('image', frame.width, frame.height);
+      const center = { x: node.position.x + node.width / 2, y: node.position.y + node.height / 2 };
+      const offsetX = position === 'first' ? -(node.width + 40) : (node.width + 40);
+      const newNodeId = nanoid();
+      const newNode = { ...createWorkflowNode(newNodeId, 'image', { x: center.x + offsetX - size.width / 2, y: center.y - size.height / 2 }, { ...record, name: frameName, status: 'success' }), ...size, freeResize: false };
+      const newConnection: WorkflowConnection = { id: nanoid(), fromNodeId: node.id, toNodeId: newNodeId };
+      pushHistory(currentFrame());
+      patchProject({
+        nodes: [...projectRef.current.nodes, newNode],
+        connections: [...projectRef.current.connections, newConnection],
+      });
+      releaseWorkflowMediaRecord(record.storageKey);
+      setNotice(position === 'first' ? '首帧已导出为图片节点' : '尾帧已导出为图片节点');
+    } catch (error) {
+      if (record) await discardWorkflowMediaRecord(record.storageKey);
+      setNotice(error instanceof Error ? error.message : '帧导出失败');
+    } finally {
+      videoToolBusyRef.current = false;
+      setVideoToolBusy(false);
+    }
+  }, [currentFrame, patchProject, pushHistory]);
+
   const builtInVideoTools = useMemo<WorkflowVideoToolHandlers>(() => ({
     trim: id => openVideoTool('trim', id),
     avSplit: id => openVideoTool('av-split', id),
     merge: ids => { if (ids.length > 0) openVideoTool('merge', ids[0]); },
-  }), [openVideoTool]);
+    extractFrame: handleExtractFrame,
+  }), [openVideoTool, handleExtractFrame]);
 
   const activeVideoToolNode = videoTool ? project.nodes.find(node => node.id === videoTool.nodeId) || null : null;
   const activeVideoToolMedia = useWorkflowMediaUrl(activeVideoToolNode?.metadata.storageKey, activeVideoToolNode?.metadata.href);
@@ -783,6 +892,113 @@ export function InfiniteWorkflow({
     return true;
   }, [commitFrame, currentSnapshot, onRunNode, selectNodes]);
 
+  const assetFolders = useMemo(() => assetLibrary?.folders || [], [assetLibrary]);
+  const assetSuggestions = useMemo<AssetSuggestion[]>(() => (assetLibrary?.items || []).map(item => ({
+    id: item.id,
+    name: item.name || '未命名',
+    folderIds: item.folderIds,
+    tags: item.tags,
+    thumbnail: item.dataUrl,
+    elementType: (item.mimeType.startsWith('video/') ? 'video' : 'image') as 'image' | 'video',
+  })), [assetLibrary]);
+
+  const handleSelectAsset = useCallback((assetId: string, fromNodeId: string): string | undefined => {
+    const snapshot = currentSnapshot();
+    const targetNode = snapshot.nodes.find(n => n.id === fromNodeId);
+    if (!targetNode) return undefined;
+    const asset = assetLibrary?.items.find(a => a.id === assetId);
+    if (!asset) return undefined;
+
+    const upstreamConn = snapshot.connections.filter(c => c.toNodeId === fromNodeId);
+    for (const conn of upstreamConn) {
+      const upstreamNode = snapshot.nodes.find(n => n.id === conn.fromNodeId);
+      if (upstreamNode?.metadata.assetId === assetId && upstreamNode.metadata.sourceType === 'assetLibrary') {
+        const order = targetNode.metadata.imageReferenceOrder || [];
+        const mentions = targetNode.metadata.mentionedNodeIds || [];
+        if (!order.includes(upstreamNode.id) || !mentions.includes(upstreamNode.id)) applyOps([{ type: 'update_node', id: fromNodeId, metadata: {
+          imageReferenceOrder: [...order.filter(id => id !== upstreamNode.id), upstreamNode.id],
+          mentionedNodeIds: [...mentions.filter(id => id !== upstreamNode.id), upstreamNode.id],
+        } }]);
+        return upstreamNode.id;
+      }
+    }
+
+    const nodeId = nanoid();
+    const gapY = 120;
+    const newNodeY = targetNode.position.y - 240 - gapY;
+    const newNodeX = targetNode.position.x + (targetNode.width - 340) / 2;
+
+    const mediaType = asset.mimeType.startsWith('video/') ? 'video' : 'image';
+    const newNode = createWorkflowNode(nodeId, mediaType, { x: newNodeX, y: newNodeY }, {
+      sourceType: 'assetLibrary',
+      assetId,
+      href: `asset-library:${assetId}`,
+      name: asset.name || '素材引用',
+      mimeType: asset.mimeType,
+      naturalWidth: asset.width,
+      naturalHeight: asset.height,
+      status: 'success',
+    });
+
+    const currentOrder = targetNode.metadata.imageReferenceOrder || [];
+    const newOrder = [...currentOrder, nodeId];
+    const currentMentions = targetNode.metadata.mentionedNodeIds || [];
+
+    const ops: WorkflowOp[] = [
+      { type: 'add_node', node: newNode },
+      { type: 'connect_nodes', fromNodeId: nodeId, toNodeId: fromNodeId },
+      { type: 'update_node', id: fromNodeId, metadata: { imageReferenceOrder: newOrder, mentionedNodeIds: [...currentMentions, nodeId] } },
+    ];
+
+    const success = applyOps(ops);
+    return success ? nodeId : undefined;
+  }, [applyOps, assetLibrary, currentSnapshot]);
+
+  const handleSelectCanvasReference = useCallback((nodeId: string, targetNodeId: string): string | undefined => {
+    const snapshot = currentSnapshot();
+    const target = snapshot.nodes.find(node => node.id === targetNodeId);
+    const source = snapshot.nodes.find(node => node.id === nodeId);
+    if (!target || !source || source.id === target.id || !['image', 'video', 'audio'].includes(source.type)) return undefined;
+    const alreadyConnected = snapshot.connections.some(connection => connection.fromNodeId === nodeId && connection.toNodeId === targetNodeId);
+    const nextOrder = [...(target.metadata.imageReferenceOrder || []).filter(id => id !== nodeId), nodeId];
+    const nextMentions = [...(target.metadata.mentionedNodeIds || []).filter(id => id !== nodeId), nodeId];
+    const ops: WorkflowOp[] = [];
+    if (!alreadyConnected) ops.push({ type: 'connect_nodes', fromNodeId: nodeId, toNodeId: targetNodeId });
+    ops.push({ type: 'update_node', id: targetNodeId, metadata: { imageReferenceOrder: nextOrder, mentionedNodeIds: nextMentions } });
+    return applyOps(ops) ? nodeId : undefined;
+  }, [applyOps, currentSnapshot]);
+
+  const handleAddReferenceFiles = useCallback(async (files: File[], targetNodeId: string) => {
+    const expectedProjectId = projectRef.current.id;
+    const records: WorkflowMediaRecord[] = [];
+    try {
+      for (const file of files.filter(file => file.type.startsWith('image/'))) records.push(await ingestWorkflowMedia(file));
+      if (!records.length) throw new Error('请选择图片文件');
+      if (!mountedRef.current || projectRef.current.id !== expectedProjectId) throw new Error('画布已切换，请重新上传');
+      const snapshot = currentSnapshot();
+      const target = snapshot.nodes.find(node => node.id === targetNodeId);
+      if (!target) throw new Error('当前生成节点已不存在');
+      const nodes = records.map((record, index) => {
+        const { type, ...metadata } = record;
+        const size = fitWorkflowMediaSize(type, record.naturalWidth, record.naturalHeight);
+        const x = target.position.x + target.width / 2 + (index - (records.length - 1) / 2) * (size.width + 24) - size.width / 2;
+        return { ...createWorkflowNode(nanoid(), type, { x, y: target.position.y - size.height - 100 }, { ...metadata, status: 'success' }), ...size, freeResize: false };
+      });
+      const ids = nodes.map(item => item.id);
+      const ops: WorkflowOp[] = nodes.map(node => ({ type: 'add_node', node }));
+      ids.forEach(id => ops.push({ type: 'connect_nodes', fromNodeId: id, toNodeId: targetNodeId }));
+      ops.push({ type: 'update_node', id: targetNodeId, metadata: {
+        imageReferenceOrder: [...(target.metadata.imageReferenceOrder || []), ...ids],
+        mentionedNodeIds: [...(target.metadata.mentionedNodeIds || []), ...ids],
+      } });
+      if (!applyOps(ops)) throw new Error('参考图节点连接失败');
+      records.forEach(record => releaseWorkflowMediaRecord(record.storageKey));
+    } catch (error) {
+      await Promise.all(records.map(record => discardWorkflowMediaRecord(record.storageKey)));
+      setNotice(error instanceof Error ? error.message : '参考图上传失败');
+    }
+  }, [applyOps, currentSnapshot]);
+
   const handleScriptBatchGenerate = useCallback((scriptNodeId: string, mode: 'image' | 'video') => {
     const snapshot = currentSnapshot();
     const scriptNode = snapshot.nodes.find(n => n.id === scriptNodeId);
@@ -1097,9 +1313,58 @@ export function InfiniteWorkflow({
     if (!interaction || interaction.pointerId !== pointerId) return;
     if (interaction.type === 'node') {
       const point = screenToWorkflow(clientX, clientY);
-      const dx = point.x - interaction.start.x;
-      const dy = point.y - interaction.start.y;
+      let dx = point.x - interaction.start.x;
+      let dy = point.y - interaction.start.y;
       interaction.moved = dx !== 0 || dy !== 0;
+      let snapGuidesState: { x?: number[]; y?: number[] } | null = null;
+      if (snapEnabledRef.current && interaction.positions.size > 0) {
+        const SNAP_THRESHOLD = 8;
+        const draggedIds = new Set(interaction.positions.keys());
+        const firstEntry = [...interaction.positions.entries()][0];
+        const draggedNode = interaction.frame.nodes.find(n => n.id === firstEntry[0]);
+        if (draggedNode) {
+          const px = firstEntry[1].x + dx;
+          const py = firstEntry[1].y + dy;
+          const cx = px + draggedNode.width / 2;
+          const cy = py + draggedNode.height / 2;
+          const dragXLines = [px, px + draggedNode.width, cx];
+          const dragYLines = [py, py + draggedNode.height, cy];
+          let snapDx: number | null = null;
+          let snapDy: number | null = null;
+          let minDx = SNAP_THRESHOLD;
+          let minDy = SNAP_THRESHOLD;
+          const guideXs: number[] = [];
+          const guideYs: number[] = [];
+          for (const other of interaction.frame.nodes) {
+            if (draggedIds.has(other.id)) continue;
+            const ox = other.position.x;
+            const oy = other.position.y;
+            const ocx = ox + other.width / 2;
+            const ocy = oy + other.height / 2;
+            const otherXLines = [ox, ox + other.width, ocx];
+            const otherYLines = [oy, oy + other.height, ocy];
+            for (let i = 0; i < dragXLines.length; i++) {
+              for (let j = 0; j < otherXLines.length; j++) {
+                const dist = Math.abs(dragXLines[i] - otherXLines[j]);
+                if (dist < minDx) { minDx = dist; snapDx = otherXLines[j] - dragXLines[i]; guideXs.length = 0; guideXs.push(otherXLines[j]); }
+                else if (dist < SNAP_THRESHOLD * 0.5 && snapDx !== null) { guideXs.push(otherXLines[j]); }
+              }
+            }
+            for (let i = 0; i < dragYLines.length; i++) {
+              for (let j = 0; j < otherYLines.length; j++) {
+                const dist = Math.abs(dragYLines[i] - otherYLines[j]);
+                if (dist < minDy) { minDy = dist; snapDy = otherYLines[j] - dragYLines[i]; guideYs.length = 0; guideYs.push(otherYLines[j]); }
+                else if (dist < SNAP_THRESHOLD * 0.5 && snapDy !== null) { guideYs.push(otherYLines[j]); }
+              }
+            }
+          }
+          const guides: { x?: number[]; y?: number[] } = {};
+          if (snapDx !== null) { dx += snapDx; guides.x = guideXs; }
+          if (snapDy !== null) { dy += snapDy; guides.y = guideYs; }
+          if (guides.x || guides.y) snapGuidesState = guides;
+        }
+      }
+      setSnapGuides(snapGuidesState);
       patchProject({ nodes: interaction.frame.nodes.map(node => {
         const start = interaction.positions.get(node.id);
         return start ? { ...node, position: { x: start.x + dx, y: start.y + dy } } : node;
@@ -1184,9 +1449,9 @@ export function InfiniteWorkflow({
     updateInteraction(clientX, clientY, pointerId);
     interactionRef.current = null;
     setOverlayHidden(false);
+    setSnapGuides(null);
     if (interaction.type === 'node' || interaction.type === 'resize') {
       if (interaction.moved) pushHistory(interaction.frame);
-      if (!interaction.moved && interaction.type === 'node' && interaction.batchId) toggleBatch(interaction.batchId);
       return;
     }
     if (interaction.type === 'selection') {
@@ -1212,7 +1477,7 @@ export function InfiniteWorkflow({
     } else {
       openCreateMenu(clientX, clientY, interaction.originId, undefined);
     }
-  }, [applyOps, flushPendingMove, getConnectionDropTarget, openCreateMenu, pushHistory, toggleBatch, updateInteraction]);
+  }, [applyOps, flushPendingMove, getConnectionDropTarget, openCreateMenu, pushHistory, updateInteraction]);
 
   const cancelInteraction = useCallback((pointerId?: number) => {
     const interaction = interactionRef.current;
@@ -1228,6 +1493,7 @@ export function InfiniteWorkflow({
     if (interaction?.type === 'connection') createMenuOpenerRef.current = null;
     setSelectionBox(null);
     setConnectionDrag(null);
+    setSnapGuides(null);
     spacePressedRef.current = false;
   }, [patchProject, selectNodes]);
 
@@ -1686,7 +1952,10 @@ export function InfiniteWorkflow({
   const overlayCenter = overlayBounds ? project.viewport.x + ((overlayBounds.left + overlayBounds.right) / 2) * project.viewport.k : 0;
   const toolbarLeft = Math.max(8, Math.min(overlayCenter, (rootRect?.width || 1000) - 8));
   const toolbarTop = overlayBounds ? Math.max(8, project.viewport.y + overlayBounds.top * project.viewport.k - 60) : 0;
-  const promptLeft = Math.max(8, Math.min(overlayCenter - 360, (rootRect?.width || 1000) - 728));
+  const workflowWidth = rootRect?.width || 1000;
+  const promptWidth = Math.min(880, Math.max(360, workflowWidth - 16));
+  const promptLeft = Math.max(8, Math.min(overlayCenter - promptWidth / 2, workflowWidth - promptWidth - 8));
+  const configLeft = Math.max(8, Math.min(overlayCenter - 210, workflowWidth - 428));
   const promptTop = overlayBounds ? Math.max(64, Math.min(project.viewport.y + overlayBounds.bottom * project.viewport.k + 12, (rootRect?.height || 700) - 190)) : 0;
   const gridSize = (project.backgroundMode === 'dots' ? 20 : 24) * project.viewport.k;
 
@@ -1705,7 +1974,7 @@ export function InfiniteWorkflow({
   const hiddenByBatch = useMemo(() => {
     const hidden = new Set<string>();
     for (const [batchId, group] of batchGroups) {
-      if (group.length > 1 && !expandedBatches.has(batchId)) {
+      if (group.length > 1 && (!expandedBatches.has(batchId) || group.length > 4)) {
         for (const node of group) hidden.add(node.id);
       }
     }
@@ -1724,6 +1993,12 @@ export function InfiniteWorkflow({
     }
     return result;
   }, [batchGroups, expandedBatches]);
+
+  const expandedBatchGalleries = useMemo(() => [...batchGroups].flatMap(([batchId, group]) => (
+    group.length > 4 && expandedBatches.has(batchId)
+      ? [{ batchId, group: [...group].sort((left, right) => (left.batchIndex ?? 0) - (right.batchIndex ?? 0)) }]
+      : []
+  )), [batchGroups, expandedBatches]);
 
   const { pendingInsert: wfPendingInsert, consumeInsert: wfConsumeInsert } = usePromptHistoryStore();
   useEffect(() => {
@@ -1835,27 +2110,43 @@ export function InfiniteWorkflow({
             setContextMenu({ type: 'connection', id, x: event.clientX, y: event.clientY });
           }}
         />
+        {snapGuides && (
+          <svg className="workflow-snap-guides" aria-hidden width={10000} height={10000} style={{ position: 'absolute', left: -5000, top: -5000, pointerEvents: 'none', overflow: 'visible' }}>
+            {snapGuides.x?.map((x, i) => (
+              <line key={`vx${i}`} x1={x + 5000} y1={0} x2={x + 5000} y2={10000} stroke="#3b82f6" strokeWidth={1 / project.viewport.k} strokeDasharray={`${4 / project.viewport.k} ${4 / project.viewport.k}`} />
+            ))}
+            {snapGuides.y?.map((y, i) => (
+              <line key={`hy${i}`} x1={0} y1={y + 5000} x2={10000} y2={y + 5000} stroke="#3b82f6" strokeWidth={1 / project.viewport.k} strokeDasharray={`${4 / project.viewport.k} ${4 / project.viewport.k}`} />
+            ))}
+          </svg>
+        )}
         <AnimatePresence>
         {collapsedBatches.map(({ batchId, head, count }) => (
-          <motion.div
+          <WorkflowBatchStack
             key={`batch-stack-${batchId}`}
-            className="workflow-batch-stack"
-            style={{ x: head.position.x, y: head.position.y, width: head.width, height: head.height }}
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.9 }}
-            transition={{ type: 'spring', stiffness: 380, damping: 24, mass: 0.8 }}
-            whileHover={{ scale: 1.02 }}
+            head={head}
+            count={count}
             onPointerDown={event => { const group = batchGroups.get(batchId) || []; if (group.length) startBatchDrag(event, batchId, group); }}
-          >
-            <div className="workflow-batch-stack__layer" style={{ transform: 'translate(6px, 6px)' }} />
-            <div className="workflow-batch-stack__layer" style={{ transform: 'translate(3px, 3px)' }} />
-            {head.metadata.href && <img src={head.metadata.href} alt="" className="workflow-batch-stack__preview" draggable={false} />}
-            <span className="workflow-batch-stack__badge">{count}</span>
-          </motion.div>
+            onExpand={() => toggleBatch(batchId)}
+          />
         ))}
-        {project.nodes.filter(node => node.isVisible !== false && !hiddenByBatch.has(node.id)).map(node => (
-          <WorkflowNode
+        {expandedBatchGalleries.map(({ batchId, group }) => (
+          <WorkflowBatchGallery
+            key={`batch-gallery-${batchId}`}
+            group={group}
+            selectedId={batchPreviewIds[batchId]}
+            onSelect={nodeId => setBatchPreviewIds(current => ({ ...current, [batchId]: nodeId }))}
+            onCollapse={() => toggleBatch(batchId)}
+            onSetPrimary={nodeId => applyOps([{ type: 'set_batch_primary', batchId, nodeId }])}
+            onPointerDown={event => startBatchDrag(event, batchId, group)}
+          />
+        ))}
+        {project.nodes.filter(node => node.isVisible !== false && !hiddenByBatch.has(node.id)).map(node => {
+          const batch = node.batchId ? batchGroups.get(node.batchId) : undefined;
+          const batchRoot = batch?.find(item => item.batchIndex === 0) || batch?.[0];
+          const primaryId = batchRoot?.metadata.primaryImageId || batchRoot?.id;
+          const expandedBatch = Boolean(node.batchId && batch && batch.length > 1 && expandedBatches.has(node.batchId));
+          return <WorkflowNode
             key={node.id}
             node={node}
             selected={selectedNodes.has(node.id)}
@@ -1907,14 +2198,17 @@ export function InfiniteWorkflow({
               selectNodes([node.id]);
               setContextMenu({ type: 'node', id: node.id, x: event.clientX, y: event.clientY });
             }}
-            onCollapseBatch={node.batchId && node.batchIndex === 0 && expandedBatches.has(node.batchId) ? () => toggleBatch(node.batchId!) : undefined}
+            batchCount={expandedBatch ? batch?.length : undefined}
+            isBatchPrimary={expandedBatch ? node.id === primaryId : undefined}
+            onCollapseBatch={expandedBatch ? () => toggleBatch(node.batchId!) : undefined}
+            onSetBatchPrimary={expandedBatch && node.id !== primaryId ? () => applyOps([{ type: 'set_batch_primary', batchId: node.batchId!, nodeId: node.id }]) : undefined}
             onDoubleClick={node.type === 'script' ? () => setScriptEditorNodeId(node.id) : undefined}
             onPreviewMedia={setPreviewNode}
             onChangeTitle={title => { if (!node.isLocked) applyOps([{ type: 'update_node', id: node.id, patch: { title } }]); }}
             renameSignal={renameSignal?.nodeId === node.id ? renameSignal.nonce : undefined}
             onFocusNode={() => focusNode(node.id)}
-          />
-        ))}
+          />;
+        })}
         </AnimatePresence>
         {selectionStyle && <div className="workflow-selection-box" style={selectionStyle} />}
       </div>
@@ -1975,11 +2269,11 @@ export function InfiniteWorkflow({
             }}
           />
         </div>
-        {selectedNodeData.length === 1 && selectedNodeData[0].type === 'config' && <div data-workflow-overlay style={{ position: 'absolute', zIndex: 69, left: promptLeft, top: promptTop, width: 420 }} onWheel={event => event.stopPropagation()}>
+        {selectedNodeData.length === 1 && selectedNodeData[0].type === 'config' && <div data-workflow-overlay style={{ position: 'absolute', zIndex: 69, left: configLeft, top: promptTop, width: 420 }} onWheel={event => event.stopPropagation()}>
           <WorkflowConfigPanel node={selectedNodeData[0]} nodes={project.nodes} connections={project.connections} onChange={metadata => applyOps([{ type: 'update_node', id: selectedNodeData[0].id, metadata: { ...selectedNodeData[0].metadata, ...metadata } }])} onRun={() => onRunNode(selectedNodeData[0].id)} onStop={onStopNode ? () => onStopNode(selectedNodeData[0].id) : undefined} />
         </div>}
         {selectedNodeData.length === 1 && ['image', 'video', 'text'].includes(selectedNodeData[0].type) && <div data-workflow-overlay style={{ position: 'absolute', zIndex: 69, left: promptLeft, top: promptTop }}>
-          <WorkflowNodePromptBar node={selectedNodeData[0]} nodes={project.nodes} connections={project.connections} t={t} theme={theme} language={language} userApiKeys={userApiKeys} modelPreference={modelPreference} dynamicModelOptions={dynamicModelOptions} onOpenSettings={onOpenSettings} onEnhancePrompt={onEnhancePrompt} isEnhancingPrompt={isEnhancingPrompt} onChange={metadata => applyOps([{ type: 'update_node', id: selectedNodeData[0].id, metadata: { ...selectedNodeData[0].metadata, ...metadata } }])} onRun={() => onRunNode(selectedNodeData[0].id)} onStop={onStopNode ? () => onStopNode(selectedNodeData[0].id) : undefined} focusSignal={promptFocusSignal} onDisconnectReference={fromNodeId => { const targetId = selectedNodeData[0].id; const conn = project.connections.find(c => c.toNodeId === targetId && c.fromNodeId === fromNodeId); if (!conn) return; applyOps([{ type: 'delete_connections', ids: [conn.id] }]); }} />
+          <WorkflowNodePromptBar width={promptWidth} node={selectedNodeData[0]} nodes={project.nodes} connections={project.connections} t={t} theme={theme} language={language} userApiKeys={userApiKeys} modelPreference={modelPreference} dynamicModelOptions={dynamicModelOptions} onOpenSettings={onOpenSettings} onEnhancePrompt={onEnhancePrompt} isEnhancingPrompt={isEnhancingPrompt} onChange={metadata => applyOps([{ type: 'update_node', id: selectedNodeData[0].id, metadata: { ...selectedNodeData[0].metadata, ...metadata } }])} onRun={() => onRunNode(selectedNodeData[0].id)} onStop={onStopNode ? () => onStopNode(selectedNodeData[0].id) : undefined} focusSignal={promptFocusSignal} onDisconnectReference={fromNodeId => { const targetId = selectedNodeData[0].id; const conn = project.connections.find(c => c.toNodeId === targetId && c.fromNodeId === fromNodeId); if (!conn) return; applyOps([{ type: 'delete_connections', ids: [conn.id] }]); }} assetFolders={assetFolders} assetItems={assetSuggestions} assetLibrary={assetLibrary} onSelectCanvasReference={selectedNodeData[0] ? (nodeId => handleSelectCanvasReference(nodeId, selectedNodeData[0].id)) : undefined} onAddReferenceFiles={selectedNodeData[0] ? (files => handleAddReferenceFiles(files, selectedNodeData[0].id)) : undefined} onSelectAsset={selectedNodeData[0] ? (assetId => handleSelectAsset(assetId, selectedNodeData[0].id)) : undefined} skillEnabled={false} />
         </div>}
       </>}
       {minimapOpen && <WorkflowMiniMap nodes={project.nodes.filter(node => node.isVisible !== false)} viewport={project.viewport} onCenter={(x, y) => {

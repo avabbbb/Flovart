@@ -25,6 +25,7 @@ export interface WorkflowVideoToolHandlers {
   trim?: (id: string) => void;
   avSplit?: (id: string) => void;
   merge?: (ids: string[]) => void;
+  extractFrame?: (id: string, position: 'first' | 'last') => void;
 }
 
 export interface WorkflowAudioToolHandlers {
@@ -93,6 +94,8 @@ export function WorkflowNodeToolbar({ nodes, onCopy, onDelete, onExport, onRun, 
     selectedMedia.length > 1 && selectedMedia.every(n => n.type === 'image') && imageTools?.storyboard && { key: 'storyboard', label: '分镜组拼接', icon: <Frame size={18} />, disabled: advancedToolBusy, onClick: () => imageTools.storyboard?.(ids) },
     node?.type === 'video' && mediaUrl && videoTools?.trim && { key: 'video-trim', label: '视频剪辑', icon: <Scissors size={18} />, disabled: videoToolBusy, onClick: () => videoTools.trim?.(node.id) },
     node?.type === 'video' && mediaUrl && videoTools?.avSplit && { key: 'video-av-split', label: '音视频分离', icon: <ScanLine size={18} />, disabled: videoToolBusy, onClick: () => videoTools.avSplit?.(node.id) },
+    node?.type === 'video' && mediaUrl && videoTools?.extractFrame && { key: 'video-frame-first', label: '导出首帧为图片', icon: <ArrowUpToLine size={18} />, disabled: videoToolBusy, onClick: () => videoTools.extractFrame?.(node.id, 'first') },
+    node?.type === 'video' && mediaUrl && videoTools?.extractFrame && { key: 'video-frame-last', label: '导出尾帧为图片', icon: <ArrowDownToLine size={18} />, disabled: videoToolBusy, onClick: () => videoTools.extractFrame?.(node.id, 'last') },
     selectedMedia.length > 1 && selectedMedia.every(n => n.type === 'video') && videoTools?.merge && { key: 'video-merge', label: '视频拼接', icon: <Frame size={18} />, disabled: videoToolBusy, onClick: () => videoTools.merge?.(ids) },
     node?.type === 'audio' && mediaUrl && audioTools?.trim && { key: 'audio-trim', label: '音频截取', icon: <Scissors size={18} />, disabled: audioToolBusy, onClick: () => audioTools.trim?.(node.id) },
     node?.type === 'audio' && mediaUrl && audioTools?.speed && { key: 'audio-speed', label: '音频变速', icon: <Gauge size={18} />, disabled: audioToolBusy, onClick: () => audioTools.speed?.(node.id) },

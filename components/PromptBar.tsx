@@ -1,6 +1,9 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Reorder } from 'motion/react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { motion, Reorder } from 'motion/react';
 import type {
+    AssetFolder,
+    AssetLibrary,
     CharacterLockProfile,
     ChatAttachment,
     Element,
@@ -12,25 +15,32 @@ import type {
     UserEffect,
 } from '../types';
 import RichPromptEditor, { type RichPromptEditorHandle } from './RichPromptEditor';
-import type { MentionItem } from './MentionList';
+import type { AssetSuggestion, MentionItem } from './MentionList';
 export type { MentionItem } from './MentionList';
 import { extractMentions } from './CanvasMentionExtension';
 import type { ImageReferenceChip } from './workflow/references';
+import { useWorkflowMediaUrl } from './workflow/media';
 import { PROVIDER_LABELS, type VideoAspectRatio } from '../services/aiGateway';
 
 import { readColdMedia } from '../utils/mediaIndexedDB';
-import { modelRefLabel, modelRefModelId, modelRefProvider, modelRefSearchText } from '../utils/modelRefs';
+import { modelRefLabel, modelRefModelId, modelRefProvider } from '../utils/modelRefs';
 import {
     getProductModel,
-    getProductModelsByCompany,
+    getProductModels,
+    getRoutedVideoModes,
+    explainUnsupportedVideoMode,
     isProductModelConfigured,
     resolveProductModelRoute,
     sanitizeProductGenerationParams,
+    VIDEO_MODE_ORDER,
 } from '../services/productModelCatalog';
+import { AssetReferencePicker, type ReferencePickerCanvasItem } from './studio/AssetReferencePicker';
+import { estimateApiCost } from '../utils/usageMonitor';
 
 export interface PromptBarProps {
     t: (key: string, ...args: any[]) => string;
     theme: 'light' | 'dark';
+    language?: 'en' | 'zho';
     compactMode?: boolean;
     prompt: string;
     promptDocument?: Record<string, unknown>;
@@ -112,15 +122,24 @@ export interface PromptBarProps {
     className?: string;
     shellClassName?: string;
     modeOptions?: GenerationMode[];
-    popoverDirection?: 'up' | 'down';
+    popoverDirection?: 'auto' | 'up' | 'down';
     onRetry?: () => void;
     error?: string | null;
     progressStage?: string;
+    providerUsageLabel?: string;
     autoFocus?: boolean;
     focusSignal?: number;
+    assetFolders?: AssetFolder[];
+    assetItems?: AssetSuggestion[];
+    assetLibrary?: AssetLibrary;
+    referenceItems?: ReferencePickerCanvasItem[];
+    onSelectCanvasReference?: (nodeId: string) => string | undefined;
+    onAddReferenceFiles?: (files: File[]) => void | Promise<void>;
+    onSelectAsset?: (assetId: string) => string | undefined;
+    skillEnabled?: boolean;
 }
 
-type ExpandPanel = 'model' | 'parameters' | 'advanced' | 'more' | null;
+type ExpandPanel = 'model' | 'submode' | 'parameters' | 'advanced' | 'more' | 'batch' | null;
 
 const TYPE_LABELS: Record<Element['type'], string> = {
     image: '图片',
@@ -169,6 +188,25 @@ const PRODUCT_MODE_LABELS: Record<ProductModelMode, string> = {
     'video-extension': '视频扩展',
 };
 
+function getProductFamily(model: ReturnType<typeof getProductModels>[number]): string {
+    if (model.id.includes('seedance')) return 'Seedance';
+    if (model.id.includes('seedream')) return 'Seedream';
+    if (model.id.includes('kling')) return 'Kling';
+    if (model.id.includes('veo')) return 'Veo';
+    if (model.id.includes('gpt-image')) return 'GPT Image';
+    if (model.id.includes('gemini')) return 'Gemini Image';
+    return model.company;
+}
+
+function ReferenceChipPreview({ chip }: { chip: ImageReferenceChip }) {
+    const media = useWorkflowMediaUrl(chip.storageKey, chip.thumbnail);
+    if (chip.elementType === 'audio') return <div className="flex h-full w-full items-center justify-center text-[10px] font-bold" style={{ color: 'var(--isl-mint-deep)', background: 'var(--isl-mint-bg)' }}>AU</div>;
+    if (!media.url) return <div className="flex h-full w-full items-center justify-center text-[10px]">{chip.elementType === 'video' ? '🎬' : '🖼'}</div>;
+    return chip.elementType === 'video'
+        ? <video src={media.url} className="h-full w-full object-cover" muted playsInline preload="metadata" />
+        : <img src={media.url} alt={chip.label} className="h-full w-full object-cover" />;
+}
+
 function getModelLabel(mode: GenerationMode, textModel?: string, imageModel?: string, videoModel?: string, userApiKeys: UserApiKey[] = []): string {
     const model = mode === 'text' ? textModel : mode === 'video' || mode === 'keyframe' ? videoModel : imageModel;
     if (!model) return mode === 'text' ? '选择文本模型' : mode === 'video' || mode === 'keyframe' ? '选择视频模型' : '选择图片模型';
@@ -180,9 +218,9 @@ function getModelLabel(mode: GenerationMode, textModel?: string, imageModel?: st
 }
 
 const PopoverHeader: React.FC<{ title: string; subtitle?: string }> = ({ title, subtitle }) => (
-    <div className="px-2 pb-1.5">
-        <div className="text-xs font-bold" style={{ color: 'var(--isl-ink)' }}>{title}</div>
-        {subtitle && <div className="mt-0.5 text-[10px]" style={{ color: 'var(--isl-ink-soft)' }}>{subtitle}</div>}
+    <div className="px-1 pb-3">
+        <div className="text-[15px] font-extrabold" style={{ color: 'var(--isl-ink)' }}>{title}</div>
+        {subtitle && <div className="mt-1 text-[11px] leading-4" style={{ color: 'var(--isl-ink-soft)' }}>{subtitle}</div>}
     </div>
 );
 
@@ -204,26 +242,120 @@ const MenuOptionButton: React.FC<{ label: string; active?: boolean; description?
     </button>
 );
 
+type FloatingSide = 'up' | 'down';
+
+const AdaptivePromptPopover: React.FC<{
+    anchorRef: React.RefObject<HTMLElement | null>;
+    preferredSide: 'auto' | FloatingSide;
+    width: number;
+    children: React.ReactNode;
+}> = ({ anchorRef, preferredSide, width, children }) => {
+    const panelRef = useRef<HTMLDivElement>(null);
+    const [position, setPosition] = useState({ left: 12, top: 12, maxHeight: 320, side: 'up' as FloatingSide, ready: false });
+
+    useLayoutEffect(() => {
+        const panel = panelRef.current;
+        const anchor = anchorRef.current;
+        if (!panel || !anchor) return;
+
+        const updatePosition = () => {
+            const anchorRect = anchor.getBoundingClientRect();
+            const panelRect = panel.getBoundingClientRect();
+            const viewport = window.visualViewport;
+            const viewportWidth = viewport?.width || window.innerWidth;
+            const viewportHeight = viewport?.height || window.innerHeight;
+            const viewportLeft = viewport?.offsetLeft || 0;
+            const viewportTop = viewport?.offsetTop || 0;
+            const margin = 12;
+            const gap = 10;
+            const spaceAbove = anchorRect.top - viewportTop - margin - gap;
+            const spaceBelow = viewportTop + viewportHeight - anchorRect.bottom - margin - gap;
+            const desiredHeight = Math.max(240, panelRect.height);
+            const preferredFits = preferredSide === 'up' ? spaceAbove >= desiredHeight : preferredSide === 'down' ? spaceBelow >= desiredHeight : false;
+            const side: FloatingSide = preferredSide === 'auto'
+                ? (spaceBelow >= desiredHeight || spaceBelow >= spaceAbove ? 'down' : 'up')
+                : preferredFits
+                    ? preferredSide
+                    : preferredSide === 'up'
+                        ? 'down'
+                        : 'up';
+            const availableHeight = Math.max(180, side === 'up' ? spaceAbove : spaceBelow);
+            const renderedHeight = Math.min(panelRect.height, availableHeight);
+            const panelWidth = Math.min(width, viewportWidth - margin * 2);
+            const idealLeft = anchorRect.left + Math.min(16, Math.max(0, anchorRect.width - panelWidth));
+            const left = Math.min(Math.max(idealLeft, viewportLeft + margin), viewportLeft + viewportWidth - panelWidth - margin);
+            const top = side === 'up'
+                ? Math.max(viewportTop + margin, anchorRect.top - gap - renderedHeight)
+                : Math.min(anchorRect.bottom + gap, viewportTop + viewportHeight - renderedHeight - margin);
+
+            setPosition(previous => {
+                const next = { left, top, maxHeight: availableHeight, side, ready: true };
+                return previous.left === next.left && previous.top === next.top && previous.maxHeight === next.maxHeight && previous.side === next.side && previous.ready
+                    ? previous
+                    : next;
+            });
+        };
+
+        updatePosition();
+        const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(updatePosition);
+        observer?.observe(anchor);
+        observer?.observe(panel);
+        window.addEventListener('resize', updatePosition);
+        window.addEventListener('scroll', updatePosition, true);
+        window.visualViewport?.addEventListener('resize', updatePosition);
+        window.visualViewport?.addEventListener('scroll', updatePosition);
+        return () => {
+            observer?.disconnect();
+            window.removeEventListener('resize', updatePosition);
+            window.removeEventListener('scroll', updatePosition, true);
+            window.visualViewport?.removeEventListener('resize', updatePosition);
+            window.visualViewport?.removeEventListener('scroll', updatePosition);
+        };
+    }, [anchorRef, preferredSide, width]);
+
+    if (typeof document === 'undefined') return null;
+    return createPortal(
+        <motion.div
+            ref={panelRef}
+            data-prompt-floating-panel
+            data-testid="prompt-floating-panel"
+            data-side={position.side}
+            data-preferred-side={preferredSide}
+            className="theme-aware fixed z-[2000] isl-scrollbar"
+            style={{
+                left: position.left,
+                top: position.top,
+                width: `min(${width}px, calc(100vw - 24px))`,
+                maxHeight: position.maxHeight,
+                visibility: position.ready ? 'visible' : 'hidden',
+                overflowY: 'auto',
+                overflowX: 'hidden',
+                overscrollBehavior: 'contain',
+                borderRadius: 24,
+                transformOrigin: position.side === 'up' ? 'bottom left' : 'top left',
+            }}
+            initial={{ opacity: 0, scale: 0.97 }}
+            animate={{ opacity: position.ready ? 1 : 0, scale: position.ready ? 1 : 0.97 }}
+            transition={{ type: 'spring', stiffness: 420, damping: 34, mass: 0.7 }}
+            onPointerDown={event => event.stopPropagation()}
+            onWheel={event => event.stopPropagation()}
+        >
+            {children}
+        </motion.div>,
+        document.body,
+    );
+};
+
 const isSupportedAttachment = (type: string) => type.startsWith('image/') || type.startsWith('video/') || type.startsWith('audio/');
 
 const SEEDANCE_RESOLUTIONS = ['480p', '720p', '1080p'] as const;
 
 const EMPTY_ATTACHMENTS: ChatAttachment[] = [];
-const RECENT_MODELS_KEY = 'flovart-recent-models';
-const MAX_RECENT_MODELS = 5;
-function getRecentModels(): string[] {
-    try { const raw = localStorage.getItem(RECENT_MODELS_KEY); return raw ? JSON.parse(raw) : []; }
-    catch { return []; }
-}
-function addRecentModel(model: string) {
-    const recent = getRecentModels().filter(m => m !== model);
-    recent.unshift(model);
-    try { localStorage.setItem(RECENT_MODELS_KEY, JSON.stringify(recent.slice(0, MAX_RECENT_MODELS))); } catch {}
-}
 
 export const PromptBar: React.FC<PromptBarProps> = ({
     t,
     theme,
+    language = 'zho',
     compactMode = false,
     prompt,
     promptDocument,
@@ -300,13 +432,22 @@ export const PromptBar: React.FC<PromptBarProps> = ({
     variant = 'global',
     className,
     shellClassName,
-    popoverDirection = 'up',
+    popoverDirection = 'auto',
     modeOptions = ['image', 'video', 'keyframe'],
     onRetry,
     error,
     progressStage,
+    providerUsageLabel,
     autoFocus = false,
     focusSignal,
+    assetFolders = [],
+    assetItems = [],
+    assetLibrary,
+    referenceItems = [],
+    onSelectCanvasReference,
+    onAddReferenceFiles,
+    onSelectAsset,
+    skillEnabled = false,
 }) => {
     const isDark = theme === 'dark';
     const rootRef = useRef<HTMLDivElement>(null);
@@ -317,14 +458,17 @@ export const PromptBar: React.FC<PromptBarProps> = ({
 
     const [expandedPanel, setExpandedPanel] = useState<ExpandPanel>(null);
     const [isDragActive, setIsDragActive] = useState(false);
+    const [referencePickerOpen, setReferencePickerOpen] = useState(false);
+    const [referencesExpanded, setReferencesExpanded] = useState(false);
     const [resolvedAttachmentHrefs, setResolvedAttachmentHrefs] = useState<Record<string, string>>({});
-    const [modelSearchQuery, setModelSearchQuery] = useState('');
-    const [recentModels, setRecentModels] = useState<string[]>(() => getRecentModels());
+    const [modelCapabilityFilter, setModelCapabilityFilter] = useState<ProductModelMode | 'all'>('all');
+    const [activeModelFamily, setActiveModelFamily] = useState('');
     const [isTranslating, setIsTranslating] = useState(false);
+    const [preTranslatePrompt, setPreTranslatePrompt] = useState<string | null>(null);
 
     const triggerClass = `isl-chip ${compactMode ? 'h-7 px-2.5 text-[11px]' : 'h-8 px-3 text-xs'}`;
     const activeTriggerClass = 'isl-chip--active';
-    const popoverCardClass = `isl-pop absolute ${popoverDirection === 'down' ? 'top-full left-0 mt-2' : 'bottom-full left-0 mb-2'} z-[80] ${compactMode ? 'min-w-[200px]' : 'min-w-[220px]'} p-1.5 max-h-[60vh] overflow-y-auto`;
+    const popoverWidth = expandedPanel === 'model' ? 660 : expandedPanel === 'submode' ? 360 : expandedPanel === 'parameters' ? 430 : expandedPanel === 'more' ? 440 : expandedPanel === 'batch' ? 300 : 400;
     const shellClass = 'isl-shell';
 
     /** 将画布元素转换为 RichPromptEditor 需要的 MentionItem[] */
@@ -345,11 +489,37 @@ export const PromptBar: React.FC<PromptBarProps> = ({
     const videoLikeMode = generationMode === 'video' || generationMode === 'keyframe';
     const activeModel = generationMode === 'text' ? selectedTextModel : videoLikeMode ? selectedVideoModel : selectedImageModel;
     const activeProductModel = useMemo(() => getProductModel(activeModel), [activeModel]);
-    /** 当前能力下的产品模型按公司分组 */
-const productModelGroups = useMemo(
-        () => activeProductModel ? getProductModelsByCompany(activeProductModel.capability) : [],
-        [activeProductModel]
+    const activeRoute = activeProductModel ? resolveProductModelRoute(activeProductModel.id, userApiKeys) : null;
+    const activeCapabilities = useMemo(() => {
+        if (!activeProductModel) return undefined;
+        const capabilities = activeProductModel.capabilities;
+        return activeProductModel.capability === 'video' && ['keling', 'minimax', 'custom', 'openai_compatible'].includes(activeRoute?.key.provider || '')
+            ? { ...capabilities, audioControl: 'none' as const }
+            : capabilities;
+    }, [activeProductModel, activeRoute]);
+    /** 图片/视频产品模型按产品家族分组：左侧选家族，右侧渐进披露具体版本。 */
+    const productModels = useMemo(
+        () => generationMode === 'text' ? [] : getProductModels(videoLikeMode ? 'video' : 'image'),
+        [generationMode, videoLikeMode]
     );
+    const productModelGroups = useMemo(() => {
+        const groups = new Map<string, typeof productModels>();
+        productModels.forEach(product => {
+            const family = getProductFamily(product);
+            groups.set(family, [...(groups.get(family) || []), product]);
+        });
+        return [...groups].map(([family, models]) => ({ family, company: models[0]?.company || '', models }));
+    }, [productModels]);
+    const modelCapabilityFilters = useMemo(() => [...new Set(productModels.flatMap(product => product.capabilities.modes))], [productModels]);
+    const filteredProductModelGroups = useMemo(() => productModelGroups
+        .map(group => ({ ...group, models: group.models.filter(product => modelCapabilityFilter === 'all' || product.capabilities.modes.includes(modelCapabilityFilter)) }))
+        .filter(group => group.models.length > 0), [modelCapabilityFilter, productModelGroups]);
+    const displayedModelGroup = filteredProductModelGroups.find(group => group.family === activeModelFamily) || filteredProductModelGroups[0];
+
+    useEffect(() => {
+        if (!activeProductModel) return;
+        setActiveModelFamily(getProductFamily(activeProductModel));
+    }, [activeProductModel]);
     /** 当前生效的比例 setter：图片用 imageAspectRatio，视频用 videoAspectRatio */
     const activeRatio = generationMode === 'image' ? imageAspectRatio : videoAspectRatio;
     const setActiveRatio = (ratio: VideoAspectRatio) => {
@@ -358,25 +528,62 @@ const productModelGroups = useMemo(
     };
     /** 参数摘要：用于 chip 上显示浓度等信息 */
     const paramSummary = useMemo(() => {
-        if (!activeProductModel) return '';
+        if (!activeProductModel || !activeCapabilities) return '';
         const parts: string[] = [];
         if (activeProductModel.capability === 'image' && generationQuality) {
             parts.push(generationQuality === 'low' ? '低画面' : generationQuality === 'medium' ? '标准' : '高画面');
         }
-        if (activeProductModel.capabilities.resolutions.length > 0 && videoResolution) parts.push(videoResolution);
-        if (activeProductModel.capabilities.aspectRatios.length > 0 && activeRatio) parts.push(activeRatio === 'adaptive' ? '自适应' : activeRatio);
-        if (generationMode === 'video' && activeProductModel.capabilities.durations.length > 0) parts.push(videoDurationSec === -1 ? '无限时' : `${videoDurationSec}s`);
+        if (activeCapabilities.resolutions.length > 0 && videoResolution) parts.push(videoResolution);
+        if (activeCapabilities.aspectRatios.length > 0 && activeRatio) parts.push(activeRatio === 'adaptive' ? '自适应' : activeRatio);
+        if (generationMode === 'video' && activeCapabilities.durations.length > 0) parts.push(videoDurationSec === -1 ? '无限时' : `${videoDurationSec}s`);
         if (batchCount > 1) parts.push(`×${batchCount}`);
         return parts.filter(Boolean).join(' · ');
-    }, [activeProductModel, generationMode, generationQuality, videoResolution, activeRatio, videoDurationSec, batchCount]);
+    }, [activeCapabilities, activeProductModel, generationMode, generationQuality, videoResolution, activeRatio, videoDurationSec, batchCount]);
     const isSeedanceVideoModel = useMemo(() => {
         return videoLikeMode && !!selectedVideoModel && modelRefModelId(selectedVideoModel).toLowerCase().includes('seedance');
     }, [selectedVideoModel, videoLikeMode]) || activeProductModel?.id.includes('seedance') === true;
     const isSeedanceFastModel = isSeedanceVideoModel && modelRefModelId(selectedVideoModel).toLowerCase().includes('fast');
 
     const currentModelOptions = generationMode === 'text' ? textModelOptions : videoLikeMode ? videoModelOptions : imageModelOptions;
-    const activeRoute = activeProductModel ? resolveProductModelRoute(activeProductModel.id, userApiKeys) : null;
+    const routedVideoModes = useMemo(() => activeProductModel?.capability === 'video'
+        ? getRoutedVideoModes(activeProductModel.id, activeRoute?.key.provider, activeRoute?.upstreamModelId)
+        : [], [activeProductModel, activeRoute]);
     const activeKey = activeRoute?.key || userApiKeys.find(k => k.isDefault) || userApiKeys[0];
+    const estimatedCost = useMemo(() => activeRoute && activeProductModel ? estimateApiCost({
+        key: activeRoute.key,
+        productModelId: activeProductModel.id,
+        upstreamModelId: activeRoute.upstreamModelId,
+        type: activeProductModel.capability,
+        durationSec: generationMode === 'video' ? videoDurationSec : undefined,
+        count: batchCount,
+        resolution: videoResolution,
+        quality: generationQuality,
+    }) : null, [activeProductModel, activeRoute, batchCount, generationMode, generationQuality, videoDurationSec, videoResolution]);
+    const estimatedCostLabel = estimatedCost
+        ? `${estimatedCost.currency === 'CNY' ? '¥' : '$'}${estimatedCost.amount < 1 ? estimatedCost.amount.toFixed(3).replace(/0+$/, '').replace(/\.$/, '') : estimatedCost.amount.toFixed(2)}`
+        : null;
+    const mentionedReferences = imageReferenceChips?.filter(reference => reference.mentioned) || [];
+    const mentionedImageCount = mentionedReferences.filter(reference => reference.elementType === 'image').length;
+    const activeSubmode = generationSubmode || (generationMode === 'video' ? 'text-to-video' : 'text-to-image');
+    const videoInputRequirement = generationMode !== 'video' ? null
+        : activeSubmode === 'image-to-video' && mentionedImageCount < 1 ? '图生视频需要添加 1 张图片'
+            : activeSubmode === 'first-last-frame' && mentionedImageCount < 2 ? '首尾帧需要按顺序添加 2 张图片'
+                : activeSubmode === 'reference-to-video' && mentionedReferences.length < 1 ? '全能参考需要添加至少 1 个素材'
+                    : null;
+    const paramDisabledReason = useCallback((kind: 'resolution' | 'aspectRatio' | 'durationSec', value: string | number): string | null => {
+        if (!activeProductModel) return '请先选择模型';
+        const base: {
+            mode: ProductModelMode;
+            aspectRatio?: VideoAspectRatio;
+            resolution?: string;
+            durationSec?: number;
+        } = { mode: activeSubmode };
+        if (kind === 'aspectRatio') base.aspectRatio = value as VideoAspectRatio; else base.aspectRatio = activeRatio;
+        if (kind === 'resolution') base.resolution = String(value); else base.resolution = videoResolution;
+        if (kind === 'durationSec') base.durationSec = Number(value); else base.durationSec = videoDurationSec;
+        const probe = sanitizeProductGenerationParams(activeProductModel.id, base);
+        return (probe[kind] as string | number) === value ? null : '当前模式下此选项不可用';
+    }, [activeProductModel, activeRatio, activeSubmode, videoDurationSec, videoResolution]);
     const changeActiveModel = (model: string) => generationMode === 'text' ? onTextModelChange?.(model) : videoLikeMode ? onVideoModelChange?.(model) : onImageModelChange?.(model);
     const promptCharCount = prompt.trim().length;
     const readyState = !activeKey || (activeProductModel && !activeRoute)
@@ -385,6 +592,8 @@ const productModelGroups = useMemo(
             ? 'error'
             : !prompt.trim()
                 ? 'empty'
+                : videoInputRequirement
+                    ? 'invalid-input'
                 : isLoading
                     ? 'generating'
                     : 'ready';
@@ -394,6 +603,8 @@ const productModelGroups = useMemo(
             ? (error || '生成失败')
             : readyState === 'empty'
                 ? '输入你想生成或修改的画面'
+                : readyState === 'invalid-input'
+                    ? videoInputRequirement
                 : readyState === 'generating'
                     ? (progressStage || '正在生成，保持画布打开')
                     : '准备就绪，Ctrl+Enter 生成';
@@ -407,6 +618,8 @@ const productModelGroups = useMemo(
         if (selectedElementCount === 1) return '描述你想对当前元素做什么';
         return `已选中 ${selectedElementCount} 个元素，补充组合生成描述`;
     }, [isSelectionActive, selectedElementCount]);
+    const addReferenceFiles = onAddReferenceFiles || (onAddAttachments ? ((files: File[]) => onAddAttachments(files)) : undefined);
+    const canOpenReferencePicker = Boolean(onSelectCanvasReference || onSelectAsset || addReferenceFiles);
 
     /** 编辑器文本 + mention 变化时同步到父组件 */
     const handleEditorChange = useCallback((plainText: string, json: Record<string, unknown>) => {
@@ -424,8 +637,8 @@ const productModelGroups = useMemo(
 
     /** 编辑器 Enter 提交 */
     const handleEditorSubmit = useCallback(() => {
-        if (latestPromptRef.current.trim() && !isLoading && readyState !== 'missing-key') onGenerate();
-    }, [isLoading, onGenerate, readyState]);
+        if (latestPromptRef.current.trim() && !isLoading && readyState !== 'missing-key' && !videoInputRequirement) onGenerate();
+    }, [isLoading, onGenerate, readyState, videoInputRequirement]);
 
     const replacePrompt = useCallback((value: string) => {
         latestPromptRef.current = value;
@@ -439,24 +652,33 @@ const productModelGroups = useMemo(
         }
     }, [onMentionedElementIds, onPromptDocumentChange, onPromptInputChange, setPrompt]);
 
-    const activeSubmode = generationSubmode || (generationMode === 'video' ? 'text-to-video' : 'text-to-image');
-
     const handleTranslatePrompt = useCallback(async () => {
         if (!onEnhancePrompt || !prompt.trim() || isTranslating) return;
+        const previous = prompt;
         setIsTranslating(true);
         try {
             const result = await onEnhancePrompt({ prompt: prompt.trim(), mode: 'translate' });
-            if (result.enhancedPrompt?.trim()) replacePrompt(result.enhancedPrompt.trim());
+            if (result.enhancedPrompt?.trim()) {
+                setPreTranslatePrompt(previous);
+                replacePrompt(result.enhancedPrompt.trim());
+            }
         } finally {
             setIsTranslating(false);
         }
     }, [isTranslating, onEnhancePrompt, prompt, replacePrompt]);
 
+    const handleRevertTranslate = useCallback(() => {
+        if (preTranslatePrompt == null) return;
+        replacePrompt(preTranslatePrompt);
+        setPreTranslatePrompt(null);
+    }, [preTranslatePrompt, replacePrompt]);
+
     useEffect(() => {
-        if (!activeProductModel || generationMode === 'text') return;
-        const capabilities = activeProductModel.capabilities;
-        if (!capabilities.modes.includes(activeSubmode)) {
-            onGenerationSubmodeChange?.(capabilities.modes[0]);
+        if (!activeProductModel || !activeCapabilities || generationMode === 'text') return;
+        const capabilities = activeCapabilities;
+        const availableModes = generationMode === 'video' && routedVideoModes.length ? routedVideoModes : capabilities.modes;
+        if (!availableModes.includes(activeSubmode)) {
+            onGenerationSubmodeChange?.(availableModes[0]);
         }
         if (activeRatio && !capabilities.aspectRatios.includes(activeRatio)) {
             setActiveRatio(capabilities.aspectRatios[0]);
@@ -473,10 +695,17 @@ const productModelGroups = useMemo(
         if (generationMode === 'video' && normalized.durationSec !== undefined && normalized.durationSec !== videoDurationSec) {
             onVideoDurationSecChange?.(normalized.durationSec);
         }
-    }, [activeProductModel, activeRatio, activeSubmode, generationMode, onGenerationSubmodeChange, onVideoDurationSecChange, onVideoResolutionChange, setActiveRatio, videoDurationSec, videoResolution]);
+    }, [activeCapabilities, activeProductModel, activeRatio, activeSubmode, generationMode, onGenerationSubmodeChange, onVideoDurationSecChange, onVideoResolutionChange, routedVideoModes, setActiveRatio, videoDurationSec, videoResolution]);
 
+    const prevFocusSignalRef = useRef<number | undefined>(undefined);
     useEffect(() => {
-        if (autoFocus || focusSignal !== undefined) richEditorRef.current?.focus();
+        if (prevFocusSignalRef.current === undefined) {
+            prevFocusSignalRef.current = focusSignal;
+            if (autoFocus) richEditorRef.current?.focus();
+            return;
+        }
+        if (prevFocusSignalRef.current !== focusSignal) richEditorRef.current?.focus();
+        prevFocusSignalRef.current = focusSignal;
     }, [autoFocus, focusSignal]);
 
     /** 外部 prompt 被清空时（如切换画板、生成完成后），同步清空富文本编辑器 */
@@ -505,13 +734,22 @@ const productModelGroups = useMemo(
 
     useEffect(() => {
         const handleOutsideClick = (event: MouseEvent) => {
-            if (rootRef.current && !rootRef.current.contains(event.target as Node)) {
+            const target = event.target as Node;
+            const isInsideFloatingPanel = target instanceof window.Element && !!target.closest('[data-prompt-floating-panel]');
+            if (rootRef.current && !rootRef.current.contains(target) && !isInsideFloatingPanel) {
                 setExpandedPanel(null);
             }
         };
+        const handleEscape = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') setExpandedPanel(null);
+        };
 
         document.addEventListener('mousedown', handleOutsideClick);
-        return () => document.removeEventListener('mousedown', handleOutsideClick);
+        document.addEventListener('keydown', handleEscape);
+        return () => {
+            document.removeEventListener('mousedown', handleOutsideClick);
+            document.removeEventListener('keydown', handleEscape);
+        };
     }, []);
 
     useEffect(() => {
@@ -616,52 +854,64 @@ const productModelGroups = useMemo(
                         '--prompt-editor-line-height': compactMode ? '1.4' : '1.5',
                     } as React.CSSProperties}
                 >
-                    {imageReferenceChips && imageReferenceChips.length > 0 && onImageReferenceReorder && (
+                    {(canOpenReferencePicker || (imageReferenceChips?.length || 0) > 0) && (
                         <div
-                            className={`${compactMode ? 'mb-2' : 'mb-2.5'} flex items-center gap-1.5 overflow-x-auto isl-scrollbar pb-1`}
+                            className={`${compactMode ? 'mb-1.5' : 'mb-2.5'} flex min-h-14 items-center overflow-x-auto overflow-y-visible px-1 pt-1 isl-scrollbar pb-1`}
                             data-testid="prompt-image-refs"
+                            data-layout={(imageReferenceChips?.length || 0) > 1 ? 'jimeng-stack' : (imageReferenceChips?.length || 0) === 1 ? 'single' : 'empty'}
+                            onMouseEnter={() => setReferencesExpanded(true)}
+                            onMouseLeave={() => setReferencesExpanded(false)}
                         >
-                            <span className="shrink-0 text-[10px] font-bold uppercase tracking-[0.14em]" style={{ color: 'var(--isl-ink-soft)' }}>参考</span>
-                            <Reorder.Group
+                            {canOpenReferencePicker && (
+                                <motion.button
+                                    type="button"
+                                    whileTap={{ scale: 0.92 }}
+                                    onClick={() => setReferencePickerOpen(true)}
+                                    className="mr-2 flex h-12 w-12 shrink-0 -rotate-3 items-center justify-center rounded-[10px] border border-dashed text-xl font-light transition hover:rotate-0 hover:border-[var(--isl-mint)] hover:bg-[var(--isl-mint-bg)]"
+                                    style={{ borderColor: 'var(--isl-border)', color: 'var(--isl-ink-soft)', background: 'var(--isl-surface-2)' }}
+                                    aria-label="添加画布参考"
+                                    title="从画布、资产管理或本地上传添加参考"
+                                    data-testid="prompt-reference-add"
+                                >+
+                                </motion.button>
+                            )}
+                            {imageReferenceChips && imageReferenceChips.length > 0 && onImageReferenceReorder && (
+                              <Reorder.Group
                                 axis="x"
                                 values={imageReferenceChips}
                                 onReorder={next => onImageReferenceReorder(next.map(chip => chip.id))}
-                                className="list-none m-0 p-0 flex items-center gap-1.5"
-                            >
+                                className="m-0 flex list-none items-center p-0 pr-2"
+                                data-expanded={referencesExpanded}
+                              >
                                 {imageReferenceChips.map((chip, index) => (
                                     <Reorder.Item
                                         key={chip.id}
                                         value={chip}
-                                        className="group flex shrink-0 list-none items-center gap-1.5 rounded-[14px] border px-1.5 py-1"
+                                        layout
+                                        transition={{ type: 'spring', stiffness: 420, damping: 32 }}
+                                        className="group relative flex h-12 w-12 shrink-0 list-none items-center overflow-visible rounded-[10px] border shadow-sm"
                                         style={{
                                             borderColor: chip.mentioned ? 'var(--isl-mint)' : 'var(--isl-border)',
                                             background: chip.mentioned ? 'var(--isl-mint-bg)' : 'var(--isl-surface-2)',
                                             cursor: 'grab',
+                                            marginLeft: index === 0 ? 0 : referencesExpanded || imageReferenceChips.length === 1 ? 7 : -27,
+                                            zIndex: index + 1,
+                                            transform: referencesExpanded || imageReferenceChips.length === 1 ? 'rotate(0deg)' : `rotate(${index % 2 ? 5 : -5}deg)`,
                                         }}
-                                        title={chip.mentioned ? `${chip.label} · 已上送 Provider` : `${chip.label} · 连线但未 @ 引用（不会上送）`}
+                                        title={chip.mentioned ? `${chip.label} · 已加入 Provider 参考` : `${chip.label} · 已连线，输入 @${chip.label} 可加入生成参考`}
                                         whileDrag={{ scale: 1.06, boxShadow: '0 6px 18px rgba(99,102,241,0.18)' }}
                                     >
-                                        <span
-                                            className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] font-black"
-                                            style={{ background: chip.mentioned ? 'var(--isl-mint-deep)' : 'var(--isl-surface-2)', color: chip.mentioned ? '#fff' : 'var(--isl-ink-soft)' }}
-                                        >{index + 1}</span>
-                                        <div className="h-7 w-7 shrink-0 overflow-hidden rounded-lg border" style={{ borderColor: 'var(--isl-border)' }}>
-                                            {chip.elementType === 'audio' ? (
-                                                <div className="flex h-full w-full items-center justify-center text-[10px] font-bold" style={{ color: 'var(--isl-mint-deep)', background: 'var(--isl-mint-bg)' }}>AU</div>
-                                            ) : chip.elementType === 'video' ? (
-                                                chip.thumbnail ? <video src={chip.thumbnail} className="h-full w-full object-cover" muted playsInline /> : <div className="flex h-full w-full items-center justify-center text-[10px]">🎬</div>
-                                            ) : (
-                                                chip.thumbnail ? <img src={chip.thumbnail} alt={chip.label} className="h-full w-full object-cover" /> : <div className="flex h-full w-full items-center justify-center text-[10px]">🖼</div>
-                                            )}
+                                        <div className="h-full w-full overflow-hidden rounded-[9px]">
+                                            <ReferenceChipPreview chip={chip} />
                                         </div>
-                                        <span className="max-w-[96px] truncate text-[11px] font-bold" style={{ color: 'var(--isl-ink)' }}>{chip.label}</span>
+                                        <span className="absolute bottom-0.5 left-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-black shadow" style={{ background: chip.mentioned ? 'var(--isl-mint-deep)' : 'var(--isl-surface)', color: chip.mentioned ? '#fff' : 'var(--isl-ink-soft)' }}>{index + 1}</span>
                                         {onImageReferenceRemove && (
                                             <button
                                                 type="button"
-                                                onClick={() => onImageReferenceRemove(chip.id)}
+                                                onClick={event => { event.stopPropagation(); onImageReferenceRemove(chip.id); }}
                                                 onPointerDown={event => event.stopPropagation()}
-                                                className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full transition hover:bg-black/5"
-                                                style={{ color: 'var(--isl-ink-soft)' }}
+                                                className={`absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full border shadow transition ${imageReferenceChips.length === 1 || referencesExpanded ? 'opacity-100' : 'pointer-events-none opacity-0'}`}
+                                                style={{ color: 'var(--isl-ink)', borderColor: 'var(--isl-border)', background: 'var(--isl-surface)' }}
                                                 title="断开该参考图连线"
                                                 aria-label={`移除参考图 ${chip.label}`}
                                             >
@@ -670,7 +920,8 @@ const productModelGroups = useMemo(
                                         )}
                                     </Reorder.Item>
                                 ))}
-                            </Reorder.Group>
+                              </Reorder.Group>
+                            )}
                         </div>
                     )}
 
@@ -682,6 +933,10 @@ const productModelGroups = useMemo(
                         onSubmit={handleEditorSubmit}
                         initialText={prompt}
                         initialDocument={promptDocument}
+                        assetFolders={assetFolders}
+                        assetItems={assetItems}
+                        onSelectAsset={onSelectAsset}
+                        skillEnabled={skillEnabled}
                     />
 
                     {variant !== 'inline' && (
@@ -737,84 +992,70 @@ const productModelGroups = useMemo(
                 </div>
 
                 {expandedPanel && (
-                    <div className="border-t border-[var(--isl-border)] bg-[var(--isl-card)]/90 backdrop-blur-md animate-slideDown" onWheel={event => event.stopPropagation()}>
-                        <div className="max-h-[45vh] overflow-y-auto overscroll-contain isl-scrollbar p-3" onWheel={event => event.stopPropagation()}>
+                    <AdaptivePromptPopover anchorRef={rootRef} preferredSide={popoverDirection} width={popoverWidth}>
+                        <div
+                            data-panel={expandedPanel}
+                            className="isl-pop overflow-hidden rounded-[24px] border border-[var(--isl-border)] bg-[var(--isl-card)]/95 shadow-2xl backdrop-blur-xl"
+                        >
+                            <div className={compactMode ? 'p-2.5' : 'p-4'} onWheel={event => event.stopPropagation()}>
                             {expandedPanel === 'model' && (
                                 <>
-                                    <PopoverHeader title="选择模型" subtitle="固定产品模型，实际 API 线路在设置中映射" />
-                                    <div className="px-1 pb-2">
-                                        <input
-                                            type="text"
-                                            value={modelSearchQuery}
-                                            onChange={(event) => setModelSearchQuery(event.target.value)}
-                                            placeholder="搜索模型、公司或能力..."
-                                            className="w-full rounded-[14px] border-[1.5px] px-3 py-2 text-xs"
-                                            style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-surface-2)', color: 'var(--isl-ink)', outline: 'none' }}
-                                        />
-                                    </div>
-                                    <div className="space-y-3 px-1 pb-2">
-                                        {activeProductModel
-                                            ? productModelGroups.map(group => {
-                                                const filtered = group.models.filter(product => {
-                                                    if (!modelSearchQuery) return true;
-                                                    const haystack = `${product.name} ${product.shortName} ${product.company} ${product.badge || ''} ${product.description}`.toLowerCase();
-                                                    return haystack.includes(modelSearchQuery.toLowerCase());
-                                                });
-                                                if (!filtered.length) return null;
-                                                return (
-                                                    <div key={group.company}>
-                                                        <div className="px-1 pb-1.5 text-[10px] font-bold uppercase tracking-[0.14em]" style={{ color: 'var(--isl-ink-soft)' }}>{group.company}</div>
-                                                        <div className="flex snap-x snap-mandatory gap-2 overflow-x-auto pb-1 isl-scrollbar">
-                                                            {filtered.map(product => {
-                                                                const configured = isProductModelConfigured(product.id, userApiKeys);
-                                                                const selected = activeModel === product.id || getProductModel(activeModel)?.id === product.id;
-                                                                const route = resolveProductModelRoute(product.id, userApiKeys);
-                                                                return (
-                                                                    <button
-                                                                        key={product.id}
-                                                                        type="button"
-                                                                        onClick={() => {
-                                                                            if (!configured) { onOpenSettings?.(); setExpandedPanel(null); return; }
-                                                                            changeActiveModel(product.id);
-                                                                            setExpandedPanel(null);
-                                                                        }}
-                                                                        className={`group relative min-h-[126px] min-w-[196px] snap-start overflow-hidden rounded-[20px] border-[1.5px] p-3 text-left transition-all duration-200 ${selected ? 'isl-chip--active -translate-y-0.5' : 'isl-chip'} ${configured ? 'hover:-translate-y-1' : 'cursor-pointer opacity-55 hover:opacity-80'}`}
-                                                                    >
-                                                                        <span className="flex items-start justify-between gap-2">
-                                                                            <span className="flex h-10 w-10 items-center justify-center rounded-[14px] bg-[var(--isl-surface-2)] text-[11px] font-black">{product.shortName}</span>
-                                                                            <span className="rounded-full bg-[var(--isl-surface-2)] px-2 py-1 text-[10px] font-bold" style={{ color: configured ? 'var(--isl-mint-deep)' : 'var(--isl-ink-soft)' }}>
-                                                                                {configured ? product.badge || '已连接' : '去配置'}
-                                                                            </span>
-                                                                        </span>
-                                                                        <span className="mt-3 block truncate text-sm font-extrabold">{product.name}</span>
-                                                                        <span className="mt-1 block line-clamp-2 text-[10px] leading-4" style={{ color: 'var(--isl-ink-soft)' }}>{product.description}</span>
-                                                                        <span className="mt-2 block truncate text-[10px]" style={{ color: 'var(--isl-ink-ghost)' }}>{route ? `${route.key.name || route.key.provider} · ${route.upstreamModelId}` : product.company}</span>
-                                                                    </button>
-                                                                );
-                                                            })}
-                                                        </div>
+                                    <div className="mb-2 px-1 text-xs font-extrabold" style={{ color: 'var(--isl-ink)' }}>选择模型</div>
+                                    <div data-testid="prompt-model-progressive" data-density="compact" className="flex h-[310px] max-h-[68vh] overflow-hidden rounded-[14px] border" style={{ borderColor: 'var(--isl-border)' }}>
+                                        {productModels.length > 0 ? (
+                                            <>
+                                                <div className="w-[245px] shrink-0 border-r p-1.5" style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-surface-sunk)' }}>
+                                                    <div className="px-1.5 pb-1 pt-0.5 text-[10px] font-bold" style={{ color: 'var(--isl-ink-soft)' }}>筛选</div>
+                                                    <div className="mb-1.5 flex flex-wrap gap-1 px-0.5">
+                                                        <button type="button" onClick={() => setModelCapabilityFilter('all')} className={`h-6 rounded-full px-2 text-[10px] font-bold ${modelCapabilityFilter === 'all' ? 'isl-chip--active' : 'isl-chip'}`}>全部</button>
+                                                        {modelCapabilityFilters.map(mode => <button key={mode} type="button" onClick={() => setModelCapabilityFilter(mode)} className={`h-6 rounded-full px-2 text-[10px] font-bold ${modelCapabilityFilter === mode ? 'isl-chip--active' : 'isl-chip'}`}>{PRODUCT_MODE_LABELS[mode]}</button>)}
                                                     </div>
-                                                );
-                                            })
-                                            : currentModelOptions
-                                                .filter(model => !modelSearchQuery || modelRefSearchText(model, userApiKeys).includes(modelSearchQuery.toLowerCase()))
-                                                .map(model => (
-                                                    <button key={model} type="button" onClick={() => { changeActiveModel(model); setExpandedPanel(null); }} className={`min-w-[184px] rounded-[18px] border-[1.5px] p-3 text-left ${activeModel === model ? 'isl-chip--active' : 'isl-chip'}`}>
-                                                        <span className="block text-xs font-bold">{modelRefLabel(model, userApiKeys)}</span>
-                                                    </button>
-                                                ))}
-                                        {(() => {
-                                            if (activeProductModel) {
-                                                const none = productModelGroups.every(group => !group.models.some(product => {
-                                                    if (!modelSearchQuery) return true;
-                                                    return `${product.name} ${product.shortName} ${product.company} ${product.badge || ''} ${product.description}`.toLowerCase().includes(modelSearchQuery.toLowerCase());
-                                                }));
-                                                return none ? <div className="px-3 py-5 text-xs" style={{ color: 'var(--isl-ink-soft)' }}>没有匹配的模型</div> : null;
-                                            }
-                                            return currentModelOptions.filter(model => !modelSearchQuery || modelRefSearchText(model, userApiKeys).includes(modelSearchQuery.toLowerCase())).length === 0
-                                                ? <div className="px-3 py-5 text-xs" style={{ color: 'var(--isl-ink-soft)' }}>没有匹配的模型</div>
-                                                : null;
-                                        })()}
+                                                    <div className="max-h-[250px] space-y-px overflow-y-auto pr-0.5 isl-scrollbar">
+                                                        {filteredProductModelGroups.map(group => {
+                                                            const active = displayedModelGroup?.family === group.family;
+                                                            const connectedCount = group.models.filter(product => isProductModelConfigured(product.id, userApiKeys)).length;
+                                                            return <button
+                                                                key={group.family}
+                                                                type="button"
+                                                                onMouseEnter={() => setActiveModelFamily(group.family)}
+                                                                onFocus={() => setActiveModelFamily(group.family)}
+                                                                onClick={() => setActiveModelFamily(group.family)}
+                                                                className={`flex h-9 w-full items-center gap-2 rounded-lg px-2 text-left transition ${active ? 'bg-[var(--isl-mint-bg)] text-[var(--isl-mint-deep)]' : 'hover:bg-[var(--isl-surface-2)]'}`}
+                                                            >
+                                                                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[8px] font-black" style={{ background: active ? 'var(--isl-mint)' : 'var(--isl-surface-2)', color: active ? '#fff' : 'var(--isl-ink-soft)' }}>{group.family.slice(0, 2).toUpperCase()}</span>
+                                                                <span className="min-w-0 flex-1"><span className="block truncate text-[11px] font-extrabold" style={{ color: active ? 'var(--isl-mint-deep)' : 'var(--isl-ink)' }}>{group.family}</span><span className="block text-[8px]" style={{ color: 'var(--isl-ink-ghost)' }}>{group.company} · {connectedCount}/{group.models.length}</span></span>
+                                                                <span aria-hidden="true" style={{ color: 'var(--isl-ink-ghost)' }}>›</span>
+                                                            </button>;
+                                                        })}
+                                                    </div>
+                                                </div>
+                                                <div className="min-w-0 flex-1 p-1.5" style={{ background: 'var(--isl-surface)' }}>
+                                                    <div className="px-1.5 pb-1 pt-0.5 text-[10px] font-bold" style={{ color: 'var(--isl-ink-soft)' }}>{displayedModelGroup?.family || '模型版本'}</div>
+                                                    <div className="max-h-[275px] space-y-0.5 overflow-y-auto pr-0.5 isl-scrollbar">
+                                                        {displayedModelGroup?.models.map(product => {
+                                                            const configured = isProductModelConfigured(product.id, userApiKeys);
+                                                            const selected = activeModel === product.id || getProductModel(activeModel)?.id === product.id;
+                                                            const route = resolveProductModelRoute(product.id, userApiKeys);
+                                                            return <button key={product.id} type="button" onClick={() => {
+                                                                if (!configured) { onOpenSettings?.(); setExpandedPanel(null); return; }
+                                                                changeActiveModel(product.id);
+                                                                setExpandedPanel(null);
+                                                            }} className={`w-full rounded-lg border px-2.5 py-1.5 text-left transition ${selected ? 'border-[var(--isl-mint)] bg-[var(--isl-mint-bg)]' : 'border-transparent hover:border-[var(--isl-border)] hover:bg-[var(--isl-surface-2)]'} ${configured ? '' : 'opacity-55'}`}>
+                                                                <span className="flex items-center gap-2"><span className="min-w-0 flex-1 truncate text-xs font-extrabold" style={{ color: selected ? 'var(--isl-mint-deep)' : 'var(--isl-ink)' }}>{product.name}</span><span className="shrink-0 text-[9px] font-bold" style={{ color: configured ? 'var(--isl-mint-deep)' : 'var(--isl-ink-ghost)' }}>{configured ? product.badge || '已连接' : '去配置'}</span></span>
+                                                                <span className="mt-0.5 flex flex-wrap gap-0.5">{product.capabilities.modes.map(mode => <span key={mode} className="rounded-full px-1.5 py-px text-[8px]" style={{ background: 'var(--isl-surface-2)', color: 'var(--isl-ink-soft)' }}>{PRODUCT_MODE_LABELS[mode]}</span>)}</span>
+                                                                {route && <span className="mt-0.5 block truncate text-[8px]" style={{ color: 'var(--isl-ink-ghost)' }}>{route.key.name || route.key.provider} · {route.upstreamModelId}</span>}
+                                                            </button>;
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            </>
+                                        ) : (
+                                            <div className="w-full p-2">
+                                                <div className="px-2 pb-2 text-[11px] font-bold" style={{ color: 'var(--isl-ink-soft)' }}>选择模型</div>
+                                                {currentModelOptions.map(model => <button key={model} type="button" onClick={() => { changeActiveModel(model); setExpandedPanel(null); }} className={`mb-1 w-full rounded-xl border px-3 py-3 text-left text-xs font-bold ${activeModel === model ? 'border-[var(--isl-mint)] bg-[var(--isl-mint-bg)] text-[var(--isl-mint-deep)]' : 'border-transparent text-[var(--isl-ink)] hover:bg-[var(--isl-surface-2)]'}`}>{modelRefLabel(model, userApiKeys)}</button>)}
+                                                {currentModelOptions.length === 0 && <div className="px-4 py-12 text-center text-xs" style={{ color: 'var(--isl-ink-soft)' }}>没有可用模型</div>}
+                                            </div>
+                                        )}
                                     </div>
                                     {!activeRoute && activeProductModel && (
                                         <button type="button" onClick={onOpenSettings} className="mx-1 mt-1 flex w-[calc(100%-0.5rem)] items-center justify-between rounded-[14px] bg-[var(--isl-surface-2)] px-3 py-2 text-xs font-bold">
@@ -823,92 +1064,145 @@ const productModelGroups = useMemo(
                                     )}
                                 </>
                             )}
-                            {expandedPanel === 'parameters' && activeProductModel && (
+                            {expandedPanel === 'submode' && generationMode === 'video' && (
+                                <div data-testid="prompt-video-mode-panel" data-density="compact">
+                                    <PopoverHeader title="生成方式" subtitle={activeProductModel ? `${activeProductModel.name} 支持的输入方式` : '请先选择视频模型'} />
+                                    <div className="grid grid-cols-2 gap-1.5 px-0.5 pb-0.5">
+                                        {VIDEO_MODE_ORDER.map(mode => {
+                                            const supported = !!activeProductModel && routedVideoModes.includes(mode);
+                                            const reason = !activeProductModel
+                                                ? '请先选择视频模型'
+                                                : (explainUnsupportedVideoMode(activeProductModel.id, mode) || '当前 API 路由不支持该模式');
+                                            return (
+                                                <button
+                                                    key={mode}
+                                                    type="button"
+                                                    aria-pressed={activeSubmode === mode}
+                                                    disabled={!supported}
+                                                    title={!supported ? reason : undefined}
+                                                    onClick={() => { if (!supported) return; onGenerationSubmodeChange?.(mode); setExpandedPanel(null); }}
+                                                    className={`h-8 rounded-[10px] px-2 text-[11px] font-bold transition ${!supported ? 'cursor-not-allowed opacity-35' : ''} ${activeSubmode === mode ? 'isl-chip--active' : 'isl-chip'}`}
+                                                >
+                                                    {PRODUCT_MODE_LABELS[mode]}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                    <div className="mt-1.5 rounded-[10px] bg-[var(--isl-surface-2)] px-2.5 py-2 text-[10px] leading-4 text-[var(--isl-ink-soft)]">
+                                        {activeSubmode === 'image-to-video' && '第一个有序图片引用作为首帧。'}
+                                        {activeSubmode === 'reference-to-video' && '图片、视频或音频作为主体与风格参考，不当作首帧。'}
+                                        {activeSubmode === 'first-last-frame' && '按引用顺序使用前两张图片作为首帧和尾帧。'}
+                                        {activeSubmode === 'video-extension' && '使用上游视频作为扩展输入。'}
+                                        {activeSubmode === 'text-to-video' && '只使用文字提示生成视频。'}
+                                        {videoInputRequirement && <div className="mt-1 font-bold text-[var(--isl-coral-deep)]">{videoInputRequirement}</div>}
+                                    </div>
+                                </div>
+                            )}
+                            {expandedPanel === 'parameters' && activeProductModel && activeCapabilities && (
                                 <>
                                     <PopoverHeader title="生成参数" subtitle={`${activeProductModel.name} 仅显示官方支持的选项`} />
-                                    <div className="space-y-3 px-1 pb-1">
-                                        {activeProductModel.capabilities.modes.length > 1 && (
-                                            <div>
-                                                <div className="mb-1.5 text-[10px] font-bold" style={{ color: 'var(--isl-ink-soft)' }}>生成方式</div>
-                                                <div className="flex flex-wrap gap-1.5">
-                                                    {activeProductModel.capabilities.modes.map(mode => (
-                                                        <button key={mode} type="button" aria-pressed={activeSubmode === mode} onClick={() => onGenerationSubmodeChange?.(mode)} className={`rounded-[12px] px-3 py-2 text-xs font-bold ${activeSubmode === mode ? 'isl-chip--active' : 'isl-chip'}`}>{PRODUCT_MODE_LABELS[mode]}</button>
-                                                    ))}
-                                                </div>
-                                                {activeSubmode === 'image-to-video' && <div className="mt-2 rounded-[12px] bg-[var(--isl-surface-2)] px-3 py-2 text-[11px] text-[var(--isl-ink-soft)]">第一个按顺序引用的图片会作为首帧。</div>}
-                                                {activeSubmode === 'reference-to-video' && <div className="mt-2 rounded-[12px] bg-[var(--isl-surface-2)] px-3 py-2 text-[11px] text-[var(--isl-ink-soft)]">引用媒体只用于角色、产品或风格保持，不会被误当成首帧。</div>}
-                                                {activeSubmode === 'first-last-frame' && <div className="mt-2 rounded-[12px] bg-[var(--isl-surface-2)] px-3 py-2 text-[11px] text-[var(--isl-ink-soft)]">需要按顺序引用两张图片：第一张是首帧，第二张是尾帧。</div>}
-                                            </div>
-                                        )}
-                                        {activeProductModel.capabilities.qualities.length > 0 && (
+                                    <div data-testid="prompt-parameter-panel" data-density="compact" className="space-y-2 px-0.5 pb-0.5">
+                                        {activeCapabilities.qualities.length > 0 && (
                                             <div>
                                                 <div className="mb-1.5 text-[10px] font-bold" style={{ color: 'var(--isl-ink-soft)' }}>画质</div>
-                                                <div className="flex flex-wrap gap-1.5">
-                                                    {activeProductModel.capabilities.qualities.map(quality => (
-                                                        <button key={quality} type="button" onClick={() => onGenerationQualityChange?.(quality)} className={`rounded-[12px] px-3 py-2 text-xs font-bold ${generationQuality === quality ? 'isl-chip--active' : 'isl-chip'}`}>{quality === 'low' ? '低' : quality === 'medium' ? '标准' : '高'}</button>
+                                                <div className="grid grid-cols-3 gap-1.5">
+                                                    {activeCapabilities.qualities.map(quality => (
+                                                        <button key={quality} type="button" onClick={() => onGenerationQualityChange?.(quality)} className={`h-8 rounded-[10px] px-2 text-[11px] font-bold ${generationQuality === quality ? 'isl-chip--active' : 'isl-chip'}`}>{quality === 'low' ? '低画质' : quality === 'medium' ? '标准画质' : '高画质'}</button>
                                                     ))}
                                                 </div>
                                             </div>
                                         )}
-                                        {activeProductModel.capabilities.resolutions.length > 0 && (
+{activeCapabilities.resolutions.length > 0 && (
                                             <div>
-                                                <div className="mb-1.5 text-[10px] font-bold" style={{ color: 'var(--isl-ink-soft)' }}>{generationMode === 'video' ? '清晰度' : '尺寸'}</div>
-                                                <div className="flex flex-wrap gap-1.5">
-                                                    {activeProductModel.capabilities.resolutions.map(resolution => (
-                                                        <button key={resolution} type="button" onClick={() => onVideoResolutionChange?.(resolution)} className={`rounded-[12px] px-3 py-2 text-xs font-bold ${videoResolution === resolution ? 'isl-chip--active' : 'isl-chip'}`}>{resolution}</button>
-                                                    ))}
+                                                <div className="mb-1.5 text-[10px] font-bold" style={{ color: 'var(--isl-ink-soft)' }}>{generationMode === 'video' ? '分辨率' : '尺寸'}</div>
+                                                <div className="grid grid-cols-3 gap-1.5">
+                                                    {activeCapabilities.resolutions.map(resolution => {
+                                                        const disabledReason = paramDisabledReason('resolution', resolution);
+                                                        return (
+                                                            <button
+                                                                key={resolution}
+                                                                type="button"
+                                                                disabled={!!disabledReason}
+                                                                title={disabledReason || undefined}
+                                                                onClick={() => { if (!disabledReason) onVideoResolutionChange?.(resolution); }}
+                                                                className={`h-8 rounded-[10px] px-2 text-[11px] font-bold transition ${disabledReason ? 'cursor-not-allowed opacity-35' : ''} ${videoResolution === resolution ? 'isl-chip--active' : 'isl-chip'}`}
+                                                            >
+                                                                {resolution}
+                                                            </button>
+                                                        );
+                                                    })}
                                                 </div>
                                             </div>
                                         )}
-                                        {activeProductModel.capabilities.aspectRatios.length > 0 && (
+                                        {activeCapabilities.aspectRatios.length > 0 && (
                                             <div>
                                                 <div className="mb-1.5 text-[10px] font-bold" style={{ color: 'var(--isl-ink-soft)' }}>比例</div>
-                                                <div className="flex flex-wrap gap-1.5">
-                                                    {activeProductModel.capabilities.aspectRatios.map(ratio => (
-                                                        <button key={ratio} type="button" onClick={() => setActiveRatio(ratio)} className={`rounded-[12px] px-3 py-2 text-xs font-bold ${activeRatio === ratio ? 'isl-chip--active' : 'isl-chip'}`}>{ratio === 'adaptive' ? '自适应' : ratio}</button>
-                                                    ))}
+                                                <div className="grid grid-cols-4 gap-1.5">
+                                                    {activeCapabilities.aspectRatios.map(ratio => {
+                                                        const disabledReason = paramDisabledReason('aspectRatio', ratio);
+                                                        return (
+                                                            <button
+                                                                key={ratio}
+                                                                type="button"
+                                                                disabled={!!disabledReason}
+                                                                title={disabledReason || undefined}
+                                                                onClick={() => { if (!disabledReason) setActiveRatio(ratio); }}
+                                                                className={`h-8 rounded-[10px] px-1.5 text-[11px] font-bold transition ${disabledReason ? 'cursor-not-allowed opacity-35' : ''} ${activeRatio === ratio ? 'isl-chip--active' : 'isl-chip'}`}
+                                                            >
+                                                                {ratio === 'adaptive' ? '自适应' : ratio}
+                                                            </button>
+                                                        );
+                                                    })}
                                                 </div>
                                             </div>
                                         )}
-                                        {generationMode === 'video' && activeProductModel.capabilities.durations.length > 0 && (
+{generationMode === 'video' && activeCapabilities.durations.length > 0 && (
                                             <div>
                                                 <div className="mb-1.5 text-[10px] font-bold" style={{ color: 'var(--isl-ink-soft)' }}>时长</div>
-                                                <div className="flex flex-wrap gap-1.5">
-                                                    {activeProductModel.capabilities.durations.map(duration => (
-                                                        <button key={duration} type="button" onClick={() => onVideoDurationSecChange?.(duration)} className={`rounded-[12px] px-3 py-2 text-xs font-bold ${videoDurationSec === duration ? 'isl-chip--active' : 'isl-chip'}`}>{duration === -1 ? '智能' : `${duration}s`}</button>
-                                                    ))}
+                                                <div className="grid grid-cols-4 gap-1.5">
+                                                    {activeCapabilities.durations.map(duration => {
+                                                        const disabledReason = paramDisabledReason('durationSec', duration);
+                                                        return (
+                                                            <button
+                                                                key={duration}
+                                                                type="button"
+                                                                disabled={!!disabledReason}
+                                                                title={disabledReason || (duration === -1 ? '不限' : `${duration} 秒`)}
+                                                                onClick={() => { if (!disabledReason) onVideoDurationSecChange?.(duration); }}
+                                                                className={`h-8 rounded-[10px] px-2 text-[11px] font-bold transition ${disabledReason ? 'cursor-not-allowed opacity-35' : ''} ${videoDurationSec === duration ? 'isl-chip--active' : 'isl-chip'}`}
+                                                            >
+                                                                {duration === -1 ? '不限' : `${duration}s`}
+                                                            </button>
+                                                        );
+                                                    })}
                                                 </div>
                                             </div>
                                         )}
-                                        {generationMode === 'video' && activeProductModel.capabilities.audioControl === 'optional' && (
-                                            <button type="button" onClick={() => onVideoGenerateAudioChange?.(!videoGenerateAudio)} className={`w-full rounded-[14px] px-3 py-2 text-left text-xs font-bold ${videoGenerateAudio ? 'isl-chip--active' : 'isl-chip'}`}>生成音频 {videoGenerateAudio ? 'ON' : 'OFF'}</button>
-                                        )}
-                                        {generationMode === 'video' && activeProductModel.capabilities.audioControl === 'always' && <div className="rounded-[14px] bg-[var(--isl-surface-2)] px-3 py-2 text-xs font-bold text-[var(--isl-ink-soft)]">该模型始终生成原生音频</div>}
-                                        {activeProductModel.id.startsWith('flovart:veo-3.1') && (activeSubmode === 'reference-to-video' || videoResolution?.toLowerCase() !== '720p') && <div className="rounded-[14px] bg-[var(--isl-mint-bg)] px-3 py-2 text-[11px] font-semibold text-[var(--isl-mint-deep)]">当前 Veo 组合按官方约束固定为 8 秒。</div>}
-                                        {(generationMode === 'image' || (generationMode === 'video' && allowVideoBatch)) && onBatchCountChange && (
+                                        {generationMode === 'video' && activeCapabilities.audioControl === 'optional' && (
                                             <div>
-                                                <div className="mb-1.5 text-[10px] font-bold" style={{ color: 'var(--isl-ink-soft)' }}>数量</div>
-                                                <div className="flex gap-1.5">
-                                                    {[1, 2, 4].map(count => (
-                                                        <button key={count} type="button" onClick={() => onBatchCountChange(count)} className={`rounded-[12px] px-3 py-2 text-xs font-bold ${batchCount === count ? 'isl-chip--active' : 'isl-chip'}`} aria-pressed={batchCount === count}>{count === 1 ? '×1' : `×${count}`}</button>
-                                                    ))}
+                                                <div className="mb-1.5 text-[10px] font-bold" style={{ color: 'var(--isl-ink-soft)' }}>生成音频</div>
+                                                <div className="grid grid-cols-2 gap-1.5">
+                                                    <button type="button" aria-pressed={videoGenerateAudio} onClick={() => onVideoGenerateAudioChange?.(true)} className={`h-8 rounded-[10px] px-2 text-[11px] font-bold ${videoGenerateAudio ? 'isl-chip--active' : 'isl-chip'}`}>开启</button>
+                                                    <button type="button" aria-pressed={!videoGenerateAudio} onClick={() => onVideoGenerateAudioChange?.(false)} className={`h-8 rounded-[10px] px-2 text-[11px] font-bold ${!videoGenerateAudio ? 'isl-chip--active' : 'isl-chip'}`}>关闭</button>
                                                 </div>
                                             </div>
                                         )}
+                                        {generationMode === 'video' && activeCapabilities.audioControl === 'always' && <div className="rounded-[14px] bg-[var(--isl-surface-2)] px-3 py-2 text-xs font-bold text-[var(--isl-ink-soft)]">该模型始终生成原生音频</div>}
+                                        {activeProductModel.id.startsWith('flovart:veo-3.1') && (activeSubmode === 'reference-to-video' || videoResolution?.toLowerCase() !== '720p') && <div className="rounded-[14px] bg-[var(--isl-mint-bg)] px-3 py-2 text-[11px] font-semibold text-[var(--isl-mint-deep)]">当前 Veo 组合按官方约束固定为 8 秒。</div>}
                                     </div>
                                 </>
                             )}
-                            {expandedPanel === 'advanced' && activeProductModel && (
+                            {expandedPanel === 'advanced' && activeProductModel && activeCapabilities && (
                                 <>
                                     <PopoverHeader title="高级选项" subtitle="不受支持的能力已隐藏" />
                                     <div className="space-y-2 px-1 pb-1">
-                                        {activeProductModel.capabilities.supportsWebSearch && (
+                                        {activeCapabilities.supportsWebSearch && (
                                             <button type="button" onClick={() => onWebSearchToggle?.(!webSearchEnabled)} className={`flex w-full items-center justify-between rounded-[14px] px-3 py-2.5 text-left text-xs font-bold ${webSearchEnabled ? 'isl-chip--active' : 'isl-chip'}`}><span>联网搜索</span><span>{webSearchEnabled ? 'ON' : 'OFF'}</span></button>
                                         )}
-                                        {activeProductModel.capabilities.supportsRealPersonCheck && (
+                                        {activeCapabilities.supportsRealPersonCheck && (
                                             <button type="button" onClick={() => onRealPersonCheckToggle?.(!realPersonCheckEnabled)} className={`flex w-full items-center justify-between rounded-[14px] px-3 py-2.5 text-left text-xs font-bold ${realPersonCheckEnabled ? 'isl-chip--active' : 'isl-chip'}`}><span>真人素材预检测</span><span>{realPersonCheckEnabled ? 'ON' : 'OFF'}</span></button>
                                         )}
-                                        {!activeProductModel.capabilities.supportsWebSearch && !activeProductModel.capabilities.supportsRealPersonCheck && (
+                                        {!activeCapabilities.supportsWebSearch && !activeCapabilities.supportsRealPersonCheck && (
                                             <div className="rounded-[14px] bg-[var(--isl-surface-2)] px-3 py-3 text-xs" style={{ color: 'var(--isl-ink-soft)' }}>当前模型没有额外的高级选项。</div>
                                         )}
                                     </div>
@@ -917,7 +1211,7 @@ const productModelGroups = useMemo(
                             {expandedPanel === 'more' && (
                                 <>
                                     <PopoverHeader title="更多操作" subtitle="参考图、角色锁定、效果存储" />
-                                    {isSeedanceVideoModel && (
+                                    {isSeedanceVideoModel && !activeProductModel && (
                                         <div className="mx-1 mb-2 rounded-[18px] border-[1.5px] p-3" style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-surface-2)' }}>
                                             <div className="flex items-center justify-between gap-3">
                                                 <div>
@@ -978,12 +1272,12 @@ const productModelGroups = useMemo(
                                                 onClick={() => { onOpenSettings?.(); setExpandedPanel(null); }}
                                             />
                                         )}
-                                        {onAddAttachments && (
+                                        {canOpenReferencePicker && (
                                             <MenuOptionButton
-                                                label="上传参考图"
-                                                description="点击选择，或直接把图片拖到输入框"
+                                                label="添加画布参考"
+                                                description="从画布节点、资产管理或本地上传"
                                                 onClick={() => {
-                                                    fileInputRef.current?.click();
+                                                    setReferencePickerOpen(true);
                                                     setExpandedPanel(null);
                                                 }}
                                             />
@@ -1049,13 +1343,37 @@ const productModelGroups = useMemo(
                                     </div>
                                 </>
                             )}
+                            {expandedPanel === 'batch' && onBatchCountChange && (
+                                <div className="px-1">
+                                    <PopoverHeader title="批量方案数量" subtitle="一次生成多张方案" />
+                                    <div className="flex items-center gap-2">
+                                        {[1, 2, 4].map(count => {
+                                            const active = batchCount === count;
+                                            return (
+                                                <button
+                                                    key={count}
+                                                    type="button"
+                                                    onClick={() => { onBatchCountChange(count); setExpandedPanel(null); }}
+                                                    className={`flex h-12 min-w-[56px] flex-1 items-center justify-center rounded-[16px] px-3 text-sm font-bold transition ${active ? 'isl-chip--active' : 'isl-chip'}`}
+                                                    style={active ? undefined : { color: 'var(--isl-ink-soft)' }}
+                                                    aria-pressed={active}
+                                                    title={count === 1 ? '单张方案' : `输出 ${count} 张方案`}
+                                                >
+                                                    ×{count}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
+                            </div>
                         </div>
-                    </div>
+                    </AdaptivePromptPopover>
                 )}
 
-                <div className={`relative flex items-end gap-3 border-t ${compactMode ? 'px-2.5 py-2' : 'px-3 py-2.5'}`} style={{ borderColor: 'var(--isl-border)' }}>
-                    <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2">
+                <div className={`relative flex items-center gap-2 border-t ${compactMode ? 'px-2.5 py-2' : 'px-3 py-2.5'}`} style={{ borderColor: 'var(--isl-border)' }}>
+                    <div className="min-w-0 flex-1 overflow-hidden">
+                        <div className="flex flex-nowrap items-center gap-2 overflow-x-auto isl-scrollbar">
                             {(() => {
                                 const keyCount = userApiKeys.length;
                                 if (keyCount === 0) {
@@ -1063,10 +1381,12 @@ const productModelGroups = useMemo(
                                         <button
                                             type="button"
                                             onClick={onOpenSettings}
-                                            className={`isl-chip border-dashed ${compactMode ? 'h-7 px-2.5 text-[11px]' : 'h-8 px-3 text-xs'}`}
+                                            className={`isl-chip shrink-0 border-dashed ${compactMode ? 'h-7 w-7 px-0 text-[11px]' : 'h-8 px-3 text-xs'}`}
                                             style={{ borderColor: 'var(--isl-coral)', color: 'var(--isl-coral-deep)' }}
+                                            aria-label="配置 API Key"
+                                            title="尚未配置 API Key，点击打开设置"
                                         >
-                                            🔑 未配置 API Key
+                                            🔑<span className={compactMode ? 'sr-only' : 'ml-1'}>未配置 API Key</span>
                                         </button>
                                     );
                                 }
@@ -1074,14 +1394,21 @@ const productModelGroups = useMemo(
                             })()}
 
                             <div className="relative">
-                                <button type="button" onClick={() => setExpandedPanel(prev => (prev === 'model' ? null : 'model'))} className={`${triggerClass} ${expandedPanel === 'model' ? activeTriggerClass : ''}`}>
+                                <button type="button" aria-haspopup="dialog" aria-expanded={expandedPanel === 'model'} onClick={() => setExpandedPanel(prev => (prev === 'model' ? null : 'model'))} className={`${triggerClass} shrink-0 ${expandedPanel === 'model' ? activeTriggerClass : ''}`}>
                                     <span className="max-w-[150px] truncate">{getModelLabel(generationMode, selectedTextModel, selectedImageModel, selectedVideoModel, userApiKeys)}</span>
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 9 6 6 6-6" /></svg>
                                 </button>
                             </div>
 
+                            {generationMode === 'video' && VIDEO_MODE_ORDER.length > 1 && (
+                                <button type="button" aria-haspopup="dialog" aria-expanded={expandedPanel === 'submode'} onClick={() => setExpandedPanel(prev => (prev === 'submode' ? null : 'submode'))} className={`${triggerClass} shrink-0 ${expandedPanel === 'submode' ? activeTriggerClass : ''}`} title="视频生成方式">
+                                    <span>{PRODUCT_MODE_LABELS[activeSubmode]}</span>
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 9 6 6 6-6" /></svg>
+                                </button>
+                            )}
+
                             {activeProductModel && (
-                                <button type="button" onClick={() => setExpandedPanel(prev => (prev === 'parameters' ? null : 'parameters'))} className={`${triggerClass} ${expandedPanel === 'parameters' ? activeTriggerClass : ''}`} title="生成参数">
+                                <button type="button" aria-haspopup="dialog" aria-expanded={expandedPanel === 'parameters'} onClick={() => setExpandedPanel(prev => (prev === 'parameters' ? null : 'parameters'))} className={`${triggerClass} shrink-0 ${expandedPanel === 'parameters' ? activeTriggerClass : ''}`} title="生成参数">
                                     <span className="max-w-[220px] truncate">{paramSummary || '参数'}</span>
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 9 6 6 6-6" /></svg>
                                 </button>
@@ -1091,7 +1418,7 @@ const productModelGroups = useMemo(
                                 type="button"
                                 onClick={onAutoEnhanceToggle}
                                 title={isAutoEnhanceEnabled ? '关闭自动润色（生成前不再自动优化提示词）' : '开启自动润色（生成前自动用 LLM 优化提示词）'}
-                                className={`isl-chip ${compactMode ? 'h-7 px-2.5 text-[11px]' : 'h-8 px-3 text-xs'} ${isAutoEnhanceEnabled ? 'isl-chip--active' : ''}`}
+                                className={`isl-chip shrink-0 ${compactMode ? 'h-7 px-2.5 text-[11px]' : 'h-8 px-3 text-xs'} ${isAutoEnhanceEnabled ? 'isl-chip--active' : ''}`}
                             >
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                     <path d="M12 3l1.912 5.813a2 2 0 0 0 1.275 1.275L21 12l-5.813 1.912a2 2 0 0 0-1.275 1.275L12 21l-1.912-5.813a2 2 0 0 0-1.275-1.275L3 12l5.813-1.912a2 2 0 0 0 1.275-1.275L12 3Z" />
@@ -1099,19 +1426,25 @@ const productModelGroups = useMemo(
                                 <span className="sr-only">{isAutoEnhanceEnabled ? '润色已开启' : '润色'}</span>
                             </button>
 
-                            <button type="button" onClick={() => void handleTranslatePrompt()} disabled={!onEnhancePrompt || !prompt.trim() || isTranslating} className={`${triggerClass} disabled:cursor-not-allowed disabled:opacity-40`} title="翻译提示词">
-                                <span className="text-sm font-black">译</span><span className="sr-only">翻译提示词</span>
+                            <button type="button" onClick={() => void handleTranslatePrompt()} disabled={!onEnhancePrompt || !prompt.trim() || isTranslating} className={`${triggerClass} shrink-0 disabled:cursor-not-allowed disabled:opacity-40`} title="翻译提示词">
+                                <span className="text-sm font-black">{isTranslating ? '…' : '译'}</span><span className="sr-only">翻译提示词</span>
                             </button>
+                            {preTranslatePrompt != null && (
+                                <button type="button" onClick={handleRevertTranslate} className={`${triggerClass} shrink-0`} title="还原翻译前的提示词">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 7v6h6" /><path d="M21 17a9 9 0 0 0-15-6.7L3 13" /></svg>
+                                    <span className="sr-only">还原翻译</span>
+                                </button>
+                            )}
 
                             {activeProductModel && (
-                                <button type="button" onClick={() => setExpandedPanel(prev => (prev === 'advanced' ? null : 'advanced'))} className={`${triggerClass} ${expandedPanel === 'advanced' ? activeTriggerClass : ''}`} title="高级选项">
+                                <button type="button" aria-haspopup="dialog" aria-expanded={expandedPanel === 'advanced'} onClick={() => setExpandedPanel(prev => (prev === 'advanced' ? null : 'advanced'))} className={`${triggerClass} shrink-0 ${expandedPanel === 'advanced' ? activeTriggerClass : ''}`} title="高级选项">
                                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 7h10M18 7h2M4 17h2M10 17h10M14 4v6M6 14v6" /></svg>
                                     <span className="sr-only">高级选项</span>
                                 </button>
                             )}
 
                             <div className="relative">
-                                <button type="button" onClick={() => setExpandedPanel(prev => (prev === 'more' ? null : 'more'))} className={`${triggerClass} ${expandedPanel === 'more' ? activeTriggerClass : ''}`} title="更多操作">
+                                <button type="button" aria-haspopup="dialog" aria-expanded={expandedPanel === 'more'} aria-label="更多操作" onClick={() => setExpandedPanel(prev => (prev === 'more' ? null : 'more'))} className={`${triggerClass} shrink-0 ${expandedPanel === 'more' ? activeTriggerClass : ''}`} title="更多操作">
                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>
                                 </button>
                             </div>
@@ -1119,29 +1452,17 @@ const productModelGroups = useMemo(
                     </div>
 
                     <div className="flex shrink-0 items-center gap-2">
+                        {activeProductModel && (
+                            <div className="isl-chip flex h-8 shrink-0 items-center px-2.5 text-[11px] font-bold" title={providerUsageLabel ? '供应商返回的本次用量' : estimatedCostLabel ? '按当前 API Key 计价规则估算；最终以供应商账单或 Token 回执为准' : '当前 API Key 尚未配置可计算的计价规则'}>
+                                <span style={{ color: providerUsageLabel || estimatedCostLabel ? 'var(--isl-mint-deep)' : 'var(--isl-ink-ghost)' }}>{providerUsageLabel || estimatedCostLabel || '费用 --'}</span>
+                            </div>
+                        )}
                         {(generationMode === 'image' || generationMode === 'video' && allowVideoBatch) && onBatchCountChange && (
-                            <div
-                                className="isl-well flex h-9 items-center p-1"
-                                title="批量方案数量"
-                            >
-                                {[1, 2, 4].map(count => {
-                                    const active = batchCount === count;
-                                    return (
-                                        <button
-                                            key={count}
-                                            type="button"
-                                            onClick={() => onBatchCountChange(count)}
-                                            className={`flex h-7 min-w-[38px] items-center justify-center rounded-[12px] px-2 text-[11px] font-bold transition ${
-                                                active ? 'isl-chip--active' : ''
-                                            }`}
-                                            style={active ? undefined : { color: 'var(--isl-ink-soft)' }}
-                                            aria-pressed={active}
-                                            title={count === 1 ? '单张方案' : `输出 ${count} 张方案`}
-                                        >
-                                            X{count}
-                                        </button>
-                                    );
-                                })}
+                            <div className="relative">
+                                <button type="button" aria-haspopup="dialog" aria-expanded={expandedPanel === 'batch'} onClick={() => setExpandedPanel(prev => (prev === 'batch' ? null : 'batch'))} className={`${triggerClass} shrink-0 ${expandedPanel === 'batch' ? activeTriggerClass : ''}`} title="批量方案数量">
+                                    <span className="text-xs font-bold">×{batchCount}</span>
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 9 6 6 6-6" /></svg>
+                                </button>
                             </div>
                         )}
 
@@ -1165,19 +1486,28 @@ const productModelGroups = useMemo(
                             type="button"
                             onClick={() => {
                                 if (isLoading && onStop) onStop();
-                                else if (prompt.trim() && readyState !== 'missing-key') onGenerate();
+                                else if (prompt.trim() && readyState !== 'missing-key' && !videoInputRequirement) onGenerate();
                             }}
-                            disabled={(isLoading && !onStop) || (!isLoading && (!prompt.trim() || readyState === 'missing-key'))}
-                            aria-label={isLoading && onStop ? (isSeedanceVideoModel ? '停止等待' : '停止生成') : t('promptBar.generate')}
-                            title={isLoading && onStop ? (isSeedanceVideoModel ? '停止本地等待；不代表供应商任务已取消，仍可能消耗额度' : '停止生成') : t('promptBar.generate')}
-                            className={`isl-go ${compactMode ? 'h-9 min-w-[104px] px-4 text-xs' : 'h-10 min-w-[116px] px-5 text-sm'}`}
+                            disabled={(isLoading && !onStop) || (!isLoading && (!prompt.trim() || readyState === 'missing-key' || Boolean(videoInputRequirement)))}
+                            aria-label={isLoading && onStop ? (isSeedanceVideoModel ? '停止并尝试取消任务' : '停止生成') : t('promptBar.generate')}
+                            title={isLoading && onStop ? (isSeedanceVideoModel ? '停止本地等待并尝试取消上游任务；若已进入生成阶段，上游仍可能继续计费' : '停止生成') : videoInputRequirement || t('promptBar.generate')}
+                            className={`isl-go ${compactMode ? 'h-10 w-10 min-w-10 rounded-full p-0 text-xs' : 'h-10 min-w-[116px] px-5 text-sm'}`}
                         >
-                            {isLoading && !onStop ? (
+                            {compactMode ? (isLoading && !onStop ? (
                                 <svg className="h-3.5 w-3.5 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                     <circle className="opacity-30" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                                     <path className="opacity-80" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4Z" />
                                 </svg>
-                            ) : isLoading ? <span className="text-xs font-semibold">{isSeedanceVideoModel ? '停止等待' : '停止'}</span> : (
+                            ) : isLoading ? (
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2" /></svg>
+                            ) : (
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"><path d="M12 19V5"/><path d="m6 11 6-6 6 6"/></svg>
+                            )) : isLoading && !onStop ? (
+                                <svg className="h-3.5 w-3.5 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-30" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                    <path className="opacity-80" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4Z" />
+                                </svg>
+                            ) : isLoading ? <span className="text-xs font-semibold">{isSeedanceVideoModel ? '停止/取消' : '停止'}</span> : (
                                 <div className="flex items-center gap-1.5">
                                     <span className="text-xs font-semibold">{error ? '重试' : batchCount > 1 ? `生成 ${batchCount} 版` : '开始生成'}</span>
                                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
@@ -1190,6 +1520,17 @@ const productModelGroups = useMemo(
                     </div>
                 </div>
             </div>
+            <AssetReferencePicker
+                open={referencePickerOpen}
+                language={language}
+                canvasItems={referenceItems}
+                connectedIds={imageReferenceChips?.map(chip => chip.id)}
+                library={assetLibrary}
+                onClose={() => setReferencePickerOpen(false)}
+                onSelectCanvas={onSelectCanvasReference}
+                onSelectAsset={onSelectAsset}
+                onUploadFiles={addReferenceFiles}
+            />
         </div>
     );
 };
