@@ -1,13 +1,16 @@
 import { BookOpen } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import type { ModelPreference, UserApiKey, GenerationMode, PromptEnhanceMode, PromptEnhanceResult } from '../../types';
+import type { AssetFolder, AssetLibrary, ModelPreference, UserApiKey, GenerationMode, PromptEnhanceMode, PromptEnhanceResult } from '../../types';
 import { PromptBar } from '../PromptBar';
+import type { AssetSuggestion } from '../MentionList';
+import type { ReferencePickerWorkflowItem } from '../studio/AssetReferencePicker';
 import {
   applyImageReferenceOrder,
   filterWorkflowInputIds,
   getOrderedImageReferences,
   getWorkflowInputNodes,
   reconcileImageReferenceOrder,
+  resolveWorkflowMentionIds,
   toImageReferenceChips,
   toWorkflowMentionItems,
 } from './references';
@@ -24,7 +27,7 @@ const modeFor = (node: WorkflowNode, config?: WorkflowGenerationConfig): Generat
   return mode === 'text' || mode === 'video' ? mode : 'image';
 };
 
-export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme, language, userApiKeys, modelPreference, dynamicModelOptions, onOpenSettings, onEnhancePrompt, isEnhancingPrompt, onChange, onRun, onStop, focusSignal, onDisconnectReference }: {
+export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme, language, userApiKeys, modelPreference, dynamicModelOptions, onOpenSettings, onEnhancePrompt, isEnhancingPrompt, onChange, onRun, onStop, focusSignal, onDisconnectReference, assetFolders, assetItems, assetLibrary, onSelectAsset, onSelectWorkflowReference, onAddReferenceFiles, skillEnabled, width = 880 }: {
   node: WorkflowNode;
   nodes: WorkflowNode[];
   connections?: WorkflowConnection[];
@@ -41,13 +44,34 @@ export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme,
   onRun: () => void;
   onStop?: () => void;
   focusSignal?: number;
-  /** 断开当前节点到指定上游节点的连线（由画布层执行 applyOps delete_connections） */
+    /** 断开当前节点到指定上游节点的连线（由 Workflow 层执行 applyOps delete_connections） */
   onDisconnectReference?: (fromNodeId: string) => void;
+  /** 个人素材库根文件夹（扁平数组，parentId=null 表示根级） */
+  assetFolders?: AssetFolder[];
+  /** 个人素材库条目（轻量索引，不含原图 dataUrl） */
+  assetItems?: AssetSuggestion[];
+  assetLibrary?: AssetLibrary;
+  /** 选择素材时调用，返回新节点 id（或复用已存在节点 id）；未提供则禁用素材选择 */
+  onSelectAsset?: (assetId: string) => string | undefined;
+    onSelectWorkflowReference?: (nodeId: string) => string | undefined;
+  onAddReferenceFiles?: (files: File[]) => void | Promise<void>;
+  /** Skill 分区是否可用；本轮默认 false 仅显示占位 */
+  skillEnabled?: boolean;
+    /** 根据工作流可用宽度收缩，保持底栏单行展示 */
+  width?: number;
 }) {
   const [libraryOpen, setLibraryOpen] = useState(false);
   const config = node.metadata.config || { mode: node.type === 'text' ? 'text' : node.type === 'video' ? 'video' : 'image' };
   const generationMode = modeFor(node, config);
   const mentionItems = toWorkflowMentionItems(getWorkflowInputNodes(node, nodes, connections));
+    const referenceItems: ReferencePickerWorkflowItem[] = nodes.filter(item => item.id !== node.id && item.isVisible !== false && (item.type === 'image' || item.type === 'video')).map(item => ({
+    id: item.id,
+    label: item.title,
+    elementType: item.type as 'image' | 'video',
+    thumbnail: item.metadata.href,
+    storageKey: item.metadata.storageKey,
+    description: item.metadata.content?.trim().slice(0, 36) || item.type,
+  }));
   const orderedImageRefs = getOrderedImageReferences(node, nodes, connections);
   const referenceChips = toImageReferenceChips(orderedImageRefs, node.metadata.mentionedNodeIds);
   const reconciledOrder = reconcileImageReferenceOrder(node.metadata.imageReferenceOrder, orderedImageRefs);
@@ -74,23 +98,40 @@ export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme,
   };
 
   const patchConfig = (patch: Partial<WorkflowGenerationConfig>) => onChange({ config: { ...config, ...patch } });
-  const keepConnectedMentions = (ids: string[]) => filterWorkflowInputIds(ids, node.id, connections);
+  const keepConnectedMentions = (plainText: string, ids: string[]) => filterWorkflowInputIds(resolveWorkflowMentionIds(plainText, ids, mentionItems), node.id, connections);
   const translatedPrompts = t('quickPrompts');
   const prompts = Array.isArray(translatedPrompts) ? translatedPrompts.filter((item): item is { name: string; value: string } => Boolean(item) && typeof item.name === 'string' && typeof item.value === 'string') : [];
+  const providerUsageLabel = [
+    node.metadata.generationActualCost !== undefined
+      ? `${node.metadata.generationCurrency === 'CNY' ? '¥' : '$'}${node.metadata.generationActualCost.toFixed(node.metadata.generationActualCost < 1 ? 3 : 2)}`
+      : undefined,
+    node.metadata.generationActualTokens !== undefined ? `${node.metadata.generationActualTokens.toLocaleString()} Token` : undefined,
+  ].filter(Boolean).join(' · ') || undefined;
 
   return (
-    <div data-workflow-overlay data-testid="workflow-node-prompt-bar" data-language={language} className="inline-prompt-bar workflow-node-prompt" style={{ width: 720 }} onPointerDown={event => event.stopPropagation()} onWheel={event => event.stopPropagation()}>
+    <div data-workflow-overlay data-testid="workflow-node-prompt-bar" data-language={language} className="inline-prompt-bar workflow-node-prompt" style={{ width, maxWidth: 'calc(100vw - 16px)' }} onPointerDown={event => event.stopPropagation()} onWheel={event => event.stopPropagation()}>
       {prompts.length > 0 && <button type="button" className="workflow-node-prompt__library-button" aria-label="提示词库" title="提示词库" onClick={() => setLibraryOpen(open => !open)}><BookOpen size={15} /></button>}
       {libraryOpen && <div className="workflow-node-prompt__library" role="menu" aria-label="提示词库">{prompts.map((item, index) => <button type="button" role="menuitem" key={`${item.name}-${index}`} onClick={() => { onChange({ prompt: item.value, richTextDocument: undefined, mentionedNodeIds: [] }); setLibraryOpen(false); }}><strong>{item.name}</strong><span>{item.value}</span></button>)}</div>}
       <PromptBar
         t={t}
         theme={theme}
+        language={language}
         compactMode
         prompt={node.metadata.prompt || ''}
         promptDocument={node.metadata.richTextDocument}
-        setPrompt={prompt => onChange({ prompt, richTextDocument: undefined, mentionedNodeIds: [] })}
-        onPromptInputChange={({ plainText, document, mentionedElementIds }) => onChange({ prompt: plainText, richTextDocument: document as typeof node.metadata.richTextDocument, mentionedNodeIds: keepConnectedMentions(mentionedElementIds) })}
+        setPrompt={prompt => onChange({ prompt, richTextDocument: undefined, mentionedNodeIds: keepConnectedMentions(prompt, []) })}
+        onPromptInputChange={({ plainText, document, mentionedElementIds }) => {
+          const mentionedNodeIds = keepConnectedMentions(plainText, mentionedElementIds);
+          const currentMentionIds = node.metadata.mentionedNodeIds || [];
+          const sameMentions = mentionedNodeIds.length === currentMentionIds.length
+            && mentionedNodeIds.every((id, index) => id === currentMentionIds[index]);
+          const sameDocument = !node.metadata.richTextDocument
+            || JSON.stringify(document) === JSON.stringify(node.metadata.richTextDocument);
+          if (plainText === (node.metadata.prompt || '') && sameMentions && sameDocument) return;
+          onChange({ prompt: plainText, richTextDocument: document as typeof node.metadata.richTextDocument, mentionedNodeIds });
+        }}
         mentionItems={mentionItems}
+        referenceItems={referenceItems}
         imageReferenceChips={referenceChips}
         onImageReferenceReorder={handleReorder}
         onImageReferenceRemove={onDisconnectReference ? handleRemoveReference : undefined}
@@ -98,7 +139,8 @@ export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme,
         onStop={onStop}
         onRetry={node.metadata.status === 'error' ? onRun : undefined}
         error={node.metadata.error || null}
-        progressStage={node.metadata.progress === undefined ? undefined : `${Math.round(node.metadata.progress)}%`}
+        progressStage={node.metadata.generationMessage || (node.metadata.progress === undefined ? undefined : `${Math.round(node.metadata.progress)}%`)}
+        providerUsageLabel={providerUsageLabel}
         isLoading={node.metadata.status === 'loading'}
         isSelectionActive={false}
         selectedElementCount={1}
@@ -150,7 +192,14 @@ export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme,
         focusSignal={focusSignal}
         variant="inline"
         shellClassName="inline-prompt-bar-shell"
-        popoverDirection="down"
+        popoverDirection="auto"
+        assetFolders={assetFolders}
+        assetItems={assetItems}
+        assetLibrary={assetLibrary}
+            onSelectWorkflowReference={onSelectWorkflowReference}
+        onAddReferenceFiles={onAddReferenceFiles}
+        onSelectAsset={onSelectAsset}
+        skillEnabled={skillEnabled}
       />
     </div>
   );

@@ -1,0 +1,47 @@
+---
+title: Features
+---
+
+Flovart is a local-first AI video production system for coding agents. Its creative UI has two workspaces with separate responsibilities: Workflow and Table.
+
+## Creative workspaces
+
+| Workspace | Responsibility | Current status |
+| --- | --- | --- |
+| **Workflow** | Orchestrates prompts, references, generation models, node dependencies, job state, and results for image and video production. | A usable foundation exists; interaction and runtime contracts are still converging. |
+| **Table** | Organizes agent storyboards and media preprocessing nodes that turn source media into reusable references. | The official entry point is integrated; the node workbench is still a placeholder. |
+
+The removed Canvas and Art workspaces are not a third creative system.
+
+## Workflow
+
+- Compose image, text, video, audio, and configuration nodes into generation flows.
+- Use PromptBar to select product models, generation modes, parameters, and references.
+- Connect nodes, switch local projects, drop local media, monitor generation, stop work, and receive result nodes.
+- Reuse characters, scenes, props, and generated artifacts from the local asset library.
+- The current CLI registry exposes Workflow project, node, connection, viewport, run, and stop commands.
+
+## Table
+
+Table is neither a spreadsheet nor a rename of the old Canvas. It is planned around two progressively disclosed node groups:
+
+- **Agent storyboard**: brief, sequence, scene, shot, and storyboard cards that an Agent Skill can draft, decompose, and revise.
+- **Media preprocessing**: image or video inputs, subject cutout, depth images and depth videos, edge/line-art/normal/pose extraction, stylization and glitch filters, plus source preparation for wardrobe edits and omni-reference generation.
+- **Artifact handoff**: preserve provenance, save results to the asset library, and use them as Workflow references.
+
+The main Table implementation is not complete. These planned capabilities must not be described as available until their nodes, persistence, and export paths are integrated. The current CLI has no Table commands.
+
+## Agents and CLI
+
+- Coding agents interpret briefs, plan work, select Skills, monitor execution, and recover failures.
+- Flovart CLI is the deterministic actuator; `command.list` and `command.schema` are the source of truth for command names and options.
+- Current automation is Workflow-first. Agents must not invent Canvas, Element, or Table commands or bypass the CLI with private HTTP calls.
+- Users configure provider credentials; CLI and agent output must never read or expose API keys.
+
+## Local-first boundaries
+
+- Workspace projects, assets, and generation history are currently stored mainly in the browser; cloud sync is not promised.
+- API keys currently stay in browser storage, and the frontend calls configured model services directly.
+- Flovart does not bundle model services. Users remain responsible for the rights and compliance of their inputs and generated output.
+
+See the [current backlog](../progress/todo.mdx) for planned work and [pending verification](../progress/pending-test.mdx) for implemented changes awaiting user confirmation.

@@ -1,0 +1,15 @@
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+pub enum RuntimeContractError {
+    #[error("invalid canonical command registry: {0}")]
+    InvalidRegistry(#[from] serde_json::Error),
+    #[error("invalid runtime contract schema: {0}")]
+    InvalidSchema(String),
+    #[error("invalid canonical command registry: {0}")]
+    InvalidRegistryContract(String),
+    #[error("duplicate command in canonical registry: {0}")]
+    DuplicateCommand(String),
+    #[error("canonical command registry hash mismatch: declared {declared}, computed {computed}")]
+    RegistryHashMismatch { declared: String, computed: String },
+}

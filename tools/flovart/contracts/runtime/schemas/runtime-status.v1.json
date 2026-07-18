@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://flovart.local/schemas/runtime/runtime-status.v1.json",
+  "title": "RuntimeStatus v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["protocolVersion", "runtimeVersion", "authority", "state"],
+  "properties": {
+    "protocolVersion": { "const": "1" },
+    "runtimeVersion": { "type": "string", "minLength": 1 },
+    "authority": { "const": "desktop-runtime" },
+    "state": { "enum": ["ready", "starting", "degraded", "stopping"] }
+  }
+}

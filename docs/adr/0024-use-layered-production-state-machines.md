@@ -1,0 +1,3 @@
+# 使用三层制作状态机
+
+Desktop Runtime 分别维护 ProductionRun、StageRun 和 ProviderAttempt 状态机。ProductionRun 使用 `preparing`、`action_required`、`queued`、`running`、`recovering`、`canceling` 以及 `completed`、`completed_with_warnings`、`failed`、`canceled` 终态；StageRun 使用 `pending`、`ready`、`running`、`blocked`、`succeeded`、`failed`、`skipped`、`canceled`；ProviderAttempt 使用 `created`、`submitting`、`submitted`、`polling`、`succeeded`、`failed`、`canceled`、`submission_unknown`。`submission_unknown` 禁止自动重提，Retry 必须创建新 Attempt；取消为 best-effort，Runtime 重启通过持久化 Provider Job ID 进入 recovering 并恢复轮询。每次状态变化与 Runtime Event Ledger 追加在同一 SQLite 事务提交，事件只追加，当前状态保存在 State Projection 中供查询；V1 不采用纯 Event Sourcing。

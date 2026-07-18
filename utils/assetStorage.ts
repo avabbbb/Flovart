@@ -36,6 +36,30 @@ const assetStore = localforage.createInstance({
 
 const EMPTY_LIBRARY: AssetLibrary = { folders: [], items: [] };
 
+/**
+ * 模块级缓存：首次 loadAssetLibraryAsync 后缓存，避免工作流每个素材节点
+ * 渲染时都重复全量读取 IndexedDB。App.tsx 在加载/增删改素材后会调用
+ * setAssetLibraryCache 同步更新缓存；null 表示清空。
+ */
+let cachedLibrary: AssetLibrary | null = null;
+
+export function setAssetLibraryCache(lib: AssetLibrary | null): void {
+  cachedLibrary = lib;
+}
+
+export function getAssetLibraryCache(): AssetLibrary | null {
+  return cachedLibrary;
+}
+
+/**
+ * 按 assetId 单条读取素材。命中缓存即同步返回，否则触发一次全量加载并写缓存。
+ * 工作流节点 storageKey = `asset-library:<assetId>` 的解析入口。
+ */
+export async function getAssetById(assetId: string): Promise<AssetItem | undefined> {
+  if (!cachedLibrary) cachedLibrary = await loadAssetLibraryAsync();
+  return cachedLibrary.items.find(a => a.id === assetId);
+}
+
 /** 旧版 character/scene/prop 桶到迁移文件夹的映射 */
 const MIGRATE_FOLDER_DEFS: Array<{ legacyKey: 'character' | 'scene' | 'prop'; name: string; tag: string }> = [
   { legacyKey: 'character', name: 'Characters', tag: 'character' },

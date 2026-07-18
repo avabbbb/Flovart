@@ -8,7 +8,7 @@ export interface ClipItem {
   name: string;
   naturalWidth?: number;
   naturalHeight?: number;
-  sourceView: 'canvas' | 'workflow';
+  sourceView: 'workflow';
 }
 
 interface ClipboardState {

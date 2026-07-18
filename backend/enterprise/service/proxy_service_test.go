@@ -41,3 +41,24 @@ func TestNormalizeProxyRequestRejectsUnsafeEndpoint(t *testing.T) {
 		}
 	}
 }
+
+func TestBuildUpstreamURLDoesNotDuplicateConfiguredProviderPath(t *testing.T) {
+	cases := []struct {
+		baseURL  string
+		endpoint string
+		want     string
+	}{
+		{"https://www.runninghub.cn", "/openapi/v2/rhart-image-g-2/text-to-image", "https://www.runninghub.cn/openapi/v2/rhart-image-g-2/text-to-image"},
+		{"https://www.runninghub.cn/openapi/v2", "/openapi/v2/rhart-image-g-2/text-to-image", "https://www.runninghub.cn/openapi/v2/rhart-image-g-2/text-to-image"},
+		{"https://gateway.example.com/api", "/v1/responses", "https://gateway.example.com/api/v1/responses"},
+	}
+	for _, tc := range cases {
+		got, err := buildUpstreamURL(tc.baseURL, tc.endpoint)
+		if err != nil {
+			t.Fatalf("buildUpstreamURL(%q, %q) returned error: %v", tc.baseURL, tc.endpoint, err)
+		}
+		if got != tc.want {
+			t.Fatalf("buildUpstreamURL(%q, %q) = %q, want %q", tc.baseURL, tc.endpoint, got, tc.want)
+		}
+	}
+}

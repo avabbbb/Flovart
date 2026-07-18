@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://flovart.local/schemas/runtime/command-envelope.v1.json",
+  "title": "CommandEnvelope v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["protocolVersion", "commandId", "command", "args", "actor"],
+  "properties": {
+    "protocolVersion": { "const": "1" },
+    "commandId": { "type": "string", "minLength": 1 },
+    "command": { "type": "string", "minLength": 1 },
+    "args": { "type": "object" },
+    "actor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "instanceId"],
+      "properties": {
+        "kind": { "enum": ["cli", "mcp", "ui", "native_host", "system"] },
+        "instanceId": { "type": "string", "minLength": 1 }
+      }
+    },
+    "idempotencyKey": { "type": "string", "minLength": 1 },
+    "productionSessionId": { "type": "string", "minLength": 1 },
+    "preconditions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["entityType", "entityId", "revision"],
+        "properties": {
+          "entityType": { "type": "string", "minLength": 1 },
+          "entityId": { "type": "string", "minLength": 1 },
+          "revision": { "type": "integer", "minimum": 0 }
+        }
+      }
+    }
+  }
+}

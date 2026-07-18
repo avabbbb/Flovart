@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://flovart.local/schemas/runtime/task-receipt.v1.json",
+  "title": "TaskReceipt v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["kind", "commandId", "taskId", "status", "eventId"],
+  "properties": {
+    "kind": { "const": "task" },
+    "commandId": { "type": "string", "minLength": 1 },
+    "taskId": { "type": "string", "minLength": 1 },
+    "status": { "enum": ["queued", "working", "input_required", "completed", "failed", "cancelled"] },
+    "entity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "id"],
+      "properties": {
+        "type": { "type": "string", "minLength": 1 },
+        "id": { "type": "string", "minLength": 1 }
+      }
+    },
+    "pollIntervalMs": { "type": "integer", "minimum": 0 },
+    "eventId": { "type": "integer", "minimum": 0 },
+    "links": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "task": { "type": "string" },
+        "events": { "type": "string" }
+      }
+    }
+  }
+}

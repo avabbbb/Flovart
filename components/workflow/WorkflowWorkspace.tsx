@@ -143,7 +143,7 @@ export function WorkflowWorkspace({
   };
 
   const mediaSourceOf = (media: WorkflowSharedMedia) => media.source || (media.id.startsWith('history:') ? 'history' : 'asset');
-  const historyMedia = sharedMedia.filter(media => mediaSourceOf(media) === 'history');
+  const historyMedia = Array.isArray(sharedMedia) ? sharedMedia.filter(media => mediaSourceOf(media) === 'history') : [];
 
   const insertAssetItem = (item: AssetItem) => {
     void insertSharedMedia({
@@ -234,6 +234,7 @@ assetLibrary={assetLibrary}
               onOpenSettings={onOpenSettings}
               onEnhancePrompt={onEnhancePrompt}
               isEnhancingPrompt={isEnhancingPrompt}
+              assetLibrary={assetLibrary}
             />
           ) : (
             <div className="workflow-empty">

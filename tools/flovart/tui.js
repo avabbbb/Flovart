@@ -13,14 +13,16 @@ const HELP_TEXT = `
 Flovart TUI
 
 Commands:
-  /install              install dependencies
-  /start                start all services and open browser
-  /web                  start frontend only
-  /backend              start backend + db
-  /db                   start database only
-  /docker               docker compose up all
-  /docker -d            docker compose up all in background
-  /plan [args]          preview start plan, e.g. /plan --web
+  /install              download and verify Agent Toolkit
+  /update               update Agent Toolkit
+  /start                start Runtime/WebUI + Codex agent
+  /start --no-agent     start Runtime/WebUI only
+  /web                  source mode: start frontend only
+  /backend              source mode: start backend + db
+  /db                   source mode: start database only
+  /docker               source mode: docker compose up all
+  /docker -d            source mode: docker compose up in background
+  /plan [args]          preview Toolkit start plan
   /doctor               run doctor check
   /status               show local status
   /models               list models
@@ -82,12 +84,12 @@ export function buildTuiCommand(line = '') {
 
   if (name === 'install' || name === 'i') return { type: 'run', args: ['install', ...args] };
   if (name === 'update') return { type: 'run', args: ['update', ...args] };
-  if (name === 'start' || name === 's') return { type: 'run', args: ['start', ...(args.length ? args : ['--all', '--open'])] };
-  if (name === 'web') return { type: 'run', args: ['start', '--web', '--open', ...args] };
-  if (name === 'backend') return { type: 'run', args: ['start', '--backend', ...args] };
-  if (name === 'db') return { type: 'run', args: ['start', '--db', ...args] };
-  if (name === 'docker') return { type: 'run', args: ['start', '--docker', '--all', '--open', ...args] };
-  if (name === 'plan') return { type: 'run', args: ['start', '--plan', '--json', ...(args.length ? args : ['--all'])] };
+  if (name === 'start' || name === 's') return { type: 'run', args: ['start', ...args] };
+  if (name === 'web') return { type: 'run', args: ['start', '--source', '--web', '--open', ...args] };
+  if (name === 'backend') return { type: 'run', args: ['start', '--source', '--backend', ...args] };
+  if (name === 'db') return { type: 'run', args: ['start', '--source', '--db', ...args] };
+  if (name === 'docker') return { type: 'run', args: ['start', '--source', '--docker', '--all', '--open', ...args] };
+  if (name === 'plan') return { type: 'run', args: ['start', '--plan', '--json', ...args] };
   if (name === 'doctor') return { type: 'run', args: ['doctor', '--json', ...args] };
   if (name === 'status') return { type: 'run', args: ['status', '--json', ...args] };
   if (name === 'models') return { type: 'run', args: ['models.list', '--json', ...args] };

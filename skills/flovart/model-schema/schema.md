@@ -1,64 +1,24 @@
-# Model and Provider Schema Notes
+# Product model and provider route notes
 
-Flovart has two layers of model information:
+Flovart separates user-facing product identity from provider execution:
 
-- Agent-facing helpers in `tools/flovart/agent-kit.js`, exposed through `models.list`, `preferences.manage`, `prompt.enhance`, `batch.plan`, and `workflow.plan-video`.
-- Browser/provider runtime in `services/aiGateway.ts`, where real provider keys, capability detection, model fetch, and generation routing happen.
+- **Product Model**: the stable model identity shown to users.
+- **Generation Mode**: text-to-image, image-to-video, reference-to-video, and similar input/output intent.
+- **Provider Route**: the executable provider endpoint bound to a Product Model and mode.
+- **Route Capability Schema**: the verified parameters, media roles, limits, and serialization contract for one route.
 
-## Capability Buckets
-
-Provider model maps are grouped by:
-
-- `text`
-- `image`
-- `video`
-
-Agent commands should select the correct bucket before generation:
+Agents select Product Models and express generation intent. Provider adapters own route payloads and credentials.
 
 ```bash
-npm run flovart:cli -- models.list --purpose image --json
-npm run flovart:cli -- provider.select-model --image-model flux-schnell --json
-```
-
-## Provider Setup Boundary
-
-The CLI can say whether a capability is configured, but it must not reveal API keys.
-
-Use:
-
-```bash
+npm run flovart:cli -- models.list --purpose all --json
 npm run flovart:cli -- provider.status --json
-npm run flovart:cli -- provider.test --purpose both --json
+npm run flovart:cli -- provider.select-model --image-model flovart:gpt-image-2 --video-model flovart:seedance-2 --json
 ```
 
-If missing, use:
+If provider setup is missing, open the browser setup flow:
 
 ```bash
 npm run flovart:cli -- provider.begin-setup --purpose both --json
 ```
 
-## Aspect Ratios
-
-Common ratios:
-
-- `16:9`
-- `9:16`
-- `1:1`
-- `4:3`
-- `3:4`
-- `21:9`
-
-Some video providers support fewer ratios. If a generation fails because of ratio support, keep the same prompt and retry only with a supported ratio.
-
-## Prompt Payload
-
-Media elements store generation state with:
-
-- `promptPayload.rawText`
-- `promptPayload.resolvedReferences`
-- `modelId`
-- `status`
-- `progress`
-- `error`
-
-Use `element.update-prompt` and `element.assign-slot` to patch prompt payloads. Do not edit provider internals directly from an agent workflow.
+Never edit provider payloads, route bindings, or secrets through invented agent commands. Confirm every generation argument with `command.schema`.

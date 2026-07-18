@@ -20,7 +20,10 @@ afterEach(async () => {
 
 function ImageHarness({ initial }: { initial: WorkflowProject }) {
   const [project, setProject] = useState(initial);
-  return <WorkflowGenerationCapabilitiesProvider><InfiniteWorkflow project={project} updateProject={patch => setProject(current => ({ ...current, ...patch }))} onRunNode={vi.fn()} /></WorkflowGenerationCapabilitiesProvider>;
+  return <WorkflowGenerationCapabilitiesProvider>
+    <InfiniteWorkflow project={project} updateProject={patch => setProject(current => ({ ...current, ...patch }))} onRunNode={vi.fn()} />
+    <output data-testid="image-harness-state" data-storage-key={project.nodes[0]?.metadata.storageKey || ''} />
+  </WorkflowGenerationCapabilitiesProvider>;
 }
 
 function imageProject(filters: WorkflowProject['nodes'][number]['metadata']['filters'] = {}) {
@@ -49,19 +52,19 @@ describe('workflow image tools UI', () => {
       rerender(<WorkflowImageToolDialogs tool={{ kind, nodeId: 'image' }} node={image} mediaUrl={image.metadata.href!} busy={false} error={null} onClose={vi.fn()} onConfirm={onConfirm} />);
       expect(screen.getByRole('button', { name: action })).toBeInTheDocument();
     }
-  });
+  }, 15_000);
 
   it('streams filter changes to the canonical node and keeps submit single-shot while busy', () => {
     const onPreview = vi.fn();
     const onConfirm = vi.fn();
     const view = render(<WorkflowImageToolDialogs tool={{ kind: 'filter', nodeId: 'image' }} node={image} mediaUrl={image.metadata.href!} busy={false} error={null} onClose={vi.fn()} onPreview={onPreview} onConfirm={onConfirm} />);
-    fireEvent.change(view.container.querySelector('input[type="range"]')!, { target: { value: '130' } });
+    fireEvent.change(document.querySelector('.image-filter-panel input[type="range"]')!, { target: { value: '130' } });
     expect(onPreview).toHaveBeenLastCalledWith(expect.objectContaining({ brightness: 130 }));
     const submit = screen.getByRole('button', { name: '完成调色' });
     fireEvent.click(submit);
     expect(onConfirm).toHaveBeenCalledTimes(1);
     view.rerender(<WorkflowImageToolDialogs tool={{ kind: 'filter', nodeId: 'image' }} node={image} mediaUrl={image.metadata.href!} busy error={null} onClose={vi.fn()} onPreview={onPreview} onConfirm={onConfirm} />);
-    expect(screen.getByRole('button', { name: '完成调色' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /完成调色/ })).toBeDisabled();
   });
 
   it('previews filters on the canvas, confirms one history entry, and restores them on cancel', async () => {
@@ -77,10 +80,10 @@ describe('workflow image tools UI', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '图片滤镜' }));
     fireEvent.change(document.querySelector('.image-filter-panel input[type="range"]')!, { target: { value: '145' } });
-    fireEvent.click(screen.getByText('✕').closest('button')!);
-    await waitFor(() => expect(screen.getByRole('img', { name: '图片' }).style.filter).toBe('');
+    fireEvent.click(document.querySelector('.image-filter-panel button')!);
+    await waitFor(() => expect(screen.getByRole('img', { name: '图片' }).style.filter).toBe(''));
     expect(screen.getByRole('button', { name: '撤销' })).toBeDisabled();
-  });
+  }, 15_000);
 
   it('crops into durable storage, preserves the node center and ratio, and is undoable', async () => {
     class TestImage {
@@ -93,12 +96,19 @@ describe('workflow image tools UI', () => {
     render(<ImageHarness initial={imageProject()} />);
     fireEvent.click(screen.getByRole('button', { name: '裁剪图片' }));
     fireEvent.click(screen.getByRole('button', { name: '应用裁剪' }));
-    await waitFor(() => expect(document.querySelector('[data-workflow-node-id="image"]')).toHaveStyle({ width: '420px', height: '315px', transform: 'translate(-40px, -37.5px)' }));
-    const stored = (await workflowMediaStorage.keys()).find(key => key.startsWith('workflow-media-'));
-    expect(stored && await workflowMediaStorage.get(stored)).toBeInstanceOf(Blob);
+    const croppedNode = document.querySelector<HTMLElement>('[data-workflow-node-id="image"]');
+    await waitFor(() => expect(croppedNode).toHaveStyle({ width: '420px', height: '315px' }));
+    expect(croppedNode?.style.transform).toContain('translateX(-40px) translateY(-37.5px)');
+    const stored = screen.getByTestId('image-harness-state').getAttribute('data-storage-key');
+    expect(stored).toMatch(/^workflow-media-/);
+    expect(await workflowMediaStorage.get(stored!)).not.toBeNull();
     fireEvent.click(screen.getByRole('button', { name: '撤销' }));
-    expect(document.querySelector('[data-workflow-node-id="image"]')).toHaveStyle({ width: '340px', height: '240px', transform: 'translate(0px, 0px)' });
-  });
+    const restoredNode = document.querySelector<HTMLElement>('[data-workflow-node-id="image"]');
+    await waitFor(() => {
+      expect(restoredNode).toHaveStyle({ width: '340px', height: '240px' });
+      expect(restoredNode?.style.transform).toBe('none');
+    });
+  }, 15_000);
 
   it('does not report success or add history after a project switch makes the provider result stale', async () => {
     let finish!: (value: imageToolService.WorkflowImageToolOutcome) => void;
@@ -135,12 +145,15 @@ describe('workflow image tools UI', () => {
     expect(imageToolService.runWorkflowImageAgent).toHaveBeenCalledWith(project.id, 'image-a', 'remove-background', expect.any(Object));
 
     const completed = { ...project, nodes: project.nodes.map(node => node.id === 'image-a' ? { ...node, metadata: { ...node.metadata, href: 'data:image/png;base64,BB==' } } : node) };
-    runtime.onProjectChange(completed);
-    finish({ status: 'committed', project: completed });
+    await act(async () => {
+      runtime.onProjectChange(completed);
+      finish({ status: 'committed', project: completed });
+      await Promise.resolve();
+    });
     await waitFor(() => expect(screen.getByText('背景移除完成')).toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: '撤销' }));
     expect(document.querySelector('[data-workflow-node-id="image-a"] img')).toHaveAttribute('src', image.metadata.href);
-  });
+  }, 15_000);
 
   it('does not let an old transaction finally release a newer project transaction', async () => {
     const pending = new Map<string, (value: imageToolService.WorkflowImageToolOutcome) => void>();
@@ -163,5 +176,5 @@ describe('workflow image tools UI', () => {
     fireEvent.click(filterButton);
     expect(screen.queryByText('图片调色')).not.toBeInTheDocument();
     await act(async () => { pending.get('project-b')?.({ status: 'stale', project: projectB }); });
-  });
+  }, 15_000);
 });

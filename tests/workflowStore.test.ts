@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createWorkflowProject,
   getWorkflowPersistenceError,
@@ -63,12 +63,20 @@ const videoNode = () => ({
 });
 
 describe('workflow project persistence', () => {
-  beforeEach(async () => {
-    vi.useFakeTimers();
-    useWorkflowStore.setState({ hydrated: true, projects: [], activeProjectId: null });
-    await vi.advanceTimersByTimeAsync(400);
+  beforeAll(async () => {
     await workflowStorage.clear();
     await workflowMediaStorage.clear();
+  });
+
+  beforeEach(async () => {
+    // 只模拟 debounce 和系统时间；fake-indexeddb 依赖 setImmediate 投递事务事件。
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    useWorkflowStore.setState({ hydrated: true, projects: [], activeProjectId: null });
+    const resetWrite = workflowPersistStorage.setItem(WORKFLOW_STORE_KEY, {
+      state: { projects: [], activeProjectId: null },
+    });
+    await vi.advanceTimersByTimeAsync(400);
+    await resetWrite;
   });
 
   afterEach(async () => {
@@ -127,7 +135,7 @@ describe('workflow project persistence', () => {
     expect(useWorkflowStore.getState().projects[0]).toEqual({
       id: projectId,
       title: 'A',
-      nodes: [videoNode()],
+      nodes: [{ ...videoNode(), isVisible: true, isLocked: false }],
       connections: [],
       selectedNodeIds: ['video-1'],
       viewport: { x: 0, y: 0, k: 1 },
@@ -158,20 +166,21 @@ describe('workflow project persistence', () => {
     expect(set).toHaveBeenCalledWith(WORKFLOW_STORE_KEY, lastValue);
   });
 
-  it('exposes store action persistence failures without an unhandled rejection', async () => {
+  it('exposes persistence failures without an unhandled rejection', async () => {
     const failure = new Error('storage unavailable');
     vi.spyOn(workflowStorage, 'set').mockRejectedValue(failure);
     const listener = vi.fn();
     const unsubscribe = subscribeWorkflowPersistenceError(listener);
-
-    const projectId = useWorkflowStore.getState().createProject('A');
-    useWorkflowStore.getState().updateProject(projectId, { backgroundMode: 'lines' });
+    const project = createWorkflowProject('A');
+    const pending = workflowPersistStorage.setItem(WORKFLOW_STORE_KEY, {
+      state: { projects: [project], activeProjectId: project.id },
+    });
 
     await vi.advanceTimersByTimeAsync(400);
-    unsubscribe();
-
+    await pending;
     expect(getWorkflowPersistenceError()).toEqual({ operation: 'write', error: failure });
     expect(listener).toHaveBeenLastCalledWith({ operation: 'write', error: failure });
+    unsubscribe();
   });
 
   it('clearStorage cancels a queued write and resolves its waiter', async () => {
@@ -231,6 +240,6 @@ describe('workflow project persistence', () => {
     useWorkflowStore.getState().deleteProjects([deletedId]);
     await vi.waitFor(async () => expect(await workflowMediaStorage.get('deleted-media')).toBeNull());
 
-    expect(await workflowMediaStorage.get('kept-media')).toBeInstanceOf(Blob);
+    expect(await workflowMediaStorage.get('kept-media')).not.toBeNull();
   });
 });

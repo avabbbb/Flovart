@@ -53,6 +53,8 @@ export function buildAssetItemsFromCollectedImages(
     id: `ext_asset_${now}_${index}`,
     name: image.alt || `Collected image ${index + 1}`,
     category: 'scene',
+    folderIds: [],
+    tags: [],
     dataUrl: image.src,
     mimeType: inferImageMimeType(image.src),
     width: image.width || 512,

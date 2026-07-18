@@ -1,50 +1,35 @@
+import localforage from 'localforage';
 import type { GenerationHistoryItem } from '../types';
 import { offloadDataUrlRecords, rehydrateDataUrlRecords } from './mediaIndexedDBSentry';
 
-const STORAGE_KEY = 'making.generationHistory.v1';
+const STORAGE_KEY = 'items';
 const MAX_HISTORY_ITEMS = 18;
-/** 历史记录存储的缩略图最大尺寸 — 避免 localStorage 爆炸 */
+/** 历史元数据存 localforage，媒体正文由 mediaIndexedDBSentry 转为 Blob 引用。 */
+export const generationHistoryStorage = localforage.createInstance({
+    name: 'flovart',
+    storeName: 'generation_history_v2',
+});
 const THUMBNAIL_MAX_DIM = 256;
 
-export const loadGenerationHistory = (): GenerationHistoryItem[] => {
+export const loadGenerationHistoryAsync = async (): Promise<GenerationHistoryItem[]> => {
     try {
-        const raw = localStorage.getItem(STORAGE_KEY);
-        if (!raw) return [];
-        const parsed = JSON.parse(raw);
-        return Array.isArray(parsed) ? parsed : [];
-    } catch {
+        const items = await generationHistoryStorage.getItem<GenerationHistoryItem[]>(STORAGE_KEY);
+        return await rehydrateDataUrlRecords(Array.isArray(items) ? items : []);
+    } catch (error) {
+        console.error('[Storage] Failed to load generation history', error);
         return [];
     }
-};
-
-export const saveGenerationHistory = (items: GenerationHistoryItem[]) => {
-    try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-    } catch (err) {
-        console.error('[Storage] Failed to save generation history', err);
-        // 降级: 只保留最近 6 条再试一次
-        try {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(items.slice(0, 6)));
-        } catch {
-            // 彻底放弃持久化, 不阻断业务
-        }
-    }
-};
-
-export const loadGenerationHistoryAsync = async (): Promise<GenerationHistoryItem[]> => {
-    const items = loadGenerationHistory();
-    return await rehydrateDataUrlRecords(items);
 };
 
 export const saveGenerationHistoryAsync = async (items: GenerationHistoryItem[]) => {
     try {
         const slim = await offloadDataUrlRecords(items, 'history');
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(slim));
+        await generationHistoryStorage.setItem(STORAGE_KEY, slim);
     } catch (err) {
         console.error('[Storage] Failed to save generation history', err);
         try {
             const slim = await offloadDataUrlRecords(items.slice(0, 6), 'history');
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(slim));
+            await generationHistoryStorage.setItem(STORAGE_KEY, slim);
         } catch {
             // Give up quietly. History is optional persistence.
         }
@@ -52,7 +37,7 @@ export const saveGenerationHistoryAsync = async (items: GenerationHistoryItem[])
 };
 
 /**
- * 将 base64 dataUrl 压缩为缩略图, 减少 localStorage 占用
+ * 将 base64 dataUrl 压缩为缩略图，降低浏览器本地存储与渲染成本。
  * 在浏览器主线程上同步返回 Promise
  */
 export const createThumbnailDataUrl = (

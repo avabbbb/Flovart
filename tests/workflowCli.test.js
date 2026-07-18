@@ -1,7 +1,22 @@
 import { describe, expect, it, vi } from 'vitest';
 import { COMMAND_ALIASES, COMMAND_REGISTRY, executeFlovartCommand, normalizeCommandName } from '../tools/flovart/core.js';
+import { createRuntimeFacade } from '../tools/flovart/runtime-client.js';
+import { createShadowRuntimeFacade } from '../tools/flovart/shadow-runtime.js';
 
 describe('workflow CLI metadata', () => {
+  it('exposes Workflow without legacy Canvas or element contracts', () => {
+    const commands = Object.keys(COMMAND_REGISTRY);
+    const aliasTargets = Object.values(COMMAND_ALIASES);
+    const client = { execute: vi.fn() };
+
+    expect(commands.some(command => /^(?:canvas|element)\./.test(command))).toBe(false);
+    expect(aliasTargets.some(command => /^(?:canvas|element)\./.test(command))).toBe(false);
+    expect(createRuntimeFacade(client)).not.toHaveProperty('canvas');
+    expect(createRuntimeFacade(client)).not.toHaveProperty('element');
+    expect(createShadowRuntimeFacade()).not.toHaveProperty('canvas');
+    expect(createShadowRuntimeFacade()).not.toHaveProperty('element');
+  });
+
   it('publishes canonical workflow commands and MCP-safe aliases', () => {
     expect(COMMAND_REGISTRY['workflow.node.create']).toBeTruthy();
     expect(COMMAND_REGISTRY['workflow.node.run']).toBeTruthy();

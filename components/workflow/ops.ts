@@ -144,7 +144,7 @@ export function applyWorkflowOps(initial: WorkflowSnapshot, ops: WorkflowOp[]): 
         reject(opIndex, op, '节点 ID 已存在');
         return;
       }
-      if (!validation.ok) {
+      if (validation.ok === false) {
         reject(opIndex, op, validation.reason);
         return;
       }
@@ -189,7 +189,7 @@ export function applyWorkflowOps(initial: WorkflowSnapshot, ops: WorkflowOp[]): 
         reject(opIndex, op, '连接 ID 已存在');
         return;
       }
-      if (!validation.ok) {
+      if (validation.ok === false) {
         reject(opIndex, op, validation.reason);
         return;
       }

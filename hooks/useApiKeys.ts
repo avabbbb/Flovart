@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import localforage from 'localforage';
 import type { UserApiKey, ModelPreference, AIProvider, AICapability, ModelItem } from '../types';
 import { saveKeysEncrypted, loadKeysDecrypted, clearAllKeyData, migrateLegacyKeys } from '../utils/keyVault';
 import { getUsageSummary } from '../utils/usageMonitor';
@@ -31,11 +32,26 @@ import { getProductModel, mergeSuggestedMappings } from '../services/productMode
 
 const generateId = () => `id_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
+const modelPreferenceStorage = localforage.createInstance({
+    name: 'flovart',
+    storeName: 'model_preferences',
+});
+
 export const DEFAULT_MODEL_PREFS: ModelPreference = {
     textModel: 'gemini-3-flash-preview',
     imageModel: 'flovart:gpt-image-2',
     videoModel: 'flovart:seedance-2',
 };
+
+export function normalizeProductModelPreference(preference: ModelPreference): ModelPreference {
+    const imageModel = getProductModel(preference.imageModel);
+    const videoModel = getProductModel(preference.videoModel);
+    return {
+        ...preference,
+        imageModel: imageModel?.capability === 'image' ? imageModel.id : DEFAULT_MODEL_PREFS.imageModel,
+        videoModel: videoModel?.capability === 'video' ? videoModel.id : DEFAULT_MODEL_PREFS.videoModel,
+    };
+}
 
 const PROVIDER_MODELS = DEFAULT_PROVIDER_MODELS;
 
@@ -94,7 +110,7 @@ const mergeFetchedModelsIntoKey = (key: UserApiKey, modelItems: ModelItem[]) => 
     if (modelItems.length === 0) return key;
     if (key.provider !== 'runningHub') {
         const merged = { ...key, models: modelItems, updatedAt: Date.now() };
-        return { ...merged, modelMappings: mergeSuggestedMappings(merged) };
+        return { ...merged, routeBindings: mergeSuggestedMappings(merged) };
     }
     const fetchedIds = new Set(modelItems.map(model => model.id));
     const preservedCustomModels = (key.customModels || [])
@@ -142,13 +158,36 @@ export const normalizeApiKeyEntry = (item: Partial<UserApiKey>): UserApiKey | nu
         defaultModel: runningHubDefaultModel,
         models: runningHubModels,
         extraConfig: item.extraConfig,
-        modelMappings: item.modelMappings,
+        routeBindings: item.routeBindings,
         pricingRules: item.pricingRules,
         budgetPolicy: item.budgetPolicy,
         createdAt: item.createdAt || Date.now(),
         updatedAt: item.updatedAt || Date.now(),
     };
 };
+
+export function mergeExtensionApiKeys(current: UserApiKey[], incoming: Array<Partial<UserApiKey>>): UserApiKey[] {
+    const next = [...current];
+    for (const item of incoming) {
+        if (!item.provider || !item.key) continue;
+        const fingerprint = buildApiKeyFingerprint(item);
+        const idIndex = item.id ? next.findIndex(existing => existing.id === item.id) : -1;
+        const index = idIndex >= 0
+            ? idIndex
+            : next.findIndex(existing => buildApiKeyFingerprint(existing) === fingerprint);
+        const existing = index >= 0 ? next[index] : undefined;
+        const definedItem = Object.fromEntries(Object.entries(item).filter(([, value]) => value !== undefined));
+        const merged: Partial<UserApiKey> = { ...existing, ...definedItem };
+        merged.id = existing?.id || item.id || crypto.randomUUID();
+        merged.createdAt = existing?.createdAt || item.createdAt || Date.now();
+        merged.updatedAt = item.updatedAt || Date.now();
+        const normalized = normalizeApiKeyEntry(merged);
+        if (!normalized) continue;
+        if (index >= 0) next[index] = normalized;
+        else next.push(normalized);
+    }
+    return next;
+}
 
 const hasCapabilityOverlap = (left: AICapability[], right: AICapability[]) =>
     left.some(capability => right.includes(capability));
@@ -178,20 +217,8 @@ export function useApiKeys(isSettingsPanelOpen: boolean) {
     const [clearKeysOnExit, setClearKeysOnExit] = useState<boolean>(() => {
         try { return localStorage.getItem('security.clearKeysOnExit') === 'true'; } catch { return false; }
     });
-    const [modelPreference, setModelPreference] = useState<ModelPreference>(() => {
-        try {
-            const raw = localStorage.getItem('modelPreference.v1');
-            if (!raw) return DEFAULT_MODEL_PREFS;
-            const parsed = { ...DEFAULT_MODEL_PREFS, ...JSON.parse(raw) } as ModelPreference;
-            return {
-                ...parsed,
-                imageModel: getProductModel(parsed.imageModel)?.id || parsed.imageModel,
-                videoModel: getProductModel(parsed.videoModel)?.id || parsed.videoModel,
-            };
-        } catch {
-            return DEFAULT_MODEL_PREFS;
-        }
-    });
+    const [modelPreference, setModelPreference] = useState<ModelPreference>(DEFAULT_MODEL_PREFS);
+    const [modelPreferenceLoaded, setModelPreferenceLoaded] = useState(false);
     const [modelPreferenceSavedAt, setModelPreferenceSavedAt] = useState<number | null>(null);
     const [modelPreferenceSaveError, setModelPreferenceSaveError] = useState<string | null>(null);
     const [activeUserKeyId, setActiveUserKeyId] = useState<string | null>(null);
@@ -288,11 +315,43 @@ export function useApiKeys(isSettingsPanelOpen: boolean) {
         return () => { cancelled = true; };
     }, []);
 
-    // 持久化 API Key（加密写入）
+    // 模型选择属于业务配置，统一异步落到 localforage；兼容迁移旧的小型 JSON。
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            let stored = await modelPreferenceStorage.getItem<ModelPreference>('current');
+            if (!stored) {
+                try {
+                    const legacy = localStorage.getItem('modelPreference.v1');
+                    if (legacy) {
+                        stored = JSON.parse(legacy) as ModelPreference;
+                        await modelPreferenceStorage.setItem('current', stored);
+                        localStorage.removeItem('modelPreference.v1');
+                    }
+                } catch {
+                    // Invalid legacy preferences fall back to product defaults.
+                }
+            }
+            if (cancelled) return;
+            setModelPreference(normalizeProductModelPreference({ ...DEFAULT_MODEL_PREFS, ...stored }));
+            setModelPreferenceLoaded(true);
+        })().catch(error => {
+            if (cancelled) return;
+            setModelPreferenceSaveError(error instanceof Error ? error.message : '本机存储不可用');
+            setModelPreferenceLoaded(true);
+        });
+        return () => { cancelled = true; };
+    }, []);
+
+    // 持久化 API Key（加密写入 localforage）；“退出时清除”开启后只保留内存态。
     useEffect(() => {
         if (!apiKeysLoaded) return;
-        saveKeysEncrypted(userApiKeys);
-    }, [userApiKeys, apiKeysLoaded]);
+        if (clearKeysOnExit) {
+            void clearAllKeyData();
+            return;
+        }
+        void saveKeysEncrypted(userApiKeys);
+    }, [userApiKeys, apiKeysLoaded, clearKeysOnExit]);
 
     // 新用户引导：API Key 异步加载完成后，如果没有任何 Key 且用户未主动跳过，自动弹出引导
     useEffect(() => {
@@ -308,14 +367,6 @@ export function useApiKeys(isSettingsPanelOpen: boolean) {
     // 持久化 clearKeysOnExit 设置
     useEffect(() => {
         try { localStorage.setItem('security.clearKeysOnExit', clearKeysOnExit.toString()); } catch { /* non-critical */ }
-    }, [clearKeysOnExit]);
-
-    // 退出时清除 API Key
-    useEffect(() => {
-        if (!clearKeysOnExit) return;
-        const handleBeforeUnload = () => { clearAllKeyData(); };
-        window.addEventListener('beforeunload', handleBeforeUnload);
-        return () => window.removeEventListener('beforeunload', handleBeforeUnload);
     }, [clearKeysOnExit]);
 
     // ─── Chrome Extension bridge V3: AES-GCM encrypted shared storage ───
@@ -411,30 +462,7 @@ export function useApiKeys(isSettingsPanelOpen: boolean) {
                 const extKeys = extKeysRaw as Array<Partial<UserApiKey>> | null;
                 if (!Array.isArray(extKeys)) return;
 
-                setUserApiKeys(prev => {
-                    const existingFingerprints = new Set(prev.map(buildApiKeyFingerprint));
-                    const newKeys: UserApiKey[] = [];
-                    for (const ek of extKeys) {
-                        if (!ek.provider || !ek.key) continue;
-                        const fp = buildApiKeyFingerprint(ek);
-                        if (existingFingerprints.has(fp)) continue;
-                        newKeys.push(normalizeApiKeyEntry({
-                            id: ek.id || crypto.randomUUID(),
-                            provider: ek.provider,
-                            key: ek.key,
-                            baseUrl: ek.baseUrl,
-                            capabilities: ek.capabilities,
-                            models: ek.models,
-                            name: ek.name,
-                            defaultModel: ek.defaultModel,
-                            customModels: ek.customModels,
-                            extraConfig: ek.extraConfig,
-                            createdAt: ek.createdAt || Date.now(),
-                            updatedAt: ek.updatedAt || Date.now(),
-                        }) as UserApiKey);
-                    }
-                    return newKeys.length > 0 ? [...prev, ...newKeys.filter(Boolean)] : prev;
-                });
+                setUserApiKeys(prev => mergeExtensionApiKeys(prev, extKeys));
             });
         };
         chrome.storage.onChanged.addListener(handleStorageChange);
@@ -463,14 +491,14 @@ export function useApiKeys(isSettingsPanelOpen: boolean) {
 
     // 持久化 modelPreference
     useEffect(() => {
-        try {
-            localStorage.setItem('modelPreference.v1', JSON.stringify(modelPreference));
+        if (!modelPreferenceLoaded) return;
+        void modelPreferenceStorage.setItem('current', modelPreference).then(() => {
             setModelPreferenceSavedAt(Date.now());
             setModelPreferenceSaveError(null);
-        } catch (error) {
+        }).catch(error => {
             setModelPreferenceSaveError(error instanceof Error ? error.message : '本机存储不可用');
-        }
-    }, [modelPreference]);
+        });
+    }, [modelPreference, modelPreferenceLoaded]);
 
     const getPreferredApiKey = useCallback((capability: AICapability, provider?: AIProvider) => {
         const requestedModel = getRequestedModelByCapability(modelPreference, capability);
@@ -491,22 +519,28 @@ export function useApiKeys(isSettingsPanelOpen: boolean) {
 
     // Sync runtime config for Gemini services
     useEffect(() => {
-        const textModel = modelRefModelId(modelPreference.textModel);
-        const imageModel = modelRefModelId(modelPreference.imageModel);
-        const videoModel = modelRefModelId(modelPreference.videoModel);
-        const textProvider = modelRefProvider(modelPreference.textModel, userApiKeys);
-        const imageProvider = modelRefProvider(modelPreference.imageModel, userApiKeys);
-        const videoProvider = modelRefProvider(modelPreference.videoModel, userApiKeys);
+        const textSelection = resolveModelSelection(modelPreference.textModel, userApiKeys, 'text');
+        const imageSelection = resolveModelSelection(modelPreference.imageModel, userApiKeys, 'image');
+        const videoSelection = resolveModelSelection(modelPreference.videoModel, userApiKeys, 'video');
+        const textModel = textSelection?.routeId || modelRefModelId(modelPreference.textModel);
+        const imageModel = imageSelection?.routeId || modelRefModelId(modelPreference.imageModel);
+        const videoModel = videoSelection?.routeId || modelRefModelId(modelPreference.videoModel);
+        const textProvider = textSelection?.provider || modelRefProvider(modelPreference.textModel, userApiKeys);
+        const imageProvider = imageSelection?.provider || modelRefProvider(modelPreference.imageModel, userApiKeys);
+        const videoProvider = videoSelection?.provider || modelRefProvider(modelPreference.videoModel, userApiKeys);
 
-        const googleTextKey = getPreferredApiKey('text', 'google');
-        const googleImageKey = getPreferredApiKey('image', 'google');
-        const googleVideoKey = getPreferredApiKey('video', 'google');
+        const googleTextKey = textProvider === 'google' ? textSelection?.key : undefined;
+        const googleImageKey = imageProvider === 'google' ? imageSelection?.key : undefined;
+        const googleVideoKey = videoProvider === 'google' ? videoSelection?.key : undefined;
 
         setGeminiRuntimeConfig({
             textApiKey: googleTextKey?.key,
             imageApiKey: googleImageKey?.key || googleTextKey?.key,
             videoApiKey: googleVideoKey?.key || googleImageKey?.key || googleTextKey?.key,
             baseUrl: googleTextKey?.baseUrl,
+            textBaseUrl: googleTextKey?.baseUrl,
+            imageBaseUrl: googleImageKey?.baseUrl,
+            videoBaseUrl: googleVideoKey?.baseUrl,
             textModel: textProvider === 'google' ? textModel : undefined,
             imageModel:
                 imageProvider === 'google' && isGoogleImageEditModel(imageModel)
@@ -530,7 +564,7 @@ export function useApiKeys(isSettingsPanelOpen: boolean) {
             createdAt: now,
             updatedAt: now,
         };
-        const nextKey = { ...initialKey, modelMappings: mergeSuggestedMappings(initialKey) };
+        const nextKey = { ...initialKey, routeBindings: mergeSuggestedMappings(initialKey) };
         setUserApiKeys(prev => {
             const isFirstOfCapabilities = !prev.some(k =>
                 hasCapabilityOverlap(

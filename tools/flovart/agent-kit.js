@@ -1,14 +1,19 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { dirname, extname, basename, isAbsolute, join, resolve } from 'node:path';
 import { homedir } from 'node:os';
+import { fileURLToPath } from 'node:url';
+import { PRODUCT_MODEL_ENTRIES, listProductModelEntries } from './product-models.js';
 
+const PACKAGE_DIR = dirname(fileURLToPath(import.meta.url));
 const CONFIG_DIR = process.env.FLOVART_AGENT_CONFIG_DIR || join(process.env.APPDATA || process.env.HOME || homedir(), 'Flovart');
 const PREFS_FILE = join(CONFIG_DIR, 'agent-preferences.json');
 
-const SEEDANCE2_MODELS = ['doubao-seedance-2.0', 'seedance-2.0', 'dreamina-seedance-2-0-260128', 'doubao-seedance-2-0-260128'];
+const SEEDANCE2_PRODUCT_IDS = ['flovart:seedance-2', 'flovart:seedance-2-fast'];
+const SEEDANCE2_ALIASES = ['doubao-seedance-2.0', 'seedance-2.0', 'dreamina-seedance-2-0-260128', 'doubao-seedance-2-0-260128', 'doubao-seedance-2-0-fast-260128'];
 const SEEDANCE2_REQUIREMENTS = {
   provider: 'volcengine',
-  models: SEEDANCE2_MODELS,
+  productModelIds: SEEDANCE2_PRODUCT_IDS,
   slots: { image: 9, video: 3, audio: 3 },
   durationSec: { min: 4, max: 15 },
   resolutions: ['480p', '720p', '1080p'],
@@ -115,15 +120,15 @@ function providerSnapshot(provider = {}) {
   const snapshot = {
     configured: { image: false, video: false, text: false, ...(provider.configured || {}) },
     selectedModels: {
-      image: 'flux-schnell',
-      video: 'doubao-seedance-2.0',
-      text: 'gpt-4.1-mini',
+      image: 'flovart:gpt-image-2',
+      video: 'flovart:seedance-2',
+      text: 'gemini-3-flash-preview',
       ...(provider.selectedModels || {}),
     },
     providers: Array.isArray(provider.providers) ? provider.providers : [],
   };
   if (snapshot.selectedModels.video === 'kling-v2' && !snapshot.configured.video && snapshot.providers.length === 0) {
-    snapshot.selectedModels.video = 'doubao-seedance-2.0';
+    snapshot.selectedModels.video = 'flovart:seedance-2';
   }
   return snapshot;
 }
@@ -131,7 +136,9 @@ function providerSnapshot(provider = {}) {
 function diagnoseSeedance2(provider) {
   const videoModel = String(provider.selectedModels.video || '');
   const normalizedModel = videoModel.toLowerCase();
-  const modelOk = SEEDANCE2_MODELS.includes(normalizedModel) || normalizedModel.includes('seedance');
+  const modelOk = SEEDANCE2_PRODUCT_IDS.includes(normalizedModel)
+    || SEEDANCE2_ALIASES.includes(normalizedModel)
+    || normalizedModel.includes('seedance');
   const providerOk = !!provider.configured.video;
   const checks = [
     {
@@ -145,9 +152,9 @@ function diagnoseSeedance2(provider) {
       id: 'video.seedance2Model',
       ok: modelOk,
       model: videoModel,
-      expectedModels: SEEDANCE2_MODELS,
+      expectedProductModelIds: SEEDANCE2_PRODUCT_IDS,
       message: modelOk ? 'Seedance 2.0 model is selected.' : 'Selected video model is not a Seedance 2.0 model.',
-      nextAction: modelOk ? undefined : 'provider.select-model --video-model doubao-seedance-2.0',
+      nextAction: modelOk ? undefined : 'provider.select-model --video-model flovart:seedance-2',
     },
     {
       id: 'seedance2.multimodalLimits',
@@ -171,18 +178,9 @@ function diagnoseSeedance2(provider) {
 
 function diagnoseGenerationSurfaces(shadowSnapshot, seedance2) {
   const state = shadowSnapshot.state || {};
-  const elements = Array.isArray(state.elements) ? state.elements : [];
   const workflowProjects = Array.isArray(state.workflowProjects) ? state.workflowProjects : [];
   const providerReady = seedance2.ok;
   return {
-    canvas: {
-      ok: providerReady,
-      commandSurface: true,
-      providerBackedGenerationReady: providerReady,
-      browserRequired: true,
-      mediaElements: elements.filter(item => item.type === 'image' || item.type === 'video').length,
-      commands: ['element.create', 'element.update-prompt', 'element.assign-slot', 'element.ignite', 'generate.video'],
-    },
     workflow: {
       ok: providerReady,
       commandSurface: true,
@@ -199,8 +197,8 @@ function defaultPreferences() {
   return {
     style: 'cinematic',
     aspectRatio: '16:9',
-    imageModel: 'flux-schnell',
-    videoModel: 'doubao-seedance-2.0',
+    imageModel: 'flovart:gpt-image-2',
+    videoModel: 'flovart:seedance-2',
     styleNotes: '',
     favoritePrompts: [],
     updatedAt: Date.now(),
@@ -295,39 +293,52 @@ export function enhancePrompt(input = {}) {
 export function listAgentModels(input = {}) {
   const prefs = manageAgentPreferences({ action: 'get' }).preferences;
   const purpose = input.purpose || 'all';
-  const models = {
-    image: [
-      { id: 'flux-schnell', label: 'Flux Schnell', routing: 'browser-provider', selected: prefs.imageModel === 'flux-schnell' },
-      { id: 'gpt-image-2', label: 'GPT Image 2', routing: 'browser-provider', selected: prefs.imageModel === 'gpt-image-2' },
-      { id: 'imagen', label: 'Imagen', routing: 'browser-provider', selected: prefs.imageModel === 'imagen' },
-    ],
-    video: [
-      { id: 'doubao-seedance-2.0', label: 'Seedance 2.0 · Volcengine', routing: 'browser-provider', provider: 'volcengine', capability: 'video', slots: { image: 9, video: 3, audio: 3 }, durationSec: { min: 4, max: 15 }, resolutions: ['480p', '720p', '1080p'], selected: prefs.videoModel === 'doubao-seedance-2.0' },
-      { id: 'seedance-2.0', label: 'Seedance 2.0 · Alias', routing: 'browser-provider', provider: 'volcengine', capability: 'video', slots: { image: 9, video: 3, audio: 3 }, durationSec: { min: 4, max: 15 }, resolutions: ['480p', '720p', '1080p'], selected: prefs.videoModel === 'seedance-2.0' },
-      { id: 'dreamina-seedance-2-0-260128', label: 'Seedance 2.0 · Dreamina Ark', routing: 'browser-provider', provider: 'volcengine', capability: 'video', slots: { image: 9, video: 3, audio: 3 }, durationSec: { min: 4, max: 15 }, resolutions: ['480p', '720p', '1080p'], selected: prefs.videoModel === 'dreamina-seedance-2-0-260128' },
-      { id: 'doubao-seedance-2-0-260128', label: 'Seedance 2.0 · Doubao Ark', routing: 'browser-provider', provider: 'volcengine', capability: 'video', slots: { image: 9, video: 3, audio: 3 }, durationSec: { min: 4, max: 15 }, resolutions: ['480p', '720p', '1080p'], selected: prefs.videoModel === 'doubao-seedance-2-0-260128' },
-      { id: 'kling-v2', label: 'Kling v2', routing: 'browser-provider', provider: 'keling', capability: 'video', selected: prefs.videoModel === 'kling-v2' },
-      { id: 'veo-3.1-generate-preview', label: 'Veo 3.1', routing: 'browser-provider', provider: 'google', capability: 'video', selected: prefs.videoModel === 'veo-3.1-generate-preview' },
-    ],
+  const filterCapability = purpose === 'image' ? 'image' : purpose === 'video' ? 'video' : 'all';
+  const entries = listProductModelEntries(filterCapability);
+  const models = {};
+  for (const entry of entries) {
+    const list = models[entry.capability] || (models[entry.capability] = []);
+    list.push({
+      id: entry.id,
+      label: entry.name,
+      routing: 'browser-provider',
+      provider: entry.provider,
+      capability: entry.capability,
+      status: entry.status,
+      badge: entry.badge || undefined,
+      selected: prefs[`${entry.capability}Model`] === entry.id,
+    });
+  }
+  const imageModels = models.image || [];
+  const videoModels = models.video || [];
+  const seedance2 = videoModels.find(m => SEEDANCE2_PRODUCT_IDS.includes(m.id.toLowerCase()));
+  if (seedance2) {
+    seedance2.slots = SEEDANCE2_REQUIREMENTS.slots;
+    seedance2.durationSec = SEEDANCE2_REQUIREMENTS.durationSec;
+    seedance2.resolutions = SEEDANCE2_REQUIREMENTS.resolutions;
+  }
+  return {
+    ok: true,
+    purpose,
+    models: purpose === 'image' ? { image: imageModels } : purpose === 'video' ? { video: videoModels } : { image: imageModels, video: videoModels },
   };
-  return { ok: true, purpose, models: purpose === 'image' ? { image: models.image } : purpose === 'video' ? { video: models.video } : models };
 }
 
-function cliServerConfig(projectDir = process.cwd()) {
+function mcpServerConfig() {
   return {
-    command: 'node',
-    args: [resolve(projectDir, 'tools/flovart/cli.js')],
+    command: process.execPath,
+    args: [join(PACKAGE_DIR, 'mcp-server.js')],
   };
 }
 
 const HOSTS = {
-  project: { name: 'Project CLI', path: '.cli.json', wrapperKey: 'cliServers' },
-  opencode: { name: 'OpenCode', path: '.cli.json', wrapperKey: 'cliServers' },
-  claude: { name: 'Claude Code', path: '.cli.json', wrapperKey: 'cliServers' },
-  cursor: { name: 'Cursor', path: '.cursor/cli.json', wrapperKey: 'cliServers' },
-  windsurf: { name: 'Windsurf', path: join(homedir(), '.codeium', 'windsurf', 'cli_config.json'), wrapperKey: 'cliServers', global: true },
-  roo: { name: 'Roo Code', path: '.roo/cli.json', wrapperKey: 'cliServers' },
-  vscode: { name: 'VS Code / GitHub Copilot', path: '.vscode/cli.json', wrapperKey: 'servers', needsType: true },
+  project: { name: 'Project MCP', path: '.mcp.json', wrapperKey: 'mcpServers' },
+  codex: { name: 'Codex CLI', register: 'codex' },
+  claude: { name: 'Claude Code', register: 'claude' },
+  opencode: { name: 'OpenCode', path: 'opencode.json', wrapperKey: 'mcp', format: 'opencode' },
+  cursor: { name: 'Cursor', path: '.cursor/mcp.json', wrapperKey: 'mcpServers' },
+  windsurf: { name: 'Windsurf', path: join(homedir(), '.codeium', 'windsurf', 'mcp_config.json'), wrapperKey: 'mcpServers', global: true },
+  vscode: { name: 'VS Code / GitHub Copilot', path: '.vscode/mcp.json', wrapperKey: 'servers', needsType: true },
 };
 
 function hostConfigPath(hostConfig, projectDir) {
@@ -336,8 +347,19 @@ function hostConfigPath(hostConfig, projectDir) {
 }
 
 function serverEntryForHost(hostConfig, projectDir) {
-  const entry = cliServerConfig(projectDir);
+  const entry = mcpServerConfig(projectDir);
+  if (hostConfig.format === 'opencode') {
+    return { type: 'local', command: [entry.command, ...entry.args], enabled: true };
+  }
   return hostConfig.needsType ? { type: 'stdio', ...entry } : entry;
+}
+
+function registrationForHost(hostConfig, projectDir) {
+  const entry = mcpServerConfig(projectDir);
+  if (hostConfig.register === 'codex') {
+    return { command: 'codex', args: ['mcp', 'add', 'flovart', '--', entry.command, ...entry.args] };
+  }
+  return { command: 'claude', args: ['mcp', 'add', '--scope', 'project', 'flovart', '--', entry.command, ...entry.args] };
 }
 
 function mergeCliJson(filePath, wrapperKey, serverConfig) {
@@ -358,7 +380,7 @@ export function initCliHost(input = {}) {
   const projectDir = resolve(String(input.projectDir || process.cwd()));
   const dryRun = input.dryRun === true || input['dry-run'] === true;
   const selected = host === 'all'
-    ? Object.entries(HOSTS).filter(([key]) => key !== 'project' && key !== 'opencode')
+    ? Object.entries(HOSTS).filter(([key]) => key !== 'project')
     : [[host, HOSTS[host]]].filter(([, value]) => value);
 
   if (selected.length === 0) {
@@ -366,6 +388,17 @@ export function initCliHost(input = {}) {
   }
 
   const writes = selected.map(([key, hostConfig]) => {
+    if (hostConfig.register) {
+      const registration = registrationForHost(hostConfig, projectDir);
+      const result = dryRun ? null : spawnSync(registration.command, registration.args, { cwd: projectDir, stdio: 'inherit', shell: false });
+      return {
+        host: key,
+        name: hostConfig.name,
+        registration,
+        dryRun,
+        ok: dryRun || result?.status === 0,
+      };
+    }
     const filePath = hostConfigPath(hostConfig, projectDir);
     const server = serverEntryForHost(hostConfig, projectDir);
     const config = dryRun
@@ -374,14 +407,23 @@ export function initCliHost(input = {}) {
     return { host: key, name: hostConfig.name, filePath, wrapperKey: hostConfig.wrapperKey, server, config, dryRun };
   });
 
+  const packagedSkill = join(PACKAGE_DIR, 'skill', 'SKILL.md');
+  const sourceSkill = resolve(PACKAGE_DIR, '..', '..', '.agents', 'skills', 'flovart', 'SKILL.md');
+  const skillSource = existsSync(packagedSkill) ? packagedSkill : sourceSkill;
+  const skillTarget = join(projectDir, '.agents', 'skills', 'flovart', 'SKILL.md');
+  if (!dryRun && existsSync(skillSource)) {
+    ensureParent(skillTarget);
+    writeFileSync(skillTarget, readFileSync(skillSource, 'utf8'), 'utf8');
+  }
+
   return {
-    ok: true,
+    ok: writes.every(write => write.ok !== false) && existsSync(skillSource),
     host,
     projectDir,
     writes,
+    skill: { source: skillSource, target: skillTarget, exists: existsSync(skillSource), dryRun },
     nextSteps: [
-      'Start the Vite app: npm run dev',
-      'Open the Flovart browser app from the dev server when provider-backed generation needs to run.',
+      'Run flovart start to launch the local Workflow WebUI and Managed Agent.',
       'Restart the host so it reloads the Flovart CLI config.',
     ],
   };
@@ -397,6 +439,16 @@ export function diagnoseAgentSetup(input = {}) {
     { id: 'preferences', ok: existsSync(PREFS_FILE), detail: PREFS_FILE, optional: true },
   ];
   const hostConfigs = Object.entries(HOSTS).map(([key, hostConfig]) => {
+    if (hostConfig.register) {
+      return {
+        host: key,
+        name: hostConfig.name,
+        filePath: null,
+        exists: null,
+        configured: null,
+        registration: registrationForHost(hostConfig, projectDir),
+      };
+    }
     const filePath = hostConfigPath(hostConfig, projectDir);
     const config = readJson(filePath, null);
     const wrapper = config?.[hostConfig.wrapperKey];
@@ -417,12 +469,11 @@ export function diagnoseAgentSetup(input = {}) {
     'Run npm run flovart:cli -- status --json to verify local file-state runtime.',
     'Run npm run flovart:cli -- init --host <host> to write missing CLI config.',
     ...seedance2.nextActions,
-    'Run npm run dev and keep the browser app open for provider-backed generation.',
+    'Run flovart start and keep the Workflow WebUI open for provider-backed generation.',
   ]));
   return {
     ok: checks.every(check => check.ok || check.optional),
     readyForSeedance2: seedance2.ok,
-    readyForCanvasSeedance2: surfaces.canvas.ok,
     readyForWorkflowSeedance2: surfaces.workflow.ok,
     projectDir,
     checks,

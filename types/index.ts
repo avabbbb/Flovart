@@ -1,73 +1,6 @@
 
 
-export type Tool = 'select' | 'pan' | 'draw' | 'erase' | 'rectangle' | 'circle' | 'triangle' | 'text' | 'arrow' | 'highlighter' | 'lasso' | 'line';
-
-export type WheelAction = 'zoom' | 'pan';
-
 export type GenerationMode = 'text' | 'image' | 'video' | 'keyframe';
-
-export interface Point {
-  x: number;
-  y: number;
-}
-
-export interface CanvasElementBase {
-  id: string;
-  x: number;
-  y: number;
-  name?: string;
-  isVisible?: boolean;
-  isLocked?: boolean;
-  parentId?: string;
-  generationState?: ElementGenerationState;
-}
-
-export type GenerationStatus = 'idle' | 'queued' | 'running' | 'success' | 'error';
-
-export type AssetSlotRole =
-  | 'first_frame'
-  | 'last_frame'
-  | 'reference_image'
-  | 'reference_video'
-  | 'reference_audio'
-  | 'style_ref'
-  | 'control_net'
-  | 'unassigned';
-
-export type InlineGenerationProvider =
-  | 'openrouter'
-  | 'siliconflow'
-  | 'google'
-  | 'keling'
-  | 'midjourney'
-  | 'openai_compatible';
-
-export interface ResolvedReference {
-  token: string;
-  targetElementId: string;
-  targetType: 'image' | 'video' | 'text';
-  slotRole?: AssetSlotRole;
-}
-
-export interface AdaptivePromptPayload {
-  rawText: string;
-  resolvedReferences: ResolvedReference[];
-  richTextDocument?: Record<string, unknown>;
-}
-
-export interface ElementGenerationState {
-  promptPayload: AdaptivePromptPayload;
-  provider: InlineGenerationProvider;
-  modelId: string;
-  aspectRatio?: '16:9' | '9:16' | '1:1' | '4:3' | '3:4' | '3:2' | '2:3' | '21:9' | 'adaptive';
-  durationSec?: number;
-  resolution?: '480p' | '720p' | '1080p' | string;
-  generateAudio?: boolean;
-  watermark?: boolean;
-  status: GenerationStatus;
-  error?: string;
-  progress?: number;
-}
 
 /** 图片滤镜/调色参数 */
 export interface ImageFilters {
@@ -96,102 +29,10 @@ export const DEFAULT_IMAGE_FILTERS: ImageFilters = {
   sharpen: 0,
 };
 
-export interface ImageElement extends CanvasElementBase {
-  type: 'image';
-  href: string; 
-  width: number;
-  height: number;
-  mimeType: string;
-  borderRadius?: number;
-  filters?: Partial<ImageFilters>;
-  /** Non-destructive layer mask: data URL of grayscale image. White = visible, Black = hidden */
-  mask?: string;
-}
-
-export interface VideoElement extends CanvasElementBase {
-  type: 'video';
-  href: string; // Blob URL
-  width: number;
-  height: number;
-  mimeType: string;
-  poster?: string;
-  durationSec?: number;
-  sourceKind?: 'upload' | 'generation';
-  generationMeta?: {
-    prompt?: string;
-    provider?: string;
-    model?: string;
-  };
-}
-
-export interface PathElement extends CanvasElementBase {
-  type: 'path';
-  points: Point[];
-  strokeColor: string;
-  strokeWidth: number;
-  strokeOpacity?: number;
-}
-
-export interface ShapeElement extends CanvasElementBase {
-    type: 'shape';
-    shapeType: 'rectangle' | 'circle' | 'triangle';
-    width: number;
-    height: number;
-    strokeColor: string;
-    strokeWidth: number;
-    fillColor: string;
-    borderRadius?: number;
-    strokeDashArray?: [number, number];
-}
-
-export interface TextElement extends CanvasElementBase {
-    type: 'text';
-    text: string;
-    fontSize: number;
-    fontColor: string;
-    width: number;
-    height: number;
-}
-
-export interface ArrowElement extends CanvasElementBase {
-    type: 'arrow';
-    points: [Point, Point];
-    strokeColor: string;
-    strokeWidth: number;
-}
-
-export interface LineElement extends CanvasElementBase {
-    type: 'line';
-    points: [Point, Point];
-    strokeColor: string;
-    strokeWidth: number;
-}
-
-export interface GroupElement extends CanvasElementBase {
-    type: 'group';
-    width: number;
-    height: number;
-}
-
-
-export type CanvasElement = ImageElement | VideoElement | TextElement | ShapeElement;
-export type Element = CanvasElement | PathElement | ArrowElement | LineElement | GroupElement;
-
 export interface UserEffect {
   id: string;
   name: string;
   value: string;
-}
-
-export interface Board {
-  id: string;
-  name: string;
-  elements: Element[];
-  history: Element[][];
-  historyIndex: number;
-  panOffset: Point;
-  zoom: number;
-  canvasBackgroundColor: string;
 }
 
 // Asset Library
@@ -272,7 +113,7 @@ export interface RecipePackage {
 
 // API Key & Model Preferences
 export type ThemeMode = 'light' | 'dark' | 'system';
-export type WorkspaceView = 'workflow' | 'table';
+export type WorkspaceView = 'workflow' | 'table' | 'agent';
 export type AIProvider = 'openai' | 'anthropic' | 'google' | 'qwen' | 'deepseek' | 'xai' | 'siliconflow' | 'keling' | 'flux' | 'midjourney' | 'runningHub' | 'minimax' | 'volcengine' | 'openrouter' | 'openai_compatible' | 'custom';
 export type AICapability = 'text' | 'image' | 'video' | 'agent';
 
@@ -291,9 +132,10 @@ export type ProductModelMode =
   | 'first-last-frame'
   | 'video-extension';
 
-export interface ProductModelMapping {
+export interface ProductRouteBinding {
   productModelId: string;
-  upstreamModelId: string;
+  mode: ProductModelMode;
+  routeId: string;
   priority: number;
   enabled: boolean;
   confirmed: boolean;
@@ -304,7 +146,7 @@ export type ApiPricingUnit = 'request' | 'image' | 'video_second' | 'input_token
 export interface ApiPricingRule {
   id: string;
   productModelId?: string;
-  upstreamModelId?: string;
+  routeId?: string;
   unit: ApiPricingUnit;
   rate: number;
   currency: 'USD' | 'CNY';
@@ -338,8 +180,8 @@ export interface UserApiKey {
   models?: ModelItem[];
   /** Provider 特有的额外配置（�?Google Veo �?projectId�?*/
   extraConfig?: Record<string, string>;
-  /** Flovart 固定产品模型到上游模型 ID 的显式映射。 */
-  modelMappings?: ProductModelMapping[];
+  /** Flovart 固定产品模型按 Generation Mode 绑定到 Provider Route 的显式绑定。 */
+  routeBindings?: ProductRouteBinding[];
   /** 该 Key / 模型线路的计价规则。 */
   pricingRules?: ApiPricingRule[];
   /** 该 Key 的月度预算策略。 */
@@ -355,8 +197,6 @@ export interface ModelPreference {
 }
 
 // Agent / Workflow
-export type WorkspaceMode = 'whiteboard' | 'node';
-
 // Multi-Agent Chat System
 export type AgentRoleId = 'creative_director' | 'prompt_engineer' | 'style_master' | 'compositor' | 'quality_reviewer' | string;
 
@@ -424,7 +264,7 @@ export interface PromptEnhanceResult {
 export interface CharacterLockProfile {
   id: string;
   name: string;
-  anchorElementId: string;
+  anchorNodeId: string;
   referenceImage: string; // dataURL
   descriptor: string;
   createdAt: number;
@@ -436,5 +276,5 @@ export interface ChatAttachment {
   name: string;
   href: string;
   mimeType: string;
-  source: 'canvas' | 'upload';
+  source: 'workflow' | 'upload';
 }

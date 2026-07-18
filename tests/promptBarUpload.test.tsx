@@ -57,12 +57,11 @@ describe('PromptBar media attachments', () => {
       />,
     );
 
-    const moreButton = screen.getByTitle('更多操作');
-    fireEvent.click(moreButton);
+    fireEvent.click(screen.getByTitle('生成参数'));
 
-    expect(screen.getByText('Seedance 视频参数')).toBeTruthy();
-    expect(screen.getByText('生成声音 ON')).toBeTruthy();
-    expect(screen.getByText('水印 OFF')).toBeTruthy();
+    expect(screen.getByText('生成音频')).toBeTruthy();
+    expect(screen.getByRole('button', { name: '开启' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByText('Seedance 视频参数')).not.toBeInTheDocument();
   });
 
   it('uses video model controls for keyframe mode', () => {
@@ -96,9 +95,10 @@ describe('PromptBar media attachments', () => {
     expect(screen.getByText('选择模型')).toBeTruthy();
     expect(screen.getAllByText('Seedance 2.0').length).toBeGreaterThan(0);
 
-    const moreButton = screen.getByTitle('更多操作');
-    fireEvent.click(moreButton);
+    fireEvent.click(screen.getByTitle('生成参数'));
 
-    expect(screen.getByText('Seedance 视频参数')).toBeTruthy();
+    expect(screen.getByTestId('prompt-parameter-panel')).toHaveAttribute('data-density', 'compact');
+    expect(screen.getByText('尺寸')).toBeTruthy();
+    expect(screen.getByRole('button', { name: '720p' })).toBeTruthy();
   });
 });

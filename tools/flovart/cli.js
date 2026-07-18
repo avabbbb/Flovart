@@ -17,53 +17,12 @@ function printCliResponse(ok, commandName, data = null, error = null, extra = {}
 }
 
 function normalizeAtomicAlias(rawCommand, parsedArgs) {
-  if (!rawCommand) return { command: rawCommand, args: parsedArgs };
-
-  if (rawCommand === 'inspect') return { command: 'canvas.inspect', args: parsedArgs };
-
-  if (rawCommand === 'create') {
-    const [type, name, x, y, width, height] = parsedArgs._;
-    return {
-      command: 'element.create',
-      args: { ...parsedArgs, type: parsedArgs.type || type, name: parsedArgs.name || name, x: parsedArgs.x ?? x, y: parsedArgs.y ?? y, width: parsedArgs.width ?? width, height: parsedArgs.height ?? height },
-    };
-  }
-
-  if (rawCommand === 'update-prompt') {
-    const [elementId, ...textTokens] = parsedArgs._;
-    return { command: 'element.update-prompt', args: { ...parsedArgs, 'element-id': parsedArgs['element-id'] || parsedArgs.elementId || elementId, 'text-prompt': parsedArgs['text-prompt'] || parsedArgs.textPrompt || textTokens.join(' ') } };
-  }
-
-  if (rawCommand === 'assign-slot') {
-    const [elementId, targetElementId, slotRole] = parsedArgs._;
-    return { command: 'element.assign-slot', args: { ...parsedArgs, 'element-id': parsedArgs['element-id'] || parsedArgs.elementId || elementId, 'target-element-id': parsedArgs['target-element-id'] || parsedArgs.targetElementId || targetElementId, 'slot-role': parsedArgs['slot-role'] || parsedArgs.slotRole || slotRole } };
-  }
-
-  if (rawCommand === 'ignite') {
-    const [elementId] = parsedArgs._;
-    return { command: 'element.ignite', args: { ...parsedArgs, 'element-id': parsedArgs['element-id'] || parsedArgs.elementId || elementId } };
-  }
-
-  if (rawCommand === 'watch') {
-    const [elementId] = parsedArgs._;
-    return { command: 'element.watch', args: { ...parsedArgs, 'element-id': parsedArgs['element-id'] || parsedArgs.elementId || elementId } };
-  }
-
-  if (rawCommand === 'remove') {
-    const [id] = parsedArgs._;
-    return { command: 'canvas.remove-element', args: { ...parsedArgs, id: parsedArgs.id || id } };
-  }
-
-  if (rawCommand === 'select') {
-    return { command: 'canvas.select', args: { ...parsedArgs, ids: parsedArgs.ids || parsedArgs._.join(',') } };
-  }
-
   return { command: rawCommand, args: parsedArgs };
 }
 
 const LOCAL_COMMANDS = new Set([
   'help', 'setup', 'init', 'doctor',
-  'command.list', 'command.schema',
+  'runtime.status', 'command.list', 'command.schema',
   'inspiration.search', 'inspiration.get',
   'prompt.enhance', 'batch.plan',
   'preferences.manage', 'models.list',
@@ -71,9 +30,6 @@ const LOCAL_COMMANDS = new Set([
 
 const FILE_STATE_COMMANDS = new Set([
   'status',
-  'canvas.inspect', 'canvas.list-media', 'canvas.add-image', 'canvas.add-video', 'canvas.upload-image', 'canvas.upload-video',
-  'canvas.update-element', 'canvas.remove-element', 'canvas.select', 'canvas.clear-media',
-  'element.create', 'element.update-prompt', 'element.assign-slot', 'element.watch',
   'asset.list', 'export.project', 'video.status',
   'workflow.project.list', 'workflow.project.create', 'workflow.project.use', 'workflow.project.delete',
   'workflow.inspect', 'workflow.node.create', 'workflow.node.create-connected', 'workflow.node.update', 'workflow.node.delete',
@@ -99,6 +55,11 @@ if (['install', 'start', 'update'].includes(rawCommand)) {
   process.exit(0);
 }
 
+if (rawCommand === 'agent') {
+  await import('./managed-agent/index.js').catch(() => import('../../agent/index.js'));
+  process.exit(0);
+}
+
 const parsedArgs = parseCliArgs(argv.slice(1));
 const normalizedAtomic = normalizeAtomicAlias(rawCommand, parsedArgs);
 const command = normalizeCommandName(normalizedAtomic.command);
@@ -116,7 +77,7 @@ if (args.file) {
 
 async function main() {
   if (!command) {
-    printCliResponse(true, 'help', { usage: 'flovart  # opens TUI; or flovart <command> --json', setup: SETUP_TEXT, devCommands: { tui: 'Open slash-command TUI', install: 'Clone source + install deps to ~/.flovart/project', start: 'Launch dev servers (vite + Go backend + Docker PG)', update: 'Pull latest + update deps' } });
+    printCliResponse(true, 'help', { usage: 'flovart  # opens TUI; or flovart <command> --json', setup: SETUP_TEXT, commands: { tui: 'Open slash-command TUI', install: 'Download and verify the versioned Agent Toolkit', start: 'Launch local Runtime/WebUI and the managed coding agent', update: 'Install and switch to the latest compatible Toolkit', source: 'Add --source for Vite/Go/Docker contributor services' } });
     return;
   }
 
@@ -124,8 +85,12 @@ async function main() {
 
   if (LOCAL_COMMANDS.has(routingCommand)) {
     const result = await executeFlovartCommand(command, args, {});
-    if (args.json) printCliResponse(true, command, result);
-    else console.log(formatValue(result.text || result));
+    const ok = isResultOk(result);
+    if (args.json) printCliResponse(ok, command, result, ok ? null : result.error || null);
+    else {
+      console.log(formatValue(result.text || result));
+      if (!ok) process.exitCode = 1;
+    }
     return;
   }
 

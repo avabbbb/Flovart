@@ -11,7 +11,7 @@ import { BROWSER_COMMANDS } from './browser-commands.js';
 
 const LOCAL_COMMANDS = new Set([
   'help', 'setup', 'init', 'doctor',
-  'command.list', 'command.schema',
+  'runtime.status', 'command.list', 'command.schema',
   'inspiration.search', 'inspiration.get',
   'prompt.enhance', 'batch.plan',
   'preferences.manage', 'models.list',
@@ -76,11 +76,11 @@ const server = new McpServer({
   name: 'flovart',
   version: '0.3.0',
   instructions: [
-    'Flovart MCP Server — deterministic canvas/workflow/generation tools.',
+    'Flovart MCP Server — deterministic Workflow and generation tools.',
     'All tools mirror flovart CLI commands. Keep the Flovart browser app open for provider-backed generation.',
-    'Browser commands (provider.*, generate.*, element.ignite, workflow.node.run/stop) accept optional `wait` (default true) and `timeoutMs` (default 60000).',
-    'If a browser command times out, it returns a pending result — use video.status or element.watch to poll.',
-    'Never read, print, or store API keys. Provider keys stay in the browser UI only.',
+    'Browser commands (provider.*, generate.*, workflow.node.run/stop) accept optional `wait` (default true) and `timeoutMs` (default 60000).',
+    'If a browser command times out, it returns a pending result; use video.status for video jobs and inspect the Workflow before retrying.',
+    'Never read, print, or store API keys. Provider keys stay in the local Flovart Runtime/WebUI only.',
   ].join(' '),
 });
 

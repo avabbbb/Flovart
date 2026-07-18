@@ -8,7 +8,7 @@ const MODE_ICON = {
     text: FileText,
 } as const;
 
-const SOURCE_LABEL = { canvas: '画布', workflow: '工作流' } as const;
+const SOURCE_LABEL = { workflow: '工作流' } as const;
 
 function formatTime(ts: number): string {
     const diff = Date.now() - ts;

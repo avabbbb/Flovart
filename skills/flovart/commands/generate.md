@@ -1,57 +1,28 @@
-# Generation Commands
+# Generation commands
 
-Generation commands are browser-backed. Keep the Flovart browser tab open and make sure provider setup is complete.
-
-Check first:
+Generation is browser-backed. Keep the Flovart UI open and check readiness first:
 
 ```bash
 npm run flovart:cli -- provider.status --json
 npm run flovart:cli -- provider.test --purpose both --json
 ```
 
-## generate.image
-
-Generate one image from an explicit prompt.
+Always inspect the current schema before submitting:
 
 ```bash
-npm run flovart:cli -- generate.image --prompt "cinematic product poster, clean hero composition" --aspect-ratio 16:9 --place-on-canvas true --wait --timeout-ms 120000 --json
+npm run flovart:cli -- command.schema --command generate.image --json
+npm run flovart:cli -- command.schema --command generate.images-batch --json
+npm run flovart:cli -- command.schema --command generate.video --json
 ```
 
-Arguments:
-
-- `prompt`: required.
-- `aspect-ratio`: optional, commonly `16:9`, `9:16`, `1:1`, `4:3`, `3:4`, `21:9`.
-- `place-on-canvas`: optional boolean.
-
-## generate.images-batch
-
-Generate multiple images from explicit prompt items.
+Examples using only registered arguments:
 
 ```bash
-npm run flovart:cli -- generate.images-batch --file shots.json --place-on-canvas true --layout grid --wait --timeout-ms 180000 --json
+npm run flovart:cli -- generate.image --prompt "cinematic product poster, clean hero composition" --aspect-ratio 16:9 --json
+npm run flovart:cli -- generate.video --prompt "slow dolly-in, subject turns toward camera" --source-image-ids image1,image2 --duration-sec 8 --aspect-ratio 16:9 --json
+npm run flovart:cli -- video.status --job-id <job-id> --json
 ```
 
-Example `shots.json`:
+`generate.image` can target a Workflow project or node when the schema exposes `projectId` and `targetNodeId`. `generate.video` accepts typed image, video, or slot references according to the active Product Model and Provider Route.
 
-```json
-{
-  "items": [
-    { "name": "unit-01-keyframe", "prompt": "wide office morning, protagonist at desk", "aspectRatio": "16:9" },
-    { "name": "unit-02-keyframe", "prompt": "close-up phone notification, tense mood", "aspectRatio": "16:9" }
-  ]
-}
-```
-
-## generate.video
-
-Generate one video from a prompt and optional source image IDs.
-
-```bash
-npm run flovart:cli -- generate.video --prompt "8 second slow dolly-in, character turns toward camera" --source-image-ids image1,image2 --duration 8 --aspect-ratio 16:9 --wait --timeout-ms 300000 --json
-```
-
-Prompt requirements:
-
-- Describe start frame, end frame, subject motion, camera motion, and continuity constraints.
-- If using source images, state each image's role in the prompt.
-- Keep retry scope small: patch prompt or source IDs, then rerun only the failed video.
+Do not reuse removed options such as `placeOnCanvas`, `layout`, or generic `wait` unless they reappear in `command.schema`. Retry only the failed job with the smallest prompt or reference change.

@@ -2,6 +2,32 @@
 title: 待测试确认
 ---
 
+## 浏览器本地业务存储收口
+
+- Provider API Key 的浏览器持久化从 `localStorage` 迁到加密的 `localforage` Vault；旧版密文与盐会一次性迁移，明文旧 Key 会加密后迁移。桌面端后续仍以系统 Credential Manager 为最终存储边界。
+- Workflow 项目与媒体 Blob、Agent 工作区布局、生成历史、素材、社区内容、用量记录、模型选择和 Provider 模型缓存统一通过独立的 `localforage` store 写入 IndexedDB；生成历史与 Workflow JSON 不内嵌视频等大二进制。
+- 本机 Agent 连接 Token 和 Hub JWT 改为 `sessionStorage`；Hub 会在首次读取时迁移并删除旧 `localStorage` 明文 Token。主题、语言、面板宽度等小型同步 UI 配置仍可保留在 `localStorage`。
+- 已通过 `npm test -- tests/browserPersistence.test.ts tests/generationHistory.test.ts tests/agentWorkspaceStore.test.ts tests/workflowStore.test.ts tests/mediaDB.test.ts tests/workflowMedia.test.ts`（6 个测试文件、36 项测试）及 `npm run build`。待用户验证：保存 Workflow/视频与 API Key 后刷新仍可恢复；关闭会话后 Agent/Hub Token 不继续持久化；旧版本 API Key 首次打开后可正常迁移。
+
+## Flovart Skill、CLI、Agent Toolkit 与发布链路
+
+- npm 发布包已统一命名为 `flovart-cli@0.3.0`，确保用户可直接使用 `npx flovart-cli ...`；包含 CLI、TUI、MCP Server、Flovart Skill、Managed Agent、Host 适配与 Toolkit 安装器。
+- Canonical Command Registry 当前导出 43 条显式命令；3 条 S0.1 命令标记为 `available`，其余迁移期命令明确标记为 `legacy-only`；`command.list` 不再出现 Canvas / Element，`command.schema --command workflow.run` 返回 `UNKNOWN_COMMAND` 并以非零状态退出。
+- Production Runtime S0.1 已建立 Node/Rust 共用的版本化 Registry 与 JSON Schema：Registry 声明内容哈希，Node 自动化测试与 Rust 启动流程分别重算并校验；重复命令、未知字段、协议不匹配和未知命令会稳定失败；Node/Rust 使用成熟 RFC 8785 实现得到相同 SHA-256，Rust 使用 UUID v7。Tauri 启动时创建唯一 `ProductionRuntime` 并注册 `runtime_status`；S0.2 安全 discovery 尚未完成，因此 CLI `runtime.status` 当前应明确返回 `RUNTIME_UNAVAILABLE`，不得回退 shadow runtime。
+- `npx flovart-cli install` 默认下载版本化 Agent Toolkit，校验 manifest 的字节数与 SHA-256 后才解包、切换 `current` 和写入本地 launcher；`start` 默认启动 Desktop Runtime + Managed Agent，源码开发需显式使用 `--source`。
+- `init --host codex|opencode|claude|cursor|windsurf|vscode|all` 可生成 Skill/MCP 配置，`--dry-run` 可先预览写入；Skill 文档仅使用当前 Workflow 命令面。
+- GitHub `Build Desktop` 工作流在 Windows tag 构建时生成并上传 Toolkit archive + manifest；根包、CLI、Cargo、Tauri 与 `VERSION` 已统一为 `0.3.0`，tag 构建前会执行版本一致性检查。
+- 待用户验证：发布 `flovart-cli@0.3.0` 与 `v0.3.0` GitHub Release 后，在全新 Windows 用户上下文执行 `npx flovart-cli install && npx flovart-cli start`；确认 PATH launcher、Runtime、Managed Agent 与 Host 配置均可用。
+
+## PromptBar、Workflow 媒体与 Provider 最终回归
+
+- PromptBar 挂载时不再因初始文本回调误写一条 History；直接点击图片/视频媒体可挂载 PromptBar 与 ElementToolbar，`@` 选择器会插入结构化 mention。
+- Workflow 裁剪新媒体在项目状态落地前会先注册临时引用，避免被 prune 竞态删除；Undo/Redo 保存真实当前帧，文件拖放与 JSON 导入对 jsdom/旧浏览器增加 FileReader 降级。
+- 生成历史现在正确映射为 Workflow 可插入媒体数组；反推 Prompt 会选择实际文本模型与 Key，不再把尺寸参数错传为模型参数。
+- RunningHub 企业代理会正确合并已含 `/openapi/v2` 的 Base URL 与 endpoint，避免重复路径；Route Catalog / Adapter 仍是 Provider payload 的唯一事实源。
+- 自动验证已通过：`npx tsc --noEmit`；Vitest 63 个文件，546 通过、1 跳过；Hub 与 Enterprise 两个 Go 模块 `go test ./...`；Vite + Tauri release `--no-bundle` 构建；以及不消耗付费 API 的 Playwright 真实浏览器回归。
+- 待用户验证：使用自己的 RunningHub 余额各执行一次图像/视频真实任务，对照账单和网络 payload；本轮自动化没有发起付费生成。
+
 ## dev 构建链路修复
 
 - 删除近 265 个未跟踪的 `.js` 副本（源码 `.tsx/.ts` 的旧编译产物），这些副本因 Vite 默认 `resolve.extensions` 把 `.js` 排在 `.tsx/.ts` 之前而遮蔽源文件，导致 dev/vitest 偶尔加载陈旧实现。同时改 `vite.config.ts` 显式声明 `resolve.extensions = ['.tsx', '.ts', '.jsx', '.js', '.json', '.mjs']`，把 tsx/ts 提到最前。dev 服务器与测试现在强制加载源码，无法再被未跟踪副本遮蔽。
@@ -249,7 +275,7 @@ title: 待测试确认
 - `index.tsx` 改为渲染 `<RouterHost>`，移除直接渲染 App 的代码；保留 `React.StrictMode` 与 `./styles/index.css` 加载次序。
 - 新增 `components/enterprise/EnterpriseApp.tsx` 默认导出（遵循"页面里只有一个主业务组件时直接写在 page.tsx"），未登录显示登录/注册面板（复用 OnboardingWizard 视觉风格，isl-tabbar 切登录/注册、isl-surface 卡片），登录后展示组织列表 + 创建组织表单 + 进入组织详情后展示成员表格 + 添加/修改角色/移除成员。
 - 角色显示使用 `RoleBadge`：owner（mint 盾勾）、admin（灰盾）、member（默认）；可管理的当前用户自动出现下拉切换角色与删除按钮，owner 不可被普通动作移除/降级（前端+后端双重）。
-- 鉴权流程：`authApi.register`/`login` → `setToken` 存 `localStorage['flovart.hub.token']`；进入组件时若有 token 调 `authApi.me` 验证，无效则清空 token，回到登录面板。
+- 鉴权流程：`authApi.register`/`login` → `setToken` 存当前会话的 `sessionStorage['flovart.hub.token']`；进入组件时若有 token 调 `authApi.me` 验证，无效则清空 token，回到登录面板。
 - `components/studio/StudioTopMenu.tsx` 在右上角加一个 `<Link to="/enterprise">` 按钮（lucide `Building2` 图标），不破坏 `StudioMenuModel` 接口，从主页可一键进后台。
 - toast 反馈复用 `hooks/useToast.ts` + `components/Toast.tsx`。
 - 待用户验证：① `npm install` 装 `react-router` 后 `npm run dev` 主程序启动正常、`/#/` 主路由仍可访问；② 点 StudioTopMenu 右上 Building2 进入 `/#/enterprise` 显示登录面板；③ 注册/登录成功，token 写入 localStorage；④ 创建组织、添加成员（同 hub 用户名）、修改角色、移除成员，对照权限矩阵确认拒绝/放行都正确；⑤ 在 Tauri dev 与 build 后 hash 路由都正常工作。
@@ -765,7 +791,7 @@ title: 待测试确认
 ### 社区版 P1-P2：用户系统 + 提示词社区（`stores/useAuthStore.ts` + `components/auth/AuthModal.tsx` + `hooks/useAuth.ts` + `components/community/`）
 
 - **P1 用户系统**：
-  - `useAuthStore`（Zustand）：`login`/`register`/`logout`/`init` 方法，token 持久化到 localStorage（`flovart.hub.token`），`init` 通过 `authApi.me()` 恢复登录态。
+- `useAuthStore`（Zustand）：`login`/`register`/`logout`/`init` 方法，token 只保留在当前浏览器会话（`sessionStorage['flovart.hub.token']`），`init` 通过 `authApi.me()` 恢复登录态。
   - `AuthModal`：登录/注册弹窗组件，模式下可切换，字段校验 + loading + 成功/失败 toast。兼容 Ant Design Modal/Input/Button。
   - `useAuth` hook：封装 `useAuthStore` + `authOpen` 状态 + `requireAuth` 方法（需登录才能操作时自动弹出 AuthModal）。
   - 后端 `Me` 接口已升级：返回 `{ userId, username, email, role }` 而非仅 `userId`，确保页面刷新后用户名正确恢复。
@@ -789,21 +815,20 @@ title: 待测试确认
 
 ## Tauri 桌面端打包 + CLI 开发环境命令
 
-- **NSIS 安装包打包**：`tauri.conf.json` 的 `bundle.targets` 从 `"all"` 改为 `["nsis"]`（绕过 WiX `light.exe` 依赖 VBSCRIPT 可选功能导致 MSI 失败的问题）。`npm run tauri -- bundle --bundles nsis` 成功生成 `Flovart_0.2.0_x64-setup.exe`（11.1MB）。updater 签名密钥与自动更新流程见下方「Tauri 自动更新 + GitHub Actions CI」节。
+- **NSIS 安装包配置**：`tauri.conf.json` 的 `bundle.targets` 使用 `["nsis"]`（绕过 WiX `light.exe` 依赖 VBSCRIPT 可选功能导致 MSI 失败的问题）。当前 `0.3.0` 已通过 `npm run tauri:build -- --bundles nsis` 在 Windows 本地生成 `Flovart_0.3.0_x64-setup.exe`（5,230,553 bytes，SHA-256 `B7B274DC186CF70D71EF2F2C0D71AC62A8D61CB653F731A09143FD71F2ECE67A`）；本地覆盖配置关闭更新产物签名，`npm run tauri:build:release` 保留正式发布所需的签名更新包。GitHub tag 的签名产物仍需实测。
 - **CLI 新增开发环境命令**（`tools/flovart/cli.js` 扩展，`tools/flovart/dev-commands.js` 新增）：
-  - `flovart install`：git clone `https://github.com/avabbbb/Flovart.git` 到 `~/.flovart/project` + `npm install` + 从 `.env.example` 复制创建 `backend/.env` 与 `backend/enterprise/.env`（已存在则跳过） + `go mod download`（hub + enterprise 两个模块，Go 不可用时跳过）。
-  - `flovart start`：若当前目录含 `package.json`+`backend/` 则用当前目录，否则用 `~/.flovart/project`。检查 Docker → 自动起 `flovart-pg` PostgreSQL 容器（`postgres:16-alpine`，user/postgres/postgres，db=flovart，不存在则创建，已停止则启动，已在跑则跳过） → 并行启动三进程：`npm run dev`（vite 前端 :11451） + `go run cmd/server/main.go`（hub 后端 :11452，auth/prompts/uploads） + `go run cmd/server/main.go`（enterprise 后端 :11453，org/dept/role）。后端各自读自身 `.env`（`DATABASE_URL`/`JWT_SECRET`/端口） → Ctrl+C 一键停止全部。
-  - `flovart update`：`git pull` + `npm install` + `go mod download`（hub + enterprise 两个模块）。
-  - 三个命令在 `cli.js` 顶层拦截，不进入画布命令路由；现有 `canvas.*`/`element.*`/`workflow.*` 等画布命令不受影响。
+  - `flovart install`：默认下载与 npm bootstrapper 同版本的 Agent Toolkit manifest，校验字节数与 SHA-256 后解包 Runtime / CLI / Managed Agent；源码贡献者使用 `flovart install --source`安装开发依赖。
+  - `flovart start`：默认启动已安装的 Desktop Runtime + Managed Agent；`--no-agent` 只启 Runtime。`--source --all --open` 才会在源码仓库并行启动 Vite / Hub / Enterprise，`--source --docker` 启动 SaaS Compose。
+  - `flovart update`：默认下载并切换新 Toolkit 版本；`--source` 模式才执行 `git pull` + 前后端依赖更新。
+  - 三个命令在 `cli.js` 顶层拦截，不进入 Workflow 原子命令路由；已删除不存在的 Canvas / Element 命令。
   - `package.json` 的 `files` 数组已加入 `dev-commands.js`，`npm publish` 会包含新文件。
-- **启动方式重构**（本轮）：CLI npm 包名改为 `flovart`，发布后可直接 `npx flovart` 进入 TUI；`flovart start` 支持 `--web` / `--backend` / `--db` / `--docker` / `--open` / `--plan` 组合；`flovart` / `flovart tui` 新增 slash-command TUI，可用 `/install`、`/start`、`/web`、`/backend`、`/docker`、`/doctor`、`/plan`；根目录 `启动.bat` 默认打开 TUI，`FlovartLauncher.exe` 与 `tools/launcher/` 构建脚本保留为可选可视化入口；Docker Compose 与 Makefile 统一到 web/hub/enterprise/db 四服务和 11451/11452/11453/5433 端口。
+- **启动方式重构**（本轮）：CLI npm 包名统一为 `flovart-cli`，发布后可直接 `npx flovart-cli` 进入 TUI；Toolkit 与源码开发模式通过 `--source` 显式分离；根目录 `启动.bat` 默认打开 TUI，Docker Compose 与 Makefile 统一到 web/hub/enterprise/db 四服务和 11451/11452/11453/5433 端口。
 - **待用户验证**：
-  - ① `npm run tauri -- bundle --bundles nsis` → 生成 `src-tauri/target/release/bundle/nsis/Flovart_0.2.0_x64-setup.exe`。
-  - ② 双击 `Flovart_0.2.0_x64-setup.exe` → 安装 Flovart 桌面端 → 启动后看到 1280x800 窗口。
-  - ③ `npx flovart-cli install` → 源码 clone 到 `~/.flovart/project` → `.env` 从 `.env.example` 创建 → `npm install` + `go mod download`（hub+enterprise）完成。
-  - ④ `npx flovart-cli start` → Docker PG 容器启动（postgres/postgres） → vite + hub(:11452) + enterprise(:11453) 三进程并行 → `http://localhost:11451` 前端可访问 → 注册/登录走 :11452 → 企业后台走 :11453 → Ctrl+C 停止全部。
-  - ⑤ `npx flovart-cli update` → `git pull` + 依赖更新完成。
-  - ⑥ 从工作区根目录直接 `node tools/flovart/cli.js start` → 检测到 CWD 是项目根 → 同 ④（无需先 install）。
+  - ① 推送 `v0.3.0` tag 后 GitHub Actions 生成 `Flovart_0.3.0_x64-setup.exe` 与带 Ed25519 签名的 updater 产物，双击安装后可正常启动与更新；Windows Authenticode 代码签名证书尚未配置，不能把 updater 签名描述成 EXE 已通过发布者代码签名。
+  - ② `npx flovart-cli install` → 下载 `0.3.0` Toolkit → SHA-256 / 字节数校验通过 → launcher 写入 PATH。
+  - ③ `npx flovart-cli start` → Desktop Runtime + Managed Agent 并行启动；`--no-agent` 仅启动 Runtime。
+  - ④ 源码仓库执行 `npx flovart-cli install --source` 与 `npx flovart-cli start --source --all --open` → Vite + Hub + Enterprise 本地联调。
+  - ⑤ `npx flovart-cli update` 会安装新 Toolkit；`npx flovart-cli update --source` 会更新源码仓库与依赖。
 
 ## Tauri 自动更新 + GitHub Actions CI
 
@@ -1393,3 +1418,69 @@ Batch 逻辑已从独立 `handleBatchGenerate` 合并进 `handleGenerate`。Prom
   - ③ 在画布用 NB 2 Lite（`gemini-3.1-flash-lite-image`）测带参考图的图像编辑，确认能出图且速度比 NB 2 快。
   - ④ 在画布用 Imagen 4 仍可做纯文生图，确认 deprecated 模型当前仍可用（至 2026-08-17 关停前）。
   - ⑤ 确认旧 `gemini-2.5-flash-image`（NB 1）已从设置页模板和默认模型列表消失，不再可选。
+
+## RunningHub Provider 映射与 Route Catalog 落地（本轮新增）
+
+完成 `docs/dev/runninghub-provider-mapping-handoff.md` 中 7 个 Blocker、16 条 Route Contract Test 与旧 regex 回退路径清理。
+
+### 协议决策（ADR-0027 ~ ADR-0033 + ADR-0006/0008）
+
+按 ADR-0027（产品模型绑定到路由）、ADR-0028/0003（Route Schema + Adapter 独自负责字段适配，不再在通用 gateway 里写 endpoint regex/字段特判）、ADR-0029/0004（只有已验证 Route Schema 可执行，未在 Catalog 中登记的路由直接拒绝提交）、ADR-0031/0006（每条 Route 写一份 Contract Test 覆盖全 mode）、ADR-0033/0008（Route Schema 约束控件，Adapter 不得静默删/换/降级用户参数）落地。
+
+### 类型与目录重构
+
+- `types/index.ts`：`ProductModelMapping` → `ProductRouteBinding`（字段 `productModelId / mode: ProductModelMode / routeId / priority / enabled / confirmed`）；`UserApiKey.modelMappings` → `routeBindings`；`ApiPricingRule.upstreamModelId` → `routeId`。按 AGENTS.md "不要兼容旧数据"直接替换，无 dual-track。
+- `services/productModelCatalog.ts`：新增 `resolveProductModelRoute(productModelId, mode, keys)` 与 `resolveAnyProductRoute`（按 product 遍历 mode 匹配）+ `suggestProductRouteBindings` + `getRoutedVideoModes`（按 `routeId` 反查 catalog）+ `isProductModelConfigured`。`PRODUCT_MODEL_CATALOG` 改为从 `tools/flovart/product-models.js` 的 `PRODUCT_MODEL_ENTRIES` 派生，TS 与 JS CLI 共享同一份产品模型身份源。
+- `utils/modelRefs.ts`：`resolveModelSelection(value, keys, capability, requestedProvider?, submode?)` 返回 `{ routeId, provider, key }`；`keyOwnsBareModel` 走 `key.routeBindings`；产品模型路由按 `submode` 匹配，未传时回退到 `text-to-image`/`text-to-video`。
+- `hooks/useApiKeys.ts`、`components/SettingsPanel.tsx`、`components/PromptBar.tsx`、`services/workflowGeneration.ts`、`services/workflowImageTools.ts`、`services/workflowOnlineAgent.ts`、`utils/usageMonitor.ts`、`App.tsx` 全量从 `upstreamModelId` / `modelMappings` / `resolved.model` 切换到 `routeId` / `routeBindings` / `resolved.routeId`；`SettingsPanel` 模型映射编辑器改为按 product × mode 网格平铺，每行独立配置。
+
+### Route Capability Schema 与 Adapter
+
+- `services/runningHubRouteCatalog.ts`：登记 16 条 `RouteCapabilitySchema`（6 图片 + 10 视频），导出 `getRouteSchema(routeId)` / `isVerifiedRoute(routeId)` / `getRouteDurations(routeId)` / `getRouteCatalog()` / `resolveRouteIdByDocId(docId)`（由 catalog 的 `officialEvidence` URL 在模块加载时反查 doc ID → routeId）。
+  - 图片 6 条：`youchuan/text-to-image-v81`（悠船 v8.1 文生图，参考图走 `imageUrl` 单数，必填 `hd:false`）+ 5 条 `rhart-image-*`（n-pro/edit、g-2/image-to-image、n-g31-flash/image-to-image、n-g31-flash/text-to-image、g-2/text-to-image）。
+  - 视频 10 条：3 条 `rhart-video-v3.1-fast`（t2v/i2v/start-end-to-video，按官方文档标 `generateAudio` 为不支持）+ 2 条 `rhart-video-g`（i2v/t2v）+ `rhart-video-g-official/reference-to-video`（3 张参考图）+ 4 条 `rhart-video/sparkvideo-2.0`（i2v/t2v/multimodal/fast-i2v，多模态最多 9 图 3 视频 3 音频）。
+- `services/aiGateway.ts` 新增 `buildRunningHubRoutePayload(schema, prompt, fields, media, userParams)` 按 schema `params[].field` 适配 RunningHub 字段名，`buildRouteMediaFields` 负责参考图数组 / firstFrameUrl / lastFrameUrl 的字段映射与裁剪，`snapDuration` 负责 duration 枚举值向最近的合法值靠拢。
+- 图片调用点 (`aiGateway.ts` ~line 2580) 与视频调用点 (~line 3400) 把 PromptBar 当前 `aspectRatio / resolution / generateAudio / seed / returnLastFrame / webSearch / quality` 作为 `userParams` 传入；按 ADR-0008，userParams 只作用于 schema 中已声明 `field` 的参数，且用户值永远覆盖 schema 默认；未声明的参数静默丢弃。图片画质映射：`quality === 'hd' || quality === 'high'` → `hd: true`。
+- `services/runningHubService.ts`：删除硬编码的 `RUNNINGHUB_API_DOC_ENDPOINTS`（13 条 endpoint → doc URL），`runningHubApiDocEndpoint` 改为调 `resolveRouteIdByDocId` 从 catalog 派生。
+
+### 旧 regex fallback 路径清理（Option C）
+
+按用户决策 Option C：删除 `buildRunningHubStandardPayload` 中整段 regex fallback（原 line 1515-1587），未在 Route Catalog 中登记的 RunningHub 路由直接 `throw new Error('RunningHub 路由 ${modelEndpoint} 未通过验证（未在 Route Catalog 中登记），暂不可执行。请先在 Route Catalog 中补齐该路由的 Capability Schema 后再使用。')`，阻塞在 Provider emit 之前。
+
+- `resolveRunningHubVideoDurations` 简化为 catalog-only：`return getRouteDurations(model) ?? []`，非 catalog 视频路由返回空数组（无法执行，不再撒谎返回估算时长）。
+- 删除仅被 fallback 路径使用的 10 个死 helper：
+  - 常量：`DEFAULT_RUNNINGHUB_PROMPT_FIELD`、`DEFAULT_RUNNINGHUB_IMAGE_PAYLOAD`。
+  - 工厂：`runningHubStandardModelDefaults`（含 12+ 个路由特化 regex）、`RUNNINGHUB_STANDARD_MODEL_DEFAULTS` 常量表。
+  - 模型判定：`isRunningHubVeo31Model` / `isRunningHubVeo31LowPriceModel` / `isRunningHubVeo31ReferenceModel` / `isRunningHubVeo31LiteModel` / `isRunningHubOmniModel` / `isRunningHubVideoSModel` / `isRunningHubNodeFieldModel`。
+  - 字段判定：`runningHubAspectRatioField` / `runningHubReferenceFields` / `runningHubMultimodalFields`。
+- 保留仍被 `getCapabilityDictionary`（aiGateway.ts line 273-279）使用的 `isRunningHubSeedance20Model` 和 `isRunningHubVideoEndpoint`，不删除。
+- `BUILTIN_RUNNINGHUB_MODELS` (`runningHubService.ts` line 20) 保留所有非 catalog 路由（kling/vidu/wan/skyreels-v4/rhart-video-s/rhart-video-v3.1-pro/lite-official 等 ~25 条），用户在 Workflow/设置页仍可看到它们，但点击生成会被 Provider emit 前的 catalog 校验拦截并抛"未通过验证"。这批非 catalog 路由的 Capability Schema 扩登记作为后续单独项目，本轮不处理。
+
+### CLI 与产品模型身份统一（Blocker 7）
+
+- 新增 `tools/flovart/product-models.js` 作为 JS CLI 与 TS catalog 共享的单一身份源：`PRODUCT_MODEL_ENTRIES` 16 条 + `listProductModelEntries(capability)` + `findProductModelEntry(id)`。
+- `tools/flovart/agent-kit.js` `listAgentModels` 改为从 `listProductModelEntries` 派生；`diagnoseSeedance2` / `defaultPreferences` / `providerSnapshot` 默认模型改为 `flovart:gpt-image-2` / `flovart:seedance-2` / `gemini-3-flash-preview`；`SEEDANCE2_MODELS` → `SEEDANCE2_PRODUCT_IDS` + `SEEDANCE2_ALIASES`。
+- `tools/flovart/shadow-runtime.js` `createProviderState` 与 `buildProviderReadiness` 默认模型同步改用产品模型 ID；`kling-v2` 失配置回退到 `flovart:seedance-2`。
+- `tools/flovart/core.js` `provider.select-model` summary 和 help 文本改用产品模型 ID 格式。
+
+### 验收与测试
+
+- 16 条 Route Contract Test 全量通过：`tests/routeContract.test.ts` 共 139 测试，覆盖每条 Route 的 capability/modes/aspectRatio/durations/resolution/refs 上限/`params[].field` 默认值 与 `officialEvidence` 的 doc ID 映射。
+- `tests/aiGatewayValidation.test.ts` 69 测试全量通过。其中 9 个原非 catalog 路由的测试已重写为 `rejects.toThrow('未通过验证')` + `expect(fetch).not.toHaveBeenCalled()`，断言 Provider emit 前阻塞生效：
+  - `rhart-video-v3.1-pro/image-to-video`、`rhart-video-v3.1-fast-official/image-to-video`、`rhart-video-v3.1-pro-official/reference-to-video`、`skyreels-v4/omni-reference-fast`（t2v/i2v）、`rhart-video-s/text-to-video`（duration snap / durationSec 20 两个 case）、`rhart-video-v3.1-lite-official/start-end-to-video`、`rhart-video-v3.1-fast-official/reference-to-video`。
+- `workflowGeneration.test.ts` 26 测试通过（`mappedMediaKey` 为所有 Product Model mode 自动生成 route binding，与 Blocker 3 一致）。
+- `flovartAgentKit.test.js`、`flovartProviderRouting.test.ts`、`shadowRuntime.test.ts`、`modelRefs.test.ts`、`productModelCatalog.test.ts` 全部通过。
+- `npx tsc --noEmit` 已收口为 0 错误；同时修正 xAI Provider 字典、图像比例联合类型、Workflow 导入校验、LocalForage 实例类型和测试回调契约。
+
+### 未在本轮范围
+
+- 非 catalog 路由的 Capability Schema 扩登记（kling-v2 / vidu / wan / skyreels-v4 / rhart-video-s / rhart-video-v3.1-pro / lite-official 等 ~25 条）按用户决策推迟为单独项目。
+- 付费 Provider Smoke Test（向真实 RunningHub API 发起一次 t2v/i2v 验证 payload 与账单）按 ADR-0031 仍需用户另行批准才能执行。
+- `flovartLibtvCompat.test.ts` 已改为当前 Workflow-only Canonical Command Registry 契约，旧 `node.create` / `upload` / `project.create` / `element.create` 兼容期望已删除。
+
+### 待用户验证要点
+
+- ① 在设置页为 `GPT Image 2` 或视频产品模型配置一条 Route Binding 后，选中该模型触发一次生成，抓包确认 RunningHub 收到的 payload 字段与官方文档对应（` Builds Route Payload` 按 schema 适配字段名，没有再走 regex 兜底）。
+- ② 禁用或删除某条 Route Binding 后，PromptBar 生成按钮变未就绪，强行触发应在 Provider emit 之前拒掉（catalog 校验拦截，不会发起 fetch）。
+- ③ 选一个未在 Catalog 中登记的 RunningHub 路由（例如 `legacyNama的 skyreels-v4/omni-reference-fast` 或 `rhart-video-s/text-to-video`），点击生成，应立即看到 `未通过验证（未在 Route Catalog 中登记）` 错误，浏览器 Network 面板无 `/task/openapi/*` 请求。
+- ④ CLI/MCP 从产品模型 ID 选模型 → 浏览器 runtime 与 `modelPreference.v1` 同步 → 再次查询返回同一产品模型 ID；CLI 默认模型 `flovart:gpt-image-2` / `flovart:seedance-2` / `gemini-3-flash-preview` 与 SettingsPanel 默认一致。

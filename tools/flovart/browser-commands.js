@@ -1,6 +1,5 @@
 export const BROWSER_COMMANDS = new Set([
   'provider.begin-setup', 'provider.status', 'provider.select-model', 'provider.test',
-  'element.ignite',
   'workflow.node.run', 'workflow.node.stop',
   'generate.image', 'generate.images-batch', 'generate.video',
 ]);

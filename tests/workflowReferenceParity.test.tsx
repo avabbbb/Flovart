@@ -48,7 +48,7 @@ describe('workflow reference parity', () => {
     const onChange = vi.fn();
     render(<WorkflowConfigPanel node={node} onChange={onChange} onRun={vi.fn()} />);
 
-    fireEvent.change(screen.getByPlaceholderText('例如 alloy'), { target: { value: 'nova' } });
+    fireEvent.change(screen.getByLabelText('音色'), { target: { value: 'nova' } });
     fireEvent.change(screen.getByLabelText('格式'), { target: { value: 'wav' } });
     fireEvent.change(screen.getByLabelText('语速'), { target: { value: '1.25' } });
     fireEvent.change(screen.getByPlaceholderText('音频风格、情绪和发音说明'), { target: { value: '轻声旁白' } });
@@ -66,7 +66,7 @@ describe('workflow reference parity', () => {
       <WorkflowToolbar tool="select" canUndo={false} canRedo={false} onToolChange={vi.fn()} onAddNode={vi.fn()} onAddSharedMedia={onAddSharedMedia} onUndo={vi.fn()} onRedo={vi.fn()} onFit={vi.fn()} onToggleGrid={vi.fn()} />
     </WorkflowGenerationCapabilitiesProvider>);
 
-    fireEvent.click(screen.getByRole('button', { name: '打开共享素材' }));
+    fireEvent.click(screen.getByRole('button', { name: '共享素材' }));
     fireEvent.click(screen.getByRole('button', { name: '视频' }));
     expect(screen.queryByRole('button', { name: '产品主图' })).not.toBeInTheDocument();
     fireEvent.change(screen.getByRole('textbox', { name: '搜索共享素材' }), { target: { value: '运动' } });

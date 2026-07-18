@@ -1,5 +1,5 @@
 // 视频首帧/尾帧抽取：使用 <video> + canvas 客户端截帧，避免 ffmpeg.wasm 重型依赖。
-// 仅用于一次截帧并落库到画布节点，不做批量或精确定位。
+// 仅用于一次截帧并落库到工作流节点，不做批量或精确定位。
 
 export type VideoFramePosition = 'first' | 'last';
 
@@ -43,7 +43,7 @@ export async function extractVideoFrame(blob: Blob, position: VideoFramePosition
     canvas.width = width;
     canvas.height = height;
     const ctx = canvas.getContext('2d');
-    if (!ctx) throw new Error('画布上下文初始化失败');
+    if (!ctx) throw new Error('图像处理上下文初始化失败');
     ctx.drawImage(video, 0, 0, width, height);
     const blobResult = await new Promise<Blob | null>(resolve => canvas.toBlob(blob => resolve(blob), 'image/png', 0.95));
     if (!blobResult) throw new Error('截帧转 PNG 失败');

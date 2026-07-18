@@ -3,7 +3,7 @@ import { createWorkflowNode } from '../components/workflow/constants';
 import { discardWorkflowMediaRecord, ingestWorkflowMedia, loadWorkflowMediaBlob, releaseWorkflowMediaRecord, workflowBlobToDataUrl, workflowDataUrlToBlob, type WorkflowMediaRecord } from '../components/workflow/media';
 import type { WorkflowNode, WorkflowProject } from '../components/workflow/types';
 import { workflowMediaStorage } from '../components/workflow/storage';
-import type { ModelPreference, UserApiKey } from '../types';
+import type { ModelPreference, ProductModelMode, UserApiKey } from '../types';
 import { resolveModelSelection } from '../utils/modelRefs';
 import { editImageWithProvider, runImageAgentWithProvider, splitImageLayersWithProvider, type ImageToolLayer, type ImageToolResult, type ImageToolTask } from './aiGateway';
 
@@ -36,7 +36,8 @@ function patchSource(project: WorkflowProject, nodeId: string, metadata: Record<
 
 function resolveImageModel(runtime: WorkflowImageToolRuntime, node: WorkflowNode) {
   const modelRef = node.metadata.config?.modelId || runtime.modelPreference.imageModel;
-  const resolved = resolveModelSelection(modelRef, runtime.userApiKeys, 'image');
+  const submode = (node.metadata.config?.submode as ProductModelMode | undefined) || 'image-to-image';
+  const resolved = resolveModelSelection(modelRef, runtime.userApiKeys, 'image', undefined, submode);
   if (!resolved) throw new Error('未找到可用于图片处理的 API Key。');
   return resolved;
 }
@@ -118,7 +119,7 @@ export async function runWorkflowImageAgent(projectId: string, nodeId: string, t
   try {
     const { input } = await sourceInput(node, runtime);
     const resolved = resolveImageModel(runtime, node);
-    const result: ImageToolResult = await (runtime.executeAgent || runImageAgentWithProvider)(input, task, resolved.model, resolved.key, options);
+    const result: ImageToolResult = await (runtime.executeAgent || runImageAgentWithProvider)(input, task, resolved.routeId, resolved.key, options);
     if (!stillActive(projectId, nodeId, requestId, runtime)) {
       if (activeRequests.get(requestKey(projectId, nodeId)) === requestId) activeRequests.delete(requestKey(projectId, nodeId));
       return { status: 'stale', project: canonical(runtime) };
@@ -136,7 +137,7 @@ export async function runWorkflowImageEdit(projectId: string, nodeId: string, pr
   try {
     const { input } = await sourceInput(node, runtime);
     const resolved = resolveImageModel(runtime, node);
-    const result = await (runtime.executeEdit || editImageWithProvider)([input], prompt, resolved.model, resolved.key, mask ? { mask } : undefined);
+    const result = await (runtime.executeEdit || editImageWithProvider)([input], prompt, resolved.routeId, resolved.key, mask ? { mask } : undefined);
     if (!result.newImageBase64) throw new Error(result.textResponse || '图片编辑没有返回可用结果');
     if (!stillActive(projectId, nodeId, requestId, runtime)) {
       if (activeRequests.get(requestKey(projectId, nodeId)) === requestId) activeRequests.delete(requestKey(projectId, nodeId));
@@ -157,7 +158,7 @@ export async function runWorkflowImageSplit(projectId: string, nodeId: string, r
   try {
     const { input } = await sourceInput(node, runtime);
     const resolved = resolveImageModel(runtime, node);
-    const layers: ImageToolLayer[] = await (runtime.executeSplit || splitImageLayersWithProvider)(input, resolved.model, resolved.key);
+    const layers: ImageToolLayer[] = await (runtime.executeSplit || splitImageLayersWithProvider)(input, resolved.routeId, resolved.key);
     if (!layers.length) throw new Error('图层拆分没有返回可用结果');
     if (!stillActive(projectId, nodeId, requestId, runtime)) {
       if (activeRequests.get(requestKey(projectId, nodeId)) === requestId) activeRequests.delete(requestKey(projectId, nodeId));

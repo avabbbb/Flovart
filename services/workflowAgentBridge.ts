@@ -2,7 +2,7 @@ import { executeFlovartCommand } from '../tools/flovart/core.js';
 import { getFlovartRuntimeApi } from './flovartRuntime';
 import { dispatchWorkflowCommand, redactWorkflowAgentValue, type WorkflowCommandEnvelope, type WorkflowCommandResult } from './workflowDispatcher';
 
-const READ_COMMANDS = new Set(['status', 'provider.status', 'canvas.inspect', 'canvas.list-media', 'asset.list', 'workflow.project.list', 'workflow.inspect', 'command.list', 'command.schema']);
+const READ_COMMANDS = new Set(['status', 'provider.status', 'asset.list', 'workflow.project.list', 'workflow.inspect', 'command.list', 'command.schema']);
 const MAX_ATTACHMENTS = 6;
 const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024;
 const MAX_TOTAL_ATTACHMENT_BYTES = 24 * 1024 * 1024;

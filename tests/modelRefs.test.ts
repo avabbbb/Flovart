@@ -19,7 +19,7 @@ const makeKey = (patch: Partial<UserApiKey>): UserApiKey => ({
   customModels: patch.customModels,
   defaultModel: patch.defaultModel,
   models: patch.models,
-  modelMappings: patch.modelMappings,
+  routeBindings: patch.routeBindings,
   extraConfig: patch.extraConfig,
   createdAt: 1,
   updatedAt: 1,
@@ -33,7 +33,7 @@ describe('modelRefs', () => {
       name: 'Seedance Ark',
       capabilities: ['video'],
       models: [{ id: 'dreamina-seedance-2-0-260128', name: 'Seedance 2' }],
-      modelMappings: [{ productModelId: 'flovart:seedance-2', upstreamModelId: 'dreamina-seedance-2-0-260128', priority: 0, enabled: true, confirmed: true }],
+      routeBindings: [{ productModelId: 'flovart:seedance-2', mode: 'text-to-video' as const, routeId: 'dreamina-seedance-2-0-260128', priority: 0, enabled: true, confirmed: true }],
     });
 
     const option = buildCapabilityModelOptions([key], 'video', [], '')[0];
@@ -41,7 +41,7 @@ describe('modelRefs', () => {
     expect(option).toBe('flovart:seedance-2');
     expect(modelRefLabel(option, [key])).toBe('Seedance 2.0 · Seedance Ark');
     expect(resolveModelSelection(option, [key], 'video')).toMatchObject({
-      model: 'dreamina-seedance-2-0-260128',
+      routeId: 'dreamina-seedance-2-0-260128',
       provider: 'volcengine',
       key,
     });
@@ -55,6 +55,18 @@ describe('modelRefs', () => {
 
     expect(normalizeModelSelectionWithKeys('shared-image', keys, 'image')).toBe('shared-image');
   });
+
+  it('does not return a product route owned by another provider when a provider is requested', () => {
+    const key = makeKey({
+      id: 'custom-image',
+      provider: 'custom',
+      models: [{ id: 'gpt-image-2', name: 'GPT Image 2 proxy' }],
+      routeBindings: [{ productModelId: 'flovart:gpt-image-2', mode: 'text-to-image' as const, routeId: 'gpt-image-2', priority: 0, enabled: true, confirmed: true }],
+    });
+
+    expect(resolveModelSelection('flovart:gpt-image-2', [key], 'image', 'google')).toBeNull();
+  });
+
   it('lists Doubao Seedance 2.0 as a video model owned by a Volcengine key', () => {
     const key = makeKey({
       id: 'volc-key',
@@ -62,14 +74,14 @@ describe('modelRefs', () => {
       name: 'Seedance Ark',
       capabilities: ['video'],
       defaultModel: 'doubao-seedance-2.0',
-      modelMappings: [{ productModelId: 'flovart:seedance-2', upstreamModelId: 'doubao-seedance-2.0', priority: 0, enabled: true, confirmed: true }],
+      routeBindings: [{ productModelId: 'flovart:seedance-2', mode: 'text-to-video' as const, routeId: 'doubao-seedance-2.0', priority: 0, enabled: true, confirmed: true }],
     });
 
     const options = buildCapabilityModelOptions([key], 'video', [], '');
 
     expect(options).toContain('flovart:seedance-2');
     expect(resolveModelSelection(options[0], [key], 'video')).toMatchObject({
-      model: 'doubao-seedance-2.0',
+      routeId: 'doubao-seedance-2.0',
       provider: 'volcengine',
     });
   });

@@ -1,4 +1,4 @@
-import { ChevronsDown, Clapperboard, FileText, Image as ImageIcon, Music2, Pencil, Plus, Upload, Video, X } from 'lucide-react';
+import { Check, ChevronsDown, Clapperboard, FileText, Image as ImageIcon, Music2, Pencil, Plus, Star, Upload, Video, X } from 'lucide-react';
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type MouseEvent as ReactMouseEvent } from 'react';
 import { motion } from 'motion/react';
 import { WorkflowConfigPanel } from './WorkflowConfigPanel';
@@ -20,6 +20,9 @@ export function WorkflowNode({
   onReplaceMedia,
   onRemoveMedia,
   onCollapseBatch,
+  batchCount,
+  isBatchPrimary,
+  onSetBatchPrimary,
   onDoubleClick,
   onPreviewMedia,
   onChangeTitle,
@@ -39,6 +42,9 @@ export function WorkflowNode({
   onReplaceMedia: (file: File) => void;
   onRemoveMedia: () => void;
   onCollapseBatch?: () => void;
+  batchCount?: number;
+  isBatchPrimary?: boolean;
+  onSetBatchPrimary?: () => void;
   onDoubleClick?: () => void;
   onPreviewMedia?: (node: WorkflowNodeData) => void;
   onChangeTitle?: (title: string) => void;
@@ -135,14 +141,11 @@ export function WorkflowNode({
         <span className="workflow-handle__plus" aria-hidden="true"><Plus size={12} strokeWidth={2.5} /></span>
       </button>
       {status === 'error' && <span className="workflow-node__error-badge" title={node.metadata.error}>!</span>}
-      {onCollapseBatch && (
-        <button
-          type="button"
-          className="workflow-node__batch-collapse"
-          title="折叠批次"
-          onPointerDown={event => { event.stopPropagation(); }}
-          onClick={event => { event.stopPropagation(); onCollapseBatch(); }}
-        ><ChevronsDown size={14} /></button>
+      {batchCount && batchCount > 1 && (
+        <div className="workflow-node__batch-actions" data-workflow-overlay>
+          {onCollapseBatch && <button type="button" title="收起结果" onPointerDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); onCollapseBatch(); }}><ChevronsDown size={13} />{batchCount}张</button>}
+          {isBatchPrimary ? <span><Check size={12} />主图</span> : onSetBatchPrimary && <button type="button" title="设为主图" onPointerDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); onSetBatchPrimary(); }}><Star size={12} />设为主图</button>}
+        </div>
       )}
       {onChangeTitle && (isEditingTitle ? (
         <div className="workflow-node__title is-editing" data-workflow-overlay>

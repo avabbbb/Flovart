@@ -6,8 +6,9 @@ import { Suggestion } from '@tiptap/suggestion';
 import tippy, { type Instance as TippyInstance } from 'tippy.js';
 import 'tippy.js/dist/tippy.css';
 import ReactDOM from 'react-dom/client';
-import MentionList, { type MentionItem, type MentionListHandle } from './MentionList';
-import { CanvasMentionNode, editorJSONToText, extractMentions, type MentionData } from './CanvasMentionExtension';
+import MentionList, { type MentionItem, type AssetSuggestion, type MentionListHandle } from './MentionList';
+import { MediaMentionNode, editorJSONToText, extractMentions, type MentionData } from './MediaMentionExtension';
+import type { AssetFolder } from '../types';
 
 function buildDocFromText(text: string) {
     const paragraphs = (text || '').split('\n').map(line => ({
@@ -31,9 +32,15 @@ function normalizeDocument(
     return buildDocFromText(text);
 }
 
-function buildSuggestionExtension(getItems: (query: string) => MentionItem[]) {
+function buildSuggestionExtension(
+    getItems: (query: string) => MentionItem[],
+    assetFoldersRef: { current: AssetFolder[] },
+    assetItemsRef: { current: AssetSuggestion[] },
+    onSelectAssetRef: { current: ((assetId: string) => string | undefined) | null },
+    skillEnabled: boolean,
+) {
     return Extension.create({
-        name: 'canvasMentionSuggestion',
+        name: 'mediaMentionSuggestion',
         addProseMirrorPlugins() {
             return [
                 Suggestion({
@@ -47,22 +54,32 @@ function buildSuggestionExtension(getItems: (query: string) => MentionItem[]) {
                         let container: HTMLElement | null = null;
                         let popup: TippyInstance[] | null = null;
                         let componentRef: React.RefObject<MentionListHandle> = React.createRef();
+                        let currentQuery: string = '';
+
+                        const renderList = (items: MentionItem[], command: (item: MentionItem) => void) => {
+                            reactRoot?.render(
+                                <MentionList
+                                    ref={componentRef}
+                                    connectedItems={items}
+                                    assetFolders={assetFoldersRef.current}
+                                    assetItems={assetItemsRef.current}
+                                    query={currentQuery}
+                                    command={command}
+                                    skillEnabled={skillEnabled}
+                                />
+                            );
+                        };
 
                         return {
                             onStart(props) {
-                                console.log('[RichPromptEditor] @ onStart', { itemsCount: (props.items as MentionItem[])?.length, hasClientRect: !!props.clientRect, clientRect: props.clientRect?.() });
+                                console.log('[RichPromptEditor] @ onStart', { itemsCount: (props.items as MentionItem[])?.length, hasClientRect: !!props.clientRect });
+                                currentQuery = (props.query as string) || '';
                                 container = document.createElement('div');
                                 document.body.appendChild(container);
 
                                 componentRef = React.createRef<MentionListHandle>();
                                 reactRoot = ReactDOM.createRoot(container);
-                                reactRoot.render(
-                                    <MentionList
-                                        ref={componentRef}
-                                        items={props.items as MentionItem[]}
-                                        command={props.command}
-                                    />
-                                );
+                                renderList(props.items as MentionItem[], props.command);
 
                                 popup = tippy('body', {
                                     getReferenceClientRect: props.clientRect as () => DOMRect,
@@ -71,28 +88,30 @@ function buildSuggestionExtension(getItems: (query: string) => MentionItem[]) {
                                     showOnCreate: true,
                                     interactive: true,
                                     trigger: 'manual',
-                                    placement: 'bottom-start',
+                                    placement: 'top-start',
                                     theme: 'mention-popup',
                                     arrow: false,
                                     offset: [0, 4],
                                     zIndex: 99999,
-                                popperOptions: {
-                                    strategy: 'fixed',
-                                    modifiers: [
-                                        { name: 'flip', enabled: true },
-                                        { name: 'preventOverflow', enabled: true },
-                                    ],
-                                },
+                                    popperOptions: {
+                                        strategy: 'fixed',
+                                        modifiers: [
+                                            {
+                                                name: 'flip',
+                                                enabled: true,
+                                                options: {
+                                                    behavior: ['bottom-start', 'top-start'],
+                                                    padding: 8,
+                                                },
+                                            },
+                                            { name: 'preventOverflow', enabled: true, options: { padding: 8 } },
+                                        ],
+                                    },
                                 });
                             },
                             onUpdate(props) {
-                                reactRoot?.render(
-                                    <MentionList
-                                        ref={componentRef}
-                                        items={props.items as MentionItem[]}
-                                        command={props.command}
-                                    />
-                                );
+                                currentQuery = (props.query as string) || '';
+                                renderList(props.items as MentionItem[], props.command);
 
                                 if (popup?.[0] && props.clientRect) {
                                     popup[0].setProps({
@@ -120,18 +139,26 @@ function buildSuggestionExtension(getItems: (query: string) => MentionItem[]) {
                     },
                     command({ editor, range, props }) {
                         const item = props as MentionItem;
+                        let mentionId = item.id;
+                        if (item.sourceType === 'assetLibrary' && item.assetId && onSelectAssetRef.current) {
+                            const newNodeId = onSelectAssetRef.current(item.assetId);
+                            if (!newNodeId) return;
+                            mentionId = newNodeId;
+                        }
                         editor
                             .chain()
                             .focus()
                             .deleteRange(range)
                             .insertContent({
-                                type: 'canvasMention',
+                                type: 'mediaMention',
                                 attrs: {
-                                    id: item.id,
+                                    id: mentionId,
                                     label: item.label,
                                     thumbnail: item.thumbnail,
                                     elementType: item.elementType,
                                     description: item.description,
+                                    sourceType: item.sourceType ?? null,
+                                    assetId: item.assetId ?? null,
                                 },
                             })
                             .insertContent(' ')
@@ -163,26 +190,49 @@ export function applyEditorPlaceholder(
 }
 
 export interface RichPromptEditorProps {
-    canvasItems: MentionItem[];
+    referenceItems: MentionItem[];
     placeholder?: string;
     disabled?: boolean;
     onTextChange?: (plainText: string, json: Record<string, unknown>) => void;
     onSubmit?: () => void;
     initialText?: string;
     initialDocument?: Record<string, unknown>;
+    /** 个人素材库根文件夹（扁平数组，parentId=null 表示根级） */
+    assetFolders?: AssetFolder[];
+    /** 个人素材库条目（轻量索引，不含原图 dataUrl） */
+    assetItems?: AssetSuggestion[];
+    /** 选择素材时调用，返回新节点 id（或复用已存在节点 id）；未提供则禁用素材选择 */
+    onSelectAsset?: (assetId: string) => string | undefined;
+    /** Skill 分区是否可用；本轮默认 false 仅显示占位 */
+    skillEnabled?: boolean;
 }
 
 const RichPromptEditor = forwardRef<RichPromptEditorHandle, RichPromptEditorProps>(
-    ({ canvasItems, placeholder = '输入提示词，@ 引用画布元素...', disabled, onTextChange, onSubmit, initialText = '', initialDocument }, ref) => {
-        const canvasItemsRef = useRef(canvasItems);
+    ({ referenceItems, placeholder = '输入提示词，@ 引用工作流节点或资产...', disabled, onTextChange, onSubmit, initialText = '', initialDocument, assetFolders = [], assetItems = [], onSelectAsset, skillEnabled = false }, ref) => {
+        const referenceItemsRef = useRef(referenceItems);
+        const assetFoldersRef = useRef(assetFolders);
+        const assetItemsRef = useRef(assetItems);
+        const onSelectAssetRef = useRef(onSelectAsset);
 
         useEffect(() => {
-            canvasItemsRef.current = canvasItems;
-        }, [canvasItems]);
+            referenceItemsRef.current = referenceItems;
+        }, [referenceItems]);
+
+        useEffect(() => {
+            assetFoldersRef.current = assetFolders;
+        }, [assetFolders]);
+
+        useEffect(() => {
+            assetItemsRef.current = assetItems;
+        }, [assetItems]);
+
+        useEffect(() => {
+            onSelectAssetRef.current = onSelectAsset;
+        }, [onSelectAsset]);
 
         const getFilteredItems = useCallback((query: string): MentionItem[] => {
             const normalized = query.toLowerCase();
-            return canvasItemsRef.current.filter(
+            return referenceItemsRef.current.filter(
                 item =>
                     item.label.toLowerCase().includes(normalized) ||
                     item.elementType.toLowerCase().includes(normalized) ||
@@ -206,8 +256,8 @@ const RichPromptEditor = forwardRef<RichPromptEditorHandle, RichPromptEditorProp
                     listItem: false,
                     horizontalRule: false,
                 }),
-                CanvasMentionNode,
-                buildSuggestionExtension(getFilteredItems),
+                MediaMentionNode,
+                buildSuggestionExtension(getFilteredItems, assetFoldersRef, assetItemsRef, onSelectAssetRef, skillEnabled),
             ],
             content: normalizeDocument(initialText, initialDocument),
             editable: !disabled,

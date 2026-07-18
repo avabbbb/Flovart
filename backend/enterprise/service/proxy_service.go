@@ -81,10 +81,10 @@ func (s *ProxyService) Forward(orgID, userID string, req ProxyRequest) (*ProxyRe
 	if baseURL == "" {
 		baseURL = defaultBaseURL(req.Provider)
 	}
-	if err := validateBaseURL(baseURL); err != nil {
+	upstreamURL, err := buildUpstreamURL(baseURL, req.Endpoint)
+	if err != nil {
 		return nil, err
 	}
-	upstreamURL := baseURL + req.Endpoint
 
 	httpReq, err := http.NewRequest("POST", upstreamURL, bytes.NewReader(req.Body))
 	if err != nil {
@@ -205,6 +205,23 @@ func validateBaseURL(baseURL string) error {
 		return errors.New("baseURL 只允许 http/https")
 	}
 	return nil
+}
+
+func buildUpstreamURL(baseURL, endpoint string) (string, error) {
+	if err := validateBaseURL(baseURL); err != nil {
+		return "", err
+	}
+	parsed, _ := url.Parse(strings.TrimRight(baseURL, "/"))
+	basePath := strings.TrimRight(parsed.Path, "/")
+	if basePath != "" && (endpoint == basePath || strings.HasPrefix(endpoint, basePath+"/")) {
+		parsed.Path = endpoint
+	} else {
+		parsed.Path = basePath + endpoint
+	}
+	parsed.RawPath = ""
+	parsed.RawQuery = ""
+	parsed.Fragment = ""
+	return parsed.String(), nil
 }
 
 func applyProviderHeaders(req *http.Request, provider, apiKey string) {

@@ -2,17 +2,17 @@ import { nanoid } from 'nanoid';
 import { getUpstreamData } from '../components/workflow/ops';
 import { CAMERA_MOVEMENTS, createWorkflowNode, STYLE_PRESETS } from '../components/workflow/constants';
 import { createWorkflowVideoPoster, discardWorkflowMediaRecord, fitWorkflowMediaSize, ingestWorkflowMedia, releaseWorkflowMediaRecord, type WorkflowMediaRecord } from '../components/workflow/media';
-import { filterSeedanceReferences, filterWorkflowInputIds, sortReferencesByOrder } from '../components/workflow/references';
+import { filterSeedanceReferences, filterWorkflowInputIds, getWorkflowInputNodes, resolveWorkflowMentionIds, sortReferencesByOrder, toWorkflowMentionItems } from '../components/workflow/references';
 import { workflowMediaStorage } from '../components/workflow/storage';
 import type { WorkflowGenerationMode, WorkflowNode, WorkflowProject } from '../components/workflow/types';
-import type { ModelPreference, UserApiKey } from '../types';
+import type { ModelPreference, ProductModelMode, UserApiKey } from '../types';
 import { resolveModelSelection } from '../utils/modelRefs';
 import { executeUnifiedIgnition, generateTextWithProvider, SeedanceSubmissionUnknownError, type UnifiedIgnitionInput, type UnifiedIgnitionResult } from './aiGateway';
 import { getGenerationCapability } from './generationCapabilities';
 import { runPreflight } from './promptPreflight';
-import { getProductModel } from './productModelCatalog';
+import { getProductModel, getRoutedVideoModes } from './productModelCatalog';
 import { usePromptHistoryStore } from '../stores/usePromptHistoryStore';
-import { reserveApiUsage, updateApiUsage } from '../utils/usageMonitor';
+import { refundApiUsage, reserveApiUsage, updateApiUsage } from '../utils/usageMonitor';
 
 export interface WorkflowHistoryPayload {
   name?: string;
@@ -163,12 +163,24 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
       throw new Error(`Workflow ${mode === 'video' ? '视频' : '图片'}生成仅支持平台预设产品模型，请重新选择模型。`);
     }
     const selectionRef = productModel?.id || modelRef;
-    const resolved = resolveModelSelection(selectionRef, runtime.userApiKeys, mode);
+    const resolved = resolveModelSelection(selectionRef, runtime.userApiKeys, mode, undefined, config.submode as ProductModelMode | undefined);
     if (!resolved) throw new Error(`未找到可用于${mode === 'video' ? '视频' : mode === 'text' ? '文本' : '图片'}生成的 API Key。`);
+    if (mode === 'video' && productModel && config.submode) {
+      const routedModes = getRoutedVideoModes(productModel.id, resolved.key.provider, resolved.routeId);
+      if (!routedModes.includes(config.submode as ProductModelMode)) {
+        const label = config.submode === 'first-last-frame' ? '首尾帧' : config.submode === 'reference-to-video' ? '全能参考' : config.submode === 'image-to-video' ? '图生视频' : '文生视频';
+        throw new Error(`当前 API 线路不支持${label}，请更换生成方式或重新映射支持该能力的 Provider。`);
+      }
+    }
 
     const source = canonical(runtime, current);
     const upstream = getUpstreamData(initiating, source.nodes, source.connections);
-    const mentionedIds = filterWorkflowInputIds(initiating.metadata.mentionedNodeIds || [], initiating.id, source.connections);
+    const inputNodes = getWorkflowInputNodes(initiating, source.nodes, source.connections);
+    const mentionedIds = filterWorkflowInputIds(resolveWorkflowMentionIds(
+      initiating.metadata.prompt || '',
+      initiating.metadata.mentionedNodeIds || [],
+      toWorkflowMentionItems(inputNodes),
+    ), initiating.id, source.connections);
     const relatedIds = mentionedIds;
     const related = relatedIds.map(id => source.nodes.find(node => node.id === id)).filter((node): node is WorkflowNode => Boolean(node));
     const mediaLabels = mode === 'text' ? related.filter(node => node.type === 'image' || node.type === 'video' || node.type === 'audio').map(node => `[参考媒体: ${node.title} (${node.type})]`) : [];
@@ -233,14 +245,16 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
       if (config.submode === 'image-to-video' && imageReferences.length < 1) throw new Error('图生视频至少需要引用 1 张图片。');
       if (config.submode === 'reference-to-video' && references.length < 1) throw new Error('全能参考至少需要引用 1 个媒体节点。');
       if (config.submode === 'first-last-frame' && imageReferences.length < 2) throw new Error('首尾帧模式需要按顺序引用 2 张图片。');
-      let imageIndex = 0;
-      references = references.map(reference => {
-        if (reference.type !== 'image') return reference;
-        const index = imageIndex++;
-        if (config.submode === 'image-to-video' && index === 0) return { ...reference, slotRole: 'first_frame' };
-        if (config.submode === 'first-last-frame') return { ...reference, slotRole: index === 0 ? 'first_frame' : index === 1 ? 'last_frame' : 'reference_image' };
-        return { ...reference, slotRole: 'reference_image' };
-      });
+      if (config.submode === 'text-to-video') references = [];
+      if (config.submode === 'image-to-video') references = [{ ...imageReferences[0], slotRole: 'first_frame' }];
+      if (config.submode === 'first-last-frame') references = [
+        { ...imageReferences[0], slotRole: 'first_frame' },
+        { ...imageReferences[1], slotRole: 'last_frame' },
+      ];
+      if (config.submode === 'reference-to-video') references = references.map(reference => ({
+        ...reference,
+        slotRole: reference.type === 'video' ? 'reference_video' : reference.type === 'audio' ? 'reference_audio' : 'reference_image',
+      }));
     }
 
     const createId = runtime.createId || nanoid;
@@ -255,7 +269,7 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
       await publish(runtime, current);
 
       if (mode === 'text') {
-        const content = await (runtime.executeText || generateTextWithProvider)(effectivePrompt, resolved.model, resolved.key, { signal: controller.signal });
+        const content = await (runtime.executeText || generateTextWithProvider)(effectivePrompt, resolved.routeId, resolved.key, { signal: controller.signal });
         if (!stillActive()) throw abortError();
         if (batched) {
           const resultNode = createWorkflowNode(createId(), 'text', { x: initiating.position.x + initiating.width + 80, y: initiating.position.y + index * 48 }, { content, status: 'success' });
@@ -279,29 +293,75 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
         continue;
       }
 
-      const usage = runtime.executeMedia ? null : await reserveApiUsage({ key: resolved.key, productModelId: selectionRef, upstreamModelId: resolved.model, type: mode === 'video' ? 'video' : 'image', durationSec: config.durationSec, count: 1 });
+      const usage = runtime.executeMedia ? null : await reserveApiUsage({ key: resolved.key, productModelId: selectionRef, routeId: resolved.routeId, type: mode === 'video' ? 'video' : 'image', durationSec: config.durationSec, count: 1, resolution: config.resolution, quality: config.quality });
+      let usageReconciled = false;
+      if (usage) {
+        current = patchInitiator(canonical(runtime, current), nodeId, {
+          generationUsageRecordId: usage.id,
+          generationEstimatedCost: usage.estimatedCost,
+          generationCurrency: usage.currency,
+          generationBillableState: usage.billableState,
+        });
+        await publish(runtime, current);
+      }
       let result: UnifiedIgnitionResult;
       try {
         const provider = (runtime.executeMedia || executeUnifiedIgnition)({
-          elementId: nodeId, prompt: effectivePrompt, modelId: resolved.model, apiKeyPayload: resolved.key,
+          elementId: nodeId, prompt: effectivePrompt, modelId: resolved.routeId, apiKeyPayload: resolved.key,
           productModelId: selectionRef,
           generationSubmode: config.submode,
           aspectRatio: config.aspectRatio as UnifiedIgnitionInput['aspectRatio'], durationSec: config.durationSec,
           resolution: config.resolution, quality: config.quality, generateAudio: config.generateAudio, watermark: config.watermark,
           webSearch: config.webSearch, realPersonCheck: config.realPersonCheck, references,
           signal: controller.signal,
-          onProgress: (progress, message) => {
+           onProgress: (progress, message) => {
             if (!stillActive()) return;
             current = patchInitiator(canonical(runtime, current), nodeId, { status: 'loading', progress: Math.max(0, Math.min(99, progress)), generationRequestId: requestId, generationMessage: message, generationStartedAt: current.nodes.find(node => node.id === nodeId)?.metadata.generationStartedAt || Date.now() });
-            void publish(runtime, current);
+             void publish(runtime, current);
+           },
+          onProviderTaskLifecycle: async event => {
+            if (!usage) return;
+            if (event.phase === 'submitted') {
+              await updateApiUsage(usage.id, { status: 'queued', providerTaskId: event.providerTaskId, submitTime: event.submittedAt });
+              current = patchInitiator(canonical(runtime, current), nodeId, { generationProviderTaskId: event.providerTaskId, generationMessage: '任务已提交，等待供应商处理' });
+            } else if (event.phase === 'running') {
+              await updateApiUsage(usage.id, { status: 'running', providerTaskId: event.providerTaskId, startTime: Date.now() });
+              current = patchInitiator(canonical(runtime, current), nodeId, { generationProviderTaskId: event.providerTaskId, generationMessage: event.remoteStatus || '供应商正在生成' });
+            } else if (event.phase === 'cancelled') {
+              if (event.canceled) {
+                await refundApiUsage(usage.id, '供应商已确认取消');
+                current = patchInitiator(canonical(runtime, current), nodeId, { generationBillableState: 'refunded', generationMessage: '供应商已确认取消' });
+              } else {
+                await updateApiUsage(usage.id, { status: 'submission_unknown', billableState: 'unknown', providerTaskId: event.providerTaskId, error: event.message });
+                current = patchInitiator(canonical(runtime, current), nodeId, { generationBillableState: 'unknown', generationMessage: event.upstreamStillRunning ? '已停止本地等待；上游可能仍在运行并计费' : event.message });
+              }
+            } else {
+              usageReconciled = true;
+              const currency = event.currency === 'USD' || event.currency === 'CNY' ? event.currency : undefined;
+              await updateApiUsage(usage.id, {
+                status: event.status === 'succeeded' ? 'succeeded' : event.status === 'cancelled' ? 'canceled' : event.status === 'failed' || event.status === 'expired' ? 'failed' : 'polling_unknown',
+                billableState: event.amount !== undefined ? 'actual' : 'unknown',
+                actualCost: event.amount,
+                actualTokens: event.totalTokens,
+                currency,
+                finishTime: Date.now(),
+              });
+              current = patchInitiator(canonical(runtime, current), nodeId, {
+                generationActualCost: event.amount,
+                generationActualTokens: event.totalTokens,
+                generationCurrency: currency || usage.currency,
+                generationBillableState: event.amount !== undefined ? 'actual' : 'unknown',
+              });
+            }
+            await publish(runtime, current);
           },
         });
         result = await raceAbort(provider, controller.signal);
       } catch (error) {
-        const isSeedance = resolved.model.toLowerCase().includes('seedance');
+        const isSeedance = resolved.routeId.toLowerCase().includes('seedance');
         if (usage) await updateApiUsage(usage.id, {
           status: error instanceof SeedanceSubmissionUnknownError || (isSeedance && isAbort(error)) ? 'submission_unknown' : isAbort(error) ? 'canceled' : 'failed',
-          billableState: 'unknown',
+          ...(usageReconciled ? {} : { billableState: 'unknown' as const }),
           error: error instanceof Error ? error.message : '生成失败',
         });
         throw error;
@@ -312,7 +372,7 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
         if (usage) await updateApiUsage(usage.id, { status: 'failed', billableState: 'unknown', error: errorMessage });
         throw new Error(errorMessage);
       }
-      if (usage) await updateApiUsage(usage.id, { status: 'succeeded', billableState: usage.estimatedCost === undefined ? 'unknown' : 'estimated' });
+      if (usage) await updateApiUsage(usage.id, { status: 'succeeded' });
       if (!stillActive()) throw abortError();
       const { blob, record } = await mediaResult(result, mode, runtime);
       if (!stillActive()) {
@@ -352,7 +412,7 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
         // 异步 pruneWorkflowMedia。RunningHub 这类慢速轮询路径上，progress 回调
         // 会反复 publish 带 new storageKey 的 loading 节点，每次都触发一次 prune。
         // 若在此处提前 release，new key 既脱离 pending 保护、又可能在 canonicalReferences
-        // 重建之前被某次 prune 命中，导致刚存入 IDB 的结果被删，画布读不到图片。
+            // 重建之前被某次 prune 命中，导致刚存入 IDB 的结果被删，工作流读不到图片。
         // 因此 release 推迟到 commit success 之后（见下方非批量分支收尾处）。
       }
 

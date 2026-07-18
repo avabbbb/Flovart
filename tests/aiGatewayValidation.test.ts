@@ -193,11 +193,10 @@ describe('aiGateway - validateApiKey', () => {
             ['https://www.runninghub.cn/runninghub-api-doc-cn/api-448183144', 'rhart-video-v3.1-fast/text-to-video'],
             ['https://www.runninghub.cn/runninghub-api-doc-cn/api-448183087', 'rhart-video-v3.1-fast/image-to-video'],
             ['https://www.runninghub.cn/runninghub-api-doc-cn/api-448183086', 'rhart-video-v3.1-fast/start-end-to-video'],
-            ['https://www.runninghub.cn/runninghub-api-doc-cn/api-448183140', 'rhart-video-v3.1-pro/text-to-video'],
-            ['https://www.runninghub.cn/runninghub-api-doc-cn/api-471297129', 'rhart-video-v3.1-pro/image-to-video'],
-            ['https://www.runninghub.cn/runninghub-api-doc-cn/api-448183085', 'rhart-video-v3.1-pro/start-end-to-video'],
             ['https://www.runninghub.cn/runninghub-api-doc-cn/api-448183167.md?from=settings', 'rhart-video/sparkvideo-2.0/text-to-video'],
             ['runninghub-api-doc-cn/api-448183127', 'rhart-video/sparkvideo-2.0/multimodal-video'],
+            ['https://www.runninghub.cn/runninghub-api-doc-cn/api-448183116', 'rhart-video/sparkvideo-2.0/image-to-video'],
+            ['https://www.runninghub.cn/runninghub-api-doc-cn/api-448183115', 'rhart-video/sparkvideo-2.0-fast/image-to-video'],
         ];
         for (const [input, endpoint] of cases) {
             expect(normalizeRunningHubModelEndpoint(input)).toBe(endpoint);
@@ -278,8 +277,9 @@ describe('aiGateway - Seedance multimodal slots', () => {
         vi.useFakeTimers();
         globalThis.fetch = vi.fn()
             .mockResolvedValueOnce(mockJsonResponse({ id: 'seedance-task-1' }))
-            .mockResolvedValueOnce(mockJsonResponse({ status: 'succeeded', content: { video_url: 'https://cdn.example.com/seedance.mp4' } }))
+            .mockResolvedValueOnce(mockJsonResponse({ status: 'succeeded', content: { video_url: 'https://cdn.example.com/seedance.mp4' }, usage: { total_tokens: 640000 } }))
             .mockResolvedValueOnce(mockBinaryResponse('seedance-video'));
+        const onProviderTaskLifecycle = vi.fn();
 
         const promise = generateVideoWithProvider('two characters cross the room', 'seedance-2-0-260128', {
             id: 'seedance-key',
@@ -297,6 +297,7 @@ describe('aiGateway - Seedance multimodal slots', () => {
             cameraFixed: true,
             watermark: false,
             returnLastFrame: true,
+            onProviderTaskLifecycle,
             slots: [
                 { kind: 'image', href: 'data:image/png;base64,aW1hZ2Ux', mimeType: 'image/png', role: 'reference_image', label: 'role-a' },
                 { kind: 'image', href: 'data:image/png;base64,aW1hZ2Uy', mimeType: 'image/png', role: 'first_frame', label: 'role-b' },
@@ -310,6 +311,8 @@ describe('aiGateway - Seedance multimodal slots', () => {
         const result = await promise;
 
         expect(result.mimeType).toBe('video/mp4');
+        expect(onProviderTaskLifecycle).toHaveBeenCalledWith(expect.objectContaining({ phase: 'submitted', providerTaskId: 'seedance-task-1' }));
+        expect(onProviderTaskLifecycle).toHaveBeenCalledWith(expect.objectContaining({ phase: 'usage', status: 'succeeded', totalTokens: 640000 }));
         const [createUrl, createInit] = vi.mocked(globalThis.fetch).mock.calls[0];
         expect(createUrl).toBe('https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks');
         const body = JSON.parse(String(createInit?.body));
@@ -332,6 +335,41 @@ describe('aiGateway - Seedance multimodal slots', () => {
             { type: 'audio_url', audio_url: { url: 'https://cdn.example.com/ref.mp3' }, role: 'reference_audio' },
         ]);
         vi.useRealTimers();
+    });
+
+    it.each([
+        ['text-to-video', [], []],
+        ['image-to-video', ['first_frame'], ['image_url']],
+        ['reference-to-video', ['reference_image', 'reference_image', 'reference_video', 'reference_audio'], ['image_url', 'image_url', 'video_url', 'audio_url']],
+        ['first-last-frame', ['first_frame', 'last_frame'], ['image_url', 'image_url']],
+    ] as const)('maps PromptBar %s to the exact Seedance content slots', async (generationSubmode, expectedRoles, expectedTypes) => {
+        globalThis.fetch = vi.fn().mockResolvedValueOnce(mockJsonResponse({ id: `task-${generationSubmode}` }));
+        await submitSeedanceVideoTask('生成视频', 'doubao-seedance-2-0-260128', {
+            id: 'seedance-key', provider: 'volcengine', capabilities: ['video'], key: 'ark-test-key',
+            baseUrl: 'https://ark.cn-beijing.volces.com/api/v3', createdAt: 0, updatedAt: 0,
+        }, {
+            generationSubmode,
+            slots: [
+                { kind: 'image', href: 'data:image/png;base64,aW1hZ2Ux', mimeType: 'image/png', role: 'reference_image' },
+                { kind: 'image', href: 'data:image/png;base64,aW1hZ2Uy', mimeType: 'image/png', role: 'reference_image' },
+                { kind: 'video', href: 'https://cdn.example.com/ref.mp4', mimeType: 'video/mp4', role: 'reference_video' },
+                { kind: 'audio', href: 'https://cdn.example.com/ref.mp3', mimeType: 'audio/mpeg', role: 'reference_audio' },
+            ],
+        });
+        const body = JSON.parse(String(vi.mocked(globalThis.fetch).mock.calls[0][1]?.body));
+        expect(body.content.slice(1).map((item: any) => item.role)).toEqual(expectedRoles);
+        expect(body.content.slice(1).map((item: any) => item.type)).toEqual(expectedTypes);
+    });
+
+    it('rejects missing PromptBar mode inputs before creating a Seedance task', async () => {
+        globalThis.fetch = vi.fn();
+        await expect(submitSeedanceVideoTask('首尾转场', 'doubao-seedance-2-0-260128', {
+            id: 'seedance-key', provider: 'volcengine', capabilities: ['video'], key: 'ark-test-key', createdAt: 0, updatedAt: 0,
+        }, {
+            generationSubmode: 'first-last-frame',
+            slots: [{ kind: 'image', href: 'data:image/png;base64,aW1hZ2Ux', mimeType: 'image/png' }],
+        })).rejects.toThrow('首尾帧模式需要 2 张图片');
+        expect(globalThis.fetch).not.toHaveBeenCalled();
     });
 
     it('matches the Tokenhub Seedance 2.0 task API shape and prefers the query id', async () => {
@@ -484,6 +522,30 @@ describe('aiGateway - Seedance multimodal slots', () => {
         expect(globalThis.fetch).not.toHaveBeenCalled();
     });
 
+    it('attempts upstream Seedance cancellation after submit when local polling is stopped', async () => {
+        const controller = new AbortController();
+        globalThis.fetch = vi.fn(async (input, init) => {
+            const url = String(input);
+            if (init?.method === 'POST' && url.endsWith('/contents/generations/tasks')) {
+                return mockJsonResponse({ id: 'task-cancel-after-submit', status: 'queued' });
+            }
+            if (init?.method === 'DELETE' && url.endsWith('/contents/generations/tasks/task-cancel-after-submit')) {
+                return mockJsonResponse({ cancelled: true });
+            }
+            return mockJsonResponse({ status: 'running' });
+        });
+
+        const pending = generateVideoWithProvider('stop this video', 'doubao-seedance-2-0-260128', {
+            id: 'seedance-key', provider: 'volcengine', capabilities: ['video'], key: 'ark-test-key',
+            baseUrl: 'https://ark.cn-beijing.volces.com/api/v3', createdAt: 0, updatedAt: 0,
+        }, { signal: controller.signal, durationSec: 5, resolution: '720p' });
+
+        await vi.waitFor(() => expect(globalThis.fetch).toHaveBeenCalledTimes(1));
+        controller.abort(new DOMException('用户停止', 'AbortError'));
+        await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+        await vi.waitFor(() => expect(vi.mocked(globalThis.fetch).mock.calls.some(([url, init]) => String(url).endsWith('/contents/generations/tasks/task-cancel-after-submit') && init?.method === 'DELETE')).toBe(true));
+    });
+
     it('parses the Tokenhub Seedance 2.0 status response video URL', async () => {
         globalThis.fetch = vi.fn().mockResolvedValueOnce(mockJsonResponse({
             id: 'task_2YCpPYe6kWzNxQAJOhwOnVvtpBtNfMiK',
@@ -536,9 +598,33 @@ describe('aiGateway - Seedance multimodal slots', () => {
 });
 
 describe('aiGateway - generateImageWithProvider', () => {
+    it('rejects an unresolved product model id before any provider request is sent', async () => {
+        globalThis.fetch = vi.fn().mockResolvedValue(mockJsonResponse({
+            data: [{ b64_json: 'ZmFrZQ==' }],
+        }));
+
+        await expect(generateImageWithProvider('test', 'flovart:gpt-image-2', {
+            id: 'openai-key',
+            provider: 'openai',
+            capabilities: ['image'],
+            key: 'sk-test',
+            routeBindings: [{
+                productModelId: 'flovart:gpt-image-2',
+                mode: 'text-to-image' as const,
+                routeId: 'gpt-image-2',
+                priority: 0,
+                enabled: true,
+                confirmed: true,
+            }],
+            createdAt: 0,
+            updatedAt: 0,
+        })).rejects.toThrow(/产品模型.*上游模型/);
+        expect(globalThis.fetch).not.toHaveBeenCalled();
+    });
+
     it('forwards cancellation to the provider request and returns a readable stop message', async () => {
         const controller = new AbortController();
-        globalThis.fetch = vi.fn((_url, init) => new Promise((_resolve, reject) => {
+        globalThis.fetch = vi.fn((_url: RequestInfo | URL, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
             init?.signal?.addEventListener('abort', () => reject(new DOMException('生成已停止', 'AbortError')), { once: true });
         }));
 
@@ -654,6 +740,37 @@ describe('aiGateway - generateImageWithProvider', () => {
             'https://cdn.example.com/rh.png',
             expect.anything(),
         );
+    });
+
+    it('passes user aspectRatio and resolution into RunningHub text-to-image route payload', async () => {
+        globalThis.fetch = vi.fn()
+            .mockResolvedValueOnce(mockJsonResponse({
+                taskId: 'rh-t2i',
+                status: 'SUCCESS',
+                errorCode: '',
+                errorMessage: '',
+                results: [{ url: 'https://cdn.example.com/t2i.png', outputType: 'png', text: null }],
+                clientId: 'client-1',
+            }))
+            .mockResolvedValueOnce(mockBinaryResponse('fake-image', 'image/png'));
+
+        await generateImageWithProvider('日落海滩', 'rhart-image-g-2/text-to-image', {
+            id: 'rh-key',
+            provider: 'runningHub',
+            capabilities: ['image'],
+            key: '0123456789abcdef0123456789abcdef',
+            baseUrl: 'https://www.runninghub.cn/openapi/v2',
+            createdAt: 0,
+            updatedAt: 0,
+        }, [], {
+            aspectRatio: '16:9',
+            resolution: '2k',
+        });
+
+        const body = JSON.parse((globalThis.fetch as any).mock.calls[0][1].body);
+        expect(body.aspectRatio).toBe('16:9');
+        expect(body.resolution).toBe('2k');
+        expect(body.prompt).toBe('日落海滩');
     });
 
     it('surfaces RunningHub submit error details instead of a generic missing taskId', async () => {
@@ -924,19 +1041,10 @@ describe('aiGateway - generateImageWithProvider', () => {
         expect(body.generateAudio).toBeUndefined();
     });
 
-    it('routes RunningHub V3.1 pro image-to-video with imageUrl field', async () => {
-        globalThis.fetch = vi.fn()
-            .mockResolvedValueOnce(mockJsonResponse({
-                taskId: 'rh-video-pro-image',
-                status: 'SUCCESS',
-                errorCode: '',
-                errorMessage: '',
-                results: [{ url: 'https://cdn.example.com/rh-pro-image.mp4', outputType: 'mp4', text: null }],
-                clientId: 'client-pro-image',
-            }))
-            .mockResolvedValueOnce(mockBinaryResponse('fake-video', 'video/mp4'));
+    it('blocks unverified RunningHub V3.1 pro image-to-video (not in Route Catalog) before submit', async () => {
+        globalThis.fetch = vi.fn();
 
-        await generateVideoWithProvider('主体保持一致并推进镜头', 'google/veo3.1-pro/image-to-video-channel-low-price', {
+        await expect(generateVideoWithProvider('主体保持一致并推进镜头', 'google/veo3.1-pro/image-to-video-channel-low-price', {
             id: 'rh-key',
             provider: 'runningHub',
             capabilities: ['video'],
@@ -951,23 +1059,8 @@ describe('aiGateway - generateImageWithProvider', () => {
             references: [
                 { href: 'https://cdn.example.com/input.png', mimeType: 'image/png', slotRole: 'first_frame' },
             ],
-        });
-
-        expect(globalThis.fetch).toHaveBeenNthCalledWith(
-            1,
-            'https://www.runninghub.cn/openapi/v2/rhart-video-v3.1-pro/image-to-video',
-            expect.objectContaining({ method: 'POST' }),
-        );
-        const body = JSON.parse((globalThis.fetch as any).mock.calls[0][1].body);
-        expect(body).toMatchObject({
-            prompt: '主体保持一致并推进镜头',
-            duration: '8',
-            resolution: '720p',
-            aspectRatio: '16:9',
-            imageUrl: 'https://cdn.example.com/input.png',
-        });
-        expect(body.imageUrls).toBeUndefined();
-        expect(body.generateAudio).toBeUndefined();
+        })).rejects.toThrow('未通过验证');
+        expect(globalThis.fetch).not.toHaveBeenCalled();
     });
 
     it('routes RunningHub V3.1 Pro start-end API doc URL with official field names', async () => {
@@ -982,7 +1075,7 @@ describe('aiGateway - generateImageWithProvider', () => {
             }))
             .mockResolvedValueOnce(mockBinaryResponse('fake-video', 'video/mp4'));
 
-        await generateVideoWithProvider('首尾帧之间自然过渡', 'https://www.runninghub.cn/runninghub-api-doc-cn/api-448183085', {
+        await generateVideoWithProvider('首尾帧之间自然过渡', 'https://www.runninghub.cn/runninghub-api-doc-cn/api-448183086', {
             id: 'rh-key',
             provider: 'runningHub',
             capabilities: ['video'],
@@ -1002,7 +1095,7 @@ describe('aiGateway - generateImageWithProvider', () => {
 
         expect(globalThis.fetch).toHaveBeenNthCalledWith(
             1,
-            'https://www.runninghub.cn/openapi/v2/rhart-video-v3.1-pro/start-end-to-video',
+            'https://www.runninghub.cn/openapi/v2/rhart-video-v3.1-fast/start-end-to-video',
             expect.objectContaining({ method: 'POST' }),
         );
         const body = JSON.parse((globalThis.fetch as any).mock.calls[0][1].body);
@@ -1072,19 +1165,10 @@ describe('aiGateway - generateImageWithProvider', () => {
         expect(body.imageUrls).toBeUndefined();
     });
 
-    it('routes Veo 3.1 fast image-to-video with imageUrl singular and duration snapping', async () => {
-        globalThis.fetch = vi.fn()
-            .mockResolvedValueOnce(mockJsonResponse({
-                taskId: 'rh-veo31-i2v',
-                status: 'SUCCESS',
-                errorCode: '',
-                errorMessage: '',
-                results: [{ url: 'https://cdn.example.com/veo31.mp4', outputType: 'mp4', text: null }],
-                clientId: 'client-1',
-            }))
-            .mockResolvedValueOnce(mockBinaryResponse('fake-video', 'video/mp4'));
+    it('blocks unverified Veo 3.1 fast-official image-to-video (not in Route Catalog) before submit', async () => {
+        globalThis.fetch = vi.fn();
 
-        const result = await generateVideoWithProvider('镜头缓慢推进', 'rhart-video-v3.1-fast-official/image-to-video', {
+        await expect(generateVideoWithProvider('镜头缓慢推进', 'rhart-video-v3.1-fast-official/image-to-video', {
             id: 'rh-key',
             provider: 'runningHub',
             capabilities: ['video'],
@@ -1099,35 +1183,14 @@ describe('aiGateway - generateImageWithProvider', () => {
             references: [
                 { href: 'https://cdn.example.com/ref.png', mimeType: 'image/png' },
             ],
-        });
-
-        expect(result.mimeType).toBe('video/mp4');
-        const body = JSON.parse((globalThis.fetch as any).mock.calls[0][1].body);
-        expect(body).toMatchObject({
-            prompt: '镜头缓慢推进',
-            resolution: '720p',
-            aspectRatio: '16:9',
-            duration: '4',
-            generateAudio: false,
-            imageUrl: 'https://cdn.example.com/ref.png',
-        });
-        expect(body.imageUrls).toBeUndefined();
-        expect(body.firstFrameUrl).toBeUndefined();
+        })).rejects.toThrow('未通过验证');
+        expect(globalThis.fetch).not.toHaveBeenCalled();
     });
 
-    it('routes Veo 3.1 pro reference-to-video with imageUrls array and no duration/aspectRatio', async () => {
-        globalThis.fetch = vi.fn()
-            .mockResolvedValueOnce(mockJsonResponse({
-                taskId: 'rh-veo31-ref',
-                status: 'SUCCESS',
-                errorCode: '',
-                errorMessage: '',
-                results: [{ url: 'https://cdn.example.com/veo31-ref.mp4', outputType: 'mp4', text: null }],
-                clientId: 'client-1',
-            }))
-            .mockResolvedValueOnce(mockBinaryResponse('fake-video', 'video/mp4'));
+    it('blocks unverified Veo 3.1 pro-official reference-to-video (not in Route Catalog) before submit', async () => {
+        globalThis.fetch = vi.fn();
 
-        const result = await generateVideoWithProvider('角色在场景中相遇', 'rhart-video-v3.1-pro-official/reference-to-video', {
+        await expect(generateVideoWithProvider('角色在场景中相遇', 'rhart-video-v3.1-pro-official/reference-to-video', {
             id: 'rh-key',
             provider: 'runningHub',
             capabilities: ['video'],
@@ -1145,18 +1208,8 @@ describe('aiGateway - generateImageWithProvider', () => {
                 { href: 'https://cdn.example.com/c.png', mimeType: 'image/png' },
                 { href: 'https://cdn.example.com/d.png', mimeType: 'image/png' },
             ],
-        });
-
-        expect(result.mimeType).toBe('video/mp4');
-        const body = JSON.parse((globalThis.fetch as any).mock.calls[0][1].body);
-        expect(body).toMatchObject({
-            prompt: '角色在场景中相遇',
-            resolution: '1080p',
-            generateAudio: false,
-            imageUrls: ['https://cdn.example.com/a.png', 'https://cdn.example.com/b.png', 'https://cdn.example.com/c.png'],
-        });
-        expect(body.duration).toBeUndefined();
-        expect(body.aspectRatio).toBeUndefined();
+        })).rejects.toThrow('未通过验证');
+        expect(globalThis.fetch).not.toHaveBeenCalled();
     });
 
     it('routes Veo 3.1 fast text-to-video with duration snap to 4/6/8', async () => {
@@ -1194,19 +1247,10 @@ describe('aiGateway - generateImageWithProvider', () => {
         expect(body.imageUrl).toBeUndefined();
     });
 
-    it('routes SkyReels V4 Omni text-to-video with numeric duration clamped to 3-15', async () => {
-        globalThis.fetch = vi.fn()
-            .mockResolvedValueOnce(mockJsonResponse({
-                taskId: 'rh-omni-1',
-                status: 'SUCCESS',
-                errorCode: '',
-                errorMessage: '',
-                results: [{ url: 'https://cdn.example.com/omni.mp4', outputType: 'mp4', text: null }],
-                clientId: 'client-1',
-            }))
-            .mockResolvedValueOnce(mockBinaryResponse('fake-video', 'video/mp4'));
+    it('blocks unverified SkyReels V4 Omni text-to-video (not in Route Catalog) before submit', async () => {
+        globalThis.fetch = vi.fn();
 
-        await generateVideoWithProvider('视频续写 @video_1', 'skyreels-v4/omni-reference-fast', {
+        await expect(generateVideoWithProvider('视频续写 @video_1', 'skyreels-v4/omni-reference-fast', {
             id: 'rh-key',
             provider: 'runningHub',
             capabilities: ['video'],
@@ -1218,20 +1262,11 @@ describe('aiGateway - generateImageWithProvider', () => {
             aspectRatio: '16:9',
             durationSec: 20,
             resolution: '1080p',
-        });
-
-        const body = JSON.parse((globalThis.fetch as any).mock.calls[0][1].body);
-        expect(body).toMatchObject({
-            prompt: '视频续写 @video_1',
-            resolution: '1080p',
-            aspectRatio: '16:9',
-            duration: 15,
-            promptOptimizer: true,
-        });
-        expect(typeof body.duration).toBe('number');
+        })).rejects.toThrow('未通过验证');
+        expect(globalThis.fetch).not.toHaveBeenCalled();
     });
 
-    it('rejects SkyReels V4 Omni with references (not yet supported)', async () => {
+    it('blocks unverified SkyReels V4 Omni with references (not in Route Catalog) before submit', async () => {
         globalThis.fetch = vi.fn();
 
         await expect(generateVideoWithProvider('续写', 'skyreels-v4/omni-reference-fast', {
@@ -1245,23 +1280,14 @@ describe('aiGateway - generateImageWithProvider', () => {
         }, {
             aspectRatio: '16:9',
             references: [{ href: 'https://cdn.example.com/ref.png', mimeType: 'image/png' }],
-        })).rejects.toThrow('SkyReels V4 Omni 参考输入');
+        })).rejects.toThrow('未通过验证');
         expect(globalThis.fetch).not.toHaveBeenCalled();
     });
 
-    it('routes 全能视频S text-to-video with duration snap to 10/15 and aspectRatio clamp', async () => {
-        globalThis.fetch = vi.fn()
-            .mockResolvedValueOnce(mockJsonResponse({
-                taskId: 'rh-vs-1',
-                status: 'SUCCESS',
-                errorCode: '',
-                errorMessage: '',
-                results: [{ url: 'https://cdn.example.com/vs.mp4', outputType: 'mp4', text: null }],
-                clientId: 'client-1',
-            }))
-            .mockResolvedValueOnce(mockBinaryResponse('fake-video', 'video/mp4'));
+    it('blocks unverified 全能视频S text-to-video (not in Route Catalog) before submit', async () => {
+        globalThis.fetch = vi.fn();
 
-        await generateVideoWithProvider('魔法森林', 'rhart-video-s/text-to-video', {
+        await expect(generateVideoWithProvider('魔法森林', 'rhart-video-s/text-to-video', {
             id: 'rh-key',
             provider: 'runningHub',
             capabilities: ['video'],
@@ -1273,28 +1299,14 @@ describe('aiGateway - generateImageWithProvider', () => {
             aspectRatio: '1:1',
             durationSec: 12,
             resolution: '1080p',
-        });
-
-        const body = JSON.parse((globalThis.fetch as any).mock.calls[0][1].body);
-        expect(body.duration).toBe('10');
-        expect(body.aspectRatio).toBe('16:9');
-        expect(body.resolution).toBe('1080p');
-        expect(body.imageUrls).toBeUndefined();
+        })).rejects.toThrow('未通过验证');
+        expect(globalThis.fetch).not.toHaveBeenCalled();
     });
 
-    it('routes 全能视频S text-to-video with durationSec 20 snapping to 15', async () => {
-        globalThis.fetch = vi.fn()
-            .mockResolvedValueOnce(mockJsonResponse({
-                taskId: 'rh-vs-2',
-                status: 'SUCCESS',
-                errorCode: '',
-                errorMessage: '',
-                results: [{ url: 'https://cdn.example.com/vs2.mp4', outputType: 'mp4', text: null }],
-                clientId: 'client-1',
-            }))
-            .mockResolvedValueOnce(mockBinaryResponse('fake-video', 'video/mp4'));
+    it('blocks unverified 全能视频S text-to-video durationSec 20 (not in Route Catalog) before submit', async () => {
+        globalThis.fetch = vi.fn();
 
-        await generateVideoWithProvider('城市夜景', 'rhart-video-s/text-to-video', {
+        await expect(generateVideoWithProvider('城市夜景', 'rhart-video-s/text-to-video', {
             id: 'rh-key',
             provider: 'runningHub',
             capabilities: ['video'],
@@ -1305,26 +1317,14 @@ describe('aiGateway - generateImageWithProvider', () => {
         }, {
             aspectRatio: '9:16',
             durationSec: 20,
-        });
-
-        const body = JSON.parse((globalThis.fetch as any).mock.calls[0][1].body);
-        expect(body.duration).toBe('15');
-        expect(body.aspectRatio).toBe('9:16');
+        })).rejects.toThrow('未通过验证');
+        expect(globalThis.fetch).not.toHaveBeenCalled();
     });
 
-    it('routes Veo 3.1 lite-official start-end with no duration field (lite has no duration)', async () => {
-        globalThis.fetch = vi.fn()
-            .mockResolvedValueOnce(mockJsonResponse({
-                taskId: 'rh-lite-se',
-                status: 'SUCCESS',
-                errorCode: '',
-                errorMessage: '',
-                results: [{ url: 'https://cdn.example.com/lite-se.mp4', outputType: 'mp4', text: null }],
-                clientId: 'client-1',
-            }))
-            .mockResolvedValueOnce(mockBinaryResponse('fake-video', 'video/mp4'));
+    it('blocks unverified Veo 3.1 lite-official start-end (not in Route Catalog) before submit', async () => {
+        globalThis.fetch = vi.fn();
 
-        await generateVideoWithProvider('镜头推近', 'rhart-video-v3.1-lite-official/start-end-to-video', {
+        await expect(generateVideoWithProvider('镜头推近', 'rhart-video-v3.1-lite-official/start-end-to-video', {
             id: 'rh-key',
             provider: 'runningHub',
             capabilities: ['video'],
@@ -1340,28 +1340,14 @@ describe('aiGateway - generateImageWithProvider', () => {
                 { href: 'https://cdn.example.com/first.png', mimeType: 'image/png', slotRole: 'first_frame' },
                 { href: 'https://cdn.example.com/last.png', mimeType: 'image/png', slotRole: 'last_frame' },
             ],
-        });
-
-        const body = JSON.parse((globalThis.fetch as any).mock.calls[0][1].body);
-        expect(body.duration).toBeUndefined();
-        expect(body.aspectRatio).toBe('16:9');
-        expect(body.resolution).toBe('720p');
-        expect(body.generateAudio).toBeUndefined();
+        })).rejects.toThrow('未通过验证');
+        expect(globalThis.fetch).not.toHaveBeenCalled();
     });
 
-    it('routes Veo 3.1 fast-official reference-to-video keeping aspectRatio (16:9/9:16 supported)', async () => {
-        globalThis.fetch = vi.fn()
-            .mockResolvedValueOnce(mockJsonResponse({
-                taskId: 'rh-fo-ref',
-                status: 'SUCCESS',
-                errorCode: '',
-                errorMessage: '',
-                results: [{ url: 'https://cdn.example.com/fo-ref.mp4', outputType: 'mp4', text: null }],
-                clientId: 'client-1',
-            }))
-            .mockResolvedValueOnce(mockBinaryResponse('fake-video', 'video/mp4'));
+    it('blocks unverified Veo 3.1 fast-official reference-to-video (not in Route Catalog) before submit', async () => {
+        globalThis.fetch = vi.fn();
 
-        await generateVideoWithProvider('角色场景', 'rhart-video-v3.1-fast-official/reference-to-video', {
+        await expect(generateVideoWithProvider('角色场景', 'rhart-video-v3.1-fast-official/reference-to-video', {
             id: 'rh-key',
             provider: 'runningHub',
             capabilities: ['video'],
@@ -1379,13 +1365,8 @@ describe('aiGateway - generateImageWithProvider', () => {
                 { href: 'https://cdn.example.com/c.png', mimeType: 'image/png' },
                 { href: 'https://cdn.example.com/d.png', mimeType: 'image/png' },
             ],
-        });
-
-        const body = JSON.parse((globalThis.fetch as any).mock.calls[0][1].body);
-        expect(body.aspectRatio).toBe('9:16');
-        expect(body.duration).toBeUndefined();
-        expect(body.resolution).toBe('1080p');
-        expect(body.imageUrls).toEqual(['https://cdn.example.com/a.png', 'https://cdn.example.com/b.png', 'https://cdn.example.com/c.png']);
+        })).rejects.toThrow('未通过验证');
+        expect(globalThis.fetch).not.toHaveBeenCalled();
     });
 
     it('routes youchuan text-to-image-v81 with hd:false default and imageUrl single for references', async () => {
@@ -1855,5 +1836,105 @@ describe('aiGateway - generateVideoWithProvider', () => {
             'https://gateway.example.com/v2/videos/generations/task-123',
             expect.objectContaining({ headers: expect.objectContaining({ Authorization: 'Bearer sk-test-key' }) }),
         );
+    });
+
+    it('passes user generateAudio/seed/returnLastFrame overrides into sparkvideo text-to-video payload', async () => {
+        globalThis.fetch = vi.fn()
+            .mockResolvedValueOnce(mockJsonResponse({
+                taskId: 'rh-spark-t2v',
+                status: 'SUCCESS',
+                errorCode: '',
+                errorMessage: '',
+                results: [{ url: 'https://cdn.example.com/spark-t2v.mp4', outputType: 'mp4', text: null }],
+                clientId: 'client-1',
+            }))
+            .mockResolvedValueOnce(mockBinaryResponse('fake-video', 'video/mp4'));
+
+        await generateVideoWithProvider('赛博朋克城市', 'rhart-video/sparkvideo-2.0/text-to-video', {
+            id: 'rh-key',
+            provider: 'runningHub',
+            capabilities: ['video'],
+            key: '0123456789abcdef0123456789abcdef',
+            baseUrl: 'https://www.runninghub.cn/openapi/v2',
+            createdAt: 0,
+            updatedAt: 0,
+        }, {
+            aspectRatio: '16:9',
+            durationSec: 5,
+            resolution: '1080p',
+            generateAudio: false,
+            seed: 42,
+            returnLastFrame: true,
+        });
+
+        const body = JSON.parse((globalThis.fetch as any).mock.calls[0][1].body);
+        expect(body.generateAudio).toBe(false);
+        expect(body.seed).toBe(42);
+        expect(body.returnLastFrame).toBe(true);
+    });
+
+    it('applies schema defaults for generateAudio/seed/returnLastFrame when user does not override', async () => {
+        globalThis.fetch = vi.fn()
+            .mockResolvedValueOnce(mockJsonResponse({
+                taskId: 'rh-spark-t2v-2',
+                status: 'SUCCESS',
+                errorCode: '',
+                errorMessage: '',
+                results: [{ url: 'https://cdn.example.com/spark-t2v-2.mp4', outputType: 'mp4', text: null }],
+                clientId: 'client-1',
+            }))
+            .mockResolvedValueOnce(mockBinaryResponse('fake-video', 'video/mp4'));
+
+        await generateVideoWithProvider('宁静山水', 'rhart-video/sparkvideo-2.0/text-to-video', {
+            id: 'rh-key',
+            provider: 'runningHub',
+            capabilities: ['video'],
+            key: '0123456789abcdef0123456789abcdef',
+            baseUrl: 'https://www.runninghub.cn/openapi/v2',
+            createdAt: 0,
+            updatedAt: 0,
+        }, {
+            aspectRatio: '16:9',
+            durationSec: 5,
+        });
+
+        const body = JSON.parse((globalThis.fetch as any).mock.calls[0][1].body);
+        expect(body.generateAudio).toBe(true);
+        expect(body.seed).toBe(-1);
+        expect(body.returnLastFrame).toBe(false);
+        expect(body.webSearch).toBe(false);
+    });
+
+    it('maps Kling PromptBar image mode, duration and clarity into the official request body', async () => {
+        vi.useFakeTimers();
+        globalThis.fetch = vi.fn()
+            .mockResolvedValueOnce(mockJsonResponse({ data: { task_id: 'kling-task-1' } }))
+            .mockResolvedValueOnce(mockJsonResponse({ data: { task_status: 'succeed', task_result: { videos: [{ url: 'https://cdn.example.com/kling.mp4' }] } } }))
+            .mockResolvedValueOnce(mockBinaryResponse('kling-video'));
+        const pending = generateVideoWithProvider('镜头推进', 'kling-video-3.0', {
+            id: 'kling-key', provider: 'keling', capabilities: ['video'], key: 'secret', baseUrl: 'https://api.klingai.com/v1', createdAt: 0, updatedAt: 0,
+        }, {
+            generationSubmode: 'image-to-video', durationSec: 15, resolution: '1080p', aspectRatio: '9:16',
+            slots: [
+                { kind: 'image', href: 'data:image/png;base64,QUJD', mimeType: 'image/png' },
+                { kind: 'image', href: 'data:image/png;base64,REVG', mimeType: 'image/png' },
+            ],
+        });
+        await vi.advanceTimersByTimeAsync(10_000);
+        await pending;
+        const body = JSON.parse(String(vi.mocked(globalThis.fetch).mock.calls[0][1]?.body));
+        expect(body).toMatchObject({ type: 'img2video', image: 'data:image/png;base64,QUJD', duration: '15', mode: 'pro', aspect_ratio: '9:16' });
+        vi.useRealTimers();
+    });
+
+    it('rejects unsupported Kling PromptBar modes before creating an upstream task', async () => {
+        globalThis.fetch = vi.fn();
+        await expect(generateVideoWithProvider('保持角色', 'kling-video-3.0', {
+            id: 'kling-key', provider: 'keling', capabilities: ['video'], key: 'secret', createdAt: 0, updatedAt: 0,
+        }, {
+            generationSubmode: 'reference-to-video',
+            slots: [{ kind: 'image', href: 'data:image/png;base64,QUJD', mimeType: 'image/png' }],
+        })).rejects.toThrow('当前可灵 API 线路尚未适配全能参考');
+        expect(globalThis.fetch).not.toHaveBeenCalled();
     });
 });

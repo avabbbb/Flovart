@@ -5,24 +5,15 @@
 <h1 align="center">Flovart</h1>
 
 <p align="center">
-  <strong>开源版 Lovart — 自带 Key、接入所有模型、把画布变成 Agent 的运行时</strong>
+  <strong>Workflow + Table + Agent 的本地优先 AI 视频制作系统：编排生成、专注预处理与空间化 Agent 协作各归其位。</strong>
 </p>
 
 <p align="center">
-  <a href="https://avabbbb.github.io/Flovart/" target="_blank"><strong>👉 在线体验 Demo</strong></a>
-</p>
-
-<p align="center">
-  <a href="https://vercel.com/new/clone?repository-url=https://github.com/avabbbb/Flovart"><img src="https://vercel.com/button" alt="Deploy with Vercel" height="32" /></a>
-  &nbsp;
-  <a href="https://render.com/deploy?repo=https://github.com/avabbbb/Flovart"><img src="https://render.com/images/deploy-to-render-button.svg" alt="Deploy to Render" height="32" /></a>
-</p>
-
-<p align="center">
-  <a href="https://avabbbb.github.io/Flovart/">在线体验</a> •
-  <a href="docs/overview/quick-start.md">快速开始</a> •
-  <a href="docs/overview/features.md">功能特性</a> •
-  <a href="docs/progress/roadmap.md">开发计划</a>
+  <a href="https://avabbbb.github.io/Flovart/"><strong>在线体验</strong></a> ·
+  <a href="docs/overview/quick-start.md">快速开始</a> ·
+  <a href="docs/content/docs/overview/features.mdx">功能特性</a> ·
+  <a href="docs/content/docs/progress/todo.mdx">开发计划</a> ·
+  <a href="./README.en.md">English</a>
 </p>
 
 <p align="center">
@@ -33,187 +24,140 @@
 </p>
 
 <p align="center">
-  <img src="https://tally.yuki.sh/hits/flovart/readme.svg?theme=rule34" alt="Flovart Popular Counter" />
+  <img src="pic/WorkFlow.png" alt="Flovart Workflow 工作区" />
 </p>
 
-<p align="center">
-  <a href="./README.en.md">English</a> •
-  <a href="./README.md">简体中文</a>
-</p>
+## Flovart 是什么？
 
----
+Flovart 是面向 Coding Agent 的本地优先 AI 视频制作系统，包含三个正式部分：**Workflow** 负责多节点生成编排，**Table** 一次专注处理一个媒体或 Workflow 节点，**Agent** 把 Codex 线程、任务状态、项目上下文和产物面板组织在空间工作区中。三者共享 Provider、素材和产物语义，但不恢复已经删除的旧 Canvas / Art 系统。
 
-## 📸 双工作区预览
+它把视频制作拆成四种稳定职责：
 
-<table>
-  <tr>
-    <td width="50%">
-      <img src="pic/Canvas.png" alt="Canvas 工作区" />
-      <p align="center"><strong>Canvas 工作区</strong> - 无限画布 + AI 创作</p>
-    </td>
-    <td width="50%">
-      <img src="pic/WorkFlow.png" alt="Workflow 工作区" />
-      <p align="center"><strong>Workflow 工作区</strong> - 节点式流程编排</p>
-    </td>
-  </tr>
-</table>
+| 角色 | 职责 |
+| --- | --- |
+| **Coding Agent** | 理解 Brief、拆解任务、组织制作角色、监控进度并处理失败；优先适配 Codex 与 OpenCode。 |
+| **Flovart Skill** | 制作总台：暴露能力、约束调用顺序、校验导演 Skill，并告诉 Agent 何时调用 CLI。 |
+| **Director Skill** | 可复用导演方法：定义风格、镜头语言、制作步骤、检查点和验收标准。 |
+| **Flovart CLI** | 确定性执行器：按注册表操作当前已开放的 Workflow 能力、调用 Provider、返回结构化状态，不让 Agent 猜 HTTP 或操纵 UI。 |
 
----
+一句话：**Workflow 编排生成，Table 专注预处理，Agent 在空间任务界面里理解、执行和监督制作。**
 
-## 这是什么？
+```mermaid
+flowchart LR
+  B["创作 Brief + 本地凭据"] --> A["Coding Agent<br/>Codex / OpenCode"]
+  A --> P["Flovart Skill<br/>制作总台"]
+  P --> D["Director Skill<br/>风格与制作 SOP"]
+  P --> C["Flovart CLI<br/>确定性命令"]
+  D --> C
+  C <--> W["Workflow Runtime<br/>节点 / 状态 / 产物"]
+  T["Table<br/>单一媒体 / 节点预处理<br/>建设中"] -. "预处理产物" .-> W
+  G["Agent Workspace<br/>Codex 线程 / 任务面板 / 产物"] <--> W
+  C --> M["Provider Adapters<br/>图像 / 视频 / 音频"]
+  W --> A
+```
 
-我想要一个真正为 AI 创作而生的画布——
+## 为什么采用这套架构？
 
-- **更自由的模型**：BYOK 自带 Key，Google / OpenAI / DeepSeek / MiniMax / 火山引擎 / Qwen 等 12+ Provider 原生接入，再加一层 OpenAI-compatible 中转站适配器，自己接任何端点。
-- **更彻底的工作流**：Canvas（画布）+ Workflow（节点流）+ Art（工具背包,开发中）三工作区架构，一键切换；节点式太重就把它收起来当工具人，专注画布创作。
-- **更可被驱动**：CLI（`tools/flovart/cli.js`）、SKILL.md 和 host config 三条确定性入口，画布上的每个媒体元素都暴露成命令。外部 Agent 负责规划，Flovart 负责执行。
-- **更好看的前端**：Animal Crossing 风的 Tactile Shell 视觉语言、无限画板、`@` 引用图层、双击聚焦 / 三击适配、双语 + 亮暗主题自适应。
+- **职责分离**：Workflow 负责多节点生成编排；Table 一次只处理一个输入；Agent 使用空间面板组织 Codex 线程和任务状态，避免把生成、处理和对话重新堆进同一张杂乱界面。
+- **BYOK 与多模型**：凭据由用户配置，Flovart 通过 Provider 适配层调用图像、视频和文本模型。
+- **可恢复**：CLI 返回 JSON 状态，Agent 可以轮询、重试、续跑，而不是依赖一次长对话完成整部短片。
+- **风格可复用**：导演经验写进 Director Skill，同一种视觉语言和制作流程可以被不同项目重复调用。
+- **能力可组合**：编剧、分镜、视觉生成、配音、剪辑和质检可以由不同 Agent/Skill 承担，共享同一个 Workflow。
 
-六种部署形态可选：在线 Demo、Vercel/Render 一键部署、Tauri 桌面端、Chrome/Edge 浏览器扩展、Docker 自托管。
+## Director Skill 生态
 
-如果你也有相同的愿望，欢迎提交 PR。
+Flovart 将规定导演 Skill 的最小对接契约，并通过 Skill Creator 模板指导社区创作。规范会覆盖：
 
-## 特别致谢
+- 身份、版本、兼容性和所需 Flovart 能力；
+- 输入 Brief、可配置参数和结构化输出；
+- Workflow 配方、制作阶段和角色分工；
+- 风格圣经、镜头规则、声音规则和禁止项；
+- 检查点、失败恢复、人工确认和最终验收；
+- 产物血缘、模型策略、成本与安全边界。
 
-**[@labiaaaaaaaaa](https://github.com/labiaaaaaaaaa)** — 推进第三方服务适配核心修复，帮助 Flovart 在聚合网关与兼容端点场景下持续完善接入规则。
+[VOX Director](https://github.com/avabbbb/vox-director) 是这类风格化导演 Skill 的参考案例。目标是让用户组合“Flovart 制作总台 + 社区导演 Skill + 自己的 Provider”，由 Coding Agent 复用完整的风格化短片工作流。
 
----
+> 基础 CLI/TUI、Flovart Skill 和 Codex/OpenCode 等 Host 配置已接入；Director Skill 社区契约、实时事件订阅和断点续跑仍在建设中。
 
-## 个人版 / 企业版
+## 当前能力与边界
 
-Flovart 同时面向个人创作者和企业团队：
+| 模块 | 状态 |
+| --- | --- |
+| Workflow 节点编排、本地项目与素材 | 已有基础 |
+| Table 单一媒体 / 节点预处理 | 基础界面与 Workflow 往返已接入；处理能力持续扩展 |
+| Agent 空间任务工作区 | 主体界面已接入；持久任务与事件订阅待完善 |
+| 多 Provider BYOK、文生图、图生图、文生视频 | 已有基础 |
+| Workflow CLI、命令 Schema、JSON 状态 | 基础能力已接入 |
+| Codex / OpenCode 等 Host 适配 | 基础 MCP/Skill 配置已接入 |
+| Director Skill 契约与 UGC 生态 | 设计与实现中 |
+| TUI 快捷命令 | 基础能力已接入；任务订阅与断点续跑待完善 |
 
-- **个人版**（社区版）：开源自部署，BYOK 自带 Key，画布 + 工作流，浏览器本地存储。永久免费。
-- **企业版**：在社区版基础上增加组织/部门/角色 RBAC 权限体系、权限继承与部门树、桌面端自动更新、全栈 CLI 工具链。适合私有化部署到企业内部。
+当前创作者运行时以 TypeScript / Node.js 为主。Go + Gin + GORM 只用于企业控制面，例如组织、RBAC、审计和私有化管理；它不是视频制作运行时。
 
-两个版本在同一代码库中，通过 landing 页的 [个人版 | 企业版] 切换器选择入口。
+## 快速开始
 
----
+### Windows 桌面版（小白用户）
 
-## 🚀 快速开始
+从 [GitHub Releases](https://github.com/avabbbb/Flovart/releases) 下载 Actions 生成的 Windows NSIS `.exe` 安装包。首次启动会在本机创建业务数据；API Key 、Workflow、素材和生成历史不默认上传。
 
-**前端 only（最简）：**
+源码仓库在 Windows 上执行 `npm run tauri:build` 可生成无需发布私钥的本地 NSIS 安装器；`npm run tauri:build:release` 专供配置了 `TAURI_SIGNING_PRIVATE_KEY` 的正式更新包发布。
+
+### Coding Agent / CLI
+
+Node.js 20+ 用户可直接安装并启动版本化 Agent Toolkit：
+
+```bash
+npx flovart-cli install
+npx flovart-cli start
+npx flovart-cli init --host codex
+```
+
+`install` 会下载并校验与 CLI 同版本的 Runtime + Agent 包；`start` 启动本地桌面 Runtime 和托管 Agent。将 `codex` 换成 `opencode` / `claude` / `cursor` / `windsurf` / `vscode` 可生成对应 Host 配置。
+
+### 源码与 SaaS 部署
 
 ```bash
 git clone https://github.com/avabbbb/Flovart.git
 cd Flovart
 npm install
-npm run dev
+npx flovart-cli start --source --all --open
 ```
 
-打开 http://localhost:11451，在设置中填入你的服务凭据即可。
+也可在 Windows 双击 `启动.bat`，或用 `docker compose up --build`启动 Web / Hub / Enterprise / PostgreSQL 容器。Docker 静态资源生产路径仍在验证，当前更适合本地联调与私有部署预演。
 
-**全栈启动（含后端 API + 企业版）：**
+### 检查 Workflow CLI
 
 ```bash
-node tools/flovart/cli.js start
+npm run flovart:cli -- command.list --json
+npm run flovart:cli -- command.schema --command workflow.node.run --json
+npm run flovart:cli -- workflow.project.list --json
 ```
 
-一键启动前端(:11451) + 社区版后端(:11452) + 企业版后端(:11453)，首次运行自动创建 `.env`。
+CLI 只接受显式命令。外部 Agent 应先读取 `command.list` / `command.schema`，再执行 Workflow 操作，不应自行拼接内部 HTTP 请求或抓取界面。
 
-> 推荐 [Google AI Studio](https://aistudio.google.com/apikey) 免费获取 Gemini 凭据。
+更多入口：
 
-更多部署方式（Agent / CLI、Docker、浏览器扩展等）请查看 [快速开始文档](docs/overview/quick-start.md)。
+- [快速开始](docs/overview/quick-start.md)
+- [功能特性](docs/content/docs/overview/features.mdx)
+- [开发计划](docs/content/docs/progress/todo.mdx)
+- [AI 文档索引](docs/index.md)
 
----
+## 本地优先与安全
 
-## 🎯 功能特性
+- 当前项目、素材和生成记录主要保存在浏览器本地，不承诺云同步。
+- API Key 加密保存在本地 `localforage` Vault；Workflow、素材、生成历史等业务数据分 store 写入 IndexedDB，大媒体不写入 `localStorage`。
+- Web 站点、桌面 WebView 和浏览器扩展的 IndexedDB 默认彼此隔离；跨入口自动共享需要 Desktop Runtime 受限桥接，当前仍是待办，不宣称已实现。
+- 不要把 API Key 写进 Director Skill、Prompt、日志或仓库；Agent 和 CLI 只应读取脱敏后的就绪状态。
+- 请勿在非官方部署中输入 API Key。官方渠道仅包括本仓库、[在线 Demo](https://avabbbb.github.io/Flovart/) 和本仓库 Actions 发布的桌面构建。
 
-Flovart 更推荐按创作链路使用，而不是把每个能力拆开记：
+## 参与贡献
 
-| 工作流                       | 你会怎么用                                                                               |
-| ---------------------------- | ---------------------------------------------------------------------------------------- |
-| **导入参考图**         | 把角色、场景、产品或草图拖进画布，作为后续生成的视觉锚点。                               |
-| **@ 引用画布节点**     | 在节点下方的 PromptBar 输入`@`，直接把画布里的图片、视频或文本节点作为上下文。         |
-| **生成 4 个方案**      | 围绕同一组参考图批量生成 2/4 个方向，快速比较构图、风格和细节。                          |
-| **A/B 对比与局部修正** | 用对比视图挑选结果，再对选中图片做局部重绘、扩图、去背景、超分或滤镜调整。               |
-| **Art 工作台（开发中）** | 把画布作为抠图/合成底座，从右侧工具背包拖拽工具(故障/滤镜/深度/抠图/边缘线稿法线)到画布，触发涟漪动画后进入全屏编辑，处理完原地替换画布内容。 |
-| **保存为素材**         | 把满意的角色、场景、道具沉淀进素材库，后续直接拖回画布复用。                             |
-| **让 Agent 继续扩展**  | 外部 Agent 可以通过 CLI / SKILL 读取画布、点火节点、重试失败任务，并继续扩展镜头或视频。 |
+欢迎通过 Issue 和 Pull Request 贡献 Provider 适配、Workflow 能力、Host 集成和 Director Skill。
 
-**核心能力**：无限画布、AI 文生图/图生图/文生视频、Multi-Agent 协作、局部重绘/扩图、滤镜调色、图层蒙版、批量生成、提示词润色、角色锁定、素材库、12+ Provider、双语主题切换。
+特别感谢 [@labiaaaaaaaaa](https://github.com/labiaaaaaaaaa) 推进第三方服务适配与兼容端点修复。
 
-完整功能列表请查看 [功能特性文档](docs/overview/features.md)。
+## 协议与声明
 
----
+Flovart 基于 [GNU Affero General Public License v3.0 only](./LICENSE) 开源。使用本产品即表示同意 [使用条款](./docs/TERMS_OF_SERVICE.md) 和 [隐私政策](./docs/PRIVACY_POLICY.md)。
 
-## 📋 开发计划
-
-### 已完成 ✅
-
-- [X] 无限画布 + 基础设计工具
-- [X] 多 Provider BYOK 系统（12+ Provider）
-- [X] AI 文生图 / 图生图 / 文生视频
-- [X] Agent-Native CLI（30+ 确定性命令）
-- [X] Canvas ↔ Workflow 双工作区切换
-- [X] Docker / Tauri 桌面端 / 在线 Demo
-- [X] 第三方 API 聚合端点全兼容
-- [X] Tactile Shell AC 视觉语言
-- [X] Tauri 自动更新（Ed25519 签名 + CI 三平台矩阵）
-- [X] 企业版 RBAC（组织/部门/角色/权限继承）
-- [X] 全栈 CLI（flovart start 一键启动）
-
-### 进行中 🚧
-
-- [ ] Chrome / Edge 商店上架
-- [ ] 扩展端服务凭据加密存储
-- [ ] 节点流可视化编辑器迭代
-- [ ] **Art 工作台**：工具背包(故障/滤镜/深度/抠图/边缘线稿法线) + 拖拽到画布触发涟漪动画 + 全屏编辑 + 原地替换
-- [ ] **三工作区布局规范统一**：Canvas / Workflow / Art 顶栏、左右侧栏、底部 Dock、外边距、圆角、阴影、主题 token 统一一套规范；清理 Workflow 硬编码 `outerGap=12` 与 `StudioRightDrawer`/`RightPanel` 双轨实现
-
-### 规划中 📝
-
-- [ ] **Art 工具实现**：滤镜风格化(复古DV/VHS/胶片)、故障风格(RGB分离/扫描线/噪点)、智能抠图、深度图提取(图片+视频逐帧)、边缘/线稿/法线提取、姿态提取(OpenPose)
-- [ ] **Art 与 Workflow 互通**：Workflow 选中节点一键进 Art 处理,结果存素材库可回 Workflow
-- [ ] LangGraph.js Agent 编排
-- [ ] AI 短剧一键流水线
-- [ ] 实时协作（CRDT）
-- [ ] 插件市场
-
-完整开发计划请查看 [开发计划文档](docs/progress/roadmap.md)。
-
----
-
-## 🤝 参与贡献
-
-1. Fork 本仓库
-2. 创建分支 `git checkout -b feature/xxx`
-3. 提交更改 `git commit -m 'Add xxx'`
-4. 推送 `git push origin feature/xxx`
-5. 提交 Pull Request
-
-> 欢迎提交 Pull Request，一起让 Flovart 更好。
-
----
-
-## ⭐ Star History
-
-如果 Flovart 对你有帮助，给个 Star ⭐ 支持一下！
-
-[![Star History Chart](https://api.star-history.com/svg?repos=avabbbb/Flovart&type=Date)](https://star-history.com/#avabbbb/Flovart&Date)
-
----
-
-## 📄 协议与声明
-
-本项目基于 [GNU Affero General Public License v3.0 only](./LICENSE) 开源。
-
-使用本产品即表示同意 [使用条款](./docs/TERMS_OF_SERVICE.md) 和 [隐私政策](./docs/PRIVACY_POLICY.md)。
-
-### 非官方部署声明
-
-Flovart 官方发布渠道仅限于：
-
-- **GitHub 仓库**：[github.com/avabbbb/Flovart](https://github.com/avabbbb/Flovart)
-- **在线 Demo**：[avabbbb.github.io/Flovart](https://avabbbb.github.io/Flovart)
-- **桌面版构建**：本仓库 Actions 签发的 EXE / DMG / deb / AppImage
-
-除上述地址外，任何第三方公开部署、镜像站点、托管服务、改版服务、整合包、网盘分发均为非官方行为，与作者无关。
-
-**请勿在非官方站点输入 API Key 或其他敏感信息。**
-
-### AI 生成内容
-
-Flovart 是本地优先的 AI 创作工具，通过你自行配置的第三方 API Key 调用模型服务。你使用本工具生成的所有图片、视频、文本内容均由你控制的 API Key 和模型产出，**你需对生成内容的合规性、版权归属、使用合法性自行负责**。
-
-Flovart 不内置任何模型服务、不存储用户的 API Key、不对生成内容做任何知识产权声明。
+Flovart 不内置模型服务，也不对生成内容主张知识产权。你需要自行确认所选模型、输入素材和生成内容的版权、合规性与使用合法性。

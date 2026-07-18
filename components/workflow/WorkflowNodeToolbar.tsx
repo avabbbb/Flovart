@@ -1,6 +1,6 @@
 import { AlignCenter, AlignLeft, AlignRight, ArrowDownToLine, ArrowUpToLine, ChevronsDown, ChevronsUp, Copy, Crop, Download, Eraser, Expand, FilePenLine, Frame, Grid2x2, Group, Layers3, Library, Lightbulb, Maximize2, MessageSquareText, Play, RefreshCw, RotateCw, ScanLine, ScanText, Scissors, SlidersHorizontal, Square, Trash2, Ungroup, ZoomIn, Gauge } from 'lucide-react';
 import { useRef } from 'react';
-import { ElementToolbarActions, ElementToolbarShell, type ElementToolbarAction } from '../ElementToolbar';
+import { WorkflowToolbarActions, WorkflowToolbarShell, type WorkflowToolbarAction } from './WorkflowToolbarPrimitives';
 import { useWorkflowMediaUrl } from './media';
 import type { WorkflowNode } from './types';
 
@@ -66,7 +66,7 @@ export function WorkflowNodeToolbar({ nodes, onCopy, onDelete, onExport, onRun, 
   const selectedMedia = nodes.filter(item => item.type === 'image' || item.type === 'video' || item.type === 'audio');
   const mediaUrl = useWorkflowMediaUrl(media?.metadata.storageKey, media?.metadata.href).url;
   const advancedToolBusy = imageToolBusy || node?.metadata.status === 'loading';
-  const actions: Array<ElementToolbarAction | null | false | undefined> = [
+  const actions: Array<WorkflowToolbarAction | null | false | undefined> = [
     { key: 'copy', label: '复制节点', icon: <Copy size={18} />, onClick: () => onCopy(ids) },
     nodes.length > 1 && onGroup && { key: 'group', label: '打组 (Ctrl+G)', icon: <Group size={18} />, onClick: () => onGroup(ids) },
     nodes.length > 1 && onExecuteGroup && { key: 'execute-group', label: '整组执行', icon: <Play size={18} />, onClick: () => onExecuteGroup(ids) },
@@ -106,9 +106,9 @@ export function WorkflowNodeToolbar({ nodes, onCopy, onDelete, onExport, onRun, 
     { key: 'delete', label: '删除节点', icon: <Trash2 size={18} />, danger: true, onClick: () => onDelete(ids) },
   ];
   return (
-    <ElementToolbarShell testId="workflow-node-toolbar">
+    <WorkflowToolbarShell testId="workflow-node-toolbar">
       {nodes.length > 1 && onAlign && <>
-        <ElementToolbarActions actions={[
+        <WorkflowToolbarActions actions={[
           { key: 'left', label: '左对齐节点', icon: <AlignLeft size={18} />, onClick: () => onAlign('left') },
           { key: 'horizontal-center', label: '水平居中节点', icon: <AlignCenter size={18} />, onClick: () => onAlign('horizontal-center') },
           { key: 'right', label: '右对齐节点', icon: <AlignRight size={18} />, onClick: () => onAlign('right') },
@@ -120,7 +120,7 @@ export function WorkflowNodeToolbar({ nodes, onCopy, onDelete, onExport, onRun, 
       {media && onReplaceMedia && <>
         <input ref={inputRef} hidden type="file" accept={`${media.type}/*`} onChange={event => { const file = event.target.files?.[0]; if (file) onReplaceMedia(media.id, file); event.target.value = ''; }} />
       </>}
-      <ElementToolbarActions actions={actions} />
-    </ElementToolbarShell>
+      <WorkflowToolbarActions actions={actions} />
+    </WorkflowToolbarShell>
   );
 }

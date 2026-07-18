@@ -1,13 +1,13 @@
 import { ChevronDown, Play } from 'lucide-react';
 import { createContext, useContext, useMemo, type CSSProperties, type ReactNode } from 'react';
-import { extractMentions } from '../CanvasMentionExtension';
+import { extractMentions } from '../MediaMentionExtension';
 import type { MentionItem } from '../MentionList';
 import RichPromptEditor from '../RichPromptEditor';
 import type { GenerationCapability, GenerationMode } from '../../services/generationCapabilities';
 import { getModelCapabilities, isSeedanceModel } from '../../services/modelTemplateRegistry';
 import { getVoicesByProvider } from '../../services/voiceCatalog';
 import { modelRefModelId } from '../../utils/modelRefs';
-import type { WorkflowConnection, WorkflowNode, WorkflowNodeMetadata } from './types';
+import type { WorkflowConnection, WorkflowNode, WorkflowNodeMetadata, WorkflowRichPromptDocument } from './types';
 import type { StudioMediaItem } from '../studio/StudioMediaBrowser';
 import { CAMERA_MOVEMENTS, CAMERA_OPTIONS, STYLE_PRESETS } from './constants';
 import { EMPTY_SEEDANCE_REFERENCES, filterSeedanceReferences, filterWorkflowInputIds, getWorkflowInputNodes, toWorkflowMentionItems } from './references';
@@ -33,7 +33,10 @@ export function WorkflowGenerationCapabilitiesProvider({ resolve, sharedMedia = 
   return <CapabilityContext.Provider value={resolve || emptyCapability}><SharedMediaContext.Provider value={sharedMedia}>{children}</SharedMediaContext.Provider></CapabilityContext.Provider>;
 }
 
-export const useWorkflowSharedMedia = () => useContext(SharedMediaContext);
+export const useWorkflowSharedMedia = () => {
+  const media = useContext(SharedMediaContext);
+  return Array.isArray(media) ? media : [];
+};
 
 export function WorkflowConfigPanel({ node, nodes, connections = [], onChange, onRun, onStop }: {
   node: WorkflowNode;
@@ -127,12 +130,12 @@ export function WorkflowConfigPanel({ node, nodes, connections = [], onChange, o
       )}
       {nodes ? <div className="workflow-config__composer" style={{ '--prompt-editor-color': 'var(--wf-text)', '--prompt-editor-placeholder': 'var(--wf-muted)', '--prompt-editor-min-height': '72px', '--prompt-editor-max-height': '140px', '--prompt-editor-padding': '7px' } as CSSProperties}>
         <RichPromptEditor
-          canvasItems={mentionItems}
+                referenceItems={mentionItems}
           initialText={node.metadata.prompt || ''}
           initialDocument={node.metadata.richTextDocument}
           placeholder="输入提示词，按 @ 引用节点"
           onSubmit={onRun}
-          onTextChange={(prompt, richTextDocument) => onChange({ prompt, richTextDocument, mentionedNodeIds: keepConnectedMentions(extractMentions(richTextDocument).map(item => item.id)) })}
+          onTextChange={(prompt, richTextDocument) => onChange({ prompt, richTextDocument: richTextDocument as WorkflowRichPromptDocument, mentionedNodeIds: keepConnectedMentions(extractMentions(richTextDocument).map(item => item.id)) })}
         />
       </div> : <textarea value={node.metadata.prompt || ''} placeholder="输入提示词；上游文本会自动合并" onChange={event => onChange({ prompt: event.target.value })} />}
       {capability.resolutions.length > 0 && (

@@ -16,12 +16,19 @@ function readEnvBase(key: string, fallback: string): string {
 export const HUB_BASE_URL = readEnvBase('VITE_HUB_BASE_URL', DEFAULT_HUB_BASE);
 export const ENTERPRISE_BASE_URL = readEnvBase('VITE_ENTERPRISE_BASE_URL', DEFAULT_ENTERPRISE_BASE);
 
-// JWT 在 localStorage 里（参考 useApiKeys 的 localStorage 用法）
+// Hub JWT 只保留当前浏览器会话；长期登录应由后端改为 HttpOnly Cookie。
 const TOKEN_KEY = 'flovart.hub.token';
 
 export function getToken(): string | null {
   try {
-    return localStorage.getItem(TOKEN_KEY);
+    const token = sessionStorage.getItem(TOKEN_KEY);
+    if (token) return token;
+
+    // 一次性收走旧版本写入 localStorage 的明文 token。
+    const legacyToken = localStorage.getItem(TOKEN_KEY);
+    if (legacyToken) sessionStorage.setItem(TOKEN_KEY, legacyToken);
+    localStorage.removeItem(TOKEN_KEY);
+    return legacyToken;
   } catch {
     return null;
   }
@@ -29,8 +36,9 @@ export function getToken(): string | null {
 
 export function setToken(token: string | null): void {
   try {
-    if (token) localStorage.setItem(TOKEN_KEY, token);
-    else localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(TOKEN_KEY);
+    if (token) sessionStorage.setItem(TOKEN_KEY, token);
+    else sessionStorage.removeItem(TOKEN_KEY);
   } catch {}
 }
 

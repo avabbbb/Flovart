@@ -1,8 +1,10 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
-import { COMMAND_ALIASES, COMMAND_REGISTRY } from '../tools/flovart/core.js';
 import { loadAgentConfig } from './config.js';
+
+const core = await import('../tools/flovart/core.js').catch(() => import('../core.js'));
+const { COMMAND_ALIASES, COMMAND_REGISTRY } = core;
 
 const descriptorSchema = descriptor => {
   const optional = String(descriptor).endsWith('?');
@@ -32,7 +34,7 @@ export function getFlovartMcpTools() {
 export async function startMcpServer() {
   const config = loadAgentConfig(true);
   const server = new McpServer({ name: 'flovart-agent', version: '0.2.0' }, {
-    instructions: '先读取 workflow.inspect 或 canvas.inspect，再使用明确的 Flovart CLI 原子命令。Workflow 写操作会在浏览器中二次确认。',
+    instructions: '先读取 workflow.inspect，再使用明确的 Flovart CLI 原子命令。当前自动化表面只有 Workflow；不得调用已删除的 Canvas 或 Element 命令。',
   });
   getFlovartMcpTools().forEach(({ command, name, metadata }) => {
     server.registerTool(name, { description: metadata.summary, inputSchema: inputShape(metadata.args) }, async input => {

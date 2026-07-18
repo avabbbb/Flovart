@@ -1,12 +1,13 @@
 // 企业后台面板共享组件
 import React from 'react';
 import type { Organization } from '../../services/orgApi';
+import type { useToast } from '../../hooks/useToast';
 
 export type PanelProps = {
   org: Organization;
   perms: string[];
   userId: string;
-  toast: { show: (msg: string, type?: 'success' | 'error' | 'info') => void; toasts: unknown[]; dismiss: (id: string) => void };
+  toast: ReturnType<typeof useToast>;
 };
 
 export function FormInput({ value, onChange, placeholder, type = 'text', autoFocus }: {

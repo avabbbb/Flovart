@@ -8,6 +8,7 @@ export interface ImageReferenceChip {
   id: string;
   label: string;
   thumbnail: string;
+  storageKey?: string;
   elementType: 'image' | 'video' | 'audio';
   mentioned: boolean;
 }
@@ -48,9 +49,27 @@ export function toImageReferenceChips(
     id: node.id,
     label: node.title,
     thumbnail: node.metadata.href || '',
+    storageKey: node.metadata.storageKey,
     elementType: (MEDIA_TYPES.has(node.type) ? node.type : 'image') as 'image' | 'video' | 'audio',
     mentioned: mentioned.has(node.id),
   }));
+}
+
+/** 从纯文本中的 @节点名 兜底解析引用；只接纳调用方给出的候选节点，避免任意文本注入节点 id。 */
+export function inferWorkflowMentionIds(plainText: string, items: MentionItem[]): string[] {
+  const hits = items.flatMap(item => {
+    const label = item.label.trim();
+    if (!label) return [];
+    const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const match = new RegExp(`@${escaped}(?![\\p{L}\\p{N}_])`, 'u').exec(plainText);
+    return match ? [{ id: item.id, index: match.index }] : [];
+  });
+  return hits.sort((left, right) => left.index - right.index).map(hit => hit.id);
+}
+
+/** 富文本 mention id 与纯文本 @名称合并，按文本顺序优先并去重。 */
+export function resolveWorkflowMentionIds(plainText: string, explicitIds: string[], items: MentionItem[]): string[] {
+  return [...new Set([...inferWorkflowMentionIds(plainText, items), ...explicitIds])];
 }
 
 /** 拼接当前 chip 列与新增/移除节点，得到新的 imageReferenceOrder 值 */

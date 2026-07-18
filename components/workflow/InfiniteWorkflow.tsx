@@ -344,7 +344,14 @@ export function InfiniteWorkflow({
   }, [clipboardVersion, future, past, project.nodes]);
 
   const patchProject = useCallback((patch: Partial<WorkflowProject>) => {
+    const previousNodes = projectRef.current.nodes;
     projectRef.current = { ...projectRef.current, ...patch };
+    if (patch.nodes) {
+      registerWorkflowMediaTransientReferences(mediaReferenceOwnerRef.current, [
+        previousNodes,
+        projectRef.current.nodes,
+      ]);
+    }
     if (patch.viewport) viewportRef.current = patch.viewport;
     updateProject(patch);
   }, [updateProject]);
@@ -954,7 +961,7 @@ export function InfiniteWorkflow({
     return success ? nodeId : undefined;
   }, [applyOps, assetLibrary, currentSnapshot]);
 
-  const handleSelectCanvasReference = useCallback((nodeId: string, targetNodeId: string): string | undefined => {
+  const handleSelectWorkflowReference = useCallback((nodeId: string, targetNodeId: string): string | undefined => {
     const snapshot = currentSnapshot();
     const target = snapshot.nodes.find(node => node.id === targetNodeId);
     const source = snapshot.nodes.find(node => node.id === nodeId);
@@ -974,7 +981,7 @@ export function InfiniteWorkflow({
     try {
       for (const file of files.filter(file => file.type.startsWith('image/'))) records.push(await ingestWorkflowMedia(file));
       if (!records.length) throw new Error('请选择图片文件');
-      if (!mountedRef.current || projectRef.current.id !== expectedProjectId) throw new Error('画布已切换，请重新上传');
+      if (!mountedRef.current || projectRef.current.id !== expectedProjectId) throw new Error('工作流已切换，请重新上传');
       const snapshot = currentSnapshot();
       const target = snapshot.nodes.find(node => node.id === targetNodeId);
       if (!target) throw new Error('当前生成节点已不存在');
@@ -1247,7 +1254,10 @@ export function InfiniteWorkflow({
       if (files.length) setNotice('仅支持图片、视频或音频文件');
       return;
     }
-    void addMediaAt(file, screenToWorkflow(event.clientX, event.clientY));
+    const point = Number.isFinite(event.clientX) && Number.isFinite(event.clientY)
+      ? screenToWorkflow(event.clientX, event.clientY)
+      : viewportCenter();
+    void addMediaAt(file, point);
   }, [addMediaAt, addSharedMediaAt, screenToWorkflow, viewportCenter]);
 
   const localPoint = useCallback((clientX: number, clientY: number): WorkflowPoint => {
@@ -1295,7 +1305,7 @@ export function InfiniteWorkflow({
       const validation = direction === 'in'
         ? validateWorkflowConnection(snapshot, node.id, originId)
         : validateWorkflowConnection(snapshot, originId, node.id);
-      if (!validation.ok) {
+      if (validation.ok === false) {
         reason ||= validation.reason;
         return;
       }
@@ -1520,16 +1530,18 @@ export function InfiniteWorkflow({
   const undo = useCallback(() => {
     const previous = past[past.length - 1];
     if (!previous) return;
+    const current = currentFrame();
     setPast(items => items.slice(0, -1));
-    setFuture(items => [currentFrame(), ...items].slice(0, 50));
+    setFuture(items => [current, ...items].slice(0, 50));
     applyFrame(previous);
   }, [applyFrame, currentFrame, past]);
 
   const redo = useCallback(() => {
     const next = future[0];
     if (!next) return;
+    const current = currentFrame();
     setFuture(items => items.slice(1));
-    setPast(items => [...items.slice(-49), currentFrame()]);
+    setPast(items => [...items.slice(-49), current]);
     applyFrame(next);
   }, [applyFrame, currentFrame, future]);
 
@@ -1610,7 +1622,15 @@ export function InfiniteWorkflow({
           return;
         }
         if (item.types.includes('text/plain')) {
-          const text = await (await item.getType('text/plain')).text();
+          const blob = await item.getType('text/plain');
+          const text = typeof blob.text === 'function'
+            ? await blob.text()
+            : await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(String(reader.result || ''));
+                reader.onerror = () => reject(reader.error || new Error('无法读取剪贴板文本'));
+                reader.readAsText(blob);
+              });
           if (text) {
             const center = viewportCenter();
             const node = createWorkflowNode(nanoid(), 'text', { x: center.x - 170, y: center.y - 110 }, { content: text });
@@ -1937,7 +1957,7 @@ export function InfiniteWorkflow({
         mimeType: node.metadata.mimeType,
         loadBlob: () => loadWorkflowMediaBlob(node.metadata.storageKey, node.metadata.href),
       })), `Flovart-Workflow-${project.title}`, project.title);
-      setNotice(`已按画布顺序导出 ${count} 个媒体文件。`);
+      setNotice(`已按工作流顺序导出 ${count} 个媒体文件。`);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : '批量导出失败。');
     }
@@ -2011,7 +2031,7 @@ export function InfiniteWorkflow({
     wfConsumeInsert();
   }, [wfPendingInsert, wfConsumeInsert, selectedNodeData, applyOps]);
 
-  // Native wheel listener with passive:false so Ctrl+scroll zooms the canvas instead of the browser.
+  // Native wheel listener with passive:false so Ctrl+scroll zooms the workflow surface instead of the browser.
   // React's synthetic onWheel is passive on the root and silently ignores preventDefault.
   useEffect(() => {
     const root = rootRef.current;
@@ -2060,7 +2080,7 @@ export function InfiniteWorkflow({
       }}
       onDropCapture={dropMedia}
       onDoubleClick={event => {
-        if (!isTrueBackground(event.target)) return;
+        if (tool === 'pan' || !isTrueBackground(event.target)) return;
         event.preventDefault();
         openCreateMenu(event.clientX, event.clientY);
       }}
@@ -2273,7 +2293,7 @@ export function InfiniteWorkflow({
           <WorkflowConfigPanel node={selectedNodeData[0]} nodes={project.nodes} connections={project.connections} onChange={metadata => applyOps([{ type: 'update_node', id: selectedNodeData[0].id, metadata: { ...selectedNodeData[0].metadata, ...metadata } }])} onRun={() => onRunNode(selectedNodeData[0].id)} onStop={onStopNode ? () => onStopNode(selectedNodeData[0].id) : undefined} />
         </div>}
         {selectedNodeData.length === 1 && ['image', 'video', 'text'].includes(selectedNodeData[0].type) && <div data-workflow-overlay style={{ position: 'absolute', zIndex: 69, left: promptLeft, top: promptTop }}>
-          <WorkflowNodePromptBar width={promptWidth} node={selectedNodeData[0]} nodes={project.nodes} connections={project.connections} t={t} theme={theme} language={language} userApiKeys={userApiKeys} modelPreference={modelPreference} dynamicModelOptions={dynamicModelOptions} onOpenSettings={onOpenSettings} onEnhancePrompt={onEnhancePrompt} isEnhancingPrompt={isEnhancingPrompt} onChange={metadata => applyOps([{ type: 'update_node', id: selectedNodeData[0].id, metadata: { ...selectedNodeData[0].metadata, ...metadata } }])} onRun={() => onRunNode(selectedNodeData[0].id)} onStop={onStopNode ? () => onStopNode(selectedNodeData[0].id) : undefined} focusSignal={promptFocusSignal} onDisconnectReference={fromNodeId => { const targetId = selectedNodeData[0].id; const conn = project.connections.find(c => c.toNodeId === targetId && c.fromNodeId === fromNodeId); if (!conn) return; applyOps([{ type: 'delete_connections', ids: [conn.id] }]); }} assetFolders={assetFolders} assetItems={assetSuggestions} assetLibrary={assetLibrary} onSelectCanvasReference={selectedNodeData[0] ? (nodeId => handleSelectCanvasReference(nodeId, selectedNodeData[0].id)) : undefined} onAddReferenceFiles={selectedNodeData[0] ? (files => handleAddReferenceFiles(files, selectedNodeData[0].id)) : undefined} onSelectAsset={selectedNodeData[0] ? (assetId => handleSelectAsset(assetId, selectedNodeData[0].id)) : undefined} skillEnabled={false} />
+      <WorkflowNodePromptBar width={promptWidth} node={selectedNodeData[0]} nodes={project.nodes} connections={project.connections} t={t} theme={theme} language={language} userApiKeys={userApiKeys} modelPreference={modelPreference} dynamicModelOptions={dynamicModelOptions} onOpenSettings={onOpenSettings} onEnhancePrompt={onEnhancePrompt} isEnhancingPrompt={isEnhancingPrompt} onChange={metadata => applyOps([{ type: 'update_node', id: selectedNodeData[0].id, metadata: { ...selectedNodeData[0].metadata, ...metadata } }])} onRun={() => onRunNode(selectedNodeData[0].id)} onStop={onStopNode ? () => onStopNode(selectedNodeData[0].id) : undefined} focusSignal={promptFocusSignal} onDisconnectReference={fromNodeId => { const targetId = selectedNodeData[0].id; const conn = project.connections.find(c => c.toNodeId === targetId && c.fromNodeId === fromNodeId); if (!conn) return; applyOps([{ type: 'delete_connections', ids: [conn.id] }]); }} assetFolders={assetFolders} assetItems={assetSuggestions} assetLibrary={assetLibrary} onSelectWorkflowReference={selectedNodeData[0] ? (nodeId => handleSelectWorkflowReference(nodeId, selectedNodeData[0].id)) : undefined} onAddReferenceFiles={selectedNodeData[0] ? (files => handleAddReferenceFiles(files, selectedNodeData[0].id)) : undefined} onSelectAsset={selectedNodeData[0] ? (assetId => handleSelectAsset(assetId, selectedNodeData[0].id)) : undefined} skillEnabled={false} />
         </div>}
       </>}
       {minimapOpen && <WorkflowMiniMap nodes={project.nodes.filter(node => node.isVisible !== false)} viewport={project.viewport} onCenter={(x, y) => {

@@ -1,4 +1,3 @@
-import type { AssetSlotRole } from '../types';
 import type { MultimodalSlot } from './aiGateway';
 import type { WorkflowCommandEnvelope, WorkflowCommandResult } from './workflowDispatcher';
 
@@ -33,30 +32,6 @@ export interface FlovartRuntimeApi {
       resolution?: string;
       seed?: number;
     }) => MaybePromise<RuntimeCommandResult>;
-  };
-  element?: {
-    create?: (input: {
-      id?: string;
-      type: 'image' | 'video' | 'text';
-      name: string;
-      x: number;
-      y: number;
-      width?: number;
-      height?: number;
-      href?: string;
-      mimeType?: string;
-    }) => MaybePromise<RuntimeCommandResult>;
-    updatePrompt?: (input: {
-      elementId: string;
-      textPrompt: string;
-      modelId?: string;
-    }) => MaybePromise<RuntimeCommandResult>;
-    assignSlot?: (input: {
-      elementId: string;
-      targetElementId: string;
-      slotRole: AssetSlotRole;
-    }) => MaybePromise<RuntimeCommandResult>;
-    ignite?: (input: { elementId: string }) => MaybePromise<RuntimeCommandResult>;
   };
 }
 

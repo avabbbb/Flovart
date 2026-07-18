@@ -1,101 +1,10 @@
-export const COMMAND_REGISTRY = {
-  help: { summary: 'Show human-readable command help.', args: {} },
-  setup: { summary: 'Show CLI file-bridge setup steps.', args: {} },
-  'command.list': { summary: 'List machine-readable atomic command metadata.', args: {} },
-  'command.schema': { summary: 'Return one atomic command schema.', args: { command: 'string?' } },
-  init: { summary: 'Write CLI helper config for a supported host.', args: { host: 'project|opencode|claude|cursor|windsurf|roo|vscode|all', projectDir: 'string?', dryRun: 'boolean?' } },
-  doctor: { summary: 'Diagnose CLI setup, Seedance 2.0 provider readiness, and Canvas/Workflow generation surfaces without exposing credentials.', args: { projectDir: 'string?' } },
-  'inspiration.search': { summary: 'Search curated Flovart prompt inspirations.', args: { query: 'string?', category: 'string?', limit: 'number?' } },
-  'inspiration.get': { summary: 'Return one curated inspiration entry by ID.', args: { id: 'string' } },
-  'prompt.enhance': { summary: 'Enhance a brief image/video prompt using Flovart agent preferences.', args: { prompt: 'string', style: 'string?', aspectRatio: 'string?', mode: 'image|video?' } },
-  'batch.plan': { summary: 'Create a deterministic multi-shot generation plan from one brief.', args: { prompt: 'string', count: 'number?', aspectRatio: 'string?' } },
-  'preferences.manage': { summary: 'Get, set, reset, or add favorite agent preferences.', args: { action: 'get|set|reset|add-favorite', style: 'string?', aspectRatio: 'string?', prompt: 'string?' } },
-  'models.list': { summary: 'List agent-facing image/video model IDs routed through Flovart browser providers.', args: { purpose: 'image|video|all?' } },
-  project: { summary: 'Show active Flovart project context summary.', args: {} },
-  'project.create': { summary: 'Create a local Flovart project context.', args: { name: 'string?', projectUuid: 'string?', use: 'boolean?' } },
-  'project.list': { summary: 'List local Flovart project contexts.', args: {} },
-  'project.use': { summary: 'Use a Flovart project UUID and write .flovart/project.json context.', args: { projectUuid: 'string' } },
-  'project.unuse': { summary: 'Clear active Flovart project context.', args: {} },
-  group: { summary: 'Show active Flovart group context summary.', args: {} },
-  'group.create': { summary: 'Create a local canvas group context.', args: { name: 'string?', groupNodeKey: 'string?', use: 'boolean?' } },
-  'group.list': { summary: 'List local canvas groups in the active project.', args: {} },
-  'group.use': { summary: 'Use a group context and write .flovart/project.json groupNodeKey.', args: { groupNodeKey: 'string' } },
-  'group.unuse': { summary: 'Clear active group context.', args: {} },
-  node: { summary: 'List canvas nodes or dispatch node subcommands.', args: { subcommand: 'create|list|delete|update|run?' } },
-  'node.create': { summary: 'Create one canvas node with LibTV-style -t, -s, and -u options.', args: { type: 'image|video|text', name: 'string?', set: 'key=value[]?', update: 'key=value[]?', run: 'boolean?' } },
-  'node.list': { summary: 'List canvas nodes, optionally filtered by type or active group.', args: { type: 'string?', all: 'boolean?' } },
-  'node.delete': { summary: 'Delete one canvas node.', args: { id: 'string' } },
-  'node.update': { summary: 'Patch one canvas node with -s generation params and -u data attrs.', args: { id: 'string', set: 'key=value[]?', update: 'key=value[]?' } },
-  'node.run': { summary: 'Run or queue one media node generation.', args: { id: 'string' } },
-  upload: { summary: 'Upload a local image or video into the active Flovart canvas context.', args: { path: 'string', type: 'image|video?', name: 'string?' } },
-  model: { summary: 'List or inspect agent-facing model metadata.', args: { modelKey: 'string?' } },
-  'model.search': { summary: 'Search agent-facing model IDs by capability and query.', args: { type: 'image|video|all?', query: 'string?' } },
-  'image.shortcut.list': { summary: 'List deterministic image prompt shortcuts.', args: {} },
-  'image.shortcut': { summary: 'Apply one image prompt shortcut to a canvas node.', args: { label: 'string', node: 'string', run: 'boolean?' } },
-  'script.storyboard': { summary: 'Create storyboard image nodes from script text or a script node.', args: { script: 'string?', scriptNode: 'string?', count: 'number?', group: 'string?' } },
-  status: { summary: 'Inspect runtime, provider, and media status.', args: {} },
-  'provider.status': { summary: 'Inspect provider/model configuration without exposing keys.', args: {} },
-  'provider.begin-setup': { summary: 'Open provider setup in the browser UI.', args: { provider: 'string?', purpose: 'image|video|both?' } },
-  'provider.select-model': { summary: 'Select configured image/video/text model IDs.', args: { imageModel: 'string?', videoModel: 'string?', textModel: 'string?' } },
-  'provider.test': { summary: 'Check provider readiness.', args: { purpose: 'image|video|both?' } },
-  'element.create': { summary: 'Create one canvas element.', args: { id: 'string?', type: 'image|video|text', name: 'string?', x: 'number?', y: 'number?', width: 'number?', height: 'number?', href: 'string?', mimeType: 'string?' } },
-  'element.update-prompt': { summary: 'Update one media prompt and hydrate @ references.', args: { elementId: 'string', textPrompt: 'string', modelId: 'string?' } },
-  'element.assign-slot': { summary: 'Assign a referenced element to an explicit generation slot role.', args: { elementId: 'string', targetElementId: 'string', slotRole: 'first_frame|style_ref|control_net|unassigned' } },
-  'element.ignite': { summary: 'Queue generation for one media element and return a job ID.', args: { elementId: 'string' } },
-  'element.watch': { summary: 'Wait for one element to reach success/error.', args: { elementId: 'string', timeoutMs: 'number?' } },
-  'canvas.inspect': { summary: 'Inspect full canvas, selection, viewport, media, and jobs.', args: {} },
-  'canvas.list-media': { summary: 'List image/video elements only.', args: {} },
-  'canvas.add-image': { summary: 'Add one image media element.', args: { href: 'string', mimeType: 'string?', name: 'string?', x: 'number?', y: 'number?', width: 'number?', height: 'number?' } },
-  'canvas.add-video': { summary: 'Add one video media element.', args: { href: 'string', mimeType: 'string?', name: 'string?', x: 'number?', y: 'number?', width: 'number?', height: 'number?' } },
-  'canvas.upload-image': { summary: 'Read a local image file and add it as a canvas media element.', args: { path: 'string', name: 'string?', x: 'number?', y: 'number?', width: 'number?', height: 'number?' } },
-  'canvas.upload-video': { summary: 'Read a local video file and add it as a canvas media element.', args: { path: 'string', name: 'string?', x: 'number?', y: 'number?', width: 'number?', height: 'number?' } },
-  'canvas.update-element': { summary: 'Patch one existing element with explicit JSON updates.', args: { id: 'string', updates: 'object' } },
-  'canvas.remove-element': { summary: 'Remove one element by ID.', args: { id: 'string' } },
-  'canvas.select': { summary: 'Replace current selection with explicit element IDs.', args: { ids: 'string[]' } },
-  'canvas.clear-media': { summary: 'Remove image/video elements only.', args: {} },
-  'workflow.project.list': { summary: 'List isolated Workflow projects.', args: {} },
-  'workflow.project.create': { summary: 'Create an isolated Workflow project.', args: { title: 'string?' } },
-  'workflow.project.use': { summary: 'Select the active Workflow project.', args: { projectId: 'string' } },
-  'workflow.project.delete': { summary: 'Delete one Workflow project.', args: { projectId: 'string' } },
-  'workflow.inspect': { summary: 'Inspect the active Workflow graph with media redacted.', args: { projectId: 'string?' } },
-  'workflow.node.create': { summary: 'Create one Workflow image/text/video/audio/config node.', args: { projectId: 'string?', id: 'string?', type: 'image|text|video|audio|config', title: 'string?', x: 'number?', y: 'number?', width: 'number?', height: 'number?', metadata: 'object?', metadataJson: 'string?' } },
-  'workflow.node.create-connected': { summary: 'Create one Workflow node and connect it from an existing node atomically.', args: { projectId: 'string?', fromNodeId: 'string', id: 'string?', type: 'image|text|video|audio|config', title: 'string?', x: 'number?', y: 'number?', width: 'number?', height: 'number?', metadata: 'object?', metadataJson: 'string?' } },
-  'workflow.node.update': { summary: 'Patch one Workflow node.', args: { projectId: 'string?', nodeId: 'string', patch: 'object?', patchJson: 'string?' } },
-  'workflow.node.delete': { summary: 'Delete one Workflow node and incident connections.', args: { projectId: 'string?', nodeId: 'string' } },
-  'workflow.node.move': { summary: 'Move one Workflow node.', args: { projectId: 'string?', nodeId: 'string', x: 'number', y: 'number' } },
-  'workflow.node.resize': { summary: 'Resize one Workflow node.', args: { projectId: 'string?', nodeId: 'string', width: 'number', height: 'number' } },
-  'workflow.connect': { summary: 'Connect two Workflow nodes.', args: { projectId: 'string?', fromNodeId: 'string', toNodeId: 'string' } },
-  'workflow.disconnect': { summary: 'Delete one Workflow connection.', args: { projectId: 'string?', connectionId: 'string' } },
-  'workflow.select': { summary: 'Select Workflow node IDs.', args: { projectId: 'string?', ids: 'string[]' } },
-  'workflow.viewport.set': { summary: 'Set Workflow viewport pan and zoom.', args: { projectId: 'string?', x: 'number', y: 'number', k: 'number' } },
-  'workflow.node.run': { summary: 'Run one Workflow config node through browser providers.', args: { projectId: 'string?', nodeId: 'string' } },
-  'workflow.node.stop': { summary: 'Stop the active generation for one Workflow node.', args: { projectId: 'string?', nodeId: 'string' } },
-  'asset.list': { summary: 'List local generated media assets/history.', args: {} },
-  'generate.image': { summary: 'Generate one image from an explicit prompt.', args: { prompt: 'string', aspectRatio: 'string?', placeOnCanvas: 'boolean?' } },
-  'generate.images-batch': { summary: 'Generate multiple images from explicit prompt items.', args: { items: 'array', placeOnCanvas: 'boolean?', layout: 'string?' } },
-  'generate.video': { summary: 'Generate one video from prompt and optional multimodal source IDs.', args: { prompt: 'string', sourceImageIds: 'string[]?', sourceVideoIds: 'string[]?', slots: 'array?', durationSec: 'number?', aspectRatio: 'string?', resolution: 'string?', generateAudio: 'boolean?', watermark: 'boolean?', seed: 'number?' } },
-  'video.status': { summary: 'Query a video/runtime job status.', args: { jobId: 'string' } },
-  'export.project': { summary: 'Export project metadata.', args: { format: 'json?' } },
-};
+import { CANONICAL_COMMAND_REGISTRY } from './registry.js';
+
+export const COMMAND_REGISTRY = CANONICAL_COMMAND_REGISTRY;
 
 export const COMMANDS = Object.keys(COMMAND_REGISTRY);
 
 export const COMMAND_ALIASES = {
-  inspect: 'canvas.inspect',
-  create: 'element.create',
-  flovart_element_create: 'element.create',
-  'update.prompt': 'element.update-prompt',
-  flovart_element_update_prompt: 'element.update-prompt',
-  'assign.slot': 'element.assign-slot',
-  flovart_element_assign_slot: 'element.assign-slot',
-  ignite: 'element.ignite',
-  flovart_element_ignite: 'element.ignite',
-  watch: 'element.watch',
-  flovart_element_watch: 'element.watch',
-  remove: 'canvas.remove-element',
-  flovart_canvas_remove_element: 'canvas.remove-element',
-  select: 'canvas.select',
-  flovart_canvas_select: 'canvas.select',
   flovart_workflow_project_list: 'workflow.project.list',
   flovart_workflow_project_create: 'workflow.project.create',
   flovart_workflow_project_use: 'workflow.project.use',
@@ -134,14 +43,10 @@ function getCommandAliases(command) {
 export const QUICK_COMMANDS = [
   'status',
   'provider.status',
-  'canvas.inspect',
-  'canvas.list-media',
+  'workflow.inspect',
+  'workflow.project.list',
   'asset.list',
   'models.list',
-  'project',
-  'project.list',
-  'group.list',
-  'node.list',
   'doctor',
   'preferences.manage',
   'inspiration.search',
@@ -152,19 +57,11 @@ export const HELP_TEXT = [
   'Flovart Agent Bridge exposes deterministic tools for external agents.',
   'Claude Code/Codex/OpenCode should do planning and call these commands with explicit arguments.',
   '',
-  'Atomic aliases:',
-  'inspect                                         Alias of canvas.inspect',
-  'create <type> <name> <x> <y>                   Alias of element.create',
-  'update-prompt <id> <text>                      Alias of element.update-prompt',
-  'assign-slot <id> <targetId> <role>             Alias of element.assign-slot',
-  'ignite <id>                                    Alias of element.ignite',
-  'watch <id>                                     Alias of element.watch',
-  '',
   'Commands:',
   'help                                            Show this help',
   'setup                                           Show CLI file-bridge setup steps',
-  'init --host opencode|claude|cursor|windsurf|roo|vscode|all [--dry-run]',
-  'doctor                                          Diagnose CLI setup + Seedance Canvas/Workflow readiness',
+  'init --host codex|claude|opencode|cursor|windsurf|vscode|all [--dry-run]',
+  'doctor                                          Diagnose CLI setup + Seedance Workflow readiness',
   'command.list                                    List machine-readable atomic command metadata',
   'command.schema --command <name>                 Show one command schema',
   'inspiration.search --query <term>               Search curated inspiration prompts',
@@ -173,31 +70,17 @@ export const HELP_TEXT = [
   'batch.plan --prompt <text> [--count 4]          Build a batch generation plan',
   'preferences.manage --action get|set|reset|add-favorite',
   'models.list --purpose image|video|all           List agent-facing model IDs',
-  'project create|list|use|unuse                    Manage local project context',
-  'group create|list|use|unuse                      Manage local group context',
-  'node create|list|update|delete|run               LibTV-style canvas node operations',
-  'upload --path <file> [--type image|video]        Upload local media into canvas',
   'model search --type image --query flux           Search model IDs',
-  'image.shortcut list                              List image shortcut prompts',
-  'script.storyboard --script <text> --count 6      Create storyboard image nodes',
   'status                                          Inspect runtime status',
   'provider.status                                 Inspect provider/model configuration',
   'provider.begin-setup --provider <id> --purpose image|video|both',
-  'provider.select-model --image-model <id> --video-model <id>',
+  'provider.select-model --image-model flovart:<id> --video-model flovart:<id>',
   'provider.test                                   Check configured provider readiness',
-  'element.create --type image|video|text --name <name> [--x 0 --y 0]',
-  'element.update-prompt --element-id <id> --text-prompt <prompt>',
-  'element.assign-slot --element-id <id> --target-element-id <id> --slot-role <role>',
-  'element.ignite --element-id <id>                Run the selected media element in place',
-  'element.watch --element-id <id>                 Wait for element terminal generation state',
-  'canvas.inspect                                  Inspect canvas, selection, and viewport state',
-  'canvas.list-media                               List image/video elements only',
-  'canvas.add-image --href <data-or-url> --mime-type image/png [--name <name>]',
-  'canvas.add-video --href <blob-or-url> --mime-type video/mp4 [--name <name>]',
-  'canvas.update-element --id <id> --updates-json <json>',
-  'canvas.remove-element --id <id>',
-  'canvas.select --ids id1,id2',
-  'canvas.clear-media                              Remove image/video elements only',
+  'workflow.project.list                           List Workflow projects',
+  'workflow.inspect [--project-id <id>]             Inspect a Workflow graph',
+  'workflow.node.create --type image|video|text|audio|config',
+  'workflow.node.update --node-id <id> --patch-json <json>',
+  'workflow.node.run --node-id <id>                 Run one Workflow node',
   'asset.list                                      List local generated media assets',
   'generate.image --prompt <prompt>                Generate one image',
   'generate.images-batch --file shots.json         Trigger multiple image generations',
@@ -209,13 +92,15 @@ export const HELP_TEXT = [
 ].join('\n');
 
 export const SETUP_TEXT = [
-  'Flovart CLI file bridge setup:',
-  '1. npm run dev',
-  '2. Open the Flovart browser app from the dev server when a command needs provider execution',
-  '3. npx flovart-cli status --json',
-  '4. npx flovart-cli generate.image --prompt <prompt> --json',
+  'Flovart Agent Toolkit setup:',
+  '1. npx flovart-cli install',
+  '2. npx flovart-cli start',
+  '3. Enter provider credentials only in the local Flovart Runtime/WebUI',
+  '4. npx flovart-cli status --json',
+  '5. npx flovart-cli generate.image --prompt <prompt> --json',
   '',
-  'API keys must be entered in the Flovart browser UI only. Do not paste secrets into AI agent transcripts.',
+  'Source contributors use `npx flovart-cli start --source --all --open`.',
+  'Never paste API keys into AI agent transcripts.',
 ].join('\n');
 
 export function formatValue(value) {
@@ -622,189 +507,18 @@ export async function executeFlovartCommand(commandName, args = {}, runtime = {}
       const models = allModels.filter((model) => (!query || [model.id, model.label, model.type].join(' ').toLowerCase().includes(query)));
       return { ok: true, query, type: requestedType, models };
     }
-    case 'project': {
-      const subcommand = commandSubcommand(args, 'summary');
-      if (subcommand === 'create') return await executeFlovartCommand('project.create', { ...args, _: args._?.slice(1) }, runtime);
-      if (subcommand === 'list') return await executeFlovartCommand('project.list', args, runtime);
-      if (subcommand === 'use') return await executeFlovartCommand('project.use', { ...args, projectUuid: args.projectUuid || args.uuid || args.p || args._?.[1] }, runtime);
-      if (subcommand === 'unuse') return await executeFlovartCommand('project.unuse', args, runtime);
-      return await runtime.project?.summary?.() || { ok: false, error: 'project unavailable' };
-    }
-    case 'project.create':
-      return await runtime.project?.create?.({
-        projectUuid: args['project-uuid'] || args.projectUuid || args.uuid || args.id,
-        name: args.name || args.n || args._?.[0],
-        description: args.description,
-        use: args.use,
-      }) || { ok: false, error: 'project.create unavailable' };
-    case 'project.list':
-      return await runtime.project?.list?.() || { ok: false, error: 'project.list unavailable' };
-    case 'project.use':
-      return await runtime.project?.use?.({
-        projectUuid: required(args['project-uuid'] || args.projectUuid || args.uuid || args.id || args.p || args._?.[0], 'project-uuid'),
-        name: args.name || args.n,
-      }) || { ok: false, error: 'project.use unavailable' };
-    case 'project.unuse':
-      return await runtime.project?.unuse?.() || { ok: false, error: 'project.unuse unavailable' };
-    case 'group': {
-      const subcommand = commandSubcommand(args, 'summary');
-      if (subcommand === 'create') return await executeFlovartCommand('group.create', { ...args, _: args._?.slice(1) }, runtime);
-      if (subcommand === 'list') return await executeFlovartCommand('group.list', args, runtime);
-      if (subcommand === 'use') return await executeFlovartCommand('group.use', { ...args, groupNodeKey: args.groupNodeKey || args.key || args.g || args._?.[1] }, runtime);
-      if (subcommand === 'unuse') return await executeFlovartCommand('group.unuse', args, runtime);
-      return await runtime.group?.summary?.() || { ok: false, error: 'group unavailable' };
-    }
-    case 'group.create':
-      return await runtime.group?.create?.({
-        groupNodeKey: args['group-node-key'] || args.groupNodeKey || args.key || args.id,
-        projectUuid: args['project-uuid'] || args.projectUuid || args.p,
-        name: args.name || args.n || args._?.[0],
-        x: args.x,
-        y: args.y,
-        use: args.use,
-      }) || { ok: false, error: 'group.create unavailable' };
-    case 'group.list':
-      return await runtime.group?.list?.() || { ok: false, error: 'group.list unavailable' };
-    case 'group.use':
-      return await runtime.group?.use?.({
-        groupNodeKey: required(args['group-node-key'] || args.groupNodeKey || args.key || args.id || args.g || args._?.[0], 'group-node-key'),
-      }) || { ok: false, error: 'group.use unavailable' };
-    case 'group.unuse':
-      return await runtime.group?.unuse?.() || { ok: false, error: 'group.unuse unavailable' };
-    case 'node': {
-      const subcommand = commandSubcommand(args, 'list');
-      if (subcommand === 'create') return await executeFlovartCommand('node.create', { ...args, _: args._?.slice(1) }, runtime);
-      if (subcommand === 'list') return await executeFlovartCommand('node.list', args, runtime);
-      if (subcommand === 'delete' || subcommand === 'remove') return await executeFlovartCommand('node.delete', { ...args, id: args.id || args._?.[1] }, runtime);
-      if (subcommand === 'update') return await executeFlovartCommand('node.update', { ...args, id: args.id || args._?.[1] }, runtime);
-      if (subcommand === 'run') return await executeFlovartCommand('node.run', { ...args, id: args.id || args._?.[1] }, runtime);
-      return await executeFlovartCommand('node.list', args, runtime);
-    }
-    case 'node.create': {
-      const { set, update } = buildNodeUpdates(args);
-      const type = nodeTypeArg(args);
-      const created = await runtime.element?.create?.({
-        id: args.id,
-        type,
-        name: nodeNameArg(args),
-        x: args.x !== undefined ? Number(args.x) : undefined,
-        y: args.y !== undefined ? Number(args.y) : undefined,
-        width: args.width !== undefined ? Number(args.width) : undefined,
-        height: args.height !== undefined ? Number(args.height) : undefined,
-        href: args.href,
-        mimeType: args.mimeType || args['mime-type'],
-      });
-      if (!created?.ok) return created || { ok: false, error: 'node.create unavailable' };
-      let node = created.element;
-      if (Object.keys(update).length > 0) {
-        const patched = await runtime.canvas?.updateElement?.(created.id, update);
-        if (patched?.ok) node = patched.element;
-      }
-      if ((set.prompt || set.model) && (type === 'image' || type === 'video')) {
-        const prompted = await runtime.element?.updatePrompt?.({
-          elementId: created.id,
-          textPrompt: String(set.prompt || ''),
-          modelId: set.model || set.modelId,
-        });
-        if (prompted?.ok) node = (await runtime.canvas?.inspect?.())?.elements?.find((item) => item.id === created.id) || node;
-      }
-      const run = args.run === true || args.run === 'true';
-      const runResult = run ? await runtime.element?.ignite?.({ elementId: created.id }) : null;
-      return { ok: true, shadow: created.shadow, id: created.id, node, run: runResult };
-    }
-    case 'node.list': {
-      const inspected = await runtime.canvas?.inspect?.();
-      if (!inspected?.ok) return inspected || { ok: false, error: 'node.list unavailable' };
-      const context = inspected.context || {};
-      const type = args.type || args.t;
-      const showAll = args.all === true || args.all === 'true';
-      const nodes = (inspected.elements || []).filter((node) => {
-        if (type && node.type !== type) return false;
-        if (!showAll && context.projectUuid && node.projectUuid && node.projectUuid !== context.projectUuid) return false;
-        if (!showAll && context.groupNodeKey && node.groupNodeKey && node.groupNodeKey !== context.groupNodeKey) return false;
-        return true;
-      });
-      return { ok: true, shadow: inspected.shadow, nodes, context };
-    }
-    case 'node.update': {
-      const id = required(nodeIdArg(args), 'id');
-      const { set, update } = buildNodeUpdates(args);
-      const normalizedUpdate = { ...update };
-      if (normalizedUpdate.content !== undefined && normalizedUpdate.text === undefined) normalizedUpdate.text = Array.isArray(normalizedUpdate.content) ? normalizedUpdate.content.join('\n') : String(normalizedUpdate.content);
-      let patched = Object.keys(normalizedUpdate).length > 0
-        ? await runtime.canvas?.updateElement?.(id, normalizedUpdate)
-        : null;
-      if (set.prompt !== undefined || set.model !== undefined || set.modelId !== undefined) {
-        const prompted = await runtime.element?.updatePrompt?.({
-          elementId: id,
-          textPrompt: String(set.prompt || ''),
-          modelId: set.model || set.modelId,
-        });
-        if (prompted?.ok) patched = { ok: true };
-      }
-      const inspected = await runtime.canvas?.inspect?.();
-      const node = inspected?.elements?.find((item) => item.id === id);
-      return node ? { ok: true, shadow: inspected.shadow, id, node } : (patched || { ok: false, error: { code: 'NOT_FOUND', message: `node not found (${id})` } });
-    }
-    case 'node.delete':
-      return await runtime.canvas?.removeElement?.(required(nodeIdArg(args), 'id')) || { ok: false, error: 'node.delete unavailable' };
-    case 'node.run':
-      return await runtime.element?.ignite?.({ elementId: required(nodeIdArg(args), 'id') }) || { ok: false, error: 'node.run unavailable' };
-    case 'upload': {
-      const { prepareMediaUpload } = await loadAgentKit();
-      const prepared = prepareMediaUpload({ ...args, path: args.path || args.file || args._?.[0], type: args.type || args.t, name: args.name || args.n });
-      if (prepared.ok === false) return prepared;
-      const result = prepared.type === 'video'
-        ? await runtime.canvas?.addVideo?.(prepared.element)
-        : await runtime.canvas?.addImage?.(prepared.element);
-      return result ? { ...result, filePath: prepared.filePath, mediaType: prepared.type } : { ok: false, error: 'upload unavailable' };
-    }
-    case 'image.shortcut.list':
-      return { ok: true, shortcuts: IMAGE_SHORTCUTS };
-    case 'image.shortcut': {
-      const label = args.label || args.shortcut || args._?.[0];
-      if (label === 'list') return { ok: true, shortcuts: IMAGE_SHORTCUTS };
-      const shortcut = IMAGE_SHORTCUTS.find((item) => item.id === label || item.label === label);
-      if (!shortcut) return { ok: false, error: { code: 'NOT_FOUND', message: `image shortcut not found: ${label}` } };
-      const id = required(nodeIdArg(args), 'node');
-      const prompted = await runtime.element?.updatePrompt?.({ elementId: id, textPrompt: shortcut.prompt });
-      if (!prompted?.ok) return prompted || { ok: false, error: 'image.shortcut unavailable' };
-      const run = args.run === true || args.run === 'true';
-      const runResult = run ? await runtime.element?.ignite?.({ elementId: id }) : null;
-      const node = (await runtime.canvas?.inspect?.())?.elements?.find((item) => item.id === id);
-      return { ok: true, shortcut, id, node, run: runResult };
-    }
-    case 'script.storyboard': {
-      const scriptNodeId = args['script-node'] || args.scriptNode || args.node;
-      let script = args.script || args.text;
-      if (!script && scriptNodeId) {
-        const inspected = await runtime.canvas?.inspect?.();
-        script = inspected?.elements?.find((item) => item.id === scriptNodeId)?.text;
-      }
-      script = required(script, 'script');
-      if (args.group && runtime.group?.create) await runtime.group.create({ name: args.group, use: true });
-      const lines = splitStoryboardScript(script, args.count);
-      const shots = [];
-      for (let index = 0; index < lines.length; index += 1) {
-        const name = `storyboard-${String(index + 1).padStart(2, '0')}`;
-        const created = await executeFlovartCommand('node.create', {
-          type: 'image',
-          name,
-          x: 840 + (index % 3) * 360,
-          y: 120 + Math.floor(index / 3) * 240,
-          width: 320,
-          height: 180,
-          s: [`prompt=Storyboard frame ${index + 1}: ${lines[index]}. Cinematic composition, clear action, production keyframe.`],
-        }, runtime);
-        shots.push(created.node);
-      }
-      return { ok: true, shadow: true, count: shots.length, shots };
-    }
+    case 'runtime.status':
+      return await runtime.runtime?.status?.() || {
+        ok: false,
+        error: {
+          code: 'RUNTIME_UNAVAILABLE',
+          message: 'Desktop Production Runtime is not connected. Secure discovery is introduced in S0.2.',
+        },
+      };
     case 'status':
       return await runtime.status?.() || {
         ok: true,
         runtime: runtime._version || 'unknown',
-        mediaElements: await runtime.canvas?.listMedia?.(),
         providers: await runtime.provider?.status?.(),
       };
     case 'provider.status':
@@ -824,114 +538,21 @@ export async function executeFlovartCommand(commandName, args = {}, runtime = {}
       });
     case 'provider.test':
       return await runtime.provider?.test?.({ purpose: args.purpose || 'both' });
-    case 'element.create': {
-      const type = required(args.type, 'type');
-      if (runtime.element?.create) {
-        return await runtime.element.create({
-          id: args.id,
-          type,
-          name: args.name,
-          x: args.x !== undefined ? Number(args.x) : undefined,
-          y: args.y !== undefined ? Number(args.y) : undefined,
-          width: args.width !== undefined ? Number(args.width) : undefined,
-          height: args.height !== undefined ? Number(args.height) : undefined,
-          href: args.href,
-          mimeType: args.mimeType || args['mime-type'],
-        });
-      }
-      return await runtime.canvas?.addElement?.({
-        id: args.id,
-        type,
-        name: args.name,
-        x: args.x !== undefined ? Number(args.x) : undefined,
-        y: args.y !== undefined ? Number(args.y) : undefined,
-        width: args.width !== undefined ? Number(args.width) : undefined,
-        height: args.height !== undefined ? Number(args.height) : undefined,
-        href: args.href,
-        mimeType: args.mimeType || args['mime-type'],
-      });
-    }
-    case 'element.update.prompt':
-    case 'element.update-prompt':
-      return await runtime.element?.updatePrompt?.({
-        elementId: required(args['element-id'] || args.elementId, 'element-id'),
-        textPrompt: required(args['text-prompt'] || args.textPrompt, 'text-prompt'),
-        modelId: args['model-id'] || args.modelId,
-      }) || { ok: false, error: 'element.update-prompt unavailable' };
-    case 'element.assign.slot':
-    case 'element.assign-slot':
-      return await runtime.element?.assignSlot?.({
-        elementId: required(args['element-id'] || args.elementId, 'element-id'),
-        targetElementId: required(args['target-element-id'] || args.targetElementId, 'target-element-id'),
-        slotRole: required(args['slot-role'] || args.slotRole, 'slot-role'),
-      }) || { ok: false, error: 'element.assign-slot unavailable' };
-    case 'element.ignite':
-      return await runtime.element?.ignite?.({
-        elementId: required(args['element-id'] || args.elementId, 'element-id'),
-      }) || { ok: false, error: 'element.ignite unavailable' };
-    case 'element.watch':
-      return await runtime.element?.watch?.({
-        elementId: required(args['element-id'] || args.elementId, 'element-id'),
-        timeoutMs: args.timeout ? Number(args.timeout) : undefined,
-      }) || { ok: false, error: 'element.watch unavailable' };
-    case 'canvas.inspect':
-      return await runtime.canvas?.inspect?.() || {
-        ok: true,
-        elements: await runtime.canvas?.getElements?.(),
-        media: await runtime.canvas?.listMedia?.(),
-      };
-    case 'canvas.list.media':
-    case 'canvas.list-media':
-      return await runtime.canvas?.listMedia?.();
-    case 'canvas.add.image':
-    case 'canvas.add-image':
-      return await runtime.canvas?.addImage?.(mediaElementFromArgs(args, 'image'));
-    case 'canvas.add.video':
-    case 'canvas.add-video':
-      return await runtime.canvas?.addVideo?.(mediaElementFromArgs(args, 'video'));
-    case 'canvas.upload.image':
-    case 'canvas.upload-image': {
-      const { prepareMediaUpload } = await loadAgentKit();
-      const prepared = prepareMediaUpload({ ...args, type: 'image', path: args.path || args.file || args.filePath || args._?.[0] });
-      if (prepared.ok === false) return prepared;
-      return await runtime.canvas?.addImage?.(prepared.element) || { ok: false, error: 'canvas.upload-image unavailable' };
-    }
-    case 'canvas.upload.video':
-    case 'canvas.upload-video': {
-      const { prepareMediaUpload } = await loadAgentKit();
-      const prepared = prepareMediaUpload({ ...args, type: 'video', path: args.path || args.file || args.filePath || args._?.[0] });
-      if (prepared.ok === false) return prepared;
-      return await runtime.canvas?.addVideo?.(prepared.element) || { ok: false, error: 'canvas.upload-video unavailable' };
-    }
-    case 'canvas.update.element':
-    case 'canvas.update-element':
-      return await runtime.canvas?.updateElement?.(
-        required(args.id, 'id'),
-        updatePayloadFromArgs(args),
-      ) || { ok: false, error: 'canvas.update-element unavailable' };
-    case 'canvas.remove.element':
-    case 'canvas.remove-element':
-      return await runtime.canvas?.removeElement?.(required(args.id, 'id')) || { ok: false, error: 'canvas.remove-element unavailable' };
-    case 'canvas.select':
-      return await runtime.canvas?.select?.(parseListOption(args.ids || args['ids'])) || { ok: false, error: 'canvas.select unavailable' };
-    case 'canvas.clear.media':
-    case 'canvas.clear-media':
-      return await runtime.canvas?.clearMedia?.();
     case 'asset.list':
       return await runtime.assets?.list?.();
     case 'generate.image':
       return await runtime.generate?.image?.({
         prompt: required(args.prompt, 'prompt'),
+        projectId: args.projectId || args['project-id'],
+        targetNodeId: args.targetNodeId || args['target-node-id'],
         aspectRatio: args['aspect-ratio'] || args.aspectRatio,
-        placeOnCanvas: args['place-on-canvas'] !== 'false',
       });
     case 'generate.images.batch':
     case 'generate.images-batch': {
       const items = args.items || parseJsonOption(args.itemsJson, null);
       return await runtime.generate?.imagesBatch?.({
         items: required(items, 'items'),
-        placeOnCanvas: args['place-on-canvas'] !== 'false',
-        layout: args.layout || 'grid',
+        projectId: args.projectId || args['project-id'],
       });
     }
     case 'generate.video':

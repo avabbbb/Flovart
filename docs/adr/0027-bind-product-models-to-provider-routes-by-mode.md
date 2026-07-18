@@ -1,0 +1,3 @@
+# 按生成模式绑定产品模型与 Provider Route
+
+Flovart 保持一个稳定的 Product Model 供 PromptBar 展示，并将它的文生、图生、首尾帧、多模态参考等 Generation Mode 分别绑定到可执行的 Provider Route。Product Model 使用经官方依据确认的原始模型名称，例如 GPT Image 2、Gemini 3.1 Flash Image、Gemini 3.0 Pro Image、Midjourney v8.1、Veo 3.1 Fast 与 Grok Imagine Video；RunningHub 的“全能”别名、低价渠道或官方稳定版只属于 Provider Route Label，不成为新的产品模型。我们不把每条 RunningHub endpoint 暴露成独立产品模型，也不再用一条 `Product Model -> upstreamModelId` 映射代表全部能力，因为同一产品在 Provider 侧可能按模式拆成字段、限制、稳定性和价格不同的多条线路；运行时必须先确定 Generation Mode，再按用户优先级选择匹配且已确认的 Route Binding。Route 选择只发生在提交前，ProviderAttempt 开始后无论明确失败还是 Submission Unknown 都不自动换线，以避免重复任务和双重计费。第一阶段只交付图片生成与普通视频生成的路由闭环；视频编辑、动作迁移和音乐作为独立 Runtime Capability 分阶段接入，不伪装成现有图片或视频 Generation Mode。

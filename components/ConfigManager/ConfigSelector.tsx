@@ -32,7 +32,6 @@ function getModelsForKey(key: UserApiKey): ModelItem[] {
     ...(pm.text || []),
     ...(pm.image || []),
     ...(pm.video || []),
-    ...(pm.agent || []),
   ];
   return all.map(id => ({ id, name: id }));
 }

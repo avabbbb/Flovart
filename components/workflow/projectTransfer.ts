@@ -2,7 +2,7 @@ import { nanoid } from 'nanoid';
 import { workflowDataUrlToBlob, workflowBlobToDataUrl } from './media';
 import { validateWorkflowConnection } from './ops';
 import { workflowMediaStorage } from './storage';
-import type { WorkflowNode, WorkflowProject } from './types';
+import type { WorkflowConnection, WorkflowNode, WorkflowProject } from './types';
 
 export const WORKFLOW_EXPORT_APP = 'flovart-workflow';
 export const WORKFLOW_EXPORT_VERSION = 1;
@@ -48,7 +48,7 @@ function portableProject(project: WorkflowProject): WorkflowProject {
 
 export async function serializeWorkflowProjects(projects: WorkflowProject[]): Promise<WorkflowExportFile> {
   const exported = await Promise.all(projects.map(async project => {
-    const assets = (await Promise.all(project.nodes.map(async node => {
+    const assets = (await Promise.all(project.nodes.map(async (node): Promise<WorkflowExportAsset | null> => {
       if (!node.metadata.storageKey) return null;
       const blob = await workflowMediaStorage.get(node.metadata.storageKey);
       if (!blob) throw new Error(`节点“${node.title}”的本地媒体不存在，无法完整导出`);
@@ -119,11 +119,12 @@ function validateProject(value: unknown, index: number): asserts value is Workfl
     throw new Error(`第 ${index + 1} 个工作流格式无效`);
   }
   value.nodes.forEach((node, nodeIndex) => validateNode(node, index, nodeIndex));
-  const nodeIds = new Set(value.nodes.map(node => node.id));
-  if (nodeIds.size !== value.nodes.length) throw new Error(`第 ${index + 1} 个工作流包含重复节点 ID`);
+  const project = value as unknown as WorkflowProject;
+  const nodeIds = new Set(project.nodes.map(node => node.id));
+  if (nodeIds.size !== project.nodes.length) throw new Error(`第 ${index + 1} 个工作流包含重复节点 ID`);
   const acceptedConnections: WorkflowProject['connections'] = [];
   const connectionIds = new Set<string>();
-  value.connections.forEach(connection => {
+  project.connections.forEach(connection => {
     if (!isRecord(connection)
       || typeof connection.id !== 'string'
       || typeof connection.fromNodeId !== 'string'
@@ -132,18 +133,19 @@ function validateProject(value: unknown, index: number): asserts value is Workfl
       || !nodeIds.has(connection.toNodeId)) {
       throw new Error(`第 ${index + 1} 个工作流包含无效连线`);
     }
-    if (connectionIds.has(connection.id)) throw new Error(`第 ${index + 1} 个工作流包含重复连线 ID`);
+    const candidate = connection as WorkflowConnection;
+    if (connectionIds.has(candidate.id)) throw new Error(`第 ${index + 1} 个工作流包含重复连线 ID`);
     const validation = validateWorkflowConnection({
-      projectId: value.id,
-      title: value.title,
-      nodes: value.nodes,
+      projectId: project.id,
+      title: project.title,
+      nodes: project.nodes,
       connections: acceptedConnections,
       selectedNodeIds: [],
-      viewport: value.viewport,
-    }, connection.fromNodeId, connection.toNodeId);
-    if (!validation.ok) throw new Error(`第 ${index + 1} 个工作流连线无效：${validation.reason}`);
-    connectionIds.add(connection.id);
-    acceptedConnections.push(connection);
+      viewport: project.viewport,
+    }, candidate.fromNodeId, candidate.toNodeId);
+    if (validation.ok === false) throw new Error(`第 ${index + 1} 个工作流连线无效：${validation.reason}`);
+    connectionIds.add(candidate.id);
+    acceptedConnections.push(candidate);
   });
 }
 
@@ -181,7 +183,7 @@ function validateExport(value: unknown): asserts value is WorkflowExportFile {
 export async function parseWorkflowProjectFile(file: File): Promise<WorkflowProject[]> {
   let parsed: unknown;
   try {
-    parsed = JSON.parse(await file.text());
+    parsed = JSON.parse(await readWorkflowFileText(file));
   } catch {
     throw new Error('工作流文件不是有效 JSON');
   }
@@ -225,6 +227,16 @@ export async function parseWorkflowProjectFile(file: File): Promise<WorkflowProj
     await Promise.all(createdKeys.map(key => workflowMediaStorage.remove(key)));
     throw error;
   }
+}
+
+function readWorkflowFileText(file: File): Promise<string> {
+  if (typeof file.text === 'function') return file.text();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(reader.error || new Error('无法读取工作流文件'));
+    reader.readAsText(file);
+  });
 }
 
 function safeFileName(value: string) {

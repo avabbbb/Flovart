@@ -603,6 +603,41 @@ body {
     }
 }
 
+/* Agent spatial workspace: status is visible on the panel, not buried in chat. */
+.agent-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--isl-ink-ghost);
+  font-size: 9px;
+  white-space: nowrap;
+}
+
+.agent-status i,
+.agent-task-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  flex: 0 0 6px;
+  border-radius: 999px;
+  background: var(--isl-ink-ghost);
+}
+
+.agent-status.is-running i,
+.agent-task-dot.is-loading { background: var(--isl-mint); box-shadow: 0 0 0 3px var(--isl-mint-bg); }
+.agent-status.is-waiting i { background: var(--isl-sun); }
+.agent-status.is-done i,
+.agent-task-dot.is-success { background: var(--isl-mint-deep); }
+.agent-status.is-error i,
+.agent-task-dot.is-error { background: var(--isl-coral); }
+
+@media (max-width: 760px) {
+  .table-workspace { grid-template-columns: 84px minmax(0, 1fr); }
+  .table-workspace > aside strong,
+  .table-workspace > aside p,
+  .table-workspace > aside button > span { display: none; }
+}
+
 /* ── Range slider (toolbar brush-size etc.) ── */
 input[type='range'].toolbar-range {
     -webkit-appearance: none;
@@ -846,8 +881,7 @@ input[type='range'].toolbar-range::-moz-range-thumb:hover {
     filter: brightness(1.08);
 }
 
-   🌊 Flovart-cc V3.0 �?Lovart 级多任务跑马灯发丝动能效�?
-   ========================================================== */
+/* Flovart card neon flow animation */
 
 @keyframes card-neon-flow-animation {
     0% { clip-path: inset(0 0 98% 0); }

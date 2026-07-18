@@ -1,7 +1,7 @@
 {
-  "name": "flovart",
+  "name": "flovart-cli",
   "version": "0.3.0",
-  "description": "Flovart CLI – deterministic command bridge for AI coding agents to operate Flovart canvas, workflow, and providers",
+  "description": "Flovart CLI, TUI and MCP bridge for Workflow, providers and coding agents",
   "type": "module",
   "bin": {
     "flovart": "./cli.js",
@@ -10,34 +10,51 @@
   },
   "files": [
     "cli.js",
+    "contracts.js",
+    "contracts",
     "core.js",
+    "bundle-manager.js",
+    "browser-commands.js",
     "dev-commands.js",
     "tui.js",
     "flovart-bridge.js",
     "shadow-runtime.js",
     "agent-kit.js",
+    "product-models.js",
+    "registry.js",
+    "managed-agent",
+    "scripts",
+    "skill",
     "runtime-client.js",
     "mcp-server.js"
   ],
   "keywords": [
     "flovart",
     "ai",
-    "canvas",
+    "workflow",
     "agent",
     "cli",
     "mcp",
     "model-context-protocol",
     "image-generation",
-    "video-generation",
-    "workflow"
+    "video-generation"
   ],
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/anomalyco/flovart"
+    "url": "https://github.com/avabbbb/Flovart"
+  },
+  "engines": {
+    "node": ">=20.10"
+  },
+  "scripts": {
+    "prepack": "node scripts/prepare-package.mjs"
   },
   "dependencies": {
+    "@cfworker/json-schema": "^4.1.1",
     "@modelcontextprotocol/sdk": "^1.29.0",
+    "json-canonicalize": "^2.0.0",
+    "tar": "^7.5.20",
     "zod": "^4.0.17"
   }
 }

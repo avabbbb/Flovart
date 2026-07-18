@@ -14,6 +14,7 @@ pub mod deeplink;
 pub mod errors;
 pub mod http;
 pub mod keyring;
+pub mod runtime;
 pub mod state;
 
 use parking_lot::Mutex;
@@ -22,6 +23,7 @@ use tauri::Manager;
 
 use crate::bridge::BridgeQueue;
 use crate::http::HttpServerHandle;
+use crate::runtime::ProductionRuntime;
 use crate::state::StateDb;
 
 /// 跨 command 共享的运行时上下文。
@@ -73,6 +75,10 @@ pub fn run() {
             let state_db = Arc::new(
                 StateDb::open(&db_path).map_err(|e| format!("open state db: {e}"))?,
             );
+            let production_runtime = Arc::new(
+                ProductionRuntime::new(env!("CARGO_PKG_VERSION"))
+                    .map_err(|e| format!("initialize Production Runtime: {e}"))?,
+            );
 
             // ── 2. 初始化命令桥队列 ──
             let bridge_queue = Arc::new(BridgeQueue::new());
@@ -121,6 +127,7 @@ pub fn run() {
             });
 
             app.manage(ctx_arc);
+            app.manage(production_runtime);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -143,6 +150,8 @@ pub fn run() {
             bridge::bridge_clear,
             // http
             http::http_status,
+            // production runtime
+            runtime::runtime_status,
             // deeplink
             deeplink::deeplink_open_canvas,
         ])

@@ -5,7 +5,7 @@
 #   2. 推送 v* tag         → 出正式 Release  (stable 频道)
 #   3. workflow_dispatch   → 手动触发，默认 Prerelease
 #
-# 构建矩阵：Windows x64 / macOS (Apple Silicon + Intel) / Linux x64
+# 构建矩阵：Windows x64 / Linux x64（macOS 暂不占用 CI 配额）
 #
 # 必须在 GitHub Repo Settings → Secrets 中配置：
 #   TAURI_SIGNING_PRIVATE_KEY         - 自动更新签名私钥（src-tauri/.tauri_private_key 文件内容）
@@ -14,7 +14,7 @@
 # 包含组件：
 #   - Flovart 主程序（React 19 + Tauri 2）
 #   - flovart-host 启动器（Chrome / Edge Native Messaging 宿主，源在 src/bin/host.rs）
-#   - 平台原生安装包（Windows: NSIS .exe / .msi，macOS: .dmg，Linux: .deb / .AppImage）
+#   - 平台原生安装包（Windows: NSIS .exe，Linux: .deb / .AppImage）
 #
 # Sidecar 编译：
 #   src-tauri/binaries/ 已在 .gitignore 排除（只有 Windows binary 会破坏跨平台构建），
@@ -54,6 +54,7 @@ jobs:
             rust_target: x86_64-pc-windows-msvc
             binary_name: flovart-host.exe
             sidecar_ext: .exe
+            bundle_args: --bundles nsis
             installer_glob: |
               **/*.exe
               **/*.msi
@@ -64,6 +65,7 @@ jobs:
             rust_target: x86_64-unknown-linux-gnu
             binary_name: flovart-host
             sidecar_ext: ''
+            bundle_args: --bundles deb,appimage
             installer_glob: |
               **/*.deb
               **/*.AppImage
@@ -103,6 +105,10 @@ jobs:
       - name: Install npm dependencies
         run: npm ci
 
+      - name: Verify tagged release versions
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: node scripts/check-release-version.mjs "${{ github.ref_name }}"
+
       # ── Sidecar pre-build ──
       # 从 src/bin/host.rs 编译 flovart-host（Chrome Native Messaging 宿主），
       # 放到 src-tauri/binaries/，文件名带 target triple 后缀，供 Tauri externalBin 查找。
@@ -128,18 +134,18 @@ jobs:
             {
               echo "is_tag=true"
               echo "tag_name=${GITHUB_REF_NAME}"
-              echo "release_name=Flovart v__VERSION__"
+              echo "release_name=Flovart ${GITHUB_REF_NAME}"
               echo "release_body<<EOF"
               echo "## Flovart Stable Release / 正式版"
               echo ""
               echo "**English:**"
               echo "- Flovart main app + flovart-host launcher (Chrome / Edge Native Messaging host)"
-              echo "- All-platform installers (Windows / macOS / Linux) with multi-language NSIS (EN / 简中 / 繁中 / 日 / 韩 / FR / DE / ES / IT / PT-BR / RU)"
+              echo "- Windows + Linux installers (macOS is currently excluded from CI quota) with multi-language NSIS on Windows (EN / 简中 / 繁中 / 日 / 韩 / FR / DE / ES / IT / PT-BR / RU)"
               echo "- Signed auto-update artifacts"
               echo ""
               echo "**简体中文：**"
               echo "- 包含 Flovart 主程序 + flovart-host 启动器（Chrome / Edge 原生消息宿主）"
-              echo "- 全平台安装包（Windows / macOS / Linux），NSIS 安装器支持 11 种语言（英 / 简中 / 繁中 / 日 / 韩 / 法 / 德 / 西 / 意 / 葡 / 俄）"
+              echo "- Windows + Linux 安装包（macOS 暂不占用 CI 配额），Windows NSIS 安装器支持 11 种语言（英 / 简中 / 繁中 / 日 / 韩 / 法 / 德 / 西 / 意 / 葡 / 俄）"
               echo "- 已签名自动更新产物"
               echo "EOF"
               echo "prerelease=false"
@@ -184,4 +190,27 @@ jobs:
           releaseBody: ${{ steps.meta.outputs.release_body }}
           prerelease: ${{ steps.meta.outputs.prerelease }}
           includeUpdaterJson: ${{ steps.meta.outputs.updater }}
-          args: --target ${{ matrix.rust_target }}
+          args: --target ${{ matrix.rust_target }} ${{ matrix.bundle_args }}
+
+      - name: Build Windows Agent Toolkit bundle
+        if: matrix.platform == 'windows-latest' && startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}" -replace '^v', ''
+          npm run build:agent-toolkit -- `
+            --runtime="src-tauri/target/${{ matrix.rust_target }}/release/flovart.exe" `
+            --host="src-tauri/binaries/flovart-host-${{ matrix.rust_target }}.exe" `
+            --platform=win32-x64 `
+            --version=$version `
+            --output=dist/agent-toolkit
+
+      - name: Upload Windows Agent Toolkit assets
+        if: matrix.platform == 'windows-latest' && startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ github.ref_name }}" `
+            "dist/agent-toolkit/flovart-agent-toolkit-win32-x64.tar.gz" `
+            "dist/agent-toolkit/flovart-agent-toolkit-manifest.json" `
+            --clobber

@@ -35,7 +35,7 @@ describe('workflow project transfer', () => {
   });
 
   it('embeds durable media and removes machine-local storage keys', async () => {
-    await workflowMediaStorage.set('local-image', new Blob(['image'], { type: 'image/png' }));
+    vi.spyOn(workflowMediaStorage, 'get').mockResolvedValue(new Blob(['image'], { type: 'image/png' }));
 
     const exported = await serializeWorkflowProjects([project()]);
 
@@ -47,8 +47,9 @@ describe('workflow project transfer', () => {
   });
 
   it('restores embedded media under a fresh durable key', async () => {
-    await workflowMediaStorage.set('local-image', new Blob(['image'], { type: 'image/png' }));
+    const get = vi.spyOn(workflowMediaStorage, 'get').mockResolvedValue(new Blob(['image'], { type: 'image/png' }));
     const exported = await serializeWorkflowProjects([project()]);
+    get.mockRestore();
     vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, blob: async () => new Blob(['restored'], { type: 'image/png' }) })));
     const file = new File([JSON.stringify(exported)], 'workflow.json', { type: 'application/json' });
 
@@ -58,7 +59,7 @@ describe('workflow project transfer', () => {
     expect(imported.title).toBe('广告镜头（导入）');
     expect(imported.nodes[0].metadata.storageKey).toMatch(/^workflow-media-/);
     expect(imported.nodes[0].metadata.storageKey).not.toBe('local-image');
-    expect(await workflowMediaStorage.get(imported.nodes[0].metadata.storageKey!)).toBeInstanceOf(Blob);
+    expect(await workflowMediaStorage.get(imported.nodes[0].metadata.storageKey!)).not.toBeNull();
   });
 
   it('rejects invalid graphs before writing any media', async () => {

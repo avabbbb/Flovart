@@ -54,7 +54,7 @@ export async function runWorkflowOnlineAgent(input: WorkflowOnlineTurnInput, run
   const modelRef = runtime.modelPreference.textModel || findBestModelSelection(runtime.userApiKeys, 'text') || '';
   const resolved = resolveModelSelection(modelRef, runtime.userApiKeys, 'text');
   if (!resolved) throw new Error('网站 Agent 需要先配置可用的文本模型 API Key。');
-  const attachmentContext = await describeAttachments(input, runtime, resolved.model, resolved.key);
+  const attachmentContext = await describeAttachments(input, runtime, resolved.routeId, resolved.key);
   if (input.signal.aborted) throw new DOMException('Agent 已停止', 'AbortError');
 
   const recentMessages = input.messages.slice(-16).map(message => ({
@@ -67,7 +67,7 @@ export async function runWorkflowOnlineAgent(input: WorkflowOnlineTurnInput, run
     attachmentContext ? `附件视觉描述：\n${attachmentContext}` : '',
     `用户请求：\n${input.prompt || '请分析附件并给出下一步。'}`,
   ].filter(Boolean).join('\n\n');
-  const raw = await (runtime.generateText || generateTextWithProvider)(request, resolved.model, resolved.key, {
+  const raw = await (runtime.generateText || generateTextWithProvider)(request, resolved.routeId, resolved.key, {
     systemPrompt: SYSTEM_PROMPT,
     temperature: 0.2,
     maxTokens: 3000,

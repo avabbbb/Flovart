@@ -5,7 +5,7 @@ export interface PromptHistoryEntry {
     id: string;
     prompt: string;
     mode: 'image' | 'video' | 'text';
-    source: 'canvas' | 'workflow';
+    source: 'workflow';
     model?: string;
     timestamp: number;
 }

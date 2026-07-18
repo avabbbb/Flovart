@@ -5,18 +5,15 @@
 <h1 align="center">Flovart</h1>
 
 <p align="center">
-  <strong>Open-source Lovart — bring your own key, plug in every model, turn the canvas into an Agent runtime</strong>
+  <strong>A local-first AI video production system with Workflow, Table, and Agent: orchestration, focused preprocessing, and spatial agent collaboration each have a clear home.</strong>
 </p>
 
 <p align="center">
-  <a href="https://avabbbb.github.io/Flovart/" target="_blank"><strong>👉 Live Demo</strong></a>
-</p>
-
-<p align="center">
-  <a href="https://avabbbb.github.io/Flovart/">Live Demo</a> •
-  <a href="docs/overview/quick-start.en.md">Getting Started</a> •
-  <a href="docs/overview/features.en.md">Features</a> •
-  <a href="docs/progress/roadmap.en.md">Roadmap</a>
+  <a href="https://avabbbb.github.io/Flovart/"><strong>Live Demo</strong></a> ·
+  <a href="docs/overview/quick-start.en.md">Getting Started</a> ·
+  <a href="docs/content/docs/overview/features.en.mdx">Features</a> ·
+  <a href="docs/content/docs/progress/todo.mdx">Roadmap</a> ·
+  <a href="./README.md">简体中文</a>
 </p>
 
 <p align="center">
@@ -27,53 +24,80 @@
 </p>
 
 <p align="center">
-  <img src="https://tally.yuki.sh/hits/flovart/readme.svg?theme=rule34" alt="Flovart Popular Counter" />
+  <img src="pic/WorkFlow.png" alt="Flovart Workflow workspace" />
 </p>
 
-<p align="center">
-  <a href="./README.en.md">English</a> •
-  <a href="./README.md">简体中文</a>
-</p>
+## What is Flovart?
 
----
+Flovart is a local-first AI video production system for coding agents with three official parts: **Workflow** owns multi-node generation orchestration; **Table** focuses on one media item or Workflow node at a time; **Agent** arranges Codex threads, task state, project context, and artifacts in a spatial workspace. They share providers, assets, and artifact semantics without restoring the removed Canvas or Art system.
 
-## 📸 Dual Workspace Preview
+The system separates video production into four stable responsibilities:
 
-<table>
-  <tr>
-    <td width="50%">
-      <img src="pic/Canvas.png" alt="Canvas Workspace" />
-      <p align="center"><strong>Canvas Workspace</strong> - Infinite canvas + AI creation</p>
-    </td>
-    <td width="50%">
-      <img src="pic/WorkFlow.png" alt="Workflow Workspace" />
-      <p align="center"><strong>Workflow Workspace</strong> - Node-based orchestration</p>
-    </td>
-  </tr>
-</table>
+| Role | Responsibility |
+| --- | --- |
+| **Coding Agent** | Understands the brief, plans the work, organizes production roles, monitors progress, and recovers failures. Codex and OpenCode are the first target hosts. |
+| **Flovart Skill** | The production switchboard: exposes capabilities, constrains call order, validates Director Skills, and tells the agent when to invoke the CLI. |
+| **Director Skill** | A reusable directing method that defines style, shot language, production stages, checkpoints, and acceptance criteria. |
+| **Flovart CLI** | The deterministic actuator: operates currently registered Workflow capabilities, invokes providers, and returns structured status without asking the agent to guess HTTP calls or manipulate the UI. |
 
----
+In one line: **Workflow orchestrates generation, Table focuses preprocessing, and Agent understands, executes, and supervises production in a spatial task interface.**
 
-## What is this?
+```mermaid
+flowchart LR
+  B["Creative brief + local credentials"] --> A["Coding Agent<br/>Codex / OpenCode"]
+  A --> P["Flovart Skill<br/>Production switchboard"]
+  P --> D["Director Skill<br/>Style and production SOP"]
+  P --> C["Flovart CLI<br/>Deterministic commands"]
+  D --> C
+  C <--> W["Workflow Runtime<br/>Nodes / status / artifacts"]
+  T["Table<br/>Single-media / node preprocessing<br/>Under construction"] -. "preprocessed artifacts" .-> W
+  G["Agent workspace<br/>Codex threads / task panels / artifacts"] <--> W
+  C --> M["Provider Adapters<br/>Image / video / audio"]
+  W --> A
+```
 
-I wanted a canvas truly built for AI creation —
+## Why this architecture?
 
-- **Freer models**: BYOK (bring your own key), with 12+ providers natively integrated — Google / OpenAI / DeepSeek / MiniMax / Volcengine / Qwen and more — plus an OpenAI-compatible relay adapter so you can connect any endpoint yourself.
-- **A more thorough workflow**: A dual-workspace architecture of Canvas + Workflow (node flow) with one-click switching. When the node view feels too heavy, collapse it and use it as a helper while you focus on canvas creation.
-- **More driveable**: Three deterministic entry points — CLI (`tools/flovart/cli.js`), SKILL.md, and host config. Every media element on the canvas is exposed as a command. External agents handle planning; Flovart handles execution.
-- **A nicer frontend**: Animal Crossing-style Tactile Shell visual language, infinite canvas, `@` layer references, double-click to focus / triple-click to fit, bilingual + light/dark adaptive themes.
+- **Separated responsibilities**: Workflow owns multi-node generation orchestration; Table processes one input at a time; Agent spatially organizes Codex threads and task state, so generation, processing, and conversation are not forced back into one cluttered surface.
+- **BYOK and multi-model**: users configure their own credentials while provider adapters connect image, video, and text models.
+- **Recoverable production**: the CLI returns JSON status so an agent can poll, retry, and resume instead of relying on one long conversation.
+- **Reusable style**: a Director Skill captures directing knowledge so the same visual language and production process can be applied across projects.
+- **Composable roles**: writing, storyboarding, visual generation, voice, editing, and quality control can be owned by separate agents or Skills while sharing one Workflow.
 
-Four deployment forms to choose from: live demo, Tauri desktop app, Chrome/Edge browser extension, and Docker self-hosting.
+## Director Skill ecosystem
 
-If you share the same wish, pull requests are welcome.
+Flovart will define the minimum integration contract for Director Skills and provide Skill Creator guidance for community authors. The contract covers:
 
-## Special Thanks
+- identity, versioning, compatibility, and required Flovart capabilities;
+- brief inputs, configurable parameters, and structured outputs;
+- Workflow recipes, production stages, and role ownership;
+- style bible, shot rules, sound rules, and forbidden patterns;
+- checkpoints, recovery, human approval, and final acceptance;
+- artifact lineage, model policy, cost controls, and safety boundaries.
 
-**[@labiaaaaaaaaa](https://github.com/labiaaaaaaaaa)** — Drove core fixes for third-party service adaptation, helping Flovart continuously improve integration rules for aggregation gateways and compatible endpoints.
+[VOX Director](https://github.com/avabbbb/vox-director) is a reference for this kind of stylized Director Skill. The goal is to combine the Flovart production switchboard, a community Director Skill, and the user's providers so a coding agent can reuse an end-to-end stylized film workflow.
 
----
+> The Director Skill contract, Skill Creator template, TUI `/commands`, and real-time event monitoring are still under development. The new Table and Agent surfaces are being implemented.
 
-## 🚀 Getting Started
+## Current capabilities and boundaries
+
+| Module | Status |
+| --- | --- |
+| Workflow node orchestration, local projects, and assets | Foundation available |
+| Table workspace entry point | Integrated; currently a placeholder |
+| Table single-media / node preprocessing | In design and implementation |
+| Agent spatial task workspace | In design and implementation |
+| Multi-provider BYOK, text-to-image, image-to-image, and text-to-video | Foundation available |
+| Workflow CLI, command schemas, and JSON status | Converging |
+| Codex and OpenCode host adapters | Priority work |
+| Director Skill contract and UGC ecosystem | In design and implementation |
+| TUI `/xxxx` shortcuts, job subscriptions, and resumable runs | Planned |
+
+The creator runtime is primarily TypeScript and Node.js. Go + Gin + GORM belong to the enterprise control plane for organizations, RBAC, audit, and private deployment management; Go is not the creative runtime.
+
+## Quick start
+
+### Start the frontend
 
 ```bash
 git clone https://github.com/avabbbb/Flovart.git
@@ -82,103 +106,40 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:11451 and enter your service credentials in Settings.
+Open <http://localhost:11451> and configure your own model-service credentials in Settings.
 
-> We recommend [Google AI Studio](https://aistudio.google.com/apikey) to get free Gemini credentials.
+### Inspect the Workflow CLI
 
-For more deployment options (Agent / CLI, Docker, browser extension, etc.), see [Getting Started](docs/overview/quick-start.en.md).
+```bash
+npm run flovart:cli -- command.list --json
+npm run flovart:cli -- command.schema --command workflow.node.run --json
+npm run flovart:cli -- workflow.project.list --json
+```
 
----
+The CLI accepts explicit commands only. External agents should inspect `command.list` and `command.schema` before operating Workflow; they should not invent internal HTTP calls or scrape the UI.
 
-## 🎯 Features
+More documentation:
 
-Flovart is best used as a creative workflow rather than treating each capability in isolation:
+- [Getting Started](docs/overview/quick-start.en.md)
+- [Features](docs/content/docs/overview/features.en.mdx)
+- [Roadmap](docs/content/docs/progress/todo.mdx)
+- [AI documentation index](docs/index.md)
 
-| Workflow | How You'll Use It |
-| -------- | ----------------- |
-| **Import references** | Drag characters, scenes, products, or sketches into the canvas as visual anchors for later generation. |
-| **@ Reference canvas nodes** | Type `@` in the PromptBar below a node to directly reference images, videos, or text nodes from the canvas as context. |
-| **Generate 4 options** | Batch-generate 2/4 directions around the same set of references; quickly compare composition, style, and detail. |
-| **A/B compare & local edits** | Use the compare view to pick results, then inpaint, outpaint, remove background, upscale, or apply filters to the selected image. |
-| **Save as asset** | Keep satisfying characters, scenes, and props in the asset library; drag them back onto the canvas later to reuse. |
-| **Let Agent extend** | External agents can read the canvas, ignite nodes, retry failed tasks, and continue extending shots or videos via CLI / SKILL. |
+## Local-first and security
 
-**Core Capabilities**: Infinite canvas, AI text-to-image/image-to-image/text-to-video, Multi-Agent collaboration, inpainting/outpainting, filters & color grading, layer masks, batch generation, prompt polishing, character lock, asset library, 12+ providers, bilingual & theme switching.
+- Projects, assets, and generation history are currently stored primarily in the browser; cloud sync is not promised.
+- API keys are currently stored locally in the browser, and the frontend calls configured model services directly.
+- Never put API keys in a Director Skill, prompt, log, or repository. Agents and the CLI should only receive redacted readiness status.
+- Do not enter API keys into unofficial deployments. Official channels are this repository, the [live demo](https://avabbbb.github.io/Flovart/), and desktop builds published by this repository's Actions.
 
-For the complete feature list, see [Features](docs/overview/features.en.md).
+## Contributing
 
----
+Issues and pull requests for provider adapters, Workflow capabilities, host integrations, and Director Skills are welcome.
 
-## 📋 Roadmap
+Special thanks to [@labiaaaaaaaaa](https://github.com/labiaaaaaaaaa) for driving third-party service compatibility and aggregation-endpoint fixes.
 
-### Done ✅
+## License and disclaimer
 
-- [X] Infinite canvas + basic design tools
-- [X] Multi-provider BYOK system (12+ providers)
-- [X] AI text-to-image / image-to-image / text-to-video
-- [X] Agent-Native CLI (30+ deterministic commands)
-- [X] Canvas ↔ Workflow dual-workspace switching
-- [X] Docker / Tauri desktop / Live demo
-- [X] Full compatibility with third-party API aggregation endpoints
-- [X] Tactile Shell AC visual language
+Flovart is licensed under the [GNU Affero General Public License v3.0 only](./LICENSE). By using the project, you agree to the [Terms of Service](./docs/TERMS_OF_SERVICE.md) and [Privacy Policy](./docs/PRIVACY_POLICY.md).
 
-### In Progress 🚧
-
-- [ ] Chrome / Edge store listing
-- [ ] Encrypted credential storage on the extension
-- [ ] Node-flow visual editor iteration
-
-### Planned 📝
-
-- [ ] LangGraph.js agent orchestration
-- [ ] One-click AI short-drama pipeline
-- [ ] Real-time collaboration (CRDT)
-- [ ] Plugin marketplace
-
-For the full roadmap, see [Roadmap](docs/progress/roadmap.en.md).
-
----
-
-## 🤝 Contributing
-
-1. Fork this repository
-2. Create a branch `git checkout -b feature/xxx`
-3. Commit changes `git commit -m 'Add xxx'`
-4. Push `git push origin feature/xxx`
-5. Open a Pull Request
-
-> [CONTRIBUTING.md](./CONTRIBUTING.md) · [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md)
-
----
-
-## ⭐ Star History
-
-If Flovart helps you, give it a Star ⭐ to show your support!
-
-[![Star History Chart](https://api.star-history.com/svg?repos=avabbbb/Flovart&type=Date)](https://star-history.com/#avabbbb/Flovart&Date)
-
----
-
-## 📄 License & Disclaimer
-
-This project is open-sourced under the [GNU Affero General Public License v3.0 only](./LICENSE).
-
-By using this product you agree to the [Terms of Service](./TERMS_OF_SERVICE.md) and [Privacy Policy](./PRIVACY_POLICY.md).
-
-### Unofficial Deployment Notice
-
-Flovart's official release channels are limited to:
-
-- **GitHub repository**: [github.com/avabbbb/Flovart](https://github.com/avabbbb/Flovart)
-- **Live demo**: [avabbbb.github.io/Flovart](https://avabbbb.github.io/Flovart)
-- **Desktop builds**: EXE / DMG / deb / AppImage signed by this repo's Actions
-
-Apart from the addresses above, any third-party public deployment, mirror site, hosting service, modified service, bundled package, or cloud-drive distribution is unofficial and unrelated to the author.
-
-**Do not enter your API key or other sensitive information on unofficial sites.**
-
-### AI-Generated Content
-
-Flovart is a local-first AI creation tool that calls model services through third-party API keys you configure yourself. All images, videos, and text you generate with this tool are produced by API keys and models under your control. **You are responsible for the compliance, copyright ownership, and legality of the generated content.**
-
-Flovart does not bundle any model service, does not store users' API keys, and makes no intellectual property claims over generated content.
+Flovart does not bundle model services and makes no intellectual-property claim over generated content. You are responsible for the copyright, compliance, and lawful use of your models, input assets, and generated output.

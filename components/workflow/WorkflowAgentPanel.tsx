@@ -12,6 +12,7 @@ import { WorkflowAgentMessages, type WorkflowAgentDisplayMessage } from './Workf
 type Tab = 'setup' | 'chat' | 'history' | 'logs';
 type Status = 'connecting' | 'connected' | 'disconnected' | 'error';
 export type WorkflowAgentMode = 'online' | 'local';
+export type WorkflowAgentActivity = 'idle' | 'running' | 'waiting' | 'done' | 'error';
 export type WorkflowOnlineAgentEvent =
   | { type: 'assistant_delta'; id: string; text: string }
   | { type: 'assistant'; id?: string; text: string }
@@ -35,6 +36,7 @@ export interface WorkflowAgentPanelProps {
   onProjectChange?: (patch: Pick<WorkflowProject, 'agentSessions' | 'activeAgentSessionId'>) => void;
   onOnlineTurn?: (input: WorkflowOnlineTurnInput) => Promise<void>;
   embedded?: boolean;
+  onActivityChange?: (activity: WorkflowAgentActivity) => void;
 }
 
 const tabs: Array<{ id: Tab; label: string; icon: typeof Link2 }> = [
@@ -47,13 +49,16 @@ const tabs: Array<{ id: Tab; label: string; icon: typeof Link2 }> = [
 const safeStorage = (key: string, fallback: string) => {
   try { return localStorage.getItem(key) || fallback; } catch { return fallback; }
 };
+const safeSessionStorage = (key: string, fallback: string) => {
+  try { return sessionStorage.getItem(key) || fallback; } catch { return fallback; }
+};
 const id = () => typeof crypto === 'undefined' ? `${Date.now()}-${Math.random()}` : crypto.randomUUID();
 
-export function WorkflowAgentPanel({ project, onClose, onProjectChange, onOnlineTurn, embedded = false }: WorkflowAgentPanelProps) {
+export function WorkflowAgentPanel({ project, onClose, onProjectChange, onOnlineTurn, embedded = false, onActivityChange }: WorkflowAgentPanelProps) {
   const [mode, setMode] = useState<WorkflowAgentMode>(() => safeStorage('flovart.workflow.agent.mode', 'online') as WorkflowAgentMode);
   const [tab, setTab] = useState<Tab>('chat');
   const [url, setUrl] = useState(() => safeStorage('flovart.agent.url', 'http://127.0.0.1:17372'));
-  const [token, setToken] = useState(() => safeStorage('flovart.agent.token', ''));
+  const [token, setToken] = useState(() => safeSessionStorage('flovart.agent.token', ''));
   const [status, setStatus] = useState<Status>('disconnected');
   const [prompt, setPrompt] = useState('');
   const [threadId, setThreadId] = useState('');
@@ -87,6 +92,15 @@ export function WorkflowAgentPanel({ project, onClose, onProjectChange, onOnline
   const visibleStatus = mode === 'online' ? onlineStatus : status;
   const canSend = mode === 'online' ? Boolean(onOnlineTurn) : status === 'connected';
   const onlineSessions = useMemo(() => project.agentSessions || [], [project.agentSessions]);
+  useEffect(() => {
+    const last = messages[messages.length - 1];
+    const activity: WorkflowAgentActivity = confirmation
+      ? 'waiting'
+      : sending ? 'running'
+        : last?.role === 'error' ? 'error'
+          : messages.length ? 'done' : 'idle';
+    onActivityChange?.(activity);
+  }, [confirmation, messages, onActivityChange, sending]);
 
   function addLog(type: string, value: unknown) {
     const text = typeof value === 'string' ? value : JSON.stringify(redactWorkflowAgentSnapshot(value));
@@ -168,7 +182,7 @@ export function WorkflowAgentPanel({ project, onClose, onProjectChange, onOnline
       const endpoint = new URL(url);
       if (!['http:', 'https:'].includes(endpoint.protocol) || !token.trim()) throw new Error('请填写有效的 Agent 地址和 Token。');
       localStorage.setItem('flovart.agent.url', endpoint.origin);
-      localStorage.setItem('flovart.agent.token', token.trim());
+      sessionStorage.setItem('flovart.agent.token', token.trim());
       bridge.current = new WorkflowAgentBridge({ url: endpoint.origin, token: token.trim(), onStatus: setStatus, onEvent: handleEvent, confirm: askConfirmation });
       bridge.current.connect();
       setTab('chat');

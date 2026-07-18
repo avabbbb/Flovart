@@ -121,7 +121,7 @@ export default function EnterpriseApp() {
         className="sticky top-0 z-30 flex h-12 items-center gap-2 px-4"
         style={{ background: 'var(--app-bg)', borderBottom: '1px solid var(--isl-border)' }}
       >
-        <Link to="/app" className="isl-icon-btn h-8 w-8" title="返回画布" aria-label="返回画布">
+            <Link to="/app" className="isl-icon-btn h-8 w-8" title="返回工作流" aria-label="返回工作流">
           <ArrowLeft size={16} />
         </Link>
         <div className="flex items-center gap-2 min-w-0">
@@ -853,7 +853,7 @@ function AuthPanel({ onAuthed, toast }: { onAuthed: (u: HubUser) => void; toast:
     <div className="theme-aware min-h-screen flex items-center justify-center px-4" style={{ background: 'var(--app-bg)', color: 'var(--isl-ink)' }}>
       <div className="w-full max-w-sm rounded-2xl p-7" style={{ background: 'var(--isl-surface)', border: '1.5px solid var(--isl-border)' }}>
         <div className="mb-6 flex items-center gap-2">
-          <Link to="/app" className="isl-icon-btn h-8 w-8" title="返回画布" aria-label="返回画布">
+            <Link to="/app" className="isl-icon-btn h-8 w-8" title="返回工作流" aria-label="返回工作流">
             <ArrowLeft size={16} />
           </Link>
           <div className="flex items-center gap-2">

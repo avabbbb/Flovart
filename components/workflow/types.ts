@@ -102,6 +102,10 @@ export interface WorkflowNodeMetadata {
   referenceNodeIds?: string[];
   /** 参考图 chip 面板顺序：上游 image/video/audio 节点 id 数组，拖拽排序只改这里 */
   imageReferenceOrder?: string[];
+  /** 节点来源类型。'assetLibrary' = 来源于素材库 @ 菜单创建的引用节点实例 */
+  sourceType?: 'assetLibrary';
+  /** 当 sourceType='assetLibrary' 时，对应 AssetItem.id，用于按 storageKey 反查 dataUrl */
+  assetId?: string;
   href?: string;
   poster?: string;
   storageKey?: string;
@@ -120,6 +124,13 @@ export interface WorkflowNodeMetadata {
   generationRequestId?: string;
   generationHistoryId?: string;
   generationStartedAt?: number;
+  generationProviderTaskId?: string;
+  generationUsageRecordId?: string;
+  generationEstimatedCost?: number;
+  generationActualCost?: number;
+  generationCurrency?: 'USD' | 'CNY';
+  generationActualTokens?: number;
+  generationBillableState?: 'estimated' | 'actual' | 'unknown' | 'not_billable' | 'refunded';
   generationMessage?: string;
   filters?: Partial<ImageFilters>;
   scriptBreakdown?: ScriptBreakdown;

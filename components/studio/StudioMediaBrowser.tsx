@@ -123,7 +123,7 @@ export function StudioMediaBrowser({ mode, items, language, onInsert, onRename, 
         <div className="mb-2 flex items-center justify-between gap-3">
           <div className="min-w-0">
             <h2 className="truncate text-xs font-bold" style={{ color: 'var(--isl-ink)' }}>{title}</h2>
-            <p className="mt-0.5 text-[10px]" style={{ color: 'var(--isl-ink-soft)' }}>{isChinese ? '点击添加，或直接拖到画布' : 'Click to add, or drag onto the canvas'}</p>
+        <p className="mt-0.5 text-[10px]" style={{ color: 'var(--isl-ink-soft)' }}>{isChinese ? '点击添加，或直接拖到工作流' : 'Click to add, or drag into the Workflow'}</p>
           </div>
           <span className="shrink-0 text-[11px] tabular-nums" style={{ color: 'var(--isl-ink-soft)' }}>{filtered.length}/{items.length}</span>
         </div>

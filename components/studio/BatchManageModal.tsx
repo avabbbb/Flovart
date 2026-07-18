@@ -108,7 +108,7 @@ export function BatchManageModal({ open, library, language, onClose, onRemoveAss
       footer={null}
       width="92vw"
       style={{ top: 24 }}
-      styles={{ body: { padding: 0, height: '85vh', background: 'var(--isl-surface)' }, content: { background: 'var(--isl-surface)' } }}
+      styles={{ body: { padding: 0, height: '85vh', background: 'var(--isl-surface)' }, container: { background: 'var(--isl-surface)' } }}
       title={
         <div className="flex items-center justify-between gap-3">
           <span className="text-sm font-bold" style={{ color: 'var(--isl-ink)' }}>{isChinese ? '批量管理素材' : 'Batch Manage Assets'}</span>

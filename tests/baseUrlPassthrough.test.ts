@@ -36,6 +36,19 @@ describe('Block1: baseUrl passthrough', () => {
         expect(getGeminiRestBaseUrl()).toBe('https://proxy.example.com/gemini');
     });
 
+    it('resolves a capability-specific Gemini baseUrl before the shared fallback', async () => {
+        const { setGeminiRuntimeConfig, resolveGeminiBaseUrl } = await import('../services/geminiService');
+        setGeminiRuntimeConfig({
+            baseUrl: 'https://text.example.com/v1beta',
+            imageBaseUrl: 'https://image.example.com/v1beta/',
+            videoBaseUrl: 'https://video.example.com/v1beta/',
+        });
+
+        expect(resolveGeminiBaseUrl('image')).toBe('https://image.example.com/v1beta');
+        expect(resolveGeminiBaseUrl('video')).toBe('https://video.example.com/v1beta');
+        expect(resolveGeminiBaseUrl('image', 'https://request.example.com/v1beta/')).toBe('https://request.example.com/v1beta');
+    });
+
     it('validateGeminiApiKey 使用自定义 baseUrl 构造请求', async () => {
         const mockFetch = vi.fn().mockResolvedValue({
             ok: true,

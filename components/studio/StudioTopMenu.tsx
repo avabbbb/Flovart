@@ -17,20 +17,22 @@ export interface StudioMenuProjectRef {
   title: string;
 }
 
+export type StudioMode = 'workflow' | 'table' | 'agent';
+
 export interface StudioMenuModel {
-  mode: 'workflow';
+  mode: StudioMode;
   title: string;
   themeMode: ThemeMode;
   resolvedTheme: 'light' | 'dark';
   language: 'en' | 'zho';
   status: StudioMenuStatus;
   actions: {
-    changeMode: (mode: 'workflow') => void;
+    changeMode: (mode: StudioMode) => void;
     setThemeMode: (mode: ThemeMode) => void;
     toggleLanguage: () => void;
     openSettings: () => void;
   };
-  // 画布管理（目前仅 workflow 视图使用，其他视图保持 undefined 即可）
+  // 工作流项目管理（目前仅 workflow 视图使用，其他视图保持 undefined 即可）
   projectList?: StudioMenuProjectRef[];
   activeProjectIndex?: number;
   projectActions?: {
@@ -54,7 +56,7 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
   const [authOpen, setAuthOpen] = useState(false);
   const isTauri = Boolean((window as any)?.__TAURI__ || (window as any)?.__TAURI_INTERNALS__);
 
-  // LOGO 下拉（回主页/新建画布/删除画布）
+  // LOGO 下拉（回主页/新建工作流/删除工作流）
   const [logoMenuOpen, setLogoMenuOpen] = useState(false);
   const logoMenuRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -66,7 +68,7 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
     return () => document.removeEventListener('mousedown', onClick);
   }, [logoMenuOpen]);
 
-  // 画布名 inline 编辑
+  // 工作流名称 inline 编辑
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState(title);
   useEffect(() => { if (!isEditingTitle) setTitleDraft(title); }, [title, isEditingTitle]);
@@ -129,7 +131,7 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
             type="button"
             className="flex items-center gap-2 rounded-lg p-0.5 transition hover:bg-black/5"
             aria-label="Flovart 菜单"
-            title={canManageProjects ? (isChinese ? '点击打开画布菜单' : 'Open canvas menu') : 'Flovart'}
+            title={canManageProjects ? (isChinese ? '点击打开工作流菜单' : 'Open workflow menu') : 'Flovart'}
             onClick={() => { if (canManageProjects) setLogoMenuOpen(open => !open); }}
           >
             <img src="/favicon.png" alt="" className="h-7 w-7 rounded-lg" />
@@ -138,7 +140,7 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
           {logoMenuOpen && canManageProjects && (
             <div
               role="menu"
-              aria-label={isChinese ? '画布菜单' : 'Canvas menu'}
+              aria-label={isChinese ? '工作流菜单' : 'Workflow menu'}
               className="isl-pop absolute left-0 top-full z-[90] mt-1.5 min-w-[200px] p-1.5"
               onPointerDown={event => event.stopPropagation()}
             >
@@ -153,7 +155,7 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
               </a>
               <button type="button" role="menuitem" className="isl-opt flex items-center gap-2" onClick={() => { projectActions!.create(); setLogoMenuOpen(false); }}>
                 <Plus size={14} />
-                <span className="text-xs font-bold">{isChinese ? '新建画布' : 'New canvas'}</span>
+                <span className="text-xs font-bold">{isChinese ? '新建工作流' : 'New workflow'}</span>
               </button>
               <button
                 type="button"
@@ -164,7 +166,7 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
                 onClick={() => { projectActions!.remove(); setLogoMenuOpen(false); }}
               >
                 <Trash2 size={14} />
-                <span className="text-xs font-bold">{isChinese ? '删除当前画布' : 'Delete canvas'}</span>
+                <span className="text-xs font-bold">{isChinese ? '删除当前工作流' : 'Delete workflow'}</span>
               </button>
             </div>
           )}
@@ -182,7 +184,7 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
                   onBlur={commitTitle}
                   className="min-w-0 max-w-[180px] rounded-md border-[1.5px] px-1.5 py-0.5 text-xs font-semibold outline-none"
                   style={{ borderColor: 'var(--isl-mint)', background: 'var(--isl-surface-2)', color: 'var(--isl-ink)' }}
-                  aria-label={isChinese ? '画布名' : 'Canvas name'}
+                  aria-label={isChinese ? '工作流名称' : 'Workflow name'}
                 />
                 <button type="button" className="isl-icon-btn h-6 w-6" onClick={commitTitle} aria-label={isChinese ? '确认' : 'Confirm'}><Check size={13} /></button>
                 <button type="button" className="isl-icon-btn h-6 w-6" onClick={cancelTitle} aria-label={isChinese ? '取消' : 'Cancel'}><X size={13} /></button>
@@ -192,7 +194,7 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
                 type="button"
                 className="group flex min-w-0 items-center gap-1 rounded-md px-1 py-0.5 transition hover:bg-black/5"
                 onClick={() => setIsEditingTitle(true)}
-                title={isChinese ? '点击修改画布名' : 'Click to rename canvas'}
+                title={isChinese ? '点击修改工作流名称' : 'Click to rename workflow'}
               >
                 <strong className="min-w-0 truncate text-xs font-semibold min-[540px]:block" style={{ color: 'var(--isl-ink-soft)' }}>
                   {title || 'Workflow'}
@@ -202,9 +204,9 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
             )}
             {hasMultipleProjects && (
               <div className="flex shrink-0 items-center gap-0.5">
-                <button type="button" className="isl-icon-btn h-6 w-6" onClick={() => switchProject(-1)} aria-label={isChinese ? '上一个画布' : 'Previous canvas'} disabled={projectList!.length < 2}><ChevronLeft size={13} /></button>
-                <span className="tabular-nums text-[11px] font-bold" style={{ color: 'var(--isl-ink-soft)' }} title={isChinese ? `${projectIndex + 1} / ${projectList!.length} 个画布` : `${projectIndex + 1} / ${projectList!.length} canvases`}>{projectIndex + 1}/{projectList!.length}</span>
-                <button type="button" className="isl-icon-btn h-6 w-6" onClick={() => switchProject(1)} aria-label={isChinese ? '下一个画布' : 'Next canvas'} disabled={projectList!.length < 2}><ChevronRight size={13} /></button>
+                <button type="button" className="isl-icon-btn h-6 w-6" onClick={() => switchProject(-1)} aria-label={isChinese ? '上一个工作流' : 'Previous workflow'} disabled={projectList!.length < 2}><ChevronLeft size={13} /></button>
+                <span className="tabular-nums text-[11px] font-bold" style={{ color: 'var(--isl-ink-soft)' }} title={isChinese ? `${projectIndex + 1} / ${projectList!.length} 个工作流` : `${projectIndex + 1} / ${projectList!.length} workflows`}>{projectIndex + 1}/{projectList!.length}</span>
+                <button type="button" className="isl-icon-btn h-6 w-6" onClick={() => switchProject(1)} aria-label={isChinese ? '下一个工作流' : 'Next workflow'} disabled={projectList!.length < 2}><ChevronRight size={13} /></button>
               </div>
             )}
           </div>
@@ -213,6 +215,27 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
             {title || 'Workflow'}
           </strong>
         )}
+      </div>
+
+      <div className="flex min-w-0 items-center justify-center gap-0.5">
+        {(['workflow', 'table', 'agent'] as const).map(tabMode => {
+          const isActive = mode === tabMode;
+          const label = tabMode === 'workflow'
+            ? (isChinese ? '工作流' : 'Workflow')
+            : tabMode === 'table' ? 'Table' : 'Agent';
+          return (
+            <button
+              key={tabMode}
+              type="button"
+              onClick={() => actions.changeMode(tabMode)}
+              className={`rounded-md px-2.5 py-1 text-xs font-bold transition ${isActive ? 'bg-black/5' : 'opacity-50 hover:opacity-80'}`}
+              style={{ color: 'var(--isl-ink)' }}
+              aria-pressed={isActive}
+            >
+              {label}
+            </button>
+          );
+        })}
       </div>
 
       <div className="flex min-w-0 items-center justify-end gap-0.5 sm:gap-1">

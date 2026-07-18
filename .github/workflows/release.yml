@@ -1,11 +1,9 @@
-name: release
+name: Legacy Release (manual only)
 
-# 推送 v* 标签触发：构建 Windows/macOS/Linux 安装包并发布到 GitHub Release
+# 旧的全平台发布流程仅保留手动兜底；正式 tag 统一由 build-desktop.yml 处理，
+# 避免两个 workflow 同时创建并覆盖同一个 GitHub Release。
 # tauri-action 自动生成 latest.json（含签名）作为 updater 端点
 on:
-  push:
-    tags:
-      - 'v*'
   workflow_dispatch:
 
 jobs:

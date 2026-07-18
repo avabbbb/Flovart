@@ -1,9 +1,9 @@
 import { spawn, execSync } from 'node:child_process';
-import { existsSync, mkdirSync, copyFileSync } from 'node:fs';
+import { existsSync, copyFileSync } from 'node:fs';
 import { homedir, platform } from 'node:os';
 import { join } from 'node:path';
+import { installToolkit, planToolkitStart, startToolkit } from './bundle-manager.js';
 
-const REPO_URL = 'https://github.com/avabbbb/Flovart.git';
 const FLOVART_HOME = join(homedir(), '.flovart');
 const PROJECT_DIR = join(FLOVART_HOME, 'project');
 const PG_CONTAINER = 'flovart-pg';
@@ -62,6 +62,12 @@ export function parseDevArgs(argv = []) {
     json: false,
     plan: false,
     detach: false,
+    source: false,
+    toolkit: false,
+    noAgent: false,
+    agent: 'codex',
+    version: undefined,
+    manifestUrl: undefined,
     help: false,
     _: [],
   };
@@ -84,6 +90,12 @@ export function parseDevArgs(argv = []) {
     else if (arg === '--json') options.json = true;
     else if (arg === '--plan' || arg === '--dry-run' || arg === 'plan') options.plan = true;
     else if (arg === '--detach' || arg === '-d') options.detach = true;
+    else if (arg === '--source') options.source = true;
+    else if (arg === '--toolkit') options.toolkit = true;
+    else if (arg === '--no-agent') options.noAgent = true;
+    else if (arg.startsWith('--agent=')) options.agent = arg.slice('--agent='.length) || 'codex';
+    else if (arg.startsWith('--version=')) options.version = arg.slice('--version='.length) || undefined;
+    else if (arg.startsWith('--manifest=')) options.manifestUrl = arg.slice('--manifest='.length) || undefined;
     else options._.push(arg);
   }
 
@@ -119,6 +131,9 @@ function selectedServices(options, fallbackAll = true) {
 
 export function planStart(argv = [], cwd = process.cwd()) {
   const options = parseDevArgs(argv);
+  if (!options.source) {
+    return planToolkitStart({ agent: options.agent, noAgent: options.noAgent });
+  }
   const services = selectedServices(options, true);
   const projectDir = resolveProjectDir(cwd);
   return {
@@ -136,6 +151,9 @@ export function planStart(argv = [], cwd = process.cwd()) {
 
 export function planInstall(argv = [], cwd = process.cwd()) {
   const options = parseDevArgs(argv);
+  if (!options.source) {
+    return { command: 'install', mode: 'toolkit', version: options.version || 'bootstrapper-compatible', manifestUrl: options.manifestUrl || null };
+  }
   const services = selectedServices(options, true).filter(name => name !== 'db');
   return {
     command: 'install',
@@ -147,33 +165,39 @@ export function planInstall(argv = [], cwd = process.cwd()) {
 function printHelp(command = 'start') {
   if (command === 'install') {
     console.log([
-      'Usage: flovart install [--web] [--backend]',
+      'Usage: flovart install [--version=x.y.z] [--manifest=https://...]',
       '',
-      '默认在当前仓库安装前端 npm 依赖和后端 Go 依赖；如果不在仓库内，会安装到 ~/.flovart/project。',
+      '普通用户下载并校验版本化 Agent Toolkit，不需要 Git、Go、PostgreSQL 或 Docker。',
+      '源码贡献者在仓库内使用 `flovart install --source` 安装开发依赖。',
     ].join('\n'));
     return;
   }
   console.log([
-    'Usage: flovart start [all|web|backend|hub|enterprise|db] [options]',
+    'Usage: flovart start [options]',
     '',
     'Options:',
-    '  --install       启动前先安装依赖',
-    '  --docker        使用 docker compose 启动',
-    '  --open          启动后打开 http://localhost:11451',
-    '  --detach, -d    Docker 模式后台运行',
+    '  --agent=codex   启动 Codex Managed Agent（默认）',
+    '  --no-agent      只启动本地 Runtime/WebUI',
     '  --plan          只打印启动计划，不真正启动服务',
-    '  --json          与 --plan 搭配输出 JSON',
+    '  --source        在源码仓库运行 Vite/Go 开发服务',
+    '  --docker        与 --source 搭配运行 SaaS Compose',
     '',
     'Examples:',
-    '  flovart start --all --open',
-    '  flovart start --backend',
-    '  flovart start --docker --detach',
+    '  flovart start',
+    '  flovart start --no-agent',
+    '  flovart start --source --all --open',
   ].join('\n'));
 }
 
 function printPlan(plan, json = false) {
   if (json) {
     console.log(JSON.stringify(plan, null, 2));
+    return;
+  }
+  if (plan.mode === 'toolkit') {
+    log(`Plan: Agent Toolkit ${plan.version} (protocol ${plan.protocolVersion})`);
+    log(`  Bundle: ${plan.bundleDir}`);
+    log(`  Processes: ${plan.processes.map(item => item.name).join(', ') || 'none'}`);
     return;
   }
   log(`Plan: ${plan.command} ${plan.mode ? `(${plan.mode})` : ''}`);
@@ -241,26 +265,20 @@ export async function install(argv = []) {
     return;
   }
 
-  log('Checking prerequisites...');
-  if (!checkCommand('git')) { err('git is required. Install from https://git-scm.com'); process.exit(1); }
-  if (!checkCommand('node')) { err('Node.js is required. Install from https://nodejs.org'); process.exit(1); }
-
-  const inRepo = existsSync(join(process.cwd(), 'package.json')) && existsSync(join(process.cwd(), 'backend'));
-  if (!inRepo) {
-    if (!existsSync(FLOVART_HOME)) mkdirSync(FLOVART_HOME, { recursive: true });
-    if (existsSync(join(PROJECT_DIR, '.git'))) {
-      log('Project already exists, pulling latest...');
-      await run('git', ['pull'], { cwd: PROJECT_DIR });
-    } else {
-      log('Cloning Flovart repository...');
-      await run('git', ['clone', REPO_URL, PROJECT_DIR]);
-    }
+  if (!options.source) {
+    log('Downloading the signed-version Agent Toolkit manifest and SHA-256 verified bundle...');
+    const result = await installToolkit({ version: options.version, manifestUrl: options.manifestUrl });
+    log(`Flovart Agent Toolkit ${result.version} installed in ${result.bundleDir}`);
+    log(`Launcher: ${result.launcher}`);
+    if (result.path?.changed) warn('PATH updated for future terminals. Open a new terminal before running `flovart`.');
+    return;
   }
 
+  log('Installing Source Development Mode dependencies...');
   const plan = planInstall(argv);
   await installProjectDependencies(plan.projectDir, plan.services);
   log('Flovart dependencies are ready in ' + plan.projectDir);
-  log('Run `flovart start --all --open` or double-click 启动.bat.');
+  log('Run `flovart start --source --all --open` or double-click 启动.bat.');
 }
 
 export async function start(argv = []) {
@@ -273,6 +291,12 @@ export async function start(argv = []) {
   const plan = planStart(argv);
   if (options.plan) {
     printPlan(plan, options.json);
+    return;
+  }
+
+  if (plan.mode === 'toolkit') {
+    printPlan(plan, options.json);
+    startToolkit({ agent: options.agent, noAgent: options.noAgent });
     return;
   }
 
@@ -422,6 +446,11 @@ async function ensurePostgres() {
 
 export async function update(argv = []) {
   const options = parseDevArgs(argv);
+  if (!options.source) {
+    const result = await installToolkit({ version: options.version, manifestUrl: options.manifestUrl });
+    log(`Flovart Agent Toolkit switched to ${result.version}.`);
+    return;
+  }
   const projectDir = resolveProjectDir();
   if (!existsSync(projectDir)) {
     err('Flovart not installed. Run `flovart install` first, or run from the project directory.');

@@ -6,7 +6,6 @@ import type {
     AssetLibrary,
     CharacterLockProfile,
     ChatAttachment,
-    Element,
     GenerationMode,
     PromptEnhanceMode,
     PromptEnhanceResult,
@@ -17,7 +16,7 @@ import type {
 import RichPromptEditor, { type RichPromptEditorHandle } from './RichPromptEditor';
 import type { AssetSuggestion, MentionItem } from './MentionList';
 export type { MentionItem } from './MentionList';
-import { extractMentions } from './CanvasMentionExtension';
+import { extractMentions } from './MediaMentionExtension';
 import type { ImageReferenceChip } from './workflow/references';
 import { useWorkflowMediaUrl } from './workflow/media';
 import { PROVIDER_LABELS, type VideoAspectRatio } from '../services/aiGateway';
@@ -30,11 +29,11 @@ import {
     getRoutedVideoModes,
     explainUnsupportedVideoMode,
     isProductModelConfigured,
-    resolveProductModelRoute,
+    resolveAnyProductRoute,
     sanitizeProductGenerationParams,
     VIDEO_MODE_ORDER,
 } from '../services/productModelCatalog';
-import { AssetReferencePicker, type ReferencePickerCanvasItem } from './studio/AssetReferencePicker';
+import { AssetReferencePicker, type ReferencePickerWorkflowItem } from './studio/AssetReferencePicker';
 import { estimateApiCost } from '../utils/usageMonitor';
 
 export interface PromptBarProps {
@@ -88,7 +87,6 @@ export interface PromptBarProps {
     onTextModelChange?: (model: string) => void;
     onImageModelChange?: (model: string) => void;
     onVideoModelChange?: (model: string) => void;
-    canvasElements?: Element[];
     mentionItems?: MentionItem[];
     attachments?: ChatAttachment[];
     onAddAttachments?: (files: FileList | File[]) => void;
@@ -132,44 +130,14 @@ export interface PromptBarProps {
     assetFolders?: AssetFolder[];
     assetItems?: AssetSuggestion[];
     assetLibrary?: AssetLibrary;
-    referenceItems?: ReferencePickerCanvasItem[];
-    onSelectCanvasReference?: (nodeId: string) => string | undefined;
+    referenceItems?: ReferencePickerWorkflowItem[];
+    onSelectWorkflowReference?: (nodeId: string) => string | undefined;
     onAddReferenceFiles?: (files: File[]) => void | Promise<void>;
     onSelectAsset?: (assetId: string) => string | undefined;
     skillEnabled?: boolean;
 }
 
 type ExpandPanel = 'model' | 'submode' | 'parameters' | 'more' | 'batch' | null;
-
-const TYPE_LABELS: Record<Element['type'], string> = {
-    image: '图片',
-    video: '视频',
-    shape: '形状',
-    text: '文字',
-    path: '画笔',
-    group: '组合',
-    arrow: '箭头',
-    line: '线条',
-};
-
-function getElementLabel(element: Element): string {
-    return element.name?.trim() || `${TYPE_LABELS[element.type]} ${element.id.slice(-4)}`;
-}
-
-function getMentionDescription(element: Element): string {
-    const typeLabel = TYPE_LABELS[element.type] || element.type;
-    if (element.type === 'image' || element.type === 'video') {
-        return `${typeLabel} · ${Math.round(element.width)}×${Math.round(element.height)}`;
-    }
-    if (element.type === 'text') {
-        const text = element.text.replace(/\s+/g, ' ').trim();
-        return text ? `${typeLabel} · ${text.slice(0, 24)}` : typeLabel;
-    }
-    if (element.type === 'shape') {
-        return `${typeLabel} · ${element.shapeType}`;
-    }
-    return typeLabel;
-}
 
 function getModeLabel(mode: GenerationMode): string {
     if (mode === 'text') return '文本';
@@ -395,7 +363,6 @@ export const PromptBar: React.FC<PromptBarProps> = ({
     onTextModelChange,
     onImageModelChange,
     onVideoModelChange,
-    canvasElements = [],
     mentionItems,
     attachments = EMPTY_ATTACHMENTS,
     onAddAttachments,
@@ -437,7 +404,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
     assetItems = [],
     assetLibrary,
     referenceItems = [],
-    onSelectCanvasReference,
+    onSelectWorkflowReference,
     onAddReferenceFiles,
     onSelectAsset,
     skillEnabled = false,
@@ -464,25 +431,13 @@ export const PromptBar: React.FC<PromptBarProps> = ({
     const popoverWidth = expandedPanel === 'model' ? 660 : expandedPanel === 'submode' ? 360 : expandedPanel === 'parameters' ? 430 : expandedPanel === 'more' ? 480 : expandedPanel === 'batch' ? 300 : 400;
     const shellClass = 'isl-shell';
 
-    /** 将画布元素转换为 RichPromptEditor 需要的 MentionItem[] */
-    const canvasItems = useMemo<MentionItem[]>(() =>
-        mentionItems || canvasElements
-            .filter(el => el.isVisible !== false)
-            .map(el => ({
-                id: el.id,
-                label: getElementLabel(el),
-                thumbnail: el.type === 'image' || el.type === 'video' ? el.href : '',
-                elementType: el.type,
-                description: getMentionDescription(el),
-            })),
-        [canvasElements, mentionItems]
-    );
+    const editorReferenceItems = useMemo<MentionItem[]>(() => mentionItems || [], [mentionItems]);
 
     /** 当前视频模型是否为 Seedance（用于 Fast 限制 1080p 等模型专属逻辑） */
     const videoLikeMode = generationMode === 'video' || generationMode === 'keyframe';
     const activeModel = generationMode === 'text' ? selectedTextModel : videoLikeMode ? selectedVideoModel : selectedImageModel;
     const activeProductModel = useMemo(() => getProductModel(activeModel), [activeModel]);
-    const activeRoute = activeProductModel ? resolveProductModelRoute(activeProductModel.id, userApiKeys) : null;
+    const activeRoute = activeProductModel ? resolveAnyProductRoute(activeProductModel.id, userApiKeys) : null;
     const activeCapabilities = useMemo(() => {
         if (!activeProductModel) return undefined;
         const capabilities = activeProductModel.capabilities;
@@ -539,13 +494,13 @@ export const PromptBar: React.FC<PromptBarProps> = ({
 
     const currentModelOptions = generationMode === 'text' ? textModelOptions : videoLikeMode ? videoModelOptions : imageModelOptions;
     const routedVideoModes = useMemo(() => activeProductModel?.capability === 'video'
-        ? getRoutedVideoModes(activeProductModel.id, activeRoute?.key.provider, activeRoute?.upstreamModelId)
+        ? getRoutedVideoModes(activeProductModel.id, activeRoute?.key.provider, activeRoute?.routeId)
         : [], [activeProductModel, activeRoute]);
     const activeKey = activeRoute?.key || userApiKeys.find(k => k.isDefault) || userApiKeys[0];
     const estimatedCost = useMemo(() => activeRoute && activeProductModel ? estimateApiCost({
         key: activeRoute.key,
         productModelId: activeProductModel.id,
-        upstreamModelId: activeRoute.upstreamModelId,
+        routeId: activeRoute.routeId,
         type: activeProductModel.capability,
         durationSec: generationMode === 'video' ? videoDurationSec : undefined,
         count: batchCount,
@@ -599,20 +554,20 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                 : readyState === 'invalid-input'
                     ? videoInputRequirement
                 : readyState === 'generating'
-                    ? (progressStage || '正在生成，保持画布打开')
+            ? (progressStage || '正在生成，请保持工作流打开')
                     : '准备就绪，Ctrl+Enter 生成';
     const promptHints = isSelectionActive
         ? [`已选中 ${selectedElementCount} 个元素`, '描述“怎么改”比描述“是什么”更有效']
         : attachments.length > 0
-            ? [`已添加 ${attachments.length} 个参考`, '可以继续输入 @ 引用画布元素']
-            : ['支持拖入图片/视频/音频参考', '输入 @ 可引用画布元素'];
+            ? [`已添加 ${attachments.length} 个参考`, '可以继续输入 @ 引用工作流节点']
+            : ['支持拖入图片/视频/音频参考', '输入 @ 可引用工作流节点'];
     const placeholder = useMemo(() => {
-        if (!isSelectionActive) return '使用 @ 引用画布中的图片，例如：把 @图片1 的人物替换为 @图片2 的兔子';
+        if (!isSelectionActive) return '使用 @ 引用工作流中的图片，例如：把 @图片1 的人物替换为 @图片2 的兔子';
         if (selectedElementCount === 1) return '描述你想对当前元素做什么';
         return `已选中 ${selectedElementCount} 个元素，补充组合生成描述`;
     }, [isSelectionActive, selectedElementCount]);
     const addReferenceFiles = onAddReferenceFiles || (onAddAttachments ? ((files: File[]) => onAddAttachments(files)) : undefined);
-    const canOpenReferencePicker = Boolean(onSelectCanvasReference || onSelectAsset || addReferenceFiles);
+    const canOpenReferencePicker = Boolean(onSelectWorkflowReference || onSelectAsset || addReferenceFiles);
 
     /** 编辑器文本 + mention 变化时同步到父组件 */
     const handleEditorChange = useCallback((plainText: string, json: Record<string, unknown>) => {
@@ -862,8 +817,8 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                     onClick={() => setReferencePickerOpen(true)}
                                     className="mr-2 flex h-12 w-12 shrink-0 -rotate-3 items-center justify-center rounded-[10px] border border-dashed text-xl font-light transition hover:rotate-0 hover:border-[var(--isl-mint)] hover:bg-[var(--isl-mint-bg)]"
                                     style={{ borderColor: 'var(--isl-border)', color: 'var(--isl-ink-soft)', background: 'var(--isl-surface-2)' }}
-                                    aria-label="添加画布参考"
-                                    title="从画布、资产管理或本地上传添加参考"
+                                aria-label="添加工作流参考"
+                                title="从工作流节点、资产管理或本地上传添加参考"
                                     data-testid="prompt-reference-add"
                                 >+
                                 </motion.button>
@@ -920,7 +875,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
 
                     <RichPromptEditor
                         ref={richEditorRef}
-                        canvasItems={canvasItems}
+                        referenceItems={editorReferenceItems}
                         placeholder={placeholder}
                         onTextChange={handleEditorChange}
                         onSubmit={handleEditorSubmit}
@@ -1028,7 +983,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                                         {displayedModelGroup?.models.map(product => {
                                                             const configured = isProductModelConfigured(product.id, userApiKeys);
                                                             const selected = activeModel === product.id || getProductModel(activeModel)?.id === product.id;
-                                                            const route = resolveProductModelRoute(product.id, userApiKeys);
+                                                            const route = resolveAnyProductRoute(product.id, userApiKeys);
                                                             return <button key={product.id} type="button" onClick={() => {
                                                                 if (!configured) { onOpenSettings?.(); setExpandedPanel(null); return; }
                                                                 changeActiveModel(product.id);
@@ -1036,7 +991,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                                             }} className={`w-full rounded-lg border px-2.5 py-1.5 text-left transition ${selected ? 'border-[var(--isl-mint)] bg-[var(--isl-mint-bg)]' : 'border-transparent hover:border-[var(--isl-border)] hover:bg-[var(--isl-surface-2)]'} ${configured ? '' : 'opacity-55'}`}>
                                                                 <span className="flex items-center gap-2"><span className="min-w-0 flex-1 truncate text-xs font-extrabold" style={{ color: selected ? 'var(--isl-mint-deep)' : 'var(--isl-ink)' }}>{product.name}</span><span className="shrink-0 text-[9px] font-bold" style={{ color: configured ? 'var(--isl-mint-deep)' : 'var(--isl-ink-ghost)' }}>{configured ? product.badge || '已连接' : '去配置'}</span></span>
                                                                 <span className="mt-0.5 flex flex-wrap gap-0.5">{product.capabilities.modes.map(mode => <span key={mode} className="rounded-full px-1.5 py-px text-[8px]" style={{ background: 'var(--isl-surface-2)', color: 'var(--isl-ink-soft)' }}>{PRODUCT_MODE_LABELS[mode]}</span>)}</span>
-                                                                {route && <span className="mt-0.5 block truncate text-[8px]" style={{ color: 'var(--isl-ink-ghost)' }}>{route.key.name || route.key.provider} · {route.upstreamModelId}</span>}
+                                                                {route && <span className="mt-0.5 block truncate text-[8px]" style={{ color: 'var(--isl-ink-ghost)' }}>{route.key.name || route.key.provider} · {route.routeId}</span>}
                                                             </button>;
                                                         })}
                                                     </div>
@@ -1262,8 +1217,8 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                         )}
                                         {canOpenReferencePicker && (
                                             <MenuOptionButton
-                                                label="添加画布参考"
-                                                description="从画布节点、资产管理或本地上传"
+                                            label="添加工作流参考"
+                                            description="从工作流节点、资产管理或本地上传"
                                                 onClick={() => {
                                                     setReferencePickerOpen(true);
                                                     setExpandedPanel(null);
@@ -1323,9 +1278,9 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                             </div>
                                         )}
 
-                                        {canvasElements.length > 0 && (
+                                        {editorReferenceItems.length > 0 && (
                                             <div className="rounded-2xl px-3 py-3 text-sm" style={{ background: 'var(--isl-surface-2)', color: 'var(--isl-ink-soft)' }}>
-                                                在输入框里输入 <span className="font-bold" style={{ color: 'var(--isl-mint-deep)' }}>@</span>，可直接引用画布里的元素卡片。
+                                                在输入框里输入 <span className="font-bold" style={{ color: 'var(--isl-mint-deep)' }}>@</span>，可直接引用工作流节点或资产。
                                             </div>
                                         )}
                                     </div>
@@ -1504,11 +1459,11 @@ export const PromptBar: React.FC<PromptBarProps> = ({
             <AssetReferencePicker
                 open={referencePickerOpen}
                 language={language}
-                canvasItems={referenceItems}
+                workflowItems={referenceItems}
                 connectedIds={imageReferenceChips?.map(chip => chip.id)}
                 library={assetLibrary}
                 onClose={() => setReferencePickerOpen(false)}
-                onSelectCanvas={onSelectCanvasReference}
+                onSelectWorkflow={onSelectWorkflowReference}
                 onSelectAsset={onSelectAsset}
                 onUploadFiles={addReferenceFiles}
             />

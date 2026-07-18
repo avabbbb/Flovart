@@ -67,7 +67,7 @@ function parseBreakdownResponse(text: string): ScriptBreakdown | null {
 function resolveTextModel(modelPreference: ModelPreference, userApiKeys: UserApiKey[]): string | null {
   if (modelPreference.textModel) return modelPreference.textModel;
   const textKey = userApiKeys.find(key => inferProviderFromModel('') !== key.provider && (key.provider === 'openai' || key.provider === 'anthropic' || key.provider === 'google' || key.provider === 'openrouter'));
-  if (textKey?.models?.length) return textKey.models[0];
+  if (textKey?.models?.length) return textKey.models[0].id;
   return null;
 }
 

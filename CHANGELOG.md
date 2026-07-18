@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- 建立 Production Runtime S0.1 契约内核：CLI/MCP 与 Rust Runtime 共用一份版本化 Canonical Command Registry 和封闭 JSON Schema，新增 Tauri `runtime_status`、UUID v7、RFC 8785 payload hash、稳定协议错误与重复命令保护；现有迁移期命令明确标记为 `legacy-only`，安全 Control Plane 留待 S0.2。
+- RunningHub Provider 映射正式落地为 Route Catalog 模式：在 `services/runningHubRouteCatalog.ts` 登记 16 条 `RouteCapabilitySchema`（6 图片 + 10 视频），承载路由的字段定义、media 上限、duration 枚举与官方文档证据元数据；`buildRunningHubRoutePayload` 按 schema 适配 RunningHub 字段名与裁剪逻辑，撤销原散落在 `buildRunningHubStandardPayload` 中的 12+ 个路由特化 regex 与默认值表；用户传参（aspectRatio / resolution / generateAudio / seed / returnLastFrame / webSearch / hd）作为 `userParams` 被严格限定在 schema 已声明的 `params[].field` 范围内，且永远覆盖 schema 默认（ADR-0008），未声明的参数静默丢弃。
+- 类型与目录重构：`ProductModelMapping` → `ProductRouteBinding`（`productModelId / mode / routeId / priority / enabled / confirmed`），`UserApiKey.modelMappings` → `routeBindings`，`ApiPricingRule.upstreamModelId` → `routeId`；按"不要兼容旧数据"原则直接替换，无 dual-track。`resolveModelSelection` 返回 `routeId`，按 `submode` 匹配产品模型路由，未传子模式回退 `text-to-image` / `text-to-video`。`SettingsPanel` 模型映射编辑器改为按 product × mode 网格平铺，每行独立配置。
+- Provider emit 前 catalog 校验：未在 Route Catalog 中登记的路由（含 `kling-video-3` / `vidu` / `wan` / `skyreels-v4` / `rhart-video-s` / `rhart-video-v3.1-pro` / `rhart-video-v3.1-fast-official` 等约 25 条）一律 `throw '未通过验证'`，不再走 regex fallback 悄悄兜底；这些路由在 `BUILTIN_RUNNINGHUB_MODELS` 中保留，用户仍可见可选但无法执行，避免被误认为已支持。`resolveRunningHubVideoDurations` 简化为 catalog-only，非 catalog 视频路由返回空数组。删除仅被 fallback 使用的 10 个死 helper（`DEFAULT_RUNNINGHUB_PROMPT_FIELD` 等），保留仍被 `getCapabilityDictionary` 使用的 `isRunningHubSeedance20Model` 与 `isRunningHubVideoEndpoint`。
+- 产品模型身份单一来源：新建 `tools/flovart/product-models.js` 作为 JS CLI 与 TS catalog 共享的 `PRODUCT_MODEL_ENTRIES` 源；`tools/flovart/agent-kit.js` / `shadow-runtime.js` / `core.js` 默认模型统一改为 `flovart:gpt-image-2` / `flovart:seedance-2` / `gemini-3-flash-preview`，与 SettingsPanel 默认值一致。
+- `runningHubApiDocEndpoint` 改为从 catalog 的 `officialEvidence` URL 派生 doc ID → routeId 映射，删除硬编码 13 条 `RUNNINGHUB_API_DOC_ENDPOINTS`。
+- 新增 ADR-0027 ~ ADR-0033（产品模型绑定到路由 / Route Schema + Adapter 独自负责参数适配 / 只允许已验证 Route Schema 执行 / 预览价格不阻塞可用性 / 每条路由写 Contract Test + Smoke Test / 默认偏好低价路由 / Route Schema 驱动控件，禁止静默降级参数）。
+- 新增 16 条 Route Contract Test（共 139 测试，`tests/routeContract.test.ts`），按 mode 覆盖 schema 字段、media 上限、duration 枚举与 `officialEvidence` doc ID。`tests/aiGatewayValidation.test.ts` 9 个原非 catalog 路由的测试重写为 `rejects.toThrow('未通过验证')`。
 - CanvasSettings 模型 Tab 新增 per-Key 产品模型映射编辑器（A 方案）：顶部保留 ModelPreference 三选下拉，下方按 API Key 分组平铺 `mergeSuggestedMappings` 合并后的映射行，每行可改 `upstreamModelId`（input+datalist 候选）/`priority`/`enabled`（生效/启用/停用三态）/删除，底部从 `getProductModels` 候选新增映射；改动后自动置 `confirmed=true`，经 `handleUpdateApiKey` 持久化并参与 `resolveProductModelRoute` 路由。
 - PromptBar 触发 chip 与浮层全面扁平化：删除独立「高级」chip 入口，联网搜索/真人素材预检测合并进「更多」popover 顶部分段；popover 去掉 `PopoverHeader` 卡片标题与 `rounded-[24px] border bg-card/95 shadow-2xl backdrop-blur-xl` 卡片背景，改用 `isl-pop` 基础浮层 + 内联段标题；model/submode/parameters/batch 动作 chip 去掉 chevron SVG 与 `isl-chip` 胶囊，改无边框文本 + 轻-hover `triggerClass`，`ExpandPanel` 类型移除 `'advanced'`。
 - 视频生成 PromptBar 三面板（模式 chip / 时长 / 比例·分辨率·帧数）改为按模型能力灰显：不支持项统一 `disabled + opacity-35 + cursor-not-allowed` 并带 tooltip 说明原因；submode 面板改按 `VIDEO_MODE_ORDER` 全量渲染，chip 入口去掉 `activeProductModel` 硬依赖改由 `getRoutedVideoModes` + StatefulWidget 路由决定可见性。新增 `explainUnsupportedVideoMode()` 与 `paramDisabledReason()` 两个 helper 函数支撑 tooltip 文案生成。
@@ -13,7 +21,7 @@
 - 新增企业后台前端管理 UI（`/#/enterprise`）：成员名册（只读 + 增删）、部门管理（左树右面板，toggle 负责人/角色）、角色管理（权限 checkbox 网格，builtin 只读保护）三标签页。
 - Tauri 桌面端改用 NSIS 打包，生成 `Flovart_0.2.0_x64-setup.exe`；新增 `flovart install/start/update` CLI 开发环境命令，`start` 一键拉起 vite + hub(:11452) + enterprise(:11453) 全栈并自动起 Docker PostgreSQL。
 - 新增 Tauri 应用内自动更新：生成 Ed25519 签名密钥，`useUpdaterStore` 实现自动检查 + 手动更新（StudioTopMenu 按钮），`tauri-plugin-process` 支持更新后重启；新增 GitHub Actions `release.yml` 用 `tauri-action` 矩阵构建三平台安装包并发布 Release + `latest.json`。
-- 恢复 Canvas 与 Workflow 双系统切换，并将 Canvas 还原到媒体节点连线改造前的行为。
+- 工作区最终收口为 Workflow + Table：删除旧 Canvas / Art 入口、状态、组件和 Worker，保留 Workflow 作为生成编排工作区，并接入 Table 正式入口与占位界面。
 - 按 `basketikun/infinite-canvas` 交互重构独立多项目 Workflow，补齐节点创建、媒体拖放、连线、PromptBar、ElementToolbar、图片工具、项目导入导出与素材选择。
 - 接入现有 Provider、API Key、生成历史、取消/重试、结果节点和在线 Agent 流程。
 - 统一 Workflow 浏览器 dispatcher、Flovart CLI、loopback Agent、MCP 和 Codex Agent 面板。

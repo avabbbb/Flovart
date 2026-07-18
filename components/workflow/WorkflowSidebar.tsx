@@ -169,7 +169,7 @@ export const WorkflowSidebar: React.FC<WorkflowSidebarProps> = ({
           <div className="flex min-h-0 flex-1 flex-col">
             {tab === 'layers' ? (
               <div className="min-h-0 flex-1 overflow-auto px-2 pb-2 pt-1">
-                {!project?.nodes.length && <p className="px-2 py-6 text-center text-xs" style={{ color: 'var(--isl-ink-soft)' }}>{language === 'zho' ? '双击画布或从顶部工具栏添加节点' : 'Double-click canvas or use toolbar to add nodes'}</p>}
+        {!project?.nodes.length && <p className="px-2 py-6 text-center text-xs" style={{ color: 'var(--isl-ink-soft)' }}>{language === 'zho' ? '双击工作流空白处或从顶部工具栏添加节点' : 'Double-click the Workflow surface or use the toolbar to add nodes'}</p>}
                 {[...(project?.nodes || [])].reverse().map(node => {
                   const selected = Boolean(project?.selectedNodeIds.includes(node.id));
                   return (
@@ -212,6 +212,7 @@ export const WorkflowSidebar: React.FC<WorkflowSidebarProps> = ({
             ) : (
               <div className="min-h-0 flex-1">
                 <AssetLibraryBrowser
+                  compact
                   library={assetLibrary}
                   language={language}
                   onInsert={onInsertAsset}

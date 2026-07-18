@@ -3,6 +3,8 @@
  * Docs: https://www.runninghub.cn/ (ComfyUI-based API)
  */
 
+import { resolveRouteIdByDocId } from './runningHubRouteCatalog';
+
 const RH_BASE = 'https://www.runninghub.cn/openapi/v2';
 const POLL_INTERVAL = 5000; // 5s
 const MAX_POLL_ATTEMPTS = 120; // 10 minutes max
@@ -11,23 +13,6 @@ const RUNNINGHUB_DETAIL_ENDPOINTS: Record<string, string> = {
   '2046503667076751361': 'rhart-image-g-2/image-to-image',
   '2027196343409463297': 'rhart-image-n-g31-flash/image-to-image',
   '2034917373414539277': 'rhart-video/sparkvideo-2.0/multimodal-video',
-};
-
-const RUNNINGHUB_API_DOC_ENDPOINTS: Record<string, string> = {
-  '448183084': 'rhart-video-v3.1-fast-official/image-to-video',
-  '448183085': 'rhart-video-v3.1-pro/start-end-to-video',
-  '448183086': 'rhart-video-v3.1-fast/start-end-to-video',
-  '448183087': 'rhart-video-v3.1-fast/image-to-video',
-  '448183115': 'rhart-video/sparkvideo-2.0-fast/image-to-video',
-  '448183116': 'rhart-video/sparkvideo-2.0/image-to-video',
-  '448183127': 'rhart-video/sparkvideo-2.0/multimodal-video',
-  '448183128': 'rhart-video/sparkvideo-2.0-fast/multimodal-video',
-  '448183140': 'rhart-video-v3.1-pro/text-to-video',
-  '448183144': 'rhart-video-v3.1-fast/text-to-video',
-  '448183145': 'rhart-video-v3.1-fast-official/text-to-video',
-  '448183166': 'rhart-video/sparkvideo-2.0-fast/text-to-video',
-  '448183167': 'rhart-video/sparkvideo-2.0/text-to-video',
-  '471297129': 'rhart-video-v3.1-pro/image-to-video',
 };
 
 // RunningHub 标准模型包：只内置当前项目实际使用的官方详情页端点。
@@ -221,7 +206,7 @@ function rhBase(baseUrl?: string) {
 function runningHubApiDocEndpoint(value: string) {
   const docId = value.match(/(?:^|\/)runninghub-api-doc(?:-cn)?\/api-(\d+)(?:\.md)?$/i)?.[1]
     || value.match(/^api-(\d+)(?:\.md)?$/i)?.[1];
-  return docId ? RUNNINGHUB_API_DOC_ENDPOINTS[docId] : undefined;
+  return docId ? resolveRouteIdByDocId(docId) : undefined;
 }
 
 function truncateDebugText(value: string, max = 120) {
@@ -606,14 +591,14 @@ export async function rhRunTask(
   if (submitResult.status === 'FAILED') {
     throw new Error(withRunningHubDebug(`RunningHub task failed: ${submitResult.errorMessage || 'Unknown error'}`, {
       ...debugContext,
-      response: submitResult,
+      response: { ...submitResult },
     }));
   }
   const taskId = submitResult.taskId;
   if (!taskId) {
     throw new Error(withRunningHubDebug('RunningHub submit failed: 未返回 taskId，请检查模型端点和输入媒体 URL。', {
       ...debugContext,
-      response: submitResult,
+      response: { ...submitResult },
     }));
   }
 
@@ -629,7 +614,7 @@ export async function rhRunTask(
           withRunningHubDebug(`RunningHub task failed: ${result.errorMessage || 'Unknown error'}`, {
             ...debugContext,
             taskId,
-            response: result,
+            response: { ...result },
           }),
         );
       }

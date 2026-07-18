@@ -1,188 +1,98 @@
 ---
 name: flovart
-description: Flovart official agent skill. Use when operating Flovart canvas, media, workflow, providers, models, assets, or project state through the deterministic Flovart CLI. External agents plan; Flovart CLI executes explicit commands. Do not invent HTTP calls, scrape the UI, or expose API keys.
-metadata:
-  openclaw:
-    category: creative
-    tags:
-      - canvas
-      - image-generation
-      - video-generation
-      - workflow
-      - mcp
-      - agent
-    entrypoints:
-      - cli
-      - mcp
+description: Operate Flovart Workflow projects, nodes, providers, product models, assets, and generation jobs through the deterministic local CLI or its MCP wrapper. Use when an agent needs to inspect or change Flovart production state, run image or video generation, diagnose provider readiness, or export project metadata. The current CLI command surface covers Workflow, not Table; never invent removed Canvas or Element commands, and do not claim Table automation until it appears in command.list.
 ---
 
-# Flovart CLI Skill
+# Flovart CLI
 
-Flovart is an AI Canvas Studio runtime for images, videos, workflows, storyboards, assets, and publish review. Agents should operate it through the local deterministic CLI:
-
-```bash
-npm run flovart:cli -- <command> --json
-```
-
-The source of truth for command names and options is:
+Use the local deterministic CLI for every Flovart mutation. In an installed Toolkit:
 
 ```bash
-npm run flovart:cli -- command.list --json
-npm run flovart:cli -- command.schema --command <command> --json
+npx flovart-cli <command> --json
 ```
 
-If this skill disagrees with `command.list` or `command.schema`, trust the CLI output and update the skill docs.
+Source contributors may use `npm run flovart:cli -- <command> --json` inside the repository.
 
-CLI aliases are accepted for atomic canvas orchestration:
+Treat these outputs as the only source of truth for names and arguments:
 
 ```bash
-npm run flovart:cli -- flovart_element_create --type image --name keyframe --json
-npm run flovart:cli -- flovart_element_update_prompt --element-id <id> --text-prompt "..." --json
-npm run flovart:cli -- flovart_element_assign_slot --element-id <id> --target-element-id <ref-id> --slot-role reference_image --json
-npm run flovart:cli -- flovart_element_ignite --element-id <id> --wait --json
-npm run flovart:cli -- flovart_generate_video --prompt "..." --source-image-ids img1,img2 --source-video-ids vid1 --json
+npx flovart-cli command.list --json
+npx flovart-cli command.schema --command <command> --json
 ```
 
-## MCP Server
+If this file or another reference disagrees with the registry, trust the registry and stop using the stale command.
 
-Flovart also ships an MCP server that exposes all CLI commands as MCP tools via stdio. This is the recommended integration for Claude Code, Codex CLI, and OpenClaw agents that support the Model Context Protocol.
+## Product boundary
 
-### Start the MCP server
+- Workflow is the current automated generation workspace.
+- Table is the official second workspace for agent storyboards and media preprocessing, but it has no registered CLI commands yet.
+- Canvas and Art are removed product workspaces. Do not call `canvas.*`, `element.*`, or their old aliases.
+- Do not turn a user request for Table into Workflow state unless the user explicitly asks for that fallback.
 
-```bash
-npm run flovart:mcp
-```
+## Safety rules
 
-Or directly:
-
-```bash
-node tools/flovart/mcp-server.js
-```
-
-### Claude Code configuration
-
-Add to `.mcp.json` in the project root:
-
-```json
-{
-  "mcpServers": {
-    "flovart": {
-      "command": "node",
-      "args": ["tools/flovart/mcp-server.js"]
-    }
-  }
-}
-```
-
-All 50+ CLI commands are automatically registered as MCP tools. Tool names use underscores (e.g., `canvas_inspect`, `element_create`, `generate_image`). Browser commands (generate.*, element.ignite, workflow.node.run/stop) accept optional `wait` (default true) and `timeoutMs` (default 60000) parameters.
-
-### Codex CLI / OpenClaw
-
-Codex and OpenClaw can spawn `flovart-mcp` as a subprocess via the MCP stdio protocol. The server auto-registers all tools from the CLI command registry.
-
-## Non-Negotiable Rules
-
-- Flovart is not the planner. The external agent writes scripts, shot lists, prompts, retry strategy, and final summaries.
-- Use the CLI for canvas/project/model/media operations. Do not hand-roll private HTTP requests or add protocol servers.
-- Never read, print, copy, or store API keys in CLI output or chat transcripts.
-- Provider-backed generation requires the browser UI because keys stay in browser storage.
-- Canvas automation for external agents is media-first. Prefer image/video elements for production artifacts; use text elements only when explicitly documenting canvas structure.
-- Send explicit prompts and structured JSON. Do not pass vague natural-language instructions into deterministic commands.
-- For slow or failed jobs, inspect status and patch the smallest affected element or workflow node. Do not rebuild the whole canvas by default.
+- Let the external agent plan scripts, shots, prompts, retries, and delivery; use Flovart only for deterministic state changes and generation.
+- Never read, print, copy, or store API keys. Provider credentials stay in the local Flovart Runtime/WebUI.
+- Keep the local Flovart Runtime/WebUI running for provider-backed commands.
+- Do not invent private HTTP calls, scrape the UI, or add another protocol server.
+- Inspect before mutation, send explicit prompts and typed arguments, and retry only the smallest failed node or job.
+- Do not submit a duplicate long-running job until its current status is known.
 
 ## Setup
 
-1. Run `npm install` if dependencies are missing.
-2. Run `npm run dev`.
-3. Keep the Flovart browser tab open for provider-backed commands.
-4. Check local state:
-
 ```bash
-npm run flovart:cli -- status --json
+npx flovart-cli install
+npx flovart-cli start
+npx flovart-cli status --json
+npx flovart-cli provider.status --json
 ```
 
-5. If models or providers are missing, open safe setup:
+If setup is incomplete:
 
 ```bash
-npm run flovart:cli -- provider.begin-setup --purpose both --json
+npx flovart-cli provider.begin-setup --purpose both --json
 ```
 
-## Runtime Modes
+Ask the user to enter credentials in the local Runtime/WebUI. Never request a key in chat.
 
-- `file-state`: local shadow runtime. Supports canvas inspection, media add/update/select/remove, workflow load/update, and export metadata without a browser.
-- `file-bridge`: queued browser execution. Used for provider status/model selection/readiness checks, image/video generation, workflow run, and element ignite. The Vite app polls `.flovart/command-queue.json` through `/__flovart/queue`.
-- Browser UI: the only place API keys are entered and used.
+## MCP wrapper
 
-## Documentation Map
-
-Read only the file needed for the current task.
-
-| Topic | File |
-| --- | --- |
-| Install, setup, host init | `../../../skills/flovart/scripts/install.md` |
-| Project context | `../../../skills/flovart/commands/project.md` |
-| Group context | `../../../skills/flovart/commands/group.md` |
-| LibTV-style node operations | `../../../skills/flovart/commands/node.md` |
-| Upload local media | `../../../skills/flovart/commands/upload.md` |
-| Runtime status and diagnostics | `../../../skills/flovart/commands/status.md` |
-| Provider setup, model selection, readiness | `../../../skills/flovart/commands/provider.md` |
-| Canvas inspect, media upload/add/update/remove | `../../../skills/flovart/commands/canvas.md` |
-| Element create, prompt, slots, ignite, watch | `../../../skills/flovart/commands/element.md` |
-| Workflow inspect/load/update/run | `../../../skills/flovart/commands/workflow.md` |
-| Assets, generated history, project export | `../../../skills/flovart/commands/asset.md` |
-| Image/video generation commands | `../../../skills/flovart/commands/generate.md` |
-| Image shortcuts | `../../../skills/flovart/commands/image.md` |
-| Script/storyboard commands | `../../../skills/flovart/commands/script.md` |
-| Prompt helpers, model list, preferences | `../../../skills/flovart/commands/model.md` |
-| Canvas element types | `../../../skills/flovart/node-types/README.md` |
-| Model and provider schema notes | `../../../skills/flovart/model-schema/schema.md` |
-| Common end-to-end cases | `../../../skills/flovart/examples/README.md` |
-
-## Common Workflows
-
-### Inspect Before Acting
+Register the same MCP server when the host supports MCP:
 
 ```bash
-npm run flovart:cli -- status --json
-npm run flovart:cli -- canvas.inspect --json
-npm run flovart:cli -- provider.status --json
+npx flovart-cli init --host codex
 ```
 
-### Add Reference Media
+Use `--host claude|opencode|cursor|windsurf|vscode|all` for another host. It exposes the same canonical registry through stdio. MCP tool names replace dots and hyphens with underscores. The MCP wrapper does not expand the command surface.
+
+## Operating workflow
+
+1. Read `command.list`, then read the schema for each command you will call.
+2. Run `status` and `provider.status`.
+3. Select or create a Workflow project with `workflow.project.*`.
+4. Inspect the redacted graph with `workflow.inspect`.
+5. Create, update, connect, move, resize, or select nodes using registered `workflow.*` commands.
+6. Run a config node with `workflow.node.run`, or use `generate.image`, `generate.images-batch`, or `generate.video` when their schemas match the task.
+7. Use `workflow.node.stop` or `video.status` for active work.
+8. Re-inspect and return project, node, connection, artifact, and job IDs plus any remaining user action.
+
+Example discovery and graph setup:
 
 ```bash
-npm run flovart:cli -- canvas.upload-image --path "C:/absolute/ref.png" --name "character-a-ref" --x 120 --y 160 --json
+npx flovart-cli command.schema --command workflow.node.create --json
+npx flovart-cli workflow.project.create --title "产品视频" --json
+npx flovart-cli workflow.node.create --type text --title "创作 Brief" --x 80 --y 120 --json
+npx flovart-cli workflow.inspect --json
 ```
 
-### Create a Generated Image Element
+Never copy arguments such as `--wait`, `--place-on-canvas`, or `--duration` from old examples without confirming they exist in the current schema.
 
-```bash
-npm run flovart:cli -- element.create --type image --name "unit-01-keyframe" --x 520 --y 160 --width 320 --height 180 --json
-npm run flovart:cli -- element.update-prompt --element-id <id> --text-prompt "cinematic keyframe..." --json
-npm run flovart:cli -- element.ignite --element-id <id> --wait --timeout-ms 120000 --json
-```
+## Delivery
 
-### Generate Directly
+Report:
 
-```bash
-npm run flovart:cli -- generate.image --prompt "premium product hero shot..." --aspect-ratio 16:9 --place-on-canvas true --wait --json
-npm run flovart:cli -- generate.video --prompt "8 second locked-off product reveal..." --source-image-ids id1,id2 --duration 8 --aspect-ratio 16:9 --wait --json
-```
-
-For Seedance-style models, `generate.video` accepts multimodal slots. Prefer existing canvas IDs when possible; use `--slots-json` for external URLs or data URLs:
-
-```bash
-npm run flovart:cli -- generate.video --prompt "8 second scene..." --source-image-ids roleA,roleB --source-video-ids motionRef --duration 8 --resolution 1080p --json
-npm run flovart:cli -- generate.video --prompt "8 second scene..." --slots-json "[{\"kind\":\"image\",\"href\":\"https://example.com/a.png\",\"mimeType\":\"image/png\",\"role\":\"reference_image\"},{\"kind\":\"video\",\"href\":\"https://example.com/ref.mp4\",\"mimeType\":\"video/mp4\",\"role\":\"reference_video\"}]" --json
-```
-
-Supported slot kinds are `image`, `video`, and `audio`. The gateway filters slot roles and request parameters through the selected model capability dictionary before calling the provider.
-
-## Delivery Checklist
-
-For creative jobs, return:
-
-- What was created or changed on the canvas.
-- Main media element IDs, job IDs, and output URLs when available.
-- Failed or pending nodes with the smallest retry plan.
-- Any user action needed in the browser UI, especially provider setup.
+- what changed in the Workflow;
+- important project, node, connection, artifact, and job IDs;
+- failed or pending work with the smallest retry plan;
+- any browser action needed for provider setup;
+- that Table automation is unavailable when the requested Table command is not registered.

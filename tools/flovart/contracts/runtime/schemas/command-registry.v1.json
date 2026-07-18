@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://flovart.local/schemas/runtime/command-registry.v1.json",
+  "title": "Canonical Command Registry v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "protocolVersion", "registryHash", "commands"],
+  "properties": {
+    "schemaVersion": { "const": "1" },
+    "protocolVersion": { "const": "1" },
+    "registryHash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA-256 of the RFC 8785 canonical registry document with registryHash omitted."
+    },
+    "commands": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "summary", "args", "availability"],
+        "properties": {
+          "name": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$" },
+          "summary": { "type": "string", "minLength": 1 },
+          "args": {
+            "type": "object",
+            "additionalProperties": { "type": "string", "minLength": 1 }
+          },
+          "availability": { "enum": ["available", "legacy-only"] }
+        }
+      }
+    }
+  }
+}

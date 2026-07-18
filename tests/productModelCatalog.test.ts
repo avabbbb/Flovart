@@ -2,9 +2,10 @@ import { describe, expect, it } from 'vitest';
 import type { UserApiKey } from '../types';
 import {
   getProductModels,
+  getRoutedVideoModes,
   resolveProductModelRoute,
   sanitizeProductGenerationParams,
-  suggestProductModelMappings,
+  suggestProductRouteBindings,
 } from '../services/productModelCatalog';
 
 const key = (id: string, priority = 0): UserApiKey => ({
@@ -13,7 +14,7 @@ const key = (id: string, priority = 0): UserApiKey => ({
   capabilities: ['video'],
   key: 'secret',
   models: [{ id: 'doubao-seedance-2-0-260128', name: 'Seedance 2.0' }],
-  modelMappings: [{ productModelId: 'flovart:seedance-2', upstreamModelId: 'doubao-seedance-2-0-260128', priority, enabled: true, confirmed: true }],
+  routeBindings: [{ productModelId: 'flovart:seedance-2', mode: 'text-to-video' as const, routeId: 'doubao-seedance-2-0-260128', priority, enabled: true, confirmed: true }],
   createdAt: 1,
   updatedAt: 1,
 });
@@ -26,13 +27,35 @@ describe('fixed product model catalog', () => {
   });
 
   it('suggests exact official mappings and resolves the lowest-priority route', () => {
-    expect(suggestProductModelMappings(key('suggested'))).toContainEqual(expect.objectContaining({ productModelId: 'flovart:seedance-2' }));
-    expect(resolveProductModelRoute('flovart:seedance-2', [key('backup', 10), key('primary', 0)])?.key.id).toBe('primary');
+    expect(suggestProductRouteBindings(key('suggested'))).toContainEqual(expect.objectContaining({ productModelId: 'flovart:seedance-2' }));
+    expect(resolveProductModelRoute('flovart:seedance-2', 'text-to-video', [key('backup', 10), key('primary', 0)])?.key.id).toBe('primary');
+  });
+
+  it('rejects mappings owned by a key without the product capability', () => {
+    const textOnly: UserApiKey = { ...key('text-only'), capabilities: ['text'] };
+    expect(resolveProductModelRoute('flovart:seedance-2', 'text-to-video', [textOnly])).toBeNull();
+  });
+
+  it('rejects a stale mapping when the provider model list no longer contains its upstream id', () => {
+    const stale = {
+      ...key('stale'),
+      models: [{ id: 'another-video-model', name: 'Another video model' }],
+      customModels: ['another-video-model'],
+      defaultModel: 'another-video-model',
+    };
+    expect(resolveProductModelRoute('flovart:seedance-2', 'text-to-video', [stale])).toBeNull();
+  });
+
+  it('uses the default key as a stable tie-breaker for equal mapping priorities', () => {
+    const secondary = { ...key('secondary'), isDefault: false };
+    const primary = { ...key('default'), isDefault: true };
+    expect(resolveProductModelRoute('flovart:seedance-2', 'text-to-video', [secondary, primary])?.key.id).toBe('default');
+    expect(resolveProductModelRoute('flovart:seedance-2', 'text-to-video', [primary, secondary])?.key.id).toBe('default');
   });
 
   it('does not auto-map Google preview ids that have already shut down', () => {
     const googleKey: UserApiKey = { ...key('google'), provider: 'google', capabilities: ['image'], models: [{ id: 'gemini-3-pro-image-preview', name: 'Gemini preview' }] };
-    expect(suggestProductModelMappings(googleKey).some(mapping => mapping.productModelId === 'flovart:gemini-3-pro-image')).toBe(false);
+    expect(suggestProductRouteBindings(googleKey).some(mapping => mapping.productModelId === 'flovart:gemini-3-pro-image')).toBe(false);
   });
 
   it('normalizes invalid params and applies Veo 4K/reference duration constraints', () => {
@@ -61,5 +84,17 @@ describe('fixed product model catalog', () => {
     expect(fast?.capabilities.modes).not.toContain('video-extension');
     expect(lite?.capabilities.modes).toContain('first-last-frame');
     expect(lite?.capabilities.modes).not.toEqual(expect.arrayContaining(['reference-to-video', 'video-extension']));
+  });
+
+  it('intersects fixed product capabilities with the actual mapped Provider adapter', () => {
+    expect(getRoutedVideoModes('flovart:seedance-2', 'volcengine', 'doubao-seedance-2-0-260128')).toEqual([
+      'text-to-video', 'image-to-video', 'reference-to-video', 'first-last-frame',
+    ]);
+    expect(getRoutedVideoModes('flovart:kling-video-3', 'keling', 'kling-video-3.0')).toEqual([
+      'text-to-video', 'image-to-video',
+    ]);
+    expect(getRoutedVideoModes('flovart:kling-video-3-omni', 'runningHub', 'kling-video-o3-std/reference-to-video')).toEqual([
+      'reference-to-video',
+    ]);
   });
 });

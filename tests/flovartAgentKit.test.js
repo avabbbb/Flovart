@@ -20,10 +20,11 @@ describe('flovart agent kit', () => {
       ok: true,
       writes: [
         expect.objectContaining({
-          wrapperKey: 'cliServers',
-          config: { cliServers: { flovart: expect.objectContaining({ command: 'node' }) } },
+          wrapperKey: 'mcp',
+          config: { mcp: { flovart: expect.objectContaining({ type: 'local', command: expect.any(Array) }) } },
         }),
       ],
+      skill: expect.objectContaining({ target: expect.stringContaining('.agents') }),
     });
 
     expect(initCliHost({ host: 'vscode', projectDir, dryRun: true })).toMatchObject({
@@ -31,9 +32,14 @@ describe('flovart agent kit', () => {
       writes: [
         expect.objectContaining({
           wrapperKey: 'servers',
-          config: { servers: { flovart: expect.objectContaining({ type: 'stdio', command: 'node' }) } },
+          config: { servers: { flovart: expect.objectContaining({ type: 'stdio', command: process.execPath }) } },
         }),
       ],
+    });
+
+    expect(initCliHost({ host: 'codex', projectDir, dryRun: true })).toMatchObject({
+      ok: true,
+      writes: [expect.objectContaining({ registration: { command: 'codex', args: expect.arrayContaining(['mcp', 'add', 'flovart']) } })],
     });
   });
 
@@ -51,10 +57,10 @@ describe('flovart agent kit', () => {
   });
   it('lists Seedance 2.0 as the default agent-facing video package', () => {
     const result = listAgentModels({ purpose: 'video' });
-    const seedance = result.models.video[0];
+    const seedance = result.models.video.find(m => m.id === 'flovart:seedance-2');
 
     expect(seedance).toMatchObject({
-      id: 'doubao-seedance-2.0',
+      id: 'flovart:seedance-2',
       provider: 'volcengine',
       capability: 'video',
       slots: { image: 9, video: 3, audio: 3 },
@@ -75,14 +81,13 @@ describe('flovart agent kit', () => {
       checks: expect.arrayContaining([expect.objectContaining({ id: 'cli', ok: true })]),
       seedance2: expect.objectContaining({ provider: 'volcengine' }),
       surfaces: expect.objectContaining({
-        canvas: expect.objectContaining({ commandSurface: true }),
         workflow: expect.objectContaining({ commandSurface: true }),
       }),
     });
     expect(JSON.stringify(diagnosis)).not.toMatch(/api[_-]?key|token|secret/i);
   });
 
-  it('diagnoses Seedance 2.0 readiness for Canvas and Workflow from local shadow state', () => {
+  it('diagnoses Seedance 2.0 readiness for Workflow from local shadow state', () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'flovart-doctor-'));
     const previousStateFile = process.env.FLOVART_SHADOW_STATE_FILE;
     const stateFile = join(tempDir, 'state.json');
@@ -91,10 +96,9 @@ describe('flovart agent kit', () => {
     writeFileSync(stateFile, JSON.stringify({
       provider: {
         configured: { image: false, video: false, text: false },
-        selectedModels: { image: 'flux-schnell', video: 'kling-v2', text: 'gpt-4.1-mini' },
+        selectedModels: { image: 'flovart:gpt-image-2', video: 'kling-v2', text: 'gemini-3-flash-preview' },
         providers: [],
       },
-      elements: [{ id: 'img-1', type: 'image' }],
       workflowProjects: [{ id: 'wf-1', title: 'Launch' }],
       activeWorkflowProjectId: 'wf-1',
     }), 'utf8');
@@ -103,9 +107,8 @@ describe('flovart agent kit', () => {
       const diagnosis = diagnoseAgentSetup({ projectDir: process.cwd() });
       expect(diagnosis).toMatchObject({
         readyForSeedance2: false,
-        readyForCanvasSeedance2: false,
         readyForWorkflowSeedance2: false,
-        provider: { selectedModels: { video: 'doubao-seedance-2.0' } },
+        provider: { selectedModels: { video: 'flovart:seedance-2' } },
         seedance2: {
           ok: false,
           checks: expect.arrayContaining([
@@ -115,7 +118,6 @@ describe('flovart agent kit', () => {
           ]),
         },
         surfaces: {
-          canvas: expect.objectContaining({ commandSurface: true, providerBackedGenerationReady: false, mediaElements: 1 }),
           workflow: expect.objectContaining({ commandSurface: true, providerBackedGenerationReady: false, projectCount: 1, activeProjectId: 'wf-1' }),
         },
       });

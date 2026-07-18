@@ -1,4 +1,5 @@
 import { webcrypto } from 'node:crypto';
+import '@testing-library/jest-dom/vitest';
 import 'fake-indexeddb/auto';
 
 // Polyfill WebCrypto for jsdom (Node 18+)
@@ -7,6 +8,15 @@ if (typeof globalThis.crypto === 'undefined' || !globalThis.crypto.subtle) {
     value: webcrypto as unknown as Crypto,
     writable: true,
   });
+}
+
+if (typeof globalThis.ResizeObserver === 'undefined') {
+  class TestResizeObserver implements ResizeObserver {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+  Object.defineProperty(globalThis, 'ResizeObserver', { value: TestResizeObserver, writable: true });
 }
 
 // Mock URL.createObjectURL / revokeObjectURL (jsdom does not implement them)

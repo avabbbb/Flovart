@@ -4,6 +4,7 @@ import { fetchModelsForProvider, type FetchModelsResult } from './modelFetcher';
 import { normalizeProviderBaseUrl } from './baseUrl';
 import { assertRunningHubModelEndpoint } from './runningHubService';
 import { sanitizeProductGenerationParams } from './productModelCatalog';
+import { getRouteSchema, getRouteDurations, type RouteCapabilitySchema, type RouteMediaSpec } from './runningHubRouteCatalog';
 
 type ImageInput = { href: string; mimeType: string };
 
@@ -170,7 +171,7 @@ export interface ApiKeyValidationResult {
 
 type CustomProviderExtraConfig = Record<string, string> | undefined;
 
-export type VideoAspectRatio = '16:9' | '9:16' | '1:1' | '4:3' | '3:4' | '3:2' | '2:3' | '21:9' | 'adaptive';
+export type VideoAspectRatio = '16:9' | '9:16' | '1:1' | '4:3' | '3:4' | '3:2' | '2:3' | '4:5' | '5:4' | '1:4' | '4:1' | '1:8' | '8:1' | '21:9' | '9:21' | 'adaptive';
 
 const DEFAULT_SEEDANCE_MODEL = 'doubao-seedance-2.0';
 const SEEDANCE_RESOLUTIONS = ['480p', '720p', '1080p'] as const;
@@ -413,7 +414,7 @@ async function resolveSeedanceSlotUrls(slots: MultimodalSlot[]): Promise<Multimo
             const dataUrl = await blobToDataUrl(href);
             return { ...slot, href: dataUrl };
         }
-        throw new Error(`Seedance 参考${slot.kind === 'image' ? '图片' : slot.kind === 'video' ? '视频' : '音频'}地址无法解析，请使用公网 URL、asset:// 素材或本地画布元素。`);
+                throw new Error(`Seedance 参考${slot.kind === 'image' ? '图片' : slot.kind === 'video' ? '视频' : '音频'}地址无法解析，请使用公网 URL、asset:// 素材或本地工作流节点。`);
     }));
 }
 
@@ -1065,68 +1066,6 @@ function decodeDataUrlImage(dataUrl: string) {
     };
 }
 
-const DEFAULT_RUNNINGHUB_PROMPT_FIELD = '12##text';
-const DEFAULT_RUNNINGHUB_IMAGE_PAYLOAD: Record<string, unknown> = {
-    '42##select': '1',
-    '43##value': 1024,
-    '30##value': 1024,
-    '44##file_type': 'PNG',
-};
-
-const RUNNINGHUB_STANDARD_MODEL_DEFAULTS: Array<{ pattern: RegExp; payload: Record<string, unknown> }> = [
-    { pattern: /^rhart-image-(?:g-2|n-g31-flash)\/(?:text-to-image|image-to-image)$/i, payload: { resolution: '1k' } },
-    { pattern: /^rhart-image-n-pro(?:-official)?\/(?:text-to-image|edit(?:-ultra)?)$/i, payload: { resolution: '1k' } },
-    { pattern: /^rhart-image-v1(?:-official)?\/(?:text-to-image|edit)$/i, payload: { resolution: '1k' } },
-    { pattern: /^youchuan\/text-to-image-v81$/i, payload: { hd: false } },
-    {
-        pattern: /^rhart-video\/sparkvideo-2\.0(?:-fast)?\/(?:text-to-video|image-to-video|multimodal-video)$/i,
-        payload: {
-            resolution: '720p',
-            duration: '5',
-            generateAudio: true,
-            ratio: 'adaptive',
-            realPersonMode: true,
-            conversionSlots: ['all'],
-            returnLastFrame: false,
-            seed: -1,
-        },
-    },
-    {
-        pattern: /^rhart-video\/sparkvideo-2\.0(?:-fast)?\/text-to-video$/i,
-        payload: { webSearch: false },
-    },
-    {
-        pattern: /^rhart-video\/sparkvideo-2\.0(?:-fast)?\/(?:image-to-video|multimodal-video)$/i,
-        payload: { realPersonMode: true, conversionSlots: ['all'] },
-    },
-    // Veo 3.1 系列（Google DeepMind 旗舰视频，原生音频 + 口型同步）
-    {
-        pattern: /^rhart-video-v3\.1(?:-[\w-]+)?\/(?:text-to-video|image-to-video|start-end-to-video)$/i,
-        payload: { resolution: '720p', duration: '8', generateAudio: false },
-    },
-    {
-        pattern: /^rhart-video-v3\.1-pro-official\/reference-to-video$/i,
-        payload: { resolution: '1080p', generateAudio: false },
-    },
-    // SkyReels V4 Omni（天工 AI 统一多模态视频，@tag 引用机制）
-    {
-        pattern: /^skyreels-v4\/omni-reference(?:-(?:fast|std))?$/i,
-        payload: { resolution: '1080p', duration: 5, promptOptimizer: true },
-    },
-    // 全能视频S（低价渠道版，duration '10'/'15'，aspectRatio 16:9/9:16）
-    {
-        pattern: /^rhart-video-s\/text-to-video$/i,
-        payload: { duration: '10' },
-    },
-];
-
-function runningHubStandardModelDefaults(modelEndpoint: string) {
-    return RUNNINGHUB_STANDARD_MODEL_DEFAULTS.reduce<Record<string, unknown>>((payload, preset) => {
-        if (preset.pattern.test(modelEndpoint)) Object.assign(payload, preset.payload);
-        return payload;
-    }, {});
-}
-
 function parseProviderJsonObject(raw: string | undefined, label: string): Record<string, unknown> {
     const trimmed = raw?.trim();
     if (!trimmed) return {};
@@ -1142,10 +1081,6 @@ function parseProviderJsonObject(raw: string | undefined, label: string): Record
     }
 }
 
-function isRunningHubNodeFieldModel(modelEndpoint: string) {
-    return /^(?:rhart-image\/)?f(?:-|_|$)|^f-/i.test(modelEndpoint);
-}
-
 function isRunningHubSeedance20Model(modelEndpoint: string) {
     return /(?:sparkvideo|seedance)-2\.0/i.test(modelEndpoint);
 }
@@ -1154,44 +1089,9 @@ function isRunningHubVideoEndpoint(modelEndpoint: string) {
     return /rhart-video[-\/]|skyreels-v4|image-to-video|start-end-to-video|reference-to-video|multimodal-video/i.test(modelEndpoint);
 }
 
-function isRunningHubVeo31Model(modelEndpoint: string) {
-    return /rhart-video-v3\.1/i.test(modelEndpoint);
-}
-
-function isRunningHubVeo31LowPriceModel(modelEndpoint: string) {
-    return /rhart-video-v3\.1-(?:fast|pro)\//i.test(modelEndpoint);
-}
-
-function isRunningHubVeo31ReferenceModel(modelEndpoint: string) {
-    return /rhart-video-v3\.1[\w.-]*\/reference-to-video/i.test(modelEndpoint);
-}
-
-function isRunningHubVeo31LiteModel(modelEndpoint: string) {
-    return /rhart-video-v3\.1-lite/i.test(modelEndpoint);
-}
-
-function isRunningHubOmniModel(modelEndpoint: string) {
-    return /skyreels-v4\/omni-reference/i.test(modelEndpoint);
-}
-
-function isRunningHubVideoSModel(modelEndpoint: string) {
-    return /rhart-video-s\//i.test(modelEndpoint);
-}
-
 function resolveRunningHubVideoDurations(model: string): number[] {
-    if (isRunningHubVeo31ReferenceModel(model)) return [];
-    if (isRunningHubVeo31Model(model)) {
-        if (isRunningHubVeo31LowPriceModel(model)) return [8];
-        if (/start-end-to-video/i.test(model)) return isRunningHubVeo31LiteModel(model) ? [] : [8];
-        return [4, 6, 8];
-    }
-    if (isRunningHubOmniModel(model)) return [3, 5, 8, 10, 12, 15];
-    if (isRunningHubVideoSModel(model)) return [10, 15];
-    return [5, 8, 10];
-}
-
-function runningHubAspectRatioField(modelEndpoint: string) {
-    return isRunningHubSeedance20Model(modelEndpoint) ? 'ratio' : 'aspectRatio';
+    const catalogDurations = getRouteDurations(model);
+    return catalogDurations ?? [];
 }
 
 function assertRunningHubPublicUrl(href: string | undefined, fieldName: string) {
@@ -1204,90 +1104,6 @@ function assertRunningHubPublicUrl(href: string | undefined, fieldName: string) 
 
 function uniqueLimitedUrls(urls: string[], max: number) {
     return Array.from(new Set(urls)).slice(0, max);
-}
-
-function runningHubReferenceFields(modelEndpoint: string, references: VideoImage[] = []) {
-    if (/image-to-image|image-to-video|start-end-to-video|reference-to-video/i.test(modelEndpoint) && references.length === 0) {
-        throw new Error(`RunningHub ${modelEndpoint} 需要至少一张参考图，请连接图片节点或拖入图片后再生成。`);
-    }
-    const first = references.find(ref => ref.slotRole === 'first_frame') || references[0];
-    const last = references.find(ref => ref.slotRole === 'last_frame') || references[1];
-    const urls = references.map((ref, index) => assertRunningHubPublicUrl(ref.href, `imageUrls[${index}]`));
-    const output: Record<string, unknown> = {};
-
-    if (isRunningHubOmniModel(modelEndpoint) && references.length > 0) {
-        throw new Error('SkyReels V4 Omni 参考输入（refImages/refVideos）暂未支持，请去掉参考图后使用文生视频。');
-    }
-
-    // Veo 3.1 Fast official image-to-video：imageUrl + optional lastImageUrl。
-    if (/rhart-video-v3\.1-fast-official\/image-to-video/i.test(modelEndpoint)) {
-        if (first?.href) output.imageUrl = assertRunningHubPublicUrl(first.href, 'imageUrl');
-        if (last?.href) output.lastImageUrl = assertRunningHubPublicUrl(last.href, 'lastImageUrl');
-        return output;
-    }
-
-    // Veo 3.1 Pro / Lite official image-to-video：imageUrl 单数；Fast 低价图生视频仍用 imageUrls 数组。
-    if (/rhart-video-v3\.1-(?:pro(?:-official)?|lite-official)\/image-to-video/i.test(modelEndpoint)) {
-        if (first?.href) output.imageUrl = assertRunningHubPublicUrl(first.href, 'imageUrl');
-        return output;
-    }
-
-    // Veo 3.1 start-end-to-video：firstFrameUrl + lastFrameUrl
-    if (/rhart-video-v3\.1[\w.-]*\/start-end-to-video/i.test(modelEndpoint)) {
-        if (first?.href) output.firstFrameUrl = assertRunningHubPublicUrl(first.href, 'firstFrameUrl');
-        if (last?.href) output.lastFrameUrl = assertRunningHubPublicUrl(last.href, 'lastFrameUrl');
-        return output;
-    }
-
-    if (/start-end-to-video/i.test(modelEndpoint) || /(?:sparkvideo|seedance)-2\.0(?:-[\w-]+)?\/image-to-video/i.test(modelEndpoint)) {
-        if (first?.href) output.firstFrameUrl = assertRunningHubPublicUrl(first.href, 'firstFrameUrl');
-        if (last?.href) output.lastFrameUrl = assertRunningHubPublicUrl(last.href, 'lastFrameUrl');
-        return output;
-    }
-
-    if (/kling|hailuo/i.test(modelEndpoint) && urls[0]) {
-        output.imageUrl = urls[0];
-        return output;
-    }
-
-    // youchuan/text-to-image-v81 垫图用 imageUrl 单数（非 imageUrls 数组）
-    if (/youchuan\/text-to-image/i.test(modelEndpoint) && urls[0]) {
-        output.imageUrl = urls[0];
-        return output;
-    }
-
-    // Veo 3.1 Fast 低价图生视频 + 各 reference-to-video：imageUrls 数组 max 3 (schema api-448183087/459865180)
-    if (/rhart-video-v3\.1[\w.-]*\/(?:image-to-video|reference-to-video)/i.test(modelEndpoint)) {
-        if (urls.length > 3) console.warn(`[RunningHub] ${modelEndpoint} 仅支持最多 3 张参考图，已截断 ${urls.length} → 3`);
-        output.imageUrls = uniqueLimitedUrls(urls, 3);
-        return output;
-    }
-
-    if (urls.length > 0) {
-        output.imageUrls = urls;
-    }
-    return output;
-}
-
-function runningHubMultimodalFields(
-    modelEndpoint: string,
-    references: VideoImage[] = [],
-    slots: MultimodalSlot[] = [],
-) {
-    if (!/(?:sparkvideo|seedance)-2\.0(?:-[\w-]+)?\/multimodal-video/i.test(modelEndpoint)) {
-        return runningHubReferenceFields(modelEndpoint, references);
-    }
-    const imageUrls = [
-        ...references.map(ref => ref.href),
-        ...slots.filter(slot => slot.kind === 'image').map(slot => slot.href),
-    ].map((href, index) => assertRunningHubPublicUrl(href, `imageUrls[${index}]`));
-    const videoUrls = slots.filter(slot => slot.kind === 'video').map((slot, index) => assertRunningHubPublicUrl(slot.href, `videoUrls[${index}]`));
-    const audioUrls = slots.filter(slot => slot.kind === 'audio').map((slot, index) => assertRunningHubPublicUrl(slot.href, `audioUrls[${index}]`));
-    const output: Record<string, unknown> = {};
-    if (imageUrls.length > 0) output.imageUrls = uniqueLimitedUrls(imageUrls, 9);
-    if (videoUrls.length > 0) output.videoUrls = uniqueLimitedUrls(videoUrls, 3);
-    if (audioUrls.length > 0) output.audioUrls = uniqueLimitedUrls(audioUrls, 3);
-    return output;
 }
 
 async function blobToDataUrl(href: string): Promise<string> {
@@ -1347,6 +1163,151 @@ async function prepareRunningHubSlots(
     }));
 }
 
+function buildRouteMediaFields(
+    schema: RouteCapabilitySchema,
+    references: VideoImage[],
+    slots: MultimodalSlot[],
+): Record<string, unknown> {
+    const output: Record<string, unknown> = {};
+    for (const spec of schema.media) {
+        if (spec.mapping === 'all_references') {
+            if (spec.required && references.length === 0) {
+                throw new Error(`RunningHub ${schema.routeId} 需要至少一张参考图，请连接图片节点或拖入图片后再生成。`);
+            }
+            const urls = references.map((ref, i) => assertRunningHubPublicUrl(ref.href, `${spec.field}[${i}]`));
+            if (spec.serialization === 'array') {
+                if (urls.length > spec.max) console.warn(`[RunningHub] ${schema.routeId} ${spec.field} 仅支持最多 ${spec.max} 张，已截断 ${urls.length} → ${spec.max}`);
+                output[spec.field] = uniqueLimitedUrls(urls, spec.max);
+            } else if (urls[0]) {
+                output[spec.field] = assertRunningHubPublicUrl(urls[0], spec.field);
+            }
+        } else if (spec.mapping === 'first_last_frame') {
+            const first = references.find(ref => ref.slotRole === 'first_frame') || references[0];
+            const last = references.find(ref => ref.slotRole === 'last_frame') || references[1];
+            if (spec.field === 'firstFrameUrl') {
+                if (spec.required && !first?.href) {
+                    throw new Error(`RunningHub ${schema.routeId} 需要首帧图片。`);
+                }
+                if (first?.href) output[spec.field] = assertRunningHubPublicUrl(first.href, spec.field);
+            } else if (spec.field === 'lastFrameUrl') {
+                if (last?.href) output[spec.field] = assertRunningHubPublicUrl(last.href, spec.field);
+            }
+        } else if (spec.mapping === 'first_frame_only') {
+            const first = references[0];
+            if (first?.href) {
+                output[spec.field] = assertRunningHubPublicUrl(first.href, spec.field);
+            }
+        } else if (spec.mapping === 'reference_images') {
+            if (spec.required && references.length === 0) {
+                throw new Error(`RunningHub ${schema.routeId} 需要至少一张参考图。`);
+            }
+            const urls = references.map((ref, i) => assertRunningHubPublicUrl(ref.href, `${spec.field}[${i}]`));
+            if (urls.length > spec.max) console.warn(`[RunningHub] ${schema.routeId} ${spec.field} 仅支持最多 ${spec.max} 张，已截断 ${urls.length} → ${spec.max}`);
+            output[spec.field] = uniqueLimitedUrls(urls, spec.max);
+        } else if (spec.mapping === 'multimodal') {
+            const imageUrls = [
+                ...references.map(ref => ref.href),
+                ...slots.filter(slot => slot.kind === 'image').map(slot => slot.href),
+            ].map((href, i) => assertRunningHubPublicUrl(href, `${spec.field}[${i}]`));
+            const videoUrls = slots.filter(slot => slot.kind === 'video').map((slot, i) => assertRunningHubPublicUrl(slot.href, `${spec.field}[${i}]`));
+            const audioUrls = slots.filter(slot => slot.kind === 'audio').map((slot, i) => assertRunningHubPublicUrl(slot.href, `${spec.field}[${i}]`));
+            if (spec.kind === 'image' && imageUrls.length > 0) output[spec.field] = uniqueLimitedUrls(imageUrls, spec.max);
+            if (spec.kind === 'video' && videoUrls.length > 0) output[spec.field] = uniqueLimitedUrls(videoUrls, spec.max);
+            if (spec.kind === 'audio' && audioUrls.length > 0) output[spec.field] = uniqueLimitedUrls(audioUrls, spec.max);
+        }
+    }
+    return output;
+}
+
+function snapDuration(requested: number, allowed: number[]): number {
+    return allowed.reduce((best, v) => Math.abs(v - requested) < Math.abs(best - requested) ? v : best, allowed[0]);
+}
+
+function buildRunningHubRoutePayload(
+    prompt: string,
+    schema: RouteCapabilitySchema,
+    key: UserApiKey | undefined,
+    options: {
+        aspectRatio?: VideoAspectRatio;
+        durationSec?: number;
+        resolution?: string;
+        references?: VideoImage[];
+        slots?: MultimodalSlot[];
+        userParams?: Record<string, unknown>;
+    },
+): Record<string, unknown> {
+    const extra = key?.extraConfig || {};
+    const disableDefaults = extra.runningHubDisableDefaultPayload === 'true';
+    const configuredPayload = {
+        ...parseProviderJsonObject(extra.configJson, 'RunningHub 配置 JSON'),
+        ...parseProviderJsonObject(extra.runningHubDefaultPayloadJson, 'RunningHub 默认载荷 JSON'),
+    };
+    const promptField = extra.runningHubPromptField || schema.promptField;
+
+    const payload: Record<string, unknown> = {};
+
+    if (!disableDefaults) {
+        if (schema.resolutionDefault) payload.resolution = schema.resolutionDefault;
+        if (schema.durationDefault !== undefined) payload.duration = schema.durationDefault;
+        if (schema.aspectRatioField && schema.aspectRatioValues?.[0]) payload[schema.aspectRatioField] = schema.aspectRatioValues[0];
+        for (const param of schema.params) {
+            if (param.default !== undefined) {
+                if (param.type === 'string' && param.default === 'all') {
+                    payload[param.field] = ['all'];
+                } else {
+                    payload[param.field] = param.default;
+                }
+            }
+        }
+    }
+
+    Object.assign(payload, configuredPayload);
+
+    payload[promptField] = prompt;
+
+    if (schema.aspectRatioField && options?.aspectRatio) {
+        payload[schema.aspectRatioField] = options.aspectRatio;
+    }
+
+    if (schema.durationType && options?.durationSec && options.durationSec > 0) {
+        if (schema.durationValues && schema.durationValues.length > 0) {
+            const allowed = schema.durationValues.map(v => Number(v)).filter(n => !isNaN(n));
+            if (allowed.length > 0) {
+                if (schema.durationType === 'string') {
+                    payload.duration = String(snapDuration(options.durationSec, allowed));
+                } else {
+                    payload.duration = snapDuration(options.durationSec, allowed);
+                }
+            }
+        } else if (schema.durationType === 'string') {
+            payload.duration = String(options.durationSec);
+        } else {
+            payload.duration = options.durationSec;
+        }
+    }
+
+    if (options?.resolution) {
+        payload.resolution = options.resolution;
+    }
+
+    if (options?.userParams) {
+        const schemaFields = new Set(schema.params.map(p => p.field));
+        for (const [key, value] of Object.entries(options.userParams)) {
+            if (value !== undefined && schemaFields.has(key)) {
+                payload[key] = value;
+            }
+        }
+    }
+
+    Object.assign(payload, buildRouteMediaFields(schema, options?.references || [], options?.slots || []));
+
+    if (extra.runningHubOutputFormatField && extra.runningHubOutputFormat) {
+        payload[extra.runningHubOutputFormatField] = extra.runningHubOutputFormat;
+    }
+
+    return payload;
+}
+
 function buildRunningHubStandardPayload(
     prompt: string,
     modelEndpoint: string,
@@ -1357,81 +1318,14 @@ function buildRunningHubStandardPayload(
         resolution?: string;
         references?: VideoImage[];
         slots?: MultimodalSlot[];
+        userParams?: Record<string, unknown>;
     },
 ): Record<string, unknown> {
-    const extra = key?.extraConfig || {};
-    const nodeFieldModel = isRunningHubNodeFieldModel(modelEndpoint);
-    const promptField = extra.runningHubPromptField || (nodeFieldModel ? DEFAULT_RUNNINGHUB_PROMPT_FIELD : 'prompt');
-    const disableDefaults = extra.runningHubDisableDefaultPayload === 'true';
-    const configuredPayload = {
-        ...parseProviderJsonObject(extra.configJson, 'RunningHub 配置 JSON'),
-        ...parseProviderJsonObject(extra.runningHubDefaultPayloadJson, 'RunningHub 默认载荷 JSON'),
-    };
-    const payload: Record<string, unknown> = {
-        ...(!disableDefaults && nodeFieldModel ? DEFAULT_RUNNINGHUB_IMAGE_PAYLOAD : {}),
-        ...(!disableDefaults && !nodeFieldModel ? runningHubStandardModelDefaults(modelEndpoint) : {}),
-        ...configuredPayload,
-        [promptField]: prompt,
-    };
-    if (!nodeFieldModel) {
-        const isVeo31Ref = isRunningHubVeo31ReferenceModel(modelEndpoint);
-        const isVeo31 = isRunningHubVeo31Model(modelEndpoint);
-        const isVeo31LowPrice = isRunningHubVeo31LowPriceModel(modelEndpoint);
-        const isProOfficialRef = /rhart-video-v3\.1-pro-official\/reference-to-video/i.test(modelEndpoint);
-        if (options?.aspectRatio && !isProOfficialRef) payload[runningHubAspectRatioField(modelEndpoint)] = options.aspectRatio;
-        if (isRunningHubVideoEndpoint(modelEndpoint)) {
-            payload.resolution = options?.resolution || payload.resolution || '720p';
-            if (isVeo31Ref) {
-                // Veo 3.1 reference-to-video：无 duration；fast-official 保留 aspectRatio (16:9/9:16)，pro-official 无 aspectRatio 字段
-                delete payload.duration;
-                if (isProOfficialRef) {
-                    delete payload.aspectRatio;
-                } else if (payload.aspectRatio !== '9:16' && payload.aspectRatio !== '16:9') {
-                    payload.aspectRatio = '16:9';
-                }
-            } else if (isVeo31) {
-                // Veo 3.1：duration 必须是 '4'/'6'/'8' 字符串
-                const isStartEnd = /start-end-to-video/i.test(modelEndpoint);
-                const isLiteOfficial = isRunningHubVeo31LiteModel(modelEndpoint);
-                if (isVeo31LowPrice) {
-                    if (payload.aspectRatio !== '9:16' && payload.aspectRatio !== '16:9') payload.aspectRatio = '16:9';
-                    delete payload.generateAudio;
-                    payload.duration = '8';
-                } else if (isStartEnd) {
-                    // Veo 3.1 start-end-to-video: schema 只有 duration='8' (lite-official 无 duration 无 generateAudio 字段)
-                    if (isLiteOfficial) {
-                        delete payload.duration;
-                        delete payload.generateAudio;
-                    } else {
-                        payload.duration = '8';
-                    }
-                } else {
-                    const requested = (options?.durationSec && options.durationSec > 0) ? options.durationSec : Number(payload.duration) || 8;
-                    const snapped = [4, 6, 8].reduce((best, v) => Math.abs(v - requested) < Math.abs(best - requested) ? v : best, 4);
-                    payload.duration = String(snapped);
-                }
-            } else if (isRunningHubOmniModel(modelEndpoint)) {
-                // Omni：duration 是 3-15 数字
-                const requested = (options?.durationSec && options.durationSec > 0) ? options.durationSec : Number(payload.duration) || 5;
-                payload.duration = Math.max(3, Math.min(15, Math.round(requested)));
-            } else if (isRunningHubVideoSModel(modelEndpoint)) {
-                // 全能视频S：duration 是 '10'/'15' 字符串，aspectRatio 只支持 '9:16'/'16:9'
-                const requested = (options?.durationSec && options.durationSec > 0) ? options.durationSec : Number(payload.duration) || 10;
-                payload.duration = requested >= 15 ? '15' : '10';
-                if (payload.aspectRatio !== '9:16' && payload.aspectRatio !== '16:9') payload.aspectRatio = '16:9';
-            } else {
-                payload.duration = String((options?.durationSec && options.durationSec > 0) ? options.durationSec : (payload.duration || 5));
-            }
-        } else {
-            if (options?.durationSec) payload.duration = String(options.durationSec);
-            if (options?.resolution) payload.resolution = options.resolution;
-        }
-        Object.assign(payload, runningHubMultimodalFields(modelEndpoint, options?.references, options?.slots));
+    const routeSchema = getRouteSchema(modelEndpoint);
+    if (routeSchema) {
+        return buildRunningHubRoutePayload(prompt, routeSchema, key, options || {});
     }
-    if (extra.runningHubOutputFormatField && extra.runningHubOutputFormat) {
-        payload[extra.runningHubOutputFormatField] = extra.runningHubOutputFormat;
-    }
-    return payload;
+    throw new Error(`RunningHub 路由 ${modelEndpoint} 未通过验证（未在 Route Catalog 中登记），暂不可执行。请先在 Route Catalog 中补齐该路由的 Capability Schema 后再使用。`);
 }
 
 function extractRunningHubMediaUrl(
@@ -2429,6 +2323,12 @@ export async function generateImageWithProvider(
         const { rhRunTask } = await import('./runningHubService');
         const result = await rhRunTask(apiKey, modelEndpoint, buildRunningHubStandardPayload(prompt, modelEndpoint, key, {
             references: runningHubRefs,
+            aspectRatio: options?.aspectRatio,
+            resolution: options?.resolution,
+            userParams: {
+                ...(options?.webSearch !== undefined ? { webSearch: options.webSearch } : {}),
+                ...(options?.quality !== undefined ? { hd: options.quality === 'hd' || options.quality === 'high' } : {}),
+            },
         }), {
             baseUrl,
             signal: options?.signal,
@@ -3248,6 +3148,11 @@ export async function generateVideoWithProvider(
             resolution: options?.resolution,
             references: runningHubRefs,
             slots: runningHubSlots,
+            userParams: {
+                ...(options?.generateAudio !== undefined ? { generateAudio: options.generateAudio } : {}),
+                ...(options?.seed !== undefined ? { seed: options.seed } : {}),
+                ...(options?.returnLastFrame !== undefined ? { returnLastFrame: options.returnLastFrame } : {}),
+            },
         }), {
             baseUrl,
             signal: options?.signal,

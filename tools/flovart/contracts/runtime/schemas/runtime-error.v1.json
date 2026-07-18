@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://flovart.local/schemas/runtime/runtime-error.v1.json",
+  "title": "RuntimeError v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["code", "message", "retryable"],
+  "properties": {
+    "code": {
+      "enum": [
+        "INVALID_ARGUMENT",
+        "UNKNOWN_COMMAND",
+        "IDEMPOTENCY_CONFLICT",
+        "PRECONDITION_FAILED",
+        "PROTOCOL_MISMATCH",
+        "RUNTIME_UNAVAILABLE",
+        "PERMISSION_DENIED",
+        "ROUTE_UNAVAILABLE",
+        "ROUTE_SCHEMA_INVALID",
+        "BUDGET_EXCEEDED",
+        "ACTION_REQUIRED",
+        "PROVIDER_SUBMISSION_UNKNOWN",
+        "TASK_NOT_FOUND"
+      ]
+    },
+    "message": { "type": "string", "minLength": 1 },
+    "retryable": { "type": "boolean" },
+    "details": {},
+    "actionUrl": { "type": ["string", "null"] }
+  }
+}

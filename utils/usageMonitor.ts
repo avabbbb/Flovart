@@ -51,25 +51,30 @@ export interface KeyUsageSummary {
 const readRecords = async (): Promise<UsageRecord[]> => (await usageStore.getItem<UsageRecord[]>(RECORDS_KEY)) || [];
 const writeRecords = async (records: UsageRecord[]) => usageStore.setItem(RECORDS_KEY, records.slice(-10_000));
 
-function pricingRulesFor(key: UserApiKey, productModelId: string | undefined, upstreamModelId: string, type: 'text' | 'image' | 'video'): ApiPricingRule[] {
+function pricingRulesFor(key: UserApiKey, productModelId: string | undefined, routeId: string, type: 'text' | 'image' | 'video', resolution?: string, quality?: string): ApiPricingRule[] {
   const rules = key.pricingRules || [];
   const supportedUnits = type === 'video' ? ['video_second', 'request'] : type === 'image' ? ['image', 'request'] : ['input_token', 'output_token', 'request'];
   const supported = rules.filter(rule => supportedUnits.includes(rule.unit));
   const productRules = supported.filter(rule => rule.productModelId === productModelId);
-  if (productRules.length) return productRules;
-  const upstreamRules = supported.filter(rule => rule.upstreamModelId === upstreamModelId);
-  return upstreamRules.length ? upstreamRules : supported.filter(rule => !rule.productModelId && !rule.upstreamModelId);
+  const routeRules = supported.filter(rule => rule.routeId === routeId);
+  const scoped = productRules.length ? productRules : routeRules.length ? routeRules : supported.filter(rule => !rule.productModelId && !rule.routeId);
+  const compatible = scoped.filter(rule => (!rule.resolution || rule.resolution.toLowerCase() === resolution?.toLowerCase()) && (!rule.quality || rule.quality.toLowerCase() === quality?.toLowerCase()));
+  if (!compatible.length) return [];
+  const maxSpecificity = Math.max(...compatible.map(rule => Number(Boolean(rule.resolution)) + Number(Boolean(rule.quality))));
+  return compatible.filter(rule => Number(Boolean(rule.resolution)) + Number(Boolean(rule.quality)) === maxSpecificity);
 }
 
 export function estimateApiCost(input: {
   key: UserApiKey;
   productModelId?: string;
-  upstreamModelId: string;
+  routeId: string;
   type: 'text' | 'image' | 'video';
   durationSec?: number;
   count?: number;
+  resolution?: string;
+  quality?: string;
 }): { amount: number; currency: 'USD' | 'CNY' } | null {
-  const rules = pricingRulesFor(input.key, input.productModelId, input.upstreamModelId, input.type)
+  const rules = pricingRulesFor(input.key, input.productModelId, input.routeId, input.type, input.resolution, input.quality)
     .filter(rule => rule.unit !== 'input_token' && rule.unit !== 'output_token');
   if (!rules.length || new Set(rules.map(rule => rule.currency)).size !== 1) return null;
   const count = Math.max(1, input.count || 1);
@@ -102,7 +107,7 @@ export async function reserveApiUsage(input: Parameters<typeof estimateApiCost>[
   const now = Date.now();
   const record: UsageRecord = {
     id: nanoid(), keyId: input.key.id, provider: input.key.provider, productModelId: input.productModelId,
-    model: input.upstreamModelId, timestamp: now, updatedAt: now, type: input.type, status: 'reserved',
+    model: input.routeId, timestamp: now, updatedAt: now, type: input.type, status: 'reserved',
     billableState: estimate ? 'estimated' : 'unknown', estimatedCost: estimate?.amount, currency: estimate?.currency,
   };
   const records = await readRecords(); records.push(record); await writeRecords(records);
@@ -154,7 +159,7 @@ export async function recordApiUsage(input: {
   success: boolean;
   error?: string;
 }): Promise<void> {
-  const estimate = estimateApiCost({ key: input.key, productModelId: input.productModelId, upstreamModelId: input.model, type: input.type });
+  const estimate = estimateApiCost({ key: input.key, productModelId: input.productModelId, routeId: input.model, type: input.type });
   const now = Date.now();
   const records = await readRecords();
   records.push({

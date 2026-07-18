@@ -1,11 +1,13 @@
 import type {
   AICapability,
   AIProvider,
-  ProductModelMapping,
+  ProductRouteBinding,
   ProductModelMode,
   UserApiKey,
 } from '../types';
 import type { VideoAspectRatio } from './aiGateway';
+import { getRouteCatalog } from './runningHubRouteCatalog';
+import { PRODUCT_MODEL_ENTRIES } from '../tools/flovart/product-models.js';
 
 export type ProductModelCapability = {
   modes: ProductModelMode[];
@@ -71,97 +73,32 @@ const baseVideo = {
   maxAudioReferences: 0,
 };
 
-export const PRODUCT_MODEL_CATALOG: ProductModelDefinition[] = [
-  {
-    id: 'flovart:gpt-image-2', name: 'GPT Image 2', shortName: 'GPT', company: 'OpenAI', capability: 'image', provider: 'openai',
-    officialModelIds: ['gpt-image-2'], aliases: ['gpt-image-2-2026-04-21'], status: 'available', badge: '文字精准',
-    description: '高质量图片生成与编辑',
-    capabilities: { ...baseImage, resolutions: ['1K', '2K', '4K'], qualities: ['low', 'medium', 'high'], maxImageReferences: 16 },
-  },
-  {
-    id: 'flovart:gemini-3-pro-image', name: 'Gemini 3 Pro Image', shortName: 'NB Pro', company: 'Google', capability: 'image', provider: 'google',
-    officialModelIds: ['gemini-3-pro-image'], aliases: [], status: 'available', badge: '设计推理',
-    description: 'Nano Banana Pro，适合专业设计资产',
-    capabilities: { ...baseImage, supportsWebSearch: true, maxImageReferences: 14 },
-  },
-  {
-    id: 'flovart:gemini-3.1-flash-image', name: 'Gemini 3.1 Flash Image', shortName: 'NB 2', company: 'Google', capability: 'image', provider: 'google',
-    officialModelIds: ['gemini-3.1-flash-image'], aliases: ['gemini-3.1-flash-image-preview'], status: 'available', badge: '通用',
-    description: 'Nano Banana 2，设计与速度平衡，最多 14 张参考图',
-    capabilities: { ...baseImage, aspectRatios: ['1:1', '3:2', '2:3', '16:9', '9:16', '4:3', '3:4', '4:5', '5:4', '1:4', '4:1', '1:8', '8:1', '21:9', '9:21'], resolutions: ['512', '1K', '2K', '4K'], supportsWebSearch: true, maxImageReferences: 14 },
-  },
-  {
-    id: 'flovart:gemini-3.1-flash-lite-image', name: 'Gemini 3.1 Flash-Lite Image', shortName: 'NB 2 Lite', company: 'Google', capability: 'image', provider: 'google',
-    officialModelIds: ['gemini-3.1-flash-lite-image'], aliases: [], status: 'available', badge: '极速',
-    description: 'Nano Banana 2 Lite，亚秒延迟，推荐替代 NB 1',
-    capabilities: { ...baseImage, aspectRatios: ['1:1', '3:2', '2:3', '16:9', '9:16', '4:3', '3:4'], resolutions: ['512', '1K', '2K'], supportsWebSearch: true, maxImageReferences: 14 },
-  },
-  {
-    id: 'flovart:imagen-4', name: 'Imagen 4', shortName: 'Imagen 4', company: 'Google', capability: 'image', provider: 'google',
-    officialModelIds: ['imagen-4.0-generate-001'], aliases: ['imagen-4.0-fast-generate-001', 'imagen-4.0-ultra-generate-001'], status: 'available', badge: '已弃用',
-    description: 'Imagen 4，2026-08-17 关停，建议迁移到 Nano Banana 2 Lite',
-    capabilities: { ...baseImage, modes: ['text-to-image'], aspectRatios: ['1:1', '16:9', '9:16', '4:3', '3:4'], resolutions: ['1K', '2K', '4K'], maxImageReferences: 0 },
-  },
-  {
-    id: 'flovart:seedream-5-pro', name: 'Seedream 5.0 Pro', shortName: 'S5 Pro', company: 'ByteDance', capability: 'image', provider: 'volcengine',
-    officialModelIds: [], aliases: ['seedream-5.0-pro', 'doubao-seedream-5.0-pro'], status: 'mapping-required', badge: '待映射',
-    description: '官方产品已发布，API 模型 ID 由用户映射',
-    capabilities: { ...baseImage, supportsWebSearch: true, supportsRealPersonCheck: true },
-  },
-  {
-    id: 'flovart:seedance-2', name: 'Seedance 2.0', shortName: 'S2', company: 'ByteDance', capability: 'video', provider: 'volcengine',
-    officialModelIds: ['doubao-seedance-2-0-260128'], aliases: ['dreamina-seedance-2-0-260128', 'doubao-seedance-2.0', 'seedance-2.0'], status: 'available', badge: '多模态',
-    description: '图文音视频统一参考，任务提交后不自动切线',
-    capabilities: { ...baseVideo, modes: ['text-to-video', 'image-to-video', 'reference-to-video', 'first-last-frame'], aspectRatios: ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9', 'adaptive'], durations: [-1, 4, 5, 6, 8, 10, 12, 15], resolutions: ['480p', '720p', '1080p'], audioControl: 'optional', supportsRealPersonCheck: true, supportsSeed: true, maxImageReferences: 9, maxVideoReferences: 3, maxAudioReferences: 3 },
-  },
-  {
-    id: 'flovart:seedance-2-fast', name: 'Seedance 2.0 Fast', shortName: 'S2 Fast', company: 'ByteDance', capability: 'video', provider: 'volcengine',
-    officialModelIds: ['doubao-seedance-2-0-fast-260128'], aliases: [], status: 'available', badge: '快速',
-    description: '快速版本，独立能力与价格线路',
-    capabilities: { ...baseVideo, modes: ['text-to-video', 'image-to-video', 'reference-to-video'], aspectRatios: ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9', 'adaptive'], durations: [-1, 4, 5, 6, 8, 10, 12, 15], resolutions: ['480p', '720p'], audioControl: 'optional', supportsRealPersonCheck: true, supportsSeed: true, maxImageReferences: 9, maxVideoReferences: 3, maxAudioReferences: 3 },
-  },
-  {
-    id: 'flovart:veo-3.1', name: 'Veo 3.1', shortName: 'Veo', company: 'Google', capability: 'video', provider: 'google',
-    officialModelIds: ['veo-3.1-generate-preview'], aliases: [], status: 'available', badge: '电影感',
-    description: '支持首尾帧与最多 3 张参考图',
-    capabilities: { ...baseVideo, modes: ['text-to-video', 'image-to-video', 'reference-to-video', 'first-last-frame'], resolutions: ['720p', '1080p', '4K'], maxImageReferences: 3, supportsSeed: true },
-  },
-  {
-    id: 'flovart:veo-3.1-fast', name: 'Veo 3.1 Fast', shortName: 'Veo Fast', company: 'Google', capability: 'video', provider: 'google',
-    officialModelIds: ['veo-3.1-fast-generate-preview'], aliases: [], status: 'available', badge: '快速',
-    description: '更快的 Veo 3.1 线路',
-    capabilities: { ...baseVideo, modes: ['text-to-video', 'image-to-video', 'reference-to-video', 'first-last-frame'], resolutions: ['720p', '1080p', '4K'], maxImageReferences: 3, supportsSeed: true },
-  },
-  {
-    id: 'flovart:veo-3.1-lite', name: 'Veo 3.1 Lite', shortName: 'Veo Lite', company: 'Google', capability: 'video', provider: 'google',
-    officialModelIds: ['veo-3.1-lite-generate-preview'], aliases: [], status: 'available', badge: '经济',
-    description: '轻量线路，不显示 4K 与参考图模式', capabilities: { ...baseVideo, modes: ['text-to-video', 'image-to-video', 'first-last-frame'], supportsSeed: true },
-  },
-  {
-    id: 'flovart:kling-video-3', name: 'Kling VIDEO 3.0', shortName: 'Kling 3', company: 'Kuaishou', capability: 'video', provider: 'keling',
-    officialModelIds: [], aliases: ['kling-video-3.0', 'kling-v3'], status: 'mapping-required', badge: '待映射',
-    description: '公开产品能力已确认，API ID 由用户映射',
-    capabilities: { ...baseVideo, modes: ['text-to-video', 'image-to-video', 'first-last-frame'], durations: [3, 5, 10, 15], audioControl: 'optional' },
-  },
-  {
-    id: 'flovart:kling-video-3-omni', name: 'Kling VIDEO 3.0 Omni', shortName: 'Kling Omni', company: 'Kuaishou', capability: 'video', provider: 'keling',
-    officialModelIds: [], aliases: ['kling-video-3.0-omni', 'kling-v3-omni'], status: 'mapping-required', badge: '全能参考',
-    description: '多模态参考与多镜头版本',
-    capabilities: { ...baseVideo, modes: ['text-to-video', 'image-to-video', 'reference-to-video', 'first-last-frame'], durations: [3, 5, 10, 15], audioControl: 'optional', maxImageReferences: 4, maxVideoReferences: 1, maxAudioReferences: 1 },
-  },
-  {
-    id: 'flovart:grok-imagine-video', name: 'Grok Imagine Video', shortName: 'Grok', company: 'xAI', capability: 'video', provider: 'xai',
-    officialModelIds: ['grok-imagine-video'], aliases: ['grok-imagine'], status: 'available', badge: '视频扩展',
-    description: 'xAI 视频生成，支持文生、图生与视频扩展',
-    capabilities: { ...baseVideo, modes: ['text-to-video', 'image-to-video', 'video-extension'], aspectRatios: ['1:1', '16:9', '9:16', '4:3', '3:4', '2:3', '3:2'], durations: [1, 3, 5, 8, 10, 15], resolutions: ['720p', '1080p'], audioControl: 'none', maxImageReferences: 1, maxVideoReferences: 1 },
-  },
-  {
-    id: 'flovart:grok-imagine-video-1.5', name: 'Grok Imagine Video 1.5', shortName: 'Grok 1.5', company: 'xAI', capability: 'video', provider: 'xai',
-    officialModelIds: ['grok-imagine-video-1.5'], aliases: ['grok-imagine-1.5'], status: 'available', badge: '升级版',
-    description: 'xAI 1.5 线路视频生成，更长时长与更高清晰度',
-    capabilities: { ...baseVideo, modes: ['text-to-video', 'image-to-video', 'video-extension'], aspectRatios: ['1:1', '16:9', '9:16', '4:3', '3:4', '2:3', '3:2'], durations: [1, 3, 5, 8, 10, 15], resolutions: ['720p', '1080p'], audioControl: 'none', maxImageReferences: 1, maxVideoReferences: 1 },
-  },
-];
+const CAPABILITY_BY_ID: Record<string, ProductModelCapability> = {
+  'flovart:gpt-image-2': { ...baseImage, resolutions: ['1K', '2K', '4K'], qualities: ['low', 'medium', 'high'], maxImageReferences: 16 },
+  'flovart:gemini-3-pro-image': { ...baseImage, supportsWebSearch: true, maxImageReferences: 14 },
+  'flovart:gemini-3.1-flash-image': { ...baseImage, aspectRatios: ['1:1', '3:2', '2:3', '16:9', '9:16', '4:3', '3:4', '4:5', '5:4', '1:4', '4:1', '1:8', '8:1', '21:9', '9:21'], resolutions: ['512', '1K', '2K', '4K'], supportsWebSearch: true, maxImageReferences: 14 },
+  'flovart:gemini-3.1-flash-lite-image': { ...baseImage, aspectRatios: ['1:1', '3:2', '2:3', '16:9', '9:16', '4:3', '3:4'], resolutions: ['512', '1K', '2K'], supportsWebSearch: true, maxImageReferences: 14 },
+  'flovart:imagen-4': { ...baseImage, modes: ['text-to-image'], aspectRatios: ['1:1', '16:9', '9:16', '4:3', '3:4'], resolutions: ['1K', '2K', '4K'], maxImageReferences: 0 },
+  'flovart:seedream-5-pro': { ...baseImage, supportsWebSearch: true, supportsRealPersonCheck: true },
+  'flovart:midjourney-v8-1': { ...baseImage, modes: ['text-to-image'], qualities: ['low', 'medium', 'high'], maxImageReferences: 1 },
+  'flovart:seedance-2': { ...baseVideo, modes: ['text-to-video', 'image-to-video', 'reference-to-video', 'first-last-frame'], aspectRatios: ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9', 'adaptive'], durations: [-1, 4, 5, 6, 8, 10, 12, 15], resolutions: ['480p', '720p', '1080p'], audioControl: 'optional', supportsRealPersonCheck: true, supportsSeed: true, maxImageReferences: 9, maxVideoReferences: 3, maxAudioReferences: 3 },
+  'flovart:seedance-2-fast': { ...baseVideo, modes: ['text-to-video', 'image-to-video', 'reference-to-video'], aspectRatios: ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9', 'adaptive'], durations: [-1, 4, 5, 6, 8, 10, 12, 15], resolutions: ['480p', '720p'], audioControl: 'optional', supportsRealPersonCheck: true, supportsSeed: true, maxImageReferences: 9, maxVideoReferences: 3, maxAudioReferences: 3 },
+  'flovart:veo-3.1': { ...baseVideo, modes: ['text-to-video', 'image-to-video', 'reference-to-video', 'first-last-frame'], resolutions: ['720p', '1080p', '4K'], maxImageReferences: 3, supportsSeed: true },
+  'flovart:veo-3.1-fast': { ...baseVideo, modes: ['text-to-video', 'image-to-video', 'reference-to-video', 'first-last-frame'], resolutions: ['720p', '1080p', '4K'], maxImageReferences: 3, supportsSeed: true },
+  'flovart:veo-3.1-lite': { ...baseVideo, modes: ['text-to-video', 'image-to-video', 'first-last-frame'], supportsSeed: true },
+  'flovart:kling-video-3': { ...baseVideo, modes: ['text-to-video', 'image-to-video', 'first-last-frame'], durations: [3, 5, 10, 15], audioControl: 'optional' },
+  'flovart:kling-video-3-omni': { ...baseVideo, modes: ['text-to-video', 'image-to-video', 'reference-to-video', 'first-last-frame'], durations: [3, 5, 10, 15], audioControl: 'optional', maxImageReferences: 4, maxVideoReferences: 1, maxAudioReferences: 1 },
+  'flovart:grok-imagine-video': { ...baseVideo, modes: ['text-to-video', 'image-to-video', 'video-extension'], aspectRatios: ['1:1', '16:9', '9:16', '4:3', '3:4', '2:3', '3:2'], durations: [1, 3, 5, 8, 10, 15], resolutions: ['720p', '1080p'], audioControl: 'none', maxImageReferences: 1, maxVideoReferences: 1 },
+  'flovart:grok-imagine-video-1.5': { ...baseVideo, modes: ['text-to-video', 'image-to-video', 'video-extension'], aspectRatios: ['1:1', '16:9', '9:16', '4:3', '3:4', '2:3', '3:2'], durations: [1, 3, 5, 8, 10, 15], resolutions: ['720p', '1080p'], audioControl: 'none', maxImageReferences: 1, maxVideoReferences: 1 },
+};
+
+export const PRODUCT_MODEL_CATALOG: ProductModelDefinition[] = PRODUCT_MODEL_ENTRIES.map(entry => ({
+  ...entry,
+  capability: entry.capability as Extract<AICapability, 'image' | 'video'>,
+  provider: entry.provider as AIProvider,
+  status: entry.status as ProductModelDefinition['status'],
+  capabilities: CAPABILITY_BY_ID[entry.id],
+}));
 
 const byId = new Map(PRODUCT_MODEL_CATALOG.map(model => [model.id, model]));
 const normalize = (value?: string) => value?.trim().toLowerCase() || '';
@@ -196,7 +133,7 @@ export function getProductModelsByCompany(capability: 'image' | 'video'): { comp
 export const VIDEO_MODE_ORDER: ProductModelMode[] = ['text-to-video', 'image-to-video', 'reference-to-video', 'first-last-frame', 'video-extension'];
 
 /** 固定产品能力与当前 BYOK 线路实际已实现的请求适配器取交集，避免 PromptBar 展示“能选但发不出去”的模式。 */
-export function getRoutedVideoModes(productModelId: string, provider?: AIProvider, upstreamModelId = ''): ProductModelMode[] {
+export function getRoutedVideoModes(productModelId: string, provider?: AIProvider, routeId = ''): ProductModelMode[] {
   const product = getProductModel(productModelId);
   if (!product || product.capability !== 'video') return [];
   const supported = (() => {
@@ -205,7 +142,7 @@ export function getRoutedVideoModes(productModelId: string, provider?: AIProvide
     if (provider === 'xai') return ['text-to-video', 'image-to-video', 'video-extension'];
     if (provider === 'keling' || provider === 'minimax' || provider === 'custom' || provider === 'openai_compatible') return ['text-to-video', 'image-to-video'];
     if (provider === 'runningHub') {
-      const endpoint = upstreamModelId.toLowerCase();
+      const endpoint = routeId.toLowerCase();
       if (/reference-to-video|multimodal-video|omni-reference/.test(endpoint)) return ['reference-to-video'];
       if (/start-end-to-video|first-last-frame/.test(endpoint)) return ['first-last-frame'];
       if (/image-to-video/.test(endpoint)) return ['image-to-video'];
@@ -241,50 +178,82 @@ function keySupportsProduct(key: UserApiKey, model: ProductModelDefinition): boo
   return !key.capabilities?.length || key.capabilities.includes(model.capability);
 }
 
-function keyStillExposesUpstreamModel(key: UserApiKey, upstreamModelId: string): boolean {
+function keyStillExposesRoute(key: UserApiKey, routeId: string): boolean {
   const models = keyModels(key);
-  return models.length === 0 || models.some(candidate => normalize(candidate) === normalize(upstreamModelId));
+  return models.length === 0 || models.some(candidate => normalize(candidate) === normalize(routeId));
 }
 
-export function suggestProductModelMappings(key: UserApiKey): ProductModelMapping[] {
+/** 第一阶段 RunningHub Route 注册表：从 runningHubRouteCatalog 派生，保证 seed 与完整 Route Capability Schema 同源。 */
+type RunningHubRouteSeed = { productModelId: string; mode: ProductModelMode; routeId: string };
+const RUNNINGHUB_ROUTE_SEED: RunningHubRouteSeed[] = getRouteCatalog().flatMap(schema =>
+    schema.modes.map(mode => ({ productModelId: schema.productModelId, mode, routeId: schema.routeId })),
+);
+
+export function suggestProductRouteBindings(key: UserApiKey): ProductRouteBinding[] {
+  if (key.provider === 'runningHub') {
+    const filter = keyModels(key).map(normalize);
+    const filterSet = filter.length ? new Set(filter) : null;
+    return RUNNINGHUB_ROUTE_SEED
+      .filter(seed => !filterSet || filterSet.has(normalize(seed.routeId)))
+      .filter(seed => keySupportsProduct(key, byId.get(seed.productModelId)!))
+      .map(seed => ({ productModelId: seed.productModelId, mode: seed.mode, routeId: seed.routeId, priority: 0, enabled: false, confirmed: false }));
+  }
   const candidates = keyModels(key);
   return PRODUCT_MODEL_CATALOG.flatMap(model => {
     const ids = [...model.officialModelIds, ...model.aliases].map(normalize);
-    const upstreamModelId = candidates.find(candidate => ids.includes(normalize(candidate)));
-    if (!upstreamModelId) return [];
-    return [{ productModelId: model.id, upstreamModelId, priority: 0, enabled: false, confirmed: false }];
+    const routeId = candidates.find(candidate => ids.includes(normalize(candidate)));
+    if (!routeId) return [];
+    return model.capabilities.modes.map(mode => ({ productModelId: model.id, mode, routeId, priority: 0, enabled: false, confirmed: false }));
   });
 }
 
-export function mergeSuggestedMappings(key: UserApiKey): ProductModelMapping[] {
-  const existing = key.modelMappings || [];
-  const existingIds = new Set(existing.map(mapping => mapping.productModelId));
-  return [...existing, ...suggestProductModelMappings(key).filter(mapping => !existingIds.has(mapping.productModelId))];
+export function mergeSuggestedMappings(key: UserApiKey): ProductRouteBinding[] {
+  const existing = key.routeBindings || [];
+  const existingKeys = new Set(existing.map(binding => `${binding.productModelId}::${binding.mode}`));
+  return [...existing, ...suggestProductRouteBindings(key).filter(binding => !existingKeys.has(`${binding.productModelId}::${binding.mode}`))];
 }
 
-export function resolveProductModelRoute(productModelId: string, keys: UserApiKey[]): { model: ProductModelDefinition; upstreamModelId: string; key: UserApiKey } | null {
+export function resolveProductModelRoute(
+  productModelId: string,
+  mode: ProductModelMode,
+  keys: UserApiKey[],
+): { model: ProductModelDefinition; routeId: string; key: UserApiKey } | null {
   const model = byId.get(productModelId);
   if (!model) return null;
   const routes = keys
     .filter(key => key.status !== 'error' && keySupportsProduct(key, model))
-    .flatMap(key => (key.modelMappings || []).filter(mapping => (
-      mapping.productModelId === productModelId
-      && mapping.enabled
-      && mapping.confirmed
-      && Boolean(mapping.upstreamModelId?.trim())
-      && keyStillExposesUpstreamModel(key, mapping.upstreamModelId)
-    )).map(mapping => ({ key, mapping })))
+    .flatMap(key => (key.routeBindings || []).filter(binding => (
+      binding.productModelId === productModelId
+      && binding.mode === mode
+      && binding.enabled
+      && binding.confirmed
+      && Boolean(binding.routeId?.trim())
+      && keyStillExposesRoute(key, binding.routeId)
+    )).map(binding => ({ key, binding })))
     .sort((left, right) => (
-      left.mapping.priority - right.mapping.priority
+      left.binding.priority - right.binding.priority
       || Number(Boolean(right.key.isDefault)) - Number(Boolean(left.key.isDefault))
       || left.key.id.localeCompare(right.key.id)
     ));
   const route = routes[0];
-  return route ? { model, upstreamModelId: route.mapping.upstreamModelId.trim(), key: route.key } : null;
+  return route ? { model, routeId: route.binding.routeId.trim(), key: route.key } : null;
+}
+
+export function resolveAnyProductRoute(
+  productModelId: string,
+  keys: UserApiKey[],
+): { model: ProductModelDefinition; routeId: string; key: UserApiKey; mode: ProductModelMode } | null {
+  const model = byId.get(productModelId);
+  if (!model) return null;
+  for (const mode of model.capabilities.modes) {
+    const route = resolveProductModelRoute(productModelId, mode, keys);
+    if (route) return { ...route, mode };
+  }
+  return null;
 }
 
 export function isProductModelConfigured(productModelId: string, keys: UserApiKey[]): boolean {
-  return Boolean(resolveProductModelRoute(productModelId, keys));
+  return Boolean(resolveAnyProductRoute(productModelId, keys));
 }
 
 export function productModelLabel(value: string): string {

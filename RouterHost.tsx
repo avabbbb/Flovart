@@ -2,7 +2,7 @@
 // HashRouter 兼容 Tauri / Cloudflare Pages 子路径 / GitHub Pages / Vercel
 // /         → ToC 社区类 Landing Page
 // /business → ToB SaaS 类 Landing Page
-// /app      → 画布/工作流 主应用 (App.tsx)
+// /app      → Workflow 主应用 (App.tsx)
 // /enterprise/* → 企业后台
 import React, { Suspense, useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router';
@@ -13,7 +13,7 @@ import { useUpdaterStore } from './stores/useUpdaterStore';
 const EnterpriseApp = React.lazy(() => import('./components/enterprise/EnterpriseApp'));
 const ToCLanding = React.lazy(() => import('./components/landing/ToCLanding'));
 const ToBLanding = React.lazy(() => import('./components/landing/ToBLanding'));
-const PromptsPage = React.lazy(() => import('./components/community/PromptsPage'));
+const PromptsPage = React.lazy(() => import('./components/community/PromptsPage').then(module => ({ default: module.PromptsPage })));
 const FlovartHome = React.lazy(() => import('./components/home/FlovartHome'));
 
 export function RouterHost() {

@@ -1,5 +1,5 @@
 export type FlovartActionSource = 'claude-code' | 'skill' | 'extension' | 'external-client';
-export type FlovartActionDomain = 'canvas' | 'storyboard' | 'assets';
+export type FlovartActionDomain = 'workflow' | 'assets';
 
 export interface FlovartActionTarget {
   domain: FlovartActionDomain;
@@ -16,8 +16,7 @@ export interface FlovartActionRequest {
 }
 
 export interface FlovartActionOutputRefs {
-  elementIds?: string[];
-  shotIds?: string[];
+  nodeIds?: string[];
   assetIds?: string[];
 }
 
@@ -42,59 +41,44 @@ export interface FlovartActionDefinition {
 
 const BUILTIN_ACTIONS: FlovartActionDefinition[] = [
   {
-    action: 'canvas.describe',
-    targetDomain: 'canvas',
-    description: 'Describe the current canvas state for an agent or skill.',
+    action: 'workflow.describe',
+    targetDomain: 'workflow',
+    description: 'Describe the current Workflow graph for an agent or skill.',
   },
   {
-    action: 'canvas.addElement',
-    targetDomain: 'canvas',
-    description: 'Create a new canvas element from structured payload data.',
+    action: 'workflow.createNode',
+    targetDomain: 'workflow',
+    description: 'Create a new Workflow node from structured payload data.',
   },
   {
-    action: 'canvas.updateElement',
-    targetDomain: 'canvas',
-    description: 'Patch an existing canvas element.',
+    action: 'workflow.updateNode',
+    targetDomain: 'workflow',
+    description: 'Patch an existing Workflow node.',
   },
   {
-    action: 'canvas.removeElement',
-    targetDomain: 'canvas',
-    description: 'Remove an existing canvas element.',
+    action: 'workflow.removeNode',
+    targetDomain: 'workflow',
+    description: 'Remove an existing Workflow node.',
   },
   {
-    action: 'canvas.select',
-    targetDomain: 'canvas',
-    description: 'Update the current canvas selection.',
+    action: 'workflow.selectNodes',
+    targetDomain: 'workflow',
+    description: 'Update the current Workflow node selection.',
   },
   {
-    action: 'selection.describe',
-    targetDomain: 'canvas',
-    description: 'Describe the current canvas selection.',
+    action: 'workflow.runNode',
+    targetDomain: 'workflow',
+    description: 'Run one Workflow node after the required approval gate.',
   },
   {
     action: 'generate.image',
-    targetDomain: 'canvas',
+    targetDomain: 'workflow',
     description: 'Generate an image using the current workspace model context.',
   },
   {
-    action: 'storyboard.listShots',
-    targetDomain: 'storyboard',
-    description: 'List storyboard shots for the active project.',
-  },
-  {
-    action: 'storyboard.createShot',
-    targetDomain: 'storyboard',
-    description: 'Create a storyboard shot from an agent request.',
-  },
-  {
-    action: 'storyboard.updateShot',
-    targetDomain: 'storyboard',
-    description: 'Patch a storyboard shot.',
-  },
-  {
-    action: 'storyboard.attachOutput',
-    targetDomain: 'storyboard',
-    description: 'Attach a canvas element output to a storyboard shot.',
+    action: 'generate.video',
+    targetDomain: 'workflow',
+    description: 'Generate a video using the current Workflow model context.',
   },
   {
     action: 'assets.list',

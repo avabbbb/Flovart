@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { fromIdbRef, getImage, isDataUrl, isIdbRef } from '../../utils/imageDB';
 import { fromIdbVideoRef, getVideoBlob, isIdbVideoRef } from '../../utils/mediaDB';
 import { readColdMedia } from '../../utils/mediaIndexedDB';
+import { getAssetById } from '../../utils/assetStorage';
 import { workflowMediaStorage } from './storage';
 import type { WorkflowNode, WorkflowNodeMetadata, WorkflowNodeType, WorkflowProject } from './types';
 
@@ -219,6 +220,11 @@ export async function loadFallbackMediaBlob(href: string): Promise<Blob> {
     if (!dataUrl) throw new Error('本地媒体文件不存在，请重新选择文件');
     return workflowDataUrlToBlob(dataUrl);
   }
+  if (href.startsWith('asset-library:')) {
+    const asset = await getAssetById(href.slice('asset-library:'.length));
+    if (!asset) throw new Error('素材不存在，可能已从素材库移除');
+    return workflowDataUrlToBlob(asset.dataUrl);
+  }
   if (!isFetchableMediaHref(href)) {
     throw new Error('无法读取本地媒体引用，请重新导入素材');
   }
@@ -290,8 +296,10 @@ export function useWorkflowMediaUrl(storageKey?: string, fallbackHref?: string) 
       }
       objectUrl = URL.createObjectURL(blob);
       setState({ key: mediaKey, url: objectUrl, error: null });
-    }).catch(() => {
-      if (active) setState({ key: mediaKey, url: null, error: '媒体文件读取失败，请重新选择文件' });
+    }).catch(error => {
+      if (!active) return;
+      const missing = error instanceof Error && error.message.includes('不存在');
+      setState({ key: mediaKey, url: null, error: missing ? '媒体文件不存在，请重新选择文件' : '媒体文件读取失败，请重新选择文件' });
     });
     return () => {
       active = false;

@@ -45,6 +45,7 @@ const STEPS = [
 /** Provider 对应的默认 capabilities */
 const PROVIDER_CAPABILITIES: Record<AIProvider, AICapability[]> = {
     google: ['text', 'image', 'video'],
+    xai: ['text', 'video'],
     openai: ['text'],
     anthropic: ['text'],
     qwen: ['text'],
@@ -309,7 +310,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                             {STEPS[0].subtitle}
                         </p>
                         <p className={`mb-8 text-sm leading-relaxed ${textSecondary}`}>
-                            Flovart 使用 AI 帮你在画布上生成图片和视频。<br />
+                                    Flovart 使用 AI 帮你在工作流中生成图片和视频。<br />
                             你可以直接接入 <strong className={textPrimary}>Google Gemini</strong>，也可以填入你自己的兼容端点，向导会尽量自动识别模型和能力。
                         </p>
 
@@ -598,7 +599,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                             <ol className="ml-4 list-decimal space-y-1">
                                 <li>在底部输入栏输入提示词，如「一只在星空下飞翔的猫」</li>
                                 <li>点击「生成」或按 Enter</li>
-                                <li>AI 生成的图片会自动出现在画布上</li>
+                                        <li>AI 生成的图片会自动写回工作流节点</li>
                                 <li>选中图片后输入新提示词可以进一步编辑</li>
                             </ol>
                         </div>

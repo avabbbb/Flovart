@@ -4,7 +4,7 @@ import { buildTuiCommand, tokenizeTuiLine } from '../tools/flovart/tui.js';
 
 describe('flovart dev startup commands', () => {
   it('plans frontend-only local startup without database', () => {
-    const plan = planStart(['--web', '--open'], process.cwd());
+    const plan = planStart(['--source', '--web', '--open'], process.cwd());
 
     expect(plan).toMatchObject({
       command: 'start',
@@ -16,7 +16,7 @@ describe('flovart dev startup commands', () => {
   });
 
   it('plans backend startup with PostgreSQL dependency', () => {
-    const plan = planStart(['--backend'], process.cwd());
+    const plan = planStart(['--source', '--backend'], process.cwd());
 
     expect(plan.mode).toBe('local');
     expect(plan.services).toEqual(['db', 'hub', 'enterprise']);
@@ -24,7 +24,7 @@ describe('flovart dev startup commands', () => {
   });
 
   it('plans full docker startup with detached mode', () => {
-    const plan = planStart(['--docker', '--all', '--detach', '--open'], process.cwd());
+    const plan = planStart(['--source', '--docker', '--all', '--detach', '--open'], process.cwd());
 
     expect(plan).toMatchObject({
       mode: 'docker',
@@ -35,15 +35,15 @@ describe('flovart dev startup commands', () => {
   });
 
   it('keeps install scoped to requested services', () => {
-    expect(planInstall(['--web'], process.cwd()).services).toEqual(['web']);
-    expect(planInstall(['--backend'], process.cwd()).services).toEqual(['hub', 'enterprise']);
+    expect(planInstall(['--source', '--web'], process.cwd()).services).toEqual(['web']);
+    expect(planInstall(['--source', '--backend'], process.cwd()).services).toEqual(['hub', 'enterprise']);
     expect(parseDevArgs(['web', '--plan', '--json'])).toMatchObject({ web: true, plan: true, json: true });
   });
 
   it('maps TUI slash commands to existing CLI commands', () => {
-    expect(buildTuiCommand('/START')).toEqual({ type: 'run', args: ['start', '--all', '--open'] });
-    expect(buildTuiCommand('/web --plan')).toEqual({ type: 'run', args: ['start', '--web', '--open', '--plan'] });
-    expect(buildTuiCommand('/docker -d')).toEqual({ type: 'run', args: ['start', '--docker', '--all', '--open', '-d'] });
+    expect(buildTuiCommand('/START')).toEqual({ type: 'run', args: ['start'] });
+    expect(buildTuiCommand('/web --plan')).toEqual({ type: 'run', args: ['start', '--source', '--web', '--open', '--plan'] });
+    expect(buildTuiCommand('/docker -d')).toEqual({ type: 'run', args: ['start', '--source', '--docker', '--all', '--open', '-d'] });
     expect(buildTuiCommand('/plan --backend')).toEqual({ type: 'run', args: ['start', '--plan', '--json', '--backend'] });
     expect(buildTuiCommand('/exit')).toEqual({ type: 'exit' });
   });

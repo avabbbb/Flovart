@@ -53,16 +53,16 @@ describe('Workflow right panel', () => {
     expect(localStorage.getItem('workflowRightPanelOpen')).toBe('false');
   });
 
-  it('searches and filters Workflow assets in the left sidebar popup', () => {
+  it('searches Workflow assets in the left sidebar popup', () => {
     renderWorkspace();
 
     // 左栏弹窗默认打开，切到"资产"tab
     fireEvent.click(screen.getByTestId('sidebar-tab-assets'));
-    fireEvent.click(screen.getByRole('button', { name: '视频' }));
+    fireEvent.change(screen.getByRole('searchbox', { name: '请输入搜索内容' }), { target: { value: '运动' } });
     expect(screen.queryByText('产品主图')).toBeNull();
     expect(screen.getByText('运动参考')).toBeTruthy();
-    fireEvent.change(screen.getByRole('searchbox', { name: '搜索素材库' }), { target: { value: '不存在' } });
-    expect(screen.getByText('没有匹配的素材')).toBeTruthy();
+    fireEvent.change(screen.getByRole('searchbox', { name: '请输入搜索内容' }), { target: { value: '不存在' } });
+    expect(screen.getByText('没有匹配的资产')).toBeTruthy();
   });
 
   it('persists left-sidebar media inserts without embedding data URLs in the project', async () => {

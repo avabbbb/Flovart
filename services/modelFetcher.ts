@@ -4,6 +4,7 @@
  * 优先支持：Google Gemini、DeepSeek、OpenAI 及兼容接口。
  */
 
+import localforage from 'localforage';
 import type { AIProvider, AICapability } from '../types';
 import { getOpenAICompatibleBaseUrlCandidates, normalizeProviderBaseUrl } from './baseUrl';
 import { isLikelyRunningHubModelEndpoint, normalizeRunningHubModelEndpoint, rhTestApiKey, BUILTIN_RUNNINGHUB_MODELS } from './runningHubService';
@@ -410,6 +411,7 @@ export const FREE_KEY_LINKS: { provider: AIProvider; label: string; url: string;
 // ── 模型缓存 ──────────────────────────────────────
 const MODEL_CACHE_TTL = 60 * 60 * 1000; // 1 小时
 const CACHE_KEY_PREFIX = 'modelCache.';
+const modelCacheStorage = localforage.createInstance({ name: 'flovart', storeName: 'provider_model_cache' });
 
 interface CachedModels {
     models: FetchedModel[];
@@ -417,11 +419,10 @@ interface CachedModels {
     endpointFlavor?: string;
 }
 
-function getCachedModels(provider: AIProvider, keyFingerprint: string): CachedModels | null {
+async function getCachedModels(provider: AIProvider, keyFingerprint: string): Promise<CachedModels | null> {
     try {
-        const raw = localStorage.getItem(`${CACHE_KEY_PREFIX}${provider}_${keyFingerprint}`);
-        if (!raw) return null;
-        const cached: CachedModels = JSON.parse(raw);
+        const cached = await modelCacheStorage.getItem<CachedModels>(`${CACHE_KEY_PREFIX}${provider}_${keyFingerprint}`);
+        if (!cached) return null;
         if (Date.now() - cached.fetchedAt > MODEL_CACHE_TTL) return null;
         return cached;
     } catch {
@@ -429,10 +430,10 @@ function getCachedModels(provider: AIProvider, keyFingerprint: string): CachedMo
     }
 }
 
-function setCachedModels(provider: AIProvider, keyFingerprint: string, models: FetchedModel[], endpointFlavor?: string) {
+async function setCachedModels(provider: AIProvider, keyFingerprint: string, models: FetchedModel[], endpointFlavor?: string) {
     try {
         const entry: CachedModels = { models, fetchedAt: Date.now(), endpointFlavor };
-        localStorage.setItem(`${CACHE_KEY_PREFIX}${provider}_${keyFingerprint}`, JSON.stringify(entry));
+        await modelCacheStorage.setItem(`${CACHE_KEY_PREFIX}${provider}_${keyFingerprint}`, entry);
     } catch { /* storage full — silent */ }
 }
 
@@ -451,7 +452,7 @@ export async function fetchModelsWithCache(
 ): Promise<FetchModelsResult> {
     const fp = keyFingerprint(apiKey);
     if (!forceRefresh) {
-        const cached = getCachedModels(provider, fp);
+        const cached = await getCachedModels(provider, fp);
         if (cached) {
             let models = cached.models;
             if (provider === 'runningHub') {
@@ -473,7 +474,7 @@ export async function fetchModelsWithCache(
     }
     const result = await fetchModelsForProvider(provider, apiKey, baseUrl);
     if (result.ok && result.models.length > 0) {
-        setCachedModels(provider, fp, result.models, result.endpointFlavor);
+        await setCachedModels(provider, fp, result.models, result.endpointFlavor);
     }
     return result;
 }
