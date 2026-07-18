@@ -19,11 +19,25 @@ describe('runtimeBridgeState', () => {
     expect(status).toMatchObject({
       environment: 'standalone-web',
       chromeStorageAvailable: false,
-      runtimeApiAvailable: true,
+      runtimeApiAvailable: false,
       runtimeBridgeConnected: false,
     });
 
     delete (window as any).__flovartAPI;
+    vi.unstubAllGlobals();
+  });
+
+  it('recognizes the restricted Tauri IPC adapter as the local runtime surface', () => {
+    vi.stubGlobal('chrome', undefined);
+    (window as any).__TAURI_INTERNALS__ = { invoke: vi.fn() };
+
+    expect(getRuntimeBridgeStatus()).toMatchObject({
+      environment: 'tauri',
+      runtimeApiAvailable: true,
+      runtimeBridgeConnected: false,
+    });
+
+    delete (window as any).__TAURI_INTERNALS__;
     vi.unstubAllGlobals();
   });
 

@@ -2,7 +2,7 @@
 
 ## 状态
 
-本文把已确认的 [Production Runtime V1 实施规划](production-runtime-v1-plan.md) 与 [数据契约](production-runtime-data-contract.md) 拆成文件级、测试级施工批次。S0.1 已实现并进入待测试状态；S0.2 及后续批次仍是实施输入，不代表已经完成。
+本文把已确认的 [Production Runtime V1 实施规划](production-runtime-v1-plan.md) 与 [数据契约](production-runtime-data-contract.md) 拆成文件级、测试级施工批次。S0.1 与 S0.2 已实现并进入待测试状态；S1 及后续批次仍是实施输入，不代表已经完成。
 
 固定范围：
 
@@ -109,6 +109,12 @@ npm run flovart:cli -- command.list --json
 
 让 CLI、MCP、Native Host 和 WebUI 到达同一个 Runtime Module；关闭 CDP、固定端口和 Secret 读取面。
 
+### 实施状态
+
+- 已完成：Desktop 启动唯一 `ProductionRuntime`，WebUI 通过受限 Tauri IPC 调用，CLI/MCP/Native Host 通过受保护 Discovery Record 连接随机 loopback 端口。
+- 当前 Control Plane 只开放 `GET /v1/status` 与 `POST /v1/commands`，且两条路由都必须携带启动期 Bearer Token；带浏览器 `Origin` 的请求直接拒绝，不返回 CORS 头。
+- 当前只有 `runtime.status`、`command.list`、`command.schema` 三条只读命令可执行。Provider、Task、生成、VOX 与成片制作仍属于后续批次。
+
 ### 新增文件
 
 - `src-tauri/src/runtime/control_server.rs`
@@ -119,10 +125,10 @@ npm run flovart:cli -- command.list --json
 
 ### 修改文件
 
-- `src-tauri/src/lib.rs`：由 `FlovartContext` 持有一个 `ProductionRuntime`，Tauri IPC 与 HTTP 共用该实例。
-- `src-tauri/src/http.rs`：缩成 Control Server 启动适配层，或在迁移完成后删除；不得保留第二套路由表。
+- `src-tauri/src/lib.rs`：Tauri App State 持有唯一 `ProductionRuntime`，Tauri IPC 与 Control Server 共用该实例。
+- `src-tauri/src/http.rs`：已删除；Control Server 只保留 `runtime/control_server.rs` 一套路由表。
 - `src-tauri/src/bin/host.rs`：读取 Discovery Record，不再使用常量端口；转发时附带 Bearer Token。
-- `src-tauri/src/keyring.rs`：对 Runtime 只暴露 `credentialRef` 的解析能力；HTTP、CLI、MCP、事件和日志都不得返回 Secret。
+- `src-tauri/src/keyring.rs`：原始 Secret 读取只保留为 Rust 内部函数，不再注册 Tauri/HTTP 读取命令；WebUI 仍可写入、删除和列出脱敏 metadata。
 - `tools/flovart/runtime-client.js`：用 Discovery Record + Local HTTP 取代 CDP/WebSocket。
 - `tools/flovart/cli.js`、`tools/flovart/mcp-server.js`：只通过新的 Runtime Client 调用可用命令。
 - `services/flovartRuntime.ts`：定义 WebUI 到 Tauri command 的类型化 adapter，不再读取 `window.__flovartAPI` 作为生产执行面。
@@ -134,8 +140,8 @@ npm run flovart:cli -- command.list --json
 - 每次 Desktop Runtime 启动生成至少 256 bit 随机 token。
 - Discovery Record 只允许当前系统用户读取：Unix 使用 `0600`；Windows 使用当前用户 SID 的显式 DACL。写入采用临时文件 + 原子 rename。
 - Discovery Record 至少包含 `protocolVersion`、`pid`、`port`、`startedAt`、`token`。token 不是 Provider Key，但仍按本机凭据处理，不写日志。
-- 除最小 health/handshake 外，所有 `/v1/**` 路由必须鉴权。
-- 启动时拒绝仍指向失效 PID 或协议不匹配的旧 discovery；正常退出删除自己创建的 record。
+- 所有 `/v1/**` 路由都必须鉴权；不存在匿名 health/handshake。
+- 客户端拒绝协议、Registry Hash、权限或 Runtime Instance 不匹配的 discovery；正常退出只删除自己创建的 record。
 - 不信任浏览器 `Origin`、空 `Origin` 或 CORS 作为身份认证。
 - `/state/keys/:provider/:keyId` 原始 Secret 读取路由必须在本批删除。
 

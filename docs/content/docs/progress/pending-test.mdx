@@ -13,7 +13,10 @@ title: 待测试确认
 
 - npm 发布包已统一命名为 `flovart-cli@0.3.0`，确保用户可直接使用 `npx flovart-cli ...`；包含 CLI、TUI、MCP Server、Flovart Skill、Managed Agent、Host 适配与 Toolkit 安装器。
 - Canonical Command Registry 当前导出 43 条显式命令；3 条 S0.1 命令标记为 `available`，其余迁移期命令明确标记为 `legacy-only`；`command.list` 不再出现 Canvas / Element，`command.schema --command workflow.run` 返回 `UNKNOWN_COMMAND` 并以非零状态退出。
-- Production Runtime S0.1 已建立 Node/Rust 共用的版本化 Registry 与 JSON Schema：Registry 声明内容哈希，Node 自动化测试与 Rust 启动流程分别重算并校验；重复命令、未知字段、协议不匹配和未知命令会稳定失败；Node/Rust 使用成熟 RFC 8785 实现得到相同 SHA-256，Rust 使用 UUID v7。Tauri 启动时创建唯一 `ProductionRuntime` 并注册 `runtime_status`；S0.2 安全 discovery 尚未完成，因此 CLI `runtime.status` 当前应明确返回 `RUNTIME_UNAVAILABLE`，不得回退 shadow runtime。
+- Production Runtime S0.1/S0.2 已建立 Node/Rust 共用的版本化 Registry 与 JSON Schema，并完成安全本地 Control Plane：Desktop 监听 `127.0.0.1:0` 随机端口，每次启动生成 256-bit Token，把协议、Runtime Instance、Registry Hash、端口和 Token 原子写入仅当前用户/SYSTEM 可读的 Discovery Record；退出时只删除自己的 Record。
+- CLI、MCP 与 Native Host 读取 Discovery Record 后，只能调用鉴权的 `GET /v1/status` / `POST /v1/commands`；WebUI 通过受限 Tauri IPC 进入同一个 `ProductionRuntime`。固定 `7421`、CDP/`window.__flovartAPI` 生产探测、任意 Native Host HTTP path 转发和原始 Secret HTTP GET 已删除。
+- 当前只执行 `runtime.status`、`command.list`、`command.schema` 三条只读命令；其余命令仍标记为 `legacy-only`，Provider、Task、VOX/视频生成与成片渲染没有伪装成已完成。扩展端桌面 Key 同步也保持关闭，待后续类型化 Native Messaging Provider 协议落地；扩展本地 Key 仍保存在自己的加密存储中。
+- 自动验证已通过：S0.2 定向 Vitest 5 个文件 23 项测试、Rust Native Host/Runtime Contract/Control Server 8 项测试、`cargo check --all-targets`、`npx tsc --noEmit`；全量 Vitest 65 个文件 562 项通过、1 项跳过，Rust 全套测试、Web 生产构建、扩展构建与 CLI npm 发布包 dry-run 也通过。Desktop 未启动时直接 CLI 在约 0.5 秒内稳定返回 `RUNTIME_UNAVAILABLE`。待用户验证：启动 Desktop 后 CLI `runtime.status` 返回同一 Runtime Instance；WebUI 的 Key 写入与脱敏 metadata 列表仍可用。
 - `npx flovart-cli install` 默认下载版本化 Agent Toolkit，校验 manifest 的字节数与 SHA-256 后才解包、切换 `current` 和写入本地 launcher；`start` 默认启动 Desktop Runtime + Managed Agent，源码开发需显式使用 `--source`。
 - `init --host codex|opencode|claude|cursor|windsurf|vscode|all` 可生成 Skill/MCP 配置，`--dry-run` 可先预览写入；Skill 文档仅使用当前 Workflow 命令面。
 - GitHub `Build Desktop` 工作流在 Windows tag 构建时生成并上传 Toolkit archive + manifest；根包、CLI、Cargo、Tauri 与 `VERSION` 已统一为 `0.3.0`，tag 构建前会执行版本一致性检查。

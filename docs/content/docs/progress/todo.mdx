@@ -51,8 +51,8 @@ Table 是 Workflow 之外的第二个正式创作工作区，不是电子表格�
 
 ## 制作 Runtime
 
-- **统一 Runtime dispatch**：⬜ 以 Desktop Runtime 为唯一 Production Authority，替换 file bridge 与未接通 Tauri 内存队列的双轨状态。
-- **本地 Runtime 安全协议**：⬜ 实现 ADR-0023 定义的 loopback 鉴权、会话令牌、请求来源限制、秘钥脱敏与重放防护，在此之前不对外宣称 CLI / Extension 可以无条件共享 Desktop 数据。
+- **统一 Runtime dispatch**：⬜ S0.2 已让 `runtime.status`、`command.list`、`command.schema` 经唯一 Desktop Runtime 执行；S1 起继续把 `legacy-only` Provider、生成和任务命令从 file/browser bridge 迁入 Runtime，迁完后删除双轨执行面。
+- **写命令重放与幂等**：⬜ 当前 Control Plane 只有三条只读命令；新增任何 Production 写命令前，必须随持久 Task Ledger 落地幂等键、receipt-before-side-effect、重放拒绝和 `submission_unknown` 处理。
 - **跨入口本地数据桥接**：⬜ Web 站点、Tauri WebView 与 Edge 扩展的 IndexedDB 默认按 origin 隔离；通过受限 Desktop Runtime API 共享 Workflow / 素材 / 历史等业务数据，API Key 只允许本地鉴权后调用，不向扩展返回明文。
 - **持久任务协议**：⬜ 为长时 Provider、媒体处理、渲染与验证操作提供 `taskId`、幂等键、进度、租约、心跳、取消、重启恢复和 `submission_unknown` 处理。
 - **原子能力面**：⬜ 补齐 Provider Job、Artifact、Node、Render 与 Verify 的封闭类型 Atomic Runtime Command；Production Intent Command 由 Runtime 展开为 ProductionRun 与 StageRun。

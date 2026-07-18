@@ -30,8 +30,8 @@ function getGlobalWindow(): (Window & typeof globalThis) | undefined {
 export function getRuntimeBridgeStatus(): RuntimeBridgeStatus {
   const win = getGlobalWindow();
   const chromeStorageAvailable = Boolean((globalThis as any).chrome?.storage?.local);
-  const runtimeApiAvailable = Boolean(win && getFlovartRuntimeApi());
   const isTauri = Boolean((win as any)?.__TAURI__ || (win as any)?.__TAURI_INTERNALS__);
+  const runtimeApiAvailable = isTauri && Boolean(getFlovartRuntimeApi());
   const isExtension = Boolean(chromeStorageAvailable && (globalThis as any).chrome?.runtime?.id);
 
   return {

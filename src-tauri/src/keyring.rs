@@ -41,8 +41,7 @@ pub fn parse_account(account: &str) -> Option<(String, String)> {
 }
 
 fn build_entry(account: &str) -> FlovartResult<keyring::Entry> {
-    keyring::Entry::new(KEYRING_SERVICE, account)
-        .map_err(|e| FlovartError::Keyring(e.to_string()))
+    keyring::Entry::new(KEYRING_SERVICE, account).map_err(|e| FlovartError::Keyring(e.to_string()))
 }
 
 #[tauri::command]
@@ -55,7 +54,9 @@ pub fn keyring_set(
 ) -> FlovartResult<KeyringEntry> {
     let account = entry_account(&provider, &key_id);
     let entry = build_entry(&account)?;
-    entry.set_password(&secret).map_err(|e| FlovartError::Keyring(e.to_string()))?;
+    entry
+        .set_password(&secret)
+        .map_err(|e| FlovartError::Keyring(e.to_string()))?;
 
     let now = chrono::Utc::now().timestamp_millis();
     let json = serde_json::json!({
@@ -74,12 +75,8 @@ pub fn keyring_set(
     })
 }
 
-#[tauri::command]
-pub fn keyring_get(
-    _ctx: State<'_, std::sync::Arc<FlovartContext>>,
-    provider: String,
-    key_id: String,
-) -> FlovartResult<Option<String>> {
+#[allow(dead_code)]
+pub(crate) fn read_secret(provider: &str, key_id: &str) -> FlovartResult<Option<String>> {
     let account = entry_account(&provider, &key_id);
     let entry = build_entry(&account)?;
     match entry.get_password() {
@@ -126,10 +123,7 @@ pub fn keyring_list(
                             .get("label")
                             .and_then(|v| v.as_str())
                             .map(|s| s.to_string()),
-                        updated_at: meta
-                            .get("updated_at")
-                            .and_then(|v| v.as_i64())
-                            .unwrap_or(0),
+                        updated_at: meta.get("updated_at").and_then(|v| v.as_i64()).unwrap_or(0),
                     });
                 }
             }

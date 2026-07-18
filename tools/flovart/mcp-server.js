@@ -8,14 +8,15 @@ import { COMMAND_REGISTRY, executeFlovartCommand } from './core.js';
 import { createShadowRuntimeFacade } from './shadow-runtime.js';
 import { enqueueCommand, enqueueAndWait } from './flovart-bridge.js';
 import { BROWSER_COMMANDS } from './browser-commands.js';
+import { FlovartRuntimeClient, RuntimeClientError } from './runtime-client.js';
 
 const LOCAL_COMMANDS = new Set([
   'help', 'setup', 'init', 'doctor',
-  'runtime.status', 'command.list', 'command.schema',
   'inspiration.search', 'inspiration.get',
   'prompt.enhance', 'batch.plan',
   'preferences.manage', 'models.list',
 ]);
+const RUNTIME_COMMANDS = new Set(['runtime.status', 'command.list', 'command.schema']);
 
 function argTypeToZod(typeStr) {
   const optional = typeStr.endsWith('?');
@@ -61,6 +62,21 @@ function toCliArgs(mcpArgs) {
 async function routeAndExecute(command, rawArgs) {
   const { wait = true, timeoutMs = 60000, ...rest } = rawArgs;
   const args = toCliArgs(rest);
+  if (RUNTIME_COMMANDS.has(command)) {
+    const runtime = new FlovartRuntimeClient();
+    try {
+      return command === 'runtime.status'
+        ? await runtime.status()
+        : await runtime.execute(command, args, { kind: 'mcp', instanceId: `mcp_${process.pid}` });
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof RuntimeClientError
+          ? error.toJSON()
+          : { code: 'RUNTIME_UNAVAILABLE', message: error instanceof Error ? error.message : String(error), retryable: true },
+      };
+    }
+  }
   if (LOCAL_COMMANDS.has(command)) {
     return await executeFlovartCommand(command, args, {});
   }

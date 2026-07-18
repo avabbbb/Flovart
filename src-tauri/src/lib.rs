@@ -3,8 +3,8 @@
 //! 模块划分：
 //! - `keyring` : 操作系统 Keyring 包装（API Key 持久化）
 //! - `state`   : SQLite 状态库（asset / history / templates / kv）
-//! - `bridge`  : 替换 .flovart/command-queue.json 的 IPC 桥
-//! - `http`    : 给 Chrome 扩展用的本地 HTTP 服务（127.0.0.1:7421）
+//! - `bridge`  : S1 迁移完成前保留的内部 IPC 桥
+//! - `runtime` : 唯一 Production Runtime 与安全本地 Control API
 //! - `deeplink`: flovart:// 自定义协议
 //!
 //! 所有 Tauri command 都通过 `commands` 模块统一注册。
@@ -12,25 +12,21 @@
 pub mod bridge;
 pub mod deeplink;
 pub mod errors;
-pub mod http;
 pub mod keyring;
 pub mod runtime;
 pub mod state;
 
-use parking_lot::Mutex;
 use std::sync::Arc;
 use tauri::Manager;
 
 use crate::bridge::BridgeQueue;
-use crate::http::HttpServerHandle;
-use crate::runtime::ProductionRuntime;
+use crate::runtime::{default_discovery_path, ControlServer, ProductionRuntime};
 use crate::state::StateDb;
 
 /// 跨 command 共享的运行时上下文。
 pub struct FlovartContext {
     pub state_db: Arc<StateDb>,
     pub bridge_queue: Arc<BridgeQueue>,
-    pub http_server: Mutex<Option<HttpServerHandle>>,
 }
 
 impl FlovartContext {
@@ -38,7 +34,6 @@ impl FlovartContext {
         Self {
             state_db,
             bridge_queue,
-            http_server: Mutex::new(None),
         }
     }
 }
@@ -70,11 +65,11 @@ pub fn run() {
                 .path()
                 .app_data_dir()
                 .map_err(|e| format!("resolve app_data_dir: {e}"))?;
-            std::fs::create_dir_all(&app_data_dir).map_err(|e| format!("create app_data_dir: {e}"))?;
+            std::fs::create_dir_all(&app_data_dir)
+                .map_err(|e| format!("create app_data_dir: {e}"))?;
             let db_path = app_data_dir.join("flovart-state.db");
-            let state_db = Arc::new(
-                StateDb::open(&db_path).map_err(|e| format!("open state db: {e}"))?,
-            );
+            let state_db =
+                Arc::new(StateDb::open(&db_path).map_err(|e| format!("open state db: {e}"))?);
             let production_runtime = Arc::new(
                 ProductionRuntime::new(env!("CARGO_PKG_VERSION"))
                     .map_err(|e| format!("initialize Production Runtime: {e}"))?,
@@ -96,19 +91,19 @@ pub fn run() {
                 let _ = app.deep_link();
             }
 
-            // ── 4. 启动本地 HTTP 服务（给扩展用）──
+            // ── 4. 启动带启动期认证的 Production Runtime Control API ──
             let ctx = FlovartContext::new(state_db.clone(), bridge_queue.clone());
             let app_handle = app.handle().clone();
             let ctx_arc = Arc::new(ctx);
-            match http::start_http_server(ctx_arc.clone(), app_handle.clone()) {
-                Ok(handle) => {
-                    log::info!("Flovart local HTTP server listening on 127.0.0.1:7421");
-                    *ctx_arc.http_server.lock() = Some(handle);
-                }
-                Err(err) => {
-                    log::warn!("Flovart local HTTP server failed to start: {err}");
-                }
-            }
+            let discovery_path = default_discovery_path()
+                .map_err(|error| format!("resolve Production Runtime discovery path: {error}"))?;
+            let control_server =
+                ControlServer::start(production_runtime.clone(), discovery_path.clone())
+                    .map_err(|error| format!("start Production Runtime control server: {error}"))?;
+            log::info!(
+                "Production Runtime control server ready; discovery={}",
+                discovery_path.display()
+            );
 
             // ── 5. 处理启动时可能携带的 flovart:// 链接 ──
             if let Some(args) = std::env::args().nth(1) {
@@ -128,32 +123,17 @@ pub fn run() {
 
             app.manage(ctx_arc);
             app.manage(production_runtime);
+            app.manage(control_server);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             // keyring
             keyring::keyring_set,
-            keyring::keyring_get,
             keyring::keyring_delete,
             keyring::keyring_list,
-            // state
-            state::state_set,
-            state::state_get,
-            state::state_delete,
-            state::state_keys,
-            state::state_dump,
-            // bridge
-            bridge::bridge_enqueue,
-            bridge::bridge_tick,
-            bridge::bridge_complete,
-            bridge::bridge_list,
-            bridge::bridge_clear,
-            // http
-            http::http_status,
             // production runtime
             runtime::runtime_status,
-            // deeplink
-            deeplink::deeplink_open_canvas,
+            runtime::runtime_execute,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Flovart");

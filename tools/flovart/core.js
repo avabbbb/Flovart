@@ -512,7 +512,7 @@ export async function executeFlovartCommand(commandName, args = {}, runtime = {}
         ok: false,
         error: {
           code: 'RUNTIME_UNAVAILABLE',
-          message: 'Desktop Production Runtime is not connected. Secure discovery is introduced in S0.2.',
+          message: 'Desktop Production Runtime is not connected.',
         },
       };
     case 'status':

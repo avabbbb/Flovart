@@ -129,20 +129,23 @@ describe('Production Runtime canonical registry', () => {
     expect(unknownOutput).toMatchObject({
       ok: false,
       error: { code: 'UNKNOWN_COMMAND' },
-      data: { ok: false, error: { code: 'UNKNOWN_COMMAND' } },
+      data: null,
+      runtime: 'production-runtime',
     });
     expect(runtimeStatus.status).toBe(1);
     expect(statusOutput).toMatchObject({
       ok: false,
       error: { code: 'RUNTIME_UNAVAILABLE' },
+      runtime: 'production-runtime',
     });
-    expect(statusOutput).not.toHaveProperty('runtime');
   });
 
   it('validates the shared runtime output contracts', () => {
     expect(validateRuntimeContract('runtime-status', {
       protocolVersion: '1',
       runtimeVersion: '0.3.0',
+      runtimeInstanceId: 'runtime_test',
+      registryHash: getCanonicalRegistry().registryHash,
       authority: 'desktop-runtime',
       state: 'ready',
     })).toMatchObject({ ok: true });

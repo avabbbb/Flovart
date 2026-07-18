@@ -2,6 +2,12 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum RuntimeContractError {
+    #[error("runtime I/O failed: {0}")]
+    Io(#[from] std::io::Error),
+    #[error("runtime control server failed: {0}")]
+    ControlServer(String),
+    #[error("runtime security setup failed: {0}")]
+    Security(String),
     #[error("invalid canonical command registry: {0}")]
     InvalidRegistry(#[from] serde_json::Error),
     #[error("invalid runtime contract schema: {0}")]

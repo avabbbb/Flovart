@@ -10,6 +10,8 @@ pub const COMMAND_ENVELOPE_SCHEMA_ID: &str =
 pub struct RuntimeStatus {
     pub protocol_version: String,
     pub runtime_version: String,
+    pub runtime_instance_id: String,
+    pub registry_hash: String,
     pub authority: String,
     pub state: String,
 }

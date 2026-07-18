@@ -344,19 +344,14 @@ document.addEventListener('DOMContentLoaded', () => {
     syncProviderUi();
   }
 
-  // 渲染 key 状态：列出所有 key，附数据源标签 (Tauri / 本地)
+  // 渲染 Key 状态；S0.2 只使用扩展本地加密存储。
   function renderKeyStatus(keys) {
     if (!keyIndicator || !keyStatusText) return;
     if (keys.length > 0) {
       keyIndicator.classList.remove('empty');
       keyIndicator.classList.add('active');
       const providers = [...new Set(keys.map(k => k.provider))];
-      const tauri = Bridge?.isTauriAvailable();
-      // 异步探测 Tauri 可用性 → 显示数据源
-      Promise.resolve(tauri).then((onTauri) => {
-        const source = onTauri ? 'Tauri 桌面' : '本地';
-        keyStatusText.textContent = `已配置 ${keys.length} 个 Key（${providers.join(', ')}）· ${source}`;
-      });
+      keyStatusText.textContent = `已配置 ${keys.length} 个 Key（${providers.join(', ')}）· 本地`;
     } else {
       keyIndicator.classList.remove('active');
       keyIndicator.classList.add('empty');
@@ -364,7 +359,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Load existing keys and show status (通过 keyBridge 走 Tauri 优先 + 本地 fallback)
+  // Load existing keys from the extension-local encrypted store.
   if (Bridge) {
     Bridge.listKeys()
       .then(renderKeyStatus)

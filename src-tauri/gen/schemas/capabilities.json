@@ -1,1 +1,1 @@
-{"main-capability":{"identifier":"main-capability","description":"Capability for the main window","local":true,"windows":["main"],"permissions":["core:default","opener:default","updater:default","process:default","deep-link:default"]}}
+{"main-capability":{"identifier":"main-capability","description":"Capability for the main window","local":true,"windows":["main"],"permissions":["core:default","opener:default","updater:default","process:default","deep-link:default","runtime-control","keyring-metadata"]}}

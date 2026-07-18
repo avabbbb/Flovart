@@ -1331,6 +1331,7 @@ dependencies = [
  "anyhow",
  "chrono",
  "env_logger",
+ "getrandom 0.4.2",
  "hex",
  "jsonschema",
  "keyring",
@@ -1342,6 +1343,7 @@ dependencies = [
  "serde_json",
  "serde_json_canonicalizer",
  "sha2 0.11.0",
+ "subtle",
  "tauri",
  "tauri-build",
  "tauri-plugin-deep-link",
@@ -1353,6 +1355,7 @@ dependencies = [
  "tiny_http",
  "url",
  "uuid",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

@@ -8,6 +8,8 @@ fn runtime_status_comes_from_the_canonical_v1_contract() {
     let status = runtime.status();
 
     assert_eq!(status.protocol_version, "1");
+    assert!(status.runtime_instance_id.starts_with("runtime_"));
+    assert_eq!(status.registry_hash, runtime.registry().registry_hash);
     assert_eq!(status.authority, "desktop-runtime");
     assert_eq!(status.state, "ready");
     assert_eq!(
@@ -16,6 +18,46 @@ fn runtime_status_comes_from_the_canonical_v1_contract() {
     );
     assert!(runtime.registry().commands.contains_key("runtime.status"));
     assert!(!runtime.registry().commands.contains_key("workflow.run"));
+}
+
+#[test]
+fn runtime_execute_dispatches_only_available_canonical_commands() {
+    let runtime = ProductionRuntime::new(env!("CARGO_PKG_VERSION")).expect("runtime contract");
+    let envelope = |command: &str, args: serde_json::Value| {
+        json!({
+            "protocolVersion": "1",
+            "commandId": ProductionRuntime::new_id("cmd"),
+            "command": command,
+            "args": args,
+            "actor": { "kind": "cli", "instanceId": "cli_test" }
+        })
+    };
+
+    let list = runtime
+        .execute(&envelope("command.list", json!({})))
+        .expect("command list");
+    assert_eq!(list["registryHash"], runtime.registry().registry_hash);
+    assert_eq!(
+        list["commands"]["runtime.status"]["availability"],
+        "available"
+    );
+
+    let schema = runtime
+        .execute(&envelope(
+            "command.schema",
+            json!({ "command": "generate.video" }),
+        ))
+        .expect("command schema");
+    assert_eq!(schema["command"], "generate.video");
+    assert_eq!(schema["schema"]["availability"], "legacy-only");
+
+    assert_eq!(
+        runtime
+            .execute(&envelope("help", json!({})))
+            .expect_err("legacy command must not dispatch")
+            .code,
+        "RUNTIME_UNAVAILABLE"
+    );
 }
 
 #[test]

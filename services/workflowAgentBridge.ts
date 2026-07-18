@@ -2,7 +2,8 @@ import { executeFlovartCommand } from '../tools/flovart/core.js';
 import { getFlovartRuntimeApi } from './flovartRuntime';
 import { dispatchWorkflowCommand, redactWorkflowAgentValue, type WorkflowCommandEnvelope, type WorkflowCommandResult } from './workflowDispatcher';
 
-const READ_COMMANDS = new Set(['status', 'provider.status', 'asset.list', 'workflow.project.list', 'workflow.inspect', 'command.list', 'command.schema']);
+const RUNTIME_COMMANDS = new Set(['runtime.status', 'command.list', 'command.schema']);
+const READ_COMMANDS = new Set(['runtime.status', 'status', 'provider.status', 'asset.list', 'workflow.project.list', 'workflow.inspect', 'command.list', 'command.schema']);
 const MAX_ATTACHMENTS = 6;
 const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024;
 const MAX_TOTAL_ATTACHMENT_BYTES = 24 * 1024 * 1024;
@@ -157,8 +158,23 @@ export class WorkflowAgentBridge {
       } else {
         if (!READ_COMMANDS.has(envelope.command) && !await this.confirm(envelope.command)) {
           result = { ok: false, error: { code: 'DENIED', message: '用户拒绝了命令。' } };
+        } else if (RUNTIME_COMMANDS.has(envelope.command)) {
+          const runtime = getFlovartRuntimeApi();
+          if (!runtime) {
+            result = { ok: false, error: { code: 'RUNTIME_UNAVAILABLE', message: 'Production Runtime 仅可通过 Tauri 桌面端调用。' } };
+          } else if (envelope.command === 'runtime.status') {
+            result = await runtime.status();
+          } else {
+            result = await runtime.execute({
+              protocolVersion: '1',
+              commandId: envelope.id,
+              command: envelope.command,
+              args: envelope.args,
+              actor: { kind: 'ui', instanceId: 'workflow_agent_bridge' },
+            });
+          }
         } else {
-          result = await executeFlovartCommand(envelope.command, envelope.args, getFlovartRuntimeApi() as any);
+          result = await executeFlovartCommand(envelope.command, envelope.args, {});
         }
       }
       await this.post('/workflow/result', { requestId, clientId: this.clientId, result });

@@ -4,6 +4,7 @@ import { createShadowRuntimeFacade } from './shadow-runtime.js';
 import { enqueueAndWait, enqueueCommand } from './flovart-bridge.js';
 import { BROWSER_COMMANDS, shouldWaitForBrowserCommand } from './browser-commands.js';
 import { readFile } from 'node:fs/promises';
+import { FlovartRuntimeClient, RuntimeClientError } from './runtime-client.js';
 
 const argv = process.argv.slice(2);
 
@@ -22,11 +23,12 @@ function normalizeAtomicAlias(rawCommand, parsedArgs) {
 
 const LOCAL_COMMANDS = new Set([
   'help', 'setup', 'init', 'doctor',
-  'runtime.status', 'command.list', 'command.schema',
   'inspiration.search', 'inspiration.get',
   'prompt.enhance', 'batch.plan',
   'preferences.manage', 'models.list',
 ]);
+
+const RUNTIME_COMMANDS = new Set(['runtime.status', 'command.list', 'command.schema']);
 
 const FILE_STATE_COMMANDS = new Set([
   'status',
@@ -82,6 +84,23 @@ async function main() {
   }
 
   const routingCommand = normalizeCommandForRouting(command);
+
+  if (RUNTIME_COMMANDS.has(routingCommand)) {
+    const runtime = new FlovartRuntimeClient();
+    try {
+      const result = routingCommand === 'runtime.status'
+        ? await runtime.status()
+        : await runtime.execute(routingCommand, args, { kind: 'cli', instanceId: `cli_${process.pid}` });
+      if (args.json) printCliResponse(true, command, result, null, { runtime: 'production-runtime' });
+      else console.log(formatValue(result));
+    } catch (error) {
+      const runtimeError = error instanceof RuntimeClientError
+        ? error.toJSON()
+        : { code: 'RUNTIME_UNAVAILABLE', message: error instanceof Error ? error.message : String(error), retryable: true };
+      printCliResponse(false, command, null, runtimeError, { runtime: 'production-runtime' });
+    }
+    return;
+  }
 
   if (LOCAL_COMMANDS.has(routingCommand)) {
     const result = await executeFlovartCommand(command, args, {});

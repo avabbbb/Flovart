@@ -1,7 +1,13 @@
-import type { MultimodalSlot } from './aiGateway';
-import type { WorkflowCommandEnvelope, WorkflowCommandResult } from './workflowDispatcher';
+import { invoke } from '@tauri-apps/api/core';
 
-type MaybePromise<T> = T | Promise<T>;
+export interface RuntimeStatus {
+  protocolVersion: '1';
+  runtimeVersion: string;
+  runtimeInstanceId: string;
+  registryHash: string;
+  authority: 'desktop-runtime';
+  state: 'ready' | 'starting' | 'degraded' | 'stopping';
+}
 
 export interface RuntimeCommandError {
   code?: string;
@@ -10,41 +16,44 @@ export interface RuntimeCommandError {
 
 export interface RuntimeCommandResult {
   ok?: boolean;
-  id?: string;
-  jobId?: string;
   error?: RuntimeCommandError | string;
   [key: string]: unknown;
 }
 
-export interface FlovartRuntimeApi {
-  workflow?: {
-    dispatch?: (envelope: WorkflowCommandEnvelope) => MaybePromise<WorkflowCommandResult>;
-  };
-  generate?: {
-    image?: (input: { prompt: string; name?: string }) => MaybePromise<RuntimeCommandResult>;
-    video?: (input: {
-      prompt: string;
-      sourceImageIds?: string[];
-      sourceVideoIds?: string[];
-      slots?: MultimodalSlot[];
-      durationSec?: number;
-      aspectRatio?: string;
-      resolution?: string;
-      seed?: number;
-    }) => MaybePromise<RuntimeCommandResult>;
+export interface RuntimeCommandEnvelope {
+  protocolVersion: '1';
+  commandId: string;
+  command: string;
+  args: Record<string, unknown>;
+  actor: {
+    kind: 'ui';
+    instanceId: string;
   };
 }
 
-type FlovartWindow = Window & typeof globalThis & {
-  __flovartAPI?: FlovartRuntimeApi;
+export interface FlovartRuntimeApi {
+  status(): Promise<RuntimeStatus>;
+  execute(envelope: RuntimeCommandEnvelope): Promise<unknown>;
+}
+
+const tauriRuntime: FlovartRuntimeApi = {
+  status: () => invoke<RuntimeStatus>('runtime_status'),
+  execute: envelope => invoke('runtime_execute', { envelope }),
 };
 
-export function getFlovartRuntimeApi(): FlovartRuntimeApi | null {
-  if (typeof window === 'undefined') return null;
-  return ((window as FlovartWindow).__flovartAPI) || null;
+export function isTauriRuntimeSurface(): boolean {
+  if (typeof window === 'undefined') return false;
+  return Boolean((window as Window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__);
 }
 
-export function getRuntimeErrorMessage(result: RuntimeCommandResult | null | undefined, fallback: string): string {
+export function getFlovartRuntimeApi(): FlovartRuntimeApi | null {
+  return isTauriRuntimeSurface() ? tauriRuntime : null;
+}
+
+export function getRuntimeErrorMessage(
+  result: RuntimeCommandResult | null | undefined,
+  fallback: string,
+): string {
   const error = result?.error;
   if (typeof error === 'string' && error.trim()) return error;
   if (error && typeof error === 'object' && typeof error.message === 'string' && error.message.trim()) {

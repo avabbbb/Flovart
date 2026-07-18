@@ -45,3 +45,8 @@ log = "0.4"
 env_logger = "0.11"
 hex = "0.4"
 jsonschema = { version = "0.48", default-features = false }
+getrandom = "0.4"
+subtle = "2.6"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security", "Win32_Security_Authorization", "Win32_System_Threading"] }
