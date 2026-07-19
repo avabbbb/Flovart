@@ -25,8 +25,7 @@ describe('workflow online agent', () => {
       project, messages: [], prompt: '创建一个文本节点', attachments: [], signal: new AbortController().signal, emit, confirm,
     };
     await runWorkflowOnlineAgent(input, {
-      userApiKeys: [{ id: 'key', provider: 'openai', capabilities: ['text'], key: 'secret', customModels: ['gpt-test'], createdAt: 1, updatedAt: 1 }],
-      modelPreference: { textModel: 'gpt-test', imageModel: '', videoModel: '' },
+      userApiKeys: [{ id: 'key', provider: 'openai', capabilities: ['text'], key: 'secret', customModels: ['gpt-test'], routeMappings: [{ target: { kind: 'runtime-capability', capability: 'agent-text' }, routeId: 'gpt-test', order: 0 }], createdAt: 1, updatedAt: 1 }],
       generateText: vi.fn().mockResolvedValue('{"message":"准备创建","commands":[{"command":"workflow.node.create","args":{"type":"text","title":"文案"}}]}'),
       dispatch,
     });

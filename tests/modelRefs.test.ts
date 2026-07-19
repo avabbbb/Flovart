@@ -19,7 +19,7 @@ const makeKey = (patch: Partial<UserApiKey>): UserApiKey => ({
   customModels: patch.customModels,
   defaultModel: patch.defaultModel,
   models: patch.models,
-  routeBindings: patch.routeBindings,
+  routeMappings: patch.routeMappings,
   extraConfig: patch.extraConfig,
   createdAt: 1,
   updatedAt: 1,
@@ -33,7 +33,7 @@ describe('modelRefs', () => {
       name: 'Seedance Ark',
       capabilities: ['video'],
       models: [{ id: 'dreamina-seedance-2-0-260128', name: 'Seedance 2' }],
-      routeBindings: [{ productModelId: 'flovart:seedance-2', mode: 'text-to-video' as const, routeId: 'dreamina-seedance-2-0-260128', priority: 0, enabled: true, confirmed: true }],
+      routeMappings: [{ target: { kind: 'product-mode', productModelId: 'flovart:seedance-2', mode: 'text-to-video' as const }, routeId: 'dreamina-seedance-2-0-260128', order: 0 }],
     });
 
     const option = buildCapabilityModelOptions([key], 'video', [], '')[0];
@@ -61,7 +61,7 @@ describe('modelRefs', () => {
       id: 'custom-image',
       provider: 'custom',
       models: [{ id: 'gpt-image-2', name: 'GPT Image 2 proxy' }],
-      routeBindings: [{ productModelId: 'flovart:gpt-image-2', mode: 'text-to-image' as const, routeId: 'gpt-image-2', priority: 0, enabled: true, confirmed: true }],
+      routeMappings: [{ target: { kind: 'product-mode', productModelId: 'flovart:gpt-image-2', mode: 'text-to-image' as const }, routeId: 'gpt-image-2', order: 0 }],
     });
 
     expect(resolveModelSelection('flovart:gpt-image-2', [key], 'image', 'google')).toBeNull();
@@ -74,7 +74,7 @@ describe('modelRefs', () => {
       name: 'Seedance Ark',
       capabilities: ['video'],
       defaultModel: 'doubao-seedance-2.0',
-      routeBindings: [{ productModelId: 'flovart:seedance-2', mode: 'text-to-video' as const, routeId: 'doubao-seedance-2.0', priority: 0, enabled: true, confirmed: true }],
+      routeMappings: [{ target: { kind: 'product-mode', productModelId: 'flovart:seedance-2', mode: 'text-to-video' as const }, routeId: 'doubao-seedance-2.0', order: 0 }],
     });
 
     const options = buildCapabilityModelOptions([key], 'video', [], '');

@@ -1,13 +1,14 @@
 import type {
   AICapability,
   AIProvider,
-  ProductRouteBinding,
   ProductModelMode,
+  RouteMappingBinding,
   UserApiKey,
 } from '../types';
 import type { VideoAspectRatio } from './aiGateway';
 import { getRouteCatalog } from './runningHubRouteCatalog';
 import { PRODUCT_MODEL_ENTRIES } from '../tools/flovart/product-models.js';
+import { resolveRouteMapping } from './routeMapping';
 
 export type ProductModelCapability = {
   modes: ProductModelMode[];
@@ -189,28 +190,22 @@ const RUNNINGHUB_ROUTE_SEED: RunningHubRouteSeed[] = getRouteCatalog().flatMap(s
     schema.modes.map(mode => ({ productModelId: schema.productModelId, mode, routeId: schema.routeId })),
 );
 
-export function suggestProductRouteBindings(key: UserApiKey): ProductRouteBinding[] {
+export function suggestProductRouteMappings(key: UserApiKey): RouteMappingBinding[] {
   if (key.provider === 'runningHub') {
     const filter = keyModels(key).map(normalize);
     const filterSet = filter.length ? new Set(filter) : null;
     return RUNNINGHUB_ROUTE_SEED
       .filter(seed => !filterSet || filterSet.has(normalize(seed.routeId)))
       .filter(seed => keySupportsProduct(key, byId.get(seed.productModelId)!))
-      .map(seed => ({ productModelId: seed.productModelId, mode: seed.mode, routeId: seed.routeId, priority: 0, enabled: false, confirmed: false }));
+      .map(seed => ({ target: { kind: 'product-mode', productModelId: seed.productModelId, mode: seed.mode }, routeId: seed.routeId, order: 0 }));
   }
   const candidates = keyModels(key);
   return PRODUCT_MODEL_CATALOG.flatMap(model => {
     const ids = [...model.officialModelIds, ...model.aliases].map(normalize);
     const routeId = candidates.find(candidate => ids.includes(normalize(candidate)));
     if (!routeId) return [];
-    return model.capabilities.modes.map(mode => ({ productModelId: model.id, mode, routeId, priority: 0, enabled: false, confirmed: false }));
+    return model.capabilities.modes.map(mode => ({ target: { kind: 'product-mode', productModelId: model.id, mode }, routeId, order: 0 }));
   });
-}
-
-export function mergeSuggestedMappings(key: UserApiKey): ProductRouteBinding[] {
-  const existing = key.routeBindings || [];
-  const existingKeys = new Set(existing.map(binding => `${binding.productModelId}::${binding.mode}`));
-  return [...existing, ...suggestProductRouteBindings(key).filter(binding => !existingKeys.has(`${binding.productModelId}::${binding.mode}`))];
 }
 
 export function resolveProductModelRoute(
@@ -220,23 +215,8 @@ export function resolveProductModelRoute(
 ): { model: ProductModelDefinition; routeId: string; key: UserApiKey } | null {
   const model = byId.get(productModelId);
   if (!model) return null;
-  const routes = keys
-    .filter(key => key.status !== 'error' && keySupportsProduct(key, model))
-    .flatMap(key => (key.routeBindings || []).filter(binding => (
-      binding.productModelId === productModelId
-      && binding.mode === mode
-      && binding.enabled
-      && binding.confirmed
-      && Boolean(binding.routeId?.trim())
-      && keyStillExposesRoute(key, binding.routeId)
-    )).map(binding => ({ key, binding })))
-    .sort((left, right) => (
-      left.binding.priority - right.binding.priority
-      || Number(Boolean(right.key.isDefault)) - Number(Boolean(left.key.isDefault))
-      || left.key.id.localeCompare(right.key.id)
-    ));
-  const route = routes[0];
-  return route ? { model, routeId: route.binding.routeId.trim(), key: route.key } : null;
+  const route = resolveRouteMapping({ kind: 'product-mode', productModelId, mode }, keys);
+  return route ? { model, routeId: route.routeId, key: route.key } : null;
 }
 
 export function resolveAnyProductRoute(

@@ -1,6 +1,6 @@
 import { BookOpen } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import type { AssetFolder, AssetLibrary, ModelPreference, UserApiKey, GenerationMode, PromptEnhanceMode, PromptEnhanceResult } from '../../types';
+import type { AssetFolder, AssetLibrary, UserApiKey, GenerationMode, PromptEnhanceMode, PromptEnhanceResult } from '../../types';
 import { PromptBar } from '../PromptBar';
 import type { AssetSuggestion } from '../MentionList';
 import type { ReferencePickerWorkflowItem } from '../studio/AssetReferencePicker';
@@ -27,7 +27,7 @@ const modeFor = (node: WorkflowNode, config?: WorkflowGenerationConfig): Generat
   return mode === 'text' || mode === 'video' ? mode : 'image';
 };
 
-export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme, language, userApiKeys, modelPreference, dynamicModelOptions, onOpenSettings, onEnhancePrompt, isEnhancingPrompt, onChange, onRun, onStop, focusSignal, onDisconnectReference, assetFolders, assetItems, assetLibrary, onSelectAsset, onSelectWorkflowReference, onAddReferenceFiles, skillEnabled, width = 880 }: {
+export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme, language, userApiKeys, dynamicModelOptions, onOpenSettings, onEnhancePrompt, isEnhancingPrompt, onChange, onRun, onStop, focusSignal, onDisconnectReference, assetFolders, assetItems, assetLibrary, onSelectAsset, onSelectWorkflowReference, onAddReferenceFiles, skillEnabled, width = 880 }: {
   node: WorkflowNode;
   nodes: WorkflowNode[];
   connections?: WorkflowConnection[];
@@ -35,7 +35,6 @@ export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme,
   theme: 'light' | 'dark';
   language: 'en' | 'zho';
   userApiKeys: UserApiKey[];
-  modelPreference: ModelPreference;
   dynamicModelOptions: WorkflowModelOptions;
   onOpenSettings?: () => void;
   onEnhancePrompt?: (payload: { prompt: string; mode: PromptEnhanceMode; stylePreset?: string }) => Promise<PromptEnhanceResult>;
@@ -170,13 +169,12 @@ export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme,
         onWebSearchToggle={webSearch => patchConfig({ webSearch })}
         realPersonCheckEnabled={config.realPersonCheck !== false}
         onRealPersonCheckToggle={realPersonCheck => patchConfig({ realPersonCheck })}
-        selectedTextModel={generationMode === 'text' ? (config.modelId || modelPreference.textModel) : undefined}
-        selectedImageModel={generationMode === 'image' ? (config.modelId || modelPreference.imageModel) : undefined}
-        selectedVideoModel={generationMode === 'video' ? (config.modelId || modelPreference.videoModel) : undefined}
-        textModelOptions={dynamicModelOptions.text}
+        selectedTextModel={undefined}
+        selectedImageModel={generationMode === 'image' ? config.modelId : undefined}
+        selectedVideoModel={generationMode === 'video' ? config.modelId : undefined}
+        textModelOptions={[]}
         imageModelOptions={dynamicModelOptions.image}
         videoModelOptions={dynamicModelOptions.video}
-        onTextModelChange={modelId => patchConfig({ modelId })}
         onImageModelChange={modelId => patchConfig({ modelId })}
         onVideoModelChange={modelId => patchConfig({ modelId })}
         apiConfigs={userApiKeys}

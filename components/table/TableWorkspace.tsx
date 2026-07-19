@@ -4,15 +4,17 @@ import {
   Save, ScanLine, Scissors, Shirt, Sparkles, Upload, Video, WandSparkles,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { ModelPreference, UserApiKey } from '../../types';
+import type { UserApiKey } from '../../types';
 import { loadWorkflowMediaBlob, useWorkflowMediaUrl } from '../workflow/media';
 import type { WorkflowNode, WorkflowProject } from '../workflow/types';
 import { processTableMedia, type TableProcessResult, type TableToolId } from '../../services/tableMediaProcessor';
+import { getProductModels } from '../../services/productModelCatalog';
+import type { RouteFallbackResolution } from '../../services/routeMapping';
 
 interface TableWorkspaceProps {
   project: WorkflowProject | null;
   userApiKeys: UserApiKey[];
-  modelPreference: ModelPreference;
+  confirmRouteFallback?: (resolution: RouteFallbackResolution) => boolean | Promise<boolean>;
   initialNodeId?: string | null;
   onCommit: (result: TableProcessResult, sourceNodeId: string | null, name: string) => Promise<void> | void;
   onSaveAsset: (result: TableProcessResult, name: string) => Promise<void> | void;
@@ -31,13 +33,14 @@ const TOOLS: Array<{ id: TableToolId; name: string; detail: string; icon: typeof
 ];
 
 export function TableWorkspace({
-  project, userApiKeys, modelPreference, initialNodeId, onCommit, onSaveAsset, onOpenWorkflow, onOpenSettings,
+  project, userApiKeys, confirmRouteFallback, initialNodeId, onCommit, onSaveAsset, onOpenWorkflow, onOpenSettings,
 }: TableWorkspaceProps) {
   const mediaNodes = useMemo(() => project?.nodes.filter(node => node.type === 'image' || node.type === 'video') || [], [project]);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [localSource, setLocalSource] = useState<{ blob: Blob; name: string } | null>(null);
   const [result, setResult] = useState<TableProcessResult | null>(null);
   const [selectedTool, setSelectedTool] = useState<TableToolId>('reference');
+  const [selectedProductModelId, setSelectedProductModelId] = useState('');
   const [wardrobePrompt, setWardrobePrompt] = useState('');
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState('');
@@ -83,7 +86,12 @@ export function TableWorkspace({
     setError('');
     try {
       const source = localSource?.blob || await loadWorkflowMediaBlob(selectedNode?.metadata.storageKey, selectedNode?.metadata.href);
-      const next = await processTableMedia(source, selectedTool, { userApiKeys, modelPreference, prompt: wardrobePrompt });
+      const next = await processTableMedia(source, selectedTool, {
+        userApiKeys,
+        productModelId: selectedProductModelId || undefined,
+        confirmRouteFallback,
+        prompt: wardrobePrompt,
+      });
       setResult(next);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : '预处理失败。');
@@ -93,6 +101,7 @@ export function TableWorkspace({
   };
 
   const hasSource = Boolean(selectedNode || localSource);
+  const requiresProductModel = selectedTool === 'cutout' || selectedTool === 'wardrobe';
 
   return (
     <div className="table-workspace grid h-full min-h-0 grid-cols-[220px_minmax(0,1fr)] overflow-hidden border-t" style={{ borderColor: 'var(--isl-border)', color: 'var(--isl-ink)', background: 'var(--isl-surface-sunk)' }}>
@@ -157,10 +166,17 @@ export function TableWorkspace({
                 const Icon = tool.icon;
                 return <button key={tool.id} type="button" disabled={disabled} onClick={() => setSelectedTool(tool.id)} className="flex w-full gap-2 rounded-lg border p-2 text-left transition disabled:cursor-not-allowed disabled:opacity-35" style={{ borderColor: selectedTool === tool.id ? 'var(--isl-mint)' : 'transparent', background: selectedTool === tool.id ? 'var(--isl-mint-bg)' : 'transparent' }}><Icon className="mt-0.5 shrink-0" size={14} /><span><strong className="block text-xs">{tool.name}</strong><span className="mt-0.5 block text-[10px] leading-4" style={{ color: 'var(--isl-ink-soft)' }}>{tool.detail}</span></span></button>;
               })}
+              {requiresProductModel && <div className="mt-2 rounded-lg border p-2" style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-surface-sunk)' }}>
+                <label className="mb-1 block text-[10px] font-bold" style={{ color: 'var(--isl-ink-soft)' }}>图片产品模型</label>
+                <select aria-label="图片产品模型" value={selectedProductModelId} onChange={event => setSelectedProductModelId(event.target.value)} className="h-8 w-full rounded-md border px-2 text-[11px] outline-none" style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-card)', color: 'var(--isl-ink)' }}>
+                  <option value="">请选择模型</option>
+                  {getProductModels('image').filter(model => model.capabilities.modes.includes('image-to-image')).map(model => <option key={model.id} value={model.id}>{model.name}</option>)}
+                </select>
+              </div>}
               {selectedTool === 'wardrobe' && <motion.textarea initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 78 }} transition={{ type: 'spring', stiffness: 360, damping: 30 }} className="mt-2 w-full resize-none rounded-lg border p-2 text-[11px] outline-none" style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-surface-sunk)' }} value={wardrobePrompt} onChange={event => setWardrobePrompt(event.target.value)} placeholder="可选：描述目标服装；留空使用中性基础款" />}
             </div>
             <div className="space-y-2 border-t p-3" style={{ borderColor: 'var(--isl-border)' }}>
-              {!result ? <button type="button" disabled={processing} onClick={() => void process()} className="flex w-full items-center justify-center gap-2 rounded-lg py-2 text-xs font-bold disabled:opacity-45" style={{ background: 'var(--isl-mint)', color: 'white' }}><WandSparkles size={14} />执行处理</button> : <><div className="flex items-center gap-1.5 text-[11px] font-semibold" style={{ color: 'var(--isl-mint-deep)' }}><CircleCheck size={13} />结果已就绪</div><button type="button" onClick={() => void onCommit(result, selectedNode?.id || null, `${sourceName}-${selectedTool}`)} className="flex w-full items-center justify-center gap-2 rounded-lg py-2 text-xs font-bold" style={{ background: 'var(--isl-mint)', color: 'white' }}><ArrowRight size={14} />发送到 Workflow</button><button type="button" onClick={() => void onSaveAsset(result, `${sourceName}-${selectedTool}`)} className="flex w-full items-center justify-center gap-2 rounded-lg border py-2 text-xs font-semibold" style={{ borderColor: 'var(--isl-border)' }}><Save size={13} />保存到素材库</button></>}
+              {!result ? <button type="button" disabled={processing || (requiresProductModel && !selectedProductModelId)} onClick={() => void process()} className="flex w-full items-center justify-center gap-2 rounded-lg py-2 text-xs font-bold disabled:opacity-45" style={{ background: 'var(--isl-mint)', color: 'white' }}><WandSparkles size={14} />{requiresProductModel && !selectedProductModelId ? '请先选择模型' : '执行处理'}</button> : <><div className="flex items-center gap-1.5 text-[11px] font-semibold" style={{ color: 'var(--isl-mint-deep)' }}><CircleCheck size={13} />结果已就绪</div><button type="button" onClick={() => void onCommit(result, selectedNode?.id || null, `${sourceName}-${selectedTool}`)} className="flex w-full items-center justify-center gap-2 rounded-lg py-2 text-xs font-bold" style={{ background: 'var(--isl-mint)', color: 'white' }}><ArrowRight size={14} />发送到 Workflow</button><button type="button" onClick={() => void onSaveAsset(result, `${sourceName}-${selectedTool}`)} className="flex w-full items-center justify-center gap-2 rounded-lg border py-2 text-xs font-semibold" style={{ borderColor: 'var(--isl-border)' }}><Save size={13} />保存到素材库</button></>}
             </div>
           </motion.aside>
         )}

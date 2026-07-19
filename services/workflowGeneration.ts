@@ -5,14 +5,14 @@ import { createWorkflowVideoPoster, discardWorkflowMediaRecord, fitWorkflowMedia
 import { filterSeedanceReferences, filterWorkflowInputIds, getWorkflowInputNodes, resolveWorkflowMentionIds, sortReferencesByOrder, toWorkflowMentionItems } from '../components/workflow/references';
 import { workflowMediaStorage } from '../components/workflow/storage';
 import type { WorkflowGenerationMode, WorkflowNode, WorkflowProject } from '../components/workflow/types';
-import type { ModelPreference, ProductModelMode, UserApiKey } from '../types';
-import { resolveModelSelection } from '../utils/modelRefs';
+import type { ProductModelMode, UserApiKey } from '../types';
 import { executeUnifiedIgnition, generateTextWithProvider, SeedanceSubmissionUnknownError, type UnifiedIgnitionInput, type UnifiedIgnitionResult } from './aiGateway';
 import { getGenerationCapability } from './generationCapabilities';
 import { runPreflight } from './promptPreflight';
 import { getProductModel, getRoutedVideoModes } from './productModelCatalog';
 import { usePromptHistoryStore } from '../stores/usePromptHistoryStore';
 import { refundApiUsage, reserveApiUsage, updateApiUsage } from '../utils/usageMonitor';
+import { resolveRouteMappingForSubmit, type RouteFallbackResolution } from './routeMapping';
 
 export interface WorkflowHistoryPayload {
   name?: string;
@@ -26,7 +26,7 @@ export interface WorkflowHistoryPayload {
 
 export interface WorkflowGenerationRuntime {
   userApiKeys: UserApiKey[];
-  modelPreference: ModelPreference;
+  confirmRouteFallback?: (resolution: RouteFallbackResolution) => boolean | Promise<boolean>;
   executeMedia?: (input: UnifiedIgnitionInput) => Promise<UnifiedIgnitionResult>;
   executeText?: typeof generateTextWithProvider;
   getProject?: () => WorkflowProject | null;
@@ -50,10 +50,6 @@ const activeRequests = new Map<string, ActiveRequest>();
 const requestKey = (projectId: string, nodeId: string) => `${projectId}:${nodeId}`;
 const isAbort = (error: unknown) => Boolean(error && typeof error === 'object' && 'name' in error && error.name === 'AbortError');
 const abortError = () => new DOMException('生成已停止', 'AbortError');
-
-const preferredModel = (preferences: ModelPreference, mode: WorkflowGenerationMode) => (
-  mode === 'text' ? preferences.textModel : mode === 'video' ? preferences.videoModel : preferences.imageModel
-);
 
 function modeFor(node: WorkflowNode): WorkflowGenerationMode {
   if (node.type === 'config') return node.metadata.config?.mode || 'image';
@@ -157,14 +153,24 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
   try {
     const initiating = canonical(runtime, current).nodes.find(node => node.id === nodeId) || initialNode;
     const config = initiating.metadata.config || { mode };
-    const modelRef = config.modelId || preferredModel(runtime.modelPreference, mode);
+    const modelRef = config.modelId || '';
+    if (mode !== 'text' && !modelRef) {
+      throw new Error(`请先在 PromptBar 明确选择${mode === 'video' ? '视频' : '图片'}产品模型。`);
+    }
     const productModel = mode === 'text' ? undefined : getProductModel(modelRef);
     if (mode !== 'text' && productModel?.capability !== mode) {
       throw new Error(`Workflow ${mode === 'video' ? '视频' : '图片'}生成仅支持平台预设产品模型，请重新选择模型。`);
     }
     const selectionRef = productModel?.id || modelRef;
-    const resolved = resolveModelSelection(selectionRef, runtime.userApiKeys, mode, undefined, config.submode as ProductModelMode | undefined);
-    if (!resolved) throw new Error(`未找到可用于${mode === 'video' ? '视频' : mode === 'text' ? '文本' : '图片'}生成的 API Key。`);
+    const productMode: ProductModelMode = (config.submode as ProductModelMode | undefined)
+      || (mode === 'video' ? 'text-to-video' : 'text-to-image');
+    const resolved = await resolveRouteMappingForSubmit(
+      mode === 'text'
+        ? { kind: 'runtime-capability', capability: 'agent-text' }
+        : { kind: 'product-mode', productModelId: selectionRef, mode: productMode },
+      runtime.userApiKeys,
+      runtime.confirmRouteFallback,
+    );
     if (mode === 'video' && productModel && config.submode) {
       const routedModes = getRoutedVideoModes(productModel.id, resolved.key.provider, resolved.routeId);
       if (!routedModes.includes(config.submode as ProductModelMode)) {
@@ -199,9 +205,10 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
         source: 'workflow',
     });
 
-    const preflight = await runPreflight(prompt, selectionRef, runtime.userApiKeys, mode, {
+    const preflight = await runPreflight(prompt, resolved.routeId, runtime.userApiKeys, mode, {
       optimize: Boolean(config.enhancePrompt),
       localComplianceCheck: config.realPersonCheck !== false,
+      confirmRouteFallback: runtime.confirmRouteFallback,
     });
     const effectivePrompt = preflight.optimizedPrompt;
     if (preflight.complianceWarnings.length > 0) {

@@ -1,7 +1,6 @@
 import type { WorkflowOnlineTurnInput } from '../components/workflow/WorkflowAgentPanel';
 import { WORKFLOW_MUTATION_COMMANDS } from '../components/workflow/agentOps';
-import type { ModelPreference, UserApiKey } from '../types';
-import { findBestModelSelection, resolveModelSelection } from '../utils/modelRefs';
+import type { UserApiKey } from '../types';
 import { generateTextWithProvider, reversePromptStreamWithProvider } from './aiGateway';
 import {
   dispatchWorkflowCommand,
@@ -9,6 +8,7 @@ import {
   type WorkflowCommandEnvelope,
   type WorkflowCommandResult,
 } from './workflowDispatcher';
+import { resolveRouteMappingForSubmit, type RouteFallbackResolution } from './routeMapping';
 
 interface WorkflowAgentPlanCommand {
   command: string;
@@ -22,7 +22,7 @@ interface WorkflowAgentPlan {
 
 export interface WorkflowOnlineAgentRuntime {
   userApiKeys: UserApiKey[];
-  modelPreference: ModelPreference;
+  confirmRouteFallback?: (resolution: RouteFallbackResolution) => boolean | Promise<boolean>;
   generateText?: typeof generateTextWithProvider;
   describeImage?: typeof reversePromptStreamWithProvider;
   dispatch?: typeof dispatchWorkflowCommand;
@@ -51,9 +51,11 @@ commands 最多 8 条。只可使用下列命令：workflow.project.list、workf
 节点类型仅限 text、image、video、audio、config。涉及已有节点时必须使用 Workflow JSON 中真实 id；信息不足时 commands 返回空数组并在 message 中说明。不要在参数中放 API Key、data URL、blob URL、storageKey 或本地路径。写操作会由用户确认并通过 Flovart dispatcher 执行。`;
 
 export async function runWorkflowOnlineAgent(input: WorkflowOnlineTurnInput, runtime: WorkflowOnlineAgentRuntime) {
-  const modelRef = runtime.modelPreference.textModel || findBestModelSelection(runtime.userApiKeys, 'text') || '';
-  const resolved = resolveModelSelection(modelRef, runtime.userApiKeys, 'text');
-  if (!resolved) throw new Error('网站 Agent 需要先配置可用的文本模型 API Key。');
+  const resolved = await resolveRouteMappingForSubmit(
+    { kind: 'runtime-capability', capability: 'agent-text' },
+    runtime.userApiKeys,
+    runtime.confirmRouteFallback,
+  );
   const attachmentContext = await describeAttachments(input, runtime, resolved.routeId, resolved.key);
   if (input.signal.aborted) throw new DOMException('Agent 已停止', 'AbortError');
 

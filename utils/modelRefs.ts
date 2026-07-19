@@ -85,7 +85,7 @@ export function getKeyModelIds(key: UserApiKey, capability?: 'text' | 'image' | 
 export function keyOwnsBareModel(key: UserApiKey, model?: string): boolean {
   const bareModel = modelRefModelId(model);
   const product = bareModel.startsWith('flovart:') ? getProductModel(bareModel) : undefined;
-  if (product) return (key.routeBindings || []).some(binding => binding.productModelId === product.id && binding.enabled);
+  if (product) return (key.routeMappings || []).some(mapping => mapping.target.kind === 'product-mode' && mapping.target.productModelId === product.id);
   const normalizedModel = normalizeModelId(bareModel);
   if (!normalizedModel) return false;
   return getKeyModelIds(key).some(candidate => normalizeModelId(candidate) === normalizedModel);

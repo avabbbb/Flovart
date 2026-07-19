@@ -2,6 +2,20 @@
 
 Flovart 是本地优先的 Workflow + Table + Agent AI 创作工具。本文固定工作区、Provider、模型路由和制作运行时相关的领域词，避免后续把不同概念混在一起。
 
+## 产品入口
+
+**App Home**：
+用户进入产品后的作品发现与项目续作入口，用于浏览可 Remix 作品、继续本地项目并进入 Workflow、Table 或 Agent；它不是独立创作工作区。
+避免混用：Public Landing、Workflow Workspace、UGC 独立工作区。
+
+**Local Work**：
+用户保存在当前 Browser Workspace 或 Local Data Service 中的最终图片或视频作品，默认只对当前用户本地可见，未经明确发布不会进入在线社区。
+避免混用：Published Work、临时预览、Provider 生成结果。
+
+**Published Work**：
+创作者明确发布到在线社区的最终图片或视频作品，可选择附带一份脱敏后的可 Remix Workflow 快照；最终媒体始终是首页展示主体。
+避免混用：Workflow Template、PromptPack、本地项目、生成历史记录。
+
 ## 创作工作区
 
 **Workflow Workspace**：
@@ -9,12 +23,16 @@ Flovart 是本地优先的 Workflow + Table + Agent AI 创作工具。本文固�
 避免混用：Table Workspace、Agent Workspace、旧 Canvas Workspace、旧 Art Workspace。
 
 **Table Workspace**：
-一次只处理一个媒体或 Workflow 节点的专注预处理台，用于抠图、深度图或深度视频、结构提取、风格化、服装修改准备和全能参考准备；它不维护多节点故事图，也不承担 Agent 对话。
-避免混用：Workflow Workspace、Agent Workspace、多节点画布、旧 Art Workspace、Artboard。
+面向节点式媒体处理的工作区，用有向节点图组织输入媒体、抠图、深度、结构提取、风格化、服装修改、参考准备和输出；它不承担 Provider 生成编排或 Agent 对话。
+避免混用：Workflow Workspace、Workflow Graph、Agent Workspace、旧 Art Workspace。
 
 **Table Session**：
-一个源媒体或 Workflow 节点及其当前预处理工具、参数、预览、任务状态和候选结果组成的临时工作上下文；切换源输入前必须处理未保存结果。
-避免混用：Workflow Project、Agent Session、多节点图。
+一张 Table Processing Graph 及其输入媒体、画布视口、预览、任务状态和候选输出组成的媒体处理上下文。
+避免混用：Workflow Project、Agent Session、单次工具调用。
+
+**Table Processing Graph**：
+Table Session 中由输入、处理和输出节点及其类型化有向连线组成的媒体计算图；它表达媒体变换关系，但不表达 Workflow 的生成依赖。
+避免混用：Workflow Graph、Table Process Stack、生成任务编排。
 
 **Agent Workspace**：
 把 Codex 线程、任务状态、项目上下文、工具执行和产物以可摆放面板组织起来的空间任务界面；画布只负责空间布局和导航，不承担 Workflow 数据流。
@@ -116,9 +134,13 @@ Official WebUI 在纯网页模式下使用的 Provider Secret 存储边界；需
 用户保存的外部 AI 服务账号，用来提供文本、图片、视频或 Agent 等生成能力。
 避免混用：Vendor、Channel、API Config。
 
-**Model Preference**：
-用户为某类生成能力保存的默认模型选择。
-避免混用：Active Model、临时选择。
+**Route Mapping Target**：
+需要解析到 Provider Route 的稳定执行意图；媒体目标由 Product Model 与 Generation Mode 共同标识，文本目标由 Runtime Capability 标识，例如提示词增强、脚本拆解和 Agent 文本生成。
+避免混用：Provider Route、Provider 默认模型、PromptBar 临时选择。
+
+**Route Mapping**：
+用户在统一“模型映射”中心把 Route Mapping Target 绑定到按提交优先级排列的 Provider Route，是 Workflow、Table 与 Agent 选择执行线路的唯一用户配置来源。
+避免混用：Model Preference、API Key 健康状态、Provider 默认模型、Run Route Plan。
 
 **Standard Model**：
 Provider 托管的单模型生成端点，请求字段和结果格式由该 Provider 自己定义。
@@ -138,19 +160,19 @@ Flovart 面向用户稳定展示的一种生成模型身份，使用可由官方
 
 **Provider Route**：
 Provider 为某个 Generation Mode 提供的可执行模型线路，具有自己的端点、输入字段、能力限制、稳定性和价格。
-避免混用：Product Model、Provider、Model Preference。
+避免混用：Product Model、Provider、Route Mapping。
 
 **Provider Route Label**：
 设置与线路选择界面展示的渠道名称，由 Provider、Provider 包装别名和线路等级组成，例如 `RunningHub · 全能图片 G-2 · 低价渠道`；不得替代 PromptBar 中的 Product Model 名称。
 避免混用：Product Model 名称、Provider Route ID、营销显示名。
 
-**Product Route Binding**：
-把一个 Product Model 的特定 Generation Mode 绑定到可执行 Provider Route 的用户确认关系；同一 Product Model 可以按模式绑定多条线路。
-避免混用：单一模型别名、Provider 默认模型、Model Preference。
+**Route Binding**：
+Route Mapping 中一条经过用户确认的目标到线路关系；目标类型为 `product-mode` 或 `runtime-capability`，并可绑定主线路与有序备用线路。
+避免混用：单一模型别名、Provider 默认模型、自动生效的线路建议。
 
 **Route Selection Policy**：
-用户为同一 Product Model 与 Generation Mode 的候选 Provider Route 设定的提交前优先顺序；首次建立 RunningHub 映射时低价渠道默认排在官方稳定线路之前，但必须显式展示其稳定性风险与 Route Price Quote。ProviderAttempt 开始后不自动切换线路。
-避免混用：自动重试、提交后 Failover、Model Preference。
+用户为同一 Route Mapping Target 的候选 Provider Route 设定的提交前优先顺序；首次建立 RunningHub 映射时低价渠道默认排在官方稳定线路之前，但必须显式展示其稳定性风险与 Route Price Quote。主线路在提交前不可用时，系统可以预选下一条可用线路，但必须明确展示线路变更并由用户确认；ProviderAttempt 开始后不自动切换线路。
+避免混用：自动重试、提交后 Failover、Route Mapping。
 
 **Route Price Quote**：
 Provider 在正式提交前根据最终 Provider Request 返回的费用预估；它用于展示和预算判断，获取失败时状态为未知，不得伪装为零价、缓存价或已确认价格。
@@ -185,8 +207,8 @@ Flovart 随版本发布的 Verified Route 集合，每条线路都带有可执�
 避免混用：Discovered Route、官方 Route Catalog 条目、任意 HTTP 映射、用户脚本 Adapter。
 
 **Run Route Plan**：
-Desktop Runtime 在 ProductionRun 开始前根据 Product Route Binding、Capability Requirement、Validated Profile、报价和可用性生成并由用户确认的不可变线路计划，逐项锁定本次运行各能力或阶段使用的 Provider Route。
-避免混用：Product Route Binding、Route Selection Policy、提交后自动 Failover、Director Skill 模型配置。
+Desktop Runtime 在 ProductionRun 开始前根据 Route Mapping、Capability Requirement、Validated Profile、报价和可用性生成并由用户确认的不可变线路计划，逐项锁定本次运行各能力或阶段使用的 Provider Route。
+避免混用：Route Binding、Route Selection Policy、提交后自动 Failover、Director Skill 模型配置。
 
 **Route Contract Test**：
 针对一条 Verified Route，用代表性 Generation Request 验证 Adapter 生成的 endpoint、字段名、类型、默认值、媒体角色和数量限制均符合 Route Capability Schema 的无费用测试。
@@ -384,11 +406,11 @@ ProductionRun 因 API Key 设置、System Gate 或人工审片需要用户介入
 
 **Capability Requirement**：
 ProductionSpec 对 Runtime Capability 及其必需特性的声明，只表达输入、输出和质量约束，不指定 Provider 或模型。
-避免混用：Model Preference、Provider Request、Validated Profile。
+避免混用：Route Mapping、Provider Request、Validated Profile。
 
 **Validated Profile**：
 某个 Director Skill 版本通过样片评测验证过的模型组合及其分数，用于优先解析而不是强制绑定。
-避免混用：Model Preference、必需模型、Provider 配置。
+避免混用：Route Mapping、必需模型、Provider 配置。
 
 **Compatible Route**：
 满足 Capability Requirement、但尚未由当前 Director Skill 版本完成样片验证的模型解析结果。

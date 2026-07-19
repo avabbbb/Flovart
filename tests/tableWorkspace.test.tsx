@@ -11,7 +11,6 @@ vi.mock('../components/workflow/media', () => ({
 
 const baseProps = {
   userApiKeys: [],
-  modelPreference: { textModel: '', imageModel: '', videoModel: '' },
   onCommit: vi.fn(),
   onSaveAsset: vi.fn(),
   onOpenWorkflow: vi.fn(),

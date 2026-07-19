@@ -6,12 +6,14 @@ import { workflowMediaStorage } from '../components/workflow/storage';
 
 const apiKey: UserApiKey = {
   id: 'image-key', provider: 'openai', capabilities: ['image'], key: 'secret', baseUrl: 'https://tools.example/v1',
-  customModels: ['gpt-image-2'], createdAt: 1, updatedAt: 1,
+  customModels: ['gpt-image-2'],
+  routeMappings: [{ target: { kind: 'product-mode', productModelId: 'flovart:gpt-image-2', mode: 'image-to-image' }, routeId: 'gpt-image-2', order: 0 }],
+  createdAt: 1, updatedAt: 1,
 };
 
 const project = (): WorkflowProject => ({
   id: 'project', title: '图片工具',
-  nodes: [{ id: 'source', type: 'image', title: '源图', position: { x: 10, y: 20 }, width: 320, height: 180, metadata: { storageKey: 'source-key', mimeType: 'image/png', status: 'success' } }],
+  nodes: [{ id: 'source', type: 'image', title: '源图', position: { x: 10, y: 20 }, width: 320, height: 180, metadata: { storageKey: 'source-key', mimeType: 'image/png', status: 'success', config: { mode: 'image', modelId: 'flovart:gpt-image-2', submode: 'image-to-image' } } }],
   connections: [], selectedNodeIds: ['source'], viewport: { x: 0, y: 0, k: 1 }, backgroundMode: 'dots', agentSessions: [], activeAgentSessionId: null,
   createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
 });
@@ -21,7 +23,7 @@ function runtime(initial = project()) {
   return {
     get current() { return current; },
     deps: {
-      userApiKeys: [apiKey], modelPreference: { textModel: '', imageModel: 'gpt-image-2', videoModel: '' },
+      userApiKeys: [apiKey],
       getProject: () => current,
       onProjectChange: vi.fn((next: WorkflowProject) => { current = next; }),
       loadMedia: vi.fn().mockResolvedValue(new Blob(['source'], { type: 'image/png' })),

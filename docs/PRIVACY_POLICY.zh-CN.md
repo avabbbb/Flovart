@@ -23,7 +23,7 @@ Flovart 是本地优先创作工具。默认情况下，官方 Desktop Edition �
 - Provider 设置和 API Key。当前 Desktop Edition 与 Official WebUI 会由应用加密 Provider Secret，再写入对应 WebView 或浏览器配置中基于 `localforage` / IndexedDB 的、按 origin 隔离的 Browser Secret Vault。这属于应用层加密的浏览器存储，并非操作系统凭据库。官方 Edge Extension 不保存 Provider Secret。
 - Workflow 项目、节点、布局、媒体、提示词和生成配置。
 - 生成的图片、视频、引用、预览和元数据。
-- 模型偏好、自定义端点、主题、语言和布局设置。
+- 模型映射、自定义端点、主题、语言和布局设置。
 - 素材库、历史记录、固定结果和本地运行信息。
 - 你启用的浏览器导入偏好。
 

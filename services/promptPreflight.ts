@@ -1,7 +1,7 @@
 import { getModelCapabilities } from './modelTemplateRegistry';
 import { generateTextWithProvider } from './aiGateway';
-import { getKeyCapabilities, getKeyModelIds } from '../utils/modelRefs';
 import type { UserApiKey } from '../types';
+import { resolveRouteMappingForSubmit, type RouteFallbackResolution } from './routeMapping';
 
 export interface PreflightResult {
   optimizedPrompt: string;
@@ -20,16 +20,6 @@ function basicComplianceCheck(prompt: string): string[] {
   return COMPLIANCE_KEYWORDS.filter(keyword => lower.includes(keyword.toLowerCase()));
 }
 
-function findTextKey(keys: UserApiKey[]): { key: UserApiKey; model: string } | null {
-  for (const key of keys) {
-    if (key.status === 'error') continue;
-    if (!getKeyCapabilities(key).includes('text')) continue;
-    const model = getKeyModelIds(key, 'text')[0];
-    if (model) return { key, model };
-  }
-  return null;
-}
-
 const OPTIMIZATION_SYSTEM_PROMPT = `你是一个视频生成提示词优化专家。请将用户给定的提示词优化为更适合 Seedance 视频生成模型的英文提示词。
 要求：
 1. 保留原始创意意图和关键描述
@@ -42,7 +32,11 @@ export async function runPreflight(
   modelId: string | undefined,
   userApiKeys: UserApiKey[],
   capability?: 'text' | 'image' | 'video',
-  options: { optimize?: boolean; localComplianceCheck?: boolean } = {},
+  options: {
+    optimize?: boolean;
+    localComplianceCheck?: boolean;
+    confirmRouteFallback?: (resolution: RouteFallbackResolution) => boolean | Promise<boolean>;
+  } = {},
 ): Promise<PreflightResult> {
   const caps = getModelCapabilities(modelId, capability);
   const result: PreflightResult = {
@@ -63,22 +57,24 @@ export async function runPreflight(
   }
 
   if (caps.promptOptimization && options.optimize !== false && prompt.trim()) {
-    const textKey = findTextKey(userApiKeys);
-    if (textKey) {
-      try {
-        const optimized = await generateTextWithProvider(
-          `${OPTIMIZATION_SYSTEM_PROMPT}\n\n[原始提示词]\n${prompt}`,
-          textKey.model,
-          textKey.key,
-          { signal: AbortSignal.timeout(15000) },
-        );
-        if (optimized?.trim()) {
-          result.optimizedPrompt = optimized.trim();
-          result.skippedOptimization = false;
-        }
-      } catch {
-        result.skippedOptimization = true;
+    const route = await resolveRouteMappingForSubmit(
+      { kind: 'runtime-capability', capability: 'prompt-enhancement' },
+      userApiKeys,
+      options.confirmRouteFallback,
+    );
+    try {
+      const optimized = await generateTextWithProvider(
+        `${OPTIMIZATION_SYSTEM_PROMPT}\n\n[原始提示词]\n${prompt}`,
+        route.routeId,
+        route.key,
+        { signal: AbortSignal.timeout(15000) },
+      );
+      if (optimized?.trim()) {
+        result.optimizedPrompt = optimized.trim();
+        result.skippedOptimization = false;
       }
+    } catch {
+      result.skippedOptimization = true;
     }
   }
 

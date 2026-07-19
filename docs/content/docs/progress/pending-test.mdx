@@ -2,6 +2,15 @@
 title: 待测试确认
 ---
 
+## 统一模型映射中心
+
+- 设置页已删除全局“模型偏好”和 API Key 弹窗中的重复模型绑定，只保留一个“模型映射”入口；提示词增强、脚本拆解、Agent 文本、图像理解四种文本能力与媒体产品模型都在这里绑定 Provider Route。
+- 每个映射目标按“主线路 / 备用 1 / 备用 2”表达优先级，可直接添加、删除和上下调整，不再暴露 `priority`、`enabled`、`confirmed` 等难懂字段，也不会自动生成或暗中确认映射。
+- Workflow 图片/视频节点和 Table 抠图/换装必须先明确选择产品模型，再按“产品模型 × 生成模式”解析线路；没有选择产品模型或没有对应映射时会在提交前阻止运行，不再回退到全局偏好、最近使用或第一条可用模型。
+- 文本相关调用按 Runtime Capability 独立解析线路。主线路提交前不可用而备用线路可用时，会显示主线路与备用线路并要求用户确认；用户拒绝则停止提交，Provider 已开始任务后不会自动改走备用线路。
+- 自动验证已通过：`npx tsc --noEmit`、Vitest 66 个文件（571 项通过、1 项跳过）及 `npm run build`；构建只保留既有 chunk size 与 RunningHub 静态/动态混合导入警告。
+- 待用户验证：① 在模型映射页分别添加一条文本能力和一条媒体产品映射，刷新后顺序仍保持；② 将主线路置为异常后生成，确认弹窗明确显示主备线路，拒绝时没有 Provider 请求；③ 新建图片/视频节点未选产品模型时生成按钮不可用并提示先选择；④ Table 抠图/换装未选产品模型时不可运行。
+
 ## 浏览器本地业务存储收口
 
 - Provider API Key 的浏览器持久化从 `localStorage` 迁到加密的 `localforage` Vault；旧版密文与盐会一次性迁移，明文旧 Key 会加密后迁移。桌面端后续仍以系统 Credential Manager 为最终存储边界。
@@ -100,14 +109,14 @@ title: 待测试确认
 - 折叠态下连向隐藏节点的连线同步隐藏；展开后恢复。
 - 批量导出 ZIP 文件名格式改为 `项目名_节点标题_序号.ext`（通过 `exportMediaArchive` 新增 `projectName` 参数）；未传 `projectName` 时回退原 `序号_名称.ext` 格式，向后兼容。
 
-## Provider 与模型偏好
+## Provider 与模型映射
 
-- Workflow 图片/视频生成现在严格以平台产品模型为入口：节点中已存在的官方上游模型别名会先归一化为 `flovart:*` 产品 ID，再解析已启用且已确认的 BYOK 映射；未知裸上游模型会在提交前被拒绝，不能绕过固定产品目录。
-- 产品模型路由会同时校验 Key 的能力范围和当前模型清单；已失效、未确认、能力不匹配或上游模型已从 Key 清单移除的映射不会参与路由。相同优先级下优先默认 Key，再按 Key ID 保持稳定选择。
+- Workflow 图片/视频生成严格以节点明确选择的平台产品模型为入口，再按当前生成模式解析统一映射；未知裸上游模型会在提交前被拒绝，不能绕过固定产品目录。
+- 产品模型路由会同时校验 Key 状态、能力范围和当前模型清单；失效、能力不匹配或已从 Key 模型清单移除的线路不会参与提交。线路顺序相同时优先默认 Key，再按 Key ID 保持稳定选择。
 - Workflow PromptBar 在所选产品模型没有可用映射时禁用生成（包括按钮和键盘提交）；AI 网关增加最终防线，任何未解析的 `flovart:*` 产品 ID 都不会被发送给供应商。
 - Google BYOK 运行时改为分别保存文本、图片、视频 Base URL，并在 Workflow 图片/视频调用时显式传递当前映射 Key 的 Base URL 与上游模型，避免不同能力使用不同代理时串线。
-- 浏览器扩展同步 API Key 时会合并同一 Key 的固定模型映射、价格规则和预算策略，不再因为 Key 已存在而丢弃新增路由字段；模型偏好加载时会把已知官方别名归一为产品 ID，未知图片/视频偏好回到平台默认产品模型。
-- 待用户验证：① 在设置页为 `GPT Image 2` 或视频产品模型确认一条映射后，从 Workflow 节点生成，供应商实际收到映射后的上游 ID；② 关闭/取消确认映射后，PromptBar 显示未就绪且生成按钮不可点击；③ 同一产品配置两条同优先级映射时默认 Key 稳定胜出；④ Google 图片与视频分别配置不同代理 Base URL 时，两类请求各走自己的地址；⑤ 在旧 Workflow 项目中写入未知裸媒体模型时显示“仅支持平台预设产品模型”，且没有供应商请求。
+- 浏览器扩展同步 API Key 时会合并同一 Key 的模型映射、价格规则和预算策略，不再因为 Key 已存在而丢弃新增路由字段。
+- 待用户验证：① 在设置页为 `GPT Image 2` 或视频产品模型添加一条映射后，从 Workflow 节点生成，供应商实际收到映射后的上游 ID；② 删除映射后 PromptBar 显示未就绪且生成按钮不可点击；③ 同一目标配置主备两条线路，主线路异常时必须确认备用线路；④ Google 图片与视频分别配置不同代理 Base URL 时，两类请求各走自己的地址；⑤ 在旧 Workflow 项目中写入未知裸媒体模型时显示“仅支持平台预设产品模型”，且没有供应商请求。
 
 - RunningHub 已作为原生标准模型 Provider 接入设置页、模型拉取、图片生成和视频生成网关；模型列表内置当前项目使用的官方标准模型端点（全能图片、Seedance 2.0、V3.1 视频等），page-api 拉取的模型作为补充，仍可手动补充模型 ID。
 - RunningHub API Key 验证会使用标准模型任务查询端点确认鉴权，并在保存或后台刷新时写入可选模型；模型生成返回的 `results[].url` 会转换成现有图片/视频结果格式。
@@ -131,8 +140,8 @@ title: 待测试确认
 - RunningHub 产品展示 slug（如 `nano-banana-pro/edit-channel-low-price`）会在提交前重写为真实 API endpoint（如 `rhart-image-n-pro/edit`），避免上传成功后打到错误路径。
 - RunningHub 标准模型提交、查询和上传会透出平台返回的 `errorCode` / `errorMessage`，并附带不含密钥的 `baseUrl`、最终提交 URL、模型 ID 与 payload 字段摘要；上传未返回公网 URL、模型 ID 仍是未知详情页/搜索页 URL，或 payload 中仍有本地引用时会在本地中断，不再退化成 `No taskId returned`。
 - Seedance 2.0 后端路由修正：`doubao-seedance-2.0` 不再被误判为文本/图片模型；Seedance 视频/音频参考在本地 `data:` / `blob:` 时会在调用 Provider 前明确失败，视频任务停止信号贯穿提交、轮询和下载。
-- 模型偏好新增本机保存状态提示，能显示已自动保存时间或浏览器存储失败原因；Canvas 与 Workflow 共用这套偏好状态。
-- 根级 `CONTEXT.md` 已补充 Provider、Model Preference、Standard Model 和 AI App 的领域词边界，并新增 ADR 记录 RunningHub 原生 Provider 的取舍。
+- 模型映射由 API Key Vault 本机保存；Workflow 与 Table 共用同一套目标映射，不再维护全局模型偏好状态。
+- 根级 `CONTEXT.md` 已补充 Provider、Route Mapping Target、Route Mapping、Standard Model 和 AI App 的领域词边界，并新增 ADR 记录单一映射权威与 RunningHub 原生 Provider 的取舍。
 
 ## CLI、Agent 与 MCP
 

@@ -3,8 +3,8 @@ import { useState } from 'react';
 import { Button, Modal, Segmented } from 'antd';
 import { nanoid } from 'nanoid';
 import { generateTextWithProvider } from '../../services/aiGateway';
-import { inferProviderFromModel } from '../../services/aiGateway';
-import type { ModelPreference, UserApiKey } from '../../types';
+import { resolveRouteMappingForSubmit, type RouteFallbackResolution } from '../../services/routeMapping';
+import type { UserApiKey } from '../../types';
 import type { ScriptAsset, ScriptBreakdown, ScriptShot, WorkflowNode, WorkflowNodeMetadata } from './types';
 
 const BREAKDOWN_SYSTEM_PROMPT = `你是一个专业的剧本拆解助手。用户会给你一段剧本或故事描述，你需要将其拆解为结构化的分镜数据。
@@ -64,19 +64,12 @@ function parseBreakdownResponse(text: string): ScriptBreakdown | null {
   }
 }
 
-function resolveTextModel(modelPreference: ModelPreference, userApiKeys: UserApiKey[]): string | null {
-  if (modelPreference.textModel) return modelPreference.textModel;
-  const textKey = userApiKeys.find(key => inferProviderFromModel('') !== key.provider && (key.provider === 'openai' || key.provider === 'anthropic' || key.provider === 'google' || key.provider === 'openrouter'));
-  if (textKey?.models?.length) return textKey.models[0].id;
-  return null;
-}
-
-export function ScriptNodeEditor({ node, onChange, onClose, userApiKeys, modelPreference, onOpenSettings, onBatchGenerate }: {
+export function ScriptNodeEditor({ node, onChange, onClose, userApiKeys, confirmRouteFallback, onOpenSettings, onBatchGenerate }: {
   node: WorkflowNode;
   onChange: (metadata: WorkflowNodeMetadata) => void;
   onClose: () => void;
   userApiKeys: UserApiKey[];
-  modelPreference: ModelPreference;
+  confirmRouteFallback?: (resolution: RouteFallbackResolution) => boolean | Promise<boolean>;
   onOpenSettings?: () => void;
   onBatchGenerate?: (mode: 'image' | 'video') => void;
 }) {
@@ -92,12 +85,15 @@ export function ScriptNodeEditor({ node, onChange, onClose, userApiKeys, modelPr
 
   const handleBreakdown = async () => {
     if (!sourceText.trim()) { setError('请先输入剧本内容'); return; }
-    const model = resolveTextModel(modelPreference, userApiKeys);
-    if (!model) { setError('未配置文本模型，请先在设置中添加 API Key'); onOpenSettings?.(); return; }
     setBusy(true);
     setError(null);
     try {
-      const result = await generateTextWithProvider(sourceText, model, undefined, {
+      const route = await resolveRouteMappingForSubmit(
+        { kind: 'runtime-capability', capability: 'script-breakdown' },
+        userApiKeys,
+        confirmRouteFallback,
+      );
+      const result = await generateTextWithProvider(sourceText, route.routeId, route.key, {
         systemPrompt: BREAKDOWN_SYSTEM_PROMPT,
         temperature: 0.7,
         maxTokens: 8192,

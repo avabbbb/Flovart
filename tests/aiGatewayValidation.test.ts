@@ -608,13 +608,10 @@ describe('aiGateway - generateImageWithProvider', () => {
             provider: 'openai',
             capabilities: ['image'],
             key: 'sk-test',
-            routeBindings: [{
-                productModelId: 'flovart:gpt-image-2',
-                mode: 'text-to-image' as const,
+            routeMappings: [{
+                target: { kind: 'product-mode', productModelId: 'flovart:gpt-image-2', mode: 'text-to-image' as const },
                 routeId: 'gpt-image-2',
-                priority: 0,
-                enabled: true,
-                confirmed: true,
+                order: 0,
             }],
             createdAt: 0,
             updatedAt: 0,

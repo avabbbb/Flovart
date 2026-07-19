@@ -34,8 +34,11 @@ export function getGenerationCapability(
   if (mode === 'text') {
     return { mode, models, aspectRatios: [], resolutions: [], durations: [], supportsReferences: [] };
   }
+  if (!selectedModel) {
+    return { mode, models, aspectRatios: [], resolutions: [], durations: [], supportsReferences: [] };
+  }
 
-  const modelRef = selectedModel || models[0] || '';
+  const modelRef = selectedModel;
   const product = getProductModel(modelRef);
   if (product?.capability === mode) {
     return {

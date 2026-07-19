@@ -15,17 +15,17 @@ const node = createWorkflowNode('image', 'image', { x: 100, y: 80 }, {
 });
 const productKey: UserApiKey = {
   id: 'openai-image', provider: 'openai', capabilities: ['image'], key: 'secret', customModels: ['gpt-image-2'],
-  routeBindings: [{ productModelId: 'flovart:gpt-image-2', mode: 'text-to-image' as const, routeId: 'gpt-image-2', priority: 0, enabled: true, confirmed: true }],
+  routeMappings: [{ target: { kind: 'product-mode', productModelId: 'flovart:gpt-image-2', mode: 'text-to-image' as const }, routeId: 'gpt-image-2', order: 0 }],
   createdAt: 1, updatedAt: 1,
 };
 const videoProductKey: UserApiKey = {
   id: 'seedance-video', provider: 'volcengine', capabilities: ['video'], key: 'secret', customModels: ['doubao-seedance-2-0-260128'],
-  routeBindings: [{ productModelId: 'flovart:seedance-2', mode: 'text-to-video' as const, routeId: 'doubao-seedance-2-0-260128', priority: 0, enabled: true, confirmed: true }],
+  routeMappings: [{ target: { kind: 'product-mode', productModelId: 'flovart:seedance-2', mode: 'text-to-video' as const }, routeId: 'doubao-seedance-2-0-260128', order: 0 }],
   createdAt: 1, updatedAt: 1,
 };
 const klingProductKey: UserApiKey = {
   id: 'kling-video', provider: 'keling', capabilities: ['video'], key: 'secret', customModels: ['kling-video-3.0'],
-  routeBindings: [{ productModelId: 'flovart:kling-video-3', mode: 'text-to-video' as const, routeId: 'kling-video-3.0', priority: 0, enabled: true, confirmed: true }],
+  routeMappings: [{ target: { kind: 'product-mode', productModelId: 'flovart:kling-video-3', mode: 'text-to-video' as const }, routeId: 'kling-video-3.0', order: 0 }],
   createdAt: 1, updatedAt: 1,
 };
 
@@ -64,7 +64,6 @@ describe('workflow node overlays', () => {
       theme="light"
       language="zho"
       userApiKeys={[productKey]}
-      modelPreference={{ textModel: '', imageModel: 'flovart:gpt-image-2', videoModel: '' }}
       dynamicModelOptions={{ text: [], image: ['flovart:gpt-image-2'], video: [] }}
       onChange={onChange}
       onRun={vi.fn()}
@@ -94,7 +93,6 @@ describe('workflow node overlays', () => {
       theme="light"
       language="zho"
       userApiKeys={[videoProductKey]}
-      modelPreference={{ textModel: '', imageModel: '', videoModel: 'flovart:seedance-2' }}
       dynamicModelOptions={{ text: [], image: [], video: ['flovart:seedance-2'] }}
       onChange={onChange}
       onRun={vi.fn()}
@@ -122,7 +120,7 @@ describe('workflow node overlays', () => {
     const videoNode = createWorkflowNode('kling-video-node', 'video', { x: 0, y: 0 }, {
       prompt: '让人物转身', config: { mode: 'video', modelId: 'flovart:kling-video-3', submode: 'text-to-video', durationSec: 5, resolution: '720p' },
     });
-    render(<WorkflowNodePromptBar node={videoNode} nodes={[videoNode]} t={t} theme="light" language="zho" userApiKeys={[klingProductKey]} modelPreference={{ textModel: '', imageModel: '', videoModel: 'flovart:kling-video-3' }} dynamicModelOptions={{ text: [], image: [], video: ['flovart:kling-video-3'] }} onChange={vi.fn()} onRun={vi.fn()} />);
+    render(<WorkflowNodePromptBar node={videoNode} nodes={[videoNode]} t={t} theme="light" language="zho" userApiKeys={[klingProductKey]} dynamicModelOptions={{ text: [], image: [], video: ['flovart:kling-video-3'] }} onChange={vi.fn()} onRun={vi.fn()} />);
     fireEvent.click(screen.getByTitle('视频生成方式'));
     const panel = screen.getByTestId('prompt-video-mode-panel');
     expect(within(panel).getByRole('button', { name: '文生视频' })).toBeInTheDocument();
@@ -137,7 +135,7 @@ describe('workflow node overlays', () => {
     const videoNode = createWorkflowNode('seedance-image-video', 'video', { x: 0, y: 0 }, {
       prompt: '让人物转身', config: { mode: 'video', modelId: 'flovart:seedance-2', submode: 'image-to-video', durationSec: 5, resolution: '720p' },
     });
-    render(<WorkflowNodePromptBar node={videoNode} nodes={[videoNode]} t={t} theme="light" language="zho" userApiKeys={[videoProductKey]} modelPreference={{ textModel: '', imageModel: '', videoModel: 'flovart:seedance-2' }} dynamicModelOptions={{ text: [], image: [], video: ['flovart:seedance-2'] }} onChange={vi.fn()} onRun={vi.fn()} />);
+    render(<WorkflowNodePromptBar node={videoNode} nodes={[videoNode]} t={t} theme="light" language="zho" userApiKeys={[videoProductKey]} dynamicModelOptions={{ text: [], image: [], video: ['flovart:seedance-2'] }} onChange={vi.fn()} onRun={vi.fn()} />);
     const generate = screen.getByRole('button', { name: 'promptBar.generate' });
     expect(generate).toBeDisabled();
     expect(generate).toHaveAttribute('title', '图生视频需要添加 1 张图片');
@@ -150,7 +148,7 @@ describe('workflow node overlays', () => {
     const source = createWorkflowNode('source', 'image', { x: 0, y: 240 }, { href: 'data:image/png;base64,AA==', name: '图片1' });
     source.title = '图片1';
         const onSelectWorkflowReference = vi.fn().mockReturnValue('source');
-        render(<WorkflowNodePromptBar node={target} nodes={[target, source]} t={t} theme="light" language="zho" userApiKeys={[productKey]} modelPreference={{ textModel: '', imageModel: 'flovart:gpt-image-2', videoModel: '' }} dynamicModelOptions={{ text: [], image: ['flovart:gpt-image-2'], video: [] }} onChange={vi.fn()} onRun={vi.fn()} onSelectWorkflowReference={onSelectWorkflowReference} />);
+        render(<WorkflowNodePromptBar node={target} nodes={[target, source]} t={t} theme="light" language="zho" userApiKeys={[productKey]} dynamicModelOptions={{ text: [], image: ['flovart:gpt-image-2'], video: [] }} onChange={vi.fn()} onRun={vi.fn()} onSelectWorkflowReference={onSelectWorkflowReference} />);
 
     const refs = screen.getByTestId('prompt-image-refs');
     expect(refs.querySelectorAll('button')).toHaveLength(1);
@@ -197,7 +195,6 @@ describe('workflow node overlays', () => {
       theme="light"
       language="zho"
       userApiKeys={[productKey]}
-      modelPreference={{ textModel: '', imageModel: 'flovart:gpt-image-2', videoModel: '' }}
       dynamicModelOptions={{ text: [], image: ['flovart:gpt-image-2'], video: [] }}
       onChange={vi.fn()}
       onRun={vi.fn()}
@@ -234,7 +231,6 @@ describe('workflow node overlays', () => {
       theme="light"
       language="zho"
       userApiKeys={[productKey]}
-      modelPreference={{ textModel: '', imageModel: 'flovart:gpt-image-2', videoModel: '' }}
       dynamicModelOptions={{ text: [], image: ['flovart:gpt-image-2'], video: [] }}
       onChange={vi.fn()}
       onRun={vi.fn()}
@@ -258,7 +254,6 @@ describe('workflow node overlays', () => {
       theme="light"
       language="zho"
       userApiKeys={[]}
-      modelPreference={{ textModel: '', imageModel: 'flovart:gpt-image-2', videoModel: '' }}
       dynamicModelOptions={{ text: [], image: ['flovart:gpt-image-2'], video: [] }}
       onChange={vi.fn()}
       onRun={onRun}
@@ -281,10 +276,10 @@ describe('workflow node overlays', () => {
   it('runs text nodes in text mode and exposes stop while loading', () => {
     const onStop = vi.fn();
     const textNode = createWorkflowNode('text', 'text', { x: 0, y: 0 }, { prompt: '写旁白', status: 'loading', config: { mode: 'text', modelId: 'text-model', count: 1 } });
-    render(<WorkflowNodePromptBar node={textNode} nodes={[textNode]} t={t} theme="light" language="zho" userApiKeys={[]} modelPreference={{ textModel: 'text-model', imageModel: '', videoModel: '' }} dynamicModelOptions={{ text: ['text-model'], image: [], video: [] }} onChange={vi.fn()} onRun={vi.fn()} onStop={onStop} />);
+    render(<WorkflowNodePromptBar node={textNode} nodes={[textNode]} t={t} theme="light" language="zho" userApiKeys={[]} dynamicModelOptions={{ text: ['text-model'], image: [], video: [] }} onChange={vi.fn()} onRun={vi.fn()} onStop={onStop} />);
     fireEvent.click(screen.getByRole('button', { name: '停止生成' }));
     expect(onStop).toHaveBeenCalled();
-    expect(screen.getByText(/text-model/)).toBeInTheDocument();
+    expect(screen.getByText('文本映射')).toBeInTheDocument();
   });
 
   it('provides six-way multi alignment and only renders real optional actions', () => {

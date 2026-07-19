@@ -1,5 +1,4 @@
-import type { ModelPreference, UserApiKey } from '../types';
-import { inferProviderFromModel } from './aiGateway';
+import type { UserApiKey } from '../types';
 import { getFlovartRuntimeApi } from './flovartRuntime';
 
 export type RuntimeEnvironment = 'extension-hosted' | 'standalone-web' | 'tauri';
@@ -17,8 +16,6 @@ export interface KeySyncStatus {
   source: KeySyncSource;
   sharedWithExtension: boolean;
   keyCount: number;
-  activeProvider?: string;
-  activeModel?: string;
   lastCheckedAt: number;
   error?: string | null;
 }
@@ -45,15 +42,9 @@ export function getRuntimeBridgeStatus(): RuntimeBridgeStatus {
 
 export function getKeySyncStatus(input: {
   userApiKeys: UserApiKey[];
-  modelPreference: ModelPreference;
   error?: string | null;
 }): KeySyncStatus {
   const bridge = getRuntimeBridgeStatus();
-  const activeModel = input.modelPreference.videoModel
-    || input.modelPreference.imageModel
-    || input.modelPreference.textModel
-    || undefined;
-  const activeProvider = activeModel ? inferProviderFromModel(activeModel) : undefined;
   const hasVaultKeys = input.userApiKeys.length > 0;
 
   return {
@@ -66,8 +57,6 @@ export function getKeySyncStatus(input: {
           : 'none',
     sharedWithExtension: hasVaultKeys && bridge.chromeStorageAvailable,
     keyCount: input.userApiKeys.length,
-    activeProvider,
-    activeModel,
     lastCheckedAt: Date.now(),
     error: input.error ?? null,
   };

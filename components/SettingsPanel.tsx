@@ -1,6 +1,6 @@
 import React from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import type { UserApiKey, ModelPreference, AIProvider, AICapability, ModelItem, ProductRouteBinding, ProductModelMode, ApiPricingRule, ApiBudgetPolicy } from '../types';
+import type { UserApiKey, AIProvider, AICapability, ModelItem, ProductModelMode, ApiPricingRule, ApiBudgetPolicy, RouteMappingBinding, RouteMappingTarget, RuntimeRouteCapability } from '../types';
 import {
     DEFAULT_PROVIDER_MODELS,
     validateApiKey,
@@ -11,8 +11,7 @@ import {
 import { formatCost, type KeyUsageSummary } from '../utils/usageMonitor';
 import { fetchModelsForProvider, type FetchedModel } from '../services/modelFetcher';
 import { normalizeProviderBaseUrl } from '../services/baseUrl';
-import { modelRefLabel, modelRefSearchText } from '../utils/modelRefs';
-import { getProductModel, getProductModels, mergeSuggestedMappings, suggestProductRouteBindings, PRODUCT_MODEL_CATALOG } from '../services/productModelCatalog';
+import { getProductModel, getProductModels } from '../services/productModelCatalog';
 
 interface SettingsPanelProps {
     isOpen: boolean;
@@ -23,17 +22,11 @@ interface SettingsPanelProps {
     onDeleteApiKey: (id: string) => void;
     onUpdateApiKey: (id: string, patch: Partial<Omit<UserApiKey, 'id' | 'createdAt'>>) => void;
     onSetDefaultApiKey: (id: string) => void;
-    modelPreference: ModelPreference;
-    setModelPreference: (prefs: ModelPreference) => void;
-    modelPreferenceSavedAt?: number | null;
-    modelPreferenceSaveError?: string | null;
     t: (key: string) => string;
     clearKeysOnExit: boolean;
     setClearKeysOnExit: (v: boolean) => void;
     /** Per-key usage summary (optional) */
     usageSummary?: Map<string, KeyUsageSummary>;
-    /** 动态模型选项（从 App.tsx 传入，基于用户 Key 计算） */
-    dynamicModelOptions?: { text: string[]; image: string[]; video: string[] };
 }
 
 const providerBaseUrl: Record<AIProvider, string> = {
@@ -73,6 +66,133 @@ const PRODUCT_MODE_LABELS: Record<ProductModelMode, string> = {
     'first-last-frame': '首尾帧',
     'video-extension': '视频扩展',
 };
+
+const RUNTIME_TARGETS: Array<{ capability: RuntimeRouteCapability; label: string; detail: string }> = [
+    { capability: 'prompt-enhancement', label: '提示词增强', detail: '润色、翻译与提示词优化' },
+    { capability: 'script-breakdown', label: '脚本拆解', detail: '把剧本拆成资产与分镜' },
+    { capability: 'agent-text', label: 'Agent 文本', detail: 'Workflow、Agent 与文本节点推理' },
+    { capability: 'image-understanding', label: '图像理解', detail: '反推提示词与视觉描述' },
+];
+
+const routeTargetKey = (target: RouteMappingTarget) => target.kind === 'product-mode'
+    ? `${target.kind}:${target.productModelId}:${target.mode}`
+    : `${target.kind}:${target.capability}`;
+
+const keyRouteOptions = (key: UserApiKey): string[] => Array.from(new Set([
+    key.defaultModel,
+    ...(key.models || []).map(model => model.id),
+    ...(key.customModels || []),
+].filter((value): value is string => Boolean(value?.trim()))));
+
+function RouteMappingEditor({ userApiKeys, onUpdateApiKey }: {
+    userApiKeys: UserApiKey[];
+    onUpdateApiKey: SettingsPanelProps['onUpdateApiKey'];
+}) {
+    const [productModelId, setProductModelId] = React.useState('');
+    const [productMode, setProductMode] = React.useState<ProductModelMode>('text-to-image');
+    const [routeChoice, setRouteChoice] = React.useState('');
+    const product = getProductModel(productModelId);
+
+    const rowsFor = (target: RouteMappingTarget) => userApiKeys.flatMap(key => (key.routeMappings || [])
+        .map((mapping, index) => ({ key, mapping, index })))
+        .filter(row => routeTargetKey(row.mapping.target) === routeTargetKey(target))
+        .sort((left, right) => left.mapping.order - right.mapping.order || left.key.id.localeCompare(right.key.id));
+
+    const routeOptions = (target: RouteMappingTarget) => userApiKeys
+        .filter(key => {
+            const capabilities = key.capabilities?.length ? key.capabilities : inferCapabilitiesByProvider(key.provider);
+            if (target.kind === 'runtime-capability') return capabilities.includes('text');
+            return capabilities.includes(target.mode === 'text-to-image' || target.mode === 'image-to-image' ? 'image' : 'video');
+        })
+        .flatMap(key => keyRouteOptions(key).map(routeId => ({
+            value: JSON.stringify([key.id, routeId]),
+            label: `${key.name || PROVIDER_LABELS[key.provider] || key.provider} · ${routeId}`,
+        })));
+
+    const addRoute = (target: RouteMappingTarget, encoded: string) => {
+        if (!encoded) return;
+        const [keyId, routeId] = JSON.parse(encoded) as [string, string];
+        const key = userApiKeys.find(item => item.id === keyId);
+        if (!key || rowsFor(target).some(row => row.key.id === keyId && row.mapping.routeId === routeId)) return;
+        const order = rowsFor(target).reduce((max, row) => Math.max(max, row.mapping.order), -1) + 1;
+        onUpdateApiKey(keyId, { routeMappings: [...(key.routeMappings || []), { target, routeId, order }] });
+    };
+
+    const removeRoute = (key: UserApiKey, index: number) => {
+        onUpdateApiKey(key.id, { routeMappings: (key.routeMappings || []).filter((_, itemIndex) => itemIndex !== index) });
+    };
+
+    const moveRoute = (target: RouteMappingTarget, rowIndex: number, direction: -1 | 1) => {
+        const rows = rowsFor(target);
+        const otherIndex = rowIndex + direction;
+        if (!rows[rowIndex] || !rows[otherIndex]) return;
+        const left = rows[rowIndex];
+        const right = rows[otherIndex];
+        const nextByKey = new Map<string, RouteMappingBinding[]>();
+        const mappingsFor = (key: UserApiKey) => nextByKey.get(key.id) || [...(key.routeMappings || [])];
+        const leftMappings = mappingsFor(left.key);
+        leftMappings[left.index] = { ...left.mapping, order: right.mapping.order };
+        nextByKey.set(left.key.id, leftMappings);
+        const rightMappings = mappingsFor(right.key);
+        rightMappings[right.index] = { ...right.mapping, order: left.mapping.order };
+        nextByKey.set(right.key.id, rightMappings);
+        nextByKey.forEach((routeMappings, keyId) => onUpdateApiKey(keyId, { routeMappings }));
+    };
+
+    const productTargets = Array.from(new Map(userApiKeys.flatMap(key => key.routeMappings || [])
+        .filter((mapping): mapping is RouteMappingBinding & { target: Extract<RouteMappingTarget, { kind: 'product-mode' }> } => mapping.target.kind === 'product-mode')
+        .map(mapping => [routeTargetKey(mapping.target), mapping.target])).values());
+
+    const renderTarget = (target: RouteMappingTarget, title: string, detail: string) => {
+        const rows = rowsFor(target);
+        const options = routeOptions(target);
+        return <div key={routeTargetKey(target)} className="rounded-2xl border border-[var(--isl-border)] bg-[var(--isl-card)] p-3">
+            <div className="flex items-start justify-between gap-3">
+                <div><div className="text-sm font-bold text-[var(--isl-ink)]">{title}</div><div className="mt-0.5 text-[11px] text-[var(--isl-ink-soft)]">{detail}</div></div>
+                <span className={`rounded-full px-2 py-1 text-[10px] font-bold ${rows.length ? 'bg-emerald-500/10 text-emerald-600' : 'bg-amber-500/10 text-amber-600'}`}>{rows.length ? `${rows.length} 条线路` : '未配置'}</span>
+            </div>
+            <div className="mt-2 space-y-1.5">
+                {rows.map((row, index) => {
+                    const exposed = keyRouteOptions(row.key);
+                    const routeId = row.mapping.routeId.trim().toLowerCase();
+                    const available = row.key.status !== 'error' && (exposed.length === 0 || exposed.some(value => value.trim().toLowerCase() === routeId));
+                    return <div key={`${row.key.id}:${row.index}`} className="flex items-center gap-2 rounded-xl bg-[var(--isl-surface-2)] px-2 py-1.5">
+                        <span className={`w-16 shrink-0 text-[10px] font-bold ${index === 0 ? 'text-[var(--isl-mint-deep)]' : 'text-[var(--isl-ink-soft)]'}`}>{index === 0 ? '主线路' : `备用 ${index}`}</span>
+                        <span className="min-w-0 flex-1 truncate text-xs text-[var(--isl-ink)]">{row.key.name || PROVIDER_LABELS[row.key.provider] || row.key.provider} · {row.mapping.routeId}</span>
+                        <span className={`shrink-0 text-[10px] ${available ? 'text-emerald-600' : 'text-red-500'}`}>{available ? '可用' : '异常'}</span>
+                        <button type="button" disabled={index === 0} onClick={() => moveRoute(target, index, -1)} className="isl-icon-btn h-6 w-6 text-[10px] disabled:opacity-25" aria-label="上移线路">↑</button>
+                        <button type="button" disabled={index === rows.length - 1} onClick={() => moveRoute(target, index, 1)} className="isl-icon-btn h-6 w-6 text-[10px] disabled:opacity-25" aria-label="下移线路">↓</button>
+                        <button type="button" onClick={() => removeRoute(row.key, row.index)} className="isl-icon-btn h-6 w-6 text-[10px] text-red-500" aria-label="删除线路">×</button>
+                    </div>;
+                })}
+                <select aria-label={`${title} 添加线路`} value="" onChange={event => addRoute(target, event.target.value)} className="isl-well h-8 w-full px-2 text-xs text-[var(--isl-ink)] outline-none">
+                    <option value="">+ 添加主线路或备用线路…</option>
+                    {options.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+                </select>
+            </div>
+        </div>;
+    };
+
+    const allProducts = [...getProductModels('image'), ...getProductModels('video')];
+    return <section className="space-y-3">
+        <div><div className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--isl-ink-ghost)]">模型映射</div><p className="mb-0 mt-1 text-xs leading-5 text-[var(--isl-ink-soft)]">先选择 Flovart 的产品模型或文本能力，再绑定 Provider 线路。这里是唯一选路来源。</p></div>
+        <div className="space-y-2">{RUNTIME_TARGETS.map(item => renderTarget({ kind: 'runtime-capability', capability: item.capability }, item.label, item.detail))}</div>
+        <div className="rounded-2xl border border-[var(--isl-border)] bg-[var(--isl-surface-2)] p-3">
+            <div className="mb-2 text-sm font-bold text-[var(--isl-ink)]">新增媒体映射</div>
+            <div className="grid gap-2 md:grid-cols-[1.2fr_1fr_1.6fr_auto]">
+                <select aria-label="产品模型" value={productModelId} onChange={event => { const next = getProductModel(event.target.value); setProductModelId(event.target.value); setProductMode(next?.capabilities.modes[0] || 'text-to-image'); setRouteChoice(''); }} className="isl-well h-9 px-2 text-xs text-[var(--isl-ink)] outline-none"><option value="">选择产品模型…</option>{allProducts.map(model => <option key={model.id} value={model.id}>{model.name}</option>)}</select>
+                <select aria-label="生成模式" value={productMode} disabled={!product} onChange={event => { setProductMode(event.target.value as ProductModelMode); setRouteChoice(''); }} className="isl-well h-9 px-2 text-xs text-[var(--isl-ink)] outline-none disabled:opacity-40">{(product?.capabilities.modes || []).map(mode => <option key={mode} value={mode}>{PRODUCT_MODE_LABELS[mode]}</option>)}</select>
+                <select aria-label="Provider 线路" value={routeChoice} disabled={!product} onChange={event => setRouteChoice(event.target.value)} className="isl-well h-9 min-w-0 px-2 text-xs text-[var(--isl-ink)] outline-none disabled:opacity-40"><option value="">选择 Provider / Key / Route…</option>{product ? routeOptions({ kind: 'product-mode', productModelId, mode: productMode }).map(option => <option key={option.value} value={option.value}>{option.label}</option>) : null}</select>
+                <button type="button" disabled={!product || !routeChoice} onClick={() => { addRoute({ kind: 'product-mode', productModelId, mode: productMode }, routeChoice); setRouteChoice(''); }} className="isl-chip px-3 text-xs disabled:opacity-40">添加</button>
+            </div>
+        </div>
+        <div className="space-y-2">{productTargets.map(target => {
+            const model = getProductModel(target.productModelId);
+            return renderTarget(target, `${model?.name || target.productModelId} · ${PRODUCT_MODE_LABELS[target.mode]}`, '媒体节点明确选择产品模型与生成模式后使用');
+        })}</div>
+        {userApiKeys.length === 0 && <div className="rounded-2xl border border-dashed border-[var(--isl-border)] p-5 text-center text-xs text-[var(--isl-ink-soft)]">请先在“API 配置”中添加 Provider，随后再建立模型映射。</div>}
+    </section>;
+}
 
 type ProviderPreset = {
     id: string;
@@ -222,12 +342,6 @@ const PROVIDER_PRESETS: ProviderPreset[] = [
     },
 ];
 
-const ensureModelOption = (options: string[], model?: string) => {
-    const trimmed = model?.trim();
-    if (!trimmed) return options;
-    return options.includes(trimmed) ? options : [trimmed, ...options];
-};
-
 export const SettingsPanel: React.FC<SettingsPanelProps> = ({
     isOpen,
     onClose,
@@ -237,14 +351,9 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
     onDeleteApiKey,
     onUpdateApiKey,
     onSetDefaultApiKey,
-    modelPreference,
-    setModelPreference,
-    modelPreferenceSavedAt,
-    modelPreferenceSaveError,
     clearKeysOnExit,
     setClearKeysOnExit,
     usageSummary,
-    dynamicModelOptions,
 }) => {
     const [provider, setProvider] = React.useState<AIProvider>('openai');
     const [apiKey, setApiKey] = React.useState('');
@@ -261,7 +370,6 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
     // 模型管理
     const [editModels, setEditModels] = React.useState<ModelItem[]>([]);
     const [editDefaultModel, setEditDefaultModel] = React.useState('');
-    const [editMappings, setEditMappings] = React.useState<ProductRouteBinding[]>([]);
     const [editPricingRules, setEditPricingRules] = React.useState<ApiPricingRule[]>([]);
     const [editBudgetPolicy, setEditBudgetPolicy] = React.useState<ApiBudgetPolicy>({ enabled: false, monthlyLimit: 100, warningPercent: 80, hardStop: true, currency: 'USD' });
     const [newModelId, setNewModelId] = React.useState('');
@@ -276,140 +384,14 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
     const [autoDetectedProvider, setAutoDetectedProvider] = React.useState<AIProvider | null>(null);
     const [endpointFlavor, setEndpointFlavor] = React.useState<'google' | 'openai-compatible' | 'openrouter-compatible' | null>(null);
     const [detectedCapabilities, setDetectedCapabilities] = React.useState<AICapability[]>([]);
-    const [modelSearch, setModelSearch] = React.useState({ text: '', image: '', video: '' });
     const [activeTab, setActiveTab] = React.useState<'api' | 'models' | 'security'>('api');
-
-    const modelOptions = React.useMemo(() => ({
-        text: ensureModelOption(
-            dynamicModelOptions?.text?.length ? dynamicModelOptions.text : [
-                ...(DEFAULT_PROVIDER_MODELS.google?.text || []),
-                ...(DEFAULT_PROVIDER_MODELS.openai?.text || []),
-                ...(DEFAULT_PROVIDER_MODELS.anthropic?.text || []),
-                ...(DEFAULT_PROVIDER_MODELS.qwen?.text || []),
-            ],
-            modelPreference.textModel
-        ),
-        image: ensureModelOption(
-            dynamicModelOptions?.image?.length ? dynamicModelOptions.image : [
-                ...(DEFAULT_PROVIDER_MODELS.openai?.image || []),
-                ...(DEFAULT_PROVIDER_MODELS.google?.image || []),
-            ],
-            modelPreference.imageModel
-        ),
-        video: ensureModelOption(
-            dynamicModelOptions?.video?.length ? dynamicModelOptions.video : [
-                ...(DEFAULT_PROVIDER_MODELS.volcengine?.video || []),
-                ...(DEFAULT_PROVIDER_MODELS.google?.video || []),
-            ],
-            modelPreference.videoModel
-        ),
-    }), [dynamicModelOptions, modelPreference.imageModel, modelPreference.textModel, modelPreference.videoModel]);
-
-    const updateModelPreference = (patch: Partial<ModelPreference>) => {
-        setModelPreference({ ...modelPreference, ...patch });
-    };
-
-    const keyUpstreamOptions = (key: UserApiKey): string[] => Array.from(new Set([
-        key.defaultModel,
-        ...(key.models || []).map(m => m.id),
-        ...(key.customModels || []),
-    ].filter((v): v is string => Boolean(v?.trim()))));
-
-    const updateKeyMappings = (keyId: string, next: ProductRouteBinding[]) => {
-        onUpdateApiKey(keyId, { routeBindings: next });
-    };
-
-    const patchMapping = (key: UserApiKey, index: number, patch: Partial<ProductRouteBinding>) => {
-        const merged = mergeSuggestedMappings(key);
-        updateKeyMappings(key.id, merged.map((m, i) => i === index ? { ...m, ...patch, confirmed: true } : m));
-    };
-
-    const removeMapping = (key: UserApiKey, index: number) => {
-        const merged = mergeSuggestedMappings(key);
-        updateKeyMappings(key.id, merged.filter((_, i) => i !== index));
-    };
-
-    const addMapping = (key: UserApiKey, productModelId: string) => {
-        if (!productModelId) return;
-        const product = getProductModel(productModelId);
-        if (!product) return;
-        const merged = mergeSuggestedMappings(key);
-        const existingModes = new Set(merged.filter(m => m.productModelId === productModelId).map(m => m.mode));
-        const additions = product.capabilities.modes
-            .filter(mode => !existingModes.has(mode))
-            .map(mode => ({ productModelId, mode, routeId: '', priority: 0, enabled: false, confirmed: true }));
-        if (additions.length === 0) return;
-        updateKeyMappings(key.id, [...merged, ...additions]);
-    };
-
-    const mappingCandidatesForKey = (key: UserApiKey) => {
-        const caps = key.capabilities?.length ? key.capabilities : inferCapabilitiesByProvider(key.provider);
-        const pool = PRODUCT_MODEL_CATALOG.filter(m =>
-            (caps.includes('image') && m.capability === 'image') || (caps.includes('video') && m.capability === 'video')
-        );
-        const existing = new Set(mergeSuggestedMappings(key).map(m => m.productModelId));
-        return pool.filter(m => !existing.has(m.id));
-    };
-
-    const modelPreferenceStatusText = modelPreferenceSaveError
-        ? `保存失败：${modelPreferenceSaveError}`
-        : modelPreferenceSavedAt
-            ? `已自动保存 ${new Date(modelPreferenceSavedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}`
-            : '选择后会自动保存到本机';
 
     const isDark = resolvedTheme === 'dark';
     const inputClass = 'isl-well w-full px-3 py-2.5 text-sm text-[var(--isl-ink)] outline-none placeholder:text-[var(--isl-ink-ghost)]';
     const chipClass = 'isl-chip px-3 py-2 text-sm';
     const sectionPanelClass = 'rounded-2xl border-[1.5px] border-[var(--isl-border)] bg-[var(--isl-surface-2)] p-3';
 
-    React.useEffect(() => {
-        if (editModels.length === 0) return;
-        const suggested = suggestProductRouteBindings({
-            id: editingKeyId || 'draft', provider, capabilities, key: apiKey || 'draft', models: editModels,
-            customModels: editModels.map(model => model.id), defaultModel: editDefaultModel, createdAt: Date.now(), updatedAt: Date.now(),
-        });
-        setEditMappings(current => {
-            const existingKeys = new Set(current.map(binding => `${binding.productModelId}::${binding.mode}`));
-            const additions = suggested.filter(binding => !existingKeys.has(`${binding.productModelId}::${binding.mode}`));
-            return additions.length ? [...current, ...additions] : current;
-        });
-    }, [apiKey, capabilities, editDefaultModel, editModels, editingKeyId, provider]);
-
     if (!isOpen) return null;
-
-    const updateMapping = (productModelId: string, mode: ProductModelMode, routeId: string) => {
-        setEditMappings(current => routeId
-            ? current.some(binding => binding.productModelId === productModelId && binding.mode === mode)
-                ? current.map(binding => binding.productModelId === productModelId && binding.mode === mode ? { ...binding, routeId, enabled: true, confirmed: true } : binding)
-                : [...current, { productModelId, mode, routeId, priority: current.length, enabled: true, confirmed: true }]
-            : current.filter(binding => !(binding.productModelId === productModelId && binding.mode === mode)));
-    };
-
-    const priorityLabel = (priority: number) => priority === 0 ? '主线' : `备线 ${priority}`;
-
-    const confirmMapping = (productModelId: string, mode: ProductModelMode) => {
-        setEditMappings(current => current.map(binding => binding.productModelId === productModelId && binding.mode === mode ? { ...binding, confirmed: true, enabled: true } : binding));
-    };
-
-    const confirmAllMappings = () => {
-        setEditMappings(current => current.map(binding => ({ ...binding, confirmed: true, enabled: true })));
-    };
-
-    const setMappingPriority = (productModelId: string, mode: ProductModelMode, priority: number) => {
-        setEditMappings(current => current.map(binding => binding.productModelId === productModelId && binding.mode === mode ? { ...binding, priority: Math.max(0, priority) } : binding));
-    };
-
-    const autoSuggestMappings = () => {
-        const suggested = suggestProductRouteBindings({
-            id: editingKeyId || 'draft', provider, capabilities, key: apiKey || 'draft', models: editModels,
-            customModels: editModels.map(model => model.id), defaultModel: editDefaultModel, createdAt: Date.now(), updatedAt: Date.now(),
-        });
-        setEditMappings(current => {
-            const existingKeys = new Set(current.map(m => `${m.productModelId}::${m.mode}`));
-            const additions = suggested.filter(m => !existingKeys.has(`${m.productModelId}::${m.mode}`));
-            return [...current, ...additions];
-        });
-    };
 
     const addPricingRule = () => setEditPricingRules(current => [...current, {
         id: crypto.randomUUID(), unit: capabilities.includes('video') ? 'video_second' : 'image', rate: 0, currency: 'USD', source: 'manual',
@@ -430,10 +412,6 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
 
     const applyProviderPreset = (preset: ProviderPreset, options: { resetKey?: boolean; fillName?: boolean } = {}) => {
         const modelItems: ModelItem[] = preset.modelItems || (preset.models || []).map(id => ({ id, name: id }));
-        const suggestedMappings = suggestProductRouteBindings({
-            id: 'draft', provider: preset.provider, capabilities: preset.capabilities, key: 'draft', models: modelItems,
-            customModels: modelItems.map(model => model.id), defaultModel: preset.defaultModel, createdAt: Date.now(), updatedAt: Date.now(),
-        });
         const presetExtra: Record<string, string> = {
             requestFormat: preset.requestFormat,
             ...(preset.extraConfig || {}),
@@ -448,7 +426,6 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
         setBaseUrl(preset.baseUrl);
         setCapabilities([...preset.capabilities]);
         setEditModels(modelItems);
-        setEditMappings(suggestedMappings);
         setEditPricingRules([]);
         setEditDefaultModel(preset.defaultModel || modelItems[0]?.id || '');
         setExtraConfig(presetExtra);
@@ -577,7 +554,6 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 customModels: customModelsToSave.length > 0 ? customModelsToSave : undefined,
                 defaultModel: finalDefaultModel || undefined,
                 extraConfig: extraToSave,
-                routeBindings: editMappings,
                 pricingRules: editPricingRules,
                 budgetPolicy: editBudgetPolicy,
             });
@@ -595,7 +571,6 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 customModels: customModelsToSave.length > 0 ? customModelsToSave : undefined,
                 defaultModel: finalDefaultModel || undefined,
                 extraConfig: extraToSave,
-                routeBindings: editMappings,
                 pricingRules: editPricingRules,
                 budgetPolicy: editBudgetPolicy,
             });
@@ -614,7 +589,6 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
         setEditModels(item.models || (item.customModels || []).map(id => ({ id, name: id })));
         setEditDefaultModel(item.defaultModel || '');
         setExtraConfig(item.extraConfig || {});
-        setEditMappings(item.routeBindings || []);
         setEditPricingRules(item.pricingRules || []);
         setEditBudgetPolicy(item.budgetPolicy || { enabled: false, monthlyLimit: 100, warningPercent: 80, hardStop: true, currency: 'USD' });
         setEndpointFlavor((item.extraConfig?.endpointFlavor as 'google' | 'openai-compatible' | 'openrouter-compatible' | undefined) || null);
@@ -632,7 +606,6 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
         setEditDefaultModel('');
         setNewModelId('');
         setExtraConfig({});
-        setEditMappings([]);
         setEditPricingRules([]);
         setEditBudgetPolicy({ enabled: false, monthlyLimit: 100, warningPercent: 80, hardStop: true, currency: 'USD' });
         setValidationResult(null);
@@ -749,7 +722,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
             defaultModel: k.defaultModel,
             models: k.models,
             extraConfig: k.extraConfig,
-            routeBindings: k.routeBindings,
+            routeMappings: k.routeMappings,
             pricingRules: k.pricingRules,
             budgetPolicy: k.budgetPolicy,
             key: '***', // 不导出明文 key
@@ -789,7 +762,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                         defaultModel: item.defaultModel,
                         models: item.models,
                         extraConfig: item.extraConfig,
-                        routeBindings: item.routeBindings,
+                        routeMappings: item.routeMappings,
                         pricingRules: item.pricingRules,
                         budgetPolicy: item.budgetPolicy,
                     });
@@ -814,7 +787,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
             defaultModel: k.defaultModel,
             models: k.models,
             extraConfig: k.extraConfig,
-            routeBindings: k.routeBindings,
+            routeMappings: k.routeMappings,
             pricingRules: k.pricingRules,
             budgetPolicy: k.budgetPolicy,
         }));
@@ -869,7 +842,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 <div className="mb-6 flex gap-1 border-b border-[var(--isl-border)]">
                     {([
                         { key: 'api', label: 'API 配置' },
-                        { key: 'models', label: '模型偏好' },
+                        { key: 'models', label: '模型映射' },
                         { key: 'security', label: '安全' },
                     ] as const).map(tab => (
                         <button
@@ -1010,7 +983,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                                                     </span>
                                                 ))}
                                                 <span className={`rounded-full px-2 py-1 text-[11px] ${isDark ? 'bg-[#1B2029] text-[#98A2B3]' : 'bg-[#F2F4F7] text-[#667085]'}`}>
-                                                    映射 {item.routeBindings?.filter(binding => binding.enabled).length || 0}
+                                                    映射 {item.routeMappings?.length || 0}
                                                 </span>
                                                 {item.budgetPolicy?.enabled && <span className="rounded-full bg-amber-500/10 px-2 py-1 text-[11px] text-amber-600">预算 {item.budgetPolicy.currency} {item.budgetPolicy.monthlyLimit}</span>}
                                             </div>
@@ -1074,160 +1047,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                     </>
                 )}
 
-                {activeTab === 'models' && (
-                    <section className="space-y-3">
-                        <div className="flex items-center justify-between gap-3">
-                            <div className={`text-xs font-semibold uppercase tracking-[0.18em] ${isDark ? 'text-[#667085]' : 'text-[#98A2B3]'}`}>
-                                模型偏好
-                            </div>
-                            <div className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${
-                                modelPreferenceSaveError
-                                    ? isDark ? 'bg-[#3A1616] text-[#FDA29B]' : 'bg-[#FEF3F2] text-[#B42318]'
-                                    : isDark ? 'bg-[#123524] text-[#75E0A7]' : 'bg-[#ECFDF3] text-[#027A48]'
-                            }`}>
-                                {modelPreferenceStatusText}
-                            </div>
-                        </div>
-                        <div className="grid gap-3 md:grid-cols-2">
-                            <label className={`rounded-2xl p-3 ${isDark ? 'bg-[#161A22]' : 'bg-[#F8FAFC]'}`}>
-                                <div className={`mb-2 text-sm font-medium ${isDark ? 'text-[#D0D5DD]' : 'text-[#344054]'}`}>LLM 润色模型</div>
-                                <input
-                                    type="text"
-                                    placeholder="搜索模型..."
-                                    value={modelSearch.text}
-                                    onChange={(e) => setModelSearch(s => ({ ...s, text: e.target.value }))}
-                                    className={`mb-2 ${inputClass} flv-safe-input text-xs`}
-                                />
-                                <select value={modelPreference.textModel} onChange={(event) => updateModelPreference({ textModel: event.target.value })} className={`${inputClass} flv-safe-input`}>
-                                    {modelOptions.text
-                                        .filter(model => !modelSearch.text || modelRefSearchText(model, userApiKeys).includes(modelSearch.text.toLowerCase()))
-                                        .map(model => <option key={model} value={model}>{modelRefLabel(model, userApiKeys)}</option>)}
-                                </select>
-                            </label>
-                            <label className={`rounded-2xl p-3 ${isDark ? 'bg-[#161A22]' : 'bg-[#F8FAFC]'}`}>
-                                <div className={`mb-2 text-sm font-medium ${isDark ? 'text-[#D0D5DD]' : 'text-[#344054]'}`}>图片模型</div>
-                                <input
-                                    type="text"
-                                    placeholder="搜索模型..."
-                                    value={modelSearch.image}
-                                    onChange={(e) => setModelSearch(s => ({ ...s, image: e.target.value }))}
-                                    className={`mb-2 ${inputClass} flv-safe-input text-xs`}
-                                />
-                                <select value={modelPreference.imageModel} onChange={(event) => updateModelPreference({ imageModel: event.target.value })} className={`${inputClass} flv-safe-input`}>
-                                    {modelOptions.image
-                                        .filter(model => !modelSearch.image || modelRefSearchText(model, userApiKeys).includes(modelSearch.image.toLowerCase()))
-                                        .map(model => <option key={model} value={model}>{modelRefLabel(model, userApiKeys)}</option>)}
-                                </select>
-                            </label>
-                            <label className={`rounded-2xl p-3 ${isDark ? 'bg-[#161A22]' : 'bg-[#F8FAFC]'}`}>
-                                <div className={`mb-2 text-sm font-medium ${isDark ? 'text-[#D0D5DD]' : 'text-[#344054]'}`}>视频模型</div>
-                                <input
-                                    type="text"
-                                    placeholder="搜索模型..."
-                                    value={modelSearch.video}
-                                    onChange={(e) => setModelSearch(s => ({ ...s, video: e.target.value }))}
-                                    className={`mb-2 ${inputClass} flv-safe-input text-xs`}
-                                />
-                                <select value={modelPreference.videoModel} onChange={(event) => updateModelPreference({ videoModel: event.target.value })} className={`${inputClass} flv-safe-input`}>
-                                    {modelOptions.video
-                                        .filter(model => !modelSearch.video || modelRefSearchText(model, userApiKeys).includes(modelSearch.video.toLowerCase()))
-                                        .map(model => <option key={model} value={model}>{modelRefLabel(model, userApiKeys)}</option>)}
-                                </select>
-                            </label>
-                        </div>
-                        <div className={`rounded-2xl border p-3 text-xs ${isDark ? 'border-[#2A3140] text-[#667085]' : 'border-[#E4E7EC] text-[#98A2B3]'}`}>
-                                            下方按每条 API Key 管理「产品模型 × 生成模式 → Provider Route」的路由绑定。启用并确认后，工作流选中该产品时会按优先级路由到对应 Key。
-                        </div>
-                        {userApiKeys.length === 0 ? (
-                            <div className={`rounded-2xl p-4 text-center text-xs ${isDark ? 'bg-[#161A22] text-[#667085]' : 'bg-[#F8FAFC] text-[#98A2B3]'}`}>
-                                还没有 API Key，请到「API」标签页添加。
-                            </div>
-                        ) : userApiKeys.map(key => {
-                            const mappings = mergeSuggestedMappings(key);
-                            const candidates = mappingCandidatesForKey(key);
-                            const upstreamOptions = keyUpstreamOptions(key);
-                            const keyCaps = key.capabilities?.length ? key.capabilities : inferCapabilitiesByProvider(key.provider);
-                            return (
-                                <div key={key.id} className={`rounded-2xl p-3 ${isDark ? 'bg-[#161A22]' : 'bg-[#F8FAFC]'}`}>
-                                    <div className="mb-2 flex items-center justify-between gap-2">
-                                        <div className="flex items-center gap-2">
-                                            <span className={`text-sm font-medium ${isDark ? 'text-[#D0D5DD]' : 'text-[#344054]'}`}>{key.name || key.provider}</span>
-                                            <span className={`rounded px-1.5 py-0.5 text-[10px] ${isDark ? 'bg-[#222A36] text-[#667085]' : 'bg-[#E4E7EC] text-[#98A2B3]'}`}>{PROVIDER_LABELS[key.provider]}</span>
-                                            {key.status === 'error' && <span className="text-[10px] text-[#F04438]">异常</span>}
-                                        </div>
-                                        <span className="text-[10px] text-[var(--isl-ink-ghost)]">{mappings.length} 条映射</span>
-                                    </div>
-                                    {mappings.length === 0 ? (
-                                        <div className={`text-xs ${isDark ? 'text-[#667085]' : 'text-[#98A2B3]'}`}>
-                                            该 Key（{keyCaps.join('/')}）暂无可映射的产品模型。
-                                        </div>
-                                    ) : (
-                                        <div className="space-y-1.5">
-                                            {mappings.map((m, i) => {
-                                                const product = getProductModel(m.productModelId);
-                                                const routeReady = m.enabled && m.confirmed && Boolean(m.routeId?.trim());
-                                                return (
-                                                    <div key={`${m.productModelId}-${m.mode}-${i}`} className="flex items-center gap-2">
-                                                        <span className="min-w-[90px] truncate text-xs font-medium" title={m.productModelId} style={{ color: 'var(--isl-ink)' }}>
-                                                            {product?.shortName || product?.name || m.productModelId}
-                                                        </span>
-                                                        <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] ${isDark ? 'bg-[#222A36] text-[#667085]' : 'bg-[#E4E7EC] text-[#98A2B3]'}" style={{ background: 'var(--isl-surface-2)', color: 'var(--isl-ink-soft)' }}>
-                                                            {PRODUCT_MODE_LABELS[m.mode]}
-                                                        </span>
-                                                        <input
-                                                            list={`route-${key.id}-${i}`}
-                                                            value={m.routeId}
-                                                            onChange={e => patchMapping(key, i, { routeId: e.target.value })}
-                                                            placeholder="Route ID / 上游模型 ID"
-                                                            className={`min-w-0 flex-1 ${inputClass} flv-safe-input text-xs`}
-                                                        />
-                                                        <datalist id={`route-${key.id}-${i}`}>
-                                                            {upstreamOptions.map(id => <option key={id} value={id} />)}
-                                                        </datalist>
-                                                        <input
-                                                            type="number"
-                                                            value={m.priority}
-                                                            onChange={e => patchMapping(key, i, { priority: Number(e.target.value) || 0 })}
-                                                            className={`w-14 px-2 py-2 text-xs ${inputClass} flv-safe-input`}
-                                                            aria-label="优先级"
-                                                        />
-                                                        <button
-                                                            onClick={() => patchMapping(key, i, { enabled: !m.enabled })}
-                                                            className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${
-                                                                m.enabled
-                                                                    ? isDark ? 'bg-[#123524] text-[#75E0A7]' : 'bg-[#ECFDF3] text-[#027A48]'
-                                                                    : isDark ? 'bg-[#222A36] text-[#667085]' : 'bg-[#F2F4F7] text-[#98A2B3]'
-                                                            }`}
-                                                            title={routeReady ? '已启用且确认，路由生效' : m.enabled ? '已启用但未确认 Route ID' : '已停用'}
-                                                        >
-                                                            {routeReady ? '生效' : m.enabled ? '启用' : '停用'}
-                                                        </button>
-                                                        <button
-                                                            onClick={() => removeMapping(key, i)}
-                                                            className="shrink-0 px-1.5 text-xs text-[var(--isl-ink-ghost)] hover:text-[#F04438]"
-                                                            aria-label="删除绑定"
-                                                        >✕</button>
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-                                    )}
-                                    {candidates.length > 0 && (
-                                        <select
-                                            value=""
-                                            onChange={e => { addMapping(key, e.target.value); }}
-                                            className={`mt-2 ${inputClass} flv-safe-input text-xs`}
-                                            aria-label="添加映射"
-                                        >
-                                            <option value="">+ 添加映射…</option>
-                                            {candidates.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-                                        </select>
-                                    )}
-                                </div>
-                            );
-                        })}
-                    </section>
-                )}
+                {activeTab === 'models' && <RouteMappingEditor userApiKeys={userApiKeys} onUpdateApiKey={onUpdateApiKey} />}
 
                 {activeTab === 'security' && (
                     <section className="space-y-3">
@@ -1518,80 +1338,6 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                                         点击模型名称设为默认（蓝色高亮），点击 × 删除
                                     </div>
                                 )}
-                            </div>
-
-                            <div className={sectionPanelClass}>
-                                <div className="mb-3 flex items-center justify-between gap-3">
-                                    <div>
-                                        <div className="text-sm font-bold text-[var(--isl-ink)]">固定模型路由绑定</div>
-                                        <div className="mt-0.5 text-[11px] text-[var(--isl-ink-soft)]">PromptBar 只展示这些产品模型；在这里按生成模式绑定这把 Key 实际可调用的 Route ID。</div>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <span className="rounded-full bg-[var(--isl-card)] px-2.5 py-1 text-[11px] text-[var(--isl-ink-soft)]">可用 {editMappings.filter(m => m.enabled && m.confirmed && m.routeId).length}</span>
-                                        {editMappings.some(m => !m.confirmed) && (
-                                            <button type="button" onClick={confirmAllMappings} className="isl-chip px-3 py-1.5 text-xs isl-chip--active">全部确认</button>
-                                        )}
-                                        <button type="button" onClick={autoSuggestMappings} className="isl-chip px-3 py-1.5 text-xs">自动推荐</button>
-                                    </div>
-                                </div>
-                                <div className="space-y-2">
-                                    {[
-                                        ...(capabilities.includes('image') ? getProductModels('image') : []),
-                                        ...(capabilities.includes('video') ? getProductModels('video') : []),
-                                    ].map(product => {
-                                        const productBindings = editMappings.filter(item => item.productModelId === product.id);
-                                        const connectedCount = productBindings.filter(b => b.routeId?.trim()).length;
-                                        const confirmedCount = productBindings.filter(b => b.confirmed).length;
-                                        const enabledCount = productBindings.filter(b => b.enabled && b.confirmed && b.routeId?.trim()).length;
-                                        const statusBadge = connectedCount === 0 ? '未绑定' : `${enabledCount}/${product.capabilities.modes.length} 生效`;
-                                        const badgeClass = connectedCount === 0 ? 'bg-[var(--isl-surface-2)] text-[var(--isl-ink-soft)]' : enabledCount > 0 ? 'bg-emerald-500/10 text-emerald-600' : 'bg-amber-500/10 text-amber-600';
-                                        return (
-                                            <motion.div key={product.id} layout transition={{ type: 'spring', stiffness: 420, damping: 34 }} className="rounded-2xl border border-[var(--isl-border)] bg-[var(--isl-card)] p-3">
-                                                <div className="flex items-center justify-between gap-3">
-                                                    <div className="flex min-w-0 items-center gap-2.5">
-                                                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[var(--isl-border)] bg-[var(--isl-surface-2)] text-[11px] font-black text-[var(--isl-ink-soft)]">{product.shortName}</span>
-                                                        <div className="min-w-0">
-                                                            <div className="truncate text-sm font-bold text-[var(--isl-ink)]">{product.name}</div>
-                                                            <div className="truncate text-[10px] text-[var(--isl-ink-soft)]">{product.company} · {product.badge || product.capability}</div>
-                                                        </div>
-                                                    </div>
-                                                    <span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-bold ${badgeClass}`}>{statusBadge}</span>
-                                                </div>
-                                                <div className="mt-2.5 space-y-1.5">
-                                                    {product.capabilities.modes.map(mode => {
-                                                        const binding = productBindings.find(b => b.mode === mode);
-                                                        const connected = binding?.routeId?.trim();
-                                                        const confirmed = binding?.confirmed;
-                                                        const enabled = binding?.enabled;
-                                                        const connectorColor = !connected ? 'var(--isl-border)' : !confirmed ? '#F59E0B' : enabled ? '#10B981' : 'var(--isl-border)';
-                                                        return (
-                                                            <div key={mode} className="flex items-center gap-2">
-                                                                <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px]" style={{ background: 'var(--isl-surface-2)', color: 'var(--isl-ink-soft)' }}>{PRODUCT_MODE_LABELS[mode]}</span>
-                                                                <motion.div className="h-0.5 w-4 shrink-0 rounded-full" animate={{ backgroundColor: connectorColor }} transition={{ type: 'spring', stiffness: 380, damping: 30 }} />
-                                                                <select aria-label={`${product.name} ${PRODUCT_MODE_LABELS[mode]} Route ID`} value={binding?.routeId || ''} onChange={event => updateMapping(product.id, mode, event.target.value)} className={`${inputClass} min-w-0 flex-1 text-xs`}>
-                                                                    <option value="">不启用此模式</option>
-                                                                    {editModels.map(model => <option key={model.id} value={model.id}>{model.name || model.id}</option>)}
-                                                                </select>
-                                                                <select aria-label={`${product.name} ${PRODUCT_MODE_LABELS[mode]} 优先级`} value={binding?.priority ?? 0} disabled={!binding} onChange={event => setMappingPriority(product.id, mode, Number(event.target.value) || 0)} className={`${inputClass} w-auto px-2 py-1 text-[10px] disabled:opacity-40`}>
-                                                                    <option value={0}>主线</option>
-                                                                    <option value={1}>备线 1</option>
-                                                                    <option value={2}>备线 2</option>
-                                                                    <option value={3}>备线 3</option>
-                                                                </select>
-                                                                {binding && !confirmed && (
-                                                                    <button type="button" onClick={() => confirmMapping(product.id, mode)} className="shrink-0 rounded-full bg-amber-500/10 px-2.5 py-1 text-[10px] font-bold text-amber-600">确认</button>
-                                                                )}
-                                                                {binding && confirmed && (
-                                                                    <button type="button" onClick={() => setEditMappings(current => current.map(item => item.productModelId === product.id && item.mode === mode ? { ...item, enabled: !item.enabled } : item))} className={`shrink-0 isl-chip px-2 text-[10px] ${enabled ? 'isl-chip--active' : ''}`}>{enabled ? '启用' : '停用'}</button>
-                                                                )}
-                                                            </div>
-                                                        );
-                                                    })}
-                                                </div>
-                                            </motion.div>
-                                        );
-                                    })}
-                                </div>
                             </div>
 
                             <div className={sectionPanelClass}>

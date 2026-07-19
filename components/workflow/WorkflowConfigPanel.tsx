@@ -74,7 +74,7 @@ export function WorkflowConfigPanel({ node, nodes, connections = [], onChange, o
         <label>类型</label>
         <select aria-label="类型" value={config.mode} onChange={event => {
           const mode = event.target.value as GenerationMode;
-          updateConfig({ mode, modelId: resolve(mode).models[0] });
+          updateConfig({ mode, modelId: undefined });
         }}>
           <option value="text">文本</option>
           <option value="image">图片</option>
@@ -84,9 +84,9 @@ export function WorkflowConfigPanel({ node, nodes, connections = [], onChange, o
       </div>
       <div className="workflow-config__row">
         <label>模型</label>
-        <select aria-label="模型" disabled={audioUnsupported} value={config.modelId || ''} onChange={event => updateConfig({ modelId: event.target.value || undefined })}>
-          <option value="">跟随全局模型</option>
-          {capability.models.map(model => <option key={model} value={model}>{modelRefModelId(model)}</option>)}
+        <select aria-label="模型" disabled={audioUnsupported || config.mode === 'text'} value={config.mode === 'text' ? '' : config.modelId || ''} onChange={event => updateConfig({ modelId: event.target.value || undefined })}>
+          <option value="">{config.mode === 'text' ? '使用文本映射' : '请选择产品模型'}</option>
+          {config.mode === 'text' ? null : capability.models.map(model => <option key={model} value={model}>{modelRefModelId(model)}</option>)}
         </select>
       </div>
       {modelCapabilities && (modelCapabilities.maxReferences || modelCapabilities.complianceCheck || modelCapabilities.promptOptimization || modelCapabilities.supportsReferenceImage || modelCapabilities.supportsMaskEdit) && (

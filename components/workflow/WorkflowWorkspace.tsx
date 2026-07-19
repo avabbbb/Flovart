@@ -1,6 +1,7 @@
 import { nanoid } from 'nanoid';
 import { useEffect, useState } from 'react';
-import type { ModelPreference, PromptEnhanceMode, PromptEnhanceResult, UserApiKey } from '../../types';
+import type { PromptEnhanceMode, PromptEnhanceResult, UserApiKey } from '../../types';
+import type { RouteFallbackResolution } from '../../services/routeMapping';
 import '../../styles/workflow.css';
 import type { GenerationCapability, GenerationMode } from '../../services/generationCapabilities';
 import { StudioRightDrawer } from '../studio/StudioRightDrawer';
@@ -28,7 +29,7 @@ export interface WorkflowWorkspaceProps {
   imageTools?: WorkflowImageToolHandlers;
   t: (key: string, ...args: any[]) => string;
   userApiKeys: UserApiKey[];
-  modelPreference: ModelPreference;
+  confirmRouteFallback?: (resolution: RouteFallbackResolution) => boolean | Promise<boolean>;
   dynamicModelOptions: WorkflowModelOptions;
   onOpenSettings?: () => void;
   onEnhancePrompt?: (payload: { prompt: string; mode: PromptEnhanceMode; stylePreset?: string }) => Promise<PromptEnhanceResult>;
@@ -62,7 +63,7 @@ export function WorkflowWorkspace({
   imageTools,
   t,
   userApiKeys,
-  modelPreference,
+  confirmRouteFallback,
   dynamicModelOptions,
   onOpenSettings,
   onEnhancePrompt,
@@ -229,7 +230,7 @@ assetLibrary={assetLibrary}
               theme={theme}
               language={language}
               userApiKeys={userApiKeys}
-              modelPreference={modelPreference}
+              confirmRouteFallback={confirmRouteFallback}
               dynamicModelOptions={dynamicModelOptions}
               onOpenSettings={onOpenSettings}
               onEnhancePrompt={onEnhancePrompt}

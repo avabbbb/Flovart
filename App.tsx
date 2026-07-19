@@ -1,11 +1,11 @@
 import React, { useState, useCallback, useEffect, useMemo, Suspense } from 'react';
 import { generateId } from './utils/helpers';
-import type { AssetLibrary, UserApiKey, ModelPreference, PromptEnhanceMode, GenerationHistoryItem, ThemeMode } from './types';
+import type { AssetLibrary, UserApiKey, PromptEnhanceMode, GenerationHistoryItem, ThemeMode } from './types';
 import { addAsset, removeAsset, renameAsset, addFolder, renameFolder, removeFolder, loadAssetLibraryAsync, saveAssetLibraryAsync, updateAssetTags, removeAssetFromFolder, batchRemoveAssets, batchAddAssetsToFolder, batchAddAssetTags } from './utils/assetStorage';
 import { loadGenerationHistoryAsync, saveGenerationHistoryAsync, addGenerationHistoryItem } from './utils/generationHistory';
-import { inferProviderFromModel, reversePromptStreamWithProvider, enhancePromptWithProvider } from './services/aiGateway';
+import { reversePromptStreamWithProvider, enhancePromptWithProvider } from './services/aiGateway';
 import { getCompactChromeMetrics } from './utils/uiScale';
-import { useApiKeys, DEFAULT_MODEL_PREFS, normalizeApiKeyEntry } from './hooks/useApiKeys';
+import { useApiKeys, normalizeApiKeyEntry } from './hooks/useApiKeys';
 import { useToast } from './hooks/useToast';
 import ToastStack from './components/Toast';
 import { AppShell } from './components/AppShell';
@@ -19,10 +19,10 @@ import { createWorkflowNode } from './components/workflow/constants';
 import { setWorkflowNodeRunner } from './services/workflowDispatcher';
 import { runWorkflowOnlineAgent } from './services/workflowOnlineAgent';
 import type { WorkflowOnlineTurnInput } from './components/workflow/WorkflowAgentPanel';
-import { modelRefModelId, resolveModelSelection, findBestModelSelection } from './utils/modelRefs';
 import { translations } from './utils/translations';
 import './styles/generation.css';
 import type { TableProcessResult } from './services/tableMediaProcessor';
+import { resolveRouteMappingForSubmit, type RouteFallbackResolution } from './services/routeMapping';
 
 const SettingsPanel = React.lazy(() => import('./components/SettingsPanel').then(m => ({ default: m.SettingsPanel })));
 const OnboardingWizard = React.lazy(() => import('./components/OnboardingWizard').then(m => ({ default: m.OnboardingWizard })));
@@ -92,10 +92,9 @@ const App: React.FC = () => {
 
     const {
         userApiKeys, setUserApiKeys, apiKeysLoaded, showOnboarding, setShowOnboarding,
-        clearKeysOnExit, setClearKeysOnExit, modelPreference, setModelPreference,
-        modelPreferenceSavedAt, modelPreferenceSaveError,
+        clearKeysOnExit, setClearKeysOnExit,
         handleAddApiKey, handleDeleteApiKey, handleUpdateApiKey, handleSetDefaultApiKey,
-        dynamicModelOptions, usageSummaryMap, getPreferredApiKey,
+        dynamicModelOptions, usageSummaryMap,
     } = useApiKeys(isSettingsPanelOpen);
 
     useEffect(() => {
@@ -157,25 +156,23 @@ const App: React.FC = () => {
         return value ?? key;
     }, [language]);
 
-    const resolveModelKey = useCallback((capability: 'image' | 'video' | 'text', currentModel: string) => {
-        const direct = resolveModelSelection(currentModel, userApiKeys, capability);
-        if (direct) return direct;
-        const fallback = findBestModelSelection(userApiKeys, capability);
-        return fallback ? resolveModelSelection(fallback, userApiKeys, capability) : null;
-    }, [userApiKeys]);
+    const confirmRouteFallback = useCallback((resolution: RouteFallbackResolution) => window.confirm(
+        `主线路 ${resolution.unavailablePrimary.key.name || resolution.unavailablePrimary.key.provider} · ${resolution.unavailablePrimary.routeId || '未配置'} 当前不可用。\n\n是否改用 ${resolution.key.name || resolution.key.provider} · ${resolution.routeId}？`,
+    ), []);
 
     const handleEnhancePrompt = useCallback(async (payload: { prompt: string; mode: PromptEnhanceMode; stylePreset?: string }) => {
         setIsEnhancingPrompt(true);
         try {
-            const resolved = resolveModelKey('text', modelPreference.textModel);
-            const model = resolved?.routeId || modelRefModelId(modelPreference.textModel);
-            const provider = resolved?.provider || inferProviderFromModel(model);
-            const key = resolved?.key || getPreferredApiKey('text', provider);
-            return await enhancePromptWithProvider(payload, model, key);
+            const route = await resolveRouteMappingForSubmit(
+                { kind: 'runtime-capability', capability: 'prompt-enhancement' },
+                userApiKeys,
+                confirmRouteFallback,
+            );
+            return await enhancePromptWithProvider(payload, route.routeId, route.key);
         } finally {
             setIsEnhancingPrompt(false);
         }
-    }, [getPreferredApiKey, modelPreference.textModel, resolveModelKey]);
+    }, [confirmRouteFallback, userApiKeys]);
 
     const saveGenerationToHistory = useCallback(async (payload: {
         name?: string;
@@ -201,11 +198,8 @@ const App: React.FC = () => {
     }, []);
 
     const resolveWorkflowGenerationCapability = useCallback((mode: GenerationMode, modelId?: string) => {
-        const fallbackModel = mode === 'text'
-            ? modelPreference.textModel
-            : mode === 'video' ? modelPreference.videoModel : modelPreference.imageModel;
-        return getGenerationCapability(userApiKeys, mode, modelId || fallbackModel);
-    }, [modelPreference.imageModel, modelPreference.textModel, modelPreference.videoModel, userApiKeys]);
+        return getGenerationCapability(userApiKeys, mode, modelId);
+    }, [userApiKeys]);
 
     const workflowSharedMedia = useMemo(() => generationHistory.map(item => ({
         id: `history:${item.id}`,
@@ -226,12 +220,12 @@ const App: React.FC = () => {
         if (!project) return;
         await runWorkflowGeneration(project, nodeId, {
             userApiKeys,
-            modelPreference,
+            confirmRouteFallback,
             getProject: () => useWorkflowStore.getState().projects.find(item => item.id === projectId) || null,
             onProjectChange: (next) => useWorkflowStore.getState().updateProject(projectId, next),
             saveHistory: saveGenerationToHistory,
         });
-    }, [modelPreference, saveGenerationToHistory, userApiKeys]);
+    }, [confirmRouteFallback, saveGenerationToHistory, userApiKeys]);
 
     const handleSaveWorkflowMedia = useCallback(async (projectId: string, nodeId: string) => {
         const node = useWorkflowStore.getState().projects.find(item => item.id === projectId)?.nodes.find(item => item.id === nodeId);
@@ -243,8 +237,8 @@ const App: React.FC = () => {
 
     const handleWorkflowOnlineAgentTurn = useCallback((input: WorkflowOnlineTurnInput) => runWorkflowOnlineAgent(input, {
         userApiKeys,
-        modelPreference,
-    }), [modelPreference, userApiKeys]);
+        confirmRouteFallback,
+    }), [confirmRouteFallback, userApiKeys]);
 
     useEffect(() => {
         setWorkflowNodeRunner(handleRunWorkflowNode, (projectId, nodeId) => {
@@ -255,13 +249,13 @@ const App: React.FC = () => {
     const activeWorkflowProject = workflowProjects.find(project => project.id === activeWorkflowProjectId) || null;
     const activeWorkflowTitle = activeWorkflowProject?.title || 'Workflow';
     const handleWorkflowReversePrompt = useCallback(async (imageHref: string, mimeType: string, imgWidth?: number, imgHeight?: number): Promise<string> => {
-        const resolved = resolveModelKey('text', modelPreference.textModel);
-        const model = resolved?.routeId || modelRefModelId(modelPreference.textModel);
-        const provider = resolved?.provider || inferProviderFromModel(model);
-        const key = resolved?.key || getPreferredApiKey('text', provider);
-        if (!model || !key) throw new Error('请先配置可用的文本模型 API Key。');
-        return reversePromptStreamWithProvider(imageHref, mimeType, model, key, () => undefined, undefined, language, { width: imgWidth, height: imgHeight });
-    }, [getPreferredApiKey, language, modelPreference.textModel, resolveModelKey]);
+        const route = await resolveRouteMappingForSubmit(
+            { kind: 'runtime-capability', capability: 'image-understanding' },
+            userApiKeys,
+            confirmRouteFallback,
+        );
+        return reversePromptStreamWithProvider(imageHref, mimeType, route.routeId, route.key, () => undefined, undefined, language, { width: imgWidth, height: imgHeight });
+    }, [confirmRouteFallback, language, userApiKeys]);
 
     const handleOpenTable = useCallback((nodeId?: string) => {
         setTableSourceNodeId(nodeId || null);
@@ -362,7 +356,7 @@ const App: React.FC = () => {
                 onOnlineAgentTurn={handleWorkflowOnlineAgentTurn}
                 t={t}
                 userApiKeys={userApiKeys}
-                modelPreference={modelPreference}
+                confirmRouteFallback={confirmRouteFallback}
                 dynamicModelOptions={dynamicModelOptions}
                 onOpenSettings={() => setIsSettingsPanelOpen(true)}
                 onEnhancePrompt={handleEnhancePrompt}
@@ -374,7 +368,7 @@ const App: React.FC = () => {
             <TableWorkspace
                 project={activeWorkflowProject}
                 userApiKeys={userApiKeys}
-                modelPreference={modelPreference}
+                confirmRouteFallback={confirmRouteFallback}
                 initialNodeId={tableSourceNodeId}
                 onCommit={handleCommitTableResult}
                 onSaveAsset={handleSaveTableAsset}
@@ -410,15 +404,10 @@ const App: React.FC = () => {
                     onDeleteApiKey={handleDeleteApiKey}
                     onUpdateApiKey={handleUpdateApiKey}
                     onSetDefaultApiKey={handleSetDefaultApiKey}
-                    modelPreference={modelPreference}
-                    setModelPreference={setModelPreference}
-                    modelPreferenceSavedAt={modelPreferenceSavedAt}
-                    modelPreferenceSaveError={modelPreferenceSaveError}
                     t={t}
                     clearKeysOnExit={clearKeysOnExit}
                     setClearKeysOnExit={setClearKeysOnExit}
                     usageSummary={usageSummaryMap}
-                    dynamicModelOptions={dynamicModelOptions}
                 />
                 {addAssetModal?.open && <AssetAddModal
                     isOpen

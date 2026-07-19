@@ -1,65 +1,23 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
-import localforage from 'localforage';
-import type { UserApiKey, ModelPreference, AIProvider, AICapability, ModelItem } from '../types';
+import type { UserApiKey, AIProvider, AICapability, ModelItem } from '../types';
 import { saveKeysEncrypted, loadKeysDecrypted, clearAllKeyData, migrateLegacyKeys } from '../utils/keyVault';
 import { getUsageSummary } from '../utils/usageMonitor';
 import {
-    DEFAULT_PROVIDER_MODELS,
     inferCapabilitiesByProvider,
-    inferCapabilityFromModel,
     inferProviderFromModel,
     isGoogleImageEditModel,
     isGoogleTextToImageModel,
-    PROVIDER_LABELS,
 } from '../services/aiGateway';
 import { normalizeProviderBaseUrl } from '../services/baseUrl';
-import { setGeminiRuntimeConfig } from '../services/geminiService';
 import { refreshAllProviderModels } from '../services/modelFetcher';
 import {
     isLikelyRunningHubModelEndpoint,
     normalizeRunningHubModelEndpoint,
 } from '../services/runningHubService';
-import { getGenerationCapability } from '../services/generationCapabilities';
-import {
-    findBestModelSelection,
-    keyOwnsBareModel,
-    modelRefModelId,
-    modelRefProvider,
-    normalizeModelSelectionWithKeys,
-    resolveModelSelection,
-} from '../utils/modelRefs';
-import { getProductModel, mergeSuggestedMappings } from '../services/productModelCatalog';
+import { modelRefModelId } from '../utils/modelRefs';
+import { getProductModels } from '../services/productModelCatalog';
 
 const generateId = () => `id_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-
-const modelPreferenceStorage = localforage.createInstance({
-    name: 'flovart',
-    storeName: 'model_preferences',
-});
-
-export const DEFAULT_MODEL_PREFS: ModelPreference = {
-    textModel: 'gemini-3-flash-preview',
-    imageModel: 'flovart:gpt-image-2',
-    videoModel: 'flovart:seedance-2',
-};
-
-export function normalizeProductModelPreference(preference: ModelPreference): ModelPreference {
-    const imageModel = getProductModel(preference.imageModel);
-    const videoModel = getProductModel(preference.videoModel);
-    return {
-        ...preference,
-        imageModel: imageModel?.capability === 'image' ? imageModel.id : DEFAULT_MODEL_PREFS.imageModel,
-        videoModel: videoModel?.capability === 'video' ? videoModel.id : DEFAULT_MODEL_PREFS.videoModel,
-    };
-}
-
-const PROVIDER_MODELS = DEFAULT_PROVIDER_MODELS;
-
-const ensureModelOption = (options: string[], model?: string) => {
-    const trimmed = model?.trim();
-    if (!trimmed) return options;
-    return options.includes(trimmed) ? options : [trimmed, ...options];
-};
 
 const buildApiKeyFingerprint = (item: Pick<Partial<UserApiKey>, 'provider' | 'key' | 'baseUrl'>) => {
     const provider = item.provider || '';
@@ -67,31 +25,6 @@ const buildApiKeyFingerprint = (item: Pick<Partial<UserApiKey>, 'provider' | 'ke
     const baseUrl = item.baseUrl?.trim().replace(/\/+$/, '') || '';
     return `${provider}::${key}::${baseUrl}`;
 };
-
-const normalizeModelId = (model?: string) => model?.trim().toLowerCase() || '';
-
-const keyOwnsModel = (key: UserApiKey, model?: string) => {
-    const normalizedModel = normalizeModelId(modelRefModelId(model));
-    if (!normalizedModel) return false;
-    return keyOwnsBareModel(key, model);
-};
-
-const getRequestedModelByCapability = (modelPreference: ModelPreference, capability: AICapability) => {
-    if (capability === 'text') return modelPreference.textModel;
-    if (capability === 'image') return modelPreference.imageModel;
-    if (capability === 'video') return modelPreference.videoModel;
-    return '';
-};
-
-const FALLBACK_TEXT_OPTIONS = ensureModelOption([...(PROVIDER_MODELS.google?.text || [])], DEFAULT_MODEL_PREFS.textModel);
-const FALLBACK_IMAGE_OPTIONS = ensureModelOption([
-    ...(PROVIDER_MODELS.openai?.image || []),
-    ...(PROVIDER_MODELS.google?.image || []),
-], DEFAULT_MODEL_PREFS.imageModel);
-const FALLBACK_VIDEO_OPTIONS = ensureModelOption([
-    ...(PROVIDER_MODELS.volcengine?.video || []),
-    ...(PROVIDER_MODELS.google?.video || []),
-], DEFAULT_MODEL_PREFS.videoModel);
 
 const sanitizeRunningHubModelId = (model?: string) => {
     const normalized = normalizeRunningHubModelEndpoint(model);
@@ -109,8 +42,7 @@ const sanitizeRunningHubModelItems = (models?: ModelItem[]) => (models || [])
 const mergeFetchedModelsIntoKey = (key: UserApiKey, modelItems: ModelItem[]) => {
     if (modelItems.length === 0) return key;
     if (key.provider !== 'runningHub') {
-        const merged = { ...key, models: modelItems, updatedAt: Date.now() };
-        return { ...merged, routeBindings: mergeSuggestedMappings(merged) };
+        return { ...key, models: modelItems, updatedAt: Date.now() };
     }
     const fetchedIds = new Set(modelItems.map(model => model.id));
     const preservedCustomModels = (key.customModels || [])
@@ -158,7 +90,7 @@ export const normalizeApiKeyEntry = (item: Partial<UserApiKey>): UserApiKey | nu
         defaultModel: runningHubDefaultModel,
         models: runningHubModels,
         extraConfig: item.extraConfig,
-        routeBindings: item.routeBindings,
+        routeMappings: item.routeMappings,
         pricingRules: item.pricingRules,
         budgetPolicy: item.budgetPolicy,
         createdAt: item.createdAt || Date.now(),
@@ -217,76 +149,14 @@ export function useApiKeys(isSettingsPanelOpen: boolean) {
     const [clearKeysOnExit, setClearKeysOnExit] = useState<boolean>(() => {
         try { return localStorage.getItem('security.clearKeysOnExit') === 'true'; } catch { return false; }
     });
-    const [modelPreference, setModelPreference] = useState<ModelPreference>(DEFAULT_MODEL_PREFS);
-    const [modelPreferenceLoaded, setModelPreferenceLoaded] = useState(false);
-    const [modelPreferenceSavedAt, setModelPreferenceSavedAt] = useState<number | null>(null);
-    const [modelPreferenceSaveError, setModelPreferenceSaveError] = useState<string | null>(null);
-    const [activeUserKeyId, setActiveUserKeyId] = useState<string | null>(null);
-    const [activeUserModelId, setActiveUserModelId] = useState<string | null>(null);
-
-    const handleUserKeyChange = useCallback((id: string) => {
-        setActiveUserKeyId(id);
-        const key = userApiKeys.find(k => k.id === id);
-        if (key) {
-            setActiveUserModelId(key.defaultModel || key.customModels?.[0] || null);
-        }
-    }, [userApiKeys]);
-
-    // 根据用户已配置的 API Key 动态计算可选模型列表
+    // PromptBar 只展示稳定 Product Model；文本执行模型由 Runtime Capability 映射决定。
     const dynamicModelOptions = useMemo(() => {
         return {
-            text: getGenerationCapability(userApiKeys, 'text', modelPreference.textModel, FALLBACK_TEXT_OPTIONS).models,
-            image: getGenerationCapability(userApiKeys, 'image', modelPreference.imageModel, FALLBACK_IMAGE_OPTIONS).models,
-            video: getGenerationCapability(userApiKeys, 'video', modelPreference.videoModel, FALLBACK_VIDEO_OPTIONS).models,
+            text: [],
+            image: getProductModels('image').map(model => model.id),
+            video: getProductModels('video').map(model => model.id),
         };
-    }, [modelPreference.imageModel, modelPreference.textModel, modelPreference.videoModel, userApiKeys]);
-
-    // 自动适配：当已配置的 API Key 不覆盖当前选中模型的 provider 时，自动切换到有 Key 的 provider 的模型
-    const [modelAutoSwitchNotice, setModelAutoSwitchNotice] = useState<string | null>(null);
-
-    useEffect(() => {
-        if (!apiKeysLoaded || userApiKeys.length === 0) return;
-
-        // 仅考虑健康状态的 key（跳过 status === 'error'）
-        const healthyKeys = userApiKeys.filter(k => k.status !== 'error');
-        if (healthyKeys.length === 0) return;
-
-        const findBestModel = (capability: 'text' | 'image' | 'video', currentModel: string): string | null => {
-            const normalized = normalizeModelSelectionWithKeys(currentModel, healthyKeys, capability);
-            if (resolveModelSelection(normalized, healthyKeys, capability)) return normalized !== currentModel ? normalized : null;
-            return findBestModelSelection(healthyKeys, capability);
-        };
-
-        setModelPreference(prev => {
-            const updates: Partial<ModelPreference> = {};
-            const betterText = findBestModel('text', prev.textModel);
-            if (betterText) updates.textModel = betterText;
-            const betterImage = findBestModel('image', prev.imageModel);
-            if (betterImage) updates.imageModel = betterImage;
-            const betterVideo = findBestModel('video', prev.videoModel);
-            if (betterVideo) updates.videoModel = betterVideo;
-
-            if (Object.keys(updates).length > 0) {
-                const switched: string[] = [];
-                if (updates.imageModel) {
-                    const p = PROVIDER_LABELS[modelRefProvider(updates.imageModel, healthyKeys)] || modelRefProvider(updates.imageModel, healthyKeys);
-                    switched.push(`图片 → ${p}`);
-                }
-                if (updates.videoModel) {
-                    const p = PROVIDER_LABELS[modelRefProvider(updates.videoModel, healthyKeys)] || modelRefProvider(updates.videoModel, healthyKeys);
-                    switched.push(`视频 → ${p}`);
-                }
-                if (updates.textModel) {
-                    const p = PROVIDER_LABELS[modelRefProvider(updates.textModel, healthyKeys)] || modelRefProvider(updates.textModel, healthyKeys);
-                    switched.push(`文本 → ${p}`);
-                }
-                setModelAutoSwitchNotice(`已自动切换模型：${switched.join('，')}`);
-                setTimeout(() => setModelAutoSwitchNotice(null), 5000);
-                return { ...prev, ...updates };
-            }
-            return prev;
-        });
-    }, [apiKeysLoaded, userApiKeys]);
+    }, []);
 
     const [usageSummaryMap, setUsageSummaryMap] = useState<Awaited<ReturnType<typeof getUsageSummary>> | undefined>();
     useEffect(() => {
@@ -312,34 +182,6 @@ export function useApiKeys(isSettingsPanelOpen: boolean) {
             setUserApiKeys(normalized);
             setApiKeysLoaded(true);
         })();
-        return () => { cancelled = true; };
-    }, []);
-
-    // 模型选择属于业务配置，统一异步落到 localforage；兼容迁移旧的小型 JSON。
-    useEffect(() => {
-        let cancelled = false;
-        (async () => {
-            let stored = await modelPreferenceStorage.getItem<ModelPreference>('current');
-            if (!stored) {
-                try {
-                    const legacy = localStorage.getItem('modelPreference.v1');
-                    if (legacy) {
-                        stored = JSON.parse(legacy) as ModelPreference;
-                        await modelPreferenceStorage.setItem('current', stored);
-                        localStorage.removeItem('modelPreference.v1');
-                    }
-                } catch {
-                    // Invalid legacy preferences fall back to product defaults.
-                }
-            }
-            if (cancelled) return;
-            setModelPreference(normalizeProductModelPreference({ ...DEFAULT_MODEL_PREFS, ...stored }));
-            setModelPreferenceLoaded(true);
-        })().catch(error => {
-            if (cancelled) return;
-            setModelPreferenceSaveError(error instanceof Error ? error.message : '本机存储不可用');
-            setModelPreferenceLoaded(true);
-        });
         return () => { cancelled = true; };
     }, []);
 
@@ -489,71 +331,6 @@ export function useApiKeys(isSettingsPanelOpen: boolean) {
         }).catch(() => { /* silent background refresh failure */ });
     }, [apiKeysLoaded, userApiKeys.length]);
 
-    // 持久化 modelPreference
-    useEffect(() => {
-        if (!modelPreferenceLoaded) return;
-        void modelPreferenceStorage.setItem('current', modelPreference).then(() => {
-            setModelPreferenceSavedAt(Date.now());
-            setModelPreferenceSaveError(null);
-        }).catch(error => {
-            setModelPreferenceSaveError(error instanceof Error ? error.message : '本机存储不可用');
-        });
-    }, [modelPreference, modelPreferenceLoaded]);
-
-    const getPreferredApiKey = useCallback((capability: AICapability, provider?: AIProvider) => {
-        const requestedModel = getRequestedModelByCapability(modelPreference, capability);
-        if (capability === 'text' || capability === 'image' || capability === 'video') {
-            const resolved = resolveModelSelection(requestedModel, userApiKeys, capability, provider);
-            if (resolved?.key) return resolved.key;
-        }
-        const matches = userApiKeys.filter(key => {
-            if (key.status === 'error') return false;
-            const capabilities = key.capabilities?.length ? key.capabilities : inferCapabilitiesByProvider(key.provider);
-            if (!capabilities.includes(capability)) return false;
-            if (!provider) return true;
-            if (key.provider === provider) return true;
-            return key.provider === 'custom' && keyOwnsModel(key, requestedModel);
-        });
-        return matches.find(key => key.isDefault) || matches[0];
-    }, [modelPreference, userApiKeys]);
-
-    // Sync runtime config for Gemini services
-    useEffect(() => {
-        const textSelection = resolveModelSelection(modelPreference.textModel, userApiKeys, 'text');
-        const imageSelection = resolveModelSelection(modelPreference.imageModel, userApiKeys, 'image');
-        const videoSelection = resolveModelSelection(modelPreference.videoModel, userApiKeys, 'video');
-        const textModel = textSelection?.routeId || modelRefModelId(modelPreference.textModel);
-        const imageModel = imageSelection?.routeId || modelRefModelId(modelPreference.imageModel);
-        const videoModel = videoSelection?.routeId || modelRefModelId(modelPreference.videoModel);
-        const textProvider = textSelection?.provider || modelRefProvider(modelPreference.textModel, userApiKeys);
-        const imageProvider = imageSelection?.provider || modelRefProvider(modelPreference.imageModel, userApiKeys);
-        const videoProvider = videoSelection?.provider || modelRefProvider(modelPreference.videoModel, userApiKeys);
-
-        const googleTextKey = textProvider === 'google' ? textSelection?.key : undefined;
-        const googleImageKey = imageProvider === 'google' ? imageSelection?.key : undefined;
-        const googleVideoKey = videoProvider === 'google' ? videoSelection?.key : undefined;
-
-        setGeminiRuntimeConfig({
-            textApiKey: googleTextKey?.key,
-            imageApiKey: googleImageKey?.key || googleTextKey?.key,
-            videoApiKey: googleVideoKey?.key || googleImageKey?.key || googleTextKey?.key,
-            baseUrl: googleTextKey?.baseUrl,
-            textBaseUrl: googleTextKey?.baseUrl,
-            imageBaseUrl: googleImageKey?.baseUrl,
-            videoBaseUrl: googleVideoKey?.baseUrl,
-            textModel: textProvider === 'google' ? textModel : undefined,
-            imageModel:
-                imageProvider === 'google' && isGoogleImageEditModel(imageModel)
-                    ? imageModel
-                    : undefined,
-            textToImageModel:
-                imageProvider === 'google' && isGoogleTextToImageModel(imageModel)
-                    ? imageModel
-                    : undefined,
-            videoModel: videoProvider === 'google' ? videoModel : undefined,
-        });
-    }, [getPreferredApiKey, modelPreference, userApiKeys]);
-
     const handleAddApiKey = useCallback((payload: Omit<UserApiKey, 'id' | 'createdAt' | 'updatedAt'>) => {
         const now = Date.now();
         const capabilities = payload.capabilities?.length ? payload.capabilities : inferCapabilitiesByProvider(payload.provider);
@@ -564,7 +341,7 @@ export function useApiKeys(isSettingsPanelOpen: boolean) {
             createdAt: now,
             updatedAt: now,
         };
-        const nextKey = { ...initialKey, routeBindings: mergeSuggestedMappings(initialKey) };
+        const nextKey = initialKey;
         setUserApiKeys(prev => {
             const isFirstOfCapabilities = !prev.some(k =>
                 hasCapabilityOverlap(
@@ -629,21 +406,11 @@ export function useApiKeys(isSettingsPanelOpen: boolean) {
         setShowOnboarding,
         clearKeysOnExit,
         setClearKeysOnExit,
-        modelPreference,
-        setModelPreference,
-        modelPreferenceSavedAt,
-        modelPreferenceSaveError,
-        activeUserKeyId,
-        activeUserModelId,
-        setActiveUserModelId,
-        handleUserKeyChange,
         dynamicModelOptions,
         usageSummaryMap,
-        getPreferredApiKey,
         handleAddApiKey,
         handleDeleteApiKey,
         handleUpdateApiKey,
         handleSetDefaultApiKey,
-        modelAutoSwitchNotice,
     };
 }

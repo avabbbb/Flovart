@@ -29,12 +29,14 @@ import {
     getRoutedVideoModes,
     explainUnsupportedVideoMode,
     isProductModelConfigured,
+    resolveProductModelRoute,
     resolveAnyProductRoute,
     sanitizeProductGenerationParams,
     VIDEO_MODE_ORDER,
 } from '../services/productModelCatalog';
 import { AssetReferencePicker, type ReferencePickerWorkflowItem } from './studio/AssetReferencePicker';
 import { estimateApiCost } from '../utils/usageMonitor';
+import { resolveRouteMapping } from '../services/routeMapping';
 
 export interface PromptBarProps {
     t: (key: string, ...args: any[]) => string;
@@ -176,8 +178,9 @@ function ReferenceChipPreview({ chip }: { chip: ImageReferenceChip }) {
 }
 
 function getModelLabel(mode: GenerationMode, textModel?: string, imageModel?: string, videoModel?: string, userApiKeys: UserApiKey[] = []): string {
-    const model = mode === 'text' ? textModel : mode === 'video' || mode === 'keyframe' ? videoModel : imageModel;
-    if (!model) return mode === 'text' ? '选择文本模型' : mode === 'video' || mode === 'keyframe' ? '选择视频模型' : '选择图片模型';
+    if (mode === 'text') return '文本映射';
+    const model = mode === 'video' || mode === 'keyframe' ? videoModel : imageModel;
+    if (!model) return mode === 'video' || mode === 'keyframe' ? '选择视频模型' : '选择图片模型';
     const product = getProductModel(model);
     if (product) return product.name;
     const provider = modelRefProvider(model, userApiKeys);
@@ -437,7 +440,12 @@ export const PromptBar: React.FC<PromptBarProps> = ({
     const videoLikeMode = generationMode === 'video' || generationMode === 'keyframe';
     const activeModel = generationMode === 'text' ? selectedTextModel : videoLikeMode ? selectedVideoModel : selectedImageModel;
     const activeProductModel = useMemo(() => getProductModel(activeModel), [activeModel]);
-    const activeRoute = activeProductModel ? resolveAnyProductRoute(activeProductModel.id, userApiKeys) : null;
+    const activeSubmode = generationSubmode || (generationMode === 'video' ? 'text-to-video' : 'text-to-image');
+    const activeRoute = activeProductModel
+        ? resolveProductModelRoute(activeProductModel.id, activeSubmode, userApiKeys)
+        : generationMode === 'text'
+            ? resolveRouteMapping({ kind: 'runtime-capability', capability: 'agent-text' }, userApiKeys)
+            : null;
     const activeCapabilities = useMemo(() => {
         if (!activeProductModel) return undefined;
         const capabilities = activeProductModel.capabilities;
@@ -512,7 +520,6 @@ export const PromptBar: React.FC<PromptBarProps> = ({
         : null;
     const mentionedReferences = imageReferenceChips?.filter(reference => reference.mentioned) || [];
     const mentionedImageCount = mentionedReferences.filter(reference => reference.elementType === 'image').length;
-    const activeSubmode = generationSubmode || (generationMode === 'video' ? 'text-to-video' : 'text-to-image');
     const videoInputRequirement = generationMode !== 'video' ? null
         : activeSubmode === 'image-to-video' && mentionedImageCount < 1 ? '图生视频需要添加 1 张图片'
             : activeSubmode === 'first-last-frame' && mentionedImageCount < 2 ? '首尾帧需要按顺序添加 2 张图片'
@@ -534,7 +541,8 @@ export const PromptBar: React.FC<PromptBarProps> = ({
     }, [activeProductModel, activeRatio, activeSubmode, videoDurationSec, videoResolution]);
     const changeActiveModel = (model: string) => generationMode === 'text' ? onTextModelChange?.(model) : videoLikeMode ? onVideoModelChange?.(model) : onImageModelChange?.(model);
     const promptCharCount = prompt.trim().length;
-    const readyState = !activeKey || (activeProductModel && !activeRoute)
+    const missingMediaModel = generationMode !== 'text' && !activeProductModel;
+    const readyState = missingMediaModel || !activeKey || (activeProductModel && !activeRoute)
         ? 'missing-key'
         : error
             ? 'error'
@@ -546,7 +554,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                     ? 'generating'
                     : 'ready';
     const readyCopy = readyState === 'missing-key'
-        ? '先连接一个 AI 供应商'
+        ? (missingMediaModel ? '请先明确选择产品模型' : userApiKeys.length ? '请先配置当前能力的模型映射' : '先连接一个 AI 供应商')
         : readyState === 'error'
             ? (error || '生成失败')
             : readyState === 'empty'
@@ -999,9 +1007,15 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                             </>
                                         ) : (
                                             <div className="w-full p-2">
-                                                <div className="px-2 pb-2 text-[11px] font-bold" style={{ color: 'var(--isl-ink-soft)' }}>选择模型</div>
-                                                {currentModelOptions.map(model => <button key={model} type="button" onClick={() => { changeActiveModel(model); setExpandedPanel(null); }} className={`mb-1 w-full rounded-xl border px-3 py-3 text-left text-xs font-bold ${activeModel === model ? 'border-[var(--isl-mint)] bg-[var(--isl-mint-bg)] text-[var(--isl-mint-deep)]' : 'border-transparent text-[var(--isl-ink)] hover:bg-[var(--isl-surface-2)]'}`}>{modelRefLabel(model, userApiKeys)}</button>)}
-                                                {currentModelOptions.length === 0 && <div className="px-4 py-12 text-center text-xs" style={{ color: 'var(--isl-ink-soft)' }}>没有可用模型</div>}
+                                                {generationMode === 'text' ? <>
+                                                    <div className="px-2 pb-2 text-[11px] font-bold" style={{ color: 'var(--isl-ink-soft)' }}>Agent 文本映射</div>
+                                                    <div className="rounded-xl bg-[var(--isl-surface-2)] px-3 py-3 text-xs" style={{ color: 'var(--isl-ink)' }}>{activeRoute ? `${activeRoute.key.name || activeRoute.key.provider} · ${activeRoute.routeId}` : '尚未配置 Agent 文本线路'}</div>
+                                                    <button type="button" onClick={() => { onOpenSettings?.(); setExpandedPanel(null); }} className="mt-2 w-full rounded-xl border border-[var(--isl-border)] px-3 py-2 text-xs font-bold">打开模型映射</button>
+                                                </> : <>
+                                                    <div className="px-2 pb-2 text-[11px] font-bold" style={{ color: 'var(--isl-ink-soft)' }}>选择模型</div>
+                                                    {currentModelOptions.map(model => <button key={model} type="button" onClick={() => { changeActiveModel(model); setExpandedPanel(null); }} className={`mb-1 w-full rounded-xl border px-3 py-3 text-left text-xs font-bold ${activeModel === model ? 'border-[var(--isl-mint)] bg-[var(--isl-mint-bg)] text-[var(--isl-mint-deep)]' : 'border-transparent text-[var(--isl-ink)] hover:bg-[var(--isl-surface-2)]'}`}>{modelRefLabel(model, userApiKeys)}</button>)}
+                                                    {currentModelOptions.length === 0 && <div className="px-4 py-12 text-center text-xs" style={{ color: 'var(--isl-ink-soft)' }}>没有可用模型</div>}
+                                                </>}
                                             </div>
                                         )}
                                     </div>

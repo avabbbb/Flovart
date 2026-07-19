@@ -20,7 +20,6 @@ const renderWorkspace = () => render(
     sharedMedia={[]}
     t={key => key}
     userApiKeys={[]}
-    modelPreference={{} as never}
     dynamicModelOptions={{} as never}
     onOpenSettings={vi.fn()}
     assetLibrary={TEST_ASSET_LIBRARY}

@@ -1,7 +1,7 @@
 import { editImageWithProvider, runImageAgentWithProvider } from './aiGateway';
-import type { ModelPreference, UserApiKey } from '../types';
-import { resolveModelSelection } from '../utils/modelRefs';
+import type { UserApiKey } from '../types';
 import { workflowBlobToDataUrl, workflowDataUrlToBlob } from '../components/workflow/media';
+import { resolveRouteMappingForSubmit, type RouteFallbackResolution } from './routeMapping';
 
 export type TableToolId = 'depth' | 'edges' | 'film' | 'reference' | 'applause' | 'cutout' | 'wardrobe';
 
@@ -14,7 +14,8 @@ export interface TableProcessResult {
 
 export interface TableProcessOptions {
   userApiKeys: UserApiKey[];
-  modelPreference: ModelPreference;
+  productModelId?: string;
+  confirmRouteFallback?: (resolution: RouteFallbackResolution) => boolean | Promise<boolean>;
   prompt?: string;
 }
 
@@ -32,7 +33,7 @@ export async function processTableMedia(blob: Blob, tool: TableToolId, options: 
 }
 
 async function processCutout(blob: Blob, options: TableProcessOptions): Promise<TableProcessResult> {
-  const resolved = resolveImageRoute(options);
+  const resolved = await resolveImageRoute(options);
   const source = await workflowBlobToDataUrl(blob);
   const result = await runImageAgentWithProvider(
     { href: source, mimeType: blob.type || 'image/png' },
@@ -44,7 +45,7 @@ async function processCutout(blob: Blob, options: TableProcessOptions): Promise<
 }
 
 async function processWardrobe(blob: Blob, options: TableProcessOptions): Promise<TableProcessResult> {
-  const resolved = resolveImageRoute(options);
+  const resolved = await resolveImageRoute(options);
   const source = await workflowBlobToDataUrl(blob);
   const prompt = options.prompt?.trim() || '保留人物身份、脸部、发型、姿态和背景，只把服装整理为中性纯色基础款，轮廓清晰，方便后续全能参考。';
   const result = await editImageWithProvider(
@@ -58,9 +59,12 @@ async function processWardrobe(blob: Blob, options: TableProcessOptions): Promis
 }
 
 function resolveImageRoute(options: TableProcessOptions) {
-  const resolved = resolveModelSelection(options.modelPreference.imageModel, options.userApiKeys, 'image', undefined, 'image-to-image');
-  if (!resolved) throw new Error('请先在设置中配置可用于图片编辑的模型和 API Key。');
-  return resolved;
+  if (!options.productModelId) throw new Error('请先明确选择图片产品模型。');
+  return resolveRouteMappingForSubmit(
+    { kind: 'product-mode', productModelId: options.productModelId, mode: 'image-to-image' },
+    options.userApiKeys,
+    options.confirmRouteFallback,
+  );
 }
 
 async function resultFromDataUrl(value: string, mimeType: string, width = 0, height = 0): Promise<TableProcessResult> {

@@ -3,7 +3,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { DragEvent as ReactDragEvent, PointerEvent as ReactPointerEvent } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Check, ChevronRight, ChevronsDown, Maximize2, Plus, Star, Undo2 } from 'lucide-react';
-import type { AssetLibrary, ModelPreference, PromptEnhanceMode, PromptEnhanceResult, UserApiKey } from '../../types';
+import type { AssetLibrary, PromptEnhanceMode, PromptEnhanceResult, UserApiKey } from '../../types';
+import type { RouteFallbackResolution } from '../../services/routeMapping';
 import { STUDIO_MEDIA_DRAG_TYPE } from '../studio/StudioMediaBrowser';
 import type { AssetSuggestion } from '../MentionList';
 import { createWorkflowNode } from './constants';
@@ -217,7 +218,7 @@ export function InfiniteWorkflow({
   theme = 'light',
   language = 'zho',
   userApiKeys = [],
-  modelPreference = { textModel: '', imageModel: '', videoModel: '' },
+  confirmRouteFallback,
   dynamicModelOptions = { text: [], image: [], video: [] },
   onOpenSettings,
   onEnhancePrompt,
@@ -238,7 +239,7 @@ export function InfiniteWorkflow({
   theme?: 'light' | 'dark';
   language?: 'en' | 'zho';
   userApiKeys?: UserApiKey[];
-  modelPreference?: ModelPreference;
+  confirmRouteFallback?: (resolution: RouteFallbackResolution) => boolean | Promise<boolean>;
   dynamicModelOptions?: WorkflowModelOptions;
   onOpenSettings?: () => void;
   onEnhancePrompt?: (payload: { prompt: string; mode: PromptEnhanceMode; stylePreset?: string }) => Promise<PromptEnhanceResult>;
@@ -465,7 +466,7 @@ export function InfiniteWorkflow({
 
   const imageToolRuntime = useMemo<WorkflowImageToolRuntime>(() => ({
     userApiKeys,
-    modelPreference,
+    confirmRouteFallback,
     getProject: () => projectRef.current,
     onProjectChange: next => {
       if (next.id !== projectRef.current.id) return;
@@ -474,7 +475,7 @@ export function InfiniteWorkflow({
       selectedIdsRef.current = next.selectedNodeIds;
       setSelectedNodeIds(next.selectedNodeIds);
     },
-  }), [modelPreference, patchProject, userApiKeys]);
+  }), [confirmRouteFallback, patchProject, userApiKeys]);
 
   const ownsImageToolTransaction = useCallback((transaction: ImageToolTransaction) => {
     const current = imageToolTransactionRef.current;
@@ -2293,7 +2294,7 @@ export function InfiniteWorkflow({
           <WorkflowConfigPanel node={selectedNodeData[0]} nodes={project.nodes} connections={project.connections} onChange={metadata => applyOps([{ type: 'update_node', id: selectedNodeData[0].id, metadata: { ...selectedNodeData[0].metadata, ...metadata } }])} onRun={() => onRunNode(selectedNodeData[0].id)} onStop={onStopNode ? () => onStopNode(selectedNodeData[0].id) : undefined} />
         </div>}
         {selectedNodeData.length === 1 && ['image', 'video', 'text'].includes(selectedNodeData[0].type) && <div data-workflow-overlay style={{ position: 'absolute', zIndex: 69, left: promptLeft, top: promptTop }}>
-      <WorkflowNodePromptBar width={promptWidth} node={selectedNodeData[0]} nodes={project.nodes} connections={project.connections} t={t} theme={theme} language={language} userApiKeys={userApiKeys} modelPreference={modelPreference} dynamicModelOptions={dynamicModelOptions} onOpenSettings={onOpenSettings} onEnhancePrompt={onEnhancePrompt} isEnhancingPrompt={isEnhancingPrompt} onChange={metadata => applyOps([{ type: 'update_node', id: selectedNodeData[0].id, metadata: { ...selectedNodeData[0].metadata, ...metadata } }])} onRun={() => onRunNode(selectedNodeData[0].id)} onStop={onStopNode ? () => onStopNode(selectedNodeData[0].id) : undefined} focusSignal={promptFocusSignal} onDisconnectReference={fromNodeId => { const targetId = selectedNodeData[0].id; const conn = project.connections.find(c => c.toNodeId === targetId && c.fromNodeId === fromNodeId); if (!conn) return; applyOps([{ type: 'delete_connections', ids: [conn.id] }]); }} assetFolders={assetFolders} assetItems={assetSuggestions} assetLibrary={assetLibrary} onSelectWorkflowReference={selectedNodeData[0] ? (nodeId => handleSelectWorkflowReference(nodeId, selectedNodeData[0].id)) : undefined} onAddReferenceFiles={selectedNodeData[0] ? (files => handleAddReferenceFiles(files, selectedNodeData[0].id)) : undefined} onSelectAsset={selectedNodeData[0] ? (assetId => handleSelectAsset(assetId, selectedNodeData[0].id)) : undefined} skillEnabled={false} />
+      <WorkflowNodePromptBar width={promptWidth} node={selectedNodeData[0]} nodes={project.nodes} connections={project.connections} t={t} theme={theme} language={language} userApiKeys={userApiKeys} dynamicModelOptions={dynamicModelOptions} onOpenSettings={onOpenSettings} onEnhancePrompt={onEnhancePrompt} isEnhancingPrompt={isEnhancingPrompt} onChange={metadata => applyOps([{ type: 'update_node', id: selectedNodeData[0].id, metadata: { ...selectedNodeData[0].metadata, ...metadata } }])} onRun={() => onRunNode(selectedNodeData[0].id)} onStop={onStopNode ? () => onStopNode(selectedNodeData[0].id) : undefined} focusSignal={promptFocusSignal} onDisconnectReference={fromNodeId => { const targetId = selectedNodeData[0].id; const conn = project.connections.find(c => c.toNodeId === targetId && c.fromNodeId === fromNodeId); if (!conn) return; applyOps([{ type: 'delete_connections', ids: [conn.id] }]); }} assetFolders={assetFolders} assetItems={assetSuggestions} assetLibrary={assetLibrary} onSelectWorkflowReference={selectedNodeData[0] ? (nodeId => handleSelectWorkflowReference(nodeId, selectedNodeData[0].id)) : undefined} onAddReferenceFiles={selectedNodeData[0] ? (files => handleAddReferenceFiles(files, selectedNodeData[0].id)) : undefined} onSelectAsset={selectedNodeData[0] ? (assetId => handleSelectAsset(assetId, selectedNodeData[0].id)) : undefined} skillEnabled={false} />
         </div>}
       </>}
       {minimapOpen && <WorkflowMiniMap nodes={project.nodes.filter(node => node.isVisible !== false)} viewport={project.viewport} onCenter={(x, y) => {
@@ -2437,7 +2438,7 @@ export function InfiniteWorkflow({
             onChange={metadata => applyOps([{ type: 'update_node', id: scriptNode.id, metadata }])}
             onClose={() => setScriptEditorNodeId(null)}
             userApiKeys={userApiKeys}
-            modelPreference={modelPreference}
+            confirmRouteFallback={confirmRouteFallback}
             onOpenSettings={onOpenSettings}
             onBatchGenerate={mode => handleScriptBatchGenerate(scriptNode.id, mode)}
           />

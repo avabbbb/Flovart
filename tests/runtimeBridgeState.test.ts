@@ -1,13 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { getKeySyncStatus, getRuntimeBridgeStatus } from '../services/runtimeBridgeState';
-import type { ModelPreference, UserApiKey } from '../types';
-
-const modelPreference: ModelPreference = {
-  textModel: 'gemini-3-flash-preview',
-  imageModel: 'gpt-image-1',
-  videoModel: 'veo-3.1-generate-preview',
-};
+import type { UserApiKey } from '../types';
 
 describe('runtimeBridgeState', () => {
   it('reports standalone runtime state when chrome storage is unavailable', () => {
@@ -41,7 +35,7 @@ describe('runtimeBridgeState', () => {
     vi.unstubAllGlobals();
   });
 
-  it('summarizes key sync state from vault keys and active model preference', () => {
+  it('summarizes key sync state without inventing one global active model', () => {
     vi.stubGlobal('chrome', {
       runtime: { id: 'extension-id' },
       storage: { local: {} },
@@ -51,19 +45,20 @@ describe('runtimeBridgeState', () => {
       provider: 'openai',
       capabilities: ['image'],
       key: 'sk-test',
+      routeMappings: [{ target: { kind: 'product-mode', productModelId: 'flovart:gpt-image-2', mode: 'text-to-image' }, routeId: 'gpt-image-2', order: 0 }],
       createdAt: 1,
       updatedAt: 1,
     }] satisfies UserApiKey[];
 
-    const status = getKeySyncStatus({ userApiKeys, modelPreference });
+    const status = getKeySyncStatus({ userApiKeys });
 
     expect(status).toMatchObject({
       source: 'merged',
       sharedWithExtension: true,
       keyCount: 1,
-      activeProvider: 'google',
-      activeModel: 'veo-3.1-generate-preview',
     });
+    expect(status).not.toHaveProperty('activeProvider');
+    expect(status).not.toHaveProperty('activeModel');
 
     vi.unstubAllGlobals();
   });

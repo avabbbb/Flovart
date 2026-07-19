@@ -51,4 +51,13 @@ describe('generation capabilities', () => {
     expect(text).toMatchObject({ aspectRatios: [], resolutions: [], durations: [], supportsReferences: [] });
     expect(getGenerationCapability([], 'audio')).toEqual({ mode: 'audio', models: [], aspectRatios: [], resolutions: [], durations: [], supportsReferences: [] });
   });
+
+  it('does not borrow controls from the first media model before the user selects one', () => {
+    const capability = getGenerationCapability([
+      key({ customModels: ['gpt-image-2'] }),
+    ], 'image');
+
+    expect(capability.models).toContain('flovart:gpt-image-2');
+    expect(capability).toMatchObject({ aspectRatios: [], resolutions: [], durations: [], supportsReferences: [] });
+  });
 });

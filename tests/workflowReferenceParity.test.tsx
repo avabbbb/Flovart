@@ -43,6 +43,19 @@ describe('workflow reference parity', () => {
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ config: expect.objectContaining({ watermark: true }) }));
   });
 
+  it('requires an explicit product-model choice when the generation type changes', () => {
+    const node = createWorkflowNode('config', 'config', { x: 0, y: 0 }, { config: { mode: 'text', modelId: 'legacy-model' } });
+    const onChange = vi.fn();
+    render(<WorkflowGenerationCapabilitiesProvider resolve={mode => ({ mode, models: ['flovart:gpt-image-2'], aspectRatios: [], resolutions: [], durations: [], supportsReferences: [] })}>
+      <WorkflowConfigPanel node={node} onChange={onChange} onRun={vi.fn()} />
+    </WorkflowGenerationCapabilitiesProvider>);
+
+    fireEvent.change(screen.getByLabelText('类型'), { target: { value: 'image' } });
+
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ config: expect.objectContaining({ mode: 'image', modelId: undefined }) }));
+    expect(screen.getByRole('option', { name: '使用文本映射' })).toBeInTheDocument();
+  });
+
   it('keeps audio metadata editable while generation stays explicitly unsupported', () => {
     const node = createWorkflowNode('audio-config', 'config', { x: 0, y: 0 }, { config: { mode: 'audio' } });
     const onChange = vi.fn();

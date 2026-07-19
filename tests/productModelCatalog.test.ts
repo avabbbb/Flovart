@@ -5,7 +5,7 @@ import {
   getRoutedVideoModes,
   resolveProductModelRoute,
   sanitizeProductGenerationParams,
-  suggestProductRouteBindings,
+  suggestProductRouteMappings,
 } from '../services/productModelCatalog';
 
 const key = (id: string, priority = 0): UserApiKey => ({
@@ -14,7 +14,7 @@ const key = (id: string, priority = 0): UserApiKey => ({
   capabilities: ['video'],
   key: 'secret',
   models: [{ id: 'doubao-seedance-2-0-260128', name: 'Seedance 2.0' }],
-  routeBindings: [{ productModelId: 'flovart:seedance-2', mode: 'text-to-video' as const, routeId: 'doubao-seedance-2-0-260128', priority, enabled: true, confirmed: true }],
+  routeMappings: [{ target: { kind: 'product-mode', productModelId: 'flovart:seedance-2', mode: 'text-to-video' as const }, routeId: 'doubao-seedance-2-0-260128', order: priority }],
   createdAt: 1,
   updatedAt: 1,
 });
@@ -27,7 +27,7 @@ describe('fixed product model catalog', () => {
   });
 
   it('suggests exact official mappings and resolves the lowest-priority route', () => {
-    expect(suggestProductRouteBindings(key('suggested'))).toContainEqual(expect.objectContaining({ productModelId: 'flovart:seedance-2' }));
+    expect(suggestProductRouteMappings(key('suggested'))).toContainEqual(expect.objectContaining({ target: expect.objectContaining({ productModelId: 'flovart:seedance-2' }) }));
     expect(resolveProductModelRoute('flovart:seedance-2', 'text-to-video', [key('backup', 10), key('primary', 0)])?.key.id).toBe('primary');
   });
 
@@ -55,7 +55,7 @@ describe('fixed product model catalog', () => {
 
   it('does not auto-map Google preview ids that have already shut down', () => {
     const googleKey: UserApiKey = { ...key('google'), provider: 'google', capabilities: ['image'], models: [{ id: 'gemini-3-pro-image-preview', name: 'Gemini preview' }] };
-    expect(suggestProductRouteBindings(googleKey).some(mapping => mapping.productModelId === 'flovart:gemini-3-pro-image')).toBe(false);
+    expect(suggestProductRouteMappings(googleKey).some(mapping => mapping.target.kind === 'product-mode' && mapping.target.productModelId === 'flovart:gemini-3-pro-image')).toBe(false);
   });
 
   it('normalizes invalid params and applies Veo 4K/reference duration constraints', () => {

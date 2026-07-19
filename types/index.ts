@@ -132,13 +132,20 @@ export type ProductModelMode =
   | 'first-last-frame'
   | 'video-extension';
 
-export interface ProductRouteBinding {
-  productModelId: string;
-  mode: ProductModelMode;
+export type RuntimeRouteCapability =
+  | 'prompt-enhancement'
+  | 'script-breakdown'
+  | 'agent-text'
+  | 'image-understanding';
+
+export type RouteMappingTarget =
+  | { kind: 'product-mode'; productModelId: string; mode: ProductModelMode }
+  | { kind: 'runtime-capability'; capability: RuntimeRouteCapability };
+
+export interface RouteMappingBinding {
+  target: RouteMappingTarget;
   routeId: string;
-  priority: number;
-  enabled: boolean;
-  confirmed: boolean;
+  order: number;
 }
 
 export type ApiPricingUnit = 'request' | 'image' | 'video_second' | 'input_token' | 'output_token';
@@ -180,20 +187,14 @@ export interface UserApiKey {
   models?: ModelItem[];
   /** Provider 特有的额外配置（�?Google Veo �?projectId�?*/
   extraConfig?: Record<string, string>;
-  /** Flovart 固定产品模型按 Generation Mode 绑定到 Provider Route 的显式绑定。 */
-  routeBindings?: ProductRouteBinding[];
+  /** 统一模型映射中心确认后的目标到 Provider Route 绑定。 */
+  routeMappings?: RouteMappingBinding[];
   /** 该 Key / 模型线路的计价规则。 */
   pricingRules?: ApiPricingRule[];
   /** 该 Key 的月度预算策略。 */
   budgetPolicy?: ApiBudgetPolicy;
   createdAt: number;
   updatedAt: number;
-}
-
-export interface ModelPreference {
-  textModel: string;
-  imageModel: string;
-  videoModel: string;
 }
 
 // Agent / Workflow

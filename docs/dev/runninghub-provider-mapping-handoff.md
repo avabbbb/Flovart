@@ -22,7 +22,7 @@
 
 ## 建议施工顺序
 
-1. 定义 `GenerationMode`、`RouteId`、`RouteCapabilitySchema`、`ProductRouteBinding` 和 provider-neutral `GenerationRequest`；不要兼容旧映射结构，项目尚未上线，直接按新设计收敛。
+1. 定义 `GenerationMode`、`RouteId`、`RouteCapabilitySchema`、统一 `RouteMappingBinding` 和 provider-neutral `GenerationRequest`；不要兼容旧映射结构，项目尚未上线，直接按新设计收敛。
 2. 将 16 条 Route 编成显式、版本化目录；每条记录 Product Model、mode、endpoint、渠道等级、参数 Schema、媒体角色/数量、序列化类型、默认值和官方证据。
 3. 为 RunningHub 实现 Route Preflight 与 Adapter；同一 Adapter 产出的 Provider Request 同时供价格预估与正式提交使用。
 4. 改造产品模型解析、设置页映射和 PromptBar 控件：原始模型名为主，Provider Route Label 显示 RunningHub 别名与低价/稳定等级，控件取 Product Model 与最终 Route Schema 的交集。
