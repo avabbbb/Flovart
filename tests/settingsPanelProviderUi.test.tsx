@@ -67,6 +67,41 @@ describe('SettingsPanel provider configuration UI', () => {
     expect(screen.queryByText('模型偏好')).toBeNull();
   });
 
+  it('puts image and video mapping before text routes and applies detected API model suggestions once confirmed', async () => {
+    const onUpdateApiKey = vi.fn();
+    const keys: UserApiKey[] = [
+      {
+        id: 'image-key', provider: 'openai', capabilities: ['image'], key: 'secret',
+        models: [{ id: 'gpt-image-2', name: 'GPT Image 2' }], createdAt: 1, updatedAt: 1,
+      },
+      {
+        id: 'video-key', provider: 'volcengine', capabilities: ['video'], key: 'secret',
+        models: [{ id: 'doubao-seedance-2-0-260128', name: 'Seedance 2.0' }], createdAt: 1, updatedAt: 1,
+      },
+    ];
+    renderSettings(keys, onUpdateApiKey);
+
+    fireEvent.click(screen.getByRole('button', { name: '模型映射' }));
+    const sections = await screen.findByTestId('model-mapping-sections');
+    expect(sections.textContent?.indexOf('图像模型')).toBeLessThan(sections.textContent?.indexOf('视频模型') || 0);
+    expect(sections.textContent?.indexOf('视频模型')).toBeLessThan(sections.textContent?.indexOf('文本与 Agent') || 0);
+    expect(screen.getByText(/检测到 6 条媒体映射建议/)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: '应用全部建议' }));
+    expect(onUpdateApiKey).toHaveBeenCalledTimes(2);
+    expect(onUpdateApiKey).toHaveBeenCalledWith('image-key', expect.objectContaining({
+      routeMappings: expect.arrayContaining([
+        expect.objectContaining({ target: { kind: 'product-mode', productModelId: 'flovart:gpt-image-2', mode: 'text-to-image' }, routeId: 'gpt-image-2' }),
+        expect.objectContaining({ target: { kind: 'product-mode', productModelId: 'flovart:gpt-image-2', mode: 'image-to-image' }, routeId: 'gpt-image-2' }),
+      ]),
+    }));
+    expect(onUpdateApiKey).toHaveBeenCalledWith('video-key', expect.objectContaining({
+      routeMappings: expect.arrayContaining([
+        expect.objectContaining({ target: expect.objectContaining({ kind: 'product-mode', productModelId: 'flovart:seedance-2' }), routeId: 'doubao-seedance-2-0-260128' }),
+      ]),
+    }));
+  });
+
   it('adds a confirmed runtime route through the single mapping center', async () => {
     const onUpdateApiKey = vi.fn();
     const key: UserApiKey = {

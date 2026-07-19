@@ -12,6 +12,7 @@ import {
     resolveRouteIdByDocId,
     type RouteCapabilitySchema,
 } from '../services/runningHubRouteCatalog';
+import { getEffectiveReferenceLimits } from '../services/productModelCatalog';
 
 const CATALOG = getRouteCatalog();
 
@@ -35,6 +36,15 @@ function mediaFields(schema: RouteCapabilitySchema): Set<string> {
 }
 
 describe('Route Catalog — structural integrity', () => {
+    it('drives @ media limits for every verified product route and mode', () => {
+        for (const schema of CATALOG) {
+            const expected = schema.media.reduce((limits, spec) => ({ ...limits, [spec.kind]: limits[spec.kind] + spec.max }), { image: 0, video: 0, audio: 0 });
+            for (const mode of schema.modes) {
+                expect(getEffectiveReferenceLimits(schema.productModelId, mode, { provider: 'runningHub', routeId: schema.routeId }), `${schema.routeId} ${mode}`).toEqual(expected);
+            }
+        }
+    });
+
     it('contains exactly 16 routes', () => {
         expect(CATALOG).toHaveLength(16);
     });

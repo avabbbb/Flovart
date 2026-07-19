@@ -260,6 +260,36 @@ describe('workflow generation', () => {
     expect(executeMedia.mock.calls[0][0].references.map((reference: any) => reference.elementId)).toEqual(['image-2', 'image-1']);
   });
 
+  it('keeps all @ images allowed by the mapped RunningHub image-to-video route', async () => {
+    const source = project();
+    const target = source.nodes.find(node => node.id === 'config-1')!;
+    source.nodes.find(node => node.id === 'image-1')!.title = '图片1';
+    source.nodes.push(
+      { id: 'image-2', type: 'image', title: '图片2', position: { x: 0, y: 440 }, width: 300, height: 200, metadata: { href: 'https://cdn.example.com/2.png', mimeType: 'image/png' } },
+      { id: 'image-3', type: 'image', title: '图片3', position: { x: 0, y: 660 }, width: 300, height: 200, metadata: { href: 'https://cdn.example.com/3.png', mimeType: 'image/png' } },
+    );
+    source.connections.push(
+      { id: 'c2', fromNodeId: 'image-2', toNodeId: 'config-1' },
+      { id: 'c3', fromNodeId: 'image-3', toNodeId: 'config-1' },
+    );
+    target.metadata = {
+      prompt: '@图片1 @图片2 @图片3 作为连续镜头参考',
+      mentionedNodeIds: ['image-1', 'image-2', 'image-3'],
+      config: { mode: 'video', modelId: 'flovart:veo-3.1-fast', submode: 'image-to-video' },
+    };
+    const routeId = 'rhart-video-v3.1-fast/image-to-video';
+    const executeMedia = vi.fn().mockResolvedValue({ ok: true, elementId: 'config-1', capability: 'video', mediaUrl: 'https://output/video', mimeType: 'video/mp4' });
+    await runWorkflowGeneration(source, 'config-1', {
+      userApiKeys: [mappedMediaKey('video', 'flovart:veo-3.1-fast', routeId, 'runningHub')], executeMedia,
+      fetchMedia: vi.fn().mockResolvedValue(new Blob(['video'])), ingestMedia: vi.fn().mockResolvedValue({ type: 'video', storageKey: 'video', name: 'video.mp4', mimeType: 'video/mp4', bytes: 5 }), createVideoPoster: vi.fn().mockResolvedValue(null), onProjectChange: vi.fn(),
+    });
+    expect(executeMedia.mock.calls[0][0].references).toEqual([
+      expect.objectContaining({ elementId: 'image-1', slotRole: 'first_frame' }),
+      expect.objectContaining({ elementId: 'image-2', slotRole: 'reference_image' }),
+      expect.objectContaining({ elementId: 'image-3', slotRole: 'reference_image' }),
+    ]);
+  });
+
   it('ignores stale hidden referenceNodeIds when there is no visible connection or @mention', async () => {
     const source = project();
     source.nodes.push({ id: 'stale', type: 'image', title: '旧隐藏引用', position: { x: 0, y: 440 }, width: 120, height: 90, metadata: { href: 'https://cdn.example.com/stale.png', mimeType: 'image/png' } });
@@ -506,7 +536,10 @@ describe('workflow generation', () => {
       );
       source.nodes[2].metadata = {
         prompt: '让角色自然运动',
-        mentionedNodeIds: ['image-1', 'image-2', 'video-1', 'audio-1'],
+        mentionedNodeIds: submode === 'text-to-video' ? []
+          : submode === 'image-to-video' ? ['image-1']
+            : submode === 'first-last-frame' ? ['image-1', 'image-2']
+              : ['image-1', 'image-2', 'video-1', 'audio-1'],
         imageReferenceOrder: ['image-1', 'image-2', 'video-1', 'audio-1'],
         config: { mode: 'video', submode, modelId: 'flovart:seedance-2' },
       };

@@ -683,6 +683,21 @@ describe('aiGateway - generateImageWithProvider', () => {
         ]);
     });
 
+    it('blocks unsupported @ media at the unified ignition boundary before Provider emit', async () => {
+        globalThis.fetch = vi.fn();
+        const result = await executeUnifiedIgnition({
+            elementId: 'video-target',
+            prompt: '跟随 @配乐 的节奏',
+            productModelId: 'flovart:veo-3.1',
+            modelId: 'veo-3.1-generate-preview',
+            generationSubmode: 'reference-to-video',
+            apiKeyPayload: { id: 'google-video', provider: 'google', capabilities: ['video'], key: 'secret', createdAt: 0, updatedAt: 0 },
+            references: [{ type: 'audio', href: 'https://cdn.example.com/music.mp3', mimeType: 'audio/mpeg', slotRole: 'reference_audio', label: '配乐' }],
+        });
+        expect(result).toMatchObject({ ok: false, errorMessage: '当前 Provider 线路不接收 @音频 参考' });
+        expect(globalThis.fetch).not.toHaveBeenCalled();
+    });
+
     it('routes RunningHub standard image models through the native standard-model API', async () => {
         globalThis.fetch = vi.fn()
             .mockResolvedValueOnce(mockJsonResponse({
@@ -1009,6 +1024,7 @@ describe('aiGateway - generateImageWithProvider', () => {
             aspectRatio: '16:9',
             durationSec: 8,
             resolution: '720p',
+            generationSubmode: 'image-to-video',
             references: [
                 { href: 'https://cdn.example.com/input-1.png', mimeType: 'image/png', slotRole: 'first_frame' },
                 { href: 'https://cdn.example.com/input-2.png', mimeType: 'image/png' },

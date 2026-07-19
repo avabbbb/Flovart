@@ -92,6 +92,7 @@ export function WorkflowAgentPanel({ project, onClose, onProjectChange, onOnline
   const visibleStatus = mode === 'online' ? onlineStatus : status;
   const canSend = mode === 'online' ? Boolean(onOnlineTurn) : status === 'connected';
   const onlineSessions = useMemo(() => project.agentSessions || [], [project.agentSessions]);
+  const lastActivityRef = useRef<WorkflowAgentActivity | undefined>(undefined);
   useEffect(() => {
     const last = messages[messages.length - 1];
     const activity: WorkflowAgentActivity = confirmation
@@ -99,7 +100,10 @@ export function WorkflowAgentPanel({ project, onClose, onProjectChange, onOnline
       : sending ? 'running'
         : last?.role === 'error' ? 'error'
           : messages.length ? 'done' : 'idle';
-    onActivityChange?.(activity);
+    if (activity !== lastActivityRef.current) {
+      lastActivityRef.current = activity;
+      onActivityChange?.(activity);
+    }
   }, [confirmation, messages, onActivityChange, sending]);
 
   function addLog(type: string, value: unknown) {

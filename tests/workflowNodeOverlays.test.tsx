@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { createWorkflowNode } from '../components/workflow/constants';
 import { WorkflowNodeToolbar } from '../components/workflow/WorkflowNodeToolbar';
@@ -28,8 +29,51 @@ const klingProductKey: UserApiKey = {
   routeMappings: [{ target: { kind: 'product-mode', productModelId: 'flovart:kling-video-3', mode: 'text-to-video' as const }, routeId: 'kling-video-3.0', order: 0 }],
   createdAt: 1, updatedAt: 1,
 };
+const runningHubVeoKey: UserApiKey = {
+  id: 'runninghub-veo', provider: 'runningHub', capabilities: ['video'], key: 'secret',
+  customModels: ['rhart-video-v3.1-fast/start-end-to-video'],
+  routeMappings: [{ target: { kind: 'product-mode', productModelId: 'flovart:veo-3.1-fast', mode: 'first-last-frame' as const }, routeId: 'rhart-video-v3.1-fast/start-end-to-video', order: 0 }],
+  createdAt: 1, updatedAt: 1,
+};
+const googleVeoKey: UserApiKey = {
+  id: 'google-veo', provider: 'google', capabilities: ['video'], key: 'secret', customModels: ['veo-3.1-generate-preview'],
+  routeMappings: [{ target: { kind: 'product-mode', productModelId: 'flovart:veo-3.1', mode: 'reference-to-video' as const }, routeId: 'veo-3.1-generate-preview', order: 0 }],
+  createdAt: 1, updatedAt: 1,
+};
 
 describe('workflow node overlays', () => {
+  it('defaults a blank video node to its first mapped model and exposes ratio and duration', async () => {
+    const initialNode = createWorkflowNode('blank-video', 'video', { x: 0, y: 0 });
+    const Harness = () => {
+      const [currentNode, setCurrentNode] = useState(initialNode);
+      return <WorkflowNodePromptBar
+        node={currentNode}
+        nodes={[currentNode]}
+        t={t}
+        theme="light"
+        language="zho"
+        userApiKeys={[videoProductKey]}
+        dynamicModelOptions={{ text: [], image: [], video: ['flovart:seedance-2'] }}
+        onChange={patch => setCurrentNode(value => ({ ...value, metadata: { ...value.metadata, ...patch } }))}
+        onRun={vi.fn()}
+      />;
+    };
+
+    render(<Harness />);
+    await waitFor(() => expect(screen.getByText('Seedance 2.0')).toBeInTheDocument());
+    fireEvent.click(screen.getByTitle('生成参数'));
+    expect(screen.getByText('比例')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '16:9' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '4s' })).toBeInTheDocument();
+  });
+
+  it('keeps the parameter entry visible before a model is configured', () => {
+    const blankVideo = createWorkflowNode('unmapped-video', 'video', { x: 0, y: 0 });
+    render(<WorkflowNodePromptBar node={blankVideo} nodes={[blankVideo]} t={t} theme="light" language="zho" userApiKeys={[]} dynamicModelOptions={{ text: [], image: [], video: ['flovart:seedance-2'] }} onChange={vi.fn()} onRun={vi.fn()} />);
+    fireEvent.click(screen.getByTitle('生成参数'));
+    expect(screen.getByText('选择模型')).toBeInTheDocument();
+  });
+
   it('uses the shared toolbar shell and exposes only wired actions', () => {
     const onCopy = vi.fn();
     const onDelete = vi.fn();
@@ -114,6 +158,33 @@ describe('workflow node overlays', () => {
     expect(screen.getByText('分辨率')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '720p' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '5s' })).toBeInTheDocument();
+  });
+
+  it('shows only durations accepted by the final mapped video route', () => {
+    const videoNode = createWorkflowNode('veo-start-end', 'video', { x: 0, y: 0 }, {
+      prompt: '从首帧过渡到尾帧',
+      config: { mode: 'video', modelId: 'flovart:veo-3.1-fast', submode: 'first-last-frame', durationSec: 4, resolution: '720p' },
+    });
+    render(<WorkflowNodePromptBar node={videoNode} nodes={[videoNode]} t={t} theme="light" language="zho" userApiKeys={[runningHubVeoKey]} dynamicModelOptions={{ text: [], image: [], video: ['flovart:veo-3.1-fast'] }} onChange={vi.fn()} onRun={vi.fn()} />);
+    fireEvent.click(screen.getByTitle('生成参数'));
+    expect(screen.queryByRole('button', { name: '4s' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '6s' })).toBeNull();
+    expect(screen.getByRole('button', { name: '8s' })).toBeInTheDocument();
+  });
+
+  it('blocks an @ media type that the final Provider route cannot receive', () => {
+    const videoNode = createWorkflowNode('veo-reference', 'video', { x: 0, y: 0 }, {
+      prompt: '跟随 @配乐 的节奏', mentionedNodeIds: ['audio-ref'],
+      config: { mode: 'video', modelId: 'flovart:veo-3.1', submode: 'reference-to-video', durationSec: 8, resolution: '720p' },
+    });
+    const audioNode = createWorkflowNode('audio-ref', 'audio', { x: 0, y: 240 }, { href: 'https://cdn.example.com/music.mp3', mimeType: 'audio/mpeg' });
+    audioNode.title = '配乐';
+    render(<WorkflowNodePromptBar node={videoNode} nodes={[videoNode, audioNode]} connections={[{ id: 'audio-link', fromNodeId: 'audio-ref', toNodeId: 'veo-reference' }]} t={t} theme="light" language="zho" userApiKeys={[googleVeoKey]} dynamicModelOptions={{ text: [], image: [], video: ['flovart:veo-3.1'] }} onChange={vi.fn()} onRun={vi.fn()} />);
+    const generate = screen.getByRole('button', { name: 'promptBar.generate' });
+    expect(generate).toBeDisabled();
+    expect(generate).toHaveAttribute('title', '当前 Provider 线路不接收 @音频 参考');
+    fireEvent.click(screen.getByTitle('视频生成方式'));
+    expect(screen.getByText('当前 Provider 线路不接收 @音频 参考')).toBeInTheDocument();
   });
 
   it('disables modes unavailable on the mapped video Provider route', () => {

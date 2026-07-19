@@ -26,6 +26,9 @@ import { modelRefLabel, modelRefModelId, modelRefProvider } from '../utils/model
 import {
     getProductModel,
     getProductModels,
+    getEffectiveProductModelCapabilities,
+    getEffectiveReferenceLimits,
+    explainReferenceCompatibility,
     getRoutedVideoModes,
     explainUnsupportedVideoMode,
     isProductModelConfigured,
@@ -446,13 +449,11 @@ export const PromptBar: React.FC<PromptBarProps> = ({
         : generationMode === 'text'
             ? resolveRouteMapping({ kind: 'runtime-capability', capability: 'agent-text' }, userApiKeys)
             : null;
+    const activeRouteContext = useMemo(() => ({ provider: activeRoute?.key.provider, routeId: activeRoute?.routeId }), [activeRoute?.key.provider, activeRoute?.routeId]);
     const activeCapabilities = useMemo(() => {
         if (!activeProductModel) return undefined;
-        const capabilities = activeProductModel.capabilities;
-        return activeProductModel.capability === 'video' && ['keling', 'minimax', 'custom', 'openai_compatible'].includes(activeRoute?.key.provider || '')
-            ? { ...capabilities, audioControl: 'none' as const }
-            : capabilities;
-    }, [activeProductModel, activeRoute]);
+        return getEffectiveProductModelCapabilities(activeProductModel.id, activeSubmode, activeRouteContext);
+    }, [activeProductModel, activeRouteContext, activeSubmode]);
     /** 图片/视频产品模型按产品家族分组：左侧选家族，右侧渐进披露具体版本。 */
     const productModels = useMemo(
         () => generationMode === 'text' ? [] : getProductModels(videoLikeMode ? 'video' : 'image'),
@@ -520,11 +521,17 @@ export const PromptBar: React.FC<PromptBarProps> = ({
         : null;
     const mentionedReferences = imageReferenceChips?.filter(reference => reference.mentioned) || [];
     const mentionedImageCount = mentionedReferences.filter(reference => reference.elementType === 'image').length;
+    const effectiveReferenceLimits = activeProductModel
+        ? getEffectiveReferenceLimits(activeProductModel.id, activeSubmode, activeRouteContext)
+        : { image: 0, video: 0, audio: 0 };
+    const referenceCompatibilityIssue = generationMode === 'video'
+        ? explainReferenceCompatibility(activeProductModel?.id, activeSubmode, mentionedReferences.map(reference => reference.elementType), activeRouteContext)
+        : null;
     const videoInputRequirement = generationMode !== 'video' ? null
         : activeSubmode === 'image-to-video' && mentionedImageCount < 1 ? '图生视频需要添加 1 张图片'
             : activeSubmode === 'first-last-frame' && mentionedImageCount < 2 ? '首尾帧需要按顺序添加 2 张图片'
                 : activeSubmode === 'reference-to-video' && mentionedReferences.length < 1 ? '全能参考需要添加至少 1 个素材'
-                    : null;
+                    : referenceCompatibilityIssue;
     const paramDisabledReason = useCallback((kind: 'resolution' | 'aspectRatio' | 'durationSec', value: string | number): string | null => {
         if (!activeProductModel) return '请先选择模型';
         const base: {
@@ -536,9 +543,9 @@ export const PromptBar: React.FC<PromptBarProps> = ({
         if (kind === 'aspectRatio') base.aspectRatio = value as VideoAspectRatio; else base.aspectRatio = activeRatio;
         if (kind === 'resolution') base.resolution = String(value); else base.resolution = videoResolution;
         if (kind === 'durationSec') base.durationSec = Number(value); else base.durationSec = videoDurationSec;
-        const probe = sanitizeProductGenerationParams(activeProductModel.id, base);
+        const probe = sanitizeProductGenerationParams(activeProductModel.id, base, activeRouteContext);
         return (probe[kind] as string | number) === value ? null : '当前模式下此选项不可用';
-    }, [activeProductModel, activeRatio, activeSubmode, videoDurationSec, videoResolution]);
+    }, [activeProductModel, activeRatio, activeRouteContext, activeSubmode, videoDurationSec, videoResolution]);
     const changeActiveModel = (model: string) => generationMode === 'text' ? onTextModelChange?.(model) : videoLikeMode ? onVideoModelChange?.(model) : onImageModelChange?.(model);
     const promptCharCount = prompt.trim().length;
     const missingMediaModel = generationMode !== 'text' && !activeProductModel;
@@ -644,14 +651,14 @@ export const PromptBar: React.FC<PromptBarProps> = ({
             aspectRatio: activeRatio,
             resolution: videoResolution,
             durationSec: videoDurationSec,
-        });
+        }, activeRouteContext);
         if (normalized.resolution && normalized.resolution !== videoResolution) {
             onVideoResolutionChange?.(normalized.resolution);
         }
         if (generationMode === 'video' && normalized.durationSec !== undefined && normalized.durationSec !== videoDurationSec) {
             onVideoDurationSecChange?.(normalized.durationSec);
         }
-    }, [activeCapabilities, activeProductModel, activeRatio, activeSubmode, generationMode, onGenerationSubmodeChange, onVideoDurationSecChange, onVideoResolutionChange, routedVideoModes, setActiveRatio, videoDurationSec, videoResolution]);
+    }, [activeCapabilities, activeProductModel, activeRatio, activeRouteContext, activeSubmode, generationMode, onGenerationSubmodeChange, onVideoDurationSecChange, onVideoResolutionChange, routedVideoModes, setActiveRatio, videoDurationSec, videoResolution]);
 
     const prevFocusSignalRef = useRef<number | undefined>(undefined);
     useEffect(() => {
@@ -839,7 +846,9 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                 className="m-0 flex list-none items-center p-0 pr-2"
                                 data-expanded={referencesExpanded}
                               >
-                                {imageReferenceChips.map((chip, index) => (
+                                {imageReferenceChips.map((chip, index) => {
+                                    const routeRejectsChip = generationMode === 'video' && chip.mentioned && effectiveReferenceLimits[chip.elementType] === 0;
+                                    return (
                                     <Reorder.Item
                                         key={chip.id}
                                         value={chip}
@@ -854,7 +863,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                             zIndex: index + 1,
                                             transform: referencesExpanded || imageReferenceChips.length === 1 ? 'rotate(0deg)' : `rotate(${index % 2 ? 5 : -5}deg)`,
                                         }}
-                                        title={chip.mentioned ? `${chip.label} · 已加入 Provider 参考` : `${chip.label} · 已连线，输入 @${chip.label} 可加入生成参考`}
+                                        title={routeRejectsChip ? `${chip.label} · 当前 Provider 线路不接收此类参考` : chip.mentioned ? `${chip.label} · 已加入 Provider 参考` : `${chip.label} · 已连线，输入 @${chip.label} 可加入生成参考`}
                                         whileDrag={{ scale: 1.06, boxShadow: '0 6px 18px rgba(99,102,241,0.18)' }}
                                     >
                                         <div className="h-full w-full overflow-hidden rounded-[9px]">
@@ -875,7 +884,8 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                             </button>
                                         )}
                                     </Reorder.Item>
-                                ))}
+                                    );
+                                })}
                               </Reorder.Group>
                             )}
                         </div>
@@ -1364,10 +1374,9 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                 </button>
                             )}
 
-                            {activeProductModel && (
-                                <button type="button" aria-haspopup="dialog" aria-expanded={expandedPanel === 'parameters'} onClick={() => setExpandedPanel(prev => (prev === 'parameters' ? null : 'parameters'))} className={`${triggerClass} shrink-0 ${expandedPanel === 'parameters' ? activeTriggerClass : ''}`} title="生成参数">
+                            {generationMode !== 'text' && (
+                                <button type="button" aria-haspopup="dialog" aria-expanded={activeProductModel ? expandedPanel === 'parameters' : expandedPanel === 'model'} onClick={() => activeProductModel ? setExpandedPanel(prev => (prev === 'parameters' ? null : 'parameters')) : setExpandedPanel('model')} className={`${triggerClass} shrink-0 ${(activeProductModel ? expandedPanel === 'parameters' : expandedPanel === 'model') ? activeTriggerClass : ''}`} title="生成参数">
                                     <span className="max-w-[220px] truncate">{paramSummary || '参数'}</span>
-                                    
                                 </button>
                             )}
 

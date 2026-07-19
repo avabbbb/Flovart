@@ -6,7 +6,7 @@ import type {
   UserApiKey,
 } from '../types';
 import type { VideoAspectRatio } from './aiGateway';
-import { getRouteCatalog } from './runningHubRouteCatalog';
+import { getRouteCatalog, getRouteDurations, getRouteSchema } from './runningHubRouteCatalog';
 import { PRODUCT_MODEL_ENTRIES } from '../tools/flovart/product-models.js';
 import { resolveRouteMapping } from './routeMapping';
 
@@ -39,6 +39,17 @@ export type ProductModelDefinition = {
   status: 'available' | 'mapping-required';
   description: string;
   capabilities: ProductModelCapability;
+};
+
+export type ProductRouteContext = {
+  provider?: AIProvider;
+  routeId?: string;
+};
+
+export type ProductReferenceLimits = {
+  image: number;
+  video: number;
+  audio: number;
 };
 
 const IMAGE_RATIOS: VideoAspectRatio[] = ['1:1', '3:2', '2:3', '16:9', '9:16', '4:3', '3:4'];
@@ -155,6 +166,103 @@ export function getRoutedVideoModes(productModelId: string, provider?: AIProvide
   return product.capabilities.modes.filter(mode => supported.includes(mode));
 }
 
+const DIRECT_VIDEO_RATIOS: Partial<Record<AIProvider, VideoAspectRatio[]>> = {
+  google: ['16:9', '9:16'],
+  minimax: ['16:9', '9:16', '1:1'],
+  keling: ['16:9', '9:16', '1:1'],
+  xai: ['1:1', '16:9', '9:16', '4:3', '3:4', '2:3', '3:2'],
+};
+
+function mappedRouteSchema(productModelId: string, mode: ProductModelMode, context?: ProductRouteContext) {
+  if (context?.provider !== 'runningHub' || !context.routeId) return undefined;
+  const schema = getRouteSchema(context.routeId);
+  return schema?.productModelId === productModelId && schema.modes.includes(mode) ? schema : undefined;
+}
+
+/** PromptBar 与提交校验共同使用的最终线路能力，避免产品卡能力覆盖 Provider 的真实限制。 */
+export function getEffectiveProductModelCapabilities(
+  productModelId: string,
+  mode: ProductModelMode,
+  context?: ProductRouteContext,
+): ProductModelCapability | undefined {
+  const product = getProductModel(productModelId);
+  if (!product) return undefined;
+  const base = product.capabilities;
+  const schema = mappedRouteSchema(product.id, mode, context);
+  if (schema) {
+    const routeRatios = schema.aspectRatioField === null
+      ? []
+      : (schema.aspectRatioValues?.filter((value): value is VideoAspectRatio => base.aspectRatios.includes(value as VideoAspectRatio)) || base.aspectRatios);
+    const routeDurations = getRouteDurations(schema.routeId);
+    const routeFields = new Set(schema.params.map(param => param.field));
+    return {
+      ...base,
+      aspectRatios: [...routeRatios],
+      durations: routeDurations?.length ? routeDurations : [...base.durations],
+      audioControl: base.audioControl === 'always' ? 'always' : routeFields.has('generateAudio') ? base.audioControl : 'none',
+      supportsWebSearch: base.supportsWebSearch && routeFields.has('webSearch'),
+      supportsRealPersonCheck: base.supportsRealPersonCheck && routeFields.has('realPersonMode'),
+      supportsSeed: base.supportsSeed && routeFields.has('seed'),
+    };
+  }
+  const providerRatios = product.capability === 'video' && context?.provider ? DIRECT_VIDEO_RATIOS[context.provider] : undefined;
+  return {
+    ...base,
+    aspectRatios: providerRatios ? base.aspectRatios.filter(ratio => providerRatios.includes(ratio)) : [...base.aspectRatios],
+    durations: product.id.startsWith('flovart:veo-3.1') && (mode === 'reference-to-video' || mode === 'video-extension') ? [8] : [...base.durations],
+    audioControl: product.capability === 'video' && ['keling', 'minimax', 'custom', 'openai_compatible'].includes(context?.provider || '') ? 'none' : base.audioControl,
+  };
+}
+
+/** 线路实际可接收的 @ 媒体数量；0 表示该媒体类型不得进入 Provider payload。 */
+export function getEffectiveReferenceLimits(
+  productModelId: string,
+  mode: ProductModelMode,
+  context?: ProductRouteContext,
+): ProductReferenceLimits {
+  const empty = { image: 0, video: 0, audio: 0 };
+  const product = getProductModel(productModelId);
+  if (!product) return empty;
+  const schema = mappedRouteSchema(product.id, mode, context);
+  if (schema) {
+    return schema.media.reduce<ProductReferenceLimits>((limits, spec) => ({
+      ...limits,
+      [spec.kind]: limits[spec.kind] + spec.max,
+    }), empty);
+  }
+  if (product.capability === 'image') {
+    return mode === 'image-to-image' ? { ...empty, image: product.capabilities.maxImageReferences } : empty;
+  }
+  if (mode === 'image-to-video') return { ...empty, image: 1 };
+  if (mode === 'first-last-frame') return { ...empty, image: 2 };
+  if (mode === 'video-extension') return { ...empty, video: 1 };
+  if (mode !== 'reference-to-video') return empty;
+  if (context?.provider === 'google') return { ...empty, image: Math.min(3, product.capabilities.maxImageReferences) };
+  return {
+    image: product.capabilities.maxImageReferences,
+    video: product.capabilities.maxVideoReferences,
+    audio: product.capabilities.maxAudioReferences,
+  };
+}
+
+export function explainReferenceCompatibility(
+  productModelId: string | undefined,
+  mode: ProductModelMode,
+  referenceKinds: Array<'image' | 'video' | 'audio'>,
+  context?: ProductRouteContext,
+): string | null {
+  if (!productModelId) return null;
+  const limits = getEffectiveReferenceLimits(productModelId, mode, context);
+  for (const kind of ['image', 'video', 'audio'] as const) {
+    const count = referenceKinds.filter(value => value === kind).length;
+    const max = limits[kind];
+    if (count === 0 || count <= max) continue;
+    const label = kind === 'image' ? '图片' : kind === 'video' ? '视频' : '音频';
+    return max === 0 ? `当前 Provider 线路不接收 @${label} 参考` : `当前 Provider 线路最多接收 ${max} 个 @${label} 参考`;
+  }
+  return null;
+}
+
 /** 各模式的不可用原因，用于 PromptBar 灰显 tooltip。 */
 export function explainUnsupportedVideoMode(productModelId: string, mode: ProductModelMode): string | null {
   const product = getProductModel(productModelId);
@@ -191,6 +299,7 @@ const RUNNINGHUB_ROUTE_SEED: RunningHubRouteSeed[] = getRouteCatalog().flatMap(s
 );
 
 export function suggestProductRouteMappings(key: UserApiKey): RouteMappingBinding[] {
+  if (keyModels(key).length === 0) return [];
   if (key.provider === 'runningHub') {
     const filter = keyModels(key).map(normalize);
     const filterSet = filter.length ? new Set(filter) : null;
@@ -200,11 +309,12 @@ export function suggestProductRouteMappings(key: UserApiKey): RouteMappingBindin
       .map(seed => ({ target: { kind: 'product-mode', productModelId: seed.productModelId, mode: seed.mode }, routeId: seed.routeId, order: 0 }));
   }
   const candidates = keyModels(key);
-  return PRODUCT_MODEL_CATALOG.flatMap(model => {
+  return PRODUCT_MODEL_CATALOG.filter(model => keySupportsProduct(key, model)).flatMap(model => {
     const ids = [...model.officialModelIds, ...model.aliases].map(normalize);
     const routeId = candidates.find(candidate => ids.includes(normalize(candidate)));
     if (!routeId) return [];
-    return model.capabilities.modes.map(mode => ({ target: { kind: 'product-mode', productModelId: model.id, mode }, routeId, order: 0 }));
+    const modes = model.capability === 'video' ? getRoutedVideoModes(model.id, key.provider, routeId) : model.capabilities.modes;
+    return modes.map(mode => ({ target: { kind: 'product-mode', productModelId: model.id, mode }, routeId, order: 0 }));
   });
 }
 
@@ -251,10 +361,11 @@ export function sanitizeProductGenerationParams(productModelId: string | undefin
   webSearch?: boolean;
   realPersonCheck?: boolean;
   referenceCount?: number;
-}) {
+}, context?: ProductRouteContext) {
   const model = getProductModel(productModelId);
   if (!model) return input;
-  const capability = model.capabilities;
+  const requestedMode = input.mode && model.capabilities.modes.includes(input.mode) ? input.mode : model.capabilities.modes[0];
+  const capability = getEffectiveProductModelCapabilities(model.id, requestedMode, context) || model.capabilities;
   const mode = input.mode === 'video-extension' && model.id.startsWith('flovart:veo-3.1')
     ? input.mode
     : input.mode && capability.modes.includes(input.mode) ? input.mode : capability.modes[0];

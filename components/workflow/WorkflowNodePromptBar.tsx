@@ -4,6 +4,7 @@ import type { AssetFolder, AssetLibrary, UserApiKey, GenerationMode, PromptEnhan
 import { PromptBar } from '../PromptBar';
 import type { AssetSuggestion } from '../MentionList';
 import type { ReferencePickerWorkflowItem } from '../studio/AssetReferencePicker';
+import { resolveProductModelRoute } from '../../services/productModelCatalog';
 import {
   applyImageReferenceOrder,
   filterWorkflowInputIds,
@@ -62,6 +63,13 @@ export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme,
   const [libraryOpen, setLibraryOpen] = useState(false);
   const config = node.metadata.config || { mode: node.type === 'text' ? 'text' : node.type === 'video' ? 'video' : 'image' };
   const generationMode = modeFor(node, config);
+  const productMode = config.submode || (generationMode === 'video' ? 'text-to-video' : 'text-to-image');
+  const availableProductModelIds = generationMode === 'video'
+    ? dynamicModelOptions?.video || []
+    : dynamicModelOptions?.image || [];
+  const defaultMappedModelId = generationMode === 'text'
+    ? undefined
+    : availableProductModelIds.find(modelId => Boolean(resolveProductModelRoute(modelId, productMode, userApiKeys)));
   const mentionItems = toWorkflowMentionItems(getWorkflowInputNodes(node, nodes, connections));
     const referenceItems: ReferencePickerWorkflowItem[] = nodes.filter(item => item.id !== node.id && item.isVisible !== false && (item.type === 'image' || item.type === 'video')).map(item => ({
     id: item.id,
@@ -97,6 +105,13 @@ export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme,
   };
 
   const patchConfig = (patch: Partial<WorkflowGenerationConfig>) => onChange({ config: { ...config, ...patch } });
+
+  useEffect(() => {
+    if (config.modelId || !defaultMappedModelId) return;
+    patchConfig({ modelId: defaultMappedModelId });
+  // The model is filled once; subsequent user selection remains authoritative.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [config.modelId, defaultMappedModelId]);
   const keepConnectedMentions = (plainText: string, ids: string[]) => filterWorkflowInputIds(resolveWorkflowMentionIds(plainText, ids, mentionItems), node.id, connections);
   const translatedPrompts = t('quickPrompts');
   const prompts = Array.isArray(translatedPrompts) ? translatedPrompts.filter((item): item is { name: string; value: string } => Boolean(item) && typeof item.name === 'string' && typeof item.value === 'string') : [];

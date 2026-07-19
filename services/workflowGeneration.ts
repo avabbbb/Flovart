@@ -9,7 +9,7 @@ import type { ProductModelMode, UserApiKey } from '../types';
 import { executeUnifiedIgnition, generateTextWithProvider, SeedanceSubmissionUnknownError, type UnifiedIgnitionInput, type UnifiedIgnitionResult } from './aiGateway';
 import { getGenerationCapability } from './generationCapabilities';
 import { runPreflight } from './promptPreflight';
-import { getProductModel, getRoutedVideoModes } from './productModelCatalog';
+import { explainReferenceCompatibility, getEffectiveReferenceLimits, getProductModel, getRoutedVideoModes } from './productModelCatalog';
 import { usePromptHistoryStore } from '../stores/usePromptHistoryStore';
 import { refundApiUsage, reserveApiUsage, updateApiUsage } from '../utils/usageMonitor';
 import { resolveRouteMappingForSubmit, type RouteFallbackResolution } from './routeMapping';
@@ -219,8 +219,16 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
 
     const capability = getGenerationCapability(runtime.userApiKeys, mode, selectionRef);
     const mediaSources = [...new Map(related.filter(node => node.type === 'image' || node.type === 'video' || node.type === 'audio').map(node => [node.id, node])).values()];
+    const routeReferenceLimits = mode === 'video' && productModel && config.submode
+      ? getEffectiveReferenceLimits(productModel.id, productMode, { provider: resolved.key.provider, routeId: resolved.routeId })
+      : null;
+    if (routeReferenceLimits) {
+      const issue = explainReferenceCompatibility(productModel!.id, productMode, mediaSources.map(node => node.type as 'image' | 'video' | 'audio'), { provider: resolved.key.provider, routeId: resolved.routeId });
+      if (issue) throw new Error(issue);
+    }
     const autoReferences = (await Promise.all(mediaSources.map(async node => {
-      if (!capability.supportsReferences.includes(node.type as 'image' | 'video' | 'audio')) return null;
+      const kind = node.type as 'image' | 'video' | 'audio';
+      if (routeReferenceLimits ? routeReferenceLimits[kind] === 0 : !capability.supportsReferences.includes(kind)) return null;
       const href = await resolveMediaHref(node, runtime, temporaryUrls);
       return href ? { type: node.type as 'image' | 'video' | 'audio', href, mimeType: node.metadata.mimeType, label: node.title, sourceName: node.title, elementId: node.id, slotRole: node.type === 'video' ? 'reference_video' as const : node.type === 'audio' ? 'reference_audio' as const : 'reference_image' as const } : null;
     }))).filter(Boolean) as NonNullable<UnifiedIgnitionInput['references']>;
@@ -253,7 +261,7 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
       if (config.submode === 'reference-to-video' && references.length < 1) throw new Error('全能参考至少需要引用 1 个媒体节点。');
       if (config.submode === 'first-last-frame' && imageReferences.length < 2) throw new Error('首尾帧模式需要按顺序引用 2 张图片。');
       if (config.submode === 'text-to-video') references = [];
-      if (config.submode === 'image-to-video') references = [{ ...imageReferences[0], slotRole: 'first_frame' }];
+      if (config.submode === 'image-to-video') references = imageReferences.map((reference, index) => ({ ...reference, slotRole: index === 0 ? 'first_frame' : 'reference_image' }));
       if (config.submode === 'first-last-frame') references = [
         { ...imageReferences[0], slotRole: 'first_frame' },
         { ...imageReferences[1], slotRole: 'last_frame' },

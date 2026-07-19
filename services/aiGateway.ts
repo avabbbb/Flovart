@@ -3,7 +3,7 @@ import { editImage, enhancePromptWithGemini, generateImageFromText, generateVide
 import { fetchModelsForProvider, type FetchModelsResult } from './modelFetcher';
 import { normalizeProviderBaseUrl } from './baseUrl';
 import { assertRunningHubModelEndpoint } from './runningHubService';
-import { sanitizeProductGenerationParams } from './productModelCatalog';
+import { explainReferenceCompatibility, sanitizeProductGenerationParams } from './productModelCatalog';
 import { getRouteSchema, getRouteDurations, type RouteCapabilitySchema, type RouteMediaSpec } from './runningHubRouteCatalog';
 
 type ImageInput = { href: string; mimeType: string };
@@ -437,7 +437,7 @@ function withSupportedParams(
  * If a provider is not listed, all 6 ratios are assumed to pass through as-is (custom/openrouter).
  */
 export const PROVIDER_VIDEO_RATIOS: Partial<Record<AIProvider, VideoAspectRatio[]>> = {
-    google:     ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9'], // Veo accepts all 6
+    google:     ['16:9', '9:16'],                               // Veo 3.1 documented ratios
     minimax:    ['16:9', '9:16', '1:1'],                        // MiniMax only supports 16:9/9:16/1:1
     keling:     ['16:9', '9:16', '1:1'],                        // Kling AI: 16:9/9:16/1:1
     volcengine: SEEDANCE_RATIOS,                                // Seedance 2.0
@@ -806,12 +806,16 @@ function multimodalSlotsFromLegacyReferences(references: VideoImage[] = []): Mul
     }));
 }
 
-function adaptVideoSlotsForMode(slots: MultimodalSlot[], mode?: ProductModelMode, provider?: AIProvider): MultimodalSlot[] {
+function adaptVideoSlotsForMode(slots: MultimodalSlot[], mode?: ProductModelMode, provider?: AIProvider, routeId?: string): MultimodalSlot[] {
     if (!mode) return slots;
     const images = slots.filter(slot => slot.kind === 'image');
     if (mode === 'text-to-video') return [];
     if (mode === 'image-to-video') {
         if (!images[0]) throw new Error('图生视频至少需要 1 张图片。');
+        const routeImageSpec = provider === 'runningHub'
+            ? getRouteSchema(routeId || '')?.media.find(spec => spec.kind === 'image' && spec.mapping === 'all_references')
+            : undefined;
+        if (routeImageSpec) return images.slice(0, routeImageSpec.max).map((image, index) => ({ ...image, role: index === 0 ? 'first_frame' : 'reference_image' }));
         return [{ ...images[0], role: 'first_frame' }];
     }
     if (mode === 'first-last-frame') {
@@ -3112,10 +3116,13 @@ export async function generateVideoWithProvider(
     const provider = resolveGenerationProvider(model, key);
     const onProgress = options?.onProgress || (() => {});
     const aspectRatio = options?.aspectRatio || '16:9';
+    const runningHubEndpoint = provider === 'runningHub'
+        ? assertRunningHubModelEndpoint(mapProviderModel(model, key) || key?.defaultModel || model)
+        : undefined;
     const legacyReferences = options?.references ?? [];
     const hasExplicitSlots = !!options?.slots?.length;
     const rawSlots = hasExplicitSlots ? options.slots! : multimodalSlotsFromLegacyReferences(legacyReferences);
-    const multimodalSlots = adaptVideoSlotsForMode(rawSlots, options?.generationSubmode, provider);
+    const multimodalSlots = adaptVideoSlotsForMode(rawSlots, options?.generationSubmode, provider, runningHubEndpoint);
     const references: VideoImage[] = multimodalSlots.filter(slot => slot.kind === 'image').map(slot => ({
         href: slot.href,
         mimeType: slot.mimeType,
@@ -3135,7 +3142,7 @@ export async function generateVideoWithProvider(
     if (provider === 'runningHub') {
         const apiKey = requireApiKey(provider, key);
         const baseUrl = getBaseUrl(provider, key);
-        const modelEndpoint = assertRunningHubModelEndpoint(mapProviderModel(model, key) || key?.defaultModel || model);
+        const modelEndpoint = runningHubEndpoint!;
         const allImageRefs = references;
         const uploadOptions = { baseUrl, signal: options?.signal };
         const runningHubRefs = await prepareRunningHubReferences(apiKey, allImageRefs, uploadOptions);
@@ -3547,7 +3554,14 @@ export async function executeUnifiedIgnition(input: UnifiedIgnitionInput): Promi
             webSearch: input.webSearch,
             realPersonCheck: input.realPersonCheck,
             referenceCount: input.references?.length || 0,
-        });
+        }, { provider: input.apiKeyPayload?.provider, routeId: input.modelId });
+        if (capability === 'video') {
+            const referenceKinds = (input.references || [])
+                .filter((reference): reference is IgnitionReference & { type: 'image' | 'video' | 'audio' } => reference.type === 'image' || reference.type === 'video' || reference.type === 'audio')
+                .map(reference => reference.type);
+            const issue = explainReferenceCompatibility(input.productModelId, params.mode as ProductModelMode, referenceKinds, { provider: input.apiKeyPayload?.provider, routeId: input.modelId });
+            if (issue) throw new Error(issue);
+        }
         const effectivePrompt = buildPromptWithReferenceBindings(prompt, input.references);
         if (capability === 'video') {
             const videoRefs = getImageReferencesForIgnition(input.references);

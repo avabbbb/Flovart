@@ -11,7 +11,7 @@ import {
 import { formatCost, type KeyUsageSummary } from '../utils/usageMonitor';
 import { fetchModelsForProvider, type FetchedModel } from '../services/modelFetcher';
 import { normalizeProviderBaseUrl } from '../services/baseUrl';
-import { getProductModel, getProductModels } from '../services/productModelCatalog';
+import { getProductModel, getProductModels, suggestProductRouteMappings } from '../services/productModelCatalog';
 
 interface SettingsPanelProps {
     isOpen: boolean;
@@ -93,6 +93,13 @@ function RouteMappingEditor({ userApiKeys, onUpdateApiKey }: {
     const [routeChoice, setRouteChoice] = React.useState('');
     const product = getProductModel(productModelId);
 
+    const detectedSuggestions = React.useMemo(() => userApiKeys.flatMap(key => {
+        const existing = key.routeMappings || [];
+        return suggestProductRouteMappings(key)
+            .filter(suggestion => !existing.some(mapping => routeTargetKey(mapping.target) === routeTargetKey(suggestion.target) && mapping.routeId === suggestion.routeId))
+            .map(suggestion => ({ key, suggestion }));
+    }), [userApiKeys]);
+
     const rowsFor = (target: RouteMappingTarget) => userApiKeys.flatMap(key => (key.routeMappings || [])
         .map((mapping, index) => ({ key, mapping, index })))
         .filter(row => routeTargetKey(row.mapping.target) === routeTargetKey(target))
@@ -139,6 +146,24 @@ function RouteMappingEditor({ userApiKeys, onUpdateApiKey }: {
         nextByKey.forEach((routeMappings, keyId) => onUpdateApiKey(keyId, { routeMappings }));
     };
 
+    const applyDetectedSuggestions = () => {
+        const nextByKey = new Map<string, RouteMappingBinding[]>();
+        const nextOrderByTarget = new Map<string, number>();
+        userApiKeys.flatMap(key => key.routeMappings || []).forEach(mapping => {
+            const targetKey = routeTargetKey(mapping.target);
+            nextOrderByTarget.set(targetKey, Math.max(nextOrderByTarget.get(targetKey) ?? -1, mapping.order));
+        });
+        detectedSuggestions.forEach(({ key, suggestion }) => {
+            const mappings = nextByKey.get(key.id) || [...(key.routeMappings || [])];
+            const targetKey = routeTargetKey(suggestion.target);
+            const order = (nextOrderByTarget.get(targetKey) ?? -1) + 1;
+            nextOrderByTarget.set(targetKey, order);
+            mappings.push({ ...suggestion, order });
+            nextByKey.set(key.id, mappings);
+        });
+        nextByKey.forEach((routeMappings, keyId) => onUpdateApiKey(keyId, { routeMappings }));
+    };
+
     const productTargets = Array.from(new Map(userApiKeys.flatMap(key => key.routeMappings || [])
         .filter((mapping): mapping is RouteMappingBinding & { target: Extract<RouteMappingTarget, { kind: 'product-mode' }> } => mapping.target.kind === 'product-mode')
         .map(mapping => [routeTargetKey(mapping.target), mapping.target])).values());
@@ -174,11 +199,35 @@ function RouteMappingEditor({ userApiKeys, onUpdateApiKey }: {
     };
 
     const allProducts = [...getProductModels('image'), ...getProductModels('video')];
-    return <section className="space-y-3">
+    const renderProductSection = (capability: 'image' | 'video', title: string, detail: string) => {
+        const targets = productTargets.filter(target => getProductModel(target.productModelId)?.capability === capability);
+        return <div className="space-y-2">
+            <div><div className="text-sm font-extrabold text-[var(--isl-ink)]">{title}</div><div className="mt-0.5 text-xs text-[var(--isl-ink-soft)]">{detail}</div></div>
+            {targets.length > 0 ? targets.map(target => {
+                const model = getProductModel(target.productModelId);
+                return renderTarget(target, `${model?.name || target.productModelId} · ${PRODUCT_MODE_LABELS[target.mode]}`, '媒体节点明确选择产品模型与生成模式后使用');
+            }) : <div className="rounded-2xl border border-dashed border-[var(--isl-border)] px-3 py-4 text-xs text-[var(--isl-ink-soft)]">尚未应用{title}映射；检测到的线路会显示在上方建议中。</div>}
+        </div>;
+    };
+    return <section className="space-y-3" data-testid="model-mapping-sections">
         <div><div className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--isl-ink-ghost)]">模型映射</div><p className="mb-0 mt-1 text-xs leading-5 text-[var(--isl-ink-soft)]">先选择 Flovart 的产品模型或文本能力，再绑定 Provider 线路。这里是唯一选路来源。</p></div>
-        <div className="space-y-2">{RUNTIME_TARGETS.map(item => renderTarget({ kind: 'runtime-capability', capability: item.capability }, item.label, item.detail))}</div>
+        {detectedSuggestions.length > 0 && <div className="rounded-2xl border border-[var(--isl-mint)] bg-[var(--isl-mint-bg)] p-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+                <div><div className="text-sm font-extrabold text-[var(--isl-mint-deep)]">检测到 {detectedSuggestions.length} 条媒体映射建议</div><div className="mt-1 text-xs text-[var(--isl-ink-soft)]">依据 API Key 实际返回的模型 ID 匹配；确认后才会写入，不会静默改动线路。</div></div>
+                <button type="button" onClick={applyDetectedSuggestions} className="isl-chip isl-chip--active h-9 px-3 text-xs" aria-label="应用全部建议">应用全部建议</button>
+            </div>
+            <div className="mt-2 grid gap-1 md:grid-cols-2">
+                {detectedSuggestions.map(({ key, suggestion }) => {
+                    const target = suggestion.target;
+                    const model = target.kind === 'product-mode' ? getProductModel(target.productModelId) : undefined;
+                    return <div key={`${key.id}:${routeTargetKey(target)}:${suggestion.routeId}`} className="truncate rounded-lg bg-[var(--isl-surface)] px-2.5 py-1.5 text-[11px] text-[var(--isl-ink)]">{model?.name || '媒体模型'} · {target.kind === 'product-mode' ? PRODUCT_MODE_LABELS[target.mode] : ''} → {suggestion.routeId}</div>;
+                })}
+            </div>
+        </div>}
+        {renderProductSection('image', '图像模型', '优先配置文生图与图生图线路。')}
+        {renderProductSection('video', '视频模型', '按生成方式绑定视频线路，PromptBar 参数将服从这里的最终线路。')}
         <div className="rounded-2xl border border-[var(--isl-border)] bg-[var(--isl-surface-2)] p-3">
-            <div className="mb-2 text-sm font-bold text-[var(--isl-ink)]">新增媒体映射</div>
+            <div className="mb-2 text-sm font-bold text-[var(--isl-ink)]">手动添加媒体映射</div>
             <div className="grid gap-2 md:grid-cols-[1.2fr_1fr_1.6fr_auto]">
                 <select aria-label="产品模型" value={productModelId} onChange={event => { const next = getProductModel(event.target.value); setProductModelId(event.target.value); setProductMode(next?.capabilities.modes[0] || 'text-to-image'); setRouteChoice(''); }} className="isl-well h-9 px-2 text-xs text-[var(--isl-ink)] outline-none"><option value="">选择产品模型…</option>{allProducts.map(model => <option key={model.id} value={model.id}>{model.name}</option>)}</select>
                 <select aria-label="生成模式" value={productMode} disabled={!product} onChange={event => { setProductMode(event.target.value as ProductModelMode); setRouteChoice(''); }} className="isl-well h-9 px-2 text-xs text-[var(--isl-ink)] outline-none disabled:opacity-40">{(product?.capabilities.modes || []).map(mode => <option key={mode} value={mode}>{PRODUCT_MODE_LABELS[mode]}</option>)}</select>
@@ -186,10 +235,7 @@ function RouteMappingEditor({ userApiKeys, onUpdateApiKey }: {
                 <button type="button" disabled={!product || !routeChoice} onClick={() => { addRoute({ kind: 'product-mode', productModelId, mode: productMode }, routeChoice); setRouteChoice(''); }} className="isl-chip px-3 text-xs disabled:opacity-40">添加</button>
             </div>
         </div>
-        <div className="space-y-2">{productTargets.map(target => {
-            const model = getProductModel(target.productModelId);
-            return renderTarget(target, `${model?.name || target.productModelId} · ${PRODUCT_MODE_LABELS[target.mode]}`, '媒体节点明确选择产品模型与生成模式后使用');
-        })}</div>
+        <div className="space-y-2"><div><div className="text-sm font-extrabold text-[var(--isl-ink)]">文本与 Agent</div><div className="mt-0.5 text-xs text-[var(--isl-ink-soft)]">提示词增强、脚本拆解与 Agent 文本能力放在媒体模型之后配置。</div></div>{RUNTIME_TARGETS.map(item => renderTarget({ kind: 'runtime-capability', capability: item.capability }, item.label, item.detail))}</div>
         {userApiKeys.length === 0 && <div className="rounded-2xl border border-dashed border-[var(--isl-border)] p-5 text-center text-xs text-[var(--isl-ink-soft)]">请先在“API 配置”中添加 Provider，随后再建立模型映射。</div>}
     </section>;
 }

@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { UserApiKey } from '../types';
 import {
   getProductModels,
+  getEffectiveProductModelCapabilities,
+  getEffectiveReferenceLimits,
   getRoutedVideoModes,
   resolveProductModelRoute,
   sanitizeProductGenerationParams,
@@ -96,5 +98,40 @@ describe('fixed product model catalog', () => {
     expect(getRoutedVideoModes('flovart:kling-video-3-omni', 'runningHub', 'kling-video-o3-std/reference-to-video')).toEqual([
       'reference-to-video',
     ]);
+  });
+
+  it('derives video controls and reference limits from the final mapped Provider route', () => {
+    const context = {
+      provider: 'runningHub' as const,
+      routeId: 'rhart-video-v3.1-fast/start-end-to-video',
+    };
+    const capabilities = getEffectiveProductModelCapabilities('flovart:veo-3.1-fast', 'first-last-frame', context);
+    expect(capabilities?.durations).toEqual([8]);
+    expect(capabilities?.aspectRatios).toEqual(['16:9', '9:16']);
+    expect(getEffectiveReferenceLimits('flovart:veo-3.1-fast', 'first-last-frame', context)).toEqual({ image: 2, video: 0, audio: 0 });
+    expect(sanitizeProductGenerationParams('flovart:veo-3.1-fast', {
+      mode: 'first-last-frame', durationSec: 4, resolution: '720p',
+    }, context).durationSec).toBe(8);
+  });
+
+  it('does not invent automatic mappings when an API key has not returned any models', () => {
+    expect(suggestProductRouteMappings({
+      id: 'empty-runninghub', provider: 'runningHub', capabilities: ['image', 'video'], key: 'secret', createdAt: 1, updatedAt: 1,
+    })).toEqual([]);
+  });
+
+  it('suggests only video modes implemented by the detected Provider adapter', () => {
+    const klingKey: UserApiKey = {
+      id: 'kling', provider: 'keling', capabilities: ['video'], key: 'secret', models: [{ id: 'kling-video-3.0', name: 'Kling 3' }], createdAt: 1, updatedAt: 1,
+    };
+    const modes = suggestProductRouteMappings(klingKey).map(mapping => mapping.target.kind === 'product-mode' ? mapping.target.mode : null);
+    expect(modes).toEqual(['text-to-video', 'image-to-video']);
+  });
+
+  it('defines direct Provider @ limits without promising unsupported media slots', () => {
+    expect(getEffectiveReferenceLimits('flovart:veo-3.1', 'reference-to-video', { provider: 'google', routeId: 'veo-3.1-generate-preview' })).toEqual({ image: 3, video: 0, audio: 0 });
+    expect(getEffectiveReferenceLimits('flovart:seedance-2', 'reference-to-video', { provider: 'volcengine', routeId: 'doubao-seedance-2-0-260128' })).toEqual({ image: 9, video: 3, audio: 3 });
+    expect(getEffectiveReferenceLimits('flovart:kling-video-3', 'image-to-video', { provider: 'keling', routeId: 'kling-video-3.0' })).toEqual({ image: 1, video: 0, audio: 0 });
+    expect(getEffectiveReferenceLimits('flovart:grok-imagine-video', 'video-extension', { provider: 'xai', routeId: 'grok-imagine-video' })).toEqual({ image: 0, video: 1, audio: 0 });
   });
 });
