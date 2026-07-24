@@ -1,6 +1,6 @@
 # RunningHub 首期 Route Catalog
 
-本清单锁定第一阶段可进入 `Verified Route` 评审的 16 条图片与普通视频线路。表中字段只是实现 Route Capability Schema 与 Route Contract Test 的最低契约锚点，不是可直接执行的完整 Schema；实现时仍须从对应官方页逐项编码枚举、必填性、默认值、媒体数量与序列化类型。只照抄示例请求或按 endpoint 名称用正则猜测的线路仍属于 `Discovered Route`，禁止执行。
+本清单锁定当前可进入 `Verified Route` 评审的 17 条图片与普通视频线路。表中字段只是实现 Route Capability Schema 与 Route Contract Test 的最低契约锚点，不是可直接执行的完整 Schema；实现时仍须从对应官方页逐项编码枚举、必填性、默认值、媒体数量与序列化类型。只照抄示例请求或按 endpoint 名称用正则猜测的线路仍属于 `Discovered Route`，禁止执行。
 
 ## Product Model 身份依据
 
@@ -11,6 +11,7 @@ PromptBar 使用原始模型名，RunningHub 包装名只作为 Provider Route L
 - Gemini 3.0 Pro Image / Nano Banana Pro：[nano-banana-pro/text-to-image-channel-low-price](https://www.runninghub.cn/runninghub-api-doc-en/api-448184536)
 - Midjourney v8.1：[midjourney-text-to-image-v8.1](https://www.runninghub.cn/runninghub-api-doc-en/api-454760430)
 - Veo 3.1 Fast：[google/veo3.1-fast/image-to-video-channel-low-price](https://www.runninghub.cn/runninghub-api-doc-en/api-448184374)
+- Veo 3.1 Lite：[全能视频 V3.1 Lite 文生视频官方稳定版](https://www.runninghub.cn/runninghub-api-doc-cn/api-448183147)
 - Grok Imagine Video：[xai/grok-imagine/text-to-video-official-stable](https://www.runninghub.cn/runninghub-api-doc-en/api-448184433)
 - Seedance 2.0 / Fast：对应 Route 的中文官方页直接以 seedance2.0 命名，具体链接见视频表。
 
@@ -25,7 +26,7 @@ PromptBar 使用原始模型名，RunningHub 包装名只作为 Provider Route L
 | Gemini 3.1 Flash Image | text-to-image | `rhart-image-n-g31-flash/text-to-image` | `prompt`、`aspectRatio`、`resolution` | [448183261](https://www.runninghub.cn/runninghub-api-doc-cn/api-448183261) |
 | GPT Image 2 | text-to-image | `rhart-image-g-2/text-to-image` | `prompt`、`aspectRatio`、`resolution` | [448183264](https://www.runninghub.cn/runninghub-api-doc-cn/api-448183264) |
 
-## 普通视频 Route（10）
+## 普通视频 Route（11）
 
 | Product Model | Generation Mode | Provider Route | 契约锚点 | 官方依据 |
 | --- | --- | --- | --- | --- |
@@ -38,6 +39,7 @@ PromptBar 使用原始模型名，RunningHub 包装名只作为 Provider Route L
 | Grok Imagine Video | multimodal-reference | `rhart-video-g-official/reference-to-video` | `imageUrls[]` 1–7 张；`prompt`、`duration`、`resolution` | [448183126](https://www.runninghub.cn/runninghub-api-doc-cn/api-448183126) |
 | Grok Imagine Video | text-to-video | `rhart-video-g/text-to-video` | `duration` 是数字；`prompt`、`aspectRatio`、`resolution` | [448183149](https://www.runninghub.cn/runninghub-api-doc-cn/api-448183149) |
 | Veo 3.1 Fast | text-to-video | `rhart-video-v3.1-fast/text-to-video` | `duration` 是字符串；`prompt`、`aspectRatio`、`resolution` | [448183144](https://www.runninghub.cn/runninghub-api-doc-cn/api-448183144) |
+| Veo 3.1 Lite | text-to-video | `rhart-video-v3.1-lite-official/text-to-video` | `duration` 是字符串（4/6/8）；`prompt`、`aspectRatio`、`resolution`；不发送未在文档出现的 `generateAudio` | [448183147](https://www.runninghub.cn/runninghub-api-doc-cn/api-448183147) |
 | Seedance 2.0 | text-to-video | `rhart-video/sparkvideo-2.0/text-to-video` | `duration` 是字符串；`ratio` 而非 `aspectRatio`；另含 `generateAudio`、`webSearch`、`returnLastFrame`、`seed` | [448183167](https://www.runninghub.cn/runninghub-api-doc-cn/api-448183167) |
 
 ## 共用基础设施

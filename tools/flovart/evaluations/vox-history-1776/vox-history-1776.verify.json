@@ -1,0 +1,37 @@
+{
+  "passed": true,
+  "outputPath": "H:\\WorkSpace_For_VsCode\\React\\Floavrt\\tools\\flovart\\evaluations\\vox-history-1776\\vox-history-1776.mp4",
+  "checkedAt": "2026-07-24T02:55:21.0469186+00:00",
+  "checks": {
+    "duration": true,
+    "video": true,
+    "audio": true,
+    "resolution": true,
+    "videoCodec": true,
+    "audioCodec": true
+  },
+  "media": {
+    "programs": [],
+    "stream_groups": [],
+    "streams": [
+      {
+        "index": 0,
+        "codec_name": "h264",
+        "codec_type": "video",
+        "width": 1280,
+        "height": 720
+      },
+      {
+        "index": 1,
+        "codec_name": "aac",
+        "codec_type": "audio",
+        "sample_rate": "48000",
+        "channels": 2
+      }
+    ],
+    "format": {
+      "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+      "duration": "30.000000"
+    }
+  }
+}

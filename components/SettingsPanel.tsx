@@ -12,6 +12,7 @@ import { formatCost, type KeyUsageSummary } from '../utils/usageMonitor';
 import { fetchModelsForProvider, type FetchedModel } from '../services/modelFetcher';
 import { normalizeProviderBaseUrl } from '../services/baseUrl';
 import { getProductModel, getProductModels, suggestProductRouteMappings } from '../services/productModelCatalog';
+import { getKeyModelIds } from '../utils/modelRefs';
 
 interface SettingsPanelProps {
     isOpen: boolean;
@@ -78,11 +79,8 @@ const routeTargetKey = (target: RouteMappingTarget) => target.kind === 'product-
     ? `${target.kind}:${target.productModelId}:${target.mode}`
     : `${target.kind}:${target.capability}`;
 
-const keyRouteOptions = (key: UserApiKey): string[] => Array.from(new Set([
-    key.defaultModel,
-    ...(key.models || []).map(model => model.id),
-    ...(key.customModels || []),
-].filter((value): value is string => Boolean(value?.trim()))));
+const keyRouteOptions = (key: UserApiKey, capability: 'text' | 'image' | 'video'): string[] =>
+    getKeyModelIds(key, capability);
 
 function RouteMappingEditor({ userApiKeys, onUpdateApiKey }: {
     userApiKeys: UserApiKey[];
@@ -105,13 +103,18 @@ function RouteMappingEditor({ userApiKeys, onUpdateApiKey }: {
         .filter(row => routeTargetKey(row.mapping.target) === routeTargetKey(target))
         .sort((left, right) => left.mapping.order - right.mapping.order || left.key.id.localeCompare(right.key.id));
 
+    const capabilityForTarget = (target: RouteMappingTarget): 'text' | 'image' | 'video' => target.kind === 'runtime-capability'
+        ? 'text'
+        : target.mode === 'text-to-image' || target.mode === 'image-to-image'
+            ? 'image'
+            : 'video';
+
     const routeOptions = (target: RouteMappingTarget) => userApiKeys
         .filter(key => {
             const capabilities = key.capabilities?.length ? key.capabilities : inferCapabilitiesByProvider(key.provider);
-            if (target.kind === 'runtime-capability') return capabilities.includes('text');
-            return capabilities.includes(target.mode === 'text-to-image' || target.mode === 'image-to-image' ? 'image' : 'video');
+            return capabilities.includes(capabilityForTarget(target));
         })
-        .flatMap(key => keyRouteOptions(key).map(routeId => ({
+        .flatMap(key => keyRouteOptions(key, capabilityForTarget(target)).map(routeId => ({
             value: JSON.stringify([key.id, routeId]),
             label: `${key.name || PROVIDER_LABELS[key.provider] || key.provider} · ${routeId}`,
         })));
@@ -178,7 +181,7 @@ function RouteMappingEditor({ userApiKeys, onUpdateApiKey }: {
             </div>
             <div className="mt-2 space-y-1.5">
                 {rows.map((row, index) => {
-                    const exposed = keyRouteOptions(row.key);
+                    const exposed = keyRouteOptions(row.key, capabilityForTarget(target));
                     const routeId = row.mapping.routeId.trim().toLowerCase();
                     const available = row.key.status !== 'error' && (exposed.length === 0 || exposed.some(value => value.trim().toLowerCase() === routeId));
                     return <div key={`${row.key.id}:${row.index}`} className="flex items-center gap-2 rounded-xl bg-[var(--isl-surface-2)] px-2 py-1.5">
@@ -564,7 +567,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
         }
 
         const detectedModelItems: ModelItem[] = result.models?.length
-            ? result.models.map(model => ({ id: model.id, name: model.name || model.id }))
+            ? result.models.map(model => ({ id: model.id, name: model.name || model.id, capability: model.capability }))
             : [];
         if (detectedModelItems.length > 0) {
             setFetchedModels(result.models || []);
@@ -688,7 +691,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                     setBaseUrl(result.effectiveBaseUrl);
                 }
                 // 自动填充到编辑模型列表
-                const modelItems: ModelItem[] = result.models.map(m => ({ id: m.id, name: m.name || m.id }));
+                const modelItems: ModelItem[] = result.models.map(m => ({ id: m.id, name: m.name || m.id, capability: m.capability }));
                 setEditModels(modelItems);
                 if (modelItems.length > 0) setEditDefaultModel(modelItems[0].id);
                 // 自动推断 capabilities
@@ -1293,7 +1296,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
 
                             <label className="block">
                                 <span className={`mb-1.5 block text-sm font-medium ${isDark ? 'text-[#D0D5DD]' : 'text-[#344054]'}`}>请求地址</span>
-                                <input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} placeholder="https://your-api-endpoint.com" className={`${inputClass} flv-safe-input`} />
+                                <input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} onKeyDown={event => event.stopPropagation()} onKeyUp={event => event.stopPropagation()} placeholder="https://your-api-endpoint.com" className={`${inputClass} flv-safe-input`} />
                             </label>
 
                             {provider === 'custom' && (

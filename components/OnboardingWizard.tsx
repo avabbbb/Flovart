@@ -146,7 +146,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
     };
 
     const applyDetectedResult = (result: FetchModelsResult) => {
-        const models = result.models.map(model => ({ id: model.id, name: model.name || model.id }));
+        const models = result.models.map(model => ({ id: model.id, name: model.name || model.id, capability: model.capability }));
         setDetectedModels(models);
         setDetectedCapabilities(result.capabilitySummary || Array.from(new Set(result.models.map(model => model.capability))));
         setEndpointFlavor(result.endpointFlavor || null);
@@ -212,7 +212,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                 if (provider === 'custom') {
                     const detectionResult = await detectCustomEndpoint(true);
                     const fetchedModels = detectionResult?.ok
-                        ? detectionResult.models.map(model => ({ id: model.id, name: model.name || model.id }))
+                        ? detectionResult.models.map(model => ({ id: model.id, name: model.name || model.id, capability: model.capability }))
                         : detectedModels;
                     const resolvedEndpointFlavor = detectionResult?.endpointFlavor
                         || endpointFlavor
@@ -431,6 +431,8 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                                             setCustomBaseUrl(e.target.value);
                                             resetCustomDetection();
                                         }}
+                                        onKeyDown={event => event.stopPropagation()}
+                                        onKeyUp={event => event.stopPropagation()}
                                         placeholder="https://api.example.com/v1"
                                         className={inputClass}
                                     />

@@ -35,16 +35,9 @@ impl BridgeQueue {
         }
     }
 
-    pub fn enqueue(
-        &self,
-        command: String,
-        args: serde_json::Value,
-        source: String,
-    ) -> BridgeEntry {
+    pub fn enqueue(&self, command: String, args: serde_json::Value, source: String) -> BridgeEntry {
         let now = chrono::Utc::now().timestamp_millis();
-        let rand = (now as u64)
-            .wrapping_mul(2_654_435_761)
-            .wrapping_add(1);
+        let rand = (now as u64).wrapping_mul(2_654_435_761).wrapping_add(1);
         let id = format!("flv_{}_{:08x}", now, rand & 0xFFFF_FFFF);
         let entry = BridgeEntry {
             id: id.clone(),

@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://flovart.local/schemas/runtime/runtime-event.v1.json",
+  "title": "RuntimeEvent v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["eventId", "eventVersion", "eventType", "occurredAt", "data"],
+  "properties": {
+    "eventId": { "type": "integer", "minimum": 1 },
+    "eventVersion": { "const": "1" },
+    "eventType": { "type": "string", "minLength": 1 },
+    "entity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "id"],
+      "properties": {
+        "type": { "type": "string", "minLength": 1 },
+        "id": { "type": "string", "minLength": 1 }
+      }
+    },
+    "taskId": { "type": "string", "minLength": 1 },
+    "occurredAt": { "type": "integer" },
+    "data": {}
+  }
+}
+

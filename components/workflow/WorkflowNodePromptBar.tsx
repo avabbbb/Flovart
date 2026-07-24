@@ -2,6 +2,7 @@ import { BookOpen } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { AssetFolder, AssetLibrary, UserApiKey, GenerationMode, PromptEnhanceMode, PromptEnhanceResult } from '../../types';
 import { PromptBar } from '../PromptBar';
+import type { MentionData } from '../MediaMentionExtension';
 import type { AssetSuggestion } from '../MentionList';
 import type { ReferencePickerWorkflowItem } from '../studio/AssetReferencePicker';
 import { resolveProductModelRoute } from '../../services/productModelCatalog';
@@ -28,7 +29,7 @@ const modeFor = (node: WorkflowNode, config?: WorkflowGenerationConfig): Generat
   return mode === 'text' || mode === 'video' ? mode : 'image';
 };
 
-export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme, language, userApiKeys, dynamicModelOptions, onOpenSettings, onEnhancePrompt, isEnhancingPrompt, onChange, onRun, onStop, focusSignal, onDisconnectReference, assetFolders, assetItems, assetLibrary, onSelectAsset, onSelectWorkflowReference, onAddReferenceFiles, skillEnabled, width = 880 }: {
+export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme, language, userApiKeys, dynamicModelOptions, onOpenSettings, onEnhancePrompt, isEnhancingPrompt, onChange, onRun, onStop, focusSignal, onDisconnectReference, assetFolders, assetItems, assetLibrary, onSelectAsset, onSelectWorkflowReference, onAddReferenceFiles, onResolvePastedMentions, onPasteUnresolvedMentions, skillEnabled, width = 880 }: {
   node: WorkflowNode;
   nodes: WorkflowNode[];
   connections?: WorkflowConnection[];
@@ -40,7 +41,7 @@ export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme,
   onOpenSettings?: () => void;
   onEnhancePrompt?: (payload: { prompt: string; mode: PromptEnhanceMode; stylePreset?: string }) => Promise<PromptEnhanceResult>;
   isEnhancingPrompt?: boolean;
-  onChange: (metadata: WorkflowNodeMetadata) => void;
+  onChange: (metadata: Partial<WorkflowNodeMetadata>) => void;
   onRun: () => void;
   onStop?: () => void;
   focusSignal?: number;
@@ -55,6 +56,8 @@ export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme,
   onSelectAsset?: (assetId: string) => string | undefined;
     onSelectWorkflowReference?: (nodeId: string) => string | undefined;
   onAddReferenceFiles?: (files: File[]) => void | Promise<void>;
+  onResolvePastedMentions?: (mentions: MentionData[]) => Array<MentionData | null>;
+  onPasteUnresolvedMentions?: (labels: string[]) => void;
   /** Skill 分区是否可用；本轮默认 false 仅显示占位 */
   skillEnabled?: boolean;
     /** 根据工作流可用宽度收缩，保持底栏单行展示 */
@@ -70,7 +73,10 @@ export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme,
   const defaultMappedModelId = generationMode === 'text'
     ? undefined
     : availableProductModelIds.find(modelId => Boolean(resolveProductModelRoute(modelId, productMode, userApiKeys)));
-  const mentionItems = toWorkflowMentionItems(getWorkflowInputNodes(node, nodes, connections));
+  const mentionItems = toWorkflowMentionItems([
+    ...getOrderedImageReferences(node, nodes, connections),
+    ...getWorkflowInputNodes(node, nodes, connections).filter(item => item.type === 'text'),
+  ]);
     const referenceItems: ReferencePickerWorkflowItem[] = nodes.filter(item => item.id !== node.id && item.isVisible !== false && (item.type === 'image' || item.type === 'video')).map(item => ({
     id: item.id,
     label: item.title,
@@ -144,6 +150,8 @@ export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme,
           if (plainText === (node.metadata.prompt || '') && sameMentions && sameDocument) return;
           onChange({ prompt: plainText, richTextDocument: document as typeof node.metadata.richTextDocument, mentionedNodeIds });
         }}
+        onResolvePastedMentions={onResolvePastedMentions}
+        onPasteUnresolvedMentions={onPasteUnresolvedMentions}
         mentionItems={mentionItems}
         referenceItems={referenceItems}
         imageReferenceChips={referenceChips}
@@ -184,6 +192,8 @@ export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme,
         onWebSearchToggle={webSearch => patchConfig({ webSearch })}
         realPersonCheckEnabled={config.realPersonCheck !== false}
         onRealPersonCheckToggle={realPersonCheck => patchConfig({ realPersonCheck })}
+        preserveReferenceAspectRatio={config.preserveReferenceAspectRatio === true}
+        onPreserveReferenceAspectRatioChange={enabled => patchConfig({ preserveReferenceAspectRatio: enabled })}
         selectedTextModel={undefined}
         selectedImageModel={generationMode === 'image' ? config.modelId : undefined}
         selectedVideoModel={generationMode === 'video' ? config.modelId : undefined}

@@ -1,4 +1,4 @@
-import { invoke } from '@tauri-apps/api/core';
+import { invoke, isTauri } from '@tauri-apps/api/core';
 
 export interface RuntimeStatus {
   protocolVersion: '1';
@@ -42,8 +42,7 @@ const tauriRuntime: FlovartRuntimeApi = {
 };
 
 export function isTauriRuntimeSurface(): boolean {
-  if (typeof window === 'undefined') return false;
-  return Boolean((window as Window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__);
+  return typeof window !== 'undefined' && isTauri();
 }
 
 export function getFlovartRuntimeApi(): FlovartRuntimeApi | null {

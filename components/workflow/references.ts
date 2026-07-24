@@ -45,14 +45,22 @@ export function toImageReferenceChips(
   mentionedNodeIds: string[] = [],
 ): ImageReferenceChip[] {
   const mentioned = new Set(mentionedNodeIds);
-  return orderedNodes.map(node => ({
-    id: node.id,
-    label: node.title,
-    thumbnail: node.metadata.href || '',
-    storageKey: node.metadata.storageKey,
-    elementType: (MEDIA_TYPES.has(node.type) ? node.type : 'image') as 'image' | 'video' | 'audio',
-    mentioned: mentioned.has(node.id),
-  }));
+  const counters = { image: 0, video: 0, audio: 0 };
+  return orderedNodes.map(node => {
+    const type = (MEDIA_TYPES.has(node.type) ? node.type : 'image') as 'image' | 'video' | 'audio';
+    let label = node.title;
+    if (type === 'image') { counters.image += 1; label = `图片${counters.image}`; }
+    else if (type === 'video') { counters.video += 1; label = `视频${counters.video}`; }
+    else { counters.audio += 1; label = `音频${counters.audio}`; }
+    return {
+      id: node.id,
+      label,
+      thumbnail: node.metadata.href || '',
+      storageKey: node.metadata.storageKey,
+      elementType: type,
+      mentioned: mentioned.has(node.id),
+    };
+  });
 }
 
 /** 从纯文本中的 @节点名 兜底解析引用；只接纳调用方给出的候选节点，避免任意文本注入节点 id。 */
@@ -146,13 +154,22 @@ export function filterWorkflowInputIds(ids: string[], targetNodeId: string, conn
 }
 
 export function toWorkflowMentionItems(nodes: WorkflowNode[]): MentionItem[] {
-  return nodes.map(item => ({
-    id: item.id,
-    label: item.title,
-    thumbnail: item.metadata.href || '',
-    elementType: item.type,
-    description: item.metadata.content?.trim().slice(0, 36) || item.type,
-  }));
+  const counters = { image: 0, video: 0, audio: 0, text: 0 };
+  return nodes.map(item => {
+    const type = item.type as 'image' | 'video' | 'audio' | 'text';
+    let label = item.title;
+    if (type === 'image') { counters.image += 1; label = `图片${counters.image}`; }
+    else if (type === 'video') { counters.video += 1; label = `视频${counters.video}`; }
+    else if (type === 'audio') { counters.audio += 1; label = `音频${counters.audio}`; }
+    else if (type === 'text') { counters.text += 1; label = `文本${counters.text}`; }
+    return {
+      id: item.id,
+      label,
+      thumbnail: item.metadata.href || '',
+      elementType: item.type,
+      description: item.metadata.content?.trim().slice(0, 36) || item.type,
+    };
+  });
 }
 
 export function filterSeedanceReferences(

@@ -71,7 +71,7 @@ pub fn run() {
             let state_db =
                 Arc::new(StateDb::open(&db_path).map_err(|e| format!("open state db: {e}"))?);
             let production_runtime = Arc::new(
-                ProductionRuntime::new(env!("CARGO_PKG_VERSION"))
+                ProductionRuntime::open(env!("CARGO_PKG_VERSION"), &db_path)
                     .map_err(|e| format!("initialize Production Runtime: {e}"))?,
             );
 
@@ -131,6 +131,7 @@ pub fn run() {
             keyring::keyring_set,
             keyring::keyring_delete,
             keyring::keyring_list,
+            keyring::keyring_report_sync,
             // production runtime
             runtime::runtime_status,
             runtime::runtime_execute,

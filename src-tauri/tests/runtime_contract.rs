@@ -14,7 +14,7 @@ fn runtime_status_comes_from_the_canonical_v1_contract() {
     assert_eq!(status.state, "ready");
     assert_eq!(
         runtime.registry().registry_hash,
-        "40607136450f6bf4551873901ab53561fbcf773e500603bac7fa327fd5c17658"
+        "ad9c10c2a27e3dfa4106cb8cce3f6468cf906334ec987ace8216144ef7181a98"
     );
     assert!(runtime.registry().commands.contains_key("runtime.status"));
     assert!(!runtime.registry().commands.contains_key("workflow.run"));
@@ -49,7 +49,7 @@ fn runtime_execute_dispatches_only_available_canonical_commands() {
         ))
         .expect("command schema");
     assert_eq!(schema["command"], "generate.video");
-    assert_eq!(schema["schema"]["availability"], "legacy-only");
+    assert_eq!(schema["schema"]["availability"], "available");
 
     assert_eq!(
         runtime
@@ -119,4 +119,82 @@ fn runtime_rejects_invalid_protocol_and_unknown_commands() {
             .code,
         "UNKNOWN_COMMAND"
     );
+}
+
+#[test]
+fn runtime_exposes_redacted_google_status_and_durable_lite_video_receipts() {
+    let runtime = ProductionRuntime::new(env!("CARGO_PKG_VERSION")).expect("runtime contract");
+    let status = runtime
+        .execute(&json!({
+            "protocolVersion": "1",
+            "commandId": ProductionRuntime::new_id("cmd"),
+            "command": "provider.status",
+            "args": {},
+            "actor": { "kind": "cli", "instanceId": "cli_test" }
+        }))
+        .expect("provider status");
+    assert_eq!(status["providers"][0]["provider"], "google");
+    assert_eq!(status["providers"][0]["ready"], false);
+    assert_eq!(status["providers"][1]["provider"], "runningHub");
+    assert_eq!(status["providers"][1]["ready"], false);
+    assert_eq!(
+        status["providers"][1]["route"]["routeId"],
+        "rhart-video-v3.1-lite-official/text-to-video"
+    );
+    assert!(status.to_string().find("secret").is_none());
+
+    let receipt = runtime
+        .execute(&json!({
+            "protocolVersion": "1",
+            "commandId": ProductionRuntime::new_id("cmd"),
+            "command": "generate.video",
+            "args": {
+                "prompt": "paper collage history explainer",
+                "productModel": "flovart:veo-3.1-lite",
+                "durationSec": 8,
+                "aspectRatio": "16:9",
+                "resolution": "720p"
+            },
+            "actor": { "kind": "cli", "instanceId": "cli_test" },
+            "idempotencyKey": "video-contract-1"
+        }))
+        .expect("video receipt");
+    assert_eq!(receipt["kind"], "task");
+    assert_eq!(receipt["status"], "queued");
+
+    let runninghub_receipt = runtime
+        .execute(&json!({
+            "protocolVersion": "1",
+            "commandId": ProductionRuntime::new_id("cmd"),
+            "command": "generate.video",
+            "args": {
+                "prompt": "paper collage history explainer",
+                "provider": "runningHub",
+                "productModel": "flovart:veo-3.1-lite",
+                "durationSec": 8,
+                "aspectRatio": "16:9",
+                "resolution": "720p"
+            },
+            "actor": { "kind": "cli", "instanceId": "cli_test" },
+            "idempotencyKey": "video-contract-runninghub-1"
+        }))
+        .expect("runninghub video receipt");
+    assert_eq!(runninghub_receipt["kind"], "task");
+    assert_eq!(runninghub_receipt["status"], "queued");
+
+    let expensive = runtime
+        .execute(&json!({
+            "protocolVersion": "1",
+            "commandId": ProductionRuntime::new_id("cmd"),
+            "command": "generate.video",
+            "args": {
+                "prompt": "paper collage",
+                "productModel": "flovart:veo-3.1",
+                "durationSec": 8
+            },
+            "actor": { "kind": "cli", "instanceId": "cli_test" },
+            "idempotencyKey": "video-contract-2"
+        }))
+        .expect_err("non-lite route");
+    assert_eq!(expensive.code, "ROUTE_UNAVAILABLE");
 }

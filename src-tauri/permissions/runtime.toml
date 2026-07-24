@@ -6,4 +6,4 @@ commands.allow = ["runtime_status", "runtime_execute"]
 [[permission]]
 identifier = "keyring-metadata"
 description = "Allows the main Flovart WebUI to write, delete, and list credential metadata without reading raw secrets back."
-commands.allow = ["keyring_set", "keyring_delete", "keyring_list"]
+commands.allow = ["keyring_set", "keyring_delete", "keyring_list", "keyring_report_sync"]

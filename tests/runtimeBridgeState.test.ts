@@ -23,7 +23,7 @@ describe('runtimeBridgeState', () => {
 
   it('recognizes the restricted Tauri IPC adapter as the local runtime surface', () => {
     vi.stubGlobal('chrome', undefined);
-    (window as any).__TAURI_INTERNALS__ = { invoke: vi.fn() };
+    vi.stubGlobal('isTauri', true);
 
     expect(getRuntimeBridgeStatus()).toMatchObject({
       environment: 'tauri',
@@ -31,7 +31,6 @@ describe('runtimeBridgeState', () => {
       runtimeBridgeConnected: false,
     });
 
-    delete (window as any).__TAURI_INTERNALS__;
     vi.unstubAllGlobals();
   });
 

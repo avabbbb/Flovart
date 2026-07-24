@@ -286,7 +286,7 @@ function ScriptNodeCard({ node }: { node: WorkflowNodeData }) {
       {breakdown?.shots?.slice(0, 4).map(shot => (
         <div key={shot.id} className="workflow-node__script-shot-row">
           <span className="workflow-node__script-shot-index">#{shot.index + 1}</span>
-          <span className="workflow-node__script-shot-desc">{shot.dialogue || shot.action || shot.promptOverride || '未描述'}</span>
+          <span className="workflow-node__script-shot-desc">{shot.dialogue || shot.action || shot.imagePromptOverride || shot.videoPromptOverride || '未描述'}</span>
         </div>
       ))}
       {shotCount > 4 && <div className="workflow-node__script-more">+{shotCount - 4} 更多分镜</div>}

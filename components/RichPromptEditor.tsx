@@ -2,6 +2,7 @@ import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useRef 
 import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { Extension } from '@tiptap/core';
+import { DOMSerializer, Slice } from '@tiptap/pm/model';
 import { Suggestion } from '@tiptap/suggestion';
 import tippy, { type Instance as TippyInstance } from 'tippy.js';
 import 'tippy.js/dist/tippy.css';
@@ -9,6 +10,13 @@ import ReactDOM from 'react-dom/client';
 import MentionList, { type MentionItem, type AssetSuggestion, type MentionListHandle } from './MentionList';
 import { MediaMentionNode, editorJSONToText, extractMentions, type MentionData } from './MediaMentionExtension';
 import type { AssetFolder } from '../types';
+import {
+    decodePromptClipboard,
+    encodePromptClipboard,
+    FLOVART_PROMPT_CLIPBOARD_MIME,
+    hydratePromptText,
+    rebindPromptDocument,
+} from '../utils/promptReferenceClipboard';
 
 function buildDocFromText(text: string) {
     const paragraphs = (text || '').split('\n').map(line => ({
@@ -191,6 +199,8 @@ export function applyEditorPlaceholder(
 
 export interface RichPromptEditorProps {
     referenceItems: MentionItem[];
+    /** 粘贴纯文本时允许按名称恢复的候选项；与 @ 下拉候选分开，避免把所有画布节点塞进下拉。 */
+    pasteReferenceItems?: MentionItem[];
     placeholder?: string;
     disabled?: boolean;
     onTextChange?: (plainText: string, json: Record<string, unknown>) => void;
@@ -203,20 +213,30 @@ export interface RichPromptEditorProps {
     assetItems?: AssetSuggestion[];
     /** 选择素材时调用，返回新节点 id（或复用已存在节点 id）；未提供则禁用素材选择 */
     onSelectAsset?: (assetId: string) => string | undefined;
+    /** 批量把粘贴内容里的来源 id / assetId 绑定为当前节点可用的上游引用。返回值与入参数组按索引对应。 */
+    onResolvePastedMentions?: (mentions: MentionData[]) => Array<MentionData | null>;
+    onPasteUnresolvedMentions?: (labels: string[]) => void;
     /** Skill 分区是否可用；本轮默认 false 仅显示占位 */
     skillEnabled?: boolean;
 }
 
 const RichPromptEditor = forwardRef<RichPromptEditorHandle, RichPromptEditorProps>(
-    ({ referenceItems, placeholder = '输入提示词，@ 引用工作流节点或资产...', disabled, onTextChange, onSubmit, initialText = '', initialDocument, assetFolders = [], assetItems = [], onSelectAsset, skillEnabled = false }, ref) => {
+    ({ referenceItems, pasteReferenceItems = referenceItems, placeholder = '输入提示词，@ 引用工作流节点或资产...', disabled, onTextChange, onSubmit, initialText = '', initialDocument, assetFolders = [], assetItems = [], onSelectAsset, onResolvePastedMentions, onPasteUnresolvedMentions, skillEnabled = false }, ref) => {
         const referenceItemsRef = useRef(referenceItems);
+        const pasteReferenceItemsRef = useRef(pasteReferenceItems);
         const assetFoldersRef = useRef(assetFolders);
         const assetItemsRef = useRef(assetItems);
         const onSelectAssetRef = useRef(onSelectAsset);
+        const onResolvePastedMentionsRef = useRef(onResolvePastedMentions);
+        const onPasteUnresolvedMentionsRef = useRef(onPasteUnresolvedMentions);
 
         useEffect(() => {
             referenceItemsRef.current = referenceItems;
         }, [referenceItems]);
+
+        useEffect(() => {
+            pasteReferenceItemsRef.current = pasteReferenceItems;
+        }, [pasteReferenceItems]);
 
         useEffect(() => {
             assetFoldersRef.current = assetFolders;
@@ -229,6 +249,14 @@ const RichPromptEditor = forwardRef<RichPromptEditorHandle, RichPromptEditorProp
         useEffect(() => {
             onSelectAssetRef.current = onSelectAsset;
         }, [onSelectAsset]);
+
+        useEffect(() => {
+            onResolvePastedMentionsRef.current = onResolvePastedMentions;
+        }, [onResolvePastedMentions]);
+
+        useEffect(() => {
+            onPasteUnresolvedMentionsRef.current = onPasteUnresolvedMentions;
+        }, [onPasteUnresolvedMentions]);
 
         const getFilteredItems = useCallback((query: string): MentionItem[] => {
             const normalized = query.toLowerCase();
@@ -277,6 +305,64 @@ const RichPromptEditor = forwardRef<RichPromptEditorHandle, RichPromptEditorProp
                         return true;
                     }
                     return false;
+                },
+                handlePaste(view, event) {
+                    const clipboard = event.clipboardData;
+                    if (!clipboard) return false;
+                    const encoded = clipboard.getData(FLOVART_PROMPT_CLIPBOARD_MIME);
+                    const payload = decodePromptClipboard(encoded);
+                    const plainText = payload?.plainText || clipboard.getData('text/plain');
+                    if (!payload && !plainText.includes('@')) return false;
+                    const hydrated = payload
+                        ? { plainText, document: payload.document, mentionedElementIds: [], unresolvedLabels: [] }
+                        : hydratePromptText(plainText, pasteReferenceItemsRef.current);
+                    if (!payload && hydrated.mentionedElementIds.length === 0 && hydrated.unresolvedLabels.length === 0) return false;
+                    try {
+                        view.state.schema.nodeFromJSON(hydrated.document).check();
+                    } catch {
+                        return false;
+                    }
+                    const mentions = extractMentions(hydrated.document);
+                    const aliasSources = new Map<string, string>();
+                    const resolvable = mentions.map((mention, index) => ({ mention, index })).filter(({ mention }) => {
+                        const alias = mention.label.trim().toLocaleLowerCase();
+                        const identity = mention.assetId ? `asset:${mention.assetId}` : `node:${mention.id}`;
+                        const owner = aliasSources.get(alias);
+                        if (owner && owner !== identity) return false;
+                        aliasSources.set(alias, identity);
+                        return true;
+                    });
+                    const reboundMentions = onResolvePastedMentionsRef.current?.(resolvable.map(item => item.mention))
+                        || resolvable.map(item => item.mention);
+                    const resolved: Array<MentionData | null> = mentions.map(() => null);
+                    resolvable.forEach((item, index) => { resolved[item.index] = reboundMentions[index] || null; });
+                    let mentionIndex = 0;
+                    const rebound = rebindPromptDocument(hydrated.document, () => resolved[mentionIndex++] || null);
+                    const unresolvedLabels = [...new Set([...hydrated.unresolvedLabels, ...rebound.unresolvedLabels])];
+                    try {
+                        const doc = view.state.schema.nodeFromJSON(rebound.document);
+                        view.dispatch(view.state.tr.replaceSelection(new Slice(doc.content, 0, 0)).scrollIntoView());
+                    } catch {
+                        return false;
+                    }
+                    event.preventDefault();
+                    if (unresolvedLabels.length > 0) onPasteUnresolvedMentionsRef.current?.(unresolvedLabels);
+                    return true;
+                },
+                handleDOMEvents: {
+                    copy(view, rawEvent) {
+                        const event = rawEvent as ClipboardEvent;
+                        if (!event.clipboardData || view.state.selection.empty) return false;
+                        const slice = view.state.selection.content();
+                        const document = { type: 'doc', content: slice.content.toJSON() };
+                        const wrapper = window.document.createElement('div');
+                        wrapper.appendChild(DOMSerializer.fromSchema(view.state.schema).serializeFragment(slice.content));
+                        event.clipboardData.setData(FLOVART_PROMPT_CLIPBOARD_MIME, encodePromptClipboard(document));
+                        event.clipboardData.setData('text/plain', editorJSONToText(document));
+                        event.clipboardData.setData('text/html', wrapper.innerHTML);
+                        event.preventDefault();
+                        return true;
+                    },
                 },
             },
             onUpdate({ editor }) {

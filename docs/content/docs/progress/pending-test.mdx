@@ -25,15 +25,18 @@ title: 待测试确认
 ## Flovart Skill、CLI、Agent Toolkit 与发布链路
 
 - npm 发布包已统一命名为 `flovart-cli@0.3.0`，确保用户可直接使用 `npx flovart-cli ...`；包含 CLI、TUI、MCP Server、Flovart Skill、Managed Agent、Host 适配与 Toolkit 安装器。
-- Canonical Command Registry 当前导出 43 条显式命令；3 条 S0.1 命令标记为 `available`，其余迁移期命令明确标记为 `legacy-only`；`command.list` 不再出现 Canvas / Element，`command.schema --command workflow.run` 返回 `UNKNOWN_COMMAND` 并以非零状态退出。
+- Canonical Command Registry 当前导出 48 条显式命令；10 条命令标记为 `available`：Runtime/Registry 查询、持久 Task/Event、`provider.status` 与 `generate.video`。其余迁移期命令明确标记为 `legacy-only`；`command.list` 不再出现 Canvas / Element，`command.schema --command workflow.run` 返回 `UNKNOWN_COMMAND` 并以非零状态退出。
 - Production Runtime S0.1/S0.2 已建立 Node/Rust 共用的版本化 Registry 与 JSON Schema，并完成安全本地 Control Plane：Desktop 监听 `127.0.0.1:0` 随机端口，每次启动生成 256-bit Token，把协议、Runtime Instance、Registry Hash、端口和 Token 原子写入仅当前用户/SYSTEM 可读的 Discovery Record；退出时只删除自己的 Record。
 - CLI、MCP 与 Native Host 读取 Discovery Record 后，只能调用鉴权的 `GET /v1/status` / `POST /v1/commands`；WebUI 通过受限 Tauri IPC 进入同一个 `ProductionRuntime`。固定 `7421`、CDP/`window.__flovartAPI` 生产探测、任意 Native Host HTTP path 转发和原始 Secret HTTP GET 已删除。
-- 当前只执行 `runtime.status`、`command.list`、`command.schema` 三条只读命令；其余命令仍标记为 `legacy-only`，Provider、Task、VOX/视频生成与成片渲染没有伪装成已完成。扩展端桌面 Key 同步也保持关闭，待后续类型化 Native Messaging Provider 协议落地；扩展本地 Key 仍保存在自己的加密存储中。
+- 当前可执行 `runtime.status`、Registry 查询、`runtime.test.delay`、Task/Event 查询与取消、`provider.status` 和 `generate.video`；真实 RunningHub Veo 3.1 Lite 视频已进入唯一 Desktop Runtime。旁白、字幕、成片合成与交付校验仍由评测目录脚本完成，尚未伪装成 Production Runtime 的正式命令。扩展端桌面 Key 同步继续关闭，待后续类型化 Native Messaging Provider 协议落地；扩展本地 Key 仍保存在自己的加密存储中。
+- Flovart Skill 已改为 Production Control 总控说明：只调用 Registry 中 `available` 的命令，明确 Provider Task/Artifact 当前不会自动创建可见 Workflow 节点，禁止把 shadow runtime、Vite file queue 或浏览器私有状态冒充正式画布同步。
+- 公共 MCP 与 CLI 现在共用 `runtime-command-surface`；MCP 只注册 10 条 `available` 命令，`provider.status` 与 `generate.video` 均进入 Desktop Production Runtime，不再因为 MCP 路由表落后而进入无消费端的 file/browser queue。WebUI Local Agent Bridge 仍是独立的浏览器连接面，尚未成为正式画布权威。
 - 自动验证已通过：S0.2 定向 Vitest 5 个文件 23 项测试、Rust Native Host/Runtime Contract/Control Server 8 项测试、`cargo check --all-targets`、`npx tsc --noEmit`；全量 Vitest 65 个文件 562 项通过、1 项跳过，Rust 全套测试、Web 生产构建、扩展构建与 CLI npm 发布包 dry-run 也通过。Desktop 未启动时直接 CLI 在约 0.5 秒内稳定返回 `RUNTIME_UNAVAILABLE`。待用户验证：启动 Desktop 后 CLI `runtime.status` 返回同一 Runtime Instance；WebUI 的 Key 写入与脱敏 metadata 列表仍可用。
 - `npx flovart-cli install` 默认下载版本化 Agent Toolkit，校验 manifest 的字节数与 SHA-256 后才解包、切换 `current` 和写入本地 launcher；`start` 默认启动 Desktop Runtime + Managed Agent，源码开发需显式使用 `--source`。
 - `init --host codex|opencode|claude|cursor|windsurf|vscode|all` 可生成 Skill/MCP 配置，`--dry-run` 可先预览写入；Skill 文档仅使用当前 Workflow 命令面。
 - GitHub `Build Desktop` 工作流在 Windows tag 构建时生成并上传 Toolkit archive + manifest；根包、CLI、Cargo、Tauri 与 `VERSION` 已统一为 `0.3.0`，tag 构建前会执行版本一致性检查。
 - 待用户验证：发布 `flovart-cli@0.3.0` 与 `v0.3.0` GitHub Release 后，在全新 Windows 用户上下文执行 `npx flovart-cli install && npx flovart-cli start`；确认 PATH launcher、Runtime、Managed Agent 与 Host 配置均可用。
+- 本轮新增自动验证：公共 Runtime 命令面与 Registry 对齐测试、CLI 进程隔离测试共 15/15 通过；两份 Flovart Skill 均通过 `skill-creator` 的 `quick_validate.py` 且内容 Hash 一致。待用户验证：重新执行 `flovart-cli init --host codex` 后，MCP 工具列表只出现 10 条 available 命令，并可用 `generate_video` 返回持久 `taskId`。
 
 ## PromptBar、Workflow 媒体与 Provider 最终回归
 
@@ -1437,7 +1440,7 @@ Batch 逻辑已从独立 `handleBatchGenerate` 合并进 `handleGenerate`。Prom
 
 ## RunningHub Provider 映射与 Route Catalog 落地（本轮新增）
 
-完成 `docs/dev/runninghub-provider-mapping-handoff.md` 中 7 个 Blocker、16 条 Route Contract Test 与旧 regex 回退路径清理。
+完成 `docs/dev/runninghub-provider-mapping-handoff.md` 中 7 个 Blocker、17 条 Route Contract Test 与旧 regex 回退路径清理。
 
 ### 协议决策（ADR-0027 ~ ADR-0033 + ADR-0006/0008）
 
@@ -1452,7 +1455,7 @@ Batch 逻辑已从独立 `handleBatchGenerate` 合并进 `handleGenerate`。Prom
 
 ### Route Capability Schema 与 Adapter
 
-- `services/runningHubRouteCatalog.ts`：登记 16 条 `RouteCapabilitySchema`（6 图片 + 10 视频），导出 `getRouteSchema(routeId)` / `isVerifiedRoute(routeId)` / `getRouteDurations(routeId)` / `getRouteCatalog()` / `resolveRouteIdByDocId(docId)`（由 catalog 的 `officialEvidence` URL 在模块加载时反查 doc ID → routeId）。
+- `services/runningHubRouteCatalog.ts`：登记 17 条 `RouteCapabilitySchema`（6 图片 + 11 视频），导出 `getRouteSchema(routeId)` / `isVerifiedRoute(routeId)` / `getRouteDurations(routeId)` / `getRouteCatalog()` / `resolveRouteIdByDocId(docId)`（由 catalog 的 `officialEvidence` URL 在模块加载时反查 doc ID → routeId）。
   - 图片 6 条：`youchuan/text-to-image-v81`（悠船 v8.1 文生图，参考图走 `imageUrl` 单数，必填 `hd:false`）+ 5 条 `rhart-image-*`（n-pro/edit、g-2/image-to-image、n-g31-flash/image-to-image、n-g31-flash/text-to-image、g-2/text-to-image）。
   - 视频 10 条：3 条 `rhart-video-v3.1-fast`（t2v/i2v/start-end-to-video，按官方文档标 `generateAudio` 为不支持）+ 2 条 `rhart-video-g`（i2v/t2v）+ `rhart-video-g-official/reference-to-video`（3 张参考图）+ 4 条 `rhart-video/sparkvideo-2.0`（i2v/t2v/multimodal/fast-i2v，多模态最多 9 图 3 视频 3 音频）。
 - `services/aiGateway.ts` 新增 `buildRunningHubRoutePayload(schema, prompt, fields, media, userParams)` 按 schema `params[].field` 适配 RunningHub 字段名，`buildRouteMediaFields` 负责参考图数组 / firstFrameUrl / lastFrameUrl 的字段映射与裁剪，`snapDuration` 负责 duration 枚举值向最近的合法值靠拢。
@@ -1470,7 +1473,7 @@ Batch 逻辑已从独立 `handleBatchGenerate` 合并进 `handleGenerate`。Prom
   - 模型判定：`isRunningHubVeo31Model` / `isRunningHubVeo31LowPriceModel` / `isRunningHubVeo31ReferenceModel` / `isRunningHubVeo31LiteModel` / `isRunningHubOmniModel` / `isRunningHubVideoSModel` / `isRunningHubNodeFieldModel`。
   - 字段判定：`runningHubAspectRatioField` / `runningHubReferenceFields` / `runningHubMultimodalFields`。
 - 保留仍被 `getCapabilityDictionary`（aiGateway.ts line 273-279）使用的 `isRunningHubSeedance20Model` 和 `isRunningHubVideoEndpoint`，不删除。
-- `BUILTIN_RUNNINGHUB_MODELS` (`runningHubService.ts` line 20) 保留所有非 catalog 路由（kling/vidu/wan/skyreels-v4/rhart-video-s/rhart-video-v3.1-pro/lite-official 等 ~25 条），用户在 Workflow/设置页仍可看到它们，但点击生成会被 Provider emit 前的 catalog 校验拦截并抛"未通过验证"。这批非 catalog 路由的 Capability Schema 扩登记作为后续单独项目，本轮不处理。
+- `BUILTIN_RUNNINGHUB_MODELS` 保留所有非 catalog 路由（kling/vidu/wan/skyreels-v4/rhart-video-s/rhart-video-v3.1-pro，以及 lite-official 的图生/首尾帧模式等），用户在 Workflow/设置页仍可看到它们，但点击生成会被 Provider emit 前的 catalog 校验拦截并抛"未通过验证"。Lite official 文生视频已经登记并实测；其余非 catalog 路由的 Capability Schema 扩登记仍作为后续单独项目。
 
 ### CLI 与产品模型身份统一（Blocker 7）
 
@@ -1481,7 +1484,7 @@ Batch 逻辑已从独立 `handleBatchGenerate` 合并进 `handleGenerate`。Prom
 
 ### 验收与测试
 
-- 16 条 Route Contract Test 全量通过：`tests/routeContract.test.ts` 共 139 测试，覆盖每条 Route 的 capability/modes/aspectRatio/durations/resolution/refs 上限/`params[].field` 默认值 与 `officialEvidence` 的 doc ID 映射。
+- 17 条 Route Contract Test 全量通过，覆盖每条 Route 的 capability/modes/aspectRatio/durations/resolution/refs 上限/`params[].field` 默认值与 `officialEvidence` 的 doc ID 映射。
 - `tests/aiGatewayValidation.test.ts` 69 测试全量通过。其中 9 个原非 catalog 路由的测试已重写为 `rejects.toThrow('未通过验证')` + `expect(fetch).not.toHaveBeenCalled()`，断言 Provider emit 前阻塞生效：
   - `rhart-video-v3.1-pro/image-to-video`、`rhart-video-v3.1-fast-official/image-to-video`、`rhart-video-v3.1-pro-official/reference-to-video`、`skyreels-v4/omni-reference-fast`（t2v/i2v）、`rhart-video-s/text-to-video`（duration snap / durationSec 20 两个 case）、`rhart-video-v3.1-lite-official/start-end-to-video`、`rhart-video-v3.1-fast-official/reference-to-video`。
 - `workflowGeneration.test.ts` 26 测试通过（`mappedMediaKey` 为所有 Product Model mode 自动生成 route binding，与 Blocker 3 一致）。
@@ -1490,8 +1493,8 @@ Batch 逻辑已从独立 `handleBatchGenerate` 合并进 `handleGenerate`。Prom
 
 ### 未在本轮范围
 
-- 非 catalog 路由的 Capability Schema 扩登记（kling-v2 / vidu / wan / skyreels-v4 / rhart-video-s / rhart-video-v3.1-pro / lite-official 等 ~25 条）按用户决策推迟为单独项目。
-- 付费 Provider Smoke Test（向真实 RunningHub API 发起一次 t2v/i2v 验证 payload 与账单）按 ADR-0031 仍需用户另行批准才能执行。
+- 非 catalog 路由的 Capability Schema 扩登记（kling-v2 / vidu / wan / skyreels-v4 / rhart-video-s / rhart-video-v3.1-pro，以及 lite-official 的图生/首尾帧模式等）按用户决策推迟为单独项目。
+- 用户已批准并完成 RunningHub Lite 文生视频真实 Smoke/Evaluation：4/4 个镜头成功，Provider task ID 与价格预览已记录；图生视频付费 Smoke 仍未执行。
 - `flovartLibtvCompat.test.ts` 已改为当前 Workflow-only Canonical Command Registry 契约，旧 `node.create` / `upload` / `project.create` / `element.create` 兼容期望已删除。
 
 ### 待用户验证要点
@@ -1500,3 +1503,77 @@ Batch 逻辑已从独立 `handleBatchGenerate` 合并进 `handleGenerate`。Prom
 - ② 禁用或删除某条 Route Binding 后，PromptBar 生成按钮变未就绪，强行触发应在 Provider emit 之前拒掉（catalog 校验拦截，不会发起 fetch）。
 - ③ 选一个未在 Catalog 中登记的 RunningHub 路由（例如 `legacyNama的 skyreels-v4/omni-reference-fast` 或 `rhart-video-s/text-to-video`），点击生成，应立即看到 `未通过验证（未在 Route Catalog 中登记）` 错误，浏览器 Network 面板无 `/task/openapi/*` 请求。
 - ④ CLI/MCP 从产品模型 ID 选模型 → 浏览器 runtime 与 `modelPreference.v1` 同步 → 再次查询返回同一产品模型 ID；CLI 默认模型 `flovart:gpt-image-2` / `flovart:seedance-2` / `gemini-3-flash-preview` 与 SettingsPanel 默认一致。
+
+## 图生图修复 + 序数 @ 命名 + 保留参考图原始比例（本轮新增）
+
+### 修复项
+
+- **图生图被退化为文生图**：`PromptBar` 之前只为视频模式渲染 submode 切换按钮，导致图像模式始终走 `text-to-image`，RunningHub `rhart-image-g-2/text-to-image` 路由的 `media: []` 使参考图被整体丢弃。本轮新增：
+  - `services/productModelCatalog.ts` 新增 `IMAGE_MODE_ORDER`、`getRoutedImageModes(productModelId, keys)`、`routedImageSupportsImageToImage(productModelId, keys)`、`explainUnsupportedImageMode(productModelId, mode, keys)`，与视频侧 helpers 对齐。
+  - `components/PromptBar.tsx` 新增 `routedImageModes` useMemo、图像 submode 工具栏图标按钮（`generationMode === 'image' && routedImageModes.length > 1`）、图像 submode 面板块（按 `IMAGE_MODE_ORDER` 渲染 `文生图/图生图`，未支持时禁用并展示 `explainUnsupportedImageMode` tooltip）；`availableModes` 自动回退同样纳入图像分支。
+  - `services/workflowGeneration.ts` 自动切换 `productMode` 到 `image-to-image`（已连参考图 + 模型支持 + 路由已配置时），新增图像路由校验、`routeReferenceLimits` 扩到 `mode === 'image'`，新增 `mode === 'image'` 参考图处理块（image-to-image 要求 ≥1 张图片参考并标记 `slotRole: 'reference_image'`，text-to-image 清空 refs）。
+- **`@` 引用升级为稳定资产绑定**：连接面板仍可用 `图片1/视频1/音频1/文本1` 作为当前节点内的快捷序数，但富文本 mention 同时保存来源节点 ID 与素材库 `assetId`，Provider 编译优先使用用户可见的语义别名（例如 `@角色1`），不再把全部别名强制改写为 `@图片1`。
+  - 复制 Prompt 时同时写入可读纯文本、HTML 与 `application/x-flovart-prompt+json` 结构化剪贴板数据；结构化数据不携带图片 Base64。
+  - 粘贴到同一 Workflow 的新节点时自动连接原来源节点；跨 Workflow 且素材仍在个人素材库时按 `assetId` 重建引用节点。只有纯文本时，按“已连接序数 → 画布节点名 → 素材名”优先级做确定性匹配。
+  - 同名候选或一个别名对应两个不同资产时不猜测：冲突项保留为普通 `@文字` 并显示“未能唯一匹配引用”提示。
+  - `workflowGeneration.ts` 从富文本文档提取 `nodeId → @别名`，将真实媒体 URL/Blob、语义别名、Provider 输入序号和 `slotRole` 一起交给 Provider Adapter；`aiGateway.ts` 的绑定段明确要求不同角色、主体、首尾帧或风格参考不得互换。
+- **保留参考图原始比例**：新增全局开关 `WorkflowGenerationConfig.preserveReferenceAspectRatio`（图生图/图生视频都生效）。开启后，`workflowGeneration.ts` 会根据第一张图片参考节点的 `naturalWidth/naturalHeight` 计算最接近的支持比例并覆盖 `config.aspectRatio`，候选集来自 `capability.aspectRatios`（过滤掉 `adaptive`）。
+  - `components/workflow/types.ts` 新增 `preserveReferenceAspectRatio?: boolean` 字段。
+  - `components/PromptBar.tsx` 在「更多」面板新增「参考图」分区，仅当 `generationMode ∈ {image, video}` 且 `imageReferenceChips.length > 0` 时显示，复用现有 ON/OFF 按钮风格。
+  - `WorkflowNodePromptBar.tsx` 通过 `patchConfig` 双向同步该开关到 `config.preserveReferenceAspectRatio`。
+
+### 待用户验证要点
+
+- ① 选中图像节点 + 连接 1+ 张图片参考 + 模型为 `flovart:gpt-image-2`：工具栏应出现图像 submode 按钮；默认自动切换到「图生图」；点击生成抓包 RunningHub `rhart-image-g-2/image-to-image`，payload 中 `imageUrls` 数组按 chip 顺序包含参考图，未再退化为 `text-to-image`。
+- ② 在 PromptBar 输入或粘贴 `@角色1`：复制到另一个节点后仍显示 `@角色1` mention，并自动建立到同一来源节点的连线；Provider 收到的绑定段为 `- 图片1 = @角色1...，slot=reference_image`，请求中同时包含真实参考图。
+- ③ 仅粘贴纯文本 `@角色1向左走`（别名后无空格）：素材库中名称唯一时自动创建并连接引用节点；存在两个同名素材时不自动选择，并显示未匹配提示。
+- ④ 分两行输入 `@角色1执行动作A` 与 `@角色2执行动作B`：抓包确认两张真实参考图、两个不同语义别名与各自 Provider 序号同时存在，未退化为只有提示词文字。
+- ⑤ 切换模型到一个条仅支持 `text-to-image` 的产品（如 `imagen-4`）：submode 面板的「图生图」应被禁用并显示有意义的 tooltip；强行不允许切到图生图。
+- ⑥ 打开「保留参考图原始比例」开关 + 连接一张宽高比非标准（如 3:2）的参考图：生成请求 payload 的 `aspectRatio` 应自动落在最接近的支持比例（`3:2` 或 fallback），与用户在 PromptBar 顶部比例选择中的值不同；关闭开关后恢复使用 PromptBar 选中比例。
+- ⑦ 图生视频场景下打开此开关，等价行为也应生效（解析第一张图片参考节点的原始宽高）。
+
+## Provider 模型能力、分镜双 Prompt 与 Base URL 删除修复
+
+### 修复项
+
+- **模型与 Provider 不再混成假模型名**：模型列表保留每个模型自身的 `text/image/video` 能力；模型映射下拉按单模型能力过滤，不再把同一个 Provider 下的所有模型复制到图片、视频和文本线路。下拉标签只展示产品模型或模型 ID，Provider 作为独立线路信息展示。
+- **分镜图片/视频 Prompt 完全独立**：`ScriptShot` 分别保存 `imagePromptOverride` 与 `videoPromptOverride`；AI 分镜拆解、编辑器和批量生图/生视频都使用各自字段，不再复用同一条图片 Prompt。
+- **Base URL 全选删除不再触发工作区快捷键**：设置页和首次引导页的 Base URL 输入框隔离键盘事件，`Ctrl+A` 后按 `Delete` 只清空输入值，不会传到 Workflow 的全局删除处理。
+
+### 待用户验证要点
+
+- ① 新增一个同时声明文本、图片、视频能力的自定义 Provider（例如 Agnes），确认 `gpt-5.4` 只出现在文本模型映射；图片和视频下拉只出现各自能力模型，且不再显示 `gpt-5.4.anges` 一类拼接名称。
+- ② 在同一分镜分别填写不同的生图 Prompt 和生视频 Prompt，执行「批量生图」与「批量生视频」，确认生成节点分别收到对应文本。
+- ③ 在设置页和首次引导页反复执行 Base URL 全选、`Delete`、重新输入，确认配置页面保持挂载且无闪退。
+
+## Production Runtime S1.1/S1.2 持久任务与真实视频生成
+
+`runtime.test.delay` 继续验证客户端断开、桌面端重启和取消请求下的持久任务恢复；新增的 `generate.video --provider runningHub` 已完成首条真实 Provider tracer-bullet。视频生成已迁入 Production Runtime，旁白、字幕、混音和合成仍是评测目录中的本地后期脚本。
+
+### 已实现
+
+- Runtime 在现有本地 SQLite 状态库中使用独立 migration 和 `runtime_tasks`、`runtime_events`、`command_receipts` 表，不复用同步日志充当任务状态。
+- 提交 `runtime.test.delay` 时，Task、首个 queued Event 与幂等 receipt 在同一事务中持久化；持久化失败或数据库繁忙时不得返回 accepted receipt。
+- CLI/MCP 的 actor instance 在多个本地进程之间保持稳定；相同 actor + idempotency key + payload 返回同一 receipt，复用相同 key 但改变 payload 返回 `IDEMPOTENCY_CONFLICT`。
+- 后台 Worker 通过租约认领任务，支持续租、过期后重启回收、完成写回和持久取消；客户端连接不是任务生命周期所有者。
+- Canonical Command Registry 可执行 `runtime.test.delay`、`task.get`、`task.list`、`task.cancel`、`event.stream`、`provider.status` 与 `generate.video`；`generate.video` 支持 `google` / `runningHub` provider 选择。
+- Control Plane 新增 Task REST 查询/稳定游标分页，以及支持 `Last-Event-ID` 和 task filter 的 SSE Event 快照。当前客户端通过快照结束后重连实现续读，不应宣称为单连接无限推送。
+- RunningHub Adapter 使用 Desktop 系统凭据，不向 CLI 返回明文 Key；Veo 3.1 Lite 在提交前调用价格预览，随后持久化 Provider task ID、轮询事件与下载后的 Artifact。
+- 真实 VOX 风格评测已完成 4/4 个 8 秒镜头，提交前预估合计 ¥10.24，顺序生成总耗时 13m 24.837s；本地合成为 30.000 秒、1280×720、H.264/AAC、-16.1 LUFS 的中文成片。预估费用不等同于最终扣费。
+
+### 自动验证
+
+- Rust Runtime 全量测试通过：Control Plane、契约、持久账本、租约恢复与取消均通过。
+- Runtime/CLI 定向 Vitest 18 项通过，`npx tsc --noEmit` 通过。
+- 本次增量验证通过：`cargo test --lib` 4/4、`runtime_contract` 5/5、`runtime_ledger` 5/5、`runtime_recovery` 3/3；RunningHub/Registry 定向 Vitest 225/225，`npm run build` 通过。
+- 项目全量 `npm test` 当前为 598 项通过、1 项跳过、6 项失败；失败均位于本轮未修改的 `tests/workflowGeneration.test.ts`，表现为生成执行器未被调用，不属于 S1.1 Runtime 测试。
+- 本轮环境未启动桌面 Runtime，因此未执行依赖真实 discovery record 的 CLI 端到端 smoke test。
+
+### 待用户验证
+
+1. 启动桌面端后执行 `npm run flovart:cli -- runtime.test.delay --delay-ms 1000 --idempotency-key demo-delay-1 --json`，保存返回的 `taskId`。
+2. 用 `npm run flovart:cli -- task.get --task-id <taskId> --json` 查询状态；再用 `task.list` 验证稳定分页。
+3. 执行 `npm run flovart:cli -- event.stream --after-event-id 0 --task-id <taskId> --json`，确认返回事件有单调递增的 ID；把最后一个 ID 作为新的 `--after-event-id` 时不得重复返回旧事件。
+4. 用相同 idempotency key 和相同参数再次提交，应返回同一 receipt；保持 key 不变但修改 `delay-ms`，应返回 `IDEMPOTENCY_CONFLICT`。
+5. 提交较长 delay 后关闭并重启桌面端，等待旧租约过期后确认任务被恢复并最终完成；运行中调用 `task.cancel` 时确认取消状态与事件可在重启后继续查询。
+6. 播放 `tools/flovart/evaluations/vox-history-1776/vox-history-1776.mp4`，确认画面、中文字幕、旁白和混音可接受；到 RunningHub 控制台核对四个 Provider task ID 的最终扣费是否与 ¥10.24 预估一致。

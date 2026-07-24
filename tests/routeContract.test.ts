@@ -1,5 +1,5 @@
 /**
- * Route Contract Tests — 16 条 RunningHub 首期 Route 的契约验证
+ * Route Contract Tests — RunningHub 已验证 Route 的契约验证
  * 每条 Route 验证 endpoint、字段名、字段类型、默认值、媒体角色与数量限制。
  * 依据：docs/dev/runninghub-route-catalog.md + docs/adr/0006
  */
@@ -45,8 +45,8 @@ describe('Route Catalog — structural integrity', () => {
         }
     });
 
-    it('contains exactly 16 routes', () => {
-        expect(CATALOG).toHaveLength(16);
+    it('contains exactly 17 routes', () => {
+        expect(CATALOG).toHaveLength(17);
     });
 
     it('every routeId is unique', () => {
@@ -60,9 +60,9 @@ describe('Route Catalog — structural integrity', () => {
         }
     });
 
-    it('contains 6 image routes and 10 video routes', () => {
+    it('contains 6 image routes and 11 video routes', () => {
         expect(IMAGE_ROUTES).toHaveLength(6);
-        expect(VIDEO_ROUTES).toHaveLength(10);
+        expect(VIDEO_ROUTES).toHaveLength(11);
     });
 });
 
@@ -331,7 +331,7 @@ describe('Image Route — rhart-image-g-2/text-to-image (GPT Image 2)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Video Route Contracts (10)
+// Video Route Contracts (11)
 // ---------------------------------------------------------------------------
 
 describe('Video Route — rhart-video-v3.1-fast/image-to-video (Veo 3.1 Fast)', () => {
@@ -708,6 +708,31 @@ describe('Video Route — rhart-video-v3.1-fast/text-to-video (Veo 3.1 Fast)', (
     });
     it('links to official evidence 448183144', () => {
         expect(s.officialEvidence).toContain('448183144');
+    });
+});
+
+describe('Video Route — rhart-video-v3.1-lite-official/text-to-video (Veo 3.1 Lite)', () => {
+    const s = schemaOf('rhart-video-v3.1-lite-official/text-to-video');
+    it('maps to flovart:veo-3.1-lite with text-to-video mode', () => {
+        expect(s.productModelId).toBe('flovart:veo-3.1-lite');
+        expect(s.modes).toEqual(['text-to-video']);
+    });
+    it('uses official-stable channel', () => {
+        expect(s.channelTier).toBe('official-stable');
+    });
+    it('caps the verified CLI route to 16:9/9:16, 4/6/8 seconds, and 720p by default', () => {
+        expect(s.aspectRatioValues).toEqual(['16:9', '9:16']);
+        expect(s.durationType).toBe('string');
+        expect(s.durationValues).toEqual(['4', '6', '8']);
+        expect(s.durationDefault).toBe('8');
+        expect(s.resolutionDefault).toBe('720p');
+    });
+    it('sends no undocumented generateAudio field or media references', () => {
+        expect(s.params).toHaveLength(0);
+        expect(s.media).toHaveLength(0);
+    });
+    it('links to official evidence 448183147', () => {
+        expect(s.officialEvidence).toContain('448183147');
     });
 });
 

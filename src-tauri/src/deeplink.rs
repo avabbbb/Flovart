@@ -54,13 +54,12 @@ pub fn handle_deeplink_url(app: &AppHandle, raw: &str) {
     // 2) 如果带 command 参数，bridge 入队
     if let Some(cmd) = params.get("command") {
         let args_str = params.get("args").cloned().unwrap_or_else(|| "{}".into());
-        let args: serde_json::Value = serde_json::from_str(&args_str).unwrap_or_else(|_| serde_json::json!({}));
+        let args: serde_json::Value =
+            serde_json::from_str(&args_str).unwrap_or_else(|_| serde_json::json!({}));
         if let Some(ctx) = app.try_state::<std::sync::Arc<crate::FlovartContext>>() {
-            let entry: BridgeEntry = ctx.bridge_queue.enqueue(
-                cmd.clone(),
-                args,
-                "deeplink".into(),
-            );
+            let entry: BridgeEntry = ctx
+                .bridge_queue
+                .enqueue(cmd.clone(), args, "deeplink".into());
             let _ = ctx.state_db.sync_log(
                 "bridge",
                 &entry.id,

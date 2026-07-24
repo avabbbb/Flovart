@@ -4,19 +4,13 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
-import { COMMAND_REGISTRY, executeFlovartCommand } from './core.js';
-import { createShadowRuntimeFacade } from './shadow-runtime.js';
-import { enqueueCommand, enqueueAndWait } from './flovart-bridge.js';
-import { BROWSER_COMMANDS } from './browser-commands.js';
-import { FlovartRuntimeClient, RuntimeClientError } from './runtime-client.js';
-
-const LOCAL_COMMANDS = new Set([
-  'help', 'setup', 'init', 'doctor',
-  'inspiration.search', 'inspiration.get',
-  'prompt.enhance', 'batch.plan',
-  'preferences.manage', 'models.list',
-]);
-const RUNTIME_COMMANDS = new Set(['runtime.status', 'command.list', 'command.schema']);
+import { COMMAND_REGISTRY } from './core.js';
+import { defaultRuntimeActor, FlovartRuntimeClient, RuntimeClientError } from './runtime-client.js';
+import {
+  availableCommandEntries,
+  RUNTIME_COMMANDS,
+  RUNTIME_WRITE_COMMANDS,
+} from './runtime-command-surface.js';
 
 function argTypeToZod(typeStr) {
   const optional = typeStr.endsWith('?');
@@ -48,64 +42,54 @@ function buildSchema(argDefs) {
   return shape;
 }
 
-function toCliArgs(mcpArgs) {
-  const cliArgs = {};
-  for (const [key, value] of Object.entries(mcpArgs)) {
-    if (value === undefined) continue;
-    cliArgs[key] = value;
-    const kebab = key.replace(/([A-Z])/g, '-$1').toLowerCase();
-    if (kebab !== key) cliArgs[kebab] = value;
-  }
-  return cliArgs;
-}
-
 async function routeAndExecute(command, rawArgs) {
-  const { wait = true, timeoutMs = 60000, ...rest } = rawArgs;
-  const args = toCliArgs(rest);
-  if (RUNTIME_COMMANDS.has(command)) {
-    const runtime = new FlovartRuntimeClient();
-    try {
-      return command === 'runtime.status'
-        ? await runtime.status()
-        : await runtime.execute(command, args, { kind: 'mcp', instanceId: `mcp_${process.pid}` });
-    } catch (error) {
-      return {
-        ok: false,
-        error: error instanceof RuntimeClientError
-          ? error.toJSON()
-          : { code: 'RUNTIME_UNAVAILABLE', message: error instanceof Error ? error.message : String(error), retryable: true },
-      };
+  const { idempotencyKey, ...rest } = rawArgs;
+  if (!RUNTIME_COMMANDS.has(command)) {
+    return { ok: false, error: { code: 'UNKNOWN_COMMAND', message: `Command is not available through Production Runtime: ${command}`, retryable: false } };
+  }
+  const runtime = new FlovartRuntimeClient();
+  try {
+    const commandArgs = {};
+    for (const name of Object.keys(COMMAND_REGISTRY[command]?.args || {})) {
+      if (rest[name] !== undefined) commandArgs[name] = rest[name];
     }
+    if (command === 'runtime.status') return await runtime.status();
+    if (command === 'task.get') return await runtime.getTask(commandArgs.taskId);
+    if (command === 'task.list') return await runtime.listTasks(commandArgs);
+    if (command === 'event.stream') return await runtime.streamEvents(commandArgs);
+    return await runtime.execute(
+      command,
+      commandArgs,
+      defaultRuntimeActor('mcp'),
+      { ...(idempotencyKey ? { idempotencyKey } : {}) },
+    );
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof RuntimeClientError
+        ? error.toJSON()
+        : { code: 'RUNTIME_UNAVAILABLE', message: error instanceof Error ? error.message : String(error), retryable: true },
+    };
   }
-  if (LOCAL_COMMANDS.has(command)) {
-    return await executeFlovartCommand(command, args, {});
-  }
-  if (BROWSER_COMMANDS.has(command)) {
-    return wait
-      ? await enqueueAndWait(command, args, timeoutMs)
-      : enqueueCommand(command, args);
-  }
-  return await executeFlovartCommand(command, args, createShadowRuntimeFacade());
 }
 
 const server = new McpServer({
   name: 'flovart',
   version: '0.3.0',
   instructions: [
-    'Flovart MCP Server — deterministic Workflow and generation tools.',
-    'All tools mirror flovart CLI commands. Keep the Flovart browser app open for provider-backed generation.',
-    'Browser commands (provider.*, generate.*, workflow.node.run/stop) accept optional `wait` (default true) and `timeoutMs` (default 60000).',
-    'If a browser command times out, it returns a pending result; use video.status for video jobs and inspect the Workflow before retrying.',
+    'Flovart MCP Server — deterministic Production Runtime tools.',
+    'Only commands marked available in the canonical registry are exposed.',
+    'Provider jobs return durable task IDs; observe them with task.get and event.stream.',
+    'Workflow commands remain unavailable until the visible workspace is projected from Production Runtime.',
     'Never read, print, or store API keys. Provider keys stay in the local Flovart Runtime/WebUI only.',
   ].join(' '),
 });
 
-for (const [commandName, def] of Object.entries(COMMAND_REGISTRY)) {
+for (const [commandName, def] of availableCommandEntries(COMMAND_REGISTRY)) {
   const toolName = commandName.replace(/[-.]/g, '_');
   const schema = buildSchema(def.args);
-  if (BROWSER_COMMANDS.has(commandName)) {
-    schema.wait = z.boolean().optional();
-    schema.timeoutMs = z.number().optional();
+  if (RUNTIME_WRITE_COMMANDS.has(commandName)) {
+    schema.idempotencyKey = z.string().min(1);
   }
   server.tool(
     toolName,

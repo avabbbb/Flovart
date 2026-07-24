@@ -1,0 +1,58 @@
+{
+  "schemaVersion": "flovart.vox-evaluation/1",
+  "title": "1776：一张床，一扇窗",
+  "source": {
+    "discovery": "https://www.reddit.com/r/history/top/?t=all",
+    "primary": "https://founders.archives.gov/documents/Adams/01-03-02-0016-0187",
+    "selectionRule": "Current highest-ranked non-meta historical anecdote in the accessible all-time r/history listing.",
+    "factBoundary": "Adams later conceded there was much truth in Franklin's foul-air argument, but did not accept that cold air never causes colds."
+  },
+  "delivery": {
+    "durationSec": 30,
+    "aspectRatio": "16:9",
+    "resolution": "1280x720",
+    "language": "zh-CN",
+    "captions": "burned-in"
+  },
+  "style": {
+    "idiom": "finished editorial paper-collage poster animated with restrained punchy motion",
+    "palette": ["warm cream", "ochre", "deep red", "ink black", "cold blue accent"],
+    "finish": ["torn paper", "newsprint", "halftone", "visible tape", "cutout silhouettes"],
+    "continuity": "same Adams and Franklin cutout character designs, same palette and paper texture in every shot",
+    "negative": "no readable text, no subtitles, no logos, no watermarks, no photorealism, no glossy 3D, no spoken dialogue"
+  },
+  "model": {
+    "productModel": "flovart:veo-3.1-lite",
+    "provider": "runningHub",
+    "providerRoute": "rhart-video-v3.1-lite-official/text-to-video",
+    "clipDurationSec": 8,
+    "clipCount": 4,
+    "quotedVideoCostCny": 10.24
+  },
+  "beats": [
+    {
+      "id": "beat-1",
+      "timeline": "00:00-00:08",
+      "overlay": "1776：一张床，一扇窗",
+      "prompt": "A finished VOX-inspired editorial paper-collage poster comes alive with restrained punchy motion. September 1776, John Adams and Benjamin Franklin as consistent stylized 18th-century cutout silhouettes arrive at a tiny New Brunswick roadside inn at night, carrying travel papers. A miniature inn, map fragments, carriage wheel and torn archival paper compose one strong graphic frame. Warm cream, ochre, deep red, ink black, cold blue accent, newsprint halftone, torn edges and visible tape. Slow push-in, two paper figures slide into place, map line draws itself, subtle paper parallax. Historically suggestive, witty, not photorealistic. No readable text, no subtitles, no logos, no watermarks, no glossy 3D, no spoken dialogue."
+    },
+    {
+      "id": "beat-2",
+      "timeline": "00:08-00:15",
+      "overlay": "旅店只剩一张小床",
+      "prompt": "A finished unbranded modern data-journalism editorial paper-collage poster animated with restrained punchy motion, continuing the same stylized John Adams and Benjamin Franklin 18th-century cutout designs and palette. Inside a chamber barely larger than one tiny bed, with one small window. Sick John Adams pulls the window shut against cold blue night air while Franklin gestures that the room is too stuffy. Bold overhead composition, oversized bed, tiny window, torn-paper walls, ochre and deep red against ink black, blue air ribbons stopped at the window, abstract newsprint halftone and tape. Quick cutout hand motion, window snaps shut, subtle camera push, paper textures breathe. Completely unbranded: no typography, no letters, no readable text, no subtitles, no logos, no watermarks, no photorealism, no spoken dialogue."
+    },
+    {
+      "id": "beat-3",
+      "timeline": "00:15-00:23",
+      "overlay": "冷风，还是浑浊空气？",
+      "prompt": "A finished unbranded modern data-journalism editorial infographic made of paper collage, animated with restrained punchy motion, continuing the same stylized John Adams and Benjamin Franklin 18th-century cutout designs and palette. Franklin opens the tiny window and explains airflow: fresh cold blue paper arrows enter, stale deep-red halftone clouds leave, simple lungs and respiration diagram assembled from torn archival paper around the one bed. Franklin points calmly while Adams looks skeptical under a blanket. Strong visual hierarchy without written words, warm cream, ochre, deep red, ink black, cold blue accent, visible tape, abstract newsprint dots. Arrows pulse, diagram pieces snap into place, slow lateral camera move. Completely unbranded: no typography, no letters, no readable text, no subtitles, no logos, no watermarks, no photorealism, no spoken dialogue."
+    },
+    {
+      "id": "beat-4",
+      "timeline": "00:23-00:30",
+      "overlay": "富兰克林还在讲，亚当斯已经睡着",
+      "prompt": "A finished unbranded modern data-journalism editorial paper-collage poster animated with restrained comedic timing, continuing the same stylized John Adams and Benjamin Franklin 18th-century cutout designs and palette. Franklin lies in the tiny shared bed, still delivering an elaborate theory with floating cut-paper lungs, air arrows and small diagrams; beside him John Adams is unmistakably asleep, paper eyelids closed, one gentle snore curl. The open window shows calm cold blue night. A blank torn diary page and quill slide into the composition as the visual resolves. Warm cream, ochre, deep red, ink black, blue accent, abstract newsprint halftone, tape and torn edges. Diagram pieces keep moving while Adams becomes still, then a gentle pull-back. Completely unbranded: no typography, no letters, no readable text, no subtitles, no logos, no watermarks, no photorealism, no spoken dialogue."
+    }
+  ]
+}

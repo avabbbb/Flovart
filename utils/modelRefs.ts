@@ -77,8 +77,12 @@ export function getKeyModelIds(key: UserApiKey, capability?: 'text' | 'image' | 
 
   return models.filter(model => {
     if (!capability) return true;
-    const inferred = inferCapabilityFromModel(model);
-    return !inferred || inferred === capability;
+    const normalized = normalizeModelId(model);
+    const declared = key.models?.find(item => normalizeModelId(item.id) === normalized)?.capability;
+    const inferred = declared || inferCapabilityFromModel(model);
+    if (inferred) return inferred === capability;
+    const creativeCapabilities = getKeyCapabilities(key).filter(item => item === 'text' || item === 'image' || item === 'video');
+    return creativeCapabilities.length === 1 && creativeCapabilities[0] === capability;
   });
 }
 
@@ -226,16 +230,8 @@ export function modelRefProvider(value: string, keys: UserApiKey[]): AIProvider 
 
 export function modelRefLabel(value: string, keys: UserApiKey[] = []): string {
   const product = getProductModel(value);
-  if (product) {
-    const route = resolveAnyProductRoute(product.id, keys);
-    const owner = route?.key.name?.trim() || (route ? PROVIDER_LABELS[route.key.provider] || route.key.provider : undefined);
-    return owner ? `${product.name} · ${owner}` : product.name;
-  }
-  const bareModel = modelRefModelId(value);
-  const keyId = modelRefKeyId(value);
-  const key = keyId ? keys.find(item => item.id === keyId) : undefined;
-  const owner = key?.name?.trim() || (key ? PROVIDER_LABELS[key.provider] || key.provider : undefined);
-  return owner ? `${bareModel} · ${owner}` : bareModel;
+  if (product) return product.name;
+  return modelRefModelId(value);
 }
 
 export function modelRefSearchText(value: string, keys: UserApiKey[] = []): string {

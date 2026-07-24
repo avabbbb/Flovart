@@ -24,14 +24,15 @@ const BREAKDOWN_SYSTEM_PROMPT = `你是一个专业的剧本拆解助手。用�
       "dialogue": "台词",
       "sfx": "音效/音乐",
       "scene": "场景名",
-      "promptOverride": "用于 AI 生图的英文 prompt，包含角色、场景、动作、光影、构图等细节"
+      "imagePromptOverride": "用于 AI 生图的英文 prompt，包含角色、场景、动作、光影、构图等静态画面细节",
+      "videoPromptOverride": "用于 AI 生视频的英文 prompt，包含主体运动、镜头运动、节奏、时序变化与结束状态"
     }
   ]
 }
 
 规则：
-- 每个分镜必须有 index（从 0 开始）、action、promptOverride
-- promptOverride 用英文撰写，适合 AI 图片生成
+- 每个分镜必须有 index（从 0 开始）、action、imagePromptOverride、videoPromptOverride
+- imagePromptOverride 与 videoPromptOverride 都用英文撰写，但分别面向静态图片和动态视频生成，不得复用同一段描述
 - 尽量覆盖剧本的关键画面，通常 4-12 个分镜
 - assets 列出所有出现的角色、场景和道具`;
 
@@ -55,7 +56,8 @@ function parseBreakdownResponse(text: string): ScriptBreakdown | null {
         dialogue: shot.dialogue,
         sfx: shot.sfx,
         scene: shot.scene,
-        promptOverride: shot.promptOverride,
+        imagePromptOverride: shot.imagePromptOverride,
+        videoPromptOverride: shot.videoPromptOverride,
       })),
       sourceText: undefined,
     };
@@ -296,16 +298,28 @@ function ShotCard({ shot, onChange, onDelete }: {
         {field('台词', 'dialogue', '角色说的话')}
         {field('音效', 'sfx', '背景音乐/音效')}
       </div>
-      <label style={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 6 }}>
-        <span style={{ fontSize: 10, color: 'var(--wf-muted)' }}>生图 Prompt（英文，覆盖自动推断）</span>
-        <textarea
-          value={shot.promptOverride || ''}
-          placeholder="A close-up shot of..."
-          onChange={event => onChange({ promptOverride: event.target.value })}
-          rows={2}
-          style={{ width: '100%', resize: 'vertical', border: '1px solid var(--wf-border)', borderRadius: 4, padding: '4px 6px', background: 'var(--wf-bg)', color: 'var(--wf-text)', fontSize: 12, outline: 'none', lineHeight: 1.4 }}
-        />
-      </label>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginTop: 6 }}>
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <span style={{ fontSize: 10, color: 'var(--wf-muted)' }}>生图 Prompt（英文）</span>
+          <textarea
+            value={shot.imagePromptOverride || ''}
+            placeholder="A close-up still frame of..."
+            onChange={event => onChange({ imagePromptOverride: event.target.value })}
+            rows={2}
+            style={{ width: '100%', resize: 'vertical', border: '1px solid var(--wf-border)', borderRadius: 4, padding: '4px 6px', background: 'var(--wf-bg)', color: 'var(--wf-text)', fontSize: 12, outline: 'none', lineHeight: 1.4 }}
+          />
+        </label>
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <span style={{ fontSize: 10, color: 'var(--wf-muted)' }}>生视频 Prompt（英文）</span>
+          <textarea
+            value={shot.videoPromptOverride || ''}
+            placeholder="A tracking shot where..."
+            onChange={event => onChange({ videoPromptOverride: event.target.value })}
+            rows={2}
+            style={{ width: '100%', resize: 'vertical', border: '1px solid var(--wf-border)', borderRadius: 4, padding: '4px 6px', background: 'var(--wf-bg)', color: 'var(--wf-text)', fontSize: 12, outline: 'none', lineHeight: 1.4 }}
+          />
+        </label>
+      </div>
     </div>
   );
 }

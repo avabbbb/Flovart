@@ -16,6 +16,11 @@ import {
 } from '../services/runningHubService';
 import { modelRefModelId } from '../utils/modelRefs';
 import { getProductModels } from '../services/productModelCatalog';
+import {
+    deleteRuntimeCredential,
+    reportRuntimeCredentialVault,
+    syncRuntimeCredentials,
+} from '../services/runtimeCredentials';
 
 const generateId = () => `id_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
@@ -188,11 +193,14 @@ export function useApiKeys(isSettingsPanelOpen: boolean) {
     // 持久化 API Key（加密写入 localforage）；“退出时清除”开启后只保留内存态。
     useEffect(() => {
         if (!apiKeysLoaded) return;
+        void reportRuntimeCredentialVault(userApiKeys.length, !clearKeysOnExit)
+            .catch(() => { /* Runtime may be unavailable in web builds. */ });
         if (clearKeysOnExit) {
             void clearAllKeyData();
             return;
         }
         void saveKeysEncrypted(userApiKeys);
+        void syncRuntimeCredentials(userApiKeys).catch(() => { /* Runtime may be unavailable in web builds. */ });
     }, [userApiKeys, apiKeysLoaded, clearKeysOnExit]);
 
     // 新用户引导：API Key 异步加载完成后，如果没有任何 Key 且用户未主动跳过，自动弹出引导
@@ -325,7 +333,7 @@ export function useApiKeys(isSettingsPanelOpen: boolean) {
             setUserApiKeys(prev => prev.map(k => {
                 const fetched = results.get(k.id);
                 if (!fetched || fetched.length === 0) return k;
-                const modelItems = fetched.map(m => ({ id: m.id, name: m.name || m.id }));
+                const modelItems = fetched.map(m => ({ id: m.id, name: m.name || m.id, capability: m.capability }));
                 return mergeFetchedModelsIntoKey(k, modelItems);
             }));
         }).catch(() => { /* silent background refresh failure */ });
@@ -365,7 +373,7 @@ export function useApiKeys(isSettingsPanelOpen: boolean) {
             .then(results => {
                 const fetched = results.get(nextKey.id);
                 if (fetched && fetched.length > 0) {
-                    const modelItems = fetched.map(m => ({ id: m.id, name: m.name || m.id }));
+                    const modelItems = fetched.map(m => ({ id: m.id, name: m.name || m.id, capability: m.capability }));
                     setUserApiKeys(prev => prev.map(k =>
                         k.id === nextKey.id ? mergeFetchedModelsIntoKey(k, modelItems) : k
                     ));
@@ -375,7 +383,11 @@ export function useApiKeys(isSettingsPanelOpen: boolean) {
     }, []);
 
     const handleDeleteApiKey = useCallback((id: string) => {
-        setUserApiKeys(prev => prev.filter(k => k.id !== id));
+        setUserApiKeys(prev => {
+            const removed = prev.find(k => k.id === id);
+            if (removed) void deleteRuntimeCredential(removed).catch(() => { /* Local vault remains authoritative. */ });
+            return prev.filter(k => k.id !== id);
+        });
     }, []);
 
     const handleUpdateApiKey = useCallback((id: string, patch: Partial<Omit<UserApiKey, 'id' | 'createdAt'>>) => {

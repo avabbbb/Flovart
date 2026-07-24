@@ -230,6 +230,40 @@ describe('workflow node overlays', () => {
     await waitFor(() => expect(screen.queryByTestId('asset-reference-picker')).not.toBeInTheDocument());
   });
 
+  it('matches pasted plain @ aliases against the asset library and requests a real reference binding', async () => {
+    const target = createWorkflowNode('paste-target', 'image', { x: 0, y: 0 }, {
+      prompt: '',
+      config: { mode: 'image', modelId: 'flovart:gpt-image-2' },
+    });
+    const onResolvePastedMentions = vi.fn(mentions => mentions.map(mention => ({ ...mention, id: 'restored-asset-node' })));
+    render(<WorkflowNodePromptBar
+      node={target}
+      nodes={[target]}
+      t={t}
+      theme="light"
+      language="zho"
+      userApiKeys={[productKey]}
+      dynamicModelOptions={{ text: [], image: ['flovart:gpt-image-2'], video: [] }}
+      onChange={vi.fn()}
+      onRun={vi.fn()}
+      assetItems={[{ id: 'asset-role-1', name: '角色1', folderIds: [], tags: ['角色'], thumbnail: '', elementType: 'image' }]}
+      onResolvePastedMentions={onResolvePastedMentions}
+    />);
+
+    fireEvent.paste(screen.getByRole('textbox'), {
+      clipboardData: { getData: (type: string) => type === 'text/plain' ? '@角色1向左走' : '' },
+    });
+
+    await waitFor(() => expect(onResolvePastedMentions).toHaveBeenCalled());
+    expect(onResolvePastedMentions).toHaveBeenCalledWith([
+      expect.objectContaining({
+        assetId: 'asset-role-1',
+        label: '角色1',
+        sourceType: 'assetLibrary',
+      }),
+    ]);
+  });
+
   it('uses the compact personal asset browser shared with PromptBar references', () => {
     render(<AssetLibraryBrowser
       compact

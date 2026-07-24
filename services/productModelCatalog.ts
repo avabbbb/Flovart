@@ -143,6 +143,7 @@ export function getProductModelsByCompany(capability: 'image' | 'video'): { comp
 }
 
 export const VIDEO_MODE_ORDER: ProductModelMode[] = ['text-to-video', 'image-to-video', 'reference-to-video', 'first-last-frame', 'video-extension'];
+export const IMAGE_MODE_ORDER: ProductModelMode[] = ['text-to-image', 'image-to-image'];
 
 /** 固定产品能力与当前 BYOK 线路实际已实现的请求适配器取交集，避免 PromptBar 展示“能选但发不出去”的模式。 */
 export function getRoutedVideoModes(productModelId: string, provider?: AIProvider, routeId = ''): ProductModelMode[] {
@@ -164,6 +165,40 @@ export function getRoutedVideoModes(productModelId: string, provider?: AIProvide
     return ['text-to-video'];
   })() as ProductModelMode[];
   return product.capabilities.modes.filter(mode => supported.includes(mode));
+}
+
+/** 图片产品模型与当前 BYOK 线路实际已实现的请求适配器取交集。RunningHub 路由名带 /text-to-image 或 /image-to-image 决定支持的模式；非 RunningHub Provider 默认仅 text-to-image，OpenAI GPT Image 系列支持 image-to-image。 */
+export function getRoutedImageModes(productModelId: string, provider?: AIProvider, routeId = ''): ProductModelMode[] {
+  const product = getProductModel(productModelId);
+  if (!product || product.capability !== 'image') return [];
+  const supported = (() => {
+    if (!provider) return IMAGE_MODE_ORDER;
+    if (provider === 'openai_compatible' || provider === 'openai') return ['text-to-image', 'image-to-image'];
+    if (provider === 'google') return ['text-to-image', 'image-to-image'];
+    if (provider === 'runningHub') {
+      const endpoint = routeId.toLowerCase();
+      if (/image-to-image/.test(endpoint)) return ['image-to-image'];
+      if (/text-to-image/.test(endpoint)) return ['text-to-image'];
+      return IMAGE_MODE_ORDER;
+    }
+    return ['text-to-image'];
+  })() as ProductModelMode[];
+  return product.capabilities.modes.filter(mode => supported.includes(mode));
+}
+
+/** 图片产品模型是否在当前 BYOK 线路下支持 image-to-image；用于 PromptBar 决定是否暴露「生成方式」按钮与「保留参考图原始比例」开关。 */
+export function routedImageSupportsImageToImage(productModelId: string, provider?: AIProvider, routeId = ''): boolean {
+  return getRoutedImageModes(productModelId, provider, routeId).includes('image-to-image');
+}
+
+/** 图片模式不可用原因，用于 PromptBar 灰显 tooltip。 */
+export function explainUnsupportedImageMode(productModelId: string, mode: ProductModelMode): string | null {
+  const product = getProductModel(productModelId);
+  if (!product || product.capability !== 'image') return null;
+  if (product.capabilities.modes.includes(mode)) return null;
+  if (mode === 'image-to-image') return '该模型不支持图生图';
+  if (mode === 'text-to-image') return '该模型不支持纯文生图';
+  return '该模式当前不存在';
 }
 
 const DIRECT_VIDEO_RATIOS: Partial<Record<AIProvider, VideoAspectRatio[]>> = {

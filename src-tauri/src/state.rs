@@ -123,9 +123,8 @@ impl StateDb {
 
     pub fn kv_list_prefix(&self, prefix: &str) -> FlovartResult<Vec<(String, String)>> {
         let conn = self.conn.lock();
-        let mut stmt = conn.prepare(
-            "SELECT key, value FROM kv WHERE key LIKE ?1 ORDER BY updated_at DESC",
-        )?;
+        let mut stmt =
+            conn.prepare("SELECT key, value FROM kv WHERE key LIKE ?1 ORDER BY updated_at DESC")?;
         let pattern = format!("{prefix}%");
         let rows = stmt.query_map(params![pattern], |row| {
             Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
@@ -187,9 +186,13 @@ pub fn state_set(
     source: Option<String>,
 ) -> FlovartResult<()> {
     ctx.state_db.kv_set(&key, &value)?;
-    let _ = ctx
-        .state_db
-        .sync_log("kv", &key, "set", source.as_deref().unwrap_or("webui"), Some(&value));
+    let _ = ctx.state_db.sync_log(
+        "kv",
+        &key,
+        "set",
+        source.as_deref().unwrap_or("webui"),
+        Some(&value),
+    );
     Ok(())
 }
 
@@ -207,9 +210,7 @@ pub fn state_delete(
     key: String,
 ) -> FlovartResult<bool> {
     let n = ctx.state_db.kv_delete(&key)?;
-    let _ = ctx
-        .state_db
-        .sync_log("kv", &key, "delete", "webui", None);
+    let _ = ctx.state_db.sync_log("kv", &key, "delete", "webui", None);
     Ok(n)
 }
 

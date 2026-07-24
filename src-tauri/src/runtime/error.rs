@@ -8,6 +8,8 @@ pub enum RuntimeContractError {
     ControlServer(String),
     #[error("runtime security setup failed: {0}")]
     Security(String),
+    #[error("runtime database failed: {0}")]
+    Database(#[from] rusqlite::Error),
     #[error("invalid canonical command registry: {0}")]
     InvalidRegistry(#[from] serde_json::Error),
     #[error("invalid runtime contract schema: {0}")]

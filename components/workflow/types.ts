@@ -22,7 +22,8 @@ export interface ScriptShot {
   dialogue?: string;
   sfx?: string;
   scene?: string;
-  promptOverride?: string;
+  imagePromptOverride?: string;
+  videoPromptOverride?: string;
   colorTag?: string;
   imageNodeId?: string;
   videoNodeId?: string;
@@ -68,6 +69,8 @@ export interface WorkflowGenerationConfig extends WorkflowProviderConfig {
   mode: WorkflowGenerationMode;
   submode?: ProductModelMode;
   aspectRatio?: string;
+  /** 图生图 / 图生视频时，是否忽略用户在 PromptBar 中选择的比例，改用第一张参考图的原始宽高比。 */
+  preserveReferenceAspectRatio?: boolean;
   resolution?: string;
   durationSec?: number;
   quality?: string;

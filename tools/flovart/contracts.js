@@ -4,7 +4,9 @@ import { canonicalize } from 'json-canonicalize';
 
 import envelopeSchema from './contracts/runtime/schemas/command-envelope.v1.json' with { type: 'json' };
 import runtimeErrorSchema from './contracts/runtime/schemas/runtime-error.v1.json' with { type: 'json' };
+import runtimeEventSchema from './contracts/runtime/schemas/runtime-event.v1.json' with { type: 'json' };
 import runtimeStatusSchema from './contracts/runtime/schemas/runtime-status.v1.json' with { type: 'json' };
+import runtimeTaskSchema from './contracts/runtime/schemas/runtime-task.v1.json' with { type: 'json' };
 import taskReceiptSchema from './contracts/runtime/schemas/task-receipt.v1.json' with { type: 'json' };
 import { getCanonicalRegistry } from './registry.js';
 
@@ -17,7 +19,9 @@ function createRuntimeValidator(schema, name) {
 const envelopeValidator = createRuntimeValidator(envelopeSchema, 'command-envelope');
 const outputValidators = Object.freeze({
   'runtime-error': createRuntimeValidator(runtimeErrorSchema, 'runtime-error'),
+  'runtime-event': createRuntimeValidator(runtimeEventSchema, 'runtime-event'),
   'runtime-status': createRuntimeValidator(runtimeStatusSchema, 'runtime-status'),
+  'runtime-task': createRuntimeValidator(runtimeTaskSchema, 'runtime-task'),
   'task-receipt': createRuntimeValidator(taskReceiptSchema, 'task-receipt'),
 });
 

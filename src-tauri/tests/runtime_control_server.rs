@@ -61,7 +61,7 @@ fn native_host_status_matches_the_same_production_runtime() {
     let _ = fs::remove_dir_all(discovery_path.parent().expect("parent"));
 }
 
-fn raw_request(port: u16, request: &str) -> (u16, String, Value) {
+fn raw_text_request(port: u16, request: &str) -> (u16, String, String) {
     let mut stream = TcpStream::connect(("127.0.0.1", port)).expect("connect control server");
     stream
         .set_read_timeout(Some(Duration::from_secs(2)))
@@ -76,10 +76,15 @@ fn raw_request(port: u16, request: &str) -> (u16, String, Value) {
         .expect("status code")
         .parse()
         .expect("numeric status");
+    (status, head.to_owned(), body.to_owned())
+}
+
+fn raw_request(port: u16, request: &str) -> (u16, String, Value) {
+    let (status, head, body) = raw_text_request(port, request);
     (
         status,
-        head.to_owned(),
-        serde_json::from_str(body).expect("JSON response"),
+        head,
+        serde_json::from_str(&body).expect("JSON response"),
     )
 }
 
@@ -192,6 +197,60 @@ fn control_server_exposes_only_authenticated_non_browser_runtime_commands() {
     assert!(!browser_headers
         .to_ascii_lowercase()
         .contains("access-control-allow-origin"));
+
+    drop(server);
+    let _ = fs::remove_dir_all(discovery_path.parent().expect("parent"));
+}
+
+#[test]
+fn control_server_reads_tasks_and_resumes_sse_from_the_same_runtime_ledger() {
+    let discovery_path = test_discovery_path();
+    let runtime = Arc::new(ProductionRuntime::new(env!("CARGO_PKG_VERSION")).expect("runtime"));
+    let server = ControlServer::start(runtime, discovery_path.clone()).expect("server");
+    let discovery: Value =
+        serde_json::from_slice(&fs::read(&discovery_path).expect("discovery record"))
+            .expect("discovery JSON");
+    let port = discovery["port"].as_u64().expect("port") as u16;
+    let token = discovery["token"].as_str().expect("token");
+    let envelope = serde_json::json!({
+        "protocolVersion": "1",
+        "commandId": "cmd_http_delay",
+        "command": "runtime.test.delay",
+        "args": { "delayMs": 500 },
+        "actor": { "kind": "cli", "instanceId": "cli_http_test" },
+        "idempotencyKey": "http-delay"
+    });
+    let body = serde_json::to_string(&envelope).expect("envelope");
+    let (_, _, receipt) = raw_request(
+        port,
+        &format!(
+            "POST /v1/commands HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nAuthorization: Bearer {token}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+            body.len()
+        ),
+    );
+    let task_id = receipt["taskId"].as_str().expect("task id");
+
+    let (task_status, _, task) = raw_request(
+        port,
+        &format!(
+            "GET /v1/tasks/{task_id} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nAuthorization: Bearer {token}\r\nConnection: close\r\n\r\n"
+        ),
+    );
+    assert_eq!(task_status, 200);
+    assert_eq!(task["id"], task_id);
+
+    let (event_status, event_headers, event_body) = raw_text_request(
+        port,
+        &format!(
+            "GET /v1/events?taskId={task_id} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nAuthorization: Bearer {token}\r\nLast-Event-ID: 0\r\nConnection: close\r\n\r\n"
+        ),
+    );
+    assert_eq!(event_status, 200);
+    assert!(event_headers
+        .to_ascii_lowercase()
+        .contains("content-type: text/event-stream"));
+    assert!(event_body.contains("event: task.queued"), "{event_body}");
+    assert!(event_body.contains("id: 1"), "{event_body}");
 
     drop(server);
     let _ = fs::remove_dir_all(discovery_path.parent().expect("parent"));

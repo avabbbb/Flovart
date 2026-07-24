@@ -29,6 +29,13 @@ pub struct KeyringEntry {
     pub updated_at: i64,
 }
 
+#[derive(Debug, Serialize)]
+pub struct KeyringSyncStatus {
+    pub credential_count: usize,
+    pub persistence_enabled: bool,
+    pub synced_at: i64,
+}
+
 pub fn entry_account(provider: &str, key_id: &str) -> String {
     format!("{provider}:{key_id}")
 }
@@ -130,4 +137,22 @@ pub fn keyring_list(
         }
     }
     Ok(entries)
+}
+
+#[tauri::command]
+pub fn keyring_report_sync(
+    ctx: State<'_, std::sync::Arc<FlovartContext>>,
+    credential_count: usize,
+    persistence_enabled: bool,
+) -> FlovartResult<KeyringSyncStatus> {
+    let status = KeyringSyncStatus {
+        credential_count,
+        persistence_enabled,
+        synced_at: chrono::Utc::now().timestamp_millis(),
+    };
+    ctx.state_db.kv_set(
+        "keyring:sync:last",
+        &serde_json::to_string(&status).map_err(|error| FlovartError::Other(error.to_string()))?,
+    )?;
+    Ok(status)
 }

@@ -1,5 +1,5 @@
 import type { UserApiKey } from '../types';
-import { getFlovartRuntimeApi } from './flovartRuntime';
+import { getFlovartRuntimeApi, isTauriRuntimeSurface } from './flovartRuntime';
 
 export type RuntimeEnvironment = 'extension-hosted' | 'standalone-web' | 'tauri';
 export type KeySyncSource = 'vault' | 'chrome-storage' | 'merged' | 'none';
@@ -27,12 +27,12 @@ function getGlobalWindow(): (Window & typeof globalThis) | undefined {
 export function getRuntimeBridgeStatus(): RuntimeBridgeStatus {
   const win = getGlobalWindow();
   const chromeStorageAvailable = Boolean((globalThis as any).chrome?.storage?.local);
-  const isTauri = Boolean((win as any)?.__TAURI__ || (win as any)?.__TAURI_INTERNALS__);
-  const runtimeApiAvailable = isTauri && Boolean(getFlovartRuntimeApi());
+  const tauriAvailable = Boolean(win) && isTauriRuntimeSurface();
+  const runtimeApiAvailable = tauriAvailable && Boolean(getFlovartRuntimeApi());
   const isExtension = Boolean(chromeStorageAvailable && (globalThis as any).chrome?.runtime?.id);
 
   return {
-    environment: isTauri ? 'tauri' : isExtension ? 'extension-hosted' : 'standalone-web',
+    environment: tauriAvailable ? 'tauri' : isExtension ? 'extension-hosted' : 'standalone-web',
     chromeStorageAvailable,
     runtimeApiAvailable,
     runtimeBridgeConnected: runtimeApiAvailable && chromeStorageAvailable,

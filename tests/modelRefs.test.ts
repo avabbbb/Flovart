@@ -39,7 +39,7 @@ describe('modelRefs', () => {
     const option = buildCapabilityModelOptions([key], 'video', [], '')[0];
 
     expect(option).toBe('flovart:seedance-2');
-    expect(modelRefLabel(option, [key])).toBe('Seedance 2.0 · Seedance Ark');
+    expect(modelRefLabel(option, [key])).toBe('Seedance 2.0');
     expect(resolveModelSelection(option, [key], 'video')).toMatchObject({
       routeId: 'dreamina-seedance-2-0-260128',
       provider: 'volcengine',
@@ -54,6 +54,33 @@ describe('modelRefs', () => {
     ];
 
     expect(normalizeModelSelectionWithKeys('shared-image', keys, 'image')).toBe('shared-image');
+  });
+
+  it('keeps a provider-owned model name separate from the provider display name', () => {
+    const key = makeKey({
+      id: 'agnes-key',
+      name: 'Agnes',
+      capabilities: ['text'],
+      models: [{ id: 'gpt-5.4', name: 'GPT-5.4', capability: 'text' }],
+    });
+
+    expect(modelRefLabel('agnes-key::gpt-5.4', [key])).toBe('gpt-5.4');
+  });
+
+  it('uses fetched per-model capability metadata instead of assigning an unknown model to every key capability', () => {
+    const key = makeKey({
+      id: 'agnes-key',
+      name: 'Agnes',
+      capabilities: ['text', 'image', 'video'],
+      models: [
+        { id: 'gpt-5.4', name: 'GPT-5.4', capability: 'text' },
+        { id: 'agnes-canvas-v2', name: 'Agnes Canvas', capability: 'image' },
+        { id: 'agnes-motion-v2', name: 'Agnes Motion', capability: 'video' },
+      ],
+    });
+
+    expect(buildCapabilityModelOptions([key], 'text', [])).toContain('agnes-key::gpt-5.4');
+    expect(buildCapabilityModelOptions([key], 'text', [])).not.toContain('agnes-key::agnes-canvas-v2');
   });
 
   it('does not return a product route owned by another provider when a provider is requested', () => {

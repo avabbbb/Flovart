@@ -1,11 +1,16 @@
 {
   "schemaVersion": "1",
   "protocolVersion": "1",
-  "registryHash": "40607136450f6bf4551873901ab53561fbcf773e500603bac7fa327fd5c17658",
+  "registryHash": "ad9c10c2a27e3dfa4106cb8cce3f6468cf906334ec987ace8216144ef7181a98",
   "commands": [
     { "name": "runtime.status", "summary": "Inspect the local Production Runtime contract status.", "args": {}, "availability": "available" },
     { "name": "command.list", "summary": "List machine-readable canonical command metadata.", "args": {}, "availability": "available" },
     { "name": "command.schema", "summary": "Return one canonical command schema.", "args": { "command": "string?" }, "availability": "available" },
+    { "name": "runtime.test.delay", "summary": "Submit an internal no-side-effect delay task for Runtime durability tests.", "args": { "delayMs": "number" }, "availability": "available" },
+    { "name": "task.get", "summary": "Return one durable Runtime task by ID.", "args": { "taskId": "string" }, "availability": "available" },
+    { "name": "task.list", "summary": "List durable Runtime tasks with status filtering and stable cursor pagination.", "args": { "status": "string?", "cursor": "string?", "limit": "number?" }, "availability": "available" },
+    { "name": "task.cancel", "summary": "Persist a cooperative cancellation request for one Runtime task.", "args": { "taskId": "string", "reason": "string?" }, "availability": "available" },
+    { "name": "event.stream", "summary": "Return durable Runtime events strictly after a resumable event ID.", "args": { "afterEventId": "number?", "taskId": "string?", "limit": "number?" }, "availability": "available" },
     { "name": "help", "summary": "Show human-readable command help.", "args": {}, "availability": "legacy-only" },
     { "name": "setup", "summary": "Show CLI file-bridge setup steps.", "args": {}, "availability": "legacy-only" },
     { "name": "init", "summary": "Install the Flovart Skill and register its MCP server for a supported coding-agent host.", "args": { "host": "project|codex|claude|opencode|cursor|windsurf|vscode|all", "projectDir": "string?", "dryRun": "boolean?" }, "availability": "legacy-only" },
@@ -19,7 +24,7 @@
     { "name": "model", "summary": "List or inspect agent-facing model metadata.", "args": { "modelKey": "string?" }, "availability": "legacy-only" },
     { "name": "model.search", "summary": "Search agent-facing model IDs by capability and query.", "args": { "type": "image|video|all?", "query": "string?" }, "availability": "legacy-only" },
     { "name": "status", "summary": "Inspect runtime, provider, and media status.", "args": {}, "availability": "legacy-only" },
-    { "name": "provider.status", "summary": "Inspect provider/model configuration without exposing keys.", "args": {}, "availability": "legacy-only" },
+    { "name": "provider.status", "summary": "Inspect Production Runtime provider readiness without exposing keys.", "args": {}, "availability": "available" },
     { "name": "provider.begin-setup", "summary": "Open provider setup in the local Runtime/WebUI.", "args": { "provider": "string?", "purpose": "image|video|both?" }, "availability": "legacy-only" },
     { "name": "provider.select-model", "summary": "Select configured image/video/text Product Model IDs (e.g. flovart:seedance-2).", "args": { "imageModel": "string?", "videoModel": "string?", "textModel": "string?" }, "availability": "legacy-only" },
     { "name": "provider.test", "summary": "Check provider readiness.", "args": { "purpose": "image|video|both?" }, "availability": "legacy-only" },
@@ -43,7 +48,7 @@
     { "name": "asset.list", "summary": "List local generated media assets/history.", "args": {}, "availability": "legacy-only" },
     { "name": "generate.image", "summary": "Generate one image for a Workflow target from an explicit prompt.", "args": { "prompt": "string", "projectId": "string?", "targetNodeId": "string?", "aspectRatio": "string?" }, "availability": "legacy-only" },
     { "name": "generate.images-batch", "summary": "Generate multiple images for a Workflow from explicit prompt items.", "args": { "items": "array", "projectId": "string?" }, "availability": "legacy-only" },
-    { "name": "generate.video", "summary": "Generate one video from prompt and optional multimodal source IDs.", "args": { "prompt": "string", "sourceImageIds": "string[]?", "sourceVideoIds": "string[]?", "slots": "array?", "durationSec": "number?", "aspectRatio": "string?", "resolution": "string?", "generateAudio": "boolean?", "watermark": "boolean?", "seed": "number?" }, "availability": "legacy-only" },
+    { "name": "generate.video", "summary": "Generate one durable Veo 3.1 Lite video task through a selected provider.", "args": { "prompt": "string", "provider": "string?", "credentialId": "string?", "productModel": "string?", "sourceImageIds": "string[]?", "sourceVideoIds": "string[]?", "slots": "array?", "durationSec": "number?", "aspectRatio": "string?", "resolution": "string?", "generateAudio": "boolean?", "watermark": "boolean?", "seed": "number?" }, "availability": "available" },
     { "name": "video.status", "summary": "Query a video/runtime job status.", "args": { "jobId": "string" }, "availability": "legacy-only" },
     { "name": "export.project", "summary": "Export project metadata.", "args": { "format": "json?" }, "availability": "legacy-only" }
   ]

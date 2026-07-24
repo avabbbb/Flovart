@@ -2,6 +2,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { spawnSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import {
@@ -13,14 +14,19 @@ import {
 import registryDocument from '../tools/flovart/contracts/runtime/command-registry.v1.json';
 import { COMMAND_REGISTRY, executeFlovartCommand } from '../tools/flovart/core.js';
 import { getCanonicalRegistry, normalizeCanonicalRegistry } from '../tools/flovart/registry.js';
+import {
+  availableCommandEntries,
+  RUNTIME_COMMAND_NAMES,
+  RUNTIME_WRITE_COMMAND_NAMES,
+} from '../tools/flovart/runtime-command-surface.js';
 
 describe('Production Runtime canonical registry', () => {
-  it('publishes the S0.1 runtime contract without restoring removed surfaces', () => {
+  it('publishes the S1.1 durable-task contract without restoring removed surfaces', () => {
     const registry = getCanonicalRegistry();
     const commandNames = Object.keys(registry.commands);
 
     expect(registry.protocolVersion).toBe('1');
-    expect(registry.registryHash).toBe('40607136450f6bf4551873901ab53561fbcf773e500603bac7fa327fd5c17658');
+    expect(registry.registryHash).toBe('ad9c10c2a27e3dfa4106cb8cce3f6468cf906334ec987ace8216144ef7181a98');
     expect(hashCanonicalRegistryDocument(registryDocument)).toBe(registry.registryHash);
     expect(Object.isFrozen(registry.commands)).toBe(true);
     expect(Object.isFrozen(registry.commands['runtime.status'].args)).toBe(true);
@@ -28,7 +34,15 @@ describe('Production Runtime canonical registry', () => {
       'runtime.status',
       'command.list',
       'command.schema',
+      'runtime.test.delay',
+      'task.get',
+      'task.list',
+      'task.cancel',
+      'event.stream',
     ]));
+    for (const command of ['runtime.test.delay', 'task.get', 'task.list', 'task.cancel', 'event.stream']) {
+      expect(registry.commands[command]?.availability).toBe('available');
+    }
     expect(commandNames).not.toContain('workflow.run');
     expect(commandNames.some(command => /^(?:canvas|element)\./.test(command))).toBe(false);
   });
@@ -38,6 +52,18 @@ describe('Production Runtime canonical registry', () => {
 
     expect(COMMAND_REGISTRY).toEqual(registry.commands);
     expect(COMMAND_REGISTRY['workflow.node.create']?.availability).toBe('legacy-only');
+  });
+
+  it('keeps the public CLI and MCP runtime surface aligned with available registry commands', () => {
+    const available = availableCommandEntries(COMMAND_REGISTRY).map(([name]) => name);
+
+    expect(available).toEqual(RUNTIME_COMMAND_NAMES);
+    expect(RUNTIME_WRITE_COMMAND_NAMES).toEqual([
+      'runtime.test.delay',
+      'task.cancel',
+      'generate.video',
+    ]);
+    expect(available).not.toContain('workflow.node.create');
   });
 
   it('rejects unknown envelope fields and commands at the public contract seam', () => {
@@ -110,19 +136,23 @@ describe('Production Runtime canonical registry', () => {
   });
 
   it('propagates local contract failures through the CLI process boundary', () => {
+    const env = {
+      ...process.env,
+      FLOVART_RUNTIME_DISCOVERY: join(tmpdir(), `flovart-missing-discovery-${process.pid}.json`),
+    };
     const unknownCommand = spawnSync(process.execPath, [
       join(process.cwd(), 'tools', 'flovart', 'cli.js'),
       'command.schema',
       '--command',
       'workflow.run',
       '--json',
-    ], { encoding: 'utf8' });
+    ], { encoding: 'utf8', env });
     const unknownOutput = JSON.parse(unknownCommand.stdout);
     const runtimeStatus = spawnSync(process.execPath, [
       join(process.cwd(), 'tools', 'flovart', 'cli.js'),
       'runtime.status',
       '--json',
-    ], { encoding: 'utf8' });
+    ], { encoding: 'utf8', env });
     const statusOutput = JSON.parse(runtimeStatus.stdout);
 
     expect(unknownCommand.status).toBe(1);
@@ -155,6 +185,28 @@ describe('Production Runtime canonical registry', () => {
       taskId: 'task_test',
       status: 'queued',
       eventId: 1,
+    })).toMatchObject({ ok: true });
+    expect(validateRuntimeContract('runtime-task', {
+      id: 'task_test',
+      commandId: 'cmd_test',
+      kind: 'runtime.test.delay',
+      status: 'completed',
+      progress: null,
+      leaseOwner: null,
+      leaseExpiresAt: null,
+      cancelRequestedAt: null,
+      result: { delayedMs: 10 },
+      error: null,
+      createdAt: 1,
+      updatedAt: 2,
+    })).toMatchObject({ ok: true });
+    expect(validateRuntimeContract('runtime-event', {
+      eventId: 1,
+      eventVersion: '1',
+      eventType: 'task.completed',
+      taskId: 'task_test',
+      occurredAt: 2,
+      data: { status: 'completed' },
     })).toMatchObject({ ok: true });
     expect(validateRuntimeContract('runtime-error', {
       code: 'RUNTIME_UNAVAILABLE',

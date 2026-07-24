@@ -16,7 +16,7 @@ import type {
 import RichPromptEditor, { type RichPromptEditorHandle } from './RichPromptEditor';
 import type { AssetSuggestion, MentionItem } from './MentionList';
 export type { MentionItem } from './MentionList';
-import { extractMentions } from './MediaMentionExtension';
+import { extractMentions, type MentionData } from './MediaMentionExtension';
 import type { ImageReferenceChip } from './workflow/references';
 import { useWorkflowMediaUrl } from './workflow/media';
 import { PROVIDER_LABELS, type VideoAspectRatio } from '../services/aiGateway';
@@ -30,7 +30,11 @@ import {
     getEffectiveReferenceLimits,
     explainReferenceCompatibility,
     getRoutedVideoModes,
+    getRoutedImageModes,
+    routedImageSupportsImageToImage,
+    IMAGE_MODE_ORDER,
     explainUnsupportedVideoMode,
+    explainUnsupportedImageMode,
     isProductModelConfigured,
     resolveProductModelRoute,
     resolveAnyProductRoute,
@@ -83,6 +87,9 @@ export interface PromptBarProps {
     onWebSearchToggle?: (enabled: boolean) => void;
     realPersonCheckEnabled?: boolean;
     onRealPersonCheckToggle?: (enabled: boolean) => void;
+    /** 图生图/图生视频时是否锁定参考图原始比例（覆盖用户在比例选择中设置）。 */
+    preserveReferenceAspectRatio?: boolean;
+    onPreserveReferenceAspectRatioChange?: (enabled: boolean) => void;
     selectedTextModel?: string;
     selectedImageModel?: string;
     selectedVideoModel?: string;
@@ -99,6 +106,8 @@ export interface PromptBarProps {
     onMentionedElementIds?: (ids: string[]) => void;
     onPromptDocumentChange?: (document: Record<string, unknown>) => void;
     onPromptInputChange?: (payload: { plainText: string; document: Record<string, unknown>; mentionedElementIds: string[] }) => void;
+    onResolvePastedMentions?: (mentions: MentionData[]) => Array<MentionData | null>;
+    onPasteUnresolvedMentions?: (labels: string[]) => void;
     onEnhancePrompt?: (payload: { prompt: string; mode: PromptEnhanceMode; stylePreset?: string }) => Promise<PromptEnhanceResult>;
     isEnhancingPrompt?: boolean;
     isAutoEnhanceEnabled?: boolean;
@@ -360,6 +369,8 @@ export const PromptBar: React.FC<PromptBarProps> = ({
     onWebSearchToggle,
     realPersonCheckEnabled = true,
     onRealPersonCheckToggle,
+    preserveReferenceAspectRatio = false,
+    onPreserveReferenceAspectRatioChange,
     selectedTextModel,
     selectedImageModel,
     selectedVideoModel,
@@ -376,6 +387,8 @@ export const PromptBar: React.FC<PromptBarProps> = ({
     onMentionedElementIds,
     onPromptDocumentChange,
     onPromptInputChange,
+    onResolvePastedMentions,
+    onPasteUnresolvedMentions,
     onEnhancePrompt,
     isEnhancingPrompt = false,
     isAutoEnhanceEnabled = false,
@@ -438,6 +451,44 @@ export const PromptBar: React.FC<PromptBarProps> = ({
     const shellClass = 'isl-shell';
 
     const editorReferenceItems = useMemo<MentionItem[]>(() => mentionItems || [], [mentionItems]);
+    const pasteReferenceItems = useMemo<MentionItem[]>(() => {
+        const tiers: MentionItem[][] = [
+            editorReferenceItems,
+            referenceItems.map(item => ({
+                id: item.id,
+                label: item.label,
+                thumbnail: item.thumbnail || '',
+                elementType: item.elementType,
+                description: item.description,
+                sourceType: 'connected',
+            })),
+            assetItems.map(item => ({
+                id: `asset:${item.id}`,
+                label: item.name || '未命名素材',
+                thumbnail: item.thumbnail,
+                elementType: item.elementType,
+                sourceType: 'assetLibrary',
+                assetId: item.id,
+            })),
+        ];
+        const claimedLabels = new Set<string>();
+        const result: MentionItem[] = [];
+        for (const tier of tiers) {
+            const grouped = new Map<string, MentionItem[]>();
+            for (const item of tier) {
+                const key = item.label.trim().toLocaleLowerCase();
+                if (!key || claimedLabels.has(key)) continue;
+                const identity = `${item.id}|${item.assetId || ''}`;
+                const current = grouped.get(key) || [];
+                if (!current.some(candidate => `${candidate.id}|${candidate.assetId || ''}` === identity)) grouped.set(key, [...current, item]);
+            }
+            for (const [key, items] of grouped) {
+                claimedLabels.add(key);
+                result.push(...items);
+            }
+        }
+        return result;
+    }, [assetItems, editorReferenceItems, referenceItems]);
 
     /** 当前视频模型是否为 Seedance（用于 Fast 限制 1080p 等模型专属逻辑） */
     const videoLikeMode = generationMode === 'video' || generationMode === 'keyframe';
@@ -504,6 +555,9 @@ export const PromptBar: React.FC<PromptBarProps> = ({
     const currentModelOptions = generationMode === 'text' ? textModelOptions : videoLikeMode ? videoModelOptions : imageModelOptions;
     const routedVideoModes = useMemo(() => activeProductModel?.capability === 'video'
         ? getRoutedVideoModes(activeProductModel.id, activeRoute?.key.provider, activeRoute?.routeId)
+        : [], [activeProductModel, activeRoute]);
+    const routedImageModes = useMemo(() => activeProductModel?.capability === 'image'
+        ? getRoutedImageModes(activeProductModel.id, activeRoute?.key.provider, activeRoute?.routeId)
         : [], [activeProductModel, activeRoute]);
     const activeKey = activeRoute?.key || userApiKeys.find(k => k.isDefault) || userApiKeys[0];
     const estimatedCost = useMemo(() => activeRoute && activeProductModel ? estimateApiCost({
@@ -639,7 +693,9 @@ export const PromptBar: React.FC<PromptBarProps> = ({
     useEffect(() => {
         if (!activeProductModel || !activeCapabilities || generationMode === 'text') return;
         const capabilities = activeCapabilities;
-        const availableModes = generationMode === 'video' && routedVideoModes.length ? routedVideoModes : capabilities.modes;
+        const availableModes = generationMode === 'video' && routedVideoModes.length ? routedVideoModes
+            : generationMode === 'image' && routedImageModes.length ? routedImageModes
+            : capabilities.modes;
         if (!availableModes.includes(activeSubmode)) {
             onGenerationSubmodeChange?.(availableModes[0]);
         }
@@ -894,6 +950,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                     <RichPromptEditor
                         ref={richEditorRef}
                         referenceItems={editorReferenceItems}
+                        pasteReferenceItems={pasteReferenceItems}
                         placeholder={placeholder}
                         onTextChange={handleEditorChange}
                         onSubmit={handleEditorSubmit}
@@ -902,6 +959,8 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                         assetFolders={assetFolders}
                         assetItems={assetItems}
                         onSelectAsset={onSelectAsset}
+                        onResolvePastedMentions={onResolvePastedMentions}
+                        onPasteUnresolvedMentions={onPasteUnresolvedMentions}
                         skillEnabled={skillEnabled}
                     />
 
@@ -1070,6 +1129,36 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                     </div>
                                 </div>
                             )}
+                            {expandedPanel === 'submode' && generationMode === 'image' && (
+                                <div data-testid="prompt-image-mode-panel" data-density="compact">
+                                    <div className="mb-2 px-1 text-xs font-extrabold" style={{ color: 'var(--isl-ink)' }}>生成方式</div>
+                                    <div className="grid grid-cols-2 gap-1.5 px-0.5 pb-0.5">
+                                        {IMAGE_MODE_ORDER.map(mode => {
+                                            const supported = !!activeProductModel && routedImageModes.includes(mode);
+                                            const reason = !activeProductModel
+                                                ? '请先选择图片模型'
+                                                : (explainUnsupportedImageMode(activeProductModel.id, mode) || '当前 API 路由不支持该模式');
+                                            return (
+                                                <button
+                                                    key={mode}
+                                                    type="button"
+                                                    aria-pressed={activeSubmode === mode}
+                                                    disabled={!supported}
+                                                    title={!supported ? reason : undefined}
+                                                    onClick={() => { if (!supported) return; onGenerationSubmodeChange?.(mode); setExpandedPanel(null); }}
+                                                    className={`h-8 rounded-[10px] px-2 text-[11px] font-bold transition ${!supported ? 'cursor-not-allowed opacity-35' : ''} ${activeSubmode === mode ? 'isl-chip--active' : 'isl-chip'}`}
+                                                >
+                                                    {PRODUCT_MODE_LABELS[mode]}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                    <div className="mt-1.5 rounded-[10px] bg-[var(--isl-surface-2)] px-2.5 py-2 text-[10px] leading-4 text-[var(--isl-ink-soft)]">
+                                        {activeSubmode === 'image-to-image' && '按引用顺序上传参考图，最多 10 张；不写 @ 引用则不发送。'}
+                                        {activeSubmode === 'text-to-image' && '只使用文字提示生成图片，不读取参考图。'}
+                                    </div>
+                                </div>
+                            )}
                             {expandedPanel === 'parameters' && activeProductModel && activeCapabilities && (
                                 <>
                                     <div className="mb-2 px-1 text-xs font-extrabold" style={{ color: 'var(--isl-ink)' }}>生成参数</div>
@@ -1175,6 +1264,15 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                             {activeCapabilities.supportsRealPersonCheck && (
                                                 <button type="button" onClick={() => onRealPersonCheckToggle?.(!realPersonCheckEnabled)} className={`flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-xs font-bold transition-colors hover:bg-[var(--isl-surface-2)] ${realPersonCheckEnabled ? 'text-[var(--isl-mint-deep)]' : ''}`}><span>真人素材预检测</span><span>{realPersonCheckEnabled ? 'ON' : 'OFF'}</span></button>
                                             )}
+                                        </div>
+                                    )}
+                                    {(generationMode === 'image' || generationMode === 'video') && imageReferenceChips && imageReferenceChips.length > 0 && onPreserveReferenceAspectRatioChange && (
+                                        <div className="mb-2 space-y-1 border-b border-[var(--isl-border)] pb-2">
+                                            <div className="px-1 pb-1 text-[10px] font-bold uppercase tracking-[0.14em]" style={{ color: 'var(--isl-ink-soft)' }}>参考图</div>
+                                            <button type="button" onClick={() => onPreserveReferenceAspectRatioChange?.(!preserveReferenceAspectRatio)} className={`flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-xs font-bold transition-colors hover:bg-[var(--isl-surface-2)] ${preserveReferenceAspectRatio ? 'text-[var(--isl-mint-deep)]' : ''}`} title="开启后将忽略上方比例选择，使用第一张参考图的原始宽高比">
+                                                <span>保留参考图原始比例</span>
+                                                <span>{preserveReferenceAspectRatio ? 'ON' : 'OFF'}</span>
+                                            </button>
                                         </div>
                                     )}
                                     <div className="px-1 pb-1 text-[10px] font-bold uppercase tracking-[0.14em]" style={{ color: 'var(--isl-ink-soft)' }}>更多操作</div>
@@ -1370,7 +1468,14 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                             {generationMode === 'video' && VIDEO_MODE_ORDER.length > 1 && (
                                 <button type="button" aria-haspopup="dialog" aria-expanded={expandedPanel === 'submode'} onClick={() => setExpandedPanel(prev => (prev === 'submode' ? null : 'submode'))} className={`${triggerClass} shrink-0 ${expandedPanel === 'submode' ? activeTriggerClass : ''}`} title="视频生成方式">
                                     <span>{PRODUCT_MODE_LABELS[activeSubmode]}</span>
-                                    
+
+                                </button>
+                            )}
+
+                            {generationMode === 'image' && routedImageModes.length > 1 && (
+                                <button type="button" aria-haspopup="dialog" aria-expanded={expandedPanel === 'submode'} onClick={() => setExpandedPanel(prev => (prev === 'submode' ? null : 'submode'))} className={`${triggerClass} shrink-0 ${expandedPanel === 'submode' ? activeTriggerClass : ''}`} title="图片生成方式">
+                                    <span>{PRODUCT_MODE_LABELS[activeSubmode]}</span>
+
                                 </button>
                             )}
 

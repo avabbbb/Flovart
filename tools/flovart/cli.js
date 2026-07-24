@@ -1,10 +1,11 @@
 #!/usr/bin/env node
-import { executeFlovartCommand, formatValue, normalizeCommandName, parseCliArgs, SETUP_TEXT } from './core.js';
+import { COMMAND_REGISTRY, executeFlovartCommand, formatValue, normalizeCommandName, parseCliArgs, SETUP_TEXT } from './core.js';
 import { createShadowRuntimeFacade } from './shadow-runtime.js';
 import { enqueueAndWait, enqueueCommand } from './flovart-bridge.js';
 import { BROWSER_COMMANDS, shouldWaitForBrowserCommand } from './browser-commands.js';
 import { readFile } from 'node:fs/promises';
-import { FlovartRuntimeClient, RuntimeClientError } from './runtime-client.js';
+import { defaultRuntimeActor, FlovartRuntimeClient, RuntimeClientError } from './runtime-client.js';
+import { RUNTIME_COMMANDS, RUNTIME_WRITE_COMMANDS } from './runtime-command-surface.js';
 
 const argv = process.argv.slice(2);
 
@@ -28,8 +29,6 @@ const LOCAL_COMMANDS = new Set([
   'preferences.manage', 'models.list',
 ]);
 
-const RUNTIME_COMMANDS = new Set(['runtime.status', 'command.list', 'command.schema']);
-
 const FILE_STATE_COMMANDS = new Set([
   'status',
   'asset.list', 'export.project', 'video.status',
@@ -41,6 +40,30 @@ const FILE_STATE_COMMANDS = new Set([
 
 function normalizeCommandForRouting(command) {
   return command.replace(/\./g, '.');
+}
+
+function runtimeInvocation(command, parsed) {
+  const definition = COMMAND_REGISTRY[command];
+  const commandArgs = {};
+  for (const [name, type] of Object.entries(definition?.args || {})) {
+    const kebab = name.replace(/([A-Z])/g, '-$1').toLowerCase();
+    const raw = parsed[name] ?? parsed[kebab];
+    if (raw === undefined) continue;
+    const base = type.replace(/\?$/, '');
+    if (base === 'number') commandArgs[name] = Number(raw);
+    else if (base === 'boolean') commandArgs[name] = raw === true || String(raw).toLowerCase() === 'true';
+    else if (['object', 'array', 'string[]'].includes(base) && typeof raw === 'string') {
+      commandArgs[name] = JSON.parse(raw);
+    } else commandArgs[name] = raw;
+  }
+  const idempotencyKey = parsed.idempotencyKey || parsed['idempotency-key'];
+  if (RUNTIME_WRITE_COMMANDS.has(command) && !idempotencyKey) {
+    throw new RuntimeClientError(
+      'INVALID_ARGUMENT',
+      `${command} requires --idempotency-key so retries cannot duplicate work.`,
+    );
+  }
+  return { commandArgs, options: { ...(idempotencyKey ? { idempotencyKey } : {}) } };
 }
 
 const rawCommand = argv[0];
@@ -88,9 +111,20 @@ async function main() {
   if (RUNTIME_COMMANDS.has(routingCommand)) {
     const runtime = new FlovartRuntimeClient();
     try {
-      const result = routingCommand === 'runtime.status'
-        ? await runtime.status()
-        : await runtime.execute(routingCommand, args, { kind: 'cli', instanceId: `cli_${process.pid}` });
+      const invocation = runtimeInvocation(routingCommand, args);
+      let result;
+      if (routingCommand === 'runtime.status') result = await runtime.status();
+      else if (routingCommand === 'task.get') result = await runtime.getTask(invocation.commandArgs.taskId);
+      else if (routingCommand === 'task.list') result = await runtime.listTasks(invocation.commandArgs);
+      else if (routingCommand === 'event.stream') result = await runtime.streamEvents(invocation.commandArgs);
+      else {
+        result = await runtime.execute(
+          routingCommand,
+          invocation.commandArgs,
+          defaultRuntimeActor('cli'),
+          invocation.options,
+        );
+      }
       if (args.json) printCliResponse(true, command, result, null, { runtime: 'production-runtime' });
       else console.log(formatValue(result));
     } catch (error) {

@@ -872,18 +872,18 @@ function buildPromptWithReferenceBindings(prompt: string, references: IgnitionRe
         }
         const index = counts[reference.type]++;
         const ordinal = referenceOrdinalLabel(reference.type, index);
-        const mention = normalizeMentionLabel(reference.label || reference.sourceName);
-        const nameNote = reference.sourceName && mention && reference.sourceName !== mention.replace(/^@/, '')
-            ? `（${reference.sourceName}）`
+        const mention = normalizeMentionLabel(reference.label || reference.sourceName) || `@${ordinal}`;
+        const nameNote = reference.sourceName && reference.sourceName !== mention.replace(/^@/, '')
+            ? `（节点: ${reference.sourceName}）`
             : '';
         if (reference.type === 'text' || reference.type === 'shape') {
             const referenceText = trimReferenceText(reference.text);
             lines.push(referenceText
-                ? `${ordinal} = ${mention || reference.sourceName || reference.elementId || '未命名引用'}${nameNote}: ${referenceText}`
-                : `${ordinal} = ${mention || reference.sourceName || reference.elementId || '未命名引用'}${nameNote}`);
+                ? `${ordinal} = ${mention}${nameNote}: ${referenceText}`
+                : `${ordinal} = ${mention}${nameNote}`);
         } else {
             const role = reference.slotRole && reference.slotRole !== 'unassigned' ? `，slot=${reference.slotRole}` : '';
-            lines.push(`${ordinal} = ${mention || reference.sourceName || reference.elementId || '未命名引用'}${nameNote}${role}`);
+            lines.push(`${ordinal} = ${mention}${nameNote}${role}`);
         }
     }
 

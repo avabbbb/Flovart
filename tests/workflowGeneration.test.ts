@@ -260,6 +260,40 @@ describe('workflow generation', () => {
     expect(executeMedia.mock.calls[0][0].references.map((reference: any) => reference.elementId)).toEqual(['image-2', 'image-1']);
   });
 
+  it('preserves semantic @ aliases from the rich prompt document in the Provider reference manifest', async () => {
+    const source = project();
+    const target = source.nodes.find(node => node.id === 'config-1')!;
+    target.metadata = {
+      prompt: '@角色1向左走',
+      richTextDocument: {
+        type: 'doc',
+        content: [{
+          type: 'paragraph',
+          content: [
+            { type: 'mediaMention', attrs: { id: 'image-1', label: '角色1', thumbnail: '', elementType: 'image' } },
+            { type: 'text', text: '向左走' },
+          ],
+        }],
+      },
+      mentionedNodeIds: ['image-1'],
+      config: { mode: 'video', modelId: 'flovart:seedance-2', submode: 'reference-to-video' },
+    };
+    const executeMedia = vi.fn().mockResolvedValue({ ok: true, elementId: 'config-1', capability: 'video', mediaUrl: 'https://output/video', mimeType: 'video/mp4' });
+
+    await runWorkflowGeneration(source, 'config-1', {
+      userApiKeys: [mappedMediaKey('video', 'flovart:seedance-2', 'doubao-seedance-2-0-260128', 'volcengine')],
+      executeMedia,
+      fetchMedia: vi.fn().mockResolvedValue(new Blob(['video'])),
+      ingestMedia: vi.fn().mockResolvedValue({ type: 'video', storageKey: 'video', name: 'video.mp4', mimeType: 'video/mp4', bytes: 5 }),
+      createVideoPoster: vi.fn().mockResolvedValue(null),
+      onProjectChange: vi.fn(),
+    });
+
+    expect(executeMedia.mock.calls[0][0].references).toEqual([
+      expect.objectContaining({ elementId: 'image-1', label: '角色1', sourceName: '参考图' }),
+    ]);
+  });
+
   it('keeps all @ images allowed by the mapped RunningHub image-to-video route', async () => {
     const source = project();
     const target = source.nodes.find(node => node.id === 'config-1')!;

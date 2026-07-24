@@ -8,13 +8,29 @@ Flovart 是本地优先的 Workflow + Table + Agent AI 创作工具。本文固�
 用户进入产品后的作品发现与项目续作入口，用于浏览可 Remix 作品、继续本地项目并进入 Workflow、Table 或 Agent；它不是独立创作工作区。
 避免混用：Public Landing、Workflow Workspace、UGC 独立工作区。
 
+**Community Gallery**：
+App Home 中公开展示 Published Work 的作品发现界面；作品媒体是浏览主体，Remix Bundle 只作为可选复刻来源。
+避免混用：Workflow Template Gallery、Local Work 列表、独立 UGC Workspace。
+
 **Local Work**：
 用户保存在当前 Browser Workspace 或 Local Data Service 中的最终图片或视频作品，默认只对当前用户本地可见，未经明确发布不会进入在线社区。
 避免混用：Published Work、临时预览、Provider 生成结果。
 
 **Published Work**：
-创作者明确发布到在线社区的最终图片或视频作品，可选择附带一份脱敏后的可 Remix Workflow 快照；最终媒体始终是首页展示主体。
+创作者明确发布到在线社区的最终图片或视频作品，可选择绑定一个由 Skill 与参考 Workflow 组成的 Remix Bundle；最终媒体始终是首页展示主体。
 避免混用：Workflow Template、PromptPack、本地项目、生成历史记录。
+
+**Remix Bundle**：
+随 Published Work 选择性发布的复刻单元，由一个精确、不可变的 Community Director Skill 版本和一份 Reference Workflow Snapshot 组成；复刻会把 Skill 加入接收者的 Skill 库，并以参考 Workflow 创建新项目。
+避免混用：单独 Skill Package、Workflow Template、完整项目备份。
+
+**Reference Workflow Snapshot**：
+Remix Bundle 中演示 Skill 用法的不可变、可移植 Workflow 投影，保留节点、连线、提示词、产品模型身份和生成参数，但不包含秘密、Provider Route、本地路径、运行历史、Agent 会话或私有素材；接收者使用自己的模型映射运行。
+避免混用：完整 Workflow Project、项目备份、Provider 请求记录。
+
+**Work Publication**：
+已登录创作者把选定 Local Work 明确转为 Published Work 的行为；未执行发布的本地作品不会被社区读取。
+避免混用：保存项目、生成完成、分享到本地素材库。
 
 ## 创作工作区
 

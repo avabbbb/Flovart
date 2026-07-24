@@ -38,6 +38,13 @@ export class RuntimeClientError extends Error {
   }
 }
 
+export function defaultRuntimeActor(kind = 'cli', env = process.env) {
+  return {
+    kind,
+    instanceId: env.FLOVART_ACTOR_INSTANCE_ID || `${kind}_local`,
+  };
+}
+
 export function defaultDiscoveryPath(env = process.env) {
   if (env.FLOVART_RUNTIME_DISCOVERY) return env.FLOVART_RUNTIME_DISCOVERY;
   if (platform() === 'win32') {
@@ -167,7 +174,7 @@ export class FlovartRuntimeClient {
     }
   }
 
-  async request(path, init = {}) {
+  async fetchResponse(path, init = {}) {
     const discovery = await this.loadDiscovery();
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
@@ -187,6 +194,11 @@ export class FlovartRuntimeClient {
     } finally {
       clearTimeout(timer);
     }
+    return { response, discovery };
+  }
+
+  async request(path, init = {}) {
+    const { response, discovery } = await this.fetchResponse(path, init);
     let body;
     try {
       body = await response.json();
@@ -210,7 +222,12 @@ export class FlovartRuntimeClient {
     return body;
   }
 
-  async execute(command, args = {}, actor = { kind: 'cli', instanceId: `cli_${process.pid}` }) {
+  async execute(
+    command,
+    args = {},
+    actor = defaultRuntimeActor('cli'),
+    options = {},
+  ) {
     const registry = getCanonicalRegistry();
     if (command === 'command.schema' && args.command && !registry.commands[args.command]) {
       throw new RuntimeClientError('UNKNOWN_COMMAND', `Unknown Flovart command: ${args.command}`);
@@ -221,6 +238,9 @@ export class FlovartRuntimeClient {
       command,
       args,
       actor,
+      ...(options.idempotencyKey ? { idempotencyKey: options.idempotencyKey } : {}),
+      ...(options.productionSessionId ? { productionSessionId: options.productionSessionId } : {}),
+      ...(options.preconditions ? { preconditions: options.preconditions } : {}),
     };
     const contract = validateCommandEnvelope(envelope);
     if (!contract.ok) throw new RuntimeClientError(contract.error.code, contract.error.message, contract.error);
@@ -228,6 +248,79 @@ export class FlovartRuntimeClient {
       method: 'POST',
       body: JSON.stringify(envelope),
     })).body;
+  }
+
+  async getTask(taskId) {
+    const task = (await this.request(`/v1/tasks/${encodeURIComponent(taskId)}`)).body;
+    if (!validateRuntimeContract('runtime-task', task).ok) {
+      throw protocolMismatch('Production Runtime returned an invalid task contract.');
+    }
+    return task;
+  }
+
+  async listTasks(options = {}) {
+    const query = new URLSearchParams();
+    if (options.status) query.set('status', options.status);
+    if (options.cursor) query.set('cursor', options.cursor);
+    if (options.limit !== undefined) query.set('limit', String(options.limit));
+    const suffix = query.size ? `?${query}` : '';
+    const page = (await this.request(`/v1/tasks${suffix}`)).body;
+    if (
+      !page
+      || typeof page !== 'object'
+      || !Array.isArray(page.tasks)
+      || !page.tasks.every(task => validateRuntimeContract('runtime-task', task).ok)
+      || !(page.nextCursor === null || typeof page.nextCursor === 'string')
+    ) {
+      throw protocolMismatch('Production Runtime returned an invalid task page contract.');
+    }
+    return page;
+  }
+
+  async streamEvents(options = {}) {
+    const afterEventId = options.afterEventId ?? 0;
+    const query = new URLSearchParams();
+    if (options.taskId) query.set('taskId', options.taskId);
+    if (options.limit !== undefined) query.set('limit', String(options.limit));
+    const suffix = query.size ? `?${query}` : '';
+    const { response } = await this.fetchResponse(`/v1/events${suffix}`, {
+      headers: {
+        Accept: 'text/event-stream',
+        'Last-Event-ID': String(afterEventId),
+      },
+    });
+    const text = await response.text();
+    if (!response.ok) {
+      let body;
+      try {
+        body = JSON.parse(text);
+      } catch {
+        throw unavailable('Production Runtime returned an invalid event stream error.');
+      }
+      throw errorFromResponse(response.status, body);
+    }
+    if (!response.headers.get('content-type')?.toLowerCase().startsWith('text/event-stream')) {
+      throw protocolMismatch('Production Runtime returned a non-SSE event response.');
+    }
+    const events = text
+      .split(/\r?\n\r?\n/)
+      .map(block => block.split(/\r?\n/).find(line => line.startsWith('data: '))?.slice(6))
+      .filter(Boolean)
+      .map(data => {
+        try {
+          const event = JSON.parse(data);
+          if (!validateRuntimeContract('runtime-event', event).ok) {
+            throw new Error('invalid event contract');
+          }
+          return event;
+        } catch {
+          throw protocolMismatch('Production Runtime returned an invalid SSE event.');
+        }
+      });
+    return {
+      events,
+      nextEventId: events.at(-1)?.eventId ?? afterEventId,
+    };
   }
 
   async disconnect() {}
@@ -240,6 +333,9 @@ export function createRuntimeFacade(client) {
     runtime: {
       status: () => client.status(),
       execute: (command, args, actor) => client.execute(command, args, actor),
+      getTask: taskId => client.getTask(taskId),
+      listTasks: options => client.listTasks(options),
+      streamEvents: options => client.streamEvents(options),
     },
   };
 }

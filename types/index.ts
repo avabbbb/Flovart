@@ -121,6 +121,8 @@ export type AICapability = 'text' | 'image' | 'video' | 'agent';
 export interface ModelItem {
   id: string;
   name: string;
+  /** 模型自身的输出能力；由 Provider 模型列表返回或用户配置，避免再次从名称猜测。 */
+  capability?: AICapability;
 }
 
 export type ProductModelMode =

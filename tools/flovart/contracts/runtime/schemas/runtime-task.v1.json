@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://flovart.local/schemas/runtime/runtime-task.v1.json",
+  "title": "RuntimeTask v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "commandId", "kind", "status", "createdAt", "updatedAt"],
+  "properties": {
+    "id": { "type": "string", "minLength": 1 },
+    "commandId": { "type": "string", "minLength": 1 },
+    "kind": { "type": "string", "minLength": 1 },
+    "status": {
+      "enum": ["queued", "working", "input_required", "completed", "failed", "cancelled"]
+    },
+    "progress": {},
+    "leaseOwner": { "type": ["string", "null"] },
+    "leaseExpiresAt": { "type": ["integer", "null"] },
+    "cancelRequestedAt": { "type": ["integer", "null"] },
+    "result": {},
+    "error": {},
+    "createdAt": { "type": "integer" },
+    "updatedAt": { "type": "integer" }
+  }
+}
+

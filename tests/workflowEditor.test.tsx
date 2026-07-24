@@ -123,6 +123,33 @@ describe('InfiniteWorkflow surface interactions', () => {
     expect(updateProject).not.toHaveBeenCalled();
   });
 
+  it('uses independent image and video prompts when batch-generating script shots', () => {
+    const initial = makeProject();
+    initial.nodes = [
+      createWorkflowNode('script', 'script', { x: 100, y: 100 }, {
+        scriptBreakdown: {
+          assets: [],
+          shots: [{
+            id: 'shot-1',
+            index: 0,
+            scene: '雨夜街道',
+            action: '人物向前奔跑',
+            imagePromptOverride: 'still frame with neon reflections',
+            videoPromptOverride: 'tracking shot, the runner accelerates through rain',
+          }],
+        },
+      }),
+    ];
+    render(<Harness initial={initial} />);
+
+    fireEvent.doubleClick(node('script'));
+    fireEvent.click(screen.getByRole('button', { name: '批量生图' }));
+    expect(projectState().nodes.find(item => item.type === 'image')?.metadata.prompt).toBe('still frame with neon reflections');
+
+    fireEvent.click(screen.getByRole('button', { name: '批量生视频' }));
+    expect(projectState().nodes.find(item => item.type === 'video')?.metadata.prompt).toBe('tracking shot, the runner accelerates through rain');
+  }, 15_000);
+
   it('keeps node overlays in screen space and dismisses them with the background', () => {
     render(<Harness />);
     fireEvent.pointerDown(node('target'), { button: 0, pointerId: 1, clientX: 540, clientY: 140 });

@@ -7,6 +7,7 @@ import type { AssetLibrary, PromptEnhanceMode, PromptEnhanceResult, UserApiKey }
 import type { RouteFallbackResolution } from '../../services/routeMapping';
 import { STUDIO_MEDIA_DRAG_TYPE } from '../studio/StudioMediaBrowser';
 import type { AssetSuggestion } from '../MentionList';
+import type { MentionData } from '../MediaMentionExtension';
 import { createWorkflowNode } from './constants';
 import {
   discardWorkflowMediaRecord,
@@ -24,6 +25,7 @@ import {
   type WorkflowMediaRecord,
 } from './media';
 import { applyWorkflowOps, validateWorkflowConnection } from './ops';
+import { buildWorkflowPromptPasteOps } from './promptPaste';
 import { WorkflowConnections } from './WorkflowConnections';
 import { WorkflowContextMenu, type WorkflowContextMenuState } from './WorkflowContextMenu';
 import { WorkflowCreateMenu, type WorkflowCreateMenuState } from './WorkflowCreateMenu';
@@ -910,6 +912,20 @@ export function InfiniteWorkflow({
     elementType: (item.mimeType.startsWith('video/') ? 'video' : 'image') as 'image' | 'video',
   })), [assetLibrary]);
 
+  const handleResolvePastedMentions = useCallback((mentions: MentionData[], targetNodeId: string): Array<MentionData | null> => {
+    const snapshot = currentSnapshot();
+    const result = buildWorkflowPromptPasteOps({
+      targetNodeId,
+      snapshot,
+      assets: assetLibrary?.items || [],
+      mentions,
+      createId: nanoid,
+    });
+    if (result.ops.length > 0 && !applyOps(result.ops)) return mentions.map(() => null);
+    selectNodes([targetNodeId]);
+    return result.resolvedMentions as Array<MentionData | null>;
+  }, [applyOps, assetLibrary, currentSnapshot, selectNodes]);
+
   const handleSelectAsset = useCallback((assetId: string, fromNodeId: string): string | undefined => {
     const snapshot = currentSnapshot();
     const targetNode = snapshot.nodes.find(n => n.id === fromNodeId);
@@ -1017,7 +1033,8 @@ export function InfiniteWorkflow({
     const shotsToGenerate = breakdown.shots.filter(shot => {
       const existingId = mode === 'image' ? shot.imageNodeId : shot.videoNodeId;
       if (existingId && snapshot.nodes.some(n => n.id === existingId)) return false;
-      return Boolean(shot.promptOverride || shot.action || shot.scene);
+      const promptOverride = mode === 'image' ? shot.imagePromptOverride : shot.videoPromptOverride;
+      return Boolean(promptOverride || shot.action || shot.scene);
     });
     if (shotsToGenerate.length === 0) return;
 
@@ -1044,7 +1061,8 @@ export function InfiniteWorkflow({
       const row = Math.floor(index / perRow);
       const nodeId = nanoid();
       newNodeIds.push(nodeId);
-      const prompt = shot.promptOverride || [shot.scene, shot.action, shot.emotion].filter(Boolean).join(', ');
+      const promptOverride = mode === 'image' ? shot.imagePromptOverride : shot.videoPromptOverride;
+      const prompt = promptOverride || [shot.scene, shot.action, shot.emotion].filter(Boolean).join(', ');
       const newNode = createWorkflowNode(nodeId, mode, {
         x: originX + col * (nodeWidth + gapX),
         y: startY + row * (nodeHeight + gapY),
@@ -2294,7 +2312,7 @@ export function InfiniteWorkflow({
           <WorkflowConfigPanel node={selectedNodeData[0]} nodes={project.nodes} connections={project.connections} onChange={metadata => applyOps([{ type: 'update_node', id: selectedNodeData[0].id, metadata: { ...selectedNodeData[0].metadata, ...metadata } }])} onRun={() => onRunNode(selectedNodeData[0].id)} onStop={onStopNode ? () => onStopNode(selectedNodeData[0].id) : undefined} />
         </div>}
         {selectedNodeData.length === 1 && ['image', 'video', 'text'].includes(selectedNodeData[0].type) && <div data-workflow-overlay style={{ position: 'absolute', zIndex: 69, left: promptLeft, top: promptTop }}>
-      <WorkflowNodePromptBar width={promptWidth} node={selectedNodeData[0]} nodes={project.nodes} connections={project.connections} t={t} theme={theme} language={language} userApiKeys={userApiKeys} dynamicModelOptions={dynamicModelOptions} onOpenSettings={onOpenSettings} onEnhancePrompt={onEnhancePrompt} isEnhancingPrompt={isEnhancingPrompt} onChange={metadata => applyOps([{ type: 'update_node', id: selectedNodeData[0].id, metadata: { ...selectedNodeData[0].metadata, ...metadata } }])} onRun={() => onRunNode(selectedNodeData[0].id)} onStop={onStopNode ? () => onStopNode(selectedNodeData[0].id) : undefined} focusSignal={promptFocusSignal} onDisconnectReference={fromNodeId => { const targetId = selectedNodeData[0].id; const conn = project.connections.find(c => c.toNodeId === targetId && c.fromNodeId === fromNodeId); if (!conn) return; applyOps([{ type: 'delete_connections', ids: [conn.id] }]); }} assetFolders={assetFolders} assetItems={assetSuggestions} assetLibrary={assetLibrary} onSelectWorkflowReference={selectedNodeData[0] ? (nodeId => handleSelectWorkflowReference(nodeId, selectedNodeData[0].id)) : undefined} onAddReferenceFiles={selectedNodeData[0] ? (files => handleAddReferenceFiles(files, selectedNodeData[0].id)) : undefined} onSelectAsset={selectedNodeData[0] ? (assetId => handleSelectAsset(assetId, selectedNodeData[0].id)) : undefined} skillEnabled={false} />
+      <WorkflowNodePromptBar width={promptWidth} node={selectedNodeData[0]} nodes={project.nodes} connections={project.connections} t={t} theme={theme} language={language} userApiKeys={userApiKeys} dynamicModelOptions={dynamicModelOptions} onOpenSettings={onOpenSettings} onEnhancePrompt={onEnhancePrompt} isEnhancingPrompt={isEnhancingPrompt} onChange={metadata => applyOps([{ type: 'update_node', id: selectedNodeData[0].id, metadata }])} onRun={() => onRunNode(selectedNodeData[0].id)} onStop={onStopNode ? () => onStopNode(selectedNodeData[0].id) : undefined} focusSignal={promptFocusSignal} onDisconnectReference={fromNodeId => { const targetId = selectedNodeData[0].id; const conn = project.connections.find(c => c.toNodeId === targetId && c.fromNodeId === fromNodeId); if (!conn) return; applyOps([{ type: 'delete_connections', ids: [conn.id] }]); }} assetFolders={assetFolders} assetItems={assetSuggestions} assetLibrary={assetLibrary} onSelectWorkflowReference={selectedNodeData[0] ? (nodeId => handleSelectWorkflowReference(nodeId, selectedNodeData[0].id)) : undefined} onAddReferenceFiles={selectedNodeData[0] ? (files => handleAddReferenceFiles(files, selectedNodeData[0].id)) : undefined} onSelectAsset={selectedNodeData[0] ? (assetId => handleSelectAsset(assetId, selectedNodeData[0].id)) : undefined} onResolvePastedMentions={mentions => handleResolvePastedMentions(mentions, selectedNodeData[0].id)} onPasteUnresolvedMentions={labels => setNotice(`未能唯一匹配引用：${labels.map(label => `@${label}`).join('、')}，已保留为普通文字。`)} skillEnabled={false} />
         </div>}
       </>}
       {minimapOpen && <WorkflowMiniMap nodes={project.nodes.filter(node => node.isVisible !== false)} viewport={project.viewport} onCenter={(x, y) => {

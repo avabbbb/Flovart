@@ -1260,6 +1260,44 @@ describe('aiGateway - generateImageWithProvider', () => {
         expect(body.imageUrl).toBeUndefined();
     });
 
+    it('routes verified RunningHub Veo 3.1 Lite text-to-video without undocumented fields', async () => {
+        globalThis.fetch = vi.fn()
+            .mockResolvedValueOnce(mockJsonResponse({
+                taskId: 'rh-veo31-lite-t2v',
+                status: 'SUCCESS',
+                errorCode: '',
+                errorMessage: '',
+                results: [{ url: 'https://cdn.example.com/veo31-lite.mp4', outputType: 'mp4', text: null }],
+                clientId: 'client-1',
+            }))
+            .mockResolvedValueOnce(mockBinaryResponse('fake-video', 'video/mp4'));
+
+        await generateVideoWithProvider('纸张拼贴历史短片', 'rhart-video-v3.1-lite-official/text-to-video', {
+            id: 'rh-key',
+            provider: 'runningHub',
+            capabilities: ['video'],
+            key: '0123456789abcdef0123456789abcdef',
+            baseUrl: 'https://www.runninghub.cn/openapi/v2',
+            createdAt: 0,
+            updatedAt: 0,
+        }, {
+            aspectRatio: '16:9',
+            durationSec: 8,
+            resolution: '720p',
+            generateAudio: true,
+        });
+
+        const [url, init] = (globalThis.fetch as any).mock.calls[0];
+        const body = JSON.parse(init.body);
+        expect(url).toContain('/rhart-video-v3.1-lite-official/text-to-video');
+        expect(body).toEqual({
+            prompt: '纸张拼贴历史短片',
+            aspectRatio: '16:9',
+            resolution: '720p',
+            duration: '8',
+        });
+    });
+
     it('blocks unverified SkyReels V4 Omni text-to-video (not in Route Catalog) before submit', async () => {
         globalThis.fetch = vi.fn();
 

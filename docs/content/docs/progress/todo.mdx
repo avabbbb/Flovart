@@ -51,12 +51,23 @@ Table 是 Workflow 之外的第二个正式创作工作区，不是电子表格�
 
 ## 制作 Runtime
 
-- **统一 Runtime dispatch**：⬜ S0.2 已让 `runtime.status`、`command.list`、`command.schema` 经唯一 Desktop Runtime 执行；S1 起继续把 `legacy-only` Provider、生成和任务命令从 file/browser bridge 迁入 Runtime，迁完后删除双轨执行面。
-- **写命令重放与幂等**：⬜ 当前 Control Plane 只有三条只读命令；新增任何 Production 写命令前，必须随持久 Task Ledger 落地幂等键、receipt-before-side-effect、重放拒绝和 `submission_unknown` 处理。
+- **统一 Runtime dispatch**：⬜ Runtime 查询、Task 查询/取消、Event 续读、`runtime.test.delay` 和首条 RunningHub Veo 3.1 Lite 真实视频路线已经由唯一 Desktop Runtime 执行；继续迁入其他已验证 Provider Route，迁完后删除双轨执行面。
 - **跨入口本地数据桥接**：⬜ Web 站点、Tauri WebView 与 Edge 扩展的 IndexedDB 默认按 origin 隔离；通过受限 Desktop Runtime API 共享 Workflow / 素材 / 历史等业务数据，API Key 只允许本地鉴权后调用，不向扩展返回明文。
-- **持久任务协议**：⬜ 为长时 Provider、媒体处理、渲染与验证操作提供 `taskId`、幂等键、进度、租约、心跳、取消、重启恢复和 `submission_unknown` 处理。
+- **Provider Task 完整语义**：⬜ 首条 RunningHub Route 已保存外部 job ID、轮询事件和 Artifact；继续补齐 ProviderAttempt、提交不确定态、真实百分比进度、失败分类与远端取消确认。
 - **原子能力面**：⬜ 补齐 Provider Job、Artifact、Node、Render 与 Verify 的封闭类型 Atomic Runtime Command；Production Intent Command 由 Runtime 展开为 ProductionRun 与 StageRun。
 - **Provider-neutral 能力**：⬜ Agent、CLI、MCP 与 WebUI 只请求产品能力，Provider Adapter 独占路由 payload、凭据和提交生命周期。
+
+## ProductionRun 与导演 Skill 生态
+
+- **Director Skill Manifest**：⬜ 定义版本化输入/输出、能力要求、Provider scope、预算、人工 Gate、产物契约和兼容版本；风格 Skill 不得读取 API Key 或直接构造 Provider HTTP 请求。
+- **制作领域模型**：⬜ 建立 `ProductionRun → Shot → Take → Artifact → Delivery`，将当前多个独立生成任务和外部合成脚本收进一条可恢复、可审计的制作图。
+- **报价与批准状态机**：⬜ 将 `production.quote`、预算策略/用户批准与 `submit` 分开，支持单镜头和整片费用上限；价格预览与最终账单分别记录。
+- **一等后期命令**：⬜ 注册旁白、字幕、混音、合成、响度和交付验证命令，使 Coding Agent 不再依赖评测目录的临时脚本。
+- **图生视频一致性流程**：⬜ 先做 style bake-off、角色参考和静态关键帧，再以 image-to-video 生成镜头；把跨镜头角色、调色和品牌污染检查设为 Gate。
+- **第三方 Skill 安全**：⬜ 增加签名、网络/Provider/文件权限、Secret 隔离、费用配额与审计日志，之后再开放导演 Skill UGC 安装与发布。
+- **只读 Workflow Projection**：⬜ 实现 `workflow.projection.get` 和 `workflow.projection.updated` 事件；Runtime Artifact 成功后自动出现只读 Shot/Take 节点，关闭并重开 WebUI 后仍能恢复。
+- **可编辑 Spec/Layout Revision**：⬜ 语义细修改走带 `parentRevisionId` 的 `production.spec.create-revision`，节点位置/视口只走 `workflow.layout.update`；实现 CAS 冲突、局部 Stage 失效、旧 Take 保留和单镜头重做。
+- **删除双轨状态**：⬜ Projection 接管后删除 `shadow-runtime-state.json`、Vite file queue 和浏览器完整快照作为命令真相；WebUI Local Agent Bridge 改为 Production Runtime Adapter。
 
 ## Provider 账单与取消
 
