@@ -16,15 +16,16 @@ function violation(code, message) {
 export function auditVoxProductionSpec(spec = {}) {
   const gates = [];
   const violations = [];
-  const extension = spec.extensions?.['vox-director'];
+  const extension = spec.extensions?.['community.vox-director']
+    || spec.extensions?.['vox-director'];
   const beats = Array.isArray(spec.narrative?.beats) ? spec.narrative.beats : [];
   const shots = beats.flatMap(beat => Array.isArray(beat.shots) ? beat.shots : []);
   const durationMs = Number(spec.delivery?.durationMs || Number(spec.durationSec || 0) * 1000);
   const directives = extension?.shotDirectives || {};
 
   const extensionPresent = !!extension;
-  addGate(gates, 'director-extension', extensionPresent, 25, 'extensions.vox-director must preserve the selected Director profile.');
-  if (!extensionPresent) violations.push(violation('VOX_EXTENSION_MISSING', 'The ProductionSpec lost extensions.vox-director and therefore has no enforceable VOX look.'));
+  addGate(gates, 'director-extension', extensionPresent, 25, 'extensions.community.vox-director must preserve the selected Director profile.');
+  if (!extensionPresent) violations.push(violation('VOX_EXTENSION_MISSING', 'The ProductionSpec lost extensions.community.vox-director and therefore has no enforceable VOX look.'));
 
   const themeReady = Array.isArray(extension?.themeCandidates)
     && extension.themeCandidates.length >= 3

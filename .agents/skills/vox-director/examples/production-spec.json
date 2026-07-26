@@ -1,0 +1,189 @@
+{
+  "schemaVersion": "flovart.production-spec/1",
+  "delivery": {
+    "durationMs": 30000,
+    "aspectRatio": "16:9",
+    "resolution": "1280x720",
+    "language": "zh-CN"
+  },
+  "narrative": {
+    "arc": "timeline",
+    "beats": [
+      {
+        "id": "hook",
+        "narration": "一个看似普通的决定，改变了之后几十年的规则。",
+        "shots": [
+          {
+            "id": "hook-wide",
+            "durationMs": 3750,
+            "scene": "撕纸标题压住一张旧报纸，红色箭头指向关键决定。"
+          },
+          {
+            "id": "hook-detail",
+            "durationMs": 3750,
+            "scene": "放大报纸日期和印章，纸屑向两侧散开。"
+          }
+        ]
+      },
+      {
+        "id": "context",
+        "narration": "在那之前，各方沿用的是另一套默认做法。",
+        "shots": [
+          {
+            "id": "context-wide",
+            "durationMs": 3750,
+            "scene": "旧规则以分层纸卡和人物剪影组成一张制度地图。"
+          },
+          {
+            "id": "context-detail",
+            "durationMs": 3750,
+            "scene": "两张规则卡片错位叠放，旧流程被红线圈出。"
+          }
+        ]
+      },
+      {
+        "id": "turn",
+        "narration": "转折点出现后，权力和流程被重新排列。",
+        "shots": [
+          {
+            "id": "turn-wide",
+            "durationMs": 3750,
+            "scene": "纸张齿轮和箭头重新组合，中央印章落下。"
+          },
+          {
+            "id": "turn-detail",
+            "durationMs": 3750,
+            "scene": "一条关键箭头从旧卡片滑向新的流程节点。"
+          }
+        ]
+      },
+      {
+        "id": "payoff",
+        "narration": "今天仍在使用的结构，就是从这次变化延伸而来。",
+        "shots": [
+          {
+            "id": "payoff-wide",
+            "durationMs": 3750,
+            "scene": "现代结构从旧报纸上展开，形成清晰的前后对照。"
+          },
+          {
+            "id": "payoff-detail",
+            "durationMs": 3750,
+            "scene": "最终结论以短标题和一枚红色印章稳定落位。"
+          }
+        ]
+      }
+    ]
+  },
+  "audio": {
+    "narration": {
+      "voiceProfile": "documentary-neutral"
+    },
+    "music": {
+      "intent": "rhythmic editorial instrumental",
+      "duckUnderNarration": true
+    }
+  },
+  "gates": [
+    {
+      "id": "approve-spec",
+      "type": "spec",
+      "status": "approved"
+    },
+    {
+      "id": "approve-style",
+      "type": "style-reference",
+      "status": "approved"
+    },
+    {
+      "id": "review-keyframes",
+      "type": "keyframe-review",
+      "status": "required"
+    },
+    {
+      "id": "verify-ocr",
+      "type": "ocr",
+      "status": "required"
+    }
+  ],
+  "extensions": {
+    "community.vox-director": {
+      "schemaVersion": "1",
+      "themeCandidates": [
+        "american-retro",
+        "swiss-modern",
+        "soviet-constructivist"
+      ],
+      "selectedTheme": "american-retro",
+      "look": {
+        "idiom": "mixed-media hand-cut paper collage",
+        "palette": [
+          "warm-cream",
+          "deep-red",
+          "ink-black",
+          "cold-blue"
+        ],
+        "typeStyle": "bold condensed cut-out headline",
+        "finish": [
+          "torn-edge",
+          "halftone-print",
+          "newsprint",
+          "paper-tape",
+          "print-grain"
+        ],
+        "motionStyle": "punchy",
+        "constraints": "strict"
+      },
+      "shotDirectives": {
+        "hook-wide": {
+          "shotSize": "WIDE",
+          "cameraMove": "push_in",
+          "elementMotion": "标题纸片滑入，箭头展开，报纸边缘轻微起伏",
+          "headlineLocked": true
+        },
+        "hook-detail": {
+          "shotSize": "CLOSE",
+          "cameraMove": "parallax",
+          "elementMotion": "日期纸片错层移动，印章脉动后稳定落位",
+          "headlineLocked": false
+        },
+        "context-wide": {
+          "shotSize": "WIDE",
+          "cameraMove": "pan",
+          "elementMotion": "人物剪影依次出现，规则卡片沿时间线展开",
+          "headlineLocked": true
+        },
+        "context-detail": {
+          "shotSize": "DETAIL",
+          "cameraMove": "static",
+          "elementMotion": "红线逐段绘出，旧卡片轻微错位后停住",
+          "headlineLocked": false
+        },
+        "turn-wide": {
+          "shotSize": "WIDE",
+          "cameraMove": "tilt",
+          "elementMotion": "纸张齿轮转动，箭头重新连接，印章从上方落下",
+          "headlineLocked": true
+        },
+        "turn-detail": {
+          "shotSize": "CLOSE",
+          "cameraMove": "element",
+          "elementMotion": "关键箭头横向滑过画面并扣住新的流程节点",
+          "headlineLocked": false
+        },
+        "payoff-wide": {
+          "shotSize": "WIDE",
+          "cameraMove": "pull_out",
+          "elementMotion": "新旧结构卡片展开成完整对照，纸屑缓慢散开",
+          "headlineLocked": true
+        },
+        "payoff-detail": {
+          "shotSize": "DETAIL",
+          "cameraMove": "static",
+          "elementMotion": "结论标题与红色印章轻弹一次后保持稳定",
+          "headlineLocked": true
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,125 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://flovart.local/schemas/director-skill/community.vox-director/1.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "themeCandidates",
+    "selectedTheme",
+    "look",
+    "shotDirectives"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "1"
+    },
+    "themeCandidates": {
+      "type": "array",
+      "minItems": 3,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "selectedTheme": {
+      "type": "string",
+      "minLength": 1
+    },
+    "look": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "idiom",
+        "palette",
+        "typeStyle",
+        "finish",
+        "motionStyle",
+        "constraints"
+      ],
+      "properties": {
+        "idiom": {
+          "type": "string",
+          "minLength": 1
+        },
+        "palette": {
+          "type": "array",
+          "minItems": 3,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "typeStyle": {
+          "type": "string",
+          "minLength": 1
+        },
+        "finish": {
+          "type": "array",
+          "minItems": 4,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "motionStyle": {
+          "enum": [
+            "calm",
+            "punchy",
+            "max"
+          ]
+        },
+        "constraints": {
+          "enum": [
+            "strict",
+            "loose"
+          ]
+        }
+      }
+    },
+    "shotDirectives": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "shotSize",
+          "cameraMove",
+          "elementMotion",
+          "headlineLocked"
+        ],
+        "properties": {
+          "shotSize": {
+            "enum": [
+              "EST_WIDE",
+              "WIDE",
+              "MEDIUM",
+              "CLOSE",
+              "DETAIL"
+            ]
+          },
+          "cameraMove": {
+            "enum": [
+              "static",
+              "push_in",
+              "pull_out",
+              "pan",
+              "tilt",
+              "parallax",
+              "element"
+            ]
+          },
+          "elementMotion": {
+            "type": "string",
+            "minLength": 8
+          },
+          "headlineLocked": {
+            "type": "boolean"
+          }
+        }
+      }
+    }
+  }
+}

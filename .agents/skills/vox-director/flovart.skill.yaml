@@ -1,0 +1,35 @@
+schemaVersion: flovart.director-skill/1
+id: community.vox-director
+version: 1.0.0
+productionSpec:
+  coreVersion: "1"
+  extensionSchema: schemas/extension.schema.json
+runtime:
+  minVersion: 0.3.0
+capabilities:
+  - image.generate
+  - video.generate
+  - audio.tts
+  - audio.music
+  - media.render
+  - media.verify
+permissions:
+  network: none
+  secrets: none
+  filesystem: package-readonly
+gates:
+  - id: approve-spec
+    type: spec
+  - id: approve-style
+    type: style-reference
+  - id: review-keyframes
+    type: keyframe-review
+  - id: verify-ocr
+    type: ocr
+evals:
+  entry: evals/cases.json
+license: MIT
+provenance:
+  source: https://github.com/avabbbb/vox-director
+  adaptation: flovart-provider-neutral-example
+trustTier: bundled-example

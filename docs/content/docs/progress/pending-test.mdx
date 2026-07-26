@@ -2,6 +2,14 @@
 title: 待测试确认
 ---
 
+## VOX Director 内置示例 Skill
+
+- 新增 `.agents/skills/vox-director` 标准 Skill 包：本地 Coding Agent 与应用内 Skill 台读取同一份 `SKILL.md`、`flovart.skill.yaml`、ProductionSpec 扩展 Schema、创意指导、评测用例和示例 ProductionSpec，不再由首页维护一份脱离运行契约的 VOX 展示假数据。
+- VOX 上游工作流已改造为 Flovart 的 Provider-neutral Director Skill：保留叙事节拍、纸张拼贴、风格试片、关键帧审片、OCR 和音频设计；示例包不读取 API Key、不直连 Provider、不负责轮询、下载或渲染，只声明 Runtime Capability 和人工 Gate。
+- `/app/home` 的 Skill 台现在显示真实 `community.vox-director` 内置示例，可打开来源、安全边界、制作能力与导演检查点详情；“用示例创建项目”会创建 `VOX Director 示例` 并进入真实 Workflow。目前尚未自动绑定 ProductionSession 或提交 ProductionRun。
+- 自动验证已通过：目录解析、扩展 Schema、安全边界与质量门定向 Vitest 6 项、Skill 标准结构校验、VOX 示例质量门 100/100、TypeScript 与生产构建；Playwright 在真实 `/app/home` 验证卡片、详情、源码入口和创建项目跳转，页面无运行时错误。全量 Vitest 为 81 个文件、638 项通过、1 项跳过，仍只有 `tests/workflowGeneration.test.ts` 的 6 项既有 Provider reference 失败。
+- 待用户验证：打开应用首页确认 Skill 台的 VOX 卡片和详情符合预期；点击“用示例创建项目”后确认 Workflow 项目名正确。第三方 Skill 的安装、锁定、签名、发布和撤销仍是待办。
+
 ## ProductionRun 与真实 Workflow Plan Projection
 
 - 新增 `production.dry-run`：Coding Agent/CLI 可把一个 Provider-neutral Director ProductionSpec 交给 Desktop Runtime；Runtime 在一个 SQLite 事务中创建 ProductionSession、不可变 Spec Revision、ProductionRun、StageRun DAG、依赖和 Workflow Plan Projection，并通过原有 Task/Event Ledger 返回可恢复 Task。

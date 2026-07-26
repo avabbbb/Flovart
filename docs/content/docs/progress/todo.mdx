@@ -59,7 +59,7 @@ Table 是 Workflow 之外的第二个正式创作工作区，不是电子表格�
 
 ## ProductionRun 与导演 Skill 生态
 
-- **Director Skill Manifest**：⬜ 定义版本化输入/输出、能力要求、Provider scope、预算、人工 Gate、产物契约和兼容版本；风格 Skill 不得读取 API Key 或直接构造 Provider HTTP 请求。
+- **Director Skill Manifest**：🟨 已用 `community.vox-director` 内置示例落地版本、ProductionSpec 扩展 Schema、Runtime Capability、人工 Gate、兼容版本、来源与权限声明，并由 Skill 台读取同一真实包；继续补第三方包导入、签名、锁定快照、发布、撤销与预算策略。风格 Skill 不得读取 API Key 或直接构造 Provider HTTP 请求。
 - **制作领域模型**：⬜ 建立 `ProductionRun → Shot → Take → Artifact → Delivery`，将当前多个独立生成任务和外部合成脚本收进一条可恢复、可审计的制作图。
 - **报价与批准状态机**：⬜ 将 `production.quote`、预算策略/用户批准与 `submit` 分开，支持单镜头和整片费用上限；价格预览与最终账单分别记录。
 - **一等后期命令**：⬜ 注册旁白、字幕、混音、合成、响度和交付验证命令，使 Coding Agent 不再依赖评测目录的临时脚本。

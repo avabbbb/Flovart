@@ -1,5 +1,4 @@
 // /app/home — 应用内产品首页，参考 flova.tv/zh-CN/skill/ 生态重构。
-// 仅前端 mock + localforage 已存项目；所有 Skill / FlovaTV 视频均来自 COMMUNITY_WORKFLOWS。
 import { useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import {
@@ -20,6 +19,8 @@ import {
 } from 'lucide-react';
 import { useWorkflowStore } from '../workflow/store';
 import { COMMUNITY_WORKFLOWS, type CommunityWorkflow } from '../landing/communityTypes';
+import type { BundledDirectorSkill } from '../../services/directorSkillCatalog';
+import { DirectorSkillShelf } from './DirectorSkillShelf';
 
 const linkTo = (path: string) => (window.location.hash = path);
 
@@ -28,7 +29,7 @@ const SIDEBAR_NAV = [
   { icon: FolderIcon, label: '项目', action: () => linkTo('/app') },
   { icon: Zap, label: '快速生成', action: () => linkTo('/app') },
   { icon: Library, label: '资产库', action: () => linkTo('/app') },
-  { icon: Sparkles, label: 'Skill', action: () => document.getElementById('hot-skills')?.scrollIntoView({ behavior: 'smooth' }) },
+  { icon: Sparkles, label: 'Skill', action: () => document.getElementById('skill-hub')?.scrollIntoView({ behavior: 'smooth' }) },
   { icon: Tv, label: 'FlovartTV', action: () => document.getElementById('flovarttv')?.scrollIntoView({ behavior: 'smooth' }) },
   { icon: BookOpen, label: '教程', action: () => window.open('https://github.com/avabbbb/Flovart/blob/main/docs', '_blank') },
   { icon: Terminal, label: 'FlovartCLI', action: () => window.open('https://github.com/avabbbb/Flovart', '_blank') },
@@ -47,22 +48,12 @@ const CATEGORY_TO_TAB: Record<CommunityWorkflow['category'], TvTab> = {
   '抽象': 'MV',
 };
 
-const HOT_SKILLS: Array<HotSkillItem> = [
-  { id: 'sk-3d-guoman', title: '3D国漫古装精品短剧', description: 'Q版化国漫古装角色, 分镜一键生成', thumb: 'linear-gradient(135deg, #2a1a3e 0%, #e94560 100%)' },
-  { id: 'sk-juqing', title: '剧情短片(音色参考)', description: '保留人物音色的剧情短片模板', thumb: 'linear-gradient(135deg, #1e3a5f 0%, #19c8b9 100%)' },
-  { id: 'sk-juben', title: '剧本生视频', description: '由剧本段落直接拼接成片', thumb: 'linear-gradient(135deg, #422 0%, #d4a574 100%)' },
-  { id: 'sk-yizhanshi', title: 'AI短剧一站式生成', description: '多节点工作流一键跑完整部短剧', thumb: 'linear-gradient(135deg, #0f3460 0%, #e94560 100%)' },
-  { id: 'sk-shangpin', title: '商品宣传短片', description: '商品+口播+剪辑成品组合', thumb: 'linear-gradient(135deg, #2d2d2d 0%, #9BC957 100%)' },
-  { id: 'sk-renwen', title: '人文纪录短片', description: '纪录片风格的旁白视频', thumb: 'linear-gradient(135deg, #2a2a2a 0%, #b58 100%)' },
-  { id: 'sk-laipian', title: '视频拉片复刻', description: '上传参考视频自动复刻分镜', thumb: 'linear-gradient(135deg, #1a1a2e 0%, #6e72fc 100%)' },
-];
-
-interface HotSkillItem {
-  id: string;
-  title: string;
-  description: string;
-  thumb: string;
-}
+const TV_SKILL_NAMES = [
+  '3D 国漫短剧',
+  '剧情短片',
+  '剧本生视频',
+  '商品宣传短片',
+] as const;
 
 // FlovartTV 卡片：用 COMMUNITY_WORKFLOWS mock 资料但映射到 tab
 interface TvCardItem {
@@ -82,7 +73,7 @@ const TV_CARDS: TvCardItem[] = COMMUNITY_WORKFLOWS.map((w, i) => {
     author: w.author?.name ?? 'flovart',
     gradient: w.gradient,
     tab,
-    skillName: HOT_SKILLS[i % HOT_SKILLS.length].title,
+    skillName: TV_SKILL_NAMES[i % TV_SKILL_NAMES.length],
   };
 });
 
@@ -188,51 +179,6 @@ function SectionTitle({ title, extra }: { title: string; extra?: React.ReactNode
       <h2 className="text-2xl font-bold" style={{ color: '#f5f5f0' }}>{title}</h2>
       {extra}
     </div>
-  );
-}
-
-function HotSkills({ onUse }: { onUse: (skill: HotSkillItem) => void }) {
-  return (
-    <section id="hot-skills" className="px-10 py-6">
-      <SectionTitle title="热门 Skills" extra={<button className="text-sm hover:underline" style={{ color: '#9BC957' }}>查看全部 <ChevronRight size={14} className="inline" /></button>} />
-      <div className="flex gap-3 overflow-x-auto pb-3" style={{ scrollbarWidth: 'thin' }}>
-        {HOT_SKILLS.map((skill, i) => (
-          <div
-            key={skill.id}
-            className="group relative rounded-2xl overflow-hidden cursor-pointer transition-all hover:scale-[1.02]"
-            style={{ width: 220, height: 60, flexShrink: 0 }}
-            onClick={() => onUse(skill)}
-          >
-            <div className="flex items-center gap-3 h-full px-3" style={{ background: skill.thumb }}>
-              <div className="rounded-full flex items-center justify-center flex-shrink-0" style={{ width: 30, height: 30, background: 'rgba(255,255,255,0.18)' }}>
-                <Sparkles size={14} color="#fff" />
-              </div>
-              <span className="font-bold text-sm" style={{ color: '#fff' }}>{skill.title}</span>
-            </div>
-            {i < 2 && (
-              <span className="absolute top-1.5 left-2 text-[10px] px-1.5 py-0.5 rounded-full font-bold" style={{ transform: 'translateY(-50%)', background: '#e94560', color: '#fff' }}>
-                热门
-              </span>
-            )}
-            <div
-              className="absolute inset-0 flex flex-col justify-end p-3 opacity-0 group-hover:opacity-100 transition-opacity"
-              style={{ background: 'rgba(0,0,0,0.78)' }}
-            >
-              <p className="text-xs line-clamp-1 mb-2" style={{ color: '#a8a49c' }}>{skill.description}</p>
-              <button className="self-start text-xs px-3 py-1 rounded-full" style={{ background: '#19c8b9', color: '#fff' }}>试一试</button>
-            </div>
-          </div>
-        ))}
-        <button
-          onClick={() => document.getElementById('flovarttv')?.scrollIntoView({ behavior: 'smooth' })}
-          className="flex items-center justify-center gap-1 rounded-2xl px-4 hover:bg-white/5 flex-shrink-0"
-          style={{ width: 120, height: 60, color: '#9BC957' }}
-        >
-          <span className="text-sm font-medium">更多 Skill</span>
-          <ChevronRight size={16} />
-        </button>
-      </div>
-    </section>
   );
 }
 
@@ -397,9 +343,8 @@ export default function FlovartHome() {
     openCanvas();
   };
 
-  const handleUseSkill = (skill: HotSkillItem) => {
-    // v1: 把 Skill 当作模板新建同名项目，后续真接入 Skill 库后再做
-    handleCreate(skill.title);
+  const handleUseSkill = (skill: BundledDirectorSkill) => {
+    handleCreate(`${skill.displayName} 示例`);
   };
 
   return (
@@ -407,7 +352,7 @@ export default function FlovartHome() {
       <Sidebar />
       <div className="flex-1 overflow-y-auto">
         <HeroAndInput onCreate={handleCreate} />
-        <HotSkills onUse={handleUseSkill} />
+        <DirectorSkillShelf onUse={handleUseSkill} />
         <RecentProjects projects={projects} onCreate={() => handleCreate()} onOpen={handleOpen} />
         <FlovartTV />
         <Footer />

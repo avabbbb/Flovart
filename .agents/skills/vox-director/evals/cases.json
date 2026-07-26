@@ -1,0 +1,33 @@
+{
+  "schemaVersion": "flovart.director-skill-evals/1",
+  "cases": [
+    {
+      "id": "history-30s",
+      "prompt": "把一个历史制度转折做成 30 秒中文纸张拼贴解释短片",
+      "expect": {
+        "arc": "timeline",
+        "durationMs": 30000,
+        "shotCount": {
+          "min": 6,
+          "max": 8
+        },
+        "requiredGates": [
+          "spec",
+          "style-reference",
+          "keyframe-review",
+          "ocr"
+        ]
+      }
+    },
+    {
+      "id": "product-explainer-30s",
+      "prompt": "用纸张拼贴做一支 30 秒产品原理解释短片",
+      "expect": {
+        "arc": "how_it_works",
+        "durationMs": 30000,
+        "imageFirst": true,
+        "adjacentCameraMovesVary": true
+      }
+    }
+  ]
+}

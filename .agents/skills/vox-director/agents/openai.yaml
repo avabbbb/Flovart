@@ -1,0 +1,4 @@
+interface:
+  display_name: "VOX Director"
+  short_description: "把任意主题编译成可审片的 VOX 纸张拼贴短片制作计划"
+  default_prompt: "Use $vox-director to turn my topic into a VOX-style ProductionSpec for Flovart."

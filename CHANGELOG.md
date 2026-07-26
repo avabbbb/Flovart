@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Skill 台新增真实 `community.vox-director` 内置示例：同一标准包同时供本地 Coding Agent 与首页目录读取，包含 Flovart Manifest、ProductionSpec 扩展 Schema、创意指导、评测与示例计划；VOX 工作流保持 Provider-neutral，不读取 API Key 或直连 Provider，并可从详情页创建示例 Workflow 项目。
 - 新增首条 ProductionRun 垂直切片：`production.dry-run` 将 Director ProductionSpec 原子持久化为 ProductionSession、Spec Revision、ProductionRun、StageRun DAG 与 Workflow Plan Projection；Desktop 自动把 Runtime 权威投影合入真实 Workflow，并保留用户节点、连线、视口及手动布局。真实 VOX 30 秒计划以无 Provider、无 CDP 路径完成 20 阶段/21 节点画布验收。
 - Desktop 现会幂等托管 Managed Agent，并由顶层 `RouterHost` 在任意路由和空 Workflow 首启时自动注册真实 Workspace Adapter；WebUI 通过受限 Tauri IPC 获取 loopback 连接，Token 不再打印或手工复制，项目切换只同步快照而不断开命令回传。已用独立 PowerShell CLI（无 Playwright/CDP）真实完成项目创建、节点细修、移动与 inspect 回读。
 - 新增内置近 30 天选题 Research Adapter 与 Ink TUI：`research.topic.collect` 可输出带来源覆盖状态的 Reddit/X 研究制品，缺少 X 认证时不伪造成功；Terminal Command Center 实时观察 Runtime、Workflow、Task 和 Event，并提供 `/research` 等 slash command。
