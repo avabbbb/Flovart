@@ -91,7 +91,7 @@ function setCors(request, response, url, config) {
   response.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
   response.setHeader('Access-Control-Allow-Private-Network', 'true');
   if (!origin || request.method === 'OPTIONS' || url.pathname === '/health' || url.pathname === '/config') return true;
-  if (!config.origin && validToken(request, url, config.token)) {
+  if (config.origin !== origin && validToken(request, url, config.token)) {
     config.origin = origin;
     saveAgentConfig(config);
   }
@@ -213,7 +213,6 @@ export function startHttpServer() {
   server.listen(port, '127.0.0.1', () => {
     console.log('Flovart Agent');
     console.log(`Local URL: ${config.url}`);
-    console.log(`Connect token: ${config.token}`);
     console.log(`Codex MCP: codex mcp add flovart -- node "${fileURLToPath(new URL('./index.js', import.meta.url))}" mcp`);
   });
   const close = () => { codex?.close(); server.close(); };

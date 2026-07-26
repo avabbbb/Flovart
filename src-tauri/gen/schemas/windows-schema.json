@@ -351,6 +351,12 @@
           "markdownDescription": "Allows the main Flovart WebUI to write, delete, and list credential metadata without reading raw secrets back."
         },
         {
+          "description": "Allows the main Flovart WebUI to start and discover the authenticated loopback Managed Agent.",
+          "type": "string",
+          "const": "managed-agent-connection",
+          "markdownDescription": "Allows the main Flovart WebUI to start and discover the authenticated loopback Managed Agent."
+        },
+        {
           "description": "Allows the main Flovart WebUI to inspect and execute the typed Production Runtime contract.",
           "type": "string",
           "const": "runtime-control",

@@ -10,6 +10,7 @@
     "process:default",
     "deep-link:default",
     "runtime-control",
-    "keyring-metadata"
+    "keyring-metadata",
+    "managed-agent-connection"
   ]
 }

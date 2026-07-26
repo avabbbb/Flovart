@@ -13,6 +13,7 @@ pub mod bridge;
 pub mod deeplink;
 pub mod errors;
 pub mod keyring;
+pub mod managed_agent;
 pub mod runtime;
 pub mod state;
 
@@ -20,6 +21,7 @@ use std::sync::Arc;
 use tauri::Manager;
 
 use crate::bridge::BridgeQueue;
+use crate::managed_agent::ManagedAgentHost;
 use crate::runtime::{default_discovery_path, ControlServer, ProductionRuntime};
 use crate::state::StateDb;
 
@@ -104,6 +106,13 @@ pub fn run() {
                 "Production Runtime control server ready; discovery={}",
                 discovery_path.display()
             );
+            let managed_agent = Arc::new(ManagedAgentHost::from_environment());
+            let warm_agent = managed_agent.clone();
+            std::thread::spawn(move || {
+                if let Err(error) = warm_agent.ensure_connection() {
+                    log::warn!("Managed Agent is not ready: {error}");
+                }
+            });
 
             // ── 5. 处理启动时可能携带的 flovart:// 链接 ──
             if let Some(args) = std::env::args().nth(1) {
@@ -124,6 +133,7 @@ pub fn run() {
             app.manage(ctx_arc);
             app.manage(production_runtime);
             app.manage(control_server);
+            app.manage(managed_agent);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -135,6 +145,7 @@ pub fn run() {
             // production runtime
             runtime::runtime_status,
             runtime::runtime_execute,
+            managed_agent::managed_agent_connection,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Flovart");

@@ -7,3 +7,8 @@ commands.allow = ["runtime_status", "runtime_execute"]
 identifier = "keyring-metadata"
 description = "Allows the main Flovart WebUI to write, delete, and list credential metadata without reading raw secrets back."
 commands.allow = ["keyring_set", "keyring_delete", "keyring_list", "keyring_report_sync"]
+
+[[permission]]
+identifier = "managed-agent-connection"
+description = "Allows the main Flovart WebUI to start and discover the authenticated loopback Managed Agent."
+commands.allow = ["managed_agent_connection"]

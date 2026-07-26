@@ -8,6 +8,8 @@ import React, { Suspense, useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router';
 import App from './App';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { useWorkflowStore } from './components/workflow/store';
+import { useWorkflowWorkspaceAdapter } from './components/workflow/useWorkflowWorkspaceAdapter';
 import { useUpdaterStore } from './stores/useUpdaterStore';
 
 const EnterpriseApp = React.lazy(() => import('./components/enterprise/EnterpriseApp'));
@@ -17,6 +19,11 @@ const PromptsPage = React.lazy(() => import('./components/community/PromptsPage'
 const FlovartHome = React.lazy(() => import('./components/home/FlovartHome'));
 
 export function RouterHost() {
+  const projects = useWorkflowStore(state => state.projects);
+  const activeProjectId = useWorkflowStore(state => state.activeProjectId);
+  const activeProject = projects.find(project => project.id === activeProjectId) || projects[0] || null;
+  useWorkflowWorkspaceAdapter(activeProject);
+
   useEffect(() => {
     useUpdaterStore.getState().autoCheckOnStartup();
   }, []);
