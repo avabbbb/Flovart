@@ -9,6 +9,7 @@ import { HashRouter, Routes, Route, Navigate } from 'react-router';
 import App from './App';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { useWorkflowStore } from './components/workflow/store';
+import { useProductionProjectionAdapter } from './components/workflow/useProductionProjectionAdapter';
 import { useWorkflowWorkspaceAdapter } from './components/workflow/useWorkflowWorkspaceAdapter';
 import { useUpdaterStore } from './stores/useUpdaterStore';
 
@@ -23,6 +24,7 @@ export function RouterHost() {
   const activeProjectId = useWorkflowStore(state => state.activeProjectId);
   const activeProject = projects.find(project => project.id === activeProjectId) || projects[0] || null;
   useWorkflowWorkspaceAdapter(activeProject);
+  useProductionProjectionAdapter(activeProject?.id || null);
 
   useEffect(() => {
     useUpdaterStore.getState().autoCheckOnStartup();

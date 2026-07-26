@@ -4,13 +4,17 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
-import { COMMAND_REGISTRY } from './core.js';
+import { COMMAND_REGISTRY, executeFlovartCommand } from './core.js';
 import { defaultRuntimeActor, FlovartRuntimeClient, RuntimeClientError } from './runtime-client.js';
 import {
   availableCommandEntries,
   RUNTIME_COMMANDS,
   RUNTIME_WRITE_COMMANDS,
 } from './runtime-command-surface.js';
+import { WORKSPACE_COMMANDS, WORKSPACE_WRITE_COMMANDS } from './workspace-command-surface.js';
+import { RESEARCH_COMMANDS, RESEARCH_WRITE_COMMANDS } from './research-command-surface.js';
+import { collectTopicResearch } from './topic-research.js';
+import { FlovartWorkspaceClient, WorkspaceClientError } from './workspace-client.js';
 
 function argTypeToZod(typeStr) {
   const optional = typeStr.endsWith('?');
@@ -44,8 +48,42 @@ function buildSchema(argDefs) {
 
 async function routeAndExecute(command, rawArgs) {
   const { idempotencyKey, ...rest } = rawArgs;
+  if (command === 'command.list' || command === 'command.schema') {
+    return executeFlovartCommand(command, rest, {});
+  }
+  if (WORKSPACE_COMMANDS.has(command)) {
+    const workspace = new FlovartWorkspaceClient();
+    try {
+      if (command === 'workspace.status') return await workspace.status();
+      return await workspace.execute(command, rest, 'mcp', { idempotencyKey });
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof WorkspaceClientError
+          ? error.toJSON()
+          : { code: 'WORKSPACE_UNAVAILABLE', message: error instanceof Error ? error.message : String(error), retryable: true },
+      };
+    }
+  }
+  if (RESEARCH_COMMANDS.has(command)) {
+    try {
+      const result = await collectTopicResearch(rest, { idempotencyKey });
+      return result.state === 'failed'
+        ? { ok: false, error: { code: 'SOURCE_UNAVAILABLE', message: 'No usable topic evidence was collected.', retryable: true, details: result } }
+        : result;
+    } catch (error) {
+      return {
+        ok: false,
+        error: {
+          code: error?.code || 'RESEARCH_FAILED',
+          message: error instanceof Error ? error.message : String(error),
+          retryable: error?.code !== 'INVALID_ARGUMENT',
+        },
+      };
+    }
+  }
   if (!RUNTIME_COMMANDS.has(command)) {
-    return { ok: false, error: { code: 'UNKNOWN_COMMAND', message: `Command is not available through Production Runtime: ${command}`, retryable: false } };
+    return { ok: false, error: { code: 'UNKNOWN_COMMAND', message: `Command has no registered local adapter: ${command}`, retryable: false } };
   }
   const runtime = new FlovartRuntimeClient();
   try {
@@ -77,10 +115,10 @@ const server = new McpServer({
   name: 'flovart',
   version: '0.3.0',
   instructions: [
-    'Flovart MCP Server — deterministic Production Runtime tools.',
+    'Flovart MCP Server — deterministic Production Runtime and visible Workspace tools.',
     'Only commands marked available in the canonical registry are exposed.',
     'Provider jobs return durable task IDs; observe them with task.get and event.stream.',
-    'Workflow commands remain unavailable until the visible workspace is projected from Production Runtime.',
+    'Workflow graph commands use the local Workspace Adapter and mutate the same visible browser project; call workspace_status before editing.',
     'Never read, print, or store API keys. Provider keys stay in the local Flovart Runtime/WebUI only.',
   ].join(' '),
 });
@@ -88,7 +126,7 @@ const server = new McpServer({
 for (const [commandName, def] of availableCommandEntries(COMMAND_REGISTRY)) {
   const toolName = commandName.replace(/[-.]/g, '_');
   const schema = buildSchema(def.args);
-  if (RUNTIME_WRITE_COMMANDS.has(commandName)) {
+  if (RUNTIME_WRITE_COMMANDS.has(commandName) || WORKSPACE_WRITE_COMMANDS.has(commandName) || RESEARCH_WRITE_COMMANDS.has(commandName)) {
     schema.idempotencyKey = z.string().min(1);
   }
   server.tool(

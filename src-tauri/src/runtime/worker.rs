@@ -14,8 +14,11 @@ use std::{
 
 use super::{
     google_veo::{GoogleVeoClient, GoogleVeoError, PollResult as GooglePollResult, VEO_LITE_MODEL},
+    production::compile_production_plan,
     runninghub::{
-        PollResult as RunningHubPollResult, RunningHubClient, RunningHubError, VEO_LITE_ROUTE,
+        image_to_video_body, MediaKind as RunningHubMediaKind, PollResult as RunningHubPollResult,
+        RunningHubClient, RunningHubError, GPT_IMAGE_2_ROUTE, GROK_VIDEO_IMAGE_ROUTE,
+        GROK_VIDEO_ROUTE, VEO_LITE_ROUTE,
     },
     store::{ClaimedTask, RuntimeStore},
 };
@@ -42,7 +45,15 @@ impl RuntimeWorker {
                         "runtime.test.delay" => {
                             run_delay(&store, &worker_id, &worker_stopping, &task)
                         }
+                        "production.dry-run" => run_production_plan(&store, &worker_id, &task),
                         "generate.video" => run_video(
+                            &store,
+                            &worker_id,
+                            &worker_stopping,
+                            artifact_root.as_deref(),
+                            &task,
+                        ),
+                        "generate.image" => run_runninghub_image(
                             &store,
                             &worker_id,
                             &worker_stopping,
@@ -72,6 +83,35 @@ impl RuntimeWorker {
         Self {
             stopping,
             thread: Some(thread),
+        }
+    }
+}
+
+fn run_production_plan(store: &RuntimeStore, worker_id: &str, task: &ClaimedTask) {
+    match compile_production_plan(&task.args) {
+        Ok(draft) => {
+            if let Err(error) = store.complete_production_plan(&task.id, worker_id, &draft) {
+                let _ = store.fail_task(
+                    &task.id,
+                    worker_id,
+                    &json!({
+                        "code": error.code,
+                        "message": error.message,
+                        "retryable": error.retryable
+                    }),
+                );
+            }
+        }
+        Err(error) => {
+            let _ = store.fail_task(
+                &task.id,
+                worker_id,
+                &json!({
+                    "code": error.code,
+                    "message": error.message,
+                    "retryable": error.retryable
+                }),
+            );
         }
     }
 }
@@ -364,12 +404,163 @@ fn run_google_video(
     }
 }
 
+struct RunningHubPlan {
+    route_id: &'static str,
+    product_model: &'static str,
+    media_kind: RunningHubMediaKind,
+    body: Value,
+    artifact_kind: &'static str,
+    duration_sec: Option<u64>,
+    source_image_task_ids: Vec<String>,
+}
+
+fn run_runninghub_image(
+    store: &RuntimeStore,
+    worker_id: &str,
+    stopping: &AtomicBool,
+    artifact_root: Option<&Path>,
+    task: &ClaimedTask,
+) {
+    let Some(artifact_root) = artifact_root else {
+        fail(
+            store,
+            task,
+            worker_id,
+            "RUNTIME_UNAVAILABLE",
+            "Artifact store is unavailable.",
+        );
+        return;
+    };
+    let prompt = task
+        .args
+        .get("prompt")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+    let aspect_ratio = task
+        .args
+        .get("aspectRatio")
+        .and_then(Value::as_str)
+        .unwrap_or("16:9");
+    let resolution = task
+        .args
+        .get("resolution")
+        .and_then(Value::as_str)
+        .unwrap_or("1k");
+    run_runninghub_generation(
+        store,
+        worker_id,
+        stopping,
+        artifact_root,
+        task,
+        RunningHubPlan {
+            route_id: GPT_IMAGE_2_ROUTE,
+            product_model: "flovart:gpt-image-2",
+            media_kind: RunningHubMediaKind::Image,
+            body: json!({
+                "prompt": prompt,
+                "aspectRatio": aspect_ratio,
+                "resolution": resolution
+            }),
+            artifact_kind: "image",
+            duration_sec: None,
+            source_image_task_ids: Vec::new(),
+        },
+    );
+}
+
 fn run_runninghub_video(
     store: &RuntimeStore,
     worker_id: &str,
     stopping: &AtomicBool,
     artifact_root: &Path,
     task: &ClaimedTask,
+) {
+    let prompt = task
+        .args
+        .get("prompt")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+    let duration_sec = task
+        .args
+        .get("durationSec")
+        .and_then(Value::as_u64)
+        .unwrap_or(8);
+    let aspect_ratio = task
+        .args
+        .get("aspectRatio")
+        .and_then(Value::as_str)
+        .unwrap_or("16:9");
+    let resolution = task
+        .args
+        .get("resolution")
+        .and_then(Value::as_str)
+        .unwrap_or("720p");
+    let product_model = task
+        .args
+        .get("productModel")
+        .and_then(Value::as_str)
+        .unwrap_or("flovart:veo-3.1-lite");
+    let source_image_task_ids = task
+        .args
+        .get("sourceImageIds")
+        .and_then(Value::as_array)
+        .map(|values| {
+            values
+                .iter()
+                .filter_map(Value::as_str)
+                .map(str::to_owned)
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    let plan = match product_model {
+        "flovart:grok-imagine-video-1.5" if !source_image_task_ids.is_empty() => RunningHubPlan {
+            route_id: GROK_VIDEO_IMAGE_ROUTE,
+            product_model: "flovart:grok-imagine-video-1.5",
+            media_kind: RunningHubMediaKind::Video,
+            body: image_to_video_body(prompt, duration_sec, aspect_ratio, resolution, &[]),
+            artifact_kind: "video",
+            duration_sec: Some(duration_sec),
+            source_image_task_ids,
+        },
+        "flovart:grok-imagine-video-1.5" => RunningHubPlan {
+            route_id: GROK_VIDEO_ROUTE,
+            product_model: "flovart:grok-imagine-video-1.5",
+            media_kind: RunningHubMediaKind::Video,
+            body: json!({
+                "prompt": prompt,
+                "aspectRatio": aspect_ratio,
+                "resolution": resolution,
+                "duration": duration_sec
+            }),
+            artifact_kind: "video",
+            duration_sec: Some(duration_sec),
+            source_image_task_ids: Vec::new(),
+        },
+        _ => RunningHubPlan {
+            route_id: VEO_LITE_ROUTE,
+            product_model: "flovart:veo-3.1-lite",
+            media_kind: RunningHubMediaKind::Video,
+            body: json!({
+                "prompt": prompt,
+                "aspectRatio": aspect_ratio,
+                "resolution": resolution,
+                "duration": duration_sec.to_string()
+            }),
+            artifact_kind: "video",
+            duration_sec: Some(duration_sec),
+            source_image_task_ids: Vec::new(),
+        },
+    };
+    run_runninghub_generation(store, worker_id, stopping, artifact_root, task, plan);
+}
+
+fn run_runninghub_generation(
+    store: &RuntimeStore,
+    worker_id: &str,
+    stopping: &AtomicBool,
+    artifact_root: &Path,
+    task: &ClaimedTask,
+    mut plan: RunningHubPlan,
 ) {
     let credential_id = task
         .args
@@ -423,26 +614,94 @@ fn run_runninghub_video(
             return;
         }
     };
-    let prompt = task
-        .args
-        .get("prompt")
-        .and_then(Value::as_str)
-        .unwrap_or_default();
-    let duration_sec = task
-        .args
-        .get("durationSec")
-        .and_then(Value::as_u64)
-        .unwrap_or(8);
-    let aspect_ratio = task
-        .args
-        .get("aspectRatio")
-        .and_then(Value::as_str)
-        .unwrap_or("16:9");
-    let resolution = task
-        .args
-        .get("resolution")
-        .and_then(Value::as_str)
-        .unwrap_or("720p");
+    if !plan.source_image_task_ids.is_empty() {
+        let preparing = json!({
+            "phase": "preparing_inputs",
+            "provider": "runningHub",
+            "routeId": plan.route_id,
+            "productModel": plan.product_model,
+            "sourceImageIds": plan.source_image_task_ids
+        });
+        if !store
+            .update_progress(&task.id, worker_id, &preparing)
+            .unwrap_or(false)
+        {
+            return;
+        }
+        let mut image_urls = Vec::with_capacity(plan.source_image_task_ids.len());
+        for source_task_id in &plan.source_image_task_ids {
+            let source_task = match store.get_task(source_task_id) {
+                Ok(source_task) => source_task,
+                Err(_) => {
+                    fail(
+                        store,
+                        task,
+                        worker_id,
+                        "SOURCE_ARTIFACT_UNAVAILABLE",
+                        &format!("Source image task is unavailable: {source_task_id}"),
+                    );
+                    return;
+                }
+            };
+            let artifact = source_task
+                .result
+                .as_ref()
+                .and_then(|result| result.get("artifact"));
+            let store_relpath = artifact
+                .and_then(|artifact| artifact.get("storeRelpath"))
+                .and_then(Value::as_str);
+            let mime_type = artifact
+                .and_then(|artifact| artifact.get("mimeType"))
+                .and_then(Value::as_str)
+                .unwrap_or("image/png");
+            if source_task.status != "completed"
+                || artifact
+                    .and_then(|artifact| artifact.get("kind"))
+                    .and_then(Value::as_str)
+                    != Some("image")
+                || store_relpath.is_none()
+            {
+                fail(
+                    store,
+                    task,
+                    worker_id,
+                    "SOURCE_ARTIFACT_UNAVAILABLE",
+                    &format!("Source task is not a completed image Artifact: {source_task_id}"),
+                );
+                return;
+            }
+            let relative = Path::new(store_relpath.unwrap())
+                .strip_prefix("runtime-artifacts")
+                .unwrap_or_else(|_| Path::new(store_relpath.unwrap()));
+            let source_path = artifact_root.join(relative);
+            let bytes = match fs::read(&source_path) {
+                Ok(bytes) => bytes,
+                Err(_) => {
+                    fail(
+                        store,
+                        task,
+                        worker_id,
+                        "SOURCE_ARTIFACT_UNAVAILABLE",
+                        &format!("Source image Artifact cannot be read: {source_task_id}"),
+                    );
+                    return;
+                }
+            };
+            let extension = source_path
+                .extension()
+                .and_then(|value| value.to_str())
+                .unwrap_or("png");
+            let file_name = format!("{source_task_id}.{extension}");
+            match client.upload_binary(&secret, bytes, &file_name, mime_type) {
+                Ok(url) => image_urls.push(url),
+                Err(error) => {
+                    fail_runninghub(store, task, worker_id, error);
+                    return;
+                }
+            }
+        }
+        plan.body["imageUrls"] = json!(image_urls);
+    }
     let mut price_quote = task
         .progress
         .as_ref()
@@ -469,7 +728,8 @@ fn run_runninghub_video(
             let preflight = json!({
                 "phase": "preflight",
                 "provider": "runningHub",
-                "routeId": VEO_LITE_ROUTE
+                "routeId": plan.route_id,
+                "productModel": plan.product_model
             });
             if !store
                 .update_progress(&task.id, worker_id, &preflight)
@@ -477,15 +737,13 @@ fn run_runninghub_video(
             {
                 return;
             }
-            let quote =
-                match client.price_preview(&secret, prompt, duration_sec, aspect_ratio, resolution)
-                {
-                    Ok(quote) => quote,
-                    Err(error) => {
-                        fail_runninghub(store, task, worker_id, error);
-                        return;
-                    }
-                };
+            let quote = match client.price_preview_route(&secret, plan.route_id, &plan.body) {
+                Ok(quote) => quote,
+                Err(error) => {
+                    fail_runninghub(store, task, worker_id, error);
+                    return;
+                }
+            };
             price_quote = serde_json::to_value(&quote).ok();
             if cancellation_requested(store, task, worker_id) {
                 return;
@@ -493,7 +751,8 @@ fn run_runninghub_video(
             let submitting = json!({
                 "phase": "submitting",
                 "provider": "runningHub",
-                "routeId": VEO_LITE_ROUTE,
+                "routeId": plan.route_id,
+                "productModel": plan.product_model,
                 "priceQuote": price_quote
             });
             if !store
@@ -502,12 +761,13 @@ fn run_runninghub_video(
             {
                 return;
             }
-            match client.submit(&secret, prompt, duration_sec, aspect_ratio, resolution) {
+            match client.submit_route(&secret, plan.route_id, &plan.body) {
                 Ok(provider_task_id) => {
                     let polling = json!({
                         "phase": "polling",
                         "provider": "runningHub",
-                        "routeId": VEO_LITE_ROUTE,
+                        "routeId": plan.route_id,
+                        "productModel": plan.product_model,
                         "providerTaskId": provider_task_id,
                         "priceQuote": price_quote
                     });
@@ -541,7 +801,7 @@ fn run_runninghub_video(
             return;
         }
         let _ = store.renew_lease(&task.id, worker_id, LEASE_MS);
-        match client.poll(&secret, &provider_task_id) {
+        match client.poll_media(&secret, &provider_task_id, plan.media_kind) {
             Ok(RunningHubPollResult::Pending) => transient_errors = 0,
             Ok(RunningHubPollResult::Failed { code }) => {
                 fail(
@@ -556,18 +816,29 @@ fn run_runninghub_video(
                 );
                 return;
             }
-            Ok(RunningHubPollResult::Succeeded { download_url }) => {
+            Ok(RunningHubPollResult::Succeeded {
+                download_url,
+                extension,
+                mime_type,
+            }) => {
                 let downloading = json!({
                     "phase": "downloading",
                     "provider": "runningHub",
-                    "routeId": VEO_LITE_ROUTE,
+                    "routeId": plan.route_id,
+                    "productModel": plan.product_model,
                     "providerTaskId": provider_task_id,
                     "priceQuote": price_quote
                 });
                 let _ = store.update_progress(&task.id, worker_id, &downloading);
                 match client.download(&download_url).and_then(|bytes| {
-                    persist_video(artifact_root, &task.id, &bytes)
-                        .map_err(|_| RunningHubError::Transport)
+                    persist_media(
+                        artifact_root,
+                        &task.id,
+                        plan.artifact_kind,
+                        &extension,
+                        &bytes,
+                    )
+                    .map_err(|_| RunningHubError::Transport)
                 }) {
                     Ok((store_relpath, sha256, byte_size)) => {
                         let _ = store.complete_task(
@@ -575,16 +846,17 @@ fn run_runninghub_video(
                             worker_id,
                             &json!({
                                 "provider": "runningHub",
-                                "routeId": VEO_LITE_ROUTE,
+                                "productModel": plan.product_model,
+                                "routeId": plan.route_id,
                                 "providerTaskId": provider_task_id,
                                 "priceQuote": price_quote,
                                 "artifact": {
-                                    "kind": "video",
-                                    "mimeType": "video/mp4",
+                                    "kind": plan.artifact_kind,
+                                    "mimeType": mime_type,
                                     "storeRelpath": store_relpath,
                                     "sha256": sha256,
                                     "byteSize": byte_size,
-                                    "durationSec": duration_sec
+                                    "durationSec": plan.duration_sec
                                 }
                             }),
                         );
@@ -622,9 +894,20 @@ fn persist_video(
     task_id: &str,
     bytes: &[u8],
 ) -> std::io::Result<(String, String, usize)> {
-    let directory = artifact_root.join("videos");
+    persist_media(artifact_root, task_id, "video", "mp4", bytes)
+}
+
+fn persist_media(
+    artifact_root: &Path,
+    task_id: &str,
+    kind: &str,
+    extension: &str,
+    bytes: &[u8],
+) -> std::io::Result<(String, String, usize)> {
+    let directory_name = if kind == "image" { "images" } else { "videos" };
+    let directory = artifact_root.join(directory_name);
     fs::create_dir_all(&directory)?;
-    let filename = format!("{task_id}.mp4");
+    let filename = format!("{task_id}.{extension}");
     let final_path = directory.join(&filename);
     let temporary_path = directory.join(format!("{filename}.part"));
     let mut file = File::create(&temporary_path)?;
@@ -632,7 +915,7 @@ fn persist_video(
     file.sync_all()?;
     fs::rename(&temporary_path, &final_path)?;
     Ok((
-        format!("runtime-artifacts/videos/{filename}"),
+        format!("runtime-artifacts/{directory_name}/{filename}"),
         hex::encode(Sha256::digest(bytes)),
         bytes.len(),
     ))
@@ -790,6 +1073,16 @@ fn fail_runninghub(
             worker_id,
             "ARTIFACT_DOWNLOAD_FAILED",
             &format!("RunningHub artifact download failed with HTTP {status}."),
+        ),
+        RunningHubError::UploadFailed(status, code) => fail(
+            store,
+            task,
+            worker_id,
+            "SOURCE_UPLOAD_FAILED",
+            &with_code(
+                &format!("RunningHub source upload was rejected with HTTP {status}"),
+                code,
+            ),
         ),
         RunningHubError::Transport => fail(
             store,

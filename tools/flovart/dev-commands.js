@@ -271,6 +271,7 @@ export async function install(argv = []) {
     log(`Flovart Agent Toolkit ${result.version} installed in ${result.bundleDir}`);
     log(`Launcher: ${result.launcher}`);
     if (result.path?.changed) warn('PATH updated for future terminals. Open a new terminal before running `flovart`.');
+    if (result.path?.supported === false) warn(`Add ${result.path.binDir} to PATH, or continue using \`npx flovart-cli\`.`);
     return;
   }
 

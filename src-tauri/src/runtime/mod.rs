@@ -5,6 +5,7 @@ mod discovery;
 mod error;
 mod events;
 mod google_veo;
+mod production;
 mod registry;
 mod runninghub;
 mod store;
@@ -235,16 +236,48 @@ impl ProductionRuntime {
                         {
                             "provider": "runningHub",
                             "ready": !runninghub_credentials.is_empty(),
-                            "capabilities": ["video"],
-                            "productModels": ["flovart:veo-3.1-lite"],
-                            "route": {
-                                "routeId": runninghub::VEO_LITE_ROUTE,
-                                "channelTier": "official-stable",
-                                "resolution": "720p",
-                                "durationsSec": [4, 6, 8],
-                                "nativeAudio": true,
-                                "pricePreview": true
-                            },
+                            "capabilities": ["image", "video"],
+                            "productModels": [
+                                "flovart:gpt-image-2",
+                                "flovart:grok-imagine-video-1.5",
+                                "flovart:veo-3.1-lite"
+                            ],
+                            "routes": [
+                                {
+                                    "productModel": "flovart:gpt-image-2",
+                                    "routeId": runninghub::GPT_IMAGE_2_ROUTE,
+                                    "channelTier": "low-price",
+                                    "resolution": "1k",
+                                    "pricePreview": true
+                                },
+                                {
+                                    "productModel": "flovart:grok-imagine-video-1.5",
+                                    "routeId": runninghub::GROK_VIDEO_ROUTE,
+                                    "channelTier": "low-price",
+                                    "resolution": "720p",
+                                    "durationsSec": [6],
+                                    "pricePreview": true
+                                },
+                                {
+                                    "productModel": "flovart:veo-3.1-lite",
+                                    "routeId": runninghub::VEO_LITE_ROUTE,
+                                    "channelTier": "official-stable",
+                                    "resolution": "720p",
+                                    "durationsSec": [4, 6, 8],
+                                    "nativeAudio": true,
+                                    "pricePreview": true
+                                },
+                                {
+                                    "productModel": "flovart:grok-imagine-video-1.5",
+                                    "routeId": runninghub::GROK_VIDEO_IMAGE_ROUTE,
+                                    "channelTier": "low-price",
+                                    "mode": "image-to-video",
+                                    "resolution": "720p",
+                                    "durationsSec": [6],
+                                    "maxSourceImages": 10,
+                                    "pricePreview": true
+                                }
+                            ],
                             "credentials": runninghub_credentials
                         }
                     ]
@@ -290,6 +323,144 @@ impl ProductionRuntime {
                     )
                     .and_then(to_value)
             }
+            "production.dry-run" => {
+                let idempotency_key = envelope
+                    .get("idempotencyKey")
+                    .and_then(Value::as_str)
+                    .ok_or_else(|| {
+                        RuntimeError::new(
+                            "INVALID_ARGUMENT",
+                            "production.dry-run requires idempotencyKey",
+                        )
+                    })?;
+                let args = &envelope["args"];
+                validate_exact_args(
+                    args,
+                    &["projectId", "title", "reviewPolicy", "director", "spec"],
+                )?;
+                production::compile_production_plan(args)?;
+                let payload_hash = Self::hash_payload(&serde_json::json!({
+                    "command": "production.dry-run",
+                    "args": args,
+                }))
+                .map_err(|error| RuntimeError::new("RUNTIME_UNAVAILABLE", error.to_string()))?;
+                self.store
+                    .submit_production_plan(
+                        envelope["commandId"].as_str().unwrap_or_default(),
+                        envelope["actor"]["kind"].as_str().unwrap_or_default(),
+                        envelope["actor"]["instanceId"].as_str().unwrap_or_default(),
+                        idempotency_key,
+                        &payload_hash,
+                        args,
+                    )
+                    .and_then(to_value)
+            }
+            "production.status" => {
+                let args = &envelope["args"];
+                validate_exact_args(args, &["runId"])?;
+                let run_id = args
+                    .get("runId")
+                    .and_then(Value::as_str)
+                    .filter(|value| !value.trim().is_empty())
+                    .ok_or_else(|| {
+                        RuntimeError::new("INVALID_ARGUMENT", "production.status requires runId")
+                    })?;
+                self.store.get_production_status(run_id)
+            }
+            "workflow.projection.get" => {
+                let args = &envelope["args"];
+                validate_exact_args(args, &["projectId"])?;
+                let project_id = args
+                    .get("projectId")
+                    .and_then(Value::as_str)
+                    .filter(|value| !value.trim().is_empty())
+                    .ok_or_else(|| {
+                        RuntimeError::new(
+                            "INVALID_ARGUMENT",
+                            "workflow.projection.get requires projectId",
+                        )
+                    })?;
+                self.store.get_workflow_projection(project_id)
+            }
+            "generate.image" => {
+                let idempotency_key = envelope
+                    .get("idempotencyKey")
+                    .and_then(Value::as_str)
+                    .ok_or_else(|| {
+                        RuntimeError::new(
+                            "INVALID_ARGUMENT",
+                            "generate.image requires idempotencyKey",
+                        )
+                    })?;
+                let args = &envelope["args"];
+                validate_exact_args(
+                    args,
+                    &[
+                        "prompt",
+                        "provider",
+                        "credentialId",
+                        "productModel",
+                        "aspectRatio",
+                        "resolution",
+                    ],
+                )?;
+                let prompt = args.get("prompt").and_then(Value::as_str).ok_or_else(|| {
+                    RuntimeError::new("INVALID_ARGUMENT", "generate.image requires prompt")
+                })?;
+                if prompt.trim().is_empty() || prompt.len() > 8_000 {
+                    return Err(RuntimeError::new(
+                        "INVALID_ARGUMENT",
+                        "generate.image prompt must contain 1 to 8000 bytes",
+                    ));
+                }
+                let provider = optional_string(args, "provider")?.unwrap_or("runningHub");
+                let product_model =
+                    optional_string(args, "productModel")?.unwrap_or("flovart:gpt-image-2");
+                if provider != "runningHub" || product_model != "flovart:gpt-image-2" {
+                    return Err(RuntimeError::new(
+                        "ROUTE_UNAVAILABLE",
+                        "GPT Image 2 is currently enabled only through the trusted RunningHub low-price route.",
+                    ));
+                }
+                let aspect_ratio = optional_string(args, "aspectRatio")?.unwrap_or("16:9");
+                if !["1:1", "16:9", "9:16", "4:3", "3:4"].contains(&aspect_ratio) {
+                    return Err(RuntimeError::new(
+                        "INVALID_ARGUMENT",
+                        "GPT Image 2 aspectRatio is not enabled by the trusted route profile.",
+                    ));
+                }
+                let resolution = optional_string(args, "resolution")?.unwrap_or("1k");
+                if resolution != "1k" {
+                    return Err(RuntimeError::new(
+                        "INVALID_ARGUMENT",
+                        "GPT Image 2 low-price tracer bullet is capped at 1k.",
+                    ));
+                }
+                let credential_id = optional_string(args, "credentialId")?;
+                let normalized_args = serde_json::json!({
+                    "prompt": prompt,
+                    "provider": provider,
+                    "productModel": product_model,
+                    "aspectRatio": aspect_ratio,
+                    "resolution": resolution,
+                    "credentialId": credential_id
+                });
+                let payload_hash = Self::hash_payload(&serde_json::json!({
+                    "command": "generate.image",
+                    "args": normalized_args,
+                }))
+                .map_err(|error| RuntimeError::new("RUNTIME_UNAVAILABLE", error.to_string()))?;
+                self.store
+                    .submit_image(
+                        envelope["commandId"].as_str().unwrap_or_default(),
+                        envelope["actor"]["kind"].as_str().unwrap_or_default(),
+                        envelope["actor"]["instanceId"].as_str().unwrap_or_default(),
+                        idempotency_key,
+                        &payload_hash,
+                        &normalized_args,
+                    )
+                    .and_then(to_value)
+            }
             "generate.video" => {
                 let idempotency_key = envelope
                     .get("idempotencyKey")
@@ -328,13 +499,23 @@ impl ProductionRuntime {
                         "generate.video prompt must contain 1 to 8000 bytes",
                     ));
                 }
-                for unsupported in [
-                    "sourceImageIds",
-                    "sourceVideoIds",
-                    "slots",
-                    "watermark",
-                    "seed",
-                ] {
+                let product_model =
+                    optional_string(args, "productModel")?.unwrap_or("flovart:veo-3.1-lite");
+                let source_image_ids = optional_string_array(args, "sourceImageIds")?;
+                if source_image_ids.len() > 10 {
+                    return Err(RuntimeError::new(
+                        "INVALID_ARGUMENT",
+                        "Grok image-to-video accepts at most 10 sourceImageIds.",
+                    ));
+                }
+                if !source_image_ids.is_empty() && product_model != "flovart:grok-imagine-video-1.5"
+                {
+                    return Err(RuntimeError::new(
+                        "INVALID_ARGUMENT",
+                        "sourceImageIds are currently enabled only for Grok Imagine Video 1.5 image-to-video.",
+                    ));
+                }
+                for unsupported in ["sourceVideoIds", "slots", "watermark", "seed"] {
                     if args.get(unsupported).is_some_and(|value| {
                         !value.is_null()
                             && value.as_array().is_none_or(|items| !items.is_empty())
@@ -343,45 +524,69 @@ impl ProductionRuntime {
                         return Err(RuntimeError::new(
                             "INVALID_ARGUMENT",
                             format!(
-                                "The current Google Veo Lite tracer bullet does not support {unsupported}"
+                                "The current text-to-video tracer bullet does not support {unsupported}"
                             ),
                         ));
                     }
                 }
-                let product_model =
-                    optional_string(args, "productModel")?.unwrap_or("flovart:veo-3.1-lite");
-                if product_model != "flovart:veo-3.1-lite" {
+                if !["flovart:veo-3.1-lite", "flovart:grok-imagine-video-1.5"]
+                    .contains(&product_model)
+                {
                     return Err(RuntimeError::new(
                         "ROUTE_UNAVAILABLE",
-                        "Only flovart:veo-3.1-lite is enabled in Production Runtime.",
+                        "The requested video Product Model is not enabled in Production Runtime.",
                     ));
                 }
-                let provider = optional_string(args, "provider")?.unwrap_or("google");
-                if !["google", "runningHub"].contains(&provider) {
+                let provider = optional_string(args, "provider")?.unwrap_or(
+                    if product_model == "flovart:grok-imagine-video-1.5" {
+                        "runningHub"
+                    } else {
+                        "google"
+                    },
+                );
+                if product_model == "flovart:grok-imagine-video-1.5" && provider != "runningHub" {
+                    return Err(RuntimeError::new(
+                        "ROUTE_UNAVAILABLE",
+                        "Grok Imagine Video is enabled only through the trusted RunningHub low-price route.",
+                    ));
+                }
+                if product_model == "flovart:veo-3.1-lite"
+                    && !["google", "runningHub"].contains(&provider)
+                {
                     return Err(RuntimeError::new(
                         "ROUTE_UNAVAILABLE",
                         "Veo 3.1 Lite is enabled only for google or runningHub.",
                     ));
                 }
-                let duration_sec = optional_i64(args, "durationSec")?.unwrap_or(8);
-                if ![4, 6, 8].contains(&duration_sec) {
+                let default_duration = if product_model == "flovart:grok-imagine-video-1.5" {
+                    6
+                } else {
+                    8
+                };
+                let duration_sec = optional_i64(args, "durationSec")?.unwrap_or(default_duration);
+                let allowed_duration = if product_model == "flovart:grok-imagine-video-1.5" {
+                    duration_sec == 6
+                } else {
+                    [4, 6, 8].contains(&duration_sec)
+                };
+                if !allowed_duration {
                     return Err(RuntimeError::new(
                         "INVALID_ARGUMENT",
-                        "Google Veo Lite durationSec must be 4, 6, or 8",
+                        "durationSec is not enabled by the trusted Product Model route profile.",
                     ));
                 }
                 let aspect_ratio = optional_string(args, "aspectRatio")?.unwrap_or("16:9");
                 if !["16:9", "9:16"].contains(&aspect_ratio) {
                     return Err(RuntimeError::new(
                         "INVALID_ARGUMENT",
-                        "Google Veo Lite aspectRatio must be 16:9 or 9:16",
+                        "The trusted video route profile supports 16:9 or 9:16.",
                     ));
                 }
                 let resolution = optional_string(args, "resolution")?.unwrap_or("720p");
                 if resolution != "720p" {
                     return Err(RuntimeError::new(
                         "INVALID_ARGUMENT",
-                        "Google Veo Lite tracer bullet is capped at 720p",
+                        "The trusted video route profile is capped at 720p.",
                     ));
                 }
                 let credential_id = optional_string(args, "credentialId")?;
@@ -394,6 +599,7 @@ impl ProductionRuntime {
                     "aspectRatio": aspect_ratio,
                     "resolution": resolution,
                     "generateAudio": generate_audio,
+                    "sourceImageIds": source_image_ids,
                     "credentialId": credential_id
                 });
                 let payload_hash = Self::hash_payload(&serde_json::json!({
@@ -600,6 +806,26 @@ fn optional_bool(args: &Value, field: &str) -> Result<Option<bool>, RuntimeError
             format!("{field} must be a boolean"),
         )),
         None => Ok(None),
+    }
+}
+
+fn optional_string_array(args: &Value, field: &str) -> Result<Vec<String>, RuntimeError> {
+    match args.get(field) {
+        Some(Value::Array(values)) => values
+            .iter()
+            .map(|value| match value {
+                Value::String(value) if !value.trim().is_empty() => Ok(value.to_owned()),
+                _ => Err(RuntimeError::new(
+                    "INVALID_ARGUMENT",
+                    format!("{field} must contain non-empty strings"),
+                )),
+            })
+            .collect(),
+        Some(_) => Err(RuntimeError::new(
+            "INVALID_ARGUMENT",
+            format!("{field} must be an array of strings"),
+        )),
+        None => Ok(Vec::new()),
     }
 }
 

@@ -19,6 +19,14 @@ import {
   RUNTIME_COMMAND_NAMES,
   RUNTIME_WRITE_COMMAND_NAMES,
 } from '../tools/flovart/runtime-command-surface.js';
+import {
+  WORKSPACE_COMMAND_NAMES,
+  WORKSPACE_WRITE_COMMAND_NAMES,
+} from '../tools/flovart/workspace-command-surface.js';
+import {
+  RESEARCH_COMMAND_NAMES,
+  RESEARCH_WRITE_COMMAND_NAMES,
+} from '../tools/flovart/research-command-surface.js';
 
 describe('Production Runtime canonical registry', () => {
   it('publishes the S1.1 durable-task contract without restoring removed surfaces', () => {
@@ -26,7 +34,7 @@ describe('Production Runtime canonical registry', () => {
     const commandNames = Object.keys(registry.commands);
 
     expect(registry.protocolVersion).toBe('1');
-    expect(registry.registryHash).toBe('ad9c10c2a27e3dfa4106cb8cce3f6468cf906334ec987ace8216144ef7181a98');
+    expect(registry.registryHash).toBe('0f94bbc3c239bb90783962b49d8ef6f6f5db42fedcebfbe98c898d8c86855a8b');
     expect(hashCanonicalRegistryDocument(registryDocument)).toBe(registry.registryHash);
     expect(Object.isFrozen(registry.commands)).toBe(true);
     expect(Object.isFrozen(registry.commands['runtime.status'].args)).toBe(true);
@@ -51,19 +59,28 @@ describe('Production Runtime canonical registry', () => {
     const registry = getCanonicalRegistry();
 
     expect(COMMAND_REGISTRY).toEqual(registry.commands);
-    expect(COMMAND_REGISTRY['workflow.node.create']?.availability).toBe('legacy-only');
+    expect(COMMAND_REGISTRY['workflow.node.create']?.availability).toBe('available');
   });
 
-  it('keeps the public CLI and MCP runtime surface aligned with available registry commands', () => {
+  it('keeps the public CLI and MCP adapters aligned with available registry commands', () => {
     const available = availableCommandEntries(COMMAND_REGISTRY).map(([name]) => name);
 
-    expect(available).toEqual(RUNTIME_COMMAND_NAMES);
+    expect(new Set(available)).toEqual(new Set([
+      ...RUNTIME_COMMAND_NAMES,
+      ...WORKSPACE_COMMAND_NAMES,
+      ...RESEARCH_COMMAND_NAMES,
+    ]));
     expect(RUNTIME_WRITE_COMMAND_NAMES).toEqual([
       'runtime.test.delay',
       'task.cancel',
+      'production.dry-run',
+      'generate.image',
       'generate.video',
     ]);
-    expect(available).not.toContain('workflow.node.create');
+    expect(WORKSPACE_WRITE_COMMAND_NAMES).toContain('workflow.node.create');
+    expect(RESEARCH_WRITE_COMMAND_NAMES).toEqual(['research.topic.collect']);
+    expect(available).toContain('workflow.node.create');
+    expect(available).toContain('research.topic.collect');
   });
 
   it('rejects unknown envelope fields and commands at the public contract seam', () => {
@@ -160,7 +177,7 @@ describe('Production Runtime canonical registry', () => {
       ok: false,
       error: { code: 'UNKNOWN_COMMAND' },
       data: null,
-      runtime: 'production-runtime',
+      runtime: 'client-registry',
     });
     expect(runtimeStatus.status).toBe(1);
     expect(statusOutput).toMatchObject({

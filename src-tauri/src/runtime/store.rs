@@ -5,11 +5,13 @@ use std::{path::Path, time::Duration};
 
 use super::{
     events::{RuntimeEntityRef, RuntimeEvent, RuntimeEventPage},
+    production::{build_workflow_projection, ProductionPlanDraft},
     tasks::{RuntimeTask, RuntimeTaskPage, TaskLinks, TaskReceipt},
     RuntimeContractError, RuntimeError,
 };
 
 const MIGRATION_0001: &str = include_str!("migrations/0001_runtime_ledger.sql");
+const MIGRATION_0002: &str = include_str!("migrations/0002_production_plan.sql");
 
 pub struct RuntimeStore {
     connection: Mutex<Connection>,
@@ -41,19 +43,22 @@ impl RuntimeStore {
                applied_at INTEGER NOT NULL
              );",
         )?;
-        let applied = connection.query_row(
-            "SELECT EXISTS(SELECT 1 FROM runtime_migrations WHERE version = 1)",
-            [],
-            |row| row.get::<_, bool>(0),
-        )?;
-        if !applied {
-            let migration = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
-            migration.execute_batch(MIGRATION_0001)?;
-            migration.execute(
-                "INSERT INTO runtime_migrations(version, applied_at) VALUES(1, ?1)",
-                [chrono::Utc::now().timestamp_millis()],
+        for (version, sql) in [(1, MIGRATION_0001), (2, MIGRATION_0002)] {
+            let applied = connection.query_row(
+                "SELECT EXISTS(SELECT 1 FROM runtime_migrations WHERE version = ?1)",
+                [version],
+                |row| row.get::<_, bool>(0),
             )?;
-            migration.commit()?;
+            if !applied {
+                let migration =
+                    connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+                migration.execute_batch(sql)?;
+                migration.execute(
+                    "INSERT INTO runtime_migrations(version, applied_at) VALUES(?1, ?2)",
+                    params![version, chrono::Utc::now().timestamp_millis()],
+                )?;
+                migration.commit()?;
+            }
         }
         Ok(Self {
             connection: Mutex::new(connection),
@@ -82,6 +87,28 @@ impl RuntimeStore {
     }
 
     #[allow(clippy::too_many_arguments)]
+    pub fn submit_image(
+        &self,
+        command_id: &str,
+        actor_kind: &str,
+        actor_instance_id: &str,
+        idempotency_key: &str,
+        payload_hash: &str,
+        args: &Value,
+    ) -> Result<TaskReceipt, RuntimeError> {
+        self.submit_task(
+            command_id,
+            actor_kind,
+            actor_instance_id,
+            idempotency_key,
+            payload_hash,
+            "generate.image",
+            args,
+            2_000,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
     pub fn submit_video(
         &self,
         command_id: &str,
@@ -100,6 +127,28 @@ impl RuntimeStore {
             "generate.video",
             args,
             2_000,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn submit_production_plan(
+        &self,
+        command_id: &str,
+        actor_kind: &str,
+        actor_instance_id: &str,
+        idempotency_key: &str,
+        payload_hash: &str,
+        args: &Value,
+    ) -> Result<TaskReceipt, RuntimeError> {
+        self.submit_task(
+            command_id,
+            actor_kind,
+            actor_instance_id,
+            idempotency_key,
+            payload_hash,
+            "production.dry-run",
+            args,
+            100,
         )
     }
 
@@ -572,6 +621,394 @@ impl RuntimeStore {
         }
         transaction.commit().map_err(store_unavailable)?;
         Ok(completed == 1)
+    }
+
+    pub fn complete_production_plan(
+        &self,
+        task_id: &str,
+        worker_id: &str,
+        draft: &ProductionPlanDraft,
+    ) -> Result<bool, RuntimeError> {
+        let mut connection = self.connection.lock();
+        let transaction = connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(store_unavailable)?;
+        let owns_task = transaction
+            .query_row(
+                "SELECT EXISTS(
+                   SELECT 1 FROM runtime_tasks
+                    WHERE id = ?1 AND status = 'working' AND lease_owner = ?2
+                 )",
+                params![task_id, worker_id],
+                |row| row.get::<_, bool>(0),
+            )
+            .map_err(store_unavailable)?;
+        if !owns_task {
+            transaction.commit().map_err(store_unavailable)?;
+            return Ok(false);
+        }
+
+        let now = chrono::Utc::now().timestamp_millis();
+        let session_id = super::ProductionRuntime::new_id("production_session");
+        let spec_revision_id = super::ProductionRuntime::new_id("spec_revision");
+        let production_run_id = super::ProductionRuntime::new_id("production_run");
+        let projection_id = super::ProductionRuntime::new_id("workflow_projection");
+        transaction
+            .execute(
+                "INSERT INTO production_sessions(
+                    id, project_id, title, review_policy, primary_skill_snapshot_json,
+                    status, created_at, updated_at
+                 ) VALUES(?1, ?2, ?3, ?4, ?5, 'active', ?6, ?6)",
+                params![
+                    session_id,
+                    draft.project_id,
+                    draft.title,
+                    draft.review_policy,
+                    draft.director.to_string(),
+                    now
+                ],
+            )
+            .map_err(store_unavailable)?;
+        transaction
+            .execute(
+                "INSERT INTO production_spec_revisions(
+                    id, session_id, revision_no, parent_revision_id, schema_version,
+                    core_json, extension_json, spec_hash, created_by, created_at
+                 ) VALUES(?1, ?2, 1, NULL, ?3, ?4, ?5, ?6, 'director_skill', ?7)",
+                params![
+                    spec_revision_id,
+                    session_id,
+                    draft.schema_version,
+                    draft.core.to_string(),
+                    draft.extensions.to_string(),
+                    draft.spec_hash,
+                    now
+                ],
+            )
+            .map_err(store_unavailable)?;
+        transaction
+            .execute(
+                "INSERT INTO production_runs(
+                    id, session_id, spec_revision_id, review_policy, status,
+                    blockers_json, created_at
+                 ) VALUES(?1, ?2, ?3, ?4, 'action_required', ?5, ?6)",
+                params![
+                    production_run_id,
+                    session_id,
+                    spec_revision_id,
+                    draft.review_policy,
+                    serde_json::to_string(&draft.blockers).map_err(store_unavailable)?,
+                    now
+                ],
+            )
+            .map_err(store_unavailable)?;
+
+        let mut stage_run_ids = Vec::with_capacity(draft.stages.len());
+        for stage in &draft.stages {
+            let stage_run_id = super::ProductionRuntime::new_id("stage_run");
+            transaction
+                .execute(
+                    "INSERT INTO stage_runs(
+                        id, run_id, stage_key, capability_id, spec_path, title, summary,
+                        status, input_hash, blocked_reason_json, created_at
+                     ) VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+                    params![
+                        stage_run_id,
+                        production_run_id,
+                        stage.stage_key,
+                        stage.capability_id,
+                        stage.spec_path,
+                        stage.title,
+                        stage.summary,
+                        stage.status,
+                        stage.input_hash,
+                        stage.blocked_reason.as_ref().map(Value::to_string),
+                        now
+                    ],
+                )
+                .map_err(store_unavailable)?;
+            stage_run_ids.push((stage.stage_key.clone(), stage_run_id));
+        }
+        let stage_id = |stage_key: &str| {
+            stage_run_ids
+                .iter()
+                .find_map(|(key, id)| (key == stage_key).then_some(id.as_str()))
+        };
+        for stage in &draft.stages {
+            let stage_run_id = stage_id(&stage.stage_key).ok_or_else(|| {
+                RuntimeError::new("RUNTIME_UNAVAILABLE", "Compiled StageRun ID is missing.")
+            })?;
+            for dependency in &stage.dependencies {
+                let dependency_id = stage_id(dependency).ok_or_else(|| {
+                    RuntimeError::new(
+                        "RUNTIME_UNAVAILABLE",
+                        format!("Compiled stage dependency is missing: {dependency}"),
+                    )
+                })?;
+                transaction
+                    .execute(
+                        "INSERT INTO stage_dependencies(
+                            stage_run_id, depends_on_stage_run_id, dependency_kind
+                         ) VALUES(?1, ?2, 'artifact')",
+                        params![stage_run_id, dependency_id],
+                    )
+                    .map_err(store_unavailable)?;
+            }
+        }
+
+        let projection = build_workflow_projection(
+            draft,
+            &projection_id,
+            &session_id,
+            &spec_revision_id,
+            &production_run_id,
+            &stage_run_ids,
+        )?;
+        let projection_hash = projection["projectionHash"]
+            .as_str()
+            .ok_or_else(|| {
+                RuntimeError::new(
+                    "RUNTIME_UNAVAILABLE",
+                    "Compiled Workflow Projection is missing its hash.",
+                )
+            })?
+            .to_owned();
+        transaction
+            .execute(
+                "INSERT INTO workflow_plan_projections(
+                    id, project_id, session_id, spec_revision_id, run_id,
+                    projection_version, projection_json, projection_hash, created_at
+                 ) VALUES(?1, ?2, ?3, ?4, ?5, 1, ?6, ?7, ?8)",
+                params![
+                    projection_id,
+                    draft.project_id,
+                    session_id,
+                    spec_revision_id,
+                    production_run_id,
+                    projection.to_string(),
+                    projection_hash,
+                    now
+                ],
+            )
+            .map_err(store_unavailable)?;
+
+        let result = json!({
+            "productionSessionId": session_id,
+            "specRevisionId": spec_revision_id,
+            "productionRunId": production_run_id,
+            "projectionId": projection_id,
+            "projectionHash": projection_hash,
+            "stageCount": draft.stages.len(),
+            "status": "action_required",
+            "blockers": draft.blockers
+        });
+        let completed = transaction
+            .execute(
+                "UPDATE runtime_tasks
+                    SET status = 'completed',
+                        entity_type = 'production_run',
+                        entity_id = ?1,
+                        result_json = ?2,
+                        lease_owner = NULL,
+                        lease_expires_at = NULL,
+                        updated_at = ?3
+                  WHERE id = ?4 AND status = 'working' AND lease_owner = ?5",
+                params![
+                    production_run_id,
+                    result.to_string(),
+                    now,
+                    task_id,
+                    worker_id
+                ],
+            )
+            .map_err(store_unavailable)?;
+        if completed != 1 {
+            return Err(RuntimeError::new(
+                "RUNTIME_UNAVAILABLE",
+                "Production plan task lease was lost before commit.",
+            ));
+        }
+        transaction
+            .execute(
+                "INSERT INTO runtime_events(
+                    event_version, entity_type, entity_id, task_id,
+                    event_type, payload_json, created_at
+                 ) VALUES('1', 'production_run', ?1, ?2, 'production.plan.compiled', ?3, ?4)",
+                params![
+                    production_run_id,
+                    task_id,
+                    json!({
+                        "status": "action_required",
+                        "stageCount": draft.stages.len(),
+                        "projectionId": projection_id,
+                        "blockers": draft.blockers
+                    })
+                    .to_string(),
+                    now
+                ],
+            )
+            .map_err(store_unavailable)?;
+        transaction
+            .execute(
+                "INSERT INTO runtime_events(
+                    event_version, entity_type, entity_id, task_id,
+                    event_type, payload_json, created_at
+                 ) VALUES('1', 'production_run', ?1, ?2, 'task.completed', ?3, ?4)",
+                params![
+                    production_run_id,
+                    task_id,
+                    json!({ "status": "completed" }).to_string(),
+                    now
+                ],
+            )
+            .map_err(store_unavailable)?;
+        transaction.commit().map_err(store_unavailable)?;
+        Ok(true)
+    }
+
+    pub fn get_production_status(&self, run_id: &str) -> Result<Value, RuntimeError> {
+        let connection = self.connection.lock();
+        let run = connection
+            .query_row(
+                "SELECT r.id, r.session_id, r.spec_revision_id, r.review_policy,
+                        r.status, r.blockers_json, s.project_id, s.title
+                   FROM production_runs r
+                   JOIN production_sessions s ON s.id = r.session_id
+                  WHERE r.id = ?1",
+                [run_id],
+                |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                        row.get::<_, String>(3)?,
+                        row.get::<_, String>(4)?,
+                        row.get::<_, String>(5)?,
+                        row.get::<_, String>(6)?,
+                        row.get::<_, String>(7)?,
+                    ))
+                },
+            )
+            .optional()
+            .map_err(store_unavailable)?
+            .ok_or_else(|| {
+                RuntimeError::new(
+                    "INVALID_ARGUMENT",
+                    format!("ProductionRun not found: {run_id}"),
+                )
+            })?;
+        let mut dependencies = std::collections::HashMap::<String, Vec<String>>::new();
+        {
+            let mut statement = connection
+                .prepare(
+                    "SELECT stage.stage_key, dependency.stage_key
+                       FROM stage_dependencies d
+                       JOIN stage_runs stage ON stage.id = d.stage_run_id
+                       JOIN stage_runs dependency ON dependency.id = d.depends_on_stage_run_id
+                      WHERE stage.run_id = ?1
+                      ORDER BY stage.stage_key, dependency.stage_key",
+                )
+                .map_err(store_unavailable)?;
+            let rows = statement
+                .query_map([run_id], |row| {
+                    Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+                })
+                .map_err(store_unavailable)?;
+            for row in rows {
+                let (stage_key, dependency) = row.map_err(store_unavailable)?;
+                dependencies.entry(stage_key).or_default().push(dependency);
+            }
+        }
+        let mut stages = Vec::new();
+        {
+            let mut statement = connection
+                .prepare(
+                    "SELECT id, stage_key, capability_id, spec_path, title, summary,
+                            status, blocked_reason_json
+                       FROM stage_runs
+                      WHERE run_id = ?1
+                      ORDER BY created_at, stage_key",
+                )
+                .map_err(store_unavailable)?;
+            let rows = statement
+                .query_map([run_id], |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                        row.get::<_, String>(3)?,
+                        row.get::<_, String>(4)?,
+                        row.get::<_, String>(5)?,
+                        row.get::<_, String>(6)?,
+                        row.get::<_, Option<String>>(7)?,
+                    ))
+                })
+                .map_err(store_unavailable)?;
+            for row in rows {
+                let (
+                    id,
+                    stage_key,
+                    capability_id,
+                    spec_path,
+                    title,
+                    summary,
+                    status,
+                    blocked_reason,
+                ) = row.map_err(store_unavailable)?;
+                stages.push(json!({
+                    "id": id,
+                    "stageKey": stage_key,
+                    "capabilityId": capability_id,
+                    "specPath": spec_path,
+                    "title": title,
+                    "summary": summary,
+                    "status": status,
+                    "blockedReason": blocked_reason
+                        .and_then(|value| serde_json::from_str::<Value>(&value).ok()),
+                    "dependsOn": dependencies.remove(&stage_key).unwrap_or_default()
+                }));
+            }
+        }
+        Ok(json!({
+            "id": run.0,
+            "productionSessionId": run.1,
+            "specRevisionId": run.2,
+            "reviewPolicy": run.3,
+            "status": run.4,
+            "blockers": serde_json::from_str::<Value>(&run.5).map_err(store_unavailable)?,
+            "projectId": run.6,
+            "title": run.7,
+            "stages": stages
+        }))
+    }
+
+    pub fn get_workflow_projection(&self, project_id: &str) -> Result<Value, RuntimeError> {
+        let connection = self.connection.lock();
+        let projection = connection
+            .query_row(
+                "SELECT projection_version, projection_json
+                   FROM workflow_plan_projections
+                  WHERE project_id = ?1
+                  ORDER BY created_at DESC, id DESC
+                  LIMIT 1",
+                [project_id],
+                |row| Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?)),
+            )
+            .optional()
+            .map_err(store_unavailable)?;
+        match projection {
+            Some((version, projection)) => Ok(json!({
+                "projectId": project_id,
+                "projectionVersion": version,
+                "projection": serde_json::from_str::<Value>(&projection)
+                    .map_err(store_unavailable)?
+            })),
+            None => Ok(json!({
+                "projectId": project_id,
+                "projectionVersion": 0,
+                "projection": null
+            })),
+        }
     }
 
     #[allow(clippy::too_many_arguments)]

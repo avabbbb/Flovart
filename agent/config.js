@@ -5,7 +5,7 @@ import path from 'node:path';
 
 export const DEFAULT_AGENT_PORT = 17372;
 export const AGENT_DIR = path.join(os.homedir(), '.flovart');
-export const AGENT_CONFIG_FILE = path.join(AGENT_DIR, 'agent.json');
+export const AGENT_CONFIG_FILE = process.env.FLOVART_AGENT_CONFIG || path.join(AGENT_DIR, 'agent.json');
 
 export function loadAgentConfig(create = false) {
   try {
@@ -19,7 +19,7 @@ export function loadAgentConfig(create = false) {
 }
 
 export function saveAgentConfig(config) {
-  fs.mkdirSync(AGENT_DIR, { recursive: true });
+  fs.mkdirSync(path.dirname(AGENT_CONFIG_FILE), { recursive: true });
   fs.writeFileSync(AGENT_CONFIG_FILE, JSON.stringify(config, null, 2), 'utf8');
 }
 

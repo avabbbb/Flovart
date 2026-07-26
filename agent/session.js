@@ -11,7 +11,14 @@ export class WorkflowAgentSession {
   }
 
   health() {
-    return { ok: true, hasWorkflow: Boolean(this.snapshot), clients: this.clients.size, pending: this.pending.size };
+    return {
+      ok: true,
+      hasWorkflow: Boolean(this.snapshot),
+      clients: this.clients.size,
+      pending: this.pending.size,
+      activeProjectId: this.snapshot?.id || null,
+      snapshotUpdatedAt: this.snapshot?.snapshotUpdatedAt || null,
+    };
   }
 
   openEvents(url, response) {
@@ -33,7 +40,11 @@ export class WorkflowAgentSession {
   }
 
   updateSnapshot(snapshot, clientId) {
-    this.snapshot = { ...(snapshot && typeof snapshot === 'object' ? snapshot : {}), clientId };
+    this.snapshot = {
+      ...(snapshot && typeof snapshot === 'object' ? snapshot : {}),
+      clientId,
+      snapshotUpdatedAt: new Date().toISOString(),
+    };
   }
 
   emit(type, payload) {
@@ -55,12 +66,12 @@ export class WorkflowAgentSession {
     return true;
   }
 
-  async callCommand(command, args = {}, source = 'mcp') {
-    const clientId = this.clients.has(this.snapshot?.clientId) ? this.snapshot.clientId : this.clients.keys().next().value;
+  async callCommand(command, args = {}, source = 'mcp', idempotencyKey) {
+    const clientId = this.clients.has(this.snapshot?.clientId) ? this.snapshot.clientId : null;
     const client = this.clients.get(clientId);
-    if (!client) throw new Error('当前没有已连接的 Flovart 浏览器');
+    if (!client) throw new Error('当前没有已连接并同步项目的 Flovart Workflow');
     const requestId = crypto.randomUUID();
-    const envelope = { id: requestId, command, args, source, idempotencyKey: args.idempotencyKey };
+    const envelope = { id: requestId, command, args, source, idempotencyKey: idempotencyKey || args.idempotencyKey };
     sendEvent(client, 'tool_call', { requestId, envelope });
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {

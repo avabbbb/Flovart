@@ -17,6 +17,8 @@
     "browser-commands.js",
     "dev-commands.js",
     "tui.js",
+    "topic-research.js",
+    "research-command-surface.js",
     "flovart-bridge.js",
     "shadow-runtime.js",
     "agent-kit.js",
@@ -26,6 +28,8 @@
     "scripts",
     "skill",
     "runtime-client.js",
+    "workspace-client.js",
+    "workspace-command-surface.js",
     "mcp-server.js"
   ],
   "keywords": [
@@ -53,8 +57,13 @@
   "dependencies": {
     "@cfworker/json-schema": "^4.1.1",
     "@modelcontextprotocol/sdk": "^1.29.0",
+    "fast-xml-parser": "^5.10.1",
+    "ink": "^6.8.0",
+    "ink-text-input": "^6.0.0",
     "json-canonicalize": "^2.0.0",
+    "react": "^19.1.1",
     "tar": "^7.5.20",
+    "undici": "^6.28.0",
     "uuid": "^14.0.1",
     "zod": "^4.0.17"
   }

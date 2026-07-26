@@ -1,0 +1,211 @@
+{
+  "schemaVersion": "flovart.production-spec/1",
+  "brief": {
+    "topic": "1776 年约翰·亚当斯与本杰明·富兰克林共住一间旅店",
+    "objective": "用纸张拼贴解释两人关于冷空气与通风的争论",
+    "audience": "短视频历史内容观众",
+    "language": "zh-CN"
+  },
+  "delivery": {
+    "durationMs": 30000,
+    "aspectRatio": "16:9",
+    "container": "mp4",
+    "videoCodec": "h264",
+    "audioCodec": "aac",
+    "captions": "burned-in"
+  },
+  "narrative": {
+    "arc": "historical-anecdote",
+    "beats": [
+      {
+        "id": "beat-1",
+        "order": 1,
+        "hook": "direct-question",
+        "narration": "1776 年，两位开国元勋为什么会为一扇窗争论？",
+        "shots": [
+          {
+            "id": "shot-1a",
+            "order": 1,
+            "durationMs": 4000,
+            "scene": "夜色中的新泽西旅店由撕纸、地图碎片和车轮拼成，亚当斯与富兰克林的剪纸人物滑入画面。"
+          },
+          {
+            "id": "shot-1b",
+            "order": 2,
+            "durationMs": 3500,
+            "scene": "镜头切近只剩一张小床与一扇窄窗，纸胶带和报纸网点强调空间的局促。"
+          }
+        ]
+      },
+      {
+        "id": "beat-2",
+        "order": 2,
+        "narration": "亚当斯担心夜里的冷风，坚持把窗关上。",
+        "shots": [
+          {
+            "id": "shot-2a",
+            "order": 1,
+            "durationMs": 4000,
+            "scene": "亚当斯把冷蓝色窗扇合上，蓝色纸条气流被截断，深红色空气留在房间里。"
+          },
+          {
+            "id": "shot-2b",
+            "order": 2,
+            "durationMs": 3500,
+            "scene": "亚当斯裹紧纸张被褥的近景，窗闩啪地落位，富兰克林在背景举手反对。"
+          }
+        ]
+      },
+      {
+        "id": "beat-3",
+        "order": 3,
+        "narration": "富兰克林却认为，真正危险的是不流通的浑浊空气。",
+        "shots": [
+          {
+            "id": "shot-3a",
+            "order": 1,
+            "durationMs": 4000,
+            "scene": "富兰克林重新推开窗，冷蓝纸箭头进入，深红半调空气从另一侧排出，形成无文字呼吸图解。"
+          },
+          {
+            "id": "shot-3b",
+            "order": 2,
+            "durationMs": 3500,
+            "scene": "撕纸肺部、气流箭头和小型窗户结构依次展开，富兰克林用剪纸手势解释通风。"
+          }
+        ]
+      },
+      {
+        "id": "beat-4",
+        "order": 4,
+        "narration": "富兰克林还没讲完，亚当斯已经睡着了。",
+        "shots": [
+          {
+            "id": "shot-4a",
+            "order": 1,
+            "durationMs": 4000,
+            "scene": "富兰克林仍在床边讲解，空气图表继续运动，亚当斯的纸张眼皮已经合上。"
+          },
+          {
+            "id": "shot-4b",
+            "order": 2,
+            "durationMs": 3500,
+            "scene": "镜头拉远到平静夜色与打开的窗，一张空白日记纸和羽毛笔落入画面作为收束。"
+          }
+        ]
+      }
+    ]
+  },
+  "audio": {
+    "narration": {
+      "voiceProfile": "warm-documentary"
+    },
+    "music": {
+      "intent": "restrained rhythmic editorial instrumental",
+      "duckUnderNarration": true
+    }
+  },
+  "gates": [
+    {
+      "id": "approve-spec",
+      "type": "spec",
+      "status": "approved"
+    },
+    {
+      "id": "approve-style",
+      "type": "style-reference",
+      "status": "approved"
+    },
+    {
+      "id": "review-keyframes",
+      "type": "keyframe-review",
+      "status": "required"
+    },
+    {
+      "id": "verify-ocr",
+      "type": "ocr",
+      "status": "required"
+    }
+  ],
+  "extensions": {
+    "vox-director": {
+      "schemaVersion": "1",
+      "themeCandidates": [
+        "american-retro",
+        "punk-zine",
+        "soviet-constructivist"
+      ],
+      "selectedTheme": "american-retro",
+      "look": {
+        "idiom": "mixed-media hand-cut paper collage",
+        "palette": [
+          "warm-cream",
+          "ochre",
+          "deep-red",
+          "ink-black",
+          "cold-blue"
+        ],
+        "typeStyle": "cut-out-headline",
+        "finish": [
+          "torn-edge",
+          "halftone",
+          "newsprint",
+          "visible-tape",
+          "print-grain"
+        ],
+        "motionStyle": "punchy",
+        "constraints": "strict"
+      },
+      "shotDirectives": {
+        "shot-1a": {
+          "shotSize": "WIDE",
+          "cameraMove": "push_in",
+          "elementMotion": "人物纸片滑入，地图线条展开，车轮轻微转动",
+          "headlineLocked": true
+        },
+        "shot-1b": {
+          "shotSize": "CLOSE",
+          "cameraMove": "static",
+          "elementMotion": "床与窗的纸片依次落位，胶带边缘轻微抖动",
+          "headlineLocked": false
+        },
+        "shot-2a": {
+          "shotSize": "WIDE",
+          "cameraMove": "pan",
+          "elementMotion": "窗扇快速合上，蓝色气流纸条被截断",
+          "headlineLocked": true
+        },
+        "shot-2b": {
+          "shotSize": "CLOSE",
+          "cameraMove": "pull_out",
+          "elementMotion": "窗闩落位，被褥纸层向上叠合",
+          "headlineLocked": false
+        },
+        "shot-3a": {
+          "shotSize": "WIDE",
+          "cameraMove": "parallax",
+          "elementMotion": "蓝色箭头进入，红色半调空气分层排出",
+          "headlineLocked": true
+        },
+        "shot-3b": {
+          "shotSize": "CLOSE",
+          "cameraMove": "tilt",
+          "elementMotion": "肺部图解、窗户结构与箭头逐层展开",
+          "headlineLocked": false
+        },
+        "shot-4a": {
+          "shotSize": "WIDE",
+          "cameraMove": "element",
+          "elementMotion": "图表继续运动，亚当斯纸张眼皮缓慢合上",
+          "headlineLocked": true
+        },
+        "shot-4b": {
+          "shotSize": "CLOSE",
+          "cameraMove": "pull_out",
+          "elementMotion": "日记纸与羽毛笔落位，夜空纸层轻微漂移",
+          "headlineLocked": false
+        }
+      }
+    }
+  }
+}

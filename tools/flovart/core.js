@@ -215,6 +215,8 @@ function parseJsonOption(value, fallback) {
 function parseListOption(value) {
   if (Array.isArray(value)) return value;
   if (typeof value !== 'string') return [];
+  const parsed = parseJsonOption(value, null);
+  if (Array.isArray(parsed)) return parsed;
   return value.split(',').map(item => item.trim()).filter(Boolean);
 }
 
@@ -406,8 +408,8 @@ export async function executeFlovartCommand(commandName, args = {}, runtime = {}
       toNodeId: args.toNodeId || args['to-node-id'],
       connectionId: args.connectionId || args['connection-id'],
       idempotencyKey: args.idempotencyKey || args['idempotency-key'],
-      metadata: args.metadata || parseJsonOption(args.metadataJson || args['metadata-json'], undefined),
-      patch: args.patch || parseJsonOption(args.patchJson || args['patch-json'], undefined),
+      metadata: parseJsonOption(args.metadata ?? args.metadataJson ?? args['metadata-json'], undefined),
+      patch: parseJsonOption(args.patch ?? args.patchJson ?? args['patch-json'], undefined),
       ids: Array.isArray(args.ids) ? args.ids : parseListOption(args.ids),
     };
     return await runtime.workflow.dispatch({

@@ -2,6 +2,22 @@
 title: 待测试确认
 ---
 
+## ProductionRun 与真实 Workflow Plan Projection
+
+- 新增 `production.dry-run`：Coding Agent/CLI 可把一个 Provider-neutral Director ProductionSpec 交给 Desktop Runtime；Runtime 在一个 SQLite 事务中创建 ProductionSession、不可变 Spec Revision、ProductionRun、StageRun DAG、依赖和 Workflow Plan Projection，并通过原有 Task/Event Ledger 返回可恢复 Task。
+- 新增 `production.status` 与 `workflow.projection.get`。当前 Dry Run 不提交 Provider、不扣费；缺少 Route Plan、Run Budget、TTS/音乐/渲染/验证能力时明确保持 `action_required`，不会把已编译计划冒充为可执行成片。
+- 顶层 Production Projection Adapter 每 1.5 秒读取 Runtime 权威投影并自动合入匹配的真实 Workflow。它只替换 Runtime-owned 投影节点/依赖，保留用户节点、用户连线、选择和视口；相同 Session/Stage 的稳定节点身份会保留用户手动移动、缩放和锁定状态。
+- 真实 VOX 验收已通过：`production-spec.v1.json` 的 VOX Gate 为 100/100；PowerShell CLI 创建 `production_run_019f9d1f-44c6-7ac0-9b28-2614d02f3b3d`，持久化 20 个 StageRun 和 21 个投影节点/19 条依赖；无 Playwright/CDP 回读真实画布得到 21 个投影节点，同时保留原“VOX 镜头 1（已细修）”，Workspace `clients: 1`。
+- 自动验证：Rust 全量测试通过；ProductionRun/Projection 定向 Vitest、TypeScript、Web 生产构建、Flovart Skill 结构校验与 63.8 kB CLI npm 发布包 dry-run 通过。单线程全量 Vitest 为 79 个文件、634 项通过、1 项跳过，仅保留 `tests/workflowGeneration.test.ts` 的 6 项既有 Provider reference 失败。
+- 待用户验证：打开项目“真实CLI同步验收-稳定连接”，确认 `VOX 1776 Production Plan` 及 20 个阶段节点可见；手动移动任一计划节点，等待多轮同步后位置不应回弹。Artifact 到 Stage 节点的自动挂载、Route Plan、预算、审批和正式 `production.run` 尚未完成。
+
+## Desktop Managed Agent 自动连接
+
+- Tauri Desktop 启动时会幂等拉起 Managed Agent，并通过受限 IPC 向 WebUI 返回本机 loopback URL 与连接 Token；Token 不再打印到终端，也不需要用户复制到 Agent 面板。
+- Workspace Adapter 已挂到 `RouterHost`，Landing、Workflow、Table、Agent 任一路由和空项目首启都会保持连接。项目创建或切换只推送最新快照，不再重建 SSE，避免命令已执行但回传断开造成“假失败”；并发快照会串行压缩到最新版本，StrictMode 异步 discovery 也不会遗留幽灵连接。
+- 不使用 Playwright/CDP 的真实验收已通过：独立 PowerShell CLI 看到 `runtime.status=ready`、`workspace.status=ready`，随后成功创建并切换项目、创建文本节点、细修标题与 VOX Prompt、移动节点，再由 `workflow.inspect` 读回相同节点与坐标。应用内保留项目“真实CLI同步验收-稳定连接”供用户肉眼确认。
+- 自动验证已通过：Managed Agent/Workspace 定向 Vitest 5 个文件 15 项、Rust Managed Agent Contract 2 项与 `cargo check --all-targets`、`npx tsc --noEmit`、`npm run build`。不用 CDP 的最终重启验收为 `clients: 1`。全量 Vitest 为 78 个文件通过、1 个既有 `workflowGeneration.test.ts` 文件的 6 项 Provider reference 断言失败。待用户验证：关闭并重新打开 Desktop，不进入 `#/app`、不打开 Agent 抽屉，直接运行 `node tools/flovart/cli.js workspace.status --json` 应返回 `ready`；打开 Workflow 后应看到上述验收项目及位于 `(360, 220)` 的“VOX 镜头 1（已细修）”节点。
+
 ## 统一模型映射中心
 
 - 设置页已删除全局“模型偏好”和 API Key 弹窗中的重复模型绑定，只保留一个“模型映射”入口；提示词增强、脚本拆解、Agent 文本、图像理解四种文本能力与媒体产品模型都在这里绑定 Provider Route。
@@ -25,18 +41,30 @@ title: 待测试确认
 ## Flovart Skill、CLI、Agent Toolkit 与发布链路
 
 - npm 发布包已统一命名为 `flovart-cli@0.3.0`，确保用户可直接使用 `npx flovart-cli ...`；包含 CLI、TUI、MCP Server、Flovart Skill、Managed Agent、Host 适配与 Toolkit 安装器。
-- Canonical Command Registry 当前导出 48 条显式命令；10 条命令标记为 `available`：Runtime/Registry 查询、持久 Task/Event、`provider.status` 与 `generate.video`。其余迁移期命令明确标记为 `legacy-only`；`command.list` 不再出现 Canvas / Element，`command.schema --command workflow.run` 返回 `UNKNOWN_COMMAND` 并以非零状态退出。
+- Canonical Command Registry 当前导出 53 条显式命令；31 条命令标记为 `available`：2 条无需 Desktop 的客户端 Registry 查询、12 条 Production Runtime 命令、16 条可见 Workspace 命令与 1 条 Research Adapter 命令。其余迁移期命令明确标记为 `legacy-only`；`command.list` 不再出现 Canvas / Element，`command.schema --command workflow.run` 返回 `UNKNOWN_COMMAND` 并以非零状态退出。
 - Production Runtime S0.1/S0.2 已建立 Node/Rust 共用的版本化 Registry 与 JSON Schema，并完成安全本地 Control Plane：Desktop 监听 `127.0.0.1:0` 随机端口，每次启动生成 256-bit Token，把协议、Runtime Instance、Registry Hash、端口和 Token 原子写入仅当前用户/SYSTEM 可读的 Discovery Record；退出时只删除自己的 Record。
 - CLI、MCP 与 Native Host 读取 Discovery Record 后，只能调用鉴权的 `GET /v1/status` / `POST /v1/commands`；WebUI 通过受限 Tauri IPC 进入同一个 `ProductionRuntime`。固定 `7421`、CDP/`window.__flovartAPI` 生产探测、任意 Native Host HTTP path 转发和原始 Secret HTTP GET 已删除。
-- 当前可执行 `runtime.status`、Registry 查询、`runtime.test.delay`、Task/Event 查询与取消、`provider.status` 和 `generate.video`；真实 RunningHub Veo 3.1 Lite 视频已进入唯一 Desktop Runtime。旁白、字幕、成片合成与交付校验仍由评测目录脚本完成，尚未伪装成 Production Runtime 的正式命令。扩展端桌面 Key 同步继续关闭，待后续类型化 Native Messaging Provider 协议落地；扩展本地 Key 仍保存在自己的加密存储中。
-- Flovart Skill 已改为 Production Control 总控说明：只调用 Registry 中 `available` 的命令，明确 Provider Task/Artifact 当前不会自动创建可见 Workflow 节点，禁止把 shadow runtime、Vite file queue 或浏览器私有状态冒充正式画布同步。
-- 公共 MCP 与 CLI 现在共用 `runtime-command-surface`；MCP 只注册 10 条 `available` 命令，`provider.status` 与 `generate.video` 均进入 Desktop Production Runtime，不再因为 MCP 路由表落后而进入无消费端的 file/browser queue。WebUI Local Agent Bridge 仍是独立的浏览器连接面，尚未成为正式画布权威。
+- 当前可执行 `runtime.status`、客户端 Registry 查询、`runtime.test.delay`、Task/Event 查询与取消、`provider.status`、`generate.image` 和 `generate.video`；真实 RunningHub GPT Image 2、Grok Imagine Video 1.5 低价路线与 Veo 3.1 Lite 已进入唯一 Desktop Runtime。旁白、字幕、成片合成与交付校验仍由评测目录脚本完成，尚未伪装成 Production Runtime 的正式命令。扩展端桌面 Key 同步继续关闭，待后续类型化 Native Messaging Provider 协议落地；扩展本地 Key 仍保存在自己的加密存储中。
+- Flovart Skill 已升级为 Production Control + visible Workspace 总控说明：Provider Task/Artifact 仍由 Runtime 管理；项目、节点、连线和视口修改经 Workspace Adapter 回到 WebUI 的同一个 `workflowDispatcher`，与用户手动操作共享浏览器 Workflow store。Skill 强制先检查 `workspace.status`、inspect 后修改、写命令使用稳定幂等键，并禁止 shadow runtime/Vite file queue 回退。
+- CLI/MCP 现在分别通过 `runtime-command-surface` 与 `workspace-command-surface` 选择深模块 Adapter：`provider.status` / `generate.video` 进入 Desktop Production Runtime；16 条 Workspace 命令进入受本机 Token 保护的 Managed Agent loopback，再由拥有最新项目快照的浏览器执行。未连接项目时稳定返回 `WORKSPACE_UNAVAILABLE`，不会显示假成功。
+- CLI 是 Node.js 程序而不是 PowerShell 脚本；PowerShell、macOS zsh/bash 使用同一组单行命令。WSL 可把 Managed Agent 运行在同一发行版；若复用 Windows Agent，则通过 `FLOVART_AGENT_CONFIG` 读取 Windows 配置并要求 mirrored networking，使 `127.0.0.1` 仍保持安全边界。macOS/Linux 安装后不会自动修改 shell 配置，会提示把 `~/.flovart/bin` 加入 PATH，或继续使用 `npx flovart-cli`。
 - 自动验证已通过：S0.2 定向 Vitest 5 个文件 23 项测试、Rust Native Host/Runtime Contract/Control Server 8 项测试、`cargo check --all-targets`、`npx tsc --noEmit`；全量 Vitest 65 个文件 562 项通过、1 项跳过，Rust 全套测试、Web 生产构建、扩展构建与 CLI npm 发布包 dry-run 也通过。Desktop 未启动时直接 CLI 在约 0.5 秒内稳定返回 `RUNTIME_UNAVAILABLE`。待用户验证：启动 Desktop 后 CLI `runtime.status` 返回同一 Runtime Instance；WebUI 的 Key 写入与脱敏 metadata 列表仍可用。
 - `npx flovart-cli install` 默认下载版本化 Agent Toolkit，校验 manifest 的字节数与 SHA-256 后才解包、切换 `current` 和写入本地 launcher；`start` 默认启动 Desktop Runtime + Managed Agent，源码开发需显式使用 `--source`。
 - `init --host codex|opencode|claude|cursor|windsurf|vscode|all` 可生成 Skill/MCP 配置，`--dry-run` 可先预览写入；Skill 文档仅使用当前 Workflow 命令面。
 - GitHub `Build Desktop` 工作流在 Windows tag 构建时生成并上传 Toolkit archive + manifest；根包、CLI、Cargo、Tauri 与 `VERSION` 已统一为 `0.3.0`，tag 构建前会执行版本一致性检查。
 - 待用户验证：发布 `flovart-cli@0.3.0` 与 `v0.3.0` GitHub Release 后，在全新 Windows 用户上下文执行 `npx flovart-cli install && npx flovart-cli start`；确认 PATH launcher、Runtime、Managed Agent 与 Host 配置均可用。
-- 本轮新增自动验证：公共 Runtime 命令面与 Registry 对齐测试、CLI 进程隔离测试共 15/15 通过；两份 Flovart Skill 均通过 `skill-creator` 的 `quick_validate.py` 且内容 Hash 一致。待用户验证：重新执行 `flovart-cli init --host codex` 后，MCP 工具列表只出现 10 条 available 命令，并可用 `generate_video` 返回持久 `taskId`。
+- 本轮新增自动验证覆盖：定向 Vitest 证明 CLI 节点命令确实发往 Workspace Adapter、幂等键透传、只向拥有最新项目快照的浏览器派发、断线不回退 shadow state、Managed Agent MCP 不暴露 legacy 工具，并覆盖 WSL 引导与 PowerShell JSON 参数解析；Rust Runtime Contract 5/5 通过，Web 生产构建与 npm 发布包 dry-run 通过，发布清单已实际包含 `workspace-client.js` / `workspace-command-surface.js`。
+- 真实浏览器与 CLI 同步已经完成：Playwright 连接本机 Agent 后，Workspace 达到 `ready`，CLI 创建 4 个可见节点与 3 条连线，并真实执行脚本节点更新、移动、选择与视口修改；`workflow.inspect` 与画布截图一致，浏览器 console error 为 0。测试同时发现并修复了 CLI 把 `metadata` / `patch` / JSON `ids` 字符串直接送进浏览器的问题，PowerShell、zsh 和子进程边界现在统一恢复为 schema 类型。证据保存在 `tools/flovart/evaluations/reddit-politics-2026-07-25/workflow-sync-verification.json` 与 `workflow-cli-sync.png`。
+
+## 30 天选题研究、低价模型短片与 TUI V1
+
+- 新增可执行 `research.topic.collect` Research Adapter：支持 Reddit/X 来源结构、时间窗、subreddit、X handle、数量限制、输出目录和稳定幂等键；Reddit 使用 Atom RSS 与系统代理，X 缺少认证适配器时显式返回 `degraded`，不以搜索摘要伪造覆盖。ready/degraded 制品可重放，失败结果修复网络后可用同一 key 重试。
+- `flovart tui` 已封装为 Ink Terminal Command Center：每 2.5 秒经 canonical CLI 观察 Runtime、Workflow、持久 Task 和 Event，提供 `/runtime`、`/workspace`、`/tasks`、`/research`、`/models`、`/run`、`/start` 等命令；`--snapshot` 支持无 TTY 回归。TUI 仍不是新的状态权威。
+- 真实政治热点测试从 Reddit 获得 25 条近 30 天条目，并选择“南卡参议院空缺如何触发临时任命与选举”的中性制度解释角度；事实由 AP 与 South Carolina Public Radio 复核，官方死因仍待检验，不使用阴谋推断或候选人劝服。
+- Production Runtime 真实完成 5 张 GPT Image 2 图片与 5 段 Grok Imagine Video 1.5 低价视频；10/10 成功，价格预览合计 ¥1.70（不是最终账单）。旧 5 秒 Grok 参数在价格预检以业务错误 1007 被阻止，没有 Provider task ID；按官方路线修正为 6 秒后成功。
+- 本地后期交付 `reddit-politics-one-empty-chair.mp4`：60.000 秒、1280×720、24 fps、H.264/AAC、中文旁白和硬字幕，SHA-256 为 `9f442189bb607a1dab42a8035417ea02cafddf934ebaf822d0cddd21cd1771c8`。模型视频自带的 AAC 被全部丢弃，成片只使用统一旁白。
+- 本轮自动验证：单线程全量 Vitest 为 75 个文件、624 项通过、1 项跳过，仅 `tests/workflowGeneration.test.ts` 保留 6 项既有失败；研究、Runtime/Registry、Provider Route、Workspace CLI 同步与 TUI 定向 186 项通过；Rust Runtime 17 项通过；`npx tsc --noEmit`、Web 构建、CLI 发布包 dry-run 与 Skill 结构校验通过。
+- 待用户验证：① 播放成片并确认节奏、字幕和纸雕风格；② 到 RunningHub 控制台核对 10 个 Provider task 的最终扣费；③ 运行 `npm run flovart:cli -- tui` 检查交互 TUI；④ 提供正式 X 数据适配凭据后再验证真实 X 覆盖。完整评估见 `tools/flovart/evaluations/reddit-politics-2026-07-25/evaluation-report.md`。
 
 ## PromptBar、Workflow 媒体与 Provider 最终回归
 

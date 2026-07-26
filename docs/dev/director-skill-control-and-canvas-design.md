@@ -2,17 +2,17 @@
 
 ## 当前结论
 
-当前实现不能把“导演 Skill → Flovart Skill → 正式 CLI/Runtime → 可见 Workflow”视为一条闭环：
+当前已经打通“Skill → CLI/MCP → Workspace Adapter → 可见 Workflow”的节点操作垂直链路；但 Provider Artifact 自动投影、ProductionSpec Revision 和局部 Stage 重编译仍未完成，不能把节点同步等同于完整 ProductionRun Projection：
 
 | 表面 | 当前状态 | 是否同步可见画布 |
 | --- | --- | --- |
 | `generate.video` Production Runtime | 已真实生成、持久 Task/Event/Artifact | 否，只生成 Runtime Artifact |
-| 正式 CLI/MCP 的 `workflow.*` | Canonical Registry 标为 `legacy-only` | 否，不应调用 |
-| CLI shadow runtime | 读写 `shadow-runtime-state.json` | 否，是独立状态 |
+| 正式 CLI/MCP 的 16 条 Workspace 命令 | 经 Managed Agent 调用页面内 `workflowDispatcher` | 是，要求 `workspace.status=ready` |
+| CLI shadow runtime | Workflow 命令已停止使用该路径 | 否，不再作为节点回退 |
 | Vite file queue | 可以入队，WebUI 没有消费端 | 否，可能返回误导性 pending |
-| WebUI Local Agent Bridge | 面板连接时直接 dispatch 到浏览器 Workflow store | 是，但属于独立浏览器桥，不是 Production Runtime |
+| WebUI Local Agent Bridge | 面板连接时持有最新项目快照并执行类型化命令 | 是，现作为正式 Workspace Adapter |
 
-因此，当前用户能在 WebUI 手动细修已有 Workflow 节点，但 Coding Agent 通过正式 CLI 生成的 Runtime Artifact 不会自动出现在画布，任务进度也没有绑定到可编辑镜头节点。本设计的目标是删除这种双真相。
+因此，Coding Agent 现在可以通过 Skill/CLI 对用户当前画布执行创建、更新、移动、缩放、连接、选择和视口细修，并由 `workflow.inspect` 验证；但 CLI 生成的 Runtime Artifact 仍不会自动成为节点，任务进度也未绑定到镜头节点。下一阶段仍需用 ProductionSpec/Run Projection 统一生成状态与画布。
 
 ## 深模块与职责
 
@@ -217,9 +217,9 @@ license: MIT
 
 ### S1：诚实能力面
 
-- Public MCP 只暴露 Canonical Registry 中 `available` 的命令。
-- Flovart Skill 明确标注 Runtime 结果当前是 off-canvas。
-- CLI/MCP 共用同一 Runtime command set，禁止出现 CLI 已迁移、MCP 仍走 file queue 的漂移。
+- 已完成：Public MCP 只暴露 Canonical Registry 中 `available` 的命令。
+- 已完成：Flovart Skill 区分 Runtime Artifact 与 visible Workspace 节点。
+- 已完成：CLI/MCP 共用 Runtime/Workspace command surface，Workspace 写命令要求幂等键且不回退 shadow/file queue。
 
 ### S2：只读投影
 

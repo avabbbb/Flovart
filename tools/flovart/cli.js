@@ -6,6 +6,14 @@ import { BROWSER_COMMANDS, shouldWaitForBrowserCommand } from './browser-command
 import { readFile } from 'node:fs/promises';
 import { defaultRuntimeActor, FlovartRuntimeClient, RuntimeClientError } from './runtime-client.js';
 import { RUNTIME_COMMANDS, RUNTIME_WRITE_COMMANDS } from './runtime-command-surface.js';
+import { WORKSPACE_COMMANDS, WORKSPACE_WRITE_COMMANDS } from './workspace-command-surface.js';
+import { RESEARCH_COMMANDS, RESEARCH_WRITE_COMMANDS } from './research-command-surface.js';
+import { collectTopicResearch } from './topic-research.js';
+import {
+  createWorkspaceFacade,
+  FlovartWorkspaceClient,
+  WorkspaceClientError,
+} from './workspace-client.js';
 
 const argv = process.argv.slice(2);
 
@@ -28,14 +36,11 @@ const LOCAL_COMMANDS = new Set([
   'prompt.enhance', 'batch.plan',
   'preferences.manage', 'models.list',
 ]);
+const CLIENT_REGISTRY_COMMANDS = new Set(['command.list', 'command.schema']);
 
 const FILE_STATE_COMMANDS = new Set([
   'status',
   'asset.list', 'export.project', 'video.status',
-  'workflow.project.list', 'workflow.project.create', 'workflow.project.use', 'workflow.project.delete',
-  'workflow.inspect', 'workflow.node.create', 'workflow.node.create-connected', 'workflow.node.update', 'workflow.node.delete',
-  'workflow.node.move', 'workflow.node.resize', 'workflow.connect', 'workflow.disconnect',
-  'workflow.select', 'workflow.viewport.set',
 ]);
 
 function normalizeCommandForRouting(command) {
@@ -94,6 +99,7 @@ if (args.file) {
   try {
     const payload = JSON.parse(await readFile(args.file, 'utf8'));
     if (command === 'generate.images-batch' || command === 'generate.video') args.items = payload.items || payload;
+    if (command === 'production.dry-run') args.spec = payload;
   } catch (error) {
     printCliResponse(false, command || 'unknown', null, { code: 'FILE_READ_ERROR', message: error instanceof Error ? error.message : String(error) });
     process.exit(1);
@@ -107,6 +113,17 @@ async function main() {
   }
 
   const routingCommand = normalizeCommandForRouting(command);
+
+  if (CLIENT_REGISTRY_COMMANDS.has(routingCommand)) {
+    const result = await executeFlovartCommand(command, args, {});
+    const ok = isResultOk(result);
+    if (args.json) printCliResponse(ok, command, ok ? result : null, ok ? null : result.error || null, { runtime: 'client-registry' });
+    else {
+      console.log(formatValue(result));
+      if (!ok) process.exitCode = 1;
+    }
+    return;
+  }
 
   if (RUNTIME_COMMANDS.has(routingCommand)) {
     const runtime = new FlovartRuntimeClient();
@@ -132,6 +149,61 @@ async function main() {
         ? error.toJSON()
         : { code: 'RUNTIME_UNAVAILABLE', message: error instanceof Error ? error.message : String(error), retryable: true };
       printCliResponse(false, command, null, runtimeError, { runtime: 'production-runtime' });
+    }
+    return;
+  }
+
+  if (WORKSPACE_COMMANDS.has(routingCommand)) {
+    const idempotencyKey = args.idempotencyKey || args['idempotency-key'];
+    if (WORKSPACE_WRITE_COMMANDS.has(routingCommand) && !idempotencyKey) {
+      printCliResponse(false, command, null, {
+        code: 'INVALID_ARGUMENT',
+        message: `${routingCommand} requires --idempotency-key so retries cannot duplicate visible Workflow changes.`,
+        retryable: false,
+      }, { runtime: 'workspace-adapter' });
+      return;
+    }
+    try {
+      const workspace = new FlovartWorkspaceClient();
+      const result = routingCommand === 'workspace.status'
+        ? await workspace.status()
+        : await executeFlovartCommand(command, args, createWorkspaceFacade(workspace));
+      const ok = isResultOk(result);
+      printCliResponse(ok, command, result, ok ? null : result.error || null, { runtime: 'workspace-adapter' });
+    } catch (error) {
+      const workspaceError = error instanceof WorkspaceClientError
+        ? error.toJSON()
+        : { code: 'WORKSPACE_UNAVAILABLE', message: error instanceof Error ? error.message : String(error), retryable: true };
+      printCliResponse(false, command, null, workspaceError, { runtime: 'workspace-adapter' });
+    }
+    return;
+  }
+
+  if (RESEARCH_COMMANDS.has(routingCommand)) {
+    const idempotencyKey = args.idempotencyKey || args['idempotency-key'];
+    if (RESEARCH_WRITE_COMMANDS.has(routingCommand) && !idempotencyKey) {
+      printCliResponse(false, command, null, {
+        code: 'INVALID_ARGUMENT',
+        message: `${routingCommand} requires --idempotency-key so retries replay the same research artifact.`,
+        retryable: false,
+      }, { runtime: 'research-adapter' });
+      return;
+    }
+    try {
+      const result = await collectTopicResearch(args, { idempotencyKey });
+      const ok = result.state !== 'failed';
+      printCliResponse(ok, command, ok ? result : null, ok ? null : {
+        code: 'SOURCE_UNAVAILABLE',
+        message: 'No usable topic evidence was collected from the requested sources.',
+        retryable: true,
+        details: result,
+      }, { runtime: 'research-adapter' });
+    } catch (error) {
+      printCliResponse(false, command, null, {
+        code: error?.code || 'RESEARCH_FAILED',
+        message: error instanceof Error ? error.message : String(error),
+        retryable: error?.code !== 'INVALID_ARGUMENT',
+      }, { runtime: 'research-adapter' });
     }
     return;
   }

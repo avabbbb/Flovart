@@ -421,8 +421,8 @@ describe('Video Route — rhart-video-v3.1-fast/start-end-to-video (Veo 3.1 Fast
 
 describe('Video Route — rhart-video-g/image-to-video (Grok Imagine Video)', () => {
     const s = schemaOf('rhart-video-g/image-to-video');
-    it('maps to flovart:grok-imagine-video with image-to-video mode', () => {
-        expect(s.productModelId).toBe('flovart:grok-imagine-video');
+    it('maps to flovart:grok-imagine-video-1.5 with image-to-video mode', () => {
+        expect(s.productModelId).toBe('flovart:grok-imagine-video-1.5');
         expect(s.modes).toEqual(['image-to-video']);
     });
     it('uses low-price channel', () => {
@@ -432,9 +432,9 @@ describe('Video Route — rhart-video-g/image-to-video (Grok Imagine Video)', ()
         expect(s.promptField).toBe('prompt');
         expect(s.aspectRatioField).toBe('aspectRatio');
     });
-    it('has number duration with default 5', () => {
+    it('has number duration with current documented default 6', () => {
         expect(s.durationType).toBe('number');
-        expect(s.durationDefault).toBe(5);
+        expect(s.durationDefault).toBe(6);
     });
     it('defaults resolution to 720p', () => {
         expect(s.resolutionDefault).toBe('720p');
@@ -650,8 +650,8 @@ describe('Video Route — rhart-video-g-official/reference-to-video (Grok Imagin
 
 describe('Video Route — rhart-video-g/text-to-video (Grok Imagine Video)', () => {
     const s = schemaOf('rhart-video-g/text-to-video');
-    it('maps to flovart:grok-imagine-video with text-to-video mode', () => {
-        expect(s.productModelId).toBe('flovart:grok-imagine-video');
+    it('maps to flovart:grok-imagine-video-1.5 with text-to-video mode', () => {
+        expect(s.productModelId).toBe('flovart:grok-imagine-video-1.5');
         expect(s.modes).toEqual(['text-to-video']);
     });
     it('uses low-price channel', () => {
@@ -661,9 +661,9 @@ describe('Video Route — rhart-video-g/text-to-video (Grok Imagine Video)', () 
         expect(s.promptField).toBe('prompt');
         expect(s.aspectRatioField).toBe('aspectRatio');
     });
-    it('has number duration with default 5', () => {
+    it('has number duration with current documented default 6', () => {
         expect(s.durationType).toBe('number');
-        expect(s.durationDefault).toBe(5);
+        expect(s.durationDefault).toBe(6);
     });
     it('defaults resolution to 720p', () => {
         expect(s.resolutionDefault).toBe('720p');

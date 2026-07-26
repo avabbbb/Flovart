@@ -5,6 +5,17 @@ import { loadAgentConfig } from './config.js';
 
 const core = await import('../tools/flovart/core.js').catch(() => import('../core.js'));
 const { COMMAND_ALIASES, COMMAND_REGISTRY } = core;
+const WORKSPACE_WRITE_COMMANDS = new Set([
+  'workflow.project.create', 'workflow.project.use', 'workflow.project.delete',
+  'workflow.node.create', 'workflow.node.create-connected', 'workflow.node.update',
+  'workflow.node.delete', 'workflow.node.move', 'workflow.node.resize',
+  'workflow.connect', 'workflow.disconnect', 'workflow.select', 'workflow.viewport.set',
+]);
+const WORKSPACE_COMMANDS = new Set([
+  'workflow.project.list',
+  'workflow.inspect',
+  ...WORKSPACE_WRITE_COMMANDS,
+]);
 
 const descriptorSchema = descriptor => {
   const optional = String(descriptor).endsWith('?');
@@ -28,16 +39,20 @@ const toolName = command => {
 };
 
 export function getFlovartMcpTools() {
-  return Object.entries(COMMAND_REGISTRY).map(([command, metadata]) => ({ command, name: toolName(command), metadata }));
+  return Object.entries(COMMAND_REGISTRY)
+    .filter(([command, metadata]) => metadata.availability === 'available' && WORKSPACE_COMMANDS.has(command))
+    .map(([command, metadata]) => ({ command, name: toolName(command), metadata }));
 }
 
 export async function startMcpServer() {
   const config = loadAgentConfig(true);
   const server = new McpServer({ name: 'flovart-agent', version: '0.2.0' }, {
-    instructions: '先读取 workflow.inspect，再使用明确的 Flovart CLI 原子命令。当前自动化表面只有 Workflow；不得调用已删除的 Canvas 或 Element 命令。',
+    instructions: '先读取 workflow.inspect，再通过当前可见 Workspace 的类型化 Workflow 命令操作节点。不得调用 legacy、Canvas 或 Element 命令；每个写命令使用稳定 idempotencyKey。',
   });
   getFlovartMcpTools().forEach(({ command, name, metadata }) => {
-    server.registerTool(name, { description: metadata.summary, inputSchema: inputShape(metadata.args) }, async input => {
+    const inputSchema = inputShape(metadata.args);
+    if (WORKSPACE_WRITE_COMMANDS.has(command)) inputSchema.idempotencyKey = z.string().min(1);
+    server.registerTool(name, { description: metadata.summary, inputSchema }, async input => {
       const response = await fetch(`${config.url}/api/tools`, {
         method: 'POST',
         signal: AbortSignal.timeout(95_000),

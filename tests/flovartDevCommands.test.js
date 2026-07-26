@@ -45,6 +45,23 @@ describe('flovart dev startup commands', () => {
     expect(buildTuiCommand('/web --plan')).toEqual({ type: 'run', args: ['start', '--source', '--web', '--open', '--plan'] });
     expect(buildTuiCommand('/docker -d')).toEqual({ type: 'run', args: ['start', '--source', '--docker', '--all', '--open', '-d'] });
     expect(buildTuiCommand('/plan --backend')).toEqual({ type: 'run', args: ['start', '--plan', '--json', '--backend'] });
+    expect(buildTuiCommand('/runtime')).toEqual({ type: 'run', args: ['runtime.status', '--json'] });
+    expect(buildTuiCommand('/workspace')).toEqual({ type: 'run', args: ['workspace.status', '--json'] });
+    expect(buildTuiCommand('/tasks')).toEqual({ type: 'run', args: ['task.list', '--limit', '20', '--json'] });
+    expect(buildTuiCommand('/research')).toEqual({ type: 'unknown', name: 'research (topic required)' });
+    expect(buildTuiCommand('/research US politics')).toMatchObject({
+      type: 'run',
+      args: [
+        'research.topic.collect',
+        '--topic',
+        'US politics',
+        '--sources',
+        '["reddit","x"]',
+        '--idempotency-key',
+        expect.stringMatching(/^tui-research-\d+$/),
+        '--json',
+      ],
+    });
     expect(buildTuiCommand('/exit')).toEqual({ type: 'exit' });
   });
 

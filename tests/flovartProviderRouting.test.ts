@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { BROWSER_COMMANDS, shouldWaitForBrowserCommand } from '../tools/flovart/browser-commands.js';
+import { RUNTIME_COMMANDS, RUNTIME_WRITE_COMMANDS } from '../tools/flovart/runtime-command-surface.js';
 
 describe('Flovart provider browser routing', () => {
   let tempDir = '';
@@ -18,15 +19,18 @@ describe('Flovart provider browser routing', () => {
   });
 
   it('uses one shared browser command policy for CLI and MCP provider operations', () => {
-    expect(['provider.status', 'provider.select-model', 'provider.test'].every(command => BROWSER_COMMANDS.has(command))).toBe(true);
-    expect(shouldWaitForBrowserCommand('provider.status', undefined)).toBe(true);
+    expect(['provider.select-model', 'provider.test'].every(command => BROWSER_COMMANDS.has(command))).toBe(true);
+    expect(['provider.status', 'generate.image', 'generate.video'].every(command => BROWSER_COMMANDS.has(command))).toBe(false);
+    expect(['provider.status', 'generate.image', 'generate.video'].every(command => RUNTIME_COMMANDS.has(command))).toBe(true);
+    expect(RUNTIME_WRITE_COMMANDS.has('generate.image')).toBe(true);
+    expect(RUNTIME_WRITE_COMMANDS.has('generate.video')).toBe(true);
+    expect(shouldWaitForBrowserCommand('provider.status', undefined)).toBe(false);
     expect(shouldWaitForBrowserCommand('provider.select-model', undefined)).toBe(true);
     expect(shouldWaitForBrowserCommand('generate.image', undefined)).toBe(false);
     expect(shouldWaitForBrowserCommand('provider.status', false)).toBe(false);
   });
 
   it.each([
-    ['provider.status', []],
     ['provider.select-model', ['--image-model', 'flovart:gpt-image-2']],
     ['provider.test', ['--purpose', 'both']],
   ])('queues %s for the Flovart browser instead of reading shadow provider state', (command, args) => {

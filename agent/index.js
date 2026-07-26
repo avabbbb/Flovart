@@ -131,7 +131,7 @@ export function startHttpServer() {
       }
       if (request.method === 'POST' && url.pathname === '/api/tools') {
         const body = await readBody(request);
-        const result = await session.callCommand(body.command, body.args || {}, body.source || 'agent');
+        const result = await session.callCommand(body.command, body.args || {}, body.source || 'agent', body.idempotencyKey);
         return json(response, 200, { ok: true, result });
       }
       if (request.method === 'GET' && url.pathname === '/agent/codex/threads') {

@@ -138,6 +138,16 @@ export interface WorkflowNodeMetadata {
   filters?: Partial<ImageFilters>;
   scriptBreakdown?: ScriptBreakdown;
   primaryImageId?: string;
+  productionProjection?: {
+    projectionId: string;
+    projectionVersion: number;
+    productionSessionId: string;
+    specRevisionId: string;
+    productionRunId: string;
+    stageRunId?: string | null;
+    stageKey?: string | null;
+    capabilityId?: string | null;
+  };
 }
 
 export interface WorkflowNode {

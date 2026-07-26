@@ -14,7 +14,7 @@ fn runtime_status_comes_from_the_canonical_v1_contract() {
     assert_eq!(status.state, "ready");
     assert_eq!(
         runtime.registry().registry_hash,
-        "ad9c10c2a27e3dfa4106cb8cce3f6468cf906334ec987ace8216144ef7181a98"
+        "0f94bbc3c239bb90783962b49d8ef6f6f5db42fedcebfbe98c898d8c86855a8b"
     );
     assert!(runtime.registry().commands.contains_key("runtime.status"));
     assert!(!runtime.registry().commands.contains_key("workflow.run"));
@@ -122,7 +122,7 @@ fn runtime_rejects_invalid_protocol_and_unknown_commands() {
 }
 
 #[test]
-fn runtime_exposes_redacted_google_status_and_durable_lite_video_receipts() {
+fn runtime_exposes_redacted_provider_status_and_durable_generation_receipts() {
     let runtime = ProductionRuntime::new(env!("CARGO_PKG_VERSION")).expect("runtime contract");
     let status = runtime
         .execute(&json!({
@@ -138,8 +138,16 @@ fn runtime_exposes_redacted_google_status_and_durable_lite_video_receipts() {
     assert_eq!(status["providers"][1]["provider"], "runningHub");
     assert_eq!(status["providers"][1]["ready"], false);
     assert_eq!(
-        status["providers"][1]["route"]["routeId"],
+        status["providers"][1]["routes"][2]["routeId"],
         "rhart-video-v3.1-lite-official/text-to-video"
+    );
+    assert_eq!(
+        status["providers"][1]["routes"][0]["routeId"],
+        "rhart-image-g-2/text-to-image"
+    );
+    assert_eq!(
+        status["providers"][1]["routes"][1]["routeId"],
+        "rhart-video-g/text-to-video"
     );
     assert!(status.to_string().find("secret").is_none());
 
@@ -181,6 +189,64 @@ fn runtime_exposes_redacted_google_status_and_durable_lite_video_receipts() {
         .expect("runninghub video receipt");
     assert_eq!(runninghub_receipt["kind"], "task");
     assert_eq!(runninghub_receipt["status"], "queued");
+
+    let image_receipt = runtime
+        .execute(&json!({
+            "protocolVersion": "1",
+            "commandId": ProductionRuntime::new_id("cmd"),
+            "command": "generate.image",
+            "args": {
+                "prompt": "editorial paper collage senate diagram",
+                "provider": "runningHub",
+                "productModel": "flovart:gpt-image-2",
+                "aspectRatio": "16:9",
+                "resolution": "1k"
+            },
+            "actor": { "kind": "cli", "instanceId": "cli_test" },
+            "idempotencyKey": "image-contract-runninghub-1"
+        }))
+        .expect("runninghub image receipt");
+    assert_eq!(image_receipt["kind"], "task");
+    assert_eq!(image_receipt["status"], "queued");
+
+    let grok_receipt = runtime
+        .execute(&json!({
+            "protocolVersion": "1",
+            "commandId": ProductionRuntime::new_id("cmd"),
+            "command": "generate.video",
+            "args": {
+                "prompt": "animated editorial paper collage",
+                "productModel": "flovart:grok-imagine-video-1.5",
+                "durationSec": 6,
+                "aspectRatio": "16:9",
+                "resolution": "720p"
+            },
+            "actor": { "kind": "cli", "instanceId": "cli_test" },
+            "idempotencyKey": "video-contract-grok-1"
+        }))
+        .expect("grok video receipt");
+    assert_eq!(grok_receipt["kind"], "task");
+    assert_eq!(grok_receipt["status"], "queued");
+
+    let grok_image_to_video_receipt = runtime
+        .execute(&json!({
+            "protocolVersion": "1",
+            "commandId": ProductionRuntime::new_id("cmd"),
+            "command": "generate.video",
+            "args": {
+                "prompt": "animate the supplied flat paper collage with subtle parallax",
+                "productModel": "flovart:grok-imagine-video-1.5",
+                "sourceImageIds": ["task_keyframe_1"],
+                "durationSec": 6,
+                "aspectRatio": "16:9",
+                "resolution": "720p"
+            },
+            "actor": { "kind": "cli", "instanceId": "cli_test" },
+            "idempotencyKey": "video-contract-grok-i2v-1"
+        }))
+        .expect("grok image-to-video receipt");
+    assert_eq!(grok_image_to_video_receipt["kind"], "task");
+    assert_eq!(grok_image_to_video_receipt["status"], "queued");
 
     let expensive = runtime
         .execute(&json!({

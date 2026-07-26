@@ -1,11 +1,11 @@
 export const BROWSER_COMMANDS = new Set([
-  'provider.begin-setup', 'provider.status', 'provider.select-model', 'provider.test',
+  'provider.begin-setup', 'provider.select-model', 'provider.test',
   'workflow.node.run', 'workflow.node.stop',
-  'generate.image', 'generate.images-batch', 'generate.video',
+  'generate.images-batch',
 ]);
 
 const WAIT_BY_DEFAULT_COMMANDS = new Set([
-  'provider.status', 'provider.select-model', 'provider.test',
+  'provider.select-model', 'provider.test',
 ]);
 
 export function shouldWaitForBrowserCommand(command, wait) {
