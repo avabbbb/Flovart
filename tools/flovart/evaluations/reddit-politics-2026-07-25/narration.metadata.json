@@ -1,0 +1,9 @@
+{
+  "generatedAt": "2026-07-24T17:27:13.0880456+00:00",
+  "engine": "Windows System.Speech",
+  "voice": "Microsoft Huihui Desktop",
+  "culture": "zh-CN",
+  "rate": 3,
+  "durationSec": 53.811,
+  "source": "narration.zh-CN.txt"
+}

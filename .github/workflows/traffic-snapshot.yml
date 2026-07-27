@@ -1,0 +1,65 @@
+# Flovart - 每日仓库数据快照
+#
+# GitHub Traffic API 只保留 14 天数据,此工作流每天抓取并累积到 stats/history.json。
+# views/clones 需要仓库 Settings → Secrets 配置 TRAFFIC_PAT(勾选 repo 权限的 PAT);
+# 未配置时降级为只记录 stars / forks / release 下载量。
+
+name: Traffic Snapshot
+
+on:
+  schedule:
+    - cron: '23 0 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Collect stats
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.TRAFFIC_PAT || github.token }}
+          script: |
+            const fs = require('fs');
+            const path = 'stats/history.json';
+            const { owner, repo } = context.repo;
+            const history = fs.existsSync(path)
+              ? JSON.parse(fs.readFileSync(path, 'utf8'))
+              : { views: {}, clones: {}, snapshots: [] };
+
+            // views / clones 需要 TRAFFIC_PAT;失败时跳过并提示
+            for (const kind of ['views', 'clones']) {
+              try {
+                const { data } = await github.request(`GET /repos/{owner}/{repo}/traffic/${kind}`, { owner, repo });
+                for (const day of data[kind]) {
+                  history[kind][day.timestamp.slice(0, 10)] = { count: day.count, uniques: day.uniques };
+                }
+              } catch (e) {
+                core.warning(`跳过 ${kind}: ${e.message}(需要配置 TRAFFIC_PAT)`);
+              }
+            }
+
+            const { data: info } = await github.rest.repos.get({ owner, repo });
+            const { data: releases } = await github.rest.repos.listReleases({ owner, repo, per_page: 100 });
+            const downloads = releases.flatMap(r => r.assets).reduce((sum, a) => sum + a.download_count, 0);
+
+            const today = new Date().toISOString().slice(0, 10);
+            history.snapshots = history.snapshots.filter(s => s.date !== today);
+            history.snapshots.push({ date: today, stars: info.stargazers_count, forks: info.forks_count, downloads });
+
+            fs.mkdirSync('stats', { recursive: true });
+            fs.writeFileSync(path, JSON.stringify(history, null, 2) + '\n');
+
+      - name: Commit history
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add stats/history.json
+          git diff --cached --quiet || git commit -m "chore: daily traffic snapshot"
+          git push

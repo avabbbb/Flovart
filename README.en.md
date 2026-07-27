@@ -21,6 +21,12 @@
   <img src="https://img.shields.io/badge/React-19-E8453C?logo=react&logoColor=white" alt="React 19" />
   <img src="https://img.shields.io/badge/TypeScript-5.8-E8453C?logo=typescript&logoColor=white" alt="TypeScript" />
   <img src="https://img.shields.io/badge/Vite-6-E8453C?logo=vite&logoColor=white" alt="Vite 6" />
+  <a href="https://github.com/avabbbb/Flovart/releases"><img src="https://img.shields.io/github/downloads/avabbbb/Flovart/total?color=E8453C&logo=github" alt="GitHub Downloads" /></a>
+  <a href="https://github.com/avabbbb/Flovart/stargazers"><img src="https://img.shields.io/github/stars/avabbbb/Flovart?color=E8453C" alt="GitHub Stars" /></a>
+</p>
+
+<p align="center">
+  <img src="https://tally.yuki.sh/hits/flovart/readme.svg?theme=rule34" alt="Flovart Popular Counter" />
 </p>
 
 <p align="center">

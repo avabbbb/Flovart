@@ -2,7 +2,27 @@
   "permissions": {
     "allow": [
       "Bash(gh repo *)",
-      "Bash(echo \"exit: $?\")"
+      "Bash(echo \"exit: $?\")",
+      "Bash(git -C \"H:/WorkSpace_For_VsCode/React/Floavrt\" log --oneline --follow -- README.md)",
+      "Bash(git -C \"H:/WorkSpace_For_VsCode/React/Floavrt\" show 46b397b -- README.md)",
+      "Bash(git -C \"H:/WorkSpace_For_VsCode/React/Floavrt\" show 391a1a4 -- README.md README.en.md)",
+      "Bash(git -C \"H:/WorkSpace_For_VsCode/React/Floavrt\" show 0d3dd85 --stat -- README.md README.en.md)",
+      "Bash(git -C \"H:/WorkSpace_For_VsCode/React/Floavrt\" show 0d3dd85 -- README.md)",
+      "Bash(curl *)",
+      "Bash(git -C \"H:/WorkSpace_For_VsCode/React/Floavrt\" remote -v)",
+      "PowerShell(foreach \\($u in @\\(\"https://tally.yuki.sh/hits/flovart/readme.svg?theme=rule34\", \"https://img.shields.io/github/downloads/avabbbb/Flovart/total\", \"https://count.getloli.com/get/@flovart-readme?theme=rule34\"\\)\\) { try { $r = Invoke-WebRequest -Uri $u -TimeoutSec 15 -UseBasicParsing; \"$\\($r.StatusCode\\) $\\($r.Headers['Content-Type']\\) $u\" } catch { \"FAIL $\\($_.Exception.Message.Substring\\(0, [Math]::Min\\(80, $_.Exception.Message.Length\\)\\)\\) $u\" } })",
+      "Bash(gh api *)",
+      "Bash(wsl *)",
+      "Bash(iconv -f UTF-16LE -t UTF-8)",
+      "mcp__playwright__browser_navigate",
+      "mcp__playwright__browser_resize",
+      "mcp__playwright__browser_take_screenshot",
+      "mcp__playwright__browser_click",
+      "mcp__flovart__workspace_status"
     ]
-  }
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "flovart"
+  ]
 }

@@ -381,6 +381,31 @@ export function isProductModelConfigured(productModelId: string, keys: UserApiKe
   return Boolean(resolveAnyProductRoute(productModelId, keys));
 }
 
+/**
+ * 当前 BYOK 映射下，该视频产品模型实际可切换的生成方式。
+ * 逐个 mode 调用 resolveProductModelRoute 解析线路（与提交时按 mode 解析一致），
+ * 命中且该线路确实承载该 mode 即视为可选。避免 PromptBar 用单条 activeRoute
+ * （仅承载当前 submode）误判其它模式不可用，导致“配了图生视频线路却点不动”。
+ */
+export function getResolvableVideoModes(productModelId: string, keys: UserApiKey[]): ProductModelMode[] {
+  const product = getProductModel(productModelId);
+  if (!product || product.capability !== 'video') return [];
+  return product.capabilities.modes.filter(mode => {
+    const route = resolveProductModelRoute(productModelId, mode, keys);
+    return !!route && getRoutedVideoModes(productModelId, route.key.provider, route.routeId).includes(mode);
+  });
+}
+
+/** 同 getResolvableVideoModes，图片侧：解决文生图线路下图生图按钮点不动的问题。 */
+export function getResolvableImageModes(productModelId: string, keys: UserApiKey[]): ProductModelMode[] {
+  const product = getProductModel(productModelId);
+  if (!product || product.capability !== 'image') return [];
+  return product.capabilities.modes.filter(mode => {
+    const route = resolveProductModelRoute(productModelId, mode, keys);
+    return !!route && getRoutedImageModes(productModelId, route.key.provider, route.routeId).includes(mode);
+  });
+}
+
 export function productModelLabel(value: string): string {
   return getProductModel(value)?.name || value;
 }

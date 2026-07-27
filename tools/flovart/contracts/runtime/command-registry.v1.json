@@ -1,60 +1,521 @@
 {
   "schemaVersion": "1",
   "protocolVersion": "1",
-  "registryHash": "0f94bbc3c239bb90783962b49d8ef6f6f5db42fedcebfbe98c898d8c86855a8b",
+  "registryHash": "eb0ff2e78686cc5b6109a6cff8a470491d91a33c27898beda6549ec5b1730854",
   "commands": [
-    { "name": "runtime.status", "summary": "Inspect the local Production Runtime contract status.", "args": {}, "availability": "available" },
-    { "name": "command.list", "summary": "List machine-readable canonical command metadata.", "args": {}, "availability": "available" },
-    { "name": "command.schema", "summary": "Return one canonical command schema.", "args": { "command": "string?" }, "availability": "available" },
-    { "name": "workspace.status", "summary": "Inspect whether the visible local Workflow is connected to the canonical Workspace Adapter.", "args": {}, "availability": "available" },
-    { "name": "runtime.test.delay", "summary": "Submit an internal no-side-effect delay task for Runtime durability tests.", "args": { "delayMs": "number" }, "availability": "available" },
-    { "name": "task.get", "summary": "Return one durable Runtime task by ID.", "args": { "taskId": "string" }, "availability": "available" },
-    { "name": "task.list", "summary": "List durable Runtime tasks with status filtering and stable cursor pagination.", "args": { "status": "string?", "cursor": "string?", "limit": "number?" }, "availability": "available" },
-    { "name": "task.cancel", "summary": "Persist a cooperative cancellation request for one Runtime task.", "args": { "taskId": "string", "reason": "string?" }, "availability": "available" },
-    { "name": "event.stream", "summary": "Return durable Runtime events strictly after a resumable event ID.", "args": { "afterEventId": "number?", "taskId": "string?", "limit": "number?" }, "availability": "available" },
-    { "name": "help", "summary": "Show human-readable command help.", "args": {}, "availability": "legacy-only" },
-    { "name": "setup", "summary": "Show CLI file-bridge setup steps.", "args": {}, "availability": "legacy-only" },
-    { "name": "init", "summary": "Install the Flovart Skill and register its MCP server for a supported coding-agent host.", "args": { "host": "project|codex|claude|opencode|cursor|windsurf|vscode|all", "projectDir": "string?", "dryRun": "boolean?" }, "availability": "legacy-only" },
-    { "name": "doctor", "summary": "Diagnose CLI setup, Seedance 2.0 provider readiness, and the Workflow generation surface without exposing credentials.", "args": { "projectDir": "string?" }, "availability": "legacy-only" },
-    { "name": "inspiration.search", "summary": "Search curated Flovart prompt inspirations.", "args": { "query": "string?", "category": "string?", "limit": "number?" }, "availability": "legacy-only" },
-    { "name": "inspiration.get", "summary": "Return one curated inspiration entry by ID.", "args": { "id": "string" }, "availability": "legacy-only" },
-    { "name": "prompt.enhance", "summary": "Enhance a brief image/video prompt using Flovart agent preferences.", "args": { "prompt": "string", "style": "string?", "aspectRatio": "string?", "mode": "image|video?" }, "availability": "legacy-only" },
-    { "name": "batch.plan", "summary": "Create a deterministic multi-shot generation plan from one brief.", "args": { "prompt": "string", "count": "number?", "aspectRatio": "string?" }, "availability": "legacy-only" },
-    { "name": "preferences.manage", "summary": "Get, set, reset, or add favorite agent preferences.", "args": { "action": "get|set|reset|add-favorite", "style": "string?", "aspectRatio": "string?", "prompt": "string?" }, "availability": "legacy-only" },
-    { "name": "models.list", "summary": "List agent-facing image/video model IDs routed through Flovart browser providers.", "args": { "purpose": "image|video|all?" }, "availability": "legacy-only" },
-    { "name": "model", "summary": "List or inspect agent-facing model metadata.", "args": { "modelKey": "string?" }, "availability": "legacy-only" },
-    { "name": "model.search", "summary": "Search agent-facing model IDs by capability and query.", "args": { "type": "image|video|all?", "query": "string?" }, "availability": "legacy-only" },
-    { "name": "status", "summary": "Inspect runtime, provider, and media status.", "args": {}, "availability": "legacy-only" },
-    { "name": "provider.status", "summary": "Inspect Production Runtime provider readiness without exposing keys.", "args": {}, "availability": "available" },
-    { "name": "production.dry-run", "summary": "Compile one Director ProductionSpec into a durable ProductionRun, StageRun DAG, blockers, and Workflow Projection without Provider submission.", "args": { "projectId": "string", "title": "string?", "reviewPolicy": "guided|balanced|autonomous?", "director": "object", "spec": "object" }, "availability": "available" },
-    { "name": "production.status", "summary": "Inspect one durable ProductionRun and its StageRun DAG.", "args": { "runId": "string" }, "availability": "available" },
-    { "name": "provider.begin-setup", "summary": "Open provider setup in the local Runtime/WebUI.", "args": { "provider": "string?", "purpose": "image|video|both?" }, "availability": "legacy-only" },
-    { "name": "provider.select-model", "summary": "Select configured image/video/text Product Model IDs (e.g. flovart:seedance-2).", "args": { "imageModel": "string?", "videoModel": "string?", "textModel": "string?" }, "availability": "legacy-only" },
-    { "name": "provider.test", "summary": "Check provider readiness.", "args": { "purpose": "image|video|both?" }, "availability": "legacy-only" },
-    { "name": "research.topic.collect", "summary": "Collect and rank recent topic evidence with explicit source coverage and durable local artifacts.", "args": { "topic": "string", "sources": "string[]?", "subreddits": "string[]?", "xHandles": "string[]?", "days": "number?", "limit": "number?", "outputDir": "string?", "proxyUrl": "string?" }, "availability": "available" },
-    { "name": "workflow.project.list", "summary": "List visible local Workflow projects through the Workspace Adapter.", "args": {}, "availability": "available" },
-    { "name": "workflow.project.create", "summary": "Create a visible local Workflow project through the Workspace Adapter.", "args": { "title": "string?" }, "availability": "available" },
-    { "name": "workflow.project.use", "summary": "Select the active visible Workflow project.", "args": { "projectId": "string" }, "availability": "available" },
-    { "name": "workflow.project.delete", "summary": "Delete one visible local Workflow project.", "args": { "projectId": "string" }, "availability": "available" },
-    { "name": "workflow.inspect", "summary": "Inspect the visible Workflow graph with media and secrets redacted.", "args": { "projectId": "string?" }, "availability": "available" },
-    { "name": "workflow.projection.get", "summary": "Read the latest Runtime-authoritative Production Plan Projection for one Workflow project.", "args": { "projectId": "string" }, "availability": "available" },
-    { "name": "workflow.node.create", "summary": "Create one visible Workflow image/text/video/audio/config node.", "args": { "projectId": "string?", "id": "string?", "type": "image|text|video|audio|config", "title": "string?", "x": "number?", "y": "number?", "width": "number?", "height": "number?", "metadata": "object?", "metadataJson": "string?" }, "availability": "available" },
-    { "name": "workflow.node.create-connected", "summary": "Create one visible Workflow node and connect it from an existing node atomically.", "args": { "projectId": "string?", "fromNodeId": "string", "id": "string?", "type": "image|text|video|audio|config", "title": "string?", "x": "number?", "y": "number?", "width": "number?", "height": "number?", "metadata": "object?", "metadataJson": "string?" }, "availability": "available" },
-    { "name": "workflow.node.update", "summary": "Patch one visible Workflow node for prompt or metadata fine-tuning.", "args": { "projectId": "string?", "nodeId": "string", "patch": "object?", "patchJson": "string?" }, "availability": "available" },
-    { "name": "workflow.node.delete", "summary": "Delete one visible Workflow node and incident connections.", "args": { "projectId": "string?", "nodeId": "string" }, "availability": "available" },
-    { "name": "workflow.node.move", "summary": "Move one visible Workflow node.", "args": { "projectId": "string?", "nodeId": "string", "x": "number", "y": "number" }, "availability": "available" },
-    { "name": "workflow.node.resize", "summary": "Resize one visible Workflow node.", "args": { "projectId": "string?", "nodeId": "string", "width": "number", "height": "number" }, "availability": "available" },
-    { "name": "workflow.connect", "summary": "Connect two visible Workflow nodes.", "args": { "projectId": "string?", "fromNodeId": "string", "toNodeId": "string" }, "availability": "available" },
-    { "name": "workflow.disconnect", "summary": "Delete one visible Workflow connection.", "args": { "projectId": "string?", "connectionId": "string" }, "availability": "available" },
-    { "name": "workflow.select", "summary": "Select visible Workflow node IDs.", "args": { "projectId": "string?", "ids": "string[]" }, "availability": "available" },
-    { "name": "workflow.viewport.set", "summary": "Set the visible Workflow viewport pan and zoom.", "args": { "projectId": "string?", "x": "number", "y": "number", "k": "number" }, "availability": "available" },
-    { "name": "workflow.node.run", "summary": "Run one Workflow config node through browser providers.", "args": { "projectId": "string?", "nodeId": "string" }, "availability": "legacy-only" },
-    { "name": "workflow.node.stop", "summary": "Stop the active generation for one Workflow node.", "args": { "projectId": "string?", "nodeId": "string" }, "availability": "legacy-only" },
-    { "name": "asset.list", "summary": "List local generated media assets/history.", "args": {}, "availability": "legacy-only" },
-    { "name": "generate.image", "summary": "Generate one durable image Artifact through a trusted Product Model route.", "args": { "prompt": "string", "provider": "string?", "credentialId": "string?", "productModel": "string?", "aspectRatio": "string?", "resolution": "string?" }, "availability": "available" },
-    { "name": "generate.images-batch", "summary": "Generate multiple images for a Workflow from explicit prompt items.", "args": { "items": "array", "projectId": "string?" }, "availability": "legacy-only" },
-    { "name": "generate.video", "summary": "Generate one durable video Artifact through a trusted Product Model route.", "args": { "prompt": "string", "provider": "string?", "credentialId": "string?", "productModel": "string?", "sourceImageIds": "string[]?", "sourceVideoIds": "string[]?", "slots": "array?", "durationSec": "number?", "aspectRatio": "string?", "resolution": "string?", "generateAudio": "boolean?", "watermark": "boolean?", "seed": "number?" }, "availability": "available" },
-    { "name": "video.status", "summary": "Query a video/runtime job status.", "args": { "jobId": "string" }, "availability": "legacy-only" },
-    { "name": "export.project", "summary": "Export project metadata.", "args": { "format": "json?" }, "availability": "legacy-only" }
+    {
+      "name": "runtime.status",
+      "summary": "Inspect the local Production Runtime contract status.",
+      "args": {},
+      "availability": "available"
+    },
+    {
+      "name": "command.list",
+      "summary": "List machine-readable canonical command metadata.",
+      "args": {},
+      "availability": "available"
+    },
+    {
+      "name": "command.schema",
+      "summary": "Return one canonical command schema.",
+      "args": {
+        "command": "string?"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "workspace.status",
+      "summary": "Inspect whether the visible local Workflow is connected to the canonical Workspace Adapter.",
+      "args": {},
+      "availability": "available"
+    },
+    {
+      "name": "runtime.test.delay",
+      "summary": "Submit an internal no-side-effect delay task for Runtime durability tests.",
+      "args": {
+        "delayMs": "number"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "task.get",
+      "summary": "Return one durable Runtime task by ID.",
+      "args": {
+        "taskId": "string"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "task.list",
+      "summary": "List durable Runtime tasks with status filtering and stable cursor pagination.",
+      "args": {
+        "status": "string?",
+        "cursor": "string?",
+        "limit": "number?"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "task.cancel",
+      "summary": "Persist a cooperative cancellation request for one Runtime task.",
+      "args": {
+        "taskId": "string",
+        "reason": "string?"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "event.stream",
+      "summary": "Return durable Runtime events strictly after a resumable event ID.",
+      "args": {
+        "afterEventId": "number?",
+        "taskId": "string?",
+        "limit": "number?"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "help",
+      "summary": "Show human-readable command help.",
+      "args": {},
+      "availability": "legacy-only"
+    },
+    {
+      "name": "setup",
+      "summary": "Show CLI file-bridge setup steps.",
+      "args": {},
+      "availability": "legacy-only"
+    },
+    {
+      "name": "init",
+      "summary": "Install the Flovart Skill and register its MCP server for a supported coding-agent host.",
+      "args": {
+        "host": "project|codex|claude|opencode|cursor|windsurf|vscode|all",
+        "projectDir": "string?",
+        "dryRun": "boolean?"
+      },
+      "availability": "legacy-only"
+    },
+    {
+      "name": "doctor",
+      "summary": "Diagnose CLI setup, Seedance 2.0 provider readiness, and the Workflow generation surface without exposing credentials.",
+      "args": {
+        "projectDir": "string?"
+      },
+      "availability": "legacy-only"
+    },
+    {
+      "name": "inspiration.search",
+      "summary": "Search curated Flovart prompt inspirations.",
+      "args": {
+        "query": "string?",
+        "category": "string?",
+        "limit": "number?"
+      },
+      "availability": "legacy-only"
+    },
+    {
+      "name": "inspiration.get",
+      "summary": "Return one curated inspiration entry by ID.",
+      "args": {
+        "id": "string"
+      },
+      "availability": "legacy-only"
+    },
+    {
+      "name": "prompt.enhance",
+      "summary": "Enhance a brief image/video prompt using Flovart agent preferences.",
+      "args": {
+        "prompt": "string",
+        "style": "string?",
+        "aspectRatio": "string?",
+        "mode": "image|video?"
+      },
+      "availability": "legacy-only"
+    },
+    {
+      "name": "batch.plan",
+      "summary": "Create a deterministic multi-shot generation plan from one brief.",
+      "args": {
+        "prompt": "string",
+        "count": "number?",
+        "aspectRatio": "string?"
+      },
+      "availability": "legacy-only"
+    },
+    {
+      "name": "preferences.manage",
+      "summary": "Get, set, reset, or add favorite agent preferences.",
+      "args": {
+        "action": "get|set|reset|add-favorite",
+        "style": "string?",
+        "aspectRatio": "string?",
+        "prompt": "string?"
+      },
+      "availability": "legacy-only"
+    },
+    {
+      "name": "models.list",
+      "summary": "List agent-facing image/video model IDs routed through Flovart browser providers.",
+      "args": {
+        "purpose": "image|video|all?"
+      },
+      "availability": "legacy-only"
+    },
+    {
+      "name": "model",
+      "summary": "List or inspect agent-facing model metadata.",
+      "args": {
+        "modelKey": "string?"
+      },
+      "availability": "legacy-only"
+    },
+    {
+      "name": "model.search",
+      "summary": "Search agent-facing model IDs by capability and query.",
+      "args": {
+        "type": "image|video|all?",
+        "query": "string?"
+      },
+      "availability": "legacy-only"
+    },
+    {
+      "name": "status",
+      "summary": "Inspect runtime, provider, and media status.",
+      "args": {},
+      "availability": "legacy-only"
+    },
+    {
+      "name": "provider.status",
+      "summary": "Inspect Production Runtime provider readiness without exposing keys.",
+      "args": {},
+      "availability": "available"
+    },
+    {
+      "name": "production.dry-run",
+      "summary": "Compile one Director ProductionSpec into a durable ProductionRun, StageRun DAG, blockers, and Workflow Projection without Provider submission.",
+      "args": {
+        "projectId": "string",
+        "title": "string?",
+        "reviewPolicy": "guided|balanced|autonomous?",
+        "director": "object",
+        "spec": "object"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "production.status",
+      "summary": "Inspect one durable ProductionRun and its StageRun DAG.",
+      "args": {
+        "runId": "string"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "production.approve",
+      "summary": "Decide one production gate; approving route-plan and run-budget system gates unblocks execution.",
+      "args": {
+        "runId": "string",
+        "gateType": "string",
+        "decision": "approved|rejected?",
+        "hardLimitMicros": "number?",
+        "note": "string?"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "production.run",
+      "summary": "Execute one approved ProductionRun: the durable scheduler drives StageRuns through provider and local capabilities under the confirmed Route Plan and Run Budget.",
+      "args": {
+        "runId": "string"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "provider.begin-setup",
+      "summary": "Open provider setup in the local Runtime/WebUI.",
+      "args": {
+        "provider": "string?",
+        "purpose": "image|video|both?"
+      },
+      "availability": "legacy-only"
+    },
+    {
+      "name": "provider.select-model",
+      "summary": "Select configured image/video/text Product Model IDs (e.g. flovart:seedance-2).",
+      "args": {
+        "imageModel": "string?",
+        "videoModel": "string?",
+        "textModel": "string?"
+      },
+      "availability": "legacy-only"
+    },
+    {
+      "name": "provider.test",
+      "summary": "Check provider readiness.",
+      "args": {
+        "purpose": "image|video|both?"
+      },
+      "availability": "legacy-only"
+    },
+    {
+      "name": "research.topic.collect",
+      "summary": "Collect and rank recent topic evidence with explicit source coverage and durable local artifacts.",
+      "args": {
+        "topic": "string",
+        "sources": "string[]?",
+        "subreddits": "string[]?",
+        "xHandles": "string[]?",
+        "days": "number?",
+        "limit": "number?",
+        "outputDir": "string?",
+        "proxyUrl": "string?"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "workflow.project.list",
+      "summary": "List visible local Workflow projects through the Workspace Adapter.",
+      "args": {},
+      "availability": "available"
+    },
+    {
+      "name": "workflow.project.create",
+      "summary": "Create a visible local Workflow project through the Workspace Adapter.",
+      "args": {
+        "title": "string?"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "workflow.project.use",
+      "summary": "Select the active visible Workflow project.",
+      "args": {
+        "projectId": "string"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "workflow.project.delete",
+      "summary": "Delete one visible local Workflow project.",
+      "args": {
+        "projectId": "string"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "workflow.inspect",
+      "summary": "Inspect the visible Workflow graph with media and secrets redacted.",
+      "args": {
+        "projectId": "string?"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "workflow.projection.get",
+      "summary": "Read the latest Runtime-authoritative Production Plan Projection for one Workflow project.",
+      "args": {
+        "projectId": "string"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "workflow.node.create",
+      "summary": "Create one visible Workflow image/text/video/audio/config node.",
+      "args": {
+        "projectId": "string?",
+        "id": "string?",
+        "type": "image|text|video|audio|config",
+        "title": "string?",
+        "x": "number?",
+        "y": "number?",
+        "width": "number?",
+        "height": "number?",
+        "metadata": "object?",
+        "metadataJson": "string?"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "workflow.node.create-connected",
+      "summary": "Create one visible Workflow node and connect it from an existing node atomically.",
+      "args": {
+        "projectId": "string?",
+        "fromNodeId": "string",
+        "id": "string?",
+        "type": "image|text|video|audio|config",
+        "title": "string?",
+        "x": "number?",
+        "y": "number?",
+        "width": "number?",
+        "height": "number?",
+        "metadata": "object?",
+        "metadataJson": "string?"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "workflow.node.update",
+      "summary": "Patch one visible Workflow node for prompt or metadata fine-tuning.",
+      "args": {
+        "projectId": "string?",
+        "nodeId": "string",
+        "patch": "object?",
+        "patchJson": "string?"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "workflow.node.delete",
+      "summary": "Delete one visible Workflow node and incident connections.",
+      "args": {
+        "projectId": "string?",
+        "nodeId": "string"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "workflow.node.move",
+      "summary": "Move one visible Workflow node.",
+      "args": {
+        "projectId": "string?",
+        "nodeId": "string",
+        "x": "number",
+        "y": "number"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "workflow.node.resize",
+      "summary": "Resize one visible Workflow node.",
+      "args": {
+        "projectId": "string?",
+        "nodeId": "string",
+        "width": "number",
+        "height": "number"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "workflow.connect",
+      "summary": "Connect two visible Workflow nodes.",
+      "args": {
+        "projectId": "string?",
+        "fromNodeId": "string",
+        "toNodeId": "string"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "workflow.disconnect",
+      "summary": "Delete one visible Workflow connection.",
+      "args": {
+        "projectId": "string?",
+        "connectionId": "string"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "workflow.select",
+      "summary": "Select visible Workflow node IDs.",
+      "args": {
+        "projectId": "string?",
+        "ids": "string[]"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "workflow.viewport.set",
+      "summary": "Set the visible Workflow viewport pan and zoom.",
+      "args": {
+        "projectId": "string?",
+        "x": "number",
+        "y": "number",
+        "k": "number"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "workflow.node.run",
+      "summary": "Run one Workflow config node through browser providers.",
+      "args": {
+        "projectId": "string?",
+        "nodeId": "string"
+      },
+      "availability": "legacy-only"
+    },
+    {
+      "name": "workflow.node.stop",
+      "summary": "Stop the active generation for one Workflow node.",
+      "args": {
+        "projectId": "string?",
+        "nodeId": "string"
+      },
+      "availability": "legacy-only"
+    },
+    {
+      "name": "asset.list",
+      "summary": "List local generated media assets/history.",
+      "args": {},
+      "availability": "legacy-only"
+    },
+    {
+      "name": "generate.image",
+      "summary": "Generate one durable image Artifact through a trusted Product Model route.",
+      "args": {
+        "prompt": "string",
+        "provider": "string?",
+        "credentialId": "string?",
+        "productModel": "string?",
+        "aspectRatio": "string?",
+        "resolution": "string?"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "generate.images-batch",
+      "summary": "Generate multiple images for a Workflow from explicit prompt items.",
+      "args": {
+        "items": "array",
+        "projectId": "string?"
+      },
+      "availability": "legacy-only"
+    },
+    {
+      "name": "generate.video",
+      "summary": "Generate one durable video Artifact through a trusted Product Model route.",
+      "args": {
+        "prompt": "string",
+        "provider": "string?",
+        "credentialId": "string?",
+        "productModel": "string?",
+        "sourceImageIds": "string[]?",
+        "sourceVideoIds": "string[]?",
+        "slots": "array?",
+        "durationSec": "number?",
+        "aspectRatio": "string?",
+        "resolution": "string?",
+        "generateAudio": "boolean?",
+        "watermark": "boolean?",
+        "seed": "number?"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "video.status",
+      "summary": "Query a video/runtime job status.",
+      "args": {
+        "jobId": "string"
+      },
+      "availability": "legacy-only"
+    },
+    {
+      "name": "export.project",
+      "summary": "Export project metadata.",
+      "args": {
+        "format": "json?"
+      },
+      "availability": "legacy-only"
+    }
   ]
 }

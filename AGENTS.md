@@ -75,6 +75,7 @@
 ## 文档规范
 
 - README 保持简洁，只放项目介绍、核心功能、快速开始和文档入口。
+- `README.md` 和 `README.en.md` 顶部必须保留 rule34 主题访问计数器 `https://tally.yuki.sh/hits/flovart/readme.svg?theme=rule34` 和 GitHub Downloads / Stars 徽章；重构 README 时不得删除。若 tally.yuki.sh 失效，换成其他支持 `theme=rule34` 的 Moe Counter 兼容服务（如 `count.kjchmc.cn`），不要直接移除。
 - `docs/index.md` 放给 AI 使用的文档索引，不要再放到 `docs/content/docs/` 内容目录里。
 - 详细功能介绍写到 `docs/content/docs/overview/features.mdx`。
 - 后续待办写到 `docs/content/docs/progress/todo.mdx`。

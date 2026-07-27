@@ -1,0 +1,65 @@
+{
+  "schemaVersion": "1",
+  "title": "一把空椅子，如何改变一场选举",
+  "language": "zh-CN",
+  "durationSec": 60,
+  "aspectRatio": "16:9",
+  "resolution": "1280x720",
+  "editorialPolicy": {
+    "mode": "neutral-news-explainer",
+    "prohibited": [
+      "candidate advocacy",
+      "targeted political persuasion",
+      "unverified cause-of-death claims",
+      "photorealistic public-figure depiction"
+    ]
+  },
+  "topic": {
+    "selected": "Lindsey Graham去世及南卡罗来纳州参议院席位继任",
+    "selectionBasis": "Flovart Reddit RSS 30-day combined top feed rank plus web-search engagement verification",
+    "redditSignals": [
+      {
+        "title": "Megathread: South Carolina Senator Lindsey Graham Dies at 71",
+        "votesObserved": 22131,
+        "url": "https://www.reddit.com/r/politics/comments/1uuc683/megathread_south_carolina_senator_lindsay_graham/"
+      },
+      {
+        "title": "Lindsey Graham’s death will shake the Senate and November election. Here’s what comes next",
+        "votesObserved": 17551,
+        "url": "https://www.reddit.com/r/politics/comments/1uuftr8/lindsey_grahams_death_will_shake_the_senate_and/"
+      }
+    ],
+    "factSources": [
+      "https://apnews.com/article/ef319a09b47a57b8c31950b90ed4f82b",
+      "https://apnews.com/article/5a9b75ffb00ec8435723f65e224b98f5",
+      "https://www.southcarolinapublicradio.org/sc-news/2026-07-13/what-u-s-sen-lindsey-grahams-death-means-for-his-senate-seat"
+    ]
+  },
+  "capabilities": {
+    "image": {
+      "productModel": "flovart:gpt-image-2",
+      "provider": "runningHub",
+      "routeTier": "low-price",
+      "count": 5
+    },
+    "video": {
+      "productModel": "flovart:grok-imagine-video-1.5",
+      "provider": "runningHub",
+      "routeTier": "low-price",
+      "count": 5,
+      "clipDurationSec": 6
+    }
+  },
+  "beats": [
+    { "start": 0, "end": 6, "visual": "video", "message": "一把突然空下来的参议院椅子" },
+    { "start": 6, "end": 12, "visual": "image", "message": "7月12日，格雷厄姆去世" },
+    { "start": 12, "end": 18, "visual": "video", "message": "Reddit讨论迅速聚集" },
+    { "start": 18, "end": 24, "visual": "image", "message": "从众议院到四届参议员" },
+    { "start": 24, "end": 30, "visual": "video", "message": "法律如何承接突然空缺" },
+    { "start": 30, "end": 36, "visual": "image", "message": "州长先任命临时参议员" },
+    { "start": 36, "end": 42, "visual": "video", "message": "达琳宣誓并竞选完整任期" },
+    { "start": 42, "end": 48, "visual": "image", "message": "候选人登记与11月选举" },
+    { "start": 48, "end": 54, "visual": "video", "message": "一个席位重排竞选与议程" },
+    { "start": 54, "end": 60, "visual": "image", "message": "制度如何接住意外" }
+  ]
+}

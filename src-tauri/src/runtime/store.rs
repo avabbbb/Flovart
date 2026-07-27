@@ -12,6 +12,7 @@ use super::{
 
 const MIGRATION_0001: &str = include_str!("migrations/0001_runtime_ledger.sql");
 const MIGRATION_0002: &str = include_str!("migrations/0002_production_plan.sql");
+const MIGRATION_0003: &str = include_str!("migrations/0003_production_execution.sql");
 
 pub struct RuntimeStore {
     connection: Mutex<Connection>,
@@ -22,6 +23,28 @@ pub struct ClaimedTask {
     pub kind: String,
     pub args: Value,
     pub progress: Option<Value>,
+}
+
+pub struct StageExec {
+    pub id: String,
+    pub stage_key: String,
+    pub capability_id: String,
+    pub status: String,
+    pub input: Value,
+    pub task_id: Option<String>,
+    pub result: Option<Value>,
+    pub dependencies: Vec<String>,
+}
+
+pub struct RunExecution {
+    pub status: String,
+    pub review_policy: String,
+    pub stages: Vec<StageExec>,
+    pub gates: std::collections::HashMap<String, String>,
+    pub budget: Option<(i64, String)>,
+    pub reserved_micros: i64,
+    pub confirmed_micros: i64,
+    pub estimates: std::collections::HashMap<String, i64>,
 }
 
 impl RuntimeStore {
@@ -43,7 +66,11 @@ impl RuntimeStore {
                applied_at INTEGER NOT NULL
              );",
         )?;
-        for (version, sql) in [(1, MIGRATION_0001), (2, MIGRATION_0002)] {
+        for (version, sql) in [
+            (1, MIGRATION_0001),
+            (2, MIGRATION_0002),
+            (3, MIGRATION_0003),
+        ] {
             let applied = connection.query_row(
                 "SELECT EXISTS(SELECT 1 FROM runtime_migrations WHERE version = ?1)",
                 [version],
@@ -149,6 +176,639 @@ impl RuntimeStore {
             "production.dry-run",
             args,
             100,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn submit_production_run(
+        &self,
+        command_id: &str,
+        actor_kind: &str,
+        actor_instance_id: &str,
+        idempotency_key: &str,
+        payload_hash: &str,
+        args: &Value,
+    ) -> Result<TaskReceipt, RuntimeError> {
+        self.submit_task(
+            command_id,
+            actor_kind,
+            actor_instance_id,
+            idempotency_key,
+            payload_hash,
+            "production.run",
+            args,
+            2_000,
+        )
+    }
+
+    /// Approve or reject one production gate. System gates carry side effects:
+    /// `route-plan` confirms the proposed Route Plan; `run-budget` persists the
+    /// approved hard limit. When no `required` system gates remain and the run is
+    /// still `action_required`, the run advances to `queued`. Idempotent via
+    /// command receipts: same key + payload replays the stored result.
+    #[allow(clippy::too_many_arguments)]
+    pub fn approve_production_gate(
+        &self,
+        command_id: &str,
+        actor_kind: &str,
+        actor_instance_id: &str,
+        idempotency_key: &str,
+        payload_hash: &str,
+        run_id: &str,
+        gate_type: &str,
+        decision: &str,
+        hard_limit_micros: Option<i64>,
+        note: Option<&str>,
+    ) -> Result<Value, RuntimeError> {
+        if !["approved", "rejected"].contains(&decision) {
+            return Err(RuntimeError::new(
+                "INVALID_ARGUMENT",
+                "production.approve decision must be approved or rejected",
+            ));
+        }
+        let approved_by = format!("{actor_kind}:{actor_instance_id}");
+        let mut connection = self.connection.lock();
+        let transaction = connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(store_unavailable)?;
+        let existing = transaction
+            .query_row(
+                "SELECT payload_hash, receipt_json
+                   FROM command_receipts
+                  WHERE actor_kind = ?1
+                    AND actor_instance_id = ?2
+                    AND idempotency_key = ?3",
+                params![actor_kind, actor_instance_id, idempotency_key],
+                |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
+            )
+            .optional()
+            .map_err(store_unavailable)?;
+        if let Some((existing_hash, receipt_json)) = existing {
+            if existing_hash != payload_hash {
+                return Err(idempotency_conflict(&existing_hash, payload_hash));
+            }
+            return serde_json::from_str(&receipt_json).map_err(store_unavailable);
+        }
+        let now = chrono::Utc::now().timestamp_millis();
+        let run_status = transaction
+            .query_row(
+                "SELECT status FROM production_runs WHERE id = ?1",
+                [run_id],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()
+            .map_err(store_unavailable)?
+            .ok_or_else(|| {
+                RuntimeError::new(
+                    "INVALID_ARGUMENT",
+                    format!("ProductionRun not found: {run_id}"),
+                )
+            })?;
+        if !["action_required", "queued"].contains(&run_status.as_str()) {
+            return Err(RuntimeError::new(
+                "PRECONDITION_FAILED",
+                format!("ProductionRun gates are frozen in status {run_status}"),
+            ));
+        }
+        let gate = transaction
+            .query_row(
+                "SELECT id, gate_kind, status FROM production_gates
+                  WHERE run_id = ?1 AND gate_type = ?2",
+                params![run_id, gate_type],
+                |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                    ))
+                },
+            )
+            .optional()
+            .map_err(store_unavailable)?
+            .ok_or_else(|| {
+                RuntimeError::new(
+                    "INVALID_ARGUMENT",
+                    format!("Production gate not found: {gate_type}"),
+                )
+            })?;
+        let (gate_id, gate_kind, gate_status) = gate;
+        if gate_status != "required" {
+            return Err(RuntimeError::new(
+                "PRECONDITION_FAILED",
+                format!("Production gate {gate_type} is already {gate_status}"),
+            ));
+        }
+        if gate_kind == "system" && gate_type == "run-budget" && decision == "approved" {
+            let hard_limit = hard_limit_micros.ok_or_else(|| {
+                RuntimeError::new(
+                    "INVALID_ARGUMENT",
+                    "Approving the run-budget gate requires hardLimitMicros",
+                )
+            })?;
+            if hard_limit <= 0 {
+                return Err(RuntimeError::new(
+                    "INVALID_ARGUMENT",
+                    "hardLimitMicros must be a positive integer",
+                ));
+            }
+            transaction
+                .execute(
+                    "INSERT INTO run_budgets(run_id, hard_limit_micros, unit_code, approved_by, created_at)
+                     VALUES(?1, ?2, 'CNY', ?3, ?4)
+                     ON CONFLICT(run_id) DO NOTHING",
+                    params![run_id, hard_limit, approved_by, now],
+                )
+                .map_err(store_unavailable)?;
+        }
+        if gate_kind == "system" && gate_type == "route-plan" && decision == "approved" {
+            transaction
+                .execute(
+                    "UPDATE run_route_plans SET status = 'confirmed', updated_at = ?1
+                      WHERE run_id = ?2 AND status = 'proposed'",
+                    params![now, run_id],
+                )
+                .map_err(store_unavailable)?;
+        }
+        let decision_record = json!({
+            "decision": decision,
+            "approvedBy": approved_by,
+            "note": note,
+            "hardLimitMicros": hard_limit_micros,
+            "decidedAt": now
+        });
+        transaction
+            .execute(
+                "UPDATE production_gates
+                    SET status = ?1, decision_json = ?2, updated_at = ?3
+                  WHERE id = ?4",
+                params![decision, decision_record.to_string(), now, gate_id],
+            )
+            .map_err(store_unavailable)?;
+
+        // Recompute blockers from remaining required gates and blocked capabilities.
+        let mut blockers = Vec::new();
+        {
+            let mut statement = transaction
+                .prepare(
+                    "SELECT gate_kind, gate_type FROM production_gates
+                      WHERE run_id = ?1 AND status = 'required'
+                      ORDER BY gate_type",
+                )
+                .map_err(store_unavailable)?;
+            let rows = statement
+                .query_map([run_id], |row| {
+                    Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+                })
+                .map_err(store_unavailable)?;
+            for row in rows {
+                let (kind, gate) = row.map_err(store_unavailable)?;
+                if kind == "system" {
+                    blockers.push(match gate.as_str() {
+                        "route-plan" => "ROUTE_PLAN_REQUIRED".to_owned(),
+                        "run-budget" => "RUN_BUDGET_REQUIRED".to_owned(),
+                        other => format!("GATE_REQUIRED:{other}"),
+                    });
+                }
+            }
+        }
+        let has_blocked_capability = transaction
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM stage_runs WHERE run_id = ?1 AND status = 'blocked')",
+                [run_id],
+                |row| row.get::<_, bool>(0),
+            )
+            .map_err(store_unavailable)?;
+        if has_blocked_capability {
+            blockers.push("CAPABILITY_UNAVAILABLE".to_owned());
+        }
+        let rejected = decision == "rejected";
+        let system_gates_clear = !blockers
+            .iter()
+            .any(|blocker| blocker.starts_with("ROUTE_PLAN") || blocker.starts_with("RUN_BUDGET"));
+        let next_status = if rejected && gate_kind == "system" {
+            "failed"
+        } else if system_gates_clear && run_status == "action_required" {
+            "queued"
+        } else {
+            run_status.as_str()
+        };
+        transaction
+            .execute(
+                "UPDATE production_runs SET status = ?1, blockers_json = ?2 WHERE id = ?3",
+                params![
+                    next_status,
+                    serde_json::to_string(&blockers).map_err(store_unavailable)?,
+                    run_id
+                ],
+            )
+            .map_err(store_unavailable)?;
+        transaction
+            .execute(
+                "INSERT INTO runtime_events(
+                    event_version, entity_type, entity_id, event_type, payload_json, created_at
+                 ) VALUES('1', 'production_run', ?1, 'production.gate.decided', ?2, ?3)",
+                params![
+                    run_id,
+                    json!({
+                        "gateType": gate_type,
+                        "gateKind": gate_kind,
+                        "decision": decision,
+                        "runStatus": next_status,
+                        "blockers": blockers
+                    })
+                    .to_string(),
+                    now
+                ],
+            )
+            .map_err(store_unavailable)?;
+        let result = json!({
+            "runId": run_id,
+            "gateType": gate_type,
+            "gateKind": gate_kind,
+            "decision": decision,
+            "runStatus": next_status,
+            "blockers": blockers
+        });
+        transaction
+            .execute(
+                "INSERT INTO command_receipts(
+                    command_id, actor_kind, actor_instance_id, idempotency_key,
+                    command_name, payload_hash, task_id, receipt_json, created_at
+                 ) VALUES(?1, ?2, ?3, ?4, 'production.approve', ?5, '', ?6, ?7)",
+                params![
+                    command_id,
+                    actor_kind,
+                    actor_instance_id,
+                    idempotency_key,
+                    payload_hash,
+                    result.to_string(),
+                    now
+                ],
+            )
+            .map_err(store_unavailable)?;
+        transaction.commit().map_err(store_unavailable)?;
+        Ok(result)
+    }
+
+    /// Snapshot everything the production.run scheduler needs in one read.
+    pub fn load_run_execution(&self, run_id: &str) -> Result<RunExecution, RuntimeError> {
+        let connection = self.connection.lock();
+        let (status, review_policy) = connection
+            .query_row(
+                "SELECT status, review_policy FROM production_runs WHERE id = ?1",
+                [run_id],
+                |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
+            )
+            .optional()
+            .map_err(store_unavailable)?
+            .ok_or_else(|| {
+                RuntimeError::new(
+                    "INVALID_ARGUMENT",
+                    format!("ProductionRun not found: {run_id}"),
+                )
+            })?;
+        let mut gates = std::collections::HashMap::new();
+        {
+            let mut statement = connection
+                .prepare("SELECT gate_type, status FROM production_gates WHERE run_id = ?1")
+                .map_err(store_unavailable)?;
+            let rows = statement
+                .query_map([run_id], |row| {
+                    Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+                })
+                .map_err(store_unavailable)?;
+            for row in rows {
+                let (gate_type, gate_status) = row.map_err(store_unavailable)?;
+                gates.insert(gate_type, gate_status);
+            }
+        }
+        let budget = connection
+            .query_row(
+                "SELECT hard_limit_micros, unit_code FROM run_budgets WHERE run_id = ?1",
+                [run_id],
+                |row| Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?)),
+            )
+            .optional()
+            .map_err(store_unavailable)?;
+        let (reserved_micros, confirmed_micros) = connection
+            .query_row(
+                "SELECT
+                    COALESCE(SUM(CASE WHEN entry_kind = 'reserve' THEN amount_micros
+                                      WHEN entry_kind = 'release' THEN -amount_micros
+                                      ELSE 0 END), 0),
+                    COALESCE(SUM(CASE WHEN entry_kind = 'confirm' THEN amount_micros ELSE 0 END), 0)
+                   FROM usage_ledger WHERE run_id = ?1",
+                [run_id],
+                |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?)),
+            )
+            .map_err(store_unavailable)?;
+        let mut estimates = std::collections::HashMap::new();
+        if let Some(plan_json) = connection
+            .query_row(
+                "SELECT plan_json FROM run_route_plans WHERE run_id = ?1 AND status = 'confirmed'",
+                [run_id],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()
+            .map_err(store_unavailable)?
+        {
+            if let Ok(plan) = serde_json::from_str::<Value>(&plan_json) {
+                for entry in plan.get("entries").and_then(Value::as_array).into_iter().flatten() {
+                    if let (Some(stage_key), Some(estimate)) = (
+                        entry.get("stageKey").and_then(Value::as_str),
+                        entry.get("estimateMicros").and_then(Value::as_i64),
+                    ) {
+                        estimates.insert(stage_key.to_owned(), estimate);
+                    }
+                }
+            }
+        }
+        let mut stage_ids = std::collections::HashMap::new();
+        let mut stages = Vec::new();
+        {
+            let mut statement = connection
+                .prepare(
+                    "SELECT id, stage_key, capability_id, status, input_json, task_id, result_json
+                       FROM stage_runs
+                      WHERE run_id = ?1
+                      ORDER BY created_at, stage_key",
+                )
+                .map_err(store_unavailable)?;
+            let rows = statement
+                .query_map([run_id], |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                        row.get::<_, String>(3)?,
+                        row.get::<_, Option<String>>(4)?,
+                        row.get::<_, Option<String>>(5)?,
+                        row.get::<_, Option<String>>(6)?,
+                    ))
+                })
+                .map_err(store_unavailable)?;
+            for row in rows {
+                let (id, stage_key, capability_id, stage_status, input_json, task_id, result_json) =
+                    row.map_err(store_unavailable)?;
+                stage_ids.insert(id.clone(), stage_key.clone());
+                stages.push(StageExec {
+                    id,
+                    stage_key,
+                    capability_id,
+                    status: stage_status,
+                    input: input_json
+                        .and_then(|value| serde_json::from_str(&value).ok())
+                        .unwrap_or(Value::Null),
+                    task_id,
+                    result: result_json.and_then(|value| serde_json::from_str(&value).ok()),
+                    dependencies: Vec::new(),
+                });
+            }
+        }
+        {
+            let mut statement = connection
+                .prepare(
+                    "SELECT d.stage_run_id, d.depends_on_stage_run_id
+                       FROM stage_dependencies d
+                       JOIN stage_runs stage ON stage.id = d.stage_run_id
+                      WHERE stage.run_id = ?1",
+                )
+                .map_err(store_unavailable)?;
+            let rows = statement
+                .query_map([run_id], |row| {
+                    Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+                })
+                .map_err(store_unavailable)?;
+            let mut dependency_map =
+                std::collections::HashMap::<String, Vec<String>>::new();
+            for row in rows {
+                let (stage_run_id, depends_on_id) = row.map_err(store_unavailable)?;
+                if let Some(dependency_key) = stage_ids.get(&depends_on_id) {
+                    dependency_map
+                        .entry(stage_run_id)
+                        .or_default()
+                        .push(dependency_key.clone());
+                }
+            }
+            for stage in &mut stages {
+                if let Some(dependencies) = dependency_map.remove(&stage.id) {
+                    stage.dependencies = dependencies;
+                }
+            }
+        }
+        Ok(RunExecution {
+            status,
+            review_policy,
+            stages,
+            gates,
+            budget,
+            reserved_micros,
+            confirmed_micros,
+            estimates,
+        })
+    }
+
+    pub fn update_run_status(
+        &self,
+        run_id: &str,
+        expected: &[&str],
+        next: &str,
+        blockers: Option<&[String]>,
+    ) -> Result<bool, RuntimeError> {
+        let mut connection = self.connection.lock();
+        let transaction = connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(store_unavailable)?;
+        let now = chrono::Utc::now().timestamp_millis();
+        let placeholders = expected
+            .iter()
+            .map(|status| format!("'{status}'"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let started = if next == "running" {
+            ", started_at = COALESCE(started_at, :now)"
+        } else if [
+            "completed",
+            "completed_with_warnings",
+            "failed",
+            "canceled",
+        ]
+        .contains(&next)
+        {
+            ", finished_at = COALESCE(finished_at, :now)"
+        } else {
+            ""
+        };
+        let blockers_clause = if blockers.is_some() {
+            ", blockers_json = :blockers"
+        } else {
+            ""
+        };
+        let sql = format!(
+            "UPDATE production_runs SET status = :next{started}{blockers_clause}
+              WHERE id = :run_id AND status IN ({placeholders})"
+        );
+        let blockers_json = blockers
+            .map(serde_json::to_string)
+            .transpose()
+            .map_err(store_unavailable)?;
+        let mut statement = transaction.prepare(&sql).map_err(store_unavailable)?;
+        let updated = if let Some(blockers_json) = &blockers_json {
+            statement
+                .execute(rusqlite::named_params! {
+                    ":next": next,
+                    ":now": now,
+                    ":blockers": blockers_json,
+                    ":run_id": run_id,
+                })
+                .map_err(store_unavailable)?
+        } else {
+            statement
+                .execute(rusqlite::named_params! {
+                    ":next": next,
+                    ":now": now,
+                    ":run_id": run_id,
+                })
+                .map_err(store_unavailable)?
+        };
+        drop(statement);
+        if updated == 1 {
+            transaction
+                .execute(
+                    "INSERT INTO runtime_events(
+                        event_version, entity_type, entity_id, event_type, payload_json, created_at
+                     ) VALUES('1', 'production_run', ?1, 'production.run.status', ?2, ?3)",
+                    params![
+                        run_id,
+                        json!({ "status": next }).to_string(),
+                        now
+                    ],
+                )
+                .map_err(store_unavailable)?;
+        }
+        transaction.commit().map_err(store_unavailable)?;
+        Ok(updated == 1)
+    }
+
+    /// Transition one stage and optionally record its provider task, result, and
+    /// usage-ledger entries, in a single transaction.
+    #[allow(clippy::too_many_arguments)]
+    pub fn update_stage(
+        &self,
+        run_id: &str,
+        stage_key: &str,
+        expected: &[&str],
+        next: &str,
+        task_id: Option<&str>,
+        result: Option<&Value>,
+        blocked_reason: Option<&Value>,
+        ledger: &[(&str, i64, &str)],
+    ) -> Result<bool, RuntimeError> {
+        let mut connection = self.connection.lock();
+        let transaction = connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(store_unavailable)?;
+        let now = chrono::Utc::now().timestamp_millis();
+        let stage_run_id = transaction
+            .query_row(
+                "SELECT id FROM stage_runs WHERE run_id = ?1 AND stage_key = ?2",
+                params![run_id, stage_key],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()
+            .map_err(store_unavailable)?
+            .ok_or_else(|| {
+                RuntimeError::new(
+                    "INVALID_ARGUMENT",
+                    format!("StageRun not found: {stage_key}"),
+                )
+            })?;
+        let placeholders = expected
+            .iter()
+            .map(|status| format!("'{status}'"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let updated = transaction
+            .execute(
+                &format!(
+                    "UPDATE stage_runs
+                        SET status = ?1,
+                            task_id = COALESCE(?2, task_id),
+                            result_json = COALESCE(?3, result_json),
+                            blocked_reason_json = ?4,
+                            started_at = CASE WHEN ?1 = 'running'
+                                THEN COALESCE(started_at, ?5) ELSE started_at END,
+                            finished_at = CASE WHEN ?1 IN ('succeeded', 'failed', 'skipped', 'canceled')
+                                THEN COALESCE(finished_at, ?5) ELSE finished_at END
+                      WHERE id = ?6 AND status IN ({placeholders})"
+                ),
+                params![
+                    next,
+                    task_id,
+                    result.map(Value::to_string),
+                    blocked_reason.map(Value::to_string),
+                    now,
+                    stage_run_id
+                ],
+            )
+            .map_err(store_unavailable)?;
+        if updated == 1 {
+            for (entry_kind, amount_micros, note) in ledger {
+                transaction
+                    .execute(
+                        "INSERT INTO usage_ledger(
+                            run_id, stage_run_id, entry_kind, amount_micros, unit_code, note, created_at
+                         ) VALUES(?1, ?2, ?3, ?4, 'CNY', ?5, ?6)",
+                        params![run_id, stage_run_id, entry_kind, amount_micros, note, now],
+                    )
+                    .map_err(store_unavailable)?;
+            }
+            transaction
+                .execute(
+                    "INSERT INTO runtime_events(
+                        event_version, entity_type, entity_id, event_type, payload_json, created_at
+                     ) VALUES('1', 'production_run', ?1, 'production.stage.status', ?2, ?3)",
+                    params![
+                        run_id,
+                        json!({
+                            "stageKey": stage_key,
+                            "stageRunId": stage_run_id,
+                            "status": next,
+                            "taskId": task_id
+                        })
+                        .to_string(),
+                        now
+                    ],
+                )
+                .map_err(store_unavailable)?;
+        }
+        transaction.commit().map_err(store_unavailable)?;
+        Ok(updated == 1)
+    }
+
+    /// Submit a stage child task from the scheduler (system actor). The
+    /// idempotency key is derived from run + stage so recovery never duplicates.
+    pub fn submit_stage_task(
+        &self,
+        run_id: &str,
+        stage_key: &str,
+        command_name: &str,
+        args: &Value,
+    ) -> Result<TaskReceipt, RuntimeError> {
+        let payload_hash = super::ProductionRuntime::hash_payload(&json!({
+            "command": command_name,
+            "args": args,
+        }))
+        .map_err(|error| RuntimeError::new("RUNTIME_UNAVAILABLE", error.to_string()))?;
+        self.submit_task(
+            &super::ProductionRuntime::new_id("cmd"),
+            "system",
+            "production_scheduler",
+            &format!("stage:{run_id}:{stage_key}"),
+            &payload_hash,
+            command_name,
+            args,
+            2_000,
         )
     }
 
@@ -396,6 +1056,24 @@ impl RuntimeStore {
         worker_id: &str,
         lease_ms: i64,
     ) -> Result<Option<ClaimedTask>, RuntimeError> {
+        self.claim_next_task_filtered(worker_id, lease_ms, None)
+    }
+
+    /// Claim the next runnable task, optionally restricted to scheduler tasks
+    /// (`Some(true)` = only `production.run`, `Some(false)` = everything else).
+    /// The split lets the scheduler thread block on child tasks that a second
+    /// executor thread claims, without the two competing for the same work.
+    pub fn claim_next_task_filtered(
+        &self,
+        worker_id: &str,
+        lease_ms: i64,
+        scheduler_only: Option<bool>,
+    ) -> Result<Option<ClaimedTask>, RuntimeError> {
+        let kind_clause = match scheduler_only {
+            Some(true) => " AND kind = 'production.run'",
+            Some(false) => " AND kind != 'production.run'",
+            None => "",
+        };
         let mut connection = self.connection.lock();
         let transaction = connection
             .transaction_with_behavior(TransactionBehavior::Immediate)
@@ -403,12 +1081,14 @@ impl RuntimeStore {
         let now = chrono::Utc::now().timestamp_millis();
         let candidate = transaction
             .query_row(
-                "SELECT id, kind, args_json, progress_json
-                   FROM runtime_tasks
-                  WHERE status = 'queued'
-                     OR (status = 'working' AND lease_expires_at <= ?1)
-                  ORDER BY created_at, id
-                  LIMIT 1",
+                &format!(
+                    "SELECT id, kind, args_json, progress_json
+                       FROM runtime_tasks
+                      WHERE (status = 'queued'
+                         OR (status = 'working' AND lease_expires_at <= ?1)){kind_clause}
+                      ORDER BY created_at, id
+                      LIMIT 1"
+                ),
                 [now],
                 |row| {
                     Ok((
@@ -710,8 +1390,8 @@ impl RuntimeStore {
                 .execute(
                     "INSERT INTO stage_runs(
                         id, run_id, stage_key, capability_id, spec_path, title, summary,
-                        status, input_hash, blocked_reason_json, created_at
-                     ) VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+                        status, input_hash, input_json, blocked_reason_json, created_at
+                     ) VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
                     params![
                         stage_run_id,
                         production_run_id,
@@ -722,6 +1402,7 @@ impl RuntimeStore {
                         stage.summary,
                         stage.status,
                         stage.input_hash,
+                        stage.input.to_string(),
                         stage.blocked_reason.as_ref().map(Value::to_string),
                         now
                     ],
@@ -729,6 +1410,44 @@ impl RuntimeStore {
                 .map_err(store_unavailable)?;
             stage_run_ids.push((stage.stage_key.clone(), stage_run_id));
         }
+        for gate in &draft.gates {
+            let gate_id = super::ProductionRuntime::new_id("production_gate");
+            transaction
+                .execute(
+                    "INSERT INTO production_gates(
+                        id, run_id, gate_kind, gate_type, status, created_at, updated_at
+                     ) VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?6)",
+                    params![
+                        gate_id,
+                        production_run_id,
+                        gate.get("gateKind").and_then(Value::as_str).unwrap_or("director"),
+                        gate.get("gateType").and_then(Value::as_str).unwrap_or_default(),
+                        gate.get("status").and_then(Value::as_str).unwrap_or("required"),
+                        now
+                    ],
+                )
+                .map_err(store_unavailable)?;
+        }
+        let route_plan = super::production::build_route_plan(
+            &draft
+                .stages
+                .iter()
+                .map(|stage| {
+                    (
+                        stage.stage_key.clone(),
+                        stage.capability_id.clone(),
+                        stage.input.clone(),
+                    )
+                })
+                .collect::<Vec<_>>(),
+        );
+        transaction
+            .execute(
+                "INSERT INTO run_route_plans(run_id, status, plan_json, created_at, updated_at)
+                 VALUES(?1, 'proposed', ?2, ?3, ?3)",
+                params![production_run_id, route_plan.to_string(), now],
+            )
+            .map_err(store_unavailable)?;
         let stage_id = |stage_key: &str| {
             stage_run_ids
                 .iter()
@@ -800,7 +1519,9 @@ impl RuntimeStore {
             "projectionHash": projection_hash,
             "stageCount": draft.stages.len(),
             "status": "action_required",
-            "blockers": draft.blockers
+            "blockers": draft.blockers,
+            "routePlan": route_plan,
+            "gates": draft.gates
         });
         let completed = transaction
             .execute(

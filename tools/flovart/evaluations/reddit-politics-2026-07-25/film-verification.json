@@ -1,0 +1,68 @@
+{
+  "renderedAt": "2026-07-24T17:28:00.2644783+00:00",
+  "output": "reddit-politics-one-empty-chair.mp4",
+  "sha256": "9f442189bb607a1dab42a8035417ea02cafddf934ebaf822d0cddd21cd1771c8",
+  "durationSec": 60.0,
+  "byteSize": 16179609,
+  "streams": [
+    {
+      "index": 0,
+      "codec_name": "h264",
+      "codec_type": "video",
+      "width": 1280,
+      "height": 720,
+      "r_frame_rate": "24/1"
+    },
+    {
+      "index": 1,
+      "codec_name": "aac",
+      "codec_type": "audio",
+      "r_frame_rate": "0/0"
+    }
+  ],
+  "sourceTasks": [
+    {
+      "slot": "visual-01",
+      "taskId": "task_019f9519-02e3-7b21-bd3e-86479e0686a6"
+    },
+    {
+      "slot": "visual-02",
+      "taskId": "task_019f9511-f256-70b3-ad30-44076635079c"
+    },
+    {
+      "slot": "visual-03",
+      "taskId": "task_019f951e-b344-78e2-8b94-d514ec98178d"
+    },
+    {
+      "slot": "visual-04",
+      "taskId": "task_019f951e-9c30-7120-90a2-a528eb677209"
+    },
+    {
+      "slot": "visual-05",
+      "taskId": "task_019f951e-b765-79a2-95f7-db55bcfc71bb"
+    },
+    {
+      "slot": "visual-06",
+      "taskId": "task_019f951e-a0ea-7683-bea7-0b38a1e681d9"
+    },
+    {
+      "slot": "visual-07",
+      "taskId": "task_019f951e-bb4e-72a0-a043-7bdff9113b36"
+    },
+    {
+      "slot": "visual-08",
+      "taskId": "task_019f951e-a572-72f1-802f-c9d6edba4039"
+    },
+    {
+      "slot": "visual-09",
+      "taskId": "task_019f951e-befa-7303-af52-ce7320732b89"
+    },
+    {
+      "slot": "visual-10",
+      "taskId": "task_019f951e-ae73-7771-827e-1b1009c4a79d"
+    }
+  ],
+  "generatedAudioDiscarded": true,
+  "narration": "narration.zh-CN.wav",
+  "captions": "captions.zh-CN.srt"
+}

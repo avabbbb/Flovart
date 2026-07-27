@@ -367,6 +367,112 @@ impl ProductionRuntime {
                     })?;
                 self.store.get_production_status(run_id)
             }
+            "production.approve" => {
+                let idempotency_key = envelope
+                    .get("idempotencyKey")
+                    .and_then(Value::as_str)
+                    .ok_or_else(|| {
+                        RuntimeError::new(
+                            "INVALID_ARGUMENT",
+                            "production.approve requires idempotencyKey",
+                        )
+                    })?;
+                let args = &envelope["args"];
+                validate_exact_args(
+                    args,
+                    &["runId", "gateType", "decision", "hardLimitMicros", "note"],
+                )?;
+                let run_id = args
+                    .get("runId")
+                    .and_then(Value::as_str)
+                    .filter(|value| !value.trim().is_empty())
+                    .ok_or_else(|| {
+                        RuntimeError::new("INVALID_ARGUMENT", "production.approve requires runId")
+                    })?;
+                let gate_type = args
+                    .get("gateType")
+                    .and_then(Value::as_str)
+                    .filter(|value| !value.trim().is_empty())
+                    .ok_or_else(|| {
+                        RuntimeError::new(
+                            "INVALID_ARGUMENT",
+                            "production.approve requires gateType",
+                        )
+                    })?;
+                let decision = optional_string(args, "decision")?.unwrap_or("approved");
+                let hard_limit_micros = optional_i64(args, "hardLimitMicros")?;
+                let note = optional_string(args, "note")?;
+                let payload_hash = Self::hash_payload(&serde_json::json!({
+                    "command": "production.approve",
+                    "args": args,
+                }))
+                .map_err(|error| RuntimeError::new("RUNTIME_UNAVAILABLE", error.to_string()))?;
+                self.store.approve_production_gate(
+                    envelope["commandId"].as_str().unwrap_or_default(),
+                    envelope["actor"]["kind"].as_str().unwrap_or_default(),
+                    envelope["actor"]["instanceId"].as_str().unwrap_or_default(),
+                    idempotency_key,
+                    &payload_hash,
+                    run_id,
+                    gate_type,
+                    decision,
+                    hard_limit_micros,
+                    note,
+                )
+            }
+            "production.run" => {
+                let idempotency_key = envelope
+                    .get("idempotencyKey")
+                    .and_then(Value::as_str)
+                    .ok_or_else(|| {
+                        RuntimeError::new(
+                            "INVALID_ARGUMENT",
+                            "production.run requires idempotencyKey",
+                        )
+                    })?;
+                let args = &envelope["args"];
+                validate_exact_args(args, &["runId"])?;
+                let run_id = args
+                    .get("runId")
+                    .and_then(Value::as_str)
+                    .filter(|value| !value.trim().is_empty())
+                    .ok_or_else(|| {
+                        RuntimeError::new("INVALID_ARGUMENT", "production.run requires runId")
+                    })?;
+                // Fail fast when the run has not cleared its system gates.
+                let status = self.store.get_production_status(run_id)?;
+                let run_status = status.get("status").and_then(Value::as_str).unwrap_or("");
+                if !["queued", "running", "recovering"].contains(&run_status) {
+                    return Err(RuntimeError {
+                        code: "PRECONDITION_FAILED".to_owned(),
+                        message: format!(
+                            "ProductionRun must be approved before execution (status: {run_status})."
+                        ),
+                        retryable: false,
+                        details: Some(serde_json::json!({
+                            "runStatus": run_status,
+                            "blockers": status.get("blockers")
+                        })),
+                        action_url: None,
+                    });
+                }
+                let normalized_args = serde_json::json!({ "runId": run_id });
+                let payload_hash = Self::hash_payload(&serde_json::json!({
+                    "command": "production.run",
+                    "args": normalized_args,
+                }))
+                .map_err(|error| RuntimeError::new("RUNTIME_UNAVAILABLE", error.to_string()))?;
+                self.store
+                    .submit_production_run(
+                        envelope["commandId"].as_str().unwrap_or_default(),
+                        envelope["actor"]["kind"].as_str().unwrap_or_default(),
+                        envelope["actor"]["instanceId"].as_str().unwrap_or_default(),
+                        idempotency_key,
+                        &payload_hash,
+                        &normalized_args,
+                    )
+                    .and_then(to_value)
+            }
             "workflow.projection.get" => {
                 let args = &envelope["args"];
                 validate_exact_args(args, &["projectId"])?;

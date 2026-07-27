@@ -1,0 +1,53 @@
+{
+  "schemaVersion": "1",
+  "items": [
+    {
+      "slot": "visual-04",
+      "kind": "image",
+      "idempotencyKey": "reddit-politics-film-image-04-v1",
+      "prompt": "Editorial paper-cut infographic for a neutral news explainer. A horizontal political career timeline made from layered newspaper strips: a small House chamber icon on the left, four repeated Senate chair icons across the middle, and one abruptly torn final strip on the right. Restrained navy, cream and muted red palette, tactile paper fibers, precise clean composition, no people, no faces, no logos, no readable text, generous lower caption safe area, 16:9."
+    },
+    {
+      "slot": "visual-06",
+      "kind": "image",
+      "idempotencyKey": "reddit-politics-film-image-06-v1",
+      "prompt": "Editorial paper-cut systems diagram for a neutral news explainer. South Carolina state outline at left, a governor's pen icon, a temporary Senate chair, a calendar, and a ballot box connected by clean paper arrows. Navy, cream and muted red, subtle shadows, tactile torn-paper layers, no people, no faces, no party logos, no readable text, clear left-to-right flow, 16:9."
+    },
+    {
+      "slot": "visual-08",
+      "kind": "image",
+      "idempotencyKey": "reddit-politics-film-image-08-v1",
+      "prompt": "Neutral editorial paper collage of an election calendar. July calendar pages lead into a November ballot box while several abstract candidate path lines converge, with a small South Carolina silhouette and a distant U.S. Capitol. Restrained navy, cream and red palette, no people, no faces, no campaign logos, no readable text, cinematic depth, 16:9."
+    },
+    {
+      "slot": "visual-10",
+      "kind": "image",
+      "idempotencyKey": "reddit-politics-film-image-10-v1",
+      "prompt": "Closing frame for a neutral institutional news explainer in tactile paper-cut style. A single blue Senate chair rests at the center of a balanced red and blue semicircle, supported underneath by visible paper gears and a ballot box, suggesting institutions absorbing an unexpected vacancy. Calm navy, cream and muted red, no people, no faces, no logos, no readable text, strong central composition, 16:9."
+    },
+    {
+      "slot": "visual-03",
+      "kind": "video",
+      "idempotencyKey": "reddit-politics-film-video-03-v1",
+      "prompt": "Animated editorial paper collage, neutral news explainer. Dozens of small blank discussion cards rise from different corners and converge around one empty Senate chair; two counters made of paper blocks rapidly grow to suggest unusually high public attention without displaying numbers or text. Smooth parallax, restrained navy cream and red, no logos, no readable text, no faces, no political advocacy, 16:9."
+    },
+    {
+      "slot": "visual-05",
+      "kind": "video",
+      "idempotencyKey": "reddit-politics-film-video-05-v1",
+      "prompt": "Animated institutional flowchart in tactile paper-cut style. A South Carolina state silhouette slides in, a governor's pen stamps a temporary appointment card, an empty Senate chair fills, then a calendar and ballot box unfold in sequence. Neutral navy cream and muted red, smooth mechanical motion, no people, no faces, no logos, no readable text, no political advocacy, 16:9."
+    },
+    {
+      "slot": "visual-07",
+      "kind": "video",
+      "idempotencyKey": "reddit-politics-film-video-07-v1",
+      "prompt": "Animated editorial paper collage for a neutral news explainer. A temporary Senate chair moves onto a paper stage while several abstract candidate tokens enter along different paths; calendar pages turn and a ballot box rises from the table. No identifiable people, no faces, no campaign branding, no readable text, calm navy cream and red palette, smooth parallax, 16:9."
+    },
+    {
+      "slot": "visual-09",
+      "kind": "video",
+      "idempotencyKey": "reddit-politics-film-video-09-v1",
+      "prompt": "Animated paper-cut infographic showing one Senate seat as a movable tile. The tile shifts between a South Carolina map, a Senate floor diagram, a committee agenda stack, and a midterm ballot box, demonstrating how one vacancy changes several systems at once. Neutral balanced red and blue palette, no people, no faces, no logos, no readable text, no political advocacy, cinematic parallax, 16:9."
+    }
+  ]
+}

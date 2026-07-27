@@ -10,6 +10,8 @@ export const RUNTIME_COMMAND_NAMES = Object.freeze([
   'provider.status',
   'production.dry-run',
   'production.status',
+  'production.approve',
+  'production.run',
   'workflow.projection.get',
   'generate.image',
   'generate.video',
@@ -19,6 +21,8 @@ export const RUNTIME_WRITE_COMMAND_NAMES = Object.freeze([
   'runtime.test.delay',
   'task.cancel',
   'production.dry-run',
+  'production.approve',
+  'production.run',
   'generate.image',
   'generate.video',
 ]);

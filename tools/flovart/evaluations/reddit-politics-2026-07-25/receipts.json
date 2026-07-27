@@ -1,0 +1,69 @@
+{
+  "submittedAt": "2026-07-24T17:14:08.0362717+00:00",
+  "receipts": [
+    {
+      "slot": "visual-04",
+      "kind": "image",
+      "idempotencyKey": "reddit-politics-film-image-04-v1",
+      "taskId": "task_019f951e-9c30-7120-90a2-a528eb677209",
+      "commandId": "cmd_019f951e-9ad0-7569-907b-f92d7097c689",
+      "status": "queued"
+    },
+    {
+      "slot": "visual-06",
+      "kind": "image",
+      "idempotencyKey": "reddit-politics-film-image-06-v1",
+      "taskId": "task_019f951e-a0ea-7683-bea7-0b38a1e681d9",
+      "commandId": "cmd_019f951e-9fab-73c1-b469-3f54bdbbdc46",
+      "status": "queued"
+    },
+    {
+      "slot": "visual-08",
+      "kind": "image",
+      "idempotencyKey": "reddit-politics-film-image-08-v1",
+      "taskId": "task_019f951e-a572-72f1-802f-c9d6edba4039",
+      "commandId": "cmd_019f951e-a469-74ae-bb0e-0dde2581251a",
+      "status": "queued"
+    },
+    {
+      "slot": "visual-10",
+      "kind": "image",
+      "idempotencyKey": "reddit-politics-film-image-10-v1",
+      "taskId": "task_019f951e-ae73-7771-827e-1b1009c4a79d",
+      "commandId": "cmd_019f951e-ab5a-74c0-8090-77fe0680c024",
+      "status": "queued"
+    },
+    {
+      "slot": "visual-03",
+      "kind": "video",
+      "idempotencyKey": "reddit-politics-film-video-03-v1",
+      "taskId": "task_019f951e-b344-78e2-8b94-d514ec98178d",
+      "commandId": "cmd_019f951e-b243-77fb-9621-58ed4fa4c09b",
+      "status": "queued"
+    },
+    {
+      "slot": "visual-05",
+      "kind": "video",
+      "idempotencyKey": "reddit-politics-film-video-05-v1",
+      "taskId": "task_019f951e-b765-79a2-95f7-db55bcfc71bb",
+      "commandId": "cmd_019f951e-b655-764b-aca8-ab054fde25ae",
+      "status": "queued"
+    },
+    {
+      "slot": "visual-07",
+      "kind": "video",
+      "idempotencyKey": "reddit-politics-film-video-07-v1",
+      "taskId": "task_019f951e-bb4e-72a0-a043-7bdff9113b36",
+      "commandId": "cmd_019f951e-ba7a-70b3-85a4-15caede92b09",
+      "status": "queued"
+    },
+    {
+      "slot": "visual-09",
+      "kind": "video",
+      "idempotencyKey": "reddit-politics-film-video-09-v1",
+      "taskId": "task_019f951e-befa-7303-af52-ce7320732b89",
+      "commandId": "cmd_019f951e-be1c-701b-9594-477105508b2d",
+      "status": "queued"
+    }
+  ]
+}

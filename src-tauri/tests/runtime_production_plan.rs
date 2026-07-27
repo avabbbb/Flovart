@@ -130,14 +130,63 @@ fn production_spec_compiles_to_a_durable_run_stage_dag_and_workflow_projection()
             .expect("production status");
         assert_eq!(status["status"], "action_required");
         assert_eq!(status["stages"].as_array().expect("stages").len(), 7);
+        // Narration-only audio compiles to the local audio.tts capability, so the
+        // remaining blockers are the two unapproved system gates.
         assert_eq!(
             status["blockers"],
-            json!([
-                "CAPABILITY_UNAVAILABLE",
-                "ROUTE_PLAN_REQUIRED",
-                "RUN_BUDGET_REQUIRED"
-            ])
+            json!(["ROUTE_PLAN_REQUIRED", "RUN_BUDGET_REQUIRED"])
         );
+
+        // Approving the route-plan gate alone keeps the run blocked on budget.
+        let route_decision = runtime
+            .execute(&envelope(
+                "production.approve",
+                json!({ "runId": run_id, "gateType": "route-plan" }),
+                Some("approve-route-plan-v1"),
+            ))
+            .expect("route-plan approval");
+        assert_eq!(route_decision["runStatus"], "action_required");
+        assert_eq!(route_decision["blockers"], json!(["RUN_BUDGET_REQUIRED"]));
+
+        // production.run must refuse to execute an unapproved run.
+        let premature = runtime.execute(&envelope(
+            "production.run",
+            json!({ "runId": run_id }),
+            Some("premature-run-v1"),
+        ));
+        assert_eq!(
+            premature.expect_err("premature run must fail").code,
+            "PRECONDITION_FAILED"
+        );
+
+        // Approving the budget gate advances the run to queued.
+        let budget_decision = runtime
+            .execute(&envelope(
+                "production.approve",
+                json!({
+                    "runId": run_id,
+                    "gateType": "run-budget",
+                    "hardLimitMicros": 5_000_000
+                }),
+                Some("approve-run-budget-v1"),
+            ))
+            .expect("run-budget approval");
+        assert_eq!(budget_decision["runStatus"], "queued");
+        assert_eq!(budget_decision["blockers"], json!([]));
+
+        // Replaying the same approval with the same key returns the same result.
+        let replay = runtime
+            .execute(&envelope(
+                "production.approve",
+                json!({
+                    "runId": run_id,
+                    "gateType": "run-budget",
+                    "hardLimitMicros": 5_000_000
+                }),
+                Some("approve-run-budget-v1"),
+            ))
+            .expect("idempotent approval replay");
+        assert_eq!(replay["runStatus"], "queued");
 
         let projection_response = runtime
             .execute(&envelope(
@@ -180,7 +229,8 @@ fn production_spec_compiles_to_a_durable_run_stage_dag_and_workflow_projection()
             None,
         ))
         .expect("durable production status");
-    assert_eq!(status["status"], "action_required");
+    // Gate decisions survive restart: the approved run stays queued.
+    assert_eq!(status["status"], "queued");
     let projection_response = restarted
         .execute(&envelope(
             "workflow.projection.get",

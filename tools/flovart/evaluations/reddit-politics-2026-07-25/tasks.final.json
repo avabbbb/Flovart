@@ -1,0 +1,310 @@
+{
+  "checkedAt": "2026-07-24T17:24:30.7574816+00:00",
+  "terminal": true,
+  "tasks": [
+    {
+      "slot": "visual-04",
+      "kind": "image",
+      "taskId": "task_019f951e-9c30-7120-90a2-a528eb677209",
+      "status": "completed",
+      "progress": {
+        "phase": "downloading",
+        "priceQuote": {
+          "currency": "CNY",
+          "estimatedPrice": 0.1,
+          "isFreeThisCall": false
+        },
+        "productModel": "flovart:gpt-image-2",
+        "provider": "runningHub",
+        "providerTaskId": "2080703062271741953",
+        "routeId": "rhart-image-g-2/text-to-image"
+      },
+      "result": {
+        "artifact": {
+          "byteSize": 2413360,
+          "durationSec": null,
+          "kind": "image",
+          "mimeType": "image/png",
+          "sha256": "a07cb3fd95bd59f2c282423806c68ea5cba8cf119f1e7eef91ca59f40d39ebd9",
+          "storeRelpath": "runtime-artifacts/images/task_019f951e-9c30-7120-90a2-a528eb677209.png"
+        },
+        "priceQuote": {
+          "currency": "CNY",
+          "estimatedPrice": 0.1,
+          "isFreeThisCall": false
+        },
+        "productModel": "flovart:gpt-image-2",
+        "provider": "runningHub",
+        "providerTaskId": "2080703062271741953",
+        "routeId": "rhart-image-g-2/text-to-image"
+      },
+      "error": null
+    },
+    {
+      "slot": "visual-06",
+      "kind": "image",
+      "taskId": "task_019f951e-a0ea-7683-bea7-0b38a1e681d9",
+      "status": "completed",
+      "progress": {
+        "phase": "downloading",
+        "priceQuote": {
+          "currency": "CNY",
+          "estimatedPrice": 0.1,
+          "isFreeThisCall": false
+        },
+        "productModel": "flovart:gpt-image-2",
+        "provider": "runningHub",
+        "providerTaskId": "2080703279717048321",
+        "routeId": "rhart-image-g-2/text-to-image"
+      },
+      "result": {
+        "artifact": {
+          "byteSize": 2562393,
+          "durationSec": null,
+          "kind": "image",
+          "mimeType": "image/png",
+          "sha256": "68ff25a180002cf357ff6c9dfbbbcaa1cc62c2726e2cb55515a95b278b5d4892",
+          "storeRelpath": "runtime-artifacts/images/task_019f951e-a0ea-7683-bea7-0b38a1e681d9.png"
+        },
+        "priceQuote": {
+          "currency": "CNY",
+          "estimatedPrice": 0.1,
+          "isFreeThisCall": false
+        },
+        "productModel": "flovart:gpt-image-2",
+        "provider": "runningHub",
+        "providerTaskId": "2080703279717048321",
+        "routeId": "rhart-image-g-2/text-to-image"
+      },
+      "error": null
+    },
+    {
+      "slot": "visual-08",
+      "kind": "image",
+      "taskId": "task_019f951e-a572-72f1-802f-c9d6edba4039",
+      "status": "completed",
+      "progress": {
+        "phase": "downloading",
+        "priceQuote": {
+          "currency": "CNY",
+          "estimatedPrice": 0.1,
+          "isFreeThisCall": false
+        },
+        "productModel": "flovart:gpt-image-2",
+        "provider": "runningHub",
+        "providerTaskId": "2080703541001199618",
+        "routeId": "rhart-image-g-2/text-to-image"
+      },
+      "result": {
+        "artifact": {
+          "byteSize": 2411774,
+          "durationSec": null,
+          "kind": "image",
+          "mimeType": "image/png",
+          "sha256": "db0eaa90cd14a490cbda6ae5cee2242c5528fd82bd6357d8024427b9ab875432",
+          "storeRelpath": "runtime-artifacts/images/task_019f951e-a572-72f1-802f-c9d6edba4039.png"
+        },
+        "priceQuote": {
+          "currency": "CNY",
+          "estimatedPrice": 0.1,
+          "isFreeThisCall": false
+        },
+        "productModel": "flovart:gpt-image-2",
+        "provider": "runningHub",
+        "providerTaskId": "2080703541001199618",
+        "routeId": "rhart-image-g-2/text-to-image"
+      },
+      "error": null
+    },
+    {
+      "slot": "visual-10",
+      "kind": "image",
+      "taskId": "task_019f951e-ae73-7771-827e-1b1009c4a79d",
+      "status": "completed",
+      "progress": {
+        "phase": "downloading",
+        "priceQuote": {
+          "currency": "CNY",
+          "estimatedPrice": 0.1,
+          "isFreeThisCall": false
+        },
+        "productModel": "flovart:gpt-image-2",
+        "provider": "runningHub",
+        "providerTaskId": "2080703803258458113",
+        "routeId": "rhart-image-g-2/text-to-image"
+      },
+      "result": {
+        "artifact": {
+          "byteSize": 2338025,
+          "durationSec": null,
+          "kind": "image",
+          "mimeType": "image/png",
+          "sha256": "2cab40dac0926dc8302ea08ac82510f93927b3b87222b9dd5ed127b276e71179",
+          "storeRelpath": "runtime-artifacts/images/task_019f951e-ae73-7771-827e-1b1009c4a79d.png"
+        },
+        "priceQuote": {
+          "currency": "CNY",
+          "estimatedPrice": 0.1,
+          "isFreeThisCall": false
+        },
+        "productModel": "flovart:gpt-image-2",
+        "provider": "runningHub",
+        "providerTaskId": "2080703803258458113",
+        "routeId": "rhart-image-g-2/text-to-image"
+      },
+      "error": null
+    },
+    {
+      "slot": "visual-03",
+      "kind": "video",
+      "taskId": "task_019f951e-b344-78e2-8b94-d514ec98178d",
+      "status": "completed",
+      "progress": {
+        "phase": "downloading",
+        "priceQuote": {
+          "currency": "CNY",
+          "estimatedPrice": 0.24,
+          "isFreeThisCall": false
+        },
+        "productModel": "flovart:grok-imagine-video-1.5",
+        "provider": "runningHub",
+        "providerTaskId": "2080704063775117314",
+        "routeId": "rhart-video-g/text-to-video"
+      },
+      "result": {
+        "artifact": {
+          "byteSize": 2356320,
+          "durationSec": 6,
+          "kind": "video",
+          "mimeType": "video/mp4",
+          "sha256": "72036875de60c0c6f5dabcb2f3575945fee5e9e8d53a33301bc9c4ec3752b3ae",
+          "storeRelpath": "runtime-artifacts/videos/task_019f951e-b344-78e2-8b94-d514ec98178d.mp4"
+        },
+        "priceQuote": {
+          "currency": "CNY",
+          "estimatedPrice": 0.24,
+          "isFreeThisCall": false
+        },
+        "productModel": "flovart:grok-imagine-video-1.5",
+        "provider": "runningHub",
+        "providerTaskId": "2080704063775117314",
+        "routeId": "rhart-video-g/text-to-video"
+      },
+      "error": null
+    },
+    {
+      "slot": "visual-05",
+      "kind": "video",
+      "taskId": "task_019f951e-b765-79a2-95f7-db55bcfc71bb",
+      "status": "completed",
+      "progress": {
+        "phase": "downloading",
+        "priceQuote": {
+          "currency": "CNY",
+          "estimatedPrice": 0.24,
+          "isFreeThisCall": false
+        },
+        "productModel": "flovart:grok-imagine-video-1.5",
+        "provider": "runningHub",
+        "providerTaskId": "2080704370949099522",
+        "routeId": "rhart-video-g/text-to-video"
+      },
+      "result": {
+        "artifact": {
+          "byteSize": 1362165,
+          "durationSec": 6,
+          "kind": "video",
+          "mimeType": "video/mp4",
+          "sha256": "1ee45de01ddcb8055956c41a0e54a61bc87f1793265c73b4291b737b70e05392",
+          "storeRelpath": "runtime-artifacts/videos/task_019f951e-b765-79a2-95f7-db55bcfc71bb.mp4"
+        },
+        "priceQuote": {
+          "currency": "CNY",
+          "estimatedPrice": 0.24,
+          "isFreeThisCall": false
+        },
+        "productModel": "flovart:grok-imagine-video-1.5",
+        "provider": "runningHub",
+        "providerTaskId": "2080704370949099522",
+        "routeId": "rhart-video-g/text-to-video"
+      },
+      "error": null
+    },
+    {
+      "slot": "visual-07",
+      "kind": "video",
+      "taskId": "task_019f951e-bb4e-72a0-a043-7bdff9113b36",
+      "status": "completed",
+      "progress": {
+        "phase": "downloading",
+        "priceQuote": {
+          "currency": "CNY",
+          "estimatedPrice": 0.24,
+          "isFreeThisCall": false
+        },
+        "productModel": "flovart:grok-imagine-video-1.5",
+        "provider": "runningHub",
+        "providerTaskId": "2080704672767029249",
+        "routeId": "rhart-video-g/text-to-video"
+      },
+      "result": {
+        "artifact": {
+          "byteSize": 2849961,
+          "durationSec": 6,
+          "kind": "video",
+          "mimeType": "video/mp4",
+          "sha256": "b814bea29332ea765d54c54a416770d950c6a554e17b5c020598d58ce03f3ed0",
+          "storeRelpath": "runtime-artifacts/videos/task_019f951e-bb4e-72a0-a043-7bdff9113b36.mp4"
+        },
+        "priceQuote": {
+          "currency": "CNY",
+          "estimatedPrice": 0.24,
+          "isFreeThisCall": false
+        },
+        "productModel": "flovart:grok-imagine-video-1.5",
+        "provider": "runningHub",
+        "providerTaskId": "2080704672767029249",
+        "routeId": "rhart-video-g/text-to-video"
+      },
+      "error": null
+    },
+    {
+      "slot": "visual-09",
+      "kind": "video",
+      "taskId": "task_019f951e-befa-7303-af52-ce7320732b89",
+      "status": "completed",
+      "progress": {
+        "phase": "downloading",
+        "priceQuote": {
+          "currency": "CNY",
+          "estimatedPrice": 0.24,
+          "isFreeThisCall": false
+        },
+        "productModel": "flovart:grok-imagine-video-1.5",
+        "provider": "runningHub",
+        "providerTaskId": "2080704933585620994",
+        "routeId": "rhart-video-g/text-to-video"
+      },
+      "result": {
+        "artifact": {
+          "byteSize": 2599382,
+          "durationSec": 6,
+          "kind": "video",
+          "mimeType": "video/mp4",
+          "sha256": "8d5efb63a08f001cd76b18202efac5fe67f09792e8d34659b14d7838bdde9527",
+          "storeRelpath": "runtime-artifacts/videos/task_019f951e-befa-7303-af52-ce7320732b89.mp4"
+        },
+        "priceQuote": {
+          "currency": "CNY",
+          "estimatedPrice": 0.24,
+          "isFreeThisCall": false
+        },
+        "productModel": "flovart:grok-imagine-video-1.5",
+        "provider": "runningHub",
+        "providerTaskId": "2080704933585620994",
+        "routeId": "rhart-video-g/text-to-video"
+      },
+      "error": null
+    }
+  ]
+}

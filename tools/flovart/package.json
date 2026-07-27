@@ -24,6 +24,7 @@
     "agent-kit.js",
     "product-models.js",
     "registry.js",
+    "runtime-command-surface.js",
     "managed-agent",
     "scripts",
     "skill",
@@ -43,7 +44,7 @@
     "image-generation",
     "video-generation"
   ],
-  "license": "MIT",
+  "license": "AGPL-3.0-only",
   "repository": {
     "type": "git",
     "url": "https://github.com/avabbbb/Flovart"

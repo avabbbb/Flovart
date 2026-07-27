@@ -1555,7 +1555,7 @@ Batch 逻辑已从独立 `handleBatchGenerate` 合并进 `handleGenerate`。Prom
   - `workflowGeneration.ts` 从富文本文档提取 `nodeId → @别名`，将真实媒体 URL/Blob、语义别名、Provider 输入序号和 `slotRole` 一起交给 Provider Adapter；`aiGateway.ts` 的绑定段明确要求不同角色、主体、首尾帧或风格参考不得互换。
 - **保留参考图原始比例**：新增全局开关 `WorkflowGenerationConfig.preserveReferenceAspectRatio`（图生图/图生视频都生效）。开启后，`workflowGeneration.ts` 会根据第一张图片参考节点的 `naturalWidth/naturalHeight` 计算最接近的支持比例并覆盖 `config.aspectRatio`，候选集来自 `capability.aspectRatios`（过滤掉 `adaptive`）。
   - `components/workflow/types.ts` 新增 `preserveReferenceAspectRatio?: boolean` 字段。
-  - `components/PromptBar.tsx` 在「更多」面板新增「参考图」分区，仅当 `generationMode ∈ {image, video}` 且 `imageReferenceChips.length > 0` 时显示，复用现有 ON/OFF 按钮风格。
+  - `components/PromptBar.tsx` 在「参数」面板的比例按钮行末尾新增「原比例」芯片（与「自适应」并列），仅当 `generationMode ∈ {image, video}` 且 `imageReferenceChips.length > 0` 时显示；选中后其余比例变灰且后端按参考图原始比例覆盖，点其他比例则自动关闭。
   - `WorkflowNodePromptBar.tsx` 通过 `patchConfig` 双向同步该开关到 `config.preserveReferenceAspectRatio`。
 
 ### 待用户验证要点
@@ -1565,8 +1565,8 @@ Batch 逻辑已从独立 `handleBatchGenerate` 合并进 `handleGenerate`。Prom
 - ③ 仅粘贴纯文本 `@角色1向左走`（别名后无空格）：素材库中名称唯一时自动创建并连接引用节点；存在两个同名素材时不自动选择，并显示未匹配提示。
 - ④ 分两行输入 `@角色1执行动作A` 与 `@角色2执行动作B`：抓包确认两张真实参考图、两个不同语义别名与各自 Provider 序号同时存在，未退化为只有提示词文字。
 - ⑤ 切换模型到一个条仅支持 `text-to-image` 的产品（如 `imagen-4`）：submode 面板的「图生图」应被禁用并显示有意义的 tooltip；强行不允许切到图生图。
-- ⑥ 打开「保留参考图原始比例」开关 + 连接一张宽高比非标准（如 3:2）的参考图：生成请求 payload 的 `aspectRatio` 应自动落在最接近的支持比例（`3:2` 或 fallback），与用户在 PromptBar 顶部比例选择中的值不同；关闭开关后恢复使用 PromptBar 选中比例。
-- ⑦ 图生视频场景下打开此开关，等价行为也应生效（解析第一张图片参考节点的原始宽高）。
+- ⑥ 在「参数」面板比例行点击「原比例」芯片 + 连接一张宽高比非标准（如 3:2）的参考图：生成请求 payload 的 `aspectRatio` 应自动落在最接近的支持比例（`3:2` 或 fallback），与用户在 PromptBar 顶部比例选择中的值不同；再点其他比例芯片则恢复使用该选中比例。
+- ⑦ 图生视频场景下点击「原比例」芯片，等价行为也应生效（解析第一张图片参考节点的原始宽高）。
 
 ## Provider 模型能力、分镜双 Prompt 与 Base URL 删除修复
 

@@ -1,0 +1,34 @@
+{
+  "testedAt": "2026-07-24T17:55:12.883Z",
+  "targetUrl": "http://127.0.0.1:1635/#/app",
+  "workspace": {
+    "state": "ready",
+    "clients": 1,
+    "projectId": "fK25JTblQ2VmQubBGhTwT"
+  },
+  "graph": {
+    "nodeCount": 4,
+    "connectionCount": 3,
+    "selectedNodeIds": [
+      "reddit-final-film"
+    ],
+    "scriptTitle": "旁白脚本 · 已细修",
+    "scriptPosition": {
+      "x": 500,
+      "y": 140
+    },
+    "finalArtifactRef": "reddit-politics-one-empty-chair.mp4",
+    "finalArtifactSha256": "9f442189bb607a1dab42a8035417ea02cafddf934ebaf822d0cddd21cd1771c8"
+  },
+  "assertions": {
+    "create": true,
+    "connect": true,
+    "update": true,
+    "move": true,
+    "select": true,
+    "viewport": true,
+    "screenshot": true
+  },
+  "consoleErrors": [],
+  "screenshot": "workflow-cli-sync.png"
+}

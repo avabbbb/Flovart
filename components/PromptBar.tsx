@@ -29,8 +29,8 @@ import {
     getEffectiveProductModelCapabilities,
     getEffectiveReferenceLimits,
     explainReferenceCompatibility,
-    getRoutedVideoModes,
-    getRoutedImageModes,
+    getResolvableVideoModes,
+    getResolvableImageModes,
     routedImageSupportsImageToImage,
     IMAGE_MODE_ORDER,
     explainUnsupportedVideoMode,
@@ -542,11 +542,11 @@ export const PromptBar: React.FC<PromptBarProps> = ({
             parts.push(generationQuality === 'low' ? '低画面' : generationQuality === 'medium' ? '标准' : '高画面');
         }
         if (activeCapabilities.resolutions.length > 0 && videoResolution) parts.push(videoResolution);
-        if (activeCapabilities.aspectRatios.length > 0 && activeRatio) parts.push(activeRatio === 'adaptive' ? '自适应' : activeRatio);
+        if (activeCapabilities.aspectRatios.length > 0 && activeRatio) parts.push(preserveReferenceAspectRatio ? '原比例' : activeRatio === 'adaptive' ? '自适应' : activeRatio);
         if (generationMode === 'video' && activeCapabilities.durations.length > 0) parts.push(videoDurationSec === -1 ? '无限时' : `${videoDurationSec}s`);
         if (batchCount > 1) parts.push(`×${batchCount}`);
         return parts.filter(Boolean).join(' · ');
-    }, [activeCapabilities, activeProductModel, generationMode, generationQuality, videoResolution, activeRatio, videoDurationSec, batchCount]);
+    }, [activeCapabilities, activeProductModel, generationMode, generationQuality, videoResolution, activeRatio, videoDurationSec, batchCount, preserveReferenceAspectRatio]);
     const isSeedanceVideoModel = useMemo(() => {
         return videoLikeMode && !!selectedVideoModel && modelRefModelId(selectedVideoModel).toLowerCase().includes('seedance');
     }, [selectedVideoModel, videoLikeMode]) || activeProductModel?.id.includes('seedance') === true;
@@ -554,11 +554,11 @@ export const PromptBar: React.FC<PromptBarProps> = ({
 
     const currentModelOptions = generationMode === 'text' ? textModelOptions : videoLikeMode ? videoModelOptions : imageModelOptions;
     const routedVideoModes = useMemo(() => activeProductModel?.capability === 'video'
-        ? getRoutedVideoModes(activeProductModel.id, activeRoute?.key.provider, activeRoute?.routeId)
-        : [], [activeProductModel, activeRoute]);
+        ? getResolvableVideoModes(activeProductModel.id, userApiKeys)
+        : [], [activeProductModel, userApiKeys]);
     const routedImageModes = useMemo(() => activeProductModel?.capability === 'image'
-        ? getRoutedImageModes(activeProductModel.id, activeRoute?.key.provider, activeRoute?.routeId)
-        : [], [activeProductModel, activeRoute]);
+        ? getResolvableImageModes(activeProductModel.id, userApiKeys)
+        : [], [activeProductModel, userApiKeys]);
     const activeKey = activeRoute?.key || userApiKeys.find(k => k.isDefault) || userApiKeys[0];
     const estimatedCost = useMemo(() => activeRoute && activeProductModel ? estimateApiCost({
         key: activeRoute.key,
@@ -1103,7 +1103,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                             const supported = !!activeProductModel && routedVideoModes.includes(mode);
                                             const reason = !activeProductModel
                                                 ? '请先选择视频模型'
-                                                : (explainUnsupportedVideoMode(activeProductModel.id, mode) || '当前 API 路由不支持该模式');
+                                                : (explainUnsupportedVideoMode(activeProductModel.id, mode) || '未映射该模式的 API 线路，请在设置中配置');
                                             return (
                                                 <button
                                                     key={mode}
@@ -1137,7 +1137,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                             const supported = !!activeProductModel && routedImageModes.includes(mode);
                                             const reason = !activeProductModel
                                                 ? '请先选择图片模型'
-                                                : (explainUnsupportedImageMode(activeProductModel.id, mode) || '当前 API 路由不支持该模式');
+                                                : (explainUnsupportedImageMode(activeProductModel.id, mode) || '未映射该模式的 API 线路，请在设置中配置');
                                             return (
                                                 <button
                                                     key={mode}
@@ -1201,19 +1201,31 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                                 <div className="grid grid-cols-4 gap-1.5">
                                                     {activeCapabilities.aspectRatios.map(ratio => {
                                                         const disabledReason = paramDisabledReason('aspectRatio', ratio);
+                                                        const isActive = activeRatio === ratio && !preserveReferenceAspectRatio;
+                                                        const dimClass = disabledReason ? 'cursor-not-allowed opacity-35' : preserveReferenceAspectRatio ? 'opacity-50' : '';
                                                         return (
                                                             <button
                                                                 key={ratio}
                                                                 type="button"
                                                                 disabled={!!disabledReason}
                                                                 title={disabledReason || undefined}
-                                                                onClick={() => { if (!disabledReason) setActiveRatio(ratio); }}
-                                                                className={`h-8 rounded-[10px] px-1.5 text-[11px] font-bold transition ${disabledReason ? 'cursor-not-allowed opacity-35' : ''} ${activeRatio === ratio ? 'isl-chip--active' : 'isl-chip'}`}
+                                                                onClick={() => { if (!disabledReason) { setActiveRatio(ratio); onPreserveReferenceAspectRatioChange?.(false); } }}
+                                                                className={`h-8 rounded-[10px] px-1.5 text-[11px] font-bold transition ${dimClass} ${isActive ? 'isl-chip--active' : 'isl-chip'}`}
                                                             >
                                                                 {ratio === 'adaptive' ? '自适应' : ratio}
                                                             </button>
                                                         );
                                                     })}
+                                                    {(generationMode === 'image' || generationMode === 'video') && imageReferenceChips && imageReferenceChips.length > 0 && onPreserveReferenceAspectRatioChange && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => onPreserveReferenceAspectRatioChange?.(true)}
+                                                            title="使用第一张参考图的原始宽高比，自动匹配最接近的支持比例"
+                                                            className={`h-8 rounded-[10px] px-1.5 text-[11px] font-bold transition ${preserveReferenceAspectRatio ? 'isl-chip--active' : 'isl-chip'}`}
+                                                        >
+                                                            原比例
+                                                        </button>
+                                                    )}
                                                 </div>
                                             </div>
                                         )}
@@ -1264,15 +1276,6 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                             {activeCapabilities.supportsRealPersonCheck && (
                                                 <button type="button" onClick={() => onRealPersonCheckToggle?.(!realPersonCheckEnabled)} className={`flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-xs font-bold transition-colors hover:bg-[var(--isl-surface-2)] ${realPersonCheckEnabled ? 'text-[var(--isl-mint-deep)]' : ''}`}><span>真人素材预检测</span><span>{realPersonCheckEnabled ? 'ON' : 'OFF'}</span></button>
                                             )}
-                                        </div>
-                                    )}
-                                    {(generationMode === 'image' || generationMode === 'video') && imageReferenceChips && imageReferenceChips.length > 0 && onPreserveReferenceAspectRatioChange && (
-                                        <div className="mb-2 space-y-1 border-b border-[var(--isl-border)] pb-2">
-                                            <div className="px-1 pb-1 text-[10px] font-bold uppercase tracking-[0.14em]" style={{ color: 'var(--isl-ink-soft)' }}>参考图</div>
-                                            <button type="button" onClick={() => onPreserveReferenceAspectRatioChange?.(!preserveReferenceAspectRatio)} className={`flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-xs font-bold transition-colors hover:bg-[var(--isl-surface-2)] ${preserveReferenceAspectRatio ? 'text-[var(--isl-mint-deep)]' : ''}`} title="开启后将忽略上方比例选择，使用第一张参考图的原始宽高比">
-                                                <span>保留参考图原始比例</span>
-                                                <span>{preserveReferenceAspectRatio ? 'ON' : 'OFF'}</span>
-                                            </button>
                                         </div>
                                     )}
                                     <div className="px-1 pb-1 text-[10px] font-bold uppercase tracking-[0.14em]" style={{ color: 'var(--isl-ink-soft)' }}>更多操作</div>

@@ -43,10 +43,6 @@ const FILE_STATE_COMMANDS = new Set([
   'asset.list', 'export.project', 'video.status',
 ]);
 
-function normalizeCommandForRouting(command) {
-  return command.replace(/\./g, '.');
-}
-
 function runtimeInvocation(command, parsed) {
   const definition = COMMAND_REGISTRY[command];
   const commandArgs = {};
@@ -58,7 +54,14 @@ function runtimeInvocation(command, parsed) {
     if (base === 'number') commandArgs[name] = Number(raw);
     else if (base === 'boolean') commandArgs[name] = raw === true || String(raw).toLowerCase() === 'true';
     else if (['object', 'array', 'string[]'].includes(base) && typeof raw === 'string') {
-      commandArgs[name] = JSON.parse(raw);
+      try {
+        commandArgs[name] = JSON.parse(raw);
+      } catch (error) {
+        throw new RuntimeClientError(
+          'INVALID_ARGUMENT',
+          `--${kebab} must be valid JSON (${base}): ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
     } else commandArgs[name] = raw;
   }
   const idempotencyKey = parsed.idempotencyKey || parsed['idempotency-key'];
@@ -112,7 +115,7 @@ async function main() {
     return;
   }
 
-  const routingCommand = normalizeCommandForRouting(command);
+  const routingCommand = command;
 
   if (CLIENT_REGISTRY_COMMANDS.has(routingCommand)) {
     const result = await executeFlovartCommand(command, args, {});

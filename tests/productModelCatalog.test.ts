@@ -5,6 +5,7 @@ import {
   getEffectiveProductModelCapabilities,
   getEffectiveReferenceLimits,
   getRoutedVideoModes,
+  getResolvableVideoModes,
   resolveProductModelRoute,
   sanitizeProductGenerationParams,
   suggestProductRouteMappings,
@@ -17,6 +18,22 @@ const key = (id: string, priority = 0): UserApiKey => ({
   key: 'secret',
   models: [{ id: 'doubao-seedance-2-0-260128', name: 'Seedance 2.0' }],
   routeMappings: [{ target: { kind: 'product-mode', productModelId: 'flovart:seedance-2', mode: 'text-to-video' as const }, routeId: 'doubao-seedance-2-0-260128', order: priority }],
+  createdAt: 1,
+  updatedAt: 1,
+});
+
+/** RunningHub 视频线路 key：models 留空表示放行所有 routeId，routeMappings 显式绑定各 mode。 */
+const rhVideoKey = (id: string, modes: Array<'text-to-video' | 'image-to-video'>): UserApiKey => ({
+  id,
+  provider: 'runningHub',
+  capabilities: ['video'],
+  key: 'secret',
+  models: [],
+  routeMappings: modes.map(mode => ({
+    target: { kind: 'product-mode' as const, productModelId: 'flovart:veo-3.1', mode },
+    routeId: `rhart-video-v3.1/${mode}`,
+    order: 0,
+  })),
   createdAt: 1,
   updatedAt: 1,
 });
@@ -98,6 +115,19 @@ describe('fixed product model catalog', () => {
     expect(getRoutedVideoModes('flovart:kling-video-3-omni', 'runningHub', 'kling-video-o3-std/reference-to-video')).toEqual([
       'reference-to-video',
     ]);
+  });
+
+  it('enables image-to-video when its own route is mapped, independent of the active submode', () => {
+    // 只映射文生视频 → 图生视频确实不可选（未映射，正确）。
+    const onlyText = getResolvableVideoModes('flovart:veo-3.1', [rhVideoKey('k1', ['text-to-video'])]);
+    expect(onlyText).toContain('text-to-video');
+    expect(onlyText).not.toContain('image-to-video');
+    // 同时映射文生视频 + 图生视频 → 图生视频变为可选。回归“配了图生视频线路却在
+    // 文生视频状态下点不动”的 bug：UI 此前用单条 activeRoute（文生视频线路）判定
+    // 所有模式，而 RunningHub 每个模式是独立线路，导致循环依赖。
+    const both = getResolvableVideoModes('flovart:veo-3.1', [rhVideoKey('k2', ['text-to-video', 'image-to-video'])]);
+    expect(both).toContain('text-to-video');
+    expect(both).toContain('image-to-video');
   });
 
   it('derives video controls and reference limits from the final mapped Provider route', () => {

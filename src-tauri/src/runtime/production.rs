@@ -14,6 +14,7 @@ pub struct CompiledStage {
     pub status: String,
     pub blocked_reason: Option<Value>,
     pub dependencies: Vec<String>,
+    pub input: Value,
     pub input_hash: String,
 }
 
@@ -29,7 +30,15 @@ pub struct ProductionPlanDraft {
     pub spec_hash: String,
     pub stages: Vec<CompiledStage>,
     pub blockers: Vec<String>,
+    pub gates: Vec<Value>,
 }
+
+// Static reservation estimates (micros, CNY) for the proposed Route Plan.
+// Actual cost is confirmed per task from the provider price preview.
+const EST_IMAGE_GPT2_MICROS: i64 = 100_000;
+const EST_VIDEO_GROK_I2V_MICROS: i64 = 240_000;
+const EST_VIDEO_VEO_LITE_MICROS: i64 = 2_560_000;
+const GROK_I2V_MAX_SHOT_MS: i64 = 6_000;
 
 pub fn compile_production_plan(args: &Value) -> Result<ProductionPlanDraft, RuntimeError> {
     let args = record(args, "production.dry-run args")?;
@@ -76,6 +85,18 @@ pub fn compile_production_plan(args: &Value) -> Result<ProductionPlanDraft, Runt
         "spec.delivery.durationMs",
         3_600_000,
     )?;
+    let aspect_ratio =
+        optional_string(delivery.get("aspectRatio"), "spec.delivery.aspectRatio", 16)?
+            .unwrap_or_else(|| "16:9".to_owned());
+    let language = optional_string(delivery.get("language"), "spec.delivery.language", 32)?
+        .unwrap_or_else(|| "zh-CN".to_owned());
+    let style_prompt = spec_record
+        .get("visual")
+        .and_then(|visual| visual.get("stylePrompt"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_owned);
     let narrative = record(
         spec_record.get("narrative").unwrap_or(&Value::Null),
         "spec.narrative",
@@ -91,8 +112,11 @@ pub fn compile_production_plan(args: &Value) -> Result<ProductionPlanDraft, Runt
     let mut ids = HashSet::new();
     let mut stages = Vec::new();
     let mut motion_stage_keys = Vec::new();
+    let mut timeline = Vec::new();
+    let mut narration_lines = Vec::new();
     let mut shot_count = 0usize;
     let mut shot_duration_ms = 0i64;
+    let mut beat_start_ms = 0i64;
     for (beat_index, beat) in beats.iter().enumerate() {
         let beat = record(beat, &format!("spec.narrative.beats[{beat_index}]"))?;
         let beat_id = required_string(
@@ -112,6 +136,7 @@ pub fn compile_production_plan(args: &Value) -> Result<ProductionPlanDraft, Runt
                 "Every ProductionSpec beat must contain at least one shot",
             ));
         }
+        let mut beat_duration_ms = 0i64;
         for (shot_index, shot) in shots.iter().enumerate() {
             shot_count += 1;
             if shot_count > 200 {
@@ -129,7 +154,21 @@ pub fn compile_production_plan(args: &Value) -> Result<ProductionPlanDraft, Runt
                 60_000,
             )?;
             shot_duration_ms += duration;
+            beat_duration_ms += duration;
             let scene = required_string(shot.get("scene"), &format!("spec{path}.scene"), 8_000)?;
+            let shot_prompt =
+                optional_string(shot.get("prompt"), &format!("spec{path}.prompt"), 8_000)?
+                    .unwrap_or_else(|| scene.clone());
+            let keyframe_prompt = match &style_prompt {
+                Some(style) => format!("{style}\n{shot_prompt}"),
+                None => shot_prompt.clone(),
+            };
+            let motion_prompt = optional_string(
+                shot.get("motionPrompt"),
+                &format!("spec{path}.motionPrompt"),
+                8_000,
+            )?
+            .unwrap_or_else(|| shot_prompt.clone());
             let summary = truncate(&scene, 180);
             let keyframe_key = format!("shot:{shot_id}:keyframe");
             let motion_key = format!("shot:{shot_id}:motion");
@@ -142,7 +181,14 @@ pub fn compile_production_plan(args: &Value) -> Result<ProductionPlanDraft, Runt
                 "ready",
                 None,
                 Vec::new(),
-                json!({ "shotId": shot_id, "scene": scene, "kind": "keyframe" }),
+                json!({
+                    "kind": "keyframe",
+                    "shotId": shot_id,
+                    "scene": scene,
+                    "prompt": keyframe_prompt,
+                    "aspectRatio": aspect_ratio,
+                    "resolution": "1k"
+                }),
             )?);
             stages.push(stage(
                 &motion_key,
@@ -152,11 +198,36 @@ pub fn compile_production_plan(args: &Value) -> Result<ProductionPlanDraft, Runt
                 &summary,
                 "pending",
                 None,
-                vec![keyframe_key],
-                json!({ "shotId": shot_id, "scene": scene, "durationMs": duration, "kind": "motion" }),
+                vec![keyframe_key.clone()],
+                json!({
+                    "kind": "motion",
+                    "shotId": shot_id,
+                    "scene": scene,
+                    "prompt": motion_prompt,
+                    "durationMs": duration,
+                    "aspectRatio": aspect_ratio,
+                    "sourceStageKey": keyframe_key
+                }),
             )?);
+            timeline.push(json!({
+                "shotId": shot_id,
+                "stageKey": motion_key,
+                "durationMs": duration
+            }));
             motion_stage_keys.push(motion_key);
         }
+        if let Some(narration) = beat.get("narration").and_then(Value::as_str) {
+            let narration = narration.trim();
+            if !narration.is_empty() {
+                narration_lines.push(json!({
+                    "beatId": beat_id,
+                    "text": narration,
+                    "startMs": beat_start_ms,
+                    "durationMs": beat_duration_ms
+                }));
+            }
+        }
+        beat_start_ms += beat_duration_ms;
     }
     if shot_duration_ms > duration_ms.saturating_mul(2) {
         return Err(invalid(
@@ -164,23 +235,37 @@ pub fn compile_production_plan(args: &Value) -> Result<ProductionPlanDraft, Runt
         ));
     }
 
+    let mut capability_blocked = false;
     let mut render_dependencies = motion_stage_keys;
+    let mut narration_stage_key = None;
     if let Some(audio) = spec_record.get("audio").and_then(Value::as_object) {
-        if audio.get("narration").is_some() {
+        if let Some(narration) = audio.get("narration") {
+            let voice_profile = narration
+                .get("voiceProfile")
+                .and_then(Value::as_str)
+                .unwrap_or("documentary-neutral");
             stages.push(stage(
                 "audio:narration",
                 "audio.tts",
                 "/audio/narration",
                 "旁白",
-                "等待一等 TTS Runtime Capability",
-                "blocked",
-                Some(json!({ "code": "CAPABILITY_UNAVAILABLE", "capabilityId": "audio.tts" })),
+                "本地 TTS 旁白合成",
+                "ready",
+                None,
                 Vec::new(),
-                audio.get("narration").cloned().unwrap_or(Value::Null),
+                json!({
+                    "kind": "narration",
+                    "voiceProfile": voice_profile,
+                    "language": language,
+                    "lines": narration_lines,
+                    "targetDurationMs": duration_ms
+                }),
             )?);
             render_dependencies.push("audio:narration".to_owned());
+            narration_stage_key = Some("audio:narration");
         }
         if audio.get("music").is_some() {
+            capability_blocked = true;
             stages.push(stage(
                 "audio:music",
                 "audio.music",
@@ -192,7 +277,6 @@ pub fn compile_production_plan(args: &Value) -> Result<ProductionPlanDraft, Runt
                 Vec::new(),
                 audio.get("music").cloned().unwrap_or(Value::Null),
             )?);
-            render_dependencies.push("audio:music".to_owned());
         }
     }
     stages.push(stage(
@@ -200,23 +284,64 @@ pub fn compile_production_plan(args: &Value) -> Result<ProductionPlanDraft, Runt
         "media.render",
         "/delivery",
         "成片合成",
-        "等待一等字幕、混音与合成 Runtime Capability",
-        "blocked",
-        Some(json!({ "code": "CAPABILITY_UNAVAILABLE", "capabilityId": "media.render" })),
+        "受控 ffmpeg 字幕、旁白与拼接合成",
+        "pending",
+        None,
         render_dependencies,
-        delivery.clone().into(),
+        json!({
+            "kind": "render",
+            "delivery": Value::Object(delivery.clone()),
+            "timeline": timeline,
+            "narrationStageKey": narration_stage_key,
+            "captions": narration_lines
+        }),
     )?);
     stages.push(stage(
         "delivery:verify",
         "media.verify",
         "/delivery",
         "交付验证",
-        "等待一等媒体与响度验证 Runtime Capability",
-        "blocked",
-        Some(json!({ "code": "CAPABILITY_UNAVAILABLE", "capabilityId": "media.verify" })),
+        "受控 ffprobe 媒体与结构验证",
+        "pending",
+        None,
         vec!["delivery:render".to_owned()],
-        delivery.clone().into(),
+        json!({
+            "kind": "verify",
+            "delivery": Value::Object(delivery.clone()),
+            "sourceStageKey": "delivery:render"
+        }),
     )?);
+
+    let mut gates = vec![
+        json!({ "gateKind": "system", "gateType": "route-plan", "status": "required" }),
+        json!({ "gateKind": "system", "gateType": "run-budget", "status": "required" }),
+    ];
+    if let Some(spec_gates) = spec_record.get("gates").and_then(Value::as_array) {
+        for (gate_index, gate) in spec_gates.iter().enumerate() {
+            let gate = record(gate, &format!("spec.gates[{gate_index}]"))?;
+            let gate_type = required_string(
+                gate.get("type"),
+                &format!("spec.gates[{gate_index}].type"),
+                64,
+            )?;
+            let status = optional_string(
+                gate.get("status"),
+                &format!("spec.gates[{gate_index}].status"),
+                32,
+            )?
+            .unwrap_or_else(|| "required".to_owned());
+            if !["required", "approved", "waived"].contains(&status.as_str()) {
+                return Err(invalid(format!(
+                    "spec.gates[{gate_index}].status must be required, approved, or waived"
+                )));
+            }
+            gates.push(json!({
+                "gateKind": "director",
+                "gateType": gate_type,
+                "status": status
+            }));
+        }
+    }
 
     let extensions = spec_record
         .get("extensions")
@@ -226,11 +351,12 @@ pub fn compile_production_plan(args: &Value) -> Result<ProductionPlanDraft, Runt
     core.remove("extensions");
     let core = Value::Object(core);
     let spec_hash = hash_json(spec)?;
-    let blockers = vec![
-        "CAPABILITY_UNAVAILABLE".to_owned(),
-        "ROUTE_PLAN_REQUIRED".to_owned(),
-        "RUN_BUDGET_REQUIRED".to_owned(),
-    ];
+    let mut blockers = Vec::new();
+    if capability_blocked {
+        blockers.push("CAPABILITY_UNAVAILABLE".to_owned());
+    }
+    blockers.push("ROUTE_PLAN_REQUIRED".to_owned());
+    blockers.push("RUN_BUDGET_REQUIRED".to_owned());
     Ok(ProductionPlanDraft {
         project_id,
         title,
@@ -242,6 +368,7 @@ pub fn compile_production_plan(args: &Value) -> Result<ProductionPlanDraft, Runt
         spec_hash,
         stages,
         blockers,
+        gates,
     })
 }
 
@@ -380,6 +507,7 @@ fn stage(
         blocked_reason,
         dependencies,
         input_hash: hash_json(&input)?,
+        input,
     })
 }
 
@@ -439,6 +567,44 @@ fn truncate(value: &str, max_chars: usize) -> String {
     } else {
         truncated
     }
+}
+
+/// Build the proposed Route Plan for a compiled run: one entry per provider-priced
+/// stage with a static reservation estimate. Local capabilities cost zero.
+pub fn build_route_plan(stages: &[(String, String, Value)]) -> Value {
+    let mut entries = Vec::new();
+    let mut total_micros = 0i64;
+    for (stage_key, capability_id, input) in stages {
+        let (product_model, estimate_micros) = match capability_id.as_str() {
+            "image.generate" => ("flovart:gpt-image-2", EST_IMAGE_GPT2_MICROS),
+            "video.generate" => {
+                let duration_ms = input
+                    .get("durationMs")
+                    .and_then(Value::as_i64)
+                    .unwrap_or(GROK_I2V_MAX_SHOT_MS);
+                if duration_ms <= GROK_I2V_MAX_SHOT_MS {
+                    ("flovart:grok-imagine-video-1.5", EST_VIDEO_GROK_I2V_MICROS)
+                } else {
+                    ("flovart:veo-3.1-lite", EST_VIDEO_VEO_LITE_MICROS)
+                }
+            }
+            "audio.tts" | "media.render" | "media.verify" => ("flovart:local", 0),
+            _ => continue,
+        };
+        total_micros += estimate_micros;
+        entries.push(json!({
+            "stageKey": stage_key,
+            "capabilityId": capability_id,
+            "productModel": product_model,
+            "estimateMicros": estimate_micros,
+            "unitCode": "CNY"
+        }));
+    }
+    json!({
+        "entries": entries,
+        "totalEstimateMicros": total_micros,
+        "unitCode": "CNY"
+    })
 }
 
 fn hash_json(value: &Value) -> Result<String, RuntimeError> {
