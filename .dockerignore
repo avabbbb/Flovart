@@ -56,9 +56,8 @@ Dockerfile
 docker-compose.yml
 .dockerignore
 
-# Windows 启动器
+# 构建产物
 *.exe
-tools/launcher
 
 # 其他
 tmp

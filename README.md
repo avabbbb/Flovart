@@ -129,7 +129,7 @@ npm install
 npx flovart-cli start --source --all --open
 ```
 
-也可在 Windows 双击 `启动.bat`，或用 `docker compose up --build`启动 Web / Hub / Enterprise / PostgreSQL 容器。Docker 静态资源生产路径仍在验证，当前更适合本地联调与私有部署预演。
+也可用 `docker compose up --build` 启动 Web / Hub / Enterprise / PostgreSQL 容器。Docker 静态资源生产路径仍在验证，当前更适合本地联调与私有部署预演。
 
 ### 检查 Workflow CLI
 

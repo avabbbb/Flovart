@@ -279,7 +279,7 @@ export async function install(argv = []) {
   const plan = planInstall(argv);
   await installProjectDependencies(plan.projectDir, plan.services);
   log('Flovart dependencies are ready in ' + plan.projectDir);
-  log('Run `flovart start --source --all --open` or double-click 启动.bat.');
+  log('Run `flovart start --source --all --open`.');
 }
 
 export async function start(argv = []) {
