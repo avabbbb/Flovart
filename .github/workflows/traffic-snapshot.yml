@@ -1,8 +1,9 @@
 # Flovart - 每日仓库数据快照
 #
-# GitHub Traffic API 只保留 14 天数据,此工作流每天抓取并累积到 stats/history.json。
-# views/clones 需要仓库 Settings → Secrets 配置 TRAFFIC_PAT(勾选 repo 权限的 PAT);
-# 未配置时降级为只记录 stars / forks / release 下载量。
+# GitHub Traffic API 只保留最近 14 天数据，本工作流每天抓取并累积到 stats/history.json。
+# views / clones 需要 TRAFFIC_PAT：推荐 Fine-grained PAT，仅授权本仓库的 Administration: read。
+# 未配置时降级为只记录 stars / forks / watchers / releases / release 下载量。
+# 这里不采集 Flovart 应用内行为、Prompt、素材或 API Key。
 
 name: Traffic Snapshot
 
@@ -10,6 +11,10 @@ on:
   schedule:
     - cron: '23 0 * * *'
   workflow_dispatch:
+
+concurrency:
+  group: traffic-snapshot
+  cancel-in-progress: false
 
 permissions:
   contents: write
@@ -31,9 +36,14 @@ jobs:
             const { owner, repo } = context.repo;
             const history = fs.existsSync(path)
               ? JSON.parse(fs.readFileSync(path, 'utf8'))
-              : { views: {}, clones: {}, snapshots: [] };
+              : { schemaVersion: 1, views: {}, clones: {}, snapshots: [], releaseAssets: [] };
 
-            // views / clones 需要 TRAFFIC_PAT;失败时跳过并提示
+            history.schemaVersion ||= 1;
+            history.views ||= {};
+            history.clones ||= {};
+            history.snapshots ||= [];
+
+            // Traffic API 只返回最近 14 天；每天合并后可形成长期趋势。
             for (const kind of ['views', 'clones']) {
               try {
                 const { data } = await github.request(`GET /repos/{owner}/{repo}/traffic/${kind}`, { owner, repo });
@@ -41,20 +51,51 @@ jobs:
                   history[kind][day.timestamp.slice(0, 10)] = { count: day.count, uniques: day.uniques };
                 }
               } catch (e) {
-                core.warning(`跳过 ${kind}: ${e.message}(需要配置 TRAFFIC_PAT)`);
+                core.warning(`跳过 ${kind}: ${e.message}（需要为 TRAFFIC_PAT 配置 Administration: read）`);
               }
             }
 
             const { data: info } = await github.rest.repos.get({ owner, repo });
-            const { data: releases } = await github.rest.repos.listReleases({ owner, repo, per_page: 100 });
-            const downloads = releases.flatMap(r => r.assets).reduce((sum, a) => sum + a.download_count, 0);
+            const releases = await github.paginate(github.rest.repos.listReleases, { owner, repo, per_page: 100 });
+            const releaseAssets = releases
+              .flatMap(release => release.assets.map(asset => ({
+                release: release.tag_name,
+                name: asset.name,
+                downloads: asset.download_count,
+                updatedAt: asset.updated_at,
+              })))
+              .sort((a, b) => b.downloads - a.downloads);
+            const downloads = releaseAssets.reduce((sum, asset) => sum + asset.downloads, 0);
 
             const today = new Date().toISOString().slice(0, 10);
             history.snapshots = history.snapshots.filter(s => s.date !== today);
-            history.snapshots.push({ date: today, stars: info.stargazers_count, forks: info.forks_count, downloads });
+            history.snapshots.push({
+              date: today,
+              stars: info.stargazers_count,
+              forks: info.forks_count,
+              watchers: info.subscribers_count,
+              releases: releases.length,
+              downloads,
+            });
+            history.snapshots.sort((a, b) => a.date.localeCompare(b.date));
+            history.releaseAssets = releaseAssets;
+            history.updatedAt = new Date().toISOString();
 
             fs.mkdirSync('stats', { recursive: true });
             fs.writeFileSync(path, JSON.stringify(history, null, 2) + '\n');
+
+            await core.summary
+              .addHeading('Flovart repository snapshot')
+              .addTable([
+                [{ data: 'Metric', header: true }, { data: 'Value', header: true }],
+                ['Stars', String(info.stargazers_count)],
+                ['Forks', String(info.forks_count)],
+                ['Watchers', String(info.subscribers_count)],
+                ['Releases', String(releases.length)],
+                ['Release asset downloads', String(downloads)],
+              ])
+              .addRaw('Traffic views and clones are included only when TRAFFIC_PAT is authorized.')
+              .write();
 
       - name: Commit history
         run: |
@@ -62,4 +103,5 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add stats/history.json
           git diff --cached --quiet || git commit -m "chore: daily traffic snapshot"
-          git push
+          git pull --rebase origin "$GITHUB_REF_NAME"
+          git push origin "HEAD:$GITHUB_REF_NAME"

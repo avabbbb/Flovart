@@ -3,6 +3,7 @@
 - [领域词与工作区边界](../CONTEXT.md)
 - [功能特性](content/docs/overview/features.mdx)
 - [Features](content/docs/overview/features.en.mdx)
+- [Skill 使用手册](overview/skill-guide.md)
 - [后续待办](content/docs/progress/todo.mdx)
 - [待测试确认](content/docs/progress/pending-test.mdx)
 - [架构决策记录](adr/)

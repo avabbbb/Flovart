@@ -2,13 +2,22 @@
 title: 待测试确认
 ---
 
+## README、项目数据与开源协作入口
+
+- 中英文 README 顶部保留并标注 rule34 主题访问计数、GitHub Stars 与 Release Downloads；访问计数明确为展示次数而非独立访客。展示区改为有内容的 Workflow 主图、最新 Skill 首页和 Director Skill 低门槛引导，不使用空白工作区或断开连接状态作为核心宣传图。
+- 现有 `Traffic Snapshot` Action 扩展为每日保存 Views、Clones、Stars、Forks、Watchers、Release 数量、附件下载总数和附件明细；Views/Clones 仍需仓库 Secret `TRAFFIC_PAT` 的 Fine-grained `Administration: Read-only` 权限。统计不读取应用内行为、Prompt、素材或 API Key。
+- 新增 `stats/README.md` 解释指标口径、14 天 Traffic 窗口、启用步骤和隐私边界；真实活跃安装、会话和功能使用率暂不统计，不用 Release 下载量冒充活跃用户。
+- 重写 `.github/CONTRIBUTING.md`，移除旧 Making、Canvas、Gemini 单一服务和不存在脚本等过期说明；新增 Bug / Feature Issue Form 与 PR 模板，约定一个 Issue 一个问题、一个 PR 一个可验证目标，UI 变更必须提供证据。
+- 待用户验证：GitHub 默认分支更新后确认两份 README 顶部 rule34 计数和新截图正常显示；手动运行一次 `Traffic Snapshot`，确认 `stats/history.json` 生成且 Action Summary 无权限警告；打开 Issue 选择页和新 PR 页面确认模板自动出现。
+
 ## VOX Director 内置示例 Skill
 
 - 新增 `.agents/skills/vox-director` 标准 Skill 包：本地 Coding Agent 与应用内 Skill 台读取同一份 `SKILL.md`、`flovart.skill.yaml`、ProductionSpec 扩展 Schema、创意指导、评测用例和示例 ProductionSpec，不再由首页维护一份脱离运行契约的 VOX 展示假数据。
 - VOX 上游工作流已改造为 Flovart 的 Provider-neutral Director Skill：保留叙事节拍、纸张拼贴、风格试片、关键帧审片、OCR 和音频设计；示例包不读取 API Key、不直连 Provider、不负责轮询、下载或渲染，只声明 Runtime Capability 和人工 Gate。
-- `/app/home` 的 Skill 台现在显示真实 `community.vox-director` 内置示例，可打开来源、安全边界、制作能力与导演检查点详情；“用示例创建项目”会创建 `VOX Director 示例` 并进入真实 Workflow。目前尚未自动绑定 ProductionSession 或提交 ProductionRun。
-- 自动验证已通过：目录解析、扩展 Schema、安全边界与质量门定向 Vitest 6 项、Skill 标准结构校验、VOX 示例质量门 100/100、TypeScript 与生产构建；Playwright 在真实 `/app/home` 验证卡片、详情、源码入口和创建项目跳转，页面无运行时错误。全量 Vitest 为 81 个文件、638 项通过、1 项跳过，仍只有 `tests/workflowGeneration.test.ts` 的 6 项既有 Provider reference 失败。
-- 待用户验证：打开应用首页确认 Skill 台的 VOX 卡片和详情符合预期；点击“用示例创建项目”后确认 Workflow 项目名正确。第三方 Skill 的安装、锁定、签名、发布和撤销仍是待办。
+- `/app/home` 的导演 Skill 入口改为三步首次使用引导，详情优先展示适用场景、显式调用名、可复制示例和费用边界；Capability、Gate、Runtime 版本等技术信息收进次级详情，避免普通创作者先理解内部协议。
+- “在本机 Agent 中试用”会创建 `VOX Director 示例`、切换到 Agent 工作区并填入可编辑的 `$vox-director` 调用词，不自动发送或调用 Provider。桌面版复用 Managed Agent IPC 自动取得 loopback 连接，Token 不写入浏览器存储；普通浏览器版保留手动连接提示。
+- 新增 `docs/overview/skill-guide.md`，覆盖 Flovart Skill 与 Director Skill 的区别、零命令路径、调用模板、生效检查、费用边界、进阶诊断和当前产品限制，并已加入两份文档索引。
+- 待用户验证：打开应用首页确认三步引导和技术信息层级易懂；点击“在本机 Agent 中试用”后确认进入 Agent、项目名正确、调用词已填入且未自动发送；修改主题发送后确认本机 Coding Agent 实际加载 `community.vox-director@1.0.0`。第三方 Skill 的安装、锁定、签名、发布和撤销仍是待办。
 
 ## ProductionRun 与真实 Workflow Plan Projection
 

@@ -1,5 +1,7 @@
-import { Archive, Bot, Circle, History, ImagePlus, Link2, MessageSquare, Plus, ScrollText, Send, Trash2, X } from 'lucide-react';
+import { Archive, Bot, Circle, History, ImagePlus, Link2, MessageSquare, Plus, ScrollText, Send, Sparkles, Trash2, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { consumeDirectorSkillDraft } from '../../services/directorSkillLaunch';
+import { getManagedAgentConnection } from '../../services/managedAgentConnection';
 import {
   WorkflowAgentBridge,
   redactWorkflowAgentSnapshot,
@@ -61,6 +63,7 @@ export function WorkflowAgentPanel({ project, onClose, onProjectChange, onOnline
   const [token, setToken] = useState(() => safeSessionStorage('flovart.agent.token', ''));
   const [status, setStatus] = useState<Status>('disconnected');
   const [prompt, setPrompt] = useState('');
+  const [skillDraftHint, setSkillDraftHint] = useState('');
   const [threadId, setThreadId] = useState('');
   const [threads, setThreads] = useState<any[]>([]);
   const [logs, setLogs] = useState<Array<{ id: string; time: string; type: string; text: string }>>([]);
@@ -75,6 +78,34 @@ export function WorkflowAgentPanel({ project, onClose, onProjectChange, onOnline
   const messagesRef = useRef(messages);
 
   useEffect(() => { messagesRef.current = messages; }, [messages]);
+  useEffect(() => {
+    const draft = consumeDirectorSkillDraft(project.id);
+    if (!draft) return;
+    setPrompt(draft.prompt);
+    setSkillDraftHint(`${draft.skillName} 调用词已填入；修改主题后发送。`);
+    setTab('chat');
+  }, [project.id]);
+  useEffect(() => {
+    if (mode !== 'local') return;
+    let active = true;
+    setStatus('connecting');
+    void getManagedAgentConnection().then(connection => {
+      if (!active) return;
+      if (!connection) {
+        setStatus('disconnected');
+        setTab('setup');
+        return;
+      }
+      setUrl(connection.url);
+      openAgentConnection(connection.url, connection.token, false);
+    }).catch(cause => {
+      if (!active) return;
+      setStatus('error');
+      setTab('setup');
+      addLog('error', errorMessage(cause));
+    });
+    return () => { active = false; };
+  }, [mode]);
   useEffect(() => {
     if (mode !== 'online') return;
     replaceMessages(activeSessionMessages(project));
@@ -180,20 +211,24 @@ export function WorkflowAgentPanel({ project, onClose, onProjectChange, onOnline
 
   const askConfirmation = (summary: string) => new Promise<boolean>(resolve => setConfirmation({ summary, resolve }));
 
-  function connect() {
+  function openAgentConnection(nextUrl: string, nextToken: string, rememberToken: boolean) {
     bridge.current?.disconnect();
     try {
-      const endpoint = new URL(url);
-      if (!['http:', 'https:'].includes(endpoint.protocol) || !token.trim()) throw new Error('请填写有效的 Agent 地址和 Token。');
+      const endpoint = new URL(nextUrl);
+      if (!['http:', 'https:'].includes(endpoint.protocol) || !nextToken.trim()) throw new Error('请填写有效的 Agent 地址和 Token。');
       localStorage.setItem('flovart.agent.url', endpoint.origin);
-      sessionStorage.setItem('flovart.agent.token', token.trim());
-      bridge.current = new WorkflowAgentBridge({ url: endpoint.origin, token: token.trim(), onStatus: setStatus, onEvent: handleEvent, confirm: askConfirmation });
+      if (rememberToken) sessionStorage.setItem('flovart.agent.token', nextToken.trim());
+      bridge.current = new WorkflowAgentBridge({ url: endpoint.origin, token: nextToken.trim(), onStatus: setStatus, onEvent: handleEvent, confirm: askConfirmation });
       bridge.current.connect();
       setTab('chat');
     } catch (cause) {
       setStatus('error');
       addLog('error', errorMessage(cause));
     }
+  }
+
+  function connect() {
+    openAgentConnection(url, token, true);
   }
 
   async function send() {
@@ -351,7 +386,23 @@ export function WorkflowAgentPanel({ project, onClose, onProjectChange, onOnline
       <nav>{tabs.map(item => { const Icon = item.icon; return <button key={item.id} type="button" className={tab === item.id ? 'is-active' : ''} onClick={() => { setTab(item.id); if (item.id === 'history') void loadThreads(); }}><Icon size={13} />{item.label}</button>; })}</nav>
       <section className="workflow-agent__body">
         {tab === 'setup' && (mode === 'local' ? <div className="workflow-agent__connect"><label>Agent 地址<input value={url} onChange={event => setUrl(event.target.value)} /></label><label>连接 Token<input type="password" value={token} onChange={event => setToken(event.target.value)} /></label><button type="button" onClick={connect}>{status === 'connecting' ? '连接中...' : '连接本机 Agent'}</button><p>运行 <code>npm run flovart:agent</code>，再填入终端显示的 Token。连接仅绑定当前网页 Origin。</p></div> : <div className="workflow-agent__connect"><strong>网站 Agent</strong><p>{onOnlineTurn ? '已连接项目现有 Provider 与 Agent 编排。API Key 仍只保存在浏览器本地。' : '网站 Agent 尚未连接 Provider 编排，请先在设置中配置文本模型。'}</p></div>)}
-        {tab === 'chat' && <><WorkflowAgentMessages messages={messages} running={sending} />{attachments.length ? <div className="workflow-agent__attachments">{attachments.map(item => <div key={item.id}><img src={item.previewUrl} alt={item.name} /><button type="button" onClick={() => removeAttachment(item.id)}><X size={11} /></button></div>)}</div> : null}<div className="workflow-agent__composer"><input ref={fileInput} hidden type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple onChange={event => { void addAttachments(event.target.files); event.target.value = ''; }} /><button type="button" className="is-secondary" title="添加图片" onClick={() => fileInput.current?.click()} disabled={sending}><ImagePlus size={14} /></button><textarea value={prompt} onChange={event => setPrompt(event.target.value)} onPaste={event => { const files = Array.from(event.clipboardData.files).filter(file => file.type.startsWith('image/')); if (files.length) { event.preventDefault(); void addAttachments(files); } }} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void send(); } }} placeholder={canSend ? '让 Agent 读取并修改当前 Workflow' : mode === 'online' ? '请先配置网站 Agent' : '请先连接本机 Agent'} /><button type="button" onClick={() => void send()} disabled={!canSend || sending}><Send size={14} /></button></div></>}
+        {tab === 'chat' && <>
+          <WorkflowAgentMessages messages={messages} running={sending} />
+          {skillDraftHint && (
+            <div
+              className="mx-2 mt-2 flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-[10px]"
+              style={{ background: 'var(--isl-mint-bg)', color: 'var(--isl-mint-deep)' }}
+            >
+              <Sparkles size={12} />
+              <span className="flex-1">{skillDraftHint}</span>
+              <button type="button" className="bg-transparent p-0 opacity-60" aria-label="关闭 Skill 提示" onClick={() => setSkillDraftHint('')}>
+                <X size={11} />
+              </button>
+            </div>
+          )}
+          {attachments.length ? <div className="workflow-agent__attachments">{attachments.map(item => <div key={item.id}><img src={item.previewUrl} alt={item.name} /><button type="button" onClick={() => removeAttachment(item.id)}><X size={11} /></button></div>)}</div> : null}
+          <div className="workflow-agent__composer"><input ref={fileInput} hidden type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple onChange={event => { void addAttachments(event.target.files); event.target.value = ''; }} /><button type="button" className="is-secondary" title="添加图片" onClick={() => fileInput.current?.click()} disabled={sending}><ImagePlus size={14} /></button><textarea value={prompt} onChange={event => setPrompt(event.target.value)} onPaste={event => { const files = Array.from(event.clipboardData.files).filter(file => file.type.startsWith('image/')); if (files.length) { event.preventDefault(); void addAttachments(files); } }} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void send(); } }} placeholder={canSend ? '让 Agent 读取并修改当前 Workflow' : mode === 'online' ? '请先配置网站 Agent' : '请先连接本机 Agent'} /><button type="button" onClick={() => void send()} disabled={!canSend || sending}><Send size={14} /></button></div>
+        </>}
         {tab === 'history' && (mode === 'online' ? <div className="workflow-agent__history">{onlineSessions.length ? onlineSessions.map(session => <div key={session.id}><button type="button" onClick={() => { onProjectChange?.({ agentSessions: project.agentSessions, activeAgentSessionId: session.id }); setMessages(session.messages.map(toDisplayMessage)); setTab('chat'); }}><strong>{session.title}</strong><span>{formatTime(session.updatedAt)}</span></button><button type="button" aria-label="删除对话" onClick={() => onProjectChange?.({ agentSessions: project.agentSessions.filter(item => item.id !== session.id), activeAgentSessionId: project.activeAgentSessionId === session.id ? null : project.activeAgentSessionId })}><Trash2 size={13} /></button></div>) : <p>暂无网站 Agent 对话。</p>}</div> : <div className="workflow-agent__history">{threads.length ? threads.map(thread => <div key={thread.id}><button type="button" onClick={() => void openThread(thread.id)}><strong>{thread.name || thread.preview || thread.id}</strong><span>{formatTime(thread.updatedAt || thread.updated_at)}</span></button><button type="button" aria-label="归档线程" onClick={() => void archiveThread(thread.id)}><Archive size={13} /></button></div>) : <p>暂无当前 Workflow 的 Codex 线程。</p>}</div>)}
         {tab === 'logs' && <div className="workflow-agent__logs"><button type="button" onClick={() => setLogs([])}>清空日志</button><pre>{logs.map(item => `${item.time} [${item.type}] ${item.text}`).join('\n') || '暂无日志。'}</pre></div>}
       </section>

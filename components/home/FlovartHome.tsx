@@ -21,6 +21,8 @@ import { useWorkflowStore } from '../workflow/store';
 import { COMMUNITY_WORKFLOWS, type CommunityWorkflow } from '../landing/communityTypes';
 import type { BundledDirectorSkill } from '../../services/directorSkillCatalog';
 import { DirectorSkillShelf } from './DirectorSkillShelf';
+import { buildDirectorSkillStarterPrompt, queueDirectorSkillDraft } from '../../services/directorSkillLaunch';
+import { useWorkspaceStore } from '../../stores/useWorkspaceStore';
 
 const linkTo = (path: string) => (window.location.hash = path);
 
@@ -329,6 +331,7 @@ export default function FlovartHome() {
   const projects = useWorkflowStore(s => s.projects);
   const createProject = useWorkflowStore(s => s.createProject);
   const setActiveProject = useWorkflowStore(s => s.setActiveProject);
+  const setActiveView = useWorkspaceStore(s => s.setActiveView);
 
   const openCanvas = () => linkTo('/app');
 
@@ -344,7 +347,22 @@ export default function FlovartHome() {
   };
 
   const handleUseSkill = (skill: BundledDirectorSkill) => {
-    handleCreate(`${skill.displayName} 示例`);
+    const projectId = createProject(`${skill.displayName} 示例`);
+    setActiveProject(projectId);
+    queueDirectorSkillDraft({
+      projectId,
+      skillId: skill.id,
+      skillVersion: skill.version,
+      skillName: skill.displayName,
+      prompt: buildDirectorSkillStarterPrompt(skill),
+    });
+    try {
+      localStorage.setItem('flovart.workflow.agent.mode', 'local');
+    } catch {
+      // Agent mode remains user-selectable when browser storage is unavailable.
+    }
+    setActiveView('agent');
+    openCanvas();
   };
 
   return (

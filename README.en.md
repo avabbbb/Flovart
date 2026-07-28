@@ -13,6 +13,8 @@
   <a href="docs/overview/quick-start.en.md">Getting Started</a> ·
   <a href="docs/content/docs/overview/features.en.mdx">Features</a> ·
   <a href="docs/content/docs/progress/todo.mdx">Roadmap</a> ·
+  <a href="stats/README.md">Project Data</a> ·
+  <a href=".github/CONTRIBUTING.md">Contributing</a> ·
   <a href="./README.md">简体中文</a>
 </p>
 
@@ -26,12 +28,33 @@
 </p>
 
 <p align="center">
-  <img src="https://tally.yuki.sh/hits/flovart/readme.svg?theme=rule34" alt="Flovart Popular Counter" />
+  <a href="stats/README.md"><img src="https://tally.yuki.sh/hits/flovart/readme.svg?theme=rule34" alt="Flovart rule34-themed visit counter" /></a>
+  <br />
+  <sub>README impressions (third-party counter, not unique visitors)</sub>
 </p>
+
+## Interface tour
 
 <p align="center">
   <img src="pic/WorkFlow.png" alt="Flovart Workflow workspace" />
+  <br />
+  <sub>Workflow: organize assets, generation nodes, connections, and results in one production graph.</sub>
 </p>
+
+<table>
+  <tr>
+    <td width="50%" align="center">
+      <img src="pic/readme-skill-home.png" alt="Flovart Skill home" />
+      <br />
+      <sub>Skill home: choose a directing method before entering a project.</sub>
+    </td>
+    <td width="50%" align="center">
+      <img src="pic/readme-skill-detail.png" alt="Flovart Director Skill onboarding" />
+      <br />
+      <sub>Low-friction guidance for invocation, cost boundaries, and safety.</sub>
+    </td>
+  </tr>
+</table>
 
 ## What is Flovart?
 
@@ -140,7 +163,7 @@ More documentation:
 
 ## Contributing
 
-Issues and pull requests for provider adapters, Workflow capabilities, host integrations, and Director Skills are welcome.
+Issues and pull requests for provider adapters, Workflow capabilities, host integrations, and Director Skills are welcome. Start from the [Issue chooser](https://github.com/avabbbb/Flovart/issues/new/choose) and read the [contribution conventions](.github/CONTRIBUTING.md): keep one problem per Issue, link every PR to an Issue, state non-goals, and attach verification evidence. UI changes require before-and-after screenshots.
 
 Special thanks to [@labiaaaaaaaaa](https://github.com/labiaaaaaaaaa) for driving third-party service compatibility and aggregation-endpoint fixes.
 

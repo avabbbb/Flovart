@@ -3,6 +3,7 @@
 ## 产品与进度
 
 - [快速开始](overview/quick-start.md) / [Getting Started](overview/quick-start.en.md)
+- [Skill 使用手册](overview/skill-guide.md)
 - [功能特性](content/docs/overview/features.mdx) / [Features](content/docs/overview/features.en.mdx)
 - [后续待办](content/docs/progress/todo.mdx)
 - [待测试确认](content/docs/progress/pending-test.mdx)

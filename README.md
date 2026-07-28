@@ -13,6 +13,8 @@
   <a href="docs/overview/quick-start.md">快速开始</a> ·
   <a href="docs/content/docs/overview/features.mdx">功能特性</a> ·
   <a href="docs/content/docs/progress/todo.mdx">开发计划</a> ·
+  <a href="stats/README.md">项目数据</a> ·
+  <a href=".github/CONTRIBUTING.md">参与贡献</a> ·
   <a href="./README.en.md">English</a>
 </p>
 
@@ -26,12 +28,33 @@
 </p>
 
 <p align="center">
-  <img src="https://tally.yuki.sh/hits/flovart/readme.svg?theme=rule34" alt="Flovart Popular Counter" />
+  <a href="stats/README.md"><img src="https://tally.yuki.sh/hits/flovart/readme.svg?theme=rule34" alt="Flovart rule34 主题访问计数" /></a>
+  <br />
+  <sub>README 展示次数（第三方计数，非独立访客）</sub>
 </p>
+
+## 界面一览
 
 <p align="center">
   <img src="pic/WorkFlow.png" alt="Flovart Workflow 工作区" />
+  <br />
+  <sub>Workflow：在同一制作图中组织素材、生成节点、连接与结果。</sub>
 </p>
+
+<table>
+  <tr>
+    <td width="50%" align="center">
+      <img src="pic/readme-skill-home.png" alt="Flovart Skill 首页" />
+      <br />
+      <sub>Skill 首页：先选导演方法，再进入项目。</sub>
+    </td>
+    <td width="50%" align="center">
+      <img src="pic/readme-skill-detail.png" alt="Flovart Director Skill 使用引导" />
+      <br />
+      <sub>低门槛引导：说明调用词、费用边界与安全信息。</sub>
+    </td>
+  </tr>
+</table>
 
 ## Flovart 是什么？
 
@@ -82,6 +105,8 @@ Flovart 将规定导演 Skill 的最小对接契约，并通过 Skill Creator �
 - 产物血缘、模型策略、成本与安全边界。
 
 [VOX Director](https://github.com/avabbbb/vox-director) 是这类风格化导演 Skill 的参考案例。目标是让用户组合“Flovart 制作总台 + 社区导演 Skill + 自己的 Provider”，由 Coding Agent 复用完整的风格化短片工作流。
+
+第一次使用可直接阅读 [Skill 使用手册](docs/overview/skill-guide.md)，无需先学习 CLI 或 ProductionSpec。
 
 > 基础 CLI/TUI、Flovart Skill 和 Codex/OpenCode 等 Host 配置已接入；Director Skill 社区契约、实时事件订阅和断点续跑仍在建设中。
 
@@ -158,7 +183,7 @@ CLI 只接受显式命令。外部 Agent 应先读取 `command.list` / `command.
 
 ## 参与贡献
 
-欢迎通过 Issue 和 Pull Request 贡献 Provider 适配、Workflow 能力、Host 集成和 Director Skill。
+欢迎通过 [Issue](https://github.com/avabbbb/Flovart/issues/new/choose) 和 Pull Request 贡献 Provider 适配、Workflow 能力、Host 集成和 Director Skill。提交前请阅读 [贡献约定](.github/CONTRIBUTING.md)，每个 Issue 聚焦一个问题，每个 PR 关联 Issue、写清非目标并附验证证据；UI 变更需要前后截图。
 
 特别感谢 [@labiaaaaaaaaa](https://github.com/labiaaaaaaaaa) 推进第三方服务适配与兼容端点修复。
 

@@ -1,0 +1,79 @@
+name: 功能建议
+description: 描述一个用户问题、期望结果和可验收范围
+title: "[Feature] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        请先描述用户问题，不要只写组件或技术方案。架构级变化应先在 Issue 中讨论清楚再提交 PR。
+  - type: dropdown
+    id: surface
+    attributes:
+      label: 目标范围
+      options:
+        - Workflow
+        - Table
+        - Agent
+        - Skill / CLI / MCP
+        - Desktop / 分发
+        - Provider / 模型映射
+        - 文档或社区
+        - 跨模块
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: 用户问题
+      description: 谁在什么场景遇到了什么阻碍？现有方式为什么不够？
+    validations:
+      required: true
+  - type: textarea
+    id: journey
+    attributes:
+      label: 期望用户路径
+      description: 用 3–6 步描述用户如何发现、使用并完成任务。
+      placeholder: |
+        1. 用户从……
+        2. 选择……
+        3. 确认……
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: 本次范围
+      description: 这次必须交付什么？
+    validations:
+      required: true
+  - type: textarea
+    id: non_goals
+    attributes:
+      label: 非目标
+      description: 明确这次不会解决什么，避免 Issue 无限扩张。
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 验收标准
+      description: 写成可以观察、测试或截图确认的结果。
+      placeholder: |
+        - [ ] …
+        - [ ] …
+    validations:
+      required: true
+  - type: textarea
+    id: references
+    attributes:
+      label: 参考资料
+      description: 可选：设计稿、同类产品、技术文档或失败过的方案。
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: 提交前确认
+      options:
+        - label: 我已搜索已有 Issue，并确认这不是重复建议。
+          required: true
+        - label: 我没有在内容中加入 API Key、Token 或私人素材。
+          required: true
