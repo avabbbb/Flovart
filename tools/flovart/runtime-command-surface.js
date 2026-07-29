@@ -8,6 +8,7 @@ export const RUNTIME_COMMAND_NAMES = Object.freeze([
   'task.cancel',
   'event.stream',
   'provider.status',
+  'agent-text.route.sync',
   'production.dry-run',
   'production.status',
   'production.approve',
@@ -20,6 +21,7 @@ export const RUNTIME_COMMAND_NAMES = Object.freeze([
 export const RUNTIME_WRITE_COMMAND_NAMES = Object.freeze([
   'runtime.test.delay',
   'task.cancel',
+  'agent-text.route.sync',
   'production.dry-run',
   'production.approve',
   'production.run',

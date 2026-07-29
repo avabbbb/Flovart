@@ -15,6 +15,25 @@ const OPENAI_COMPATIBLE_PROVIDERS = new Set<AIProvider>([
     'midjourney',
 ]);
 
+export const isOpenAICompatibleProvider = (provider: AIProvider) => OPENAI_COMPATIBLE_PROVIDERS.has(provider);
+
+const DEFAULT_OPENAI_COMPATIBLE_BASE_URLS: Partial<Record<AIProvider, string>> = {
+    openai: 'https://api.openai.com/v1',
+    openrouter: 'https://openrouter.ai/api/v1',
+    deepseek: 'https://api.deepseek.com/v1',
+    siliconflow: 'https://api.siliconflow.cn/v1',
+    qwen: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    minimax: 'https://api.minimax.chat/v1',
+    volcengine: 'https://ark.cn-beijing.volces.com/api/v3',
+    keling: 'https://api.klingai.com/v1',
+    flux: 'https://api.bfl.ml/v1',
+    midjourney: 'https://api.midjourney.com/v1',
+};
+
+export const resolveProviderBaseUrl = (provider: AIProvider, baseUrl?: string) => (
+    normalizeProviderBaseUrl(provider, baseUrl || DEFAULT_OPENAI_COMPATIBLE_BASE_URLS[provider])
+);
+
 function trimTrailingSlashes(value: string) {
     return value.trim().replace(/\/+$/, '');
 }

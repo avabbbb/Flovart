@@ -3,6 +3,9 @@
   "private": true,
   "version": "0.3.0",
   "type": "module",
+  "engines": {
+    "node": ">=22.19.0"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -25,6 +28,9 @@
   },
   "dependencies": {
     "@cfworker/json-schema": "^4.1.1",
+    "@earendil-works/pi-agent-core": "0.82.1",
+    "@earendil-works/pi-ai": "0.82.1",
+    "@earendil-works/pi-storage-sqlite-node": "0.82.1",
     "@excalidraw/excalidraw": "^0.18.1",
     "@ffmpeg/ffmpeg": "^0.12.15",
     "@ffmpeg/util": "^0.12.2",

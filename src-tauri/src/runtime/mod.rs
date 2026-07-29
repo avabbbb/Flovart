@@ -1,4 +1,5 @@
 mod auth;
+mod agent_text;
 mod contracts;
 mod control_server;
 mod discovery;
@@ -181,6 +182,36 @@ impl ProductionRuntime {
         self.store.list_events(after_event_id, task_id, limit)
     }
 
+    pub fn open_agent_text_stream(
+        &self,
+        request: &Value,
+    ) -> Result<agent_text::AgentTextStream, RuntimeError> {
+        let request = agent_text::parse_request(request)?;
+        let routes = self.store.list_agent_text_routes()?;
+        if routes.is_empty() {
+            return Err(RuntimeError::new(
+                "ROUTE_UNAVAILABLE",
+                "No agent-text route is configured",
+            ));
+        }
+        for route in routes {
+            let secret = crate::keyring::read_secret(&route.provider, &route.credential_id)
+                .map_err(|_| {
+                    RuntimeError::new(
+                        "RUNTIME_UNAVAILABLE",
+                        "The operating-system keyring could not be read",
+                    )
+                })?;
+            if let Some(secret) = secret {
+                return agent_text::open_provider_stream(&route, &secret, &request);
+            }
+        }
+        Err(RuntimeError::new(
+            "ROUTE_UNAVAILABLE",
+            "No configured agent-text credential is available",
+        ))
+    }
+
     pub fn execute(&self, envelope: &Value) -> Result<Value, RuntimeError> {
         self.validate_envelope(envelope)?;
         match envelope["command"].as_str().unwrap_or_default() {
@@ -281,6 +312,15 @@ impl ProductionRuntime {
                             "credentials": runninghub_credentials
                         }
                     ]
+                }))
+            }
+            "agent-text.route.sync" => {
+                let routes = agent_text::validate_routes(&envelope["args"])?;
+                self.store.replace_agent_text_routes(&routes)?;
+                Ok(serde_json::json!({
+                    "target": "runtime-capability:agent-text",
+                    "routes": routes,
+                    "secretFieldsStored": false
                 }))
             }
             "runtime.test.delay" => {

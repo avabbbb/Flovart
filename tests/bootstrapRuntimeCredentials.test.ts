@@ -6,6 +6,7 @@ describe('bootstrapRuntimeCredentials', () => {
   it('syncs persisted credentials before any business route mounts', async () => {
     const report = vi.fn().mockResolvedValue(undefined);
     const sync = vi.fn().mockResolvedValue(1);
+    const syncRoutes = vi.fn().mockResolvedValue(1);
 
     await expect(bootstrapRuntimeCredentials({
       migrate: vi.fn().mockResolvedValue(undefined),
@@ -18,11 +19,18 @@ describe('bootstrapRuntimeCredentials', () => {
       clear: vi.fn(),
       report,
       sync,
+      syncRoutes,
       persistenceEnabled: () => true,
     })).resolves.toBe(1);
 
     expect(report).toHaveBeenCalledWith(1, true);
     expect(sync).toHaveBeenCalledWith([{
+      id: 'google-1',
+      provider: 'google',
+      key: 'secret',
+      name: 'Google',
+    }]);
+    expect(syncRoutes).toHaveBeenCalledWith([{
       id: 'google-1',
       provider: 'google',
       key: 'secret',
@@ -34,6 +42,7 @@ describe('bootstrapRuntimeCredentials', () => {
     const clear = vi.fn().mockResolvedValue(undefined);
     const report = vi.fn().mockResolvedValue(undefined);
     const sync = vi.fn();
+    const syncRoutes = vi.fn().mockResolvedValue(0);
 
     await expect(bootstrapRuntimeCredentials({
       migrate: vi.fn().mockResolvedValue(undefined),
@@ -45,11 +54,13 @@ describe('bootstrapRuntimeCredentials', () => {
       clear,
       report,
       sync,
+      syncRoutes,
       persistenceEnabled: () => false,
     })).resolves.toBe(0);
 
     expect(report).toHaveBeenCalledWith(1, false);
     expect(clear).toHaveBeenCalledOnce();
     expect(sync).not.toHaveBeenCalled();
+    expect(syncRoutes).toHaveBeenCalledWith([]);
   });
 });

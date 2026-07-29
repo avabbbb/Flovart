@@ -57,14 +57,22 @@ Table 是 Workflow 之外的第二个正式创作工作区，不是电子表格�
 - **原子能力面**：⬜ 补齐 Provider Job、Artifact、Node、Render 与 Verify 的封闭类型 Atomic Runtime Command；Production Intent Command 由 Runtime 展开为 ProductionRun 与 StageRun。
 - **Provider-neutral 能力**：⬜ Agent、CLI、MCP 与 WebUI 只请求产品能力，Provider Adapter 独占路由 payload、凭据和提交生命周期。
 
-## ProductionRun 与导演 Skill 生态
+## Flovart Agent V1
 
-- **Director Skill Manifest**：🟨 已用 `community.vox-director` 内置示例落地版本、ProductionSpec 扩展 Schema、Runtime Capability、人工 Gate、兼容版本、来源与权限声明，并由 Skill 台读取同一真实包；继续补第三方包导入、签名、锁定快照、发布、撤销与预算策略。风格 Skill 不得读取 API Key 或直接构造 Provider HTTP 请求。
+- **类型化制作工具**：⬜ 为 PI Kernel 注册项目/素材/Runtime 查询、方案修订提案、Production Intent 与 Specialist Capability；不开放 Shell、任意文件和任意网络工具。
+- **流式工具调用**：⬜ 在 Runtime `agent-text` 归一化协议中补齐 tool-call delta、结构化错误、断流重试和超时分类，并验证多轮 Tool Result 回灌。
+- **主对话与探索分支**：⬜ 保留一条可恢复主对话；探索分支未提升前不得创建正式 Spec Revision 或 Mandate。
+- **Production Plan Card**：⬜ 把目标产物、可选 Production Skill、Route Plan、预算和审片点投影为一张制作方案卡；“确认并开始”原子创建 Mandate 和 Run，普通聊天文本不得授权付费。
+- **固定 Node Runtime**：⬜ 正式 Desktop 安装包捆绑满足 PI 要求的 Node `>=22.19.0`，Release Manifest 锁定 Node、PI、Agent 协议和 Session Schema；源码开发模式才允许使用合规系统 Node。
+
+## ProductionRun 与 Production Skill 生态
+
+- **Production Skill Manifest**：🟨 已用 `community.vox-director` 内置 VOX Skill 示例落地版本、ProductionSpec 扩展 Schema、Runtime Capability、人工 Gate、兼容版本、来源与权限声明，并由 Skill 台读取同一真实包；继续补第三方包导入、签名、锁定快照、发布、撤销与预算策略。Production Skill 不得读取 API Key 或直接构造 Provider HTTP 请求。
 - **制作领域模型**：⬜ 建立 `ProductionRun → Shot → Take → Artifact → Delivery`，将当前多个独立生成任务和外部合成脚本收进一条可恢复、可审计的制作图。
 - **报价与批准状态机**：⬜ 将 `production.quote`、预算策略/用户批准与 `submit` 分开，支持单镜头和整片费用上限；价格预览与最终账单分别记录。
 - **一等后期命令**：⬜ 注册旁白、字幕、混音、合成、响度和交付验证命令，使 Coding Agent 不再依赖评测目录的临时脚本。
 - **图生视频一致性流程**：⬜ 先做 style bake-off、角色参考和静态关键帧，再以 image-to-video 生成镜头；把跨镜头角色、调色和品牌污染检查设为 Gate。
-- **第三方 Skill 安全**：⬜ 增加签名、网络/Provider/文件权限、Secret 隔离、费用配额与审计日志，之后再开放导演 Skill UGC 安装与发布。
+- **第三方 Skill 安全**：⬜ 增加签名、网络/Provider/文件权限、Secret 隔离、费用配额与审计日志，之后再开放 Production Skill UGC 安装与发布。
 - **Research Adapter 正式来源**：⬜ 为 X 接入经过认证、可审计且遵守来源条款的正式适配器，并补限流、游标、去重和来源级健康度；不得用搜索摘要冒充 X 原帖。Reddit RSS 已完成 tracer-bullet，但仍需加入票数/评论数的正式元数据来源。
 - **TUI 制作控制台 V2**：⬜ 在保持 CLI 为唯一命令入口的前提下，增加 Task drill-down、价格批准、Artifact 预览、Agent token stream 和失败镜头重做；TUI 不保存第三份 Runtime/Workflow 状态。
 - **只读 Workflow Projection**：🟨 `production.dry-run` 已持久编译 ProductionRun/StageRun DAG，`workflow.projection.get` 与 Desktop 轮询 Adapter 已把计划节点自动投到真实 Workflow，并保留用户布局；继续补 `workflow.projection.updated` 事件和 Runtime Artifact 到对应 Shot/Take 节点的自动挂载。
@@ -78,7 +86,7 @@ Table 是 Workflow 之外的第二个正式创作工作区，不是电子表格�
 
 ## 社区、企业与分发
 
-- **Desktop 内置 Agent Toolkit**：⬜ 当前 Desktop 可自动启动显式入口、已安装 Agent Toolkit 或源码开发入口，WebUI 无需手填 Token；正式安装包仍需内置签名后的 Managed Agent 资源或在首次启动安全安装 Toolkit，避免全新机器只有 Desktop、尚未安装 Node/Toolkit 时自动连接降级。
+- **Desktop 内置 Agent Toolkit**：⬜ 当前 Desktop 可自动启动显式入口、已安装 Agent Toolkit 或源码开发入口，WebUI 无需手填 Token；正式安装包仍需内置签名后的 Managed Agent 资源和固定 Node `>=22.19.0`，避免全新机器只有 Desktop、尚未安装 Node/Toolkit 时自动连接降级。
 - **macOS/Linux Agent Toolkit 发布**：⬜ Node CLI、Workspace Adapter 与 POSIX launcher 已跨平台；正式 tag 流程仍需同时构建、签名并合并 `darwin-*` / `linux-*` Toolkit manifest，不能只发布 Windows artifact 后宣称 `flovart install/start` 全平台可用。
 - **UGC 后端**：⬜ 实现 CommunityWorkflow 列表、筛选、搜索、上传、详情、点赞与 fork 计数，并接入真实用户和 R2 媒体预览。
 - **项目与素材共享**：⬜ 完成项目云同步、作品画廊和公共素材库；共享 Workflow 不包含模型配置和 API Key。

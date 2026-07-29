@@ -3,7 +3,7 @@ import { nanoid } from 'nanoid';
 import { create } from 'zustand';
 import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware';
 
-export type AgentPanelKind = 'brief' | 'codex' | 'activity' | 'artifacts';
+export type AgentPanelKind = 'brief' | 'flovart' | 'codex' | 'activity' | 'artifacts';
 export type AgentPanelStatus = 'idle' | 'running' | 'waiting' | 'done' | 'error';
 
 export interface AgentWorkspacePanel {
@@ -44,17 +44,36 @@ export const createDefaultAgentLayout = (): AgentWorkspaceLayout => ({
   viewport: { x: 42, y: 38, zoom: 1 },
   panels: [
     { id: 'brief', kind: 'brief', title: '项目 Brief', status: 'idle', x: 0, y: 0, width: 310, height: 220, z: 1 },
-    { id: 'codex-main', kind: 'codex', title: 'Codex · 制作线程', status: 'idle', x: 336, y: 0, width: 520, height: 620, z: 4 },
+    { id: 'flovart-main', kind: 'flovart', title: 'Flovart Agent', status: 'idle', x: 336, y: 0, width: 520, height: 620, z: 4 },
     { id: 'activity', kind: 'activity', title: '任务状态', status: 'idle', x: 0, y: 246, width: 310, height: 374, z: 2 },
     { id: 'artifacts', kind: 'artifacts', title: '制作产物', status: 'idle', x: 882, y: 0, width: 360, height: 620, z: 3 },
   ],
 });
 
+const withFlovartMain = (layout: AgentWorkspaceLayout): AgentWorkspaceLayout => {
+  if (layout.panels.some(panel => panel.kind === 'flovart')) return layout;
+  const legacyMain = layout.panels.find(panel => panel.id === 'codex-main');
+  const flovart: AgentWorkspacePanel = legacyMain
+    ? { ...legacyMain, id: 'flovart-main', kind: 'flovart', title: 'Flovart Agent', status: 'idle' }
+    : createDefaultAgentLayout().panels.find(panel => panel.kind === 'flovart')!;
+  return {
+    ...layout,
+    panels: legacyMain
+      ? layout.panels.map(panel => panel.id === legacyMain.id ? flovart : panel)
+      : [...layout.panels, flovart],
+  };
+};
+
 export const useAgentWorkspaceStore = create<AgentWorkspaceState>()(
   persist(
     set => ({
       layouts: {},
-      ensureLayout: projectId => set(state => state.layouts[projectId] ? state : { layouts: { ...state.layouts, [projectId]: createDefaultAgentLayout() } }),
+      ensureLayout: projectId => set(state => {
+        const current = state.layouts[projectId];
+        if (!current) return { layouts: { ...state.layouts, [projectId]: createDefaultAgentLayout() } };
+        const layout = withFlovartMain(current);
+        return layout === current ? state : { layouts: { ...state.layouts, [projectId]: layout } };
+      }),
       updatePanel: (projectId, panelId, patch) => set(state => {
         const layout = state.layouts[projectId] || createDefaultAgentLayout();
         return { layouts: { ...state.layouts, [projectId]: { ...layout, panels: layout.panels.map(panel => panel.id === panelId ? { ...panel, ...patch } : panel) } } };

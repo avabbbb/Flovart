@@ -5,6 +5,7 @@ import type { WorkflowOnlineTurnInput } from '../workflow/WorkflowAgentPanel';
 import { WorkflowAgentPanel, type WorkflowAgentActivity } from '../workflow/WorkflowAgentPanel';
 import { useWorkflowMediaUrl } from '../workflow/media';
 import type { WorkflowNode, WorkflowProject } from '../workflow/types';
+import { FlovartAgentPanel } from './FlovartAgentPanel';
 import { useAgentWorkspaceStore, type AgentPanelStatus, type AgentWorkspacePanel } from './agentWorkspaceStore';
 
 interface AgentWorkspaceProps {
@@ -72,7 +73,7 @@ export function AgentWorkspace({ project, onCreateProject, onProjectChange, onOn
             onMove={(x, y) => updatePanel(project.id, panel.id, { x, y })}
             onResize={(width, height) => updatePanel(project.id, panel.id, { width, height })}
             onFocus={() => updatePanel(project.id, panel.id, { z: maxZ + 1 })}
-            onRemove={panel.kind === 'codex' && layout.panels.filter(item => item.kind === 'codex').length > 1 ? () => removePanel(project.id, panel.id) : undefined}
+            onRemove={panel.kind === 'codex' ? () => removePanel(project.id, panel.id) : undefined}
             onActivity={status => updatePanel(project.id, panel.id, { status })}
             onProjectChange={patch => onProjectChange(project.id, patch)}
             onOnlineTurn={onOnlineTurn}
@@ -86,7 +87,7 @@ export function AgentWorkspace({ project, onCreateProject, onProjectChange, onOn
         <span className="w-11 text-center text-[10px] font-bold tabular-nums">{Math.round(viewport.zoom * 100)}%</span>
         <button type="button" className="isl-icon-btn h-8 w-8" title="放大" onClick={() => zoomBy(.1)}><Plus size={14} /></button>
         <span className="mx-1 h-4 w-px" style={{ background: 'var(--isl-border)' }} />
-        <button type="button" className="isl-icon-btn h-8 gap-1 px-2 text-[11px]" onClick={() => addCodexPanel(project.id)}><Bot size={13} />新线程</button>
+        <button type="button" className="isl-icon-btn h-8 gap-1 px-2 text-[11px]" onClick={() => addCodexPanel(project.id)}><Bot size={13} />Codex 子任务</button>
         <button type="button" className="isl-icon-btn h-8 w-8" title="恢复默认布局" onClick={() => resetLayout(project.id)}><RotateCcw size={13} /></button>
         <button type="button" className="isl-icon-btn h-8 w-8" title="回到内容" onClick={() => { const next = { x: 42, y: 38, zoom: 1 }; setViewport(next); commitViewport(next); }}><Focus size={14} /></button>
       </div>
@@ -113,13 +114,14 @@ interface AgentPanelProps {
 function AgentPanel({ panel, project, mediaNodes, onMove, onResize, onFocus, onRemove, onActivity, onProjectChange, onOnlineTurn, onOpenWorkflow, onOpenTable }: AgentPanelProps) {
   const drag = useRef<{ x: number; y: number; panelX: number; panelY: number } | undefined>(undefined);
   const resize = useRef<{ x: number; y: number; width: number; height: number } | undefined>(undefined);
-  const Icon = panel.kind === 'codex' ? Bot : panel.kind === 'artifacts' ? Boxes : panel.kind === 'activity' ? CircleDot : Sparkles;
+  const Icon = panel.kind === 'codex' || panel.kind === 'flovart' ? Bot : panel.kind === 'artifacts' ? Boxes : panel.kind === 'activity' ? CircleDot : Sparkles;
   return <motion.section className="absolute flex min-h-0 flex-col overflow-hidden rounded-xl border" style={{ left: panel.x, top: panel.y, width: panel.width, height: panel.height, zIndex: panel.z, borderColor: panel.status === 'waiting' ? 'var(--isl-sun)' : panel.status === 'error' ? 'var(--isl-coral)' : 'var(--isl-border-strong)', background: 'var(--isl-card)', boxShadow: 'var(--isl-shadow)' }} initial={{ opacity: 0, scale: .94, y: 12 }} animate={{ opacity: 1, scale: 1, y: 0 }} transition={{ type: 'spring', stiffness: 390, damping: 31 }} onPointerDown={onFocus}>
     <header className="flex h-9 shrink-0 cursor-grab items-center gap-2 border-b px-2.5 active:cursor-grabbing" style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-surface)' }} onPointerDown={event => { if ((event.target as HTMLElement).closest('button')) return; drag.current = { x: event.clientX, y: event.clientY, panelX: panel.x, panelY: panel.y }; event.currentTarget.setPointerCapture(event.pointerId); }} onPointerMove={event => { if (drag.current) onMove(drag.current.panelX + event.clientX - drag.current.x, drag.current.panelY + event.clientY - drag.current.y); }} onPointerUp={event => { drag.current = undefined; event.currentTarget.releasePointerCapture(event.pointerId); }}>
       <Icon size={13} /><strong className="min-w-0 flex-1 truncate text-[11px]">{panel.title}</strong><span className={`agent-status is-${panel.status}`}><i />{STATUS_LABEL[panel.status]}</span>{onRemove && <button type="button" className="isl-icon-btn h-6 w-6" aria-label="关闭面板" onClick={onRemove}><X size={12} /></button>}
     </header>
     <div className="min-h-0 flex-1 overflow-hidden">
       {panel.kind === 'codex' && <WorkflowAgentPanel project={project} onClose={() => undefined} onProjectChange={onProjectChange} onOnlineTurn={onOnlineTurn} embedded onActivityChange={(activity: WorkflowAgentActivity) => onActivity(activity)} />}
+      {panel.kind === 'flovart' && <FlovartAgentPanel projectId={project.id} onActivityChange={onActivity} />}
       {panel.kind === 'brief' && <BriefPanel project={project} onOpenWorkflow={onOpenWorkflow} />}
       {panel.kind === 'activity' && <ActivityPanel project={project} />}
       {panel.kind === 'artifacts' && <ArtifactsPanel nodes={mediaNodes} onOpenTable={onOpenTable} />}

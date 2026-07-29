@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1",
   "protocolVersion": "1",
-  "registryHash": "eb0ff2e78686cc5b6109a6cff8a470491d91a33c27898beda6549ec5b1730854",
+  "registryHash": "f6dc0d07e6cb4110c4a258e20ba428f69caf172c615e5f4a6767ecb3f2bb3a09",
   "commands": [
     {
       "name": "runtime.status",
@@ -189,6 +189,14 @@
       "name": "provider.status",
       "summary": "Inspect Production Runtime provider readiness without exposing keys.",
       "args": {},
+      "availability": "available"
+    },
+    {
+      "name": "agent-text.route.sync",
+      "summary": "Persist ordered non-secret Runtime routes for the built-in Flovart Agent text capability.",
+      "args": {
+        "routes": "array"
+      },
       "availability": "available"
     },
     {

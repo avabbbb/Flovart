@@ -88,7 +88,7 @@ impl Drop for ControlServer {
     }
 }
 
-fn handle_request(mut request: Request, runtime: &ProductionRuntime, token: &str) {
+fn handle_request(mut request: Request, runtime: &Arc<ProductionRuntime>, token: &str) {
     if request
         .headers()
         .iter()
@@ -176,6 +176,20 @@ fn handle_request(mut request: Request, runtime: &ProductionRuntime, token: &str
                     respond_error(request, status, error);
                 }
             }
+        }
+        (&Method::Post, "/v1/agent-text/stream") => {
+            let body = match read_json_body(&mut request) {
+                Ok(body) => body,
+                Err(error) => {
+                    respond_error(request, 400, error);
+                    return;
+                }
+            };
+            let runtime = runtime.clone();
+            std::thread::spawn(move || match runtime.open_agent_text_stream(&body) {
+                Ok(stream) => respond_agent_text_sse(request, stream),
+                Err(error) => respond_runtime_error(request, error),
+            });
         }
         (&Method::Get, "/v1/tasks") => {
             let status = query_value(parsed_url.as_ref(), "status");
@@ -414,6 +428,17 @@ fn respond_sse(request: Request, events: &[super::RuntimeEvent]) {
     );
     response.add_header(Header::from_bytes("Cache-Control", "no-store").expect("header"));
     response.add_header(Header::from_bytes("X-Accel-Buffering", "no").expect("header"));
+    let _ = request.respond(response);
+}
+
+fn respond_agent_text_sse(request: Request, stream: super::agent_text::AgentTextStream) {
+    let headers = vec![
+        Header::from_bytes("Content-Type", "text/event-stream; charset=utf-8").expect("header"),
+        Header::from_bytes("Cache-Control", "no-store").expect("header"),
+        Header::from_bytes("X-Accel-Buffering", "no").expect("header"),
+        Header::from_bytes("X-Content-Type-Options", "nosniff").expect("header"),
+    ];
+    let response = Response::new(StatusCode(200), headers, stream, None, None);
     let _ = request.respond(response);
 }
 

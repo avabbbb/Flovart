@@ -9,15 +9,17 @@
 - [ADR 0036：向 Agent 暴露 Provider-neutral Capability 而不是 Provider Job](../adr/0036-expose-provider-neutral-capabilities-to-agents.md)
 - [ADR 0044：允许用户验证本地 BYOK Route Mapping](../adr/0044-allow-verified-local-byok-route-mapping.md)
 - [ADR 0045：以 ProductionSpec 作为制作计划权威](../adr/0045-make-production-spec-authoritative-over-workflow-projection.md)
-- [ADR 0046：每个 ProductionSession 只绑定一个主 Director](../adr/0046-bind-one-primary-director-per-production-session.md)
+- [ADR 0046：每个 ProductionSession 至多绑定一个主 Production Skill](../adr/0046-bind-at-most-one-primary-skill-per-production-session.md)
 - [ADR 0047：通过 Runtime 介入事件唤醒 Coding Agent](../adr/0047-wake-agents-from-runtime-intervention-events.md)
+- [ADR 0056：以内嵌 PI Agent Core 实现 Flovart Agent](../adr/0056-use-pi-agent-core-for-the-built-in-flovart-agent.md)
+- [Flovart Agent V1 实施规划](flovart-agent-v1-plan.md)
 - [Production Runtime 数据契约](production-runtime-data-contract.md)
 - [Production Runtime S0/S1 施工清单](production-runtime-s0-s1-work-items.md)
 - [领域词汇](../../CONTEXT.md)
 
 ## V1 目标
 
-让同一个 Coding Agent 同时使用 Director Skill 与 Flovart Skill 后，可以提交一条生产意图，立即拿到持久任务句柄，并在 WebUI 关闭、CLI 断开或 Desktop Runtime 重启后继续查询、观察、取消或恢复；Provider 凭据始终不离开 Desktop Runtime 与受控 Provider Worker。
+让内置 Flovart Agent 或接入的外部 Coding Agent 使用可选 Production Skill，并通过 Flovart Skill 或同一 Runtime 契约提交生产意图，立即拿到持久任务句柄，在 WebUI 关闭、CLI 断开或 Desktop Runtime 重启后继续查询、观察、取消或恢复；Provider 凭据始终不离开 Desktop Runtime 与受控 Provider Worker。
 
 首个可放行垂直切片定义为：
 
@@ -34,7 +36,7 @@
 ## 非目标
 
 - V1 不把 Production Authority 放到云端 Hub。
-- Director Skill 不接触 Provider Secret、Provider HTTP endpoint 或任意 Shell。
+- Production Skill 不接触 Provider Secret、Provider HTTP endpoint 或任意 Shell。
 - 不让 WebUI 继续承担长任务执行权威。
 - 不为尚未存在的远程 Runtime、集群调度或跨设备同步预留复杂抽象。
 - 不直接依赖仍在变化的 MCP Tasks 实验接口；MCP 是 Runtime 的 Adapter。
@@ -150,7 +152,7 @@ flowchart LR
 | Atomic Runtime | `workflow.node.move`、`workflow.connect`、`artifact.import`、`capability.submit` | Flovart Skill、第一方 UI、受控 operator |
 | Private Provider IPC | `provider.submit`、`provider.poll`、`provider.cancel` | 仅 Desktop Runtime |
 
-推荐把公开原子生成 seam 定义为 Provider-neutral 的 `capability.submit`，输入为 Capability Requirement；Provider Job 是 Runtime 内部的 ProviderAttempt，不向社区 Director Skill 暴露 Provider endpoint。
+推荐把公开原子生成 seam 定义为 Provider-neutral 的 `capability.submit`，输入为 Capability Requirement；Provider Job 是 Runtime 内部的 ProviderAttempt，不向社区 Production Skill 暴露 Provider endpoint。
 
 ## Runtime Task 生命周期
 
@@ -300,7 +302,7 @@ Runtime SQLite 结构应单独记录在 `docs/content/docs/runtime/runtime-stora
 - Agent 可以在断线后只凭 ProductionRun ID 恢复上下文。
 - 已完成 Artifact 不因重规划被重复生成。
 - 所有费用预留与 ProviderAttempt 可追溯到 StageRun。
-- Director Skill 只能声明 Capability Requirement，不能指定 Secret 或任意 endpoint。
+- Production Skill 只能声明 Capability Requirement，不能指定 Secret 或任意 endpoint。
 
 ### S4：完整短片能力
 
@@ -417,6 +419,6 @@ S0 与 S1 同时满足以下条件后，才进入视频和 ProductionRun：
 3. 首个 WebUI Adapter 只接 Workflow；ProductionRuntime 保持 UI-neutral，Table 或未来 Canvas 通过相同 Interface 后续接入。
 4. ProductionSpec Revision 是制作计划权威；Workflow 只保存可重建投影和独立布局 revision。
 5. 用户可以在已支持 Provider Adapter Family 内验证本地 BYOK Route，但未知协议必须新增受审 Adapter。
-6. 每个 ProductionSession 在 V1 中只绑定一个 Primary Director Skill Snapshot。
+6. 每个 ProductionSession 在 V1 中至多绑定一个 Primary Skill Binding；无绑定时直接使用 ProductionSpec Core。
 7. Runtime/TUI 持续监控长任务，仅通过 Agent Intervention Event 唤醒 Coding Agent。
 8. S0/S1 图片底座放行后，下一条产品验收是 15 秒 VOX 端到端短片。

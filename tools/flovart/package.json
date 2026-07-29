@@ -50,13 +50,16 @@
     "url": "https://github.com/avabbbb/Flovart"
   },
   "engines": {
-    "node": ">=20.10"
+    "node": ">=22.19.0"
   },
   "scripts": {
     "prepack": "node scripts/prepare-package.mjs"
   },
   "dependencies": {
     "@cfworker/json-schema": "^4.1.1",
+    "@earendil-works/pi-agent-core": "0.82.1",
+    "@earendil-works/pi-ai": "0.82.1",
+    "@earendil-works/pi-storage-sqlite-node": "0.82.1",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "fast-xml-parser": "^5.10.1",
     "ink": "^6.8.0",

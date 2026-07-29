@@ -2,26 +2,36 @@
 title: 待测试确认
 ---
 
+## Flovart Agent 首个可用切片
+
+- Agent 工作区的默认主对话已从 Codex 改为唯一的 `Flovart Agent`；已有空间布局会把旧 `codex-main` 原位替换，用户仍可按需新增和关闭独立的 Codex 子任务面板。
+- Managed Agent 内嵌锁定版本的 PI Agent Core，并使用独立 `agent-sessions.db` 保存每个项目的一条主对话；关闭并重开 Agent 或 Desktop 后会从 SQLite 恢复消息，不把聊天写进 Production Runtime 数据库。
+- `agent-text` 路线现在由 Desktop Runtime 执行：WebUI 只同步 Provider、Credential ID、Model、Base URL 和顺序，Node 只提交裁剪后的消息上下文；原始 API Key 只由 Rust Runtime 从操作系统 Keyring 读取。Agent 请求一旦携带 `apiKey` 或未知秘密字段会被拒绝。
+- 首条 Runtime Adapter 支持 OpenAI-compatible Chat Completions SSE。Runtime 在独立请求线程读取上游流并归一化为 PI 事件，Control Plane 的状态、任务和事件查询不会被长文本回复阻塞。
+- 这一切片只交付安全主对话，不会因为用户在聊天中输入“可以”或“开始”而创建付费 ProductionRun。Production Plan Card、Production Mandate、类型化制作工具、探索分支和 Production Skill 绑定仍在待办。
+- 自动验证已通过：PI SQLite 恢复、Node 秘密边界、Runtime Route/Keyring/SSE、Managed Agent 客户端、默认空间布局共 10 个文件、27 项定向 Vitest；Rust 路由持久化、秘密字段拒绝和 OpenAI SSE 归一化测试；Web 生产构建与 Agent JavaScript 语法检查。单线程全量 Vitest 为 85 个文件、646 项通过、1 项跳过；保留本轮未修改的 `workflowGeneration.test.ts` 6 项 Provider reference 失败，以及 `workflowNodeOverlays.test.tsx` 2 项既有视频模式断言失败。
+- 待用户验证：在设置的“模型映射 → 文本与 Agent”中给 `agent-text` 绑定一条 OpenAI-compatible 模型，进入 Agent 工作区确认默认面板名为 `Flovart Agent`；发送一句制作需求，应看到流式回复。关闭并重开 Desktop 后同一项目的对话应恢复；新增 `Codex 子任务` 不应替换主对话。
+
 ## README、项目数据与开源协作入口
 
-- 中英文 README 顶部保留并标注 rule34 主题访问计数、GitHub Stars 与 Release Downloads；访问计数明确为展示次数而非独立访客。展示区改为有内容的 Workflow 主图、最新 Skill 首页和 Director Skill 低门槛引导，不使用空白工作区或断开连接状态作为核心宣传图。
+- 中英文 README 顶部保留并标注 rule34 主题访问计数、GitHub Stars 与 Release Downloads；访问计数明确为展示次数而非独立访客。展示区改为有内容的 Workflow 主图、最新 Skill 首页和 Production Skill 低门槛引导，不使用空白工作区或断开连接状态作为核心宣传图。
 - 现有 `Traffic Snapshot` Action 扩展为每日保存 Views、Clones、Stars、Forks、Watchers、Release 数量、附件下载总数和附件明细；Views/Clones 仍需仓库 Secret `TRAFFIC_PAT` 的 Fine-grained `Administration: Read-only` 权限。统计不读取应用内行为、Prompt、素材或 API Key。
 - 新增 `stats/README.md` 解释指标口径、14 天 Traffic 窗口、启用步骤和隐私边界；真实活跃安装、会话和功能使用率暂不统计，不用 Release 下载量冒充活跃用户。
 - 重写 `.github/CONTRIBUTING.md`，移除旧 Making、Canvas、Gemini 单一服务和不存在脚本等过期说明；新增 Bug / Feature Issue Form 与 PR 模板，约定一个 Issue 一个问题、一个 PR 一个可验证目标，UI 变更必须提供证据。
 - 待用户验证：GitHub 默认分支更新后确认两份 README 顶部 rule34 计数和新截图正常显示；手动运行一次 `Traffic Snapshot`，确认 `stats/history.json` 生成且 Action Summary 无权限警告；打开 Issue 选择页和新 PR 页面确认模板自动出现。
 
-## VOX Director 内置示例 Skill
+## VOX Skill 内置示例
 
 - 新增 `.agents/skills/vox-director` 标准 Skill 包：本地 Coding Agent 与应用内 Skill 台读取同一份 `SKILL.md`、`flovart.skill.yaml`、ProductionSpec 扩展 Schema、创意指导、评测用例和示例 ProductionSpec，不再由首页维护一份脱离运行契约的 VOX 展示假数据。
-- VOX 上游工作流已改造为 Flovart 的 Provider-neutral Director Skill：保留叙事节拍、纸张拼贴、风格试片、关键帧审片、OCR 和音频设计；示例包不读取 API Key、不直连 Provider、不负责轮询、下载或渲染，只声明 Runtime Capability 和人工 Gate。
-- `/app/home` 的导演 Skill 入口改为三步首次使用引导，详情优先展示适用场景、显式调用名、可复制示例和费用边界；Capability、Gate、Runtime 版本等技术信息收进次级详情，避免普通创作者先理解内部协议。
-- “在本机 Agent 中试用”会创建 `VOX Director 示例`、切换到 Agent 工作区并填入可编辑的 `$vox-director` 调用词，不自动发送或调用 Provider。桌面版复用 Managed Agent IPC 自动取得 loopback 连接，Token 不写入浏览器存储；普通浏览器版保留手动连接提示。
-- 新增 `docs/overview/skill-guide.md`，覆盖 Flovart Skill 与 Director Skill 的区别、零命令路径、调用模板、生效检查、费用边界、进阶诊断和当前产品限制，并已加入两份文档索引。
+- VOX 上游工作流已改造为 Flovart 的 Provider-neutral Production Skill：保留叙事节拍、纸张拼贴、风格试片、关键帧审片、OCR 和音频设计；示例包不读取 API Key、不直连 Provider、不负责轮询、下载或渲染，只声明 Runtime Capability 和人工 Gate。
+- `/app/home` 的 VOX Skill 入口改为三步首次使用引导，详情优先展示适用场景、显式调用名、可复制示例和费用边界；Capability、Gate、Runtime 版本等技术信息收进次级详情，避免普通创作者先理解内部协议。
+- “在本机 Agent 中试用”会创建 `VOX Skill 示例`、切换到 Agent 工作区并填入可编辑的 `$vox-director` 调用词，不自动发送或调用 Provider。桌面版复用 Managed Agent IPC 自动取得 loopback 连接，Token 不写入浏览器存储；普通浏览器版保留手动连接提示。
+- 新增 `docs/overview/skill-guide.md`，覆盖 Flovart Skill 与 Production Skill 的区别、零命令路径、调用模板、生效检查、费用边界、进阶诊断和当前产品限制，并已加入两份文档索引。
 - 待用户验证：打开应用首页确认三步引导和技术信息层级易懂；点击“在本机 Agent 中试用”后确认进入 Agent、项目名正确、调用词已填入且未自动发送；修改主题发送后确认本机 Coding Agent 实际加载 `community.vox-director@1.0.0`。第三方 Skill 的安装、锁定、签名、发布和撤销仍是待办。
 
 ## ProductionRun 与真实 Workflow Plan Projection
 
-- 新增 `production.dry-run`：Coding Agent/CLI 可把一个 Provider-neutral Director ProductionSpec 交给 Desktop Runtime；Runtime 在一个 SQLite 事务中创建 ProductionSession、不可变 Spec Revision、ProductionRun、StageRun DAG、依赖和 Workflow Plan Projection，并通过原有 Task/Event Ledger 返回可恢复 Task。
+- 新增 `production.dry-run`：Coding Agent/CLI 可把一个 Provider-neutral ProductionSpec 交给 Desktop Runtime；Runtime 在一个 SQLite 事务中创建 ProductionSession、不可变 Spec Revision、ProductionRun、StageRun DAG、依赖和 Workflow Plan Projection，并通过原有 Task/Event Ledger 返回可恢复 Task。
 - 新增 `production.status` 与 `workflow.projection.get`。当前 Dry Run 不提交 Provider、不扣费；缺少 Route Plan、Run Budget、TTS/音乐/渲染/验证能力时明确保持 `action_required`，不会把已编译计划冒充为可执行成片。
 - 顶层 Production Projection Adapter 每 1.5 秒读取 Runtime 权威投影并自动合入匹配的真实 Workflow。它只替换 Runtime-owned 投影节点/依赖，保留用户节点、用户连线、选择和视口；相同 Session/Stage 的稳定节点身份会保留用户手动移动、缩放和锁定状态。
 - 真实 VOX 验收已通过：`production-spec.v1.json` 的 VOX Gate 为 100/100；PowerShell CLI 创建 `production_run_019f9d1f-44c6-7ac0-9b28-2614d02f3b3d`，持久化 20 个 StageRun 和 21 个投影节点/19 条依赖；无 Playwright/CDP 回读真实画布得到 21 个投影节点，同时保留原“VOX 镜头 1（已细修）”，Workspace `clients: 1`。
@@ -693,7 +703,7 @@ title: 待测试确认
 
 ## Phase 2.4 — 音频工具（截取 / 变速）
 
-对齐 LibTV 模块 06+07 音频工具部分。导演台 3D 构图（three.js / @react-three/fiber）为 P2 最低优先级，本轮未实现，后续视用户需求再补。
+对齐 LibTV 模块 06+07 音频工具部分。3D 构图工作台（three.js / @react-three/fiber）为 P2 最低优先级，本轮未实现，后续视用户需求再补。
 
 ### 音频工具服务（services/audioTools.ts — 新建）
 - **`trimAudio(blob, startSec, endSec, name)`**：用 ffmpeg.wasm `-ss` + `-to` + `-c copy` 流复制截取音频片段，不重编码，极快；返回 `AudioTrimResult { blob, durationSec }`，输出格式延续源文件 MIME（默认 `audio/mpeg`）。

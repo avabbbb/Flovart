@@ -8,8 +8,12 @@ import {
   reportRuntimeCredentialVault,
   syncRuntimeCredentials,
 } from './runtimeCredentials';
+import { syncRuntimeAgentTextRoutes } from './runtimeAgentTextRoutes';
 
-type BootstrapCredential = Pick<UserApiKey, 'id' | 'provider' | 'key' | 'name'>;
+type BootstrapCredential = Pick<
+  UserApiKey,
+  'id' | 'provider' | 'key' | 'name' | 'baseUrl' | 'routeMappings' | 'isDefault' | 'capabilities' | 'status'
+>;
 
 interface BootstrapDependencies {
   migrate(): Promise<void>;
@@ -17,6 +21,7 @@ interface BootstrapDependencies {
   clear(): Promise<void>;
   report(count: number, persistenceEnabled: boolean): Promise<void>;
   sync(credentials: BootstrapCredential[]): Promise<number>;
+  syncRoutes(credentials: BootstrapCredential[]): Promise<number>;
   persistenceEnabled(): boolean;
 }
 
@@ -26,6 +31,7 @@ const defaults: BootstrapDependencies = {
   clear: clearAllKeyData,
   report: reportRuntimeCredentialVault,
   sync: syncRuntimeCredentials,
+  syncRoutes: syncRuntimeAgentTextRoutes,
   persistenceEnabled: () => localStorage.getItem('security.clearKeysOnExit') !== 'true',
 };
 
@@ -45,8 +51,11 @@ export async function bootstrapRuntimeCredentials(
   const persistenceEnabled = dependencies.persistenceEnabled();
   await dependencies.report(credentials.length, persistenceEnabled);
   if (!persistenceEnabled) {
+    await dependencies.syncRoutes([]);
     await dependencies.clear();
     return 0;
   }
-  return dependencies.sync(credentials);
+  const count = await dependencies.sync(credentials);
+  await dependencies.syncRoutes(credentials);
+  return count;
 }

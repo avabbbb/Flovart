@@ -21,7 +21,7 @@ App Home 中公开展示 Published Work 的作品发现界面；作品媒体是�
 避免混用：Workflow Template、PromptPack、本地项目、生成历史记录。
 
 **Remix Bundle**：
-随 Published Work 选择性发布的复刻单元，由一个精确、不可变的 Community Director Skill 版本和一份 Reference Workflow Snapshot 组成；复刻会把 Skill 加入接收者的 Skill 库，并以参考 Workflow 创建新项目。
+随 Published Work 选择性发布的复刻单元，由一个精确、不可变的 Community Production Skill 版本和一份 Reference Workflow Snapshot 组成；复刻会把 Skill 加入接收者的 Skill 库，并以参考 Workflow 创建新项目。
 避免混用：单独 Skill Package、Workflow Template、完整项目备份。
 
 **Reference Workflow Snapshot**：
@@ -70,7 +70,7 @@ Agent Workspace 中的第一等布局对象，可承载 Codex 对话、项目 Br
 
 **Agent Toolkit**：
 面向本地 Coding Agent 用户的终端产品，包含 TUI、CLI 与宿主适配，并连接 Flovart 的统一 Runtime 与命令契约；普通用户通过 npm Bootstrapper 获取版本化 Runtime Release Bundle，不从 Git 克隆源码。正式安装后的 `flovart start` 统一启动本地 Runtime、WebUI 和用户选择的 Coding Agent。
-避免混用：Desktop Edition、Director Skill Package、SaaS Deployment。
+避免混用：Desktop Edition、Production Skill Package、SaaS Deployment。
 
 **Local Workbench Session**：
 由一次 `flovart start` 管理的本地运行会话，统一持有 Runtime、WebUI、TUI 和所选 Coding Agent 的进程状态、端口与关闭顺序；它可以附着到 Local Runtime Registry 中兼容的 Desktop Runtime，否则启动 Agent Toolkit 自有 Runtime。各组件仍保留只用于排障的独立启动命令。
@@ -85,8 +85,12 @@ Agent Workspace 中的第一等布局对象，可承载 Codex 对话、项目 Br
 避免混用：临时 `npx` 进程、npm 全局包、Desktop EXE、Runtime Release Bundle。
 
 **Runtime Release Bundle**：
-由官方 Release 发布、带精确版本与完整性清单的 Agent Toolkit 运行包，包含已构建 WebUI、本地 Runtime 及所需宿主组件，安装到用户级版本目录并由 Agent Bootstrapper 管理。
+由官方 Release 发布、带精确版本与完整性清单的 Agent Toolkit 运行包，包含已构建 WebUI、本地 Runtime、固定 Agent Node Runtime 及所需宿主组件，安装到用户级版本目录并由 Agent Bootstrapper 管理。
 避免混用：Git 工作树、npm Bootstrapper、SaaS 镜像、NSIS Desktop 安装器。
+
+**Agent Node Runtime**：
+随 Desktop Edition 与 Runtime Release Bundle 按平台捆绑、由 Flovart 校验并专供内置 PI Agent 使用的固定 Node.js 运行时；正式安装不读取系统 `node`，版本与 PI 依赖随 Flovart Release 一起升级。
+避免混用：用户系统 Node.js、浏览器 JavaScript Runtime、Rust Desktop Runtime、Provider Worker。
 
 **Local Runtime Registry**：
 Desktop Edition 与 Agent Toolkit 在当前操作系统用户范围内共享的 Runtime 发现记录，声明进程、协议版本、发行版本、端口和会话认证信息；Agent Toolkit 只复用身份可信且协议兼容的现有 Runtime。
@@ -126,7 +130,7 @@ Official WebUI 在纯网页模式下使用的 Provider Secret 存储边界；需
 
 **Edge Extension**：
 通过 Microsoft Edge Add-ons 分发的 Desktop Edition 薄伴侣，只采集并转交用户明确选择的网页内容，并在用户配对后为 Official WebUI 提供受限本地桥接；它不保存 Provider Secret，也不执行生成任务。
-避免混用：Provider Plugin、Director Skill、Desktop Edition、任意网页监控器。
+避免混用：Provider Plugin、Production Skill、Desktop Edition、任意网页监控器。
 
 **Desktop Bridge Host**：
 由 Desktop Edition 安装并注册给 Edge Native Messaging 的最小本机宿主，只接受受信扩展和兼容协议；收到用户主动发起的导入或已授权 WebUI 桥接动作时，它负责启动或激活 Desktop Runtime 并投递类型化请求，不保存 Provider Secret，也不执行生成。
@@ -224,7 +228,7 @@ Flovart 随版本发布的 Verified Route 集合，每条线路都带有可执�
 
 **Run Route Plan**：
 Desktop Runtime 在 ProductionRun 开始前根据 Route Mapping、Capability Requirement、Validated Profile、报价和可用性生成并由用户确认的不可变线路计划，逐项锁定本次运行各能力或阶段使用的 Provider Route。
-避免混用：Route Binding、Route Selection Policy、提交后自动 Failover、Director Skill 模型配置。
+避免混用：Route Binding、Route Selection Policy、提交后自动 Failover、Production Skill 模型配置。
 
 **Route Contract Test**：
 针对一条 Verified Route，用代表性 Generation Request 验证 Adapter 生成的 endpoint、字段名、类型、默认值、媒体角色和数量限制均符合 Route Capability Schema 的无费用测试。
@@ -236,16 +240,36 @@ Desktop Runtime 在 ProductionRun 开始前根据 Route Mapping、Capability Req
 
 ## 制作编排
 
-**Director Skill**：
+**Production Skill**：
 把用户创作意图转成 ProductionSpec 的风格化导演知识包，不持有 Provider 凭据，也不直接执行生成任务。
 避免混用：Provider Plugin、Workflow Runtime、Model Adapter。
 
-**Director Skill Package**：
+**Flovart Agent**：
+绑定到一个 ProductionSession 的有状态制作决策主体，结合创作 Brief、可选 Primary Skill Binding、ProductionSpec 与受限制作能力形成连续工作上下文；每个 ProductionSession 同时只有一个活跃 Flovart Agent。
+避免混用：Production Skill、Coding Agent、Production Authority、Provider Worker。
+
+**Agent Kernel**：
+内置 Flovart Agent 的非用户可见 TypeScript 执行内核，基于固定版本的 `@earendil-works/pi-agent-core` 运行对话、工具循环、流式事件和 Specialist Agent；它通过 Runtime 提供的 `agent-text` 流与受限 Production Intent 调用工作，不直接读取 Provider Secret、文件系统或 Shell。
+避免混用：Flovart Agent 产品身份、PI Coding Agent、Coding Agent Adapter、Desktop Runtime。
+
+**Specialist Agent**：
+由 Flovart Agent 针对一项专业判断临时委派的受限分析主体，只返回结构化证据与建议，不拥有 ProductionSpec 修订、Production Mandate 请求或 Provider 提交权。
+避免混用：Flovart Agent、Coding Agent、Provider Worker、平级制作总监。
+
+**Specialist Capability**：
+平台拥有的类型化专业判断契约，限定 Specialist Agent 的任务语义、输入、结构化输出与最大权限；Production Skill 只能请求已注册能力并补充风格上下文。V1 注册 narrative-review、shot-plan-review、evidence-review 与 visual-continuity-review，预算、线路和格式可行性仍由 Runtime 确定性裁决。
+避免混用：Runtime Capability、自由文本角色 Prompt、Production Skill 私有 Agent、Provider Capability。
+
+**Specialist Report**：
+Specialist Agent 针对一次委派返回的不可变结构化判断，包含结论、分级发现、证据、建议、可选 ProductionSpec 修订提案与用量摘要；它必须由 Flovart Agent 采纳后才能形成新的 Revision。
+避免混用：聊天回复、ProductionSpec Revision、可直接执行的 Patch、Skill Eval。
+
+**Production Skill Package**：
 可由 Codex/OpenCode 读取并由 Flovart 验证、安装和评测的不可变 Skill 目录，包含精炼 SKILL.md、生产 Manifest 及按需资源。
 避免混用：Git 仓库、Hub 页面、任意脚本压缩包。
 
 **Flovart Skill Manifest**：
-Director Skill Package 根目录的 `flovart.skill.yaml`，声明包身份与版本、兼容性、Interaction Commands、Runtime Capabilities、Permissions、Gates、Extension Schema 和 Eval 入口。
+Production Skill Package 根目录的 `flovart.skill.yaml`，声明包身份与版本、兼容性、Interaction Commands、Runtime Capabilities、Permissions、Gates、Extension Schema 和 Eval 入口。
 避免混用：SKILL.md frontmatter、Provider 配置、ProductionSpec 实例。
 
 **Deterministic Skill Script**：
@@ -253,7 +277,7 @@ Package 中具有已声明输入输出、无网络、无秘密且在受限 Sandb
 避免混用：Provider Worker、Runtime Capability、Agent Shell 命令。
 
 **Flovart Skill Creator**：
-官方 Meta Skill 与 CLI 工作流，用具体示例引导创建或迁移 Director Skill，并依次完成 scaffold、validate、dry-run、eval、pack 和 publish。
+官方 Meta Skill 与 CLI 工作流，用具体示例引导创建或迁移 Production Skill，并依次完成 scaffold、validate、dry-run、eval、pack 和 publish。
 避免混用：Hub 审核员、通用 Codex skill-creator、在线代码生成器。
 
 **Skill Snapshot**：
@@ -269,40 +293,40 @@ Hub 针对精确 Skill 版本与 Hash 发布的 advisory、block_new 或 critica
 避免混用：远程删除、本地卸载、普通升级通知。
 
 **ProductionSession**：
-一部作品从创作 Brief、Agent 对话、ProductionSpec 修订到多次 ProductionRun 的上下文边界；一个 Flovart Project 可以包含多个彼此隔离的 ProductionSession。
+一部作品从创作 Brief、Agent 对话、ProductionSpec 修订到多次 ProductionRun 的上下文边界；一个 Flovart Project 可以包含多个彼此隔离的 ProductionSession。每个 ProductionSession 保留一条可恢复的 Flovart Agent 主对话，探索分支在提升为主分支前不能推进正式计划或请求执行授权。
 避免混用：Flovart Project、Agent Session、ProductionRun。
 
-**Primary Director Binding**：
-ProductionSession 对一个精确 Director Skill 版本或 Skill Snapshot 的唯一创意规划绑定；V1 不让多个 Director Skill 同时修改同一 ProductionSpec 的叙事、阶段和审批门。
-避免混用：Flovart Skill、通用素材包、Validated Profile、运行时临时读取多个 Director Skill。
+**Primary Skill Binding**：
+ProductionSession 对至多一个精确 Production Skill 版本或 Skill Snapshot 的可选创意规划绑定；没有绑定时 Flovart Agent 使用 ProductionSpec Core 直接进行通用制作，且不创建虚构的通用 Skill。Agent 可以根据 Brief 推荐 Skill，但只有用户明确确认后才能建立或更换绑定，且系统不得静默切换；更换绑定必须显式重新规划，产生新的 ProductionSpec Revision 并使旧 Production Mandate 失效，已提交的 ProductionRun 不被原地改写。
+避免混用：Flovart Skill、通用素材包、Validated Profile、运行时临时读取多个 Production Skill。
 
 **Production Session Workspace**：
 Production Mode 下为单个 ProductionSession 创建的隔离文件工作区，只向 Agent 暴露只读权威上下文、可写 scratch/exports 和非秘密绑定信息。
 避免混用：Flovart 源码仓库、Runtime 数据目录、Artifact Store 内部目录。
 
 **Skill Authoring Session**：
-用户通过 `skill dev` 显式选择 Director Skill 仓库后创建的开发会话，允许 Agent 在宿主 Sandbox 与 Agent Tool Approval 约束下修改 Skill 源码和测试。
+用户通过 `skill dev` 显式选择 Production Skill 仓库后创建的开发会话，允许 Agent 在宿主 Sandbox 与 Agent Tool Approval 约束下修改 Skill 源码和测试。
 避免混用：ProductionSession、公共 Hub 编辑器、默认磁盘权限。
 
 **ProductionSpec**：
-Director Skill 输出的结构化制作计划，描述叙事、镜头、素材依赖、审批门、能力需求和交付规格。
+Flovart Agent 输出的结构化制作计划，描述叙事、镜头、素材依赖、审批门、能力需求和交付规格；可选 Production Skill 只能在共同 Core 之上增加已声明的制作方法。
 避免混用：Workflow Project、Table Workspace State、Provider Request。
 
 **ProductionSpec Core**：
-所有 Director Skill 共用的制作计划字段，统一表达作品规格、叙事、镜头、音频、审批门和交付要求。
+所有通用制作与 Production Skill 共用的制作计划字段，统一表达作品规格、叙事、镜头、音频、审批门和交付要求。
 避免混用：导演风格模板、Skill 私有 DSL、Workflow 节点结构。
 
 **ProductionSpec Extension**：
-位于 `extensions.<skill-id>` 下并由 Director Skill 自带 Schema 声明的风格专属规划字段，不得增加私有执行阶段。
+位于 `extensions.<skill-id>` 下并由 Production Skill 自带 Schema 声明的风格专属规划字段，不得增加私有执行阶段。
 避免混用：未知根字段、Runtime Capability、Provider 参数。
 
 **Runtime Capability**：
 由 Flovart Runtime 提供并由稳定契约标识的原子制作能力，例如图片生成、视频生成、语音、音乐、渲染和验证。
-避免混用：CLI Command、Provider Model、Director Skill。
+避免混用：CLI Command、Provider Model、Production Skill。
 
 **Atomic Runtime Command**：
 由 Desktop Runtime 执行的最小可恢复操作，只表达一个明确状态转换或外部副作用，并具有显式目标、封闭类型输入、幂等键、持久任务句柄和可查询结果。
-避免混用：Production Intent Command、Director Skill 工作流、隐藏全局配置驱动的复合操作。
+避免混用：Production Intent Command、Production Skill 工作流、隐藏全局配置驱动的复合操作。
 
 **Production Intent Command**：
 面向 Coding Agent、CLI 或 WebUI 的便捷目标命令，例如 `workflow.node.run`、`generate.image`；Runtime 将其展开为一个 ProductionRun 内的多个 Atomic Runtime Command，本身不是重试、计费或恢复的原子边界。
@@ -313,19 +337,19 @@ TUI 中以斜杠触发的类型化交互入口，解析后只能调用规范 CLI
 避免混用：任意 Shell 别名、自由文本 Prompt、Runtime API。
 
 **Command Dispatch**：
-Interaction Command 的类型化去向，只允许 `runtime_command`、`tui_action`、`agent_intent` 或 `capability_request`；Director Skill 只能声明后两种。
+Interaction Command 的类型化去向，只允许 `runtime_command`、`tui_action`、`agent_intent` 或 `capability_request`；Production Skill 只能声明后两种。
 避免混用：Shell 命令模板、HTTP URL、脚本入口。
 
 **Platform Command Namespace**：
 由 Flovart 保留的 `/flovart <action>` 稳定命名空间，用于状态、计划、执行、审批、预算、产物和 Skill 管理等平台能力。
-避免混用：Director Skill 命令、CLI 原子命令名称、本地快捷别名。
+避免混用：Production Skill 命令、CLI 原子命令名称、本地快捷别名。
 
-**Director Command Namespace**：
-Director Skill 通过 Manifest 声明的 `/flovart <skill-slug> <action>` 受控命名空间，不得占用平台命令或注册任意全局斜杠命令。
+**Skill Command Namespace**：
+Production Skill 通过 Manifest 声明的 `/flovart <skill-slug> <action>` 受控命名空间，不得占用平台命令或注册任意全局斜杠命令。
 避免混用：Skill ID、Runtime Capability、用户本地别名。
 
 **Local Command Alias**：
-用户在本机显式启用并通过冲突检查后生成的 Director Skill 短入口，例如 `/vox`；发布者不能默认启用或据此获得全局命名权。
+用户在本机显式启用并通过冲突检查后生成的 Production Skill 短入口，例如 `/vox`；发布者不能默认启用或据此获得全局命名权。
 避免混用：公共 Skill 名称、平台保留命令、Hub 分发元数据。
 
 **Terminal Command Center**：
@@ -341,7 +365,7 @@ Terminal Command Center 用来检测、启动、恢复和取消外部 Coding Age
 避免混用：Connected Agent、AI Provider、Flovart 内置模型。
 
 **Connected Agent**：
-通过 Flovart MCP Server、CLI 或 Director Skill 调用 Runtime Capability，但其安装、登录、进程和会话生命周期不由 Flovart 托管的外部 Coding Agent；V1 可包含 Claude Code、OpenCode、Cursor 等经过连接测试的宿主。
+通过 Flovart MCP Server、CLI 或 Production Skill 调用 Runtime Capability，但其安装、登录、进程和会话生命周期不由 Flovart 托管的外部 Coding Agent；V1 可包含 Claude Code、OpenCode、Cursor 等经过连接测试的宿主。
 避免混用：Managed Agent、Coding Agent Adapter、仅出现在配置列表中的未验证宿主。
 
 **First-Class Agent Adapter**：
@@ -362,7 +386,7 @@ Coding Agent Adapter 启动时对宿主版本、健康状态和必需协议能�
 
 **Agent Tool Approval**：
 由 Codex 或 OpenCode 宿主请求并裁决的 Shell、文件、网络或 Agent 工具权限，只影响当前 Agent Turn 的执行能力。
-避免混用：Production Gate、Run Budget、Director Skill 权限。
+避免混用：Production Gate、Run Budget、Production Skill 权限。
 
 **Production Gate Approval**：
 由 Desktop Runtime 记录和执行的预算、安全、素材或审片决定，只影响 ProductionRun，不授予 Agent 额外系统权限。
@@ -371,6 +395,10 @@ Coding Agent Adapter 启动时对宿主版本、健康状态和必需协议能�
 **Agent Session Binding**：
 ProductionSession 与一个外部 Coding Agent 会话之间可恢复的本地关联，保存宿主类型和非秘密会话标识，不持有 ProductionRun 生命周期。
 避免混用：ProductionRun、TUI 进程、Agent API Key。
+
+**Agent Session Store**：
+由内置 PI Agent 独占写入的本地 SQLite 会话库，保存主对话、探索分支、消息、工具轨迹和 Specialist Report，并只以稳定 ID 引用 Desktop Runtime 中的权威制作对象；会话库不可决定规格、授权、费用、运行或产物状态。
+避免混用：Desktop Runtime SQLite、浏览器 Agent 布局存储、外部 Coding Agent 线程、ProductionSession 本身。
 
 **Agent Handoff Snapshot**：
 切换 Coding Agent 宿主时由 Desktop Runtime 根据权威状态生成的不可变上下文快照，包含作品 Brief、Skill 版本、当前 Spec、已确认决策、Run 摘要、待审批项、Artifact 引用和预算状态。
@@ -389,7 +417,7 @@ ProductionSession 与一个外部 Coding Agent 会话之间可恢复的本地关
 避免混用：Skill Hub、Coding Agent、CLI、WebUI。
 
 **Skill Hub**：
-分发 Director Skill Package 的云端目录，保存版本、内容哈希、许可证、评测、认证和撤销信息；不持有用户 Provider 凭据，也不拥有或执行 ProductionRun。
+分发 Production Skill Package 的云端目录，保存版本、内容哈希、许可证、评测、认证和撤销信息；不持有用户 Provider 凭据，也不拥有或执行 ProductionRun。
 避免混用：Desktop Runtime、Provider Worker、云端成片队列。
 
 **Runtime Control API**：
@@ -418,18 +446,18 @@ ProductionRun 因 API Key 设置、System Gate 或人工审片需要用户介入
 
 **Provider Worker**：
 由 Desktop Runtime 调度、使用 TypeScript Provider Adapter 执行具体模型请求并回报状态与结果的本地执行器。
-避免混用：Director Skill、Desktop Runtime、Provider 本身。
+避免混用：Production Skill、Desktop Runtime、Provider 本身。
 
 **Capability Requirement**：
 ProductionSpec 对 Runtime Capability 及其必需特性的声明，只表达输入、输出和质量约束，不指定 Provider 或模型。
 避免混用：Route Mapping、Provider Request、Validated Profile。
 
 **Validated Profile**：
-某个 Director Skill 版本通过样片评测验证过的模型组合及其分数，用于优先解析而不是强制绑定。
+某个 Production Skill 版本通过样片评测验证过的模型组合及其分数，用于优先解析而不是强制绑定。
 避免混用：Route Mapping、必需模型、Provider 配置。
 
 **Compatible Route**：
-满足 Capability Requirement、但尚未由当前 Director Skill 版本完成样片验证的模型解析结果。
+满足 Capability Requirement、但尚未由当前 Production Skill 版本完成样片验证的模型解析结果。
 避免混用：Validated Profile、默认模型、自动成功保证。
 
 **ProductionRun**：
@@ -456,8 +484,16 @@ Desktop Runtime 在状态变化事务中追加的不可变事件序列，为 Run
 ProductionSpec 的不可变版本；任何镜头、提示词、素材依赖或阶段结构调整都创建新版本，不覆盖已批准版本。
 避免混用：运行时 Patch、Provider Retry、工作区撤销历史。
 
+**Production Mandate**：
+用户对一次制作执行边界的不可变授权记录，精确绑定获准使用的 ProductionSpec Revision、Run Route Plan、Run Budget、Review Policy、输入范围与审批门；任一绑定内容改变都会使旧授权失效。
+避免混用：聊天同意、ProductionRun、Run Budget、ProductionSpec。
+
+**Production Plan Card**：
+Flovart Agent 面向用户展示的单一“制作方案”确认面，以人话汇总目标产物、可选 Production Skill、预计费用、关键审片点与执行范围，并允许按需展开底层规格和线路；主动作“确认并开始”以一次幂等操作生成对应 Production Mandate 并启动 ProductionRun，仅保存草稿或预览 Workflow 均不授权执行。
+避免混用：聊天中的“可以”、完整 ProductionSpec 编辑器、Production Mandate 本身。
+
 **Production Plan Projection**：
-Desktop Runtime 根据一个 ProductionSpec Revision 派生并展示在 Workflow Workspace 的制作计划视图；用户或 Agent 的有效计划编辑先生成新的 Revision，再刷新投影和受影响的 StageRun。
+Desktop Runtime 根据一个 ProductionSpec Revision 派生并展示在 Workflow Workspace 的制作计划视图；确认制作方案后自动生成或刷新该投影，Agent Workspace 与 Workflow Workspace 共享同一 Runtime 运行状态。用户或 Agent 的有效计划编辑先生成新的 Revision，再同步刷新投影和受影响的 StageRun。
 避免混用：ProductionSpec 权威真相、可独立执行的第二份 Workflow 图、仅改变节点坐标的视口操作。
 
 **Agent Intervention Event**：
@@ -469,20 +505,24 @@ ProductionRun 因创意反馈或语义性失败而提出的重规划请求，说
 避免混用：机械重试、错误日志、用户聊天消息。
 
 **System Gate**：
-由 Flovart Runtime 强制执行且不能被 Director Skill 或 Review Policy 跳过的审批门，用于权限、预算、安全和运行可行性边界。
-避免混用：Director Gate、User Gate、Provider 弹窗。
+由 Flovart Runtime 强制执行且不能被 Production Skill 或 Review Policy 跳过的审批门，用于权限、预算、安全和运行可行性边界。
+避免混用：Skill Gate、User Gate、Provider 弹窗。
 
-**Director Gate**：
-Director Skill 为故事、视觉风格、关键帧或成片质量推荐的创作审批门，可以按用户选择的 Review Policy 执行或跳过。
+**Skill Gate**：
+Production Skill 为故事、视觉风格、关键帧或成片质量推荐的创作审批门，可以按用户选择的 Review Policy 执行或跳过。
 避免混用：System Gate、强制安全检查、Skill 内部步骤。
+
+**Specialist Review Gate**：
+通过一个 Specialist Capability 生成 Specialist Report 的 Skill Gate，由 Production Skill 声明 required 或 recommended，并按 Review Policy 决定是否执行。
+避免混用：System Gate、Specialist Agent 的临时委派、Runtime 确定性校验。
 
 **User Gate**：
 用户针对特定 ProductionRun 主动插入的审批门，用来约束品牌、人物、素材、配音或费用等个别节点。
-避免混用：Director Gate、聊天反馈、全局偏好。
+避免混用：Skill Gate、聊天反馈、全局偏好。
 
 **Review Policy**：
-用户在 ProductionRun 开始前选择的审片策略，决定执行哪些 Director Gate；支持 Guided、Balanced 和 Autonomous，且不影响 System Gate。
-避免混用：权限策略、重试策略、Director Skill 默认值。
+用户在 ProductionRun 开始前选择的审片策略，决定执行哪些 Skill Gate；支持 Guided、Balanced 和 Autonomous，且不影响 System Gate。
+避免混用：权限策略、重试策略、Production Skill 默认值。
 
 **Run Budget**：
 用户在 ProductionRun 开始前批准的费用边界，包含硬上限、重试预留和超限处理策略。
@@ -513,19 +553,19 @@ Artifact 与其 ProductionRun、ProductionSpec Revision、StageRun、Provider Jo
 避免混用：生成历史文案、文件修改时间、工作区连线。
 
 **Skill Eval**：
-使用真实任务、基线和可验证证据衡量 Director Skill 触发、规划与交付质量的评测记录。
+使用真实任务、基线和可验证证据衡量 Production Skill 触发、规划与交付质量的评测记录。
 避免混用：示例项目、人工好评、单次成功运行。
 
 **Local Skill Draft**：
-仅保存在作者本机、尚未进入公共 Hub 的 Director Skill 工作版本，可以运行校验和评测但不能公开分发。
-避免混用：Community Director Skill、已发布版本、本地安装副本。
+仅保存在作者本机、尚未进入公共 Hub 的 Production Skill 工作版本，可以运行校验和评测但不能公开分发。
+避免混用：Community Production Skill、已发布版本、本地安装副本。
 
-**Community Director Skill**：
-通过静态校验、零费用 Dry Run、许可证和基础评测后在公共 Hub 分发的不可变 Director Skill 版本。
-避免混用：Local Skill Draft、Certified Director Skill、受信任脚本。
+**Community Production Skill**：
+通过静态校验、零费用 Dry Run、许可证和基础评测后在公共 Hub 分发的不可变 Production Skill 版本。
+避免混用：Local Skill Draft、Certified Production Skill、受信任脚本。
 
-**Certified Director Skill**：
-在 Community 门槛之上通过受控样片、人工审片和安全检查的不可变 Director Skill 版本；认证不跨版本继承。
+**Certified Production Skill**：
+在 Community 门槛之上通过受控样片、人工审片和安全检查的不可变 Production Skill 版本；认证不跨版本继承。
 避免混用：已上传 Skill、已安装 Skill、受信任脚本。
 
 **Skill Revocation**：

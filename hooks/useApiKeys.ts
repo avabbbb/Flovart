@@ -21,6 +21,7 @@ import {
     reportRuntimeCredentialVault,
     syncRuntimeCredentials,
 } from '../services/runtimeCredentials';
+import { syncRuntimeAgentTextRoutes } from '../services/runtimeAgentTextRoutes';
 
 const generateId = () => `id_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
@@ -197,10 +198,13 @@ export function useApiKeys(isSettingsPanelOpen: boolean) {
             .catch(() => { /* Runtime may be unavailable in web builds. */ });
         if (clearKeysOnExit) {
             void clearAllKeyData();
+            void syncRuntimeAgentTextRoutes([]).catch(() => { /* Runtime may be unavailable in web builds. */ });
             return;
         }
         void saveKeysEncrypted(userApiKeys);
-        void syncRuntimeCredentials(userApiKeys).catch(() => { /* Runtime may be unavailable in web builds. */ });
+        void syncRuntimeCredentials(userApiKeys)
+            .then(() => syncRuntimeAgentTextRoutes(userApiKeys))
+            .catch(() => { /* Runtime may be unavailable in web builds. */ });
     }, [userApiKeys, apiKeysLoaded, clearKeysOnExit]);
 
     // 新用户引导：API Key 异步加载完成后，如果没有任何 Key 且用户未主动跳过，自动弹出引导

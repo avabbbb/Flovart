@@ -4,6 +4,7 @@ use serde_json::{json, Value};
 use std::{path::Path, time::Duration};
 
 use super::{
+    agent_text::AgentTextRoute,
     events::{RuntimeEntityRef, RuntimeEvent, RuntimeEventPage},
     production::{build_workflow_projection, ProductionPlanDraft},
     tasks::{RuntimeTask, RuntimeTaskPage, TaskLinks, TaskReceipt},
@@ -13,6 +14,7 @@ use super::{
 const MIGRATION_0001: &str = include_str!("migrations/0001_runtime_ledger.sql");
 const MIGRATION_0002: &str = include_str!("migrations/0002_production_plan.sql");
 const MIGRATION_0003: &str = include_str!("migrations/0003_production_execution.sql");
+const MIGRATION_0004: &str = include_str!("migrations/0004_agent_text_routes.sql");
 
 pub struct RuntimeStore {
     connection: Mutex<Connection>,
@@ -70,6 +72,7 @@ impl RuntimeStore {
             (1, MIGRATION_0001),
             (2, MIGRATION_0002),
             (3, MIGRATION_0003),
+            (4, MIGRATION_0004),
         ] {
             let applied = connection.query_row(
                 "SELECT EXISTS(SELECT 1 FROM runtime_migrations WHERE version = ?1)",
@@ -962,6 +965,63 @@ impl RuntimeStore {
             }));
         }
         Ok(credentials)
+    }
+
+    pub fn replace_agent_text_routes(
+        &self,
+        routes: &[AgentTextRoute],
+    ) -> Result<(), RuntimeError> {
+        let mut connection = self.connection.lock();
+        let transaction = connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(store_unavailable)?;
+        transaction
+            .execute("DELETE FROM agent_text_routes", [])
+            .map_err(store_unavailable)?;
+        for route in routes {
+            transaction
+                .execute(
+                    "INSERT INTO agent_text_routes(
+                       order_index, provider, credential_id, model, base_url, protocol
+                     ) VALUES(?1, ?2, ?3, ?4, ?5, ?6)",
+                    params![
+                        route.order,
+                        route.provider,
+                        route.credential_id,
+                        route.model,
+                        route.base_url,
+                        route.protocol
+                    ],
+                )
+                .map_err(store_unavailable)?;
+        }
+        transaction.commit().map_err(store_unavailable)
+    }
+
+    pub fn list_agent_text_routes(&self) -> Result<Vec<AgentTextRoute>, RuntimeError> {
+        let connection = self.connection.lock();
+        let mut statement = connection
+            .prepare(
+                "SELECT provider, credential_id, model, base_url, protocol, order_index
+                   FROM agent_text_routes
+                  ORDER BY order_index ASC",
+            )
+            .map_err(store_unavailable)?;
+        let routes = statement
+            .query_map([], |row| {
+                Ok(AgentTextRoute {
+                    provider: row.get(0)?,
+                    credential_id: row.get(1)?,
+                    model: row.get(2)?,
+                    base_url: row.get(3)?,
+                    protocol: row.get(4)?,
+                    order: row.get(5)?,
+                })
+            })
+            .map_err(store_unavailable)?
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .map_err(store_unavailable)?;
+        Ok(routes)
     }
 
     pub fn default_credential_id(&self, provider: &str) -> Result<Option<String>, RuntimeError> {

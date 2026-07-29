@@ -1,6 +1,6 @@
 # 通过 Edge Add-ons 分发浏览器扩展
 
-Flovart 的开源 Desktop Edition 继续通过独立 EXE 发行，Edge Extension 则作为独立 Manifest V3 发行物通过 Microsoft Edge Add-ons 分发；安装桌面版不自动安装扩展，未安装扩展也不影响 Desktop Edition 的本地画布、Workflow 或第三方 Provider 使用。Edge Extension 不是 Provider Plugin 或 Director Skill；商店版本必须按其最终产品范围单独披露权限与数据流，并链接适用于扩展的隐私政策和用户条款。
+Flovart 的开源 Desktop Edition 继续通过独立 EXE 发行，Edge Extension 则作为独立 Manifest V3 发行物通过 Microsoft Edge Add-ons 分发；安装桌面版不自动安装扩展，未安装扩展也不影响 Desktop Edition 的本地画布、Workflow 或第三方 Provider 使用。Edge Extension 不是 Provider Plugin 或 Production Skill；商店版本必须按其最终产品范围单独披露权限与数据流，并链接适用于扩展的隐私政策和用户条款。
 
 Edge Extension V1 是 Desktop Edition 的薄伴侣，不再打包完整 Flovart WebUI，不保存、解密或同步 Provider Secret，也不直接请求任何 AI Provider。它只实现三种 Browser Import Action：右键发送单张图片、发送选中文本、截取当前可见区域；不提供整页图片扫描、后台采集或浏览历史同步。所有生成、Provider 路由、费用与 Artifact 状态仍由 Desktop Runtime 负责。
 

@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadAgentConfig, saveAgentConfig, workspaceForProject } from './config.js';
 import { CodexAppServer } from './codex.js';
+import { FlovartAgentService } from './flovart.js';
 import { startMcpServer } from './mcp.js';
 import { WorkflowAgentSession } from './session.js';
 
@@ -105,6 +106,7 @@ export function startHttpServer() {
   config.url = `http://127.0.0.1:${port}`;
   saveAgentConfig(config);
   const session = new WorkflowAgentSession();
+  const flovart = new FlovartAgentService();
   let codex;
   const getCodex = async () => {
     if (!codex) codex = await new CodexAppServer((type, payload) => session.emit(type, payload)).start();
@@ -133,6 +135,40 @@ export function startHttpServer() {
         const body = await readBody(request);
         const result = await session.callCommand(body.command, body.args || {}, body.source || 'agent', body.idempotencyKey);
         return json(response, 200, { ok: true, result });
+      }
+      if (request.method === 'GET' && url.pathname === '/agent/flovart/session') {
+        const projectId = url.searchParams.get('projectId') || 'default';
+        return json(response, 200, { ok: true, ...(await flovart.snapshot(projectId)) });
+      }
+      if (request.method === 'POST' && url.pathname === '/agent/flovart/turn') {
+        const body = await readBody(request);
+        const projectId = String(body.projectId || 'default');
+        response.writeHead(200, {
+          'Content-Type': 'text/event-stream; charset=utf-8',
+          'Cache-Control': 'no-store',
+          'X-Accel-Buffering': 'no',
+        });
+        const emit = (event, data) => response.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+        const unsubscribe = await flovart.subscribe(projectId, event => {
+          const update = event.type === 'message_update' ? event.assistantMessageEvent : undefined;
+          if (update?.type === 'text_delta') emit('text-delta', { delta: update.delta });
+          if (event.type === 'agent_start') emit('status', { running: true });
+        });
+        try {
+          const snapshot = await flovart.send(projectId, String(body.prompt || ''));
+          emit('snapshot', snapshot);
+        } catch (error) {
+          emit('error', { message: error instanceof Error ? error.message : String(error) });
+        } finally {
+          unsubscribe();
+          response.end();
+        }
+        return;
+      }
+      if (request.method === 'POST' && url.pathname === '/agent/flovart/cancel') {
+        const body = await readBody(request);
+        await flovart.cancel(String(body.projectId || 'default'));
+        return json(response, 200, { ok: true });
       }
       if (request.method === 'GET' && url.pathname === '/agent/codex/threads') {
         const cwd = workspaceForProject(url.searchParams.get('projectId') || 'default');
@@ -215,7 +251,7 @@ export function startHttpServer() {
     console.log(`Local URL: ${config.url}`);
     console.log(`Codex MCP: codex mcp add flovart -- node "${fileURLToPath(new URL('./index.js', import.meta.url))}" mcp`);
   });
-  const close = () => { codex?.close(); server.close(); };
+  const close = () => { codex?.close(); void flovart.close(); server.close(); };
   process.once('SIGINT', close);
   process.once('SIGTERM', close);
   return server;

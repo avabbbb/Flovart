@@ -1,6 +1,6 @@
 # 以三种发行入口共享一个核心
 
-Flovart 分别交付面向个人设计师的 Desktop Edition、面向 Coding Agent 用户的 Agent Toolkit 和面向托管服务的 SaaS Deployment，不要求一个安装包同时承担三类用户的依赖与运维复杂度；三种入口共享同一 Runtime、Canonical Command Registry、Provider-neutral Capability 和 Director Skill Package 契约。Desktop Edition V1 只正式支持 Windows 10/11 x64，入口必须是可直接安装的 EXE，且不得要求普通设计师预装 Git、Node.js、Go 或 Docker；macOS 与 Linux 桌面发行延后，Agent 与 SaaS 的安装和升级生命周期独立演进。
+Flovart 分别交付面向个人设计师的 Desktop Edition、面向 Coding Agent 用户的 Agent Toolkit 和面向托管服务的 SaaS Deployment，不要求一个安装包同时承担三类用户的依赖与运维复杂度；三种入口共享同一 Runtime、Canonical Command Registry、Provider-neutral Capability 和 Production Skill Package 契约。Desktop Edition V1 只正式支持 Windows 10/11 x64，入口必须是可直接安装的 EXE，且不得要求普通设计师预装 Git、Node.js、Go 或 Docker；macOS 与 Linux 桌面发行延后，Agent 与 SaaS 的安装和升级生命周期独立演进。
 
 Windows Release 同时产出两个 NSIS EXE：官网主推小体积安装包，在系统缺少 WebView2 时自动下载补齐；支持页另提供内置 WebView2 Offline Installer 的完整离线包。两个产物安装同一 Desktop Edition，不形成不同功能版本，也不要求普通用户理解 WebView2。
 

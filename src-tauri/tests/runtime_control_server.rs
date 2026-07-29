@@ -255,3 +255,35 @@ fn control_server_reads_tasks_and_resumes_sse_from_the_same_runtime_ledger() {
     drop(server);
     let _ = fs::remove_dir_all(discovery_path.parent().expect("parent"));
 }
+
+#[test]
+fn control_server_rejects_secrets_from_agent_text_requests() {
+    let discovery_path = test_discovery_path();
+    let runtime = Arc::new(ProductionRuntime::new(env!("CARGO_PKG_VERSION")).expect("runtime"));
+    let server = ControlServer::start(runtime, discovery_path.clone()).expect("server");
+    let discovery: Value =
+        serde_json::from_slice(&fs::read(&discovery_path).expect("discovery record"))
+            .expect("discovery JSON");
+    let port = discovery["port"].as_u64().expect("port") as u16;
+    let token = discovery["token"].as_str().expect("token");
+    let body = serde_json::json!({
+        "messages": [],
+        "tools": [],
+        "apiKey": "must-never-cross-the-agent-runtime-boundary"
+    })
+    .to_string();
+    let (status, _, output) = raw_request(
+        port,
+        &format!(
+            "POST /v1/agent-text/stream HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nAuthorization: Bearer {token}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+            body.len()
+        ),
+    );
+
+    assert_eq!(status, 400);
+    assert_eq!(output["error"]["code"], "INVALID_ARGUMENT");
+    assert!(!output.to_string().contains("must-never-cross"));
+
+    drop(server);
+    let _ = fs::remove_dir_all(discovery_path.parent().expect("parent"));
+}

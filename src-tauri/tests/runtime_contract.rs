@@ -14,7 +14,7 @@ fn runtime_status_comes_from_the_canonical_v1_contract() {
     assert_eq!(status.state, "ready");
     assert_eq!(
         runtime.registry().registry_hash,
-        "eb0ff2e78686cc5b6109a6cff8a470491d91a33c27898beda6549ec5b1730854"
+        "f6dc0d07e6cb4110c4a258e20ba428f69caf172c615e5f4a6767ecb3f2bb3a09"
     );
     assert!(runtime.registry().commands.contains_key("runtime.status"));
     assert!(!runtime.registry().commands.contains_key("workflow.run"));
@@ -263,4 +263,39 @@ fn runtime_exposes_redacted_provider_status_and_durable_generation_receipts() {
         }))
         .expect_err("non-lite route");
     assert_eq!(expensive.code, "ROUTE_UNAVAILABLE");
+}
+
+#[test]
+fn runtime_persists_only_non_secret_agent_text_routes() {
+    let runtime = ProductionRuntime::new(env!("CARGO_PKG_VERSION")).expect("runtime contract");
+    let route = json!({
+        "protocolVersion": "1",
+        "commandId": ProductionRuntime::new_id("cmd"),
+        "command": "agent-text.route.sync",
+        "args": {
+            "routes": [{
+                "provider": "openai",
+                "credentialId": "openai-main",
+                "model": "gpt-5-mini",
+                "baseUrl": "https://api.openai.com/v1",
+                "protocol": "openai-chat-completions",
+                "order": 0
+            }]
+        },
+        "actor": { "kind": "ui", "instanceId": "webui_test" }
+    });
+
+    let synced = runtime.execute(&route).expect("agent-text route sync");
+    assert_eq!(synced["target"], "runtime-capability:agent-text");
+    assert_eq!(synced["routes"][0]["credentialId"], "openai-main");
+    assert_eq!(synced["secretFieldsStored"], false);
+    assert!(!synced.to_string().contains("apiKey"));
+
+    let mut leaked = route;
+    leaked["commandId"] = json!(ProductionRuntime::new_id("cmd"));
+    leaked["args"]["routes"][0]["apiKey"] = json!("must-never-enter-runtime-route-storage");
+    let error = runtime
+        .execute(&leaked)
+        .expect_err("provider secret must be rejected");
+    assert_eq!(error.code, "INVALID_ARGUMENT");
 }
