@@ -383,7 +383,7 @@ npm run flovart:cli -- generate.image --prompt "runtime image contract smoke" --
 
 ## 明确不在 S0/S1 做
 
-- VOX Director Skill 安装、市场审核或运行。
+- VOX Skill 安装、市场审核或运行。
 - `ProductionSpecExtension.vox` 的实际 stage expansion。
 - 视频、音频、TTS、音乐、FFmpeg 渲染与成片验证。
 - Local Verified Route 的用户自定义 declarative mapping UI；S1 只验证一个第一方支持的图片 Adapter Family。

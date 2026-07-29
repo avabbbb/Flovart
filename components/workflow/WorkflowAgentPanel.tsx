@@ -1,6 +1,6 @@
 import { Archive, Bot, Circle, History, ImagePlus, Link2, MessageSquare, Plus, ScrollText, Send, Sparkles, Trash2, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { consumeDirectorSkillDraft } from '../../services/directorSkillLaunch';
+import { consumeProductionSkillDraft } from '../../services/productionSkillLaunch';
 import { getManagedAgentConnection } from '../../services/managedAgentConnection';
 import {
   WorkflowAgentBridge,
@@ -79,7 +79,7 @@ export function WorkflowAgentPanel({ project, onClose, onProjectChange, onOnline
 
   useEffect(() => { messagesRef.current = messages; }, [messages]);
   useEffect(() => {
-    const draft = consumeDirectorSkillDraft(project.id);
+    const draft = consumeProductionSkillDraft(project.id);
     if (!draft) return;
     setPrompt(draft.prompt);
     setSkillDraftHint(`${draft.skillName} 调用词已填入；修改主题后发送。`);

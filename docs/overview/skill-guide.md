@@ -1,28 +1,30 @@
-# Flovart Skill 使用手册
+# Flovart Agent 与 Production Skill 使用手册
 
-这份手册面向想用 Flovart Skill 完成视频制作、但不想先学习 CLI、Manifest 或 ProductionSpec 的创作者。
+这份手册面向想用 Flovart Agent 完成视频制作、但不想先学习 CLI、Manifest 或 ProductionSpec 的创作者。
 
 ## 先记住一句话
 
-**Skill 是 Agent 的制作方法，不是一个需要你手动运行的按钮或脚本。**
+**Flovart Agent 是唯一内置主 Agent；Production Skill 是它加载的制作方法；VOX Skill 是其中一个具体方法。**
 
-你只要描述目标，Agent 会在任务匹配时自动加载合适的 Skill。想明确指定某个 Skill 时，在请求中写出它的名字，例如 `$vox-director`。
+你只要描述目标，Flovart Agent 会在任务匹配时自动加载合适的 Production Skill。想明确指定 VOX Skill 时，可以在请求中写技术调用句柄 `$vox-director`。
 
-## 两类 Skill 不要混淆
+## 产品层只有一种 Skill
 
-| 名称 | 负责什么 | 用户需要做什么 |
-| --- | --- | --- |
-| Flovart Skill | 连接 Flovart Runtime、检查状态、操作 Workflow、监督任务与产物 | 通常无需指定，由 Coding Agent 自动使用 |
-| Director Skill | 定义某种导演方法、视觉语言、制作步骤和审片标准 | 选择风格；必要时明确写 `$Skill名` |
+| 名称 | 定位 |
+| --- | --- |
+| Flovart | 整个产品 |
+| Flovart Agent | 用户直接协作的唯一内置主 Agent |
+| Production Skill | Flovart Agent 可加载的制作方法 |
+| VOX Skill | 一个具体 Production Skill |
 
-可以把 Flovart Skill 理解成“制作总台”，把 Director Skill 理解成“导演手册”。Director Skill 不保存 API Key，也不直接请求 Provider；实际执行、费用和产物仍由 Flovart Runtime 管理。
+仓库里供 Codex、Claude Code 或 OpenCode 连接 Runtime 的 `SKILL.md` 属于外部 Host 接入说明，不是第二类产品 Skill。Production Skill 不保存 API Key，也不直接请求 Provider；实际执行、费用和产物仍由 Flovart Runtime 管理。
 
 ## 最低成本的使用方式
 
 ### 在 Flovart Desktop 中
 
 1. 打开应用首页 `#/app/home`。
-2. 找到“选择一个导演 Skill”。
+2. 找到“选择一种制作方法”。
 3. 点击 Skill 卡片，先看适用场景和示例调用词。
 4. 点击“在本机 Agent 中试用”。
 5. Flovart 会新建项目、打开本机 Agent，并把调用词填入输入框。
@@ -82,7 +84,7 @@
 ## 发送后会发生什么
 
 1. Agent 根据名称与描述发现并加载相关 Skill。
-2. Director Skill 把主题整理为 Provider-neutral 的制作计划。
+2. Production Skill 把主题整理为 Provider-neutral 的制作计划。
 3. Agent 先向你展示叙事、主题和必要的人工检查点。
 4. 计划可以通过 `production.dry-run` 编译成 ProductionRun 和可见 Workflow Projection。
 5. 路线、预算或审批未完成时，计划保持阻塞状态，不会被冒充为已完成成片。
@@ -94,7 +96,7 @@
 
 不要只看 Agent 有没有说“我正在使用 Skill”。至少检查以下三项：
 
-- 回复中出现与该 Skill 对应的制作结构，例如 VOX Director 的叙事节拍、主题试片、关键帧审片和 OCR 检查；
+- 回复中出现与该 Skill 对应的制作结构，例如 VOX Skill 的叙事节拍、主题试片、关键帧审片和 OCR 检查；
 - Agent 能报告精确的 Skill ID 与版本，例如 `community.vox-director@1.0.0`；
 - 编译后能在当前 Workflow 中看到与 ProductionRun 对应的计划节点，而不是只得到一段聊天文本。
 
@@ -148,7 +150,7 @@ npm run flovart:cli -- <command> --json
 
 ### 为什么浏览器版要求连接本机 Agent？
 
-真正的 Director Skill 需要由能发现并读取 Skill 包的 Coding Agent 执行。普通网页内置 Agent 当前只支持受限的 Workflow 操作，不能冒充完整的 Skill Host。
+真正的 Production Skill 需要由能发现并读取 Skill 包的 Flovart Agent 或外部 Coding Agent 执行。普通网页模式无法连接 Desktop Managed Agent，不能冒充完整的 Skill Host。
 
 ### Agent 说找不到 Skill 怎么办？
 
@@ -166,7 +168,7 @@ npm run flovart:cli -- <command> --json
 
 - 当前首页提供一个真实内置示例：`community.vox-director`。
 - 第三方 Skill 的安装、签名、权限、发布与撤销仍在建设中。
-- 网站内置 Agent 尚不执行完整 Director Skill；请使用 Desktop Managed Agent 或外部 Coding Agent。
+- 普通网页模式尚不能执行完整 Production Skill；请使用 Desktop Flovart Agent 或外部 Coding Agent。
 - Runtime Artifact 到对应计划节点的自动挂载仍在完善，不能仅凭计划节点判断成片已完成。
 
 ## 设计依据

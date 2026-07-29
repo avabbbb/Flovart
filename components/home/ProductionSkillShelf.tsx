@@ -3,23 +3,23 @@ import { BookOpen, Check, Copy, ExternalLink, Newspaper, ShieldCheck, Sparkles }
 import { useState } from 'react';
 
 import {
-  listBundledDirectorSkills,
-  type BundledDirectorSkill,
-} from '../../services/directorSkillCatalog';
+  listBundledProductionSkills,
+  type BundledProductionSkill,
+} from '../../services/productionSkillCatalog';
 import {
-  buildDirectorSkillStarterPrompt,
-  directorSkillHandle,
-} from '../../services/directorSkillLaunch';
+  buildProductionSkillStarterPrompt,
+  productionSkillHandle,
+} from '../../services/productionSkillLaunch';
 
-export function DirectorSkillShelf({
+export function ProductionSkillShelf({
   onUse,
 }: {
-  onUse: (skill: BundledDirectorSkill) => void;
+  onUse: (skill: BundledProductionSkill) => void;
 }) {
-  const skills = listBundledDirectorSkills();
-  const [selected, setSelected] = useState<BundledDirectorSkill | null>(null);
+  const skills = listBundledProductionSkills();
+  const [selected, setSelected] = useState<BundledProductionSkill | null>(null);
   const [copiedSkillId, setCopiedSkillId] = useState<string | null>(null);
-  const starterPrompt = selected ? buildDirectorSkillStarterPrompt(selected) : '';
+  const starterPrompt = selected ? buildProductionSkillStarterPrompt(selected) : '';
 
   const copyStarterPrompt = async () => {
     if (!selected || !navigator.clipboard) return;
@@ -31,7 +31,7 @@ export function DirectorSkillShelf({
     <section id="skill-hub" className="px-10 py-6">
       <div className="mb-4 flex items-end justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold" style={{ color: '#f5f5f0' }}>选择一个导演 Skill</h2>
+          <h2 className="text-2xl font-bold" style={{ color: '#f5f5f0' }}>选择一种制作方法</h2>
           <p className="mt-1 text-sm" style={{ color: '#a8a49c' }}>
             不用学习命令。选择后，我们会新建项目并把推荐调用词填进 Agent，你只需要改主题并发送。
           </p>
@@ -154,7 +154,7 @@ export function DirectorSkillShelf({
             <div>
               <div className="flex flex-wrap gap-2">
                 <Tag color="cyan">内置示例</Tag>
-                <Tag>{directorSkillHandle(selected)}</Tag>
+                <Tag>{productionSkillHandle(selected)}</Tag>
                 <Tag>30 秒短片</Tag>
               </div>
               <p className="mt-3 text-sm leading-6" style={{ color: 'var(--isl-ink-soft)' }}>
@@ -170,7 +170,7 @@ export function DirectorSkillShelf({
                 <div>
                   <strong className="block text-sm" style={{ color: 'var(--isl-ink)' }}>最简单的用法</strong>
                   <span className="text-xs" style={{ color: 'var(--isl-ink-soft)' }}>
-                    直接描述也会自动匹配；保留 {directorSkillHandle(selected)} 可以明确指定它。
+                    直接描述也会自动匹配；保留 {productionSkillHandle(selected)} 可以明确指定它。
                   </span>
                 </div>
                 <Button
@@ -221,7 +221,7 @@ export function DirectorSkillShelf({
                   </div>
                 </div>
                 <div>
-                  <div className="mb-1 text-xs font-bold" style={{ color: 'var(--isl-ink)' }}>导演检查点</div>
+                  <div className="mb-1 text-xs font-bold" style={{ color: 'var(--isl-ink)' }}>制作检查点</div>
                   <div className="flex flex-wrap gap-1.5">
                     {selected.gates.map(gate => <Tag key={gate.id}>{gate.type}</Tag>)}
                   </div>

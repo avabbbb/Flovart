@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://flovart.local/schemas/director-skill/community.vox-director/1.json",
+  "$id": "https://flovart.local/schemas/production-skill/community.vox-director/1.json",
   "type": "object",
   "additionalProperties": false,
   "required": [

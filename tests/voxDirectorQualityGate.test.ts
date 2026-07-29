@@ -74,7 +74,7 @@ const approvedVoxSpec = {
   },
 };
 
-describe('VOX Director quality gate', () => {
+describe('VOX Skill quality gate', () => {
   it('rejects a generic paper-cut plan that lost the Director extension', () => {
     const result = auditVoxProductionSpec({
       schemaVersion: '1',

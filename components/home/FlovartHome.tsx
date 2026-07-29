@@ -19,9 +19,9 @@ import {
 } from 'lucide-react';
 import { useWorkflowStore } from '../workflow/store';
 import { COMMUNITY_WORKFLOWS, type CommunityWorkflow } from '../landing/communityTypes';
-import type { BundledDirectorSkill } from '../../services/directorSkillCatalog';
-import { DirectorSkillShelf } from './DirectorSkillShelf';
-import { buildDirectorSkillStarterPrompt, queueDirectorSkillDraft } from '../../services/directorSkillLaunch';
+import type { BundledProductionSkill } from '../../services/productionSkillCatalog';
+import { ProductionSkillShelf } from './ProductionSkillShelf';
+import { buildProductionSkillStarterPrompt, queueProductionSkillDraft } from '../../services/productionSkillLaunch';
 import { useWorkspaceStore } from '../../stores/useWorkspaceStore';
 
 const linkTo = (path: string) => (window.location.hash = path);
@@ -346,15 +346,15 @@ export default function FlovartHome() {
     openCanvas();
   };
 
-  const handleUseSkill = (skill: BundledDirectorSkill) => {
+  const handleUseSkill = (skill: BundledProductionSkill) => {
     const projectId = createProject(`${skill.displayName} 示例`);
     setActiveProject(projectId);
-    queueDirectorSkillDraft({
+    queueProductionSkillDraft({
       projectId,
       skillId: skill.id,
       skillVersion: skill.version,
       skillName: skill.displayName,
-      prompt: buildDirectorSkillStarterPrompt(skill),
+      prompt: buildProductionSkillStarterPrompt(skill),
     });
     try {
       localStorage.setItem('flovart.workflow.agent.mode', 'local');
@@ -370,7 +370,7 @@ export default function FlovartHome() {
       <Sidebar />
       <div className="flex-1 overflow-y-auto">
         <HeroAndInput onCreate={handleCreate} />
-        <DirectorSkillShelf onUse={handleUseSkill} />
+        <ProductionSkillShelf onUse={handleUseSkill} />
         <RecentProjects projects={projects} onCreate={() => handleCreate()} onOpen={handleOpen} />
         <FlovartTV />
         <Footer />

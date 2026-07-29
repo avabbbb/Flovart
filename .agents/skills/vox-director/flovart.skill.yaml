@@ -1,4 +1,4 @@
-schemaVersion: flovart.director-skill/1
+schemaVersion: flovart.production-skill/1
 id: community.vox-director
 version: 1.0.0
 productionSpec:

@@ -3,7 +3,7 @@ name: vox-director
 description: Compile a topic, brief, article, or research artifact into a provider-neutral Flovart ProductionSpec for a VOX-inspired editorial paper-collage explainer. Use for torn-paper collage videos, motion-collage explainers, narrated editorial shorts, scrapbook-style ads, or any request that needs an image-first collage workflow with style bake-off, wide/detail shot cadence, stable typography, keyframe review, narration, music, captions, and delivery verification.
 ---
 
-# VOX Director
+# VOX Skill
 
 Turn one topic into a concise editorial paper-collage ProductionSpec. Direct the film; let Flovart own credentials, Provider routing, tasks, budgets, Artifacts, rendering, and Workflow Projection.
 

@@ -8,7 +8,7 @@
 
 - Desktop Runtime 是唯一 Production Authority。
 - ProductionSpec Revision 是制作计划权威；Workflow 只保存可重建投影和独立布局。
-- Director Skill 只声明 ProductionSpec、Capability Requirement 与 Director Gate，不持有 Provider Secret、Route 或任意执行脚本权。
+- Production Skill 只声明 ProductionSpec、Capability Requirement 与制作 Gate，不持有 Provider Secret、Route 或任意执行脚本权。
 - Provider Secret 只存在操作系统凭据库；SQLite 只保存不可反查秘密的 `credential_ref`。
 - 所有金额使用整数微单位和明确 `unit_code`，所有时间使用 UTC 毫秒，所有 ID 使用成熟 UUID v7 库生成并作为不透明 TEXT 返回。
 - JSON 列只保存有版本 Schema 的封闭对象；可筛选、关联、唯一约束或参与状态机的字段必须独立成列。
@@ -50,7 +50,7 @@
 | `local_verified_routes` | `id`、`provider_id`、`adapter_family`、`credential_ref`、`base_url`、`route_id`、`schema_version`、`schema_json`、`schema_hash`、`contract_status`、`smoke_status`、`status` | 只允许已支持 Adapter Family；Contract Test 通过并确认后才能执行。 |
 | `product_route_bindings` | `id`、`product_model_id`、`generation_mode`、`route_id`、`priority`、`enabled` | 用户长期偏好，不等于单次运行的锁定线路。 |
 | `run_route_plans` | `id`、`run_id`、`revision_no`、`status`、`plan_hash`、`estimated_amount_micros`、`unit_code`、`confirmed_at` | `proposed -> confirmed|rejected`；ProviderAttempt 创建后不可改写已确认版本。 |
-| `run_route_plan_entries` | `id`、`plan_id`、`stage_key`、`capability_id`、`product_model_id`、`generation_mode`、`provider_id`、`route_id`、`route_schema_hash`、`credential_ref`、`quote_json`、`selection_reason` | `(plan_id, stage_key)` 唯一；Director Skill 不得填这些字段。 |
+| `run_route_plan_entries` | `id`、`plan_id`、`stage_key`、`capability_id`、`product_model_id`、`generation_mode`、`provider_id`、`route_id`、`route_schema_hash`、`credential_ref`、`quote_json`、`selection_reason` | `(plan_id, stage_key)` 唯一；Production Skill 不得填这些字段。 |
 | `production_gates` | `id`、`run_id`、`stage_run_id`、`gate_kind`、`gate_type`、`status`、`request_json`、`created_at`、`resolved_at` | `system|director|user`；System Gate 不能被 Review Policy 跳过。 |
 | `gate_decisions` | `id`、`gate_id`、`decision`、`actor_kind`、`actor_id`、`reason`、`created_at` | 决策只追加；当前 Gate 状态与决策同事务更新。 |
 | `run_budgets` | `run_id`、`hard_limit_micros`、`retry_reserve_micros`、`unit_code`、`status` | 一次 Run 一个已批准预算边界。 |
@@ -272,9 +272,9 @@ Core 只表达作品意图，不包含 Provider、endpoint、credentialRef 或�
 }
 ```
 
-Runtime Compiler 从 Core 生成平台标准 Stage：`style.preview`、`image.generate`、`video.generate`、`speech.generate`、`music.generate`、`media.render`、`media.verify`。Director Skill 可以省略不需要的能力或配置标准 Gate，但不能注册私有 Stage type。
+Runtime Compiler 从 Core 生成平台标准 Stage：`style.preview`、`image.generate`、`video.generate`、`speech.generate`、`music.generate`、`media.render`、`media.verify`。Production Skill 可以省略不需要的能力或配置标准 Gate，但不能注册私有 Stage type。
 
-## VOX Director Extension v1
+## VOX Skill Extension v1
 
 VOX 迁移只把风格专属信息放入 `extensions.vox-director`，不复制 Core 的 narration、shot、duration 或能力字段：
 
@@ -317,7 +317,7 @@ VOX 迁移只把风格专属信息放入 `extensions.vox-director`，不复制 C
 
 固定为约 3 个 beat、6 个 shot，并使用 Balanced Review Policy：
 
-1. Agent + VOX Director 生成 Spec Revision。
+1. Flovart Agent + VOX Skill 生成 Spec Revision。
 2. Director Gate：确认分镜。
 3. `style.preview` 产生 3–4 张样图 Artifact；Director Gate：确认风格。
 4. Runtime 生成多 Provider Run Route Plan 和 Route Price Quote；System Gate：确认 BYOK 路由与 Run Budget。

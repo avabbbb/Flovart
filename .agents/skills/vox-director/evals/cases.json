@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "flovart.director-skill-evals/1",
+  "schemaVersion": "flovart.production-skill-evals/1",
   "cases": [
     {
       "id": "history-30s",

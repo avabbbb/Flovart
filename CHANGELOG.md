@@ -3,6 +3,7 @@
 ## Unreleased
 
 - 新增首个可用的内置 Flovart Agent：Managed Agent 内嵌 PI Agent Core 与独立 SQLite 主会话，默认 Agent 空间以 `Flovart Agent` 取代 Codex 主线程；`agent-text` 由 Rust Runtime 按非秘密 Route Mapping 选路并从操作系统 Keyring 注入凭据，Node/WebUI 不接触 Provider Secret。Codex 保留为可新增的外部子任务。
+- 统一 Agent/Skill 产品语言为 `Flovart Agent → Production Skill → VOX Skill`，清理首页、正式文档、Schema 与代码中的 Director Skill 歧义；缺少 `agent-text` 路线时 Agent 面板明确显示“需要配置”，不再把连接成功误报为文本能力已就绪。
 - 更新中英文 README 的 rule34 访问计数、真实 UI 展示与项目数据入口；每日仓库快照新增 Watchers、Release/附件明细和正确的 Traffic 权限说明，并加入当前架构对应的 Issue Form、PR 模板与贡献约定，不引入应用内遥测。
 - Skill 台新增真实 `community.vox-director` 内置示例，并补齐低门槛首次使用闭环：三步引导、可复制调用词、费用边界、中文手册，以及“创建项目 → 打开本机 Agent → 预填 `$vox-director` 草稿”；桌面版复用 Managed Agent 安全连接，选择 Skill 不会自动发送或产生费用。
 - 新增首条 ProductionRun 垂直切片：`production.dry-run` 将 ProductionSpec 原子持久化为 ProductionSession、Spec Revision、ProductionRun、StageRun DAG 与 Workflow Plan Projection；Desktop 自动把 Runtime 权威投影合入真实 Workflow，并保留用户节点、连线、视口及手动布局。真实 VOX 30 秒计划以无 Provider、无 CDP 路径完成 20 阶段/21 节点画布验收。

@@ -46,10 +46,10 @@
     <td width="50%" align="center">
       <img src="pic/readme-skill-home.png" alt="Flovart Skill 首页" />
       <br />
-      <sub>Skill 首页：先选导演方法，再进入项目。</sub>
+      <sub>Skill 首页：先选制作方法，再进入项目。</sub>
     </td>
     <td width="50%" align="center">
-      <img src="pic/readme-skill-detail.png" alt="Flovart Director Skill 使用引导" />
+      <img src="pic/readme-skill-detail.png" alt="Flovart Production Skill 使用引导" />
       <br />
       <sub>低门槛引导：说明调用词、费用边界与安全信息。</sub>
     </td>
@@ -58,31 +58,30 @@
 
 ## Flovart 是什么？
 
-Flovart 是面向 Coding Agent 的本地优先 AI 视频制作系统，包含三个正式部分：**Workflow** 负责多节点生成编排，**Table** 一次专注处理一个媒体或 Workflow 节点，**Agent** 把 Codex 线程、任务状态、项目上下文和产物面板组织在空间工作区中。三者共享 Provider、素材和产物语义，但不恢复已经删除的旧 Canvas / Art 系统。
+Flovart 是以唯一内置 **Flovart Agent** 为协作入口的本地优先 AI 视频制作系统，包含三个正式工作区：**Workflow** 负责多节点生成编排，**Table** 一次专注处理一个媒体或 Workflow 节点，**Agent** 组织主对话、可选外部 Coding Agent 子任务、项目上下文和产物。三者共享 Provider、素材和产物语义，但不恢复已经删除的旧 Canvas / Art 系统。
 
 它把视频制作拆成四种稳定职责：
 
 | 角色 | 职责 |
 | --- | --- |
-| **Coding Agent** | 理解 Brief、拆解任务、组织制作角色、监控进度并处理失败；优先适配 Codex 与 OpenCode。 |
-| **Flovart Skill** | 制作总台：暴露能力、约束调用顺序、校验导演 Skill，并告诉 Agent 何时调用 CLI。 |
-| **Director Skill** | 可复用导演方法：定义风格、镜头语言、制作步骤、检查点和验收标准。 |
-| **Flovart CLI** | 确定性执行器：按注册表操作当前已开放的 Workflow 能力、调用 Provider、返回结构化状态，不让 Agent 猜 HTTP 或操纵 UI。 |
+| **Flovart Agent** | 用户唯一直接协作的内置制作 Agent：理解 Brief、选择方法、监督执行并恢复主对话。 |
+| **Production Skill** | Flovart Agent 可加载的制作方法：定义风格、镜头语言、制作步骤、检查点和验收标准。 |
+| **Flovart Runtime / CLI** | 确定性执行层：按注册表操作能力、保存任务与产物，不让 Agent 猜 HTTP 或操纵 UI。 |
+| **Provider Adapter** | 独占模型路由、凭据注入、提交和轮询；Production Skill 不接触 API Key。 |
 
 一句话：**Workflow 编排生成，Table 专注预处理，Agent 在空间任务界面里理解、执行和监督制作。**
 
 ```mermaid
 flowchart LR
-  B["创作 Brief + 本地凭据"] --> A["Coding Agent<br/>Codex / OpenCode"]
-  A --> P["Flovart Skill<br/>制作总台"]
-  P --> D["Director Skill<br/>风格与制作 SOP"]
-  P --> C["Flovart CLI<br/>确定性命令"]
-  D --> C
-  C <--> W["Workflow Runtime<br/>节点 / 状态 / 产物"]
-  T["Table<br/>单一媒体 / 节点预处理<br/>建设中"] -. "预处理产物" .-> W
-  G["Agent Workspace<br/>Codex 线程 / 任务面板 / 产物"] <--> W
+  B["创作 Brief"] --> A["Flovart Agent<br/>唯一内置主 Agent"]
+  A --> S["Production Skill<br/>可复用制作方法"]
+  A --> C["Flovart Runtime / CLI<br/>确定性执行"]
+  X["Codex / OpenCode<br/>可选外部子任务"] -.-> C
+  C <--> W["Workflow<br/>节点 / 状态 / 产物"]
+  C <--> T["Table<br/>媒体预处理"]
   C --> M["Provider Adapters<br/>图像 / 视频 / 音频"]
   W --> A
+  T --> A
 ```
 
 ## 为什么采用这套架构？
@@ -90,12 +89,12 @@ flowchart LR
 - **职责分离**：Workflow 负责多节点生成编排；Table 一次只处理一个输入；Agent 使用空间面板组织 Codex 线程和任务状态，避免把生成、处理和对话重新堆进同一张杂乱界面。
 - **BYOK 与多模型**：凭据由用户配置，Flovart 通过 Provider 适配层调用图像、视频和文本模型。
 - **可恢复**：CLI 返回 JSON 状态，Agent 可以轮询、重试、续跑，而不是依赖一次长对话完成整部短片。
-- **风格可复用**：导演经验写进 Director Skill，同一种视觉语言和制作流程可以被不同项目重复调用。
-- **能力可组合**：编剧、分镜、视觉生成、配音、剪辑和质检可以由不同 Agent/Skill 承担，共享同一个 Workflow。
+- **风格可复用**：制作经验写进 Production Skill，同一种视觉语言和制作流程可以被不同项目重复调用。
+- **能力可组合**：编剧、分镜、视觉生成、配音、剪辑和质检可以由 Production Skill 与可选专业子任务承担，共享同一个 Workflow。
 
-## Director Skill 生态
+## Production Skill 生态
 
-Flovart 将规定导演 Skill 的最小对接契约，并通过 Skill Creator 模板指导社区创作。规范会覆盖：
+Flovart 将规定 Production Skill 的最小对接契约，并通过 Skill Creator 模板指导社区创作。规范会覆盖：
 
 - 身份、版本、兼容性和所需 Flovart 能力；
 - 输入 Brief、可配置参数和结构化输出；
@@ -104,11 +103,11 @@ Flovart 将规定导演 Skill 的最小对接契约，并通过 Skill Creator �
 - 检查点、失败恢复、人工确认和最终验收；
 - 产物血缘、模型策略、成本与安全边界。
 
-[VOX Director](https://github.com/avabbbb/vox-director) 是这类风格化导演 Skill 的参考案例。目标是让用户组合“Flovart 制作总台 + 社区导演 Skill + 自己的 Provider”，由 Coding Agent 复用完整的风格化短片工作流。
+[VOX Skill](https://github.com/avabbbb/vox-director) 是首个风格化 Production Skill 参考案例；上游仓库和技术调用句柄仍为 `vox-director`。目标是让用户组合“Flovart Agent + Production Skill + 自己的 Provider”，复用完整的风格化短片工作流。
 
 第一次使用可直接阅读 [Skill 使用手册](docs/overview/skill-guide.md)，无需先学习 CLI 或 ProductionSpec。
 
-> 基础 CLI/TUI、Flovart Skill 和 Codex/OpenCode 等 Host 配置已接入；Director Skill 社区契约、实时事件订阅和断点续跑仍在建设中。
+> 基础 CLI/TUI、Flovart Skill 和 Codex/OpenCode 等 Host 配置已接入；Production Skill 社区契约、实时事件订阅和断点续跑仍在建设中。
 
 ## 当前能力与边界
 
@@ -120,7 +119,7 @@ Flovart 将规定导演 Skill 的最小对接契约，并通过 Skill Creator �
 | 多 Provider BYOK、文生图、图生图、文生视频 | 已有基础 |
 | Workflow CLI、命令 Schema、JSON 状态 | 基础能力已接入 |
 | Codex / OpenCode 等 Host 适配 | 基础 MCP/Skill 配置已接入 |
-| Director Skill 契约与 UGC 生态 | 设计与实现中 |
+| Production Skill 契约与 UGC 生态 | 设计与实现中 |
 | TUI 快捷命令 | 基础能力已接入；任务订阅与断点续跑待完善 |
 
 当前创作者运行时以 TypeScript / Node.js 为主。Go + Gin + GORM 只用于企业控制面，例如组织、RBAC、审计和私有化管理；它不是视频制作运行时。
@@ -178,12 +177,12 @@ CLI 只接受显式命令。外部 Agent 应先读取 `command.list` / `command.
 - 当前项目、素材和生成记录主要保存在浏览器本地，不承诺云同步。
 - API Key 加密保存在本地 `localforage` Vault；Workflow、素材、生成历史等业务数据分 store 写入 IndexedDB，大媒体不写入 `localStorage`。
 - Web 站点、桌面 WebView 和浏览器扩展的 IndexedDB 默认彼此隔离；跨入口自动共享需要 Desktop Runtime 受限桥接，当前仍是待办，不宣称已实现。
-- 不要把 API Key 写进 Director Skill、Prompt、日志或仓库；Agent 和 CLI 只应读取脱敏后的就绪状态。
+- 不要把 API Key 写进 Production Skill、Prompt、日志或仓库；Agent 和 CLI 只应读取脱敏后的就绪状态。
 - 请勿在非官方部署中输入 API Key。官方渠道仅包括本仓库、[在线 Demo](https://avabbbb.github.io/Flovart/) 和本仓库 Actions 发布的桌面构建。
 
 ## 参与贡献
 
-欢迎通过 [Issue](https://github.com/avabbbb/Flovart/issues/new/choose) 和 Pull Request 贡献 Provider 适配、Workflow 能力、Host 集成和 Director Skill。提交前请阅读 [贡献约定](.github/CONTRIBUTING.md)，每个 Issue 聚焦一个问题，每个 PR 关联 Issue、写清非目标并附验证证据；UI 变更需要前后截图。
+欢迎通过 [Issue](https://github.com/avabbbb/Flovart/issues/new/choose) 和 Pull Request 贡献 Provider 适配、Workflow 能力、Host 集成和 Production Skill。提交前请阅读 [贡献约定](.github/CONTRIBUTING.md)，每个 Issue 聚焦一个问题，每个 PR 关联 Issue、写清非目标并附验证证据；UI 变更需要前后截图。
 
 特别感谢 [@labiaaaaaaaaa](https://github.com/labiaaaaaaaaa) 推进第三方服务适配与兼容端点修复。
 

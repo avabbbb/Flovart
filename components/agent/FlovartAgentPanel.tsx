@@ -13,11 +13,28 @@ interface FlovartAgentPanelProps {
   onActivityChange: (status: 'idle' | 'running' | 'done' | 'error') => void;
 }
 
+const AGENT_TEXT_CONFIGURATION_MESSAGE = '请在设置的“模型映射”中为 Agent 文本能力配置可用线路。';
+
+function isAgentTextConfigurationError(error?: string) {
+  const message = String(error || '').toLowerCase();
+  return message.includes('no agent-text route')
+    || message.includes('no configured agent-text credential');
+}
+
+function displayError(error: string) {
+  return isAgentTextConfigurationError(error) ? AGENT_TEXT_CONFIGURATION_MESSAGE : error;
+}
+
+function snapshotNeedsConfiguration(snapshot: FlovartAgentSnapshot) {
+  const latestAssistant = [...snapshot.messages].reverse().find(message => message.role === 'assistant');
+  return isAgentTextConfigurationError(latestAssistant?.error);
+}
+
 function displayMessages(snapshot: FlovartAgentSnapshot): WorkflowAgentDisplayMessage[] {
   return snapshot.messages.map(message => ({
     id: message.id,
     role: message.error ? 'error' : message.role,
-    text: message.error || message.text,
+    text: message.error ? displayError(message.error) : message.text,
     createdAt: message.timestamp ? new Date(message.timestamp).toISOString() : undefined,
   }));
 }
@@ -34,6 +51,7 @@ export function FlovartAgentPanel({ projectId, onActivityChange }: FlovartAgentP
   const [prompt, setPrompt] = useState('');
   const [status, setStatus] = useState<'connecting' | 'ready' | 'error'>('connecting');
   const [sending, setSending] = useState(false);
+  const [needsConfiguration, setNeedsConfiguration] = useState(false);
 
   useEffect(() => { activity.current = onActivityChange; }, [onActivityChange]);
   useEffect(() => {
@@ -49,11 +67,14 @@ export function FlovartAgentPanel({ projectId, onActivityChange }: FlovartAgentP
         client.current = next;
         setMessages(displayMessages(snapshot));
         setStatus('ready');
-        activity.current(snapshot.messages.length ? 'done' : 'idle');
+        const configurationNeeded = snapshotNeedsConfiguration(snapshot);
+        setNeedsConfiguration(configurationNeeded);
+        activity.current(configurationNeeded ? 'error' : snapshot.messages.length ? 'done' : 'idle');
       })
       .catch(error => {
         if (!active) return;
         setStatus('error');
+        setNeedsConfiguration(false);
         setMessages([{ id: 'connection-error', role: 'error', text: errorMessage(error) }]);
         activity.current('error');
       });
@@ -65,13 +86,16 @@ export function FlovartAgentPanel({ projectId, onActivityChange }: FlovartAgentP
 
   const handleEvent = (event: FlovartAgentTurnEvent, assistantId: string) => {
     if (event.type === 'text-delta') {
+      setNeedsConfiguration(false);
       setMessages(items => items.some(item => item.id === assistantId)
         ? items.map(item => item.id === assistantId ? { ...item, text: item.text + event.delta } : item)
         : [...items, { id: assistantId, role: 'assistant', text: event.delta }]);
     } else if (event.type === 'snapshot') {
+      setNeedsConfiguration(snapshotNeedsConfiguration(event.snapshot));
       setMessages(displayMessages(event.snapshot));
     } else if (event.type === 'error') {
-      setMessages(items => [...items, { id: crypto.randomUUID(), role: 'error', text: event.message }]);
+      setNeedsConfiguration(isAgentTextConfigurationError(event.message));
+      setMessages(items => [...items, { id: crypto.randomUUID(), role: 'error', text: displayError(event.message) }]);
     }
   };
 
@@ -83,6 +107,7 @@ export function FlovartAgentPanel({ projectId, onActivityChange }: FlovartAgentP
     setPrompt('');
     setSending(true);
     setStatus('ready');
+    setNeedsConfiguration(false);
     activity.current('running');
     const controller = new AbortController();
     abort.current = controller;
@@ -95,7 +120,9 @@ export function FlovartAgentPanel({ projectId, onActivityChange }: FlovartAgentP
       activity.current(failed ? 'error' : 'done');
     } catch (error) {
       if (!controller.signal.aborted) {
-        setMessages(items => [...items, { id: crypto.randomUUID(), role: 'error', text: errorMessage(error) }]);
+        const message = errorMessage(error);
+        setNeedsConfiguration(isAgentTextConfigurationError(message));
+        setMessages(items => [...items, { id: crypto.randomUUID(), role: 'error', text: displayError(message) }]);
         activity.current('error');
       }
     } finally {
@@ -106,8 +133,8 @@ export function FlovartAgentPanel({ projectId, onActivityChange }: FlovartAgentP
   return (
     <div className="workflow-agent is-embedded">
       <header className="workflow-agent__utility">
-        <span className={`workflow-agent__status is-${status === 'ready' ? 'connected' : status}`}>
-          <Circle size={8} />{status === 'connecting' ? '连接中' : status === 'ready' ? '已就绪' : '需要配置'}
+        <span className={`workflow-agent__status is-${needsConfiguration ? 'error' : status === 'ready' ? 'connected' : status}`}>
+          <Circle size={8} />{status === 'connecting' ? '连接中' : status === 'error' ? '连接失败' : needsConfiguration ? '需要配置' : '已就绪'}
         </span>
         <span className="ml-auto text-[9px]" style={{ color: 'var(--isl-ink-ghost)' }}>主对话自动恢复</span>
       </header>
@@ -123,7 +150,7 @@ export function FlovartAgentPanel({ projectId, onActivityChange }: FlovartAgentP
                 void send();
               }
             }}
-            placeholder={status === 'ready' ? '告诉 Flovart Agent 你想制作什么' : '请先配置 Agent 文本模型映射'}
+            placeholder={needsConfiguration ? '请先配置 Agent 文本模型映射' : status === 'ready' ? '告诉 Flovart Agent 你想制作什么' : 'Flovart Agent 连接失败'}
             disabled={status === 'connecting'}
           />
           {sending

@@ -13,7 +13,7 @@ const permissionSchema = z.object({
 }).strict();
 
 const manifestSchema = z.object({
-  schemaVersion: z.literal('flovart.director-skill/1'),
+  schemaVersion: z.literal('flovart.production-skill/1'),
   id: z.string().min(1),
   version: z.string().regex(/^\d+\.\d+\.\d+$/),
   productionSpec: z.object({
@@ -46,7 +46,7 @@ const openaiMetadataSchema = z.object({
   }).strict(),
 }).strict();
 
-export interface BundledDirectorSkill {
+export interface BundledProductionSkill {
   id: string;
   version: string;
   displayName: string;
@@ -69,7 +69,7 @@ export interface BundledDirectorSkill {
 
 const manifest = manifestSchema.parse(parse(manifestSource));
 const metadata = openaiMetadataSchema.parse(parse(openaiSource)).interface;
-const bundledSkills: readonly BundledDirectorSkill[] = Object.freeze([Object.freeze({
+const bundledSkills: readonly BundledProductionSkill[] = Object.freeze([Object.freeze({
   id: manifest.id,
   version: manifest.version,
   displayName: metadata.display_name,
@@ -86,10 +86,10 @@ const bundledSkills: readonly BundledDirectorSkill[] = Object.freeze([Object.fre
   exampleSpec,
 })]);
 
-export function listBundledDirectorSkills(): readonly BundledDirectorSkill[] {
+export function listBundledProductionSkills(): readonly BundledProductionSkill[] {
   return bundledSkills;
 }
 
-export function getBundledDirectorSkill(id: string): BundledDirectorSkill | null {
+export function getBundledProductionSkill(id: string): BundledProductionSkill | null {
   return bundledSkills.find(skill => skill.id === id) || null;
 }

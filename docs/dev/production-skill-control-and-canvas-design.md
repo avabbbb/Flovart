@@ -1,4 +1,4 @@
-# Director Skill 总控、Creator 与画布投影设计
+# Production Skill 总控、Creator 与画布投影设计
 
 ## 当前结论
 
@@ -61,7 +61,7 @@ production.spec.create-revision
 - `workflow.layout.update`：只改位置、折叠、分组和视口，使用 `expectedLayoutRevision`，不创建 Spec Revision。
 - `production.spec.create-revision`：所有有制作语义的画布修改都携带 `parentRevisionId`，创建不可变新 Revision，再重编译受影响阶段。
 
-删除这个 Module 后，投影、Revision CAS、局部失效和事件同步复杂度会散落到 UI、CLI、Agent 与每个 Director Skill，因此它应成为深模块。
+删除这个 Module 后，投影、Revision CAS、局部失效和事件同步复杂度会散落到 UI、CLI、Agent 与每个 Production Skill，因此它应成为深模块。
 
 ## 画布同步协议
 
@@ -115,7 +115,7 @@ Agent 与用户同时编辑时，过期 `parentRevisionId` 返回 `PRECONDITION_
 总控 Skill 只编排以下稳定循环：
 
 1. 发现 Runtime 与 Canonical Registry。
-2. 加载 Primary Director Skill Snapshot。
+2. 加载 Primary Production Skill Snapshot。
 3. 让 Director Compiler 产出 ProductionSpec Draft。
 4. 运行 dry-run，显示能力缺口、路线报价、预算和 Gate。
 5. 用户批准后启动 ProductionRun。
@@ -126,7 +126,7 @@ Agent 与用户同时编辑时，过期 `parentRevisionId` 返回 `PRECONDITION_
 
 总控 Skill 不应该列出几十个 Provider 特化命令；其 Depth 来自用少量 Production Intent 隐藏任务恢复、成本、ProviderAttempt 和画布同步。
 
-## Director Skill Creator
+## Production Skill Creator
 
 Creator 必须是独立 Authoring Skill，不并入运行时总控。推荐流程：
 
@@ -143,7 +143,7 @@ create/import
 标准包：
 
 ```text
-director-skill/
+production-skill/
 ├── SKILL.md
 ├── flovart.skill.yaml
 ├── agents/openai.yaml
@@ -158,7 +158,7 @@ director-skill/
 ### Manifest 最小形状
 
 ```yaml
-schemaVersion: flovart.director-skill/1
+schemaVersion: flovart.production-skill/1
 id: community.vox-director
 version: 1.0.0
 productionSpec:
@@ -236,16 +236,16 @@ license: MIT
 ### S4：完整导演制作
 
 - 实现 dry-run、路线报价、预算、Gate、run、retry-stage、replan、render、verify。
-- Director Skill Creator 完成 import/validate/eval/pack。
+- Production Skill Creator 完成 import/validate/eval/pack。
 - 用迁移后的 VOX Skill 跑一条 image-first 30 秒样片，并验证全程画布同步与单镜头重做。
 
 ## 验收标准
 
-只有同时满足以下条件，才能宣称“导演 Skill 运行时同步操作画布并支持细修”：
+只有同时满足以下条件，才能宣称“Production Skill 运行时同步操作画布并支持细修”：
 
 1. Coding Agent、CLI、MCP、WebUI 对同一 ProductionRun ID 读取到相同 Spec/Projection Revision。
 2. 关闭 WebUI 后任务继续；重开后节点状态和 Artifact 自动恢复。
 3. 用户修改单个镜头只创建新 Spec Revision，并只重跑该镜头及其下游。
 4. 移动节点不触发生成；语义编辑不直接覆盖当前投影。
 5. 每个画布结果能追溯到 StageRun、ProviderAttempt、Artifact、报价和验证报告。
-6. Director Skill 全程无法读取 Secret 或直接调用 Provider。
+6. Production Skill 全程无法读取 Secret 或直接调用 Provider。

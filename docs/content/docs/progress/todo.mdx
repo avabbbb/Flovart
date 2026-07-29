@@ -64,6 +64,8 @@ Table 是 Workflow 之外的第二个正式创作工作区，不是电子表格�
 - **主对话与探索分支**：⬜ 保留一条可恢复主对话；探索分支未提升前不得创建正式 Spec Revision 或 Mandate。
 - **Production Plan Card**：⬜ 把目标产物、可选 Production Skill、Route Plan、预算和审片点投影为一张制作方案卡；“确认并开始”原子创建 Mandate 和 Run，普通聊天文本不得授权付费。
 - **固定 Node Runtime**：⬜ 正式 Desktop 安装包捆绑满足 PI 要求的 Node `>=22.19.0`，Release Manifest 锁定 Node、PI、Agent 协议和 Session Schema；源码开发模式才允许使用合规系统 Node。
+- **Managed Agent 生命周期**：⬜ Desktop 正常退出时必须同步终止其托管的 Managed Agent 子进程；实机验收发现源码开发模式关闭窗口后 Node 子进程仍会存活。
+- **Agent 空间默认布局**：⬜ 新增 Codex 子任务时按主面板边界计算空位，避免默认位置大面积遮挡 `Flovart Agent`；仍需保留用户拖动后的空间布局。
 
 ## ProductionRun 与 Production Skill 生态
 

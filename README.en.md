@@ -46,10 +46,10 @@
     <td width="50%" align="center">
       <img src="pic/readme-skill-home.png" alt="Flovart Skill home" />
       <br />
-      <sub>Skill home: choose a directing method before entering a project.</sub>
+      <sub>Skill home: choose a production method before entering a project.</sub>
     </td>
     <td width="50%" align="center">
-      <img src="pic/readme-skill-detail.png" alt="Flovart Director Skill onboarding" />
+      <img src="pic/readme-skill-detail.png" alt="Flovart Production Skill onboarding" />
       <br />
       <sub>Low-friction guidance for invocation, cost boundaries, and safety.</sub>
     </td>
@@ -58,31 +58,30 @@
 
 ## What is Flovart?
 
-Flovart is a local-first AI video production system for coding agents with three official parts: **Workflow** owns multi-node generation orchestration; **Table** focuses on one media item or Workflow node at a time; **Agent** arranges Codex threads, task state, project context, and artifacts in a spatial workspace. They share providers, assets, and artifact semantics without restoring the removed Canvas or Art system.
+Flovart is a local-first AI video production system centered on one built-in **Flovart Agent**. It has three official workspaces: **Workflow** owns multi-node generation orchestration; **Table** focuses on one media item or Workflow node at a time; **Agent** organizes the main conversation, optional external coding-agent subtasks, project context, and artifacts. They share providers, assets, and artifact semantics without restoring the removed Canvas or Art system.
 
 The system separates video production into four stable responsibilities:
 
 | Role | Responsibility |
 | --- | --- |
-| **Coding Agent** | Understands the brief, plans the work, organizes production roles, monitors progress, and recovers failures. Codex and OpenCode are the first target hosts. |
-| **Flovart Skill** | The production switchboard: exposes capabilities, constrains call order, validates Director Skills, and tells the agent when to invoke the CLI. |
-| **Director Skill** | A reusable directing method that defines style, shot language, production stages, checkpoints, and acceptance criteria. |
-| **Flovart CLI** | The deterministic actuator: operates currently registered Workflow capabilities, invokes providers, and returns structured status without asking the agent to guess HTTP calls or manipulate the UI. |
+| **Flovart Agent** | The one built-in production agent users collaborate with directly: it understands the brief, selects methods, supervises execution, and restores the main conversation. |
+| **Production Skill** | A production method loaded by Flovart Agent that defines style, shot language, stages, checkpoints, and acceptance criteria. |
+| **Flovart Runtime / CLI** | The deterministic execution layer: operates registered capabilities and persists tasks and artifacts without asking the agent to guess HTTP calls or manipulate the UI. |
+| **Provider Adapter** | Exclusively owns model routing, credential injection, submission, and polling; Production Skills never access API keys. |
 
 In one line: **Workflow orchestrates generation, Table focuses preprocessing, and Agent understands, executes, and supervises production in a spatial task interface.**
 
 ```mermaid
 flowchart LR
-  B["Creative brief + local credentials"] --> A["Coding Agent<br/>Codex / OpenCode"]
-  A --> P["Flovart Skill<br/>Production switchboard"]
-  P --> D["Director Skill<br/>Style and production SOP"]
-  P --> C["Flovart CLI<br/>Deterministic commands"]
-  D --> C
-  C <--> W["Workflow Runtime<br/>Nodes / status / artifacts"]
-  T["Table<br/>Single-media / node preprocessing<br/>Under construction"] -. "preprocessed artifacts" .-> W
-  G["Agent workspace<br/>Codex threads / task panels / artifacts"] <--> W
+  B["Creative brief"] --> A["Flovart Agent<br/>One built-in main agent"]
+  A --> S["Production Skill<br/>Reusable production method"]
+  A --> C["Flovart Runtime / CLI<br/>Deterministic execution"]
+  X["Codex / OpenCode<br/>Optional external subtask"] -.-> C
+  C <--> W["Workflow<br/>Nodes / status / artifacts"]
+  C <--> T["Table<br/>Media preprocessing"]
   C --> M["Provider Adapters<br/>Image / video / audio"]
   W --> A
+  T --> A
 ```
 
 ## Why this architecture?
@@ -90,12 +89,12 @@ flowchart LR
 - **Separated responsibilities**: Workflow owns multi-node generation orchestration; Table processes one input at a time; Agent spatially organizes Codex threads and task state, so generation, processing, and conversation are not forced back into one cluttered surface.
 - **BYOK and multi-model**: users configure their own credentials while provider adapters connect image, video, and text models.
 - **Recoverable production**: the CLI returns JSON status so an agent can poll, retry, and resume instead of relying on one long conversation.
-- **Reusable style**: a Director Skill captures directing knowledge so the same visual language and production process can be applied across projects.
-- **Composable roles**: writing, storyboarding, visual generation, voice, editing, and quality control can be owned by separate agents or Skills while sharing one Workflow.
+- **Reusable style**: a Production Skill captures production knowledge so the same visual language and process can be applied across projects.
+- **Composable roles**: writing, storyboarding, visual generation, voice, editing, and quality control can be owned by Production Skills and optional specialist subtasks while sharing one Workflow.
 
-## Director Skill ecosystem
+## Production Skill ecosystem
 
-Flovart will define the minimum integration contract for Director Skills and provide Skill Creator guidance for community authors. The contract covers:
+Flovart will define the minimum integration contract for Production Skills and provide Skill Creator guidance for community authors. The contract covers:
 
 - identity, versioning, compatibility, and required Flovart capabilities;
 - brief inputs, configurable parameters, and structured outputs;
@@ -104,9 +103,9 @@ Flovart will define the minimum integration contract for Director Skills and pro
 - checkpoints, recovery, human approval, and final acceptance;
 - artifact lineage, model policy, cost controls, and safety boundaries.
 
-[VOX Director](https://github.com/avabbbb/vox-director) is a reference for this kind of stylized Director Skill. The goal is to combine the Flovart production switchboard, a community Director Skill, and the user's providers so a coding agent can reuse an end-to-end stylized film workflow.
+[VOX Skill](https://github.com/avabbbb/vox-director) is the first stylized Production Skill reference; its upstream repository and technical invocation handle remain `vox-director`. The goal is to combine Flovart Agent, Production Skills, and the user's providers into a reusable end-to-end film workflow.
 
-> The Director Skill contract, Skill Creator template, TUI `/commands`, and real-time event monitoring are still under development. The new Table and Agent surfaces are being implemented.
+> The Production Skill contract, Skill Creator template, TUI `/commands`, and real-time event monitoring are still under development. The new Table and Agent surfaces are being implemented.
 
 ## Current capabilities and boundaries
 
@@ -119,7 +118,7 @@ Flovart will define the minimum integration contract for Director Skills and pro
 | Multi-provider BYOK, text-to-image, image-to-image, and text-to-video | Foundation available |
 | Workflow CLI, command schemas, and JSON status | Converging |
 | Codex and OpenCode host adapters | Priority work |
-| Director Skill contract and UGC ecosystem | In design and implementation |
+| Production Skill contract and UGC ecosystem | In design and implementation |
 | TUI `/xxxx` shortcuts, job subscriptions, and resumable runs | Planned |
 
 The creator runtime is primarily TypeScript and Node.js. Go + Gin + GORM belong to the enterprise control plane for organizations, RBAC, audit, and private deployment management; Go is not the creative runtime.
@@ -158,12 +157,12 @@ More documentation:
 
 - Projects, assets, and generation history are currently stored primarily in the browser; cloud sync is not promised.
 - API keys are currently stored locally in the browser, and the frontend calls configured model services directly.
-- Never put API keys in a Director Skill, prompt, log, or repository. Agents and the CLI should only receive redacted readiness status.
+- Never put API keys in a Production Skill, prompt, log, or repository. Agents and the CLI should only receive redacted readiness status.
 - Do not enter API keys into unofficial deployments. Official channels are this repository, the [live demo](https://avabbbb.github.io/Flovart/), and desktop builds published by this repository's Actions.
 
 ## Contributing
 
-Issues and pull requests for provider adapters, Workflow capabilities, host integrations, and Director Skills are welcome. Start from the [Issue chooser](https://github.com/avabbbb/Flovart/issues/new/choose) and read the [contribution conventions](.github/CONTRIBUTING.md): keep one problem per Issue, link every PR to an Issue, state non-goals, and attach verification evidence. UI changes require before-and-after screenshots.
+Issues and pull requests for provider adapters, Workflow capabilities, host integrations, and Production Skills are welcome. Start from the [Issue chooser](https://github.com/avabbbb/Flovart/issues/new/choose) and read the [contribution conventions](.github/CONTRIBUTING.md): keep one problem per Issue, link every PR to an Issue, state non-goals, and attach verification evidence. UI changes require before-and-after screenshots.
 
 Special thanks to [@labiaaaaaaaaa](https://github.com/labiaaaaaaaaa) for driving third-party service compatibility and aggregation-endpoint fixes.
 

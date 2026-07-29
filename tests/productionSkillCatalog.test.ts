@@ -9,23 +9,23 @@ import { describe, expect, it } from 'vitest';
 
 import extensionSchema from '../.agents/skills/vox-director/schemas/extension.schema.json';
 import {
-  getBundledDirectorSkill,
-  listBundledDirectorSkills,
-} from '../services/directorSkillCatalog';
+  getBundledProductionSkill,
+  listBundledProductionSkills,
+} from '../services/productionSkillCatalog';
 import { auditVoxProductionSpec } from '../tools/flovart/vox-director-quality.js';
 
-describe('bundled Director Skill catalog', () => {
+describe('bundled Production Skill catalog', () => {
   const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../.agents/skills/vox-director');
 
   it('discovers the provider-neutral VOX package as an official example', () => {
-    const skills = listBundledDirectorSkills();
-    const vox = getBundledDirectorSkill('community.vox-director');
+    const skills = listBundledProductionSkills();
+    const vox = getBundledProductionSkill('community.vox-director');
 
     expect(skills.map(skill => skill.id)).toContain('community.vox-director');
     expect(vox).toMatchObject({
       id: 'community.vox-director',
       version: '1.0.0',
-      displayName: 'VOX Director',
+      displayName: 'VOX Skill',
       trustTier: 'bundled-example',
       license: 'MIT',
       permissions: {
@@ -45,7 +45,7 @@ describe('bundled Director Skill catalog', () => {
   });
 
   it('ships a quality-gated example using the canonical Skill extension id', () => {
-    const vox = getBundledDirectorSkill('community.vox-director');
+    const vox = getBundledProductionSkill('community.vox-director');
     const example = vox?.exampleSpec as { extensions?: Record<string, unknown> } | undefined;
     const result = auditVoxProductionSpec(vox?.exampleSpec);
     const extension = example?.extensions?.['community.vox-director'];
