@@ -9,10 +9,11 @@ import {
 import { WorkflowAgentBridge } from '../../services/workflowAgentBridge';
 import { WorkflowAgentMessages, type WorkflowAgentDisplayMessage } from '../workflow/WorkflowAgentMessages';
 import type { WorkflowProject } from '../workflow/types';
+import type { AgentPanelStatus } from './agentWorkspaceStore';
 
 interface FlovartAgentPanelProps {
   project: WorkflowProject;
-  onActivityChange: (status: 'idle' | 'running' | 'done' | 'error') => void;
+  onActivityChange: (status: AgentPanelStatus) => void;
   onOpenSettings: () => void;
 }
 
@@ -58,7 +59,7 @@ export function FlovartAgentPanel({ project, onActivityChange, onOpenSettings }:
   const workspaceBridge = useRef<WorkflowAgentBridge | undefined>(undefined);
   const abort = useRef<AbortController | undefined>(undefined);
   const activity = useRef(onActivityChange);
-  const confirmationRef = useRef<{ summary: string; resolve: (approved: boolean) => void }>();
+  const confirmationRef = useRef<{ summary: string; resolve: (approved: boolean) => void } | undefined>(undefined);
   const [messages, setMessages] = useState<WorkflowAgentDisplayMessage[]>([]);
   const [prompt, setPrompt] = useState('');
   const [status, setStatus] = useState<'connecting' | 'ready' | 'error'>('connecting');
