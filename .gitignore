@@ -23,6 +23,7 @@ dist-extension.zip
 
 # Agent and automation temp directories
 .claude/worktrees/
+.codex/
 .chrome-cdp/
 .chrome-cdp2/
 .cdp-temp/
