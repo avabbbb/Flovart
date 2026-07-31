@@ -33,64 +33,100 @@ const LEASE_MS: i64 = 500;
 
 pub struct RuntimeWorker {
     stopping: Arc<AtomicBool>,
-    thread: Option<JoinHandle<()>>,
+    scheduler_thread: Option<JoinHandle<()>>,
+    executor_thread: Option<JoinHandle<()>>,
 }
 
 impl RuntimeWorker {
     pub fn start(store: Arc<RuntimeStore>, artifact_root: Option<PathBuf>) -> Self {
         let stopping = Arc::new(AtomicBool::new(false));
-        let worker_stopping = stopping.clone();
-        let worker_id = super::ProductionRuntime::new_id("worker");
-        let thread = std::thread::spawn(move || {
-            while !worker_stopping.load(Ordering::Acquire) {
-                match store.claim_next_task(&worker_id, LEASE_MS) {
+
+        // Scheduler thread: only production.run, so it can block on child
+        // tasks that the executor thread claims (see claim_next_task_filtered).
+        let scheduler_stopping = stopping.clone();
+        let scheduler_store = store.clone();
+        let scheduler_artifact_root = artifact_root.clone();
+        let scheduler_id = super::ProductionRuntime::new_id("worker");
+        let scheduler_thread = std::thread::spawn(move || {
+            while !scheduler_stopping.load(Ordering::Acquire) {
+                match scheduler_store.claim_next_task_filtered(&scheduler_id, LEASE_MS, Some(true)) {
                     Ok(Some(task)) => match task.kind.as_str() {
-                        "runtime.test.delay" => {
-                            run_delay(&store, &worker_id, &worker_stopping, &task)
-                        }
-                        "production.dry-run" => run_production_plan(&store, &worker_id, &task),
                         "production.run" => run_production_execution(
-                            &store,
-                            &worker_id,
-                            &worker_stopping,
+                            &scheduler_store,
+                            &scheduler_id,
+                            &scheduler_stopping,
                             &task,
                         ),
+                        _ => {
+                            let _ = scheduler_store.fail_task(
+                                &task.id,
+                                &scheduler_id,
+                                &json!({
+                                    "code": "UNKNOWN_COMMAND",
+                                    "message": "Runtime scheduler does not support this task kind.",
+                                    "retryable": false
+                                }),
+                            );
+                        }
+                    },
+                    Ok(None) => std::thread::sleep(IDLE_POLL),
+                    Err(error) => {
+                        log::warn!("Runtime scheduler ledger poll failed: {}", error.message);
+                        std::thread::sleep(IDLE_POLL);
+                    }
+                }
+            }
+        });
+
+        // Executor thread: everything except production.run (provider calls,
+        // media pipelines, planning, diagnostics).
+        let executor_stopping = stopping.clone();
+        let executor_artifact_root = artifact_root;
+        let executor_id = super::ProductionRuntime::new_id("exec");
+        let executor_thread = std::thread::spawn(move || {
+            while !executor_stopping.load(Ordering::Acquire) {
+                match store.claim_next_task_filtered(&executor_id, LEASE_MS, Some(false)) {
+                    Ok(Some(task)) => match task.kind.as_str() {
+                        "runtime.test.delay" => {
+                            run_delay(&store, &executor_id, &executor_stopping, &task)
+                        }
+                        "production.dry-run" => run_production_plan(&store, &executor_id, &task),
                         "audio.tts" => local_media::run_tts(
                             &store,
-                            &worker_id,
-                            artifact_root.as_deref(),
+                            &executor_id,
+                            executor_artifact_root.as_deref(),
                             &task,
                         ),
                         "media.render" => local_media::run_render(
                             &store,
-                            &worker_id,
-                            artifact_root.as_deref(),
+                            &executor_id,
+                            executor_artifact_root.as_deref(),
                             &task,
                         ),
                         "media.verify" => local_media::run_verify(
                             &store,
-                            &worker_id,
-                            artifact_root.as_deref(),
+                            &executor_id,
+                            executor_artifact_root.as_deref(),
                             &task,
                         ),
                         "generate.video" => run_video(
                             &store,
-                            &worker_id,
-                            &worker_stopping,
-                            artifact_root.as_deref(),
+                            &executor_id,
+                            &executor_stopping,
+                            executor_artifact_root.as_deref(),
                             &task,
                         ),
                         "generate.image" => run_runninghub_image(
                             &store,
-                            &worker_id,
-                            &worker_stopping,
-                            artifact_root.as_deref(),
+                            &executor_id,
+                            &executor_stopping,
+                            executor_artifact_root.as_deref(),
                             &task,
                         ),
                         _ => {
                             let _ = store.fail_task(
                                 &task.id,
-                                &worker_id,
+                                &executor_id,
                                 &json!({
                                     "code": "UNKNOWN_COMMAND",
                                     "message": "Runtime worker does not support this task kind.",
@@ -101,7 +137,7 @@ impl RuntimeWorker {
                     },
                     Ok(None) => std::thread::sleep(IDLE_POLL),
                     Err(error) => {
-                        log::warn!("Runtime worker ledger poll failed: {}", error.message);
+                        log::warn!("Runtime executor ledger poll failed: {}", error.message);
                         std::thread::sleep(IDLE_POLL);
                     }
                 }
@@ -109,7 +145,8 @@ impl RuntimeWorker {
         });
         Self {
             stopping,
-            thread: Some(thread),
+            scheduler_thread: Some(scheduler_thread),
+            executor_thread: Some(executor_thread),
         }
     }
 }
@@ -1563,7 +1600,10 @@ fn fail_runninghub(
 impl Drop for RuntimeWorker {
     fn drop(&mut self) {
         self.stopping.store(true, Ordering::Release);
-        if let Some(thread) = self.thread.take() {
+        if let Some(thread) = self.scheduler_thread.take() {
+            let _ = thread.join();
+        }
+        if let Some(thread) = self.executor_thread.take() {
             let _ = thread.join();
         }
     }
