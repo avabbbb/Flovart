@@ -44,7 +44,7 @@ impl FlovartContext {
 pub fn run() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
 
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
             // 二开实例：把 argv 里的 flovart:// 链接转到已运行实例
             for arg in argv.iter().skip(1) {
@@ -147,6 +147,14 @@ pub fn run() {
             runtime::runtime_execute,
             managed_agent::managed_agent_connection,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running Flovart");
+        .build(tauri::generate_context!())
+        .expect("error while building Flovart");
+
+    app.run(|app_handle, event| {
+        if matches!(event, tauri::RunEvent::Exit) {
+            if let Some(host) = app_handle.try_state::<Arc<ManagedAgentHost>>() {
+                host.shutdown();
+            }
+        }
+    });
 }

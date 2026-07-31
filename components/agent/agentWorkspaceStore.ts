@@ -86,7 +86,8 @@ export const useAgentWorkspaceStore = create<AgentWorkspaceState>()(
         const layout = state.layouts[projectId] || createDefaultAgentLayout();
         const count = layout.panels.filter(panel => panel.kind === 'codex').length + 1;
         const z = Math.max(0, ...layout.panels.map(panel => panel.z)) + 1;
-        const panel: AgentWorkspacePanel = { id: `codex-${nanoid(6)}`, kind: 'codex', title: `Codex · 子任务 ${count}`, status: 'idle', x: 120 + count * 34, y: 80 + count * 34, width: 500, height: 560, z };
+        const y = Math.max(0, ...layout.panels.map(panel => panel.y + panel.height)) + 26;
+        const panel: AgentWorkspacePanel = { id: `codex-${nanoid(6)}`, kind: 'codex', title: `Codex · 子任务 ${count}`, status: 'idle', x: 0, y, width: 500, height: 560, z };
         return { layouts: { ...state.layouts, [projectId]: { ...layout, panels: [...layout.panels, panel] } } };
       }),
       removePanel: (projectId, panelId) => set(state => {

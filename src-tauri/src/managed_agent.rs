@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use url::Url;
@@ -168,6 +169,7 @@ pub struct ManagedAgentHost {
     launch: Result<ManagedAgentLaunch, String>,
     config_path: PathBuf,
     child: Mutex<Option<Child>>,
+    shutting_down: AtomicBool,
 }
 
 impl ManagedAgentHost {
@@ -194,10 +196,14 @@ impl ManagedAgentHost {
             launch,
             config_path,
             child: Mutex::new(None),
+            shutting_down: AtomicBool::new(false),
         }
     }
 
     pub fn ensure_connection(&self) -> Result<ManagedAgentConnection, String> {
+        if self.shutting_down.load(Ordering::Acquire) {
+            return Err("Managed Agent is shutting down.".to_owned());
+        }
         let managed = self
             .child
             .lock()
@@ -214,6 +220,9 @@ impl ManagedAgentHost {
                 .unwrap_or(false);
             if !alive {
                 *child = None;
+                if self.shutting_down.load(Ordering::Acquire) {
+                    return Err("Managed Agent is shutting down.".to_owned());
+                }
                 let launch = self.launch.as_ref().map_err(Clone::clone)?;
                 if !launch
                     .args
@@ -252,6 +261,16 @@ impl ManagedAgentHost {
         Err("Managed Agent did not become ready within 4 seconds.".to_owned())
     }
 
+    pub fn shutdown(&self) -> bool {
+        self.shutting_down.store(true, Ordering::Release);
+        let Some(mut child) = self.child.lock().take() else {
+            return false;
+        };
+        let _ = child.kill();
+        let _ = child.wait();
+        true
+    }
+
     fn read_ready_connection(&self, managed: bool) -> Result<ManagedAgentConnection, String> {
         let connection = parse_managed_agent_connection(
             &fs::read(&self.config_path)
@@ -286,10 +305,36 @@ impl ManagedAgentHost {
 
 impl Drop for ManagedAgentHost {
     fn drop(&mut self) {
-        if let Some(mut child) = self.child.get_mut().take() {
-            let _ = child.kill();
-            let _ = child.wait();
-        }
+        self.shutdown();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn shutdown_is_idempotent_and_blocks_future_startup() {
+        let child = Command::new("node")
+            .args(["-e", "setInterval(() => {}, 1000)"])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("start test child");
+        let host = ManagedAgentHost {
+            launch: Err("test launch must not run".to_owned()),
+            config_path: PathBuf::from("unused-agent-config.json"),
+            child: Mutex::new(Some(child)),
+            shutting_down: AtomicBool::new(false),
+        };
+
+        assert!(host.shutdown());
+        assert!(!host.shutdown());
+        assert_eq!(
+            host.ensure_connection().unwrap_err(),
+            "Managed Agent is shutting down."
+        );
     }
 }
 

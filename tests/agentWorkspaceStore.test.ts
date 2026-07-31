@@ -1,6 +1,14 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createDefaultAgentLayout, useAgentWorkspaceStore } from '../components/agent/agentWorkspaceStore';
 
+const overlaps = (
+  left: { x: number; y: number; width: number; height: number },
+  right: { x: number; y: number; width: number; height: number },
+) => left.x < right.x + right.width
+  && left.x + left.width > right.x
+  && left.y < right.y + right.height
+  && left.y + left.height > right.y;
+
 describe('Agent workspace layout', () => {
   beforeEach(() => useAgentWorkspaceStore.setState({ layouts: {} }));
 
@@ -40,5 +48,25 @@ describe('Agent workspace layout', () => {
       ['codex-task', 'codex'],
     ]);
     expect(panels[0]).toMatchObject({ x: 10, y: 20, width: 500, height: 600 });
+  });
+
+  it('places a new Codex subtask outside every existing panel', () => {
+    useAgentWorkspaceStore.getState().addCodexPanel('project');
+    const panels = useAgentWorkspaceStore.getState().layouts.project.panels;
+    const codex = panels.find(panel => panel.kind === 'codex');
+
+    expect(codex).toBeDefined();
+    expect(codex).toMatchObject({ x: 0, y: 646 });
+    expect(panels.filter(panel => panel.id !== codex?.id).every(panel => !overlaps(codex!, panel))).toBe(true);
+  });
+
+  it('keeps consecutive Codex subtasks from overlapping one another', () => {
+    const store = useAgentWorkspaceStore.getState();
+    store.addCodexPanel('project');
+    useAgentWorkspaceStore.getState().addCodexPanel('project');
+    const codexPanels = useAgentWorkspaceStore.getState().layouts.project.panels.filter(panel => panel.kind === 'codex');
+
+    expect(codexPanels).toHaveLength(2);
+    expect(overlaps(codexPanels[0], codexPanels[1])).toBe(false);
   });
 });
