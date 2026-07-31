@@ -9,7 +9,7 @@
 - [ADR 0036：向 Agent 暴露 Provider-neutral Capability 而不是 Provider Job](../adr/0036-expose-provider-neutral-capabilities-to-agents.md)
 - [ADR 0044：允许用户验证本地 BYOK Route Mapping](../adr/0044-allow-verified-local-byok-route-mapping.md)
 - [ADR 0045：以 ProductionSpec 作为制作计划权威](../adr/0045-make-production-spec-authoritative-over-workflow-projection.md)
-- [ADR 0046：每个 ProductionSession 至多绑定一个主 Production Skill](../adr/0046-bind-at-most-one-primary-skill-per-production-session.md)
+- [ADR 0046：每个 ProductionSession 至多绑定一个 Production Skill](../adr/0046-bind-at-most-one-primary-skill-per-production-session.md)
 - [ADR 0047：通过 Runtime 介入事件唤醒 Coding Agent](../adr/0047-wake-agents-from-runtime-intervention-events.md)
 - [ADR 0056：以内嵌 PI Agent Core 实现 Flovart Agent](../adr/0056-use-pi-agent-core-for-the-built-in-flovart-agent.md)
 - [Flovart Agent V1 实施规划](flovart-agent-v1-plan.md)
@@ -419,6 +419,6 @@ S0 与 S1 同时满足以下条件后，才进入视频和 ProductionRun：
 3. 首个 WebUI Adapter 只接 Workflow；ProductionRuntime 保持 UI-neutral，Table 或未来 Canvas 通过相同 Interface 后续接入。
 4. ProductionSpec Revision 是制作计划权威；Workflow 只保存可重建投影和独立布局 revision。
 5. 用户可以在已支持 Provider Adapter Family 内验证本地 BYOK Route，但未知协议必须新增受审 Adapter。
-6. 每个 ProductionSession 在 V1 中至多绑定一个 Primary Skill Binding；无绑定时直接使用 ProductionSpec Core。
+6. 每个 ProductionSession 在 V1 中至多绑定一个 Bound Production Skill；无绑定时直接使用 ProductionSpec Core。
 7. Runtime/TUI 持续监控长任务，仅通过 Agent Intervention Event 唤醒 Coding Agent。
 8. S0/S1 图片底座放行后，下一条产品验收是 15 秒 VOX 端到端短片。

@@ -70,7 +70,7 @@ Node 与 Rust 不直接并发写同一个 SQLite 文件。Agent Session Store �
 
 ### E. Production Skill 与 Specialist
 
-- Primary Skill Binding 允许零或一个；无绑定时直接使用 ProductionSpec Core。
+- Bound Production Skill 允许零或一个；无绑定时直接使用 ProductionSpec Core。
 - Skill 推荐必须展示对风格、阶段和审片的影响并由用户确认。
 - 注册 narrative-review、shot-plan-review、evidence-review、visual-continuity-review 四种 Specialist Capability。
 - Specialist 只返回 Specialist Report；Flovart Agent 采纳后才能形成 Spec Patch。
@@ -106,7 +106,7 @@ Node 与 Rust 不直接并发写同一个 SQLite 文件。Agent Session Store �
 ## 关联决策
 
 - [ADR 0045：以 ProductionSpec 作为 Workflow 投影的权威](../adr/0045-make-production-spec-authoritative-over-workflow-projection.md)
-- [ADR 0046：每个 ProductionSession 至多绑定一个主 Production Skill](../adr/0046-bind-at-most-one-primary-skill-per-production-session.md)
+- [ADR 0046：每个 ProductionSession 至多绑定一个 Production Skill](../adr/0046-bind-at-most-one-primary-skill-per-production-session.md)
 - [ADR 0051：以 Production Mandate 统一制作授权](../adr/0051-unify-production-authorization-in-a-mandate.md)
 - [ADR 0052：使用一个负责的 Flovart Agent 与临时 Specialist](../adr/0052-use-one-accountable-flovart-agent-with-specialists.md)
 - [ADR 0054：统一 Agent 与 Skill 语言](../adr/0054-use-one-agent-and-skill-language.md)

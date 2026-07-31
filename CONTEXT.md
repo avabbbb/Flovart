@@ -256,8 +256,12 @@ Desktop Runtime 在 ProductionRun 开始前根据 Route Mapping、Capability Req
 把用户创作意图转成 ProductionSpec 的风格化导演知识包，不持有 Provider 凭据，也不直接执行生成任务。
 避免混用：Provider Plugin、Workflow Runtime、Model Adapter。
 
+**Operation Skill**：
+指导 Agent 如何操作 Flovart 的 Skill，通过 CLI/MCP 驱动 Production Runtime、Workspace、Research 与 Terminal Command Center；对应仓库里供 Codex、Claude Code 或 OpenCode 连接 Runtime 的 `SKILL.md` host 接入手册（.claude/skills/flovart 与 .agents/skills/flovart）。不持有 Provider 凭据，也不编译制作计划。
+避免混用：Production Skill、Provider Plugin、Model Adapter。
+
 **Flovart Agent**：
-绑定到一个 ProductionSession 的有状态制作决策主体，结合创作 Brief、可选 Primary Skill Binding、ProductionSpec 与受限制作能力形成连续工作上下文；每个 ProductionSession 同时只有一个活跃 Flovart Agent。
+绑定到一个 ProductionSession 的有状态制作决策主体，结合创作 Brief、可选 Bound Production Skill、ProductionSpec 与受限制作能力形成连续工作上下文；每个 ProductionSession 同时只有一个活跃 Flovart Agent。
 避免混用：Production Skill、Coding Agent、Production Authority、Provider Worker。
 
 **Agent Kernel**：
@@ -308,7 +312,7 @@ Hub 针对精确 Skill 版本与 Hash 发布的 advisory、block_new 或 critica
 一部作品从创作 Brief、Agent 对话、ProductionSpec 修订到多次 ProductionRun 的上下文边界；一个 Flovart Project 可以包含多个彼此隔离的 ProductionSession。每个 ProductionSession 保留一条可恢复的 Flovart Agent 主对话，探索分支在提升为主分支前不能推进正式计划或请求执行授权。
 避免混用：Flovart Project、Agent Session、ProductionRun。
 
-**Primary Skill Binding**：
+**Bound Production Skill（绑定的制作 Skill）**：
 ProductionSession 对至多一个精确 Production Skill 版本或 Skill Snapshot 的可选创意规划绑定；没有绑定时 Flovart Agent 使用 ProductionSpec Core 直接进行通用制作，且不创建虚构的通用 Skill。Agent 可以根据 Brief 推荐 Skill，但只有用户明确确认后才能建立或更换绑定，且系统不得静默切换；更换绑定必须显式重新规划，产生新的 ProductionSpec Revision 并使旧 Production Mandate 失效，已提交的 ProductionRun 不被原地改写。
 避免混用：Flovart Skill、通用素材包、Validated Profile、运行时临时读取多个 Production Skill。
 

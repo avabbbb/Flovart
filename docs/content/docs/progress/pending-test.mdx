@@ -2,6 +2,13 @@
 title: 待测试确认
 ---
 
+## Skill 术语两类模型对齐
+
+- ADR 0054 扩展为两类 Skill：操作 Skill（Operation Skill，host 接入手册 `.claude/skills/flovart` 与 `.agents/skills/flovart`）与 Production Skill（制作方法）并列，职责正交（操作 vs 风格化）；「主 Skill」作为操作 Skill 的俗称。
+- ADR 0046 的 Primary Skill Binding 改名 Bound Production Skill（绑定的制作 Skill），让出「主」字；CONTEXT、skill-guide、两个 V1 plan 文档同步。
+- 两份 host 手册内容已完全同步（diff 无差异），并清除其中 11 处旧称；vox-director 质量门禁消息与测试用例名同步去旧称（gate key `director-extension` 保留）。
+- 待用户验证：在 `.claude/skills/flovart/SKILL.md` 与 `.agents/skills/flovart/SKILL.md` 间运行 `diff` 应无差异；代码层与 host 手册搜索旧称应归零（`evaluation-report` 历史快照除外）。
+
 ## Flovart Agent 可见 Workflow 工具闭环
 
 - 内置 PI Agent 现在获得 15 条受限、类型化的可见 Workflow 工具：先读取项目和图状态，再创建、更新、移动、缩放、连接、选择或切换项目；不开放 Shell、任意文件、任意网络、legacy Canvas / Element 或浏览器旧生成命令。所有写操作仍要求稳定幂等键，并由现有 `workflowDispatcher` 做最终来源、Schema 和状态校验。

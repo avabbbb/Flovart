@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- 统一 Skill 术语为两类模型：操作 Skill（Operation Skill，指导 Agent 操作 Flovart 的 host 接入手册）与 Production Skill（制作方法）并列；ADR 0046 的 Primary Skill 让位为 Bound Production Skill，避免与“主 Skill”俗称碰撞；两份 host 手册（.claude/skills/flovart 与 .agents/skills/flovart）内容同步，并清除其中残留的 Director Skill 旧称。
 - Workflow 视频节点新增本地持久化 Poster，并把“选中”与“活动播放器”分离：普通和多选视频只显示懒加载 Poster 或轻量占位，显式加载后最多挂载一个 `<video preload="none">`；Esc、切换选择或进入工具时会卸载播放器，点击媒体表面仍会挂载 PromptBar 与 ElementToolbar。
 - 新增首个可用的内置 Flovart Agent：Managed Agent 内嵌 PI Agent Core 与独立 SQLite 主会话，默认 Agent 空间以 `Flovart Agent` 取代 Codex 主线程；`agent-text` 由 Rust Runtime 按非秘密 Route Mapping 选路并从操作系统 Keyring 注入凭据，Node/WebUI 不接触 Provider Secret。Agent 已接通 15 条受限的可见 Workflow 类型化工具、流式工具状态、主工作区同步与模型映射入口；Codex 保留为可新增的外部子任务。
 - 修复正常关闭桌面端后 Managed Agent Node 子进程残留的问题，并把新建 Codex 子任务的默认位置移到现有 Agent 面板之外。

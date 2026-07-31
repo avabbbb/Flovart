@@ -4,20 +4,21 @@
 
 ## 先记住一句话
 
-**Flovart Agent 是唯一内置主 Agent；Production Skill 是它加载的制作方法；VOX Skill 是其中一个具体方法。**
+**Flovart Agent 是唯一内置主 Agent；操作 Skill 指导它如何操作 Flovart，Production Skill 是它加载的制作方法；VOX Skill 是其中一个具体方法。**
 
 你只要描述目标，Flovart Agent 会在任务匹配时自动加载合适的 Production Skill。想明确指定 VOX Skill 时，可以在请求中写技术调用句柄 `$vox-director`。
 
-## 产品层只有一种 Skill
+## 产品层的两类 Skill
 
 | 名称 | 定位 |
 | --- | --- |
 | Flovart | 整个产品 |
 | Flovart Agent | 用户直接协作的唯一内置主 Agent |
+| Operation Skill | 指导 Agent 如何操作 Flovart 的 host 接入手册 |
 | Production Skill | Flovart Agent 可加载的制作方法 |
 | VOX Skill | 一个具体 Production Skill |
 
-仓库里供 Codex、Claude Code 或 OpenCode 连接 Runtime 的 `SKILL.md` 属于外部 Host 接入说明，不是第二类产品 Skill。Production Skill 不保存 API Key，也不直接请求 Provider；实际执行、费用和产物仍由 Flovart Runtime 管理。
+仓库里供 Codex、Claude Code 或 OpenCode 连接 Runtime 的 `SKILL.md` 属于 Operation Skill，是与 Production Skill 并列的两类 Skill 之一：Operation Skill 指导 Agent 如何操作 Flovart，Production Skill 提供具体制作方法。两类都不保存 API Key，也不直接请求 Provider；实际执行、费用和产物仍由 Flovart Runtime 管理。
 
 ## 最低成本的使用方式
 

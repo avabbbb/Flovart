@@ -24,7 +24,7 @@ export function auditVoxProductionSpec(spec = {}) {
   const directives = extension?.shotDirectives || {};
 
   const extensionPresent = !!extension;
-  addGate(gates, 'director-extension', extensionPresent, 25, 'extensions.community.vox-director must preserve the selected Director profile.');
+  addGate(gates, 'director-extension', extensionPresent, 25, 'extensions.community.vox-director must preserve the selected VOX profile.');
   if (!extensionPresent) violations.push(violation('VOX_EXTENSION_MISSING', 'The ProductionSpec lost extensions.community.vox-director and therefore has no enforceable VOX look.'));
 
   const themeReady = Array.isArray(extension?.themeCandidates)

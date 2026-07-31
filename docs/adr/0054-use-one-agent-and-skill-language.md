@@ -1,3 +1,3 @@
-# 统一为一个 Agent 与一层 Skill 语言
+# 统一为一个 Agent 与两类 Skill 语言
 
-Flovart 的正式产品与领域语言统一为四层：Flovart 是产品，Flovart Agent 是用户唯一直接协作的内置制作 Agent，Production Skill 是它加载的可复用制作方法，VOX Skill 是一个具体 Production Skill；后台 Specialist Agent 只作为实现中的临时专业分析者，不在主产品层级制造第二套人格。我们不再把“导演”同时用作主 Agent、Skill 类型和具体 VOX 包的实体名称，因为这种重名让用户误以为存在多个平级 Agent，也使代码、文档和界面无法形成统一心智模型。
+Flovart 的正式产品与领域语言统一为两类 Skill：**操作 Skill（Operation Skill）** 指导 Agent 如何操作 Flovart，通过 CLI/MCP 驱动 Production Runtime、Workspace、Research 与 Terminal Command Center，对应仓库里供 Codex、Claude Code 或 OpenCode 连接 Runtime 的 `SKILL.md` host 接入手册；**Production Skill** 是 Flovart Agent 可加载的可复用制作方法，负责把创作意图编译成特定风格的 ProductionSpec，VOX Skill 是其中一个具体 Production Skill。两类 Skill 职责正交：操作 Skill 管“怎么操作”，Production Skill 管“怎么编排特定风格的制作计划”；操作 Skill 不持有 Provider 凭据也不编译制作计划，Production Skill 不直接操作 Workspace 或 Runtime 命令。Flovart Agent 是用户唯一直接协作的内置制作 Agent，后台 Specialist Agent 只作为实现中的临时专业分析者，不在主产品层级制造第二套人格。我们不再把“导演”同时用作主 Agent、Skill 类型和具体 VOX 包的实体名称。绑定到 ProductionSession 的那个 Production Skill 称为 Bound Production Skill（绑定的制作 Skill，见 ADR 0046）；“主 Skill” 仅作为操作 Skill 的中文俗称，不再用于指代被绑定的 Production Skill，以免重名让用户误以为存在多个平级 Agent，也使代码、文档和界面无法形成统一心智模型。
