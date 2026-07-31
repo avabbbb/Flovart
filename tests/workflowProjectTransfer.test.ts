@@ -28,6 +28,19 @@ const project = (): WorkflowProject => ({
   updatedAt: '2026-06-19T00:00:00.000Z',
 });
 
+const videoProject = (): WorkflowProject => ({
+  ...project(),
+  nodes: [createWorkflowNode('video-1', 'video', { x: 10, y: 20 }, {
+    storageKey: 'local-video',
+    posterStorageKey: 'local-video-poster',
+    poster: 'data:image/jpeg;base64,cG9zdGVy',
+    name: 'shot.mp4',
+    mimeType: 'video/mp4',
+    bytes: 5,
+  })],
+  selectedNodeIds: ['video-1'],
+});
+
 describe('workflow project transfer', () => {
   beforeEach(async () => {
     vi.restoreAllMocks();
@@ -60,6 +73,28 @@ describe('workflow project transfer', () => {
     expect(imported.nodes[0].metadata.storageKey).toMatch(/^workflow-media-/);
     expect(imported.nodes[0].metadata.storageKey).not.toBe('local-image');
     expect(await workflowMediaStorage.get(imported.nodes[0].metadata.storageKey!)).not.toBeNull();
+  });
+
+  it('drops machine-local poster keys on export and rebuilds a durable poster on import', async () => {
+    const video = new Blob(['video'], { type: 'video/mp4' });
+    const poster = new Blob(['poster'], { type: 'image/jpeg' });
+    const get = vi.spyOn(workflowMediaStorage, 'get').mockImplementation(async key => key === 'local-video' ? video : key === 'local-video-poster' ? poster : null);
+    const exported = await serializeWorkflowProjects([videoProject()]);
+    get.mockRestore();
+
+    expect(JSON.stringify(exported.projects[0].project)).not.toContain('local-video-poster');
+    expect(JSON.stringify(exported.projects[0].project)).not.toContain('data:image/jpeg');
+    expect(exported.projects[0].assets).toHaveLength(1);
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, blob: async () => new Blob(['restored-video'], { type: 'video/mp4' }) })));
+    const [imported] = await parseWorkflowProjectFile(
+      new File([JSON.stringify(exported)], 'workflow.json', { type: 'application/json' }),
+      async () => new Blob(['restored-poster'], { type: 'image/jpeg' }),
+    );
+
+    const metadata = imported.nodes[0].metadata;
+    expect(metadata.storageKey).toMatch(/^workflow-media-/);
+    expect(metadata.posterStorageKey).toBe(`${metadata.storageKey}-poster`);
+    expect(await workflowMediaStorage.get(metadata.posterStorageKey!)).not.toBeNull();
   });
 
   it('rejects invalid graphs before writing any media', async () => {
@@ -103,8 +138,9 @@ describe('workflow project transfer', () => {
       projects: [{ project: { ...source, nodes: source.nodes.map(node => ({ ...node, metadata: { ...node.metadata, storageKey: undefined } })) }, assets: source.nodes.map(node => ({ nodeId: node.id, dataUrl: 'data:image/png;base64,aW1hZ2U=', mimeType: 'image/png' })) }],
     };
     vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, blob: async () => new Blob(['restored'], { type: 'image/png' }) })));
+    const originalSet = workflowMediaStorage.set.bind(workflowMediaStorage);
     const set = vi.spyOn(workflowMediaStorage, 'set');
-    set.mockResolvedValueOnce().mockRejectedValueOnce(new Error('storage full'));
+    set.mockImplementationOnce(originalSet).mockRejectedValueOnce(new Error('storage full'));
 
     await expect(parseWorkflowProjectFile(new File([JSON.stringify(exported)], 'workflow.json'))).rejects.toThrow('storage full');
     expect(await workflowMediaStorage.keys()).toEqual([]);

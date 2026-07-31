@@ -111,6 +111,8 @@ export interface WorkflowNodeMetadata {
   assetId?: string;
   href?: string;
   poster?: string;
+  /** 本地视频首帧 JPEG 的独立持久化键；不得内嵌为项目 JSON 的 base64。 */
+  posterStorageKey?: string;
   storageKey?: string;
   name?: string;
   mimeType?: string;

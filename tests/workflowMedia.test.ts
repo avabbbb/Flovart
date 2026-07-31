@@ -1,6 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  discardWorkflowMediaRecord,
   fitWorkflowMediaSize,
   ingestWorkflowMedia,
   inspectWorkflowMedia,
@@ -103,6 +104,50 @@ describe('workflow media', () => {
     expect(JSON.stringify(record)).not.toContain('data:');
   });
 
+  it('persists a generated video poster beside the video and discards both together', async () => {
+    const video = document.createElement('video');
+    Object.defineProperties(video, {
+      videoWidth: { value: 1920 },
+      videoHeight: { value: 1080 },
+      duration: { value: 4 },
+    });
+    vi.spyOn(document, 'createElement').mockReturnValue(video);
+    vi.spyOn(video, 'load').mockImplementation(() => queueMicrotask(() => video.dispatchEvent(new Event('loadedmetadata'))));
+    const record = await ingestWorkflowMedia(
+      new File(['video'], 'shot.mp4', { type: 'video/mp4' }),
+      async () => new Blob(['poster'], { type: 'image/jpeg' }),
+    );
+
+    expect(record.posterStorageKey).toBe(`${record.storageKey}-poster`);
+    expect(await workflowMediaStorage.get(record.storageKey)).not.toBeNull();
+    expect(await workflowMediaStorage.get(record.posterStorageKey!)).not.toBeNull();
+    expect(JSON.stringify(record)).not.toContain('data:image');
+
+    await discardWorkflowMediaRecord(record.storageKey);
+    expect(await workflowMediaStorage.get(record.storageKey)).toBeNull();
+    expect(await workflowMediaStorage.get(record.posterStorageKey!)).toBeNull();
+  });
+
+  it('keeps the source video when poster generation fails', async () => {
+    const video = document.createElement('video');
+    Object.defineProperties(video, {
+      videoWidth: { value: 1920 },
+      videoHeight: { value: 1080 },
+      duration: { value: 4 },
+    });
+    vi.spyOn(document, 'createElement').mockReturnValue(video);
+    vi.spyOn(video, 'load').mockImplementation(() => queueMicrotask(() => video.dispatchEvent(new Event('loadedmetadata'))));
+
+    const record = await ingestWorkflowMedia(
+      new File(['video'], 'shot.mp4', { type: 'video/mp4' }),
+      async () => { throw new Error('poster failed'); },
+    );
+
+    expect(record.posterStorageKey).toBeUndefined();
+    expect(await workflowMediaStorage.get(record.storageKey)).not.toBeNull();
+    expect(await workflowMediaStorage.get(`${record.storageKey}-poster`)).toBeNull();
+  });
+
   it('creates and revokes a render URL and resolves the same storage key after remount', async () => {
     const key = 'workflow-media-reload';
     await workflowMediaStorage.set(key, new Blob(['persisted'], { type: 'image/png' }));
@@ -152,28 +197,32 @@ describe('workflow media', () => {
   });
 
   it('keeps history-reachable media and prunes it after the transient history is dropped', async () => {
-    const node = (id: string, storageKey: string) => ({
+    const node = (id: string, storageKey: string, posterStorageKey?: string) => ({
       id,
       type: 'image' as const,
       title: '图片',
       position: { x: 0, y: 0 },
       width: 100,
       height: 100,
-      metadata: { storageKey },
+      metadata: { storageKey, posterStorageKey },
     });
     await workflowMediaStorage.set('current-key', new Blob(['current']));
+    await workflowMediaStorage.set('current-key-poster', new Blob(['current-poster']));
     await workflowMediaStorage.set('history-key', new Blob(['history']));
+    await workflowMediaStorage.set('history-key-poster', new Blob(['history-poster']));
     await workflowMediaStorage.set('orphan-key', new Blob(['orphan']));
-    setWorkflowMediaCanonicalProjects([{ nodes: [node('current', 'current-key')] }]);
-    registerWorkflowMediaTransientReferences('history-test', [[node('history', 'history-key')]]);
+    setWorkflowMediaCanonicalProjects([{ nodes: [node('current', 'current-key', 'current-key-poster')] }]);
+    registerWorkflowMediaTransientReferences('history-test', [[node('history', 'history-key', 'history-key-poster')]]);
 
     await pruneWorkflowMedia();
-    expect(await workflowMediaStorage.keys()).toEqual(expect.arrayContaining(['current-key', 'history-key']));
+    expect(await workflowMediaStorage.keys()).toEqual(expect.arrayContaining(['current-key', 'current-key-poster', 'history-key', 'history-key-poster']));
     expect(await workflowMediaStorage.get('orphan-key')).toBeNull();
 
     unregisterWorkflowMediaTransientReferences('history-test');
     await pruneWorkflowMedia();
     expect(await workflowMediaStorage.get('history-key')).toBeNull();
+    expect(await workflowMediaStorage.get('history-key-poster')).toBeNull();
     expect(await workflowMediaStorage.get('current-key')).not.toBeNull();
+    expect(await workflowMediaStorage.get('current-key-poster')).not.toBeNull();
   });
 });

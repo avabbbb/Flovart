@@ -143,13 +143,23 @@ function workflowDropSharedMedia(dataTransfer: DataTransfer): WorkflowSharedMedi
   }
 }
 
+function WorkflowVideoPreview({ node, className }: { node: WorkflowNodeData; className?: string }) {
+  const poster = useWorkflowMediaUrl(node.metadata.posterStorageKey, node.metadata.poster);
+  return poster.url
+    ? <img src={poster.url} alt={`${node.title} 视频封面`} className={className} draggable={false} loading="lazy" data-workflow-media-preview />
+    : <div className={`${className || ''} workflow-video-placeholder`} role="img" aria-label={`${node.title} 视频预览`} data-testid="workflow-video-placeholder" data-workflow-media-preview>视频预览</div>;
+}
+
 function WorkflowBatchStack({ head, count, onPointerDown, onExpand }: {
   head: WorkflowNodeData;
   count: number;
   onPointerDown: (event: ReactPointerEvent<HTMLDivElement>) => void;
   onExpand: () => void;
 }) {
-  const media = useWorkflowMediaUrl(head.metadata.storageKey, head.metadata.href);
+  const media = useWorkflowMediaUrl(
+    head.type === 'video' ? undefined : head.metadata.storageKey,
+    head.type === 'video' ? undefined : head.metadata.href,
+  );
   return (
     <motion.div
       className="workflow-batch-stack"
@@ -163,9 +173,9 @@ function WorkflowBatchStack({ head, count, onPointerDown, onExpand }: {
     >
       <div className="workflow-batch-stack__layer" style={{ transform: 'translate(7px, 7px)' }} />
       <div className="workflow-batch-stack__layer" style={{ transform: 'translate(3.5px, 3.5px)' }} />
-      {media.url && (head.type === 'video'
-        ? <video src={media.url} className="workflow-batch-stack__preview" muted playsInline preload="metadata" />
-        : <img src={media.url} alt={head.title} className="workflow-batch-stack__preview" draggable={false} />)}
+      {head.type === 'video'
+        ? <WorkflowVideoPreview node={head} className="workflow-batch-stack__preview" />
+        : media.url && <img src={media.url} alt={head.title} className="workflow-batch-stack__preview" draggable={false} />}
       <div className="workflow-batch-stack__title"><span>{head.title}</span></div>
       <button type="button" className="workflow-batch-stack__expand" data-workflow-overlay onPointerDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); onExpand(); }} aria-label={`展开 ${count} 个结果`}>
         <span>{count}张</span><ChevronRight size={16} />
@@ -175,9 +185,12 @@ function WorkflowBatchStack({ head, count, onPointerDown, onExpand }: {
 }
 
 function WorkflowBatchThumb({ node, active, primary, onSelect }: { node: WorkflowNodeData; active: boolean; primary: boolean; onSelect: () => void }) {
-  const media = useWorkflowMediaUrl(node.metadata.storageKey, node.metadata.href);
+  const media = useWorkflowMediaUrl(
+    node.type === 'video' ? undefined : node.metadata.storageKey,
+    node.type === 'video' ? undefined : node.metadata.href,
+  );
   return <button type="button" className={`workflow-batch-gallery__thumb${active ? ' is-active' : ''}`} onPointerDown={event => event.stopPropagation()} onClick={onSelect} title={`${node.title}${primary ? ' · 主图' : ''}`}>
-    {media.url && (node.type === 'video' ? <video src={media.url} muted playsInline preload="metadata" /> : <img src={media.url} alt={node.title} />)}
+    {node.type === 'video' ? <WorkflowVideoPreview node={node} /> : media.url && <img src={media.url} alt={node.title} />}
     {primary && <Check size={11} className="workflow-batch-gallery__primary-mark" />}
   </button>;
 }
@@ -193,10 +206,15 @@ function WorkflowBatchGallery({ group, selectedId, onSelect, onCollapse, onSetPr
   const root = group.find(node => node.batchIndex === 0) || group[0];
   const primaryId = root.metadata.primaryImageId || root.id;
   const selected = group.find(node => node.id === selectedId) || group.find(node => node.id === primaryId) || root;
-  const media = useWorkflowMediaUrl(selected.metadata.storageKey, selected.metadata.href);
+  const media = useWorkflowMediaUrl(
+    selected.type === 'video' ? undefined : selected.metadata.storageKey,
+    selected.type === 'video' ? undefined : selected.metadata.href,
+  );
   const index = Math.max(0, group.findIndex(node => node.id === selected.id));
   return <motion.div className="workflow-batch-gallery" style={{ x: root.position.x, y: root.position.y, width: root.width, height: root.height }} initial={{ opacity: 0, scale: .94 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: .94 }} transition={{ type: 'spring', stiffness: 360, damping: 28 }} onPointerDown={onPointerDown}>
-    {media.url && (selected.type === 'video' ? <video src={media.url} className="workflow-batch-gallery__media" controls playsInline preload="metadata" /> : <img src={media.url} alt={selected.title} className="workflow-batch-gallery__media" draggable={false} />)}
+    {selected.type === 'video'
+      ? <WorkflowVideoPreview node={selected} className="workflow-batch-gallery__media" />
+      : media.url && <img src={media.url} alt={selected.title} className="workflow-batch-gallery__media" draggable={false} />}
     <div className="workflow-batch-stack__title"><span>{selected.title}</span></div>
     <button type="button" className="workflow-batch-stack__expand" data-workflow-overlay onPointerDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); onCollapse(); }}><span>{group.length}张</span><ChevronsDown size={15} /></button>
     {selected.id !== primaryId && <button type="button" className="workflow-batch-gallery__set-primary" data-workflow-overlay onPointerDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); onSetPrimary(selected.id); }}><Star size={13} />设为主图</button>}
@@ -302,9 +320,11 @@ export function InfiniteWorkflow({
   const [scriptEditorNodeId, setScriptEditorNodeId] = useState<string | null>(null);
   const [slashMenu, setSlashMenu] = useState<{ x: number; y: number } | null>(null);
   const [previewNode, setPreviewNode] = useState<WorkflowNodeData | null>(null);
+  const [activeMedia, setActiveMedia] = useState<{ projectId: string; nodeId: string } | null>(null);
   const slashMenuRef = useRef<{ x: number; y: number } | null>(null);
   slashMenuRef.current = slashMenu;
   const toggleBatch = useCallback((batchId: string) => {
+    setActiveMedia(null);
     setExpandedBatches(prev => {
       const next = new Set(prev);
       if (next.has(batchId)) next.delete(batchId); else next.add(batchId);
@@ -390,6 +410,7 @@ export function InfiniteWorkflow({
     setImageToolError(null);
     imageToolBusyRef.current = false;
     imageToolTransactionRef.current = null;
+    setActiveMedia(null);
     clipboardRef.current = [];
     setClipboardVersion(version => version + 1);
     replaceSequenceRef.current.clear();
@@ -403,6 +424,23 @@ export function InfiniteWorkflow({
     selectedIdsRef.current = ids;
     setSelectedNodeIds(ids);
   }, [project.id, project.selectedNodeIds]);
+
+  useEffect(() => {
+    if (!activeMedia) return;
+    const activeNode = project.nodes.find(node => node.id === activeMedia.nodeId);
+    if (activeMedia.projectId !== project.id
+      || selectedNodeIds.length !== 1
+      || selectedNodeIds[0] !== activeMedia.nodeId
+      || activeNode?.type !== 'video'
+      || activeNode.isVisible === false
+      || !(activeNode.metadata.storageKey || activeNode.metadata.href)) {
+      setActiveMedia(null);
+    }
+  }, [activeMedia, project.id, project.nodes, selectedNodeIds]);
+
+  useEffect(() => {
+    if (imageTool || videoTool || audioTool || previewNode) setActiveMedia(null);
+  }, [audioTool, imageTool, previewNode, videoTool]);
 
   const currentFrame = useCallback((): Frame => ({
     nodes: projectRef.current.nodes,
@@ -1710,6 +1748,7 @@ export function InfiniteWorkflow({
       }
       if (event.key === 'Escape') {
         if (slashMenuRef.current) { setSlashMenu(null); return; }
+        setActiveMedia(null);
         closeCreateMenu();
         setContextMenu(null);
         cancelInteraction();
@@ -1733,6 +1772,7 @@ export function InfiniteWorkflow({
 
   const replaceMedia = useCallback(async (node: WorkflowNodeData, file: File) => {
     if (node.isLocked) return;
+    setActiveMedia(current => current?.nodeId === node.id ? null : current);
     const expectedProjectId = projectRef.current.id;
     const sequence = (replaceSequenceRef.current.get(node.id) || 0) + 1;
     replaceSequenceRef.current.set(node.id, sequence);
@@ -1784,6 +1824,7 @@ export function InfiniteWorkflow({
     if (node.isLocked) return;
     const {
       storageKey: _storageKey,
+      posterStorageKey: _posterStorageKey,
       name: _name,
       mimeType: _mimeType,
       bytes: _bytes,
@@ -1795,6 +1836,7 @@ export function InfiniteWorkflow({
       error: _error,
       ...metadata
     } = node.metadata;
+    setActiveMedia(current => current?.nodeId === node.id ? null : current);
     commitFrame(projectRef.current.nodes.map(item => item.id === node.id
       ? { ...item, metadata: { ...metadata, status: 'idle' as const } }
       : item), projectRef.current.connections);
@@ -1909,7 +1951,7 @@ export function InfiniteWorkflow({
     else if (!ids.includes(node.id)) ids = [node.id];
     selectNodes(ids);
     if (!ids.includes(node.id) || node.isLocked) return;
-    if (target?.closest('video,audio')) {
+    if (target?.closest('video,audio,[data-workflow-media-preview]')) {
       setOverlayHidden(false);
       return;
     }
@@ -2189,6 +2231,13 @@ export function InfiniteWorkflow({
             key={node.id}
             node={node}
             selected={selectedNodes.has(node.id)}
+            mediaActive={activeMedia?.projectId === project.id && activeMedia.nodeId === node.id}
+            onActivateMedia={node.type === 'video' && (node.metadata.storageKey || node.metadata.href)
+              ? () => {
+                selectNodes([node.id]);
+                setActiveMedia({ projectId: project.id, nodeId: node.id });
+              }
+              : undefined}
             onPointerDown={event => startNodeDrag(event, node)}
             onConnectStart={event => {
               if (event.button !== 0) return;

@@ -1,4 +1,4 @@
-import { Check, ChevronsDown, Clapperboard, FileText, Image as ImageIcon, Music2, Pencil, Plus, Star, Upload, Video, X } from 'lucide-react';
+import { Check, ChevronsDown, Clapperboard, FileText, Image as ImageIcon, Music2, Pencil, Play, Plus, Star, Upload, Video, X } from 'lucide-react';
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type MouseEvent as ReactMouseEvent } from 'react';
 import { motion } from 'motion/react';
 import { WorkflowConfigPanel } from './WorkflowConfigPanel';
@@ -9,6 +9,7 @@ import type { WorkflowNode as WorkflowNodeData } from './types';
 export function WorkflowNode({
   node,
   selected,
+  mediaActive,
   onPointerDown,
   onConnectStart,
   onConnectStartTarget,
@@ -19,6 +20,7 @@ export function WorkflowNode({
   onContextMenu,
   onReplaceMedia,
   onRemoveMedia,
+  onActivateMedia,
   onCollapseBatch,
   batchCount,
   isBatchPrimary,
@@ -31,6 +33,7 @@ export function WorkflowNode({
 }: {
   node: WorkflowNodeData;
   selected: boolean;
+  mediaActive?: boolean;
   onPointerDown: (event: ReactPointerEvent<HTMLDivElement>) => void;
   onConnectStart: (event: ReactPointerEvent<HTMLButtonElement>) => void;
   onConnectStartTarget?: (event: ReactPointerEvent<HTMLButtonElement>) => void;
@@ -41,6 +44,7 @@ export function WorkflowNode({
   onContextMenu: (event: ReactMouseEvent<HTMLDivElement>) => void;
   onReplaceMedia: (file: File) => void;
   onRemoveMedia: () => void;
+  onActivateMedia?: () => void;
   onCollapseBatch?: () => void;
   batchCount?: number;
   isBatchPrimary?: boolean;
@@ -68,8 +72,18 @@ export function WorkflowNode({
   const elapsedLabel = elapsedSec > 0 ? `${Math.floor(elapsedSec / 60)}:${String(elapsedSec % 60).padStart(2, '0')}` : '';
   const staleHint = status === 'loading' && elapsedSec >= 180 ? '已等待较久，如长时间无响应可点击停止' : '';
   const mediaInput = useRef<HTMLInputElement>(null);
-  const media = useWorkflowMediaUrl(node.metadata.storageKey, node.metadata.href);
+  const videoActive = node.type === 'video' && Boolean(mediaActive);
+  const resolveSourceMedia = node.type !== 'video' || videoActive;
+  const media = useWorkflowMediaUrl(
+    resolveSourceMedia ? node.metadata.storageKey : undefined,
+    resolveSourceMedia ? node.metadata.href : undefined,
+  );
+  const posterMedia = useWorkflowMediaUrl(
+    node.type === 'video' ? node.metadata.posterStorageKey : undefined,
+    node.type === 'video' ? node.metadata.poster : undefined,
+  );
   const isMedia = node.type === 'image' || node.type === 'video' || node.type === 'audio';
+  const hasMediaReference = Boolean(node.metadata.storageKey || node.metadata.href);
   const uploading = Boolean(node.metadata.uploading);
   const uploadBytes = node.metadata.uploadBytes || 0;
   const isLoading = status === 'loading' || uploading;
@@ -126,7 +140,7 @@ export function WorkflowNode({
       onDoubleClick={event => {
         if (node.type === 'script') { event.stopPropagation(); onDoubleClick?.(); return; }
         event.stopPropagation();
-        if (isMedia && !media.url) { mediaInput.current?.click(); return; }
+        if (isMedia && !hasMediaReference) { mediaInput.current?.click(); return; }
         onFocusNode?.();
       }}
       onContextMenu={event => { event.preventDefault(); event.stopPropagation(); onContextMenu(event); }}
@@ -180,12 +194,20 @@ export function WorkflowNode({
         </div>
       ))}
       <div className="workflow-node__body">
-        {isMedia && media.url && <div className="workflow-node__drag-handle" data-workflow-drag-handle />}
+        {isMedia && (media.url || hasMediaReference) && <div className="workflow-node__drag-handle" data-workflow-drag-handle />}
         {node.type === 'image' && (media.url
           ? <><img src={media.url} alt={node.title} draggable={false} style={{ filter: buildCssFilter(node.metadata.filters) }} />{mediaActions}</>
           : <div className="workflow-node__empty"><ImageIcon size={26} /><span>{mediaError || '图片节点'}</span>{mediaActions}</div>)}
-        {node.type === 'video' && (media.url
-          ? <><video src={media.url} poster={node.metadata.poster} controls preload="metadata" playsInline />{mediaActions}</>
+        {node.type === 'video' && (hasMediaReference
+          ? videoActive
+            ? media.url
+              ? <><video src={media.url} poster={posterMedia.url || undefined} controls preload="none" playsInline />{mediaActions}</>
+              : <div className="workflow-node__empty"><Video size={26} /><span>{mediaError || '正在加载视频'}</span>{mediaActions}</div>
+            : <>{posterMedia.url
+              ? <img src={posterMedia.url} alt={`${node.title} 视频封面`} draggable={false} loading="lazy" data-workflow-media-preview />
+              : <div className="workflow-node__empty workflow-video-placeholder" role="img" aria-label={`${node.title} 视频预览`} data-testid="workflow-video-placeholder" data-workflow-media-preview><Video size={26} /><span>视频预览</span></div>}
+              {onActivateMedia && <button type="button" className="workflow-node__video-activate" aria-label="加载视频播放器" title="加载视频播放器" data-workflow-overlay onPointerDown={event => event.stopPropagation()} onClick={onActivateMedia}><Play size={18} fill="currentColor" /></button>}
+              {mediaActions}</>
           : <div className="workflow-node__empty"><Video size={26} /><span>{mediaError || '视频节点'}</span>{mediaActions}</div>)}
         {node.type === 'audio' && (media.url
           ? <><audio src={media.url} controls preload="metadata" style={{ width: '100%' }} />{mediaActions}</>

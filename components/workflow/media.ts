@@ -36,6 +36,7 @@ let canonicalReferences = new Set<string>();
 function collectNodeKeys(nodes: WorkflowNode[], keys = new Set<string>()) {
   nodes.forEach(node => {
     if (node.metadata.storageKey) keys.add(node.metadata.storageKey);
+    if (node.metadata.posterStorageKey) keys.add(node.metadata.posterStorageKey);
   });
   return keys;
 }
@@ -65,11 +66,17 @@ export async function pruneWorkflowMedia() {
 
 export function releaseWorkflowMediaRecord(storageKey: string) {
   pendingReferences.delete(storageKey);
+  pendingReferences.delete(workflowPosterStorageKey(storageKey));
 }
 
 export async function discardWorkflowMediaRecord(storageKey: string) {
   pendingReferences.delete(storageKey);
-  await workflowMediaStorage.remove(storageKey).catch(() => undefined);
+  const posterStorageKey = workflowPosterStorageKey(storageKey);
+  pendingReferences.delete(posterStorageKey);
+  await Promise.all([
+    workflowMediaStorage.remove(storageKey).catch(() => undefined),
+    workflowMediaStorage.remove(posterStorageKey).catch(() => undefined),
+  ]);
 }
 
 export function workflowMediaType(file: Pick<File, 'name' | 'type'>): WorkflowMediaType {
@@ -133,7 +140,7 @@ export async function createWorkflowVideoPoster(blob: Blob, maxWidth = 640): Pro
   const url = URL.createObjectURL(blob);
   try {
     const video = document.createElement('video');
-    video.preload = 'metadata';
+    video.preload = 'auto';
     video.muted = true;
     video.playsInline = true;
     await new Promise<void>((resolve, reject) => {
@@ -160,18 +167,50 @@ export async function createWorkflowVideoPoster(blob: Blob, maxWidth = 640): Pro
   }
 }
 
-export async function ingestWorkflowMedia(file: File): Promise<WorkflowMediaRecord> {
+export function workflowPosterStorageKey(storageKey: string) {
+  return `${storageKey}-poster`;
+}
+
+export async function persistWorkflowVideoPoster(
+  storageKey: string,
+  blob: Blob,
+  createPoster: (blob: Blob) => Promise<Blob | null> = createWorkflowVideoPoster,
+) {
+  const posterStorageKey = workflowPosterStorageKey(storageKey);
+  try {
+    const poster = await createPoster(blob);
+    if (!poster) return undefined;
+    await workflowMediaStorage.set(posterStorageKey, poster);
+    return posterStorageKey;
+  } catch {
+    await workflowMediaStorage.remove(posterStorageKey).catch(() => undefined);
+    return undefined;
+  }
+}
+
+export async function ingestWorkflowMedia(
+  file: File,
+  createPoster: (blob: Blob) => Promise<Blob | null> = createWorkflowVideoPoster,
+): Promise<WorkflowMediaRecord> {
   const type = workflowMediaType(file);
   const mimeType = workflowMediaMimeType(file);
   const mediaFile = mimeType === file.type ? file : new File([file], file.name, { type: mimeType, lastModified: file.lastModified });
   const inspected = await inspectWorkflowMedia(mediaFile);
   const storageKey = `workflow-media-${nanoid()}`;
+  const reservedPosterStorageKey = type === 'video' ? workflowPosterStorageKey(storageKey) : undefined;
   pendingReferences.add(storageKey);
+  if (reservedPosterStorageKey) pendingReferences.add(reservedPosterStorageKey);
   try {
     await workflowMediaStorage.set(storageKey, mediaFile);
+    const posterStorageKey = type === 'video'
+      ? await persistWorkflowVideoPoster(storageKey, mediaFile, createPoster)
+      : undefined;
+    if (reservedPosterStorageKey && !posterStorageKey) pendingReferences.delete(reservedPosterStorageKey);
     return {
       type,
       storageKey,
+      poster: undefined,
+      posterStorageKey,
       name: file.name,
       mimeType,
       bytes: file.size,
@@ -180,7 +219,12 @@ export async function ingestWorkflowMedia(file: File): Promise<WorkflowMediaReco
     };
   } catch (error) {
     pendingReferences.delete(storageKey);
-    await workflowMediaStorage.remove(storageKey).catch(() => undefined);
+    const posterStorageKey = workflowPosterStorageKey(storageKey);
+    pendingReferences.delete(posterStorageKey);
+    await Promise.all([
+      workflowMediaStorage.remove(storageKey).catch(() => undefined),
+      workflowMediaStorage.remove(posterStorageKey).catch(() => undefined),
+    ]);
     throw error;
   }
 }

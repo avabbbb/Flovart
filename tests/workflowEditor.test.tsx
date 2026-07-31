@@ -167,7 +167,7 @@ describe('InfiniteWorkflow surface interactions', () => {
     const initial = makeProject();
     initial.nodes = [
       createWorkflowNode('image-media', 'image', { x: 100, y: 100 }, { href: 'data:image/png;base64,aW1hZ2U=' }),
-      createWorkflowNode('video-media', 'video', { x: 520, y: 100 }, { href: 'data:video/mp4;base64,dmlkZW8=' }),
+      createWorkflowNode('video-media', 'video', { x: 520, y: 100 }, { href: 'data:video/mp4;base64,dmlkZW8=', poster: 'data:image/jpeg;base64,cG9zdGVy' }),
     ];
     render(<Harness initial={initial} />);
 
@@ -177,11 +177,76 @@ describe('InfiniteWorkflow surface interactions', () => {
     expect(screen.getByTestId('workflow-node-toolbar')).toBeInTheDocument();
     expect(screen.getByTestId('workflow-node-prompt-bar')).toBeInTheDocument();
 
-    fireEvent.pointerDown(node('video-media').querySelector('video')!, { button: 0, pointerId: 22, clientX: 560, clientY: 150 });
+    expect(editor().querySelectorAll('video')).toHaveLength(0);
+    fireEvent.pointerDown(node('video-media').querySelector('img')!, { button: 0, pointerId: 22, clientX: 560, clientY: 150 });
     expect(node('video-media')).toHaveClass('is-selected');
     expect(node('image-media')).not.toHaveClass('is-selected');
+    expect(editor().querySelectorAll('video')).toHaveLength(0);
     expect(screen.getByTestId('workflow-node-toolbar')).toBeInTheDocument();
     expect(screen.getByTestId('workflow-node-prompt-bar')).toBeInTheDocument();
+
+    const videoFileInputClick = vi.spyOn(
+      node('video-media').querySelector<HTMLInputElement>('input[type="file"]')!,
+      'click',
+    );
+    fireEvent.doubleClick(node('video-media').querySelector('img')!);
+    expect(videoFileInputClick).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: '加载视频播放器' }));
+    expect(editor().querySelectorAll('video')).toHaveLength(1);
+    expect(editor().querySelector('video')).toHaveAttribute('preload', 'none');
+    expect(screen.getByTestId('workflow-node-toolbar')).toBeInTheDocument();
+    expect(screen.getByTestId('workflow-node-prompt-bar')).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(editor().querySelectorAll('video')).toHaveLength(0);
+    fireEvent.click(screen.getByRole('button', { name: '加载视频播放器' }));
+    expect(editor().querySelectorAll('video')).toHaveLength(1);
+
+    fireEvent.pointerDown(node('image-media').querySelector('img')!, { button: 0, pointerId: 23, clientX: 140, clientY: 150 });
+    fireEvent.pointerUp(window, { pointerId: 23, clientX: 140, clientY: 150 });
+    expect(editor().querySelectorAll('video')).toHaveLength(0);
+  });
+
+  it('keeps multiple selected video nodes on lightweight previews', () => {
+    const initial = makeProject();
+    initial.nodes = [
+      createWorkflowNode('video-a', 'video', { x: 100, y: 100 }, { href: 'data:video/mp4;base64,YQ==', poster: 'data:image/jpeg;base64,YQ==' }),
+      createWorkflowNode('video-b', 'video', { x: 520, y: 100 }, { href: 'data:video/mp4;base64,Yg==' }),
+    ];
+    initial.selectedNodeIds = ['video-a', 'video-b'];
+
+    render(<Harness initial={initial} />);
+
+    expect(node('video-a').querySelector('img')).toHaveAccessibleName('视频 视频封面');
+    expect(node('video-a').querySelector('img')).toHaveAttribute('loading', 'lazy');
+    expect(node('video-b').querySelector('[data-testid="workflow-video-placeholder"]')).toBeInTheDocument();
+    expect(editor().querySelectorAll('video')).toHaveLength(0);
+  });
+
+  it('does not carry an active player into another project with the same node id', () => {
+    const projectA = makeProject();
+    projectA.nodes = [createWorkflowNode('shared-video', 'video', { x: 100, y: 100 }, {
+      href: 'data:video/mp4;base64,YQ==',
+      poster: 'data:image/jpeg;base64,YQ==',
+    })];
+    projectA.selectedNodeIds = ['shared-video'];
+    const projectB = {
+      ...makeProject(),
+      id: 'project-2',
+      nodes: [createWorkflowNode('shared-video', 'video', { x: 100, y: 100 }, {
+        href: 'data:video/mp4;base64,Yg==',
+        poster: 'data:image/jpeg;base64,Yg==',
+      })],
+      selectedNodeIds: ['shared-video'],
+    };
+    const view = render(<InfiniteWorkflow project={projectA} updateProject={() => undefined} onRunNode={() => undefined} onOpenAgent={() => undefined} />);
+    fireEvent.click(screen.getByRole('button', { name: '加载视频播放器' }));
+    expect(editor().querySelectorAll('video')).toHaveLength(1);
+
+    view.rerender(<InfiniteWorkflow project={projectB} updateProject={() => undefined} onRunNode={() => undefined} onOpenAgent={() => undefined} />);
+
+    expect(editor().querySelectorAll('video')).toHaveLength(0);
   });
 
   it('records a multi-move node drag as one undoable history entry', async () => {

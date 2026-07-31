@@ -1,5 +1,5 @@
 import { nanoid } from 'nanoid';
-import { workflowDataUrlToBlob, workflowBlobToDataUrl } from './media';
+import { createWorkflowVideoPoster, persistWorkflowVideoPoster, workflowDataUrlToBlob, workflowBlobToDataUrl } from './media';
 import { validateWorkflowConnection } from './ops';
 import { workflowMediaStorage } from './storage';
 import type { WorkflowConnection, WorkflowNode, WorkflowProject } from './types';
@@ -38,8 +38,9 @@ function portableProject(project: WorkflowProject): WorkflowProject {
         metadata: {
           ...node.metadata,
           storageKey: undefined,
+          posterStorageKey: undefined,
           href: node.metadata.storageKey ? undefined : href,
-          poster: node.metadata.poster && /^(blob:|file:)/i.test(node.metadata.poster) ? undefined : node.metadata.poster,
+          poster: node.metadata.poster && /^(data:|blob:|file:)/i.test(node.metadata.poster) ? undefined : node.metadata.poster,
         },
       };
     }),
@@ -180,7 +181,10 @@ function validateExport(value: unknown): asserts value is WorkflowExportFile {
   });
 }
 
-export async function parseWorkflowProjectFile(file: File): Promise<WorkflowProject[]> {
+export async function parseWorkflowProjectFile(
+  file: File,
+  createPoster: (blob: Blob) => Promise<Blob | null> = createWorkflowVideoPoster,
+): Promise<WorkflowProject[]> {
   let parsed: unknown;
   try {
     parsed = JSON.parse(await readWorkflowFileText(file));
@@ -190,29 +194,43 @@ export async function parseWorkflowProjectFile(file: File): Promise<WorkflowProj
   validateExport(parsed);
   const createdKeys: string[] = [];
   try {
-    return await Promise.all(parsed.projects.map(async ({ project, assets }) => {
+    const importedProjects: WorkflowProject[] = [];
+    for (const { project, assets } of parsed.projects) {
       const assetByNode = new Map(assets.map(asset => [asset.nodeId, asset]));
-      const nodes = await Promise.all(project.nodes.map(async node => {
+      const nodes: WorkflowNode[] = [];
+      for (const node of project.nodes) {
         const asset = assetByNode.get(node.id);
-        if (!asset) return { ...node, metadata: { ...node.metadata, storageKey: undefined } };
+        const portablePoster = node.metadata.poster && /^(data:|blob:|file:)/i.test(node.metadata.poster)
+          ? undefined
+          : node.metadata.poster;
+        if (!asset) {
+          nodes.push({ ...node, metadata: { ...node.metadata, storageKey: undefined, posterStorageKey: undefined, poster: portablePoster } });
+          continue;
+        }
         const blob = await workflowDataUrlToBlob(asset.dataUrl);
         const storageKey = `workflow-media-${nanoid()}`;
-        await workflowMediaStorage.set(storageKey, blob);
         createdKeys.push(storageKey);
-        return {
+        await workflowMediaStorage.set(storageKey, blob);
+        const posterStorageKey = node.type === 'video'
+          ? await persistWorkflowVideoPoster(storageKey, blob, createPoster)
+          : undefined;
+        if (posterStorageKey) createdKeys.push(posterStorageKey);
+        nodes.push({
           ...node,
           metadata: {
             ...node.metadata,
             storageKey,
+            posterStorageKey,
+            poster: portablePoster,
             href: undefined,
             mimeType: asset.mimeType,
             name: asset.name || node.metadata.name,
             bytes: blob.size,
           },
-        };
-      }));
+        });
+      }
       const now = new Date().toISOString();
-      return {
+      importedProjects.push({
         ...project,
         id: nanoid(),
         title: `${project.title}（导入）`,
@@ -221,8 +239,9 @@ export async function parseWorkflowProjectFile(file: File): Promise<WorkflowProj
         activeAgentSessionId: null,
         createdAt: now,
         updatedAt: now,
-      };
-    }));
+      });
+    }
+    return importedProjects;
   } catch (error) {
     await Promise.all(createdKeys.map(key => workflowMediaStorage.remove(key)));
     throw error;
