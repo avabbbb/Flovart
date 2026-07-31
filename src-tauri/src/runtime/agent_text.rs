@@ -2,7 +2,7 @@ use reqwest::blocking::Response as ProviderResponse;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{
-    collections::{HashSet, VecDeque},
+    collections::{BTreeMap, HashSet, VecDeque},
     io::{self, BufRead, BufReader, Read},
 };
 use url::Url;
@@ -33,10 +33,18 @@ pub struct AgentTextRequest {
 pub struct AgentTextStream {
     source: BufReader<ProviderResponse>,
     pending: VecDeque<u8>,
+    tool_calls: BTreeMap<u64, ToolCallBuffer>,
     provider: String,
     model: String,
     started: bool,
     finished: bool,
+}
+
+#[derive(Default)]
+struct ToolCallBuffer {
+    id: String,
+    name: String,
+    arguments: String,
 }
 
 pub fn parse_request(value: &Value) -> Result<AgentTextRequest, RuntimeError> {
@@ -130,6 +138,7 @@ pub fn open_provider_stream(
     Ok(AgentTextStream {
         source: BufReader::new(response),
         pending: VecDeque::new(),
+        tool_calls: BTreeMap::new(),
         provider: route.provider.clone(),
         model: route.model.clone(),
         started: false,
@@ -265,6 +274,27 @@ impl AgentTextStream {
         );
     }
 
+    fn finish(&mut self, reason: &str) {
+        let tool_calls = std::mem::take(&mut self.tool_calls);
+        let has_tool_calls = !tool_calls.is_empty();
+        for (index, tool_call) in tool_calls {
+            self.enqueue(
+                "toolcall-end",
+                json!({
+                    "index": index,
+                    "id": tool_call.id,
+                    "name": tool_call.name,
+                    "arguments": tool_call.arguments
+                }),
+            );
+        }
+        self.enqueue(
+            "done",
+            json!({ "finishReason": if has_tool_calls { "toolUse" } else { reason } }),
+        );
+        self.finished = true;
+    }
+
     fn fill_pending(&mut self) -> io::Result<()> {
         if !self.started {
             self.started = true;
@@ -289,8 +319,7 @@ impl AgentTextStream {
             };
             let data = data.trim();
             if data == "[DONE]" {
-                self.enqueue("done", json!({ "finishReason": "stop" }));
-                self.finished = true;
+                self.finish("stop");
                 return Ok(());
             }
             let chunk: Value = match serde_json::from_str(data) {
@@ -304,12 +333,61 @@ impl AgentTextStream {
                     return Ok(());
                 }
             };
+            let mut emitted = false;
             if let Some(delta) = chunk
                 .pointer("/choices/0/delta/content")
                 .and_then(Value::as_str)
+                .filter(|delta| !delta.is_empty())
             {
                 self.enqueue("text-delta", json!({ "delta": delta }));
-                return Ok(());
+                emitted = true;
+            }
+            let tool_call_deltas = chunk
+                .pointer("/choices/0/delta/tool_calls")
+                .and_then(Value::as_array)
+                .cloned()
+                .unwrap_or_default();
+            let mut tool_events = Vec::new();
+            for tool_call in tool_call_deltas {
+                let index = tool_call.get("index").and_then(Value::as_u64).unwrap_or(0);
+                let is_new = !self.tool_calls.contains_key(&index);
+                let state = self.tool_calls.entry(index).or_default();
+                if let Some(id) = tool_call.get("id").and_then(Value::as_str) {
+                    state.id.push_str(id);
+                }
+                if let Some(name) = tool_call.pointer("/function/name").and_then(Value::as_str) {
+                    state.name.push_str(name);
+                }
+                let arguments = tool_call
+                    .pointer("/function/arguments")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default();
+                state.arguments.push_str(arguments);
+                if is_new {
+                    tool_events.push((
+                        "toolcall-start",
+                        json!({
+                            "index": index,
+                            "id": state.id.clone(),
+                            "name": state.name.clone()
+                        }),
+                    ));
+                }
+                if !arguments.is_empty() {
+                    tool_events.push((
+                        "toolcall-delta",
+                        json!({
+                            "index": index,
+                            "id": state.id.clone(),
+                            "name": state.name.clone(),
+                            "delta": arguments
+                        }),
+                    ));
+                }
+            }
+            for (event, payload) in tool_events {
+                self.enqueue(event, payload);
+                emitted = true;
             }
             if let Some(reason) = chunk
                 .pointer("/choices/0/finish_reason")
@@ -320,8 +398,10 @@ impl AgentTextStream {
                     "tool_calls" => "toolUse",
                     _ => "stop",
                 };
-                self.enqueue("done", json!({ "finishReason": reason }));
-                self.finished = true;
+                self.finish(reason);
+                return Ok(());
+            }
+            if emitted {
                 return Ok(());
             }
         }
@@ -420,5 +500,64 @@ mod tests {
         assert!(normalized.contains("\"delta\":\"制作\""));
         assert!(normalized.contains("\"delta\":\"计划\""));
         assert!(normalized.contains("event: done"));
+    }
+
+    #[test]
+    fn runtime_preserves_streamed_openai_tool_calls() {
+        let server = Server::http("127.0.0.1:0").expect("provider stub");
+        let address = server.server_addr().to_ip().expect("TCP provider stub");
+        std::thread::spawn(move || {
+            let mut request = server.recv().expect("provider request");
+            let mut body = String::new();
+            request
+                .as_reader()
+                .read_to_string(&mut body)
+                .expect("provider body");
+            assert!(body.contains("\"name\":\"flovart_workflow_inspect\""));
+            let mut response = Response::from_string(concat!(
+                "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call-1\",\"function\":{\"name\":\"flovart_workflow_inspect\",\"arguments\":\"{\"}}]},\"finish_reason\":null}]}\n\n",
+                "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"\\\"projectId\\\":\\\"project-1\\\"}\"}}]},\"finish_reason\":null}]}\n\n",
+                "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"tool_calls\"}]}\n\n",
+                "data: [DONE]\n\n"
+            ));
+            response.add_header(
+                Header::from_bytes("Content-Type", "text/event-stream").expect("header"),
+            );
+            request.respond(response).expect("provider response");
+        });
+        let route = AgentTextRoute {
+            provider: "openai".to_owned(),
+            credential_id: "credential-one".to_owned(),
+            model: "gpt-test".to_owned(),
+            base_url: format!("http://{address}"),
+            protocol: "openai-chat-completions".to_owned(),
+            order: 0,
+        };
+        let request = AgentTextRequest {
+            system_prompt: Some("先读取可见 Workflow".to_owned()),
+            messages: vec![json!({ "role": "user", "content": "读取当前 Workflow" })],
+            tools: vec![json!({
+                "name": "flovart_workflow_inspect",
+                "description": "读取 Workflow",
+                "parameters": {
+                    "type": "object",
+                    "properties": { "projectId": { "type": "string" } }
+                }
+            })],
+        };
+
+        let mut stream =
+            open_provider_stream(&route, "runtime-only-secret", &request).expect("agent stream");
+        let mut normalized = String::new();
+        stream
+            .read_to_string(&mut normalized)
+            .expect("normalized stream");
+
+        assert!(normalized.contains("event: toolcall-start"));
+        assert!(normalized.contains("event: toolcall-delta"));
+        assert!(normalized.contains("event: toolcall-end"));
+        assert!(normalized.contains("\"name\":\"flovart_workflow_inspect\""));
+        assert!(normalized.contains("\\\"projectId\\\":\\\"project-1\\\""));
+        assert!(normalized.contains("\"finishReason\":\"toolUse\""));
     }
 }

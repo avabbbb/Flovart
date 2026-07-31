@@ -66,23 +66,32 @@ export class WorkflowAgentSession {
     return true;
   }
 
-  async callCommand(command, args = {}, source = 'mcp', idempotencyKey) {
+  async callCommand(command, args = {}, source = 'mcp', idempotencyKey, signal) {
     const clientId = this.clients.has(this.snapshot?.clientId) ? this.snapshot.clientId : null;
     const client = this.clients.get(clientId);
     if (!client) throw new Error('当前没有已连接并同步项目的 Flovart Workflow');
+    if (signal?.aborted) throw new Error('Workflow 操作已取消');
     const requestId = crypto.randomUUID();
     const envelope = { id: requestId, command, args, source, idempotencyKey: idempotencyKey || args.idempotencyKey };
     sendEvent(client, 'tool_call', { requestId, envelope });
     return new Promise((resolve, reject) => {
+      const cleanup = () => signal?.removeEventListener('abort', onAbort);
+      const onAbort = () => {
+        this.pending.delete(requestId);
+        cleanup();
+        reject(new Error('Workflow 操作已取消'));
+      };
       const timer = setTimeout(() => {
         this.pending.delete(requestId);
+        cleanup();
         reject(new Error('Workflow 操作超时'));
       }, this.timeoutMs);
       this.pending.set(requestId, {
         clientId,
-        resolve: value => { clearTimeout(timer); resolve(value); },
-        reject: error => { clearTimeout(timer); reject(error); },
+        resolve: value => { clearTimeout(timer); cleanup(); resolve(value); },
+        reject: error => { clearTimeout(timer); cleanup(); reject(error); },
       });
+      signal?.addEventListener('abort', onAbort, { once: true });
     });
   }
 }

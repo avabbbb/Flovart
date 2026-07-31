@@ -43,4 +43,18 @@ describe('workflow agent session', () => {
     });
     expect(session.health()).toMatchObject({ hasWorkflow: true, activeProjectId: 'project-1' });
   });
+
+  it('stops waiting and clears the pending command when the Agent turn is cancelled', async () => {
+    const session = new WorkflowAgentSession({ timeoutMs: 1000 });
+    const response = { writeHead() {}, write() {}, on() {} };
+    session.openEvents(new URL('http://127.0.0.1/events?clientId=browser-1'), response);
+    session.updateSnapshot({ id: 'project-1' }, 'browser-1');
+    const controller = new AbortController();
+    const call = session.callCommand('workflow.inspect', {}, 'flovart-agent', undefined, controller.signal);
+
+    controller.abort();
+
+    await expect(call).rejects.toThrow('已取消');
+    expect(session.health().pending).toBe(0);
+  });
 });

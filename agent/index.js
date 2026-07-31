@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { loadAgentConfig, saveAgentConfig, workspaceForProject } from './config.js';
 import { CodexAppServer } from './codex.js';
 import { FlovartAgentService } from './flovart.js';
-import { startMcpServer } from './mcp.js';
+import { createFlovartAgentTools, startMcpServer } from './mcp.js';
 import { WorkflowAgentSession } from './session.js';
 
 const json = (response, status, body) => {
@@ -106,7 +106,9 @@ export function startHttpServer() {
   config.url = `http://127.0.0.1:${port}`;
   saveAgentConfig(config);
   const session = new WorkflowAgentSession();
-  const flovart = new FlovartAgentService();
+  const flovart = new FlovartAgentService({
+    tools: createFlovartAgentTools((...args) => session.callCommand(...args)),
+  });
   let codex;
   const getCodex = async () => {
     if (!codex) codex = await new CodexAppServer((type, payload) => session.emit(type, payload)).start();
@@ -153,6 +155,17 @@ export function startHttpServer() {
           const update = event.type === 'message_update' ? event.assistantMessageEvent : undefined;
           if (update?.type === 'text_delta') emit('text-delta', { delta: update.delta });
           if (event.type === 'agent_start') emit('status', { running: true });
+          if (event.type === 'tool_execution_start') emit('tool-start', {
+            id: event.toolCallId,
+            name: event.toolName,
+            args: event.args,
+          });
+          if (event.type === 'tool_execution_end') emit('tool-end', {
+            id: event.toolCallId,
+            name: event.toolName,
+            result: event.result,
+            isError: event.isError,
+          });
         });
         try {
           const snapshot = await flovart.send(projectId, String(body.prompt || ''));

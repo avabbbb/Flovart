@@ -385,6 +385,7 @@ const App: React.FC = () => {
                 onOnlineTurn={handleWorkflowOnlineAgentTurn}
                 onOpenWorkflow={() => setActiveView('workflow')}
                 onOpenTable={handleOpenTable}
+                onOpenSettings={() => setIsSettingsPanelOpen(true)}
             />
         </Suspense>
     );

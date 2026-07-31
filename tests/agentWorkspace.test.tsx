@@ -20,6 +20,7 @@ describe('Agent workspace', () => {
         onProjectChange={vi.fn()}
         onOpenWorkflow={vi.fn()}
         onOpenTable={vi.fn()}
+        onOpenSettings={vi.fn()}
       />,
     );
 

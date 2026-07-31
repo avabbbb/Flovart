@@ -2,8 +2,10 @@ import type { ManagedAgentConnection } from './managedAgentConnection';
 
 export interface FlovartAgentMessage {
   id: string;
-  role: 'user' | 'assistant';
+  role: 'user' | 'assistant' | 'tool';
   text: string;
+  toolName?: string;
+  isError?: boolean;
   timestamp?: number;
   error?: string;
 }
@@ -19,6 +21,8 @@ export type FlovartAgentTurnEvent =
   | { type: 'text-delta'; delta: string }
   | { type: 'snapshot'; snapshot: FlovartAgentSnapshot }
   | { type: 'status'; running: boolean }
+  | { type: 'tool-start'; id: string; name: string; args: unknown }
+  | { type: 'tool-end'; id: string; name: string; result: unknown; isError: boolean }
   | { type: 'error'; message: string };
 
 function headers(connection: ManagedAgentConnection, body = false) {
@@ -83,6 +87,19 @@ export class ManagedFlovartAgentClient {
         if (event.type === 'text-delta') emit({ type: 'text-delta', delta: String(event.data?.delta || '') });
         else if (event.type === 'snapshot') emit({ type: 'snapshot', snapshot: event.data });
         else if (event.type === 'status') emit({ type: 'status', running: Boolean(event.data?.running) });
+        else if (event.type === 'tool-start') emit({
+          type: 'tool-start',
+          id: String(event.data?.id || ''),
+          name: String(event.data?.name || 'Workflow 工具'),
+          args: event.data?.args,
+        });
+        else if (event.type === 'tool-end') emit({
+          type: 'tool-end',
+          id: String(event.data?.id || ''),
+          name: String(event.data?.name || 'Workflow 工具'),
+          result: event.data?.result,
+          isError: Boolean(event.data?.isError),
+        });
         else if (event.type === 'error') emit({ type: 'error', message: String(event.data?.message || 'Flovart Agent 运行失败') });
       }
       if (done) break;

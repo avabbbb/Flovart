@@ -15,11 +15,12 @@ interface AgentWorkspaceProps {
   onOnlineTurn?: (input: WorkflowOnlineTurnInput) => Promise<void>;
   onOpenWorkflow: () => void;
   onOpenTable: (nodeId?: string) => void;
+  onOpenSettings: () => void;
 }
 
 const STATUS_LABEL: Record<AgentPanelStatus, string> = { idle: '待命', running: '运行中', waiting: '待确认', done: '已完成', error: '异常' };
 
-export function AgentWorkspace({ project, onCreateProject, onProjectChange, onOnlineTurn, onOpenWorkflow, onOpenTable }: AgentWorkspaceProps) {
+export function AgentWorkspace({ project, onCreateProject, onProjectChange, onOnlineTurn, onOpenWorkflow, onOpenTable, onOpenSettings }: AgentWorkspaceProps) {
   const ensureLayout = useAgentWorkspaceStore(state => state.ensureLayout);
   const updatePanel = useAgentWorkspaceStore(state => state.updatePanel);
   const setStoredViewport = useAgentWorkspaceStore(state => state.setViewport);
@@ -79,6 +80,7 @@ export function AgentWorkspace({ project, onCreateProject, onProjectChange, onOn
             onOnlineTurn={onOnlineTurn}
             onOpenWorkflow={onOpenWorkflow}
             onOpenTable={onOpenTable}
+            onOpenSettings={onOpenSettings}
           />
         ))}
       </div>
@@ -109,9 +111,10 @@ interface AgentPanelProps {
   onOnlineTurn?: (input: WorkflowOnlineTurnInput) => Promise<void>;
   onOpenWorkflow: () => void;
   onOpenTable: (nodeId?: string) => void;
+  onOpenSettings: () => void;
 }
 
-function AgentPanel({ panel, project, mediaNodes, onMove, onResize, onFocus, onRemove, onActivity, onProjectChange, onOnlineTurn, onOpenWorkflow, onOpenTable }: AgentPanelProps) {
+function AgentPanel({ panel, project, mediaNodes, onMove, onResize, onFocus, onRemove, onActivity, onProjectChange, onOnlineTurn, onOpenWorkflow, onOpenTable, onOpenSettings }: AgentPanelProps) {
   const drag = useRef<{ x: number; y: number; panelX: number; panelY: number } | undefined>(undefined);
   const resize = useRef<{ x: number; y: number; width: number; height: number } | undefined>(undefined);
   const Icon = panel.kind === 'codex' || panel.kind === 'flovart' ? Bot : panel.kind === 'artifacts' ? Boxes : panel.kind === 'activity' ? CircleDot : Sparkles;
@@ -121,7 +124,7 @@ function AgentPanel({ panel, project, mediaNodes, onMove, onResize, onFocus, onR
     </header>
     <div className="min-h-0 flex-1 overflow-hidden">
       {panel.kind === 'codex' && <WorkflowAgentPanel project={project} onClose={() => undefined} onProjectChange={onProjectChange} onOnlineTurn={onOnlineTurn} embedded onActivityChange={(activity: WorkflowAgentActivity) => onActivity(activity)} />}
-      {panel.kind === 'flovart' && <FlovartAgentPanel projectId={project.id} onActivityChange={onActivity} />}
+      {panel.kind === 'flovart' && <FlovartAgentPanel project={project} onActivityChange={onActivity} onOpenSettings={onOpenSettings} />}
       {panel.kind === 'brief' && <BriefPanel project={project} onOpenWorkflow={onOpenWorkflow} />}
       {panel.kind === 'activity' && <ActivityPanel project={project} />}
       {panel.kind === 'artifacts' && <ArtifactsPanel nodes={mediaNodes} onOpenTable={onOpenTable} />}

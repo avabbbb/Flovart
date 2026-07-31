@@ -1,9 +1,12 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { Type } from 'typebox';
 import { z } from 'zod';
 import { loadAgentConfig } from './config.js';
 
-const core = await import('../tools/flovart/core.js').catch(() => import('../core.js'));
+const sourceCore = '../tools/flovart/core.js';
+const bundledCore = '../core.js';
+const core = await import(sourceCore).catch(() => import(bundledCore));
 const { COMMAND_ALIASES, COMMAND_REGISTRY } = core;
 const WORKSPACE_WRITE_COMMANDS = new Set([
   'workflow.project.create', 'workflow.project.use', 'workflow.project.delete',
@@ -38,10 +41,51 @@ const toolName = command => {
   return alias || `flovart_${command.replace(/[^a-zA-Z0-9]+/g, '_')}`;
 };
 
+const descriptorType = descriptor => {
+  const optional = String(descriptor).endsWith('?');
+  const token = optional ? String(descriptor).slice(0, -1) : String(descriptor);
+  let schema;
+  if (token === 'number') schema = Type.Number();
+  else if (token === 'boolean') schema = Type.Boolean();
+  else if (token === 'object') schema = Type.Record(Type.String(), Type.Unknown());
+  else if (token === 'array') schema = Type.Array(Type.Unknown());
+  else if (token === 'string[]') schema = Type.Array(Type.String());
+  else if (token.includes('|')) schema = Type.Union(token.split('|').map(value => Type.Literal(value)));
+  else schema = Type.String();
+  return optional ? Type.Optional(schema) : schema;
+};
+
+const agentParameters = (args, write) => Type.Object({
+  ...Object.fromEntries(Object.entries(args || {}).map(([name, descriptor]) => [name, descriptorType(descriptor)])),
+  ...(write ? { idempotencyKey: Type.String({ minLength: 1 }) } : {}),
+}, { additionalProperties: false });
+
 export function getFlovartMcpTools() {
   return Object.entries(COMMAND_REGISTRY)
     .filter(([command, metadata]) => metadata.availability === 'available' && WORKSPACE_COMMANDS.has(command))
     .map(([command, metadata]) => ({ command, name: toolName(command), metadata }));
+}
+
+export function createFlovartAgentTools(callCommand) {
+  return getFlovartMcpTools().map(({ command, name, metadata }) => {
+    const write = WORKSPACE_WRITE_COMMANDS.has(command);
+    return {
+      name,
+      label: metadata.summary,
+      description: metadata.summary,
+      parameters: agentParameters(metadata.args, write),
+      executionMode: 'sequential',
+      async execute(_toolCallId, input, signal) {
+        if (signal?.aborted) throw new Error('Workflow 操作已取消');
+        const result = await callCommand(command, input, 'agent', input.idempotencyKey, signal);
+        if (result?.ok === false) throw new Error(result.error?.message || 'Flovart Workflow 操作失败');
+        return {
+          content: [{ type: 'text', text: JSON.stringify(result) }],
+          details: { command, result },
+        };
+      },
+    };
+  });
 }
 
 export async function startMcpServer() {

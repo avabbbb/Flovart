@@ -8,10 +8,12 @@ export class FlovartAgentService {
     databasePath = path.join(AGENT_DIR, 'agent-sessions.db'),
     model = RUNTIME_AGENT_TEXT_MODEL,
     streamFn = createProductionRuntimeStream(),
+    tools = [],
   } = {}) {
     this.databasePath = databasePath;
     this.model = model;
     this.streamFn = streamFn;
+    this.tools = tools;
     this.sessions = new Map();
   }
 
@@ -24,6 +26,7 @@ export class FlovartAgentService {
           databasePath: this.databasePath,
           model: this.model,
           streamFn: this.streamFn,
+          tools: this.tools,
         });
         await kernel.openSession({ projectId: id, cwd: workspaceForProject(id) });
         return kernel;

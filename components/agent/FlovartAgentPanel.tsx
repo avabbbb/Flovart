@@ -1,4 +1,4 @@
-import { Circle, Send, Square } from 'lucide-react';
+import { Circle, Send, Settings2, Square } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { getManagedAgentConnection } from '../../services/managedAgentConnection';
 import {
@@ -6,11 +6,14 @@ import {
   type FlovartAgentSnapshot,
   type FlovartAgentTurnEvent,
 } from '../../services/managedFlovartAgent';
+import { WorkflowAgentBridge } from '../../services/workflowAgentBridge';
 import { WorkflowAgentMessages, type WorkflowAgentDisplayMessage } from '../workflow/WorkflowAgentMessages';
+import type { WorkflowProject } from '../workflow/types';
 
 interface FlovartAgentPanelProps {
-  projectId: string;
+  project: WorkflowProject;
   onActivityChange: (status: 'idle' | 'running' | 'done' | 'error') => void;
+  onOpenSettings: () => void;
 }
 
 const AGENT_TEXT_CONFIGURATION_MESSAGE = '请在设置的“模型映射”中为 Agent 文本能力配置可用线路。';
@@ -35,6 +38,8 @@ function displayMessages(snapshot: FlovartAgentSnapshot): WorkflowAgentDisplayMe
     id: message.id,
     role: message.error ? 'error' : message.role,
     text: message.error ? displayError(message.error) : message.text,
+    title: message.role === 'tool' ? message.toolName : undefined,
+    status: message.role === 'tool' ? message.isError ? 'error' : 'success' : undefined,
     createdAt: message.timestamp ? new Date(message.timestamp).toISOString() : undefined,
   }));
 }
@@ -43,15 +48,24 @@ function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error || 'Flovart Agent 运行失败');
 }
 
-export function FlovartAgentPanel({ projectId, onActivityChange }: FlovartAgentPanelProps) {
+function toolResultText(result: unknown) {
+  const content = (result as { content?: Array<{ type?: string; text?: string }> })?.content;
+  return content?.filter(item => item.type === 'text').map(item => item.text).filter(Boolean).join('\n') || 'Workflow 操作已完成';
+}
+
+export function FlovartAgentPanel({ project, onActivityChange, onOpenSettings }: FlovartAgentPanelProps) {
   const client = useRef<ManagedFlovartAgentClient | undefined>(undefined);
+  const workspaceBridge = useRef<WorkflowAgentBridge | undefined>(undefined);
   const abort = useRef<AbortController | undefined>(undefined);
   const activity = useRef(onActivityChange);
+  const confirmationRef = useRef<{ summary: string; resolve: (approved: boolean) => void }>();
   const [messages, setMessages] = useState<WorkflowAgentDisplayMessage[]>([]);
   const [prompt, setPrompt] = useState('');
   const [status, setStatus] = useState<'connecting' | 'ready' | 'error'>('connecting');
+  const [workspaceStatus, setWorkspaceStatus] = useState<'connecting' | 'ready' | 'error'>('connecting');
   const [sending, setSending] = useState(false);
   const [needsConfiguration, setNeedsConfiguration] = useState(false);
+  const [confirmation, setConfirmation] = useState<{ summary: string; resolve: (approved: boolean) => void }>();
 
   useEffect(() => { activity.current = onActivityChange; }, [onActivityChange]);
   useEffect(() => {
@@ -62,9 +76,28 @@ export function FlovartAgentPanel({ projectId, onActivityChange }: FlovartAgentP
       .then(async connection => {
         if (!connection) throw new Error('Flovart Agent 仅在桌面端可用。');
         const next = new ManagedFlovartAgentClient(connection);
-        const snapshot = await next.session(projectId);
+        const snapshot = await next.session(project.id);
         if (!active) return;
         client.current = next;
+        if (typeof EventSource === 'function') {
+          const bridge = new WorkflowAgentBridge({
+            url: connection.url,
+            token: connection.token,
+            confirm: summary => new Promise<boolean>(resolve => {
+              const next = { summary, resolve };
+              confirmationRef.current = next;
+              setConfirmation(next);
+              activity.current('waiting');
+            }),
+            onStatus: nextStatus => {
+              if (!active) return;
+              setWorkspaceStatus(nextStatus === 'connected' ? 'ready' : nextStatus === 'error' ? 'error' : 'connecting');
+            },
+          });
+          workspaceBridge.current = bridge;
+          bridge.connect();
+          await bridge.pushSnapshot(project);
+        }
         setMessages(displayMessages(snapshot));
         setStatus('ready');
         const configurationNeeded = snapshotNeedsConfiguration(snapshot);
@@ -74,6 +107,7 @@ export function FlovartAgentPanel({ projectId, onActivityChange }: FlovartAgentP
       .catch(error => {
         if (!active) return;
         setStatus('error');
+        setWorkspaceStatus('error');
         setNeedsConfiguration(false);
         setMessages([{ id: 'connection-error', role: 'error', text: errorMessage(error) }]);
         activity.current('error');
@@ -81,8 +115,16 @@ export function FlovartAgentPanel({ projectId, onActivityChange }: FlovartAgentP
     return () => {
       active = false;
       abort.current?.abort();
+      confirmationRef.current?.resolve(false);
+      confirmationRef.current = undefined;
+      workspaceBridge.current?.disconnect();
+      workspaceBridge.current = undefined;
     };
-  }, [projectId]);
+  }, [project.id]);
+
+  useEffect(() => {
+    if (workspaceBridge.current) void workspaceBridge.current.pushSnapshot(project).catch(() => setWorkspaceStatus('error'));
+  }, [project]);
 
   const handleEvent = (event: FlovartAgentTurnEvent, assistantId: string) => {
     if (event.type === 'text-delta') {
@@ -93,6 +135,22 @@ export function FlovartAgentPanel({ projectId, onActivityChange }: FlovartAgentP
     } else if (event.type === 'snapshot') {
       setNeedsConfiguration(snapshotNeedsConfiguration(event.snapshot));
       setMessages(displayMessages(event.snapshot));
+    } else if (event.type === 'tool-start') {
+      setMessages(items => [...items, {
+        id: `tool-${event.id}`,
+        role: 'tool',
+        title: event.name,
+        text: '等待 Workflow 确认与执行',
+        detail: event.args,
+        status: 'pending',
+      }]);
+    } else if (event.type === 'tool-end') {
+      setMessages(items => items.map(item => item.id === `tool-${event.id}` ? {
+        ...item,
+        text: toolResultText(event.result),
+        detail: event.result,
+        status: event.isError ? 'error' : 'success',
+      } : item));
     } else if (event.type === 'error') {
       setNeedsConfiguration(isAgentTextConfigurationError(event.message));
       setMessages(items => [...items, { id: crypto.randomUUID(), role: 'error', text: displayError(event.message) }]);
@@ -113,7 +171,7 @@ export function FlovartAgentPanel({ projectId, onActivityChange }: FlovartAgentP
     abort.current = controller;
     let failed = false;
     try {
-      await client.current.turn(projectId, text, event => {
+      await client.current.turn(project.id, text, event => {
         if (event.type === 'error' || (event.type === 'snapshot' && event.snapshot.messages.some(message => message.error))) failed = true;
         handleEvent(event, assistantId);
       }, controller.signal);
@@ -133,13 +191,15 @@ export function FlovartAgentPanel({ projectId, onActivityChange }: FlovartAgentP
   return (
     <div className="workflow-agent is-embedded">
       <header className="workflow-agent__utility">
-        <span className={`workflow-agent__status is-${needsConfiguration ? 'error' : status === 'ready' ? 'connected' : status}`}>
-          <Circle size={8} />{status === 'connecting' ? '连接中' : status === 'error' ? '连接失败' : needsConfiguration ? '需要配置' : '已就绪'}
+        <span className={`workflow-agent__status is-${needsConfiguration || workspaceStatus === 'error' ? 'error' : status === 'ready' && workspaceStatus === 'ready' ? 'connected' : status}`}>
+          <Circle size={8} />{status === 'connecting' ? '连接中' : status === 'error' ? '连接失败' : needsConfiguration ? '需要配置' : workspaceStatus === 'error' ? '工作区断开' : workspaceStatus !== 'ready' ? '同步工作区' : '已就绪'}
         </span>
+        {needsConfiguration && <button type="button" className="ml-2 flex items-center gap-1 text-[9px] font-semibold" onClick={onOpenSettings}><Settings2 size={10} />打开模型映射</button>}
         <span className="ml-auto text-[9px]" style={{ color: 'var(--isl-ink-ghost)' }}>主对话自动恢复</span>
       </header>
       <section className="workflow-agent__body">
         <WorkflowAgentMessages messages={messages} running={sending} />
+        {confirmation && <div className="workflow-agent__confirm"><strong>Agent 请求修改 Workflow</strong><p>{confirmation.summary}</p><div><button type="button" onClick={() => { confirmationRef.current = undefined; confirmation.resolve(false); setConfirmation(undefined); activity.current('running'); }}>拒绝</button><button type="button" onClick={() => { confirmationRef.current = undefined; confirmation.resolve(true); setConfirmation(undefined); activity.current('running'); }}>允许</button></div></div>}
         <div className="workflow-agent__composer">
           <textarea
             value={prompt}
@@ -154,7 +214,7 @@ export function FlovartAgentPanel({ projectId, onActivityChange }: FlovartAgentP
             disabled={status === 'connecting'}
           />
           {sending
-            ? <button type="button" aria-label="停止" onClick={() => { abort.current?.abort(); activity.current('idle'); void client.current?.cancel(projectId); }}><Square size={13} /></button>
+            ? <button type="button" aria-label="停止" onClick={() => { abort.current?.abort(); activity.current('idle'); void client.current?.cancel(project.id); }}><Square size={13} /></button>
             : <button type="button" aria-label="发送" onClick={() => void send()} disabled={status !== 'ready' || !prompt.trim()}><Send size={14} /></button>}
         </div>
       </section>

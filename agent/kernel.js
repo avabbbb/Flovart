@@ -7,6 +7,9 @@ import {
 
 const DEFAULT_SYSTEM_PROMPT = `你是 Flovart Agent，负责把用户的创作目标整理为可审查的制作计划。
 你只能使用已注册的 Flovart 制作工具，不得访问 Shell、任意文件或 Provider Secret。
+处理当前项目时先调用 flovart_workflow_inspect，不得猜测项目、节点或连接 ID。
+写操作必须使用稳定的 idempotencyKey；只有工具返回成功后，才能声称 Workflow 已发生变化。
+可见 Workflow 会在写操作前要求用户确认，不得绕过确认。
 没有足够信息时先说明缺口；没有用户确认的 Production Mandate 时不得声称付费制作已经开始。`;
 
 function messageText(message) {
@@ -20,6 +23,16 @@ function messageText(message) {
 
 function snapshotMessage(entry) {
   const message = entry.message;
+  if (message.role === 'toolResult') {
+    return {
+      id: entry.id,
+      role: 'tool',
+      text: messageText(message),
+      toolName: message.toolName,
+      isError: Boolean(message.isError),
+      timestamp: message.timestamp,
+    };
+  }
   return {
     id: entry.id,
     role: message.role,
@@ -98,7 +111,10 @@ export class FlovartAgentKernel {
     return {
       sessionId: metadata.id,
       projectId: metadata.metadata?.projectId,
-      messages: entries.filter(entry => entry.type === 'message').map(snapshotMessage),
+      messages: entries
+        .filter(entry => entry.type === 'message')
+        .map(snapshotMessage)
+        .filter(message => message.role !== 'assistant' || message.text || message.error),
       running: Boolean(this.agent?.state.isStreaming),
     };
   }

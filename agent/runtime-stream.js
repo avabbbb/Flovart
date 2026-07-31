@@ -109,6 +109,13 @@ function finishWithError(stream, model, error, aborted = false) {
   stream.end(message);
 }
 
+function parseToolArguments(value) {
+  if (!value) return {};
+  const parsed = JSON.parse(value);
+  if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object') throw new Error('Flovart Runtime returned invalid tool arguments');
+  return parsed;
+}
+
 export function createRuntimeAgentTextStream({
   endpoint = undefined,
   token = undefined,
@@ -128,8 +135,31 @@ export function createRuntimeAgentTextStream({
     const stream = createAssistantMessageEventStream();
     queueMicrotask(async () => {
       let partial = initialMessage(model);
+      const content = [];
+      const toolCalls = new Map();
       let text = '';
       let textStarted = false;
+      const updatePartial = () => { partial = { ...partial, content: [...content] }; };
+      const ensureToolCall = data => {
+        const index = Number(data?.index || 0);
+        let state = toolCalls.get(index);
+        if (!state) {
+          const block = {
+            type: 'toolCall',
+            id: String(data?.id || ''),
+            name: String(data?.name || ''),
+            arguments: {},
+          };
+          state = { block, argumentsText: '' };
+          toolCalls.set(index, state);
+          content.push(block);
+          updatePartial();
+          stream.push({ type: 'toolcall_start', contentIndex: content.length - 1, partial: { ...partial } });
+        }
+        if (data?.id) state.block.id = String(data.id);
+        if (data?.name) state.block.name = String(data.name);
+        return state;
+      };
       try {
         const resolved = staticConnection || await connection();
         const origin = assertLoopbackEndpoint(resolved.endpoint);
@@ -158,21 +188,60 @@ export function createRuntimeAgentTextStream({
           }
           if (item.event === 'text-delta') {
             if (!textStarted) {
-              partial = { ...partial, content: [{ type: 'text', text: '' }] };
-              stream.push({ type: 'text_start', contentIndex: 0, partial: { ...partial } });
+              content.push({ type: 'text', text: '' });
+              updatePartial();
+              stream.push({ type: 'text_start', contentIndex: content.length - 1, partial: { ...partial } });
               textStarted = true;
             }
             text += String(item.data?.delta || '');
-            partial = { ...partial, content: [{ type: 'text', text }] };
-            stream.push({ type: 'text_delta', contentIndex: 0, delta: String(item.data?.delta || ''), partial: { ...partial } });
+            const textIndex = content.findIndex(block => block.type === 'text');
+            content[textIndex] = { type: 'text', text };
+            updatePartial();
+            stream.push({ type: 'text_delta', contentIndex: textIndex, delta: String(item.data?.delta || ''), partial: { ...partial } });
+            continue;
+          }
+          if (item.event === 'toolcall-start') {
+            ensureToolCall(item.data);
+            continue;
+          }
+          if (item.event === 'toolcall-delta') {
+            const state = ensureToolCall(item.data);
+            const delta = String(item.data?.delta || '');
+            state.argumentsText += delta;
+            try { state.block.arguments = parseToolArguments(state.argumentsText); } catch { /* partial JSON */ }
+            updatePartial();
+            stream.push({
+              type: 'toolcall_delta',
+              contentIndex: content.indexOf(state.block),
+              delta,
+              partial: { ...partial },
+            });
+            continue;
+          }
+          if (item.event === 'toolcall-end') {
+            const state = ensureToolCall(item.data);
+            state.argumentsText = String(item.data?.arguments ?? state.argumentsText);
+            state.block.arguments = parseToolArguments(state.argumentsText);
+            if (!state.block.id || !state.block.name) throw new Error('Flovart Runtime returned an incomplete tool call');
+            updatePartial();
+            stream.push({
+              type: 'toolcall_end',
+              contentIndex: content.indexOf(state.block),
+              toolCall: { ...state.block },
+              partial: { ...partial },
+            });
             continue;
           }
           if (item.event === 'error') throw new Error(item.data?.message || 'Flovart Runtime agent-text failed');
           if (item.event === 'done') {
-            if (textStarted) stream.push({ type: 'text_end', contentIndex: 0, content: text, partial: { ...partial } });
+            if (textStarted) {
+              const textIndex = content.findIndex(block => block.type === 'text');
+              stream.push({ type: 'text_end', contentIndex: textIndex, content: text, partial: { ...partial } });
+            }
             const reason = ['stop', 'length', 'toolUse'].includes(item.data?.finishReason)
               ? item.data.finishReason
               : 'stop';
+            if (reason === 'toolUse' && toolCalls.size === 0) throw new Error('Flovart Runtime ended with toolUse but returned no tool call');
             const message = { ...partial, stopReason: reason };
             stream.push({ type: 'done', reason, message });
             stream.end(message);
