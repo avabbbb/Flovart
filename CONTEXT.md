@@ -38,6 +38,18 @@ Remix Bundle 中演示 Skill 用法的不可变、可移植 Workflow 投影，�
 面向生成编排的节点工作区，用于组织提示词、参考素材、模型配置、生成依赖、任务状态和结果节点。
 避免混用：Table Workspace、Agent Workspace、旧 Canvas Workspace、旧 Art Workspace。
 
+**上下文媒体条（Context Media Bar）**：
+Workflow Workspace 中选中媒体节点后出现的轻量操作条，现有代码入口为 `WorkflowNodeToolbar`，也就是讨论中所说的 ElementBar；它总共只常驻 5–7 个高频动作，其中按图片或视频切换 3–5 个类型专属动作，长尾能力进入“更多”、工具面板或节点内参数区。
+避免混用：完整工具架、PromptBar、节点参数面板、右键菜单、工具箱模板。
+
+**媒体代理（Media Proxy）**：
+Workflow 全景或普通浏览状态中替代原始媒体的轻量视觉资源；图片使用与屏幕投影尺寸匹配的缩略图，视频使用首帧 Poster，不承担播放、编辑、Provider 输入或下载语义。
+避免混用：原始媒体、活动媒体、生成结果记录。
+
+**活动媒体（Active Media）**：
+当前唯一升级为完整交互组件的媒体节点；视频只有成为活动媒体后才挂载真实播放器，单纯选中节点只负责显示 PromptBar 与上下文媒体条。
+避免混用：选中节点、悬停节点、视口内节点、故事板预览。
+
 **Table Workspace**：
 面向节点式媒体处理的工作区，用有向节点图组织输入媒体、抠图、深度、结构提取、风格化、服装修改、参考准备和输出；它不承担 Provider 生成编排或 Agent 对话。
 避免混用：Workflow Workspace、Workflow Graph、Agent Workspace、旧 Art Workspace。

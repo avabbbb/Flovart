@@ -2,6 +2,31 @@
 title: 待测试确认
 ---
 
+## Flovart Agent 可见 Workflow 工具闭环
+
+- 内置 PI Agent 现在获得 15 条受限、类型化的可见 Workflow 工具：先读取项目和图状态，再创建、更新、移动、缩放、连接、选择或切换项目；不开放 Shell、任意文件、任意网络、legacy Canvas / Element 或浏览器旧生成命令。所有写操作仍要求稳定幂等键，并由现有 `workflowDispatcher` 做最终来源、Schema 和状态校验。
+- Rust `agent-text` Runtime 会把 OpenAI-compatible 流中的 `tool_calls` 完整归一化为 PI 工具事件，不再只转发文字；Agent 主面板显示工具等待、成功或失败状态，并在 Agent 工作区自行维持当前项目的 Workspace Adapter。缺少文本线路时可直接点击“打开模型映射”，不再只给出死路提示。
+- 真实桌面只读探针已通过：临时本机 OpenAI-compatible 路线依次产生 `status → tool-start → tool-end → text-delta → snapshot`，实际调用 `flovart_workflow_inspect`，工具结果 `ok=true`，会话保存为 `user → tool → assistant`；探针前后项目均为 0 节点、0 连线。临时路线已恢复为空，本机探针服务和测试进程均已关闭。
+- 自动验证通过：Agent / Workspace 定向 Vitest 6 个文件 15 项（含写操作拒绝确认）、Rust 全量测试、CLI npm 发布包 dry-run、Web 生产构建、Windows NSIS 安装包构建，以及包含 Runtime、Host 和最新 Managed Agent 的 Windows Agent Toolkit 归档构建。NSIS 输出为 `src-tauri/target/release/bundle/nsis/Flovart_0.3.0_x64-setup.exe`。
+- 全量 Vitest 当前为 85 个文件通过、657 项通过、1 项跳过；仍保留本轮未修改且可独立复现的 `workflowGeneration.test.ts` 6 项 Provider reference 失败和 `workflowNodeOverlays.test.tsx` 2 项视频模式断言失败。`flovartHomeSkills.test.tsx` 在全量并行运行时曾超时，单独与相关 UI 测试重跑后通过。
+- 待用户验证：在“模型映射 → 文本与 Agent”配置一条真实低价 OpenAI-compatible 文本线路，进入 Agent 项目要求它“先读取 Workflow，再创建一个文本节点并移动到指定位置”，确认工具轨迹、节点变化和重启后的主对话一致。付费 Production Plan Card、Mandate / Run 授权、探索分支以及全新机器免 Node 的 Desktop 内置 Agent Toolkit 仍是后续上线门禁，本轮没有把聊天中的“开始”误当成付费授权。
+
+## Workflow 大项目视频 Poster 与活动播放器
+
+- 本地拖入、导入项目或后续生成的视频会尽力生成 JPEG Poster，并以 `posterStorageKey` 和源视频一起存入 Workflow 的 `localforage` 媒体库；Poster 生成失败不会丢失源视频。项目导出不会携带本机 Poster Key 或内嵌 Poster，导入时会重新生成。
+- Workflow 主画布、折叠批次和展开批次中的普通视频不再常驻真实 `<video>`：有 Poster 时使用懒加载图片，没有封面时显示轻量可点击占位，也不会提前从本地媒体存储解析完整视频 Blob。
+- “选中”和“活动媒体”已经分开：单击 Poster 或占位只选中节点并显示 PromptBar、ElementToolbar；用户显式点击“加载视频播放器”后才挂载最多一个 `<video preload="none" playsInline>`。按 Esc、切换选择、打开工具/预览、替换或删除媒体、切换项目或批次显示都会卸载活动播放器。
+- 自动验证覆盖：Poster 生成、持久化、失败降级、清理和项目导入导出；直接点击视频媒体后两条 Bar 稳定挂载；双击已有视频不会误开文件选择器；未活动/多选视频为 0 个播放器；显式活动最多 1 个播放器；Esc 和切换节点后回落为 0。
+- 待用户验证：打开包含大量视频的 Workflow，确认未显式加载播放器时主画布没有 `<video>`；点击任一 Poster 后只出现选择态和两条 Bar，再点击“加载视频播放器”才出现唯一播放器；Esc、多选或切换节点后播放器立即卸载。远程 URL 或历史视频若没有可用 Poster，当前仍显示轻量占位。
+
+## Desktop Agent 生命周期与子任务布局
+
+- Tauri 顶层退出事件现在会显式关闭由 Desktop 拥有的 Managed Agent 子进程；同时增加 shutdown 状态，阻止退出期间的后台预热线程重新启动 Node。`Drop` 仅保留为兜底，不再承担正常窗口关闭的唯一清理责任。
+- Agent 空间新增 Codex 子任务时，默认放到所有现有面板下方并保留 26px 间距；连续新增也不会互相遮挡。已有用户拖动布局不做自动迁移，避免覆盖手工位置。
+- 新增 [LibTV CLI 功能复刻审计](../../../dev/libtv-cli-parity-audit.md)：以本机 `libtv 1.1.1` 实际帮助、官方产品页、官方开源仓库和 Flovart Canonical Command Registry 交叉核对。结论是核心 Agent→画布链路已部分复刻，但分组、模型完整 Schema、上传下载、脚本分镜、video-clip 与 NDJSON 管道尚未完整对等。
+- 自动验证：Agent Workspace 3 个测试文件共 11 项通过；Managed Agent shutdown 单元测试通过；`npx tsc --noEmit` 与 `cargo build` 通过。真实启动 `src-tauri/target/debug/flovart.exe` 后调用正常窗口关闭，Desktop 与其 Managed Agent Node 子进程均在 10 秒内退出。
+- 待用户验证：① 在 Agent 空间新建两个 Codex 子任务，确认默认出现在现有面板下方且均可独立拖动；② 正常关闭桌面端后，任务管理器中不再残留由本次 Desktop 启动的 `node.exe`。
+
 ## Flovart Agent 首个可用切片
 
 - Agent 工作区的默认主对话已从 Codex 改为唯一的 `Flovart Agent`；已有空间布局会把旧 `codex-main` 原位替换，用户仍可按需新增和关闭独立的 Codex 子任务面板。
