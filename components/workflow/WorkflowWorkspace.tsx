@@ -14,6 +14,7 @@ import type { WorkflowModelOptions } from './WorkflowNodePromptBar';
 import { WorkflowAgentPanel, type WorkflowOnlineTurnInput } from './WorkflowAgentPanel';
 import type { WorkflowImageToolHandlers } from './WorkflowNodeToolbar';
 import { WorkflowSidebar } from './WorkflowSidebar';
+import { useWorkflowWorkspaceAdapter } from './useWorkflowWorkspaceAdapter';
 import { discardWorkflowMediaRecord, fitWorkflowMediaSize, ingestWorkflowMedia, loadWorkflowMediaBlob, releaseWorkflowMediaRecord, workflowBlobToDataUrl, type WorkflowMediaRecord } from './media';
 import type { AssetItem, AssetLibrary } from '../../types';
 
@@ -89,6 +90,7 @@ export function WorkflowWorkspace({
   const createProject = useWorkflowStore(state => state.createProject);
   const updateProject = useWorkflowStore(state => state.updateProject);
   const activeProject = projects.find(project => project.id === activeProjectId) || null;
+  useWorkflowWorkspaceAdapter(activeProject);
   const [leftOpen, setLeftOpen] = useState(true);
   const [rightOpen, setRightOpen] = useState(() => localStorage.getItem('workflowRightPanelOpen') !== 'false');
   const [rightTab, setRightTab] = useState<WorkflowRightTab>('agent');

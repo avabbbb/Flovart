@@ -1,4 +1,4 @@
-import { Archive, Bot, Circle, History, ImagePlus, Link2, MessageSquare, Plus, ScrollText, Send, Sparkles, Trash2, X } from 'lucide-react';
+import { Archive, Bot, Circle, History, ImagePlus, Link2, MessageSquare, PenLine, Plus, ScrollText, Send, Sparkles, Trash2, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { consumeProductionSkillDraft } from '../../services/productionSkillLaunch';
 import { getManagedAgentConnection } from '../../services/managedAgentConnection';
@@ -8,10 +8,11 @@ import {
   validateWorkflowAgentAttachments,
   type WorkflowAgentAttachment,
 } from '../../services/workflowAgentBridge';
+import { useWorkflowStore } from './store';
 import type { WorkflowAgentMessage, WorkflowAgentSession, WorkflowProject } from './types';
 import { WorkflowAgentMessages, type WorkflowAgentDisplayMessage } from './WorkflowAgentMessages';
 
-type Tab = 'setup' | 'chat' | 'history' | 'logs';
+type Tab = 'setup' | 'chat' | 'history' | 'draft' | 'logs';
 type Status = 'connecting' | 'connected' | 'disconnected' | 'error';
 export type WorkflowAgentMode = 'online' | 'local';
 export type WorkflowAgentActivity = 'idle' | 'running' | 'waiting' | 'done' | 'error';
@@ -45,6 +46,7 @@ const tabs: Array<{ id: Tab; label: string; icon: typeof Link2 }> = [
   { id: 'setup', label: '连接', icon: Link2 },
   { id: 'chat', label: '对话', icon: MessageSquare },
   { id: 'history', label: '历史', icon: History },
+  { id: 'draft', label: '草稿', icon: PenLine },
   { id: 'logs', label: '日志', icon: ScrollText },
 ];
 
@@ -141,6 +143,15 @@ export function WorkflowAgentPanel({ project, onClose, onProjectChange, onOnline
     const text = typeof value === 'string' ? value : JSON.stringify(redactWorkflowAgentSnapshot(value));
     setLogs(items => [...items.slice(-159), { id: id(), time: new Date().toLocaleTimeString(), type, text }]);
   }
+
+  /** 在画布上定位草稿动作涉及的节点（通过 Workflow store 同步选中，画布会高亮）。 */
+  function locateDraftNodes(nodeIds: string[]) {
+    const current = useWorkflowStore.getState().projects.find(item => item.id === project.id);
+    if (!current) return;
+    useWorkflowStore.getState().updateProject(project.id, { selectedNodeIds: nodeIds.filter(id => current.nodes.some(node => node.id === id)) });
+  }
+
+  const draftEntries = useMemo(() => [...(project.draftLog || [])].reverse(), [project.draftLog]);
 
   function updateMessages(updater: (items: WorkflowAgentDisplayMessage[]) => WorkflowAgentDisplayMessage[]) {
     const next = updater(messagesRef.current);
@@ -405,6 +416,31 @@ export function WorkflowAgentPanel({ project, onClose, onProjectChange, onOnline
         </>}
         {tab === 'history' && (mode === 'online' ? <div className="workflow-agent__history">{onlineSessions.length ? onlineSessions.map(session => <div key={session.id}><button type="button" onClick={() => { onProjectChange?.({ agentSessions: project.agentSessions, activeAgentSessionId: session.id }); setMessages(session.messages.map(toDisplayMessage)); setTab('chat'); }}><strong>{session.title}</strong><span>{formatTime(session.updatedAt)}</span></button><button type="button" aria-label="删除对话" onClick={() => onProjectChange?.({ agentSessions: project.agentSessions.filter(item => item.id !== session.id), activeAgentSessionId: project.activeAgentSessionId === session.id ? null : project.activeAgentSessionId })}><Trash2 size={13} /></button></div>) : <p>暂无网站 Agent 对话。</p>}</div> : <div className="workflow-agent__history">{threads.length ? threads.map(thread => <div key={thread.id}><button type="button" onClick={() => void openThread(thread.id)}><strong>{thread.name || thread.preview || thread.id}</strong><span>{formatTime(thread.updatedAt || thread.updated_at)}</span></button><button type="button" aria-label="归档线程" onClick={() => void archiveThread(thread.id)}><Archive size={13} /></button></div>) : <p>暂无当前 Workflow 的 Codex 线程。</p>}</div>)}
         {tab === 'logs' && <div className="workflow-agent__logs"><button type="button" onClick={() => setLogs([])}>清空日志</button><pre>{logs.map(item => `${item.time} [${item.type}] ${item.text}`).join('\n') || '暂无日志。'}</pre></div>}
+        {tab === 'draft' && (
+          <div className="workflow-agent__draft">
+            {draftEntries.length === 0 ? (
+              <p className="workflow-agent__draft-empty">暂无草稿动作记录。AI 在画布上创建节点、连线、改提示词或执行二次处理工具时，会在这里留下可追溯记录，设计师可直接定位节点继续细修。</p>
+            ) : (
+              <ul className="workflow-agent__draft-list">
+                {draftEntries.map(entry => (
+                  <li key={entry.id} className={`workflow-agent__draft-item ${entry.ok ? '' : 'is-error'}`}>
+                    <div className="workflow-agent__draft-head">
+                      <span className="workflow-agent__draft-command">{entry.command}</span>
+                      <span className="workflow-agent__draft-time">{formatTime(entry.at)}</span>
+                    </div>
+                    <div className="workflow-agent__draft-summary">{entry.summary}</div>
+                    {entry.message && <div className="workflow-agent__draft-message">{entry.message}</div>}
+                    {entry.nodeIds && entry.nodeIds.length > 0 && (
+                      <button type="button" className="workflow-agent__draft-locate" onClick={() => locateDraftNodes(entry.nodeIds!)}>
+                        定位节点 ({entry.nodeIds.length})
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
       </section>
       {confirmation && <div className="workflow-agent__confirm"><strong>Agent 请求修改 Workflow</strong><p>{confirmation.summary}</p><div><button type="button" onClick={() => { confirmation.resolve(false); setConfirmation(undefined); }}>拒绝</button><button type="button" onClick={() => { confirmation.resolve(true); setConfirmation(undefined); }}>允许</button></div></div>}
     </aside>

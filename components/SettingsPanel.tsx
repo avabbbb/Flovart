@@ -13,6 +13,23 @@ import { fetchModelsForProvider, type FetchedModel } from '../services/modelFetc
 import { normalizeProviderBaseUrl } from '../services/baseUrl';
 import { getProductModel, getProductModels, suggestProductRouteMappings } from '../services/productModelCatalog';
 import { getKeyModelIds } from '../utils/modelRefs';
+import { getFlovartRuntimeApi } from '../services/flovartRuntime';
+
+interface RuntimeProviderStatus {
+    provider: string;
+    ready: boolean;
+    capabilities?: string[];
+    credentials?: Array<{ label?: string; available?: boolean; credentialId?: string }>;
+    productModels?: string[];
+    routes?: Array<{
+        routeId: string;
+        productModel?: string;
+        mode?: string;
+        durationsSec?: number[];
+        resolution?: string;
+        maxSourceImages?: number;
+    }>;
+}
 
 interface SettingsPanelProps {
     isOpen: boolean;
@@ -434,8 +451,70 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
     const [endpointFlavor, setEndpointFlavor] = React.useState<'google' | 'openai-compatible' | 'openrouter-compatible' | null>(null);
     const [detectedCapabilities, setDetectedCapabilities] = React.useState<AICapability[]>([]);
     const [activeTab, setActiveTab] = React.useState<'api' | 'models' | 'security'>('api');
+    const [runtimeProviders, setRuntimeProviders] = React.useState<RuntimeProviderStatus[] | null>(null);
+    const [selectedCredentialByProvider, setSelectedCredentialByProvider] = React.useState<Record<string, string>>({});
+    const configuredRuntimeProviders = runtimeProviders?.filter(item => item.ready) || [];
+
+    React.useEffect(() => {
+        if (!isOpen) return;
+        const runtime = getFlovartRuntimeApi();
+        if (!runtime) {
+            setRuntimeProviders(null);
+            return;
+        }
+        let active = true;
+        void runtime.execute({
+            protocolVersion: '1',
+            commandId: crypto.randomUUID(),
+            command: 'provider.status',
+            args: {},
+            actor: { kind: 'ui', instanceId: 'settings-panel' },
+        }).then(result => {
+            if (!active) return;
+            const providers = (result as { providers?: RuntimeProviderStatus[] })?.providers;
+            setRuntimeProviders(Array.isArray(providers) ? providers : []);
+        }).catch(() => {
+            if (active) setRuntimeProviders([]);
+        });
+        return () => { active = false; };
+    }, [isOpen]);
 
     const isDark = resolvedTheme === 'dark';
+
+    // 把 Desktop Runtime 的安全凭证一键导入为「Runtime 托管」网页 Key（不含明文，媒体生成经 Runtime 执行）。
+    // 支持多凭证 Provider 指定选择：未传 credentialId 时回退到当前选中或第一个可用凭证。
+    const importRuntimeCredential = (runtimeProvider: RuntimeProviderStatus, credentialId?: string) => {
+        const providerName = runtimeProvider.provider as AIProvider;
+        const credential = runtimeProvider.credentials?.find(item => item.available && item.credentialId === credentialId)
+            || runtimeProvider.credentials?.find(item => item.available && item.credentialId)
+            || runtimeProvider.credentials?.find(item => item.available);
+        const routeMappings = (runtimeProvider.routes || []).filter(route => route.routeId && route.productModel).map((route, index) => ({
+            target: {
+                kind: 'product-mode' as const,
+                productModelId: route.productModel as string,
+                mode: (route.mode && ['text-to-image', 'image-to-image', 'text-to-video', 'image-to-video', 'reference-to-video', 'first-last-frame', 'video-extension'].includes(route.mode)
+                    ? route.mode
+                    : route.productModel?.includes('image') ? 'text-to-image' : 'text-to-video') as ProductModelMode,
+            },
+            routeId: route.routeId,
+            order: index,
+        }));
+        const routeIds = (runtimeProvider.routes || []).map(route => route.routeId).filter(Boolean);
+        const capabilities = (runtimeProvider.capabilities || []).filter((cap): cap is AICapability => cap === 'image' || cap === 'video');
+        onAddApiKey({
+            provider: providerName,
+            capabilities,
+            key: `runtime:${credential?.credentialId || providerName}`,
+            name: `${providerName === 'runningHub' ? 'RunningHub' : providerName}（Runtime 托管）`,
+            status: 'ok',
+            isDefault: false,
+            runtimeManaged: { credentialId: credential?.credentialId },
+            models: routeIds.map(routeId => ({ id: routeId, name: routeId })),
+            customModels: routeIds,
+            routeMappings,
+        });
+    };
+
     const inputClass = 'isl-well w-full px-3 py-2.5 text-sm text-[var(--isl-ink)] outline-none placeholder:text-[var(--isl-ink-ghost)]';
     const chipClass = 'isl-chip px-3 py-2 text-sm';
     const sectionPanelClass = 'rounded-2xl border-[1.5px] border-[var(--isl-border)] bg-[var(--isl-surface-2)] p-3';
@@ -924,6 +1003,77 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 {activeTab === 'api' && (
                     <>
                     {/* ── 统一 API 配置管理 ───────────────────────── */}
+                    {runtimeProviders !== null && (
+                        <section className={sectionPanelClass}>
+                            <div className="flex items-center justify-between gap-3">
+                                <div>
+                                    <div className="text-sm font-extrabold text-[var(--isl-ink)]">桌面 Runtime 凭证</div>
+                                    <div className="mt-1 text-xs text-[var(--isl-ink-soft)]">这里显示 EXE 共享的安全凭证状态，不会把原始 API Key 读回网页。</div>
+                                </div>
+                                <span className="rounded-full bg-[var(--isl-card)] px-2.5 py-1 text-[11px] text-[var(--isl-ink-soft)]">Runtime</span>
+                            </div>
+                            {configuredRuntimeProviders.length > 0 ? (
+                                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                                    {configuredRuntimeProviders.map(item => {
+                                        const availableCredentials = (item.credentials || []).filter(credential => credential.available);
+                                        const selectedCredentialId = selectedCredentialByProvider[item.provider]
+                                            || availableCredentials.find(credential => credential.credentialId)?.credentialId
+                                            || '';
+                                        const alreadyImported = userApiKeys.some(key => key.runtimeManaged?.credentialId && key.runtimeManaged.credentialId === selectedCredentialId);
+                                        return (
+                                            <div key={item.provider} className="rounded-xl border border-[var(--isl-border)] px-3 py-2.5">
+                                                <div className="flex items-center justify-between gap-2 text-sm font-semibold text-[var(--isl-ink)]">
+                                                    <span>{item.provider === 'runningHub' ? 'RunningHub' : item.provider === 'google' ? 'Google Gemini' : item.provider}</span>
+                                                    <span className="text-emerald-500">已配置</span>
+                                                </div>
+                                                <div className="mt-1 text-[11px] text-[var(--isl-ink-soft)]">
+                                                    {availableCredentials.length || 0} 个安全凭证可供 Production Runtime 使用
+                                                </div>
+                                                {availableCredentials.length > 1 && (
+                                                    <select
+                                                        aria-label={`${item.provider === 'runningHub' ? 'RunningHub' : item.provider} Runtime 凭证选择`}
+                                                        value={selectedCredentialId}
+                                                        onChange={event => setSelectedCredentialByProvider(prev => ({ ...prev, [item.provider]: event.target.value }))}
+                                                        className="isl-well mt-2 h-8 w-full px-2 text-xs text-[var(--isl-ink)] outline-none"
+                                                    >
+                                                        {availableCredentials.map(credential => (
+                                                            <option key={credential.credentialId || credential.label || item.provider} value={credential.credentialId || ''}>
+                                                                {credential.label || credential.credentialId || item.provider}
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                )}
+                                                {availableCredentials.length === 1 && selectedCredentialId && (
+                                                    <div className="mt-2 truncate text-[11px] text-[var(--isl-ink-soft)]">
+                                                        {availableCredentials[0].label || '安全凭证'}
+                                                    </div>
+                                                )}
+                                                <button
+                                                    type="button"
+                                                    disabled={alreadyImported || availableCredentials.length === 0}
+                                                    onClick={() => importRuntimeCredential(item, selectedCredentialId || undefined)}
+                                                    className="mt-2 rounded-full border px-2.5 py-1 text-[11px] font-medium transition disabled:opacity-40"
+                                                    style={{ borderColor: 'var(--isl-border)', color: 'var(--isl-ink-soft)' }}
+                                                    title="把该 Runtime 凭证导入为「Runtime 托管」网页 Key，模型映射即可推荐其路线，媒体生成经 Runtime 执行"
+                                                >
+                                                    {alreadyImported ? '已导入 API 配置' : availableCredentials.length === 0 ? '暂无可用凭证' : '一键导入到 API 配置'}
+                                                </button>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            ) : (
+                                <div className="mt-3 rounded-xl border border-dashed border-[var(--isl-border)] px-3 py-3 text-xs text-[var(--isl-ink-soft)]">
+                                    当前没有可供 Production Runtime 使用的安全凭证。
+                                </div>
+                            )}
+                            {runtimeProviders.some(item => item.provider === 'runningHub' && item.ready) && !userApiKeys.some(item => item.provider === 'runningHub') && (
+                                <div className="mt-3 rounded-xl border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+                                    Runtime 已有 RunningHub 凭证，但当前网页配置列表为空；Production Runtime 可以使用它，浏览器直连生成仍需在本 EXE 中重新录入 Key。
+                                </div>
+                            )}
+                        </section>
+                    )}
                     <section className="space-y-3">
                         <div className="flex items-center justify-between">
                             <div className={`text-xs font-semibold uppercase tracking-[0.18em] ${isDark ? 'text-[#667085]' : 'text-[#98A2B3]'}`}>

@@ -2,7 +2,11 @@
 
 ## Unreleased
 
-- 统一 Skill 术语为两类模型：操作 Skill（Operation Skill，指导 Agent 操作 Flovart 的 host 接入手册）与 Production Skill（制作方法）并列；ADR 0046 的 Primary Skill 让位为 Bound Production Skill，避免与“主 Skill”俗称碰撞；两份 host 手册（.claude/skills/flovart 与 .agents/skills/flovart）内容同步，并清除其中残留的 Director Skill 旧称。
+- **AI 原生 Workflow Draft 落地**：AI/CLI/MCP 现在直接以 Draft Action 操作可见画布草稿，节点、连线、Prompt、参考素材都落在 `metadata.prompt`（PromptBar 可见可编辑），并持久化为项目 `draftLog` 供设计师在 Agent 面板「草稿」Tab 回溯和定位节点；新增 `workflow.node.tool` 命令让 AI 调用画布二次处理工具（高清放大、移除背景、拆分图层、图片编辑、旋转、宫格切分、视频剪辑/音视频分离/拼接/抽帧、音频截取/变速），结果回填为新节点 + 来源连线。
+- 设置页「桌面 Runtime 凭证」支持多凭证选择：Provider 有多个安全凭证时显示下拉，设计师选定具体凭证后再一键导入到画布 API 配置，导入的 `runtimeManaged` Key 进入模型映射并被画布节点使用。
+- 架构文档从 60 个碎片化 ADR 收敛为 12 个当前有效主题决策，删除已被替代的设计并由 Git 保留历史；AI 原生 Workflow Draft 统一纳入可见 Draft Action、语义 ChangeSet、单一 Draft Authority 与批准后不可变 ProductionSpec Revision。
+- 修复 Desktop Production Runtime 产物不回填 Workflow 画布的问题：已完成 StageRun 会投影为图片/视频/音频节点并通过受控 Tauri IPC 读取媒体；设置页显示 Runtime 凭证状态，首次引导补齐 RunningHub 入口。
+- 统一 Skill 术语为两类模型：操作 Skill（Operation Skill，指导 Agent 操作 Flovart 的 host 接入手册）与 Production Skill（制作方法）并列；绑定到 ProductionSession 的制作方法统一称为 Bound Production Skill，避免与“主 Skill”俗称碰撞；两份 host 手册（.claude/skills/flovart 与 .agents/skills/flovart）内容同步，并清除其中残留的 Director Skill 旧称。当前边界统一记录在 ADR 0025。
 - Workflow 视频节点新增本地持久化 Poster，并把“选中”与“活动播放器”分离：普通和多选视频只显示懒加载 Poster 或轻量占位，显式加载后最多挂载一个 `<video preload="none">`；Esc、切换选择或进入工具时会卸载播放器，点击媒体表面仍会挂载 PromptBar 与 ElementToolbar。
 - 新增首个可用的内置 Flovart Agent：Managed Agent 内嵌 PI Agent Core 与独立 SQLite 主会话，默认 Agent 空间以 `Flovart Agent` 取代 Codex 主线程；`agent-text` 由 Rust Runtime 按非秘密 Route Mapping 选路并从操作系统 Keyring 注入凭据，Node/WebUI 不接触 Provider Secret。Agent 已接通 15 条受限的可见 Workflow 类型化工具、流式工具状态、主工作区同步与模型映射入口；Codex 保留为可新增的外部子任务。
 - 修复正常关闭桌面端后 Managed Agent Node 子进程残留的问题，并把新建 Codex 子任务的默认位置移到现有 Agent 面板之外。
@@ -19,12 +23,12 @@
 - 打通 Skill/CLI/MCP 到可见 Workflow 的可靠节点细修链路：新增受 loopback Token 保护的 Workspace Client 与 `workspace.status`，16 条 Workspace 命令经 Managed Agent 回到页面内同一个 `workflowDispatcher`，支持项目查询、节点创建/更新/移动/缩放/删除、连接、选择与视口修改；所有写命令要求幂等键，断线时返回 `WORKSPACE_UNAVAILABLE`，不再回退 shadow state。Canonical Registry 当前共 56 条命令、34 条 available；`command.list/schema` 改为无需 Desktop 的客户端查询，Node CLI 与 Skill 示例兼容 PowerShell、zsh/bash 和 WSL mirrored networking，npm 发布白名单已包含 Workspace Adapter 模块。
 - 新增 Production Skill 总控、Creator 与 Workflow Projection 设计，定义 Production Skill Compiler、Production Control、Workflow Projection 三个深模块，以及 ProductionSpec Revision、布局 Revision、事件同步、单镜头细修和 VOX Skill 导入规则。
 - 完成 Production Runtime S0.1/S0.2 契约内核与安全本地 Control Plane：CLI/MCP、Native Host、Tauri WebUI 与 Rust Runtime 共用版本化 Canonical Command Registry，通过随机 loopback 端口、每次启动 256-bit Bearer Token、当前用户专属 Discovery Record 和受限 Tauri IPC 到达同一 Runtime Instance；删除固定 `7421`、CDP/浏览器全局生产探测、任意 Native Host path 转发与原始 Secret HTTP GET。S0 阶段仅开放三条只读 Runtime 命令，Provider、Task 与生成命令保持 `legacy-only`。
-- RunningHub Provider 映射正式落地为 Route Catalog 模式：在 `services/runningHubRouteCatalog.ts` 登记 17 条 `RouteCapabilitySchema`（6 图片 + 11 视频，含已实测的 Veo 3.1 Lite 文生视频），承载路由的字段定义、media 上限、duration 枚举与官方文档证据元数据；`buildRunningHubRoutePayload` 按 schema 适配 RunningHub 字段名与裁剪逻辑，撤销原散落在 `buildRunningHubStandardPayload` 中的 12+ 个路由特化 regex 与默认值表；用户传参（aspectRatio / resolution / generateAudio / seed / returnLastFrame / webSearch / hd）作为 `userParams` 被严格限定在 schema 已声明的 `params[].field` 范围内，且永远覆盖 schema 默认（ADR-0008），未声明的参数静默丢弃。
+- RunningHub Provider 映射正式落地为 Route Catalog 模式：在 `services/runningHubRouteCatalog.ts` 登记 17 条 `RouteCapabilitySchema`（6 图片 + 11 视频，含已实测的 Veo 3.1 Lite 文生视频），承载路由的字段定义、media 上限、duration 枚举与官方文档证据元数据；`buildRunningHubRoutePayload` 按 schema 适配 RunningHub 字段名与裁剪逻辑，撤销原散落在 `buildRunningHubStandardPayload` 中的 12+ 个路由特化 regex 与默认值表；用户传参（aspectRatio / resolution / generateAudio / seed / returnLastFrame / webSearch / hd）作为 `userParams` 被严格限定在 schema 已声明的 `params[].field` 范围内，且永远覆盖 schema 默认（ADR 0027），未声明的参数静默丢弃。
 - 删除全局 `ModelPreference` 与每个 Provider 弹窗里的重复绑定入口，统一为设置页唯一“模型映射”中心：图像、视频映射优先于文本能力展示；API Key 返回模型列表后自动生成待确认映射建议，只有用户一键应用后才写入；线路以主/备顺序展示，主线路提交前不可用时必须显式确认备用线路，任务提交后不自动换线。空模型图片/视频节点会采用当前模式首个已映射产品模型，参数入口保持可见；视频 PromptBar 与提交校验共用最终 Provider Route 能力，`@` 媒体按线路类型和上限验证，不再显示无法提交的比例/时长或静默丢弃引用。
 - Provider emit 前 catalog 校验：未在 Route Catalog 中登记的路由（含 `kling-video-3` / `vidu` / `wan` / `skyreels-v4` / `rhart-video-s` / `rhart-video-v3.1-pro` / `rhart-video-v3.1-fast-official` 等约 25 条）一律 `throw '未通过验证'`，不再走 regex fallback 悄悄兜底；这些路由在 `BUILTIN_RUNNINGHUB_MODELS` 中保留，用户仍可见可选但无法执行，避免被误认为已支持。`resolveRunningHubVideoDurations` 简化为 catalog-only，非 catalog 视频路由返回空数组。删除仅被 fallback 使用的 10 个死 helper（`DEFAULT_RUNNINGHUB_PROMPT_FIELD` 等），保留仍被 `getCapabilityDictionary` 使用的 `isRunningHubSeedance20Model` 与 `isRunningHubVideoEndpoint`。
 - 产品模型身份单一来源：新建 `tools/flovart/product-models.js` 作为 JS CLI 与 TS catalog 共享的 `PRODUCT_MODEL_ENTRIES` 源；`tools/flovart/agent-kit.js` / `shadow-runtime.js` / `core.js` 默认模型统一改为 `flovart:gpt-image-2` / `flovart:seedance-2` / `gemini-3-flash-preview`，与 SettingsPanel 默认值一致。
 - `runningHubApiDocEndpoint` 改为从 catalog 的 `officialEvidence` URL 派生 doc ID → routeId 映射，删除硬编码 13 条 `RUNNINGHUB_API_DOC_ENDPOINTS`。
-- 新增 ADR-0027 ~ ADR-0033（产品模型绑定到路由 / Route Schema + Adapter 独自负责参数适配 / 只允许已验证 Route Schema 执行 / 预览价格不阻塞可用性 / 每条路由写 Contract Test + Smoke Test / 默认偏好低价路由 / Route Schema 驱动控件，禁止静默降级参数）。
+- Provider Route 的模式绑定、Schema/Adapter、执行验证、价格预估和参数冲突边界统一收敛到 ADR 0027；具体线路与测试证据由 Route Catalog 和施工文档维护。
 - 新增 17 条 Route Contract Test，按 mode 覆盖 schema 字段、media 上限、duration 枚举与 `officialEvidence` doc ID；RunningHub Lite 文生视频另有 payload、轮询与 Runtime receipt 契约测试。`tests/aiGatewayValidation.test.ts` 9 个原非 catalog 路由的测试重写为 `rejects.toThrow('未通过验证')`。
 - PromptBar 触发 chip 与浮层全面扁平化：删除独立「高级」chip 入口，联网搜索/真人素材预检测合并进「更多」popover 顶部分段；popover 去掉 `PopoverHeader` 卡片标题与 `rounded-[24px] border bg-card/95 shadow-2xl backdrop-blur-xl` 卡片背景，改用 `isl-pop` 基础浮层 + 内联段标题；model/submode/parameters/batch 动作 chip 去掉 chevron SVG 与 `isl-chip` 胶囊，改无边框文本 + 轻-hover `triggerClass`，`ExpandPanel` 类型移除 `'advanced'`。
 - 视频生成 PromptBar 三面板（模式 chip / 时长 / 比例·分辨率·帧数）改为按模型能力灰显：不支持项统一 `disabled + opacity-35 + cursor-not-allowed` 并带 tooltip 说明原因；submode 面板改按 `VIDEO_MODE_ORDER` 全量渲染，chip 入口去掉 `activeProductModel` 硬依赖改由 `getRoutedVideoModes` + StatefulWidget 路由决定可见性。新增 `explainUnsupportedVideoMode()` 与 `paramDisabledReason()` 两个 helper 函数支撑 tooltip 文案生成。
@@ -36,7 +40,7 @@
 - 新增企业后台前端管理 UI（`/#/enterprise`）：成员名册（只读 + 增删）、部门管理（左树右面板，toggle 负责人/角色）、角色管理（权限 checkbox 网格，builtin 只读保护）三标签页。
 - Tauri 桌面端改用 NSIS 打包，生成 `Flovart_0.2.0_x64-setup.exe`；新增 `flovart install/start/update` CLI 开发环境命令，`start` 一键拉起 vite + hub(:11452) + enterprise(:11453) 全栈并自动起 Docker PostgreSQL。
 - 新增 Tauri 应用内自动更新：生成 Ed25519 签名密钥，`useUpdaterStore` 实现自动检查 + 手动更新（StudioTopMenu 按钮），`tauri-plugin-process` 支持更新后重启；新增 GitHub Actions `release.yml` 用 `tauri-action` 矩阵构建三平台安装包并发布 Release + `latest.json`。
-- 工作区最终收口为 Workflow + Table：删除旧 Canvas / Art 入口、状态、组件和 Worker，保留 Workflow 作为生成编排工作区，并接入 Table 正式入口与占位界面。
+- 产品主体收口为 Workflow + Table + Agent：删除旧 Canvas / Art 入口、状态、组件和 Worker；Workflow 负责生成编排，Table 负责节点式媒体处理，Agent 负责空间化任务协作。
 - 按 `basketikun/infinite-canvas` 交互重构独立多项目 Workflow，补齐节点创建、媒体拖放、连线、PromptBar、ElementToolbar、图片工具、项目导入导出与素材选择。
 - 接入现有 Provider、API Key、生成历史、取消/重试、结果节点和在线 Agent 流程。
 - 统一 Workflow 浏览器 dispatcher、Flovart CLI、loopback Agent、MCP 和 Codex Agent 面板。

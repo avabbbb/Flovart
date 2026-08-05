@@ -77,13 +77,14 @@ export function WorkflowNode({
   const media = useWorkflowMediaUrl(
     resolveSourceMedia ? node.metadata.storageKey : undefined,
     resolveSourceMedia ? node.metadata.href : undefined,
+    resolveSourceMedia ? node.metadata.artifactRef : undefined,
   );
   const posterMedia = useWorkflowMediaUrl(
     node.type === 'video' ? node.metadata.posterStorageKey : undefined,
     node.type === 'video' ? node.metadata.poster : undefined,
   );
   const isMedia = node.type === 'image' || node.type === 'video' || node.type === 'audio';
-  const hasMediaReference = Boolean(node.metadata.storageKey || node.metadata.href);
+  const hasMediaReference = Boolean(node.metadata.storageKey || node.metadata.href || node.metadata.artifactRef?.taskId);
   const uploading = Boolean(node.metadata.uploading);
   const uploadBytes = node.metadata.uploadBytes || 0;
   const isLoading = status === 'loading' || uploading;
@@ -116,7 +117,7 @@ export function WorkflowNode({
   const mediaActions = isMedia && (
     <div className="workflow-node__media-actions" data-workflow-overlay>
       <button type="button" aria-label="重新选择媒体文件" onClick={() => mediaInput.current?.click()}><Upload size={14} />重新选择</button>
-      {(node.metadata.storageKey || node.metadata.href) && <button type="button" aria-label="移除媒体文件" onClick={onRemoveMedia}><X size={14} />移除</button>}
+      {(node.metadata.storageKey || node.metadata.href || node.metadata.artifactRef?.taskId) && <button type="button" aria-label="移除媒体文件" onClick={onRemoveMedia}><X size={14} />移除</button>}
       <input ref={mediaInput} hidden type="file" accept={accept} onChange={event => { const file = event.target.files?.[0]; if (file) onReplaceMedia(file); event.currentTarget.value = ''; }} />
     </div>
   );
@@ -201,7 +202,7 @@ export function WorkflowNode({
         {node.type === 'video' && (hasMediaReference
           ? videoActive
             ? media.url
-              ? <><video src={media.url} poster={posterMedia.url || undefined} controls preload="none" playsInline />{mediaActions}</>
+              ? <><video src={media.url} poster={posterMedia.url || undefined} controls preload="metadata" playsInline />{mediaActions}</>
               : <div className="workflow-node__empty"><Video size={26} /><span>{mediaError || '正在加载视频'}</span>{mediaActions}</div>
             : <>{posterMedia.url
               ? <img src={posterMedia.url} alt={`${node.title} 视频封面`} draggable={false} loading="lazy" data-workflow-media-preview />

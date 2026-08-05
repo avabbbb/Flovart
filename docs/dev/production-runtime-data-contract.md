@@ -6,8 +6,8 @@
 
 固定边界：
 
-- Desktop Runtime 是唯一 Production Authority。
-- ProductionSpec Revision 是制作计划权威；Workflow 只保存可重建投影和独立布局。
+- 个人制作保持本地优先：纯 Web 项目由 Browser Workspace 承担本地执行，Desktop 或已配对 Web 项目由 Desktop Runtime 承担可恢复执行；云端 Hub 不成为 Production Authority。
+- 批准前 Workflow Draft 是编辑权威，批准后不可变 ProductionSpec Revision 是执行权威；Production Plan Projection 只同步运行状态，不覆盖草稿。
 - Production Skill 只声明 ProductionSpec、Capability Requirement 与制作 Gate，不持有 Provider Secret、Route 或任意执行脚本权。
 - Provider Secret 只存在操作系统凭据库；SQLite 只保存不可反查秘密的 `credential_ref`。
 - 所有金额使用整数微单位和明确 `unit_code`，所有时间使用 UTC 毫秒，所有 ID 使用成熟 UUID v7 库生成并作为不透明 TEXT 返回。
@@ -22,7 +22,7 @@
 | `command_receipts` | `command_id`、`actor_kind`、`actor_instance_id`、`idempotency_key`、`command_name`、`payload_hash`、`task_id`、`result_json` | `command_id` 唯一；`(actor_kind, actor_instance_id, idempotency_key)` 唯一。同 key 不同 payload 返回 `IDEMPOTENCY_CONFLICT`。 |
 | `runtime_tasks` | `id`、`command_id`、`kind`、`status`、`entity_type`、`entity_id`、`progress_json`、`lease_owner`、`lease_expires_at`、`cancel_requested_at`、`result_json`、`error_json` | 长任务 State Projection；receipt 与 task 必须在任何外部副作用前同事务提交。 |
 | `runtime_events` | `event_id`、`event_version`、`entity_type`、`entity_id`、`task_id`、`event_type`、`payload_json`、`created_at` | `event_id INTEGER PRIMARY KEY AUTOINCREMENT`；只追加，用于审计和 SSE 续传，不作为唯一查询模型。 |
-| `production_sessions` | `id`、`project_id`、`title`、`brief_json`、`review_policy`、`primary_skill_snapshot_id`、`active_spec_revision_id`、`active_agent_binding_id`、`status` | 一部作品的上下文边界；V1 只允许一个 Primary Director Binding。 |
+| `production_sessions` | `id`、`project_id`、`title`、`brief_json`、`review_policy`、`bound_skill_snapshot_id`、`active_spec_revision_id`、`active_agent_binding_id`、`status` | 一部作品的上下文边界；V1 允许零或一个 Bound Production Skill。当前 Runtime 的 `primary_skill_snapshot_json` 是待收敛的旧物理命名，不是领域词。 |
 | `production_spec_revisions` | `id`、`session_id`、`revision_no`、`parent_revision_id`、`skill_snapshot_id`、`schema_version`、`core_json`、`extension_json`、`spec_hash`、`created_by`、`created_at` | `(session_id, revision_no)` 与 `spec_hash` 唯一；Revision 内容只插入不更新，批准记录进入 Gate 决策。 |
 | `production_runs` | `id`、`session_id`、`spec_revision_id`、`route_plan_id`、`review_policy`、`status`、`started_at`、`finished_at` | 一次 Spec 的实际运行；Route Plan 确认前保持 `preparing`。 |
 | `stage_runs` | `id`、`run_id`、`stage_key`、`capability_id`、`spec_path`、`status`、`input_hash`、`blocked_reason_json`、`started_at`、`finished_at` | `(run_id, stage_key)` 唯一；语义性变更创建新 Spec/Run 或 Replan，不覆盖旧阶段。 |
@@ -32,15 +32,21 @@
 | `artifact_relations` | `artifact_id`、`related_artifact_id`、`role`、`ordinal` | 记录参考图、源视频、音轨、父版本等输入关系。 |
 | `artifact_provenance` | `artifact_id`、`spec_revision_id`、`run_id`、`stage_run_id`、`provider_attempt_id`、`capability_id`、`product_model_id`、`prompt_hash`、`request_hash` | `artifact_id` 唯一；生成、导入、渲染和验证产物都必须说明来源。 |
 
-### S1 Workflow 投影表
+### S1 Workflow Draft 与运行投影表
 
 | 表 | 关键字段 | 约束与责任 |
 | --- | --- | --- |
-| `workflow_projects` | `id`、`title`、`active_session_id`、`created_at`、`updated_at` | 只保存工作区身份和当前 ProductionSession，不再把一份任意 graph JSON 当制作计划权威。 |
+| `workflow_projects` | `id`、`title`、`active_session_id`、`draft_authority_kind`、`draft_authority_id`、`created_at`、`updated_at` | 保存工作区身份、当前 ProductionSession 与唯一 Draft Authority Binding；不允许 Browser/Runtime 双写。 |
+| `workflow_drafts` | `id`、`project_id`、`draft_version`、`base_spec_revision_id`、`snapshot_json`、`snapshot_hash`、`updated_at` | 批准前的编辑权威，保存节点、连线、Operation Prompt Document、参考、参数、工具步骤和布局；每个可修改对象含单调 `objectVersion`，`base_spec_revision_id` 可空。 |
+| `workflow_draft_changesets` | `id`、`draft_id`、`sequence_no`、`actor_kind`、`actor_id`、`intent`、`base_draft_version`、`result_draft_version`、`status`、`created_at`、`closed_at` | 一个 Agent 回合或连续人工手势的语义历史与撤销边界；状态为 open/completed/partial/failed/undone，顺序只追加。 |
+| `workflow_draft_actions` | `changeset_id`、`ordinal`、`action_type`、`target_id`、`payload_json`、`inverse_json`、`result_json` | 类型化、可重放和可逆的草稿动作；不保存每个指针或按键事件。 |
+| `workflow_operation_input_bindings` | `id`、`draft_id`、`source_node_id`、`source_artifact_id`、`target_operation_node_id`、`role`、`ordinal`、`prompt_anchor_json`、`object_version` | PromptBar `@` chip 与画布输入边的唯一数据；来源二选一，角色/数量由 Recipe Schema 校验。 |
+| `execution_prompt_snapshots` | `id`、`operation_node_id`、`prompt_document_hash`、`rendered_text`、`reference_bindings_json`、`normalized_parameters_json`、`compiler_version`、`created_at` | ProviderAttempt 的不可变实际 Prompt；记录增强/翻译/适配结果但不包含 Secret。 |
+| `workflow_operation_takes` | `id`、`draft_id`、`operation_node_id`、`recipe_hash`、`execution_prompt_snapshot_id`、`provider_attempt_id`、`artifact_id`、`status`、`created_at`、`selected_at` | Operation 的不可变候选输出；旧 Recipe 晚到结果标记 `outdated_recipe`，不得自动成为当前选择。 |
 | `workflow_plan_projections` | `id`、`project_id`、`session_id`、`spec_revision_id`、`run_id`、`projection_version`、`projection_json`、`projection_hash` | 从 Spec/Run 派生的可删除缓存；同一输入必须得到相同 hash。 |
-| `workflow_layouts` | `project_id`、`session_id`、`layout_revision`、`layout_json`、`viewport_json`、`updated_at` | 节点位置、折叠和视口独立 CAS；纯布局修改不产生新 Spec。 |
+| `workflow_layouts` | `project_id`、`session_id`、`layout_revision`、`layout_json`、`viewport_json`、`updated_at` | 已批准运行投影的位置、折叠和视口；Workflow Draft 布局由 Draft Action 保存，纯布局修改不产生新 Spec。 |
 
-计划字段编辑不直接更新投影。`production.spec.patch` 必须携带父 `spec_revision_id`，校验后创建新 Revision，再重新投影受影响节点；`workflow.layout.update` 只携带 `expected_layout_revision`。
+批准前的语义和布局修改只通过 `workflow.draft.apply-actions` 进入 Workflow Draft，并携带 `base_draft_version`；冲突返回 `PRECONDITION_FAILED`。用户批准当前 Draft 时才创建新的不可变 ProductionSpec Revision。`workflow.layout.update` 只用于已批准运行投影，并携带 `expected_layout_revision`。
 
 ### S2/S3 路由、审批与预算表
 
@@ -194,14 +200,18 @@ GET  /v1/events                streamEvents(Last-Event-ID)
 | `task.cancel` | sync/write | 请求协作式取消，不虚报 Provider 已取消。 |
 | `task.watch` | stream/read | CLI 对 Runtime Event Stream 的展示适配。 |
 | `artifact.get` / `artifact.list` | sync/read | 返回 metadata、provenance 与受控本地打开动作。 |
+| `workflow.draft.get` | sync/read | 读取当前 Workflow Draft、Authority Binding 与最新 ChangeSet 位置。 |
+| `workflow.draft.apply-actions` | sync/write | 以 `base_draft_version` 与 `expected_object_versions` 向 open Draft ChangeSet 追加已验证动作；每批耐久提交，冲突返回对象级差异，部分失败不回滚已成功动作。 |
+| `workflow.draft.undo` | sync/write | 按 ChangeSet 应用已记录的逆向动作，不删除历史。 |
+| `workflow.draft.transfer` | task/write | 显式校验并转移 Draft Authority；失败时保留原权威。 |
 | `workflow.layout.update` | sync/write | 只更新布局与视口 revision。 |
 
 ### S3/S4 Production Intent
 
 | 命令 | 模式 | 作用 |
 | --- | --- | --- |
-| `production.session.create` | sync/write | 创建 ProductionSession 并锁定 Primary Director Snapshot。 |
-| `production.spec.create-revision` | sync/write | 校验 Core + Extension 并插入不可变 Revision。 |
+| `production.session.create` | sync/write | 创建 ProductionSession，并按用户确认锁定零或一个 Bound Production Skill Snapshot。 |
+| `production.spec.create-revision` | sync/write | 仅在批准 Workflow Draft 时校验 Core + Extension 并插入不可变 Revision。 |
 | `production.dry-run` | task/read | 编译 Stage DAG、能力缺口、Gate、Run Route Plan 与费用，不提交 Provider。 |
 | `production.run` | task/write | 以已批准 Spec、Run Route Plan 和 Run Budget 启动执行。 |
 | `production.status` / `production.watch` | read/stream | 返回 Run、Stage、Gate、费用与 Artifact 摘要。 |
@@ -318,8 +328,8 @@ VOX 迁移只把风格专属信息放入 `extensions.vox-director`，不复制 C
 固定为约 3 个 beat、6 个 shot，并使用 Balanced Review Policy：
 
 1. Flovart Agent + VOX Skill 生成 Spec Revision。
-2. Director Gate：确认分镜。
-3. `style.preview` 产生 3–4 张样图 Artifact；Director Gate：确认风格。
+2. Skill Gate：确认分镜。
+3. `style.preview` 产生 3–4 张样图 Artifact；Skill Gate：确认风格。
 4. Runtime 生成多 Provider Run Route Plan 和 Route Price Quote；System Gate：确认 BYOK 路由与 Run Budget。
 5. 6 个 `image.generate` Stage 可在预算并发上限内并行。
 6. 6 个 `video.generate` Stage 依赖各自关键帧；ProviderAttempt 各自独立恢复。

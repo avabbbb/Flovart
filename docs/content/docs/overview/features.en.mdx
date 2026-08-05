@@ -2,7 +2,7 @@
 title: Features
 ---
 
-Flovart is a local-first AI video production system for coding agents. Its creative UI has two workspaces with separate responsibilities: Workflow and Table.
+Flovart is a local-first AI creation system with three distinct workspaces: Workflow, Table, and Agent.
 
 ## Creative workspaces
 
@@ -10,8 +10,9 @@ Flovart is a local-first AI video production system for coding agents. Its creat
 | --- | --- | --- |
 | **Workflow** | Orchestrates prompts, references, generation models, node dependencies, job state, and results for image and video production. | A usable foundation exists; interaction and runtime contracts are still converging. |
 | **Table** | Organizes agent storyboards and media preprocessing nodes that turn source media into reusable references. | The official entry point is integrated; the node workbench is still a placeholder. |
+| **Agent** | Organizes the built-in Flovart Agent, Codex threads, task state, project context, and artifacts as spatial panels. | The main entry and built-in Agent changes are still pending user verification and are not presented here as confirmed features. |
 
-The removed Canvas and Art workspaces are not a third creative system.
+The removed Canvas and Art workspaces are not a fourth product surface.
 
 ## Workflow
 
@@ -20,6 +21,7 @@ The removed Canvas and Art workspaces are not a third creative system.
 - Connect nodes, switch local projects, drop local media, monitor generation, stop work, and receive result nodes.
 - Reuse characters, scenes, props, and generated artifacts from the local asset library.
 - The current CLI registry exposes Workflow project, node, connection, viewport, run, and stop commands.
+- The target AI-native record surface combines the canvas's current state with a semantic ChangeSet timeline; chat carries intent and explanation, not the sole operation history. This remains planned work and must not be presented as complete.
 
 ## Table
 
@@ -29,11 +31,19 @@ Table is neither a spreadsheet nor a rename of the old Canvas. It is planned aro
 - **Media preprocessing**: image or video inputs, subject cutout, depth images and depth videos, edge/line-art/normal/pose extraction, stylization and glitch filters, plus source preparation for wardrobe edits and omni-reference generation.
 - **Artifact handoff**: preserve provenance, save results to the asset library, and use them as Workflow references.
 
+Workflow and Table are separated by interaction complexity: Workflow may keep single-step, local operations that directly serve the generation chain, while batch, multi-step, multi-input/output, timeline-precision, and reusable processing pipelines belong in Table. They may share operation schemas and executors, but never graph-node instances or history.
+
+When a single-step operation grows into a complex pipeline, an explicit Table Promotion transfers editing authority to a new Table Session. Workflow references only an explicitly published Artifact; Table experiments never overwrite Workflow through live bidirectional sync.
+
 The main Table implementation is not complete. These planned capabilities must not be described as available until their nodes, persistence, and export paths are integrated. The current CLI has no Table commands.
 
-## Agents and CLI
+## Agent
 
-- Coding agents interpret briefs, plan work, select Skills, monitor execution, and recover failures.
+Agent is neither a Workflow chat drawer nor another generation graph. It uses movable panels for the main conversation, external Codex tasks, status, context, and artifacts; its spatial canvas only handles layout, focus, zoom, and restoration. The current built-in Flovart Agent, visible Workflow tools, and spatial-layout changes remain in [Pending verification](../progress/pending-test.mdx) until the user confirms them.
+
+## CLI and external agents
+
+- External coding agents can call typed Flovart capabilities through an Operation Skill, CLI, or MCP, but they are not alternate built-in Flovart Agent personas.
 - Flovart CLI is the deterministic actuator; `command.list` and `command.schema` are the source of truth for command names and options.
 - Current automation is Workflow-first. Agents must not invent Canvas, Element, or Table commands or bypass the CLI with private HTTP calls.
 - Users configure provider credentials; CLI and agent output must never read or expose API keys.

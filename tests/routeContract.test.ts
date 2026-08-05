@@ -1,7 +1,7 @@
 /**
  * Route Contract Tests — RunningHub 已验证 Route 的契约验证
  * 每条 Route 验证 endpoint、字段名、字段类型、默认值、媒体角色与数量限制。
- * 依据：docs/dev/runninghub-route-catalog.md + docs/adr/0006
+ * 依据：docs/dev/runninghub-route-catalog.md + docs/adr/0027-use-schema-driven-route-mapping.md
  */
 import { describe, it, expect } from 'vitest';
 import {

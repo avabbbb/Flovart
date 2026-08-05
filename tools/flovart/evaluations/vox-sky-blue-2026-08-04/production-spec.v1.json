@@ -1,0 +1,180 @@
+{
+  "schemaVersion": "flovart.production-spec/1",
+  "delivery": {
+    "durationMs": 30000,
+    "aspectRatio": "16:9",
+    "resolution": "1280x720",
+    "language": "zh-CN"
+  },
+  "narrative": {
+    "arc": "how_it_works",
+    "beats": [
+      {
+        "id": "hook",
+        "narration": "天空为什么是蓝色的？答案就藏在你每天呼吸的空气里。",
+        "shots": [
+          {
+            "id": "hook-wide",
+            "durationMs": 3750,
+            "scene": "撕纸标题「天空为什么是蓝色的？」压住一张蓝天海报，白色阳光从左上角射入。"
+          },
+          {
+            "id": "hook-detail",
+            "durationMs": 3750,
+            "scene": "放大阳光穿过一团纸剪空气分子的瞬间，纸屑向两侧散开。"
+          }
+        ]
+      },
+      {
+        "id": "context",
+        "narration": "太阳光看起来是白色的，其实它混着红橙黄绿蓝紫七种颜色。",
+        "shots": [
+          {
+            "id": "context-wide",
+            "durationMs": 3750,
+            "scene": "一张白色纸卡投过纸棱镜，展开成完整的七色光谱条带。"
+          },
+          {
+            "id": "context-detail",
+            "durationMs": 3750,
+            "scene": "光谱特写：蓝色一端与红色一端并排对照，「波长」标签钉在纸上。"
+          }
+        ]
+      },
+      {
+        "id": "turn",
+        "narration": "空气分子很小，却会把短波的蓝光弹向四面八方，这就是散射。",
+        "shots": [
+          {
+            "id": "turn-wide",
+            "durationMs": 3750,
+            "scene": "阳光横穿一片纸剪空气分子，蓝色光束向四周散射成星芒，红色光束笔直穿过。"
+          },
+          {
+            "id": "turn-detail",
+            "durationMs": 3750,
+            "scene": "一颗放大的空气分子特写：蓝光四散、红光直穿的小图解，箭头标注散射方向。"
+          }
+        ]
+      },
+      {
+        "id": "payoff",
+        "narration": "所以无论看向哪个方向，都是散射的蓝光；日落时阳光斜穿大气，剩下的便是橙红。",
+        "shots": [
+          {
+            "id": "payoff-wide",
+            "durationMs": 3750,
+            "scene": "左右对照：白天蓝天与日落橙红天空，共用同一条地平线纸卡。"
+          },
+          {
+            "id": "payoff-detail",
+            "durationMs": 3750,
+            "scene": "日落天空细节，短标题「散射」与一枚红色印章收束画面。"
+          }
+        ]
+      }
+    ]
+  },
+  "audio": {
+    "narration": {
+      "voiceProfile": "documentary-neutral"
+    },
+    "music": {
+      "intent": "rhythmic editorial instrumental",
+      "duckUnderNarration": true
+    }
+  },
+  "gates": [
+    {
+      "id": "approve-spec",
+      "type": "spec",
+      "status": "approved"
+    },
+    {
+      "id": "approve-style",
+      "type": "style-reference",
+      "status": "approved"
+    },
+    {
+      "id": "review-keyframes",
+      "type": "keyframe-review",
+      "status": "required"
+    },
+    {
+      "id": "verify-ocr",
+      "type": "ocr",
+      "status": "required"
+    }
+  ],
+  "extensions": {
+    "community.vox-director": {
+      "schemaVersion": "1",
+      "themeCandidates": [
+        "swiss-modern",
+        "atomic-age",
+        "american-retro"
+      ],
+      "selectedTheme": "swiss-modern",
+      "look": {
+        "idiom": "mixed-media hand-cut paper collage",
+        "palette": [
+          "#2E6FBF",
+          "#D9482B",
+          "#F5EFE0",
+          "#1A1A1A",
+          "#FFFFFF"
+        ],
+        "finish": [
+          "torn paper edges",
+          "newsprint halftone",
+          "masking tape",
+          "offset grain"
+        ],
+        "typography": "condensed grotesque headline with poster hierarchy",
+        "constraints": "strict"
+      },
+      "shotDirectives": {
+        "hook-wide": {
+          "cameraMove": "push_in",
+          "shotSize": "wide",
+          "elementMotion": "sun rays sweep in as torn headline drops onto the blue poster and settles"
+        },
+        "hook-detail": {
+          "cameraMove": "element",
+          "shotSize": "close-up",
+          "elementMotion": "molecule chips drift apart as paper scraps scatter outward"
+        },
+        "context-wide": {
+          "cameraMove": "static",
+          "shotSize": "wide",
+          "elementMotion": "white card tilts while the spectrum band peels open and locks flat"
+        },
+        "context-detail": {
+          "cameraMove": "pan",
+          "shotSize": "close-up",
+          "elementMotion": "blue and red swatches slide side by side beneath a pinned label"
+        },
+        "turn-wide": {
+          "cameraMove": "element",
+          "shotSize": "wide",
+          "elementMotion": "blue rays fan outward as the red ray punches straight through the molecule field"
+        },
+        "turn-detail": {
+          "cameraMove": "static",
+          "shotSize": "macro",
+          "elementMotion": "diagram arrows draw in around the single enlarged molecule"
+        },
+        "payoff-wide": {
+          "cameraMove": "pull_out",
+          "shotSize": "wide",
+          "elementMotion": "day sky and sunset sky cards separate from one shared horizon strip"
+        },
+        "payoff-detail": {
+          "cameraMove": "element",
+          "shotSize": "close-up",
+          "elementMotion": "headline word and red stamp press down to close the film"
+        }
+      }
+    }
+  }
+}

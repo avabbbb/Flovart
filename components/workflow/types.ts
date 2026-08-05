@@ -58,6 +58,15 @@ export interface WorkflowProviderConfig {
   modelId?: string;
 }
 
+export interface WorkflowArtifactRef {
+  taskId: string;
+  kind: Extract<WorkflowNodeType, 'image' | 'video' | 'audio'>;
+  mimeType?: string;
+  sha256?: string;
+  byteSize?: number;
+  durationSec?: number;
+}
+
 export interface CameraParams {
   camera?: string;
   lens?: string;
@@ -110,6 +119,7 @@ export interface WorkflowNodeMetadata {
   /** 当 sourceType='assetLibrary' 时，对应 AssetItem.id，用于按 storageKey 反查 dataUrl */
   assetId?: string;
   href?: string;
+  artifactRef?: WorkflowArtifactRef;
   poster?: string;
   /** 本地视频首帧 JPEG 的独立持久化键；不得内嵌为项目 JSON 的 base64。 */
   posterStorageKey?: string;
@@ -192,6 +202,20 @@ export interface WorkflowAgentSession {
   updatedAt: string;
 }
 
+/** 一条由 Agent/CLI/MCP 驱动的可撤销 Workflow Draft Action 记录（AI 原生画布过程可追溯）。 */
+export interface WorkflowDraftLogEntry {
+  id: string;
+  at: string;
+  source: 'agent' | 'mcp' | 'cli' | 'ui';
+  command: string;
+  /** 人类可读的中文动作摘要（如「创建图片节点「关键帧·hook-wide」」）。 */
+  summary: string;
+  ok: boolean;
+  message?: string;
+  nodeIds?: string[];
+  connectionIds?: string[];
+}
+
 export interface WorkflowProject {
   id: string;
   title: string;
@@ -202,6 +226,8 @@ export interface WorkflowProject {
   backgroundMode: WorkflowBackgroundMode;
   agentSessions: WorkflowAgentSession[];
   activeAgentSessionId: string | null;
+  /** AI/CLI/MCP 驱动的草稿动作记录；设计师据此回溯并二次编辑。 */
+  draftLog?: WorkflowDraftLogEntry[];
   createdAt: string;
   updatedAt: string;
 }

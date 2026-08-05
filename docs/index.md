@@ -6,7 +6,7 @@
 - [Skill 使用手册](overview/skill-guide.md)
 - [后续待办](content/docs/progress/todo.mdx)
 - [待测试确认](content/docs/progress/pending-test.mdx)
-- [架构决策记录](adr/)
+- [架构决策记录](adr/README.md)
 - [第三方许可说明](THIRD_PARTY_NOTICES.md)
 - [Workflow CLI](../skills/flovart/commands/workflow.md)
 - [RunningHub 首期 Route Catalog](dev/runninghub-route-catalog.md)

@@ -35,8 +35,76 @@ Remix Bundle 中演示 Skill 用法的不可变、可移植 Workflow 投影，�
 ## 创作工作区
 
 **Workflow Workspace**：
-面向生成编排的节点工作区，用于组织提示词、参考素材、模型配置、生成依赖、任务状态和结果节点。
+面向生成编排的节点工作区；编辑阶段承载 Workflow Draft，批准执行后同时展示 Production Plan Projection、任务状态和结果节点。
 避免混用：Table Workspace、Agent Workspace、旧 Canvas Workspace、旧 Art Workspace。
+
+**Workflow Draft（画布草稿）**：
+设计师与 Flovart Agent 在执行批准前共同编辑的生成编排图，完整保留节点、连线、提示词、参考素材、模型参数和画布内二次处理步骤，并支持撤销与继续细修；批准后才冻结为 ProductionSpec Revision。
+避免混用：Production Plan Projection、ProductionSpec Revision、后端生成结果列表、纯布局快照。
+
+**Workflow Draft Action（画布草稿动作）**：
+设计师或 Flovart Agent 对 Workflow Draft 执行的同一种类型化、可撤销操作，例如创建、更新、连线、移动、缩放或删除节点；动作携带 Draft 基线与目标对象的期望版本，默认立即呈现在画布并归入一个 Draft ChangeSet。同一对象版本冲突时拒绝旧动作，不做最后写入覆盖。
+避免混用：付费 Provider 提交、Production Mandate、ProductionSpec Revision、不可恢复发布操作。
+
+**Draft Object Version（草稿对象版本）**：
+Workflow Draft 中节点、连线或其他可独立修改对象的单调版本，用于设计师与 Agent 的对象级乐观并发；动作只在期望版本仍匹配时提交，冲突返回最新版本和受影响对象 ID，互不相关对象不被锁定。
+避免混用：整个 Draft 的检查点版本、ProductionSpec Revision、最后写入获胜、画布全局锁。
+
+**Workflow Layout Intent（Workflow 布局意图）**：
+Flovart Agent 创建或重组节点时表达的语义位置约束，例如接在某节点之后、并排、分支或属于某组；确定性前端 Layout Planner 根据真实尺寸、折叠状态、视口和占用区域计算坐标。人工拖动的 pinned 节点不被 Agent 移动，派生布局可撤销但不改变 Recipe Hash 或 ProductionSpec。
+避免混用：Agent 猜测绝对 x/y、每回合全图重排、生成依赖关系、ProductionSpec Stage 顺序。
+
+**Workflow Operation Node（Workflow 操作节点）**：
+Workflow Draft 中可编辑、可重跑的单步结果型处理步骤，使用“输入媒体 → 操作节点 → 输出媒体”表达图片生成、局部编辑、放大、简单裁剪或剪辑等直接服务后续生成的来源关系；节点保存操作类型、Prompt、参数、产品模型意图、输入角色和任务/Artifact 引用。运行中、失败、待确认、最近修改、选中或固定的操作显示完整节点，稳定完成的简单步骤可以随语义缩放折叠成带名称和状态的连线 chip；折叠不能删除耐久数据或隐藏错误。批量、多步骤、多输入/多输出、时间轴精修和可复用处理链进入 Table。
+避免混用：仅改变节点位置的 Draft Action、只读 Production Plan Projection、Table Processing Node、媒体节点内部不可见版本。
+
+**Operation Prompt Document（操作提示词文档）**：
+结果型 Workflow Operation Node 持有的唯一结构化 Prompt 权威，保存可编辑文本、富文本结构、稳定 `@` 对象引用、输入角色和顺序；现有 PromptBar 只是当前选中 Operation 的编辑视图，Flovart Agent 与设计师通过同一 Draft Action 修改该文档。输出媒体只引用来源 Operation，不复制另一份 Prompt。
+避免混用：Agent 聊天消息、输出媒体 metadata 中的 Prompt 副本、额外 InlinePrompt/NodePrompt 表面、单次 Provider Request 文本。
+
+**Operation Input Binding（操作输入绑定）**：
+媒体/Text/Artifact 到目标 Workflow Operation Node 的唯一类型化输入关系，保存稳定绑定 ID、来源对象、目标操作、输入角色与顺序；画布连线和 PromptBar 的 `@` chip 是同一 Binding 的两个视图，从任一入口添加、改角色、排序或删除都会同步另一边。
+避免混用：独立 `mentionedNodeIds`、`referenceNodeIds`、`imageReferenceOrder` 与无角色 connection 副本、仅存在于渲染层的连线。
+
+**Execution Prompt Snapshot（执行提示词快照）**：
+某次 ProviderAttempt 实际使用的不可变 Prompt 记录，绑定源 Operation Prompt Document Hash，保存最终渲染文本、引用绑定、规范化参数和编译器版本；增强、翻译、模板与 Provider 适配产生的差异可查看但不反向覆盖可编辑文档，明确“采用到 PromptBar”才创建新的 Draft Action。
+避免混用：可编辑 Operation Prompt Document、Provider 日志、聊天回复、包含 Secret 的原始 HTTP 请求。
+
+**Operation Take（操作候选结果）**：
+Workflow Operation Node 某个精确 Recipe Hash 的一次不可变输出候选，引用对应 Execution Prompt Snapshot、ProviderAttempt、费用状态与 Artifact；Operation 运行中被修改时，旧 Recipe 晚到结果仍保留并标记为旧版本，但不自动成为 `selectedTakeId` 或触发当前下游，设计师可以比较、复用或明确采用。
+避免混用：当前输出节点、覆盖源媒体、无来源生成历史、自动选中的最新返回值。
+
+**Media Operation Recipe（媒体操作配方）**：
+Workflow Operation Node 与 Table Processing Node 可以共同使用的类型化操作定义，声明操作类型、输入/输出角色、参数 Schema、执行能力和结果来源；两种工作区可以复用配方与执行器，但不能共享同一个图节点实例或双写参数。
+避免混用：Workflow Draft Action、Provider Request、跨工作区共享节点、工具栏按钮配置。
+
+**Operation Capability Registry（操作能力注册表）**：
+Flovart 平台拥有的版本化封闭目录，为每项媒体/生成操作声明输入输出角色、Recipe 与参数 Schema、执行类别、费用和确认级别、Workflow/Table 适用性及 UI 控件 key；Agent 工具、工具栏、Dispatcher、Preflight 与契约测试从同一目录派生，未注册操作不能执行。
+避免混用：Production Skill 自定义 HTTP/脚本、任意 JSON 工具调用、前端与 Agent 各自维护的工具名列表、Provider Route Catalog。
+
+**Table Promotion（提升到 Table）**：
+把一个 Workflow Operation Node 的输入 Artifact 与 Media Operation Recipe 显式复制为新 Table Session 的起点，并把后续复杂处理的编辑权威交给 Table；Workflow 保留可点击的 Table 引用步骤，只在用户或 Agent 明确发布某个 Table 输出后更新所引用的 Artifact。
+避免混用：双向实时同步、共享图节点、静默发送结果、无来源媒体复制。
+
+**Draft ChangeSet（草稿变更集）**：
+设计师可理解的一次 Workflow Draft 修改单元，把一个 Agent 回合或一段连续人工操作归并为有操作者、意图、差异和结果的动作组；动作流式耐久提交，ChangeSet 可以是 completed、partial、failed 或 undone。部分失败时保留成功步骤，失败 Operation Node 保留 Recipe、错误与重试入口；按组撤销只移除 Draft 图变更，不伪造删除已发生的 ProviderAttempt 或 Artifact。
+避免混用：单次键盘事件、完整画布快照、Agent 聊天消息、ProductionSpec Revision。
+
+**Draft Change Timeline（草稿变更时间线）**：
+Workflow Workspace 中与画布同步的轻量历史视图，按 Draft ChangeSet 展示操作者、意图、状态、差异摘要及费用/Artifact 关联；点击记录聚焦受影响节点，节点也能反查来源 ChangeSet。聊天只链接记录，不作为唯一历史权威。
+避免混用：Agent 聊天消息列表、逐事件调试日志、Runtime Event Stream、完整快照浏览器。
+
+**Workflow Agent Tool Loop（Workflow Agent 工具循环）**：
+Flovart Agent 在一个用户回合内反复读取当前 Draft、调用 Operation Capability Registry 派生的类型化工具、观察最新 Draft/Object Version 与结果后继续决策的循环；该回合归入一个 Draft ChangeSet，并受步数、时间、取消、对象冲突、预算和 Production Mandate 限制。长时任务返回句柄，由 Runtime 观察而不是让 Agent 持续轮询。
+避免混用：一次性 JSON 命令批次、只规划不执行、Agent 轮询 Provider、第二套网站 Workflow Agent。
+
+**Workflow Draft Authority（画布草稿存储权威）**：
+一个 Workflow Project 当前唯一负责耐久保存 Workflow Draft 与 Draft ChangeSet 的存储端；纯 Web 项目绑定 Browser Workspace，Desktop 或已配对 Web 项目绑定 Local Data Service，切换必须显式转移且禁止双写或静默合并。
+避免混用：前端渲染状态、Production Plan Projection、Agent Session Store、云同步副本。
+
+**Workflow Draft Authority Port（画布草稿权威端口）**：
+UI、Flovart Agent、Dispatcher 与历史界面读写 Workflow Draft、ChangeSet、Binding、Take 和布局的唯一类型化接口；首个图片 tracer bullet 由 Browser Workspace/localforage Adapter 实现，后续 Desktop Local Data Service 实现同一契约。调用方不得绕过 Port 直接双写 Zustand、localforage 或 Runtime。
+避免混用：具体存储 Adapter、React store、跨端同步层、Production Runtime Control API。
 
 **上下文媒体条（Context Media Bar）**：
 Workflow Workspace 中选中媒体节点后出现的轻量操作条，现有代码入口为 `WorkflowNodeToolbar`，也就是讨论中所说的 ElementBar；它总共只常驻 5–7 个高频动作，其中按图片或视频切换 3–5 个类型专属动作，长尾能力进入“更多”、工具面板或节点内参数区。
@@ -325,7 +393,7 @@ Production Mode 下为单个 ProductionSession 创建的隔离文件工作区，
 避免混用：ProductionSession、公共 Hub 编辑器、默认磁盘权限。
 
 **ProductionSpec**：
-Flovart Agent 输出的结构化制作计划，描述叙事、镜头、素材依赖、审批门、能力需求和交付规格；可选 Production Skill 只能在共同 Core 之上增加已声明的制作方法。
+由获批 Workflow Draft 冻结并编译出的结构化制作计划，描述叙事、镜头、素材依赖、审批门、能力需求和交付规格；可选 Production Skill 只能在共同 Core 之上增加已声明的制作方法。
 避免混用：Workflow Project、Table Workspace State、Provider Request。
 
 **ProductionSpec Core**：
@@ -497,20 +565,24 @@ Desktop Runtime 在状态变化事务中追加的不可变事件序列，为 Run
 避免混用：纯 Event Sourcing、前端缓存、SSE 客户端状态。
 
 **ProductionSpec Revision**：
-ProductionSpec 的不可变版本；任何镜头、提示词、素材依赖或阶段结构调整都创建新版本，不覆盖已批准版本。
+一次已获批 Workflow Draft 对应的不可变 ProductionSpec 版本；编辑中的提示词、连线或参数变化只修改草稿，重新批准时才创建新 Revision，已批准版本永不原地覆盖。
 避免混用：运行时 Patch、Provider Retry、工作区撤销历史。
 
 **Production Mandate**：
-用户对一次制作执行边界的不可变授权记录，精确绑定获准使用的 ProductionSpec Revision、Run Route Plan、Run Budget、Review Policy、输入范围与审批门；任一绑定内容改变都会使旧授权失效。
+用户对一次制作执行边界的不可变授权记录，精确绑定获准使用的 Workflow Draft 版本、ProductionSpec Revision、Authorized Operation Subgraph、Run Route Plan、Run Budget、Review Policy、输入范围与审批门；任一绑定内容改变都会使受影响授权失效，未包含的新节点不能继承权限。
 避免混用：聊天同意、ProductionRun、Run Budget、ProductionSpec。
 
+**Authorized Operation Subgraph（已授权操作子图）**：
+Production Mandate 中获准执行的 Workflow Operation Node 集合、必要依赖闭包与各节点 Recipe Hash；用户通过一张 Production Plan Card 对该精确子图一次确认，语义修改只使改动节点及受影响下游重新授权。
+避免混用：整个 Workflow Draft、当前选择框、会话级自动预算、逐节点弹窗。
+
 **Production Plan Card**：
-Flovart Agent 面向用户展示的单一“制作方案”确认面，以人话汇总目标产物、可选 Production Skill、预计费用、关键审片点与执行范围，并允许按需展开底层规格和线路；主动作“确认并开始”以一次幂等操作生成对应 Production Mandate 并启动 ProductionRun，仅保存草稿或预览 Workflow 均不授权执行。
+Flovart Agent 面向用户展示的单一“制作方案”确认面，以人话汇总目标产物、待执行 Operation 子图、可选 Production Skill、预计费用、关键审片点与执行范围，并允许按需展开节点、配方和线路；主动作“确认并开始”以一次幂等操作生成对应 Production Mandate 并启动 ProductionRun，仅保存草稿或预览 Workflow 均不授权执行。
 避免混用：聊天中的“可以”、完整 ProductionSpec 编辑器、Production Mandate 本身。
 
 **Production Plan Projection**：
-Desktop Runtime 根据一个 ProductionSpec Revision 派生并展示在 Workflow Workspace 的制作计划视图；确认制作方案后自动生成或刷新该投影，Agent Workspace 与 Workflow Workspace 共享同一 Runtime 运行状态。用户或 Agent 的有效计划编辑先生成新的 Revision，再同步刷新投影和受影响的 StageRun。
-避免混用：ProductionSpec 权威真相、可独立执行的第二份 Workflow 图、仅改变节点坐标的视口操作。
+Desktop Runtime 根据已批准的 ProductionSpec Revision 与 ProductionRun 派生并展示在 Workflow Workspace 的运行视图，用于同步 StageRun、Artifact、费用和审批状态；它不能覆盖编辑中的 Workflow Draft，运行中需要语义调整时先从当前 Revision 派生新草稿并重新批准。
+避免混用：Workflow Draft、ProductionSpec 权威真相、可独立编辑的第二份执行图、仅改变节点坐标的视口操作。
 
 **Agent Intervention Event**：
 ProductionRun 需要创意重规划、失败诊断、审片决定或额外输入时，由 Desktop Runtime 发出的 Agent 介入信号；普通 Provider 轮询和进度展示由 Runtime 与 TUI 持续承担。

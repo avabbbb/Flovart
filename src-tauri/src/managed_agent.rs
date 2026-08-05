@@ -181,11 +181,12 @@ impl ManagedAgentHost {
         let config_path = std::env::var_os("FLOVART_AGENT_CONFIG")
             .map(PathBuf::from)
             .unwrap_or_else(|| home_dir.join(".flovart/agent.json"));
-        let development_entrypoint = if cfg!(debug_assertions) {
-            Some(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../agent/index.js"))
-        } else {
-            None
-        };
+        // The desktop bundle is also built directly from this source checkout during
+        // local release verification. Keep the checked-out Agent as a safe fallback
+        // when a versioned Toolkit has not been installed yet; installed builds still
+        // prefer the Toolkit entrypoint above.
+        let source_entrypoint = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../agent/index.js");
+        let development_entrypoint = source_entrypoint.is_file().then_some(source_entrypoint);
         let launch = plan_managed_agent_launch(ManagedAgentLaunchOptions {
             node: std::env::var_os("FLOVART_NODE").map(PathBuf::from),
             entrypoint: std::env::var_os("FLOVART_MANAGED_AGENT_ENTRY").map(PathBuf::from),

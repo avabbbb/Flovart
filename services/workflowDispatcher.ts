@@ -1,6 +1,8 @@
 import { nanoid } from 'nanoid';
 import { WORKFLOW_MUTATION_COMMANDS, workflowCommandSummary } from '../components/workflow/agentOps';
 import { createWorkflowNode } from '../components/workflow/constants';
+import { appendWorkflowDraftLog, createWorkflowDraftLogEntry } from '../components/workflow/draftLog';
+import { WORKFLOW_NODE_TOOLS } from '../components/workflow/nodeToolCatalog';
 import { applyWorkflowOps } from '../components/workflow/ops';
 import { getWorkflowPersistenceError, useWorkflowStore } from '../components/workflow/store';
 import type { WorkflowNode, WorkflowNodeMetadata, WorkflowNodeType, WorkflowProject } from '../components/workflow/types';
@@ -29,6 +31,7 @@ export interface WorkflowDispatcherDependencies {
   updateProject: (id: string, patch: Partial<Omit<WorkflowProject, 'id' | 'createdAt'>>) => void;
   runNode?: (projectId: string, nodeId: string) => Promise<void> | void;
   stopNode?: (projectId: string, nodeId: string) => Promise<void> | void;
+  nodeToolRunner?: (projectId: string, nodeId: string, tool: string, args: Record<string, unknown>) => Promise<unknown>;
   persistenceError?: () => unknown;
 }
 
@@ -86,6 +89,26 @@ const recordArg = (value: unknown, label: string) => {
   return value;
 };
 
+/** AI/CLI/MCP 驱动的 Draft Action 记入项目草稿日志；纯 UI 手动编辑跳过（手动编辑已有独立撤销栈）。 */
+function draftLogPatch(
+  project: WorkflowProject,
+  envelope: WorkflowCommandEnvelope,
+  ok: boolean,
+  extra?: { message?: string; nodeIds?: string[]; connectionIds?: string[] },
+): Partial<WorkflowProject> {
+  if (envelope.source === 'ui') return {};
+  const entry = createWorkflowDraftLogEntry({
+    source: envelope.source,
+    command: envelope.command,
+    args: envelope.args,
+    ok,
+    message: extra?.message,
+    nodeIds: extra?.nodeIds,
+    connectionIds: extra?.connectionIds,
+  });
+  return { draftLog: appendWorkflowDraftLog(project, entry).draftLog };
+}
+
 function validatedNode(args: Record<string, unknown>): WorkflowNode {
   const type = String(args.type || 'text') as WorkflowNodeType;
   if (!NODE_TYPES.includes(type)) throw new Error(`不支持的节点类型：${type}`);
@@ -137,10 +160,15 @@ export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDepende
         result = { ok: true, commandId: envelope.id, result: state.projects.map(({ id, title, createdAt, updatedAt }) => ({ id, title, createdAt, updatedAt })) };
       } else if (command === 'workflow.project.create') {
         const id = dependencies.createProject(args.title === undefined ? undefined : requiredString(args.title, 'title'));
+        const freshProject = dependencies.getState().projects.find(item => item.id === id);
+        if (freshProject && envelope.source !== 'ui') {
+          dependencies.updateProject(id, draftLogPatch(freshProject, envelope, true));
+        }
         result = { ok: true, commandId: envelope.id, result: { projectId: id } };
       } else if (command === 'workflow.project.use') {
         if (!project) return error(envelope.id, 'NOT_FOUND', `Workflow 项目不存在：${projectId}`);
         dependencies.setActiveProject(projectId);
+        if (envelope.source !== 'ui') dependencies.updateProject(projectId, draftLogPatch(project, envelope, true));
         result = { ok: true, commandId: envelope.id, result: { projectId } };
       } else if (command === 'workflow.project.delete') {
         if (!project) return error(envelope.id, 'NOT_FOUND', `Workflow 项目不存在：${projectId}`);
@@ -157,7 +185,25 @@ export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDepende
         const runner = command === 'workflow.node.run' ? dependencies.runNode : dependencies.stopNode;
         if (!runner) return error(envelope.id, 'RUNNER_UNAVAILABLE', command === 'workflow.node.run' ? 'Workflow 生成适配器尚未连接。' : 'Workflow 停止适配器尚未连接。');
         await runner(project.id, nodeId);
+        dependencies.updateProject(project.id, draftLogPatch(project, envelope, true, { nodeIds: [nodeId] }));
         result = { ok: true, commandId: envelope.id, result: { projectId: project.id, nodeId } };
+      } else if (command === 'workflow.node.tool') {
+        const nodeId = requiredString(args.nodeId || args.id, 'nodeId');
+        const tool = requiredString(args.tool, 'tool');
+        if (!project.nodes.some(node => node.id === nodeId)) return error(envelope.id, 'NOT_FOUND', `节点不存在：${nodeId}`);
+        if (!(WORKFLOW_NODE_TOOLS as readonly string[]).includes(tool)) return error(envelope.id, 'BAD_REQUEST', `不支持的画布工具：${tool}`);
+        const runner = dependencies.nodeToolRunner;
+        if (!runner) return error(envelope.id, 'RUNNER_UNAVAILABLE', 'Workflow 画布工具适配器尚未连接。');
+        const toolArgs: Record<string, unknown> = { ...args };
+        delete toolArgs.projectId;
+        delete toolArgs.nodeId;
+        delete toolArgs.id;
+        delete toolArgs.tool;
+        delete toolArgs.confirmed;
+        const outcome = await runner(project.id, nodeId, tool, toolArgs);
+        const committed = Boolean(outcome && typeof outcome === 'object' && (outcome as { status?: string }).status === 'committed');
+        dependencies.updateProject(project.id, draftLogPatch(project, envelope, true, { nodeIds: [nodeId] }));
+        result = { ok: true, commandId: envelope.id, result: { projectId: project.id, nodeId, tool, committed } };
       } else {
         const requestedNodeId = String(args.nodeId || args.id || '');
         if (['workflow.node.update', 'workflow.node.delete', 'workflow.node.move', 'workflow.node.resize'].includes(command)
@@ -197,11 +243,26 @@ export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDepende
 
         const applied = applyWorkflowOps(snapshot, [operation]);
         if (applied.rejections.length) return error(envelope.id, 'BAD_REQUEST', applied.rejections.map(item => item.reason).join('；'));
+        const affectedIds = (() => {
+          switch (operation.type) {
+            case 'add_node': return { nodeIds: [operation.node.id] };
+            case 'create_connected_node': return { nodeIds: [operation.node.id] };
+            case 'update_node': return { nodeIds: [operation.id] };
+            case 'delete_nodes': return { nodeIds: operation.ids };
+            case 'delete_connections': return { connectionIds: operation.ids };
+            case 'connect_nodes': return { nodeIds: [operation.fromNodeId, operation.toNodeId] };
+            case 'select_nodes': return { nodeIds: operation.ids };
+            default: return {};
+          }
+        })();
+        // 选中与视口是导航而非创作动作，不入草稿记录；其余 AI/CLI/MCP 动作全部可追溯。
+        const isNavigationOp = operation.type === 'select_nodes' || operation.type === 'set_viewport';
         dependencies.updateProject(project.id, {
           nodes: applied.snapshot.nodes,
           connections: applied.snapshot.connections,
           selectedNodeIds: applied.snapshot.selectedNodeIds,
           viewport: applied.snapshot.viewport,
+          ...(isNavigationOp ? {} : draftLogPatch(project, envelope, true, affectedIds)),
         });
         const persistedError = dependencies.persistenceError?.();
         if (persistedError) return error(envelope.id, 'PERSISTENCE_FAILED', 'Workflow 持久化失败，请检查浏览器存储。');
@@ -220,10 +281,15 @@ export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDepende
 
 let browserNodeRunner: WorkflowDispatcherDependencies['runNode'];
 let browserNodeStopper: WorkflowDispatcherDependencies['stopNode'];
+let browserNodeToolRunner: WorkflowDispatcherDependencies['nodeToolRunner'];
 
 export function setWorkflowNodeRunner(runner?: WorkflowDispatcherDependencies['runNode'], stopper?: WorkflowDispatcherDependencies['stopNode']) {
   browserNodeRunner = runner;
   browserNodeStopper = stopper;
+}
+
+export function setWorkflowNodeToolRunner(runner?: WorkflowDispatcherDependencies['nodeToolRunner']) {
+  browserNodeToolRunner = runner;
 }
 
 const browserDependencies: WorkflowDispatcherDependencies = {
@@ -239,6 +305,10 @@ const browserDependencies: WorkflowDispatcherDependencies = {
   stopNode: (projectId, nodeId) => {
     if (!browserNodeStopper) throw new Error('Workflow 停止适配器尚未连接。');
     return browserNodeStopper(projectId, nodeId);
+  },
+  nodeToolRunner: (projectId, nodeId, tool, args) => {
+    if (!browserNodeToolRunner) throw new Error('Workflow 画布工具适配器尚未连接。');
+    return browserNodeToolRunner(projectId, nodeId, tool, args);
   },
   persistenceError: getWorkflowPersistenceError,
 };

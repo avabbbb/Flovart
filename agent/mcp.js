@@ -12,6 +12,7 @@ const WORKSPACE_WRITE_COMMANDS = new Set([
   'workflow.project.create', 'workflow.project.use', 'workflow.project.delete',
   'workflow.node.create', 'workflow.node.create-connected', 'workflow.node.update',
   'workflow.node.delete', 'workflow.node.move', 'workflow.node.resize',
+  'workflow.node.tool',
   'workflow.connect', 'workflow.disconnect', 'workflow.select', 'workflow.viewport.set',
 ]);
 const WORKSPACE_COMMANDS = new Set([

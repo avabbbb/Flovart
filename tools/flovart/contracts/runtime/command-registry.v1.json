@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1",
   "protocolVersion": "1",
-  "registryHash": "f6dc0d07e6cb4110c4a258e20ba428f69caf172c615e5f4a6767ecb3f2bb3a09",
+  "registryHash": "f05995edcec698055b4dba8d32734affa4ec9b3d89449fdafc8f3083c462bd33",
   "commands": [
     {
       "name": "runtime.status",
@@ -460,6 +460,29 @@
         "nodeId": "string"
       },
       "availability": "legacy-only"
+    },
+    {
+      "name": "workflow.node.tool",
+      "summary": "Run one canvas secondary-processing tool on a visible Workflow node.",
+      "args": {
+        "projectId": "string?",
+        "nodeId": "string",
+        "tool": "string",
+        "prompt": "string?",
+        "maskHref": "string?",
+        "maskMimeType": "string?",
+        "targetLongEdge": "number?",
+        "algorithm": "string?",
+        "rotation": "string?",
+        "rows": "number?",
+        "cols": "number?",
+        "startSec": "number?",
+        "endSec": "number?",
+        "sourceNodeIds": "string[]?",
+        "position": "string?",
+        "speed": "number?"
+      },
+      "availability": "available"
     },
     {
       "name": "asset.list",

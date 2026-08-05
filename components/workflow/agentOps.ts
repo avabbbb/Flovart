@@ -8,6 +8,7 @@ export const WORKFLOW_MUTATION_COMMANDS = new Set([
   'workflow.node.delete',
   'workflow.node.move',
   'workflow.node.resize',
+  'workflow.node.tool',
   'workflow.connect',
   'workflow.disconnect',
   'workflow.select',

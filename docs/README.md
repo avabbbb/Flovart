@@ -8,7 +8,7 @@
 - [后续待办](content/docs/progress/todo.mdx)
 - [待测试确认](content/docs/progress/pending-test.mdx)
 - [领域词与工作区边界](../CONTEXT.md)
-- [架构决策记录](adr/)
+- [架构决策记录](adr/README.md)
 
 ## 开发者文档
 
@@ -18,4 +18,4 @@
 - [接口响应规则](content/docs/backend/api-response.mdx)
 - [Enterprise 接口](content/docs/backend/enterprise-api.mdx)
 
-现行产品只有 Workflow 与 Table 两个正式创作工作区。旧 Canvas / Art 只会出现在历史变更与待测试记录中，不再作为当前功能入口。
+现行产品由 Workflow、Table 与 Agent 三部分组成：Workflow 负责生成编排，Table 负责节点式媒体处理，Agent 负责空间化任务协作。旧 Canvas / Art 只会出现在历史变更与待测试记录中，不再作为第四个功能入口。

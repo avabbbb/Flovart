@@ -15,6 +15,11 @@ describe('workflow online agent', () => {
     expect(() => parseWorkflowAgentPlan('{"message":"x","commands":[{"command":"canvas.delete","args":{}}]}')).toThrow('不允许');
   });
 
+  it('allows the canvas secondary-processing tool command', () => {
+    const plan = parseWorkflowAgentPlan('{"message":"高清放大选中图","commands":[{"command":"workflow.node.tool","args":{"nodeId":"img-1","tool":"upscale","targetLongEdge":2048}}]}');
+    expect(plan.commands).toEqual([{ command: 'workflow.node.tool', args: { nodeId: 'img-1', tool: 'upscale', targetLongEdge: 2048 } }]);
+  });
+
   it('uses the configured provider and confirms canonical dispatcher mutations', async () => {
     const emit = vi.fn();
     const confirm = vi.fn().mockResolvedValue(true);

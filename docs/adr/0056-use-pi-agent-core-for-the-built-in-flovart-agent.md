@@ -1,3 +1,0 @@
-# 以内嵌 PI Agent Core 实现 Flovart Agent
-
-Flovart 在现有受托管 Node Agent Toolkit 内直接嵌入固定版本的 `@earendil-works/pi-agent-core`，把它作为非用户可见的 Agent Kernel，复用其状态化对话、流式事件、工具前置检查、转向、续问与取消能力；模型流通过自定义 `streamFn` 调用 Desktop Runtime 的 `agent-text` Route Mapping，由 Runtime 从 Keyring 注入凭据，PI 不使用自己的登录或直接取得 Provider Secret。Agent Kernel 只获得只读制作查询、受限 Production Intent、方案修订提案和 Specialist Capability，不获得 Shell、任意文件访问、原始 Provider 请求或授权替用户确认；会话进入独立 Agent Session Store，生产真相仍在 Runtime。我们不采用 PI Coding Agent 的通用编程工具，不采用 PI Web UI 替换现有 Agent Workspace，也不把 Codex、Claude Code 或 OpenCode 变成内置 Agent 内核，它们继续通过 Coding Agent Adapter 使用同一 Runtime 契约；PI、Agent Node Runtime 与会话 Schema 必须在 Flovart Release Manifest 中锁定并接受迁移与契约测试。

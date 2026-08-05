@@ -23,6 +23,7 @@ pub use tasks::{RuntimeTask, RuntimeTaskPage, TaskReceipt};
 
 use contracts::{COMMAND_ENVELOPE_SCHEMA, COMMAND_ENVELOPE_SCHEMA_ID};
 use registry::load_registry;
+use serde::Serialize;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::{
@@ -38,7 +39,15 @@ pub struct ProductionRuntime {
     registry: CanonicalRegistry,
     envelope_validator: jsonschema::Validator,
     store: Arc<RuntimeStore>,
+    artifact_root: Option<PathBuf>,
     _worker: worker::RuntimeWorker,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimeArtifactPayload {
+    pub mime_type: String,
+    pub bytes: Vec<u8>,
 }
 
 impl ProductionRuntime {
@@ -74,13 +83,14 @@ impl ProductionRuntime {
         let envelope_validator = jsonschema::validator_for(&schema)
             .map_err(|error| RuntimeContractError::InvalidSchema(error.to_string()))?;
         let store = Arc::new(store);
-        let worker = worker::RuntimeWorker::start(store.clone(), artifact_root);
+        let worker = worker::RuntimeWorker::start(store.clone(), artifact_root.clone());
         Ok(Self {
             runtime_version: runtime_version.into(),
             runtime_instance_id: Self::new_id("runtime"),
             registry: load_registry()?,
             envelope_validator,
             store,
+            artifact_root,
             _worker: worker,
         })
     }
@@ -102,6 +112,63 @@ impl ProductionRuntime {
 
     pub fn get_task(&self, task_id: &str) -> Result<RuntimeTask, RuntimeError> {
         self.store.get_task(task_id)
+    }
+
+    pub fn read_artifact(&self, task_id: &str) -> Result<RuntimeArtifactPayload, RuntimeError> {
+        let task = self.get_task(task_id)?;
+        let artifact = task
+            .result
+            .as_ref()
+            .and_then(|result| result.get("artifact"))
+            .ok_or_else(|| RuntimeError::new("INVALID_ARGUMENT", "Task has no media artifact"))?;
+        let store_relpath = artifact
+            .get("storeRelpath")
+            .and_then(Value::as_str)
+            .ok_or_else(|| RuntimeError::new("RUNTIME_UNAVAILABLE", "Media artifact path is missing"))?;
+        let relative_path = store_relpath
+            .strip_prefix("runtime-artifacts/")
+            .or_else(|| store_relpath.strip_prefix("runtime-artifacts\\"))
+            .ok_or_else(|| RuntimeError::new("RUNTIME_UNAVAILABLE", "Media artifact path is invalid"))?;
+        let relative_path = Path::new(relative_path);
+        if relative_path.is_absolute()
+            || relative_path
+                .components()
+                .any(|component| matches!(component, std::path::Component::ParentDir))
+        {
+            return Err(RuntimeError::new(
+                "RUNTIME_UNAVAILABLE",
+                "Media artifact path escapes the runtime artifact root",
+            ));
+        }
+        let root = self.artifact_root.as_ref().ok_or_else(|| {
+            RuntimeError::new(
+                "RUNTIME_UNAVAILABLE",
+                "Runtime artifact storage is unavailable",
+            )
+        })?;
+        let canonical_root = std::fs::canonicalize(root).map_err(|error| {
+            RuntimeError::new("RUNTIME_UNAVAILABLE", format!("Media artifact root is unavailable: {error}"))
+        })?;
+        let path = std::fs::canonicalize(root.join(relative_path)).map_err(|error| {
+            RuntimeError::new("RUNTIME_UNAVAILABLE", format!("Media artifact is unavailable: {error}"))
+        })?;
+        if !path.starts_with(&canonical_root) {
+            return Err(RuntimeError::new(
+                "RUNTIME_UNAVAILABLE",
+                "Media artifact path is outside the runtime artifact root",
+            ));
+        }
+        let bytes = std::fs::read(path).map_err(|error| {
+            RuntimeError::new("RUNTIME_UNAVAILABLE", format!("Media artifact cannot be read: {error}"))
+        })?;
+        Ok(RuntimeArtifactPayload {
+            mime_type: artifact
+                .get("mimeType")
+                .and_then(Value::as_str)
+                .unwrap_or("application/octet-stream")
+                .to_owned(),
+            bytes,
+        })
     }
 
     pub fn list_tasks(
@@ -992,4 +1059,12 @@ pub fn runtime_execute(
         ));
     }
     runtime.execute(&envelope)
+}
+
+#[tauri::command]
+pub fn runtime_artifact_read(
+    runtime: tauri::State<'_, Arc<ProductionRuntime>>,
+    task_id: String,
+) -> Result<RuntimeArtifactPayload, RuntimeError> {
+    runtime.read_artifact(&task_id)
 }

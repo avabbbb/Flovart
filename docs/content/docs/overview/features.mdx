@@ -2,7 +2,7 @@
 title: 功能特性
 ---
 
-Flovart 是面向 Coding Agent 的本地优先 AI 视频制作系统。创作界面由 Workflow 与 Table 两个职责清晰的工作区组成。
+Flovart 是本地优先的 AI 创作系统，产品由 Workflow、Table 与 Agent 三个职责清晰的工作区组成。
 
 ## 创作工作区
 
@@ -10,8 +10,9 @@ Flovart 是面向 Coding Agent 的本地优先 AI 视频制作系统。创作界
 | --- | --- | --- |
 | **Workflow** | 编排提示词、参考素材、生成模型、节点依赖、任务状态与结果；支持图片和视频生成链路。 | 已有可用基础，持续收敛交互与 Runtime 契约。 |
 | **Table** | 组织 Agent 故事版和媒体预处理节点，把源媒体加工为可复用参考素材。 | 正式入口已接入；当前仍是占位界面，节点工作台待实现。 |
+| **Agent** | 将 Flovart Agent、Codex 线程、任务状态、项目上下文与产物组织为空间面板。 | 主体入口与内置 Agent 的最新实现仍在待测试确认，不在本页提前宣称正式完成。 |
 
-旧 Canvas / Art 工作区已经删除，不再作为第三套创作系统恢复。
+旧 Canvas / Art 工作区已经删除，不再作为第四套创作系统恢复。
 
 ## Workflow
 
@@ -20,6 +21,7 @@ Flovart 是面向 Coding Agent 的本地优先 AI 视频制作系统。创作界
 - 支持节点连线、项目切换、本地媒体拖入、生成状态、停止与结果节点。
 - 通过本地素材库复用角色、场景、道具和生成产物。
 - 当前 CLI 注册表提供 Workflow 项目、节点、连线、视口、运行和停止命令。
+- AI 原生 Workflow 的目标记录面由画布当前状态与语义 ChangeSet 时间线组成；聊天负责意图与解释，不作为唯一操作历史。该能力仍列在待办，不能误写为当前已完成。
 
 ## Table
 
@@ -29,11 +31,19 @@ Table 不是电子表格，也不是旧 Canvas 的改名。它计划提供两组
 - **媒体预处理**：图片或视频输入、人物抠图、深度图与深度视频、边缘/线稿/法线/姿态提取、风格化与故障滤镜，以及服装修改和全能参考前的素材准备。
 - **产物交接**：处理结果保留来源关系，可保存到素材库并作为 Workflow 的参考输入。
 
+Workflow 与 Table 按复杂度分工：Workflow 可以保留直接服务生成链的单步、局部操作；批量、多步骤、多输入/多输出、时间轴精修与可复用处理链进入 Table。两边可以复用媒体操作 Schema 与执行器，但不共享图节点或历史。
+
+单步操作升级为复杂处理时采用显式 Table Promotion：Table 获得该处理链的编辑权威，Workflow 只引用明确发布回来的 Artifact；Table 内部试验不会双向实时覆盖 Workflow。
+
 Table 主体尚未完成；在对应节点、持久化与导出链路落地前，不应把上述计划能力描述为已可用。当前 CLI 也没有 Table 命令。
 
-## Agent 与 CLI
+## Agent
 
-- Coding Agent 负责理解 Brief、拆解任务、选择 Skill、监控执行并处理失败。
+Agent 不是 Workflow 右侧聊天抽屉，也不是另一张生成节点图。它以可摆放面板承载主对话、外部 Codex 子任务、状态、上下文和产物，空间画布只负责布局、聚焦、缩放与恢复。当前版本的内置 Flovart Agent、可见 Workflow 工具与空间布局改造仍列在[待测试确认](../progress/pending-test.mdx)，用户确认前不从待测试状态提升为正式功能。
+
+## CLI 与外部 Agent
+
+- 外部 Coding Agent 可以通过操作 Skill、CLI 或 MCP 调用 Flovart 的类型化能力，但不是内置 Flovart Agent 的替代人格。
 - Flovart CLI 是确定性执行器；命令和参数以 `command.list` 与 `command.schema` 为唯一事实源。
 - 当前自动化能力以 Workflow 为主。Agent 不得伪造 Canvas、Element 或 Table 命令，也不得绕过 CLI 拼接私有 HTTP 请求。
 - Provider 凭据由用户配置，CLI 和 Agent 输出不得读取或泄露 API Key。

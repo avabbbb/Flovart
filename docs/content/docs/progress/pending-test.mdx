@@ -2,10 +2,26 @@
 title: 待测试确认
 ---
 
+## 架构文档与 AI 原生画布边界收敛
+
+- `docs/adr/` 从 60 个拆分决策收敛为 12 个当前有效主题 ADR；旧决定直接删除并由 Git 历史保留，`docs/adr/README.md` 成为唯一当前索引，编号空缺不再表示缺失文件。
+- 原 ADR 0058–0060 已合并为一个 AI 原生 Workflow Draft 决策：AI 与设计师共用可撤销 Draft Action，一个 Agent 回合或连续人工手势形成语义 Draft ChangeSet；纯 Web 与 Desktop 项目分别绑定唯一 Draft Authority，批准后才冻结 ProductionSpec Revision。
+- Production Runtime、Flovart Agent、RunningHub Route 与数据契约文档已改指向合并后的 ADR，并清除 `Primary Director`、`Director Compiler` 与“总控 Skill”等已废弃领域语言；本轮只更新设计与进度文档，不把未实现的 Workflow Draft 能力写成已完成产品功能。
+- 待用户验证：ADR 当前索引只有 12 条；所有本地 Markdown 链接可解析；`todo.mdx` 仍把 Workflow Draft、ChangeSet、Authority 转移与 Revision 批准列为待实现。
+
+## AI 原生 Workflow Draft：画布直接操作 + 草稿记录 + 二次处理工具
+
+承接 VOX 评测的 AI-Native 结论，把「编译 spec→后端跑→投影成品」改造成「Agent 在画布上直接搭草稿，设计师随时细修」：
+
+- **Runtime 凭证可选可导入**：设置页「桌面 Runtime 凭证」在 Provider 有多个安全凭证时显示下拉选择器，设计师选定具体凭证后再「一键导入到 API 配置」；导入的 `runtimeManaged` Key 会进入当前画布 API 配置、被模型映射推荐路线，媒体生成经 Runtime 执行，明文仍只存在于系统 Keyring。已导入状态按所选凭证判定，切到另一个凭证后可再次导入。
+- **前端草稿动作记录**：AI/CLI/MCP 驱动的每次 Workflow Draft Action（创建/连线/改提示词/移动/缩放/运行/二次处理工具）都会写入项目 `draftLog`，随项目一起持久化；Agent 面板新增「草稿」Tab 展示可追溯记录（命令、中文摘要、时间、成败、涉及节点），点击「定位节点」可在画布高亮对应节点继续细修。纯 UI 手动编辑与 select/viewport 导航不入记录（手动编辑已有独立撤销栈）。
+- **AI 可操作画布二次处理工具**：新增 `workflow.node.tool` 命令，AI（网站 Agent / 本机 PI Agent / CLI / MCP）可对选中节点执行 upscale、remove-background、split-layers、edit（含标注/打光/扩图/蒙版）、rotate、split-grid、video-trim、video-av-split、video-merge、video-extract-frame、audio-trim、audio-speed；结果统一回填为新节点 + 来源连线 + 选中。命令已进入 57 条 canonical registry（新 hash），PI 工具面、CLI Workspace 面与网站 Agent 提示词同步更新。
+- 自动验证已通过：`npx tsc --noEmit`、Web 生产构建；Vitest 新增草稿日志、凭证选择、工具路由/拒绝用例，全量 91 文件 671 通过、9 失败（8 项为本轮前已记录的 `workflowGeneration.test.ts` Provider reference 与 `workflowNodeOverlays.test.tsx` 视频模式断言失败，1 项 `flovartHomeSkills.test.tsx` 全量并行时超时、单独重跑通过）；Rust lib 与 `runtime_production_plan` 集成测试通过（验证 registry hash）。
+- 待用户验证：① 设置页多凭证 Provider 显示下拉并能选第二个凭证导入；② 在网站 Agent 或本机 Agent 要求「读取 Workflow → 创建节点 → 写提示词 → 连线 → 对图片执行高清放大」，确认画布实时变化、Agent 面板「草稿」Tab 逐条可见、点击可定位；③ 刷新页面后草稿记录仍在（已随项目持久化）。
+
 ## Skill 术语两类模型对齐
 
-- ADR 0054 扩展为两类 Skill：操作 Skill（Operation Skill，host 接入手册 `.claude/skills/flovart` 与 `.agents/skills/flovart`）与 Production Skill（制作方法）并列，职责正交（操作 vs 风格化）；「主 Skill」作为操作 Skill 的俗称。
-- ADR 0046 的 Primary Skill Binding 改名 Bound Production Skill（绑定的制作 Skill），让出「主」字；CONTEXT、skill-guide、两个 V1 plan 文档同步。
+- ADR 0025 统一两类 Skill：操作 Skill（Operation Skill，host 接入手册 `.claude/skills/flovart` 与 `.agents/skills/flovart`）与 Production Skill（制作方法）职责正交；绑定到 ProductionSession 的制作方法称为 Bound Production Skill，让出「主」字；CONTEXT、skill-guide、两个 V1 plan 文档同步。
 - 两份 host 手册内容已完全同步（diff 无差异），并清除其中 11 处旧称；vox-director 质量门禁消息与测试用例名同步去旧称（gate key `director-extension` 保留）。
 - 待用户验证：在 `.claude/skills/flovart/SKILL.md` 与 `.agents/skills/flovart/SKILL.md` 间运行 `diff` 应无差异；代码层与 host 手册搜索旧称应归零（`evaluation-report` 历史快照除外）。
 
@@ -25,6 +41,14 @@ title: 待测试确认
 - “选中”和“活动媒体”已经分开：单击 Poster 或占位只选中节点并显示 PromptBar、ElementToolbar；用户显式点击“加载视频播放器”后才挂载最多一个 `<video preload="none" playsInline>`。按 Esc、切换选择、打开工具/预览、替换或删除媒体、切换项目或批次显示都会卸载活动播放器。
 - 自动验证覆盖：Poster 生成、持久化、失败降级、清理和项目导入导出；直接点击视频媒体后两条 Bar 稳定挂载；双击已有视频不会误开文件选择器；未活动/多选视频为 0 个播放器；显式活动最多 1 个播放器；Esc 和切换节点后回落为 0。
 - 待用户验证：打开包含大量视频的 Workflow，确认未显式加载播放器时主画布没有 `<video>`；点击任一 Poster 后只出现选择态和两条 Bar，再点击“加载视频播放器”才出现唯一播放器；Esc、多选或切换节点后播放器立即卸载。远程 URL 或历史视频若没有可用 Poster，当前仍显示轻量占位。
+
+## Production Runtime 产物投影与桌面配置可见性
+
+- Runtime 读取 `stage_runs.result_json` 中的受控 Artifact 元数据，把已完成的图片、视频或音频 StageRun 投影为对应 Workflow 媒体节点，并同步 `loading / success / error` 状态；投影只携带 `taskId`、摘要和校验信息，不把 `runtime-artifacts` 私有路径写入画布。
+- Desktop Tauri 新增受控 Artifact IPC 读取，前端将返回的二进制转成临时 Blob URL 后渲染；媒体读取会按 Task 缓存，视频播放器使用 `preload="metadata"`，避免把大视频常驻塞入项目 JSON。
+- 设置页新增桌面 Runtime 凭证状态区，展示 RunningHub / Google 的安全存储状态但不回读明文 Key；首次引导新增 RunningHub 入口，解决“Runtime 已有凭证但 EXE 配置页看不到”的认知断层。
+- 自动验证：Web 生产构建通过；Rust Runtime 产物投影集成测试通过；Production Projection Adapter 定向测试 2 项通过。
+- 待用户验证：使用重新生成的 Windows EXE 打开既有 Production 项目，确认设置页能看到 Runtime 凭证状态；重新运行或刷新 Workflow 后，成功的关键帧显示为图片节点、视频 Stage 显示为视频节点，点击媒体本体仍能选中并显示 PromptBar / ElementToolbar；失败 Stage 显示错误状态。
 
 ## Desktop Agent 生命周期与子任务布局
 
@@ -238,7 +262,7 @@ title: 待测试确认
 - RunningHub 标准模型提交、查询和上传会透出平台返回的 `errorCode` / `errorMessage`，并附带不含密钥的 `baseUrl`、最终提交 URL、模型 ID 与 payload 字段摘要；上传未返回公网 URL、模型 ID 仍是未知详情页/搜索页 URL，或 payload 中仍有本地引用时会在本地中断，不再退化成 `No taskId returned`。
 - Seedance 2.0 后端路由修正：`doubao-seedance-2.0` 不再被误判为文本/图片模型；Seedance 视频/音频参考在本地 `data:` / `blob:` 时会在调用 Provider 前明确失败，视频任务停止信号贯穿提交、轮询和下载。
 - 模型映射由 API Key Vault 本机保存；Workflow 与 Table 共用同一套目标映射，不再维护全局模型偏好状态。
-- 根级 `CONTEXT.md` 已补充 Provider、Route Mapping Target、Route Mapping、Standard Model 和 AI App 的领域词边界，并新增 ADR 记录单一映射权威与 RunningHub 原生 Provider 的取舍。
+- 根级 `CONTEXT.md` 已补充 Provider、Route Mapping Target、Route Mapping、Standard Model 和 AI App 的领域词边界；单一映射权威、Schema/Adapter 与 RunningHub 原生 Provider 的取舍统一记录在 ADR 0027。
 
 ## CLI、Agent 与 MCP
 
@@ -1532,9 +1556,9 @@ Batch 逻辑已从独立 `handleBatchGenerate` 合并进 `handleGenerate`。Prom
 
 完成 `docs/dev/runninghub-provider-mapping-handoff.md` 中 7 个 Blocker、17 条 Route Contract Test 与旧 regex 回退路径清理。
 
-### 协议决策（ADR-0027 ~ ADR-0033 + ADR-0006/0008）
+### 协议决策（ADR 0027）
 
-按 ADR-0027（产品模型绑定到路由）、ADR-0028/0003（Route Schema + Adapter 独自负责字段适配，不再在通用 gateway 里写 endpoint regex/字段特判）、ADR-0029/0004（只有已验证 Route Schema 可执行，未在 Catalog 中登记的路由直接拒绝提交）、ADR-0031/0006（每条 Route 写一份 Contract Test 覆盖全 mode）、ADR-0033/0008（Route Schema 约束控件，Adapter 不得静默删/换/降级用户参数）落地。
+按 ADR 0027 落地统一 Route Mapping：Product Model 按 Generation Mode 绑定 Route，Route Schema 与 Adapter 独占字段适配，只有已验证 Route 可以执行；控件与 Preflight 复用同一 Schema，Adapter 不得静默删、换或降级用户参数。每条具体 Route 的 Contract Test 与 Smoke Test 要求保留在 Route Catalog 和施工文档中。
 
 ### 类型与目录重构
 
@@ -1549,7 +1573,7 @@ Batch 逻辑已从独立 `handleBatchGenerate` 合并进 `handleGenerate`。Prom
   - 图片 6 条：`youchuan/text-to-image-v81`（悠船 v8.1 文生图，参考图走 `imageUrl` 单数，必填 `hd:false`）+ 5 条 `rhart-image-*`（n-pro/edit、g-2/image-to-image、n-g31-flash/image-to-image、n-g31-flash/text-to-image、g-2/text-to-image）。
   - 视频 10 条：3 条 `rhart-video-v3.1-fast`（t2v/i2v/start-end-to-video，按官方文档标 `generateAudio` 为不支持）+ 2 条 `rhart-video-g`（i2v/t2v）+ `rhart-video-g-official/reference-to-video`（3 张参考图）+ 4 条 `rhart-video/sparkvideo-2.0`（i2v/t2v/multimodal/fast-i2v，多模态最多 9 图 3 视频 3 音频）。
 - `services/aiGateway.ts` 新增 `buildRunningHubRoutePayload(schema, prompt, fields, media, userParams)` 按 schema `params[].field` 适配 RunningHub 字段名，`buildRouteMediaFields` 负责参考图数组 / firstFrameUrl / lastFrameUrl 的字段映射与裁剪，`snapDuration` 负责 duration 枚举值向最近的合法值靠拢。
-- 图片调用点 (`aiGateway.ts` ~line 2580) 与视频调用点 (~line 3400) 把 PromptBar 当前 `aspectRatio / resolution / generateAudio / seed / returnLastFrame / webSearch / quality` 作为 `userParams` 传入；按 ADR-0008，userParams 只作用于 schema 中已声明 `field` 的参数，且用户值永远覆盖 schema 默认；未声明的参数静默丢弃。图片画质映射：`quality === 'hd' || quality === 'high'` → `hd: true`。
+- 图片调用点 (`aiGateway.ts` ~line 2580) 与视频调用点 (~line 3400) 把 PromptBar 当前 `aspectRatio / resolution / generateAudio / seed / returnLastFrame / webSearch / quality` 作为 `userParams` 传入；按 ADR 0027，userParams 只作用于 schema 中已声明 `field` 的参数，且用户值永远覆盖 schema 默认；未声明的参数静默丢弃。图片画质映射：`quality === 'hd' || quality === 'high'` → `hd: true`。
 - `services/runningHubService.ts`：删除硬编码的 `RUNNINGHUB_API_DOC_ENDPOINTS`（13 条 endpoint → doc URL），`runningHubApiDocEndpoint` 改为调 `resolveRouteIdByDocId` 从 catalog 派生。
 
 ### 旧 regex fallback 路径清理（Option C）

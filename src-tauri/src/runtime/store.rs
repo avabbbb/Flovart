@@ -8,6 +8,7 @@ use super::{
     events::{RuntimeEntityRef, RuntimeEvent, RuntimeEventPage},
     production::{build_workflow_projection, ProductionPlanDraft},
     tasks::{RuntimeTask, RuntimeTaskPage, TaskLinks, TaskReceipt},
+    ProductionRuntime,
     RuntimeContractError, RuntimeError,
 };
 
@@ -1778,12 +1779,142 @@ impl RuntimeStore {
             .optional()
             .map_err(store_unavailable)?;
         match projection {
-            Some((version, projection)) => Ok(json!({
-                "projectId": project_id,
-                "projectionVersion": version,
-                "projection": serde_json::from_str::<Value>(&projection)
-                    .map_err(store_unavailable)?
-            })),
+            Some((version, projection)) => {
+                let mut projection = serde_json::from_str::<Value>(&projection)
+                    .map_err(store_unavailable)?;
+                if let Some(run_id) = projection
+                    .get("productionRunId")
+                    .and_then(Value::as_str)
+                {
+                    let mut stages = std::collections::HashMap::<
+                        String,
+                        (String, Option<String>, Option<Value>),
+                    >::new();
+                    {
+                        let mut statement = connection
+                            .prepare(
+                                "SELECT stage_key, status, task_id, result_json
+                                   FROM stage_runs
+                                  WHERE run_id = ?1",
+                            )
+                            .map_err(store_unavailable)?;
+                        let rows = statement
+                            .query_map([run_id], |row| {
+                                Ok((
+                                    row.get::<_, String>(0)?,
+                                    row.get::<_, String>(1)?,
+                                    row.get::<_, Option<String>>(2)?,
+                                    row.get::<_, Option<String>>(3)?,
+                                ))
+                            })
+                            .map_err(store_unavailable)?;
+                        for row in rows {
+                            let (stage_key, status, task_id, result_json) =
+                                row.map_err(store_unavailable)?;
+                            stages.insert(
+                                stage_key,
+                                (
+                                    status,
+                                    task_id,
+                                    result_json.and_then(|value| serde_json::from_str(&value).ok()),
+                                ),
+                            );
+                        }
+                    }
+                    if let Some(nodes) = projection.get_mut("nodes").and_then(Value::as_array_mut)
+                    {
+                        for node in nodes {
+                            let Some(stage_key) = node
+                                .get("metadata")
+                                .and_then(|value| value.get("productionProjection"))
+                                .and_then(|value| value.get("stageKey"))
+                                .and_then(Value::as_str)
+                            else {
+                                continue;
+                            };
+                            let Some((status, task_id, result)) = stages.get(stage_key) else {
+                                continue;
+                            };
+                            let mut media_kind = None;
+                            {
+                                let Some(metadata) =
+                                    node.get_mut("metadata").and_then(Value::as_object_mut)
+                                else {
+                                    continue;
+                                };
+                                metadata.insert(
+                                    "status".to_owned(),
+                                    json!(match status.as_str() {
+                                        "running" | "queued" | "ready" => "loading",
+                                        "succeeded" => "success",
+                                        "failed" | "blocked" => "error",
+                                        _ => "idle",
+                                    }),
+                                );
+                                if let Some(artifact) = result
+                                    .as_ref()
+                                    .and_then(|value| value.get("artifact"))
+                                    .and_then(Value::as_object)
+                                {
+                                    let Some(kind) = artifact.get("kind").and_then(Value::as_str) else {
+                                        continue;
+                                    };
+                                    if !matches!(kind, "image" | "video" | "audio") {
+                                        continue;
+                                    }
+                                    let Some(task_id) = task_id.as_deref() else {
+                                        continue;
+                                    };
+                                    let mime_type = artifact
+                                        .get("mimeType")
+                                        .and_then(Value::as_str)
+                                        .unwrap_or("application/octet-stream");
+                                    let mut artifact_ref = json!({
+                                        "taskId": task_id,
+                                        "kind": kind,
+                                        "mimeType": mime_type
+                                    });
+                                    for (source, target) in [
+                                        ("sha256", "sha256"),
+                                        ("byteSize", "byteSize"),
+                                        ("durationSec", "durationSec"),
+                                    ] {
+                                        if let Some(value) = artifact.get(source) {
+                                            artifact_ref[target] = value.clone();
+                                        }
+                                    }
+                                    metadata.insert("artifactRef".to_owned(), artifact_ref);
+                                    metadata.insert("mimeType".to_owned(), json!(mime_type));
+                                    if let Some(value) = artifact.get("byteSize") {
+                                        metadata.insert("bytes".to_owned(), value.clone());
+                                    }
+                                    if let Some(duration) = artifact
+                                        .get("durationSec")
+                                        .and_then(Value::as_f64)
+                                    {
+                                        metadata.insert("durationMs".to_owned(), json!(duration * 1000.0));
+                                    }
+                                    media_kind = Some(kind.to_owned());
+                                }
+                            }
+                            if let Some(kind) = media_kind {
+                                node["type"] = json!(kind);
+                            }
+                        }
+                    }
+                }
+                if let Some(object) = projection.as_object_mut() {
+                    object.remove("projectionHash");
+                }
+                let projection_hash = ProductionRuntime::hash_payload(&projection)
+                    .map_err(|error| RuntimeError::new("RUNTIME_UNAVAILABLE", error.to_string()))?;
+                projection["projectionHash"] = json!(projection_hash);
+                Ok(json!({
+                    "projectId": project_id,
+                    "projectionVersion": version,
+                    "projection": projection
+                }))
+            }
             None => Ok(json!({
                 "projectId": project_id,
                 "projectionVersion": 0,

@@ -354,7 +354,7 @@ npm run flovart:cli -- generate.image --prompt "runtime fake smoke" --json
 
 已确认采用**严格单权威**：S1.3 图片 hard cutover 时，同步停用 WebUI 旧视频直连执行；CLI/MCP 的 `generate.video`、`video.status` 也不得回退到浏览器 Bridge，统一明确返回 `CAPABILITY_UNAVAILABLE`。视频能力在 S2 以 Runtime 持久任务方式恢复。
 
-因此 S1.3 不允许保留 legacy、non-resumable 视频执行开关，也不允许用“临时 fallback”继续调用浏览器 Provider。这个选择会产生一个明确的视频功能空档，但能保证 Desktop Runtime 始终是唯一 Production Authority。
+因此 S1.3 对 Desktop 或已配对 Web 项目不允许保留 legacy、non-resumable 视频执行开关，也不允许用“临时 fallback”继续调用浏览器 Provider。这个选择会产生一个明确的视频功能空档，但能保证该项目只由 Desktop Runtime 承担 Production Authority；独立纯 Web 项目仍受其自身本地执行边界约束。
 
 ### 验收
 
@@ -387,5 +387,5 @@ npm run flovart:cli -- generate.image --prompt "runtime image contract smoke" --
 - `ProductionSpecExtension.vox` 的实际 stage expansion。
 - 视频、音频、TTS、音乐、FFmpeg 渲染与成片验证。
 - Local Verified Route 的用户自定义 declarative mapping UI；S1 只验证一个第一方支持的图片 Adapter Family。
-- 预算、Route Plan、Director Gate、Agent Intervention 的完整持久层；这些按数据契约进入 S2/S3。
+- 预算、Route Plan、Skill Gate、Agent Intervention 的完整持久层；这些按数据契约进入 S2/S3。
 - 云端 Hub、远程队列、跨设备同步、团队 RBAC。

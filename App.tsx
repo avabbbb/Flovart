@@ -16,8 +16,10 @@ import { getGenerationCapability, type GenerationMode } from './services/generat
 import { cancelWorkflowGeneration, runWorkflowGeneration } from './services/workflowGeneration';
 import { ingestWorkflowMedia, loadWorkflowMediaBlob, releaseWorkflowMediaRecord } from './components/workflow/media';
 import { createWorkflowNode } from './components/workflow/constants';
-import { setWorkflowNodeRunner } from './services/workflowDispatcher';
+import { setWorkflowNodeRunner, setWorkflowNodeToolRunner } from './services/workflowDispatcher';
 import { runWorkflowOnlineAgent } from './services/workflowOnlineAgent';
+import type { WorkflowNodeToolName, WorkflowNodeToolRuntime } from './services/workflowNodeTools';
+import { getManagedAgentConnection } from './services/managedAgentConnection';
 import type { WorkflowOnlineTurnInput } from './components/workflow/WorkflowAgentPanel';
 import { translations } from './utils/translations';
 import './styles/generation.css';
@@ -96,6 +98,10 @@ const App: React.FC = () => {
         handleAddApiKey, handleDeleteApiKey, handleUpdateApiKey, handleSetDefaultApiKey,
         dynamicModelOptions, usageSummaryMap,
     } = useApiKeys(isSettingsPanelOpen);
+
+    useEffect(() => {
+        void getManagedAgentConnection().catch(error => console.warn('Managed Agent auto-start unavailable.', error));
+    }, []);
 
     useEffect(() => {
         Promise.all([
@@ -245,6 +251,22 @@ const App: React.FC = () => {
             cancelWorkflowGeneration(projectId, nodeId);
         });
     }, [handleRunWorkflowNode]);
+
+    const handleWorkflowNodeTool = useCallback(async (projectId: string, nodeId: string, tool: string, args: Record<string, unknown>) => {
+        // 画布二次处理工具服务含 ffmpeg 等重型依赖，懒加载避免拖进主 chunk。
+        const { runWorkflowNodeTool } = await import('./services/workflowNodeTools');
+        const runtime: WorkflowNodeToolRuntime = {
+            userApiKeys,
+            confirmRouteFallback,
+            getProject: () => useWorkflowStore.getState().projects.find(item => item.id === projectId) || null,
+            onProjectChange: (next) => { useWorkflowStore.getState().updateProject(projectId, next); },
+        };
+        return runWorkflowNodeTool(projectId, nodeId, tool as WorkflowNodeToolName, args, runtime);
+    }, [confirmRouteFallback, userApiKeys]);
+
+    useEffect(() => {
+        setWorkflowNodeToolRunner(handleWorkflowNodeTool);
+    }, [handleWorkflowNodeTool]);
 
     const activeWorkflowProject = workflowProjects.find(project => project.id === activeWorkflowProjectId) || null;
     const activeWorkflowTitle = activeWorkflowProject?.title || 'Workflow';

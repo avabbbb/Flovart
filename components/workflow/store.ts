@@ -20,6 +20,7 @@ export function createWorkflowProject(title = '未命名工作流'): WorkflowPro
     backgroundMode: 'dots',
     agentSessions: [],
     activeAgentSessionId: null,
+    draftLog: [],
     createdAt: now,
     updatedAt: now,
   };

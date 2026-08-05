@@ -493,7 +493,7 @@ fn run_production_execution(
                     let dependency_failed = stage.dependencies.iter().any(|dependency| {
                         run.stages.iter().any(|item| {
                             &item.stage_key == dependency
-                                && ["failed", "canceled", "blocked"].contains(&item.status.as_str())
+                                && ["failed", "canceled", "blocked", "skipped"].contains(&item.status.as_str())
                         })
                     });
                     if dependency_failed {

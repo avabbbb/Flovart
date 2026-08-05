@@ -1,4 +1,5 @@
 use flovart_lib::runtime::ProductionRuntime;
+use rusqlite::{params, Connection};
 use serde_json::{json, Value};
 use std::{
     fs,
@@ -188,6 +189,32 @@ fn production_spec_compiles_to_a_durable_run_stage_dag_and_workflow_projection()
             .expect("idempotent approval replay");
         assert_eq!(replay["runStatus"], "queued");
 
+        let connection = Connection::open(&database_path).expect("open projection test database");
+        connection
+            .execute(
+                "UPDATE stage_runs
+                    SET status = 'succeeded',
+                        task_id = ?1,
+                        result_json = ?2
+                  WHERE run_id = ?3 AND stage_key = ?4",
+                params![
+                    "task_image_projection_test",
+                    json!({
+                        "artifact": {
+                            "kind": "image",
+                            "mimeType": "image/png",
+                            "storeRelpath": "runtime-artifacts/images/task_image_projection_test.png",
+                            "sha256": "a".repeat(64),
+                            "byteSize": 12
+                        }
+                    })
+                    .to_string(),
+                    run_id,
+                    "shot:shot-1a:keyframe"
+                ],
+            )
+            .expect("seed completed image artifact");
+
         let projection_response = runtime
             .execute(&envelope(
                 "workflow.projection.get",
@@ -198,6 +225,18 @@ fn production_spec_compiles_to_a_durable_run_stage_dag_and_workflow_projection()
         let projection = &projection_response["projection"];
         assert_eq!(projection["projectId"], "workflow-project-1");
         assert_eq!(projection["productionRunId"], run_id);
+        let keyframe_node = projection["nodes"]
+            .as_array()
+            .expect("projection nodes")
+            .iter()
+            .find(|node| node["metadata"]["productionProjection"]["stageKey"] == "shot:shot-1a:keyframe")
+            .expect("keyframe projection node");
+        assert_eq!(keyframe_node["type"], "image");
+        assert_eq!(
+            keyframe_node["metadata"]["artifactRef"]["taskId"],
+            "task_image_projection_test"
+        );
+        assert_eq!(keyframe_node["metadata"]["status"], "success");
         assert_eq!(
             projection["nodes"]
                 .as_array()

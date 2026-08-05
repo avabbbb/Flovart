@@ -70,6 +70,7 @@ const PROVIDER_LABELS: Record<string, string> = {
     qwen: 'Qwen 通义千问',
     deepseek: 'DeepSeek',
     siliconflow: 'SiliconFlow',
+    runningHub: 'RunningHub 标准模型',
     keling: 'Keling 可灵',
     flux: 'Flux',
     midjourney: 'Midjourney',
@@ -349,7 +350,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                                 AI 服务商
                             </label>
                             <div className="flex flex-wrap gap-2">
-                                {(['google', 'openai', 'anthropic', 'deepseek', 'siliconflow', 'qwen', 'keling', 'flux', 'midjourney', 'custom'] as AIProvider[]).map(p => (
+                                {(['google', 'openai', 'anthropic', 'deepseek', 'siliconflow', 'runningHub', 'qwen', 'keling', 'flux', 'midjourney', 'custom'] as AIProvider[]).map(p => (
                                     <button
                                         key={p}
                                         type="button"

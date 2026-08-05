@@ -14,6 +14,7 @@ export const WORKSPACE_WRITE_COMMAND_NAMES = Object.freeze([
   'workflow.node.delete',
   'workflow.node.move',
   'workflow.node.resize',
+  'workflow.node.tool',
   'workflow.connect',
   'workflow.disconnect',
   'workflow.select',

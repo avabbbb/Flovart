@@ -145,6 +145,7 @@ pub fn run() {
             // production runtime
             runtime::runtime_status,
             runtime::runtime_execute,
+            runtime::runtime_artifact_read,
             managed_agent::managed_agent_connection,
         ])
         .build(tauri::generate_context!())

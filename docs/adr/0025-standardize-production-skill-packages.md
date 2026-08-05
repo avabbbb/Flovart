@@ -1,5 +1,7 @@
-# 标准化 Production Skill Package
+# 统一 Production Skill 契约与包边界
 
-Production Skill Package 使用跨 Agent 的精炼 `SKILL.md` 作为导演工作流入口，并使用独立 `flovart.skill.yaml` 声明包 ID 与版本、Runtime/ProductionSpec 兼容性、Interaction Commands、Runtime Capability Requirement、Permissions、Skill Gates、ProductionSpec Extension Schema 和 Eval 入口。Package 可以按需包含 `agents/openai.yaml`、`schemas/`、`references/`、`scripts/`、`assets/`、`examples/` 与 `evals/`；详细创意知识放 references，可复用输出资源放 assets，scripts 只能包含声明输入输出、无网络、无秘密且不调用任意外部二进制的 Deterministic Skill Script。安装包不包含 README、安装指南或 Changelog，Hub 页面从 Manifest 与示例生成。
+Flovart 只使用两类 Skill 语言：操作 Skill 指导外部 Agent 如何通过 CLI/MCP 操作 Flovart；Production Skill 是内置 Flovart Agent 可加载的制作方法。操作 Skill 不编译制作计划，Production Skill 不直接操作 Workspace、持有 Provider Secret 或提交 Provider 请求。
 
-官方 Flovart Skill Creator 同时提供 `create` 与 `import` 路径，并按 scaffold、validate、零费用 dry-run、eval、pack、publish 顺序工作。导入 VOX 等现有 Skill 时保留叙事、风格、提示词和审批知识，把直接 API 调用、API Key、硬编码模型和 ffmpeg 执行分别迁移为 Runtime Capability、Keyring、Validated Profile 和受控组装能力；迁移报告必须列出直接网络、秘密、Shell/二进制、私有执行阶段、未声明命令、Schema、Eval、许可证与资源来源问题。
+所有 Production Skill 输出共享的 ProductionSpec Core，只能声明 Runtime Capability Requirement、Skill Gate 与 `extensions.<skill-id>` 下的受 Schema 校验扩展。一个 ProductionSession 可以不绑定 Production Skill，但最多绑定一个精确版本或本地 Snapshot；切换绑定必须产生新的 Workflow Draft 与 ProductionSpec Revision，不能让多个 Skill 并发改写同一制作计划。
+
+Production Skill Package 使用精炼 `SKILL.md` 与 `flovart.skill.yaml` 声明身份、版本、兼容性、权限、Capability、Gate、扩展 Schema 和 Eval。公开版本不可变并以版本与 Hash 锁定；社区分发前完成静态校验、零费用 dry-run、许可证与基础评测，撤销只作用于精确版本。确定性脚本必须声明输入输出且默认无网络、无秘密、不得调用任意外部二进制；Skill Authoring 与正常 Production Workspace 保持隔离。

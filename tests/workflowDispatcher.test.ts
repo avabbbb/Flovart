@@ -76,4 +76,54 @@ describe('workflow dispatcher', () => {
     expect((await dispatch({ id: 'run', command: 'workflow.node.run', args: { nodeId: 'image-1', confirmed: true }, source: 'agent' })).error?.code).toBe('RUNNER_UNAVAILABLE');
     expect((await dispatch({ id: 'stop', command: 'workflow.node.stop', args: { nodeId: 'image-1', confirmed: true }, source: 'agent' })).error?.code).toBe('RUNNER_UNAVAILABLE');
   });
+
+  it('records agent/mcp draft actions into the project draft log but skips pure UI edits', async () => {
+    const { dispatch, dependencies } = setup();
+    await dispatch({ id: 'create', command: 'workflow.node.create', args: { type: 'text', title: '旁白', confirmed: true }, source: 'agent' });
+    await dispatch({ id: 'move', command: 'workflow.node.move', args: { nodeId: 'image-1', x: 10, y: 20, confirmed: true }, source: 'mcp' });
+    await dispatch({ id: 'select', command: 'workflow.select', args: { ids: ['image-1'] }, source: 'ui' });
+
+    const log = dependencies.getState().projects[0].draftLog || [];
+    expect(log).toHaveLength(2);
+    expect(log[0].source).toBe('agent');
+    expect(log[0].command).toBe('workflow.node.create');
+    expect(log[0].summary).toBe('创建text节点「旁白」');
+    const createdId = dependencies.getState().projects[0].nodes[1].id;
+    expect(log[0].nodeIds).toEqual([createdId]);
+    expect(log[1].source).toBe('mcp');
+    expect(log[1].command).toBe('workflow.node.move');
+    expect(log[1].summary).toBe('移动节点「image-1」');
+    expect(log[1].nodeIds).toEqual(['image-1']);
+  });
+
+  it('routes workflow.node.tool to the canvas tool runner, records the action and strips confirmation flags', async () => {
+    const { dispatch, dependencies } = setup();
+    const nodeToolRunner = vi.fn().mockResolvedValue({ status: 'committed', project: null });
+    dependencies.nodeToolRunner = nodeToolRunner;
+    const result = await dispatch({
+      id: 'tool', command: 'workflow.node.tool',
+      args: { nodeId: 'image-1', tool: 'upscale', targetLongEdge: 2048, confirmed: true },
+      source: 'agent',
+    });
+    expect(result.ok).toBe(true);
+    expect(result.result).toMatchObject({ nodeId: 'image-1', tool: 'upscale', committed: true });
+    expect(nodeToolRunner).toHaveBeenCalledWith(expect.any(String), 'image-1', 'upscale', { targetLongEdge: 2048 });
+    const log = dependencies.getState().projects[0].draftLog || [];
+    expect(log.at(-1)?.command).toBe('workflow.node.tool');
+    expect(log.at(-1)?.summary).toBe('对节点「image-1」执行 upscale 工具');
+    expect(log.at(-1)?.nodeIds).toEqual(['image-1']);
+  });
+
+  it('rejects unknown canvas tools and requires a connected tool adapter', async () => {
+    const { dispatch, dependencies } = setup();
+    dependencies.nodeToolRunner = undefined;
+    const missing = await dispatch({ id: 'tool2', command: 'workflow.node.tool', args: { nodeId: 'image-1', tool: 'upscale', confirmed: true }, source: 'agent' });
+    expect(missing.error?.code).toBe('RUNNER_UNAVAILABLE');
+
+    dependencies.nodeToolRunner = vi.fn();
+    const unknown = await dispatch({ id: 'tool3', command: 'workflow.node.tool', args: { nodeId: 'image-1', tool: 'explode', confirmed: true }, source: 'agent' });
+    expect(unknown.ok).toBe(false);
+    expect(unknown.error?.message).toContain('不支持的画布工具');
+    expect(dependencies.nodeToolRunner).not.toHaveBeenCalled();
+  });
 });

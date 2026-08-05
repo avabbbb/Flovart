@@ -195,6 +195,12 @@ export interface UserApiKey {
   pricingRules?: ApiPricingRule[];
   /** 该 Key 的月度预算策略。 */
   budgetPolicy?: ApiBudgetPolicy;
+  /**
+   * 由 Desktop Production Runtime 托管的安全凭证（明文 Key 只存在系统 Keyring）。
+   * 设置页「桌面 Runtime 凭证 → 一键导入」会创建这种条目；浏览器直连生成对它无效，
+   * 媒体生成会经 `runtime_execute` 的 generate.image / generate.video 路由到 Runtime 执行。
+   */
+  runtimeManaged?: { credentialId?: string };
   createdAt: number;
   updatedAt: number;
 }

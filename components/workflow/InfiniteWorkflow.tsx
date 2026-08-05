@@ -433,7 +433,7 @@ export function InfiniteWorkflow({
       || selectedNodeIds[0] !== activeMedia.nodeId
       || activeNode?.type !== 'video'
       || activeNode.isVisible === false
-      || !(activeNode.metadata.storageKey || activeNode.metadata.href)) {
+      || !(activeNode.metadata.storageKey || activeNode.metadata.href || activeNode.metadata.artifactRef?.taskId)) {
       setActiveMedia(null);
     }
   }, [activeMedia, project.id, project.nodes, selectedNodeIds]);
@@ -1832,6 +1832,7 @@ export function InfiniteWorkflow({
       naturalHeight: _naturalHeight,
       durationMs: _durationMs,
       href: _href,
+      artifactRef: _artifactRef,
       poster: _poster,
       error: _error,
       ...metadata
@@ -2232,7 +2233,7 @@ export function InfiniteWorkflow({
             node={node}
             selected={selectedNodes.has(node.id)}
             mediaActive={activeMedia?.projectId === project.id && activeMedia.nodeId === node.id}
-            onActivateMedia={node.type === 'video' && (node.metadata.storageKey || node.metadata.href)
+            onActivateMedia={node.type === 'video' && (node.metadata.storageKey || node.metadata.href || node.metadata.artifactRef?.taskId)
               ? () => {
                 selectNodes([node.id]);
                 setActiveMedia({ projectId: project.id, nodeId: node.id });

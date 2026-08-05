@@ -142,6 +142,7 @@ describe('workflow project persistence', () => {
       backgroundMode: 'lines',
       agentSessions,
       activeAgentSessionId: 'session-1',
+      draftLog: [],
       createdAt: '2026-01-02T03:04:05.000Z',
       updatedAt: '2026-01-02T03:04:05.000Z',
     });

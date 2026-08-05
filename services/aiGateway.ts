@@ -5,6 +5,20 @@ import { normalizeProviderBaseUrl } from './baseUrl';
 import { assertRunningHubModelEndpoint } from './runningHubService';
 import { explainReferenceCompatibility, sanitizeProductGenerationParams } from './productModelCatalog';
 import { getRouteSchema, getRouteDurations, type RouteCapabilitySchema, type RouteMediaSpec } from './runningHubRouteCatalog';
+import { runRuntimeMediaGeneration } from './runtimeGeneration';
+
+function blobToBase64(blob: Blob): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+            const value = reader.result;
+            if (typeof value === 'string') resolve(value);
+            else reject(new Error('无法读取生成结果'));
+        };
+        reader.onerror = () => reject(new Error('读取生成结果失败'));
+        reader.readAsDataURL(blob);
+    });
+}
 
 type ImageInput = { href: string; mimeType: string };
 
@@ -2301,6 +2315,24 @@ export async function generateImageWithProvider(
 ): Promise<{ newImageBase64: string | null; newImageMimeType: string | null; textResponse: string | null }> {
     assertResolvedUpstreamModel(model);
     const provider = resolveGenerationProvider(model, key);
+
+    // Runtime 托管的网页 Key：明文在系统 Keyring，经 Runtime 执行并读回产物。
+    if (key?.runtimeManaged) {
+        const productModel = model.startsWith('flovart:') ? model : (key.defaultModel || model);
+        const result = await runRuntimeMediaGeneration({
+            command: 'generate.image',
+            args: {
+                prompt,
+                productModel,
+                credentialId: key.runtimeManaged.credentialId,
+                aspectRatio: options?.aspectRatio,
+                resolution: options?.resolution || '1k',
+            },
+            signal: options?.signal,
+        });
+        const base64 = await blobToBase64(result.blob);
+        return { newImageBase64: base64, newImageMimeType: result.mimeType, textResponse: null };
+    }
     const refs = limitProviderImageInputs(images ?? [], provider, model, key);
 
     if (provider === 'google') {
@@ -3114,6 +3146,26 @@ export async function generateVideoWithProvider(
 ): Promise<{ videoBlob: Blob; mimeType: string }> {
     assertResolvedUpstreamModel(model);
     const provider = resolveGenerationProvider(model, key);
+
+    // Runtime 托管的网页 Key：明文在系统 Keyring，经 Runtime 执行并读回产物 Blob。
+    if (key?.runtimeManaged) {
+        const productModel = model.startsWith('flovart:') ? model : (key.defaultModel || model);
+        const result = await runRuntimeMediaGeneration({
+            command: 'generate.video',
+            args: {
+                prompt,
+                productModel,
+                credentialId: key.runtimeManaged.credentialId,
+                durationSec: options?.durationSec,
+                aspectRatio: options?.aspectRatio || '16:9',
+                resolution: options?.resolution || '720p',
+                generateAudio: options?.generateAudio ?? false,
+            },
+            onProgress: options?.onProgress,
+            signal: options?.signal,
+        });
+        return { videoBlob: result.blob, mimeType: result.mimeType };
+    }
     const onProgress = options?.onProgress || (() => {});
     const aspectRatio = options?.aspectRatio || '16:9';
     const runningHubEndpoint = provider === 'runningHub'

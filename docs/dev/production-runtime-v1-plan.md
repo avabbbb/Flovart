@@ -4,14 +4,13 @@
 
 本文件是已确认方向的实施规划。S0.1 Canonical Contract + Runtime Kernel 已实现并进入待测试状态；S0.2 及后续批次仍未实现，不得把规划内容当作现有能力。架构决策见：
 
-- [ADR 0034：V1 将成片制作权威保留在用户本机](../adr/0034-keep-production-authority-local.md)
-- [ADR 0035：在原子运行时命令之上保留生产意图命令](../adr/0035-layer-production-intents-over-atomic-runtime-commands.md)
-- [ADR 0036：向 Agent 暴露 Provider-neutral Capability 而不是 Provider Job](../adr/0036-expose-provider-neutral-capabilities-to-agents.md)
-- [ADR 0044：允许用户验证本地 BYOK Route Mapping](../adr/0044-allow-verified-local-byok-route-mapping.md)
-- [ADR 0045：以 ProductionSpec 作为制作计划权威](../adr/0045-make-production-spec-authoritative-over-workflow-projection.md)
-- [ADR 0046：每个 ProductionSession 至多绑定一个 Production Skill](../adr/0046-bind-at-most-one-primary-skill-per-production-session.md)
-- [ADR 0047：通过 Runtime 介入事件唤醒 Coding Agent](../adr/0047-wake-agents-from-runtime-intervention-events.md)
-- [ADR 0056：以内嵌 PI Agent Core 实现 Flovart Agent](../adr/0056-use-pi-agent-core-for-the-built-in-flovart-agent.md)
+- [ADR 0002：制作执行保持本地优先](../adr/0002-local-first-production-execution.md)
+- [ADR 0010：Artifact 使用稳定 ID 与内容寻址](../adr/0010-use-content-addressed-local-artifacts.md)
+- [ADR 0023：统一制作执行、授权与状态契约](../adr/0023-centralize-production-execution-contract.md)
+- [ADR 0025：统一 Production Skill 契约与包边界](../adr/0025-standardize-production-skill-packages.md)
+- [ADR 0027：使用 Schema 驱动的统一 Route Mapping](../adr/0027-use-schema-driven-route-mapping.md)
+- [ADR 0052：使用一个负责的 Flovart Agent 与临时 Specialist](../adr/0052-use-one-accountable-flovart-agent-with-specialists.md)
+- [ADR 0058：以 AI 原生 Workflow Draft 驱动画布](../adr/0058-use-ai-native-workflow-draft.md)
 - [Flovart Agent V1 实施规划](flovart-agent-v1-plan.md)
 - [Production Runtime 数据契约](production-runtime-data-contract.md)
 - [Production Runtime S0/S1 施工清单](production-runtime-s0-s1-work-items.md)
@@ -37,7 +36,7 @@
 
 - V1 不把 Production Authority 放到云端 Hub。
 - Production Skill 不接触 Provider Secret、Provider HTTP endpoint 或任意 Shell。
-- 不让 WebUI 继续承担长任务执行权威。
+- Desktop 或已配对 Web 项目不让 WebUI 继续承担长任务执行权威；纯 Web 模式仍明确受标签页生命周期与浏览器密钥边界限制。
 - 不为尚未存在的远程 Runtime、集群调度或跨设备同步预留复杂抽象。
 - 不直接依赖仍在变化的 MCP Tasks 实验接口；MCP 是 Runtime 的 Adapter。
 - 本轮规划不恢复或重写 Canvas、Table、Workflow 的视觉界面。
@@ -190,9 +189,12 @@ V1 直接建立新表，不把现有 `sync_log` 伪装成 ProductionRun 数据�
 | `artifacts` | 内容哈希、媒体类型、尺寸、时长、存储位置 |
 | `artifact_inputs` | Artifact 来源依赖和角色 |
 | `production_spec_revisions` | 不可变 ProductionSpec Core、Extension、版本与内容哈希 |
-| `workflow_projects` | Workflow 工作区身份和当前 ProductionSession，不保存第二份权威制作计划 |
+| `workflow_projects` | Workflow 工作区身份、当前 ProductionSession 与唯一 Draft Authority Binding |
+| `workflow_drafts` | 批准前的可编辑画布真相，保存节点、连线、Prompt、参考、参数、工具步骤与布局 |
+| `workflow_draft_changesets` | 一个 Agent 回合或连续人工手势的语义历史、差异和撤销边界 |
+| `workflow_draft_actions` | ChangeSet 内类型化、可重放、可逆的画布动作 |
 | `workflow_plan_projections` | 从 Spec/Run 派生的可重建节点投影 |
-| `workflow_layouts` | 节点位置、折叠、视口和独立 layout revision |
+| `workflow_layouts` | 已批准运行投影的节点位置、折叠、视口和独立 layout revision |
 | `runtime_events` | 单调事件 ID、实体、事件类型和 payload |
 
 完整列、唯一约束、路由/审批/预算/Agent 表与 JSON 契约见 [Production Runtime 数据契约](production-runtime-data-contract.md)。
@@ -201,7 +203,7 @@ V1 直接建立新表，不把现有 `sync_log` 伪装成 ProductionRun 数据�
 
 1. 接受命令：receipt、task/run/stage 与首个事件同事务提交。
 2. Provider 提交前：ProviderAttempt 与 Cost Reservation 先提交。
-3. Provider 返回：Attempt 状态、Artifact、StageRun、Workflow revision 与事件同事务提交。
+3. Provider 返回：Attempt 状态、Artifact、StageRun、Production Plan Projection 与事件同事务提交；不得覆盖未批准 Workflow Draft。
 4. 每个查询读 State Projection；SSE 从 `runtime_events` 读取并支持 `Last-Event-ID`。
 
 Runtime SQLite 结构应单独记录在 `docs/content/docs/runtime/runtime-storage.mdx`，不要混入 Go Enterprise Backend 数据库文档。
@@ -414,10 +416,10 @@ S0 与 S1 同时满足以下条件后，才进入视频和 ProductionRun：
 
 ## 已确认决策
 
-1. 公开原子生成 seam 使用 Provider-neutral `capability.submit`；Provider Job 仅作为 Runtime 内部 ProviderAttempt，见 [ADR 0036](../adr/0036-expose-provider-neutral-capabilities-to-agents.md)。
+1. 公开原子生成 seam 使用 Provider-neutral `capability.submit`；Provider Job 仅作为本地执行权威内部的 ProviderAttempt，见 [ADR 0023](../adr/0023-centralize-production-execution-contract.md) 与 [ADR 0027](../adr/0027-use-schema-driven-route-mapping.md)。
 2. 首个 tracer bullet 使用图片任务，先验证持久化、幂等、恢复、Artifact 和 Workflow revision，再接视频。
-3. 首个 WebUI Adapter 只接 Workflow；ProductionRuntime 保持 UI-neutral，Table 或未来 Canvas 通过相同 Interface 后续接入。
-4. ProductionSpec Revision 是制作计划权威；Workflow 只保存可重建投影和独立布局 revision。
+3. 首个 WebUI Adapter 只接 Workflow；ProductionRuntime 保持 UI-neutral。Table 与 Agent 通过各自类型化 Interface 接入，不恢复旧 Canvas，也不混用三种工作区的图语义。
+4. 批准前 Workflow Draft 是编辑权威，批准后 ProductionSpec Revision 是执行权威；Workflow 同时展示但明确分离 Draft 与可重建 Production Plan Projection。
 5. 用户可以在已支持 Provider Adapter Family 内验证本地 BYOK Route，但未知协议必须新增受审 Adapter。
 6. 每个 ProductionSession 在 V1 中至多绑定一个 Bound Production Skill；无绑定时直接使用 ProductionSpec Core。
 7. Runtime/TUI 持续监控长任务，仅通过 Agent Intervention Event 唤醒 Coding Agent。

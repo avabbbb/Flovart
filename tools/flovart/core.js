@@ -16,6 +16,7 @@ export const COMMAND_ALIASES = {
   flovart_workflow_node_delete: 'workflow.node.delete',
   flovart_workflow_node_move: 'workflow.node.move',
   flovart_workflow_node_resize: 'workflow.node.resize',
+  flovart_workflow_node_tool: 'workflow.node.tool',
   flovart_workflow_connect: 'workflow.connect',
   flovart_workflow_disconnect: 'workflow.disconnect',
   flovart_workflow_select: 'workflow.select',

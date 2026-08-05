@@ -8,7 +8,7 @@
 
 - 领域词与边界：[CONTEXT.md](../../CONTEXT.md)
 - 16 条首期线路及官方依据：[RunningHub 首期 Route Catalog](runninghub-route-catalog.md)
-- 决策：[0027 按模式绑定](../adr/0027-bind-product-models-to-provider-routes-by-mode.md)、[0028 Schema 与 Adapter](../adr/0028-own-provider-parameters-in-route-schemas-and-adapters.md)、[0029 未验证 Route 禁止执行](../adr/0029-require-verified-route-schemas-before-execution.md)、[0030 价格预估](../adr/0030-preview-route-price-without-making-it-an-availability-gate.md)、[0031 验收](../adr/0031-verify-every-route-contract-and-smoke-test-each-mode.md)、[0032 低价默认](../adr/0032-prefer-low-price-routes-by-default.md)、[0033 参数冲突](../adr/0033-drive-controls-and-preflight-from-route-schemas.md)
+- 决策：[ADR 0027：使用 Schema 驱动的统一 Route Mapping](../adr/0027-use-schema-driven-route-mapping.md)
 
 ## 必须先修的阻断项
 

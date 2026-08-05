@@ -1,9 +1,7 @@
-# 以三种发行入口共享一个核心
+# 不同发行入口共享一个核心
 
-Flovart 分别交付面向个人设计师的 Desktop Edition、面向 Coding Agent 用户的 Agent Toolkit 和面向托管服务的 SaaS Deployment，不要求一个安装包同时承担三类用户的依赖与运维复杂度；三种入口共享同一 Runtime、Canonical Command Registry、Provider-neutral Capability 和 Production Skill Package 契约。Desktop Edition V1 只正式支持 Windows 10/11 x64，入口必须是可直接安装的 EXE，且不得要求普通设计师预装 Git、Node.js、Go 或 Docker；macOS 与 Linux 桌面发行延后，Agent 与 SaaS 的安装和升级生命周期独立演进。
+Flovart 分别交付面向设计师的 Web/Desktop Edition、面向 Coding Agent 用户的 Agent Toolkit，以及面向组织的 SaaS Deployment；不同入口可以拥有独立的安装、升级和运维生命周期，但必须共享领域模型、Canonical Command Registry、Provider-neutral Capability、Production Skill Package 与工作区数据契约，不能形成互不兼容的执行后端。
 
-Windows Release 同时产出两个 NSIS EXE：官网主推小体积安装包，在系统缺少 WebView2 时自动下载补齐；支持页另提供内置 WebView2 Offline Installer 的完整离线包。两个产物安装同一 Desktop Edition，不形成不同功能版本，也不要求普通用户理解 WebView2。
+Desktop Edition 以普通设计师可直接安装和本地 BYOK 为边界，不要求 Git、Node.js、Go 或 Docker；Agent Toolkit 通过轻量 Bootstrapper 分发版本化 CLI、TUI、宿主适配与兼容 Runtime Bundle，不把完整源码仓库作为用户安装产物。Edge Extension 是 Desktop 的薄内容导入伴侣，不持有 Provider Secret、不直接生成，也不复制完整 WebUI 或 Runtime。
 
-开发与小范围内测可以使用未签名 EXE，但面向普通设计师的公开 Release 必须通过 Windows Authenticode 代码签名并带时间戳；Tauri Updater 的更新包签名继续独立存在，不能替代 Windows 对安装器发布者身份的验证。
-
-Desktop Edition 的核心生成路径免注册登录并采用本地优先 BYOK：用户安装后只需配置自己的 Provider 凭据即可创作，本机 Runtime、项目与生成状态不得依赖 Go Hub、Enterprise Backend、PostgreSQL 或 SaaS 在线状态。账号登录只用于用户主动选择的 Skill Hub、云同步或组织服务，不能成为本地生成的前置条件。
+本地创作与生成不以账号登录为前置条件；登录只用于用户主动选择的社区、Skill Hub、云同步和组织服务。首次保存 Provider Secret 或发起可能计费的请求前必须取得版本化的本地协议同意。具体安装器格式、平台矩阵、签名、商店权限和启动命令属于发布与实施文档，不再分别创建 ADR。

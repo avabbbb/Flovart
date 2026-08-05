@@ -194,7 +194,7 @@ describe('InfiniteWorkflow surface interactions', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '加载视频播放器' }));
     expect(editor().querySelectorAll('video')).toHaveLength(1);
-    expect(editor().querySelector('video')).toHaveAttribute('preload', 'none');
+    expect(editor().querySelector('video')).toHaveAttribute('preload', 'metadata');
     expect(screen.getByTestId('workflow-node-toolbar')).toBeInTheDocument();
     expect(screen.getByTestId('workflow-node-prompt-bar')).toBeInTheDocument();
 
