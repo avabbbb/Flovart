@@ -3,6 +3,7 @@ import { cancelWorkflowGeneration, runWorkflowGeneration } from '../services/wor
 import { getProductModel } from '../services/productModelCatalog';
 import type { ProductModelMode, UserApiKey } from '../types';
 import type { WorkflowProject } from '../components/workflow/types';
+import { createWorkflowOperationInputBinding, createWorkflowOperationNode, workflowOperationInputConnections } from '../components/workflow/operations';
 
 const imageKey: UserApiKey = {
   id: 'image-key',
@@ -10,7 +11,10 @@ const imageKey: UserApiKey = {
   capabilities: ['image'],
   key: 'secret',
   customModels: ['gpt-image-2'],
-  routeMappings: [{ target: { kind: 'product-mode', productModelId: 'flovart:gpt-image-2', mode: 'text-to-image' as const }, routeId: 'gpt-image-2', order: 0 }],
+  routeMappings: [
+    { target: { kind: 'product-mode', productModelId: 'flovart:gpt-image-2', mode: 'text-to-image' as const }, routeId: 'gpt-image-2', order: 0 },
+    { target: { kind: 'product-mode', productModelId: 'flovart:gpt-image-2', mode: 'image-to-image' as const }, routeId: 'gpt-image-2', order: 0 },
+  ],
   createdAt: 1,
   updatedAt: 1,
 };
@@ -59,6 +63,38 @@ const project = (): WorkflowProject => ({
 });
 
 describe('workflow generation', () => {
+  it('keeps an image generation Operation and appends an immutable output Take', async () => {
+    const source = project();
+    const operation = await createWorkflowOperationNode({
+      id: 'operation-1', capabilityId: 'image.generate@1', position: { x: 420, y: 80 }, prompt: '电影光线',
+      productModelId: 'flovart:gpt-image-2', parameters: { submode: 'text-to-image', count: 1 },
+      inputBindings: [createWorkflowOperationInputBinding('prompt-binding', 'text-1', 'prompt_context', 0)],
+      now: '2026-08-05T00:00:00.000Z',
+    });
+    source.nodes = [source.nodes[0], operation];
+    source.connections = workflowOperationInputConnections(operation);
+    let latest = source;
+    const result = await runWorkflowGeneration(source, operation.id, {
+      userApiKeys: [imageKey],
+      executeMedia: vi.fn().mockResolvedValue({ ok: true, elementId: operation.id, capability: 'image', mediaUrl: 'https://output/result', mimeType: 'image/png' }),
+      fetchMedia: vi.fn().mockResolvedValue(new Blob(['result'])),
+      ingestMedia: vi.fn().mockResolvedValue({ type: 'image', storageKey: 'result-key', name: 'result.png', mimeType: 'image/png', bytes: 6, naturalWidth: 800, naturalHeight: 400 }),
+      encodeDataUrl: vi.fn().mockResolvedValue('data:image/png;base64,AA=='),
+      getProject: () => latest,
+      onProjectChange: next => { latest = next; },
+      createId: (() => { let index = 0; return () => `generated-${index++}`; })(),
+    });
+    const committedOperation = result.nodes.find(node => node.id === operation.id);
+    const output = result.nodes.find(node => node.metadata.sourceOperationNodeId === operation.id);
+    expect(committedOperation?.type).toBe('operation');
+    expect(output).toMatchObject({ type: 'image', width: 420, height: 210, metadata: { storageKey: 'result-key', operationTakeId: 'generated-0', config: { modelId: 'flovart:gpt-image-2' } } });
+    expect(result.connections).toContainEqual(expect.objectContaining({ fromNodeId: operation.id, toNodeId: output?.id, kind: 'operation-output' }));
+    expect(committedOperation?.metadata.operation?.takes[0]).toMatchObject({
+      id: 'generated-0', status: 'success', outputNodeIds: [output?.id], snapshot: { renderedPrompt: expect.stringContaining('电影光线'), routeId: 'gpt-image-2' },
+    });
+    expect(committedOperation?.metadata.operation?.selectedTakeId).toBe('generated-0');
+  });
+
   it('runs a text node directly with text mode and replaces the initiator in place', async () => {
     const source = project();
     let latest = source;
@@ -421,7 +457,7 @@ describe('workflow generation', () => {
     expect(result.nodes[2].metadata).toMatchObject({ status: 'error', error: 'provider unavailable' });
   });
 
-  it('filters an actual unsupported video and audio reference from image generation', async () => {
+  it('rejects unsupported video and audio references instead of silently dropping visible bindings', async () => {
     const source = project();
     source.nodes.push(
       { id: 'video-ref', type: 'video', title: '视频参考', position: { x: 0, y: 0 }, width: 100, height: 100, metadata: { href: 'data:video/mp4;base64,AA==', mimeType: 'video/mp4' } },
@@ -430,13 +466,12 @@ describe('workflow generation', () => {
     source.connections.push({ id: 'video-link', fromNodeId: 'video-ref', toNodeId: 'config-1' }, { id: 'audio-link', fromNodeId: 'audio-ref', toNodeId: 'config-1' });
     source.nodes[2].metadata.mentionedNodeIds = ['image-1', 'video-ref', 'audio-ref'];
     const executeMedia = vi.fn().mockResolvedValue({ ok: true, elementId: 'config-1', capability: 'image', mediaUrl: 'https://output/image', mimeType: 'image/png' });
-    await runWorkflowGeneration(source, 'config-1', {
+    const result = await runWorkflowGeneration(source, 'config-1', {
       userApiKeys: [imageKey], executeMedia,
       fetchMedia: vi.fn().mockResolvedValue(new Blob(['image'])), ingestMedia: vi.fn().mockResolvedValue({ type: 'image', storageKey: 'result', name: 'result.png', mimeType: 'image/png', bytes: 5 }), onProjectChange: vi.fn(), encodeDataUrl: vi.fn().mockResolvedValue('data:image/png;base64,AA=='),
     });
-    const references = executeMedia.mock.calls[0][0].references;
-    expect(references.some((reference: any) => reference.type === 'image')).toBe(true);
-    expect(references.some((reference: any) => reference.type === 'video' || reference.type === 'audio')).toBe(false);
+    expect(executeMedia).not.toHaveBeenCalled();
+    expect(result.nodes.find(node => node.id === 'config-1')?.metadata.error).toBe('当前 Provider 线路不接收 @视频 参考');
   });
 
   it('passes audio references only when the selected video capability supports the audio slot', async () => {

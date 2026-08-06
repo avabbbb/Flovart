@@ -17,6 +17,12 @@ export const WORKFLOW_NODE_SPECS: Record<WorkflowNodeType, { title: string; widt
     height: 560,
     metadata: { status: 'idle', scriptBreakdown: { assets: [], shots: [] } },
   },
+  operation: {
+    title: '处理步骤',
+    width: 240,
+    height: 156,
+    metadata: { prompt: '', status: 'idle', config: { mode: 'image' } },
+  },
 };
 
 export const INITIAL_WORKFLOW_VIEWPORT = { x: 0, y: 0, k: 1 } as const;

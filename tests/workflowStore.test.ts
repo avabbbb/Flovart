@@ -8,6 +8,8 @@ import {
   WORKFLOW_STORE_KEY,
   type PersistedWorkflowState,
 } from '../components/workflow/store';
+import { createWorkflowNode } from '../components/workflow/constants';
+import { beginWorkflowOperationTake, completeWorkflowOperationTake, createWorkflowOperationInputBinding, createWorkflowOperationNode, workflowOperationInputConnections } from '../components/workflow/operations';
 import type { WorkflowProject } from '../components/workflow/types';
 import { workflowMediaStorage, workflowStorage } from '../components/workflow/storage';
 
@@ -135,7 +137,7 @@ describe('workflow project persistence', () => {
     expect(useWorkflowStore.getState().projects[0]).toEqual({
       id: projectId,
       title: 'A',
-      nodes: [{ ...videoNode(), isVisible: true, isLocked: false }],
+      nodes: [{ ...videoNode(), objectVersion: 1, isVisible: true, isLocked: false }],
       connections: [],
       selectedNodeIds: ['video-1'],
       viewport: { x: 0, y: 0, k: 1 },
@@ -143,9 +145,52 @@ describe('workflow project persistence', () => {
       agentSessions,
       activeAgentSessionId: 'session-1',
       draftLog: [],
+      draftVersion: 1,
       createdAt: '2026-01-02T03:04:05.000Z',
       updatedAt: '2026-01-02T03:04:05.000Z',
     });
+  });
+
+  it('rehydrates operation recipes, bindings, snapshots, and takes as one durable chain', async () => {
+    const source = createWorkflowNode('source-image', 'image', { x: 0, y: 0 }, { storageKey: 'source-key', status: 'success' });
+    const binding = createWorkflowOperationInputBinding('crop-input', source.id, 'source_image', 0);
+    let operation = await createWorkflowOperationNode({
+      id: 'crop-operation', capabilityId: 'image.crop@1', position: { x: 400, y: 0 },
+      parameters: { x: .1, y: .1, width: .8, height: .8 }, inputBindings: [binding], now: '2026-08-06T00:00:00.000Z',
+    });
+    const started = await beginWorkflowOperationTake(operation, { id: 'take-1', snapshotId: 'snapshot-1', now: '2026-08-06T00:01:00.000Z' });
+    operation = completeWorkflowOperationTake(started.node, started.take.id, ['crop-output'], { now: '2026-08-06T00:02:00.000Z' });
+    const output = createWorkflowNode('crop-output', 'image', { x: 800, y: 0 }, {
+      storageKey: 'crop-key', status: 'success', sourceOperationNodeId: operation.id, operationTakeId: started.take.id,
+    });
+    const projectId = useWorkflowStore.getState().createProject('Operation 恢复');
+    useWorkflowStore.getState().updateProject(projectId, {
+      nodes: [source, operation, output],
+      connections: [
+        ...workflowOperationInputConnections(operation),
+        { id: 'crop-output-edge', fromNodeId: operation.id, toNodeId: output.id, kind: 'operation-output' },
+      ],
+      selectedNodeIds: [operation.id],
+      draftVersion: 4,
+    });
+    await vi.advanceTimersByTimeAsync(400);
+
+    useWorkflowStore.setState({ hydrated: false, projects: [], activeProjectId: null });
+    await useWorkflowStore.persist.rehydrate();
+
+    const restored = useWorkflowStore.getState().projects[0];
+    const restoredOperation = restored.nodes.find(node => node.id === operation.id);
+    expect(restored).toMatchObject({ draftVersion: 4, selectedNodeIds: [operation.id] });
+    expect(restoredOperation?.metadata.operation).toMatchObject({
+      capabilityId: 'image.crop@1',
+      recipe: { inputBindings: [binding], parameters: { x: .1, y: .1, width: .8, height: .8 } },
+      selectedTakeId: started.take.id,
+      takes: [{ id: started.take.id, status: 'success', snapshot: { id: 'snapshot-1' }, outputNodeIds: [output.id] }],
+    });
+    expect(restored.connections).toEqual([
+      { id: binding.id, fromNodeId: source.id, toNodeId: operation.id, kind: 'operation-input', role: 'source_image', order: 0 },
+      { id: 'crop-output-edge', fromNodeId: operation.id, toNodeId: output.id, kind: 'operation-output' },
+    ]);
   });
 
   it('coalesces debounced writes and resolves every waiter after the final value is stored', async () => {

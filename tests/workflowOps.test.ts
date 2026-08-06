@@ -1,6 +1,7 @@
 import { nanoid } from 'nanoid';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createWorkflowNode } from '../components/workflow/constants';
+import { createWorkflowOperationNode } from '../components/workflow/operations';
 import { applyWorkflowOps, validateWorkflowConnection } from '../components/workflow/ops';
 import type { WorkflowSnapshot } from '../components/workflow/types';
 
@@ -161,5 +162,39 @@ describe('applyWorkflowOps', () => {
 
     expect(result.snapshot.nodes).toEqual(before.nodes);
     expect(result.runRequests).toEqual([{ nodeId: 'b' }]);
+  });
+
+  it('keeps manual operation links and canonical Input Bindings synchronized', async () => {
+    const source = createWorkflowNode('source-image', 'image', { x: 0, y: 0 });
+    const operation = await createWorkflowOperationNode({
+      id: 'operation', capabilityId: 'image.generate@1', position: { x: 420, y: 0 }, parameters: { count: 1 }, inputBindings: [],
+    });
+    const initial = { ...snapshot(), nodes: [source, operation] };
+    const connected = applyWorkflowOps(initial, [{ type: 'connect_nodes', id: 'operation-input', fromNodeId: source.id, toNodeId: operation.id }]);
+
+    expect(connected.snapshot.connections[0]).toMatchObject({ id: 'operation-input', kind: 'operation-input', role: 'reference_image', order: 0 });
+    expect(connected.snapshot.nodes.find(node => node.id === operation.id)?.metadata.operation?.recipe.inputBindings).toEqual([
+      expect.objectContaining({ id: 'operation-input', sourceNodeId: source.id, role: 'reference_image', order: 0 }),
+    ]);
+
+    const edited = applyWorkflowOps(connected.snapshot, [{
+      type: 'update_node', id: operation.id,
+      metadata: { prompt: '参考 @图片1 生成海报', mentionedNodeIds: [source.id], imageReferenceOrder: [source.id] },
+    }]);
+    expect(edited.snapshot.connections[0]).toMatchObject({ id: 'operation-input', role: 'reference_image', order: 0 });
+    expect(edited.snapshot.nodes.find(node => node.id === operation.id)?.metadata.operation?.recipe).toMatchObject({
+      promptDocument: { text: '参考 @图片1 生成海报' },
+      inputBindings: [expect.objectContaining({ id: 'operation-input', sourceNodeId: source.id })],
+    });
+
+    const unmentioned = applyWorkflowOps(edited.snapshot, [{
+      type: 'update_node', id: operation.id, metadata: { mentionedNodeIds: [], imageReferenceOrder: [] },
+    }]);
+    expect(unmentioned.snapshot.connections).toEqual([]);
+    expect(unmentioned.snapshot.nodes.find(node => node.id === operation.id)?.metadata.operation?.recipe.inputBindings).toEqual([]);
+
+    const disconnected = applyWorkflowOps(connected.snapshot, [{ type: 'delete_connections', ids: ['operation-input'] }]);
+    expect(disconnected.snapshot.connections).toEqual([]);
+    expect(disconnected.snapshot.nodes.find(node => node.id === operation.id)?.metadata.operation?.recipe.inputBindings).toEqual([]);
   });
 });

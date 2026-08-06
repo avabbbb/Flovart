@@ -1,5 +1,7 @@
 import { nanoid } from 'nanoid';
-import type { WorkflowConnection, WorkflowNode, WorkflowOp, WorkflowSnapshot } from './types';
+import { getWorkflowOperationInputRoleForNodeType, validateWorkflowOperationInputBindings } from './operationRegistry';
+import { createWorkflowOperationInputBinding, updateWorkflowOperationFromMetadata, updateWorkflowOperationRecipe, workflowOperationInputConnections } from './operations';
+import type { WorkflowConnection, WorkflowNode, WorkflowOp, WorkflowOperationInputRole, WorkflowSnapshot } from './types';
 
 export interface WorkflowOpResult {
   snapshot: WorkflowSnapshot;
@@ -36,6 +38,58 @@ function createUniqueConnectionId(connections: WorkflowConnection[]): string {
   let id = nanoid();
   while (connections.some(connection => connection.id === id)) id = nanoid();
   return id;
+}
+
+function operationInputRole(fromNode: WorkflowNode, toNode: WorkflowNode): WorkflowOperationInputRole | null {
+  const capabilityId = toNode.metadata.operation?.capabilityId;
+  if (!capabilityId) return null;
+  return getWorkflowOperationInputRoleForNodeType(capabilityId, fromNode.type);
+}
+
+function connectOperationInput(snapshot: WorkflowSnapshot, connection: WorkflowConnection): WorkflowSnapshot {
+  const source = snapshot.nodes.find(node => node.id === connection.fromNodeId);
+  const target = snapshot.nodes.find(node => node.id === connection.toNodeId);
+  if (!source || !target || target.type !== 'operation' || !target.metadata.operation) {
+    return { ...snapshot, connections: [...snapshot.connections, connection] };
+  }
+  const role = operationInputRole(source, target)!;
+  const existing = target.metadata.operation.recipe.inputBindings.find(binding => binding.sourceNodeId === source.id);
+  const binding = existing || createWorkflowOperationInputBinding(connection.id, source.id, role, target.metadata.operation.recipe.inputBindings.length);
+  const operation = existing ? target : updateWorkflowOperationRecipe(target, { inputBindings: [...target.metadata.operation.recipe.inputBindings, binding] });
+  return {
+    ...snapshot,
+    nodes: snapshot.nodes.map(node => node.id === target.id ? operation : node),
+    connections: [...snapshot.connections, { ...connection, kind: 'operation-input', role: binding.role, order: binding.order }],
+  };
+}
+
+function removeOperationInputs(snapshot: WorkflowSnapshot, removed: WorkflowConnection[]): WorkflowSnapshot {
+  if (!removed.length) return snapshot;
+  const removedSourcesByTarget = new Map<string, Set<string>>();
+  removed.forEach(connection => {
+    const target = snapshot.nodes.find(node => node.id === connection.toNodeId);
+    if (target?.type !== 'operation') return;
+    const sources = removedSourcesByTarget.get(target.id) || new Set<string>();
+    sources.add(connection.fromNodeId);
+    removedSourcesByTarget.set(target.id, sources);
+  });
+  return {
+    ...snapshot,
+    nodes: snapshot.nodes.map(node => {
+      const sources = removedSourcesByTarget.get(node.id);
+      const operation = node.metadata.operation;
+      if (!sources || !operation) return node;
+      return updateWorkflowOperationRecipe(node, { inputBindings: operation.recipe.inputBindings.filter(binding => !sources.has(binding.sourceNodeId)) });
+    }),
+  };
+}
+
+function synchronizeOperationInputConnections(connections: WorkflowConnection[], node: WorkflowNode): WorkflowConnection[] {
+  if (!node.metadata.operation) return connections;
+  return [
+    ...connections.filter(connection => connection.toNodeId !== node.id),
+    ...workflowOperationInputConnections(node),
+  ];
 }
 
 export function topoSort(nodes: WorkflowNode[], connections: WorkflowConnection[], nodeIds: string[]): string[] {
@@ -109,6 +163,19 @@ export function validateWorkflowConnection(
   if (snapshot.connections.some(connection => connection.fromNodeId === fromNodeId && connection.toNodeId === toNodeId)) {
     return { ok: false, reason: '节点之间已存在连接' };
   }
+  if (toNode.type === 'operation') {
+    if (!toNode.metadata.operation) return { ok: false, reason: 'Operation 配方缺失' };
+    const role = operationInputRole(fromNode, toNode);
+    if (!role) return { ok: false, reason: '该节点类型不能作为此 Operation 的输入' };
+    try {
+      validateWorkflowOperationInputBindings(toNode.metadata.operation.capabilityId, [
+        ...toNode.metadata.operation.recipe.inputBindings,
+        createWorkflowOperationInputBinding('__candidate__', fromNodeId, role, toNode.metadata.operation.recipe.inputBindings.length),
+      ]);
+    } catch (error) {
+      return { ok: false, reason: error instanceof Error ? error.message : 'Operation 输入不符合 Registry 契约' };
+    }
+  }
   if (createsCycle(snapshot.connections, fromNodeId, toNodeId)) return { ok: false, reason: '连接会形成循环' };
   return { ok: true };
 }
@@ -160,27 +227,42 @@ export function applyWorkflowOps(initial: WorkflowSnapshot, ops: WorkflowOp[]): 
       return;
     }
     if (op.type === 'update_node') {
+      const current = snapshot.nodes.find(node => node.id === op.id);
+      if (!current) return;
+      const metadataPatch = { ...(op.patch?.metadata || {}), ...(op.metadata || {}) };
+      const base = { ...current, ...op.patch, metadata: current.metadata };
+      const updated = current.metadata.operation && Object.keys(metadataPatch).length > 0
+        ? updateWorkflowOperationFromMetadata(base, metadataPatch)
+        : { ...base, metadata: { ...current.metadata, ...metadataPatch } };
       snapshot = {
         ...snapshot,
-        nodes: snapshot.nodes.map(node => node.id === op.id
-          ? { ...node, ...op.patch, metadata: { ...node.metadata, ...op.patch?.metadata, ...op.metadata } }
-          : node),
+        nodes: snapshot.nodes.map(node => node.id === op.id ? updated : node),
+        connections: synchronizeOperationInputConnections(snapshot.connections, updated),
       };
       return;
     }
     if (op.type === 'delete_nodes') {
       const ids = new Set(op.ids);
-      snapshot = {
+      const next = {
         ...snapshot,
         nodes: snapshot.nodes.filter(node => !ids.has(node.id)),
         connections: snapshot.connections.filter(connection => !ids.has(connection.fromNodeId) && !ids.has(connection.toNodeId)),
         selectedNodeIds: snapshot.selectedNodeIds.filter(id => !ids.has(id)),
       };
+      snapshot = {
+        ...next,
+        nodes: next.nodes.map(node => {
+          const operation = node.metadata.operation;
+          if (!operation || !operation.recipe.inputBindings.some(binding => ids.has(binding.sourceNodeId))) return node;
+          return updateWorkflowOperationRecipe(node, { inputBindings: operation.recipe.inputBindings.filter(binding => !ids.has(binding.sourceNodeId)) });
+        }),
+      };
       return;
     }
     if (op.type === 'delete_connections') {
       const ids = new Set(op.ids || []);
-      snapshot = { ...snapshot, connections: op.all ? [] : snapshot.connections.filter(connection => !ids.has(connection.id)) };
+      const removed = snapshot.connections.filter(connection => op.all || ids.has(connection.id));
+      snapshot = removeOperationInputs({ ...snapshot, connections: op.all ? [] : snapshot.connections.filter(connection => !ids.has(connection.id)) }, removed);
       return;
     }
     if (op.type === 'connect_nodes') {
@@ -193,14 +275,11 @@ export function applyWorkflowOps(initial: WorkflowSnapshot, ops: WorkflowOp[]): 
         reject(opIndex, op, validation.reason);
         return;
       }
-      snapshot = {
-        ...snapshot,
-        connections: [...snapshot.connections, {
-          id: op.id || createUniqueConnectionId(snapshot.connections),
-          fromNodeId: op.fromNodeId,
-          toNodeId: op.toNodeId,
-        }],
-      };
+      snapshot = connectOperationInput(snapshot, {
+        id: op.id || createUniqueConnectionId(snapshot.connections),
+        fromNodeId: op.fromNodeId,
+        toNodeId: op.toNodeId,
+      });
       return;
     }
     if (op.type === 'select_nodes') {

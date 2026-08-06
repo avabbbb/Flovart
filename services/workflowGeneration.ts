@@ -9,11 +9,12 @@ import type { ProductModelMode, UserApiKey } from '../types';
 import { executeUnifiedIgnition, generateTextWithProvider, SeedanceSubmissionUnknownError, type UnifiedIgnitionInput, type UnifiedIgnitionResult } from './aiGateway';
 import { getGenerationCapability } from './generationCapabilities';
 import { runPreflight } from './promptPreflight';
-import { explainReferenceCompatibility, getEffectiveReferenceLimits, getProductModel, getRoutedImageModes, getRoutedVideoModes, resolveProductModelRoute } from './productModelCatalog';
+import { explainReferenceCompatibility, getEffectiveReferenceLimits, getProductModel, getRoutedImageModes, getRoutedVideoModes } from './productModelCatalog';
 import { usePromptHistoryStore } from '../stores/usePromptHistoryStore';
 import { refundApiUsage, reserveApiUsage, updateApiUsage } from '../utils/usageMonitor';
 import { getPromptReferenceAliases } from '../utils/promptReferenceClipboard';
 import { resolveRouteMappingForSubmit, type RouteFallbackResolution } from './routeMapping';
+import { beginWorkflowOperationTake, completeWorkflowOperationTake } from '../components/workflow/operations';
 
 export interface WorkflowHistoryPayload {
   name?: string;
@@ -128,6 +129,10 @@ export function cancelWorkflowGeneration(projectId: string, nodeId: string) {
 export async function runWorkflowGeneration(project: WorkflowProject, nodeId: string, runtime: WorkflowGenerationRuntime): Promise<WorkflowProject> {
   const initialNode = project.nodes.find(node => node.id === nodeId);
   if (!initialNode) return project;
+  const isImageOperation = initialNode.type === 'operation' && initialNode.metadata.operation?.capabilityId === 'image.generate@1';
+  if (initialNode.type === 'operation' && !isImageOperation) {
+    return publish(runtime, patchInitiator(canonical(runtime, project), nodeId, { status: 'error', error: '该 Operation 需要对应的图片处理执行器', progress: undefined }));
+  }
   if (initialNode.type === 'script') return publish(runtime, patchInitiator(canonical(runtime, project), nodeId, { status: 'error', error: '脚本节点请双击打开编辑器进行拆解和批量生成', progress: undefined }));
   const mode = modeFor(initialNode);
   if (mode === 'audio') {
@@ -146,6 +151,7 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
   const preparedConnections: WorkflowProject['connections'] = [];
   const preparedHistory: WorkflowHistoryPayload[] = [];
   let committed = false;
+  let operationTakeId: string | undefined;
 
   const stillActive = () => {
     if (activeRequests.get(key)?.requestId !== requestId || controller.signal.aborted) return false;
@@ -165,13 +171,25 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
     const selectionRef = productModel?.id || modelRef;
     let productMode: ProductModelMode = (config.submode as ProductModelMode | undefined)
       || (mode === 'video' ? 'text-to-video' : 'text-to-image');
-    // 图片节点未显式选择 submode 时：若已有上游图片/视频引用且用户已为该模型配置 image-to-image 线路，则自动切到图生图，不再无脑走 text-to-image。
-    if (mode === 'image' && !config.submode && productModel) {
+    // 未显式选择 submode 时，只根据 PromptBar 中真正 @ 提及的输入切换模式；普通连线不能偷偷改变 Provider 契约。
+    if (!config.submode && productModel) {
       const earlySource = canonical(runtime, current);
       const earlyInputs = getWorkflowInputNodes(initiating, earlySource.nodes, earlySource.connections);
-      const hasImageRef = earlyInputs.some(node => node.type === 'image' || node.type === 'video');
-      if (hasImageRef && productModel.capabilities.modes.includes('image-to-image') && resolveProductModelRoute(selectionRef, 'image-to-image', runtime.userApiKeys)) {
+      const earlyMentionedIds = filterWorkflowInputIds(resolveWorkflowMentionIds(
+        initiating.metadata.prompt || '',
+        initiating.metadata.mentionedNodeIds || [],
+        toWorkflowMentionItems(earlyInputs),
+      ), initiating.id, earlySource.connections);
+      const earlyMedia = earlyMentionedIds
+        .map(id => earlySource.nodes.find(node => node.id === id))
+        .filter((node): node is WorkflowNode => Boolean(node && (node.type === 'image' || node.type === 'video' || node.type === 'audio')));
+      if (mode === 'image' && earlyMedia.some(node => node.type === 'image') && productModel.capabilities.modes.includes('image-to-image')) {
         productMode = 'image-to-image';
+      } else if (mode === 'video' && earlyMedia.length > 0) {
+        const imageCount = earlyMedia.filter(node => node.type === 'image').length;
+        const needsGeneralReference = earlyMedia.some(node => node.type === 'video' || node.type === 'audio') || imageCount > 1;
+        if (needsGeneralReference && productModel.capabilities.modes.includes('reference-to-video')) productMode = 'reference-to-video';
+        else if (imageCount > 0 && productModel.capabilities.modes.includes('image-to-video')) productMode = 'image-to-video';
       }
     }
     const resolved = await resolveRouteMappingForSubmit(
@@ -299,6 +317,20 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
     }
 
     const createId = runtime.createId || nanoid;
+    if (isImageOperation) {
+      const latest = canonical(runtime, current);
+      const operation = latest.nodes.find(node => node.id === nodeId);
+      if (!operation) throw new Error('图片生成 Operation 已不存在');
+      const started = await beginWorkflowOperationTake(operation, {
+        id: createId(),
+        snapshotId: createId(),
+        renderedPrompt: effectivePrompt,
+        routeId: resolved.routeId,
+      });
+      operationTakeId = started.take.id;
+      current = { ...latest, nodes: latest.nodes.map(node => node.id === nodeId ? started.node : node) };
+      await publish(runtime, current);
+    }
     const count = mode === 'text' ? 1 : Math.max(1, Math.min(4, config.count || 1));
     const batched = count > 1;
     const batchId = batched ? createId() : undefined;
@@ -445,12 +477,22 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
         throw abortError();
       }
 
-      if (batched) {
-        const resultNode = createWorkflowNode(createId(), mode, { x: initiating.position.x + initiating.width + 80, y: initiating.position.y + index * 48 }, { ...record, href: undefined, status: 'success' });
+      if (batched || isImageOperation) {
+        const resultNode = {
+          ...createWorkflowNode(createId(), mode, { x: initiating.position.x + initiating.width + 80, y: initiating.position.y + index * 48 }, {
+            ...record,
+            href: undefined,
+            status: 'success',
+            config: initiating.metadata.config,
+            sourceOperationNodeId: isImageOperation ? nodeId : undefined,
+            operationTakeId: isImageOperation ? operationTakeId : undefined,
+          }),
+          ...fitWorkflowMediaSize(mode, record.naturalWidth, record.naturalHeight),
+        };
         resultNode.title = mode === 'video' ? '生成视频' : '生成图片';
         preparedNodes.push(resultNode);
         if (!stillActive()) throw abortError();
-        preparedConnections.push({ id: createId(), fromNodeId: nodeId, toNodeId: resultNode.id });
+        preparedConnections.push({ id: createId(), fromNodeId: nodeId, toNodeId: resultNode.id, kind: isImageOperation ? 'operation-output' : 'data' });
       } else {
         const size = fitWorkflowMediaSize(mode, record.naturalWidth, record.naturalHeight);
         const center = { x: initiating.position.x + initiating.width / 2, y: initiating.position.y + initiating.height / 2 };
@@ -493,7 +535,7 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
     if (batchId) preparedNodes.forEach((node, index) => { node.batchId = batchId; node.batchIndex = index; });
 
     if (!stillActive()) throw abortError();
-    if (batched) {
+    if (batched || isImageOperation) {
       const latest = canonical(runtime, current);
       current = {
         ...latest,
@@ -502,6 +544,16 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
       };
     } else {
       current = patchInitiator(current, nodeId, { status: 'success' as const, error: undefined, progress: 100, generationRequestId: undefined, generationStartedAt: undefined, generationMessage: undefined });
+    }
+    if (operationTakeId) {
+      const operation = current.nodes.find(node => node.id === nodeId);
+      if (operation) {
+        const completed = completeWorkflowOperationTake(operation, operationTakeId, preparedNodes.map(node => node.id), {
+          providerTaskId: operation.metadata.generationProviderTaskId,
+          usageRecordId: operation.metadata.generationUsageRecordId,
+        });
+        current = { ...current, nodes: current.nodes.map(node => node.id === nodeId ? completed : node) };
+      }
     }
     activeRequests.delete(key);
     await publish(runtime, current);
@@ -523,7 +575,19 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
     if (!committed) await Promise.all(preparedNodes.map(node => node.metadata.storageKey ? discardWorkflowMediaRecord(node.metadata.storageKey) : Promise.resolve()));
     if (active && active.requestId !== requestId) return canonical(runtime, current);
     if (activeRequests.get(key)?.requestId === requestId) activeRequests.delete(key);
-    const latest = canonical(runtime, current);
+    let latest = canonical(runtime, current);
+    if (operationTakeId) {
+      const operation = latest.nodes.find(node => node.id === nodeId);
+      if (operation) {
+        const completed = completeWorkflowOperationTake(operation, operationTakeId, [], {
+          canceled: isAbort(error),
+          error: isAbort(error) ? '生成已停止' : error instanceof Error ? error.message : '生成失败，请重试。',
+          providerTaskId: operation.metadata.generationProviderTaskId,
+          usageRecordId: operation.metadata.generationUsageRecordId,
+        });
+        latest = { ...latest, nodes: latest.nodes.map(node => node.id === nodeId ? completed : node) };
+      }
+    }
     current = patchInitiator(latest, nodeId, isAbort(error)
       ? { status: 'idle', error: undefined, progress: undefined, generationRequestId: undefined, generationStartedAt: undefined, generationMessage: undefined }
       : { status: 'error', error: error instanceof Error ? error.message : '生成失败，请重试。', progress: undefined, generationRequestId: undefined, generationStartedAt: undefined, generationMessage: undefined });

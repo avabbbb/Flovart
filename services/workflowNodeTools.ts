@@ -22,6 +22,7 @@ import {
   type WorkflowImageToolOutcome,
   type WorkflowImageToolRuntime,
 } from './workflowImageTools';
+import { runWorkflowCropOperation, runWorkflowUpscaleOperation, type WorkflowImageOperationRuntime } from './workflowImageOperations';
 
 /** 画布二次处理工具：AI 可直接对选中节点执行这些工具，结果作为新节点+连线回填画布。 */
 export type { WorkflowNodeToolName } from '../components/workflow/nodeToolCatalog';
@@ -29,7 +30,7 @@ export type { WorkflowNodeToolName } from '../components/workflow/nodeToolCatalo
 export type WorkflowNodeToolOutcome = WorkflowImageToolOutcome;
 
 /** 图片工具经 WorkflowImageToolRuntime 走 Provider 路由；确定性工具只需画布媒体读入/写入。 */
-export interface WorkflowNodeToolRuntime extends WorkflowImageToolRuntime {}
+export interface WorkflowNodeToolRuntime extends WorkflowImageOperationRuntime {}
 
 const nanoidFactory = () => nanoid;
 
@@ -117,11 +118,21 @@ export async function runWorkflowNodeTool(
   runtime: WorkflowNodeToolRuntime,
 ): Promise<WorkflowNodeToolOutcome> {
   switch (tool) {
-    case 'upscale':
-      return runWorkflowImageAgent(projectId, nodeId, 'upscale', runtime, {
-        targetLongEdge: args.targetLongEdge,
-        algorithm: args.algorithm,
-      });
+    case 'crop':
+      return runWorkflowCropOperation(projectId, nodeId, {
+        x: finite(args.x, 0, 0, 1),
+        y: finite(args.y, 0, 0, 1),
+        width: finite(args.width, 1, Number.EPSILON, 1),
+        height: finite(args.height, 1, Number.EPSILON, 1),
+      }, runtime);
+    case 'upscale': {
+      const requestedAlgorithm = String(args.algorithm || 'high');
+      const algorithm = (['high', 'bilinear', 'nearest'].includes(requestedAlgorithm) ? requestedAlgorithm : 'high') as 'high' | 'bilinear' | 'nearest';
+      return runWorkflowUpscaleOperation(projectId, nodeId, {
+        targetLongEdge: Math.round(finite(args.targetLongEdge, 2048, 512, 8192)),
+        algorithm,
+      }, runtime);
+    }
     case 'remove-background':
       return runWorkflowImageAgent(projectId, nodeId, 'remove-background', runtime, {});
     case 'split-layers':

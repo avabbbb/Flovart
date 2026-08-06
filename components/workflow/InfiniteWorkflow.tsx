@@ -13,7 +13,6 @@ import {
   discardWorkflowMediaRecord,
   fitWorkflowMediaSize,
   ingestWorkflowMedia,
-  cropWorkflowImage,
   loadWorkflowMediaBlob,
   pruneWorkflowMedia,
   registerWorkflowMediaTransientReferences,
@@ -46,6 +45,7 @@ import { composeImageGrid } from './gridComposer';
 import { LIGHTING_PRESETS, buildRelightPrompt } from './LightingPresets';
 import type { WorkflowConnection, WorkflowNode as WorkflowNodeData, WorkflowNodeType, WorkflowOp, WorkflowPoint, WorkflowProject, WorkflowSnapshot, WorkflowViewport, ScriptShot, SlashCommand } from './types';
 import { runWorkflowImageAgent, runWorkflowImageEdit, runWorkflowImageSplit, type WorkflowImageToolOutcome, type WorkflowImageToolRuntime } from '../../services/workflowImageTools';
+import { runWorkflowCropOperation, runWorkflowUpscaleOperation } from '../../services/workflowImageOperations';
 import { transformImage } from '../../services/imageTransform';
 import { splitGrid as splitGridService } from '../../services/gridSplitter';
 import { trimVideo, splitAudioVideo, mergeVideos } from '../../services/videoTools';
@@ -804,27 +804,16 @@ export function InfiniteWorkflow({
         return;
       }
       if (confirmation.kind === 'crop') {
-        const blob = await loadWorkflowMediaBlob(node.metadata.storageKey, node.metadata.href);
-        const cropped = await cropWorkflowImage(blob, confirmation.crop);
-        const record = await ingestWorkflowMedia(new File([cropped], `crop-${node.metadata.name || 'image.png'}`, { type: cropped.type || node.metadata.mimeType || 'image/png' }));
-        if (!ownsImageToolTransaction(transaction) || projectRef.current.id !== transaction.projectId || !projectRef.current.nodes.some(item => item.id === node.id)) {
-          await discardWorkflowMediaRecord(record.storageKey);
-          if (ownsImageToolTransaction(transaction)) {
-            setImageTool(null);
-            setImageToolError(null);
-            releaseImageToolTransaction(transaction);
-          }
-          return;
+        // 裁剪走显式 Operation：源图片 → Operation → 结果图片，不再原地覆盖源媒体。
+        const result = await runWorkflowCropOperation(transaction.projectId, node.id, confirmation.crop, imageToolRuntime);
+        if (!ownsImageToolTransaction(transaction)) return;
+        if (result.status === 'committed' && result.project.id === transaction.projectId && result.project.nodes.some(item => item.id === transaction.nodeId)) {
+          pushHistory(transaction.frame);
+          setNotice('图片裁剪完成');
+          setImageTool(null);
+          releaseImageToolTransaction(transaction);
         }
-        const width = record.naturalWidth || node.width;
-        const height = record.naturalHeight || node.height;
-        const center = { x: node.position.x + node.width / 2, y: node.position.y + node.height / 2 };
-        const size = fitWorkflowMediaSize('image', width, height);
-        pushHistory(transaction.frame);
-        patchProject({ nodes: projectRef.current.nodes.map(item => item.id === node.id ? { ...item, position: { x: center.x - size.width / 2, y: center.y - size.height / 2 }, width: size.width, height: size.height, metadata: { ...item.metadata, ...record, href: undefined } } : item) });
-        releaseWorkflowMediaRecord(record.storageKey);
-        setImageTool(null);
-        releaseImageToolTransaction(transaction);
+        else if (result?.status === 'stale') { setImageTool(null); setImageToolError(null); releaseImageToolTransaction(transaction); }
         return;
       }
       if (confirmation.kind === 'rotate') {
@@ -902,13 +891,14 @@ export function InfiniteWorkflow({
         return;
       }
       let result: WorkflowImageToolOutcome | null = null;
-      if (confirmation.kind === 'upscale') result = await runWorkflowImageAgent(transaction.projectId, node.id, 'upscale', imageToolRuntime, { targetLongEdge: confirmation.targetLongEdge, algorithm: confirmation.algorithm });
+      if (confirmation.kind === 'upscale') result = await runWorkflowUpscaleOperation(transaction.projectId, node.id, { targetLongEdge: confirmation.targetLongEdge, algorithm: confirmation.algorithm }, imageToolRuntime);
       if (confirmation.kind === 'split') result = await runWorkflowImageSplit(transaction.projectId, node.id, imageToolRuntime);
       if (confirmation.kind === 'outpaint') result = await runWorkflowImageEdit(transaction.projectId, node.id, `向${{ left: '左侧', right: '右侧', top: '上方', bottom: '下方', all: '四周' }[confirmation.direction]}扩展画面。${confirmation.prompt}`, undefined, imageToolRuntime);
       if (confirmation.kind === 'mask') result = await runWorkflowImageEdit(transaction.projectId, node.id, confirmation.prompt, { href: confirmation.maskDataUrl, mimeType: 'image/png' }, imageToolRuntime);
       if (!ownsImageToolTransaction(transaction)) return;
       if (result?.status === 'committed' && result.project.id === transaction.projectId && projectRef.current.id === transaction.projectId && result.project.nodes.some(item => item.id === transaction.nodeId)) {
         pushHistory(transaction.frame);
+        if (confirmation.kind === 'upscale') setNotice('高清放大完成');
         setImageTool(null);
         releaseImageToolTransaction(transaction);
       } else if (result?.status === 'stale') {
@@ -2087,7 +2077,7 @@ export function InfiniteWorkflow({
     if (!wfPendingInsert) return;
     const target = selectedNodeData.length === 1 && ['image', 'video', 'text'].includes(selectedNodeData[0].type) ? selectedNodeData[0] : null;
     if (target) {
-      applyOps([{ type: 'update_node', id: target.id, metadata: { ...target.metadata, prompt: wfPendingInsert.text, richTextDocument: undefined, mentionedNodeIds: [] } }]);
+      applyOps([{ type: 'update_node', id: target.id, metadata: { prompt: wfPendingInsert.text, richTextDocument: undefined } }]);
       setPromptFocusSignal(value => value + 1);
     }
     wfConsumeInsert();
@@ -2274,11 +2264,7 @@ export function InfiniteWorkflow({
               setOverlayHidden(true);
             }}
             onChangeText={content => { if (!node.isLocked) patchProject({ nodes: projectRef.current.nodes.map(item => item.id === node.id ? { ...item, metadata: { ...item.metadata, content } } : item) }); }}
-            onChangeMetadata={metadata => !node.isLocked && patchProject({
-              nodes: projectRef.current.nodes.map(item => item.id === node.id
-                ? { ...item, metadata: { ...item.metadata, ...metadata, config: metadata.config ? { ...item.metadata.config, ...metadata.config } : item.metadata.config } }
-                : item),
-            })}
+            onChangeMetadata={metadata => { if (!node.isLocked) applyOps([{ type: 'update_node', id: node.id, metadata }]); }}
             onRun={() => { if (!node.isLocked) onRunNode(node.id); }}
             onReplaceMedia={file => { if (!node.isLocked) void replaceMedia(node, file); }}
             onRemoveMedia={() => { if (!node.isLocked) removeMedia(node); }}
@@ -2359,9 +2345,9 @@ export function InfiniteWorkflow({
           />
         </div>
         {selectedNodeData.length === 1 && selectedNodeData[0].type === 'config' && <div data-workflow-overlay style={{ position: 'absolute', zIndex: 69, left: configLeft, top: promptTop, width: 420 }} onWheel={event => event.stopPropagation()}>
-          <WorkflowConfigPanel node={selectedNodeData[0]} nodes={project.nodes} connections={project.connections} onChange={metadata => applyOps([{ type: 'update_node', id: selectedNodeData[0].id, metadata: { ...selectedNodeData[0].metadata, ...metadata } }])} onRun={() => onRunNode(selectedNodeData[0].id)} onStop={onStopNode ? () => onStopNode(selectedNodeData[0].id) : undefined} />
+          <WorkflowConfigPanel node={selectedNodeData[0]} nodes={project.nodes} connections={project.connections} onChange={metadata => applyOps([{ type: 'update_node', id: selectedNodeData[0].id, metadata }])} onRun={() => onRunNode(selectedNodeData[0].id)} onStop={onStopNode ? () => onStopNode(selectedNodeData[0].id) : undefined} />
         </div>}
-        {selectedNodeData.length === 1 && ['image', 'video', 'text'].includes(selectedNodeData[0].type) && <div data-workflow-overlay style={{ position: 'absolute', zIndex: 69, left: promptLeft, top: promptTop }}>
+        {selectedNodeData.length === 1 && ['image', 'video', 'text', 'operation'].includes(selectedNodeData[0].type) && <div data-workflow-overlay style={{ position: 'absolute', zIndex: 69, left: promptLeft, top: promptTop }}>
       <WorkflowNodePromptBar width={promptWidth} node={selectedNodeData[0]} nodes={project.nodes} connections={project.connections} t={t} theme={theme} language={language} userApiKeys={userApiKeys} dynamicModelOptions={dynamicModelOptions} onOpenSettings={onOpenSettings} onEnhancePrompt={onEnhancePrompt} isEnhancingPrompt={isEnhancingPrompt} onChange={metadata => applyOps([{ type: 'update_node', id: selectedNodeData[0].id, metadata }])} onRun={() => onRunNode(selectedNodeData[0].id)} onStop={onStopNode ? () => onStopNode(selectedNodeData[0].id) : undefined} focusSignal={promptFocusSignal} onDisconnectReference={fromNodeId => { const targetId = selectedNodeData[0].id; const conn = project.connections.find(c => c.toNodeId === targetId && c.fromNodeId === fromNodeId); if (!conn) return; applyOps([{ type: 'delete_connections', ids: [conn.id] }]); }} assetFolders={assetFolders} assetItems={assetSuggestions} assetLibrary={assetLibrary} onSelectWorkflowReference={selectedNodeData[0] ? (nodeId => handleSelectWorkflowReference(nodeId, selectedNodeData[0].id)) : undefined} onAddReferenceFiles={selectedNodeData[0] ? (files => handleAddReferenceFiles(files, selectedNodeData[0].id)) : undefined} onSelectAsset={selectedNodeData[0] ? (assetId => handleSelectAsset(assetId, selectedNodeData[0].id)) : undefined} onResolvePastedMentions={mentions => handleResolvePastedMentions(mentions, selectedNodeData[0].id)} onPasteUnresolvedMentions={labels => setNotice(`未能唯一匹配引用：${labels.map(label => `@${label}`).join('、')}，已保留为普通文字。`)} skillEnabled={false} />
         </div>}
       </>}

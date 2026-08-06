@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Workflow 图片生成、裁剪和高清放大开始统一为显式 Operation 链：Registry 集中声明能力、参数与确认级别，Operation 保存唯一 Recipe / Prompt Document / Input Binding / Execution Snapshot / Take，重跑追加 Take，取消与旧配方晚到结果可追溯，源图片不再被裁剪原地覆盖。
 - **AI 原生 Workflow Draft 落地**：AI/CLI/MCP 现在直接以 Draft Action 操作可见画布草稿，节点、连线、Prompt、参考素材都落在 `metadata.prompt`（PromptBar 可见可编辑），并持久化为项目 `draftLog` 供设计师在 Agent 面板「草稿」Tab 回溯和定位节点；新增 `workflow.node.tool` 命令让 AI 调用画布二次处理工具（高清放大、移除背景、拆分图层、图片编辑、旋转、宫格切分、视频剪辑/音视频分离/拼接/抽帧、音频截取/变速），结果回填为新节点 + 来源连线。
 - 设置页「桌面 Runtime 凭证」支持多凭证选择：Provider 有多个安全凭证时显示下拉，设计师选定具体凭证后再一键导入到画布 API 配置，导入的 `runtimeManaged` Key 进入模型映射并被画布节点使用。
 - 架构文档从 60 个碎片化 ADR 收敛为 12 个当前有效主题决策，删除已被替代的设计并由 Git 保留历史；AI 原生 Workflow Draft 统一纳入可见 Draft Action、语义 ChangeSet、单一 Draft Authority 与批准后不可变 ProductionSpec Revision。

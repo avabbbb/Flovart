@@ -21,6 +21,7 @@ export function createWorkflowProject(title = '未命名工作流'): WorkflowPro
     agentSessions: [],
     activeAgentSessionId: null,
     draftLog: [],
+    draftVersion: 1,
     createdAt: now,
     updatedAt: now,
   };
@@ -84,9 +85,9 @@ function cancelPendingWrite() {
 }
 
 export function normalizeWorkflowProject(project: WorkflowProject): WorkflowProject {
-  const nodes = project.nodes.map(node => ({ ...node, isVisible: node.isVisible !== false, isLocked: node.isLocked === true }));
+  const nodes = project.nodes.map(node => ({ ...node, objectVersion: node.objectVersion || 1, isVisible: node.isVisible !== false, isLocked: node.isLocked === true }));
   const nodeIds = new Set(nodes.map(node => node.id));
-  return { ...project, nodes, selectedNodeIds: project.selectedNodeIds.filter(id => nodeIds.has(id)) };
+  return { ...project, draftVersion: project.draftVersion || 1, nodes, selectedNodeIds: project.selectedNodeIds.filter(id => nodeIds.has(id)) };
 }
 
 export const workflowPersistStorage: PersistStorage<PersistedWorkflowState, Promise<void>> = {

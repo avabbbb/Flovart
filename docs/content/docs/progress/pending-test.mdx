@@ -2,6 +2,15 @@
 title: 待测试确认
 ---
 
+## Workflow 图片 Operation 配方与 Take 底座
+
+- 首个可测切片把 `image.generate@1`、`image.crop@1`、`image.upscale@1` 收进同一封闭 Registry，并由 Registry 派生 Agent 工具名、输入角色、参数校验、执行类别与确认级别；本地 crop 不再要求付费确认，upscale / generate 仍保留付费子图确认语义。
+- 图片生成、裁剪和放大现在都形成“输入媒体 → Operation Node → 输出媒体”。Operation 耐久保存 Recipe、Prompt Document、Input Binding、Execution Prompt Snapshot 与 Take；重跑复用同一 Operation 并追加 Take，不再原地覆盖源图片或复制源媒体 metadata。
+- PromptBar 和 `applyWorkflowOps` 共同修改 Operation 的唯一 Recipe；Binding ID 同时作为输入边 ID，连接、删除、排序和 Prompt 更新后不会产生第二套引用身份。Recipe 编辑后 Hash 置为 dirty，执行前重新冻结；取消记为 canceled，旧 Recipe 的晚到结果记为 `outdated_recipe` 且不会自动选中。
+- Browser/localforage 重载测试已覆盖来源图片、Operation、输出图片、Binding、Snapshot 与 Take 的恢复。视频 4 项、音频 2 项、其余图片/本地工具，以及跨媒体 ChangeSet、按组撤销、对象并发和完整恢复仍在 `todo.mdx`，本节不把它们写成完成。
+- 自动验证通过：`npx tsc --noEmit`；13 个 Operation/Workflow 相关测试文件 129 项；全量 Vitest 96 个文件 702 项通过、1 项预期失败、1 项跳过；Web 生产构建成功。构建仅保留既有的动态/静态重复导入与大 chunk 警告。
+- 待用户验证：① 对一张本地图片执行裁剪，确认源图保留并出现独立 Operation 与结果图；② 修改裁剪参数后重跑，确认同一 Operation 的 Take 数增加；③ 对图片执行高清放大，确认执行前仍有付费确认且 Take 可追溯实际 Route；④ 刷新页面后确认三段链路、Prompt、输入边和 Take 仍可编辑；⑤ 在运行中修改生成 Prompt，确认旧结果保留但不会替换当前选择。
+
 ## 架构文档与 AI 原生画布边界收敛
 
 - `docs/adr/` 从 60 个拆分决策收敛为 12 个当前有效主题 ADR；旧决定直接删除并由 Git 历史保留，`docs/adr/README.md` 成为唯一当前索引，编号空缺不再表示缺失文件。

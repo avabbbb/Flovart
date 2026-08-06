@@ -1,5 +1,7 @@
 import type { WorkflowOnlineTurnInput } from '../components/workflow/WorkflowAgentPanel';
 import { WORKFLOW_MUTATION_COMMANDS } from '../components/workflow/agentOps';
+import { WORKFLOW_NODE_TOOLS } from '../components/workflow/nodeToolCatalog';
+import { WORKFLOW_OPERATION_CAPABILITY_IDS, getWorkflowOperationCapability } from '../components/workflow/operationRegistry';
 import type { UserApiKey } from '../types';
 import { generateTextWithProvider, reversePromptStreamWithProvider } from './aiGateway';
 import {
@@ -37,6 +39,12 @@ const ALLOWED_COMMANDS = new Set([
   'workflow.select', 'workflow.viewport.set',
 ]);
 
+const OPERATION_TOOL_USAGE = WORKFLOW_OPERATION_CAPABILITY_IDS
+  .map(getWorkflowOperationCapability)
+  .filter(capability => capability.nodeTool && capability.agentUsage)
+  .map(capability => capability.agentUsage)
+  .join('；');
+
 const SYSTEM_PROMPT = `你是 Flovart 网站内置 Workflow Agent。你会收到脱敏后的当前 Workflow JSON、最近对话和用户请求。
 只能返回一个 JSON 对象，不要输出 Markdown。格式：
 {"message":"说明你的意图，不要声称尚未执行的操作已经成功","commands":[{"command":"workflow.node.create","args":{}}]}
@@ -47,7 +55,7 @@ commands 最多 8 条。只可使用下列命令：workflow.project.list、workf
 - workflow.node.update: {nodeId,patch}，prompt/content/config 放在 patch.metadata 内
 - workflow.node.delete/run/stop: {nodeId}
 - workflow.node.move: {nodeId,x,y}；workflow.node.resize: {nodeId,width,height}
-- workflow.node.tool: {nodeId,tool,...}，tool 可选 upscale/remove-background/split-layers/edit/rotate/split-grid/video-trim/video-av-split/video-merge/video-extract-frame/audio-trim/audio-speed；edit 需 prompt，rotate 需 rotation，split-grid 需 rows/cols，视频/音频工具按需 startSec/endSec/speed/sourceNodeIds/position
+- workflow.node.tool: {nodeId,tool,...}，tool 可选 ${WORKFLOW_NODE_TOOLS.join('/')}；${OPERATION_TOOL_USAGE}；edit 需 prompt，rotate 需 rotation，split-grid 需 rows/cols，视频/音频工具按需 startSec/endSec/speed/sourceNodeIds/position
 - workflow.connect: {fromNodeId,toNodeId}；workflow.disconnect: {connectionId}
 - workflow.select: {ids}；workflow.viewport.set: {x,y,k}
 节点类型仅限 text、image、video、audio、config。涉及已有节点时必须使用 Workflow JSON 中真实 id；信息不足时 commands 返回空数组并在 message 中说明。不要在参数中放 API Key、data URL、blob URL、storageKey 或本地路径。写操作会由用户确认并通过 Flovart dispatcher 执行。`;

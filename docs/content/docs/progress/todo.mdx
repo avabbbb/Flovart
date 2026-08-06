@@ -79,13 +79,13 @@ Table 是 Workflow 之外的第二个正式创作工作区，不是电子表格�
 - **TUI 制作控制台 V2**：⬜ 在保持 CLI 为唯一命令入口的前提下，增加 Task drill-down、价格批准、Artifact 预览、Agent token stream 和失败镜头重做；TUI 不保存第三份 Runtime/Workflow 状态。
 - **运行态 Workflow Projection（当前基线）**：🟨 `production.dry-run` 已持久编译 ProductionRun/StageRun DAG，`workflow.projection.get` 与 Desktop 轮询 Adapter 已把阶段和 Artifact 投到真实 Workflow，并保留用户布局；继续补 `workflow.projection.updated` 事件。该能力只负责运行恢复，不再作为最终编辑模型。
 - **AI 原生 Workflow Draft**：🟨 Agent 与设计师已通过同一套 Workflow Draft Action 直接操作画布草稿，节点、连线、Prompt、参考素材都落在 `metadata.prompt`（PromptBar 可见可编辑）；新增「草稿」记录 Tab 持久化每次 AI/CLI/MCP 动作并支持定位节点，新增 `workflow.node.tool` 让 AI 直接调用画布二次处理工具（放大/抠图/拆分/编辑/旋转/宫格/视频剪辑分离拼接抽帧/音频截取变速）。剩余：Agent 写操作进入画布本地撤销栈（当前经 dispatcher 直写 store，Ctrl+Z 不可回退 AI 动作）、可撤销删除/付费生成与冻结 Revision 的确认 Gate 语义收口、Production Plan Card 与 Revision 批准。
-- **Workflow Operation Node**：⬜ 将所有结果型操作统一为输入媒体 → 操作节点 → 输出媒体；节点耐久保存操作类型、Prompt、参数、产品模型意图、输入角色和 Task/Artifact 引用，可折叠为连线步骤但必须可展开编辑。重跑产生新 Take，裁剪、放大、剪辑等不得再原地覆盖源媒体或生成无来源孤立节点。
-- **Operation Prompt Document**：⬜ 将结果型 Operation 的结构化 `promptDocument` 作为唯一 Prompt 权威，保存可编辑文本、Rich Prompt 与稳定 `@` 对象 ID/角色/顺序；现有 PromptBar 与 Agent 通过同一 Draft Action 修改。输出媒体和聊天只引用 Operation，不复制 Prompt，也不新增 InlinePrompt/NodePrompt 表面。
-- **Operation Input Binding**：⬜ 以稳定 Binding 统一 PromptBar `@` chip 与画布输入边，保存来源节点/Artifact、目标 Operation、角色、顺序和对象版本；任一入口添加、删除、改角色或排序都同步另一视图。迁移并删除可独立写入的 `mentionedNodeIds`、`referenceNodeIds`、`imageReferenceOrder` 与无角色连接真相。
-- **Operation Capability Registry**：⬜ 用一个轻量版本化封闭注册表取代 `nodeToolCatalog`、Toolbar handlers、Agent prompt 工具列表、Dispatcher 校验与执行 switch 的多套权威；声明输入输出角色、Recipe/参数 Schema、执行类别、费用/确认级别、Workflow/Table 归属和 UI key，并派生 Agent tools、控件、Preflight 与契约测试。V1 不允许 Production Skill 注入任意 HTTP/脚本操作。
+- **Workflow Operation Node**：🟨 图片 generate/crop/upscale 已形成输入媒体 → Operation → 输出媒体并支持同节点追加 Take；继续迁移视频、音频、其余图片/本地结果工具，补语义 LOD 与跨媒体一致执行，不得回退为原地覆盖或无来源孤立节点。
+- **Operation Prompt Document**：🟨 图片 Operation 已以 `promptDocument` 保存 Prompt 并由现有 PromptBar/Agent 共用；继续删除 `metadata.prompt` 等可独立写入旁路，扩到视频、音频与所有结果工具，不新增第二套 Prompt 表面。
+- **Operation Input Binding**：🟨 图片 Operation 已让 Binding ID 同时投影为输入边 ID，并保存角色/顺序/对象版本；继续补角色编辑、所有入口双向同步，迁移并删除 `mentionedNodeIds`、`referenceNodeIds`、`imageReferenceOrder` 与无角色连接真相。
+- **Operation Capability Registry**：🟨 已注册 image.generate/crop/upscale，并派生 Agent 工具、Dispatcher 参数/确认和输入 Preflight；继续迁入 4 个视频、2 个音频及 remove-background/split-layers/edit/rotate/split-grid，删除 legacy catalog 与执行 switch 后才能完成。
 - **Workflow Agent Tool Loop**：⬜ 内置 Flovart Agent 采用读取当前 Draft → 调用 Registry 工具 → 观察新 Draft/Object Version 与结果 → 继续的迭代循环，一个用户回合归入一个 ChangeSet；支持步数/时间限制、取消、steer、对象冲突重读与授权暂停。长时任务只返回持久句柄，由 Runtime/Workspace 观察，不让 Agent 轮询；旧网站 one-shot JSON 命令批次退出主流程。
-- **AI 原生图片 tracer bullet**：⬜ 首先只贯通 `image.generate@1 → image.crop@1 → image.upscale@1`：显式 Operation Node、PromptBar/Agent 共用 Prompt Document、`@` Input Binding、generate/upscale 精确子图授权、crop 本地直跑、Execution Prompt Snapshot、Take、partial ChangeSet/时间线、对象冲突、晚到结果、撤销与页面重载恢复。视频、音频、Table Promotion 和其余图片工具在本链验收前不得写成完成。
-- **Execution Prompt Snapshot**：⬜ 每个 ProviderAttempt/Take 冻结源 Prompt Document Hash、实际提交文本、引用绑定、规范化参数和编译器版本；增强、翻译、模板和 Provider 适配差异可查看但不静默覆盖 PromptBar。明确“采用到 PromptBar”时才创建新 Draft Action 并重新计算 Recipe Hash/授权。
+- **AI 原生图片 tracer bullet**：🟨 image.generate/crop/upscale 已贯通显式 Operation、共享 Prompt Document/Input Binding、Snapshot、Take、取消、晚到结果和 localforage 重载；继续补精确子图授权卡、partial ChangeSet/时间线、对象冲突与按组撤销。验收门限制完成声明，不阻塞视频、音频及剩余工具继续迁入同一机制。
+- **Execution Prompt Snapshot**：🟨 图片 Operation Take 已冻结 Recipe Hash、提交文本、引用绑定、规范化参数、Route 和编译器版本；继续关联 ProviderAttempt/费用，并实现增强差异查看与“采用到 PromptBar”Draft Action。
 - **Operation Node 语义 LOD**：⬜ 运行中、失败、待确认、最近修改、选中或固定的操作显示完整卡片；稳定完成的简单步骤才随缩放折叠成带名称、状态、Take 数和警告的连线 chip。两种形态都可直接命中和键盘聚焦，支持单节点固定与全局展开，错误不得被缩放隐藏。
 - **Workflow / Table 工具分层**：⬜ Workflow 只保留单步、局部、立即服务下一次生成的 Operation Node；批量、多步骤、多输入/多输出、时间轴精修与可复用处理链进入 Table。抽出共享 `MediaOperationRecipe` Schema、参数控件与执行器，但两个工作区不得共享节点实例、历史或布局。
 - **显式 Table Promotion**：⬜ 支持把 Workflow Operation 的输入 Artifact 与 Recipe 提升为新 Table Session；提升后 Table 独占配方编辑，Workflow 只保留可点击引用步骤。Table 候选结果不会自动回写，用户或 Agent 明确发布时才以 Draft ChangeSet 更新 Workflow 的 `publishedArtifactId`，并保留旧发布版本用于回退。
@@ -97,7 +97,7 @@ Table 是 Workflow 之外的第二个正式创作工作区，不是电子表格�
 - **Workflow Draft Authority Port**：⬜ UI、Agent、Dispatcher、Timeline 只能通过统一 Port 读写 Draft、ChangeSet、Binding、Take 与布局。图片 tracer bullet 先实现 Browser/localforage Adapter，Zustand 只作 UI projection/cache；Desktop Adapter 后续复用契约，未显式 transfer 前不得双写 Runtime，Browser 页面关闭限制必须如实提示。
 - **草稿批准与 ProductionSpec Revision**：⬜ 批准前所有语义与布局修改只进入 Workflow Draft；用户批准时才冻结为不可变 ProductionSpec Revision。运行中细修改从当前 Revision 派生新草稿，重新批准后执行局部 Stage 失效、旧 Take 保留和单镜头重做。
 - **精确 Operation 子图授权**：⬜ Production Plan Card 一次锁定 Draft 版本、待运行 Operation 节点与依赖闭包、Recipe Hash、Route Plan、预算和 Gate；多个付费节点不逐项弹窗，未包含的新节点也不继承会话授权。语义修改只要求改动节点及受影响下游重新批准，本地可撤销非 Provider 操作继续直接执行。
-- **Operation Take 与晚到结果**：⬜ 每个结果绑定启动时 Recipe Hash、ProviderAttempt、费用状态与 Artifact。运行中 Recipe 被修改后，旧任务结果仍持久化并标为 `outdated_recipe`，但不得自动更新 `selectedTakeId` 或触发当前下游；设计师比较后明确采用时，以新 Draft ChangeSet 更新选择并重新计算受影响授权。
+- **Operation Take 与晚到结果**：🟨 图片 Operation 已按启动 Recipe Hash 保存 Take；运行中改 Recipe 后结果标为 `outdated_recipe` 且不更新 `selectedTakeId`。继续关联 ProviderAttempt、费用与 Artifact，补比较/明确采用动作，并将语义扩到视频、音频和其余结果工具。
 - **删除双轨状态**：⬜ Projection 接管后删除 `shadow-runtime-state.json`、Vite file queue 和浏览器完整快照作为命令真相；WebUI Local Agent Bridge 改为 Production Runtime Adapter。
 
 ## Provider 账单与取消

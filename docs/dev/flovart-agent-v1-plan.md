@@ -73,13 +73,13 @@ Workflow Draft 历史不只保存无法解释的整图快照，也不把每个�
 - Mandate 锁定 Draft 版本、Operation 节点与依赖闭包、Recipe Hash、Route Plan 和预算；新增节点不继承授权，语义修改只使受影响子图重新确认。
 - 聊天中的“可以”“继续”“开始”不得替代方案卡授权。
 
-### D1. AI 原生图片 tracer bullet
+### D1. AI 原生 Operation 完整链
 
-- 只先注册 `image.generate@1`、`image.crop@1` 与 `image.upscale@1`，从同一 Registry 生成 Agent/UI/校验契约。
-- 贯通显式 Operation Node、Prompt Document、Input Binding、Execution Prompt Snapshot、Take 与 Draft Change Timeline。
-- crop 作为本地可撤销动作直接运行；generate/upscale 按精确 Operation 子图一次授权。
-- 覆盖 Agent 与人工共用动作、partial ChangeSet、对象版本冲突、旧 Recipe 晚到结果、按组撤销与页面重载恢复。
-- 本切片不迁移视频、音频、Table Promotion 或所有旧图片工具，也不把这些能力写成已完成。
+- 第一阶段先贯通 `image.generate@1`、`image.crop@1` 与 `image.upscale@1`，从同一 Registry 生成 Agent/UI/校验契约，并落地显式 Operation Node、Prompt Document、Input Binding、Execution Prompt Snapshot 与 Take。
+- 第二阶段复用同一机制迁移 `video-trim`、`video-av-split`、`video-merge`、`video-extract-frame`、`audio-trim`、`audio-speed`，再迁移 `remove-background`、`split-layers`、`edit`、`rotate`、`split-grid`；不得为视频、音频或本地工具另建平行配方模型。
+- 第三阶段在全部媒体能力上统一 Agent/人工 Draft Action、partial ChangeSet、对象版本冲突、旧 Recipe 晚到结果、按组撤销与页面重载恢复，并删除旧 catalog、handler 与无角色连线权威。
+- 本地可撤销 Operation 直接运行；Provider Operation 按精确 Operation 子图一次授权。Provider 暂缺能力时仍实现本地执行器与共享机制，并如实记录未接通的 Provider 缺口。
+- 图片 tracer bullet 的验收门只限制完成声明，不限制后续实现范围；在整条结果工具链完成前，视频、音频和剩余图片工具不得被排除出计划。
 - 首个 Adapter 使用 Browser Workspace/localforage，但 UI、Agent、Dispatcher 与 Timeline 只能通过 Workflow Draft Authority Port 访问；Zustand 仅作 UI projection/cache，不增加 Runtime 双写。
 
 ### E. Production Skill 与 Specialist

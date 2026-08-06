@@ -1,6 +1,11 @@
-/** 画布二次处理工具目录（轻量，无重型依赖；服务实现见 services/workflowNodeTools.ts）。 */
-export type WorkflowNodeToolName =
-  | 'upscale'
+import {
+  WORKFLOW_OPERATION_NODE_TOOLS,
+  getWorkflowOperationCapabilityByNodeTool,
+  type WorkflowOperationNodeToolName,
+} from './operationRegistry';
+
+/** 尚未迁入 Operation Registry 的旧工具；每迁完一项就从这里删除。 */
+export type LegacyWorkflowNodeToolName =
   | 'remove-background'
   | 'split-layers'
   | 'edit'
@@ -13,13 +18,21 @@ export type WorkflowNodeToolName =
   | 'audio-trim'
   | 'audio-speed';
 
-export const WORKFLOW_NODE_TOOLS: readonly WorkflowNodeToolName[] = [
-  'upscale', 'remove-background', 'split-layers', 'edit', 'rotate', 'split-grid',
+export type WorkflowNodeToolName = WorkflowOperationNodeToolName | LegacyWorkflowNodeToolName;
+
+const LEGACY_WORKFLOW_NODE_TOOLS: readonly LegacyWorkflowNodeToolName[] = [
+  'remove-background', 'split-layers', 'edit', 'rotate', 'split-grid',
   'video-trim', 'video-av-split', 'video-merge', 'video-extract-frame', 'audio-trim', 'audio-speed',
 ];
 
+export const WORKFLOW_NODE_TOOLS: readonly WorkflowNodeToolName[] = [
+  ...WORKFLOW_OPERATION_NODE_TOOLS,
+  ...LEGACY_WORKFLOW_NODE_TOOLS,
+];
+
 export const WORKFLOW_NODE_TOOL_LABELS: Record<WorkflowNodeToolName, string> = {
-  upscale: '高清放大',
+  crop: getWorkflowOperationCapabilityByNodeTool('crop')!.label,
+  upscale: getWorkflowOperationCapabilityByNodeTool('upscale')!.label,
   'remove-background': '移除背景',
   'split-layers': '拆分图层',
   edit: '图片编辑',

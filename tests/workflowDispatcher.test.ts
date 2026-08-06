@@ -107,11 +107,43 @@ describe('workflow dispatcher', () => {
     });
     expect(result.ok).toBe(true);
     expect(result.result).toMatchObject({ nodeId: 'image-1', tool: 'upscale', committed: true });
-    expect(nodeToolRunner).toHaveBeenCalledWith(expect.any(String), 'image-1', 'upscale', { targetLongEdge: 2048 });
+    expect(nodeToolRunner).toHaveBeenCalledWith(expect.any(String), 'image-1', 'upscale', { targetLongEdge: 2048, algorithm: 'high' });
     const log = dependencies.getState().projects[0].draftLog || [];
     expect(log.at(-1)?.command).toBe('workflow.node.tool');
     expect(log.at(-1)?.summary).toBe('对节点「image-1」执行 upscale 工具');
     expect(log.at(-1)?.nodeIds).toEqual(['image-1']);
+  });
+
+  it('derives operation-tool validation and confirmation from the capability registry', async () => {
+    const { dispatch, dependencies } = setup();
+    const nodeToolRunner = vi.fn().mockResolvedValue({ status: 'committed', project: null });
+    dependencies.nodeToolRunner = nodeToolRunner;
+
+    const crop = await dispatch({
+      id: 'crop', command: 'workflow.node.tool',
+      args: { nodeId: 'image-1', tool: 'crop', x: .1, y: .1, width: .8, height: .8 },
+      source: 'agent',
+    });
+    expect(crop.confirmation).toBeUndefined();
+    expect(crop.ok).toBe(true);
+    expect(nodeToolRunner).toHaveBeenCalledWith(expect.any(String), 'image-1', 'crop', { x: .1, y: .1, width: .8, height: .8 });
+
+    const paid = await dispatch({
+      id: 'upscale-preview', command: 'workflow.node.tool',
+      args: { nodeId: 'image-1', tool: 'upscale', targetLongEdge: 2048 },
+      source: 'agent',
+    });
+    expect(paid.confirmation?.required).toBe(true);
+
+    nodeToolRunner.mockClear();
+    const invalid = await dispatch({
+      id: 'bad-crop', command: 'workflow.node.tool',
+      args: { nodeId: 'image-1', tool: 'crop', x: .8, y: 0, width: .5, height: 1 },
+      source: 'agent',
+    });
+    expect(invalid.error?.code).toBe('BAD_REQUEST');
+    expect(invalid.error?.message).toContain('裁剪范围不能超出图片');
+    expect(nodeToolRunner).not.toHaveBeenCalled();
   });
 
   it('rejects unknown canvas tools and requires a connected tool adapter', async () => {

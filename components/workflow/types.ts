@@ -1,6 +1,6 @@
 import type { ImageFilters, ProductModelMode } from '../../types';
 
-export type WorkflowNodeType = 'image' | 'text' | 'video' | 'audio' | 'config' | 'script';
+export type WorkflowNodeType = 'image' | 'text' | 'video' | 'audio' | 'config' | 'script' | 'operation';
 export type WorkflowNodeStatus = 'idle' | 'loading' | 'success' | 'error';
 export type WorkflowGenerationMode = 'text' | 'image' | 'video' | 'audio';
 export type WorkflowBackgroundMode = 'dots' | 'lines' | 'none';
@@ -51,6 +51,69 @@ export interface WorkflowViewport {
 
 export interface WorkflowRichPromptDocument extends Record<string, unknown> {
   type: string;
+}
+
+export type WorkflowOperationCapabilityId = 'image.generate@1' | 'image.crop@1' | 'image.upscale@1';
+export type WorkflowOperationInputRole = 'source_image' | 'reference_image' | 'prompt_context';
+export type WorkflowOperationTakeStatus = 'running' | 'success' | 'error' | 'canceled' | 'outdated_recipe';
+
+export interface WorkflowOperationInputBinding {
+  id: string;
+  sourceNodeId: string;
+  role: WorkflowOperationInputRole;
+  order: number;
+  objectVersion: number;
+}
+
+export interface WorkflowOperationPromptDocument {
+  text: string;
+  richTextDocument?: WorkflowRichPromptDocument;
+}
+
+export interface WorkflowOperationRecipe {
+  capabilityId: WorkflowOperationCapabilityId;
+  version: 1;
+  promptDocument: WorkflowOperationPromptDocument;
+  parameters: Record<string, unknown>;
+  productModelId?: string;
+  inputBindings: WorkflowOperationInputBinding[];
+  /** 当前已计算的语义 Hash；编辑后置空，执行/授权前必须重新冻结。 */
+  recipeHash: string | null;
+  objectVersion: number;
+  updatedAt: string;
+}
+
+export interface WorkflowExecutionPromptSnapshot {
+  id: string;
+  createdAt: string;
+  compilerVersion: 'workflow-image-operation@1';
+  renderedPrompt: string;
+  richTextDocument?: WorkflowRichPromptDocument;
+  parameters: Record<string, unknown>;
+  productModelId?: string;
+  inputBindings: WorkflowOperationInputBinding[];
+  recipeHash: string;
+  routeId?: string;
+}
+
+export interface WorkflowOperationTake {
+  id: string;
+  status: WorkflowOperationTakeStatus;
+  recipeHash: string;
+  createdAt: string;
+  completedAt?: string;
+  snapshot: WorkflowExecutionPromptSnapshot;
+  outputNodeIds: string[];
+  providerTaskId?: string;
+  usageRecordId?: string;
+  error?: string;
+}
+
+export interface WorkflowOperationRecord {
+  capabilityId: WorkflowOperationCapabilityId;
+  recipe: WorkflowOperationRecipe;
+  takes: WorkflowOperationTake[];
+  selectedTakeId?: string;
 }
 
 export interface WorkflowProviderConfig {
@@ -150,6 +213,11 @@ export interface WorkflowNodeMetadata {
   filters?: Partial<ImageFilters>;
   scriptBreakdown?: ScriptBreakdown;
   primaryImageId?: string;
+  /** 显式 Workflow Operation 的唯一可编辑配方与不可变执行记录。 */
+  operation?: WorkflowOperationRecord;
+  /** 媒体结果反向定位其来源 Operation 与 Take。 */
+  sourceOperationNodeId?: string;
+  operationTakeId?: string;
   productionProjection?: {
     projectionId: string;
     projectionVersion: number;
@@ -172,6 +240,7 @@ export interface WorkflowNode {
   freeResize?: boolean;
   isVisible?: boolean;
   isLocked?: boolean;
+  objectVersion?: number;
   batchId?: string;
   batchIndex?: number;
   batchGroupSource?: WorkflowBatchGroupSource;
@@ -182,6 +251,9 @@ export interface WorkflowConnection {
   id: string;
   fromNodeId: string;
   toNodeId: string;
+  kind?: 'data' | 'operation-input' | 'operation-output';
+  role?: WorkflowOperationInputRole;
+  order?: number;
 }
 
 export interface WorkflowAgentMessage {
@@ -228,6 +300,7 @@ export interface WorkflowProject {
   activeAgentSessionId: string | null;
   /** AI/CLI/MCP 驱动的草稿动作记录；设计师据此回溯并二次编辑。 */
   draftLog?: WorkflowDraftLogEntry[];
+  draftVersion?: number;
   createdAt: string;
   updatedAt: string;
 }

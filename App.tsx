@@ -25,6 +25,7 @@ import { translations } from './utils/translations';
 import './styles/generation.css';
 import type { TableProcessResult } from './services/tableMediaProcessor';
 import { resolveRouteMappingForSubmit, type RouteFallbackResolution } from './services/routeMapping';
+import { ensureWorkflowImageGenerateOperation } from './components/workflow/operations';
 
 const SettingsPanel = React.lazy(() => import('./components/SettingsPanel').then(m => ({ default: m.SettingsPanel })));
 const OnboardingWizard = React.lazy(() => import('./components/OnboardingWizard').then(m => ({ default: m.OnboardingWizard })));
@@ -222,9 +223,32 @@ const App: React.FC = () => {
     })), [generationHistory]);
 
     const handleRunWorkflowNode = useCallback(async (projectId: string, nodeId: string) => {
-        const project = useWorkflowStore.getState().projects.find(item => item.id === projectId);
+        let project = useWorkflowStore.getState().projects.find(item => item.id === projectId);
         if (!project) return;
-        await runWorkflowGeneration(project, nodeId, {
+        const requestedNode = project.nodes.find(item => item.id === nodeId);
+        const capabilityId = requestedNode?.metadata.operation?.capabilityId;
+        if (requestedNode?.type === 'operation' && (capabilityId === 'image.crop@1' || capabilityId === 'image.upscale@1')) {
+            const { rerunWorkflowImageOperation } = await import('./services/workflowImageOperations');
+            await rerunWorkflowImageOperation(projectId, nodeId, {
+                userApiKeys,
+                confirmRouteFallback,
+                getProject: () => useWorkflowStore.getState().projects.find(item => item.id === projectId) || null,
+                onProjectChange: next => { useWorkflowStore.getState().updateProject(projectId, next); },
+            });
+            return;
+        }
+        const prepared = await ensureWorkflowImageGenerateOperation({ project, nodeId, createId: generateId });
+        const executableNodeId = prepared.operationNodeId;
+        if (prepared.created) {
+            project = prepared.project;
+            useWorkflowStore.getState().updateProject(projectId, {
+                nodes: project.nodes,
+                connections: project.connections,
+                selectedNodeIds: project.selectedNodeIds,
+                draftVersion: project.draftVersion,
+            });
+        }
+        await runWorkflowGeneration(project, executableNodeId, {
             userApiKeys,
             confirmRouteFallback,
             getProject: () => useWorkflowStore.getState().projects.find(item => item.id === projectId) || null,

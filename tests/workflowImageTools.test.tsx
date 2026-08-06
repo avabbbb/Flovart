@@ -20,9 +20,15 @@ afterEach(async () => {
 
 function ImageHarness({ initial }: { initial: WorkflowProject }) {
   const [project, setProject] = useState(initial);
+  const output = project.nodes.find(node => node.metadata.sourceOperationNodeId);
   return <WorkflowGenerationCapabilitiesProvider>
     <InfiniteWorkflow project={project} updateProject={patch => setProject(current => ({ ...current, ...patch }))} onRunNode={vi.fn()} />
-    <output data-testid="image-harness-state" data-storage-key={project.nodes[0]?.metadata.storageKey || ''} />
+    <output
+      data-testid="image-harness-state"
+      data-operation-count={project.nodes.filter(node => node.type === 'operation').length}
+      data-output-storage-key={output?.metadata.storageKey || ''}
+      data-connection-count={project.connections.length}
+    />
   </WorkflowGenerationCapabilitiesProvider>;
 }
 
@@ -85,7 +91,7 @@ describe('workflow image tools UI', () => {
     expect(screen.getByRole('button', { name: '撤销' })).toBeDisabled();
   }, 15_000);
 
-  it('crops into durable storage, preserves the node center and ratio, and is undoable', async () => {
+  it('crops as source -> operation -> output, keeps the source untouched, and undoes the whole action', async () => {
     class TestImage {
       naturalWidth = 800; naturalHeight = 600; onload: null | (() => void) = null; onerror = null;
       set src(_value: string) { queueMicrotask(() => this.onload?.()); }
@@ -96,17 +102,21 @@ describe('workflow image tools UI', () => {
     render(<ImageHarness initial={imageProject()} />);
     fireEvent.click(screen.getByRole('button', { name: '裁剪图片' }));
     fireEvent.click(screen.getByRole('button', { name: '应用裁剪' }));
-    const croppedNode = document.querySelector<HTMLElement>('[data-workflow-node-id="image"]');
-    await waitFor(() => expect(croppedNode).toHaveStyle({ width: '420px', height: '315px' }));
-    expect(croppedNode?.style.transform).toContain('translateX(-40px) translateY(-37.5px)');
-    const stored = screen.getByTestId('image-harness-state').getAttribute('data-storage-key');
+    const state = screen.getByTestId('image-harness-state');
+    await waitFor(() => expect(state).toHaveAttribute('data-connection-count', '2'));
+    expect(state).toHaveAttribute('data-operation-count', '1');
+    expect(document.querySelector('[data-workflow-node-id="image"]')).toHaveStyle({ width: '340px', height: '240px' });
+    const imageNodes = document.querySelectorAll<HTMLElement>('.workflow-node--image');
+    expect(imageNodes).toHaveLength(2);
+    expect(imageNodes[1]).toHaveStyle({ width: '420px', height: '315px' });
+    expect(screen.getByTestId('workflow-operation-card')).toHaveTextContent('1 输入 · 1 Take');
+    const stored = state.getAttribute('data-output-storage-key');
     expect(stored).toMatch(/^workflow-media-/);
     expect(await workflowMediaStorage.get(stored!)).not.toBeNull();
     fireEvent.click(screen.getByRole('button', { name: '撤销' }));
-    const restoredNode = document.querySelector<HTMLElement>('[data-workflow-node-id="image"]');
     await waitFor(() => {
-      expect(restoredNode).toHaveStyle({ width: '340px', height: '240px' });
-      expect(restoredNode?.style.transform).toBe('none');
+      expect(state).toHaveAttribute('data-operation-count', '0');
+      expect(document.querySelectorAll('.workflow-node--image')).toHaveLength(1);
     });
   }, 15_000);
 

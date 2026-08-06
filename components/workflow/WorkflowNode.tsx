@@ -1,4 +1,4 @@
-import { Check, ChevronsDown, Clapperboard, FileText, Image as ImageIcon, Music2, Pencil, Play, Plus, Star, Upload, Video, X } from 'lucide-react';
+import { Check, ChevronsDown, Clapperboard, FileText, Image as ImageIcon, Music2, Pencil, Play, Plus, Sparkles, Star, Upload, Video, X } from 'lucide-react';
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type MouseEvent as ReactMouseEvent } from 'react';
 import { motion } from 'motion/react';
 import { WorkflowConfigPanel } from './WorkflowConfigPanel';
@@ -58,7 +58,7 @@ export function WorkflowNode({
   const status = node.metadata.status || 'idle';
   const progress = Math.max(0, Math.min(100, Math.round(node.metadata.progress || 0)));
   const generationMode = node.metadata.config?.mode || node.type;
-  const generationLabel = generationMode === 'video' ? '视频生成中' : generationMode === 'text' ? '文本生成中' : '图片生成中';
+  const generationLabel = node.type === 'operation' ? `${node.title}中` : generationMode === 'video' ? '视频生成中' : generationMode === 'text' ? '文本生成中' : '图片生成中';
   const generationMessage = node.metadata.generationMessage;
   const generationStartedAt = node.metadata.generationStartedAt;
   const [elapsedSec, setElapsedSec] = useState(0);
@@ -100,7 +100,7 @@ export function WorkflowNode({
     lastRenameSignalRef.current = renameSignal;
     if (!isEditingTitle) setEditingTitle(true);
   }, [renameSignal, isEditingTitle]);
-  const titleIcon = node.type === 'image' ? ImageIcon : node.type === 'video' ? Video : node.type === 'audio' ? Music2 : node.type === 'script' ? Clapperboard : FileText;
+  const titleIcon = node.type === 'image' ? ImageIcon : node.type === 'video' ? Video : node.type === 'audio' ? Music2 : node.type === 'script' ? Clapperboard : node.type === 'operation' ? Sparkles : FileText;
   const TitleIcon = titleIcon;
   const commitTitle = () => {
     const next = titleDraft.trim();
@@ -225,6 +225,7 @@ export function WorkflowNode({
           <WorkflowConfigPanel node={node} onChange={onChangeMetadata} onRun={onRun} />
         )}
         {node.type === 'script' && <ScriptNodeCard node={node} />}
+        {node.type === 'operation' && <OperationNodeCard node={node} onRun={onRun} />}
         {mediaDetails && <span className="workflow-node__media-details">{mediaDetails}</span>}
         {status === 'loading' && (
           <motion.div
@@ -270,6 +271,35 @@ export function WorkflowNode({
       </div>
       <button className="workflow-resize" aria-label="调整节点大小" onPointerDown={onResizeStart} />
     </motion.div>
+  );
+}
+
+function OperationNodeCard({ node, onRun }: { node: WorkflowNodeData; onRun: () => void }) {
+  const operation = node.metadata.operation;
+  if (!operation) return <div className="workflow-operation-card"><span>Operation 配方缺失</span></div>;
+  const latestTake = operation.takes.at(-1);
+  const parameters = operation.recipe.parameters;
+  const parameterLabel = operation.capabilityId === 'image.crop@1'
+    ? `${Math.round(Number(parameters.width || 0) * 100)}% × ${Math.round(Number(parameters.height || 0) * 100)}%`
+    : operation.capabilityId === 'image.upscale@1'
+      ? `${parameters.targetLongEdge || '-'}px · ${parameters.algorithm || '-'}`
+      : `${parameters.aspectRatio || '自适应'} · ×${parameters.count || 1}`;
+  const statusLabel = latestTake?.status === 'outdated_recipe' ? '旧配方结果'
+    : latestTake?.status === 'canceled' ? '已停止'
+    : latestTake?.status === 'error' ? '执行失败'
+      : latestTake?.status === 'success' ? '已完成'
+        : latestTake?.status === 'running' ? '执行中' : '待执行';
+  return (
+    <div className="workflow-operation-card" data-testid="workflow-operation-card">
+      <div className="workflow-operation-card__row"><strong>{parameterLabel}</strong><span>{statusLabel}</span></div>
+      <p title={operation.recipe.promptDocument.text}>{operation.recipe.promptDocument.text || '无文本 Prompt · 参数型操作'}</p>
+      <div className="workflow-operation-card__footer">
+        <span>{operation.recipe.inputBindings.length} 输入 · {operation.takes.length} Take</span>
+        <button type="button" data-workflow-overlay onPointerDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); onRun(); }} disabled={node.metadata.status === 'loading'}>
+          <Play size={11} fill="currentColor" />{latestTake?.status === 'error' ? '重试' : '运行'}
+        </button>
+      </div>
+    </div>
   );
 }
 

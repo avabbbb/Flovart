@@ -2,7 +2,8 @@ import { nanoid } from 'nanoid';
 import { WORKFLOW_MUTATION_COMMANDS, workflowCommandSummary } from '../components/workflow/agentOps';
 import { createWorkflowNode } from '../components/workflow/constants';
 import { appendWorkflowDraftLog, createWorkflowDraftLogEntry } from '../components/workflow/draftLog';
-import { WORKFLOW_NODE_TOOLS } from '../components/workflow/nodeToolCatalog';
+import { isWorkflowNodeTool } from '../components/workflow/nodeToolCatalog';
+import { getWorkflowOperationCapabilityByNodeTool, parseWorkflowOperationParameters } from '../components/workflow/operationRegistry';
 import { applyWorkflowOps } from '../components/workflow/ops';
 import { getWorkflowPersistenceError, useWorkflowStore } from '../components/workflow/store';
 import type { WorkflowNode, WorkflowNodeMetadata, WorkflowNodeType, WorkflowProject } from '../components/workflow/types';
@@ -132,6 +133,14 @@ function validateEnvelope(envelope: WorkflowCommandEnvelope): WorkflowCommandRes
   return null;
 }
 
+function requiresWorkflowConfirmation(envelope: WorkflowCommandEnvelope) {
+  if (!WORKFLOW_MUTATION_COMMANDS.has(envelope.command) || (envelope.source !== 'agent' && envelope.source !== 'mcp')) return false;
+  if (envelope.command !== 'workflow.node.tool') return true;
+  const tool = String(envelope.args.tool || '');
+  if (!isWorkflowNodeTool(tool)) return false;
+  return getWorkflowOperationCapabilityByNodeTool(tool)?.confirmation !== 'none';
+}
+
 export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDependencies) {
   const idempotencyCache = new Map<string, WorkflowCommandResult>();
   const cache = (key: string | undefined, result: WorkflowCommandResult) => {
@@ -146,7 +155,7 @@ export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDepende
     const cacheKey = envelope.idempotencyKey && `${envelope.source}:${envelope.idempotencyKey}`;
     if (cacheKey && idempotencyCache.has(cacheKey)) return idempotencyCache.get(cacheKey)!;
     const { command, args } = envelope;
-    if (WORKFLOW_MUTATION_COMMANDS.has(command) && (envelope.source === 'agent' || envelope.source === 'mcp') && args.confirmed !== true) {
+    if (requiresWorkflowConfirmation(envelope) && args.confirmed !== true) {
       return { ok: true, commandId: envelope.id, confirmation: { required: true, summary: workflowCommandSummary(command, args) } };
     }
 
@@ -191,7 +200,7 @@ export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDepende
         const nodeId = requiredString(args.nodeId || args.id, 'nodeId');
         const tool = requiredString(args.tool, 'tool');
         if (!project.nodes.some(node => node.id === nodeId)) return error(envelope.id, 'NOT_FOUND', `节点不存在：${nodeId}`);
-        if (!(WORKFLOW_NODE_TOOLS as readonly string[]).includes(tool)) return error(envelope.id, 'BAD_REQUEST', `不支持的画布工具：${tool}`);
+        if (!isWorkflowNodeTool(tool)) return error(envelope.id, 'BAD_REQUEST', `不支持的画布工具：${tool}`);
         const runner = dependencies.nodeToolRunner;
         if (!runner) return error(envelope.id, 'RUNNER_UNAVAILABLE', 'Workflow 画布工具适配器尚未连接。');
         const toolArgs: Record<string, unknown> = { ...args };
@@ -200,7 +209,9 @@ export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDepende
         delete toolArgs.id;
         delete toolArgs.tool;
         delete toolArgs.confirmed;
-        const outcome = await runner(project.id, nodeId, tool, toolArgs);
+        const capability = getWorkflowOperationCapabilityByNodeTool(tool);
+        const normalizedArgs = capability ? parseWorkflowOperationParameters(capability.id, toolArgs) : toolArgs;
+        const outcome = await runner(project.id, nodeId, tool, normalizedArgs);
         const committed = Boolean(outcome && typeof outcome === 'object' && (outcome as { status?: string }).status === 'committed');
         dependencies.updateProject(project.id, draftLogPatch(project, envelope, true, { nodeIds: [nodeId] }));
         result = { ok: true, commandId: envelope.id, result: { projectId: project.id, nodeId, tool, committed } };

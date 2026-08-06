@@ -6,6 +6,7 @@ import type { MentionData } from '../MediaMentionExtension';
 import type { AssetSuggestion } from '../MentionList';
 import type { ReferencePickerWorkflowItem } from '../studio/AssetReferencePicker';
 import { resolveProductModelRoute } from '../../services/productModelCatalog';
+import { getWorkflowOperationCapability } from './operationRegistry';
 import {
   applyImageReferenceOrder,
   filterWorkflowInputIds,
@@ -64,20 +65,30 @@ export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme,
   width?: number;
 }) {
   const [libraryOpen, setLibraryOpen] = useState(false);
+  const operationCapability = node.metadata.operation ? getWorkflowOperationCapability(node.metadata.operation.capabilityId) : undefined;
   const config = node.metadata.config || { mode: node.type === 'text' ? 'text' : node.type === 'video' ? 'video' : 'image' };
   const generationMode = modeFor(node, config);
-  const productMode = config.submode || (generationMode === 'video' ? 'text-to-video' : 'text-to-image');
+  const productMode = operationCapability?.id === 'image.upscale@1'
+    ? 'image-to-image'
+    : config.submode || (generationMode === 'video' ? 'text-to-video' : 'text-to-image');
   const availableProductModelIds = generationMode === 'video'
     ? dynamicModelOptions?.video || []
     : dynamicModelOptions?.image || [];
   const defaultMappedModelId = generationMode === 'text'
+    || operationCapability?.executor === 'local-transform'
     ? undefined
     : availableProductModelIds.find(modelId => Boolean(resolveProductModelRoute(modelId, productMode, userApiKeys)));
   const mentionItems = toWorkflowMentionItems([
     ...getOrderedImageReferences(node, nodes, connections),
     ...getWorkflowInputNodes(node, nodes, connections).filter(item => item.type === 'text'),
   ]);
-    const referenceItems: ReferencePickerWorkflowItem[] = nodes.filter(item => item.id !== node.id && item.isVisible !== false && (item.type === 'image' || item.type === 'video')).map(item => ({
+  const allowedReferenceTypes = operationCapability
+    ? new Set(operationCapability.inputRoles.flatMap(input => input.nodeTypes))
+    : null;
+  const referenceItems: ReferencePickerWorkflowItem[] = nodes.filter(item => item.id !== node.id
+    && item.isVisible !== false
+    && (item.type === 'image' || item.type === 'video')
+    && (!allowedReferenceTypes || allowedReferenceTypes.has(item.type))).map(item => ({
     id: item.id,
     label: item.title,
     elementType: item.type as 'image' | 'video',
@@ -118,7 +129,11 @@ export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme,
   // The model is filled once; subsequent user selection remains authoritative.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config.modelId, defaultMappedModelId]);
-  const keepConnectedMentions = (plainText: string, ids: string[]) => filterWorkflowInputIds(resolveWorkflowMentionIds(plainText, ids, mentionItems), node.id, connections);
+  const keepConnectedMentions = (plainText: string, ids: string[]) => {
+    const resolved = filterWorkflowInputIds(resolveWorkflowMentionIds(plainText, ids, mentionItems), node.id, connections);
+    const operationInputIds = node.metadata.operation?.recipe.inputBindings.map(binding => binding.sourceNodeId) || [];
+    return [...new Set([...operationInputIds, ...resolved])];
+  };
   const translatedPrompts = t('quickPrompts');
   const prompts = Array.isArray(translatedPrompts) ? translatedPrompts.filter((item): item is { name: string; value: string } => Boolean(item) && typeof item.name === 'string' && typeof item.value === 'string') : [];
   const providerUsageLabel = [
@@ -131,7 +146,7 @@ export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme,
   return (
     <div data-workflow-overlay data-testid="workflow-node-prompt-bar" data-language={language} className="inline-prompt-bar workflow-node-prompt" style={{ width, maxWidth: 'calc(100vw - 16px)' }} onPointerDown={event => event.stopPropagation()} onWheel={event => event.stopPropagation()}>
       {prompts.length > 0 && <button type="button" className="workflow-node-prompt__library-button" aria-label="提示词库" title="提示词库" onClick={() => setLibraryOpen(open => !open)}><BookOpen size={15} /></button>}
-      {libraryOpen && <div className="workflow-node-prompt__library" role="menu" aria-label="提示词库">{prompts.map((item, index) => <button type="button" role="menuitem" key={`${item.name}-${index}`} onClick={() => { onChange({ prompt: item.value, richTextDocument: undefined, mentionedNodeIds: [] }); setLibraryOpen(false); }}><strong>{item.name}</strong><span>{item.value}</span></button>)}</div>}
+      {libraryOpen && <div className="workflow-node-prompt__library" role="menu" aria-label="提示词库">{prompts.map((item, index) => <button type="button" role="menuitem" key={`${item.name}-${index}`} onClick={() => { onChange({ prompt: item.value, richTextDocument: undefined }); setLibraryOpen(false); }}><strong>{item.name}</strong><span>{item.value}</span></button>)}</div>}
       <PromptBar
         t={t}
         theme={theme}

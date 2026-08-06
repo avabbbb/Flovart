@@ -21,7 +21,11 @@ const productKey: UserApiKey = {
 };
 const videoProductKey: UserApiKey = {
   id: 'seedance-video', provider: 'volcengine', capabilities: ['video'], key: 'secret', customModels: ['doubao-seedance-2-0-260128'],
-  routeMappings: [{ target: { kind: 'product-mode', productModelId: 'flovart:seedance-2', mode: 'text-to-video' as const }, routeId: 'doubao-seedance-2-0-260128', order: 0 }],
+  routeMappings: ['text-to-video', 'image-to-video', 'reference-to-video', 'first-last-frame'].map((mode, order) => ({
+    target: { kind: 'product-mode' as const, productModelId: 'flovart:seedance-2', mode: mode as 'text-to-video' | 'image-to-video' | 'reference-to-video' | 'first-last-frame' },
+    routeId: 'doubao-seedance-2-0-260128',
+    order,
+  })),
   createdAt: 1, updatedAt: 1,
 };
 const klingProductKey: UserApiKey = {
@@ -199,7 +203,7 @@ describe('workflow node overlays', () => {
     expect(within(panel).getByRole('button', { name: '全能参考' })).toBeDisabled();
     expect(within(panel).getByRole('button', { name: '全能参考' })).toHaveAttribute('title', '该模型不支持多模态参考输入');
     expect(within(panel).getByRole('button', { name: '首尾帧' })).toBeDisabled();
-    expect(within(panel).getByRole('button', { name: '首尾帧' })).toHaveAttribute('title', '当前 API 路由不支持该模式');
+    expect(within(panel).getByRole('button', { name: '首尾帧' })).toHaveAttribute('title', '未映射该模式的 API 线路，请在设置中配置');
   });
 
   it('blocks video submission until the selected mode has the required references', () => {
