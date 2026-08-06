@@ -13,6 +13,11 @@ export type WorkflowOperationConfirmationClass = 'none' | 'paid-operation-subgra
 export type WorkflowOperationNodeToolName =
   | 'crop'
   | 'upscale'
+  | 'remove-background'
+  | 'split-layers'
+  | 'edit'
+  | 'rotate'
+  | 'split-grid'
   | 'video-trim'
   | 'video-av-split'
   | 'video-merge'
@@ -75,6 +80,26 @@ const upscaleParameters = z.object({
   algorithm: z.enum(['high', 'bilinear', 'nearest']).default('high'),
 });
 
+const imageEditParameters = z.object({
+  variant: z.enum(['edit', 'outpaint', 'mask', 'annotate', 'relight']).default('edit'),
+});
+
+const imageEditToolArguments = z.object({
+  prompt: z.string().trim().min(1),
+  maskNodeId: z.string().min(1).optional(),
+  maskHref: z.string().min(1).optional(),
+  maskMimeType: z.string().min(1).optional(),
+});
+
+const imageRotateParameters = z.object({
+  action: z.enum(['rotate-90', 'rotate-180', 'rotate-270', 'flip-h', 'flip-v']).default('rotate-90'),
+});
+
+const imageSplitGridParameters = z.object({
+  rows: z.number().int().min(1).max(6).default(2),
+  cols: z.number().int().min(1).max(6).default(2),
+});
+
 const videoTrimParameters = z.object({
   startSec: z.number().min(0),
   endSec: z.number().positive(),
@@ -113,7 +138,7 @@ export const WORKFLOW_OPERATION_CAPABILITIES: Readonly<Record<WorkflowOperationC
     summarizeParameters: parameters => `${parameters.aspectRatio || '自适应'} · ×${parameters.count || 1}`,
   },
   'image.crop@1': {
-    id: 'image.crop@1', label: '图片裁剪',
+    id: 'image.crop@1', label: '裁剪图片',
     mediaType: 'image',
     inputRoles: [{ role: 'source_image', nodeTypes: ['image'], min: 1, max: 1 }],
     outputRoles: [{ role: 'result_image', nodeType: 'image', min: 1, max: 1 }],
@@ -145,6 +170,64 @@ export const WORKFLOW_OPERATION_CAPABILITIES: Readonly<Record<WorkflowOperationC
       ] },
     ],
     summarizeParameters: parameters => `${parameters.targetLongEdge || '-'}px · ${parameters.algorithm || '-'}`,
+  },
+  'image.remove-background@1': {
+    id: 'image.remove-background@1', label: '移除背景', mediaType: 'image',
+    inputRoles: [{ role: 'source_image', nodeTypes: ['image'], min: 1, max: 1 }],
+    outputRoles: [{ role: 'result_image', nodeType: 'image', min: 1, max: 1 }],
+    executor: 'provider-image-tool', confirmation: 'paid-operation-subgraph', workflow: true, table: true,
+    uiKey: 'image-remove-background', nodeTool: 'remove-background', agentUsage: 'remove-background 无额外参数',
+    parameters: noParameters,
+    summarizeParameters: () => '透明背景',
+  },
+  'image.split-layers@1': {
+    id: 'image.split-layers@1', label: '拆分图层', mediaType: 'image',
+    inputRoles: [{ role: 'source_image', nodeTypes: ['image'], min: 1, max: 1 }],
+    outputRoles: [{ role: 'result_image', nodeType: 'image', min: 1 }],
+    executor: 'provider-image-tool', confirmation: 'paid-operation-subgraph', workflow: true, table: true,
+    uiKey: 'image-split-layers', nodeTool: 'split-layers', agentUsage: 'split-layers 无额外参数，可返回多个图层',
+    parameters: noParameters,
+    summarizeParameters: () => '多图层输出',
+  },
+  'image.edit@1': {
+    id: 'image.edit@1', label: '图片编辑', mediaType: 'image',
+    inputRoles: [
+      { role: 'source_image', nodeTypes: ['image'], min: 1, max: 1 },
+      { role: 'mask_image', nodeTypes: ['image'], min: 0, max: 1 },
+    ],
+    outputRoles: [{ role: 'result_image', nodeType: 'image', min: 1, max: 1 }],
+    executor: 'provider-image-tool', confirmation: 'paid-operation-subgraph', workflow: true, table: true,
+    uiKey: 'image-edit', nodeTool: 'edit', agentUsage: 'edit 必须提供 prompt，可选 maskNodeId 或 maskHref/maskMimeType',
+    parameters: imageEditParameters,
+    nodeToolArguments: imageEditToolArguments,
+    promptRequired: true,
+    summarizeParameters: parameters => ({ edit: '描述编辑', outpaint: '扩展画面', mask: '蒙版编辑', annotate: '标注编辑', relight: '重新打光' }[String(parameters.variant)] || '描述编辑'),
+  },
+  'image.rotate@1': {
+    id: 'image.rotate@1', label: '旋转镜像', mediaType: 'image',
+    inputRoles: [{ role: 'source_image', nodeTypes: ['image'], min: 1, max: 1 }],
+    outputRoles: [{ role: 'result_image', nodeType: 'image', min: 1, max: 1 }],
+    executor: 'local-transform', confirmation: 'none', workflow: true, table: true,
+    uiKey: 'image-rotate', nodeTool: 'rotate', agentUsage: 'rotate 使用 action（rotate-90/rotate-180/rotate-270/flip-h/flip-v）',
+    parameters: imageRotateParameters,
+    parameterControls: [{ key: 'action', kind: 'select', label: '动作', options: [
+      { label: '顺时针 90°', value: 'rotate-90' }, { label: '旋转 180°', value: 'rotate-180' },
+      { label: '逆时针 90°', value: 'rotate-270' }, { label: '水平镜像', value: 'flip-h' }, { label: '垂直镜像', value: 'flip-v' },
+    ] }],
+    summarizeParameters: parameters => ({ 'rotate-90': '顺时针 90°', 'rotate-180': '旋转 180°', 'rotate-270': '逆时针 90°', 'flip-h': '水平镜像', 'flip-v': '垂直镜像' }[String(parameters.action)] || '顺时针 90°'),
+  },
+  'image.split-grid@1': {
+    id: 'image.split-grid@1', label: '宫格切分', mediaType: 'image',
+    inputRoles: [{ role: 'source_image', nodeTypes: ['image'], min: 1, max: 1 }],
+    outputRoles: [{ role: 'result_image', nodeType: 'image', min: 1, max: 36 }],
+    executor: 'local-transform', confirmation: 'none', workflow: true, table: true,
+    uiKey: 'image-split-grid', nodeTool: 'split-grid', agentUsage: 'split-grid 使用 rows/cols（1-6）',
+    parameters: imageSplitGridParameters,
+    parameterControls: [
+      { key: 'rows', kind: 'number', label: '行', min: 1, max: 6, step: 1 },
+      { key: 'cols', kind: 'number', label: '列', min: 1, max: 6, step: 1 },
+    ],
+    summarizeParameters: parameters => `${parameters.rows || 2} × ${parameters.cols || 2}`,
   },
   'video.trim@1': {
     id: 'video.trim@1', label: '视频剪辑', mediaType: 'video',

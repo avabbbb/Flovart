@@ -8,7 +8,7 @@ import { WorkflowImageToolDialogs } from '../components/workflow/WorkflowImageTo
 import { WorkflowGenerationCapabilitiesProvider } from '../components/workflow/WorkflowConfigPanel';
 import { workflowMediaStorage } from '../components/workflow/storage';
 import type { WorkflowProject } from '../components/workflow/types';
-import * as imageToolService from '../services/workflowImageTools';
+import * as imageToolService from '../services/workflowImageOperations';
 
 const image = createWorkflowNode('image', 'image', { x: 0, y: 0 }, { href: 'data:image/png;base64,AA==', mimeType: 'image/png', filters: { brightness: 120 } });
 
@@ -122,12 +122,12 @@ describe('workflow image tools UI', () => {
 
   it('does not report success or add history after a project switch makes the provider result stale', async () => {
     let finish!: (value: imageToolService.WorkflowImageToolOutcome) => void;
-    vi.spyOn(imageToolService, 'runWorkflowImageAgent').mockReturnValue(new Promise(resolve => { finish = resolve; }));
+    vi.spyOn(imageToolService, 'runWorkflowRemoveBackgroundOperation').mockReturnValue(new Promise(resolve => { finish = resolve; }));
     const projectA = imageProject();
     const projectB = { ...imageProject(), id: 'other-project', nodes: [], selectedNodeIds: [] };
     const view = render(<WorkflowGenerationCapabilitiesProvider><InfiniteWorkflow project={projectA} updateProject={vi.fn()} onRunNode={vi.fn()} /></WorkflowGenerationCapabilitiesProvider>);
     fireEvent.click(screen.getByRole('button', { name: '移除背景' }));
-    await waitFor(() => expect(imageToolService.runWorkflowImageAgent).toHaveBeenCalled());
+    await waitFor(() => expect(imageToolService.runWorkflowRemoveBackgroundOperation).toHaveBeenCalled());
     view.rerender(<WorkflowGenerationCapabilitiesProvider><InfiniteWorkflow project={projectB} updateProject={vi.fn()} onRunNode={vi.fn()} /></WorkflowGenerationCapabilitiesProvider>);
     finish({ status: 'stale', project: projectB });
     expect(screen.queryByText('背景移除完成')).not.toBeInTheDocument();
@@ -136,8 +136,8 @@ describe('workflow image tools UI', () => {
 
   it('keeps one image-tool transaction so pending node A blocks node B and records only A origin', async () => {
     let finish!: (value: imageToolService.WorkflowImageToolOutcome) => void;
-    let runtime!: imageToolService.WorkflowImageToolRuntime;
-    vi.spyOn(imageToolService, 'runWorkflowImageAgent').mockImplementation((_projectId, _nodeId, _action, nextRuntime) => {
+    let runtime!: imageToolService.WorkflowImageOperationRuntime;
+    vi.spyOn(imageToolService, 'runWorkflowRemoveBackgroundOperation').mockImplementation((_projectId, _nodeId, nextRuntime) => {
       runtime = nextRuntime;
       return new Promise(resolve => { finish = resolve; });
     });
@@ -151,8 +151,8 @@ describe('workflow image tools UI', () => {
     expect(filterButton).toBeDisabled();
     fireEvent.click(filterButton);
     expect(screen.queryByText('图片调色')).not.toBeInTheDocument();
-    expect(imageToolService.runWorkflowImageAgent).toHaveBeenCalledTimes(1);
-    expect(imageToolService.runWorkflowImageAgent).toHaveBeenCalledWith(project.id, 'image-a', 'remove-background', expect.any(Object));
+    expect(imageToolService.runWorkflowRemoveBackgroundOperation).toHaveBeenCalledTimes(1);
+    expect(imageToolService.runWorkflowRemoveBackgroundOperation).toHaveBeenCalledWith(project.id, 'image-a', expect.any(Object));
 
     const completed = { ...project, nodes: project.nodes.map(node => node.id === 'image-a' ? { ...node, metadata: { ...node.metadata, href: 'data:image/png;base64,BB==' } } : node) };
     await act(async () => {
@@ -167,7 +167,7 @@ describe('workflow image tools UI', () => {
 
   it('does not let an old transaction finally release a newer project transaction', async () => {
     const pending = new Map<string, (value: imageToolService.WorkflowImageToolOutcome) => void>();
-    vi.spyOn(imageToolService, 'runWorkflowImageAgent').mockImplementation(projectId => new Promise(resolve => { pending.set(projectId, resolve); }));
+    vi.spyOn(imageToolService, 'runWorkflowRemoveBackgroundOperation').mockImplementation(projectId => new Promise(resolve => { pending.set(projectId, resolve); }));
     const projectA = { ...imageProject(), id: 'project-a', nodes: [imageNode('image-a', 0)], selectedNodeIds: ['image-a'] };
     const projectB = { ...imageProject(), id: 'project-b', nodes: [imageNode('image-b', 0)], selectedNodeIds: ['image-b'] };
     const view = render(<WorkflowGenerationCapabilitiesProvider><InfiniteWorkflow project={projectA} updateProject={vi.fn()} onRunNode={vi.fn()} /></WorkflowGenerationCapabilitiesProvider>);
@@ -175,7 +175,7 @@ describe('workflow image tools UI', () => {
 
     view.rerender(<WorkflowGenerationCapabilitiesProvider><InfiniteWorkflow project={projectB} updateProject={vi.fn()} onRunNode={vi.fn()} /></WorkflowGenerationCapabilitiesProvider>);
     fireEvent.click(screen.getByRole('button', { name: '移除背景' }));
-    expect(imageToolService.runWorkflowImageAgent).toHaveBeenCalledTimes(2);
+    expect(imageToolService.runWorkflowRemoveBackgroundOperation).toHaveBeenCalledTimes(2);
     await act(async () => {
       pending.get('project-a')?.({ status: 'stale', project: projectA });
       await Promise.resolve();

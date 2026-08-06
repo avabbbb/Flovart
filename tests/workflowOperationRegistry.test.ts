@@ -16,11 +16,13 @@ describe('workflow operation capability registry', () => {
   it('exposes image, video and audio capabilities from one closed registry', () => {
     expect(WORKFLOW_OPERATION_CAPABILITY_IDS).toEqual([
       'image.generate@1', 'image.crop@1', 'image.upscale@1',
+      'image.remove-background@1', 'image.split-layers@1', 'image.edit@1', 'image.rotate@1', 'image.split-grid@1',
       'video.trim@1', 'video.av-split@1', 'video.merge@1', 'video.extract-frame@1',
       'audio.trim@1', 'audio.speed@1',
     ]);
     expect(WORKFLOW_OPERATION_NODE_TOOLS).toEqual([
-      'crop', 'upscale', 'video-trim', 'video-av-split', 'video-merge', 'video-extract-frame',
+      'crop', 'upscale', 'remove-background', 'split-layers', 'edit', 'rotate', 'split-grid',
+      'video-trim', 'video-av-split', 'video-merge', 'video-extract-frame',
       'audio-trim', 'audio-speed',
     ]);
     expect(getWorkflowOperationCapability('image.crop@1')).toMatchObject({
@@ -31,7 +33,9 @@ describe('workflow operation capability registry', () => {
     expect(getWorkflowOperationCapabilityByNodeTool('upscale')).toMatchObject({
       id: 'image.upscale@1', executor: 'provider-image-tool', confirmation: 'paid-operation-subgraph',
     });
-    expect(getWorkflowOperationCapabilityByNodeTool('remove-background')).toBeUndefined();
+    expect(getWorkflowOperationCapabilityByNodeTool('remove-background')).toMatchObject({
+      id: 'image.remove-background@1', executor: 'provider-image-tool', confirmation: 'paid-operation-subgraph',
+    });
     expect(getWorkflowOperationCapabilityByNodeTool('video-av-split')).toMatchObject({
       id: 'video.av-split@1', mediaType: 'video', confirmation: 'none',
       outputRoles: [
@@ -50,6 +54,10 @@ describe('workflow operation capability registry', () => {
     expect(() => parseWorkflowOperationParameters('audio.trim@1', { startSec: 4, endSec: 2 })).toThrow('音频结束时间必须晚于开始时间');
     expect(parseWorkflowOperationParameters('audio.speed@1', { speed: 1.5, ignored: true })).toEqual({ speed: 1.5 });
     expect(() => parseWorkflowOperationParameters('audio.speed@1', { speed: 5 })).toThrow();
+    expect(parseWorkflowOperationParameters('image.rotate@1', {})).toEqual({ action: 'rotate-90' });
+    expect(parseWorkflowOperationParameters('image.split-grid@1', {})).toEqual({ rows: 2, cols: 2 });
+    expect(parseWorkflowOperationNodeToolArguments('image.edit@1', { prompt: '换成蓝天', maskNodeId: 'mask-1', ignored: true })).toEqual({ prompt: '换成蓝天', maskNodeId: 'mask-1' });
+    expect(() => parseWorkflowOperationNodeToolArguments('image.edit@1', {})).toThrow();
     expect(parseWorkflowOperationNodeToolArguments('video.merge@1', { sourceNodeIds: ['video-1', 'video-2'], ignored: true })).toEqual({ sourceNodeIds: ['video-1', 'video-2'] });
     expect(() => parseWorkflowOperationNodeToolArguments('video.merge@1', { sourceNodeIds: ['video-1', 'video-1'] })).toThrow('视频拼接来源不能重复');
   });

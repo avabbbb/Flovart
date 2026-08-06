@@ -1,0 +1,222 @@
+{
+  "schemaVersion": "flovart.production-spec/1",
+  "delivery": {
+    "durationMs": 30000,
+    "aspectRatio": "16:9",
+    "resolution": "1280x720",
+    "language": "zh-CN"
+  },
+  "research": {
+    "researchId": "research_939a60e28518a2491ca6",
+    "topic": "AI 数据中心为什么开始成为盗贼的新目标？",
+    "redditPost": "https://www.reddit.com/r/technology/comments/1uq558s/thieves_are_now_targeting_ai_data_center/",
+    "sources": [
+      "https://www.vice.com/en/article/thieves-are-now-targeting-ai-data-center-construction-sites-for-copper-and-expensive-equipment/",
+      "https://www.datacenterdynamics.com/en/news/data-center-kit-and-copper-cables-worth-13m-recovered-from-stolen-trucks/",
+      "https://www.techradar.com/pro/ai-data-center-supplies-hit-by-cargo-thieves-copper-wires-construction-materials-all-stolen-in-usd1-3-million-heists",
+      "https://www.kpler.com/zh-sg/blog/copper-the-perfect-squeeze",
+      "https://institute.bankofamerica.com/sustainability/data-center-construction.html"
+    ],
+    "editorialNote": "将报道中的两辆拖车和约 130 万美元物资作为已核实案例；把更广泛的行业判断表达为供应链风险，不宣称存在已证实的全国性 AI 盗窃潮。"
+  },
+  "visual": {
+    "stylePrompt": "VOX-inspired flat 2D editorial paper collage: torn warm-cream newsprint, deep-red arrows and stamps, ink-black headlines, cold-blue infrastructure layers, restrained copper accents, visible halftone and print grain, no photorealism, no 3D, no glossy UI, limited short headline text only."
+  },
+  "narrative": {
+    "arc": "how_it_works",
+    "beats": [
+      {
+        "id": "hook",
+        "narration": "AI 的下一场争夺，不只在云端，也在一卷铜线里。",
+        "shots": [
+          {
+            "id": "hook-wide",
+            "durationMs": 3750,
+            "scene": "一座尚未完工的数据中心像纸片建筑压在美国地图上，铜色线缆从画面边缘伸入；短标题：AI 的下一场争夺。",
+            "prompt": "Flat paper-collage wide shot of an unfinished American AI data center placed over a simplified US map, copper cable entering from the edge, torn newsprint, red editorial arrows, short locked headline: AI 的下一场争夺.",
+            "motionPrompt": "The paper data center pushes forward over the map while a copper cable slides in and a red arrow points toward the construction site."
+          },
+          {
+            "id": "hook-detail",
+            "durationMs": 3750,
+            "scene": "铜线线圈、货运标签和红色箭头的平面特写；短标题：不只在云端。",
+            "prompt": "Flat editorial close-up of a copper wire coil, freight label and red arrow on torn paper, visible halftone and newsprint grain, short locked headline: 不只在云端.",
+            "motionPrompt": "Layered paper labels shift in parallax, the copper coil catches a restrained highlight, and the red arrow settles on the freight tag."
+          }
+        ]
+      },
+      {
+        "id": "context",
+        "narration": "报道提到，芝加哥附近追回的两辆拖车，装着约 130 万美元的数据中心物资。",
+        "shots": [
+          {
+            "id": "context-wide",
+            "durationMs": 3750,
+            "scene": "两辆带编号的拖车剪纸停在芝加哥地图上，报纸数字 1.3M 作为大标题；短标题：$1.3M。",
+            "prompt": "Flat paper-collage wide shot of two numbered freight trailers parked beside a simplified Chicago map, oversized newspaper figure $1.3M, red recovery stamp, short locked headline: $1.3M.",
+            "motionPrompt": "The map pans from the city label to the two trailers as the $1.3M newspaper figure unfolds and a recovery stamp lands."
+          },
+          {
+            "id": "context-detail",
+            "durationMs": 3750,
+            "scene": "一卷铜线旁放置 $300K 标记，另一张设备清单标记约 $1M；短标题：铜线 + 设备。",
+            "prompt": "Flat paper-collage detail of a copper cable coil labeled $300K beside a separate data-center equipment checklist labeled about $1M, torn paper, ink-black type, short locked headline: 铜线 + 设备.",
+            "motionPrompt": "The red underline draws across $300K, then the equipment checklist slides into focus and the second value is circled."
+          }
+        ]
+      },
+      {
+        "id": "turn",
+        "narration": "数据中心最先需要的，不是模型，而是电力、散热和把它们连起来的基础设施。",
+        "shots": [
+          {
+            "id": "turn-wide",
+            "durationMs": 3750,
+            "scene": "地下电力、冷却管道、服务器机架以分层纸卡拼成基础设施剖面；短标题：先铺地面。",
+            "prompt": "Flat 2D paper-collage infrastructure cross-section: underground power lines, cooling pipes and server racks stacked as layered cards beneath an AI data center, cold-blue and copper accents, short locked headline: 先铺地面.",
+            "motionPrompt": "The layered cross-section tilts downward from server racks to cooling pipes and power lines, revealing the physical stack underneath."
+          },
+          {
+            "id": "turn-detail",
+            "durationMs": 3750,
+            "scene": "铜线、母排、重型设备被贴上货运标签，红线从工地指向货车；短标题：高价值货物。",
+            "prompt": "Flat editorial detail of copper cable, busbar and heavy data-center equipment with freight labels, a red route line connecting construction site to truck, short locked headline: 高价值货物.",
+            "motionPrompt": "A red route line draws from the worksite to the truck while freight labels attach one by one to the copper, busbar and equipment cards."
+          }
+        ]
+      },
+      {
+        "id": "payoff",
+        "narration": "所以 AI 的隐形账单，也包括材料、运输和安保。你看到算力，供应链看到的是一条新风险路线。",
+        "shots": [
+          {
+            "id": "payoff-wide",
+            "durationMs": 3750,
+            "scene": "AI 芯片与服务器在上层，铜线、货运和警示标签在下层，形成上下对照；短标题：算力的隐形账单。",
+            "prompt": "Flat paper-collage wide comparison: AI chips and servers on an upper paper layer, copper wire, freight labels and security warnings on a lower layer, deep-red divider, short locked headline: 算力的隐形账单.",
+            "motionPrompt": "The camera pulls out to reveal the upper compute layer and lower supply-chain layer as one connected paper system, with warning labels spreading below."
+          },
+          {
+            "id": "payoff-detail",
+            "durationMs": 3750,
+            "scene": "纸张地图上的红色货运路线收束到一个问号和警示印章；短标题：谁来守住基础设施？",
+            "prompt": "Flat newsprint map detail where a red freight route converges on a question mark and warning stamp, torn edges, ink-black type, short locked headline: 谁来守住基础设施？.",
+            "motionPrompt": "The freight route pulls back into a single red question mark, then a warning stamp presses down and holds on the final frame."
+          }
+        ]
+      }
+    ]
+  },
+  "audio": {
+    "narration": {
+      "voiceProfile": "documentary-neutral-zh-CN"
+    },
+    "music": {
+      "intent": "rhythmic editorial instrumental with restrained industrial pulse",
+      "duckUnderNarration": true
+    }
+  },
+  "gates": [
+    {
+      "id": "approve-spec",
+      "type": "spec",
+      "status": "required"
+    },
+    {
+      "id": "approve-style",
+      "type": "style-reference",
+      "status": "required"
+    },
+    {
+      "id": "review-keyframes",
+      "type": "keyframe-review",
+      "status": "required"
+    },
+    {
+      "id": "verify-ocr",
+      "type": "ocr",
+      "status": "required"
+    }
+  ],
+  "extensions": {
+    "community.vox-director": {
+      "schemaVersion": "1",
+      "themeCandidates": [
+        "american-retro",
+        "soviet-constructivist",
+        "punk-zine"
+      ],
+      "selectedTheme": "american-retro",
+      "look": {
+        "idiom": "mixed-media hand-cut paper collage",
+        "palette": [
+          "warm-cream",
+          "deep-red",
+          "ink-black",
+          "cold-blue",
+          "copper-spot"
+        ],
+        "typeStyle": "bold condensed cut-out headline",
+        "finish": [
+          "torn-edge",
+          "halftone-print",
+          "newsprint",
+          "paper-tape",
+          "print-grain"
+        ],
+        "motionStyle": "punchy editorial paper mechanics",
+        "constraints": "strict"
+      },
+      "shotDirectives": {
+        "hook-wide": {
+          "shotSize": "WIDE",
+          "cameraMove": "push_in",
+          "elementMotion": "数据中心纸片滑入，铜线伸入，红色箭头展开",
+          "headlineLocked": true
+        },
+        "hook-detail": {
+          "shotSize": "CLOSE",
+          "cameraMove": "parallax",
+          "elementMotion": "标签错层移动，铜线高光扫过，箭头稳定落位",
+          "headlineLocked": true
+        },
+        "context-wide": {
+          "shotSize": "WIDE",
+          "cameraMove": "pan",
+          "elementMotion": "地图横向展开，两辆拖车依次停入，数字纸片翻开",
+          "headlineLocked": true
+        },
+        "context-detail": {
+          "shotSize": "DETAIL",
+          "cameraMove": "static",
+          "elementMotion": "红线先圈出铜线金额，再划向设备清单金额",
+          "headlineLocked": true
+        },
+        "turn-wide": {
+          "shotSize": "WIDE",
+          "cameraMove": "tilt",
+          "elementMotion": "剖面从机架向下展开，管道与电力层逐层显现",
+          "headlineLocked": true
+        },
+        "turn-detail": {
+          "shotSize": "CLOSE",
+          "cameraMove": "element",
+          "elementMotion": "货运标签逐个贴合，红色路线从工地滑向货车",
+          "headlineLocked": true
+        },
+        "payoff-wide": {
+          "shotSize": "WIDE",
+          "cameraMove": "pull_out",
+          "elementMotion": "上下纸层拉开成完整供应链对照，警示标签扩散",
+          "headlineLocked": true
+        },
+        "payoff-detail": {
+          "shotSize": "DETAIL",
+          "cameraMove": "static",
+          "elementMotion": "路线收束成问号，警示印章压下并保持稳定",
+          "headlineLocked": true
+        }
+      }
+    }
+  }
+}

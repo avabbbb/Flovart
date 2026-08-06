@@ -57,6 +57,11 @@ export type WorkflowOperationCapabilityId =
   | 'image.generate@1'
   | 'image.crop@1'
   | 'image.upscale@1'
+  | 'image.remove-background@1'
+  | 'image.split-layers@1'
+  | 'image.edit@1'
+  | 'image.rotate@1'
+  | 'image.split-grid@1'
   | 'video.trim@1'
   | 'video.av-split@1'
   | 'video.merge@1'
@@ -64,7 +69,7 @@ export type WorkflowOperationCapabilityId =
   | 'audio.trim@1'
   | 'audio.speed@1';
 export type WorkflowOperationMediaType = 'image' | 'video' | 'audio';
-export type WorkflowOperationInputRole = 'source_image' | 'reference_image' | 'source_video' | 'source_audio' | 'prompt_context';
+export type WorkflowOperationInputRole = 'source_image' | 'reference_image' | 'mask_image' | 'source_video' | 'source_audio' | 'prompt_context';
 export type WorkflowOperationOutputRole = 'result_image' | 'result_video' | 'result_audio';
 export type WorkflowOperationTakeStatus = 'running' | 'success' | 'error' | 'canceled' | 'outdated_recipe';
 

@@ -27,6 +27,7 @@ import type {
   WorkflowOperationInputRole,
   WorkflowOperationOutputRole,
   WorkflowProject,
+  WorkflowRichPromptDocument,
 } from '../components/workflow/types';
 import { loadRuntimeArtifactBlob } from './runtimeArtifacts';
 
@@ -55,6 +56,10 @@ export interface WorkflowOperationBlobOutput {
   role: WorkflowOperationOutputRole;
   mimeType?: string;
   fileName?: string;
+  offsetX?: number;
+  offsetY?: number;
+  column?: number;
+  row?: number;
 }
 
 function requireProject(runtime: WorkflowOperationRuntime, projectId: string): WorkflowProject {
@@ -130,24 +135,35 @@ export async function startWorkflowOperation(input: {
   productModelId?: string;
   routeId?: string;
   anchorNodeId?: string;
+  prompt?: string;
+  richTextDocument?: WorkflowRichPromptDocument;
+  additionalSourceNodes?: WorkflowNode[];
 }): Promise<StartedWorkflowOperation> {
   const project = requireProject(input.runtime, input.projectId);
   const createId = input.runtime.createId || nanoid;
+  const additionalSourceNodes = input.additionalSourceNodes || [];
+  const nodeIds = new Set(project.nodes.map(node => node.id));
+  additionalSourceNodes.forEach(node => {
+    if (nodeIds.has(node.id)) throw new Error(`Operation 附加输入节点 ID 重复：${node.id}`);
+    nodeIds.add(node.id);
+  });
+  const availableNodes = [...project.nodes, ...additionalSourceNodes];
   const sourceNodes = input.sources.map(source => {
-    const node = project.nodes.find(item => item.id === source.nodeId);
+    const node = availableNodes.find(item => item.id === source.nodeId);
     if (!node) throw new Error(`Operation 输入节点不存在：${source.nodeId}`);
     return node;
   });
   const bindings = input.sources.map((source, order) => createWorkflowOperationInputBinding(createId(), source.nodeId, source.role, order));
   validateWorkflowOperationInputBindings(input.capabilityId, bindings, { requireMinimum: true });
   validateSourceNodes(input.capabilityId, bindings, sourceNodes);
-  const anchor = project.nodes.find(node => node.id === input.anchorNodeId) || sourceNodes.at(-1);
+  const anchor = availableNodes.find(node => node.id === input.anchorNodeId) || sourceNodes.at(-1);
   if (!anchor) throw new Error('Operation 缺少布局锚点');
   const operation = await createWorkflowOperationNode({
     id: createId(),
     capabilityId: input.capabilityId,
     position: { x: anchor.position.x + anchor.width + 64, y: anchor.position.y + Math.max(0, (anchor.height - 156) / 2) },
-    prompt: '',
+    prompt: input.prompt || '',
+    richTextDocument: input.richTextDocument,
     parameters: input.parameters,
     productModelId: input.productModelId,
     inputBindings: bindings,
@@ -155,7 +171,7 @@ export async function startWorkflowOperation(input: {
   const started = await beginWorkflowOperationTake(operation, { id: createId(), snapshotId: createId(), routeId: input.routeId });
   const next: WorkflowProject = {
     ...project,
-    nodes: [...project.nodes, started.node],
+    nodes: [...project.nodes, ...additionalSourceNodes, started.node],
     connections: [...project.connections, ...workflowOperationInputConnections(started.node)],
     selectedNodeIds: [started.node.id],
     draftVersion: (project.draftVersion || 1) + 1,
@@ -235,8 +251,13 @@ export async function commitWorkflowOperation(
   const outputNodes = normalized.map((output, index) => {
     const record = records[index];
     const size = fitWorkflowMediaSize(output.nodeType, record.naturalWidth, record.naturalHeight);
+    const gridPositioned = Number.isInteger(output.column) || Number.isInteger(output.row);
+    const position = {
+      x: latestOperation.position.x + latestOperation.width + 64 + (output.column || 0) * (size.width + 12) + (output.offsetX || 0),
+      y: (gridPositioned ? latestOperation.position.y + (output.row || 0) * (size.height + 12) : outputY) + (output.offsetY || 0),
+    };
     const node = {
-      ...createWorkflowNode(started.createId(), output.nodeType, { x: latestOperation.position.x + latestOperation.width + 64, y: outputY }, {
+      ...createWorkflowNode(started.createId(), output.nodeType, position, {
         ...record,
         href: undefined,
         name: record.name,
@@ -249,7 +270,7 @@ export async function commitWorkflowOperation(
       ...size,
       title: output.title,
     };
-    outputY += size.height + 24;
+    if (!gridPositioned) outputY += size.height + 24;
     return node;
   });
   const completed = completeWorkflowOperationTake(latestOperation, started.takeId, outputNodes.map(node => node.id));

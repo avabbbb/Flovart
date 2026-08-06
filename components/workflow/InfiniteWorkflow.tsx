@@ -19,7 +19,6 @@ import {
   releaseWorkflowMediaRecord,
   unregisterWorkflowMediaTransientReferences,
   useWorkflowMediaUrl,
-  workflowBlobToDataUrl,
   workflowMediaType,
   type WorkflowMediaRecord,
 } from './media';
@@ -44,10 +43,17 @@ import { WorkflowToolbar, type WorkflowTool } from './WorkflowToolbar';
 import { composeImageGrid } from './gridComposer';
 import { LIGHTING_PRESETS, buildRelightPrompt } from './LightingPresets';
 import type { WorkflowConnection, WorkflowNode as WorkflowNodeData, WorkflowNodeType, WorkflowOp, WorkflowPoint, WorkflowProject, WorkflowSnapshot, WorkflowViewport, ScriptShot, SlashCommand } from './types';
-import { runWorkflowImageAgent, runWorkflowImageEdit, runWorkflowImageSplit, type WorkflowImageToolOutcome, type WorkflowImageToolRuntime } from '../../services/workflowImageTools';
-import { runWorkflowCropOperation, runWorkflowUpscaleOperation } from '../../services/workflowImageOperations';
-import { transformImage } from '../../services/imageTransform';
-import { splitGrid as splitGridService } from '../../services/gridSplitter';
+import {
+  runWorkflowCropOperation,
+  runWorkflowImageEditOperation,
+  runWorkflowRemoveBackgroundOperation,
+  runWorkflowRotateOperation,
+  runWorkflowSplitGridOperation,
+  runWorkflowSplitLayersOperation,
+  runWorkflowUpscaleOperation,
+  type WorkflowImageToolOutcome,
+  type WorkflowImageOperationRuntime,
+} from '../../services/workflowImageOperations';
 import {
   runWorkflowVideoAvSplitOperation,
   runWorkflowVideoExtractFrameOperation,
@@ -508,7 +514,7 @@ export function InfiniteWorkflow({
     return () => window.clearTimeout(timer);
   }, [layoutToast]);
 
-  const imageToolRuntime = useMemo<WorkflowImageToolRuntime>(() => ({
+  const imageToolRuntime = useMemo<WorkflowImageOperationRuntime>(() => ({
     userApiKeys,
     confirmRouteFallback,
     getProject: () => projectRef.current,
@@ -552,7 +558,7 @@ export function InfiniteWorkflow({
     if (kind === 'remove-background') {
       imageToolBusyRef.current = true;
       setImageToolBusy(true);
-      void runWorkflowImageAgent(transaction.projectId, nodeId, kind, imageToolRuntime).then(result => {
+      void runWorkflowRemoveBackgroundOperation(transaction.projectId, nodeId, imageToolRuntime).then(result => {
         if (!ownsImageToolTransaction(transaction)) return;
         if (result.status === 'committed' && result.project.id === transaction.projectId && projectRef.current.id === transaction.projectId && result.project.nodes.some(node => node.id === transaction.nodeId)) {
           pushHistory(transaction.frame);
@@ -796,45 +802,21 @@ export function InfiniteWorkflow({
         return;
       }
       if (confirmation.kind === 'rotate') {
-        const blob = await loadWorkflowMediaBlob(node.metadata.storageKey, node.metadata.href);
-        const transformed = await transformImage(await workflowBlobToDataUrl(blob), confirmation.action);
-        const record = await ingestWorkflowMedia(new File([transformed], `rotated-${node.metadata.name || 'image.png'}`, { type: transformed.type || 'image/png' }));
-        if (!ownsImageToolTransaction(transaction)) { await discardWorkflowMediaRecord(record.storageKey); return; }
-        const width = record.naturalWidth || node.width;
-        const height = record.naturalHeight || node.height;
-        const center = { x: node.position.x + node.width / 2, y: node.position.y + node.height / 2 };
-        const size = fitWorkflowMediaSize('image', width, height);
-        pushHistory(transaction.frame);
-        patchProject({ nodes: [...projectRef.current.nodes, { ...createWorkflowNode(nanoid(), 'image', { x: center.x + node.width + 40, y: center.y - size.height / 2 }, { ...record, name: `rotated-${node.metadata.name || 'image.png'}`, status: 'success' }), ...size }] });
-        releaseWorkflowMediaRecord(record.storageKey);
-        setNotice('旋转镜像完成');
-        setImageTool(null);
-        releaseImageToolTransaction(transaction);
+        const result = await runWorkflowRotateOperation(transaction.projectId, node.id, confirmation.action, imageToolRuntime);
+        if (!ownsImageToolTransaction(transaction)) return;
+        if (result.status === 'committed') { pushHistory(transaction.frame); setNotice('旋转镜像完成'); setImageTool(null); releaseImageToolTransaction(transaction); }
+        else { setImageTool(null); setImageToolError(null); releaseImageToolTransaction(transaction); }
         return;
       }
       if (confirmation.kind === 'splitGrid') {
-        const blob = await loadWorkflowMediaBlob(node.metadata.storageKey, node.metadata.href);
-        const dataUrl = await workflowBlobToDataUrl(blob);
-        const pieces = await splitGridService(dataUrl, confirmation.rows, confirmation.cols);
+        const result = await runWorkflowSplitGridOperation(transaction.projectId, node.id, { rows: confirmation.rows, cols: confirmation.cols }, imageToolRuntime);
         if (!ownsImageToolTransaction(transaction)) return;
-        const newNodes: WorkflowNodeData[] = [];
-        for (const piece of pieces) {
-          const record = await ingestWorkflowMedia(new File([piece.blob], `grid-${piece.index}-${node.metadata.name || 'image.png'}`, { type: 'image/png' }));
-          const size = fitWorkflowMediaSize('image', record.naturalWidth || 256, record.naturalHeight || 256);
-          const col = piece.col;
-          const row = piece.row;
-          newNodes.push({ ...createWorkflowNode(nanoid(), 'image', { x: node.position.x + node.width + 40 + col * (size.width + 12), y: node.position.y + row * (size.height + 12) }, { ...record, name: `grid-${piece.index}`, status: 'success' }), ...size });
-          releaseWorkflowMediaRecord(record.storageKey);
-        }
-        pushHistory(transaction.frame);
-        patchProject({ nodes: [...projectRef.current.nodes, ...newNodes] });
-        setNotice(`宫格切分完成 (${pieces.length} 张)`);
-        setImageTool(null);
-        releaseImageToolTransaction(transaction);
+        if (result.status === 'committed') { pushHistory(transaction.frame); setNotice(`宫格切分完成 (${confirmation.rows * confirmation.cols} 张)`); setImageTool(null); releaseImageToolTransaction(transaction); }
+        else { setImageTool(null); setImageToolError(null); releaseImageToolTransaction(transaction); }
         return;
       }
       if (confirmation.kind === 'annotate') {
-        const result = await runWorkflowImageEdit(transaction.projectId, node.id, '根据标注修改图片', { href: confirmation.annotatedDataUrl, mimeType: 'image/png' }, imageToolRuntime);
+        const result = await runWorkflowImageEditOperation(transaction.projectId, node.id, '根据标注修改图片', 'annotate', { href: confirmation.annotatedDataUrl, mimeType: 'image/png' }, imageToolRuntime);
         if (!ownsImageToolTransaction(transaction)) return;
         if (result?.status === 'committed') { pushHistory(transaction.frame); setImageTool(null); releaseImageToolTransaction(transaction); }
         else if (result?.status === 'stale') { setImageTool(null); setImageToolError(null); releaseImageToolTransaction(transaction); }
@@ -843,7 +825,7 @@ export function InfiniteWorkflow({
       if (confirmation.kind === 'relight') {
         const preset = LIGHTING_PRESETS.find(p => p.id === confirmation.preset)!;
         const prompt = buildRelightPrompt(preset, confirmation.intensity, confirmation.color, confirmation.smart);
-        const result = await runWorkflowImageEdit(transaction.projectId, node.id, prompt, undefined, imageToolRuntime);
+        const result = await runWorkflowImageEditOperation(transaction.projectId, node.id, prompt, 'relight', undefined, imageToolRuntime);
         if (!ownsImageToolTransaction(transaction)) return;
         if (result?.status === 'committed') { pushHistory(transaction.frame); setImageTool(null); releaseImageToolTransaction(transaction); }
         else if (result?.status === 'stale') { setImageTool(null); setImageToolError(null); releaseImageToolTransaction(transaction); }
@@ -871,9 +853,9 @@ export function InfiniteWorkflow({
       }
       let result: WorkflowImageToolOutcome | null = null;
       if (confirmation.kind === 'upscale') result = await runWorkflowUpscaleOperation(transaction.projectId, node.id, { targetLongEdge: confirmation.targetLongEdge, algorithm: confirmation.algorithm }, imageToolRuntime);
-      if (confirmation.kind === 'split') result = await runWorkflowImageSplit(transaction.projectId, node.id, imageToolRuntime);
-      if (confirmation.kind === 'outpaint') result = await runWorkflowImageEdit(transaction.projectId, node.id, `向${{ left: '左侧', right: '右侧', top: '上方', bottom: '下方', all: '四周' }[confirmation.direction]}扩展画面。${confirmation.prompt}`, undefined, imageToolRuntime);
-      if (confirmation.kind === 'mask') result = await runWorkflowImageEdit(transaction.projectId, node.id, confirmation.prompt, { href: confirmation.maskDataUrl, mimeType: 'image/png' }, imageToolRuntime);
+      if (confirmation.kind === 'split') result = await runWorkflowSplitLayersOperation(transaction.projectId, node.id, imageToolRuntime);
+      if (confirmation.kind === 'outpaint') result = await runWorkflowImageEditOperation(transaction.projectId, node.id, `向${{ left: '左侧', right: '右侧', top: '上方', bottom: '下方', all: '四周' }[confirmation.direction]}扩展画面。${confirmation.prompt}`, 'outpaint', undefined, imageToolRuntime);
+      if (confirmation.kind === 'mask') result = await runWorkflowImageEditOperation(transaction.projectId, node.id, confirmation.prompt, 'mask', { href: confirmation.maskDataUrl, mimeType: 'image/png' }, imageToolRuntime);
       if (!ownsImageToolTransaction(transaction)) return;
       if (result?.status === 'committed' && result.project.id === transaction.projectId && projectRef.current.id === transaction.projectId && result.project.nodes.some(item => item.id === transaction.nodeId)) {
         pushHistory(transaction.frame);

@@ -245,7 +245,7 @@ const App: React.FC = () => {
             });
             return;
         }
-        if (requestedNode?.type === 'operation' && (capabilityId === 'image.crop@1' || capabilityId === 'image.upscale@1')) {
+        if (requestedNode?.type === 'operation' && operationCapability?.mediaType === 'image' && capabilityId !== 'image.generate@1') {
             const { rerunWorkflowImageOperation } = await import('./services/workflowImageOperations');
             await rerunWorkflowImageOperation(projectId, nodeId, {
                 userApiKeys, confirmRouteFallback,

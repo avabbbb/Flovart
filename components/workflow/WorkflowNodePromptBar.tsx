@@ -105,7 +105,7 @@ export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme,
   const isLocalOperation = operationCapability?.executor === 'local-transform';
   const config = node.metadata.config || { mode: node.type === 'text' ? 'text' : node.type === 'video' ? 'video' : 'image' };
   const generationMode = modeFor(node, config);
-  const productMode = operationCapability?.id === 'image.upscale@1'
+  const productMode = operationCapability?.executor === 'provider-image-tool'
     ? 'image-to-image'
     : config.submode || (generationMode === 'video' ? 'text-to-video' : 'text-to-image');
   const availableProductModelIds = generationMode === 'video'
