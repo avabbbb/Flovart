@@ -10,15 +10,12 @@ export type LegacyWorkflowNodeToolName =
   | 'split-layers'
   | 'edit'
   | 'rotate'
-  | 'split-grid'
-  | 'audio-trim'
-  | 'audio-speed';
+  | 'split-grid';
 
 export type WorkflowNodeToolName = WorkflowOperationNodeToolName | LegacyWorkflowNodeToolName;
 
 const LEGACY_WORKFLOW_NODE_TOOLS: readonly LegacyWorkflowNodeToolName[] = [
   'remove-background', 'split-layers', 'edit', 'rotate', 'split-grid',
-  'audio-trim', 'audio-speed',
 ];
 
 export const WORKFLOW_NODE_TOOLS: readonly WorkflowNodeToolName[] = [
@@ -38,8 +35,6 @@ export const WORKFLOW_NODE_TOOL_LABELS: Record<WorkflowNodeToolName, string> = {
   edit: '图片编辑',
   rotate: '旋转镜像',
   'split-grid': '宫格切分',
-  'audio-trim': '音频截取',
-  'audio-speed': '音频变速',
 };
 
 export function isWorkflowNodeTool(value: string): value is WorkflowNodeToolName {

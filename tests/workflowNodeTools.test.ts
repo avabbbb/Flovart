@@ -68,4 +68,16 @@ describe('workflow node tools operation projection', () => {
       capabilityId: 'video.trim@1', recipe: { parameters: { startSec: 1, endSec: 3 } }, takes: [{ status: 'success' }],
     });
   });
+
+  it('routes Agent audio tools through the same Operation lifecycle', async () => {
+    const audio = createWorkflowNode('audio', 'audio', { x: 0, y: 0 }, { storageKey: 'audio-key', mimeType: 'audio/mpeg', name: 'source.mp3' });
+    const state = harness([audio]);
+    await runWorkflowNodeTool('project', 'audio', 'audio-speed', { speed: 1.5 }, {
+      ...state.runtime,
+      executeAudioSpeed: vi.fn().mockResolvedValue(new Blob(['speed'], { type: 'audio/mpeg' })),
+    });
+    expect(state.current.nodes.find(node => node.type === 'operation')?.metadata.operation).toMatchObject({
+      capabilityId: 'audio.speed@1', recipe: { parameters: { speed: 1.5 } }, takes: [{ status: 'success' }],
+    });
+  });
 });

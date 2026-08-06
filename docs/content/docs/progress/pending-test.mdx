@@ -7,7 +7,7 @@ title: 待测试确认
 - 首个可测切片把 `image.generate@1`、`image.crop@1`、`image.upscale@1` 收进同一封闭 Registry，并由 Registry 派生 Agent 工具名、输入角色、参数校验、执行类别与确认级别；本地 crop 不再要求付费确认，upscale / generate 仍保留付费子图确认语义。
 - 图片生成、裁剪和放大现在都形成“输入媒体 → Operation Node → 输出媒体”。Operation 耐久保存 Recipe、Prompt Document、Input Binding、Execution Prompt Snapshot 与 Take；重跑复用同一 Operation 并追加 Take，不再原地覆盖源图片或复制源媒体 metadata。
 - PromptBar 和 `applyWorkflowOps` 共同修改 Operation 的唯一 Recipe；Binding ID 同时作为输入边 ID，连接、删除、排序和 Prompt 更新后不会产生第二套引用身份。Recipe 编辑后 Hash 置为 dirty，执行前重新冻结；取消记为 canceled，旧 Recipe 的晚到结果记为 `outdated_recipe` 且不会自动选中。
-- Browser/localforage 重载测试已覆盖来源图片、Operation、输出图片、Binding、Snapshot 与 Take 的恢复。视频 4 项、音频 2 项、其余图片/本地工具，以及跨媒体 ChangeSet、按组撤销、对象并发和完整恢复仍在 `todo.mdx`，本节不把它们写成完成。
+- Browser/localforage 重载测试已覆盖来源图片、Operation、输出图片、Binding、Snapshot 与 Take 的恢复。视频与音频迁移结果见下方独立待测项；其余图片/本地工具，以及跨媒体 ChangeSet、按组撤销、对象并发和完整恢复仍在 `todo.mdx`，本节不把它们写成完成。
 - 自动验证通过：`npx tsc --noEmit`；13 个 Operation/Workflow 相关测试文件 129 项；全量 Vitest 96 个文件 702 项通过、1 项预期失败、1 项跳过；Web 生产构建成功。构建仅保留既有的动态/静态重复导入与大 chunk 警告。
 - 待用户验证：① 对一张本地图片执行裁剪，确认源图保留并出现独立 Operation 与结果图；② 修改裁剪参数后重跑，确认同一 Operation 的 Take 数增加；③ 对图片执行高清放大，确认执行前仍有付费确认且 Take 可追溯实际 Route；④ 刷新页面后确认三段链路、Prompt、输入边和 Take 仍可编辑；⑤ 在运行中修改生成 Prompt，确认旧结果保留但不会替换当前选择。
 
@@ -17,7 +17,15 @@ title: 待测试确认
 - 音视频分离在一个 Take 中保存 `result_video` 与 `result_audio` 两个类型化输出；视频拼接保存多个 `source_video` Binding 的确定顺序；抽帧明确输出 `result_image`。四项操作失败后保留可重试 Operation，同节点重跑会追加新 Take。
 - Registry 现在同时派生节点工具参数、确认级别、中文参数摘要和编辑控件。裁剪百分比、放大长边/算法、视频起止时间与首尾帧位置都在现有 PromptBar 表面旁编辑，参数通过同一 Schema 后写回唯一 Recipe，并将旧 Recipe Hash 置为 dirty。
 - 自动验证通过：`npx tsc --noEmit`；Operation 参数/UI/图片/视频 5 个定向测试文件 23 项。全量 Vitest 中 96 个文件、709 项通过，另有 1 项预期失败、1 项跳过；唯一失败为已知 `flovartHomeSkills` 全量并行 5 秒超时，单文件 2 项复跑通过。Web 生产构建通过，只保留既有动态/静态重复导入与大 chunk 警告。
-- 待用户验证：① 剪辑视频后确认源视频、Operation、结果视频和两段角色边都存在；② 修改起止时间并重跑，确认同一 Operation 增加 Take；③ 执行音视频分离，确认一个 Take 同时关联纯视频与纯音频；④ 按指定顺序拼接两个视频，确认 Binding 与结果顺序一致；⑤ 导出首帧、尾帧后确认结果是图片节点。音频 2 项、其余图片/本地工具、跨媒体 ChangeSet/按组撤销/并发与完整重载仍在 `todo.mdx`，本节不把它们写成完成。
+- 待用户验证：① 剪辑视频后确认源视频、Operation、结果视频和两段角色边都存在；② 修改起止时间并重跑，确认同一 Operation 增加 Take；③ 执行音视频分离，确认一个 Take 同时关联纯视频与纯音频；④ 按指定顺序拼接两个视频，确认 Binding 与结果顺序一致；⑤ 导出首帧、尾帧后确认结果是图片节点。其余图片/本地工具、跨媒体 ChangeSet/按组撤销/并发与完整重载仍在 `todo.mdx`，本节不把它们写成完成。
+
+## Workflow 音频 Operation 共用执行链
+
+- `audio.trim@1` 与 `audio.speed@1` 已迁入同一 Registry、Recipe、Input Binding、Execution Snapshot、Take 和类型化输出机制；音频截取与变速都形成 `source_audio → Operation → result_audio`，失败保留可重试节点，同节点重跑追加 Take。
+- Registry 统一校验截取起止时间与 0.25–4 倍速度，并派生中文摘要、Agent 参数和 PromptBar 参数控件；MP3 产物 MIME 已规范为 `audio/mpeg`，不再写入非标准 `audio/mp3`。
+- 本地 Operation 的共享 PromptBar 现在允许空 Prompt、无需 Provider 即可直接“运行”，并隐藏无关的模型与生成参数入口；Provider 型 Operation 仍保持模型/Route 门禁，图片生成仍要求 Prompt。
+- 自动验证通过：`npx tsc --noEmit`；Operation/PromptBar/Overlay 8 个定向测试文件 85 项；全量 Vitest 98 个文件、714 项通过，另有 1 项预期失败、1 项跳过；Web 生产构建通过，只保留既有动态/静态重复导入与大 chunk 警告。
+- 待用户验证：① 截取一段本地音频，确认源音频、Operation、结果音频与角色边均保留；② 修改起止时间后从 PromptBar 直接重跑，确认同一 Operation 新增 Take；③ 以 1.5 倍变速并播放 MP3 结果，确认时长/音调与 MIME 正常；④ 刷新页面后确认参数与 Take 仍在。其余图片/本地工具和跨媒体可靠性验收仍在 `todo.mdx`。
 
 ## 架构文档与 AI 原生画布边界收敛
 

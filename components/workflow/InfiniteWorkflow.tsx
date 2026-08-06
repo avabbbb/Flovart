@@ -54,7 +54,7 @@ import {
   runWorkflowVideoMergeOperation,
   runWorkflowVideoTrimOperation,
 } from '../../services/workflowVideoOperations';
-import { trimAudio, changeAudioSpeed } from '../../services/audioTools';
+import { runWorkflowAudioSpeedOperation, runWorkflowAudioTrimOperation } from '../../services/workflowAudioOperations';
 import { exportMediaArchive } from '../../utils/batchMediaExport';
 import { usePromptHistoryStore } from '../../stores/usePromptHistoryStore';
 import { useClipboardStore, type ClipItem } from '../../stores/useClipboardStore';
@@ -711,26 +711,26 @@ export function InfiniteWorkflow({
     setAudioToolBusy(true);
     setAudioToolError(null);
     try {
-      const blob = await loadWorkflowMediaBlob(node.metadata.storageKey, node.metadata.href);
+      let result: WorkflowImageToolOutcome;
+      let successNotice: string;
       if (confirmation.kind === 'trim') {
-        const result = await trimAudio(blob, confirmation.startSec, confirmation.endSec, node.metadata.name);
-        const record = await ingestWorkflowMedia(new File([result.blob], `trim-${node.metadata.name || 'audio.mp3'}`, { type: result.blob.type || 'audio/mpeg' }));
-        const center = { x: node.position.x + node.width / 2, y: node.position.y + node.height / 2 };
+        result = await runWorkflowAudioTrimOperation(transaction.projectId, node.id, {
+          startSec: confirmation.startSec,
+          endSec: confirmation.endSec,
+        }, imageToolRuntime);
+        successNotice = '音频截取完成';
+      } else {
+        result = await runWorkflowAudioSpeedOperation(transaction.projectId, node.id, confirmation.speed, imageToolRuntime);
+        successNotice = `音频变速完成 (${confirmation.speed.toFixed(2)}x)`;
+      }
+      if (result.status === 'committed' && result.project.id === transaction.projectId && projectRef.current.id === transaction.projectId) {
         pushHistory(transaction.frame);
-        patchProject({ nodes: [...projectRef.current.nodes, { ...createWorkflowNode(nanoid(), 'audio', { x: center.x + node.width + 40, y: center.y - 40 }, { ...record, name: `trim-${node.metadata.name || 'audio.mp3'}`, status: 'success' }), width: 200, height: 80 }] });
-        releaseWorkflowMediaRecord(record.storageKey);
-        setNotice('音频截取完成');
+        setNotice(successNotice);
         setAudioTool(null);
         audioToolTransactionRef.current = null;
-      } else if (confirmation.kind === 'speed') {
-        const result = await changeAudioSpeed(blob, confirmation.speed, node.metadata.name);
-        const record = await ingestWorkflowMedia(new File([result], `speed-${confirmation.speed}x-${node.metadata.name || 'audio.mp3'}`, { type: 'audio/mp3' }));
-        const center = { x: node.position.x + node.width / 2, y: node.position.y + node.height / 2 };
-        pushHistory(transaction.frame);
-        patchProject({ nodes: [...projectRef.current.nodes, { ...createWorkflowNode(nanoid(), 'audio', { x: center.x + node.width + 40, y: center.y - 40 }, { ...record, name: `speed-${confirmation.speed}x-${node.metadata.name || 'audio.mp3'}`, status: 'success', mimeType: 'audio/mp3' }), width: 200, height: 80 }] });
-        releaseWorkflowMediaRecord(record.storageKey);
-        setNotice(`音频变速完成 (${confirmation.speed.toFixed(2)}x)`);
+      } else if (result.status === 'stale') {
         setAudioTool(null);
+        setAudioToolError(null);
         audioToolTransactionRef.current = null;
       }
     } catch (error) {
@@ -739,7 +739,7 @@ export function InfiniteWorkflow({
       audioToolBusyRef.current = false;
       setAudioToolBusy(false);
     }
-  }, [audioTool, patchProject, pushHistory]);
+  }, [audioTool, imageToolRuntime, pushHistory]);
 
   const activeImageToolNode = imageTool ? project.nodes.find(node => node.id === imageTool.nodeId) || null : null;
   const activeImageToolMedia = useWorkflowMediaUrl(activeImageToolNode?.metadata.storageKey, activeImageToolNode?.metadata.href);

@@ -237,6 +237,14 @@ const App: React.FC = () => {
             });
             return;
         }
+        if (requestedNode?.type === 'operation' && operationCapability?.executor === 'local-transform' && operationCapability.mediaType === 'audio') {
+            const { rerunWorkflowAudioOperation } = await import('./services/workflowAudioOperations');
+            await rerunWorkflowAudioOperation(projectId, nodeId, {
+                getProject: () => useWorkflowStore.getState().projects.find(item => item.id === projectId) || null,
+                onProjectChange: next => { useWorkflowStore.getState().updateProject(projectId, next); },
+            });
+            return;
+        }
         if (requestedNode?.type === 'operation' && (capabilityId === 'image.crop@1' || capabilityId === 'image.upscale@1')) {
             const { rerunWorkflowImageOperation } = await import('./services/workflowImageOperations');
             await rerunWorkflowImageOperation(projectId, nodeId, {

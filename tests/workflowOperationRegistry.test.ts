@@ -13,13 +13,15 @@ import {
 import { createWorkflowOperationInputBinding } from '../components/workflow/operations';
 
 describe('workflow operation capability registry', () => {
-  it('exposes image and video capabilities from one closed registry', () => {
+  it('exposes image, video and audio capabilities from one closed registry', () => {
     expect(WORKFLOW_OPERATION_CAPABILITY_IDS).toEqual([
       'image.generate@1', 'image.crop@1', 'image.upscale@1',
       'video.trim@1', 'video.av-split@1', 'video.merge@1', 'video.extract-frame@1',
+      'audio.trim@1', 'audio.speed@1',
     ]);
     expect(WORKFLOW_OPERATION_NODE_TOOLS).toEqual([
       'crop', 'upscale', 'video-trim', 'video-av-split', 'video-merge', 'video-extract-frame',
+      'audio-trim', 'audio-speed',
     ]);
     expect(getWorkflowOperationCapability('image.crop@1')).toMatchObject({
       executor: 'local-transform', confirmation: 'none', nodeTool: 'crop', uiKey: 'image-crop',
@@ -45,6 +47,9 @@ describe('workflow operation capability registry', () => {
     expect(() => parseWorkflowOperationParameters('image.crop@1', { x: .8, y: 0, width: .5, height: 1 })).toThrow('裁剪范围不能超出图片');
     expect(parseWorkflowOperationParameters('video.extract-frame@1', {})).toEqual({ position: 'first' });
     expect(() => parseWorkflowOperationParameters('video.trim@1', { startSec: 4, endSec: 2 })).toThrow('视频结束时间必须晚于开始时间');
+    expect(() => parseWorkflowOperationParameters('audio.trim@1', { startSec: 4, endSec: 2 })).toThrow('音频结束时间必须晚于开始时间');
+    expect(parseWorkflowOperationParameters('audio.speed@1', { speed: 1.5, ignored: true })).toEqual({ speed: 1.5 });
+    expect(() => parseWorkflowOperationParameters('audio.speed@1', { speed: 5 })).toThrow();
     expect(parseWorkflowOperationNodeToolArguments('video.merge@1', { sourceNodeIds: ['video-1', 'video-2'], ignored: true })).toEqual({ sourceNodeIds: ['video-1', 'video-2'] });
     expect(() => parseWorkflowOperationNodeToolArguments('video.merge@1', { sourceNodeIds: ['video-1', 'video-1'] })).toThrow('视频拼接来源不能重复');
   });
@@ -55,6 +60,7 @@ describe('workflow operation capability registry', () => {
     expect(getWorkflowOperationInputRoleForNodeType('image.generate@1', 'video')).toBeNull();
     expect(getWorkflowOperationInputRoleForNodeType('image.crop@1', 'image')).toBe('source_image');
     expect(getWorkflowOperationInputRoleForNodeType('video.merge@1', 'video')).toBe('source_video');
+    expect(getWorkflowOperationInputRoleForNodeType('audio.trim@1', 'audio')).toBe('source_audio');
 
     const source = createWorkflowOperationInputBinding('binding-1', 'source-1', 'source_image', 0);
     expect(() => validateWorkflowOperationInputBindings('image.generate@1', [source])).toThrow('不允许输入角色 source_image');

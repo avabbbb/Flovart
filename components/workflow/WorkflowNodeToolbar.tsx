@@ -98,8 +98,8 @@ export function WorkflowNodeToolbar({ nodes, onCopy, onDelete, onExport, onRun, 
     node?.type === 'video' && mediaUrl && videoTools?.extractFrame && { key: 'video-frame-first', label: '导出首帧为图片', icon: <ArrowUpToLine size={18} />, disabled: videoToolBusy, onClick: () => videoTools.extractFrame?.(node.id, 'first') },
     node?.type === 'video' && mediaUrl && videoTools?.extractFrame && { key: 'video-frame-last', label: '导出尾帧为图片', icon: <ArrowDownToLine size={18} />, disabled: videoToolBusy, onClick: () => videoTools.extractFrame?.(node.id, 'last') },
     selectedMedia.length > 1 && selectedMedia.every(n => n.type === 'video') && videoTools?.merge && { key: 'video-merge', label: WORKFLOW_NODE_TOOL_LABELS['video-merge'], icon: <Frame size={18} />, disabled: videoToolBusy, onClick: () => videoTools.merge?.(ids) },
-    node?.type === 'audio' && mediaUrl && audioTools?.trim && { key: 'audio-trim', label: '音频截取', icon: <Scissors size={18} />, disabled: audioToolBusy, onClick: () => audioTools.trim?.(node.id) },
-    node?.type === 'audio' && mediaUrl && audioTools?.speed && { key: 'audio-speed', label: '音频变速', icon: <Gauge size={18} />, disabled: audioToolBusy, onClick: () => audioTools.speed?.(node.id) },
+    node?.type === 'audio' && mediaUrl && audioTools?.trim && { key: 'audio-trim', label: WORKFLOW_NODE_TOOL_LABELS['audio-trim'], icon: <Scissors size={18} />, disabled: audioToolBusy, onClick: () => audioTools.trim?.(node.id) },
+    node?.type === 'audio' && mediaUrl && audioTools?.speed && { key: 'audio-speed', label: WORKFLOW_NODE_TOOL_LABELS['audio-speed'], icon: <Gauge size={18} />, disabled: audioToolBusy, onClick: () => audioTools.speed?.(node.id) },
     node && (node.type === 'image' || node.type === 'video') && onToggleFreeResize && { key: 'resize', label: '切换自由缩放', icon: <Expand size={18} />, active: Boolean(node.freeResize), onClick: () => onToggleFreeResize(node.id) },
     node && node.type !== 'audio' && node.type !== 'script' && node.metadata.status === 'loading' && onStop
       ? { key: 'stop', label: '停止节点', icon: <Square size={17} />, onClick: () => onStop(node.id) }

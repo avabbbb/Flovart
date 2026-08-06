@@ -16,7 +16,9 @@ export type WorkflowOperationNodeToolName =
   | 'video-trim'
   | 'video-av-split'
   | 'video-merge'
-  | 'video-extract-frame';
+  | 'video-extract-frame'
+  | 'audio-trim'
+  | 'audio-speed';
 
 export interface WorkflowOperationInputRoleSpec {
   role: WorkflowOperationInputRole;
@@ -45,6 +47,7 @@ export interface WorkflowOperationCapability {
   parameters: z.ZodType<Record<string, unknown>>;
   nodeToolArguments?: z.ZodType<Record<string, unknown>>;
   parameterControls?: readonly WorkflowOperationParameterControl[];
+  promptRequired?: boolean;
   summarizeParameters: (parameters: Record<string, unknown>) => string;
 }
 
@@ -87,6 +90,13 @@ const videoExtractFrameParameters = z.object({
   position: z.enum(['first', 'last']).default('first'),
 });
 
+const audioTrimParameters = z.object({
+  startSec: z.number().min(0),
+  endSec: z.number().positive(),
+}).refine(value => value.endSec > value.startSec, '音频结束时间必须晚于开始时间');
+
+const audioSpeedParameters = z.object({ speed: z.number().min(.25).max(4) });
+
 export const WORKFLOW_OPERATION_CAPABILITIES: Readonly<Record<WorkflowOperationCapabilityId, WorkflowOperationCapability>> = {
   'image.generate@1': {
     id: 'image.generate@1', label: '图片生成',
@@ -99,6 +109,7 @@ export const WORKFLOW_OPERATION_CAPABILITIES: Readonly<Record<WorkflowOperationC
     executor: 'provider-generation', confirmation: 'paid-operation-subgraph', workflow: true, table: false,
     uiKey: 'image-generate',
     parameters: generateParameters,
+    promptRequired: true,
     summarizeParameters: parameters => `${parameters.aspectRatio || '自适应'} · ×${parameters.count || 1}`,
   },
   'image.crop@1': {
@@ -182,6 +193,29 @@ export const WORKFLOW_OPERATION_CAPABILITIES: Readonly<Record<WorkflowOperationC
       { label: '尾帧', value: 'last' },
     ] }],
     summarizeParameters: parameters => parameters.position === 'last' ? '尾帧' : '首帧',
+  },
+  'audio.trim@1': {
+    id: 'audio.trim@1', label: '音频截取', mediaType: 'audio',
+    inputRoles: [{ role: 'source_audio', nodeTypes: ['audio'], min: 1, max: 1 }],
+    outputRoles: [{ role: 'result_audio', nodeType: 'audio', min: 1, max: 1 }],
+    executor: 'local-transform', confirmation: 'none', workflow: true, table: true,
+    uiKey: 'audio-trim', nodeTool: 'audio-trim', agentUsage: 'audio-trim 使用 startSec/endSec，且 endSec 必须晚于 startSec',
+    parameters: audioTrimParameters,
+    parameterControls: [
+      { key: 'startSec', kind: 'number', label: '开始', min: 0, step: .1, suffix: '秒' },
+      { key: 'endSec', kind: 'number', label: '结束', min: .1, step: .1, suffix: '秒' },
+    ],
+    summarizeParameters: parameters => `${Number(parameters.startSec || 0).toFixed(1)}s → ${Number(parameters.endSec || 0).toFixed(1)}s`,
+  },
+  'audio.speed@1': {
+    id: 'audio.speed@1', label: '音频变速', mediaType: 'audio',
+    inputRoles: [{ role: 'source_audio', nodeTypes: ['audio'], min: 1, max: 1 }],
+    outputRoles: [{ role: 'result_audio', nodeType: 'audio', min: 1, max: 1 }],
+    executor: 'local-transform', confirmation: 'none', workflow: true, table: true,
+    uiKey: 'audio-speed', nodeTool: 'audio-speed', agentUsage: 'audio-speed 使用 speed（0.25-4）',
+    parameters: audioSpeedParameters,
+    parameterControls: [{ key: 'speed', kind: 'number', label: '速度', min: .25, max: 4, step: .05, suffix: '×' }],
+    summarizeParameters: parameters => `${Number(parameters.speed || 1).toFixed(2)}×`,
   },
 };
 

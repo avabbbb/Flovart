@@ -139,6 +139,10 @@ export interface PromptBarProps {
     error?: string | null;
     progressStage?: string;
     providerUsageLabel?: string;
+    runWithoutPrompt?: boolean;
+    providerOptional?: boolean;
+    hideGenerationOptions?: boolean;
+    runLabel?: string;
     autoFocus?: boolean;
     focusSignal?: number;
     assetFolders?: AssetFolder[];
@@ -417,6 +421,10 @@ export const PromptBar: React.FC<PromptBarProps> = ({
     error,
     progressStage,
     providerUsageLabel,
+    runWithoutPrompt = false,
+    providerOptional = false,
+    hideGenerationOptions = false,
+    runLabel,
     autoFocus = false,
     focusSignal,
     assetFolders = [],
@@ -602,12 +610,13 @@ export const PromptBar: React.FC<PromptBarProps> = ({
     }, [activeProductModel, activeRatio, activeRouteContext, activeSubmode, videoDurationSec, videoResolution]);
     const changeActiveModel = (model: string) => generationMode === 'text' ? onTextModelChange?.(model) : videoLikeMode ? onVideoModelChange?.(model) : onImageModelChange?.(model);
     const promptCharCount = prompt.trim().length;
-    const missingMediaModel = generationMode !== 'text' && !activeProductModel;
-    const readyState = missingMediaModel || !activeKey || (activeProductModel && !activeRoute)
+    const promptReady = runWithoutPrompt || Boolean(prompt.trim());
+    const missingMediaModel = !providerOptional && generationMode !== 'text' && !activeProductModel;
+    const readyState = missingMediaModel || (!providerOptional && (!activeKey || (activeProductModel && !activeRoute)))
         ? 'missing-key'
         : error
             ? 'error'
-            : !prompt.trim()
+            : !promptReady
                 ? 'empty'
                 : videoInputRequirement
                     ? 'invalid-input'
@@ -654,8 +663,8 @@ export const PromptBar: React.FC<PromptBarProps> = ({
 
     /** 编辑器 Enter 提交 */
     const handleEditorSubmit = useCallback(() => {
-        if (latestPromptRef.current.trim() && !isLoading && readyState !== 'missing-key' && !videoInputRequirement) onGenerate();
-    }, [isLoading, onGenerate, readyState, videoInputRequirement]);
+        if ((runWithoutPrompt || latestPromptRef.current.trim()) && !isLoading && readyState !== 'missing-key' && !videoInputRequirement) onGenerate();
+    }, [isLoading, onGenerate, readyState, runWithoutPrompt, videoInputRequirement]);
 
     const replacePrompt = useCallback((value: string) => {
         latestPromptRef.current = value;
@@ -1442,7 +1451,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                 <div className={`relative flex items-center gap-2 border-t ${compactMode ? 'px-2.5 py-2' : 'px-3 py-2.5'}`} style={{ borderColor: 'var(--isl-border)' }}>
                     <div className="min-w-0 flex-1 overflow-hidden">
                         <div className="flex flex-nowrap items-center gap-2 overflow-x-auto isl-scrollbar">
-                            {(() => {
+                            {!hideGenerationOptions && (() => {
                                 const keyCount = userApiKeys.length;
                                 if (keyCount === 0) {
                                     return (
@@ -1461,34 +1470,34 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                 return null;
                             })()}
 
-                            <div className="relative">
+                            {!hideGenerationOptions && <div className="relative">
                                 <button type="button" aria-haspopup="dialog" aria-expanded={expandedPanel === 'model'} onClick={() => setExpandedPanel(prev => (prev === 'model' ? null : 'model'))} className={`${triggerClass} shrink-0 ${expandedPanel === 'model' ? activeTriggerClass : ''}`}>
                                     <span className="max-w-[150px] truncate">{getModelLabel(generationMode, selectedTextModel, selectedImageModel, selectedVideoModel, userApiKeys)}</span>
                                     
                                 </button>
-                            </div>
+                            </div>}
 
-                            {generationMode === 'video' && VIDEO_MODE_ORDER.length > 1 && (
+                            {!hideGenerationOptions && generationMode === 'video' && VIDEO_MODE_ORDER.length > 1 && (
                                 <button type="button" aria-haspopup="dialog" aria-expanded={expandedPanel === 'submode'} onClick={() => setExpandedPanel(prev => (prev === 'submode' ? null : 'submode'))} className={`${triggerClass} shrink-0 ${expandedPanel === 'submode' ? activeTriggerClass : ''}`} title="视频生成方式">
                                     <span>{PRODUCT_MODE_LABELS[activeSubmode]}</span>
 
                                 </button>
                             )}
 
-                            {generationMode === 'image' && routedImageModes.length > 1 && (
+                            {!hideGenerationOptions && generationMode === 'image' && routedImageModes.length > 1 && (
                                 <button type="button" aria-haspopup="dialog" aria-expanded={expandedPanel === 'submode'} onClick={() => setExpandedPanel(prev => (prev === 'submode' ? null : 'submode'))} className={`${triggerClass} shrink-0 ${expandedPanel === 'submode' ? activeTriggerClass : ''}`} title="图片生成方式">
                                     <span>{PRODUCT_MODE_LABELS[activeSubmode]}</span>
 
                                 </button>
                             )}
 
-                            {generationMode !== 'text' && (
+                            {!hideGenerationOptions && generationMode !== 'text' && (
                                 <button type="button" aria-haspopup="dialog" aria-expanded={activeProductModel ? expandedPanel === 'parameters' : expandedPanel === 'model'} onClick={() => activeProductModel ? setExpandedPanel(prev => (prev === 'parameters' ? null : 'parameters')) : setExpandedPanel('model')} className={`${triggerClass} shrink-0 ${(activeProductModel ? expandedPanel === 'parameters' : expandedPanel === 'model') ? activeTriggerClass : ''}`} title="生成参数">
                                     <span className="max-w-[220px] truncate">{paramSummary || '参数'}</span>
                                 </button>
                             )}
 
-                            <button
+                            {!hideGenerationOptions && <button
                                 type="button"
                                 onClick={onAutoEnhanceToggle}
                                 title={isAutoEnhanceEnabled ? '关闭自动润色（生成前不再自动优化提示词）' : '开启自动润色（生成前自动用 LLM 优化提示词）'}
@@ -1498,33 +1507,33 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                     <path d="M12 3l1.912 5.813a2 2 0 0 0 1.275 1.275L21 12l-5.813 1.912a2 2 0 0 0-1.275 1.275L12 21l-1.912-5.813a2 2 0 0 0-1.275-1.275L3 12l5.813-1.912a2 2 0 0 0 1.275-1.275L12 3Z" />
                                 </svg>
                                 <span className="sr-only">{isAutoEnhanceEnabled ? '润色已开启' : '润色'}</span>
-                            </button>
+                            </button>}
 
-                            <button type="button" onClick={() => void handleTranslatePrompt()} disabled={!onEnhancePrompt || !prompt.trim() || isTranslating} className={`${triggerClass} shrink-0 disabled:cursor-not-allowed disabled:opacity-40`} title="翻译提示词">
+                            {!hideGenerationOptions && <button type="button" onClick={() => void handleTranslatePrompt()} disabled={!onEnhancePrompt || !prompt.trim() || isTranslating} className={`${triggerClass} shrink-0 disabled:cursor-not-allowed disabled:opacity-40`} title="翻译提示词">
                                 <span className="text-sm font-black">{isTranslating ? '…' : '译'}</span><span className="sr-only">翻译提示词</span>
-                            </button>
-                            {preTranslatePrompt != null && (
+                            </button>}
+                            {!hideGenerationOptions && preTranslatePrompt != null && (
                                 <button type="button" onClick={handleRevertTranslate} className={`${triggerClass} shrink-0`} title="还原翻译前的提示词">
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 7v6h6" /><path d="M21 17a9 9 0 0 0-15-6.7L3 13" /></svg>
                                     <span className="sr-only">还原翻译</span>
                                 </button>
                             )}
 
-                            <div className="relative">
+                            {!hideGenerationOptions && <div className="relative">
                                 <button type="button" aria-haspopup="dialog" aria-expanded={expandedPanel === 'more'} aria-label="更多操作" onClick={() => setExpandedPanel(prev => (prev === 'more' ? null : 'more'))} className={`${triggerClass} shrink-0 ${expandedPanel === 'more' ? activeTriggerClass : ''}`} title="更多操作">
                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>
                                 </button>
-                            </div>
+                            </div>}
                         </div>
                     </div>
 
                     <div className="flex shrink-0 items-center gap-2">
-                        {activeProductModel && (
+                        {!hideGenerationOptions && activeProductModel && (
                             <div className="flex h-8 shrink-0 items-center px-2.5 text-[11px] font-bold" title={providerUsageLabel ? '供应商返回的本次用量' : estimatedCostLabel ? '按当前 API Key 计价规则估算；最终以供应商账单或 Token 回执为准' : '当前 API Key 尚未配置可计算的计价规则'}>
                                 <span style={{ color: providerUsageLabel || estimatedCostLabel ? 'var(--isl-mint-deep)' : 'var(--isl-ink-ghost)' }}>{providerUsageLabel || estimatedCostLabel || '费用 --'}</span>
                             </div>
                         )}
-                        {(generationMode === 'image' || generationMode === 'video' && allowVideoBatch) && onBatchCountChange && (
+                        {!hideGenerationOptions && (generationMode === 'image' || generationMode === 'video' && allowVideoBatch) && onBatchCountChange && (
                             <div className="relative">
                                 <button type="button" aria-haspopup="dialog" aria-expanded={expandedPanel === 'batch'} onClick={() => setExpandedPanel(prev => (prev === 'batch' ? null : 'batch'))} className={`${triggerClass} shrink-0 ${expandedPanel === 'batch' ? activeTriggerClass : ''}`} title="批量方案数量">
                                     <span className="text-xs font-bold">×{batchCount}</span>
@@ -1553,11 +1562,11 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                             type="button"
                             onClick={() => {
                                 if (isLoading && onStop) onStop();
-                                else if (prompt.trim() && readyState !== 'missing-key' && !videoInputRequirement) onGenerate();
+                                else if (promptReady && readyState !== 'missing-key' && !videoInputRequirement) onGenerate();
                             }}
-                            disabled={(isLoading && !onStop) || (!isLoading && (!prompt.trim() || readyState === 'missing-key' || Boolean(videoInputRequirement)))}
-                            aria-label={isLoading && onStop ? (isSeedanceVideoModel ? '停止并尝试取消任务' : '停止生成') : t('promptBar.generate')}
-                            title={isLoading && onStop ? (isSeedanceVideoModel ? '停止本地等待并尝试取消上游任务；若已进入生成阶段，上游仍可能继续计费' : '停止生成') : videoInputRequirement || t('promptBar.generate')}
+                            disabled={(isLoading && !onStop) || (!isLoading && (!promptReady || readyState === 'missing-key' || Boolean(videoInputRequirement)))}
+                            aria-label={isLoading && onStop ? (isSeedanceVideoModel ? '停止并尝试取消任务' : '停止生成') : runLabel || t('promptBar.generate')}
+                            title={isLoading && onStop ? (isSeedanceVideoModel ? '停止本地等待并尝试取消上游任务；若已进入生成阶段，上游仍可能继续计费' : '停止生成') : videoInputRequirement || runLabel || t('promptBar.generate')}
                             className={`isl-go ${compactMode ? 'h-10 w-10 min-w-10 rounded-full p-0 text-xs' : 'h-10 min-w-[116px] px-5 text-sm'}`}
                         >
                             {compactMode ? (isLoading && !onStop ? (
@@ -1576,7 +1585,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                 </svg>
                             ) : isLoading ? <span className="text-xs font-semibold">{isSeedanceVideoModel ? '停止/取消' : '停止'}</span> : (
                                 <div className="flex items-center gap-1.5">
-                                    <span className="text-xs font-semibold">{error ? '重试' : batchCount > 1 ? `生成 ${batchCount} 版` : '开始生成'}</span>
+                                    <span className="text-xs font-semibold">{error ? '重试' : runLabel || (batchCount > 1 ? `生成 ${batchCount} 版` : '开始生成')}</span>
                                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
                                         <path d="M5 12h14" />
                                         <path d="m12 5 7 7-7 7" />

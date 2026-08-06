@@ -102,6 +102,7 @@ export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme,
 }) {
   const [libraryOpen, setLibraryOpen] = useState(false);
   const operationCapability = node.metadata.operation ? getWorkflowOperationCapability(node.metadata.operation.capabilityId) : undefined;
+  const isLocalOperation = operationCapability?.executor === 'local-transform';
   const config = node.metadata.config || { mode: node.type === 'text' ? 'text' : node.type === 'video' ? 'video' : 'image' };
   const generationMode = modeFor(node, config);
   const productMode = operationCapability?.id === 'image.upscale@1'
@@ -219,6 +220,10 @@ export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme,
         error={node.metadata.error || null}
         progressStage={node.metadata.generationMessage || (node.metadata.progress === undefined ? undefined : `${Math.round(node.metadata.progress)}%`)}
         providerUsageLabel={providerUsageLabel}
+        runWithoutPrompt={Boolean(operationCapability && !operationCapability.promptRequired)}
+        providerOptional={isLocalOperation}
+        hideGenerationOptions={isLocalOperation}
+        runLabel={operationCapability ? '运行' : undefined}
         isLoading={node.metadata.status === 'loading'}
         isSelectionActive={false}
         selectedElementCount={1}

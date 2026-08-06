@@ -64,7 +64,7 @@ export async function splitAudioVideo(blob: Blob, originalName = 'video.mp4'): P
   const videoData = await ffmpeg.readFile(videoOutput);
   const audioData = await ffmpeg.readFile(audioOutput);
   const videoBlob = new Blob([videoData], { type: `video/${format}` });
-  const audioBlob = new Blob([audioData], { type: 'audio/mp3' });
+  const audioBlob = new Blob([audioData], { type: 'audio/mpeg' });
 
   await ffmpeg.deleteFile(inputName);
   await ffmpeg.deleteFile(videoOutput);

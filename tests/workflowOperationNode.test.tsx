@@ -73,6 +73,7 @@ describe('workflow operation node surface', () => {
     const source = createWorkflowNode('source-image', 'image', { x: 0, y: 0 }, { storageKey: 'source-key', status: 'success' });
     const video = createWorkflowNode('video-reference', 'video', { x: 0, y: 300 }, { storageKey: 'video-key', status: 'success' });
     const onChange = vi.fn();
+    const onRun = vi.fn();
     render(<WorkflowNodePromptBar
       node={operation}
       nodes={[operation, source, video]}
@@ -83,11 +84,13 @@ describe('workflow operation node surface', () => {
       userApiKeys={[imageKey]}
       dynamicModelOptions={{ text: [], image: ['flovart:gpt-image-2'], video: [] }}
       onChange={onChange}
-      onRun={vi.fn()}
+      onRun={onRun}
     />);
 
     expect(screen.getByTestId('workflow-node-prompt-bar')).toBeInTheDocument();
     expect(onChange).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: '运行' }));
+    expect(onRun).toHaveBeenCalledOnce();
     fireEvent.change(screen.getByLabelText('宽度'), { target: { value: '70' } });
     const patch = onChange.mock.calls.at(-1)?.[0];
     expect(patch.config.operationParameters).toEqual({ x: .1, y: .2, width: .7, height: .6 });

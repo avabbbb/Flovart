@@ -72,7 +72,7 @@ export async function changeAudioSpeed(blob: Blob, speed: number, originalName =
   ]);
 
   const data = await ffmpeg.readFile(outputName);
-  const resultBlob = new Blob([data], { type: 'audio/mp3' });
+  const resultBlob = new Blob([data], { type: 'audio/mpeg' });
   await ffmpeg.deleteFile(inputName);
   await ffmpeg.deleteFile(outputName);
   return resultBlob;

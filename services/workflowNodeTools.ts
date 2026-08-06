@@ -12,7 +12,6 @@ import type { WorkflowNodeToolName } from '../components/workflow/nodeToolCatalo
 import { loadRuntimeArtifactBlob } from './runtimeArtifacts';
 import { transformImage } from './imageTransform';
 import { splitGrid } from './gridSplitter';
-import { trimAudio, changeAudioSpeed } from './audioTools';
 import {
   runWorkflowImageAgent,
   runWorkflowImageEdit,
@@ -28,6 +27,11 @@ import {
   runWorkflowVideoTrimOperation,
   type WorkflowVideoOperationRuntime,
 } from './workflowVideoOperations';
+import {
+  runWorkflowAudioSpeedOperation,
+  runWorkflowAudioTrimOperation,
+  type WorkflowAudioOperationRuntime,
+} from './workflowAudioOperations';
 
 /** 画布二次处理工具：AI 可直接对选中节点执行这些工具，结果作为新节点+连线回填画布。 */
 export type { WorkflowNodeToolName } from '../components/workflow/nodeToolCatalog';
@@ -35,7 +39,7 @@ export type { WorkflowNodeToolName } from '../components/workflow/nodeToolCatalo
 export type WorkflowNodeToolOutcome = WorkflowImageToolOutcome;
 
 /** 图片工具经 WorkflowImageToolRuntime 走 Provider 路由；确定性工具只需画布媒体读入/写入。 */
-export interface WorkflowNodeToolRuntime extends WorkflowImageOperationRuntime, WorkflowVideoOperationRuntime {}
+export interface WorkflowNodeToolRuntime extends WorkflowImageOperationRuntime, WorkflowVideoOperationRuntime, WorkflowAudioOperationRuntime {}
 
 const nanoidFactory = () => nanoid;
 
@@ -188,19 +192,14 @@ export async function runWorkflowNodeTool(
       return runWorkflowVideoExtractFrameOperation(projectId, nodeId, position, runtime);
     }
     case 'audio-trim': {
-      const project = requireProject(runtime, projectId);
-      const source = requireMediaNode(project, nodeId, 'audio');
-      const blob = await loadSourceBlob(source, runtime);
-      const { blob: trimmed, durationSec } = await trimAudio(blob, finite(args.startSec, 0, 0, Number.MAX_SAFE_INTEGER), finite(args.endSec, 0, 0, Number.MAX_SAFE_INTEGER), source.metadata.name || 'audio.mp3');
-      return commitBlobResults(projectId, source, [{ blob: trimmed, title: `截取 ${durationSec.toFixed(1)}s`, mimeType: trimmed.type || 'audio/mpeg' }], runtime);
+      return runWorkflowAudioTrimOperation(projectId, nodeId, {
+        startSec: finite(args.startSec, 0, 0, Number.MAX_SAFE_INTEGER),
+        endSec: finite(args.endSec, 0, 0, Number.MAX_SAFE_INTEGER),
+      }, runtime);
     }
     case 'audio-speed': {
-      const project = requireProject(runtime, projectId);
-      const source = requireMediaNode(project, nodeId, 'audio');
-      const blob = await loadSourceBlob(source, runtime);
       const speed = finite(args.speed, 1, 0.25, 4);
-      const result = await changeAudioSpeed(blob, speed, source.metadata.name || 'audio.mp3');
-      return commitBlobResults(projectId, source, [{ blob: result, title: `变速 ${speed}x`, mimeType: 'audio/mpeg' }], runtime);
+      return runWorkflowAudioSpeedOperation(projectId, nodeId, speed, runtime);
     }
     default:
       throw new Error(`未知画布工具：${String(tool)}`);
