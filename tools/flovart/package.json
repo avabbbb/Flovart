@@ -1,6 +1,6 @@
 {
   "name": "flovart-cli",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Flovart CLI, TUI and MCP bridge for Workflow, providers and coding agents",
   "type": "module",
   "bin": {
