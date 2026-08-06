@@ -173,6 +173,14 @@
 .workflow-toolbar__library-grid span { overflow: hidden; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 .workflow-toolbar__library-grid p { grid-column: 1/-1; margin: 12px; color: var(--wf-muted); font-size: 11px; text-align: center; }
 .workflow-node-prompt { position: relative; }
+.workflow-operation-parameters { position: absolute; z-index: 4; left: 0; bottom: calc(100% + 8px); display: flex; max-width: 100%; gap: 8px; overflow-x: auto; border: 1px solid var(--wf-border); border-radius: 8px; padding: 7px 9px; color: var(--wf-text); background: var(--wf-strong); box-shadow: 0 10px 28px rgba(0,0,0,.16); }
+.workflow-operation-parameters label { display: flex; flex: 0 0 auto; align-items: center; gap: 5px; color: var(--wf-muted); font-size: 10px; white-space: nowrap; }
+.workflow-operation-parameters input,.workflow-operation-parameters select { height: 27px; border: 1px solid var(--wf-border); border-radius: 6px; padding: 0 7px; color: var(--wf-text); background: var(--wf-panel); font: inherit; outline: 0; }
+.workflow-operation-parameters input { width: 68px; }
+.workflow-operation-parameters select { min-width: 72px; }
+.workflow-operation-parameters input:focus,.workflow-operation-parameters select:focus { border-color: var(--wf-accent); }
+.workflow-operation-parameters__number { display: flex; align-items: center; gap: 3px; }
+.workflow-operation-parameters__number small { color: var(--wf-muted); font-size: 9px; }
 .workflow-node-prompt__library-button { position: absolute; z-index: 3; right: 48px; top: -30px; display: grid; place-content: center; width: 27px; height: 27px; border: 1px solid var(--wf-border); border-radius: 6px; color: var(--wf-muted); background: var(--wf-panel); cursor: pointer; }
 .workflow-node-prompt__library { position: absolute; z-index: 5; right: 0; bottom: calc(100% + 8px); width: 300px; max-height: 260px; overflow: auto; border: 1px solid var(--wf-border); border-radius: 8px; padding: 5px; background: var(--wf-strong); box-shadow: 0 14px 34px rgba(0,0,0,.2); }
 .workflow-node-prompt__library button { display: flex; flex-direction: column; gap: 3px; width: 100%; border: 0; border-radius: 6px; padding: 7px 8px; color: inherit; background: transparent; text-align: left; cursor: pointer; }

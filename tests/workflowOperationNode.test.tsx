@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { createWorkflowNode } from '../components/workflow/constants';
-import { createWorkflowOperationInputBinding, createWorkflowOperationNode } from '../components/workflow/operations';
+import { createWorkflowOperationInputBinding, createWorkflowOperationNode, updateWorkflowOperationFromMetadata } from '../components/workflow/operations';
 import { WorkflowNode } from '../components/workflow/WorkflowNode';
 import { WorkflowNodePromptBar } from '../components/workflow/WorkflowNodePromptBar';
 import type { UserApiKey } from '../types';
@@ -45,6 +45,29 @@ describe('workflow operation node surface', () => {
     expect(onRun).toHaveBeenCalledOnce();
   });
 
+  it('derives a video Operation card and mode from the same capability registry', async () => {
+    const operation = await createWorkflowOperationNode({
+      id: 'trim-operation', capabilityId: 'video.trim@1', position: { x: 400, y: 0 },
+      parameters: { startSec: 1, endSec: 4 },
+      inputBindings: [createWorkflowOperationInputBinding('trim-input', 'source-video', 'source_video', 0)],
+    });
+    render(<WorkflowNode
+      node={operation}
+      selected
+      onPointerDown={vi.fn()}
+      onConnectStart={vi.fn()}
+      onResizeStart={vi.fn()}
+      onChangeText={vi.fn()}
+      onChangeMetadata={vi.fn()}
+      onRun={vi.fn()}
+      onContextMenu={vi.fn()}
+      onReplaceMedia={vi.fn()}
+      onRemoveMedia={vi.fn()}
+    />);
+    expect(operation.metadata.config?.mode).toBe('video');
+    expect(screen.getByTestId('workflow-operation-card')).toHaveTextContent('1.0s → 4.0s');
+  });
+
   it('keeps the shared PromptBar mounted without assigning a Provider model to local crop', async () => {
     const operation = await cropOperation();
     const source = createWorkflowNode('source-image', 'image', { x: 0, y: 0 }, { storageKey: 'source-key', status: 'success' });
@@ -64,6 +87,39 @@ describe('workflow operation node surface', () => {
     />);
 
     expect(screen.getByTestId('workflow-node-prompt-bar')).toBeInTheDocument();
+    expect(onChange).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText('宽度'), { target: { value: '70' } });
+    const patch = onChange.mock.calls.at(-1)?.[0];
+    expect(patch.config.operationParameters).toEqual({ x: .1, y: .2, width: .7, height: .6 });
+    const updated = updateWorkflowOperationFromMetadata(operation, patch, '2026-08-06T00:00:00.000Z');
+    expect(updated.metadata.operation?.recipe).toMatchObject({ parameters: { x: .1, y: .2, width: .7, height: .6 }, recipeHash: null });
+  });
+
+  it('edits video parameters through the Registry controls and rejects invalid cross-field values', async () => {
+    const operation = await createWorkflowOperationNode({
+      id: 'trim-operation', capabilityId: 'video.trim@1', position: { x: 400, y: 0 },
+      parameters: { startSec: 1, endSec: 4 },
+      inputBindings: [createWorkflowOperationInputBinding('trim-input', 'source-video', 'source_video', 0)],
+    });
+    const source = createWorkflowNode('source-video', 'video', { x: 0, y: 0 }, { storageKey: 'video-key', status: 'success' });
+    const onChange = vi.fn();
+    render(<WorkflowNodePromptBar
+      node={operation}
+      nodes={[operation, source]}
+      connections={[{ id: 'trim-input', fromNodeId: source.id, toNodeId: operation.id, kind: 'operation-input', role: 'source_video', order: 0 }]}
+      t={t}
+      theme="light"
+      language="zho"
+      userApiKeys={[]}
+      dynamicModelOptions={{ text: [], image: [], video: [] }}
+      onChange={onChange}
+      onRun={vi.fn()}
+    />);
+
+    fireEvent.change(screen.getByLabelText('开始'), { target: { value: '2' } });
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ config: expect.objectContaining({ operationParameters: { startSec: 2, endSec: 4 } }) }));
+    onChange.mockClear();
+    fireEvent.change(screen.getByLabelText('开始'), { target: { value: '5' } });
     expect(onChange).not.toHaveBeenCalled();
   });
 });

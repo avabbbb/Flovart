@@ -136,6 +136,15 @@ describe('workflow dispatcher', () => {
     expect(paid.confirmation?.required).toBe(true);
 
     nodeToolRunner.mockClear();
+    const merge = await dispatch({
+      id: 'merge', command: 'workflow.node.tool',
+      args: { nodeId: 'image-1', tool: 'video-merge', sourceNodeIds: ['video-2', 'video-1'], ignored: true },
+      source: 'agent',
+    });
+    expect(merge.confirmation).toBeUndefined();
+    expect(nodeToolRunner).toHaveBeenCalledWith(expect.any(String), 'image-1', 'video-merge', { sourceNodeIds: ['video-2', 'video-1'] });
+
+    nodeToolRunner.mockClear();
     const invalid = await dispatch({
       id: 'bad-crop', command: 'workflow.node.tool',
       args: { nodeId: 'image-1', tool: 'crop', x: .8, y: 0, width: .5, height: 1 },

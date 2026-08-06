@@ -12,8 +12,6 @@ import type { WorkflowNodeToolName } from '../components/workflow/nodeToolCatalo
 import { loadRuntimeArtifactBlob } from './runtimeArtifacts';
 import { transformImage } from './imageTransform';
 import { splitGrid } from './gridSplitter';
-import { trimVideo, splitAudioVideo, mergeVideos } from './videoTools';
-import { extractVideoFrame } from './videoFrameExtractor';
 import { trimAudio, changeAudioSpeed } from './audioTools';
 import {
   runWorkflowImageAgent,
@@ -23,6 +21,13 @@ import {
   type WorkflowImageToolRuntime,
 } from './workflowImageTools';
 import { runWorkflowCropOperation, runWorkflowUpscaleOperation, type WorkflowImageOperationRuntime } from './workflowImageOperations';
+import {
+  runWorkflowVideoAvSplitOperation,
+  runWorkflowVideoExtractFrameOperation,
+  runWorkflowVideoMergeOperation,
+  runWorkflowVideoTrimOperation,
+  type WorkflowVideoOperationRuntime,
+} from './workflowVideoOperations';
 
 /** 画布二次处理工具：AI 可直接对选中节点执行这些工具，结果作为新节点+连线回填画布。 */
 export type { WorkflowNodeToolName } from '../components/workflow/nodeToolCatalog';
@@ -30,7 +35,7 @@ export type { WorkflowNodeToolName } from '../components/workflow/nodeToolCatalo
 export type WorkflowNodeToolOutcome = WorkflowImageToolOutcome;
 
 /** 图片工具经 WorkflowImageToolRuntime 走 Provider 路由；确定性工具只需画布媒体读入/写入。 */
-export interface WorkflowNodeToolRuntime extends WorkflowImageOperationRuntime {}
+export interface WorkflowNodeToolRuntime extends WorkflowImageOperationRuntime, WorkflowVideoOperationRuntime {}
 
 const nanoidFactory = () => nanoid;
 
@@ -167,47 +172,20 @@ export async function runWorkflowNodeTool(
       );
     }
     case 'video-trim': {
-      const project = requireProject(runtime, projectId);
-      const source = requireMediaNode(project, nodeId, 'video');
-      const blob = await loadSourceBlob(source, runtime);
-      const { blob: trimmed, durationSec } = await trimVideo(blob, finite(args.startSec, 0, 0, Number.MAX_SAFE_INTEGER), finite(args.endSec, 0, 0, Number.MAX_SAFE_INTEGER), source.metadata.name || 'video.mp4');
-      return commitBlobResults(projectId, source, [{ blob: trimmed, title: `剪辑 ${durationSec.toFixed(1)}s`, mimeType: 'video/mp4' }], runtime);
+      return runWorkflowVideoTrimOperation(projectId, nodeId, {
+        startSec: finite(args.startSec, 0, 0, Number.MAX_SAFE_INTEGER),
+        endSec: finite(args.endSec, 0, 0, Number.MAX_SAFE_INTEGER),
+      }, runtime);
     }
-    case 'video-av-split': {
-      const project = requireProject(runtime, projectId);
-      const source = requireMediaNode(project, nodeId, 'video');
-      const blob = await loadSourceBlob(source, runtime);
-      const { videoBlob, audioBlob } = await splitAudioVideo(blob, source.metadata.name || 'video.mp4');
-      return commitBlobResults(
-        projectId,
-        source,
-        [
-          { blob: videoBlob, title: '纯视频', mimeType: 'video/mp4' },
-          { blob: audioBlob, title: '纯音频', mimeType: audioBlob.type || 'audio/mp3' },
-        ],
-        runtime,
-      );
-    }
+    case 'video-av-split':
+      return runWorkflowVideoAvSplitOperation(projectId, nodeId, runtime);
     case 'video-merge': {
-      const project = requireProject(runtime, projectId);
-      const source = requireMediaNode(project, nodeId, 'video');
       const requested = Array.isArray(args.sourceNodeIds) ? args.sourceNodeIds.map(String) : [];
-      const candidateIds = requested.length ? requested : project.connections.filter(connection => connection.toNodeId === nodeId).map(connection => connection.fromNodeId);
-      const sources = Array.from(new Set(candidateIds))
-        .map(id => project.nodes.find(node => node.id === id))
-        .filter((node): node is WorkflowNode => Boolean(node && node.type === 'video' && (node.metadata.storageKey || node.metadata.href || node.metadata.artifactRef?.taskId)));
-      if (sources.length < 2) throw new Error('视频拼接至少需要 2 个视频节点');
-      const blobs = await Promise.all(sources.map(node => loadSourceBlob(node, runtime)));
-      const merged = await mergeVideos(blobs, sources.map(node => node.metadata.name || 'video.mp4'));
-      return commitBlobResults(projectId, source, [{ blob: merged, title: '视频拼接', mimeType: 'video/mp4' }], runtime);
+      return runWorkflowVideoMergeOperation(projectId, requested, runtime);
     }
     case 'video-extract-frame': {
-      const project = requireProject(runtime, projectId);
-      const source = requireMediaNode(project, nodeId, 'video');
-      const blob = await loadSourceBlob(source, runtime);
       const position = String(args.position || 'first') === 'last' ? 'last' : 'first';
-      const frame = await extractVideoFrame(blob, position);
-      return commitBlobResults(projectId, source, [{ blob: frame.blob, title: position === 'first' ? '首帧' : '尾帧', mimeType: 'image/jpeg' }], runtime);
+      return runWorkflowVideoExtractFrameOperation(projectId, nodeId, position, runtime);
     }
     case 'audio-trim': {
       const project = requireProject(runtime, projectId);

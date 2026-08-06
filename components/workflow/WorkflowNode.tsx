@@ -2,6 +2,7 @@ import { Check, ChevronsDown, Clapperboard, FileText, Image as ImageIcon, Music2
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type MouseEvent as ReactMouseEvent } from 'react';
 import { motion } from 'motion/react';
 import { WorkflowConfigPanel } from './WorkflowConfigPanel';
+import { getWorkflowOperationCapability } from './operationRegistry';
 import { buildCssFilter } from '../ImageFilterPanel';
 import { useWorkflowMediaUrl } from './media';
 import type { WorkflowNode as WorkflowNodeData } from './types';
@@ -278,12 +279,7 @@ function OperationNodeCard({ node, onRun }: { node: WorkflowNodeData; onRun: () 
   const operation = node.metadata.operation;
   if (!operation) return <div className="workflow-operation-card"><span>Operation 配方缺失</span></div>;
   const latestTake = operation.takes.at(-1);
-  const parameters = operation.recipe.parameters;
-  const parameterLabel = operation.capabilityId === 'image.crop@1'
-    ? `${Math.round(Number(parameters.width || 0) * 100)}% × ${Math.round(Number(parameters.height || 0) * 100)}%`
-    : operation.capabilityId === 'image.upscale@1'
-      ? `${parameters.targetLongEdge || '-'}px · ${parameters.algorithm || '-'}`
-      : `${parameters.aspectRatio || '自适应'} · ×${parameters.count || 1}`;
+  const parameterLabel = getWorkflowOperationCapability(operation.capabilityId).summarizeParameters(operation.recipe.parameters);
   const statusLabel = latestTake?.status === 'outdated_recipe' ? '旧配方结果'
     : latestTake?.status === 'canceled' ? '已停止'
     : latestTake?.status === 'error' ? '执行失败'

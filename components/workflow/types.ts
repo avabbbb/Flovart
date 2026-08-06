@@ -53,8 +53,17 @@ export interface WorkflowRichPromptDocument extends Record<string, unknown> {
   type: string;
 }
 
-export type WorkflowOperationCapabilityId = 'image.generate@1' | 'image.crop@1' | 'image.upscale@1';
-export type WorkflowOperationInputRole = 'source_image' | 'reference_image' | 'prompt_context';
+export type WorkflowOperationCapabilityId =
+  | 'image.generate@1'
+  | 'image.crop@1'
+  | 'image.upscale@1'
+  | 'video.trim@1'
+  | 'video.av-split@1'
+  | 'video.merge@1'
+  | 'video.extract-frame@1';
+export type WorkflowOperationMediaType = 'image' | 'video' | 'audio';
+export type WorkflowOperationInputRole = 'source_image' | 'reference_image' | 'source_video' | 'prompt_context';
+export type WorkflowOperationOutputRole = 'result_image' | 'result_video' | 'result_audio';
 export type WorkflowOperationTakeStatus = 'running' | 'success' | 'error' | 'canceled' | 'outdated_recipe';
 
 export interface WorkflowOperationInputBinding {
@@ -86,7 +95,7 @@ export interface WorkflowOperationRecipe {
 export interface WorkflowExecutionPromptSnapshot {
   id: string;
   createdAt: string;
-  compilerVersion: 'workflow-image-operation@1';
+  compilerVersion: 'workflow-operation@1';
   renderedPrompt: string;
   richTextDocument?: WorkflowRichPromptDocument;
   parameters: Record<string, unknown>;
@@ -139,6 +148,7 @@ export interface CameraParams {
 
 export interface WorkflowGenerationConfig extends WorkflowProviderConfig {
   mode: WorkflowGenerationMode;
+  operationParameters?: Record<string, unknown>;
   submode?: ProductModelMode;
   aspectRatio?: string;
   /** 图生图 / 图生视频时，是否忽略用户在 PromptBar 中选择的比例，改用第一张参考图的原始宽高比。 */
@@ -218,6 +228,7 @@ export interface WorkflowNodeMetadata {
   /** 媒体结果反向定位其来源 Operation 与 Take。 */
   sourceOperationNodeId?: string;
   operationTakeId?: string;
+  operationOutputRole?: WorkflowOperationOutputRole;
   productionProjection?: {
     projectionId: string;
     projectionVersion: number;
@@ -252,7 +263,7 @@ export interface WorkflowConnection {
   fromNodeId: string;
   toNodeId: string;
   kind?: 'data' | 'operation-input' | 'operation-output';
-  role?: WorkflowOperationInputRole;
+  role?: WorkflowOperationInputRole | WorkflowOperationOutputRole;
   order?: number;
 }
 

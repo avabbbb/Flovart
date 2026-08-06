@@ -11,6 +11,14 @@ title: 待测试确认
 - 自动验证通过：`npx tsc --noEmit`；13 个 Operation/Workflow 相关测试文件 129 项；全量 Vitest 96 个文件 702 项通过、1 项预期失败、1 项跳过；Web 生产构建成功。构建仅保留既有的动态/静态重复导入与大 chunk 警告。
 - 待用户验证：① 对一张本地图片执行裁剪，确认源图保留并出现独立 Operation 与结果图；② 修改裁剪参数后重跑，确认同一 Operation 的 Take 数增加；③ 对图片执行高清放大，确认执行前仍有付费确认且 Take 可追溯实际 Route；④ 刷新页面后确认三段链路、Prompt、输入边和 Take 仍可编辑；⑤ 在运行中修改生成 Prompt，确认旧结果保留但不会替换当前选择。
 
+## Workflow 视频 Operation 共用执行链
+
+- `video.trim@1`、`video.av-split@1`、`video.merge@1`、`video.extract-frame@1` 已迁入图片 Operation 使用的同一 Registry 与执行生命周期；视频剪辑、音视频分离、视频拼接和首尾帧导出均形成“有序输入媒体 → Operation → 带角色输出媒体”，不再由 UI 或 Agent 直接创建无 Operation 的结果节点。
+- 音视频分离在一个 Take 中保存 `result_video` 与 `result_audio` 两个类型化输出；视频拼接保存多个 `source_video` Binding 的确定顺序；抽帧明确输出 `result_image`。四项操作失败后保留可重试 Operation，同节点重跑会追加新 Take。
+- Registry 现在同时派生节点工具参数、确认级别、中文参数摘要和编辑控件。裁剪百分比、放大长边/算法、视频起止时间与首尾帧位置都在现有 PromptBar 表面旁编辑，参数通过同一 Schema 后写回唯一 Recipe，并将旧 Recipe Hash 置为 dirty。
+- 自动验证通过：`npx tsc --noEmit`；Operation 参数/UI/图片/视频 5 个定向测试文件 23 项。全量 Vitest 中 96 个文件、709 项通过，另有 1 项预期失败、1 项跳过；唯一失败为已知 `flovartHomeSkills` 全量并行 5 秒超时，单文件 2 项复跑通过。Web 生产构建通过，只保留既有动态/静态重复导入与大 chunk 警告。
+- 待用户验证：① 剪辑视频后确认源视频、Operation、结果视频和两段角色边都存在；② 修改起止时间并重跑，确认同一 Operation 增加 Take；③ 执行音视频分离，确认一个 Take 同时关联纯视频与纯音频；④ 按指定顺序拼接两个视频，确认 Binding 与结果顺序一致；⑤ 导出首帧、尾帧后确认结果是图片节点。音频 2 项、其余图片/本地工具、跨媒体 ChangeSet/按组撤销/并发与完整重载仍在 `todo.mdx`，本节不把它们写成完成。
+
 ## 架构文档与 AI 原生画布边界收敛
 
 - `docs/adr/` 从 60 个拆分决策收敛为 12 个当前有效主题 ADR；旧决定直接删除并由 Git 历史保留，`docs/adr/README.md` 成为唯一当前索引，编号空缺不再表示缺失文件。

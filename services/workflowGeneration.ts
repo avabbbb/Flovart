@@ -15,6 +15,7 @@ import { refundApiUsage, reserveApiUsage, updateApiUsage } from '../utils/usageM
 import { getPromptReferenceAliases } from '../utils/promptReferenceClipboard';
 import { resolveRouteMappingForSubmit, type RouteFallbackResolution } from './routeMapping';
 import { beginWorkflowOperationTake, completeWorkflowOperationTake } from '../components/workflow/operations';
+import { validateWorkflowOperationOutputs } from '../components/workflow/operationRegistry';
 
 export interface WorkflowHistoryPayload {
   name?: string;
@@ -486,13 +487,19 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
             config: initiating.metadata.config,
             sourceOperationNodeId: isImageOperation ? nodeId : undefined,
             operationTakeId: isImageOperation ? operationTakeId : undefined,
+            operationOutputRole: isImageOperation ? 'result_image' : undefined,
           }),
           ...fitWorkflowMediaSize(mode, record.naturalWidth, record.naturalHeight),
         };
         resultNode.title = mode === 'video' ? '生成视频' : '生成图片';
         preparedNodes.push(resultNode);
         if (!stillActive()) throw abortError();
-        preparedConnections.push({ id: createId(), fromNodeId: nodeId, toNodeId: resultNode.id, kind: isImageOperation ? 'operation-output' : 'data' });
+        preparedConnections.push({
+          id: createId(), fromNodeId: nodeId, toNodeId: resultNode.id,
+          kind: isImageOperation ? 'operation-output' : 'data',
+          role: isImageOperation ? 'result_image' : undefined,
+          order: isImageOperation ? index : undefined,
+        });
       } else {
         const size = fitWorkflowMediaSize(mode, record.naturalWidth, record.naturalHeight);
         const center = { x: initiating.position.x + initiating.width / 2, y: initiating.position.y + initiating.height / 2 };
@@ -548,6 +555,7 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
     if (operationTakeId) {
       const operation = current.nodes.find(node => node.id === nodeId);
       if (operation) {
+        validateWorkflowOperationOutputs('image.generate@1', preparedNodes.map(() => ({ role: 'result_image', nodeType: 'image' })));
         const completed = completeWorkflowOperationTake(operation, operationTakeId, preparedNodes.map(node => node.id), {
           providerTaskId: operation.metadata.generationProviderTaskId,
           usageRecordId: operation.metadata.generationUsageRecordId,

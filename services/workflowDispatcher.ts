@@ -3,7 +3,7 @@ import { WORKFLOW_MUTATION_COMMANDS, workflowCommandSummary } from '../component
 import { createWorkflowNode } from '../components/workflow/constants';
 import { appendWorkflowDraftLog, createWorkflowDraftLogEntry } from '../components/workflow/draftLog';
 import { isWorkflowNodeTool } from '../components/workflow/nodeToolCatalog';
-import { getWorkflowOperationCapabilityByNodeTool, parseWorkflowOperationParameters } from '../components/workflow/operationRegistry';
+import { getWorkflowOperationCapabilityByNodeTool, parseWorkflowOperationNodeToolArguments } from '../components/workflow/operationRegistry';
 import { applyWorkflowOps } from '../components/workflow/ops';
 import { getWorkflowPersistenceError, useWorkflowStore } from '../components/workflow/store';
 import type { WorkflowNode, WorkflowNodeMetadata, WorkflowNodeType, WorkflowProject } from '../components/workflow/types';
@@ -210,7 +210,7 @@ export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDepende
         delete toolArgs.tool;
         delete toolArgs.confirmed;
         const capability = getWorkflowOperationCapabilityByNodeTool(tool);
-        const normalizedArgs = capability ? parseWorkflowOperationParameters(capability.id, toolArgs) : toolArgs;
+        const normalizedArgs = capability ? parseWorkflowOperationNodeToolArguments(capability.id, toolArgs) : toolArgs;
         const outcome = await runner(project.id, nodeId, tool, normalizedArgs);
         const committed = Boolean(outcome && typeof outcome === 'object' && (outcome as { status?: string }).status === 'committed');
         dependencies.updateProject(project.id, draftLogPatch(project, envelope, true, { nodeIds: [nodeId] }));

@@ -89,12 +89,15 @@ export async function createWorkflowOperationRecipe(input: WorkflowOperationReci
 export async function createWorkflowOperationNode(input: WorkflowOperationRecipeInput & { id: string; position: WorkflowPoint }): Promise<WorkflowNode> {
   const recipe = await createWorkflowOperationRecipe(input);
   const capability = getWorkflowOperationCapability(input.capabilityId);
+  const config = capability.id === 'image.generate@1'
+    ? { mode: capability.mediaType, modelId: recipe.productModelId, ...recipe.parameters }
+    : { mode: capability.mediaType, modelId: recipe.productModelId, operationParameters: recipe.parameters };
   const node = createWorkflowNode(input.id, 'operation', input.position, {
     prompt: recipe.promptDocument.text,
     richTextDocument: recipe.promptDocument.richTextDocument,
     mentionedNodeIds: recipe.inputBindings.map(binding => binding.sourceNodeId),
     imageReferenceOrder: recipe.inputBindings.filter(binding => binding.role !== 'prompt_context').map(binding => binding.sourceNodeId),
-    config: { mode: 'image', modelId: recipe.productModelId, ...recipe.parameters },
+    config,
     status: 'idle',
     operation: { capabilityId: input.capabilityId, recipe, takes: [] },
   });
@@ -116,6 +119,7 @@ export function updateWorkflowOperationRecipe(
 ): WorkflowNode {
   const operation = node.metadata.operation;
   if (!operation) return node;
+  const capability = getWorkflowOperationCapability(operation.capabilityId);
   const recipe = operation.recipe;
   const promptDocument = patch.prompt === undefined && patch.richTextDocument === undefined
     ? recipe.promptDocument
@@ -142,7 +146,9 @@ export function updateWorkflowOperationRecipe(
       richTextDocument: nextRecipe.promptDocument.richTextDocument,
       mentionedNodeIds: inputBindings.map(binding => binding.sourceNodeId),
       imageReferenceOrder: inputBindings.filter(binding => binding.role !== 'prompt_context').map(binding => binding.sourceNodeId),
-      config: { ...node.metadata.config, ...parameters, mode: 'image', modelId: nextRecipe.productModelId },
+      config: capability.id === 'image.generate@1'
+        ? { ...node.metadata.config, ...parameters, mode: capability.mediaType, modelId: nextRecipe.productModelId }
+        : { ...node.metadata.config, operationParameters: parameters, mode: capability.mediaType, modelId: nextRecipe.productModelId },
       operation: { ...operation, recipe: nextRecipe },
     },
   };
@@ -158,7 +164,7 @@ export async function beginWorkflowOperationTake(node: WorkflowNode, input: Work
   const snapshot: WorkflowExecutionPromptSnapshot = {
     id: input.snapshotId,
     createdAt: now,
-    compilerVersion: 'workflow-image-operation@1',
+    compilerVersion: 'workflow-operation@1',
     renderedPrompt: input.renderedPrompt ?? recipe.promptDocument.text,
     richTextDocument: recipe.promptDocument.richTextDocument,
     parameters: structuredClone(recipe.parameters),
@@ -274,8 +280,8 @@ export function updateWorkflowOperationFromMetadata(
       })();
   const parameters = operation.capabilityId === 'image.generate@1'
     ? compactRecord(generationParameters({ ...node, metadata: { ...node.metadata, config } }))
-    : operation.recipe.parameters;
-  const updated = updateWorkflowOperationRecipe(node, {
+    : config?.operationParameters || operation.recipe.parameters;
+  const updated = updateWorkflowOperationRecipe({ ...node, metadata: { ...node.metadata, config } }, {
     prompt: patch.prompt,
     richTextDocument: patch.richTextDocument,
     parameters,
@@ -294,7 +300,7 @@ export function updateWorkflowOperationFromMetadata(
       richTextDocument: updated.metadata.operation?.recipe.promptDocument.richTextDocument,
       mentionedNodeIds: updated.metadata.operation?.recipe.inputBindings.map(binding => binding.sourceNodeId),
       imageReferenceOrder: updated.metadata.operation?.recipe.inputBindings.filter(binding => binding.role !== 'prompt_context').map(binding => binding.sourceNodeId),
-      config: { ...updated.metadata.config, ...config },
+      config: updated.metadata.config,
       operation: updated.metadata.operation,
     },
   };

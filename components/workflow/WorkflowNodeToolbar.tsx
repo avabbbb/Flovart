@@ -2,6 +2,7 @@ import { AlignCenter, AlignLeft, AlignRight, ArrowDownToLine, ArrowUpToLine, Che
 import { useRef } from 'react';
 import { WorkflowToolbarActions, WorkflowToolbarShell, type WorkflowToolbarAction } from './WorkflowToolbarPrimitives';
 import { useWorkflowMediaUrl } from './media';
+import { WORKFLOW_NODE_TOOL_LABELS } from './nodeToolCatalog';
 import type { WorkflowNode } from './types';
 
 type Alignment = 'left' | 'horizontal-center' | 'right' | 'top' | 'vertical-center' | 'bottom';
@@ -92,11 +93,11 @@ export function WorkflowNodeToolbar({ nodes, onCopy, onDelete, onExport, onRun, 
     node?.type === 'image' && mediaUrl && imageTools?.annotate && { key: 'annotate', label: '标注涂鸦', icon: <ScanLine size={18} />, disabled: advancedToolBusy, onClick: () => imageTools.annotate?.(node.id) },
     node?.type === 'image' && mediaUrl && imageTools?.relight && { key: 'relight', label: '打光面板', icon: <Lightbulb size={18} />, disabled: advancedToolBusy, onClick: () => imageTools.relight?.(node.id) },
     selectedMedia.length > 1 && selectedMedia.every(n => n.type === 'image') && imageTools?.storyboard && { key: 'storyboard', label: '分镜组拼接', icon: <Frame size={18} />, disabled: advancedToolBusy, onClick: () => imageTools.storyboard?.(ids) },
-    node?.type === 'video' && mediaUrl && videoTools?.trim && { key: 'video-trim', label: '视频剪辑', icon: <Scissors size={18} />, disabled: videoToolBusy, onClick: () => videoTools.trim?.(node.id) },
-    node?.type === 'video' && mediaUrl && videoTools?.avSplit && { key: 'video-av-split', label: '音视频分离', icon: <ScanLine size={18} />, disabled: videoToolBusy, onClick: () => videoTools.avSplit?.(node.id) },
+    node?.type === 'video' && mediaUrl && videoTools?.trim && { key: 'video-trim', label: WORKFLOW_NODE_TOOL_LABELS['video-trim'], icon: <Scissors size={18} />, disabled: videoToolBusy, onClick: () => videoTools.trim?.(node.id) },
+    node?.type === 'video' && mediaUrl && videoTools?.avSplit && { key: 'video-av-split', label: WORKFLOW_NODE_TOOL_LABELS['video-av-split'], icon: <ScanLine size={18} />, disabled: videoToolBusy, onClick: () => videoTools.avSplit?.(node.id) },
     node?.type === 'video' && mediaUrl && videoTools?.extractFrame && { key: 'video-frame-first', label: '导出首帧为图片', icon: <ArrowUpToLine size={18} />, disabled: videoToolBusy, onClick: () => videoTools.extractFrame?.(node.id, 'first') },
     node?.type === 'video' && mediaUrl && videoTools?.extractFrame && { key: 'video-frame-last', label: '导出尾帧为图片', icon: <ArrowDownToLine size={18} />, disabled: videoToolBusy, onClick: () => videoTools.extractFrame?.(node.id, 'last') },
-    selectedMedia.length > 1 && selectedMedia.every(n => n.type === 'video') && videoTools?.merge && { key: 'video-merge', label: '视频拼接', icon: <Frame size={18} />, disabled: videoToolBusy, onClick: () => videoTools.merge?.(ids) },
+    selectedMedia.length > 1 && selectedMedia.every(n => n.type === 'video') && videoTools?.merge && { key: 'video-merge', label: WORKFLOW_NODE_TOOL_LABELS['video-merge'], icon: <Frame size={18} />, disabled: videoToolBusy, onClick: () => videoTools.merge?.(ids) },
     node?.type === 'audio' && mediaUrl && audioTools?.trim && { key: 'audio-trim', label: '音频截取', icon: <Scissors size={18} />, disabled: audioToolBusy, onClick: () => audioTools.trim?.(node.id) },
     node?.type === 'audio' && mediaUrl && audioTools?.speed && { key: 'audio-speed', label: '音频变速', icon: <Gauge size={18} />, disabled: audioToolBusy, onClick: () => audioTools.speed?.(node.id) },
     node && (node.type === 'image' || node.type === 'video') && onToggleFreeResize && { key: 'resize', label: '切换自由缩放', icon: <Expand size={18} />, active: Boolean(node.freeResize), onClick: () => onToggleFreeResize(node.id) },

@@ -48,8 +48,12 @@ import { runWorkflowImageAgent, runWorkflowImageEdit, runWorkflowImageSplit, typ
 import { runWorkflowCropOperation, runWorkflowUpscaleOperation } from '../../services/workflowImageOperations';
 import { transformImage } from '../../services/imageTransform';
 import { splitGrid as splitGridService } from '../../services/gridSplitter';
-import { trimVideo, splitAudioVideo, mergeVideos } from '../../services/videoTools';
-import { extractVideoFrame } from '../../services/videoFrameExtractor';
+import {
+  runWorkflowVideoAvSplitOperation,
+  runWorkflowVideoExtractFrameOperation,
+  runWorkflowVideoMergeOperation,
+  runWorkflowVideoTrimOperation,
+} from '../../services/workflowVideoOperations';
 import { trimAudio, changeAudioSpeed } from '../../services/audioTools';
 import { exportMediaArchive } from '../../utils/batchMediaExport';
 import { usePromptHistoryStore } from '../../stores/usePromptHistoryStore';
@@ -511,7 +515,13 @@ export function InfiniteWorkflow({
     onProjectChange: next => {
       if (next.id !== projectRef.current.id) return;
       projectRef.current = next;
-      patchProject({ nodes: next.nodes, connections: next.connections, selectedNodeIds: next.selectedNodeIds });
+      patchProject({
+        nodes: next.nodes,
+        connections: next.connections,
+        selectedNodeIds: next.selectedNodeIds,
+        draftVersion: next.draftVersion,
+        updatedAt: next.updatedAt,
+      });
       selectedIdsRef.current = next.selectedNodeIds;
       setSelectedNodeIds(next.selectedNodeIds);
     },
@@ -579,37 +589,24 @@ export function InfiniteWorkflow({
     if (videoToolBusyRef.current) return;
     const node = projectRef.current.nodes.find(item => item.id === id);
     if (!node || node.type !== 'video') return;
+    const projectId = projectRef.current.id;
+    const frame = currentFrame();
     videoToolBusyRef.current = true;
     setVideoToolBusy(true);
     setVideoToolError(null);
-    let record: WorkflowMediaRecord | undefined;
     try {
-      const blob = await loadWorkflowMediaBlob(node.metadata.storageKey, node.metadata.href);
-      const frame = await extractVideoFrame(blob, position);
-      const baseName = node.metadata.name || 'video';
-      const frameName = `${position === 'first' ? 'first-frame' : 'last-frame'}-${baseName.replace(/\.[^.]+$/, '')}.png`;
-      record = await ingestWorkflowMedia(new File([frame.blob], frameName, { type: 'image/png' }));
-      const size = fitWorkflowMediaSize('image', frame.width, frame.height);
-      const center = { x: node.position.x + node.width / 2, y: node.position.y + node.height / 2 };
-      const offsetX = position === 'first' ? -(node.width + 40) : (node.width + 40);
-      const newNodeId = nanoid();
-      const newNode = { ...createWorkflowNode(newNodeId, 'image', { x: center.x + offsetX - size.width / 2, y: center.y - size.height / 2 }, { ...record, name: frameName, status: 'success' }), ...size, freeResize: false };
-      const newConnection: WorkflowConnection = { id: nanoid(), fromNodeId: node.id, toNodeId: newNodeId };
-      pushHistory(currentFrame());
-      patchProject({
-        nodes: [...projectRef.current.nodes, newNode],
-        connections: [...projectRef.current.connections, newConnection],
-      });
-      releaseWorkflowMediaRecord(record.storageKey);
-      setNotice(position === 'first' ? '首帧已导出为图片节点' : '尾帧已导出为图片节点');
+      const result = await runWorkflowVideoExtractFrameOperation(projectId, id, position, imageToolRuntime);
+      if (result.status === 'committed' && projectRef.current.id === projectId) {
+        pushHistory(frame);
+        setNotice(position === 'first' ? '首帧已通过 Operation 导出' : '尾帧已通过 Operation 导出');
+      }
     } catch (error) {
-      if (record) await discardWorkflowMediaRecord(record.storageKey);
       setNotice(error instanceof Error ? error.message : '帧导出失败');
     } finally {
       videoToolBusyRef.current = false;
       setVideoToolBusy(false);
     }
-  }, [currentFrame, patchProject, pushHistory]);
+  }, [currentFrame, imageToolRuntime, pushHistory]);
 
   const builtInVideoTools = useMemo<WorkflowVideoToolHandlers>(() => ({
     trim: id => openVideoTool('trim', id),
@@ -640,49 +637,31 @@ export function InfiniteWorkflow({
     setVideoToolBusy(true);
     setVideoToolError(null);
     try {
-      const blob = await loadWorkflowMediaBlob(node.metadata.storageKey, node.metadata.href);
+      let result: WorkflowImageToolOutcome | null = null;
+      let successNotice = '';
       if (confirmation.kind === 'trim') {
-        const result = await trimVideo(blob, confirmation.startSec, confirmation.endSec, node.metadata.name);
-        const record = await ingestWorkflowMedia(new File([result.blob], `trim-${node.metadata.name || 'video.mp4'}`, { type: result.blob.type || 'video/mp4' }));
-        const center = { x: node.position.x + node.width / 2, y: node.position.y + node.height / 2 };
-        const size = fitWorkflowMediaSize('video', record.naturalWidth || node.width, record.naturalHeight || node.height);
-        pushHistory(transaction.frame);
-        patchProject({ nodes: [...projectRef.current.nodes, { ...createWorkflowNode(nanoid(), 'video', { x: center.x + node.width + 40, y: center.y - size.height / 2 }, { ...record, name: `trim-${node.metadata.name || 'video.mp4'}`, status: 'success' }), ...size }] });
-        releaseWorkflowMediaRecord(record.storageKey);
-        setNotice('视频剪辑完成');
-        setVideoTool(null);
-        videoToolTransactionRef.current = null;
+        result = await runWorkflowVideoTrimOperation(transaction.projectId, node.id, {
+          startSec: confirmation.startSec,
+          endSec: confirmation.endSec,
+        }, imageToolRuntime);
+        successNotice = '视频剪辑完成';
       } else if (confirmation.kind === 'av-split') {
-        const result = await splitAudioVideo(blob, node.metadata.name);
-        const videoRecord = await ingestWorkflowMedia(new File([result.videoBlob], `video-only-${node.metadata.name || 'video.mp4'}`, { type: result.videoBlob.type }));
-        const audioRecord = await ingestWorkflowMedia(new File([result.audioBlob], `audio-${node.metadata.name || 'audio.mp3'}`, { type: 'audio/mp3' }));
-        const center = { x: node.position.x + node.width / 2, y: node.position.y + node.height / 2 };
-        const videoSize = fitWorkflowMediaSize('video', videoRecord.naturalWidth || node.width, videoRecord.naturalHeight || node.height);
-        pushHistory(transaction.frame);
-        patchProject({ nodes: [...projectRef.current.nodes,
-          { ...createWorkflowNode(nanoid(), 'video', { x: center.x + node.width + 40, y: center.y - videoSize.height / 2 }, { ...videoRecord, name: `video-only-${node.metadata.name || 'video.mp4'}`, status: 'success' }), ...videoSize },
-          { ...createWorkflowNode(nanoid(), 'audio', { x: center.x + node.width + 40, y: center.y + videoSize.height / 2 + 30 }, { ...audioRecord, name: `audio-${node.metadata.name || 'audio.mp3'}`, status: 'success', mimeType: 'audio/mp3' }), width: 200, height: 80 },
-        ] });
-        releaseWorkflowMediaRecord(videoRecord.storageKey);
-        releaseWorkflowMediaRecord(audioRecord.storageKey);
-        setNotice('音视频分离完成');
-        setVideoTool(null);
-        videoToolTransactionRef.current = null;
+        result = await runWorkflowVideoAvSplitOperation(transaction.projectId, node.id, imageToolRuntime);
+        successNotice = '音视频分离完成';
       } else if (confirmation.kind === 'merge') {
         const selectedNodes = projectRef.current.nodes.filter(n => n.type === 'video' && (confirmation.nodeIds.length === 0 || confirmation.nodeIds.includes(n.id)));
         if (selectedNodes.length < 2) { setVideoToolError('至少需要选择 2 个视频节点'); return; }
-        const blobs = await Promise.all(selectedNodes.map(n => loadWorkflowMediaBlob(n.metadata.storageKey, n.metadata.href)));
-        const names = selectedNodes.map(n => n.metadata.name || 'clip.mp4');
-        const merged = await mergeVideos(blobs, names);
-        const record = await ingestWorkflowMedia(new File([merged], 'merged.mp4', { type: 'video/mp4' }));
-        const lastNode = selectedNodes[selectedNodes.length - 1];
-        const center = { x: lastNode.position.x + lastNode.width / 2, y: lastNode.position.y + lastNode.height / 2 };
-        const size = fitWorkflowMediaSize('video', record.naturalWidth || 1920, record.naturalHeight || 1080);
+        result = await runWorkflowVideoMergeOperation(transaction.projectId, selectedNodes.map(item => item.id), imageToolRuntime);
+        successNotice = '视频拼接完成';
+      }
+      if (result?.status === 'committed' && result.project.id === transaction.projectId && projectRef.current.id === transaction.projectId) {
         pushHistory(transaction.frame);
-        patchProject({ nodes: [...projectRef.current.nodes, { ...createWorkflowNode(nanoid(), 'video', { x: center.x + lastNode.width + 40, y: center.y - size.height / 2 }, { ...record, name: 'merged.mp4', status: 'success' }), ...size }] });
-        releaseWorkflowMediaRecord(record.storageKey);
-        setNotice('视频拼接完成');
+        setNotice(successNotice);
         setVideoTool(null);
+        videoToolTransactionRef.current = null;
+      } else if (result?.status === 'stale') {
+        setVideoTool(null);
+        setVideoToolError(null);
         videoToolTransactionRef.current = null;
       }
     } catch (error) {
@@ -691,7 +670,7 @@ export function InfiniteWorkflow({
       videoToolBusyRef.current = false;
       setVideoToolBusy(false);
     }
-  }, [videoTool, patchProject, pushHistory]);
+  }, [imageToolRuntime, pushHistory, videoTool]);
 
   const openAudioTool = useCallback((kind: WorkflowAudioToolState['kind'], nodeId: string) => {
     if (audioToolTransactionRef.current || audioTool || audioToolBusyRef.current) {

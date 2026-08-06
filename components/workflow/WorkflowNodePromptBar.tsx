@@ -6,7 +6,7 @@ import type { MentionData } from '../MediaMentionExtension';
 import type { AssetSuggestion } from '../MentionList';
 import type { ReferencePickerWorkflowItem } from '../studio/AssetReferencePicker';
 import { resolveProductModelRoute } from '../../services/productModelCatalog';
-import { getWorkflowOperationCapability } from './operationRegistry';
+import { getWorkflowOperationCapability, parseWorkflowOperationParameters, type WorkflowOperationCapability } from './operationRegistry';
 import {
   applyImageReferenceOrder,
   filterWorkflowInputIds,
@@ -23,6 +23,42 @@ export interface WorkflowModelOptions {
   text: string[];
   image: string[];
   video: string[];
+}
+
+function WorkflowOperationParameterPanel({ capability, parameters, onChange }: {
+  capability: WorkflowOperationCapability;
+  parameters: Record<string, unknown>;
+  onChange: (parameters: Record<string, unknown>) => void;
+}) {
+  if (!capability.parameterControls?.length) return null;
+  const update = (key: string, value: unknown) => {
+    try {
+      onChange(parseWorkflowOperationParameters(capability.id, { ...parameters, [key]: value }));
+    } catch {
+      // Keep the last valid Recipe while the user is editing a cross-field constraint.
+    }
+  };
+  return <div className="workflow-operation-parameters" role="group" aria-label={`${capability.label}参数`} data-testid="workflow-operation-parameters">
+    {capability.parameterControls.map(control => <label key={control.key}>
+      <span>{control.label}</span>
+      {control.kind === 'select'
+        ? <select aria-label={control.label} value={String(parameters[control.key] ?? '')} onChange={event => update(control.key, event.target.value)}>
+            {control.options.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+          </select>
+        : <span className="workflow-operation-parameters__number">
+            <input
+              aria-label={control.label}
+              type="number"
+              min={control.min}
+              max={control.max}
+              step={control.step}
+              value={Number(parameters[control.key] || 0) * (control.scale || 1)}
+              onChange={event => update(control.key, Number(event.target.value) / (control.scale || 1))}
+            />
+            {control.suffix && <small>{control.suffix}</small>}
+          </span>}
+    </label>)}
+  </div>;
 }
 
 const modeFor = (node: WorkflowNode, config?: WorkflowGenerationConfig): GenerationMode => {
@@ -145,6 +181,11 @@ export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme,
 
   return (
     <div data-workflow-overlay data-testid="workflow-node-prompt-bar" data-language={language} className="inline-prompt-bar workflow-node-prompt" style={{ width, maxWidth: 'calc(100vw - 16px)' }} onPointerDown={event => event.stopPropagation()} onWheel={event => event.stopPropagation()}>
+      {operationCapability && <WorkflowOperationParameterPanel
+        capability={operationCapability}
+        parameters={node.metadata.operation?.recipe.parameters || {}}
+        onChange={operationParameters => patchConfig({ operationParameters })}
+      />}
       {prompts.length > 0 && <button type="button" className="workflow-node-prompt__library-button" aria-label="提示词库" title="提示词库" onClick={() => setLibraryOpen(open => !open)}><BookOpen size={15} /></button>}
       {libraryOpen && <div className="workflow-node-prompt__library" role="menu" aria-label="提示词库">{prompts.map((item, index) => <button type="button" role="menuitem" key={`${item.name}-${index}`} onClick={() => { onChange({ prompt: item.value, richTextDocument: undefined }); setLibraryOpen(false); }}><strong>{item.name}</strong><span>{item.value}</span></button>)}</div>}
       <PromptBar
@@ -186,7 +227,9 @@ export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme,
         onDeleteUserEffect={() => undefined}
         generationMode={generationMode}
         setGenerationMode={mode => patchConfig({ mode: mode === 'text' ? 'text' : mode === 'video' ? 'video' : 'image', modelId: undefined })}
-        modeOptions={node.type === 'video' ? ['video'] : node.type === 'text' ? ['text'] : ['image']}
+        modeOptions={operationCapability
+          ? [operationCapability.mediaType === 'video' ? 'video' : 'image']
+          : node.type === 'video' ? ['video'] : node.type === 'text' ? ['text'] : ['image']}
         videoAspectRatio={(config.aspectRatio as any) || '16:9'}
         setVideoAspectRatio={aspectRatio => patchConfig({ aspectRatio })}
         imageAspectRatio={(config.aspectRatio as any) || '1:1'}
