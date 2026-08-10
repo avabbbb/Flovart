@@ -2,6 +2,14 @@
 title: 待测试确认
 ---
 
+## Flovart Agent 同画布制作与 VOX 风格锁定
+
+- Workflow 右侧 `Agent` 与独立 Agent 工作区现在都挂载同一个 Flovart PI 主会话。主 Agent 会先读取当前可见 Draft，再逐步调用类型化工具；一个用户回合的可逆操作合并为同一 ChangeSet，并和人工操作共用撤销/重做、Draft Version、节点 Object Version 与画布时间线。旧网站 one-shot JSON 计划器不再是主入口，Codex 仅保留为明确的新建子任务。
+- 内置 Agent 发起 `production.dry-run` 时不再接受与画布无关的隐式制作：它必须提交当前 `draftVersion` 与实际 `sourceNodeIds`，浏览器桥会校验节点和版本、冻结对象版本/相关 ChangeSet/脱敏快照 Hash，Runtime 将该绑定写入不可变 Spec Hash；画布在编译前发生变化会直接拒绝并要求 Agent 重读。
+- VOX 编译器现在把同一代表镜头编译为 3 张不同主题、但共享严格剪纸拼贴约束的 Style Bake-off。用户必须批准其中一个已成功图片 Stage；该 Artifact 会作为所有关键帧的 RunningHub GPT Image 2 图生图输入，而不是只把“VOX/剪纸”文字重复塞进 Prompt。关键帧全部成功前不能批准 Keyframe/OCR Gate，两道 Gate 未通过时视频 Stage 不会提交；动态 Prompt 禁止重绘、变形、改字或新增文字。
+- 自动验证已覆盖：PI Skill Snapshot 校验/恢复/解绑、逐步工具循环、同回合 ChangeSet、对象版本冲突、人工文本编辑、共享撤销/重做、Workflow 主入口、Skill 恢复竞态、Draft 绑定与过期拒绝、3–4 方案 Bake-off 上限、非推荐主题 Artifact 选择、图生图来源转发、预置或过早批准关键帧/OCR 的阻断、Projection 回填、Runtime Registry Hash 与 Provider 状态。`npx tsc --noEmit`、Web 生产构建、全量 Vitest 102 个文件（736 项通过、1 项预期失败、1 项跳过，共 738 项）和 Rust `cargo test --all-targets` 全部通过；可见 Edge 验收也确认 Workflow 主入口挂载 PI Agent、VOX Skill 卡片、人工编辑后的 Draft 时间线与撤销，并修正了时间线遮挡 Agent 抽屉的问题。真实 Provider 付费视觉生成尚未执行，因此不能把“剪纸观感已达标”写成已验证。
+- 待用户验证：① 在 Workflow 右侧要求 Agent “读取当前画布，创建 Brief/镜头/参考节点并连线”，观察每一步直接出现在画布及时间线，随后用工具栏撤销/重做整轮；② 手工修改其将要使用的节点后让它继续，确认旧 Object/Draft Version 被拒绝并重读；③ 加入 VOX Skill 制作短片，确认画布先出现 3 张同镜头风格候选，选中非推荐候选批准后，关键帧仍继承你选的样图；④ 未审关键帧或 OCR 时确认视频阶段保持等待；⑤ 经你明确同意付费后再以最小 1 镜头烟测判断撕纸边缘、纸层厚度、接触阴影、网点/新闻纸/胶带/套印偏移，以及动态中构图和文字是否稳定。
+
 ## Workflow 图片 Operation 配方与 Take 底座
 
 - 首个可测切片把 `image.generate@1`、`image.crop@1`、`image.upscale@1` 收进同一封闭 Registry，并由 Registry 派生 Agent 工具名、输入角色、参数校验、执行类别与确认级别；本地 crop 不再要求付费确认，upscale / generate 仍保留付费子图确认语义。

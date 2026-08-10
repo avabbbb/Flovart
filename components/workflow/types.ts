@@ -272,6 +272,7 @@ export interface WorkflowConnection {
   kind?: 'data' | 'operation-input' | 'operation-output';
   role?: WorkflowOperationInputRole | WorkflowOperationOutputRole;
   order?: number;
+  objectVersion?: number;
 }
 
 export interface WorkflowAgentMessage {
@@ -306,6 +307,37 @@ export interface WorkflowDraftLogEntry {
   connectionIds?: string[];
 }
 
+export type WorkflowDraftActor = 'agent' | 'mcp' | 'cli' | 'ui';
+export type WorkflowDraftChangeSetStatus = 'completed' | 'partial' | 'failed' | 'undone';
+
+export interface WorkflowDraftNodeChange {
+  id: string;
+  before?: WorkflowNode;
+  after?: WorkflowNode;
+}
+
+export interface WorkflowDraftConnectionChange {
+  id: string;
+  before?: WorkflowConnection;
+  after?: WorkflowConnection;
+}
+
+export interface WorkflowDraftChangeSet {
+  id: string;
+  at: string;
+  actor: WorkflowDraftActor;
+  intent: string;
+  status: WorkflowDraftChangeSetStatus;
+  baseDraftVersion: number;
+  resultDraftVersion: number;
+  nodeChanges: WorkflowDraftNodeChange[];
+  connectionChanges: WorkflowDraftConnectionChange[];
+  undoneAt?: string;
+  undoneDraftVersion?: number;
+  redoneAt?: string;
+  redoneDraftVersion?: number;
+}
+
 export interface WorkflowProject {
   id: string;
   title: string;
@@ -318,6 +350,8 @@ export interface WorkflowProject {
   activeAgentSessionId: string | null;
   /** AI/CLI/MCP 驱动的草稿动作记录；设计师据此回溯并二次编辑。 */
   draftLog?: WorkflowDraftLogEntry[];
+  draftChangeSets?: WorkflowDraftChangeSet[];
+  draftRedoStack?: string[];
   draftVersion?: number;
   createdAt: string;
   updatedAt: string;

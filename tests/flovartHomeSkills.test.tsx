@@ -2,9 +2,9 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import FlovartHome from '../components/home/FlovartHome';
-import { readProductionSkillDraft } from '../services/productionSkillLaunch';
 import { useWorkflowStore } from '../components/workflow/store';
 import { useWorkspaceStore } from '../stores/useWorkspaceStore';
+import { readPendingProductionSkill, useProductionSkillComposerStore } from '../stores/useProductionSkillComposerStore';
 
 describe('Flovart Home Skill 台', () => {
   beforeEach(() => {
@@ -13,6 +13,7 @@ describe('Flovart Home Skill 台', () => {
     window.location.hash = '';
     useWorkflowStore.setState({ projects: [], activeProjectId: null, hydrated: true });
     useWorkspaceStore.setState({ activeView: 'workflow' });
+    useProductionSkillComposerStore.setState({ pendingByProject: {} });
   });
 
   it('shows the bundled VOX example and opens its verified package details', () => {
@@ -43,7 +44,8 @@ describe('Flovart Home Skill 台', () => {
     expect(project.title).toBe('VOX Skill 示例');
     expect(useWorkspaceStore.getState().activeView).toBe('agent');
     expect(localStorage.getItem('flovart.workflow.agent.mode')).toBe('local');
-    expect(readProductionSkillDraft(project.id)?.prompt).toContain('$vox-director');
+    expect(readPendingProductionSkill(project.id)?.prompt).toContain('$vox-director');
+    expect(sessionStorage.length).toBe(0);
     expect(window.location.hash).toBe('#/app');
   });
 });

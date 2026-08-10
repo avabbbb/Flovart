@@ -14,7 +14,7 @@ fn runtime_status_comes_from_the_canonical_v1_contract() {
     assert_eq!(status.state, "ready");
     assert_eq!(
         runtime.registry().registry_hash,
-        "f6dc0d07e6cb4110c4a258e20ba428f69caf172c615e5f4a6767ecb3f2bb3a09"
+        "e31afad6b1193985ed8d3a84a0d1312c78bc733bba77a96310f7c317f5890bdf"
     );
     assert!(runtime.registry().commands.contains_key("runtime.status"));
     assert!(!runtime.registry().commands.contains_key("workflow.run"));
@@ -138,7 +138,7 @@ fn runtime_exposes_redacted_provider_status_and_durable_generation_receipts() {
     assert_eq!(status["providers"][1]["provider"], "runningHub");
     assert_eq!(status["providers"][1]["ready"], false);
     assert_eq!(
-        status["providers"][1]["routes"][2]["routeId"],
+        status["providers"][1]["routes"][3]["routeId"],
         "rhart-video-v3.1-lite-official/text-to-video"
     );
     assert_eq!(
@@ -147,6 +147,10 @@ fn runtime_exposes_redacted_provider_status_and_durable_generation_receipts() {
     );
     assert_eq!(
         status["providers"][1]["routes"][1]["routeId"],
+        "rhart-image-g-2/image-to-image"
+    );
+    assert_eq!(
+        status["providers"][1]["routes"][2]["routeId"],
         "rhart-video-g/text-to-video"
     );
     assert!(status.to_string().find("secret").is_none());
@@ -208,6 +212,26 @@ fn runtime_exposes_redacted_provider_status_and_durable_generation_receipts() {
         .expect("runninghub image receipt");
     assert_eq!(image_receipt["kind"], "task");
     assert_eq!(image_receipt["status"], "queued");
+
+    let image_edit_receipt = runtime
+        .execute(&json!({
+            "protocolVersion": "1",
+            "commandId": ProductionRuntime::new_id("cmd"),
+            "command": "generate.image",
+            "args": {
+                "prompt": "preserve the approved paper collage style",
+                "provider": "runningHub",
+                "productModel": "flovart:gpt-image-2",
+                "sourceImageIds": ["task_approved_style_reference"],
+                "aspectRatio": "16:9",
+                "resolution": "1k"
+            },
+            "actor": { "kind": "cli", "instanceId": "cli_test" },
+            "idempotencyKey": "image-edit-contract-runninghub-1"
+        }))
+        .expect("runninghub image edit receipt");
+    assert_eq!(image_edit_receipt["kind"], "task");
+    assert_eq!(image_edit_receipt["status"], "queued");
 
     let grok_receipt = runtime
         .execute(&json!({

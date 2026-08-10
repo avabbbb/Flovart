@@ -349,6 +349,14 @@ impl ProductionRuntime {
                                     "pricePreview": true
                                 },
                                 {
+                                    "productModel": "flovart:gpt-image-2",
+                                    "routeId": runninghub::GPT_IMAGE_2_EDIT_ROUTE,
+                                    "channelTier": "low-price",
+                                    "mode": "image-to-image",
+                                    "resolution": "1k",
+                                    "pricePreview": true
+                                },
+                                {
                                     "productModel": "flovart:grok-imagine-video-1.5",
                                     "routeId": runninghub::GROK_VIDEO_ROUTE,
                                     "channelTier": "low-price",
@@ -443,7 +451,14 @@ impl ProductionRuntime {
                 let args = &envelope["args"];
                 validate_exact_args(
                     args,
-                    &["projectId", "title", "reviewPolicy", "director", "spec"],
+                    &[
+                        "projectId",
+                        "title",
+                        "reviewPolicy",
+                        "draftBinding",
+                        "director",
+                        "spec",
+                    ],
                 )?;
                 production::compile_production_plan(args)?;
                 let payload_hash = Self::hash_payload(&serde_json::json!({
@@ -487,7 +502,14 @@ impl ProductionRuntime {
                 let args = &envelope["args"];
                 validate_exact_args(
                     args,
-                    &["runId", "gateType", "decision", "hardLimitMicros", "note"],
+                    &[
+                        "runId",
+                        "gateType",
+                        "decision",
+                        "hardLimitMicros",
+                        "note",
+                        "approvedStageKey",
+                    ],
                 )?;
                 let run_id = args
                     .get("runId")
@@ -509,6 +531,7 @@ impl ProductionRuntime {
                 let decision = optional_string(args, "decision")?.unwrap_or("approved");
                 let hard_limit_micros = optional_i64(args, "hardLimitMicros")?;
                 let note = optional_string(args, "note")?;
+                let approved_stage_key = optional_string(args, "approvedStageKey")?;
                 let payload_hash = Self::hash_payload(&serde_json::json!({
                     "command": "production.approve",
                     "args": args,
@@ -525,6 +548,7 @@ impl ProductionRuntime {
                     decision,
                     hard_limit_micros,
                     note,
+                    approved_stage_key,
                 )
             }
             "production.run" => {
@@ -615,6 +639,7 @@ impl ProductionRuntime {
                         "productModel",
                         "aspectRatio",
                         "resolution",
+                        "sourceImageIds",
                     ],
                 )?;
                 let prompt = args.get("prompt").and_then(Value::as_str).ok_or_else(|| {
@@ -650,13 +675,21 @@ impl ProductionRuntime {
                     ));
                 }
                 let credential_id = optional_string(args, "credentialId")?;
+                let source_image_ids = optional_string_array(args, "sourceImageIds")?;
+                if source_image_ids.len() > 10 {
+                    return Err(RuntimeError::new(
+                        "INVALID_ARGUMENT",
+                        "GPT Image 2 accepts at most 10 sourceImageIds.",
+                    ));
+                }
                 let normalized_args = serde_json::json!({
                     "prompt": prompt,
                     "provider": provider,
                     "productModel": product_model,
                     "aspectRatio": aspect_ratio,
                     "resolution": resolution,
-                    "credentialId": credential_id
+                    "credentialId": credential_id,
+                    "sourceImageIds": source_image_ids
                 });
                 let payload_hash = Self::hash_payload(&serde_json::json!({
                     "command": "generate.image",

@@ -32,7 +32,7 @@ Keep the style language consistent across shots while scene and palette progress
 
 ## Theme bake-off
 
-Propose at least three themes that fit the topic's era, culture, and tone. Useful
+Propose three or four themes that fit the topic's era, culture, and tone. Useful
 starting points include:
 
 - `american-retro`: slab/wood type, aged halftone, bold primaries;

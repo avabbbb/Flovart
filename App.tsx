@@ -416,7 +416,6 @@ const App: React.FC = () => {
                 onCreateFolder={(parentId, name) => setAssetLibrary(prev => addFolder(prev, { id: generateId(), name, parentId, createdAt: Date.now() }))}
                 onRenameFolder={(id, name) => setAssetLibrary(prev => renameFolder(prev, id, name))}
                 onRemoveFolder={(id, deleteItems) => setAssetLibrary(prev => removeFolder(prev, id, deleteItems))}
-                onOnlineAgentTurn={handleWorkflowOnlineAgentTurn}
                 t={t}
                 userApiKeys={userApiKeys}
                 confirmRouteFallback={confirmRouteFallback}

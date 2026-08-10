@@ -17,8 +17,8 @@ use super::{
     production::compile_production_plan,
     runninghub::{
         image_to_video_body, MediaKind as RunningHubMediaKind, PollResult as RunningHubPollResult,
-        RunningHubClient, RunningHubError, GPT_IMAGE_2_ROUTE, GROK_VIDEO_IMAGE_ROUTE,
-        GROK_VIDEO_ROUTE, VEO_LITE_ROUTE,
+        RunningHubClient, RunningHubError, GPT_IMAGE_2_EDIT_ROUTE, GPT_IMAGE_2_ROUTE,
+        GROK_VIDEO_IMAGE_ROUTE, GROK_VIDEO_ROUTE, VEO_LITE_ROUTE,
     },
     store::{ClaimedTask, RuntimeStore, StageExec},
 };
@@ -49,7 +49,8 @@ impl RuntimeWorker {
         let scheduler_id = super::ProductionRuntime::new_id("worker");
         let scheduler_thread = std::thread::spawn(move || {
             while !scheduler_stopping.load(Ordering::Acquire) {
-                match scheduler_store.claim_next_task_filtered(&scheduler_id, LEASE_MS, Some(true)) {
+                match scheduler_store.claim_next_task_filtered(&scheduler_id, LEASE_MS, Some(true))
+                {
                     Ok(Some(task)) => match task.kind.as_str() {
                         "production.run" => run_production_execution(
                             &scheduler_store,
@@ -180,8 +181,49 @@ fn run_production_plan(store: &RuntimeStore, worker_id: &str, task: &ClaimedTask
     }
 }
 
+fn required_stage_gates(stage: &StageExec) -> Vec<&str> {
+    stage
+        .input
+        .get("requiredGates")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .collect()
+}
+
+fn approved_style_reference_tasks(
+    stage: &StageExec,
+    run: &super::store::RunExecution,
+) -> Vec<String> {
+    let Some(gate_type) = stage
+        .input
+        .get("styleReferenceGate")
+        .and_then(Value::as_str)
+    else {
+        return Vec::new();
+    };
+    let Some(stage_key) = run
+        .gate_decisions
+        .get(gate_type)
+        .and_then(|decision| decision.get("approvedStageKey"))
+        .and_then(Value::as_str)
+    else {
+        return Vec::new();
+    };
+    run.stages
+        .iter()
+        .find(|candidate| candidate.stage_key == stage_key && candidate.status == "succeeded")
+        .and_then(|candidate| candidate.task_id.clone())
+        .into_iter()
+        .collect()
+}
+
 /// The stage command a scheduler tick derives from one `ready` StageRun.
-fn stage_child_command(stage: &StageExec, run: &super::store::RunExecution) -> Option<(String, Value)> {
+fn stage_child_command(
+    stage: &StageExec,
+    run: &super::store::RunExecution,
+) -> Option<(String, Value)> {
     let input = &stage.input;
     match stage.capability_id.as_str() {
         "image.generate" => Some((
@@ -192,6 +234,7 @@ fn stage_child_command(stage: &StageExec, run: &super::store::RunExecution) -> O
                 "productModel": "flovart:gpt-image-2",
                 "aspectRatio": input.get("aspectRatio").and_then(Value::as_str).unwrap_or("16:9"),
                 "resolution": "1k",
+                "sourceImageIds": approved_style_reference_tasks(stage, run),
                 "credentialId": Value::Null
             }),
         )),
@@ -204,7 +247,10 @@ fn stage_child_command(stage: &StageExec, run: &super::store::RunExecution) -> O
                 .find(|item| item.stage_key == source_stage_key)?
                 .task_id
                 .clone()?;
-            let duration_ms = input.get("durationMs").and_then(Value::as_i64).unwrap_or(6_000);
+            let duration_ms = input
+                .get("durationMs")
+                .and_then(Value::as_i64)
+                .unwrap_or(6_000);
             // Grok image-to-video is fixed at 6 s / 720p on the trusted route.
             Some((
                 "generate.video".to_owned(),
@@ -298,7 +344,12 @@ fn run_production_execution(
         }
     };
     // Move queued -> running (recovering re-entry is also accepted).
-    match store.update_run_status(&run_id, &["queued", "running", "recovering"], "running", None) {
+    match store.update_run_status(
+        &run_id,
+        &["queued", "running", "recovering"],
+        "running",
+        None,
+    ) {
         Ok(true) => {}
         Ok(false) => {
             fail(
@@ -326,7 +377,10 @@ fn run_production_execution(
             let _ = store.update_run_status(&run_id, &["running"], "canceled", None);
             return;
         }
-        if !store.renew_lease(&task.id, worker_id, LEASE_MS).unwrap_or(false) {
+        if !store
+            .renew_lease(&task.id, worker_id, LEASE_MS)
+            .unwrap_or(false)
+        {
             return;
         }
         let run = match store.load_run_execution(&run_id) {
@@ -343,6 +397,38 @@ fn run_production_execution(
         for stage in &run.stages {
             match stage.status.as_str() {
                 "ready" => {
+                    let required_gates = required_stage_gates(stage);
+                    let rejected_gate = required_gates
+                        .iter()
+                        .find(|gate| run.gates.get(**gate).map(String::as_str) == Some("rejected"));
+                    if let Some(gate) = rejected_gate {
+                        let _ = store.update_stage(
+                            &run_id,
+                            &stage.stage_key,
+                            &["ready"],
+                            "blocked",
+                            None,
+                            None,
+                            Some(&json!({
+                                "code": "DIRECTOR_GATE_REJECTED",
+                                "message": format!("Director gate {gate} was rejected."),
+                                "gateType": gate
+                            })),
+                            &[],
+                        );
+                        failed_stage = Some(stage.stage_key.clone());
+                        progressed = true;
+                        continue;
+                    }
+                    if required_gates.iter().any(|gate| {
+                        !matches!(
+                            run.gates.get(*gate).map(String::as_str),
+                            Some("approved" | "waived")
+                        )
+                    }) {
+                        waiting += 1;
+                        continue;
+                    }
                     let Some((command, args)) = stage_child_command(stage, &run) else {
                         let _ = store.update_stage(
                             &run_id,
@@ -493,7 +579,8 @@ fn run_production_execution(
                     let dependency_failed = stage.dependencies.iter().any(|dependency| {
                         run.stages.iter().any(|item| {
                             &item.stage_key == dependency
-                                && ["failed", "canceled", "blocked", "skipped"].contains(&item.status.as_str())
+                                && ["failed", "canceled", "blocked", "skipped"]
+                                    .contains(&item.status.as_str())
                         })
                     });
                     if dependency_failed {
@@ -600,7 +687,10 @@ fn run_production_execution(
                     }
                     return;
                 }
-                if !store.renew_lease(&task.id, worker_id, LEASE_MS).unwrap_or(false) {
+                if !store
+                    .renew_lease(&task.id, worker_id, LEASE_MS)
+                    .unwrap_or(false)
+                {
                     return;
                 }
                 std::thread::sleep(Duration::from_millis(100));
@@ -939,6 +1029,19 @@ fn run_runninghub_image(
         .get("resolution")
         .and_then(Value::as_str)
         .unwrap_or("1k");
+    let source_image_task_ids = task
+        .args
+        .get("sourceImageIds")
+        .and_then(Value::as_array)
+        .map(|values| {
+            values
+                .iter()
+                .filter_map(Value::as_str)
+                .map(str::to_owned)
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    let image_to_image = !source_image_task_ids.is_empty();
     run_runninghub_generation(
         store,
         worker_id,
@@ -946,7 +1049,11 @@ fn run_runninghub_image(
         artifact_root,
         task,
         RunningHubPlan {
-            route_id: GPT_IMAGE_2_ROUTE,
+            route_id: if image_to_image {
+                GPT_IMAGE_2_EDIT_ROUTE
+            } else {
+                GPT_IMAGE_2_ROUTE
+            },
             product_model: "flovart:gpt-image-2",
             media_kind: RunningHubMediaKind::Image,
             body: json!({
@@ -956,7 +1063,7 @@ fn run_runninghub_image(
             }),
             artifact_kind: "image",
             duration_sec: None,
-            source_image_task_ids: Vec::new(),
+            source_image_task_ids,
         },
     );
 }
@@ -1049,7 +1156,9 @@ fn run_runninghub_video(
                 task,
                 worker_id,
                 "ROUTE_UNAVAILABLE",
-                &format!("The requested video Product Model has no trusted RunningHub route: {other}"),
+                &format!(
+                    "The requested video Product Model has no trusted RunningHub route: {other}"
+                ),
             );
             return;
         }

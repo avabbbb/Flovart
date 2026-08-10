@@ -70,28 +70,30 @@ Table 是 Workflow 之外的第二个正式创作工作区，不是电子表格�
 ## ProductionRun 与 Production Skill 生态
 
 - **Production Skill Manifest**：🟨 已用 `community.vox-director` 内置 VOX Skill 示例落地版本、ProductionSpec 扩展 Schema、Runtime Capability、人工 Gate、兼容版本、来源与权限声明，并由 Skill 台读取同一真实包；继续补第三方包导入、签名、锁定快照、发布、撤销与预算策略。Production Skill 不得读取 API Key 或直接构造 Provider HTTP 请求。
+- **Production Skill 卡组与 PI 绑定**：🟨 主 Flovart Agent 输入框已提供可移除的 Skill 卡片，发送消息时以 `{ id, version, contentHash }` 校验内置包并把精确 Snapshot 耐久绑定到 PI 主会话；Workflow 右侧 Agent 入口也已切到同一 PI Agent，不再把 VOX 请求排队给网站 one-shot 计划器。继续补第三方包签名、撤销、升级与 ProductionSpec Revision 重规划。
 - **制作领域模型**：⬜ 建立 `ProductionRun → Shot → Take → Artifact → Delivery`，将当前多个独立生成任务和外部合成脚本收进一条可恢复、可审计的制作图。
 - **报价与批准状态机**：⬜ 将 `production.quote`、预算策略/用户批准与 `submit` 分开，支持单镜头和整片费用上限；价格预览与最终账单分别记录。
 - **一等后期命令**：⬜ 注册旁白、字幕、混音、合成、响度和交付验证命令，使 Coding Agent 不再依赖评测目录的临时脚本。
-- **图生视频一致性流程**：⬜ 先做 style bake-off、角色参考和静态关键帧，再以 image-to-video 生成镜头；把跨镜头角色、调色和品牌污染检查设为 Gate。
+- **图生视频一致性流程**：🟨 VOX 编译器已固定执行同一代表镜头三主题 Bake-off → 风格样图批准 → 图生图关键帧 → Keyframe/OCR Gate → image-to-video，并在动态 Prompt 中禁止重绘、变形和新增文字；继续补角色参考、跨镜头调色/品牌污染自动检查及真实样片评分。
+- **Approved Style Reference**：🟨 `style-reference` Gate 已要求用户选定本 Run 内成功的 Bake-off 图片 Artifact，Runtime 将该 Artifact 的 Task 作为每个关键帧 GPT Image 2 图生图输入；Gate 批准后不可原地换图，关键帧未全部成功时不能批准 Keyframe/OCR Gate。继续实现“更换参考 → 新 Revision → 仅失效受影响关键帧及下游镜头”，并做真实 Provider 视觉验收。
 - **第三方 Skill 安全**：⬜ 增加签名、网络/Provider/文件权限、Secret 隔离、费用配额与审计日志，之后再开放 Production Skill UGC 安装与发布。
 - **Research Adapter 正式来源**：⬜ 为 X 接入经过认证、可审计且遵守来源条款的正式适配器，并补限流、游标、去重和来源级健康度；不得用搜索摘要冒充 X 原帖。Reddit RSS 已完成 tracer-bullet，但仍需加入票数/评论数的正式元数据来源。
 - **TUI 制作控制台 V2**：⬜ 在保持 CLI 为唯一命令入口的前提下，增加 Task drill-down、价格批准、Artifact 预览、Agent token stream 和失败镜头重做；TUI 不保存第三份 Runtime/Workflow 状态。
 - **运行态 Workflow Projection（当前基线）**：🟨 `production.dry-run` 已持久编译 ProductionRun/StageRun DAG，`workflow.projection.get` 与 Desktop 轮询 Adapter 已把阶段和 Artifact 投到真实 Workflow，并保留用户布局；继续补 `workflow.projection.updated` 事件。该能力只负责运行恢复，不再作为最终编辑模型。
-- **AI 原生 Workflow Draft**：🟨 Agent 与设计师已通过同一套 Workflow Draft Action 直接操作画布草稿，节点、连线、Prompt、参考素材都落在 `metadata.prompt`（PromptBar 可见可编辑）；新增「草稿」记录 Tab 持久化每次 AI/CLI/MCP 动作并支持定位节点，新增 `workflow.node.tool` 让 AI 直接调用画布二次处理工具（放大/抠图/拆分/编辑/旋转/宫格/视频剪辑分离拼接抽帧/音频截取变速）。剩余：Agent 写操作进入画布本地撤销栈（当前经 dispatcher 直写 store，Ctrl+Z 不可回退 AI 动作）、可撤销删除/付费生成与冻结 Revision 的确认 Gate 语义收口、Production Plan Card 与 Revision 批准。
+- **AI 原生 Workflow Draft**：🟨 Agent 与设计师已通过同一 Draft Authority 直接操作可见画布；Agent/CLI/MCP 可逆写入与人工编辑共用耐久 ChangeSet、撤销/重做、Draft Version 和节点 Object Version，删除、付费运行及 Production 审批仍要求确认。`production.dry-run` 必须锁定当前 Draft 版本、来源节点、对象版本、相关 ChangeSet 与快照 Hash，Runtime 阶段产物持续投影回同一 Workflow。继续补 Desktop Authority Adapter、Production Plan Card、不可变 Revision 批准和精确 Operation 子图授权。
 - **Workflow Operation Node**：🟨 图片 generate/crop/upscale、视频 trim/av-split/merge/extract-frame 与音频 trim/speed 已形成输入媒体 → Operation → 带角色输出媒体并支持同节点追加 Take；继续迁移其余图片/本地结果工具，补语义 LOD 与跨媒体一致执行，不得回退为原地覆盖或无来源孤立节点。
 - **Operation Prompt Document**：🟨 图片、视频与音频 Operation 已以 `promptDocument` 保存 Prompt，并在现有 PromptBar 表面旁由 Registry 派生参数控件；本地步骤可无 Prompt/Provider 直接运行。继续删除 `metadata.prompt` 等可独立写入旁路，扩到所有结果工具，不新增第二套 Prompt 表面。
 - **Operation Input Binding**：🟨 图片、视频与音频 Operation 已让 Binding ID 同时投影为输入边 ID，并保存角色/顺序/对象版本；视频拼接已覆盖有序多输入，音视频分离已覆盖同 Take 多角色输出。继续补角色编辑、所有入口双向同步，迁移并删除 `mentionedNodeIds`、`referenceNodeIds`、`imageReferenceOrder` 与无角色连接真相。
 - **Operation Capability Registry**：🟨 已注册 image.generate/crop/upscale、4 个视频与 2 个音频能力，并派生 Agent 工具、Dispatcher 参数/确认、输入/输出 Preflight、摘要和参数控件；继续迁入 remove-background/split-layers/edit/rotate/split-grid，删除 legacy catalog 与执行 switch 后才能完成。
-- **Workflow Agent Tool Loop**：⬜ 内置 Flovart Agent 采用读取当前 Draft → 调用 Registry 工具 → 观察新 Draft/Object Version 与结果 → 继续的迭代循环，一个用户回合归入一个 ChangeSet；支持步数/时间限制、取消、steer、对象冲突重读与授权暂停。长时任务只返回持久句柄，由 Runtime/Workspace 观察，不让 Agent 轮询；旧网站 one-shot JSON 命令批次退出主流程。
+- **Workflow Agent Tool Loop**：🟨 主 Flovart Agent 已使用 PI 原生多轮 tool-call 循环读取并修改当前 Draft，一个用户回合共用一个 `changeSetId`；工具返回 Draft/Object Version，版本冲突会拒绝覆盖，Production 只通过持久 Run/Task 句柄与 Projection 闭环。旧网站 one-shot JSON 批次已退出 Workflow 与 Agent 的主入口，仅保留在明确的 Codex 子任务面板。继续补显式步数/时间预算、运行中 steer、只重读冲突子图与事件驱动长任务恢复。
 - **AI 原生图片 tracer bullet**：🟨 image.generate/crop/upscale 已贯通显式 Operation、共享 Prompt Document/Input Binding、Snapshot、Take、取消、晚到结果和 localforage 重载；继续补精确子图授权卡、partial ChangeSet/时间线、对象冲突与按组撤销。验收门限制完成声明，不阻塞视频、音频及剩余工具继续迁入同一机制。
 - **Execution Prompt Snapshot**：🟨 图片 Operation Take 已冻结 Recipe Hash、提交文本、引用绑定、规范化参数、Route 和编译器版本；继续关联 ProviderAttempt/费用，并实现增强差异查看与“采用到 PromptBar”Draft Action。
 - **Operation Node 语义 LOD**：⬜ 运行中、失败、待确认、最近修改、选中或固定的操作显示完整卡片；稳定完成的简单步骤才随缩放折叠成带名称、状态、Take 数和警告的连线 chip。两种形态都可直接命中和键盘聚焦，支持单节点固定与全局展开，错误不得被缩放隐藏。
 - **Workflow / Table 工具分层**：⬜ Workflow 只保留单步、局部、立即服务下一次生成的 Operation Node；批量、多步骤、多输入/多输出、时间轴精修与可复用处理链进入 Table。抽出共享 `MediaOperationRecipe` Schema、参数控件与执行器，但两个工作区不得共享节点实例、历史或布局。
 - **显式 Table Promotion**：⬜ 支持把 Workflow Operation 的输入 Artifact 与 Recipe 提升为新 Table Session；提升后 Table 独占配方编辑，Workflow 只保留可点击引用步骤。Table 候选结果不会自动回写，用户或 Agent 明确发布时才以 Draft ChangeSet 更新 Workflow 的 `publishedArtifactId`，并保留旧发布版本用于回退。
-- **语义 Draft ChangeSet**：⬜ 将一个 Agent 回合或连续人工手势归为可读变更集，耐久记录操作者、意图、类型化动作、前后差异、结果及关联 Provider Task/Artifact；状态支持 open/completed/partial/failed/undone。动作流式耐久提交，部分失败保留成功步骤与可重试失败 Operation Node；按组撤销不伪造删除 ProviderAttempt/Artifact，也不把每次按键或指针移动永久事件化。
-- **Draft Change Timeline**：⬜ 在 Workflow Workspace 提供默认轻量收起的 ChangeSet 时间线，展示操作者、意图、状态、差异摘要、费用与 Artifact 关联；点击记录聚焦受影响节点，节点检查器可反查来源记录，并提供按组撤销、重做、查看差异和失败重试。聊天只保存 `changeSetId` 链接，不作为唯一历史权威。
-- **设计师 / Agent 对象级并发**：⬜ 为 Draft 节点与连线增加单调 Object Version，Draft Action 携带 `baseDraftVersion` 与目标 `expectedObjectVersions`；同对象冲突返回 `PRECONDITION_FAILED`、当前版本和最小差异，Agent 只重读受影响子图。不同对象继续并行，不锁整张画布，也不允许最后写入静默覆盖人工 Prompt、参数或连线。
+- **语义 Draft ChangeSet**：🟨 已耐久记录操作者、意图、节点/连线前后状态、结果 Draft Version 与 completed/undone 状态；一个 Agent 回合连续动作会合并并可按组撤销/重做，Runtime Projection 也以 Agent ChangeSet 回填。继续补 open/partial/failed 流式提交、Provider Task/Artifact/费用关联、人工连续手势归组与失败 Operation 重试。
+- **Draft Change Timeline**：🟨 Workflow 已提供默认收起的画布时间线，展示操作者、意图、状态、对象数与 Draft Version；工具栏按整组 ChangeSet 撤销/重做，Agent 空间活动面板读取同一记录。继续补时间线点击聚焦、逐字段差异、费用/Artifact 链接、节点反查、失败重试与聊天 `changeSetId` 深链。
+- **设计师 / Agent 对象级并发**：🟨 Draft 节点已有单调 Object Version，Agent Action 可携带 `expectedObjectVersion`，冲突返回 `PRECONDITION_FAILED` 而不会静默覆盖；Draft Version 同时保护 Production 编译。继续扩展到连线与多对象原子预条件，并返回最小差异供 Agent 只重读受影响子图。
 - **Workflow Layout Intent**：⬜ Agent 只声明相对来源、方向、分支、分组与顺序提示，前端确定性 Layout Planner 按真实尺寸、折叠状态、视口和占用区域找空位；人工拖动节点标记 pinned，Agent 不得移动。派生坐标进入可撤销 ChangeSet，但不更新 Recipe Hash、授权或 ProductionSpec。
 - **Workflow Draft Authority 与显式转移**：⬜ 纯 Web 项目由 Browser Workspace/localforage 保存草稿，Desktop 或已配对 Web 项目由 Local Data Service 保存；同一项目禁止双写。实现 Authority Binding、导出校验、导入、切换失败回退与冲突拒绝。
 - **Workflow Draft Authority Port**：⬜ UI、Agent、Dispatcher、Timeline 只能通过统一 Port 读写 Draft、ChangeSet、Binding、Take 与布局。图片 tracer bullet 先实现 Browser/localforage Adapter，Zustand 只作 UI projection/cache；Desktop Adapter 后续复用契约，未显式 transfer 前不得双写 Runtime，Browser 页面关闭限制必须如实提示。

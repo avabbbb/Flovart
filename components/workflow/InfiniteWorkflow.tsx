@@ -9,6 +9,7 @@ import { STUDIO_MEDIA_DRAG_TYPE } from '../studio/StudioMediaBrowser';
 import type { AssetSuggestion } from '../MentionList';
 import type { MentionData } from '../MediaMentionExtension';
 import { createWorkflowNode } from './constants';
+import { applyWorkflowDraftChangeSet, recordWorkflowDraftSnapshotChange, redoWorkflowDraftChangeSet, undoWorkflowDraftChangeSet } from './draftAuthority';
 import {
   discardWorkflowMediaRecord,
   fitWorkflowMediaSize,
@@ -22,7 +23,7 @@ import {
   workflowMediaType,
   type WorkflowMediaRecord,
 } from './media';
-import { applyWorkflowOps, validateWorkflowConnection } from './ops';
+import { summarizeWorkflowOps, validateWorkflowConnection } from './ops';
 import { buildWorkflowPromptPasteOps } from './promptPaste';
 import { WorkflowConnections } from './WorkflowConnections';
 import { WorkflowContextMenu, type WorkflowContextMenuState } from './WorkflowContextMenu';
@@ -40,6 +41,8 @@ import { WorkflowConfigPanel } from './WorkflowConfigPanel';
 import { ScriptNodeEditor } from './ScriptNodeEditor';
 import { SlashMenu } from './SlashMenu';
 import { WorkflowToolbar, type WorkflowTool } from './WorkflowToolbar';
+import { WorkflowDraftTimeline } from './WorkflowDraftTimeline';
+import { useProductionProjectionAdapter } from './useProductionProjectionAdapter';
 import { composeImageGrid } from './gridComposer';
 import { LIGHTING_PRESETS, buildRelightPrompt } from './LightingPresets';
 import type { WorkflowConnection, WorkflowNode as WorkflowNodeData, WorkflowNodeType, WorkflowOp, WorkflowPoint, WorkflowProject, WorkflowSnapshot, WorkflowViewport, ScriptShot, SlashCommand } from './types';
@@ -254,6 +257,7 @@ export function InfiniteWorkflow({
   onEnhancePrompt,
   isEnhancingPrompt,
   agentOpen,
+  rightPanelInset,
   assetLibrary,
 }: {
   project: WorkflowProject;
@@ -265,6 +269,7 @@ export function InfiniteWorkflow({
   imageTools?: WorkflowImageToolHandlers;
   onOpenAgent?: () => void;
   agentOpen?: boolean;
+  rightPanelInset?: number;
   t?: (key: string, ...args: any[]) => string;
   theme?: 'light' | 'dark';
   language?: 'en' | 'zho';
@@ -276,6 +281,7 @@ export function InfiniteWorkflow({
   isEnhancingPrompt?: boolean;
   assetLibrary?: AssetLibrary;
 }) {
+  useProductionProjectionAdapter(project.id);
   const rootRef = useRef<HTMLDivElement>(null);
   const worldRef = useRef<HTMLDivElement>(null);
   const projectRef = useRef(project);
@@ -304,8 +310,6 @@ export function InfiniteWorkflow({
   const [clipboardVersion, setClipboardVersion] = useState(0);
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>(project.selectedNodeIds || []);
   const [selectedConnectionId, setSelectedConnectionId] = useState<string | null>(null);
-  const [past, setPast] = useState<Frame[]>([]);
-  const [future, setFuture] = useState<Frame[]>([]);
   const [selectionBox, setSelectionBox] = useState<SelectionBox | null>(null);
   const [connectionDrag, setConnectionDrag] = useState<{ sourceId: string; point: WorkflowPoint; targetId: string | null; direction: 'out' | 'in'; local: WorkflowPoint } | null>(null);
   const [createMenu, setCreateMenu] = useState<WorkflowCreateMenuState | null>(null);
@@ -369,12 +373,14 @@ export function InfiniteWorkflow({
   useEffect(() => {
     registerWorkflowMediaTransientReferences(mediaReferenceOwnerRef.current, [
       project.nodes,
-      ...past.map(frame => frame.nodes),
-      ...future.map(frame => frame.nodes),
+      ...(project.draftChangeSets || []).flatMap(changeSet => changeSet.nodeChanges.flatMap(change => [
+        change.before ? [change.before] : [],
+        change.after ? [change.after] : [],
+      ])),
       clipboardRef.current,
     ]);
     void pruneWorkflowMedia();
-  }, [clipboardVersion, future, past, project.nodes]);
+  }, [clipboardVersion, project.draftChangeSets, project.nodes]);
 
   const patchProject = useCallback((patch: Partial<WorkflowProject>) => {
     const previousNodes = projectRef.current.nodes;
@@ -410,8 +416,6 @@ export function InfiniteWorkflow({
     focusAnimRef.current = null;
     pendingMoveRef.current = null;
     setSelectedConnectionId(null);
-    setPast([]);
-    setFuture([]);
     setSelectionBox(null);
     setConnectionDrag(null);
     setCreateMenu(null);
@@ -466,21 +470,29 @@ export function InfiniteWorkflow({
     viewport: viewportRef.current,
   }), []);
 
-  const pushHistory = useCallback((frame: Frame) => {
-    setPast(items => [...items.slice(-49), frame]);
-    setFuture([]);
-  }, []);
+  const applyDraftProject = useCallback((next: WorkflowProject) => {
+    patchProject({
+      nodes: next.nodes,
+      connections: next.connections,
+      selectedNodeIds: next.selectedNodeIds,
+      draftVersion: next.draftVersion,
+      draftChangeSets: next.draftChangeSets,
+      draftRedoStack: next.draftRedoStack,
+    });
+    selectedIdsRef.current = next.selectedNodeIds;
+    setSelectedNodeIds(next.selectedNodeIds);
+  }, [patchProject]);
 
-  const applyFrame = useCallback((frame: Frame) => {
-    patchProject(frame);
-    const existing = new Set(frame.nodes.map(node => node.id));
-    selectNodes(selectedIdsRef.current.filter(id => existing.has(id)));
-  }, [patchProject, selectNodes]);
+  const pushHistory = useCallback((frame: Frame, nextFrame: Frame = currentFrame(), intent = '编辑画布') => {
+    const recorded = recordWorkflowDraftSnapshotChange(projectRef.current, frame, nextFrame, { actor: 'ui', intent });
+    if (recorded.ok === false) return false;
+    applyDraftProject(recorded.project);
+    return true;
+  }, [applyDraftProject, currentFrame]);
 
   const commitFrame = useCallback((nodes: WorkflowNodeData[], connections: WorkflowConnection[]) => {
-    pushHistory(currentFrame());
-    patchProject({ nodes, connections });
-  }, [currentFrame, patchProject, pushHistory]);
+    pushHistory(currentFrame(), { nodes, connections });
+  }, [currentFrame, pushHistory]);
 
   const autoLayout = useCallback(() => {
     const nodes = projectRef.current.nodes;
@@ -492,19 +504,17 @@ export function InfiniteWorkflow({
       const p = positions.get(node.id);
       return p ? { ...node, position: { x: p.x, y: p.y } } : node;
     });
-    pushHistory(currentFrame());
-    patchProject({ nodes: next });
+    commitFrame(next, projectRef.current.connections);
     setLayoutToast({ prev, deadline: Date.now() + 6000 });
-  }, [currentFrame, patchProject, pushHistory]);
+  }, [commitFrame]);
 
   const restoreLayout = useCallback(() => {
     setLayoutToast(prev => {
       if (!prev) return null;
-      pushHistory(currentFrame());
-      patchProject({ nodes: prev.prev });
+      commitFrame(prev.prev, projectRef.current.connections);
       return null;
     });
-  }, [currentFrame, patchProject, pushHistory]);
+  }, [commitFrame]);
 
   useEffect(() => {
     if (!layoutToast) return;
@@ -842,8 +852,10 @@ export function InfiniteWorkflow({
         if (!ownsImageToolTransaction(transaction)) { await discardWorkflowMediaRecord(record.storageKey); return; }
         const lastNode = sourceNodes[sourceNodes.length - 1];
         const size = fitWorkflowMediaSize('image', record.naturalWidth || 1024, record.naturalHeight || 768);
-        pushHistory(transaction.frame);
-        patchProject({ nodes: [...projectRef.current.nodes, { ...createWorkflowNode(nanoid(), 'image', { x: lastNode.position.x + lastNode.width + 40, y: lastNode.position.y }, { ...record, name: 'storyboard.png', status: 'success' }), ...size }] });
+        pushHistory(transaction.frame, {
+          nodes: [...projectRef.current.nodes, { ...createWorkflowNode(nanoid(), 'image', { x: lastNode.position.x + lastNode.width + 40, y: lastNode.position.y }, { ...record, name: 'storyboard.png', status: 'success' }), ...size }],
+          connections: projectRef.current.connections,
+        }, '创建分镜组拼图');
         releaseWorkflowMediaRecord(record.storageKey);
         setNotice('分镜组拼接完成');
         setStoryboardNodeIds(null);
@@ -878,18 +890,20 @@ export function InfiniteWorkflow({
   }, [imageTool, imageToolRuntime, ownsImageToolTransaction, patchProject, pushHistory, releaseImageToolTransaction]);
 
   const applyOps = useCallback((ops: WorkflowOp[]) => {
-    const result = applyWorkflowOps(currentSnapshot(), ops);
-    const rejection = result.rejections[0];
-    if (rejection) {
-      setNotice(rejection.reason);
+    const result = applyWorkflowDraftChangeSet(projectRef.current, {
+      actor: 'ui',
+      intent: summarizeWorkflowOps(ops) || '编辑画布',
+      ops,
+    });
+    if (result.ok === false) {
+      setNotice(result.error.message);
       return false;
     }
-    commitFrame(result.snapshot.nodes, result.snapshot.connections);
-    selectNodes(result.snapshot.selectedNodeIds);
+    applyDraftProject(result.project);
     setNotice(null);
     result.runRequests.forEach(({ nodeId }) => onRunNode(nodeId));
     return true;
-  }, [commitFrame, currentSnapshot, onRunNode, selectNodes]);
+  }, [applyDraftProject, onRunNode]);
 
   const assetFolders = useMemo(() => assetLibrary?.folders || [], [assetLibrary]);
   const assetSuggestions = useMemo<AssetSuggestion[]>(() => (assetLibrary?.items || []).map(item => ({
@@ -1536,22 +1550,16 @@ export function InfiniteWorkflow({
   }, [cancelInteraction, finishInteraction, scheduleInteractionMove]);
 
   const undo = useCallback(() => {
-    const previous = past[past.length - 1];
-    if (!previous) return;
-    const current = currentFrame();
-    setPast(items => items.slice(0, -1));
-    setFuture(items => [current, ...items].slice(0, 50));
-    applyFrame(previous);
-  }, [applyFrame, currentFrame, past]);
+    const result = undoWorkflowDraftChangeSet(projectRef.current);
+    if (result.ok === false) return;
+    applyDraftProject(result.project);
+  }, [applyDraftProject]);
 
   const redo = useCallback(() => {
-    const next = future[0];
-    if (!next) return;
-    const current = currentFrame();
-    setFuture(items => items.slice(1));
-    setPast(items => [...items.slice(-49), current]);
-    applyFrame(next);
-  }, [applyFrame, currentFrame, future]);
+    const result = redoWorkflowDraftChangeSet(projectRef.current);
+    if (result.ok === false) return;
+    applyDraftProject(result.project);
+  }, [applyDraftProject]);
 
   const syncToSharedClipboard = useCallback((nodes: WorkflowNodeData[]) => {
     const mediaNodes = nodes.filter(node => (node.type === 'image' || node.type === 'video') && (node.metadata.storageKey || node.metadata.href));
@@ -2101,8 +2109,8 @@ export function InfiniteWorkflow({
     >
       <WorkflowToolbar
         tool={tool}
-        canUndo={past.length > 0}
-        canRedo={future.length > 0}
+        canUndo={Boolean(project.draftChangeSets?.some(changeSet => changeSet.status === 'completed' || changeSet.status === 'partial'))}
+        canRedo={Boolean(project.draftRedoStack?.length)}
         onToolChange={setTool}
         onAddNode={addNode}
         onAddSharedMedia={media => { void addSharedMedia(media); }}
@@ -2126,6 +2134,7 @@ export function InfiniteWorkflow({
         onZoomOut={zoomOut}
         onZoomReset={zoomReset}
       />
+      <WorkflowDraftTimeline changeSets={project.draftChangeSets || []} rightInset={rightPanelInset} />
       <div ref={worldRef} className="workflow-world" style={{ transform: `translate(${project.viewport.x}px, ${project.viewport.y}px) scale(${project.viewport.k})` }}>
         <WorkflowConnections
           nodes={project.nodes.filter(node => node.isVisible !== false)}
@@ -2224,7 +2233,7 @@ export function InfiniteWorkflow({
               interactionRef.current = { type: 'resize', pointerId: event.pointerId, id: node.id, start: screenToWorkflow(event.clientX, event.clientY), width: node.width, height: node.height, frame, moved: false };
               setOverlayHidden(true);
             }}
-            onChangeText={content => { if (!node.isLocked) patchProject({ nodes: projectRef.current.nodes.map(item => item.id === node.id ? { ...item, metadata: { ...item.metadata, content } } : item) }); }}
+            onChangeText={content => { if (!node.isLocked) applyOps([{ type: 'update_node', id: node.id, metadata: { content } }]); }}
             onChangeMetadata={metadata => { if (!node.isLocked) applyOps([{ type: 'update_node', id: node.id, metadata }]); }}
             onRun={() => { if (!node.isLocked) onRunNode(node.id); }}
             onReplaceMedia={file => { if (!node.isLocked) void replaceMedia(node, file); }}

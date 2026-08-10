@@ -1,8 +1,16 @@
 import { executeFlovartCommand } from '../tools/flovart/core.js';
-import { getFlovartRuntimeApi } from './flovartRuntime';
+import { canonicalize } from 'json-canonicalize';
+import { useWorkflowStore } from '../components/workflow/store';
+import type { WorkflowProject } from '../components/workflow/types';
+import { getFlovartRuntimeApi, type RuntimeCommandEnvelope } from './flovartRuntime';
 import { dispatchWorkflowCommand, redactWorkflowAgentValue, type WorkflowCommandEnvelope, type WorkflowCommandResult } from './workflowDispatcher';
 
-const RUNTIME_COMMANDS = new Set(['runtime.status', 'command.list', 'command.schema']);
+const RUNTIME_COMMANDS = new Set([
+  'runtime.status', 'command.list', 'command.schema', 'provider.status',
+  'production.dry-run', 'production.status', 'production.approve', 'production.run',
+  'task.get', 'task.cancel', 'workflow.projection.get',
+]);
+const RUNTIME_CONFIRM_COMMANDS = new Set(['production.approve', 'production.run', 'task.cancel']);
 const READ_COMMANDS = new Set(['runtime.status', 'status', 'provider.status', 'asset.list', 'workflow.project.list', 'workflow.inspect', 'command.list', 'command.schema']);
 const MAX_ATTACHMENTS = 6;
 const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024;
@@ -40,6 +48,96 @@ export interface WorkflowAgentBridgeOptions {
   onEvent?: (type: string, payload: any) => void;
   onStatus?: (status: 'connecting' | 'connected' | 'disconnected' | 'error') => void;
   confirm?: (summary: string) => boolean | Promise<boolean>;
+}
+
+export function requiresRuntimeAgentConfirmation(command: string) {
+  return RUNTIME_CONFIRM_COMMANDS.has(command);
+}
+
+export function runtimeAgentConfirmationSummary(envelope: WorkflowCommandEnvelope) {
+  if (envelope.command === 'production.approve') {
+    const gate = String(envelope.args.gateType || '未知门禁');
+    const action = envelope.args.decision === 'rejected' ? '拒绝' : '批准';
+    const limit = Number(envelope.args.hardLimitMicros);
+    if (gate === 'run-budget' && Number.isFinite(limit)) return `${action} Production 预算上限 ¥${(limit / 1_000_000).toFixed(2)}`;
+    if (gate === 'style-reference') {
+      const stage = String(envelope.args.approvedStageKey || '未指定候选').slice(0, 200);
+      return `${action} VOX 风格参考：${stage}`;
+    }
+    return `${action} Production 门禁：${gate}`;
+  }
+  if (envelope.command === 'production.run') return `开始 ProductionRun ${String(envelope.args.runId || '')}；已批准阶段将提交 Provider`;
+  if (envelope.command === 'task.cancel') return `取消 Runtime Task ${String(envelope.args.taskId || '')}`;
+  return envelope.command;
+}
+
+export function prepareRuntimeAgentEnvelope(envelope: WorkflowCommandEnvelope): RuntimeCommandEnvelope {
+  const { idempotencyKey: legacyIdempotencyKey, ...args } = envelope.args;
+  const idempotencyKey = envelope.idempotencyKey
+    || (typeof legacyIdempotencyKey === 'string' ? legacyIdempotencyKey : undefined);
+  return {
+    protocolVersion: '1',
+    commandId: envelope.id,
+    command: envelope.command,
+    args,
+    actor: { kind: 'ui', instanceId: 'workflow_agent_bridge' },
+    ...(idempotencyKey ? { idempotencyKey } : {}),
+  };
+}
+
+const hex = (bytes: ArrayBuffer) => Array.from(new Uint8Array(bytes), byte => byte.toString(16).padStart(2, '0')).join('');
+
+export async function bindProductionDraftEnvelope(
+  envelope: WorkflowCommandEnvelope,
+  project: WorkflowProject,
+): Promise<WorkflowCommandEnvelope> {
+  if (envelope.command !== 'production.dry-run') return envelope;
+  if (envelope.args.projectId !== project.id) throw new Error('Production Plan 与当前 Workflow 项目不匹配。');
+  const requested = envelope.args.draftBinding;
+  if (!requested || typeof requested !== 'object' || Array.isArray(requested)) {
+    throw new Error('production.dry-run 必须绑定 workflow.inspect 返回的 Draft 版本与来源节点。');
+  }
+  const requestedBinding = requested as Record<string, unknown>;
+  const draftVersion = Number(requestedBinding.draftVersion);
+  const currentDraftVersion = project.draftVersion || 1;
+  if (!Number.isInteger(draftVersion) || draftVersion !== currentDraftVersion) {
+    throw new Error(`Draft 版本已变化：期望 v${draftVersion || '?'}, 当前 v${currentDraftVersion}；请重新读取 workflow.inspect。`);
+  }
+  const sourceNodeIds = Array.isArray(requestedBinding.sourceNodeIds)
+    ? [...new Set(requestedBinding.sourceNodeIds.filter((id): id is string => typeof id === 'string' && id.length > 0))]
+    : [];
+  if (!sourceNodeIds.length) throw new Error('Production Plan 至少要绑定一个当前画布来源节点。');
+  if (sourceNodeIds.length > 200) throw new Error('Production Plan 最多绑定 200 个画布来源节点。');
+  const nodeById = new Map(project.nodes.map(node => [node.id, node]));
+  const missing = sourceNodeIds.find(id => !nodeById.has(id));
+  if (missing) throw new Error(`画布来源节点不存在：${missing}；请重新读取 workflow.inspect。`);
+  const nodes = sourceNodeIds.map(id => nodeById.get(id)!);
+  const sourceIds = new Set(sourceNodeIds);
+  const connections = project.connections.filter(connection => sourceIds.has(connection.fromNodeId) && sourceIds.has(connection.toNodeId));
+  const snapshot = redactWorkflowAgentValue({ projectId: project.id, draftVersion, nodes, connections });
+  const snapshotHash = hex(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(canonicalize(snapshot))));
+  const changeSetIds = (project.draftChangeSets || []).filter(changeSet => (
+    changeSet.nodeChanges.some(change => sourceIds.has(change.id))
+    || changeSet.connectionChanges.some(change => {
+      const connection = change.after || change.before;
+      return Boolean(connection && sourceIds.has(connection.fromNodeId) && sourceIds.has(connection.toNodeId));
+    })
+  )).map(changeSet => changeSet.id);
+  return {
+    ...envelope,
+    args: {
+      ...envelope.args,
+      draftBinding: {
+        schemaVersion: 'flovart.workflow-draft-binding/1',
+        projectId: project.id,
+        draftVersion,
+        sourceNodeIds,
+        objectVersions: Object.fromEntries(nodes.map(node => [node.id, node.objectVersion || 1])),
+        changeSetIds,
+        snapshotHash,
+      },
+    },
+  };
 }
 
 export class WorkflowAgentBridge {
@@ -147,7 +245,27 @@ export class WorkflowAgentBridge {
     if (!requestId || !envelope) return;
     try {
       let result: any;
-      if (envelope.command.startsWith('workflow.')) {
+      if (RUNTIME_COMMANDS.has(envelope.command)) {
+        if (requiresRuntimeAgentConfirmation(envelope.command) && !await this.confirm(runtimeAgentConfirmationSummary(envelope))) {
+          result = { ok: false, error: { code: 'DENIED', message: '用户拒绝了 Production Runtime 命令。' } };
+        } else {
+          const runtime = getFlovartRuntimeApi();
+          if (!runtime) {
+            result = { ok: false, error: { code: 'RUNTIME_UNAVAILABLE', message: 'Production Runtime 仅可通过 Tauri 桌面端调用。' } };
+          } else if (envelope.command === 'runtime.status') {
+            result = await runtime.status();
+          } else {
+            const projectId = typeof envelope.args.projectId === 'string' ? envelope.args.projectId : '';
+            const project = useWorkflowStore.getState().projects.find(item => item.id === projectId);
+            let boundEnvelope = envelope;
+            if (envelope.command === 'production.dry-run') {
+              if (!project) throw new Error('当前 Workflow 项目不存在。');
+              boundEnvelope = await bindProductionDraftEnvelope(envelope, project);
+            }
+            result = await runtime.execute(prepareRuntimeAgentEnvelope(boundEnvelope));
+          }
+        }
+      } else if (envelope.command.startsWith('workflow.')) {
         result = await dispatchWorkflowCommand(envelope);
         if (result.confirmation?.required) {
           const approved = await this.confirm(result.confirmation.summary);
@@ -158,21 +276,6 @@ export class WorkflowAgentBridge {
       } else {
         if (!READ_COMMANDS.has(envelope.command) && !await this.confirm(envelope.command)) {
           result = { ok: false, error: { code: 'DENIED', message: '用户拒绝了命令。' } };
-        } else if (RUNTIME_COMMANDS.has(envelope.command)) {
-          const runtime = getFlovartRuntimeApi();
-          if (!runtime) {
-            result = { ok: false, error: { code: 'RUNTIME_UNAVAILABLE', message: 'Production Runtime 仅可通过 Tauri 桌面端调用。' } };
-          } else if (envelope.command === 'runtime.status') {
-            result = await runtime.status();
-          } else {
-            result = await runtime.execute({
-              protocolVersion: '1',
-              commandId: envelope.id,
-              command: envelope.command,
-              args: envelope.args,
-              actor: { kind: 'ui', instanceId: 'workflow_agent_bridge' },
-            });
-          }
         } else {
           result = await executeFlovartCommand(envelope.command, envelope.args, {});
         }

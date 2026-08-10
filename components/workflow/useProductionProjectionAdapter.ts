@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { getFlovartRuntimeApi } from '../../services/flovartRuntime';
 import { ProductionProjectionAdapter } from '../../services/productionProjectionAdapter';
+import { recordWorkflowDraftSnapshotChange } from './draftAuthority';
 import { useWorkflowStore } from './store';
 
 const PROJECTION_SYNC_INTERVAL_MS = 1_500;
@@ -13,7 +14,25 @@ export function useProductionProjectionAdapter(projectId: string | null) {
       getProject: id => (
         useWorkflowStore.getState().projects.find(project => project.id === id) || null
       ),
-      updateProject: (id, patch) => useWorkflowStore.getState().updateProject(id, patch),
+      updateProject: (id, patch) => {
+        const state = useWorkflowStore.getState();
+        const project = state.projects.find(item => item.id === id);
+        if (!project) return;
+        const recorded = recordWorkflowDraftSnapshotChange(
+          project,
+          { nodes: project.nodes, connections: project.connections },
+          { nodes: patch.nodes, connections: patch.connections },
+          { actor: 'agent', intent: '同步 Production Runtime 画布投影' },
+        );
+        state.updateProject(id, recorded.ok ? {
+          nodes: recorded.project.nodes,
+          connections: recorded.project.connections,
+          selectedNodeIds: patch.selectedNodeIds,
+          draftVersion: recorded.project.draftVersion,
+          draftChangeSets: recorded.project.draftChangeSets,
+          draftRedoStack: recorded.project.draftRedoStack,
+        } : patch);
+      },
     });
   }
 

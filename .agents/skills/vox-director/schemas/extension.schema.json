@@ -17,6 +17,7 @@
     "themeCandidates": {
       "type": "array",
       "minItems": 3,
+      "maxItems": 4,
       "uniqueItems": true,
       "items": {
         "type": "string",

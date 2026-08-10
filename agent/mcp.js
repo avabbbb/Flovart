@@ -20,6 +20,25 @@ const WORKSPACE_COMMANDS = new Set([
   'workflow.inspect',
   ...WORKSPACE_WRITE_COMMANDS,
 ]);
+const PRODUCTION_WRITE_COMMANDS = new Set([
+  'production.dry-run',
+  'production.approve',
+  'production.run',
+  'task.cancel',
+]);
+const PRODUCTION_COMMANDS = new Set([
+  'runtime.status',
+  'provider.status',
+  'production.dry-run',
+  'production.status',
+  'production.approve',
+  'production.run',
+  'task.get',
+  'task.cancel',
+  'workflow.projection.get',
+]);
+const AGENT_COMMANDS = new Set([...WORKSPACE_COMMANDS, ...PRODUCTION_COMMANDS]);
+const AGENT_WRITE_COMMANDS = new Set([...WORKSPACE_WRITE_COMMANDS, ...PRODUCTION_WRITE_COMMANDS]);
 
 const descriptorSchema = descriptor => {
   const optional = String(descriptor).endsWith('?');
@@ -63,13 +82,13 @@ const agentParameters = (args, write) => Type.Object({
 
 export function getFlovartMcpTools() {
   return Object.entries(COMMAND_REGISTRY)
-    .filter(([command, metadata]) => metadata.availability === 'available' && WORKSPACE_COMMANDS.has(command))
+    .filter(([command, metadata]) => metadata.availability === 'available' && AGENT_COMMANDS.has(command))
     .map(([command, metadata]) => ({ command, name: toolName(command), metadata }));
 }
 
 export function createFlovartAgentTools(callCommand) {
   return getFlovartMcpTools().map(({ command, name, metadata }) => {
-    const write = WORKSPACE_WRITE_COMMANDS.has(command);
+    const write = AGENT_WRITE_COMMANDS.has(command);
     return {
       name,
       label: metadata.summary,
@@ -78,8 +97,12 @@ export function createFlovartAgentTools(callCommand) {
       executionMode: 'sequential',
       async execute(_toolCallId, input, signal) {
         if (signal?.aborted) throw new Error('Workflow 操作已取消');
-        const result = await callCommand(command, input, 'agent', input.idempotencyKey, signal);
-        if (result?.ok === false) throw new Error(result.error?.message || 'Flovart Workflow 操作失败');
+        const { idempotencyKey, changeSetId, ...args } = input;
+        const commandArgs = WORKSPACE_WRITE_COMMANDS.has(command) && changeSetId
+          ? { ...args, changeSetId }
+          : args;
+        const result = await callCommand(command, commandArgs, 'agent', idempotencyKey, signal);
+        if (result?.ok === false) throw new Error(result.error?.message || 'Flovart 操作失败');
         return {
           content: [{ type: 'text', text: JSON.stringify(result) }],
           details: { command, result },
@@ -92,17 +115,18 @@ export function createFlovartAgentTools(callCommand) {
 export async function startMcpServer() {
   const config = loadAgentConfig(true);
   const server = new McpServer({ name: 'flovart-agent', version: '0.2.0' }, {
-    instructions: '先读取 workflow.inspect，再通过当前可见 Workspace 的类型化 Workflow 命令操作节点。不得调用 legacy、Canvas 或 Element 命令；每个写命令使用稳定 idempotencyKey。',
+    instructions: '先读取 workflow.inspect，再通过当前可见 Workspace 的类型化 Workflow 命令操作节点；制作视频时使用 production.dry-run/status/approve/run 与 Runtime Projection 闭环。不得调用 legacy、Canvas、Element 或直接 generate 命令；每个写命令使用稳定 idempotencyKey。',
   });
   getFlovartMcpTools().forEach(({ command, name, metadata }) => {
     const inputSchema = inputShape(metadata.args);
-    if (WORKSPACE_WRITE_COMMANDS.has(command)) inputSchema.idempotencyKey = z.string().min(1);
+    if (AGENT_WRITE_COMMANDS.has(command)) inputSchema.idempotencyKey = z.string().min(1);
     server.registerTool(name, { description: metadata.summary, inputSchema }, async input => {
+      const { idempotencyKey, ...args } = input;
       const response = await fetch(`${config.url}/api/tools`, {
         method: 'POST',
         signal: AbortSignal.timeout(95_000),
         headers: { 'content-type': 'application/json', 'x-flovart-agent-token': config.token },
-        body: JSON.stringify({ command, args: input, source: 'mcp' }),
+        body: JSON.stringify({ command, args, source: 'mcp', idempotencyKey }),
       });
       const body = await response.json();
       if (!response.ok || !body.ok || body.result?.ok === false) throw new Error(body.result?.error?.message || body.error?.message || body.error || 'Flovart tool call failed');

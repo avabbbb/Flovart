@@ -1,8 +1,7 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { WorkflowAgentPanel } from '../components/workflow/WorkflowAgentPanel';
 import { createWorkflowProject } from '../components/workflow/store';
-import { queueProductionSkillDraft, readProductionSkillDraft } from '../services/productionSkillLaunch';
 
 describe('Workflow Agent panel', () => {
   beforeEach(() => {
@@ -28,22 +27,5 @@ describe('Workflow Agent panel', () => {
     expect(screen.queryByRole('button', { name: '关闭 Agent' })).toBeNull();
     expect(screen.getByText('网站')).toBeTruthy();
     expect(screen.getByTitle('新对话')).toBeTruthy();
-  });
-
-  it('consumes a Skill launch draft into the editable composer', async () => {
-    const project = createWorkflowProject('VOX Skill 示例');
-    queueProductionSkillDraft({
-      projectId: project.id,
-      skillId: 'community.vox-director',
-      skillVersion: '1.0.0',
-      skillName: 'VOX Skill',
-      prompt: '使用 $vox-director，把【主题】制作成 30 秒短片。',
-    });
-
-    render(<WorkflowAgentPanel project={project} onClose={() => undefined} />);
-
-    await waitFor(() => expect(screen.getByDisplayValue(/使用 \$vox-director/)).toBeInTheDocument());
-    expect(screen.getByText('VOX Skill 调用词已填入；修改主题后发送。')).toBeInTheDocument();
-    expect(readProductionSkillDraft(project.id)).toBeNull();
   });
 });

@@ -18,3 +18,4 @@
 - [0052：使用一个负责的 Flovart Agent 与临时专家](0052-use-one-accountable-flovart-agent-with-specialists.md)
 - [0057：在可替换画布端口后保留 Workflow 引擎](0057-preserve-workflow-engine-behind-a-replaceable-canvas-port.md)
 - [0058：以 AI 原生 Workflow Draft 驱动画布](0058-use-ai-native-workflow-draft.md)
+- [0059：以已批准样图锁定跨镜头视觉风格](0059-lock-visual-style-to-approved-reference.md)

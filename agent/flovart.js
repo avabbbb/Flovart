@@ -41,8 +41,8 @@ export class FlovartAgentService {
     return (await this.getSession(projectId)).snapshot();
   }
 
-  async send(projectId, text, images = []) {
-    return (await this.getSession(projectId)).send(text, images);
+  async send(projectId, text, images = [], skillAttachment) {
+    return (await this.getSession(projectId)).send(text, images, skillAttachment);
   }
 
   async subscribe(projectId, listener) {

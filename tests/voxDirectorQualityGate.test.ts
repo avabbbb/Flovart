@@ -18,6 +18,7 @@ const approvedVoxSpec = {
           id: `shot-${beatIndex + 1}a`,
           durationMs: 6_000,
           scene: '分层纸张剪影、报纸碎片和制度图解。',
+          headline: `第 ${beatIndex + 1} 幕`,
         },
         {
           id: `shot-${beatIndex + 1}b`,
@@ -33,7 +34,7 @@ const approvedVoxSpec = {
   },
   gates: [
     { id: 'approve-spec', type: 'spec', status: 'approved' },
-    { id: 'approve-style', type: 'style-reference', status: 'approved' },
+    { id: 'approve-style', type: 'style-reference', status: 'required' },
     { id: 'review-keyframes', type: 'keyframe-review', status: 'required' },
     { id: 'verify-ocr', type: 'ocr', status: 'required' },
   ],
@@ -100,5 +101,38 @@ describe('VOX Skill quality gate', () => {
     expect(result.passed).toBe(true);
     expect(result.score).toBeGreaterThanOrEqual(85);
     expect(result.metrics).toMatchObject({ beatCount: 6, shotCount: 12 });
+  });
+
+  it('keeps style selection open until a generated bake-off Artifact is chosen', () => {
+    const result = auditVoxProductionSpec({
+      ...approvedVoxSpec,
+      gates: approvedVoxSpec.gates.map(gate => gate.type === 'style-reference'
+        ? { ...gate, status: 'approved' }
+        : gate),
+    });
+
+    expect(result.passed).toBe(false);
+    expect(result.violations).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'KEYFRAME_GATE_MISSING' }),
+    ]));
+  });
+
+  it('bounds the paid style bake-off to three or four candidates', () => {
+    const current = approvedVoxSpec.extensions['vox-director'];
+    const result = auditVoxProductionSpec({
+      ...approvedVoxSpec,
+      extensions: {
+        ...approvedVoxSpec.extensions,
+        'vox-director': {
+          ...current,
+          themeCandidates: ['american-retro', 'swiss-modern', 'punk-zine', 'atomic-age', 'wpa-propaganda'],
+        },
+      },
+    });
+
+    expect(result.passed).toBe(false);
+    expect(result.violations).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'STYLE_APPROVAL_MISSING' }),
+    ]));
   });
 });

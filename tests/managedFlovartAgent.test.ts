@@ -41,7 +41,7 @@ describe('Managed Flovart Agent client', () => {
     expect(fetch).toHaveBeenCalledWith('http://127.0.0.1:17372/agent/flovart/turn', expect.objectContaining({
       method: 'POST',
       headers: expect.objectContaining({ 'X-Flovart-Agent-Token': 'desktop-token' }),
-      body: JSON.stringify({ projectId: 'project-1', prompt: '制作一个解释视频' }),
+      body: JSON.stringify({ projectId: 'project-1', prompt: '制作一个解释视频', skillAttachment: null }),
     }));
   });
 });

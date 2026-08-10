@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FlovartAgentPanel } from '../components/agent/FlovartAgentPanel';
 import { createWorkflowProject, useWorkflowStore } from '../components/workflow/store';
 import { getManagedAgentConnection } from '../services/managedAgentConnection';
+import { queuePendingProductionSkill } from '../stores/useProductionSkillComposerStore';
 
 vi.mock('../services/managedAgentConnection', () => ({
   getManagedAgentConnection: vi.fn(),
@@ -67,7 +68,7 @@ describe('Flovart Agent panel', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: '发送' })).toBeEnabled());
   });
 
-  it('asks for visible confirmation before an Agent tool mutates Workflow', async () => {
+  it('applies reversible Agent edits directly and confirms only irreversible deletes', async () => {
     const project = { ...createWorkflowProject('Agent 项目'), id: 'project-1' };
     const onActivityChange = vi.fn();
     useWorkflowStore.setState({ projects: [project], activeProjectId: project.id });
@@ -95,10 +96,97 @@ describe('Flovart Agent panel', () => {
       },
     });
 
-    expect(await screen.findByText('Agent 请求修改 Workflow')).toBeInTheDocument();
+    await waitFor(() => expect(useWorkflowStore.getState().projects[0].nodes).toHaveLength(1));
+    expect(screen.queryByText('Agent 请求确认')).not.toBeInTheDocument();
+
+    const createdId = useWorkflowStore.getState().projects[0].nodes[0].id;
+    StubEventSource.current!.emit('tool_call', {
+      requestId: 'request-2',
+      envelope: {
+        id: 'command-2',
+        command: 'workflow.node.delete',
+        args: { nodeId: createdId },
+        source: 'agent',
+        idempotencyKey: 'agent-delete-outline-v1',
+      },
+    });
+
+    expect(await screen.findByText('Agent 请求确认')).toBeInTheDocument();
     expect(onActivityChange).toHaveBeenCalledWith('waiting');
     fireEvent.click(screen.getByRole('button', { name: '拒绝' }));
-    await waitFor(() => expect(screen.queryByText('Agent 请求修改 Workflow')).not.toBeInTheDocument());
-    expect(useWorkflowStore.getState().projects[0].nodes).toHaveLength(0);
+    await waitFor(() => expect(screen.queryByText('Agent 请求确认')).not.toBeInTheDocument());
+    expect(useWorkflowStore.getState().projects[0].nodes).toHaveLength(1);
+  });
+
+  it('sends a selected Production Skill as a typed attachment to the main PI turn', async () => {
+    const project = { ...createWorkflowProject('Agent 项目'), id: 'project-1' };
+    const turnBodies: unknown[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (input, init) => {
+      const url = String(input);
+      if (url.includes('/agent/flovart/turn')) {
+        turnBodies.push(JSON.parse(String(init?.body)));
+        return new Response('', { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
+      }
+      return new Response(JSON.stringify({
+        sessionId: 'session-1',
+        projectId: project.id,
+        running: false,
+        messages: [],
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }));
+
+    render(<FlovartAgentPanel project={project} onActivityChange={vi.fn()} onOpenSettings={vi.fn()} />);
+
+    fireEvent.click(await screen.findByRole('button', { name: '选择制作 Skill' }));
+    fireEvent.click(screen.getByRole('button', { name: '添加 VOX Skill' }));
+    expect(await screen.findByRole('button', { name: '移除 VOX Skill' })).toBeInTheDocument();
+
+    fireEvent.change(screen.getByPlaceholderText('告诉 Flovart Agent 你想制作什么'), {
+      target: { value: '制作一个 30 秒中文剪纸解释视频' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '发送' }));
+
+    await waitFor(() => expect(turnBodies).toEqual([expect.objectContaining({
+      projectId: project.id,
+      prompt: '制作一个 30 秒中文剪纸解释视频',
+      skillAttachment: expect.objectContaining({
+        id: 'community.vox-director',
+        version: '1.0.0',
+        contentHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+      }),
+    })]));
+  });
+
+  it('keeps a queued Production Skill when the restored session snapshot arrives later', async () => {
+    const project = { ...createWorkflowProject('VOX 排队项目'), id: 'project-queued-skill' };
+    let resolveSession!: () => void;
+    const sessionResponse = new Promise<Response>(resolve => {
+      resolveSession = () => resolve(new Response(JSON.stringify({
+        sessionId: 'session-queued',
+        projectId: project.id,
+        running: false,
+        messages: [],
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    });
+    vi.stubGlobal('fetch', vi.fn((input) => (
+      String(input).includes('/agent/flovart/session')
+        ? sessionResponse
+        : Promise.resolve(new Response(JSON.stringify({ ok: true }), { status: 200 }))
+    )));
+    queuePendingProductionSkill({
+      projectId: project.id,
+      skillId: 'community.vox-director',
+      skillVersion: '1.0.0',
+      skillName: 'VOX Skill',
+      prompt: '从当前画布制作 VOX 短片',
+    });
+
+    render(<FlovartAgentPanel project={project} onActivityChange={vi.fn()} onOpenSettings={vi.fn()} />);
+    expect(await screen.findByRole('button', { name: '移除 VOX Skill' })).toBeInTheDocument();
+    resolveSession();
+    await screen.findByPlaceholderText('告诉 Flovart Agent 你想制作什么');
+
+    expect(screen.getByRole('button', { name: '移除 VOX Skill' })).toBeInTheDocument();
+    expect(screen.getByDisplayValue('从当前画布制作 VOX 短片')).toBeInTheDocument();
   });
 });

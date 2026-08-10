@@ -3,7 +3,8 @@
 ## Unreleased
 
 - Workflow 图片生成/裁剪/高清放大、视频剪辑/音视频分离/拼接/抽帧与音频截取/变速开始统一为显式 Operation 链：Registry 集中声明能力、参数、类型化输入输出、确认级别与参数控件，Operation 保存唯一 Recipe / Prompt Document / Input Binding / Execution Snapshot / Take，重跑追加 Take，失败、取消与旧配方晚到结果可追溯，源媒体不再被原地覆盖。
-- **AI 原生 Workflow Draft 落地**：AI/CLI/MCP 现在直接以 Draft Action 操作可见画布草稿，节点、连线、Prompt、参考素材都落在 `metadata.prompt`（PromptBar 可见可编辑），并持久化为项目 `draftLog` 供设计师在 Agent 面板「草稿」Tab 回溯和定位节点；新增 `workflow.node.tool` 命令让 AI 调用画布二次处理工具（高清放大、移除背景、拆分图层、图片编辑、旋转、宫格切分、视频剪辑/音视频分离/拼接/抽帧、音频截取/变速），结果回填为新节点 + 来源连线。
+- **AI 原生 Workflow Draft 落地**：Workflow 右侧与独立 Agent 工作区现共用迭代式 Flovart PI Agent；AI/CLI/MCP 和人工编辑通过同一 Draft Authority 写入可见画布，一个 Agent 回合形成一个耐久 ChangeSet，并共用撤销/重做、Draft Version、节点 Object Version 与轻量画布时间线。内置 Agent 的 `production.dry-run` 必须绑定当前 Draft 与来源节点，Runtime 产物持续回填同一 Workflow；旧网站 one-shot JSON 计划器退出主入口。
+- **VOX 风格锁定链路**：VOX Production Skill 现在编译同一代表镜头的三主题剪纸拼贴 Bake-off，并以用户批准的图片 Artifact 作为全部关键帧的 GPT Image 2 图生图参考；关键帧审片与 OCR 未通过时禁止进入 image-to-video，动态 Prompt 强制保留构图、原文、纸张边缘与印刷纹理。真实付费样片仍需用户确认后验收。
 - 设置页「桌面 Runtime 凭证」支持多凭证选择：Provider 有多个安全凭证时显示下拉，设计师选定具体凭证后再一键导入到画布 API 配置，导入的 `runtimeManaged` Key 进入模型映射并被画布节点使用。
 - 架构文档从 60 个碎片化 ADR 收敛为 12 个当前有效主题决策，删除已被替代的设计并由 Git 保留历史；AI 原生 Workflow Draft 统一纳入可见 Draft Action、语义 ChangeSet、单一 Draft Authority 与批准后不可变 ProductionSpec Revision。
 - 修复 Desktop Production Runtime 产物不回填 Workflow 画布的问题：已完成 StageRun 会投影为图片/视频/音频节点并通过受控 Tauri IPC 读取媒体；设置页显示 Runtime 凭证状态，首次引导补齐 RunningHub 入口。

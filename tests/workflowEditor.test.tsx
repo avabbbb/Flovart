@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useState } from 'react';
 import { createWorkflowNode } from '../components/workflow/constants';
+import { applyWorkflowDraftChangeSet } from '../components/workflow/draftAuthority';
 import { InfiniteWorkflow } from '../components/workflow/InfiniteWorkflow';
 import { WorkflowConfigPanel, WorkflowGenerationCapabilitiesProvider, type WorkflowSharedMedia } from '../components/workflow/WorkflowConfigPanel';
 import { WorkflowMiniMap } from '../components/workflow/WorkflowMiniMap';
@@ -261,6 +262,39 @@ describe('InfiniteWorkflow surface interactions', () => {
     fireEvent.click(screen.getByRole('button', { name: '撤销' }));
     await waitFor(() => expect(projectNode('source').position).toEqual({ x: 100, y: 100 }));
     expect(screen.getByRole('button', { name: '撤销' })).toBeDisabled();
+  });
+
+  it('uses the visible toolbar to undo and redo an Agent Draft ChangeSet', async () => {
+    const initial = makeProject();
+    const agentNode = createWorkflowNode('agent-outline', 'text', { x: 860, y: 120 }, { content: 'Agent 创建的大纲' });
+    agentNode.title = 'Agent 大纲';
+    const applied = applyWorkflowDraftChangeSet(initial, {
+      actor: 'agent',
+      intent: '创建 Agent 大纲',
+      ops: [{ type: 'add_node', node: agentNode }],
+    });
+    if (applied.ok === false) throw new Error(applied.error.message);
+    render(<Harness initial={applied.project} />);
+
+    expect(node('agent-outline')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '撤销' })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: '撤销' }));
+    await waitFor(() => expect(editor().querySelector('[data-workflow-node-id="agent-outline"]')).not.toBeInTheDocument());
+    expect(screen.getByRole('button', { name: '重做' })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: '重做' }));
+    await waitFor(() => expect(node('agent-outline')).toBeInTheDocument());
+  });
+
+  it('records direct text editing in the shared Draft Authority', () => {
+    render(<Harness />);
+
+    fireEvent.change(node('source').querySelector('textarea')!, { target: { value: '真人刚刚改过的旁白' } });
+
+    expect(projectNode('source').metadata.content).toBe('真人刚刚改过的旁白');
+    expect(projectNode('source').objectVersion).toBe(2);
+    expect(projectState().draftVersion).toBe(2);
+    expect(projectState().draftChangeSets).toHaveLength(1);
+    expect(projectState().draftChangeSets?.[0].actor).toBe('ui');
   });
 
   it('batches native pointer moves and flushes the latest position before pointerup', () => {
@@ -729,7 +763,7 @@ describe('InfiniteWorkflow surface interactions', () => {
     const input = node('target').querySelector<HTMLInputElement>('input[accept="image/*"]')!;
     fireEvent.change(input, { target: { files: [new File(['new-image'], 'replacement.png', { type: 'image/png' })] } });
 
-    await waitFor(() => expect(screen.getByTestId('workflow-project-state')).not.toHaveTextContent('old-media'));
+    await waitFor(() => expect(projectNode('target').metadata.storageKey).not.toBe('old-media'));
     expect(projectNode('target').position).toEqual({ x: 480, y: 82.5 });
     expect(node('target').style.width).toBe('420px');
     expect(node('target').style.height).toBe('315px');
@@ -739,17 +773,17 @@ describe('InfiniteWorkflow surface interactions', () => {
     fireEvent.pointerDown(editor(), { button: 0, clientX: 20, clientY: 20 });
     fireEvent.pointerUp(window, { clientX: 20, clientY: 20 });
     fireEvent.click(screen.getByRole('button', { name: '撤销' }));
-    await waitFor(() => expect(screen.getByTestId('workflow-project-state')).toHaveTextContent('"storageKey":"old-media"'));
+    await waitFor(() => expect(projectNode('target').metadata.storageKey).toBe('old-media'));
     const restoredBlob = await workflowMediaStorage.get('old-media');
     expect(restoredBlob).not.toBeNull();
     expect(editor().querySelector('[data-workflow-connection-id="media-connection"]')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: '移除媒体文件' }));
-    await waitFor(() => expect(screen.getByTestId('workflow-project-state')).not.toHaveTextContent('old-media'));
+    await waitFor(() => expect(projectNode('target').metadata.storageKey).toBeUndefined());
     fireEvent.pointerDown(editor(), { button: 0, clientX: 20, clientY: 20 });
     fireEvent.pointerUp(window, { clientX: 20, clientY: 20 });
     fireEvent.click(screen.getByRole('button', { name: '撤销' }));
-    await waitFor(() => expect(screen.getByTestId('workflow-project-state')).toHaveTextContent('"storageKey":"old-media"'));
+    await waitFor(() => expect(projectNode('target').metadata.storageKey).toBe('old-media'));
     expect(await workflowMediaStorage.get('old-media')).not.toBeNull();
   });
 

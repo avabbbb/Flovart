@@ -45,7 +45,7 @@ export const createDefaultAgentLayout = (): AgentWorkspaceLayout => ({
   panels: [
     { id: 'brief', kind: 'brief', title: '项目 Brief', status: 'idle', x: 0, y: 0, width: 310, height: 220, z: 1 },
     { id: 'flovart-main', kind: 'flovart', title: 'Flovart Agent', status: 'idle', x: 336, y: 0, width: 520, height: 620, z: 4 },
-    { id: 'activity', kind: 'activity', title: '任务状态', status: 'idle', x: 0, y: 246, width: 310, height: 374, z: 2 },
+    { id: 'activity', kind: 'activity', title: '画布时间线', status: 'idle', x: 0, y: 246, width: 310, height: 374, z: 2 },
     { id: 'artifacts', kind: 'artifacts', title: '制作产物', status: 'idle', x: 882, y: 0, width: 360, height: 620, z: 3 },
   ],
 });

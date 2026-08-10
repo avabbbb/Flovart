@@ -145,6 +145,8 @@ describe('workflow project persistence', () => {
       agentSessions,
       activeAgentSessionId: 'session-1',
       draftLog: [],
+      draftChangeSets: [],
+      draftRedoStack: [],
       draftVersion: 1,
       createdAt: '2026-01-02T03:04:05.000Z',
       updatedAt: '2026-01-02T03:04:05.000Z',
@@ -188,8 +190,8 @@ describe('workflow project persistence', () => {
       takes: [{ id: started.take.id, status: 'success', snapshot: { id: 'snapshot-1' }, outputNodeIds: [output.id] }],
     });
     expect(restored.connections).toEqual([
-      { id: binding.id, fromNodeId: source.id, toNodeId: operation.id, kind: 'operation-input', role: 'source_image', order: 0 },
-      { id: 'crop-output-edge', fromNodeId: operation.id, toNodeId: output.id, kind: 'operation-output' },
+      { id: binding.id, fromNodeId: source.id, toNodeId: operation.id, kind: 'operation-input', role: 'source_image', order: 0, objectVersion: 1 },
+      { id: 'crop-output-edge', fromNodeId: operation.id, toNodeId: output.id, kind: 'operation-output', objectVersion: 1 },
     ]);
   });
 

@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1",
   "protocolVersion": "1",
-  "registryHash": "f05995edcec698055b4dba8d32734affa4ec9b3d89449fdafc8f3083c462bd33",
+  "registryHash": "e31afad6b1193985ed8d3a84a0d1312c78bc733bba77a96310f7c317f5890bdf",
   "commands": [
     {
       "name": "runtime.status",
@@ -206,6 +206,7 @@
         "projectId": "string",
         "title": "string?",
         "reviewPolicy": "guided|balanced|autonomous?",
+        "draftBinding": "object?",
         "director": "object",
         "spec": "object"
       },
@@ -227,7 +228,8 @@
         "gateType": "string",
         "decision": "approved|rejected?",
         "hardLimitMicros": "number?",
-        "note": "string?"
+        "note": "string?",
+        "approvedStageKey": "string?"
       },
       "availability": "available"
     },
@@ -499,7 +501,8 @@
         "credentialId": "string?",
         "productModel": "string?",
         "aspectRatio": "string?",
-        "resolution": "string?"
+        "resolution": "string?",
+        "sourceImageIds": "string[]?"
       },
       "availability": "available"
     },

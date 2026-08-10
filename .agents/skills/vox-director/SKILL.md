@@ -27,8 +27,8 @@ Turn one topic into a concise editorial paper-collage ProductionSpec. Direct the
 1. Choose one narrative arc that fits the topic.
 2. Draft a hook that lands within three seconds.
 3. For a 30-second film, create 6–8 shots arranged as wide/detail pairs; keep every shot at or below seven seconds.
-4. Propose at least three topic-appropriate themes. Do not choose a generic house style merely because it is available.
-5. Ask the user to approve the beat map and selected theme before any paid generation.
+4. Propose three or four topic-appropriate themes (default to three) and mark one recommendation. Do not pretend the recommendation is the final approved style.
+5. Ask the user to approve the beat map and the paid 3–4 image style bake-off before any Provider submission.
 6. Lock the approved collage language in `extensions.community.vox-director.look`.
 7. Give every shot a flat-safe camera move and scene-specific element motion. Do not repeat the same camera move on adjacent shots.
 8. Add spec, style-reference, keyframe-review, and OCR gates.
@@ -43,13 +43,11 @@ Run the repository quality gate during this bundled example:
 node tools/flovart/vox-director-quality.js --spec <production-spec.json> --json
 ```
 
-Require a passing score before compilation. Then submit a zero-cost plan:
+Require a passing score before compilation. In the built-in PI Agent, first materialize the Brief, shots, prompts, references, and connections on the user's visible Workflow. Re-read `flovart_workflow_inspect`, then call `flovart_production_dry_run` with the current project, Director identity, ProductionSpec, stable idempotency key, and `draftBinding: { draftVersion, sourceNodeIds }` from that exact inspection. The browser binds object versions, ChangeSets, and a redacted snapshot hash before Runtime freezes the Revision. Never open a CLI or create a second hidden canvas as an alternate authoring path.
 
-```bash
-npx flovart-cli production.dry-run --project-id <project-id> --title "VOX Production Plan" --director '{"skillId":"community.vox-director","version":"1.0.0","contentHash":"<package-hash>"}' --file <production-spec.json> --idempotency-key "<stable-plan-key>" --json
-```
+Wait for the returned Task, inspect `flovart_production_status`, and verify the matching `flovart_workflow_projection_get` result on the user's current visible Workflow. After the user confirms Route Plan and Run Budget, `flovart_production_run` may create the 3–4 same-shot style bake-off Artifacts. Keep keyframes waiting at `style-reference`; show those Artifacts on Workflow and ask the user which `style:bakeoff:<theme>` Stage to lock. Approve that gate only with the chosen `approvedStageKey`. The Runtime must pass that exact Artifact into every keyframe image-to-image request.
 
-Wait for the returned Task, inspect `production.status`, and verify the matching Workflow Projection. Do not claim a finished film while Route Plan, Run Budget, required capabilities, approvals, or Artifact attachment remain blocked.
+Keep motion waiting until the user has reviewed the keyframe sheet and the OCR gate has passed. Approve `keyframe-review` and `ocr` explicitly, then let the same ProductionRun continue. Do not claim a finished film while Route Plan, Run Budget, required capabilities, approvals, Runtime Projection, or Artifact attachment remain blocked.
 
 ## Revise
 

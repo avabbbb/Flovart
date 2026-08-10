@@ -10,6 +10,13 @@ import { WorkflowAgentBridge } from '../../services/workflowAgentBridge';
 import { WorkflowAgentMessages, type WorkflowAgentDisplayMessage } from '../workflow/WorkflowAgentMessages';
 import type { WorkflowProject } from '../workflow/types';
 import type { AgentPanelStatus } from './agentWorkspaceStore';
+import { ProductionSkillDeck } from './ProductionSkillDeck';
+import {
+  createProductionSkillAttachment,
+  getBundledProductionSkill,
+  type ProductionSkillAttachment,
+} from '../../services/productionSkillCatalog';
+import { consumePendingProductionSkill } from '../../stores/useProductionSkillComposerStore';
 
 interface FlovartAgentPanelProps {
   project: WorkflowProject;
@@ -58,10 +65,13 @@ export function FlovartAgentPanel({ project, onActivityChange, onOpenSettings }:
   const client = useRef<ManagedFlovartAgentClient | undefined>(undefined);
   const workspaceBridge = useRef<WorkflowAgentBridge | undefined>(undefined);
   const abort = useRef<AbortController | undefined>(undefined);
+  const composer = useRef<HTMLDivElement>(null);
+  const skillAttachmentDirty = useRef(false);
   const activity = useRef(onActivityChange);
   const confirmationRef = useRef<{ summary: string; resolve: (approved: boolean) => void } | undefined>(undefined);
   const [messages, setMessages] = useState<WorkflowAgentDisplayMessage[]>([]);
   const [prompt, setPrompt] = useState('');
+  const [skillAttachment, setSkillAttachment] = useState<ProductionSkillAttachment>();
   const [status, setStatus] = useState<'connecting' | 'ready' | 'error'>('connecting');
   const [workspaceStatus, setWorkspaceStatus] = useState<'connecting' | 'ready' | 'error'>('connecting');
   const [sending, setSending] = useState(false);
@@ -70,8 +80,36 @@ export function FlovartAgentPanel({ project, onActivityChange, onOpenSettings }:
 
   useEffect(() => { activity.current = onActivityChange; }, [onActivityChange]);
   useEffect(() => {
+    skillAttachmentDirty.current = false;
+    setSkillAttachment(undefined);
+    const pending = consumePendingProductionSkill(project.id);
+    if (!pending) return;
+    setPrompt(pending.prompt);
+    const skill = getBundledProductionSkill(pending.skillId);
+    if (!skill || skill.version !== pending.skillVersion) {
+      setMessages(items => [...items, {
+        id: crypto.randomUUID(),
+        role: 'error',
+        text: `制作 Skill 不可用：${pending.skillId}@${pending.skillVersion}`,
+      }]);
+      return;
+    }
+    skillAttachmentDirty.current = true;
+    void createProductionSkillAttachment(skill)
+      .then(setSkillAttachment)
+      .catch(error => {
+        skillAttachmentDirty.current = false;
+        setMessages(items => [...items, {
+          id: crypto.randomUUID(),
+          role: 'error',
+          text: errorMessage(error),
+        }]);
+      });
+  }, [project.id]);
+  useEffect(() => {
     let active = true;
     client.current = undefined;
+    setConfirmation(undefined);
     setStatus('connecting');
     void getManagedAgentConnection()
       .then(async connection => {
@@ -100,6 +138,10 @@ export function FlovartAgentPanel({ project, onActivityChange, onOpenSettings }:
           await bridge.pushSnapshot(project);
         }
         setMessages(displayMessages(snapshot));
+        if (!skillAttachmentDirty.current) setSkillAttachment(snapshot.boundProductionSkill);
+        if (snapshot.productionSkillBindingError) {
+          setMessages(items => [...items, { id: 'skill-binding-error', role: 'error', text: snapshot.productionSkillBindingError! }]);
+        }
         setStatus('ready');
         const configurationNeeded = snapshotNeedsConfiguration(snapshot);
         setNeedsConfiguration(configurationNeeded);
@@ -136,12 +178,16 @@ export function FlovartAgentPanel({ project, onActivityChange, onOpenSettings }:
     } else if (event.type === 'snapshot') {
       setNeedsConfiguration(snapshotNeedsConfiguration(event.snapshot));
       setMessages(displayMessages(event.snapshot));
+      skillAttachmentDirty.current = false;
+      setSkillAttachment(event.snapshot.boundProductionSkill);
     } else if (event.type === 'tool-start') {
+      const needsApproval = /production_(?:approve|run)|task_cancel/.test(event.name);
+      const productionTool = /production_|workflow_projection|provider_status|task_get/.test(event.name);
       setMessages(items => [...items, {
         id: `tool-${event.id}`,
         role: 'tool',
         title: event.name,
-        text: '等待 Workflow 确认与执行',
+        text: needsApproval ? '等待你的 Production 授权' : productionTool ? '正在读取或编译 Production Plan' : '正在操作同一 Workflow Draft',
         detail: event.args,
         status: 'pending',
       }]);
@@ -175,7 +221,7 @@ export function FlovartAgentPanel({ project, onActivityChange, onOpenSettings }:
       await client.current.turn(project.id, text, event => {
         if (event.type === 'error' || (event.type === 'snapshot' && event.snapshot.messages.some(message => message.error))) failed = true;
         handleEvent(event, assistantId);
-      }, controller.signal);
+      }, controller.signal, skillAttachment);
       activity.current(failed ? 'error' : 'done');
     } catch (error) {
       if (!controller.signal.aborted) {
@@ -200,8 +246,9 @@ export function FlovartAgentPanel({ project, onActivityChange, onOpenSettings }:
       </header>
       <section className="workflow-agent__body">
         <WorkflowAgentMessages messages={messages} running={sending} />
-        {confirmation && <div className="workflow-agent__confirm"><strong>Agent 请求修改 Workflow</strong><p>{confirmation.summary}</p><div><button type="button" onClick={() => { confirmationRef.current = undefined; confirmation.resolve(false); setConfirmation(undefined); activity.current('running'); }}>拒绝</button><button type="button" onClick={() => { confirmationRef.current = undefined; confirmation.resolve(true); setConfirmation(undefined); activity.current('running'); }}>允许</button></div></div>}
-        <div className="workflow-agent__composer">
+        {confirmation && <div className="workflow-agent__confirm"><strong>Agent 请求确认</strong><p>{confirmation.summary}</p><div><button type="button" onClick={() => { confirmationRef.current = undefined; confirmation.resolve(false); setConfirmation(undefined); activity.current('running'); }}>拒绝</button><button type="button" onClick={() => { confirmationRef.current = undefined; confirmation.resolve(true); setConfirmation(undefined); activity.current('running'); }}>允许</button></div></div>}
+        <div ref={composer} className="workflow-agent__composer">
+          <ProductionSkillDeck attachment={skillAttachment} onChange={value => { skillAttachmentDirty.current = true; setSkillAttachment(value); }} dropTargetRef={composer} />
           <textarea
             value={prompt}
             onChange={event => setPrompt(event.target.value)}

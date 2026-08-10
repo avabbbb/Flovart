@@ -1,4 +1,5 @@
 import type { ManagedAgentConnection } from './managedAgentConnection';
+import type { ProductionSkillAttachment } from './productionSkillCatalog';
 
 export interface FlovartAgentMessage {
   id: string;
@@ -15,6 +16,8 @@ export interface FlovartAgentSnapshot {
   projectId: string;
   messages: FlovartAgentMessage[];
   running: boolean;
+  boundProductionSkill?: ProductionSkillAttachment;
+  productionSkillBindingError?: string;
 }
 
 export type FlovartAgentTurnEvent =
@@ -64,12 +67,13 @@ export class ManagedFlovartAgentClient {
     prompt: string,
     emit: (event: FlovartAgentTurnEvent) => void,
     signal?: AbortSignal,
+    skillAttachment?: ProductionSkillAttachment | null,
   ): Promise<void> {
     const response = await fetch(`${this.connection.url}/agent/flovart/turn`, {
       method: 'POST',
       signal,
       headers: headers(this.connection, true),
-      body: JSON.stringify({ projectId, prompt }),
+      body: JSON.stringify({ projectId, prompt, skillAttachment: skillAttachment || null }),
     });
     if (!response.ok) throw await responseError(response);
     const reader = response.body?.getReader();

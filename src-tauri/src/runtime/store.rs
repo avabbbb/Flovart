@@ -8,8 +8,7 @@ use super::{
     events::{RuntimeEntityRef, RuntimeEvent, RuntimeEventPage},
     production::{build_workflow_projection, ProductionPlanDraft},
     tasks::{RuntimeTask, RuntimeTaskPage, TaskLinks, TaskReceipt},
-    ProductionRuntime,
-    RuntimeContractError, RuntimeError,
+    ProductionRuntime, RuntimeContractError, RuntimeError,
 };
 
 const MIGRATION_0001: &str = include_str!("migrations/0001_runtime_ledger.sql");
@@ -44,6 +43,7 @@ pub struct RunExecution {
     pub review_policy: String,
     pub stages: Vec<StageExec>,
     pub gates: std::collections::HashMap<String, String>,
+    pub gate_decisions: std::collections::HashMap<String, Value>,
     pub budget: Option<(i64, String)>,
     pub reserved_micros: i64,
     pub confirmed_micros: i64,
@@ -223,6 +223,7 @@ impl RuntimeStore {
         decision: &str,
         hard_limit_micros: Option<i64>,
         note: Option<&str>,
+        approved_stage_key: Option<&str>,
     ) -> Result<Value, RuntimeError> {
         if !["approved", "rejected"].contains(&decision) {
             return Err(RuntimeError::new(
@@ -268,12 +269,6 @@ impl RuntimeStore {
                     format!("ProductionRun not found: {run_id}"),
                 )
             })?;
-        if !["action_required", "queued"].contains(&run_status.as_str()) {
-            return Err(RuntimeError::new(
-                "PRECONDITION_FAILED",
-                format!("ProductionRun gates are frozen in status {run_status}"),
-            ));
-        }
         let gate = transaction
             .query_row(
                 "SELECT id, gate_kind, status FROM production_gates
@@ -296,6 +291,14 @@ impl RuntimeStore {
                 )
             })?;
         let (gate_id, gate_kind, gate_status) = gate;
+        if !["action_required", "queued"].contains(&run_status.as_str())
+            && !(run_status == "running" && gate_kind == "director")
+        {
+            return Err(RuntimeError::new(
+                "PRECONDITION_FAILED",
+                format!("ProductionRun gates are frozen in status {run_status}"),
+            ));
+        }
         if gate_status != "required" {
             return Err(RuntimeError::new(
                 "PRECONDITION_FAILED",
@@ -333,11 +336,67 @@ impl RuntimeStore {
                 )
                 .map_err(store_unavailable)?;
         }
+        if gate_kind == "director" && gate_type == "style-reference" && decision == "approved" {
+            let selected_stage = approved_stage_key.ok_or_else(|| {
+                RuntimeError::new(
+                    "INVALID_ARGUMENT",
+                    "Approving the style-reference gate requires approvedStageKey",
+                )
+            })?;
+            let valid_reference = transaction
+                .query_row(
+                    "SELECT EXISTS(
+                       SELECT 1 FROM stage_runs
+                        WHERE run_id = ?1
+                          AND stage_key = ?2
+                          AND stage_key LIKE 'style:bakeoff:%'
+                          AND capability_id = 'image.generate'
+                          AND status = 'succeeded'
+                          AND task_id IS NOT NULL
+                     )",
+                    params![run_id, selected_stage],
+                    |row| row.get::<_, bool>(0),
+                )
+                .map_err(store_unavailable)?;
+            if !valid_reference {
+                return Err(RuntimeError::new(
+                    "PRECONDITION_FAILED",
+                    "approvedStageKey must identify a succeeded style bake-off Artifact in this run",
+                ));
+            }
+        } else if gate_kind == "director"
+            && ["keyframe-review", "ocr"].contains(&gate_type)
+            && decision == "approved"
+        {
+            let (total, incomplete) = transaction
+                .query_row(
+                    "SELECT COUNT(*), COALESCE(SUM(CASE WHEN status = 'succeeded' THEN 0 ELSE 1 END), 0)
+                       FROM stage_runs
+                      WHERE run_id = ?1 AND stage_key LIKE 'shot:%:keyframe'",
+                    [run_id],
+                    |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?)),
+                )
+                .map_err(store_unavailable)?;
+            if total == 0 || incomplete > 0 {
+                return Err(RuntimeError::new(
+                    "PRECONDITION_FAILED",
+                    format!(
+                        "{gate_type} can be approved only after every keyframe Artifact succeeds"
+                    ),
+                ));
+            }
+        } else if approved_stage_key.is_some() {
+            return Err(RuntimeError::new(
+                "INVALID_ARGUMENT",
+                "approvedStageKey is only valid for the style-reference gate",
+            ));
+        }
         let decision_record = json!({
             "decision": decision,
             "approvedBy": approved_by,
             "note": note,
             "hardLimitMicros": hard_limit_micros,
+            "approvedStageKey": approved_stage_key,
             "decidedAt": now
         });
         transaction
@@ -372,6 +431,8 @@ impl RuntimeStore {
                         "run-budget" => "RUN_BUDGET_REQUIRED".to_owned(),
                         other => format!("GATE_REQUIRED:{other}"),
                     });
+                } else {
+                    blockers.push(format!("DIRECTOR_GATE_REQUIRED:{gate}"));
                 }
             }
         }
@@ -389,7 +450,7 @@ impl RuntimeStore {
         let system_gates_clear = !blockers
             .iter()
             .any(|blocker| blocker.starts_with("ROUTE_PLAN") || blocker.starts_with("RUN_BUDGET"));
-        let next_status = if rejected && gate_kind == "system" {
+        let next_status = if rejected && run_status != "running" {
             "failed"
         } else if system_gates_clear && run_status == "action_required" {
             "queued"
@@ -472,17 +533,26 @@ impl RuntimeStore {
                 )
             })?;
         let mut gates = std::collections::HashMap::new();
+        let mut gate_decisions = std::collections::HashMap::new();
         {
             let mut statement = connection
-                .prepare("SELECT gate_type, status FROM production_gates WHERE run_id = ?1")
+                .prepare("SELECT gate_type, status, decision_json FROM production_gates WHERE run_id = ?1")
                 .map_err(store_unavailable)?;
             let rows = statement
                 .query_map([run_id], |row| {
-                    Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, Option<String>>(2)?,
+                    ))
                 })
                 .map_err(store_unavailable)?;
             for row in rows {
-                let (gate_type, gate_status) = row.map_err(store_unavailable)?;
+                let (gate_type, gate_status, decision) = row.map_err(store_unavailable)?;
+                if let Some(decision) = decision.and_then(|value| serde_json::from_str(&value).ok())
+                {
+                    gate_decisions.insert(gate_type.clone(), decision);
+                }
                 gates.insert(gate_type, gate_status);
             }
         }
@@ -517,7 +587,12 @@ impl RuntimeStore {
             .map_err(store_unavailable)?
         {
             if let Ok(plan) = serde_json::from_str::<Value>(&plan_json) {
-                for entry in plan.get("entries").and_then(Value::as_array).into_iter().flatten() {
+                for entry in plan
+                    .get("entries")
+                    .and_then(Value::as_array)
+                    .into_iter()
+                    .flatten()
+                {
                     if let (Some(stage_key), Some(estimate)) = (
                         entry.get("stageKey").and_then(Value::as_str),
                         entry.get("estimateMicros").and_then(Value::as_i64),
@@ -583,8 +658,7 @@ impl RuntimeStore {
                     Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
                 })
                 .map_err(store_unavailable)?;
-            let mut dependency_map =
-                std::collections::HashMap::<String, Vec<String>>::new();
+            let mut dependency_map = std::collections::HashMap::<String, Vec<String>>::new();
             for row in rows {
                 let (stage_run_id, depends_on_id) = row.map_err(store_unavailable)?;
                 if let Some(dependency_key) = stage_ids.get(&depends_on_id) {
@@ -605,6 +679,7 @@ impl RuntimeStore {
             review_policy,
             stages,
             gates,
+            gate_decisions,
             budget,
             reserved_micros,
             confirmed_micros,
@@ -631,14 +706,7 @@ impl RuntimeStore {
             .join(", ");
         let started = if next == "running" {
             ", started_at = COALESCE(started_at, :now)"
-        } else if [
-            "completed",
-            "completed_with_warnings",
-            "failed",
-            "canceled",
-        ]
-        .contains(&next)
-        {
+        } else if ["completed", "completed_with_warnings", "failed", "canceled"].contains(&next) {
             ", finished_at = COALESCE(finished_at, :now)"
         } else {
             ""
@@ -682,11 +750,7 @@ impl RuntimeStore {
                     "INSERT INTO runtime_events(
                         event_version, entity_type, entity_id, event_type, payload_json, created_at
                      ) VALUES('1', 'production_run', ?1, 'production.run.status', ?2, ?3)",
-                    params![
-                        run_id,
-                        json!({ "status": next }).to_string(),
-                        now
-                    ],
+                    params![run_id, json!({ "status": next }).to_string(), now],
                 )
                 .map_err(store_unavailable)?;
         }
@@ -968,10 +1032,7 @@ impl RuntimeStore {
         Ok(credentials)
     }
 
-    pub fn replace_agent_text_routes(
-        &self,
-        routes: &[AgentTextRoute],
-    ) -> Result<(), RuntimeError> {
+    pub fn replace_agent_text_routes(&self, routes: &[AgentTextRoute]) -> Result<(), RuntimeError> {
         let mut connection = self.connection.lock();
         let transaction = connection
             .transaction_with_behavior(TransactionBehavior::Immediate)
@@ -1481,9 +1542,15 @@ impl RuntimeStore {
                     params![
                         gate_id,
                         production_run_id,
-                        gate.get("gateKind").and_then(Value::as_str).unwrap_or("director"),
-                        gate.get("gateType").and_then(Value::as_str).unwrap_or_default(),
-                        gate.get("status").and_then(Value::as_str).unwrap_or("required"),
+                        gate.get("gateKind")
+                            .and_then(Value::as_str)
+                            .unwrap_or("director"),
+                        gate.get("gateType")
+                            .and_then(Value::as_str)
+                            .unwrap_or_default(),
+                        gate.get("status")
+                            .and_then(Value::as_str)
+                            .unwrap_or("required"),
                         now
                     ],
                 )
@@ -1653,9 +1720,10 @@ impl RuntimeStore {
         let run = connection
             .query_row(
                 "SELECT r.id, r.session_id, r.spec_revision_id, r.review_policy,
-                        r.status, r.blockers_json, s.project_id, s.title
+                        r.status, r.blockers_json, s.project_id, s.title, revision.extension_json
                    FROM production_runs r
                    JOIN production_sessions s ON s.id = r.session_id
+                   JOIN production_spec_revisions revision ON revision.id = r.spec_revision_id
                   WHERE r.id = ?1",
                 [run_id],
                 |row| {
@@ -1668,6 +1736,7 @@ impl RuntimeStore {
                         row.get::<_, String>(5)?,
                         row.get::<_, String>(6)?,
                         row.get::<_, String>(7)?,
+                        row.get::<_, String>(8)?,
                     ))
                 },
             )
@@ -1706,7 +1775,7 @@ impl RuntimeStore {
             let mut statement = connection
                 .prepare(
                     "SELECT id, stage_key, capability_id, spec_path, title, summary,
-                            status, blocked_reason_json
+                            status, blocked_reason_json, input_json, task_id
                        FROM stage_runs
                       WHERE run_id = ?1
                       ORDER BY created_at, stage_key",
@@ -1723,6 +1792,8 @@ impl RuntimeStore {
                         row.get::<_, String>(5)?,
                         row.get::<_, String>(6)?,
                         row.get::<_, Option<String>>(7)?,
+                        row.get::<_, Option<String>>(8)?,
+                        row.get::<_, Option<String>>(9)?,
                     ))
                 })
                 .map_err(store_unavailable)?;
@@ -1736,6 +1807,8 @@ impl RuntimeStore {
                     summary,
                     status,
                     blocked_reason,
+                    input,
+                    task_id,
                 ) = row.map_err(store_unavailable)?;
                 stages.push(json!({
                     "id": id,
@@ -1745,12 +1818,47 @@ impl RuntimeStore {
                     "title": title,
                     "summary": summary,
                     "status": status,
+                    "input": input.and_then(|value| serde_json::from_str::<Value>(&value).ok()),
+                    "taskId": task_id,
                     "blockedReason": blocked_reason
                         .and_then(|value| serde_json::from_str::<Value>(&value).ok()),
                     "dependsOn": dependencies.remove(&stage_key).unwrap_or_default()
                 }));
             }
         }
+        let mut gates = Vec::new();
+        {
+            let mut statement = connection
+                .prepare(
+                    "SELECT gate_kind, gate_type, status, decision_json
+                       FROM production_gates
+                      WHERE run_id = ?1
+                      ORDER BY gate_kind, gate_type",
+                )
+                .map_err(store_unavailable)?;
+            let rows = statement
+                .query_map([run_id], |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                        row.get::<_, Option<String>>(3)?,
+                    ))
+                })
+                .map_err(store_unavailable)?;
+            for row in rows {
+                let (gate_kind, gate_type, status, decision) = row.map_err(store_unavailable)?;
+                gates.push(json!({
+                    "gateKind": gate_kind,
+                    "gateType": gate_type,
+                    "status": status,
+                    "decision": decision.and_then(|value| serde_json::from_str::<Value>(&value).ok())
+                }));
+            }
+        }
+        let draft_binding = serde_json::from_str::<Value>(&run.8)
+            .ok()
+            .and_then(|extensions| extensions.get("flovart.workflow-draft").cloned());
         Ok(json!({
             "id": run.0,
             "productionSessionId": run.1,
@@ -1760,7 +1868,9 @@ impl RuntimeStore {
             "blockers": serde_json::from_str::<Value>(&run.5).map_err(store_unavailable)?,
             "projectId": run.6,
             "title": run.7,
-            "stages": stages
+            "draftBinding": draft_binding,
+            "stages": stages,
+            "gates": gates
         }))
     }
 
@@ -1780,12 +1890,9 @@ impl RuntimeStore {
             .map_err(store_unavailable)?;
         match projection {
             Some((version, projection)) => {
-                let mut projection = serde_json::from_str::<Value>(&projection)
-                    .map_err(store_unavailable)?;
-                if let Some(run_id) = projection
-                    .get("productionRunId")
-                    .and_then(Value::as_str)
-                {
+                let mut projection =
+                    serde_json::from_str::<Value>(&projection).map_err(store_unavailable)?;
+                if let Some(run_id) = projection.get("productionRunId").and_then(Value::as_str) {
                     let mut stages = std::collections::HashMap::<
                         String,
                         (String, Option<String>, Option<Value>),
@@ -1821,8 +1928,7 @@ impl RuntimeStore {
                             );
                         }
                     }
-                    if let Some(nodes) = projection.get_mut("nodes").and_then(Value::as_array_mut)
-                    {
+                    if let Some(nodes) = projection.get_mut("nodes").and_then(Value::as_array_mut) {
                         for node in nodes {
                             let Some(stage_key) = node
                                 .get("metadata")
@@ -1856,7 +1962,8 @@ impl RuntimeStore {
                                     .and_then(|value| value.get("artifact"))
                                     .and_then(Value::as_object)
                                 {
-                                    let Some(kind) = artifact.get("kind").and_then(Value::as_str) else {
+                                    let Some(kind) = artifact.get("kind").and_then(Value::as_str)
+                                    else {
                                         continue;
                                     };
                                     if !matches!(kind, "image" | "video" | "audio") {
@@ -1888,11 +1995,13 @@ impl RuntimeStore {
                                     if let Some(value) = artifact.get("byteSize") {
                                         metadata.insert("bytes".to_owned(), value.clone());
                                     }
-                                    if let Some(duration) = artifact
-                                        .get("durationSec")
-                                        .and_then(Value::as_f64)
+                                    if let Some(duration) =
+                                        artifact.get("durationSec").and_then(Value::as_f64)
                                     {
-                                        metadata.insert("durationMs".to_owned(), json!(duration * 1000.0));
+                                        metadata.insert(
+                                            "durationMs".to_owned(),
+                                            json!(duration * 1000.0),
+                                        );
                                     }
                                     media_kind = Some(kind.to_owned());
                                 }

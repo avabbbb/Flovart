@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createWorkflowDispatcher, type WorkflowDispatcherDependencies } from '../services/workflowDispatcher';
 import { createWorkflowProject } from '../components/workflow/store';
 import { createWorkflowNode } from '../components/workflow/constants';
+import { undoWorkflowDraftChangeSet } from '../components/workflow/draftAuthority';
 
 const setup = () => {
   let projects = [createWorkflowProject('测试')];
@@ -34,16 +35,83 @@ describe('workflow dispatcher', () => {
     expect(JSON.stringify(result.result)).not.toContain('private-key');
   });
 
-  it('previews Agent mutations before applying them', async () => {
+  it('applies reversible Agent canvas edits without stopping for confirmation', async () => {
     const { dispatch, dependencies } = setup();
     const envelope = { id: 'create', command: 'workflow.node.create', args: { type: 'text', title: '脚本' }, source: 'agent' as const };
-    const preview = await dispatch(envelope);
-    expect(preview.confirmation?.required).toBe(true);
-    expect(dependencies.getState().projects[0].nodes).toHaveLength(1);
-
-    const applied = await dispatch({ ...envelope, args: { ...envelope.args, confirmed: true } });
+    const applied = await dispatch(envelope);
     expect(applied.ok).toBe(true);
     expect(dependencies.getState().projects[0].nodes).toHaveLength(2);
+    const created = dependencies.getState().projects[0].nodes.at(-1)!;
+    expect(applied.result).toMatchObject({
+      affectedNodeIds: [created.id],
+      objectVersions: { [created.id]: 1 },
+    });
+  });
+
+  it('records an Agent mutation as an undoable semantic Draft ChangeSet', async () => {
+    const { dispatch, dependencies } = setup();
+    const projectId = dependencies.getState().activeProjectId!;
+
+    const applied = await dispatch({
+      id: 'create-change-set',
+      command: 'workflow.node.create',
+      args: { id: 'outline-1', type: 'text', title: '脚本大纲', confirmed: true },
+      source: 'agent',
+      idempotencyKey: 'create-outline-v1',
+    });
+    expect(applied.ok).toBe(true);
+    expect(applied.result).toMatchObject({ affectedNodeIds: ['outline-1'], objectVersions: { 'outline-1': 1 } });
+    const changed = dependencies.getState().projects[0];
+    expect(changed.draftChangeSets?.at(-1)).toMatchObject({
+      actor: 'agent',
+      intent: '创建text节点「脚本大纲」',
+      status: 'completed',
+      baseDraftVersion: 1,
+      resultDraftVersion: 2,
+    });
+
+    const undone = undoWorkflowDraftChangeSet(changed);
+    expect(undone.ok).toBe(true);
+    if (undone.ok === false) throw new Error(undone.error.message);
+    dependencies.updateProject(projectId, undone.project);
+    expect(dependencies.getState().projects[0].nodes.map(node => node.id)).toEqual(['image-1']);
+    expect(dependencies.getState().projects[0].draftChangeSets?.at(-1)?.status).toBe('undone');
+  });
+
+  it('does not create a Draft ChangeSet for selection or viewport navigation', async () => {
+    const { dispatch, dependencies } = setup();
+    await dispatch({ id: 'select-only', command: 'workflow.select', args: { ids: ['image-1'] }, source: 'agent' });
+    await dispatch({ id: 'viewport-only', command: 'workflow.viewport.set', args: { x: 40, y: 60, k: 1.25 }, source: 'agent' });
+
+    const project = dependencies.getState().projects[0];
+    expect(project.selectedNodeIds).toEqual(['image-1']);
+    expect(project.viewport).toEqual({ x: 40, y: 60, k: 1.25 });
+    expect(project.draftVersion).toBe(1);
+    expect(project.draftChangeSets).toEqual([]);
+  });
+
+  it('uses object versions for conflict detection and increments a changed object exactly once', async () => {
+    const { dispatch, dependencies } = setup();
+    const initial = dependencies.getState().projects[0];
+    initial.nodes[0].objectVersion = 3;
+
+    const stale = await dispatch({
+      id: 'stale-update',
+      command: 'workflow.node.update',
+      args: { nodeId: 'image-1', patch: { title: '过期修改' }, expectedObjectVersions: { 'image-1': 2 } },
+      source: 'agent',
+    });
+    expect(stale.error).toMatchObject({ code: 'PRECONDITION_FAILED' });
+    expect(dependencies.getState().projects[0].nodes[0]).toMatchObject({ title: '图片', objectVersion: 3 });
+
+    const applied = await dispatch({
+      id: 'fresh-update',
+      command: 'workflow.node.update',
+      args: { nodeId: 'image-1', patch: { title: '新标题' }, expectedObjectVersions: { 'image-1': 3 } },
+      source: 'agent',
+    });
+    expect(applied.ok).toBe(true);
+    expect(dependencies.getState().projects[0].nodes[0]).toMatchObject({ title: '新标题', objectVersion: 4 });
   });
 
   it('deduplicates confirmed mutations by idempotency key', async () => {

@@ -2,9 +2,14 @@ import { parse } from 'yaml';
 import { z } from 'zod';
 
 import exampleSpec from '../.agents/skills/vox-director/examples/production-spec.json';
+import exampleSource from '../.agents/skills/vox-director/examples/production-spec.json?raw';
+import evalsSource from '../.agents/skills/vox-director/evals/cases.json?raw';
+import schemaSource from '../.agents/skills/vox-director/schemas/extension.schema.json?raw';
+import creativeDirectionSource from '../.agents/skills/vox-director/references/creative-direction.md?raw';
 import manifestSource from '../.agents/skills/vox-director/flovart.skill.yaml?raw';
 import openaiSource from '../.agents/skills/vox-director/agents/openai.yaml?raw';
 import skillSource from '../.agents/skills/vox-director/SKILL.md?raw';
+import { hashProductionSkillSnapshot } from './productionSkillSnapshot.js';
 
 const permissionSchema = z.object({
   network: z.literal('none'),
@@ -64,7 +69,16 @@ export interface BundledProductionSkill {
     filesystem: 'package-readonly';
   };
   skillSource: string;
+  packageEntries: readonly { path: string; content: string }[];
   exampleSpec: Record<string, unknown>;
+}
+
+export interface ProductionSkillAttachment {
+  id: string;
+  version: string;
+  contentHash: string;
+  displayName: string;
+  trustTier: BundledProductionSkill['trustTier'];
 }
 
 const manifest = manifestSchema.parse(parse(manifestSource));
@@ -83,6 +97,15 @@ const bundledSkills: readonly BundledProductionSkill[] = Object.freeze([Object.f
   gates: Object.freeze(manifest.gates.map(gate => Object.freeze({ ...gate }))),
   permissions: Object.freeze({ ...manifest.permissions }),
   skillSource,
+  packageEntries: Object.freeze([
+    { path: 'SKILL.md', content: skillSource },
+    { path: 'agents/openai.yaml', content: openaiSource },
+    { path: 'evals/cases.json', content: evalsSource },
+    { path: 'examples/production-spec.json', content: exampleSource },
+    { path: 'flovart.skill.yaml', content: manifestSource },
+    { path: 'references/creative-direction.md', content: creativeDirectionSource },
+    { path: 'schemas/extension.schema.json', content: schemaSource },
+  ].map(entry => Object.freeze(entry))),
   exampleSpec,
 })]);
 
@@ -92,4 +115,14 @@ export function listBundledProductionSkills(): readonly BundledProductionSkill[]
 
 export function getBundledProductionSkill(id: string): BundledProductionSkill | null {
   return bundledSkills.find(skill => skill.id === id) || null;
+}
+
+export async function createProductionSkillAttachment(skill: BundledProductionSkill): Promise<ProductionSkillAttachment> {
+  return {
+    id: skill.id,
+    version: skill.version,
+    contentHash: await hashProductionSkillSnapshot(skill.packageEntries),
+    displayName: skill.displayName,
+    trustTier: skill.trustTier,
+  };
 }

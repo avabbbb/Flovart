@@ -6,6 +6,7 @@ use std::time::Duration;
 
 pub const VEO_LITE_ROUTE: &str = "rhart-video-v3.1-lite-official/text-to-video";
 pub const GPT_IMAGE_2_ROUTE: &str = "rhart-image-g-2/text-to-image";
+pub const GPT_IMAGE_2_EDIT_ROUTE: &str = "rhart-image-g-2/image-to-image";
 pub const GROK_VIDEO_ROUTE: &str = "rhart-video-g/text-to-video";
 pub const GROK_VIDEO_IMAGE_ROUTE: &str = "rhart-video-g/image-to-video";
 const DEFAULT_API_ROOT: &str = "https://www.runninghub.cn/openapi/v2";

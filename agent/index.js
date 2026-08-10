@@ -168,7 +168,7 @@ export function startHttpServer() {
           });
         });
         try {
-          const snapshot = await flovart.send(projectId, String(body.prompt || ''));
+          const snapshot = await flovart.send(projectId, String(body.prompt || ''), [], body.skillAttachment);
           emit('snapshot', snapshot);
         } catch (error) {
           emit('error', { message: error instanceof Error ? error.message : String(error) });

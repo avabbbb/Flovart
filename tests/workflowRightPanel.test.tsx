@@ -5,6 +5,10 @@ import { createWorkflowProject, useWorkflowStore } from '../components/workflow/
 import { workflowMediaStorage } from '../components/workflow/storage';
 import type { AssetLibrary } from '../types';
 
+vi.mock('../components/agent/FlovartAgentPanel', () => ({
+  FlovartAgentPanel: ({ project }: { project: { title: string } }) => <div data-testid="flovart-main-agent">PI Agent · {project.title}</div>,
+}));
+
 const TEST_ASSET_LIBRARY: AssetLibrary = {
   folders: [],
   items: [
@@ -50,6 +54,14 @@ describe('Workflow right panel', () => {
     expect(drawer.style.pointerEvents).toBe('auto');
     fireEvent.click(close);
     expect(localStorage.getItem('workflowRightPanelOpen')).toBe('false');
+  });
+
+  it('mounts the iterative Flovart PI Agent beside the visible Workflow', () => {
+    renderWorkspace();
+
+    expect(screen.getByTestId('flovart-main-agent')).toHaveTextContent('PI Agent · 右侧面板测试');
+    expect(screen.queryByText('网站')).toBeNull();
+    expect(screen.queryByText('本机')).toBeNull();
   });
 
   it('searches Workflow assets in the left sidebar popup', () => {

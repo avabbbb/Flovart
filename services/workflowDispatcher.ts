@@ -1,12 +1,13 @@
 import { nanoid } from 'nanoid';
 import { WORKFLOW_MUTATION_COMMANDS, workflowCommandSummary } from '../components/workflow/agentOps';
 import { createWorkflowNode } from '../components/workflow/constants';
+import { applyWorkflowDraftChangeSet } from '../components/workflow/draftAuthority';
 import { appendWorkflowDraftLog, createWorkflowDraftLogEntry } from '../components/workflow/draftLog';
 import { isWorkflowNodeTool } from '../components/workflow/nodeToolCatalog';
-import { getWorkflowOperationCapabilityByNodeTool, parseWorkflowOperationNodeToolArguments } from '../components/workflow/operationRegistry';
 import { applyWorkflowOps } from '../components/workflow/ops';
+import { getWorkflowOperationCapabilityByNodeTool, parseWorkflowOperationNodeToolArguments } from '../components/workflow/operationRegistry';
 import { getWorkflowPersistenceError, useWorkflowStore } from '../components/workflow/store';
-import type { WorkflowNode, WorkflowNodeMetadata, WorkflowNodeType, WorkflowProject } from '../components/workflow/types';
+import type { WorkflowConnection, WorkflowNode, WorkflowNodeMetadata, WorkflowNodeType, WorkflowProject } from '../components/workflow/types';
 
 export interface WorkflowCommandEnvelope {
   id: string;
@@ -135,7 +136,8 @@ function validateEnvelope(envelope: WorkflowCommandEnvelope): WorkflowCommandRes
 
 function requiresWorkflowConfirmation(envelope: WorkflowCommandEnvelope) {
   if (!WORKFLOW_MUTATION_COMMANDS.has(envelope.command) || (envelope.source !== 'agent' && envelope.source !== 'mcp')) return false;
-  if (envelope.command !== 'workflow.node.tool') return true;
+  if (envelope.command === 'workflow.project.delete' || envelope.command === 'workflow.node.delete' || envelope.command === 'workflow.node.run') return true;
+  if (envelope.command !== 'workflow.node.tool') return false;
   const tool = String(envelope.args.tool || '');
   if (!isWorkflowNodeTool(tool)) return false;
   return getWorkflowOperationCapabilityByNodeTool(tool)?.confirmation !== 'none';
@@ -222,7 +224,6 @@ export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDepende
         if (command === 'workflow.disconnect' && !project.connections.some(connection => connection.id === String(args.connectionId || args.id || ''))) {
           return error(envelope.id, 'NOT_FOUND', '指定的连接不存在。');
         }
-        const snapshot = { projectId: project.id, title: project.title, nodes: project.nodes, connections: project.connections, selectedNodeIds: project.selectedNodeIds || [], viewport: project.viewport };
         let operation;
         if (command === 'workflow.node.create') {
           operation = { type: 'add_node' as const, node: validatedNode(args) };
@@ -252,34 +253,80 @@ export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDepende
           return error(envelope.id, 'UNKNOWN_COMMAND', `未知 Workflow 命令：${command}`);
         }
 
-        const applied = applyWorkflowOps(snapshot, [operation]);
-        if (applied.rejections.length) return error(envelope.id, 'BAD_REQUEST', applied.rejections.map(item => item.reason).join('；'));
-        const affectedIds = (() => {
-          switch (operation.type) {
-            case 'add_node': return { nodeIds: [operation.node.id] };
-            case 'create_connected_node': return { nodeIds: [operation.node.id] };
-            case 'update_node': return { nodeIds: [operation.id] };
-            case 'delete_nodes': return { nodeIds: operation.ids };
-            case 'delete_connections': return { connectionIds: operation.ids };
-            case 'connect_nodes': return { nodeIds: [operation.fromNodeId, operation.toNodeId] };
-            case 'select_nodes': return { nodeIds: operation.ids };
-            default: return {};
-          }
-        })();
-        // 选中与视口是导航而非创作动作，不入草稿记录；其余 AI/CLI/MCP 动作全部可追溯。
         const isNavigationOp = operation.type === 'select_nodes' || operation.type === 'set_viewport';
+        if (isNavigationOp) {
+          const applied = applyWorkflowOps({
+            projectId: project.id,
+            title: project.title,
+            nodes: project.nodes,
+            connections: project.connections,
+            selectedNodeIds: project.selectedNodeIds,
+            viewport: project.viewport,
+          }, [operation]);
+          const rejection = applied.rejections[0];
+          if (rejection) return error(envelope.id, 'BAD_REQUEST', rejection.reason);
+          dependencies.updateProject(project.id, {
+            selectedNodeIds: applied.snapshot.selectedNodeIds,
+            viewport: applied.snapshot.viewport,
+          });
+          result = { ok: true, commandId: envelope.id, result: { projectId: project.id, draftVersion: project.draftVersion || 1 } };
+          cache(cacheKey, result);
+          return result;
+        }
+
+        const expectedObjectVersions = Object.fromEntries(Object.entries(recordArg(args.expectedObjectVersions, 'expectedObjectVersions')).map(([id, value]) => [id, positiveNumber(value, `expectedObjectVersions.${id}`)]));
+        const applied = applyWorkflowDraftChangeSet(project, {
+          id: typeof args.changeSetId === 'string' ? args.changeSetId : envelope.id,
+          actor: envelope.source,
+          intent: createWorkflowDraftLogEntry({
+            source: envelope.source,
+            command,
+            args,
+            ok: true,
+          }).summary,
+          ops: [operation],
+          baseDraftVersion: args.baseDraftVersion === undefined ? project.draftVersion : positiveNumber(args.baseDraftVersion, 'baseDraftVersion'),
+          expectedObjectVersions,
+        });
+        if (applied.ok === false) return error(envelope.id, applied.error.code, applied.error.message);
+        const affectedNodeIds = applied.changeSet.nodeChanges.map(change => change.id);
+        const affectedConnectionIds = applied.changeSet.connectionChanges.map(change => change.id);
+        const affectedIds = {
+          ...(affectedNodeIds.length ? { nodeIds: affectedNodeIds } : {}),
+          ...(affectedConnectionIds.length ? { connectionIds: affectedConnectionIds } : {}),
+        };
         dependencies.updateProject(project.id, {
-          nodes: applied.snapshot.nodes,
-          connections: applied.snapshot.connections,
-          selectedNodeIds: applied.snapshot.selectedNodeIds,
-          viewport: applied.snapshot.viewport,
-          ...(isNavigationOp ? {} : draftLogPatch(project, envelope, true, affectedIds)),
+          nodes: applied.project.nodes,
+          connections: applied.project.connections,
+          selectedNodeIds: applied.project.selectedNodeIds,
+          viewport: applied.project.viewport,
+          draftVersion: applied.project.draftVersion,
+          draftChangeSets: applied.project.draftChangeSets,
+          draftRedoStack: applied.project.draftRedoStack,
+          ...draftLogPatch(project, envelope, true, affectedIds),
         });
         const persistedError = dependencies.persistenceError?.();
         if (persistedError) return error(envelope.id, 'PERSISTENCE_FAILED', 'Workflow 持久化失败，请检查浏览器存储。');
         const committed = dependencies.getState().projects.find(item => item.id === project.id);
         if (!committed) return error(envelope.id, 'COMMIT_FAILED', 'Workflow 修改未提交。');
-        result = { ok: true, commandId: envelope.id, result: { projectId: project.id, summary: workflowCommandSummary(command, args) } };
+        const committedObjects = new Map<string, WorkflowNode | WorkflowConnection>([
+          ...committed.nodes.map(item => [item.id, item] as const),
+          ...committed.connections.map(item => [item.id, item] as const),
+        ]);
+        const objectVersions = Object.fromEntries(
+          [...affectedNodeIds, ...affectedConnectionIds]
+            .map(id => [id, committedObjects.get(id)?.objectVersion] as const)
+            .filter((entry): entry is readonly [string, number] => typeof entry[1] === 'number'),
+        );
+        result = { ok: true, commandId: envelope.id, result: {
+          projectId: project.id,
+          summary: workflowCommandSummary(command, args),
+          changeSetId: applied.changeSet.id,
+          draftVersion: applied.project.draftVersion,
+          affectedNodeIds,
+          affectedConnectionIds,
+          objectVersions,
+        } };
       }
 
       cache(cacheKey, result);

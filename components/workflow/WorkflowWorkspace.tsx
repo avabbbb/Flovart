@@ -6,12 +6,12 @@ import '../../styles/workflow.css';
 import type { GenerationCapability, GenerationMode } from '../../services/generationCapabilities';
 import { StudioRightDrawer } from '../studio/StudioRightDrawer';
 import { StudioMediaBrowser, type StudioMediaItem } from '../studio/StudioMediaBrowser';
+import { FlovartAgentPanel } from '../agent/FlovartAgentPanel';
 import { createWorkflowNode } from './constants';
 import { InfiniteWorkflow } from './InfiniteWorkflow';
 import { WorkflowGenerationCapabilitiesProvider, type WorkflowSharedMedia } from './WorkflowConfigPanel';
 import { useWorkflowStore } from './store';
 import type { WorkflowModelOptions } from './WorkflowNodePromptBar';
-import { WorkflowAgentPanel, type WorkflowOnlineTurnInput } from './WorkflowAgentPanel';
 import type { WorkflowImageToolHandlers } from './WorkflowNodeToolbar';
 import { WorkflowSidebar } from './WorkflowSidebar';
 import { useWorkflowWorkspaceAdapter } from './useWorkflowWorkspaceAdapter';
@@ -36,7 +36,6 @@ export interface WorkflowWorkspaceProps {
   onEnhancePrompt?: (payload: { prompt: string; mode: PromptEnhanceMode; stylePreset?: string }) => Promise<PromptEnhanceResult>;
   isEnhancingPrompt?: boolean;
   onOpenAgent?: () => void;
-  onOnlineAgentTurn?: (input: WorkflowOnlineTurnInput) => Promise<void>;
   assetLibrary: AssetLibrary;
   onRenameAsset: (id: string, name: string) => void;
   onRemoveAsset: (id: string) => void;
@@ -70,7 +69,6 @@ export function WorkflowWorkspace({
   onEnhancePrompt,
   isEnhancingPrompt,
   onOpenAgent,
-  onOnlineAgentTurn,
   assetLibrary,
   onRenameAsset,
   onRemoveAsset,
@@ -228,6 +226,7 @@ assetLibrary={assetLibrary}
                 });
               }}
               agentOpen={rightOpen && rightTab === 'agent'}
+              rightPanelInset={rightOpen ? rightWidth + 24 : 12}
               t={t}
               theme={theme}
               language={language}
@@ -265,12 +264,10 @@ assetLibrary={assetLibrary}
         ]}
       >
         {activeProject && rightTab === 'agent' && (
-          <WorkflowAgentPanel
-            embedded
+          <FlovartAgentPanel
             project={activeProject}
-            onClose={() => setRightOpen(false)}
-            onOnlineTurn={onOnlineAgentTurn}
-            onProjectChange={patch => updateProject(activeProject.id, patch)}
+            onActivityChange={() => undefined}
+            onOpenSettings={onOpenSettings || (() => undefined)}
           />
         )}
         {rightTab === 'history' && (

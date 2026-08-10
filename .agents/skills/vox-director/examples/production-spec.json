@@ -16,7 +16,8 @@
           {
             "id": "hook-wide",
             "durationMs": 3750,
-            "scene": "撕纸标题压住一张旧报纸，红色箭头指向关键决定。"
+            "scene": "撕纸标题压住一张旧报纸，红色箭头指向关键决定。",
+            "headline": "一个决定 改写规则"
           },
           {
             "id": "hook-detail",
@@ -32,7 +33,8 @@
           {
             "id": "context-wide",
             "durationMs": 3750,
-            "scene": "旧规则以分层纸卡和人物剪影组成一张制度地图。"
+            "scene": "旧规则以分层纸卡和人物剪影组成一张制度地图。",
+            "headline": "旧规则 如何运转"
           },
           {
             "id": "context-detail",
@@ -48,7 +50,8 @@
           {
             "id": "turn-wide",
             "durationMs": 3750,
-            "scene": "纸张齿轮和箭头重新组合，中央印章落下。"
+            "scene": "纸张齿轮和箭头重新组合，中央印章落下。",
+            "headline": "权力 重新排列"
           },
           {
             "id": "turn-detail",
@@ -64,12 +67,14 @@
           {
             "id": "payoff-wide",
             "durationMs": 3750,
-            "scene": "现代结构从旧报纸上展开，形成清晰的前后对照。"
+            "scene": "现代结构从旧报纸上展开，形成清晰的前后对照。",
+            "headline": "变化 延续至今"
           },
           {
             "id": "payoff-detail",
             "durationMs": 3750,
-            "scene": "最终结论以短标题和一枚红色印章稳定落位。"
+            "scene": "最终结论以短标题和一枚红色印章稳定落位。",
+            "headline": "结构 从此改变"
           }
         ]
       }
@@ -93,7 +98,7 @@
     {
       "id": "approve-style",
       "type": "style-reference",
-      "status": "approved"
+      "status": "required"
     },
     {
       "id": "review-keyframes",

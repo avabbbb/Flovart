@@ -29,10 +29,11 @@ export function auditVoxProductionSpec(spec = {}) {
 
   const themeReady = Array.isArray(extension?.themeCandidates)
     && extension.themeCandidates.length >= 3
+    && extension.themeCandidates.length <= 4
     && typeof extension?.selectedTheme === 'string'
-    && extension.selectedTheme.length > 0;
-  addGate(gates, 'approved-theme', themeReady, 10, 'At least three candidates and one approved theme are required.');
-  if (!themeReady) violations.push(violation('STYLE_APPROVAL_MISSING', 'No approved VOX theme with a three-option visual decision exists.'));
+    && extension.themeCandidates.includes(extension.selectedTheme);
+  addGate(gates, 'approved-theme', themeReady, 10, 'Three or four candidates and one approved theme are required.');
+  if (!themeReady) violations.push(violation('STYLE_APPROVAL_MISSING', 'No approved VOX theme with a three-or-four-option visual decision exists.'));
 
   const look = extension?.look || {};
   const finish = Array.isArray(look.finish) ? look.finish.map(value => String(value).toLowerCase()) : [];
@@ -59,15 +60,17 @@ export function auditVoxProductionSpec(spec = {}) {
     && typeof directive.shotSize === 'string'
     && typeof directive.elementMotion === 'string'
     && directive.elementMotion.trim().length >= 8
-  ));
+  )) && shots.every(shot => directives[shot.id]?.headlineLocked !== true
+    || (typeof shot.headline === 'string' && shot.headline.trim().length > 0));
   const cameraMoves = directiveList.map(directive => directive?.cameraMove).filter(Boolean);
   const adjacentMovesVary = cameraMoves.every((move, index) => index === 0 || move !== cameraMoves[index - 1]);
   const motionReady = directivesComplete && adjacentMovesVary;
   addGate(gates, 'shot-direction', motionReady, 15, 'Every shot needs size, flat-safe camera motion, rich element motion and adjacent variation.');
   if (!motionReady) violations.push(violation('SHOT_DIRECTION_WEAK', 'Shot directives are missing, unsafe, or repeat the same camera move on adjacent shots.'));
 
-  const gateTypes = new Set((Array.isArray(spec.gates) ? spec.gates : []).map(gate => gate.type));
-  const reviewReady = ['spec', 'style-reference', 'keyframe-review', 'ocr'].every(type => gateTypes.has(type));
+  const gatesByType = new Map((Array.isArray(spec.gates) ? spec.gates : []).map(gate => [gate.type, gate]));
+  const reviewReady = ['spec', 'style-reference', 'keyframe-review', 'ocr'].every(type => gatesByType.has(type))
+    && ['style-reference', 'keyframe-review', 'ocr'].every(type => gatesByType.get(type)?.status === 'required');
   addGate(gates, 'review-gates', reviewReady, 10, 'Spec, style, keyframe and OCR gates must exist before paid motion generation.');
   if (!reviewReady) {
     violations.push(violation('KEYFRAME_GATE_MISSING', 'The plan can reach paid motion generation without approved style, keyframe review and OCR checks.'));

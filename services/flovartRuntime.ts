@@ -29,6 +29,7 @@ export interface RuntimeCommandEnvelope {
     kind: 'ui';
     instanceId: string;
   };
+  idempotencyKey?: string;
 }
 
 export interface FlovartRuntimeApi {

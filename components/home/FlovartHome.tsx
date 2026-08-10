@@ -21,7 +21,8 @@ import { useWorkflowStore } from '../workflow/store';
 import { COMMUNITY_WORKFLOWS, type CommunityWorkflow } from '../landing/communityTypes';
 import type { BundledProductionSkill } from '../../services/productionSkillCatalog';
 import { ProductionSkillShelf } from './ProductionSkillShelf';
-import { buildProductionSkillStarterPrompt, queueProductionSkillDraft } from '../../services/productionSkillLaunch';
+import { buildProductionSkillStarterPrompt } from '../../services/productionSkillLaunch';
+import { queuePendingProductionSkill } from '../../stores/useProductionSkillComposerStore';
 import { useWorkspaceStore } from '../../stores/useWorkspaceStore';
 
 const linkTo = (path: string) => (window.location.hash = path);
@@ -349,7 +350,7 @@ export default function FlovartHome() {
   const handleUseSkill = (skill: BundledProductionSkill) => {
     const projectId = createProject(`${skill.displayName} 示例`);
     setActiveProject(projectId);
-    queueProductionSkillDraft({
+    queuePendingProductionSkill({
       projectId,
       skillId: skill.id,
       skillVersion: skill.version,
