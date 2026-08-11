@@ -1,5 +1,6 @@
-mod auth;
 mod agent_text;
+mod auth;
+mod browser_import;
 mod contracts;
 mod control_server;
 mod discovery;
@@ -13,6 +14,10 @@ mod store;
 mod tasks;
 mod worker;
 
+pub use browser_import::{
+    BrowserImportArtifactPayload, BrowserImportBegin, BrowserImportChunkAck, BrowserImportPairing,
+    BrowserImportReceipt, BrowserImportStore, BrowserImportTransfer, BROWSER_IMPORT_CHUNK_BYTES,
+};
 pub use contracts::{RuntimeError, RuntimeStatus};
 pub use control_server::ControlServer;
 pub use discovery::{default_discovery_path, DiscoveryRecord};
@@ -39,6 +44,7 @@ pub struct ProductionRuntime {
     registry: CanonicalRegistry,
     envelope_validator: jsonschema::Validator,
     store: Arc<RuntimeStore>,
+    browser_imports: Arc<BrowserImportStore>,
     artifact_root: Option<PathBuf>,
     _worker: worker::RuntimeWorker,
 }
@@ -52,7 +58,12 @@ pub struct RuntimeArtifactPayload {
 
 impl ProductionRuntime {
     pub fn new(runtime_version: impl Into<String>) -> Result<Self, RuntimeContractError> {
-        Self::build(runtime_version, RuntimeStore::in_memory()?, None)
+        Self::build(
+            runtime_version,
+            RuntimeStore::in_memory()?,
+            BrowserImportStore::in_memory()?,
+            None,
+        )
     }
 
     pub fn open(
@@ -62,9 +73,14 @@ impl ProductionRuntime {
         let artifact_root = database_path
             .parent()
             .map(|parent| parent.join("runtime-artifacts"));
+        let browser_imports = match artifact_root.as_ref() {
+            Some(root) => BrowserImportStore::open(database_path, root)?,
+            None => BrowserImportStore::in_memory()?,
+        };
         Self::build(
             runtime_version,
             RuntimeStore::open(database_path)?,
+            browser_imports,
             artifact_root,
         )
     }
@@ -72,6 +88,7 @@ impl ProductionRuntime {
     fn build(
         runtime_version: impl Into<String>,
         store: RuntimeStore,
+        browser_imports: BrowserImportStore,
         artifact_root: Option<PathBuf>,
     ) -> Result<Self, RuntimeContractError> {
         let schema: Value = serde_json::from_str(COMMAND_ENVELOPE_SCHEMA)?;
@@ -90,6 +107,7 @@ impl ProductionRuntime {
             registry: load_registry()?,
             envelope_validator,
             store,
+            browser_imports: Arc::new(browser_imports),
             artifact_root,
             _worker: worker,
         })
@@ -97,6 +115,10 @@ impl ProductionRuntime {
 
     pub fn registry(&self) -> &CanonicalRegistry {
         &self.registry
+    }
+
+    pub fn browser_imports(&self) -> &BrowserImportStore {
+        &self.browser_imports
     }
 
     pub fn status(&self) -> RuntimeStatus {
@@ -124,11 +146,15 @@ impl ProductionRuntime {
         let store_relpath = artifact
             .get("storeRelpath")
             .and_then(Value::as_str)
-            .ok_or_else(|| RuntimeError::new("RUNTIME_UNAVAILABLE", "Media artifact path is missing"))?;
+            .ok_or_else(|| {
+                RuntimeError::new("RUNTIME_UNAVAILABLE", "Media artifact path is missing")
+            })?;
         let relative_path = store_relpath
             .strip_prefix("runtime-artifacts/")
             .or_else(|| store_relpath.strip_prefix("runtime-artifacts\\"))
-            .ok_or_else(|| RuntimeError::new("RUNTIME_UNAVAILABLE", "Media artifact path is invalid"))?;
+            .ok_or_else(|| {
+                RuntimeError::new("RUNTIME_UNAVAILABLE", "Media artifact path is invalid")
+            })?;
         let relative_path = Path::new(relative_path);
         if relative_path.is_absolute()
             || relative_path
@@ -147,10 +173,16 @@ impl ProductionRuntime {
             )
         })?;
         let canonical_root = std::fs::canonicalize(root).map_err(|error| {
-            RuntimeError::new("RUNTIME_UNAVAILABLE", format!("Media artifact root is unavailable: {error}"))
+            RuntimeError::new(
+                "RUNTIME_UNAVAILABLE",
+                format!("Media artifact root is unavailable: {error}"),
+            )
         })?;
         let path = std::fs::canonicalize(root.join(relative_path)).map_err(|error| {
-            RuntimeError::new("RUNTIME_UNAVAILABLE", format!("Media artifact is unavailable: {error}"))
+            RuntimeError::new(
+                "RUNTIME_UNAVAILABLE",
+                format!("Media artifact is unavailable: {error}"),
+            )
         })?;
         if !path.starts_with(&canonical_root) {
             return Err(RuntimeError::new(
@@ -159,7 +191,10 @@ impl ProductionRuntime {
             ));
         }
         let bytes = std::fs::read(path).map_err(|error| {
-            RuntimeError::new("RUNTIME_UNAVAILABLE", format!("Media artifact cannot be read: {error}"))
+            RuntimeError::new(
+                "RUNTIME_UNAVAILABLE",
+                format!("Media artifact cannot be read: {error}"),
+            )
         })?;
         Ok(RuntimeArtifactPayload {
             mime_type: artifact
@@ -1100,4 +1135,75 @@ pub fn runtime_artifact_read(
     task_id: String,
 ) -> Result<RuntimeArtifactPayload, RuntimeError> {
     runtime.read_artifact(&task_id)
+}
+
+#[tauri::command]
+pub fn browser_import_pairing_list_pending(
+    runtime: tauri::State<'_, Arc<ProductionRuntime>>,
+) -> Result<Vec<BrowserImportPairing>, RuntimeError> {
+    runtime.browser_imports().list_pending_pairings()
+}
+
+#[tauri::command]
+pub fn browser_import_pairing_approve(
+    runtime: tauri::State<'_, Arc<ProductionRuntime>>,
+    extension_origin: String,
+) -> Result<(), RuntimeError> {
+    runtime.browser_imports().approve_pairing(&extension_origin)
+}
+
+#[tauri::command]
+pub fn browser_import_pairing_reject(
+    runtime: tauri::State<'_, Arc<ProductionRuntime>>,
+    extension_origin: String,
+) -> Result<(), RuntimeError> {
+    runtime.browser_imports().reject_pairing(&extension_origin)
+}
+
+#[tauri::command]
+pub fn browser_import_destination_set(
+    runtime: tauri::State<'_, Arc<ProductionRuntime>>,
+    project_id: Option<String>,
+) -> Result<(), RuntimeError> {
+    runtime
+        .browser_imports()
+        .set_active_project(project_id.as_deref())
+}
+
+#[tauri::command]
+pub fn browser_import_list_pending(
+    runtime: tauri::State<'_, Arc<ProductionRuntime>>,
+) -> Result<Vec<BrowserImportReceipt>, RuntimeError> {
+    runtime.browser_imports().list_pending()
+}
+
+#[tauri::command]
+pub fn browser_import_route_to_project(
+    runtime: tauri::State<'_, Arc<ProductionRuntime>>,
+    import_id: String,
+    project_id: String,
+) -> Result<BrowserImportReceipt, RuntimeError> {
+    runtime
+        .browser_imports()
+        .route_to_project(&import_id, &project_id)
+}
+
+#[tauri::command]
+pub fn browser_import_mark_consumed(
+    runtime: tauri::State<'_, Arc<ProductionRuntime>>,
+    import_id: String,
+    project_id: String,
+    node_id: String,
+) -> Result<BrowserImportReceipt, RuntimeError> {
+    runtime
+        .browser_imports()
+        .mark_consumed(&import_id, &project_id, &node_id)
+}
+
+#[tauri::command]
+pub fn browser_import_artifact_read(
+    runtime: tauri::State<'_, Arc<ProductionRuntime>>,
+    import_id: String,
+) -> Result<BrowserImportArtifactPayload, RuntimeError> {
+    runtime.browser_imports().read_artifact_payload(&import_id)
 }

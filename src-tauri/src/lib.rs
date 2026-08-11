@@ -146,6 +146,14 @@ pub fn run() {
             runtime::runtime_status,
             runtime::runtime_execute,
             runtime::runtime_artifact_read,
+            runtime::browser_import_pairing_list_pending,
+            runtime::browser_import_pairing_approve,
+            runtime::browser_import_pairing_reject,
+            runtime::browser_import_destination_set,
+            runtime::browser_import_list_pending,
+            runtime::browser_import_route_to_project,
+            runtime::browser_import_mark_consumed,
+            runtime::browser_import_artifact_read,
             managed_agent::managed_agent_connection,
         ])
         .build(tauri::generate_context!())

@@ -5,6 +5,7 @@ import { fromIdbVideoRef, getVideoBlob, isIdbVideoRef } from '../../utils/mediaD
 import { readColdMedia } from '../../utils/mediaIndexedDB';
 import { getAssetById } from '../../utils/assetStorage';
 import { loadRuntimeArtifactBlob } from '../../services/runtimeArtifacts';
+import { loadBrowserImportArtifactBlob, parseBrowserImportHref } from '../../services/browserImportArtifacts';
 import { workflowMediaStorage } from './storage';
 import type { WorkflowArtifactRef, WorkflowNode, WorkflowNodeMetadata, WorkflowNodeType, WorkflowProject } from './types';
 
@@ -250,6 +251,8 @@ function isFetchableMediaHref(href: string) {
 }
 
 export async function loadFallbackMediaBlob(href: string): Promise<Blob> {
+  const browserImportId = parseBrowserImportHref(href);
+  if (browserImportId) return loadBrowserImportArtifactBlob(browserImportId);
   if (isIdbRef(href)) {
     const dataUrl = await getImage(fromIdbRef(href));
     if (!dataUrl) throw new Error('本地图片文件不存在，请重新选择文件');

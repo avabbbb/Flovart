@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **Browser Import V1**：Edge/Chrome 扩展收缩为 Desktop-first 薄伴侣，右键单图经显式 Desktop 配对、长连接 Native Messaging 分块、SHA-256 与 MIME 字节签名校验进入内容寻址 Artifact，再投影为活动 Workflow `image` 节点或 Browser Import Inbox；扩展侧 Provider Key、直连模型、完整 WebUI、常驻 `<all_urls>`、整页扫描与旧 storage 交接路径已移除，升级时同步清理旧扩展凭证和大载荷交接键。正式商店 ID 与 NSIS 自动注册仍待实机验收后接入。
 - Workflow 图片生成/裁剪/高清放大、视频剪辑/音视频分离/拼接/抽帧与音频截取/变速开始统一为显式 Operation 链：Registry 集中声明能力、参数、类型化输入输出、确认级别与参数控件，Operation 保存唯一 Recipe / Prompt Document / Input Binding / Execution Snapshot / Take，重跑追加 Take，失败、取消与旧配方晚到结果可追溯，源媒体不再被原地覆盖。
 - **AI 原生 Workflow Draft 落地**：Workflow 右侧与独立 Agent 工作区现共用迭代式 Flovart PI Agent；AI/CLI/MCP 和人工编辑通过同一 Draft Authority 写入可见画布，一个 Agent 回合形成一个耐久 ChangeSet，并共用撤销/重做、Draft Version、节点 Object Version 与轻量画布时间线。内置 Agent 的 `production.dry-run` 必须绑定当前 Draft 与来源节点，Runtime 产物持续回填同一 Workflow；旧网站 one-shot JSON 计划器退出主入口。
 - **VOX 风格锁定链路**：VOX Production Skill 现在编译同一代表镜头的三主题剪纸拼贴 Bake-off，并以用户批准的图片 Artifact 作为全部关键帧的 GPT Image 2 图生图参考；关键帧审片与 OCR 未通过时禁止进入 image-to-video，动态 Prompt 强制保留构图、原文、纸张边缘与印刷纹理。真实付费样片仍需用户确认后验收。

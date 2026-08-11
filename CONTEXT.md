@@ -209,19 +209,39 @@ Official WebUI 在纯网页模式下使用的 Provider Secret 存储边界；需
 避免混用：本地开发 Compose、Windows 启动脚本、Desktop Edition。
 
 **Edge Extension**：
-通过 Microsoft Edge Add-ons 分发的 Desktop Edition 薄伴侣，只采集并转交用户明确选择的网页内容，并在用户配对后为 Official WebUI 提供受限本地桥接；它不保存 Provider Secret，也不执行生成任务。
+通过 Microsoft Edge Add-ons 分发的 Desktop Edition 薄伴侣，只采集并转交用户明确选择的网页内容，并在用户配对后为 Official WebUI 提供受限本地桥接；它不保存 Provider Secret，也不执行生成任务。回程只接收配对与目标摘要、传输回执，以及与本次导入关联的白名单能力进度和结果，不列举完整项目或素材数据。
 避免混用：Provider Plugin、Production Skill、Desktop Edition、任意网页监控器。
 
 **Desktop Bridge Host**：
-由 Desktop Edition 安装并注册给 Edge Native Messaging 的最小本机宿主，只接受受信扩展和兼容协议；收到用户主动发起的导入或已授权 WebUI 桥接动作时，它负责启动或激活 Desktop Runtime 并投递类型化请求，不保存 Provider Secret，也不执行生成。
+由 Desktop Edition 安装并注册给 Edge Native Messaging 的最小本机宿主，只接受受信扩展和兼容协议；收到用户主动发起的导入或已授权 WebUI 桥接动作时，它负责启动或激活 Desktop Runtime、进行有界等待并投递类型化请求，不保存 Provider Secret、导入队列或项目数据，也不执行生成。只有 Local Data Service 返回 `artifactId` / `importId` 回执后扩展才显示成功；唤起或投递失败必须返回可重试错误。
 避免混用：Edge Extension、Desktop Runtime、Provider Adapter、公开 HTTP 服务。
 
 **Browser Import Action**：
-用户在 Edge 中显式触发的一次内容转交；V1 仅包括右键发送单张图片、发送选中文本和截取当前可见区域，每次只读取完成该动作所需的当前页面内容。
+用户在 Edge 中显式触发的一次内容转交；V1 仅包括右键发送单张图片、发送选中文本和截取当前可见区域，每次只读取完成该动作所需的当前页面内容。Desktop 当前存在活动 Workflow 时，单图与截图映射为现有 `image` 节点，选中文本映射为现有 `text` 节点，并通过 Workflow Draft Authority Port 在同一个 Draft ChangeSet 中写入节点、`artifactId` 与来源 metadata；没有活动项目时，先写入 Browser Import Inbox 并唤起 Desktop Edition。
 避免混用：整页图片采集、后台网页监控、浏览历史同步、Provider 请求。
 
+**Browser Import Inbox**：
+由 Local Data Service 持久保存的浏览器导入暂存区，只接收已通过 Desktop Bridge Host 校验但尚未绑定活动 Workflow 的内容及其来源元数据；用户选择项目后再通过 Workflow Draft Authority Port 消费，扩展只保留非敏感传输回执。
+避免混用：Edge Extension storage、Browser Workspace、Workflow 项目自动同步、失败重试死信队列。
+
+**Imported Web Artifact**：
+Browser Import Action 成功后写入本地 Artifact Store 的稳定内容副本；图片和截图保存实际字节并计算内容哈希，选中文本保存规范化文本，原网页 URL、标题、采集时间和媒体元数据只作为来源信息。Workflow 与 Browser Import Inbox 只引用 `artifactId`，不依赖远程 URL 或 Base64 项目字段继续工作。
+避免混用：网页热链、Chrome storage 临时载荷、Workflow 节点内嵌大二进制、浏览器缓存。
+
+**Browser Import Transfer**：
+Edge Extension 与 Desktop Bridge Host 通过长连接 Native Messaging 完成的一次有界分块传输；控制信封先声明 `transferId`、内容类型、总大小、内容哈希与来源元数据，Desktop Bridge Host 将后续分块流式写入临时文件，校验完成后才让 Local Data Service 原子提交 Imported Web Artifact。失败传输必须可中止或按同一 `transferId` 安全重试，不能留下半成品资产。
+避免混用：单条 Base64 storage 写入、网页 URL 回源下载、公开本地上传端口、永久扩展队列。
+
+**Extension Pairing Grant**：
+Desktop Edition 在校验官方扩展 ID 与协议版本后，经用户在桌面端明确确认而保存的可撤销能力授权；授权记录由本机保存并列出允许的类型化能力，扩展只保存公开的配对标识与状态，不保存 Runtime Token 或 Provider Secret。扩展版本或能力集合发生实质变化时必须重新确认。
+避免混用：Native Messaging `allowed_origins`、网站登录、永久全能力 Token、Provider 授权。
+
+**Browser Capability Preview**：
+用户从网页显式请求的一次白名单 Runtime 能力预览，例如对所选图片执行 `prompt.reverse`；Edge Extension 只上传输入、展示进度和返回结果，Provider 路由与 Secret 始终由 Desktop Runtime 管理。预览完成不会自动修改项目，只有用户确认“加入 Flovart”后才原子提交 Imported Web Artifact、结果数据与 Workflow Draft ChangeSet；取消或过期的暂存输入由 Local Data Service 清理。
+避免混用：Content Script 直连 Provider、扩展本地 Key、后台自动生成、未确认的 Workflow 写入。
+
 **Trusted Web Bridge**：
-用户在 Edge 中明确批准后，为 `https://avabbbb.github.io/Flovart/` 建立的可撤销本地能力通道；Official WebUI 可以通过类型化接口访问获批工作区数据并请求 Runtime 执行，但不能读取原始 Provider Secret，也不能把权限扩展给其他网页 origin。
+用户在 Edge 中明确批准后，为 `https://avabbbb.github.io/Flovart/` 建立的可撤销本地能力通道；Official WebUI 可以通过类型化接口访问获批工作区数据并请求 Runtime 执行，但不能读取原始 Provider Secret，也不能把权限扩展给其他网页 origin。它不属于 Browser Import V1，只有扩展与 Desktop 的导入、预览、回执闭环完成验收后才进入独立阶段。
 避免混用：任意网页 External Messaging、CORS 白名单、公开 localhost API、账号登录。
 
 **Local Terms Acceptance**：
@@ -324,6 +344,10 @@ Desktop Runtime 在 ProductionRun 开始前根据 Route Mapping、Capability Req
 把用户创作意图转成 ProductionSpec 的风格化导演知识包，不持有 Provider 凭据，也不直接执行生成任务。
 避免混用：Provider Plugin、Workflow Runtime、Model Adapter。
 
+**Approved Style Reference（已批准风格参考）**：
+用户从同一代表镜头的多主题视觉 Bake-off 中选定的不可变参考 Artifact 与结构化 Look 组合，是同一 ProductionSpec Revision 内全部关键帧的视觉风格权威；更换参考会创建新的 Workflow Draft/Revision，并使受影响的关键帧与动态镜头失效。
+避免混用：仅含风格词的 Prompt、主题名称、未经选择的候选图、任意一张已生成镜头。
+
 **Operation Skill**：
 指导 Agent 如何操作 Flovart 的 Skill，通过 CLI/MCP 驱动 Production Runtime、Workspace、Research 与 Terminal Command Center；对应仓库里供 Codex、Claude Code 或 OpenCode 连接 Runtime 的 `SKILL.md` host 接入手册（.claude/skills/flovart 与 .agents/skills/flovart）。不持有 Provider 凭据，也不编译制作计划。
 避免混用：Production Skill、Provider Plugin、Model Adapter。
@@ -383,6 +407,10 @@ Hub 针对精确 Skill 版本与 Hash 发布的 advisory、block_new 或 critica
 **Bound Production Skill（绑定的制作 Skill）**：
 ProductionSession 对至多一个精确 Production Skill 版本或 Skill Snapshot 的可选创意规划绑定；没有绑定时 Flovart Agent 使用 ProductionSpec Core 直接进行通用制作，且不创建虚构的通用 Skill。Agent 可以根据 Brief 推荐 Skill，但只有用户明确确认后才能建立或更换绑定，且系统不得静默切换；更换绑定必须显式重新规划，产生新的 ProductionSpec Revision 并使旧 Production Mandate 失效，已提交的 ProductionRun 不被原地改写。
 避免混用：Flovart Skill、通用素材包、Validated Profile、运行时临时读取多个 Production Skill。
+
+**Production Skill Attachment（制作 Skill 附件）**：
+用户从 Skill 卡组拖入或选择后暂存在 Agent 输入框中的可移除精确 Skill 引用，以卡片/chip 显示 ID、版本和信任状态；附件本身不修改 ProductionSession、不启动制作，只有随用户消息发送并通过 Catalog 校验后才成为 Bound Production Skill。
+避免混用：普通 `$skill` 文本、Bound Production Skill、已经授权的 Production Mandate、自动执行命令。
 
 **Production Session Workspace**：
 Production Mode 下为单个 ProductionSession 创建的隔离文件工作区，只向 Agent 暴露只读权威上下文、可写 scratch/exports 和非秘密绑定信息。

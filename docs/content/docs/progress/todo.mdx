@@ -53,6 +53,7 @@ Table 是 Workflow 之外的第二个正式创作工作区，不是电子表格�
 
 - **统一 Runtime dispatch**：⬜ Runtime 查询、Task 查询/取消、Event 续读、`runtime.test.delay`、RunningHub GPT Image 2、Grok Imagine Video 1.5 低价路线和 Veo 3.1 Lite 已由唯一 Desktop Runtime 执行；继续迁入其他已验证 Provider Route，迁完后删除双轨执行面。
 - **跨入口本地数据桥接**：⬜ Web 站点、Tauri WebView 与 Edge 扩展的 IndexedDB 默认按 origin 隔离；通过受限 Desktop Runtime API 共享 Workflow / 素材 / 历史等业务数据，API Key 只允许本地鉴权后调用，不向扩展返回明文。
+- **Browser Import V1**：🟨 “右键单图 → Desktop 配对 → Native Messaging 分块传输 → 内容寻址 Artifact → 活动 Workflow `image` 节点或 Browser Import Inbox → 回执”已完成代码、协议与自动测试；待使用真实 Edge 扩展 ID 注册 Host 并完成浏览器/Desktop 实机验收，商店 ID 确定后再接 NSIS 安装/卸载 Hook。扩展不保存 Provider Secret、不直连 Provider、不内嵌完整 WebUI、不常驻 `<all_urls>`、不扫描整页图片；选中文本、可见区截图和 `prompt.reverse` 仍不进入本轮。
 - **Provider Task 完整语义**：⬜ 首条 RunningHub Route 已保存外部 job ID、轮询事件和 Artifact；继续补齐 ProviderAttempt、提交不确定态、真实百分比进度、失败分类与远端取消确认。
 - **原子能力面**：⬜ 补齐 Provider Job、Artifact、Node、Render 与 Verify 的封闭类型 Atomic Runtime Command；Production Intent Command 由 Runtime 展开为 ProductionRun 与 StageRun。
 - **Provider-neutral 能力**：⬜ Agent、CLI、MCP 与 WebUI 只请求产品能力，Provider Adapter 独占路由 payload、凭据和提交生命周期。

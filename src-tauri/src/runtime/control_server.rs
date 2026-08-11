@@ -1,3 +1,4 @@
+use serde::Deserialize;
 use serde_json::{json, Value};
 use std::{
     io::Read,
@@ -14,11 +15,33 @@ use url::Url;
 
 use super::{
     auth::{generate_token, is_authorized},
+    browser_import::{BrowserImportBegin, BROWSER_IMPORT_CHUNK_BYTES},
     discovery::{remove_if_owned, write_discovery, DiscoveryRecord},
     ProductionRuntime, RuntimeContractError, RuntimeError,
 };
 
 const MAX_COMMAND_BYTES: usize = 1024 * 1024;
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct PairingRequest {
+    extension_origin: String,
+    protocol_version: String,
+    capabilities: Vec<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ImportBeginRequest {
+    extension_origin: String,
+    payload: BrowserImportBegin,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ImportCommitRequest {
+    extension_origin: String,
+}
 
 pub struct ControlServer {
     server: Arc<Server>,
@@ -128,6 +151,137 @@ fn handle_request(mut request: Request, runtime: &Arc<ProductionRuntime>, token:
             200,
             serde_json::to_value(runtime.status()).unwrap_or_else(|_| json!({})),
         ),
+        (&Method::Post, "/v1/browser-bridge/pairings") => {
+            let body = match read_typed_json_body::<PairingRequest>(&mut request) {
+                Ok(body) => body,
+                Err(error) => {
+                    respond_error(request, 400, error);
+                    return;
+                }
+            };
+            match runtime.browser_imports().request_pairing(
+                &body.extension_origin,
+                &body.protocol_version,
+                &body.capabilities,
+            ) {
+                Ok(pairing) => respond_json(
+                    request,
+                    200,
+                    serde_json::to_value(pairing).unwrap_or_else(|_| json!({})),
+                ),
+                Err(error) => respond_runtime_error(request, error),
+            }
+        }
+        (&Method::Post, "/v1/browser-imports:begin") => {
+            let body = match read_typed_json_body::<ImportBeginRequest>(&mut request) {
+                Ok(body) => body,
+                Err(error) => {
+                    respond_error(request, 400, error);
+                    return;
+                }
+            };
+            match runtime
+                .browser_imports()
+                .begin_import(&body.extension_origin, body.payload)
+            {
+                Ok(transfer) => respond_json(
+                    request,
+                    200,
+                    serde_json::to_value(transfer).unwrap_or_else(|_| json!({})),
+                ),
+                Err(error) => respond_runtime_error(request, error),
+            }
+        }
+        (&Method::Post, path)
+            if path.starts_with("/v1/browser-imports/") && path.ends_with("/chunks") =>
+        {
+            let transfer_id = path
+                .trim_start_matches("/v1/browser-imports/")
+                .trim_end_matches("/chunks");
+            if transfer_id.is_empty() || transfer_id.contains('/') {
+                respond_error(
+                    request,
+                    404,
+                    RuntimeError::new("ROUTE_UNAVAILABLE", "Unknown browser import route"),
+                );
+                return;
+            }
+            let Some(extension_origin) = header_value(&request, "X-Flovart-Extension-Origin")
+            else {
+                respond_error(
+                    request,
+                    400,
+                    RuntimeError::new("INVALID_ARGUMENT", "Extension origin header is required"),
+                );
+                return;
+            };
+            let sequence = match header_value(&request, "X-Flovart-Chunk-Sequence")
+                .and_then(|value| value.parse::<u32>().ok())
+            {
+                Some(sequence) => sequence,
+                None => {
+                    respond_error(
+                        request,
+                        400,
+                        RuntimeError::new("INVALID_ARGUMENT", "Chunk sequence header is invalid"),
+                    );
+                    return;
+                }
+            };
+            let bytes = match read_binary_body(&mut request, BROWSER_IMPORT_CHUNK_BYTES) {
+                Ok(bytes) => bytes,
+                Err(error) => {
+                    respond_error(request, 400, error);
+                    return;
+                }
+            };
+            match runtime.browser_imports().append_chunk(
+                &extension_origin,
+                transfer_id,
+                sequence,
+                &bytes,
+            ) {
+                Ok(ack) => respond_json(
+                    request,
+                    200,
+                    serde_json::to_value(ack).unwrap_or_else(|_| json!({})),
+                ),
+                Err(error) => respond_runtime_error(request, error),
+            }
+        }
+        (&Method::Post, path)
+            if path.starts_with("/v1/browser-imports/") && path.ends_with(":commit") =>
+        {
+            let transfer_id = path
+                .trim_start_matches("/v1/browser-imports/")
+                .trim_end_matches(":commit");
+            if transfer_id.is_empty() || transfer_id.contains('/') {
+                respond_error(
+                    request,
+                    404,
+                    RuntimeError::new("ROUTE_UNAVAILABLE", "Unknown browser import route"),
+                );
+                return;
+            }
+            let body = match read_typed_json_body::<ImportCommitRequest>(&mut request) {
+                Ok(body) => body,
+                Err(error) => {
+                    respond_error(request, 400, error);
+                    return;
+                }
+            };
+            match runtime
+                .browser_imports()
+                .commit_import(&body.extension_origin, transfer_id)
+            {
+                Ok(receipt) => respond_json(
+                    request,
+                    200,
+                    serde_json::to_value(receipt).unwrap_or_else(|_| json!({})),
+                ),
+                Err(error) => respond_runtime_error(request, error),
+            }
+        }
         (&Method::Post, "/v1/commands") => {
             if request
                 .body_length()
@@ -402,10 +556,41 @@ fn read_json_body(request: &mut Request) -> Result<Value, RuntimeError> {
         .map_err(|error| RuntimeError::new("INVALID_ARGUMENT", error.to_string()))
 }
 
+fn read_typed_json_body<T: for<'de> Deserialize<'de>>(
+    request: &mut Request,
+) -> Result<T, RuntimeError> {
+    let value = read_json_body(request)?;
+    serde_json::from_value(value)
+        .map_err(|error| RuntimeError::new("INVALID_ARGUMENT", error.to_string()))
+}
+
+fn read_binary_body(request: &mut Request, maximum: usize) -> Result<Vec<u8>, RuntimeError> {
+    if request.body_length().is_some_and(|length| length > maximum) {
+        return Err(RuntimeError::new(
+            "INVALID_ARGUMENT",
+            "Import chunk is too large",
+        ));
+    }
+    let mut body = Vec::new();
+    request
+        .as_reader()
+        .take((maximum + 1) as u64)
+        .read_to_end(&mut body)
+        .map_err(|error| RuntimeError::new("INVALID_ARGUMENT", error.to_string()))?;
+    if body.is_empty() || body.len() > maximum {
+        return Err(RuntimeError::new(
+            "INVALID_ARGUMENT",
+            "Import chunk size is invalid",
+        ));
+    }
+    Ok(body)
+}
+
 fn respond_runtime_error(request: Request, error: RuntimeError) {
     let status = match error.code.as_str() {
         "TASK_NOT_FOUND" | "UNKNOWN_COMMAND" => 404,
         "IDEMPOTENCY_CONFLICT" | "PROTOCOL_MISMATCH" => 409,
+        "PAIRING_REQUIRED" | "PAIRING_REJECTED" | "PERMISSION_DENIED" => 403,
         "RUNTIME_UNAVAILABLE" => 503,
         _ => 400,
     };

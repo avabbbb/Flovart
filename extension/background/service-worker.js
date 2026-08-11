@@ -1,195 +1,245 @@
-// Flovart Background Service Worker — Context menus + message routing
+import {
+  bytesToBase64,
+  exactOptionalOrigin,
+  provenanceUrl,
+  sha256Hex,
+  splitImportBytes,
+} from './import-protocol.js';
+import { NativeSession, nativeResult } from './native-client.js';
+import { purgeLegacyExtensionStorage } from './storage-migration.js';
 
-// Register context menus on install
+const MENU_IMPORT = 'flovart-import-image';
+const MENU_OPEN = 'flovart-open-desktop';
+const MAX_IMAGE_BYTES = 64 * 1024 * 1024;
+const SUPPORTED_MIME = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/avif']);
+
 chrome.runtime.onInstalled.addListener(() => {
-  // Right-click on images
-  chrome.contextMenus.create({
-    id: 'flovart-add-to-canvas',
-    title: '📌 添加到 Flovart 画布',
-    contexts: ['image'],
+  void purgeLegacyExtensionStorage().catch(error => {
+    console.error('[Flovart Browser Import] 清理旧扩展数据失败', error);
   });
-
-  chrome.contextMenus.create({
-    id: 'flovart-reverse-prompt',
-    title: '✨ AI 反推 Prompt',
-    contexts: ['image'],
-  });
-
-  chrome.contextMenus.create({
-    id: 'flovart-separator',
-    type: 'separator',
-    contexts: ['image'],
-  });
-
-  chrome.contextMenus.create({
-    id: 'flovart-open-canvas',
-    title: '🎨 打开 Flovart 画布',
-    contexts: ['page', 'selection'],
-  });
-});
-
-// Handle context menu clicks
-chrome.contextMenus.onClicked.addListener(async (info, tab) => {
-  if (info.menuItemId === 'flovart-open-canvas') {
-    const canvasUrl = chrome.runtime.getURL('app/index.html');
-    chrome.tabs.create({ url: canvasUrl });
-    return;
-  }
-
-  if (info.menuItemId === 'flovart-add-to-canvas') {
-    const srcUrl = info.srcUrl;
-    if (!srcUrl) return;
-
-    try {
-      // Fetch the image and convert to data URL for cross-origin safety
-      const dataUrl = await fetchImageAsDataUrl(srcUrl);
-
-      await chrome.storage.local.set({
-        flovart_pending_image: {
-          dataUrl,
-          source: 'context-menu',
-          sourceUrl: info.pageUrl,
-          name: `Image from ${new URL(info.pageUrl || '').hostname}`,
-          timestamp: Date.now(),
-        },
-      });
-
-      // Open canvas
-      const canvasUrl = chrome.runtime.getURL('app/index.html');
-      chrome.tabs.create({ url: canvasUrl });
-    } catch (err) {
-      console.error('[Flovart] Failed to fetch image:', err);
-    }
-    return;
-  }
-
-  if (info.menuItemId === 'flovart-reverse-prompt') {
-    const srcUrl = info.srcUrl;
-    if (!srcUrl || !tab?.id) return;
-
-    try {
-      // Send message to content script to show the prompt panel
-      chrome.tabs.sendMessage(tab.id, {
-        type: 'FLOVART_REVERSE_PROMPT',
-        imageUrl: srcUrl,
-      });
-    } catch (err) {
-      console.error('[Flovart] Failed to send reverse prompt message:', err);
-    }
-    return;
-  }
-});
-
-// Listen for messages from content script / popup
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.type === 'FLOVART_GET_API_KEY') {
-    // Content script needs an API key for reverse prompt (V2/V3 encrypted format)
-    chrome.storage.local.get('flovart_api_keys_v2', async (result) => {
-      try {
-        const stored = result['flovart_api_keys_v2'];
-        if (!stored?.d) { sendResponse({ keys: [] }); return; }
-        // Decrypt keys (supports both V3 AES-GCM and V2 base64 fallback)
-        const decoded = await decryptStoredKeys(stored.d);
-        sendResponse({ keys: Array.isArray(decoded) ? decoded : [] });
-      } catch {
-        sendResponse({ keys: [] });
-      }
+  chrome.contextMenus.removeAll(() => {
+    chrome.contextMenus.create({
+      id: MENU_IMPORT,
+      title: '添加图片到 Flovart',
+      contexts: ['image'],
     });
-    return true; // async response
-  }
-
-  if (message.type === 'FLOVART_REVERSE_PROMPT_RESULT') {
-    // Store the result for the canvas to pick up if needed
-    chrome.storage.local.set({
-      flovart_last_reverse_prompt: {
-        prompt: message.prompt,
-        imageUrl: message.imageUrl,
-        timestamp: Date.now(),
-      },
-    });
-  }
-
-  // Runtime API: forward command to Flovart tab
-  if (message.type === 'FLOVART_COMMAND') {
-    forwardCommandToFlovart(message).then(sendResponse).catch(err => sendResponse({ error: err.message }));
-    return true;
-  }
-});
-
-// ─── Runtime API: External message support (from web pages / other extensions) ───
-chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => {
-  if (message.type === 'FLOVART_COMMAND') {
-    forwardCommandToFlovart(message).then(sendResponse).catch(err => sendResponse({ error: err.message }));
-    return true;
-  }
-  if (message.type === 'FLOVART_PING') {
-    sendResponse({ ok: true, version: chrome.runtime.getManifest().version });
-    return;
-  }
-});
-
-// Forward a FLOVART_COMMAND to the active Flovart tab's content script
-async function forwardCommandToFlovart(message) {
-  // Find a tab running Flovart (extension page or localhost dev)
-  const tabs = await chrome.tabs.query({});
-  const flovartTab = tabs.find(t =>
-    t.url?.includes(chrome.runtime.id) ||
-    t.url?.includes('localhost:') ||
-    t.url?.includes('flovart')
-  );
-  if (!flovartTab?.id) throw new Error('No Flovart tab found. Open Flovart first.');
-  return new Promise((resolve, reject) => {
-    chrome.tabs.sendMessage(flovartTab.id, {
-      type: 'FLOVART_COMMAND',
-      id: message.id || crypto.randomUUID(),
-      method: message.method,
-      args: message.args,
-    }, (response) => {
-      if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
-      else resolve(response);
+    chrome.contextMenus.create({
+      id: MENU_OPEN,
+      title: '连接 / 打开 Flovart Desktop',
+      contexts: ['page', 'image', 'selection'],
     });
   });
-}
+});
 
-// Helper: decrypt stored API keys (V3 AES-GCM or V2 base64 fallback)
-async function decryptStoredKeys(encoded) {
+chrome.contextMenus.onClicked.addListener((info, tab) => {
+  if (info.menuItemId === MENU_IMPORT) void importSelectedImage(info, tab);
+  if (info.menuItemId === MENU_OPEN) void connectDesktop();
+});
+
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message?.type !== 'FLOVART_DESKTOP_CONNECT') return undefined;
+  connectDesktop()
+    .then(result => sendResponse({ ok: true, result }))
+    .catch(error => sendResponse({ ok: false, error: errorMessage(error) }));
+  return true;
+});
+
+async function connectDesktop() {
+  await setBridgeStatus('connecting', '正在连接 Flovart Desktop…');
+  let session;
   try {
-    if (encoded && encoded.iv && encoded.ct) {
-      // V3: AES-GCM encrypted
-      const enc = new TextEncoder();
-      const keyMaterial = await crypto.subtle.importKey(
-        'raw', enc.encode(chrome.runtime.id), 'PBKDF2', false, ['deriveKey']
-      );
-      const aesKey = await crypto.subtle.deriveKey(
-        { name: 'PBKDF2', salt: enc.encode('flovart-ext-v3'), iterations: 100000, hash: 'SHA-256' },
-        keyMaterial, { name: 'AES-GCM', length: 256 }, false, ['decrypt']
-      );
-      const iv = new Uint8Array(encoded.iv);
-      const ct = new Uint8Array(encoded.ct);
-      const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, aesKey, ct);
-      return JSON.parse(new TextDecoder().decode(pt));
-    }
-    if (typeof encoded === 'string') {
-      // V2 fallback: base64
-      const s = atob(encoded);
-      const bytes = new Uint8Array(s.length);
-      for (let i = 0; i < s.length; i++) bytes[i] = s.charCodeAt(i);
-      return JSON.parse(new TextDecoder().decode(bytes));
-    }
-    return null;
-  } catch {
-    return null;
+    session = new NativeSession();
+    const pairing = nativeResult(await session.request({
+      type: 'bridge.hello',
+      protocolVersion: '1',
+      capabilities: ['browser.import.image'],
+    }, 35_000));
+    if (pairing.status === 'rejected') throw new Error('Desktop 已拒绝此扩展连接');
+    await setBridgeStatus('connected', 'Flovart Desktop 已连接');
+    return pairing;
+  } catch (error) {
+    await setBridgeStatus('error', errorMessage(error));
+    throw error;
+  } finally {
+    session?.disconnect();
   }
 }
 
-// Helper: fetch an image URL and convert to base64 data URL
-async function fetchImageAsDataUrl(url) {
-  const response = await fetch(url);
-  const blob = await response.blob();
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => resolve(reader.result);
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
+async function importSelectedImage(info, tab) {
+  if (!info.srcUrl) return;
+  // Start the exact-origin permission request synchronously from the context-menu
+  // gesture; the gesture may no longer be valid after Desktop pairing completes.
+  const imagePromise = readSelectedImage(info.srcUrl, info.pageUrl, tab?.id);
+  await setBridgeStatus('importing', '正在读取所选图片…');
+  let session;
+  try {
+    const image = await imagePromise;
+    session = new NativeSession();
+    const pairing = nativeResult(await session.request({
+      type: 'bridge.hello',
+      protocolVersion: '1',
+      capabilities: ['browser.import.image'],
+    }, 35_000));
+    if (pairing.status === 'rejected') throw new Error('Desktop 已拒绝此扩展连接');
+
+    const sha256 = await sha256Hex(image.bytes);
+    const requestId = crypto.randomUUID();
+    const transfer = nativeResult(await session.request({
+      type: 'import.begin',
+      payload: {
+        requestId,
+        kind: 'image',
+        name: image.name,
+        mimeType: image.mimeType,
+        byteSize: image.bytes.length,
+        sha256,
+        sourceUrl: provenanceUrl(info.srcUrl),
+        sourcePageUrl: provenanceUrl(info.pageUrl || tab?.url || ''),
+        sourceTitle: tab?.title?.slice(0, 4096) || null,
+        naturalWidth: image.width,
+        naturalHeight: image.height,
+      },
+    }));
+
+    let sequence = transfer.nextSequence || 0;
+    let offset = transfer.receivedBytes || 0;
+    if (offset > image.bytes.length) throw new Error('Desktop 返回的续传偏移无效');
+    for (const chunk of splitImportBytes(image.bytes.subarray(offset))) {
+      const ack = nativeResult(await session.request({
+        type: 'import.chunk',
+        transferId: transfer.transferId,
+        sequence,
+        dataBase64: bytesToBase64(chunk),
+      }));
+      sequence = ack.nextSequence;
+      offset += chunk.length;
+    }
+    if (offset !== image.bytes.length) throw new Error('图片分块传输未完整结束');
+
+    const receipt = nativeResult(await session.request({
+      type: 'import.commit',
+      transferId: transfer.transferId,
+    }, 15_000));
+    const destination = receipt.destinationProjectId ? '活动 Workflow' : '浏览器导入箱';
+    await setBridgeStatus('imported', `已发送到${destination}`, receipt);
+  } catch (error) {
+    console.error('[Flovart Browser Import]', error);
+    await setBridgeStatus('error', errorMessage(error));
+  } finally {
+    session?.disconnect();
+  }
+}
+
+async function readSelectedImage(sourceUrl, pageUrl, tabId) {
+  if (sourceUrl.startsWith('blob:')) {
+    if (!tabId) throw new Error('无法从当前页面读取 Blob 图片');
+    return readBlobImageFromTab(tabId, sourceUrl);
+  }
+
+  const optionalOrigin = exactOptionalOrigin(sourceUrl, pageUrl || '');
+  let temporaryPermission = false;
+  try {
+    if (optionalOrigin) {
+      temporaryPermission = await chrome.permissions.request({ origins: [optionalOrigin] });
+      if (!temporaryPermission) throw new Error('未授予所选图片来源的临时读取权限');
+    }
+    const response = await fetch(sourceUrl, { cache: 'no-store', credentials: 'include' });
+    if (!response.ok) throw new Error(`读取图片失败（HTTP ${response.status}）`);
+    return inspectBlob(await response.blob(), sourceUrl);
+  } finally {
+    if (temporaryPermission && optionalOrigin) {
+      await chrome.permissions.remove({ origins: [optionalOrigin] }).catch(() => false);
+    }
+  }
+}
+
+async function readBlobImageFromTab(tabId, sourceUrl) {
+  const [result] = await chrome.scripting.executeScript({
+    target: { tabId },
+    args: [sourceUrl, MAX_IMAGE_BYTES],
+    func: async (url, maximum) => {
+      const response = await fetch(url);
+      const blob = await response.blob();
+      if (blob.size > maximum) throw new Error('图片超过 64 MB 限制');
+      const bytes = new Uint8Array(await blob.arrayBuffer());
+      let binary = '';
+      for (let offset = 0; offset < bytes.length; offset += 32 * 1024) {
+        binary += String.fromCharCode(...bytes.subarray(offset, offset + 32 * 1024));
+      }
+      return { dataBase64: btoa(binary), mimeType: blob.type };
+    },
   });
+  if (!result?.result?.dataBase64) throw new Error('页面没有返回 Blob 图片字节');
+  const binary = atob(result.result.dataBase64);
+  const bytes = Uint8Array.from(binary, char => char.charCodeAt(0));
+  return inspectBlob(new Blob([bytes], { type: result.result.mimeType }), sourceUrl);
+}
+
+async function inspectBlob(blob, sourceUrl) {
+  if (!blob.size || blob.size > MAX_IMAGE_BYTES) throw new Error('图片大小必须在 1 B 到 64 MB 之间');
+  const mimeType = normalizedImageMime(blob.type, sourceUrl);
+  if (!SUPPORTED_MIME.has(mimeType)) throw new Error(`暂不支持此图片格式：${blob.type || 'unknown'}`);
+  let width = null;
+  let height = null;
+  try {
+    const bitmap = await createImageBitmap(blob);
+    width = bitmap.width;
+    height = bitmap.height;
+    bitmap.close();
+  } catch {
+    // Desktop still validates bytes/hash; dimensions are optional metadata.
+  }
+  return {
+    bytes: new Uint8Array(await blob.arrayBuffer()),
+    mimeType,
+    name: imageName(sourceUrl, mimeType),
+    width,
+    height,
+  };
+}
+
+function normalizedImageMime(value, sourceUrl) {
+  const mime = String(value || '').split(';')[0].trim().toLowerCase();
+  if (mime === 'image/jpg') return 'image/jpeg';
+  if (SUPPORTED_MIME.has(mime)) return mime;
+  const path = (() => { try { return new URL(sourceUrl).pathname.toLowerCase(); } catch { return ''; } })();
+  if (/\.jpe?g$/.test(path)) return 'image/jpeg';
+  if (/\.webp$/.test(path)) return 'image/webp';
+  if (/\.gif$/.test(path)) return 'image/gif';
+  if (/\.avif$/.test(path)) return 'image/avif';
+  if (/\.png$/.test(path) || sourceUrl.startsWith('data:image/png')) return 'image/png';
+  return mime;
+}
+
+function imageName(sourceUrl, mimeType) {
+  const extension = {
+    'image/jpeg': 'jpg',
+    'image/webp': 'webp',
+    'image/gif': 'gif',
+    'image/avif': 'avif',
+  }[mimeType] || 'png';
+  if (!sourceUrl.startsWith('http:') && !sourceUrl.startsWith('https:')) {
+    return `browser-image.${extension}`;
+  }
+  try {
+    const segment = decodeURIComponent(new URL(sourceUrl).pathname.split('/').pop() || '');
+    const safe = segment.replace(/[\\/:*?"<>|]/g, '-').slice(0, 160);
+    if (safe && safe.includes('.')) return safe;
+  } catch {
+    // data/blob URL
+  }
+  return `browser-image.${extension}`;
+}
+
+async function setBridgeStatus(state, message, receipt = null) {
+  const status = { state, message, receipt, updatedAt: Date.now() };
+  await chrome.storage.local.set({ flovartBridgeStatus: status });
+  const badge = state === 'importing' || state === 'connecting' ? '…' : state === 'error' ? '!' : state === 'imported' ? '✓' : '';
+  await chrome.action.setBadgeText({ text: badge });
+  if (badge) await chrome.action.setBadgeBackgroundColor({ color: state === 'error' ? '#d14343' : '#168f82' });
+  return status;
+}
+
+function errorMessage(error) {
+  return error instanceof Error ? error.message : String(error || '未知错误');
 }

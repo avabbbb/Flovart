@@ -1340,6 +1340,7 @@ name = "flovart"
 version = "0.3.1"
 dependencies = [
  "anyhow",
+ "base64 0.22.1",
  "chrono",
  "env_logger",
  "getrandom 0.4.2",

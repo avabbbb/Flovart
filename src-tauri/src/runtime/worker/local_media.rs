@@ -123,7 +123,13 @@ pub fn run_tts(
     task: &ClaimedTask,
 ) {
     let Some(artifact_root) = artifact_root else {
-        fail(store, task, worker_id, "RUNTIME_UNAVAILABLE", "Artifact store is unavailable.");
+        fail(
+            store,
+            task,
+            worker_id,
+            "RUNTIME_UNAVAILABLE",
+            "Artifact store is unavailable.",
+        );
         return;
     };
     if !cfg!(windows) {
@@ -148,7 +154,13 @@ pub fn run_tts(
         .collect::<Vec<_>>()
         .join("\n");
     if text.trim().is_empty() {
-        fail(store, task, worker_id, "INVALID_ARGUMENT", "audio.tts requires narration lines.");
+        fail(
+            store,
+            task,
+            worker_id,
+            "INVALID_ARGUMENT",
+            "audio.tts requires narration lines.",
+        );
         return;
     }
     let language = task
@@ -163,13 +175,25 @@ pub fn run_tts(
         .unwrap_or(60_000);
     let work_dir = artifact_root.join("audio");
     if fs::create_dir_all(&work_dir).is_err() {
-        fail(store, task, worker_id, "RUNTIME_UNAVAILABLE", "Artifact store is not writable.");
+        fail(
+            store,
+            task,
+            worker_id,
+            "RUNTIME_UNAVAILABLE",
+            "Artifact store is not writable.",
+        );
         return;
     }
     let text_path = work_dir.join(format!("{}.txt", task.id));
     let wav_path = work_dir.join(format!("{}.wav", task.id));
     if fs::write(&text_path, &text).is_err() {
-        fail(store, task, worker_id, "RUNTIME_UNAVAILABLE", "Narration text could not be staged.");
+        fail(
+            store,
+            task,
+            worker_id,
+            "RUNTIME_UNAVAILABLE",
+            "Narration text could not be staged.",
+        );
         return;
     }
     // Rate-search loop: pick the slowest rate that fits the target duration,
@@ -218,7 +242,13 @@ Write-Output "rate=5 duration=$probe overflow=true"
     let bytes = match fs::read(&wav_path) {
         Ok(bytes) if !bytes.is_empty() => bytes,
         _ => {
-            fail(store, task, worker_id, "PROVIDER_FAILED", "TTS produced no audio output.");
+            fail(
+                store,
+                task,
+                worker_id,
+                "PROVIDER_FAILED",
+                "TTS produced no audio output.",
+            );
             return;
         }
     };
@@ -247,7 +277,13 @@ Write-Output "rate=5 duration=$probe overflow=true"
                 }),
             );
         }
-        Err(_) => fail(store, task, worker_id, "RUNTIME_UNAVAILABLE", "TTS artifact could not be stored."),
+        Err(_) => fail(
+            store,
+            task,
+            worker_id,
+            "RUNTIME_UNAVAILABLE",
+            "TTS artifact could not be stored.",
+        ),
     }
 }
 
@@ -261,10 +297,20 @@ pub fn run_render(
     task: &ClaimedTask,
 ) {
     let Some(artifact_root) = artifact_root else {
-        fail(store, task, worker_id, "RUNTIME_UNAVAILABLE", "Artifact store is unavailable.");
+        fail(
+            store,
+            task,
+            worker_id,
+            "RUNTIME_UNAVAILABLE",
+            "Artifact store is unavailable.",
+        );
         return;
     };
-    let delivery = task.args.get("delivery").cloned().unwrap_or_else(|| json!({}));
+    let delivery = task
+        .args
+        .get("delivery")
+        .cloned()
+        .unwrap_or_else(|| json!({}));
     let duration_ms = delivery
         .get("durationMs")
         .and_then(Value::as_i64)
@@ -276,7 +322,13 @@ pub fn run_render(
         .cloned()
         .unwrap_or_default();
     if timeline.is_empty() {
-        fail(store, task, worker_id, "INVALID_ARGUMENT", "media.render requires a timeline.");
+        fail(
+            store,
+            task,
+            worker_id,
+            "INVALID_ARGUMENT",
+            "media.render requires a timeline.",
+        );
         return;
     }
 
@@ -295,11 +347,20 @@ pub fn run_render(
         };
         match artifact_path(store, artifact_root, source_task_id) {
             Ok((path, _)) => {
-                let shot_ms = entry.get("durationMs").and_then(Value::as_i64).unwrap_or(6_000);
+                let shot_ms = entry
+                    .get("durationMs")
+                    .and_then(Value::as_i64)
+                    .unwrap_or(6_000);
                 inputs.push((path, shot_ms));
             }
             Err(message) => {
-                fail(store, task, worker_id, "SOURCE_ARTIFACT_UNAVAILABLE", &message);
+                fail(
+                    store,
+                    task,
+                    worker_id,
+                    "SOURCE_ARTIFACT_UNAVAILABLE",
+                    &message,
+                );
                 return;
             }
         }
@@ -308,7 +369,13 @@ pub fn run_render(
         Some(narration_task_id) => match artifact_path(store, artifact_root, narration_task_id) {
             Ok((path, _)) => Some(path),
             Err(message) => {
-                fail(store, task, worker_id, "SOURCE_ARTIFACT_UNAVAILABLE", &message);
+                fail(
+                    store,
+                    task,
+                    worker_id,
+                    "SOURCE_ARTIFACT_UNAVAILABLE",
+                    &message,
+                );
                 return;
             }
         },
@@ -317,7 +384,13 @@ pub fn run_render(
 
     let work_dir = artifact_root.join("videos");
     if fs::create_dir_all(&work_dir).is_err() {
-        fail(store, task, worker_id, "RUNTIME_UNAVAILABLE", "Artifact store is not writable.");
+        fail(
+            store,
+            task,
+            worker_id,
+            "RUNTIME_UNAVAILABLE",
+            "Artifact store is not writable.",
+        );
         return;
     }
 
@@ -334,8 +407,14 @@ pub fn run_render(
         let mut srt = String::new();
         for (index, caption) in captions.iter().enumerate() {
             let start = caption.get("startMs").and_then(Value::as_i64).unwrap_or(0);
-            let duration = caption.get("durationMs").and_then(Value::as_i64).unwrap_or(3_000);
-            let text = caption.get("text").and_then(Value::as_str).unwrap_or_default();
+            let duration = caption
+                .get("durationMs")
+                .and_then(Value::as_i64)
+                .unwrap_or(3_000);
+            let text = caption
+                .get("text")
+                .and_then(Value::as_str)
+                .unwrap_or_default();
             srt.push_str(&format!(
                 "{}\n{} --> {}\n{}\n\n",
                 index + 1,
@@ -425,7 +504,13 @@ pub fn run_render(
     let bytes = match fs::read(&output_path) {
         Ok(bytes) if !bytes.is_empty() => bytes,
         _ => {
-            fail(store, task, worker_id, "PROVIDER_FAILED", "ffmpeg produced no output file.");
+            fail(
+                store,
+                task,
+                worker_id,
+                "PROVIDER_FAILED",
+                "ffmpeg produced no output file.",
+            );
             return;
         }
     };
@@ -462,22 +547,43 @@ pub fn run_verify(
     task: &ClaimedTask,
 ) {
     let Some(artifact_root) = artifact_root else {
-        fail(store, task, worker_id, "RUNTIME_UNAVAILABLE", "Artifact store is unavailable.");
+        fail(
+            store,
+            task,
+            worker_id,
+            "RUNTIME_UNAVAILABLE",
+            "Artifact store is unavailable.",
+        );
         return;
     };
     let Some(source_task_id) = task.args.get("sourceTaskId").and_then(Value::as_str) else {
-        fail(store, task, worker_id, "INVALID_ARGUMENT", "media.verify requires sourceTaskId.");
+        fail(
+            store,
+            task,
+            worker_id,
+            "INVALID_ARGUMENT",
+            "media.verify requires sourceTaskId.",
+        );
         return;
     };
-    let (source_path, source_artifact) =
-        match artifact_path(store, artifact_root, source_task_id) {
-            Ok(resolved) => resolved,
-            Err(message) => {
-                fail(store, task, worker_id, "SOURCE_ARTIFACT_UNAVAILABLE", &message);
-                return;
-            }
-        };
-    let delivery = task.args.get("delivery").cloned().unwrap_or_else(|| json!({}));
+    let (source_path, source_artifact) = match artifact_path(store, artifact_root, source_task_id) {
+        Ok(resolved) => resolved,
+        Err(message) => {
+            fail(
+                store,
+                task,
+                worker_id,
+                "SOURCE_ARTIFACT_UNAVAILABLE",
+                &message,
+            );
+            return;
+        }
+    };
+    let delivery = task
+        .args
+        .get("delivery")
+        .cloned()
+        .unwrap_or_else(|| json!({}));
     let expected_ms = delivery
         .get("durationMs")
         .and_then(Value::as_i64)
@@ -534,13 +640,11 @@ pub fn run_verify(
             "height": video_stream.and_then(|stream| stream.get("height")).cloned()
         }
     });
-    let passed = checks
-        .as_object()
-        .is_some_and(|object| {
-            object
-                .values()
-                .all(|check| check.get("passed").and_then(Value::as_bool) == Some(true))
-        });
+    let passed = checks.as_object().is_some_and(|object| {
+        object
+            .values()
+            .all(|check| check.get("passed").and_then(Value::as_bool) == Some(true))
+    });
     let report = json!({
         "schemaVersion": "flovart.media-verify/1",
         "passed": passed,
@@ -552,7 +656,13 @@ pub fn run_verify(
     let report_bytes = match serde_json::to_vec_pretty(&report) {
         Ok(bytes) => bytes,
         Err(_) => {
-            fail(store, task, worker_id, "RUNTIME_UNAVAILABLE", "Verification report could not be serialized.");
+            fail(
+                store,
+                task,
+                worker_id,
+                "RUNTIME_UNAVAILABLE",
+                "Verification report could not be serialized.",
+            );
             return;
         }
     };
@@ -592,6 +702,12 @@ pub fn run_verify(
                 );
             }
         }
-        Err(_) => fail(store, task, worker_id, "RUNTIME_UNAVAILABLE", "Verification report could not be stored."),
+        Err(_) => fail(
+            store,
+            task,
+            worker_id,
+            "RUNTIME_UNAVAILABLE",
+            "Verification report could not be stored.",
+        ),
     }
 }

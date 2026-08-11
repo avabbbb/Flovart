@@ -199,6 +199,14 @@ export interface WorkflowNodeMetadata {
   /** 当 sourceType='assetLibrary' 时，对应 AssetItem.id，用于按 storageKey 反查 dataUrl */
   assetId?: string;
   href?: string;
+  browserImport?: {
+    importId: string;
+    artifactId: string;
+    contentHash: string;
+    sourceUrl?: string;
+    sourcePageUrl?: string;
+    sourceTitle?: string;
+  };
   artifactRef?: WorkflowArtifactRef;
   poster?: string;
   /** 本地视频首帧 JPEG 的独立持久化键；不得内嵌为项目 JSON 的 base64。 */
