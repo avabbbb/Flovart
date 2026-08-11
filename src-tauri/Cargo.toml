@@ -1,6 +1,6 @@
 [package]
 name = "flovart"
-version = "0.3.1"
+version = "0.3.2"
 description = "Flovart - AI-powered creative workspace"
 authors = ["Flovart"]
 edition = "2021"
