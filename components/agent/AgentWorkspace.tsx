@@ -7,6 +7,7 @@ import { useWorkflowMediaUrl } from '../workflow/media';
 import type { WorkflowNode, WorkflowProject } from '../workflow/types';
 import { FlovartAgentPanel } from './FlovartAgentPanel';
 import { useAgentWorkspaceStore, type AgentPanelStatus, type AgentWorkspacePanel } from './agentWorkspaceStore';
+import { useCompactViewport } from '../../hooks/useCompactViewport';
 
 interface AgentWorkspaceProps {
   project: WorkflowProject | null;
@@ -30,15 +31,22 @@ export function AgentWorkspace({ project, onCreateProject, onProjectChange, onOn
   const layout = useAgentWorkspaceStore(state => project ? state.layouts[project.id] : undefined);
   const [viewport, setViewport] = useState({ x: 42, y: 38, zoom: 1 });
   const [panning, setPanning] = useState(false);
+  const [mobilePanelId, setMobilePanelId] = useState('flovart-main');
+  const compactLayout = useCompactViewport();
   const panStart = useRef({ x: 0, y: 0, viewportX: 0, viewportY: 0 });
 
   useEffect(() => { if (project) ensureLayout(project.id); }, [ensureLayout, project]);
   useEffect(() => { if (layout) setViewport(layout.viewport); }, [layout?.viewport.x, layout?.viewport.y, layout?.viewport.zoom, project?.id]);
+  useEffect(() => {
+    if (layout && !layout.panels.some(panel => panel.id === mobilePanelId)) {
+      setMobilePanelId(layout.panels.find(panel => panel.kind === 'flovart')?.id || layout.panels[0]?.id || 'flovart-main');
+    }
+  }, [layout, mobilePanelId]);
 
   const mediaNodes = useMemo(() => project?.nodes.filter(node => node.type === 'image' || node.type === 'video') || [], [project]);
   const maxZ = Math.max(0, ...(layout?.panels.map(panel => panel.z) || []));
 
-  if (!project) return <div className="grid h-full place-content-center text-center" style={{ color: 'var(--isl-ink)' }}><Bot className="mx-auto mb-3" size={30} style={{ color: 'var(--isl-mint)' }} /><strong>Agent 需要一个制作项目</strong><p className="mt-1 text-xs" style={{ color: 'var(--isl-ink-soft)' }}>创建 Workflow 后，任务、上下文与产物会在这里汇合。</p><button type="button" className="mx-auto mt-3 rounded-lg px-3 py-2 text-xs font-bold text-white" style={{ background: 'var(--isl-mint)' }} onClick={onCreateProject}>创建项目</button></div>;
+  if (!project) return <main className="grid h-full place-content-center text-center" style={{ color: 'var(--isl-ink)' }}><Bot className="mx-auto mb-3" size={30} style={{ color: 'var(--isl-mint)' }} /><strong>Agent 需要一个制作项目</strong><p className="mt-1 text-xs" style={{ color: 'var(--isl-ink-soft)' }}>创建 Workflow 后，任务、上下文与产物会在这里汇合。</p><button type="button" className="mx-auto mt-3 rounded-lg px-3 py-2 text-xs font-bold text-white" style={{ background: 'var(--isl-mint)' }} onClick={onCreateProject}>创建项目</button></main>;
   if (!layout) return null;
 
   const commitViewport = (next = viewport) => setStoredViewport(project.id, next);
@@ -48,8 +56,71 @@ export function AgentWorkspace({ project, onCreateProject, onProjectChange, onOn
     commitViewport(next);
   };
 
+  const mobilePanel = layout.panels.find(panel => panel.id === mobilePanelId)
+    || layout.panels.find(panel => panel.kind === 'flovart')
+    || layout.panels[0];
+  if (compactLayout && mobilePanel) return (
+    <main
+      className="agent-workspace flex h-full min-h-0 flex-col overflow-hidden border-t"
+      data-testid="agent-mobile-workspace"
+      style={{ borderColor: 'var(--isl-border)', color: 'var(--isl-ink)', background: 'var(--isl-surface-sunk)' }}
+    >
+      <div className="flex shrink-0 items-center gap-2 border-b px-2 py-2" style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-surface)' }}>
+        <Bot size={14} style={{ color: 'var(--isl-mint-deep)' }} />
+        <strong className="min-w-0 flex-1 truncate text-xs">{project.title}</strong>
+        <span className="text-[10px]" style={{ color: 'var(--isl-ink-ghost)' }}>{layout.panels.length} 个面板</span>
+        <button
+          type="button"
+          className="isl-icon-btn h-8 w-8 shrink-0"
+          aria-label="添加 Codex 子任务"
+          onClick={() => {
+            addCodexPanel(project.id);
+            const panels = useAgentWorkspaceStore.getState().layouts[project.id]?.panels || [];
+            const added = [...panels].reverse().find(panel => panel.kind === 'codex');
+            if (added) setMobilePanelId(added.id);
+          }}
+        ><Plus size={14} /></button>
+      </div>
+      <div role="tablist" aria-label="Agent 任务面板" className="flex shrink-0 gap-1 overflow-x-auto px-2 py-2">
+        {layout.panels.map(panel => {
+          const selected = panel.id === mobilePanel.id;
+          return <button
+            key={panel.id}
+            type="button"
+            role="tab"
+            aria-selected={selected}
+            aria-controls={`agent-mobile-panel-${panel.id}`}
+            aria-label={`${panel.title}，${STATUS_LABEL[panel.status]}`}
+            className="flex min-h-9 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 text-[11px] font-semibold"
+            style={{ borderColor: selected ? 'var(--isl-mint)' : 'var(--isl-border)', color: selected ? 'var(--isl-ink)' : 'var(--isl-ink-soft)', background: selected ? 'var(--isl-card)' : 'transparent' }}
+            onClick={() => setMobilePanelId(panel.id)}
+          ><span className={`agent-status is-${panel.status}`}><i /></span>{panel.title}</button>;
+        })}
+      </div>
+      <div id={`agent-mobile-panel-${mobilePanel.id}`} role="tabpanel" className="min-h-0 flex-1 px-2 pb-2">
+        <AgentPanel
+          compact
+          panel={mobilePanel}
+          project={project}
+          mediaNodes={mediaNodes}
+          maxZ={maxZ}
+          onMove={(x, y) => updatePanel(project.id, mobilePanel.id, { x, y })}
+          onResize={(width, height) => updatePanel(project.id, mobilePanel.id, { width, height })}
+          onFocus={() => undefined}
+          onRemove={mobilePanel.kind === 'codex' ? () => removePanel(project.id, mobilePanel.id) : undefined}
+          onActivity={status => updatePanel(project.id, mobilePanel.id, { status })}
+          onProjectChange={patch => onProjectChange(project.id, patch)}
+          onOnlineTurn={onOnlineTurn}
+          onOpenWorkflow={onOpenWorkflow}
+          onOpenTable={onOpenTable}
+          onOpenSettings={onOpenSettings}
+        />
+      </div>
+    </main>
+  );
+
   return (
-    <div
+    <main
       className={`agent-workspace relative h-full overflow-hidden border-t ${panning ? 'cursor-grabbing' : ''}`}
       style={{ borderColor: 'var(--isl-border)', color: 'var(--isl-ink)', backgroundColor: 'var(--isl-surface-sunk)', backgroundImage: 'radial-gradient(var(--isl-border-strong) 1px, transparent 1px)', backgroundSize: `${22 * viewport.zoom}px ${22 * viewport.zoom}px`, backgroundPosition: `${viewport.x}px ${viewport.y}px` }}
       onPointerDown={event => {
@@ -93,11 +164,12 @@ export function AgentWorkspace({ project, onCreateProject, onProjectChange, onOn
         <button type="button" className="isl-icon-btn h-8 w-8" title="恢复默认布局" onClick={() => resetLayout(project.id)}><RotateCcw size={13} /></button>
         <button type="button" className="isl-icon-btn h-8 w-8" title="回到内容" onClick={() => { const next = { x: 42, y: 38, zoom: 1 }; setViewport(next); commitViewport(next); }}><Focus size={14} /></button>
       </div>
-    </div>
+    </main>
   );
 }
 
 interface AgentPanelProps {
+  compact?: boolean;
   panel: AgentWorkspacePanel;
   project: WorkflowProject;
   mediaNodes: WorkflowNode[];
@@ -114,12 +186,12 @@ interface AgentPanelProps {
   onOpenSettings: () => void;
 }
 
-function AgentPanel({ panel, project, mediaNodes, onMove, onResize, onFocus, onRemove, onActivity, onProjectChange, onOnlineTurn, onOpenWorkflow, onOpenTable, onOpenSettings }: AgentPanelProps) {
+function AgentPanel({ compact = false, panel, project, mediaNodes, onMove, onResize, onFocus, onRemove, onActivity, onProjectChange, onOnlineTurn, onOpenWorkflow, onOpenTable, onOpenSettings }: AgentPanelProps) {
   const drag = useRef<{ x: number; y: number; panelX: number; panelY: number } | undefined>(undefined);
   const resize = useRef<{ x: number; y: number; width: number; height: number } | undefined>(undefined);
   const Icon = panel.kind === 'codex' || panel.kind === 'flovart' ? Bot : panel.kind === 'artifacts' ? Boxes : panel.kind === 'activity' ? CircleDot : Sparkles;
-  return <motion.section className="absolute flex min-h-0 flex-col overflow-hidden rounded-xl border" style={{ left: panel.x, top: panel.y, width: panel.width, height: panel.height, zIndex: panel.z, borderColor: panel.status === 'waiting' ? 'var(--isl-sun)' : panel.status === 'error' ? 'var(--isl-coral)' : 'var(--isl-border-strong)', background: 'var(--isl-card)', boxShadow: 'var(--isl-shadow)' }} initial={{ opacity: 0, scale: .94, y: 12 }} animate={{ opacity: 1, scale: 1, y: 0 }} transition={{ type: 'spring', stiffness: 390, damping: 31 }} onPointerDown={onFocus}>
-    <header className="flex h-9 shrink-0 cursor-grab items-center gap-2 border-b px-2.5 active:cursor-grabbing" style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-surface)' }} onPointerDown={event => { if ((event.target as HTMLElement).closest('button')) return; drag.current = { x: event.clientX, y: event.clientY, panelX: panel.x, panelY: panel.y }; event.currentTarget.setPointerCapture(event.pointerId); }} onPointerMove={event => { if (drag.current) onMove(drag.current.panelX + event.clientX - drag.current.x, drag.current.panelY + event.clientY - drag.current.y); }} onPointerUp={event => { drag.current = undefined; event.currentTarget.releasePointerCapture(event.pointerId); }}>
+  return <motion.section className={`${compact ? 'relative h-full w-full' : 'absolute'} flex min-h-0 flex-col overflow-hidden rounded-xl border`} style={{ ...(compact ? {} : { left: panel.x, top: panel.y, width: panel.width, height: panel.height, zIndex: panel.z }), borderColor: panel.status === 'waiting' ? 'var(--isl-sun)' : panel.status === 'error' ? 'var(--isl-coral)' : 'var(--isl-border-strong)', background: 'var(--isl-card)', boxShadow: 'var(--isl-shadow)' }} initial={compact ? false : { opacity: 0, scale: .94, y: 12 }} animate={{ opacity: 1, scale: 1, y: 0 }} transition={{ type: 'spring', stiffness: 390, damping: 31 }} onPointerDown={compact ? undefined : onFocus}>
+    <header className={`flex h-9 shrink-0 items-center gap-2 border-b px-2.5 ${compact ? '' : 'cursor-grab active:cursor-grabbing'}`} style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-surface)' }} onPointerDown={compact ? undefined : event => { if ((event.target as HTMLElement).closest('button')) return; drag.current = { x: event.clientX, y: event.clientY, panelX: panel.x, panelY: panel.y }; event.currentTarget.setPointerCapture(event.pointerId); }} onPointerMove={compact ? undefined : event => { if (drag.current) onMove(drag.current.panelX + event.clientX - drag.current.x, drag.current.panelY + event.clientY - drag.current.y); }} onPointerUp={compact ? undefined : event => { drag.current = undefined; event.currentTarget.releasePointerCapture(event.pointerId); }}>
       <Icon size={13} /><strong className="min-w-0 flex-1 truncate text-[11px]">{panel.title}</strong><span className={`agent-status is-${panel.status}`}><i />{STATUS_LABEL[panel.status]}</span>{onRemove && <button type="button" className="isl-icon-btn h-6 w-6" aria-label="关闭面板" onClick={onRemove}><X size={12} /></button>}
     </header>
     <div className="min-h-0 flex-1 overflow-hidden">
@@ -129,7 +201,7 @@ function AgentPanel({ panel, project, mediaNodes, onMove, onResize, onFocus, onR
       {panel.kind === 'activity' && <ActivityPanel project={project} />}
       {panel.kind === 'artifacts' && <ArtifactsPanel nodes={mediaNodes} onOpenTable={onOpenTable} />}
     </div>
-    <button type="button" aria-label="调整面板大小" className="absolute bottom-0 right-0 grid h-5 w-5 cursor-nwse-resize place-items-center bg-transparent opacity-35" onPointerDown={event => { event.stopPropagation(); resize.current = { x: event.clientX, y: event.clientY, width: panel.width, height: panel.height }; event.currentTarget.setPointerCapture(event.pointerId); }} onPointerMove={event => { if (resize.current) onResize(Math.max(280, resize.current.width + event.clientX - resize.current.x), Math.max(180, resize.current.height + event.clientY - resize.current.y)); }} onPointerUp={event => { resize.current = undefined; event.currentTarget.releasePointerCapture(event.pointerId); }}><Maximize2 size={10} /></button>
+    {!compact && <button type="button" aria-label="调整面板大小" className="absolute bottom-0 right-0 grid h-5 w-5 cursor-nwse-resize place-items-center bg-transparent opacity-35" onPointerDown={event => { event.stopPropagation(); resize.current = { x: event.clientX, y: event.clientY, width: panel.width, height: panel.height }; event.currentTarget.setPointerCapture(event.pointerId); }} onPointerMove={event => { if (resize.current) onResize(Math.max(280, resize.current.width + event.clientX - resize.current.x), Math.max(180, resize.current.height + event.clientY - resize.current.y)); }} onPointerUp={event => { resize.current = undefined; event.currentTarget.releasePointerCapture(event.pointerId); }}><Maximize2 size={10} /></button>}
   </motion.section>;
 }
 

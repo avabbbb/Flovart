@@ -17,6 +17,7 @@ import { WorkflowSidebar } from './WorkflowSidebar';
 import { useWorkflowWorkspaceAdapter } from './useWorkflowWorkspaceAdapter';
 import { discardWorkflowMediaRecord, fitWorkflowMediaSize, ingestWorkflowMedia, loadWorkflowMediaBlob, releaseWorkflowMediaRecord, workflowBlobToDataUrl, type WorkflowMediaRecord } from './media';
 import type { AssetItem, AssetLibrary } from '../../types';
+import { useCompactViewport } from '../../hooks/useCompactViewport';
 
 export interface WorkflowWorkspaceProps {
   theme: 'light' | 'dark';
@@ -89,8 +90,15 @@ export function WorkflowWorkspace({
   const updateProject = useWorkflowStore(state => state.updateProject);
   const activeProject = projects.find(project => project.id === activeProjectId) || null;
   useWorkflowWorkspaceAdapter(activeProject);
-  const [leftOpen, setLeftOpen] = useState(true);
-  const [rightOpen, setRightOpen] = useState(() => localStorage.getItem('workflowRightPanelOpen') !== 'false');
+  const compactViewport = useCompactViewport();
+  const [desktopLeftOpen, setDesktopLeftOpen] = useState(true);
+  const [mobileLeftOpen, setMobileLeftOpen] = useState(false);
+  const leftOpen = compactViewport ? mobileLeftOpen : desktopLeftOpen;
+  const setLeftOpen = (open: boolean) => compactViewport ? setMobileLeftOpen(open) : setDesktopLeftOpen(open);
+  const [desktopRightOpen, setDesktopRightOpen] = useState(() => localStorage.getItem('workflowRightPanelOpen') !== 'false');
+  const [mobileRightOpen, setMobileRightOpen] = useState(false);
+  const rightOpen = compactViewport ? mobileRightOpen : desktopRightOpen;
+  const setRightOpen = (open: boolean) => compactViewport ? setMobileRightOpen(open) : setDesktopRightOpen(open);
   const [rightTab, setRightTab] = useState<WorkflowRightTab>('agent');
   const [rightWidth, setRightWidth] = useState(() => Number(localStorage.getItem('workflowRightPanelWidth')) || 390);
   const [workspaceNotice, setWorkspaceNotice] = useState('');
@@ -104,8 +112,16 @@ export function WorkflowWorkspace({
   }, [rightWidth]);
 
   useEffect(() => {
-    localStorage.setItem('workflowRightPanelOpen', String(rightOpen));
-  }, [rightOpen]);
+    localStorage.setItem('workflowRightPanelOpen', String(desktopRightOpen));
+  }, [desktopRightOpen]);
+
+  useEffect(() => {
+    if (compactViewport) setMobileRightOpen(false);
+  }, [compactViewport]);
+
+  useEffect(() => {
+    if (compactViewport) setMobileLeftOpen(false);
+  }, [compactViewport]);
 
   const insertSharedMedia = async (media: WorkflowSharedMedia) => {
     if (!activeProject) return;
@@ -219,14 +235,12 @@ assetLibrary={assetLibrary}
               onReversePrompt={onReversePrompt}
               onOpenAgent={() => {
                 setRightTab('agent');
-                setRightOpen(prev => {
-                  const next = !prev;
-                  if (next) onOpenAgent?.();
-                  return next;
-                });
+                const next = !rightOpen;
+                setRightOpen(next);
+                if (next) onOpenAgent?.();
               }}
               agentOpen={rightOpen && rightTab === 'agent'}
-              rightPanelInset={rightOpen ? rightWidth + 24 : 12}
+              rightPanelInset={rightOpen && !compactViewport ? rightWidth + 24 : 12}
               t={t}
               theme={theme}
               language={language}

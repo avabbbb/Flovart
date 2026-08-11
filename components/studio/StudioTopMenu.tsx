@@ -122,7 +122,7 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
   return (
     <>
     <header
-      className="theme-aware relative z-50 grid min-h-12 shrink-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-1 px-2 py-1.5 sm:px-4"
+      className="theme-aware relative z-50 grid min-h-12 shrink-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-1 px-2 py-1.5 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:px-4"
       style={{ background: 'var(--app-bg)' }}
     >
       <div className="flex min-w-0 items-center gap-2">
@@ -192,11 +192,11 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
             ) : (
               <button
                 type="button"
-                className="group flex min-w-0 items-center gap-1 rounded-md px-1 py-0.5 transition hover:bg-black/5"
+                className="group hidden min-w-0 items-center gap-1 rounded-md px-1 py-0.5 transition hover:bg-black/5 min-[540px]:flex"
                 onClick={() => setIsEditingTitle(true)}
                 title={isChinese ? '点击修改工作流名称' : 'Click to rename workflow'}
               >
-                <strong className="min-w-0 truncate text-xs font-semibold min-[540px]:block" style={{ color: 'var(--isl-ink-soft)' }}>
+                <strong className="min-w-0 truncate text-xs font-semibold" style={{ color: 'var(--isl-ink-soft)' }}>
                   {title || 'Workflow'}
                 </strong>
                 <Pencil size={10} className="shrink-0 opacity-0 transition group-hover:opacity-60" />
@@ -228,7 +228,7 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
               key={tabMode}
               type="button"
               onClick={() => actions.changeMode(tabMode)}
-              className={`rounded-md px-2.5 py-1 text-xs font-bold transition ${isActive ? 'bg-black/5' : 'opacity-50 hover:opacity-80'}`}
+              className={`shrink-0 whitespace-nowrap rounded-md px-2.5 py-1 text-xs font-bold transition ${isActive ? 'bg-black/5' : 'opacity-50 hover:opacity-80'}`}
               style={{ color: 'var(--isl-ink)' }}
               aria-pressed={isActive}
             >
@@ -241,7 +241,7 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
       <div className="flex min-w-0 items-center justify-end gap-0.5 sm:gap-1">
         <Link
           to="/prompts"
-          className="isl-icon-btn flex h-8 items-center gap-1.5 px-2"
+          className="isl-icon-btn max-sm:!hidden h-8 items-center gap-1.5 px-2 sm:!flex"
           title={isChinese ? '提示词社区' : 'Prompt community'}
           aria-label={isChinese ? '提示词社区' : 'Prompt community'}
         >
@@ -249,7 +249,7 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
         </Link>
         <Link
           to="/enterprise"
-          className="isl-icon-btn flex h-8 items-center gap-1.5 px-2"
+          className="isl-icon-btn max-sm:!hidden h-8 items-center gap-1.5 px-2 sm:!flex"
           title={isChinese ? '企业后台' : 'Enterprise console'}
           aria-label={isChinese ? '企业后台' : 'Enterprise console'}
         >
@@ -257,7 +257,7 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
         </Link>
         <button
           type="button"
-          className="isl-icon-btn flex h-8 items-center gap-1.5 px-2"
+          className="isl-icon-btn max-sm:!hidden h-8 items-center gap-1.5 px-2 sm:!flex"
           onClick={() => setAuthOpen(true)}
           title={isLoggedIn ? user?.username : (isChinese ? '登录' : 'Login')}
           aria-label={isChinese ? '登录' : 'Login'}
@@ -289,7 +289,7 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
         )}
         <button
           type="button"
-          className="isl-icon-btn flex h-8 min-w-8 items-center gap-1.5 px-2"
+          className="isl-icon-btn flex h-8 min-w-8 shrink-0 items-center gap-1.5 px-2"
           onClick={actions.openSettings}
           title={status.detail}
           aria-label={`${status.label}: ${status.detail}`}
@@ -298,11 +298,11 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
           {status.tone === 'ready' ? <CircleCheck size={15} /> : <CircleAlert size={15} />}
           <span className="hidden whitespace-nowrap text-[11px] font-semibold lg:inline">{status.label}</span>
         </button>
-        <button type="button" className="isl-icon-btn h-8 w-8" onClick={actions.toggleLanguage} title={isChinese ? 'Switch to English' : '切换到中文'}>
+        <button type="button" className="isl-icon-btn h-8 w-8 shrink-0" onClick={actions.toggleLanguage} title={isChinese ? 'Switch to English' : '切换到中文'}>
           <Languages size={15} />
           <span className="sr-only">{isChinese ? 'Switch to English' : '切换到中文'}</span>
         </button>
-        <div ref={themeMenuRef} className="relative shrink-0">
+        <div ref={themeMenuRef} className="relative hidden shrink-0 min-[430px]:block">
           <button type="button" className="isl-icon-btn h-8 w-8" onClick={() => setThemeMenuOpen(open => !open)} title={isChinese ? '主题模式' : 'Theme mode'} aria-label={isChinese ? '主题模式' : 'Theme mode'}>
             {themeIcon}
           </button>
@@ -333,7 +333,7 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
             </div>
           )}
         </div>
-        <button type="button" className="isl-icon-btn h-8 w-8" onClick={actions.openSettings} title={settingsLabel} aria-label={settingsLabel}>
+        <button type="button" className="isl-icon-btn h-8 w-8 shrink-0" onClick={actions.openSettings} title={settingsLabel} aria-label={settingsLabel}>
           <Settings size={15} />
         </button>
       </div>

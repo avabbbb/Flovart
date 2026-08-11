@@ -48,4 +48,14 @@ describe('Flovart Home Skill 台', () => {
     expect(sessionStorage.length).toBe(0);
     expect(window.location.hash).toBe('#/app');
   });
+
+  it('exposes a semantic, navigable mobile shell instead of a fixed desktop sidebar', () => {
+    render(<FlovartHome />);
+
+    expect(screen.getByRole('main')).toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: '移动端功能导航' })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: '创作想法' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '添加文件' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /Flovart 1\.0/ })).not.toBeInTheDocument();
+  });
 });

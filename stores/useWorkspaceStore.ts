@@ -12,6 +12,8 @@ interface UISlice {
   setLanguage: (lang: 'en' | 'zho') => void;
 }
 
+export const DEFAULT_WORKSPACE_LANGUAGE = 'zho' as const;
+
 const createUISlice = (set: any): UISlice => ({
   activeView: 'workflow',
   setActiveView: (activeView) => set({ activeView }),
@@ -24,7 +26,7 @@ const createUISlice = (set: any): UISlice => ({
     }
   })(),
   setThemeMode: (mode) => set({ themeMode: mode }),
-  language: 'en' as const,
+  language: DEFAULT_WORKSPACE_LANGUAGE,
   setLanguage: (lang) => set({ language: lang }),
 });
 

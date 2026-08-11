@@ -20,6 +20,7 @@ import { setWorkflowNodeRunner, setWorkflowNodeToolRunner } from './services/wor
 import { runWorkflowOnlineAgent } from './services/workflowOnlineAgent';
 import type { WorkflowNodeToolName, WorkflowNodeToolRuntime } from './services/workflowNodeTools';
 import { getManagedAgentConnection } from './services/managedAgentConnection';
+import { getStudioRuntimeStatus, type AgentRuntimeState } from './services/studioRuntimeStatus';
 import type { WorkflowOnlineTurnInput } from './components/workflow/WorkflowAgentPanel';
 import { translations } from './utils/translations';
 import './styles/generation.css';
@@ -34,6 +35,7 @@ const WorkflowWorkspace = React.lazy(() => import('./components/workflow/Workflo
 const TableWorkspace = React.lazy(() => import('./components/table/TableWorkspace').then(m => ({ default: m.TableWorkspace })));
 const AgentWorkspace = React.lazy(() => import('./components/agent/AgentWorkspace').then(m => ({ default: m.AgentWorkspace })));
 const AssetAddModal = React.lazy(() => import('./components/AssetAddModal').then(m => ({ default: m.AssetAddModal })));
+const BrowserImportBridge = React.lazy(() => import('./components/extension/BrowserImportBridge').then(m => ({ default: m.BrowserImportBridge })));
 
 type ThemePalette = {
     appBackground: string;
@@ -72,6 +74,7 @@ const App: React.FC = () => {
     const [isEnhancingPrompt, setIsEnhancingPrompt] = useState(false);
     const [isAssetPanelOpen, setIsAssetPanelOpen] = useState(false);
     const [tableSourceNodeId, setTableSourceNodeId] = useState<string | null>(null);
+    const [agentRuntimeState, setAgentRuntimeState] = useState<AgentRuntimeState>({ kind: 'checking' });
 
     const toast = useToast();
 
@@ -102,7 +105,14 @@ const App: React.FC = () => {
     } = useApiKeys(isSettingsPanelOpen);
 
     useEffect(() => {
-        void getManagedAgentConnection().catch(error => console.warn('Managed Agent auto-start unavailable.', error));
+        let active = true;
+        void getManagedAgentConnection()
+            .then(connection => { if (active) setAgentRuntimeState({ kind: connection ? 'ready' : 'web' }); })
+            .catch(error => {
+                console.warn('Managed Agent auto-start unavailable.', error);
+                if (active) setAgentRuntimeState({ kind: 'error', message: error instanceof Error ? error.message : String(error) });
+            });
+        return () => { active = false; };
     }, []);
 
     useEffect(() => {
@@ -367,17 +377,14 @@ const App: React.FC = () => {
         toast.show('已保存到我的素材。', 'success');
     }, [toast]);
 
+    const studioRuntimeStatus = useMemo(() => getStudioRuntimeStatus(language, agentRuntimeState), [agentRuntimeState, language]);
     const studioMenuModel: StudioMenuModel = useMemo(() => ({
         mode: activeView,
         title: activeView === 'workflow' ? activeWorkflowTitle : activeView === 'table' ? 'Table' : 'Agent',
         themeMode,
         resolvedTheme,
         language,
-        status: {
-            tone: 'ready',
-            label: 'Ready',
-            detail: 'All systems operational',
-        },
+        status: studioRuntimeStatus,
         actions: {
             changeMode: setActiveView,
             setThemeMode,
@@ -392,7 +399,7 @@ const App: React.FC = () => {
             rename: (newTitle: string) => { if (activeWorkflowProjectId) workflowRenameProject(activeWorkflowProjectId, newTitle); },
             setActiveByIndex: (index: number) => { const target = workflowProjects[index]; if (target) workflowSetActiveProject(target.id); },
         },
-    }), [activeView, activeWorkflowTitle, resolvedTheme, themeMode, language, setActiveView, setThemeMode, setLanguage, workflowProjects, activeWorkflowIndex, activeWorkflowProjectId, workflowCreateProject, workflowDeleteProjects, workflowRenameProject, workflowSetActiveProject]);
+    }), [activeView, activeWorkflowTitle, resolvedTheme, themeMode, language, setActiveView, setThemeMode, setLanguage, studioRuntimeStatus, workflowProjects, activeWorkflowIndex, activeWorkflowProjectId, workflowCreateProject, workflowDeleteProjects, workflowRenameProject, workflowSetActiveProject]);
 
     const main = activeView === 'workflow' ? (
         <Suspense fallback={<div className="grid h-full place-content-center text-sm opacity-40">正在加载 Workflow...</div>}>
@@ -487,6 +494,7 @@ const App: React.FC = () => {
                         toast.show('已保存到我的素材。', 'success');
                     }}
                 />}
+                <BrowserImportBridge />
             </Suspense>
             <ToastStack toasts={toast.toasts} onDismiss={toast.dismiss} />
         </>}

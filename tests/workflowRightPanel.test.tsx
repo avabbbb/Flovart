@@ -36,6 +36,8 @@ const renderWorkspace = () => render(
 );
 
 describe('Workflow right panel', () => {
+  const desktopWidth = window.innerWidth;
+
   beforeEach(async () => {
     localStorage.clear();
     await workflowMediaStorage.clear();
@@ -43,7 +45,11 @@ describe('Workflow right panel', () => {
     useWorkflowStore.setState({ hydrated: true, projects: [project], activeProjectId: project.id });
   });
 
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: desktopWidth });
+    window.dispatchEvent(new Event('resize'));
+    vi.unstubAllGlobals();
+  });
 
   it('opens by default and persists its visibility like the Canvas panel', () => {
     renderWorkspace();
@@ -54,6 +60,25 @@ describe('Workflow right panel', () => {
     expect(drawer.style.pointerEvents).toBe('auto');
     fireEvent.click(close);
     expect(localStorage.getItem('workflowRightPanelOpen')).toBe('false');
+  });
+
+  it('starts closed on narrow screens so the drawer cannot block first-run Workflow actions', () => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 });
+    renderWorkspace();
+
+    const open = screen.getByRole('button', { name: '打开右侧面板' });
+    const drawer = screen.getByTitle('收起右侧面板').closest('aside') as HTMLElement;
+    expect(drawer.style.pointerEvents).toBe('none');
+    expect(open.style.pointerEvents).toBe('auto');
+    expect(document.querySelector('.workflow-sidebar')).toBeNull();
+
+    fireEvent.click(open);
+    expect(drawer.style.pointerEvents).toBe('auto');
+
+    const openLayers = screen.getByRole('button', { name: '打开图层与资产' });
+    expect(openLayers.style.pointerEvents).toBe('auto');
+    fireEvent.click(openLayers);
+    expect(document.querySelector('.workflow-sidebar')).toBeInTheDocument();
   });
 
   it('mounts the iterative Flovart PI Agent beside the visible Workflow', () => {
