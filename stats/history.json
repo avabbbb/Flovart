@@ -122,6 +122,14 @@
       "watchers": 0,
       "releases": 1,
       "downloads": 24
+    },
+    {
+      "date": "2026-08-13",
+      "stars": 131,
+      "forks": 33,
+      "watchers": 0,
+      "releases": 1,
+      "downloads": 24
     }
   ],
   "releaseAssets": [
@@ -132,5 +140,5 @@
       "updatedAt": "2026-06-02T08:23:17Z"
     }
   ],
-  "updatedAt": "2026-08-12T02:48:29.073Z"
+  "updatedAt": "2026-08-13T03:02:31.096Z"
 }
