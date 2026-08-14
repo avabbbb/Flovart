@@ -3,8 +3,8 @@ package repository
 import (
 	"errors"
 
-	"gorm.io/gorm"
 	"flovart/enterprise/model"
+	"gorm.io/gorm"
 )
 
 type ResourceRepository struct {
@@ -27,8 +27,9 @@ func (r *ResourceRepository) ListLevels(orgID string) ([]model.ResourceLevel, er
 	return list, err
 }
 
-func (r *ResourceRepository) DeleteLevel(id string) error {
-	return r.db.Where("id = ?", id).Delete(&model.ResourceLevel{}).Error
+// DeleteLevelByOrg 按 org 归属删除（防跨组织删除）
+func (r *ResourceRepository) DeleteLevelByOrg(orgID, id string) error {
+	return r.db.Where("id = ? AND org_id = ?", id, orgID).Delete(&model.ResourceLevel{}).Error
 }
 
 // --- Resource ---
@@ -37,9 +38,10 @@ func (r *ResourceRepository) Create(res *model.Resource) error {
 	return r.db.Create(res).Error
 }
 
-func (r *ResourceRepository) FindByID(id string) (*model.Resource, error) {
+// FindByIDAndOrg 按 org 归属查找（防跨组织读取/操作）
+func (r *ResourceRepository) FindByIDAndOrg(orgID, id string) (*model.Resource, error) {
 	var res model.Resource
-	err := r.db.Preload("Level").Where("id = ?", id).First(&res).Error
+	err := r.db.Preload("Level").Where("id = ? AND org_id = ?", id, orgID).First(&res).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, nil
 	}

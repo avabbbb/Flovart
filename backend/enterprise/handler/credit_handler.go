@@ -4,9 +4,9 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/gin-gonic/gin"
 	"flovart/enterprise/middleware"
 	"flovart/enterprise/service"
+	"github.com/gin-gonic/gin"
 )
 
 type CreditHandler struct {
@@ -78,7 +78,7 @@ func (h *CreditHandler) ListRecharges(c *gin.Context) {
 
 func (h *CreditHandler) CancelRecharge(c *gin.Context) {
 	uid := c.GetString(middleware.ContextUserID)
-	r, err := h.svc.CancelRecharge(c.Param("rechargeId"), uid)
+	r, err := h.svc.CancelRecharge(c.Param("id"), c.Param("rechargeId"), uid)
 	if err != nil {
 		Fail(c, http.StatusBadRequest, err.Error())
 		return
@@ -99,7 +99,7 @@ func (h *CreditHandler) ReviewRecharge(c *gin.Context) {
 		return
 	}
 	r, err := h.svc.ReviewRecharge(service.ReviewRechargeInput{
-		RechargeID: c.Param("rechargeId"),
+		OrgID: c.Param("id"), RechargeID: c.Param("rechargeId"),
 		ReviewedBy: uid,
 		Approve:    req.Approve,
 		ReviewNote: req.ReviewNote,

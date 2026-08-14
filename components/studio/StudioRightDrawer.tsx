@@ -1,4 +1,4 @@
-import { PanelRightClose, PanelRightOpen } from 'lucide-react';
+import { History, MessageSquare, PanelRightClose, PanelRightOpen } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
 
 export interface StudioDrawerTab {
@@ -18,6 +18,7 @@ export interface StudioRightDrawerProps {
   tabs: StudioDrawerTab[];
   activeTab: string;
   onTabChange: (id: string) => void;
+  flush?: boolean;
   children: React.ReactNode;
 }
 
@@ -32,18 +33,25 @@ export const StudioRightDrawer: React.FC<StudioRightDrawerProps> = ({
   tabs,
   activeTab,
   onTabChange,
+  flush = false,
   children,
 }) => {
   const [resizing, setResizing] = useState(false);
+  const asideRef = useRef<HTMLElement>(null);
   const startRef = useRef({ x: 0, width });
 
   useEffect(() => {
     if (!resizing) return;
     const move = (event: PointerEvent) => {
-      const next = startRef.current.width + startRef.current.x - event.clientX;
-      onWidthChange(Math.min(maxWidth, Math.max(minWidth, next)));
+      const next = Math.min(maxWidth, Math.max(minWidth, startRef.current.width + startRef.current.x - event.clientX));
+      // 拖拽期间直接操作 DOM，避免每帧触发 Workflow 巨型画布重渲染；松手时一次性 commit
+      if (asideRef.current) asideRef.current.style.width = `${next}px`;
     };
-    const stop = () => setResizing(false);
+    const stop = () => {
+      setResizing(false);
+      const widthNow = asideRef.current ? parseFloat(asideRef.current.style.width) : Number.NaN;
+      if (Number.isFinite(widthNow)) onWidthChange(Math.min(maxWidth, Math.max(minWidth, widthNow)));
+    };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', stop);
     return () => {
@@ -56,8 +64,8 @@ export const StudioRightDrawer: React.FC<StudioRightDrawerProps> = ({
     <>
       <button
         type="button"
-        className="isl-icon-btn theme-aware absolute z-40 h-10 w-10"
-        style={{ right: outerGap, top: outerGap, opacity: open ? 0 : 1, pointerEvents: open ? 'none' : 'auto' }}
+        className="isl-icon-btn theme-aware absolute h-10 w-10"
+        style={{ right: outerGap, top: outerGap, zIndex: 80, opacity: open ? 0 : 1, pointerEvents: open ? 'none' : 'auto' }}
         onClick={() => onOpenChange(true)}
         title="打开右侧面板"
         aria-label="打开右侧面板"
@@ -66,12 +74,13 @@ export const StudioRightDrawer: React.FC<StudioRightDrawerProps> = ({
       </button>
 
       <aside
-        className="isl-panel compact-right-panel theme-aware absolute z-40 flex min-h-0 flex-col overflow-hidden transition-[transform,opacity] duration-200"
+        ref={asideRef}
+        className={`isl-panel compact-right-panel theme-aware absolute z-40 flex min-h-0 flex-col overflow-hidden transition-[transform,opacity] duration-200 ${flush ? 'compact-right-panel--flush' : ''}`}
         style={{
-          top: outerGap,
-          right: outerGap,
-          bottom: outerGap,
-          width: `min(${width}px, calc(100% - ${outerGap * 2}px))`,
+          top: flush ? 0 : outerGap,
+          right: flush ? 0 : outerGap,
+          bottom: flush ? 0 : outerGap,
+          width: `min(${width}px, calc(100% - ${(flush ? 0 : outerGap * 2)}px))`,
           opacity: open ? 1 : 0,
           pointerEvents: open ? 'auto' : 'none',
           transform: open ? 'translateX(0)' : 'translateX(calc(100% + 24px))',
@@ -80,7 +89,7 @@ export const StudioRightDrawer: React.FC<StudioRightDrawerProps> = ({
         <div
           role="separator"
           aria-orientation="vertical"
-          className="absolute inset-y-0 left-0 z-10 w-2 -translate-x-1/2 cursor-ew-resize"
+          className="absolute inset-y-0 left-0 z-[85] w-2 -translate-x-1/2 cursor-ew-resize"
           onPointerDown={event => {
             if (event.button !== 0) return;
             startRef.current = { x: event.clientX, width };
@@ -88,7 +97,7 @@ export const StudioRightDrawer: React.FC<StudioRightDrawerProps> = ({
             event.preventDefault();
           }}
         />
-        <div className="flex shrink-0 items-center gap-1.5 border-b px-2 py-2" style={{ borderColor: 'var(--isl-border)' }}>
+        <div className={flush ? 'compact-right-panel__quicktabs' : 'flex shrink-0 items-center gap-1.5 border-b px-2 py-2'} style={{ borderColor: 'var(--isl-border)' }}>
           <div className="isl-tabbar isl-tabbar--ac min-w-0 flex-1">
             {tabs.map(tab => (
               <button
@@ -98,7 +107,7 @@ export const StudioRightDrawer: React.FC<StudioRightDrawerProps> = ({
                 onClick={() => onTabChange(tab.id)}
                 title={tab.label}
               >
-                {tab.icon}
+                {tab.icon || (tab.id === 'history' ? <History size={15} /> : <MessageSquare size={15} />)}
                 <span className="truncate">{tab.label}</span>
               </button>
             ))}

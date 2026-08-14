@@ -2,13 +2,13 @@ package model
 
 // Query 列表筛选统一入参，沿用项目列表接口契约
 type Query struct {
-	Keyword string
-	Tags    []string
+	Keyword  string
+	Tags     []string
 	AuthorID string
-	Mode    string
-	Sort    string // latest | popular | downloads
-	Page    int
-	Size    int
+	Mode     string
+	Sort     string // latest | popular | downloads
+	Page     int
+	Size     int
 }
 
 // Normalize 填充默认值并约束边界

@@ -3,9 +3,9 @@ package handler
 import (
 	"net/http"
 
-	"github.com/gin-gonic/gin"
 	"flovart/enterprise/middleware"
 	"flovart/enterprise/service"
+	"github.com/gin-gonic/gin"
 )
 
 type ApiKeyHandler struct {
@@ -60,7 +60,7 @@ func (h *ApiKeyHandler) Toggle(c *gin.Context) {
 		Fail(c, http.StatusBadRequest, "入参格式错误")
 		return
 	}
-	key, err := h.svc.Toggle(c.Param("keyId"), req.Enabled)
+	key, err := h.svc.Toggle(c.Param("id"), c.Param("keyId"), req.Enabled)
 	if err != nil {
 		Fail(c, http.StatusBadRequest, err.Error())
 		return
@@ -69,7 +69,7 @@ func (h *ApiKeyHandler) Toggle(c *gin.Context) {
 }
 
 func (h *ApiKeyHandler) Delete(c *gin.Context) {
-	if err := h.svc.Delete(c.Param("keyId")); err != nil {
+	if err := h.svc.Delete(c.Param("id"), c.Param("keyId")); err != nil {
 		Fail(c, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -112,7 +112,7 @@ func (h *ApiKeyHandler) ListPricing(c *gin.Context) {
 }
 
 func (h *ApiKeyHandler) DeletePricing(c *gin.Context) {
-	if err := h.svc.DeletePricing(c.Param("pricingId")); err != nil {
+	if err := h.svc.DeletePricing(c.Param("id"), c.Param("pricingId")); err != nil {
 		Fail(c, http.StatusBadRequest, err.Error())
 		return
 	}

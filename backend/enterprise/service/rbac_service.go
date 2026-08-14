@@ -27,6 +27,9 @@ func (s *RbacService) Satisfy(orgID, userID, perm string) (bool, error) {
 	if err != nil || org == nil {
 		return false, errRequireOrg
 	}
+	if org.Status != "active" {
+		return false, nil
+	}
 	if org.OwnerID == userID {
 		return true, nil
 	}
@@ -39,7 +42,7 @@ func (s *RbacService) Satisfy(orgID, userID, perm string) (bool, error) {
 
 // IsMember 判断 user 是否 org 任一部门成员（"组织成员即可"档权限用）
 func (s *RbacService) IsMember(orgID, userID string) (bool, error) {
-	if org, _ := s.orgs.FindByID(orgID); org != nil && org.OwnerID == userID {
+	if org, _ := s.orgs.FindByID(orgID); org != nil && org.Status == "active" && org.OwnerID == userID {
 		return true, nil
 	}
 	return s.rbac.UserInOrg(orgID, userID)
@@ -51,6 +54,9 @@ func (s *RbacService) EffectivePerms(orgID, userID string) ([]string, error) {
 	org, err := s.orgs.FindByID(orgID)
 	if err != nil || org == nil {
 		return nil, errRequireOrg
+	}
+	if org.Status != "active" {
+		return nil, errors.New("组织已暂停")
 	}
 	if org.OwnerID == userID {
 		return model.AllPermissions, nil

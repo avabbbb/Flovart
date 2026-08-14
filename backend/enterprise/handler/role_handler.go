@@ -3,8 +3,8 @@ package handler
 import (
 	"net/http"
 
-	"github.com/gin-gonic/gin"
 	"flovart/enterprise/service"
+	"github.com/gin-gonic/gin"
 )
 
 type RoleHandler struct {
@@ -48,9 +48,9 @@ func (h *RoleHandler) Create(c *gin.Context) {
 }
 
 type updateRolePermsReq struct {
-	Name        *string   `json:"name"`
-	Permissions []string  `json:"permissions"`
-	Sort        *int      `json:"sort"`
+	Name        *string  `json:"name"`
+	Permissions []string `json:"permissions"`
+	Sort        *int     `json:"sort"`
 }
 
 func (h *RoleHandler) Update(c *gin.Context) {

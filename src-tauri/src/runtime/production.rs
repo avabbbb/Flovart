@@ -100,6 +100,16 @@ pub fn compile_production_plan(args: &Value) -> Result<ProductionPlanDraft, Runt
             .unwrap_or_else(|| "16:9".to_owned());
     let language = optional_string(delivery.get("language"), "spec.delivery.language", 32)?
         .unwrap_or_else(|| "zh-CN".to_owned());
+    // Language is later interpolated into a PowerShell script (audio.tts), so
+    // restrict it to BCP-47-style tags before it can reach a command string.
+    if !language
+        .chars()
+        .all(|character| character.is_ascii_alphanumeric() || character == '-')
+    {
+        return Err(invalid(
+            "spec.delivery.language must contain only ASCII letters, digits, or hyphens (e.g. zh-CN)",
+        ));
+    }
     let style_prompt = spec_record
         .get("visual")
         .and_then(|visual| visual.get("stylePrompt"))

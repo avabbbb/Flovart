@@ -48,9 +48,9 @@ func TestBuildUpstreamURLDoesNotDuplicateConfiguredProviderPath(t *testing.T) {
 		endpoint string
 		want     string
 	}{
-		{"https://www.runninghub.cn", "/openapi/v2/rhart-image-g-2/text-to-image", "https://www.runninghub.cn/openapi/v2/rhart-image-g-2/text-to-image"},
-		{"https://www.runninghub.cn/openapi/v2", "/openapi/v2/rhart-image-g-2/text-to-image", "https://www.runninghub.cn/openapi/v2/rhart-image-g-2/text-to-image"},
-		{"https://gateway.example.com/api", "/v1/responses", "https://gateway.example.com/api/v1/responses"},
+		{"https://203.0.113.10", "/openapi/v2/rhart-image-g-2/text-to-image", "https://203.0.113.10/openapi/v2/rhart-image-g-2/text-to-image"},
+		{"https://203.0.113.10/openapi/v2", "/openapi/v2/rhart-image-g-2/text-to-image", "https://203.0.113.10/openapi/v2/rhart-image-g-2/text-to-image"},
+		{"https://203.0.113.10/api", "/v1/responses", "https://203.0.113.10/api/v1/responses"},
 	}
 	for _, tc := range cases {
 		got, err := buildUpstreamURL(tc.baseURL, tc.endpoint)
@@ -59,6 +59,35 @@ func TestBuildUpstreamURLDoesNotDuplicateConfiguredProviderPath(t *testing.T) {
 		}
 		if got != tc.want {
 			t.Fatalf("buildUpstreamURL(%q, %q) = %q, want %q", tc.baseURL, tc.endpoint, got, tc.want)
+		}
+	}
+}
+
+// TestValidateBaseURLBlocksPrivateTargets SSRF 防线：回环/内网/链路本地/云元数据一律拒绝
+func TestValidateBaseURLBlocksPrivateTargets(t *testing.T) {
+	blocked := []string{
+		"http://127.0.0.1:8080",
+		"http://localhost:11452",
+		"http://10.0.0.5/api",
+		"http://192.168.1.1/api",
+		"http://172.16.0.1/api",
+		"http://169.254.169.254/latest/meta-data",
+		"http://[::1]:8080",
+		"http://metadata.google.internal/computeMetadata/v1/",
+		"http://0.0.0.0/api",
+	}
+	for _, base := range blocked {
+		if err := validateBaseURL(base); err == nil {
+			t.Fatalf("validateBaseURL(%q) should be blocked, got nil", base)
+		}
+	}
+	allowed := []string{
+		"https://203.0.113.10/api",
+		"https://203.0.113.10/openapi/v2",
+	}
+	for _, base := range allowed {
+		if err := validateBaseURL(base); err != nil {
+			t.Fatalf("validateBaseURL(%q) should pass, got %v", base, err)
 		}
 	}
 }

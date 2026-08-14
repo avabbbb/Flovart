@@ -6,7 +6,9 @@
 
 每个结果型 Operation Node 持有唯一 Operation Prompt Document，包含可编辑文本、富文本结构和带稳定对象 ID、输入角色与顺序的 `@` 引用。现有 PromptBar 是该文档的唯一通用编辑表面，Agent 与设计师通过相同 Draft Action 修改；不新增 InlinePrompt/NodePrompt，也不在输出媒体或聊天中保存会漂移的 Prompt 副本。Prompt 语义变化更新 Recipe Hash，并只使当前 Operation 及受影响下游重新预览和授权。
 
-PromptBar 的 `@` chip 与画布输入边统一投影自 Operation Input Binding，Binding 保存稳定 ID、来源节点/Artifact、目标 Operation、输入角色与顺序。从 PromptBar 添加或排序引用、从画布连接或改角色、以及 Agent 调整输入，都修改同一 Binding 并同步另一视图；不再并行维护 mention/reference/order 数组与无语义 connection，也不允许有 `@` 无边或有边无输入角色。
+PromptBar 的 `@` chip 与画布输入边统一投影自 Operation Input Binding，Binding 保存稳定 ID、来源节点/Artifact、目标 Operation、输入角色与顺序。从 PromptBar 添加、排序或替换引用、从画布连接或改角色、以及 Agent 调整输入，都修改同一 Binding 并同步另一视图；替换只改变当前目标 Binding 的来源，保留其 ID、角色和顺序，不修改共享源节点或其它下游。不再并行维护 mention/reference/order 数组与无语义 connection，也不允许有 `@` 无边或有边无输入角色。
+
+每个 Workflow 节点在项目内取得按媒体类型单调分配、永不重排且永不复用的 Stable Node Alias，例如 `图片1`、`图片2`、`视频1`。它是默认显示名和稳定 `@` 解析键；用户自定义标题后，两者继续指向同一节点。打开或导入纯文本旧 Prompt 时，只对唯一精确命中的稳定别名、唯一自定义标题或素材别名执行幂等水合；若唯一命中的是尚未出现在画布上的素材库资产，则先物化可见引用节点再建立 Binding。歧义或不存在的名称保留为普通文字并提示，禁止模糊猜测和隐藏媒体输入。
 
 AI 与前端只能创建 Operation Capability Registry 中已注册的操作。Registry 为每项能力提供版本化输入/输出角色、Recipe/参数 Schema、执行类别、费用与确认级别、Workflow/Table 归属和 UI 控件 key；Agent tool schema、工具栏、Dispatcher、Preflight 与测试从同一来源生成。V1 不允许 Production Skill 或模型通过任意 JSON、HTTP 或脚本临时扩展操作面，避免 AI 能力、可编辑 UI、权限和费用边界再次漂移。
 

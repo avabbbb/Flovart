@@ -43,7 +43,7 @@ func (s *OrgService) Create(ownerID string, in CreateOrgInput) (*model.Organizat
 		return nil, errors.New("slug 已存在")
 	}
 
-	org := &model.Organization{Slug: in.Slug, Name: in.Name, OwnerID: ownerID}
+	org := &model.Organization{Slug: in.Slug, Name: in.Name, OwnerID: ownerID, Status: "active"}
 	err := s.db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(org).Error; err != nil {
 			return err
@@ -63,7 +63,7 @@ func (s *OrgService) Create(ownerID string, in CreateOrgInput) (*model.Organizat
 			return err
 		}
 		// owner 加入根部门，绑定 owner 角色
-		m := &model.DepartmentMember{DeptID: rootDept.ID, UserID: ownerID, Roles: pq.StringArray{ownerRole.ID}}
+		m := &model.DepartmentMember{DeptID: rootDept.ID, UserID: ownerID, Roles: pq.StringArray{ownerRole.ID}, Status: "active"}
 		return tx.Create(m).Error
 	})
 	if err != nil {
@@ -135,12 +135,31 @@ func (s *OrgService) AddMember(requesterID string, in AddOrgMemberInput) (*model
 		DeptID: rootDept.ID,
 		UserID: target.ID,
 		Roles:  pq.StringArray{},
+		Status: "active",
 	}
 	if err := s.depts.AddMember(m); err != nil {
 		return nil, err
 	}
 	m.User = target
 	return m, nil
+}
+
+func (s *OrgService) UpdateMemberStatus(requesterID, orgID, targetUserID, status string) error {
+	if requesterID == targetUserID && status != "active" {
+		return errors.New("不可暂停自己")
+	}
+	normalized, ok := NormalizeMembershipStatus(status)
+	if !ok {
+		return errors.New("成员状态无效")
+	}
+	org, err := s.orgs.FindByID(orgID)
+	if err != nil || org == nil {
+		return errors.New("组织不存在")
+	}
+	if org.OwnerID == targetUserID && normalized != "active" {
+		return errors.New("不可暂停组织 owner")
+	}
+	return s.depts.UpdateOrgMemberStatus(orgID, targetUserID, normalized)
 }
 
 // RemoveMember 将用户从组织所有部门移除

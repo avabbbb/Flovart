@@ -25,6 +25,7 @@ export interface WorkflowSidebarProps {
   onCreateFolder: (parentId: string | null, name: string) => void;
   onRenameFolder: (id: string, name: string) => void;
   onRemoveFolder: (id: string, deleteItems: boolean) => void;
+  tabRequest?: { tab: SidebarTab; nonce: number };
 }
 
 type SidebarTab = 'layers' | 'assets';
@@ -57,11 +58,16 @@ export const WorkflowSidebar: React.FC<WorkflowSidebarProps> = ({
   onCreateFolder,
   onRenameFolder,
   onRemoveFolder,
+  tabRequest,
 }) => {
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [tab, setTab] = useState<SidebarTab>('layers');
   const panelRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (tabRequest) setTab(tabRequest.tab);
+  }, [tabRequest]);
 
   // 点外部收起
   useEffect(() => {

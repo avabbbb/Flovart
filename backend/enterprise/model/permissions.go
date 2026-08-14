@@ -2,20 +2,20 @@ package model
 
 // 权限点常量。后端硬编码全集，不动态增删。
 const (
-	PermOrgManage       = "org:manage"        // 改名/删除组织
-	PermMemberInvite    = "member:invite"     // 邀请成员加入组织
-	PermMemberManage    = "member:manage"      // 调整/移除成员、调整部门角色
-	PermDeptManage      = "dept:manage"       // 部门 CRUD
-	PermRoleManage      = "role:manage"       // 角色增删改
-	PermCreditGrant     = "credit:grant"      // 提交充值申请
-	PermCreditAdjust    = "credit:adjust"     // 人工调整余额
-	PermApiKeyManage    = "apikey:manage"     // API Key 池增删改
-	PermPricingManage   = "pricing:manage"    // 模型单价配置
-	PermQuotaManage     = "quota:manage"      // 成员月度额度配置
-	PermAssetApprove    = "asset:approve"     // 资源审批
-	PermAssetPublish    = "asset:publish"     // 资源发布
-	PermWorkflowPublish = "workflow:publish"  // 发布工作流
-	PermViewAuditLog    = "view:audit_log"    // 审计日志
+	PermOrgManage       = "org:manage"       // 改名/删除组织
+	PermMemberInvite    = "member:invite"    // 邀请成员加入组织
+	PermMemberManage    = "member:manage"    // 调整/移除成员、调整部门角色
+	PermDeptManage      = "dept:manage"      // 部门 CRUD
+	PermRoleManage      = "role:manage"      // 角色增删改
+	PermCreditGrant     = "credit:grant"     // 提交充值申请
+	PermCreditAdjust    = "credit:adjust"    // 人工调整余额
+	PermApiKeyManage    = "apikey:manage"    // API Key 池增删改
+	PermPricingManage   = "pricing:manage"   // 模型单价配置
+	PermQuotaManage     = "quota:manage"     // 成员月度额度配置
+	PermAssetApprove    = "asset:approve"    // 资源审批
+	PermAssetPublish    = "asset:publish"    // 资源发布
+	PermWorkflowPublish = "workflow:publish" // 发布工作流
+	PermViewAuditLog    = "view:audit_log"   // 审计日志
 )
 
 // AllPermissions 全量权限点。新增权限点时追加到此切片。

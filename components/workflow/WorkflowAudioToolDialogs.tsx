@@ -2,16 +2,18 @@ import { Button, Modal, Slider } from 'antd';
 import { useEffect, useState } from 'react';
 import { getAudioDuration } from '../../services/audioTools';
 import { isFFmpegSupported, isMultiThreadAvailable } from '../../services/ffmpegClient';
+import type { WorkflowNode } from './types';
 
-export type WorkflowAudioToolKind = 'trim' | 'speed';
+export type WorkflowAudioToolKind = 'trim' | 'speed' | 'stem-split';
 export interface WorkflowAudioToolState { kind: WorkflowAudioToolKind; nodeId: string }
 export type WorkflowAudioToolConfirmation =
   | { kind: 'trim'; startSec: number; endSec: number }
-  | { kind: 'speed'; speed: number };
+  | { kind: 'speed'; speed: number }
+  | { kind: 'stem-split' };
 
 export function WorkflowAudioToolDialogs({ tool, node, mediaUrl, busy, error, onClose, onConfirm }: {
   tool: WorkflowAudioToolState | null;
-  node: import('./types').WorkflowNode | null;
+  node: WorkflowNode | null;
   mediaUrl: string;
   busy: boolean;
   error: string | null;
@@ -22,6 +24,7 @@ export function WorkflowAudioToolDialogs({ tool, node, mediaUrl, busy, error, on
   const common = { open: true, mediaUrl, busy, error, onClose };
   if (tool.kind === 'trim') return <AudioTrimDialog {...common} onConfirm={(startSec, endSec) => onConfirm({ kind: 'trim', startSec, endSec })} />;
   if (tool.kind === 'speed') return <AudioSpeedDialog {...common} onConfirm={(speed) => onConfirm({ kind: 'speed', speed })} />;
+  if (tool.kind === 'stem-split') return <StemSplitDialog {...common} onConfirm={() => onConfirm({ kind: 'stem-split' })} />;
   return null;
 }
 
@@ -36,6 +39,18 @@ function FFmpegStatus() {
   if (!isFFmpegSupported()) return <p className="workflow-image-tool__error">当前浏览器不支持 WebAssembly，无法使用音频工具。</p>;
   if (!isMultiThreadAvailable()) return <p className="workflow-image-tool__hint">提示: 未启用多线程，处理速度较慢。COOP/COEP headers 需正确配置。</p>;
   return null;
+}
+
+function StemSplitDialog(props: CommonProps & { onConfirm: () => void }) {
+  return <Modal {...modalProps(props)} title="人声/伴奏分离">
+    <div className="workflow-image-tool__simple" data-workflow-overlay>
+      <div className="workflow-image-tool__preview"><audio src={props.mediaUrl} controls style={{ width: '100%' }} /></div>
+      <FFmpegStatus />
+      <p>分离为「人声」与「伴奏」两条独立音轨，分别创建音频节点。基于立体声相位抵消，人声通常居中；单声道或混音复杂的素材效果有限。</p>
+      <DialogError error={props.error} />
+      <Button type="primary" loading={props.busy} disabled={!isFFmpegSupported()} onClick={props.onConfirm}>分离人声与伴奏</Button>
+    </div>
+  </Modal>;
 }
 
 function AudioTrimDialog(props: CommonProps & { onConfirm: (startSec: number, endSec: number) => void }) {

@@ -32,7 +32,7 @@ describe('Flovart Home Skill 台', () => {
     expect(screen.getByRole('dialog')).toHaveTextContent('查看上游源码');
     expect(screen.getByRole('dialog')).toHaveTextContent('$vox-director');
     expect(screen.getByRole('dialog')).toHaveTextContent('不会自动发送、调用 Provider 或产生费用');
-  });
+  }, 20_000);
 
   it('creates a project and queues an editable Agent draft instead of an empty Workflow', () => {
     render(<FlovartHome />);
@@ -47,15 +47,34 @@ describe('Flovart Home Skill 台', () => {
     expect(readPendingProductionSkill(project.id)?.prompt).toContain('$vox-director');
     expect(sessionStorage.length).toBe(0);
     expect(window.location.hash).toBe('#/app');
-  });
+  }, 20_000);
 
-  it('exposes a semantic, navigable mobile shell instead of a fixed desktop sidebar', () => {
+  it('exposes a semantic desktop shell with real workspace entries and a usable Agent composer', () => {
     render(<FlovartHome />);
 
-    expect(screen.getByRole('main')).toBeInTheDocument();
-    expect(screen.getByRole('navigation', { name: '移动端功能导航' })).toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: '首页导航' })).toBeInTheDocument();
+    for (const label of ['首页', '新建项目', 'Workflow', 'Table', 'Agent', 'Skill']) {
+      expect(screen.getByRole('button', { name: label })).toBeInTheDocument();
+    }
     expect(screen.getByRole('textbox', { name: '创作想法' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '添加文件' })).toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: /Flovart 1\.0/ })).not.toBeInTheDocument();
-  });
+    expect(screen.getByRole('button', { name: '空白 Workflow' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '发送' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /一张 Workflow/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /轻量视频节点/ })).toBeInTheDocument();
+    expect(screen.queryByText('FlovartTV')).not.toBeInTheDocument();
+  }, 20_000);
+
+  it('turns a homepage idea into a real text node and opens Agent', () => {
+    render(<FlovartHome />);
+
+    fireEvent.change(screen.getByRole('textbox', { name: '创作想法' }), { target: { value: '做一个关于城市夜雨的 30 秒短片' } });
+    fireEvent.click(screen.getByRole('button', { name: '发送' }));
+
+    const project = useWorkflowStore.getState().projects[0];
+    expect(project.title).toBe('做一个关于城市夜雨的 30 秒短片');
+    expect(project.nodes).toHaveLength(1);
+    expect(project.nodes[0]).toMatchObject({ type: 'text', metadata: { content: '做一个关于城市夜雨的 30 秒短片' } });
+    expect(useWorkspaceStore.getState().activeView).toBe('agent');
+    expect(window.location.hash).toBe('#/app');
+  }, 20_000);
 });

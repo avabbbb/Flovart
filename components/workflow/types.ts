@@ -67,7 +67,8 @@ export type WorkflowOperationCapabilityId =
   | 'video.merge@1'
   | 'video.extract-frame@1'
   | 'audio.trim@1'
-  | 'audio.speed@1';
+  | 'audio.speed@1'
+  | 'audio.stem-split@1';
 export type WorkflowOperationMediaType = 'image' | 'video' | 'audio';
 export type WorkflowOperationInputRole = 'source_image' | 'reference_image' | 'mask_image' | 'source_video' | 'source_audio' | 'prompt_context';
 export type WorkflowOperationOutputRole = 'result_image' | 'result_video' | 'result_audio';

@@ -3,8 +3,8 @@ package repository
 import (
 	"errors"
 
-	"gorm.io/gorm"
 	"flovart/enterprise/model"
+	"gorm.io/gorm"
 )
 
 type ApprovalRepository struct {
@@ -21,9 +21,10 @@ func (r *ApprovalRepository) CreateWorkflow(w *model.ApprovalWorkflow) error {
 	return r.db.Create(w).Error
 }
 
-func (r *ApprovalRepository) FindWorkflowByID(id string) (*model.ApprovalWorkflow, error) {
+// FindWorkflowByIDAndOrg 按 org 归属查找审批流（防跨组织读取）
+func (r *ApprovalRepository) FindWorkflowByIDAndOrg(orgID, id string) (*model.ApprovalWorkflow, error) {
 	var w model.ApprovalWorkflow
-	err := r.db.Where("id = ?", id).First(&w).Error
+	err := r.db.Where("id = ? AND org_id = ?", id, orgID).First(&w).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, nil
 	}
@@ -49,8 +50,9 @@ func (r *ApprovalRepository) UpdateWorkflow(w *model.ApprovalWorkflow) error {
 	return r.db.Save(w).Error
 }
 
-func (r *ApprovalRepository) DeleteWorkflow(id string) error {
-	return r.db.Where("id = ?", id).Delete(&model.ApprovalWorkflow{}).Error
+// DeleteWorkflowByOrg 按 org 归属删除审批流（防跨组织删除）
+func (r *ApprovalRepository) DeleteWorkflowByOrg(orgID, id string) error {
+	return r.db.Where("id = ? AND org_id = ?", id, orgID).Delete(&model.ApprovalWorkflow{}).Error
 }
 
 // --- Node ---
@@ -75,9 +77,10 @@ func (r *ApprovalRepository) CreateRecord(rec *model.ApprovalRecord) error {
 	return r.db.Create(rec).Error
 }
 
-func (r *ApprovalRepository) FindRecord(id string) (*model.ApprovalRecord, error) {
+// FindRecordByOrg 按 org 归属查找审批实例（防跨组织读取/操作）
+func (r *ApprovalRepository) FindRecordByOrg(orgID, id string) (*model.ApprovalRecord, error) {
 	var rec model.ApprovalRecord
-	err := r.db.Where("id = ?", id).First(&rec).Error
+	err := r.db.Where("id = ? AND org_id = ?", id, orgID).First(&rec).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, nil
 	}

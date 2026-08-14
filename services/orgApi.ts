@@ -6,6 +6,7 @@ export interface Organization {
   slug: string;
   name: string;
   ownerId: string;
+  status: 'active' | 'suspended';
   createdAt: string;
   updatedAt: string;
 }
@@ -32,6 +33,7 @@ export interface DepartmentMember {
   userId: string;
   isLead: boolean;
   roles: string[]; // 绑定在此部门的 roleID 数组
+  status: 'active' | 'suspended';
   createdAt: string;
   updatedAt: string;
   user?: HubUser;
@@ -79,6 +81,8 @@ export const orgApi = {
   members: (id: string) => api.get<DepartmentMember[]>(ENTERPRISE_BASE_URL, `/orgs/${id}/members`),
   addMember: (id: string, body: { byUsername: string }) =>
     api.post<DepartmentMember>(ENTERPRISE_BASE_URL, `/orgs/${id}/members`, body),
+  updateMember: (id: string, userId: string, status: DepartmentMember['status']) =>
+    api.put<{ userId: string; status: DepartmentMember['status'] }>(ENTERPRISE_BASE_URL, `/orgs/${id}/members/${userId}`, { status }),
   removeMember: (id: string, userId: string) =>
     api.del<{ removed: string }>(ENTERPRISE_BASE_URL, `/orgs/${id}/members/${userId}`),
   // 我的有效权限集
@@ -107,4 +111,19 @@ export const orgApi = {
   updateRole: (roleId: string, body: { name?: string; permissions?: string[]; sort?: number }) =>
     api.put<Role>(ENTERPRISE_BASE_URL, `/roles/${roleId}`, body),
   deleteRole: (roleId: string) => api.del<{ deleted: string }>(ENTERPRISE_BASE_URL, `/roles/${roleId}`),
+  auditLogs: (orgId: string, page = 1, pageSize = 50) =>
+    api.get<{ list: AuditLog[]; total: number }>(ENTERPRISE_BASE_URL, `/orgs/${orgId}/audit-logs?page=${page}&pageSize=${pageSize}`),
 };
+
+export interface AuditLog {
+  id: string;
+  orgId?: string;
+  actorId: string;
+  method: string;
+  route: string;
+  statusCode: number;
+  requestId: string;
+  ip: string;
+  userAgent: string;
+  createdAt: string;
+}

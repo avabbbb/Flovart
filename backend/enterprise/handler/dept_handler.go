@@ -4,9 +4,9 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/gin-gonic/gin"
 	"flovart/enterprise/middleware"
 	"flovart/enterprise/service"
+	"github.com/gin-gonic/gin"
 )
 
 type DeptHandler struct {

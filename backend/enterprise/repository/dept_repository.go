@@ -4,6 +4,7 @@ import (
 	"errors"
 
 	"flovart/enterprise/model"
+	"github.com/lib/pq"
 	"gorm.io/gorm"
 )
 
@@ -91,6 +92,19 @@ func (r *DeptRepository) UpdateMember(m *model.DepartmentMember) error {
 	return r.db.Save(m).Error
 }
 
+func (r *DeptRepository) UpdateOrgMemberStatus(orgID, userID, status string) error {
+	tx := r.db.Model(&model.DepartmentMember{}).
+		Where("user_id = ? AND dept_id IN (SELECT id FROM departments WHERE org_id = ?)", userID, orgID).
+		Update("status", status)
+	if tx.Error != nil {
+		return tx.Error
+	}
+	if tx.RowsAffected == 0 {
+		return errors.New("成员不在该组织")
+	}
+	return nil
+}
+
 func (r *DeptRepository) RemoveMember(deptID, userID string) error {
 	tx := r.db.Where("dept_id = ? AND user_id = ?", deptID, userID).Delete(&model.DepartmentMember{})
 	if tx.Error != nil {
@@ -120,4 +134,30 @@ func (r *DeptRepository) CountRolesByOrg(orgID string, roleIDs []string) (int64,
 	var n int64
 	err := r.db.Model(&model.Role{}).Where("org_id = ? AND id IN ?", orgID, roleIDs).Count(&n).Error
 	return n, err
+}
+
+// UserHasAnyRole 判断 user 在该 org 是否持有 roleIDs 中任一角色（审批流 role 类型节点用）
+func (r *DeptRepository) UserHasAnyRole(orgID, userID string, roleIDs []string) (bool, error) {
+	if len(roleIDs) == 0 {
+		return false, nil
+	}
+	var n int64
+	err := r.db.Table("department_members dm").
+		Joins("JOIN departments d ON d.id = dm.dept_id AND d.org_id = ?", orgID).
+		Where("dm.user_id = ? AND dm.roles && ?", userID, pq.Array(roleIDs)).
+		Count(&n).Error
+	return n > 0, err
+}
+
+// UserLeadsAnyDept 判断 user 是否为该 org 中 deptIDs 任一部门的负责人（审批流 dept_lead 类型节点用）
+func (r *DeptRepository) UserLeadsAnyDept(orgID, userID string, deptIDs []string) (bool, error) {
+	if len(deptIDs) == 0 {
+		return false, nil
+	}
+	var n int64
+	err := r.db.Table("department_members dm").
+		Joins("JOIN departments d ON d.id = dm.dept_id AND d.org_id = ?", orgID).
+		Where("dm.user_id = ? AND dm.dept_id IN ? AND dm.is_lead = true", userID, deptIDs).
+		Count(&n).Error
+	return n > 0, err
 }

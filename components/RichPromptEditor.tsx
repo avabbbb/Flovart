@@ -16,6 +16,7 @@ import {
     FLOVART_PROMPT_CLIPBOARD_MIME,
     hydratePromptText,
     rebindPromptDocument,
+    type PromptReferenceMention,
 } from '../utils/promptReferenceClipboard';
 
 function buildDocFromText(text: string) {
@@ -417,6 +418,46 @@ const RichPromptEditor = forwardRef<RichPromptEditorHandle, RichPromptEditorProp
 );
 
 RichPromptEditor.displayName = 'RichPromptEditor';
+
+export type PromptReferenceMentionItem = PromptReferenceMention;
+
+// 提交前把纯文本里的 @名称（用户手动输入而非从选择器选择）解析为真实引用绑定。
+// 与粘贴路径共用同一套名称匹配 + rebind 逻辑；返回是否发生了文档改写。
+export function resolveEditorMentions(
+    editor: RichPromptEditorHandle,
+    candidates: PromptReferenceMention[],
+    resolvePasted?: (mentions: MentionData[]) => Array<MentionData | null>,
+): boolean {
+    const text = editor.getText();
+    if (!text.includes('@')) return false;
+    const hydrated = hydratePromptText(text, candidates);
+    const mentions = extractMentions(hydrated.document);
+    if (mentions.length === 0) return false;
+
+    const aliasSources = new Map<string, string>();
+    const resolvable = mentions.map((mention, index) => ({ mention, index })).filter(({ mention }) => {
+        const alias = mention.label.trim().toLocaleLowerCase();
+        const identity = mention.assetId ? `asset:${mention.assetId}` : `node:${mention.id}`;
+        const owner = aliasSources.get(alias);
+        if (owner && owner !== identity) return false;
+        aliasSources.set(alias, identity);
+        return true;
+    });
+    if (resolvable.length === 0) return false;
+
+    const reboundMentions = resolvePasted?.(resolvable.map(item => item.mention))
+        || resolvable.map(item => item.mention);
+    const resolved: Array<MentionData | null> = mentions.map(() => null);
+    resolvable.forEach((item, index) => { resolved[item.index] = reboundMentions[index] || null; });
+    let mentionIndex = 0;
+    const rebound = rebindPromptDocument(hydrated.document, () => resolved[mentionIndex++] || null);
+    try {
+        editor.setDocument(rebound.document);
+        return true;
+    } catch {
+        return false;
+    }
+}
 
 export default RichPromptEditor;
 

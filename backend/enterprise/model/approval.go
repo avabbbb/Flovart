@@ -34,26 +34,26 @@ type ApprovalNode struct {
 // ApprovalRecord 审批实例。每次提交审批生成一条。
 // Status: pending（流转中）/ approved（最终通过）/ rejected（被驳回）/ cancelled（发起者撤回）
 type ApprovalRecord struct {
-	ID              string     `gorm:"primaryKey;type:uuid;default:gen_random_uuid()" json:"id"`
-	OrgID           string     `gorm:"type:uuid;index;not null" json:"orgId"`
-	WorkflowID      string     `gorm:"type:uuid;index;not null" json:"workflowId"`
-	TargetType      string     `gorm:"size:32;not null" json:"targetType"`
-	TargetID        string     `gorm:"type:uuid;index;not null" json:"targetId"`
-	InitiatorID     string     `gorm:"type:uuid;not null" json:"initiatorId"`
-	Status          string     `gorm:"size:16;index;not null;default:'pending'" json:"status"`
+	ID               string    `gorm:"primaryKey;type:uuid;default:gen_random_uuid()" json:"id"`
+	OrgID            string    `gorm:"type:uuid;index;not null" json:"orgId"`
+	WorkflowID       string    `gorm:"type:uuid;index;not null" json:"workflowId"`
+	TargetType       string    `gorm:"size:32;not null" json:"targetType"`
+	TargetID         string    `gorm:"type:uuid;index;not null" json:"targetId"`
+	InitiatorID      string    `gorm:"type:uuid;not null" json:"initiatorId"`
+	Status           string    `gorm:"size:16;index;not null;default:'pending'" json:"status"`
 	CurrentNodeIndex int       `gorm:"not null;default:0" json:"currentNodeIndex"`
-	CreatedAt       time.Time  `gorm:"index" json:"createdAt"`
-	UpdatedAt       time.Time  `json:"updatedAt"`
+	CreatedAt        time.Time `gorm:"index" json:"createdAt"`
+	UpdatedAt        time.Time `json:"updatedAt"`
 }
 
 // ApprovalStep 审批记录中每个节点的实际审批动作。不可变。
 type ApprovalStep struct {
-	ID         string     `gorm:"primaryKey;type:uuid;default:gen_random_uuid()" json:"id"`
-	RecordID   string     `gorm:"type:uuid;index;not null" json:"recordId"`
-	NodeIndex  int        `gorm:"not null" json:"nodeIndex"`
-	ApproverID string     `gorm:"type:uuid;not null" json:"approverId"`
-	Action     string     `gorm:"size:16;not null" json:"action"` // approve|reject
-	Note       string     `gorm:"size:500" json:"note,omitempty"`
+	ID         string    `gorm:"primaryKey;type:uuid;default:gen_random_uuid()" json:"id"`
+	RecordID   string    `gorm:"type:uuid;index;not null" json:"recordId"`
+	NodeIndex  int       `gorm:"not null" json:"nodeIndex"`
+	ApproverID string    `gorm:"type:uuid;not null" json:"approverId"`
+	Action     string    `gorm:"size:16;not null" json:"action"` // approve|reject
+	Note       string    `gorm:"size:500" json:"note,omitempty"`
 	ActedAt    time.Time `gorm:"not null" json:"actedAt"`
 }
 
@@ -71,8 +71,8 @@ const (
 )
 
 const (
-	ApproverTypeUser    = "user"
-	ApproverTypeRole    = "role"
+	ApproverTypeUser     = "user"
+	ApproverTypeRole     = "role"
 	ApproverTypeDeptLead = "dept_lead"
 )
 

@@ -3,9 +3,9 @@ package handler
 import (
 	"net/http"
 
-	"github.com/gin-gonic/gin"
 	"flovart/enterprise/middleware"
 	"flovart/enterprise/service"
+	"github.com/gin-gonic/gin"
 )
 
 type ProxyHandler struct {
@@ -28,5 +28,5 @@ func (h *ProxyHandler) Forward(c *gin.Context) {
 		Fail(c, http.StatusBadGateway, err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"code": 0, "data": result, "msg": "ok"})
+	OK(c, result)
 }

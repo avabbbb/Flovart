@@ -1,4 +1,4 @@
-import { AlignCenter, AlignLeft, AlignRight, ArrowDownToLine, ArrowUpToLine, ChevronsDown, ChevronsUp, Copy, Crop, Download, Eraser, Expand, FilePenLine, Frame, Grid2x2, Group, Layers3, Library, Lightbulb, Maximize2, MessageSquareText, Play, RefreshCw, RotateCw, ScanLine, ScanText, Scissors, SlidersHorizontal, Square, Trash2, Ungroup, ZoomIn, Gauge } from 'lucide-react';
+import { AlignCenter, AlignLeft, AlignRight, ArrowDownToLine, ArrowUpToLine, AudioLines, ChevronsDown, ChevronsUp, Copy, Crop, Download, Eraser, Expand, FilePenLine, Frame, Grid2x2, Group, Layers3, Library, Lightbulb, Maximize2, MessageSquareText, Play, RefreshCw, RotateCw, ScanLine, ScanText, Scissors, SlidersHorizontal, Square, Trash2, Ungroup, ZoomIn, Gauge } from 'lucide-react';
 import { useRef } from 'react';
 import { WorkflowToolbarActions, WorkflowToolbarShell, type WorkflowToolbarAction } from './WorkflowToolbarPrimitives';
 import { useWorkflowMediaUrl } from './media';
@@ -26,12 +26,14 @@ export interface WorkflowVideoToolHandlers {
   trim?: (id: string) => void;
   avSplit?: (id: string) => void;
   merge?: (ids: string[]) => void;
-  extractFrame?: (id: string, position: 'first' | 'last') => void;
+  extractFrame?: (id: string, position: 'first' | 'current' | 'last', currentTimeSec?: number) => void;
+  extractFrameAt?: (id: string) => void;
 }
 
 export interface WorkflowAudioToolHandlers {
   trim?: (id: string) => void;
   speed?: (id: string) => void;
+  stemSplit?: (id: string) => void;
 }
 
 export function WorkflowNodeToolbar({ nodes, onCopy, onDelete, onExport, onRun, onStop, onPromptFocus, onSaveMedia, onReversePrompt, onReplaceMedia, onToggleFreeResize, onAlign, onLayer, onGroup, onUngroup, onExecuteGroup, onPreviewMedia, imageTools, imageToolBusy = false, videoTools, videoToolBusy = false, audioTools, audioToolBusy = false }: {
@@ -97,9 +99,11 @@ export function WorkflowNodeToolbar({ nodes, onCopy, onDelete, onExport, onRun, 
     node?.type === 'video' && mediaUrl && videoTools?.avSplit && { key: 'video-av-split', label: WORKFLOW_NODE_TOOL_LABELS['video-av-split'], icon: <ScanLine size={18} />, disabled: videoToolBusy, onClick: () => videoTools.avSplit?.(node.id) },
     node?.type === 'video' && mediaUrl && videoTools?.extractFrame && { key: 'video-frame-first', label: '导出首帧为图片', icon: <ArrowUpToLine size={18} />, disabled: videoToolBusy, onClick: () => videoTools.extractFrame?.(node.id, 'first') },
     node?.type === 'video' && mediaUrl && videoTools?.extractFrame && { key: 'video-frame-last', label: '导出尾帧为图片', icon: <ArrowDownToLine size={18} />, disabled: videoToolBusy, onClick: () => videoTools.extractFrame?.(node.id, 'last') },
+    node?.type === 'video' && mediaUrl && videoTools?.extractFrameAt && { key: 'video-frame-at', label: '提取指定帧', icon: <Frame size={18} />, disabled: videoToolBusy, onClick: () => videoTools.extractFrameAt?.(node.id) },
     selectedMedia.length > 1 && selectedMedia.every(n => n.type === 'video') && videoTools?.merge && { key: 'video-merge', label: WORKFLOW_NODE_TOOL_LABELS['video-merge'], icon: <Frame size={18} />, disabled: videoToolBusy, onClick: () => videoTools.merge?.(ids) },
     node?.type === 'audio' && mediaUrl && audioTools?.trim && { key: 'audio-trim', label: WORKFLOW_NODE_TOOL_LABELS['audio-trim'], icon: <Scissors size={18} />, disabled: audioToolBusy, onClick: () => audioTools.trim?.(node.id) },
     node?.type === 'audio' && mediaUrl && audioTools?.speed && { key: 'audio-speed', label: WORKFLOW_NODE_TOOL_LABELS['audio-speed'], icon: <Gauge size={18} />, disabled: audioToolBusy, onClick: () => audioTools.speed?.(node.id) },
+    node?.type === 'audio' && mediaUrl && audioTools?.stemSplit && { key: 'audio-stem-split', label: WORKFLOW_NODE_TOOL_LABELS['audio-stem-split'], icon: <AudioLines size={18} />, disabled: audioToolBusy, onClick: () => audioTools.stemSplit?.(node.id) },
     node && (node.type === 'image' || node.type === 'video') && onToggleFreeResize && { key: 'resize', label: '切换自由缩放', icon: <Expand size={18} />, active: Boolean(node.freeResize), onClick: () => onToggleFreeResize(node.id) },
     node && node.type !== 'audio' && node.type !== 'script' && node.metadata.status === 'loading' && onStop
       ? { key: 'stop', label: '停止节点', icon: <Square size={17} />, onClick: () => onStop(node.id) }

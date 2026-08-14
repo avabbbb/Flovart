@@ -1,353 +1,340 @@
-// /app/home — 应用内产品首页，参考 flova.tv/zh-CN/skill/ 生态重构。
-import { useMemo, useState } from 'react';
-import { motion } from 'motion/react';
+import { useMemo, useRef, useState } from 'react';
 import {
-  Home as HomeIcon,
-  Folder as FolderIcon,
-  Zap,
-  Library,
-  Sparkles,
-  Tv,
+  Bot,
   BookOpen,
-  Terminal,
+  ChevronRight,
+  Clapperboard,
+  FolderClock,
+  Home as HomeIcon,
+  Image as ImageIcon,
+  LayoutGrid,
+  MonitorPlay,
   Plus,
   Send,
-  ChevronRight,
-  Play,
-  Volume2,
-  Maximize2,
+  Sparkles,
+  Table2,
+  Video,
+  Workflow as WorkflowIcon,
 } from 'lucide-react';
+import { nanoid } from 'nanoid';
+
+import contactSheet from '../../tools/flovart/evaluations/vox-history-1776/contact-sheet-10.png';
+import smokeFilm from '../../tools/flovart/evaluations/vox-history-1776/_smoke/render-smoke.mp4';
+import hookFrame from '../../tools/flovart/evaluations/vox-sky-blue-2026-08-04/preview-hook.jpg';
+import detailFrame from '../../tools/flovart/evaluations/vox-sky-blue-2026-08-04/preview-hookdetail.jpg';
+import payoffFrame from '../../tools/flovart/evaluations/vox-sky-blue-2026-08-04/preview-payoff.jpg';
+import workflowPreview from '../../tools/flovart/evaluations/reddit-politics-2026-07-25/workflow-cli-sync.png';
+import { createWorkflowNode } from '../workflow/constants';
 import { useWorkflowStore } from '../workflow/store';
-import { COMMUNITY_WORKFLOWS, type CommunityWorkflow } from '../landing/communityTypes';
+import type { WorkflowProject, WorkflowNodeType } from '../workflow/types';
 import type { BundledProductionSkill } from '../../services/productionSkillCatalog';
-import { ProductionSkillShelf } from './ProductionSkillShelf';
 import { buildProductionSkillStarterPrompt } from '../../services/productionSkillLaunch';
 import { queuePendingProductionSkill } from '../../stores/useProductionSkillComposerStore';
 import { useWorkspaceStore } from '../../stores/useWorkspaceStore';
+import { ProductionSkillShelf } from './ProductionSkillShelf';
+import '../../styles/home.css';
 
-const linkTo = (path: string) => (window.location.hash = path);
+const linkTo = (path: string) => { window.location.hash = path; };
 
-const SIDEBAR_NAV = [
-  { icon: HomeIcon, label: '首页', action: () => linkTo('/app/home') },
-  { icon: FolderIcon, label: '项目', action: () => linkTo('/app') },
-  { icon: Zap, label: '快速生成', action: () => linkTo('/app') },
-  { icon: Library, label: '资产库', action: () => linkTo('/app') },
-  { icon: Sparkles, label: 'Skill', action: () => document.getElementById('skill-hub')?.scrollIntoView({ behavior: 'smooth' }) },
-  { icon: Tv, label: 'FlovartTV', action: () => document.getElementById('flovarttv')?.scrollIntoView({ behavior: 'smooth' }) },
-  { icon: BookOpen, label: '教程', action: () => window.open('https://github.com/avabbbb/Flovart/blob/main/docs', '_blank') },
-  { icon: Terminal, label: 'FlovartCLI', action: () => window.open('https://github.com/avabbbb/Flovart', '_blank') },
-];
-
-const TV_TABS = ['全部', '影视', '短剧', '漫剧', 'MV', 'TVC'] as const;
-type TvTab = (typeof TV_TABS)[number];
-
-// 把 mock 类目映射到页面 tabs
-const CATEGORY_TO_TAB: Record<CommunityWorkflow['category'], TvTab> = {
-  'TV Show': '影视',
-  '人物': '短剧',
-  '风景': 'MV',
-  '产品': 'TVC',
-  '动漫': '漫剧',
-  '抽象': 'MV',
+type WorkspaceTarget = 'workflow' | 'table' | 'agent';
+type Capability = {
+  title: string;
+  description: string;
+  badge: string;
+  media: string;
+  mediaType?: 'video';
+  target: WorkspaceTarget | 'skill';
+  icon: typeof WorkflowIcon;
 };
 
-const TV_SKILL_NAMES = [
-  '3D 国漫短剧',
-  '剧情短片',
-  '剧本生视频',
-  '商品宣传短片',
-] as const;
+const CAPABILITIES: Capability[] = [
+  {
+    title: '无限 Workflow',
+    description: '文本、图片、视频与处理步骤在同一空间自由编排。',
+    badge: '画布',
+    media: workflowPreview,
+    target: 'workflow',
+    icon: WorkflowIcon,
+  },
+  {
+    title: '图片生成与迭代',
+    description: '参考图、提示词和参数贴着节点走，结果可继续连接。',
+    badge: '图片',
+    media: hookFrame,
+    target: 'workflow',
+    icon: ImageIcon,
+  },
+  {
+    title: '轻量视频节点',
+    description: '封面优先加载，需要时再启用播放器，支持大批量视频。',
+    badge: '视频',
+    media: smokeFilm,
+    mediaType: 'video',
+    target: 'workflow',
+    icon: Video,
+  },
+  {
+    title: '脚本到分镜',
+    description: '把脚本、镜头与生成结果组织成可追溯的制作链路。',
+    badge: '分镜',
+    media: contactSheet,
+    target: 'workflow',
+    icon: Clapperboard,
+  },
+  {
+    title: '节点式媒体处理',
+    description: '裁剪、拆分、拼接等处理保留输入与输出关系。',
+    badge: 'Table',
+    media: detailFrame,
+    target: 'table',
+    icon: Table2,
+  },
+  {
+    title: 'Agent + Production Skill',
+    description: '让 Agent 读取项目上下文，按制作方法推进并回写产物。',
+    badge: 'Agent',
+    media: payoffFrame,
+    target: 'skill',
+    icon: Bot,
+  },
+];
 
-// FlovartTV 卡片：用 COMMUNITY_WORKFLOWS mock 资料但映射到 tab
-interface TvCardItem {
-  id: string;
-  title: string;
-  author: string;
-  gradient: string;
-  tab: TvTab;
-  skillName: string;
-}
+const TYPE_LABELS: Record<WorkflowNodeType, string> = {
+  image: '图片',
+  video: '视频',
+  audio: '音频',
+  text: '文本',
+  config: '配置',
+  script: '脚本',
+  operation: '处理',
+};
 
-const TV_CARDS: TvCardItem[] = COMMUNITY_WORKFLOWS.map((w, i) => {
-  const tab = CATEGORY_TO_TAB[w.category] ?? '影视';
-  return {
-    id: `tv-${w.id ?? i}`,
-    title: w.title,
-    author: w.author?.name ?? 'flovart',
-    gradient: w.gradient,
-    tab,
-    skillName: TV_SKILL_NAMES[i % TV_SKILL_NAMES.length],
-  };
-});
-
-function Sidebar() {
+function HomeRail({ onCreate, onOpenView }: {
+  onCreate: () => void;
+  onOpenView: (view: WorkspaceTarget) => void;
+}) {
+  const actions = [
+    { label: '首页', icon: HomeIcon, action: () => document.querySelector('.flovart-home__scroll')?.scrollTo({ top: 0, behavior: 'smooth' }) },
+    { label: '新建项目', icon: Plus, action: onCreate, primary: true },
+    { label: 'Workflow', icon: WorkflowIcon, action: () => onOpenView('workflow') },
+    { label: 'Table', icon: Table2, action: () => onOpenView('table') },
+    { label: 'Agent', icon: Bot, action: () => onOpenView('agent') },
+    { label: 'Skill', icon: Sparkles, action: () => document.getElementById('skill-hub')?.scrollIntoView({ behavior: 'smooth' }) },
+  ];
   return (
-    <aside className="flex flex-col justify-between px-4 py-6" style={{ width: 200, borderRight: '1px solid rgba(255,255,255,0.06)' }}>
-      <div className="flex items-center gap-2 px-2 mb-6 cursor-pointer" onClick={() => linkTo('/app/home')}>
-        <span style={{ fontSize: 20, fontWeight: 800, letterSpacing: '-0.02em' }}>Flovart</span>
-        <Sparkles size={14} color="#19c8b9" />
-      </div>
-      <nav className="flex flex-col gap-1 flex-1">
-        {SIDEBAR_NAV.map(item => (
+    <nav className="flovart-home__rail" aria-label="首页导航">
+      <button className="home-rail__brand" type="button" aria-label="Flovart 首页" onClick={() => linkTo('/app/home')}>F</button>
+      <div className="home-rail__actions">
+        {actions.map(item => (
           <button
             key={item.label}
+            type="button"
+            className={item.primary ? 'is-primary' : undefined}
+            aria-label={item.label}
+            title={item.label}
             onClick={item.action}
-            className="flex items-center gap-3 px-3 py-2 rounded-xl text-sm transition-all hover:bg-white/5 text-left"
-            style={{ color: '#a8a49c' }}
           >
-            <item.icon size={16} />
+            <item.icon size={18} />
             <span>{item.label}</span>
           </button>
         ))}
-      </nav>
-      <div className="flex flex-col gap-3 mt-6 px-3">
-        <div className="text-xs font-medium" style={{ color: '#4a463f' }}>邀请/社群</div>
-        <div className="flex items-center gap-3">
-          <a href="#" className="text-xs hover:text-white" style={{ color: '#6b6862' }}>X</a>
-          <a href="#" className="text-xs hover:text-white" style={{ color: '#6b6862' }}>YouTube</a>
-          <a href="#" className="text-xs hover:text-white" style={{ color: '#6b6862' }}>Discord</a>
-        </div>
       </div>
-    </aside>
+      <a href="https://github.com/avabbbb/Flovart/tree/main/docs" target="_blank" rel="noreferrer" aria-label="文档" title="文档">
+        <BookOpen size={18} /><span>文档</span>
+      </a>
+    </nav>
   );
 }
 
-function HeroAndInput({ onCreate }: { onCreate: (title?: string) => void }) {
+function CapabilityCard({ item, onOpen }: { item: Capability; onOpen: (target: Capability['target']) => void }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const startPreview = () => { if (videoRef.current) void videoRef.current.play().catch(() => undefined); };
+  const stopPreview = () => {
+    if (!videoRef.current) return;
+    videoRef.current.pause();
+    videoRef.current.currentTime = 0;
+  };
+  return (
+    <button
+      type="button"
+      className="home-capability"
+      onClick={() => onOpen(item.target)}
+      onMouseEnter={startPreview}
+      onMouseLeave={stopPreview}
+      onFocus={startPreview}
+      onBlur={stopPreview}
+      aria-label={`${item.title}：${item.description}`}
+    >
+      {item.mediaType === 'video'
+        ? <video ref={videoRef} src={item.media} muted loop playsInline preload="metadata" poster={contactSheet} />
+        : <img src={item.media} alt="" draggable={false} />}
+      <span className="home-capability__shade" />
+      <span className="home-capability__badge">{item.badge}</span>
+      <span className="home-capability__copy">
+        <strong><item.icon size={15} />{item.title}</strong>
+        <small>{item.description}</small>
+      </span>
+      <span className="home-capability__open">进入 <ChevronRight size={13} /></span>
+    </button>
+  );
+}
+
+function Hero({ onCreate, onOpen }: {
+  onCreate: () => void;
+  onOpen: (target: Capability['target']) => void;
+}) {
+  return (
+    <>
+      <section className="home-hero" aria-labelledby="home-hero-title">
+        <div className="home-hero__copy">
+          <span className="home-eyebrow"><Sparkles size={13} /> AI 原生制作空间</span>
+          <h1 id="home-hero-title">一张 Workflow，<br />把想法连到最终成片</h1>
+          <p>从素材、生成、处理到 Agent 协作，每一步都留在可编辑的节点关系里。</p>
+          <button type="button" className="home-primary-action" onClick={onCreate}><Plus size={17} />新建 Workflow</button>
+        </div>
+        <div className="home-capability-grid">
+          {CAPABILITIES.map(item => <CapabilityCard key={item.title} item={item} onOpen={onOpen} />)}
+        </div>
+      </section>
+      <div className="home-quick-strip" aria-label="核心能力">
+        {[
+          [MonitorPlay, '图片 / 视频生成', '结果直接成为节点'],
+          [WorkflowIcon, '自由编排', '关系与版本可追溯'],
+          [Table2, '媒体处理', '输入输出显式连接'],
+          [Bot, 'Agent 协作', '读取上下文并回写'],
+        ].map(([Icon, title, detail]) => (
+          <span key={String(title)}><i><Icon size={16} /></i><strong>{String(title)}</strong><small>{String(detail)}</small></span>
+        ))}
+      </div>
+    </>
+  );
+}
+
+function IdeaComposer({ onSubmit, onCreateEmpty }: {
+  onSubmit: (idea: string) => void;
+  onCreateEmpty: () => void;
+}) {
   const [draft, setDraft] = useState('');
   const submit = () => {
-    const trimmed = draft.trim();
-    if (!trimmed) return;
-    onCreate(trimmed.length > 20 ? trimmed.slice(0, 20) + '…' : trimmed);
+    const idea = draft.trim();
+    if (!idea) return;
+    onSubmit(idea);
     setDraft('');
   };
   return (
-    <section className="px-10 pt-16 pb-10 flex flex-col items-center">
-      <h1 className="text-center" style={{ fontSize: 40, fontWeight: 200, lineHeight: 1.2 }}>
-        Flovart 1.0 — 你的专属AI视频创作Agent
-      </h1>
-      <p className="mt-3 text-center" style={{ fontSize: 16, fontWeight: 300, color: '#a8a49c' }}>
-        把品味和习惯写进 Skill，让精力回归创意
-      </p>
-      <div className="mt-8 w-full" style={{ maxWidth: '70vw' }}>
-        <div
-          className="rounded-2xl p-4"
-          style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
-        >
-          <textarea
-            value={draft}
-            onChange={e => setDraft(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); } }}
-            placeholder="由一个想法或故事开始…"
-            rows={2}
-            className="w-full bg-transparent outline-none resize-none"
-            style={{ color: '#f5f5f0', fontSize: 16 }}
-          />
-          <div className="flex items-center justify-between mt-3">
-            <div className="flex items-center gap-2">
-              <button
-                className="rounded-full flex items-center justify-center hover:bg-white/10"
-                style={{ width: 32, height: 32, background: 'rgba(255,255,255,0.05)' }}
-                title="添加文件"
-              >
-                <Plus size={16} color="#a8a49c" />
-              </button>
-              {['模型', 'Skill', '资产库'].map(label => (
-                <span
-                  key={label}
-                  className="rounded-full px-3 py-1 text-xs"
-                  style={{ background: 'rgba(255,255,255,0.05)', color: '#a8a49c' }}
-                >
-                  {label}
-                </span>
-              ))}
-            </div>
-            <button
-              onClick={submit}
-              className="rounded-full flex items-center justify-center transition-all hover:scale-105"
-              style={{ width: 36, height: 36, background: '#19c8b9', color: '#fff' }}
-              title="发送"
-            >
-              <Send size={16} />
-            </button>
-          </div>
-        </div>
+    <div className="home-agent-composer">
+      <textarea
+        aria-label="创作想法"
+        value={draft}
+        onChange={event => setDraft(event.target.value)}
+        onKeyDown={event => {
+          if (event.key === 'Enter' && !event.shiftKey) {
+            event.preventDefault();
+            submit();
+          }
+        }}
+        placeholder="说出你的创意，或者选一个 Skill 开始创作"
+        rows={3}
+      />
+      <div>
+        <button type="button" className="home-composer-tool" onClick={onCreateEmpty}><Plus size={16} />空白 Workflow</button>
+        <span><WorkflowIcon size={14} />想法会保存为首个文本节点</span>
+        <button type="button" className="home-composer-send" aria-label="发送" disabled={!draft.trim()} onClick={submit}><Send size={17} /></button>
       </div>
-    </section>
-  );
-}
-
-function SectionTitle({ title, extra }: { title: string; extra?: React.ReactNode }) {
-  return (
-    <div className="flex items-center justify-between mb-4">
-      <h2 className="text-2xl font-bold" style={{ color: '#f5f5f0' }}>{title}</h2>
-      {extra}
     </div>
   );
 }
 
-function RecentProjects({
-  projects,
-  onCreate,
-  onOpen,
-}: {
-  projects: ReturnType<typeof useWorkflowStore.getState>['projects'];
+function ProjectPreview({ project }: { project: WorkflowProject }) {
+  const visible = project.nodes.filter(node => node.isVisible !== false).slice(0, 6);
+  return (
+    <div className="home-project-preview" aria-hidden="true">
+      <span className="home-project-preview__grid" />
+      {visible.length ? visible.map((node, index) => (
+        <i key={node.id} data-type={node.type} style={{ left: `${10 + (index % 3) * 28}%`, top: `${18 + Math.floor(index / 3) * 38}%` }}>
+          {node.type === 'video' ? <Video size={13} /> : node.type === 'image' ? <ImageIcon size={13} /> : node.type === 'script' ? <Clapperboard size={13} /> : <LayoutGrid size={13} />}
+        </i>
+      )) : <span className="home-project-preview__empty"><Plus size={20} />空白画布</span>}
+    </div>
+  );
+}
+
+function RecentProjects({ projects, onCreate, onOpen, onOpenAll }: {
+  projects: WorkflowProject[];
   onCreate: () => void;
   onOpen: (id: string) => void;
+  onOpenAll: () => void;
 }) {
-  const sorted = useMemo(() => {
-    return [...projects].sort((a, b) => +new Date(b.updatedAt) - +new Date(a.updatedAt)).slice(0, 10);
-  }, [projects]);
-
+  const sorted = useMemo(() => [...projects]
+    .sort((left, right) => +new Date(right.updatedAt) - +new Date(left.updatedAt))
+    .slice(0, 7), [projects]);
   return (
-    <section id="recent-projects" className="px-10 py-6">
-      <SectionTitle title="最近项目" extra={<button className="text-sm hover:underline" style={{ color: '#a8a49c' }}>查看全部 <ChevronRight size={14} className="inline" /></button>} />
-      <div className="flex gap-4 overflow-x-auto pb-3" style={{ scrollbarWidth: 'thin' }}>
-        <button
-          onClick={onCreate}
-          className="rounded-2xl flex flex-col items-center justify-center gap-2 cursor-pointer transition-all hover:bg-white/5"
-          style={{ width: 300, height: 200, border: '2px dashed rgba(255,255,255,0.15)', color: '#a8a49c', flexShrink: 0 }}
-        >
-          <Plus size={28} />
-          <span className="text-sm">创建新项目</span>
+    <section id="recent-projects" className="home-section">
+      <div className="home-section__heading">
+        <div><span>LOCAL PROJECTS</span><h2>最近项目</h2></div>
+        <button type="button" onClick={onOpenAll}>查看全部 <ChevronRight size={14} /></button>
+      </div>
+      <div className="home-project-grid">
+        <button type="button" className="home-project-card home-project-card--new" onClick={onCreate}>
+          <span><Plus size={24} /></span><strong>创建新项目</strong><small>从空白 Workflow 开始</small>
         </button>
-        {sorted.map(p => (
-          <button
-            key={p.id}
-            onClick={() => onOpen(p.id)}
-            className="group rounded-2xl overflow-hidden text-left transition-all hover:scale-[1.02]"
-            style={{ width: 300, height: 200, flexShrink: 0, background: p.backgroundMode === 'lines' ? '#1c1c1c' : 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}
-          >
-            <div className="h-[130px] relative" style={{ background: 'linear-gradient(135deg, #111 0%, #1a1a2e 100%)' }}>
-              <div className="absolute inset-0 flex items-center justify-center" style={{ color: '#4a463f' }}>
-                <Play size={20} />
-              </div>
-            </div>
-            <div className="px-3 py-2">
-              <div className="text-sm font-medium truncate" style={{ color: '#f5f5f0' }}>{p.title || '未命名项目'}</div>
-              <div className="text-xs mt-0.5" style={{ color: '#6b6862' }}>最后编辑于 {new Date(p.updatedAt).toLocaleDateString('zh-CN')}</div>
-            </div>
-          </button>
-        ))}
+        {sorted.map(project => {
+          const counts = project.nodes.reduce<Partial<Record<WorkflowNodeType, number>>>((result, node) => {
+            result[node.type] = (result[node.type] || 0) + 1;
+            return result;
+          }, {});
+          const summary = Object.entries(counts).slice(0, 3).map(([type, count]) => `${count} ${TYPE_LABELS[type as WorkflowNodeType]}`).join(' · ') || '空白 Workflow';
+          return (
+            <button type="button" className="home-project-card" key={project.id} onClick={() => onOpen(project.id)}>
+              <ProjectPreview project={project} />
+              <span className="home-project-card__meta">
+                <strong>{project.title || '未命名项目'}</strong>
+                <small>{summary}</small>
+                <em>打开创作过程 <ChevronRight size={13} /></em>
+              </span>
+            </button>
+          );
+        })}
       </div>
     </section>
-  );
-}
-
-function FlovartTV() {
-  const [activeTab, setActiveTab] = useState<TvTab>('全部');
-  const [addedSkills, setAddedSkills] = useState<Record<string, boolean>>({});
-  const cards = activeTab === '全部' ? TV_CARDS : TV_CARDS.filter(c => c.tab === activeTab);
-  return (
-    <section id="flovarttv" className="px-10 py-6">
-      <SectionTitle title="FlovartTV" />
-      <div className="flex gap-2 mb-4 sticky top-0 z-10 py-2" style={{ background: '#0a0a0a' }}>
-        {TV_TABS.map(tab => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className="px-4 py-1.5 rounded-full text-sm transition-all"
-            style={{
-              background: activeTab === tab ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.04)',
-              color: activeTab === tab ? '#fff' : '#a8a49c',
-              border: `1px solid ${activeTab === tab ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.06)'}`,
-            }}
-          >
-            {tab}
-          </button>
-        ))}
-      </div>
-      <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gridAutoRows: 213, gridAutoFlow: 'row dense' }}>
-        {cards.map((card, i) => (
-          <div
-            key={card.id}
-            className="group relative rounded-2xl overflow-hidden"
-            style={{ gridColumn: i % 5 === 0 ? 'span 1' : undefined, gridRow: 'span 2', height: 438, background: card.gradient, border: '1px solid rgba(255,255,255,0.06)' }}
-          >
-            <span className="absolute top-3 left-3 text-xs px-2 py-0.5 rounded-full" style={{ background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(8px)', color: '#fff' }}>{card.tab}</span>
-            <div className="absolute top-3 right-3 flex items-center gap-1.5">
-              <button className="rounded-full w-7 h-7 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(8px)' }}><Volume2 size={12} color="#fff" /></button>
-              <button className="rounded-full w-7 h-7 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(8px)' }}><Maximize2 size={12} color="#fff" /></button>
-            </div>
-            <div className="absolute bottom-0 left-0 right-0 p-3 flex flex-col gap-1">
-              <div className="flex items-center gap-2">
-                <div className="rounded-full" style={{ width: 26, height: 26, background: 'rgba(255,255,255,0.18)' }} />
-                <span className="text-xs" style={{ color: 'rgba(255,255,255,0.7)' }}>@{card.author}</span>
-              </div>
-              <h3 className="text-sm font-semibold truncate" style={{ color: '#fff' }}>{card.title}</h3>
-            </div>
-            <div
-              className="absolute inset-0 p-3 flex flex-col justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity"
-              style={{ background: 'rgba(0,0,0,0.62)' }}
-            >
-              <div className="flex items-center justify-between rounded-full px-3 py-1 text-xs self-start" style={{ background: 'rgba(255,255,255,0.12)', color: '#fff' }}>
-                <span className="flex items-center gap-1"><Sparkles size={12} /> {card.skillName}</span>
-              </div>
-              <button
-                onClick={() => setAddedSkills(s => ({ ...s, [card.skillName]: !s[card.skillName] }))}
-                className="self-start rounded-full px-3 py-1 text-xs"
-                style={{ background: addedSkills[card.skillName] ? 'rgba(155,201,87,0.18)' : 'rgba(255,255,255,0.12)', color: addedSkills[card.skillName] ? '#9BC957' : '#fff' }}
-              >
-                {addedSkills[card.skillName] ? '已添加我的 Skill' : '添加为我的 Skill'}
-              </button>
-              <div className="h-px" style={{ background: 'rgba(255,255,255,0.18)' }} />
-              <div className="flex items-center gap-2">
-                <button className="rounded-full px-3 py-1.5 text-xs font-medium" style={{ background: '#fff', color: '#000' }}>查看</button>
-                <button className="rounded-full px-3 py-1.5 text-xs flex-1" style={{ background: 'transparent', color: '#fff', border: '1px solid rgba(255,255,255,0.3)' }}>查看创作过程</button>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function Footer() {
-  return (
-    <footer className="px-10 py-8 mt-8" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-      <div className="grid grid-cols-2 gap-8" style={{ maxWidth: 600 }}>
-        <div>
-          <div className="text-xs mb-2 font-semibold" style={{ color: '#6b6862' }}>公司</div>
-          <ul className="space-y-1 text-xs" style={{ color: '#a8a49c' }}>
-            <li><a href="#" className="hover:text-white">关于我们</a></li>
-            <li><a href="#" className="hover:text-white">联系</a></li>
-            <li><a href="#/business" className="hover:text-white">企业版</a></li>
-          </ul>
-        </div>
-        <div>
-          <div className="text-xs mb-2 font-semibold" style={{ color: '#6b6862' }}>社交媒体</div>
-          <ul className="space-y-1 text-xs" style={{ color: '#a8a49c' }}>
-            <li><a href="#" className="hover:text-white">X</a></li>
-            <li><a href="#" className="hover:text-white">YouTube</a></li>
-            <li><a href="#" className="hover:text-white">Discord</a></li>
-          </ul>
-        </div>
-      </div>
-      <div className="mt-6 text-xs" style={{ color: '#4a463f' }}>© 2026 Flovart · 本地优先 · 开源免费</div>
-    </footer>
   );
 }
 
 export default function FlovartHome() {
-  const projects = useWorkflowStore(s => s.projects);
-  const createProject = useWorkflowStore(s => s.createProject);
-  const setActiveProject = useWorkflowStore(s => s.setActiveProject);
-  const setActiveView = useWorkspaceStore(s => s.setActiveView);
+  const projects = useWorkflowStore(state => state.projects);
+  const createProject = useWorkflowStore(state => state.createProject);
+  const setActiveProject = useWorkflowStore(state => state.setActiveProject);
+  const setActiveView = useWorkspaceStore(state => state.setActiveView);
 
-  const openCanvas = () => linkTo('/app');
-
-  const handleCreate = (title?: string) => {
-    const id = createProject(title);
-    setActiveProject(id);
-    openCanvas();
+  const openView = (view: WorkspaceTarget) => {
+    setActiveView(view);
+    linkTo('/app');
   };
-
-  const handleOpen = (id: string) => {
+  const createEmpty = () => {
+    const id = createProject();
     setActiveProject(id);
-    openCanvas();
+    openView('workflow');
   };
-
-  const handleUseSkill = (skill: BundledProductionSkill) => {
+  const startFromIdea = (idea: string) => {
+    const title = idea.length > 28 ? `${idea.slice(0, 28)}…` : idea;
+    const projectId = createProject(title);
+    const node = createWorkflowNode(nanoid(), 'text', { x: 120, y: 120 }, { content: idea, prompt: idea });
+    useWorkflowStore.getState().updateProject(projectId, { nodes: [node], selectedNodeIds: [node.id] });
+    setActiveProject(projectId);
+    openView('agent');
+  };
+  const openProject = (id: string) => {
+    setActiveProject(id);
+    openView('workflow');
+  };
+  const openCapability = (target: Capability['target']) => {
+    if (target === 'skill') {
+      document.getElementById('skill-hub')?.scrollIntoView({ behavior: 'smooth' });
+      return;
+    }
+    openView(target);
+  };
+  const useSkill = (skill: BundledProductionSkill) => {
     const projectId = createProject(`${skill.displayName} 示例`);
     setActiveProject(projectId);
     queuePendingProductionSkill({
@@ -357,25 +344,37 @@ export default function FlovartHome() {
       skillName: skill.displayName,
       prompt: buildProductionSkillStarterPrompt(skill),
     });
-    try {
-      localStorage.setItem('flovart.workflow.agent.mode', 'local');
-    } catch {
-      // Agent mode remains user-selectable when browser storage is unavailable.
-    }
-    setActiveView('agent');
-    openCanvas();
+    try { localStorage.setItem('flovart.workflow.agent.mode', 'local'); } catch { /* keep the current mode */ }
+    openView('agent');
   };
 
   return (
-    <div className="flex" style={{ height: '100vh', background: '#0a0a0a', color: '#f5f5f0', fontFamily: '-apple-system, "Segoe UI", "Noto Sans SC", sans-serif' }}>
-      <Sidebar />
-      <div className="flex-1 overflow-y-auto">
-        <HeroAndInput onCreate={handleCreate} />
-        <ProductionSkillShelf onUse={handleUseSkill} />
-        <RecentProjects projects={projects} onCreate={() => handleCreate()} onOpen={handleOpen} />
-        <FlovartTV />
-        <Footer />
-      </div>
+    <div className="flovart-home">
+      <HomeRail onCreate={createEmpty} onOpenView={openView} />
+      <main className="flovart-home__scroll">
+        <header className="home-topbar">
+          <strong>Flovart</strong><span>本地优先的 AI 视频制作空间</span>
+          <button type="button" onClick={() => document.getElementById('recent-projects')?.scrollIntoView({ behavior: 'smooth' })}><FolderClock size={15} />本地项目 {projects.length}</button>
+        </header>
+        <div className="flovart-home__content">
+          <Hero onCreate={createEmpty} onOpen={openCapability} />
+          <section className="home-agent" aria-labelledby="home-agent-title">
+            <div className="home-section__heading">
+              <div><span>FLOVART AGENT</span><h2 id="home-agent-title">说出创意，或者选择一种制作方法</h2></div>
+              <button type="button" onClick={() => openView('agent')}>打开 Agent <ChevronRight size={14} /></button>
+            </div>
+            <div className="home-agent__panel">
+              <IdeaComposer onSubmit={startFromIdea} onCreateEmpty={createEmpty} />
+              <ProductionSkillShelf onUse={useSkill} />
+            </div>
+          </section>
+          <RecentProjects projects={projects} onCreate={createEmpty} onOpen={openProject} onOpenAll={() => openView('workflow')} />
+          <footer className="home-footer">
+            <span>Flovart · Workflow / Table / Agent</span>
+            <a href="https://github.com/avabbbb/Flovart" target="_blank" rel="noreferrer">GitHub <ChevronRight size={13} /></a>
+          </footer>
+        </div>
+      </main>
     </div>
   );
 }

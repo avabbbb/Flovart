@@ -217,7 +217,7 @@ foreach ($rate in 0..5) {{
 }}
 Write-Output "rate=5 duration=$probe overflow=true"
 "#,
-        language = language,
+        language = language.replace('\'', "''"),
         text = text_path.to_string_lossy().replace('\'', "''"),
         wav = wav_path.to_string_lossy().replace('\'', "''"),
         target_sec = (target_ms as f64 / 1000.0) - 0.5,

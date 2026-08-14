@@ -111,5 +111,5 @@ func requireOrgMember(svc *service.RbacService, resolveOrg func(*gin.Context) (s
 }
 
 func abort(c *gin.Context, status int, msg string) {
-	c.AbortWithStatusJSON(status, gin.H{"code": status, "msg": msg})
+	c.AbortWithStatusJSON(status, gin.H{"code": status, "data": nil, "msg": msg})
 }

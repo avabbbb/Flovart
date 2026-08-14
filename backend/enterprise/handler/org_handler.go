@@ -4,9 +4,9 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/gin-gonic/gin"
 	"flovart/enterprise/middleware"
 	"flovart/enterprise/service"
+	"github.com/gin-gonic/gin"
 )
 
 type OrgHandler struct {
@@ -102,4 +102,21 @@ func (h *OrgHandler) RemoveMember(c *gin.Context) {
 		return
 	}
 	OK(c, gin.H{"removed": c.Param("userId")})
+}
+
+type updateOrgMemberReq struct {
+	Status string `json:"status"`
+}
+
+func (h *OrgHandler) UpdateMember(c *gin.Context) {
+	var req updateOrgMemberReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		Fail(c, http.StatusBadRequest, "入参格式错误")
+		return
+	}
+	if err := h.svc.UpdateMemberStatus(c.GetString(middleware.ContextUserID), c.Param("id"), c.Param("userId"), req.Status); err != nil {
+		Fail(c, http.StatusBadRequest, err.Error())
+		return
+	}
+	OK(c, gin.H{"userId": c.Param("userId"), "status": strings.ToLower(strings.TrimSpace(req.Status))})
 }

@@ -3,8 +3,8 @@ package repository
 import (
 	"errors"
 
-	"gorm.io/gorm"
 	"flovart/hub/model"
+	"gorm.io/gorm"
 )
 
 type UserRepository struct {
@@ -50,4 +50,12 @@ func (r *UserRepository) FindByID(id string) (*model.User, error) {
 		return nil, err
 	}
 	return &u, nil
+}
+
+func (r *UserRepository) SessionState(id string) (string, int64, error) {
+	user, err := r.FindByID(id)
+	if err != nil || user == nil {
+		return "", 0, err
+	}
+	return user.Status, user.TokenVersion, nil
 }

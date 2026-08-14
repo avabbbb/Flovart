@@ -69,11 +69,18 @@ func decryptSecret(value string) (string, error) {
 func keyEncryptionSecret() ([]byte, error) {
 	secret := strings.TrimSpace(os.Getenv("API_KEY_ENCRYPTION_SECRET"))
 	if secret == "" {
-		secret = strings.TrimSpace(os.Getenv("JWT_SECRET"))
+		return nil, errors.New("API_KEY_ENCRYPTION_SECRET 未配置：必须单独设置，不能回退 JWT_SECRET（密钥分离）")
 	}
 	if len(secret) < 16 {
 		return nil, errors.New("API_KEY_ENCRYPTION_SECRET 至少需要 16 个字符")
 	}
 	sum := sha256.Sum256([]byte(secret))
 	return sum[:], nil
+}
+
+// RequireKeyEncryptionSecret 启动时校验加密密钥已配置，缺失则直接失败，
+// 避免运行时才发现 API Key 无法加解密。
+func RequireKeyEncryptionSecret() error {
+	_, err := keyEncryptionSecret()
+	return err
 }

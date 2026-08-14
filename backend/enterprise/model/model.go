@@ -12,19 +12,24 @@ type Organization struct {
 	Name      string    `gorm:"size:120;not null" json:"name"`
 	OwnerID   string    `gorm:"type:uuid;index;not null" json:"ownerId"`
 	Owner     *User     `gorm:"foreignKey:OwnerID" json:"owner,omitempty"`
+	Status    string    `gorm:"size:16;default:'active';index;not null" json:"status"`
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
 }
 
 // User 只读引用 hub.users，本服务不创建。字段精简到管理后台需要
 type User struct {
-	ID        string    `gorm:"primaryKey;type:uuid" json:"id"`
-	Username  string    `gorm:"size:32" json:"username"`
-	Email     string    `gorm:"size:255" json:"email"`
-	Bio       string    `gorm:"size:500" json:"bio"`
-	AvatarURL string    `gorm:"size:500" json:"avatarUrl"`
-	Role      string    `gorm:"size:16" json:"role"` // hub 平台角色（user/admin）
-	CreatedAt time.Time `json:"createdAt"`
+	ID           string    `gorm:"primaryKey;type:uuid" json:"id"`
+	Username     string    `gorm:"size:32" json:"username"`
+	Email        string    `gorm:"size:255" json:"email"`
+	Bio          string    `gorm:"size:500" json:"bio"`
+	AvatarURL    string    `gorm:"size:500" json:"avatarUrl"`
+	Role         string    `gorm:"size:16" json:"role"` // hub 平台角色（user/admin）
+	Status       string    `gorm:"size:16" json:"status"`
+	TokenVersion int64     `json:"-"`
+	Password     string    `gorm:"size:255" json:"-"`
+	CreatedAt    time.Time `json:"createdAt"`
+	UpdatedAt    time.Time `json:"updatedAt"`
 }
 
 func (User) TableName() string { return "users" } // 复用 hub 的 users 表

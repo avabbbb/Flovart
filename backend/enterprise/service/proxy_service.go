@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -193,6 +194,18 @@ func validateProviderEndpoint(provider, endpoint string) error {
 	return fmt.Errorf("暂不支持 provider: %s", provider)
 }
 
+// isBlockedIP 判断 IP 是否属于不可访问的地址段（回环/内网/链路本地/云元数据/组播）
+func isBlockedIP(ip net.IP) bool {
+	if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified() || ip.IsMulticast() {
+		return true
+	}
+	// IPv4-mapped IPv6（::ffff:192.168.x.x）还原为 IPv4 再判断
+	if v4 := ip.To4(); v4 != nil {
+		return v4.IsLoopback() || v4.IsPrivate() || v4.IsLinkLocalUnicast() || v4.IsUnspecified() || v4.IsMulticast()
+	}
+	return false
+}
+
 func validateBaseURL(baseURL string) error {
 	if baseURL == "" {
 		return errors.New("baseURL 未配置")
@@ -203,6 +216,21 @@ func validateBaseURL(baseURL string) error {
 	}
 	if parsed.Scheme != "https" && parsed.Scheme != "http" {
 		return errors.New("baseURL 只允许 http/https")
+	}
+	host := parsed.Hostname()
+	lowerHost := strings.ToLower(host)
+	if lowerHost == "localhost" || strings.HasSuffix(lowerHost, ".local") || lowerHost == "metadata.google.internal" {
+		return errors.New("baseURL 不允许指向本机或本地网络")
+	}
+	// 解析主机并拒绝内网/回环/链路本地/云元数据地址，防止 SSRF
+	ips, err := net.LookupIP(host)
+	if err != nil || len(ips) == 0 {
+		return errors.New("baseURL 主机无法解析")
+	}
+	for _, ip := range ips {
+		if isBlockedIP(ip) {
+			return errors.New("baseURL 不允许指向内网/回环/链路本地地址")
+		}
 	}
 	return nil
 }

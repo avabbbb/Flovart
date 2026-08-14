@@ -1,8 +1,6 @@
 #!/usr/bin/env node
 import { COMMAND_REGISTRY, executeFlovartCommand, formatValue, normalizeCommandName, parseCliArgs, SETUP_TEXT } from './core.js';
 import { createShadowRuntimeFacade } from './shadow-runtime.js';
-import { enqueueAndWait, enqueueCommand } from './flovart-bridge.js';
-import { BROWSER_COMMANDS, shouldWaitForBrowserCommand } from './browser-commands.js';
 import { readFile } from 'node:fs/promises';
 import { defaultRuntimeActor, FlovartRuntimeClient, RuntimeClientError } from './runtime-client.js';
 import { RUNTIME_COMMANDS, RUNTIME_WRITE_COMMANDS } from './runtime-command-surface.js';
@@ -41,6 +39,15 @@ const CLIENT_REGISTRY_COMMANDS = new Set(['command.list', 'command.schema']);
 const FILE_STATE_COMMANDS = new Set([
   'status',
   'asset.list', 'export.project', 'video.status',
+]);
+
+// 浏览器 Bridge 双轨路由已删除（docs/dev/production-runtime-s0-s1-work-items.md）：
+// 这些命令曾写入 .flovart/command-queue.json 由浏览器轮询执行，前端已无消费方，
+// 入队后永不被执行。现在直接返回明确错误，不再返回 ok:true 假成功。
+const RETIRED_COMMANDS = new Set([
+  'provider.begin-setup', 'provider.select-model', 'provider.test',
+  'workflow.node.run', 'workflow.node.stop',
+  'generate.images-batch',
 ]);
 
 function runtimeInvocation(command, parsed) {
@@ -229,11 +236,12 @@ async function main() {
     return;
   }
 
-  if (BROWSER_COMMANDS.has(routingCommand)) {
-    const shouldWait = shouldWaitForBrowserCommand(routingCommand, args.wait);
-    const timeoutMs = args.timeout ? Number(args.timeout) : args['timeout-ms'] ? Number(args['timeout-ms']) : 30000;
-    const result = shouldWait ? await enqueueAndWait(command, args, timeoutMs) : enqueueCommand(command, args);
-    printCliResponse(isResultOk(result), command, result, isResultOk(result) ? null : result?.error || null, { runtime: 'file-bridge' });
+  if (RETIRED_COMMANDS.has(routingCommand)) {
+    printCliResponse(false, command, null, {
+      code: 'COMMAND_RETIRED',
+      message: `${routingCommand} 已下线：浏览器 Bridge 文件队列已删除且前端不再消费。请使用生产 Runtime 命令（generate.image、generate.video、provider.status、task.list）或 Flovart WebUI。`,
+      retryable: false,
+    }, { runtime: 'retired' });
     return;
   }
 

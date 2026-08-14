@@ -68,6 +68,7 @@ func (s *CreditService) CreateRecharge(in CreateRechargeInput) (*model.RechargeR
 }
 
 type ReviewRechargeInput struct {
+	OrgID      string
 	RechargeID string
 	ReviewedBy string
 	Approve    bool
@@ -75,36 +76,37 @@ type ReviewRechargeInput struct {
 }
 
 // ReviewRecharge 平台 admin 审批充值申请。approve=true 时在事务内入账 + 写流水。
+// 行锁（FOR UPDATE）防止并发双审批重复入账。
 func (s *CreditService) ReviewRecharge(in ReviewRechargeInput) (*model.RechargeRequest, error) {
-	req, err := s.credits.GetRecharge(in.RechargeID)
-	if err != nil || req == nil {
-		return nil, errors.New("充值申请不存在")
-	}
-	if req.Status != model.RechargeStatusPending {
-		return nil, fmt.Errorf("申请状态为 %s，无法审批", req.Status)
-	}
-
-	status := model.RechargeStatusRejected
-	if in.Approve {
-		status = model.RechargeStatusApproved
-	}
-	req.Status = status
-	req.ReviewedBy = in.ReviewedBy
-	req.ReviewNote = in.ReviewNote
-	now := time.Now().UTC()
-	req.ReviewedAt = &now
-
-	if !in.Approve {
-		return req, s.db.Save(req).Error
-	}
-
-	// 审批通过：事务内入账
-	err = s.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Save(req).Error; err != nil {
-			return err
+	var result *model.RechargeRequest
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		var req model.RechargeRequest
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("id = ? AND org_id = ?", in.RechargeID, in.OrgID).First(&req).Error; err != nil {
+			return errors.New("充值申请不存在")
 		}
+		if req.Status != model.RechargeStatusPending {
+			return fmt.Errorf("申请状态为 %s，无法审批", req.Status)
+		}
+
+		status := model.RechargeStatusRejected
+		if in.Approve {
+			status = model.RechargeStatusApproved
+		}
+		req.Status = status
+		req.ReviewedBy = in.ReviewedBy
+		req.ReviewNote = in.ReviewNote
+		now := time.Now().UTC()
+		req.ReviewedAt = &now
+
+		if !in.Approve {
+			return tx.Save(&req).Error
+		}
+
+		// 审批通过：锁定组织余额行后入账 + 写流水，防止并发余额丢失更新
 		var credit model.OrgCredit
-		if err := tx.Where("org_id = ?", req.OrgID).First(&credit).Error; err != nil {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("org_id = ?", req.OrgID).First(&credit).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				credit = model.OrgCredit{OrgID: req.OrgID, Balance: 0}
 				if err := tx.Create(&credit).Error; err != nil {
@@ -127,17 +129,27 @@ func (s *CreditService) ReviewRecharge(in ReviewRechargeInput) (*model.RechargeR
 			RefRequestID: req.ID,
 			Reason:       "充值审批通过",
 		}
-		return tx.Create(txRecord).Error
+		if err := tx.Create(txRecord).Error; err != nil {
+			return err
+		}
+		if err := tx.Save(&req).Error; err != nil {
+			return err
+		}
+		result = &req
+		return nil
 	})
 	if err != nil {
 		return nil, err
 	}
-	return req, nil
+	return result, nil
 }
 
-func (s *CreditService) CancelRecharge(rechargeID, userID string) (*model.RechargeRequest, error) {
+func (s *CreditService) CancelRecharge(orgID, rechargeID, userID string) (*model.RechargeRequest, error) {
 	req, err := s.credits.GetRecharge(rechargeID)
 	if err != nil || req == nil {
+		return nil, errors.New("充值申请不存在")
+	}
+	if req.OrgID != orgID {
 		return nil, errors.New("充值申请不存在")
 	}
 	if req.Status != model.RechargeStatusPending {

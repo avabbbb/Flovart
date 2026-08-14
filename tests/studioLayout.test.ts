@@ -44,4 +44,23 @@ describe('studio layout contracts', () => {
     expect(workflowPanel).toContain('isl-panel compact-right-panel');
     expect(workflowPanel).not.toContain("boxShadow: 'var(--isl-shadow-lg)'");
   });
+
+  it('does not squeeze nested Agent picker and mode buttons into the legacy composer width', () => {
+    const workflowStyles = source('styles/workflow.css');
+
+    expect(workflowStyles).toContain('.workflow-agent__composer > button { width: 34px;');
+    expect(workflowStyles).not.toContain('.workflow-agent__composer button { width: 34px;');
+  });
+
+  it('keeps Workflow overlays and controls inside their usable canvas region', () => {
+    const workflow = source('components/workflow/InfiniteWorkflow.tsx');
+    const toolbar = source('components/workflow/WorkflowToolbar.tsx');
+    const workflowStyles = source('styles/workflow.css');
+
+    expect(workflowStyles).toContain('.workflow-toolbar__add-menu { position: absolute; bottom: calc(100% + 6px);');
+    expect(toolbar).toContain("style={constrained ? { left: `calc((100% - ${rightInset}px) / 2)` } : undefined}");
+    expect(workflow).toContain('Math.max(72, 56 + 28 * project.viewport.k)');
+    expect(workflow).toContain('const dockSafeTop = rootHeight - 60;');
+    expect(workflowStyles.match(/overflow: clip/g)?.length).toBeGreaterThanOrEqual(2);
+  });
 });

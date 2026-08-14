@@ -115,6 +115,17 @@ describe('workflow video operation executors', () => {
     expect(output).toMatchObject({ type: 'image', title: '尾帧', metadata: { operationOutputRole: 'result_image', mimeType: 'image/png' } });
   });
 
+  it('persists the current playback timestamp when extracting the current frame', async () => {
+    const state = harness();
+    const executeVideoFrame = vi.fn().mockResolvedValue({ blob: new Blob(['current'], { type: 'image/png' }), width: 1280, height: 720 });
+    await runWorkflowVideoExtractFrameOperation('project-video', 'video-1', 'current', { ...state.runtime, executeVideoFrame }, 12.4);
+    const operation = state.current.nodes.find(node => node.type === 'operation');
+    const output = state.current.nodes.find(node => node.metadata.sourceOperationNodeId === operation?.id);
+    expect(operation?.metadata.operation?.recipe.parameters).toEqual({ position: 'current', currentTimeSec: 12.4 });
+    expect(executeVideoFrame).toHaveBeenCalledWith(expect.any(Blob), 'current', 12.4);
+    expect(output).toMatchObject({ type: 'image', title: '当前帧', metadata: { operationOutputRole: 'result_image' } });
+  });
+
   it('rejects an invalid merge before creating an Operation and keeps failures retryable', async () => {
     const invalid = harness();
     await expect(runWorkflowVideoMergeOperation('project-video', ['video-1'], invalid.runtime)).rejects.toThrow('至少需要 2 个 source_video 输入');

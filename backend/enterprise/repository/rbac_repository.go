@@ -23,7 +23,7 @@ WITH RECURSIVE user_depts AS (
   SELECT dm.dept_id
   FROM department_members dm
   JOIN departments d ON d.id = dm.dept_id AND d.org_id = $2
-  WHERE dm.user_id = $1
+  WHERE dm.user_id = $1 AND dm.status = 'active'
 ),
 reachable AS (
   SELECT dept_id FROM user_depts
@@ -64,7 +64,7 @@ func (r *RbacRepository) UserInOrg(orgID, userID string) (bool, error) {
 	var n int64
 	err := r.db.Table("department_members dm").
 		Joins("JOIN departments d ON d.id = dm.dept_id AND d.org_id = ?", orgID).
-		Where("dm.user_id = ?", userID).
+		Where("dm.user_id = ? AND dm.status = ?", userID, "active").
 		Count(&n).Error
 	return n > 0, err
 }

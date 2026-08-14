@@ -3,8 +3,8 @@ package repository
 import (
 	"errors"
 
-	"gorm.io/gorm"
 	"flovart/enterprise/model"
+	"gorm.io/gorm"
 )
 
 type SensitiveRepository struct {
@@ -29,8 +29,9 @@ func (r *SensitiveRepository) ListAll(orgID string) ([]model.SensitiveWord, erro
 	return r.List(orgID)
 }
 
-func (r *SensitiveRepository) Delete(id string) error {
-	return r.db.Where("id = ?", id).Delete(&model.SensitiveWord{}).Error
+// DeleteByOrg 按 org 归属删除（防跨组织删除）
+func (r *SensitiveRepository) DeleteByOrg(orgID, id string) error {
+	return r.db.Where("id = ? AND org_id = ?", id, orgID).Delete(&model.SensitiveWord{}).Error
 }
 
 func (r *SensitiveRepository) FindByWord(orgID, word string) (*model.SensitiveWord, error) {

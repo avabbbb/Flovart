@@ -36,8 +36,10 @@ func main() {
 	packRepo := repository.NewPromptRepository(db)
 	authSvc := service.NewAuthService(userRepo, cfg.JWTSecret, atoiDefault(cfg.JWTExpHours, 168))
 	promptSvc := service.NewPromptService(packRepo)
+	deploymentSvc := service.NewDeploymentService(cfg.DeploymentMode)
 	authH := handler.NewAuthHandler(authSvc)
 	promptH := handler.NewPromptHandler(promptSvc)
+	deploymentH := handler.NewDeploymentHandler(deploymentSvc)
 
 	var uploadH *handler.UploadHandler
 	if cfg.StorageReady() {
@@ -65,11 +67,12 @@ func main() {
 
 	api := r.Group("/api/v1")
 	{
+		api.GET("/deployment-profile", deploymentH.Profile)
 		auth := api.Group("/auth")
 		{
 			auth.POST("/register", authH.Register)
 			auth.POST("/login", authH.Login)
-			auth.GET("/me", middleware.Auth(cfg.JWTSecret), authH.Me)
+			auth.GET("/me", middleware.Auth(cfg.JWTSecret, userRepo), authH.Me)
 		}
 		p := api.Group("/prompts")
 		{
@@ -77,7 +80,7 @@ func main() {
 			p.GET("/by-slug/:slug", promptH.GetBySlug)
 			p.GET("/:id", promptH.Get)
 			p.GET("/:id/download", promptH.Download)
-			pAuth := p.Group("", middleware.Auth(cfg.JWTSecret))
+			pAuth := p.Group("", middleware.Auth(cfg.JWTSecret, userRepo))
 			{
 				pAuth.POST("", promptH.Create)
 				pAuth.PUT("/:id", promptH.Update)
@@ -86,7 +89,7 @@ func main() {
 			}
 		}
 		if uploadH != nil {
-			up := api.Group("/uploads", middleware.Auth(cfg.JWTSecret))
+			up := api.Group("/uploads", middleware.Auth(cfg.JWTSecret, userRepo))
 			{
 				up.POST("/presign", uploadH.Presign)
 				up.POST("/confirm", uploadH.Confirm)
@@ -103,11 +106,22 @@ func main() {
 func corsMiddleware(allow string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		origin := c.GetHeader("Origin")
-		if allow == "*" || allow == origin || allow == "off" {
-			c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
+		switch allow {
+		case "*":
+			// 通配模式：不回显 Origin、不携带凭据
+			c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
 			c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 			c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-			c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
+		case "", "off":
+			// 关闭 CORS：不输出任何 CORS 头
+		default:
+			// 白名单模式：仅放行匹配的 Origin 并携带凭据
+			if origin == allow {
+				c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
+				c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+				c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+				c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
+			}
 		}
 		if c.Request.Method == http.MethodOptions {
 			c.AbortWithStatus(http.StatusNoContent)

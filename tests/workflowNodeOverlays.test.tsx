@@ -328,6 +328,10 @@ describe('workflow node overlays', () => {
       if ((this as HTMLElement).classList.contains('theme-aware')) {
         return { x: 180, y: 650, left: 180, top: 650, right: 1060, bottom: 750, width: 880, height: 100, toJSON: () => ({}) } as DOMRect;
       }
+      // 展开面板现在锚定触发按钮：生成参数按钮靠近视口底部，面板应向上翻
+      if ((this as HTMLElement).tagName === 'BUTTON' && (this as HTMLElement).getAttribute('title') === '生成参数') {
+        return { x: 380, y: 660, left: 380, top: 660, right: 500, bottom: 692, width: 120, height: 32, toJSON: () => ({}) } as DOMRect;
+      }
       return { x: 0, y: 0, left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0, toJSON: () => ({}) } as DOMRect;
     });
     const productNode = createWorkflowNode('bottom-image', 'image', { x: 0, y: 0 }, {
@@ -419,6 +423,63 @@ describe('workflow node overlays', () => {
     />);
     expect(screen.getByTestId('workflow-generation-glass')).toHaveTextContent('图片生成中');
     expect(screen.getByTestId('workflow-generation-glass')).toHaveTextContent('42%');
+  });
+
+  it('renders the media node label with source dimensions outside the card', () => {
+    render(<WorkflowNode
+      node={{ ...node, title: '角色定帧', metadata: { ...node.metadata, href: 'data:image/png;base64,AA==', naturalWidth: 2048, naturalHeight: 1152 } }}
+      selected
+      onPointerDown={vi.fn()}
+      onConnectStart={vi.fn()}
+      onResizeStart={vi.fn()}
+      onChangeText={vi.fn()}
+      onChangeMetadata={vi.fn()}
+      onRun={vi.fn()}
+      onContextMenu={vi.fn()}
+      onReplaceMedia={vi.fn()}
+      onRemoveMedia={vi.fn()}
+    />);
+    expect(screen.getByText('角色定帧')).toBeInTheDocument();
+    expect(screen.getByText('2048 × 1152')).toHaveClass('workflow-node__title-meta');
+  });
+
+  it('uses lightweight activation before mounting the custom video player controls', () => {
+    const video = createWorkflowNode('video', 'video', { x: 0, y: 0 }, {
+      href: 'data:video/mp4;base64,dmlkZW8=', poster: 'data:image/jpeg;base64,cG9zdGVy', durationMs: 9000,
+    });
+    const onExtractFrame = vi.fn();
+    const props = {
+      node: video,
+      selected: true,
+      onPointerDown: vi.fn(),
+      onConnectStart: vi.fn(),
+      onResizeStart: vi.fn(),
+      onChangeText: vi.fn(),
+      onChangeMetadata: vi.fn(),
+      onRun: vi.fn(),
+      onContextMenu: vi.fn(),
+      onReplaceMedia: vi.fn(),
+      onRemoveMedia: vi.fn(),
+      onActivateMedia: vi.fn(),
+      onDeactivateMedia: vi.fn(),
+      onExtractFrame,
+    };
+    const view = render(<WorkflowNode {...props} mediaActive={false} />);
+    expect(screen.getByRole('button', { name: '加载视频播放器' })).toBeInTheDocument();
+    expect(screen.queryByRole('slider', { name: '视频进度' })).not.toBeInTheDocument();
+    view.rerender(<WorkflowNode {...props} mediaActive />);
+    expect(screen.getByRole('button', { name: '播放视频' })).toBeInTheDocument();
+    expect(screen.getByRole('slider', { name: '视频进度' })).toBeInTheDocument();
+    expect(screen.getByText('0:09')).toBeInTheDocument();
+    expect(document.querySelector('video')).not.toHaveAttribute('controls');
+    expect(document.querySelector('video')).toHaveAttribute('preload', 'metadata');
+    expect(document.querySelector('video')).toHaveAttribute('playsinline');
+    fireEvent.click(screen.getByRole('button', { name: '视频截帧' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: '截取当前帧' }));
+    expect(onExtractFrame).toHaveBeenCalledWith('current', 0);
+    fireEvent.click(screen.getByRole('button', { name: '静音视频' }));
+    fireEvent.change(screen.getByRole('slider', { name: '视频音量' }), { target: { value: '.75' } });
+    expect(screen.getByText('75')).toBeInTheDocument();
   });
 
   it('uses explicit batch controls to collapse results and set a different primary image', () => {

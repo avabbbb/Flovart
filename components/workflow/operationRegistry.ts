@@ -23,7 +23,8 @@ export type WorkflowOperationNodeToolName =
   | 'video-merge'
   | 'video-extract-frame'
   | 'audio-trim'
-  | 'audio-speed';
+  | 'audio-speed'
+  | 'audio-stem-split';
 
 export interface WorkflowOperationInputRoleSpec {
   role: WorkflowOperationInputRole;
@@ -112,7 +113,8 @@ const videoMergeToolArguments = z.object({
 }).refine(value => new Set(value.sourceNodeIds).size === value.sourceNodeIds.length, '视频拼接来源不能重复');
 
 const videoExtractFrameParameters = z.object({
-  position: z.enum(['first', 'last']).default('first'),
+  position: z.enum(['first', 'current', 'last']).default('first'),
+  currentTimeSec: z.number().min(0).optional(),
 });
 
 const audioTrimParameters = z.object({
@@ -269,13 +271,14 @@ export const WORKFLOW_OPERATION_CAPABILITIES: Readonly<Record<WorkflowOperationC
     inputRoles: [{ role: 'source_video', nodeTypes: ['video'], min: 1, max: 1 }],
     outputRoles: [{ role: 'result_image', nodeType: 'image', min: 1, max: 1 }],
     executor: 'local-transform', confirmation: 'none', workflow: true, table: true,
-    uiKey: 'video-extract-frame', nodeTool: 'video-extract-frame', agentUsage: 'video-extract-frame 使用 position（first/last）',
+    uiKey: 'video-extract-frame', nodeTool: 'video-extract-frame', agentUsage: 'video-extract-frame 使用 position（first/current/last），current 可传 currentTimeSec',
     parameters: videoExtractFrameParameters,
     parameterControls: [{ key: 'position', kind: 'select', label: '位置', options: [
       { label: '首帧', value: 'first' },
+      { label: '当前帧', value: 'current' },
       { label: '尾帧', value: 'last' },
     ] }],
-    summarizeParameters: parameters => parameters.position === 'last' ? '尾帧' : '首帧',
+    summarizeParameters: parameters => parameters.position === 'last' ? '尾帧' : parameters.position === 'current' ? `当前帧 ${Number(parameters.currentTimeSec || 0).toFixed(1)}s` : '首帧',
   },
   'audio.trim@1': {
     id: 'audio.trim@1', label: '音频截取', mediaType: 'audio',
@@ -299,6 +302,17 @@ export const WORKFLOW_OPERATION_CAPABILITIES: Readonly<Record<WorkflowOperationC
     parameters: audioSpeedParameters,
     parameterControls: [{ key: 'speed', kind: 'number', label: '速度', min: .25, max: 4, step: .05, suffix: '×' }],
     summarizeParameters: parameters => `${Number(parameters.speed || 1).toFixed(2)}×`,
+  },
+  'audio.stem-split@1': {
+    id: 'audio.stem-split@1', label: '人声/伴奏分离', mediaType: 'audio',
+    inputRoles: [{ role: 'source_audio', nodeTypes: ['audio'], min: 1, max: 1 }],
+    outputRoles: [
+      { role: 'result_audio', nodeType: 'audio', min: 2, max: 2 },
+    ],
+    executor: 'local-transform', confirmation: 'none', workflow: true, table: true,
+    uiKey: 'audio-stem-split', nodeTool: 'audio-stem-split', agentUsage: 'audio-stem-split 无额外参数，输出人声与伴奏两条音轨',
+    parameters: noParameters,
+    summarizeParameters: () => '人声 + 伴奏',
   },
 };
 

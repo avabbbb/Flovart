@@ -3,8 +3,8 @@ package repository
 import (
 	"errors"
 
-	"gorm.io/gorm"
 	"flovart/enterprise/model"
+	"gorm.io/gorm"
 )
 
 type RoleRepository struct {

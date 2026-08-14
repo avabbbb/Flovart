@@ -3,7 +3,7 @@ import crypto from 'node:crypto';
 const sendEvent = (response, type, payload) => response.write(`event: ${type}\ndata: ${JSON.stringify(payload)}\n\n`);
 
 export class WorkflowAgentSession {
-  constructor({ timeoutMs = 30000 } = {}) {
+  constructor({ timeoutMs = 60000 } = {}) {
     this.timeoutMs = timeoutMs;
     this.clients = new Map();
     this.pending = new Map();

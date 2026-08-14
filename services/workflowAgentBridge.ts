@@ -4,6 +4,8 @@ import { useWorkflowStore } from '../components/workflow/store';
 import type { WorkflowProject } from '../components/workflow/types';
 import { getFlovartRuntimeApi, type RuntimeCommandEnvelope } from './flovartRuntime';
 import { dispatchWorkflowCommand, redactWorkflowAgentValue, type WorkflowCommandEnvelope, type WorkflowCommandResult } from './workflowDispatcher';
+import { workflowCommandSummary } from '../components/workflow/agentOps';
+import { getWorkflowOperationCapabilityByNodeTool } from '../components/workflow/operationRegistry';
 
 const RUNTIME_COMMANDS = new Set([
   'runtime.status', 'command.list', 'command.schema', 'provider.status',
@@ -12,6 +14,7 @@ const RUNTIME_COMMANDS = new Set([
 ]);
 const RUNTIME_CONFIRM_COMMANDS = new Set(['production.approve', 'production.run', 'task.cancel']);
 const READ_COMMANDS = new Set(['runtime.status', 'status', 'provider.status', 'asset.list', 'workflow.project.list', 'workflow.inspect', 'command.list', 'command.schema']);
+const WORKFLOW_READ_COMMANDS = new Set(['workflow.project.list', 'workflow.inspect']);
 const MAX_ATTACHMENTS = 6;
 const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024;
 const MAX_TOTAL_ATTACHMENT_BYTES = 24 * 1024 * 1024;
@@ -48,6 +51,7 @@ export interface WorkflowAgentBridgeOptions {
   onEvent?: (type: string, payload: any) => void;
   onStatus?: (status: 'connecting' | 'connected' | 'disconnected' | 'error') => void;
   confirm?: (summary: string) => boolean | Promise<boolean>;
+  confirmWrite?: (summary: string) => boolean | Promise<boolean>;
 }
 
 export function requiresRuntimeAgentConfirmation(command: string) {
@@ -266,6 +270,14 @@ export class WorkflowAgentBridge {
           }
         }
       } else if (envelope.command.startsWith('workflow.')) {
+        if (this.options.confirmWrite && !WORKFLOW_READ_COMMANDS.has(envelope.command)
+          && !requiresHighRiskWorkflowConfirmation(envelope)
+          && !await this.options.confirmWrite(workflowCommandSummary(envelope.command, envelope.args))) {
+          result = { ok: false, commandId: envelope.id, error: { code: 'DENIED', message: '用户拒绝了 Workflow 变更。' } };
+          await this.post('/workflow/result', { requestId, clientId: this.clientId, result });
+          this.emit('tool_result', { requestId, command: envelope.command, result });
+          return;
+        }
         result = await dispatchWorkflowCommand(envelope);
         if (result.confirmation?.required) {
           const approved = await this.confirm(result.confirmation.summary);
@@ -318,4 +330,11 @@ export class WorkflowAgentBridge {
       clearTimeout(timer);
     }
   }
+}
+
+function requiresHighRiskWorkflowConfirmation(envelope: WorkflowCommandEnvelope) {
+  if (envelope.command === 'workflow.project.delete' || envelope.command === 'workflow.node.delete' || envelope.command === 'workflow.node.run') return true;
+  if (envelope.command !== 'workflow.node.tool') return false;
+  const tool = String(envelope.args.tool || '');
+  return getWorkflowOperationCapabilityByNodeTool(tool)?.confirmation !== 'none';
 }

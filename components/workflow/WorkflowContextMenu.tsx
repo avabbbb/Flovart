@@ -1,12 +1,14 @@
-import { Copy, Pencil, Play, Star, Trash2 } from 'lucide-react';
+import { Copy, CopyPlus, Library, Pencil, Play, Star, Trash2 } from 'lucide-react';
 
 export type WorkflowContextMenuState =
   | { type: 'node'; id: string; x: number; y: number }
   | { type: 'connection'; id: string; x: number; y: number };
 
-export function WorkflowContextMenu({ state, onCopy, onDelete, onRun, onSetPrimary, onRename }: {
+export function WorkflowContextMenu({ state, onCopy, onDuplicate, onSaveMedia, onDelete, onRun, onSetPrimary, onRename }: {
   state: WorkflowContextMenuState;
   onCopy: () => void;
+  onDuplicate?: () => void;
+  onSaveMedia?: () => void;
   onDelete: () => void;
   onRun: () => void;
   onSetPrimary?: () => void;
@@ -15,6 +17,8 @@ export function WorkflowContextMenu({ state, onCopy, onDelete, onRun, onSetPrima
   return (
     <div role="menu" aria-label={state.type === 'node' ? '节点菜单' : '连接菜单'} data-workflow-overlay className="workflow-context-menu" style={{ left: state.x, top: state.y }} onPointerDown={event => event.stopPropagation()} onDoubleClick={event => event.stopPropagation()}>
       {state.type === 'node' && <button type="button" role="menuitem" onClick={onCopy}><Copy size={14} />复制</button>}
+      {state.type === 'node' && onDuplicate && <button type="button" role="menuitem" onClick={onDuplicate}><CopyPlus size={14} />创建副本</button>}
+      {state.type === 'node' && onSaveMedia && <button type="button" role="menuitem" onClick={onSaveMedia}><Library size={14} />保存到我的素材</button>}
       {state.type === 'node' && <button type="button" role="menuitem" onClick={onRun}><Play size={14} />运行节点</button>}
       {state.type === 'node' && onSetPrimary && <button type="button" role="menuitem" onClick={onSetPrimary}><Star size={14} />设为主图</button>}
       {state.type === 'node' && onRename && <button type="button" role="menuitem" onClick={onRename}><Pencil size={14} />重命名</button>}

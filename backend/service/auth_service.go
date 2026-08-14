@@ -6,16 +6,21 @@ import (
 	"strings"
 	"time"
 
-	"github.com/golang-jwt/jwt/v5"
-	"golang.org/x/crypto/bcrypt"
 	"flovart/hub/model"
 	"flovart/hub/repository"
+	"github.com/golang-jwt/jwt/v5"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type AuthService struct {
-	users      *repository.UserRepository
-	jwtSecret  string
-	jwtExpH    int
+	users     *repository.UserRepository
+	jwtSecret string
+	jwtExpH   int
+}
+
+func AccountCanAuthenticate(status string) bool {
+	status = strings.ToLower(strings.TrimSpace(status))
+	return status == "" || status == "active"
 }
 
 func NewAuthService(users *repository.UserRepository, jwtSecret string, jwtExpH int) *AuthService {
@@ -48,7 +53,7 @@ func (s *AuthService) Register(username, email, password string) (*model.User, s
 	if err != nil {
 		return nil, "", err
 	}
-	user := &model.User{Username: username, Email: email, Password: string(hash), Role: "user"}
+	user := &model.User{Username: username, Email: email, Password: string(hash), Role: "user", Status: "active", TokenVersion: 1}
 	if err := s.users.Create(user); err != nil {
 		return nil, "", err
 	}
@@ -75,6 +80,9 @@ func (s *AuthService) Login(identifier, password string) (*model.User, string, e
 	if user == nil {
 		return nil, "", errors.New("账号或密码错误")
 	}
+	if !AccountCanAuthenticate(user.Status) {
+		return nil, "", errors.New("账号已停用，请联系平台管理员")
+	}
 	if bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password)) != nil {
 		return nil, "", errors.New("账号或密码错误")
 	}
@@ -87,11 +95,14 @@ func (s *AuthService) Login(identifier, password string) (*model.User, string, e
 
 func (s *AuthService) issueToken(user *model.User) (string, error) {
 	now := time.Now()
-	claims := jwt.RegisteredClaims{
-		Subject:   user.ID,
-		Audience:  jwt.ClaimStrings{user.Role},
-		ExpiresAt: jwt.NewNumericDate(now.Add(time.Duration(s.jwtExpH) * time.Hour)),
-		IssuedAt:  jwt.NewNumericDate(now),
+	claims := UserClaims{
+		TokenVersion: user.TokenVersion,
+		RegisteredClaims: jwt.RegisteredClaims{
+			Subject:   user.ID,
+			Audience:  jwt.ClaimStrings{user.Role},
+			ExpiresAt: jwt.NewNumericDate(now.Add(time.Duration(s.jwtExpH) * time.Hour)),
+			IssuedAt:  jwt.NewNumericDate(now),
+		},
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString([]byte(s.jwtSecret))
@@ -108,4 +119,9 @@ func validEmail(v string) bool    { return emailRe.MatchString(v) }
 // GetUserByID 根据 ID 查询用户
 func (s *AuthService) GetUserByID(id string) (*model.User, error) {
 	return s.users.FindByID(id)
+}
+
+type UserClaims struct {
+	TokenVersion int64 `json:"ver"`
+	jwt.RegisteredClaims
 }

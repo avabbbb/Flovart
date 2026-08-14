@@ -2,6 +2,16 @@
 title: 待测试确认
 ---
 
+## 首页、Workflow 节点与视频交互重构
+
+- 应用首页已从静态社区 mock 改为真实创作入口：首屏使用仓库内实际 Workflow、图片、分镜与视频评测资产展示六类能力；左侧导航只保留已接线的 Workflow、Table、Agent、Skill 与文档入口。首页创意输入会创建真实项目与文本节点并打开 Agent，最近项目卡读取本地项目和真实节点数量，不再伪造 FlovartTV 作品。
+- Production Skill 首页卡改为横向媒体卡，使用真实 VOX 评测缩略图、版本、调用标识与安全说明；继续复用现有详情 Modal 和“创建项目 → 预填 Agent 草稿”链路，不因视觉复刻伪造额外 Skill。
+- Workflow 图片、视频、文本、脚本、音频、配置与 Operation 共用 12px 媒体卡外壳、浮动标题、克制选中边框和尺寸元数据。节点 hover 不再整体缩放，避免媒体控制、连接锚点和空间位置漂移；批次结果保留轻微错层卡片语义。
+- 视频节点默认只解析并展示持久 Poster，显式激活后才挂载一个自定义 `<video preload="metadata" playsInline>`；控制层提供播放/暂停、当前时间、总时长与进度拖动。进度条聚焦时按 Esc 也会卸载播放器并恢复 Poster。
+- 真实浏览器验收发现并修复三处单测未暴露的阻塞：底部添加节点菜单改为向上展开；Agent 面板打开时底部工具栏按剩余画布宽度左移并压缩；工作区禁止程序性滚动，PromptBar 在节点上下完整翻转并为底部 Dock 留出安全区，不再遮住视频控制或工具栏。
+- 自动验证覆盖首页语义入口、创意到真实节点、视频尺寸/轻量激活/自定义播放器、浮层安全区与工具栏 inset。可见 Playwright 已在 1440×900 真实完成首页 hover 视频预览、创意建项目、视频文件导入、Poster、播放、拖动进度、Esc 卸载，以及六类可创建节点同屏检查；仍需用户按下方要点确认视觉取舍。
+- 待用户验证：① 首页首屏的信息密度、真实评测素材和六宫格能力排序是否符合 Flovart 定位；② 从首页输入一个创意，确认进入 Agent 后再打开 Workflow 可看到同名项目和文本节点；③ 导入本地视频，确认初始只有 Poster，加载后可播放/拖进度且 Esc 回到 Poster；④ 展开 Agent、图层栏和 PromptBar 后，确认底部 Dock、节点标题/尺寸、ElementToolbar 与播放器控制互不遮挡；⑤ 在浅色与深色主题各检查一次节点边框、背景与文字对比度。
+
 ## Browser Import V1 右键单图闭环
 
 - Edge/Chrome 扩展已从内嵌 WebUI 与 Provider 客户端收缩为 Desktop-first 薄伴侣：构建产物不再包含 Content Script、整页图片采集、扩展 API Key、Provider 直连、泛化 External Messaging、`<all_urls>` 常驻权限或 `app/`。右键单图只为所选跨域图片临时请求精确来源权限，读取后立即撤销；`data:` / `blob:` 大载荷不写入 Provenance，HTTP(S) 来源会移除凭据、查询与 Hash。升级时清理旧版扩展凭证、Base64 待导入图和整页采集键，不触碰 Desktop Keyring。
@@ -11,6 +21,11 @@ title: 待测试确认
 - 待用户实机确认：① 在 `edge://extensions` 旁加载 `dist-extension` 并复制真实 ID；② 用开发脚本注册 Host 后启动 Desktop，首次连接确认能看到并批准准确 Extension Origin；③ 分别右键同源图、跨域 CDN 图与大于 1 MiB 的图，确认节点保持原比例、来源可追踪且临时站点权限已撤销；④ 没有活动项目时确认只进入导入箱，再手动路由；⑤ 关闭 Desktop 后右键图片，确认 Host 能唤起 Desktop 且失败/超时不会误报成功。商店 ID 和正式 NSIS Hook 未完成前不能判定为可发布安装闭环。
 
 ## Flovart Agent 同画布制作与 VOX 风格锁定
+
+- Workflow 的 Agent 入口已按真实 LibLib 交互重做为贴边主面板：桌面宽屏默认占约 40% 视口，左侧保留可直接操作的 Workflow，右侧依次呈现可恢复主对话、底部 Skill 开场卡和固定 composer；独立 Agent 入口继续保留为「上下文/产物 60% + 主对话 40%」，不是把 Agent 降级回唯一聊天抽屉。
+- Production Skill 入口改为内容卡、搜索选择器和已选 Skill chip。卡片使用仓库内 VOX 实际评测画面；当前只展示真实可执行的 `community.vox-director`，没有为了凑 2×2 外观伪造不可运行 Skill。选中卡片只预填 `$vox-director` 制作草稿，不自动发送或产生费用。
+- Composer 新增已接线的手动/自动模式：手动模式会在每个 Workflow 写操作前询问；自动模式只跳过可逆写操作的逐步确认，删除、付费生成、Production 批准/运行与任务取消仍始终要求明确确认。Web 预览即使显示“仅桌面端可用”，也会保留 Skill 开场与交互预览。
+- 自动验证覆盖 Skill 空态、选择器搜索、卡片预填、手动/自动写入边界、不可逆操作确认、Workflow 贴边面板和独立 Agent 入口；仍需在 Desktop Managed Agent 已连接时由用户走一轮真实对话、可逆改画布、删除拒绝和 VOX Skill 预填验收。
 
 - Workflow 右侧 `Agent` 与独立 Agent 工作区现在都挂载同一个 Flovart PI 主会话。主 Agent 会先读取当前可见 Draft，再逐步调用类型化工具；一个用户回合的可逆操作合并为同一 ChangeSet，并和人工操作共用撤销/重做、Draft Version、节点 Object Version 与画布时间线。旧网站 one-shot JSON 计划器不再是主入口，Codex 仅保留为明确的新建子任务。
 - 内置 Agent 发起 `production.dry-run` 时不再接受与画布无关的隐式制作：它必须提交当前 `draftVersion` 与实际 `sourceNodeIds`，浏览器桥会校验节点和版本、冻结对象版本/相关 ChangeSet/脱敏快照 Hash，Runtime 将该绑定写入不可变 Spec Hash；画布在编译前发生变化会直接拒绝并要求 Agent 重读。

@@ -13,26 +13,28 @@ type Config struct {
 	JWTSecret      string
 	JWTExpHours    string
 	CORSAllow      string
+	DeploymentMode string
 	Storage        StorageConfig
 }
 
 type StorageConfig struct {
-	Provider    string // "r2"
-	AccountID   string
-	AccessKey   string
-	SecretKey   string
-	Bucket      string
-	PublicBase  string
+	Provider   string // "r2"
+	AccountID  string
+	AccessKey  string
+	SecretKey  string
+	Bucket     string
+	PublicBase string
 }
 
 func Load() (*Config, error) {
 	_ = godotenv.Load()
 	cfg := &Config{
-		Port:        env("PORT", "11452"),
-		DatabaseURL: os.Getenv("DATABASE_URL"),
-		JWTSecret:   env("JWT_SECRET", ""),
-		JWTExpHours: env("JWT_EXP_HOURS", "168"),
-		CORSAllow:   env("CORS_ALLOW", "*"),
+		Port:           env("PORT", "11452"),
+		DatabaseURL:    os.Getenv("DATABASE_URL"),
+		JWTSecret:      env("JWT_SECRET", ""),
+		JWTExpHours:    env("JWT_EXP_HOURS", "168"),
+		CORSAllow:      env("CORS_ALLOW", "*"),
+		DeploymentMode: env("FLOVART_DEPLOYMENT_MODE", "local"),
 		Storage: StorageConfig{
 			Provider:   env("STORAGE_PROVIDER", "r2"),
 			AccountID:  os.Getenv("R2_ACCOUNT_ID"),

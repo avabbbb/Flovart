@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **首页与 Workflow 媒体节点重构**：首页改为使用真实项目、评测素材、Agent 创意入口和 Production Skill 的创作工作台；通用节点统一为浮动标题与稳定媒体卡，视频采用 Poster 优先、显式单播放器和自定义进度控制。补齐添加菜单向上翻转、Agent 展开时 Dock 让位、PromptBar 上下避让与画布禁止程序性滚动，消除视频控制和工作区浮层遮挡。
+- **Agent / Skill 主入口重构**：Workflow 右侧 Agent 改为约 40% 视口的贴边主面板，独立 Agent 收口为稳定制作上下文与主对话分栏；空对话提供真实 Production Skill 内容卡、搜索选择器、已选 chip 与 VOX 评测缩略图。手动模式逐个确认 Workflow 写操作，自动模式只自动推进可逆写入，付费、删除、取消等高风险动作继续强制确认。
 - **Browser Import V1**：Edge/Chrome 扩展收缩为 Desktop-first 薄伴侣，右键单图经显式 Desktop 配对、长连接 Native Messaging 分块、SHA-256 与 MIME 字节签名校验进入内容寻址 Artifact，再投影为活动 Workflow `image` 节点或 Browser Import Inbox；扩展侧 Provider Key、直连模型、完整 WebUI、常驻 `<all_urls>`、整页扫描与旧 storage 交接路径已移除，升级时同步清理旧扩展凭证和大载荷交接键。正式商店 ID 与 NSIS 自动注册仍待实机验收后接入。
 - Workflow 图片生成/裁剪/高清放大、视频剪辑/音视频分离/拼接/抽帧与音频截取/变速开始统一为显式 Operation 链：Registry 集中声明能力、参数、类型化输入输出、确认级别与参数控件，Operation 保存唯一 Recipe / Prompt Document / Input Binding / Execution Snapshot / Take，重跑追加 Take，失败、取消与旧配方晚到结果可追溯，源媒体不再被原地覆盖。
 - **AI 原生 Workflow Draft 落地**：Workflow 右侧与独立 Agent 工作区现共用迭代式 Flovart PI Agent；AI/CLI/MCP 和人工编辑通过同一 Draft Authority 写入可见画布，一个 Agent 回合形成一个耐久 ChangeSet，并共用撤销/重做、Draft Version、节点 Object Version 与轻量画布时间线。内置 Agent 的 `production.dry-run` 必须绑定当前 Draft 与来源节点，Runtime 产物持续回填同一 Workflow；旧网站 one-shot JSON 计划器退出主入口。

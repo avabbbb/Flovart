@@ -21,6 +21,10 @@ func main() {
 	if err != nil {
 		log.Fatalf("config load: %v", err)
 	}
+	// API Key 加密密钥必须单独配置，启动即失败，避免回退 JWT_SECRET 的弱隔离
+	if err := service.RequireKeyEncryptionSecret(); err != nil {
+		log.Fatalf("key encryption: %v", err)
+	}
 	db, err := gorm.Open(postgres.Open(cfg.DatabaseURL), &gorm.Config{})
 	if err != nil {
 		log.Fatalf("db open: %v", err)
@@ -52,6 +56,8 @@ func main() {
 		&model.SensitiveWord{},
 		// 项目镜像
 		&model.Project{},
+		// 企业审计（不保存请求正文与密钥）
+		&model.AuditLog{},
 	); err != nil {
 		log.Fatalf("migrate: %v", err)
 	}
@@ -67,6 +73,7 @@ func main() {
 	approvalRepo := repository.NewApprovalRepository(db)
 	sensitiveRepo := repository.NewSensitiveRepository(db)
 	projectRepo := repository.NewProjectRepository(db)
+	auditRepo := repository.NewAuditRepository(db)
 
 	orgSvc := service.NewOrgService(db, orgRepo, userRepo, deptRepo, roleRepo)
 	rbacSvc := service.NewRbacService(orgRepo, rbacRepo)
@@ -76,9 +83,11 @@ func main() {
 	apiKeySvc := service.NewApiKeyService(db, apiKeyRepo, creditRepo)
 	proxySvc := service.NewProxyService(db, apiKeyRepo, creditRepo, creditSvc, apiKeySvc)
 	resourceSvc := service.NewResourceService(db, resourceRepo)
-	approvalSvc := service.NewApprovalService(db, approvalRepo)
+	approvalSvc := service.NewApprovalService(db, approvalRepo, deptRepo)
 	sensitiveSvc := service.NewSensitiveService(sensitiveRepo)
 	projectSvc := service.NewProjectService(projectRepo)
+	platformSvc := service.NewPlatformService(userRepo, orgRepo)
+	auditSvc := service.NewAuditService(auditRepo)
 
 	orgH := handler.NewOrgHandler(orgSvc)
 	deptH := handler.NewDeptHandler(deptSvc)
@@ -90,14 +99,27 @@ func main() {
 	approvalH := handler.NewApprovalHandler(approvalSvc)
 	sensitiveH := handler.NewSensitiveHandler(sensitiveSvc)
 	projectH := handler.NewProjectHandler(projectSvc)
+	platformH := handler.NewPlatformHandler(platformSvc)
+	auditH := handler.NewAuditHandler(auditSvc)
 
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.Default()
 	r.Use(corsMiddleware(cfg.CORSAllow))
 	r.GET("/healthz", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"ok": true}) })
 
-	api := r.Group("/api/v1/enterprise", middleware.Auth(cfg.JWTSecret))
+	api := r.Group("/api/v1/enterprise", middleware.Auth(cfg.JWTSecret, userRepo), middleware.Audit(auditRepo))
 	{
+		platform := api.Group("/platform", middleware.RequirePlatformAdmin())
+		{
+			platform.GET("/users", platformH.ListUsers)
+			platform.POST("/users", platformH.CreateUser)
+			platform.PUT("/users/:userId", platformH.UpdateUser)
+			platform.DELETE("/users/:userId", platformH.DeleteUser)
+			platform.GET("/organizations", platformH.ListOrganizations)
+			platform.PUT("/organizations/:orgId", platformH.UpdateOrganization)
+			platform.GET("/audit-logs", auditH.ListPlatform)
+		}
+
 		// 组织 CRUD（沿用现有 handler）
 		api.POST("/orgs", orgH.Create)
 		api.GET("/orgs", orgH.MyOrgs)
@@ -107,7 +129,9 @@ func main() {
 		// 成员名册（M4：改为部门汇总 + 根部门快捷加入）
 		api.GET("/orgs/:id/members", middleware.RequireMember(rbacSvc), orgH.ListMembers)
 		api.POST("/orgs/:id/members", middleware.RequirePerm(rbacSvc, model.PermMemberInvite), orgH.AddMember)
+		api.PUT("/orgs/:id/members/:userId", middleware.RequirePerm(rbacSvc, model.PermMemberManage), orgH.UpdateMember)
 		api.DELETE("/orgs/:id/members/:userId", middleware.RequirePerm(rbacSvc, model.PermMemberManage), orgH.RemoveMember)
+		api.GET("/orgs/:id/audit-logs", middleware.RequirePerm(rbacSvc, model.PermViewAuditLog), auditH.ListOrganization)
 
 		// 部门树（M3 新增）
 		api.POST("/orgs/:id/departments", middleware.RequirePerm(rbacSvc, model.PermDeptManage), deptH.Create)
@@ -200,11 +224,22 @@ func main() {
 func corsMiddleware(allow string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		origin := c.GetHeader("Origin")
-		if allow == "*" || allow == origin {
-			c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
+		switch allow {
+		case "*":
+			// 通配模式：不回显 Origin、不携带凭据
+			c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
 			c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 			c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-			c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
+		case "", "off":
+			// 关闭 CORS：不输出任何 CORS 头
+		default:
+			// 白名单模式：仅放行匹配的 Origin 并携带凭据
+			if origin == allow {
+				c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
+				c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+				c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+				c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
+			}
 		}
 		if c.Request.Method == http.MethodOptions {
 			c.AbortWithStatus(http.StatusNoContent)

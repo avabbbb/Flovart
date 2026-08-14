@@ -7,6 +7,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { AuthModal } from '../auth/AuthModal';
 import { PromptDetailDrawer } from './PromptDetailDrawer';
 import { PromptUploadModal } from './PromptUploadModal';
+import { friendlyError } from '../../utils/helpers';
 
 type Mode = 'image' | 'video' | 'text' | '';
 type Sort = 'latest' | 'popular' | 'downloads';
@@ -54,7 +55,7 @@ export function PromptsPage() {
       setPacks(result.list || []);
       setTotal(result.total);
     } catch (e: any) {
-      message.error(e?.message || '加载失败');
+      message.error(friendlyError(e, '加载失败'));
     } finally {
       setLoading(false);
     }
@@ -84,7 +85,7 @@ export function PromptsPage() {
         )
       );
     } catch (e: any) {
-      message.error(e?.message || '操作失败');
+      message.error(friendlyError(e, '操作失败'));
     }
   };
 

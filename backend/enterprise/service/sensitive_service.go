@@ -50,8 +50,8 @@ func (s *SensitiveService) List(orgID string) ([]model.SensitiveWord, error) {
 	return s.rep.List(orgID)
 }
 
-func (s *SensitiveService) Delete(id string) error {
-	return s.rep.Delete(id)
+func (s *SensitiveService) Delete(orgID, id string) error {
+	return s.rep.DeleteByOrg(orgID, id)
 }
 
 type CheckResult struct {

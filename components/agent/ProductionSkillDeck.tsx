@@ -1,33 +1,65 @@
-import { Puzzle, X } from 'lucide-react';
+import { BookOpen, Check, ChevronDown, Plus, Search, Shuffle, Sparkles, X } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { useState, type RefObject } from 'react';
+import { useMemo, useState, type RefObject } from 'react';
 
 import {
   createProductionSkillAttachment,
   listBundledProductionSkills,
+  type BundledProductionSkill,
   type ProductionSkillAttachment,
 } from '../../services/productionSkillCatalog';
+import { buildProductionSkillStarterPrompt, productionSkillHandle } from '../../services/productionSkillLaunch';
+import voxSkillCover from '../../tools/flovart/evaluations/vox-sky-blue-2026-08-04/preview-hook.jpg';
+
+const SKILL_ACCENTS = [
+  ['#f4b452', '#df6b3f'],
+  ['#5fc8bb', '#23767b'],
+  ['#7f8de7', '#7355ad'],
+  ['#d77f9c', '#8d4469'],
+] as const;
+
+function skillCover(skill: BundledProductionSkill) {
+  return skill.id === 'community.vox-director' ? voxSkillCover : undefined;
+}
 
 export function ProductionSkillDeck({
   attachment,
   onChange,
   dropTargetRef,
+  onPromptChange,
+  showWelcome = false,
 }: {
   attachment?: ProductionSkillAttachment;
   onChange: (attachment?: ProductionSkillAttachment) => void;
   dropTargetRef: RefObject<HTMLElement | null>;
+  onPromptChange?: (prompt: string) => void;
+  showWelcome?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [query, setQuery] = useState('');
+  const [shuffleOffset, setShuffleOffset] = useState(0);
   const reduceMotion = useReducedMotion();
+  const skills = listBundledProductionSkills();
+  const filteredSkills = useMemo(() => {
+    const normalized = query.trim().toLowerCase();
+    if (!normalized) return skills;
+    return skills.filter(skill => [skill.displayName, skill.id, skill.description, productionSkillHandle(skill)]
+      .some(value => value.toLowerCase().includes(normalized)));
+  }, [query, skills]);
+  const welcomeSkills = useMemo(() => skills.length
+    ? Array.from({ length: Math.min(4, skills.length) }, (_, index) => skills[(shuffleOffset + index) % skills.length])
+    : [], [shuffleOffset, skills]);
 
-  const attach = async (id: string) => {
-    const skill = listBundledProductionSkills().find(item => item.id === id);
+  const attach = async (id: string, seedPrompt = false) => {
+    const skill = skills.find(item => item.id === id);
     if (!skill || loading) return;
     setLoading(true);
     try {
       onChange(await createProductionSkillAttachment(skill));
+      if (seedPrompt) onPromptChange?.(buildProductionSkillStarterPrompt(skill));
       setOpen(false);
+      setQuery('');
     } finally {
       setLoading(false);
     }
@@ -41,61 +73,94 @@ export function ProductionSkillDeck({
   };
 
   return (
-    <div className="relative">
-      {attachment ? (
-        <span
-          className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-[10px] font-semibold"
-          style={{ background: 'var(--isl-mint-bg, color-mix(in srgb, var(--wf-accent) 14%, transparent))', color: 'var(--isl-mint-deep, var(--wf-accent))' }}
-        >
-          <Puzzle size={11} />{attachment.displayName}<span className="opacity-60">v{attachment.version}</span>
-          <button type="button" aria-label={`移除 ${attachment.displayName}`} onClick={() => onChange(undefined)}><X size={11} /></button>
-        </span>
-      ) : (
-        <button
-          type="button"
-          aria-label="选择制作 Skill"
-          className="inline-flex items-center gap-1 px-1 text-[10px] font-semibold"
-          style={{ color: 'var(--isl-ink-soft, var(--wf-text-soft, var(--wf-text)))' }}
-          onClick={() => setOpen(value => !value)}
-        >
-          <Puzzle size={12} />Skill
-        </button>
+    <>
+      {showWelcome && !attachment && welcomeSkills.length > 0 && (
+        <section className="agent-skill-welcome" aria-label="推荐制作 Skill">
+          <div className="agent-skill-welcome__heading">
+            <BookOpen size={18} />
+            <h2>每个 Skill，都是一个开场</h2>
+            {skills.length > 1 && <button type="button" onClick={() => setShuffleOffset(value => (value + 1) % skills.length)}><Shuffle size={12} />换一批</button>}
+          </div>
+          <div className="agent-skill-welcome__grid">
+            {welcomeSkills.map((skill, index) => <SkillCard key={`${skill.id}-${index}`} skill={skill} accent={SKILL_ACCENTS[index % SKILL_ACCENTS.length]} onClick={() => void attach(skill.id, true)} />)}
+          </div>
+        </section>
       )}
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            initial={reduceMotion ? false : { opacity: 0, y: 8, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 6, scale: 0.98 }}
-            transition={{ type: 'spring', stiffness: 420, damping: 32 }}
-            className="absolute bottom-full left-0 z-20 mb-2 w-60 rounded-xl p-2"
-            style={{ background: 'var(--isl-surface, var(--wf-panel))', border: '1px solid var(--isl-line, var(--wf-border))' }}
-          >
-            {listBundledProductionSkills().map(skill => (
-              <motion.button
-                key={skill.id}
-                type="button"
-                aria-label={`添加 ${skill.displayName}`}
-                disabled={loading}
-                whileHover={reduceMotion ? undefined : { y: -2 }}
-                whileTap={reduceMotion ? undefined : { scale: 0.97 }}
-                whileDrag={reduceMotion ? undefined : { scale: 1.05, rotate: -2 }}
-                drag
-                dragElastic={0.14}
-                dragSnapToOrigin
-                onDragEnd={(_, info) => { if (droppedInComposer(info.point)) void attach(skill.id); }}
-                transition={{ type: 'spring', stiffness: 520, damping: 30 }}
-                className="block w-full rounded-lg p-2 text-left"
-                style={{ background: 'var(--isl-surface-2, var(--wf-panel))', color: 'var(--isl-ink, var(--wf-text))' }}
-                onClick={() => void attach(skill.id)}
-              >
-                <strong className="block text-xs">{skill.displayName}</strong>
-                <span className="mt-0.5 block text-[10px]" style={{ color: 'var(--isl-ink-soft, var(--wf-text-soft, var(--wf-text)))' }}>{skill.description}</span>
-              </motion.button>
-            ))}
-          </motion.div>
+      {!showWelcome && <div className="agent-skill-control">
+        {attachment ? (
+          <span className="agent-skill-chip">
+            <BookOpen size={13} />
+            <span>{attachment.displayName}</span>
+            <button type="button" aria-label={`移除 ${attachment.displayName}`} onClick={() => onChange(undefined)}><X size={11} /></button>
+          </span>
+        ) : (
+          <button type="button" aria-label="选择制作 Skill" className="agent-composer-tool" onClick={() => setOpen(value => !value)}>
+            <BookOpen size={16} /><span>Skill</span><ChevronDown size={12} />
+          </button>
         )}
-      </AnimatePresence>
-    </div>
+        <AnimatePresence>
+          {open && (
+            <motion.div
+              initial={reduceMotion ? false : { opacity: 0, y: 8, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 6, scale: 0.98 }}
+              transition={{ type: 'spring', stiffness: 420, damping: 32 }}
+              className="agent-skill-picker"
+              role="dialog"
+              aria-label="Skill"
+            >
+              <header className="agent-skill-picker__header">
+                <strong>Skill</strong>
+                <button type="button" className="agent-skill-picker__create" disabled><Plus size={16} />创建</button>
+                <button type="button" className="agent-skill-picker__filter">全部</button>
+                <button type="button" aria-label="关闭 Skill" onClick={() => setOpen(false)}><X size={15} /></button>
+              </header>
+              <div className="agent-skill-picker__toolbar">
+                <div role="tablist" aria-label="Skill 分类"><button type="button" aria-selected="true">通用</button><button type="button" disabled>收藏</button><button type="button" disabled>我的</button></div>
+                <label><Search size={15} /><input autoFocus aria-label="搜索 Skill" placeholder="搜索 Skill" value={query} onChange={event => setQuery(event.target.value)} /></label>
+              </div>
+              <div className="agent-skill-picker__list">
+                {filteredSkills.map((skill, index) => (
+                  <motion.button
+                    key={skill.id}
+                    type="button"
+                    aria-label={`添加 ${skill.displayName}`}
+                    disabled={loading}
+                    whileHover={reduceMotion ? undefined : { x: 2 }}
+                    whileTap={reduceMotion ? undefined : { scale: 0.98 }}
+                    whileDrag={reduceMotion ? undefined : { scale: 1.02 }}
+                    drag
+                    dragElastic={0.14}
+                    dragSnapToOrigin
+                    onDragEnd={(_, info) => { if (droppedInComposer(info.point)) void attach(skill.id); }}
+                    transition={{ type: 'spring', stiffness: 520, damping: 30 }}
+                    className="agent-skill-picker__row"
+                    onClick={() => void attach(skill.id)}
+                  >
+                    <SkillMark accent={SKILL_ACCENTS[index % SKILL_ACCENTS.length]} cover={skillCover(skill)} />
+                    <span><strong>{skill.displayName}<em>{productionSkillHandle(skill)}</em></strong><small>{skill.description}</small></span>
+                    <i>{attachment?.id === skill.id ? <Check size={13} /> : '详情'}</i>
+                  </motion.button>
+                ))}
+                {!filteredSkills.length && <div className="agent-skill-picker__empty">未找到匹配的 Skill</div>}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>}
+    </>
+  );
+}
+
+function SkillMark({ accent, cover }: { accent: readonly [string, string]; cover?: string }) {
+  return <span className="agent-skill-mark" style={{ background: `linear-gradient(135deg, ${accent[0]}, ${accent[1]})` }}>{cover ? <img src={cover} alt="" /> : <Sparkles size={15} />}</span>;
+}
+
+function SkillCard({ skill, accent, onClick }: { skill: BundledProductionSkill; accent: readonly [string, string]; onClick: () => void }) {
+  return (
+    <motion.button type="button" className="agent-skill-card" aria-label={`使用 Skill ${skill.displayName}`} onClick={onClick} whileHover={{ y: -2 }} whileTap={{ scale: .98 }} transition={{ type: 'spring', stiffness: 440, damping: 30 }}>
+      <SkillMark accent={accent} cover={skillCover(skill)} />
+      <span><strong>{skill.displayName}</strong><small>{productionSkillHandle(skill)}</small></span>
+    </motion.button>
   );
 }

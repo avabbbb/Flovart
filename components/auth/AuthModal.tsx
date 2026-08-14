@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Modal, Input, Button, message } from 'antd';
 import { useAuthStore } from '../../stores/useAuthStore';
+import { friendlyError } from '../../utils/helpers';
 
 interface AuthModalProps {
   open: boolean;
@@ -40,7 +41,7 @@ export function AuthModal({ open, onClose, onSuccess }: AuthModalProps) {
       onSuccess?.();
       handleClose();
     } catch (e: any) {
-      message.error(e?.message || '操作失败');
+      message.error(friendlyError(e, '操作失败'));
     } finally {
       setLoading(false);
     }

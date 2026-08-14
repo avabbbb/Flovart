@@ -3,6 +3,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useAuth } from '../../hooks/useAuth';
 import { useUpdaterStore } from '../../stores/useUpdaterStore';
+import { useDeploymentStore } from '../../stores/useDeploymentStore';
 import { AuthModal } from '../auth/AuthModal';
 import type { ThemeMode } from '../../types';
 
@@ -55,6 +56,7 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
   const { user, isLoggedIn } = useAuth();
   const [authOpen, setAuthOpen] = useState(false);
   const isTauri = Boolean((window as any)?.__TAURI__ || (window as any)?.__TAURI_INTERNALS__);
+  const enterpriseEnabled = useDeploymentStore(state => state.profile.capabilities.enterpriseAdmin);
 
   // LOGO 下拉（回主页/新建工作流/删除工作流）
   const [logoMenuOpen, setLogoMenuOpen] = useState(false);
@@ -247,14 +249,16 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
         >
           <BookOpen size={15} />
         </Link>
-        <Link
-          to="/enterprise"
-          className="isl-icon-btn max-sm:!hidden h-8 items-center gap-1.5 px-2 sm:!flex"
-          title={isChinese ? '企业后台' : 'Enterprise console'}
-          aria-label={isChinese ? '企业后台' : 'Enterprise console'}
-        >
-          <Building2 size={15} />
-        </Link>
+        {enterpriseEnabled && (
+          <Link
+            to="/enterprise"
+            className="isl-icon-btn max-sm:!hidden h-8 items-center gap-1.5 px-2 sm:!flex"
+            title={isChinese ? '企业后台' : 'Enterprise console'}
+            aria-label={isChinese ? '企业后台' : 'Enterprise console'}
+          >
+            <Building2 size={15} />
+          </Link>
+        )}
         <button
           type="button"
           className="isl-icon-btn max-sm:!hidden h-8 items-center gap-1.5 px-2 sm:!flex"

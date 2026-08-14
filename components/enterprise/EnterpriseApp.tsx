@@ -5,7 +5,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router';
 import {
   ArrowLeft, Building2, Users, Plus, Trash2, UserPlus, LogOut, Loader2,
-  Shield, Check, Star,
+  Shield, Check, Star, PauseCircle, PlayCircle,
 } from 'lucide-react';
 import { useToast } from '../../hooks/useToast';
 import ToastStack from '../Toast';
@@ -21,12 +21,13 @@ import ResourcePanel from './panels/resource-panel';
 import ApprovalPanel from './panels/approval-panel';
 import SensitivePanel from './panels/sensitive-panel';
 import ProjectPanel from './panels/project-panel';
+import { AuditTable } from './PlatformAdminApp';
 
 type View = 'list' | 'org';
 type Section =
   | 'members' | 'depts' | 'roles'
   | 'credit' | 'apikeys' | 'resources'
-  | 'approval' | 'sensitive' | 'projects';
+  | 'approval' | 'sensitive' | 'projects' | 'audit';
 
 const SIDEBAR_GROUPS: { label: string; items: { key: Section; label: string }[] }[] = [
   { label: '组织管理', items: [
@@ -48,6 +49,7 @@ const SIDEBAR_GROUPS: { label: string; items: { key: Section; label: string }[] 
   ]},
   { label: '安全', items: [
     { key: 'sensitive', label: '敏感词' },
+    { key: 'audit', label: '审计日志' },
   ]},
   { label: '项目', items: [
     { key: 'projects', label: '项目列表' },
@@ -74,9 +76,9 @@ export default function EnterpriseApp() {
     if (!token) return;
     (async () => {
       try {
-        const { userId } = await authApi.me();
+        const { userId, username, email, role } = await authApi.me();
         if (userId) {
-          setUser((prev) => prev ?? { id: userId, username: '已登录', email: '', role: 'user' });
+          setUser((prev) => prev ?? { id: userId, username, email, role: role as HubUser['role'] });
           await fetchMyOrgs();
         }
       } catch {
@@ -140,6 +142,9 @@ export default function EnterpriseApp() {
           </span>
         )}
         <div className="ml-auto flex items-center gap-2">
+          {user.role === 'admin' && (
+            <Link to="/enterprise/platform" className="isl-tab px-2 py-1 text-[11px]">平台管理</Link>
+          )}
           <span className="hidden truncate text-xs sm:inline" style={{ color: 'var(--isl-ink-soft)' }}>
             {user.username}
           </span>
@@ -302,6 +307,8 @@ function OrgDetailPanel({ org, user, onDeleted, toast }: {
           <SensitivePanel {...panelProps} />
         ) : section === 'projects' ? (
           <ProjectPanel {...panelProps} />
+        ) : section === 'audit' ? (
+          <AuditTable load={() => orgApi.auditLogs(org.id)} />
         ) : null}
       </div>
     </div>
@@ -348,6 +355,16 @@ function MemberRoster({ org, members, canInvite, canManage, onRefresh, toast }: 
     }
   }, [org.id, onRefresh, toast]);
 
+  const toggleStatus = useCallback(async (member: DepartmentMember) => {
+    try {
+      await orgApi.updateMember(org.id, member.userId, member.status === 'active' ? 'suspended' : 'active');
+      toast.show(member.status === 'active' ? '成员已暂停' : '成员已恢复', 'success');
+      await onRefresh();
+    } catch (e) {
+      toast.show(e instanceof ApiError ? e.message : '更新成员状态失败', 'error');
+    }
+  }, [org.id, onRefresh, toast]);
+
   return (
     <div className="space-y-3">
       {canInvite && (
@@ -380,10 +397,11 @@ function MemberRoster({ org, members, canInvite, canManage, onRefresh, toast }: 
       )}
 
       <div className="rounded-xl overflow-hidden" style={{ background: 'var(--isl-surface)', border: '1.5px solid var(--isl-border)' }}>
-        <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_120px_40px] items-center gap-2 px-4 py-2.5 text-[11px] font-bold uppercase"
+        <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_80px_110px_72px] items-center gap-2 px-4 py-2.5 text-[11px] font-bold uppercase"
           style={{ background: 'var(--isl-surface-2)', color: 'var(--isl-ink-soft)', borderBottom: '1px solid var(--isl-border)' }}>
           <span>用户名</span>
           <span>邮箱</span>
+          <span>状态</span>
           <span>加入时间</span>
           <span />
         </div>
@@ -391,16 +409,22 @@ function MemberRoster({ org, members, canInvite, canManage, onRefresh, toast }: 
           <div className="py-8 text-center text-xs" style={{ color: 'var(--isl-ink-ghost)' }}>尚无成员</div>
         )}
         {members.map((m) => (
-          <div key={m.id} className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_120px_40px] items-center gap-2 px-4 py-2.5 text-xs"
+          <div key={m.id} className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_80px_110px_72px] items-center gap-2 px-4 py-2.5 text-xs"
             style={{ borderBottom: '1px solid var(--isl-border)' }}>
             <span className="truncate font-semibold" style={{ color: 'var(--isl-ink)' }}>{m.user?.username ?? m.userId}</span>
             <span className="truncate text-[10px]" style={{ color: 'var(--isl-ink-ghost)' }}>{m.user?.email ?? '—'}</span>
+            <span className="text-[10px] font-semibold" style={{ color: m.status === 'active' ? 'var(--isl-mint-deep)' : 'var(--isl-coral-deep)' }}>{m.status === 'active' ? '启用' : '已暂停'}</span>
             <span className="truncate text-[10px]" style={{ color: 'var(--isl-ink-ghost)' }}>{new Date(m.createdAt).toLocaleDateString()}</span>
             <div>
               {canManage && m.userId !== org.ownerId && (
-                <button type="button" onClick={() => remove(m.userId)} className="isl-icon-btn h-7 w-7" title="移除成员" aria-label="移除成员">
-                  <Trash2 size={13} />
-                </button>
+                <div className="flex gap-0.5">
+                  <button type="button" onClick={() => toggleStatus(m)} className="isl-icon-btn h-7 w-7" title={m.status === 'active' ? '暂停成员' : '恢复成员'} aria-label={m.status === 'active' ? '暂停成员' : '恢复成员'}>
+                    {m.status === 'active' ? <PauseCircle size={13} /> : <PlayCircle size={13} />}
+                  </button>
+                  <button type="button" onClick={() => remove(m.userId)} className="isl-icon-btn h-7 w-7" title="移除成员" aria-label="移除成员">
+                    <Trash2 size={13} />
+                  </button>
+                </div>
               )}
             </div>
           </div>

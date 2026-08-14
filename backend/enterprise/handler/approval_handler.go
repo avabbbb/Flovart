@@ -4,9 +4,9 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/gin-gonic/gin"
 	"flovart/enterprise/middleware"
 	"flovart/enterprise/service"
+	"github.com/gin-gonic/gin"
 )
 
 type ApprovalHandler struct {
@@ -61,7 +61,7 @@ func (h *ApprovalHandler) List(c *gin.Context) {
 }
 
 func (h *ApprovalHandler) Get(c *gin.Context) {
-	w, nodes, err := h.svc.GetWorkflow(c.Param("wfId"))
+	w, nodes, err := h.svc.GetWorkflow(c.Param("id"), c.Param("wfId"))
 	if err != nil {
 		Fail(c, http.StatusNotFound, err.Error())
 		return
@@ -70,7 +70,7 @@ func (h *ApprovalHandler) Get(c *gin.Context) {
 }
 
 func (h *ApprovalHandler) Delete(c *gin.Context) {
-	if err := h.svc.DeleteWorkflow(c.Param("wfId")); err != nil {
+	if err := h.svc.DeleteWorkflow(c.Param("id"), c.Param("wfId")); err != nil {
 		Fail(c, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -112,7 +112,7 @@ func (h *ApprovalHandler) ListRecords(c *gin.Context) {
 }
 
 func (h *ApprovalHandler) GetRecord(c *gin.Context) {
-	rec, steps, err := h.svc.GetRecord(c.Param("recId"))
+	rec, steps, err := h.svc.GetRecord(c.Param("id"), c.Param("recId"))
 	if err != nil {
 		Fail(c, http.StatusNotFound, err.Error())
 		return
@@ -133,7 +133,7 @@ func (h *ApprovalHandler) Act(c *gin.Context) {
 		return
 	}
 	rec, err := h.svc.Act(service.ActApprovalInput{
-		RecordID: c.Param("recId"), ApproverID: uid, Action: req.Action, Note: req.Note,
+		OrgID: c.Param("id"), RecordID: c.Param("recId"), ApproverID: uid, Action: req.Action, Note: req.Note,
 	})
 	if err != nil {
 		Fail(c, http.StatusBadRequest, err.Error())

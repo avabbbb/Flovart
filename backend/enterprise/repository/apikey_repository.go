@@ -20,9 +20,10 @@ func (r *ApiKeyRepository) Create(key *model.OrgApiKey) error {
 	return r.db.Create(key).Error
 }
 
-func (r *ApiKeyRepository) FindByID(id string) (*model.OrgApiKey, error) {
+// FindByIDAndOrg 按 org 归属查找（防跨组织读取/操作）
+func (r *ApiKeyRepository) FindByIDAndOrg(orgID, id string) (*model.OrgApiKey, error) {
 	var k model.OrgApiKey
-	err := r.db.Where("id = ?", id).First(&k).Error
+	err := r.db.Where("id = ? AND org_id = ?", id, orgID).First(&k).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, nil
 	}
@@ -49,8 +50,9 @@ func (r *ApiKeyRepository) Update(k *model.OrgApiKey) error {
 	return r.db.Save(k).Error
 }
 
-func (r *ApiKeyRepository) Delete(id string) error {
-	return r.db.Where("id = ?", id).Delete(&model.OrgApiKey{}).Error
+// DeleteByOrg 按 org 归属删除（防跨组织删除）
+func (r *ApiKeyRepository) DeleteByOrg(orgID, id string) error {
+	return r.db.Where("id = ? AND org_id = ?", id, orgID).Delete(&model.OrgApiKey{}).Error
 }
 
 // --- ModelPricing ---
@@ -78,8 +80,9 @@ func (r *ApiKeyRepository) UpdatePricing(p *model.ModelPricing) error {
 	return r.db.Save(p).Error
 }
 
-func (r *ApiKeyRepository) DeletePricing(id string) error {
-	return r.db.Where("id = ?", id).Delete(&model.ModelPricing{}).Error
+// DeletePricingByOrg 按 org 归属删除（防跨组织删除）
+func (r *ApiKeyRepository) DeletePricingByOrg(orgID, id string) error {
+	return r.db.Where("id = ? AND org_id = ?", id, orgID).Delete(&model.ModelPricing{}).Error
 }
 
 // --- MemberQuota ---

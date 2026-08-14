@@ -93,6 +93,51 @@ function buildAtempoChain(speed: number): string {
   return factors.map(f => `atempo=${f}`).join(',');
 }
 
+export type AudioStemMode = 'vocals' | 'instrumental';
+
+export interface AudioStemSplitResult {
+  vocalsBlob: Blob;
+  instrumentalBlob: Blob;
+}
+
+// 人声/伴奏分离（相位抵消，适用于立体声素材）：
+// - vocals: 中心声道 (L+R)/2 —— 人声通常居中，会保留少量居中乐器
+// - instrumental: 侧声道差 L-R —— 抵消居中的人声，保留立体声乐器
+export async function splitAudioStems(blob: Blob, originalName = 'audio.mp3'): Promise<AudioStemSplitResult> {
+  const ffmpeg = await getFFmpeg();
+  const format = guessAudioFormat(originalName);
+  const inputName = `input.${format}`;
+  const vocalsName = 'vocals.mp3';
+  const instrumentalName = 'instrumental.mp3';
+
+  await ffmpeg.writeFile(inputName, await fetchFile(blob));
+
+  // 人声：中置提取
+  await ffmpeg.exec([
+    '-i', inputName,
+    '-filter:a', 'pan=stereo|c0=.5*c0+.5*c1|c1=.5*c0+.5*c1',
+    '-vn', '-acodec', 'libmp3lame', '-q:a', '2',
+    vocalsName,
+  ]);
+  // 伴奏：相位抵消去人声
+  await ffmpeg.exec([
+    '-i', inputName,
+    '-filter:a', 'pan=stereo|c0=c0-c1|c1=c1-c0',
+    '-vn', '-acodec', 'libmp3lame', '-q:a', '2',
+    instrumentalName,
+  ]);
+
+  const vocalsData = await ffmpeg.readFile(vocalsName);
+  const instrumentalData = await ffmpeg.readFile(instrumentalName);
+  const vocalsBlob = new Blob([vocalsData], { type: 'audio/mpeg' });
+  const instrumentalBlob = new Blob([instrumentalData], { type: 'audio/mpeg' });
+
+  await ffmpeg.deleteFile(inputName);
+  await ffmpeg.deleteFile(vocalsName);
+  await ffmpeg.deleteFile(instrumentalName);
+  return { vocalsBlob, instrumentalBlob };
+}
+
 // 获取音频时长 (秒)
 export async function getAudioDuration(blob: Blob): Promise<number> {
   return new Promise((resolve) => {

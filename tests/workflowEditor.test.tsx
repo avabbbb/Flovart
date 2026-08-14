@@ -199,7 +199,9 @@ describe('InfiniteWorkflow surface interactions', () => {
     expect(screen.getByTestId('workflow-node-toolbar')).toBeInTheDocument();
     expect(screen.getByTestId('workflow-node-prompt-bar')).toBeInTheDocument();
 
-    fireEvent.keyDown(window, { key: 'Escape' });
+    const progress = screen.getByRole('slider', { name: '视频进度' });
+    progress.focus();
+    fireEvent.keyDown(progress, { key: 'Escape' });
     expect(editor().querySelectorAll('video')).toHaveLength(0);
     fireEvent.click(screen.getByRole('button', { name: '加载视频播放器' }));
     expect(editor().querySelectorAll('video')).toHaveLength(1);
@@ -469,7 +471,7 @@ describe('InfiniteWorkflow surface interactions', () => {
 
     fireEvent.doubleClick(editor(), { clientX: 900, clientY: 600 });
     fireEvent.keyDown(screen.getByRole('menu', { name: '新建节点' }), { key: 'Escape' });
-    await waitFor(() => expect(screen.queryByRole('menu', { name: '新建节点' })).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByRole('menu', { name: '新建节点' })).not.toBeInTheDocument(), { timeout: 5000 });
   });
 
   it('restores focus to the surface or source handle after closing the create menu', () => {

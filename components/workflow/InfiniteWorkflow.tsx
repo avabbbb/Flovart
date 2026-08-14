@@ -8,7 +8,7 @@ import type { RouteFallbackResolution } from '../../services/routeMapping';
 import { STUDIO_MEDIA_DRAG_TYPE } from '../studio/StudioMediaBrowser';
 import type { AssetSuggestion } from '../MentionList';
 import type { MentionData } from '../MediaMentionExtension';
-import { createWorkflowNode } from './constants';
+import { createWorkflowNode, WORKFLOW_NODE_SPECS } from './constants';
 import { applyWorkflowDraftChangeSet, recordWorkflowDraftSnapshotChange, redoWorkflowDraftChangeSet, undoWorkflowDraftChangeSet } from './draftAuthority';
 import {
   discardWorkflowMediaRecord,
@@ -41,7 +41,6 @@ import { WorkflowConfigPanel } from './WorkflowConfigPanel';
 import { ScriptNodeEditor } from './ScriptNodeEditor';
 import { SlashMenu } from './SlashMenu';
 import { WorkflowToolbar, type WorkflowTool } from './WorkflowToolbar';
-import { WorkflowDraftTimeline } from './WorkflowDraftTimeline';
 import { useProductionProjectionAdapter } from './useProductionProjectionAdapter';
 import { composeImageGrid } from './gridComposer';
 import { LIGHTING_PRESETS, buildRelightPrompt } from './LightingPresets';
@@ -63,7 +62,7 @@ import {
   runWorkflowVideoMergeOperation,
   runWorkflowVideoTrimOperation,
 } from '../../services/workflowVideoOperations';
-import { runWorkflowAudioSpeedOperation, runWorkflowAudioTrimOperation } from '../../services/workflowAudioOperations';
+import { runWorkflowAudioSpeedOperation, runWorkflowAudioStemSplitOperation, runWorkflowAudioTrimOperation } from '../../services/workflowAudioOperations';
 import { exportMediaArchive } from '../../utils/batchMediaExport';
 import { usePromptHistoryStore } from '../../stores/usePromptHistoryStore';
 import { useClipboardStore, type ClipItem } from '../../stores/useClipboardStore';
@@ -259,6 +258,8 @@ export function InfiniteWorkflow({
   agentOpen,
   rightPanelInset,
   assetLibrary,
+  focusNodeRequest,
+  onOpenAssets,
 }: {
   project: WorkflowProject;
   updateProject: (patch: Partial<WorkflowProject>) => void;
@@ -280,6 +281,8 @@ export function InfiniteWorkflow({
   onEnhancePrompt?: (payload: { prompt: string; mode: PromptEnhanceMode; stylePreset?: string }) => Promise<PromptEnhanceResult>;
   isEnhancingPrompt?: boolean;
   assetLibrary?: AssetLibrary;
+  focusNodeRequest?: { nodeId: string; nonce: number };
+  onOpenAssets?: () => void;
 }) {
   useProductionProjectionAdapter(project.id);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -443,14 +446,12 @@ export function InfiniteWorkflow({
     if (!activeMedia) return;
     const activeNode = project.nodes.find(node => node.id === activeMedia.nodeId);
     if (activeMedia.projectId !== project.id
-      || selectedNodeIds.length !== 1
-      || selectedNodeIds[0] !== activeMedia.nodeId
       || activeNode?.type !== 'video'
       || activeNode.isVisible === false
       || !(activeNode.metadata.storageKey || activeNode.metadata.href || activeNode.metadata.artifactRef?.taskId)) {
       setActiveMedia(null);
     }
-  }, [activeMedia, project.id, project.nodes, selectedNodeIds]);
+  }, [activeMedia, project.id, project.nodes]);
 
   useEffect(() => {
     if (imageTool || videoTool || audioTool || previewNode) setActiveMedia(null);
@@ -601,7 +602,7 @@ export function InfiniteWorkflow({
     setVideoTool({ kind, nodeId });
   }, [currentFrame, videoTool]);
 
-  const handleExtractFrame = useCallback(async (id: string, position: 'first' | 'last') => {
+  const handleExtractFrame = useCallback(async (id: string, position: 'first' | 'current' | 'last', currentTimeSec?: number) => {
     if (videoToolBusyRef.current) return;
     const node = projectRef.current.nodes.find(item => item.id === id);
     if (!node || node.type !== 'video') return;
@@ -611,10 +612,10 @@ export function InfiniteWorkflow({
     setVideoToolBusy(true);
     setVideoToolError(null);
     try {
-      const result = await runWorkflowVideoExtractFrameOperation(projectId, id, position, imageToolRuntime);
+      const result = await runWorkflowVideoExtractFrameOperation(projectId, id, position, imageToolRuntime, currentTimeSec);
       if (result.status === 'committed' && projectRef.current.id === projectId) {
         pushHistory(frame);
-        setNotice(position === 'first' ? '首帧已通过 Operation 导出' : '尾帧已通过 Operation 导出');
+        setNotice(position === 'first' ? '首帧已通过 Operation 导出' : position === 'last' ? '尾帧已通过 Operation 导出' : '当前帧已通过 Operation 导出');
       }
     } catch (error) {
       setNotice(error instanceof Error ? error.message : '帧导出失败');
@@ -629,6 +630,7 @@ export function InfiniteWorkflow({
     avSplit: id => openVideoTool('av-split', id),
     merge: ids => { if (ids.length > 0) openVideoTool('merge', ids[0]); },
     extractFrame: handleExtractFrame,
+    extractFrameAt: id => openVideoTool('extract-frame', id),
   }), [openVideoTool, handleExtractFrame]);
 
   const activeVideoToolNode = videoTool ? project.nodes.find(node => node.id === videoTool.nodeId) || null : null;
@@ -664,6 +666,9 @@ export function InfiniteWorkflow({
       } else if (confirmation.kind === 'av-split') {
         result = await runWorkflowVideoAvSplitOperation(transaction.projectId, node.id, imageToolRuntime);
         successNotice = '音视频分离完成';
+      } else if (confirmation.kind === 'extract-frame') {
+        result = await runWorkflowVideoExtractFrameOperation(transaction.projectId, node.id, confirmation.position, imageToolRuntime, confirmation.currentTimeSec);
+        successNotice = `已提取 ${confirmation.currentTimeSec != null ? `${confirmation.currentTimeSec.toFixed(1)}s` : confirmation.position === 'last' ? '尾帧' : '首帧'}`;
       } else if (confirmation.kind === 'merge') {
         const selectedNodes = projectRef.current.nodes.filter(n => n.type === 'video' && (confirmation.nodeIds.length === 0 || confirmation.nodeIds.includes(n.id)));
         if (selectedNodes.length < 2) { setVideoToolError('至少需要选择 2 个视频节点'); return; }
@@ -703,6 +708,7 @@ export function InfiniteWorkflow({
   const builtInAudioTools = useMemo<WorkflowAudioToolHandlers>(() => ({
     trim: id => openAudioTool('trim', id),
     speed: id => openAudioTool('speed', id),
+    stemSplit: id => openAudioTool('stem-split', id),
   }), [openAudioTool]);
 
   const activeAudioToolNode = audioTool ? project.nodes.find(node => node.id === audioTool.nodeId) || null : null;
@@ -735,9 +741,12 @@ export function InfiniteWorkflow({
           endSec: confirmation.endSec,
         }, imageToolRuntime);
         successNotice = '音频截取完成';
-      } else {
+      } else if (confirmation.kind === 'speed') {
         result = await runWorkflowAudioSpeedOperation(transaction.projectId, node.id, confirmation.speed, imageToolRuntime);
         successNotice = `音频变速完成 (${confirmation.speed.toFixed(2)}x)`;
+      } else {
+        result = await runWorkflowAudioStemSplitOperation(transaction.projectId, node.id, imageToolRuntime);
+        successNotice = '人声/伴奏分离完成';
       }
       if (result.status === 'committed' && result.project.id === transaction.projectId && projectRef.current.id === transaction.projectId) {
         pushHistory(transaction.frame);
@@ -890,10 +899,19 @@ export function InfiniteWorkflow({
   }, [imageTool, imageToolRuntime, ownsImageToolTransaction, patchProject, pushHistory, releaseImageToolTransaction]);
 
   const applyOps = useCallback((ops: WorkflowOp[]) => {
+    // 自动命名：未自定义标题的新节点按「类型 + 序号」命名，避免画布上全是「图片」「视频」
+    const snapshot = projectRef.current;
+    const renamedOps = ops.map(op => {
+      if (op.type !== 'add_node') return op;
+      const specTitle = WORKFLOW_NODE_SPECS[op.node.type].title;
+      if (op.node.title !== specTitle) return op;
+      const count = snapshot.nodes.filter(node => node.type === op.node.type).length + 1;
+      return { ...op, node: { ...op.node, title: `${specTitle} ${count}` } };
+    });
     const result = applyWorkflowDraftChangeSet(projectRef.current, {
       actor: 'ui',
-      intent: summarizeWorkflowOps(ops) || '编辑画布',
-      ops,
+      intent: summarizeWorkflowOps(renamedOps) || '编辑画布',
+      ops: renamedOps,
     });
     if (result.ok === false) {
       setNotice(result.error.message);
@@ -1107,19 +1125,21 @@ export function InfiniteWorkflow({
 
   const viewportCenter = useCallback(() => {
     const rect = rootRef.current?.getBoundingClientRect();
-    return screenToWorkflow((rect?.left || 0) + (rect?.width || 1000) / 2, (rect?.top || 0) + (rect?.height || 700) / 2);
-  }, [screenToWorkflow]);
+    const availableWidth = Math.max(360, (rect?.width || 1000) - (rightPanelInset || 0));
+    return screenToWorkflow((rect?.left || 0) + availableWidth / 2, (rect?.top || 0) + (rect?.height || 700) / 2);
+  }, [rightPanelInset, screenToWorkflow]);
 
   const focusNode = useCallback((id: string) => {
     const node = projectRef.current.nodes.find(n => n.id === id);
     if (!node) return;
     const rect = rootRef.current?.getBoundingClientRect();
     if (!rect) return;
+    const availableWidth = Math.max(360, rect.width - (rightPanelInset || 0));
     const padding = 120;
-    const targetK = Math.min(1.5, Math.max(0.12, Math.min((rect.width - padding) / Math.max(1, node.width), (rect.height - padding) / Math.max(1, node.height))));
+    const targetK = Math.min(1.5, Math.max(0.12, Math.min((availableWidth - padding) / Math.max(1, node.width), (rect.height - padding) / Math.max(1, node.height))));
     const nodeCenterX = node.position.x + node.width / 2;
     const nodeCenterY = node.position.y + node.height / 2;
-    const targetX = rect.width / 2 - nodeCenterX * targetK;
+    const targetX = availableWidth / 2 - nodeCenterX * targetK;
     const targetY = rect.height / 2 - nodeCenterY * targetK;
     const start = { ...viewportRef.current };
     const dx = targetX - start.x;
@@ -1144,7 +1164,15 @@ export function InfiniteWorkflow({
       }
     };
     focusAnimRef.current = window.requestAnimationFrame(tick);
-  }, [patchProject]);
+  }, [patchProject, rightPanelInset]);
+
+  useEffect(() => {
+    if (!focusNodeRequest) return;
+    const node = projectRef.current.nodes.find(item => item.id === focusNodeRequest.nodeId);
+    if (!node) return;
+    selectNodes([node.id]);
+    focusNode(node.id);
+  }, [focusNode, focusNodeRequest, selectNodes]);
 
   const handleSlashCommand = useCallback((command: SlashCommand) => {
     setSlashMenu(null);
@@ -1684,6 +1712,7 @@ export function InfiniteWorkflow({
         spacePressedRef.current = true;
         return;
       }
+      if (event.key === 'Escape') setActiveMedia(null);
       if (target?.closest(BLOCKED_TARGET)) return;
       const modifier = event.ctrlKey || event.metaKey;
       const key = event.key.toLowerCase();
@@ -1707,7 +1736,6 @@ export function InfiniteWorkflow({
       }
       if (event.key === 'Escape') {
         if (slashMenuRef.current) { setSlashMenu(null); return; }
-        setActiveMedia(null);
         closeCreateMenu();
         setContextMenu(null);
         cancelInteraction();
@@ -1824,13 +1852,14 @@ export function InfiniteWorkflow({
     const rect = rootRef.current?.getBoundingClientRect();
     const nodes = projectRef.current.nodes.filter(node => node.isVisible !== false);
     if (!rect || nodes.length === 0) return;
+    const availableWidth = Math.max(360, rect.width - (rightPanelInset || 0));
     const minX = Math.min(...nodes.map(node => node.position.x));
     const minY = Math.min(...nodes.map(node => node.position.y));
     const maxX = Math.max(...nodes.map(node => node.position.x + node.width));
     const maxY = Math.max(...nodes.map(node => node.position.y + node.height));
-    const k = Math.min(1.5, Math.max(0.12, Math.min((rect.width - 160) / Math.max(1, maxX - minX), (rect.height - 160) / Math.max(1, maxY - minY))));
-    patchProject({ viewport: { x: rect.width / 2 - ((minX + maxX) / 2) * k, y: rect.height / 2 - ((minY + maxY) / 2) * k, k } });
-  }, [patchProject]);
+    const k = Math.min(1.5, Math.max(0.12, Math.min((availableWidth - 160) / Math.max(1, maxX - minX), (rect.height - 160) / Math.max(1, maxY - minY))));
+    patchProject({ viewport: { x: availableWidth / 2 - ((minX + maxX) / 2) * k, y: rect.height / 2 - ((minY + maxY) / 2) * k, k } });
+  }, [patchProject, rightPanelInset]);
 
   const zoomBy = useCallback((factor: number) => {
     setFocusBadge(false);
@@ -1909,6 +1938,7 @@ export function InfiniteWorkflow({
     let ids = selectedIdsRef.current;
     if (modifier) ids = ids.includes(node.id) ? ids.filter(id => id !== node.id) : [...ids, node.id];
     else if (!ids.includes(node.id)) ids = [node.id];
+    if (activeMedia && (ids.length !== 1 || ids[0] !== activeMedia.nodeId)) setActiveMedia(null);
     selectNodes(ids);
     if (!ids.includes(node.id) || node.isLocked) return;
     if (target?.closest('video,audio,[data-workflow-media-preview]')) {
@@ -1990,14 +2020,21 @@ export function InfiniteWorkflow({
     bottom: Math.max(bounds.bottom, node.position.y + node.height),
   }), { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity }) : null;
   const rootRect = rootRef.current?.getBoundingClientRect();
+  const workflowWidth = Math.max(360, (rootRect?.width || 1000) - (rightPanelInset || 0));
   const overlayCenter = overlayBounds ? project.viewport.x + ((overlayBounds.left + overlayBounds.right) / 2) * project.viewport.k : 0;
-  const toolbarLeft = Math.max(8, Math.min(overlayCenter, (rootRect?.width || 1000) - 8));
-  const toolbarTop = overlayBounds ? Math.max(8, project.viewport.y + overlayBounds.top * project.viewport.k - 60) : 0;
-  const workflowWidth = rootRect?.width || 1000;
+  const toolbarLeft = Math.max(8, Math.min(overlayCenter, workflowWidth - 8));
+  const toolbarTop = overlayBounds ? Math.max(8, project.viewport.y + overlayBounds.top * project.viewport.k - Math.max(72, 56 + 28 * project.viewport.k)) : 0;
   const promptWidth = Math.min(880, Math.max(360, workflowWidth - 16));
   const promptLeft = Math.max(8, Math.min(overlayCenter - promptWidth / 2, workflowWidth - promptWidth - 8));
   const configLeft = Math.max(8, Math.min(overlayCenter - 210, workflowWidth - 428));
-  const promptTop = overlayBounds ? Math.max(64, Math.min(project.viewport.y + overlayBounds.bottom * project.viewport.k + 12, (rootRect?.height || 700) - 190)) : 0;
+  const promptTop = overlayBounds ? (() => {
+    const rootHeight = rootRect?.height || 700;
+    const estimatedPromptHeight = 176;
+    const below = project.viewport.y + overlayBounds.bottom * project.viewport.k + 12;
+    const dockSafeTop = rootHeight - 60;
+    if (below + estimatedPromptHeight <= dockSafeTop) return below;
+    return Math.max(8, toolbarTop - estimatedPromptHeight - 8);
+  })() : 0;
   const gridSize = (project.backgroundMode === 'dots' ? 20 : 24) * project.viewport.k;
 
   const batchGroups = useMemo(() => {
@@ -2114,6 +2151,7 @@ export function InfiniteWorkflow({
         onToolChange={setTool}
         onAddNode={addNode}
         onAddSharedMedia={media => { void addSharedMedia(media); }}
+        onOpenAssets={onOpenAssets}
         onUndo={undo}
         onRedo={redo}
         onFit={fitView}
@@ -2133,8 +2171,8 @@ export function InfiniteWorkflow({
         onZoomIn={zoomIn}
         onZoomOut={zoomOut}
         onZoomReset={zoomReset}
+        rightInset={rightPanelInset}
       />
-      <WorkflowDraftTimeline changeSets={project.draftChangeSets || []} rightInset={rightPanelInset} />
       <div ref={worldRef} className="workflow-world" style={{ transform: `translate(${project.viewport.x}px, ${project.viewport.y}px) scale(${project.viewport.k})` }}>
         <WorkflowConnections
           nodes={project.nodes.filter(node => node.isVisible !== false)}
@@ -2195,10 +2233,11 @@ export function InfiniteWorkflow({
             mediaActive={activeMedia?.projectId === project.id && activeMedia.nodeId === node.id}
             onActivateMedia={node.type === 'video' && (node.metadata.storageKey || node.metadata.href || node.metadata.artifactRef?.taskId)
               ? () => {
-                selectNodes([node.id]);
                 setActiveMedia({ projectId: project.id, nodeId: node.id });
               }
               : undefined}
+            onDeactivateMedia={() => setActiveMedia(active => active?.projectId === project.id && active.nodeId === node.id ? null : active)}
+            onExtractFrame={node.type === 'video' ? (position, currentTimeSec) => void handleExtractFrame(node.id, position, currentTimeSec) : undefined}
             onPointerDown={event => startNodeDrag(event, node)}
             onConnectStart={event => {
               if (event.button !== 0) return;
@@ -2407,6 +2446,13 @@ export function InfiniteWorkflow({
             }
             setContextMenu(null);
           }}
+          onDuplicate={contextMenu.type === 'node' && ctxNode && !ctxNode.isLocked ? (() => {
+            const duplicate = { ...ctxNode, id: nanoid(), position: { x: ctxNode.position.x + 32, y: ctxNode.position.y + 32 }, metadata: { ...ctxNode.metadata } };
+            commitFrame([...projectRef.current.nodes, duplicate], projectRef.current.connections);
+            selectNodes([duplicate.id]);
+            setContextMenu(null);
+          }) : undefined}
+          onSaveMedia={contextMenu.type === 'node' && ctxNode && ['image', 'video', 'audio'].includes(ctxNode.type) && (ctxNode.metadata.storageKey || ctxNode.metadata.href || ctxNode.metadata.artifactRef?.taskId) && onSaveWorkflowMedia ? (() => { onSaveWorkflowMedia(ctxNode.id); setContextMenu(null); }) : undefined}
           onRun={() => { if (contextMenu.type === 'node' && !projectRef.current.nodes.find(node => node.id === contextMenu.id)?.isLocked) onRunNode(contextMenu.id); setContextMenu(null); }}
           onRename={contextMenu.type === 'node' && ctxNode && !ctxNode.isLocked ? (() => { setRenameSignal({ nodeId: ctxNode.id, nonce: Date.now() }); setContextMenu(null); }) : undefined}
           onDelete={() => {

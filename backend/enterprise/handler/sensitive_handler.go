@@ -3,8 +3,8 @@ package handler
 import (
 	"net/http"
 
-	"github.com/gin-gonic/gin"
 	"flovart/enterprise/service"
+	"github.com/gin-gonic/gin"
 )
 
 type SensitiveHandler struct {
@@ -47,7 +47,7 @@ func (h *SensitiveHandler) List(c *gin.Context) {
 }
 
 func (h *SensitiveHandler) Delete(c *gin.Context) {
-	if err := h.svc.Delete(c.Param("wordId")); err != nil {
+	if err := h.svc.Delete(c.Param("id"), c.Param("wordId")); err != nil {
 		Fail(c, http.StatusBadRequest, err.Error())
 		return
 	}

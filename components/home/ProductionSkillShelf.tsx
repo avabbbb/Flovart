@@ -1,6 +1,8 @@
 import { Button, Modal, Tag } from 'antd';
-import { BookOpen, Check, Copy, ExternalLink, Newspaper, ShieldCheck, Sparkles } from 'lucide-react';
+import { ArrowRight, BookOpen, Check, Copy, ExternalLink, ShieldCheck, Sparkles } from 'lucide-react';
 import { useState } from 'react';
+
+import skillCover from '../../tools/flovart/evaluations/vox-history-1776/contact-sheet-10.png';
 
 import {
   listBundledProductionSkills,
@@ -28,11 +30,12 @@ export function ProductionSkillShelf({
   };
 
   return (
-    <section id="skill-hub" className="px-10 py-6">
-      <div className="mb-4 flex items-end justify-between gap-4">
+    <section id="skill-hub" className="home-skill-shelf">
+      <div className="home-skill-shelf__heading">
         <div>
-          <h2 className="text-2xl font-bold" style={{ color: '#f5f5f0' }}>选择一种制作方法</h2>
-          <p className="mt-1 text-sm" style={{ color: '#a8a49c' }}>
+          <span>PRODUCTION SKILL</span>
+          <h3>选择一种制作方法</h3>
+          <p>
             不用学习命令。选择后，我们会新建项目并把推荐调用词填进 Agent，你只需要改主题并发送。
           </p>
         </div>
@@ -40,85 +43,30 @@ export function ProductionSkillShelf({
           href="https://github.com/avabbbb/Flovart/blob/main/docs/overview/skill-guide.md"
           target="_blank"
           rel="noreferrer"
-          className="flex shrink-0 items-center gap-1 text-xs hover:underline"
-          style={{ color: '#a8a49c' }}
+          className="home-skill-shelf__manual"
         >
           <BookOpen size={13} /> 使用手册
         </a>
       </div>
-
-      <div
-        className="mb-4 grid gap-2 rounded-xl px-4 py-3 text-xs sm:grid-cols-3"
-        style={{ border: '1px solid var(--isl-line)', color: 'var(--isl-ink-soft)' }}
-      >
-        {[
-          ['1', '选方法', '挑选适合成片风格的 Skill'],
-          ['2', '改主题', '调用词会自动填入 Agent'],
-          ['3', '先确认再执行', '未确认前不会产生生成费用'],
-        ].map(([step, title, description]) => (
-          <div key={step} className="flex items-start gap-2">
-            <span
-              className="grid h-5 w-5 shrink-0 place-content-center rounded-full text-[10px] font-bold"
-              style={{ background: 'var(--isl-mint-bg)', color: 'var(--isl-mint-deep)' }}
-            >
-              {step}
-            </span>
-            <span>
-              <strong className="block" style={{ color: 'var(--isl-ink)' }}>{title}</strong>
-              <span>{description}</span>
-            </span>
-          </div>
-        ))}
-      </div>
-
-      <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
+      <div className="home-skill-grid">
         {skills.map(skill => (
           <button
             key={skill.id}
             type="button"
             aria-label={`了解并使用 ${skill.displayName}`}
-            className="group overflow-hidden rounded-2xl text-left transition-transform hover:-translate-y-0.5"
-            style={{ border: '1px solid var(--isl-line)', background: 'var(--isl-surface-2)' }}
+            className="home-skill-card"
             onClick={() => {
               setSelected(skill);
               setCopiedSkillId(null);
             }}
           >
-            <div
-              className="relative flex h-36 items-center justify-center overflow-hidden"
-              style={{
-                background: 'linear-gradient(135deg, #f2dfb5 0%, #d75645 48%, #23384f 100%)',
-              }}
-            >
-              <div
-                className="absolute inset-0 opacity-30"
-                style={{
-                  backgroundImage: 'repeating-linear-gradient(12deg, transparent 0 10px, rgba(20,20,20,.35) 11px 12px)',
-                }}
-              />
-              <div className="relative flex -rotate-2 items-center gap-3 bg-[#f5edd7] px-5 py-3 text-[#191713] shadow-lg">
-                <Newspaper size={22} />
-                <span className="text-lg font-black tracking-tight">VOX COLLAGE</span>
-              </div>
-              <span className="absolute left-3 top-3 rounded-full bg-black/55 px-2 py-1 text-[11px] font-bold text-white">
-                内置示例
-              </span>
-            </div>
-            <div className="p-4">
-              <div className="flex items-center gap-2">
-                <Sparkles size={15} style={{ color: 'var(--isl-mint-deep)' }} />
-                <strong style={{ color: 'var(--isl-ink)' }}>{skill.displayName}</strong>
-                <span className="ml-auto text-[11px]" style={{ color: 'var(--isl-ink-ghost)' }}>
-                  v{skill.version}
-                </span>
-              </div>
-              <p className="mt-2 line-clamp-2 text-xs leading-5" style={{ color: 'var(--isl-ink-soft)' }}>
-                {skill.description}
-              </p>
-              <span className="mt-3 block text-xs font-semibold" style={{ color: 'var(--isl-mint-deep)' }}>
-                查看用法与示例 →
-              </span>
-            </div>
+            <span className="home-skill-card__visual"><img src={skillCover} alt="" /><i>内置示例</i></span>
+            <span className="home-skill-card__body">
+              <span><Sparkles size={15} /><strong>{skill.displayName}</strong><em>{productionSkillHandle(skill)}</em></span>
+              <small>{skill.description}</small>
+              <b>v{skill.version} · 30 秒短片 · 确认后执行</b>
+            </span>
+            <span className="home-skill-card__open">查看用法 <ArrowRight size={14} /></span>
           </button>
         ))}
       </div>

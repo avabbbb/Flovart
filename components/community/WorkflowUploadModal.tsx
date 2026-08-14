@@ -6,6 +6,7 @@ import type { WorkflowProject } from '../workflow/types';
 import { useAuth } from '../../hooks/useAuth';
 import { publishCommunityWorkflow } from './communityStore';
 import { COMMUNITY_CATEGORIES, type CommunityCategory } from '../landing/communityTypes';
+import { friendlyError } from '../../utils/helpers';
 
 interface Props {
   open: boolean;
@@ -96,7 +97,7 @@ export function WorkflowUploadModal({ open, onClose, onSuccess }: Props) {
       onSuccess?.();
       onClose();
     } catch (e: any) {
-      message.error(e?.message || '发布失败');
+      message.error(friendlyError(e, '发布失败'));
     } finally {
       setLoading(false);
     }

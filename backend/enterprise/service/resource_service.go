@@ -4,9 +4,9 @@ import (
 	"errors"
 	"strings"
 
-	"gorm.io/gorm"
 	"flovart/enterprise/model"
 	"flovart/enterprise/repository"
+	"gorm.io/gorm"
 )
 
 type ResourceService struct {
@@ -40,8 +40,8 @@ func (s *ResourceService) ListLevels(orgID string) ([]model.ResourceLevel, error
 	return s.rep.ListLevels(orgID)
 }
 
-func (s *ResourceService) DeleteLevel(id string) error {
-	return s.rep.DeleteLevel(id)
+func (s *ResourceService) DeleteLevel(orgID, id string) error {
+	return s.rep.DeleteLevelByOrg(orgID, id)
 }
 
 type CreateResourceInput struct {
@@ -82,10 +82,10 @@ func (s *ResourceService) Create(in CreateResourceInput) (*model.Resource, error
 }
 
 type ListResourceInput struct {
-	OrgID   string
-	Page    int
+	OrgID    string
+	Page     int
 	PageSize int
-	Status  string
+	Status   string
 }
 
 func (s *ResourceService) List(in ListResourceInput) ([]model.Resource, int64, error) {
@@ -98,19 +98,19 @@ func (s *ResourceService) List(in ListResourceInput) ([]model.Resource, int64, e
 	return s.rep.List(in.OrgID, in.Page, in.PageSize, in.Status)
 }
 
-func (s *ResourceService) Get(id string) (*model.Resource, error) {
-	res, err := s.rep.FindByID(id)
+func (s *ResourceService) Get(orgID, id string) (*model.Resource, error) {
+	res, err := s.rep.FindByIDAndOrg(orgID, id)
 	if err != nil || res == nil {
 		return nil, errors.New("资源不存在")
 	}
 	return res, nil
 }
 
-func (s *ResourceService) Review(id, status string) (*model.Resource, error) {
+func (s *ResourceService) Review(orgID, id, status string) (*model.Resource, error) {
 	if status != model.ResourceStatusApproved && status != model.ResourceStatusRejected {
 		return nil, errors.New("status 只能是 approved 或 rejected")
 	}
-	res, err := s.rep.FindByID(id)
+	res, err := s.rep.FindByIDAndOrg(orgID, id)
 	if err != nil || res == nil {
 		return nil, errors.New("资源不存在")
 	}
@@ -124,8 +124,8 @@ func (s *ResourceService) Review(id, status string) (*model.Resource, error) {
 	return res, nil
 }
 
-func (s *ResourceService) Publish(id string) (*model.Resource, error) {
-	res, err := s.rep.FindByID(id)
+func (s *ResourceService) Publish(orgID, id string) (*model.Resource, error) {
+	res, err := s.rep.FindByIDAndOrg(orgID, id)
 	if err != nil || res == nil {
 		return nil, errors.New("资源不存在")
 	}

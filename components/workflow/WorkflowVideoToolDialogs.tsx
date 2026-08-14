@@ -3,12 +3,13 @@ import { useEffect, useState } from 'react';
 import { getVideoDuration } from '../../services/videoTools';
 import { isFFmpegSupported, isMultiThreadAvailable } from '../../services/ffmpegClient';
 
-export type WorkflowVideoToolKind = 'trim' | 'av-split' | 'merge';
+export type WorkflowVideoToolKind = 'trim' | 'av-split' | 'merge' | 'extract-frame';
 export interface WorkflowVideoToolState { kind: WorkflowVideoToolKind; nodeId: string }
 export type WorkflowVideoToolConfirmation =
   | { kind: 'trim'; startSec: number; endSec: number }
   | { kind: 'av-split' }
-  | { kind: 'merge'; nodeIds: string[] };
+  | { kind: 'merge'; nodeIds: string[] }
+  | { kind: 'extract-frame'; position: 'first' | 'current' | 'last'; currentTimeSec?: number };
 
 export function WorkflowVideoToolDialogs({ tool, node, mediaUrl, busy, error, onClose, onConfirm }: {
   tool: WorkflowVideoToolState | null;
@@ -24,6 +25,7 @@ export function WorkflowVideoToolDialogs({ tool, node, mediaUrl, busy, error, on
   if (tool.kind === 'trim') return <TrimDialog {...common} onConfirm={(startSec, endSec) => onConfirm({ kind: 'trim', startSec, endSec })} />;
   if (tool.kind === 'av-split') return <SimpleVideoDialog {...common} title="音视频分离" description="将视频的音频轨和视频轨分离，分别创建独立的音频节点和静音视频节点。" action="分离音视频" onConfirm={() => onConfirm({ kind: 'av-split' })} />;
   if (tool.kind === 'merge') return <SimpleVideoDialog {...common} title="视频拼接" description="将选中的多个视频片段按顺序拼接为一个视频。仅支持相同分辨率和帧率的片段。" action="拼接视频" onConfirm={() => onConfirm({ kind: 'merge', nodeIds: [] })} />;
+  if (tool.kind === 'extract-frame') return <ExtractFrameDialog {...common} onConfirm={(currentTimeSec) => onConfirm({ kind: 'extract-frame', position: 'current', currentTimeSec })} />;
   return null;
 }
 
@@ -81,6 +83,39 @@ function SimpleVideoDialog(props: CommonProps & { title: string; description: st
       <p>{props.description}</p>
       <DialogError error={props.error} />
       <Button type="primary" loading={props.busy} disabled={!isFFmpegSupported()} onClick={props.onConfirm}>{props.action}</Button>
+    </div>
+  </Modal>;
+}
+
+function ExtractFrameDialog(props: CommonProps & { onConfirm: (currentTimeSec: number) => void }) {
+  const [duration, setDuration] = useState(0);
+  const [timeSec, setTimeSec] = useState(0);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    const video = document.createElement('video');
+    video.preload = 'metadata';
+    video.onloadedmetadata = () => {
+      const d = video.duration || 0;
+      setDuration(d);
+      setTimeSec(d > 1 ? Math.floor(d / 2) : 0);
+      setLoaded(true);
+    };
+    video.src = props.mediaUrl;
+  }, [props.mediaUrl]);
+
+  return <Modal {...modalProps(props, 720)} title="提取指定帧">
+    <div className="workflow-image-tool__simple" data-workflow-overlay>
+      <div className="workflow-image-tool__preview"><video src={props.mediaUrl} controls style={{ maxWidth: '100%', maxHeight: 320 }} /></div>
+      <FFmpegStatus />
+      <div className="workflow-image-tool__controls">
+        <label>选择时间点{loaded ? `（${timeSec.toFixed(1)}s / ${duration.toFixed(1)}s）` : '（读取时长中…）'}
+          <Slider min={0} max={Math.max(0, Math.floor(duration))} value={Math.min(timeSec, Math.max(0, Math.floor(duration)))} onChange={v => setTimeSec(v)} disabled={!loaded} />
+        </label>
+        <p className="workflow-image-tool__hint">拖动滑块选择要提取的时间点，也可以先在预览播放器暂停到目标画面再看滑块位置。</p>
+        <DialogError error={props.error} />
+        <Button type="primary" loading={props.busy} disabled={!isFFmpegSupported() || !loaded} onClick={() => props.onConfirm(timeSec)}>提取此帧</Button>
+      </div>
     </div>
   </Modal>;
 }

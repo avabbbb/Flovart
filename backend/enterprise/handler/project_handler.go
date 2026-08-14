@@ -4,8 +4,9 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/gin-gonic/gin"
+	"flovart/enterprise/middleware"
 	"flovart/enterprise/service"
+	"github.com/gin-gonic/gin"
 )
 
 type ProjectHandler struct {
@@ -18,22 +19,22 @@ func NewProjectHandler(svc *service.ProjectService) *ProjectHandler {
 
 type syncProjectReq struct {
 	ID              string `json:"id" binding:"required"`
-	OrgID           string `json:"orgId" binding:"required"`
-	OwnerID         string `json:"ownerId" binding:"required"`
 	Title           string `json:"title" binding:"required"`
 	NodeCount       int    `json:"nodeCount"`
 	ConnectionCount int    `json:"connectionCount"`
 }
 
 func (h *ProjectHandler) Sync(c *gin.Context) {
+	uid := c.GetString(middleware.ContextUserID)
 	var req syncProjectReq
 	if err := c.ShouldBindJSON(&req); err != nil {
 		Fail(c, http.StatusBadRequest, "入参格式错误")
 		return
 	}
+	// OrgID 与 OwnerID 一律取自路径/登录态，不信任客户端 body，防止跨组织覆写
 	p, err := h.svc.Sync(service.SyncProjectInput{
-		ID: req.ID, OrgID: req.OrgID, OwnerID: req.OwnerID,
-		Title: req.Title, NodeCount: req.NodeCount, ConnectionCount: req.ConnectionCount,
+		OrgID: c.Param("id"), OwnerID: uid,
+		ID: req.ID, Title: req.Title, NodeCount: req.NodeCount, ConnectionCount: req.ConnectionCount,
 	})
 	if err != nil {
 		Fail(c, http.StatusBadRequest, err.Error())
@@ -54,7 +55,7 @@ func (h *ProjectHandler) List(c *gin.Context) {
 }
 
 func (h *ProjectHandler) Delete(c *gin.Context) {
-	if err := h.svc.Delete(c.Param("projId")); err != nil {
+	if err := h.svc.Delete(c.Param("id"), c.Param("projId")); err != nil {
 		Fail(c, http.StatusBadRequest, err.Error())
 		return
 	}

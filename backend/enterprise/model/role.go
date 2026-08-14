@@ -17,9 +17,9 @@ const (
 type Role struct {
 	ID          string         `gorm:"primaryKey;type:uuid;default:gen_random_uuid()" json:"id"`
 	OrgID       string         `gorm:"type:uuid;index:idx_role_org_name,unique;not null" json:"orgId"`
-	Name        string         `gorm:"size:32;index:idx_role_org_name,unique;not null" json:"name"`  // 同组织内唯一
-	IsBuiltin   bool           `gorm:"default:false" json:"isBuiltin"`                                  // owner/admin 预置
-	Permissions pq.StringArray `gorm:"type:text[]" json:"permissions"`                                  // 权限点 key 数组
+	Name        string         `gorm:"size:32;index:idx_role_org_name,unique;not null" json:"name"` // 同组织内唯一
+	IsBuiltin   bool           `gorm:"default:false" json:"isBuiltin"`                              // owner/admin 预置
+	Permissions pq.StringArray `gorm:"type:text[]" json:"permissions"`                              // 权限点 key 数组
 	Sort        int            `gorm:"default:0" json:"sort"`
 	CreatedAt   time.Time      `json:"createdAt"`
 	UpdatedAt   time.Time      `json:"updatedAt"`

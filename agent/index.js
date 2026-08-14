@@ -115,6 +115,12 @@ export function startHttpServer() {
     return codex;
   };
 
+  const activeSse = new Set();
+  const trackSse = response => {
+    activeSse.add(response);
+    response.on('close', () => activeSse.delete(response));
+  };
+
   const server = http.createServer(async (request, response) => {
     const url = new URL(request.url || '/', config.url);
     if (!setCors(request, response, url, config)) return json(response, 403, { ok: false, error: 'origin not allowed' });
@@ -124,7 +130,11 @@ export function startHttpServer() {
     if (!validToken(request, url, config.token)) return json(response, 401, { ok: false, error: 'invalid token' });
 
     try {
-      if (request.method === 'GET' && url.pathname === '/events') return session.openEvents(url, response);
+      if (request.method === 'GET' && url.pathname === '/events') {
+        session.openEvents(url, response);
+        trackSse(response);
+        return;
+      }
       if (request.method === 'POST' && url.pathname === '/workflow/state') {
         session.updateSnapshot(await readBody(request), url.searchParams.get('clientId') || undefined);
         return json(response, 200, { ok: true });
@@ -150,7 +160,16 @@ export function startHttpServer() {
           'Cache-Control': 'no-store',
           'X-Accel-Buffering': 'no',
         });
-        const emit = (event, data) => response.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+        trackSse(response);
+        const emit = (event, data) => {
+          if (response.destroyed || request.aborted) return;
+          try {
+            response.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+          } catch (error) {
+            if (error?.code === 'EPIPE' || error?.code === 'ERR_STREAM_DESTROYED') return;
+            console.error('[flovart-agent] SSE write failed:', error);
+          }
+        };
         const unsubscribe = await flovart.subscribe(projectId, event => {
           const update = event.type === 'message_update' ? event.assistantMessageEvent : undefined;
           if (update?.type === 'text_delta') emit('text-delta', { delta: update.delta });
@@ -264,7 +283,15 @@ export function startHttpServer() {
     console.log(`Local URL: ${config.url}`);
     console.log(`Codex MCP: codex mcp add flovart -- node "${fileURLToPath(new URL('./index.js', import.meta.url))}" mcp`);
   });
-  const close = () => { codex?.close(); void flovart.close(); server.close(); };
+  const close = () => {
+    codex?.close();
+    void flovart.close();
+    for (const res of activeSse) {
+      try { res.end(); } catch { /* SSE connection already closed */ }
+    }
+    activeSse.clear();
+    server.close();
+  };
   process.once('SIGINT', close);
   process.once('SIGTERM', close);
   return server;

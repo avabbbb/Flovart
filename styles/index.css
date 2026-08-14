@@ -281,6 +281,30 @@ body {
     backface-visibility: hidden;
 }
 
+.compact-right-panel--flush {
+    border: 0;
+    border-left: 1px solid var(--isl-border);
+    border-radius: 0 !important;
+    box-shadow: -8px 0 30px rgba(20,24,31,.08) !important;
+}
+
+.compact-right-panel__quicktabs {
+    position: absolute;
+    /* 必须高于 .agent-conversation 的 z-index:60（嵌入 Agent 面板会盖住 tab 栏） */
+    z-index: 80;
+    top: 7px;
+    right: 8px;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.compact-right-panel__quicktabs .isl-tabbar { gap: 2px; background: transparent; border: 0; padding: 0; }
+.compact-right-panel__quicktabs .isl-tab { flex: none; width: 30px; height: 30px; padding: 0; background: transparent; border: 0; }
+.compact-right-panel__quicktabs .isl-tab span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.compact-right-panel__quicktabs .isl-tab--active { display: none; }
+.compact-right-panel__quicktabs > button { width: 30px; height: 30px; border: 0; background: transparent; box-shadow: none; }
+
 .inline-prompt-bar {
     box-sizing: border-box;
     overflow: visible;
@@ -1345,13 +1369,18 @@ input[type='range'].toolbar-range::-moz-range-thumb:hover {
 
 /* ── Popover card ── */
 .isl-pop {
-  border-radius: var(--isl-r-lg);
+  border-radius: 6px;
   background: var(--isl-card);
-  border: 1.5px solid var(--isl-border-strong);
-  box-shadow: 0 4px 0 0 var(--isl-edge), var(--isl-shadow-lg);
+  border: 1px solid rgba(15, 15, 15, 0.08);
+  box-shadow: 0 1px 3px rgba(15, 15, 15, 0.08), 0 1px 2px rgba(15, 15, 15, 0.04);
   color: var(--isl-ink);
   font-family: var(--isl-font);
   animation: flv-pop 180ms cubic-bezier(.2,1.35,.3,1) both;
+}
+
+:root[data-theme='dark'] .isl-pop {
+  border-color: rgba(255, 255, 255, 0.09);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
 /* ── Sunk input well ── */
@@ -1378,17 +1407,22 @@ input[type='range'].toolbar-range::-moz-range-thumb:hover {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  border-radius: var(--isl-r-sm);
-  padding: 9px 11px;
+  border-radius: 4px;
+  padding: 5px 8px;
   text-align: left;
   cursor: pointer;
   color: var(--isl-ink);
   font-family: var(--isl-font);
-  transition: background 160ms ease, color 160ms ease;
+  font-size: 13px;
+  transition: background 120ms ease, color 120ms ease;
 }
 
 .isl-opt:hover {
-  background: var(--isl-surface-2);
+  background: rgba(55, 53, 47, 0.07);
+}
+
+:root[data-theme='dark'] .isl-opt:hover {
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .isl-opt--active {

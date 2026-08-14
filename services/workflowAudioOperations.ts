@@ -1,5 +1,5 @@
 import { parseWorkflowOperationParameters } from '../components/workflow/operationRegistry';
-import { changeAudioSpeed, trimAudio } from './audioTools';
+import { changeAudioSpeed, splitAudioStems, trimAudio } from './audioTools';
 import {
   commitWorkflowOperation,
   failWorkflowOperation,
@@ -15,6 +15,7 @@ import {
 export interface WorkflowAudioOperationRuntime extends WorkflowOperationRuntime {
   executeAudioTrim?: typeof trimAudio;
   executeAudioSpeed?: typeof changeAudioSpeed;
+  executeAudioStemSplit?: typeof splitAudioStems;
 }
 
 export async function runWorkflowAudioTrimOperation(
@@ -48,6 +49,31 @@ async function executeAudioTrim(
       mimeType: result.blob.type || source.metadata.mimeType || 'audio/mpeg',
       role: 'result_audio',
     }]);
+  } catch (error) {
+    await failWorkflowOperation(runtime, projectId, started, error);
+    throw error;
+  }
+}
+
+export async function runWorkflowAudioStemSplitOperation(
+  projectId: string,
+  sourceNodeId: string,
+  runtime: WorkflowAudioOperationRuntime,
+): Promise<WorkflowOperationOutcome> {
+  const started = await startWorkflowOperation({
+    runtime, projectId, capabilityId: 'audio.stem-split@1',
+    sources: [{ nodeId: sourceNodeId, role: 'source_audio' }],
+    parameters: {},
+  });
+  try {
+    const source = started.sourceNodes[0];
+    const blob = await loadWorkflowOperationSourceBlob(source, runtime);
+    const baseName = (source.metadata.name || 'audio').replace(/\.[^.]+$/, '');
+    const result = await (runtime.executeAudioStemSplit || splitAudioStems)(blob, source.metadata.name || 'audio.mp3');
+    return await commitWorkflowOperation(runtime, projectId, started, [
+      { blob: result.vocalsBlob, title: '人声', fileName: `vocals-${baseName}.mp3`, mimeType: 'audio/mpeg', role: 'result_audio' },
+      { blob: result.instrumentalBlob, title: '伴奏', fileName: `instrumental-${baseName}.mp3`, mimeType: 'audio/mpeg', role: 'result_audio' },
+    ]);
   } catch (error) {
     await failWorkflowOperation(runtime, projectId, started, error);
     throw error;

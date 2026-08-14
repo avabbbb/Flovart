@@ -104,6 +104,7 @@ export interface HubUser {
   bio?: string;
   avatarUrl?: string;
   role: 'user' | 'admin';
+  status?: 'active' | 'suspended' | 'deleted';
 }
 
 export const authApi = {

@@ -18,12 +18,12 @@ describe('workflow operation capability registry', () => {
       'image.generate@1', 'image.crop@1', 'image.upscale@1',
       'image.remove-background@1', 'image.split-layers@1', 'image.edit@1', 'image.rotate@1', 'image.split-grid@1',
       'video.trim@1', 'video.av-split@1', 'video.merge@1', 'video.extract-frame@1',
-      'audio.trim@1', 'audio.speed@1',
+      'audio.trim@1', 'audio.speed@1', 'audio.stem-split@1',
     ]);
     expect(WORKFLOW_OPERATION_NODE_TOOLS).toEqual([
       'crop', 'upscale', 'remove-background', 'split-layers', 'edit', 'rotate', 'split-grid',
       'video-trim', 'video-av-split', 'video-merge', 'video-extract-frame',
-      'audio-trim', 'audio-speed',
+      'audio-trim', 'audio-speed', 'audio-stem-split',
     ]);
     expect(getWorkflowOperationCapability('image.crop@1')).toMatchObject({
       executor: 'local-transform', confirmation: 'none', nodeTool: 'crop', uiKey: 'image-crop',

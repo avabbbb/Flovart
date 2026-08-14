@@ -41,6 +41,12 @@ func (s *ApiKeyService) Create(createdBy string, in CreateApiKeyInput) (*model.O
 	if in.APIKey == "" {
 		return nil, errors.New("API Key 不能为空")
 	}
+	// BaseURL 仅在自定义上游时允许；必须通过 SSRF 校验（禁内网/回环/链路本地/云元数据）
+	if strings.TrimSpace(in.BaseURL) != "" {
+		if err := validateBaseURL(in.BaseURL); err != nil {
+			return nil, err
+		}
+	}
 	hint := ""
 	if len(in.APIKey) >= 4 {
 		hint = "****" + in.APIKey[len(in.APIKey)-4:]
@@ -69,8 +75,8 @@ func (s *ApiKeyService) List(orgID string) ([]model.OrgApiKey, error) {
 	return s.keys.ListByOrg(orgID)
 }
 
-func (s *ApiKeyService) Toggle(id string, enabled bool) (*model.OrgApiKey, error) {
-	key, err := s.keys.FindByID(id)
+func (s *ApiKeyService) Toggle(orgID, id string, enabled bool) (*model.OrgApiKey, error) {
+	key, err := s.keys.FindByIDAndOrg(orgID, id)
 	if err != nil || key == nil {
 		return nil, errors.New("API Key 不存在")
 	}
@@ -81,8 +87,8 @@ func (s *ApiKeyService) Toggle(id string, enabled bool) (*model.OrgApiKey, error
 	return key, nil
 }
 
-func (s *ApiKeyService) Delete(id string) error {
-	return s.keys.Delete(id)
+func (s *ApiKeyService) Delete(orgID, id string) error {
+	return s.keys.DeleteByOrg(orgID, id)
 }
 
 // --- ModelPricing ---
@@ -130,8 +136,8 @@ func (s *ApiKeyService) ListPricing(orgID string) ([]model.ModelPricing, error) 
 	return s.keys.ListPricing(orgID)
 }
 
-func (s *ApiKeyService) DeletePricing(id string) error {
-	return s.keys.DeletePricing(id)
+func (s *ApiKeyService) DeletePricing(orgID, id string) error {
+	return s.keys.DeletePricingByOrg(orgID, id)
 }
 
 // --- MemberQuota ---

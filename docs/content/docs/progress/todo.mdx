@@ -47,7 +47,7 @@ Table 是 Workflow 之外的第二个正式创作工作区，不是电子表格�
 - **删除 Config 节点**：⬜ 单独评估现有模型/参数入口后移除冗余 Config 节点，避免先删入口再补交互。
 - **Scene Prediction**：⬜ 基于首尾帧能力实现向前或向后续写镜头，并明确抽帧产物与新视频节点的来源关系。
 - **音频生成**：⬜ 等 Provider 层提供已验证音频生成能力后启用；当前只保留音频上传、播放、引用和配置元数据。
-- **布局规范统一**：⬜ 顶栏、侧栏、底部 Dock、外边距、圆角、阴影和主题 token 统一；清理 Workflow 硬编码间距和重复右侧面板实现。
+- **布局规范统一**：🟨 首页、通用节点外壳、视频控制、底部 Dock 与右侧 Agent 面板避让已统一并进入待用户验证；继续收口顶栏、左侧栏、剩余硬编码间距和重复面板实现。
 
 ## 制作 Runtime
 
@@ -66,12 +66,12 @@ Table 是 Workflow 之外的第二个正式创作工作区，不是电子表格�
 - **Production Plan Card**：⬜ 把目标产物、可选 Production Skill、Route Plan、预算和审片点投影为一张制作方案卡；“确认并开始”原子创建 Mandate 和 Run，普通聊天文本不得授权付费。
 - **固定 Node Runtime**：⬜ 正式 Desktop 安装包捆绑满足 PI 要求的 Node `>=22.19.0`，Release Manifest 锁定 Node、PI、Agent 协议和 Session Schema；源码开发模式才允许使用合规系统 Node。
 - **Managed Agent 生命周期**：⬜ Desktop 正常退出时必须同步终止其托管的 Managed Agent 子进程；实机验收发现源码开发模式关闭窗口后 Node 子进程仍会存活。
-- **Agent 空间默认布局**：⬜ 新增 Codex 子任务时按主面板边界计算空位，避免默认位置大面积遮挡 `Flovart Agent`；仍需保留用户拖动后的空间布局。
+- **Agent 空间扩展布局**：⬜ 当前主入口已收口为稳定「制作上下文 + 主对话」分栏，并保留可新增 Codex 子任务页签；后续若恢复可拖动空间面板，只用于 Codex 探索分支和产物组织，不得破坏主对话与 Workflow 的稳定 60/40 关系。
 
 ## ProductionRun 与 Production Skill 生态
 
 - **Production Skill Manifest**：🟨 已用 `community.vox-director` 内置 VOX Skill 示例落地版本、ProductionSpec 扩展 Schema、Runtime Capability、人工 Gate、兼容版本、来源与权限声明，并由 Skill 台读取同一真实包；继续补第三方包导入、签名、锁定快照、发布、撤销与预算策略。Production Skill 不得读取 API Key 或直接构造 Provider HTTP 请求。
-- **Production Skill 卡组与 PI 绑定**：🟨 主 Flovart Agent 输入框已提供可移除的 Skill 卡片，发送消息时以 `{ id, version, contentHash }` 校验内置包并把精确 Snapshot 耐久绑定到 PI 主会话；Workflow 右侧 Agent 入口也已切到同一 PI Agent，不再把 VOX 请求排队给网站 one-shot 计划器。继续补第三方包签名、撤销、升级与 ProductionSpec Revision 重规划。
+- **Production Skill 卡组与 PI 绑定**：🟨 主 Flovart Agent 已提供真实内容开场卡、可搜索选择器和可移除 chip，发送消息时以 `{ id, version, contentHash }` 校验内置包并把精确 Snapshot 耐久绑定到 PI 主会话；Workflow 右侧 Agent 入口也已切到同一 PI Agent。当前只展示真实可执行的 VOX Skill；继续补第三方包签名、撤销、升级与 ProductionSpec Revision 重规划。
 - **制作领域模型**：⬜ 建立 `ProductionRun → Shot → Take → Artifact → Delivery`，将当前多个独立生成任务和外部合成脚本收进一条可恢复、可审计的制作图。
 - **报价与批准状态机**：⬜ 将 `production.quote`、预算策略/用户批准与 `submit` 分开，支持单镜头和整片费用上限；价格预览与最终账单分别记录。
 - **一等后期命令**：⬜ 注册旁白、字幕、混音、合成、响度和交付验证命令，使 Coding Agent 不再依赖评测目录的临时脚本。

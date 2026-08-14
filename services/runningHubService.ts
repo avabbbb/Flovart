@@ -409,6 +409,7 @@ export async function rhSubmitTask(
   assertNotAborted(options.signal);
   const debugContext = runningHubDebugContext(options.baseUrl || RH_BASE, modelEndpoint, payload);
   const url = rhTaskUrl(options.baseUrl || RH_BASE, modelEndpoint);
+  const startedAt = Date.now();
 
   console.log('[RH Debug] rhSubmitTask fetch start', { url, payloadKeys: Object.keys(payload || {}), payloadSize: JSON.stringify(payload).length });
   const res = await fetchWithTimeout(url, {
@@ -416,21 +417,22 @@ export async function rhSubmitTask(
     headers: rhHeaders(apiKey),
     body: JSON.stringify(payload),
   }, 60_000, options.signal);
-  console.log('[RH Debug] rhSubmitTask response raw', { status: res.status, ok: res.ok, contentType: res.headers.get('content-length'), ct: res.headers.get('content-type') });
+  const durationMs = Date.now() - startedAt;
+  console.log('[RH Debug] rhSubmitTask response raw', { status: res.status, ok: res.ok, durationMs, contentType: res.headers.get('content-length'), ct: res.headers.get('content-type') });
 
   if (!res.ok) {
     const text = await res.text();
-    console.error('[RH Debug] rhSubmitTask !res.ok body', text);
+    console.error('[RH Debug] rhSubmitTask !res.ok', { status: res.status, durationMs, body: truncateDebugText(text, 200) });
     throw new Error(withRunningHubDebug(`RunningHub submit failed (${res.status}): ${text}`, debugContext));
   }
   const json = await res.json();
-  console.log('[RH Debug] rhSubmitTask json', json);
+  console.log('[RH Debug] rhSubmitTask json', truncateDebugText(JSON.stringify(json), 200));
   const error = rhResponseError(json, 'RunningHub submit');
   if (error) {
-    console.error('[RH Debug] rhSubmitTask flagged error', { rhErr: error, json });
+    console.error('[RH Debug] rhSubmitTask flagged error', { rhErr: error, response: truncateDebugText(JSON.stringify(json), 200) });
     throw new Error(withRunningHubDebug(error, { ...debugContext, response: json }));
   }
-  console.log('[RH Debug] rhSubmitTask OK', { taskId: json?.taskId, status: json?.status });
+  console.log('[RH Debug] rhSubmitTask OK', { taskId: json?.taskId, status: json?.status, durationMs });
   return json;
 }
 
@@ -441,22 +443,24 @@ export async function rhQueryTask(
   options: Pick<RHRunOptions, 'baseUrl' | 'signal'> = {},
 ): Promise<RHTaskResponse> {
   assertNotAborted(options.signal);
+  const startedAt = Date.now();
   const res = await fetchWithTimeout(`${rhBase(options.baseUrl)}/query`, {
     method: 'POST',
     headers: rhHeaders(apiKey),
     body: JSON.stringify({ taskId }),
   }, RH_FETCH_TIMEOUT_MS, options.signal);
+  const durationMs = Date.now() - startedAt;
 
   if (!res.ok) {
     const text = await res.text();
-    console.error('[RH Debug] rhQueryTask !res.ok', { status: res.status, taskId, body: text });
+    console.error('[RH Debug] rhQueryTask !res.ok', { status: res.status, taskId, durationMs, body: truncateDebugText(text, 200) });
     throw new Error(withRunningHubDebug(`RunningHub query failed (${res.status}): ${text}`, {
       baseUrl: rhBase(options.baseUrl),
       taskId,
     }));
   }
   const json = await res.json();
-  console.log('[RH Debug] rhQueryTask result', { taskId, status: json?.status, hasResults: !!json?.results, resultsCount: json?.results?.length });
+  console.log('[RH Debug] rhQueryTask result', { taskId, status: json?.status, durationMs, hasResults: !!json?.results, resultsCount: json?.results?.length });
   const error = rhResponseError(json, 'RunningHub query');
   if (error) throw new Error(withRunningHubDebug(error, {
     baseUrl: rhBase(options.baseUrl),
@@ -514,6 +518,7 @@ export async function rhUploadFile(
   const formData = new FormData();
   formData.append('file', file, fileName || 'upload.png');
   const uploadUrl = `${rhBase(options.baseUrl)}/media/upload/binary`;
+  const startedAt = Date.now();
   console.log('[RH Debug] rhUploadFile fetch start', { url: uploadUrl, hasKey: !!apiKey, blobSize: file.size, blobType: file.type, fileName: fileName || 'upload.png' });
 
   const res = await fetch(uploadUrl, {
@@ -522,7 +527,8 @@ export async function rhUploadFile(
     headers: { Authorization: `Bearer ${apiKey}` },
     body: formData,
   });
-  console.log('[RH Debug] rhUploadFile response', { status: res.status, ok: res.ok, contentType: res.headers.get('content-length'), ct: res.headers.get('content-type') });
+  const durationMs = Date.now() - startedAt;
+  console.log('[RH Debug] rhUploadFile response', { status: res.status, ok: res.ok, durationMs, contentType: res.headers.get('content-length'), ct: res.headers.get('content-type') });
 
   if (!res.ok) {
     const text = await res.text();
@@ -533,7 +539,7 @@ export async function rhUploadFile(
   }
 
   const json = await res.json();
-  console.log('[RH Debug] rhUploadFile json', json);
+  console.log('[RH Debug] rhUploadFile json', truncateDebugText(JSON.stringify(json), 200));
   const error = rhResponseError(json, 'RunningHub upload');
   if (error) throw new Error(withRunningHubDebug(error, {
     baseUrl: rhBase(options.baseUrl),

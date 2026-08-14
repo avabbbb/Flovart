@@ -171,7 +171,7 @@ async function callLLM(opts: LLMCallOptions): Promise<string> {
     }
 
     if (provider === 'google') {
-        const url = `${baseUrl}/models/${model}:generateContent?key=${apiKey}`;
+        const url = `${baseUrl}/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
         const contents = messages.map(m => ({
             role: m.role === 'assistant' ? 'model' : 'user',
             parts: [{ text: m.content }],

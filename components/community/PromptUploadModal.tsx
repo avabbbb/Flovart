@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Modal, Input, Select, Button, message } from 'antd';
 import { Plus, Trash2 } from 'lucide-react';
 import { promptApi, PromptItem } from '../../services/promptApi';
+import { friendlyError } from '../../utils/helpers';
 
 interface Props {
   open: boolean;
@@ -70,7 +71,7 @@ export function PromptUploadModal({ open, onClose, onSuccess }: Props) {
       onSuccess?.();
       onClose();
     } catch (e: any) {
-      message.error(e?.message || '发布失败');
+      message.error(friendlyError(e, '发布失败'));
     } finally {
       setLoading(false);
     }

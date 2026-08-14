@@ -17,11 +17,15 @@ interface RuntimeTaskView {
 const GENERATION_COMMANDS = ['generate.image', 'generate.video'] as const;
 type GenerationCommand = typeof GENERATION_COMMANDS[number];
 
-const TASK_TERMINAL = new Set(['completed', 'succeeded', 'failed', 'cancelled', 'cancelled', 'error']);
+const RUNTIME_POLL_TIMEOUT_MS = 600_000; // 与 aiGateway 各 provider 一致的 10 分钟硬上限
 
 async function pollRuntimeTask(runtime: NonNullable<ReturnType<typeof getFlovartRuntimeApi>>, taskId: string, onProgress?: (message: string) => void, signal?: AbortSignal): Promise<RuntimeTaskView> {
+  const pollStart = Date.now();
   for (;;) {
     if (signal?.aborted) throw new Error('已取消');
+    if (Date.now() - pollStart > RUNTIME_POLL_TIMEOUT_MS) {
+      throw new Error('Runtime 生成超时（已等待超过 10 分钟）');
+    }
     const task = await runtime.execute({
       protocolVersion: '1',
       commandId: crypto.randomUUID(),

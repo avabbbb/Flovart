@@ -4,9 +4,9 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/gin-gonic/gin"
 	"flovart/enterprise/middleware"
 	"flovart/enterprise/service"
+	"github.com/gin-gonic/gin"
 )
 
 type ResourceHandler struct {
@@ -48,7 +48,7 @@ func (h *ResourceHandler) ListLevels(c *gin.Context) {
 }
 
 func (h *ResourceHandler) DeleteLevel(c *gin.Context) {
-	if err := h.svc.DeleteLevel(c.Param("levelId")); err != nil {
+	if err := h.svc.DeleteLevel(c.Param("id"), c.Param("levelId")); err != nil {
 		Fail(c, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -56,12 +56,12 @@ func (h *ResourceHandler) DeleteLevel(c *gin.Context) {
 }
 
 type createResourceReq struct {
-	Type      string `json:"type" binding:"required"`
-	Title     string `json:"title"`
-	Href      string `json:"href" binding:"required"`
-	Thumbnail string `json:"thumbnail"`
+	Type       string `json:"type" binding:"required"`
+	Title      string `json:"title"`
+	Href       string `json:"href" binding:"required"`
+	Thumbnail  string `json:"thumbnail"`
 	StorageKey string `json:"storageKey"`
-	LevelID   string `json:"levelId"`
+	LevelID    string `json:"levelId"`
 }
 
 func (h *ResourceHandler) Create(c *gin.Context) {
@@ -98,7 +98,7 @@ func (h *ResourceHandler) List(c *gin.Context) {
 }
 
 func (h *ResourceHandler) Get(c *gin.Context) {
-	res, err := h.svc.Get(c.Param("resId"))
+	res, err := h.svc.Get(c.Param("id"), c.Param("resId"))
 	if err != nil {
 		Fail(c, http.StatusNotFound, err.Error())
 		return
@@ -116,7 +116,7 @@ func (h *ResourceHandler) Review(c *gin.Context) {
 		Fail(c, http.StatusBadRequest, "入参格式错误")
 		return
 	}
-	res, err := h.svc.Review(c.Param("resId"), req.Status)
+	res, err := h.svc.Review(c.Param("id"), c.Param("resId"), req.Status)
 	if err != nil {
 		Fail(c, http.StatusBadRequest, err.Error())
 		return
@@ -125,7 +125,7 @@ func (h *ResourceHandler) Review(c *gin.Context) {
 }
 
 func (h *ResourceHandler) Publish(c *gin.Context) {
-	res, err := h.svc.Publish(c.Param("resId"))
+	res, err := h.svc.Publish(c.Param("id"), c.Param("resId"))
 	if err != nil {
 		Fail(c, http.StatusBadRequest, err.Error())
 		return

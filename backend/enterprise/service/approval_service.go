@@ -12,12 +12,13 @@ import (
 )
 
 type ApprovalService struct {
-	db  *gorm.DB
-	rep *repository.ApprovalRepository
+	db    *gorm.DB
+	rep   *repository.ApprovalRepository
+	depts *repository.DeptRepository
 }
 
-func NewApprovalService(db *gorm.DB, rep *repository.ApprovalRepository) *ApprovalService {
-	return &ApprovalService{db: db, rep: rep}
+func NewApprovalService(db *gorm.DB, rep *repository.ApprovalRepository, depts *repository.DeptRepository) *ApprovalService {
+	return &ApprovalService{db: db, rep: rep, depts: depts}
 }
 
 type CreateWorkflowInput struct {
@@ -55,18 +56,27 @@ func (s *ApprovalService) CreateWorkflow(in CreateWorkflowInput) (*model.Approva
 			return err
 		}
 		for i, n := range in.Nodes {
+			if n.NodeType == "" {
+				n.NodeType = model.ApprovalNodeSequential
+			}
+			if n.NodeType != model.ApprovalNodeSequential && n.NodeType != model.ApprovalNodeParallel && n.NodeType != model.ApprovalNodeAny {
+				return fmt.Errorf("节点 %d 的 nodeType 只能是 sequential/parallel/any", i+1)
+			}
+			if n.ApproverType == "" {
+				n.ApproverType = model.ApproverTypeUser
+			}
+			if n.ApproverType != model.ApproverTypeUser && n.ApproverType != model.ApproverTypeRole && n.ApproverType != model.ApproverTypeDeptLead {
+				return fmt.Errorf("节点 %d 的 approverType 只能是 user/role/dept_lead", i+1)
+			}
+			if len(n.ApproverIDs) == 0 {
+				return fmt.Errorf("节点 %d 必须至少指定一个审批人", i+1)
+			}
 			node := &model.ApprovalNode{
 				WorkflowID:   w.ID,
 				NodeIndex:    i,
 				NodeType:     n.NodeType,
 				ApproverType: n.ApproverType,
 				ApproverIDs:  n.ApproverIDs,
-			}
-			if node.NodeType == "" {
-				node.NodeType = model.ApprovalNodeSequential
-			}
-			if node.ApproverType == "" {
-				node.ApproverType = model.ApproverTypeUser
 			}
 			if err := tx.Create(node).Error; err != nil {
 				return err
@@ -84,8 +94,8 @@ func (s *ApprovalService) ListWorkflows(orgID string) ([]model.ApprovalWorkflow,
 	return s.rep.ListWorkflows(orgID)
 }
 
-func (s *ApprovalService) GetWorkflow(id string) (*model.ApprovalWorkflow, []model.ApprovalNode, error) {
-	w, err := s.rep.FindWorkflowByID(id)
+func (s *ApprovalService) GetWorkflow(orgID, id string) (*model.ApprovalWorkflow, []model.ApprovalNode, error) {
+	w, err := s.rep.FindWorkflowByIDAndOrg(orgID, id)
 	if err != nil || w == nil {
 		return nil, nil, errors.New("审批流不存在")
 	}
@@ -93,12 +103,12 @@ func (s *ApprovalService) GetWorkflow(id string) (*model.ApprovalWorkflow, []mod
 	return w, nodes, err
 }
 
-func (s *ApprovalService) DeleteWorkflow(id string) error {
+func (s *ApprovalService) DeleteWorkflow(orgID, id string) error {
 	return s.db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Where("workflow_id = ?", id).Delete(&model.ApprovalNode{}).Error; err != nil {
 			return err
 		}
-		return tx.Where("id = ?", id).Delete(&model.ApprovalWorkflow{}).Error
+		return tx.Where("id = ? AND org_id = ?", id, orgID).Delete(&model.ApprovalWorkflow{}).Error
 	})
 }
 
@@ -131,22 +141,45 @@ func (s *ApprovalService) Submit(in SubmitApprovalInput) (*model.ApprovalRecord,
 }
 
 type ActApprovalInput struct {
+	OrgID      string
 	RecordID   string
 	ApproverID string
 	Action     string // approve|reject
 	Note       string
 }
 
+// canAct 判断 approverID 是否为当前节点的合法审批人。
+// user: 必须在节点 ApproverIDs 中；role: 必须持有 ApproverIDs 中任一角色；
+// dept_lead: 必须是 ApproverIDs 中任一部门的负责人。未知类型一律拒绝。
+func (s *ApprovalService) canAct(orgID, approverID string, node *model.ApprovalNode) (bool, error) {
+	switch node.ApproverType {
+	case model.ApproverTypeUser:
+		for _, id := range node.ApproverIDs {
+			if id == approverID {
+				return true, nil
+			}
+		}
+		return false, nil
+	case model.ApproverTypeRole:
+		return s.depts.UserHasAnyRole(orgID, approverID, node.ApproverIDs)
+	case model.ApproverTypeDeptLead:
+		return s.depts.UserLeadsAnyDept(orgID, approverID, node.ApproverIDs)
+	default:
+		return false, nil
+	}
+}
+
 // Act 审批操作。当前节点审批通过后自动流转到下一节点。
 // sequential: 需要所有 approver 各自审批通过
 // parallel: 需要所有 approver 各自审批通过
 // any: 任一 approver 审批通过即可
+// role/dept_lead 节点: 任一合法审批人（角色成员/部门负责人）审批通过即视为节点完成
 // reject: 直接驳回整条审批
 func (s *ApprovalService) Act(in ActApprovalInput) (*model.ApprovalRecord, error) {
 	if in.Action != model.ApprovalActionApprove && in.Action != model.ApprovalActionReject {
 		return nil, errors.New("action 只能是 approve 或 reject")
 	}
-	rec, err := s.rep.FindRecord(in.RecordID)
+	rec, err := s.rep.FindRecordByOrg(in.OrgID, in.RecordID)
 	if err != nil || rec == nil {
 		return nil, errors.New("审批记录不存在")
 	}
@@ -164,6 +197,15 @@ func (s *ApprovalService) Act(in ActApprovalInput) (*model.ApprovalRecord, error
 		return nil, errors.New("当前节点不存在")
 	}
 	currentNode := &nodes[rec.CurrentNodeIndex]
+
+	// 审批人授权校验：非当前节点审批人不得操作
+	allowed, err := s.canAct(in.OrgID, in.ApproverID, currentNode)
+	if err != nil {
+		return nil, err
+	}
+	if !allowed {
+		return nil, errors.New("您不是当前节点的审批人")
+	}
 
 	// 记录 step
 	step := &model.ApprovalStep{
@@ -212,6 +254,10 @@ func (s *ApprovalService) Act(in ActApprovalInput) (*model.ApprovalRecord, error
 }
 
 func (s *ApprovalService) isNodeComplete(node *model.ApprovalNode, existingSteps []model.ApprovalStep, newApproverID string) bool {
+	// role/dept_lead：审批人授权已由 canAct 校验，任一合法审批人通过即视为节点完成
+	if node.ApproverType != model.ApproverTypeUser {
+		return true
+	}
 	// any: 任一人审即可
 	if node.NodeType == model.ApprovalNodeAny {
 		return true
@@ -242,8 +288,8 @@ func (s *ApprovalService) ListRecords(orgID string, page, size int) ([]model.App
 	return s.rep.ListRecords(orgID, page, size)
 }
 
-func (s *ApprovalService) GetRecord(id string) (*model.ApprovalRecord, []model.ApprovalStep, error) {
-	rec, err := s.rep.FindRecord(id)
+func (s *ApprovalService) GetRecord(orgID, id string) (*model.ApprovalRecord, []model.ApprovalStep, error) {
+	rec, err := s.rep.FindRecordByOrg(orgID, id)
 	if err != nil || rec == nil {
 		return nil, nil, errors.New("审批记录不存在")
 	}

@@ -1,13 +1,11 @@
-import { motion } from 'motion/react';
-import { Bot, Boxes, CircleDot, Focus, Grid2X2, Maximize2, Minus, Plus, RotateCcw, Sparkles, X } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Bot, Boxes, CircleDot, Grid2X2, Plus, Sparkles, X } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 import type { WorkflowOnlineTurnInput } from '../workflow/WorkflowAgentPanel';
 import { WorkflowAgentPanel, type WorkflowAgentActivity } from '../workflow/WorkflowAgentPanel';
 import { useWorkflowMediaUrl } from '../workflow/media';
 import type { WorkflowNode, WorkflowProject } from '../workflow/types';
 import { FlovartAgentPanel } from './FlovartAgentPanel';
-import { useAgentWorkspaceStore, type AgentPanelStatus, type AgentWorkspacePanel } from './agentWorkspaceStore';
-import { useCompactViewport } from '../../hooks/useCompactViewport';
+import { useAgentWorkspaceStore, type AgentPanelStatus } from './agentWorkspaceStore';
 
 interface AgentWorkspaceProps {
   project: WorkflowProject | null;
@@ -22,206 +20,85 @@ interface AgentWorkspaceProps {
 const STATUS_LABEL: Record<AgentPanelStatus, string> = { idle: '待命', running: '运行中', waiting: '待确认', done: '已完成', error: '异常' };
 
 export function AgentWorkspace({ project, onCreateProject, onProjectChange, onOnlineTurn, onOpenWorkflow, onOpenTable, onOpenSettings }: AgentWorkspaceProps) {
-  const ensureLayout = useAgentWorkspaceStore(state => state.ensureLayout);
-  const updatePanel = useAgentWorkspaceStore(state => state.updatePanel);
-  const setStoredViewport = useAgentWorkspaceStore(state => state.setViewport);
   const addCodexPanel = useAgentWorkspaceStore(state => state.addCodexPanel);
-  const resetLayout = useAgentWorkspaceStore(state => state.resetLayout);
+  const ensureLayout = useAgentWorkspaceStore(state => state.ensureLayout);
   const removePanel = useAgentWorkspaceStore(state => state.removePanel);
-  const layout = useAgentWorkspaceStore(state => project ? state.layouts[project.id] : undefined);
-  const [viewport, setViewport] = useState({ x: 42, y: 38, zoom: 1 });
-  const [panning, setPanning] = useState(false);
-  const [mobilePanelId, setMobilePanelId] = useState('flovart-main');
-  const compactLayout = useCompactViewport();
-  const panStart = useRef({ x: 0, y: 0, viewportX: 0, viewportY: 0 });
-
-  useEffect(() => { if (project) ensureLayout(project.id); }, [ensureLayout, project]);
-  useEffect(() => { if (layout) setViewport(layout.viewport); }, [layout?.viewport.x, layout?.viewport.y, layout?.viewport.zoom, project?.id]);
-  useEffect(() => {
-    if (layout && !layout.panels.some(panel => panel.id === mobilePanelId)) {
-      setMobilePanelId(layout.panels.find(panel => panel.kind === 'flovart')?.id || layout.panels[0]?.id || 'flovart-main');
-    }
-  }, [layout, mobilePanelId]);
-
+  const updatePanel = useAgentWorkspaceStore(state => state.updatePanel);
+  const layouts = useAgentWorkspaceStore(state => state.layouts);
+  const [activeContext, setActiveContext] = useState<'brief' | 'activity' | 'artifacts'>('artifacts');
+  const [activeCodexId, setActiveCodexId] = useState<string>();
+  const layout = project ? layouts[project.id] : undefined;
   const mediaNodes = useMemo(() => project?.nodes.filter(node => node.type === 'image' || node.type === 'video') || [], [project]);
-  const maxZ = Math.max(0, ...(layout?.panels.map(panel => panel.z) || []));
+  useEffect(() => { if (project) ensureLayout(project.id); }, [ensureLayout, project]);
 
   if (!project) return <main className="grid h-full place-content-center text-center" style={{ color: 'var(--isl-ink)' }}><Bot className="mx-auto mb-3" size={30} style={{ color: 'var(--isl-mint)' }} /><strong>Agent 需要一个制作项目</strong><p className="mt-1 text-xs" style={{ color: 'var(--isl-ink-soft)' }}>创建 Workflow 后，任务、上下文与产物会在这里汇合。</p><button type="button" className="mx-auto mt-3 rounded-lg px-3 py-2 text-xs font-bold text-white" style={{ background: 'var(--isl-mint)' }} onClick={onCreateProject}>创建项目</button></main>;
-  if (!layout) return null;
 
-  const commitViewport = (next = viewport) => setStoredViewport(project.id, next);
-  const zoomBy = (delta: number) => {
-    const next = { ...viewport, zoom: Math.min(1.6, Math.max(.45, Number((viewport.zoom + delta).toFixed(2)))) };
-    setViewport(next);
-    commitViewport(next);
+  const codexPanels = layout?.panels.filter(panel => panel.kind === 'codex') || [];
+  const activeCodex = codexPanels.find(panel => panel.id === activeCodexId);
+  const status = layout?.panels.find(panel => panel.kind === 'flovart')?.status || 'idle';
+  const openNewCodex = () => {
+    addCodexPanel(project.id);
+    const added = [...(useAgentWorkspaceStore.getState().layouts[project.id]?.panels || [])].reverse().find(panel => panel.kind === 'codex');
+    if (added) setActiveCodexId(added.id);
   };
 
-  const mobilePanel = layout.panels.find(panel => panel.id === mobilePanelId)
-    || layout.panels.find(panel => panel.kind === 'flovart')
-    || layout.panels[0];
-  if (compactLayout && mobilePanel) return (
-    <main
-      className="agent-workspace flex h-full min-h-0 flex-col overflow-hidden border-t"
-      data-testid="agent-mobile-workspace"
-      style={{ borderColor: 'var(--isl-border)', color: 'var(--isl-ink)', background: 'var(--isl-surface-sunk)' }}
-    >
-      <div className="flex shrink-0 items-center gap-2 border-b px-2 py-2" style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-surface)' }}>
-        <Bot size={14} style={{ color: 'var(--isl-mint-deep)' }} />
-        <strong className="min-w-0 flex-1 truncate text-xs">{project.title}</strong>
-        <span className="text-[10px]" style={{ color: 'var(--isl-ink-ghost)' }}>{layout.panels.length} 个面板</span>
-        <button
-          type="button"
-          className="isl-icon-btn h-8 w-8 shrink-0"
-          aria-label="添加 Codex 子任务"
-          onClick={() => {
-            addCodexPanel(project.id);
-            const panels = useAgentWorkspaceStore.getState().layouts[project.id]?.panels || [];
-            const added = [...panels].reverse().find(panel => panel.kind === 'codex');
-            if (added) setMobilePanelId(added.id);
-          }}
-        ><Plus size={14} /></button>
-      </div>
-      <div role="tablist" aria-label="Agent 任务面板" className="flex shrink-0 gap-1 overflow-x-auto px-2 py-2">
-        {layout.panels.map(panel => {
-          const selected = panel.id === mobilePanel.id;
-          return <button
-            key={panel.id}
-            type="button"
-            role="tab"
-            aria-selected={selected}
-            aria-controls={`agent-mobile-panel-${panel.id}`}
-            aria-label={`${panel.title}，${STATUS_LABEL[panel.status]}`}
-            className="flex min-h-9 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 text-[11px] font-semibold"
-            style={{ borderColor: selected ? 'var(--isl-mint)' : 'var(--isl-border)', color: selected ? 'var(--isl-ink)' : 'var(--isl-ink-soft)', background: selected ? 'var(--isl-card)' : 'transparent' }}
-            onClick={() => setMobilePanelId(panel.id)}
-          ><span className={`agent-status is-${panel.status}`}><i /></span>{panel.title}</button>;
-        })}
-      </div>
-      <div id={`agent-mobile-panel-${mobilePanel.id}`} role="tabpanel" className="min-h-0 flex-1 px-2 pb-2">
-        <AgentPanel
-          compact
-          panel={mobilePanel}
-          project={project}
-          mediaNodes={mediaNodes}
-          maxZ={maxZ}
-          onMove={(x, y) => updatePanel(project.id, mobilePanel.id, { x, y })}
-          onResize={(width, height) => updatePanel(project.id, mobilePanel.id, { width, height })}
-          onFocus={() => undefined}
-          onRemove={mobilePanel.kind === 'codex' ? () => removePanel(project.id, mobilePanel.id) : undefined}
-          onActivity={status => updatePanel(project.id, mobilePanel.id, { status })}
-          onProjectChange={patch => onProjectChange(project.id, patch)}
-          onOnlineTurn={onOnlineTurn}
-          onOpenWorkflow={onOpenWorkflow}
-          onOpenTable={onOpenTable}
-          onOpenSettings={onOpenSettings}
-        />
-      </div>
-    </main>
-  );
-
   return (
-    <main
-      className={`agent-workspace relative h-full overflow-hidden border-t ${panning ? 'cursor-grabbing' : ''}`}
-      style={{ borderColor: 'var(--isl-border)', color: 'var(--isl-ink)', backgroundColor: 'var(--isl-surface-sunk)', backgroundImage: 'radial-gradient(var(--isl-border-strong) 1px, transparent 1px)', backgroundSize: `${22 * viewport.zoom}px ${22 * viewport.zoom}px`, backgroundPosition: `${viewport.x}px ${viewport.y}px` }}
-      onPointerDown={event => {
-        if (event.target !== event.currentTarget || event.button !== 0) return;
-        setPanning(true);
-        panStart.current = { x: event.clientX, y: event.clientY, viewportX: viewport.x, viewportY: viewport.y };
-        event.currentTarget.setPointerCapture(event.pointerId);
-      }}
-      onPointerMove={event => { if (panning) setViewport(current => ({ ...current, x: panStart.current.viewportX + event.clientX - panStart.current.x, y: panStart.current.viewportY + event.clientY - panStart.current.y })); }}
-      onPointerUp={event => { if (!panning) return; setPanning(false); event.currentTarget.releasePointerCapture(event.pointerId); setViewport(current => { commitViewport(current); return current; }); }}
-      onWheel={event => { if (!event.ctrlKey) return; event.preventDefault(); zoomBy(event.deltaY > 0 ? -.08 : .08); }}
-    >
-      <div className="pointer-events-none absolute left-4 top-3 z-50 flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-[11px]" style={{ borderColor: 'var(--isl-border)', background: 'color-mix(in srgb,var(--isl-card) 90%,transparent)' }}><Bot size={13} style={{ color: 'var(--isl-mint-deep)' }} /><strong>{project.title}</strong><span style={{ color: 'var(--isl-ink-ghost)' }}>{layout.panels.length} 个任务面板</span></div>
-      <div className="absolute left-0 top-0 origin-top-left" style={{ width: 1500, height: 900, transform: `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.zoom})` }}>
-        {layout.panels.map(panel => (
-          <AgentPanel
-            key={panel.id}
-            panel={panel}
-            project={project}
-            mediaNodes={mediaNodes}
-            maxZ={maxZ}
-            onMove={(x, y) => updatePanel(project.id, panel.id, { x, y })}
-            onResize={(width, height) => updatePanel(project.id, panel.id, { width, height })}
-            onFocus={() => updatePanel(project.id, panel.id, { z: maxZ + 1 })}
-            onRemove={panel.kind === 'codex' ? () => removePanel(project.id, panel.id) : undefined}
-            onActivity={status => updatePanel(project.id, panel.id, { status })}
-            onProjectChange={patch => onProjectChange(project.id, patch)}
-            onOnlineTurn={onOnlineTurn}
-            onOpenWorkflow={onOpenWorkflow}
-            onOpenTable={onOpenTable}
-            onOpenSettings={onOpenSettings}
-          />
-        ))}
-      </div>
-      <div className="absolute bottom-4 left-1/2 z-50 flex -translate-x-1/2 items-center gap-1 rounded-xl border p-1" style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-card)', boxShadow: 'var(--isl-shadow)' }}>
-        <button type="button" className="isl-icon-btn h-8 w-8" title="缩小" onClick={() => zoomBy(-.1)}><Minus size={14} /></button>
-        <span className="w-11 text-center text-[10px] font-bold tabular-nums">{Math.round(viewport.zoom * 100)}%</span>
-        <button type="button" className="isl-icon-btn h-8 w-8" title="放大" onClick={() => zoomBy(.1)}><Plus size={14} /></button>
-        <span className="mx-1 h-4 w-px" style={{ background: 'var(--isl-border)' }} />
-        <button type="button" className="isl-icon-btn h-8 gap-1 px-2 text-[11px]" onClick={() => addCodexPanel(project.id)}><Bot size={13} />Codex 子任务</button>
-        <button type="button" className="isl-icon-btn h-8 w-8" title="恢复默认布局" onClick={() => resetLayout(project.id)}><RotateCcw size={13} /></button>
-        <button type="button" className="isl-icon-btn h-8 w-8" title="回到内容" onClick={() => { const next = { x: 42, y: 38, zoom: 1 }; setViewport(next); commitViewport(next); }}><Focus size={14} /></button>
-      </div>
+    <main className="agent-studio" data-testid="agent-main-workspace">
+      <aside className="agent-studio__context">
+        <header className="agent-context__header">
+          <div><span>Agent 空间</span><strong>{project.title}</strong></div>
+          <button type="button" aria-label="添加 Codex 子任务" onClick={openNewCodex}><Plus size={15} /></button>
+        </header>
+        <nav className="agent-context__tabs" aria-label="Agent 上下文">
+          <button type="button" aria-pressed={activeContext === 'brief'} onClick={() => setActiveContext('brief')}><Sparkles size={14} />Brief</button>
+          <button type="button" aria-pressed={activeContext === 'artifacts'} onClick={() => setActiveContext('artifacts')}><Boxes size={14} />产物</button>
+          <button type="button" aria-pressed={activeContext === 'activity'} onClick={() => setActiveContext('activity')}><CircleDot size={14} />时间线</button>
+        </nav>
+        <section className="agent-context__body">
+          {activeContext === 'brief' && <BriefPanel project={project} onOpenWorkflow={onOpenWorkflow} />}
+          {activeContext === 'activity' && <ActivityPanel project={project} />}
+          {activeContext === 'artifacts' && <ArtifactsPanel nodes={mediaNodes} onOpenTable={onOpenTable} />}
+        </section>
+        <footer className="agent-context__footer">
+          <span className={`agent-status is-${status}`}><i />{STATUS_LABEL[status]}</span>
+          <button type="button" onClick={onOpenWorkflow}><Grid2X2 size={13} />打开 Workflow</button>
+        </footer>
+      </aside>
+
+      <section className="agent-studio__conversation" aria-label="Flovart Agent 主对话">
+        {activeCodex ? (
+          <>
+            <header className="agent-codex__header"><Bot size={14} /><strong>{activeCodex.title}</strong><button type="button" aria-label="关闭 Codex 子任务" onClick={() => { removePanel(project.id, activeCodex.id); setActiveCodexId(undefined); }}><X size={14} /></button></header>
+            <WorkflowAgentPanel project={project} onClose={() => setActiveCodexId(undefined)} onProjectChange={patch => onProjectChange(project.id, patch)} onOnlineTurn={onOnlineTurn} embedded onActivityChange={(activity: WorkflowAgentActivity) => updatePanel(project.id, activeCodex.id, { status: activity })} />
+          </>
+        ) : <FlovartAgentPanel project={project} onActivityChange={activity => updatePanel(project.id, 'flovart-main', { status: activity })} onOpenSettings={onOpenSettings} />}
+      </section>
+
+      {codexPanels.length > 0 && <nav className="agent-studio__threads" aria-label="Agent 任务面板">
+        <button type="button" aria-pressed={!activeCodex} onClick={() => setActiveCodexId(undefined)}><Bot size={13} />Flovart Agent</button>
+        {codexPanels.map(panel => <button key={panel.id} type="button" aria-pressed={activeCodex?.id === panel.id} onClick={() => setActiveCodexId(panel.id)}>{panel.title}</button>)}
+        <button type="button" aria-label="新增 Codex 子任务" onClick={openNewCodex}><Plus size={13} /></button>
+      </nav>}
     </main>
   );
 }
 
-interface AgentPanelProps {
-  compact?: boolean;
-  panel: AgentWorkspacePanel;
-  project: WorkflowProject;
-  mediaNodes: WorkflowNode[];
-  maxZ: number;
-  onMove: (x: number, y: number) => void;
-  onResize: (width: number, height: number) => void;
-  onFocus: () => void;
-  onRemove?: () => void;
-  onActivity: (status: AgentPanelStatus) => void;
-  onProjectChange: (patch: Pick<WorkflowProject, 'agentSessions' | 'activeAgentSessionId'>) => void;
-  onOnlineTurn?: (input: WorkflowOnlineTurnInput) => Promise<void>;
-  onOpenWorkflow: () => void;
-  onOpenTable: (nodeId?: string) => void;
-  onOpenSettings: () => void;
-}
-
-function AgentPanel({ compact = false, panel, project, mediaNodes, onMove, onResize, onFocus, onRemove, onActivity, onProjectChange, onOnlineTurn, onOpenWorkflow, onOpenTable, onOpenSettings }: AgentPanelProps) {
-  const drag = useRef<{ x: number; y: number; panelX: number; panelY: number } | undefined>(undefined);
-  const resize = useRef<{ x: number; y: number; width: number; height: number } | undefined>(undefined);
-  const Icon = panel.kind === 'codex' || panel.kind === 'flovart' ? Bot : panel.kind === 'artifacts' ? Boxes : panel.kind === 'activity' ? CircleDot : Sparkles;
-  return <motion.section className={`${compact ? 'relative h-full w-full' : 'absolute'} flex min-h-0 flex-col overflow-hidden rounded-xl border`} style={{ ...(compact ? {} : { left: panel.x, top: panel.y, width: panel.width, height: panel.height, zIndex: panel.z }), borderColor: panel.status === 'waiting' ? 'var(--isl-sun)' : panel.status === 'error' ? 'var(--isl-coral)' : 'var(--isl-border-strong)', background: 'var(--isl-card)', boxShadow: 'var(--isl-shadow)' }} initial={compact ? false : { opacity: 0, scale: .94, y: 12 }} animate={{ opacity: 1, scale: 1, y: 0 }} transition={{ type: 'spring', stiffness: 390, damping: 31 }} onPointerDown={compact ? undefined : onFocus}>
-    <header className={`flex h-9 shrink-0 items-center gap-2 border-b px-2.5 ${compact ? '' : 'cursor-grab active:cursor-grabbing'}`} style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-surface)' }} onPointerDown={compact ? undefined : event => { if ((event.target as HTMLElement).closest('button')) return; drag.current = { x: event.clientX, y: event.clientY, panelX: panel.x, panelY: panel.y }; event.currentTarget.setPointerCapture(event.pointerId); }} onPointerMove={compact ? undefined : event => { if (drag.current) onMove(drag.current.panelX + event.clientX - drag.current.x, drag.current.panelY + event.clientY - drag.current.y); }} onPointerUp={compact ? undefined : event => { drag.current = undefined; event.currentTarget.releasePointerCapture(event.pointerId); }}>
-      <Icon size={13} /><strong className="min-w-0 flex-1 truncate text-[11px]">{panel.title}</strong><span className={`agent-status is-${panel.status}`}><i />{STATUS_LABEL[panel.status]}</span>{onRemove && <button type="button" className="isl-icon-btn h-6 w-6" aria-label="关闭面板" onClick={onRemove}><X size={12} /></button>}
-    </header>
-    <div className="min-h-0 flex-1 overflow-hidden">
-      {panel.kind === 'codex' && <WorkflowAgentPanel project={project} onClose={() => undefined} onProjectChange={onProjectChange} onOnlineTurn={onOnlineTurn} embedded onActivityChange={(activity: WorkflowAgentActivity) => onActivity(activity)} />}
-      {panel.kind === 'flovart' && <FlovartAgentPanel project={project} onActivityChange={onActivity} onOpenSettings={onOpenSettings} />}
-      {panel.kind === 'brief' && <BriefPanel project={project} onOpenWorkflow={onOpenWorkflow} />}
-      {panel.kind === 'activity' && <ActivityPanel project={project} />}
-      {panel.kind === 'artifacts' && <ArtifactsPanel nodes={mediaNodes} onOpenTable={onOpenTable} />}
-    </div>
-    {!compact && <button type="button" aria-label="调整面板大小" className="absolute bottom-0 right-0 grid h-5 w-5 cursor-nwse-resize place-items-center bg-transparent opacity-35" onPointerDown={event => { event.stopPropagation(); resize.current = { x: event.clientX, y: event.clientY, width: panel.width, height: panel.height }; event.currentTarget.setPointerCapture(event.pointerId); }} onPointerMove={event => { if (resize.current) onResize(Math.max(280, resize.current.width + event.clientX - resize.current.x), Math.max(180, resize.current.height + event.clientY - resize.current.y)); }} onPointerUp={event => { resize.current = undefined; event.currentTarget.releasePointerCapture(event.pointerId); }}><Maximize2 size={10} /></button>}
-  </motion.section>;
-}
-
-function BriefPanel({ project, onOpenWorkflow }: { project: WorkflowProject; onOpenWorkflow: () => void }) {
+function BriefPanel({ project }: { project: WorkflowProject; onOpenWorkflow: () => void }) {
   const running = project.nodes.filter(node => node.metadata.status === 'loading').length;
-  return <div className="flex h-full flex-col p-3"><p className="m-0 text-[10px] font-bold uppercase tracking-[.14em]" style={{ color: 'var(--isl-ink-ghost)' }}>Production context</p><h2 className="mb-1 mt-2 text-base leading-tight">{project.title}</h2><p className="m-0 text-[11px] leading-5" style={{ color: 'var(--isl-ink-soft)' }}>Agent 与你编辑同一份 Workflow Draft；可逆操作直接进入画布时间线，付费执行和删除仍由你确认。</p><div className="mt-3 grid grid-cols-3 gap-1.5">{[[project.nodes.length, '节点'], [project.connections.length, '连接'], [running, '运行中']].map(([value, label]) => <div key={label} className="rounded-lg p-2 text-center" style={{ background: 'var(--isl-surface-2)' }}><strong className="block text-sm">{value}</strong><span className="text-[9px]" style={{ color: 'var(--isl-ink-ghost)' }}>{label}</span></div>)}</div><button type="button" className="mt-auto flex items-center justify-center gap-1 rounded-lg border py-1.5 text-[10px] font-semibold" style={{ borderColor: 'var(--isl-border)' }} onClick={onOpenWorkflow}><Grid2X2 size={11} />打开 Workflow</button></div>;
+  return <div className="agent-brief"><p>PRODUCTION CONTEXT</p><h2>{project.title}</h2><span>Agent 与你编辑同一份 Workflow Draft；可逆操作直接进入画布时间线，付费执行和删除仍由你确认。</span><div>{[[project.nodes.length, '节点'], [project.connections.length, '连接'], [running, '运行中']].map(([value, label]) => <section key={label}><strong>{value}</strong><small>{label}</small></section>)}</div></div>;
 }
 
 function ActivityPanel({ project }: { project: WorkflowProject }) {
   const changes = [...(project.draftChangeSets || [])].reverse().slice(0, 10);
-  if (changes.length) return <div className="h-full overflow-y-auto p-2">{changes.map(change => <div key={change.id} className="mb-1.5 rounded-lg p-2" style={{ background: 'var(--isl-surface-2)', opacity: change.status === 'undone' ? .58 : 1 }}><div className="flex items-center gap-2"><strong className="min-w-0 flex-1 truncate text-[10px]">{change.intent}</strong><span className="text-[9px] tabular-nums" style={{ color: 'var(--isl-ink-ghost)' }}>v{change.resultDraftVersion}</span></div><span className="mt-0.5 block text-[9px]" style={{ color: change.actor === 'agent' ? 'var(--isl-mint-deep)' : 'var(--isl-ink-ghost)' }}>{change.actor === 'agent' ? 'Agent' : change.actor === 'ui' ? '你' : change.actor.toUpperCase()} · {{ completed: '已应用', partial: '部分应用', failed: '失败', undone: '已撤销' }[change.status]} · {change.nodeChanges.length + change.connectionChanges.length} 个对象</span></div>)}</div>;
-  const items = [...project.nodes].sort((a, b) => String(b.metadata.generationStartedAt || '').localeCompare(String(a.metadata.generationStartedAt || ''))).slice(0, 8);
-  return <div className="h-full overflow-y-auto p-2">{items.length ? items.map(node => <div key={node.id} className="mb-1.5 flex items-start gap-2 rounded-lg p-2" style={{ background: 'var(--isl-surface-2)' }}><span className={`agent-task-dot is-${node.metadata.status || 'idle'}`} /><span className="min-w-0"><strong className="block truncate text-[10px]">{node.title}</strong><span className="block truncate text-[9px]" style={{ color: 'var(--isl-ink-ghost)' }}>{node.metadata.generationMessage || node.metadata.status || 'idle'}</span></span></div>) : <div className="grid h-full place-content-center text-center text-[11px]" style={{ color: 'var(--isl-ink-ghost)' }}>任务运行后，状态会留在这里。<br />不必翻聊天记录。</div>}</div>;
+  if (changes.length) return <div className="agent-activity">{changes.map(change => <div key={change.id}><strong>{change.intent}</strong><small>{change.actor === 'agent' ? 'Agent' : '你'} · {{ completed: '已应用', partial: '部分应用', failed: '失败', undone: '已撤销' }[change.status]} · v{change.resultDraftVersion}</small></div>)}</div>;
+  return <div className="agent-context-empty"><CircleDot size={24} /><span>任务运行后，状态会留在这里。<br />不必翻聊天记录。</span></div>;
 }
 
 function ArtifactsPanel({ nodes, onOpenTable }: { nodes: WorkflowNode[]; onOpenTable: (nodeId?: string) => void }) {
-  return <div className="grid grid-cols-2 gap-2 overflow-y-auto p-2">{nodes.map(node => <ArtifactCard key={node.id} node={node} onClick={() => onOpenTable(node.id)} />)}{!nodes.length && <div className="col-span-2 grid h-40 place-content-center text-center text-[11px]" style={{ color: 'var(--isl-ink-ghost)' }}>生成结果会自动汇集在这里。</div>}</div>;
+  return <div className="agent-artifacts">{nodes.map(node => <ArtifactCard key={node.id} node={node} onClick={() => onOpenTable(node.id)} />)}{!nodes.length && <div className="agent-context-empty"><Boxes size={25} /><span>生成结果会自动汇集在这里。<br />你可以随时送往 Table 继续处理。</span></div>}</div>;
 }
 
 function ArtifactCard({ node, onClick }: { node: WorkflowNode; onClick: () => void }) {
   const media = useWorkflowMediaUrl(node.metadata.storageKey, node.metadata.href);
-  return <button type="button" className="overflow-hidden rounded-lg border text-left transition hover:-translate-y-0.5" style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-surface)' }} onClick={onClick}><div className="aspect-video bg-black/10">{media.url && (node.type === 'video' ? <video src={media.url} muted preload="metadata" className="h-full w-full object-cover" /> : <img src={media.url} alt="" className="h-full w-full object-cover" />)}</div><div className="truncate px-2 py-1.5 text-[9px] font-semibold">{node.metadata.name || node.title}</div></button>;
+  return <button type="button" className="agent-artifact-card" onClick={onClick}>{node.type === 'video' ? <video src={media.url || undefined} muted playsInline /> : <img src={media.url || undefined} alt="" />}<span><strong>{node.title}</strong><small>{node.metadata.status || 'ready'}</small></span></button>;
 }

@@ -83,7 +83,13 @@ export async function runWorkflowNodeTool(
     case 'video-merge':
       return runWorkflowVideoMergeOperation(projectId, Array.isArray(args.sourceNodeIds) ? args.sourceNodeIds.map(String) : [], runtime);
     case 'video-extract-frame':
-      return runWorkflowVideoExtractFrameOperation(projectId, nodeId, String(args.position || 'first') === 'last' ? 'last' : 'first', runtime);
+      return runWorkflowVideoExtractFrameOperation(
+        projectId,
+        nodeId,
+        (['first', 'current', 'last'].includes(String(args.position)) ? String(args.position) : 'first') as 'first' | 'current' | 'last',
+        runtime,
+        finite(args.currentTimeSec, 0, 0, Number.MAX_SAFE_INTEGER),
+      );
     case 'audio-trim':
       return runWorkflowAudioTrimOperation(projectId, nodeId, {
         startSec: finite(args.startSec, 0, 0, Number.MAX_SAFE_INTEGER), endSec: finite(args.endSec, 0, 0, Number.MAX_SAFE_INTEGER),

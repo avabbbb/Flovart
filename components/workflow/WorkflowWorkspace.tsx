@@ -100,8 +100,13 @@ export function WorkflowWorkspace({
   const rightOpen = compactViewport ? mobileRightOpen : desktopRightOpen;
   const setRightOpen = (open: boolean) => compactViewport ? setMobileRightOpen(open) : setDesktopRightOpen(open);
   const [rightTab, setRightTab] = useState<WorkflowRightTab>('agent');
-  const [rightWidth, setRightWidth] = useState(() => Number(localStorage.getItem('workflowRightPanelWidth')) || 390);
+  const [rightWidth, setRightWidth] = useState(() => {
+    const stored = Number(localStorage.getItem('workflowRightPanelWidth'));
+    return stored >= 520 ? stored : Math.round(window.innerWidth * .4);
+  });
   const [workspaceNotice, setWorkspaceNotice] = useState('');
+  const [agentFocusRequest, setAgentFocusRequest] = useState<{ nodeId: string; nonce: number }>();
+  const [sidebarTabRequest, setSidebarTabRequest] = useState<{ tab: 'layers' | 'assets'; nonce: number }>();
 
   useEffect(() => {
     if (hydrated && projects.length > 0 && !activeProjectId) setActiveProject(projects[0].id);
@@ -215,6 +220,7 @@ assetLibrary={assetLibrary}
           onCreateFolder={onCreateFolder}
           onRenameFolder={onRenameFolder}
           onRemoveFolder={onRemoveFolder}
+          tabRequest={sidebarTabRequest}
       />
       <main className="workflow-workspace__main">
         {workspaceNotice && <div className="workflow-workspace__notice" role="status">{workspaceNotice}</div>}
@@ -234,10 +240,15 @@ assetLibrary={assetLibrary}
               imageTools={imageTools}
               onReversePrompt={onReversePrompt}
               onOpenAgent={() => {
-                setRightTab('agent');
-                const next = !rightOpen;
-                setRightOpen(next);
-                if (next) onOpenAgent?.();
+                if (rightOpen && rightTab === 'agent') {
+                  // 已打开且停在 Agent 页：按钮标题为「收起 Agent」，执行收起
+                  setRightOpen(false);
+                } else {
+                  // 关闭中或停在其它页：打开并切到 Agent
+                  setRightTab('agent');
+                  setRightOpen(true);
+                  onOpenAgent?.();
+                }
               }}
               agentOpen={rightOpen && rightTab === 'agent'}
               rightPanelInset={rightOpen && !compactViewport ? rightWidth + 24 : 12}
@@ -251,6 +262,11 @@ assetLibrary={assetLibrary}
               onEnhancePrompt={onEnhancePrompt}
               isEnhancingPrompt={isEnhancingPrompt}
               assetLibrary={assetLibrary}
+              focusNodeRequest={agentFocusRequest}
+              onOpenAssets={() => {
+                setSidebarTabRequest({ tab: 'assets', nonce: Date.now() });
+                setLeftOpen(true);
+              }}
             />
           ) : (
             <div className="workflow-empty">
@@ -265,11 +281,12 @@ assetLibrary={assetLibrary}
       <StudioRightDrawer
         open={rightOpen}
         onOpenChange={setRightOpen}
-        outerGap={12}
+        outerGap={0}
         width={rightWidth}
-        minWidth={320}
-        maxWidth={520}
+        minWidth={420}
+        maxWidth={Math.max(520, Math.round(window.innerWidth * .55))}
         onWidthChange={setRightWidth}
+        flush
         activeTab={rightTab}
         onTabChange={tab => setRightTab(tab as WorkflowRightTab)}
         tabs={[
@@ -277,13 +294,25 @@ assetLibrary={assetLibrary}
           { id: 'history', label: language === 'zho' ? '生成历史' : 'History', icon: undefined },
         ]}
       >
-        {activeProject && rightTab === 'agent' && (
+        {rightTab === 'agent' && (activeProject ? (
           <FlovartAgentPanel
             project={activeProject}
             onActivityChange={() => undefined}
             onOpenSettings={onOpenSettings || (() => undefined)}
+            assetLibrary={assetLibrary}
+            userApiKeys={userApiKeys}
+            onFocusNode={nodeId => setAgentFocusRequest({ nodeId, nonce: Date.now() })}
           />
-        )}
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, height: '100%', padding: '0 32px', textAlign: 'center', color: 'var(--isl-ink-soft)', fontSize: 13 }}>
+            <strong style={{ color: 'var(--isl-ink)' }}>Agent 需要一个制作项目</strong>
+            <span>创建 Workflow 后，任务、上下文与产物会在这里汇合。</span>
+            <button type="button" aria-label="新建工作流" onClick={() => createProject()}
+              style={{ marginTop: 6, padding: '7px 16px', border: 0, borderRadius: 9, color: '#fff', background: 'var(--isl-accent, #1677ff)', cursor: 'pointer', fontSize: 12 }}>
+              创建项目
+            </button>
+          </div>
+        ))}
         {rightTab === 'history' && (
           <StudioMediaBrowser
             mode="history"

@@ -1,5 +1,5 @@
-import { Check, ChevronsDown, Clapperboard, FileText, Image as ImageIcon, Music2, Pencil, Play, Plus, Sparkles, Star, Upload, Video, X } from 'lucide-react';
-import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type MouseEvent as ReactMouseEvent } from 'react';
+import { Camera, Check, ChevronsDown, Clapperboard, FileText, Image as ImageIcon, Music2, Pause, Pencil, Play, Plus, Sparkles, Star, Upload, Video, Volume2, VolumeX, X } from 'lucide-react';
+import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type MouseEvent as ReactMouseEvent } from 'react';
 import { motion } from 'motion/react';
 import { WorkflowConfigPanel } from './WorkflowConfigPanel';
 import { getWorkflowOperationCapability } from './operationRegistry';
@@ -22,6 +22,8 @@ export function WorkflowNode({
   onReplaceMedia,
   onRemoveMedia,
   onActivateMedia,
+  onDeactivateMedia,
+  onExtractFrame,
   onCollapseBatch,
   batchCount,
   isBatchPrimary,
@@ -46,6 +48,8 @@ export function WorkflowNode({
   onReplaceMedia: (file: File) => void;
   onRemoveMedia: () => void;
   onActivateMedia?: () => void;
+  onDeactivateMedia?: () => void;
+  onExtractFrame?: (position: 'first' | 'current' | 'last', currentTimeSec?: number) => void;
   onCollapseBatch?: () => void;
   batchCount?: number;
   isBatchPrimary?: boolean;
@@ -84,6 +88,26 @@ export function WorkflowNode({
     node.type === 'video' ? node.metadata.posterStorageKey : undefined,
     node.type === 'video' ? node.metadata.poster : undefined,
   );
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const videoLeaveTimer = useRef<number | undefined>(undefined);
+  const [videoPlaying, setVideoPlaying] = useState(false);
+  const [videoCurrentTime, setVideoCurrentTime] = useState(0);
+  const [videoDuration, setVideoDuration] = useState(() => (node.metadata.durationMs || 0) / 1000);
+  const [videoVolume, setVideoVolume] = useState(.5);
+  const [volumeOpen, setVolumeOpen] = useState(false);
+  const [frameMenuOpen, setFrameMenuOpen] = useState(false);
+  useEffect(() => () => window.clearTimeout(videoLeaveTimer.current), []);
+  useEffect(() => {
+    if (!videoActive) {
+      setVideoPlaying(false);
+      setVideoCurrentTime(0);
+      setVolumeOpen(false);
+      setFrameMenuOpen(false);
+    }
+  }, [videoActive]);
+  useEffect(() => {
+    if (videoRef.current) videoRef.current.volume = videoVolume;
+  }, [videoActive, videoVolume]);
   const isMedia = node.type === 'image' || node.type === 'video' || node.type === 'audio';
   const hasMediaReference = Boolean(node.metadata.storageKey || node.metadata.href || node.metadata.artifactRef?.taskId);
   const uploading = Boolean(node.metadata.uploading);
@@ -110,15 +134,36 @@ export function WorkflowNode({
   };
   const accept = isMedia ? `${node.type}/*` : undefined;
   const mediaError = isMedia ? (media.error || node.metadata.error) : null;
+  const mediaDimensions = isMedia && node.metadata.naturalWidth && node.metadata.naturalHeight
+    ? `${node.metadata.naturalWidth} × ${node.metadata.naturalHeight}`
+    : '';
   const mediaDetails = isMedia ? [
-    node.metadata.naturalWidth && node.metadata.naturalHeight ? `${node.metadata.naturalWidth}×${node.metadata.naturalHeight}` : '',
-    node.metadata.durationMs ? formatDuration(node.metadata.durationMs) : '',
+    node.metadata.durationMs && !(node.type === 'video' && videoActive) ? formatDuration(node.metadata.durationMs) : '',
     node.metadata.bytes ? formatBytes(node.metadata.bytes) : '',
   ].filter(Boolean).join(' · ') : '';
+  const toggleVideo = async () => {
+    const video = videoRef.current;
+    if (!video) return;
+    if (video.paused) await video.play().catch(() => undefined);
+    else video.pause();
+  };
+  const updateVolume = (value: number) => {
+    const next = Math.max(0, Math.min(1, value));
+    setVideoVolume(next);
+    if (videoRef.current) videoRef.current.volume = next;
+  };
+  const keepVideoLoaded = () => {
+    window.clearTimeout(videoLeaveTimer.current);
+    onActivateMedia?.();
+  };
+  const releaseVideo = () => {
+    window.clearTimeout(videoLeaveTimer.current);
+    videoLeaveTimer.current = window.setTimeout(() => onDeactivateMedia?.(), 520);
+  };
   const mediaActions = isMedia && (
     <div className="workflow-node__media-actions" data-workflow-overlay>
-      <button type="button" aria-label="重新选择媒体文件" onClick={() => mediaInput.current?.click()}><Upload size={14} />重新选择</button>
-      {(node.metadata.storageKey || node.metadata.href || node.metadata.artifactRef?.taskId) && <button type="button" aria-label="移除媒体文件" onClick={onRemoveMedia}><X size={14} />移除</button>}
+      <button type="button" aria-label="重新选择媒体文件" onPointerDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); mediaInput.current?.click(); }}><Upload size={14} />重新选择</button>
+      {(node.metadata.storageKey || node.metadata.href || node.metadata.artifactRef?.taskId) && <button type="button" aria-label="移除媒体文件" onPointerDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); onRemoveMedia(); }}><X size={14} />移除</button>}
       <input ref={mediaInput} hidden type="file" accept={accept} onChange={event => { const file = event.target.files?.[0]; if (file) onReplaceMedia(file); event.currentTarget.value = ''; }} />
     </div>
   );
@@ -130,7 +175,6 @@ export function WorkflowNode({
       initial={{ scale: 0.85, opacity: 0 }}
       animate={{ scale: isLoading ? [1, 1.015, 1] : 1, opacity: 1 }}
       exit={{ scale: 0.85, opacity: 0 }}
-      whileHover={isLoading ? undefined : { scale: 1.02 }}
       transition={{
         scale: isLoading
           ? { duration: 1.8, repeat: Infinity, ease: 'easeInOut' }
@@ -146,6 +190,12 @@ export function WorkflowNode({
         onFocusNode?.();
       }}
       onContextMenu={event => { event.preventDefault(); event.stopPropagation(); onContextMenu(event); }}
+      onMouseOver={node.type === 'video' && hasMediaReference ? keepVideoLoaded : undefined}
+      onMouseOut={node.type === 'video' && hasMediaReference ? event => {
+        const related = event.relatedTarget as Node | null;
+        if (related && event.currentTarget.contains(related)) return;
+        releaseVideo();
+      } : undefined}
       onDragOver={event => { if (isMedia && event.dataTransfer?.types?.includes('Files')) { event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; setDropTarget(true); } }}
       onDragLeave={event => { if (!isMedia) return; const related = event.relatedTarget as Node | null; if (related && (event.currentTarget as HTMLElement).contains(related)) return; setDropTarget(false); }}
       onDrop={event => { if (!isMedia) return; event.preventDefault(); event.stopPropagation(); setDropTarget(false); const file = event.dataTransfer.files?.[0]; if (file) onReplaceMedia(file); }}
@@ -163,7 +213,7 @@ export function WorkflowNode({
           {isBatchPrimary ? <span><Check size={12} />主图</span> : onSetBatchPrimary && <button type="button" title="设为主图" onPointerDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); onSetBatchPrimary(); }}><Star size={12} />设为主图</button>}
         </div>
       )}
-      {onChangeTitle && (isEditingTitle ? (
+      {isEditingTitle && onChangeTitle ? (
         <div className="workflow-node__title is-editing" data-workflow-overlay>
           <TitleIcon size={12} />
           <input
@@ -186,15 +236,16 @@ export function WorkflowNode({
           onPointerDown={event => event.stopPropagation()}
           onDoubleClick={event => {
             event.stopPropagation();
-            setEditingTitle(true);
+            if (onChangeTitle) setEditingTitle(true);
           }}
-          title="双击重命名"
+          title={onChangeTitle ? '双击重命名' : undefined}
         >
           <TitleIcon size={12} />
           <span className="workflow-node__title-text">{node.title}</span>
           <Pencil className="workflow-node__title-edit-icon" size={11} />
+          {mediaDimensions && <span className="workflow-node__title-meta">{mediaDimensions}</span>}
         </div>
-      ))}
+      )}
       <div className="workflow-node__body">
         {isMedia && (media.url || hasMediaReference) && <div className="workflow-node__drag-handle" data-workflow-drag-handle />}
         {node.type === 'image' && (media.url
@@ -203,7 +254,64 @@ export function WorkflowNode({
         {node.type === 'video' && (hasMediaReference
           ? videoActive
             ? media.url
-              ? <><video src={media.url} poster={posterMedia.url || undefined} controls preload="metadata" playsInline />{mediaActions}</>
+              ? <>
+                <video
+                  ref={videoRef}
+                  className="workflow-node__video"
+                  src={media.url}
+                  poster={posterMedia.url || undefined}
+                  preload="metadata"
+                  playsInline
+                  crossOrigin="anonymous"
+                  onLoadedMetadata={event => {
+                    event.currentTarget.volume = videoVolume;
+                    setVideoDuration(Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0);
+                  }}
+                  onDurationChange={event => setVideoDuration(Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0)}
+                  onTimeUpdate={event => setVideoCurrentTime(event.currentTarget.currentTime)}
+                  onPlay={() => setVideoPlaying(true)}
+                  onPause={() => setVideoPlaying(false)}
+                  onEnded={() => setVideoPlaying(false)}
+                  onClick={event => { event.stopPropagation(); void toggleVideo(); }}
+                />
+                <div className="workflow-node__video-controls" data-workflow-overlay onPointerDown={event => event.stopPropagation()}>
+                  <button type="button" aria-label={videoPlaying ? '暂停视频' : '播放视频'} onClick={() => void toggleVideo()}>
+                    {videoPlaying ? <Pause size={13} fill="currentColor" /> : <Play size={13} fill="currentColor" />}
+                  </button>
+                  <time>{formatVideoTime(videoCurrentTime)}</time>
+                  <input
+                    type="range"
+                    aria-label="视频进度"
+                    min={0}
+                    max={Math.max(videoDuration, 0.01)}
+                    step="0.01"
+                    value={Math.min(videoCurrentTime, Math.max(videoDuration, 0.01))}
+                    style={{ '--workflow-video-progress': `${videoDuration > 0 ? (videoCurrentTime / videoDuration) * 100 : 0}%` } as CSSProperties}
+                    onChange={event => {
+                      const next = Number(event.target.value);
+                      if (videoRef.current) videoRef.current.currentTime = next;
+                      setVideoCurrentTime(next);
+                    }}
+                  />
+                  <time>{formatVideoTime(videoDuration)}</time>
+                  <div className="workflow-node__video-volume">
+                    <button type="button" aria-label={videoVolume > 0 ? '静音视频' : '取消静音'} aria-expanded={volumeOpen} onClick={() => setVolumeOpen(open => !open)}>
+                      {videoVolume > 0 ? <Volume2 size={14} /> : <VolumeX size={14} />}
+                    </button>
+                    {volumeOpen && <div className="workflow-node__video-volume-popover">
+                      <input type="range" className="workflow-node__video-volume-slider" aria-label="视频音量" min={0} max={1} step={.01} value={videoVolume} onChange={event => updateVolume(Number(event.target.value))} />
+                      <span>{Math.round(videoVolume * 100)}</span>
+                    </div>}
+                  </div>
+                  {onExtractFrame && <div className="workflow-node__video-frame">
+                    <button type="button" aria-label="视频截帧" aria-expanded={frameMenuOpen} onClick={() => setFrameMenuOpen(open => !open)}><Camera size={14} /></button>
+                    {frameMenuOpen && <div className="workflow-node__video-frame-menu" role="menu" aria-label="视频截帧">
+                      {([['first', '截取首帧'], ['last', '截取尾帧'], ['current', '截取当前帧']] as const).map(([position, label]) => <button key={position} type="button" role="menuitem" onClick={() => { onExtractFrame(position, position === 'current' ? videoCurrentTime : undefined); setFrameMenuOpen(false); }}>{label}</button>)}
+                    </div>}
+                  </div>}
+                </div>
+                {mediaActions}
+              </>
               : <div className="workflow-node__empty"><Video size={26} /><span>{mediaError || '正在加载视频'}</span>{mediaActions}</div>
             : <>{posterMedia.url
               ? <img src={posterMedia.url} alt={`${node.title} 视频封面`} draggable={false} loading="lazy" data-workflow-media-preview />
@@ -302,6 +410,12 @@ function OperationNodeCard({ node, onRun }: { node: WorkflowNodeData; onRun: () 
 function formatDuration(durationMs: number) {
   const seconds = Math.max(0, Math.round(durationMs / 1000));
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+}
+
+function formatVideoTime(seconds: number) {
+  const safeSeconds = Number.isFinite(seconds) ? Math.max(0, Math.floor(seconds)) : 0;
+  const minutes = Math.floor(safeSeconds / 60);
+  return `${minutes}:${String(safeSeconds % 60).padStart(2, '0')}`;
 }
 
 function formatBytes(bytes: number) {

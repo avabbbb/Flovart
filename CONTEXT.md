@@ -63,8 +63,16 @@ Workflow Draft 中可编辑、可重跑的单步结果型处理步骤，使用�
 避免混用：Agent 聊天消息、输出媒体 metadata 中的 Prompt 副本、额外 InlinePrompt/NodePrompt 表面、单次 Provider Request 文本。
 
 **Operation Input Binding（操作输入绑定）**：
-媒体/Text/Artifact 到目标 Workflow Operation Node 的唯一类型化输入关系，保存稳定绑定 ID、来源对象、目标操作、输入角色与顺序；画布连线和 PromptBar 的 `@` chip 是同一 Binding 的两个视图，从任一入口添加、改角色、排序或删除都会同步另一边。
+媒体/Text/Artifact 到目标 Workflow Operation Node 的唯一类型化输入关系，保存稳定绑定 ID、来源对象、目标操作、输入角色与顺序；画布连线和 PromptBar 的 `@` chip 是同一 Binding 的两个视图，从任一入口添加、改角色、排序、替换或删除都会同步另一边。替换只原子更新当前目标的 Binding 来源并保留 Binding ID、角色和顺序，不修改共享源节点，也不影响该源节点的其它下游。
 避免混用：独立 `mentionedNodeIds`、`referenceNodeIds`、`imageReferenceOrder` 与无角色 connection 副本、仅存在于渲染层的连线。
+
+**Stable Node Alias（稳定节点别名）**：
+Workflow 项目内按媒体类型单调分配且永不重排、永不复用的节点别名，例如 `图片1`、`图片2`、`视频1`；它既是节点的默认显示名，也是 PromptBar `@` 引用的稳定解析键。删除、移动或新增其他节点不得改变既有别名；用户改成自定义标题后，自定义标题与原稳定别名都解析到同一节点，重复自定义标题不得覆盖稳定别名的唯一性。
+避免混用：节点数组下标、画布位置或图层顺序、可变显示标题、内部 Node ID。
+
+**Prompt Reference Hydration（提示词引用水合）**：
+打开或导入只含纯文本的旧 Prompt 时，把唯一精确命中的 `@稳定节点别名`、`@唯一自定义标题` 或 `@素材别名` 幂等转换为结构化 Mention 与真实 Operation Input Binding；若唯一命中的是尚未出现在画布上的素材库资产，则先物化一个可见引用节点，再建立 Binding、chip 与画布连线。不存在、重复或歧义名称保留为普通文字并明确提示，不做模糊猜测，也不重复创建节点或连线。
+避免混用：仅改变文字颜色的假引用、每次渲染都重复建节点、无画布对象的隐藏媒体输入、模糊名称匹配。
 
 **Execution Prompt Snapshot（执行提示词快照）**：
 某次 ProviderAttempt 实际使用的不可变 Prompt 记录，绑定源 Operation Prompt Document Hash，保存最终渲染文本、引用绑定、规范化参数和编译器版本；增强、翻译、模板与 Provider 适配产生的差异可查看但不反向覆盖可编辑文档，明确“采用到 PromptBar”才创建新的 Draft Action。

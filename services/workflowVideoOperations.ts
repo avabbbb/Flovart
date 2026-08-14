@@ -126,13 +126,14 @@ export async function runWorkflowVideoExtractFrameOperation(
   sourceNodeId: string,
   position: VideoFramePosition,
   runtime: WorkflowVideoOperationRuntime,
+  currentTimeSec?: number,
 ): Promise<WorkflowOperationOutcome> {
   const started = await startWorkflowOperation({
     runtime, projectId, capabilityId: 'video.extract-frame@1',
     sources: [{ nodeId: sourceNodeId, role: 'source_video' }],
-    parameters: { position },
+    parameters: { position, ...(position === 'current' ? { currentTimeSec: Math.max(0, currentTimeSec || 0) } : {}) },
   });
-  return executeVideoExtractFrame(projectId, started, position, runtime);
+  return executeVideoExtractFrame(projectId, started, position, runtime, currentTimeSec);
 }
 
 async function executeVideoExtractFrame(
@@ -140,16 +141,18 @@ async function executeVideoExtractFrame(
   started: StartedWorkflowOperation,
   position: VideoFramePosition,
   runtime: WorkflowVideoOperationRuntime,
+  currentTimeSec?: number,
 ) {
   try {
     const source = started.sourceNodes[0];
     const blob = await loadWorkflowOperationSourceBlob(source, runtime);
-    const frame = await (runtime.executeVideoFrame || extractVideoFrame)(blob, position);
+    const frame = await (runtime.executeVideoFrame || extractVideoFrame)(blob, position, currentTimeSec);
     const baseName = (source.metadata.name || 'video').replace(/\.[^.]+$/, '');
+    const frameLabel = position === 'first' ? '首帧' : position === 'last' ? '尾帧' : '当前帧';
     return await commitWorkflowOperation(runtime, projectId, started, [{
       blob: frame.blob,
-      title: position === 'first' ? '首帧' : '尾帧',
-      fileName: `${position === 'first' ? 'first-frame' : 'last-frame'}-${baseName}.png`,
+      title: frameLabel,
+      fileName: `${position === 'first' ? 'first-frame' : position === 'last' ? 'last-frame' : 'current-frame'}-${baseName}.png`,
       mimeType: frame.blob.type || 'image/png',
       role: 'result_image',
     }]);
@@ -177,8 +180,8 @@ export async function rerunWorkflowVideoOperation(
     return executeVideoMerge(projectId, await restartWorkflowOperation(runtime, projectId, operationNodeId), runtime);
   }
   if (record.capabilityId === 'video.extract-frame@1') {
-    const { position } = parseWorkflowOperationParameters(record.capabilityId, record.recipe.parameters) as { position: VideoFramePosition };
-    return executeVideoExtractFrame(projectId, await restartWorkflowOperation(runtime, projectId, operationNodeId), position, runtime);
+    const { position, currentTimeSec } = parseWorkflowOperationParameters(record.capabilityId, record.recipe.parameters) as { position: VideoFramePosition; currentTimeSec?: number };
+    return executeVideoExtractFrame(projectId, await restartWorkflowOperation(runtime, projectId, operationNodeId), position, runtime, currentTimeSec);
   }
   throw new Error('该 Operation 不是可重跑的视频处理步骤');
 }

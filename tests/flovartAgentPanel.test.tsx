@@ -68,6 +68,30 @@ describe('Flovart Agent panel', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: '发送' })).toBeEnabled());
   });
 
+  it('mirrors the Agent opening flow with a Skill card, searchable picker, and autonomy menu', async () => {
+    const project = { ...createWorkflowProject('Agent 空态'), id: 'project-empty' };
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      sessionId: 'session-empty', projectId: project.id, running: false, messages: [],
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } })));
+
+    render(<FlovartAgentPanel project={project} onActivityChange={vi.fn()} onOpenSettings={vi.fn()} />);
+
+    expect(await screen.findByText('每个 Skill，都是一个开场')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '选择制作 Skill' }));
+    expect(screen.getByRole('dialog', { name: 'Skill' })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: '搜索 Skill' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '关闭 Skill' }));
+
+    fireEvent.click(screen.getByRole('button', { name: '生成模式' }));
+    expect(screen.getByText('每个写操作前询问')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('menuitem', { name: /自动模式/ }));
+    expect(screen.getByRole('button', { name: '生成模式' })).toHaveTextContent('自动');
+
+    fireEvent.click(screen.getByRole('button', { name: '使用 Skill VOX Skill' }));
+    expect(await screen.findByRole('button', { name: '移除 VOX Skill' })).toBeInTheDocument();
+    expect((screen.getByLabelText('开始你的创作，或者 @ 引用工作流/节点/资源') as HTMLTextAreaElement).value).toContain('$vox-director');
+  });
+
   it('applies reversible Agent edits directly and confirms only irreversible deletes', async () => {
     const project = { ...createWorkflowProject('Agent 项目'), id: 'project-1' };
     const onActivityChange = vi.fn();
@@ -118,6 +142,32 @@ describe('Flovart Agent panel', () => {
     expect(useWorkflowStore.getState().projects[0].nodes).toHaveLength(1);
   });
 
+  it('pauses reversible writes in manual mode without bypassing high-risk confirmation', async () => {
+    const project = { ...createWorkflowProject('手动 Agent 项目'), id: 'project-manual' };
+    useWorkflowStore.setState({ projects: [project], activeProjectId: project.id });
+    vi.stubGlobal('EventSource', StubEventSource);
+    vi.stubGlobal('fetch', vi.fn(async input => new Response(JSON.stringify(String(input).includes('/agent/flovart/session')
+      ? { sessionId: 'session-manual', projectId: project.id, running: false, messages: [] }
+      : { ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } })));
+
+    render(<FlovartAgentPanel project={project} onActivityChange={vi.fn()} onOpenSettings={vi.fn()} />);
+    await waitFor(() => expect(StubEventSource.current).toBeDefined());
+    fireEvent.click(screen.getByRole('button', { name: '生成模式' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: /手动模式/ }));
+    StubEventSource.current!.emit('tool_call', {
+      requestId: 'request-manual-create',
+      envelope: {
+        id: 'command-manual-create', command: 'workflow.node.create',
+        args: { type: 'text', title: '待确认大纲' }, source: 'agent', idempotencyKey: 'manual-create-v1',
+      },
+    });
+
+    expect(await screen.findByText('Agent 请求确认')).toBeInTheDocument();
+    expect(useWorkflowStore.getState().projects[0].nodes).toHaveLength(0);
+    fireEvent.click(screen.getByRole('button', { name: '允许' }));
+    await waitFor(() => expect(useWorkflowStore.getState().projects[0].nodes).toHaveLength(1));
+  });
+
   it('sends a selected Production Skill as a typed attachment to the main PI turn', async () => {
     const project = { ...createWorkflowProject('Agent 项目'), id: 'project-1' };
     const turnBodies: unknown[] = [];
@@ -155,6 +205,32 @@ describe('Flovart Agent panel', () => {
         contentHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
       }),
     })]));
+  });
+
+  it('selects @ workflow and asset references, focuses node chips, and sends bound context', async () => {
+    const project = { ...createWorkflowProject('引用项目'), id: 'project-reference', nodes: [
+      { ...createWorkflowProject('临时').nodes[0], id: 'video-node', type: 'video' as const, title: '主视频' },
+    ] };
+    const onFocusNode = vi.fn();
+    const turnBodies: Array<{ prompt?: string }> = [];
+    vi.stubGlobal('fetch', vi.fn(async (input, init) => {
+      if (String(input).includes('/agent/flovart/turn')) {
+        turnBodies.push(JSON.parse(String(init?.body)));
+        return new Response('', { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
+      }
+      return new Response(JSON.stringify({ sessionId: 'session-ref', projectId: project.id, running: false, messages: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }));
+    render(<FlovartAgentPanel project={project} onActivityChange={vi.fn()} onOpenSettings={vi.fn()} onFocusNode={onFocusNode} assetLibrary={{ folders: [], items: [{ id: 'asset-1', name: '角色定帧', folderIds: [], tags: [], dataUrl: 'data:image/png;base64,AA==', mimeType: 'image/png', width: 512, height: 512, createdAt: 1 }] }} />);
+    const input = await screen.findByPlaceholderText('告诉 Flovart Agent 你想制作什么');
+    fireEvent.change(input, { target: { value: '参考 @主' } });
+    fireEvent.click(screen.getByRole('option', { name: /主视频/ }));
+    fireEvent.click(screen.getByRole('button', { name: '定位节点 主视频' }));
+    expect(onFocusNode).toHaveBeenCalledWith('video-node');
+    fireEvent.change(input, { target: { value: '和 @角色' } });
+    fireEvent.click(screen.getByRole('option', { name: /角色定帧/ }));
+    fireEvent.click(screen.getByRole('button', { name: '发送' }));
+    await waitFor(() => expect(turnBodies[0]?.prompt).toContain('@主视频（工作流节点 nodeId=video-node）'));
+    expect(turnBodies[0]?.prompt).toContain('@角色定帧（我的素材 assetId=asset-1）');
   });
 
   it('keeps a queued Production Skill when the restored session snapshot arrives later', async () => {

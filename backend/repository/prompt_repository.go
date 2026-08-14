@@ -3,8 +3,9 @@ package repository
 import (
 	"errors"
 
-	"gorm.io/gorm"
 	"flovart/hub/model"
+	"github.com/lib/pq"
+	"gorm.io/gorm"
 )
 
 type PromptRepository struct {
@@ -54,7 +55,7 @@ func (r *PromptRepository) List(q model.Query) (*model.PageResult[model.PromptPa
 		tx = tx.Where("mode = ?", q.Mode)
 	}
 	if len(q.Tags) > 0 {
-		tx = tx.Where("tags && ?", "{"+joinTags(q.Tags)+"}")
+		tx = tx.Where("tags && ?", pq.Array(q.Tags))
 	}
 	var total int64
 	if err := tx.Count(&total).Error; err != nil {
@@ -120,15 +121,4 @@ func (r *PromptRepository) ToggleLike(userID, packID string) (bool, error) {
 		return false, err
 	}
 	return true, nil
-}
-
-func joinTags(tags []string) string {
-	out := ""
-	for i, t := range tags {
-		if i > 0 {
-			out += ","
-		}
-		out += t
-	}
-	return out
 }
