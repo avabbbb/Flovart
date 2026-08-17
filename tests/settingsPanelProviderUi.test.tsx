@@ -184,7 +184,8 @@ describe('SettingsPanel provider configuration UI', () => {
     fireEvent.click(screen.getByRole('button', { name: /添加 API Key|添加供应商/i }));
 
     expect(screen.getByText('RunningHub 标准模型')).toBeTruthy();
-    expect(screen.getByText('点击获取官方模型')).toBeTruthy();
+    expect(screen.getByText('RunningHub 海外站')).toBeTruthy();
+    expect(screen.getAllByText('点击获取官方模型').length).toBeGreaterThanOrEqual(1);
     expect(screen.queryByText('全能图片G-2.0-图生图-低价渠道版')).toBeNull();
     expect(screen.queryByText('全能视频V3.1-fast-图生视频-低价渠道版')).toBeNull();
   });

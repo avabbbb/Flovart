@@ -345,6 +345,18 @@ const PROVIDER_PRESETS: ProviderPreset[] = [
         featured: true,
     },
     {
+        id: 'runninghub-global',
+        name: 'RunningHub 海外站',
+        shortName: 'RH',
+        provider: 'runningHub',
+        websiteUrl: 'https://www.runninghub.ai',
+        baseUrl: 'https://www.runninghub.ai/openapi/v2',
+        capabilities: ['image', 'video'],
+        requestFormat: 'native',
+        authHeaderName: 'Authorization',
+        authScheme: 'Bearer',
+    },
+    {
         id: 'seedance-2',
         name: 'Seedance 2.0',
         shortName: 'S2',
