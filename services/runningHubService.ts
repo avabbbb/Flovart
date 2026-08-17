@@ -136,6 +136,46 @@ export const BUILTIN_RUNNINGHUB_MODELS: Array<{ id: string; capability: 'image' 
 // RunningHub 产品展示名 → 真实 API endpoint 的别名映射。
 // 用户在设置页手填 RH 官网"产品名"（如 nano-banana-pro/edit-channel-low-price）时，
 // 通过这里自动重写为真实的 /openapi/v2/<endpoint> 路径，避免 404。
+// 家族别名：不含版本的家族名 -> 该系列当前默认端点。
+// 官方发布新版本时：用户可直接填新 endpoint（未命中 alias 时原样透传），无需更新本表。
+const RUNNINGHUB_FAMILY_ALIASES: Record<string, string> = {
+  '可灵文生视频': 'kling-video-o3-pro/text-to-video',
+  '可灵图生视频': 'kling-video-o3-pro/image-to-video',
+  '可灵首尾帧生视频': 'kling-video-o3-pro/start-end-to-video',
+  '可灵参考生视频': 'kling-video-o3-pro/reference-to-video',
+  '可灵文生视频pro': 'kling-video-o3-pro/text-to-video',
+  '可灵图生视频pro': 'kling-video-o3-pro/image-to-video',
+  '可灵文生视频std': 'kling-video-o3-std/text-to-video',
+  '可灵图生视频std': 'kling-video-o3-std/image-to-video',
+  '万相文生视频': 'rhart-video/wan-2.7/text-to-video',
+  '万相图生视频': 'rhart-video/wan-2.7/image-to-video',
+  '万相参考生视频': 'rhart-video/wan-2.7/reference-to-video',
+  '万相文生图': 'rhart-image/wan-2.7/text-to-image',
+  '万相图生图': 'rhart-image/wan-2.7/image-to-image',
+  'vidu文生视频': 'vidu/text-to-video-q3-pro',
+  'vidu图生视频': 'vidu/image-to-video-q3-pro',
+  'vidu首尾帧生视频': 'vidu/start-end-to-video-q3-pro',
+  'Vidu文生视频': 'vidu/text-to-video-q3-pro',
+  'Vidu图生视频': 'vidu/image-to-video-q3-pro',
+  'Vidu首尾帧生视频': 'vidu/start-end-to-video-q3-pro',
+  '海螺文生视频': 'rhart-video/hailuo-2.3/text-to-video',
+  '海螺图生视频': 'rhart-video/hailuo-2.3/image-to-video',
+  'seedance文生视频': 'rhart-video/sparkvideo-2.5/text-to-video',
+  'seedance图生视频': 'rhart-video/sparkvideo-2.5/image-to-video',
+  'seedance多模态视频': 'rhart-video/sparkvideo-2.5/multimodal-video',
+  'seedream文生图': 'rhart-image/seedream-v5/text-to-image',
+  'seedream图生图': 'rhart-image/seedream-v5/image-to-image',
+  '全能视频X文生视频': 'rhart-video-x-v1.5/text-to-video',
+  '全能视频X图生视频': 'rhart-video-x-v1.5/image-to-video',
+  '全能视频X参考生视频': 'rhart-video-x-v1.5/reference-to-video',
+  'skyreels文生视频': 'skyreels-v4/text-to-video-std',
+  'skyreels图生视频': 'skyreels-v4/image-to-video-std',
+  'miniMax-H3文生视频': 'rhart-video/minimax-h3/text-to-video',
+  'miniMax-H3图生视频': 'rhart-video/minimax-h3/image-to-video',
+  'flux文生视频': 'rhart-video/flux-3/text-to-video',
+  'flux图生视频': 'rhart-video/flux-3/image-to-video',
+};
+
 const RUNNINGHUB_PRODUCT_ALIASES: Record<string, string> = {
   'nano-banana/edit-channel-low-price': 'rhart-image-v1/edit',
   'nano-banana/edit-official-stable': 'rhart-image-v1-official/edit',
@@ -470,6 +510,10 @@ export function normalizeRunningHubModelEndpoint(modelEndpoint?: string) {
   if (docEndpoint) return docEndpoint;
   const alias = RUNNINGHUB_PRODUCT_ALIASES[value.toLowerCase()];
   if (alias) return alias;
+  // 家族名匹配：不含版本的家族名（含空格/大小写归一）落到该系列默认端点
+  const familyKey = value.toLowerCase().replace(/\s+/g, '');
+  const familyAlias = RUNNINGHUB_FAMILY_ALIASES[familyKey];
+  if (familyAlias) return familyAlias;
   return value;
 }
 
