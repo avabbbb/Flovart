@@ -419,7 +419,8 @@ export const FREE_KEY_LINKS: { provider: AIProvider; label: string; url: string;
 
 // ── 模型缓存 ──────────────────────────────────────
 const MODEL_CACHE_TTL = 60 * 60 * 1000; // 1 小时
-const CACHE_KEY_PREFIX = 'modelCache.';
+// 缓存 key 带版本：模型目录/展示逻辑变更时 bump，强制旧缓存失效重拉
+const CACHE_KEY_PREFIX = 'modelCacheV3.';
 const modelCacheStorage = localforage.createInstance({ name: 'flovart', storeName: 'provider_model_cache' });
 
 interface CachedModels {
