@@ -241,6 +241,13 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
       </div>
 
       <div className="flex min-w-0 items-center justify-end gap-0.5 sm:gap-1">
+        <span
+          title="开发构建标识：刷新后时间变化即代表加载了最新代码"
+          className="hidden items-center rounded px-1.5 py-0.5 text-[9px] font-semibold lg:inline-flex"
+          style={{ color: 'var(--isl-ink-ghost)', background: 'var(--isl-surface-2)' }}
+        >
+          dev {new Date().toLocaleTimeString('zh-CN', { hour12: false })}
+        </span>
         <Link
           to="/prompts"
           className="isl-icon-btn max-sm:!hidden h-8 items-center gap-1.5 px-2 sm:!flex"
