@@ -7,7 +7,7 @@
 import localforage from 'localforage';
 import type { AIProvider, AICapability } from '../types';
 import { getOpenAICompatibleBaseUrlCandidates, normalizeProviderBaseUrl } from './baseUrl';
-import { isLikelyRunningHubModelEndpoint, normalizeRunningHubModelEndpoint, rhTestApiKey, BUILTIN_RUNNINGHUB_MODELS } from './runningHubService';
+import { isLikelyRunningHubModelEndpoint, normalizeRunningHubModelEndpoint, rhTestApiKey, BUILTIN_RUNNINGHUB_MODELS, stripRunningHubVersionName } from './runningHubService';
 
 export interface FetchedModel {
     id: string;
@@ -327,16 +327,25 @@ async function fetchRunningHubModels(apiKey: string, baseUrl?: string): Promise<
 
     const builtinModels: FetchedModel[] = BUILTIN_RUNNINGHUB_MODELS.map(item => ({
         id: item.id,
-        name: item.id,
+        name: stripRunningHubVersionName(item.description) || item.id,
         capability: item.capability,
         description: item.description,
     }));
 
     const models = mergeModelLists(builtinModels, pageModels);
+    // 展示去重：同能力 + 同去版本名 只保留一条（官方更新版本时列表不膨胀）
+    const uniqueModels: FetchedModel[] = [];
+    const seen = new Set<string>();
+    for (const model of models) {
+        const key = `${model.capability}|${stripRunningHubVersionName(model.name || model.id).toLowerCase()}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        uniqueModels.push({ ...model, name: stripRunningHubVersionName(model.name || model.id) || model.id });
+    }
     return {
         ok: true,
-        models,
-        capabilitySummary: summarizeCapabilities(models),
+        models: uniqueModels,
+        capabilitySummary: summarizeCapabilities(uniqueModels),
         effectiveBaseUrl,
     };
 }
@@ -458,11 +467,21 @@ export async function fetchModelsWithCache(
             if (provider === 'runningHub') {
                 const builtinModels: FetchedModel[] = BUILTIN_RUNNINGHUB_MODELS.map(item => ({
                     id: item.id,
-                    name: item.id,
+                    name: stripRunningHubVersionName(item.description) || item.id,
                     capability: item.capability,
                     description: item.description,
                 }));
-                models = mergeModelLists(builtinModels, models);
+                models = mergeModelLists(builtinModels, models).map(model => ({
+                    ...model,
+                    name: stripRunningHubVersionName(model.name || model.id) || model.id,
+                }));
+                const seenCache = new Set<string>();
+                models = models.filter(model => {
+                    const key = `${model.capability}|${stripRunningHubVersionName(model.name || model.id).toLowerCase()}`;
+                    if (seenCache.has(key)) return false;
+                    seenCache.add(key);
+                    return true;
+                });
             }
             return {
                 ok: true,

@@ -17,6 +17,28 @@ const RUNNINGHUB_DETAIL_ENDPOINTS: Record<string, string> = {
 
 // RunningHub 标准模型包：只内置当前项目实际使用的官方详情页端点。
 // 这些端点使用 /openapi/v2/<endpoint> + Bearer 认证。
+
+// ── 展示名归一化：去掉版本与渠道标记，只保留「家族 + 模式」（如「可灵 o3-pro 文生视频」→「可灵 文生视频」）。
+// 列表展示用；提交仍用 endpoint id，不受影响。官方出新版本时展示名自动合并，无需更新。
+const RUNNINGHUB_VERSION_RE = /\b(?:o\d+(?:-[a-z0-9]+)?|v?\d+\.\d+(?:-[a-z0-9.]+)?|v\d+(?:\.\d+)?|q\d+(?:-[a-z0-9]+)?|-[a-z]{1,2}\d+(?:\.\d+)?)\b/gi;
+const RUNNINGHUB_CHANNEL_RE = /\s*(?:官方稳定版|低价渠道版|低价通道|通道版|已下架|标准版|基础版|编辑版|预览版)\s*/g;
+const RUNNINGHUB_TIER_RE = /\s*(?:fast|pro|std|lite|turbo|mini|preview|hd|ultra)\b/gi;
+
+export function stripRunningHubVersionName(name: string): string {
+  if (!name) return '';
+  // 英文 endpoint 路径（含 /）不做版本清洗，原样返回，避免拆坏
+  if (/^[A-Za-z0-9._/-]+\/[A-Za-z0-9._/-]+$/.test(name)) return name;
+  return name
+    .replace(RUNNINGHUB_CHANNEL_RE, ' ')
+    .replace(RUNNINGHUB_VERSION_RE, ' ')
+    .replace(RUNNINGHUB_TIER_RE, ' ')
+    .replace(/[（(]?官方[^）)]*[）)]?/g, ' ')
+    .replace(/-+/g, ' ')
+    .replace(/[()（）]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 export const BUILTIN_RUNNINGHUB_MODELS: Array<{ id: string; capability: 'image' | 'video'; description: string }> = [
   { id: RUNNINGHUB_DETAIL_ENDPOINTS['2046503667076751361'], capability: 'image', description: '全能图片 G-2.0 图生图' },
   { id: RUNNINGHUB_DETAIL_ENDPOINTS['2027196343409463297'], capability: 'image', description: '全能图片 V2 图生图' },
