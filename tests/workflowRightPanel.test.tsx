@@ -51,15 +51,17 @@ describe('Workflow right panel', () => {
     vi.unstubAllGlobals();
   });
 
-  it('opens by default and persists its visibility like the Canvas panel', () => {
+  it('starts collapsed by default and persists its visibility like the Canvas panel', () => {
     renderWorkspace();
 
     const close = screen.getByTitle('收起右侧面板');
     const drawer = close.closest('aside') as HTMLElement;
-    expect(drawer.style.opacity).toBe('1');
-    expect(drawer.style.pointerEvents).toBe('auto');
+    expect(drawer.style.opacity).toBe('0');
+    expect(drawer.style.pointerEvents).toBe('none');
+    fireEvent.click(screen.getByRole('button', { name: '打开右侧面板' }));
+    expect(localStorage.getItem('workflowRightPanelOpenV2')).toBe('true');
     fireEvent.click(close);
-    expect(localStorage.getItem('workflowRightPanelOpen')).toBe('false');
+    expect(localStorage.getItem('workflowRightPanelOpenV2')).toBe('false');
   });
 
   it('starts closed on narrow screens so the drawer cannot block first-run Workflow actions', () => {

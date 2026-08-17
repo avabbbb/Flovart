@@ -461,7 +461,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
 
     const triggerClass = `inline-flex items-center gap-1 rounded px-1.5 font-semibold transition-colors hover:bg-[var(--isl-surface-2)] ${compactMode ? 'h-6 text-[10px]' : 'h-7 text-[11px]'}`;
     const activeTriggerClass = 'text-[var(--isl-mint-deep)]';
-    const popoverWidth = expandedPanel === 'model' ? 660 : expandedPanel === 'submode' ? 360 : expandedPanel === 'parameters' ? 430 : expandedPanel === 'more' ? 480 : expandedPanel === 'batch' ? 300 : 400;
+    const popoverWidth = expandedPanel === 'model' ? 660 : expandedPanel === 'submode' ? 360 : expandedPanel === 'parameters' ? 430 : expandedPanel === 'more' ? 480 : expandedPanel === 'batch' ? 100 : 400;
     const shellClass = 'isl-shell';
 
     const editorReferenceItems = useMemo<MentionItem[]>(() => mentionItems || [], [mentionItems]);
@@ -1047,69 +1047,67 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                             {expandedPanel === 'model' && (
                                 <>
                                     <div className="mb-1.5 px-1 text-[11px] font-semibold" style={{ color: 'var(--isl-ink)' }}>选择模型</div>
-                                    <div data-testid="prompt-model-progressive" data-density="compact" className="flex h-[280px] max-h-[68vh] overflow-hidden rounded-[6px] border" style={{ borderColor: 'var(--isl-border)' }}>
-                                        {productModels.length > 0 ? (
-                                            <>
-                                                <div className="w-[215px] shrink-0 border-r p-1" style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-surface-sunk)' }}>
-                                                    <div className="px-1.5 pb-1 pt-0.5 text-[10px] font-bold" style={{ color: 'var(--isl-ink-soft)' }}>筛选</div>
-                                                    <div className="mb-1.5 flex flex-wrap gap-1 px-0.5">
-                                                        <button type="button" onClick={() => setModelCapabilityFilter('all')} className={`h-6 rounded-full px-2 text-[10px] font-bold ${modelCapabilityFilter === 'all' ? 'isl-chip--active' : 'isl-chip'}`}>全部</button>
-                                                        {modelCapabilityFilters.map(mode => <button key={mode} type="button" onClick={() => setModelCapabilityFilter(mode)} className={`h-6 rounded-full px-2 text-[10px] font-bold ${modelCapabilityFilter === mode ? 'isl-chip--active' : 'isl-chip'}`}>{PRODUCT_MODE_LABELS[mode]}</button>)}
-                                                    </div>
-                                                    <div className="max-h-[250px] space-y-px overflow-y-auto pr-0.5 isl-scrollbar">
-                                                        {filteredProductModelGroups.map(group => {
-                                                            const active = displayedModelGroup?.family === group.family;
-                                                            const connectedCount = group.models.filter(product => isProductModelConfigured(product.id, userApiKeys)).length;
-                                                            return <button
-                                                                key={group.family}
-                                                                type="button"
-                                                                onMouseEnter={() => setActiveModelFamily(group.family)}
-                                                                onFocus={() => setActiveModelFamily(group.family)}
-                                                                onClick={() => setActiveModelFamily(group.family)}
-                                                                className={`flex h-8 w-full items-center gap-2 rounded-[5px] px-2 text-left transition ${active ? 'bg-[var(--isl-mint-bg)] text-[var(--isl-mint-deep)]' : 'hover:bg-[var(--isl-surface-2)]'}`}
-                                                            >
-                                                                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-[4px] text-[8px] font-black" style={{ background: active ? 'var(--isl-mint)' : 'var(--isl-surface-2)', color: active ? '#fff' : 'var(--isl-ink-soft)' }}>{group.family.slice(0, 2).toUpperCase()}</span>
-                                                                <span className="min-w-0 flex-1"><span className="block truncate text-[11px] font-extrabold" style={{ color: active ? 'var(--isl-mint-deep)' : 'var(--isl-ink)' }}>{group.family}</span><span className="block text-[8px]" style={{ color: 'var(--isl-ink-ghost)' }}>{group.company} · {connectedCount}/{group.models.length}</span></span>
-                                                                <span aria-hidden="true" style={{ color: 'var(--isl-ink-ghost)' }}>›</span>
-                                                            </button>;
-                                                        })}
-                                                    </div>
-                                                </div>
-                                                <div className="min-w-0 flex-1 p-1.5" style={{ background: 'var(--isl-surface)' }}>
-                                                    <div className="px-1.5 pb-1 pt-0.5 text-[10px] font-bold" style={{ color: 'var(--isl-ink-soft)' }}>{displayedModelGroup?.family || '模型版本'}</div>
-                                                    <div className="max-h-[275px] space-y-0.5 overflow-y-auto pr-0.5 isl-scrollbar">
-                                                        {displayedModelGroup?.models.map(product => {
-                                                            const configured = isProductModelConfigured(product.id, userApiKeys);
-                                                            const selected = activeModel === product.id || getProductModel(activeModel)?.id === product.id;
-                                                            const route = resolveAnyProductRoute(product.id, userApiKeys);
-                                                            return <button key={product.id} type="button" onClick={() => {
-                                                                if (!configured) { onOpenSettings?.(); setExpandedPanel(null); return; }
-                                                                changeActiveModel(product.id);
-                                                                setExpandedPanel(null);
-                                                            }} className={`w-full rounded-[5px] border px-2 py-1 text-left transition ${selected ? 'border-[var(--isl-mint)] bg-[var(--isl-mint-bg)]' : 'border-transparent hover:border-[var(--isl-border)] hover:bg-[var(--isl-surface-2)]'} ${configured ? '' : 'opacity-55'}`}>
-                                                                <span className="flex items-center gap-2"><span className="min-w-0 flex-1 truncate text-[11px] font-semibold" style={{ color: selected ? 'var(--isl-mint-deep)' : 'var(--isl-ink)' }}>{product.name}</span><span className="shrink-0 text-[9px] font-bold" style={{ color: configured ? 'var(--isl-mint-deep)' : 'var(--isl-ink-ghost)' }}>{configured ? product.badge || '已连接' : '去配置'}</span></span>
-                                                                <span className="mt-0.5 flex flex-wrap gap-0.5">{product.capabilities.modes.map(mode => <span key={mode} className="rounded-full px-1.5 py-px text-[8px]" style={{ background: 'var(--isl-surface-2)', color: 'var(--isl-ink-soft)' }}>{PRODUCT_MODE_LABELS[mode]}</span>)}</span>
-                                                                {route && <span className="mt-0.5 block truncate text-[8px]" style={{ color: 'var(--isl-ink-ghost)' }}>{route.key.name || route.key.provider} · {route.routeId}</span>}
-                                                            </button>;
-                                                        })}
-                                                    </div>
-                                                </div>
-                                            </>
-                                        ) : (
-                                            <div className="w-full p-2">
-                                                {generationMode === 'text' ? <>
-                                                    <div className="px-2 pb-2 text-[11px] font-bold" style={{ color: 'var(--isl-ink-soft)' }}>Agent 文本映射</div>
-                                                    <div className="rounded-xl bg-[var(--isl-surface-2)] px-3 py-3 text-xs" style={{ color: 'var(--isl-ink)' }}>{activeRoute ? `${activeRoute.key.name || activeRoute.key.provider} · ${activeRoute.routeId}` : '尚未配置 Agent 文本线路'}</div>
-                                                    <button type="button" onClick={() => { onOpenSettings?.(); setExpandedPanel(null); }} className="mt-2 w-full rounded-xl border border-[var(--isl-border)] px-3 py-2 text-xs font-bold">打开模型映射</button>
-                                                </> : <>
-                                                    <div className="px-2 pb-2 text-[11px] font-bold" style={{ color: 'var(--isl-ink-soft)' }}>选择模型</div>
-                                                    {currentModelOptions.map(model => <button key={model} type="button" onClick={() => { changeActiveModel(model); setExpandedPanel(null); }} className={`mb-1 w-full rounded-[6px] border px-2.5 py-2 text-left text-xs font-semibold ${activeModel === model ? 'border-[var(--isl-mint)] bg-[var(--isl-mint-bg)] text-[var(--isl-mint-deep)]' : 'border-transparent text-[var(--isl-ink)] hover:bg-[var(--isl-surface-2)]'}`}>{modelRefLabel(model, userApiKeys)}</button>)}
-                                                    {currentModelOptions.length === 0 && <div className="px-4 py-12 text-center text-xs" style={{ color: 'var(--isl-ink-soft)' }}>没有可用模型</div>}
-                                                </>}
-                                            </div>
-                                        )}
+                                    <div data-testid="prompt-model-progressive" data-density="compact" className="flex h-[320px] max-h-[68vh] overflow-hidden">
+                        {productModels.length > 0 ? (
+                            <>
+                                <div className="flex w-[150px] shrink-0 flex-col border-r p-1" style={{ borderColor: 'var(--isl-border)' }}>
+                                    <div className="flex flex-wrap gap-1 px-1 pb-1.5">
+                                        <button type="button" onClick={() => setModelCapabilityFilter('all')} className={`h-5 rounded-[5px] px-1.5 text-[9px] font-semibold ${modelCapabilityFilter === 'all' ? 'isl-chip--active' : 'isl-chip'}`}>全部</button>
+                                        {modelCapabilityFilters.map(mode => <button key={mode} type="button" onClick={() => setModelCapabilityFilter(mode)} className={`h-5 rounded-[5px] px-1.5 text-[9px] font-semibold ${modelCapabilityFilter === mode ? 'isl-chip--active' : 'isl-chip'}`}>{PRODUCT_MODE_LABELS[mode]}</button>)}
                                     </div>
-                                    {!activeRoute && activeProductModel && (
+                                    <div className="min-h-0 flex-1 space-y-px overflow-y-auto pr-0.5 isl-scrollbar">
+                                        {filteredProductModelGroups.map(group => {
+                                            const active = displayedModelGroup?.family === group.family;
+                                            return <button
+                                                key={group.family}
+                                                type="button"
+                                                onClick={() => setActiveModelFamily(active ? '' : group.family)}
+                                                className={`flex h-8 w-full items-center gap-1.5 rounded-[5px] px-1.5 text-left transition ${active ? 'bg-[var(--isl-mint-bg)]' : 'hover:bg-[var(--isl-surface-2)]'}`}
+                                                title={group.family}
+                                            >
+                                                <span className="min-w-0 flex-1"><span className="block truncate text-[11px] font-semibold" style={{ color: active ? 'var(--isl-mint-deep)' : 'var(--isl-ink)' }}>{group.family}</span><span className="block text-[8px]" style={{ color: 'var(--isl-ink-ghost)' }}>{group.company} · {group.models.filter(product => isProductModelConfigured(product.id, userApiKeys)).length}/{group.models.length}</span></span>
+                                                <span aria-hidden="true" style={{ color: 'var(--isl-ink-ghost)', fontSize: 9 }}>{active ? '‹' : '›'}</span>
+                                            </button>;
+                                        })}
+                                    </div>
+                                </div>
+                                <div className="min-w-0 flex-1 p-1">
+                                    <div className="px-1 pb-1 text-[10px] font-semibold" style={{ color: 'var(--isl-ink-soft)' }}>{displayedModelGroup?.family || '模型'}</div>
+                                    <div className="min-h-0 max-h-[270px] space-y-0.5 overflow-y-auto pr-0.5 isl-scrollbar">
+                                        {displayedModelGroup?.models.map(product => {
+                                            const configured = isProductModelConfigured(product.id, userApiKeys);
+                                            const selected = activeModel === product.id || getProductModel(activeModel)?.id === product.id;
+                                            const route = resolveAnyProductRoute(product.id, userApiKeys);
+                                            return <button key={product.id} type="button" onClick={() => {
+                                                if (!configured) { onOpenSettings?.(); setExpandedPanel(null); return; }
+                                                changeActiveModel(product.id);
+                                                setExpandedPanel(null);
+                                            }} className={`flex w-full items-center gap-2 rounded-[6px] border-0 px-2 py-1.5 text-left transition ${selected ? 'bg-[var(--isl-mint-bg)]' : 'hover:bg-[var(--isl-surface-2)]'} ${configured ? '' : 'opacity-55'}`}>
+                                                <span className="min-w-0 flex-1"><span className="block truncate text-[11px] font-semibold" style={{ color: selected ? 'var(--isl-mint-deep)' : 'var(--isl-ink)' }}>{product.name}</span>
+                                                    <span className="mt-px flex flex-wrap gap-1">{product.capabilities.modes.map(mode => <span key={mode} className="rounded-[4px] px-1 text-[8px]" style={{ background: 'var(--isl-surface-2)', color: 'var(--isl-ink-soft)' }}>{PRODUCT_MODE_LABELS[mode]}</span>)}</span>
+                                                    {route && <span className="mt-px block truncate text-[8px]" style={{ color: 'var(--isl-ink-ghost)' }}>{route.key.name || route.key.provider} · {route.routeId}</span>}
+                                                </span>
+                                                <span className="shrink-0 text-[9px] font-semibold" style={{ color: configured ? 'var(--isl-mint-deep)' : 'var(--isl-ink-ghost)' }}>{configured ? product.badge || '已连接' : '去配置'}</span>
+                                            </button>;
+                                        })}
+                                    </div>
+                                </div>
+                            </>
+                        ) : (
+                            <div className="w-full p-2">
+                                {generationMode === 'text' ? <>
+                                    <div className="px-2 pb-2 text-[11px] font-semibold" style={{ color: 'var(--isl-ink-soft)' }}>Agent 文本映射</div>
+                                    <div className="rounded-[6px] bg-[var(--isl-surface-2)] px-3 py-2.5 text-xs" style={{ color: 'var(--isl-ink)' }}>{activeRoute ? `${activeRoute.key.name || activeRoute.key.provider} · ${activeRoute.routeId}` : '尚未配置 Agent 文本线路'}</div>
+                                    <button type="button" onClick={() => { onOpenSettings?.(); setExpandedPanel(null); }} className="mt-2 w-full rounded-[6px] border border-[var(--isl-border)] px-3 py-2 text-xs font-semibold">打开模型映射</button>
+                                </> : <>
+                                    <div className="px-2 pb-2 text-[11px] font-semibold" style={{ color: 'var(--isl-ink-soft)' }}>选择模型</div>
+                                    {currentModelOptions.map(model => <button key={model} type="button" onClick={() => { changeActiveModel(model); setExpandedPanel(null); }} className={`mb-1 w-full rounded-[6px] border-0 px-2.5 py-2 text-left text-xs font-semibold ${activeModel === model ? 'bg-[var(--isl-mint-bg)] text-[var(--isl-mint-deep)]' : 'text-[var(--isl-ink)] hover:bg-[var(--isl-surface-2)]'}`}>{modelRefLabel(model, userApiKeys)}</button>)}
+                                    {currentModelOptions.length === 0 && <div className="px-4 py-12 text-center text-xs" style={{ color: 'var(--isl-ink-soft)' }}>没有可用模型</div>}
+                                </>}
+                            </div>
+                        )}
+                    </div>
+                    {!activeRoute && activeProductModel && (
                                         <button type="button" onClick={onOpenSettings} className="mx-1 mt-1 flex w-[calc(100%-0.5rem)] items-center justify-between rounded-[6px] bg-[var(--isl-surface-2)] px-2.5 py-1.5 text-[11px] font-semibold">
                                             <span>{activeProductModel.name} 尚未映射 API 线路</span><span>去配置 →</span>
                                         </button>
@@ -1119,7 +1117,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                             {expandedPanel === 'submode' && generationMode === 'video' && (
                                 <div data-testid="prompt-video-mode-panel" data-density="compact">
                                     <div className="mb-2 px-1 text-xs font-extrabold" style={{ color: 'var(--isl-ink)' }}>生成方式</div>
-                                    <div className="grid grid-cols-2 gap-1.5 px-0.5 pb-0.5">
+                                    <div className="flex flex-col gap-1 px-0.5 pb-0.5">
                                         {VIDEO_MODE_ORDER.map(mode => {
                                             const supported = !!activeProductModel && routedVideoModes.includes(mode);
                                             const reason = !activeProductModel
@@ -1133,7 +1131,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                                     disabled={!supported}
                                                     title={!supported ? reason : undefined}
                                                     onClick={() => { if (!supported) return; onGenerationSubmodeChange?.(mode); setExpandedPanel(null); }}
-                                                    className={`h-7 rounded-[5px] px-2 text-[11px] font-medium transition ${!supported ? 'cursor-not-allowed opacity-35' : ''} ${activeSubmode === mode ? 'isl-chip--active' : 'isl-chip'}`}
+                                                    className={`h-8 w-full rounded-[6px] px-2 text-left text-[11px] font-medium transition ${!supported ? 'cursor-not-allowed opacity-35' : ''} ${activeSubmode === mode ? 'isl-chip--active' : 'isl-chip'}`}
                                                 >
                                                     {PRODUCT_MODE_LABELS[mode]}
                                                 </button>
@@ -1153,7 +1151,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                             {expandedPanel === 'submode' && generationMode === 'image' && (
                                 <div data-testid="prompt-image-mode-panel" data-density="compact">
                                     <div className="mb-2 px-1 text-xs font-extrabold" style={{ color: 'var(--isl-ink)' }}>生成方式</div>
-                                    <div className="grid grid-cols-2 gap-1.5 px-0.5 pb-0.5">
+                                    <div className="flex flex-col gap-1 px-0.5 pb-0.5">
                                         {IMAGE_MODE_ORDER.map(mode => {
                                             const supported = !!activeProductModel && routedImageModes.includes(mode);
                                             const reason = !activeProductModel
@@ -1167,7 +1165,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                                     disabled={!supported}
                                                     title={!supported ? reason : undefined}
                                                     onClick={() => { if (!supported) return; onGenerationSubmodeChange?.(mode); setExpandedPanel(null); }}
-                                                    className={`h-7 rounded-[5px] px-2 text-[11px] font-medium transition ${!supported ? 'cursor-not-allowed opacity-35' : ''} ${activeSubmode === mode ? 'isl-chip--active' : 'isl-chip'}`}
+                                                    className={`h-8 w-full rounded-[6px] px-2 text-left text-[11px] font-medium transition ${!supported ? 'cursor-not-allowed opacity-35' : ''} ${activeSubmode === mode ? 'isl-chip--active' : 'isl-chip'}`}
                                                 >
                                                     {PRODUCT_MODE_LABELS[mode]}
                                                 </button>
@@ -1183,21 +1181,21 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                             {expandedPanel === 'parameters' && activeProductModel && activeCapabilities && (
                                 <>
                                     <div className="mb-1.5 px-1 text-[11px] font-semibold" style={{ color: 'var(--isl-ink)' }}>生成参数</div>
-                                    <div data-testid="prompt-parameter-panel" data-density="compact" className="space-y-1.5 px-0.5 pb-0.5">
+                                    <div data-testid="prompt-parameter-panel" data-density="compact" className="max-h-[320px] space-y-2 overflow-y-auto px-0.5 pb-0.5 isl-scrollbar">
                                         {activeCapabilities.qualities.length > 0 && (
                                             <div>
-                                                <div className="mb-1.5 text-[10px] font-bold" style={{ color: 'var(--isl-ink-soft)' }}>画质</div>
-                                                <div className="grid grid-cols-3 gap-1.5">
+                                                <div className="mb-1 text-[10px] font-semibold" style={{ color: 'var(--isl-ink-soft)' }}>画质</div>
+                                                <div className="flex flex-wrap gap-1.5">
                                                     {activeCapabilities.qualities.map(quality => (
-                                                        <button key={quality} type="button" onClick={() => onGenerationQualityChange?.(quality)} className={`h-7 rounded-[5px] px-2 text-[11px] font-medium ${generationQuality === quality ? 'isl-chip--active' : 'isl-chip'}`}>{quality === 'low' ? '低画质' : quality === 'medium' ? '标准画质' : '高画质'}</button>
+                                                        <button key={quality} type="button" onClick={() => onGenerationQualityChange?.(quality)} className={`h-7 rounded-[6px] px-2 text-[11px] font-medium ${generationQuality === quality ? 'isl-chip--active' : 'isl-chip'}`}>{quality === 'low' ? '低画质' : quality === 'medium' ? '标准画质' : '高画质'}</button>
                                                     ))}
                                                 </div>
                                             </div>
                                         )}
 {activeCapabilities.resolutions.length > 0 && (
                                             <div>
-                                                <div className="mb-1.5 text-[10px] font-bold" style={{ color: 'var(--isl-ink-soft)' }}>{generationMode === 'video' ? '分辨率' : '尺寸'}</div>
-                                                <div className="grid grid-cols-3 gap-1.5">
+                                                <div className="mb-1 text-[10px] font-semibold" style={{ color: 'var(--isl-ink-soft)' }}>{generationMode === 'video' ? '分辨率' : '尺寸'}</div>
+                                                <div className="flex flex-wrap gap-1.5">
                                                     {activeCapabilities.resolutions.map(resolution => {
                                                         const disabledReason = paramDisabledReason('resolution', resolution);
                                                         return (
@@ -1207,7 +1205,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                                                 disabled={!!disabledReason}
                                                                 title={disabledReason || undefined}
                                                                 onClick={() => { if (!disabledReason) onVideoResolutionChange?.(resolution); }}
-                                                                className={`h-7 rounded-[5px] px-2 text-[11px] font-medium transition ${disabledReason ? 'cursor-not-allowed opacity-35' : ''} ${videoResolution === resolution ? 'isl-chip--active' : 'isl-chip'}`}
+                                                                className={`h-7 rounded-[6px] px-2 text-[11px] font-medium transition ${disabledReason ? 'cursor-not-allowed opacity-35' : ''} ${videoResolution === resolution ? 'isl-chip--active' : 'isl-chip'}`}
                                                             >
                                                                 {resolution}
                                                             </button>
@@ -1218,8 +1216,8 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                         )}
                                         {activeCapabilities.aspectRatios.length > 0 && (
                                             <div>
-                                                <div className="mb-1.5 text-[10px] font-bold" style={{ color: 'var(--isl-ink-soft)' }}>比例</div>
-                                                <div className="grid grid-cols-4 gap-1.5">
+                                                <div className="mb-1 text-[10px] font-semibold" style={{ color: 'var(--isl-ink-soft)' }}>比例</div>
+                                                <div className="flex flex-wrap gap-1.5">
                                                     {activeCapabilities.aspectRatios.map(ratio => {
                                                         const disabledReason = paramDisabledReason('aspectRatio', ratio);
                                                         const isActive = activeRatio === ratio && !preserveReferenceAspectRatio;
@@ -1231,18 +1229,19 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                                                 disabled={!!disabledReason}
                                                                 title={disabledReason || undefined}
                                                                 onClick={() => { if (!disabledReason) { setActiveRatio(ratio); onPreserveReferenceAspectRatioChange?.(false); } }}
-                                                                className={`h-7 rounded-[5px] px-1.5 text-[11px] font-medium transition ${dimClass} ${isActive ? 'isl-chip--active' : 'isl-chip'}`}
+                                                                className={`h-7 rounded-[6px] px-2 text-[11px] font-medium transition ${dimClass} ${isActive ? 'isl-chip--active' : 'isl-chip'}`}
                                                             >
                                                                 {ratio === 'adaptive' ? '自适应' : ratio}
                                                             </button>
                                                         );
                                                     })}
-                                                    {(generationMode === 'image' || generationMode === 'video') && imageReferenceChips && imageReferenceChips.length > 0 && onPreserveReferenceAspectRatioChange && (
+                                                    {(generationMode === 'image' || generationMode === 'video') && onPreserveReferenceAspectRatioChange && (
                                                         <button
                                                             type="button"
-                                                            onClick={() => onPreserveReferenceAspectRatioChange?.(true)}
-                                                            title="使用第一张参考图的原始宽高比，自动匹配最接近的支持比例"
-                                                            className={`h-7 rounded-[5px] px-1.5 text-[11px] font-medium transition ${preserveReferenceAspectRatio ? 'isl-chip--active' : 'isl-chip'}`}
+                                                            disabled={(imageReferenceChips?.length || 0) === 0}
+                                                            onClick={() => { if ((imageReferenceChips?.length || 0) > 0) onPreserveReferenceAspectRatioChange?.(true); }}
+                                                            title={(imageReferenceChips?.length || 0) === 0 ? '请先添加参考图，才能使用原始宽高比' : preserveReferenceAspectRatio ? '恢复手动选择比例' : '使用第一张参考图的原始宽高比，自动匹配最接近的支持比例'}
+                                                            className={`h-8 w-full rounded-[6px] px-2 text-left text-[11px] font-medium transition ${preserveReferenceAspectRatio ? 'isl-chip--active' : 'isl-chip'} ${(imageReferenceChips?.length || 0) === 0 ? 'cursor-not-allowed opacity-40' : ''}`}
                                                         >
                                                             原比例
                                                         </button>
@@ -1252,8 +1251,8 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                         )}
 {generationMode === 'video' && activeCapabilities.durations.length > 0 && (
                                             <div>
-                                                <div className="mb-1.5 text-[10px] font-bold" style={{ color: 'var(--isl-ink-soft)' }}>时长</div>
-                                                <div className="grid grid-cols-4 gap-1.5">
+                                                <div className="mb-1 text-[10px] font-semibold" style={{ color: 'var(--isl-ink-soft)' }}>时长</div>
+                                                <div className="flex flex-wrap gap-1.5">
                                                     {activeCapabilities.durations.map(duration => {
                                                         const disabledReason = paramDisabledReason('durationSec', duration);
                                                         return (
@@ -1263,7 +1262,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                                                 disabled={!!disabledReason}
                                                                 title={disabledReason || (duration === -1 ? '不限' : `${duration} 秒`)}
                                                                 onClick={() => { if (!disabledReason) onVideoDurationSecChange?.(duration); }}
-                                                                className={`h-7 rounded-[5px] px-2 text-[11px] font-medium transition ${disabledReason ? 'cursor-not-allowed opacity-35' : ''} ${videoDurationSec === duration ? 'isl-chip--active' : 'isl-chip'}`}
+                                                                className={`h-7 rounded-[6px] px-2 text-[11px] font-medium transition ${disabledReason ? 'cursor-not-allowed opacity-35' : ''} ${videoDurationSec === duration ? 'isl-chip--active' : 'isl-chip'}`}
                                                             >
                                                                 {duration === -1 ? '不限' : `${duration}s`}
                                                             </button>
@@ -1276,8 +1275,8 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                             <div>
                                                 <div className="mb-1.5 text-[10px] font-bold" style={{ color: 'var(--isl-ink-soft)' }}>生成音频</div>
                                                 <div className="grid grid-cols-2 gap-1.5">
-                                                    <button type="button" aria-pressed={videoGenerateAudio} onClick={() => onVideoGenerateAudioChange?.(true)} className={`h-7 rounded-[5px] px-2 text-[11px] font-medium ${videoGenerateAudio ? 'isl-chip--active' : 'isl-chip'}`}>开启</button>
-                                                    <button type="button" aria-pressed={!videoGenerateAudio} onClick={() => onVideoGenerateAudioChange?.(false)} className={`h-7 rounded-[5px] px-2 text-[11px] font-medium ${!videoGenerateAudio ? 'isl-chip--active' : 'isl-chip'}`}>关闭</button>
+                                                    <button type="button" aria-pressed={videoGenerateAudio} onClick={() => onVideoGenerateAudioChange?.(true)} className={`h-7 rounded-[6px] px-2 text-[11px] font-medium ${videoGenerateAudio ? 'isl-chip--active' : 'isl-chip'}`}>开启</button>
+                                                    <button type="button" aria-pressed={!videoGenerateAudio} onClick={() => onVideoGenerateAudioChange?.(false)} className={`h-7 rounded-[6px] px-2 text-[11px] font-medium ${!videoGenerateAudio ? 'isl-chip--active' : 'isl-chip'}`}>关闭</button>
                                                 </div>
                                             </div>
                                         )}
@@ -1315,7 +1314,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                             </div>
                                             <div className="mt-3">
                                                 <div className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.12em]" style={{ color: 'var(--isl-ink-soft)' }}>分辨率</div>
-                                                <div className="grid grid-cols-3 gap-1.5">
+                                                <div className="flex flex-wrap gap-1.5">
                                                     {SEEDANCE_RESOLUTIONS.map(resolution => {
                                                         const disabled = isSeedanceFastModel && resolution === '1080p';
                                                         return (
@@ -1433,9 +1432,9 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                 </>
                             )}
                             {expandedPanel === 'batch' && onBatchCountChange && (
-                                <div className="px-1">
-                                    <div className="mb-2 text-xs font-extrabold" style={{ color: 'var(--isl-ink)' }}>批量方案数量</div>
-                                    <div className="flex items-center gap-2">
+                                <div className="flex flex-col items-center px-1">
+                                    <div className="mb-1.5 px-1 text-[11px] font-semibold" style={{ color: 'var(--isl-ink)' }}>批量方案数量</div>
+                                    <div className="flex flex-wrap gap-1.5">
                                         {[1, 2, 4].map(count => {
                                             const active = batchCount === count;
                                             return (
@@ -1443,7 +1442,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                                     key={count}
                                                     type="button"
                                                     onClick={() => { onBatchCountChange(count); setExpandedPanel(null); }}
-                                                    className={`flex h-12 min-w-[56px] flex-1 items-center justify-center rounded-[16px] px-3 text-sm font-bold transition ${active ? 'isl-chip--active' : 'isl-chip'}`}
+                                                    className={`flex h-8 w-[76px] items-center justify-center rounded-[6px] px-2 text-xs font-semibold transition ${active ? 'isl-chip--active' : 'isl-chip'}`}
                                                     style={active ? undefined : { color: 'var(--isl-ink-soft)' }}
                                                     aria-pressed={active}
                                                     title={count === 1 ? '单张方案' : `输出 ${count} 张方案`}
@@ -1596,7 +1595,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                     <path className="opacity-80" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4Z" />
                                 </svg>
                             ) : isLoading ? <span className="text-xs font-semibold">{isSeedanceVideoModel ? '停止/取消' : '停止'}</span> : (
-                                <div className="flex items-center gap-1.5">
+                                <div className="flex flex-wrap gap-1.5">
                                     <span className="text-xs font-semibold">{error ? '重试' : runLabel || (batchCount > 1 ? `生成 ${batchCount} 版` : '开始生成')}</span>
                                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
                                         <path d="M5 12h14" />

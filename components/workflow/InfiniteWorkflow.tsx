@@ -2024,8 +2024,10 @@ export function InfiniteWorkflow({
   const overlayCenter = overlayBounds ? project.viewport.x + ((overlayBounds.left + overlayBounds.right) / 2) * project.viewport.k : 0;
   const toolbarLeft = Math.max(8, Math.min(overlayCenter, workflowWidth - 8));
   const toolbarTop = overlayBounds ? Math.max(8, project.viewport.y + overlayBounds.top * project.viewport.k - Math.max(72, 56 + 28 * project.viewport.k)) : 0;
-  const promptWidth = Math.min(880, Math.max(360, workflowWidth - 16));
-  const promptLeft = Math.max(8, Math.min(overlayCenter - promptWidth / 2, workflowWidth - promptWidth - 8));
+  // PromptBar 让位行程减半：右侧面板弹出时只左移一半距离，避免过度偏移
+  const promptWorkflowWidth = Math.max(360, (rootRect?.width || 1000) - Math.round((rightPanelInset || 0) / 2));
+  const promptWidth = Math.min(880, Math.max(360, promptWorkflowWidth - 16));
+  const promptLeft = Math.max(8, Math.min(overlayCenter - promptWidth / 2, promptWorkflowWidth - promptWidth - 8));
   const configLeft = Math.max(8, Math.min(overlayCenter - 210, workflowWidth - 428));
   const promptTop = overlayBounds ? (() => {
     const rootHeight = rootRect?.height || 700;

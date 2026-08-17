@@ -1,5 +1,5 @@
 import { Bot, Boxes, CircleDot, Grid2X2, Plus, Sparkles, X } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { WorkflowOnlineTurnInput } from '../workflow/WorkflowAgentPanel';
 import { WorkflowAgentPanel, type WorkflowAgentActivity } from '../workflow/WorkflowAgentPanel';
 import { useWorkflowMediaUrl } from '../workflow/media';
@@ -27,6 +27,31 @@ export function AgentWorkspace({ project, onCreateProject, onProjectChange, onOn
   const layouts = useAgentWorkspaceStore(state => state.layouts);
   const [activeContext, setActiveContext] = useState<'brief' | 'activity' | 'artifacts'>('artifacts');
   const [activeCodexId, setActiveCodexId] = useState<string>();
+  // 左右弹性比例（百分比）：默认左栏 36%，可拖拽分隔条调节（25%-50%），持久化到本地
+  const [contextRatio, setContextRatio] = useState(() => {
+    const saved = Number(localStorage.getItem('agentWorkspaceContextRatio'));
+    return Number.isFinite(saved) && saved >= 0.25 && saved <= 0.5 ? saved : 0.36;
+  });
+
+  const startResize = useCallback((event: React.PointerEvent) => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    const studio = event.currentTarget.parentElement as HTMLElement | null;
+    if (!studio) return;
+    const move = (moveEvent: PointerEvent) => {
+      const rect = studio.getBoundingClientRect();
+      if (rect.width <= 0) return;
+      const ratio = Math.min(0.5, Math.max(0.25, (moveEvent.clientX - rect.left) / rect.width));
+      setContextRatio(ratio);
+      localStorage.setItem('agentWorkspaceContextRatio', String(ratio));
+    };
+    const stop = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', stop);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', stop);
+  }, []);
   const layout = project ? layouts[project.id] : undefined;
   const mediaNodes = useMemo(() => project?.nodes.filter(node => node.type === 'image' || node.type === 'video') || [], [project]);
   useEffect(() => { if (project) ensureLayout(project.id); }, [ensureLayout, project]);
@@ -43,7 +68,7 @@ export function AgentWorkspace({ project, onCreateProject, onProjectChange, onOn
   };
 
   return (
-    <main className="agent-studio" data-testid="agent-main-workspace">
+    <main className="agent-studio" data-testid="agent-main-workspace" style={{ gridTemplateColumns: `minmax(220px, ${contextRatio * 100}%) minmax(400px, ${(1 - contextRatio) * 100}%)` }}>
       <aside className="agent-studio__context">
         <header className="agent-context__header">
           <div><span>Agent 空间</span><strong>{project.title}</strong></div>
@@ -64,6 +89,14 @@ export function AgentWorkspace({ project, onCreateProject, onProjectChange, onOn
           <button type="button" onClick={onOpenWorkflow}><Grid2X2 size={13} />打开 Workflow</button>
         </footer>
       </aside>
+
+      <div
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="调整左右栏宽度"
+        onPointerDown={startResize}
+        style={{ position: 'absolute', top: 0, bottom: 0, left: `calc(${contextRatio * 100}% - 3px)`, width: 6, zIndex: 30, cursor: 'col-resize' }}
+      />
 
       <section className="agent-studio__conversation" aria-label="Flovart Agent 主对话">
         {activeCodex ? (

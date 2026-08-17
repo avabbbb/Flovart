@@ -95,7 +95,7 @@ export function WorkflowWorkspace({
   const [mobileLeftOpen, setMobileLeftOpen] = useState(false);
   const leftOpen = compactViewport ? mobileLeftOpen : desktopLeftOpen;
   const setLeftOpen = (open: boolean) => compactViewport ? setMobileLeftOpen(open) : setDesktopLeftOpen(open);
-  const [desktopRightOpen, setDesktopRightOpen] = useState(() => localStorage.getItem('workflowRightPanelOpen') !== 'false');
+  const [desktopRightOpen, setDesktopRightOpen] = useState(() => localStorage.getItem('workflowRightPanelOpenV2') === 'true');
   const [mobileRightOpen, setMobileRightOpen] = useState(false);
   const rightOpen = compactViewport ? mobileRightOpen : desktopRightOpen;
   const setRightOpen = (open: boolean) => compactViewport ? setMobileRightOpen(open) : setDesktopRightOpen(open);
@@ -117,7 +117,7 @@ export function WorkflowWorkspace({
   }, [rightWidth]);
 
   useEffect(() => {
-    localStorage.setItem('workflowRightPanelOpen', String(desktopRightOpen));
+    localStorage.setItem('workflowRightPanelOpenV2', String(desktopRightOpen));
   }, [desktopRightOpen]);
 
   useEffect(() => {
@@ -283,8 +283,8 @@ assetLibrary={assetLibrary}
         onOpenChange={setRightOpen}
         outerGap={0}
         width={rightWidth}
-        minWidth={420}
-        maxWidth={Math.max(520, Math.round(window.innerWidth * .55))}
+        minWidth={Math.max(320, Math.round(window.innerWidth * .3))}
+        maxWidth={Math.max(480, Math.round(window.innerWidth * .55))}
         onWidthChange={setRightWidth}
         flush
         activeTab={rightTab}

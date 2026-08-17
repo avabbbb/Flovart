@@ -106,6 +106,7 @@ export function FlovartAgentPanel({ project, onActivityChange, onOpenSettings, a
   const [mentionQuery, setMentionQuery] = useState('');
   const [attachmentOpen, setAttachmentOpen] = useState(false);
   const [replaceTarget, setReplaceTarget] = useState<AgentReference | null>(null);
+  const [infoPanel, setInfoPanel] = useState<'context' | 'safety' | null>(null);
 
   const referenceGroups = useMemo(() => {
     const query = mentionQuery.trim().toLowerCase();
@@ -482,8 +483,27 @@ export function FlovartAgentPanel({ project, onActivityChange, onOpenSettings, a
                   <button type="button" role="menuitem" onClick={() => openReferencePicker('asset')}><ImageIcon size={15} /><span><strong>从我的素材添加</strong><small>{assetLibrary?.items.length || 0} 个本地资产</small></span></button>
                 </div>}
               </div>
-              <button type="button" aria-label="制作上下文" title="上下文会自动读取当前项目" disabled><WandSparkles size={16} /></button>
-              <button type="button" aria-label="安全边界" title="付费、删除等不可逆操作始终需要确认" disabled><ShieldCheck size={16} /></button>
+              <div className="agent-mode-control">
+                <button type="button" aria-label="制作上下文" aria-expanded={infoPanel === 'context'} title="查看当前项目上下文" onClick={() => setInfoPanel(panel => panel === 'context' ? null : 'context')}><WandSparkles size={16} /></button>
+                {infoPanel === 'context' && <div className="agent-mode-menu" role="dialog" aria-label="制作上下文">
+                  <div style={{ padding: '10px 12px' }}>
+                    <strong style={{ display: 'block', fontSize: 13 }}>{project.title}</strong>
+                    <div style={{ display: 'flex', gap: 14, marginTop: 8 }}>
+                      {[[project.nodes.length, '节点'], [project.connections.length, '连接'], [(project.draftChangeSets || []).length, '变更']].map(([value, label]) => <span key={String(label)} style={{ fontSize: 11, color: 'var(--isl-ink-soft)' }}><b style={{ display: 'block', fontSize: 15, color: 'var(--isl-ink)' }}>{value}</b>{label}</span>)}
+                    </div>
+                    <p style={{ margin: '10px 0 0', fontSize: 10, lineHeight: 1.6, color: 'var(--isl-ink-ghost)' }}>Agent 自动读取当前 Workflow Draft，可逆操作直接进入画布时间线，无需手动同步。</p>
+                  </div>
+                </div>}
+              </div>
+              <div className="agent-mode-control">
+                <button type="button" aria-label="安全边界" aria-expanded={infoPanel === 'safety'} title="查看确认策略" onClick={() => setInfoPanel(panel => panel === 'safety' ? null : 'safety')}><ShieldCheck size={16} /></button>
+                {infoPanel === 'safety' && <div className="agent-mode-menu" role="dialog" aria-label="安全边界">
+                  <div style={{ padding: '10px 12px' }}>
+                    <strong style={{ display: 'block', fontSize: 13 }}>确认策略</strong>
+                    <p style={{ margin: '8px 0 0', fontSize: 10, lineHeight: 1.7, color: 'var(--isl-ink-soft)' }}>{mode === 'manual' ? '手动模式：每个 Workflow 写操作都会先询问。' : '自动模式：可逆操作自动推进；'}<br />删除、付费生成、Production 批准/运行、任务取消<b style={{ color: 'var(--isl-ink)' }}>始终需要确认</b>。</p>
+                  </div>
+                </div>}
+              </div>
               <button type="button" aria-label="重新同步" title="重新同步" onClick={() => void workspaceBridge.current?.pushSnapshot(project).catch(() => setWorkspaceStatus('error'))}><RotateCw size={15} /></button>
               <div className="agent-mode-control">
                 <button type="button" aria-label="生成模式" aria-expanded={modeOpen} onClick={() => setModeOpen(value => !value)}>{mode === 'manual' ? <Hand size={15} /> : <RotateCw size={15} />}<span>{mode === 'manual' ? '手动' : '自动'}</span></button>

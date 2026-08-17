@@ -105,6 +105,7 @@ func main() {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.Default()
 	r.Use(corsMiddleware(cfg.CORSAllow))
+	r.GET("/", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"service": "flovart/enterprise", "status": "ok", "api": "/api/v1/enterprise"}) })
 	r.GET("/healthz", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"ok": true}) })
 
 	api := r.Group("/api/v1/enterprise", middleware.Auth(cfg.JWTSecret, userRepo), middleware.Audit(auditRepo))

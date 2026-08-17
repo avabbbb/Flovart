@@ -63,6 +63,7 @@ func main() {
 
 	r := gin.Default()
 	r.Use(corsMiddleware(cfg.CORSAllow))
+	r.GET("/", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"service": "flovart/hub", "status": "ok", "api": "/api/v1"}) })
 	r.GET("/healthz", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"ok": true}) })
 
 	api := r.Group("/api/v1")

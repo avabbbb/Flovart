@@ -1122,7 +1122,7 @@ input[type='range'].toolbar-range::-moz-range-thumb:hover {
 }
 
 @keyframes flv-pop {
-  from { opacity: 0; transform: translateY(8px) scale(.965); }
+  from { opacity: 0; transform: translateY(4px) scale(.98); }
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
@@ -1371,16 +1371,16 @@ input[type='range'].toolbar-range::-moz-range-thumb:hover {
 .isl-pop {
   border-radius: 6px;
   background: var(--isl-card);
-  border: 1px solid rgba(15, 15, 15, 0.08);
-  box-shadow: 0 1px 3px rgba(15, 15, 15, 0.08), 0 1px 2px rgba(15, 15, 15, 0.04);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 8px 24px rgba(0, 0, 0, 0.06);
   color: var(--isl-ink);
   font-family: var(--isl-font);
-  animation: flv-pop 180ms cubic-bezier(.2,1.35,.3,1) both;
+  animation: flv-pop 160ms cubic-bezier(.16,1,.3,1) both;
 }
 
 :root[data-theme='dark'] .isl-pop {
   border-color: rgba(255, 255, 255, 0.09);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.4);
 }
 
 /* ── Sunk input well ── */
@@ -1414,11 +1414,12 @@ input[type='range'].toolbar-range::-moz-range-thumb:hover {
   color: var(--isl-ink);
   font-family: var(--isl-font);
   font-size: 13px;
+  line-height: 1.4;
   transition: background 120ms ease, color 120ms ease;
 }
 
 .isl-opt:hover {
-  background: rgba(55, 53, 47, 0.07);
+  background: #f0eeea;
 }
 
 :root[data-theme='dark'] .isl-opt:hover {
@@ -1794,4 +1795,35 @@ input[type='range'].toolbar-range::-moz-range-thumb:hover {
     transition: none !important;
     transform: none !important;
   }
+}
+
+/* 浮层内 chips 扁平化：覆盖 isl-chip 的 pill 圆角 */
+.isl-pop .isl-chip,
+.isl-pop .isl-chip--active {
+  border-radius: 6px;
+}
+
+/* ── 完全扁平：浮层无边框、阴影压到几乎不可见 ── */
+.isl-pop {
+  border: 0;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+:root[data-theme='dark'] .isl-pop {
+  border: 0;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+}
+
+/* 浮层内 chips：去边框、去硬阴影、去抬起 hover */
+.isl-pop .isl-chip,
+.isl-pop .isl-chip--active {
+  border: 0;
+  border-radius: 6px;
+  box-shadow: none;
+}
+
+.isl-pop .isl-chip:hover:not(:disabled),
+.isl-pop .isl-chip--active:hover {
+  transform: none;
+  box-shadow: none;
 }

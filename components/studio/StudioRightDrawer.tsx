@@ -75,7 +75,7 @@ export const StudioRightDrawer: React.FC<StudioRightDrawerProps> = ({
 
       <aside
         ref={asideRef}
-        className={`isl-panel compact-right-panel theme-aware absolute z-40 flex min-h-0 flex-col overflow-hidden transition-[transform,opacity] duration-200 ${flush ? 'compact-right-panel--flush' : ''}`}
+        className={`isl-panel compact-right-panel theme-aware absolute z-[78] flex min-h-0 flex-col overflow-hidden transition-[transform,opacity] duration-200 ${flush ? 'compact-right-panel--flush' : ''}`}
         style={{
           top: flush ? 0 : outerGap,
           right: flush ? 0 : outerGap,

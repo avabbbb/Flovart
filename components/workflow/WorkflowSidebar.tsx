@@ -126,7 +126,7 @@ export const WorkflowSidebar: React.FC<WorkflowSidebarProps> = ({
             top: outerGap,
             left: outerGap,
             bottom: outerGap,
-            width: `min(17.5rem, calc(100% - ${outerGap * 2}px))`,
+            width: `clamp(200px, 19vw, 300px)`,
             background: 'var(--isl-card)',
             borderColor: 'var(--isl-border)',
             boxShadow: 'var(--isl-shadow-lg)',

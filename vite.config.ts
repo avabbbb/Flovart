@@ -22,6 +22,7 @@ export default defineConfig(() => {
         headers: {
           'Cross-Origin-Opener-Policy': 'same-origin',
           'Cross-Origin-Embedder-Policy': 'require-corp',
+          'Cache-Control': 'no-store',
         },
       },
       plugins: [tailwindcss(), react()],
