@@ -11,6 +11,7 @@ import {
 import { formatCost, type KeyUsageSummary } from '../utils/usageMonitor';
 import { fetchModelsForProvider, type FetchedModel } from '../services/modelFetcher';
 import { normalizeProviderBaseUrl } from '../services/baseUrl';
+import { stripRunningHubVersionName } from '../services/runningHubService';
 import { getProductModel, getProductModels, suggestProductRouteMappings } from '../services/productModelCatalog';
 import { getKeyModelIds } from '../utils/modelRefs';
 import { getFlovartRuntimeApi } from '../services/flovartRuntime';
@@ -194,15 +195,39 @@ function RouteMappingEditor({ userApiKeys, onUpdateApiKey }: {
         .filter((mapping): mapping is RouteMappingBinding & { target: Extract<RouteMappingTarget, { kind: 'product-mode' }> } => mapping.target.kind === 'product-mode')
         .map(mapping => [routeTargetKey(mapping.target), mapping.target])).values());
 
-    const renderTarget = (target: RouteMappingTarget, title: string, detail: string) => {
+    // 卡片内容（线路列表 + 添加）：供单卡与分组卡共用
+    const targetBody = (target: RouteMappingTarget, modeLabel: string) => {
         const rows = rowsFor(target);
         const options = routeOptions(target);
-        const targetKey = routeTargetKey(target);
+        return <div className="space-y-1.5">
+            <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--isl-ink-ghost)]">{modeLabel}</div>
+            {rows.map((row, index) => {
+                const exposed = keyRouteOptions(row.key, capabilityForTarget(target));
+                const routeId = row.mapping.routeId.trim().toLowerCase();
+                const available = row.key.status !== 'error' && (exposed.length === 0 || exposed.some(value => value.trim().toLowerCase() === routeId));
+                return <motion.div key={`${row.key.id}:${row.index}`} initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: index * 0.04, type: 'spring', stiffness: 420, damping: 32 }} className="flex items-center gap-2 rounded-lg bg-[var(--isl-surface-2)] px-2 py-1.5">
+                    <span className={`w-14 shrink-0 text-[10px] font-bold ${index === 0 ? 'text-[var(--isl-mint-deep)]' : 'text-[var(--isl-ink-soft)]'}`}>{index === 0 ? '主线路' : `备用 ${index}`}</span>
+                    <span className="min-w-0 flex-1 truncate text-xs text-[var(--isl-ink)]">{row.key.name || PROVIDER_LABELS[row.key.provider] || row.key.provider} · {row.mapping.routeId}</span>
+                    <span className={`shrink-0 text-[10px] ${available ? 'text-emerald-600' : 'text-red-500'}`}>{available ? '可用' : '异常'}</span>
+                    <button type="button" disabled={index === 0} onClick={() => moveRoute(target, index, -1)} className="isl-icon-btn h-6 w-6 text-[10px] disabled:opacity-25" aria-label="上移线路">↑</button>
+                    <button type="button" disabled={index === rows.length - 1} onClick={() => moveRoute(target, index, 1)} className="isl-icon-btn h-6 w-6 text-[10px] disabled:opacity-25" aria-label="下移线路">↓</button>
+                    <button type="button" onClick={() => removeRoute(row.key, row.index)} className="isl-icon-btn h-6 w-6 text-[10px] text-red-500" aria-label="删除线路">×</button>
+                </motion.div>;
+            })}
+            <select aria-label={`${modeLabel} 添加线路`} value="" onChange={event => addRoute(target, event.target.value)} className="isl-well h-8 w-full px-2 text-xs text-[var(--isl-ink)] outline-none">
+                <option value="">+ 添加主线路或备用线路…</option>
+                {options.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+            </select>
+        </div>;
+    };
+
+    // 可折叠卡片外壳：标题 + 徽标 + 箭头 + 弹性展开
+    const collapsibleCard = (targetKey: string, title: string, badge: string, badgeGood: boolean, children: React.ReactNode, testId?: string) => {
         const expanded = expandedTargets.has(targetKey);
-        return <div key={targetKey} data-testid={`mapping-card-${targetKey}`} className="overflow-hidden rounded-xl border border-[var(--isl-border)] bg-[var(--isl-card)]">
+        return <div key={targetKey} data-testid={testId || `mapping-card-${targetKey}`} className="overflow-hidden rounded-xl border border-[var(--isl-border)] bg-[var(--isl-card)]">
             <button type="button" aria-expanded={expanded} onClick={() => toggleTarget(targetKey)} className="flex w-full items-center gap-2 px-3 py-2.5 text-left transition hover:bg-[var(--isl-surface-2)]">
-                <span className="min-w-0 flex-1"><span className="block truncate text-[13px] font-bold text-[var(--isl-ink)]">{title}</span><span className="mt-0.5 block truncate text-[10px] text-[var(--isl-ink-soft)]">{detail}</span></span>
-                <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${rows.length ? 'bg-emerald-500/10 text-emerald-600' : 'bg-amber-500/10 text-amber-600'}`}>{rows.length ? `${rows.length} 条线路` : '未配置'}</span>
+                <span className="min-w-0 flex-1 truncate text-[13px] font-bold text-[var(--isl-ink)]">{title}</span>
+                <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${badgeGood ? 'bg-emerald-500/10 text-emerald-600' : 'bg-amber-500/10 text-amber-600'}`}>{badge}</span>
                 <motion.span animate={{ rotate: expanded ? 180 : 0 }} transition={{ type: 'spring', stiffness: 420, damping: 30 }} className="shrink-0 text-[var(--isl-ink-ghost)]"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 9 6 6 6-6" /></svg></motion.span>
             </button>
             <AnimatePresence initial={false}>
@@ -213,38 +238,49 @@ function RouteMappingEditor({ userApiKeys, onUpdateApiKey }: {
                     transition={{ type: 'spring', stiffness: 360, damping: 34, mass: 0.9 }}
                     style={{ overflow: 'hidden' }}
                 >
-                    <div className="space-y-1.5 border-t border-[var(--isl-border)] px-3 py-2.5">
-                        {rows.map((row, index) => {
-                            const exposed = keyRouteOptions(row.key, capabilityForTarget(target));
-                            const routeId = row.mapping.routeId.trim().toLowerCase();
-                            const available = row.key.status !== 'error' && (exposed.length === 0 || exposed.some(value => value.trim().toLowerCase() === routeId));
-                            return <motion.div key={`${row.key.id}:${row.index}`} initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: index * 0.04, type: 'spring', stiffness: 420, damping: 32 }} className="flex items-center gap-2 rounded-lg bg-[var(--isl-surface-2)] px-2 py-1.5">
-                                <span className={`w-14 shrink-0 text-[10px] font-bold ${index === 0 ? 'text-[var(--isl-mint-deep)]' : 'text-[var(--isl-ink-soft)]'}`}>{index === 0 ? '主线路' : `备用 ${index}`}</span>
-                                <span className="min-w-0 flex-1 truncate text-xs text-[var(--isl-ink)]">{row.key.name || PROVIDER_LABELS[row.key.provider] || row.key.provider} · {row.mapping.routeId}</span>
-                                <span className={`shrink-0 text-[10px] ${available ? 'text-emerald-600' : 'text-red-500'}`}>{available ? '可用' : '异常'}</span>
-                                <button type="button" disabled={index === 0} onClick={() => moveRoute(target, index, -1)} className="isl-icon-btn h-6 w-6 text-[10px] disabled:opacity-25" aria-label="上移线路">↑</button>
-                                <button type="button" disabled={index === rows.length - 1} onClick={() => moveRoute(target, index, 1)} className="isl-icon-btn h-6 w-6 text-[10px] disabled:opacity-25" aria-label="下移线路">↓</button>
-                                <button type="button" onClick={() => removeRoute(row.key, row.index)} className="isl-icon-btn h-6 w-6 text-[10px] text-red-500" aria-label="删除线路">×</button>
-                            </motion.div>;
-                        })}
-                        <select aria-label={`${title} 添加线路`} value="" onChange={event => addRoute(target, event.target.value)} className="isl-well h-8 w-full px-2 text-xs text-[var(--isl-ink)] outline-none">
-                            <option value="">+ 添加主线路或备用线路…</option>
-                            {options.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-                        </select>
-                    </div>
+                    <div className="border-t border-[var(--isl-border)] px-3 py-2.5">{children}</div>
                 </motion.div>}
             </AnimatePresence>
         </div>;
     };
 
+    const renderTarget = (target: RouteMappingTarget, title: string, detail: string) => {
+        const rows = rowsFor(target);
+        const targetKey = routeTargetKey(target);
+        return collapsibleCard(targetKey, title, rows.length ? `${rows.length} 条线路` : '未配置', rows.length > 0,
+            targetBody(target, title));
+    };
+
     const allProducts = [...getProductModels('image'), ...getProductModels('video')];
     const renderProductSection = (capability: 'image' | 'video', title: string, detail: string) => {
-        const targets = productTargets.filter(target => getProductModel(target.productModelId)?.capability === capability);
+        // 按产品模型分组：同一模型的不同生成方式（文生/图生/首尾帧/参考）收进同一张卡
+        const grouped = new Map<string, Array<RouteMappingTarget & { kind: 'product-mode'; productModelId: string; mode: ProductModelMode }>>();
+        productTargets
+            .filter((target): target is RouteMappingTarget & { kind: 'product-mode'; productModelId: string; mode: ProductModelMode } => (
+                target.kind === 'product-mode' && getProductModel(target.productModelId)?.capability === capability
+            ))
+            .forEach(target => {
+                const list = grouped.get(target.productModelId) || [];
+                list.push(target);
+                grouped.set(target.productModelId, list);
+            });
         return <div className="space-y-2">
             <div><div className="text-sm font-extrabold text-[var(--isl-ink)]">{title}</div><div className="mt-0.5 text-xs text-[var(--isl-ink-soft)]">{detail}</div></div>
-            {targets.length > 0 ? targets.map(target => {
-                const model = getProductModel(target.productModelId);
-                return renderTarget(target, `${model?.name || target.productModelId} · ${PRODUCT_MODE_LABELS[target.mode]}`, '媒体节点明确选择产品模型与生成模式后使用');
+            {grouped.size > 0 ? [...grouped.entries()].map(([modelId, targets]) => {
+                const model = getProductModel(modelId);
+                const displayName = stripRunningHubVersionName(model?.name || modelId) || modelId;
+                const totalRows = targets.reduce((sum, target) => sum + rowsFor(target).length, 0);
+                const modeTargets = targets.map(target => ({
+                    mode: PRODUCT_MODE_LABELS[target.mode],
+                    target,
+                }));
+                return collapsibleCard(`model:${modelId}`, `${displayName}`, totalRows ? `${totalRows} 条线路` : '未配置', totalRows > 0,
+                    <div className="space-y-3">
+                        {modeTargets.map(({ mode, target }, index) => <div key={`${modelId}:${target.mode}`}>
+                            {index > 0 && <div className="my-2 border-t border-[var(--isl-border)]" />}
+                            {targetBody(target, mode)}
+                        </div>)}
+                    </div>, `mapping-card-${modelId}`);
             }) : <div className="rounded-2xl border border-dashed border-[var(--isl-border)] px-3 py-4 text-xs text-[var(--isl-ink-soft)]">尚未应用{title}映射；检测到的线路会显示在上方建议中。</div>}
         </div>;
     };
