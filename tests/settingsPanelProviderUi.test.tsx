@@ -111,6 +111,7 @@ describe('SettingsPanel provider configuration UI', () => {
     expect(Array.from(imageRoutes.options).map(option => option.textContent)).not.toContain('Agnes · gpt-5.4');
     expect(Array.from(imageRoutes.options).map(option => option.textContent)).not.toContain('Agnes · agnes-motion-v2');
 
+    fireEvent.click(screen.getByRole('button', { name: /提示词增强/ }));
     const textRoutes = screen.getByLabelText('提示词增强 添加线路') as HTMLSelectElement;
     expect(Array.from(textRoutes.options).map(option => option.textContent)).toContain('Agnes · gpt-5.4');
     expect(Array.from(textRoutes.options).map(option => option.textContent)).not.toContain('Agnes · agnes-canvas-v2');
@@ -166,6 +167,7 @@ describe('SettingsPanel provider configuration UI', () => {
     renderSettings([key], onUpdateApiKey);
 
     fireEvent.click(screen.getByRole('button', { name: '模型映射' }));
+    fireEvent.click(await screen.findByRole('button', { name: /提示词增强/ }));
     const routeSelect = await screen.findByLabelText('提示词增强 添加线路');
     fireEvent.change(routeSelect, { target: { value: JSON.stringify(['text-key', 'gemini-3-flash']) } });
 
