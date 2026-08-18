@@ -11,7 +11,6 @@ import {
 import { formatCost, type KeyUsageSummary } from '../utils/usageMonitor';
 import { fetchModelsForProvider, type FetchedModel } from '../services/modelFetcher';
 import { normalizeProviderBaseUrl } from '../services/baseUrl';
-import { stripRunningHubVersionName } from '../services/runningHubService';
 import { getProductModel, getProductModels, suggestProductRouteMappings } from '../services/productModelCatalog';
 import { getKeyModelIds } from '../utils/modelRefs';
 import { getFlovartRuntimeApi } from '../services/flovartRuntime';
@@ -268,7 +267,7 @@ function RouteMappingEditor({ userApiKeys, onUpdateApiKey }: {
             <div><div className="text-sm font-extrabold text-[var(--isl-ink)]">{title}</div><div className="mt-0.5 text-xs text-[var(--isl-ink-soft)]">{detail}</div></div>
             {grouped.size > 0 ? [...grouped.entries()].map(([modelId, targets]) => {
                 const model = getProductModel(modelId);
-                const displayName = stripRunningHubVersionName(model?.name || modelId) || modelId;
+                const displayName = model?.name || modelId;
                 const totalRows = targets.reduce((sum, target) => sum + rowsFor(target).length, 0);
                 const modeTargets = targets.map(target => ({
                     mode: PRODUCT_MODE_LABELS[target.mode],
