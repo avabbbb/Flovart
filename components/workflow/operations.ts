@@ -331,14 +331,18 @@ export async function ensureWorkflowImageGenerateOperation(input: {
 
   const now = input.now || new Date().toISOString();
   const sourceHasMedia = source.type === 'image' && hasMedia(source);
-  const operationId = sourceHasMedia ? input.createId() : source.id;
+  // 有媒体节点也原位替换为 operation；原图复制成隐藏输入节点保留图生图参考，画布不再多出可见节点
+  const hiddenInputId = sourceHasMedia ? input.createId() : undefined;
+  const operationId = sourceHasMedia ? source.id : source.id;
   const upstream = input.project.connections
     .filter(connection => connection.toNodeId === source.id)
     .map(connection => input.project.nodes.find(node => node.id === connection.fromNodeId))
     .filter((node): node is WorkflowNode => Boolean(node));
   const order = source.metadata.imageReferenceOrder || upstream.map(node => node.id);
   const orderIndex = new Map(order.map((id, index) => [id, index]));
-  const candidates = sourceHasMedia ? [source] : upstream;
+  const candidates = sourceHasMedia
+    ? [{ ...source, id: hiddenInputId! } as WorkflowNode]
+    : upstream;
   const bindings = candidates
     .filter(node => node.type === 'image' || node.type === 'text')
     .sort((left, right) => (orderIndex.get(left.id) ?? Number.MAX_SAFE_INTEGER) - (orderIndex.get(right.id) ?? Number.MAX_SAFE_INTEGER))
@@ -352,7 +356,7 @@ export async function ensureWorkflowImageGenerateOperation(input: {
   const operation = await createWorkflowOperationNode({
     id: operationId,
     capabilityId: 'image.generate@1',
-    position: sourceHasMedia ? { x: source.position.x + source.width + 80, y: source.position.y } : source.position,
+    position: source.position,
     prompt: source.metadata.prompt || '',
     richTextDocument: source.metadata.richTextDocument,
     parameters: compactRecord({ ...generationParameters(source), submode: sourceHasMedia || hasImageInput ? 'image-to-image' : generationParameters(source).submode }),
@@ -366,8 +370,18 @@ export async function ensureWorkflowImageGenerateOperation(input: {
   };
   operation.objectVersion = (source.objectVersion || 0) + 1;
 
+  // 有媒体：隐藏输入节点（isVisible:false）保留原图 + 原节点原位替换成 operation
+  const hiddenInput = sourceHasMedia
+    ? {
+        ...source,
+        id: hiddenInputId!,
+        isVisible: false,
+        isLocked: true,
+        position: { x: source.position.x, y: source.position.y },
+      } as WorkflowNode
+    : undefined;
   const replacedNodes = sourceHasMedia
-    ? [...input.project.nodes, operation]
+    ? [hiddenInput!, ...input.project.nodes.map(node => node.id === source.id ? operation : node)]
     : input.project.nodes.map(node => node.id === source.id ? operation : node);
   const removedIncomingIds = new Set(sourceHasMedia ? [] : input.project.connections.filter(connection => connection.toNodeId === source.id).map(connection => connection.id));
   const connections = [

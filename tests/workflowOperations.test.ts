@@ -91,7 +91,7 @@ describe('workflow operation records', () => {
     }]);
   });
 
-  it('keeps an existing media node and creates a following generate operation', async () => {
+  it('replaces the existing media node in place with a generate operation and keeps a hidden input node', async () => {
     const project = createWorkflowProject('重做图片');
     const source = createWorkflowNode('image-1', 'image', { x: 0, y: 0 }, {
       storageKey: 'image-1', prompt: '做成海报', status: 'success', config: { mode: 'image', modelId: 'flovart:gpt-image-2' },
@@ -99,12 +99,15 @@ describe('workflow operation records', () => {
     project.nodes = [source];
     const ids = ['operation-1', 'binding-1'];
     const result = await ensureWorkflowImageGenerateOperation({ project, nodeId: source.id, createId: () => ids.shift()!, now: '2026-08-05T00:00:00.000Z' });
+    // 原节点原位替换为 operation（id/位置不变），画布不新增可见节点
     expect(result.project.nodes).toHaveLength(2);
-    expect(result.project.nodes[0]).toBe(source);
-    expect(result.project.nodes[1]).toMatchObject({ id: 'operation-1', type: 'operation' });
-    expect(result.project.nodes[1].metadata).not.toHaveProperty('storageKey');
-    expect(result.project.nodes[1].metadata).not.toHaveProperty('href');
-    expect(result.project.nodes[1].metadata).not.toHaveProperty('artifactRef');
-    expect(result.project.nodes[1].metadata.operation?.recipe.inputBindings[0]).toMatchObject({ sourceNodeId: 'image-1', role: 'reference_image' });
+    const operation = result.project.nodes.find(node => node.id === 'image-1');
+    expect(operation).toMatchObject({ id: 'image-1', type: 'operation', isVisible: true });
+    expect(operation?.metadata.operation?.recipe.inputBindings[0]).toMatchObject({ role: 'reference_image' });
+    // 原图保留为隐藏输入节点
+    const hidden = result.project.nodes.find(node => node.id === 'operation-1');
+    expect(hidden).toMatchObject({ type: 'image', isVisible: false, isLocked: true });
+    expect(hidden?.metadata).toHaveProperty('storageKey');
+    expect(result.project.connections.some(connection => connection.fromNodeId === 'operation-1' && connection.toNodeId === 'image-1')).toBe(true);
   });
 });
