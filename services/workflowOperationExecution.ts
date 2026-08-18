@@ -273,7 +273,43 @@ export async function commitWorkflowOperation(
     if (!gridPositioned) outputY += size.height + 24;
     return node;
   });
-  const completed = completeWorkflowOperationTake(latestOperation, started.takeId, outputNodes.map(node => node.id));
+
+  // 仅「生成类」单输出（图片生成）结果原位写回 operation 节点自身；处理类（裁剪/放大等）保持 operation→output 链
+  const isGenerate = capability.id === 'image.generate@1';
+  const singleInPlace = isGenerate && normalized.length === 1 && !Number.isInteger(normalized[0].column) && !Number.isInteger(normalized[0].row);
+  const completed = completeWorkflowOperationTake(latestOperation, started.takeId, singleInPlace ? [latestOperation.id] : outputNodes.map(node => node.id));
+
+  if (singleInPlace) {
+    const record = records[0];
+    const size = fitWorkflowMediaSize(normalized[0].nodeType, record.naturalWidth, record.naturalHeight);
+    const next: WorkflowProject = {
+      ...latest,
+      nodes: latest.nodes.map(node => node.id === latestOperation.id
+        ? {
+            ...completed,
+            type: normalized[0].nodeType,
+            width: size.width,
+            height: size.height,
+            metadata: {
+              ...completed.metadata,
+              ...record,
+              href: undefined,
+              status: 'success' as const,
+              operationTakeId: started.takeId,
+              sourceOperationNodeId: latestOperation.id,
+              operationOutputRole: normalized[0].role,
+            },
+          }
+        : node),
+      selectedNodeIds: [latestOperation.id],
+      draftVersion: (latest.draftVersion || 1) + 1,
+      updatedAt: new Date().toISOString(),
+    };
+    await runtime.onProjectChange(next);
+    records.forEach(recordItem => releaseWorkflowMediaRecord(recordItem.storageKey));
+    return { status: 'committed', project: next };
+  }
+
   const connections = outputNodes.map((node, index) => ({
     id: started.createId(),
     fromNodeId: latestOperation.id,
