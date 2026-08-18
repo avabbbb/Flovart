@@ -393,6 +393,24 @@ function OperationNodeCard({ node, onRun }: { node: WorkflowNodeData; onRun: () 
     : latestTake?.status === 'error' ? '执行失败'
       : latestTake?.status === 'success' ? '已完成'
         : latestTake?.status === 'running' ? '执行中' : '待执行';
+  // 单张生成：结果媒体原位写在 operation 节点 metadata 上（storageKey/href），显示结果图
+  const resultMedia = useWorkflowMediaUrl(node.metadata.storageKey, node.metadata.href);
+  if (resultMedia.url) {
+    return (
+      <div className="workflow-operation-card workflow-operation-card--result" data-testid="workflow-operation-card">
+        {node.metadata.mimeType?.startsWith('video/')
+          ? <video src={resultMedia.url} muted playsInline loop style={{ width: '100%', maxHeight: 260, objectFit: 'contain' }} data-workflow-media-preview />
+          : <img src={resultMedia.url} alt={`${node.title} 生成结果`} draggable={false} loading="lazy" data-workflow-media-preview style={{ width: '100%', maxHeight: 260, objectFit: 'contain' }} />}
+        <div className="workflow-operation-card__row"><strong>{parameterLabel}</strong><span>{statusLabel}</span></div>
+        <div className="workflow-operation-card__footer">
+          <span>{operation.recipe.inputBindings.length} 输入 · {operation.takes.length} Take</span>
+          <button type="button" data-workflow-overlay onPointerDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); onRun(); }} disabled={node.metadata.status === 'loading'}>
+            <Play size={11} fill="currentColor" />{latestTake?.status === 'error' ? '重试' : '运行'}
+          </button>
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="workflow-operation-card" data-testid="workflow-operation-card">
       <div className="workflow-operation-card__row"><strong>{parameterLabel}</strong><span>{statusLabel}</span></div>

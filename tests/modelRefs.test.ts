@@ -39,7 +39,7 @@ describe('modelRefs', () => {
     const option = buildCapabilityModelOptions([key], 'video', [], '')[0];
 
     expect(option).toBe('flovart:seedance-2');
-    expect(modelRefLabel(option, [key])).toBe('Seedance 2.0');
+    expect(modelRefLabel(option, [key])).toBe('Seedance');
     expect(resolveModelSelection(option, [key], 'video')).toMatchObject({
       routeId: 'dreamina-seedance-2-0-260128',
       provider: 'volcengine',

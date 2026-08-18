@@ -63,7 +63,7 @@ const project = (): WorkflowProject => ({
 });
 
 describe('workflow generation', () => {
-  it('keeps an image generation Operation and appends an immutable output Take', async () => {
+  it('replaces an image generation Operation node in place with the result media', async () => {
     const source = project();
     const operation = await createWorkflowOperationNode({
       id: 'operation-1', capabilityId: 'image.generate@1', position: { x: 420, y: 80 }, prompt: '电影光线',
@@ -84,15 +84,16 @@ describe('workflow generation', () => {
       onProjectChange: next => { latest = next; },
       createId: (() => { let index = 0; return () => `generated-${index++}`; })(),
     });
-    const committedOperation = result.nodes.find(node => node.id === operation.id);
-    const output = result.nodes.find(node => node.metadata.sourceOperationNodeId === operation.id);
-    expect(committedOperation?.type).toBe('operation');
-    expect(output).toMatchObject({ type: 'image', width: 420, height: 210, metadata: { storageKey: 'result-key', operationTakeId: 'generated-0', config: { modelId: 'flovart:gpt-image-2' } } });
-    expect(result.connections).toContainEqual(expect.objectContaining({ fromNodeId: operation.id, toNodeId: output?.id, kind: 'operation-output' }));
-    expect(committedOperation?.metadata.operation?.takes[0]).toMatchObject({
-      id: 'generated-0', status: 'success', outputNodeIds: [output?.id], snapshot: { renderedPrompt: expect.stringContaining('电影光线'), routeId: 'gpt-image-2' },
+    // 单张生成：不新建输出节点，结果媒体原位写回 operation 节点自身（保留 operation 元数据 + take）
+    const committed = result.nodes.find(node => node.id === operation.id);
+    expect(committed).toBeDefined();
+    expect(result.nodes.filter(node => node.id !== operation.id && node.metadata.sourceOperationNodeId === operation.id).length).toBe(0);
+    expect(result.nodes).toHaveLength(2);
+    expect(committed?.metadata).toMatchObject({ storageKey: 'result-key', operationTakeId: 'generated-0' });
+    expect(committed?.metadata.operation?.takes[0]).toMatchObject({
+      id: 'generated-0', status: 'success', outputNodeIds: [operation.id], snapshot: { renderedPrompt: expect.stringContaining('电影光线'), routeId: 'gpt-image-2' },
     });
-    expect(committedOperation?.metadata.operation?.selectedTakeId).toBe('generated-0');
+    expect(committed?.metadata.operation?.selectedTakeId).toBe('generated-0');
   });
 
   it('runs a text node directly with text mode and replaces the initiator in place', async () => {

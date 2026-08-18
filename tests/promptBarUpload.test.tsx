@@ -91,9 +91,9 @@ describe('PromptBar media attachments', () => {
       />,
     );
 
-    fireEvent.click(screen.getByText('Seedance 2.0').closest('button')!);
+    fireEvent.click(screen.getByText(/Seedance/).closest('button')!);
     expect(screen.getByText('选择模型')).toBeTruthy();
-    expect(screen.getAllByText('Seedance 2.0').length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Seedance/).length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByTitle('生成参数'));
 

@@ -478,7 +478,7 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
         throw abortError();
       }
 
-      if (batched || isImageOperation) {
+      if (batched) {
         const resultNode = {
           ...createWorkflowNode(createId(), mode, { x: initiating.position.x + initiating.width + 80, y: initiating.position.y + index * 48 }, {
             ...record,
@@ -513,7 +513,15 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
                 position: { x: center.x - size.width / 2, y: center.y - size.height / 2 },
                 width: size.width,
                 height: size.height,
-                metadata: { ...node.metadata, ...record, href: undefined, status: 'loading' as const, error: undefined, progress: 100 },
+                metadata: {
+                  ...node.metadata,
+                  ...record,
+                  href: undefined,
+                  status: 'loading' as const,
+                  error: undefined,
+                  progress: 100,
+                  ...(operationTakeId ? { operationTakeId, sourceOperationNodeId: nodeId } : {}),
+                },
               }
             : node),
         };
@@ -542,7 +550,7 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
     if (batchId) preparedNodes.forEach((node, index) => { node.batchId = batchId; node.batchIndex = index; });
 
     if (!stillActive()) throw abortError();
-    if (batched || isImageOperation) {
+    if (batched) {
       const latest = canonical(runtime, current);
       current = {
         ...latest,
@@ -555,8 +563,10 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
     if (operationTakeId) {
       const operation = current.nodes.find(node => node.id === nodeId);
       if (operation) {
-        validateWorkflowOperationOutputs('image.generate@1', preparedNodes.map(() => ({ role: 'result_image', nodeType: 'image' })));
-        const completed = completeWorkflowOperationTake(operation, operationTakeId, preparedNodes.map(node => node.id), {
+        // 批量输出 = 新建结果节点；单张输出 = 原位替换后的节点自身
+        const outputNodeIds = preparedNodes.length > 0 ? preparedNodes.map(node => node.id) : [nodeId];
+        validateWorkflowOperationOutputs('image.generate@1', outputNodeIds.map(() => ({ role: 'result_image' as const, nodeType: 'image' as const })));
+        const completed = completeWorkflowOperationTake(operation, operationTakeId, outputNodeIds, {
           providerTaskId: operation.metadata.generationProviderTaskId,
           usageRecordId: operation.metadata.generationUsageRecordId,
         });

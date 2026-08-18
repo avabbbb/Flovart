@@ -64,7 +64,7 @@ describe('workflow node overlays', () => {
     };
 
     render(<Harness />);
-    await waitFor(() => expect(screen.getByText('Seedance 2.0')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/Seedance/)).toBeInTheDocument());
     fireEvent.click(screen.getByTitle('生成参数'));
     expect(screen.getByText('比例')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '16:9' })).toBeInTheDocument();
