@@ -1,0 +1,6 @@
+{
+  "name": "flovart-resolve-workflow-integration",
+  "version": "0.3.2",
+  "description": "Flovart contextual inspector for DaVinci Resolve Studio",
+  "main": "main.js"
+}

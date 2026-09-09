@@ -1,4 +1,5 @@
 import { AnimatePresence, motion } from 'motion/react';
+import '../../styles/table.css';
 import {
   ArrowRight, CircleCheck, Image as ImageIcon, LoaderCircle, RotateCcw,
   Save, ScanLine, Scissors, Shirt, Sparkles, Upload, Video, WandSparkles,
@@ -104,7 +105,7 @@ export function TableWorkspace({
   const requiresProductModel = selectedTool === 'cutout' || selectedTool === 'wardrobe';
 
   return (
-    <div className="table-workspace grid h-full min-h-0 grid-cols-[220px_minmax(0,1fr)] overflow-hidden border-t" style={{ borderColor: 'var(--isl-border)', color: 'var(--isl-ink)', background: 'var(--isl-surface-sunk)' }}>
+    <div className="table-workspace grid h-full min-h-0 overflow-hidden border-t" style={{ borderColor: 'var(--isl-border)', color: 'var(--isl-ink)', background: 'var(--isl-surface-sunk)' }}>
       <aside className="flex min-h-0 flex-col border-r" style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-card)' }}>
         <div className="border-b p-3" style={{ borderColor: 'var(--isl-border)' }}>
           <p className="m-0 text-[10px] font-bold uppercase tracking-[.16em]" style={{ color: 'var(--isl-ink-ghost)' }}>Input</p>
@@ -128,7 +129,7 @@ export function TableWorkspace({
         <button type="button" className="m-2 flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-semibold hover:bg-black/5" onClick={onOpenWorkflow}><ArrowRight size={13} />返回 Workflow</button>
       </aside>
 
-      <main className={`grid min-h-0 ${hasSource ? 'grid-cols-[minmax(0,1fr)_256px]' : ''}`}>
+      <main className={`table-workspace__main grid min-h-0 ${hasSource ? 'table-workspace__main--with-tools' : ''}`}>
         <section className="relative flex min-h-0 flex-col">
           <div className="flex h-10 shrink-0 items-center justify-between border-b px-3" style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-card)' }}>
             <div className="min-w-0"><strong className="block truncate text-xs">{sourceName}</strong><span className="text-[10px]" style={{ color: 'var(--isl-ink-ghost)' }}>{result ? '处理结果' : '原始输入'} · {isVideo ? '视频' : '图片'}</span></div>
@@ -148,7 +149,7 @@ export function TableWorkspace({
               <div className="absolute inset-0 opacity-40" style={{ backgroundImage: 'radial-gradient(var(--isl-border-strong) 1px, transparent 1px)', backgroundSize: '18px 18px' }} />
               <AnimatePresence mode="wait">
                 <motion.div key={previewUrl || 'loading'} className="relative z-10 max-h-full max-w-full overflow-hidden rounded-xl border bg-black" style={{ borderColor: 'var(--isl-border-strong)', boxShadow: 'var(--isl-shadow)' }} initial={{ opacity: 0, scale: .96 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: .98 }} transition={{ type: 'spring', stiffness: 360, damping: 28 }}>
-                  {previewUrl ? (isVideo ? <video className="block max-h-[calc(100vh-170px)] max-w-full" src={previewUrl} controls playsInline preload="metadata" /> : <img className="block max-h-[calc(100vh-170px)] max-w-full object-contain" src={previewUrl} alt={sourceName} />) : <div className="grid h-52 w-80 place-items-center text-white/55"><LoaderCircle className="animate-spin" size={18} /></div>}
+                  {previewUrl ? (isVideo ? <video className="table-preview-media block max-w-full" src={previewUrl} controls playsInline preload="metadata" /> : <img className="table-preview-media block max-w-full object-contain" src={previewUrl} alt={sourceName} />) : <div className="grid h-52 w-80 max-w-full place-items-center text-white/55"><LoaderCircle className="animate-spin" size={18} /></div>}
                 </motion.div>
               </AnimatePresence>
               {processing && <div className="absolute inset-0 z-20 grid place-content-center bg-black/35 backdrop-blur-[2px]"><div className="flex items-center gap-2 rounded-lg bg-black/75 px-3 py-2 text-xs text-white"><LoaderCircle className="animate-spin" size={14} />{isVideo ? '逐帧处理中，请保持页面打开…' : '正在处理…'}</div></div>}
@@ -158,7 +159,7 @@ export function TableWorkspace({
         </section>
 
         {hasSource && (
-          <motion.aside className="flex min-h-0 flex-col border-l" style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-card)' }} initial={{ x: 18, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ type: 'spring', stiffness: 420, damping: 32 }}>
+          <motion.aside className="table-workspace__tools flex min-h-0 flex-col border-l" style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-card)' }} initial={{ x: 18, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ type: 'spring', stiffness: 420, damping: 32 }}>
             <div className="border-b p-3" style={{ borderColor: 'var(--isl-border)' }}><p className="m-0 text-[10px] font-bold uppercase tracking-[.16em]" style={{ color: 'var(--isl-ink-ghost)' }}>Process</p><strong className="text-sm">预处理工具</strong></div>
             <div className="min-h-0 flex-1 space-y-1 overflow-y-auto p-2">
               {TOOLS.map(tool => {

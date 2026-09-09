@@ -1,7 +1,7 @@
 /**
  * @flovart/dsh-plugin — browser half.
  *
- * Registers the additive RC8 slots: conversation.view (native Flovart Workflow
+ * Registers the additive RC8 slots: conversation.view (contextual Flovart Workflow
  * canvas) and shell.overlay (status/approval/Artifact light overlays). The
  * exclusive root sidebar/conversation/conversation.session slots stay
  * untouched, and no second Flovart navigation entry is added.

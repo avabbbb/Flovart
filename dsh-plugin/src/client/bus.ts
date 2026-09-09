@@ -1,5 +1,5 @@
 /**
- * Plugin-local typed event bus shared by the native conversation.view and the
+ * Plugin-local typed event bus shared by the contextual conversation.view and the
  * shell.overlay stack. One bus lives per page (module scope of the single
  * client bundle instance).
  */

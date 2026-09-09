@@ -1,4 +1,5 @@
 import http from 'node:http';
+import { BootstrapCredentialError, BootstrapCredentialStore } from './bootstrap-credentials.js';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DEFAULT_AGENT_PORT, loadAgentConfig, saveAgentConfig } from './config.js';
@@ -47,21 +48,45 @@ const readBody = request => new Promise((resolve, reject) => {
   request.on('error', reject);
 });
 
-const validToken = (request, url, token) => url.searchParams.get('token') === token || request.headers['x-flovart-agent-token'] === token;
+const requestToken = request => String(request.headers['x-flovart-agent-token'] || '');
+const validPersistentToken = (request, url, token) => {
+  const queryToken = url.searchParams.get('token');
+  const headerToken = requestToken(request);
+  return Boolean(token) && (queryToken === token || headerToken === token);
+};
 
-function setCors(request, response, url, config) {
+const validToken = (request, url, token, credentials) => (
+  validPersistentToken(request, url, token)
+  || credentials.isSessionToken(url.searchParams.get('token'))
+  || credentials.isSessionToken(requestToken(request))
+);
+
+function isLoopbackOrigin(origin) {
+  try {
+    const url = new URL(origin);
+    return url.protocol === 'http:' && new Set(['127.0.0.1', 'localhost', '[::1]']).has(url.hostname);
+  } catch {
+    return false;
+  }
+}
+
+function setCors(request, response, url, config, credentials) {
   const origin = request.headers.origin;
   response.setHeader('Access-Control-Allow-Origin', origin || '*');
-  response.setHeader('Access-Control-Allow-Headers', 'content-type,x-flovart-agent-token');
+  response.setHeader('Access-Control-Allow-Headers', 'content-type,x-flovart-agent-token,x-flovart-bootstrap-token');
   response.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
   response.setHeader('Access-Control-Allow-Private-Network', 'true');
   if (!origin || request.method === 'OPTIONS' || url.pathname === '/health' || url.pathname === '/config') return true;
-  if (config.origin !== origin && validToken(request, url, config.token)) {
+  if (url.pathname === '/bootstrap/exchange') return isLoopbackOrigin(origin);
+  if (url.pathname === '/bootstrap/issue') return false;
+  if (config.origin !== origin && validPersistentToken(request, url, config.token)) {
     config.origin = origin;
     saveAgentConfig(config);
   }
   response.setHeader('Vary', 'Origin');
-  return config.origin === origin;
+  return config.origin === origin
+    || credentials.isSessionToken(url.searchParams.get('token'))
+    || credentials.isSessionToken(requestToken(request));
 }
 
 export function startHttpServer() {
@@ -69,6 +94,7 @@ export function startHttpServer() {
   const requestedPort = process.env.FLOVART_AGENT_PORT === '0'
     ? 0
     : Number(process.env.FLOVART_AGENT_PORT) || Number(new URL(config.url).port) || DEFAULT_AGENT_PORT;
+  const bootstrapCredentials = new BootstrapCredentialStore();
   const session = new WorkflowAgentSession({ isKnownAgentIdentity: id => Boolean(getAgentIdentity(id)) });
   const crew = new CrewService({
     store: new CrewStore(),
@@ -88,11 +114,27 @@ export function startHttpServer() {
 
   const server = http.createServer(async (request, response) => {
     const url = new URL(request.url || '/', config.url);
-    if (!setCors(request, response, url, config)) return json(response, 403, { ok: false, error: 'origin not allowed' });
+    bootstrapCredentials.expire();
+    if (!setCors(request, response, url, config, bootstrapCredentials)) return json(response, 403, { ok: false, error: 'origin not allowed' });
     if (request.method === 'OPTIONS') return json(response, 200, { ok: true });
     if (url.pathname === '/health') return json(response, 200, { ...session.health(), serviceMode: WORKSPACE_ONLY ? 'workspace-only' : 'agent' });
     if (url.pathname === '/config') return json(response, 200, { ok: true, url: config.url, hasToken: true, originBound: Boolean(config.origin) });
-    if (!validToken(request, url, config.token)) return json(response, 401, { ok: false, error: 'invalid token' });
+    if (request.method === 'POST' && url.pathname === '/bootstrap/issue') {
+      if (request.headers.origin || !validPersistentToken(request, url, config.token)) {
+        return json(response, 401, { ok: false, error: { code: 'BOOTSTRAP_ISSUE_UNAUTHORIZED', message: '只能由本机启动器签发 Browser bootstrap credential。' } });
+      }
+      return json(response, 200, { ok: true, ...bootstrapCredentials.issue() });
+    }
+    if (request.method === 'POST' && url.pathname === '/bootstrap/exchange') {
+      try {
+        const exchanged = bootstrapCredentials.exchange(request.headers['x-flovart-bootstrap-token']);
+        return json(response, 200, { ok: true, ...exchanged });
+      } catch (error) {
+        const known = error instanceof BootstrapCredentialError ? error : new BootstrapCredentialError('BOOTSTRAP_INVALID', 'Browser bootstrap credential 无效。');
+        return json(response, 401, { ok: false, error: known.toJSON() });
+      }
+    }
+    if (!validToken(request, url, config.token, bootstrapCredentials)) return json(response, 401, { ok: false, error: 'invalid token' });
 
     try {
       if (request.method === 'GET' && url.pathname === '/events') {
@@ -122,7 +164,7 @@ export function startHttpServer() {
         const body = await readBody(request);
         const agentIdentity = String(body.agentIdentity || body.host || '').trim().toLowerCase();
         const host = discoverAgentHosts({ includeVersion: false }).agents.find(item => item.id === agentIdentity);
-        if (!host?.available) {
+        if (!host?.available && host?.status !== 'manual-import') {
           return json(response, 409, { ok: false, error: { code: 'HOST_UNAVAILABLE', message: `${agentIdentity || '该 Agent Host'} 当前未在本机就绪。` } });
         }
         return json(response, 200, { ok: true, ...session.activateAgentHost({
@@ -131,11 +173,27 @@ export function startHttpServer() {
           projectId: body.projectId || body['project-id'],
         }) });
       }
-      if (request.method === 'POST' && url.pathname === '/workflow/native/register') {
-        return json(response, 200, { ok: true, ...session.activateNativeWorkspace() });
+      if (request.method === 'GET' && url.pathname === '/workspace/lease') {
+        return json(response, 200, { ok: true, leases: session.workspaceLeaseState() });
       }
-      if (request.method === 'GET' && url.pathname === '/workflow/native/state') {
-        return json(response, 200, { ok: true, ...session.nativeWorkspaceState() });
+      if (request.method === 'POST' && url.pathname === '/workspace/lease/acquire') {
+        const body = await readBody(request);
+        return json(response, 200, { ok: true, lease: session.acquireWorkspaceLease(body) });
+      }
+      if (request.method === 'POST' && url.pathname === '/workspace/lease/validate') {
+        const body = await readBody(request);
+        return json(response, 200, { ok: true, lease: session.validateWorkspaceLease(body) });
+      }
+      if (request.method === 'POST' && url.pathname === '/workspace/lease/renew') {
+        const body = await readBody(request);
+        return json(response, 200, { ok: true, lease: session.renewWorkspaceLease(body.leaseId) });
+      }
+      if (request.method === 'POST' && url.pathname === '/workspace/lease/release') {
+        const body = await readBody(request);
+        return json(response, 200, { ok: true, released: session.releaseWorkspaceLease(body.leaseId) });
+      }
+      if (request.method === 'POST' && url.pathname === '/workspace/lease/expire') {
+        return json(response, 200, { ok: true, leases: session.expireWorkspaceLeases() });
       }
       if (request.method === 'POST' && url.pathname === '/workflow/state') {
         session.updateSnapshot(await readBody(request), url.searchParams.get('clientId') || undefined);
@@ -339,7 +397,9 @@ export function startHttpServer() {
       return json(response, 404, { ok: false, error: 'not found' });
     } catch (error) {
       if (error instanceof WorkflowAgentSessionError) {
-        const status = ['AGENT_WRITER_INACTIVE', 'AGENT_HOST_REQUIRED', 'AGENT_HOST_SESSION_MISMATCH', 'AGENT_PROJECT_INACTIVE'].includes(error.code) ? 409 : 400;
+        const status = ['AGENT_WRITER_INACTIVE', 'AGENT_HOST_REQUIRED', 'AGENT_HOST_SESSION_MISMATCH', 'AGENT_PROJECT_INACTIVE', 'LEASE_EXPIRED', 'LEASE_TARGET_CHANGED', 'REVISION_CONFLICT'].includes(error.code)
+          ? 409
+          : error.code === 'WORKSPACE_UNAVAILABLE' ? 503 : 400;
         return json(response, status, { ok: false, error: error.toJSON() });
       }
       if (error instanceof CrewServiceError) {

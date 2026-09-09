@@ -44,8 +44,13 @@ async function fetchJson(url, options = {}) {
   const timer = setTimeout(() => controller.abort(), options.timeoutMs || 800);
   try {
     const response = await fetchImpl(url, {
+      method: options.method || 'GET',
       signal: controller.signal,
-      headers: options.token ? { 'x-flovart-agent-token': options.token } : undefined,
+      body: options.body,
+      headers: {
+        ...(options.token ? { 'x-flovart-agent-token': options.token } : {}),
+        ...(options.headers || {}),
+      },
     });
     const body = await response.json().catch(() => ({}));
     return { response, body };
@@ -55,6 +60,27 @@ async function fetchJson(url, options = {}) {
   } finally {
     clearTimeout(timer);
   }
+}
+
+/** Exchange the launcher-only Agent token for a one-use Browser credential. */
+export async function issueBrowserBootstrapToken(connection, options = {}) {
+  const normalized = connection || readLocalAgentConnection(options);
+  if (!normalized) throw new Error('Flovart Agent 连接不可用。');
+  let result;
+  try {
+    result = await fetchJson(new URL('/bootstrap/issue', normalized.url), {
+      ...options,
+      method: 'POST',
+      token: normalized.token,
+    });
+  } catch (cause) {
+    throw Object.assign(new Error(cause instanceof Error ? cause.message : String(cause)), { code: 'BOOTSTRAP_ISSUE_FAILED' });
+  }
+  if (!result.response.ok || !result.body?.bootstrapToken) {
+    const message = result.body?.error?.message || result.body?.error || `Agent bootstrap 签发返回 HTTP ${result.response.status}`;
+    throw Object.assign(new Error(String(message)), { code: result.body?.error?.code || 'BOOTSTRAP_ISSUE_FAILED' });
+  }
+  return String(result.body.bootstrapToken);
 }
 
 export async function inspectLocalAgent(connection, options = {}) {
@@ -153,9 +179,14 @@ export function buildBrowserBootstrapUrl(frontendUrl, connection, route = '#/app
   const url = new URL(frontendUrl);
   const normalized = connection || {};
   url.searchParams.set('agentUrl', normalizeLocalAgentUrl(normalized.url));
+  const bootstrapToken = String(normalized.bootstrapToken || '').trim();
+  if (bootstrapToken) {
+    url.searchParams.set('bootstrapToken', bootstrapToken);
+  } else {
   const token = String(normalized.token || '').trim();
   if (!token) throw new Error('构造 Browser bootstrap URL 时缺少 Agent Token。');
   url.searchParams.set('agentToken', token);
+  }
   // Only a launcher-opened page may claim the Browser Writer automatically.
   // Ordinary tabs still require an explicit in-app activation.
   url.searchParams.set('activateBrowserWriter', '1');
@@ -167,6 +198,7 @@ export function redactBootstrapUrl(value) {
   try {
     const url = new URL(String(value));
     url.searchParams.delete('agentToken');
+    url.searchParams.delete('bootstrapToken');
     url.searchParams.delete('token');
     url.searchParams.delete('activateBrowserWriter');
     const hashQueryIndex = url.hash.indexOf('?');
@@ -174,6 +206,7 @@ export function redactBootstrapUrl(value) {
       const route = url.hash.slice(0, hashQueryIndex);
       const params = new URLSearchParams(url.hash.slice(hashQueryIndex + 1));
       params.delete('agentToken');
+      params.delete('bootstrapToken');
       params.delete('token');
       params.delete('activateBrowserWriter');
       url.hash = params.size ? `${route}?${params}` : route;
@@ -182,6 +215,7 @@ export function redactBootstrapUrl(value) {
   } catch {
     return String(value || '')
       .replace(/([?&#](?:agentToken|token)=)[^&#]*/gi, '$1[redacted]')
+      .replace(/([?&#]bootstrapToken=)[^&#]*/gi, '$1[redacted]')
       .replace(/([?&#]activateBrowserWriter=)[^&#]*/gi, '$1[removed]');
   }
 }

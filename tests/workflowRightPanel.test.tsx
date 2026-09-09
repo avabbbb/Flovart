@@ -54,7 +54,9 @@ describe('Workflow right panel', () => {
     const drawer = close.closest('aside') as HTMLElement;
     expect(drawer.style.opacity).toBe('0');
     expect(drawer.style.pointerEvents).toBe('none');
+    expect(screen.queryByTestId('agent-host-picker')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: '打开右侧面板' }));
+    expect(screen.getByTestId('agent-host-picker')).toBeInTheDocument();
     expect(localStorage.getItem('workflowRightPanelOpenV2')).toBe('true');
     fireEvent.click(close);
     expect(localStorage.getItem('workflowRightPanelOpenV2')).toBe('false');
@@ -83,9 +85,9 @@ describe('Workflow right panel', () => {
     renderWorkspace();
 
     expect(screen.getByRole('region', { name: 'Production Crew 状态' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: '外部 Director Host 是指挥入口' })).toBeInTheDocument();
-    expect(screen.getByText('由当前 Host Projection 决定')).toBeInTheDocument();
-    expect(screen.queryByRole('textbox')).toBeNull();
+    expect(screen.getByRole('heading', { name: '协作 Agent 会帮你推进制作' })).toBeInTheDocument();
+    expect(screen.getByText('由左侧选择的助手负责')).toBeInTheDocument();
+    expect(screen.queryByText(/连接 Agent|Host Projection|Director Binding|连接指令/)).not.toBeInTheDocument();
     expect(screen.queryByTestId('flovart-main-agent')).toBeNull();
   });
 

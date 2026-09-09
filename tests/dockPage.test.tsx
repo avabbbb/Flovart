@@ -87,6 +87,12 @@ describe('dock plugin page', () => {
     vi.stubGlobal('fetch', fetchImpl);
     render(<DockPage embedded />);
 
+    expect(screen.getByRole('heading', { name: 'AI 协作' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Agent 地址')).not.toBeVisible();
+    expect(screen.getByLabelText('Token')).not.toBeVisible();
+    fireEvent.click(screen.getByText('高级连接设置 · Developer connection', { exact: true }));
+    expect(screen.getByLabelText('Agent 地址')).toBeVisible();
+    expect(screen.getByLabelText('Token')).toBeVisible();
     fireEvent.change(screen.getByLabelText('Agent 地址'), { target: { value: 'http://127.0.0.1:17372' } });
     fireEvent.change(screen.getByLabelText('Token'), { target: { value: 'token-abc' } });
     fireEvent.click(screen.getByRole('button', { name: '连接 Agent' }));

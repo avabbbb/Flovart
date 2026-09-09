@@ -77,7 +77,9 @@ function normalizeProbeResult(identity, result) {
     distributionTargets: identity.distributionTargets,
     runtimeSurfaces: identity.runtimeSurfaces,
     directorBinding: binding ? 'supported' : 'not-supported',
-    diagnostic: identity.status === 'planned'
+    diagnostic: identity.status === 'manual-import'
+      ? '通过 WorkBuddy 官方技能页导入 Flovart 技能包；未检测桌面安装或登录状态。'
+      : identity.status === 'planned'
       ? '该 Host 只登记为未来 Projection 候选，本次不探测也不参与 Director Binding。'
       : available
         ? '已发现可执行文件；登录状态由 Host 自己管理。'

@@ -208,14 +208,7 @@ export function useApiKeys(isSettingsPanelOpen: boolean) {
             .catch(() => { /* Runtime may be unavailable in web builds. */ });
     }, [userApiKeys, apiKeysLoaded, clearKeysOnExit]);
 
-    // 新用户引导：API Key 异步加载完成后，如果没有任何 Key 且用户未主动跳过，自动弹出引导
-    useEffect(() => {
-        if (!apiKeysLoaded) return;
-        const hasSkipped = localStorage.getItem('onboarding.skipped') === 'true';
-        if (userApiKeys.length === 0 && !hasSkipped) {
-            setShowOnboarding(true);
-        }
-    }, [apiKeysLoaded, userApiKeys.length]);
+    // 首次进入画布或连接外部助手不需要 Provider Key。AI 服务由用户在设置中配置。
 
     // 持久化 clearKeysOnExit 设置
     useEffect(() => {

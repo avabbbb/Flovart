@@ -44,14 +44,14 @@ export default function PlatformAdminApp() {
   if (viewer.role !== 'admin') return <CenteredMessage text="当前账号不是平台管理员" action={<Link to="/enterprise">返回企业后台</Link>} />;
 
   return (
-    <div className="theme-aware min-h-screen" style={{ background: 'var(--app-bg)', color: 'var(--isl-ink)' }}>
-      <header className="flex h-12 items-center gap-2 px-4" style={{ borderBottom: '1px solid var(--isl-border)' }}>
+      <div className="enterprise-platform-app theme-aware min-h-screen" style={{ background: 'var(--app-bg)', color: 'var(--isl-ink)' }}>
+      <header className="enterprise-platform-app__header flex h-12 items-center gap-2 px-4" style={{ borderBottom: '1px solid var(--isl-border)' }}>
         <Link to="/enterprise" className="isl-icon-btn h-8 w-8" title="返回企业后台" aria-label="返回企业后台"><ArrowLeft size={16} /></Link>
         <ShieldCheck size={17} style={{ color: 'var(--isl-mint-deep)' }} />
         <strong className="text-sm">Flovart 平台管理</strong>
         <span className="ml-auto text-xs" style={{ color: 'var(--isl-ink-soft)' }}>{viewer.username}</span>
       </header>
-      <main className="mx-auto max-w-7xl px-4 py-6">
+      <main className="enterprise-platform-app__main mx-auto max-w-7xl px-4 py-6">
         <Tabs
           defaultActiveKey="users"
           items={[
@@ -162,5 +162,5 @@ export function AuditTable({ load }: { load: () => Promise<{ list: AuditLog[]; t
 }
 
 function CenteredMessage({ text, action }: { text: string; action?: React.ReactNode }) {
-  return <div className="theme-aware flex min-h-screen items-center justify-center" style={{ background: 'var(--app-bg)', color: 'var(--isl-ink)' }}><div className="rounded-xl p-6 text-center" style={{ background: 'var(--isl-surface)', border: '1px solid var(--isl-border)' }}><p className="mb-3 text-sm">{text}</p>{action}</div></div>;
+  return <div className="enterprise-centered-message theme-aware flex min-h-screen items-center justify-center" style={{ background: 'var(--app-bg)', color: 'var(--isl-ink)' }}><div className="rounded-xl p-6 text-center" style={{ background: 'var(--isl-surface)', border: '1px solid var(--isl-border)' }}><p className="mb-3 text-sm">{text}</p>{action}</div></div>;
 }

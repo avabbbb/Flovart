@@ -14,7 +14,7 @@ import type {
   WorkflowResourceReference,
 } from './types';
 
-export type GenerationReferenceOrigin = 'graph' | 'mention' | 'asset' | 'runtime-artifact';
+export type GenerationReferenceOrigin = 'graph' | 'mention' | 'asset' | 'runtime-artifact' | 'creative-host';
 
 export type WorkflowGenerationCapability =
   | 'text-generate'
@@ -186,7 +186,7 @@ function resolveNodeResources(node: WorkflowNode, connection: WorkflowConnection
     const reference: WorkflowResourceReference = {
       id: connection.id,
       resourceId: resource.resourceId,
-      resourceOrigin: locator.kind === 'asset' ? 'asset' : 'node',
+      resourceOrigin: locator.kind === 'asset' ? 'asset' : locator.kind === 'creative-host' ? 'creative-host' : 'node',
       sourceId,
       kind: resource.kind,
       source: 'edge',
@@ -215,6 +215,7 @@ function resourceIdentity(resource: ResolvedWorkflowResource): string {
     case 'asset': return `asset:${resource.locator.assetId}`;
     case 'workflow-storage': return `storage:${resource.locator.storageKey}`;
     case 'runtime-artifact': return `artifact:${resource.locator.artifactRef.artifactId || resource.locator.artifactRef.taskId}:${resource.locator.artifactRef.outputIndex ?? 0}`;
+    case 'creative-host': return `host:${resource.locator.host}:${JSON.stringify(Object.entries(resource.locator.locator).sort(([left], [right]) => left.localeCompare(right)))}`;
     case 'remote-url': return `remote:${resource.resourceId}`;
     case 'legacy-href': return `legacy:${resource.locator.href}`;
     case 'inline-text': return `text:${resource.resourceId}`;
@@ -325,6 +326,7 @@ function assetResource(mention: WorkflowMentionReferenceInput, asset: WorkflowAs
 function mediaOrigin(resource: ResolvedWorkflowResource): GenerationReferenceOrigin {
   if (resource.locator.kind === 'asset') return 'asset';
   if (resource.locator.kind === 'runtime-artifact') return 'runtime-artifact';
+  if (resource.locator.kind === 'creative-host') return 'creative-host';
   return 'graph';
 }
 

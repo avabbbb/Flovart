@@ -5,8 +5,10 @@ import { useAuth } from '../../hooks/useAuth';
 import { useUpdaterStore } from '../../stores/useUpdaterStore';
 import { useDeploymentStore } from '../../stores/useDeploymentStore';
 import { useAgentConnectionStore } from '../../stores/useAgentConnectionStore';
+import { toLocalLinkPublicStatus } from '../../tools/flovart/public-status';
 import { AuthModal } from '../auth/AuthModal';
 import type { ThemeMode } from '../../types';
+import '../../styles/studio.css';
 
 export interface StudioMenuStatus {
   tone: 'ready' | 'warning';
@@ -122,19 +124,24 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
           ? (isChinese ? '已是最新版本' : 'Up to date')
           : (isChinese ? '检查更新' : 'Check for updates');
   const agentConnectionStatus = useAgentConnectionStore(state => state.status);
-  const agentReady = agentConnectionStatus === 'ready';
+  const agentPublicStatus = toLocalLinkPublicStatus({
+    ready: agentConnectionStatus === 'ready',
+    agent: { status: agentConnectionStatus === 'auth_failed' ? 'auth_failed' : agentConnectionStatus },
+    browserConnected: agentConnectionStatus === 'ready',
+  });
+  const agentReady = agentPublicStatus.state === 'ready';
   const agentLabel = isChinese
-    ? agentReady ? '本机 Agent 已连接' : agentConnectionStatus === 'connecting' ? '本机 Agent 连接中' : agentConnectionStatus === 'auth_failed' ? '本机 Agent 认证失败' : '本机 Agent 离线'
-    : agentReady ? 'Local Agent Ready' : agentConnectionStatus === 'connecting' ? 'Local Agent Connecting' : agentConnectionStatus === 'auth_failed' ? 'Local Agent Auth Failed' : 'Local Agent Offline';
-  const agentColor = agentReady ? 'var(--isl-mint-deep)' : agentConnectionStatus === 'auth_failed' || agentConnectionStatus === 'error' ? 'var(--isl-coral-deep)' : 'var(--isl-ink-soft)';
+    ? agentPublicStatus.label
+    : ({ ready: 'Ready', needs_setup: 'Needs setup', needs_login: 'Needs login', offline: 'Offline' }[agentPublicStatus.state]);
+  const agentColor = agentReady ? 'var(--isl-mint-deep)' : agentPublicStatus.state === 'needs_login' || agentPublicStatus.state === 'offline' ? 'var(--isl-coral-deep)' : 'var(--isl-ink-soft)';
 
   return (
     <>
     <header
-      className="theme-aware relative z-50 grid min-h-12 shrink-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-1 px-2 py-1.5 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:px-4"
+      className="studio-top-menu theme-aware relative z-50 grid min-h-12 shrink-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-1 px-2 py-1.5 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:px-4"
       style={{ background: 'var(--app-bg)' }}
     >
-      <div className="flex min-w-0 items-center gap-2">
+      <div className="studio-top-menu__leading flex min-w-0 items-center gap-2">
         <div ref={logoMenuRef} className="relative shrink-0">
           <button
             type="button"
@@ -226,7 +233,7 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
         )}
       </div>
 
-      <div className="flex min-w-0 items-center justify-center gap-0.5">
+      <nav className="studio-top-menu__modes flex min-w-0 items-center justify-center gap-0.5" aria-label={isChinese ? '工作区' : 'Workspace'}>
         {(['workflow', 'table', 'agent'] as const).map(tabMode => {
           const isActive = mode === tabMode;
           const label = tabMode === 'workflow'
@@ -245,9 +252,9 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
             </button>
           );
         })}
-      </div>
+      </nav>
 
-      <div className="flex min-w-0 items-center justify-end gap-0.5 sm:gap-1">
+      <div className="studio-top-menu__actions flex min-w-0 items-center justify-end gap-0.5 sm:gap-1">
         <span
           title="开发构建标识：刷新后时间变化即代表加载了最新代码"
           className="hidden items-center rounded px-1.5 py-0.5 text-[9px] font-semibold lg:inline-flex"
@@ -309,7 +316,7 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
           to="/dock"
           data-testid="agent-connection-status"
           className="isl-icon-btn flex h-8 items-center gap-1.5 px-2"
-          title={isChinese ? '打开本机 Agent 开发者诊断' : 'Open Local Agent diagnostics'}
+          title={isChinese ? '打开协作服务开发者诊断' : 'Open collaboration diagnostics'}
           aria-label={agentLabel}
           style={{ color: agentColor }}
         >

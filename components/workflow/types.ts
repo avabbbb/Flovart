@@ -153,7 +153,7 @@ export interface WorkflowArtifactRef {
 }
 
 export type WorkflowResourceKind = 'text' | 'image' | 'video' | 'audio';
-export type WorkflowResourceOrigin = 'node' | 'asset' | 'upload';
+export type WorkflowResourceOrigin = 'node' | 'asset' | 'upload' | 'creative-host';
 export type WorkflowResourceReferenceSource = 'edge' | 'mention' | 'manual';
 export type WorkflowGenerationReferenceRole = 'first_frame' | 'last_frame' | 'reference' | 'character' | 'style' | 'mask' | 'source_video' | 'source_audio';
 
@@ -161,6 +161,8 @@ export type WorkflowResourceLocator =
   | { kind: 'asset'; assetId: string }
   | { kind: 'workflow-storage'; storageKey: string }
   | { kind: 'runtime-artifact'; artifactRef: WorkflowArtifactRef }
+  /** Creative Host 的 opaque locator；执行层必须通过 Host adapter 物化，不能被 Provider 直接解释。 */
+  | { kind: 'creative-host'; host: string; locator: Record<string, string | number> }
   | { kind: 'remote-url'; href: string }
   | { kind: 'legacy-href'; href: string }
   | { kind: 'inline-text'; text: string }
@@ -248,6 +250,8 @@ export interface WorkflowNodeMetadata {
     sourceTitle?: string;
   };
   artifactRef?: WorkflowArtifactRef;
+  /** 由 Creative Host 注入的 provider-neutral 资源定位信息。 */
+  resourceLocator?: WorkflowResourceLocator;
   poster?: string;
   /** 本地视频首帧 JPEG 的独立持久化键；不得内嵌为项目 JSON 的 base64。 */
   posterStorageKey?: string;

@@ -7,6 +7,7 @@ import type { GenerationCapability, GenerationMode } from '../../services/genera
 import { StudioRightDrawer } from '../studio/StudioRightDrawer';
 import { StudioMediaBrowser, type StudioMediaItem } from '../studio/StudioMediaBrowser';
 import { ProductionCrewPanel } from '../agent/ProductionCrewPanel';
+import { AgentHostPicker } from '../agent/AgentHostPicker';
 import { activateBrowserWorkflowWriter } from '../../services/agentHostDiscovery';
 import { useAgentConnectionStore } from '../../stores/useAgentConnectionStore';
 import { createWorkflowNode } from './constants';
@@ -19,7 +20,7 @@ import type { WorkflowImageToolHandlers } from './WorkflowNodeToolbar';
 import { WorkflowSidebar } from './WorkflowSidebar';
 import { discardWorkflowMediaRecord, fitWorkflowMediaSize, ingestWorkflowMedia, loadWorkflowMediaBlob, releaseWorkflowMediaRecord, workflowBlobToDataUrl, type WorkflowMediaRecord } from './media';
 import type { AssetItem, AssetLibrary } from '../../types';
-import { useCompactViewport } from '../../hooks/useCompactViewport';
+import { useMediaQuery } from '../../hooks/useMediaQuery';
 import type { WorkflowProject } from './types';
 import type { PromptIntent } from './promptIntent';
 
@@ -55,6 +56,22 @@ export interface WorkflowWorkspaceProps {
 }
 
 type WorkflowRightTab = 'agent' | 'history';
+
+const WORKFLOW_DRAWER_MIN = 280;
+const WORKFLOW_DRAWER_DEFAULT = 360;
+const WORKFLOW_DRAWER_MAX = 640;
+
+function readWorkflowDrawerWidth() {
+  if (typeof window === 'undefined') return WORKFLOW_DRAWER_DEFAULT;
+  try {
+    const stored = Number(localStorage.getItem('workflowRightPanelWidth'));
+    return Number.isFinite(stored) && stored >= WORKFLOW_DRAWER_MIN && stored <= WORKFLOW_DRAWER_MAX
+      ? stored
+      : WORKFLOW_DRAWER_DEFAULT;
+  } catch {
+    return WORKFLOW_DRAWER_DEFAULT;
+  }
+}
 
 export function WorkflowWorkspace({
   theme,
@@ -93,21 +110,19 @@ export function WorkflowWorkspace({
   const createProject = useWorkflowStore(state => state.createProject);
   const updateProject = useWorkflowStore(state => state.updateProject);
   const activeProject = projects.find(project => project.id === activeProjectId) || null;
-  const compactViewport = useCompactViewport();
+  // These queries only switch interaction mode (inline pane vs drawer). CSS
+  // and container queries own the actual geometry and wrapping.
+  const mediumViewport = useMediaQuery('(max-width: 1023px)');
   const [desktopLeftOpen, setDesktopLeftOpen] = useState(true);
   const [mobileLeftOpen, setMobileLeftOpen] = useState(false);
-  const leftOpen = compactViewport ? mobileLeftOpen : desktopLeftOpen;
-  const setLeftOpen = (open: boolean) => compactViewport ? setMobileLeftOpen(open) : setDesktopLeftOpen(open);
+  const leftOpen = mediumViewport ? mobileLeftOpen : desktopLeftOpen;
+  const setLeftOpen = (open: boolean) => mediumViewport ? setMobileLeftOpen(open) : setDesktopLeftOpen(open);
   const [desktopRightOpen, setDesktopRightOpen] = useState(() => localStorage.getItem('workflowRightPanelOpenV2') === 'true');
   const [mobileRightOpen, setMobileRightOpen] = useState(false);
-  const rightOpen = compactViewport ? mobileRightOpen : desktopRightOpen;
-  const setRightOpen = (open: boolean) => compactViewport ? setMobileRightOpen(open) : setDesktopRightOpen(open);
+  const rightOpen = mediumViewport ? mobileRightOpen : desktopRightOpen;
+  const setRightOpen = (open: boolean) => mediumViewport ? setMobileRightOpen(open) : setDesktopRightOpen(open);
   const [rightTab, setRightTab] = useState<WorkflowRightTab>('agent');
-  const [rightWidth, setRightWidth] = useState(() => {
-    const stored = Number(localStorage.getItem('workflowRightPanelWidth'));
-    // 首次打开默认占视口 32%，避免 Agent 面板弹出时过度挤压画布；用户拖宽后记住选择
-    return stored >= 520 ? stored : Math.min(520, Math.round(window.innerWidth * .32));
-  });
+  const [rightWidth, setRightWidth] = useState(readWorkflowDrawerWidth);
   const [workspaceNotice, setWorkspaceNotice] = useState('');
   const [writerRecoveryPending, setWriterRecoveryPending] = useState(false);
   const [sidebarTabRequest, setSidebarTabRequest] = useState<{ tab: 'layers' | 'assets'; nonce: number }>();
@@ -127,8 +142,8 @@ export function WorkflowWorkspace({
   }, [desktopRightOpen]);
 
   useEffect(() => {
-    if (compactViewport) setMobileRightOpen(false);
-  }, [compactViewport]);
+    if (mediumViewport) setMobileRightOpen(false);
+  }, [mediumViewport]);
 
   const commitProjectPatch = (projectId: string, patch: Partial<WorkflowProject>, intent: string) => {
     const current = useWorkflowStore.getState().projects.find(project => project.id === projectId);
@@ -179,8 +194,8 @@ export function WorkflowWorkspace({
   };
 
   useEffect(() => {
-    if (compactViewport) setMobileLeftOpen(false);
-  }, [compactViewport]);
+    if (mediumViewport) setMobileLeftOpen(false);
+  }, [mediumViewport]);
 
   const insertSharedMedia = async (media: WorkflowSharedMedia) => {
     if (!activeProject) return;
@@ -316,7 +331,7 @@ assetLibrary={assetLibrary}
                 }
               }}
               agentOpen={rightOpen && rightTab === 'agent'}
-              rightPanelInset={rightOpen && !compactViewport ? rightWidth + 24 : 12}
+              rightPanelInset={rightOpen && !mediumViewport ? rightWidth + 24 : 12}
               t={t}
               theme={theme}
               language={language}
@@ -347,8 +362,8 @@ assetLibrary={assetLibrary}
         onOpenChange={setRightOpen}
         outerGap={0}
         width={rightWidth}
-        minWidth={Math.max(320, Math.round(window.innerWidth * .3))}
-        maxWidth={Math.max(480, Math.round(window.innerWidth * .55))}
+        minWidth={WORKFLOW_DRAWER_MIN}
+        maxWidth={WORKFLOW_DRAWER_MAX}
         onWidthChange={setRightWidth}
         flush
         activeTab={rightTab}
@@ -359,7 +374,7 @@ assetLibrary={assetLibrary}
         ]}
       >
         {rightTab === 'agent' && (activeProject ? (
-          <ProductionCrewPanel project={activeProject} />
+          <div className="h-full overflow-auto">{rightOpen && <AgentHostPicker />}<ProductionCrewPanel project={activeProject} /></div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, height: '100%', padding: '0 32px', textAlign: 'center', color: 'var(--isl-ink-soft)', fontSize: 13 }}>
             <strong style={{ color: 'var(--isl-ink)' }}>制作状态需要一个 Workflow 项目</strong>

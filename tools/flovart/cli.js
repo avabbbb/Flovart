@@ -12,6 +12,7 @@ import { RESEARCH_COMMANDS, RESEARCH_WRITE_COMMANDS } from './research-command-s
 import { collectTopicResearch } from './topic-research.js';
 import { runSkillCommand, SKILL_COMMAND_NAMES } from './skill-commands.js';
 import { getLocalStatus } from './local-status.js';
+import { ensureFlovart } from './ensure.js';
 import {
   createWorkspaceFacade,
   FlovartWorkspaceClient,
@@ -139,6 +140,33 @@ if (['install', 'start', 'update'].includes(rawCommand)) {
   }
 
   const routingCommand = command;
+
+  if (routingCommand === 'ensure') {
+    const result = await ensureFlovart({ open: !(args.noOpen || args['no-open']) });
+    printCliResponse(result.ok, command, result, result.ok ? null : result.error, { runtime: 'flovart-link' });
+    return;
+  }
+
+  // WorkBuddy's CLI connector lifecycle is local-ready semantics, not a second
+  // account or OAuth flow. It never revokes Flovart credentials shared by other
+  // Hosts when WorkBuddy runs unAuth.
+  if (routingCommand === 'workbuddy.status') {
+    const result = await getLocalStatus();
+    printCliResponse(true, command, { state: result.ready ? 'local-ready' : 'offline', status: result }, null, { runtime: 'workbuddy-connector' });
+    return;
+  }
+  if (routingCommand === 'workbuddy.auth') {
+    const result = await ensureFlovart({ open: false });
+    printCliResponse(result.ok, command, { state: result.ok ? 'local-ready' : 'offline', ...result }, result.ok ? null : result.error, { runtime: 'workbuddy-connector' });
+    return;
+  }
+  if (routingCommand === 'workbuddy.unAuth') {
+    printCliResponse(true, command, {
+      state: 'local-ready',
+      message: 'Flovart 本地服务不保存 WorkBuddy 账号；此次 unAuth 不会注销或影响其它 Host。',
+    }, null, { runtime: 'workbuddy-connector' });
+    return;
+  }
 
   if (CLIENT_REGISTRY_COMMANDS.has(routingCommand)) {
     const result = await executeFlovartCommand(command, args, {});

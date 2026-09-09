@@ -4,6 +4,7 @@ import ReactDOM from 'react-dom/client';
 import { RouterHost } from './RouterHost';
 import { bootstrapRuntimeCredentials } from './services/bootstrapRuntimeCredentials';
 import './styles/index.css';
+import './styles/adaptive.css';
 
 void bootstrapRuntimeCredentials().catch(() => {
   // Browser builds and unavailable Desktop IPC keep using the encrypted Web Vault.

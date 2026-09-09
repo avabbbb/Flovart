@@ -1,0 +1,92 @@
+/* Table keeps its own media-processing graph, but its chrome reflows around it. */
+
+.table-workspace {
+  container-type: inline-size;
+  grid-template-columns: minmax(180px, 220px) minmax(0, 1fr);
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.table-workspace > aside,
+.table-workspace__main,
+.table-workspace__main > section,
+.table-workspace__tools {
+  min-width: 0;
+  min-height: 0;
+}
+
+.table-workspace__main {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.table-workspace__main--with-tools {
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 256px);
+}
+
+.table-workspace__main img,
+.table-workspace__main video {
+  max-width: 100%;
+}
+
+.table-workspace__main > section video {
+  max-height: calc(100dvh - 190px);
+}
+
+@container (max-width: 900px) {
+  .table-workspace {
+    grid-template-columns: minmax(160px, 190px) minmax(0, 1fr);
+  }
+
+  .table-workspace__main--with-tools {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) minmax(0, auto);
+  }
+
+  .table-workspace__tools {
+    max-height: min(34dvh, 280px);
+    border-top: 1px solid var(--isl-border);
+    border-left: 0 !important;
+  }
+}
+
+@container (max-width: 640px) {
+  .table-workspace {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .table-workspace > aside {
+    max-height: min(26dvh, 190px);
+    border-right: 0;
+    border-bottom: 1px solid var(--isl-border);
+  }
+
+  .table-workspace > aside > .min-h-0.flex-1 {
+    min-height: 0;
+  }
+
+  .table-workspace > aside strong,
+  .table-workspace > aside p,
+  .table-workspace > aside button > span {
+    display: block;
+  }
+
+  .table-workspace__tools {
+    max-height: min(38dvh, 260px);
+  }
+
+  .table-workspace__main > section video {
+    max-height: calc(100dvh - 250px);
+  }
+}
+
+@media (max-height: 600px) {
+  .table-workspace > aside {
+    max-height: 156px;
+  }
+
+  .table-workspace__tools {
+    max-height: 180px;
+  }
+}

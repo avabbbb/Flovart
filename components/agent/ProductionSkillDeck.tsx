@@ -102,7 +102,9 @@ export function ProductionSkillDeck({
     });
   };
 
-  // 弹性高度：picker 从 composer 向上弹出，高度按可用空间比例收缩，避免顶部被面板/视口裁切
+  // 弹性高度：picker 从 composer 向上弹出，高度按可用空间比例收缩，避免顶部被面板/视口裁切。
+  // 这是浮层行为几何（不是页面布局）：观察锚点自身尺寸，避免让整个 App
+  // 在每个 viewport resize tick 上重渲染。
   useLayoutEffect(() => {
     if (!open) return;
     const measure = () => {
@@ -111,8 +113,16 @@ export function ProductionSkillDeck({
       setAvailableHeight(Math.max(260, Math.min(420, Math.floor(rect.top - 64))));
     };
     measure();
-    window.addEventListener('resize', measure);
-    return () => window.removeEventListener('resize', measure);
+    const target = dropTargetRef.current;
+    const observer = typeof ResizeObserver === 'undefined' || !target
+      ? null
+      : new ResizeObserver(measure);
+    observer?.observe(target);
+    window.visualViewport?.addEventListener('resize', measure);
+    return () => {
+      observer?.disconnect();
+      window.visualViewport?.removeEventListener('resize', measure);
+    };
   }, [open, dropTargetRef]);
 
   const bundledSkills = listBundledProductionSkills();

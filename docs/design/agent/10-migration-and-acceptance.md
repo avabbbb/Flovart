@@ -1,13 +1,19 @@
 # 迁移与验收
 
 > 状态：实施规划。文档重构不等于代码迁移完成；所有产品声明以本文件的放行门为准。
+>
+> 本文件保留早期 External Director / Workspace Operator 迁移背景。DeepSeek
+> Harness 的 Native Draft、独立 Binding UI 和完整 Dock 方案已经被 Flovart
+> Link 2.0 与 [ADR 0063](../../adr/0063-dsh-browser-workflow-authority.md)
+> 取代；当前实现以 `docs/design/flovart-link-2/`、`dsh-plugin/README.md` 和
+> `SUPPORT_MATRIX.md` 为准，本文中的旧方案不得作为已完成证据。
 
 ## 当前代码事实
 
 | 当前路径 | 事实 | 与目标的冲突 |
 | --- | --- | --- |
-| `components/agent/AgentWorkspace.tsx` | 默认渲染 `FlovartAgentPanel`，Codex 作为“子任务” | 主次颠倒；目标只保留可由 Flovart Dock 打开的 Production Control |
-| `components/agent/agentWorkspaceStore.ts` | 固定 `flovart-main` 面板并迁移旧 `codex-main` | UI 数据模型仍以内置主 Agent 为中心 |
+| `components/agent/AgentWorkspace.tsx` | 挂载助手引导、制作状态、上下文和产物；空项目也可开始接入 | 首次对话、空间布局和任务定位仍需继续验收 |
+| `components/agent/agentWorkspaceStore.ts` | 使用 `crew-main`，仍保留旧面板转换代码 | 清理旧数据兼容逻辑需独立核对调用与测试 |
 | `agent/flovart.js` + `agent/kernel.js` | 旧内置主 Agent 通过 `@earendil-works/pi-agent-core` 创建长期会话并写 SQLite | Operator 应按 Intent 临时运行；实现包名不再成为产品角色名 |
 | `services/browserAgentKernel.ts` | 浏览器再实现一套旧内置 Agent、会话和直连模型 | 双内核、双会话、Secret 边界不同 |
 | `components/agent/FlovartAgentPanel.tsx` | 在 Managed/Browser 两个旧内置实现间切换 | 不应再提供内置主聊天 |

@@ -77,6 +77,7 @@ export const HELP_TEXT = [
   'models.list --purpose image|video|all           List agent-facing model IDs',
   'model search --type image --query flux           Search model IDs',
   'status                                          Inspect local frontend, Agent, and visible Workflow readiness',
+  'ensure [--no-open]                              Make the local Flovart Link ready and return public JSON status',
   'provider.status                                 Inspect provider/model configuration',
   'provider.begin-setup ...                       [retired] Configure an AI service in Flovart WebUI',
   'provider.select-model ...                      [retired] Configure models in Flovart WebUI',
@@ -102,7 +103,7 @@ export const HELP_TEXT = [
   'video.status --job-id <id>                      Query video job status',
   'export.project                                  Export project metadata when supported',
   '',
-  'The stable Agent surface is status + workflow.inspect/selection.get/apply/node.run; other commands are CLI adapters.',
+  'The stable Agent surface is ensure + status + workflow.inspect/selection.get/apply/node.run; other commands are CLI adapters.',
   'External Host projections should pass --agent-identity on Workflow commands; the first tagged inspect claims the Host writer.',
   'This CLI does not understand natural language. The external agent is the planner.',
 ].join('\n');

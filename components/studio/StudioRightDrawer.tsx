@@ -60,6 +60,20 @@ export const StudioRightDrawer: React.FC<StudioRightDrawerProps> = ({
     };
   }, [maxWidth, minWidth, onWidthChange, resizing]);
 
+  const safeWidth = Math.min(maxWidth, Math.max(minWidth, Number.isFinite(width) ? width : minWidth));
+  const drawerStyle: React.CSSProperties = {
+    top: flush ? 0 : outerGap,
+    right: flush ? 0 : outerGap,
+    bottom: flush ? 0 : outerGap,
+    // Keep the user's preference as a token. CSS clamps it against the
+    // available container; no viewport measurement is needed here.
+    ['--drawer-width' as string]: `${safeWidth}px`,
+    width: open ? `min(var(--drawer-width), calc(100% - ${(flush ? 0 : outerGap * 2)}px))` : '0px',
+    opacity: open ? 1 : 0,
+    pointerEvents: open ? 'auto' : 'none',
+    transform: 'translateX(0)',
+  };
+
   return (
     <>
       <button
@@ -76,15 +90,8 @@ export const StudioRightDrawer: React.FC<StudioRightDrawerProps> = ({
       <aside
         ref={asideRef}
         className={`isl-panel compact-right-panel theme-aware absolute z-[78] flex min-h-0 flex-col overflow-hidden transition-[transform,opacity] duration-200 ${flush ? 'compact-right-panel--flush' : ''}`}
-        style={{
-          top: flush ? 0 : outerGap,
-          right: flush ? 0 : outerGap,
-          bottom: flush ? 0 : outerGap,
-          width: `min(${width}px, calc(100% - ${(flush ? 0 : outerGap * 2)}px))`,
-          opacity: open ? 1 : 0,
-          pointerEvents: open ? 'auto' : 'none',
-          transform: open ? 'translateX(0)' : 'translateX(calc(100% + 24px))',
-        }}
+        data-open={open ? 'true' : 'false'}
+        style={drawerStyle}
       >
         <div
           role="separator"

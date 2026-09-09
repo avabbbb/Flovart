@@ -1,5 +1,6 @@
 import { nanoid } from 'nanoid';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { RefObject } from 'react';
 import type { DragEvent as ReactDragEvent, PointerEvent as ReactPointerEvent } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Check, ChevronRight, ChevronsDown, Maximize2, Plus, Star, Undo2 } from 'lucide-react';
@@ -89,6 +90,26 @@ const CONNECTION_NODE_PADDING = 24;
 const CONNECTION_HANDLE_RADIUS = 18;
 function sameIds(a: string[], b: string[]) {
   return a.length === b.length && a.every((id, index) => id === b[index]);
+}
+
+function useElementSize<T extends HTMLElement>(ref: RefObject<T | null>) {
+  const [size, setSize] = useState<{ width: number; height: number } | null>(null);
+
+  useEffect(() => {
+    const element = ref.current;
+    if (!element) return;
+    const update = () => {
+      const next = { width: element.clientWidth, height: element.clientHeight };
+      setSize(previous => previous && previous.width === next.width && previous.height === next.height ? previous : next);
+    };
+    update();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(update);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [ref]);
+
+  return size;
 }
 
 function workflowDropFiles(dataTransfer: DataTransfer) {
@@ -242,6 +263,7 @@ export function InfiniteWorkflow({
 }) {
   useProductionProjectionAdapter(project.id);
   const rootRef = useRef<HTMLDivElement>(null);
+  const rootSize = useElementSize(rootRef);
   const worldRef = useRef<HTMLDivElement>(null);
   const projectRef = useRef(project);
   const viewportRef = useRef(project.viewport);
@@ -1992,18 +2014,17 @@ export function InfiniteWorkflow({
     right: Math.max(bounds.right, node.position.x + node.width),
     bottom: Math.max(bounds.bottom, node.position.y + node.height),
   }), { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity }) : null;
-  const rootRect = rootRef.current?.getBoundingClientRect();
-  const workflowWidth = Math.max(360, (rootRect?.width || 1000) - (rightPanelInset || 0));
+  const workflowWidth = Math.max(360, (rootSize?.width || 1000) - (rightPanelInset || 0));
   const overlayCenter = overlayBounds ? project.viewport.x + ((overlayBounds.left + overlayBounds.right) / 2) * project.viewport.k : 0;
   const toolbarLeft = Math.max(8, Math.min(overlayCenter, workflowWidth - 8));
   const toolbarTop = overlayBounds ? Math.max(8, project.viewport.y + overlayBounds.top * project.viewport.k - Math.max(72, 56 + 28 * project.viewport.k)) : 0;
   // PromptBar 让位行程减半：右侧面板弹出时只左移一半距离，避免过度偏移
-  const promptWorkflowWidth = Math.max(360, (rootRect?.width || 1000) - Math.round((rightPanelInset || 0) / 2));
+  const promptWorkflowWidth = Math.max(360, (rootSize?.width || 1000) - Math.round((rightPanelInset || 0) / 2));
   const promptWidth = Math.min(880, Math.max(360, promptWorkflowWidth - 16));
   const promptLeft = Math.max(8, Math.min(overlayCenter - promptWidth / 2, promptWorkflowWidth - promptWidth - 8));
   const configLeft = Math.max(8, Math.min(overlayCenter - 210, workflowWidth - 428));
   const promptTop = overlayBounds ? (() => {
-    const rootHeight = rootRect?.height || 700;
+    const rootHeight = rootSize?.height || 700;
     const estimatedPromptHeight = 176;
     const below = project.viewport.y + overlayBounds.bottom * project.viewport.k + 12;
     const dockSafeTop = rootHeight - 60;

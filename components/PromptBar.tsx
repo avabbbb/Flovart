@@ -1,5 +1,4 @@
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, Reorder } from 'motion/react';
 import type {
     AssetFolder,
@@ -23,6 +22,7 @@ import { createPromptBarGenerationPolicy, PROMPT_IMAGE_MODE_ORDER, PROMPT_VIDEO_
 
 import { readColdMedia } from '../utils/mediaIndexedDB';
 import { AssetReferencePicker, type ReferencePickerWorkflowItem } from './studio/AssetReferencePicker';
+import { ResponsivePopover } from './ResponsivePopover';
 
 export interface PromptBarProps {
     t: (key: string, ...args: any[]) => string;
@@ -179,110 +179,6 @@ const MenuOptionButton: React.FC<{ label: string; active?: boolean; description?
         )}
     </button>
 );
-
-type FloatingSide = 'up' | 'down';
-
-const AdaptivePromptPopover: React.FC<{
-    anchorRef: React.RefObject<HTMLElement | null>;
-    preferredSide: 'auto' | FloatingSide;
-    width: number;
-    children: React.ReactNode;
-}> = ({ anchorRef, preferredSide, width, children }) => {
-    const panelRef = useRef<HTMLDivElement>(null);
-    const [position, setPosition] = useState({ left: 12, top: 12, maxHeight: 320, side: 'up' as FloatingSide, ready: false });
-
-    useLayoutEffect(() => {
-        const panel = panelRef.current;
-        const anchor = anchorRef.current;
-        if (!panel || !anchor) return;
-
-        const updatePosition = () => {
-            const anchorRect = anchor.getBoundingClientRect();
-            const panelRect = panel.getBoundingClientRect();
-            const viewport = window.visualViewport;
-            const viewportWidth = viewport?.width || window.innerWidth;
-            const viewportHeight = viewport?.height || window.innerHeight;
-            const viewportLeft = viewport?.offsetLeft || 0;
-            const viewportTop = viewport?.offsetTop || 0;
-            const margin = 12;
-            const gap = 10;
-            const spaceAbove = anchorRect.top - viewportTop - margin - gap;
-            const spaceBelow = viewportTop + viewportHeight - anchorRect.bottom - margin - gap;
-            const desiredHeight = Math.max(240, panelRect.height);
-            const preferredFits = preferredSide === 'up' ? spaceAbove >= desiredHeight : preferredSide === 'down' ? spaceBelow >= desiredHeight : false;
-            const side: FloatingSide = preferredSide === 'auto'
-                ? (spaceBelow >= desiredHeight || spaceBelow >= spaceAbove ? 'down' : 'up')
-                : preferredFits
-                    ? preferredSide
-                    : preferredSide === 'up'
-                        ? 'down'
-                        : 'up';
-            const availableHeight = Math.max(180, side === 'up' ? spaceAbove : spaceBelow);
-            const renderedHeight = Math.min(panelRect.height, availableHeight);
-            const panelWidth = Math.min(width, viewportWidth - margin * 2);
-            const idealLeft = anchorRect.left + Math.min(16, Math.max(0, anchorRect.width - panelWidth));
-            const left = Math.min(Math.max(idealLeft, viewportLeft + margin), viewportLeft + viewportWidth - panelWidth - margin);
-            const top = side === 'up'
-                ? Math.max(viewportTop + margin, anchorRect.top - gap - renderedHeight)
-                : Math.min(anchorRect.bottom + gap, viewportTop + viewportHeight - renderedHeight - margin);
-
-            setPosition(previous => {
-                const next = { left, top, maxHeight: availableHeight, side, ready: true };
-                return previous.left === next.left && previous.top === next.top && previous.maxHeight === next.maxHeight && previous.side === next.side && previous.ready
-                    ? previous
-                    : next;
-            });
-        };
-
-        updatePosition();
-        const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(updatePosition);
-        observer?.observe(anchor);
-        observer?.observe(panel);
-        window.addEventListener('resize', updatePosition);
-        window.addEventListener('scroll', updatePosition, true);
-        window.visualViewport?.addEventListener('resize', updatePosition);
-        window.visualViewport?.addEventListener('scroll', updatePosition);
-        return () => {
-            observer?.disconnect();
-            window.removeEventListener('resize', updatePosition);
-            window.removeEventListener('scroll', updatePosition, true);
-            window.visualViewport?.removeEventListener('resize', updatePosition);
-            window.visualViewport?.removeEventListener('scroll', updatePosition);
-        };
-    }, [anchorRef, preferredSide, width]);
-
-    if (typeof document === 'undefined') return null;
-    return createPortal(
-        <motion.div
-            ref={panelRef}
-            data-prompt-floating-panel
-            data-testid="prompt-floating-panel"
-            data-side={position.side}
-            data-preferred-side={preferredSide}
-            className="theme-aware fixed z-[2000] isl-scrollbar"
-            style={{
-                left: position.left,
-                top: position.top,
-                width: `min(${width}px, calc(100vw - 24px))`,
-                maxHeight: position.maxHeight,
-                visibility: position.ready ? 'visible' : 'hidden',
-                overflowY: 'auto',
-                overflowX: 'hidden',
-                overscrollBehavior: 'contain',
-                borderRadius: 16,
-                transformOrigin: position.side === 'up' ? 'bottom left' : 'top left',
-            }}
-            initial={{ opacity: 0, scale: 0.97 }}
-            animate={{ opacity: position.ready ? 1 : 0, scale: position.ready ? 1 : 0.97 }}
-            transition={{ type: 'spring', stiffness: 420, damping: 34, mass: 0.7 }}
-            onPointerDown={event => event.stopPropagation()}
-            onWheel={event => event.stopPropagation()}
-        >
-            {children}
-        </motion.div>,
-        document.body,
-    );
-};
 
 const isSupportedAttachment = (type: string) => type.startsWith('image/') || type.startsWith('video/') || type.startsWith('audio/');
 
@@ -913,7 +809,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                 </div>
 
                 {expandedPanel && (
-                    <AdaptivePromptPopover anchorRef={popoverAnchor ? { current: popoverAnchor } : rootRef} preferredSide={popoverDirection} width={popoverWidth}>
+                    <ResponsivePopover anchorRef={popoverAnchor ? { current: popoverAnchor } : rootRef} preferredSide={popoverDirection} width={popoverWidth} dataTestId="prompt-floating-panel">
                         <div
                             data-panel={expandedPanel}
                             className="isl-pop"
@@ -1331,7 +1227,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                             )}
                             </div>
                         </div>
-                    </AdaptivePromptPopover>
+                    </ResponsivePopover>
                 )}
 
                 <div className={`relative flex items-center gap-2 border-t ${compactMode ? 'px-2.5 py-2' : 'px-3 py-2.5'}`} style={{ borderColor: 'var(--isl-border)' }}>

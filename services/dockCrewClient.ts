@@ -1,8 +1,8 @@
 /**
  * Flovart Dock 前端 Crew 客户端
  *
- * 通过同一 loopback Agent/Workspace Adapter 通道（localStorage 记忆 url +
- * sessionStorage 短期 token）读取 Crew 协议：director.status、crew.intent.*、
+ * 通过同一 loopback Agent/Workspace Adapter 通道（localStorage 仅记忆 url，
+ * sessionStorage 保存短期 token）读取 Crew 协议：director.status、crew.intent.*、
  * crew.receipt.get、crew.event.watch、crew.protocol。
  *
  * 约定与 Node 侧 workspace-client 一致：请求头携带 x-flovart-agent-token，
@@ -64,9 +64,9 @@ export function rememberDockConnection(url: string, token: string, rememberToken
     const connection = normalizeDockConnection(url, token);
     localStorage.setItem(DOCK_AGENT_URL_KEY, connection.url);
     sessionStorage.setItem(DOCK_AGENT_TOKEN_KEY, connection.token);
-    // 嵌入场景（DeepSeek Harness iframe）重载后 iframe 自身的 sessionStorage 可能不可用，
-    // 在同源 localStorage 留一份非秘密回执（仅本机 loopback 地址 + 短期 Token）。
-    if (rememberToken) localStorage.setItem(DOCK_AGENT_TOKEN_KEY + '.session', connection.token);
+    // 兼容旧版本参数，但不再把 Agent token 写入 localStorage。
+    void rememberToken;
+    localStorage.removeItem(DOCK_AGENT_TOKEN_KEY + '.session');
   } catch {
     // 隐私模式或存储不可用时静默失败，仅本次会话可用
   }
@@ -74,10 +74,9 @@ export function rememberDockConnection(url: string, token: string, rememberToken
 
 export function loadDockConnection(): DockConnection | null {
   try {
+    localStorage.removeItem(DOCK_AGENT_TOKEN_KEY + '.session');
     const url = localStorage.getItem(DOCK_AGENT_URL_KEY) || '';
-    // 短期 Token 优先 sessionStorage；嵌入场景（Harness iframe 重载）回退 localStorage，
-    // 因为 iframe 的 sessionStorage 随顶层标签会话走，配对后重载可能丢失。
-    const token = sessionStorage.getItem(DOCK_AGENT_TOKEN_KEY) || localStorage.getItem(DOCK_AGENT_TOKEN_KEY + '.session') || '';
+    const token = sessionStorage.getItem(DOCK_AGENT_TOKEN_KEY) || '';
     if (!url || !token) return null;
     return normalizeDockConnection(url, token);
   } catch {

@@ -1,0 +1,766 @@
+/* Flovart Adaptive UI System
+ *
+ * Layout geometry belongs to CSS. React may switch a behavior such as
+ * “inline pane” versus “drawer” through matchMedia, but no component stores
+ * every viewport width or uses it to build structural columns.
+ */
+
+:root {
+  --layout-xs: 320px;
+  --layout-sm: 480px;
+  --layout-md: 768px;
+  --layout-lg: 1024px;
+  --layout-xl: 1440px;
+  --sidebar-rail: 56px;
+  --sidebar-expanded: clamp(200px, 22cqw, 304px);
+  --panel-min: 280px;
+  --panel-preferred: 360px;
+  --panel-max: 640px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --control-min: 36px;
+  --app-height: 100vh;
+}
+
+@supports (height: 100dvh) {
+  :root { --app-height: 100dvh; }
+}
+
+html,
+body,
+#root {
+  min-width: 0;
+  min-height: 100%;
+}
+
+#root { height: 100%; }
+
+.route-fallback {
+  display: grid;
+  min-width: 0;
+  min-height: var(--app-height);
+  place-items: center;
+  padding: var(--space-5);
+  text-align: center;
+}
+
+.app-shell,
+.dock-page,
+.flovart-home {
+  min-width: 0;
+  min-height: 0;
+  height: var(--app-height);
+}
+
+.app-shell,
+.dock-page {
+  container-type: inline-size;
+}
+
+.app-shell__workspace,
+.app-shell__content,
+.app-shell__main,
+.dock-surface,
+.workflow-workspace,
+.table-workspace,
+.agent-workspace-shell {
+  min-width: 0;
+  min-height: 0;
+}
+
+.app-shell__content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.app-shell__content[data-sidebar-layout='with-sidebars'] {
+  grid-template-columns: minmax(0, auto) minmax(0, 1fr) minmax(0, auto);
+}
+
+.app-shell__left-sidebar,
+.app-shell__right-sidebar {
+  width: clamp(200px, 24cqw, 320px);
+  max-width: 40cqw;
+  min-width: 0;
+  flex: none;
+}
+
+.app-shell__main { width: 100%; }
+
+/* Shared primitives. Components opt in when they have more than one caller. */
+.adaptive-shell {
+  container-type: inline-size;
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.responsive-stack {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.responsive-grid,
+.responsive-form-grid {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: var(--panel-gap, var(--space-3));
+}
+
+.overflow-region {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.asset-library-context-menu {
+  left: clamp(8px, var(--menu-x), calc(100% - 168px));
+  top: clamp(8px, var(--menu-y), calc(100% - 208px));
+  max-width: calc(100% - 16px);
+}
+
+.adaptive-modal-overlay {
+  min-width: 0;
+  min-height: 0;
+  padding: max(var(--space-3), env(safe-area-inset-top)) max(var(--space-3), env(safe-area-inset-right)) max(var(--space-3), env(safe-area-inset-bottom)) max(var(--space-3), env(safe-area-inset-left));
+  overscroll-behavior: contain;
+}
+
+.adaptive-modal {
+  display: flex;
+  width: min(100%, 720px);
+  max-width: 100%;
+  max-height: min(90%, calc(var(--app-height) - 32px));
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.adaptive-modal__header,
+.adaptive-modal__body {
+  min-width: 0;
+}
+
+.adaptive-modal__body {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+/* Workflow is a 2-D surface; only its chrome participates in reflow. */
+.workflow-workspace {
+  container-type: inline-size;
+}
+
+.workflow-sidebar {
+  width: min(300px, 28cqw) !important;
+  max-width: calc(100% - 16px);
+  min-width: 200px;
+}
+
+.compact-right-panel {
+  --drawer-width: var(--panel-preferred);
+  width: min(var(--drawer-width), calc(100% - 16px));
+  max-width: calc(100% - 16px);
+  min-width: 0;
+  min-height: 0;
+  overscroll-behavior: contain;
+}
+
+.compact-right-panel > :last-child,
+.compact-right-panel .agent-conversation,
+.compact-right-panel .workflow-agent {
+  min-width: 0;
+  min-height: 0;
+}
+
+.workflow-toolbar {
+  max-width: calc(100% - 16px);
+  min-width: 0;
+}
+
+.workflow-toolbar__library,
+.workflow-toolbar__shortcut-card,
+.workflow-toolbar__compact-menu {
+  max-width: calc(100% - 24px);
+}
+
+.workflow-config,
+.workflow-config__row,
+.workflow-config__composer,
+.workflow-node-prompt {
+  min-width: 0;
+}
+
+.workflow-node-prompt {
+  width: min(var(--workflow-node-prompt-width, 880px), calc(100cqw - 16px));
+  max-width: calc(100% - 16px);
+}
+
+/* Table: the JSX declares semantics, CSS chooses the number of panes. */
+.table-workspace {
+  container-type: inline-size;
+  grid-template-columns: minmax(180px, 220px) minmax(0, 1fr) !important;
+}
+
+.table-workspace__main,
+.table-workspace__main--with-tools {
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 256px) !important;
+}
+
+.table-workspace__main > section,
+.table-workspace__tools,
+.table-workspace > aside {
+  min-width: 0;
+  min-height: 0;
+}
+
+.table-preview-media {
+  max-height: calc(var(--app-height) - 190px);
+}
+
+/* Settings and host cards adapt to the space their caller gives them. */
+.settings-dialog,
+.settings-key-dialog,
+.settings-service-card,
+.settings-api-section,
+.agent-host-picker,
+.agent-link-surface,
+.agent-card,
+.agent-workspace-shell {
+  min-width: 0;
+}
+
+.settings-dialog,
+.settings-key-dialog {
+  container-type: inline-size;
+  max-width: 100%;
+  max-height: calc(var(--app-height) - 16px);
+}
+
+@container (max-width: 720px) {
+  .settings-service-card {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .settings-service-card > .settings-service-actions {
+    justify-content: flex-start;
+  }
+
+  .settings-dialog .settings-route-add,
+  .settings-dialog .settings-pricing-row,
+  .settings-dialog .settings-budget-grid,
+  .settings-dialog .settings-extra-grid {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+  }
+}
+
+.settings-service-card,
+.settings-key-dialog__key-row,
+.settings-api-actions,
+.settings-key-dialog__footer-actions {
+  min-width: 0;
+}
+
+.settings-service-card > *,
+.settings-key-dialog__key-row > *,
+.settings-api-actions > *,
+.settings-key-dialog__footer-actions > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.settings-dialog__mobile-nav,
+.settings-dialog__mobile-back {
+  display: none;
+}
+
+.agent-workspace-shell {
+  width: 100%;
+  max-width: var(--content-max, 1280px);
+}
+
+.agent-workspace-shell__context,
+.agent-workspace-shell__conversation,
+.agent-workspace-body,
+.agent-workspace-footer {
+  min-width: 0;
+  min-height: 0;
+}
+
+/* Community and other public surfaces use the same reflow contract as the
+ * local app, while retaining their own visual theme. */
+.community-prompts-page {
+  min-width: 0;
+  min-height: var(--app-height);
+  overflow-x: hidden;
+}
+
+.community-prompts-page__header-inner,
+.community-prompts-page__content {
+  min-width: 0;
+}
+
+.community-prompts-page__brand,
+.community-prompts-page__brand > div,
+.community-prompts-page__actions {
+  min-width: 0;
+}
+
+.community-prompts-page__brand > div {
+  overflow: hidden;
+}
+
+.community-prompts-page__brand h1,
+.community-prompts-page__brand p {
+  overflow-wrap: anywhere;
+}
+
+.community-prompts-page__search {
+  width: min(100%, 400px);
+}
+
+.community-prompts-page__grid > * {
+  min-width: 0;
+}
+
+.enterprise-app,
+.enterprise-platform-app,
+.enterprise-centered-message {
+  min-width: 0;
+  min-height: var(--app-height);
+  overflow-x: hidden;
+}
+
+.enterprise-app__header,
+.enterprise-platform-app__header,
+.enterprise-app__main,
+.enterprise-platform-app__main,
+.enterprise-org-layout,
+.enterprise-org-content,
+.enterprise-dept-grid {
+  min-width: 0;
+}
+
+.enterprise-org-sidebar {
+  width: clamp(184px, 22cqw, 240px) !important;
+  height: calc(var(--app-height) - 64px) !important;
+  max-width: 34cqw;
+}
+
+.enterprise-member-grid {
+  min-width: 0;
+}
+
+.enterprise-member-grid > * {
+  min-width: 0;
+}
+
+.ant-table-wrapper,
+.ant-table-container,
+.ant-table-content {
+  min-width: 0;
+}
+
+.ant-table-content {
+  overflow-x: auto;
+}
+
+.script-editor-modal .ant-modal-content,
+.script-editor-modal .ant-modal-body {
+  min-width: 0;
+  min-height: 0;
+}
+
+.script-editor__layout {
+  display: grid !important;
+  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+  height: min(72dvh, 720px) !important;
+  min-height: 0 !important;
+}
+
+.script-editor__source,
+.script-editor__shots {
+  width: auto !important;
+  min-width: 0;
+  min-height: 0;
+}
+
+.script-editor__source textarea,
+.script-editor__shots input,
+.script-editor__shots textarea {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.script-editor__fields {
+  min-width: 0;
+}
+
+.script-editor__fields > * {
+  min-width: 0;
+}
+
+@container (max-width: 1023px) {
+  .workflow-sidebar {
+    width: min(320px, calc(100% - 16px)) !important;
+  }
+
+  .compact-right-panel {
+    top: 8px !important;
+    right: 8px !important;
+    bottom: 8px !important;
+    width: min(var(--drawer-width), calc(100% - 16px)) !important;
+    max-width: calc(100% - 16px);
+    border-radius: 16px;
+  }
+
+  .compact-right-panel > [role='separator'] { display: none; }
+}
+
+@container (max-width: 760px) {
+  .workflow-sidebar {
+    width: calc(100% - 16px) !important;
+    min-width: 0;
+  }
+
+  .compact-right-panel,
+  .compact-right-panel--flush {
+    top: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    width: 100% !important;
+    max-width: 100%;
+    border-radius: 0 !important;
+  }
+
+  .workflow-toolbar {
+    bottom: max(8px, env(safe-area-inset-bottom));
+  }
+
+  .workflow-toolbar__history-direct { display: none; }
+}
+
+@media (max-width: 1023px) {
+  .app-shell__content,
+  .app-shell__content[data-sidebar-layout='with-sidebars'] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .app-shell__left-sidebar,
+  .app-shell__right-sidebar {
+    width: 100%;
+    max-width: none;
+  }
+
+  .table-workspace,
+  .table-workspace__main--with-tools {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .table-workspace > aside {
+    max-height: min(28dvh, 220px);
+    border-right: 0;
+    border-bottom: 1px solid var(--isl-border);
+  }
+
+  .table-workspace__tools {
+    max-height: min(36dvh, 280px);
+    border-left: 0 !important;
+    border-top: 1px solid var(--isl-border);
+  }
+
+  .table-preview-media {
+    max-height: calc(var(--app-height) - 250px);
+  }
+}
+
+@media (max-width: 760px) {
+  .adaptive-modal-overlay { align-items: end; padding: 8px; }
+
+  .adaptive-modal {
+    width: 100%;
+    max-height: calc(var(--app-height) - 16px);
+    border-radius: 20px;
+  }
+
+  .adaptive-modal > .adaptive-modal__body {
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: var(--space-3);
+  }
+
+  .adaptive-modal > .adaptive-modal__body img {
+    max-height: min(38dvh, 260px);
+  }
+
+  .responsive-form-grid,
+  .settings-dialog .settings-route-add,
+  .settings-dialog .settings-pricing-row,
+  .settings-dialog .settings-budget-grid,
+  .settings-dialog .settings-extra-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .settings-api-actions,
+  .settings-key-dialog__footer-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .settings-api-actions > button,
+  .settings-key-dialog__footer-actions > button {
+    width: 100%;
+  }
+
+  .settings-dialog__tabs { display: none; }
+
+  .settings-dialog__mobile-nav {
+    display: grid;
+    gap: var(--space-2);
+    margin-bottom: var(--space-3);
+  }
+
+  .settings-dialog__mobile-nav button {
+    display: flex;
+    min-width: 0;
+    min-height: 56px;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    border: 1px solid var(--isl-border);
+    border-radius: 14px;
+    padding: 10px 12px;
+    color: var(--isl-ink);
+    background: var(--isl-card);
+    text-align: left;
+    touch-action: manipulation;
+  }
+
+  .settings-dialog__mobile-nav button > span:first-child {
+    display: grid;
+    min-width: 0;
+    gap: 3px;
+  }
+
+  .settings-dialog__mobile-nav strong,
+  .settings-dialog__mobile-nav small {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .settings-dialog__mobile-nav small {
+    color: var(--isl-ink-soft);
+    font-size: 11px;
+  }
+
+  .settings-dialog__mobile-nav button > span:last-child {
+    flex: 0 0 auto;
+    color: var(--isl-ink-soft);
+    font-size: 22px;
+    line-height: 1;
+  }
+
+  .settings-dialog__mobile-nav button:hover,
+  .settings-dialog__mobile-nav button:focus-visible {
+    border-color: var(--isl-mint);
+    background: var(--isl-mint-bg);
+  }
+
+  .settings-dialog__body:not(.is-detail) { display: none; }
+
+  .settings-dialog__body.is-detail {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .settings-dialog__mobile-back {
+    display: inline-flex;
+    width: max-content;
+    min-height: 36px;
+    align-items: center;
+    gap: 4px;
+    border: 0;
+    padding: 0 2px;
+    color: var(--isl-ink-soft);
+    background: transparent;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .community-prompts-page__header-inner,
+  .community-prompts-page__content {
+    padding-inline: 16px;
+  }
+
+  .community-prompts-page__header-inner {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .community-prompts-page__brand {
+    width: 100%;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .community-prompts-page__brand h1 { font-size: 18px; }
+  .community-prompts-page__brand p { line-height: 1.45; }
+
+  .community-prompts-page__actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .community-prompts-page__filters {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .community-prompts-page__search {
+    width: 100%;
+    max-width: none !important;
+  }
+
+  .community-prompts-page__filters .ant-segmented {
+    width: 100%;
+    overflow-x: auto;
+  }
+
+  .community-prompts-page__filters .ant-segmented-group {
+    min-width: max-content;
+  }
+
+  .script-editor-modal .ant-modal {
+    width: calc(100% - 16px) !important;
+    max-width: calc(100% - 16px);
+    margin: 8px auto;
+  }
+
+  .script-editor-modal .ant-modal-body {
+    padding: 12px;
+  }
+
+  .script-editor__layout {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(210px, auto) minmax(0, 1fr);
+    height: calc(var(--app-height) - 132px) !important;
+  }
+
+  .script-editor__source {
+    overflow: auto !important;
+  }
+
+  .script-editor__source > :last-child {
+    min-height: 0;
+  }
+
+  .script-editor__fields--primary,
+  .script-editor__fields--secondary,
+  .script-editor__fields--prompts {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .script-editor__fields--secondary,
+  .script-editor__fields--prompts {
+    margin-top: 6px;
+  }
+
+  .enterprise-app__header,
+  .enterprise-platform-app__header {
+    min-height: 48px;
+    height: auto;
+    flex-wrap: wrap;
+    padding-block: 8px;
+  }
+
+  .enterprise-app__header > .enterprise-app__header,
+  .enterprise-platform-app__header > .enterprise-platform-app__header {
+    min-width: 0;
+  }
+
+  .enterprise-app__main,
+  .enterprise-platform-app__main {
+    padding-inline: 12px;
+    padding-block: 16px;
+  }
+
+  .enterprise-org-layout {
+    display: block;
+  }
+
+  .enterprise-org-sidebar {
+    display: none;
+  }
+
+  .enterprise-member-grid {
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    align-items: start;
+    padding-inline: 12px;
+  }
+
+  .enterprise-member-grid:first-child {
+    display: none;
+  }
+
+  .enterprise-member-grid > span:nth-child(2),
+  .enterprise-member-grid > span:nth-child(4) {
+    grid-column: 1 / -1;
+  }
+
+  .enterprise-member-grid > span:nth-child(3) {
+    grid-column: 1;
+  }
+
+  .enterprise-member-grid > div {
+    grid-column: 2;
+    grid-row: 3;
+    justify-self: end;
+  }
+
+  .enterprise-dept-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .enterprise-platform-app .ant-tabs-nav-wrap {
+    overflow-x: auto;
+  }
+
+  .enterprise-platform-app .ant-tabs-tab {
+    flex: 0 0 auto;
+  }
+}
+
+@media (max-width: 360px) {
+  .adaptive-modal-overlay { padding: 4px; }
+
+  .adaptive-modal { max-height: calc(var(--app-height) - 8px); }
+
+  .studio-top-menu__modes button { padding-inline: 8px; }
+}
+
+@media (max-height: 600px) {
+  .compact-right-panel { top: 4px !important; bottom: 4px !important; }
+
+  .table-workspace > aside { max-height: 156px; }
+
+  .table-workspace__tools { max-height: 180px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .adaptive-modal,
+  .compact-right-panel,
+  .workflow-sidebar { scroll-behavior: auto; transition-duration: 0.01ms !important; }
+}

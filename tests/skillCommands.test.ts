@@ -206,13 +206,15 @@ describe('web.open', () => {
       if (url === target) return { ok: true, status: 200, text: async () => '<body data-flovart-webui="1"></body>' };
       if (url.endsWith('/health')) return { ok: true, status: 200, json: async () => ({ ok: true, clients: 0, hasWorkflow: false }) };
       if (url.endsWith('/crew/protocol')) return { ok: true, status: 200, json: async () => ({ ok: true }) };
+      if (url.endsWith('/bootstrap/issue')) return { ok: true, status: 200, json: async () => ({ ok: true, bootstrapToken: 'one-time-browser-token' }) };
       throw new Error('unexpected request');
     }));
     try {
       const result = await runSkillCommand('web.open', { url: target, opener });
       expect(result).toMatchObject({ ok: true, opened: target });
       expect(JSON.stringify(result)).not.toContain('secret-token');
-      expect(opener).toHaveBeenCalledWith(expect.stringContaining('agentToken=secret-token'));
+      expect(opener).toHaveBeenCalledWith(expect.stringContaining('bootstrapToken=one-time-browser-token'));
+      expect(opener.mock.calls[0][0]).not.toContain('agentToken=secret-token');
       expect(opener.mock.calls[0][0]).toContain('activateBrowserWriter=1');
     } finally {
       vi.unstubAllGlobals();

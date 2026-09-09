@@ -101,10 +101,10 @@ export function PromptsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white">
-      <div className="sticky top-0 z-30 border-b border-white/10 bg-[#0a0a0a]/90 backdrop-blur-md">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
-          <div className="flex items-center gap-4">
+    <div className="community-prompts-page min-h-screen bg-[#0a0a0a] text-white">
+      <div className="community-prompts-page__header sticky top-0 z-30 border-b border-white/10 bg-[#0a0a0a]/90 backdrop-blur-md">
+        <div className="community-prompts-page__header-inner mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
+          <div className="community-prompts-page__brand flex items-center gap-4">
             <button
               className="text-sm text-white/60 hover:text-white"
               onClick={() => navigate('/')}
@@ -116,7 +116,7 @@ export function PromptsPage() {
               <p className="text-xs text-white/45">提示词在线分享；完整制作 Skill 请在首页 Skill 台选择或安装</p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="community-prompts-page__actions flex items-center gap-3">
             {isLoggedIn ? (
               <span className="text-sm text-white/70">{user?.username}</span>
             ) : (
@@ -138,15 +138,15 @@ export function PromptsPage() {
         </div>
       </div>
 
-      <div className="mx-auto max-w-7xl px-6 py-8">
-        <div className="mb-6 flex flex-wrap items-center gap-3">
+      <div className="community-prompts-page__content mx-auto max-w-7xl px-6 py-8">
+        <div className="community-prompts-page__filters mb-6 flex flex-wrap items-center gap-3">
           <Input
             placeholder="搜索提示词标题、描述..."
             value={keyword}
             onChange={(e) => setKeyword(e.target.value)}
             onPressEnter={handleSearch}
             prefix={<Search size={16} className="text-white/40" />}
-            className="flex-1 min-w-[240px]"
+            className="community-prompts-page__search min-w-0 flex-1"
             style={{ maxWidth: 400, background: 'rgba(255,255,255,0.06)', borderColor: 'rgba(255,255,255,0.15)' }}
           />
           <Segmented
@@ -183,7 +183,7 @@ export function PromptsPage() {
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="community-prompts-page__grid grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {packs.map((pack) => (
               <div
                 key={pack.id}

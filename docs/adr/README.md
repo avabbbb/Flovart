@@ -20,6 +20,7 @@
 - [0060：浏览器扩展使用桌面权威的受限导入桥](0060-use-a-desktop-authoritative-browser-import-bridge.md)
 - [0061：使用外部导演 Harness 与唯一内置 Operator](0061-use-external-director-and-internal-production-crew.md)
 - [0062：DeepSeek Harness 内置原生 Workflow 画布](0062-use-native-workflow-canvas-in-deepseek-harness.md)
+- [0063：DSH 只使用 Browser Workflow Authority](0063-dsh-browser-workflow-authority.md)
 - [0063：DSH 记录会话投影，Flovart Runtime 裁定生产事实](0063-runtime-owns-production-facts.md)
 - [0064：DSH Session 使用显式 Flovart Project Binding](0064-bind-dsh-session-to-explicit-flovart-project.md)
 - [0065：Workflow 变更使用版本前置条件与幂等 Mutation ID](0065-idempotent-revisioned-workflow-mutations.md)

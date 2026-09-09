@@ -32,12 +32,21 @@ export interface WorkflowRunFailure {
   message: string;
 }
 
+/** Opaque result identity for a Host to request the committed Artifact. */
+export interface WorkflowArtifactOutput {
+  artifactId: string;
+  kind: 'image' | 'video' | 'audio';
+  mimeType: string;
+  name?: string;
+}
+
 export interface WorkflowRunResult {
   runId: string;
   projectId: string;
   nodeId: string;
   status: 'completed' | 'failed';
   error?: WorkflowRunFailure;
+  artifact?: WorkflowArtifactOutput;
   /** 只供执行追踪和测试使用，不由 Dispatcher 回传给外部 Agent。 */
   canonicalInput?: CanonicalGenerationInput;
 }
@@ -55,6 +64,7 @@ export interface WorkflowExecutorAdapters {
 export interface WorkflowRunAdapterResult {
   status?: 'completed' | 'failed';
   error?: WorkflowRunFailure;
+  artifact?: WorkflowArtifactOutput;
   canonicalInput?: CanonicalGenerationInput;
 }
 
@@ -128,6 +138,7 @@ export function createWorkflowExecutor(adapters: WorkflowExecutorAdapters, optio
           nodeId: command.nodeId,
           status: outcome?.status || 'completed',
           ...(outcome?.error ? { error: outcome.error } : {}),
+          ...(outcome?.artifact ? { artifact: outcome.artifact } : {}),
           ...(outcome?.canonicalInput ? { canonicalInput: outcome.canonicalInput } : {}),
         };
       } catch (cause) {

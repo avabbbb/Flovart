@@ -4,6 +4,15 @@ title: 后续待办
 
 本页只保留尚未完成的工作。已经实现但仍需用户确认的变更统一记录在 [待测试确认](pending-test.mdx)，正式能力在用户确认后再进入 [功能特性](../overview/features.mdx)。
 
+## 当前目标：助手接入与创作宿主插件
+
+按 [Flovart Link 2.0 审计](../../../design/flovart-link-2/CURRENT_STATE.md)、[目标状态](../../../design/flovart-link-2/TARGET_STATE.md) 和 [Studio package 清单](../../../../integrations/studio/README.md) 继续完成真实验收，不能用 package build 或 mock 替代第三方客户端/宿主证据。
+
+- 用户可见的 Codex 首次 conversation transcript、WorkBuddy 客户端/Marketplace、DSH 登录与 service recovery 仍待 External Gate；本机 ChatGPT-authenticated `codex exec` 的首次连接 smoke 已通过，Link/Lease/Stable CLI 的实现与 focused tests 已移入 pending-test。
+- Photoshop/Premiere/After Effects/Resolve Studio package、共享 inspector 和 Resource Contract 已实现并标为 Experimental；真实 layer/clip materialize、Provider wire、artifact import 和原素材不变仍待宿主验收。
+- After Effects CEP/ExtendScript 与 Resolve Studio Workflow Integration 的安装、bridge 注入和真实 tracer 仍需按安装版本完成，不能把 package build 当成宿主认证。
+- 完成 Canvas/Provider regression、20x Agent/Studio chaos 与 hosted security/release gates 后，才能给出内测/发布结论；Vitest 默认 worker 上限已固定为 4，Rust 与当前全量回归均已通过。
+
 ## Production Launch 总门禁
 
 - **总目标**：⬜ 按 `docs/maintenance/agent/LAUNCH_GOAL.md` 从 R0 Release Truth Audit 持续执行到 R31 独立 Red Team；只有 Autonomous DoD、External Certification、`P0 = 0`、`P1 = 0` 同时满足才允许 `LAUNCH VERDICT: GO`。
@@ -71,11 +80,11 @@ Table 是 Workflow 之外的第二个正式创作工作区，不是电子表格�
 
 - **S2 Host Projection 与模型工具基线**：🟨 已将 Agent 工具面收敛为 `status`、`workflow.inspect`、`workflow.selection.get`、`workflow.apply`、`workflow.node.run`，并将 `command.list` / `command.schema` 降为 CLI bootstrap/discovery/debug；Codex projection、默认启动、本地 Browser tracer、Host Picker 自动准备以及 Claude Code/OpenCode 外部 CLI tracer 已通过，仍待登录态 Codex 与用户可见路径确认。
 - **S3 Director Binding 与投影**：🟨 已拆分 Agent Identity、IDE Host、Distribution Target、Runtime Surface 与 Director Runtime Binding；`host.list` 使用 PATH-only discovery，`init --target` 和 Host Picker 显式选择都能准备对应投影，WorkBuddy 暂不进入 Director Binding。Codex/DSH 的 Binding、Handoff、Active Writer、Host Picker 浏览器 smoke 以及 Claude/OpenCode CLI tracer 已有本机证据，仍待 Codex 外部会话与用户窗口确认。
-- **S3C DSH / Flovart P0 纵切**：🟨 Runtime SoT、显式 Session/Project Binding、`expectedRevision + mutationId` 幂等 Workflow Mutation、DSH Workspace Supervisor、Native view 和 inspect → apply → Canvas → Run unavailable 路径已完成；仍需真实 Harness 登录态会话、Receipt/Job 恢复和 Authority transfer 验收。
+- **S3C DSH / Flovart P0 纵切**：🟨 Runtime SoT、显式 Session/Project Binding、`expectedRevision + mutationId` 幂等 Workflow Mutation、DSH Workspace Supervisor、Browser-only contextual view 和 inspect → apply → run fail-closed 路径已完成；仍需真实 Harness 登录态会话、Receipt/Job 恢复和页面 tracer 验收。
 - **S3D DSH Flovart UI 能力门控**：🟨 Session 内 Flovart view 常驻、Runtime offline 页面、Standalone/DSH 模式分流、Chat/Canvas 互跳与未来 Global Flovart 升级预留已接入；仍需真实 Harness 重载、崩溃恢复和多会话页面确认。
-- **S3B DeepSeek Harness 原生画布插件**：🟨 RC8 专用 Profile、原生 `conversation.view`、Workspace-only 启动、Host 同源代理、Production Brief、Native Workflow Draft、DeepSeek 会话绑定、有界 CLI 工具、profile uninstall、Workspace 崩溃重启与 Native view 重注册已完成本机验证；无 iframe、手填连接字段、外部侧栏入口或第二套 Agent 对话。仍未完成：真实登录态页面恢复、不兼容升级回滚，以及 Native Draft 与 Browser Workspace 的显式 Authority 转移。继续依 [ADR 0062](../../../adr/0062-use-native-workflow-canvas-in-deepseek-harness.md) 维护兼容集。
+- **S3B DeepSeek Harness contextual Plugin**：🟨 RC8 专用 Profile、Browser-only `conversation.view`、Workspace-only 启动、Host 同源 health/tools 代理、有界 CLI 工具、profile uninstall 和 Workspace 崩溃重启已完成本机验证；无 iframe、手填连接字段、外部侧栏入口或第二套 Agent 对话。仍未完成：真实登录态页面恢复、可见 Browser Workflow tracer、不兼容升级回滚。旧 Native Draft 方案已由 [ADR 0063](../../../adr/0063-dsh-browser-workflow-authority.md) 取代。
 - **DeepSeek 安装、兼容集与回滚**：⬜ 首次缺少 Runtime 时展示版本、来源、体积、完整性和权限，用户确认后由 Agent Bootstrapper 安装；Profile/Plugin/Harness/Runtime 协议按已验证兼容集升级，原子切换、失败回滚，不自动追随 latest。Harness 崩溃或重载不得终止 ProductionRun。
-- **S4 Agent Workspace 反转**：🟨 Agent 主入口和 Workflow 右侧区已改为 Production Crew 状态面，展示当前 Host Projection、Director Binding、Draft、Production 状态和最近 Receipt；继续补审批、Task、Artifact drill-down 与真实 Handoff 操作。
+- **S4 Agent Workspace 反转**：🟨 Agent 主入口和 Workflow 右侧区已改为协作状态面，展示当前 Agent、Workflow、Production 状态和最近 Receipt；继续补审批、Task、Artifact drill-down 与真实 Handoff 操作。
 - **S5 生命周期与旧轨删除**：🟡 部分完成——默认开发/桌面启动不再拉起 ManagedAgent，Agent 与 Workflow 主路径不再挂载第二套 Flovart 聊天；已删除 Codex/MCP 子任务旧轨。未挂载的浏览器 Agent 内核、旧 `flovart-main` 语义和残余 Managed/Connected 文案仍待确认无调用后删除。
 - **Production Session Workspace**：⬜ 为每个 ProductionSession 建立隔离本地项目根目录，只暴露带版本/Hash 的只读上下文投影与可写 scratch/exports；不得暴露 Runtime SQLite、Discovery Token、Provider Secret、Artifact Store 内部路径或完整聊天。
 - **Operator Model Route 与辅助预算**：⬜ Workspace Operator 仅在 Intent 需要微规划时临时启动，使用独立 `workspace_operator` Model Route 与 Session 级小额 Operator Assistance Budget；精确原子命令直接执行，不能借用 Harness 登录态，也不能把辅助预算当作 Production 付费授权。

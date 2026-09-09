@@ -2,15 +2,20 @@
  * 样式只使用全局主题变量，不硬编码黑白/主题色。 */
 
 .dock-page {
-  position: relative;
   display: grid;
-  grid-template-columns: 64px minmax(0, 1fr);
+  grid-template-columns: clamp(56px, 5vw, 72px) minmax(0, 1fr);
   width: 100%;
-  height: 100%;
+  height: 100vh;
+  height: 100dvh;
   min-height: 0;
   overflow: hidden;
+  box-sizing: border-box;
   color: var(--isl-ink);
   background: var(--isl-surface-sunk);
+}
+
+.dock-page.is-bridge-open {
+  grid-template-columns: clamp(56px, 5vw, 72px) minmax(0, 1fr) minmax(280px, clamp(280px, 24vw, 360px));
 }
 
 .dock-rail {
@@ -116,13 +121,9 @@
 }
 
 .dock-bridge {
-  position: absolute;
-  z-index: 60;
-  top: 0;
-  right: 0;
-  bottom: 0;
   display: flex;
-  width: 240px;
+  min-width: 0;
+  min-height: 0;
   flex-direction: column;
   border-left: 1px solid var(--isl-border);
   background: var(--isl-card);
@@ -147,9 +148,44 @@
 .dock-bridge dl div.is-active dd { color: var(--isl-mint, #38bda6); font-weight: 800; }
 .dock-bridge > p { margin: auto 12px 12px; color: var(--isl-ink-ghost); font-size: 9px; line-height: 1.7; }
 
-/* ── Production Control（复用 agent-studio 骨架 + Dock 专属补充） ── */
+.dock-bridge__header { height: auto !important; min-height: 58px; align-items: flex-start !important; padding: 14px !important; }
+.dock-bridge__header > div { min-width: 0; }
+.dock-bridge__header strong,
+.dock-bridge__header span { display: block; }
+.dock-bridge__header strong { font-size: 12px; }
+.dock-bridge__header span { margin-top: 4px; color: var(--isl-ink-ghost); font-size: 10px; }
+.dock-bridge__list { display: grid; min-height: 0; gap: 6px; padding: 0 10px 10px; overflow: auto; }
+.dock-bridge__card { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; min-width: 0; align-items: center; gap: 8px; border: 1px solid transparent; border-radius: 9px; padding: 9px; background: var(--isl-surface-2); }
+.dock-bridge__card > div { min-width: 0; }
+.dock-bridge__card strong,
+.dock-bridge__card span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dock-bridge__card strong { font-size: 11px; }
+.dock-bridge__card span { margin-top: 3px; color: var(--isl-ink-soft); font-size: 10px; }
+.dock-bridge__card small { color: var(--isl-ink-soft); font-size: 10px; font-weight: 800; white-space: nowrap; }
+.dock-bridge__dot { width: 8px; height: 8px; border-radius: 999px; background: var(--isl-ink-ghost); }
+.dock-bridge__dot.is-ready { background: var(--isl-mint); }
+.dock-bridge__dot.is-needs_setup { background: var(--isl-sun); }
+.dock-bridge__dot.is-needs_login,
+.dock-bridge__dot.is-offline { background: var(--isl-coral); }
+.dock-bridge__diagnostics { margin: auto 12px 12px; color: var(--isl-ink-soft); font-size: 10px; }
+.dock-bridge__diagnostics summary { cursor: pointer; }
+.dock-bridge__diagnostics p { margin: 7px 0 0; color: var(--isl-ink-ghost); line-height: 1.6; }
 
-.dock-surface .agent-studio { border-top: 0; }
+/* The connected Dock control keeps its semantics but uses the same fluid shell. */
+.agent-control-shell .agent-context__header { display: flex; min-height: 52px; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--isl-border); }
+.agent-control-shell .agent-context__header div { min-width: 0; display: flex; flex: 1; flex-direction: column; gap: 2px; }
+.agent-control-shell .agent-context__header span { color: var(--isl-ink-ghost); font-size: 9px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+.agent-control-shell .agent-context__header strong { overflow: hidden; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.agent-control-shell .agent-context__tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 3px; padding: 7px 8px; border-bottom: 1px solid var(--isl-border); }
+.agent-control-shell .agent-context__tabs button { display: flex; min-width: 0; min-height: 34px; align-items: center; justify-content: center; gap: 5px; border: 0; border-radius: 7px; color: var(--isl-ink-soft); background: transparent; font-size: 10px; font-weight: 650; cursor: pointer; }
+.agent-control-shell .agent-context__tabs button[aria-pressed='true'],
+.agent-control-shell .agent-context__tabs button:hover { color: var(--isl-ink); background: var(--isl-surface-2); }
+.agent-control-shell .agent-context__body { min-height: 0; flex: 1; overflow: auto; }
+.agent-control-shell .agent-context__footer { display: flex; min-height: 44px; align-items: center; justify-content: space-between; gap: 8px; padding: 0 10px; border-top: 1px solid var(--isl-border); }
+.agent-control-shell .agent-context__footer > button { display: flex; align-items: center; gap: 5px; border: 0; color: var(--isl-ink-soft); background: transparent; font-size: 10px; font-weight: 650; cursor: pointer; }
+.agent-control-shell .agent-control-shell__conversation { position: relative; min-width: 0; min-height: 0; overflow: hidden; background: var(--isl-card); }
+
+/* ── Production Control 的 Dock 专属补充 ── */
 
 .dock-connect,
 .agent-dock-connect {
@@ -352,6 +388,54 @@
 
 @media (max-width: 760px) {
   .dock-page { grid-template-columns: 56px minmax(0, 1fr); }
-  .dock-bridge { width: 100%; }
+  .dock-page.is-bridge-open { grid-template-columns: 56px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; }
+  .dock-page.is-bridge-open .dock-bridge { grid-column: 1 / -1; max-height: min(44dvh, 360px); border-top: 1px solid var(--isl-border); border-left: 0; }
+  .dock-bridge__list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .agent-control-shell { grid-template-columns: 1fr; grid-template-rows: repeat(2, minmax(0, 1fr)); overflow: hidden; }
   .agent-dock-live__grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 560px) {
+  .dock-page { grid-template-columns: 56px minmax(0, 1fr); }
+  .dock-page.is-bridge-open .dock-bridge { max-height: min(42dvh, 300px); }
+  .dock-bridge__list { grid-template-columns: 1fr; }
+  .agent-control-shell { grid-template-rows: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 640px) {
+  .dock-page,
+  .dock-page.is-bridge-open {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+
+  .dock-page.is-bridge-open {
+    grid-template-rows: minmax(0, 1fr) minmax(0, min(42dvh, 300px)) auto;
+  }
+
+  .dock-surface { grid-row: 1; }
+  .dock-bridge { grid-row: 2; }
+  .dock-page:not(.is-bridge-open) .dock-bridge { display: none; }
+
+  .dock-rail {
+    grid-row: 2;
+    display: flex;
+    min-height: 56px;
+    flex-direction: row;
+    border-top: 1px solid var(--isl-border);
+    border-right: 0;
+  }
+
+  .dock-page.is-bridge-open .dock-rail { grid-row: 3; }
+  .dock-rail > header { display: none; }
+  .dock-rail__items { flex-direction: row; gap: 4px; padding: 4px; }
+  .dock-rail__items button,
+  .dock-rail > footer button { height: 48px; flex: 1; }
+  .dock-rail > footer { display: flex; min-width: 58px; align-items: center; padding: 4px; border-top: 0; border-left: 1px solid var(--isl-border); }
+  .dock-bridge__list { max-height: min(34dvh, 240px); }
+}
+
+@media (max-height: 600px) {
+  .dock-page.is-bridge-open { grid-template-rows: minmax(0, 1fr) minmax(0, 220px) auto; }
+  .dock-page.is-bridge-open .dock-bridge { max-height: 220px; }
 }

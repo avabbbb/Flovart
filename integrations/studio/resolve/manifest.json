@@ -1,0 +1,10 @@
+{
+  "id": "com.flovart.studio.resolve",
+  "name": "Flovart",
+  "version": "0.3.2",
+  "runtime": "resolve-workflow-integration",
+  "host": "resolve-studio",
+  "minimumEdition": "Studio",
+  "entry": "index.html",
+  "entrypoints": [{ "type": "panel", "id": "flovartPanel", "label": "Flovart" }]
+}

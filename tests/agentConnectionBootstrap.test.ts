@@ -29,6 +29,37 @@ afterEach(() => {
 });
 
 describe('AgentConnectionBootstrap', () => {
+  it('exchanges a one-time browser credential before authenticating and never stores the launcher token', async () => {
+    const session = storage();
+    const replaceState = vi.fn();
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(String(input));
+      if (url.pathname === '/bootstrap/exchange') {
+        expect(init?.method).toBe('POST');
+        expect(init?.headers).toMatchObject({ 'x-flovart-bootstrap-token': 'one-time-bootstrap' });
+        return response({ ok: true, sessionToken: 'short-lived-session', expiresAt: Date.now() + 60_000 });
+      }
+      if (url.pathname === '/health') return response({ ok: true, clients: 0 });
+      expect(init?.headers).toMatchObject({ 'x-flovart-agent-token': 'short-lived-session' });
+      return response({ ok: true, protocolVersion: '1' });
+    });
+    const location = {
+      href: 'http://127.0.0.1:37522/?agentUrl=http%3A%2F%2F127.0.0.1%3A17373&bootstrapToken=one-time-bootstrap#/app',
+      search: '?agentUrl=http%3A%2F%2F127.0.0.1%3A17373&bootstrapToken=one-time-bootstrap',
+      hash: '#/app',
+      pathname: '/',
+    };
+
+    const result = await bootstrapLocalAgentConnection({ location, history: { replaceState }, sessionStorage: session, fetchImpl, maxAttempts: 1 });
+
+    expect(result.state).toBe('ready');
+    expect(result.connection?.token).toBe('short-lived-session');
+    expect(session.getItem(agentBootstrapStorageKeys.token)).toBe('short-lived-session');
+    expect(session.getItem(agentBootstrapStorageKeys.expiresAt)).toBeTruthy();
+    expect(replaceState).toHaveBeenCalledWith(null, expect.any(String), '/#/app');
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+  });
+
   it('authenticates from launcher parameters, binds the browser, and scrubs the URL', async () => {
     const session = storage();
     const replaceState = vi.fn();

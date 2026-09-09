@@ -53,17 +53,17 @@
       "executable": "dsh",
       "aliases": [],
       "distributionTargets": ["dsh-plugin"],
-      "runtimeSurfaces": ["dsh-native"]
+      "runtimeSurfaces": ["browser-workflow"]
     },
     {
       "id": "workbuddy",
       "label": "WorkBuddy",
       "category": "mainstream-host",
-      "status": "planned",
+      "status": "manual-import",
       "executable": null,
       "aliases": [],
       "distributionTargets": ["workbuddy-skill"],
-      "runtimeSurfaces": ["skill-mediated"]
+      "runtimeSurfaces": ["skill-mediated", "browser-workflow"]
     }
   ],
   "ideHosts": [
@@ -119,7 +119,7 @@
       "label": "WorkBuddy Skill",
       "kind": "skill",
       "installPath": null,
-      "status": "planned"
+      "status": "manual-import"
     }
   ],
   "distributionTargetAliases": {
@@ -131,7 +131,6 @@
   "runtimeSurfaces": [
     { "id": "cli", "label": "Local CLI" },
     { "id": "browser-workflow", "label": "Visible Browser Workflow" },
-    { "id": "dsh-native", "label": "DeepSeek Native Workflow" },
     { "id": "skill-mediated", "label": "Skill-mediated Host" }
   ],
   "directorBindings": [

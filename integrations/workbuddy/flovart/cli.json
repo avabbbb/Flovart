@@ -1,0 +1,25 @@
+{
+  "runtime": { "type": "node", "version": "22" },
+  "init": {
+    "darwin": "npm install -g flovart-cli@0.3.2",
+    "linux": "npm install -g flovart-cli@0.3.2",
+    "win32": "npm install -g flovart-cli@0.3.2"
+  },
+  "auth": {
+    "darwin": "flovart-cli workbuddy.auth --json",
+    "linux": "flovart-cli workbuddy.auth --json",
+    "win32": "flovart-cli.cmd workbuddy.auth --json"
+  },
+  "unAuth": {
+    "darwin": "flovart-cli workbuddy.unAuth --json",
+    "linux": "flovart-cli workbuddy.unAuth --json",
+    "win32": "flovart-cli.cmd workbuddy.unAuth --json"
+  },
+  "status": {
+    "darwin": "flovart-cli workbuddy.status --json",
+    "linux": "flovart-cli workbuddy.status --json",
+    "win32": "flovart-cli.cmd workbuddy.status --json"
+  },
+  "statusMatch": "\"state\"\\s*:\\s*\"local-ready\"",
+  "authSuppressBrowser": true
+}

@@ -5,6 +5,7 @@ import { useWorkflowStore } from '../workflow/store';
 import type { WorkflowProject } from '../workflow/types';
 import { setBrowserWorkflowBinding } from '../../services/browserWorkflowBinding';
 import { DockCrewClient, DockClientError, loadDockConnection, normalizeDockConnection, rememberDockConnection, type DockConnection } from '../../services/dockCrewClient';
+import { getManagedAgentConnection } from '../../services/managedAgentConnection';
 import { ProductionControl } from './ProductionControl';
 import { DOCK_CHANNEL, DOCK_PROTOCOL_VERSION, isDockMessage, sendDockMessage, type DockBadges, type DockSurface } from './protocol';
 
@@ -39,6 +40,35 @@ export function DockPage({ embedded = false, agentUrl, agentToken }: DockPagePro
   const hostWindow = useRef<Window | null>(null);
 
   const client = useMemo(() => connection ? new DockCrewClient(connection) : null, [connection]);
+
+  const ensureConnection = useCallback(async () => {
+    try {
+      const managed = await getManagedAgentConnection();
+      if (!managed) return false;
+      const next = normalizeDockConnection(managed.url, managed.token);
+      setConnection(next);
+      setConnectionReady(false);
+      setConnectionError(null);
+      return true;
+    } catch {
+      setConnectionError(new DockClientError('DOCK_UNAVAILABLE', '本地 Agent 尚未启动，请打开高级连接设置完成排障。', true));
+      return false;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (connection) return;
+    let cancelled = false;
+    void getManagedAgentConnection().then(managed => {
+      if (cancelled || !managed) return;
+      const next = normalizeDockConnection(managed.url, managed.token);
+      setConnection(next);
+      setConnectionReady(false);
+    }).catch(() => {
+      // The public surface remains usable while the local launcher is unavailable.
+    });
+    return () => { cancelled = true; };
+  }, [connection]);
 
   useEffect(() => {
     setBrowserWorkflowBinding(connection && connectionReady
@@ -172,7 +202,7 @@ export function DockPage({ embedded = false, agentUrl, agentToken }: DockPagePro
   }, [surface]);
 
   return (
-    <div className="dock-page" data-testid="dock-page" data-embedded={embedded ? 'true' : 'false'}>
+    <div className={`dock-page${bridgeOpen ? ' is-bridge-open' : ''}`} data-testid="dock-page" data-embedded={embedded ? 'true' : 'false'}>
       <nav className="dock-rail" aria-label="Flovart Dock">
         <header>
           <LayoutPanelLeft size={17} />
@@ -195,7 +225,7 @@ export function DockPage({ embedded = false, agentUrl, agentToken }: DockPagePro
           </button>
         </div>
         <footer>
-          <button type="button" aria-label="切换 Agent Bridge" aria-pressed={bridgeOpen} onClick={() => setBridgeOpen(open => !open)}>
+          <button type="button" aria-label="切换协作 Agent" aria-pressed={bridgeOpen} onClick={() => setBridgeOpen(open => !open)}>
             {bridgeOpen ? <PanelRightOpen size={15} /> : <PanelRightClose size={15} />}
             <span>Bridge</span>
           </button>
@@ -211,6 +241,7 @@ export function DockPage({ embedded = false, agentUrl, agentToken }: DockPagePro
             connectionReady={connectionReady}
             connectionError={connectionError}
             onConnection={handleConnection}
+            onEnsureConnection={ensureConnection}
             onOpenWorkflow={() => setSurface('workflow')}
             onOpenTable={() => setSurface('table')}
             onBadges={handleBadges}
@@ -226,16 +257,28 @@ export function DockPage({ embedded = false, agentUrl, agentToken }: DockPagePro
       </section>
 
       {bridgeOpen && (
-        <aside className="dock-bridge" aria-label="Agent Bridge">
-          <header><CircleDot size={14} /><strong>Agent Bridge</strong></header>
-          <dl>
-            <div className={connection ? 'is-active' : ''}><dt>DeepSeek Harness</dt><dd>{connection ? '已连接' : '未连接'}</dd></div>
-            <div><dt>Codex</dt><dd>未绑定</dd></div>
-            <div><dt>Claude Code</dt><dd>未绑定</dd></div>
-            <div><dt>OpenCode</dt><dd>未绑定</dd></div>
-            <div><dt>Pi</dt><dd>未绑定</dd></div>
-          </dl>
-          <p>同一 ProductionSession 同时只有一个 Active Director；切换其他 Harness 前必须显式 Handoff。五者共享 Operation Skill + CLI 模型工具基线。</p>
+        <aside className="dock-bridge" aria-label="协作 Agent">
+          <header className="dock-bridge__header"><CircleDot size={15} /><div><strong>协作 Agent</strong><span>选择可用的协作入口</span></div></header>
+          <div className="dock-bridge__list" role="list">
+            {[
+              { label: 'Codex', state: connectionReady ? 'ready' : 'offline', detail: connectionReady ? '本地服务已就绪' : '等待本地服务' },
+              { label: 'WorkBuddy', state: 'needs_setup', detail: '可导入连接器' },
+              { label: 'DeepSeek Harness', state: connectionReady ? 'ready' : 'needs_setup', detail: connectionReady ? '当前面板宿主' : '插件可用' },
+              { label: 'Claude Code', state: 'needs_setup', detail: '尚未准备' },
+              { label: 'OpenCode', state: 'needs_setup', detail: '尚未准备' },
+              { label: 'Pi', state: 'needs_setup', detail: '尚未准备' },
+            ].map(agent => (
+              <article key={agent.label} className="dock-bridge__card" role="listitem">
+                <span className={`dock-bridge__dot is-${agent.state}`} />
+                <div><strong>{agent.label}</strong><span>{agent.detail}</span></div>
+                <small>{{ ready: '已就绪', needs_setup: '需要准备', needs_login: '需要登录', offline: '离线' }[agent.state] || '离线'}</small>
+              </article>
+            ))}
+          </div>
+          <details className="dock-bridge__diagnostics">
+            <summary>开发者诊断</summary>
+            <p>{connectionReady ? '本机 Agent 通道已验证。' : connection ? '已发现本机服务，但尚未完成验证。' : '尚未发现本机 Agent 连接。'}</p>
+          </details>
         </aside>
       )}
     </div>

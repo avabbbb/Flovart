@@ -30,12 +30,14 @@ import type {
   WorkflowRichPromptDocument,
 } from '../components/workflow/types';
 import { loadRuntimeArtifactBlob } from './runtimeArtifacts';
+import type { CreativeHostResourceLocator } from './workflowResourceResolver';
 
 export interface WorkflowOperationRuntime {
   getProject: () => WorkflowProject | null;
   onProjectChange: (project: WorkflowProject) => void | Promise<void>;
   createId?: () => string;
   loadMedia?: (storageKey: string) => Promise<Blob | null>;
+  loadCreativeHostResource?: (locator: CreativeHostResourceLocator) => Promise<Blob | null>;
   ingestMedia?: (file: File) => Promise<WorkflowMediaRecord>;
 }
 
@@ -77,7 +79,7 @@ export function requireWorkflowMediaNode(
   const project = requireProject(runtime, projectId);
   const node = project.nodes.find(item => item.id === nodeId);
   if (!node || node.type !== nodeType) throw new Error(`${nodeType} 节点不存在或已被删除`);
-  if (!node.metadata.storageKey && !node.metadata.href && !node.metadata.artifactRef?.taskId) {
+  if (!node.metadata.storageKey && !node.metadata.href && !node.metadata.artifactRef?.taskId && node.metadata.resourceLocator?.kind !== 'creative-host') {
     throw new Error('节点还没有可用媒体，请先生成或选择媒体。');
   }
   return { project, node };
@@ -122,6 +124,10 @@ export async function loadWorkflowOperationSourceBlob(node: WorkflowNode, runtim
   }
   if (node.metadata.artifactRef?.taskId) {
     return loadRuntimeArtifactBlob(node.metadata.artifactRef.taskId, node.metadata.artifactRef.mimeType);
+  }
+  if (node.metadata.resourceLocator?.kind === 'creative-host') {
+    const blob = await runtime.loadCreativeHostResource?.(node.metadata.resourceLocator);
+    if (blob) return blob;
   }
   return loadWorkflowMediaBlob(undefined, node.metadata.href);
 }

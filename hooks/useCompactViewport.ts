@@ -1,11 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useMediaQuery } from './useMediaQuery';
 
-export function useCompactViewport(maxWidth = 767) {
-  const [compact, setCompact] = useState(() => typeof window !== 'undefined' && window.innerWidth <= maxWidth);
-  useEffect(() => {
-    const update = () => setCompact(window.innerWidth <= maxWidth);
-    window.addEventListener('resize', update);
-    return () => window.removeEventListener('resize', update);
-  }, [maxWidth]);
-  return compact;
+/** @deprecated Prefer useMediaQuery for behavior-specific transitions. */
+export function useCompactViewport(maxWidth = 760) {
+  return useMediaQuery(`(max-width: ${maxWidth}px)`);
 }

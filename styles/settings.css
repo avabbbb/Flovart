@@ -1,0 +1,282 @@
+/* Responsive settings and API configuration surfaces. */
+
+.settings-overlay,
+.settings-key-overlay {
+  padding: clamp(8px, 3vw, 32px);
+  overflow: hidden;
+  overscroll-behavior: contain;
+}
+
+.settings-dialog {
+  display: flex;
+  width: min(1120px, 100%);
+  height: min(900px, calc(100dvh - 32px));
+  max-height: calc(100dvh - 32px);
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+  padding: clamp(16px, 2.4vw, 28px);
+}
+
+.settings-dialog__header,
+.settings-api-section__header,
+.settings-key-dialog__header {
+  min-width: 0;
+  gap: 12px;
+}
+
+.settings-dialog__header > div,
+.settings-api-section__header > div:first-child,
+.settings-key-dialog__header > h4 {
+  min-width: 0;
+}
+
+.settings-dialog__header p,
+.settings-api-section__header p {
+  max-width: 72ch;
+  line-height: 1.6;
+}
+
+.settings-dialog__close {
+  flex: 0 0 auto;
+}
+
+.settings-dialog__tabs {
+  min-width: 0;
+  flex: 0 0 auto;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: thin;
+}
+
+.settings-dialog__tabs button {
+  min-height: 40px;
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.settings-dialog__body {
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding-right: 2px;
+}
+
+.settings-api-section__header,
+.settings-api-actions {
+  flex-wrap: wrap;
+}
+
+.settings-api-actions {
+  justify-content: flex-end;
+}
+
+.settings-service-list,
+.settings-service-card,
+.settings-service-card > div:first-child {
+  min-width: 0;
+}
+
+.settings-service-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, auto);
+  align-items: start;
+  gap: 12px;
+}
+
+.settings-service-card__usage {
+  flex-wrap: wrap;
+  row-gap: 4px;
+}
+
+.settings-service-card > .settings-service-actions {
+  min-width: 0;
+  max-width: 100%;
+  margin-left: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.settings-dialog input,
+.settings-dialog select,
+.settings-dialog textarea,
+.settings-key-dialog input,
+.settings-key-dialog select,
+.settings-key-dialog textarea {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.settings-dialog select,
+.settings-key-dialog select {
+  background-color: var(--isl-card);
+  color: var(--isl-ink);
+}
+
+.settings-dialog .settings-route-add,
+.settings-dialog .settings-pricing-row,
+.settings-dialog .settings-budget-grid,
+.settings-dialog .settings-extra-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+}
+
+.settings-key-overlay {
+  display: grid;
+  place-items: center;
+}
+
+.settings-key-positioner {
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  overscroll-behavior: contain;
+}
+
+.settings-key-dialog {
+  width: min(100%, 1024px);
+  height: min(900px, calc(100dvh - 32px));
+  max-height: calc(100dvh - 32px);
+}
+
+.settings-key-dialog__header {
+  flex: 0 0 auto;
+}
+
+.settings-key-dialog__body {
+  min-width: 0;
+  min-height: 0;
+  overscroll-behavior: contain;
+}
+
+.settings-key-dialog__key-row {
+  min-width: 0;
+  align-items: end;
+}
+
+.settings-key-dialog__key-row > label {
+  min-width: 0;
+}
+
+.settings-key-dialog__footer {
+  flex: 0 0 auto;
+}
+
+.settings-key-dialog__footer-actions {
+  flex-wrap: wrap;
+}
+
+.settings-key-dialog :is(button, input, select, textarea):focus-visible,
+.settings-dialog :is(button, input, select, textarea):focus-visible {
+  outline: 2px solid var(--isl-mint);
+  outline-offset: 2px;
+}
+
+.settings-dialog :is(button, a),
+.settings-key-dialog :is(button, a) {
+  touch-action: manipulation;
+}
+
+@media (max-width: 720px) {
+  .settings-dialog {
+    width: 100%;
+    height: min(900px, calc(100dvh - 16px));
+    max-height: calc(100dvh - 16px);
+  }
+
+  .settings-service-card {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .settings-service-card > .settings-service-actions {
+    justify-content: flex-start;
+  }
+
+  .settings-api-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .settings-api-actions > button {
+    flex: 0 1 auto;
+  }
+
+  .settings-key-dialog {
+    height: min(900px, calc(100dvh - 16px));
+    max-height: calc(100dvh - 16px);
+  }
+}
+
+@media (max-width: 560px) {
+  .settings-overlay,
+  .settings-key-overlay {
+    align-items: end;
+    padding: 8px;
+  }
+
+  .settings-dialog,
+  .settings-key-dialog {
+    height: calc(100dvh - 16px);
+    max-height: calc(100dvh - 16px);
+    padding: 14px;
+    border-radius: 20px;
+  }
+
+  .settings-dialog__header {
+    align-items: flex-start;
+  }
+
+  .settings-dialog__header p {
+    font-size: 12px;
+  }
+
+  .settings-dialog__tabs {
+    margin-bottom: 16px;
+  }
+
+  .settings-dialog__tabs button {
+    padding-inline: 12px;
+  }
+
+  .settings-api-actions > button,
+  .settings-key-dialog__footer-actions > button {
+    min-height: 36px;
+  }
+
+  .settings-key-dialog__key-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .settings-key-dialog__key-row > button {
+    width: 100%;
+  }
+
+  .settings-key-dialog__footer-actions > button {
+    flex: 1 1 140px;
+  }
+}
+
+@media (max-width: 360px) {
+  .settings-dialog,
+  .settings-key-dialog {
+    padding: 12px;
+  }
+
+  .settings-api-actions > button,
+  .settings-key-dialog__footer-actions > button {
+    width: 100%;
+    flex-basis: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-dialog,
+  .settings-key-dialog {
+    scroll-behavior: auto;
+  }
+}

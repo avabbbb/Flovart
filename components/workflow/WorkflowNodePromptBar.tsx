@@ -244,7 +244,7 @@ export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme,
   ].filter(Boolean).join(' · ') || undefined;
 
   return (
-    <div data-workflow-overlay data-testid="workflow-node-prompt-bar" data-language={language} className="inline-prompt-bar workflow-node-prompt" style={{ width, maxWidth: 'calc(100vw - 16px)' }} onPointerDown={event => event.stopPropagation()} onWheel={event => event.stopPropagation()}>
+    <div data-workflow-overlay data-testid="workflow-node-prompt-bar" data-language={language} className="inline-prompt-bar workflow-node-prompt" style={{ ['--workflow-node-prompt-width' as string]: `${width}px` }} onPointerDown={event => event.stopPropagation()} onWheel={event => event.stopPropagation()}>
       {operationCapability && <WorkflowOperationParameterPanel
         capability={operationCapability}
         parameters={node.metadata.operation?.recipe.parameters || {}}

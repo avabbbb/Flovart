@@ -16,7 +16,7 @@ import {
   SkillHubError,
 } from './skill-hub.js';
 import { readWebDiscovery } from './web-discovery.js';
-import { buildBrowserBootstrapUrl, inspectLocalAgent, probeWebUi, readLocalAgentConnection } from './local-agent.js';
+import { buildBrowserBootstrapUrl, inspectLocalAgent, issueBrowserBootstrapToken, probeWebUi, readLocalAgentConnection } from './local-agent.js';
 
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]']);
 
@@ -185,7 +185,10 @@ async function openVerifiedWebUi(target, verified = true, opener = openUrlNative
     try {
       const connection = readLocalAgentConnection();
       const inspected = await inspectLocalAgent(connection, { timeoutMs: 600 });
-      if (inspected.state === 'ready') openTarget = buildBrowserBootstrapUrl(target, connection);
+      if (inspected.state === 'ready') {
+        const bootstrapToken = await issueBrowserBootstrapToken(connection, { timeoutMs: 600 });
+        openTarget = buildBrowserBootstrapUrl(target, { ...connection, bootstrapToken });
+      }
     } catch {
       // A plain WebUI remains a valid fallback when the optional Browser Agent is offline.
     }
@@ -210,7 +213,7 @@ export async function openWebUi(explicitUrl = '', options = {}) {
       return openVerifiedWebUi(candidate, true, opener);
     }
   }
-  throw Object.assign(new Error('没有发现运行中的 Flovart WebUI。请先运行 `npx flovart-cli start --source --web --open`；不要单独运行 `npm run dev` 来建立 Agent 连接。'), { code: 'NO_WEBUI' });
+  throw Object.assign(new Error('没有发现运行中的 Flovart WebUI。请先运行 `flovart start --source --web --open`；源码仓库可使用 `npm run flovart:cli -- start --source --web --open`，不要单独运行 `npm run dev` 来建立 Agent 连接。'), { code: 'NO_WEBUI' });
 }
 
 /** Open a URL with the OS default browser without shell-parsing bootstrap query strings. */

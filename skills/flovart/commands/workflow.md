@@ -5,7 +5,7 @@ Workflow is the current automated generation workspace. Table has no registered 
 Normal Agent flow starts from readiness and inspect:
 
 ```bash
-npm run flovart:cli -- status --json
+npm run flovart:cli -- ensure --json
 npm run flovart:cli -- workflow.inspect --json
 ```
 

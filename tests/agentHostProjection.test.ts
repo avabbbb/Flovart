@@ -43,6 +43,15 @@ describe('Agent Host Projection preparation', () => {
     expect(result).toMatchObject({ ok: true, projection: { status: 'external', skillReady: false } });
   });
 
+  it('offers WorkBuddy import without claiming that the app or Skill is installed', () => {
+    const result = prepareAgentHostProjection({ agentIdentity: 'workbuddy', discover: () => ({ agents: [] }) });
+    expect(result).toMatchObject({
+      ok: true,
+      distributionTarget: { id: 'workbuddy-skill', kind: 'skill' },
+      projection: { status: 'external', skillReady: false, bootstrapReady: false },
+    });
+  });
+
   it('does not prepare a projection for an unavailable Host', () => {
     expect(prepareAgentHostProjection({ agentIdentity: 'codebuddy-code', discover: () => ({ agents: [] }) })).toMatchObject({
       ok: false,

@@ -458,7 +458,7 @@ export function AssetLibraryBrowser({
         </div>
       )}
 
-      {menu && <><div className="fixed inset-0 z-40" onClick={() => setMenu(null)} /><motion.div ref={menuRef} initial={{ opacity: 0, scale: 0.94 }} animate={{ opacity: 1, scale: 1 }} className="fixed z-50 min-w-36 rounded-xl border py-1 shadow-xl" style={{ background: 'var(--isl-card)', borderColor: 'var(--isl-border)', left: Math.min(menu.x, window.innerWidth - 160), top: Math.min(menu.y, window.innerHeight - 160) }}><button type="button" className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-[var(--isl-surface-2)]" onClick={() => handleMenuAction('rename')}><Pencil size={12} />{isChinese ? '重命名' : 'Rename'}</button>{selectedFolderId && <button type="button" className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-[var(--isl-surface-2)]" onClick={() => handleMenuAction('removeFromFolder')}><FolderInput size={12} />{isChinese ? '移出此文件夹' : 'Remove'}</button>}<button type="button" className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-[var(--isl-surface-2)]" style={{ color: 'var(--isl-coral-deep)' }} onClick={() => handleMenuAction('delete')}><Trash2 size={12} />{isChinese ? '删除' : 'Delete'}</button></motion.div></>}
+      {menu && <><div className="fixed inset-0 z-40" onClick={() => setMenu(null)} /><motion.div ref={menuRef} initial={{ opacity: 0, scale: 0.94 }} animate={{ opacity: 1, scale: 1 }} className="asset-library-context-menu fixed z-50 min-w-36 rounded-xl border py-1 shadow-xl" style={{ '--menu-x': `${menu.x}px`, '--menu-y': `${menu.y}px`, background: 'var(--isl-card)', borderColor: 'var(--isl-border)' } as React.CSSProperties}><button type="button" className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-[var(--isl-surface-2)]" onClick={() => handleMenuAction('rename')}><Pencil size={12} />{isChinese ? '重命名' : 'Rename'}</button>{selectedFolderId && <button type="button" className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-[var(--isl-surface-2)]" onClick={() => handleMenuAction('removeFromFolder')}><FolderInput size={12} />{isChinese ? '移出此文件夹' : 'Remove'}</button>}<button type="button" className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-[var(--isl-surface-2)]" style={{ color: 'var(--isl-coral-deep)' }} onClick={() => handleMenuAction('delete')}><Trash2 size={12} />{isChinese ? '删除' : 'Delete'}</button></motion.div></>}
       <DeleteFolderDialog open={Boolean(folderDelete)} folder={folderDelete} itemCount={folderDeleteItemCount} subfolderCount={folderDeleteSubfolderCount} onConfirm={mode => { if (folderDelete) onRemoveFolder(folderDelete.id, mode === 'delete-all'); setFolderDelete(null); }} onCancel={() => setFolderDelete(null)} />
     </div>
   );
@@ -614,13 +614,13 @@ export function AssetLibraryBrowser({
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.94 }}
               transition={{ duration: 0.14 }}
-              className="fixed z-50 min-w-36 rounded-lg border-[1.5px] py-1 shadow-lg"
+              className="asset-library-context-menu fixed z-50 min-w-36 rounded-lg border-[1.5px] py-1 shadow-lg"
               style={{
+                '--menu-x': `${menu.x}px`,
+                '--menu-y': `${menu.y}px`,
                 background: 'var(--isl-card)',
                 borderColor: 'var(--isl-border)',
-                left: Math.min(menu.x, window.innerWidth - 160),
-                top: Math.min(menu.y, window.innerHeight - 200),
-              }}
+              } as React.CSSProperties}
             >
               <button type="button" className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-xs hover:bg-[var(--isl-surface-2)]" onClick={() => handleMenuAction('rename')}>
                 <Pencil size={12} />

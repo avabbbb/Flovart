@@ -28,9 +28,9 @@ Table、Agent Production Control、Agent Bridge、首页、设置和 Flovart 自
                          └─ shell.overlay: waiting / approval / Artifact
 ```
 
-首版使用原生轻量边界：DeepSeek Client Plugin 直接在 DSH React 树中渲染 Workflow View，不打包 Flovart React 19 主应用、Ant Design、路由或浏览器 store。Client 只通过 Harness Host 的受限同源代理读取和修改 Native Draft；Workspace Token 留在 Host，不在 URL、页面状态或节点中出现。
+首版使用原生轻量边界：DeepSeek Client Plugin 直接在 DSH React 树中渲染 contextual Workflow View，不打包 Flovart React 19 主应用、Ant Design、路由或浏览器 store。Client 只通过 Harness Host 的受限同源代理读取可见 Browser Workflow，并把修改交给 `ctx.flovart` 的同一套 stable contract；Workspace Token 留在 Host，不在 URL、页面状态或节点中出现。
 
-RC8 的根 `conversation` 与 `conversation.session` 都是排他 Slot，而 `conversation.view` 是附加列表 Slot；因此 Flovart 只注册后者，不替换主会话或其 Header/Input。若目标 Harness 版本没有相同且经过实测的 Slot 契约，就退回 CLI-only，而不是 Patch Harness 核心。Native Draft 与 Host 同源代理是可操作、可恢复的版本化兼容边界，不是截图或只读预览。
+RC8 的根 `conversation` 与 `conversation.session` 都是排他 Slot，而 `conversation.view` 是附加列表 Slot；因此 Flovart 只注册后者，不替换主会话或其 Header/Input。若目标 Harness 版本没有相同且经过实测的 Slot 契约，就退回 CLI-only，而不是 Patch Harness 核心。可见 Browser Workflow 与 Host 同源代理是版本化兼容边界；没有可见工作区时显示明确不可用，不创建隐藏副本。
 
 ## 空间画布职责
 
@@ -69,10 +69,12 @@ RC8 的根 `conversation` 与 `conversation.session` 都是排他 Slot，而 `co
 
 DeepSeek Profile 首次打开 Flovart Workflow View 时，由 Node/Cordis 插件使用当前非秘密 Session ID 发起配对；用户不手填 Agent URL 或长期 Token。未绑定或从其它 Harness 独立打开 Flovart 时，不显示一个看似可用的内置聊天框，而是展示：
 
-- 已安装宿主的 Operation Skill 检测结果；
-- `flovart director.bind ... --json` 的可复制命令；
-- CLI、Runtime、Workspace 与 Provider 的分层诊断；
-- “仅查看本地任务”的只读模式。
+- Codex、WorkBuddy、DeepSeek Harness 的具名选择；
+- 对所选助手可执行的准备动作与启动指令；
+- 当前项目、连接阶段及失败恢复动作；
+- 折叠的高级诊断；常规流程不要求填写绑定参数。
+
+新的首次接入、WorkBuddy 技能包和创作宿主面板统一按 [本地助手接入与创作软件插件](../agent-and-creative-hosts.md) 实施。上述旧的手工 `director.bind` 引导由该方案替代，CLI 绑定命令仍可用于开发者诊断。
 
 绑定后显示宿主和 Session 状态，但完整对话仍在外部 Harness。Flovart 可以展示 Harness 主动发布的用户可见摘要，必须标注来源和同步时间。
 

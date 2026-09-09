@@ -360,7 +360,7 @@ export function initCliHost(input = {}) {
   // coding-agent attachment and never writes MCP server configuration.
   const packagedSkill = join(PACKAGE_DIR, 'skill', 'SKILL.md');
   const sourceSkill = resolve(PACKAGE_DIR, '..', '..', '.agents', 'skills', 'flovart', 'SKILL.md');
-  const skillSource = existsSync(packagedSkill) ? packagedSkill : sourceSkill;
+  const skillSource = existsSync(sourceSkill) ? sourceSkill : packagedSkill;
   const distributionRoot = join(projectDir, target.installPath);
   const skillTarget = join(distributionRoot, 'flovart', 'SKILL.md');
   if (!dryRun && existsSync(skillSource)) {
@@ -369,7 +369,7 @@ export function initCliHost(input = {}) {
   }
   const packagedOpenSkill = join(PACKAGE_DIR, 'skill', 'open-flovart', 'SKILL.md');
   const sourceOpenSkill = resolve(PACKAGE_DIR, '..', '..', '.agents', 'skills', 'open-flovart', 'SKILL.md');
-  const openSkillSource = existsSync(packagedOpenSkill) ? packagedOpenSkill : sourceOpenSkill;
+  const openSkillSource = existsSync(sourceOpenSkill) ? sourceOpenSkill : packagedOpenSkill;
   const openSkillTarget = join(distributionRoot, 'open-flovart', 'SKILL.md');
   if (!dryRun && existsSync(openSkillSource)) {
     ensureParent(openSkillTarget);
@@ -385,7 +385,7 @@ export function initCliHost(input = {}) {
     skill: { source: skillSource, target: skillTarget, exists: existsSync(skillSource), dryRun },
     bootstrapSkill: { source: openSkillSource, target: openSkillTarget, exists: existsSync(openSkillSource), dryRun },
     nextSteps: [
-      'Run flovart start --open to launch or reuse the local Runtime and visible Workflow.',
+      'Run flovart ensure --json to launch or reuse the local Runtime and visible Workflow.',
       `The selected distribution reads ${target.installPath}/open-flovart/SKILL.md to prepare the browser, then ${target.installPath}/flovart/SKILL.md for Workflow commands.`,
     ],
   };
@@ -408,7 +408,7 @@ export function diagnoseAgentSetup(input = {}) {
       skillPath: skillTarget,
       cliAvailable: existsSync(toolPath) || process.env.FLOVART_SKIP_CLI_CHECK === '1',
       cliPath: toolPath,
-      usage: 'npx flovart-cli <command> --json  // coding agent 经 CLI 操作 Flovart',
+      usage: 'flovart <command> --json  // source checkout fallback: npm run flovart:cli -- <command> --json',
     };
   })();
   const shadowState = readShadowStateSnapshot();

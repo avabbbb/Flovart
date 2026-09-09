@@ -1,0 +1,14 @@
+{
+  "manifestVersion": 4,
+  "id": "com.flovart.studio.photoshop",
+  "name": "Flovart",
+  "version": "0.3.2",
+  "main": "index.html",
+  "host": [{ "app": "PS", "minVersion": "23.0.0" }],
+  "entrypoints": [{
+    "type": "panel",
+    "id": "flovartPanel",
+    "label": "Flovart",
+    "minimumSize": { "width": 280, "height": 420 }
+  }]
+}

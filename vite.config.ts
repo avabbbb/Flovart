@@ -63,6 +63,10 @@ export default defineConfig(() => {
         globals: true,
         environment: 'jsdom',
         setupFiles: ['./tests/setup.ts'],
+        // Windows hosts can exhaust fork/handle resources at Vitest's
+        // auto-detected worker count; four workers keep the full suite
+        // deterministic without changing test isolation.
+        maxWorkers: 4,
       },
     };
 });

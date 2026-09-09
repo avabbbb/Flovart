@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<BlackmagicDesign>
+  <Plugin>
+    <Id>com.flovart.studio.resolve</Id>
+    <Name>Flovart</Name>
+    <Version>0.3.2</Version>
+    <Description>Flovart contextual creative inspector</Description>
+    <FilePath>main.js</FilePath>
+  </Plugin>
+</BlackmagicDesign>

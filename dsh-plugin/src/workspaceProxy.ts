@@ -7,11 +7,7 @@ export const WORKSPACE_PROXY_PATH = '/flovart-workspace'
 
 const ROUTES = new Map<string, ReadonlySet<string>>([
   ['/health', new Set(['GET'])],
-  ['/workflow/native/register', new Set(['POST'])],
   ['/api/tools', new Set(['POST'])],
-  ['/director/bind', new Set(['POST'])],
-  ['/director/handoff', new Set(['POST'])],
-  ['/director/status', new Set(['GET'])],
 ])
 const MAX_BODY_BYTES = 36 * 1024 * 1024
 
@@ -55,24 +51,8 @@ export function resolveWorkspaceProxyTarget(workspaceUrl: string, requestUrl: st
     case '/health':
       target.pathname = '/health'
       break
-    case '/workflow/native/register':
-      target.pathname = '/workflow/native/register'
-      break
     case '/api/tools':
       target.pathname = '/api/tools'
-      break
-    case '/director/bind':
-      target.pathname = '/director/bind'
-      break
-    case '/director/handoff':
-      target.pathname = '/director/handoff'
-      break
-    case '/director/status':
-      target.pathname = '/director/status'
-      for (const key of ['agentIdentity', 'host', 'sessionId', 'projectId']) {
-        const value = incoming.searchParams.get(key)
-        if (value !== null) target.searchParams.set(key, value)
-      }
       break
     default:
       return null

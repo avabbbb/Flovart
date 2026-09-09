@@ -13,8 +13,8 @@ export interface FlovartPluginConfig {
   cli: string
   /** Per-CLI-call timeout in milliseconds. */
   toolTimeoutMs: number
-  /** Explicit DSH runtime surface; native/headless never falls back to Browser. */
-  workspaceMode: 'browser' | 'native' | 'headless'
+  /** DSH always joins the visible Browser Workflow authority. */
+  workspaceMode: 'browser'
 }
 
 export const DEFAULT_CONFIG: FlovartPluginConfig = {
@@ -26,5 +26,5 @@ export const DEFAULT_CONFIG: FlovartPluginConfig = {
 }
 
 export function normalizeConfig(config: Partial<FlovartPluginConfig> | undefined): FlovartPluginConfig {
-  return { ...DEFAULT_CONFIG, ...config }
+  return { ...DEFAULT_CONFIG, ...config, workspaceMode: 'browser' }
 }

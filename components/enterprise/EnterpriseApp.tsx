@@ -118,9 +118,9 @@ export default function EnterpriseApp() {
   );
 
   return (
-    <div className="theme-aware min-h-screen" style={{ background: 'var(--app-bg)', color: 'var(--isl-ink)' }}>
+    <div className="enterprise-app theme-aware min-h-screen" style={{ background: 'var(--app-bg)', color: 'var(--isl-ink)' }}>
       <header
-        className="sticky top-0 z-30 flex h-12 items-center gap-2 px-4"
+        className="enterprise-app__header sticky top-0 z-30 flex h-12 items-center gap-2 px-4"
         style={{ background: 'var(--app-bg)', borderBottom: '1px solid var(--isl-border)' }}
       >
             <Link to="/app" className="isl-icon-btn h-8 w-8" title="返回工作流" aria-label="返回工作流">
@@ -154,7 +154,7 @@ export default function EnterpriseApp() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl px-4 py-6">
+      <main className="enterprise-app__main mx-auto max-w-6xl px-4 py-6">
         {view === 'list' && (
           <OrgListPanel orgs={orgs} onOpen={openOrg} onChanged={fetchMyOrgs} toast={toast} />
         )}
@@ -234,9 +234,9 @@ function OrgDetailPanel({ org, user, onDeleted, toast }: {
   const panelProps: PanelProps = { org, perms, toast, userId: user.id };
 
   return (
-    <div className="flex gap-4">
+    <div className="enterprise-org-layout flex gap-4">
       {/* Sidebar */}
-      <aside className="sticky top-14 hidden h-[calc(100vh-3.5rem)] w-52 shrink-0 overflow-y-auto md:block">
+      <aside className="enterprise-org-sidebar sticky top-14 hidden h-[calc(100vh-3.5rem)] w-52 shrink-0 overflow-y-auto md:block">
         <div className="rounded-xl p-3" style={{ background: 'var(--isl-surface)', border: '1.5px solid var(--isl-border)' }}>
           <div className="mb-3">
             <h2 className="truncate text-sm font-bold">{org.name}</h2>
@@ -273,7 +273,7 @@ function OrgDetailPanel({ org, user, onDeleted, toast }: {
       </aside>
 
       {/* Content */}
-      <div className="min-w-0 flex-1">
+      <div className="enterprise-org-content min-w-0 flex-1">
         {/* Mobile section selector */}
         <div className="mb-3 md:hidden">
           <select value={section} onChange={(e) => setSection(e.target.value as Section)}
@@ -397,7 +397,7 @@ function MemberRoster({ org, members, canInvite, canManage, onRefresh, toast }: 
       )}
 
       <div className="rounded-xl overflow-hidden" style={{ background: 'var(--isl-surface)', border: '1.5px solid var(--isl-border)' }}>
-        <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_80px_110px_72px] items-center gap-2 px-4 py-2.5 text-[11px] font-bold uppercase"
+        <div className="enterprise-member-grid grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_80px_110px_72px] items-center gap-2 px-4 py-2.5 text-[11px] font-bold uppercase"
           style={{ background: 'var(--isl-surface-2)', color: 'var(--isl-ink-soft)', borderBottom: '1px solid var(--isl-border)' }}>
           <span>用户名</span>
           <span>邮箱</span>
@@ -409,7 +409,7 @@ function MemberRoster({ org, members, canInvite, canManage, onRefresh, toast }: 
           <div className="py-8 text-center text-xs" style={{ color: 'var(--isl-ink-ghost)' }}>尚无成员</div>
         )}
         {members.map((m) => (
-          <div key={m.id} className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_80px_110px_72px] items-center gap-2 px-4 py-2.5 text-xs"
+          <div key={m.id} className="enterprise-member-grid grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_80px_110px_72px] items-center gap-2 px-4 py-2.5 text-xs"
             style={{ borderBottom: '1px solid var(--isl-border)' }}>
             <span className="truncate font-semibold" style={{ color: 'var(--isl-ink)' }}>{m.user?.username ?? m.userId}</span>
             <span className="truncate text-[10px]" style={{ color: 'var(--isl-ink-ghost)' }}>{m.user?.email ?? '—'}</span>
@@ -552,7 +552,7 @@ function DeptPanel({ org, depts, roles, orgMembers, canManage, onTreeChanged, on
   const cardStyle = { background: 'var(--isl-surface)', border: '1.5px solid var(--isl-border)' } as const;
 
   return (
-    <div className="grid gap-4 md:grid-cols-[280px_1fr]">
+    <div className="enterprise-dept-grid grid gap-4 md:grid-cols-[280px_1fr]">
       <div className="rounded-xl p-3" style={cardStyle}>
         <div className="mb-2 flex items-center justify-between">
           <span className="text-xs font-bold">部门树</span>

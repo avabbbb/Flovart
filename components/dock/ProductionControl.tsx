@@ -1,5 +1,6 @@
 import { Boxes, Bot, CircleAlert, CircleDashed, Copy, LoaderCircle, Send, ShieldCheck, Sparkles, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import '../../styles/agent.css';
 import type { WorkflowNode, WorkflowProject } from '../workflow/types';
 import { DockCrewClient, DockClientError, loadDockAgentUrl, type DockConnection, type DockDirectorStatus, type DockIntent, type DockReceipt } from '../../services/dockCrewClient';
 import { serializeSupportDiagnostics } from '../../services/supportDiagnostics';
@@ -15,6 +16,7 @@ interface ProductionControlProps {
   connectionReady: boolean;
   connectionError: DockClientError | null;
   onConnection: (url: string, token: string) => void;
+  onEnsureConnection: () => Promise<boolean>;
   onOpenWorkflow: () => void;
   onOpenTable: (nodeId?: string) => void;
   onBadges: (badges: DockBadges) => void;
@@ -41,7 +43,7 @@ function statusClass(status: string) {
   return 'is-running';
 }
 
-export function ProductionControl({ project, client, connection, connectionReady, connectionError, onConnection, onOpenWorkflow, onOpenTable, onBadges }: ProductionControlProps) {
+export function ProductionControl({ project, client, connection, connectionReady, connectionError, onConnection, onEnsureConnection, onOpenWorkflow, onOpenTable, onBadges }: ProductionControlProps) {
   const [mode, setMode] = useState<ProductionControlMode>('intents');
   const [director, setDirector] = useState<DockDirectorStatus | null>(null);
   const [intents, setIntents] = useState<DockIntent[]>([]);
@@ -55,6 +57,8 @@ export function ProductionControl({ project, client, connection, connectionReady
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [diagnosticsCopied, setDiagnosticsCopied] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [startingConnection, setStartingConnection] = useState(false);
   const eventCursor = useRef(0);
   const agentStatus = useAgentConnectionStore(state => state.status);
   const agentClientId = useAgentConnectionStore(state => state.clientId);
@@ -62,6 +66,12 @@ export function ProductionControl({ project, client, connection, connectionReady
   const agentRevision = useAgentConnectionStore(state => state.revision);
   const activeHostIdentity = useAgentConnectionStore(state => state.activeHostIdentity);
   const writerStatus = useAgentConnectionStore(state => state.writerStatus);
+
+  useEffect(() => {
+    if (!connection) return;
+    setUrl(connection.url);
+    setToken(connection.token);
+  }, [connection]);
 
   const refreshDirector = useCallback(async () => {
     if (!client) return;
@@ -187,6 +197,15 @@ export function ProductionControl({ project, client, connection, connectionReady
     onConnection(url.trim(), token.trim());
   }, [url, token, onConnection]);
 
+  const startAndConnect = useCallback(async () => {
+    setStartingConnection(true);
+    try {
+      if (!(await onEnsureConnection())) setAdvancedOpen(true);
+    } finally {
+      setStartingConnection(false);
+    }
+  }, [onEnsureConnection]);
+
   const copyCommand = useCallback(() => {
     const text = director?.binding
       ? `flovart director.status --json`
@@ -227,51 +246,85 @@ export function ProductionControl({ project, client, connection, connectionReady
   // 配对遵循本机 Agent 的显式连接流程：地址可从上次配对恢复，Token 只由用户或受信宿主提供。
 
   if (!client || !connectionReady) {
-    const pairingTitle = connectionError?.code === 'INVALID_TOKEN'
-      ? 'Token 无效，请重新配对'
-      : !url.trim()
-        ? '连接本机 Flovart Agent'
-        : !token.trim()
-          ? '还差一个配对 Token'
-          : '验证本机 Flovart Agent…';
+    const needsLogin = connectionError?.code === 'INVALID_TOKEN';
+    const pairingTitle = needsLogin
+      ? '需要重新连接本机 Agent'
+      : connection
+        ? '无法连接到 Flovart 本地服务'
+        : '本地 Agent 服务尚未运行';
+    const pairingMessage = needsLogin
+      ? '当前连接凭据已失效。请在高级连接设置中重新输入本机配对信息。'
+      : connection
+        ? 'Flovart 会在本机服务恢复后自动重试，也可以打开高级设置立即重新连接。'
+        : 'Flovart 会在启动时自动连接本机服务；如果你是开发者，也可以在高级设置中手动排障。';
+    const currentAgent = connection ? 'DeepSeek Harness' : 'Codex';
+    const agents = [
+      { label: 'Codex', state: connectionReady ? 'ready' : 'offline', detail: connectionReady ? '本地服务已就绪' : '等待本地服务' },
+      { label: 'WorkBuddy', state: 'needs_setup', detail: '可导入连接器' },
+      { label: 'DeepSeek Harness', state: connectionReady ? 'ready' : 'needs_setup', detail: connectionReady ? '当前面板宿主' : '插件可用' },
+      { label: 'Claude Code', state: 'needs_setup', detail: '尚未准备' },
+      { label: 'OpenCode', state: 'needs_setup', detail: '尚未准备' },
+      { label: 'Pi', state: 'needs_setup', detail: '尚未准备' },
+    ].filter(agent => agent.label !== currentAgent);
+    const stateLabel = (state: string) => ({ ready: '已就绪', needs_setup: '需要准备', needs_login: '需要登录', offline: '离线' }[state] || '离线');
     return (
-      <main className="agent-studio dock-surface" data-testid="production-control">
-        <section className="agent-studio__context">
-          <header className="agent-context__header">
-            <div><span>Local Agent</span><strong>开发者连接面</strong></div>
-          </header>
-          <div className="agent-context__body">
-            <div className="agent-dock-connect">
-              <Bot size={26} />
-              <h2>{pairingTitle}</h2>
-              <p>这是给本地 CLI / 外部 Agent 使用的开发者配对面，不是普通创作页面。Agent 地址是服务地址，不能直接点击打开网页。</p>
-              <p>先启动 <code>npm run flovart:agent</code>，再填入本机配对记录中的 Token。Token 不要放进 URL，也不要发送到聊天。</p>
-              <label>Agent 地址<input value={url} placeholder="http://127.0.0.1:17372" onChange={event => setUrl(event.target.value)} /></label>
-              <label>Token<input value={token} type="password" placeholder="短期 Token" onChange={event => setToken(event.target.value)} /></label>
-              {connectionError && <div className="agent-dock-error">{connectionError.message}</div>}
+      <main className="agent-link-surface dock-surface" data-testid="production-control">
+        <header className="agent-link-surface__header">
+          <span className="agent-link-surface__eyebrow">Local Agent</span>
+          <h1>AI 协作</h1>
+          <p>让 Codex、WorkBuddy 或 DeepSeek Harness 操作当前 Flovart Workflow。连接细节只在需要排障时展开。</p>
+          <span className={`agent-link-surface__status${connectionReady ? ' is-ready' : ''}`} role="status"><i />{connectionReady ? '本地服务已就绪' : needsLogin ? '需要登录' : '本地服务离线'}</span>
+        </header>
+
+        <div className="agent-link-surface__grid">
+          <section className="agent-link-surface__card agent-link-surface__current" aria-labelledby="agent-link-current-title">
+            <Bot size={22} style={{ color: 'var(--isl-mint)' }} aria-hidden="true" />
+            <h2 id="agent-link-current-title">{pairingTitle}</h2>
+            <p>{pairingMessage}</p>
+            <div className="agent-link-surface__workflow"><span>当前 Workflow</span><strong>{project?.title || '尚未选择 Workflow'}</strong></div>
+            <button type="button" className="agent-link-surface__primary-action" disabled={startingConnection} aria-busy={startingConnection} onClick={() => connectionReady ? onOpenWorkflow() : needsLogin ? setAdvancedOpen(true) : void startAndConnect()}>{connectionReady ? '打开 Workflow' : needsLogin ? '打开高级连接设置' : startingConnection ? '正在启动本地服务…' : connection ? '重新连接并使用 Codex' : '启动并连接 Codex'}</button>
+            {connectionError && !needsLogin && <div className="agent-link-surface__recovery" role="alert">
+              <strong>无法连接到 Flovart 本地服务</strong>
+              <span>可以自动修复，或查看开发者诊断。</span>
+              <div><button type="button" disabled={startingConnection} onClick={() => void startAndConnect()}>自动修复</button><button type="button" onClick={() => setAdvancedOpen(true)}>查看诊断</button></div>
+            </div>}
+          </section>
+
+          <section className="agent-link-surface__card" aria-labelledby="agent-link-agents-title">
+            <h3 id="agent-link-agents-title">其他 Agent</h3>
+            <p>选择已准备好的协作入口。</p>
+            <div className="agent-link-surface__cards" role="list">
+              {agents.map(agent => (
+                <div key={agent.label} className="agent-link-card" role="listitem">
+                  <span className="agent-link-card__dot" style={{ background: agent.state === 'ready' ? 'var(--isl-mint)' : agent.state === 'offline' ? 'var(--isl-coral)' : 'var(--isl-sun)' }} />
+                  <div className="agent-link-card__body"><strong>{agent.label}</strong><span>{agent.detail}</span></div>
+                  <span className="agent-link-card__state">{stateLabel(agent.state)}</span>
+                </div>
+              ))}
+            </div>
+          </section>
+        </div>
+
+        <details className="agent-link-surface__advanced" open={advancedOpen} onToggle={event => setAdvancedOpen(event.currentTarget.open)}>
+          <summary>高级连接设置 · Developer connection</summary>
+          <div className="agent-link-surface__advanced-body">
+            <label>Agent 地址<input value={url} placeholder="http://127.0.0.1:17372" onChange={event => setUrl(event.target.value)} /></label>
+            <label>Token<input value={token} type="password" placeholder="短期 Token" onChange={event => setToken(event.target.value)} /></label>
+            {connectionError && <p className="agent-link-surface__error">{connectionError.message}</p>}
+            <p className="agent-link-surface__diagnostic">手动连接仅用于开发者排障。Token 不会写入 URL；连接成功后只保留本次会话凭据。</p>
+            <div className="agent-link-surface__advanced-actions">
               <button type="button" onClick={connect}><ShieldCheck size={14} />连接 Agent</button>
-              <button type="button" className="agent-dock-secondary-action" onClick={() => void copyDiagnostics()}><Copy size={14} />{diagnosticsCopied ? '已复制诊断信息' : '复制诊断信息'}</button>
+              <button type="button" onClick={() => void copyDiagnostics()}><Copy size={14} />{diagnosticsCopied ? '已复制诊断信息' : '复制诊断信息'}</button>
             </div>
           </div>
-        </section>
-        <section className="agent-studio__conversation">
-          <div className="agent-dock-connect-info">
-            <header><ShieldCheck size={16} /><strong>配对顺序</strong></header>
-            <ol>
-              <li>启动本机 Flovart Agent。</li>
-              <li>使用同一次启动的 URL 与 Token。</li>
-              <li>认证成功后，当前浏览器才会绑定为 Workflow client。</li>
-            </ol>
-            <p>普通 Workflow 不依赖这个页面；连接只决定 CLI / Agent 是否能操作当前可见 Workflow。</p>
-          </div>
-        </section>
+        </details>
       </main>
     );
   }
 
   return (
-    <main className="agent-studio dock-surface" data-testid="production-control">
-      <aside className="agent-studio__context">
+    <main className="agent-control-shell dock-surface" data-testid="production-control">
+      <aside className="agent-control-shell__context">
         <header className="agent-context__header">
           <div><span>Production Control</span><strong>{project?.title || 'Flovart 制作台'}</strong></div>
         </header>
@@ -324,7 +377,7 @@ export function ProductionControl({ project, client, connection, connectionReady
         </footer>
       </aside>
 
-      <section className="agent-studio__conversation" aria-label="制作现场">
+      <section className="agent-control-shell__conversation" aria-label="制作现场">
         {mode === 'receipts' && receipt ? (
           <ReceiptView receipt={receipt} onClose={() => setMode('intents')} onOpenWorkflow={onOpenWorkflow} onOpenTable={onOpenTable} />
         ) : mode === 'receipts' ? (

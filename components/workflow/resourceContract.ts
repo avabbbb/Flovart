@@ -12,6 +12,7 @@ export function workflowNodeOutputResourceId(nodeId: string, index = 0) {
 
 function mediaLocator(node: WorkflowNode): WorkflowResourceLocator {
   const metadata = node.metadata;
+  if (metadata.resourceLocator) return metadata.resourceLocator;
   if (metadata.sourceType === 'assetLibrary' && metadata.assetId) return { kind: 'asset', assetId: metadata.assetId };
   if (metadata.storageKey) return { kind: 'workflow-storage', storageKey: metadata.storageKey };
   if (metadata.artifactRef?.taskId) return { kind: 'runtime-artifact', artifactRef: metadata.artifactRef };

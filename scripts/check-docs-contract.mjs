@@ -6,6 +6,7 @@ import { CANONICAL_COMMAND_REGISTRY } from '../tools/flovart/registry.js';
 import { SKILL_COMMAND_NAMES } from '../tools/flovart/skill-commands.js';
 
 const stableAgentSurface = [
+  'ensure',
   'status',
   'workflow.inspect',
   'workflow.selection.get',
@@ -25,6 +26,7 @@ const minimumNodeVersion = String(packageJson.engines?.node || '').match(/\d+\.\
 const requiredDocPaths = [
   'README.md',
   'README.en.md',
+  'README.zh-CN.md',
   'docs/overview/installation.zh-CN.md',
   'docs/overview/quick-start.md',
   'docs/overview/quick-start.en.md',
@@ -40,6 +42,7 @@ const requiredDocPaths = [
 
 const compatibilityMarker = /legacy|compatib|diagnos|debug|deprecated|historical|retired|removed|曾|历史|兼容|诊断|调试|旧路径|迁移|仅用于|不再|删除|替换|only for/i;
 const pseudoCliCommands = new Set(['install', 'start', 'update']);
+const lifecycleCommands = new Set(['ensure']);
 const commandInvocation = /(?:npx\s+flovart-cli|npm\s+run\s+flovart:cli\s+--|flovart-cli)\s+([a-z][a-z0-9]*(?:[.-][a-z0-9]+)*)/gi;
 const schemaCommand = /--command\s+([a-z][a-z0-9]*(?:[.-][a-z0-9]+)*)/gi;
 const publicDocPath = /^(?:README(?:\.en|\.zh-CN)?\.md|docs\/overview\/|docs\/content\/docs\/)/i;
@@ -103,7 +106,7 @@ export function checkDocsContract({ rootDir = path.resolve(path.dirname(fileURLT
 
   for (const { relativePath, text } of docs) {
     for (const command of mentionedCommands(text)) {
-      if (command.startsWith('<') || pseudoCliCommands.has(command) || command === 'tui' || SKILL_COMMAND_NAMES.has(command)) continue;
+      if (command.startsWith('<') || pseudoCliCommands.has(command) || lifecycleCommands.has(command) || command === 'tui' || SKILL_COMMAND_NAMES.has(command)) continue;
       const definition = CANONICAL_COMMAND_REGISTRY[command];
       if (!definition) {
         errors.push(`${relativePath}: command ${command} is not in the canonical registry`);

@@ -5,11 +5,14 @@
 Inspect readiness before mutation:
 
 ```bash
-npm run flovart:cli -- status --json
-npm run flovart:cli -- start --open --json   # only when status is not ready
+npm run flovart:cli -- ensure --json
 npm run flovart:cli -- workflow.inspect --json
 npm run flovart:cli -- provider.status --json
 ```
+
+`ensure` owns local service startup, Browser bootstrap, and recovery. Use
+`status` only to inspect a reported failure; do not manually construct a URL,
+token, or port.
 
 Use `doctor` when the browser bridge, host setup, or Workflow generation surface appears unavailable:
 

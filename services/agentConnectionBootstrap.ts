@@ -4,9 +4,11 @@ import { useAgentConnectionStore, type AgentConnectionStatus } from '../stores/u
 
 const AGENT_URL_PARAM = 'agentUrl';
 const AGENT_TOKEN_PARAM = 'agentToken';
+const BOOTSTRAP_TOKEN_PARAM = 'bootstrapToken';
 const AUTO_ACTIVATE_PARAM = 'activateBrowserWriter';
 const SESSION_URL_KEY = 'flovart.agent.bootstrap.url';
 const SESSION_TOKEN_KEY = 'flovart.agent.bootstrap.token';
+const SESSION_EXPIRES_KEY = 'flovart.agent.bootstrap.expires';
 const SESSION_AUTO_ACTIVATE_KEY = 'flovart.agent.bootstrap.activate';
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]']);
 
@@ -58,15 +60,23 @@ function readConnectionParams(location: BootstrapLocation) {
   return {
     url: search.get(AGENT_URL_PARAM) || hash.get(AGENT_URL_PARAM) || '',
     token: search.get(AGENT_TOKEN_PARAM) || hash.get(AGENT_TOKEN_PARAM) || '',
+    bootstrapToken: search.get(BOOTSTRAP_TOKEN_PARAM) || hash.get(BOOTSTRAP_TOKEN_PARAM) || '',
     autoActivate: search.get(AUTO_ACTIVATE_PARAM) === '1' || hash.get(AUTO_ACTIVATE_PARAM) === '1',
-    fromUrl: search.has(AGENT_URL_PARAM) || search.has(AGENT_TOKEN_PARAM) || search.has(AUTO_ACTIVATE_PARAM)
-      || hash.has(AGENT_URL_PARAM) || hash.has(AGENT_TOKEN_PARAM) || hash.has(AUTO_ACTIVATE_PARAM),
+    fromUrl: search.has(AGENT_URL_PARAM) || search.has(AGENT_TOKEN_PARAM) || search.has(BOOTSTRAP_TOKEN_PARAM) || search.has(AUTO_ACTIVATE_PARAM)
+      || hash.has(AGENT_URL_PARAM) || hash.has(AGENT_TOKEN_PARAM) || hash.has(BOOTSTRAP_TOKEN_PARAM) || hash.has(AUTO_ACTIVATE_PARAM),
   };
 }
 
 function readSessionConnection(storage: StorageLike | null) {
   if (!storage) return { url: '', token: '' };
   try {
+    const expiresAt = Number(storage.getItem(SESSION_EXPIRES_KEY) || 0);
+    if (expiresAt && expiresAt <= Date.now()) {
+      storage.removeItem(SESSION_URL_KEY);
+      storage.removeItem(SESSION_TOKEN_KEY);
+      storage.removeItem(SESSION_EXPIRES_KEY);
+      return { url: '', token: '' };
+    }
     return { url: storage.getItem(SESSION_URL_KEY) || '', token: storage.getItem(SESSION_TOKEN_KEY) || '' };
   } catch {
     return { url: '', token: '' };
@@ -95,6 +105,7 @@ function scrubConnectionParams(location: BootstrapLocation, history: BootstrapHi
     const url = new URL(location.href);
     url.searchParams.delete(AGENT_URL_PARAM);
     url.searchParams.delete(AGENT_TOKEN_PARAM);
+    url.searchParams.delete(BOOTSTRAP_TOKEN_PARAM);
     url.searchParams.delete(AUTO_ACTIVATE_PARAM);
     const hashQueryIndex = url.hash.indexOf('?');
     if (hashQueryIndex >= 0) {
@@ -102,6 +113,7 @@ function scrubConnectionParams(location: BootstrapLocation, history: BootstrapHi
       const params = new URLSearchParams(url.hash.slice(hashQueryIndex + 1));
       params.delete(AGENT_URL_PARAM);
       params.delete(AGENT_TOKEN_PARAM);
+      params.delete(BOOTSTRAP_TOKEN_PARAM);
       params.delete(AUTO_ACTIVATE_PARAM);
       url.hash = params.size ? `${route}?${params}` : route;
     }
@@ -121,11 +133,20 @@ function saveSessionConnection(storage: StorageLike | null, connection: ManagedA
   }
 }
 
+function saveSessionExpiry(storage: StorageLike | null, expiresAt?: number) {
+  if (!storage) return;
+  try {
+    if (Number.isFinite(expiresAt)) storage.setItem(SESSION_EXPIRES_KEY, String(expiresAt));
+    else storage.removeItem(SESSION_EXPIRES_KEY);
+  } catch { /* storage is best effort */ }
+}
+
 function clearSessionConnection(storage: StorageLike | null) {
   if (!storage) return;
   try {
     storage.removeItem(SESSION_URL_KEY);
     storage.removeItem(SESSION_TOKEN_KEY);
+    storage.removeItem(SESSION_EXPIRES_KEY);
   } catch { /* storage is best effort */ }
 }
 
@@ -137,14 +158,15 @@ function saveAutoActivation(storage: StorageLike | null, enabled: boolean) {
   } catch { /* storage is best effort */ }
 }
 
-async function requestJson(url: URL, options: AgentConnectionBootstrapOptions, token?: string) {
+async function requestJson(url: URL, options: AgentConnectionBootstrapOptions, token?: string, headers: Record<string, string> = {}, method = 'GET') {
   const fetchImpl = options.fetchImpl || fetch;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), options.timeoutMs || 1200);
   try {
     const response = await fetchImpl(url, {
       signal: controller.signal,
-      headers: token ? { 'x-flovart-agent-token': token } : undefined,
+      method,
+      headers: { ...(token ? { 'x-flovart-agent-token': token } : {}), ...headers },
     });
     const body = await response.json().catch(() => ({}));
     return { response, body };
@@ -154,6 +176,22 @@ async function requestJson(url: URL, options: AgentConnectionBootstrapOptions, t
   } finally {
     clearTimeout(timer);
   }
+}
+
+async function exchangeBootstrapCredential(url: string, bootstrapToken: string, options: AgentConnectionBootstrapOptions) {
+  const result = await requestJson(
+    new URL('/bootstrap/exchange', url),
+    options,
+    undefined,
+    { 'x-flovart-bootstrap-token': bootstrapToken },
+    'POST',
+  );
+  if (!result.response.ok || typeof result.body?.sessionToken !== 'string' || !result.body.sessionToken) {
+    const error = new Error(String(result.body?.error?.message || result.body?.error || `Browser bootstrap 返回 HTTP ${result.response.status}。`));
+    (error as Error & { code?: string }).code = result.body?.error?.code || 'AUTH_FAILED';
+    throw error;
+  }
+  return { token: result.body.sessionToken, expiresAt: Number(result.body.expiresAt) || undefined };
 }
 
 async function authenticate(connection: ManagedAgentConnection, options: AgentConnectionBootstrapOptions) {
@@ -179,22 +217,28 @@ async function runBootstrap(options: AgentConnectionBootstrapOptions): Promise<A
   if (!location) return { state: 'skipped' };
   const storage = options.sessionStorage || sessionStore();
   const params = readConnectionParams(location);
+  const history = options.history || browserHistory();
+  if (params.fromUrl) scrubConnectionParams(location, history);
   const session = readSessionConnection(storage);
   const url = params.url || session.url;
   const token = params.token || session.token;
-  if (!url && !token) return { state: 'skipped' };
+  if (!url && !token && !params.bootstrapToken) return { state: 'skipped' };
 
   setStoreStatus('connecting', { url: url || null, error: null });
   let connection: ManagedAgentConnection;
+  let sessionExpiresAt: number | undefined;
   try {
-    connection = normalizeConnection(url, token);
+    const exchanged = params.bootstrapToken
+      ? await exchangeBootstrapCredential(url, params.bootstrapToken, options)
+      : { token, expiresAt: undefined };
+    sessionExpiresAt = exchanged.expiresAt;
+    connection = normalizeConnection(url, exchanged.token);
   } catch (cause) {
     clearSessionConnection(storage);
     saveAutoActivation(storage, false);
     setBrowserWorkflowBinding(null);
     const error = cause instanceof Error ? cause.message : String(cause);
     setStoreStatus('auth_failed', { url: null, clientId: null, projectId: null, revision: null, error });
-    if (params.fromUrl) scrubConnectionParams(location, options.history || browserHistory());
     return { state: 'auth_failed', error };
   }
 
@@ -204,9 +248,9 @@ async function runBootstrap(options: AgentConnectionBootstrapOptions): Promise<A
     try {
       await authenticate(connection, options);
       saveSessionConnection(storage, connection);
+      saveSessionExpiry(storage, sessionExpiresAt);
       saveAutoActivation(storage, params.autoActivate);
       setBrowserWorkflowBinding(connection);
-      if (params.fromUrl) scrubConnectionParams(location, options.history || browserHistory());
       return { state: 'ready', connection };
     } catch (cause) {
       lastError = cause instanceof Error ? cause.message : String(cause);
@@ -214,7 +258,6 @@ async function runBootstrap(options: AgentConnectionBootstrapOptions): Promise<A
         clearSessionConnection(storage);
         saveAutoActivation(storage, false);
         setBrowserWorkflowBinding(null);
-        if (params.fromUrl) scrubConnectionParams(location, options.history || browserHistory());
         setStoreStatus('auth_failed', { url: connection.url, clientId: null, projectId: null, revision: null, error: lastError });
         return { state: 'auth_failed', connection, error: lastError };
       }
@@ -249,5 +292,6 @@ export function consumeBrowserWriterAutoActivation(storage: StorageLike | null =
 export const agentBootstrapStorageKeys = Object.freeze({
   url: SESSION_URL_KEY,
   token: SESSION_TOKEN_KEY,
+  expiresAt: SESSION_EXPIRES_KEY,
   autoActivate: SESSION_AUTO_ACTIVATE_KEY,
 });

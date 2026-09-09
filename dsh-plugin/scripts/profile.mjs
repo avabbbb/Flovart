@@ -32,11 +32,8 @@ const TARGET_DSH = '0.1.0-rc.8'
 const BUNDLES = ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app', '@flovart/dsh-plugin']
 
 const PROFILE_PATCH_TEMPLATE = `# Your patch layer for the flovart profile, applied after every bundle layer.
-# Example: override the Flovart WebUI origin / CLI launcher.
-# - id: flovart
-#   config:
-#     webuiUrl: !!js process.env.FLOVART_WEBUI_URL ?? 'http://127.0.0.1:37522'
-#     cli: !!js process.env.FLOVART_CLI ?? 'flovart'
+# Keep provider credentials and browser connection details in Flovart.
+# The plugin joins the visible Browser Workflow through its host-side proxy.
 []
 `
 
@@ -75,6 +72,12 @@ function runDsh(args, opts = {}) {
   return run(process.execPath, [resolveDshEntrypoint(), ...args], opts)
 }
 
+function cliArguments(value) {
+  return [...String(value || '').matchAll(/"([^"]*)"|(\S+)/g)]
+    .map(match => match[1] ?? match[2])
+    .filter(Boolean)
+}
+
 function readProfileManifest(dir) {
   const file = join(dir, 'package.json')
   if (!existsSync(file)) return null
@@ -85,19 +88,18 @@ function quoteArg(value) {
   return `"${String(value).replaceAll('"', '\\"')}"`
 }
 
-export function harnessEnvironment(config, repositoryRoot = REPOSITORY_ROOT, nativeWorkspaceFile) {
-  const workspaceDir = nativeWorkspaceFile ? dirname(nativeWorkspaceFile) : null
+export function harnessEnvironment(config, repositoryRoot = REPOSITORY_ROOT, workspaceDirectory) {
+  const workspaceDir = workspaceDirectory || null
   return {
     FLOVART_WORKSPACE_URL: config.url,
     FLOVART_WORKSPACE_TOKEN: config.token,
     FLOVART_CLI: `${quoteArg(process.execPath)} ${quoteArg(join(repositoryRoot, 'tools', 'flovart', 'cli.js'))}`,
-    FLOVART_WORKSPACE_MODE: 'native',
+    FLOVART_WORKSPACE_MODE: 'browser',
     ...(workspaceDir ? {
       FLOVART_AGENT_HOME: workspaceDir,
       FLOVART_AGENT_CONFIG: join(workspaceDir, 'agent.json'),
       FLOVART_CREW_DIR: join(workspaceDir, 'crew'),
     } : {}),
-    ...(nativeWorkspaceFile ? { FLOVART_NATIVE_WORKSPACE_FILE: nativeWorkspaceFile } : {}),
   }
 }
 
@@ -123,8 +125,7 @@ async function probeWorkspace(config) {
   }
 }
 
-function spawnWorkspaceOperator(nativeWorkspaceFile) {
-  const workspaceDir = dirname(nativeWorkspaceFile)
+function spawnWorkspaceOperator(workspaceDir) {
   return spawn(process.execPath, [join(REPOSITORY_ROOT, 'agent', 'index.js')], {
     cwd: REPOSITORY_ROOT,
     env: {
@@ -133,25 +134,49 @@ function spawnWorkspaceOperator(nativeWorkspaceFile) {
       FLOVART_AGENT_HOME: workspaceDir,
       FLOVART_AGENT_CONFIG: join(workspaceDir, 'agent.json'),
       FLOVART_CREW_DIR: join(workspaceDir, 'crew'),
-      ...(nativeWorkspaceFile ? { FLOVART_NATIVE_WORKSPACE_FILE: nativeWorkspaceFile } : {}),
     },
     stdio: 'inherit',
     windowsHide: true,
   })
 }
 
-function createWorkspaceSupervisor(nativeWorkspaceFile) {
-  const configFile = join(dirname(nativeWorkspaceFile), 'agent.json')
+function createWorkspaceSupervisor(workspaceDir) {
+  const configFile = join(workspaceDir, 'agent.json')
   return new WorkspaceSupervisor({
     readConfig: () => readWorkspaceConfig(configFile),
     probe: probeWorkspace,
-    spawnWorkspace: () => spawnWorkspaceOperator(nativeWorkspaceFile),
+    spawnWorkspace: () => spawnWorkspaceOperator(workspaceDir),
     onEvent: event => {
       if (event.kind === 'borrowed') console.log('[flovart] 复用现有 Workspace Operator（不会由 Harness 接管其进程）。')
       if (event.kind === 'recovering') console.warn(`[flovart] Workspace Operator 已断开，正在自动恢复：${event.error?.message || '未知原因'}`)
       if (event.kind === 'restarted') console.log('[flovart] Workspace Operator 已恢复，Harness 会话连接保持不变。')
     },
   })
+}
+
+/** Ensure the DSH profile joins the same visible Browser Workflow authority. */
+export function ensureVisibleWorkflow(env = process.env, runner = spawnSync) {
+  if (env.FLOVART_DSH_NO_BROWSER === '1') return { ok: true, skipped: true }
+  const repositoryCli = join(REPOSITORY_ROOT, 'tools', 'flovart', 'cli.js')
+  const cli = env.FLOVART_CLI ?? (existsSync(repositoryCli) ? `${quoteArg(process.execPath)} ${quoteArg(repositoryCli)}` : 'flovart')
+  const argv = cliArguments(cli)
+  const result = runner(argv[0], [...argv.slice(1), 'ensure', '--json'], {
+    cwd: REPOSITORY_ROOT,
+    env,
+    encoding: 'utf8',
+    timeout: 60_000,
+    windowsHide: true,
+  })
+  if (result.error || result.status !== 0) {
+    return { ok: false, message: `Flovart ensure 失败（${result.error?.message ?? `退出码 ${result.status}`}）。` }
+  }
+  try {
+    const parsed = JSON.parse(result.stdout ?? '')
+    if (!parsed.ok || parsed.data?.ok !== true) return { ok: false, message: parsed.error?.message || parsed.data?.error?.message || '可见 Browser Workflow 尚未就绪。' }
+    return { ok: true, result: parsed.data }
+  } catch {
+    return { ok: false, message: 'Flovart ensure 输出不是有效 JSON。' }
+  }
 }
 
 function resolveDshEntrypoint() {
@@ -178,13 +203,18 @@ export async function start(homeArg) {
     throw new Error('Flovart Harness Profile 尚未安装。请先运行 `npm run dsh:profile:install`。')
   }
 
-  const nativeWorkspaceFile = join(home, 'workspace', 'native-workflow.json')
-  const workspace = createWorkspaceSupervisor(nativeWorkspaceFile)
+  const workspaceDir = join(home, 'workspace')
+  const workspace = createWorkspaceSupervisor(workspaceDir)
   const prepared = await workspace.start()
   const env = {
     ...process.env,
     DSH_HOME: home,
-    ...harnessEnvironment(prepared.config, REPOSITORY_ROOT, nativeWorkspaceFile),
+    ...harnessEnvironment(prepared.config, REPOSITORY_ROOT, workspaceDir),
+  }
+  const visibleWorkflow = ensureVisibleWorkflow(env)
+  if (!visibleWorkflow.ok) {
+    await workspace.stop()
+    throw new Error(visibleWorkflow.message)
   }
   const dshArgs = [
     resolveDshEntrypoint(),
@@ -349,7 +379,7 @@ export function uninstall(homeArg) {
 function runCliProbe() {
   const repositoryCli = join(REPOSITORY_ROOT, 'tools', 'flovart', 'cli.js')
   const cli = process.env.FLOVART_CLI ?? (existsSync(repositoryCli) ? `${quoteArg(process.execPath)} ${quoteArg(repositoryCli)}` : 'flovart')
-  const argv = [...cli.matchAll(/"([^"]*)"|(\S+)/g)].map(match => match[1] ?? match[2]).filter(Boolean)
+  const argv = cliArguments(cli)
   const result = spawnSync(argv[0], [...argv.slice(1), 'command.list', '--json'], {
     encoding: 'utf8',
     timeout: 15000,

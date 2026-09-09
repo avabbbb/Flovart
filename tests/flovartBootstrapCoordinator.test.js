@@ -59,6 +59,7 @@ describe('Flovart bootstrap coordinator', () => {
     const coordinator = new FlovartBootstrapCoordinator({
       inspectAgent: vi.fn().mockResolvedValue({ state: 'ready', health: { clients: 0, hasWorkflow: false } }),
       waitForWeb: vi.fn().mockResolvedValue('http://127.0.0.1:43127'),
+      issueBootstrapToken: vi.fn().mockResolvedValue('browser-bootstrap'),
       openBrowser: vi.fn(),
       sleep: vi.fn().mockResolvedValue(undefined),
     });

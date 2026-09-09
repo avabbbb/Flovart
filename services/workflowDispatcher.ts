@@ -16,6 +16,15 @@ export interface WorkflowCommandEnvelope {
   source: 'ui' | 'cli' | 'agent' | 'operator';
   idempotencyKey?: string;
   caller?: { agentIdentity?: string; hostSessionId?: string };
+  workspaceLease?: {
+    leaseId: string;
+    agentIdentity: string;
+    clientId: string;
+    projectId: string;
+    baseRevision: number | null;
+    issuedAt: number;
+    expiresAt: number;
+  };
 }
 
 const WORKFLOW_HUMAN_APPROVAL = Symbol('flovart.workflow-human-approval');
@@ -284,7 +293,12 @@ export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDepende
         }
         const latestProject = dependencies.getState().projects.find(item => item.id === project.id) || project;
         dependencies.updateProject(project.id, draftLogPatch(latestProject, envelope, true, { nodeIds: [nodeId] }));
-        result = { ok: true, commandId: envelope.id, result: { projectId: project.id, nodeId, ...(executionResult ? { runId: executionResult.runId } : {}) } };
+        result = { ok: true, commandId: envelope.id, result: {
+          projectId: project.id,
+          nodeId,
+          ...(executionResult ? { runId: executionResult.runId } : {}),
+          ...(executionResult?.artifact ? { artifact: executionResult.artifact } : {}),
+        } };
       } else if (command === 'workflow.node.tool') {
         const nodeId = requiredString(args.nodeId || args.id, 'nodeId');
         const tool = requiredString(args.tool, 'tool');

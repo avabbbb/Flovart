@@ -1,92 +1,52 @@
 ---
 name: open-flovart
-description: Open Flovart and prepare the visible local Workflow for CLI or coding-agent control. Use when a user asks to open Flovart, connect the current Workflow, or make Flovart ready for workflow.inspect, workflow.apply, or workflow.node.run.
+description: Prepare Flovart for a user's Workflow task. Use when a user asks to open Flovart or make it ready for workflow work.
 ---
 
 # Open Flovart
 
-This Skill only prepares the local Flovart browser workspace. It does not
-implement a second bridge, read Agent configuration files, or construct an
-Agent token.
+Flovart manages its local service, browser workspace, short-lived credentials,
+and recovery internally. Do not ask the user for connection details and do not
+recreate a connection flow in the conversation.
 
-## Bootstrap sequence
+## Normal loop
 
-Use the canonical CLI from the current project. A Codex projection can be prepared once with `npx flovart-cli init --target codex`; this is a Distribution Target alias for the project-local Codex Skill and does not configure MCP or ask for connection details.
-
-Use the canonical CLI from the current project:
+Run the lifecycle command first:
 
 ```bash
-npx flovart-cli status --json
+flovart ensure --json
 ```
 
-Treat the returned `status` data as the only readiness signal. Continue when:
-
-```text
-data.ready = true
-data.browserConnected = true
-```
-
-If the local system is not ready, ask the CLI to start the local Runtime and
-open the visible Workflow:
-
-For an automated browser acceptance run, skip the command below and use
-`npm run test:browser:chrome`; only a manual user request should use `--open`.
+When working directly from this source checkout, use the repository entrypoint
+if the packaged `flovart` command is not installed:
 
 ```bash
-npx flovart-cli start --open --json
+npm run flovart:cli -- ensure --json
 ```
 
-In a source checkout the same command starts the Vite WebUI and Browser Agent;
-from an installed Agent Toolkit it starts or reuses the embedded Desktop
-Runtime and its managed local services. Do not replace it with a guessed port
-or a direct browser URL. The launcher owns startup, the short-lived bootstrap
-handoff, and the browser opening. The browser owns the visible Workflow state.
+Do not use `npx flovart-cli` as an automatic fallback; an unpublished source
+checkout can make `npx` query an unrelated registry package.
 
-Poll the status command again after startup until it is ready or the command
-reports a concrete failure. Do not wait forever. Report `frontend`, `agent`,
-and `browser` states when it remains unavailable.
+Continue only when the result has `ok: true` and `state: "ready"`. If it is
+not ready, report the returned public state and error action; do not guess a
+port, open a private URL, read a local config file, or retry with a new token.
 
-For automated validation, do not use `--open`: it delegates to the Windows
-default URL handler and may open an unrelated browser window. Use the
-repository Chrome smoke harness instead:
+Then hand the task to the stable Flovart Skill:
 
 ```bash
-npm run test:browser:chrome
+flovart workflow.inspect --json
 ```
 
-The harness starts the source WebUI and Browser Agent with
-`--no-open --web-port=0 --agent-port=0`, launches Playwright's Chrome for
-Testing executable, and navigates to the one-time bootstrap URL itself. A
-manual user request to open Flovart may still use `--open`.
+Use `npm run flovart:cli -- workflow.inspect --json` for the same source-checkout fallback.
 
-If `start --open --json` reports a pending Browser binding or times out after
-opening the page, do not immediately run `start` again. Poll `status --json`
-for the same bootstrap attempt; the local services stay alive while the page
-finishes loading, and the launcher suppresses duplicate browser opens. Only
-start again after the services are confirmed offline or the user explicitly
-requests a fresh page.
-
-## Handoff to Workflow operations
-
-Once ready, hand off to the main Flovart Skill:
-
-```bash
-npx flovart-cli workflow.inspect --json
-```
-
-Use `command.list` / `command.schema` only when a command is unfamiliar or the
-CLI reports a contract mismatch.
-
-Only then use `workflow.apply`/the available Workflow mutation commands or
-`workflow.node.run`, with the schema's current arguments and an explicit
-idempotency key for writes.
+Use `workflow.selection.get` when the request depends on the current
+selection. Use one `workflow.apply` for related graph edits, and
+`workflow.node.run` only after confirming the node and revision. Keep the same
+`mutationId` and `idempotencyKey` when retrying a write.
 
 ## Prohibited shortcuts
 
-- Do not read `~/.flovart/agent.json` from the Skill.
-- Do not copy or print a token.
-- Do not guess ports or probe private HTTP endpoints.
-- Do not use CDP, browser scraping, React setters, shadow state, or a hidden
-  Workflow copy.
-- Do not treat Agent offline as a reason to block ordinary Workflow navigation;
-  it only blocks external Workflow control.
+- Do not read Agent configuration, tokens, ports, or private Runtime files.
+- Do not call a Provider directly or write browser storage.
+- Do not use MCP, CDP, browser scraping, React setters, or a hidden Workflow copy.
+- Do not choose another project when the visible workspace is unavailable or its revision changed.

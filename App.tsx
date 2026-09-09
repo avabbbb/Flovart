@@ -4,7 +4,6 @@ import type { AssetLibrary, UserApiKey, PromptEnhanceMode, GenerationHistoryItem
 import { addAsset, removeAsset, renameAsset, addFolder, renameFolder, removeFolder, loadAssetLibraryAsync, saveAssetLibraryAsync, updateAssetTags, removeAssetFromFolder, batchRemoveAssets, batchAddAssetsToFolder, batchAddAssetTags } from './utils/assetStorage';
 import { loadGenerationHistoryAsync, saveGenerationHistoryAsync, addGenerationHistoryItem } from './utils/generationHistory';
 import { reversePromptStreamWithProvider, enhancePromptWithProvider } from './services/aiGateway';
-import { getCompactChromeMetrics } from './utils/uiScale';
 import { useApiKeys, normalizeApiKeyEntry } from './hooks/useApiKeys';
 import { useToast } from './hooks/useToast';
 import ToastStack from './components/Toast';
@@ -29,6 +28,8 @@ import { resolveRouteMappingForSubmit, type RouteFallbackResolution } from './se
 import { ensureWorkflowImageGenerateOperation } from './components/workflow/operations';
 import { getWorkflowOperationCapability } from './components/workflow/operationRegistry';
 import { buildGenerationGateSummary, getGenerationGateDetails, requiresExternalGenerationGate } from './services/generationGate';
+import { loadCreativeHostResource } from './services/studio/hostResourceRegistry';
+import { registerWorkflowArtifact } from './services/studio/artifactRegistry';
 
 const SettingsPanel = React.lazy(() => import('./components/SettingsPanel').then(m => ({ default: m.SettingsPanel })));
 const OnboardingWizard = React.lazy(() => import('./components/OnboardingWizard').then(m => ({ default: m.OnboardingWizard })));
@@ -68,7 +69,6 @@ const App: React.FC = () => {
     const [dataReady, setDataReady] = useState(false);
     const [assetLibrary, setAssetLibrary] = useState<AssetLibrary>({ folders: [], items: [] });
     const [generationHistory, setGenerationHistory] = useState<GenerationHistoryItem[]>([]);
-    const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
     const [isSettingsPanelOpen, setIsSettingsPanelOpen] = useState(false);
     const [addAssetModal, setAddAssetModal] = useState<{ open: boolean; dataUrl: string; mimeType: string; width: number; height: number } | null>(null);
     const [systemTheme, setSystemTheme] = useState<'light' | 'dark'>('light');
@@ -127,12 +127,6 @@ const App: React.FC = () => {
         if (!dataReady) return;
         saveGenerationHistoryAsync(generationHistory).catch(console.error);
     }, [generationHistory, dataReady]);
-
-    useEffect(() => {
-        const handleResize = () => setViewportWidth(window.innerWidth);
-        window.addEventListener('resize', handleResize);
-        return () => window.removeEventListener('resize', handleResize);
-    }, []);
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
@@ -247,6 +241,7 @@ const App: React.FC = () => {
             await rerunWorkflowVideoOperation(projectId, nodeId, {
                 getProject: () => useWorkflowStore.getState().projects.find(item => item.id === projectId) || null,
                 onProjectChange: next => { useWorkflowStore.getState().updateProject(projectId, next); },
+                loadCreativeHostResource,
             });
             return { status: 'completed' };
         }
@@ -255,6 +250,7 @@ const App: React.FC = () => {
             await rerunWorkflowAudioOperation(projectId, nodeId, {
                 getProject: () => useWorkflowStore.getState().projects.find(item => item.id === projectId) || null,
                 onProjectChange: next => { useWorkflowStore.getState().updateProject(projectId, next); },
+                loadCreativeHostResource,
             });
             return { status: 'completed' };
         }
@@ -264,6 +260,7 @@ const App: React.FC = () => {
                 userApiKeys, confirmRouteFallback,
                 getProject: () => useWorkflowStore.getState().projects.find(item => item.id === projectId) || null,
                 onProjectChange: next => { useWorkflowStore.getState().updateProject(projectId, next); },
+                loadCreativeHostResource,
             });
             return { status: 'completed' };
         }
@@ -288,6 +285,7 @@ const App: React.FC = () => {
             onCanonicalInput: input => { canonicalInput = input; },
             assets: assetLibrary.items.map(({ id, name, mimeType }) => ({ id, name, mimeType })),
             getProject: () => useWorkflowStore.getState().projects.find(item => item.id === projectId) || null,
+            loadCreativeHostResource,
             onProjectChange: (next) => {
                 const previous = useWorkflowStore.getState().projects.find(item => item.id === projectId);
                 useWorkflowStore.getState().updateProject(projectId, next);
@@ -306,7 +304,16 @@ const App: React.FC = () => {
             const normalized = normalizeWorkflowExecutionError(new Error(failureMessage), context.runId);
             return { status: 'failed', error: { code: normalized.code, message: normalized.message }, canonicalInput };
         }
-        return { status: 'completed', canonicalInput };
+        const committedArtifact = generatedNode?.metadata.storageKey && context.runId
+            ? registerWorkflowArtifact({
+                artifactId: context.runId,
+                storageKey: generatedNode.metadata.storageKey,
+                kind: generatedNode.type === 'video' ? 'video' : generatedNode.type === 'audio' ? 'audio' : 'image',
+                mimeType: generatedNode.metadata.mimeType,
+                name: generatedNode.metadata.name || generatedNode.title,
+            })
+            : undefined;
+        return { status: 'completed', canonicalInput, ...(committedArtifact ? { artifact: committedArtifact } : {}) };
     }, [assetLibrary.items, confirmRouteFallback, saveGenerationToHistory, userApiKeys]);
 
     const workflowExecutor = useMemo(() => createWorkflowExecutor({
@@ -382,6 +389,7 @@ const App: React.FC = () => {
             userApiKeys,
             confirmRouteFallback,
             getProject: () => useWorkflowStore.getState().projects.find(item => item.id === projectId) || null,
+            loadCreativeHostResource,
             onProjectChange: (next) => { useWorkflowStore.getState().updateProject(projectId, next); },
         };
         return runWorkflowNodeTool(projectId, nodeId, tool as WorkflowNodeToolName, args, runtime);

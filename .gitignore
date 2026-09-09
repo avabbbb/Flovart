@@ -11,6 +11,8 @@ node_modules
 dist
 dist-ssr
 dist-extension
+dist-studio
+dist-workbuddy
 *.local
 n8n-temp/
 tmp-*.png
@@ -36,6 +38,9 @@ show.jpg
 libtv-public-workflow.png
 moqiang-workflow-overview.png
 libtv-public-work-snapshot.md
+artifacts/responsive-agent-link/
+artifacts/responsive/
+.tmp/
 
 # Playwright MCP temp files
 .playwright-mcp/

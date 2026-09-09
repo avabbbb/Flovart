@@ -113,7 +113,7 @@ export class FlovartWorkspaceClient {
   async status() {
     const body = await this.request('/health');
     return {
-      authority: body.nativeWorkspace ? 'native-runtime' : 'browser-workspace',
+      authority: 'browser-workspace',
       state: body.hasWorkflow && body.clients > 0 ? 'ready' : 'disconnected',
       hasWorkflow: Boolean(body.hasWorkflow),
       clients: Number(body.clients || 0),

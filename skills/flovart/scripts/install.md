@@ -6,11 +6,10 @@ Flovart CLI is local to this repository.
 
 ```bash
 npm install
-npm run flovart:cli -- start --source --web --open
-npm run flovart:cli -- status --json
+npm run flovart:cli -- ensure --json
 ```
 
-启动器会同时准备 WebUI 和 Browser Agent，并用一次性 bootstrap 打开 Workflow。`37522` 只是首选 WebUI 端口；被占用时会自动切换到可用的 loopback 端口。不要单独运行 `npm run dev` 后把普通地址当成已绑定的 Agent 页面；Provider-backed commands require the browser app to stay open because API keys remain in browser storage.
+启动器会同时准备 WebUI 和 Browser Agent，并用一次性 bootstrap 打开 Workflow。端口和凭据由 Link 内部管理；不要单独运行 `npm run dev` 后把普通地址当成已绑定的 Agent 页面。Provider-backed commands require the browser app to stay open because API keys remain in browser storage.
 
 ## Agent Host Init
 

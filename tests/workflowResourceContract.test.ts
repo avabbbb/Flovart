@@ -37,4 +37,16 @@ describe('workflow node resource contract', () => {
       locator: { kind: 'inline-text', text: '镜头缓慢推进' },
     }]);
   });
+
+  it('carries a creative-host locator into the shared resource contract', () => {
+    const node = createWorkflowNode('ps-layer', 'image', { x: 0, y: 0 }, {
+      resourceLocator: { kind: 'creative-host', host: 'photoshop', locator: { documentId: 'doc-1', layerId: 42 } },
+      mimeType: 'image/png',
+    });
+
+    expect(getWorkflowNodeDefinition(node.type).output(node)).toEqual([expect.objectContaining({
+      locator: { kind: 'creative-host', host: 'photoshop', locator: { documentId: 'doc-1', layerId: 42 } },
+      mimeType: 'image/png',
+    })]);
+  });
 });

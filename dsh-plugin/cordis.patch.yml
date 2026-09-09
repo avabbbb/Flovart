@@ -9,14 +9,14 @@
 #     call through the public CLI facade (`Flovart CLI 门面`);
 #   - the browser half (`exports["./client"]`, discovered through the
 #     `dsh.client` manifest declaration) registers the additive
-#     `conversation.view` (native Flovart Workflow canvas) and
+#     `conversation.view` (contextual Flovart Workflow summary) and
 #     `shell.overlay` (status/approval/Artifact light overlays).
 #
 # RC8 boundary: we never occupy the exclusive root `sidebar`, root
 # `conversation` or `conversation.session` slots. The session-scoped view is a
-# native React canvas and talks to the authenticated local Workspace Operator
-# through a narrow same-origin host proxy. The Workspace token never enters the
-# browser bundle.
+# read-only contextual projection of the visible Browser Workflow and talks to
+# the authenticated local Workspace Operator through a narrow same-origin host
+# proxy. The Workspace token never enters the browser bundle.
 #
 # The row config is evaluated at row start, so it only reads process.env
 # (same proven idiom as the web-app layer's DSH_TOOLS_MODE seam). A future
@@ -32,7 +32,7 @@
         - webServer
       config:
         # The launcher prepares this authenticated loopback Workspace Operator.
-        # The host keeps these values private and proxies only four native-view routes.
+        # The host keeps these values private and proxies only health/tools routes.
         workspaceUrl: !!js process.env.FLOVART_WORKSPACE_URL ?? 'http://127.0.0.1:17372'
         workspaceToken: !!js process.env.FLOVART_WORKSPACE_TOKEN ?? ''
         cli: !!js process.env.FLOVART_CLI ?? 'flovart'

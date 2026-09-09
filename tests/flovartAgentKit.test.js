@@ -64,10 +64,14 @@ describe('flovart agent kit', () => {
     try {
       const result = initCliHost({ target: 'codex', projectDir });
       const content = readFileSync(result.skill.target, 'utf8');
-      expect(content).toContain('npx flovart-cli status --json');
-      expect(content).toContain('npx flovart-cli start --open --json');
-      expect(content).toContain('npx flovart-cli workflow.inspect --json');
-      expect(content).toContain('not part of the normal model-facing loop');
+      expect(content).toContain('flovart ensure --json');
+      expect(content).toContain('flovart workflow.inspect --agent-identity codex --json');
+      expect(content).toContain('npm run flovart:cli -- ensure --json');
+      expect(content).toContain('Do not use `npx flovart-cli` as an automatic fallback');
+      expect(content).toContain('workflow.selection.get');
+      expect(content).not.toContain('start --open');
+      expect(content).not.toContain('command.list');
+      expect(content).not.toContain('agent.json');
       expect(content).not.toContain('npx flovart-cli command.list --json\n');
     } finally {
       rmSync(projectDir, { recursive: true, force: true });

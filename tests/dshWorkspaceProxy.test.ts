@@ -23,7 +23,7 @@ afterEach(async () => {
 });
 
 describe('DeepSeek Harness Workspace proxy', () => {
-  it('forwards only the native workspace surface and keeps the token host-side', async () => {
+  it('forwards only the contextual workspace surface and keeps the token host-side', async () => {
     let observed: { url?: string; token?: string; body?: string } = {};
     const workspacePort = await listen(http.createServer((request, response) => {
       const chunks: Buffer[] = [];
@@ -59,13 +59,12 @@ describe('DeepSeek Harness Workspace proxy', () => {
   });
 
   it('rejects unrelated paths and non-loopback workspace targets', () => {
-    expect(resolveWorkspaceProxyTarget(
-      'http://127.0.0.1:17372',
-      '/flovart-workspace/director/status?host=deepseek&sessionId=session-a&evil=https%3A%2F%2Fexample.com',
-      'GET',
-    )?.href).toBe('http://127.0.0.1:17372/director/status?host=deepseek&sessionId=session-a');
-    expect(resolveWorkspaceProxyTarget('http://127.0.0.1:17372', '/flovart-workspace/director/handoff', 'POST')?.pathname).toBe('/director/handoff');
-    expect(resolveWorkspaceProxyTarget('http://127.0.0.1:17372', '/flovart-workspace/director/handoff', 'GET')).toBeNull();
+    expect(resolveWorkspaceProxyTarget('http://127.0.0.1:17372', '/flovart-workspace/health', 'GET')?.href)
+      .toBe('http://127.0.0.1:17372/health');
+    expect(resolveWorkspaceProxyTarget('http://127.0.0.1:17372', '/flovart-workspace/api/tools', 'POST')?.pathname)
+      .toBe('/api/tools');
+    expect(resolveWorkspaceProxyTarget('http://127.0.0.1:17372', '/flovart-workspace/api/tools', 'GET')).toBeNull();
+    expect(resolveWorkspaceProxyTarget('http://127.0.0.1:17372', '/flovart-workspace/director/handoff', 'POST')).toBeNull();
     expect(resolveWorkspaceProxyTarget('http://127.0.0.1:17372', '/flovart-workspace/agent/flovart/turn', 'POST')).toBeNull();
     expect(() => resolveWorkspaceProxyTarget('https://example.com', '/flovart-workspace/health')).toThrow(/127\.0\.0\.1/);
     expect(() => resolveWorkspaceProxyTarget('http://localhost:17372', '/flovart-workspace/health')).toThrow(/127\.0\.0\.1/);

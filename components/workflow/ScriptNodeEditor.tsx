@@ -142,13 +142,14 @@ export function ScriptNodeEditor({ node, onChange, onClose, userApiKeys, confirm
       footer={null}
       centered
       width="90%"
+      className="script-editor-modal"
       style={{ maxWidth: 1200, top: 20 }}
       destroyOnHidden
       maskClosable={!busy}
       title={<div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Clapperboard size={18} />脚本分镜编辑器</div>}
     >
-      <div style={{ display: 'flex', gap: 16, height: '72vh', minHeight: 500 }}>
-        <div style={{ width: 280, display: 'flex', flexDirection: 'column', gap: 10, overflow: 'hidden' }}>
+      <div className="script-editor__layout" style={{ display: 'flex', gap: 16, height: '72vh', minHeight: 500 }}>
+        <div className="script-editor__source" style={{ width: 280, display: 'flex', flexDirection: 'column', gap: 10, overflow: 'hidden' }}>
           <div style={{ flexShrink: 0 }}>
             <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6, color: 'var(--wf-text)' }}>剧本原文</div>
             <textarea
@@ -197,7 +198,7 @@ export function ScriptNodeEditor({ node, onChange, onClose, userApiKeys, confirm
           </div>
         </div>
 
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div className="script-editor__shots" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
             <Segmented
               value={activeTab}
@@ -289,16 +290,16 @@ function ShotCard({ shot, onChange, onDelete }: {
         <div style={{ flex: 1 }} />
         <button className="isl-icon-btn h-6 w-6" aria-label="删除分镜" onClick={onDelete}><Trash2 size={13} /></button>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
+      <div className="script-editor__fields script-editor__fields--primary" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
         {field('情绪/表情', 'emotion', '开心、悲伤...')}
         {field('动作', 'action', '角色在做什么')}
         {field('场景', 'scene', '室内/室外')}
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginTop: 6 }}>
+      <div className="script-editor__fields script-editor__fields--secondary" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginTop: 6 }}>
         {field('台词', 'dialogue', '角色说的话')}
         {field('音效', 'sfx', '背景音乐/音效')}
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginTop: 6 }}>
+      <div className="script-editor__fields script-editor__fields--prompts" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginTop: 6 }}>
         <label style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           <span style={{ fontSize: 10, color: 'var(--wf-muted)' }}>生图 Prompt（英文）</span>
           <textarea

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createServer as createHttpServer } from 'node:http';
 import { createServer as createNetServer } from 'node:net';
 import { spawn, spawnSync } from 'node:child_process';
+import { join } from 'node:path';
 import { buildBrowserOpenCommand, dockerComposeServices, findAvailablePort, findExistingWebUi, parseDevArgs, planInstall, planStart, resolveDockerPorts, shouldKeepStartedServices } from '../tools/flovart/dev-commands.js';
 import { buildTuiCommand, tokenizeTuiLine } from '../tools/flovart/tui.js';
 
@@ -189,7 +190,11 @@ describe('flovart dev startup commands', () => {
         encoding: 'utf8',
         timeout: 15_000,
         windowsHide: true,
-        env: { ...process.env, FLOVART_WEB_PORT: String(port), FLOVART_WEB_DISCOVERY: `${process.env.TEMP || 'C:\\tmp'}\\flovart-missing-web-${process.pid}.json` },
+        env: {
+          ...process.env,
+          FLOVART_WEB_PORT: String(port),
+          FLOVART_WEB_DISCOVERY: join(process.env.TEMP || join(process.cwd(), '.tmp', 'vitest'), `flovart-missing-web-${process.pid}.json`),
+        },
       });
       let stdout = '';
       let stderr = '';

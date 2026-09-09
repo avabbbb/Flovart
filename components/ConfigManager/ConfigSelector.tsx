@@ -1,14 +1,15 @@
 /**
  * ConfigSelector — 输入框旁的配置 + 模型联动选择器
  *
- * 统一使用 UserApiKey 作为数据源（不再依赖 APIConfig）。
- * 两个紧凑下拉：选配置 → 选模型
- * 切换配置时自动更新模型列表并选中默认模型。
+ * 选择器只有一份业务状态，但会根据所在容器呈现为两个 chip、一个紧凑
+ * selector 或移动端 bottom sheet。菜单通过共享 ResponsivePopover 定位，
+ * 不依赖父级 overflow 或固定的 bottom-full 坐标。
  */
 
-import React, { useRef, useState, useEffect } from 'react';
-import type { UserApiKey, ModelItem } from '../../types';
-import { PROVIDER_LABELS, DEFAULT_PROVIDER_MODELS } from '../../services/aiGateway';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import type { ModelItem, UserApiKey } from '../../types';
+import { DEFAULT_PROVIDER_MODELS, PROVIDER_LABELS } from '../../services/aiGateway';
+import { ResponsivePopover } from '../ResponsivePopover';
 
 interface ConfigSelectorProps {
   configs: UserApiKey[];
@@ -19,22 +20,22 @@ interface ConfigSelectorProps {
   isDark: boolean;
 }
 
-/** 从 UserApiKey 中提取可用模型列表 */
+type SelectorMenu = 'config' | 'model' | 'combined';
+
+/** 从 UserApiKey 中提取可用模型列表。 */
 function getModelsForKey(key: UserApiKey): ModelItem[] {
   if (key.models && key.models.length > 0) return key.models;
-  if (key.customModels && key.customModels.length > 0) {
-    return key.customModels.map(id => ({ id, name: id }));
-  }
-  // 回退到 provider 默认模型
-  const pm = DEFAULT_PROVIDER_MODELS[key.provider];
-  if (!pm) return [];
-  const all = [
-    ...(pm.text || []),
-    ...(pm.image || []),
-    ...(pm.video || []),
-  ];
-  return all.map(id => ({ id, name: id }));
+  if (key.customModels && key.customModels.length > 0) return key.customModels.map(id => ({ id, name: id }));
+  const providerModels = DEFAULT_PROVIDER_MODELS[key.provider];
+  if (!providerModels) return [];
+  return [...(providerModels.text || []), ...(providerModels.image || []), ...(providerModels.video || [])].map(id => ({ id, name: id }));
 }
+
+const Chevron = () => (
+  <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="m6 9 6 6 6-6" />
+  </svg>
+);
 
 export const ConfigSelector: React.FC<ConfigSelectorProps> = ({
   configs,
@@ -42,107 +43,188 @@ export const ConfigSelector: React.FC<ConfigSelectorProps> = ({
   activeModelId,
   onConfigChange,
   onModelChange,
+  isDark,
 }) => {
-  const [showConfigMenu, setShowConfigMenu] = useState(false);
-  const [showModelMenu, setShowModelMenu] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const popoverAnchorRef = useRef<HTMLElement | null>(null);
+  const [openMenu, setOpenMenu] = useState<SelectorMenu | null>(null);
+  const [modelQuery, setModelQuery] = useState('');
+  const activeConfig = configs.find(config => config.id === activeConfigId);
+  const models = activeConfig ? getModelsForKey(activeConfig) : [];
+  const activeModel = models.find(model => model.id === activeModelId);
 
-  const activeConfig = configs.find(c => c.id === activeConfigId);
-  const models: ModelItem[] = activeConfig ? getModelsForKey(activeConfig) : [];
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
-        setShowConfigMenu(false);
-        setShowModelMenu(false);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+  const closeMenu = useCallback((restoreFocus = true) => {
+    if (restoreFocus) popoverAnchorRef.current?.focus();
+    setOpenMenu(null);
+    setModelQuery('');
   }, []);
 
-  const pillClass = 'isl-chip h-8 px-3 text-xs select-none';
-  const pillActiveClass = 'isl-chip--active';
-  const menuClass = 'isl-pop absolute bottom-full left-0 z-[85] mb-2 min-w-[200px] p-1.5';
-  const optionClass = (active: boolean) =>
-    `isl-opt text-xs ${active ? 'isl-opt--active' : ''}`;
+  useEffect(() => {
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      const element = target instanceof Element ? target : null;
+      if (rootRef.current?.contains(target) || element?.closest('[data-responsive-popover]')) return;
+      closeMenu(false);
+    };
+    document.addEventListener('pointerdown', handlePointerDown);
+    return () => document.removeEventListener('pointerdown', handlePointerDown);
+  }, [closeMenu]);
 
-  const chevron = (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 9 6 6 6-6" /></svg>
-  );
+  useEffect(() => {
+    if (!openMenu) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeMenu();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [closeMenu, openMenu]);
+
+  const open = (menu: SelectorMenu, event: React.MouseEvent<HTMLButtonElement>) => {
+    popoverAnchorRef.current = event.currentTarget;
+    setModelQuery('');
+    setOpenMenu(menu);
+  };
+
+  const serviceLabel = activeConfig?.name || (activeConfig ? PROVIDER_LABELS[activeConfig.provider] || activeConfig.provider : '选择服务');
+  const modelLabel = activeModel?.name || activeModel?.id || '选择模型';
+  const filteredModels = models.filter(model => `${model.name || ''} ${model.id}`.toLowerCase().includes(modelQuery.trim().toLowerCase()));
 
   if (configs.length === 0) {
     return (
-      <div className="isl-chip h-8 border-dashed px-3 text-[11px]" style={{ color: 'var(--isl-ink-ghost)' }}>
-        <span>⚙️</span> 无配置，请到设置中新建
+      <div className="config-selector config-selector--empty" data-theme={isDark ? 'dark' : 'light'} role="status">
+        <span aria-hidden="true">⚙️</span>
+        <span>无配置，请到设置中新建</span>
       </div>
     );
   }
 
+  const renderConfigOptions = () => (
+    <div className="config-selector__options" role="menu" aria-label="AI 服务">
+      {configs.map(config => {
+        const label = config.name || PROVIDER_LABELS[config.provider] || config.provider;
+        return (
+          <button
+            key={config.id}
+            type="button"
+            role="menuitemradio"
+            aria-checked={config.id === activeConfigId}
+            className={`isl-opt ${config.id === activeConfigId ? 'isl-opt--active' : ''}`}
+            title={label}
+            onClick={() => { onConfigChange(config.id); closeMenu(); }}
+          >
+            <span className="min-w-0 flex-1 truncate">{label}</span>
+            {config.id === activeConfigId && <span aria-hidden="true">✓</span>}
+          </button>
+        );
+      })}
+    </div>
+  );
+
+  const renderModelOptions = () => (
+    <div className="config-selector__model-list">
+      {models.length > 5 && (
+        <label className="config-selector__search">
+          <span className="sr-only">搜索模型</span>
+          <input value={modelQuery} onChange={event => setModelQuery(event.target.value)} placeholder="搜索模型…" />
+        </label>
+      )}
+      <div className="config-selector__options" role="menu" aria-label="可用模型">
+        {filteredModels.length ? filteredModels.map(model => {
+          const label = model.name || model.id;
+          return (
+            <button
+              key={model.id}
+              type="button"
+              role="menuitemradio"
+              aria-checked={model.id === activeModelId}
+              className={`isl-opt ${model.id === activeModelId ? 'isl-opt--active' : ''}`}
+              title={model.id}
+              onClick={() => { onModelChange(model.id); closeMenu(); }}
+            >
+              <span className="min-w-0 flex-1 truncate">{label}</span>
+              {model.id === activeModelId && <span aria-hidden="true">✓</span>}
+            </button>
+          );
+        }) : <p className="config-selector__empty-search">没有匹配的模型</p>}
+      </div>
+    </div>
+  );
+
   return (
-    <div ref={rootRef} className="flex items-center gap-2">
-      {/* 配置选择 */}
-      <div className="relative">
+    <div ref={rootRef} className="config-selector" data-theme={isDark ? 'dark' : 'light'}>
+      <div className="config-selector__wide" aria-label="AI 服务和模型">
         <button
           type="button"
-          onClick={() => { setShowConfigMenu(v => !v); setShowModelMenu(false); }}
-          className={`${pillClass} ${showConfigMenu ? pillActiveClass : ''}`}
+          aria-haspopup="menu"
+          aria-expanded={openMenu === 'config'}
+          onClick={event => open('config', event)}
+          className={`isl-chip config-selector__trigger ${openMenu === 'config' ? 'isl-chip--active' : ''}`}
+          title={serviceLabel}
         >
-          📋 <span className="max-w-[120px] truncate">{activeConfig?.name || (activeConfig ? PROVIDER_LABELS[activeConfig.provider] : '选择配置')}</span>
-          {chevron}
+          <span aria-hidden="true">📋</span><span className="config-selector__label">{serviceLabel}</span><Chevron />
         </button>
-
-        {showConfigMenu && (
-          <div className={menuClass}>
-            <div className="px-2 pb-1 text-[10px] font-bold uppercase tracking-[0.16em]" style={{ color: 'var(--isl-ink-ghost)' }}>AI 服务</div>
-            {configs.map(c => (
-              <button
-                key={c.id}
-                type="button"
-                onClick={() => { onConfigChange(c.id); setShowConfigMenu(false); }}
-                className={optionClass(c.id === activeConfigId)}
-              >
-                <span className="truncate">{c.name || PROVIDER_LABELS[c.provider] || c.provider}</span>
-                {c.id === activeConfigId && (
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"><path d="m5 13 4 4L19 7" /></svg>
-                )}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* 模型选择 */}
-      <div className="relative">
         <button
           type="button"
-          onClick={() => { setShowModelMenu(v => !v); setShowConfigMenu(false); }}
           disabled={models.length === 0}
-          className={`${pillClass} ${showModelMenu ? pillActiveClass : ''} disabled:cursor-not-allowed disabled:opacity-50`}
+          aria-haspopup="menu"
+          aria-expanded={openMenu === 'model'}
+          onClick={event => open('model', event)}
+          className={`isl-chip config-selector__trigger ${openMenu === 'model' ? 'isl-chip--active' : ''}`}
+          title={modelLabel}
         >
-          🤖 <span className="max-w-[120px] truncate">{models.find(m => m.id === activeModelId)?.name ?? '选择模型'}</span>
-          {chevron}
+          <span aria-hidden="true">🤖</span><span className="config-selector__label">{modelLabel}</span><Chevron />
         </button>
-
-        {showModelMenu && models.length > 0 && (
-          <div className={menuClass}>
-            <div className="px-2 pb-1 text-[10px] font-bold uppercase tracking-[0.16em]" style={{ color: 'var(--isl-ink-ghost)' }}>可用模型</div>
-            {models.map(m => (
-              <button
-                key={m.id}
-                type="button"
-                onClick={() => { onModelChange(m.id); setShowModelMenu(false); }}
-                className={optionClass(m.id === activeModelId)}
-              >
-                <span>{m.name}</span>
-                {m.id === activeModelId && (
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"><path d="m5 13 4 4L19 7" /></svg>
-                )}
-              </button>
-            ))}
-          </div>
-        )}
       </div>
+
+      <button
+        type="button"
+        aria-haspopup="dialog"
+        aria-expanded={openMenu === 'combined'}
+        onClick={event => open('combined', event)}
+        className="isl-chip config-selector__compact-trigger"
+        title={`${serviceLabel} · ${modelLabel}`}
+      >
+        <span className="config-selector__label">{serviceLabel} · {modelLabel}</span><Chevron />
+      </button>
+
+      <button
+        type="button"
+        aria-haspopup="dialog"
+        aria-expanded={openMenu === 'combined'}
+        onClick={event => open('combined', event)}
+        className="isl-chip config-selector__narrow-trigger"
+      >
+        <span className="config-selector__label">AI 服务 / 模型</span><Chevron />
+      </button>
+
+      {openMenu && popoverAnchorRef.current && (
+        <ResponsivePopover
+          anchorRef={popoverAnchorRef}
+          preferredSide="up"
+          width={360}
+          role="dialog"
+          ariaLabel={openMenu === 'model' ? '选择模型' : openMenu === 'config' ? '选择 AI 服务' : '选择 AI 服务和模型'}
+          onRequestClose={() => closeMenu()}
+          dataTestId="config-selector-popover"
+          className="config-selector__popover"
+        >
+          {openMenu === 'config' && <><div className="config-selector__popover-title">AI 服务</div>{renderConfigOptions()}</>}
+          {openMenu === 'model' && <><div className="config-selector__popover-title">可用模型</div>{renderModelOptions()}</>}
+          {openMenu === 'combined' && (
+            <>
+              <div className="config-selector__popover-title">AI 服务</div>
+              {renderConfigOptions()}
+              <div className="config-selector__divider" />
+              <div className="config-selector__popover-title">可用模型</div>
+              {models.length ? renderModelOptions() : <p className="config-selector__empty-search">当前服务没有可用模型</p>}
+            </>
+          )}
+        </ResponsivePopover>
+      )}
     </div>
   );
 };

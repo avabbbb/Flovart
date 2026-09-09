@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { apply } from '../dsh-plugin/src/client/index';
 
 describe('DeepSeek Harness client registration', () => {
-  it('registers native additions through the RC8 slot lifecycle only', () => {
+  it('registers contextual additions through the RC8 slot lifecycle only', () => {
     const injected: string[] = [];
     const registered: Array<{ name: string; id: string }> = [];
     const register = vi.fn((options: { name: string; id: string }) => {

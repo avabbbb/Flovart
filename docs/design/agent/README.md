@@ -7,7 +7,7 @@
 
 `Production Crew` 只是“Workspace Operator + Dispatcher + Runtime Worker”等执行组件的集合名，不是第三个 Agent，也不是多 Agent 制作团队。Dispatcher、Runtime、Provider Worker、Review Tool 都是普通工具或服务。
 
-> 这些文档描述目标架构，不代表当前代码已经完成迁移。当前实现仍把一个基于 `@earendil-works/pi-agent-core` 的旧内置 Agent 作为主对话，并把 Codex 放在子任务位置；这里的包名不是目标产品角色，也不同于外部 Pi Coding Agent Harness。真实差距与删除门槛见第 10 份文档，DSH/Flovart P0 契约见第 11–15 份文档。
+> 这些文档描述目标架构，不代表已通过内测。当前真实 Agent 入口和 Workflow 制作面已经挂载制作状态与外部助手接入引导；旧内置聊天文件的存在不代表它是主入口。新一轮体验重设计与宿主插件实施以 [本地助手接入与创作软件插件](../agent-and-creative-hosts.md) 为主计划，DSH/Flovart 契约继续见第 11–15 份文档。
 
 ## 阅读顺序
 
@@ -38,7 +38,7 @@
 
 ## Coding Agent Projection 与 Mainstream Host
 
-Codex 是当前 professional golden path；DeepSeek Harness 保留显式 native Plugin projection；CodeBuddy Code、Claude Code、OpenCode、Pi Coding Agent Harness 通过 stable Operation Skill + CLI contract 兼容。DeepSeek 额外采用专用 Profile + 可卸载 Bundle：Harness 继续作为主壳和默认导演，Client Plugin 只在原生会话中追加一个隔离 Flovart Workflow View 与轻弹层，不嵌入 Table、Agent Production Control 或 Agent Bridge。WorkBuddy 是未来 mainstream、skill-mediated projection 候选，不加入当前 `director.bind`。
+Codex 是当前 professional golden path；DeepSeek Harness 通过专用 Profile + 可卸载 Bundle 提供 contextual Plugin projection，所有 Workflow 仍回到可见 Browser Authority；CodeBuddy Code、Claude Code、OpenCode、Pi Coding Agent Harness 通过 stable Operation Skill + CLI contract 兼容。WorkBuddy 现在提供独立 Connector artifact 及 Browser Workflow 身份，仍待官方客户端实测，不加入 `director.bind`。
 
 - [Codex 官方文档](https://developers.openai.com/codex/)：CLI、Skill、非交互模式与 App Server 提供可选深度连接面。
 - [DeepSeek Harness 官方 RC8](https://github.com/deepseek-ai/deepseek-harness/tree/dsh-v0.1.0-rc.8)：首个精确兼容基线；Profile/Bundle、`dsh.client` 与 UI Slot 均按该标签实现和验收，developer preview 的后续 RC 不自动视为兼容。
@@ -49,7 +49,7 @@ Codex 是当前 professional golden path；DeepSeek Harness 保留显式 native 
 ## 决策依据
 
 - [ADR 0061：外部导演 Harness 与唯一内置 Operator](../../adr/0061-use-external-director-and-internal-production-crew.md)
-- [ADR 0062：DeepSeek Harness 内置原生 Workflow 画布](../../adr/0062-use-native-workflow-canvas-in-deepseek-harness.md)
+- [ADR 0063：DSH 只使用 Browser Workflow Authority](../../adr/0063-dsh-browser-workflow-authority.md)
 - [ADR 0063：DSH 记录会话投影，Flovart Runtime 裁定生产事实](../../adr/0063-runtime-owns-production-facts.md)
 - [ADR 0064：DSH Session 使用显式 Flovart Project Binding](../../adr/0064-bind-dsh-session-to-explicit-flovart-project.md)
 - [ADR 0065：Workflow 变更使用版本前置条件与幂等 Mutation ID](../../adr/0065-idempotent-revisioned-workflow-mutations.md)

@@ -16,12 +16,12 @@ describe('Flovart Host registry', () => {
     expect(registry.agentIdentities.map(item => item.id)).toContain('workbuddy');
     expect(registry.ideHosts.map(item => item.id)).toEqual(['cursor', 'windsurf', 'vscode']);
     expect(registry.distributionTargets.map(item => item.id)).toContain('codebuddy-code-skill');
-    expect(registry.runtimeSurfaces.map(item => item.id)).toContain('dsh-native');
+    expect(registry.runtimeSurfaces.map(item => item.id)).toContain('browser-workflow');
     expect(registry.directorBindings.map(item => item.agentIdentityId)).not.toContain('workbuddy');
     expect(registry.directorBindings.map(item => item.agentIdentityId)).not.toContain('codebuddy-code');
   });
 
-  it('discovers PATH executables without probing planned mainstream Hosts', () => {
+  it('discovers PATH executables while keeping manual Skill import separate from app detection', () => {
     const probed = [];
     const result = discoverAgentHosts({
       platform: 'win32',
@@ -36,8 +36,8 @@ describe('Flovart Host registry', () => {
     const codex = result.agents.find(item => item.id === 'codex');
     const workbuddy = result.agents.find(item => item.id === 'workbuddy');
     expect(codex).toMatchObject({ available: true, path: 'C:\\tools\\codex.exe', authStatus: 'not-inspected' });
-    expect(workbuddy).toMatchObject({ status: 'planned', available: false, directorBinding: 'not-supported' });
-    expect(probed).not.toContain('workbuddy');
+    expect(workbuddy).toMatchObject({ status: 'manual-import', available: false, directorBinding: 'not-supported' });
+    expect(workbuddy.runtimeSurfaces).toContain('browser-workflow');
   });
 
   it('maps canonical Agent Identity only where a Director Runtime Binding exists', () => {

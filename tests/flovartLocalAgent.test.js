@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   buildBrowserBootstrapUrl,
+  issueBrowserBootstrapToken,
   normalizeLocalAgentUrl,
   probeWebUi,
   readLocalAgentConnection,
@@ -35,6 +36,27 @@ describe('local Agent bootstrap helpers', () => {
     expect(redactBootstrapUrl(url)).not.toContain('secret-token');
     expect(redactBootstrapUrl(url)).not.toContain('activateBrowserWriter');
     expect(redactBootstrapUrl('http://127.0.0.1:37522/#/app?agentToken=secret-token&activateBrowserWriter=1')).toBe('http://127.0.0.1:37522/#/app');
+  });
+
+  it('uses a one-time bootstrap token in the browser URL', async () => {
+    const fetchImpl = async (input, init) => {
+      expect(String(input)).toBe('http://127.0.0.1:17373/bootstrap/issue');
+      expect(init.method).toBe('POST');
+      expect(init.headers).toEqual({ 'x-flovart-agent-token': 'launcher-secret' });
+      return { ok: true, status: 200, json: async () => ({ ok: true, bootstrapToken: 'browser-once' }) };
+    };
+    const bootstrapToken = await issueBrowserBootstrapToken(
+      { url: 'http://127.0.0.1:17373', token: 'launcher-secret' },
+      { fetchImpl },
+    );
+    const url = buildBrowserBootstrapUrl('http://127.0.0.1:37522', {
+      url: 'http://127.0.0.1:17373',
+      bootstrapToken,
+      token: 'launcher-secret',
+    });
+    expect(new URL(url).searchParams.get('bootstrapToken')).toBe('browser-once');
+    expect(new URL(url).searchParams.get('agentToken')).toBeNull();
+    expect(redactBootstrapUrl(url)).not.toContain('browser-once');
   });
 
   it('rejects an unrelated localhost HTTP service during WebUI discovery', async () => {

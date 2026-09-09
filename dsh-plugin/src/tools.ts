@@ -1,7 +1,7 @@
 /**
  * Model-tool derivation from the canonical Flovart CLI registry.
  *
- * The native tool face exposes inspection plus bounded graph mutations. Paid
+ * The model tool face exposes inspection plus bounded graph mutations. Paid
  * generation, Production approval/run, media tools, and Crew submission stay
  * behind their existing explicit Runtime gates. `command.list` is a machine
  * registry probe for this projection; `command.schema` is a diagnostic surface,
@@ -61,7 +61,13 @@ async function ensureToolsApi(): Promise<DefineToolFn | undefined> {
 }
 
 function toolNameOf(command: string): string {
-  return `flovart_${command.replaceAll('.', '_')}`
+  return ({
+    status: 'flovart_status',
+    'workflow.inspect': 'flovart_inspect',
+    'workflow.selection.get': 'flovart_selection',
+    'workflow.apply': 'flovart_apply',
+    'workflow.node.run': 'flovart_run',
+  } as Record<string, string>)[command] ?? `flovart_${command.replaceAll('.', '_')}`
 }
 
 /** Map a registry arg type tag (`string?`/`number`/...) to a tool parameter spec. */
@@ -100,14 +106,14 @@ function registerDerivedTool(
   defineTool: DefineToolFn,
   command: ToolCommand,
   meta: CommandMeta,
-): void {
+): () => void {
   const write = STABLE_WRITE_COMMANDS.has(command)
   const parameters: ParameterSchemaSpec = {}
   for (const [argName, argType] of Object.entries(meta.args)) {
     parameters[argName] = parameterSpec(argType, `${command} 的 ${argName} 参数（来自 command.schema）`)
   }
   if (write) parameters.idempotencyKey = { type: 'string', required: true, description: '重试时保持不变的幂等键' }
-  ctx.tools.register(defineTool({
+  return ctx.tools.register(defineTool({
     name: toolNameOf(command),
     description:
       `Flovart CLI 命令 ${command} 的模型工具封装：${meta.summary}。`
@@ -125,7 +131,7 @@ function registerDerivedTool(
       }
       return outcome.data as JsonValue
     },
-    isConcurrencySafe: () => true,
+    isConcurrencySafe: () => !write,
   }))
 }
 
@@ -136,21 +142,22 @@ function registerDerivedTool(
  * and are not model tools. Skipping registration on dsh-tools absence is the
  * documented degradation path — the profile must keep booting.
  */
-export async function registerFlovartTools(ctx: Context, service: FlovartService): Promise<void> {
+export async function registerFlovartTools(ctx: Context, service: FlovartService): Promise<() => void> {
   const defineTool = await ensureToolsApi()
-  const probe = service.probe()
-  if (!probe.ok) {
-    console.warn(`[flovart] CLI 探测失败：${probe.error?.message ?? ''}`)
-  }
-  if (defineTool === undefined) return
+  if (service.state.commands === null) service.probe()
+  if (defineTool === undefined) return () => {}
   const commands = service.state.commands ?? {}
+  const disposers: Array<() => void> = []
   let derived = 0
   for (const command of STABLE_TOOL_COMMANDS) {
     const meta = commands[command]
     if (meta) {
-      registerDerivedTool(ctx, service, defineTool, command, meta)
+      disposers.push(registerDerivedTool(ctx, service, defineTool, command, meta))
       derived += 1
     }
   }
   console.log(`[flovart] 模型工具已注册：stable ${derived}/5（CLI ${service.config.cli}）`)
+  return () => {
+    for (const dispose of disposers.splice(0).reverse()) dispose()
+  }
 }

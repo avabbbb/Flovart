@@ -131,8 +131,8 @@ export async function runCli(
   args: Record<string, unknown> = {},
   signal?: AbortSignal,
 ): Promise<CliOutcome> {
-  const commandArgs = command.startsWith('workflow.') && config.workspaceMode !== 'browser'
-    ? { ...args, workspaceMode: config.workspaceMode }
+  const commandArgs = command.startsWith('workflow.')
+    ? { ...args, workspaceMode: 'browser', agentIdentity: args.agentIdentity || 'deepseek-harness' }
     : args
   const argv = buildCliCommand(config.cli, command, commandArgs)
   return new Promise<CliOutcome>(resolve => {

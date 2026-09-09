@@ -2,6 +2,12 @@
 
 ## 产品、架构与进度
 
+- [当前实施：本地助手接入与创作软件插件](design/agent-and-creative-hosts.md)
+- [Flovart Link 2.0 当前审计](design/flovart-link-2/CURRENT_STATE.md)
+- [Flovart Link 2.0 目标状态](design/flovart-link-2/TARGET_STATE.md)
+- [Flovart Link 2.0 状态机](design/flovart-link-2/STATE_MACHINE.md)
+- [Flovart Link 2.0 Host 矩阵](design/flovart-link-2/HOST_MATRIX.md)
+- [Studio Host packages 与认证清单](../integrations/studio/README.md)
 - [领域词与工作区边界](maintenance/agent/CONTEXT.md)
 - [发行候选证据索引](evidence/release-candidate/README.md)
 - [维护资料索引](maintenance/README.md)
@@ -32,7 +38,8 @@
 - [SPEC-004：Flovart Durable Projection Events](design/agent/14-durable-flovart-projection-events.md)
 - [SPEC-005：Flovart UI Availability 与 Mode Contract](design/agent/15-flovart-ui-availability-and-mode-contract.md)
 - [ADR 0061：外部导演与唯一内置 Operator](adr/0061-use-external-director-and-internal-production-crew.md)
-- [ADR 0062：DeepSeek Harness 内置原生 Workflow 画布](adr/0062-use-native-workflow-canvas-in-deepseek-harness.md)
+- [ADR 0062：DeepSeek Harness 内置原生 Workflow 画布（历史方案，已被 0063 取代）](adr/0062-use-native-workflow-canvas-in-deepseek-harness.md)
+- [ADR 0063：DSH 只使用 Browser Workflow Authority](adr/0063-dsh-browser-workflow-authority.md)
 - [ADR 0063：DSH 记录会话投影，Flovart Runtime 裁定生产事实](adr/0063-runtime-owns-production-facts.md)
 - [ADR 0064：DSH Session 使用显式 Flovart Project Binding](adr/0064-bind-dsh-session-to-explicit-flovart-project.md)
 - [ADR 0065：Workflow 变更使用版本前置条件与幂等 Mutation ID](adr/0065-idempotent-revisioned-workflow-mutations.md)

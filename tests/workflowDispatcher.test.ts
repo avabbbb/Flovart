@@ -333,6 +333,7 @@ describe('workflow dispatcher', () => {
     const canonicalInput = buildCanonicalGenerationInput({ targetNode: target, inputs, prompt: '人物缓慢转身', mode: 'video', submode: 'image-to-video' });
     const runNode = vi.fn().mockImplementation(async command => ({
       runId: 'adapter-run', projectId: command.projectId, nodeId: command.nodeId, canonicalInput,
+      artifact: { artifactId: 'artifact-run', kind: 'image' as const, mimeType: 'image/png' },
     }));
     let sequence = 0;
     const executor = createWorkflowExecutor({ runNode, stopNode: vi.fn() }, { createRunId: () => `run-${++sequence}` });
@@ -346,7 +347,7 @@ describe('workflow dispatcher', () => {
     await dispatch({ id: 'runtime-run', command: 'workflow.node.run', args: { nodeId: 'image-1' }, source: 'operator' });
 
     expect(ui.canonicalInput).toEqual(canonicalInput);
-    expect(agentResult.result).toMatchObject({ projectId, nodeId: 'image-1', runId: 'run-2' });
+    expect(agentResult.result).toMatchObject({ projectId, nodeId: 'image-1', runId: 'run-2', artifact: { artifactId: 'artifact-run' } });
     expect(runNode.mock.calls).toHaveLength(4);
     expect(runNode.mock.calls.map(([, context]) => context.surface)).toEqual(['ui', 'browser-agent', 'cli', 'runtime']);
     expect(runNode.mock.calls.map(([, context]) => context.correlationId)).toEqual(['ui-run', 'agent-run', 'cli-run', 'runtime-run']);

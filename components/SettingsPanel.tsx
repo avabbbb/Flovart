@@ -14,6 +14,7 @@ import { normalizeProviderBaseUrl } from '../services/baseUrl';
 import { getProductModel, getProductModels, suggestProductRouteMappings } from '../services/productModelCatalog';
 import { getKeyModelIds } from '../utils/modelRefs';
 import { getFlovartRuntimeApi } from '../services/flovartRuntime';
+import '../styles/settings.css';
 
 interface RuntimeProviderStatus {
     provider: string;
@@ -351,7 +352,7 @@ function RouteMappingEditor({ userApiKeys, onUpdateApiKey, runtimeProviders }: {
         {renderProductSection('video', '视频模型', '按生成方式绑定视频线路，PromptBar 参数将服从这里的最终线路。')}
         <div className="rounded-2xl border border-[var(--isl-border)] bg-[var(--isl-surface-2)] p-3">
             <div className="mb-2 text-sm font-bold text-[var(--isl-ink)]">手动添加媒体映射</div>
-            <div className="grid gap-2 md:grid-cols-[1.2fr_1fr_1.6fr_auto]">
+            <div className="settings-route-add grid gap-2 md:grid-cols-[1.2fr_1fr_1.6fr_auto]">
                 <select aria-label="产品模型" value={productModelId} onChange={event => { const next = getProductModel(event.target.value); setProductModelId(event.target.value); setProductMode(next?.capabilities.modes[0] || 'text-to-image'); setRouteChoice(''); }} className="isl-well h-9 px-2 text-xs text-[var(--isl-ink)] outline-none"><option value="">选择产品模型…</option>{allProducts.map(model => <option key={model.id} value={model.id}>{model.name}</option>)}</select>
                 <select aria-label="生成模式" value={productMode} disabled={!product} onChange={event => { setProductMode(event.target.value as ProductModelMode); setRouteChoice(''); }} className="isl-well h-9 px-2 text-xs text-[var(--isl-ink)] outline-none disabled:opacity-40">{(product?.capabilities.modes || []).map(mode => <option key={mode} value={mode}>{PRODUCT_MODE_LABELS[mode]}</option>)}</select>
                 <select aria-label="AI 服务线路" value={routeChoice} disabled={!product} onChange={event => setRouteChoice(event.target.value)} className="isl-well h-9 min-w-0 px-2 text-xs text-[var(--isl-ink)] outline-none disabled:opacity-40"><option value="">选择服务 / 模型 / 路线…</option>{product ? routeOptions({ kind: 'product-mode', productModelId, mode: productMode }).map(option => <option key={option.value} value={option.value}>{option.label}</option>) : null}</select>
@@ -567,10 +568,15 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
     const [endpointFlavor, setEndpointFlavor] = React.useState<'google' | 'openai-compatible' | 'openrouter-compatible' | null>(null);
     const [detectedCapabilities, setDetectedCapabilities] = React.useState<AICapability[]>([]);
     const [activeTab, setActiveTab] = React.useState<'api' | 'models' | 'security'>('api');
+    const [mobileDetailOpen, setMobileDetailOpen] = React.useState(false);
     const [showAdvancedApi, setShowAdvancedApi] = React.useState(false);
     const [runtimeProviders, setRuntimeProviders] = React.useState<RuntimeProviderStatus[] | null>(null);
     const settingsDialogRef = React.useRef<HTMLDivElement>(null);
     const configuredRuntimeProviders = runtimeProviders?.filter(item => item.ready) || [];
+
+    React.useEffect(() => {
+        if (!isOpen) setMobileDetailOpen(false);
+    }, [isOpen]);
 
     React.useEffect(() => {
         if (!isOpen) return;
@@ -1086,12 +1092,12 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
     if (!isOpen) return null;
 
     return (
-        <div ref={settingsDialogRef} role="dialog" aria-modal="true" aria-labelledby="settings-title" data-testid="settings-dialog" className="theme-aware fixed inset-0 z-100 flex items-center justify-center bg-black/35 backdrop-blur-sm" onClick={onClose}>
+        <div ref={settingsDialogRef} role="dialog" aria-modal="true" aria-labelledby="settings-title" data-testid="settings-dialog" className="theme-aware settings-overlay fixed inset-0 z-100 flex items-center justify-center bg-black/35 backdrop-blur-sm" onClick={onClose}>
             <div
-                className="isl-shell relative max-h-[90vh] w-[94%] max-w-6xl overflow-y-auto p-6"
+                className="isl-shell settings-dialog relative w-[94%] max-w-6xl"
                 onClick={(event) => event.stopPropagation()}
             >
-                <div className="mb-6 flex items-center justify-between">
+                <div className="settings-dialog__header mb-6 flex items-center justify-between">
                     <div>
                         <h3 id="settings-title" className="text-xl font-extrabold text-[var(--isl-ink)]">设置</h3>
                         <p className="mt-1 text-sm text-[var(--isl-ink-soft)]">
@@ -1103,7 +1109,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                         aria-label="关闭设置"
                         title="关闭设置"
                         onClick={onClose}
-                        className={`flex h-10 w-10 items-center justify-center rounded-2xl border transition ${
+                        className={`settings-dialog__close flex h-10 w-10 items-center justify-center rounded-2xl border transition ${
                             isDark ? 'border-[#2A3140] text-[#98A2B3] hover:bg-[#1B2029]' : 'border-[#E4E7EC] text-[#667085] hover:bg-[#F9FAFB]'
                         }`}
                     >
@@ -1111,8 +1117,9 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                     </button>
                 </div>
 
-                {/* Tab 导航 */}
-                <div className="mb-6 flex gap-1 border-b border-[var(--isl-border)]">
+                {/* Wide/medium tabs; compact mode uses the same state as a
+                    mobile master-detail list below. */}
+                <div className={`settings-dialog__tabs mb-6 flex gap-1 border-b border-[var(--isl-border)] ${mobileDetailOpen ? 'is-detail' : ''}`}>
                     {([
                         { key: 'api', label: 'AI 服务' },
                         { key: 'models', label: '模型映射' },
@@ -1121,7 +1128,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                         <button
                             key={tab.key}
                             type="button"
-                            onClick={() => setActiveTab(tab.key)}
+                            onClick={() => { setActiveTab(tab.key); setMobileDetailOpen(true); }}
                             className={`relative px-4 py-2.5 text-sm font-bold transition-colors ${
                                 activeTab === tab.key
                                     ? 'text-[var(--isl-ink)]'
@@ -1136,6 +1143,18 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                     ))}
                 </div>
 
+                <nav className="settings-dialog__mobile-nav" aria-label="设置分类">
+                    {([
+                        { key: 'api', label: 'AI 服务', detail: 'Provider、API Key 和连接状态' },
+                        { key: 'models', label: '模型映射', detail: '产品模型与路线优先级' },
+                        { key: 'security', label: '安全', detail: '本地数据和退出策略' },
+                    ] as const).map(item => (
+                        <button key={item.key} type="button" onClick={() => { setActiveTab(item.key); setMobileDetailOpen(true); }}>
+                            <span><strong>{item.label}</strong><small>{item.detail}</small></span><span aria-hidden="true">›</span>
+                        </button>
+                    ))}
+                </nav>
+
                 <AnimatePresence mode="wait">
                 <motion.div
                     key={activeTab}
@@ -1143,8 +1162,9 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -8 }}
                     transition={{ type: 'spring', stiffness: 420, damping: 34 }}
-                    className="space-y-6"
+                    className={`settings-dialog__body space-y-6 ${mobileDetailOpen ? 'is-detail' : ''}`}
                 >
+                <button type="button" className="settings-dialog__mobile-back" onClick={() => setMobileDetailOpen(false)}>← 设置</button>
                 {activeTab === 'api' && (
                     <>
                     {/* ── 统一 API 配置管理 ───────────────────────── */}
@@ -1190,12 +1210,12 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                             )}
                         </section>
                     )}
-                    <section className="space-y-3">
-                        <div className="flex items-center justify-between">
+                    <section className="settings-api-section space-y-3">
+                        <div className="settings-api-section__header flex items-center justify-between">
                             <div className={`text-xs font-semibold uppercase tracking-[0.18em] ${isDark ? 'text-[#667085]' : 'text-[#98A2B3]'}`}>
                                 🔑 AI 服务
                             </div>
-                            <div className="flex items-center gap-2">
+                            <div className="settings-api-actions flex items-center gap-2">
                                 {userApiKeys.length > 0 && (
                                     <button
                                         type="button"
@@ -1250,7 +1270,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                             </div>
                         </div>
 
-                        <div className="space-y-2">
+                        <div className="settings-service-list space-y-2">
                             {userApiKeys.length > 0 && !showAdvancedApi ? (
                                 <div className="rounded-2xl border border-[var(--isl-border)] bg-[var(--isl-surface-2)] px-4 py-4 text-sm text-[var(--isl-ink)]">
                                     <div className="font-medium">已配置 {userApiKeys.length} 个 AI 服务</div>
@@ -1274,7 +1294,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                                         animate={{ opacity: 1, y: 0, scale: 1 }}
                                         exit={{ opacity: 0, y: -6, scale: 0.98 }}
                                         transition={{ type: 'spring', stiffness: 420, damping: 34 }}
-                                        className={`flex items-center justify-between rounded-2xl border px-4 py-3 ${
+                                        className={`settings-service-card flex items-center justify-between rounded-2xl border px-4 py-3 ${
                                         editingKeyId === item.id
                                             ? isDark ? 'border-[#4B5B78] bg-[#1B2330]' : 'border-[#1D4ED8] bg-[#EFF6FF]'
                                             : isDark ? 'border-[#2A3140] bg-[#161A22]' : 'border-[#E4E7EC] bg-white'
@@ -1323,7 +1343,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                                                 const u = usageSummary.get(item.id)!;
                                                 if (u.totalCalls === 0) return null;
                                                 return (
-                                                    <div className={`mt-1.5 flex gap-3 text-[10px] ${isDark ? 'text-[#667085]' : 'text-[#98A2B3]'}`}>
+                                                    <div className={`settings-service-card__usage mt-1.5 flex gap-3 text-[10px] ${isDark ? 'text-[#667085]' : 'text-[#98A2B3]'}`}>
                                                         <span>调用 {u.totalCalls} 次</span>
                                                         {u.errorCalls > 0 && <span className="text-red-400">失败 {u.errorCalls}</span>}
                                                 <span>累计≈ {formatCost(u.totalCostCents, u.currency)}</span>
@@ -1335,7 +1355,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                                             })()}
                                             </div>
                                         </div>
-                                        <div className="ml-3 flex items-center gap-2">
+                                        <div className="settings-service-actions ml-3 flex items-center gap-2">
                                             {!item.isDefault ? (
                                                 <button type="button" onClick={() => onSetDefaultApiKey(item.id)} className={`${chipClass} flv-elastic`}>
                                                     设为默认
@@ -1423,7 +1443,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
             <AnimatePresence>
             {showKeyModal && (
                 <motion.div
-                    className="fixed inset-0 z-150 overflow-y-auto bg-black/40 backdrop-blur-sm"
+                    className="settings-key-overlay fixed inset-0 z-150 overflow-y-auto bg-black/40 backdrop-blur-sm"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
@@ -1431,21 +1451,21 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                     onClick={handleCancelEdit}
                 >
                     <motion.div
-                        className="flex min-h-[100dvh] items-end justify-center p-2 sm:min-h-full sm:items-center sm:p-6"
+                        className="settings-key-positioner flex min-h-[100dvh] items-end justify-center p-2 sm:min-h-full sm:items-center sm:p-6"
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
                         transition={{ duration: 0.14 }}
                     >
                     <motion.div
-                        className="isl-shell relative flex min-h-0 max-h-[calc(100dvh-1rem)] w-full max-w-5xl flex-col overflow-hidden sm:max-h-[calc(100dvh-3rem)]"
+                        className="isl-shell settings-key-dialog relative flex min-h-0 max-h-[calc(100dvh-1rem)] w-full max-w-5xl flex-col overflow-hidden sm:max-h-[calc(100dvh-3rem)]"
                         initial={{ opacity: 0, y: 24, scale: 0.97 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: 16, scale: 0.98 }}
                         transition={{ type: 'spring', stiffness: 380, damping: 30 }}
                         onClick={(e) => e.stopPropagation()}
                     >
-                        <div className="mb-0 flex items-center justify-between px-6 pb-4 pt-6">
+                        <div className="settings-key-dialog__header mb-0 flex items-center justify-between px-6 pb-4 pt-6">
                             <h4 className="text-base font-extrabold text-[var(--isl-ink)]">
                                 {editingKeyId ? '编辑 AI 服务' : '添加新的 AI 服务'}
                             </h4>
@@ -1454,7 +1474,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                             </button>
                         </div>
 
-                        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-6 pb-4">
+                        <div className="settings-key-dialog__body min-h-0 flex-1 space-y-3 overflow-y-auto px-6 pb-4">
                             {/* 常用 AI 服务 */}
                             {!editingKeyId && (
                                 <div className={sectionPanelClass}>
@@ -1526,7 +1546,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                                 <input value={extraConfig.websiteUrl || ''} onChange={(event) => updateExtraConfig('websiteUrl', event.target.value)} placeholder="https://example.com（可选）" className={inputClass} />
                             </label>
 
-                            <div className="flex gap-2">
+                            <div className="settings-key-dialog__key-row flex gap-2">
                                 <label className="min-w-0 flex-1">
                                     <span className={`mb-1.5 block text-sm font-medium ${isDark ? 'text-[#D0D5DD]' : 'text-[#344054]'}`}>API Key</span>
                                     <input
@@ -1536,7 +1556,9 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                                         type={showKey ? 'text' : 'password'}
                                         placeholder="只需要填这里，下方配置会自动填充"
                                         className={`${inputClass} flv-safe-input`}
-                                        autoFocus
+                                        name="apiKey"
+                                        autoComplete="off"
+                                        spellCheck={false}
                                     />
                                 </label>
                                 <button type="button" onClick={() => setShowKey(prev => !prev)} className={`${chipClass} flv-elastic`}>
@@ -1578,7 +1600,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
 
                             <label className="block">
                                 <span className={`mb-1.5 block text-sm font-medium ${isDark ? 'text-[#D0D5DD]' : 'text-[#344054]'}`}>请求地址</span>
-                                <input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} onKeyDown={event => event.stopPropagation()} onKeyUp={event => event.stopPropagation()} placeholder="https://your-api-endpoint.com" className={`${inputClass} flv-safe-input`} />
+                                <input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} onKeyDown={event => event.stopPropagation()} onKeyUp={event => event.stopPropagation()} placeholder="https://your-api-endpoint.com" className={`${inputClass} flv-safe-input`} name="baseUrl" autoComplete="url" inputMode="url" />
                             </label>
 
                             {provider === 'custom' && (
@@ -1678,7 +1700,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                                 </div>
                                 <div className="space-y-2">
                                     {editPricingRules.map(rule => (
-                                        <motion.div key={rule.id} layout transition={{ type: 'spring', stiffness: 420, damping: 34 }} className="grid gap-2 rounded-2xl border border-[var(--isl-border)] bg-[var(--isl-card)] p-3 md:grid-cols-[1.4fr_1fr_1fr_1fr_auto]">
+                                        <motion.div key={rule.id} layout transition={{ type: 'spring', stiffness: 420, damping: 34 }} className="settings-pricing-row grid gap-2 rounded-2xl border border-[var(--isl-border)] bg-[var(--isl-card)] p-3 md:grid-cols-[1.4fr_1fr_1fr_1fr_auto]">
                                             <select aria-label="计价模型" value={rule.productModelId || ''} onChange={event => setEditPricingRules(current => current.map(item => item.id === rule.id ? { ...item, productModelId: event.target.value || undefined, unit: event.target.value ? getProductModel(event.target.value)?.capability === 'video' ? 'video_second' : 'image' : 'request' } : item))} className={`${inputClass} text-xs`}>
                                                 <option value="">整把 Key</option>
                                                 {[...getProductModels('image'), ...getProductModels('video')].map(model => <option key={model.id} value={model.id}>{model.name}</option>)}
@@ -1711,7 +1733,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                                         {usage.pendingCostCalls > 0 && <div className="mt-2 text-[10px] text-amber-600">另有 {usage.pendingCostCalls} 笔费用待 AI 服务账单确认，预算占用按当前预估计算。</div>}
                                     </div>;
                                 })()}
-                                {editBudgetPolicy.enabled && <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} transition={{ type: 'spring', stiffness: 380, damping: 32 }} className="grid gap-2 md:grid-cols-4">
+                                {editBudgetPolicy.enabled && <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} transition={{ type: 'spring', stiffness: 380, damping: 32 }} className="settings-budget-grid grid gap-2 md:grid-cols-4">
                                     <label className="text-[11px] text-[var(--isl-ink-soft)]">月度额度<input type="number" min="0" value={editBudgetPolicy.monthlyLimit} onChange={event => setEditBudgetPolicy(policy => ({ ...policy, monthlyLimit: Number(event.target.value) || 0 }))} className={`${inputClass} mt-1`} /></label>
                                     <label className="text-[11px] text-[var(--isl-ink-soft)]">预警比例<input type="number" min="1" max="100" value={editBudgetPolicy.warningPercent} onChange={event => setEditBudgetPolicy(policy => ({ ...policy, warningPercent: Math.max(1, Math.min(100, Number(event.target.value) || 80)) }))} className={`${inputClass} mt-1`} /></label>
                                     <label className="text-[11px] text-[var(--isl-ink-soft)]">币种<select value={editBudgetPolicy.currency} onChange={event => setEditBudgetPolicy(policy => ({ ...policy, currency: event.target.value as 'USD' | 'CNY' }))} className={`${inputClass} mt-1`}><option value="USD">USD</option><option value="CNY">CNY</option></select></label>
@@ -1725,7 +1747,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                                     <span className={`text-sm font-medium ${isDark ? 'text-[#D0D5DD]' : 'text-[#344054]'}`}>高级配置</span>
                                     <span className={`text-[11px] ${isDark ? 'text-[#667085]' : 'text-[#98A2B3]'}`}>第三方兼容端点可选</span>
                                 </div>
-                                <div className="grid gap-2 md:grid-cols-2">
+                                <div className="settings-extra-grid grid gap-2 md:grid-cols-2">
                                     <div className={`md:col-span-2 text-xs font-semibold ${isDark ? 'text-[#98A2B3]' : 'text-[#667085]'}`}>API 格式</div>
                                     <select
                                         value={extraConfig.requestFormat || ''}
@@ -1788,8 +1810,8 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                             </div>
                         </div>
 
-                        <div className={`shrink-0 border-t px-6 py-4 ${isDark ? 'border-[#2A3140] bg-[#12151B]' : 'border-[#E4E7EC] bg-white'}`}>
-                            <div className="flex items-center gap-2">
+                        <div className={`settings-key-dialog__footer shrink-0 border-t px-6 py-4 ${isDark ? 'border-[#2A3140] bg-[#12151B]' : 'border-[#E4E7EC] bg-white'}`}>
+                            <div className="settings-key-dialog__footer-actions flex items-center gap-2">
                                 <button
                                     type="button"
                                     onClick={handleSaveKey}

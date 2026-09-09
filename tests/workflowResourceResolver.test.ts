@@ -73,4 +73,23 @@ describe('workflow executable resource resolver', () => {
 
     expect(resolved).toBeNull();
   });
+
+  it('materializes a creative-host locator through the injected host adapter', async () => {
+    const cleanup: string[] = [];
+    const loadCreativeHostResource = async (locator: { kind: 'creative-host'; host: string; locator: Record<string, string | number> }) => {
+      expect(locator).toEqual({ kind: 'creative-host', host: 'photoshop', locator: { documentId: 'doc-1', layerId: 7 } });
+      return new Blob(['layer'], { type: 'image/png' });
+    };
+    const resolved = await resolveWorkflowResource({
+      resourceId: 'creative-host:photoshop:layer-7',
+      kind: 'image',
+      title: 'Hero Layer',
+      locator: { kind: 'creative-host', host: 'photoshop', locator: { documentId: 'doc-1', layerId: 7 } },
+      mimeType: 'image/png',
+    }, { loadCreativeHostResource }, cleanup);
+
+    expect(resolved).toMatchObject({ executable: { kind: 'blob-url', source: 'creative-host' } });
+    expect(cleanup).toHaveLength(1);
+    cleanup.splice(0).forEach(url => URL.revokeObjectURL(url));
+  });
 });

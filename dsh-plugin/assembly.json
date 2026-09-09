@@ -26,11 +26,11 @@
       "rowId": "flovart"
     },
     "workflowView": {
-      "kind": "native-conversation-view",
+      "kind": "contextual-conversation-view",
       "slot": "conversation.view",
       "surface": "production",
       "badges": ["waiting", "error", "artifacts"],
-      "briefLedStart": true,
+      "briefLedStart": false,
       "autoWorkspace": true,
       "sidebarEntry": false,
       "iframe": false,
@@ -40,7 +40,7 @@
       "kind": "cli-derivation",
       "commandList": "flovart command.list --json",
       "commandSchema": "flovart command.schema --command {command} --json",
-      "bootstrap": "flovart director.bind --agent-identity deepseek-harness --session-id {sessionId} --project-id {projectId} --json"
+      "bootstrap": "flovart ensure --json"
     }
   },
   "privacy": {

@@ -3,14 +3,17 @@ import { workflowMediaStorage } from '../components/workflow/storage';
 import type { ResolvedWorkflowResource } from '../components/workflow/inputResolver';
 import type { WorkflowResource, WorkflowResourceKind, WorkflowResourceLocator } from '../components/workflow/types';
 
+export type CreativeHostResourceLocator = Extract<WorkflowResourceLocator, { kind: 'creative-host' }>;
+
 export interface WorkflowResourceResolverRuntime {
   loadMedia?: (storageKey: string) => Promise<Blob | null>;
+  loadCreativeHostResource?: (locator: CreativeHostResourceLocator) => Promise<Blob | null>;
 }
 
 export type ExecutableWorkflowResource =
   | { kind: 'inline-text'; text: string }
   | { kind: 'remote-url'; href: string }
-  | { kind: 'blob-url'; href: string; source: 'asset' | 'workflow-storage' | 'runtime-artifact' | 'legacy-href' }
+  | { kind: 'blob-url'; href: string; source: 'asset' | 'workflow-storage' | 'runtime-artifact' | 'legacy-href' | 'creative-host' }
   | { kind: 'runtime-artifact'; taskId: string; artifactId?: string; outputIndex?: number };
 
 export interface ResolvedExecutableWorkflowResource {
@@ -34,7 +37,7 @@ function resolvedResource(resource: WorkflowResource, executable: ExecutableWork
 async function materializeBlob(
   resource: WorkflowResource,
   blob: Blob | null,
-  source: 'asset' | 'workflow-storage' | 'runtime-artifact' | 'legacy-href',
+  source: 'asset' | 'workflow-storage' | 'runtime-artifact' | 'legacy-href' | 'creative-host',
   cleanup: string[],
 ) {
   if (!blob) return null;
@@ -47,6 +50,7 @@ async function loadLocatorBlob(locator: WorkflowResourceLocator, runtime: Workfl
   if (locator.kind === 'workflow-storage') return (runtime.loadMedia || workflowMediaStorage.get)(locator.storageKey);
   if (locator.kind === 'asset') return loadWorkflowMediaBlob(undefined, `asset-library:${locator.assetId}`);
   if (locator.kind === 'runtime-artifact') return loadWorkflowMediaBlob(undefined, undefined, locator.artifactRef);
+  if (locator.kind === 'creative-host') return runtime.loadCreativeHostResource?.(locator) || null;
   if (locator.kind === 'legacy-href') return loadWorkflowMediaBlob(undefined, locator.href);
   return null;
 }

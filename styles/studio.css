@@ -1,0 +1,52 @@
+/* The top menu is a shell-level component: it reflows its workspace switcher
+   before utility actions are allowed to squeeze the active surface. */
+
+.studio-top-menu,
+.studio-top-menu__leading,
+.studio-top-menu__modes,
+.studio-top-menu__actions {
+  min-width: 0;
+}
+
+.studio-top-menu__modes {
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.studio-top-menu__modes::-webkit-scrollbar { display: none; }
+
+@media (max-width: 767px) {
+  .studio-top-menu {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: minmax(40px, auto) 32px;
+    min-height: 76px;
+    align-items: center;
+    padding-block: 4px;
+  }
+
+  .studio-top-menu__leading { grid-column: 1; grid-row: 1; }
+  .studio-top-menu__actions { grid-column: 2; grid-row: 1; }
+  .studio-top-menu__modes {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-content: flex-start;
+    width: 100%;
+    border-top: 1px solid color-mix(in srgb, var(--isl-border) 72%, transparent);
+    padding-top: 2px;
+  }
+
+  .studio-top-menu__modes button { min-height: 28px; padding-inline: 12px; }
+}
+
+@media (max-width: 420px) {
+  .studio-top-menu { padding-inline: 6px; }
+  .studio-top-menu__leading { gap: 5px; }
+  .studio-top-menu__actions { gap: 0; }
+  .studio-top-menu__actions > a,
+  .studio-top-menu__actions > button { min-width: 32px; padding-inline: 6px; }
+  .studio-top-menu__modes button { padding-inline: 10px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .studio-top-menu__modes { scroll-behavior: auto; }
+}

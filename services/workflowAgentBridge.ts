@@ -79,6 +79,26 @@ export function prepareRuntimeAgentEnvelope(envelope: WorkflowCommandEnvelope): 
   };
 }
 
+export function validateBrowserWorkspaceLease(envelope: WorkflowCommandEnvelope, clientId: string, now = Date.now()): WorkflowCommandResult | null {
+  const lease = envelope.workspaceLease;
+  if (!lease || !envelope.command.startsWith('workflow.')) return null;
+  const state = useWorkflowStore.getState();
+  const projectId = String(envelope.args.projectId || lease.projectId || '');
+  const project = state.projects.find(item => item.id === lease.projectId);
+  if (lease.expiresAt <= now) return { ok: false, commandId: envelope.id, error: { code: 'LEASE_EXPIRED', message: 'Workflow Lease 已过期，请重新开始任务。' } };
+  if (lease.clientId !== clientId) return { ok: false, commandId: envelope.id, error: { code: 'LEASE_TARGET_CHANGED', message: 'Workflow Lease 的 Browser Writer 已改变。' } };
+  if (projectId !== lease.projectId || state.activeProjectId !== lease.projectId) {
+    return { ok: false, commandId: envelope.id, error: { code: 'LEASE_TARGET_CHANGED', message: '当前 Active Workflow 项目已改变，请结束当前任务后重新开始。' } };
+  }
+  if (!project) return { ok: false, commandId: envelope.id, error: { code: 'WORKSPACE_UNAVAILABLE', message: 'Workflow 项目已经不可用。' } };
+  const expectedRevision = envelope.args.expectedRevision;
+  const currentRevision = project.draftVersion || 1;
+  if (expectedRevision !== undefined && Number(expectedRevision) !== currentRevision) {
+    return { ok: false, commandId: envelope.id, error: { code: 'REVISION_CONFLICT', message: `Workflow 草稿版本已变化：期望 ${expectedRevision}，当前 ${currentRevision}。`, expectedRevision: Number(expectedRevision), actualRevision: currentRevision } };
+  }
+  return null;
+}
+
 const hex = (bytes: ArrayBuffer) => Array.from(new Uint8Array(bytes), byte => byte.toString(16).padStart(2, '0')).join('');
 
 export async function bindProductionDraftEnvelope(
@@ -214,7 +234,10 @@ export class WorkflowAgentBridge {
     if (!requestId || !envelope) return;
     try {
       let result: any;
-      if (RUNTIME_COMMANDS.has(envelope.command)) {
+      const leaseFailure = validateBrowserWorkspaceLease(envelope, this.clientId);
+      if (leaseFailure) {
+        result = leaseFailure;
+      } else if (RUNTIME_COMMANDS.has(envelope.command)) {
         if (requiresRuntimeAgentConfirmation(envelope.command) && !await this.confirm(runtimeAgentConfirmationSummary(envelope))) {
           result = { ok: false, error: { code: 'DENIED', message: '用户拒绝了 Production Runtime 命令。' } };
         } else {

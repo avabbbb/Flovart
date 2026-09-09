@@ -1,7 +1,7 @@
 {
   "name": "@flovart/dsh-plugin",
   "version": "0.1.0",
-  "description": "Flovart Production Workspace plugin for DeepSeek Harness RC8: dsh bundle patch + host CLI tool derivation + native conversation.view and shell.overlay entries.",
+  "description": "Flovart Production Workspace plugin for DeepSeek Harness RC8: dsh bundle patch + host CLI tool derivation + contextual conversation.view and shell.overlay entries.",
   "type": "module",
   "main": "lib/index.js",
   "exports": {

@@ -1,73 +1,104 @@
 # SPEC-001：`ctx.flovart` Service Contract
 
+> 当前实现说明。早期版本曾把 Binding、Native Draft 和 DSH 自己的 Workflow
+> store 放进这个设计；这些边界已由 [ADR 0063](../../adr/0063-dsh-browser-workflow-authority.md)
+> 取代。当前唯一 Workflow authority 是可见的 Flovart Browser Workflow。
+
 ## 目的
 
-为 DSH Agent、Flovart Native View、CLI 和未来其他 Host 提供同一个 Flovart 能力入口。调用方依赖 Service Interface，不直接请求 Flovart HTTP、读取 Browser IndexedDB、操作 React Canvas 或启动第二个 Flovart Agent Loop。
+为 DeepSeek Harness 的 Agent tools 和 contextual view 提供一个稳定、最小的
+Flovart 能力入口。调用方不直接请求 Flovart Agent HTTP、读取 Browser
+IndexedDB、操作 React Canvas 或启动第二个 Workflow Runtime；Node/Cordis
+Service 通过 Flovart CLI contract 进入现有 Workspace Adapter、Draft Authority、
+WorkflowExecutor 和 Artifact 边界。
 
-## Service Interface
+## 当前 Service Interface
 
-`ctx.flovart` 是一个深模块：公开少量语义能力，内部由 Runtime Adapter 通过 Flovart Command Registry 实现。
+实际公开的 `ctx.flovart` 形状是：
 
 ```ts
-type FlovartRequestContext = {
-  sessionId: string
-  actor: "dsh-agent" | "dsh-ui" | "cli"
-}
-
-type FlovartScope = {
-  projectId: string
-  workflowId?: string
-}
-
 interface FlovartService {
-  binding: {
-    get(ctx: FlovartRequestContext): Promise<FlovartWorkspaceBinding | null>
-    set(ctx: FlovartRequestContext, binding: FlovartWorkspaceBinding): Promise<FlovartWorkspaceBinding>
+  status(signal?: AbortSignal): Promise<unknown>
+  ensure(signal?: AbortSignal): Promise<unknown>
+
+  workspace: {
+    inspect(args?: Record<string, unknown>, signal?: AbortSignal): Promise<unknown>
+    selection(args?: Record<string, unknown>, signal?: AbortSignal): Promise<unknown>
   }
-  inspect(input: {
-    ctx: FlovartRequestContext
-    scope: FlovartScope
-    selectors?: string[]
-  }): Promise<FlovartInspection>
+
   workflow: {
-    apply(input: WorkflowMutation): Promise<MutationReceipt>
+    apply(args: Record<string, unknown>, signal?: AbortSignal): Promise<unknown>
+    run(args: Record<string, unknown>, signal?: AbortSignal): Promise<unknown>
   }
-  run: {
-    start(input: ProductionRunRequest): Promise<FlovartRunHandle>
-    status(input: { ctx: FlovartRequestContext; runId: string }): Promise<FlovartRunView>
-    cancel(input: { ctx: FlovartRequestContext; runId: string }): Promise<FlovartRunView>
-  }
-  artifact: {
-    inspect(input: { ctx: FlovartRequestContext; artifactIds: string[] }): Promise<ArtifactView[]>
+
+  artifacts: {
+    get(args?: Record<string, unknown>, signal?: AbortSignal): Promise<unknown>
   }
 }
 ```
 
-以上是契约形状，不要求第一版拆成独立 npm 包。Provider 负责连接和权限，Consumer 是 DSH tools/client，Flovart Runtime Adapter 负责把语义方法映射为 `command.list`、`command.schema` 和显式 Command Registry 调用。
+Workflow 调用会固定 `workspaceMode: "browser"`，并以
+`agentIdentity: "deepseek-harness"` 进入稳定 CLI；没有可见 Browser Workflow
+时返回 `WORKSPACE_REQUIRED` 或 `WORKSPACE_UNAVAILABLE`，不创建空项目、不读取
+旧项目，也不回退到隐藏 Draft。
 
 ## 工具投影
 
-P0 只向模型暴露语义工具，例如：
+模型工具只投影五个稳定命令：
 
 ```text
-flovart_binding
+flovart_status
 flovart_inspect
-flovart_workflow_apply
-flovart_run_start
-flovart_run_status
-flovart_run_cancel
-flovart_artifact_inspect
+flovart_selection
+flovart_apply
+flovart_run
 ```
 
-工具不是 `flovart_exec(command, args)` 的薄转发，也不暴露 Provider secret、浏览器存储键或 React 节点实例。工具 schema 必须要求或验证 `projectId/workflowId`，写操作还必须要求 `expectedRevision/mutationId`。
+工具 schema 从 `flovart command.list --json` 的当前 Registry 读取，但只允许
+上述白名单；`command.list`、`command.schema`、`director.*`、Provider、Crew
+和内部诊断命令不进入模型工具面。写操作要求稳定的幂等键，Workflow mutation
+还由可见 Browser 的 `expectedRevision`、`mutationId` 和 Workspace Lease 校验。
 
-## 错误与权限
+## Artifact
 
-Service 至少区分 `BINDING_REQUIRED`、`BINDING_MISMATCH`、`NOT_FOUND`、`PRECONDITION_FAILED`、`IDEMPOTENCY_KEY_REUSE`、`APPROVAL_REQUIRED`、`RUN_NOT_CANCELLABLE` 和 `RUNTIME_UNAVAILABLE`。只读 inspect 不应伪装成成功的空结果；外部调用、费用动作、破坏性动作沿用 DSH pre-execute approval。
+`ctx.flovart.artifacts.get({ taskId })` 只把现有 Runtime Task 的非秘密 Artifact
+描述投影给 DSH。它不扫描 Asset store、不返回 Provider credential、原始本地
+路径或隐藏 Workflow 数据；没有成功 Artifact 时返回结构化失败。
 
-## 验收
+## 生命周期与错误
 
-- DSH Agent、CLI 和 Native Workflow View 对同一操作都经过同一个 Service Interface。
-- 断开 Browser Client 时，Runtime 仍可查询 Workflow revision 和已提交 Run。
-- 任意工具都不能从隐式 active project 推导 mutation 目标。
-- Service 连接失败时返回结构化错误，不回退到直接 HTTP 或本地 store。
+`FlovartService` 是 Cordis Service。CLI probe 失败时服务进入不可用状态，依赖
+它的工具由 Cordis 注销；health monitor 恢复 probe 后重新注入，不能缓存 stale
+Service reference。Host proxy 只暴露同源的 `GET /flovart-workspace/health` 和
+`POST /flovart-workspace/api/tools`，Workspace token 只存在 Host 环境。
+
+产品层错误至少映射为：
+
+```text
+HOST_NEEDS_SETUP
+HOST_NEEDS_LOGIN
+LINK_OFFLINE
+WORKSPACE_REQUIRED
+WORKSPACE_UNAVAILABLE
+LEASE_EXPIRED
+LEASE_TARGET_CHANGED
+REVISION_CONFLICT
+INPUT_RESOLUTION_FAILED
+RESOURCE_NOT_EXECUTABLE
+UNSUPPORTED_INPUT_MODE
+PROVIDER_REQUEST_FAILED
+HOST_IMPORT_FAILED
+```
+
+UI 只显示发生了什么、下一步怎么修和 CTA；协议错误码与 transport 细节留在
+Developer Diagnostics。
+
+## 验收边界
+
+- DSH Agent tools、CLI 和 contextual view 对 Workflow 修改最终进入同一个
+  Browser Workflow Dispatcher；不存在 DSH Native Draft 或第二条 Provider 路径。
+- 关闭 Browser client、切换项目或 stale revision 时必须失败安全，不误写其它项目。
+- 同一个 `mutationId + payload` 重试必须重放原 Receipt；不同 payload 必须拒绝。
+- packed profile、Host/Client bundle、proxy 白名单和 Cordis unload/reload 可以
+  在本地 contract suite 验证，但真实 DeepSeek 登录会话和页面 tracer 仍是
+  External Gate。

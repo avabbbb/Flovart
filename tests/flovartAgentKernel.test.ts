@@ -44,7 +44,7 @@ describe('Flovart Agent Kernel', () => {
     expect(systemPrompt).toContain('flovart_workflow_apply');
     expect(systemPrompt).toContain('flovart_workflow_node_run');
     expect(systemPrompt).toContain('不得模拟鼠标');
-    expect(systemPrompt).toContain('不能切换到 Native');
+    expect(systemPrompt).toContain('不能切换到隐藏图');
     expect(systemPrompt).toContain('不能自行解析 Provider');
     await kernel.close();
   });

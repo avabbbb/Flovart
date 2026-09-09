@@ -1,4 +1,4 @@
-import { inspectLocalAgent, waitForWebUi, buildBrowserBootstrapUrl } from './local-agent.js';
+import { inspectLocalAgent, waitForWebUi, buildBrowserBootstrapUrl, issueBrowserBootstrapToken } from './local-agent.js';
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -28,6 +28,8 @@ export class FlovartBootstrapCoordinator {
     this.inspectAgent = options.inspectAgent || inspectLocalAgent;
     this.waitForWeb = options.waitForWeb || waitForWebUi;
     this.buildBootstrapUrl = options.buildBootstrapUrl || buildBrowserBootstrapUrl;
+    this.issueBootstrapToken = options.issueBootstrapToken
+      || (this.buildBootstrapUrl === buildBrowserBootstrapUrl ? issueBrowserBootstrapToken : null);
     this.openBrowser = options.openBrowser || (() => {});
     this.sleep = options.sleep || sleep;
   }
@@ -69,8 +71,7 @@ export class FlovartBootstrapCoordinator {
     if (!open || !frontendUrl) return result;
 
     let bootstrapUrl = frontendUrl;
-    if (connection) bootstrapUrl = this.buildBootstrapUrl(frontendUrl, connection, route);
-    else {
+    if (!connection) {
       const url = new URL(frontendUrl);
       url.hash = route.startsWith('#') ? route : `#${route}`;
       bootstrapUrl = url.toString();
@@ -88,6 +89,18 @@ export class FlovartBootstrapCoordinator {
         previousBrowserClientId = beforeOpen?.health?.activeWriter?.clientId || beforeOpen?.health?.clientId || null;
       } catch {
         // The post-open poll remains authoritative if the pre-open probe races startup.
+      }
+    }
+    if (connection) {
+      try {
+        const browserConnection = this.issueBootstrapToken
+          ? { ...connection, bootstrapToken: await this.issueBootstrapToken(connection, { timeoutMs: 800 }) }
+          : connection;
+        bootstrapUrl = this.buildBootstrapUrl(frontendUrl, browserConnection, route);
+      } catch (error) {
+        result.error = error instanceof Error ? error.message : String(error);
+        result.ok = false;
+        return result;
       }
     }
     try {

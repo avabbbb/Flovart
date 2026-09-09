@@ -24,7 +24,8 @@ export const inject = ['tools', 'webServer'] as const
 /** Host plugin body. */
 export function apply(ctx: Context, config: Partial<FlovartPluginConfig> | undefined): void {
   const service = new FlovartService(ctx, config)
-  ctx.provide('flovart', service)
+  service.probe()
+  ctx.effect(() => service.startHealthMonitor(), 'flovart: CLI health monitor')
   registerWorkspaceProxy(ctx, service.config)
-  void registerFlovartTools(ctx, service)
+  ctx.inject(['flovart'], toolCtx => registerFlovartTools(toolCtx, service))
 }

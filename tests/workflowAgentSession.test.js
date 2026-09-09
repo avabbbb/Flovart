@@ -1,28 +1,16 @@
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { NativeWorkflowStore } from '../agent/native-workspace.js';
 import { WorkflowAgentSession } from '../agent/session.js';
 
 describe('workflow agent session', () => {
-  it('does not silently activate the native workspace when no browser is connected', async () => {
-    const directory = mkdtempSync(join(tmpdir(), 'flovart-session-native-'));
-    try {
-      const session = new WorkflowAgentSession({ timeoutMs: 10, nativeWorkspace: new NativeWorkflowStore({ file: join(directory, 'workflow.json') }) });
-      expect(session.health()).toMatchObject({ nativeWorkspace: false, hasWorkflow: false });
-      await expect(session.callCommand('workflow.project.create', { title: '原生工作区测试' }, 'mcp')).rejects.toThrow('没有已连接并同步项目');
-      expect(session.health()).toMatchObject({ nativeWorkspace: false, hasWorkflow: false });
-
-      session.activateNativeWorkspace();
-      const created = await session.callCommand('workflow.project.create', { workspaceMode: 'native', title: '原生工作区测试' }, 'mcp');
-      expect(session.health()).toMatchObject({ nativeWorkspace: true, hasWorkflow: true });
-      const result = await session.callCommand('workflow.inspect', { workspaceMode: 'native', projectId: created.result.projectId }, 'mcp');
-      expect(result.ok).toBe(true);
-      expect(session.health()).toMatchObject({ nativeWorkspace: true, hasWorkflow: true });
-    } finally {
-      rmSync(directory, { recursive: true, force: true });
-    }
+  it('requires a visible Browser Workflow and rejects removed native modes', async () => {
+    const session = new WorkflowAgentSession({ timeoutMs: 10 });
+    expect(session.health()).toMatchObject({ hasWorkflow: false, clients: 0 });
+    expect(session.health()).not.toHaveProperty('nativeWorkspace');
+    await expect(session.callCommand('workflow.project.create', { title: '浏览器工作区测试' }, 'mcp'))
+      .rejects.toMatchObject({ code: 'WORKSPACE_UNAVAILABLE' });
+    await expect(session.callCommand('workflow.inspect', { workspaceMode: 'native' }, 'mcp'))
+      .rejects.toMatchObject({ code: 'WORKSPACE_REQUIRED' });
+    expect(session.health()).not.toHaveProperty('nativeWorkspace');
   });
 
   it('redacts secrets from pushed workflow snapshots', () => {
@@ -93,64 +81,33 @@ describe('workflow agent session', () => {
     expect(session.health()).toMatchObject({ activeProjectId: 'project-1', revision: 2, activeWriter: { projectId: 'project-1' } });
   });
 
-  it('never falls back a browser-bound mutation into an active native workspace', async () => {
-    const directory = mkdtempSync(join(tmpdir(), 'flovart-session-binding-'));
-    try {
-      const nativeWorkspace = new NativeWorkflowStore({ file: join(directory, 'workflow.json') });
-      const session = new WorkflowAgentSession({ timeoutMs: 10, nativeWorkspace });
-      session.activateNativeWorkspace();
-
-      await expect(session.callCommand('workflow.apply', {
-        workspaceMode: 'browser',
-        clientId: 'missing-browser',
-        projectId: 'browser-project',
-        expectedRevision: 1,
-        mutationId: 'browser-only',
-        operations: [],
-      }, 'cli')).rejects.toThrow('没有已连接并同步项目');
-      await expect(session.callCommand('workflow.project.create', { title: 'Agent 不得进入 Native' }, 'agent')).rejects.toThrow('没有已连接并同步项目');
-      expect(nativeWorkspace.state().projects).toEqual([]);
-    } finally {
-      rmSync(directory, { recursive: true, force: true });
-    }
+  it('never falls back a browser-bound mutation into a hidden workspace', async () => {
+    const session = new WorkflowAgentSession({ timeoutMs: 10 });
+    await expect(session.callCommand('workflow.apply', {
+      workspaceMode: 'browser',
+      clientId: 'missing-browser',
+      projectId: 'browser-project',
+      expectedRevision: 1,
+      mutationId: 'browser-only',
+      operations: [],
+    }, 'cli')).rejects.toMatchObject({ code: 'WORKSPACE_UNAVAILABLE' });
+    await expect(session.callCommand('workflow.project.create', { title: 'Agent 不得绕过浏览器' }, 'agent'))
+      .rejects.toMatchObject({ code: 'WORKSPACE_UNAVAILABLE' });
   });
 
-  it('prefers a connected Browser workspace unless Native mode is explicit', async () => {
-    const directory = mkdtempSync(join(tmpdir(), 'flovart-session-authority-'));
-    try {
-      const nativeWorkspace = new NativeWorkflowStore({ file: join(directory, 'workflow.json') });
-      const session = new WorkflowAgentSession({ timeoutMs: 1000, nativeWorkspace });
-      session.activateNativeWorkspace();
-      let events = '';
-      const response = { writeHead() {}, write(value) { events += value; }, on() {} };
-      session.openEvents(new URL('http://127.0.0.1/events?clientId=browser-1'), response);
-      session.updateSnapshot({ id: 'browser-project', draftVersion: 1 }, 'browser-1');
+  it('uses the connected Browser authority and rejects native mode even when a tab is ready', async () => {
+    const session = new WorkflowAgentSession({ timeoutMs: 1000 });
+    let events = '';
+    const response = { writeHead() {}, write(value) { events += value; }, on() {} };
+    session.openEvents(new URL('http://127.0.0.1/events?clientId=browser-1'), response);
+    session.updateSnapshot({ id: 'browser-project', draftVersion: 1 }, 'browser-1');
 
-      const browserCall = session.callCommand('workflow.project.list', {}, 'cli', 'browser-list');
-      const browserPayload = JSON.parse(events.match(/event: tool_call\ndata: (.+)\n\n/)?.[1] || '{}');
-      session.resolveResult({ requestId: browserPayload.requestId, clientId: 'browser-1', result: { ok: true, result: [] } });
-      await expect(browserCall).resolves.toMatchObject({ ok: true });
-      expect(nativeWorkspace.state().projects).toEqual([]);
-
-      const nativeResult = await session.callCommand('workflow.project.create', { workspaceMode: 'native', title: '显式原生' }, 'operator', 'native-create');
-      expect(nativeResult.ok).toBe(true);
-      expect(nativeWorkspace.state().projects).toHaveLength(1);
-    } finally {
-      rmSync(directory, { recursive: true, force: true });
-    }
-  });
-
-  it('never selects Native for a non-explicit workspace mode', async () => {
-    const directory = mkdtempSync(join(tmpdir(), 'flovart-session-explicit-native-'));
-    try {
-      const nativeWorkspace = new NativeWorkflowStore({ file: join(directory, 'workflow.json') });
-      const session = new WorkflowAgentSession({ timeoutMs: 10, nativeWorkspace });
-      session.activateNativeWorkspace();
-      await expect(session.callCommand('workflow.project.create', { title: '不得隐式原生' }, 'cli')).rejects.toThrow('没有已连接并同步项目');
-      expect(nativeWorkspace.state().projects).toEqual([]);
-    } finally {
-      rmSync(directory, { recursive: true, force: true });
-    }
+    const browserCall = session.callCommand('workflow.project.list', {}, 'cli', 'browser-list');
+    const browserPayload = JSON.parse(events.match(/event: tool_call\ndata: (.+)\n\n/)?.[1] || '{}');
+    session.resolveResult({ requestId: browserPayload.requestId, clientId: 'browser-1', result: { ok: true, result: [] } });
+    await expect(browserCall).resolves.toMatchObject({ ok: true });
+    await expect(session.callCommand('workflow.project.create', { workspaceMode: 'native', title: '隐藏工作区' }, 'operator', 'native-create'))
+      .rejects.toMatchObject({ code: 'WORKSPACE_REQUIRED' });
   });
 
   it('keeps explicit multi-tab clientId mutations on their owning browser', async () => {
@@ -228,10 +185,31 @@ describe('workflow agent session', () => {
     session.updateSnapshot({ id: 'project-2', draftVersion: 1 }, 'browser-2');
 
     expect(session.health()).toMatchObject({ clientId: 'browser-1', activeWriter: { clientId: 'browser-1', projectId: 'project-1' } });
-    await expect(session.callCommand('workflow.inspect', { clientId: 'browser-2', projectId: 'project-2' }, 'cli')).rejects.toThrow('WORKSPACE_WRITER_INACTIVE');
+    await expect(session.callCommand('workflow.inspect', { clientId: 'browser-2', projectId: 'project-2' }, 'cli')).rejects.toMatchObject({ code: 'LEASE_TARGET_CHANGED' });
 
     expect(session.activateClient({ clientId: 'browser-2', projectId: 'project-2' })).toMatchObject({ clientId: 'browser-2', projectId: 'project-2' });
     expect(session.health()).toMatchObject({ clientId: 'browser-2', activeWriter: { clientId: 'browser-2' } });
+  });
+
+  it('fails a leased Agent turn when the active project changes instead of writing the new project', async () => {
+    const session = new WorkflowAgentSession({ timeoutMs: 1000 });
+    let events = '';
+    const response = { writeHead() {}, write(value) { events += value; }, on() {} };
+    session.openEvents(new URL('http://127.0.0.1/events?clientId=browser-1'), response);
+    session.updateSnapshot({ id: 'project-a', draftVersion: 4 }, 'browser-1');
+
+    const inspect = session.callCommand('workflow.inspect', {}, 'agent', 'turn-inspect');
+    const firstPayload = JSON.parse(events.match(/event: tool_call\ndata: (.+)\n\n/)?.[1] || '{}');
+    expect(firstPayload.envelope.workspaceLease).toMatchObject({ clientId: 'browser-1', projectId: 'project-a', baseRevision: 4 });
+    session.resolveResult({ requestId: firstPayload.requestId, clientId: 'browser-1', result: { ok: true } });
+    await expect(inspect).resolves.toMatchObject({ ok: true });
+
+    session.updateSnapshot({ id: 'project-b', draftVersion: 1 }, 'browser-1');
+    await expect(session.callCommand('workflow.apply', {
+      operations: [{ type: 'add_node', node: { id: 'must-not-write', type: 'text' } }],
+      mutationId: 'turn-apply',
+    }, 'agent')).rejects.toMatchObject({ code: 'LEASE_TARGET_CHANGED' });
+    expect(events.match(/event: tool_call\n/g) || []).toHaveLength(1);
   });
 
   it('rejects explicit activation when the browser has no matching project binding', () => {

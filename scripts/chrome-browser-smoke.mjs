@@ -1,26 +1,40 @@
 import { execFileSync, spawn } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
-import { mkdir, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
+import { mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { dirname, join, parse, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
-import { buildBrowserBootstrapUrl, probeWebUi } from '../tools/flovart/local-agent.js';
+import { buildBrowserBootstrapUrl, issueBrowserBootstrapToken, probeWebUi, redactBootstrapUrl } from '../tools/flovart/local-agent.js';
 
 const projectDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const testRoot = mkdtempSync(join(tmpdir(), 'flovart-chrome-smoke-'));
+const tempRoot = resolve(process.env.FLOVART_TEST_TMP_ROOT || resolve(projectDir, '.tmp'));
+if (parse(tempRoot).root.toUpperCase() !== 'H:\\') throw new Error(`Chrome smoke tests must use an H: temp root: ${tempRoot}`);
+await mkdir(tempRoot, { recursive: true });
+const testRoot = await mkdtemp(join(tempRoot, 'flovart-chrome-smoke-'));
 const env = {
   ...process.env,
+  TEMP: testRoot,
+  TMP: testRoot,
+  TMPDIR: testRoot,
   FLOVART_PROJECT_DIR: projectDir,
   FLOVART_AGENT_CONFIG: join(testRoot, 'agent.json'),
   FLOVART_WEB_DISCOVERY: join(testRoot, 'web.json'),
   FLOVART_BROWSER_LAUNCH_STATE: join(testRoot, 'browser-launch.json'),
 };
+// Playwright inherits the parent environment, so keep Chromium's own crash,
+// cache, and temporary writes beside the H: test profile as well.
+process.env.TEMP = testRoot;
+process.env.TMP = testRoot;
+process.env.TMPDIR = testRoot;
 const cliArgs = [
   'tools/flovart/cli.js',
   'start', '--source', '--web',
   '--web-port=0', '--agent-port=0', '--no-open',
 ];
+const chromeExecutable = process.env.FLOVART_CHROME_PATH || chromium.executablePath();
+if (!existsSync(chromeExecutable)) {
+  throw new Error(`Chrome for Testing executable was not found: ${chromeExecutable}`);
+}
 
 const sleep = ms => new Promise(resolveSleep => setTimeout(resolveSleep, ms));
 
@@ -85,13 +99,13 @@ try {
     const connection = readJson(env.FLOVART_AGENT_CONFIG);
     return connection?.url && connection?.token ? connection : null;
   });
-  const bootstrapUrl = buildBrowserBootstrapUrl(web, agent, '#/app');
-  const executablePath = process.env.FLOVART_CHROME_PATH || chromium.executablePath();
+  const bootstrapToken = await issueBrowserBootstrapToken(agent);
+  const bootstrapUrl = buildBrowserBootstrapUrl(web, { ...agent, bootstrapToken }, '#/app');
   const profileDir = join(testRoot, 'chrome-profile');
   await mkdir(profileDir, { recursive: true });
   browser = await chromium.launchPersistentContext(profileDir, {
-    headless: false,
-    executablePath,
+    headless: true,
+    executablePath: chromeExecutable,
     args: [
       '--no-first-run',
       '--no-default-browser-check',
@@ -104,7 +118,10 @@ try {
     if (message.type() === 'error') consoleErrors.push(message.text());
   });
   page.on('pageerror', error => pageErrors.push(error.message));
-  await page.goto(bootstrapUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+  // The Vite/WebUI page owns long-lived HMR and Agent connections. Waiting for
+  // the browser's full DOMContentLoaded lifecycle can therefore be flaky even
+  // after the document has committed and rendered its WebUI marker.
+  await page.goto(bootstrapUrl, { waitUntil: 'commit', timeout: 15_000 });
   await page.locator('body[data-flovart-webui="1"]').waitFor({ state: 'attached', timeout: 15_000 });
   const health = await waitFor(async () => {
     const response = await fetch(new URL('/health', agent.url));
@@ -116,8 +133,7 @@ try {
   if (/[?&](agentToken|token)=/i.test(finalUrl)) throw new Error('Bootstrap secret remained in the browser URL.');
   result = {
     ok: true,
-    browser: 'Chrome for Testing',
-    executablePath,
+    browser: 'managed Chromium',
     webUrl: discovery.url,
     agentUrl: agent.url,
     browserConnected: true,
@@ -130,9 +146,9 @@ try {
 } catch (error) {
   result = {
     ok: false,
-    browser: 'Chrome for Testing',
-    error: error instanceof Error ? error.message : String(error),
-    cliOutput: cliOutput.slice(-4000),
+    browser: 'managed Chromium',
+    error: redactBootstrapUrl(error instanceof Error ? error.message : String(error)),
+    cliOutput: redactBootstrapUrl(cliOutput.slice(-4000)),
   };
 } finally {
   try { await page?.screenshot({ path: join(testRoot, 'chrome-smoke.png'), fullPage: true }); } catch {}

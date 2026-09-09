@@ -1,6 +1,18 @@
+import { mkdirSync } from 'node:fs';
+import { parse, resolve } from 'node:path';
 import { webcrypto } from 'node:crypto';
 import '@testing-library/jest-dom/vitest';
 import 'fake-indexeddb/auto';
+
+// Keep Vitest's mkdtemp/tmpdir fixtures off the system drive. The repository
+// is on H:, so every test-owned temporary file belongs under this ignored H:
+// workspace directory instead of the user's Windows TEMP directory.
+const testTempRoot = resolve(process.cwd(), '.tmp', 'vitest');
+if (parse(testTempRoot).root.toUpperCase() !== 'H:\\') throw new Error(`Vitest temporary files must use an H: root: ${testTempRoot}`);
+mkdirSync(testTempRoot, { recursive: true });
+process.env.TEMP = testTempRoot;
+process.env.TMP = testTempRoot;
+process.env.TMPDIR = testTempRoot;
 
 // Polyfill WebCrypto for jsdom (Node 18+)
 if (typeof globalThis.crypto === 'undefined' || !globalThis.crypto.subtle) {

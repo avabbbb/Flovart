@@ -9,8 +9,10 @@
   --home-ghost: var(--isl-ink-ghost);
   --home-accent: var(--isl-mint);
   display: flex;
-  width: 100vw;
+  width: 100%;
+  min-width: 0;
   height: 100vh;
+  height: 100dvh;
   min-height: 0;
   overflow: hidden;
   color: var(--home-text);

@@ -1,0 +1,14 @@
+{
+  "name": "Flovart",
+  "name_zh": "Flovart",
+  "name_en": "Flovart",
+  "description": "Use Flovart to create and edit visual Workflow projects from natural language.",
+  "description_zh": "通过自然语言在 Flovart 中创建和编辑可见的 Workflow。",
+  "description_en": "Create and edit visible Flovart Workflow projects with natural language.",
+  "source": "flovart",
+  "type": "cli",
+  "version": "0.3.2",
+  "minWorkbuddyVersion": "5.0.0",
+  "examples_zh": ["打开 Flovart", "查看当前 Workflow", "用这些图片做一条产品广告"],
+  "examples_en": ["Open Flovart", "Inspect the current Workflow", "Make a product ad from these images"]
+}

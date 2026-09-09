@@ -1,0 +1,123 @@
+/* Responsive first-run API setup. */
+
+.onboarding-overlay {
+  padding: 8px;
+  overflow: hidden;
+  overscroll-behavior: contain;
+}
+
+.onboarding-dialog {
+  width: min(100%, 480px);
+  min-width: 0;
+  min-height: 0;
+  height: min(760px, calc(100dvh - 32px));
+  max-height: calc(100dvh - 32px);
+}
+
+.onboarding-dialog__progress {
+  flex: 0 0 auto;
+}
+
+.onboarding-dialog__body {
+  min-width: 0;
+  min-height: 0;
+  overscroll-behavior: contain;
+}
+
+.onboarding-dialog__body > div {
+  min-width: 0;
+}
+
+.onboarding-key-field {
+  min-width: 0;
+}
+
+.onboarding-key-field input {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.onboarding-key-field__toggle {
+  min-height: 32px;
+  min-width: 40px;
+  padding-inline: 4px;
+  touch-action: manipulation;
+}
+
+.onboarding-dialog__footer {
+  flex: 0 0 auto;
+  overscroll-behavior: contain;
+}
+
+.onboarding-dialog__footer-actions {
+  flex-wrap: wrap;
+}
+
+.onboarding-dialog :is(button, input, select, textarea, a):focus-visible {
+  outline: 2px solid var(--isl-mint);
+  outline-offset: 2px;
+}
+
+.onboarding-dialog select {
+  min-width: 0;
+  max-width: 100%;
+  background-color: var(--isl-card);
+  color: var(--isl-ink);
+}
+
+@media (max-width: 480px) {
+  .onboarding-dialog {
+    width: 100%;
+    height: calc(100dvh - 16px);
+    max-height: calc(100dvh - 16px);
+    border-radius: 20px;
+  }
+
+  .onboarding-dialog__progress,
+  .onboarding-dialog__body,
+  .onboarding-dialog__footer {
+    padding-inline: 16px;
+  }
+
+  .onboarding-dialog__progress {
+    padding-top: 16px;
+  }
+
+  .onboarding-dialog__body {
+    padding-bottom: 16px;
+  }
+
+  .onboarding-dialog__footer-actions > button {
+    min-height: 40px;
+    flex: 1 1 130px;
+  }
+}
+
+@media (max-width: 360px) {
+  .onboarding-dialog__footer-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .onboarding-dialog__footer-actions > button {
+    width: 100%;
+  }
+}
+
+@media (max-height: 600px) {
+  .onboarding-dialog {
+    height: calc(100dvh - 8px);
+    max-height: calc(100dvh - 8px);
+  }
+
+  .onboarding-dialog__progress {
+    padding-top: 12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .onboarding-dialog * {
+    scroll-behavior: auto;
+  }
+}

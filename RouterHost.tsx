@@ -24,7 +24,7 @@ const DockPage = React.lazy(() => import('./components/dock/DockPage').then(modu
 function EnterpriseRoute({ children }: { children: React.ReactNode }) {
   const profile = useDeploymentStore(state => state.profile);
   const initialized = useDeploymentStore(state => state.initialized);
-  if (!initialized) return <div className="flex h-screen items-center justify-center text-sm" style={{ color: 'var(--isl-ink-soft)' }}>正在读取部署配置...</div>;
+  if (!initialized) return <div className="route-fallback text-sm" style={{ color: 'var(--isl-ink-soft)' }}>正在读取部署配置…</div>;
   return profile.capabilities.enterpriseAdmin ? children : <Navigate to="/app" replace />;
 }
 
@@ -54,7 +54,7 @@ export function RouterHost() {
           <Route
             path="/"
             element={
-              <Suspense fallback={<div className="flex h-screen items-center justify-center text-sm" style={{ color: '#a8a49c' }}>加载中...</div>}>
+              <Suspense fallback={<div className="route-fallback text-sm" style={{ color: '#a8a49c' }}>加载中…</div>}>
                 <FlovartHome />
               </Suspense>
             }
@@ -62,7 +62,7 @@ export function RouterHost() {
           <Route
             path="/app/home"
             element={
-              <Suspense fallback={<div className="flex h-screen items-center justify-center text-sm" style={{ color: '#a8a49c' }}>加载中...</div>}>
+              <Suspense fallback={<div className="route-fallback text-sm" style={{ color: '#a8a49c' }}>加载中…</div>}>
                 <FlovartHome />
               </Suspense>
             }
@@ -70,7 +70,7 @@ export function RouterHost() {
           <Route
             path="/dock"
             element={
-              <Suspense fallback={<div className="flex h-screen items-center justify-center text-sm" style={{ color: '#a8a49c' }}>加载 Dock...</div>}>
+              <Suspense fallback={<div className="route-fallback text-sm" style={{ color: '#a8a49c' }}>加载 Dock…</div>}>
                 <DockPage embedded={window.parent !== window} />
               </Suspense>
             }
@@ -79,7 +79,7 @@ export function RouterHost() {
           <Route
             path="/prompts"
             element={
-              <Suspense fallback={<div className="flex h-screen items-center justify-center text-sm" style={{ color: '#a8a49c' }}>加载中...</div>}>
+              <Suspense fallback={<div className="route-fallback text-sm" style={{ color: '#a8a49c' }}>加载中…</div>}>
                 <PromptsPage />
               </Suspense>
             }
@@ -88,7 +88,7 @@ export function RouterHost() {
             path="/enterprise/platform"
             element={
               <EnterpriseRoute>
-                <Suspense fallback={<div className="flex h-screen items-center justify-center text-sm">加载平台管理...</div>}>
+                <Suspense fallback={<div className="route-fallback text-sm">加载平台管理…</div>}>
                   <PlatformAdminApp />
                 </Suspense>
               </EnterpriseRoute>
@@ -98,7 +98,7 @@ export function RouterHost() {
             path="/enterprise/*"
             element={
               <EnterpriseRoute>
-                <Suspense fallback={<div className="flex h-screen items-center justify-center text-sm" style={{ color: 'var(--isl-ink-soft)' }}>加载企业后台...</div>}>
+                <Suspense fallback={<div className="route-fallback text-sm" style={{ color: 'var(--isl-ink-soft)' }}>加载企业后台…</div>}>
                   <EnterpriseApp />
                 </Suspense>
               </EnterpriseRoute>

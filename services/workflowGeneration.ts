@@ -12,7 +12,7 @@ import { getProductModel, getRoutedImageModes, getRoutedVideoModes } from './pro
 import { usePromptHistoryStore } from '../stores/usePromptHistoryStore';
 import { refundApiUsage, reserveApiUsage, updateApiUsage } from '../utils/usageMonitor';
 import { resolveRouteMappingForSubmit, type RouteFallbackResolution } from './routeMapping';
-import { requireWorkflowResourceHref } from './workflowResourceResolver';
+import { requireWorkflowResourceHref, type CreativeHostResourceLocator } from './workflowResourceResolver';
 import { beginWorkflowOperationTake, completeWorkflowOperationTake } from '../components/workflow/operations';
 import { validateWorkflowOperationOutputs } from '../components/workflow/operationRegistry';
 import type { ProviderMaterializedReference } from './providerGenerationAdapter';
@@ -45,6 +45,7 @@ export interface WorkflowGenerationRuntime {
   createId?: () => string;
   assets?: readonly WorkflowAssetReferenceInput[];
   loadMedia?: (storageKey: string) => Promise<Blob | null>;
+  loadCreativeHostResource?: (locator: CreativeHostResourceLocator) => Promise<Blob | null>;
   fetchMedia?: (href: string) => Promise<Blob>;
   ingestMedia?: (file: File) => Promise<WorkflowMediaRecord>;
   encodeDataUrl?: (blob: Blob) => Promise<string>;
@@ -78,7 +79,7 @@ async function materializeCanonicalReferences(
 ): Promise<ProviderMaterializedReference[]> {
   return Promise.all(input.references.map(async ({ resource, role, label, order }) => {
     const kind = resource.kind as 'image' | 'video' | 'audio';
-    const href = await requireWorkflowResourceHref(resource, { loadMedia: runtime.loadMedia }, temporaryUrls, { allowArtifactReference });
+    const href = await requireWorkflowResourceHref(resource, { loadMedia: runtime.loadMedia, loadCreativeHostResource: runtime.loadCreativeHostResource }, temporaryUrls, { allowArtifactReference });
     return {
       resourceId: resource.resourceId,
       type: kind,

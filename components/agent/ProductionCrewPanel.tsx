@@ -20,25 +20,25 @@ export function ProductionCrewPanel({ project }: { project: WorkflowProject }) {
           </div>
         </header>
 
-        <div className="rounded-xl border p-5" style={{ borderColor: 'var(--isl-line)', background: 'var(--isl-surface)' }}>
+        <div className="rounded-xl border p-5" style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-surface)' }}>
           <div className="flex items-start gap-3">
             <ShieldCheck className="mt-0.5 shrink-0" size={20} style={{ color: 'var(--isl-mint)' }} />
             <div>
-              <h2 className="text-base font-semibold" style={{ color: 'var(--isl-ink)' }}>外部 Director Host 是指挥入口</h2>
+              <h2 className="text-base font-semibold" style={{ color: 'var(--isl-ink)' }}>协作 Agent 会帮你推进制作</h2>
               <p className="mt-1 text-xs leading-6" style={{ color: 'var(--isl-ink-soft)' }}>
-                这里不再复制一套 Agent 聊天。Host Projection 下达任务，Production Crew 执行，Workflow Draft、状态、回执和产物在 Flovart 内持续可见。
+                在左侧选择你习惯的助手，它会通过 Flovart 编辑当前 Workflow；状态、回执和产物都会在这里持续可见。
               </p>
             </div>
           </div>
         </div>
 
         <div className="grid gap-3 sm:grid-cols-3">
-          <StatusCard icon={<ShieldCheck size={16} />} label="Director Binding" value="由当前 Host Projection 决定" />
-          <StatusCard icon={<Boxes size={16} />} label="Workflow Draft" value={`${project.nodes.length} 节点 · ${project.connections.length} 连接`} />
-          <StatusCard icon={<CircleDot size={16} />} label="Production State" value={running > 0 ? `${running} 项运行中` : failed > 0 ? `${failed} 项异常` : '等待下一条指令'} />
+          <StatusCard icon={<ShieldCheck size={16} />} label="协作 Agent" value="由左侧选择的助手负责" />
+          <StatusCard icon={<Boxes size={16} />} label="Workflow" value={`${project.nodes.length} 节点 · ${project.connections.length} 连接`} />
+          <StatusCard icon={<CircleDot size={16} />} label="制作状态" value={running > 0 ? `${running} 项运行中` : failed > 0 ? `${failed} 项异常` : '等待下一条指令'} />
         </div>
 
-        <div className="rounded-xl border p-4" style={{ borderColor: 'var(--isl-line)', background: 'var(--isl-surface)' }}>
+        <div className="rounded-xl border p-4" style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-surface)' }}>
           <p className="text-[10px] font-bold tracking-[0.14em]" style={{ color: 'var(--isl-ink-soft)' }}>LATEST RECEIPT</p>
           {latestReceipt ? (
             <div className="mt-2">
@@ -46,7 +46,7 @@ export function ProductionCrewPanel({ project }: { project: WorkflowProject }) {
               <p className="mt-1 text-xs" style={{ color: 'var(--isl-ink-soft)' }}>Draft v{latestReceipt.resultDraftVersion} · {receiptStatus(latestReceipt.status)}</p>
             </div>
           ) : (
-            <p className="mt-2 text-xs leading-5" style={{ color: 'var(--isl-ink-soft)' }}>尚无执行回执。请回到当前 Director Host 描述这次的制作目标。</p>
+            <p className="mt-2 text-xs leading-5" style={{ color: 'var(--isl-ink-soft)' }}>尚无执行回执。请在协作 Agent 中描述这次的制作目标。</p>
           )}
         </div>
       </div>
@@ -56,7 +56,7 @@ export function ProductionCrewPanel({ project }: { project: WorkflowProject }) {
 
 function StatusCard({ icon, label, value }: { icon: JSX.Element; label: string; value: string }) {
   return (
-    <div className="rounded-xl border p-4" style={{ borderColor: 'var(--isl-line)', background: 'var(--isl-surface)' }}>
+    <div className="rounded-xl border p-4" style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-surface)' }}>
       <div className="mb-3" style={{ color: 'var(--isl-mint)' }}>{icon}</div>
       <small className="block text-[10px] font-bold tracking-[0.12em]" style={{ color: 'var(--isl-ink-soft)' }}>{label}</small>
       <strong className="mt-1 block text-xs" style={{ color: 'var(--isl-ink)' }}>{value}</strong>

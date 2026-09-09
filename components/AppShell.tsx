@@ -25,17 +25,22 @@ export const AppShell: React.FC<AppShellProps> = ({
   onDrop,
 }) => (
   <div
-    className="theme-aware relative w-screen h-screen flex flex-col overflow-hidden font-sans"
+    className="app-shell theme-aware relative flex w-full min-h-0 flex-col overflow-hidden font-sans"
     style={{ backgroundColor: themeBackground }}
     onDragOver={onDragOver}
     onDrop={onDrop}
   >
-    <div className="shrink-0">{topBar}</div>
-    <OfflineNotice />
-    <div className="min-h-0 flex flex-1 relative">
-      {leftSidebar && <div className="shrink-0">{leftSidebar}</div>}
-      <div className="min-w-0 min-h-0 flex-1 relative flex flex-col">{main}</div>
-      {rightSidebar && <div className="shrink-0">{rightSidebar}</div>}
+    <div className="app-shell__topbar">{topBar}</div>
+    <div className="app-shell__workspace">
+      <div className="app-shell__offline"><OfflineNotice /></div>
+      <div
+        className="app-shell__content"
+        data-sidebar-layout={leftSidebar || rightSidebar ? 'with-sidebars' : 'main-only'}
+      >
+        {leftSidebar && <div className="app-shell__left-sidebar">{leftSidebar}</div>}
+        <div className="app-shell__main">{main}</div>
+        {rightSidebar && <div className="app-shell__right-sidebar">{rightSidebar}</div>}
+      </div>
     </div>
     {bottomDock && <div className="pointer-events-none absolute inset-x-0 bottom-4 z-40 flex justify-center px-4">{bottomDock}</div>}
     {overlays}

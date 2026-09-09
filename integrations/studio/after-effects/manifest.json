@@ -1,0 +1,9 @@
+{
+  "id": "com.flovart.studio.after-effects",
+  "name": "Flovart",
+  "version": "0.3.2",
+  "runtime": "CEP",
+  "host": "AEFT",
+  "entry": "CSXS/manifest.xml",
+  "panel": "index.html"
+}

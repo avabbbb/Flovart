@@ -4,6 +4,25 @@ title: 待测试确认
 
 本页只记录当前版本已经进入代码或文档、但仍需用户确认的变更。旧版本的 Canvas、Art、Excalidraw、MCP、Managed/Connected Agent 与阶段施工流水不再保留在这里；需要追溯时使用 Git 历史。完成用户验收后，再把稳定能力更新到[功能特性](../overview/features.mdx)。
 
+## Flovart Link 2.0 与 Studio Host Platform
+
+- `#/dock` 与主 `#/app` Agent 入口已完成 Responsive App Shell + Agent Link Surface 重构：App shell 使用 `100dvh`/`minmax(0, 1fr)`，Dock Bridge 从绝对定位改为 Grid 列并在窄屏落到底部，Agent workspace 删除百分比 separator 和逐像素 resize listener。
+- 未连接的普通路径现在先显示当前 Agent、四态状态、当前 Workflow 和主 CTA；`Agent 地址`、`Token`、Writer、Projection、Binding 与 diagnostics 仅在折叠的 Developer connection/diagnostics 中出现。公共 Agent 卡使用 container queries，可复用到完整 App、侧栏和 Creative Host Panel。
+- `docs/design/responsive-ui/CURRENT_LAYOUT_AUDIT.md` 记录了旧 sizing model、根因、受影响窗口和修复模型；Chromium screenshot artifact 覆盖 `2560×1440` 至 `390×844`、Dock Bridge、主 App Agent 和 live resize stress，当前本机布局检查通过。
+- 待用户确认：从 `390px` 拖到 `2560px` 时主 CTA、Agent 卡和 Advanced 仍符合产品优先级；短高窗口内部滚动是否符合实际工作习惯；深色主题下同一组卡片的对比度和信息密度是否达到发布标准。
+
+- Agent picker 已改为“协作 Agent”，普通路径只显示 Codex、WorkBuddy、DeepSeek Harness 和四种产品状态：`ready`、`needs_setup`、`needs_login`、`offline`。URL、Token、Port、Writer、Projection 和 Binding 只保留在开发者诊断表面。
+- `services/link/` 已收敛 Host Definition、registry、默认 discovery/prepare/activate、public status 与 `ensureHostReady`；`flovart ensure --json` 复用现有启动器，不启动第二个 Runtime。
+- Browser bootstrap 默认走一次性 issue → exchange → session credential，地址栏参数会 scrub；Agent 的 Browser-bound Workflow 没有 workspace 时返回 `WORKSPACE_UNAVAILABLE`，不会切到旧项目或随机 Tab。
+- Workspace Lease 已覆盖 acquire、validate、renew、release、expire，并在 inspect/selection/apply/node.run 前固定 Agent、Browser client、project 和 revision；跨项目、Tab close、过期、revision conflict 与重复 mutation 已有 focused tests。
+- WorkBuddy 已生成 official-shape `connector-meta.json`、`cli.json`、icon、Skill/reference；package/clean fixture/schema 检查通过，但 WorkBuddy 客户端、Marketplace 和自然语言 tracer 未被 mock 冒充。
+- DSH 已提供 `ctx.flovart` service、五个稳定工具和 RC8 packed profile install/`--dump-config`；Cordis service unload/reload 已有临时 CLI 进程的 contract test，但真实登录、可见 Browser Workflow tracer 和发布升级回滚仍待外部验证。DSH 不再创建 Native Draft。
+- Photoshop/Premiere/After Effects/Resolve Studio 已有共享 `CreativeHostAdapter`、`creative-host` Resource Contract、compact inspector 与宿主 package build；真实宿主的 materialize、I2I、artifact 回写分别记录在 Studio checklist，不能标 Stable。
+- Agent Skill projections 现在优先使用已安装的 `flovart` 命令；直接在 source checkout 工作时明确回退到 `npm run flovart:cli --`，不再让 `npx` 自动查询未发布或不受信任的 registry 包。
+- Resolve Studio 的“展开 Flovart 画布”只接受显式 `FLOVART_CANVAS_URL` 或 launcher 写入的 `FLOVART_WEB_DISCOVERY` loopback discovery，并统一打开 `#/app`；没有已启动 WebUI 时 fail closed，不再回退到固定端口。该边界由 `studioResolveCanvasUrl` 回归覆盖。
+
+待确认/External Gate：真实 Codex conversation、WorkBuddy 客户端、DSH 登录会话与 Browser Workflow tracer、Photoshop Layer → I2I → New Layer、Premiere Clip/Frame → Artifact → Project import、After Effects CEP layer tracer、Resolve Studio Workflow Integration Media Pool tracer。contract/mock/package 证据只证明边界，不替代这些验证。
+
 ## Release Candidate Hardening：发行候选验收
 
 - 已建立 `docs/evidence/release-candidate/RC_BASELINE.md`、安装器/迁移/持久化/Canvas stress/资源/accessibility/security/plugin/provider/Host chaos/updater/offline/diagnostics/red-team 证据文档；本机自主验收不等同于真实账号、付费接口或生产发布认证。
@@ -51,7 +70,7 @@ title: 待测试确认
 - 新增版本化 Host Registry，把 Agent Identity、IDE Host、Distribution Target、Runtime Surface 和 Director Runtime Binding 分开；`init --target` 负责安装投影，`director.*` 只接受能映射到已实现 Runtime Binding 的 Agent Identity。
 - `host.list` 只做 PATH 可执行文件发现，不读取登录文件、OAuth 或 API Key；Agent Host picker 只保存后续任务偏好，不自动切换 Director 会话。
 - 内置 Agent 模型工具固定为 `status`、`workflow.inspect`、`workflow.selection.get`、`workflow.apply`、`workflow.node.run`。`command.list` / `command.schema` 仍可用于 CLI bootstrap、discovery 和 debug，但不再进入模型工具集合。
-- Codex 是当前 professional golden path；DeepSeek Harness 保留显式 native Plugin projection；CodeBuddy Code、Claude Code、OpenCode、Pi 通过 stable Skill + CLI contract 兼容。WorkBuddy 仅作为未来 mainstream、skill-mediated projection 候选，不加入 `director.bind`，不阻塞本轮验收。
+- Codex 是当前 professional golden path；DeepSeek Harness 通过 Browser-only contextual Plugin projection 接入同一可见 Workflow authority；CodeBuddy Code、Claude Code、OpenCode、Pi 通过 stable Skill + CLI contract 兼容。WorkBuddy 通过独立 Connector artifact 接入，不要求用户执行 `director.bind`。
 - Settings 中 Runtime 凭证与浏览器 AI 服务保持不同安全边界：Runtime 路由只展示非敏感元数据，浏览器直连凭证继续渐进披露；PromptBar 使用“AI 服务/访问凭证”产品词汇。
 
 待用户确认：
@@ -133,16 +152,16 @@ title: 待测试确认
 ## Browser Workflow Contract 与 Local Agent binding（Phase F0）
 
 - 新增版本化 `BrowserWorkflowContract`：`WorkflowAgentBridge` 只把 Workflow 命令交给浏览器 Contract，Contract 再进入现有 Dispatcher、Draft Authority 与 `WorkflowExecutor`；Bridge 不直接组装第二套 React/Provider 执行路径。
-- 普通 Vite 浏览器支持显式 loopback Agent binding：`#/dock` 现在明确是开发者配对/调试面，只有 `/crew/protocol` 认证成功后才把连接放入当前页面内存并通知可见 Workflow adapter；已保存的本地配对可在普通 `#/app` 启动时恢复，Tauri 仍只使用受限 IPC discovery。
-- Local Agent Session 不再在没有浏览器连接时自动启用 native workspace；native Workflow 只有经过明确的 `/workflow/native/register` 才能成为当前会话的执行 authority。
+- 普通 Vite 浏览器支持显式 loopback Agent binding：`#/dock` 默认是面向用户的 Local Agent/协作入口，只有展开 Developer connection 后才进入手工配对/调试面；只有 `/crew/protocol` 认证成功后才把连接放入当前页面内存并通知可见 Workflow adapter；已保存的本地配对可在普通 `#/app` 启动时恢复，Tauri 仍只使用受限 IPC discovery。
+- Local Agent Session 在没有浏览器连接时只返回 Workspace unavailable；不存在 `/workflow/native/register` 或隐藏 Workflow authority。
 - `workflow.node.run/stop` 已在 canonical Registry 中标记为 `available`，但仍只由 Workspace Adapter 转发到浏览器 Workflow Executor，不会变成 Production Runtime 的第二套执行器或内置 Agent 的默认工具。
 - CLI 仍只通过 loopback Workspace Adapter 调用浏览器，浏览器 Workflow 继续拥有节点、连线、Draft 与运行入口；本阶段没有新增私有 HTTP、shadow state 或 PromptBar Provider 分支。
 
 待用户确认：
 
 1. 启动 `npm run flovart:agent` 后，在 `#/dock` 输入 Agent 配对信息，确认 Dock 与 Workflow 都显示已连接，且 `workspace.status` 返回浏览器 Workspace `ready`。
-2. 浏览器配对后通过 CLI 执行 `workflow.project.list`、`workflow.inspect` 和一个可撤销节点变更，确认 CLI 看到并修改的是当前可见 Workflow，而不是 native 文件状态。
-3. 关闭或未配对浏览器时，CLI/Agent 应诚实返回 Workspace 不可用；不能自动创建或读取 native Workflow。只有显式 native 注册的 DSH/Runtime 场景才允许走 Native Draft。
+2. 浏览器配对后通过 CLI 执行 `workflow.project.list`、`workflow.inspect` 和一个可撤销节点变更，确认 CLI 看到并修改的是当前可见 Workflow，而不是隐藏文件状态。
+3. 关闭或未配对浏览器时，CLI/Agent 应诚实返回 Workspace 不可用；不能自动创建或读取隐藏 Workflow。
 4. 同一 Agent 重连或切换项目后，旧 Workflow adapter 不应继续接收命令；最新快照的 browser client 才能成为命令目标。
 5. 记录真实使用的 Agent URL、HTTP 响应和失败状态；若端口无监听，先启动 Agent 或修正配对配置，不把连接失败归因于 PromptBar 或 Provider。
 
@@ -165,7 +184,7 @@ title: 待测试确认
 - Workflow Document Mutation 统一通过 `WorkflowMutationEnvelope → applyWorkflowOps`，包含 `projectId`、`expectedRevision`、`mutationId`、`source` 与批量 `ops`；UI、CLI、Browser Agent 和 DSH Browser projection 共用同一 Draft Authority。
 - Document Ops（节点/连线/布局）进入 Draft ChangeSet、revision 与 Undo/Redo；View Ops（selection、viewport、focus）不改变 Workflow revision；节点执行仍只经过 `WorkflowExecutor`。
 - 新增 `workflow.apply` public contract；既有 granular `workflow.*` 继续保留为 compatibility adapter，只翻译为同一批 Document Ops，不再持有独立 mutation logic。Mutation Receipt 随项目持久化，重复载荷可重放，不同载荷明确拒绝。
-- Browser-bound Agent 在没有浏览器绑定时返回 Workspace unavailable，不会隐式进入 NativeWorkflowStore；显式 Native/Headless workspace 仍保持独立边界。
+- Browser-bound Agent 在没有浏览器绑定时返回 Workspace unavailable；Native/Headless workspace 不再是可用的执行边界。
 
 待用户确认：
 
@@ -217,7 +236,7 @@ title: 待测试确认
 - Agent 的稳定 Workflow surface 已收敛为 `workflow.inspect`、`workflow.selection.get`、`workflow.apply` 与 `workflow.node.run`；`workflow.node.stop` 仍作为执行控制兼容命令存在，但不进入 Document Mutation Core。
 - `workflow.selection.get` 返回脱敏的当前选择投影，不写入 Draft、不增加 Workflow revision；Document Ops 仍通过唯一 `applyWorkflowOps`/Draft Authority，View Ops 与 Execution State 分开。
 - UI、PromptBar、CLI、Browser Agent 与 DSH Browser adapter 共用同一 mutation boundary；旧 granular `workflow.*` 只翻译为统一 operations。Agent command 默认绑定当前 Browser，先 inspect/selection，再用结构化 `workflow.apply`，生成只经 `WorkflowExecutor`。
-- 没有 Browser binding 时，Browser/Agent command 明确返回 `WORKSPACE_UNAVAILABLE`，不会隐式读取或写入 NativeWorkflowStore；DSH Native 只有请求显式携带 `workspaceMode: native` 时才走 Native adapter。
+- 没有 Browser binding 时，Browser/Agent command 明确返回 `WORKSPACE_UNAVAILABLE`，不会隐式读取或写入隐藏 Workflow；DSH 的 `workspaceMode: native/headless` 请求统一返回 `WORKSPACE_REQUIRED`。
 - Agent contract 禁止鼠标模拟、React setter/localforage Workflow graph 直读、Provider 重新解析与第二套 Runtime；Agent source 的 Workflow 命令始终强制 Browser mode。
 
 待用户确认：
@@ -228,7 +247,7 @@ title: 待测试确认
 
 ## Canvas Platform Convergence 最终集成（Phase G7）
 
-- G1-G6 已完成统一 Mutation/Generation/Agent/Provider/Plugin/Skill 契约的集成回归；Document Mutation、View State、Execution State 保持分层，Browser-bound Workflow 不会隐式回落 Native。
+- G1-G6 已完成统一 Mutation/Generation/Agent/Provider/Plugin/Skill 契约的集成回归；Document Mutation、View State、Execution State 保持分层，Browser-bound Workflow 不会隐式回落隐藏状态。
 - 使用系统 Chrome 的真实 Browser 会话验证了自动 bootstrap、`status --json` Ready、`workspace.status` 的 browser authority、UI 节点/连线/拖动/删除/Undo/Redo，以及 CLI `workflow.apply → inspect/selection` 同一 Draft 回流。
 - 真实 Browser 会话验证了 `plugin:markdown` 节点由 CLI 写入后在 Workflow 中渲染；stale revision 与 mutationId 复用错误均可见。全量 131 个测试文件、926 passed / 1 skipped，typecheck、Web build、DSH build 和 diff check 均通过。
 
@@ -244,8 +263,8 @@ title: 待测试确认
 - ADR 0066 与 SPEC-005 固定 DSH Mode 的导航规则：有效 Session 内始终显示 Flovart view；Runtime offline、Agent unavailable 或 Provider unavailable 只阻断对应动作，不隐藏入口；P0 不伪造 DSH 全局 Flovart 页面。
 - 新增 SPEC-001 至 SPEC-004，固定 DSH/Flovart P0 的 `ctx.flovart` Service、显式 Session/Project Binding、`expectedRevision + mutationId` 变更契约，以及由 Flovart Runtime 事件重建的 Conversation Node / DSH Job 投影。
 - ADR 0061 固定系统只有两个 AI 角色：External Coding Agent Harness 是导演台，Workspace Operator 是唯一内置执行 Agent；Production Crew、Dispatcher、Runtime Worker 与 Review Tool 都不是额外 Agent。
-- ADR 0062 固定 DeepSeek Harness 主壳中的 Flovart 原生画布边界：专用 Flovart Profile；session-scoped `conversation.view` 直接渲染原生 Workflow 节点画布，Runtime 持有 Native Draft，当前 Harness 会话建立 DeepSeek Director Binding；WebUI/Dock 只作为 Table、Provider 和恢复降级入口。
-- Coding Agent projections 共享 Operation Skill + CLI 模型工具基线；Codex 是当前 professional golden path，DeepSeek Harness 额外保留显式 native Plugin projection，其余 Coding Agent 通过稳定 contract 兼容。WorkBuddy 属于未来 mainstream projection，不在本轮 Director Binding 范围内。
+- ADR 0063 取代 ADR 0062：DeepSeek Harness 使用专用 Flovart Profile；session-scoped `conversation.view` 只摘要可见 Browser Workflow，`ctx.flovart` 和工具通过同一 stable contract 操作；不保存 Native Draft。
+- Coding Agent projections 共享 Operation Skill + CLI 模型工具基线；Codex 是当前 professional golden path，DeepSeek Harness 通过 contextual Plugin projection 接入同一 Browser authority，其余 Coding Agent 通过稳定 contract 兼容。WorkBuddy 仍待官方客户端实测。
 - 明确一对一 Director Session Binding、显式 Handoff、独立 Operator Model Route、Operator Assistance Budget、Production Session Workspace、首次安装确认、兼容集原子升级/回滚与 Harness 崩溃后 ProductionRun 继续运行。
 - 已删除迁移跳转壳、损坏的 Docker 指南、过期面试快照、已完成的 RunningHub/S0-S1 施工清单与 LibTV 旧版本对照；现行入口统一回到 `docs/index.md`、ADR、Route Catalog、Runtime 契约和本设计包。
 - `docs/README.md` 已收缩为 7 个公开页面入口；Agent 设计、ADR、Runtime 与后端契约只通过内部索引进入，不再在面向使用者的首屏逐篇展开。
@@ -254,7 +273,7 @@ title: 待测试确认
 待用户确认：
 
 1. 任一入口是否都能一眼看出只有“外部导演 + 内置 Operator”两个 AI 角色。
-2. 是否清楚 Codex 是当前 professional golden path、DSH 是显式 native Plugin projection，其它 Coding Agent 走 stable CLI compatibility；WorkBuddy 不在当前 Director Binding。
+2. 是否清楚 Codex 是当前 professional golden path、DSH 是接入同一 Browser authority 的 Native Plugin，其它 Coding Agent 走 stable CLI compatibility；WorkBuddy 不在当前 Director Binding。
 3. 是否清楚 DeepSeek Harness 是主壳、Flovart 是 Dock/Workspace 插件，模型工具仍以 CLI 为权威，而完整工作区 UI/事件不是 CLI 轮询。
 4. [迁移与验收](../../../design/agent/10-migration-and-acceptance.md) 是否可以直接拆成后续实现批次。
 
@@ -273,16 +292,20 @@ title: 待测试确认
 4. 相同 `idempotencyKey + payload` 重放原 Receipt，不同 payload 返回 `IDEMPOTENCY_CONFLICT`；`director.bind` 的 Registry/Adapter 契约已覆盖五类支持的 Agent Identity，实际外部 Host 可用性以本页 External Agent 证据与待确认项为准。
 5. 无浏览器连接时提交 Intent 返回诚实失败（`OPERATOR_FAILED`/无法读取 Workflow），不伪造完成。
 
-## DeepSeek Harness 插件包（S3B Harness 侧纵切）
+## DeepSeek Harness 插件包（S3B 历史记录，当前实现以 Link 2.0 为准）
 
-- `@flovart/dsh-plugin` 现在只注册 RC8 原生 `conversation.view` 与 `shell.overlay`，并按公开 `ctx.slots.inject(...)` 生命周期挂载；不占用根 `sidebar` / `conversation` / `conversation.session`，也不再注册 `sidebar.footer.action`。
+> 本节早期施工记录中的 Native Draft、Production Brief 和绑定恢复描述已被
+> [ADR 0063](../../../adr/0063-dsh-browser-workflow-authority.md) 取代，不能作为当前
+> DSH 验收证据。当前插件只读当前可见 Browser Workflow，不创建隐藏副本。
+
+- `@flovart/dsh-plugin` 现在只注册 RC8 contextual `conversation.view` 与 `shell.overlay`，并按公开 `ctx.slots.inject(...)` 生命周期挂载；不占用根 `sidebar` / `conversation` / `conversation.session`，也不再注册 `sidebar.footer.action`。
 - `npm run dsh:start` 会安装匹配的 `0.1.0-rc.8` Profile、准备 Workspace-only Operator、注入 Host 私有连接信息，再以随机可用端口启动 Harness；默认开发与 Tauri 启动不再预热 ManagedAgent。
-- Browser Client 只调用 Harness 同源 `/flovart-workspace`；Host 白名单仅转发健康检查、原生工作页注册、Workflow 命令和 Director Binding。Workspace Token 不进入浏览器、节点、Draft、回执或 Provider 参数。
-- Native Workflow Store 不再在激活时制造空项目；没有内容或已有项目为空时，原生页先显示 Production Brief，引导创建首个文本节点，也允许显式空白开始。
-- Agent 主入口和 Workflow 右侧区已由第二套 Flovart 聊天改为 Production Crew 状态面；当前入口显示 Host Projection/Director Binding 摘要，不把某个 Coding Agent 写死为唯一产品 Host。
-- RC8 Client bundle 继续满足 `window.__ModuleLoader__.load({id, factory})` 契约；新增 Slot 注册、同源代理、Brief 引导、Workspace Store 和默认启动行为回归测试。
+- Browser Client 只调用 Harness 同源 `/flovart-workspace`；Host 白名单仅转发 health 与受限 Workflow tools。Workspace Token 不进入浏览器、节点、Draft、回执或 Provider 参数。
+- Contextual view 只显示当前可见 Browser Workflow；没有 Browser Workspace 时 fail closed，不制造 Native Draft 或第二套画布。
+- DSH 工具和 `ctx.flovart` 只通过稳定 CLI contract 操作可见 Browser authority；Host 私有凭证不进入浏览器。
+- RC8 Client bundle 继续满足 `window.__ModuleLoader__.load({id, factory})` 契约；当前 view、同源代理和 Browser-only 生命周期已有 contract/build 测试。
 
-已完成的真实验收（DeepSeek Harness `0.1.0-rc.8`）：
+历史版本的真实验收记录（不计入当前 Link 2.0 放行）：
 
 1. 真实 Profile 安装与 `--dump-config` 通过；Harness 启动后插件进入 boot 图谱，`Flovart` 原生页签可见。
 2. 首屏展示 Production Brief，引导创建后进入 `Draft v2`，画布出现 `Production Brief` 节点并绑定当前 Harness Session。
@@ -297,15 +320,15 @@ title: 待测试确认
 
 ## DeepSeek Dock 插件页面（S3B Flovart 侧纵切）
 
-- 新增 `#/dock` 可嵌入路由：左侧固定 Flovart Dock（waiting/error/Artifact 徽标）、中央 Production Control（Director Binding、Intent 提交/列表/取消、Receipt 详情、Crew 事件流、产物汇总）、右侧可折叠 Agent Bridge（已发现 Host Projection 连接状态与单导演说明）。
+- 新增 `#/dock` 可嵌入路由：左侧 Flovart Dock（waiting/error/Artifact 徽标）、中央 Agent Link/Production Control（默认展示协作状态与主 CTA，连接后保留 Intent、Receipt、Crew 事件流和产物汇总）、右侧可折叠协作 Agent picker；内部 Host Projection 与单导演说明只进入开发者 diagnostics。
 - 新增 `flovart-dock` v1 postMessage 协议：Harness 可发送 `handshake / focus-surface / theme / session.bound / session.unbound`，Flovart 发布 `ready / badges / intent.status / receipt.completed / open-surface / open-window`；版本不匹配时保留只读模式并输出可复制 CLI 命令。
 - 前端 Crew 客户端复用同一 loopback + 短期 Token 通道（`flovart.agent.url` / `flovart.agent.token`），只允许本机 loopback；配对失败留在连接面并返回 `{ code, message, retryable }`，不向 Harness 泄漏凭据，也不再盲探测未监听的默认端口。
-- `dsh-plugin/assembly.json` 兼容集清单与 README 现在锁定原生 `conversation.view`、Native Runtime Draft、CLI 工具派生、隐私边界和 WebUI 降级入口；历史 Dock 协议仍服务 Flovart 侧控制页，不是原生画布主协议。
+- `dsh-plugin/assembly.json` 兼容集清单与 README 现在锁定 contextual `conversation.view`、Browser Workflow authority、CLI 工具派生和隐私边界；历史 Dock 协议仍服务 Flovart 侧开发者控制页，不是 DSH 主入口。
 - `#/dock` 保留为独立 Flovart 控制/调试表面，不再由 Harness 侧栏或原生页主路径打开；Table/Provider 高级面仍属于独立 WebUI。会话切换、崩溃恢复和升级回滚继续待测。
 
 待用户确认：
 
-1. `#/dock` 页面在本机浏览器/独立窗口可打开，未连接时明确显示开发者配对说明，不把未认证状态误显示为 Director/制作控制已连接。
+1. `#/dock` 页面在本机浏览器/独立窗口可打开，未连接时先显示当前 Agent 的离线/准备状态与主 CTA；展开 Developer connection 后仍可完成手工配对，不把未认证状态误显示为 Director/制作控制已连接。
 2. 连接 Workspace Operator 后能提交有界 Intent、看到真实执行状态与 Receipt，画布 ChangeSet 同步可见。
 3. 模拟 Harness postMessage `focus-surface` 可切换表面，徽标随 waiting/error/Artifact 计数更新。
 4. Agent Bridge 明确显示“同一项目只有一个 Active Director，切换必须显式 Handoff”。
@@ -410,10 +433,11 @@ title: 待测试确认
 - DSH 已真实完成 profile install、dump-config、boot、浏览器无 plugin error，以及隔离 Native Workspace 的 `create/apply/inspect`；Workspace Operator 被精确终止后自动重启，Native view 增加重注册；重启后的 CLI 已完成 Director bind/handoff/status，旧 Binding 归档。没有可见 Browser Workflow 或 Provider 时，`run` 明确返回不可用，不伪造执行结果；profile uninstall 只移除应用管理的 Flovart profile。
 - Claude Code 与 OpenCode 已分别完成真实 `status → workflow.inspect → workflow.apply → workflow.inspect` CLI tracer，未调用 Provider；临时节点及清理 receipt 记录在 `C:\tmp\flovart-external-host-tracers-20260829.json`。
 - Host Picker 已完成真实浏览器 smoke：从带 bootstrap 的 `/app` 进入 Agent Workspace，显式选择 Claude Code 后，认证请求 `/hosts/prepare` 返回 200，页面显示“Claude Code 的 Flovart Skill 已准备”；选择 DeepSeek Harness 显示“由其 Plugin/Profile 管理”，WorkBuddy 仍为禁用的未来入口。地址栏已清理，普通 UI 未泄露连接实现细节。证据在 `C:\tmp\flovart-host-projection-20260829.json`、`C:\tmp\flovart-host-projection-20260829.png`、`C:\tmp\flovart-dsh-picker-smoke-20260829.json` 与 `C:\tmp\flovart-dsh-picker-smoke-20260829.png`，不含原始 Token。
-- Host Picker 的发现请求已与 CLI/诊断分层：页面只请求轻量 PATH 发现（`includeVersion=false`），不会为普通选择器同步探测版本；版本与可执行文件详情仍只在 `host.list`/Advanced Diagnostics 中提供。完整 Vitest 为 136 个文件通过、972 passed、1 skipped（973 total）。
+- Host Picker 的发现请求已与 CLI/诊断分层：页面只请求轻量 PATH 发现（`includeVersion=false`），不会为普通选择器同步探测版本；版本与可执行文件详情仍只在 `host.list`/Advanced Diagnostics 中提供。当前完整 Vitest 为 169 个文件、1091 passed、1 skipped；Windows 默认 worker 上限固定为 4 以避免 fork/句柄争用。
 - 开发者 Dock 的未绑定 Director 状态不再用时间戳伪造 DSH sessionId；现在只提供可复制的显式 `director.bind` 命令，真实 Harness/Plugin Session 才能建立绑定。
 - 打包路径已补齐：`npm pack --dry-run` 包含 Agent/Host/Skill 模块；隔离临时项目实际启动 packaged Managed Agent，PATH discovery 返回 7 个 Host，并把 Codex projection 写入调用方项目而不是 bundle 目录。Toolkit launcher 传递调用方 `FLOVART_PROJECT_DIR`，失败启动会清理子进程；脱敏记录为 `C:\tmp\flovart-packaged-agent-smoke-20260829.json`。
 - 新鲜 bootstrap 浏览器会话已通过 canonical CLI tracer：自动认证并激活 writer 后，`workflow.inspect → workflow.apply → workflow.inspect` 实际新增两个节点、移动、修改、连线并在页面显示；记录为 `C:\tmp\flovart-canonical-cli-browser-golden-20260829.json`，截图为 `C:\tmp\flovart-codex-golden-20260829.png`。这是 CLI/Browser 闭环证据，不替代用户登录 Codex 后的真实对话验收。
+- 本机 ChatGPT-authenticated Codex `exec` 已在同一隔离 Chrome/动态端口会话中完成首次连接验收：`ensure → workflow.inspect` 返回 `state: ready`、`projectId` 和 `revision: 1`，未调用 Provider、未修改仓库；首次请求出现 WebSocket 重试但最终正常结束。该证据证明 Codex CLI 与可见 Workflow 的闭环，不替代用户实际新对话 transcript。
 - 安全执行 fixture 已在真实 Browser binding 上通过：隔离临时 Workflow 先用本地 `image.crop@1` 建立 Operation，再由 `workflow.node.run --agent-identity codex` 成功追加 Take 和输出节点；未调用 Provider 或付费接口，随后删除临时项目并恢复原项目 revision 10。证据为 `C:\tmp\flovart-browser-node-run-local-fixture-20260829.json`；Provider 成功仍仅由已有 fake/wire 测试覆盖。
 - granular `workflow.node.tool` CLI 适配器已补齐数值、数组及 dashed alias 的参数归一化，避免字符串 flag 直接触发严格 Operation schema 拒绝；`workflowCli` + `workflowDispatcher` 聚焦回归 26/26 通过。该命令仍是 CLI compatibility adapter，不进入五个模型-facing tools。
 - DSH CLI 的 object/array 参数已改为 JSON flag；Rust Runtime Registry Hash 与 canonical registry 已重新对齐，Rust 全量 targets 通过。
@@ -421,7 +445,7 @@ title: 待测试确认
 
 待用户/外部环境确认：
 
-1. 登录 Codex CLI 后，从新 Codex 对话执行“打开 Flovart”，确认 0 次 URL、Token、端口、JSON 手工配置，并保存 transcript；当前机器 `codex login status` 为 `Not logged in`，此前 `codex exec` 返回 401，未触发付费请求。
+1. 从用户实际新 Codex 对话执行“打开 Flovart”，确认 0 次 URL、Token、端口、JSON 手工配置，并保存 transcript；当前机器 `codex login status` 已显示 `Logged in using ChatGPT`，本机 `codex exec` 首次连接 smoke 已通过，仍需用户可见对话确认。
 2. 首次执行 `flovart start --open`、Host 切换和手动画布增删改连线的用户可见确认；默认启动的命令级证据已通过。
 3. DSH 真实登录态页面重载、升级回滚以及 Browser/Native Authority transfer；Workspace 崩溃重启、state isolation、多 Session Handoff 和 profile uninstall 已有本机证据。
 4. Provider 仍只使用 local fake/wire fixture；真实付费图像或视频生成、账单、取消和生产发布需单独批准。
@@ -432,6 +456,6 @@ title: 待测试确认
 - Desktop release workflow 的写权限与 attestation 权限已从全局收窄到实际发布 job；YAML 权限范围由 release red-team 检查。
 - 当前候选已重新构建并通过 NSIS artifact checksum/SBOM 校验、安装、启动、优雅关闭和卸载；Hosted CodeQL、生产签名、GitHub 发布和真实 Provider/Codex 认证仍是外部门禁。
 - 浏览器启动回归已改用独立 Chrome for Testing profile：普通动态 WebUI origin 不会建立 Browser binding，带一次性 bootstrap 的页面真实建立 `clients=1 / hasWorkflow=true`；源码 WebUI 与 Browser Agent 通过 `--web-port=0 --agent-port=0` 使用随机 loopback 端口，故意占用 `37522` 时也会自动回退且不触碰占用者。Windows 默认 Edge 不再作为自动化验收浏览器。
-- Skill 启动说明和 `web.open` 无服务提示已移除“单独运行 `npm run dev` 即可连接 Agent”的歧义；源码路径统一使用 `flovart-cli start --source --web --open`，并明确 `37522` 只是首选端口、普通 origin 不含 Browser bootstrap。当前工作树复跑 full Vitest `154 files / 1035 passed / 1 skipped`、docs/version/red-team/secret、TypeScript、Web、扩展、DSH、Rust 和 critical `10/10` 均通过。
+- Skill 启动说明和 `web.open` 无服务提示已移除“单独运行 `npm run dev` 即可连接 Agent”的歧义；源码路径统一使用 `flovart-cli start --source --web --open`，并明确 `37522` 只是首选端口、普通 origin 不含 Browser bootstrap。当前工作树复跑 full Vitest `169 files / 1091 passed / 1 skipped`，Rust/docs/typecheck/Web/扩展/DSH/Studio package 均通过；真实宿主/登录和 hosted release gates 仍待完成。
 - Skill projection 的 Node.js 最低版本已与 `package.json` 的 `22.19.0` 对齐；docs contract 现在从 package engine 自动校验三份源投影与生成投影，避免 clean install 按过时版本说明执行。
-- 自动化浏览器验收现在固定使用 Playwright Chrome for Testing、隔离 profile 与 `--no-open --web-port=0 --agent-port=0`；当前复跑为 `clients=1 / hasWorkflow=true`、零 console/page error，且 `37522/17373/1635` 均无残留监听。Docker Compose 的 Web 端口默认值已与实现对齐为 `1635`，冲突时由 launcher 按实际依赖闭包选择可用且互不重复的 host port；Dockerfile 也已从 Node 20 对齐到 Node 22。当前工作树新增回归后 focused dev-command 为 `20/20`、full Vitest 为 `154 files / 1040 passed / 1 skipped`，DSH audit 固定官方 registry 后为 `0 vulnerabilities`。
+- 自动化浏览器验收现在固定使用 Playwright Chrome for Testing、隔离 profile 与 `--no-open --web-port=0 --agent-port=0`；当前复跑为 `clients=1 / hasWorkflow=true`、零 console/page error，且 `37522/17373/1635` 均无残留监听。Docker Compose 的 Web 端口默认值已与实现对齐为 `1635`，冲突时由 launcher 按实际依赖闭包选择可用且互不重复的 host port；Dockerfile 也已从 Node 20 对齐到 Node 22。当前工作树新增回归后 focused dev-command 为 `20/20`、full Vitest 为 `169 files / 1091 passed / 1 skipped`，DSH audit 固定官方 registry 后为 `0 vulnerabilities`。

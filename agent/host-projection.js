@@ -24,7 +24,14 @@ export function prepareAgentHostProjection(input = {}) {
 
   const discovery = (input.discover || (() => discoverAgentHosts({ includeVersion: false })))();
   const host = discovery.agents?.find(item => item.id === identity.id);
-  if (!host?.available) return failure('HOST_UNAVAILABLE', `${identity.label} 当前未在本机就绪。`, { agentIdentity: identity.id });
+  if (!host?.available && identity.status !== 'manual-import') return failure('HOST_UNAVAILABLE', `${identity.label} 当前未在本机就绪。`, { agentIdentity: identity.id });
+
+  if (identity.status === 'manual-import') return {
+    ok: true,
+    agentIdentity: { id: identity.id, label: identity.label },
+    distributionTarget: { id: 'workbuddy-skill', label: 'WorkBuddy 技能包', kind: 'skill' },
+    projection: { status: 'external', skillReady: false, bootstrapReady: false, message: '在 WorkBuddy 的技能页导入下载的 Flovart 技能包，再发送连接指令。' },
+  };
 
   const target = projectionTarget(identity);
   if (!target) {

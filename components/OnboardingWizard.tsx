@@ -23,6 +23,7 @@ import React, { useState } from 'react';
 import type { AIProvider, AICapability, ModelItem, UserApiKey } from '../types';
 import { validateApiKey } from '../services/aiGateway';
 import { fetchModelsForProvider, type FetchModelsResult } from '../services/modelFetcher';
+import '../styles/onboarding.css';
 
 interface OnboardingWizardProps {
     /** 是否显示弹窗 */
@@ -283,13 +284,14 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
     };
 
     return (
-        <div className="fixed inset-0 z-200 flex items-end justify-center bg-black/40 backdrop-blur-sm sm:items-center">
+        <div className="onboarding-overlay fixed inset-0 z-200 flex items-end justify-center bg-black/40 backdrop-blur-sm sm:items-center">
             <div
-                className={`relative flex max-h-[calc(100dvh-0.5rem)] w-full max-w-120 flex-col overflow-hidden rounded-t-4xl border shadow-[0_48px_120px_rgba(0,0,0,0.2)] sm:max-h-[calc(100dvh-2rem)] sm:w-[90%] sm:rounded-4xl ${cardBg}`}
+                className={`onboarding-dialog relative flex max-h-[calc(100dvh-0.5rem)] w-full max-w-120 flex-col overflow-hidden rounded-t-4xl border shadow-[0_48px_120px_rgba(0,0,0,0.2)] sm:max-h-[calc(100dvh-2rem)] sm:w-[90%] sm:rounded-4xl ${cardBg}`}
+                data-testid="onboarding-dialog"
                 onClick={(e) => e.stopPropagation()}
             >
                 {/* ── 进度指示器（固定顶部） ── */}
-                <div className="shrink-0 px-8 pt-8 pb-2">
+                <div className="onboarding-dialog__progress shrink-0 px-8 pt-8 pb-2">
                     <div className="flex justify-center gap-2">
                         {STEPS.map((_, i) => (
                             <div
@@ -307,7 +309,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                 </div>
 
                 {/* ── 滚动内容区 ── */}
-                <div className="min-h-0 flex-1 overflow-y-auto px-8 pb-8">
+                <div className="onboarding-dialog__body min-h-0 flex-1 overflow-y-auto px-8 pb-8">
 
                 {/* ── Step 0: 欢迎页 ── */}
                 {step === 0 && (
@@ -392,7 +394,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                             <label htmlFor="onboarding-api-key" className={`mb-2 block text-xs font-semibold uppercase tracking-wider ${textSecondary}`}>
                                 API Key
                             </label>
-                            <div className="relative">
+                            <div className="onboarding-key-field relative">
                                 <input
                                     id="onboarding-api-key"
                                     value={apiKey}
@@ -404,13 +406,15 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                                     onKeyDown={handleKeyDown}
                                     type={showKey ? 'text' : 'password'}
                                     placeholder={provider === 'google' ? 'AIzaSy...' : 'sk-...'}
-                                    className={inputClass}
-                                    autoFocus
+                                    className={`${inputClass} pr-16`}
+                                    name="apiKey"
+                                    autoComplete="off"
+                                    spellCheck={false}
                                 />
                                 <button
                                     type="button"
                                     onClick={() => setShowKey(prev => !prev)}
-                                    className={`absolute right-3 top-1/2 -translate-y-1/2 text-xs ${textSecondary} hover:${textPrimary}`}
+                                    className={`onboarding-key-field__toggle absolute right-3 top-1/2 -translate-y-1/2 text-xs ${textSecondary} hover:${textPrimary}`}
                                 >
                                     {showKey ? '隐藏' : '显示'}
                                 </button>
@@ -433,6 +437,9 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                                     onKeyUp={event => event.stopPropagation()}
                                     placeholder="https://api.example.com/v1"
                                     className={inputClass}
+                                    name="baseUrl"
+                                    autoComplete="url"
+                                    inputMode="url"
                                 />
                                 <p className={`mt-1.5 text-xs ${textSecondary}`}>兼容 OpenAI 接口的服务都可以使用。</p>
                             </div>
@@ -641,8 +648,8 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
 
                 {/* ── Step 1 固定底部按钮区 ── */}
                 {step === 1 && (
-                    <div className={`shrink-0 border-t px-8 py-4 ${isDark ? 'border-[#2A3140]' : 'border-[#E4E7EC]'}`}>
-                        <div className="flex gap-3">
+                    <div className={`onboarding-dialog__footer shrink-0 border-t px-8 py-4 ${isDark ? 'border-[#2A3140]' : 'border-[#E4E7EC]'}`}>
+                        <div className="onboarding-dialog__footer-actions flex gap-3">
                             <button type="button" onClick={() => { setStep(0); setError(null); }} className={secondaryBtn}>
                                 ← 返回
                             </button>

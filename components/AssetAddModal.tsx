@@ -63,15 +63,15 @@ export const AssetAddModal: React.FC<AssetAddModalProps> = ({ isOpen, onClose, p
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm" onClick={onClose}>
-            <div className="isl-panel isl-bounce-in w-[720px] max-w-[92vw] overflow-hidden" onClick={(e) => e.stopPropagation()}>
-                <div className="flex items-center justify-between p-4 border-b" style={{ borderColor: 'var(--isl-border)' }}>
-                    <strong style={{ color: 'var(--isl-ink)' }}>加入素材库</strong>
+        <div className="adaptive-modal-overlay fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm" onClick={onClose}>
+            <div role="dialog" aria-modal="true" aria-labelledby="asset-add-modal-title" className="adaptive-modal isl-panel isl-bounce-in overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                <div className="adaptive-modal__header flex items-center justify-between p-4 border-b" style={{ borderColor: 'var(--isl-border)' }}>
+                    <strong id="asset-add-modal-title" style={{ color: 'var(--isl-ink)' }}>加入素材库</strong>
                     <button onClick={onClose} className="isl-icon-btn h-8 w-8" title="关闭" aria-label="关闭">
                         <X size={18} />
                     </button>
                 </div>
-                <div className="p-4 grid grid-cols-2 gap-4">
+                <div className="adaptive-modal__body p-4 grid grid-cols-2 gap-4">
                     <div className="isl-well p-2">
                         <img src={previewDataUrl} alt="预览" className="w-full h-64 object-contain" />
                     </div>

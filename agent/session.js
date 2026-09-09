@@ -1,9 +1,15 @@
 import crypto from 'node:crypto';
-import { NativeWorkflowStore } from './native-workspace.js';
+import { WorkspaceLeaseError, WorkspaceLeaseManager } from './workspace-lease.js';
 
 const sendEvent = (response, type, payload) => response.write(`event: ${type}\ndata: ${JSON.stringify(payload)}\n\n`);
 
 const HOST_ID_PATTERN = /^[a-z0-9][a-z0-9._-]{0,79}$/;
+const LEASED_WORKFLOW_COMMANDS = new Set([
+  'workflow.inspect', 'workflow.selection.get', 'workflow.apply', 'workflow.node.run', 'workflow.node.stop',
+  'workflow.node.create', 'workflow.node.create-connected', 'workflow.node.update', 'workflow.node.delete',
+  'workflow.node.move', 'workflow.node.resize', 'workflow.node.tool', 'workflow.connect', 'workflow.disconnect',
+  'workflow.select', 'workflow.viewport.set',
+]);
 
 export class WorkflowAgentSessionError extends Error {
   constructor(code, message, details = {}) {
@@ -11,10 +17,11 @@ export class WorkflowAgentSessionError extends Error {
     this.name = 'WorkflowAgentSessionError';
     this.code = code;
     this.details = details;
+    this.retryable = ['LINK_OFFLINE', 'WORKSPACE_UNAVAILABLE', 'LEASE_EXPIRED'].includes(code);
   }
 
   toJSON() {
-    return { code: this.code, message: this.message, retryable: false, details: this.details };
+    return { code: this.code, message: this.message, retryable: this.retryable, details: this.details };
   }
 }
 
@@ -31,7 +38,7 @@ function sessionError(code, message, details) {
 }
 
 export class WorkflowAgentSession {
-  constructor({ timeoutMs = 60000, nativeWorkspace, isKnownAgentIdentity } = {}) {
+  constructor({ timeoutMs = 60000, isKnownAgentIdentity, workspaceLease } = {}) {
     this.timeoutMs = timeoutMs;
     this.clients = new Map();
     this.pending = new Map();
@@ -40,32 +47,22 @@ export class WorkflowAgentSession {
     this.activeClientId = null;
     this.activeHostWriter = null;
     this.isKnownAgentIdentity = isKnownAgentIdentity;
-    this.nativeWorkspace = nativeWorkspace || new NativeWorkflowStore();
+    this.workspaceLease = workspaceLease || new WorkspaceLeaseManager();
   }
 
   health() {
-    const native = this.nativeWorkspace.health();
     return {
       ok: true,
-      hasWorkflow: native.enabled ? native.hasWorkflow : Boolean(this.snapshot),
-      clients: native.enabled ? Math.max(1, this.clients.size) : this.clients.size,
+      hasWorkflow: Boolean(this.snapshot),
+      clients: this.clients.size,
       pending: this.pending.size,
-      activeProjectId: native.enabled ? native.activeProjectId : this.snapshot?.id || null,
-      snapshotUpdatedAt: native.enabled ? native.snapshotUpdatedAt : this.snapshot?.snapshotUpdatedAt || null,
-      clientId: native.enabled ? null : this.activeClientId || this.snapshot?.clientId || null,
-      revision: native.enabled ? null : this.snapshot?.draftVersion ?? this.snapshot?.revision ?? null,
-      activeWriter: native.enabled ? null : this.activeClientId ? { clientId: this.activeClientId, projectId: this.snapshot?.id || null } : null,
-      activeHostWriter: native.enabled ? null : hostWriterView(this.activeHostWriter),
-      nativeWorkspace: native.enabled,
+      activeProjectId: this.snapshot?.id || null,
+      snapshotUpdatedAt: this.snapshot?.snapshotUpdatedAt || null,
+      clientId: this.activeClientId || this.snapshot?.clientId || null,
+      revision: this.snapshot?.draftVersion ?? this.snapshot?.revision ?? null,
+      activeWriter: this.activeClientId ? { clientId: this.activeClientId, projectId: this.snapshot?.id || null } : null,
+      activeHostWriter: hostWriterView(this.activeHostWriter),
     };
-  }
-
-  activateNativeWorkspace() {
-    return this.nativeWorkspace.activate();
-  }
-
-  nativeWorkspaceState() {
-    return this.nativeWorkspace.state();
   }
 
   openEvents(url, response) {
@@ -81,6 +78,7 @@ export class WorkflowAgentSession {
       if (this.clients.get(clientId) !== response) return;
       this.clients.delete(clientId);
       this.snapshots.delete(clientId);
+      this.workspaceLease.revokeClient(clientId);
       if (this.activeClientId === clientId) {
         const projectId = this.snapshot?.id || null;
         this.activeClientId = null;
@@ -90,7 +88,7 @@ export class WorkflowAgentSession {
       this.pending.forEach((pending, requestId) => {
         if (pending.clientId !== clientId) return;
         this.pending.delete(requestId);
-        pending.reject(new Error('Flovart 浏览器连接已断开'));
+        pending.reject(sessionError('WORKSPACE_UNAVAILABLE', 'Flovart 浏览器连接已断开，当前 Workflow 不可用。', { clientId }));
       });
     });
   }
@@ -140,6 +138,103 @@ export class WorkflowAgentSession {
 
   hostWriterState() {
     return hostWriterView(this.activeHostWriter);
+  }
+
+  acquireWorkspaceLease(input) {
+    try {
+      return this.workspaceLease.acquire(input);
+    } catch (cause) {
+      if (cause instanceof WorkspaceLeaseError) throw sessionError(cause.code, cause.message, cause.details);
+      throw cause;
+    }
+  }
+
+  validateWorkspaceLease(input) {
+    try {
+      return this.workspaceLease.validate(input);
+    } catch (cause) {
+      if (cause instanceof WorkspaceLeaseError) throw sessionError(cause.code, cause.message, cause.details);
+      throw cause;
+    }
+  }
+
+  renewWorkspaceLease(leaseId) {
+    try {
+      return this.workspaceLease.renew(leaseId);
+    } catch (cause) {
+      if (cause instanceof WorkspaceLeaseError) throw sessionError(cause.code, cause.message, cause.details);
+      throw cause;
+    }
+  }
+
+  releaseWorkspaceLease(leaseId) {
+    return this.workspaceLease.release(leaseId);
+  }
+
+  workspaceLeaseState() {
+    return this.workspaceLease.list();
+  }
+
+  expireWorkspaceLeases() {
+    this.workspaceLease.expire();
+    return this.workspaceLease.list();
+  }
+
+  isLeasedWorkflowCommand(command) {
+    return LEASED_WORKFLOW_COMMANDS.has(command);
+  }
+
+  browserLeaseContext(boundSnapshot, clientId, args = {}) {
+    return {
+      clientId,
+      projectId: String(args.projectId || boundSnapshot?.id || ''),
+      currentClientId: clientId,
+      currentProjectId: boundSnapshot?.id || null,
+      currentRevision: boundSnapshot?.draftVersion ?? boundSnapshot?.revision ?? 1,
+    };
+  }
+
+  ensureWorkspaceLease({ command, args, source, caller, context, idempotencyKey }) {
+    if (!this.isLeasedWorkflowCommand(command)) return null;
+    const identity = caller?.agentIdentity || source;
+    const hostSessionId = caller?.hostSessionId || null;
+    const explicitLeaseId = args.leaseId || args['lease-id'];
+    const mutation = !['workflow.inspect', 'workflow.selection.get'].includes(command);
+    const mutationId = args.mutationId || args['mutation-id'] || args.idempotencyKey || args['idempotency-key'] || idempotencyKey;
+    try {
+      const lease = explicitLeaseId
+        ? this.workspaceLease.validate({
+          leaseId: explicitLeaseId,
+          agentIdentity: identity,
+          hostSessionId,
+          source,
+          ...context,
+          mutationId,
+          mutation,
+          expectedRevision: args.expectedRevision,
+        })
+        : this.workspaceLease.acquire({
+          agentIdentity: identity,
+          hostSessionId,
+          source,
+          clientId: context.clientId,
+          projectId: context.projectId,
+          baseRevision: context.currentRevision,
+        });
+      return this.workspaceLease.validate({
+        leaseId: lease.leaseId,
+        agentIdentity: identity,
+        hostSessionId,
+        source,
+        ...context,
+        mutationId,
+        mutation,
+        expectedRevision: args.expectedRevision,
+      });
+    } catch (cause) {
+      if (cause instanceof WorkspaceLeaseError) throw sessionError(cause.code, cause.message, cause.details);
+      throw cause;
+    }
   }
 
   activateAgentHost({ agentIdentity, hostSessionId, projectId } = {}) {
@@ -245,41 +340,39 @@ export class WorkflowAgentSession {
       };
     }
     const workspaceMode = args?.workspaceMode;
-    const requestedClientId = typeof args?.clientId === 'string' && args.clientId ? args.clientId : null;
-    const agentSource = source === 'agent' || source === 'flovart-agent';
-    const browserBound = agentSource || workspaceMode === 'browser' || Boolean(requestedClientId);
-    const shouldUseNativeWorkspace = command.startsWith('workflow.')
-      && this.nativeWorkspace.enabled
-      && !browserBound
-      && (workspaceMode === 'native' || workspaceMode === 'headless');
-    if (shouldUseNativeWorkspace) {
-      if (signal?.aborted) throw new Error('Workflow 操作已取消');
-      return this.nativeWorkspace.execute(command, args, source, idempotencyKey);
+    if (command.startsWith('workflow.') && (workspaceMode === 'native' || workspaceMode === 'headless')) {
+      throw sessionError('WORKSPACE_REQUIRED', 'Workflow 命令必须通过可见的 Browser Workflow 执行；隐藏工作区不可用。');
     }
+    const requestedClientId = typeof args?.clientId === 'string' && args.clientId ? args.clientId : null;
     const boundSnapshot = requestedClientId ? this.snapshots.get(requestedClientId) : this.snapshot;
     if (command.startsWith('workflow.') && requestedClientId && !this.clients.has(requestedClientId)) {
-      throw new Error('当前没有已连接并同步项目的 Flovart Workflow');
+      throw sessionError('WORKSPACE_UNAVAILABLE', '指定的 Flovart Workflow 页面已经不可用。', { clientId: requestedClientId });
     }
     if (command.startsWith('workflow.') && requestedClientId && requestedClientId !== this.activeClientId) {
-      throw new Error('WORKSPACE_WRITER_INACTIVE：请先显式激活当前 Browser Workflow。');
+      throw sessionError('LEASE_TARGET_CHANGED', '指定的 Flovart Workflow 不是当前可写页面。', { clientId: requestedClientId, activeClientId: this.activeClientId });
     }
     const clientId = this.clients.has(boundSnapshot?.clientId) ? boundSnapshot.clientId : null;
     if (args?.projectId && boundSnapshot?.id && args.projectId !== boundSnapshot.id) {
-      throw new Error(`Workflow Browser binding 不匹配：${args.projectId}`);
+      throw sessionError('LEASE_TARGET_CHANGED', `Workflow 项目目标已改变：${args.projectId}`, { requestedProjectId: args.projectId, activeProjectId: boundSnapshot.id });
     }
     const client = this.clients.get(clientId);
-    if (!client) throw new Error('当前没有已连接并同步项目的 Flovart Workflow');
+    if (!client) throw sessionError('WORKSPACE_UNAVAILABLE', '当前没有已连接并同步项目的 Flovart Workflow。');
     if (command.startsWith('workflow.') && source === 'cli') {
       this.authorizeExternalHost(caller, args);
     }
+    const lease = this.ensureWorkspaceLease({ command, args, source, caller, idempotencyKey, context: this.browserLeaseContext(boundSnapshot, clientId, args) });
     if (signal?.aborted) throw new Error('Workflow 操作已取消');
     const requestId = crypto.randomUUID();
+    const forwardedArgs = { ...args };
+    delete forwardedArgs.leaseId;
+    delete forwardedArgs['lease-id'];
     const envelope = {
       id: requestId,
       command,
-      args,
+      args: forwardedArgs,
       source,
       idempotencyKey: idempotencyKey || args.idempotencyKey,
+      ...(lease ? { workspaceLease: lease } : {}),
       ...(caller ? { caller } : {}),
     };
     sendEvent(client, 'tool_call', { requestId, envelope });
