@@ -63,7 +63,7 @@
   </tr>
 </table>
 
-The current screenshots are real Workflow and Skill surfaces. A future recording that shows an agent changing that same Workflow is specified in [README_VISUAL_TODO.md](README_VISUAL_TODO.md); this README does not fabricate that evidence.
+The current screenshots are real Workflow and Skill surfaces. A future recording that shows an agent changing that same Workflow is specified in [README_VISUAL_TODO.md](docs/maintenance/readme/README_VISUAL_TODO.md); this README does not fabricate that evidence.
 
 ## Why Flovart?
 

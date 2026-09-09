@@ -5,6 +5,7 @@
 ## 使用与产品
 
 - [快速开始](overview/quick-start.md) / [Getting Started](overview/quick-start.en.md)
+- [Windows 安装指引](overview/installation.zh-CN.md)
 - [Skill 使用手册](overview/skill-guide.md)
 - [功能特性](content/docs/overview/features.mdx) / [Features](content/docs/overview/features.en.mdx)
 
@@ -12,8 +13,10 @@
 
 - [后续待办](content/docs/progress/todo.mdx)
 - [待测试确认](content/docs/progress/pending-test.mdx)
+- [发行候选证据](evidence/release-candidate/README.md)
+- [维护资料](maintenance/README.md)
 
-以上共 7 个公开页面入口：中英文快速开始、中英文功能页、Skill 手册、Todo 与 Pending Test。
+以上共 8 个公开页面入口：中英文快速开始、Windows 安装指引、中英文功能页、Skill 手册、Todo 与 Pending Test。
 
 ## 内部设计与开发者索引
 

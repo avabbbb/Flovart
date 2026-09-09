@@ -63,7 +63,7 @@
   </tr>
 </table>
 
-当前展示的都是实际 Workflow 和 Skill 界面。未来“Agent 操作同一份 Workflow”的录屏规格见 [README_VISUAL_TODO.md](README_VISUAL_TODO.md)；本 README 不伪造尚未具备的视觉证据。
+当前展示的都是实际 Workflow 和 Skill 界面。未来“Agent 操作同一份 Workflow”的录屏规格见 [README_VISUAL_TODO.md](docs/maintenance/readme/README_VISUAL_TODO.md)；本 README 不伪造尚未具备的视觉证据。
 
 ## 为什么是 Flovart？
 

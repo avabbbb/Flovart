@@ -6,12 +6,12 @@ title: 待测试确认
 
 ## Release Candidate Hardening：发行候选验收
 
-- 已建立 `RC_BASELINE.md`、安装器/迁移/持久化/Canvas stress/资源/accessibility/security/plugin/provider/Host chaos/updater/offline/diagnostics/red-team 证据文档；本机自主验收不等同于真实账号、付费接口或生产发布认证。
+- 已建立 `docs/evidence/release-candidate/RC_BASELINE.md`、安装器/迁移/持久化/Canvas stress/资源/accessibility/security/plugin/provider/Host chaos/updater/offline/diagnostics/red-team 证据文档；本机自主验收不等同于真实账号、付费接口或生产发布认证。
 - Windows 本地 NSIS 已实际构建、隔离安装、启动、关闭和卸载；Tauri test-only updater 已在隔离 HTTPS fixture 中完成安装态 N→N+1 替换、篡改包拒绝，并用种子项目证明升级后项目容器仍可见；source-identical packaged WebView2 已完成跨 schema 迁移和备份/当前 envelope 两阶段进程中断恢复。生产 updater private key、Authenticode、生产等价签名和发行机确认仍待完成。
 - CI 已加入 docs/typecheck/full Vitest/Web/extension/DSH/Rust/release invariant 门禁；关键套件本机 `10/10` 通过，GitHub hosted workflow 还需在仓库权限和 release secret 下实际执行。
 - Release security 已加入 `npm run release:secret-audit`、`.github/workflows/security.yml` 的 CodeQL（JS/TS + Rust）与 PR 高危依赖审查；当前候选本机扫描 923 个 Git-visible files 为零发现，GitHub secret scanning/push protection 与 hosted 首轮结果仍需在仓库设置中确认。
 - 远端旧 `main` 的 CodeQL 快照包含 13 个未关闭告警（1 critical、9 high、3 medium）；本地候选已把选题研究产物键改为 4096 字符有界字符扫描并通过恶意超长键回归，但候选 SHA 仍需 Hosted CodeQL 重跑，不把本地修复写成远端关闭。
-- 生产与开发依赖安全已完成一次最小收口：移除当前源码未引用的 Transformers/Excalidraw 生产依赖，更新同主版本安全修复并锁定依赖；clean `npm ci` 后官方 registry 的完整 `npm audit` 与 `--omit=dev` 均为 `0 vulnerabilities`。详细版本和命令见 `RC_DEPENDENCY_AUDIT.md`；Hosted 首轮仍待候选 SHA 执行。
+- 生产与开发依赖安全已完成一次最小收口：移除当前源码未引用的 Transformers/Excalidraw 生产依赖，更新同主版本安全修复并锁定依赖；clean `npm ci` 后官方 registry 的完整 `npm audit` 与 `--omit=dev` 均为 `0 vulnerabilities`。详细版本和命令见 `docs/evidence/release-candidate/RC_DEPENDENCY_AUDIT.md`；Hosted 首轮仍待候选 SHA 执行。
 - DSH Plugin 的独立 lockfile 已将构建期 `esbuild` 从 `0.21.x` 更新到 `0.28.2`，clean install 后嵌套依赖 `npm audit --audit-level=moderate` 为 `0 vulnerabilities`；CI 与 Security workflow 已加入该嵌套审计，候选 SHA 的 Hosted 首轮仍待执行。
 - 发布 workflow 在 checksum/SBOM 生成后增加产物内容校验：安装包版本名、`SHA256SUMS.txt` 覆盖与实际摘要必须一致；本机 NSIS 和篡改 fixture 已通过，Hosted Syft SPDX 与 provenance 仍待在候选 SHA 上执行。
 - 稳定 tag 发布路径新增 `latest.json`/`.sig` updater 产物校验：每个平台必须有版本化 HTTPS URL、对应产物和匹配 sidecar，缺失签名时 fail closed；本机 test-signed feed 与 `4/4` focused tests 已通过，但生产签名、Hosted 执行和公开 feed 仍待确认。
@@ -19,7 +19,7 @@ title: 待测试确认
 - 修复 Tauri/WebView2 中生成结果为 `data:` URL 时被 CSP 阻断的问题：桌面生成路径直接解码为 Blob，保留普通远程 URL 的 fetch 路径；源代码聚焦回归 `55/55`，源代码一致的带 CDP 观测构建已完成 Fake Provider T2I 并将结果持久化到画布。
 - 断网时保留本地项目、素材和 Canvas 编辑，并以产品文案提示远程能力等待恢复；高级 Dock 支持复制脱敏诊断 JSON。默认页面不展示连接 Token、Provider secret 或运行时协议字段。
 - 支持等级统一记录在根目录 `SUPPORT_MATRIX.md`：Codex/Claude/OpenCode/DSH 为 Experimental，CodeBuddy Code/Pi/WorkBuddy 为 Planned 或 mainstream projection 候选，真实 Provider/账号/账单不写成 Stable。
-- 从同一应用源码构建的测试 overlay NSIS 已安装并通过真实 WebView2 页面完成 Home → 新建 Workflow → 首次 AI 服务配置 → 费用确认 → Fake Provider 图片生成；该 overlay 只用于观测，不改变正式 v10 安装包、签名或 updater 结论，详情见 `RC_PACKAGED_UI_EVIDENCE.md`。
+- 从同一应用源码构建的测试 overlay NSIS 已安装并通过真实 WebView2 页面完成 Home → 新建 Workflow → 首次 AI 服务配置 → 费用确认 → Fake Provider 图片生成；该 overlay 只用于观测，不改变正式 v10 安装包、签名或 updater 结论，详情见 `docs/evidence/release-candidate/RC_PACKAGED_UI_EVIDENCE.md`。
 - 独立 `flovart-cli@0.3.2` 的实际 npm 打包与隔离安装已补齐：修复 `files` 白名单漏发运行时模块导致安装后 `flovart --help` 崩溃的问题，并由 `tests/cliPackageManifest.test.js` 防止可达顶层模块再次漏包；tarball 的 CLI help、结构化 offline status、Skill 和 Managed Agent 投影均已通过。
 - 当前 clean candidate 为 `111db63d4261cd81cf7f5cadd340f1044cea32e8`；NSIS `0.3.2`（12,248,572 bytes，SHA-256 `0E8753064D4C9150C67D632396E158EC614945AACE663F47167688C2DB8A1C3F`）、SPDX/checksum、隔离安装/启动/关闭/卸载、Chrome-only 动态端口绑定 smoke、公开 `#/app` Quick Start 和 CLI tarball 隔离安装已重新绑定到该 SHA。该候选未推送、未签名，也没有 Hosted CI/CodeQL/provenance 运行记录。
 

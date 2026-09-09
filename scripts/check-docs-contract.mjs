@@ -25,7 +25,7 @@ const minimumNodeVersion = String(packageJson.engines?.node || '').match(/\d+\.\
 const requiredDocPaths = [
   'README.md',
   'README.en.md',
-  '安装指引.md',
+  'docs/overview/installation.zh-CN.md',
   'docs/overview/quick-start.md',
   'docs/overview/quick-start.en.md',
   'docs/overview/skill-guide.md',
@@ -42,7 +42,7 @@ const compatibilityMarker = /legacy|compatib|diagnos|debug|deprecated|historical
 const pseudoCliCommands = new Set(['install', 'start', 'update']);
 const commandInvocation = /(?:npx\s+flovart-cli|npm\s+run\s+flovart:cli\s+--|flovart-cli)\s+([a-z][a-z0-9]*(?:[.-][a-z0-9]+)*)/gi;
 const schemaCommand = /--command\s+([a-z][a-z0-9]*(?:[.-][a-z0-9]+)*)/gi;
-const publicDocPath = /^(?:README(?:\.en)?\.md|安装指引\.md|docs\/overview\/|docs\/content\/docs\/)/i;
+const publicDocPath = /^(?:README(?:\.en|\.zh-CN)?\.md|docs\/overview\/|docs\/content\/docs\/)/i;
 const installerVersion = /Flovart[_ -](\d+\.\d+\.\d+)_x64-setup\.exe/gi;
 const tagVersion = /\bgit tag v(\d+\.\d+\.\d+)\b/gi;
 const retiredPublicPathPatterns = [

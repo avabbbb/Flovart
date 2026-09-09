@@ -34,7 +34,7 @@
 ## S0：契约与术语
 
 - 新 ADR 接受“External Director Harness + Workspace Operator”两个 AI 角色；Production Crew 明确为执行组件集合。
-- `CONTEXT.md` 移除内置主 Agent、Managed/Connected 双主语言。
+- [`CONTEXT.md`](../../maintenance/agent/CONTEXT.md) 移除内置主 Agent、Managed/Connected 双主语言。
 - 当前 professional golden path 是 Codex；DeepSeek Harness 保留显式 native Plugin projection；CodeBuddy Code、Claude Code、OpenCode、Pi 通过 stable Skill + CLI contract 兼容；WorkBuddy 后续单独评估，不进入本轮 Director Binding。
 - Canonical Registry 设计 `director.*`、`crew.intent.*`、`crew.receipt.*` 与事件 Schema。
 - 固定模型工具的 Operation Skill + CLI 公开边界；DeepSeek 私有 UI/事件通道只存在于可卸载 Embedded Plugin，MCP Server 不恢复。

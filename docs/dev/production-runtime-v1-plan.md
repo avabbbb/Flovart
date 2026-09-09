@@ -15,7 +15,7 @@
 - [ADR 0058：以 AI 原生 Workflow Draft 驱动画布](../adr/0058-use-ai-native-workflow-draft.md)
 - [Agent 架构设计包](../design/agent/README.md)
 - [Production Runtime 数据契约](production-runtime-data-contract.md)
-- [领域词汇](../../CONTEXT.md)
+- [领域词汇](../maintenance/agent/CONTEXT.md)
 
 ## V1 目标
 

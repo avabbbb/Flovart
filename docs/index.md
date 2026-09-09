@@ -2,7 +2,9 @@
 
 ## 产品、架构与进度
 
-- [领域词与工作区边界](../CONTEXT.md)
+- [领域词与工作区边界](maintenance/agent/CONTEXT.md)
+- [发行候选证据索引](evidence/release-candidate/README.md)
+- [维护资料索引](maintenance/README.md)
 - [功能特性](content/docs/overview/features.mdx)
 - [Features](content/docs/overview/features.en.mdx)
 - [快速开始](overview/quick-start.md) / [Getting Started](overview/quick-start.en.md)

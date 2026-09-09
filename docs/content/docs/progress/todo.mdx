@@ -6,8 +6,8 @@ title: 后续待办
 
 ## Production Launch 总门禁
 
-- **总目标**：⬜ 按根目录 `LAUNCH_GOAL.md` 从 R0 Release Truth Audit 持续执行到 R31 独立 Red Team；只有 Autonomous DoD、External Certification、`P0 = 0`、`P1 = 0` 同时满足才允许 `LAUNCH VERDICT: GO`。
-- **R0 Release Truth**：🟨 `RELEASE_TRUTH_MATRIX.md` 已区分当前工作树、历史基线、公开 main 与外部门禁；本地 Autonomous RC 为 PASS，公开 main、真实账号、生产签名和正式发布仍保持 `NO-GO`。
+- **总目标**：⬜ 按 `docs/maintenance/agent/LAUNCH_GOAL.md` 从 R0 Release Truth Audit 持续执行到 R31 独立 Red Team；只有 Autonomous DoD、External Certification、`P0 = 0`、`P1 = 0` 同时满足才允许 `LAUNCH VERDICT: GO`。
+- **R0 Release Truth**：🟨 `docs/evidence/release-candidate/RELEASE_TRUTH_MATRIX.md` 已区分当前工作树、历史基线、公开 main 与外部门禁；本地 Autonomous RC 为 PASS，公开 main、真实账号、生产签名和正式发布仍保持 `NO-GO`。
 - **最高优先级风险**：🟨 First Run → First Safe Generation 已用 Fake Provider recorder 证明伪造 `confirmed:true` 仍返回 `CONFIRMATION_REQUIRED`、Gate 前无 Provider 请求，并覆盖限流、重试、幂等重放和视频刷新不重复提交；完整的双击/重启 exactly-once 矩阵仍待发布门禁阶段补齐。
 - **Release Engineering**：🟨 已建立 docs-contract guard、三份 Skill parity、CLI help/red-team、tag release gate、draft-first publication、NSIS clean install、test-signed N→N+1 安装升级（含隔离项目容器保留）、checksums、SBOM/provenance workflow、CodeQL/dependency/secret automation；生产 key、Windows Authenticode、跨 schema/中断迁移、hosted workflow 首轮结果和 GitHub Release publication 仍是外部发行门禁。
 - **产品可靠性**：🟨 First Run、BYOK、T2I/I2I/T2V/I2V Fake HTTP wire、费用 Gate、限流/重试/幂等、视频刷新恢复、migration、persistence soak、500-node/undo-redo、Plugin failure containment、offline、diagnostics、performance 和 accessibility 已有 RC 证据；真实 Provider/Codex/发行态升级仍待外部确认。

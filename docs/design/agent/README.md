@@ -29,7 +29,7 @@
 
 ## 文档规则
 
-- `CONTEXT.md` 只定义领域词；行为、协议和迁移细节只写在本目录。
+- [`CONTEXT.md`](../../maintenance/agent/CONTEXT.md) 只定义领域词；行为、协议和迁移细节只写在本目录。
 - 每一项能力都要明确标为“当前已有”“目标设计”或“迁移后删除”，不能用未来设计冒充已实现功能。
 - Coding Agent Projections 的模型工具统一从 Flovart CLI 与 Operation Skill 获得能力；Flovart 不向 Coding Agent 暴露 MCP Server。DeepSeek RC8 主壳只额外注册一个 `conversation.view` Flovart Workflow View，并可用 `shell.overlay` 呈现轻量审批/状态/Artifact；它们仅为 UI、事件与恢复使用受限私有通道，不形成第二套模型工具协议。
 - CLI 的机器注册表来自 `command.list` 与 `command.schema`，仅用于 bootstrap、兼容诊断和调试；正常 Agent 操作使用五个稳定命令面，面向人的 stdout 不是内部协议。
