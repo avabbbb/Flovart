@@ -4,6 +4,7 @@
 
 - **Visual Production Runtime projections**：CLI、MCP 与 DSH service 继续围绕同一份 canonical operation contract；新增脱敏 `ProductionTask` inspect/resume 投影、跨投影 parity 证据与 TeleAgent/Creative Host 接入边界，未迁移 Browser Workflow authority。
 - **Flovart Link 2.0 与 Studio 基础**：收敛 Host lifecycle、四态 Agent UX、一次性 Browser bootstrap、Workspace Lease、`flovart ensure`、WorkBuddy official-shape Connector、DSH `ctx.flovart`/RC8 profile 和 Photoshop/Premiere/After Effects/Resolve Studio 共享 Studio contract/package；Resolve 画布入口改为只读取显式或 launcher discovery 的动态 loopback URL。真实第三方客户端、登录态和创作宿主回写仍按 Support Matrix 标记为 External Gate/Experimental。
+- **Agent Link 响应式修复**：修正窄视口下 Agent 列表内容撑破 Grid 行、覆盖 Advanced 连接区的问题，并将卡片/Advanced 的垂直邻接关系纳入真实 Chrome 矩阵检查；连接语义与 Browser Workflow authority 不变。
 - **测试稳定性**：Windows Vitest 默认 worker 上限固定为 4，避免全量并发触发 fork/句柄争用；当前 172 个测试文件、1105 passed、1 skipped，关键套件连续 10/10 通过。
 - **Release Candidate Hardening**：加入 Windows 发布产物 checksum、安装包内容校验、SPDX SBOM、tag-only provenance attestation、CI 全量门禁与关键套件 10x 循环；补齐迁移/持久化/Canvas stress、插件故障 containment、离线提示、脱敏诊断、支持矩阵和 release red-team 证据，并让 Skill projection 的 Node.js 最低版本由 docs contract 与 package engine 自动对齐；本机 test-signed N→N+1 更新及隔离项目保留已通过。真实 Provider、Codex 登录、生产 updater key、Authenticode、跨 schema/中断迁移与正式发布仍为外部门禁。
 - **Updater 产物校验**：稳定 tag 发布路径现在在 draft-first 流程中强制收集 `latest.json` 与 `.sig` sidecar，并校验版本化 HTTPS URL、产物存在性及签名文本一致；本机 test-signed feed 已通过，生产签名和 Hosted 发布仍为外部门禁。

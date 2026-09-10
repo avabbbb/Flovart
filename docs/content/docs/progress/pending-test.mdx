@@ -28,6 +28,7 @@ title: 待测试确认
 - 本轮新增 `tests/flovartProjectionParity.test.ts`：四个 Workflow operation 的 CLI/MCP normalized 参数与受控 Workflow state hash parity 已通过；测量口径见[跨投影评估](../../../design/ecosystem/CROSS_PROJECTION_EVAL.md)。
 - `ProductionTask` 复用现有 `ProductionRun` ID，不建立第二份 Workflow 图；请验证 Runtime 重启、scheduler lease 回收、`task.inspect` checkpoint 和 `task.resume` 不重复提交已完成 Stage。未开始的 Run 会明确拒绝 resume，不会静默启动。
 - Agent picker、四态提示、响应式布局与高级诊断折叠已有实现；请确认首次连接、默认选择、重扫、断线、换项目和重新激活不会显示假成功。
+- Agent Link 的窄屏高度分配已修复：Agent 列表按内容撑开，Advanced 连接区不再覆盖卡片；新增真实浏览器断点检查覆盖 640/480/390px 及动态调整宽度，仍需用户在目标设备确认滚动手感。
 - WorkBuddy CLI Connector 与 Skill 包已有打包和契约记录；仍需真实客户端导入及自然语言调用。
 - DSH RC8 现有适配读取可见 Browser Workflow；旧 Native Draft/Dock 方案不再作为验收目标。真实登录、view、service recovery 按当前实现测试。
 - Codex 外部首次会话与 Claude/OpenCode 接入按[支持矩阵](../../../../SUPPORT_MATRIX.md)逐个验证，不能将一个助手的 tracer 当成全部支持。

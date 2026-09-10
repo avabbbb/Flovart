@@ -29,6 +29,12 @@ async function checkDock(page, width, height) {
     const shell = document.querySelector('.dock-page');
     const rect = shell?.getBoundingClientRect();
     const control = document.querySelector('.agent-control-shell');
+    const linkGrid = document.querySelector('.agent-link-surface__grid');
+    const linkCards = Array.from(document.querySelectorAll('.agent-link-surface__grid > .agent-link-surface__card'));
+    const advancedSummary = document.querySelector('.agent-link-surface__advanced > summary');
+    const gridRect = linkGrid?.getBoundingClientRect();
+    const cardBottom = linkCards.reduce((bottom, card) => Math.max(bottom, card.getBoundingClientRect().bottom), 0);
+    const summaryTop = advancedSummary?.getBoundingClientRect().top;
     const layoutOverflow = Boolean(control && [control, ...control.children].some(element => element.scrollWidth > element.clientWidth + 1));
     return {
       viewportWidth: innerWidth,
@@ -37,9 +43,16 @@ async function checkDock(page, width, height) {
       shellBottom: rect?.bottom || 0,
       shellVisible: Boolean(shell && rect && rect.width > 0 && rect.height > 0),
       layoutOverflow,
+      agentLinkGridBottom: gridRect?.bottom || null,
+      agentLinkCardBottom: cardBottom || null,
+      agentLinkAdvancedTop: summaryTop ?? null,
     };
   });
-  if (result.scrollWidth > width + 1 || result.layoutOverflow || !result.shellVisible || result.shellBottom < height - 2) throw new Error(`Dock ${width}x${height}: ${JSON.stringify(result)}`);
+  const linkStackOverlaps = result.agentLinkCardBottom !== null
+    && result.agentLinkGridBottom !== null
+    && result.agentLinkAdvancedTop !== null
+    && (result.agentLinkCardBottom > result.agentLinkGridBottom + 1 || result.agentLinkGridBottom > result.agentLinkAdvancedTop + 1);
+  if (result.scrollWidth > width + 1 || result.layoutOverflow || !result.shellVisible || result.shellBottom < height - 2 || linkStackOverlaps) throw new Error(`Dock ${width}x${height}: ${JSON.stringify(result)}`);
   return result;
 }
 
@@ -104,10 +117,10 @@ try {
   page.on('console', message => { if (message.type() === 'error') consoleErrors.push(message.text()); });
   page.on('pageerror', error => pageErrors.push(error.message));
 
-  await page.goto(`${targetUrl}/#/dock`, { waitUntil: 'networkidle' });
+  await page.goto(`${targetUrl}/#/dock`, { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('[data-testid="production-control"]', { timeout: 15_000 });
   await page.evaluate(() => { localStorage.clear(); sessionStorage.clear(); });
-  await page.reload({ waitUntil: 'networkidle' });
+  await page.reload({ waitUntil: 'domcontentloaded' });
 
   if (await page.getByText('Agent 地址', { exact: true }).isVisible()) throw new Error('Agent URL is visible before Advanced opens.');
   if (await page.getByText('Token', { exact: true }).isVisible()) throw new Error('Token is visible before Advanced opens.');
@@ -144,7 +157,7 @@ try {
   try {
     const address = mockCrew.address();
     const mockUrl = `http://127.0.0.1:${typeof address === 'object' && address ? address.port : 0}`;
-    await page.goto(`${targetUrl}/#/dock`, { waitUntil: 'networkidle' });
+    await page.goto(`${targetUrl}/#/dock`, { waitUntil: 'domcontentloaded' });
     await page.evaluate(({ url }) => {
       localStorage.setItem('flovart.agent.url', url);
       sessionStorage.setItem('flovart.agent.token', 'responsive-test-token');
