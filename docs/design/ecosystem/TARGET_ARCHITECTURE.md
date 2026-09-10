@@ -1,6 +1,6 @@
-# Flovart 目标生态架构
+# Flovart 现有生态接入边界
 
-状态：E0/E1 目标设计；代码只有在对应测试和真实宿主证据存在后才可提升 Support Matrix 状态。
+本页仅说明已有 Browser Workflow、CLI/MCP、DSH 与面板接入的收敛边界。产品目标以[原生效果主设计](../flovart-native-effects.md)为准；这里的 Gateway、Native SDK 和 CreativeHostAdapter 是现有代码名称，不是要求新功能再增加的三层。原生效果不以打开 Browser Workflow 为设计前提。
 
 ## 五个边界
 
@@ -49,12 +49,12 @@ Creative Host  = Host / 选区上下文、渲染与导入
 
 ## 不变的权威
 
-目标架构增加 Projection，不迁移权威：
+现有 Workflow 接入增加协议入口，不迁移其图状态；下面约束不将未来宿主的效果参数和渲染状态归入 Browser：
 
 - 可见 Workflow 图仍由 Browser Workflow authority 保存和修改。
 - ProductionTask 只保存执行生命周期、checkpoint、job/artifact 引用和恢复信息，不复制 Workflow 图。
 - Provider adapter 只接收 canonical generation input，不知道 Codex、MCP、Premiere 等调用者。
-- Creative Host 只提供 `HostContext`、`HostSelection`、materialize/import 能力。
+- 当前 CreativeHostAdapter 只提供 `HostContext`、`HostSelection`、materialize/import 能力；未来原生效果另走宿主渲染回调，不串进该导入链。
 - DSH `ctx.flovart` 是 Native SDK projection，不是另一个 Workflow store。
 
 ## Canonical operation families

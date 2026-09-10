@@ -4,6 +4,8 @@
 
 已接受（实施分阶段；真实 Host/Agent 认证仍是外部门槛）
 
+本决策适用于当前 Browser Workflow 的协议入口。它不要求新原生效果创建 Workflow、ProductionTask 投影或通用 Gateway；原生效果的产品与执行边界以 [ADR 0069](0069-native-effects-with-one-generation-path.md)和[主设计](../design/flovart-native-effects.md)为准。
+
 ## 背景
 
 Flovart 已有 canonical CLI registry、五个稳定 Agent 命令、Browser Workflow authority、Runtime control plane 和 DSH `ctx.flovart` Service。历史上曾存在全量 MCP/Managed Agent 包装器，后来因为它们复制模型工具、混淆 Browser authority 和 Runtime authority 而删除。新的生态目标需要 MCP，但不能恢复那种第二套业务面。

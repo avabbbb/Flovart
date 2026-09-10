@@ -7,7 +7,7 @@
 3. [待办](content/docs/progress/todo.mdx) / [待测试确认](content/docs/progress/pending-test.mdx) — 未完成与实际已变更分开。
 4. [支持矩阵](../SUPPORT_MATRIX.md) — 当前证据边界，不把新目标标成支持。
 5. [架构决策](adr/README.md) — 只保留仍有效的短决策。
-6. [生态架构与跨投影评估](design/ecosystem/TARGET_ARCHITECTURE.md) / [Parity 结果](design/ecosystem/CROSS_PROJECTION_EVAL.md) — CLI、MCP、Native 与 Creative Host 的当前边界。
+6. [现有 CLI/MCP 接入边界](design/ecosystem/TARGET_ARCHITECTURE.md) / [Parity 记录](design/ecosystem/CROSS_PROJECTION_EVAL.md) — 当前代码的专项说明，不是并列产品目标；不替代新效果的 Benchmark。
 
 ## 使用与插件
 

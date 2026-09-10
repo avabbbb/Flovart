@@ -40,6 +40,8 @@
   <sub>README 展示次数 · 第三方计数，非独立访客</sub>
 </p>
 
+新方向是深入创作软件的 Flovart 原生效果：生成一个版本，在宿主内继续精修，复杂任务再展开 Workflow。首版优先 Windows AE/PR，macOS 后续单独验证；原生效果仍属规划开发，不等于当前实验面板已具备这些能力。见[产品与实现主设计](docs/design/flovart-native-effects.md)。
+
 ## 工作区一览
 
 <p align="center">
@@ -205,13 +207,9 @@ flowchart LR
   T["Table 工作区"] -. 独立入口 .-> W
 ```
 
-理解产品之后，再看三个实现术语：
+CLI 与实验性 stdio MCP 共用操作语义，当前仍绑定真实 Browser Workflow。确定性操作直接执行，不需要第二个 AI 重新解释。
 
-- **External Coding Agent Harness：** 负责主会话和长程计划的导演台。
-- **Workspace Operator：** 唯一内置执行 Agent，只在有界 Intent 内使用类型化工具。
-- **Production Crew：** Operator 与确定性 Dispatcher、Runtime、Provider 服务的集合名，不是第三个 Agent。
-
-完整协议、状态边界和迁移说明见 [生态架构设计包](docs/design/ecosystem/TARGET_ARCHITECTURE.md) 与 [当前架构记录](docs/design/ecosystem/CURRENT_ARCHITECTURE.md)。
+新原生效果保持两条短路径：同一生成函数产出持久素材版本；宿主效果读取固定版本并本地渲染。不强制经过导演、Operator、制作组等层级。产品、交互、实现和评测集中在[主设计](docs/design/flovart-native-effects.md)；[当前实现记录](docs/design/ecosystem/CURRENT_ARCHITECTURE.md)只解释现有代码，不是另一套产品目标。
 
 ## 本地优先与安全
 
@@ -225,9 +223,9 @@ flowchart LR
 
 接下来面向产品的三个方向是：
 
-- 完善 Agent Host 的认证、恢复和可见 Workflow 认证；
-- 扩展 Table 媒体预处理工作台与 Production Skill 生态；
-- 完成创意宿主 package 及真实产物导入路径的认证。
+- 先验证 AE/PR 固定素材原生效果、参数保存与离线导出；
+- 接入持久生成任务和外部/内部 Agent，共用操作能力；
+- 首条流程通过后再接 PS 与 Resolve，同时维护已有工作区和 Skill。
 
 这些是方向，不是当前 Stable 支持。证据进度见[开发计划](docs/content/docs/progress/todo.mdx)和[待用户确认](docs/content/docs/progress/pending-test.mdx)。
 

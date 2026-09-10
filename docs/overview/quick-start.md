@@ -19,9 +19,9 @@ npm run flovart:cli -- start --source --web --open
 
 > 推荐 [Google AI Studio](https://aistudio.google.com/apikey) 免费获取 Gemini 凭据。
 
-## 方式二：用外部 Agent / CLI 指挥制作组
+## 方式二：用 Agent / CLI / MCP 操作 Workflow
 
-当前外部导演路径以 Codex CLI/Browser、Claude Code 和 OpenCode CLI 为主；它们通过 Operation Skill 使用同一套本机 CLI。DeepSeek Harness 是显式 Plugin/Profile projection，WorkBuddy 使用 CLI Connector + Skill；TeleAgent 可尝试本地 stdio MCP + canonical Skill，但真实客户端仍是 External Gate。CodeBuddy Code 与 Pi 通过稳定 contract 兼容。Flovart 不要求用户配置浏览器抓取或文件队列；MCP 仅是可选 transport。
+当前可沿用 Codex、Claude Code、OpenCode 的 Skill/CLI，以及 WorkBuddy 的 CLI Connector。另有实验性本地 stdio MCP，共用现有操作入口；每个助手的实际安装、登录和调用状态见[支持矩阵](../../SUPPORT_MATRIX.md)。TeleAgent 接入准备包不等于真实客户端已认证。
 
 ```bash
 npm run flovart:cli -- status --json
@@ -29,23 +29,19 @@ npm run flovart:cli -- start --open --json  # 仅在 status 未就绪时执行
 npm run flovart:cli -- workflow.inspect --json
 ```
 
-### 运行逻辑
+日常操作使用 status、workflow.inspect、workflow.selection.get、workflow.apply、workflow.node.run；ensure 准备连接，command.list/schema 仅作 discovery 和诊断。写入前核对目标与版本，写入后回读；确定性命令不需要额外内部 AI 重新解释。
 
-- **外部 Harness 是导演台**：保留主对话、总体计划和跨任务调度；关闭 Flovart 不应终止 Harness。
-- **Workspace Operator 是唯一内置执行 Agent**：只在单次有界 Intent 内调用类型化、可逆工具；Production Crew 是 Operator、Runtime 与 Worker 的执行面集合名，不是额外 Agent。
-- **稳定 Agent surface**：正常操作只使用 `status`、`workflow.inspect`、`workflow.selection.get`、`workflow.apply` 与 `workflow.node.run`；仅在 bootstrap、兼容诊断或调试时读取 `command.list` / `command.schema`。
-- **可见 Workflow 单一权威**：操作前确认 `status` 与 Workflow 已就绪，操作后用 `workflow.inspect` 回读；所有写操作都经当前 Browser Workflow authority。
-- **密钥安全**：Provider Secret 只由 Flovart 的受控边界使用，CLI 与外部 Agent 均不得读取、输出或保存原始密钥。
-
-### 示例命令
+从源码启动 MCP：
 
 ```bash
-npm run flovart:cli -- workflow.inspect --json
+node tools/flovart/mcp-server.js
 ```
 
-写操作由外部 Agent 按当前 Skill 调用 `workflow.apply` 或 `workflow.node.run`，并在结果后重新 `workflow.inspect`。命令注册表可以离线读取；可见 Workflow 操作需要先启动 Flovart Desktop 并打开目标 Workflow。完整架构边界见 [生态架构设计包](../design/ecosystem/TARGET_ARCHITECTURE.md)。
+在支持本地 stdio 的客户端配置上述进程入口，工作目录指向本仓库；具体配置按该客户端文档和实际版本核验。MCP 的五个工具仍操作已绑定的可见 Browser Workflow，不提供无 UI 原生效果能力。详见[当前操作契约](../design/ecosystem/OPERATION_SURFACE.md)。
 
-DeepSeek Harness 的目标体验是在自身主壳中安装专用 Flovart Profile/Plugin：左侧固定 Flovart Dock 打开中央完整 Workflow、Table 与 Agent Production Control，快速弹层处理审批/状态/Artifact，右侧 Agent Bridge 管理连接与单导演 Handoff，并可弹出独立 Flovart 窗口。Host Plugin 仍从 CLI Registry 派生并执行模型工具，Client Plugin 只为 UI、事件和恢复使用受限本地通道。该 Profile 尚处于设计/迁移阶段；当前使用方式仍以 Operation Skill + CLI + 独立 Flovart 工作区为准。
+现有 DSH 适配继续使用自己的服务入口，但不要求所有用户安装 DSH、导演台或完整 Dock。Agent/CLI/MCP 不读取、输出或保存原始 Provider key；工具可调用不等于已批准付费生成。
+
+插件与内部 Agent 双入口的新产品方向见[主设计](../design/flovart-native-effects.md)。不要把当前面板或 MCP 安装成功当作原生效果已可用。
 
 ## 方式三：第三方服务适配
 

@@ -40,6 +40,8 @@
   <sub>README views · third-party counter, not unique visitors</sub>
 </p>
 
+The next direction is native Flovart effects inside creative software: generate a version, refine it in the host, and open Workflow for complex work. Windows AE/PR effects come first; macOS will be evaluated separately. Native effects remain planned, distinct from today's experimental panels. See the [product and implementation design](docs/design/flovart-native-effects.md).
+
 ## See the workspace
 
 <p align="center">
@@ -205,13 +207,9 @@ flowchart LR
   T["Table workspace"] -. separate surface .-> W
 ```
 
-The implementation uses three names that are useful once the product story is clear:
+CLI and the experimental stdio MCP share operation semantics and the current Browser Workflow binding. Deterministic operations do not require a second AI to reinterpret them.
 
-- **External Coding Agent Harness:** the director that owns the main conversation and long-range plan.
-- **Workspace Operator:** the only built-in execution agent; it uses typed tools inside a bounded intent.
-- **Production Crew:** a group name for the Operator and deterministic dispatch/runtime/provider services, not a third agent.
-
-The full protocol, state boundaries and migration notes are in the [ecosystem architecture package](docs/design/ecosystem/TARGET_ARCHITECTURE.md) and [current architecture record](docs/design/ecosystem/CURRENT_ARCHITECTURE.md).
+The native-effect design keeps two short paths: one shared generation function produces durable media versions; the host effect reads a fixed version and renders locally. It does not require a director/Operator/Crew chain. Product scope, interactions, implementation and benchmarks live in the [main design](docs/design/flovart-native-effects.md); the [current implementation record](docs/design/ecosystem/CURRENT_ARCHITECTURE.md) describes existing code, not an additional target architecture.
 
 ## Local-first and security
 
@@ -225,9 +223,9 @@ The full protocol, state boundaries and migration notes are in the [ecosystem ar
 
 The next product-facing directions are:
 
-- mature Agent Host authentication, recovery and visible Workflow certification;
-- expand the Table media-processing workbench and the Production Skill ecosystem;
-- certify creative-host packages and their real artifact import paths.
+- validate AE/PR native effects with fixed assets, saved parameters and offline export;
+- connect durable generation tasks and external/internal Agent entry points through shared operations;
+- extend to Photoshop and Resolve after the first host workflow is verified, while maintaining existing workspaces and Skills.
 
 These are directions, not current Stable support. Follow [the roadmap](docs/content/docs/progress/todo.mdx) and [pending verification](docs/content/docs/progress/pending-test.mdx) for the evidence trail.
 

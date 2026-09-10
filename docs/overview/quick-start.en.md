@@ -19,9 +19,9 @@ Do not use `--open` for automated browser acceptance because it delegates to the
 
 > We recommend [Google AI Studio](https://aistudio.google.com/apikey) to get free Gemini credentials.
 
-## Option 2: Direct the Production Crew via an External Agent / CLI
+## Option 2: Use an Agent / CLI / MCP with Workflow
 
-The current external-director path is Codex CLI/Browser, Claude Code, and OpenCode CLI. They use the same local CLI through the Operation Skill. DeepSeek Harness keeps an explicit Plugin/Profile projection; WorkBuddy uses a CLI Connector + Skill. TeleAgent can use the local stdio MCP + canonical Skill projection, but its real client tracer remains an External Gate. CodeBuddy Code and Pi are compatible through the stable contract. Users do not need browser scraping or a file queue; MCP is optional.
+Use the current Skill/CLI integrations for Codex, Claude Code and OpenCode, or the WorkBuddy CLI Connector. An experimental local stdio MCP server shares the existing operations. Check the [Support Matrix](../../SUPPORT_MATRIX.md) for each client's actual certification status; the TeleAgent preparation package is not a verified client integration.
 
 ```bash
 npm run flovart:cli -- status --json
@@ -29,23 +29,19 @@ npm run flovart:cli -- start --open --json  # only when status is not ready
 npm run flovart:cli -- workflow.inspect --json
 ```
 
-### How it Works
+Normal work uses status, workflow.inspect, workflow.selection.get, workflow.apply and workflow.node.run. Use ensure for connection setup and command.list/schema for discovery or diagnostics. Check the target and revision before writes, then inspect the result. Deterministic commands do not require a second internal AI.
 
-- **The external harness is the director**: it owns the canonical conversation, overall plan, and cross-task scheduling; closing Flovart must not terminate it.
-- **Workspace Operator is the only built-in execution agent**: it calls typed, reversible tools only inside a bounded intent. Production Crew is merely the group name for the Operator, Runtime, workers, and tools—not another agent.
-- **Stable Agent surface**: normal work uses only `status`, `workflow.inspect`, `workflow.selection.get`, `workflow.apply`, and `workflow.node.run`; read `command.list` / `command.schema` only for bootstrap, compatibility diagnosis, or debugging.
-- **One visible-Workflow authority**: confirm `status` and the target Workflow are ready, then verify every mutation with `workflow.inspect`. All writes go through the current Browser Workflow authority.
-- **Secret boundary**: Provider secrets stay in Flovart's controlled boundary. The CLI and external harness never read, print, or store raw secrets.
-
-### Example Commands
+Start the MCP server from the source checkout:
 
 ```bash
-npm run flovart:cli -- workflow.inspect --json
+node tools/flovart/mcp-server.js
 ```
 
-External agents use `workflow.apply` or `workflow.node.run` for writes and then re-read `workflow.inspect`. The command registry is readable offline; visible Workflow operations require Flovart Desktop to be running and the target Workflow to be open. See the [ecosystem architecture package](../design/ecosystem/TARGET_ARCHITECTURE.md) for the full boundary.
+Configure that process in a client supporting local stdio, with this repository as its working directory; verify the client's own configuration format and version. The five MCP tools still operate on the bound, visible Browser Workflow. They are not headless native-effect tools. See the [current operation contract](../design/ecosystem/OPERATION_SURFACE.md).
 
-The target DeepSeek Harness experience installs a dedicated Flovart Profile/Plugin into the Harness shell. A fixed Flovart Dock opens the complete Workflow, Table, and Agent Production Control surface in the central workspace; lightweight overlays handle approvals/status/artifacts, the right-side Agent Bridge manages connections and single-director handoff, and a standalone Flovart window remains available. The Host Plugin still derives and executes model tools from the CLI registry; its Client Plugin uses a scoped local channel only for UI, events, and recovery. This Profile is still a design/migration target, so the current path remains Operation Skill + CLI + the standalone Flovart workspace.
+Existing DSH integrations keep their service entry point; other users do not need DSH or a director/Dock setup. Agents and transports must not read, print or store raw Provider keys. Tool access is not approval for paid generation.
+
+The [main design](../design/flovart-native-effects.md) defines future native effects and internal Agent entry points. A working panel or MCP handshake does not certify those capabilities.
 
 ## Option 3: Third-Party Service Adaptation
 

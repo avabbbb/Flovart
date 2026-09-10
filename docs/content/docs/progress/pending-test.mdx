@@ -2,13 +2,16 @@
 title: 待测试确认
 ---
 
-本页记录实际进入文档或代码、仍需用户确认的变更。下面既有代码项来自仓库及原记录；本轮已重跑本地构建、全量测试、Rust Runtime 和响应式浏览器矩阵，但真实第三方宿主、账号、Provider 与公开发布仍需单独认证。原证据见[发行候选记录](../../../evidence/release-candidate/README.md)。
+本页记录实际进入文档或代码、仍需用户确认的变更。既有实现的构建、全量测试、Rust Runtime 和响应式浏览器记录见[发行候选证据](../../../evidence/release-candidate/README.md)，仅适用于其对应代码与范围。本次文档收尾只运行文档相关检查，未重跑上述整套验收；真实第三方宿主、账号、Provider 与公开发布仍需单独认证。
 
 ## 本轮：新方向与文档精简
 
 - 已建立[唯一主设计](../../../design/flovart-native-effects.md)，集中产品、交互、系统、具体实现、Benchmark、宣传与实施顺序。
 - 已记录用户确认的插件主入口、AE/PR→PS、Flovart 自有原生效果、场景替换、缓存后实时调整和 Agent 双入口。
+- 已通过 ASK 确认 Windows 首版优先；主设计、待办和宣传明确 macOS 后续单独验证，不承诺同期支持。
 - 已把旧 Agent/Link/Runtime 目标稿及重复施工计划合并清理，术语表与 AGENTS.md 改为短路径、少状态、少中间层。
+- 已同步中英文 README、快速开始、Studio 与支持矩阵，保留新 MCP 实现并区分面板、原生效果和未认证客户端；生态专项文档仅解释现有实现，不再作为并列产品目标。
+- 文档检查：docs:check 通过；137 份仓库 Markdown/MDX 的相对文件链接无缺失；docsContract 单项测试通过。未执行新原生效果的 Benchmark，指标仍为待测目标。
 - 已撤销禁止公开 MCP、所有任务强制内置 Operator、只允许外部主对话等旧目标；现有 Browser 代码绑定继续有效。
 - 待用户确认：主设计的“插件独立生成”“整段替换加宿主遮罩”仍是 ASK 未返回答案的推荐假设；Benchmark 阈值是建议验收目标。
 - 本轮已落地 canonical registry 驱动的本地 stdio MCP projection（五个稳定工具、两个只读 Resource），以及由现有 ProductionRun/StageRun/RuntimeTask 规范化出的 `ProductionTask v1` `task.inspect` / `task.resume`；真实 MCP Host、Agent session 和 Provider/宿主 tracer 仍未认证。

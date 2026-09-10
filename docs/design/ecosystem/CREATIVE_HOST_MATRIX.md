@@ -1,6 +1,6 @@
 # Flovart Creative Host Matrix
 
-状态：E0 真实 package/contract 审计。
+本页保留当前面板包的代码审计与导入验证边界，不是原生效果支持声明。新效果的 AE/PR 优先顺序及保存、关键帧、离线渲染验收统一见[主设计](../flovart-native-effects.md)。
 
 | Host | Adapter | 当前包/证据 | 当前状态 | 首条 Golden Path |
 | --- | --- | --- | --- | --- |
@@ -27,7 +27,7 @@ Manifest、shared UI、mock、fake Provider、build 和 contract test 只能证�
 
 ## Premiere priority
 
-Premiere 是第一条 Production tracer，因为它最直接证明：
+现有面板的首次导入验证优先 Premiere；这不改变新原生效果先 AE 小样、再验证 PR 复用的顺序。此处只证明：
 
 ```text
 Clip → Flovart → Artifact → back to Project

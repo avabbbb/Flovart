@@ -25,6 +25,20 @@
 | After Effects | Experimental | `dist-studio/after-effects` CEP panel 与 Link-injected layer bridge；真实 AE tracer 仍是 External Gate |
 | DaVinci Resolve Studio | Experimental | `dist-studio/resolve` Workflow Integration panel 与 Link-injected Media Pool bridge；真实 Studio tracer 仍是 External Gate |
 
+## Native effects and deeper Agent integration
+
+The following are design targets, not capabilities certified by the panel or MCP tests above. The initial native-effect release targets Windows; macOS will be validated separately and is not a simultaneous-release commitment.
+
+| Capability | Status | Required evidence |
+| --- | --- | --- |
+| AE / PR native Flovart effects | Planned | Real effect controls, fixed media versions, keyframes, saved project and offline export |
+| Photoshop native filter | Planned | Real filter integration, selection, editable parameters and project reopening |
+| Resolve OpenFX effect | Planned | Real OFX instance, parameter persistence and fixed-version rendering |
+| Native-effect generation without an open Workflow | Proposed | Confirm scope; verify headless service, Provider parity and persistent assets |
+| Internal Codex / WorkBuddy task entry | Planned | Official integration, real account, visible conversation, tools, approval and recovery |
+
+Scope and proposed benchmarks are defined in the [main design](docs/design/flovart-native-effects.md).
+
 ## Runtime and provider paths
 
 | Capability | Status | Evidence / boundary |

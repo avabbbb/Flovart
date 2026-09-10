@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **产品方向与文档精简**：统一原生效果、Agent 协作与评测主设计，清理过时的多层 Agent/Runtime 目标；强调共用业务函数、独立本地渲染和最少必要层级，同步使用说明与支持边界。原生效果仍属待实现/验证目标。
 - **Visual Production Runtime projections**：CLI、MCP 与 DSH service 继续围绕同一份 canonical operation contract；新增脱敏 `ProductionTask` inspect/resume 投影、跨投影 parity 证据与 TeleAgent/Creative Host 接入边界，未迁移 Browser Workflow authority。
 - **Flovart Link 2.0 与 Studio 基础**：收敛 Host lifecycle、四态 Agent UX、一次性 Browser bootstrap、Workspace Lease、`flovart ensure`、WorkBuddy official-shape Connector、DSH `ctx.flovart`/RC8 profile 和 Photoshop/Premiere/After Effects/Resolve Studio 共享 Studio contract/package；Resolve 画布入口改为只读取显式或 launcher discovery 的动态 loopback URL。真实第三方客户端、登录态和创作宿主回写仍按 Support Matrix 标记为 External Gate/Experimental。
 - **Agent Link 响应式修复**：修正窄视口下 Agent 列表内容撑破 Grid 行、覆盖 Advanced 连接区的问题，并将卡片/Advanced 的垂直邻接关系纳入真实 Chrome 矩阵检查；连接语义与 Browser Workflow authority 不变。
