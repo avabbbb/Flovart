@@ -45,6 +45,14 @@ flovart workflow.apply
 flovart workflow.node.run
 ```
 
+The same five operations are available through the optional local stdio MCP
+projection for MCP-capable hosts such as TeleAgent. The MCP names are
+`flovart_status`, `flovart_workflow_inspect`, `flovart_workflow_selection`,
+`flovart_workflow_apply`, and `flovart_workflow_run`. MCP is a transport
+projection, not a second Workflow runtime; use the CLI path for Codex,
+Claude Code, OpenCode, and WorkBuddy's CLI Connector unless that host has a
+separately certified MCP integration.
+
 Before a change, read the real `projectId`, object IDs, and revision from
 `workflow.inspect`. Read `workflow.selection.get` when the request depends on
 the current selection. Group related graph edits into one `workflow.apply`.

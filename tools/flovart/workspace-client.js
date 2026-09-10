@@ -148,6 +148,7 @@ export class FlovartWorkspaceClient {
       args,
       source,
       idempotencyKey: options.idempotencyKey,
+      ...(options.caller ? { caller: options.caller } : {}),
     });
   }
 }

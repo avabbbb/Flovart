@@ -12,6 +12,7 @@
 | OpenCode CLI projection | Experimental | shared Skill/CLI surface；Host-specific tracer 未认证 |
 | DeepSeek Harness RC8 bundle/profile | Experimental | DSH build、service/tool tests、packed profile install 与 `--dump-config`；真实登录、可见 Browser Workflow tracer、service recovery 仍待认证 |
 | WorkBuddy CLI Connector + Skill | Experimental | official-shape artifact、schema/secret/clean fixture 与 local-ready lifecycle；真实 WorkBuddy client/Marketplace/NL tracer 未运行 |
+| TeleAgent MCP + Skill projection | Experimental | stdio MCP handshake/tool/resource contract 与接入准备包；真实 TeleAgent client/import/NL tracer 未运行 |
 | CodeBuddy Code | Planned | stable Skill/CLI compatibility target；无本机登录 tracer |
 | Pi | Planned | stable Skill/CLI compatibility target；无本机登录 tracer |
 
@@ -31,6 +32,7 @@
 | Stable CLI surface (`status`, `ensure`, `workflow.inspect`, `workflow.selection.get`, `workflow.apply`, `workflow.node.run`) | Stable contract | registry/CLI/Skill tests；命令仍通过既有 Workspace Adapter 与 Workflow authority |
 | Browser-bound Workflow authority | Stable contract | 无 Browser workspace 时结构化返回 `WORKSPACE_UNAVAILABLE`，不回退随机项目或 last-focused project |
 | Workspace Lease | Experimental | acquire/validate/renew/release/expire、cross-project、close、revision 和 idempotency focused tests；未完成 20x chaos/持久化压力证据 |
+| ProductionTask v1 projection | Experimental | `task.inspect` / safe `task.resume` over durable ProductionRun/StageRun and scheduler lease；真实 Agent 跨会话、429/提交未知恢复与 Task Center 未认证 |
 | Local Fake Provider HTTP fixture | Stable test fixture | Provider resilience 与 wire tests；不代表第三方账号/账单行为 |
 | OpenAI-compatible BYOK | Experimental | 本地 Fake Provider + Browser/Workflow path；真实供应商、价格、取消语义待认证 |
 | Seedance / RunningHub / other remote providers | Experimental | route/adapter 存在；真实账号、账单和生产失败语义未列为 Stable |
@@ -45,6 +47,7 @@
 | `dist-studio/after-effects` | Experimental artifact | 可生成并校验；CEP/ExtendScript bridge 与真实 AE layer tracer 尚未认证 |
 | `dist-studio/resolve` | Experimental artifact | 可生成并校验；Workflow Integration bridge 与真实 Studio Media Pool tracer 尚未认证 |
 | `@flovart/dsh-plugin` | Experimental | RC8 profile 可安装；真实认证会话与完整 recovery 未完成 |
+| `tools/flovart/mcp-server.js` / `flovart-mcp` | Experimental artifact | canonical five-tool stdio projection 与 MCP SDK tests；真实 MCP Host import、Agent session 与 Provider path 未认证 |
 | Built-in Workflow node plugins | Experimental | trusted in-process code，故障隔离不是安全 sandbox |
 | Community Skill package install | Experimental | 安装边界有路径/大小/数量/重复项校验，第三方包安全仍需签名与权限策略 |
 

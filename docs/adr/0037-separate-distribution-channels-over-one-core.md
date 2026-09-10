@@ -1,7 +1,5 @@
-# 不同发行入口共享一个核心
+# 插件与工作区共用本地能力
 
-Flovart 分别交付面向设计师的 Web/Desktop Edition、面向 Coding Agent 用户的 Agent Toolkit，以及面向组织的 SaaS Deployment；不同入口可以拥有独立的安装、升级和运维生命周期，但必须共享领域模型、Canonical Command Registry、Provider-neutral Capability、Production Skill Package 与工作区数据契约，不能形成互不兼容的执行后端。
+插件是日常入口，复杂编排时展开 Flovart；安装器按实际宿主安装组件并复用一个本地服务。AE/PR 先验证，再 PS 和 Resolve。CLI/MCP 及 Agent 接入共用任务与素材，不各自交付不同业务后端。
 
-Desktop Edition 以普通设计师可直接安装和本地 BYOK 为边界，不要求 Git、Node.js、Go 或 Docker；Agent Toolkit 通过轻量 Bootstrapper 分发版本化 CLI、TUI、Production Crew 与兼容 Runtime Bundle，并以 Operation Skill + CLI 连接独立外部 Coding Agent Harness，不把完整源码仓库或宿主本身作为用户安装产物。Edge Extension 是 Desktop 的薄内容导入伴侣，不持有 Provider Secret、不直接生成，也不复制完整 WebUI 或 Runtime。
-
-本地创作与生成不以账号登录为前置条件；登录只用于用户主动选择的社区、Skill Hub、云同步和组织服务。首次保存 Provider Secret 或发起可能计费的请求前必须取得版本化的本地协议同意。具体安装器格式、平台矩阵、签名、商店权限和启动命令属于发布与实施文档，不再分别创建 ADR。
+现有网站与社区继续维护，不把 SaaS、独立 TUI、多个运行 Profile 或市场系统设为原生效果首发条件。普通用户不需手动安装 Node、Go、Git 等开发工具。独立生成的实现缺口与假设见[主设计](../design/flovart-native-effects.md)。

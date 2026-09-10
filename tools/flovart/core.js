@@ -77,6 +77,7 @@ export const HELP_TEXT = [
   'models.list --purpose image|video|all           List agent-facing model IDs',
   'model search --type image --query flux           Search model IDs',
   'status                                          Inspect local frontend, Agent, and visible Workflow readiness',
+  'mcp                                            Start the stdio MCP projection of the five stable Agent operations',
   'ensure [--no-open]                              Make the local Flovart Link ready and return public JSON status',
   'provider.status                                 Inspect provider/model configuration',
   'provider.begin-setup ...                       [retired] Configure an AI service in Flovart WebUI',
@@ -89,6 +90,8 @@ export const HELP_TEXT = [
   'workflow.node.create --type image|video|text|audio|config',
   'workflow.node.update --node-id <id> --patch-json <json>',
   'workflow.node.run --node-id <id>                 Run one Workflow node',
+  'task.inspect --task-id <id>                       Inspect one ProductionTask lifecycle',
+  'task.resume --task-id <id>                        Reconnect to an active ProductionTask',
   'asset.list                                      List local generated media assets',
   'skill.list                                      Scan local Skill packages (project + coding-agent dirs)',
   'skill.manifest <id>                             Show one installed Skill manifest and content hash',
@@ -442,7 +445,7 @@ export async function executeFlovartCommand(commandName, args = {}, runtime = {}
   const command = normalizeCommandName(commandName);
 
   if (command.startsWith('workflow.')) {
-    if (!runtime.workflow?.dispatch) return { ok: false, error: { code: 'WORKFLOW_UNAVAILABLE', message: 'Workflow dispatcher unavailable.' } };
+    if (!runtime.operation && !runtime.workflow?.dispatch) return { ok: false, error: { code: 'WORKFLOW_UNAVAILABLE', message: 'Workflow dispatcher unavailable.' } };
     const {
       agentIdentity,
       'agent-identity': legacyAgentIdentity,
@@ -452,7 +455,7 @@ export async function executeFlovartCommand(commandName, args = {}, runtime = {}
     } = args;
     const callerIdentity = agentIdentity || legacyAgentIdentity;
     const callerSession = hostSessionId || legacyHostSessionId;
-    const workflowArgs = {
+    const workflowArgs = Object.fromEntries(Object.entries({
       ...commandOptions,
       projectId: commandOptions.projectId || commandOptions['project-id'],
       nodeId: commandOptions.nodeId || commandOptions['node-id'],
@@ -467,21 +470,28 @@ export async function executeFlovartCommand(commandName, args = {}, runtime = {}
       metadata: parseJsonOption(commandOptions.metadata ?? commandOptions.metadataJson ?? commandOptions['metadata-json'], undefined),
       patch: parseJsonOption(commandOptions.patch ?? commandOptions.patchJson ?? commandOptions['patch-json'], undefined),
       operations: parseJsonOption(commandOptions.operations ?? commandOptions.operationsJson ?? commandOptions['operations-json'] ?? commandOptions.ops ?? commandOptions['ops-json'], undefined),
-      ids: Array.isArray(commandOptions.ids) ? commandOptions.ids : parseListOption(commandOptions.ids),
+      ids: commandOptions.ids === undefined ? undefined : parseListOption(commandOptions.ids),
       ...(command === 'workflow.node.tool' ? normalizeWorkflowNodeToolArgs(commandOptions) : {}),
-    };
+    }).filter(([, value]) => value !== undefined));
+    const source = runtime.source || 'cli';
+    const caller = runtime.caller || (callerIdentity ? {
+      agentIdentity: String(callerIdentity),
+      ...(callerSession ? { hostSessionId: String(callerSession) } : {}),
+    } : undefined);
+    if (runtime.operation) {
+      return await runtime.operation(command, workflowArgs, {
+        source,
+        ...(workflowArgs.idempotencyKey ? { idempotencyKey: workflowArgs.idempotencyKey } : {}),
+        ...(caller ? { caller } : {}),
+      });
+    }
     return await runtime.workflow.dispatch({
       id: args.commandId || secureId('cli_'),
       command,
       args: workflowArgs,
-      source: 'cli',
+      source,
       idempotencyKey: workflowArgs.idempotencyKey,
-      ...(callerIdentity ? {
-        caller: {
-          agentIdentity: String(callerIdentity),
-          ...(callerSession ? { hostSessionId: String(callerSession) } : {}),
-        },
-      } : {}),
+      ...(caller ? { caller } : {}),
     });
   }
 

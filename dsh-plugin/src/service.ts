@@ -83,6 +83,10 @@ export class FlovartService extends Service {
   readonly artifacts = {
     get: (args: FlovartServiceArgs = {}, signal?: AbortSignal) => this.getArtifact(args, signal),
   }
+  readonly task = {
+    inspect: (args: FlovartServiceArgs = {}, signal?: AbortSignal) => this.invoke('task.inspect', args, signal),
+    resume: (args: FlovartServiceArgs = {}, signal?: AbortSignal) => this.invoke('task.resume', args, signal),
+  }
 
   constructor(ctx: Context, config: Partial<FlovartPluginConfig> | undefined) {
     super(ctx, 'flovart')

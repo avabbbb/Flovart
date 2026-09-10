@@ -211,7 +211,7 @@ flowchart LR
 - **Workspace Operator：** 唯一内置执行 Agent，只在有界 Intent 内使用类型化工具。
 - **Production Crew：** Operator 与确定性 Dispatcher、Runtime、Provider 服务的集合名，不是第三个 Agent。
 
-完整协议、状态边界和迁移说明见 [Agent 架构设计包](docs/design/agent/README.md) 与 [Flovart Link 状态文档](docs/design/flovart-link-2/CURRENT_STATE.md)。
+完整协议、状态边界和迁移说明见 [生态架构设计包](docs/design/ecosystem/TARGET_ARCHITECTURE.md) 与 [当前架构记录](docs/design/ecosystem/CURRENT_ARCHITECTURE.md)。
 
 ## 本地优先与安全
 

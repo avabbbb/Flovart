@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://flovart.local/schemas/runtime/production-task.v1.json",
+  "title": "ProductionTask v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "taskId", "workflowId", "productionRunId", "intent", "state", "runIds", "jobIds", "artifactIds", "checkpoint", "retryPolicy", "createdBy", "createdAt", "updatedAt"],
+  "properties": {
+    "schemaVersion": { "const": "flovart.production-task/1" },
+    "taskId": { "type": "string", "minLength": 1 },
+    "workflowId": { "type": "string", "minLength": 1 },
+    "productionRunId": { "type": "string", "minLength": 1 },
+    "intent": { "type": "string" },
+    "state": { "enum": ["planned", "awaiting_approval", "running", "paused", "recovering", "completed", "failed", "cancelled"] },
+    "runIds": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+    "jobIds": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+    "artifactIds": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+    "checkpoint": { "type": "object", "additionalProperties": true },
+    "retryPolicy": { "type": "object", "additionalProperties": true },
+    "createdBy": { "type": "object", "additionalProperties": true },
+    "createdAt": { "type": "integer" },
+    "updatedAt": { "type": "integer" },
+    "runtimeTask": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["id", "status"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "status": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

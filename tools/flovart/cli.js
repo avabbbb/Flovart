@@ -13,6 +13,8 @@ import { collectTopicResearch } from './topic-research.js';
 import { runSkillCommand, SKILL_COMMAND_NAMES } from './skill-commands.js';
 import { getLocalStatus } from './local-status.js';
 import { ensureFlovart } from './ensure.js';
+import { AGENT_PUBLIC_COMMAND_SET } from './agent-surface.js';
+import { createOperationGateway } from './operation-gateway.js';
 import {
   createWorkspaceFacade,
   FlovartWorkspaceClient,
@@ -108,6 +110,12 @@ if (rawCommand === 'tui' || rawCommand === 'ui' || rawCommand === 'interactive' 
   process.exit(0);
 }
 
+if (rawCommand === 'mcp' || rawCommand === 'mcp-server') {
+  const mod = await import('./mcp-server.js');
+  await mod.runMcpServer();
+  process.exit(0);
+}
+
 if (['install', 'start', 'update'].includes(rawCommand)) {
   const mod = await import('./dev-commands.js');
   await mod[rawCommand](argv.slice(1));
@@ -185,7 +193,13 @@ if (['install', 'start', 'update'].includes(rawCommand)) {
       const invocation = runtimeInvocation(routingCommand, args);
       let result;
       if (routingCommand === 'runtime.status') result = await runtime.status();
-      else if (routingCommand === 'task.get') result = await runtime.getTask(invocation.commandArgs.taskId);
+       else if (routingCommand === 'task.get') result = await runtime.getTask(invocation.commandArgs.taskId);
+       else if (routingCommand === 'task.inspect') result = await runtime.getProductionTask(invocation.commandArgs.taskId);
+       else if (routingCommand === 'task.resume') result = await runtime.resumeProductionTask(
+         invocation.commandArgs.taskId,
+         defaultRuntimeActor('cli'),
+         invocation.options,
+       );
       else if (routingCommand === 'task.list') result = await runtime.listTasks(invocation.commandArgs);
       else if (routingCommand === 'event.stream') result = await runtime.streamEvents(invocation.commandArgs);
       else {
@@ -221,7 +235,12 @@ if (['install', 'start', 'update'].includes(rawCommand)) {
       const workspace = new FlovartWorkspaceClient();
       const result = routingCommand === 'workspace.status'
         ? await workspace.status()
-        : await executeFlovartCommand(command, args, createWorkspaceFacade(workspace));
+        : AGENT_PUBLIC_COMMAND_SET.has(routingCommand)
+          ? await executeFlovartCommand(command, args, {
+            operation: createOperationGateway({ workspace }),
+            source: 'cli',
+          })
+          : await executeFlovartCommand(command, args, createWorkspaceFacade(workspace));
       const ok = isResultOk(result);
       printCliResponse(ok, command, result, ok ? null : result.error || null, { runtime: 'workspace-adapter' });
     } catch (error) {

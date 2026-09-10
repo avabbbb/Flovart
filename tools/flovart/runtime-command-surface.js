@@ -4,6 +4,8 @@ export const RUNTIME_COMMAND_NAMES = Object.freeze([
   'command.schema',
   'runtime.test.delay',
   'task.get',
+  'task.inspect',
+  'task.resume',
   'task.list',
   'task.cancel',
   'event.stream',

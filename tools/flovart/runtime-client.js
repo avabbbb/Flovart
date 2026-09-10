@@ -258,6 +258,26 @@ export class FlovartRuntimeClient {
     return task;
   }
 
+  async getProductionTask(taskId, actor = defaultRuntimeActor('cli')) {
+    const task = await this.execute('task.inspect', { taskId }, actor);
+    if (!validateRuntimeContract('production-task', task).ok) {
+      throw protocolMismatch('Production Runtime returned an invalid ProductionTask contract.');
+    }
+    return task;
+  }
+
+  async resumeProductionTask(
+    taskId,
+    actor = defaultRuntimeActor('cli'),
+    options = {},
+  ) {
+    const result = await this.execute('task.resume', { taskId }, actor, options);
+    if (!validateRuntimeContract('production-task-resume', result).ok) {
+      throw protocolMismatch('Production Runtime returned an invalid ProductionTask resume contract.');
+    }
+    return result;
+  }
+
   async listTasks(options = {}) {
     const query = new URLSearchParams();
     if (options.status) query.set('status', options.status);
@@ -334,6 +354,8 @@ export function createRuntimeFacade(client) {
       status: () => client.status(),
       execute: (command, args, actor) => client.execute(command, args, actor),
       getTask: taskId => client.getTask(taskId),
+      getProductionTask: taskId => client.getProductionTask(taskId),
+      resumeProductionTask: (taskId, actor, options) => client.resumeProductionTask(taskId, actor, options),
       listTasks: options => client.listTasks(options),
       streamEvents: options => client.streamEvents(options),
     },

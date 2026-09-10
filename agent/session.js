@@ -357,7 +357,7 @@ export class WorkflowAgentSession {
     }
     const client = this.clients.get(clientId);
     if (!client) throw sessionError('WORKSPACE_UNAVAILABLE', '当前没有已连接并同步项目的 Flovart Workflow。');
-    if (command.startsWith('workflow.') && source === 'cli') {
+    if (command.startsWith('workflow.') && (source === 'cli' || (source === 'mcp' && caller))) {
       this.authorizeExternalHost(caller, args);
     }
     const lease = this.ensureWorkspaceLease({ command, args, source, caller, idempotencyKey, context: this.browserLeaseContext(boundSnapshot, clientId, args) });

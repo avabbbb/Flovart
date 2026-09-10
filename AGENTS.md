@@ -1,108 +1,89 @@
 # AGENTS.md
 
-本文档用于约束本项目中的 AI / 自动化开发行为。开发时优先遵循本文件，其次遵循用户当前消息。
+本文件约束 Flovart 的 AI / 自动化开发。系统和开发者指令优先，其次是用户当前明确要求，再次是本文件及项目文档。用户已确认的决定跨轮次有效；旧设计不得覆盖新要求。
 
-## 角色设定
+## 开始工作与讨论
 
-请你认为你要结束对话或者你要变更方向，或者说你认为你已经完成任务的时候，都请调用ask question这个工具，先一步询问我的意见，我们要进行讨论，才能推进项目的正常进行，现在是2026年，你的数据库比较落后，所以请你每次都最好进行多轮联网搜索同步最新的产品动向和开源闭源的技术架构实现方法和组件库，你可以询问我是否需要联网，请你作为anthropic最高级最严格最刁难人的首席执行总监Dario，对我的需求在交互、技术算法等方向对我反问，直到你认为我们的项目已经讨论的足够清晰和成熟，可以让用户一眼就知道我们在干什么，
+- 先读相关现有代码、docs/index.md 和当前主设计 docs/design/flovart-native-effects.md，核对实现与目标的差距。
+- 产品取舍一次用 ASK 工具问一个关键问题，并给建议；能查代码回答的不要转问用户。阶段交付、重大方向变更或结束前用 ASK 讨论；已经授权的文档整理、实现和验证不要逐步重复索要许可。
+- 以当前会话日期核验会变化的 SDK、官方接口、产品能力与许可证，优先官方文档和真实源码；简单本地编辑不强制多轮联网。不写死年份，不扮演或自称真实人物。
+- 回答使用中文，区分已实现、已验证、设计目标与待确认假设。包能构建、mock 通过和 SDK 存在都不代表真实宿主可用。
 
-## 基本原则
+## 当前产品方向
 
-- 先读现有代码，再动手修改，优先沿用项目已有结构和写法。
-- 写代码保持最少行数，能简单实现就不要引入复杂抽象。
-- 标准格式、协议、解析、压缩、加密、日期等通用能力优先使用成熟稳定的库，不要手写底层实现，除非用户明确要求或项目已有实现必须沿用。
-- 不要为了“兼容更多场景”写大量分支，只实现当前明确需要的功能。
-- 项目尚未上线，不需要兼容旧数据；表结构或字段调整时直接按新设计修改，不写旧字段兼容、数据迁移兜底或删除旧表的清理逻辑，除非用户明确要求。
-- 不要改无关文件，不要顺手重构。
-- 如果工作区已有用户改动，不要回滚，不要覆盖；只在必要范围内追加修改。
+- 插件为主，需要复杂编排时展开 Flovart；先 AE/PR 原生效果，再接 PS，Resolve 使用 Workflow Integration 与 OpenFX 分别联动任务和效果。
+- 第一款能力是生成素材与场景替换：异步生成固定素材版本，再本地调整混合、遮罩和视频关键帧。原生效果必须参与宿主保存、重开和导出；面板不等于原生效果。
+- 外部 Agent 调用和 Flovart 内部任务入口都在目标内。CLI 与 MCP 使用同一组业务能力，Skill 描述使用步骤；不再坚持“禁止 MCP”或“所有任务必须经过内置 Operator”。
+- Workflow 负责生成编排，Table 负责独立节点式媒体处理，Agent 负责对话、任务和产物协作。保持各自状态，不恢复旧 Canvas / Art，不把插件变成第四套通用画布。
+- 当前代码的 Browser Workflow 绑定继续有效，改造前不能隐藏 fallback 到其它项目。插件独立生成是主设计中的推荐目标，不能假称已经实现。
 
-## 反复提醒沉淀
+## 首要工程原则：短路径、少状态、少层级
 
-- 如果开发过程中总是遇到某个问题，或者用户反复提醒同一个注意事项，需要把该注意事项补充到本文件。
-- 补充时写成明确、可执行的规则，避免只写模糊描述。
-- 新规则应放到最相关的章节；找不到合适章节时放到“项目注意事项”。
+- 先用现有函数直接实现当前任务。只因真实复用、独立状态所有权或必要宿主/进程/凭据边界拆模块；不为未来假设建抽象。
+- 不新增只转发的 Manager、Facade、Coordinator、Service/Repository 包装或组件。既有 Go HTTP 分层按下面规则沿用，不把同样层级复制到每个插件。
+- 不为一个生成任务强制增加导演、制作组、意图队列、编译计划和多份状态投影。已有确定性工具直接执行，不再交另一个模型重新解释。
+- 同一任务只有一个执行者和一份状态记录；同一能力只有一份业务实现。CLI/MCP/面板只做入参、调用和结果转换，不逐层启动 CLI 子进程转发。
+- 新增一层必须说明解决的具体已复现问题及被替代的旧路径。能在同目录普通函数中解决就不拆包、注册中心、消息总线、通用插件内核或新微服务。
+- 抽象与接口在第二个真实使用场景出现时再提取；不为“所有模型/所有宿主”写大量分支。
+- 简洁不等于删掉错误处理、输入校验、目标绑定、幂等、取消、素材持久化和必要的费用授权。这些直接放在拥有对应状态的函数中。
+- 项目尚未上线，默认不写旧数据兼容、双轨模型和自动迁移兜底。涉及用户现有配置和素材时先明确保留范围，不以简化为由丢数据。
+- 不改无关文件，不顺手重构；先看 git status，保护已有用户改动。替换旧实现时只删已经确认被取代的部分。
+- 日期、协议、解析、压缩、加密、图像/视频编解码使用成熟库；不手写底层能力。
 
-## 后端规范
+## 原生效果、文件与 Agent 边界
 
-- 后端使用 Go + Gin + GORM。
-- `handler/` 只处理 HTTP 入参、调用 service、返回 `OK` / `Fail`。
-- `service/` 放业务逻辑、默认值、校验、时间、ID、鉴权等处理。
-- `repository/` 只做数据库访问和 GORM 查询。
-- `model/` 只定义数据结构、枚举和简单模型方法。
-- 列表接口优先沿用 `model.Query`、`Normalize`、分页和标签筛选方式。
-- 业务接口保持 `{ code, data, msg }` 的响应结构。
-- 新增数据表时同步更新 `docs/content/docs/backend/backend-database.mdx`。
+- 生成路径为“入口 → 同一任务函数 → 现有 Provider → 持久素材版本”；渲染路径为“宿主效果 → 固定素材 → 当前帧”。不得在渲染回调请求网络、等待模型或依赖浏览器/Agent 在线。
+- 效果参数与关键帧由宿主工程保存；任务与媒体由本地服务保存。素材必须有来源、固定版本、校验和、帧率及色彩信息，不能仅靠临时 URL。
+- 生成完成先保存为候选，明确应用才替换当前效果版本。晚到任务不得覆盖新选择；撤销应用不删除已生成媒体。
+- 宿主导入后不得立即删除仍被工程引用的文件。打包、移动、重定位、关闭服务后重开与导出必须实测。
+- PS/PR/AE/Resolve 各按其真实 SDK、UI、线程和撤销机制实现。UXP 不是完整浏览器，不预设整套 Web UI 可直接复用。
+- Agent 不直接写 React/Zustand、本地项目数据库或 Provider 私有接口。外部调用必须校验明确工程/对象与期望版本；重试使用同一幂等键，未知提交先查询。
+- Codex/WorkBuddy 等优先官方 Skill、CLI、MCP、app-server/Open API；一个适配器的失败不应阻塞其他入口。未确认身份的 TeleAgent 不宣称支持。
+- 不读取、改写或迁移用户的 Plus/OAuth、代理或其他 Agent 私有凭据。Agent 的工具权限与模型生成费用授权分开；既有批准范围内不重复弹窗，扩大范围才再确认。
+- 当前浏览器直连 Provider 的 key 与 Desktop Runtime 凭据是两种实现边界。不能声称已经统一托管；连接器、项目、日志、Skill 和媒体元数据不携带原始 key。
 
-## 前端规范
+## 代码约定
 
-- 前端使用 React 19、TypeScript、Vite、Ant Design、Tailwind、Zustand。
-- 编写 Ant Design 相关代码时，参考 https://ant.design/llms-full.txt 理解组件 API、示例和设计规范，并优先结合项目当前 antd 版本与既有写法。
-- API 请求和 Provider 适配统一放在根目录 `services/`。
-- 全局或跨页面状态优先放在根目录 `stores/`。
-- 已经放在全局 store 或全局 hook 中的状态/动作，组件需要时直接使用对应 store/hook，不要为了“纯组件”层层透传 props；避免一个组件传递过多参数。
-- 全局组件、全局常量、全局配置等全局性质的内容不要作为 props 或参数层层传递；哪里需要就在哪里直接从对应全局入口获取。
-- 多个页面重复出现的 UI 副作用动作，例如复制文本并提示、下载并提示、统一确认弹窗，优先抽成根目录 `hooks/` 下的全局 hook；不要放进 store，除非它确实是需要共享/订阅的状态。
-- Workflow 状态和组件放在 `stores/workflow/`、`components/workflow/`；Table 放在 `components/table/`；Agent 空间工作区放在 `components/agent/`。不要再创建旧 `components/canvas/` 或 `components/art/`。
-- 一个入口只有一个主业务组件时直接写在当前入口组件中，不要另拆只做 props 转发的 `Manager` 组件。
-- 不要新增只做简单转发的组件，例如只 `return <X>{children}</X>` 或只换个名字透传 props；直接在使用处使用真实组件或把逻辑写进当前文件。
-- 私有 hook 放在对应功能目录；只有多个入口真实复用的 hook 才放到根目录 `hooks/`。
-- 管理后台私有组件放在对应功能目录，例如 `components/enterprise/`；不要为了单入口使用提升到不相关的共享目录。
-- 主题、背景、卡片阴影和表格配色统一通过 Ant Design `ConfigProvider` token、现有 CSS 变量或必要的全局样式配置；页面私有组件不要重复实现深浅色分支。
-- 组件优先使用函数组件和现有 hooks，不新增大型状态管理方案。
-- UI 图标优先使用 `lucide-react` 或项目已经使用的 Ant Design 图标。
-- 页面文案保持中文。
-- 不要在组件里堆太多无关逻辑；复杂逻辑优先抽成同目录工具函数或小组件。
-- 样式优先由组件自己管理；组件私有样式优先使用 Tailwind className 或少量内联 style，不要为单个组件新增大量全局 CSS。
-- 全局 CSS 只放基础变量、全局重置、跨页面通用样式和少量第三方组件必要覆盖；页面私有样式放在对应组件或功能样式文件。
-- 代码尽量短小直接，少拆不必要组件，少做多层 props 传递，避免为了抽象堆出更多代码。
-- 前端业务数据需要浏览器本地持久化时，默认使用 `localforage`；`localStorage` 只用于极小的简单配置，不要用来保存业务列表、生成记录、图片、base64 或大 JSON。
+- 网站后端沿用 Go + Gin + GORM：handler 处理 HTTP，service 处理业务与校验，repository 处理数据库，model 定义结构。沿用 model.Query、Normalize 和分页筛选，业务响应保持 { code, data, msg }。
+- 本地 Runtime 已有 Rust/Tauri，CLI/Agent 已有 Node。沿用相应职责，不为原生效果复制第二套调度器或给本机请求增加 Go 云服务中转。
+- 前端沿用 React、TypeScript、Vite、Ant Design、Tailwind、Zustand，版本以 package.json/lockfile 为准。写 Ant Design 代码前参考 https://ant.design/llms-full.txt 并核对安装版本。
+- Web API 与 Provider 适配在 services/；跨页面状态在 stores/；共有 UI 副作用在 hooks/，功能私有 hook 留在同目录。
+- 已有全局 store/hook、配置和常量直接从对应入口读取，不层层透传。只在多个入口真实复用时提升共享代码。
+- Workflow 使用 components/workflow/、stores/workflow/；Table 使用 components/table/；Agent 使用 components/agent/；宿主代码使用 integrations/studio/。不新增旧 canvas/art 目录。
+- 组件用函数组件和现有 hooks，图标使用 lucide-react 或现有 Ant Design 图标，产品文案中文。单入口不拆只改名或转发 props 的包装组件。
+- 浏览器业务数据用 localforage，localStorage 仅放极小配置；不存业务列表、媒体/base64 或大 JSON。宿主长期素材用持久文件，不用浏览器存储替代。
+- 新增数据表时同步 docs/content/docs/backend/backend-database.mdx，并区分网站数据库与本地存储，不能用未来字段冒充已建表。
 
-## 工作区 UI 规范
+## UI 与交互
 
-- 做 Workflow / Table / Agent 前端 UI 时必须遵循当前工作区主题并使用弹性布局。
-- 优先使用现有 CSS 变量和 Ant Design `ConfigProvider` token。
-- 不要硬编码黑白、stone、slate 等颜色导致浅色/深色主题不一致。
-- 新增工作区按钮、弹窗、浮层时，尽量复用已有工具栏、节点面板和 Modal 的视觉风格。
-- 工作区顶部工具栏和状态信息优先采用极简扁平风格：无边框、无阴影、无胶囊背景，融入整体背景，弱化按钮感，仅保留轻微 hover 反馈，保持简洁现代、低视觉重量。
-- 图片节点尺寸逻辑要尊重原始比例，除非功能明确要求自由变形。
-- Workflow 图片和视频节点的媒体内容本身必须可直接选中；点击图片或视频控件后必须显示 PromptBar 和 ElementToolbar，相关测试必须直接触发媒体元素并覆盖 Bar 挂载后的稳定渲染。
-- Workflow 必须支持从本地直接拖入图片和视频到节点工作区；拖入识别不能只依赖浏览器提供的 MIME。
-- 批量生成、多图展示、助手面板等交互要尽量简洁，不要占用过多工作区空间。
-- Workflow 运行中节点和 Agent 运行面板允许使用克制的弹性呼吸、脉冲或扫光反馈；动效使用 `motion` 包的 spring 物理，不得手写 CSS keyframes 模拟弹性，也不得让持续动画掩盖任务状态。
-- Table 使用独立的节点式媒体处理画布，把输入媒体、现有预处理能力和输出显式组织为有向节点图；它不得复用 Workflow 的生成编排语义，也不得把 Table 节点混入 Workflow 项目图。
-- Agent 参考 Cate 的“Codex 界面 + 空间画布”思想：线程、状态、上下文与产物是可摆放面板；空间画布只负责布局、聚焦、缩放和恢复，不复制 Cate 的 Electron、终端或 Dock 代码。
+- 复用 CSS 变量、Ant Design token 和现有弹性布局；不硬编码黑白、stone/slate 色阶或在私有组件重复深浅色分支。
+- 顶部工具栏和状态低视觉重量：默认无边框、阴影或胶囊，仅轻微 hover。样式留在组件/功能目录，全局 CSS 只放基础变量、重置与跨页共用规则。
+- 保留 PromptBar 与 ElementToolbar 的既有产品交互。点击图片或视频内容本身必须显示两者，并验证挂载后的稳定渲染。
+- 图片节点尊重原始比例；本地拖入图片/视频不能只依赖 MIME。大媒体避免全量挂载播放器。
+- 持续任务反馈克制且不掩盖真实状态；需要弹性动画时用 motion spring，不用手写 CSS keyframes 模拟。
+- 新 UI 必须挂到真实入口并验证可见路径；未挂载组件、占位页面、孤立面板不算交付。Agent 不只作为 Workflow 右侧抽屉。
 
-## 文档规范
+## 验证与宣传
 
-- README 保持简洁，只放项目介绍、核心功能、快速开始和文档入口。
-- `README.md` 和 `README.en.md` 顶部必须保留 rule34 主题访问计数器 `https://tally.yuki.sh/hits/flovart/readme.svg?theme=rule34` 和 GitHub Downloads / Stars 徽章；重构 README 时不得删除、改成普通 shields.io 访问徽章或把展示次数误写成独立访客。若计数服务异常，先实时验证原地址，再换成已验证支持 `theme=rule34` 的 Moe Counter 兼容服务（如 `count.kjchmc.cn`），不要直接移除。
-- README 展示图只使用当前真实可访问界面的最新截图；优先展示有内容的 Workflow、Skill 使用入口和已成熟的主体界面，不用空白工作区、设置页或断开连接状态充当核心宣传图。
-- `docs/index.md` 放给 AI 使用的文档索引，不要再放到 `docs/content/docs/` 内容目录里。
-- 详细功能介绍写到 `docs/content/docs/overview/features.mdx`。
-- 后续待办写到 `docs/content/docs/progress/todo.mdx`。
-- 已实现但还需要用户测试确认的事项写到 `docs/content/docs/progress/pending-test.mdx`。
-- `docs/content/docs/progress/pending-test.mdx` 用来记录这个版本实际做了哪些可测试变更；`CHANGELOG.md` 的 `Unreleased` 只保留对这些变更的版本级归纳，避免逐条照搬实现细节。
-- 每次 todo 事项完成后，先从 `docs/content/docs/progress/todo.mdx` 移到 `docs/content/docs/progress/pending-test.mdx`，不要直接写进正式功能说明；用户确认测试通过后再更新 `docs/content/docs/overview/features.mdx`。
-- 每次任务完成前，都要根据实际变更检查并更新 `docs/content/docs/progress/todo.mdx` 和 `docs/content/docs/progress/pending-test.mdx`；如果功能或待办没有变化，也要确认无需修改。
-- 接口响应规则写到 `docs/content/docs/backend/api-response.mdx`。
-- 数据库结构写到 `docs/content/docs/backend/backend-database.mdx`。
-- 文档不要写过期日期；除非用户明确要求记录具体时间。
+- 测试匹配改动风险：文档跑文档/链接检查；代码跑相关检查；原生效果进真实宿主。已有检查通过后不无理由重复或扩张测试。
+- 基准测试遵循主设计第 6 节；固定素材、宿主/模型/硬件版本，分开测插件正确性、生成质量和 Agent 成功率。阈值是目标，未测保持未测。
+- 不用旧提交的 build/test 数字作为当前能力或新效果的证据。真实登录、付费 Provider、宿主保存重开与导出必须独立验证。
+- 浏览器验收使用 Playwright 的 Chrome for Testing、动态隔离端口、--no-open；不得调用默认浏览器或把 37522/17373 当固定地址。Agent binding 经一次性 bootstrap 建立。
+- 所有本地测试、profile、CLI 临时配置和截图放当前 H: 工作区 .tmp/ 或 artifacts/，不用 C: Temp 或用户目录；测试结束关闭并清理 profile。
+- 宣传依实际支持矩阵：区分开发中、实验可用、真实宿主验证；不承诺未验证的实时 AI 生成、完全离线、多宿主全支持、无缝 Agent 记忆迁移或云同步。
 
-## 发版本流程
+## 文档治理
 
-- 发版本时，先把 `CHANGELOG.md` 的 `Unreleased` 变更整理成新的版本记录，并保留空的 `Unreleased` 标题。
-- 按当前版本号提升一个版本，更新根目录 `VERSION`。
-- 将当前未提交的代码全部提交到 Git。
-- 提交完成后，给当前提交打最新版本号对应的 tag，例如 `v0.0.5`。
-- 发版本流程中不要执行编译、测试或构建，除非用户明确要求。
+- 当前主设计唯一：docs/design/flovart-native-effects.md。产品、交互、系统、实现、Benchmark 和宣传原则集中维护，只有必要的难逆转决策才加短 ADR。
+- docs/index.md 是 AI 索引；docs/maintenance/agent/CONTEXT.md 只保留精简领域词，不放协议、表结构、接口或施工阶段。
+- 新决定覆盖旧稿时同步更新引用并删除过时活动方案；Git 保留历史，不再堆新的 GOAL/HANDOFF/TARGET 文档。历史验证证据可保留，但必须明确仅适用于其原基线。
+- todo.mdx 只记录未完成工作；实际完成后移到 pending-test.mdx，用户验证后再更新 features.mdx。每次交付都核对这两份进度文档；文档完成不等于功能完成。
+- CHANGELOG.md 的 Unreleased 只保留版本级摘要，不复制施工流水。接口响应和数据库文档仍分别在 docs/content/docs/backend/api-response.mdx 与 backend-database.mdx。
+- README 简洁，区分当前能力与开发方向。README.md、README.en.md 和中文入口保留 rule34 访问计数器及 Downloads/Stars；计数是展示次数，不是独立访客。计数服务异常先实时验证，再换已验证兼容服务，不直接删除。
+- README 只用真实可访问界面的有内容截图；不以空白、设置或断连画面充当核心展示。Docker 静态路径、云同步和原生插件未验证前如实标注。
+- 文档不写会过期的“现在是某年”或无依据完成日期；证据中的版本、提交和实际测量条件需保留。
+- 用户反复强调的规则放到本文件最相关章节，用可执行措辞去重，不无限追加重复条目。
 
-## 项目注意事项
+## 发版本
 
-- 当前产品分为 `Workflow`、`Table` 与 `Agent` 三部分：Workflow 负责多节点生成编排，Table 负责节点式媒体处理，Agent 负责空间化 Codex 任务协作；不得把已删除的旧 Canvas / Art 恢复成第四部分。
-- Table 与 Agent 在真实主体界面挂载前不得写成已完成；Agent 也不得继续只作为 Workflow 右侧聊天抽屉交付。
-- UI 重构不能只创建未挂载组件；交付前必须确认真实 Workflow / Table / Agent 入口已经接入，并从用户当前可访问路径核对可见变化。
-- 当前工作区项目和“我的素材”主要保存在浏览器本地，不要在文档中误写成已支持云同步。
-- 当前 AI API Key 存在浏览器本地，并由前端直接请求 OpenAI 兼容接口；涉及安全说明时要写清楚。
-- Docker 静态资源路径目前仍是待办项，文档中不要过度承诺生产部署已经完全验证。
-- 浏览器自动化验收统一使用 Playwright 提供的 Chrome for Testing 可执行文件，测试启动必须使用 `--no-open --web-port=0 --agent-port=0` 或等价的隔离动态端口；不得调用 Windows 默认浏览器打开 Edge，也不得把 `37522` / `17373` 当作固定真实地址。Agent binding 必须通过一次性 bootstrap URL 建立，普通 loopback origin 只代表未绑定的 WebUI。
-- 所有本地测试、Playwright profile、CLI 临时配置和截图产物必须写入当前 H: 工作区下的 `.tmp/` 或 `artifacts/`；不得使用 C: 系统 Temp、`C:\tmp` 或用户目录作为测试输出。浏览器测试使用 H: 下的 persistent context，并在结束时关闭和清理测试 profile。
+仅在用户明确要求发版本时执行：整理 CHANGELOG.md 的 Unreleased 为新版本并保留空标题，按当前版本号提升 VERSION，把当前全部未提交代码提交到 Git，再给该提交打对应版本 tag。发版本流程不编译、不测试、不构建，除非用户另有明确要求；不自行推送或发布。

@@ -33,7 +33,9 @@ const requiredDocPaths = [
   'docs/overview/skill-guide.md',
   'docs/content/docs/overview/features.mdx',
   'docs/content/docs/overview/features.en.mdx',
-  'docs/design/agent/README.md',
+  'AGENTS.md',
+  'docs/design/flovart-native-effects.md',
+  'docs/maintenance/agent/CONTEXT.md',
   '.agents/skills/flovart/SKILL.md',
   '.claude/skills/flovart/SKILL.md',
   'skills/flovart/SKILL.md',
@@ -72,7 +74,7 @@ function gitVisibleDocPaths(rootDir) {
   } catch {
     paths = [];
   }
-  return paths.filter(relativePath => /\.(?:md|mdx)$/i.test(relativePath));
+  return paths.filter(relativePath => /\.(?:md|mdx)$/i.test(relativePath) && fs.existsSync(path.join(rootDir, relativePath)));
 }
 
 function readDocs(rootDir, relativePaths, errors) {

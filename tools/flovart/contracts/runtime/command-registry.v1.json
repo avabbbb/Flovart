@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1",
   "protocolVersion": "1",
-  "registryHash": "16259085507641cce24209775a0a87a94a4e0c72f4aed5ed34781fee046b914e",
+  "registryHash": "abc139fe2d1903463dddf6429fbb1c0721bd4d6321e43bed30f86bdd6ce790ec",
   "commands": [
     {
       "name": "runtime.status",
@@ -40,6 +40,22 @@
     {
       "name": "task.get",
       "summary": "Return one durable Runtime task by ID.",
+      "args": {
+        "taskId": "string"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "task.inspect",
+      "summary": "Return one normalized ProductionTask backed by a durable ProductionRun and its StageRun checkpoint.",
+      "args": {
+        "taskId": "string"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "task.resume",
+      "summary": "Reconnect to an active ProductionTask scheduler record without resubmitting completed provider stages.",
       "args": {
         "taskId": "string"
       },

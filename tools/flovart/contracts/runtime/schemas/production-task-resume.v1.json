@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://flovart.local/schemas/runtime/production-task-resume.v1.json",
+  "title": "ProductionTask Resume v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "taskId", "resumed", "recoveryMode", "runtimeTaskId", "task"],
+  "properties": {
+    "schemaVersion": { "const": "flovart.production-task/1" },
+    "taskId": { "type": "string", "minLength": 1 },
+    "resumed": { "const": true },
+    "recoveryMode": { "const": "existing-runtime-task" },
+    "runtimeTaskId": { "type": "string", "minLength": 1 },
+    "task": { "$ref": "production-task.v1.json" }
+  }
+}

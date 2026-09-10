@@ -182,6 +182,19 @@ fn production_spec_compiles_to_a_durable_run_stage_dag_and_workflow_projection()
             json!(["ROUTE_PLAN_REQUIRED", "RUN_BUDGET_REQUIRED"])
         );
 
+        let production_task = runtime
+            .execute(&envelope("task.inspect", json!({ "taskId": run_id }), None))
+            .expect("normalized ProductionTask");
+        assert_eq!(production_task["taskId"], run_id);
+        assert_eq!(production_task["workflowId"], "workflow-project-1");
+        assert_eq!(production_task["state"], "awaiting_approval");
+        assert_eq!(production_task["runIds"], json!([run_id]));
+        assert!(production_task.get("runtimeTask").is_none());
+        let resume_before_submit = runtime
+            .execute(&envelope("task.resume", json!({ "taskId": run_id }), None))
+            .expect_err("unsubmitted ProductionTask must not be silently started");
+        assert_eq!(resume_before_submit.code, "PRECONDITION_FAILED");
+
         // Approving the route-plan gate alone keeps the run blocked on budget.
         let route_decision = runtime
             .execute(&envelope(
@@ -273,7 +286,9 @@ fn production_spec_compiles_to_a_durable_run_stage_dag_and_workflow_projection()
             .as_array()
             .expect("projection nodes")
             .iter()
-            .find(|node| node["metadata"]["productionProjection"]["stageKey"] == "shot:shot-1a:keyframe")
+            .find(|node| {
+                node["metadata"]["productionProjection"]["stageKey"] == "shot:shot-1a:keyframe"
+            })
             .expect("keyframe projection node");
         assert_eq!(keyframe_node["type"], "image");
         assert_eq!(
@@ -314,6 +329,11 @@ fn production_spec_compiles_to_a_durable_run_stage_dag_and_workflow_projection()
         .expect("durable production status");
     // Gate decisions survive restart: the approved run stays queued.
     assert_eq!(status["status"], "queued");
+    let production_task = restarted
+        .execute(&envelope("task.inspect", json!({ "taskId": run_id }), None))
+        .expect("durable ProductionTask");
+    assert_eq!(production_task["state"], "planned");
+    assert_eq!(production_task["checkpoint"]["runStatus"], "queued");
     let projection_response = restarted
         .execute(&envelope(
             "workflow.projection.get",
@@ -333,8 +353,8 @@ fn community_vox_compiler_creates_same_shot_bakeoff_and_blocks_motion_on_review_
     let database_path = test_database_path();
     fs::create_dir_all(database_path.parent().expect("database parent"))
         .expect("create database directory");
-    let runtime = ProductionRuntime::open(env!("CARGO_PKG_VERSION"), &database_path)
-        .expect("runtime");
+    let runtime =
+        ProductionRuntime::open(env!("CARGO_PKG_VERSION"), &database_path).expect("runtime");
     let receipt = runtime.execute(&envelope(
         "production.dry-run",
         json!({
@@ -359,35 +379,69 @@ fn community_vox_compiler_creates_same_shot_bakeoff_and_blocks_motion_on_review_
         Some("compile-community-vox-gated-v1"),
     )).expect("production dry-run receipt");
     let completed = wait_for_task(&runtime, receipt["taskId"].as_str().expect("task id"));
-    let run_id = completed["result"]["productionRunId"].as_str().expect("run id");
-    let status = runtime.execute(&envelope(
-        "production.status",
-        json!({ "runId": run_id }),
-        None,
-    )).expect("production status");
+    let run_id = completed["result"]["productionRunId"]
+        .as_str()
+        .expect("run id");
+    let status = runtime
+        .execute(&envelope(
+            "production.status",
+            json!({ "runId": run_id }),
+            None,
+        ))
+        .expect("production status");
 
     let stages = status["stages"].as_array().expect("stages");
     assert_eq!(stages.len(), 10);
-    let bakeoffs = stages.iter().filter(|stage| {
-        stage["stageKey"].as_str().unwrap_or_default().starts_with("style:bakeoff:")
-    }).collect::<Vec<_>>();
+    let bakeoffs = stages
+        .iter()
+        .filter(|stage| {
+            stage["stageKey"]
+                .as_str()
+                .unwrap_or_default()
+                .starts_with("style:bakeoff:")
+        })
+        .collect::<Vec<_>>();
     assert_eq!(bakeoffs.len(), 3);
     assert!(bakeoffs.iter().all(|stage| {
-        stage["input"]["prompt"].as_str().unwrap_or_default().contains("hand-cut paper")
+        stage["input"]["prompt"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("hand-cut paper")
     }));
-    let keyframe = stages.iter().find(|stage| stage["stageKey"] == "shot:shot-wide:keyframe")
+    let keyframe = stages
+        .iter()
+        .find(|stage| stage["stageKey"] == "shot:shot-wide:keyframe")
         .expect("keyframe stage");
-    assert_eq!(keyframe["input"]["requiredGates"], json!(["style-reference"]));
-    assert!(keyframe["input"]["prompt"].as_str().unwrap_or_default().contains("torn-edge"));
-    let motion = stages.iter().find(|stage| stage["stageKey"] == "shot:shot-wide:motion")
+    assert_eq!(
+        keyframe["input"]["requiredGates"],
+        json!(["style-reference"])
+    );
+    assert!(keyframe["input"]["prompt"]
+        .as_str()
+        .unwrap_or_default()
+        .contains("torn-edge"));
+    let motion = stages
+        .iter()
+        .find(|stage| stage["stageKey"] == "shot:shot-wide:motion")
         .expect("motion stage");
-    assert_eq!(motion["input"]["requiredGates"], json!(["keyframe-review", "ocr"]));
-    assert!(motion["input"]["prompt"].as_str().unwrap_or_default().contains("rigid paper layers"));
-    assert!(status["gates"].as_array().expect("gates").iter().any(|gate| {
-        gate["gateType"] == "style-reference" && gate["status"] == "required"
-    }));
+    assert_eq!(
+        motion["input"]["requiredGates"],
+        json!(["keyframe-review", "ocr"])
+    );
+    assert!(motion["input"]["prompt"]
+        .as_str()
+        .unwrap_or_default()
+        .contains("rigid paper layers"));
+    assert!(status["gates"]
+        .as_array()
+        .expect("gates")
+        .iter()
+        .any(|gate| { gate["gateType"] == "style-reference" && gate["status"] == "required" }));
     assert_eq!(status["draftBinding"]["draftVersion"], 7);
-    assert_eq!(status["draftBinding"]["sourceNodeIds"], json!(["brief-node"]));
+    assert_eq!(
+        status["draftBinding"]["sourceNodeIds"],
+        json!(["brief-node"])
+    );
 
     drop(runtime);
     let _ = fs::remove_dir_all(database_path.parent().expect("database parent"));
@@ -398,24 +452,26 @@ fn community_vox_compiler_rejects_preapproved_keyframe_or_ocr_gates() {
     let database_path = test_database_path();
     fs::create_dir_all(database_path.parent().expect("database parent"))
         .expect("create database directory");
-    let runtime = ProductionRuntime::open(env!("CARGO_PKG_VERSION"), &database_path)
-        .expect("runtime");
+    let runtime =
+        ProductionRuntime::open(env!("CARGO_PKG_VERSION"), &database_path).expect("runtime");
     let mut spec = gated_community_vox_spec();
     spec["gates"][2]["status"] = json!("approved");
-    let error = runtime.execute(&envelope(
-        "production.dry-run",
-        json!({
-            "projectId": "workflow-vox-premature-gates",
-            "title": "VOX invalid review gates",
-            "director": {
-                "skillId": "community.vox-director",
-                "version": "1.0.0",
-                "contentHash": "sha256:community-vox-premature-gates"
-            },
-            "spec": spec
-        }),
-        Some("compile-community-vox-premature-gates-v1"),
-    )).expect_err("preapproved keyframe gate must be rejected");
+    let error = runtime
+        .execute(&envelope(
+            "production.dry-run",
+            json!({
+                "projectId": "workflow-vox-premature-gates",
+                "title": "VOX invalid review gates",
+                "director": {
+                    "skillId": "community.vox-director",
+                    "version": "1.0.0",
+                    "contentHash": "sha256:community-vox-premature-gates"
+                },
+                "spec": spec
+            }),
+            Some("compile-community-vox-premature-gates-v1"),
+        ))
+        .expect_err("preapproved keyframe gate must be rejected");
     assert!(error.message.contains("keyframe-review"));
 
     drop(runtime);
@@ -427,8 +483,8 @@ fn community_vox_compiler_rejects_more_than_four_style_candidates() {
     let database_path = test_database_path();
     fs::create_dir_all(database_path.parent().expect("database parent"))
         .expect("create database directory");
-    let runtime = ProductionRuntime::open(env!("CARGO_PKG_VERSION"), &database_path)
-        .expect("runtime");
+    let runtime =
+        ProductionRuntime::open(env!("CARGO_PKG_VERSION"), &database_path).expect("runtime");
     let mut spec = gated_community_vox_spec();
     spec["extensions"]["community.vox-director"]["themeCandidates"] = json!([
         "american-retro",
@@ -437,20 +493,22 @@ fn community_vox_compiler_rejects_more_than_four_style_candidates() {
         "documentary-archive",
         "bold-pop"
     ]);
-    let error = runtime.execute(&envelope(
-        "production.dry-run",
-        json!({
-            "projectId": "workflow-vox-too-many-themes",
-            "title": "VOX oversized style review",
-            "director": {
-                "skillId": "community.vox-director",
-                "version": "1.0.0",
-                "contentHash": "sha256:community-vox-too-many-themes"
-            },
-            "spec": spec
-        }),
-        Some("compile-community-vox-too-many-themes-v1"),
-    )).expect_err("more than four VOX style candidates must be rejected");
+    let error = runtime
+        .execute(&envelope(
+            "production.dry-run",
+            json!({
+                "projectId": "workflow-vox-too-many-themes",
+                "title": "VOX oversized style review",
+                "director": {
+                    "skillId": "community.vox-director",
+                    "version": "1.0.0",
+                    "contentHash": "sha256:community-vox-too-many-themes"
+                },
+                "spec": spec
+            }),
+            Some("compile-community-vox-too-many-themes-v1"),
+        ))
+        .expect_err("more than four VOX style candidates must be rejected");
     assert!(error.message.contains("themeCandidates"));
 
     drop(runtime);
@@ -462,24 +520,29 @@ fn running_vox_plan_waits_for_an_approved_bakeoff_and_forwards_that_artifact_to_
     let database_path = test_database_path();
     fs::create_dir_all(database_path.parent().expect("database parent"))
         .expect("create database directory");
-    let runtime = ProductionRuntime::open(env!("CARGO_PKG_VERSION"), &database_path)
-        .expect("runtime");
-    let receipt = runtime.execute(&envelope(
-        "production.dry-run",
-        json!({
-            "projectId": "workflow-vox-reference",
-            "title": "VOX approved reference",
-            "director": {
-                "skillId": "community.vox-director",
-                "version": "1.0.0",
-                "contentHash": "sha256:community-vox-reference"
-            },
-            "spec": gated_community_vox_spec()
-        }),
-        Some("compile-community-vox-reference-v1"),
-    )).expect("production dry-run receipt");
+    let runtime =
+        ProductionRuntime::open(env!("CARGO_PKG_VERSION"), &database_path).expect("runtime");
+    let receipt = runtime
+        .execute(&envelope(
+            "production.dry-run",
+            json!({
+                "projectId": "workflow-vox-reference",
+                "title": "VOX approved reference",
+                "director": {
+                    "skillId": "community.vox-director",
+                    "version": "1.0.0",
+                    "contentHash": "sha256:community-vox-reference"
+                },
+                "spec": gated_community_vox_spec()
+            }),
+            Some("compile-community-vox-reference-v1"),
+        ))
+        .expect("production dry-run receipt");
     let completed = wait_for_task(&runtime, receipt["taskId"].as_str().expect("task id"));
-    let run_id = completed["result"]["productionRunId"].as_str().expect("run id").to_owned();
+    let run_id = completed["result"]["productionRunId"]
+        .as_str()
+        .expect("run id")
+        .to_owned();
 
     let connection = Connection::open(&database_path).expect("open runtime database");
     let selected_stage = "style:bakeoff:swiss-modern";
@@ -487,58 +550,82 @@ fn running_vox_plan_waits_for_an_approved_bakeoff_and_forwards_that_artifact_to_
         "style:bakeoff:american-retro",
         "style:bakeoff:swiss-modern",
         "style:bakeoff:punk-zine",
-    ].iter().enumerate() {
-        connection.execute(
-            "UPDATE stage_runs SET status = 'succeeded', task_id = ?1, result_json = ?2
+    ]
+    .iter()
+    .enumerate()
+    {
+        connection
+            .execute(
+                "UPDATE stage_runs SET status = 'succeeded', task_id = ?1, result_json = ?2
               WHERE run_id = ?3 AND stage_key = ?4",
-            params![
-                format!("task_style_reference_{index}"),
-                json!({ "artifact": { "kind": "image", "mimeType": "image/png" } }).to_string(),
-                run_id,
-                stage_key,
-            ],
-        ).expect("seed bake-off result");
+                params![
+                    format!("task_style_reference_{index}"),
+                    json!({ "artifact": { "kind": "image", "mimeType": "image/png" } }).to_string(),
+                    run_id,
+                    stage_key,
+                ],
+            )
+            .expect("seed bake-off result");
     }
     drop(connection);
 
-    runtime.execute(&envelope(
-        "production.approve",
-        json!({ "runId": run_id, "gateType": "route-plan" }),
-        Some("approve-reference-route-v1"),
-    )).expect("approve route");
-    runtime.execute(&envelope(
-        "production.approve",
-        json!({ "runId": run_id, "gateType": "run-budget", "hardLimitMicros": 8_000_000 }),
-        Some("approve-reference-budget-v1"),
-    )).expect("approve budget");
-    runtime.execute(&envelope(
-        "production.run",
-        json!({ "runId": run_id }),
-        Some("run-reference-plan-v1"),
-    )).expect("start production run");
+    runtime
+        .execute(&envelope(
+            "production.approve",
+            json!({ "runId": run_id, "gateType": "route-plan" }),
+            Some("approve-reference-route-v1"),
+        ))
+        .expect("approve route");
+    runtime
+        .execute(&envelope(
+            "production.approve",
+            json!({ "runId": run_id, "gateType": "run-budget", "hardLimitMicros": 8_000_000 }),
+            Some("approve-reference-budget-v1"),
+        ))
+        .expect("approve budget");
+    runtime
+        .execute(&envelope(
+            "production.run",
+            json!({ "runId": run_id }),
+            Some("run-reference-plan-v1"),
+        ))
+        .expect("start production run");
 
     let premature_review = runtime.execute(&envelope(
         "production.approve",
         json!({ "runId": run_id, "gateType": "keyframe-review" }),
         Some("approve-keyframes-too-early-v1"),
     ));
-    assert_eq!(premature_review.expect_err("keyframes are not ready for review").code, "PRECONDITION_FAILED");
+    assert_eq!(
+        premature_review
+            .expect_err("keyframes are not ready for review")
+            .code,
+        "PRECONDITION_FAILED"
+    );
 
     let deadline = Instant::now() + Duration::from_secs(6);
     loop {
-        let status = runtime.execute(&envelope(
-            "production.status",
-            json!({ "runId": run_id }),
-            None,
-        )).expect("production status");
-        let keyframe = status["stages"].as_array().expect("stages").iter()
+        let status = runtime
+            .execute(&envelope(
+                "production.status",
+                json!({ "runId": run_id }),
+                None,
+            ))
+            .expect("production status");
+        let keyframe = status["stages"]
+            .as_array()
+            .expect("stages")
+            .iter()
             .find(|stage| stage["stageKey"] == "shot:shot-wide:keyframe")
             .expect("keyframe stage");
         if status["status"] == "running" && keyframe["status"] == "ready" {
             assert!(keyframe["taskId"].is_null());
             break;
         }
-        assert!(Instant::now() < deadline, "keyframe did not wait at style gate: {status}");
+        assert!(
+            Instant::now() < deadline,
+            "keyframe did not wait at style gate: {status}"
+        );
         thread::sleep(Duration::from_millis(50));
     }
 
@@ -547,37 +634,51 @@ fn running_vox_plan_waits_for_an_approved_bakeoff_and_forwards_that_artifact_to_
         json!({ "runId": run_id, "gateType": "style-reference" }),
         Some("approve-style-without-selection-v1"),
     ));
-    assert_eq!(missing_selection.expect_err("selection is required").code, "INVALID_ARGUMENT");
+    assert_eq!(
+        missing_selection.expect_err("selection is required").code,
+        "INVALID_ARGUMENT"
+    );
 
-    let decision = runtime.execute(&envelope(
-        "production.approve",
-        json!({
-            "runId": run_id,
-            "gateType": "style-reference",
-            "approvedStageKey": selected_stage
-        }),
-        Some("approve-style-selection-v1"),
-    )).expect("approve selected style reference");
+    let decision = runtime
+        .execute(&envelope(
+            "production.approve",
+            json!({
+                "runId": run_id,
+                "gateType": "style-reference",
+                "approvedStageKey": selected_stage
+            }),
+            Some("approve-style-selection-v1"),
+        ))
+        .expect("approve selected style reference");
     assert_eq!(decision["runStatus"], "running");
 
     let deadline = Instant::now() + Duration::from_secs(6);
     loop {
         let connection = Connection::open(&database_path).expect("open runtime database");
-        let args = connection.query_row(
-            "SELECT args_json FROM runtime_tasks
+        let args = connection
+            .query_row(
+                "SELECT args_json FROM runtime_tasks
               WHERE kind = 'generate.image'
                 AND json_extract(args_json, '$.sourceImageIds[0]') = 'task_style_reference_1'
               LIMIT 1",
-            [],
-            |row| row.get::<_, String>(0),
-        ).optional().expect("query keyframe task");
+                [],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()
+            .expect("query keyframe task");
         if let Some(args) = args {
             let args: Value = serde_json::from_str(&args).expect("keyframe args");
             assert_eq!(args["sourceImageIds"], json!(["task_style_reference_1"]));
-            assert!(!args["prompt"].as_str().unwrap_or_default().contains("american-retro"));
+            assert!(!args["prompt"]
+                .as_str()
+                .unwrap_or_default()
+                .contains("american-retro"));
             break;
         }
-        assert!(Instant::now() < deadline, "approved style reference was not forwarded");
+        assert!(
+            Instant::now() < deadline,
+            "approved style reference was not forwarded"
+        );
         thread::sleep(Duration::from_millis(50));
     }
 

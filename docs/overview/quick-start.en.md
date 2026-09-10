@@ -21,7 +21,7 @@ Do not use `--open` for automated browser acceptance because it delegates to the
 
 ## Option 2: Direct the Production Crew via an External Agent / CLI
 
-The current external-director path is Codex CLI/Browser, Claude Code, and OpenCode CLI. They use the same local CLI through the Operation Skill. DeepSeek Harness keeps an explicit Plugin/Profile projection; CodeBuddy Code and Pi are compatible through the stable contract. WorkBuddy is a separate mainstream office AI workspace, not CodeBuddy Code, and is outside the current Director Binding. Flovart's formal Coding Agent surface is Skill + CLI; users do not need to configure MCP, browser scraping, or a file queue.
+The current external-director path is Codex CLI/Browser, Claude Code, and OpenCode CLI. They use the same local CLI through the Operation Skill. DeepSeek Harness keeps an explicit Plugin/Profile projection; WorkBuddy uses a CLI Connector + Skill. TeleAgent can use the local stdio MCP + canonical Skill projection, but its real client tracer remains an External Gate. CodeBuddy Code and Pi are compatible through the stable contract. Users do not need browser scraping or a file queue; MCP is optional.
 
 ```bash
 npm run flovart:cli -- status --json
@@ -43,7 +43,7 @@ npm run flovart:cli -- workflow.inspect --json
 npm run flovart:cli -- workflow.inspect --json
 ```
 
-External agents use `workflow.apply` or `workflow.node.run` for writes and then re-read `workflow.inspect`. The command registry is readable offline; visible Workflow operations require Flovart Desktop to be running and the target Workflow to be open. See the [Agent architecture package](../design/agent/README.md) for the full boundary.
+External agents use `workflow.apply` or `workflow.node.run` for writes and then re-read `workflow.inspect`. The command registry is readable offline; visible Workflow operations require Flovart Desktop to be running and the target Workflow to be open. See the [ecosystem architecture package](../design/ecosystem/TARGET_ARCHITECTURE.md) for the full boundary.
 
 The target DeepSeek Harness experience installs a dedicated Flovart Profile/Plugin into the Harness shell. A fixed Flovart Dock opens the complete Workflow, Table, and Agent Production Control surface in the central workspace; lightweight overlays handle approvals/status/artifacts, the right-side Agent Bridge manages connections and single-director handoff, and a standalone Flovart window remains available. The Host Plugin still derives and executes model tools from the CLI registry; its Client Plugin uses a scoped local channel only for UI, events, and recovery. This Profile is still a design/migration target, so the current path remains Operation Skill + CLI + the standalone Flovart workspace.
 

@@ -5,7 +5,8 @@
   "type": "module",
   "bin": {
     "flovart": "./cli.js",
-    "flovart-cli": "./cli.js"
+    "flovart-cli": "./cli.js",
+    "flovart-mcp": "./mcp-server.js"
   },
   "files": [
     "cli.js",
@@ -21,7 +22,9 @@
     "host-discovery.js",
     "host-registry.js",
     "local-agent.js",
-  "local-status.js",
+    "local-status.js",
+    "operation-gateway.js",
+    "mcp-server.js",
   "public-status.js",
   "ensure.js",
     "tui.js",

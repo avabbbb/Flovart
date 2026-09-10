@@ -64,6 +64,16 @@
       "aliases": [],
       "distributionTargets": ["workbuddy-skill"],
       "runtimeSurfaces": ["skill-mediated", "browser-workflow"]
+    },
+    {
+      "id": "teleagent",
+      "label": "TeleAgent",
+      "category": "mainstream-host",
+      "status": "manual-import",
+      "executable": null,
+      "aliases": [],
+      "distributionTargets": ["teleagent-skill"],
+      "runtimeSurfaces": ["mcp", "skill-mediated", "browser-workflow"]
     }
   ],
   "ideHosts": [
@@ -117,6 +127,13 @@
     {
       "id": "workbuddy-skill",
       "label": "WorkBuddy Skill",
+      "kind": "skill",
+      "installPath": null,
+      "status": "manual-import"
+    },
+    {
+      "id": "teleagent-skill",
+      "label": "TeleAgent Skill",
       "kind": "skill",
       "installPath": null,
       "status": "manual-import"

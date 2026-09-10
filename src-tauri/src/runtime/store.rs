@@ -197,7 +197,10 @@ impl RuntimeStore {
         payload_hash: &str,
         args: &Value,
     ) -> Result<TaskReceipt, RuntimeError> {
-        self.submit_task(
+        let run_id = args.get("runId").and_then(Value::as_str).ok_or_else(|| {
+            RuntimeError::new("INVALID_ARGUMENT", "production.run requires runId")
+        })?;
+        self.submit_task_with_entity(
             command_id,
             actor_kind,
             actor_instance_id,
@@ -205,6 +208,7 @@ impl RuntimeStore {
             payload_hash,
             "production.run",
             args,
+            Some(("production_run", run_id)),
             2_000,
         )
     }
@@ -896,6 +900,32 @@ impl RuntimeStore {
         args: &Value,
         poll_interval_ms: u64,
     ) -> Result<TaskReceipt, RuntimeError> {
+        self.submit_task_with_entity(
+            command_id,
+            actor_kind,
+            actor_instance_id,
+            idempotency_key,
+            payload_hash,
+            command_name,
+            args,
+            None,
+            poll_interval_ms,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn submit_task_with_entity(
+        &self,
+        command_id: &str,
+        actor_kind: &str,
+        actor_instance_id: &str,
+        idempotency_key: &str,
+        payload_hash: &str,
+        command_name: &str,
+        args: &Value,
+        entity: Option<(&str, &str)>,
+        poll_interval_ms: u64,
+    ) -> Result<TaskReceipt, RuntimeError> {
         let mut connection = self.connection.lock();
         let transaction = connection
             .transaction_with_behavior(TransactionBehavior::Immediate)
@@ -935,9 +965,18 @@ impl RuntimeStore {
         transaction
             .execute(
                 "INSERT INTO runtime_tasks(
-                    id, command_id, kind, status, args_json, created_at, updated_at
-                 ) VALUES(?1, ?2, ?3, 'queued', ?4, ?5, ?5)",
-                params![task_id, command_id, command_name, args.to_string(), now],
+                    id, command_id, kind, status, entity_type, entity_id,
+                    args_json, created_at, updated_at
+                 ) VALUES(?1, ?2, ?3, 'queued', ?4, ?5, ?6, ?7, ?7)",
+                params![
+                    task_id,
+                    command_id,
+                    command_name,
+                    entity.map(|(kind, _)| kind),
+                    entity.map(|(_, id)| id),
+                    args.to_string(),
+                    now
+                ],
             )
             .map_err(store_unavailable)?;
         transaction
@@ -1119,6 +1158,28 @@ impl RuntimeStore {
             .ok_or_else(|| {
                 RuntimeError::new("TASK_NOT_FOUND", format!("Task not found: {task_id}"))
             })
+    }
+
+    pub fn find_production_run_task(
+        &self,
+        run_id: &str,
+    ) -> Result<Option<RuntimeTask>, RuntimeError> {
+        let connection = self.connection.lock();
+        connection
+            .query_row(
+                "SELECT id, command_id, kind, status, progress_json, lease_owner,
+                        lease_expires_at, cancel_requested_at, result_json, error_json,
+                        created_at, updated_at
+                   FROM runtime_tasks
+                  WHERE kind = 'production.run'
+                    AND entity_type = 'production_run' AND entity_id = ?1
+                  ORDER BY created_at DESC, id DESC
+                  LIMIT 1",
+                [run_id],
+                task_from_row,
+            )
+            .optional()
+            .map_err(store_unavailable)
     }
 
     pub fn list_tasks(
@@ -1727,7 +1788,8 @@ impl RuntimeStore {
         let run = connection
             .query_row(
                 "SELECT r.id, r.session_id, r.spec_revision_id, r.review_policy,
-                        r.status, r.blockers_json, s.project_id, s.title, revision.extension_json
+                        r.status, r.blockers_json, s.project_id, s.title, revision.extension_json,
+                        r.created_at, COALESCE(r.finished_at, r.started_at, r.created_at)
                    FROM production_runs r
                    JOIN production_sessions s ON s.id = r.session_id
                    JOIN production_spec_revisions revision ON revision.id = r.spec_revision_id
@@ -1744,6 +1806,8 @@ impl RuntimeStore {
                         row.get::<_, String>(6)?,
                         row.get::<_, String>(7)?,
                         row.get::<_, String>(8)?,
+                        row.get::<_, i64>(9)?,
+                        row.get::<_, i64>(10)?,
                     ))
                 },
             )
@@ -1782,7 +1846,7 @@ impl RuntimeStore {
             let mut statement = connection
                 .prepare(
                     "SELECT id, stage_key, capability_id, spec_path, title, summary,
-                            status, blocked_reason_json, input_json, task_id
+                            status, blocked_reason_json, input_json, task_id, result_json
                        FROM stage_runs
                       WHERE run_id = ?1
                       ORDER BY created_at, stage_key",
@@ -1801,6 +1865,7 @@ impl RuntimeStore {
                         row.get::<_, Option<String>>(7)?,
                         row.get::<_, Option<String>>(8)?,
                         row.get::<_, Option<String>>(9)?,
+                        row.get::<_, Option<String>>(10)?,
                     ))
                 })
                 .map_err(store_unavailable)?;
@@ -1816,7 +1881,11 @@ impl RuntimeStore {
                     blocked_reason,
                     input,
                     task_id,
+                    result,
                 ) = row.map_err(store_unavailable)?;
+                let artifact = result
+                    .and_then(|value| serde_json::from_str::<Value>(&value).ok())
+                    .and_then(|value| super::production_task::artifact_reference(&value));
                 stages.push(json!({
                     "id": id,
                     "stageKey": stage_key,
@@ -1827,6 +1896,7 @@ impl RuntimeStore {
                     "status": status,
                     "input": input.and_then(|value| serde_json::from_str::<Value>(&value).ok()),
                     "taskId": task_id,
+                    "artifact": artifact,
                     "blockedReason": blocked_reason
                         .and_then(|value| serde_json::from_str::<Value>(&value).ok()),
                     "dependsOn": dependencies.remove(&stage_key).unwrap_or_default()
@@ -1876,9 +1946,66 @@ impl RuntimeStore {
             "projectId": run.6,
             "title": run.7,
             "draftBinding": draft_binding,
+            "createdAt": run.9,
+            "updatedAt": run.10,
             "stages": stages,
             "gates": gates
         }))
+    }
+
+    pub fn get_production_task(&self, task_id: &str) -> Result<Value, RuntimeError> {
+        let run = self.get_production_status(task_id)?;
+        let runtime_task = self
+            .find_production_run_task(task_id)?
+            .map(|task| serde_json::to_value(task).map_err(store_unavailable))
+            .transpose()?;
+        Ok(super::production_task::from_run(
+            &run,
+            runtime_task.as_ref(),
+        ))
+    }
+
+    pub fn resume_production_task(&self, task_id: &str) -> Result<Value, RuntimeError> {
+        let task = self.get_production_task(task_id)?;
+        let state = task
+            .get("state")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        if !["planned", "running", "recovering"].contains(&state) {
+            return Err(RuntimeError {
+                code: "PRECONDITION_FAILED".to_owned(),
+                message: format!("ProductionTask cannot resume from state {state}."),
+                retryable: false,
+                details: Some(json!({ "task": task })),
+                action_url: None,
+            });
+        }
+        let runtime_task = self.find_production_run_task(task_id)?.ok_or_else(|| {
+            RuntimeError::new(
+                "PRECONDITION_FAILED",
+                "ProductionTask has not been submitted to the Runtime scheduler.",
+            )
+        })?;
+        if !["queued", "working"].contains(&runtime_task.status.as_str()) {
+            return Err(RuntimeError {
+                code: "RECOVERY_REQUIRED".to_owned(),
+                message: format!(
+                    "The ProductionTask scheduler record is {} and cannot be resumed safely.",
+                    runtime_task.status
+                ),
+                retryable: false,
+                details: Some(json!({
+                    "runtimeTaskId": runtime_task.id,
+                    "runtimeTaskStatus": runtime_task.status,
+                    "task": task
+                })),
+                action_url: None,
+            });
+        }
+        Ok(super::production_task::resume_result(
+            &task,
+            &serde_json::to_value(runtime_task).map_err(store_unavailable)?,
+        ))
     }
 
     pub fn get_workflow_projection(&self, project_id: &str) -> Result<Value, RuntimeError> {

@@ -10,6 +10,8 @@ import runtimeEventSchema from './contracts/runtime/schemas/runtime-event.v1.jso
 import runtimeStatusSchema from './contracts/runtime/schemas/runtime-status.v1.json' with { type: 'json' };
 import runtimeTaskSchema from './contracts/runtime/schemas/runtime-task.v1.json' with { type: 'json' };
 import taskReceiptSchema from './contracts/runtime/schemas/task-receipt.v1.json' with { type: 'json' };
+import productionTaskSchema from './contracts/runtime/schemas/production-task.v1.json' with { type: 'json' };
+import productionTaskResumeSchema from './contracts/runtime/schemas/production-task-resume.v1.json' with { type: 'json' };
 import { getCanonicalRegistry } from './registry.js';
 
 function createRuntimeValidator(schema, name) {
@@ -19,6 +21,13 @@ function createRuntimeValidator(schema, name) {
 }
 
 const envelopeValidator = createRuntimeValidator(envelopeSchema, 'command-envelope');
+const productionTaskResumeDocument = {
+  ...productionTaskResumeSchema,
+  properties: {
+    ...productionTaskResumeSchema.properties,
+    task: productionTaskSchema,
+  },
+};
 const outputValidators = Object.freeze({
   'crew-intent': createRuntimeValidator(crewIntentSchema, 'crew-intent'),
   'crew-receipt': createRuntimeValidator(crewReceiptSchema, 'crew-receipt'),
@@ -27,6 +36,8 @@ const outputValidators = Object.freeze({
   'runtime-status': createRuntimeValidator(runtimeStatusSchema, 'runtime-status'),
   'runtime-task': createRuntimeValidator(runtimeTaskSchema, 'runtime-task'),
   'task-receipt': createRuntimeValidator(taskReceiptSchema, 'task-receipt'),
+  'production-task': createRuntimeValidator(productionTaskSchema, 'production-task'),
+  'production-task-resume': createRuntimeValidator(productionTaskResumeDocument, 'production-task-resume'),
 });
 
 function invalid(code, message, details) {

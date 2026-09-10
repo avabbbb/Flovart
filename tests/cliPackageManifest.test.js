@@ -37,7 +37,9 @@ describe('flovart-cli package manifest', () => {
   });
 
   it('keeps the executable, managed agent, and Skill projections in the package', () => {
-    expect(packageManifest.bin).toMatchObject({ flovart: './cli.js', 'flovart-cli': './cli.js' });
+    expect(packageManifest.bin).toMatchObject({ flovart: './cli.js', 'flovart-cli': './cli.js', 'flovart-mcp': './mcp-server.js' });
+    expect(packageEntries.has('mcp-server.js')).toBe(true);
+    expect(packageEntries.has('operation-gateway.js')).toBe(true);
     expect([...packageEntries]).toEqual(expect.arrayContaining(['cli.js', 'managed-agent', 'skill', 'scripts']));
   });
 });

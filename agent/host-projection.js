@@ -26,12 +26,17 @@ export function prepareAgentHostProjection(input = {}) {
   const host = discovery.agents?.find(item => item.id === identity.id);
   if (!host?.available && identity.status !== 'manual-import') return failure('HOST_UNAVAILABLE', `${identity.label} 当前未在本机就绪。`, { agentIdentity: identity.id });
 
-  if (identity.status === 'manual-import') return {
-    ok: true,
-    agentIdentity: { id: identity.id, label: identity.label },
-    distributionTarget: { id: 'workbuddy-skill', label: 'WorkBuddy 技能包', kind: 'skill' },
-    projection: { status: 'external', skillReady: false, bootstrapReady: false, message: '在 WorkBuddy 的技能页导入下载的 Flovart 技能包，再发送连接指令。' },
-  };
+  if (identity.status === 'manual-import') {
+    const isTeleAgent = identity.id === 'teleagent';
+    return {
+      ok: true,
+      agentIdentity: { id: identity.id, label: identity.label },
+      distributionTarget: { id: isTeleAgent ? 'teleagent-skill' : 'workbuddy-skill', label: isTeleAgent ? 'TeleAgent 技能包' : 'WorkBuddy 技能包', kind: 'skill' },
+      projection: { status: 'external', skillReady: false, bootstrapReady: false, message: isTeleAgent
+        ? '在 TeleAgent 中导入 Flovart Skill，并配置本地 stdio MCP Server；真实客户端行为仍需认证。'
+        : '在 WorkBuddy 的技能页导入下载的 Flovart 技能包，再发送连接指令。' },
+    };
+  }
 
   const target = projectionTarget(identity);
   if (!target) {

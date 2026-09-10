@@ -21,7 +21,7 @@ npm run flovart:cli -- start --source --web --open
 
 ## 方式二：用外部 Agent / CLI 指挥制作组
 
-当前外部导演路径以 Codex CLI/Browser、Claude Code 和 OpenCode CLI 为主；它们通过 Operation Skill 使用同一套本机 CLI。DeepSeek Harness 是显式 Plugin/Profile projection，CodeBuddy Code 与 Pi 通过稳定 contract 兼容；WorkBuddy（普通办公 AI 工作台）与 CodeBuddy Code（Coding Agent CLI）是不同产品，WorkBuddy 不在当前 Director Binding。Flovart 的正式 Coding Agent 接入面是 Skill + CLI，不要求用户配置 MCP、浏览器抓取或文件队列。
+当前外部导演路径以 Codex CLI/Browser、Claude Code 和 OpenCode CLI 为主；它们通过 Operation Skill 使用同一套本机 CLI。DeepSeek Harness 是显式 Plugin/Profile projection，WorkBuddy 使用 CLI Connector + Skill；TeleAgent 可尝试本地 stdio MCP + canonical Skill，但真实客户端仍是 External Gate。CodeBuddy Code 与 Pi 通过稳定 contract 兼容。Flovart 不要求用户配置浏览器抓取或文件队列；MCP 仅是可选 transport。
 
 ```bash
 npm run flovart:cli -- status --json
@@ -43,7 +43,7 @@ npm run flovart:cli -- workflow.inspect --json
 npm run flovart:cli -- workflow.inspect --json
 ```
 
-写操作由外部 Agent 按当前 Skill 调用 `workflow.apply` 或 `workflow.node.run`，并在结果后重新 `workflow.inspect`。命令注册表可以离线读取；可见 Workflow 操作需要先启动 Flovart Desktop 并打开目标 Workflow。完整架构边界见 [Agent 设计文档](../design/agent/README.md)。
+写操作由外部 Agent 按当前 Skill 调用 `workflow.apply` 或 `workflow.node.run`，并在结果后重新 `workflow.inspect`。命令注册表可以离线读取；可见 Workflow 操作需要先启动 Flovart Desktop 并打开目标 Workflow。完整架构边界见 [生态架构设计包](../design/ecosystem/TARGET_ARCHITECTURE.md)。
 
 DeepSeek Harness 的目标体验是在自身主壳中安装专用 Flovart Profile/Plugin：左侧固定 Flovart Dock 打开中央完整 Workflow、Table 与 Agent Production Control，快速弹层处理审批/状态/Artifact，右侧 Agent Bridge 管理连接与单导演 Handoff，并可弹出独立 Flovart 窗口。Host Plugin 仍从 CLI Registry 派生并执行模型工具，Client Plugin 只为 UI、事件和恢复使用受限本地通道。该 Profile 尚处于设计/迁移阶段；当前使用方式仍以 Operation Skill + CLI + 独立 Flovart 工作区为准。
 

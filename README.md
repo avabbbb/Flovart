@@ -211,7 +211,7 @@ The implementation uses three names that are useful once the product story is cl
 - **Workspace Operator:** the only built-in execution agent; it uses typed tools inside a bounded intent.
 - **Production Crew:** a group name for the Operator and deterministic dispatch/runtime/provider services, not a third agent.
 
-The full protocol, state boundaries and migration notes are in the [Agent architecture package](docs/design/agent/README.md) and [Flovart Link state document](docs/design/flovart-link-2/CURRENT_STATE.md).
+The full protocol, state boundaries and migration notes are in the [ecosystem architecture package](docs/design/ecosystem/TARGET_ARCHITECTURE.md) and [current architecture record](docs/design/ecosystem/CURRENT_ARCHITECTURE.md).
 
 ## Local-first and security
 

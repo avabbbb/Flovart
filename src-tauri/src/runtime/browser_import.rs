@@ -17,7 +17,13 @@ const IMAGE_CAPABILITY: &str = "browser.import.image";
 const VIDEO_CAPABILITY: &str = "browser.import.video";
 const MAX_IMPORT_BYTES: u64 = 64 * 1024 * 1024;
 pub const BROWSER_IMPORT_CHUNK_BYTES: usize = 256 * 1024;
-const SUPPORTED_IMAGE_MIMES: &[&str] = &["image/png", "image/jpeg", "image/webp", "image/gif", "image/avif"];
+const SUPPORTED_IMAGE_MIMES: &[&str] = &[
+    "image/png",
+    "image/jpeg",
+    "image/webp",
+    "image/gif",
+    "image/avif",
+];
 const SUPPORTED_VIDEO_MIMES: &[&str] = &["video/mp4", "video/webm"];
 
 const SCHEMA: &str = r#"

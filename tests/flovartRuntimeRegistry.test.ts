@@ -35,7 +35,7 @@ describe('Production Runtime canonical registry', () => {
     const commandNames = Object.keys(registry.commands);
 
     expect(registry.protocolVersion).toBe('1');
-    expect(registry.registryHash).toBe('16259085507641cce24209775a0a87a94a4e0c72f4aed5ed34781fee046b914e');
+    expect(registry.registryHash).toBe('abc139fe2d1903463dddf6429fbb1c0721bd4d6321e43bed30f86bdd6ce790ec');
     expect(hashCanonicalRegistryDocument(registryDocument)).toBe(registry.registryHash);
     expect(Object.isFrozen(registry.commands)).toBe(true);
     expect(Object.isFrozen(registry.commands['runtime.status'].args)).toBe(true);
@@ -45,16 +45,46 @@ describe('Production Runtime canonical registry', () => {
       'command.schema',
       'runtime.test.delay',
       'task.get',
+      'task.inspect',
+      'task.resume',
       'task.list',
       'task.cancel',
       'event.stream',
       'workflow.selection.get',
     ]));
-    for (const command of ['runtime.test.delay', 'task.get', 'task.list', 'task.cancel', 'event.stream']) {
+    for (const command of ['runtime.test.delay', 'task.get', 'task.inspect', 'task.resume', 'task.list', 'task.cancel', 'event.stream']) {
       expect(registry.commands[command]?.availability).toBe('available');
     }
     expect(commandNames).not.toContain('workflow.run');
     expect(commandNames.some(command => /^(?:canvas|element)\./.test(command))).toBe(false);
+  });
+
+  it('validates the ProductionTask lifecycle and resume contracts', () => {
+    const task = {
+      schemaVersion: 'flovart.production-task/1',
+      taskId: 'production_run_test',
+      workflowId: 'workflow_test',
+      productionRunId: 'production_run_test',
+      intent: 'Test production',
+      state: 'recovering',
+      runIds: ['production_run_test'],
+      jobIds: ['task_stage_test'],
+      artifactIds: ['sha256:test'],
+      checkpoint: { runStatus: 'recovering', completedStageKeys: [], failedStageKeys: [] },
+      retryPolicy: { strategy: 'stage-idempotent', retryCompletedStages: false, duplicateSubmission: 'reject' },
+      createdBy: { surface: 'production-runtime' },
+      createdAt: 1,
+      updatedAt: 2,
+    };
+    expect(validateRuntimeContract('production-task', task)).toMatchObject({ ok: true });
+    expect(validateRuntimeContract('production-task-resume', {
+      schemaVersion: 'flovart.production-task/1',
+      taskId: task.taskId,
+      resumed: true,
+      recoveryMode: 'existing-runtime-task',
+      runtimeTaskId: 'task_stage_test',
+      task,
+    })).toMatchObject({ ok: true });
   });
 
   it('is the single command metadata source used by the CLI', () => {

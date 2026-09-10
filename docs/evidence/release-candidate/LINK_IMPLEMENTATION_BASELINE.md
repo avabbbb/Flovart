@@ -1,4 +1,6 @@
-# Flovart Link 2.0：当前状态审计
+# 历史证据：Flovart Link 2.0 实现基线
+
+> 仅保留原审计的实现与测试证据，下文“当前”均指其原基线，不约束新设计，也不代表本轮复测。产品、交互与实现目标已统一到 [原生效果与 Agent 协作设计](../../design/flovart-native-effects.md)。
 
 本文记录当前工作树的真实调用边界和验证结果。它不是把 package build 或
 mock contract 当成第三方宿主完成声明；工作树开始时已有用户修改，本轮没有

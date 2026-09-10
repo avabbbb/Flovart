@@ -8,6 +8,7 @@ mod error;
 mod events;
 mod google_veo;
 mod production;
+mod production_task;
 mod registry;
 mod runninghub;
 mod store;
@@ -134,6 +135,14 @@ impl ProductionRuntime {
 
     pub fn get_task(&self, task_id: &str) -> Result<RuntimeTask, RuntimeError> {
         self.store.get_task(task_id)
+    }
+
+    pub fn get_production_task(&self, task_id: &str) -> Result<Value, RuntimeError> {
+        self.store.get_production_task(task_id)
+    }
+
+    pub fn resume_production_task(&self, task_id: &str) -> Result<Value, RuntimeError> {
+        self.store.resume_production_task(task_id)
     }
 
     pub fn read_artifact(&self, task_id: &str) -> Result<RuntimeArtifactPayload, RuntimeError> {
@@ -906,6 +915,22 @@ impl ProductionRuntime {
                     RuntimeError::new("INVALID_ARGUMENT", "task.get requires taskId")
                 })?;
                 self.get_task(task_id).and_then(to_value)
+            }
+            "task.inspect" => {
+                let args = &envelope["args"];
+                validate_exact_args(args, &["taskId"])?;
+                let task_id = args.get("taskId").and_then(Value::as_str).ok_or_else(|| {
+                    RuntimeError::new("INVALID_ARGUMENT", "task.inspect requires taskId")
+                })?;
+                self.get_production_task(task_id)
+            }
+            "task.resume" => {
+                let args = &envelope["args"];
+                validate_exact_args(args, &["taskId"])?;
+                let task_id = args.get("taskId").and_then(Value::as_str).ok_or_else(|| {
+                    RuntimeError::new("INVALID_ARGUMENT", "task.resume requires taskId")
+                })?;
+                self.resume_production_task(task_id)
             }
             "task.list" => {
                 let args = &envelope["args"];
