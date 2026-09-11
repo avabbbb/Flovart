@@ -1,14 +1,14 @@
 import { execFileSync, spawn } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
-import { dirname, join, parse, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 import { buildBrowserBootstrapUrl, issueBrowserBootstrapToken, probeWebUi, redactBootstrapUrl } from '../tools/flovart/local-agent.js';
+import { resolveTestTempRoot } from './test-temp-root.mjs';
 
 const projectDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const tempRoot = resolve(process.env.FLOVART_TEST_TMP_ROOT || resolve(projectDir, '.tmp'));
-if (parse(tempRoot).root.toUpperCase() !== 'H:\\') throw new Error(`Chrome smoke tests must use an H: temp root: ${tempRoot}`);
+const tempRoot = resolveTestTempRoot(projectDir);
 await mkdir(tempRoot, { recursive: true });
 const testRoot = await mkdtemp(join(tempRoot, 'flovart-chrome-smoke-'));
 const env = {

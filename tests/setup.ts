@@ -1,14 +1,12 @@
 import { mkdirSync } from 'node:fs';
-import { parse, resolve } from 'node:path';
 import { webcrypto } from 'node:crypto';
 import '@testing-library/jest-dom/vitest';
 import 'fake-indexeddb/auto';
+import { resolveTestTempRoot } from '../scripts/test-temp-root.mjs';
 
-// Keep Vitest's mkdtemp/tmpdir fixtures off the system drive. The repository
-// is on H:, so every test-owned temporary file belongs under this ignored H:
-// workspace directory instead of the user's Windows TEMP directory.
-const testTempRoot = resolve(process.cwd(), '.tmp', 'vitest');
-if (parse(testTempRoot).root.toUpperCase() !== 'H:\\') throw new Error(`Vitest temporary files must use an H: root: ${testTempRoot}`);
+// Keep Vitest's mkdtemp/tmpdir fixtures off the system drive. Local Windows
+// runs are pinned to H:, while GitHub Actions uses its non-C: runner workspace.
+const testTempRoot = resolveTestTempRoot(process.cwd(), 'vitest');
 mkdirSync(testTempRoot, { recursive: true });
 process.env.TEMP = testTempRoot;
 process.env.TMP = testTempRoot;

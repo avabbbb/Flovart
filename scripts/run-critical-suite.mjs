@@ -1,11 +1,11 @@
 import { spawnSync } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
-import { dirname, parse, resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { resolveTestTempRoot } from './test-temp-root.mjs';
 
 const projectDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const testTempRoot = resolve(projectDir, '.tmp', 'vitest');
-if (parse(testTempRoot).root.toUpperCase() !== 'H:\\') throw new Error(`Critical tests must use an H: temp root: ${testTempRoot}`);
+const testTempRoot = resolveTestTempRoot(projectDir, 'vitest');
 mkdirSync(testTempRoot, { recursive: true });
 
 const repeat = Number(process.env.FLOVART_CRITICAL_REPEATS || process.argv[2] || 10);

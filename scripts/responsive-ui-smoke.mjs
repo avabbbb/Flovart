@@ -1,17 +1,16 @@
 import { chromium } from 'playwright';
 import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
-import { dirname, parse, resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { assertTestPath, resolveTestTempRoot } from './test-temp-root.mjs';
 
 const targetUrl = process.env.FLOVART_TEST_URL || 'http://127.0.0.1:7410';
 const projectDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const chromeExecutable = process.env.FLOVART_CHROME_PATH || chromium.executablePath();
 if (!existsSync(chromeExecutable)) throw new Error(`Chrome for Testing executable was not found: ${chromeExecutable}`);
-const tempRoot = resolve(process.env.FLOVART_TEST_TMP_ROOT || resolve(projectDir, '.tmp'));
-if (parse(tempRoot).root.toUpperCase() !== 'H:\\') throw new Error(`Responsive UI tests must use an H: temp root: ${tempRoot}`);
-const outputDir = resolve(process.env.FLOVART_RESPONSIVE_ARTIFACT_DIR || resolve(tempRoot, 'responsive-artifacts'));
-if (parse(outputDir).root.toUpperCase() !== 'H:\\') throw new Error('Responsive UI artifacts must use an H: output root.');
+const tempRoot = resolveTestTempRoot(projectDir);
+const outputDir = assertTestPath(process.env.FLOVART_RESPONSIVE_ARTIFACT_DIR || resolve(tempRoot, 'responsive-artifacts'), 'Responsive UI artifacts');
 await mkdir(tempRoot, { recursive: true });
 const profileDir = await mkdtemp(resolve(tempRoot, 'flovart-responsive-ui-'));
 process.env.TEMP = profileDir;
