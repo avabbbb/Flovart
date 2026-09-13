@@ -167,9 +167,11 @@ function windowsSystemProxy() {
   if (process.platform !== 'win32') return '';
   try {
     const key = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings';
-    const enabled = execFileSync('reg.exe', ['query', key, '/v', 'ProxyEnable'], { encoding: 'utf8', windowsHide: true });
+    // A blocked or intercepted reg.exe must not stall the caller: this runs on
+    // the research path, so cap each query and fall back to "no system proxy".
+    const enabled = execFileSync('reg.exe', ['query', key, '/v', 'ProxyEnable'], { encoding: 'utf8', windowsHide: true, timeout: 2000 });
     if (!/\b0x1\b/i.test(enabled)) return '';
-    const output = execFileSync('reg.exe', ['query', key, '/v', 'ProxyServer'], { encoding: 'utf8', windowsHide: true });
+    const output = execFileSync('reg.exe', ['query', key, '/v', 'ProxyServer'], { encoding: 'utf8', windowsHide: true, timeout: 2000 });
     const raw = output.match(/ProxyServer\s+REG_SZ\s+(.+)$/im)?.[1]?.trim() || '';
     const https = raw.match(/(?:^|;)https=([^;]+)/i)?.[1] || raw.match(/(?:^|;)http=([^;]+)/i)?.[1] || raw;
     return https ? (/^https?:\/\//i.test(https) ? https : `http://${https}`) : '';

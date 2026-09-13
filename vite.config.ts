@@ -63,6 +63,13 @@ export default defineConfig(() => {
         globals: true,
         environment: 'jsdom',
         setupFiles: ['./tests/setup.ts'],
+        // Tests that shell out to `node` pay a full child-process start plus the
+        // spawned work. On Windows hosts that alone measures in seconds, and
+        // four parallel workers push single-spawn tests past Vitest's 5s/10s
+        // defaults, which showed up as intermittent "timed out" failures.
+        // These budgets still fail a genuinely hung child process.
+        testTimeout: 20000,
+        hookTimeout: 20000,
         // Windows hosts can exhaust fork/handle resources at Vitest's
         // auto-detected worker count; four workers keep the full suite
         // deterministic without changing test isolation.

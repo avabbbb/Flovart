@@ -16,6 +16,13 @@ export function assertTestPath(targetPath, label = 'Test path') {
 
 export function resolveTestTempRoot(projectDir, leaf = '') {
   const configuredRoot = process.env.FLOVART_TEST_TMP_ROOT?.trim();
-  const baseRoot = configuredRoot ? resolve(configuredRoot) : resolve(projectDir, '.tmp');
+  const runnerTemp = isGitHubActions() ? process.env.RUNNER_TEMP?.trim() : '';
+  // GitHub's checkout directory can carry broad inherited ACLs. Keep test
+  // discovery records and their ACL snapshots in the runner-owned temp area.
+  const baseRoot = configuredRoot
+    ? resolve(configuredRoot)
+    : runnerTemp
+      ? resolve(runnerTemp, 'flovart-tests')
+      : resolve(projectDir, '.tmp');
   return assertTestPath(resolve(baseRoot, leaf), 'Test temporary files');
 }

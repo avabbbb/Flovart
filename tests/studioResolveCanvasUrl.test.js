@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { normalizeCanvasUrl, resolveCanvasUrl } from '../integrations/studio/resolve/canvas-url.js';
+import { resolveTestTempRoot } from '../scripts/test-temp-root.mjs';
 
-const testTempRoot = 'H:/WorkSpace_For_VsCode/React/Floavrt/.tmp/vitest';
+const testTempRoot = resolveTestTempRoot(process.cwd(), 'vitest');
 
 describe('Resolve canvas URL discovery', () => {
   it('normalizes an explicit loopback URL to the Workflow route', () => {
