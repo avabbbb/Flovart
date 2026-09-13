@@ -29,6 +29,8 @@ dist-extension.zip
 .chrome-cdp/
 .chrome-cdp2/
 .cdp-temp/
+# WorkBuddy agent workspace: local memory and session state, not source
+.workbuddy/
 
 # Display / screenshot assets (not part of source)
 displayphoto0.png
