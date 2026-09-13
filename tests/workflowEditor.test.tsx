@@ -340,27 +340,39 @@ describe('InfiniteWorkflow surface interactions', () => {
     expect(projectState().draftChangeSets?.[0].actor).toBe('ui');
   });
 
-  it('batches native pointer moves and flushes the latest position before pointerup', () => {
+  it('keeps drag positions local and commits one revision when the pointer is released', () => {
     const frames = new Map<number, FrameRequestCallback>();
     let frameId = 0;
-    render(<Harness />);
+    const initial = makeProject();
+    initial.connections = [{ id: 'connection-1', fromNodeId: 'source', toNodeId: 'target' }];
+    render(<Harness initial={initial} />);
     vi.stubGlobal('requestAnimationFrame', vi.fn((callback: FrameRequestCallback) => {
       frames.set(++frameId, callback);
       return frameId;
     }));
     vi.stubGlobal('cancelAnimationFrame', vi.fn((id: number) => frames.delete(id)));
 
+    const connectionPath = () => editor().querySelector<SVGPathElement>('[data-workflow-connection-id="connection-1"]')?.getAttribute('d') || '';
+    const pathBefore = connectionPath();
+
     fireEvent.pointerDown(node('source'), { button: 0, pointerId: 7, clientX: 120, clientY: 120 });
     fireEvent.pointerMove(window, { pointerId: 7, clientX: 160, clientY: 150 });
     fireEvent.pointerMove(window, { pointerId: 7, clientX: 200, clientY: 180 });
+    // 拖动期间不写项目存储，也不产生草稿变更集。
     expect(projectNode('source').position).toEqual({ x: 100, y: 100 });
+    expect(projectState().draftChangeSets).toBeUndefined();
     expect(frames.size).toBe(1);
 
+    // rAF 批处理只更新本地预览：渲染已跟随，但存储仍保持原值。
     act(() => frames.values().next().value?.(0));
-    expect(projectNode('source').position).toEqual({ x: 180, y: 160 });
+    expect(projectNode('source').position).toEqual({ x: 100, y: 100 });
+    expect(connectionPath()).not.toBe(pathBefore);
+
+    // pointerup 先 flush 最新位置，再把最终结果作为单次变更写入项目与历史。
     fireEvent.pointerMove(window, { pointerId: 7, clientX: 220, clientY: 190 });
     fireEvent.pointerUp(window, { pointerId: 7, clientX: 230, clientY: 200 });
     expect(projectNode('source').position).toEqual({ x: 210, y: 180 });
+    expect(projectState().draftChangeSets).toHaveLength(1);
   });
 
   it('ignores move, up, and cancel events from a different pointer', () => {

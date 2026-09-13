@@ -137,7 +137,7 @@ function inspectTimedMedia(url: string, type: 'video' | 'audio') {
   });
 }
 
-export async function inspectWorkflowMedia(file: File) {
+export async function inspectWorkflowMedia(file: File): Promise<Pick<WorkflowMediaRecord, 'naturalWidth' | 'naturalHeight' | 'durationMs'>> {
   const type = workflowMediaType(file);
   const url = URL.createObjectURL(file);
   try {
@@ -184,6 +184,31 @@ export function workflowPosterStorageKey(storageKey: string) {
   return `${storageKey}-poster`;
 }
 
+/** 浏览用缩略图：只缩小尺寸，不改变比例，也不写回项目状态。 */
+export async function createWorkflowImageThumbnail(blob: Blob, maxWidth = 320): Promise<{ blob: Blob; width: number; height: number } | null> {
+  if (typeof document === 'undefined') return null;
+  const sourceUrl = URL.createObjectURL(blob);
+  try {
+    const image = await inspectImageElement(sourceUrl);
+    const sourceWidth = image.naturalWidth || 1;
+    const sourceHeight = image.naturalHeight || 1;
+    const width = Math.max(1, Math.min(maxWidth, sourceWidth));
+    const height = Math.max(1, Math.round(width * sourceHeight / sourceWidth));
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext('2d');
+    if (!context) return null;
+    context.drawImage(image, 0, 0, width, height);
+    const result = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/jpeg', .78));
+    return result ? { blob: result, width: sourceWidth, height: sourceHeight } : null;
+  } catch {
+    return null;
+  } finally {
+    URL.revokeObjectURL(sourceUrl);
+  }
+}
+
 export async function persistWorkflowVideoPoster(
   storageKey: string,
   blob: Blob,
@@ -198,6 +223,34 @@ export async function persistWorkflowVideoPoster(
   } catch {
     await workflowMediaStorage.remove(posterStorageKey).catch(() => undefined);
     return undefined;
+  }
+}
+
+/**
+ * 为缺少封面的视频补齐一张持久化封面，返回封面 storageKey。
+ * 仅在节点已有媒体来源时调用；调用方把返回的 key 写回节点 metadata 后，
+ * 需要调用 releaseWorkflowMediaRecord 解除临时引用（写回后由项目引用接管）。
+ */
+export async function ensureWorkflowVideoPoster(
+  source: { storageKey?: string; href?: string; artifactRef?: WorkflowArtifactRef },
+  createPoster: (blob: Blob) => Promise<Blob | null> = createWorkflowVideoPoster,
+): Promise<string | undefined> {
+  if (!source.storageKey && !source.href && !source.artifactRef?.taskId) return undefined;
+  const blob = await loadWorkflowMediaBlob(source.storageKey, source.href, source.artifactRef);
+  const posterStorageKey = workflowPosterStorageKey(source.storageKey || `workflow-media-${nanoid()}`);
+  pendingReferences.add(posterStorageKey);
+  try {
+    const poster = await createPoster(blob);
+    if (!poster) {
+      pendingReferences.delete(posterStorageKey);
+      return undefined;
+    }
+    await workflowMediaStorage.set(posterStorageKey, poster);
+    return posterStorageKey;
+  } catch (error) {
+    pendingReferences.delete(posterStorageKey);
+    await workflowMediaStorage.remove(posterStorageKey).catch(() => undefined);
+    throw error;
   }
 }
 

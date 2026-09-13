@@ -60,6 +60,7 @@ export function WorkflowNode({
   onChangeTitle,
   onFocusNode,
   renameSignal,
+  onNeedPoster,
   pluginContext,
 }: {
   node: WorkflowNodeData;
@@ -87,6 +88,8 @@ export function WorkflowNode({
   onChangeTitle?: (title: string) => void;
   onFocusNode?: () => void;
   renameSignal?: number;
+  /** 视频缺少封面时通知画布按需补齐（由画布持有请求，避免节点卸载后遗留缓存）。 */
+  onNeedPoster?: () => void;
   pluginContext?: WorkflowNodePluginContext;
 }) {
   const status = node.metadata.status || 'idle';
@@ -106,6 +109,8 @@ export function WorkflowNode({
   const elapsedLabel = elapsedSec > 0 ? `${Math.floor(elapsedSec / 60)}:${String(elapsedSec % 60).padStart(2, '0')}` : '';
   const staleHint = status === 'loading' && elapsedSec >= 180 ? '已等待较久，如长时间无响应可点击停止' : '';
   const mediaInput = useRef<HTMLInputElement>(null);
+  const needPosterRef = useRef(onNeedPoster);
+  needPosterRef.current = onNeedPoster;
   const videoActive = node.type === 'video' && Boolean(mediaActive);
   const resolveSourceMedia = node.type !== 'video' || videoActive;
   const media = useWorkflowMediaUrl(
@@ -139,6 +144,13 @@ export function WorkflowNode({
   }, [videoActive, videoVolume]);
   const isMedia = node.type === 'image' || node.type === 'video' || node.type === 'audio';
   const hasMediaReference = Boolean(node.metadata.storageKey || node.metadata.href || node.metadata.artifactRef?.taskId);
+  const posterSourceKey = node.type === 'video' ? `${node.metadata.storageKey || ''}|${node.metadata.href || ''}|${node.metadata.artifactRef?.taskId || ''}` : '';
+  // 视频默认展示封面：缺失时通知画布按需补齐，避免画布上出现空白占位。
+  useEffect(() => {
+    if (node.type !== 'video' || !posterSourceKey) return;
+    if (node.metadata.posterStorageKey || node.metadata.poster) return;
+    needPosterRef.current?.();
+  }, [node.metadata.poster, node.metadata.posterStorageKey, node.type, posterSourceKey]);
   const uploading = Boolean(node.metadata.uploading);
   const uploadBytes = node.metadata.uploadBytes || 0;
   const isLoading = status === 'loading' || uploading;

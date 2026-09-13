@@ -13,6 +13,7 @@ import { createWorkflowNode, WORKFLOW_NODE_SPECS } from './constants';
 import { applyWorkflowMutation, redoWorkflowDraftChangeSet, undoWorkflowDraftChangeSet, workflowDocumentOperationsFromFrames } from './draftAuthority';
 import {
   discardWorkflowMediaRecord,
+  ensureWorkflowVideoPoster,
   fitWorkflowMediaSize,
   ingestWorkflowMedia,
   loadWorkflowMediaBlob,
@@ -74,9 +75,13 @@ import { useClipboardStore, type ClipItem } from '../../stores/useClipboardStore
 type Frame = Pick<WorkflowProject, 'nodes' | 'connections'>;
 type ImageToolTransaction = { id: string; projectId: string; nodeId: string; frame: Frame };
 type SelectionBox = { start: WorkflowPoint; current: WorkflowPoint; additive: boolean; initialIds: string[] };
+/** 拖拽过程中的预览状态：只改本地渲染，松手后才写回项目存储。 */
+type InteractionPreview =
+  | { kind: 'node'; positions: Map<string, WorkflowPoint> }
+  | { kind: 'resize'; id: string; width: number; height: number };
 type Interaction = { pointerId: number } & (
-  | { type: 'node'; start: WorkflowPoint; positions: Map<string, WorkflowPoint>; frame: Frame; moved: boolean; batchId?: string }
-  | { type: 'resize'; id: string; start: WorkflowPoint; width: number; height: number; frame: Frame; moved: boolean }
+  | { type: 'node'; start: WorkflowPoint; positions: Map<string, WorkflowPoint>; frame: Frame; moved: boolean; batchId?: string; preview?: Map<string, WorkflowPoint> }
+  | { type: 'resize'; id: string; start: WorkflowPoint; width: number; height: number; frame: Frame; moved: boolean; preview?: { width: number; height: number } }
   | { type: 'pan'; start: WorkflowPoint; viewport: WorkflowViewport }
   | { type: 'selection'; box: SelectionBox }
   | { type: 'connection'; originId: string; direction: 'out' | 'in' });
@@ -88,6 +93,8 @@ const EDITABLE_TARGET = 'textarea,input,select,video,audio,[contenteditable="tru
 const SPACE_BLOCKED_TARGET = `${EDITABLE_TARGET},[role="menu"],[role="dialog"]`;
 const CONNECTION_NODE_PADDING = 24;
 const CONNECTION_HANDLE_RADIUS = 18;
+/** 视口裁剪留出的世界坐标边距，避免节点刚滑出屏幕就被卸载。 */
+const VIEWPORT_CULL_MARGIN = 480;
 function sameIds(a: string[], b: string[]) {
   return a.length === b.length && a.every((id, index) => id === b[index]);
 }
@@ -317,6 +324,7 @@ export function InfiniteWorkflow({
   const [slashMenu, setSlashMenu] = useState<{ x: number; y: number } | null>(null);
   const [previewNode, setPreviewNode] = useState<WorkflowNodeData | null>(null);
   const [activeMedia, setActiveMedia] = useState<{ projectId: string; nodeId: string } | null>(null);
+  const [interactionPreview, setInteractionPreview] = useState<InteractionPreview | null>(null);
   const slashMenuRef = useRef<{ x: number; y: number } | null>(null);
   slashMenuRef.current = slashMenu;
   const toggleBatch = useCallback((batchId: string) => {
@@ -333,6 +341,20 @@ export function InfiniteWorkflow({
   const videoToolTransactionRef = useRef<ImageToolTransaction | null>(null);
   const audioToolBusyRef = useRef(false);
   const audioToolTransactionRef = useRef<ImageToolTransaction | null>(null);
+
+  // 拖拽/缩放只产生本地预览副本，存储与历史在松手时一次性提交（见 finishInteraction）。
+  const displayNodes = useMemo(() => {
+    if (!interactionPreview) return project.nodes;
+    if (interactionPreview.kind === 'node') {
+      const { positions } = interactionPreview;
+      return project.nodes.map(node => {
+        const position = positions.get(node.id);
+        return position ? { ...node, position } : node;
+      });
+    }
+    const { id, width, height } = interactionPreview;
+    return project.nodes.map(node => node.id === id ? { ...node, width, height } : node);
+  }, [interactionPreview, project.nodes]);
 
   projectRef.current = project;
   viewportRef.current = project.viewport;
@@ -412,6 +434,7 @@ export function InfiniteWorkflow({
     replaceSequenceRef.current.clear();
     createMenuOpenerRef.current = null;
     interactionRef.current = null;
+    setInteractionPreview(null);
   }, [project.id]);
 
   useEffect(() => {
@@ -482,6 +505,45 @@ export function InfiniteWorkflow({
   const commitFrame = useCallback((nodes: WorkflowNodeData[], connections: WorkflowConnection[]) => {
     pushHistory(currentFrame(), { nodes, connections });
   }, [currentFrame, pushHistory]);
+
+  // 视频封面只是派生缓存：补齐后直接写回 metadata，不产生撤销记录，也不推进草稿版本。
+  const applyVideoPoster = useCallback((nodeId: string, posterStorageKey: string) => {
+    const current = projectRef.current.nodes;
+    const nodes = current.map(node => node.id === nodeId
+      ? { ...node, metadata: { ...node.metadata, posterStorageKey } }
+      : node);
+    if (nodes.every((node, index) => node === current[index])) {
+      releaseWorkflowMediaRecord(posterStorageKey);
+      return;
+    }
+    patchProject({ nodes });
+    releaseWorkflowMediaRecord(posterStorageKey);
+  }, [patchProject]);
+
+  // 封面请求由画布持有：节点被裁剪/卸载不会取消生成，也不会遗留无人引用的缓存。
+  const posterRequestsRef = useRef(new Set<string>());
+  const requestVideoPoster = useCallback((nodeId: string) => {
+    if (posterRequestsRef.current.has(nodeId)) return;
+    const node = projectRef.current.nodes.find(item => item.id === nodeId);
+    if (!node || node.type !== 'video' || node.metadata.posterStorageKey || node.metadata.poster) return;
+    if (!(node.metadata.storageKey || node.metadata.href || node.metadata.artifactRef?.taskId)) return;
+    posterRequestsRef.current.add(nodeId);
+    void ensureWorkflowVideoPoster({
+      storageKey: node.metadata.storageKey,
+      href: node.metadata.href,
+      artifactRef: node.metadata.artifactRef,
+    }).then(posterStorageKey => {
+      if (!posterStorageKey) return;
+      const target = projectRef.current.nodes.find(item => item.id === nodeId);
+      if (!target || target.metadata.posterStorageKey || target.metadata.poster) {
+        void discardWorkflowMediaRecord(posterStorageKey);
+        return;
+      }
+      applyVideoPoster(nodeId, posterStorageKey);
+    }).catch(() => undefined).finally(() => {
+      posterRequestsRef.current.delete(nodeId);
+    });
+  }, [applyVideoPoster]);
 
   const autoLayout = useCallback(() => {
     const nodes = projectRef.current.nodes;
@@ -1420,10 +1482,13 @@ export function InfiniteWorkflow({
         }
       }
       setSnapGuides(snapGuidesState);
-      patchProject({ nodes: interaction.frame.nodes.map(node => {
+      const positions = new Map<string, WorkflowPoint>();
+      interaction.frame.nodes.forEach(node => {
         const start = interaction.positions.get(node.id);
-        return start ? { ...node, position: { x: start.x + dx, y: start.y + dy } } : node;
-      }) });
+        if (start) positions.set(node.id, { x: start.x + dx, y: start.y + dy });
+      });
+      interaction.preview = positions;
+      setInteractionPreview({ kind: 'node', positions });
       return;
     }
     if (interaction.type === 'resize') {
@@ -1445,9 +1510,8 @@ export function InfiniteWorkflow({
       }
       if (resizingNode?.type === 'audio') height = 120;
       interaction.moved = width !== interaction.width || height !== interaction.height;
-      patchProject({ nodes: interaction.frame.nodes.map(node => node.id === interaction.id
-        ? { ...node, width, height }
-        : node) });
+      interaction.preview = { width, height };
+      setInteractionPreview({ kind: 'resize', id: interaction.id, width, height });
       return;
     }
     if (interaction.type === 'pan') {
@@ -1506,7 +1570,20 @@ export function InfiniteWorkflow({
     setOverlayHidden(false);
     setSnapGuides(null);
     if (interaction.type === 'node' || interaction.type === 'resize') {
-      if (interaction.moved) pushHistory(interaction.frame);
+      setInteractionPreview(null);
+      const frame = interaction.frame;
+      const previewPositions = interaction.type === 'node' ? interaction.preview : undefined;
+      const previewSize = interaction.type === 'resize' ? interaction.preview : undefined;
+      const resizedId = interaction.type === 'resize' ? interaction.id : undefined;
+      if (!interaction.moved || (!previewPositions && !previewSize)) return;
+      // 拖拽期间只渲染预览；松手时把最终位置/尺寸作为单次变更写入历史与存储。
+      const nextNodes = previewSize
+        ? frame.nodes.map(node => node.id === resizedId ? { ...node, width: previewSize.width, height: previewSize.height } : node)
+        : frame.nodes.map(node => {
+          const position = previewPositions?.get(node.id);
+          return position ? { ...node, position } : node;
+        });
+      pushHistory(frame, { nodes: nextNodes, connections: frame.connections });
       return;
     }
     if (interaction.type === 'selection') {
@@ -1542,7 +1619,8 @@ export function InfiniteWorkflow({
     pendingMoveRef.current = null;
     interactionRef.current = null;
     setOverlayHidden(false);
-    if (interaction?.type === 'node' || interaction?.type === 'resize') patchProject(interaction.frame);
+    // 拖拽期间的改动只存在于预览状态，取消时直接丢弃，无需写回存储。
+    setInteractionPreview(null);
     if (interaction?.type === 'pan') patchProject({ viewport: interaction.viewport });
     if (interaction?.type === 'selection') selectNodes(interaction.box.initialIds);
     if (interaction?.type === 'connection') createMenuOpenerRef.current = null;
@@ -1991,7 +2069,7 @@ export function InfiniteWorkflow({
     height: Math.abs(selectionBox.current.y - selectionBox.start.y),
   } : undefined;
   const selectedNodes = useMemo(() => new Set(selectedNodeIds), [selectedNodeIds]);
-  const selectedNodeData = project.nodes.filter(node => node.isVisible !== false && selectedNodes.has(node.id));
+  const selectedNodeData = displayNodes.filter(node => node.isVisible !== false && selectedNodes.has(node.id));
   const exportSelectedMedia = async (nodes: WorkflowNodeData[]) => {
     const media = nodes.filter(node => node.type === 'image' || node.type === 'video' || node.type === 'audio');
     try {
@@ -2035,7 +2113,7 @@ export function InfiniteWorkflow({
 
   const batchGroups = useMemo(() => {
     const groups = new Map<string, WorkflowNodeData[]>();
-    for (const node of project.nodes) {
+    for (const node of displayNodes) {
       if (node.batchId && node.isVisible !== false) {
         const group = groups.get(node.batchId) || [];
         group.push(node);
@@ -2043,7 +2121,7 @@ export function InfiniteWorkflow({
       }
     }
     return groups;
-  }, [project.nodes]);
+  }, [displayNodes]);
 
   const hiddenByBatch = useMemo(() => {
     const hidden = new Set<string>();
@@ -2073,6 +2151,44 @@ export function InfiniteWorkflow({
       ? [{ batchId, group: [...group].sort((left, right) => (left.batchIndex ?? 0) - (right.batchIndex ?? 0)) }]
       : []
   )), [batchGroups, expandedBatches]);
+
+  // 视口裁剪：只挂载视口附近的节点 DOM；连线额外保留与可见节点相邻的一端，避免边线断裂。
+  // 首帧尚未测量到容器尺寸时不裁剪，避免挂载瞬间丢节点（也兼容无布局的测试环境）。
+  const cullingEnabled = Boolean(rootSize && rootSize.width > 0 && rootSize.height > 0);
+  const visibleWorldRect = useMemo(() => {
+    const k = project.viewport.k || 1;
+    const left = -project.viewport.x / k;
+    const top = -project.viewport.y / k;
+    const width = Math.max(320, (rootSize?.width || 1200) - (rightPanelInset || 0));
+    const height = Math.max(240, rootSize?.height || 800);
+    return {
+      left: left - VIEWPORT_CULL_MARGIN,
+      top: top - VIEWPORT_CULL_MARGIN,
+      right: left + width / k + VIEWPORT_CULL_MARGIN,
+      bottom: top + height / k + VIEWPORT_CULL_MARGIN,
+    };
+  }, [project.viewport.k, project.viewport.x, project.viewport.y, rightPanelInset, rootSize?.height, rootSize?.width]);
+
+  const renderNodes = useMemo(() => displayNodes.filter(node => {
+    if (node.isVisible === false || hiddenByBatch.has(node.id)) return false;
+    if (!cullingEnabled) return true;
+    if (selectedNodes.has(node.id)) return true;
+    if (interactionPreview?.kind === 'node' && interactionPreview.positions.has(node.id)) return true;
+    const width = node.width || 320;
+    const height = node.height || 200;
+    return node.position.x < visibleWorldRect.right && node.position.x + width > visibleWorldRect.left
+      && node.position.y < visibleWorldRect.bottom && node.position.y + height > visibleWorldRect.top;
+  }), [cullingEnabled, displayNodes, hiddenByBatch, interactionPreview, selectedNodes, visibleWorldRect]);
+
+  const connectionNodes = useMemo(() => {
+    const visibleIds = new Set(renderNodes.map(node => node.id));
+    const needed = new Set(visibleIds);
+    for (const connection of project.connections) {
+      if (visibleIds.has(connection.fromNodeId)) needed.add(connection.toNodeId);
+      if (visibleIds.has(connection.toNodeId)) needed.add(connection.fromNodeId);
+    }
+    return displayNodes.filter(node => needed.has(node.id));
+  }, [displayNodes, project.connections, renderNodes]);
 
   const { pendingInsert: wfPendingInsert, consumeInsert: wfConsumeInsert } = usePromptHistoryStore();
   useEffect(() => {
@@ -2171,7 +2287,7 @@ export function InfiniteWorkflow({
       />
       <div ref={worldRef} className="workflow-world" style={{ transform: `translate(${project.viewport.x}px, ${project.viewport.y}px) scale(${project.viewport.k})` }}>
         <WorkflowConnections
-          nodes={project.nodes.filter(node => node.isVisible !== false)}
+          nodes={connectionNodes}
           connections={edgesVisible === false ? [] : project.connections.filter(connection => {
             const from = project.nodes.find(node => node.id === connection.fromNodeId);
             const to = project.nodes.find(node => node.id === connection.toNodeId);
@@ -2217,7 +2333,7 @@ export function InfiniteWorkflow({
             onPointerDown={event => startBatchDrag(event, batchId, group)}
           />
         ))}
-        {project.nodes.filter(node => node.isVisible !== false && !hiddenByBatch.has(node.id)).map(node => {
+        {renderNodes.map(node => {
           const batch = node.batchId ? batchGroups.get(node.batchId) : undefined;
           const batchRoot = batch?.find(item => item.batchIndex === 0) || batch?.[0];
           const primaryId = batchRoot?.metadata.primaryImageId || batchRoot?.id;
@@ -2284,6 +2400,7 @@ export function InfiniteWorkflow({
             onSetBatchPrimary={expandedBatch && node.id !== primaryId ? () => applyOps([{ type: 'set_batch_primary', batchId: node.batchId!, nodeId: node.id }]) : undefined}
             onDoubleClick={node.type === 'script' ? () => setScriptEditorNodeId(node.id) : undefined}
             onPreviewMedia={setPreviewNode}
+            onNeedPoster={() => requestVideoPoster(node.id)}
             onChangeTitle={title => { if (!node.isLocked) applyOps([{ type: 'update_node', id: node.id, patch: { title } }]); }}
             renameSignal={renameSignal?.nodeId === node.id ? renameSignal.nonce : undefined}
             onFocusNode={() => focusNode(node.id)}
@@ -2361,7 +2478,7 @@ export function InfiniteWorkflow({
       <WorkflowNodePromptBar width={promptWidth} node={selectedNodeData[0]} nodes={project.nodes} connections={project.connections} t={t} theme={theme} language={language} userApiKeys={userApiKeys} dynamicModelOptions={dynamicModelOptions} onOpenSettings={onOpenSettings} onEnhancePrompt={onEnhancePrompt} isEnhancingPrompt={isEnhancingPrompt} onChange={metadata => applyOps([{ type: 'update_node', id: selectedNodeData[0].id, metadata }])} onPromptIntent={intent => { promptIntentRef.current = intent; }} onRun={() => { const intent = promptIntentRef.current?.targetNodeId === selectedNodeData[0].id ? promptIntentRef.current : undefined; promptIntentRef.current = null; onRunNode(selectedNodeData[0].id, intent || undefined); }} onStop={onStopNode ? () => onStopNode(selectedNodeData[0].id) : undefined} focusSignal={promptFocusSignal} onDisconnectReference={fromNodeId => { const targetId = selectedNodeData[0].id; const conn = project.connections.find(c => c.toNodeId === targetId && c.fromNodeId === fromNodeId); if (!conn) return; applyOps([{ type: 'delete_connections', ids: [conn.id] }]); }} onReorderReference={nextIds => handleReorderReferences(selectedNodeData[0].id, nextIds)} assetFolders={assetFolders} assetItems={assetSuggestions} assetLibrary={assetLibrary} onSelectWorkflowReference={selectedNodeData[0] ? (nodeId => handleSelectWorkflowReference(nodeId, selectedNodeData[0].id)) : undefined} onAddReferenceFiles={selectedNodeData[0] ? (files => handleAddReferenceFiles(files, selectedNodeData[0].id)) : undefined} onSelectAsset={selectedNodeData[0] ? (assetId => handleSelectAsset(assetId, selectedNodeData[0].id)) : undefined} onResolvePastedMentions={mentions => handleResolvePastedMentions(mentions, selectedNodeData[0].id)} onPasteUnresolvedMentions={labels => setNotice(`未能唯一匹配引用：${labels.map(label => `@${label}`).join('、')}，已保留为普通文字。`)} skillEnabled={false} />
         </div>}
       </>}
-      {minimapOpen && <WorkflowMiniMap nodes={project.nodes.filter(node => node.isVisible !== false)} viewport={project.viewport} onCenter={(x, y) => {
+      {minimapOpen && <WorkflowMiniMap nodes={displayNodes.filter(node => node.isVisible !== false)} viewport={project.viewport} onCenter={(x, y) => {
         setFocusBadge(false);
         const rect = rootRef.current?.getBoundingClientRect();
         patchProject({ viewport: { ...viewportRef.current, x: (rect?.width || 1000) / 2 - x * viewportRef.current.k, y: (rect?.height || 700) / 2 - y * viewportRef.current.k } });
