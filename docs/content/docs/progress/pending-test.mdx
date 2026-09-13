@@ -16,6 +16,29 @@ title: 待测试确认
 - 待用户确认：主设计的“插件独立生成”“整段替换加宿主遮罩”仍是 ASK 未返回答案的推荐假设；Benchmark 阈值是建议验收目标。
 - 本轮已落地 canonical registry 驱动的本地 stdio MCP projection（五个稳定工具、两个只读 Resource），以及由现有 ProductionRun/StageRun/RuntimeTask 规范化出的 `ProductionTask v1` `task.inspect` / `task.resume`；真实 MCP Host、Agent session 和 Provider/宿主 tracer 仍未认证。
 
+## 本轮：本地文件夹直读素材
+
+按“素材就地读取、默认引用原文件”的方向把本地素材从“导入副本”扩出第二条路径；原导入路径不变，仍服务文件粘贴与外部来源。
+
+- 新增 `services/localFolderSource.ts`：目录授权（`showDirectoryPicker`）、目录句柄本地持久化、按深度/数量上限扫描媒体条目、按相对路径读取原文件、缩略图缓存、权限查询与重新授权。决策见 [ADR 0071](../../../adr/0071-local-folder-reference-media.md)。
+- 节点用 `local-folder:<folderId>/<相对路径>` 引用素材，`sourceType` 为 `localFolder`；项目 JSON 不保存字节、base64 或临时 URL。`loadFallbackMediaBlob` 增加该前缀解析，`useWorkflowMediaUrl` 原样透出“权限失效 / 原文件被移动”的原因，便于用户重新定位。
+- 新增 `components/workflow/LocalFolderBrowser.tsx` 并挂到 Workflow 侧栏新增的「本地文件夹」页签（真实入口，非占位）：可“选择文件夹”或拖入文件夹、按类型与文件名筛选、缩略图进入视口才生成并缓存、多选后一次性“放入画布”。未选中的条目不会生成节点。
+- 批量放入画布共用一个 Draft ChangeSet；插入前只读取选中文件的尺寸与时长，不复制字节。
+- 视频封面复用画布既有的按需封面补齐路径，对文件夹引用的视频同样生效。
+- 本轮证据：`npx tsc --noEmit` 通过；新增 `tests/localFolderSource.test.ts`（11 项）与 `tests/localFolderBrowser.test.tsx`（6 项）通过；`npm run docs:check` 通过。
+- 待用户实测：真实 Chrome/Edge 中授权一个含子目录与中文路径的文件夹，确认缩略图与“放入画布”可用、刷新后“重新连接”能恢复、移动或重命名原文件后提示重新定位。宿主 iframe 中目录授权可能被浏览器禁用，未在本轮验证。
+- 未做：助手直接给文件夹路径的读取（需本地服务新增受限目录接口）；导出/打包对引用失效的检测；轻面板的「任务 / 打开画布」入口收敛。
+
+## 本轮：画布拖拽与渲染收敛
+
+按“现有画布先优化三个地方”的切片改动，未更换画布引擎、未新增插件平台，PromptBar、工具栏和 Provider 保持原样。
+
+- 拖动节点与缩放节点改为本地预览：`pointermove` 只更新组件内预览状态，`pointerup` 才把最终位置/尺寸作为单次变更写入项目存储与撤销历史（`components/workflow/InfiniteWorkflow.tsx`）。取消手势直接丢弃预览，不再需要回滚写入。请验证拖动跟手、吸附参考线、多选整体拖动、单次撤销即可还原、以及取消后面板与画布状态一致。
+- 视口裁剪：只挂载视口附近的节点 DOM，连线额外保留与可见节点相邻的一端以免边线断裂；容器尺寸尚未测量时不裁剪，避免挂载首帧丢节点（`components/workflow/InfiniteWorkflow.tsx`）。请在真实项目中用大图验证滚动/缩放不掉节点、连线和批组栈跟随、以及内存占用变化。
+- 视频默认显示封面：视频节点缺失封面时按需生成并持久化一张封面缩略图（`ensureWorkflowVideoPoster`，`components/workflow/media.ts` + `WorkflowNode.tsx`），生成结果只写回节点 metadata，不进入撤销历史、不推进草稿版本。请验证生成结果与外部引用视频首次出现时显示封面而非空白占位，以及原文件缺失时的降级提示。
+- 本轮证据：`npx tsc --noEmit` 通过；`npm run build` 通过；相关测试 43 + 73 + 34 项通过（`tests/workflowEditor.test.tsx`、`tests/workflowNodeOverlays.test.tsx`、`tests/workflowRightPanel.test.tsx`、`tests/releaseCandidateCanvasStress.test.ts`、`tests/releaseCandidatePersistence.test.ts`、`tests/workflowStore.test.ts`、`tests/workflowMedia.test.ts`、`tests/workflowProjectTransfer.test.ts`、`tests/workflowAgentBridge.test.ts`、`tests/dshNativeWorkflowView.test.tsx`、`tests/workflowOperationNode.test.tsx`、`tests/nodePluginSdk.test.tsx`、`tests/workflowReferenceParity.test.tsx`、`tests/workflowDraftAuthority.test.ts`、`tests/workflowMutation.test.ts`、`tests/studioWorkflow.test.ts`）。`tests/workflowEditor.test.tsx` 的拖拽用例已按新契约改写：拖动期间不写项目存储、松手后只产生一个变更集。真实大项目的帧率与内存未实测，仍属待测目标。
+- 未做：画布平移/缩放仍按帧写入 viewport；未实测掉帧与内存峰值；`ingestWorkflowMedia` 仍是导入副本语义，文件夹直读见[待办](todo.mdx)。
+
 ## 既有 Workflow 与媒体操作
 
 - 现有 PromptBar、媒体工具栏、图片/视频节点、本地拖入与布局已有实现。请在真实 Workflow 中直接点媒体、缩放、播放和重载，确认工具栏稳定且原比例不变。

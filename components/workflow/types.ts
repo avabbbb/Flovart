@@ -236,8 +236,8 @@ export interface WorkflowNodeMetadata {
   content?: string;
   prompt?: string;
   richTextDocument?: WorkflowRichPromptDocument;
-  /** 节点来源类型。'assetLibrary' = 来源于素材库 @ 菜单创建的引用节点实例 */
-  sourceType?: 'assetLibrary';
+  /** 节点来源类型。'assetLibrary' = 素材库引用节点；'localFolder' = 本地文件夹直读引用，保存原文件而非副本。 */
+  sourceType?: 'assetLibrary' | 'localFolder';
   /** 当 sourceType='assetLibrary' 时，对应 AssetItem.id，用于按 storageKey 反查 dataUrl */
   assetId?: string;
   href?: string;

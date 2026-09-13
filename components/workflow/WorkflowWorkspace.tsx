@@ -18,10 +18,11 @@ import { useWorkflowStore } from './store';
 import type { WorkflowModelOptions } from './WorkflowNodePromptBar';
 import type { WorkflowImageToolHandlers } from './WorkflowNodeToolbar';
 import { WorkflowSidebar } from './WorkflowSidebar';
-import { discardWorkflowMediaRecord, fitWorkflowMediaSize, ingestWorkflowMedia, loadWorkflowMediaBlob, releaseWorkflowMediaRecord, workflowBlobToDataUrl, type WorkflowMediaRecord } from './media';
+import { discardWorkflowMediaRecord, fitWorkflowMediaSize, ingestWorkflowMedia, inspectWorkflowMedia, loadWorkflowMediaBlob, releaseWorkflowMediaRecord, workflowBlobToDataUrl, type WorkflowMediaRecord } from './media';
+import { localFolderHref, readLocalFolderFile, type LocalFolderEntry } from '../../services/localFolderSource';
 import type { AssetItem, AssetLibrary } from '../../types';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
-import type { WorkflowProject } from './types';
+import type { WorkflowNodeMetadata, WorkflowProject } from './types';
 import type { PromptIntent } from './promptIntent';
 
 export interface WorkflowWorkspaceProps {
@@ -197,6 +198,86 @@ export function WorkflowWorkspace({
     if (mediumViewport) setMobileLeftOpen(false);
   }, [mediumViewport]);
 
+  // 把一批媒体元数据按视口中心铺成节点；单条时保持原有"落在中心"的行为。
+  const layoutMediaNodes = (
+    items: Array<{ type: 'image' | 'video' | 'audio'; metadata: WorkflowNodeMetadata; naturalWidth?: number; naturalHeight?: number; title: string }>,
+    project: WorkflowProject,
+  ) => {
+    const k = Math.max(project.viewport.k, 0.12);
+    const origin = { x: (360 - project.viewport.x) / k, y: (220 - project.viewport.y) / k };
+    const columns = Math.min(4, Math.max(1, items.length));
+    return items.map((item, index) => {
+      const size = fitWorkflowMediaSize(item.type, item.naturalWidth, item.naturalHeight);
+      const column = index % columns;
+      const row = Math.floor(index / columns);
+      return {
+        ...createWorkflowNode(nanoid(), item.type, {
+          x: origin.x - size.width / 2 + column * 48,
+          y: origin.y - size.height / 2 + row * 48,
+        }, item.metadata),
+        ...size,
+        freeResize: false,
+        title: item.title,
+      };
+    });
+  };
+
+  // 一批素材只产生一个 Draft ChangeSet，避免批量插入把撤销栈冲散。
+  const commitMediaNodes = (
+    items: Array<{ type: 'image' | 'video' | 'audio'; metadata: WorkflowNodeMetadata; naturalWidth?: number; naturalHeight?: number; title: string }>,
+    intent: string,
+  ) => {
+    if (!activeProject || !items.length) return false;
+    const current = useWorkflowStore.getState().projects.find(project => project.id === activeProject.id);
+    if (!current) return false;
+    const nodes = layoutMediaNodes(items, current);
+    return commitProjectPatch(current.id, { nodes: [...current.nodes, ...nodes], selectedNodeIds: nodes.map(node => node.id) }, intent);
+  };
+
+  const insertLocalFolderEntries = async (entries: LocalFolderEntry[]) => {
+    if (!activeProject) return;
+    setWorkspaceNotice('');
+    const prepared: Array<{ type: 'image' | 'video' | 'audio'; metadata: WorkflowNodeMetadata; naturalWidth?: number; naturalHeight?: number; title: string }> = [];
+    const failures: string[] = [];
+    for (const entry of entries) {
+      try {
+        // 引用原文件：这里只读取尺寸与时长，不复制字节进项目存储。
+        const file = await readLocalFolderFile(entry.folderId, entry.relativePath);
+        const info = await inspectWorkflowMedia(file);
+        const { naturalWidth, naturalHeight, durationMs } = info;
+        prepared.push({
+          type: entry.kind,
+          naturalWidth,
+          naturalHeight,
+          title: entry.name,
+          metadata: {
+            sourceType: 'localFolder',
+            href: localFolderHref(entry.folderId, entry.relativePath),
+            name: entry.name,
+            mimeType: entry.mimeType,
+            bytes: entry.bytes,
+            naturalWidth,
+            naturalHeight,
+            durationMs,
+            status: 'success',
+          },
+        });
+      } catch (error) {
+        failures.push(`${entry.name}：${error instanceof Error ? error.message : '读取失败'}`);
+      }
+    }
+    const committed = commitMediaNodes(prepared, '从本地文件夹插入素材节点');
+    if (failures.length) {
+      setWorkspaceNotice(`已放入 ${committed ? prepared.length : 0} 个，${failures.length} 个读取失败（${failures[0]}）`);
+      return;
+    }
+    if (!prepared.length) {
+      setWorkspaceNotice('没有可用的素材。');
+      return;
+    }
+    if (!committed) setWorkspaceNotice('画布项目已切换，未写入节点。');
+  };
+
   const insertSharedMedia = async (media: WorkflowSharedMedia) => {
     if (!activeProject) return;
     const expectedProjectId = activeProject.id;
@@ -207,25 +288,22 @@ export function WorkflowWorkspace({
         const blob = await loadWorkflowMediaBlob(undefined, media.href);
         record = await ingestWorkflowMedia(new File([blob], media.name, { type: blob.type || media.mimeType }));
       }
-      const current = useWorkflowStore.getState().projects.find(project => project.id === expectedProjectId);
-      if (!current) {
+      if (!useWorkflowStore.getState().projects.some(project => project.id === expectedProjectId)) {
         if (record) await discardWorkflowMediaRecord(record.storageKey);
         return;
       }
       const type = record?.type || media.type;
-      const size = fitWorkflowMediaSize(type, record?.naturalWidth || media.width, record?.naturalHeight || media.height);
-      const k = Math.max(current.viewport.k, 0.12);
-      const center = { x: (360 - current.viewport.x) / k, y: (220 - current.viewport.y) / k };
       const storedMetadata = record && (({ type: _type, ...metadata }) => metadata)(record);
-      const node = {
-        ...createWorkflowNode(nanoid(), type, { x: center.x - size.width / 2, y: center.y - size.height / 2 }, storedMetadata
-          ? storedMetadata
-          : { href: media.href, mimeType: media.mimeType, name: media.name, naturalWidth: media.width, naturalHeight: media.height, status: 'success' }),
-        ...size,
-        freeResize: false,
+      const committed = commitMediaNodes([{
+        type,
+        naturalWidth: record?.naturalWidth || media.width,
+        naturalHeight: record?.naturalHeight || media.height,
         title: media.name,
-      };
-      if (!commitProjectPatch(current.id, { nodes: [...current.nodes, node], selectedNodeIds: [node.id] }, '从素材库插入媒体节点')) {
+        metadata: storedMetadata
+          ? storedMetadata as WorkflowNodeMetadata
+          : { href: media.href, mimeType: media.mimeType, name: media.name, naturalWidth: media.width, naturalHeight: media.height, status: 'success' },
+      }], '从素材库插入媒体节点');
+      if (!committed) {
         if (record) await discardWorkflowMediaRecord(record.storageKey);
         return;
       }
@@ -292,6 +370,7 @@ assetLibrary={assetLibrary}
           onCreateFolder={onCreateFolder}
           onRenameFolder={onRenameFolder}
           onRemoveFolder={onRemoveFolder}
+          onInsertLocalFolderEntries={entries => insertLocalFolderEntries(entries)}
           tabRequest={sidebarTabRequest}
       />
       <main className="workflow-workspace__main">

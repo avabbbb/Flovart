@@ -14,6 +14,7 @@
 - [0049：作品与 Remix 分享](0049-build-a-minimum-real-creator-community.md)
 - [0059：现有 VOX 的已批准风格参考](0059-lock-visual-style-to-approved-reference.md)
 - [0060：现有浏览器导入桥](0060-use-a-desktop-authoritative-browser-import-bridge.md)
+- [0071：本地文件夹素材使用引用语义](0071-local-folder-reference-media.md)
 - [0063：现有 DSH Browser 绑定](0063-dsh-browser-workflow-authority.md)
 - [0065：Workflow 版本与幂等](0065-idempotent-revisioned-workflow-mutations.md)
 - [0068：首次生成与费用范围](0068-first-safe-generation-boundaries.md)

@@ -6,6 +6,7 @@ import { readColdMedia } from '../../utils/mediaIndexedDB';
 import { getAssetById } from '../../utils/assetStorage';
 import { loadRuntimeArtifactBlob } from '../../services/runtimeArtifacts';
 import { loadBrowserImportArtifactBlob, parseBrowserImportHref } from '../../services/browserImportArtifacts';
+import { LocalFolderError, parseLocalFolderHref, readLocalFolderFile } from '../../services/localFolderSource';
 import { workflowMediaStorage } from './storage';
 import type { WorkflowArtifactRef, WorkflowNode, WorkflowNodeMetadata, WorkflowNodeType, WorkflowProject } from './types';
 
@@ -340,6 +341,8 @@ export function isFetchableMediaHref(href: string) {
 }
 
 export async function loadFallbackMediaBlob(href: string): Promise<Blob> {
+  const folderRef = parseLocalFolderHref(href);
+  if (folderRef) return readLocalFolderFile(folderRef.folderId, folderRef.relativePath);
   const browserImportId = parseBrowserImportHref(href);
   if (browserImportId) return loadBrowserImportArtifactBlob(browserImportId);
   if (isIdbRef(href)) {
@@ -437,6 +440,11 @@ export function useWorkflowMediaUrl(storageKey?: string, fallbackHref?: string, 
       setState({ key: mediaKey, url: objectUrl, error: null });
     }).catch(error => {
       if (!active) return;
+      // 本地文件夹直读的失败原因（权限失效 / 原文件被移动）要原样呈现，方便用户重新定位。
+      if (error instanceof LocalFolderError) {
+        setState({ key: mediaKey, url: null, error: error.message });
+        return;
+      }
       const missing = error instanceof Error && error.message.includes('不存在');
       setState({ key: mediaKey, url: null, error: missing ? '媒体文件不存在，请重新选择文件' : '媒体文件读取失败，请重新选择文件' });
     });

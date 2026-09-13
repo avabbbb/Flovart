@@ -1,7 +1,9 @@
-import { Eye, EyeOff, Folder, GripVertical, Image, Layers, Lock, Music, PanelLeftClose, SlidersHorizontal, Type, Unlock, Video, X } from 'lucide-react';
+import { Eye, EyeOff, Folder, FolderOpen, GripVertical, Image, Layers, Lock, Music, PanelLeftClose, SlidersHorizontal, Type, Unlock, Video, X } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
 import type { WorkflowNode, WorkflowProject } from './types';
 import { AssetLibraryBrowser } from '../studio/AssetLibraryBrowser';
+import { LocalFolderBrowser } from './LocalFolderBrowser';
+import type { LocalFolderEntry } from '../../services/localFolderSource';
 import type { AssetItem, AssetLibrary } from '../../types';
 
 export interface WorkflowSidebarProps {
@@ -25,10 +27,12 @@ export interface WorkflowSidebarProps {
   onCreateFolder: (parentId: string | null, name: string) => void;
   onRenameFolder: (id: string, name: string) => void;
   onRemoveFolder: (id: string, deleteItems: boolean) => void;
+  /** 本地文件夹直读：只把用户选中的条目放进画布。 */
+  onInsertLocalFolderEntries?: (entries: LocalFolderEntry[]) => void | Promise<void>;
   tabRequest?: { tab: SidebarTab; nonce: number };
 }
 
-type SidebarTab = 'layers' | 'assets';
+type SidebarTab = 'layers' | 'assets' | 'localFolder';
 
 const nodeIcon = (node: WorkflowNode) => {
   if (node.type === 'image') return <Image size={14} />;
@@ -58,6 +62,7 @@ export const WorkflowSidebar: React.FC<WorkflowSidebarProps> = ({
   onCreateFolder,
   onRenameFolder,
   onRemoveFolder,
+  onInsertLocalFolderEntries,
   tabRequest,
 }) => {
   const [draggedId, setDraggedId] = useState<string | null>(null);
@@ -134,7 +139,11 @@ export const WorkflowSidebar: React.FC<WorkflowSidebarProps> = ({
         >
           <div className="flex h-11 shrink-0 items-center justify-between px-3">
             <strong className="text-xs" style={{ color: 'var(--isl-ink)' }}>
-              {tab === 'layers' ? (language === 'zho' ? '图层' : 'Layers') : (language === 'zho' ? '资产' : 'Assets')}
+              {tab === 'layers'
+                ? (language === 'zho' ? '图层' : 'Layers')
+                : tab === 'assets'
+                  ? (language === 'zho' ? '资产' : 'Assets')
+                  : (language === 'zho' ? '本地文件夹' : 'Local folder')}
             </strong>
             <button type="button" className="isl-icon-btn h-8 w-8" onClick={() => onOpenChange(false)} title={language === 'zho' ? '收起' : 'Close'} aria-label={language === 'zho' ? '收起' : 'Close'}>
               <X size={16} />
@@ -169,6 +178,19 @@ export const WorkflowSidebar: React.FC<WorkflowSidebarProps> = ({
             >
               <Folder size={13} />
               <span>{language === 'zho' ? '资产' : 'Assets'}</span>
+            </button>
+            <button
+              type="button"
+              data-testid="sidebar-tab-local-folder"
+              onClick={() => setTab('localFolder')}
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] font-bold transition"
+              style={{
+                background: tab === 'localFolder' ? 'var(--isl-surface-2)' : 'transparent',
+                color: tab === 'localFolder' ? 'var(--isl-ink)' : 'var(--isl-ink-soft)',
+              }}
+            >
+              <FolderOpen size={13} />
+              <span>{language === 'zho' ? '本地' : 'Local'}</span>
             </button>
           </div>
 
@@ -215,7 +237,7 @@ export const WorkflowSidebar: React.FC<WorkflowSidebarProps> = ({
                   );
                 })}
               </div>
-            ) : (
+            ) : tab === 'assets' ? (
               <div className="min-h-0 flex-1">
                 <AssetLibraryBrowser
                   compact
@@ -234,6 +256,10 @@ export const WorkflowSidebar: React.FC<WorkflowSidebarProps> = ({
                   onRenameFolder={onRenameFolder}
                   onRemoveFolder={onRemoveFolder}
                 />
+              </div>
+            ) : (
+              <div className="min-h-0 flex-1 overflow-auto">
+                <LocalFolderBrowser language={language} onInsert={entries => onInsertLocalFolderEntries?.(entries)} />
               </div>
             )}
           </div>
