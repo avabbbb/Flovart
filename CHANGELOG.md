@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Hosted CI Runtime 发现权限修复**：修复 `verifyDiscoveryPermissions` 的 SDDL 解析在含括号 SID 上截断、以及 `icacls /save` 首行文件名在 D: 盘时定位错位两个根因（改为按括号配对的 `parseDaclAces()` 与按行锚定的 `findDaclLine()`），并把两个被阻塞测试文件的 20s fixture 清理挂起改为有上界；安全策略未放宽（仍只允许当前用户 SID 与 LocalSystem）。两个文件 19/19 通过。真实 Hosted runner 复跑仍待确认。
+- **FlovartBench v0.1**：新增 `eval/` 系统级 Agent/Workflow/Runtime 评测框架（57 任务 / 7 suite，准入 53），链路为 Task → 受控环境 → 真实 CLI/MCP/Workflow/Runtime 面 → 轨迹 → WorldSnapshot → 确定性 grader → 重复 trial → 机器生成报告；含 Oracle×5 + NOP 准入、谓词与冻结 canonical hash 双判分、safety hard gate、失败分类、tokens/cost 的「已测/未测」区分、dev(8)/regression(49) 与不入库的 holdout 分层、CI 分层，以及 12 项对 benchmark 自身的红队。当前确定性基线 pass@1 615/615，已认证外部 Agent trial 为 0/120，不将其计为 Agent 能力。
 - **产品方向与文档精简**：统一原生效果、Agent 协作与评测主设计，清理过时的多层 Agent/Runtime 目标；强调共用业务函数、独立本地渲染和最少必要层级，同步使用说明与支持边界。原生效果仍属待实现/验证目标。
 - **Visual Production Runtime projections**：CLI、MCP 与 DSH service 继续围绕同一份 canonical operation contract；新增脱敏 `ProductionTask` inspect/resume 投影、跨投影 parity 证据与 TeleAgent/Creative Host 接入边界，未迁移 Browser Workflow authority。
 - **Flovart Link 2.0 与 Studio 基础**：收敛 Host lifecycle、四态 Agent UX、一次性 Browser bootstrap、Workspace Lease、`flovart ensure`、WorkBuddy official-shape Connector、DSH `ctx.flovart`/RC8 profile 和 Photoshop/Premiere/After Effects/Resolve Studio 共享 Studio contract/package；Resolve 画布入口改为只读取显式或 launcher discovery 的动态 loopback URL。真实第三方客户端、登录态和创作宿主回写仍按 Support Matrix 标记为 External Gate/Experimental。
