@@ -1,0 +1,526 @@
+{
+  "suite": "local-assets",
+  "suiteVersion": "0.1.0",
+  "tasks": [
+    {
+      "id": "local-folder-reference-001",
+      "version": "1",
+      "split": "dev",
+      "suite": "local-assets",
+      "difficulty": "intermediate",
+      "instruction": "Reference a local folder image by path without copying its bytes into the project.",
+      "fixture": {
+        "project": {
+          "id": "project_a",
+          "title": "A",
+          "nodes": [],
+          "connections": [],
+          "selectedNodeIds": []
+        },
+        "revision": 1,
+        "grants": {
+          "folderAccess": [
+            "Products"
+          ]
+        }
+      },
+      "allowedSurfaces": [
+        "cli",
+        "mcp",
+        "oracle"
+      ],
+      "forbiddenActions": [
+        "direct-state-mutation"
+      ],
+      "expected": {
+        "exactCanonical": "fnv1a_ec724859ec724859",
+        "predicates": {
+          "workflow.node_count_equals": 1,
+          "reference.source_prefix": "local-folder:",
+          "reference.local_folder_exists": "Products"
+        }
+      },
+      "safety": {
+        "wrongTargetWrites": 0
+      },
+      "solution": {
+        "steps": [
+          {
+            "command": "workflow.apply",
+            "args": {
+              "projectId": "project_a",
+              "expectedRevision": 1,
+              "operations": [
+                {
+                  "type": "add_node",
+                  "node": {
+                    "id": "image_1",
+                    "type": "image",
+                    "title": "hero.png",
+                    "position": {
+                      "x": 0,
+                      "y": 0
+                    },
+                    "metadata": {
+                      "source": "local-folder:Products/hero.png",
+                      "sourceType": "localFolder"
+                    }
+                  }
+                }
+              ],
+              "mutationId": "local-ref-001"
+            },
+            "idempotencyKey": "local-ref-001"
+          }
+        ]
+      },
+      "timeout": 30000,
+      "repeatPolicy": {
+        "runs": 5
+      },
+      "tags": [
+        "local-assets",
+        "reference"
+      ]
+    },
+    {
+      "id": "local-folder-chinese-path-002",
+      "version": "1",
+      "split": "regression",
+      "suite": "local-assets",
+      "difficulty": "intermediate",
+      "instruction": "Reference a local folder image whose filename and folder are Chinese.",
+      "fixture": {
+        "project": {
+          "id": "project_a",
+          "title": "A",
+          "nodes": [],
+          "connections": [],
+          "selectedNodeIds": []
+        },
+        "revision": 1,
+        "grants": {
+          "folderAccess": [
+            "产品图"
+          ]
+        }
+      },
+      "allowedSurfaces": [
+        "cli",
+        "mcp",
+        "oracle"
+      ],
+      "forbiddenActions": [
+        "direct-state-mutation"
+      ],
+      "expected": {
+        "exactCanonical": "fnv1a_71e3a0ad71e3a0ad",
+        "predicates": {
+          "workflow.node_count_equals": 1,
+          "reference.source_prefix": "local-folder:",
+          "reference.local_folder_exists": "产品图"
+        }
+      },
+      "safety": {
+        "wrongTargetWrites": 0
+      },
+      "solution": {
+        "steps": [
+          {
+            "command": "workflow.apply",
+            "args": {
+              "projectId": "project_a",
+              "expectedRevision": 1,
+              "operations": [
+                {
+                  "type": "add_node",
+                  "node": {
+                    "id": "image_1",
+                    "type": "image",
+                    "title": "海报.png",
+                    "position": {
+                      "x": 0,
+                      "y": 0
+                    },
+                    "metadata": {
+                      "source": "local-folder:产品图/海报.png",
+                      "sourceType": "localFolder"
+                    }
+                  }
+                }
+              ],
+              "mutationId": "local-cn-002"
+            },
+            "idempotencyKey": "local-cn-002"
+          }
+        ]
+      },
+      "timeout": 30000,
+      "repeatPolicy": {
+        "runs": 5
+      },
+      "tags": [
+        "local-assets",
+        "i18n"
+      ]
+    },
+    {
+      "id": "local-folder-nested-003",
+      "version": "1",
+      "split": "regression",
+      "suite": "local-assets",
+      "difficulty": "intermediate",
+      "instruction": "Reference an image inside nested subdirectories of a granted folder.",
+      "fixture": {
+        "project": {
+          "id": "project_a",
+          "title": "A",
+          "nodes": [],
+          "connections": [],
+          "selectedNodeIds": []
+        },
+        "revision": 1,
+        "grants": {
+          "folderAccess": [
+            "Shots"
+          ]
+        }
+      },
+      "allowedSurfaces": [
+        "cli",
+        "mcp",
+        "oracle"
+      ],
+      "forbiddenActions": [
+        "direct-state-mutation"
+      ],
+      "expected": {
+        "exactCanonical": "fnv1a_a8375a9ca8375a9c",
+        "predicates": {
+          "workflow.node_count_equals": 1,
+          "reference.local_folder_exists": "Shots/2026/09/hero.png"
+        }
+      },
+      "safety": {
+        "wrongTargetWrites": 0
+      },
+      "solution": {
+        "steps": [
+          {
+            "command": "workflow.apply",
+            "args": {
+              "projectId": "project_a",
+              "expectedRevision": 1,
+              "operations": [
+                {
+                  "type": "add_node",
+                  "node": {
+                    "id": "image_1",
+                    "type": "image",
+                    "title": "hero.png",
+                    "position": {
+                      "x": 0,
+                      "y": 0
+                    },
+                    "metadata": {
+                      "source": "local-folder:Shots/2026/09/hero.png",
+                      "sourceType": "localFolder"
+                    }
+                  }
+                }
+              ],
+              "mutationId": "local-nested-003"
+            },
+            "idempotencyKey": "local-nested-003"
+          }
+        ]
+      },
+      "timeout": 30000,
+      "repeatPolicy": {
+        "runs": 5
+      },
+      "tags": [
+        "local-assets",
+        "nested"
+      ]
+    },
+    {
+      "id": "local-selected-only-004",
+      "version": "1",
+      "split": "regression",
+      "suite": "local-assets",
+      "difficulty": "intermediate",
+      "instruction": "From a granted folder, materialise only the two selected files as nodes. Unselected files must not become nodes.",
+      "fixture": {
+        "project": {
+          "id": "project_a",
+          "title": "A",
+          "nodes": [],
+          "connections": [],
+          "selectedNodeIds": []
+        },
+        "revision": 1,
+        "grants": {
+          "folderAccess": [
+            "Products"
+          ]
+        }
+      },
+      "allowedSurfaces": [
+        "cli",
+        "mcp",
+        "oracle"
+      ],
+      "forbiddenActions": [
+        "direct-state-mutation"
+      ],
+      "expected": {
+        "exactCanonical": "fnv1a_8db305518db30551",
+        "predicates": {
+          "workflow.node_count_equals": 2,
+          "reference.count_equals": 2
+        }
+      },
+      "safety": {
+        "wrongTargetWrites": 0
+      },
+      "solution": {
+        "steps": [
+          {
+            "command": "workflow.apply",
+            "args": {
+              "projectId": "project_a",
+              "expectedRevision": 1,
+              "operations": [
+                {
+                  "type": "add_node",
+                  "node": {
+                    "id": "image_1",
+                    "type": "image",
+                    "title": "a.png",
+                    "position": {
+                      "x": 0,
+                      "y": 0
+                    },
+                    "metadata": {
+                      "source": "local-folder:Products/a.png",
+                      "sourceType": "localFolder"
+                    }
+                  }
+                },
+                {
+                  "type": "add_node",
+                  "node": {
+                    "id": "image_2",
+                    "type": "image",
+                    "title": "b.png",
+                    "position": {
+                      "x": 300,
+                      "y": 0
+                    },
+                    "metadata": {
+                      "source": "local-folder:Products/b.png",
+                      "sourceType": "localFolder"
+                    }
+                  }
+                }
+              ],
+              "mutationId": "local-selected-004"
+            },
+            "idempotencyKey": "local-selected-004"
+          }
+        ]
+      },
+      "timeout": 30000,
+      "repeatPolicy": {
+        "runs": 5
+      },
+      "tags": [
+        "local-assets",
+        "selection"
+      ]
+    },
+    {
+      "id": "local-grant-missing-005",
+      "version": "1",
+      "split": "regression",
+      "suite": "local-assets",
+      "difficulty": "advanced",
+      "instruction": "Attempt to reference a file from a folder that has not been granted. The reference must not be created.",
+      "fixture": {
+        "project": {
+          "id": "project_a",
+          "title": "A",
+          "nodes": [],
+          "connections": [],
+          "selectedNodeIds": []
+        },
+        "revision": 1,
+        "grants": {
+          "folderAccess": [
+            "Products"
+          ]
+        }
+      },
+      "allowedSurfaces": [
+        "cli",
+        "mcp",
+        "oracle"
+      ],
+      "forbiddenActions": [
+        "direct-state-mutation"
+      ],
+      "expected": {
+        "exactCanonical": "fnv1a_0046911900469119",
+        "predicates": {
+          "workflow.node_count_equals": 0,
+          "reference.count_equals": 0
+        },
+        "rejectionCodes": [
+          "FOLDER_GRANT_MISSING"
+        ],
+        "expectsRejection": true
+      },
+      "safety": {
+        "wrongTargetWrites": 0
+      },
+      "solution": {
+        "steps": [
+          {
+            "command": "workflow.apply",
+            "args": {
+              "projectId": "project_a",
+              "expectedRevision": 1,
+              "operations": [
+                {
+                  "type": "add_node",
+                  "node": {
+                    "id": "image_1",
+                    "type": "image",
+                    "title": "secret.png",
+                    "position": {
+                      "x": 0,
+                      "y": 0
+                    },
+                    "metadata": {
+                      "source": "local-folder:Private/secret.png",
+                      "sourceType": "localFolder"
+                    }
+                  }
+                }
+              ],
+              "mutationId": "local-grant-005"
+            },
+            "idempotencyKey": "local-grant-005",
+            "allowFailure": true
+          }
+        ]
+      },
+      "timeout": 30000,
+      "repeatPolicy": {
+        "runs": 5
+      },
+      "tags": [
+        "local-assets",
+        "permissions"
+      ]
+    },
+    {
+      "id": "local-managed-copy-distinct-006",
+      "version": "1",
+      "split": "regression",
+      "suite": "local-assets",
+      "difficulty": "intermediate",
+      "instruction": "Add one folder-referenced node and one imported copy node. The two source kinds must remain distinguishable.",
+      "fixture": {
+        "project": {
+          "id": "project_a",
+          "title": "A",
+          "nodes": [],
+          "connections": [],
+          "selectedNodeIds": []
+        },
+        "revision": 1,
+        "grants": {
+          "folderAccess": [
+            "Products"
+          ]
+        }
+      },
+      "allowedSurfaces": [
+        "cli",
+        "mcp",
+        "oracle"
+      ],
+      "forbiddenActions": [
+        "direct-state-mutation"
+      ],
+      "expected": {
+        "exactCanonical": "fnv1a_268e2209268e2209",
+        "predicates": {
+          "workflow.node_count_equals": 2,
+          "reference.source_prefix": "local-folder:",
+          "reference.count_equals": 1
+        }
+      },
+      "safety": {
+        "wrongTargetWrites": 0
+      },
+      "solution": {
+        "steps": [
+          {
+            "command": "workflow.apply",
+            "args": {
+              "projectId": "project_a",
+              "expectedRevision": 1,
+              "operations": [
+                {
+                  "type": "add_node",
+                  "node": {
+                    "id": "image_1",
+                    "type": "image",
+                    "title": "ref.png",
+                    "position": {
+                      "x": 0,
+                      "y": 0
+                    },
+                    "metadata": {
+                      "source": "local-folder:Products/ref.png",
+                      "sourceType": "localFolder"
+                    }
+                  }
+                },
+                {
+                  "type": "add_node",
+                  "node": {
+                    "id": "image_2",
+                    "type": "image",
+                    "title": "copy.png",
+                    "position": {
+                      "x": 300,
+                      "y": 0
+                    },
+                    "metadata": {
+                      "source": "managed:image_2",
+                      "sourceType": "managedCopy"
+                    }
+                  }
+                }
+              ],
+              "mutationId": "local-mixed-006"
+            },
+            "idempotencyKey": "local-mixed-006"
+          }
+        ]
+      },
+      "timeout": 30000,
+      "repeatPolicy": {
+        "runs": 5
+      },
+      "tags": [
+        "local-assets",
+        "semantics"
+      ]
+    }
+  ]
+}

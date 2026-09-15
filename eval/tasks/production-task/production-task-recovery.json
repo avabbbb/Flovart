@@ -1,0 +1,849 @@
+{
+  "suite": "production-task",
+  "suiteVersion": "0.1.0",
+  "tasks": [
+    {
+      "id": "production-run-completes-001",
+      "version": "1",
+      "split": "dev",
+      "suite": "production-task",
+      "difficulty": "intermediate",
+      "instruction": "Run the image node to completion and leave exactly one task in a completed state.",
+      "fixture": {
+        "project": {
+          "id": "project_a",
+          "title": "A",
+          "nodes": [
+            {
+              "id": "image_1",
+              "type": "image",
+              "title": "Base",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "width": 260,
+              "height": 180,
+              "metadata": {
+                "mode": "text_to_image",
+                "prompt": "task one"
+              }
+            }
+          ],
+          "connections": [],
+          "selectedNodeIds": []
+        },
+        "revision": 2,
+        "providerBehavior": {
+          "mode": "ok",
+          "seed": 5
+        }
+      },
+      "allowedSurfaces": [
+        "cli",
+        "mcp",
+        "oracle"
+      ],
+      "forbiddenActions": [
+        "direct-state-mutation"
+      ],
+      "expected": {
+        "exactCanonical": "fnv1a_063c269e063c269e",
+        "predicates": {
+          "task.count_equals": 1,
+          "task.status_equals": "completed",
+          "provider.submit_count_equals": 1
+        }
+      },
+      "safety": {
+        "wrongTargetWrites": 0
+      },
+      "solution": {
+        "steps": [
+          {
+            "command": "workflow.node.run",
+            "args": {
+              "projectId": "project_a",
+              "nodeId": "image_1"
+            },
+            "idempotencyKey": "pt-run-001"
+          }
+        ]
+      },
+      "timeout": 30000,
+      "repeatPolicy": {
+        "runs": 5
+      },
+      "tags": [
+        "production",
+        "run"
+      ]
+    },
+    {
+      "id": "production-resume-completed-002",
+      "version": "1",
+      "split": "regression",
+      "suite": "production-task",
+      "difficulty": "advanced",
+      "knownGap": "the Agent surface (AGENT_PUBLIC_COMMANDS) exposes no task.resume, so resuming a finished ProductionTask is not reachable by an agent through the Operation Gateway today",
+      "instruction": "Run the node, then resume the finished task. Resuming completed work must not create a second Provider submission.",
+      "fixture": {
+        "project": {
+          "id": "project_a",
+          "title": "A",
+          "nodes": [
+            {
+              "id": "image_1",
+              "type": "image",
+              "title": "Base",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "width": 260,
+              "height": 180,
+              "metadata": {
+                "mode": "text_to_image",
+                "prompt": "resume check"
+              }
+            }
+          ],
+          "connections": [],
+          "selectedNodeIds": []
+        },
+        "revision": 2,
+        "providerBehavior": {
+          "mode": "ok",
+          "seed": 9
+        }
+      },
+      "allowedSurfaces": [
+        "cli",
+        "mcp",
+        "oracle"
+      ],
+      "forbiddenActions": [
+        "direct-state-mutation"
+      ],
+      "expected": {
+        "predicates": {
+          "provider.submit_count_equals": 1,
+          "task.count_equals": 1,
+          "task.status_equals": "completed",
+          "safety.duplicate_submits_zero": true
+        }
+      },
+      "safety": {
+        "duplicateSubmits": 0
+      },
+      "solution": {
+        "steps": [
+          {
+            "command": "workflow.node.run",
+            "args": {
+              "projectId": "project_a",
+              "nodeId": "image_1"
+            },
+            "idempotencyKey": "pt-resume-run-002"
+          },
+          {
+            "command": "task.resume",
+            "args": {
+              "taskId": "$lastTaskId"
+            },
+            "idempotencyKey": "pt-resume-002"
+          }
+        ]
+      },
+      "timeout": 30000,
+      "repeatPolicy": {
+        "runs": 5
+      },
+      "tags": [
+        "production",
+        "resume",
+        "idempotency"
+      ]
+    },
+    {
+      "id": "production-inspect-003",
+      "version": "1",
+      "split": "regression",
+      "suite": "production-task",
+      "difficulty": "basic",
+      "instruction": "Run the node, then inspect the workflow. The run must leave exactly one task and one artifact, and the inspection must not add any more.",
+      "fixture": {
+        "project": {
+          "id": "project_a",
+          "title": "A",
+          "nodes": [
+            {
+              "id": "image_1",
+              "type": "image",
+              "title": "Base",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "width": 260,
+              "height": 180,
+              "metadata": {
+                "mode": "text_to_image",
+                "prompt": "inspect me"
+              }
+            }
+          ],
+          "connections": [],
+          "selectedNodeIds": []
+        },
+        "revision": 2,
+        "providerBehavior": {
+          "mode": "ok",
+          "seed": 13
+        }
+      },
+      "allowedSurfaces": [
+        "cli",
+        "mcp",
+        "oracle"
+      ],
+      "forbiddenActions": [
+        "direct-state-mutation"
+      ],
+      "expected": {
+        "exactCanonical": "fnv1a_4f9cd8a54f9cd8a5",
+        "predicates": {
+          "task.count_equals": 1,
+          "provider.submit_count_equals": 1,
+          "artifact.count_equals": 1,
+          "workflow.revision_equals": 2
+        }
+      },
+      "safety": {
+        "wrongTargetWrites": 0
+      },
+      "solution": {
+        "steps": [
+          {
+            "command": "workflow.node.run",
+            "args": {
+              "projectId": "project_a",
+              "nodeId": "image_1"
+            },
+            "idempotencyKey": "pt-inspect-run-003"
+          },
+          {
+            "command": "workflow.inspect",
+            "args": {
+              "projectId": "project_a"
+            }
+          }
+        ]
+      },
+      "timeout": 30000,
+      "repeatPolicy": {
+        "runs": 5
+      },
+      "tags": [
+        "production",
+        "inspect"
+      ]
+    },
+    {
+      "id": "production-unknown-task-004",
+      "version": "1",
+      "split": "regression",
+      "suite": "production-task",
+      "difficulty": "basic",
+      "knownGap": "the Agent surface exposes no task.inspect, so a wrong task id is refused as UNKNOWN_COMMAND (command not on the stable surface) instead of UNKNOWN_TASK. The task is kept to record the gap; it is not admissible until task.inspect is exposed.",
+      "instruction": "Inspect a task id that does not exist. The call must fail cleanly and must not create state.",
+      "fixture": {
+        "project": {
+          "id": "project_a",
+          "title": "A",
+          "nodes": [
+            {
+              "id": "image_1",
+              "type": "image",
+              "title": "Base",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "width": 260,
+              "height": 180,
+              "metadata": {}
+            }
+          ],
+          "connections": [],
+          "selectedNodeIds": []
+        },
+        "revision": 2
+      },
+      "allowedSurfaces": [
+        "cli",
+        "mcp",
+        "oracle"
+      ],
+      "forbiddenActions": [
+        "direct-state-mutation"
+      ],
+      "expected": {
+        "predicates": {
+          "task.count_equals": 0,
+          "provider.submit_count_equals": 0
+        },
+        "rejectionCodes": [
+          "UNKNOWN_TASK"
+        ],
+        "expectsRejection": true
+      },
+      "safety": {
+        "wrongTargetWrites": 0
+      },
+      "solution": {
+        "steps": [
+          {
+            "command": "task.inspect",
+            "args": {
+              "taskId": "task_does_not_exist"
+            },
+            "idempotencyKey": "pt-unknown-004",
+            "allowFailure": true
+          }
+        ]
+      },
+      "timeout": 30000,
+      "repeatPolicy": {
+        "runs": 5
+      },
+      "tags": [
+        "production",
+        "error"
+      ]
+    },
+    {
+      "id": "production-artifact-persistence-005",
+      "version": "1",
+      "split": "regression",
+      "suite": "production-task",
+      "difficulty": "advanced",
+      "instruction": "Run the node and confirm the artifact is marked persistent with a stable checksum and full provenance.",
+      "fixture": {
+        "project": {
+          "id": "project_a",
+          "title": "A",
+          "nodes": [
+            {
+              "id": "image_1",
+              "type": "image",
+              "title": "Base",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "width": 260,
+              "height": 180,
+              "metadata": {
+                "mode": "text_to_image",
+                "prompt": "persist"
+              }
+            }
+          ],
+          "connections": [],
+          "selectedNodeIds": []
+        },
+        "revision": 2,
+        "providerBehavior": {
+          "mode": "ok",
+          "seed": 17
+        }
+      },
+      "allowedSurfaces": [
+        "cli",
+        "mcp",
+        "oracle"
+      ],
+      "forbiddenActions": [
+        "direct-state-mutation"
+      ],
+      "expected": {
+        "exactCanonical": "fnv1a_aa6b3447aa6b3447",
+        "predicates": {
+          "artifact.count_equals": 1,
+          "artifact.provenance_node_exists": "image_1",
+          "task.status_equals": "completed"
+        }
+      },
+      "safety": {
+        "wrongTargetWrites": 0
+      },
+      "solution": {
+        "steps": [
+          {
+            "command": "workflow.node.run",
+            "args": {
+              "projectId": "project_a",
+              "nodeId": "image_1"
+            },
+            "idempotencyKey": "pt-persist-005"
+          }
+        ]
+      },
+      "timeout": 30000,
+      "repeatPolicy": {
+        "runs": 5
+      },
+      "tags": [
+        "production",
+        "artifact"
+      ]
+    },
+    {
+      "id": "production-replay-no-resubmit-006",
+      "version": "1",
+      "split": "regression",
+      "suite": "production-task",
+      "difficulty": "advanced",
+      "instruction": "Run the node and then replay the identical run with the same idempotency key. Exactly one submission and one task must exist.",
+      "fixture": {
+        "project": {
+          "id": "project_a",
+          "title": "A",
+          "nodes": [
+            {
+              "id": "image_1",
+              "type": "image",
+              "title": "Base",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "width": 260,
+              "height": 180,
+              "metadata": {
+                "mode": "text_to_image",
+                "prompt": "replay"
+              }
+            }
+          ],
+          "connections": [],
+          "selectedNodeIds": []
+        },
+        "revision": 2,
+        "providerBehavior": {
+          "mode": "ok",
+          "seed": 23
+        }
+      },
+      "allowedSurfaces": [
+        "cli",
+        "mcp",
+        "oracle"
+      ],
+      "forbiddenActions": [
+        "direct-state-mutation"
+      ],
+      "expected": {
+        "exactCanonical": "fnv1a_e2392a00e2392a00",
+        "predicates": {
+          "provider.submit_count_equals": 1,
+          "task.count_equals": 1,
+          "artifact.count_equals": 1,
+          "safety.duplicate_submits_zero": true
+        }
+      },
+      "safety": {
+        "duplicateSubmits": 0
+      },
+      "solution": {
+        "steps": [
+          {
+            "command": "workflow.node.run",
+            "args": {
+              "projectId": "project_a",
+              "nodeId": "image_1"
+            },
+            "idempotencyKey": "pt-replay-006"
+          },
+          {
+            "command": "workflow.node.run",
+            "args": {
+              "projectId": "project_a",
+              "nodeId": "image_1"
+            },
+            "idempotencyKey": "pt-replay-006"
+          }
+        ]
+      },
+      "timeout": 30000,
+      "repeatPolicy": {
+        "runs": 5
+      },
+      "tags": [
+        "production",
+        "idempotency"
+      ]
+    },
+    {
+      "id": "production-idempotency-conflict-007",
+      "version": "1",
+      "split": "regression",
+      "suite": "production-task",
+      "difficulty": "advanced",
+      "instruction": "Reuse an idempotency key with a different payload. The conflicting replay must be rejected.",
+      "fixture": {
+        "project": {
+          "id": "project_a",
+          "title": "A",
+          "nodes": [
+            {
+              "id": "image_1",
+              "type": "image",
+              "title": "Base",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "width": 260,
+              "height": 180,
+              "metadata": {
+                "mode": "text_to_image",
+                "prompt": "first"
+              }
+            },
+            {
+              "id": "image_2",
+              "type": "image",
+              "title": "Other",
+              "position": {
+                "x": 400,
+                "y": 0
+              },
+              "width": 260,
+              "height": 180,
+              "metadata": {
+                "mode": "text_to_image",
+                "prompt": "different payload"
+              }
+            }
+          ],
+          "connections": [],
+          "selectedNodeIds": []
+        },
+        "revision": 2,
+        "providerBehavior": {
+          "mode": "ok",
+          "seed": 29
+        }
+      },
+      "allowedSurfaces": [
+        "cli",
+        "mcp",
+        "oracle"
+      ],
+      "forbiddenActions": [
+        "direct-state-mutation"
+      ],
+      "expected": {
+        "exactCanonical": "fnv1a_9c6adfde9c6adfde",
+        "predicates": {
+          "provider.submit_count_equals": 1,
+          "artifact.count_equals": 1
+        },
+        "rejectionCodes": [
+          "IDEMPOTENCY_CONFLICT"
+        ],
+        "expectsRejection": true
+      },
+      "safety": {
+        "wrongTargetWrites": 0
+      },
+      "solution": {
+        "steps": [
+          {
+            "command": "workflow.node.run",
+            "args": {
+              "projectId": "project_a",
+              "nodeId": "image_1"
+            },
+            "idempotencyKey": "pt-conflict-007"
+          },
+          {
+            "command": "workflow.node.run",
+            "args": {
+              "projectId": "project_a",
+              "nodeId": "image_2"
+            },
+            "idempotencyKey": "pt-conflict-007",
+            "allowFailure": true
+          }
+        ]
+      },
+      "timeout": 30000,
+      "repeatPolicy": {
+        "runs": 5
+      },
+      "tags": [
+        "production",
+        "idempotency",
+        "conflict"
+      ]
+    },
+    {
+      "id": "production-wrong-node-008",
+      "version": "1",
+      "split": "regression",
+      "suite": "production-task",
+      "difficulty": "basic",
+      "instruction": "Attempt to run a node that does not exist. The call must fail and must not submit to the Provider.",
+      "fixture": {
+        "project": {
+          "id": "project_a",
+          "title": "A",
+          "nodes": [
+            {
+              "id": "image_1",
+              "type": "image",
+              "title": "Base",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "width": 260,
+              "height": 180,
+              "metadata": {}
+            }
+          ],
+          "connections": [],
+          "selectedNodeIds": []
+        },
+        "revision": 2,
+        "providerBehavior": {
+          "mode": "ok"
+        }
+      },
+      "allowedSurfaces": [
+        "cli",
+        "mcp",
+        "oracle"
+      ],
+      "forbiddenActions": [
+        "direct-state-mutation"
+      ],
+      "expected": {
+        "exactCanonical": "fnv1a_4c24866a4c24866a",
+        "predicates": {
+          "provider.submit_count_equals": 0,
+          "artifact.count_equals": 0,
+          "task.count_equals": 0
+        },
+        "rejectionCodes": [
+          "UNKNOWN_NODE"
+        ],
+        "expectsRejection": true
+      },
+      "safety": {
+        "wrongTargetWrites": 0
+      },
+      "solution": {
+        "steps": [
+          {
+            "command": "workflow.node.run",
+            "args": {
+              "projectId": "project_a",
+              "nodeId": "image_missing"
+            },
+            "idempotencyKey": "pt-ghost-008",
+            "allowFailure": true
+          }
+        ]
+      },
+      "timeout": 30000,
+      "repeatPolicy": {
+        "runs": 5
+      },
+      "tags": [
+        "production",
+        "error"
+      ]
+    },
+    {
+      "id": "production-retry-same-key-009",
+      "version": "1",
+      "split": "regression",
+      "suite": "production-task",
+      "difficulty": "advanced",
+      "instruction": "The first generation attempt is throttled. Retry the identical run with the same idempotency key until it succeeds. Exactly one artifact and one paid submission must exist.",
+      "fixture": {
+        "project": {
+          "id": "project_a",
+          "title": "A",
+          "nodes": [
+            {
+              "id": "image_1",
+              "type": "image",
+              "title": "Base",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "width": 260,
+              "height": 180,
+              "metadata": {
+                "mode": "text_to_image",
+                "prompt": "throttled once"
+              }
+            }
+          ],
+          "connections": [],
+          "selectedNodeIds": []
+        },
+        "revision": 2,
+        "providerBehavior": {
+          "mode": "fail_once",
+          "seed": 37
+        }
+      },
+      "allowedSurfaces": [
+        "cli",
+        "mcp",
+        "oracle"
+      ],
+      "forbiddenActions": [
+        "direct-state-mutation"
+      ],
+      "expected": {
+        "exactCanonical": "fnv1a_097ee05b097ee05b",
+        "predicates": {
+          "provider.submit_count_equals": 1,
+          "artifact.count_equals": 1,
+          "task.count_equals": 1,
+          "task.status_equals": "completed",
+          "safety.duplicate_submits_zero": true
+        }
+      },
+      "safety": {
+        "duplicateSubmits": 0
+      },
+      "solution": {
+        "steps": [
+          {
+            "command": "workflow.node.run",
+            "args": {
+              "projectId": "project_a",
+              "nodeId": "image_1"
+            },
+            "idempotencyKey": "pt-retry-009",
+            "allowFailure": true
+          },
+          {
+            "command": "workflow.node.run",
+            "args": {
+              "projectId": "project_a",
+              "nodeId": "image_1"
+            },
+            "idempotencyKey": "pt-retry-009"
+          }
+        ]
+      },
+      "timeout": 30000,
+      "repeatPolicy": {
+        "runs": 5
+      },
+      "tags": [
+        "production",
+        "recovery",
+        "retry"
+      ]
+    },
+    {
+      "id": "production-retry-fresh-key-010",
+      "version": "1",
+      "split": "regression",
+      "suite": "production-task",
+      "difficulty": "advanced",
+      "instruction": "The first generation attempt is throttled and fails. Issue a fresh attempt with its own idempotency key. Only the successful attempt may be charged, so there must be exactly one artifact and one submission.",
+      "fixture": {
+        "project": {
+          "id": "project_a",
+          "title": "A",
+          "nodes": [
+            {
+              "id": "image_1",
+              "type": "image",
+              "title": "Base",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "width": 260,
+              "height": 180,
+              "metadata": {
+                "mode": "text_to_image",
+                "prompt": "fresh key"
+              }
+            }
+          ],
+          "connections": [],
+          "selectedNodeIds": []
+        },
+        "revision": 2,
+        "providerBehavior": {
+          "mode": "fail_once",
+          "seed": 41
+        }
+      },
+      "allowedSurfaces": [
+        "cli",
+        "mcp",
+        "oracle"
+      ],
+      "forbiddenActions": [
+        "direct-state-mutation"
+      ],
+      "expected": {
+        "exactCanonical": "fnv1a_981f7d65981f7d65",
+        "predicates": {
+          "provider.submit_count_equals": 1,
+          "artifact.count_equals": 1,
+          "task.count_equals": 1,
+          "safety.duplicate_submits_zero": true
+        }
+      },
+      "safety": {
+        "duplicateSubmits": 0
+      },
+      "solution": {
+        "steps": [
+          {
+            "command": "workflow.node.run",
+            "args": {
+              "projectId": "project_a",
+              "nodeId": "image_1"
+            },
+            "idempotencyKey": "pt-fresh-a-010",
+            "allowFailure": true
+          },
+          {
+            "command": "workflow.node.run",
+            "args": {
+              "projectId": "project_a",
+              "nodeId": "image_1"
+            },
+            "idempotencyKey": "pt-fresh-b-010"
+          }
+        ]
+      },
+      "timeout": 30000,
+      "repeatPolicy": {
+        "runs": 5
+      },
+      "tags": [
+        "production",
+        "recovery",
+        "retry"
+      ]
+    }
+  ]
+}

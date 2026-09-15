@@ -1,0 +1,127 @@
+name: FlovartBench
+
+# Layered so that no tier needs a credential the repository does not have.
+#
+#   pull_request   validate + red team + the dev split only       (no secrets)
+#   schedule/main  full regression split + environment transfer x5
+#   dispatch       real external agent x5, only when explicitly asked for
+#
+# A missing external capability (no codex binary, no funded Provider) reports as
+# EXTERNAL_FAILURE and is excluded from pass@1/pass^5 - it must never turn into a
+# red PR.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '0 18 * * *'
+  workflow_dispatch:
+    inputs:
+      run_agent:
+        description: 'Run the real external agent group (requires a codex binary and credentials)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: flovartbench-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract:
+    name: Contract, red team, oracle smoke
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Dataset contract
+        run: npm run eval:validate
+
+      - name: Red team the benchmark
+        run: npm run eval:redteam
+
+      - name: Dev split on every deterministic surface
+        run: node eval/run.mjs run --split dev --runner oracle,cli,mcp --repeat 1
+
+  deterministic:
+    name: Deterministic baseline
+    if: github.event_name != 'pull_request'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Admission gate (Oracle x5 + NOP)
+        run: npm run eval:oracle
+
+      - name: Core baseline on every deterministic surface
+        run: npm run eval:core
+
+      - name: Environment transfer
+        run: node eval/run.mjs run --group environment
+
+      - name: Generate report
+        if: always()
+        run: npm run eval:report
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flovartbench-deterministic
+          path: |
+            eval/reports/
+            eval/results/**/score.json
+          if-no-files-found: warn
+
+  external-agent:
+    name: Real external agent
+    if: github.event_name == 'workflow_dispatch' && inputs.run_agent
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Agent group (Codex x5)
+        env:
+          FLOVARTBENCH_ALLOW_CODEX: 'true'
+        run: npm run eval:agent
+
+      - name: Generate report
+        if: always()
+        run: npm run eval:report
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flovartbench-agent
+          path: |
+            eval/reports/
+            eval/results/**/score.json
+          if-no-files-found: warn

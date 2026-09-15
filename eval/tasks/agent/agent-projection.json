@@ -1,0 +1,529 @@
+{
+  "suite": "agent",
+  "suiteVersion": "0.1.0",
+  "tasks": [
+    {
+      "id": "agent-projection-add-001",
+      "version": "1",
+      "split": "regression",
+      "suite": "agent",
+      "difficulty": "basic",
+      "instruction": "Add one image node. Scored on the final graph, not on how many calls were used.",
+      "fixture": {
+        "project": {
+          "id": "project_a",
+          "title": "A",
+          "nodes": [],
+          "connections": [],
+          "selectedNodeIds": []
+        },
+        "revision": 1
+      },
+      "allowedSurfaces": [
+        "cli",
+        "mcp",
+        "oracle",
+        "codex"
+      ],
+      "forbiddenActions": [
+        "direct-state-mutation"
+      ],
+      "expected": {
+        "exactCanonical": "fnv1a_a22f7e57a22f7e57",
+        "predicates": {
+          "workflow.node_count_equals": 1,
+          "workflow.node_type_exists": "image",
+          "workflow.revision_equals": 2
+        }
+      },
+      "safety": {
+        "wrongTargetWrites": 0
+      },
+      "solution": {
+        "steps": [
+          {
+            "command": "workflow.apply",
+            "args": {
+              "projectId": "project_a",
+              "expectedRevision": 1,
+              "operations": [
+                {
+                  "type": "add_node",
+                  "node": {
+                    "id": "image_1",
+                    "type": "image",
+                    "title": "Image 1",
+                    "position": {
+                      "x": 0,
+                      "y": 0
+                    }
+                  }
+                }
+              ],
+              "mutationId": "agent-add-001"
+            },
+            "idempotencyKey": "agent-add-001"
+          }
+        ]
+      },
+      "timeout": 30000,
+      "repeatPolicy": {
+        "runs": 5
+      },
+      "tags": [
+        "agent",
+        "parity"
+      ]
+    },
+    {
+      "id": "agent-projection-connect-002",
+      "version": "1",
+      "split": "regression",
+      "suite": "agent",
+      "difficulty": "basic",
+      "instruction": "Connect the existing image node to the existing video node.",
+      "fixture": {
+        "project": {
+          "id": "project_a",
+          "title": "A",
+          "nodes": [
+            {
+              "id": "image_1",
+              "type": "image",
+              "title": "Image",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "width": 260,
+              "height": 180,
+              "metadata": {}
+            },
+            {
+              "id": "video_1",
+              "type": "video",
+              "title": "Video",
+              "position": {
+                "x": 400,
+                "y": 0
+              },
+              "width": 260,
+              "height": 180,
+              "metadata": {}
+            }
+          ],
+          "connections": [],
+          "selectedNodeIds": []
+        },
+        "revision": 2
+      },
+      "allowedSurfaces": [
+        "cli",
+        "mcp",
+        "oracle",
+        "codex"
+      ],
+      "forbiddenActions": [
+        "direct-state-mutation"
+      ],
+      "expected": {
+        "exactCanonical": "fnv1a_2ce912712ce91271",
+        "predicates": {
+          "workflow.edge_count_equals": 1,
+          "workflow.connected_pair_types": {
+            "from": "image",
+            "to": "video"
+          },
+          "workflow.node_count_equals": 2
+        }
+      },
+      "safety": {
+        "wrongTargetWrites": 0
+      },
+      "solution": {
+        "steps": [
+          {
+            "command": "workflow.apply",
+            "args": {
+              "projectId": "project_a",
+              "expectedRevision": 2,
+              "operations": [
+                {
+                  "type": "connect_nodes",
+                  "fromNodeId": "image_1",
+                  "toNodeId": "video_1",
+                  "kind": "data"
+                }
+              ],
+              "mutationId": "agent-connect-002"
+            },
+            "idempotencyKey": "agent-connect-002"
+          }
+        ]
+      },
+      "timeout": 30000,
+      "repeatPolicy": {
+        "runs": 5
+      },
+      "tags": [
+        "agent",
+        "parity"
+      ]
+    },
+    {
+      "id": "agent-projection-batch-003",
+      "version": "1",
+      "split": "regression",
+      "suite": "agent",
+      "difficulty": "intermediate",
+      "instruction": "Add an image node and a video node and connect them. One batched apply and two separate applies score identically.",
+      "fixture": {
+        "project": {
+          "id": "project_a",
+          "title": "A",
+          "nodes": [],
+          "connections": [],
+          "selectedNodeIds": []
+        },
+        "revision": 1
+      },
+      "allowedSurfaces": [
+        "cli",
+        "mcp",
+        "oracle",
+        "codex"
+      ],
+      "forbiddenActions": [
+        "direct-state-mutation"
+      ],
+      "expected": {
+        "exactCanonical": "fnv1a_4a1bebef4a1bebef",
+        "predicates": {
+          "workflow.node_count_equals": 2,
+          "workflow.edge_count_equals": 1,
+          "workflow.connected_pair_types": {
+            "from": "image",
+            "to": "video"
+          }
+        }
+      },
+      "safety": {
+        "wrongTargetWrites": 0
+      },
+      "solution": {
+        "steps": [
+          {
+            "command": "workflow.apply",
+            "args": {
+              "projectId": "project_a",
+              "expectedRevision": 1,
+              "operations": [
+                {
+                  "type": "add_node",
+                  "node": {
+                    "id": "image_1",
+                    "type": "image",
+                    "title": "Image",
+                    "position": {
+                      "x": 0,
+                      "y": 0
+                    }
+                  }
+                },
+                {
+                  "type": "create_connected_node",
+                  "fromNodeId": "image_1",
+                  "kind": "data",
+                  "node": {
+                    "id": "video_1",
+                    "type": "video",
+                    "title": "Video",
+                    "position": {
+                      "x": 400,
+                      "y": 0
+                    }
+                  }
+                }
+              ],
+              "mutationId": "agent-batch-003"
+            },
+            "idempotencyKey": "agent-batch-003"
+          }
+        ]
+      },
+      "timeout": 30000,
+      "repeatPolicy": {
+        "runs": 5
+      },
+      "tags": [
+        "agent",
+        "parity",
+        "outcome-over-trajectory"
+      ]
+    },
+    {
+      "id": "agent-projection-inspect-004",
+      "version": "1",
+      "split": "dev",
+      "suite": "agent",
+      "difficulty": "basic",
+      "instruction": "Inspect the workflow, then select the image node. Neither the inspection nor the selection may change the document revision.",
+      "fixture": {
+        "project": {
+          "id": "project_a",
+          "title": "A",
+          "nodes": [
+            {
+              "id": "image_1",
+              "type": "image",
+              "title": "Image",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "width": 260,
+              "height": 180,
+              "metadata": {}
+            }
+          ],
+          "connections": [],
+          "selectedNodeIds": []
+        },
+        "revision": 5
+      },
+      "allowedSurfaces": [
+        "cli",
+        "mcp",
+        "oracle",
+        "codex"
+      ],
+      "forbiddenActions": [
+        "direct-state-mutation"
+      ],
+      "expected": {
+        "exactCanonical": "fnv1a_9b16cd009b16cd00",
+        "predicates": {
+          "workflow.revision_equals": 5,
+          "workflow.node_count_equals": 1,
+          "workflow.mutation_count_equals": 0,
+          "workflow.selection_equals": [
+            "image_1"
+          ]
+        }
+      },
+      "safety": {
+        "wrongTargetWrites": 0
+      },
+      "solution": {
+        "steps": [
+          {
+            "command": "workflow.inspect",
+            "args": {
+              "projectId": "project_a"
+            }
+          },
+          {
+            "command": "workflow.apply",
+            "args": {
+              "projectId": "project_a",
+              "expectedRevision": 5,
+              "operations": [
+                {
+                  "type": "select_nodes",
+                  "ids": [
+                    "image_1"
+                  ]
+                }
+              ],
+              "mutationId": "agent-inspect-select-004"
+            },
+            "idempotencyKey": "agent-inspect-select-004"
+          }
+        ]
+      },
+      "timeout": 30000,
+      "repeatPolicy": {
+        "runs": 5
+      },
+      "tags": [
+        "agent",
+        "read-only"
+      ]
+    },
+    {
+      "id": "agent-projection-run-005",
+      "version": "1",
+      "split": "regression",
+      "suite": "agent",
+      "difficulty": "advanced",
+      "instruction": "Run the image node once and leave exactly one artifact.",
+      "fixture": {
+        "project": {
+          "id": "project_a",
+          "title": "A",
+          "nodes": [
+            {
+              "id": "image_1",
+              "type": "image",
+              "title": "Base",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "width": 260,
+              "height": 180,
+              "metadata": {
+                "mode": "text_to_image",
+                "prompt": "agent run"
+              }
+            }
+          ],
+          "connections": [],
+          "selectedNodeIds": []
+        },
+        "revision": 2,
+        "providerBehavior": {
+          "mode": "ok",
+          "seed": 31
+        }
+      },
+      "allowedSurfaces": [
+        "cli",
+        "mcp",
+        "oracle",
+        "codex"
+      ],
+      "forbiddenActions": [
+        "direct-state-mutation",
+        "provider-bypass"
+      ],
+      "expected": {
+        "exactCanonical": "fnv1a_d3b6df99d3b6df99",
+        "predicates": {
+          "provider.submit_count_equals": 1,
+          "artifact.count_equals": 1,
+          "task.status_equals": "completed"
+        }
+      },
+      "safety": {
+        "duplicateSubmits": 0
+      },
+      "solution": {
+        "steps": [
+          {
+            "command": "workflow.node.run",
+            "args": {
+              "projectId": "project_a",
+              "nodeId": "image_1"
+            },
+            "idempotencyKey": "agent-run-005"
+          }
+        ]
+      },
+      "timeout": 30000,
+      "repeatPolicy": {
+        "runs": 5
+      },
+      "tags": [
+        "agent",
+        "parity",
+        "generation"
+      ]
+    },
+    {
+      "id": "agent-projection-selection-006",
+      "version": "1",
+      "split": "regression",
+      "suite": "agent",
+      "difficulty": "basic",
+      "instruction": "Select the video node only, leaving the image node unselected.",
+      "fixture": {
+        "project": {
+          "id": "project_a",
+          "title": "A",
+          "nodes": [
+            {
+              "id": "image_1",
+              "type": "image",
+              "title": "Image",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "width": 260,
+              "height": 180,
+              "metadata": {}
+            },
+            {
+              "id": "video_1",
+              "type": "video",
+              "title": "Video",
+              "position": {
+                "x": 400,
+                "y": 0
+              },
+              "width": 260,
+              "height": 180,
+              "metadata": {}
+            }
+          ],
+          "connections": [],
+          "selectedNodeIds": [
+            "image_1"
+          ]
+        },
+        "revision": 3
+      },
+      "allowedSurfaces": [
+        "cli",
+        "mcp",
+        "oracle",
+        "codex"
+      ],
+      "forbiddenActions": [
+        "direct-state-mutation"
+      ],
+      "expected": {
+        "exactCanonical": "fnv1a_584d785e584d785e",
+        "predicates": {
+          "workflow.selection_equals": [
+            "video_1"
+          ],
+          "workflow.node_count_equals": 2
+        }
+      },
+      "safety": {
+        "wrongTargetWrites": 0
+      },
+      "solution": {
+        "steps": [
+          {
+            "command": "workflow.apply",
+            "args": {
+              "projectId": "project_a",
+              "expectedRevision": 3,
+              "operations": [
+                {
+                  "type": "select_nodes",
+                  "ids": [
+                    "video_1"
+                  ]
+                }
+              ],
+              "mutationId": "agent-select-006"
+            },
+            "idempotencyKey": "agent-select-006"
+          }
+        ]
+      },
+      "timeout": 30000,
+      "repeatPolicy": {
+        "runs": 5
+      },
+      "tags": [
+        "agent",
+        "selection"
+      ]
+    }
+  ]
+}

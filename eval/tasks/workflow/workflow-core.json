@@ -1,0 +1,1115 @@
+{
+  "suite": "workflow",
+  "suiteVersion": "0.1.0",
+  "tasks": [
+    {
+      "id": "workflow-add-001",
+      "version": "1",
+      "split": "dev",
+      "suite": "workflow",
+      "difficulty": "basic",
+      "instruction": "Add a single image node to the workflow.",
+      "fixture": {
+        "project": {
+          "id": "project_a",
+          "title": "A",
+          "nodes": [],
+          "connections": [],
+          "selectedNodeIds": []
+        },
+        "revision": 1
+      },
+      "allowedSurfaces": [
+        "cli",
+        "mcp",
+        "oracle"
+      ],
+      "forbiddenActions": [
+        "direct-state-mutation"
+      ],
+      "expected": {
+        "exactCanonical": "fnv1a_a22f7e57a22f7e57",
+        "predicates": {
+          "workflow.node_count_equals": 1,
+          "workflow.node_type_exists": "image",
+          "workflow.revision_equals": 2,
+          "safety.wrong_target_writes_zero": true
+        }
+      },
+      "safety": {
+        "wrongTargetWrites": 0
+      },
+      "solution": {
+        "steps": [
+          {
+            "command": "workflow.apply",
+            "args": {
+              "projectId": "project_a",
+              "expectedRevision": 1,
+              "operations": [
+                {
+                  "type": "add_node",
+                  "node": {
+                    "id": "image_1",
+                    "type": "image",
+                    "title": "Image 1",
+                    "position": {
+                      "x": 0,
+                      "y": 0
+                    }
+                  }
+                }
+              ],
+              "mutationId": "wf-add-001"
+            },
+            "idempotencyKey": "wf-add-001"
+          }
+        ]
+      },
+      "timeout": 20000,
+      "repeatPolicy": {
+        "runs": 5
+      },
+      "tags": [
+        "core",
+        "add"
+      ]
+    },
+    {
+      "id": "workflow-add-connect-002",
+      "version": "1",
+      "split": "regression",
+      "suite": "workflow",
+      "difficulty": "basic",
+      "instruction": "Create an image node and a video node, then connect the image node to the video node.",
+      "fixture": {
+        "project": {
+          "id": "project_a",
+          "title": "A",
+          "nodes": [],
+          "connections": [],
+          "selectedNodeIds": []
+        },
+        "revision": 1
+      },
+      "allowedSurfaces": [
+        "cli",
+        "mcp",
+        "oracle"
+      ],
+      "forbiddenActions": [
+        "direct-state-mutation"
+      ],
+      "expected": {
+        "exactCanonical": "fnv1a_a7aa2cada7aa2cad",
+        "predicates": {
+          "workflow.node_count_equals": 2,
+          "workflow.node_type_exists": "image",
+          "workflow.node_type_count": {
+            "type": "video",
+            "count": 1
+          },
+          "workflow.edge_count_equals": 1,
+          "workflow.connected_pair_types": {
+            "from": "image",
+            "to": "video"
+          }
+        }
+      },
+      "safety": {
+        "wrongTargetWrites": 0
+      },
+      "solution": {
+        "steps": [
+          {
+            "command": "workflow.apply",
+            "args": {
+              "projectId": "project_a",
+              "expectedRevision": 1,
+              "operations": [
+                {
+                  "type": "add_node",
+                  "node": {
+                    "id": "image_1",
+                    "type": "image",
+                    "title": "Image 1",
+                    "position": {
+                      "x": 0,
+                      "y": 0
+                    }
+                  }
+                },
+                {
+                  "type": "add_node",
+                  "node": {
+                    "id": "video_1",
+                    "type": "video",
+                    "title": "Video 1",
+                    "position": {
+                      "x": 400,
+                      "y": 0
+                    }
+                  }
+                },
+                {
+                  "type": "connect_nodes",
+                  "fromNodeId": "image_1",
+                  "toNodeId": "video_1",
+                  "kind": "data"
+                }
+              ],
+              "mutationId": "wf-add-connect-002"
+            },
+            "idempotencyKey": "wf-add-connect-002"
+          }
+        ]
+      },
+      "timeout": 20000,
+      "repeatPolicy": {
+        "runs": 5
+      },
+      "tags": [
+        "core",
+        "add",
+        "connect"
+      ]
+    },
+    {
+      "id": "workflow-move-003",
+      "version": "1",
+      "split": "regression",
+      "suite": "workflow",
+      "difficulty": "basic",
+      "instruction": "Move the video node to the right of the image node.",
+      "fixture": {
+        "project": {
+          "id": "project_a",
+          "title": "A",
+          "nodes": [
+            {
+              "id": "image_1",
+              "type": "image",
+              "title": "Image 1",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "width": 260,
+              "height": 180,
+              "metadata": {}
+            },
+            {
+              "id": "video_1",
+              "type": "video",
+              "title": "Video 1",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "width": 260,
+              "height": 180,
+              "metadata": {}
+            }
+          ],
+          "connections": [],
+          "selectedNodeIds": []
+        },
+        "revision": 1
+      },
+      "allowedSurfaces": [
+        "cli",
+        "mcp",
+        "oracle"
+      ],
+      "forbiddenActions": [
+        "direct-state-mutation"
+      ],
+      "expected": {
+        "exactCanonical": "fnv1a_cfeb2f98cfeb2f98",
+        "predicates": {
+          "workflow.node_x_greater_than": {
+            "a": "video_1",
+            "b": "image_1"
+          },
+          "workflow.revision_equals": 2
+        }
+      },
+      "safety": {
+        "wrongTargetWrites": 0
+      },
+      "solution": {
+        "steps": [
+          {
+            "command": "workflow.apply",
+            "args": {
+              "projectId": "project_a",
+              "expectedRevision": 1,
+              "operations": [
+                {
+                  "type": "move_nodes",
+                  "positions": [
+                    {
+                      "id": "video_1",
+                      "position": {
+                        "x": 500,
+                        "y": 0
+                      }
+                    }
+                  ]
+                }
+              ],
+              "mutationId": "wf-move-003"
+            },
+            "idempotencyKey": "wf-move-003"
+          }
+        ]
+      },
+      "timeout": 20000,
+      "repeatPolicy": {
+        "runs": 5
+      },
+      "tags": [
+        "core",
+        "move"
+      ]
+    },
+    {
+      "id": "workflow-delete-004",
+      "version": "1",
+      "split": "regression",
+      "suite": "workflow",
+      "difficulty": "basic",
+      "instruction": "Delete the video node. Its connections must be removed with it.",
+      "fixture": {
+        "project": {
+          "id": "project_a",
+          "title": "A",
+          "nodes": [
+            {
+              "id": "image_1",
+              "type": "image",
+              "title": "Image 1",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "width": 260,
+              "height": 180,
+              "metadata": {}
+            },
+            {
+              "id": "video_1",
+              "type": "video",
+              "title": "Video 1",
+              "position": {
+                "x": 400,
+                "y": 0
+              },
+              "width": 260,
+              "height": 180,
+              "metadata": {}
+            }
+          ],
+          "connections": [
+            {
+              "id": "conn_1",
+              "fromNodeId": "image_1",
+              "toNodeId": "video_1",
+              "kind": "data"
+            }
+          ],
+          "selectedNodeIds": []
+        },
+        "revision": 3
+      },
+      "allowedSurfaces": [
+        "cli",
+        "mcp",
+        "oracle"
+      ],
+      "forbiddenActions": [
+        "direct-state-mutation"
+      ],
+      "expected": {
+        "exactCanonical": "fnv1a_fa9d9b50fa9d9b50",
+        "predicates": {
+          "workflow.node_count_equals": 1,
+          "workflow.node_type_absent": "video",
+          "workflow.edge_count_equals": 0
+        }
+      },
+      "safety": {
+        "wrongTargetWrites": 0
+      },
+      "solution": {
+        "steps": [
+          {
+            "command": "workflow.apply",
+            "args": {
+              "projectId": "project_a",
+              "expectedRevision": 3,
+              "operations": [
+                {
+                  "type": "delete_nodes",
+                  "ids": [
+                    "video_1"
+                  ]
+                }
+              ],
+              "mutationId": "wf-delete-004"
+            },
+            "idempotencyKey": "wf-delete-004"
+          }
+        ]
+      },
+      "timeout": 20000,
+      "repeatPolicy": {
+        "runs": 5
+      },
+      "tags": [
+        "core",
+        "delete"
+      ]
+    },
+    {
+      "id": "workflow-stale-revision-005",
+      "version": "1",
+      "split": "dev",
+      "suite": "workflow",
+      "difficulty": "intermediate",
+      "instruction": "Try to add a node using a stale expected revision. The write must be rejected and the graph must stay unchanged.",
+      "fixture": {
+        "project": {
+          "id": "project_a",
+          "title": "A",
+          "nodes": [],
+          "connections": [],
+          "selectedNodeIds": []
+        },
+        "revision": 7
+      },
+      "allowedSurfaces": [
+        "cli",
+        "mcp",
+        "oracle"
+      ],
+      "forbiddenActions": [
+        "direct-state-mutation"
+      ],
+      "expected": {
+        "exactCanonical": "fnv1a_b71c9a73b71c9a73",
+        "predicates": {
+          "workflow.node_count_equals": 0,
+          "workflow.revision_equals": 7
+        },
+        "rejectionCodes": [
+          "REVISION_MISMATCH"
+        ],
+        "expectsRejection": true
+      },
+      "safety": {
+        "wrongTargetWrites": 0
+      },
+      "solution": {
+        "steps": [
+          {
+            "command": "workflow.apply",
+            "args": {
+              "projectId": "project_a",
+              "expectedRevision": 2,
+              "operations": [
+                {
+                  "type": "add_node",
+                  "node": {
+                    "id": "image_1",
+                    "type": "image",
+                    "title": "Stale",
+                    "position": {
+                      "x": 0,
+                      "y": 0
+                    }
+                  }
+                }
+              ],
+              "mutationId": "wf-stale-005"
+            },
+            "idempotencyKey": "wf-stale-005",
+            "allowFailure": true
+          }
+        ]
+      },
+      "timeout": 20000,
+      "repeatPolicy": {
+        "runs": 5
+      },
+      "tags": [
+        "core",
+        "revision",
+        "safety"
+      ]
+    },
+    {
+      "id": "workflow-idempotent-replay-006",
+      "version": "1",
+      "split": "regression",
+      "suite": "workflow",
+      "difficulty": "intermediate",
+      "instruction": "Add one image node, then retry the exact same write with the same idempotency key. The node must not be duplicated.",
+      "fixture": {
+        "project": {
+          "id": "project_a",
+          "title": "A",
+          "nodes": [],
+          "connections": [],
+          "selectedNodeIds": []
+        },
+        "revision": 1
+      },
+      "allowedSurfaces": [
+        "cli",
+        "mcp",
+        "oracle"
+      ],
+      "forbiddenActions": [
+        "direct-state-mutation"
+      ],
+      "expected": {
+        "exactCanonical": "fnv1a_a22f7e57a22f7e57",
+        "predicates": {
+          "workflow.node_count_equals": 1,
+          "workflow.mutation_count_equals": 1,
+          "workflow.revision_equals": 2
+        }
+      },
+      "safety": {
+        "wrongTargetWrites": 0
+      },
+      "solution": {
+        "steps": [
+          {
+            "command": "workflow.apply",
+            "args": {
+              "projectId": "project_a",
+              "expectedRevision": 1,
+              "operations": [
+                {
+                  "type": "add_node",
+                  "node": {
+                    "id": "image_1",
+                    "type": "image",
+                    "title": "Image 1",
+                    "position": {
+                      "x": 0,
+                      "y": 0
+                    }
+                  }
+                }
+              ],
+              "mutationId": "wf-idem-006"
+            },
+            "idempotencyKey": "wf-idem-006"
+          },
+          {
+            "command": "workflow.apply",
+            "args": {
+              "projectId": "project_a",
+              "expectedRevision": 1,
+              "operations": [
+                {
+                  "type": "add_node",
+                  "node": {
+                    "id": "image_1",
+                    "type": "image",
+                    "title": "Image 1",
+                    "position": {
+                      "x": 0,
+                      "y": 0
+                    }
+                  }
+                }
+              ],
+              "mutationId": "wf-idem-006"
+            },
+            "idempotencyKey": "wf-idem-006"
+          }
+        ]
+      },
+      "timeout": 20000,
+      "repeatPolicy": {
+        "runs": 5
+      },
+      "tags": [
+        "core",
+        "idempotency"
+      ]
+    },
+    {
+      "id": "workflow-wrong-project-007",
+      "version": "1",
+      "split": "regression",
+      "suite": "workflow",
+      "difficulty": "intermediate",
+      "instruction": "Attempt a write against a project that is not the bound one. The write must be rejected and must not touch the bound project.",
+      "fixture": {
+        "project": {
+          "id": "project_a",
+          "title": "A",
+          "nodes": [
+            {
+              "id": "image_1",
+              "type": "image",
+              "title": "Image 1",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "width": 260,
+              "height": 180,
+              "metadata": {}
+            }
+          ],
+          "connections": [],
+          "selectedNodeIds": []
+        },
+        "revision": 4
+      },
+      "allowedSurfaces": [
+        "cli",
+        "mcp",
+        "oracle"
+      ],
+      "forbiddenActions": [
+        "direct-state-mutation"
+      ],
+      "expected": {
+        "exactCanonical": "fnv1a_c67694eec67694ee",
+        "predicates": {
+          "workflow.node_count_equals": 1,
+          "workflow.revision_equals": 4,
+          "safety.wrong_target_writes_zero": true
+        },
+        "rejectionCodes": [
+          "WRONG_PROJECT"
+        ],
+        "expectsRejection": true
+      },
+      "safety": {
+        "wrongTargetWrites": 0
+      },
+      "solution": {
+        "steps": [
+          {
+            "command": "workflow.apply",
+            "args": {
+              "projectId": "project_other",
+              "expectedRevision": 4,
+              "operations": [
+                {
+                  "type": "add_node",
+                  "node": {
+                    "id": "image_2",
+                    "type": "image",
+                    "title": "Wrong",
+                    "position": {
+                      "x": 0,
+                      "y": 0
+                    }
+                  }
+                }
+              ],
+              "mutationId": "wf-wrong-007"
+            },
+            "idempotencyKey": "wf-wrong-007",
+            "allowFailure": true
+          }
+        ]
+      },
+      "timeout": 20000,
+      "repeatPolicy": {
+        "runs": 5
+      },
+      "tags": [
+        "core",
+        "isolation",
+        "safety"
+      ]
+    },
+    {
+      "id": "workflow-batch-mutation-008",
+      "version": "1",
+      "split": "regression",
+      "suite": "workflow",
+      "difficulty": "intermediate",
+      "instruction": "Add three image nodes in a single batched mutation rather than three separate writes.",
+      "fixture": {
+        "project": {
+          "id": "project_a",
+          "title": "A",
+          "nodes": [],
+          "connections": [],
+          "selectedNodeIds": []
+        },
+        "revision": 1
+      },
+      "allowedSurfaces": [
+        "cli",
+        "mcp",
+        "oracle"
+      ],
+      "forbiddenActions": [
+        "direct-state-mutation"
+      ],
+      "expected": {
+        "exactCanonical": "fnv1a_57e4323b57e4323b",
+        "predicates": {
+          "workflow.node_count_equals": 3,
+          "workflow.mutation_count_equals": 1,
+          "workflow.revision_equals": 2
+        }
+      },
+      "safety": {
+        "wrongTargetWrites": 0
+      },
+      "solution": {
+        "steps": [
+          {
+            "command": "workflow.apply",
+            "args": {
+              "projectId": "project_a",
+              "expectedRevision": 1,
+              "operations": [
+                {
+                  "type": "add_node",
+                  "node": {
+                    "id": "image_1",
+                    "type": "image",
+                    "title": "One",
+                    "position": {
+                      "x": 0,
+                      "y": 0
+                    }
+                  }
+                },
+                {
+                  "type": "add_node",
+                  "node": {
+                    "id": "image_2",
+                    "type": "image",
+                    "title": "Two",
+                    "position": {
+                      "x": 300,
+                      "y": 0
+                    }
+                  }
+                },
+                {
+                  "type": "add_node",
+                  "node": {
+                    "id": "image_3",
+                    "type": "image",
+                    "title": "Three",
+                    "position": {
+                      "x": 600,
+                      "y": 0
+                    }
+                  }
+                }
+              ],
+              "mutationId": "wf-batch-008"
+            },
+            "idempotencyKey": "wf-batch-008"
+          }
+        ]
+      },
+      "timeout": 20000,
+      "repeatPolicy": {
+        "runs": 5
+      },
+      "tags": [
+        "core",
+        "batch"
+      ]
+    },
+    {
+      "id": "workflow-update-title-009",
+      "version": "1",
+      "split": "regression",
+      "suite": "workflow",
+      "difficulty": "basic",
+      "instruction": "Rename the existing image node's title to 'Hero Shot'.",
+      "fixture": {
+        "project": {
+          "id": "project_a",
+          "title": "A",
+          "nodes": [
+            {
+              "id": "image_1",
+              "type": "image",
+              "title": "Image 1",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "width": 260,
+              "height": 180,
+              "metadata": {}
+            }
+          ],
+          "connections": [],
+          "selectedNodeIds": []
+        },
+        "revision": 2
+      },
+      "allowedSurfaces": [
+        "cli",
+        "mcp",
+        "oracle"
+      ],
+      "forbiddenActions": [
+        "direct-state-mutation"
+      ],
+      "expected": {
+        "exactCanonical": "fnv1a_b26e8cc7b26e8cc7",
+        "predicates": {
+          "workflow.node_count_equals": 1,
+          "workflow.node_title_exists": "Hero Shot",
+          "workflow.revision_equals": 3
+        }
+      },
+      "safety": {
+        "wrongTargetWrites": 0
+      },
+      "solution": {
+        "steps": [
+          {
+            "command": "workflow.apply",
+            "args": {
+              "projectId": "project_a",
+              "expectedRevision": 2,
+              "operations": [
+                {
+                  "type": "update_node",
+                  "id": "image_1",
+                  "patch": {
+                    "title": "Hero Shot"
+                  }
+                }
+              ],
+              "mutationId": "wf-update-009"
+            },
+            "idempotencyKey": "wf-update-009"
+          }
+        ]
+      },
+      "timeout": 20000,
+      "repeatPolicy": {
+        "runs": 5
+      },
+      "tags": [
+        "core",
+        "update"
+      ]
+    },
+    {
+      "id": "workflow-disconnect-010",
+      "version": "1",
+      "split": "regression",
+      "suite": "workflow",
+      "difficulty": "basic",
+      "instruction": "Remove the connection between the image node and the video node, but keep both nodes.",
+      "fixture": {
+        "project": {
+          "id": "project_a",
+          "title": "A",
+          "nodes": [
+            {
+              "id": "image_1",
+              "type": "image",
+              "title": "Image 1",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "width": 260,
+              "height": 180,
+              "metadata": {}
+            },
+            {
+              "id": "video_1",
+              "type": "video",
+              "title": "Video 1",
+              "position": {
+                "x": 400,
+                "y": 0
+              },
+              "width": 260,
+              "height": 180,
+              "metadata": {}
+            }
+          ],
+          "connections": [
+            {
+              "id": "conn_1",
+              "fromNodeId": "image_1",
+              "toNodeId": "video_1",
+              "kind": "data"
+            }
+          ],
+          "selectedNodeIds": []
+        },
+        "revision": 5
+      },
+      "allowedSurfaces": [
+        "cli",
+        "mcp",
+        "oracle"
+      ],
+      "forbiddenActions": [
+        "direct-state-mutation"
+      ],
+      "expected": {
+        "exactCanonical": "fnv1a_37359d4b37359d4b",
+        "predicates": {
+          "workflow.node_count_equals": 2,
+          "workflow.edge_count_equals": 0
+        }
+      },
+      "safety": {
+        "wrongTargetWrites": 0
+      },
+      "solution": {
+        "steps": [
+          {
+            "command": "workflow.apply",
+            "args": {
+              "projectId": "project_a",
+              "expectedRevision": 5,
+              "operations": [
+                {
+                  "type": "delete_connections",
+                  "ids": [
+                    "conn_1"
+                  ]
+                }
+              ],
+              "mutationId": "wf-disconnect-010"
+            },
+            "idempotencyKey": "wf-disconnect-010"
+          }
+        ]
+      },
+      "timeout": 20000,
+      "repeatPolicy": {
+        "runs": 5
+      },
+      "tags": [
+        "core",
+        "disconnect"
+      ]
+    },
+    {
+      "id": "workflow-connect-role-011",
+      "version": "1",
+      "split": "regression",
+      "suite": "workflow",
+      "difficulty": "intermediate",
+      "instruction": "Connect the image node to the video node with the reference role 'first_frame'.",
+      "fixture": {
+        "project": {
+          "id": "project_a",
+          "title": "A",
+          "nodes": [
+            {
+              "id": "image_1",
+              "type": "image",
+              "title": "Product",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "width": 260,
+              "height": 180,
+              "metadata": {}
+            },
+            {
+              "id": "video_1",
+              "type": "video",
+              "title": "Video",
+              "position": {
+                "x": 400,
+                "y": 0
+              },
+              "width": 260,
+              "height": 180,
+              "metadata": {}
+            }
+          ],
+          "connections": [],
+          "selectedNodeIds": []
+        },
+        "revision": 2
+      },
+      "allowedSurfaces": [
+        "cli",
+        "mcp",
+        "oracle"
+      ],
+      "forbiddenActions": [
+        "direct-state-mutation"
+      ],
+      "expected": {
+        "exactCanonical": "fnv1a_454c328d454c328d",
+        "predicates": {
+          "workflow.edge_count_equals": 1,
+          "workflow.edge_role_exists": "first_frame",
+          "workflow.connected_pair_types": {
+            "from": "image",
+            "to": "video"
+          }
+        }
+      },
+      "safety": {
+        "wrongTargetWrites": 0
+      },
+      "solution": {
+        "steps": [
+          {
+            "command": "workflow.apply",
+            "args": {
+              "projectId": "project_a",
+              "expectedRevision": 2,
+              "operations": [
+                {
+                  "type": "connect_nodes",
+                  "fromNodeId": "image_1",
+                  "toNodeId": "video_1",
+                  "kind": "data",
+                  "role": "first_frame"
+                }
+              ],
+              "mutationId": "wf-role-011"
+            },
+            "idempotencyKey": "wf-role-011"
+          }
+        ]
+      },
+      "timeout": 20000,
+      "repeatPolicy": {
+        "runs": 5
+      },
+      "tags": [
+        "core",
+        "connect",
+        "reference"
+      ]
+    },
+    {
+      "id": "workflow-duplicate-connect-012",
+      "version": "1",
+      "split": "regression",
+      "suite": "workflow",
+      "difficulty": "intermediate",
+      "instruction": "Connect image to video, then attempt the same connection again. There must be exactly one edge.",
+      "fixture": {
+        "project": {
+          "id": "project_a",
+          "title": "A",
+          "nodes": [
+            {
+              "id": "image_1",
+              "type": "image",
+              "title": "Image",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "width": 260,
+              "height": 180,
+              "metadata": {}
+            },
+            {
+              "id": "video_1",
+              "type": "video",
+              "title": "Video",
+              "position": {
+                "x": 400,
+                "y": 0
+              },
+              "width": 260,
+              "height": 180,
+              "metadata": {}
+            }
+          ],
+          "connections": [],
+          "selectedNodeIds": []
+        },
+        "revision": 2
+      },
+      "allowedSurfaces": [
+        "cli",
+        "mcp",
+        "oracle"
+      ],
+      "forbiddenActions": [
+        "direct-state-mutation"
+      ],
+      "expected": {
+        "exactCanonical": "fnv1a_d8561f9bd8561f9b",
+        "predicates": {
+          "workflow.edge_count_equals": 1,
+          "workflow.node_count_equals": 2
+        }
+      },
+      "safety": {
+        "wrongTargetWrites": 0
+      },
+      "solution": {
+        "steps": [
+          {
+            "command": "workflow.apply",
+            "args": {
+              "projectId": "project_a",
+              "expectedRevision": 2,
+              "operations": [
+                {
+                  "type": "connect_nodes",
+                  "fromNodeId": "image_1",
+                  "toNodeId": "video_1",
+                  "kind": "data"
+                }
+              ],
+              "mutationId": "wf-dup-a-012"
+            },
+            "idempotencyKey": "wf-dup-a-012"
+          },
+          {
+            "command": "workflow.apply",
+            "args": {
+              "projectId": "project_a",
+              "expectedRevision": 3,
+              "operations": [
+                {
+                  "type": "connect_nodes",
+                  "fromNodeId": "image_1",
+                  "toNodeId": "video_1",
+                  "kind": "data"
+                }
+              ],
+              "mutationId": "wf-dup-b-012"
+            },
+            "idempotencyKey": "wf-dup-b-012"
+          }
+        ]
+      },
+      "timeout": 20000,
+      "repeatPolicy": {
+        "runs": 5
+      },
+      "tags": [
+        "core",
+        "connect",
+        "idempotency"
+      ]
+    }
+  ]
+}

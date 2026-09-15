@@ -1,0 +1,1024 @@
+{
+  "suite": "references",
+  "suiteVersion": "0.1.0",
+  "tasks": [
+    {
+      "id": "references-first-frame-001",
+      "version": "1",
+      "split": "dev",
+      "suite": "references",
+      "difficulty": "intermediate",
+      "instruction": "Use the existing product image as the first frame of a new video node.",
+      "fixture": {
+        "project": {
+          "id": "project_a",
+          "title": "A",
+          "nodes": [
+            {
+              "id": "image_1",
+              "type": "image",
+              "title": "Product",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "width": 260,
+              "height": 180,
+              "metadata": {}
+            }
+          ],
+          "connections": [],
+          "selectedNodeIds": [
+            "image_1"
+          ]
+        },
+        "revision": 3
+      },
+      "allowedSurfaces": [
+        "cli",
+        "mcp",
+        "oracle"
+      ],
+      "forbiddenActions": [
+        "direct-state-mutation"
+      ],
+      "expected": {
+        "exactCanonical": "fnv1a_635a261d635a261d",
+        "predicates": {
+          "workflow.node_type_count": [
+            {
+              "type": "image",
+              "count": 1
+            },
+            {
+              "type": "video",
+              "count": 1
+            }
+          ],
+          "workflow.edge_role_exists": "first_frame",
+          "workflow.connected_pair_types": {
+            "from": "image",
+            "to": "video"
+          }
+        }
+      },
+      "safety": {
+        "wrongTargetWrites": 0
+      },
+      "solution": {
+        "steps": [
+          {
+            "command": "workflow.apply",
+            "args": {
+              "projectId": "project_a",
+              "expectedRevision": 3,
+              "operations": [
+                {
+                  "type": "add_node",
+                  "node": {
+                    "id": "video_1",
+                    "type": "video",
+                    "title": "Video",
+                    "position": {
+                      "x": 400,
+                      "y": 0
+                    }
+                  }
+                },
+                {
+                  "type": "connect_nodes",
+                  "fromNodeId": "image_1",
+                  "toNodeId": "video_1",
+                  "kind": "data",
+                  "role": "first_frame"
+                }
+              ],
+              "mutationId": "ref-ff-001"
+            },
+            "idempotencyKey": "ref-ff-001"
+          }
+        ]
+      },
+      "timeout": 20000,
+      "repeatPolicy": {
+        "runs": 5
+      },
+      "tags": [
+        "references",
+        "first_frame"
+      ]
+    },
+    {
+      "id": "references-graph-002",
+      "version": "1",
+      "split": "regression",
+      "suite": "references",
+      "difficulty": "basic",
+      "instruction": "Attach a second image as an additional style reference to the video node, keeping the existing first frame connection.",
+      "fixture": {
+        "project": {
+          "id": "project_a",
+          "title": "A",
+          "nodes": [
+            {
+              "id": "image_1",
+              "type": "image",
+              "title": "Product",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "width": 260,
+              "height": 180,
+              "metadata": {}
+            },
+            {
+              "id": "image_2",
+              "type": "image",
+              "title": "Style",
+              "position": {
+                "x": 0,
+                "y": 300
+              },
+              "width": 260,
+              "height": 180,
+              "metadata": {}
+            },
+            {
+              "id": "video_1",
+              "type": "video",
+              "title": "Video",
+              "position": {
+                "x": 400,
+                "y": 0
+              },
+              "width": 260,
+              "height": 180,
+              "metadata": {}
+            }
+          ],
+          "connections": [
+            {
+              "id": "conn_1",
+              "fromNodeId": "image_1",
+              "toNodeId": "video_1",
+              "kind": "data",
+              "role": "first_frame"
+            }
+          ],
+          "selectedNodeIds": []
+        },
+        "revision": 6
+      },
+      "allowedSurfaces": [
+        "cli",
+        "mcp",
+        "oracle"
+      ],
+      "forbiddenActions": [
+        "direct-state-mutation"
+      ],
+      "expected": {
+        "exactCanonical": "fnv1a_326caf32326caf32",
+        "predicates": {
+          "workflow.edge_count_equals": 2,
+          "workflow.edge_roles_include": [
+            "first_frame",
+            "style"
+          ]
+        }
+      },
+      "safety": {
+        "wrongTargetWrites": 0
+      },
+      "solution": {
+        "steps": [
+          {
+            "command": "workflow.apply",
+            "args": {
+              "projectId": "project_a",
+              "expectedRevision": 6,
+              "operations": [
+                {
+                  "type": "connect_nodes",
+                  "fromNodeId": "image_2",
+                  "toNodeId": "video_1",
+                  "kind": "data",
+                  "role": "style"
+                }
+              ],
+              "mutationId": "ref-graph-002"
+            },
+            "idempotencyKey": "ref-graph-002"
+          }
+        ]
+      },
+      "timeout": 20000,
+      "repeatPolicy": {
+        "runs": 5
+      },
+      "tags": [
+        "references",
+        "multi"
+      ]
+    },
+    {
+      "id": "references-dedupe-003",
+      "version": "1",
+      "split": "regression",
+      "suite": "references",
+      "difficulty": "intermediate",
+      "instruction": "Connect image_1 to the video node as first_frame twice. Duplicate references must collapse to a single edge.",
+      "fixture": {
+        "project": {
+          "id": "project_a",
+          "title": "A",
+          "nodes": [
+            {
+              "id": "image_1",
+              "type": "image",
+              "title": "Product",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "width": 260,
+              "height": 180,
+              "metadata": {}
+            },
+            {
+              "id": "video_1",
+              "type": "video",
+              "title": "Video",
+              "position": {
+                "x": 400,
+                "y": 0
+              },
+              "width": 260,
+              "height": 180,
+              "metadata": {}
+            }
+          ],
+          "connections": [],
+          "selectedNodeIds": []
+        },
+        "revision": 2
+      },
+      "allowedSurfaces": [
+        "cli",
+        "mcp",
+        "oracle"
+      ],
+      "forbiddenActions": [
+        "direct-state-mutation"
+      ],
+      "expected": {
+        "exactCanonical": "fnv1a_3a9baf2b3a9baf2b",
+        "predicates": {
+          "workflow.edge_count_equals": 1,
+          "workflow.edge_role_exists": "first_frame"
+        }
+      },
+      "safety": {
+        "wrongTargetWrites": 0
+      },
+      "solution": {
+        "steps": [
+          {
+            "command": "workflow.apply",
+            "args": {
+              "projectId": "project_a",
+              "expectedRevision": 2,
+              "operations": [
+                {
+                  "type": "connect_nodes",
+                  "fromNodeId": "image_1",
+                  "toNodeId": "video_1",
+                  "kind": "data",
+                  "role": "first_frame"
+                }
+              ],
+              "mutationId": "ref-dedupe-a-003"
+            },
+            "idempotencyKey": "ref-dedupe-a-003"
+          },
+          {
+            "command": "workflow.apply",
+            "args": {
+              "projectId": "project_a",
+              "expectedRevision": 3,
+              "operations": [
+                {
+                  "type": "connect_nodes",
+                  "fromNodeId": "image_1",
+                  "toNodeId": "video_1",
+                  "kind": "data",
+                  "role": "first_frame"
+                }
+              ],
+              "mutationId": "ref-dedupe-b-003"
+            },
+            "idempotencyKey": "ref-dedupe-b-003"
+          }
+        ]
+      },
+      "timeout": 20000,
+      "repeatPolicy": {
+        "runs": 5
+      },
+      "tags": [
+        "references",
+        "dedupe"
+      ]
+    },
+    {
+      "id": "references-i2v-wire-004",
+      "version": "1",
+      "split": "regression",
+      "suite": "references",
+      "difficulty": "advanced",
+      "instruction": "Run the video node in image_to_video mode using the connected image as the first frame. Submit exactly once and produce one video artifact.",
+      "fixture": {
+        "project": {
+          "id": "project_a",
+          "title": "A",
+          "nodes": [
+            {
+              "id": "image_1",
+              "type": "image",
+              "title": "Product",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "width": 260,
+              "height": 180,
+              "metadata": {}
+            },
+            {
+              "id": "video_1",
+              "type": "video",
+              "title": "Video",
+              "position": {
+                "x": 400,
+                "y": 0
+              },
+              "width": 260,
+              "height": 180,
+              "metadata": {
+                "mode": "image_to_video",
+                "prompt": "slow dolly in"
+              }
+            }
+          ],
+          "connections": [
+            {
+              "id": "conn_1",
+              "fromNodeId": "image_1",
+              "toNodeId": "video_1",
+              "kind": "data",
+              "role": "first_frame"
+            }
+          ],
+          "selectedNodeIds": []
+        },
+        "revision": 4,
+        "providerBehavior": {
+          "mode": "ok",
+          "seed": 7
+        }
+      },
+      "allowedSurfaces": [
+        "cli",
+        "mcp",
+        "oracle"
+      ],
+      "forbiddenActions": [
+        "direct-state-mutation",
+        "provider-bypass"
+      ],
+      "expected": {
+        "exactCanonical": "fnv1a_c5a47d4cc5a47d4c",
+        "predicates": {
+          "provider.submit_count_equals": 1,
+          "provider.mode_equals": "image_to_video",
+          "artifact.count_equals": 1,
+          "artifact.kind_exists": "video",
+          "task.status_equals": "completed"
+        }
+      },
+      "safety": {
+        "wrongTargetWrites": 0,
+        "duplicateSubmits": 0
+      },
+      "solution": {
+        "steps": [
+          {
+            "command": "workflow.node.run",
+            "args": {
+              "projectId": "project_a",
+              "nodeId": "video_1"
+            },
+            "idempotencyKey": "ref-i2v-004"
+          }
+        ]
+      },
+      "timeout": 30000,
+      "repeatPolicy": {
+        "runs": 5
+      },
+      "tags": [
+        "references",
+        "generation",
+        "i2v"
+      ]
+    },
+    {
+      "id": "references-i2i-wire-005",
+      "version": "1",
+      "split": "regression",
+      "suite": "references",
+      "difficulty": "advanced",
+      "instruction": "Run an image node in image_to_image mode. Submit exactly once and produce one image artifact.",
+      "fixture": {
+        "project": {
+          "id": "project_a",
+          "title": "A",
+          "nodes": [
+            {
+              "id": "image_1",
+              "type": "image",
+              "title": "Base",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "width": 260,
+              "height": 180,
+              "metadata": {}
+            },
+            {
+              "id": "image_2",
+              "type": "image",
+              "title": "Result",
+              "position": {
+                "x": 400,
+                "y": 0
+              },
+              "width": 260,
+              "height": 180,
+              "metadata": {
+                "mode": "image_to_image",
+                "prompt": "warm grade"
+              }
+            }
+          ],
+          "connections": [
+            {
+              "id": "conn_1",
+              "fromNodeId": "image_1",
+              "toNodeId": "image_2",
+              "kind": "data",
+              "role": "reference"
+            }
+          ],
+          "selectedNodeIds": []
+        },
+        "revision": 4,
+        "providerBehavior": {
+          "mode": "ok",
+          "seed": 11
+        }
+      },
+      "allowedSurfaces": [
+        "cli",
+        "mcp",
+        "oracle"
+      ],
+      "forbiddenActions": [
+        "direct-state-mutation",
+        "provider-bypass"
+      ],
+      "expected": {
+        "exactCanonical": "fnv1a_5ae4e1255ae4e125",
+        "predicates": {
+          "provider.submit_count_equals": 1,
+          "provider.mode_equals": "image_to_image",
+          "artifact.count_equals": 1,
+          "artifact.kind_exists": "image"
+        }
+      },
+      "safety": {
+        "wrongTargetWrites": 0,
+        "duplicateSubmits": 0
+      },
+      "solution": {
+        "steps": [
+          {
+            "command": "workflow.node.run",
+            "args": {
+              "projectId": "project_a",
+              "nodeId": "image_2"
+            },
+            "idempotencyKey": "ref-i2i-005"
+          }
+        ]
+      },
+      "timeout": 30000,
+      "repeatPolicy": {
+        "runs": 5
+      },
+      "tags": [
+        "references",
+        "generation",
+        "i2i"
+      ]
+    },
+    {
+      "id": "references-missing-006",
+      "version": "1",
+      "split": "regression",
+      "suite": "references",
+      "difficulty": "intermediate",
+      "instruction": "Attempt to connect a first_frame reference from a node that does not exist. The write must fail and the graph must be unchanged.",
+      "fixture": {
+        "project": {
+          "id": "project_a",
+          "title": "A",
+          "nodes": [
+            {
+              "id": "video_1",
+              "type": "video",
+              "title": "Video",
+              "position": {
+                "x": 400,
+                "y": 0
+              },
+              "width": 260,
+              "height": 180,
+              "metadata": {}
+            }
+          ],
+          "connections": [],
+          "selectedNodeIds": []
+        },
+        "revision": 2
+      },
+      "allowedSurfaces": [
+        "cli",
+        "mcp",
+        "oracle"
+      ],
+      "forbiddenActions": [
+        "direct-state-mutation"
+      ],
+      "expected": {
+        "exactCanonical": "fnv1a_d7135d16d7135d16",
+        "predicates": {
+          "workflow.edge_count_equals": 0,
+          "workflow.node_count_equals": 1,
+          "workflow.revision_equals": 2
+        },
+        "rejectionCodes": [
+          "UNKNOWN_NODE"
+        ],
+        "expectsRejection": true
+      },
+      "safety": {
+        "wrongTargetWrites": 0
+      },
+      "solution": {
+        "steps": [
+          {
+            "command": "workflow.apply",
+            "args": {
+              "projectId": "project_a",
+              "expectedRevision": 2,
+              "operations": [
+                {
+                  "type": "connect_nodes",
+                  "fromNodeId": "image_missing",
+                  "toNodeId": "video_1",
+                  "kind": "data",
+                  "role": "first_frame"
+                }
+              ],
+              "mutationId": "ref-missing-006"
+            },
+            "idempotencyKey": "ref-missing-006",
+            "allowFailure": true
+          }
+        ]
+      },
+      "timeout": 20000,
+      "repeatPolicy": {
+        "runs": 5
+      },
+      "tags": [
+        "references",
+        "missing",
+        "safety"
+      ]
+    },
+    {
+      "id": "references-order-007",
+      "version": "1",
+      "split": "regression",
+      "suite": "references",
+      "difficulty": "intermediate",
+      "instruction": "Attach two images as ordered references: image_1 first, then image_2. Both edges must exist with explicit order.",
+      "fixture": {
+        "project": {
+          "id": "project_a",
+          "title": "A",
+          "nodes": [
+            {
+              "id": "image_1",
+              "type": "image",
+              "title": "One",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "width": 260,
+              "height": 180,
+              "metadata": {}
+            },
+            {
+              "id": "image_2",
+              "type": "image",
+              "title": "Two",
+              "position": {
+                "x": 0,
+                "y": 300
+              },
+              "width": 260,
+              "height": 180,
+              "metadata": {}
+            },
+            {
+              "id": "image_3",
+              "type": "image",
+              "title": "Target",
+              "position": {
+                "x": 400,
+                "y": 0
+              },
+              "width": 260,
+              "height": 180,
+              "metadata": {}
+            }
+          ],
+          "connections": [],
+          "selectedNodeIds": []
+        },
+        "revision": 3
+      },
+      "allowedSurfaces": [
+        "cli",
+        "mcp",
+        "oracle"
+      ],
+      "forbiddenActions": [
+        "direct-state-mutation"
+      ],
+      "expected": {
+        "exactCanonical": "fnv1a_e56f2b85e56f2b85",
+        "predicates": {
+          "workflow.edge_count_equals": 2,
+          "workflow.edges_exist": [
+            {
+              "from": "image_1",
+              "to": "image_3"
+            },
+            {
+              "from": "image_2",
+              "to": "image_3"
+            }
+          ]
+        }
+      },
+      "safety": {
+        "wrongTargetWrites": 0
+      },
+      "solution": {
+        "steps": [
+          {
+            "command": "workflow.apply",
+            "args": {
+              "projectId": "project_a",
+              "expectedRevision": 3,
+              "operations": [
+                {
+                  "type": "connect_nodes",
+                  "fromNodeId": "image_1",
+                  "toNodeId": "image_3",
+                  "kind": "data",
+                  "role": "reference",
+                  "order": 0
+                },
+                {
+                  "type": "connect_nodes",
+                  "fromNodeId": "image_2",
+                  "toNodeId": "image_3",
+                  "kind": "data",
+                  "role": "reference",
+                  "order": 1
+                }
+              ],
+              "mutationId": "ref-order-007"
+            },
+            "idempotencyKey": "ref-order-007"
+          }
+        ]
+      },
+      "timeout": 20000,
+      "repeatPolicy": {
+        "runs": 5
+      },
+      "tags": [
+        "references",
+        "ordering"
+      ]
+    },
+    {
+      "id": "references-run-idempotent-008",
+      "version": "1",
+      "split": "regression",
+      "suite": "references",
+      "difficulty": "advanced",
+      "instruction": "Run the same generation twice with the same idempotency key. Only one Provider submission and one artifact may exist.",
+      "fixture": {
+        "project": {
+          "id": "project_a",
+          "title": "A",
+          "nodes": [
+            {
+              "id": "image_1",
+              "type": "image",
+              "title": "Base",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "width": 260,
+              "height": 180,
+              "metadata": {
+                "mode": "text_to_image",
+                "prompt": "a red cube"
+              }
+            }
+          ],
+          "connections": [],
+          "selectedNodeIds": []
+        },
+        "revision": 2,
+        "providerBehavior": {
+          "mode": "ok",
+          "seed": 3
+        }
+      },
+      "allowedSurfaces": [
+        "cli",
+        "mcp",
+        "oracle"
+      ],
+      "forbiddenActions": [
+        "direct-state-mutation",
+        "provider-bypass"
+      ],
+      "expected": {
+        "exactCanonical": "fnv1a_11bc042411bc0424",
+        "predicates": {
+          "provider.submit_count_equals": 1,
+          "artifact.count_equals": 1,
+          "safety.duplicate_submits_zero": true
+        }
+      },
+      "safety": {
+        "duplicateSubmits": 0
+      },
+      "solution": {
+        "steps": [
+          {
+            "command": "workflow.node.run",
+            "args": {
+              "projectId": "project_a",
+              "nodeId": "image_1"
+            },
+            "idempotencyKey": "ref-run-idem-008"
+          },
+          {
+            "command": "workflow.node.run",
+            "args": {
+              "projectId": "project_a",
+              "nodeId": "image_1"
+            },
+            "idempotencyKey": "ref-run-idem-008"
+          }
+        ]
+      },
+      "timeout": 30000,
+      "repeatPolicy": {
+        "runs": 5
+      },
+      "tags": [
+        "references",
+        "generation",
+        "idempotency"
+      ]
+    },
+    {
+      "id": "references-unsupported-capability-009",
+      "version": "1",
+      "split": "regression",
+      "suite": "references",
+      "difficulty": "intermediate",
+      "instruction": "Attempt to attach a video node as a first_frame reference to another video node. The write must be rejected.",
+      "fixture": {
+        "project": {
+          "id": "project_a",
+          "title": "A",
+          "nodes": [
+            {
+              "id": "video_1",
+              "type": "video",
+              "title": "Source",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "width": 260,
+              "height": 180,
+              "metadata": {}
+            },
+            {
+              "id": "video_2",
+              "type": "video",
+              "title": "Target",
+              "position": {
+                "x": 400,
+                "y": 0
+              },
+              "width": 260,
+              "height": 180,
+              "metadata": {}
+            }
+          ],
+          "connections": [],
+          "selectedNodeIds": []
+        },
+        "revision": 2
+      },
+      "allowedSurfaces": [
+        "cli",
+        "mcp",
+        "oracle"
+      ],
+      "forbiddenActions": [
+        "direct-state-mutation"
+      ],
+      "expected": {
+        "predicates": {
+          "workflow.edge_count_equals": 0,
+          "workflow.revision_equals": 2
+        },
+        "expectsRejection": true
+      },
+      "safety": {
+        "wrongTargetWrites": 0
+      },
+      "solution": {
+        "steps": [
+          {
+            "command": "workflow.apply",
+            "args": {
+              "projectId": "project_a",
+              "expectedRevision": 2,
+              "operations": [
+                {
+                  "type": "connect_nodes",
+                  "fromNodeId": "video_1",
+                  "toNodeId": "video_2",
+                  "kind": "data",
+                  "role": "first_frame",
+                  "unsupported": true
+                }
+              ],
+              "mutationId": "ref-unsupported-009"
+            },
+            "idempotencyKey": "ref-unsupported-009",
+            "allowFailure": true
+          }
+        ]
+      },
+      "timeout": 20000,
+      "repeatPolicy": {
+        "runs": 5
+      },
+      "knownGap": "verified against components/workflow/inputResolver.ts: a first_frame reference may be created from a video node - the product only raises a ROLE_CONFLICT diagnostic at input-resolution time, it does not reject the graph write. The task premise is therefore ahead of the product and stays out of the admissible set.",
+      "tags": [
+        "references",
+        "capability"
+      ]
+    },
+    {
+      "id": "references-provenance-010",
+      "version": "1",
+      "split": "regression",
+      "suite": "references",
+      "difficulty": "advanced",
+      "instruction": "Generate from the video node and verify the artifact records the source node in its provenance.",
+      "fixture": {
+        "project": {
+          "id": "project_a",
+          "title": "A",
+          "nodes": [
+            {
+              "id": "image_1",
+              "type": "image",
+              "title": "Frame",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "width": 260,
+              "height": 180,
+              "metadata": {}
+            },
+            {
+              "id": "video_1",
+              "type": "video",
+              "title": "Video",
+              "position": {
+                "x": 400,
+                "y": 0
+              },
+              "width": 260,
+              "height": 180,
+              "metadata": {
+                "mode": "image_to_video",
+                "prompt": "orbit"
+              }
+            }
+          ],
+          "connections": [
+            {
+              "id": "conn_1",
+              "fromNodeId": "image_1",
+              "toNodeId": "video_1",
+              "kind": "data",
+              "role": "first_frame"
+            }
+          ],
+          "selectedNodeIds": []
+        },
+        "revision": 5,
+        "providerBehavior": {
+          "mode": "ok",
+          "seed": 21
+        }
+      },
+      "allowedSurfaces": [
+        "cli",
+        "mcp",
+        "oracle"
+      ],
+      "forbiddenActions": [
+        "direct-state-mutation",
+        "provider-bypass"
+      ],
+      "expected": {
+        "exactCanonical": "fnv1a_6cb264936cb26493",
+        "predicates": {
+          "artifact.count_equals": 1,
+          "artifact.provenance_node_exists": "video_1",
+          "provider.submit_count_equals": 1
+        }
+      },
+      "safety": {
+        "wrongTargetWrites": 0
+      },
+      "solution": {
+        "steps": [
+          {
+            "command": "workflow.node.run",
+            "args": {
+              "projectId": "project_a",
+              "nodeId": "video_1"
+            },
+            "idempotencyKey": "ref-prov-010"
+          }
+        ]
+      },
+      "timeout": 30000,
+      "repeatPolicy": {
+        "runs": 5
+      },
+      "tags": [
+        "references",
+        "provenance"
+      ]
+    }
+  ]
+}

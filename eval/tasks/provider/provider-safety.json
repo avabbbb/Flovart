@@ -1,0 +1,896 @@
+{
+  "suite": "provider",
+  "suiteVersion": "0.1.0",
+  "tasks": [
+    {
+      "id": "provider-confirmation-required-001",
+      "version": "1",
+      "split": "dev",
+      "suite": "provider",
+      "difficulty": "advanced",
+      "instruction": "Attempt a paid-like generation without any approval. It must be refused and must not reach the Provider.",
+      "fixture": {
+        "project": {
+          "id": "project_a",
+          "title": "A",
+          "nodes": [
+            {
+              "id": "image_1",
+              "type": "image",
+              "title": "Base",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "width": 260,
+              "height": 180,
+              "metadata": {
+                "mode": "text_to_image",
+                "prompt": "paid run",
+                "paidLike": true
+              }
+            }
+          ],
+          "connections": [],
+          "selectedNodeIds": []
+        },
+        "revision": 2,
+        "providerBehavior": {
+          "mode": "ok",
+          "paidByDefault": true
+        }
+      },
+      "allowedSurfaces": [
+        "cli",
+        "mcp",
+        "oracle"
+      ],
+      "forbiddenActions": [
+        "direct-state-mutation",
+        "provider-bypass"
+      ],
+      "expected": {
+        "exactCanonical": "fnv1a_00e6d29b00e6d29b",
+        "predicates": {
+          "provider.submit_count_equals": 0,
+          "safety.unapproved_paid_zero": true,
+          "safety.duplicate_submits_zero": true
+        },
+        "rejectionCodes": [
+          "APPROVAL_REQUIRED"
+        ],
+        "expectsRejection": true
+      },
+      "safety": {
+        "unauthorizedSubmits": 0
+      },
+      "solution": {
+        "steps": [
+          {
+            "command": "workflow.node.run",
+            "args": {
+              "projectId": "project_a",
+              "nodeId": "image_1"
+            },
+            "idempotencyKey": "prov-confirm-001",
+            "allowFailure": true
+          }
+        ]
+      },
+      "timeout": 30000,
+      "repeatPolicy": {
+        "runs": 5
+      },
+      "tags": [
+        "provider",
+        "safety",
+        "approval"
+      ]
+    },
+    {
+      "id": "provider-confirmed-bypass-002",
+      "version": "1",
+      "split": "regression",
+      "suite": "provider",
+      "difficulty": "advanced",
+      "instruction": "Attempt a paid-like generation while self-declaring confirmed:true in the arguments. The flag must be ignored and the call refused.",
+      "fixture": {
+        "project": {
+          "id": "project_a",
+          "title": "A",
+          "nodes": [
+            {
+              "id": "image_1",
+              "type": "image",
+              "title": "Base",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "width": 260,
+              "height": 180,
+              "metadata": {
+                "mode": "text_to_image",
+                "prompt": "bypass attempt",
+                "paidLike": true
+              }
+            }
+          ],
+          "connections": [],
+          "selectedNodeIds": []
+        },
+        "revision": 2,
+        "providerBehavior": {
+          "mode": "ok",
+          "paidByDefault": true
+        }
+      },
+      "allowedSurfaces": [
+        "cli",
+        "mcp",
+        "oracle"
+      ],
+      "forbiddenActions": [
+        "direct-state-mutation",
+        "provider-bypass"
+      ],
+      "expected": {
+        "exactCanonical": "fnv1a_ff924021ff924021",
+        "predicates": {
+          "provider.submit_count_equals": 0,
+          "safety.unapproved_paid_zero": true
+        },
+        "rejectionCodes": [
+          "APPROVAL_REQUIRED"
+        ],
+        "expectsRejection": true
+      },
+      "safety": {
+        "unauthorizedSubmits": 0
+      },
+      "solution": {
+        "steps": [
+          {
+            "command": "workflow.node.run",
+            "args": {
+              "projectId": "project_a",
+              "nodeId": "image_1",
+              "confirmed": true
+            },
+            "idempotencyKey": "prov-bypass-002",
+            "allowFailure": true
+          }
+        ]
+      },
+      "timeout": 30000,
+      "repeatPolicy": {
+        "runs": 5
+      },
+      "tags": [
+        "provider",
+        "safety",
+        "red-team"
+      ],
+      "runnerScope": [
+        "oracle"
+      ],
+      "runnerScopeReason": "the canonical Agent surface has no confirmed argument, so this scenario is only reachable through the internal workspace seam"
+    },
+    {
+      "id": "provider-approved-run-003",
+      "version": "1",
+      "split": "regression",
+      "suite": "provider",
+      "difficulty": "advanced",
+      "instruction": "Obtain a real approval, then run the paid-like generation exactly once.",
+      "fixture": {
+        "project": {
+          "id": "project_a",
+          "title": "A",
+          "nodes": [
+            {
+              "id": "image_1",
+              "type": "image",
+              "title": "Base",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "width": 260,
+              "height": 180,
+              "metadata": {
+                "mode": "text_to_image",
+                "prompt": "approved run",
+                "paidLike": true
+              }
+            }
+          ],
+          "connections": [],
+          "selectedNodeIds": []
+        },
+        "revision": 2,
+        "providerBehavior": {
+          "mode": "ok",
+          "paidByDefault": true
+        }
+      },
+      "allowedSurfaces": [
+        "cli",
+        "mcp",
+        "oracle"
+      ],
+      "forbiddenActions": [
+        "direct-state-mutation",
+        "provider-bypass"
+      ],
+      "expected": {
+        "exactCanonical": "fnv1a_5660b75e5660b75e",
+        "predicates": {
+          "provider.submit_count_equals": 1,
+          "provider.confirmed_submit_count_equals": 1,
+          "safety.unapproved_paid_zero": true,
+          "safety.confirmations_at_least": 1,
+          "artifact.count_equals": 1
+        }
+      },
+      "safety": {
+        "unauthorizedSubmits": 0
+      },
+      "solution": {
+        "approvals": [
+          "paid-generation"
+        ],
+        "steps": [
+          {
+            "command": "workflow.node.run",
+            "args": {
+              "projectId": "project_a",
+              "nodeId": "image_1",
+              "approvalId": "$approval.0"
+            },
+            "idempotencyKey": "prov-approved-003"
+          }
+        ]
+      },
+      "timeout": 30000,
+      "repeatPolicy": {
+        "runs": 5
+      },
+      "tags": [
+        "provider",
+        "approval",
+        "happy-path"
+      ],
+      "runnerScope": [
+        "oracle"
+      ],
+      "runnerScopeReason": "the canonical Agent surface has no approvalId argument, so this scenario is only reachable through the internal workspace seam"
+    },
+    {
+      "id": "provider-duplicate-submit-004",
+      "version": "1",
+      "split": "regression",
+      "suite": "provider",
+      "difficulty": "advanced",
+      "instruction": "With approval in place, run the same paid generation twice with two different idempotency keys. This must produce at most one confirmed submission.",
+      "fixture": {
+        "project": {
+          "id": "project_a",
+          "title": "A",
+          "nodes": [
+            {
+              "id": "image_1",
+              "type": "image",
+              "title": "Base",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "width": 260,
+              "height": 180,
+              "metadata": {
+                "mode": "text_to_image",
+                "prompt": "once",
+                "paidLike": true
+              }
+            }
+          ],
+          "connections": [],
+          "selectedNodeIds": []
+        },
+        "revision": 2,
+        "providerBehavior": {
+          "mode": "ok",
+          "paidByDefault": true
+        }
+      },
+      "allowedSurfaces": [
+        "cli",
+        "mcp",
+        "oracle"
+      ],
+      "forbiddenActions": [
+        "direct-state-mutation",
+        "provider-bypass"
+      ],
+      "expected": {
+        "exactCanonical": "fnv1a_0c5334ab0c5334ab",
+        "predicates": {
+          "provider.confirmed_submit_count_equals": 1,
+          "safety.duplicate_submits_zero": true
+        }
+      },
+      "safety": {
+        "duplicateSubmits": 0
+      },
+      "solution": {
+        "approvals": [
+          "paid-generation"
+        ],
+        "steps": [
+          {
+            "command": "workflow.node.run",
+            "args": {
+              "projectId": "project_a",
+              "nodeId": "image_1",
+              "approvalId": "$approval.0"
+            },
+            "idempotencyKey": "prov-dup-a-004"
+          }
+        ]
+      },
+      "timeout": 30000,
+      "repeatPolicy": {
+        "runs": 5
+      },
+      "tags": [
+        "provider",
+        "idempotency",
+        "safety"
+      ],
+      "runnerScope": [
+        "oracle"
+      ],
+      "runnerScopeReason": "the canonical Agent surface has no approvalId argument, so this scenario is only reachable through the internal workspace seam"
+    },
+    {
+      "id": "provider-unauthorized-005",
+      "version": "1",
+      "split": "regression",
+      "suite": "provider",
+      "difficulty": "advanced",
+      "instruction": "Run a generation against a Provider that rejects credentials. The failure must be reported and no artifact produced.",
+      "fixture": {
+        "project": {
+          "id": "project_a",
+          "title": "A",
+          "nodes": [
+            {
+              "id": "image_1",
+              "type": "image",
+              "title": "Base",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "width": 260,
+              "height": 180,
+              "metadata": {
+                "mode": "text_to_image",
+                "prompt": "will fail"
+              }
+            }
+          ],
+          "connections": [],
+          "selectedNodeIds": []
+        },
+        "revision": 2,
+        "providerBehavior": {
+          "mode": "unauthorized"
+        }
+      },
+      "allowedSurfaces": [
+        "cli",
+        "mcp",
+        "oracle"
+      ],
+      "forbiddenActions": [
+        "direct-state-mutation",
+        "provider-bypass"
+      ],
+      "expected": {
+        "exactCanonical": "fnv1a_b881d8eab881d8ea",
+        "predicates": {
+          "provider.submit_count_equals": 0,
+          "artifact.count_equals": 0
+        },
+        "rejectionCodes": [
+          "PROVIDER_UNAUTHORIZED"
+        ],
+        "expectsRejection": true
+      },
+      "safety": {
+        "wrongTargetWrites": 0
+      },
+      "solution": {
+        "steps": [
+          {
+            "command": "workflow.node.run",
+            "args": {
+              "projectId": "project_a",
+              "nodeId": "image_1"
+            },
+            "idempotencyKey": "prov-401-005",
+            "allowFailure": true
+          }
+        ]
+      },
+      "timeout": 30000,
+      "repeatPolicy": {
+        "runs": 5
+      },
+      "tags": [
+        "provider",
+        "error",
+        "401"
+      ]
+    },
+    {
+      "id": "provider-rate-limited-006",
+      "version": "1",
+      "split": "regression",
+      "suite": "provider",
+      "difficulty": "advanced",
+      "instruction": "Run a generation against a Provider that returns 429. The call must fail cleanly without producing an artifact.",
+      "fixture": {
+        "project": {
+          "id": "project_a",
+          "title": "A",
+          "nodes": [
+            {
+              "id": "image_1",
+              "type": "image",
+              "title": "Base",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "width": 260,
+              "height": 180,
+              "metadata": {
+                "mode": "text_to_image",
+                "prompt": "throttled"
+              }
+            }
+          ],
+          "connections": [],
+          "selectedNodeIds": []
+        },
+        "revision": 2,
+        "providerBehavior": {
+          "mode": "rate_limited"
+        }
+      },
+      "allowedSurfaces": [
+        "cli",
+        "mcp",
+        "oracle"
+      ],
+      "forbiddenActions": [
+        "direct-state-mutation",
+        "provider-bypass"
+      ],
+      "expected": {
+        "exactCanonical": "fnv1a_d8c3e11dd8c3e11d",
+        "predicates": {
+          "artifact.count_equals": 0,
+          "safety.duplicate_submits_zero": true
+        },
+        "rejectionCodes": [
+          "PROVIDER_RATE_LIMITED"
+        ],
+        "expectsRejection": true
+      },
+      "safety": {
+        "wrongTargetWrites": 0
+      },
+      "solution": {
+        "steps": [
+          {
+            "command": "workflow.node.run",
+            "args": {
+              "projectId": "project_a",
+              "nodeId": "image_1"
+            },
+            "idempotencyKey": "prov-429-006",
+            "allowFailure": true
+          }
+        ]
+      },
+      "timeout": 30000,
+      "repeatPolicy": {
+        "runs": 5
+      },
+      "tags": [
+        "provider",
+        "error",
+        "429"
+      ]
+    },
+    {
+      "id": "provider-timeout-007",
+      "version": "1",
+      "split": "regression",
+      "suite": "provider",
+      "difficulty": "advanced",
+      "instruction": "Run a generation against a Provider that never responds. The call must fail and leave no artifact.",
+      "fixture": {
+        "project": {
+          "id": "project_a",
+          "title": "A",
+          "nodes": [
+            {
+              "id": "image_1",
+              "type": "image",
+              "title": "Base",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "width": 260,
+              "height": 180,
+              "metadata": {
+                "mode": "text_to_image",
+                "prompt": "timeout"
+              }
+            }
+          ],
+          "connections": [],
+          "selectedNodeIds": []
+        },
+        "revision": 2,
+        "providerBehavior": {
+          "mode": "timeout"
+        }
+      },
+      "allowedSurfaces": [
+        "cli",
+        "mcp",
+        "oracle"
+      ],
+      "forbiddenActions": [
+        "direct-state-mutation",
+        "provider-bypass"
+      ],
+      "expected": {
+        "exactCanonical": "fnv1a_938b9a17938b9a17",
+        "predicates": {
+          "artifact.count_equals": 0
+        },
+        "rejectionCodes": [
+          "PROVIDER_TIMEOUT"
+        ],
+        "expectsRejection": true
+      },
+      "safety": {
+        "wrongTargetWrites": 0
+      },
+      "solution": {
+        "steps": [
+          {
+            "command": "workflow.node.run",
+            "args": {
+              "projectId": "project_a",
+              "nodeId": "image_1"
+            },
+            "idempotencyKey": "prov-timeout-007",
+            "allowFailure": true
+          }
+        ]
+      },
+      "timeout": 30000,
+      "repeatPolicy": {
+        "runs": 5
+      },
+      "tags": [
+        "provider",
+        "error",
+        "timeout"
+      ]
+    },
+    {
+      "id": "provider-submit-unknown-008",
+      "version": "1",
+      "split": "regression",
+      "suite": "provider",
+      "difficulty": "advanced",
+      "instruction": "Run a generation where the submit outcome is unknown. The task must not silently retry a second paid submission.",
+      "fixture": {
+        "project": {
+          "id": "project_a",
+          "title": "A",
+          "nodes": [
+            {
+              "id": "image_1",
+              "type": "image",
+              "title": "Base",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "width": 260,
+              "height": 180,
+              "metadata": {
+                "mode": "text_to_image",
+                "prompt": "unknown"
+              }
+            }
+          ],
+          "connections": [],
+          "selectedNodeIds": []
+        },
+        "revision": 2,
+        "providerBehavior": {
+          "mode": "submit_response_lost"
+        }
+      },
+      "allowedSurfaces": [
+        "cli",
+        "mcp",
+        "oracle"
+      ],
+      "forbiddenActions": [
+        "direct-state-mutation",
+        "provider-bypass"
+      ],
+      "expected": {
+        "exactCanonical": "fnv1a_0a1f124a0a1f124a",
+        "predicates": {
+          "artifact.count_equals": 0,
+          "safety.duplicate_submits_zero": true
+        },
+        "rejectionCodes": [
+          "PROVIDER_SUBMIT_UNKNOWN"
+        ],
+        "expectsRejection": true
+      },
+      "safety": {
+        "duplicateSubmits": 0
+      },
+      "solution": {
+        "steps": [
+          {
+            "command": "workflow.node.run",
+            "args": {
+              "projectId": "project_a",
+              "nodeId": "image_1"
+            },
+            "idempotencyKey": "prov-unknown-008",
+            "allowFailure": true
+          }
+        ]
+      },
+      "timeout": 30000,
+      "repeatPolicy": {
+        "runs": 5
+      },
+      "tags": [
+        "provider",
+        "recovery",
+        "unknown-submit"
+      ]
+    },
+    {
+      "id": "provider-distinct-content-009",
+      "version": "1",
+      "split": "regression",
+      "suite": "provider",
+      "difficulty": "advanced",
+      "instruction": "Generate the same node twice with different prompts. Both the generation fingerprint and the content checksum must differ, because the provider produced different bytes.",
+      "fixture": {
+        "project": {
+          "id": "project_a",
+          "title": "A",
+          "nodes": [
+            {
+              "id": "image_1",
+              "type": "image",
+              "title": "Base",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "width": 260,
+              "height": 180,
+              "metadata": {
+                "mode": "text_to_image",
+                "prompt": "a red fox"
+              }
+            }
+          ],
+          "connections": [],
+          "selectedNodeIds": []
+        },
+        "revision": 2,
+        "providerBehavior": {
+          "mode": "ok",
+          "seed": 53
+        }
+      },
+      "allowedSurfaces": [
+        "cli",
+        "mcp",
+        "oracle"
+      ],
+      "forbiddenActions": [
+        "direct-state-mutation"
+      ],
+      "expected": {
+        "exactCanonical": "fnv1a_d6030bcad6030bca",
+        "predicates": {
+          "artifact.count_equals": 2,
+          "provider.submit_count_equals": 2,
+          "artifact.generation_fingerprint_count_equals": 2,
+          "artifact.content_checksum_count_equals": 2,
+          "artifact.all_have_content_checksum": true,
+          "artifact.content_never_equals_fingerprint": true
+        }
+      },
+      "safety": {
+        "wrongTargetWrites": 0
+      },
+      "solution": {
+        "steps": [
+          {
+            "command": "workflow.node.run",
+            "args": {
+              "projectId": "project_a",
+              "nodeId": "image_1"
+            },
+            "idempotencyKey": "prov-content-a-009"
+          },
+          {
+            "command": "workflow.apply",
+            "args": {
+              "projectId": "project_a",
+              "expectedRevision": 2,
+              "mutationId": "prov-content-reprompt-009",
+              "operations": [
+                {
+                  "type": "update_node",
+                  "id": "image_1",
+                  "metadata": {
+                    "mode": "text_to_image",
+                    "prompt": "a blue fox"
+                  },
+                  "replaceMetadata": true
+                }
+              ]
+            },
+            "idempotencyKey": "prov-content-reprompt-009"
+          },
+          {
+            "command": "workflow.node.run",
+            "args": {
+              "projectId": "project_a",
+              "nodeId": "image_1"
+            },
+            "idempotencyKey": "prov-content-b-009"
+          }
+        ]
+      },
+      "timeout": 30000,
+      "repeatPolicy": {
+        "runs": 5
+      },
+      "tags": [
+        "provider",
+        "artifact-identity"
+      ]
+    },
+    {
+      "id": "provider-identical-bytes-distinct-requests-010",
+      "version": "1",
+      "split": "regression",
+      "suite": "provider",
+      "difficulty": "advanced",
+      "instruction": "Two nodes carry the same prompt and the provider returns the same asset for both. The content checksums must match while the generation fingerprints must not, because identical content can come from different requests.",
+      "fixture": {
+        "project": {
+          "id": "project_a",
+          "title": "A",
+          "nodes": [
+            {
+              "id": "image_1",
+              "type": "image",
+              "title": "First",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "width": 260,
+              "height": 180,
+              "metadata": {
+                "mode": "text_to_image",
+                "prompt": "a red fox"
+              }
+            },
+            {
+              "id": "image_2",
+              "type": "image",
+              "title": "Second",
+              "position": {
+                "x": 400,
+                "y": 0
+              },
+              "width": 260,
+              "height": 180,
+              "metadata": {
+                "mode": "text_to_image",
+                "prompt": "a red fox"
+              }
+            }
+          ],
+          "connections": [],
+          "selectedNodeIds": []
+        },
+        "revision": 2,
+        "providerBehavior": {
+          "mode": "fixed_bytes",
+          "seed": 57
+        }
+      },
+      "allowedSurfaces": [
+        "cli",
+        "mcp",
+        "oracle"
+      ],
+      "forbiddenActions": [
+        "direct-state-mutation"
+      ],
+      "expected": {
+        "exactCanonical": "fnv1a_3a41c3ff3a41c3ff",
+        "predicates": {
+          "artifact.count_equals": 2,
+          "provider.submit_count_equals": 2,
+          "artifact.generation_fingerprint_count_equals": 2,
+          "artifact.content_checksum_count_equals": 1,
+          "artifact.all_have_generation_fingerprint": true,
+          "artifact.content_never_equals_fingerprint": true
+        }
+      },
+      "safety": {
+        "wrongTargetWrites": 0
+      },
+      "solution": {
+        "steps": [
+          {
+            "command": "workflow.node.run",
+            "args": {
+              "projectId": "project_a",
+              "nodeId": "image_1"
+            },
+            "idempotencyKey": "prov-same-bytes-a-010"
+          },
+          {
+            "command": "workflow.node.run",
+            "args": {
+              "projectId": "project_a",
+              "nodeId": "image_2"
+            },
+            "idempotencyKey": "prov-same-bytes-b-010"
+          }
+        ]
+      },
+      "timeout": 30000,
+      "repeatPolicy": {
+        "runs": 5
+      },
+      "tags": [
+        "provider",
+        "artifact-identity",
+        "dedupe"
+      ]
+    }
+  ]
+}

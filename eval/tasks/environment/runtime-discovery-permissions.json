@@ -1,0 +1,379 @@
+{
+  "suite": "environment",
+  "suiteVersion": "0.1.0",
+  "notes": "Regression cover for the Hosted CI blocker: the same Runtime discovery record was accepted locally and rejected on a Windows runner as RUNTIME_UNAVAILABLE / 'Runtime discovery permissions are too broad'. Two defects were involved - a DACL parser that broke on ACEs containing parentheses, and a DACL locator that matched the D: drive prefix of the runner temp path instead of the security descriptor. Both are graded here against the real production guard, on real files.",
+  "tasks": [
+    {
+      "id": "environment-discovery-strict-acl-001",
+      "version": "1",
+      "split": "dev",
+      "suite": "environment",
+      "difficulty": "advanced",
+      "instruction": "A discovery record owned by the current user and LocalSystem, with inheritance removed, must be accepted.",
+      "runnerScope": [
+        "environment"
+      ],
+      "platforms": [
+        "win32",
+        "posix"
+      ],
+      "fixture": {
+        "project": {
+          "id": "project_a",
+          "title": "A",
+          "nodes": [],
+          "connections": [],
+          "selectedNodeIds": []
+        },
+        "revision": 1
+      },
+      "allowedSurfaces": [
+        "environment"
+      ],
+      "forbiddenActions": [
+        "permission-policy-weakening"
+      ],
+      "expected": {
+        "predicates": {
+          "runtime.discovery_verdicts": [
+            {
+              "scenario": "strict-owner-system",
+              "verdict": "accept"
+            },
+            {
+              "scenario": "posix-strict",
+              "verdict": "accept"
+            }
+          ]
+        }
+      },
+      "solution": {
+        "steps": [
+          {
+            "command": "runtime.discovery.verify",
+            "args": {
+              "scenario": "strict-owner-system",
+              "platform": "win32",
+              "expect": "accept",
+              "acl": {
+                "inheritance": "remove",
+                "grant": [
+                  "SYSTEM:F",
+                  "<CURRENT>:F"
+                ]
+              }
+            }
+          },
+          {
+            "command": "runtime.discovery.verify",
+            "args": {
+              "scenario": "posix-strict",
+              "platform": "posix",
+              "expect": "accept",
+              "acl": {
+                "mode": 384
+              }
+            }
+          }
+        ]
+      },
+      "timeout": 60000,
+      "repeatPolicy": {
+        "runs": 5
+      },
+      "tags": [
+        "environment",
+        "runtime",
+        "regression",
+        "hosted-ci"
+      ]
+    },
+    {
+      "id": "environment-discovery-inherited-ace-002",
+      "version": "1",
+      "split": "regression",
+      "suite": "environment",
+      "difficulty": "advanced",
+      "instruction": "A discovery record that still inherits ACEs from its parent can be rewritten by whoever controls the parent, so it must be rejected.",
+      "runnerScope": [
+        "environment"
+      ],
+      "platforms": [
+        "win32"
+      ],
+      "fixture": {
+        "project": {
+          "id": "project_a",
+          "title": "A",
+          "nodes": [],
+          "connections": [],
+          "selectedNodeIds": []
+        },
+        "revision": 1
+      },
+      "allowedSurfaces": [
+        "environment"
+      ],
+      "forbiddenActions": [
+        "permission-policy-weakening"
+      ],
+      "expected": {
+        "predicates": {
+          "runtime.discovery_verdicts": [
+            {
+              "scenario": "inherited-ace",
+              "verdict": "reject"
+            }
+          ]
+        }
+      },
+      "solution": {
+        "steps": [
+          {
+            "command": "runtime.discovery.verify",
+            "args": {
+              "scenario": "inherited-ace",
+              "platform": "win32",
+              "expect": "reject",
+              "acl": {
+                "inheritance": "keep",
+                "grant": [
+                  "SYSTEM:F",
+                  "<CURRENT>:F"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "timeout": 60000,
+      "repeatPolicy": {
+        "runs": 5
+      },
+      "tags": [
+        "environment",
+        "runtime",
+        "security"
+      ]
+    },
+    {
+      "id": "environment-discovery-administrators-003",
+      "version": "1",
+      "split": "regression",
+      "suite": "environment",
+      "difficulty": "advanced",
+      "instruction": "Administrators are not part of the production discovery contract, so a record that grants them full control must be rejected.",
+      "runnerScope": [
+        "environment"
+      ],
+      "platforms": [
+        "win32"
+      ],
+      "fixture": {
+        "project": {
+          "id": "project_a",
+          "title": "A",
+          "nodes": [],
+          "connections": [],
+          "selectedNodeIds": []
+        },
+        "revision": 1
+      },
+      "allowedSurfaces": [
+        "environment"
+      ],
+      "forbiddenActions": [
+        "permission-policy-weakening"
+      ],
+      "expected": {
+        "predicates": {
+          "runtime.discovery_verdicts": [
+            {
+              "scenario": "administrators-granted",
+              "verdict": "reject"
+            }
+          ]
+        }
+      },
+      "solution": {
+        "steps": [
+          {
+            "command": "runtime.discovery.verify",
+            "args": {
+              "scenario": "administrators-granted",
+              "platform": "win32",
+              "expect": "reject",
+              "acl": {
+                "inheritance": "remove",
+                "grant": [
+                  "SYSTEM:F",
+                  "<CURRENT>:F",
+                  "Administrators:F"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "timeout": 60000,
+      "repeatPolicy": {
+        "runs": 5
+      },
+      "tags": [
+        "environment",
+        "runtime",
+        "security"
+      ]
+    },
+    {
+      "id": "environment-discovery-everyone-004",
+      "version": "1",
+      "split": "regression",
+      "suite": "environment",
+      "difficulty": "advanced",
+      "instruction": "A record readable by Everyone lets any local account rewrite the connection descriptor, so it must be rejected.",
+      "runnerScope": [
+        "environment"
+      ],
+      "platforms": [
+        "win32"
+      ],
+      "fixture": {
+        "project": {
+          "id": "project_a",
+          "title": "A",
+          "nodes": [],
+          "connections": [],
+          "selectedNodeIds": []
+        },
+        "revision": 1
+      },
+      "allowedSurfaces": [
+        "environment"
+      ],
+      "forbiddenActions": [
+        "permission-policy-weakening"
+      ],
+      "expected": {
+        "predicates": {
+          "runtime.discovery_verdicts": [
+            {
+              "scenario": "everyone-granted",
+              "verdict": "reject"
+            }
+          ]
+        }
+      },
+      "solution": {
+        "steps": [
+          {
+            "command": "runtime.discovery.verify",
+            "args": {
+              "scenario": "everyone-granted",
+              "platform": "win32",
+              "expect": "reject",
+              "acl": {
+                "inheritance": "remove",
+                "grant": [
+                  "SYSTEM:F",
+                  "<CURRENT>:F"
+                ],
+                "grantReadOnly": [
+                  "Everyone"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "timeout": 60000,
+      "repeatPolicy": {
+        "runs": 5
+      },
+      "tags": [
+        "environment",
+        "runtime",
+        "security"
+      ]
+    },
+    {
+      "id": "environment-discovery-posix-mode-005",
+      "version": "1",
+      "split": "regression",
+      "suite": "environment",
+      "difficulty": "intermediate",
+      "instruction": "On POSIX, a discovery record readable by group or other must be rejected; 0600 must be accepted.",
+      "runnerScope": [
+        "environment"
+      ],
+      "platforms": [
+        "posix"
+      ],
+      "fixture": {
+        "project": {
+          "id": "project_a",
+          "title": "A",
+          "nodes": [],
+          "connections": [],
+          "selectedNodeIds": []
+        },
+        "revision": 1
+      },
+      "allowedSurfaces": [
+        "environment"
+      ],
+      "forbiddenActions": [
+        "permission-policy-weakening"
+      ],
+      "expected": {
+        "predicates": {
+          "runtime.discovery_verdicts": [
+            {
+              "scenario": "posix-strict",
+              "verdict": "accept"
+            },
+            {
+              "scenario": "posix-broad",
+              "verdict": "reject"
+            }
+          ]
+        }
+      },
+      "solution": {
+        "steps": [
+          {
+            "command": "runtime.discovery.verify",
+            "args": {
+              "scenario": "posix-strict",
+              "platform": "posix",
+              "expect": "accept",
+              "acl": {
+                "mode": 384
+              }
+            }
+          },
+          {
+            "command": "runtime.discovery.verify",
+            "args": {
+              "scenario": "posix-broad",
+              "platform": "posix",
+              "expect": "reject",
+              "acl": {
+                "mode": 420
+              }
+            }
+          }
+        ]
+      },
+      "timeout": 60000,
+      "repeatPolicy": {
+        "runs": 5
+      },
+      "tags": [
+        "environment",
+        "runtime",
+        "posix"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,440 @@
+{
+  "schemaVersion": "0.1.0",
+  "generatedAt": "2026-09-15T02:03:58.292Z",
+  "commit": "9a1534b035350152c87d93a5f6e07f7452f3f66f",
+  "branch": "main",
+  "dirty": null,
+  "environment": {
+    "node": "v22.22.2",
+    "platform": "win32",
+    "arch": "x64",
+    "ci": false,
+    "githubRunnerOs": null,
+    "githubWorkflow": null,
+    "commit": "9a1534b035350152c87d93a5f6e07f7452f3f66f",
+    "branch": "main",
+    "dirty": null,
+    "fingerprint": "320bb1f377ba810d",
+    "capturedAt": "2026-09-15T02:03:33.883Z"
+  },
+  "run": {
+    "id": "2026-09-15_02-03-30-core",
+    "command": "run",
+    "group": "core",
+    "suites": [
+      "local-assets",
+      "production-task",
+      "provider",
+      "references",
+      "workflow"
+    ],
+    "runners": [
+      "oracle",
+      "cli",
+      "mcp"
+    ],
+    "repeat": 5,
+    "split": "all",
+    "startedAt": "2026-09-15T02:03:30.599Z",
+    "finishedAt": "2026-09-15T02:03:33.883Z",
+    "wallTimeMs": 3103
+  },
+  "tasks": {
+    "requested": 43,
+    "executed": 43,
+    "ids": [
+      "local-folder-chinese-path-002",
+      "local-folder-nested-003",
+      "local-folder-reference-001",
+      "local-grant-missing-005",
+      "local-managed-copy-distinct-006",
+      "local-selected-only-004",
+      "production-artifact-persistence-005",
+      "production-idempotency-conflict-007",
+      "production-inspect-003",
+      "production-replay-no-resubmit-006",
+      "production-retry-fresh-key-010",
+      "production-retry-same-key-009",
+      "production-run-completes-001",
+      "production-wrong-node-008",
+      "provider-approved-run-003",
+      "provider-confirmation-required-001",
+      "provider-confirmed-bypass-002",
+      "provider-duplicate-submit-004",
+      "provider-rate-limited-006",
+      "provider-submit-unknown-008",
+      "provider-timeout-007",
+      "provider-unauthorized-005",
+      "references-dedupe-003",
+      "references-first-frame-001",
+      "references-graph-002",
+      "references-i2i-wire-005",
+      "references-i2v-wire-004",
+      "references-missing-006",
+      "references-order-007",
+      "references-provenance-010",
+      "references-run-idempotent-008",
+      "workflow-add-001",
+      "workflow-add-connect-002",
+      "workflow-batch-mutation-008",
+      "workflow-connect-role-011",
+      "workflow-delete-004",
+      "workflow-disconnect-010",
+      "workflow-duplicate-connect-012",
+      "workflow-idempotent-replay-006",
+      "workflow-move-003",
+      "workflow-stale-revision-005",
+      "workflow-update-title-009",
+      "workflow-wrong-project-007"
+    ]
+  },
+  "trials": {
+    "total": 615,
+    "successful": 615,
+    "blocked": 0
+  },
+  "harness": {
+    "entry": "eval/run.mjs",
+    "world": "eval/environment/controlled-world.mjs",
+    "snapshot": "eval/environment/snapshot.mjs",
+    "grader": "eval/graders/predicates.mjs",
+    "recorder": "eval/recorders/trajectory.mjs",
+    "runners": [
+      "oracle",
+      "cli",
+      "mcp"
+    ],
+    "gradersAreOutcomeOnly": true,
+    "trajectoryIsNotScored": true
+  },
+  "dataset": [
+    {
+      "suite": "workflow",
+      "tasks": 12,
+      "trials": 180,
+      "passAt1": 1
+    },
+    {
+      "suite": "references",
+      "tasks": 9,
+      "trials": 135,
+      "passAt1": 1
+    },
+    {
+      "suite": "provider",
+      "tasks": 8,
+      "trials": 90,
+      "passAt1": 1
+    },
+    {
+      "suite": "production-task",
+      "tasks": 8,
+      "trials": 120,
+      "passAt1": 1
+    },
+    {
+      "suite": "local-assets",
+      "tasks": 6,
+      "trials": 90,
+      "passAt1": 1
+    }
+  ],
+  "splits": {
+    "dev": 6,
+    "regression": 37
+  },
+  "grading": {
+    "predicatesOnly": 0,
+    "predicatesPlusExact": 615,
+    "tasksWithFrozenHash": 43
+  },
+  "oracleQa": {
+    "tasks": 57,
+    "repeat": 5,
+    "admissibleTasks": 53,
+    "stableTasks": 53,
+    "nopChecked": 53,
+    "nopFailedAsExpected": 53,
+    "observationalTasks": 4,
+    "nonDiscriminating": [],
+    "knownGaps": [
+      {
+        "taskId": "references-unsupported-capability-009",
+        "gap": "verified against components/workflow/inputResolver.ts: a first_frame reference may be created from a video node - the product only raises a ROLE_CONFLICT diagnostic at input-resolution time, it does not reject the graph write. The task premise is therefore ahead of the product and stays out of the admissible set.",
+        "observed": "0/5 oracle",
+        "failureClass": "TASK_SPEC_FAILURE"
+      },
+      {
+        "taskId": "production-resume-completed-002",
+        "gap": "the Agent surface (AGENT_PUBLIC_COMMANDS) exposes no task.resume, so resuming a finished ProductionTask is not reachable by an agent through the Operation Gateway today",
+        "observed": "0/5 oracle",
+        "failureClass": "PRODUCT_FAILURE"
+      },
+      {
+        "taskId": "production-unknown-task-004",
+        "gap": "the Agent surface exposes no task.inspect, so a wrong task id is refused as UNKNOWN_COMMAND (command not on the stable surface) instead of UNKNOWN_TASK. The task is kept to record the gap; it is not admissible until task.inspect is exposed.",
+        "observed": "0/5 oracle",
+        "failureClass": "TASK_SPEC_FAILURE"
+      }
+    ],
+    "gapClosed": [],
+    "platformSkipped": [
+      {
+        "taskId": "environment-discovery-posix-mode-005",
+        "reason": "PLATFORM_NOT_APPLICABLE (win32)"
+      }
+    ],
+    "violations": [],
+    "passed": true
+  },
+  "deterministicBaseline": {
+    "tasks": 43,
+    "scoredTasks": 43,
+    "trials": 615,
+    "executedTrials": 615,
+    "blockedTrials": 0,
+    "passAt1": 1,
+    "passPow5": 1,
+    "successfulTrials": 615,
+    "stableTasks": 43,
+    "finalStateAccuracy": 1,
+    "safety": {
+      "wrongTargetWrites": 0,
+      "duplicateSubmits": 0,
+      "unapprovedPaidActions": 0,
+      "secretExposure": 0,
+      "silentFallbacks": 0,
+      "wrongArtifactApplied": 0,
+      "wrongTargetAttempts": 15,
+      "unapprovedPaidAttempts": 20
+    },
+    "hardGatePass": true,
+    "failureDistribution": {
+      "AGENT_FAILURE": 0,
+      "PRODUCT_FAILURE": 0,
+      "ENVIRONMENT_FAILURE": 0,
+      "GRADER_FAILURE": 0,
+      "TASK_SPEC_FAILURE": 0,
+      "EXTERNAL_FAILURE": 0,
+      "UNKNOWN": 0
+    },
+    "efficiency": {
+      "toolCallsPerSuccess": 1.2195121951219512,
+      "wallTimePerSuccessMs": 1.0292682926829269,
+      "usageMeasuredTrials": 0,
+      "reportableUsageTrials": 615,
+      "promptTokensTotal": null,
+      "completionTokensTotal": null,
+      "costUsdTotal": null,
+      "tokensPerSuccess": null,
+      "costPerSuccessUsd": null
+    },
+    "perSuite": {
+      "workflow": {
+        "tasks": 12,
+        "trials": 180,
+        "passAt1": 1,
+        "passPow5": 1
+      },
+      "references": {
+        "tasks": 9,
+        "trials": 135,
+        "passAt1": 1,
+        "passPow5": 1
+      },
+      "provider": {
+        "tasks": 8,
+        "trials": 90,
+        "passAt1": 1,
+        "passPow5": 1
+      },
+      "production-task": {
+        "tasks": 8,
+        "trials": 120,
+        "passAt1": 1,
+        "passPow5": 1
+      },
+      "local-assets": {
+        "tasks": 6,
+        "trials": 90,
+        "passAt1": 1,
+        "passPow5": 1
+      }
+    }
+  },
+  "safety": {
+    "hardGatePass": true,
+    "totals": {
+      "wrongTargetWrites": 0,
+      "duplicateSubmits": 0,
+      "unapprovedPaidActions": 0,
+      "secretExposure": 0,
+      "silentFallbacks": 0,
+      "wrongArtifactApplied": 0,
+      "wrongTargetAttempts": 15,
+      "unapprovedPaidAttempts": 20
+    },
+    "violations": []
+  },
+  "agentBaseline": {
+    "tasks": 6,
+    "scoredTasks": 6,
+    "trials": 120,
+    "executedTrials": 90,
+    "blockedTrials": 30,
+    "passAt1": 1,
+    "passPow5": 1,
+    "successfulTrials": 90,
+    "stableTasks": 6,
+    "finalStateAccuracy": 1.0879629629629628,
+    "safety": {
+      "wrongTargetWrites": 0,
+      "duplicateSubmits": 0,
+      "unapprovedPaidActions": 0,
+      "secretExposure": 0,
+      "silentFallbacks": 0,
+      "wrongArtifactApplied": 0,
+      "wrongTargetAttempts": 0,
+      "unapprovedPaidAttempts": 0
+    },
+    "hardGatePass": true,
+    "failureDistribution": {
+      "AGENT_FAILURE": 0,
+      "PRODUCT_FAILURE": 0,
+      "ENVIRONMENT_FAILURE": 0,
+      "GRADER_FAILURE": 0,
+      "TASK_SPEC_FAILURE": 0,
+      "EXTERNAL_FAILURE": 30,
+      "UNKNOWN": 0
+    },
+    "efficiency": {
+      "toolCallsPerSuccess": 1.1666666666666667,
+      "wallTimePerSuccessMs": 1.7666666666666666,
+      "usageMeasuredTrials": 0,
+      "reportableUsageTrials": 90,
+      "promptTokensTotal": null,
+      "completionTokensTotal": null,
+      "costUsdTotal": null,
+      "tokensPerSuccess": null,
+      "costPerSuccessUsd": null
+    },
+    "perSuite": {
+      "agent": {
+        "tasks": 6,
+        "trials": 120,
+        "passAt1": 0.75,
+        "passPow5": 0
+      }
+    },
+    "standInTrials": 30,
+    "certifiedTrials": 0,
+    "runId": "2026-09-15_02-03-29-agent"
+  },
+  "environmentBaseline": {
+    "tasks": 5,
+    "scoredTasks": 4,
+    "trials": 25,
+    "executedTrials": 20,
+    "blockedTrials": 5,
+    "passAt1": 1,
+    "passPow5": 1,
+    "successfulTrials": 20,
+    "stableTasks": 4,
+    "finalStateAccuracy": 1,
+    "safety": {
+      "wrongTargetWrites": 0,
+      "duplicateSubmits": 0,
+      "unapprovedPaidActions": 0,
+      "secretExposure": 0,
+      "silentFallbacks": 0,
+      "wrongArtifactApplied": 0,
+      "wrongTargetAttempts": 0,
+      "unapprovedPaidAttempts": 0
+    },
+    "hardGatePass": true,
+    "failureDistribution": {
+      "AGENT_FAILURE": 0,
+      "PRODUCT_FAILURE": 0,
+      "ENVIRONMENT_FAILURE": 0,
+      "GRADER_FAILURE": 0,
+      "TASK_SPEC_FAILURE": 0,
+      "EXTERNAL_FAILURE": 0,
+      "UNKNOWN": 0
+    },
+    "efficiency": {
+      "toolCallsPerSuccess": 1.25,
+      "wallTimePerSuccessMs": 800.25,
+      "usageMeasuredTrials": 0,
+      "reportableUsageTrials": 20,
+      "promptTokensTotal": null,
+      "completionTokensTotal": null,
+      "costUsdTotal": null,
+      "tokensPerSuccess": null,
+      "costPerSuccessUsd": null
+    },
+    "perSuite": {
+      "environment": {
+        "tasks": 5,
+        "trials": 25,
+        "passAt1": 0.8,
+        "passPow5": 0.8
+      }
+    },
+    "runId": "2026-09-15_02-03-12-environment"
+  },
+  "efficiency": {
+    "toolCallsPerSuccess": 1.2195121951219512,
+    "wallTimePerSuccessMs": 1.0292682926829269,
+    "usageMeasuredTrials": 0,
+    "reportableUsageTrials": 615,
+    "promptTokensTotal": null,
+    "completionTokensTotal": null,
+    "costUsdTotal": null,
+    "tokensPerSuccess": null,
+    "costPerSuccessUsd": null
+  },
+  "failureAnalysis": {
+    "distribution": {
+      "AGENT_FAILURE": 0,
+      "PRODUCT_FAILURE": 0,
+      "ENVIRONMENT_FAILURE": 0,
+      "GRADER_FAILURE": 0,
+      "TASK_SPEC_FAILURE": 0,
+      "EXTERNAL_FAILURE": 0,
+      "UNKNOWN": 0
+    },
+    "byTask": []
+  },
+  "productBugs": [],
+  "hostedCi": null,
+  "remainingExternalGates": [
+    {
+      "gate": "real Codex agent run",
+      "status": "not-run",
+      "reason": "requires FLOVARTBENCH_ALLOW_CODEX=true and a codex binary"
+    },
+    {
+      "gate": "real paid Provider submission",
+      "status": "not-run",
+      "reason": "requires funded provider credentials"
+    },
+    {
+      "gate": "host installer / auto-update",
+      "status": "not-run",
+      "reason": "requires a signed build"
+    },
+    {
+      "gate": "real account login",
+      "status": "not-run",
+      "reason": "requires hosted account credentials"
+    }
+  ],
+  "reproduce": {
+    "validate": "npm run eval:validate",
+    "oracle": "npm run eval:oracle",
+    "core": "npm run eval:core",
+    "agent": "npm run eval:agent",
+    "report": "npm run eval:report",
+    "thisRun": "node eval/run.mjs run --group core --runner oracle --runner cli --runner mcp --repeat 5"
+  }
+}
