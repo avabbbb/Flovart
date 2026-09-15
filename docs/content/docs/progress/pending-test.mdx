@@ -4,6 +4,32 @@ title: 待测试确认
 
 本页记录实际进入文档或代码、仍需用户确认的变更。既有实现的构建、全量测试、Rust Runtime 和响应式浏览器记录见[发行候选证据](../../../evidence/release-candidate/README.md)，仅适用于其对应代码与范围。本次文档收尾只运行文档相关检查，未重跑上述整套验收；真实第三方宿主、账号、Provider 与公开发布仍需单独认证。
 
+## 本轮：Hosted CI Runtime 发现权限修复 + FlovartBench v0.1
+
+### E0：Hosted CI blocker（已修复，待你在真实 runner 上确认）
+
+`main` 的 Hosted CI 之前红在 `tests/flovartRuntimeClient.test.ts` 与 `tests/flovartRuntimeTasks.test.ts`，报 `RUNTIME_UNAVAILABLE / Runtime discovery permissions are too broad`，下游 Web/Extension/DSH/Rust 构建被跳过。根因有两个，都在被测代码而不是测试：
+
+- `verifyDiscoveryPermissions` 用正则切 ACE，遇到含括号的 SID 会截断；改为按括号配对的 `parseDaclAces()`；
+- `icacls /save` 把文件名写在第一行，而 GitHub runner 的临时目录在 D: 盘，原实现按 `indexOf('D:')` 定位安全描述符会命中盘符；改为按行锚定的 `findDaclLine()`。
+
+安全策略没有为测试放宽：允许列表仍是当前用户 SID + `S-1-5-18`/`SY`，`BA`/`BU`/`WD` 一律拒绝（依据 `src-tauri/src/runtime/discovery.rs` 的生产契约）。同时修掉了两个文件里既有的 20s 挂起：fixture 清理改为先 `closeAllConnections()` 再 `close()`，并对 dispose 加 5s 上界。
+
+- 证据：`npx vitest run tests/flovartRuntimeClient.test.ts tests/flovartRuntimeTasks.test.ts` → 19/19 通过、13.5s；`npx tsc --noEmit` 通过；`npm run docs:check` 通过。
+- 已把该场景固化为 `eval/tasks/environment/` 回归用例，用真实文件与真实生产守卫判定，含 strict 接受、继承 ACE 拒绝、Administrators 拒绝、Everyone 拒绝、POSIX 0600/0644。
+- 待你在真实 GitHub runner 上确认：本地 19/19 通过不等于 Hosted 通过；Rust / Web / Extension / DSH 四个下游 job 需重新看到绿色后才算闭环。
+
+### FlovartBench v0.1（新增 `eval/`，规则见 `eval/README.md`）
+
+- 链路：`Task → 受控环境 → 真实 runner（CLI/MCP/Workflow/Runtime 面）→ 轨迹 → 最终 WorldSnapshot → 确定性 grader → 重复 trial → 报告`。任务只含 instruction + environment + verifier，不含强制参照轨迹；只判最终状态，不判路径。
+- 规模：57 个任务、7 个 suite；准入 53（Oracle ×5 全绿、NOP 对全部状态变更任务失败）、3 个 known gap、1 个仅 POSIX；dev 8 / regression 49，holdout 不进公开仓库。
+- 判分两种且都只判最终状态：谓词常开；43 个任务另有冻结的 canonical hash 做整世界相等判定，哈希由 `node eval/run.mjs oracle --freeze-hashes` 从真实参照运行导出（不手写），失配报 stale dataset；Oracle 还会断言 5 次 trial 产出同一个 canonical world。
+- 机器生成的事实来源是 `eval/reports/<run-id>/report.json`，`report.md` 只是投影；本页与 `CROSS_PROJECTION_EVAL.md` 的数字均来自它，可从基线 SHA `9a1534b035350152c87d93a5f6e07f7452f3f66f` 重跑。
+- 本轮确定性基线 pass@1 615/615、pass^5 43/43、safety hard gate 全 0；**这不代表 Agent 能力**：已认证的真实外部 Agent trial 为 0/120，Codex 无二进制时按 `EXTERNAL_FAILURE` 记录并从 pass@1/pass^5 中剔除。
+- tokens / cost 报告为「未测量」而非 0：确定性 runner 不调用模型，只有外部 Agent runner 才可能上报 usage。
+- 对 benchmark 本身做了 12 项红队（写答案文件、改 expected、删 grader 输入、自报成功、近似图、重复扣费、泄露密钥、跨 trial 残留、NOP 误过、oracle 状态泄漏、哈希判分退化），12/12 被防住。
+- 待你验证：在真实 GitHub runner 上跑一次 `flovartbench` workflow；以及决定是否提供 `FLOVARTBENCH_ALLOW_CODEX=true` 与真实 Codex 二进制来产出第一个已认证 Agent 基线。
+
 ## 本轮：新方向与文档精简
 
 - 已建立[唯一主设计](../../../design/flovart-native-effects.md)，集中产品、交互、系统、具体实现、Benchmark、宣传与实施顺序。

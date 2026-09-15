@@ -36,6 +36,16 @@ title: 后续待办
 - [ ] 导出、打包与渲染需要处理“引用失效”：导出前检测缺失并显式失败或要求用户明确旁路，不能静默输出错误内容。
 - [ ] `ingestWorkflowMedia` 继续服务文件粘贴与外部来源（导入副本语义不变）；不要把文件夹引用改写成同一条复制路径，也不要让新增缓存与 Workflow 媒体清理共用同一存储实例。
 
+## FlovartBench 后续
+
+- [ ] 在真实 GitHub runner 上跑一次 `flovartbench` workflow，确认 Windows Hosted 下 `eval:validate`、`eval:redteam`、oracle smoke 与 `eval:core` 全绿；本地通过不等于 Hosted 通过。
+- [ ] 用真实 Codex 二进制与 `FLOVARTBENCH_ALLOW_CODEX=true` 产出第一个**已认证** Agent 基线（当前 0/120），并把 `EXTERNAL_FAILURE` 与能力失败分开汇报。
+- [ ] 建立 holdout 数据集：不进公开仓库，按路径挂载用于认证；任务一旦在仓库暴露即转为 regression 并替换其 holdout 位。
+- [ ] 补齐三个 known gap 对应能力：Agent 稳定面暴露 `task.inspect` / `task.resume`、稳定面提供费用确认参数、`first_frame` 来自 video 时在写入期拒绝而非只报 `ROLE_CONFLICT` 诊断。
+- [ ] `eval/tasks/native-effects/` 与 `eval/graders/nativeEffects/` 保持预留：接入真实 AE/PR 宿主后可断言保存/重开/导出前的持久化，不做无宿主也能通过的占位任务。
+- [ ] 用真实付费 Provider 跑 provider suite 的已批准路径，替换 Fake Provider 语义；真实验证扣费、429、提交未知与取消。
+- [ ] 媒体与 Table：按实际需求推进，不因 benchmark 建设而扩充范围。
+
 ## 精简实现
 
 - [ ] 按当前切片清理只转发的包装、重复状态和重复执行路径；每次替换给出现有调用点和回归证据。
