@@ -51,8 +51,22 @@ function runCli(args: string[], env: NodeJS.ProcessEnv) {
   });
 }
 
+// An ACL-hardened temp directory can occasionally take a long time to remove on
+// Windows hosts. A slow removal used to consume the whole afterEach budget and
+// then time out unrelated tests, so each disposal is bounded and a directory
+// that cannot be removed promptly is abandoned instead of blocking the suite.
+function withTimeout(work: Promise<void>, ms: number): Promise<void> {
+  return Promise.race([
+    work,
+    new Promise<void>(resolve => {
+      const timer = setTimeout(resolve, ms);
+      timer.unref?.();
+    }),
+  ]);
+}
+
 afterEach(async () => {
-  await Promise.all(cleanup.splice(0).map(dispose => dispose()));
+  await Promise.all(cleanup.splice(0).map(dispose => withTimeout(dispose(), 5_000)));
 });
 
 async function fixture() {
@@ -126,6 +140,9 @@ async function fixture() {
   }));
   await protectDiscovery(discoveryPath);
   cleanup.push(async () => {
+    // Keep-alive sockets from the client's fetch keep server.close() from ever
+    // invoking its callback, which hangs the whole suite on this one fixture.
+    server.closeAllConnections?.();
     await new Promise<void>(resolve => server.close(() => resolve()));
     await rm(directory, { recursive: true, force: true });
   });

@@ -8,7 +8,7 @@ import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { FlovartRuntimeClient } from '../tools/flovart/runtime-client.js';
+import { findDaclLine, FlovartRuntimeClient, parseDaclAces } from '../tools/flovart/runtime-client.js';
 import { getCanonicalRegistry } from '../tools/flovart/registry.js';
 
 const cleanup: Array<() => Promise<void>> = [];
@@ -36,8 +36,26 @@ async function protectDiscovery(path: string) {
   ], { windowsHide: true });
 }
 
+// An ACL-hardened temp directory can occasionally take a long time to remove on
+// Windows hosts. A slow removal used to consume the whole afterEach budget and
+// then time out unrelated tests, so each disposal is bounded and a directory
+// that cannot be removed promptly is abandoned instead of blocking the suite.
+async function disposeAll() {
+  await Promise.all(cleanup.splice(0).map(dispose => withTimeout(dispose(), 5_000)));
+}
+
+function withTimeout(work: Promise<void>, ms: number): Promise<void> {
+  return Promise.race([
+    work,
+    new Promise<void>(resolve => {
+      const timer = setTimeout(resolve, ms);
+      timer.unref?.();
+    }),
+  ]);
+}
+
 afterEach(async () => {
-  await Promise.all(cleanup.splice(0).map(dispose => dispose()));
+  await disposeAll();
 });
 
 async function fixture() {
@@ -87,6 +105,9 @@ async function fixture() {
   }));
   await protectDiscovery(discoveryPath);
   cleanup.push(async () => {
+    // Keep-alive sockets from the client's fetch keep server.close() from ever
+    // invoking its callback, which hangs the whole suite on this one fixture.
+    server.closeAllConnections?.();
     await new Promise<void>(resolve => server.close(() => resolve()));
     await rm(directory, { recursive: true, force: true });
   });
@@ -237,5 +258,70 @@ describe('FlovartRuntimeClient', () => {
       runtime: 'production-runtime',
     });
     expect(requests.map(request => request.url)).toEqual(['/v1/status']);
+  });
+});
+
+// icacls /save output has to be split into ACEs by balanced parentheses: owner
+// and group SIDs on domain-joined machines contain parentheses themselves, and
+// a naive regex over the whole DACL silently merges or truncates ACEs. These
+// cases are pure string handling, so they stay fast and identical on every host.
+describe('parseDaclAces', () => {
+  it('splits the production owner-only file DACL into both ACEs', () => {
+    expect(parseDaclAces('D:P(A;;FA;;;SY)(A;;FA;;;S-1-5-21-1-2-3-1001)')).toEqual([
+      { type: 'A', flags: '', sid: 'SY', inherited: false },
+      { type: 'A', flags: '', sid: 'S-1-5-21-1-2-3-1001', inherited: false },
+    ]);
+  });
+
+  it('keeps inherited ACEs recognisable so an inherited DACL can be rejected', () => {
+    const aces = parseDaclAces('D:AI(A;ID;FA;;;SY)(A;ID;FA;;;S-1-5-21-1-2-3-1001)');
+    expect(aces).toHaveLength(2);
+    expect(aces.every(ace => ace.inherited)).toBe(true);
+  });
+
+  it('treats IO (inherit-only) ACEs as inherited as well', () => {
+    const aces = parseDaclAces('D:AI(A;IO;FA;;;SY)');
+    expect(aces[0].inherited).toBe(true);
+  });
+
+  it('does not split an ACE whose SID contains parentheses', () => {
+    const aces = parseDaclAces('D:PAI(A;;FA;;;SY)(A;;FA;;;AB(C))');
+    expect(aces).toHaveLength(2);
+    expect(aces[1].sid).toBe('AB(C)');
+  });
+
+  it('returns no ACEs for empty or unbalanced input', () => {
+    expect(parseDaclAces('')).toEqual([]);
+    expect(parseDaclAces('D:PAI(A;;FA;;;SY')).toEqual([]);
+    expect(parseDaclAces('not-an-sddl')).toEqual([]);
+  });
+});
+
+// icacls /save writes the saved file name on the first line and the descriptor
+// after it. On GitHub's Windows runners the test temp root sits on the D: drive,
+// so the name line can also begin with "D:" and must not be mistaken for the
+// DACL. This is why the two hosted-CI runtime tests failed locally-green runs.
+describe('findDaclLine', () => {
+  it('reads the DACL that follows a plain file name', () => {
+    const dacl = findDaclLine('control-v1.json\r\nD:PAI(A;;FA;;;SY)(A;;FA;;;S-1-5-21-1-2-3-1001)\r\n');
+    expect(dacl).toBe('D:PAI(A;;FA;;;SY)(A;;FA;;;S-1-5-21-1-2-3-1001)');
+  });
+
+  it('does not mistake a D: drive path for the DACL', () => {
+    const dacl = findDaclLine('D:\\a\\_temp\\vitest\\control-v1.json\r\nD:PAI(A;;FA;;;SY)(A;;FA;;;S-1-5-21-1-2-3-1001)\r\n');
+    expect(dacl).toBe('D:PAI(A;;FA;;;SY)(A;;FA;;;S-1-5-21-1-2-3-1001)');
+  });
+
+  it('reads the DACL after a C: drive path', () => {
+    const dacl = findDaclLine('C:\\Users\\x\\control-v1.json\r\nD:P(A;;FA;;;SY)(A;;FA;;;S-1-5-21-1-2-3-1001)\r\n');
+    expect(dacl).toBe('D:P(A;;FA;;;SY)(A;;FA;;;S-1-5-21-1-2-3-1001)');
+  });
+
+  it('accepts a DACL that carries no protection flags', () => {
+    expect(findDaclLine('f.json\r\nD:(A;;FA;;;SY)\r\n')).toBe('D:(A;;FA;;;SY)');
+  });
+
+  it('returns null when no descriptor was saved', () => {
+    expect(findDaclLine('control-v1.json\r\n')).toBeNull();
   });
 });

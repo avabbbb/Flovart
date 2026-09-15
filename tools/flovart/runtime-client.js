@@ -74,15 +74,26 @@ export async function verifyDiscoveryPermissions(path) {
         windowsHide: true,
       });
       const sddl = await readFile(aclPath, 'utf16le');
-      const dacl = sddl.slice(sddl.indexOf('D:')).trim();
-      const aces = [...dacl.matchAll(/\(([^)]*)\)/g)].map(match => match[1].split(';'));
+      const dacl = findDaclLine(sddl);
+      if (dacl === null) throw new Error('unreadable DACL');
+      const aces = parseDaclAces(dacl);
       const allowed = new Set([currentSid, 'S-1-5-18', 'SY']);
-      if (!dacl.startsWith('D:P') || aces.length < 2) throw new Error('unprotected DACL');
-      if (aces.some(([type, , , , , sid]) => type !== 'A' || !allowed.has(sid))) {
+      if (!aces.length) throw new Error('empty DACL');
+      // ACEs marked ID (inherited) only appear if the DACL still inherits from the
+      // parent. A record that keeps an inherited ACE can be rewritten by whoever
+      // controls the parent directory, so treat it as unprotected.
+      const inheritedAce = aces.find(ace => ace.inherited);
+      if (inheritedAce) throw new Error('inherited ACE present');
+      if (aces.some(ace => ace.type !== 'A' && ace.type !== 'D')) {
+        throw new Error('unexpected DACL entry type');
+      }
+      if (aces.some(ace => ace.type === 'A' && !allowed.has(ace.sid))) {
         throw new Error('unexpected DACL principal');
       }
-      if (!aces.some(([, , , , , sid]) => sid === currentSid)) throw new Error('current user missing');
-      if (!aces.some(([, , , , , sid]) => sid === 'SY' || sid === 'S-1-5-18')) {
+      if (!aces.some(ace => ace.type === 'A' && ace.sid === currentSid)) {
+        throw new Error('current user missing');
+      }
+      if (!aces.some(ace => ace.type === 'A' && (ace.sid === 'SY' || ace.sid === 'S-1-5-18'))) {
         throw new Error('system missing');
       }
     } catch {
@@ -94,6 +105,59 @@ export async function verifyDiscoveryPermissions(path) {
     throw unavailable('Runtime discovery permissions are too broad.');
   }
   return `${metadata.size}:${metadata.mtimeMs}`;
+}
+
+// icacls /save writes the file name on the first line and the security
+// descriptor after it. The name can be an absolute path such as "D:\\a\\_temp",
+// so the DACL has to be located at the start of a line instead of by the first
+// "D:" occurrence anywhere in the text.
+export function findDaclLine(sddl) {
+  if (typeof sddl !== 'string') return null;
+  for (const rawLine of sddl.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    // A DACL is "D:" plus optional flags plus the first ACE. A saved file name
+    // can also start with "D:" when the path lives on a D: drive, so the line
+    // only counts when it actually carries the SDDL grammar.
+    if (/^D:[A-Za-z]*\(/.test(line)) return line;
+  }
+  return null;
+}
+
+// SDDL ACEs are delimited by balanced parentheses. Owner, group and machine
+// SIDs can themselves contain parentheses, so a regex over the whole DACL
+// silently merges or truncates entries.
+export function parseDaclAces(dacl) {
+  if (typeof dacl !== 'string') return [];
+  const entries = [];
+  let depth = 0;
+  let buffer = '';
+  for (const character of dacl) {
+    if (character === '(') {
+      depth += 1;
+      if (depth === 1) {
+        buffer = '';
+        continue;
+      }
+    } else if (character === ')') {
+      depth -= 1;
+      if (depth === 0) {
+        entries.push(buffer);
+        buffer = '';
+        continue;
+      }
+    }
+    if (depth >= 1) buffer += character;
+  }
+  if (depth !== 0) return [];
+  return entries.map(entry => {
+    const fields = entry.split(';');
+    return {
+      type: fields[0] ?? '',
+      flags: fields[1] ?? '',
+      sid: fields[fields.length - 1] ?? '',
+      inherited: (fields[1] ?? '').includes('ID') || (fields[1] ?? '').includes('IO'),
+    };
+  });
 }
 
 function unavailable(message, details = null) {
