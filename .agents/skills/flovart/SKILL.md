@@ -33,8 +33,9 @@ checkout can make `npx` query an unrelated registry package.
 
 Use only the stable Workflow surface for normal work:
 
-The stable commands are `ensure`, `status`, `workflow.inspect`,
-`workflow.selection.get`, `workflow.apply`, and `workflow.node.run`.
+Use `ensure` as the bootstrap command. The five stable task operations are
+`status`, `workflow.inspect`, `workflow.selection.get`, `workflow.apply`, and
+`workflow.node.run`.
 
 ```text
 flovart ensure

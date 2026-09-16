@@ -4,6 +4,17 @@ title: 待测试确认
 
 本页记录实际进入文档或代码、仍需用户确认的变更。既有实现的构建、全量测试、Rust Runtime 和响应式浏览器记录见[发行候选证据](../../../evidence/release-candidate/README.md)，仅适用于其对应代码与范围。本次文档收尾只运行文档相关检查，未重跑上述整套验收；真实第三方宿主、账号、Provider 与公开发布仍需单独认证。
 
+## 本轮：外部 Agent 优先与 CLI 入口收敛
+
+- Agent 页面现在优先展示外部 Agent；Flovart 内置 Assistant 仅在用户点击后挂载，且不拥有额外权限，不自动接管项目。
+- Workflow 工具栏的 Agent 按钮切换到顶层 Agent 入口；Workflow 右栏只保留当前 Workflow 上下文，不重复显示 Agent 选择或会话面板。Workflow、Table、Agent 仍保持独立入口。
+- 普通 Agent 状态收敛为“已准备 / 需安装 / 需登录 / 离线 / 异常”；“已选择/已准备”不等同真实外部 Agent 会话，真实身份调用仍待验证。URL、clientId、Writer、Projection 等仅放在高级诊断中，Token 不在界面明文展示。
+- Browser bootstrap 的认证探针改用已有 token 保护的 `/hosts?includeVersion=false`，保留短期 bootstrap、loopback 限制、URL 清理和 `sessionStorage`。
+- CLI 默认帮助只展示 bootstrap/admin 与五个稳定操作；兼容命令仍由 registry 保留并可通过 discovery 调用。CLI + Skill 是默认外部 Agent 路径，MCP 仍为可选投影。
+- `ProductionCrewPanel` 已确认无运行时引用后删除；`agentWorkspaceStore` 仍被内置面板用于状态类型，暂不删除。
+- 本轮证据：相关 Vitest `31/31` 通过；`npx tsc --noEmit` 通过；`npm run build` 通过；`npm run docs:check` 通过（153 份文档）；`npm run test:browser:responsive` 冷启动连续两次通过（托管 CLI 使用动态 loopback 端口与 `--no-open`，Chrome for Testing、临时 profile 自动清理，10 个响应式断点，Workflow → Agent、外部 Agent 优先、内置助手点击挂载）。`git diff --check` 通过。
+- 未验证：真实 Codex/WorkBuddy 会话、浏览器可见路径、Provider 付费调用、宿主插件保存/重开/导出。原生效果仍是下一条独立切片，不能用本轮 UI/CLI 证据替代。
+
 ## 本轮：Hosted CI Runtime 发现权限修复 + FlovartBench v0.1
 
 ### E0：Hosted CI blocker（已修复，待你在真实 runner 上确认）

@@ -11,7 +11,7 @@ description: 在 WorkBuddy 中用自然语言操作用户看得见的 Flovart Wo
 
 ## 正常入口
 
-首次使用或本地服务断开时先执行：
+首次使用或本地服务断开时先执行 bootstrap：
 
 ```bash
 flovart-cli ensure --json
