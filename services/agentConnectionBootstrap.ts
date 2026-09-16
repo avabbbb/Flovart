@@ -194,10 +194,20 @@ async function exchangeBootstrapCredential(url: string, bootstrapToken: string, 
   return { token: result.body.sessionToken, expiresAt: Number(result.body.expiresAt) || undefined };
 }
 
+/**
+ * `/hosts` re-scans installed agent hosts on every call and can take several
+ * seconds on a cold machine, while the default probe budget is 1200ms. Without
+ * a wider budget for this one call the bootstrap aborts, retries, and finally
+ * reports the Agent offline even though `/health` answered in milliseconds.
+ * `/health` keeps the short budget so a genuinely absent Agent still fails fast.
+ */
+const HOSTS_PROBE_TIMEOUT_MS = 8000;
+
 async function authenticate(connection: ManagedAgentConnection, options: AgentConnectionBootstrapOptions) {
   const health = await requestJson(new URL('/health', connection.url), options);
   if (!health.response.ok) throw new Error(`Agent health 返回 HTTP ${health.response.status}。`);
-  const hosts = await requestJson(new URL('/hosts?includeVersion=false', connection.url), options, connection.token);
+  const hostsOptions = { ...options, timeoutMs: Math.max(Number(options.timeoutMs) || 0, HOSTS_PROBE_TIMEOUT_MS) };
+  const hosts = await requestJson(new URL('/hosts?includeVersion=false', connection.url), hostsOptions, connection.token);
   if (hosts.response.status === 401 || /invalid token/i.test(String(hosts.body?.error || ''))) {
     const error = new Error('Flovart Agent Token 无效。');
     (error as Error & { code?: string }).code = 'AUTH_FAILED';
