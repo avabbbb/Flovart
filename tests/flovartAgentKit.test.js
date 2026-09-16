@@ -20,8 +20,9 @@ describe('flovart agent kit', () => {
       encoding: 'utf8',
     });
 
-    expect(output).toContain('Commands:');
+    expect(output).toContain('Stable operations:');
     expect(output).toContain('workflow.inspect');
+    expect(output).toContain('Compatibility commands remain callable');
   });
 
   it('installs the CLI-first SKILL attachment without writing any MCP config', () => {

@@ -1,58 +1,71 @@
 import { chromium } from 'playwright';
-import { existsSync } from 'node:fs';
+import { execFileSync, spawn } from 'node:child_process';
+import { existsSync, readFileSync } from 'node:fs';
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
-import { createServer } from 'node:http';
-import { dirname, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { probeWebUi } from '../tools/flovart/local-agent.js';
 import { assertTestPath, resolveTestTempRoot } from './test-temp-root.mjs';
 
 const projectDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const targetUrl = process.env.FLOVART_TEST_URL || 'http://127.0.0.1:7410';
+const externalTargetUrl = process.env.FLOVART_TEST_URL?.trim() || null;
 const chromeExecutable = process.env.FLOVART_CHROME_PATH || chromium.executablePath();
 if (!existsSync(chromeExecutable)) throw new Error(`Chrome for Testing executable was not found: ${chromeExecutable}`);
+
 const testTempRoot = resolveTestTempRoot(projectDir);
-const outputDir = assertTestPath(process.env.FLOVART_RESPONSIVE_ARTIFACT_DIR || resolve(testTempRoot, 'responsive-agent-link-artifacts'), 'Responsive Agent artifacts');
+const outputDir = assertTestPath(
+  process.env.FLOVART_RESPONSIVE_ARTIFACT_DIR || resolve(testTempRoot, 'responsive-agent-link-artifacts'),
+  'Responsive Agent artifacts',
+);
 await mkdir(testTempRoot, { recursive: true });
+await mkdir(outputDir, { recursive: true });
 const profileDir = await mkdtemp(resolve(testTempRoot, 'flovart-responsive-agent-link-'));
+const serviceDir = externalTargetUrl ? null : await mkdtemp(resolve(testTempRoot, 'flovart-responsive-agent-link-service-'));
 process.env.TEMP = profileDir;
 process.env.TMP = profileDir;
 process.env.TMPDIR = profileDir;
+
 const viewports = [
   ['2560x1440', 2560, 1440], ['1920x1080', 1920, 1080], ['1600x900', 1600, 900],
   ['1366x768', 1366, 768], ['1280x720', 1280, 720], ['1024x768', 1024, 768],
   ['768x1024', 768, 1024], ['640x900', 640, 900], ['480x800', 480, 800], ['390x844', 390, 844],
 ];
 
-async function checkDock(page, width, height) {
-  const result = await page.evaluate(() => {
-    const shell = document.querySelector('.dock-page');
-    const rect = shell?.getBoundingClientRect();
-    const control = document.querySelector('.agent-control-shell');
-    const linkGrid = document.querySelector('.agent-link-surface__grid');
-    const linkCards = Array.from(document.querySelectorAll('.agent-link-surface__grid > .agent-link-surface__card'));
-    const advancedSummary = document.querySelector('.agent-link-surface__advanced > summary');
-    const gridRect = linkGrid?.getBoundingClientRect();
-    const cardBottom = linkCards.reduce((bottom, card) => Math.max(bottom, card.getBoundingClientRect().bottom), 0);
-    const summaryTop = advancedSummary?.getBoundingClientRect().top;
-    const layoutOverflow = Boolean(control && [control, ...control.children].some(element => element.scrollWidth > element.clientWidth + 1));
-    return {
-      viewportWidth: innerWidth,
-      viewportHeight: innerHeight,
-      scrollWidth: document.documentElement.scrollWidth,
-      shellBottom: rect?.bottom || 0,
-      shellVisible: Boolean(shell && rect && rect.width > 0 && rect.height > 0),
-      layoutOverflow,
-      agentLinkGridBottom: gridRect?.bottom || null,
-      agentLinkCardBottom: cardBottom || null,
-      agentLinkAdvancedTop: summaryTop ?? null,
-    };
-  });
-  const linkStackOverlaps = result.agentLinkCardBottom !== null
-    && result.agentLinkGridBottom !== null
-    && result.agentLinkAdvancedTop !== null
-    && (result.agentLinkCardBottom > result.agentLinkGridBottom + 1 || result.agentLinkGridBottom > result.agentLinkAdvancedTop + 1);
-  if (result.scrollWidth > width + 1 || result.layoutOverflow || !result.shellVisible || result.shellBottom < height - 2 || linkStackOverlaps) throw new Error(`Dock ${width}x${height}: ${JSON.stringify(result)}`);
-  return result;
+const sleep = ms => new Promise(resolveSleep => setTimeout(resolveSleep, ms));
+
+async function waitFor(check, timeoutMs = 60_000, intervalMs = 250) {
+  const deadline = Date.now() + timeoutMs;
+  let lastError = null;
+  while (Date.now() <= deadline) {
+    try {
+      const value = await check();
+      if (value) return value;
+    } catch (error) {
+      lastError = error;
+    }
+    await sleep(intervalMs);
+  }
+  throw lastError || new Error('等待 Flovart WebUI 超时。');
+}
+
+function readJson(file) {
+  return JSON.parse(readFileSync(file, 'utf8'));
+}
+
+function stopProcessTree(child) {
+  if (!child?.pid) return;
+  if (process.platform === 'win32') {
+    try {
+      execFileSync('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], {
+        stdio: 'ignore',
+        windowsHide: true,
+      });
+    } catch {
+      // The managed CLI may already have exited after reporting a startup failure.
+    }
+    return;
+  }
+  try { child.kill('SIGTERM'); } catch {}
 }
 
 async function checkAppAgent(page, width, height) {
@@ -67,44 +80,66 @@ async function checkAppAgent(page, width, height) {
       hasSeparator: Boolean(document.querySelector('[role="separator"]')),
     };
   });
-  if (result.scrollWidth > width + 1 || result.shellBottom < height - 2 || !result.mainVisible || result.hasSeparator) throw new Error(`App Agent ${width}x${height}: ${JSON.stringify(result)}`);
+  if (result.scrollWidth > width + 1 || result.shellBottom < height - 2 || !result.mainVisible || result.hasSeparator) {
+    throw new Error(`App Agent ${width}x${height}: ${JSON.stringify(result)}`);
+  }
   return result;
 }
 
-function startMockCrew() {
-  const server = createServer((request, response) => {
-    response.setHeader('access-control-allow-origin', '*');
-    response.setHeader('access-control-allow-headers', 'content-type, x-flovart-agent-token');
-    if (request.method === 'OPTIONS') {
-      response.statusCode = 204;
-      response.end();
-      return;
-    }
-    if (request.url?.startsWith('/events')) {
-      response.setHeader('cache-control', 'no-cache');
-      response.setHeader('connection', 'keep-alive');
-      response.setHeader('content-type', 'text/event-stream');
-      response.write('event: hello\ndata: {}\n\n');
-      request.on('close', () => response.end());
-      return;
-    }
-    const payload = request.url?.startsWith('/crew/protocol')
-      ? { ok: true, protocolVersion: '1', registryHash: '0'.repeat(64), capabilities: ['command', 'events', 'crew-intent'], limits: {} }
-      : request.url?.startsWith('/director/status')
-        ? { ok: true, binding: null, archivedCount: 0, projectId: null }
-        : request.url?.startsWith('/crew/events')
-          ? { ok: true, events: [], nextEventId: 0, hasMore: false }
-          : { ok: true };
-    response.setHeader('content-type', 'application/json');
-    response.end(JSON.stringify(payload));
-  });
-  return new Promise(resolve => server.listen(0, '127.0.0.1', () => resolve(server)));
+async function assertTopLevelModes(page) {
+  for (const label of ['工作流', 'Table', 'Agent']) {
+    const modeButton = page.getByRole('button', { name: label, exact: true });
+    await modeButton.waitFor({ state: 'visible', timeout: 30_000 });
+  }
 }
 
-await mkdir(outputDir, { recursive: true });
-let context = null;
+function assertDefaultAgentCopy(bodyText) {
+  if (!bodyText.includes('外部 Agent 优先')) throw new Error('External Agent priority copy is missing.');
+  if (/Production Crew|Director|Writer|Projection|Token/i.test(bodyText)) {
+    throw new Error('Advanced Agent implementation terms leaked into the default user path.');
+  }
+}
 
+let context = null;
+let managedCli = null;
+let managedCliOutput = '';
 try {
+  let targetUrl = externalTargetUrl;
+  if (!targetUrl) {
+    const serviceEnv = {
+      ...process.env,
+      TEMP: serviceDir,
+      TMP: serviceDir,
+      TMPDIR: serviceDir,
+      FLOVART_PROJECT_DIR: projectDir,
+      FLOVART_AGENT_CONFIG: join(serviceDir, 'agent.json'),
+      FLOVART_WEB_DISCOVERY: join(serviceDir, 'web.json'),
+      FLOVART_BROWSER_LAUNCH_STATE: join(serviceDir, 'browser-launch.json'),
+    };
+    managedCli = spawn(process.execPath, [
+      'tools/flovart/cli.js',
+      'start', '--source', '--web',
+      '--web-port=0', '--agent-port=0', '--no-open',
+    ], {
+      cwd: projectDir,
+      env: serviceEnv,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      shell: false,
+      windowsHide: true,
+    });
+    managedCli.stdout.on('data', chunk => { managedCliOutput += String(chunk); });
+    managedCli.stderr.on('data', chunk => { managedCliOutput += String(chunk); });
+    targetUrl = await waitFor(async () => {
+      if (managedCli.exitCode !== null) {
+        throw new Error(`托管 Flovart 启动失败: ${managedCliOutput.slice(-2000)}`);
+      }
+      const discoveryFile = serviceEnv.FLOVART_WEB_DISCOVERY;
+      if (!existsSync(discoveryFile)) return null;
+      const discovery = readJson(discoveryFile);
+      return await probeWebUi(discovery.url, { timeoutMs: 800 }).catch(() => null);
+    });
+  }
+
   context = await chromium.launchPersistentContext(profileDir, {
     headless: true,
     executablePath: chromeExecutable,
@@ -116,86 +151,53 @@ try {
   page.on('console', message => { if (message.type() === 'error') consoleErrors.push(message.text()); });
   page.on('pageerror', error => pageErrors.push(error.message));
 
-  await page.goto(`${targetUrl}/#/dock`, { waitUntil: 'domcontentloaded' });
-  await page.waitForSelector('[data-testid="production-control"]', { timeout: 15_000 });
+  const appUrl = new URL(targetUrl);
+  appUrl.searchParams.set('responsive-reset', String(Date.now()));
+  appUrl.hash = '/app';
+  await page.goto(appUrl.toString(), { waitUntil: 'commit', timeout: 15_000 });
+  await page.waitForSelector('.app-shell', { timeout: 45_000 });
   await page.evaluate(() => { localStorage.clear(); sessionStorage.clear(); });
-  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.reload({ waitUntil: 'commit', timeout: 15_000 });
+  await assertTopLevelModes(page);
 
-  if (await page.getByText('Agent 地址', { exact: true }).isVisible()) throw new Error('Agent URL is visible before Advanced opens.');
-  if (await page.getByText('Token', { exact: true }).isVisible()) throw new Error('Token is visible before Advanced opens.');
-  await page.getByText('高级连接设置 · Developer connection', { exact: true }).click();
-  if (!(await page.getByText('Agent 地址', { exact: true }).isVisible())) throw new Error('Advanced Agent URL did not open.');
-  await page.locator('details.agent-link-surface__advanced > summary').click();
+  await page.getByRole('button', { name: '工作流', exact: true }).click();
+  const createWorkflow = page.locator('button[aria-label="新建工作流"]');
+  await page.waitForSelector('[data-testid="workflow-editor"], button[aria-label="新建工作流"]', { timeout: 30_000 });
+  if (await page.locator('[data-testid="workflow-editor"]').count() === 0) {
+    await createWorkflow.first().click();
+  }
+  await page.waitForSelector('[data-testid="workflow-editor"]', { timeout: 30_000 });
+
+  const workflowAgentButton = page.getByRole('button', { name: '打开 Agent', exact: true });
+  if (!(await workflowAgentButton.isVisible())) throw new Error('Workflow Agent action is not visible.');
+  await workflowAgentButton.click();
+  await page.waitForSelector('[data-testid="agent-main-workspace"]', { timeout: 15_000 });
+  await page.waitForSelector('section[aria-label="外部 Agent"]', { timeout: 15_000 });
+
+  if (await page.locator('.workflow-agent').count() > 0) throw new Error('Embedded Flovart Assistant mounted by default.');
+  assertDefaultAgentCopy(await page.locator('body').innerText());
 
   for (const [name, width, height] of viewports) {
     await page.setViewportSize({ width, height });
-    const result = await checkDock(page, width, height);
-    await page.screenshot({ path: resolve(outputDir, `after-${name}.png`) });
-    console.log(JSON.stringify({ surface: 'dock', name, ...result }));
-  }
-
-  await page.setViewportSize({ width: 1920, height: 832 });
-  for (const width of [1500, 1100, 900, 700, 480, 1200]) {
-    await page.setViewportSize({ width, height: 832 });
-    const result = await page.evaluate(() => ({ width: innerWidth, scrollWidth: document.documentElement.scrollWidth, hasAgentCopy: document.body.textContent?.includes('AI 协作') || false }));
-    if (result.scrollWidth > width + 1 || !result.hasAgentCopy) throw new Error(`Resize ${width}: ${JSON.stringify(result)}`);
-    console.log(JSON.stringify({ surface: 'dock', resize: width, ...result }));
+    const result = await checkAppAgent(page, width, height);
+    await page.screenshot({ path: resolve(outputDir, `app-agent-default-${name}.png`) });
+    console.log(JSON.stringify({ surface: 'app-agent-default', name, ...result }));
   }
 
   await page.setViewportSize({ width: 1280, height: 720 });
-  await page.getByRole('button', { name: '切换协作 Agent' }).click();
-  for (const [name, width, height] of [['bridge-1280x720', 1280, 720], ['bridge-480x800', 480, 800]]) {
-    await page.setViewportSize({ width, height });
-    const result = await checkDock(page, width, height);
-    if (!(await page.locator('.dock-bridge').isVisible())) throw new Error(`Bridge ${name} is not visible.`);
-    await page.screenshot({ path: resolve(outputDir, `after-${name}.png`) });
-    console.log(JSON.stringify({ surface: 'dock-bridge', name, ...result }));
-  }
-
-  const mockCrew = await startMockCrew();
-  try {
-    const address = mockCrew.address();
-    const mockUrl = `http://127.0.0.1:${typeof address === 'object' && address ? address.port : 0}`;
-    await page.goto(`${targetUrl}/#/dock`, { waitUntil: 'domcontentloaded' });
-    await page.evaluate(({ url }) => {
-      localStorage.setItem('flovart.agent.url', url);
-      sessionStorage.setItem('flovart.agent.token', 'responsive-test-token');
-    }, { url: mockUrl });
-    await page.reload({ waitUntil: 'domcontentloaded' });
-    await page.waitForSelector('.agent-control-shell', { timeout: 15_000 });
-    for (const [name, width, height] of [['connected-1280x720', 1280, 720], ['connected-768x1024', 768, 1024], ['connected-480x800', 480, 800]]) {
-      await page.setViewportSize({ width, height });
-      const result = await checkDock(page, width, height);
-      await page.screenshot({ path: resolve(outputDir, `${name}.png`) });
-      console.log(JSON.stringify({ surface: 'dock-connected', name, ...result }));
-    }
-
-    // Reset persisted connection before the full navigation so the App Agent
-    // checks cover the normal browser-only path. The full navigation also
-    // resets the module-level browser binding from the Dock fixture.
-    await page.evaluate(() => { localStorage.clear(); sessionStorage.clear(); });
-    const appUrl = new URL(targetUrl);
-    appUrl.searchParams.set('responsive-reset', String(Date.now()));
-    appUrl.hash = '/app';
-    await page.goto(appUrl.toString(), { waitUntil: 'domcontentloaded' });
-    await page.getByRole('button', { name: 'Agent', exact: true }).click();
-    await page.waitForSelector('[data-testid="agent-main-workspace"]', { timeout: 15_000 });
-    for (const [name, width, height] of [['1920x1080', 1920, 1080], ['1366x768', 1366, 768], ['768x1024', 768, 1024]]) {
-      await page.setViewportSize({ width, height });
-      const result = await checkAppAgent(page, width, height);
-      await page.screenshot({ path: resolve(outputDir, `app-agent-${name}.png`) });
-      console.log(JSON.stringify({ surface: 'app-agent', name, ...result }));
-    }
-  } finally {
-    // Release any EventSource opened by the connected fixture before closing
-    // its local server.
-    await page.goto('about:blank').catch(() => {});
-    await new Promise(resolve => mockCrew.close(resolve));
-  }
+  const embeddedAssistantButton = page.getByRole('button', { name: '打开可选内置助手', exact: true });
+  if (!(await embeddedAssistantButton.isVisible())) throw new Error('Optional embedded Assistant action is not visible.');
+  await embeddedAssistantButton.click();
+  await page.waitForSelector('.workflow-agent', { state: 'visible', timeout: 15_000 });
+  await page.screenshot({ path: resolve(outputDir, 'app-agent-embedded-1280x720.png') });
+  console.log(JSON.stringify({ surface: 'app-agent-embedded', visible: true }));
 
   if (consoleErrors.length || pageErrors.length) throw new Error(`Browser errors: ${JSON.stringify({ consoleErrors, pageErrors })}`);
   console.log(JSON.stringify({ ok: true, viewports: viewports.length, artifacts: outputDir }));
 } finally {
   await context?.close().catch(() => {});
+  stopProcessTree(managedCli);
+  await sleep(500);
   await rm(profileDir, { recursive: true, force: true });
+  if (serviceDir) await rm(serviceDir, { recursive: true, force: true });
 }

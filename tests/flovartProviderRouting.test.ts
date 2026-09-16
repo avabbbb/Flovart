@@ -33,11 +33,12 @@ describe('Flovart retired browser Bridge commands', () => {
     expect(RUNTIME_COMMANDS.has('generate.images-batch')).toBe(false);
   });
 
-  it('labels retired commands instead of presenting them as active help paths', () => {
-    expect(HELP_TEXT).toContain('provider.begin-setup ...                       [retired]');
-    expect(HELP_TEXT).toContain('provider.select-model ...                      [retired]');
-    expect(HELP_TEXT).toContain('provider.test                                   [retired]');
-    expect(HELP_TEXT).toContain('generate.images-batch --file shots.json         [retired]');
+  it('keeps default help focused while preserving compatibility discovery', () => {
+    expect(HELP_TEXT).toContain('Bootstrap/admin:');
+    expect(HELP_TEXT).toContain('Stable operations:');
+    expect(HELP_TEXT).toContain('Compatibility commands remain callable and discoverable');
+    expect(HELP_TEXT).not.toContain('provider.begin-setup');
+    expect(HELP_TEXT).not.toContain('generate.images-batch');
   });
 
   it.each(RETIRED_COMMANDS)('rejects retired browser-Bridge command %s without queueing it', (command, args) => {
