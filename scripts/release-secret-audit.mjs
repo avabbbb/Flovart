@@ -16,6 +16,14 @@ const detectors = [
 
 const secretFilePattern = /(^|[\\/])(?:\.env(?:\.|$)|id_(?:rsa|dsa|ecdsa|ed25519)|credentials\.json)(?:$|[\\/])|\.(?:pem|p12|pfx|key)$/i;
 
+// Token-shaped literals that exist only to prove the evidence recorder redacts
+// credentials (see eval/red-team.mjs). They must be exempted by exact value:
+// exempting the whole file would also hide a real token added there later.
+const intentionalFixtures = new Set([
+  'sk-live-REDTEAM0000000000000000000',
+  'ghp_REDTEAM000000000000000000000000',
+]);
+
 function repositoryFiles() {
   return execFileSync('git', ['ls-files', '-co', '--exclude-standard', '-z'], { cwd: root }).toString().split('\0').filter(Boolean);
 }
@@ -59,6 +67,7 @@ for (const relativePath of files) {
   for (const detector of detectors) {
     const match = detector.pattern.exec(text);
     if (!match) continue;
+    if (intentionalFixtures.has(match[0])) continue;
     findings.push({
       path: relativePath,
       line: lineNumber(text, match.index),

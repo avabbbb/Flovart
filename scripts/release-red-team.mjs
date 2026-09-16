@@ -71,9 +71,22 @@ observations.push(`skill-projections=${skillProjectionPaths.length}`);
 
 try {
   const help = execFileSync(process.execPath, ['tools/flovart/cli.js', '--help'], { cwd: root, encoding: 'utf8' });
-  requireCondition(help.includes('Commands:') && help.includes('workflow.inspect'), 'CLI --help did not return canonical help output');
+  requireCondition(
+    help.includes('Bootstrap/admin:') && help.includes('Stable operations:') && help.includes('workflow.inspect'),
+    'CLI --help did not return canonical help output',
+  );
 } catch (error) {
   requireCondition(false, `CLI --help failed: ${error instanceof Error ? error.message : String(error)}`);
+}
+
+try {
+  const setup = execFileSync(process.execPath, ['tools/flovart/cli.js', 'setup'], { cwd: root, encoding: 'utf8' });
+  requireCondition(
+    !/npx flovart-cli/.test(setup),
+    'CLI setup output advertises `npx flovart-cli`, which is not published in the npm registry',
+  );
+} catch (error) {
+  requireCondition(false, `CLI setup failed: ${error instanceof Error ? error.message : String(error)}`);
 }
 
 try {
