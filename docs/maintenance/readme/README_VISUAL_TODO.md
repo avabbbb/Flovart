@@ -2,28 +2,31 @@
 
 ## Current state
 
-The README uses real, content-rich assets from `pic/`:
+README 现在有三类真实视觉素材：
 
-- `pic/WorkFlow.png` shows a populated Workflow with connected media nodes.
-- `pic/readme-skill-home.png` shows the Production Skill entry point.
-- `pic/readme-skill-detail.png` shows Skill invocation and safety guidance.
+- `pic/readme/agent-operations-live-workflow.gif` —— 真实录屏：外部 Agent 会话通过 Flovart CLI
+  创建项目与节点、连接节点，可见 Workflow 实时更新。记录见 [DEMO_RECORDING.md](./DEMO_RECORDING.md)。
+- `pic/readme-skill-home.png` / `pic/readme-skill-detail.png` —— 真实 Production Skill 界面。
+- `pic/readme/agent-operations-final-state.png` —— 上述录屏的终态静帧，GIF 加载失败时的降级素材。
 
-No current repository screenshot proves an external Agent changing that same visible Workflow in one frame. The README names this boundary instead of presenting a staged or fabricated Agent demo.
+## Still open
 
-## Next asset
+录屏证明的是 **CLI 那一半**：结构化操作确实作用于同一份可见 Workflow。
+它还**没有**证明一个具名 Coding Agent 在自己的对话里完成这件事。要补的正是下面这条：
 
-Record a real 10–15 second GIF or short MP4/GIF-compatible preview with this sequence:
+录一条真实 10–15 秒的 GIF 或 MP4，内容为：
 
-1. A local agent receives a short production brief.
-2. Flovart opens the bound Workflow through the real Link/CLI path.
-3. The agent adds or connects nodes in that visible Workflow.
-4. A human moves or edits one node in the same workspace.
-5. The resulting artifact remains visible for inspection.
+1. 具名本地 Agent（Codex 或 WorkBuddy Connector）收到一句短 brief；
+2. Agent 通过真实的 Link/CLI 路径打开绑定的 Workflow；
+3. Agent 在那份可见 Workflow 里新增或连接节点；
+4. 人用鼠标在同一份 Workspace 里移动或修改其中一个节点；
+5. 产物保持可见、可继续检查。
 
-Acceptance requirements:
+验收要求：
 
-- capture an actual supported local path, with its status labelled according to `SUPPORT_MATRIX.md`;
-- show the same project and Workflow state throughout the sequence;
-- redact API keys, tokens, private endpoints and personal data;
-- do not imply that Experimental or Planned Hosts are Stable;
-- replace the static Hero image only after the recording can be independently reproduced.
+- 使用真实受支持的本地路径，并按 `SUPPORT_MATRIX.md` 标注其状态；
+- 全程是同一个项目、同一份 Workflow 状态；
+- 隐去 API key、token、私有端点和个人信息；
+- 不得暗示 Experimental 或 Planned 的宿主已 Stable；
+- 只有这条录屏能独立复现之后，才考虑把它替换成 Hero 主视觉；
+- 同步在 [DEMO_RECORDING.md](./DEMO_RECORDING.md) 登记（没有记录的 Demo 不得进 README）。

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **发布门禁与 CLI 口径修复**：`release:red-team` 的 CLI help 不变量从旧标题 `Commands:` 更新为当前 canonical 形状（`Bootstrap/admin:` + `Stable operations:`），并新增「`setup` 不得再宣传未发布的 `npx flovart-cli`」回归守护；`release:secret-audit` 为 red-team 中故意构造的假 token 增加**按精确字面值**的豁免（不按文件豁免，避免掩盖同文件后续真凭据）。`flovart setup`、bundle-manager 与 dev-commands 的文案也不再指向 npm registry 中不存在的 `npx flovart-cli`，改为源码路径。
+- **Agent Link bootstrap 冷机修复（缓解）**：浏览器 bootstrap 的认证探测原预算为 1200ms，而 `/hosts` 每次请求都重新扫描 Host（本机实测 3.0–4.2s，`/health` 仅 4ms），导致探测被中止、重试耗尽后浏览器无法成为 workspace writer。现仅对 `/hosts` 放宽到 8s，`/health` 保持 1200ms 以便 Agent 缺失时仍能快速失败。**根因未消除**：`/hosts` 仍无 TTL 缓存与 in-flight 去重，也尚未拆分 fast discovery 与 deep inspection。
+- **README 展示面重构**：英文 README 作为 canonical 重排（首屏移除 native-effects roadmap、Quick Start 前移、重复 caveat 收敛），中文版结构对齐；新增真实「外部 Agent CLI 操作 → 同一份可见 Workflow」录屏与其可复现记录，未把 CLI 操作描述为具名 Coding Agent 的对话。
+
 - **Hosted CI Runtime 发现权限修复**：修复 `verifyDiscoveryPermissions` 的 SDDL 解析在含括号 SID 上截断、以及 `icacls /save` 首行文件名在 D: 盘时定位错位两个根因（改为按括号配对的 `parseDaclAces()` 与按行锚定的 `findDaclLine()`），并把两个被阻塞测试文件的 20s fixture 清理挂起改为有上界；安全策略未放宽（仍只允许当前用户 SID 与 LocalSystem）。两个文件 19/19 通过。真实 Hosted runner 复跑仍待确认。
 - **FlovartBench v0.1**：新增 `eval/` 系统级 Agent/Workflow/Runtime 评测框架（57 任务 / 7 suite，准入 53），链路为 Task → 受控环境 → 真实 CLI/MCP/Workflow/Runtime 面 → 轨迹 → WorldSnapshot → 确定性 grader → 重复 trial → 机器生成报告；含 Oracle×5 + NOP 准入、谓词与冻结 canonical hash 双判分、safety hard gate、失败分类、tokens/cost 的「已测/未测」区分、dev(8)/regression(49) 与不入库的 holdout 分层、CI 分层，以及 12 项对 benchmark 自身的红队。当前确定性基线 pass@1 615/615，已认证外部 Agent trial 为 0/120，不将其计为 Agent 能力。
 - **产品方向与文档精简**：统一原生效果、Agent 协作与评测主设计，清理过时的多层 Agent/Runtime 目标；强调共用业务函数、独立本地渲染和最少必要层级，同步使用说明与支持边界。原生效果仍属待实现/验证目标。
