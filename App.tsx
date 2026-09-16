@@ -514,6 +514,7 @@ const App: React.FC = () => {
                 onOpenSettings={() => setIsSettingsPanelOpen(true)}
                 onEnhancePrompt={handleEnhancePrompt}
                 isEnhancingPrompt={isEnhancingPrompt}
+                onOpenAgent={() => setActiveView('agent')}
             />
         </Suspense>
     ) : activeView === 'table' ? (
@@ -536,6 +537,9 @@ const App: React.FC = () => {
                 onCreateProject={() => workflowCreateProject(language === 'zho' ? '未命名工作流' : 'Untitled workflow')}
                 onOpenWorkflow={() => setActiveView('workflow')}
                 onOpenTable={handleOpenTable}
+                assetLibrary={assetLibrary}
+                userApiKeys={userApiKeys}
+                onOpenSettings={() => setIsSettingsPanelOpen(true)}
             />
         </Suspense>
     );

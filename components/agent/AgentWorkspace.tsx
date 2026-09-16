@@ -1,32 +1,29 @@
 import { Bot, Boxes, CircleDot, Grid2X2, Sparkles } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import '../../styles/agent.css';
 import { useWorkflowMediaUrl } from '../workflow/media';
 import type { WorkflowNode, WorkflowProject } from '../workflow/types';
-import { ProductionCrewPanel } from './ProductionCrewPanel';
 import { AgentHostPicker } from './AgentHostPicker';
-import { useAgentWorkspaceStore, type AgentPanelStatus } from './agentWorkspaceStore';
+import { FlovartAgentPanel } from './FlovartAgentPanel';
+import type { AssetLibrary, UserApiKey } from '../../types';
 
 interface AgentWorkspaceProps {
   project: WorkflowProject | null;
   onCreateProject: () => void;
   onOpenWorkflow: () => void;
   onOpenTable: (nodeId?: string) => void;
+  assetLibrary?: AssetLibrary;
+  userApiKeys?: UserApiKey[];
+  onOpenSettings?: () => void;
 }
 
-const STATUS_LABEL: Record<AgentPanelStatus, string> = { idle: '待命', running: '运行中', waiting: '待确认', done: '已完成', error: '异常' };
-
-export function AgentWorkspace({ project, onCreateProject, onOpenWorkflow, onOpenTable }: AgentWorkspaceProps) {
-  const ensureLayout = useAgentWorkspaceStore(state => state.ensureLayout);
-  const layouts = useAgentWorkspaceStore(state => state.layouts);
+export function AgentWorkspace({ project, onCreateProject, onOpenWorkflow, onOpenTable, assetLibrary, userApiKeys = [], onOpenSettings = () => undefined }: AgentWorkspaceProps) {
+  const [embeddedOpen, setEmbeddedOpen] = useState(false);
+  const [panelStatus, setPanelStatus] = useState<'idle' | 'running' | 'waiting' | 'done' | 'error'>('idle');
   const [activeContext, setActiveContext] = useState<'brief' | 'activity' | 'artifacts' | 'crew'>('artifacts');
-  const layout = project ? layouts[project.id] : undefined;
   const mediaNodes = useMemo(() => project?.nodes.filter(node => node.type === 'image' || node.type === 'video') || [], [project]);
-  useEffect(() => { if (project) ensureLayout(project.id); }, [ensureLayout, project]);
 
   if (!project) return <main className="agent-workspace-shell agent-workspace-shell--empty" data-testid="agent-main-workspace" style={{ color: 'var(--isl-ink)' }}><div className="mx-auto w-full max-w-3xl"><AgentHostPicker /><div className="mt-6 rounded-xl border p-6 text-center" style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-surface)' }}><Bot className="mx-auto mb-3" size={26} style={{ color: 'var(--isl-mint)' }} /><strong>从一个新项目开始</strong><p className="mt-1 text-xs" style={{ color: 'var(--isl-ink-soft)' }}>创建画布后，你和助手可以一起编辑，结果会保存在这里。</p><button type="button" className="mx-auto mt-3 rounded-lg border px-3 py-2 text-xs font-semibold" style={{ borderColor: 'var(--isl-border)' }} onClick={onCreateProject}>创建项目</button></div></div></main>;
-
-  const status = layout?.panels.find(panel => panel.kind === 'crew')?.status || 'idle';
 
   return (
     <main className="agent-workspace-shell" data-testid="agent-main-workspace" data-mobile-context={activeContext}>
@@ -39,22 +36,40 @@ export function AgentWorkspace({ project, onCreateProject, onOpenWorkflow, onOpe
           <button type="button" aria-pressed={activeContext === 'brief'} onClick={() => setActiveContext('brief')}><Sparkles size={14} />Brief</button>
           <button type="button" aria-pressed={activeContext === 'artifacts'} onClick={() => setActiveContext('artifacts')}><Boxes size={14} />产物</button>
           <button type="button" aria-pressed={activeContext === 'activity'} onClick={() => setActiveContext('activity')}><CircleDot size={14} />时间线</button>
-          <button type="button" aria-pressed={activeContext === 'crew'} onClick={() => setActiveContext('crew')} className="agent-workspace-tabs__crew"><Bot size={14} />现场</button>
+          <button type="button" aria-pressed={activeContext === 'crew'} onClick={() => setActiveContext('crew')} className="agent-workspace-tabs__crew"><Bot size={14} />助手</button>
         </nav>
         <section className="agent-workspace-body">
           {activeContext === 'brief' && <BriefPanel project={project} onOpenWorkflow={onOpenWorkflow} />}
           {activeContext === 'activity' && <ActivityPanel project={project} />}
           {activeContext === 'artifacts' && <ArtifactsPanel nodes={mediaNodes} onOpenTable={onOpenTable} />}
-          {activeContext === 'crew' && <div className="agent-context-empty"><Bot size={24} /><span>制作现场已切换到当前页面。</span></div>}
+          {activeContext === 'crew' && <div className="agent-context-empty"><Bot size={24} /><span>外部 Agent 负责当前项目；内置助手可按需打开。</span></div>}
         </section>
         <footer className="agent-workspace-footer">
-          <span className={`agent-status is-${status}`}><i />{STATUS_LABEL[status]}</span>
+          <span className={`agent-status is-${panelStatus}`}><i />{panelStatus === 'error' ? '异常' : panelStatus === 'running' ? '运行中' : panelStatus === 'waiting' ? '需确认' : panelStatus === 'done' ? '已完成' : '已准备'}</span>
           <button type="button" onClick={onOpenWorkflow}><Grid2X2 size={13} />打开 Workflow</button>
         </footer>
       </aside>
       <section className="agent-workspace-shell__conversation">
         <button type="button" className="agent-workspace-shell__mobile-back" onClick={() => setActiveContext('artifacts')}>← 返回上下文</button>
-        <ProductionCrewPanel project={project} />
+        {!embeddedOpen ? (
+          <section className="agent-external-priority" aria-label="外部 Agent">
+            <div className="agent-external-priority__content">
+              <Bot size={28} style={{ color: 'var(--isl-mint)' }} />
+              <h2>外部 Agent 优先</h2>
+              <p>从左侧选择 Codex、WorkBuddy 或其他可用助手，它们会通过 Flovart 操作当前 Workflow。</p>
+              <p className="agent-external-priority__hint">内置助手是可选的本地备用入口，不会自动接管项目。</p>
+              <button type="button" onClick={() => setEmbeddedOpen(true)}>打开可选内置助手</button>
+            </div>
+          </section>
+        ) : (
+          <FlovartAgentPanel
+            project={project}
+            onActivityChange={setPanelStatus}
+            onOpenSettings={onOpenSettings}
+            assetLibrary={assetLibrary}
+            userApiKeys={userApiKeys}
+          />
+        )}
       </section>
     </main>
   );

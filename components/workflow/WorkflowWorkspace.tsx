@@ -6,8 +6,6 @@ import '../../styles/workflow.css';
 import type { GenerationCapability, GenerationMode } from '../../services/generationCapabilities';
 import { StudioRightDrawer } from '../studio/StudioRightDrawer';
 import { StudioMediaBrowser, type StudioMediaItem } from '../studio/StudioMediaBrowser';
-import { ProductionCrewPanel } from '../agent/ProductionCrewPanel';
-import { AgentHostPicker } from '../agent/AgentHostPicker';
 import { activateBrowserWorkflowWriter } from '../../services/agentHostDiscovery';
 import { useAgentConnectionStore } from '../../stores/useAgentConnectionStore';
 import { createWorkflowNode } from './constants';
@@ -399,15 +397,12 @@ assetLibrary={assetLibrary}
               imageTools={imageTools}
               onReversePrompt={onReversePrompt}
               onOpenAgent={() => {
-                if (rightOpen && rightTab === 'agent') {
-                  // 已打开且停在制作状态页：执行收起
-                  setRightOpen(false);
-                } else {
-                  // 关闭中或停在其它页：打开并切到制作状态
-                  setRightTab('agent');
-                  setRightOpen(true);
-                  onOpenAgent?.();
+                if (onOpenAgent) {
+                  onOpenAgent();
+                  return;
                 }
+                setRightTab('agent');
+                setRightOpen(true);
               }}
               agentOpen={rightOpen && rightTab === 'agent'}
               rightPanelInset={rightOpen && !mediumViewport ? rightWidth + 24 : 12}
@@ -448,12 +443,12 @@ assetLibrary={assetLibrary}
         activeTab={rightTab}
         onTabChange={tab => setRightTab(tab as WorkflowRightTab)}
         tabs={[
-          { id: 'agent', label: language === 'zho' ? '制作状态' : 'Production', icon: undefined },
+          { id: 'agent', label: language === 'zho' ? 'Workflow 上下文' : 'Workflow context', icon: undefined },
           { id: 'history', label: language === 'zho' ? '生成历史' : 'History', icon: undefined },
         ]}
       >
         {rightTab === 'agent' && (activeProject ? (
-          <div className="h-full overflow-auto">{rightOpen && <AgentHostPicker />}<ProductionCrewPanel project={activeProject} /></div>
+          <WorkflowContextPanel project={activeProject} />
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, height: '100%', padding: '0 32px', textAlign: 'center', color: 'var(--isl-ink-soft)', fontSize: 13 }}>
             <strong style={{ color: 'var(--isl-ink)' }}>制作状态需要一个 Workflow 项目</strong>
@@ -479,4 +474,36 @@ assetLibrary={assetLibrary}
       </StudioRightDrawer>
     </section>
   );
+}
+
+function WorkflowContextPanel({ project }: { project: WorkflowProject }) {
+  const running = project.nodes.filter(node => node.metadata.status === 'loading').length;
+  const failed = project.nodes.filter(node => node.metadata.status === 'error').length;
+  const latestReceipt = [...(project.draftChangeSets || [])].reverse()[0];
+  return (
+    <section className="h-full overflow-auto p-5" aria-label="Workflow 上下文">
+      <div className="mx-auto grid w-full max-w-3xl gap-4">
+        <header>
+          <p className="text-[10px] font-bold tracking-[0.16em]" style={{ color: 'var(--isl-ink-soft)' }}>WORKFLOW CONTEXT</p>
+          <h2 className="mt-1 text-base font-semibold" style={{ color: 'var(--isl-ink)' }}>{project.title}</h2>
+          <p className="mt-1 text-xs leading-6" style={{ color: 'var(--isl-ink-soft)' }}>当前项目的节点、运行状态和最近变更。</p>
+        </header>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <ContextCard label="节点" value={String(project.nodes.length)} />
+          <ContextCard label="连接" value={String(project.connections.length)} />
+          <ContextCard label="状态" value={running > 0 ? `${running} 项运行中` : failed > 0 ? `${failed} 项异常` : '已准备'} />
+        </div>
+        <div className="rounded-xl border p-4" style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-surface)' }}>
+          <p className="text-[10px] font-bold tracking-[0.14em]" style={{ color: 'var(--isl-ink-soft)' }}>最近变更</p>
+          <p className="mt-2 text-xs leading-5" style={{ color: 'var(--isl-ink-soft)' }}>
+            {latestReceipt ? `${latestReceipt.intent} · v${latestReceipt.resultDraftVersion}` : '尚无变更记录。'}
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function ContextCard({ label, value }: { label: string; value: string }) {
+  return <div className="rounded-xl border p-4" style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-surface)' }}><small className="block text-[10px] font-bold" style={{ color: 'var(--isl-ink-soft)' }}>{label}</small><strong className="mt-1 block text-sm" style={{ color: 'var(--isl-ink)' }}>{value}</strong></div>;
 }

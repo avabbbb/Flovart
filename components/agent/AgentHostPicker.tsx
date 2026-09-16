@@ -36,9 +36,9 @@ function statusDot(state: LinkPublicStatus['state']) {
 }
 
 const PUBLIC_STATE_LABEL: Record<LinkPublicStatus['state'], string> = {
-  ready: '已就绪',
-  needs_setup: '需要准备',
-  needs_login: '需要登录',
+  ready: '已准备',
+  needs_setup: '需安装',
+  needs_login: '需登录',
   offline: '离线',
 };
 
@@ -113,7 +113,7 @@ export function AgentHostPicker({ projectTitle }: AgentHostPickerProps) {
     const request = ++actionRequest.current;
     setPendingId(id);
     setFailure('');
-    setNotice('正在准备协作…');
+    setNotice('正在准备…');
     try {
       if (id === 'workbuddy') {
         await useWorkBuddy(request);
@@ -123,9 +123,9 @@ export function AgentHostPicker({ projectTitle }: AgentHostPickerProps) {
         const result = await ensureHostReady(id);
         if (request !== actionRequest.current) return;
         if ('state' in result) {
-          setNotice('这个助手尚未安装或准备完成。');
+          setNotice('这个助手尚未安装。');
         } else {
-          setNotice(`${registry.agentIdentities.find(host => host.id === id)?.label || id} 正在协作当前项目。`);
+          setNotice(`${registry.agentIdentities.find(host => host.id === id)?.label || id} 已选择并准备连接。`);
           void scan();
         }
       }
@@ -168,13 +168,13 @@ export function AgentHostPicker({ projectTitle }: AgentHostPickerProps) {
             <div>
               <span className="agent-picker__eyebrow">当前 Agent</span>
               <h3>{selectedHost.label}</h3>
-              <p>{selectedActive ? '正在协作当前项目' : selectedStatus.label}</p>
+              <p>{selectedActive ? '已选择' : selectedStatus.label}</p>
             </div>
-            <span className="agent-picker__badge">{selectedActive ? '当前使用' : PUBLIC_STATE_LABEL[selectedStatus.state]}</span>
+            <span className="agent-picker__badge">{selectedActive ? '已准备' : PUBLIC_STATE_LABEL[selectedStatus.state]}</span>
           </div>
           {projectTitle && <div className="agent-picker__current-workflow"><p>当前 Workflow</p><strong title={projectTitle}>{projectTitle}</strong></div>}
           <button type="button" className="agent-picker__primary-action" disabled={selectedActive || Boolean(pendingId)} onClick={() => void useHost(selectedHost.id)}>{selectedBusy ? '正在准备…' : selectedActionLabel}</button>
-          <p className="agent-picker__message">{selectedActive ? `${selectedHost.label} 已获得当前项目的协作权。` : selectedStatus.message}</p>
+          <p className="agent-picker__message">{selectedActive ? `${selectedHost.label} 已选择并准备连接。` : selectedStatus.message}</p>
         </section>
 
         <section className="agent-picker__others" aria-label="其他 Agent">
@@ -191,7 +191,7 @@ export function AgentHostPicker({ projectTitle }: AgentHostPickerProps) {
                   <span aria-hidden="true" className="agent-card__dot" style={{ background: statusDot(status.state) }} />
                   <button type="button" onClick={() => selectHost(id)} aria-pressed={selectedId === id} className="agent-card__body">
                     <strong>{host.label}</strong>
-                    <span>{active ? '正在协作当前项目' : status.label}</span>
+                    <span>{active ? '已选择' : status.label}</span>
                   </button>
                   {active ? <Check size={15} style={{ color: 'var(--isl-mint-deep)' }} aria-label="当前协作 Agent" /> : <button type="button" disabled={Boolean(pendingId)} onClick={() => void useHost(id)} className="agent-card__action">{busy ? '准备中…' : status.state === 'needs_setup' ? (id === 'workbuddy' ? '安装' : '启用') : `使用 ${host.label}`}</button>}
                 </div>

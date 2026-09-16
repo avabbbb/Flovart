@@ -11,7 +11,7 @@ describe('Agent workspace', () => {
     });
   });
 
-  it('shows production control without mounting a second Agent conversation', () => {
+  it('prioritizes external Agents and keeps the built-in helper folded', () => {
     const project = { ...createWorkflowProject('Agent 项目'), id: 'project' };
     render(
       <AgentWorkspace
@@ -23,8 +23,10 @@ describe('Agent workspace', () => {
     );
 
     expect(screen.getByTestId('agent-main-workspace')).toHaveClass('agent-workspace-shell');
-    expect(screen.getByRole('region', { name: 'Production Crew 状态' })).toBeInTheDocument();
-    expect(screen.getByText('协作 Agent 会帮你推进制作')).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: '协作 Agent' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: '外部 Agent' })).toBeInTheDocument();
+    expect(screen.getByText('外部 Agent 优先')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '打开可选内置助手' })).toBeInTheDocument();
     expect(screen.queryByRole('textbox', { name: /开始你的创作/ })).not.toBeInTheDocument();
     expect(screen.queryByText('历史对话')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '调整面板大小' })).not.toBeInTheDocument();

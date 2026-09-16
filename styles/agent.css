@@ -46,6 +46,41 @@
   border-radius: 16px;
 }
 
+.agent-external-priority {
+  display: grid;
+  min-height: 100%;
+  place-items: center;
+  padding: 28px;
+  background: var(--agent-panel);
+}
+
+.agent-external-priority__content {
+  display: grid;
+  width: min(100%, 520px);
+  justify-items: center;
+  gap: 10px;
+  text-align: center;
+}
+
+.agent-external-priority__content h2,
+.agent-external-priority__content p { margin: 0; }
+.agent-external-priority__content h2 { color: var(--isl-ink); font-size: 18px; }
+.agent-external-priority__content p { color: var(--isl-ink-soft); font-size: 12px; line-height: 1.7; }
+.agent-external-priority__hint { color: var(--isl-ink-ghost) !important; font-size: 11px !important; }
+.agent-external-priority__content button {
+  min-height: 36px;
+  margin-top: 6px;
+  border: 1px solid var(--isl-border);
+  border-radius: 8px;
+  padding: 0 14px;
+  color: var(--isl-ink);
+  background: var(--agent-subtle);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
 .agent-workspace-header {
   display: flex;
   min-width: 0;

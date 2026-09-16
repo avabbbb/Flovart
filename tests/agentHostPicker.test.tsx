@@ -43,7 +43,7 @@ describe('Link 2.0 agent selection', () => {
     render(<AgentHostPicker />);
     fireEvent.click(await screen.findByRole('button', { name: '使用 Codex' }));
     await waitFor(() => expect(ensureHostReady).toHaveBeenCalledWith('codex'));
-    expect(await screen.findByRole('status')).toHaveTextContent('Codex 正在协作当前项目');
+    expect(await screen.findByRole('status')).toHaveTextContent('Codex 已选择并准备连接');
   });
 
   it('does not transfer control when selecting another assistant', async () => {
@@ -79,6 +79,6 @@ describe('Link 2.0 agent selection', () => {
     fireEvent.click(await screen.findByRole('button', { name: '使用 Codex' }));
     act(() => useAgentConnectionStore.getState().setStatus('ready', { projectId: 'project-2' }));
     await act(async () => finish({ activeHostWriter: { agentIdentity: 'codex', projectId: 'project-1', hasSessionId: false }, switched: false }));
-    expect(screen.queryByText('Codex 正在协作当前项目')).not.toBeInTheDocument();
+    expect(screen.queryByText('Codex 已准备，可以操作当前项目')).not.toBeInTheDocument();
   });
 });
