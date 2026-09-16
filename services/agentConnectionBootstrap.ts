@@ -197,14 +197,14 @@ async function exchangeBootstrapCredential(url: string, bootstrapToken: string, 
 async function authenticate(connection: ManagedAgentConnection, options: AgentConnectionBootstrapOptions) {
   const health = await requestJson(new URL('/health', connection.url), options);
   if (!health.response.ok) throw new Error(`Agent health 返回 HTTP ${health.response.status}。`);
-  const protocol = await requestJson(new URL('/crew/protocol', connection.url), options, connection.token);
-  if (protocol.response.status === 401 || /invalid token/i.test(String(protocol.body?.error || ''))) {
+  const hosts = await requestJson(new URL('/hosts?includeVersion=false', connection.url), options, connection.token);
+  if (hosts.response.status === 401 || /invalid token/i.test(String(hosts.body?.error || ''))) {
     const error = new Error('Flovart Agent Token 无效。');
     (error as Error & { code?: string }).code = 'AUTH_FAILED';
     throw error;
   }
-  if (!protocol.response.ok || protocol.body?.ok === false) {
-    throw new Error(`Agent protocol 返回 HTTP ${protocol.response.status}。`);
+  if (!hosts.response.ok || hosts.body?.ok === false) {
+    throw new Error(`Agent Host 返回 HTTP ${hosts.response.status}。`);
   }
 }
 

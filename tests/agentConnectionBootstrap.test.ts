@@ -40,8 +40,10 @@ describe('AgentConnectionBootstrap', () => {
         return response({ ok: true, sessionToken: 'short-lived-session', expiresAt: Date.now() + 60_000 });
       }
       if (url.pathname === '/health') return response({ ok: true, clients: 0 });
+      expect(url.pathname).toBe('/hosts');
+      expect(url.search).toBe('?includeVersion=false');
       expect(init?.headers).toMatchObject({ 'x-flovart-agent-token': 'short-lived-session' });
-      return response({ ok: true, protocolVersion: '1' });
+      return response({ ok: true, agents: [] });
     });
     const location = {
       href: 'http://127.0.0.1:37522/?agentUrl=http%3A%2F%2F127.0.0.1%3A17373&bootstrapToken=one-time-bootstrap#/app',
@@ -66,8 +68,10 @@ describe('AgentConnectionBootstrap', () => {
     const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = new URL(String(input));
       if (url.pathname === '/health') return response({ ok: true, clients: 0 });
+      expect(url.pathname).toBe('/hosts');
+      expect(url.search).toBe('?includeVersion=false');
       expect(init?.headers).toMatchObject({ 'x-flovart-agent-token': 'bootstrap-secret' });
-      return response({ ok: true, protocolVersion: '1' });
+      return response({ ok: true, agents: [] });
     });
     const location = {
       href: 'http://127.0.0.1:37522/?agentUrl=http%3A%2F%2F127.0.0.1%3A17373&agentToken=bootstrap-secret#/app',
@@ -93,7 +97,7 @@ describe('AgentConnectionBootstrap', () => {
     const replaceState = vi.fn();
     const fetchImpl = vi.fn(async (input: RequestInfo | URL) => new URL(String(input)).pathname === '/health'
       ? response({ ok: true })
-      : response({ ok: true, protocolVersion: '1' }));
+      : response({ ok: true, agents: [] }));
     const location = {
       href: 'http://127.0.0.1:37522/?agentUrl=http%3A%2F%2F127.0.0.1%3A17373&agentToken=bootstrap-secret&activateBrowserWriter=1#/app',
       search: '?agentUrl=http%3A%2F%2F127.0.0.1%3A17373&agentToken=bootstrap-secret&activateBrowserWriter=1',
