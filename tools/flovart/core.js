@@ -78,14 +78,15 @@ export const HELP_TEXT = [
 ].join('\n');
 
 export const SETUP_TEXT = [
-  'Flovart Agent Toolkit setup:',
-  '1. npx flovart-cli install',
-  '2. npx flovart-cli start',
+  'Flovart Agent Toolkit setup (run from a source checkout):',
+  '1. npm install',
+  '2. npm run flovart:cli -- start --source --web --open',
   '3. Enter provider credentials only in the local Flovart Runtime/WebUI',
-  '4. npx flovart-cli status --json',
-  '5. npx flovart-cli generate.image --prompt <prompt> --json',
+  '4. npm run flovart:cli -- status --json',
+  '5. npm run flovart:cli -- workflow.inspect --json',
   '',
-  'Source contributors use `npx flovart-cli start --source --all --open`.',
+  'A published CLI package is still a release gate; the source checkout above is the verified path.',
+  'Source contributors can use `npm run flovart:cli -- start --source --all --open`.',
   'Never paste API keys into AI agent transcripts.',
 ].join('\n');
 

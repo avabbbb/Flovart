@@ -211,7 +211,7 @@ function resolveEntrypoint(bundleDir, entry) {
 
 export function planToolkitStart(options = {}) {
   const installed = readCurrentToolkit(options.homeDir);
-  if (!installed) throw new Error('Flovart Agent Toolkit is not installed. Run `npx flovart-cli install` first.');
+  if (!installed) throw new Error('Flovart Agent Toolkit is not installed. Run `npm run flovart:cli -- install` first.');
   const names = ['runtime'];
   if (options.agent !== 'none' && options.noAgent !== true) names.push('agent');
   const processes = names.map(name => ({ name, ...resolveEntrypoint(installed.current.bundleDir, installed.bundle.entrypoints[name]) }));
