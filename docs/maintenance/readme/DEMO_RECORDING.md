@@ -15,7 +15,8 @@ Status:      已录制（2026-09-16）
 
 ```text
 Recording date:         2026-09-16
-Repo commit:            3919fa9 + 未提交改动（见本文件末尾“依赖的改动”）
+Repo commit:            1a1abdd（README 与素材）+ 66ac1f7（bootstrap 探测预算修复）
+                        —— 录制时这两部分还在工作区未提交；现已按同样内容提交并推送
 Branch:                 main
 
 Host / agent:           无具名宿主的独立会话（WorkBuddy 上的外部 Agent 直接驱动 Flovart CLI）
@@ -74,7 +75,7 @@ Support Matrix status of what was used:
 
 ### 依赖的改动（否则这段录屏无法产生）
 
-录制过程中发现并修复了一个真实缺陷，详见 `README_CLAIM_AUDIT.md`：
+录制过程中发现并修复了一个真实缺陷，详见 `README_CLAIM_AUDIT.md`（修复提交：`66ac1f7`）：
 
 ```text
 services/agentConnectionBootstrap.ts
