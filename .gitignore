@@ -78,3 +78,7 @@ dsh-plugin/lib/
 # The generated reports under eval/reports/ are the artifact of record; the raw
 # per-trial files are uploaded as CI artifacts instead of committed.
 eval/results/
+
+# Root-level artifacts directory (smoke screenshots, recordings)
+artifacts/
+
