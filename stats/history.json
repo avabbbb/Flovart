@@ -394,6 +394,14 @@
       "watchers": 0,
       "releases": 16,
       "downloads": 36
+    },
+    {
+      "date": "2026-09-17",
+      "stars": 137,
+      "forks": 34,
+      "watchers": 0,
+      "releases": 18,
+      "downloads": 36
     }
   ],
   "releaseAssets": [
@@ -402,6 +410,42 @@
       "name": "Flovart_0.2.0_x64-setup.exe",
       "downloads": 36,
       "updatedAt": "2026-06-02T08:23:17Z"
+    },
+    {
+      "release": "nightly-79-29ae8f8",
+      "name": "Flovart_0.3.2_amd64.AppImage",
+      "downloads": 0,
+      "updatedAt": "2026-09-16T15:22:40Z"
+    },
+    {
+      "release": "nightly-79-29ae8f8",
+      "name": "Flovart_0.3.2_amd64.deb",
+      "downloads": 0,
+      "updatedAt": "2026-09-16T15:22:35Z"
+    },
+    {
+      "release": "nightly-79-29ae8f8",
+      "name": "Flovart_0.3.2_x64-setup.exe",
+      "downloads": 0,
+      "updatedAt": "2026-09-16T15:23:49Z"
+    },
+    {
+      "release": "nightly-78-04be6cb",
+      "name": "Flovart_0.3.2_amd64.AppImage",
+      "downloads": 0,
+      "updatedAt": "2026-09-16T15:16:39Z"
+    },
+    {
+      "release": "nightly-78-04be6cb",
+      "name": "Flovart_0.3.2_amd64.deb",
+      "downloads": 0,
+      "updatedAt": "2026-09-16T15:16:36Z"
+    },
+    {
+      "release": "nightly-78-04be6cb",
+      "name": "Flovart_0.3.2_x64-setup.exe",
+      "downloads": 0,
+      "updatedAt": "2026-09-16T15:16:45Z"
     },
     {
       "release": "nightly-77-3919fa9",
@@ -656,5 +700,5 @@
       "updatedAt": "2026-09-06T12:12:04Z"
     }
   ],
-  "updatedAt": "2026-09-16T04:56:03.450Z"
+  "updatedAt": "2026-09-17T04:59:12.292Z"
 }
