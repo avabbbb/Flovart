@@ -59,11 +59,30 @@ Before a change, read the real `projectId`, object IDs, and revision from
 the current selection. Group related graph edits into one `workflow.apply`.
 Pass the returned project and revision as preconditions, and use a stable
 `mutationId` and `idempotencyKey` for every write or run.
-
 After a write, inspect again. If a command fails, preserve its structured error
 code, inspect before retrying, and stop safely when the visible workspace is
 unavailable or the target/revision changed. Never choose another project or
 retry a mutation with a new identity.
+
+## Cold start — no project open
+
+`workflow.inspect` returns `WORKSPACE_UNAVAILABLE` when the browser is
+connected but no Workflow project is open. This is not a fatal stop: the task
+usually still wants a project. Create and activate one, then inspect again:
+
+```bash
+npm run flovart:cli -- workflow.project.create --title "Product Video" --agent-identity codex --idempotency-key <key> --json
+npm run flovart:cli -- workflow.project.use --project-id <project-id> --agent-identity codex --idempotency-key <key> --json
+npm run flovart:cli -- workflow.inspect --agent-identity codex --json
+```
+
+`workflow.project.list` shows existing projects. Only stop for the user when
+the browser itself is `offline` — not when the workspace is simply empty.
+
+Every **write** command must carry the same `--agent-identity` used for
+`inspect` plus a stable `--idempotency-key`. Passing identity only to `inspect`
+and omitting it on `project.create`/`workflow.apply` makes the write fail with
+`AGENT_HOST_REQUIRED` — the active Host writer must match the caller identity.
 
 ## Intent mapping
 
@@ -72,6 +91,15 @@ retry a mutation with a new identity.
 - “当前选择” → `workflow.selection.get`.
 - Add, delete, move, resize, connect, disconnect, or edit → one `workflow.apply`.
 - Run a node → `workflow.node.run` after confirming the node from inspection.
+
+For a sequence of nodes, the granular `workflow.node.create-connected` adapter
+is the reliable path — it fills the node defaults (including `storageKey`) that
+a bare `workflow.apply` `add_node` operation requires. Prefer it over a raw
+`add_node` when you only have a type/title/position:
+
+```bash
+npm run flovart:cli -- workflow.node.create-connected --from-node-id <id> --type text --title "Shot 2" --x 420 --y 120 --agent-identity codex --idempotency-key <key> --json
+```
 
 The UI and Flovart Core own Provider routing, credentials, cost confirmation,
 resource resolution, and artifacts. Do not call a Provider directly, store

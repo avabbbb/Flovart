@@ -43,12 +43,12 @@
 ## See Flovart in action
 
 <p align="center">
-  <img src="pic/readme/agent-operations-live-workflow.gif" alt="Flovart CLI operations creating nodes and connections in the live Workflow" width="880" />
+  <img src="artifacts/hero-codex.gif" alt="A real Codex session editing the same live Flovart Workflow" width="880" />
   <br />
-  <sub><strong>External agent operations, applied to the same visible Workflow.</strong><br />
-  Real capture from a local run, played at 1.5×. A project and three nodes are created through <code>workflow.project.create</code>,
-  <code>workflow.node.create</code> and <code>workflow.connect</code>, and the canvas updates live.
-  Full reproduction record: <a href="docs/maintenance/readme/DEMO_RECORDING.md">DEMO_RECORDING.md</a>.</sub>
+  <sub><strong>A real Codex session editing the same live Flovart Workflow — natural language becomes nodes and edges.</strong><br />
+  Codex CLI read the shipped Flovart Skill and drove the visible Workflow through the typed CLI surface; five consecutive
+  real <code>codex exec</code> trials (3–7) passed on the live Workflow with no source edits.
+  Reproduction record: <a href="docs/maintenance/readme/DEMO_RECORDING.md">DEMO_RECORDING.md</a>.</sub>
 </p>
 
 <table>
@@ -66,7 +66,7 @@
   </tr>
 </table>
 
-The recording shows the CLI half of the claim; the equivalent capture of a named coding agent's own conversation is still open — see [README_VISUAL_TODO.md](docs/maintenance/readme/README_VISUAL_TODO.md).
+Both halves are now on record: the hero above is a real Codex conversation editing the live Workflow, and the CLI-only capture sits under [Architecture](#architecture) as the operation-level view. Remaining visual gaps are tracked in [README_VISUAL_TODO.md](docs/maintenance/readme/README_VISUAL_TODO.md).
 
 ## Why Flovart?
 
@@ -178,6 +178,15 @@ flowchart LR
 ```
 
 CLI and the experimental stdio MCP share operation semantics and the current Browser Workflow binding. Deterministic operations do not require a second AI to reinterpret them.
+
+<p align="center">
+  <img src="pic/readme/agent-operations-live-workflow.gif" alt="Flovart CLI operations creating nodes and connections in the live Workflow" width="720" />
+  <br />
+  <sub><strong>The operation-level view of the same claim.</strong> A project and three nodes are created through
+  <code>workflow.project.create</code>, <code>workflow.node.create</code> and <code>workflow.connect</code> (played at 1.5×) — the
+  typed operations the Codex session above drives end-to-end. Capture record:
+  <a href="docs/maintenance/readme/DEMO_RECORDING.md">DEMO_RECORDING.md</a>.</sub>
+</p>
 
 Native-effect work keeps two short paths: one shared generation function produces durable media versions, and the host effect reads a fixed version and renders locally — no director/Operator/crew chain. Product scope, interactions, implementation and benchmarks live in the [main design](docs/design/flovart-native-effects.md); the [current implementation record](docs/design/ecosystem/CURRENT_ARCHITECTURE.md) describes existing code, not a second target architecture.
 

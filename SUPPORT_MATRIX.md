@@ -7,7 +7,7 @@
 
 | Host / projection | Status | Evidence / boundary |
 | --- | --- | --- |
-| Codex CLI + Browser Workflow | Experimental | Link/Lease focused tests 与 Chrome for Testing smoke；真实首次 Codex conversation 仍是 external gate |
+| Codex CLI + Browser Workflow | Experimental | Link/Lease focused tests 与 Chrome for Testing smoke，另有 5 次连续真实 `codex exec`（v0.154.0）trial：Codex 读取 `.agents/skills/flovart/SKILL.md` 后经 CLI 驱动真实 Browser Workflow 完成 3 节点 + 2 顺序连接（`workflow.node.create-connected`，trial 3–7，见 `.tmp/codex-trial-*.jsonl`）；真实 Provider wire 进行中，公开安装首次启动 transcript 仍是 External Gate |
 | Claude Code CLI projection | Experimental | shared Skill/CLI surface；真实登录与公开安装态未认证 |
 | OpenCode CLI projection | Experimental | shared Skill/CLI surface；Host-specific tracer 未认证 |
 | DeepSeek Harness RC8 bundle/profile | Experimental | DSH build、service/tool tests、packed profile install 与 `--dump-config`；真实登录、可见 Browser Workflow tracer、service recovery 仍待认证 |
