@@ -21,3 +21,8 @@ root.render(
     <RouterHost />
   </React.StrictMode>
 );
+
+// Readiness marker for smoke/e2e harnesses: set only after the module has
+// executed and React has mounted, so a bare HTML fetch cannot pass early on
+// a cold Vite compile.
+document.body?.setAttribute('data-flovart-mounted', '1');

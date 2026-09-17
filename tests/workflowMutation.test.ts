@@ -118,6 +118,35 @@ describe('WorkflowMutationEnvelope', () => {
     expect(viewed.project.workflowMutationReceipts).toEqual([]);
   });
 
+  it('fills node defaults for a bare workflow.apply add_node payload', () => {
+    const project = createWorkflowProject('裸节点');
+    const result = applyWorkflowMutation(project, {
+      projectId: project.id,
+      expectedRevision: project.draftVersion || 1,
+      mutationId: 'bare-add-node',
+      source: 'cli',
+      intent: '创建文本节点',
+      ops: [{
+        type: 'add_node',
+        node: { id: 'x', type: 'text', title: 'T', position: { x: 80, y: 120 } } as never,
+      }],
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok === false) throw new Error(result.error.message);
+    const node = result.project.nodes.find(item => item.id === 'x');
+    expect(node).toMatchObject({
+      id: 'x',
+      type: 'text',
+      title: 'T',
+      position: { x: 80, y: 120 },
+      isVisible: true,
+      isLocked: false,
+    });
+    expect(node?.metadata).toMatchObject({ status: 'idle' });
+    expect(result.project.draftVersion).toBe(2);
+  });
+
   it('preserves one-step undo and redo for a batch mutation', () => {
     const project = createWorkflowProject('撤销重做');
     const applied = applyWorkflowMutation(project, envelope(project.id));

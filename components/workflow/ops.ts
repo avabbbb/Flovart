@@ -1,8 +1,9 @@
 import { nanoid } from 'nanoid';
+import { createWorkflowNode } from './constants';
 import { resolveWorkflowInputs } from './inputResolver';
 import { getWorkflowOperationInputRoleForNodeType, validateWorkflowOperationInputBindings } from './operationRegistry';
 import { createWorkflowOperationInputBinding, updateWorkflowOperationFromMetadata, updateWorkflowOperationRecipe, workflowOperationInputConnections } from './operations';
-import type { WorkflowConnection, WorkflowNode, WorkflowOp, WorkflowOperationInputBinding, WorkflowOperationInputRole, WorkflowSnapshot } from './types';
+import type { WorkflowConnection, WorkflowNode, WorkflowNodeMetadata, WorkflowOp, WorkflowOperationInputBinding, WorkflowOperationInputRole, WorkflowSnapshot } from './types';
 
 export interface WorkflowOpResult {
   snapshot: WorkflowSnapshot;
@@ -191,19 +192,42 @@ export function applyWorkflowOps(initial: WorkflowSnapshot, ops: WorkflowOp[]): 
     rejections.push({ opIndex, opType: op.type, reason });
   };
 
+/**
+ * External callers (workflow.apply / Agent bridges) may submit a bare node literal
+ * without metadata/size defaults. Re-materialize it through createWorkflowNode so
+ * downstream code can rely on `node.metadata` existing — same defaults the
+ * workflow.node.create adapter fills via validatedNode().
+ */
+function normalizeDocumentNode(node: WorkflowNode): WorkflowNode {
+  const metadata = (node.metadata || {}) as WorkflowNodeMetadata;
+  const normalized = createWorkflowNode(node.id, node.type, node.position, metadata);
+  if (node.title !== undefined) normalized.title = node.title;
+  if (node.width !== undefined) normalized.width = node.width;
+  if (node.height !== undefined) normalized.height = node.height;
+  if (node.isVisible !== undefined) normalized.isVisible = node.isVisible;
+  if (node.isLocked !== undefined) normalized.isLocked = node.isLocked;
+  if (node.batchId !== undefined) normalized.batchId = node.batchId;
+  if (node.batchIndex !== undefined) normalized.batchIndex = node.batchIndex;
+  if (node.batchGroupSource !== undefined) normalized.batchGroupSource = node.batchGroupSource;
+  if (node.objectVersion !== undefined) normalized.objectVersion = node.objectVersion;
+  return normalized;
+}
+
   ops.forEach((op, opIndex) => {
     if (op.type === 'add_node') {
-      if (!snapshot.nodes.some(node => node.id === op.node.id)) {
-        snapshot = { ...snapshot, nodes: [...snapshot.nodes, op.node], selectedNodeIds: [op.node.id] };
+      const node = normalizeDocumentNode(op.node);
+      if (!snapshot.nodes.some(item => item.id === node.id)) {
+        snapshot = { ...snapshot, nodes: [...snapshot.nodes, node], selectedNodeIds: [node.id] };
       } else {
         reject(opIndex, op, '节点 ID 已存在');
       }
       return;
     }
     if (op.type === 'create_connected_node') {
-      const duplicateNode = snapshot.nodes.some(node => node.id === op.node.id);
-      const candidate = duplicateNode ? snapshot : { ...snapshot, nodes: [...snapshot.nodes, op.node] };
-      const validation = validateWorkflowConnection(candidate, op.fromNodeId, op.node.id);
+      const node = normalizeDocumentNode(op.node);
+      const duplicateNode = snapshot.nodes.some(item => item.id === node.id);
+      const candidate = duplicateNode ? snapshot : { ...snapshot, nodes: [...snapshot.nodes, node] };
+      const validation = validateWorkflowConnection(candidate, op.fromNodeId, node.id);
       if (duplicateNode) {
         reject(opIndex, op, '节点 ID 已存在');
         return;
@@ -217,9 +241,9 @@ export function applyWorkflowOps(initial: WorkflowSnapshot, ops: WorkflowOp[]): 
         connections: [...candidate.connections, {
           id: createUniqueConnectionId(candidate.connections),
           fromNodeId: op.fromNodeId,
-          toNodeId: op.node.id,
+          toNodeId: node.id,
         }],
-        selectedNodeIds: [op.node.id],
+        selectedNodeIds: [node.id],
       };
       return;
     }

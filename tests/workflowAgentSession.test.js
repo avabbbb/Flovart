@@ -260,4 +260,30 @@ describe('workflow agent session', () => {
     await expect(call).rejects.toThrow('已取消');
     expect(session.health().pending).toBe(0);
   });
+
+  it('pins the inspect target-mismatch contract for a non-active projectId', async () => {
+    const session = new WorkflowAgentSession({ timeoutMs: 10 });
+    let events = '';
+    const response = { writeHead() {}, write(value) { events += value; }, on() {} };
+    session.openEvents(new URL('http://127.0.0.1/events?clientId=browser-1'), response);
+    session.updateSnapshot({ id: 'project-1', draftVersion: 3 }, 'browser-1');
+
+    await expect(session.callCommand('workflow.inspect', { projectId: 'project-2' }, 'cli'))
+      .rejects.toMatchObject({
+        code: 'LEASE_TARGET_CHANGED',
+        message: expect.stringContaining('project-2'),
+        details: {
+          requestedProjectId: 'project-2',
+          activeProjectId: 'project-1',
+          hint: expect.stringContaining('inspect reads only the active visible Browser Workflow'),
+        },
+      });
+    await expect(session.callCommand('workflow.apply', {
+      projectId: 'project-2', mutationId: 'apply-other', operations: [],
+    }, 'cli')).rejects.toMatchObject({
+      code: 'LEASE_TARGET_CHANGED',
+      details: { requestedProjectId: 'project-2', activeProjectId: 'project-1' },
+    });
+    expect(events).not.toContain('tool_call');
+  });
 });

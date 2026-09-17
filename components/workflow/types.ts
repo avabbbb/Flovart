@@ -272,6 +272,8 @@ export interface WorkflowNodeMetadata {
   generationHistoryId?: string;
   generationStartedAt?: number;
   generationProviderTaskId?: string;
+  /** 仅供溯源：供应商返回的原始远端媒体 URL（如 RunningHub 24h 临时链接）。节点的实际媒体数据始终以 storageKey/href 本地存储为准，此字段不可用于重新拉取已过期内容。 */
+  remoteUrl?: string;
   generationUsageRecordId?: string;
   generationEstimatedCost?: number;
   generationActualCost?: number;

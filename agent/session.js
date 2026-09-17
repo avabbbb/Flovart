@@ -353,7 +353,15 @@ export class WorkflowAgentSession {
     }
     const clientId = this.clients.has(boundSnapshot?.clientId) ? boundSnapshot.clientId : null;
     if (args?.projectId && boundSnapshot?.id && args.projectId !== boundSnapshot.id) {
-      throw sessionError('LEASE_TARGET_CHANGED', `Workflow 项目目标已改变：${args.projectId}`, { requestedProjectId: args.projectId, activeProjectId: boundSnapshot.id });
+      const readOnlyInspect = command === 'workflow.inspect' || command === 'workflow.selection.get';
+      const hint = readOnlyInspect
+        ? 'inspect reads only the active visible Browser Workflow; pass that projectId or activate the target project in Flovart first'
+        : 'commands run only on the active visible Browser Workflow; activate the target project in Flovart first';
+      throw sessionError(
+        'LEASE_TARGET_CHANGED',
+        `Workflow 目标不匹配：请求的项目 ${args.projectId} 不是当前 Active Browser Workflow（${boundSnapshot.id}）。`,
+        { requestedProjectId: args.projectId, activeProjectId: boundSnapshot.id, hint },
+      );
     }
     const client = this.clients.get(clientId);
     if (!client) throw sessionError('WORKSPACE_UNAVAILABLE', '当前没有已连接并同步项目的 Flovart Workflow。');
