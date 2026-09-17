@@ -1,11 +1,12 @@
 // @vitest-environment node
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { discoverAgentHosts } from '../tools/flovart/host-discovery.js';
 import {
   getHostRegistry,
   getDistributionTarget,
   resolveDirectorBinding,
+  listAgentIdentities,
 } from '../tools/flovart/host-registry.js';
 
 describe('Flovart Host registry', () => {
@@ -75,5 +76,64 @@ describe('Flovart Host registry', () => {
       command: expect.stringMatching(/cmd\.exe$/i),
       args: ['/d', '/s', '/c', 'C:\\tools\\codex.cmd', '--version'],
     }));
+  });
+});
+
+describe('host discovery cache', () => {
+  it('serves cached results inside the TTL for the default probe', async () => {
+    // Injected probes bypass the cache, so exercise the real spawnSync path
+    // twice and assert the second call does not pay a rescan. Timing is
+    // load-bearing here: an uncached rescan costs ~1s on this machine.
+    const first = discoverAgentHosts({ includeVersion: false });
+    const started = Date.now();
+    const second = discoverAgentHosts({ includeVersion: false });
+    const elapsed = Date.now() - started;
+    expect(second).toEqual(first);
+    expect(elapsed).toBeLessThan(50);
+  });
+
+  it('refresh=true bypasses the cache and pays a real rescan', () => {
+    discoverAgentHosts({ includeVersion: false });
+    const started = Date.now();
+    const result = discoverAgentHosts({ includeVersion: false, refresh: true });
+    const elapsed = Date.now() - started;
+    expect(result.ok).toBe(true);
+    // A real rescan spawns where.exe probes; on this machine that costs
+    // hundreds of ms. Assert it took meaningful time so we know refresh did
+    // not silently hit the cache.
+    expect(elapsed).toBeGreaterThan(50);
+  });
+
+  it('injected probe/runner options bypass the cache so tests stay isolated', () => {
+    let probes = 0;
+    const options = {
+      platform: 'win32',
+      probe: () => {
+        probes += 1;
+        return { available: false, executable: null, path: null, version: null };
+      },
+    };
+    discoverAgentHosts(options);
+    discoverAgentHosts(options);
+    // Both calls must have probed: if the cache swallowed the second call,
+    // probes would equal the identity count from only one pass.
+    const identityCount = listAgentIdentities().length;
+    expect(probes).toBe(identityCount * 2);
+  });
+
+  it('re-scans once the TTL has expired instead of serving stale agents', () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2026-01-01T00:00:00Z'));
+      // Populate the cache under fake time so no earlier real-time entry can
+      // satisfy the assertion.
+      const first = discoverAgentHosts({ includeVersion: false, refresh: true });
+      vi.setSystemTime(new Date('2026-01-01T00:00:06Z'));
+      const second = discoverAgentHosts({ includeVersion: false });
+      expect(second.scannedAt).not.toBe(first.scannedAt);
+      expect(second.ok).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { dirname, extname, basename, isAbsolute, join, resolve } from 'node:path';
 import { homedir } from 'node:os';
@@ -357,23 +357,41 @@ export function initCliHost(input = {}) {
   }
 
   // The agent-facing surface is CLI-first: init installs the Flovart SKILL as a
-  // coding-agent attachment and never writes MCP server configuration.
-  const packagedSkill = join(PACKAGE_DIR, 'skill', 'SKILL.md');
-  const sourceSkill = resolve(PACKAGE_DIR, '..', '..', '.agents', 'skills', 'flovart', 'SKILL.md');
-  const skillSource = existsSync(sourceSkill) ? sourceSkill : packagedSkill;
+  // coding-agent attachment and never writes MCP server configuration. In a
+  // source checkout `.agents/skills/flovart` is the committed snapshot mirrored
+  // from canonical `skills/flovart` (guarded by scripts/check-docs-contract.mjs),
+  // so init copies the whole directory — SKILL.md alone is not the package.
+  // Packaged installs ship the same tree at <package>/skill/flovart.
+  const sourceSkillDir = resolve(PACKAGE_DIR, '..', '..', '.agents', 'skills', 'flovart');
+  const packagedSkillDir = join(PACKAGE_DIR, 'skill', 'flovart');
+  const legacyPackagedSkill = join(PACKAGE_DIR, 'skill', 'SKILL.md');
+  const skillSourceDir = existsSync(join(sourceSkillDir, 'SKILL.md'))
+    ? sourceSkillDir
+    : (existsSync(join(packagedSkillDir, 'SKILL.md')) ? packagedSkillDir : null);
+  const skillSource = skillSourceDir
+    ? join(skillSourceDir, 'SKILL.md')
+    : (existsSync(legacyPackagedSkill) ? legacyPackagedSkill : null);
   const distributionRoot = join(projectDir, target.installPath);
-  const skillTarget = join(distributionRoot, 'flovart', 'SKILL.md');
-  if (!dryRun && existsSync(skillSource)) {
-    ensureParent(skillTarget);
-    writeFileSync(skillTarget, readFileSync(skillSource, 'utf8'), 'utf8');
+  const skillTargetDir = join(distributionRoot, 'flovart');
+  const skillTarget = join(skillTargetDir, 'SKILL.md');
+  if (!dryRun && skillSource) {
+    if (skillSourceDir) {
+      rmSync(skillTargetDir, { recursive: true, force: true });
+      cpSync(skillSourceDir, skillTargetDir, { recursive: true });
+    } else {
+      ensureParent(skillTarget);
+      writeFileSync(skillTarget, readFileSync(skillSource, 'utf8'), 'utf8');
+    }
   }
-  const packagedOpenSkill = join(PACKAGE_DIR, 'skill', 'open-flovart', 'SKILL.md');
-  const sourceOpenSkill = resolve(PACKAGE_DIR, '..', '..', '.agents', 'skills', 'open-flovart', 'SKILL.md');
-  const openSkillSource = existsSync(sourceOpenSkill) ? sourceOpenSkill : packagedOpenSkill;
-  const openSkillTarget = join(distributionRoot, 'open-flovart', 'SKILL.md');
+  const packagedOpenSkillDir = join(PACKAGE_DIR, 'skill', 'open-flovart');
+  const sourceOpenSkillDir = resolve(PACKAGE_DIR, '..', '..', '.agents', 'skills', 'open-flovart');
+  const openSkillSourceDir = existsSync(join(sourceOpenSkillDir, 'SKILL.md')) ? sourceOpenSkillDir : packagedOpenSkillDir;
+  const openSkillSource = join(openSkillSourceDir, 'SKILL.md');
+  const openSkillTargetDir = join(distributionRoot, 'open-flovart');
+  const openSkillTarget = join(openSkillTargetDir, 'SKILL.md');
   if (!dryRun && existsSync(openSkillSource)) {
-    ensureParent(openSkillTarget);
-    writeFileSync(openSkillTarget, readFileSync(openSkillSource, 'utf8'), 'utf8');
+    rmSync(openSkillTargetDir, { recursive: true, force: true });
+    cpSync(openSkillSourceDir, openSkillTargetDir, { recursive: true });
   }
 
   return {
@@ -382,8 +400,8 @@ export function initCliHost(input = {}) {
     target: targetId,
     distributionTarget: target,
     projectDir,
-    skill: { source: skillSource, target: skillTarget, exists: existsSync(skillSource), dryRun },
-    bootstrapSkill: { source: openSkillSource, target: openSkillTarget, exists: existsSync(openSkillSource), dryRun },
+    skill: { source: skillSource, target: skillTarget, packageDir: skillSourceDir, exists: existsSync(skillSource), dryRun },
+    bootstrapSkill: { source: openSkillSource, target: openSkillTarget, packageDir: openSkillSourceDir, exists: existsSync(openSkillSource), dryRun },
     nextSteps: [
       'Run flovart ensure --json to launch or reuse the local Runtime and visible Workflow.',
       `The selected distribution reads ${target.installPath}/open-flovart/SKILL.md to prepare the browser, then ${target.installPath}/flovart/SKILL.md for Workflow commands.`,

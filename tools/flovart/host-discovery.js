@@ -89,21 +89,38 @@ function normalizeProbeResult(identity, result) {
   };
 }
 
+const DISCOVERY_CACHE_TTL_MS = 5000;
+const discoveryCache = new Map();
+
+function cacheEligible(options) {
+  return !options.probe && !options.runner && !options.platform;
+}
+
 export function discoverAgentHosts(options = {}) {
+  const includeVersion = options.includeVersion !== false;
+  const cacheKey = includeVersion ? 'with-version' : 'no-version';
+  const eligible = cacheEligible(options);
+  if (eligible && options.refresh !== true) {
+    const hit = discoveryCache.get(cacheKey);
+    if (hit && Date.now() - hit.cachedAt < DISCOVERY_CACHE_TTL_MS) return hit.result;
+  }
+
   const platform = options.platform || process.platform;
   const runner = options.runner || spawnSync;
   const probe = options.probe || (identity => identity.executable
-    ? probeExecutable(identity, { platform, runner, includeVersion: options.includeVersion !== false })
+    ? probeExecutable(identity, { platform, runner, includeVersion })
     : { available: false, executable: null, path: null, version: null });
   const agents = listAgentIdentities().map(identity => normalizeProbeResult(identity, identity.status === 'planned'
     ? { available: false, executable: null, path: null, version: null }
     : probe(identity) || { available: false }));
 
-  return {
+  const result = {
     ok: true,
     schemaVersion: getHostRegistry().schemaVersion,
     scannedAt: new Date().toISOString(),
     agents,
     directorBindings: getHostRegistry().directorBindings,
   };
+  if (eligible) discoveryCache.set(cacheKey, { cachedAt: Date.now(), result });
+  return result;
 }

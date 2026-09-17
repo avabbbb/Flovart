@@ -45,8 +45,8 @@ describe('Route Catalog — structural integrity', () => {
         }
     });
 
-    it('contains exactly 17 routes', () => {
-        expect(CATALOG).toHaveLength(17);
+    it('contains exactly 18 routes', () => {
+        expect(CATALOG).toHaveLength(18);
     });
 
     it('every routeId is unique', () => {
@@ -60,8 +60,8 @@ describe('Route Catalog — structural integrity', () => {
         }
     });
 
-    it('contains 6 image routes and 11 video routes', () => {
-        expect(IMAGE_ROUTES).toHaveLength(6);
+    it('contains 7 image routes and 11 video routes', () => {
+        expect(IMAGE_ROUTES).toHaveLength(7);
         expect(VIDEO_ROUTES).toHaveLength(11);
     });
 });
@@ -116,7 +116,7 @@ describe('Route Catalog — getRouteDurations', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Image Route Contracts (6)
+// Image Route Contracts (7)
 // ---------------------------------------------------------------------------
 
 describe('Image Route — youchuan/text-to-image-v81 (Midjourney v8.1)', () => {
@@ -327,6 +327,42 @@ describe('Image Route — rhart-image-g-2/text-to-image (GPT Image 2)', () => {
     });
     it('links to official evidence 448183264', () => {
         expect(s.officialEvidence).toContain('448183264');
+    });
+});
+
+describe('Image Route — seedream-v4.5/text-to-image (Seedream 4.5)', () => {
+    const s = schemaOf('seedream-v4.5/text-to-image');
+    it('maps to flovart:seedream-4.5 with text-to-image mode', () => {
+        expect(s.productModelId).toBe('flovart:seedream-4.5');
+        expect(s.modes).toEqual(['text-to-image']);
+    });
+    it('uses low-price channel', () => {
+        expect(s.channelTier).toBe('low-price');
+    });
+    it('uses "prompt" as prompt field and has no aspectRatio field', () => {
+        expect(s.promptField).toBe('prompt');
+        expect(s.aspectRatioField).toBeNull();
+    });
+    it('defaults resolution to 2k', () => {
+        expect(s.resolutionDefault).toBe('2k');
+    });
+    it('has no duration fields', () => {
+        expect(s.durationType).toBeNull();
+        expect(s.durationDefault).toBeUndefined();
+    });
+    it('declares width/height/sequentialImageGeneration/maxImages params', () => {
+        const fields = paramFields(s);
+        expect(fields).toEqual(new Set(['width', 'height', 'sequentialImageGeneration', 'maxImages']));
+        expect(s.params.find(p => p.field === 'width')).toMatchObject({ type: 'number', default: 2048 });
+        expect(s.params.find(p => p.field === 'height')).toMatchObject({ type: 'number', default: 2048 });
+        expect(s.params.find(p => p.field === 'sequentialImageGeneration')).toMatchObject({ type: 'string', default: 'disabled' });
+        expect(s.params.find(p => p.field === 'maxImages')).toMatchObject({ type: 'number', default: 1 });
+    });
+    it('has no media specs (text-to-image)', () => {
+        expect(s.media).toHaveLength(0);
+    });
+    it('links to official evidence 448183229', () => {
+        expect(s.officialEvidence).toContain('448183229');
     });
 });
 

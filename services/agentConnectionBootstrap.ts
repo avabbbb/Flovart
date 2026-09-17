@@ -195,11 +195,12 @@ async function exchangeBootstrapCredential(url: string, bootstrapToken: string, 
 }
 
 /**
- * `/hosts` re-scans installed agent hosts on every call and can take several
- * seconds on a cold machine, while the default probe budget is 1200ms. Without
- * a wider budget for this one call the bootstrap aborts, retries, and finally
- * reports the Agent offline even though `/health` answered in milliseconds.
- * `/health` keeps the short budget so a genuinely absent Agent still fails fast.
+ * The first `/hosts` call after an Agent restart still pays a real host
+ * scan (~1s for a PATH-only probe, several seconds with `--version`), but
+ * the endpoint now caches discovery for a short TTL so the bootstrap retry
+ * loop and later callers hit a warm cache instead of rescanning every time.
+ * The budget stays wider than `/health`'s so a cold first scan still fits;
+ * `/health` keeps the short budget so a genuinely absent Agent fails fast.
  */
 const HOSTS_PROBE_TIMEOUT_MS = 8000;
 

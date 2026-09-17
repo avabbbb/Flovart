@@ -147,6 +147,17 @@ if (['install', 'start', 'update'].includes(rawCommand)) {
     return;
   }
 
+  if ((args.help || args.h) && COMMAND_REGISTRY[command]) {
+    const result = await executeFlovartCommand('command.schema', { command }, {});
+    const ok = isResultOk(result);
+    if (args.json) printCliResponse(ok, command, ok ? result : null, ok ? null : result.error || null, { runtime: 'client-registry' });
+    else {
+      console.log(formatValue(result));
+      if (!ok) process.exitCode = 1;
+    }
+    return;
+  }
+
   const routingCommand = command;
 
   if (routingCommand === 'ensure') {

@@ -68,7 +68,7 @@ export const HELP_TEXT = [
   '',
   'Stable operations:',
   'status                                          Inspect local readiness',
-  'workflow.inspect [--project-id <id>]            Inspect the visible Workflow',
+  'workflow.inspect [--project-id <id>]            Inspect the active visible Workflow (--project-id must match it)',
   'workflow.selection.get [--project-id <id>]      Read the current Workflow selection',
   'workflow.apply --project-id <id> --operations-json <json> --idempotency-key <key>',
   'workflow.node.run --project-id <id> --node-id <id> --idempotency-key <key>',

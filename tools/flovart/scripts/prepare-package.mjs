@@ -23,7 +23,10 @@ const PACKAGE_LAYOUT_ALIASES = {
 };
 
 await refreshDirectory(resolve(repoDir, 'agent'), resolve(packageDir, 'managed-agent'));
-await refreshDirectory(resolve(repoDir, '.agents', 'skills', 'flovart'), resolve(packageDir, 'skill'));
+// Nested under skill/flovart so the package layout matches every other skill
+// package (skill/open-flovart, skill/vox-director) and initCliHost can copy the
+// whole package directory — SKILL.md alone drops commands/ and scripts/.
+await refreshDirectory(resolve(repoDir, '.agents', 'skills', 'flovart'), resolve(packageDir, 'skill', 'flovart'));
 await refreshDirectory(resolve(repoDir, '.agents', 'skills', 'open-flovart'), resolve(packageDir, 'skill', 'open-flovart'));
 // Bundled Production Skills also ship inside the package so the packaged
 // Managed Agent can bind them (skill/vox-director/); the loader checks both
