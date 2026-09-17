@@ -140,6 +140,8 @@ export const BUILTIN_RUNNINGHUB_MODELS: Array<{ id: string; capability: 'image' 
   { id: 'rhart-image/seedream-v5/text-to-image', capability: 'image', description: 'Seedream v5-pro 文生图' },
   { id: 'rhart-image/seedream-v5/image-to-image', capability: 'image', description: 'Seedream v5-pro 图生图' },
   { id: 'rhart-image/seedream-v5/layer-split', capability: 'image', description: 'Seedream v5-pro 图层拆分' },
+  // seedream v4.5 文生图（文档 448183229；Route Catalog 已登记 seedream-v4.5/text-to-image）
+  { id: 'seedream-v4.5/text-to-image', capability: 'image', description: 'Seedream v4.5 文生图' },
   // SkyReels V4 文生/图生/std（文档 454760434-454760437）
   { id: 'skyreels-v4/text-to-video-fast', capability: 'video', description: 'SkyReels V4 文生视频 (fast)' },
   { id: 'skyreels-v4/text-to-video-std', capability: 'video', description: 'SkyReels V4 文生视频 (std)' },
@@ -299,6 +301,7 @@ const RUNNINGHUB_PRODUCT_ALIASES: Record<string, string> = {
   'seedream-v5/image-to-image': 'rhart-image/seedream-v5/image-to-image',
   'seedream-v5-pro-文生图': 'rhart-image/seedream-v5/text-to-image',
   'seedream-v5-pro-图生图': 'rhart-image/seedream-v5/image-to-image',
+  'seedream-v4.5-文生图': 'seedream-v4.5/text-to-image',
   'sparkvideo-2.5/text-to-video': 'rhart-video/sparkvideo-2.5/text-to-video',
   'seedance2.5/文生视频': 'rhart-video/sparkvideo-2.5/text-to-video',
   'seedance2.5/图生视频': 'rhart-video/sparkvideo-2.5/image-to-video',
@@ -338,11 +341,14 @@ export interface RHSubmitPayload {
   webhookUrl?: string;
   [key: string]: unknown; // RunningHub standard model fields, e.g. 12##text
 }
-
 export interface RHRunOptions {
   baseUrl?: string;
   signal?: AbortSignal;
   onProgress?: (status: RHTaskResponse['status'], attempt: number) => void;
+  /** 已有供应商 taskId 时跳过重新提交，直接续上轮询（防重复计费/重复生成）。 */
+  resumeTaskId?: string;
+  /** 任务已确立（提交成功或恢复既有任务）后回调一次 taskId，供上层持久化以便后续恢复。 */
+  onTaskId?: (taskId: string) => void | Promise<void>;
 }
 
 type RHDebugContext = {
@@ -746,7 +752,10 @@ export async function rhRunTask(
     ? { onProgress: onProgressOrOptions as RHRunOptions['onProgress'] }
     : onProgressOrOptions || {};
   const debugContext = runningHubDebugContext(options.baseUrl || RH_BASE, modelEndpoint, payload);
-  const submitResult = await rhSubmitTask(apiKey, modelEndpoint, payload, options);
+  const submitResult = options.resumeTaskId
+    ? { taskId: options.resumeTaskId, status: 'QUEUED' as const, errorCode: '', errorMessage: '' }
+    : await rhSubmitTask(apiKey, modelEndpoint, payload, options);
+  if (submitResult.taskId) await options.onTaskId?.(submitResult.taskId);
   if (submitResult.status === 'SUCCESS') return submitResult;
   if (submitResult.status === 'FAILED') {
     throw new Error(withRunningHubDebug(`RunningHub task failed: ${submitResult.errorMessage || 'Unknown error'}`, {
@@ -761,7 +770,6 @@ export async function rhRunTask(
       response: { ...submitResult },
     }));
   }
-
   for (let i = 0; i < MAX_POLL_ATTEMPTS; i++) {
     try {
       await delay(POLL_INTERVAL, options.signal);

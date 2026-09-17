@@ -66,6 +66,8 @@ export interface ProviderResult {
   mediaUrl?: string;
   mimeType?: string;
   text?: string;
+  /** 仅供溯源：供应商返回的原始远端媒体 URL（RunningHub 等 24h 临时链接）；已下载的媒体内容仍以本地存储为准。 */
+  remoteMediaUrl?: string;
   raw?: unknown;
 }
 

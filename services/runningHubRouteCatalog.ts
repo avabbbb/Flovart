@@ -338,6 +338,24 @@ const RUNNHUB_ROUTE_CATALOG: RouteCapabilitySchema[] = [
         media: [],
         officialEvidence: 'https://www.runninghub.cn/runninghub-api-doc-cn/api-448183167',
     },
+    {
+        routeId: 'seedream-v4.5/text-to-image',
+        productModelId: 'flovart:seedream-4.5',
+        modes: ['text-to-image'],
+        channelTier: 'low-price',
+        promptField: 'prompt',
+        aspectRatioField: null,
+        durationType: null,
+        resolutionDefault: '2k',
+        params: [
+            { field: 'width', type: 'number', default: 2048 },
+            { field: 'height', type: 'number', default: 2048 },
+            { field: 'sequentialImageGeneration', type: 'string', default: 'disabled' },
+            { field: 'maxImages', type: 'number', default: 1 },
+        ],
+        media: [],
+        officialEvidence: 'https://www.runninghub.cn/runninghub-api-doc-cn/api-448183229',
+    },
 ];
 
 const ROUTE_MAP = new Map<string, RouteCapabilitySchema>(

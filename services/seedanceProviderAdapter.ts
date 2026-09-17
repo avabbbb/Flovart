@@ -136,8 +136,9 @@ export const seedanceProviderAdapter: ProviderAdapter = {
       }
       if (result.status === 'succeeded') {
         if (result.result.mediaUrl) {
-          const downloaded = await downloadSeedanceVideoResult(result.result.mediaUrl);
-          return { ...result.result, mimeType: downloaded.mimeType };
+          const remoteMediaUrl = result.result.mediaUrl;
+          const downloaded = await downloadSeedanceVideoResult(remoteMediaUrl);
+          return { ...result.result, mimeType: downloaded.mimeType, remoteMediaUrl };
         }
         return result.result;
       }

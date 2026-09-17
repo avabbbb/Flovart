@@ -130,7 +130,8 @@ async function mediaResult(result: Extract<UnifiedIgnitionResult, { ok: true }>,
     const extension = mode === 'video' ? 'mp4' : 'png';
     const file = typeof File === 'undefined' ? Object.assign(blob, { name: `workflow-result.${extension}`, lastModified: Date.now() }) as File : new File([blob], `workflow-result.${extension}`, { type: result.mimeType || blob.type, lastModified: Date.now() });
     const record = await (runtime.ingestMedia || ingestWorkflowMedia)(file);
-    return { blob, record };
+    // 远端临时 URL（RunningHub 等 24h 链接）只进 provenance；节点媒体以本地 storageKey 为准。
+    return { blob, record: result.remoteMediaUrl ? { ...record, remoteUrl: result.remoteMediaUrl } : record };
   } finally {
     if (result.mediaUrl.startsWith('blob:')) URL.revokeObjectURL(result.mediaUrl);
   }
@@ -397,7 +398,13 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
          canonicalInput,
          materializedReferences,
          signal: controller.signal,
-          resumeProviderTaskId: runtime.resumeProviderTaskId,
+          // 恢复优先级：调用方显式传入（启动恢复）> 节点上仍在跑的持久化任务。
+          // 必须看 initialNode（本次 run 前的持久化快照）：current 已在 L173 被强制置 loading，
+          // 用它判断会把"已完成/已失败"节点误当成在途。仅 run 前就是 'loading' 才说明
+          // 供应商任务可能仍在跑；success/error/idle 是终态，其上残留的 generationProviderTaskId
+          // 指向已完结的上游任务，恢复它会跳过正常重跑。
+          resumeProviderTaskId: runtime.resumeProviderTaskId
+            || (initialNode.metadata.status === 'loading' ? initialNode.metadata.generationProviderTaskId : undefined),
           onProgress: (progress, message) => {
             if (!stillActive()) return;
             current = patchInitiator(canonical(runtime, current), nodeId, { status: 'loading', progress: Math.max(0, Math.min(99, progress)), generationRequestId: requestId, generationMessage: message, generationStartedAt: current.nodes.find(node => node.id === nodeId)?.metadata.generationStartedAt || Date.now() });

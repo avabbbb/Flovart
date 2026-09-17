@@ -967,6 +967,134 @@ describe('aiGateway - generateImageWithProvider', () => {
         expect(globalThis.fetch).not.toHaveBeenCalled();
     });
 
+    it('materializes a local asset-library reference and uploads it via rhUploadFile', async () => {
+        const { setAssetLibraryCache } = await import('../utils/assetStorage');
+        setAssetLibraryCache({
+            folders: [],
+            items: [{
+                id: 'asset-local-1',
+                name: '本地素材图',
+                folderIds: [],
+                tags: [],
+                dataUrl: 'data:image/png;base64,aGVsbG8td29ybGQ=',
+                mimeType: 'image/png',
+                width: 64,
+                height: 64,
+                createdAt: 0,
+            }],
+        });
+
+        globalThis.fetch = vi.fn()
+            .mockResolvedValueOnce(mockJsonResponse({
+                code: 200,
+                message: 'success',
+                data: { download_url: 'https://cdn.example.com/uploaded-local.png', fileName: 'reference.png' },
+            }))
+            .mockResolvedValueOnce(mockJsonResponse({
+                taskId: 'rh-local-asset',
+                status: 'SUCCESS',
+                errorCode: '',
+                errorMessage: '',
+                results: [{ url: 'https://cdn.example.com/rh-out.png', outputType: 'png', text: null }],
+                clientId: 'client-local',
+            }))
+            .mockResolvedValueOnce(mockBinaryResponse('fake-image', 'image/png'));
+
+        await generateImageWithProvider('把杯子变成磨砂玻璃材质', 'rhart-image-n-g31-flash/image-to-image', {
+            id: 'rh-key',
+            provider: 'runningHub',
+            capabilities: ['image'],
+            key: '0123456789abcdef0123456789abcdef',
+            baseUrl: 'https://www.runninghub.cn/openapi/v2',
+            createdAt: 0,
+            updatedAt: 0,
+        }, [{
+            href: 'asset-library:asset-local-1',
+            mimeType: 'image/png',
+            label: '本地素材图',
+        }]);
+
+        // First call: upload to /media/upload/binary with FormData containing a File/Blob.
+        const uploadCall = (globalThis.fetch as any).mock.calls[0];
+        expect(uploadCall[0]).toBe('https://www.runninghub.cn/openapi/v2/media/upload/binary');
+        const uploadBody = uploadCall[1]?.body;
+        expect(uploadBody instanceof FormData).toBe(true);
+        const uploadedFile = (uploadBody as FormData).get('file');
+        expect(uploadedFile).toBeInstanceOf(Blob);
+
+        // Second call: submit with the download_url from upload.
+        const submitCall = (globalThis.fetch as any).mock.calls[1];
+        expect(submitCall[0]).toBe('https://www.runninghub.cn/openapi/v2/rhart-image-n-g31-flash/image-to-image');
+        const submitBody = JSON.parse(submitCall[1].body);
+        expect(submitBody.imageUrls).toEqual(['https://cdn.example.com/uploaded-local.png']);
+
+        setAssetLibraryCache(null);
+    });
+
+    it('materializes a cold-media reference and uploads it via rhUploadFile', async () => {
+        const { writeColdMedia, eraseColdMedia } = await import('../utils/mediaIndexedDB');
+        await writeColdMedia('cold-key-1', 'data:image/png;base64,aGVsbG8td29ybGQ=');
+        // cold-media lives in mediaIndexedDB as data-URL strings, not workflowMediaStorage Blobs.
+
+        globalThis.fetch = vi.fn()
+            .mockResolvedValueOnce(mockJsonResponse({
+                code: 200,
+                message: 'success',
+                data: { download_url: 'https://cdn.example.com/uploaded-cold.png', fileName: 'reference.png' },
+            }))
+            .mockResolvedValueOnce(mockJsonResponse({
+                taskId: 'rh-cold',
+                status: 'SUCCESS',
+                errorCode: '',
+                errorMessage: '',
+                results: [{ url: 'https://cdn.example.com/rh-cold-out.png', outputType: 'png', text: null }],
+                clientId: 'client-cold',
+            }))
+            .mockResolvedValueOnce(mockBinaryResponse('fake-image', 'image/png'));
+
+        await generateImageWithProvider('换背景', 'rhart-image-n-g31-flash/image-to-image', {
+            id: 'rh-key',
+            provider: 'runningHub',
+            capabilities: ['image'],
+            key: '0123456789abcdef0123456789abcdef',
+            baseUrl: 'https://www.runninghub.cn/openapi/v2',
+            createdAt: 0,
+            updatedAt: 0,
+        }, [{
+            href: 'cold-media:cold-key-1',
+            mimeType: 'image/png',
+        }]);
+
+        const uploadCall = (globalThis.fetch as any).mock.calls[0];
+        expect(uploadCall[0]).toBe('https://www.runninghub.cn/openapi/v2/media/upload/binary');
+        const uploadedFile = (uploadCall[1]?.body as FormData)?.get('file');
+        expect(uploadedFile).toBeInstanceOf(Blob);
+
+        const submitBody = JSON.parse((globalThis.fetch as any).mock.calls[1][1].body);
+        expect(submitBody.imageUrls).toEqual(['https://cdn.example.com/uploaded-cold.png']);
+
+        await eraseColdMedia('cold-key-1');
+    });
+
+    it('surfaces a clear error for unmaterializable local references', async () => {
+        globalThis.fetch = vi.fn();
+
+        await expect(generateImageWithProvider('换背景', 'rhart-image-n-g31-flash/image-to-image', {
+            id: 'rh-key',
+            provider: 'runningHub',
+            capabilities: ['image'],
+            key: '0123456789abcdef0123456789abcdef',
+            baseUrl: 'https://www.runninghub.cn/openapi/v2',
+            createdAt: 0,
+            updatedAt: 0,
+        }, [{
+            href: 'unknown-scheme:something',
+            mimeType: 'image/png',
+        }])).rejects.toThrow('无法从本地引用');
+
+        expect(globalThis.fetch).not.toHaveBeenCalled();
+    });
+
     it('routes RunningHub standard video models through the native standard-model API', async () => {
         globalThis.fetch = vi.fn()
             .mockResolvedValueOnce(mockJsonResponse({
@@ -998,6 +1126,8 @@ describe('aiGateway - generateImageWithProvider', () => {
         });
 
         expect(result.mimeType).toBe('video/mp4');
+        // 远端临时 URL 只作溯源；下载的 videoBlob 才是内容来源。
+        expect(result.remoteMediaUrl).toBe('https://cdn.example.com/rh.mp4');
         expect(globalThis.fetch).toHaveBeenNthCalledWith(
             1,
             'https://www.runninghub.cn/openapi/v2/rhart-video-v3.1-fast/start-end-to-video',

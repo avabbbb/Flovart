@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { cancelWorkflowGeneration, runWorkflowGeneration } from '../services/workflowGeneration';
+import { cancelWorkflowGeneration, runWorkflowGeneration, type WorkflowGenerationRuntime } from '../services/workflowGeneration';
 import { getProductModel } from '../services/productModelCatalog';
 import type { ProductModelMode, UserApiKey } from '../types';
 import type { WorkflowProject } from '../components/workflow/types';
@@ -147,6 +147,22 @@ describe('workflow generation', () => {
     expect(result.nodes).toHaveLength(source.nodes.length);
     expect(result.connections).toHaveLength(source.connections.length);
   });
+  it('keeps the remote result URL only as provenance while the node references the local artifact', async () => {
+    const source = project();
+    source.nodes[0] = { ...source.nodes[0], type: 'video', metadata: { prompt: '生成视频', config: { mode: 'video', modelId: 'flovart:seedance-2' } } };
+    const remoteUrl = 'https://cdn.runninghub.cn/expires-in-24h.mp4';
+    const executeMedia = vi.fn().mockResolvedValue({ ok: true, elementId: 'text-1', capability: 'video', mediaUrl: 'https://output/result', mimeType: 'video/mp4', remoteMediaUrl: remoteUrl });
+    const result = await runWorkflowGeneration(source, 'text-1', {
+      userApiKeys: [mappedMediaKey('video', 'flovart:seedance-2', 'video-model', 'runningHub')],
+      executeMedia, fetchMedia: vi.fn().mockResolvedValue(new Blob(['result'])),
+      ingestMedia: vi.fn().mockResolvedValue({ type: 'video', storageKey: 'video-key', name: 'result.mp4', mimeType: 'video/mp4', bytes: 6 }),
+      encodeDataUrl: vi.fn().mockResolvedValue('data:image/png;base64,AA=='), createVideoPoster: vi.fn().mockResolvedValue(null),
+      onProjectChange: vi.fn(),
+    });
+    const initiator = result.nodes.find(node => node.id === 'text-1');
+    expect(initiator?.metadata).toMatchObject({ storageKey: 'video-key', href: undefined, remoteUrl });
+  });
+
 
   it('resolves a Workflow product model to its confirmed BYOK upstream model', async () => {
     const source = project();
@@ -794,3 +810,47 @@ describe('workflow generation', () => {
     expect(result.nodes.find(node => node.id === operationNodeId)?.metadata.status).toBe('success');
   });
 });
+
+  describe('provider task resume on re-run', () => {
+    const videoProject = (status: 'loading' | 'success' | 'error', providerTaskId?: string): WorkflowProject => {
+      const source = project();
+      source.nodes = [{
+        id: 'video-node', type: 'video', title: '视频生成', position: { x: 420, y: 0 }, width: 360, height: 240,
+        metadata: { prompt: '生成视频', status, generationProviderTaskId: providerTaskId, config: { mode: 'video', modelId: 'flovart:seedance-2' } },
+      }];
+      source.connections = [];
+      return source;
+    };
+    const videoRuntime = (executeMedia: WorkflowGenerationRuntime['executeMedia']) => ({
+      userApiKeys: [mappedMediaKey('video', 'flovart:seedance-2', 'seedance-2.0', 'volcengine')],
+      executeMedia,
+      fetchMedia: vi.fn().mockResolvedValue(new Blob(['video'])),
+      ingestMedia: vi.fn().mockResolvedValue({ type: 'video', storageKey: 'video', name: 'video.mp4', mimeType: 'video/mp4', bytes: 5 }),
+      createVideoPoster: vi.fn().mockResolvedValue(null),
+      onProjectChange: vi.fn(),
+    });
+
+    it('resumes the persisted provider task when re-running an in-flight node', async () => {
+      const executeMedia = vi.fn().mockResolvedValue({ ok: true, elementId: 'video-node', capability: 'video', mediaUrl: 'https://output/video', mimeType: 'video/mp4' });
+      await runWorkflowGeneration(videoProject('loading', 'task-persisted-1'), 'video-node', videoRuntime(executeMedia));
+      expect(executeMedia).toHaveBeenCalledWith(expect.objectContaining({ resumeProviderTaskId: 'task-persisted-1' }));
+    });
+
+    it('lets an explicit context resumeProviderTaskId win over the persisted node taskId', async () => {
+      const executeMedia = vi.fn().mockResolvedValue({ ok: true, elementId: 'video-node', capability: 'video', mediaUrl: 'https://output/video', mimeType: 'video/mp4' });
+      await runWorkflowGeneration(videoProject('loading', 'task-persisted-1'), 'video-node', { ...videoRuntime(executeMedia), resumeProviderTaskId: 'task-explicit-9' });
+      expect(executeMedia).toHaveBeenCalledWith(expect.objectContaining({ resumeProviderTaskId: 'task-explicit-9' }));
+    });
+
+    it('submits fresh (no resume) when the node already completed', async () => {
+      const executeMedia = vi.fn().mockResolvedValue({ ok: true, elementId: 'video-node', capability: 'video', mediaUrl: 'https://output/video', mimeType: 'video/mp4' });
+      await runWorkflowGeneration(videoProject('success', 'task-stale-1'), 'video-node', videoRuntime(executeMedia));
+      expect(executeMedia).toHaveBeenCalledWith(expect.objectContaining({ resumeProviderTaskId: undefined }));
+    });
+
+    it('submits fresh (no resume) when the node already errored', async () => {
+      const executeMedia = vi.fn().mockResolvedValue({ ok: true, elementId: 'video-node', capability: 'video', mediaUrl: 'https://output/video', mimeType: 'video/mp4' });
+      await runWorkflowGeneration(videoProject('error', 'task-stale-1'), 'video-node', videoRuntime(executeMedia));
+      expect(executeMedia).toHaveBeenCalledWith(expect.objectContaining({ resumeProviderTaskId: undefined }));
+    });
+  });

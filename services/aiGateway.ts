@@ -2,7 +2,7 @@ import type { AICapability, AIProvider, ProductModelMode, PromptEnhanceRequest, 
 import { editImage, enhancePromptWithGemini, generateImageFromText, generateVideo, validateGeminiApiKey, getGeminiRestBaseUrl } from './geminiService';
 import { fetchModelsForProvider, type FetchModelsResult } from './modelFetcher';
 import { normalizeProviderBaseUrl } from './baseUrl';
-import { assertRunningHubModelEndpoint } from './runningHubService';
+import { assertRunningHubModelEndpoint, rhUploadDataUrl, rhUploadFile } from './runningHubService';
 import { explainReferenceCompatibility, sanitizeProductGenerationParams } from './productModelCatalog';
 import { getRouteSchema, getRouteDurations, type RouteCapabilitySchema, type RouteMediaSpec } from './runningHubRouteCatalog';
 import { runRuntimeMediaGeneration } from './runtimeGeneration';
@@ -11,6 +11,8 @@ import type { CanonicalGenerationInput, WorkflowGenerationCapability } from '../
 import type { ProviderMaterializedReference } from './providerGenerationAdapter';
 import { validateLegacyProviderRequest } from './providerGenerationAdapter';
 import { executeUserScriptProvider, getUserScriptProviderForKey } from './userScriptProviderAdapter';
+import { loadWorkflowMediaBlob } from '../components/workflow/media';
+import { loadRuntimeArtifactBlob } from './runtimeArtifacts';
 
 function blobToBase64(blob: Blob): Promise<string> {
     return new Promise((resolve, reject) => {
@@ -165,7 +167,7 @@ export interface UnifiedIgnitionInput {
 }
 
 export type UnifiedIgnitionResult =
-    | { ok: true; elementId: string; mediaUrl: string; mimeType: string; capability: ElementMediaCapability; textResponse?: string | null }
+    | { ok: true; elementId: string; mediaUrl: string; mimeType: string; capability: ElementMediaCapability; textResponse?: string | null; /** 仅供溯源：远端已下载结果的原始 URL（RunningHub 等 24h 临时链接）。持久化层据此保留来源，节点媒体仍以本地存储为准。 */ remoteMediaUrl?: string }
     | { ok: false; elementId: string; errorMessage: string; capability: ElementMediaCapability };
 
 export type ElementMediaCapability = 'image' | 'video';
@@ -1228,24 +1230,59 @@ async function blobToDataUrl(href: string): Promise<string> {
     });
 }
 
+/**
+ * 本地媒体地址前缀 → 材质化入口。与 components/workflow/media.ts 的 loadFallbackMediaBlob
+ * 支持清单保持一致；不在清单内的地址视为不可物化，走保底错误。
+ */
+const LOCAL_MATERIALIZABLE_PREFIXES = ['local-folder:', 'asset-library:', 'cold-media:', 'idb:', 'idb-video:', 'flovart-browser-import:'];
+
+function uploadFileNameFor(mimeType: string | undefined, label: string | undefined, fallbackBase: string) {
+    const extension = (mimeType || '').split('/')[1]?.toLowerCase().replace(/[^a-z0-9]/g, '') || 'png';
+    const base = (label || fallbackBase).replace(/[\\/:*?"<>|]/g, '_').trim() || fallbackBase;
+    return `${base}.${extension}`;
+}
+
+/**
+ * 将一个本地参考（local-folder/asset-library/cold-media/idb/browser-import href 或
+ * 引用 artifact 的 WorkflowArtifactRef）物化为 Blob 并上传；无法物化返回 null。
+ */
+async function uploadLocalRunningHubReference(
+    apiKey: string,
+    ref: { href: string; mimeType: string; artifactRef?: WorkflowArtifactRef; label?: string },
+    options?: { baseUrl?: string; signal?: AbortSignal },
+): Promise<string | null> {
+    let blob: Blob | null = null;
+    try {
+        blob = ref.artifactRef?.taskId
+            ? await loadRuntimeArtifactBlob(ref.artifactRef.taskId, ref.artifactRef.mimeType || ref.mimeType)
+            : LOCAL_MATERIALIZABLE_PREFIXES.some(prefix => ref.href.startsWith(prefix))
+                ? await loadWorkflowMediaBlob(undefined, ref.href)
+                : null;
+    } catch {
+        blob = null;
+    }
+    if (!blob) return null;
+    return rhUploadFile(apiKey, blob, uploadFileNameFor(blob.type || ref.mimeType, ref.label, 'reference'), options);
+}
+
 async function prepareRunningHubReferences(
     apiKey: string,
     references: VideoImage[] = [],
     options?: { baseUrl?: string; signal?: AbortSignal },
 ): Promise<VideoImage[]> {
     if (references.length === 0) return [];
-    const needsUpload = references.some(ref => ref.href.startsWith('data:') || ref.href.startsWith('blob:'));
-    const uploadModule = needsUpload ? await import('./runningHubService') : null;
     return Promise.all(references.map(async ref => {
         if (/^https?:\/\//i.test(ref.href)) return ref;
-        if (ref.href.startsWith('data:') && uploadModule) {
-            return { ...ref, href: assertRunningHubPublicUrl(await uploadModule.rhUploadDataUrl(apiKey, ref.href, options), 'uploaded image URL') };
+        if (ref.href.startsWith('data:')) {
+            return { ...ref, href: assertRunningHubPublicUrl(await rhUploadDataUrl(apiKey, ref.href, options), 'uploaded image URL') };
         }
-        if (ref.href.startsWith('blob:') && uploadModule) {
+        if (ref.href.startsWith('blob:')) {
             const dataUrl = await blobToDataUrl(ref.href);
-            return { ...ref, href: assertRunningHubPublicUrl(await uploadModule.rhUploadDataUrl(apiKey, dataUrl, options), 'uploaded image URL') };
+            return { ...ref, href: assertRunningHubPublicUrl(await rhUploadDataUrl(apiKey, dataUrl, options), 'uploaded image URL') };
         }
-        throw new Error('RunningHub 标准模型的参考媒体需要公网 URL；本地 data URL 会自动上传，其他本地地址暂不支持。');
+        const uploaded = await uploadLocalRunningHubReference(apiKey, ref, options);
+        if (uploaded) return { ...ref, href: assertRunningHubPublicUrl(uploaded, 'uploaded image URL') };
+        throw new Error(`RunningHub 标准模型的参考媒体需要公网 URL；无法从本地引用「${ref.label || ref.href.slice(0, 48)}」读取媒体文件，请重新导入或改用公网链接。`);
     }));
 }
 
@@ -1255,18 +1292,18 @@ async function prepareRunningHubSlots(
     options?: { baseUrl?: string; signal?: AbortSignal },
 ): Promise<MultimodalSlot[]> {
     if (slots.length === 0) return [];
-    const needsUpload = slots.some(slot => slot.href.startsWith('data:') || slot.href.startsWith('blob:'));
-    const uploadModule = needsUpload ? await import('./runningHubService') : null;
     return Promise.all(slots.map(async slot => {
         if (/^https?:\/\//i.test(slot.href)) return slot;
-        if (slot.href.startsWith('data:') && uploadModule) {
-            return { ...slot, href: assertRunningHubPublicUrl(await uploadModule.rhUploadDataUrl(apiKey, slot.href, options), 'uploaded slot URL') };
+        if (slot.href.startsWith('data:')) {
+            return { ...slot, href: assertRunningHubPublicUrl(await rhUploadDataUrl(apiKey, slot.href, options), 'uploaded slot URL') };
         }
-        if (slot.href.startsWith('blob:') && uploadModule) {
+        if (slot.href.startsWith('blob:')) {
             const dataUrl = await blobToDataUrl(slot.href);
-            return { ...slot, href: assertRunningHubPublicUrl(await uploadModule.rhUploadDataUrl(apiKey, dataUrl, options), 'uploaded slot URL') };
+            return { ...slot, href: assertRunningHubPublicUrl(await rhUploadDataUrl(apiKey, dataUrl, options), 'uploaded slot URL') };
         }
-        throw new Error('RunningHub 标准模型的参考媒体需要公网 URL；本地 data URL 会自动上传，其他本地地址暂不支持。');
+        const uploaded = await uploadLocalRunningHubReference(apiKey, slot, options);
+        if (uploaded) return { ...slot, href: assertRunningHubPublicUrl(uploaded, 'uploaded slot URL') };
+        throw new Error(`RunningHub 标准模型的参考媒体需要公网 URL；无法从本地引用「${slot.label || slot.href.slice(0, 48)}」读取媒体文件，请重新导入或改用公网链接。`);
     }));
 }
 
@@ -2439,7 +2476,7 @@ export async function generateImageWithProvider(
     key?: UserApiKey,
     images?: VideoImage[],
     options?: { signal?: AbortSignal; aspectRatio?: VideoAspectRatio; resolution?: string; quality?: string; webSearch?: boolean },
-): Promise<{ newImageBase64: string | null; newImageMimeType: string | null; textResponse: string | null }> {
+): Promise<{ newImageBase64: string | null; newImageMimeType: string | null; textResponse: string | null; /** 仅供溯源：远端图片原始 URL（RunningHub 等 24h 临时链接）；本地 base64 仍为内容来源。 */ remoteMediaUrl?: string }> {
     assertResolvedUpstreamModel(model);
     const provider = resolveGenerationProvider(model, key);
 
@@ -2504,7 +2541,8 @@ export async function generateImageWithProvider(
                 textResponse: result.results?.map(item => item.text).filter(Boolean).join('\n') || 'RunningHub 未返回图片 URL。',
             };
         }
-        return fetchImageUrlToBase64(imageUrl);
+        const downloaded = await fetchImageUrlToBase64(imageUrl);
+        return { ...downloaded, remoteMediaUrl: imageUrl };
     }
 
     if (provider === 'openrouter') {
@@ -3276,7 +3314,7 @@ export async function generateVideoWithProvider(
        signal?: AbortSignal;
         onProviderTaskLifecycle?: (event: ProviderTaskLifecycleEvent) => void | Promise<void>;
     },
-): Promise<{ videoBlob: Blob; mimeType: string }> {
+): Promise<{ videoBlob: Blob; mimeType: string; /** 仅供溯源：远端视频原始 URL（RunningHub 等 24h 临时链接）；videoBlob 仍为内容来源。 */ remoteMediaUrl?: string }> {
     assertResolvedUpstreamModel(model);
     const provider = resolveGenerationProvider(model, key);
 
@@ -3325,7 +3363,7 @@ export async function generateVideoWithProvider(
         const runningHubRefs = await prepareRunningHubReferences(apiKey, allImageRefs, uploadOptions);
         const runningHubSlots = await prepareRunningHubSlots(apiKey, hasExplicitSlots ? multimodalSlots : [], uploadOptions);
         const { rhRunTask } = await import('./runningHubService');
-        onProgress('Submitting RunningHub video task...');
+        onProgress(options?.resumeProviderTaskId ? '恢复 RunningHub 视频任务轮询...' : 'Submitting RunningHub video task...');
         const result = await rhRunTask(apiKey, modelEndpoint, buildRunningHubStandardPayload(prompt, modelEndpoint, key, {
             aspectRatio,
             durationSec: options?.durationSec,
@@ -3340,6 +3378,8 @@ export async function generateVideoWithProvider(
         }), {
             baseUrl,
             signal: options?.signal,
+            resumeTaskId: options?.resumeProviderTaskId,
+            onTaskId: taskId => options?.onProviderTaskLifecycle?.({ phase: 'submitted', providerTaskId: taskId, submittedAt: Date.now() }),
             onProgress: (status, attempt) => onProgress(`RunningHub ${status} (${attempt})`),
         });
         const videoUrl = extractRunningHubMediaUrl(result, 'video');
@@ -3347,7 +3387,8 @@ export async function generateVideoWithProvider(
             throw new Error(result.results?.map(item => item.text).filter(Boolean).join('\n') || 'RunningHub 视频任务完成但未返回视频 URL。');
         }
         onProgress('Downloading generated video...');
-        return downloadSeedanceVideoResult(videoUrl, { signal: options?.signal });
+        const downloaded = await downloadSeedanceVideoResult(videoUrl, { signal: options?.signal });
+        return { ...downloaded, remoteMediaUrl: videoUrl };
     }
 
     if (provider === 'google') {
@@ -3827,7 +3868,7 @@ export async function executeUnifiedIgnition(input: UnifiedIgnitionInput): Promi
                 resumeProviderTaskId: input.resumeProviderTaskId,
            });
             const mediaUrl = URL.createObjectURL(result.videoBlob);
-            return { ok: true, elementId: input.elementId, mediaUrl, mimeType: result.mimeType, capability };
+            return { ok: true, elementId: input.elementId, mediaUrl, mimeType: result.mimeType, capability, remoteMediaUrl: result.remoteMediaUrl };
         }
 
         const imageReferences = getImageReferencesForIgnition(input.references);
@@ -3847,7 +3888,6 @@ export async function executeUnifiedIgnition(input: UnifiedIgnitionInput): Promi
                 errorMessage: result.textResponse || '生成网关未返回可用图片。',
             };
         }
-
         return {
             ok: true,
             elementId: input.elementId,
@@ -3855,6 +3895,7 @@ export async function executeUnifiedIgnition(input: UnifiedIgnitionInput): Promi
             mimeType: result.newImageMimeType,
             capability,
             textResponse: result.textResponse,
+            remoteMediaUrl: result.remoteMediaUrl,
         };
     } catch (error) {
         const reason = input.signal?.aborted ? input.signal.reason : error;

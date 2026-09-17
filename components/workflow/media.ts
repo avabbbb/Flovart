@@ -38,8 +38,9 @@ let canonicalReferences = new Set<string>();
 
 function collectNodeKeys(nodes: WorkflowNode[], keys = new Set<string>()) {
   nodes.forEach(node => {
-    if (node.metadata.storageKey) keys.add(node.metadata.storageKey);
-    if (node.metadata.posterStorageKey) keys.add(node.metadata.posterStorageKey);
+    const metadata = node.metadata || {};
+    if (metadata.storageKey) keys.add(metadata.storageKey);
+    if (metadata.posterStorageKey) keys.add(metadata.posterStorageKey);
   });
   return keys;
 }
