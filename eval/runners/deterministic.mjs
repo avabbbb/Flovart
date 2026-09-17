@@ -10,11 +10,15 @@
 
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { executeFlovartCommand } from '../../tools/flovart/core.js';
 import { createMcpServer } from '../../tools/flovart/mcp-server.js';
 import { createOperationGateway } from '../../tools/flovart/operation-gateway.js';
 import { createEnvironmentRunner } from './environment.mjs';
+
+const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 const MCP_TOOL_BY_COMMAND = {
   status: 'flovart_status',
@@ -166,8 +170,16 @@ export function createNopRunner() {
 
 /**
  * Codex runner: real external agent.
- * Executed only when a real binary is present; otherwise it reports itself as
- * blocked rather than faking a result.
+ * Spawned only when FLOVARTBENCH_ALLOW_CODEX=true and a `codex` binary is on
+ * PATH; otherwise it reports itself as blocked rather than faking a result.
+ *
+ * The agent receives task.instruction and a real shell; it drives the live
+ * Workflow through `npm run flovart:cli -- …` exactly as the manual Golden
+ * Task trials did. After the process exits the runner parses the `codex exec`
+ * JSONL transcript, extracts every `flovart:cli` write the agent issued, and
+ * replays those writes through the same OperationGateway into the controlled
+ * world being graded - so outcome predicates judge what the agent actually
+ * did, not what it claimed.
  */
 export function createCodexRunner(controlled, { trajectory } = {}) {
   const gateway = createOperationGateway({ workspace: controlled.workspace });
@@ -184,30 +196,123 @@ export function createCodexRunner(controlled, { trajectory } = {}) {
           error: { code: 'EXTERNAL_AGENT_UNAVAILABLE', message: available.reason },
         };
       }
-      // A real Codex session would translate the instruction into tool calls.
-      // Until that session exists the runner replays the reference solution over
-      // the same gateway and marks itself as a non-certified stand-in.
-      trajectory?.recordNote({ surface: 'codex', note: 'stand-in replay; not a certified Codex run', reason: available.reason });
-      for (const step of task.solution?.steps ?? []) {
-        const { command, args, idempotencyKey } = stepToGatewayCall(step);
-        try {
-          const result = await gateway(command, args, {
-            source: 'codex',
-            ...(idempotencyKey ? { idempotencyKey } : {}),
-          });
-          trajectory?.recordToolCall({ surface: 'codex', command, args, result: summarise(result) });
-        } catch (error) {
-          trajectory?.recordToolCall({
-            surface: 'codex',
-            command,
-            args,
-            result: { ok: false, error: { code: error.code ?? 'CODEX_ERROR' } },
-          });
-        }
+      const { transcript, exitCode, error: spawnError } = await runCodexExec(task, controlled);
+      if (spawnError) {
+        trajectory?.recordNote({ surface: 'codex', note: 'spawn failed', reason: spawnError });
+        return {
+          blocked: true,
+          reason: spawnError,
+          completedSteps: false,
+          error: { code: 'EXTERNAL_AGENT_UNAVAILABLE', message: spawnError },
+        };
       }
-      return { completedSteps: true, standIn: true };
+      const parsed = parseCodexJsonl(transcript);
+      for (const call of parsed.toolCalls) {
+        trajectory?.recordToolCall({
+          surface: 'codex',
+          command: call.command,
+          args: call.args,
+          result: call.result,
+        });
+      }
+      if (exitCode !== 0) {
+        return {
+          completedSteps: false,
+          error: { code: 'CODEX_EXIT_NONZERO', message: `codex exec exited ${exitCode}` },
+          usage: parsed.usage,
+        };
+      }
+      const replay = await replayCodexWrites(parsed.writes, gateway, trajectory);
+      return {
+        completedSteps: true,
+        ...(replay.error ? { error: replay.error } : {}),
+        usage: parsed.usage,
+        certified: true,
+      };
     },
   };
+}
+
+/**
+ * Translate one recorded `flovart:cli` write into the gateway call that
+ * produces the same final world. The granular CLI commands the agent used are
+ * folded into `workflow.apply` operations so the controlled world sees the
+ * same document mutation the live workspace applied.
+ */
+function codexWriteToGatewayCall(write) {
+  const { command, args } = write;
+  if (command === 'workflow.apply') {
+    return { command: 'workflow.apply', args };
+  }
+  if (command === 'workflow.node.create') {
+    return {
+      command: 'workflow.apply',
+      args: {
+        projectId: args.projectId,
+        operations: [{
+          type: 'add_node',
+          node: {
+            id: args.id ?? args.nodeId,
+            type: args.type,
+            title: args.title,
+            position: { x: Number(args.x ?? 0), y: Number(args.y ?? 0) },
+            ...(args.metadata ? { metadata: args.metadata } : {}),
+          },
+        }],
+      },
+    };
+  }
+  if (command === 'workflow.node.create-connected') {
+    return {
+      command: 'workflow.apply',
+      args: {
+        projectId: args.projectId,
+        operations: [{
+          type: 'create_connected_node',
+          fromNodeId: args.fromNodeId,
+          kind: 'data',
+          node: {
+            id: args.id ?? args.nodeId,
+            type: args.type,
+            title: args.title,
+            position: { x: Number(args.x ?? 0), y: Number(args.y ?? 0) },
+            ...(args.metadata ? { metadata: args.metadata } : {}),
+          },
+        }],
+      },
+    };
+  }
+  return null;
+}
+
+/** Replay the agent's recorded writes through the real gateway so the graded world reflects what actually happened. */
+async function replayCodexWrites(writes, gateway, trajectory) {
+  for (const write of writes) {
+    const call = codexWriteToGatewayCall(write);
+    if (!call) {
+      trajectory?.recordNote({ surface: 'codex', note: `unsupported write command: ${write.command}`, args: write.args });
+      continue;
+    }
+    try {
+      const result = await gateway(call.command, call.args, {
+        source: 'codex',
+        ...(write.idempotencyKey ? { idempotencyKey: write.idempotencyKey } : {}),
+      });
+      trajectory?.recordToolCall({ surface: 'codex', command: call.command, args: call.args, result: summarise(result) });
+      if (result && result.ok === false) {
+        return { error: result.error ?? { code: 'CODEX_WRITE_REJECTED' } };
+      }
+    } catch (error) {
+      trajectory?.recordToolCall({
+        surface: 'codex',
+        command: call.command,
+        args: call.args,
+        result: { ok: false, error: { code: error.code ?? 'CODEX_ERROR', message: error.message } },
+      });
+      return { error: { code: error.code ?? 'CODEX_ERROR', message: error.message } };
+    }
+  }
+  return {};
 }
 
 async function isCodexAvailable() {
@@ -223,6 +328,108 @@ async function isCodexAvailable() {
       : { ok: false, reason: `codex --version exited with ${code}` }));
   });
 }
+
+/**
+ * Spawn `codex exec` for one task. The transcript is captured as raw JSONL so
+ * the harness, not the agent, decides what the agent actually did.
+ */
+async function runCodexExec(task, controlled) {
+  const { spawn } = await import('node:child_process');
+  const instruction = String(task.instruction ?? '').trim();
+  if (!instruction) {
+    return { transcript: '', exitCode: null, error: 'task has no instruction' };
+  }
+  const prompt = [
+    instruction,
+    'Use the Flovart CLI (npm run flovart:cli -- …) to drive the visible Workflow.',
+    'Read .agents/skills/flovart/SKILL.md first. Do not modify any source files.',
+  ].join(' ');
+  return new Promise(resolve => {
+    let stdout = '';
+    let stderr = '';
+    const child = spawn('codex', ['exec', '--json', '--skip-git-repo-check', prompt], {
+      cwd: REPO_ROOT,
+      env: process.env,
+      shell: process.platform === 'win32',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    child.stdout.on('data', chunk => { stdout += chunk; });
+    child.stderr.on('data', chunk => { stderr += chunk; });
+    child.once('error', err => resolve({ transcript: '', exitCode: null, error: `codex spawn failed: ${err.message}` }));
+    child.once('close', code => resolve({ transcript: stdout, exitCode: code, error: null }));
+    setTimeout(() => {
+      child.kill('SIGKILL');
+      resolve({ transcript: stdout, exitCode: null, error: 'codex exec timed out' });
+    }, task.timeout ?? 120_000);
+  });
+}
+
+/**
+ * Parse a `codex exec --json` transcript into tool calls, write commands and
+ * token usage. Read-only commands are recorded as evidence; only writes are
+ * replayed into the controlled world.
+ */
+function parseCodexJsonl(transcript) {
+  const toolCalls = [];
+  const writes = [];
+  let usage = null;
+  for (const line of String(transcript).split('\n')) {
+    if (!line.trim()) continue;
+    let event;
+    try { event = JSON.parse(line); } catch { continue; }
+    if (event.type === 'turn.completed' && event.usage) {
+      usage = {
+        promptTokens: event.usage.input_tokens ?? 0,
+        completionTokens: event.usage.output_tokens ?? 0,
+        costUsd: 0,
+        measured: true,
+      };
+      continue;
+    }
+    if (event.type !== 'item.completed' || event.item?.type !== 'command_execution') continue;
+    const raw = event.item.command ?? '';
+    const exitCode = event.item.exit_code;
+    const output = event.item.aggregated_output ?? '';
+    // Every `npm run flovart:cli -- <cmd> …` inside a (possibly compound) shell
+    // command is one Flovart tool call.
+    for (const match of raw.matchAll(/flovart:cli\s+--\s+([^\n]+?)(?=['\"]|$)/g)) {
+      const segment = match[1].trim();
+      const parts = segment.split(/\s+/);
+      const command = parts[0];
+      const args = parseCliFlags(segment.slice(command.length));
+      const isWrite = /^(workflow\.node\.create|workflow\.node\.create-connected|workflow\.apply|workflow\.connect|workflow\.node\.update|workflow\.node\.delete|workflow\.select)/.test(command);
+      const record = { command, args, result: parseCliOutput(output), exitCode };
+      toolCalls.push(record);
+      if (isWrite && exitCode === 0) writes.push({ command, args, idempotencyKey: args.idempotencyKey ?? args['idempotency-key'] });
+    }
+  }
+  return { toolCalls, writes, usage };
+}
+
+/** Turn `--flag value` / `--flag=value` segments into a flat args object. */
+function parseCliFlags(text) {
+  const args = {};
+  const flagRe = /--([a-zA-Z][\w-]*)(?:[= ]([^'"\s][^\s'"]*|"[^"]*"|'[^']*'))?/g;
+  for (const match of text.matchAll(flagRe)) {
+    const key = match[1].replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+    const raw = match[2];
+    args[key] = raw === undefined ? true : raw.replace(/^['"]|['"]$/g, '');
+  }
+  return args;
+}
+
+/** Extract the JSON body of a `flovart:cli --json` invocation, or a truncated marker. */
+function parseCliOutput(output) {
+  const start = output.indexOf('{');
+  if (start < 0) return { ok: true, note: 'no-json-output' };
+  try {
+    return JSON.parse(output.slice(start));
+  } catch {
+    return { ok: true, note: 'truncated-json' };
+  }
+}
+
+
 
 /** Strip fields that are large or may carry secrets before recording. */
 function summarise(result) {

@@ -199,8 +199,16 @@ export async function runTrial(task, { runnerName, runDir, metadata, trialIndex,
     // Steps are resolved one at a time, immediately before they run, so a later
     // step can reference something an earlier step produced. Resolving them all
     // up front would freeze "$lastTaskId" at null.
-    const stepRunner = createStepwiseRunner(runner, { steps: graded.steps }, context);
-    runnerOutcome = await stepRunner();
+    //
+    // An external agent (runner.external) does not execute solution.steps: it
+    // gets the task instruction once and drives the real surface itself, so the
+    // stepwise loop must hand it the whole task rather than one resolved step.
+    if (runner.external) {
+      runnerOutcome = await runner.run(task);
+    } else {
+      const stepRunner = createStepwiseRunner(runner, { steps: graded.steps }, context);
+      runnerOutcome = await stepRunner();
+    }
   } catch (error) {
     runnerError = error;
     runnerOutcome = { completedSteps: false, error: { code: error.code ?? 'RUNNER_ERROR', message: error.message } };

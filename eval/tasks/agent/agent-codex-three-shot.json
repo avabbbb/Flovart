@@ -1,0 +1,99 @@
+{
+  "suite": "agent",
+  "suiteVersion": "0.1.0",
+  "tasks": [
+    {
+      "id": "agent-codex-three-shot-001",
+      "version": "1",
+      "split": "regression",
+      "suite": "agent",
+      "difficulty": "intermediate",
+      "instruction": "Create a three-shot product video workflow: three video nodes connected in sequence (Shot 1 -> Shot 2 -> Shot 3). Read the Flovart skill at .agents/skills/flovart/SKILL.md first, then use the Flovart CLI operations (npm run flovart:cli -- ...). Do not modify any source files; only operate the live Workflow through the CLI.",
+      "fixture": {
+        "project": {
+          "id": "project_codex",
+          "title": "Codex Trial",
+          "nodes": [],
+          "connections": [],
+          "selectedNodeIds": []
+        },
+        "revision": 1
+      },
+      "allowedSurfaces": [
+        "codex"
+      ],
+      "forbiddenActions": [
+        "direct-state-mutation"
+      ],
+      "expected": {
+        "predicates": {
+          "workflow.node_count_equals": 3,
+          "workflow.node_type_count": { "type": "video", "count": 3 },
+          "workflow.edge_count_equals": 2,
+          "workflow.connected_pair_types": { "from": "video", "to": "video" }
+        }
+      },
+      "safety": {
+        "wrongTargetWrites": 0
+      },
+      "solution": {
+        "steps": [
+          {
+            "command": "workflow.apply",
+            "args": {
+              "projectId": "project_codex",
+              "expectedRevision": 1,
+              "operations": [
+                {
+                  "type": "add_node",
+                  "node": {
+                    "id": "shot_1",
+                    "type": "video",
+                    "title": "Shot 1",
+                    "position": { "x": 120, "y": 120 }
+                  }
+                },
+                {
+                  "type": "create_connected_node",
+                  "fromNodeId": "shot_1",
+                  "kind": "data",
+                  "node": {
+                    "id": "shot_2",
+                    "type": "video",
+                    "title": "Shot 2",
+                    "position": { "x": 520, "y": 120 }
+                  }
+                },
+                {
+                  "type": "create_connected_node",
+                  "fromNodeId": "shot_2",
+                  "kind": "data",
+                  "node": {
+                    "id": "shot_3",
+                    "type": "video",
+                    "title": "Shot 3",
+                    "position": { "x": 920, "y": 120 }
+                  }
+                }
+              ],
+              "mutationId": "agent-codex-three-shot-001"
+            },
+            "idempotencyKey": "agent-codex-three-shot-001"
+          }
+        ]
+      },
+      "runnerScope": ["codex"],
+      "runnerScopeReason": "External-agent certification: only a real Codex session counts as evidence; deterministic runners replay the reference, not the agent's behaviour.",
+      "timeout": 120000,
+      "repeatPolicy": {
+        "runs": 5
+      },
+      "tags": [
+        "agent",
+        "codex",
+        "golden-task",
+        "external-evidence"
+      ]
+    }
+  ]
+}
