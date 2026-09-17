@@ -60,7 +60,7 @@ const canonicalSkill = read(skillProjectionPaths[0]);
 for (const path of skillProjectionPaths.slice(1)) {
   requireCondition(read(path) === canonicalSkill, `${path}: Skill projection drifted from ${skillProjectionPaths[0]}`);
 }
-const generatedSkillPath = 'tools/flovart/skill/SKILL.md';
+const generatedSkillPath = 'tools/flovart/skill/flovart/SKILL.md';
 if (existsSync(join(root, generatedSkillPath))) {
   requireCondition(read(generatedSkillPath) === canonicalSkill, `${generatedSkillPath}: generated Skill drifted from ${skillProjectionPaths[0]}`);
   observations.push('generated-skill=present-and-aligned');

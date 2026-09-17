@@ -4,6 +4,22 @@ title: 待测试确认
 
 本页记录实际进入文档或代码、仍需用户确认的变更。既有实现的构建、全量测试、Rust Runtime 和响应式浏览器记录见[发行候选证据](../../../evidence/release-candidate/README.md)，仅适用于其对应代码与范围。本次文档收尾只运行文档相关检查，未重跑上述整套验收；真实第三方宿主、账号、Provider 与公开发布仍需单独认证。
 
+## 本轮：Real Codex External Gate（3/5 trial 已通过，进行中）
+
+- 已验证：3 次连续真实 `codex exec`（v0.154.0，非交互）trial 通过 Golden Task —— Codex 读取 `.agents/skills/flovart/SKILL.md` 后仅用 CLI（`npm run flovart:cli -- …`）驱动真实 Browser Workflow，每次产出 3 个节点 + 2 条顺序连接（shot1 → shot2 → shot3），写入走 `workflow.node.create-connected`，未改任何源码文件，进程 exit 0。证据为 `.tmp/codex-trial-3.jsonl`、`.tmp/codex-trial-4.jsonl`、`.tmp/codex-trial-5.jsonl`（每次 trial 独立新建项目并自动激活）。
+- 暴露并已修复的缺陷一：SKILL.md 缺少冷启动路径——浏览器在线但无打开项目时 `workflow.inspect` 返回 `WORKSPACE_UNAVAILABLE`，trial 1 在此安全停止；现已把 `workflow.project.create`/`project.use` + 每次写入必须携带相同 `--agent-identity` 与稳定幂等键（否则 `AGENT_HOST_REQUIRED`）写入 SKILL.md 的 Cold start 一节。
+- 暴露的缺陷二：`.agents/skills` 快照缺少 `commands/` 等子目录（此前只投影了 `SKILL.md`）。快照内容已补齐（`commands/`、`model-schema/`、`scripts/` 与 `skills/flovart` 逐文件一致），但覆盖子目录的漂移检查仍在施工中——目前 `check-docs-contract`/`release-red-team` 只比对 SKILL.md 本体。
+- 未完成（仍是外部门禁）：pass^5 需 5 次连续通过，trial 6–7 进行中；真实 Provider wire（付费调用、取消语义）与公开安装包首次启动的完整 transcript 未认证；Support Matrix 中 Codex 行仍标 `Experimental`，不升级为 Stable。
+
+## 已记录回归：workflow.project.use 浏览器激活缺失
+
+- 症状：外部 Agent 运行 `workflow.project.use --project-id X` 后返回 `ok` 与 `{ projectId: X }`，但 `/health`（`workspace.status`）的 `activeProjectId` 仍是旧项目；后续 `workflow.inspect --agent-identity codex` 读取的仍是旧项目，若再对 X 显式传 `--project-id X` 会被 `agent/session.js:355` 以 `LEASE_TARGET_CHANGED` 拒绝——`project.use` 表面上成功，实际没有切换 agent 侧绑定目标。
+- 根因：命令只穿过 Browser 执行，且没有任何「切换确认」握手。链路为 `cli.js → FlovartWorkspaceClient.execute → POST /api/tools → agent/session.js callCommand:331 → SSE tool_call → services/workflowAgentBridge.ts:270 → workflowDispatcher.ts:242-246`。`workflowDispatcher.ts:244` 的 `dependencies.setActiveProject(projectId)` 只改浏览器 store 的 `activeProjectId`（`components/workflow/store.ts:191`），随后 dispatcher 立即返回 `{ projectId }`——它只是回显请求参数，不是浏览器已切换的 ack。agent 侧绑定要等浏览器 store 订阅触发 `workflowWorkspaceAdapter.update()` → `pushSnapshot` → `POST /workflow/state` → `agent/session.js:96-117 updateSnapshot` 后才更新；由于 `project.use` 不在 `LEASED_WORKFLOW_COMMANDS`（`agent/session.js:7-12`）内，session 对该命令不取 lease、不等快照，resolve 时机早于回环完成。在这段窗口内 `callCommand:347` 的 `boundSnapshot` 仍是旧 projectId：`/health` 的 `activeProjectId` 读旧值，对 X 显式传 `--project-id` 的后续写入会被 `callCommand:355-365` 以 `LEASE_TARGET_CHANGED` 拒绝，而不带 projectId 的 `inspect` 读到旧项目。本地指针更新（`setActiveProject`）被当成交互终点，browser→agent 的状态回环完全在临界区之外。
+- 预期语义（浏览器激活命令）：`project.use` 应是一条浏览器激活 RPC，而非普通 mutation——`callCommand` 收到后向 Browser 发送「切到项目 X」请求；浏览器 `setActiveProject(X)` → store 变化触发 `pushSnapshot(X)` → session `updateSnapshot` 把 `boundSnapshot.id` 更新为 X → 此时才向调用方 resolve，并让下一次 `ensureWorkspaceLease` 在 X 上签新 lease。当前实现把「本地指针更新」当成交互终点，绕过了 browser→agent 的状态回环，于是 inspect/lease/写目标三者各自依据不同时间点的快照。
+- 为何暂不修：不在 5/5 Golden Task 的关键路径上——trial 走 `workflow.project.create`（新项目自动成为 active 并经 pushSnapshot 自然绑定），`project.use` 只在「跨已有项目切换」场景才暴露；修复需要在 session ↔ browser 之间新增一轮「切换确认」握手的真实行为改动，按用户指示作为独立回归跟踪，不混入本轮外部门禁收尾。预期语义已冻结为 [ADR 0072](../../../adr/0072-project-use-is-a-browser-activation.md)。
+- 修复草案：把 `workflow.project.use` 加入 leased/确认命令集，或在 `callCommand` 里对它特判为「发送 tool_call → 等 boundSnapshot.id === args.projectId（带超时）→ resolve」；同时让 `workflowDispatcher.project.use` 分支在浏览器侧返回新 `activeProjectId` 作为 ack 载荷，而不是仅回显请求参数。
+
+
 ## 本轮：外部 Agent 优先与 CLI 入口收敛
 
 - Agent 页面现在优先展示外部 Agent；Flovart 内置 Assistant 仅在用户点击后挂载，且不拥有额外权限，不自动接管项目。

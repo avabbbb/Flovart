@@ -19,7 +19,13 @@ const skillProjectionPaths = [
   '.claude/skills/flovart/SKILL.md',
   'skills/flovart/SKILL.md',
 ];
-const generatedSkillProjectionPath = 'tools/flovart/skill/SKILL.md';
+const generatedSkillProjectionPath = 'tools/flovart/skill/flovart/SKILL.md';
+// `skills/flovart` is the canonical package; `.agents/skills/flovart` is the
+// committed snapshot that `init --target project-skill` copies. Comparing the
+// whole tree (not just SKILL.md) catches a missing commands/ or scripts/ dir.
+const skillPackageProjections = [
+  { canonical: 'skills/flovart', snapshot: '.agents/skills/flovart' },
+];
 const packageJson = JSON.parse(fs.readFileSync(path.join(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'), 'package.json'), 'utf8'));
 const minimumNodeVersion = String(packageJson.engines?.node || '').match(/\d+\.\d+\.\d+/)?.[0] || '';
 
@@ -75,6 +81,21 @@ function gitVisibleDocPaths(rootDir) {
     paths = [];
   }
   return paths.filter(relativePath => /\.(?:md|mdx)$/i.test(relativePath) && fs.existsSync(path.join(rootDir, relativePath)));
+}
+
+function packageFileMap(directory) {
+  const files = new Map();
+  if (!fs.existsSync(directory)) return files;
+  const stack = [''];
+  while (stack.length) {
+    const segment = stack.pop();
+    for (const entry of fs.readdirSync(path.join(directory, segment), { withFileTypes: true })) {
+      const relativeName = segment ? `${segment}/${entry.name}` : entry.name;
+      if (entry.isDirectory()) stack.push(relativeName);
+      else if (entry.isFile()) files.set(relativeName, fs.readFileSync(path.join(directory, relativeName)));
+    }
+  }
+  return files;
 }
 
 function readDocs(rootDir, relativePaths, errors) {
@@ -166,6 +187,20 @@ for (const relativePath of skillProjectionPaths) {
   if (fs.existsSync(path.join(rootDir, generatedSkillProjectionPath))) {
     const generatedSkill = fs.readFileSync(path.join(rootDir, generatedSkillProjectionPath), 'utf8');
     if (generatedSkill !== canonicalSkill) errors.push(`${generatedSkillProjectionPath} has drifted from ${skillProjectionPaths[0]}`);
+  }
+
+  for (const { canonical, snapshot } of skillPackageProjections) {
+    const canonicalFiles = packageFileMap(path.join(rootDir, canonical));
+    const snapshotFiles = packageFileMap(path.join(rootDir, snapshot));
+    if (!snapshotFiles.size) {
+      errors.push(`${snapshot}: skill package snapshot is missing or empty`);
+      continue;
+    }
+    for (const name of new Set([...canonicalFiles.keys(), ...snapshotFiles.keys()])) {
+      if (!snapshotFiles.has(name)) errors.push(`${snapshot}: missing ${name} present in ${canonical}`);
+      else if (!canonicalFiles.has(name)) errors.push(`${snapshot}: extra file ${name} absent from ${canonical}`);
+      else if (!snapshotFiles.get(name).equals(canonicalFiles.get(name))) errors.push(`${snapshot}/${name} drifted from ${canonical}/${name}`);
+    }
   }
 
   return { errors, files: docs.map(doc => doc.relativePath) };

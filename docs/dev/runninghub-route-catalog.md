@@ -1,6 +1,6 @@
 # RunningHub 首期 Route Catalog
 
-本清单锁定当前可进入 `Verified Route` 评审的 17 条图片与普通视频线路。表中字段只是实现 Route Capability Schema 与 Route Contract Test 的最低契约锚点，不是可直接执行的完整 Schema；实现时仍须从对应官方页逐项编码枚举、必填性、默认值、媒体数量与序列化类型。只照抄示例请求或按 endpoint 名称用正则猜测的线路仍属于 `Discovered Route`，禁止执行。
+本清单锁定当前可进入 `Verified Route` 评审的 18 条图片与普通视频线路。表中字段只是实现 Route Capability Schema 与 Route Contract Test 的最低契约锚点，不是可直接执行的完整 Schema；实现时仍须从对应官方页逐项编码枚举、必填性、默认值、媒体数量与序列化类型。只照抄示例请求或按 endpoint 名称用正则猜测的线路仍属于 `Discovered Route`，禁止执行。
 
 ## Product Model 身份依据
 
@@ -15,7 +15,7 @@ PromptBar 使用原始模型名，RunningHub 包装名只作为 Provider Route L
 - Grok Imagine Video：[xai/grok-imagine/text-to-video-official-stable](https://www.runninghub.cn/runninghub-api-doc-en/api-448184433)
 - Seedance 2.0 / Fast：对应 Route 的中文官方页直接以 seedance2.0 命名，具体链接见视频表。
 
-## 图片 Route（6）
+## 图片 Route（7）
 
 | Product Model | Generation Mode | Provider Route | 契约锚点 | 官方依据 |
 | --- | --- | --- | --- | --- |
@@ -25,6 +25,7 @@ PromptBar 使用原始模型名，RunningHub 包装名只作为 Provider Route L
 | Gemini 3.1 Flash Image | image-to-image | `rhart-image-n-g31-flash/image-to-image` | `imageUrls[]`、`prompt`、`aspectRatio`、`resolution` | [448183223](https://www.runninghub.cn/runninghub-api-doc-cn/api-448183223) |
 | Gemini 3.1 Flash Image | text-to-image | `rhart-image-n-g31-flash/text-to-image` | `prompt`、`aspectRatio`、`resolution` | [448183261](https://www.runninghub.cn/runninghub-api-doc-cn/api-448183261) |
 | GPT Image 2 | text-to-image | `rhart-image-g-2/text-to-image` | `prompt`、`aspectRatio`、`resolution` | [448183264](https://www.runninghub.cn/runninghub-api-doc-cn/api-448183264) |
+| Seedream 4.5 | text-to-image | `seedream-v4.5/text-to-image` | `prompt`、`width`/`height`（默认 2048）、`resolution`（2k/4k，优先于宽高）、`sequentialImageGeneration`、`maxImages`；无 `aspectRatio` 字段 | [448183229](https://www.runninghub.cn/runninghub-api-doc-cn/api-448183229) |
 
 ## 普通视频 Route（11）
 

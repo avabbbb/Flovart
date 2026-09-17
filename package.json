@@ -42,7 +42,8 @@
     "eval:core": "node eval/run.mjs run --group core",
     "eval:agent": "node eval/run.mjs run --group agent",
     "eval:report": "node eval/run.mjs report",
-    "eval:redteam": "node eval/red-team.mjs"
+    "eval:redteam": "node eval/red-team.mjs",
+    "session:browser": "node scripts/codex-session-browser.mjs"
   },
   "dependencies": {
     "@cfworker/json-schema": "^4.1.1",

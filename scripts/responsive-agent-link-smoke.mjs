@@ -33,19 +33,40 @@ const viewports = [
 
 const sleep = ms => new Promise(resolveSleep => setTimeout(resolveSleep, ms));
 
-async function waitFor(check, timeoutMs = 60_000, intervalMs = 250) {
+function describeWaitValue(value) {
+  if (value instanceof Error) return value.message;
+  if (value && typeof value === 'object') {
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
+  }
+  return String(value);
+}
+
+async function waitFor(stage, check, timeoutMs = 60_000, intervalMs = 250) {
   const deadline = Date.now() + timeoutMs;
   let lastError = null;
+  let lastValue = null;
+  let attempts = 0;
   while (Date.now() <= deadline) {
+    attempts += 1;
     try {
       const value = await check();
       if (value) return value;
     } catch (error) {
       lastError = error;
+      lastValue = error;
     }
     await sleep(intervalMs);
   }
-  throw lastError || new Error('等待 Flovart WebUI 超时。');
+  const detail = `stage=${stage} attempts=${attempts} last=${describeWaitValue(lastValue)}`;
+  if (lastError) {
+    const message = lastError instanceof Error ? lastError.message : String(lastError);
+    throw new Error(`等待 Flovart WebUI 超时 (${detail}): ${message}`);
+  }
+  throw new Error(`等待 Flovart WebUI 超时 (${detail})。`);
 }
 
 function readJson(file) {
@@ -129,15 +150,29 @@ try {
     });
     managedCli.stdout.on('data', chunk => { managedCliOutput += String(chunk); });
     managedCli.stderr.on('data', chunk => { managedCliOutput += String(chunk); });
-    targetUrl = await waitFor(async () => {
-      if (managedCli.exitCode !== null) {
-        throw new Error(`托管 Flovart 启动失败: ${managedCliOutput.slice(-2000)}`);
-      }
-      const discoveryFile = serviceEnv.FLOVART_WEB_DISCOVERY;
-      if (!existsSync(discoveryFile)) return null;
-      const discovery = readJson(discoveryFile);
-      return await probeWebUi(discovery.url, { timeoutMs: 800 }).catch(() => null);
-    });
+    let lastWebObservation = 'discovery-file-missing';
+    try {
+      targetUrl = await waitFor('web-discovery', async () => {
+        if (managedCli.exitCode !== null) {
+          throw new Error(`托管 Flovart 启动失败: ${managedCliOutput.slice(-2000)}`);
+        }
+        const discoveryFile = serviceEnv.FLOVART_WEB_DISCOVERY;
+        if (!existsSync(discoveryFile)) {
+          lastWebObservation = 'discovery-file-missing';
+          return null;
+        }
+        const discovery = readJson(discoveryFile);
+        const origin = await probeWebUi(discovery.url, { timeoutMs: 800 }).catch(() => null);
+        if (origin) return origin;
+        // Probe keeps returning null; keep the redacted discovery file so a
+        // stale-URL race is visible in the timeout output.
+        lastWebObservation = { probe: 'null', discovery: { url: discovery.url, pid: discovery.pid ?? null } };
+        return null;
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`${message} webLast=${describeWaitValue(lastWebObservation)}`);
+    }
   }
 
   context = await chromium.launchPersistentContext(profileDir, {
@@ -154,10 +189,14 @@ try {
   const appUrl = new URL(targetUrl);
   appUrl.searchParams.set('responsive-reset', String(Date.now()));
   appUrl.hash = '/app';
-  await page.goto(appUrl.toString(), { waitUntil: 'commit', timeout: 15_000 });
+  // domcontentloaded + the React-mount marker so a cold Vite compile cannot
+  // time out at the navigation step before the app has executed.
+  await page.goto(appUrl.toString(), { waitUntil: 'domcontentloaded', timeout: 90_000 });
+  await page.waitForSelector('body[data-flovart-mounted="1"]', { timeout: 60_000 });
   await page.waitForSelector('.app-shell', { timeout: 45_000 });
   await page.evaluate(() => { localStorage.clear(); sessionStorage.clear(); });
-  await page.reload({ waitUntil: 'commit', timeout: 15_000 });
+  await page.reload({ waitUntil: 'domcontentloaded', timeout: 60_000 });
+  await page.waitForSelector('body[data-flovart-mounted="1"]', { timeout: 60_000 });
   await assertTopLevelModes(page);
 
   await page.getByRole('button', { name: '工作流', exact: true }).click();

@@ -38,19 +38,73 @@ if (!existsSync(chromeExecutable)) {
 
 const sleep = ms => new Promise(resolveSleep => setTimeout(resolveSleep, ms));
 
-async function waitFor(check, timeoutMs = 45_000, intervalMs = 250) {
+function describeWaitValue(value) {
+  if (value instanceof Error) return value.message;
+  if (value && typeof value === 'object') {
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
+  }
+  return String(value);
+}
+
+async function waitFor(stage, check, timeoutMs = 45_000, intervalMs = 250) {
   const deadline = Date.now() + timeoutMs;
   let lastError = null;
+  let lastValue = null;
+  let attempts = 0;
   while (Date.now() <= deadline) {
+    attempts += 1;
     try {
       const value = await check();
       if (value) return value;
+      lastValue = value;
     } catch (error) {
       lastError = error;
+      lastValue = error;
     }
     await sleep(intervalMs);
   }
-  throw lastError || new Error('Chrome smoke 等待本地服务超时。');
+  const detail = `stage=${stage} attempts=${attempts} last=${describeWaitValue(lastValue)}`;
+  if (lastError) {
+    const message = lastError instanceof Error ? lastError.message : String(lastError);
+    throw new Error(`Chrome smoke 等待本地服务超时 (${detail}): ${message}`);
+  }
+  throw new Error(`Chrome smoke 等待本地服务超时 (${detail})。`);
+}
+
+async function waitForWebDiscovery(env, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  let lastError = null;
+  let lastObservation = 'discovery-file-missing';
+  let attempts = 0;
+  while (Date.now() <= deadline) {
+    attempts += 1;
+    try {
+      if (!existsSync(env.FLOVART_WEB_DISCOVERY)) {
+        lastObservation = 'discovery-file-missing';
+      } else {
+        const discovery = readJson(env.FLOVART_WEB_DISCOVERY);
+        const origin = await probeWebUi(discovery.url, { timeoutMs: 800 }).catch(() => null);
+        if (origin) return origin;
+        // The probe keeps returning null; keep the redacted discovery file so a
+        // stale-URL race is visible in the timeout output.
+        lastObservation = { probe: 'null', discovery: { url: redactBootstrapUrl(discovery.url), pid: discovery.pid ?? null, startedAt: discovery.startedAt ?? null } };
+      }
+    } catch (error) {
+      lastError = error;
+      lastObservation = error;
+    }
+    await sleep(250);
+  }
+  const detail = `stage=web-discovery attempts=${attempts} last=${describeWaitValue(lastObservation)}`;
+  if (lastError) {
+    const message = lastError instanceof Error ? lastError.message : String(lastError);
+    throw new Error(`Chrome smoke 等待本地服务超时 (${detail}): ${message}`);
+  }
+  throw new Error(`Chrome smoke 等待本地服务超时 (${detail})。`);
 }
 
 function readJson(file) {
@@ -88,13 +142,9 @@ let browser = null;
 let page = null;
 let result = null;
 try {
-  const web = await waitFor(async () => {
-    if (!existsSync(env.FLOVART_WEB_DISCOVERY)) return null;
-    const discovery = readJson(env.FLOVART_WEB_DISCOVERY);
-    return await probeWebUi(discovery.url, { timeoutMs: 800 }).catch(() => null);
-  });
+  const web = await waitForWebDiscovery(env);
   const discovery = readJson(env.FLOVART_WEB_DISCOVERY);
-  const agent = await waitFor(() => {
+  const agent = await waitFor('agent-config', () => {
     if (!existsSync(env.FLOVART_AGENT_CONFIG)) return null;
     const connection = readJson(env.FLOVART_AGENT_CONFIG);
     return connection?.url && connection?.token ? connection : null;
@@ -118,17 +168,31 @@ try {
     if (message.type() === 'error') consoleErrors.push(message.text());
   });
   page.on('pageerror', error => pageErrors.push(error.message));
-  // The Vite/WebUI page owns long-lived HMR and Agent connections. Waiting for
-  // the browser's full DOMContentLoaded lifecycle can therefore be flaky even
-  // after the document has committed and rendered its WebUI marker.
-  await page.goto(bootstrapUrl, { waitUntil: 'commit', timeout: 15_000 });
-  await page.locator('body[data-flovart-webui="1"]').waitFor({ state: 'attached', timeout: 15_000 });
-  const health = await waitFor(async () => {
-    const response = await fetch(new URL('/health', agent.url));
-    if (!response.ok) return null;
-    const value = await response.json();
-    return Number(value.clients || 0) > 0 && value.hasWorkflow ? value : null;
-  }, 30_000);
+  // Navigate with domcontentloaded (not commit) so the module script runs and
+  // Vite finishes compiling before we assert. Then wait for the React-mount
+  // marker — not the static data-flovart-webui HTML attribute, which is
+  // present in index.html before any script executes and would pass a bare
+  // fetch on a cold compile (Vite cold start measured 26–48s).
+  await page.goto(bootstrapUrl, { waitUntil: 'domcontentloaded', timeout: 90_000 });
+  await page.locator('body[data-flovart-mounted="1"]').waitFor({ state: 'attached', timeout: 60_000 });
+  let lastHealthObservation = 'no-response';
+  let health = null;
+  try {
+    health = await waitFor('browser-health', async () => {
+      const response = await fetch(new URL('/health', agent.url));
+      if (!response.ok) {
+        lastHealthObservation = `http-${response.status}`;
+        return null;
+      }
+      const value = await response.json();
+      if (Number(value.clients || 0) > 0 && value.hasWorkflow) return value;
+      lastHealthObservation = { probe: 'not-ready', health: value };
+      return null;
+    }, 30_000);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`${message} healthLast=${describeWaitValue(lastHealthObservation)}`);
+  }
   const finalUrl = page.url();
   if (/[?&](agentToken|token)=/i.test(finalUrl)) throw new Error('Bootstrap secret remained in the browser URL.');
   result = {
