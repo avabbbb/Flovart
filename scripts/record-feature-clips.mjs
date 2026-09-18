@@ -579,7 +579,11 @@ async function agentHealthy(agent) {
 }
 
 async function resolveServices() {
-  const agentConfigPath = join(homedir(), '.flovart', 'agent.json');
+  // Honour the same override the CLI uses, so the recorded browser and the CLI
+  // writes always talk to the SAME agent. Without this, a stale agent.json can
+  // point the browser at one agent and the CLI at another.
+  const agentConfigPath = process.env.FLOVART_AGENT_CONFIG
+    || join(homedir(), '.flovart', 'agent.json');
   const webDiscoveryPath = join(homedir(), '.flovart', 'web.json');
 
   const configured = await waitFor(() => {
