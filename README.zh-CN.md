@@ -70,14 +70,14 @@
 
 ## 功能演示
 
-下面每一条都是运行中应用的真实录屏：一个操作，从头到尾，没有合成帧、没有效果图。每条都裁到动作本身。录制方法、可复现命令与边界见 [DEMO_RECORDING.md](docs/maintenance/readme/DEMO_RECORDING.md)。
+下面每一条都是运行中应用的真实录屏：一个操作，从头到尾，没有合成帧、没有效果图。每条都裁到动作本身。视频与音频工具在浏览器内跑 ffmpeg.wasm，录制动作前会先预热 core，因此片段展示的是操作本身，而不是一次性约 30MB 的 wasm 下载 —— **所以片段时长不等于首次使用时的等待时间**。录制方法、可复现命令与边界见 [DEMO_RECORDING.md](docs/maintenance/readme/DEMO_RECORDING.md)。
 
 ### 画布操作
 
 <table>
   <tr>
     <td width="50%" align="center">
-      <img src="pic/readme/features/canvas-add-node.gif" alt="从画布工具栏添加图片节点与视频节点" />
+      <img src="pic/readme/features/canvas-add-node.gif" alt="从画布的添加节点菜单新增节点" />
       <br /><sub><strong>添加节点。</strong>工具栏的添加菜单涵盖图片、视频、文本、脚本、音频、配置。</sub>
     </td>
     <td width="50%" align="center">
@@ -130,6 +130,64 @@
   </tr>
 </table>
 
+### 视频节点
+
+同样是本地的、同样不联系模型服务：这几条走浏览器内的 ffmpeg core，每条都产出自己的结果节点（音视频分离会产出两个）。
+
+<table>
+  <tr>
+    <td width="50%" align="center">
+      <img src="pic/readme/features/video-trim.gif" alt="对视频节点做剪辑" />
+      <br /><sub><strong>剪辑。</strong>设定起止点；剪切走 stream copy，不重编码。</sub>
+    </td>
+    <td width="50%" align="center">
+      <img src="pic/readme/features/video-av-split.gif" alt="把视频拆成静音视频节点与音频节点" />
+      <br /><sub><strong>音视频分离。</strong>一个视频变成静音视频节点 + 一个音频节点。</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" align="center">
+      <img src="pic/readme/features/video-merge.gif" alt="按顺序拼接两个视频节点" />
+      <br /><sub><strong>拼接。</strong>选中多个视频节点，按顺序合成一个。</sub>
+    </td>
+    <td width="50%" align="center">
+      <img src="pic/readme/features/extract-frame-at.gif" alt="按指定时间点导出视频帧" />
+      <br /><sub><strong>导出帧。</strong>选一个时间点，把视频里的那一帧变成图片节点。</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" align="center">
+      <img src="pic/readme/features/extract-first-frame.gif" alt="导出首帧为图片节点" />
+      <br /><sub><strong>首帧。</strong>一键得到图片节点。</sub>
+    </td>
+    <td width="50%" align="center">
+      <img src="pic/readme/features/extract-last-frame.gif" alt="导出尾帧为图片节点" />
+      <br /><sub><strong>尾帧。</strong>同样一键，取片段末尾那帧。</sub>
+    </td>
+  </tr>
+</table>
+
+### 音频节点
+
+<table>
+  <tr>
+    <td width="50%" align="center">
+      <img src="pic/readme/features/audio-trim.gif" alt="截取音频节点" />
+      <br /><sub><strong>截取。</strong>同样的起止点控件，同样的 stream copy 剪切。</sub>
+    </td>
+    <td width="50%" align="center">
+      <img src="pic/readme/features/audio-speed.gif" alt="调整音频播放速度" />
+      <br /><sub><strong>变速。</strong>0.25×–4×，保持音调不变。</sub>
+    </td>
+  </tr>
+  <tr>
+    <td colspan="2" align="center">
+      <img src="pic/readme/features/audio-stem-split.gif" alt="把音频分离为人声与伴奏" />
+      <br /><sub><strong>人声/伴奏分离。</strong>输出两个音频节点；原理是立体声相位抵消，单声道或混音复杂的素材分离效果有限。</sub>
+    </td>
+  </tr>
+</table>
+
 ### 外部 Agent 链路
 
 <table>
@@ -145,7 +203,7 @@
   </tr>
 </table>
 
-尚未录制、也刻意没有展示的：依赖模型的生成能力（本机未配置任何 Provider），以及视频与音频节点工具——它们的浏览器内 ffmpeg core 当前加载失败。两项都作为开放缺口登记在[录制记录](docs/maintenance/readme/DEMO_RECORDING.md)里。
+尚未录制、也刻意没有展示的：依赖模型的生成能力与依赖模型的图片工具（图片生成、高清放大、移除背景、拆分图层、图片编辑/扩图）——本机未配置任何 Provider，没有可诚实展示的结果。该缺口登记在[录制记录](docs/maintenance/readme/DEMO_RECORDING.md)里。
 
 ## 为什么是 Flovart？
 

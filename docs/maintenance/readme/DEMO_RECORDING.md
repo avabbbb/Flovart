@@ -97,9 +97,19 @@ node .tmp/capture-demo.mjs
 ## Hero — external-agent live workflow (README 顶部主图)
 
 ```text
-File:        artifacts/hero-codex.gif   (README embed, 4.4 MB, 55 s @880 px)
+File:        pic/readme/hero-agent.gif   (README embed, 2.9 MB, 55 s @720 px)
 Masters:     artifacts/hero-codex.webm / .mp4  (8.97 MB, ~355 s @1440×900)
+             —— 母版留在 artifacts/（gitignore，不入库）；README 只引用重编码后的 GIF
 Status:      已录制（2026-09-18）
+
+落位与重命名（2026-09-18 修正）:
+  原引用 artifacts/hero-codex.gif 有两个问题：
+  1. .gitignore 第 83 行忽略整个 artifacts/，`git ls-files artifacts/` 为 0，
+     该文件不会被提交 —— README 在 GitHub 上是坏图。
+  2. 文件名带 "codex"，但实际宿主是 WorkBuddy codebuddy（见下），命名本身就在误导。
+  处理：从母版产物重编码为 pic/readme/hero-agent.gif（与其他 README 素材同目录、被 git 跟踪），
+  重编码参数 fps=5 / scale=720 / max_colors=80 / paletteuse dither=none，4.3 MB → 2.9 MB。
+  重编码来源为该 GIF 的上一版（artifacts/hero-codex.gif），不是从 355s 母版重新裁剪。
 ```
 
 ```text
@@ -239,23 +249,37 @@ Steps（每条片段同一条链路，未重排、未拼接）:
 后处理（可复现）:
   裁剪窗口由录制时打的时间标记自动计算（点选前 1.2s → 结果渲染后 0.6s），不是手工试出来的
   MP4 母版: libx264 crf 23 / yuv420p / faststart / -an
-  GIF: fps=9, scale=820:-2:flags=lanczos, palettegen max_colors=112, paletteuse dither=none
+  GIF: fps=8, scale=760:-2:flags=lanczos, palettegen max_colors=96, paletteuse dither=none
        （GIF 从 MP4 母版再编码，可用 `--regif --gif-scale/--gif-fps/--gif-colors` 重调而不重录）
-  成片 6–11s，单条 0.26–1.27 MB，整组 11 条共 7.5 MB
+  单条时长 6–11s；体积 192 KB–1000 KB；20 条合计 12.2 MB
   无逐帧修图，未插入非本次运行的画面
 
-素材清单（11 条，全部已产出并抽帧核对；体积为最终 GIF）:
-  canvas-add-node    638 KB   画布：添加节点菜单
-  canvas-connect     333 KB   画布：拖出连线
-  canvas-drag        276 KB   画布：拖动节点
-  canvas-tidy        263 KB   画布：一键整理
-  canvas-prompt      745 KB   画布：在节点上写提示词
-  crop               871 KB   图片：裁剪
-  rotate            1034 KB   图片：旋转镜像
-  split-grid        1000 KB   图片：宫格切分
-  filter             944 KB   图片：图片调色
-  agent-cli-live    1264 KB   外部 Agent：CLI 操作实时落到画布
-  agent-open-panel   303 KB   外部 Agent：打开 Agent 界面
+素材清单（20 条，全部已产出并抽帧核对；体积为最终 GIF）:
+  画布
+    canvas-add-node      540 KB   添加节点菜单
+    canvas-connect       324 KB   拖出连线
+    canvas-drag          308 KB   拖动节点
+    canvas-tidy          192 KB   一键整理
+    canvas-prompt        492 KB   在节点上写提示词
+  图片节点
+    crop                 684 KB   裁剪
+    rotate               784 KB   旋转镜像
+    split-grid          1000 KB   宫格切分
+    filter               592 KB   图片调色
+  视频节点
+    video-trim           712 KB   视频剪辑
+    video-av-split       680 KB   音视频分离
+    video-merge          972 KB   视频拼接
+    extract-first-frame  584 KB   导出首帧
+    extract-last-frame   460 KB   导出尾帧
+    extract-frame-at     776 KB   提取指定帧
+  音频节点
+    audio-trim           672 KB   音频截取
+    audio-speed          788 KB   音频变速
+    audio-stem-split     756 KB   人声/伴奏分离
+  外部 Agent
+    agent-cli-live       988 KB   CLI 操作实时落到画布
+    agent-open-panel     240 KB   打开 Agent 界面
 
 Secrets redacted:
   [x] 画面仅含本地 127.0.0.1 端口与本地 fixture 端口，无 API key / token / 私有端点
@@ -264,13 +288,17 @@ Secrets redacted:
 Claims demonstrated:
   - 画布：工具栏新增节点、拖动节点、连接节点、一键整理画布、在节点上直接写提示词
   - 图片节点本地操作：裁剪、旋转镜像、宫格切分、图片调色 —— 真实 UI 完成并产出结果节点
+  - 视频节点本地操作：剪辑、音视频分离、拼接、导出首/尾帧、提取指定帧 —— 均由浏览器内
+    ffmpeg core 完成，画布上出现真实结果节点（音视频分离产出两个）
+  - 音频节点本地操作：截取、变速、人声/伴奏分离 —— 同上
   - 外部 Agent 的 typed CLI 操作会实时反映到可见画布（agent-cli-live 一条）
 
 Claims NOT demonstrated（不要在宣传里延伸）:
   - 任何 Provider 生成能力：本组未配置任何模型服务；图片生成、高清放大、移除背景、
     拆分图层、图片编辑/扩图均未录制
-  - 视频与音频处理：见下方「已知阻塞」
+  - 视频/音频片段的时长不代表首次使用等待：core 冷启动已被预热（见上方预热说明）
   - 多选打组/对齐：见下方「未捕获」
+  - 缩放/撤销（canvas-zoom）：见下方「未捕获」
   - AE / PR / Resolve 原生效果、云同步
 
 Support Matrix status of what was used:
@@ -278,10 +306,10 @@ Support Matrix status of what was used:
   —— 未升级任何 Host / Provider 状态
 ```
 
-### 视频与音频本地工具：缺陷已修复，片段待补录（2026-09-18）
+### 视频与音频本地工具：缺陷已修复，片段已补录（2026-09-18）
 
-录制视频片段时发现视频/音频类操作全部不可用（视频剪辑、音视频分离、导出首/尾帧、提取指定帧、
-视频拼接、音频截取、音频变速、人声伴奏分离）。根因是**三个叠加的缺陷**，现已修复：
+首次录制时视频/音频类操作全部不可用，根因是**三个叠加的缺陷**，修复后 9 条片段已全部录成
+（每条的 `operation outcome` 均为 `committed`）：
 
 ```text
 缺陷 1（core 构建类型不匹配）
@@ -323,20 +351,29 @@ ff.exec(['-version']) → 正常返回
 
 `npx tsc --noEmit` 通过。
 
-**尚未完成的收尾**：这 8 条片段的端到端录屏还没补。录制时应用无法挂载——
-`services/dockCrewClient.ts` 仍 import 已被删除的 `components/dock/protocol`
-（同一批删除还包括 `components/dock/*`、`components/enterprise/panels/*`、
-`components/AgentThinkingPanel.tsx`、`styles/dock.css`），vite 报 import-analysis 错误、
-页面 500，因此无法进入画布操作。这属于当时的在途清理，与 ffmpeg 修复无关，未在本轮改动。
-该 import 恢复后即可用下面命令补录：
+**预热说明（必须与素材一起声明）**：ffmpeg core 的冷启动要抓取并实例化约 30MB wasm
+（本机实测 4–16s）。录制脚本会在录制动作**之前**，在同一页面调用应用自己的
+`getFFmpeg()`（模块级 memo，与画布用的是同一实例）完成预热，因此片段展示的是操作本身，
+**不是**一次性冷启动下载。也就是说：这些片段的时长不代表首次使用的等待时间。
+
+补录命令（可重放）：
 
 ```bash
 bash .tmp/with-web.sh node scripts/record-feature-clips.mjs \
   --clip video-trim,video-av-split,extract-last-frame,extract-first-frame,extract-frame-at,video-merge,audio-trim,audio-speed,audio-stem-split --keep-raw
 ```
 
-脚本已内置 ffmpeg 预热：录制动作前先在同一页面调用应用自己的 `getFFmpeg()` 完成冷启动，
-避免把 ~16s 的 core 下载当成"操作过程"录进去。**该预热会在补录的登记里明确标注。**
+录制期间还修了录制工具自身的两个环境问题，与产品行为无关：
+
+```text
+- fixture server 缺少 Range 支持：<video preload="metadata"> 会发 Range 请求，
+  没有 206 就永远不触发 loadedmetadata，面板读到 0s 时长并禁用确认按钮，整条片段卡死。
+  已实现 206/416 与 Accept-Ranges。
+- ~/.flovart/agent.json 会漂移（被一次已退出的 CLI start 改写成动态端口 ×6932），
+  而 CLI 子进程与浏览器可能因此指向不同 agent，表现为 WORKSPACE_UNAVAILABLE。
+  脚本现在探测 /health 并在必要时回退到 17373，同时把解析结果写成一份配置显式传给
+  CLI 子进程（FLOVART_AGENT_CONFIG），保证两边一致。未改动仓库外的 agent.json。
+```
 
 
 ### 未捕获：多选打组 / 对齐
@@ -379,8 +416,9 @@ node scripts/record-feature-clips.mjs --clip crop --keep-raw   # 单条 + 保留
 - [x] Demo A GIF 1.83 MB < 10 MB，README 加载无压力
 - [x] Demo D：`--clip <key>` 可重放；输出为真实操作提交的录像，未逐帧修图
 - [x] Demo D：全部 fixture 为本地生成，未使用用户素材；画面无密钥、无私有端点
-- [x] Demo D：单条 GIF 0.26–1.27 MB，整组 11 条共 7.5 MB
-- [ ] Demo D：视频/音频类片段待 `services/ffmpegClient.ts` 能加载 core 后补录
+- [x] Demo D：单条 GIF 192 KB–1000 KB，20 条共 12.2 MB
+- [x] Demo D：视频/音频 9 条已补录，`operation outcome` 均为 `committed`；预热已在上方声明
 - [ ] Demo D：多选打组/对齐（`canvas-group-align`）待框架选/多选行为后补录
 - [ ] Demo D：缩放与撤销（`canvas-zoom`）因本地服务探测超时未录，可单独重跑
+- [ ] Demo D：Provider 类工具（图片生成/高清放大/移除背景/拆分图层/图片编辑）需先配置模型服务
 - [ ] Demo B / C 待录

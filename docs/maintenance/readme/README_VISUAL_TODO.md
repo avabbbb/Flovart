@@ -4,10 +4,17 @@
 
 README 现在有五类真实视觉素材：
 
-- `artifacts/hero-codex.gif` —— Hero 主视觉：真实 Codex 会话用自然语言驱动同一份可见
-  Browser Workflow，节点与连线实时出现（5 次连续 `codex exec` trial 通过，trial 3–7）。
-  **⚠️ 该路径已失效**：`.gitignore` 把整个 `artifacts/` 目录排除，`git ls-files artifacts/`
-  为 0，仓库里没有这个文件，线上 README 的 Hero 图是坏的。待决定落位后修正引用。
+- `pic/readme/hero-agent.gif` —— Hero 主视觉：外部 coding agent（WorkBuddy codebuddy）读仓库自带的
+  Flovart Skill，经 typed CLI 驱动同一份可见 Browser Workflow，现场创建 3 个节点与 2 条连线，
+  无源码改动、未跑生成（即未调用付费模型服务）。录制与证据见
+  [DEMO_RECORDING.md](./DEMO_RECORDING.md)。
+  **2026-09-18 修正了两处遗留问题**：
+  1. 原引用 `artifacts/hero-codex.gif`，而 `.gitignore` 忽略整个 `artifacts/`（`git ls-files artifacts/`
+     为 0），该文件不会入库 → 线上是坏图。现已重编码并落到被跟踪的 `pic/readme/hero-agent.gif`
+     （4.3 MB → 2.9 MB），同时去掉文件名里误导性的 `codex`。
+  2. 原 README 文案称「real Codex session / five consecutive codex exec trials (3–7)」，
+     与证据矛盾：宿主实为 **codebuddy**，Codex 路径因账号配额未用；证据里也没有 trial 3–7
+     的记录（只有单次 `hero-codebuddy-trial.jsonl`）。文案已按证据改写。
 - `pic/readme/agent-operations-live-workflow.gif` —— 真实录屏：外部 Agent 会话通过 Flovart CLI
   创建项目与节点、连接节点，可见 Workflow 实时更新。记录见 [DEMO_RECORDING.md](./DEMO_RECORDING.md)。
   现展示于 README Architecture 段，作为操作级视角。
@@ -15,9 +22,11 @@ README 现在有五类真实视觉素材：
 - `pic/readme/agent-operations-final-state.png` —— 上述录屏的终态静帧，GIF 加载失败时的降级素材。
 - `pic/readme/features/*.gif` —— **功能演示组（Demo D，2026-09-18）**，README 新增
   「Feature tour / 功能演示」章节内嵌。每条一个操作，均由 `scripts/record-feature-clips.mjs`
-  在真实 UI 上驱动并录制：
+  在真实 UI 上驱动并录制，共 20 条、合计 12.2 MB：
   - 画布：`canvas-add-node`、`canvas-connect`、`canvas-drag`、`canvas-tidy`、`canvas-prompt`
   - 图片节点：`crop`、`rotate`、`split-grid`、`filter`
+  - 视频节点：`video-trim`、`video-av-split`、`video-merge`、`extract-first-frame`、`extract-last-frame`、`extract-frame-at`
+  - 音频节点：`audio-trim`、`audio-speed`、`audio-stem-split`
   - 外部 Agent：`agent-cli-live`、`agent-open-panel`
   对应 MP4 母版与登记见 [DEMO_RECORDING.md](./DEMO_RECORDING.md)。
 
@@ -33,19 +42,15 @@ README 现在有五类真实视觉素材：
 2. Hero 录屏里尚未包含**人用鼠标在同一份 Workspace 里移动/修改节点**的来回交互镜头。
    Demo D 的画布组已补上人操作的部分，但两者不在同一段素材里。
 3. WorkBuddy Connector 等其他具名 Host 的同类自然语言 tracer 录屏仍未录制。
-4. **视频与音频节点工具：缺陷已修复，片段仍待补录**。原缺陷有三处叠加：core 指到了
+4. **视频与音频节点工具：缺陷已修复，9 条片段已补录**。原缺陷有三处叠加：core 指到了
    *umd* 构建（umd 无默认导出，而 `@ffmpeg/ffmpeg` 固定以模块 worker 启动，必然抛
    `failed to import ffmpeg-core.js`）；多线程分支向 `@ffmpeg/core` 索取只存在于
    `@ffmpeg/core-mt` 的 `ffmpeg-core.worker.js`（404）；以及 `@ffmpeg/ffmpeg` 被 Vite
    预打包后 `new Worker(new URL('./worker.js', import.meta.url))` 解析到不存在的
    `/node_modules/.vite/deps/worker.js`（404），使 `ffmpeg.load()` 永不 settle、工具静默卡死。
-   三处已修（`services/ffmpegClient.ts` + `vite.config.ts`），并在跨域隔离页面内实测
-   `getFFmpeg()` 加载成功、文件系统可读写、`exec` 可执行（详见
-   [DEMO_RECORDING.md](./DEMO_RECORDING.md)）。
-   **未完成**：这 8 条片段（视频剪辑、音视频分离、导出首/尾帧、提取指定帧、视频拼接、
-   音频截取、音频变速、人声伴奏分离）的端到端录屏还没补——录制期间应用无法挂载，
-   原因是 `services/dockCrewClient.ts` 仍 import 已被删除的 `components/dock/protocol`。
-   该 import 恢复后按 DEMO_RECORDING 里的命令即可补录。
+   三处已修（`services/ffmpegClient.ts` + `vite.config.ts`），视频与音频共 9 条片段已录成，
+   每条的 `operation outcome` 均为 `committed`。详见 [DEMO_RECORDING.md](./DEMO_RECORDING.md)。
+   注意：这些片段的时长**不代表首次使用等待**——录制前会预热 ffmpeg core，该点已在登记中声明。
 5. **多选打组 / 对齐未捕获**：`canvas-group-align` 在脚本中记为 `DEFERRED`——
    Shift+点击与框选都没能让工具栏渲染对齐与打组动作。
 6. **缩放 / 撤销片段未捕获**：`canvas-zoom` 两次都因本地服务探测超时失败

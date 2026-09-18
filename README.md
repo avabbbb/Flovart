@@ -43,12 +43,12 @@
 ## See Flovart in action
 
 <p align="center">
-  <img src="artifacts/hero-codex.gif" alt="A real Codex session editing the same live Flovart Workflow" width="880" />
+  <img src="pic/readme/hero-agent.gif" alt="An external coding agent editing the same live Flovart Workflow" width="880" />
   <br />
-  <sub><strong>A real Codex session editing the same live Flovart Workflow — natural language becomes nodes and edges.</strong><br />
-  Codex CLI read the shipped Flovart Skill and drove the visible Workflow through the typed CLI surface; five consecutive
-  real <code>codex exec</code> trials (3–7) passed on the live Workflow with no source edits.
-  Reproduction record: <a href="docs/maintenance/readme/DEMO_RECORDING.md">DEMO_RECORDING.md</a>.</sub>
+  <sub><strong>An external coding agent editing the same live Flovart Workflow — natural language becomes nodes and edges.</strong><br />
+  The agent (WorkBuddy codebuddy) read the shipped Flovart Skill, then drove the visible Workflow through the typed CLI
+  surface: three nodes and two connections created live, with no source edits. No generation step was run, so no paid
+  model service was called. Reproduction record: <a href="docs/maintenance/readme/DEMO_RECORDING.md">DEMO_RECORDING.md</a>.</sub>
 </p>
 
 <table>
@@ -66,18 +66,18 @@
   </tr>
 </table>
 
-Both halves are now on record: the hero above is a real Codex conversation editing the live Workflow, and the CLI-only capture sits under [Architecture](#architecture) as the operation-level view. Remaining visual gaps are tracked in [README_VISUAL_TODO.md](docs/maintenance/readme/README_VISUAL_TODO.md).
+Both halves are now on record: the hero above is an external coding agent session editing the live Workflow, and the CLI-only capture sits under [Architecture](#architecture) as the operation-level view. Remaining visual gaps are tracked in [README_VISUAL_TODO.md](docs/maintenance/readme/README_VISUAL_TODO.md).
 
 ## Feature tour
 
-Every clip below is a real recording of the running app — one operation, start to finish, with no composited frames and no mockups. Each is cut to the action. Registration, method and limits: [DEMO_RECORDING.md](docs/maintenance/readme/DEMO_RECORDING.md).
+Every clip below is a real recording of the running app — one operation, start to finish, with no composited frames and no mockups. Each is cut to the action. Video and audio tools run ffmpeg.wasm in the browser; their core is pre-warmed before the recorded action, so the clip shows the operation rather than the one-off ~30MB wasm download — **clip length is therefore not the wait time on a first run**. Registration, method and limits: [DEMO_RECORDING.md](docs/maintenance/readme/DEMO_RECORDING.md).
 
 ### Canvas
 
 <table>
   <tr>
     <td width="50%" align="center">
-      <img src="pic/readme/features/canvas-add-node.gif" alt="Adding an image node and a video node from the canvas toolbar" />
+      <img src="pic/readme/features/canvas-add-node.gif" alt="Adding nodes from the canvas add-node menu" />
       <br /><sub><strong>Add nodes.</strong> The toolbar's add menu covers image, video, text, script, audio and config.</sub>
     </td>
     <td width="50%" align="center">
@@ -130,6 +130,64 @@ Four local operations on the same generated fixture plate, each producing a real
   </tr>
 </table>
 
+### Video nodes
+
+Also local, also without a model service: these run through the in-browser ffmpeg core, and each one creates its own result node (audio/video split creates two).
+
+<table>
+  <tr>
+    <td width="50%" align="center">
+      <img src="pic/readme/features/video-trim.gif" alt="Trimming a video node" />
+      <br /><sub><strong>Trim.</strong> Set the in/out points; the cut uses stream copy, so nothing is re-encoded.</sub>
+    </td>
+    <td width="50%" align="center">
+      <img src="pic/readme/features/video-av-split.gif" alt="Splitting a video into a silent video node and an audio node" />
+      <br /><sub><strong>Split audio and video.</strong> One video becomes a silent video node plus an audio node.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" align="center">
+      <img src="pic/readme/features/video-merge.gif" alt="Merging two video nodes in order" />
+      <br /><sub><strong>Merge.</strong> Select several video nodes and join them in order.</sub>
+    </td>
+    <td width="50%" align="center">
+      <img src="pic/readme/features/extract-frame-at.gif" alt="Extracting a frame at a chosen timecode" />
+      <br /><sub><strong>Extract a frame.</strong> Pick a timecode and get an image node out of the video.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" align="center">
+      <img src="pic/readme/features/extract-first-frame.gif" alt="Extracting the first frame as an image node" />
+      <br /><sub><strong>First frame.</strong> One click, straight to an image node.</sub>
+    </td>
+    <td width="50%" align="center">
+      <img src="pic/readme/features/extract-last-frame.gif" alt="Extracting the last frame as an image node" />
+      <br /><sub><strong>Last frame.</strong> Same, from the tail of the clip.</sub>
+    </td>
+  </tr>
+</table>
+
+### Audio nodes
+
+<table>
+  <tr>
+    <td width="50%" align="center">
+      <img src="pic/readme/features/audio-trim.gif" alt="Trimming an audio node" />
+      <br /><sub><strong>Trim.</strong> Same in/out controls, same stream-copy cut.</sub>
+    </td>
+    <td width="50%" align="center">
+      <img src="pic/readme/features/audio-speed.gif" alt="Changing audio playback speed" />
+      <br /><sub><strong>Speed.</strong> 0.25×–4× with pitch preserved.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td colspan="2" align="center">
+      <img src="pic/readme/features/audio-stem-split.gif" alt="Separating an audio node into vocals and backing track" />
+      <br /><sub><strong>Separate vocals and backing.</strong> Two audio nodes come out; this is stereo phase cancellation, so mono or heavily mixed material separates less cleanly.</sub>
+    </td>
+  </tr>
+</table>
+
 ### The external-agent link
 
 <table>
@@ -145,7 +203,7 @@ Four local operations on the same generated fixture plate, each producing a real
   </tr>
 </table>
 
-Not filmed yet, and deliberately not shown: model-backed generation (this checkout configures no provider) and the video and audio node tools, whose in-browser ffmpeg core currently fails to load — both are recorded as open gaps in the [recording notes](docs/maintenance/readme/DEMO_RECORDING.md).
+Not filmed yet, and deliberately not shown: model-backed generation and the model-backed image tools (image generation, upscale, background removal, layer split, edit/outpaint) — this checkout configures no provider, so there is no honest result to record. That gap is logged in the [recording notes](docs/maintenance/readme/DEMO_RECORDING.md).
 
 ## Why Flovart?
 
@@ -263,7 +321,7 @@ CLI and the experimental stdio MCP share operation semantics and the current Bro
   <br />
   <sub><strong>The operation-level view of the same claim.</strong> A project and three nodes are created through
   <code>workflow.project.create</code>, <code>workflow.node.create</code> and <code>workflow.connect</code> (played at 1.5×) — the
-  typed operations the Codex session above drives end-to-end. Capture record:
+  typed operations the external-agent session above drives end-to-end. Capture record:
   <a href="docs/maintenance/readme/DEMO_RECORDING.md">DEMO_RECORDING.md</a>.</sub>
 </p>
 

@@ -28,7 +28,7 @@
 
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:http';
-import { existsSync, readFileSync, mkdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, mkdirSync, statSync, writeFileSync } from 'node:fs';
 import { mkdir, mkdtemp, rm, copyFile, readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -353,23 +353,20 @@ const CATALOG = {
   },
 };
 
-// ---------------------------------------------------------------------------
-// 2. Clips that run through the in-page ffmpeg.wasm core.
+// Clips that run through the in-page ffmpeg.wasm core. They are recorded like
+// any other clip now that the client can actually load a core — they just need
+// the core pre-warmed before the recorded action (see the prewarm step below),
+// because a cold start fetches and instantiates ~30MB of wasm and showing that
+// download as the "operation" would misrepresent the feature.
 //
-// Verified unusable on 2026-09-18, so they are excluded from `all` rather than
-// shipped as broken demos:
-//   - the app page IS cross-origin isolated (COOP/COEP from vite.config.ts, and
-//     `window.crossOriginIsolated === true`), so services/ffmpegClient.ts takes
-//     its multi-thread branch;
-//   - that branch requests `ffmpeg-core.worker.js` from @ffmpeg/core@0.12.6,
-//     which does not ship that file (HTTP 404) — the load rejects with
-//     "Failed to fetch", which is exactly what the operation card showed;
-//   - repointing the branch at @ffmpeg/core-mt@0.12.6 removes the 404, but the
-//     core still never finishes loading in the page (observed >300s at the
-//     dialog's loading state with the canvas untouched).
-// Re-record these once the client can actually load a core.
-// ---------------------------------------------------------------------------
-const BLOCKED_FFMPEG = new Set([
+// Historical note: these were unrecordable until 2026-09-18 because of three
+// stacked defects in the ffmpeg load path — the core was loaded from the *umd*
+// build (no default export, so the module-worker path always threw), the
+// multi-thread branch asked @ffmpeg/core for a worker file only @ffmpeg/core-mt
+// ships (404), and Vite's dependency pre-bundling broke
+// `new Worker(new URL('./worker.js', import.meta.url))` so `ffmpeg.load()` never
+// settled. See docs/maintenance/readme/DEMO_RECORDING.md.
+const FFMPEG_TOOLS = new Set([
   'video-trim', 'video-av-split', 'extract-last-frame', 'extract-first-frame',
   'extract-frame-at', 'video-merge', 'audio-trim', 'audio-speed', 'audio-stem-split',
 ]);
@@ -597,8 +594,14 @@ async function resolveServices() {
     if (await agentHealthy(candidate)) { agent = candidate; break; }
   }
   if (agent.url !== configured.url) {
-    console.log(`[clip] agent.json points at ${configured.url} (no /health) — using ${agent.url}`);
+    console.log(`[clip] ${agentConfigPath} points at ${configured.url} (no /health) — using ${agent.url}`);
   }
+  // The CLI child resolves the agent from FLOVART_AGENT_CONFIG independently of
+  // what the browser was pointed at, so write the resolved endpoint to its own
+  // config and hand that to the child. Otherwise a stale discovery file makes
+  // the browser talk to one agent and every CLI write to another.
+  const resolvedConfigPath = join(tmpDir, 'agent-resolved.json');
+  writeFileSync(resolvedConfigPath, JSON.stringify(agent, null, 2));
 
   const web = await waitFor(async () => {
     const candidates = new Set();
@@ -614,7 +617,7 @@ async function resolveServices() {
     }
     return null;
   });
-  return { agent, webUrl: typeof web === 'string' ? web : web?.url };
+  return { agent, webUrl: typeof web === 'string' ? web : web?.url, resolvedConfigPath };
 }
 
 // The CLI prints npm's banner, then a pretty-printed JSON envelope. The
@@ -626,14 +629,17 @@ function parseCliJson(out) {
   return JSON.parse(lines.slice(start).join('\n'));
 }
 
-function makeCli() {
+function makeCli(agentConfigPath) {
   // Invoke the CLI through node directly instead of `npm run … -- …`.
   // An npm+shell hop on Windows re-splits argv, which silently truncates
   // titles at spaces and mangles the JSON metadata payload.
   const cliPath = join(projectDir, 'tools', 'flovart', 'cli.js');
+  const env = agentConfigPath
+    ? { ...process.env, FLOVART_AGENT_CONFIG: agentConfigPath }
+    : process.env;
   return args => new Promise((res, rej) => {
     const child = spawn(process.execPath, [cliPath, ...args, '--json'], {
-      cwd: projectDir, env: process.env, stdio: ['ignore', 'pipe', 'pipe'],
+      cwd: projectDir, env, stdio: ['ignore', 'pipe', 'pipe'],
     });
     let out = '', err = '';
     child.stdout.on('data', c => { out += c; });
@@ -659,7 +665,7 @@ function makeCli() {
 async function recordClip(key, clip, services, fixtureOrigin, runTag) {
   const { agent, webUrl } = services;
   const agentIdentity = 'workbuddy';
-  const cli = makeCli();
+  const cli = makeCli(services.resolvedConfigPath);
 
   const tempRoot = resolveTestTempRoot(projectDir);
   await mkdir(tempRoot, { recursive: true });
@@ -767,7 +773,7 @@ async function recordClip(key, clip, services, fixtureOrigin, runTag) {
     // that need it. Cold start fetches and instantiates a ~30MB wasm core, and
     // showing that download as the "operation" would misrepresent the feature.
     // Same module instance the app uses — getFFmpeg() memoises at module scope.
-    if (BLOCKED_FFMPEG.has(key) || clip.prewarmFfmpeg) {
+    if (FFMPEG_TOOLS.has(key) || clip.prewarmFfmpeg) {
       const t0 = Date.now();
       const warm = await page.evaluate(async () => {
         try {
@@ -876,7 +882,7 @@ async function recordClip(key, clip, services, fixtureOrigin, runTag) {
 // ---------------------------------------------------------------------------
 if (FLAGS.has('--list')) {
   for (const [k, c] of Object.entries(CATALOG)) {
-    const tags = [c.provider ? '[needs provider]' : '', BLOCKED_FFMPEG.has(k) ? '[blocked: ffmpeg.wasm]' : '']
+    const tags = [c.provider ? '[needs provider]' : '', FFMPEG_TOOLS.has(k) ? '[ffmpeg.wasm]' : '']
       .filter(Boolean).join(' ');
     console.log(`${k.padEnd(22)} ${c.kind.padEnd(10)} ${c.title}${tags ? '  ' + tags : ''}`);
   }
@@ -889,11 +895,10 @@ if (!requested) {
   process.exit(2);
 }
 // `all` records everything that can actually run here: no provider-backed tools
-// (this run configures no BYOK service), no ffmpeg.wasm-backed tools, and none
-// of the scenarios that are still deferred.
+// (this run configures no BYOK service) and none of the deferred scenarios.
 const keys = requested === 'all'
   ? Object.keys(CATALOG).filter(k => FLAGS.has('--include-blocked')
-      || (!BLOCKED_FFMPEG.has(k) && !CATALOG[k].provider && !DEFERRED.has(k)))
+      || (!CATALOG[k].provider && !DEFERRED.has(k)))
   : requested.split(',').map(s => s.trim()).filter(Boolean);
 for (const k of keys) if (!CATALOG[k]) { console.error(`unknown clip "${k}"`); process.exit(2); }
 
