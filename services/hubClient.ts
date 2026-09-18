@@ -1,8 +1,7 @@
 // Flovart Hub 后端 API 客户端
-// 所有 backend/* 服务的统一入口：auth、prompts、uploads、enterprise
+// 所有 backend/* 服务的统一入口：auth、prompts、uploads
 
 const DEFAULT_HUB_BASE = 'http://localhost:11452/api/v1';
-const DEFAULT_ENTERPRISE_BASE = 'http://localhost:11453/api/v1/enterprise';
 
 function readEnvBase(key: string, fallback: string): string {
   // 仅在 web 环境可用；Tauri 也会注入 import.meta.env
@@ -14,7 +13,6 @@ function readEnvBase(key: string, fallback: string): string {
 }
 
 export const HUB_BASE_URL = readEnvBase('VITE_HUB_BASE_URL', DEFAULT_HUB_BASE);
-export const ENTERPRISE_BASE_URL = readEnvBase('VITE_ENTERPRISE_BASE_URL', DEFAULT_ENTERPRISE_BASE);
 
 // Hub JWT 只保留当前浏览器会话；长期登录应由后端改为 HttpOnly Cookie。
 const TOKEN_KEY = 'flovart.hub.token';

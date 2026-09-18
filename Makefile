@@ -11,7 +11,7 @@ help:
 	@echo "  make build       - 构建 Docker 镜像"
 	@echo "  make up          - 启动全部容器（后台运行）"
 	@echo "  make web         - 启动 Web 及依赖服务"
-	@echo "  make backend     - 启动 Hub + Enterprise + 数据库"
+	@echo "  make backend     - 启动 Hub + 数据库"
 	@echo "  make db          - 只启动 PostgreSQL"
 	@echo "  make down        - 停止并删除容器"
 	@echo "  make restart     - 重启容器"
@@ -39,7 +39,7 @@ web:
 
 backend:
 	@echo "正在启动后端与数据库..."
-	$(COMPOSE) up -d --build db hub enterprise
+	$(COMPOSE) up -d --build db hub
 
 db:
 	@echo "正在启动 PostgreSQL..."

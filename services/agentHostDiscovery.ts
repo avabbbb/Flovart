@@ -13,7 +13,6 @@ export interface AgentHostRecord {
   authStatus: 'not-inspected' | string;
   distributionTargets: string[];
   runtimeSurfaces: string[];
-  directorBinding: 'supported' | 'not-supported' | string;
   diagnostic: string;
 }
 

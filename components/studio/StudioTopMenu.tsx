@@ -1,9 +1,8 @@
-import { CircleAlert, CircleCheck, Languages, Moon, Settings, Sun, Monitor, Building2, BookOpen, User, Download, RefreshCw, Loader2, Home, Plus, Trash2, ChevronLeft, ChevronRight, Pencil, Check, X } from 'lucide-react';
+import { CircleAlert, CircleCheck, Languages, Moon, Settings, Sun, Monitor, BookOpen, User, Download, RefreshCw, Loader2, Home, Plus, Trash2, ChevronLeft, ChevronRight, Pencil, Check, X } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useAuth } from '../../hooks/useAuth';
 import { useUpdaterStore } from '../../stores/useUpdaterStore';
-import { useDeploymentStore } from '../../stores/useDeploymentStore';
 import { useAgentConnectionStore } from '../../stores/useAgentConnectionStore';
 import { toLocalLinkPublicStatus } from '../../tools/flovart/public-status';
 import { AuthModal } from '../auth/AuthModal';
@@ -21,7 +20,7 @@ export interface StudioMenuProjectRef {
   title: string;
 }
 
-export type StudioMode = 'workflow' | 'table' | 'agent';
+export type StudioMode = 'workflow' | 'agent';
 
 export interface StudioMenuModel {
   mode: StudioMode;
@@ -59,8 +58,6 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
   const { user, isLoggedIn } = useAuth();
   const [authOpen, setAuthOpen] = useState(false);
   const isTauri = Boolean((window as any)?.__TAURI__ || (window as any)?.__TAURI_INTERNALS__);
-  const enterpriseEnabled = useDeploymentStore(state => state.profile.capabilities.enterpriseAdmin);
-
   // LOGO 下拉（回主页/新建工作流/删除工作流）
   const [logoMenuOpen, setLogoMenuOpen] = useState(false);
   const logoMenuRef = useRef<HTMLDivElement>(null);
@@ -234,11 +231,11 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
       </div>
 
       <nav className="studio-top-menu__modes flex min-w-0 items-center justify-center gap-0.5" aria-label={isChinese ? '工作区' : 'Workspace'}>
-        {(['workflow', 'table', 'agent'] as const).map(tabMode => {
+        {(['workflow', 'agent'] as const).map(tabMode => {
           const isActive = mode === tabMode;
           const label = tabMode === 'workflow'
             ? (isChinese ? '工作流' : 'Workflow')
-            : tabMode === 'table' ? 'Table' : 'Agent';
+            : 'Agent';
           return (
             <button
               key={tabMode}
@@ -270,16 +267,6 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
         >
           <BookOpen size={15} />
         </Link>
-        {enterpriseEnabled && (
-          <Link
-            to="/enterprise"
-            className="isl-icon-btn max-sm:!hidden h-8 items-center gap-1.5 px-2 sm:!flex"
-            title={isChinese ? '企业后台' : 'Enterprise console'}
-            aria-label={isChinese ? '企业后台' : 'Enterprise console'}
-          >
-            <Building2 size={15} />
-          </Link>
-        )}
         <button
           type="button"
           className="isl-icon-btn max-sm:!hidden h-8 items-center gap-1.5 px-2 sm:!flex"

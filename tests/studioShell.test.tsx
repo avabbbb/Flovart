@@ -9,9 +9,9 @@ vi.mock('../hooks/useAuth', () => ({
   useAuth: () => ({ user: null, isLoggedIn: false }),
 }));
 
-const menuModel = (mode: 'workflow' | 'table' | 'agent'): StudioMenuModel => ({
+const menuModel = (mode: 'workflow' | 'agent'): StudioMenuModel => ({
   mode,
-  title: mode === 'workflow' ? 'Workflow project' : mode === 'table' ? 'Table' : 'Agent',
+  title: mode === 'workflow' ? 'Workflow project' : 'Agent',
   themeMode: 'light',
   resolvedTheme: 'light',
   language: 'zho',
@@ -29,7 +29,7 @@ const menuModel = (mode: 'workflow' | 'table' | 'agent'): StudioMenuModel => ({
 });
 
 describe('shared studio shell', () => {
-  it.each(['workflow', 'table', 'agent'] as const)('uses the same menu model in %s mode', mode => {
+  it.each(['workflow', 'agent'] as const)('uses the same menu model in %s mode', mode => {
     const model = menuModel(mode);
     render(<MemoryRouter><StudioTopMenu model={model} /></MemoryRouter>);
 

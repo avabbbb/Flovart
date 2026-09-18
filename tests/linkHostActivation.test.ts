@@ -8,7 +8,7 @@ const available: AgentHostDiscovery = {
   state: 'ready',
   agents: [{
     id: 'codex', label: 'Codex', category: 'coding-agent', status: 'available', available: true,
-    executable: 'codex', path: null, version: null, authStatus: 'not-inspected', distributionTargets: [], runtimeSurfaces: [], directorBinding: 'supported', diagnostic: '',
+    executable: 'codex', path: null, version: null, authStatus: 'not-inspected', distributionTargets: [], runtimeSurfaces: [], diagnostic: '',
   }],
 };
 

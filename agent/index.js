@@ -7,13 +7,12 @@ import { FlovartAgentService } from './flovart.js';
 import { createFlovartAgentTools } from './tools.js';
 import { SkillRegistry, BUNDLED_SKILL_IDS } from './skill-registry.js';
 import { WorkflowAgentSession, WorkflowAgentSessionError } from './session.js';
-import { CrewStore } from './crew/store.js';
-import { CrewService, CrewServiceError } from './crew/service.js';
 import { prepareAgentHostProjection } from './host-projection.js';
 import { importFlovartModule } from './flovart-modules.js';
 
 const { discoverAgentHosts } = await importFlovartModule('host-discovery');
-const { getAgentIdentity, resolveDirectorBinding } = await importFlovartModule('host-registry');
+const { getAgentIdentity } = await importFlovartModule('host-registry');
+const { getCanonicalRegistry } = await importFlovartModule('registry');
 
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PROJECT_ROOT = path.resolve(process.env.FLOVART_PROJECT_DIR || REPOSITORY_ROOT);
@@ -96,11 +95,16 @@ export function startHttpServer() {
     : Number(process.env.FLOVART_AGENT_PORT) || Number(new URL(config.url).port) || DEFAULT_AGENT_PORT;
   const bootstrapCredentials = new BootstrapCredentialStore();
   const session = new WorkflowAgentSession({ isKnownAgentIdentity: id => Boolean(getAgentIdentity(id)) });
-  const crew = new CrewService({
-    store: new CrewStore(),
-    callCommand: (command, args, source, idempotencyKey) => session.callCommand(command, args, source, idempotencyKey),
+  // /crew/protocol 仍是对外 readiness 握手（local-agent.js inspectLocalAgent
+  // 与 CLI bootstrap/status 路径依赖）。Crew/Director 业务面已移除，这里只保留
+  // 协议版本与 Registry Hash 的自报能力。
+  const canonicalRegistry = getCanonicalRegistry();
+  const protocolDescriptor = () => ({
+    protocolVersion: canonicalRegistry.protocolVersion,
+    registryHash: canonicalRegistry.registryHash,
+    capabilities: ['command', 'events'],
+    limits: { maxPayloadBytes: 1024 * 1024, eventRetention: 10000 },
   });
-  crew.recoverAfterRestart();
   const skillRegistry = new SkillRegistry({ repoRoot: PROJECT_ROOT });
   const flovart = WORKSPACE_ONLY ? null : new FlovartAgentService({
     tools: createFlovartAgentTools((...args) => session.callCommand(...args)),
@@ -211,66 +215,7 @@ export function startHttpServer() {
         return json(response, 200, { ok: true });
       }
       if (request.method === 'GET' && url.pathname === '/crew/protocol') {
-        return json(response, 200, { ok: true, ...crew.protocol() });
-      }
-      if (request.method === 'POST' && url.pathname === '/crew/intent') {
-        const body = await readBody(request);
-        const result = crew.submitIntent({
-          intentText: body.intentJson || body.intentText,
-          projectId: body.projectId,
-          idempotencyKey: body.idempotencyKey,
-          director: body.director || null,
-        });
-        return json(response, 200, { ok: true, ...result });
-      }
-      if (request.method === 'GET' && /^\/crew\/intent\/[^/]+$/.test(url.pathname)) {
-        return json(response, 200, { ok: true, intent: crew.getIntent(decodeURIComponent(url.pathname.split('/').pop())) });
-      }
-      if (request.method === 'POST' && /^\/crew\/intent\/[^/]+\/cancel$/.test(url.pathname)) {
-        const body = await readBody(request);
-        const intentId = decodeURIComponent(url.pathname.split('/').slice(-2)[0]);
-        const { intent, receipt, alreadyFinal } = crew.cancelIntent(intentId, body.reason);
-        return json(response, 200, { ok: true, intent, receipt, alreadyFinal });
-      }
-      if (request.method === 'GET' && /^\/crew\/receipt\/[^/]+$/.test(url.pathname)) {
-        return json(response, 200, { ok: true, receipt: crew.getReceipt(decodeURIComponent(url.pathname.split('/').pop())) });
-      }
-      if (request.method === 'GET' && url.pathname === '/crew/events') {
-        const after = Number(url.searchParams.get('afterEventId') ?? url.searchParams.get('after') ?? 0);
-        const limit = Number(url.searchParams.get('limit') ?? 100);
-        return json(response, 200, { ok: true, ...crew.listEvents({ afterEventId: after, limit }) });
-      }
-      if (request.method === 'POST' && url.pathname === '/director/bind') {
-        const body = await readBody(request);
-        const binding = crew.bindDirector({
-          hostKind: resolveDirectorBinding(body.agentIdentity || body.host || body.hostKind)?.runtimeHostKind,
-          sessionId: body.sessionId,
-          hostInstanceId: body.hostInstanceId,
-          projectId: body.projectId,
-        });
-        return json(response, 200, { ok: true, binding });
-      }
-      if (request.method === 'POST' && url.pathname === '/director/handoff') {
-        const body = await readBody(request);
-        const binding = crew.handoffDirector({
-          hostKind: resolveDirectorBinding(body.agentIdentity || body.host || body.hostKind)?.runtimeHostKind,
-          sessionId: body.sessionId,
-          hostInstanceId: body.hostInstanceId,
-          projectId: body.projectId,
-          expectedBindingId: body.expectedBindingId,
-        });
-        return json(response, 200, { ok: true, binding });
-      }
-      if (request.method === 'GET' && url.pathname === '/director/status') {
-        return json(response, 200, { ok: true, ...crew.directorStatus({
-          hostKind: resolveDirectorBinding(url.searchParams.get('agentIdentity') || url.searchParams.get('host'))?.runtimeHostKind,
-          sessionId: url.searchParams.get('sessionId') || undefined,
-          projectId: url.searchParams.get('projectId') || undefined,
-        }) });
-      }
-      if (request.method === 'POST' && url.pathname === '/director/unbind') {
-        const body = await readBody(request);
-        return json(response, 200, crew.unbindDirector({ bindingId: body.bindingId }));
+        return json(response, 200, { ok: true, ...protocolDescriptor() });
       }
       if (request.method === 'GET' && url.pathname === '/api/skills') {
         return json(response, 200, { ok: true, skills: await skillRegistry.scan() });
@@ -401,12 +346,6 @@ export function startHttpServer() {
           ? 409
           : error.code === 'WORKSPACE_UNAVAILABLE' ? 503 : 400;
         return json(response, status, { ok: false, error: error.toJSON() });
-      }
-      if (error instanceof CrewServiceError) {
-        const status = error.code === 'NOT_FOUND' ? 404
-          : error.code === 'BINDING_CONFLICT' || error.code === 'IDEMPOTENCY_CONFLICT' ? 409
-            : error.code === 'RECEIPT_PENDING' ? 202 : 400;
-        return json(response, status, { ok: false, error: error.toJSON(), crew: true });
       }
       return json(response, 500, { ok: false, error: { code: 'INTERNAL_ERROR', message: 'Agent 服务处理失败，请重试。' } });
     }

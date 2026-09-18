@@ -13,7 +13,6 @@ type Config struct {
 	JWTSecret      string
 	JWTExpHours    string
 	CORSAllow      string
-	DeploymentMode string
 	Storage        StorageConfig
 }
 
@@ -34,7 +33,6 @@ func Load() (*Config, error) {
 		JWTSecret:      env("JWT_SECRET", ""),
 		JWTExpHours:    env("JWT_EXP_HOURS", "168"),
 		CORSAllow:      env("CORS_ALLOW", "*"),
-		DeploymentMode: env("FLOVART_DEPLOYMENT_MODE", "local"),
 		Storage: StorageConfig{
 			Provider:   env("STORAGE_PROVIDER", "r2"),
 			AccountID:  os.Getenv("R2_ACCOUNT_ID"),

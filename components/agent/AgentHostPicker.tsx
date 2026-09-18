@@ -1,8 +1,7 @@
 import { Check, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { discoverAgentHosts, type AgentHostDiscovery, type AgentHostRecord } from '../../services/agentHostDiscovery';
-import { createWorkBuddySkillPackage } from '../../services/agentSkillPackage';
-import { ensureHostReady, LinkActivationError } from '../../services/link/hostActivation';
+import { prepareAgent } from '../../services/link/hostActivation';
 import { toLinkPublicStatus, type LinkPublicStatus } from '../../services/link/publicStatus';
 import { useAgentConnectionStore } from '../../stores/useAgentConnectionStore';
 import registry from '../../tools/flovart/contracts/host-registry.v1.json';
@@ -15,14 +14,9 @@ function readSelectedHost() {
   try { return localStorage.getItem(SELECTED_HOST_KEY) || 'codex'; } catch { return 'codex'; }
 }
 
-function serviceState(status: string): 'ready' | 'connecting' | 'offline' | 'error' {
-  return status === 'ready' || status === 'connecting' || status === 'error' ? status : 'offline';
-}
-
 function publicStatusFor(host: AgentHostRecord | undefined, connectionStatus: string, writerActive: boolean): LinkPublicStatus {
   return toLinkPublicStatus({
-    service: serviceState(connectionStatus),
-    browserConnected: connectionStatus === 'ready',
+    service: connectionStatus === 'ready' || connectionStatus === 'connecting' || connectionStatus === 'error' ? connectionStatus : 'offline',
     // A ready local service is enough to classify an unavailable host as setup-needed.
     // Writer ownership is shown separately by `active`; treating it as a hard
     // prerequisite would incorrectly turn WorkBuddy/DSH setup into "offline".
@@ -41,6 +35,15 @@ const PUBLIC_STATE_LABEL: Record<LinkPublicStatus['state'], string> = {
   needs_login: '需登录',
   offline: '离线',
 };
+
+function actionLabel(status: LinkPublicStatus, hostLabel: string): string {
+  switch (status.action) {
+    case 'setup': return '设置';
+    case 'login': return '登录';
+    case 'repair': return '重试';
+    default: return `使用 ${hostLabel}`;
+  }
+}
 
 interface AgentHostPickerProps {
   projectTitle?: string;
@@ -96,45 +99,23 @@ export function AgentHostPicker({ projectTitle }: AgentHostPickerProps) {
     try { localStorage.setItem(SELECTED_HOST_KEY, id); } catch { /* preference only */ }
   };
 
-  const useWorkBuddy = async (request: number) => {
-    const blob = await createWorkBuddySkillPackage();
-    if (request !== actionRequest.current) return;
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'flovart-workbuddy.zip';
-    link.click();
-    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-    setNotice('WorkBuddy 安装包已下载，导入后即可直接使用 Flovart。');
-  };
-
   const useHost = async (id: string) => {
     selectHost(id);
     const request = ++actionRequest.current;
     setPendingId(id);
     setFailure('');
     setNotice('正在准备…');
-    try {
-      if (id === 'workbuddy') {
-        await useWorkBuddy(request);
-      } else if (id === 'deepseek-harness') {
-        setNotice('DeepSeek Harness 插件尚未在当前环境就绪，请先完成插件安装。');
-      } else {
-        const result = await ensureHostReady(id);
-        if (request !== actionRequest.current) return;
-        if ('state' in result) {
-          setNotice('这个助手尚未安装。');
-        } else {
-          setNotice(`${registry.agentIdentities.find(host => host.id === id)?.label || id} 已选择并准备连接。`);
-          void scan();
-        }
-      }
-    } catch (error) {
-      if (request !== actionRequest.current) return;
+    const result = await prepareAgent(id);
+    if (request !== actionRequest.current) return;
+    setPendingId(null);
+    if (result.state === 'ready') {
+      setNotice(result.notice);
+      void scan();
+    } else if (result.state === 'error') {
       setNotice('');
-      setFailure(error instanceof LinkActivationError ? error.message : error instanceof Error ? error.message : '暂时无法使用这个助手。');
-    } finally {
-      if (request === actionRequest.current) setPendingId(null);
+      setFailure(result.message);
+    } else {
+      setNotice(result.message);
     }
   };
 
@@ -144,11 +125,6 @@ export function AgentHostPicker({ projectTitle }: AgentHostPickerProps) {
   const selectedActive = activeHostIdentity === selectedHost.id && activeHostProjectId === projectId && writerStatus === 'active';
   const selectedStatus = publicStatusFor(selectedDetected, connectionStatus, selectedActive);
   const selectedBusy = pendingId === selectedHost.id;
-  const selectedActionLabel = selectedActive
-    ? '当前使用'
-    : selectedStatus.state === 'needs_setup'
-      ? (selectedHost.id === 'workbuddy' ? '安装' : '启用')
-      : `使用 ${selectedHost.label}`;
 
   return (
     <section className="agent-host-picker" data-testid="agent-host-picker" aria-label="协作 Agent">
@@ -173,7 +149,7 @@ export function AgentHostPicker({ projectTitle }: AgentHostPickerProps) {
             <span className="agent-picker__badge">{selectedActive ? '已准备' : PUBLIC_STATE_LABEL[selectedStatus.state]}</span>
           </div>
           {projectTitle && <div className="agent-picker__current-workflow"><p>当前 Workflow</p><strong title={projectTitle}>{projectTitle}</strong></div>}
-          <button type="button" className="agent-picker__primary-action" disabled={selectedActive || Boolean(pendingId)} onClick={() => void useHost(selectedHost.id)}>{selectedBusy ? '正在准备…' : selectedActionLabel}</button>
+          <button type="button" className="agent-picker__primary-action" disabled={selectedActive || Boolean(pendingId)} onClick={() => void useHost(selectedHost.id)}>{selectedBusy ? '正在准备…' : selectedActive ? '当前使用' : actionLabel(selectedStatus, selectedHost.label)}</button>
           <p className="agent-picker__message">{selectedActive ? `${selectedHost.label} 已选择并准备连接。` : selectedStatus.message}</p>
         </section>
 
@@ -193,7 +169,7 @@ export function AgentHostPicker({ projectTitle }: AgentHostPickerProps) {
                     <strong>{host.label}</strong>
                     <span>{active ? '已选择' : status.label}</span>
                   </button>
-                  {active ? <Check size={15} style={{ color: 'var(--isl-mint-deep)' }} aria-label="当前协作 Agent" /> : <button type="button" disabled={Boolean(pendingId)} onClick={() => void useHost(id)} className="agent-card__action">{busy ? '准备中…' : status.state === 'needs_setup' ? (id === 'workbuddy' ? '安装' : '启用') : `使用 ${host.label}`}</button>}
+                  {active ? <Check size={15} style={{ color: 'var(--isl-mint-deep)' }} aria-label="当前协作 Agent" /> : <button type="button" disabled={Boolean(pendingId)} onClick={() => void useHost(id)} className="agent-card__action">{busy ? '准备中…' : actionLabel(status, host.label)}</button>}
                 </div>
               );
             })}

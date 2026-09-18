@@ -36,10 +36,9 @@ func main() {
 	packRepo := repository.NewPromptRepository(db)
 	authSvc := service.NewAuthService(userRepo, cfg.JWTSecret, atoiDefault(cfg.JWTExpHours, 168))
 	promptSvc := service.NewPromptService(packRepo)
-	deploymentSvc := service.NewDeploymentService(cfg.DeploymentMode)
 	authH := handler.NewAuthHandler(authSvc)
 	promptH := handler.NewPromptHandler(promptSvc)
-	deploymentH := handler.NewDeploymentHandler(deploymentSvc)
+
 
 	var uploadH *handler.UploadHandler
 	if cfg.StorageReady() {
@@ -68,7 +67,6 @@ func main() {
 
 	api := r.Group("/api/v1")
 	{
-		api.GET("/deployment-profile", deploymentH.Profile)
 		auth := api.Group("/auth")
 		{
 			auth.POST("/register", authH.Register)

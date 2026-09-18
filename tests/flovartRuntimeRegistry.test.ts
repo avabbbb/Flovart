@@ -23,7 +23,6 @@ import {
   WORKSPACE_COMMAND_NAMES,
   WORKSPACE_WRITE_COMMAND_NAMES,
 } from '../tools/flovart/workspace-command-surface.js';
-import { CREW_COMMAND_NAMES } from '../tools/flovart/crew-command-surface.js';
 import {
   RESEARCH_COMMAND_NAMES,
   RESEARCH_WRITE_COMMAND_NAMES,
@@ -35,7 +34,7 @@ describe('Production Runtime canonical registry', () => {
     const commandNames = Object.keys(registry.commands);
 
     expect(registry.protocolVersion).toBe('1');
-    expect(registry.registryHash).toBe('abc139fe2d1903463dddf6429fbb1c0721bd4d6321e43bed30f86bdd6ce790ec');
+    expect(registry.registryHash).toBe('963705f2699d1bef95490314add610ca85ae68b4859e101b1b624f6c51375ff8');
     expect(hashCanonicalRegistryDocument(registryDocument)).toBe(registry.registryHash);
     expect(Object.isFrozen(registry.commands)).toBe(true);
     expect(Object.isFrozen(registry.commands['runtime.status'].args)).toBe(true);
@@ -94,15 +93,8 @@ describe('Production Runtime canonical registry', () => {
     expect(COMMAND_REGISTRY['workflow.node.create']?.availability).toBe('available');
     expect(COMMAND_REGISTRY['workflow.node.run']?.availability).toBe('available');
     expect(COMMAND_REGISTRY['workflow.node.stop']?.availability).toBe('available');
-    expect(COMMAND_REGISTRY['director.handoff']).toMatchObject({
-      availability: 'available',
-      args: expect.objectContaining({
-        agentIdentity: 'codex|deepseek-harness|claude-code|opencode|pi',
-        sessionId: 'string',
-        projectId: 'string',
-        expectedBindingId: 'string?',
-      }),
-    });
+    expect(COMMAND_REGISTRY['director.handoff']).toBeUndefined();
+    expect(Object.keys(registry.commands).some(command => /^(?:crew|director)\./.test(command))).toBe(false);
   });
 
   it('keeps the public CLI and MCP adapters aligned with available registry commands', () => {
@@ -111,7 +103,6 @@ describe('Production Runtime canonical registry', () => {
     expect(new Set(available)).toEqual(new Set([
       ...RUNTIME_COMMAND_NAMES,
       ...WORKSPACE_COMMAND_NAMES,
-      ...CREW_COMMAND_NAMES,
       ...RESEARCH_COMMAND_NAMES,
       'status', // CLI local-system adapter
       'host.list', // CLI local Host discovery adapter

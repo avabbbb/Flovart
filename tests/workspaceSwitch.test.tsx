@@ -6,14 +6,19 @@ describe('workspace switching', () => {
     expect(DEFAULT_WORKSPACE_LANGUAGE).toBe('zho');
   });
 
-  it('keeps Workflow, Table, and Agent as explicit persisted views', () => {
+  it('keeps Workflow and Agent as explicit persisted views', () => {
     useWorkspaceStore.getState().setActiveView('workflow');
     expect(useWorkspaceStore.getState().activeView).toBe('workflow');
 
-    useWorkspaceStore.getState().setActiveView('table');
-    expect(useWorkspaceStore.getState().activeView).toBe('table');
-
     useWorkspaceStore.getState().setActiveView('agent');
     expect(useWorkspaceStore.getState().activeView).toBe('agent');
+  });
+
+  it('keeps Table as a Canvas secondary view', () => {
+    useWorkspaceStore.getState().setCanvasView('table');
+    expect(useWorkspaceStore.getState().canvasView).toBe('table');
+
+    useWorkspaceStore.getState().setCanvasView('spatial');
+    expect(useWorkspaceStore.getState().canvasView).toBe('spatial');
   });
 });

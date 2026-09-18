@@ -32,7 +32,7 @@ import { loadCreativeHostResource } from './services/studio/hostResourceRegistry
 import { registerWorkflowArtifact } from './services/studio/artifactRegistry';
 
 const SettingsPanel = React.lazy(() => import('./components/SettingsPanel').then(m => ({ default: m.SettingsPanel })));
-const OnboardingWizard = React.lazy(() => import('./components/OnboardingWizard').then(m => ({ default: m.OnboardingWizard })));
+
 const WorkflowWorkspace = React.lazy(() => import('./components/workflow/WorkflowWorkspace').then(m => ({ default: m.WorkflowWorkspace })));
 const TableWorkspace = React.lazy(() => import('./components/table/TableWorkspace').then(m => ({ default: m.TableWorkspace })));
 const AgentWorkspace = React.lazy(() => import('./components/agent/AgentWorkspace').then(m => ({ default: m.AgentWorkspace })));
@@ -82,6 +82,8 @@ const App: React.FC = () => {
     const setLanguage = useWorkspaceStore(s => s.setLanguage);
     const activeView = useWorkspaceStore(s => s.activeView);
     const setActiveView = useWorkspaceStore(s => s.setActiveView);
+    const canvasView = useWorkspaceStore(s => s.canvasView);
+    const setCanvasView = useWorkspaceStore(s => s.setCanvasView);
     const themeMode = useWorkspaceStore(s => s.themeMode);
     const setThemeMode = useWorkspaceStore(s => s.setThemeMode);
 
@@ -99,7 +101,7 @@ const App: React.FC = () => {
     const themePalette = THEME_PALETTES[resolvedTheme];
 
     const {
-        userApiKeys, setUserApiKeys, apiKeysLoaded, showOnboarding, setShowOnboarding,
+        userApiKeys, setUserApiKeys, apiKeysLoaded,
         clearKeysOnExit, setClearKeysOnExit,
         handleAddApiKey, handleDeleteApiKey, handleUpdateApiKey, handleSetDefaultApiKey,
         dynamicModelOptions, usageSummaryMap,
@@ -161,10 +163,6 @@ const App: React.FC = () => {
         return value ?? key;
     }, [language]);
 
-    const closeOnboarding = useCallback(() => {
-        try { localStorage.setItem('onboarding.skipped', 'true'); } catch { /* non-critical */ }
-        setShowOnboarding(false);
-    }, [setShowOnboarding]);
 
     const confirmRouteFallback = useCallback((resolution: RouteFallbackResolution) => window.confirm(
         `主线路 ${resolution.unavailablePrimary.key.name || resolution.unavailablePrimary.key.provider} · ${resolution.unavailablePrimary.routeId || '未配置'} 当前不可用。\n\n是否改用 ${resolution.key.name || resolution.key.provider} · ${resolution.routeId}？`,
@@ -411,9 +409,9 @@ const App: React.FC = () => {
     }, [confirmRouteFallback, language, userApiKeys]);
 
     const handleOpenTable = useCallback((nodeId?: string) => {
-        setTableSourceNodeId(nodeId || null);
-        setActiveView('table');
-    }, [setActiveView]);
+        setActiveView('workflow');
+        setCanvasView('table');
+    }, [setActiveView, setCanvasView]);
 
     const handleCommitTableResult = useCallback(async (result: TableProcessResult, sourceNodeId: string | null, name: string) => {
         const project = useWorkflowStore.getState().projects.find(item => item.id === useWorkflowStore.getState().activeProjectId);
@@ -464,7 +462,7 @@ const App: React.FC = () => {
     }), [language]);
     const studioMenuModel: StudioMenuModel = useMemo(() => ({
         mode: activeView,
-        title: activeView === 'workflow' ? activeWorkflowTitle : activeView === 'table' ? 'Table' : 'Agent',
+        title: activeView === 'workflow' ? (canvasView === 'table' ? 'Table' : activeWorkflowTitle) : 'Agent',
         themeMode,
         resolvedTheme,
         language,
@@ -483,53 +481,82 @@ const App: React.FC = () => {
             rename: (newTitle: string) => { if (activeWorkflowProjectId) workflowRenameProject(activeWorkflowProjectId, newTitle); },
             setActiveByIndex: (index: number) => { const target = workflowProjects[index]; if (target) workflowSetActiveProject(target.id); },
         },
-    }), [activeView, activeWorkflowTitle, resolvedTheme, themeMode, language, setActiveView, setThemeMode, setLanguage, studioRuntimeStatus, workflowProjects, activeWorkflowIndex, activeWorkflowProjectId, workflowCreateProject, workflowDeleteProjects, workflowRenameProject, workflowSetActiveProject]);
+    }), [activeView, canvasView, activeWorkflowTitle, resolvedTheme, themeMode, language, setActiveView, setThemeMode, setLanguage, studioRuntimeStatus, workflowProjects, activeWorkflowIndex, activeWorkflowProjectId, workflowCreateProject, workflowDeleteProjects, workflowRenameProject, workflowSetActiveProject]);
 
     const main = activeView === 'workflow' ? (
-        <Suspense fallback={<div className="grid h-full place-content-center text-sm opacity-40">正在加载 Workflow...</div>}>
-            <WorkflowWorkspace
-                theme={resolvedTheme}
-                language={language}
-                resolveGenerationCapability={resolveWorkflowGenerationCapability}
-                sharedMedia={workflowSharedMedia}
-                onReversePrompt={handleWorkflowReversePrompt}
-                onRunNode={runWorkflowNodeFromUi}
-                onStopNode={(projectId, nodeId) => workflowExecutor.stopNode?.({ projectId, nodeId }, { surface: 'ui' })}
-                onSaveWorkflowMedia={handleSaveWorkflowMedia}
-                assetLibrary={assetLibrary}
-                onRenameAsset={(id, name) => setAssetLibrary(prev => renameAsset(prev, id, name))}
-                onRemoveAsset={id => setAssetLibrary(prev => removeAsset(prev, id))}
-                onUpdateAssetTags={(id, tags) => setAssetLibrary(prev => updateAssetTags(prev, id, tags))}
-                onRemoveAssetFromFolder={(itemId, folderId) => setAssetLibrary(prev => removeAssetFromFolder(prev, itemId, folderId))}
-                onBatchRemoveAssets={ids => setAssetLibrary(prev => batchRemoveAssets(prev, ids))}
-                onBatchAddAssetsToFolder={(ids, folderId) => setAssetLibrary(prev => batchAddAssetsToFolder(prev, ids, folderId))}
-                onBatchAddAssetTags={(ids, tags) => setAssetLibrary(prev => batchAddAssetTags(prev, ids, tags))}
-                onCreateFolder={(parentId, name) => setAssetLibrary(prev => addFolder(prev, { id: generateId(), name, parentId, createdAt: Date.now() }))}
-                onRenameFolder={(id, name) => setAssetLibrary(prev => renameFolder(prev, id, name))}
-                onRemoveFolder={(id, deleteItems) => setAssetLibrary(prev => removeFolder(prev, id, deleteItems))}
-                t={t}
-                userApiKeys={userApiKeys}
-                confirmRouteFallback={confirmRouteFallback}
-                dynamicModelOptions={dynamicModelOptions}
-                onOpenSettings={() => setIsSettingsPanelOpen(true)}
-                onEnhancePrompt={handleEnhancePrompt}
-                isEnhancingPrompt={isEnhancingPrompt}
-                onOpenAgent={() => setActiveView('agent')}
-            />
-        </Suspense>
-    ) : activeView === 'table' ? (
-        <Suspense fallback={<div className="grid h-full place-content-center text-sm opacity-40">正在加载 Table...</div>}>
-            <TableWorkspace
-                project={activeWorkflowProject}
-                userApiKeys={userApiKeys}
-                confirmRouteFallback={confirmRouteFallback}
-                initialNodeId={tableSourceNodeId}
-                onCommit={handleCommitTableResult}
-                onSaveAsset={handleSaveTableAsset}
-                onOpenWorkflow={() => setActiveView('workflow')}
-                onOpenSettings={() => setIsSettingsPanelOpen(true)}
-            />
-        </Suspense>
+        <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]">
+            <div
+                className="canvas-view-switch flex h-9 shrink-0 items-center justify-center gap-0.5 border-b"
+                style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-card)' }}
+                role="tablist"
+                aria-label={language === 'zho' ? '画布视图' : 'Canvas view'}
+            >
+                {(['spatial', 'table'] as const).map(view => {
+                    const isActive = canvasView === view;
+                    const label = view === 'spatial' ? (language === 'zho' ? '画布' : 'Canvas') : 'Table';
+                    return (
+                        <button
+                            key={view}
+                            type="button"
+                            role="tab"
+                            aria-selected={isActive}
+                            aria-label={view === 'spatial' ? (language === 'zho' ? '画布视图' : 'Canvas view') : 'Table'}
+                            onClick={() => setCanvasView(view)}
+                            className={`shrink-0 whitespace-nowrap rounded-md px-2.5 py-1 text-xs font-bold transition ${isActive ? 'bg-black/5' : 'opacity-50 hover:opacity-80'}`}
+                            style={{ color: 'var(--isl-ink)' }}
+                        >
+                            {label}
+                        </button>
+                    );
+                })}
+            </div>
+            {canvasView === 'table' ? (
+                <Suspense fallback={<div className="grid h-full place-content-center text-sm opacity-40">正在加载 Table...</div>}>
+                    <TableWorkspace
+                        project={activeWorkflowProject}
+                        userApiKeys={userApiKeys}
+                        confirmRouteFallback={confirmRouteFallback}
+                        initialNodeId={tableSourceNodeId}
+                        onCommit={handleCommitTableResult}
+                        onSaveAsset={handleSaveTableAsset}
+                        onOpenWorkflow={() => setCanvasView('spatial')}
+                        onOpenSettings={() => setIsSettingsPanelOpen(true)}
+                    />
+                </Suspense>
+            ) : (
+                <Suspense fallback={<div className="grid h-full place-content-center text-sm opacity-40">正在加载 Workflow...</div>}>
+                    <WorkflowWorkspace
+                        theme={resolvedTheme}
+                        language={language}
+                        resolveGenerationCapability={resolveWorkflowGenerationCapability}
+                        sharedMedia={workflowSharedMedia}
+                        onReversePrompt={handleWorkflowReversePrompt}
+                        onRunNode={runWorkflowNodeFromUi}
+                        onStopNode={(projectId, nodeId) => workflowExecutor.stopNode?.({ projectId, nodeId }, { surface: 'ui' })}
+                        onSaveWorkflowMedia={handleSaveWorkflowMedia}
+                        assetLibrary={assetLibrary}
+                        onRenameAsset={(id, name) => setAssetLibrary(prev => renameAsset(prev, id, name))}
+                        onRemoveAsset={id => setAssetLibrary(prev => removeAsset(prev, id))}
+                        onUpdateAssetTags={(id, tags) => setAssetLibrary(prev => updateAssetTags(prev, id, tags))}
+                        onRemoveAssetFromFolder={(itemId, folderId) => setAssetLibrary(prev => removeAssetFromFolder(prev, itemId, folderId))}
+                        onBatchRemoveAssets={ids => setAssetLibrary(prev => batchRemoveAssets(prev, ids))}
+                        onBatchAddAssetsToFolder={(ids, folderId) => setAssetLibrary(prev => batchAddAssetsToFolder(prev, ids, folderId))}
+                        onBatchAddAssetTags={(ids, tags) => setAssetLibrary(prev => batchAddAssetTags(prev, ids, tags))}
+                        onCreateFolder={(parentId, name) => setAssetLibrary(prev => addFolder(prev, { id: generateId(), name, parentId, createdAt: Date.now() }))}
+                        onRenameFolder={(id, name) => setAssetLibrary(prev => renameFolder(prev, id, name))}
+                        onRemoveFolder={(id, deleteItems) => setAssetLibrary(prev => removeFolder(prev, id, deleteItems))}
+                        t={t}
+                        userApiKeys={userApiKeys}
+                        confirmRouteFallback={confirmRouteFallback}
+                        dynamicModelOptions={dynamicModelOptions}
+                        onOpenSettings={() => setIsSettingsPanelOpen(true)}
+                        onEnhancePrompt={handleEnhancePrompt}
+                        isEnhancingPrompt={isEnhancingPrompt}
+                        onOpenAgent={() => setActiveView('agent')}
+                    />
+                </Suspense>
+            )}
+        </div>
     ) : (
         <Suspense fallback={<div className="grid h-full place-content-center text-sm opacity-40">正在加载 Agent...</div>}>
             <AgentWorkspace
@@ -564,12 +591,7 @@ const App: React.FC = () => {
                     setClearKeysOnExit={setClearKeysOnExit}
                     usageSummary={usageSummaryMap}
                 />
-                {apiKeysLoaded && showOnboarding && <OnboardingWizard
-                    isOpen
-                    onClose={closeOnboarding}
-                    onAddApiKey={handleAddApiKey}
-                    resolvedTheme={resolvedTheme}
-                />}
+
                 {addAssetModal?.open && <AssetAddModal
                     isOpen
                     previewDataUrl={addAssetModal.dataUrl}

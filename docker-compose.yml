@@ -29,19 +29,6 @@ services:
       db:
         condition: service_healthy
 
-  enterprise:
-    build: ./backend/enterprise
-    environment:
-      ENTERPRISE_PORT: "11453"
-      DATABASE_URL: "postgres://postgres:postgres@db:5432/flovart?sslmode=disable"
-      JWT_SECRET: "flovart-dev-secret-change-in-production"
-      CORS_ALLOW: "*"
-    ports:
-      - "${FLOVART_ENTERPRISE_PORT:-11453}:11453"
-    depends_on:
-      db:
-        condition: service_healthy
-
   web:
     build: .
     ports:
@@ -49,13 +36,11 @@ services:
     environment:
       CHOKIDAR_USEPOLLING: "true"
       VITE_HUB_BASE_URL: "http://localhost:${FLOVART_HUB_PORT:-11452}/api/v1"
-      VITE_ENTERPRISE_BASE_URL: "http://localhost:${FLOVART_ENTERPRISE_PORT:-11453}/api/v1/enterprise"
     volumes:
       - .:/app
       - /app/node_modules
     depends_on:
       - hub
-      - enterprise
 
 volumes:
   db-data:

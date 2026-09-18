@@ -24,7 +24,7 @@ describe('flovart dev startup commands', () => {
     const plan = planStart(['--source', '--backend'], process.cwd());
 
     expect(plan.mode).toBe('local');
-    expect(plan.services).toEqual(['db', 'hub', 'enterprise']);
+    expect(plan.services).toEqual(['db', 'hub']);
     expect(plan.openBrowser).toBe(false);
   });
 
@@ -33,7 +33,7 @@ describe('flovart dev startup commands', () => {
 
     expect(plan).toMatchObject({
       mode: 'docker',
-      services: ['db', 'hub', 'enterprise', 'web'],
+      services: ['db', 'hub', 'web'],
       detach: true,
       openBrowser: true,
     });
@@ -66,7 +66,7 @@ describe('flovart dev startup commands', () => {
 
   it('keeps install scoped to requested services', () => {
     expect(planInstall(['--source', '--web'], process.cwd()).services).toEqual(['web']);
-    expect(planInstall(['--source', '--backend'], process.cwd()).services).toEqual(['hub', 'enterprise']);
+    expect(planInstall(['--source', '--backend'], process.cwd()).services).toEqual(['hub']);
     expect(parseDevArgs(['web', '--plan', '--json'])).toMatchObject({ web: true, plan: true, json: true });
   });
 
@@ -125,16 +125,15 @@ describe('flovart dev startup commands', () => {
   });
 
   it('resolves the full Compose dependency closure for a Web-only request', async () => {
-    expect(dockerComposeServices(['web'])).toEqual(['db', 'hub', 'enterprise', 'web']);
+    expect(dockerComposeServices(['web'])).toEqual(['db', 'hub', 'web']);
     const ports = await resolveDockerPorts({ services: ['web'] }, {
       FLOVART_DB_PORT: '46112',
       FLOVART_HUB_PORT: '46113',
-      FLOVART_ENTERPRISE_PORT: '46114',
       FLOVART_WEB_PORT: '46115',
     });
 
-    expect(Object.keys(ports)).toEqual(['db', 'hub', 'enterprise', 'web']);
-    expect(new Set(Object.values(ports)).size).toBe(4);
+    expect(Object.keys(ports)).toEqual(['db', 'hub', 'web']);
+    expect(new Set(Object.values(ports)).size).toBe(3);
   });
 
   it('reuses a discovered Flovart WebUI before starting a duplicate Vite process', async () => {

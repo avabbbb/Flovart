@@ -48,23 +48,19 @@ body,
   text-align: center;
 }
 
-.app-shell,
-.dock-page,
-.flovart-home {
+.app-shell {
   min-width: 0;
   min-height: 0;
   height: var(--app-height);
 }
 
-.app-shell,
-.dock-page {
+.app-shell {
   container-type: inline-size;
 }
 
 .app-shell__workspace,
 .app-shell__content,
 .app-shell__main,
-.dock-surface,
 .workflow-workspace,
 .table-workspace,
 .agent-workspace-shell {
@@ -298,73 +294,6 @@ body,
   min-height: 0;
 }
 
-/* Community and other public surfaces use the same reflow contract as the
- * local app, while retaining their own visual theme. */
-.community-prompts-page {
-  min-width: 0;
-  min-height: var(--app-height);
-  overflow-x: hidden;
-}
-
-.community-prompts-page__header-inner,
-.community-prompts-page__content {
-  min-width: 0;
-}
-
-.community-prompts-page__brand,
-.community-prompts-page__brand > div,
-.community-prompts-page__actions {
-  min-width: 0;
-}
-
-.community-prompts-page__brand > div {
-  overflow: hidden;
-}
-
-.community-prompts-page__brand h1,
-.community-prompts-page__brand p {
-  overflow-wrap: anywhere;
-}
-
-.community-prompts-page__search {
-  width: min(100%, 400px);
-}
-
-.community-prompts-page__grid > * {
-  min-width: 0;
-}
-
-.enterprise-app,
-.enterprise-platform-app,
-.enterprise-centered-message {
-  min-width: 0;
-  min-height: var(--app-height);
-  overflow-x: hidden;
-}
-
-.enterprise-app__header,
-.enterprise-platform-app__header,
-.enterprise-app__main,
-.enterprise-platform-app__main,
-.enterprise-org-layout,
-.enterprise-org-content,
-.enterprise-dept-grid {
-  min-width: 0;
-}
-
-.enterprise-org-sidebar {
-  width: clamp(184px, 22cqw, 240px) !important;
-  height: calc(var(--app-height) - 64px) !important;
-  max-width: 34cqw;
-}
-
-.enterprise-member-grid {
-  min-width: 0;
-}
-
-.enterprise-member-grid > * {
-  min-width: 0;
-}
 
 .ant-table-wrapper,
 .ant-table-container,
@@ -599,49 +528,6 @@ body,
     font-weight: 700;
   }
 
-  .community-prompts-page__header-inner,
-  .community-prompts-page__content {
-    padding-inline: 16px;
-  }
-
-  .community-prompts-page__header-inner {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 12px;
-  }
-
-  .community-prompts-page__brand {
-    width: 100%;
-    align-items: flex-start;
-    gap: 10px;
-  }
-
-  .community-prompts-page__brand h1 { font-size: 18px; }
-  .community-prompts-page__brand p { line-height: 1.45; }
-
-  .community-prompts-page__actions {
-    width: 100%;
-    justify-content: space-between;
-  }
-
-  .community-prompts-page__filters {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .community-prompts-page__search {
-    width: 100%;
-    max-width: none !important;
-  }
-
-  .community-prompts-page__filters .ant-segmented {
-    width: 100%;
-    overflow-x: auto;
-  }
-
-  .community-prompts-page__filters .ant-segmented-group {
-    min-width: max-content;
-  }
 
   .script-editor-modal .ant-modal {
     width: calc(100% - 16px) !important;
@@ -678,69 +564,6 @@ body,
     margin-top: 6px;
   }
 
-  .enterprise-app__header,
-  .enterprise-platform-app__header {
-    min-height: 48px;
-    height: auto;
-    flex-wrap: wrap;
-    padding-block: 8px;
-  }
-
-  .enterprise-app__header > .enterprise-app__header,
-  .enterprise-platform-app__header > .enterprise-platform-app__header {
-    min-width: 0;
-  }
-
-  .enterprise-app__main,
-  .enterprise-platform-app__main {
-    padding-inline: 12px;
-    padding-block: 16px;
-  }
-
-  .enterprise-org-layout {
-    display: block;
-  }
-
-  .enterprise-org-sidebar {
-    display: none;
-  }
-
-  .enterprise-member-grid {
-    grid-template-columns: minmax(0, 1fr) auto !important;
-    align-items: start;
-    padding-inline: 12px;
-  }
-
-  .enterprise-member-grid:first-child {
-    display: none;
-  }
-
-  .enterprise-member-grid > span:nth-child(2),
-  .enterprise-member-grid > span:nth-child(4) {
-    grid-column: 1 / -1;
-  }
-
-  .enterprise-member-grid > span:nth-child(3) {
-    grid-column: 1;
-  }
-
-  .enterprise-member-grid > div {
-    grid-column: 2;
-    grid-row: 3;
-    justify-self: end;
-  }
-
-  .enterprise-dept-grid {
-    grid-template-columns: minmax(0, 1fr) !important;
-  }
-
-  .enterprise-platform-app .ant-tabs-nav-wrap {
-    overflow-x: auto;
-  }
-
-  .enterprise-platform-app .ant-tabs-tab {
-    flex: 0 0 auto;
-  }
 }
 
 @media (max-width: 360px) {

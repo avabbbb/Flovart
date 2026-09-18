@@ -152,7 +152,7 @@ export function buildAgentRuntimeSummary(input: {
 export function useApiKeys(isSettingsPanelOpen: boolean) {
     const [userApiKeys, setUserApiKeys] = useState<UserApiKey[]>([]);
     const [apiKeysLoaded, setApiKeysLoaded] = useState(false);
-    const [showOnboarding, setShowOnboarding] = useState(false);
+
     const [clearKeysOnExit, setClearKeysOnExit] = useState<boolean>(() => {
         try { return localStorage.getItem('security.clearKeysOnExit') === 'true'; } catch { return false; }
     });
@@ -410,8 +410,7 @@ export function useApiKeys(isSettingsPanelOpen: boolean) {
         userApiKeys,
         setUserApiKeys,
         apiKeysLoaded,
-        showOnboarding,
-        setShowOnboarding,
+
         clearKeysOnExit,
         setClearKeysOnExit,
         dynamicModelOptions,
