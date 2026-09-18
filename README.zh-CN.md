@@ -43,12 +43,12 @@
 ## 实际效果
 
 <p align="center">
-  <img src="pic/readme/agent-operations-live-workflow.gif" alt="Flovart CLI 操作在可见 Workflow 中创建节点与连线" width="880" />
+  <img src="pic/readme/hero-agent.gif" alt="外部 coding agent 正在编辑同一份可见的 Flovart Workflow" width="880" />
   <br />
-  <sub><strong>外部 Agent 的操作，直接作用在同一份可见 Workflow 上。</strong><br />
-  本地真实运行的录屏，1.5 倍速播放。一个项目和三个节点由 <code>workflow.project.create</code>、
-  <code>workflow.node.create</code> 和 <code>workflow.connect</code> 创建，画布同步更新。
-  完整可复现记录见 <a href="docs/maintenance/readme/DEMO_RECORDING.md">DEMO_RECORDING.md</a>。</sub>
+  <sub><strong>外部 coding agent 正在编辑同一份可见的 Flovart Workflow —— 自然语言变成节点与连线。</strong><br />
+  该 Agent（WorkBuddy codebuddy）读取仓库自带的 Flovart Skill，再经 typed CLI 驱动可见 Workflow：
+  现场创建 3 个节点与 2 条连线，没有改动任何源码。未执行生成步骤，因此没有调用付费模型服务。
+  可复现记录见 <a href="docs/maintenance/readme/DEMO_RECORDING.md">DEMO_RECORDING.md</a>。</sub>
 </p>
 
 <table>
@@ -66,7 +66,7 @@
   </tr>
 </table>
 
-这段录屏展示的是这件事里 CLI 那一半；「具名 Coding Agent 自己的对话过程」的等价录屏仍然待补，见 [README_VISUAL_TODO.md](docs/maintenance/readme/README_VISUAL_TODO.md)。
+两半都已记录在案：上面 Hero 是外部 coding agent 会话在编辑可见 Workflow，而纯 CLI 的录屏放在下面[架构](#架构)段作为操作级视角。剩余视觉缺口见 [README_VISUAL_TODO.md](docs/maintenance/readme/README_VISUAL_TODO.md)。
 
 ## 功能演示
 
@@ -315,6 +315,15 @@ flowchart LR
 ```
 
 CLI 与实验性 stdio MCP 共用操作语义，当前都绑定可见的 Browser Workflow。确定性操作直接执行，不需要第二个 AI 再解释一遍。
+
+<p align="center">
+  <img src="pic/readme/agent-operations-live-workflow.gif" alt="Flovart CLI 操作在可见 Workflow 中创建节点与连线" width="720" />
+  <br />
+  <sub><strong>同一主张的操作级视角。</strong>一个项目和三个节点由 <code>workflow.project.create</code>、
+  <code>workflow.node.create</code> 和 <code>workflow.connect</code> 创建（1.5 倍速播放）——
+  上面 Hero 里那个外部 Agent 会话端到端驱动的正是这些 typed 操作。录制记录：
+  <a href="docs/maintenance/readme/DEMO_RECORDING.md">DEMO_RECORDING.md</a>。</sub>
+</p>
 
 原生效果保持两条短路径：同一生成函数产出持久素材版本，宿主效果读取固定版本并本地渲染——不强制经过导演、Operator 或制作组层级。产品、交互、实现和评测集中在[主设计](docs/design/flovart-native-effects.md)；[当前实现记录](docs/design/ecosystem/CURRENT_ARCHITECTURE.md)只解释现有代码，不是另一套产品目标。
 
