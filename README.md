@@ -68,6 +68,85 @@
 
 Both halves are now on record: the hero above is a real Codex conversation editing the live Workflow, and the CLI-only capture sits under [Architecture](#architecture) as the operation-level view. Remaining visual gaps are tracked in [README_VISUAL_TODO.md](docs/maintenance/readme/README_VISUAL_TODO.md).
 
+## Feature tour
+
+Every clip below is a real recording of the running app — one operation, start to finish, with no composited frames and no mockups. Each is cut to the action. Registration, method and limits: [DEMO_RECORDING.md](docs/maintenance/readme/DEMO_RECORDING.md).
+
+### Canvas
+
+<table>
+  <tr>
+    <td width="50%" align="center">
+      <img src="pic/readme/features/canvas-add-node.gif" alt="Adding an image node and a video node from the canvas toolbar" />
+      <br /><sub><strong>Add nodes.</strong> The toolbar's add menu covers image, video, text, script, audio and config.</sub>
+    </td>
+    <td width="50%" align="center">
+      <img src="pic/readme/features/canvas-connect.gif" alt="Dragging a connection from one node onto another" />
+      <br /><sub><strong>Connect.</strong> Drag from a node's source handle onto another node to feed it in.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" align="center">
+      <img src="pic/readme/features/canvas-drag.gif" alt="Dragging a node across the canvas" />
+      <br /><sub><strong>Arrange by hand.</strong> Nodes move freely; the graph itself is the state.</sub>
+    </td>
+    <td width="50%" align="center">
+      <img src="pic/readme/features/canvas-tidy.gif" alt="Re-laying out the canvas in one click" />
+      <br /><sub><strong>Tidy.</strong> One click re-lays out the whole graph.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td colspan="2" align="center">
+      <img src="pic/readme/features/canvas-prompt.gif" alt="Typing a prompt directly on a selected node" />
+      <br /><sub><strong>Prompt in place.</strong> Select a node and write the prompt on the node itself — no separate prompt dialog.</sub>
+    </td>
+  </tr>
+</table>
+
+### Image nodes
+
+Four local operations on the same generated fixture plate, each producing a real result node. None of them contacts a model service.
+
+<table>
+  <tr>
+    <td width="50%" align="center">
+      <img src="pic/readme/features/crop.gif" alt="Cropping an image node" />
+      <br /><sub><strong>Crop.</strong> Set the crop rectangle, then apply.</sub>
+    </td>
+    <td width="50%" align="center">
+      <img src="pic/readme/features/rotate.gif" alt="Rotating an image node a quarter turn" />
+      <br /><sub><strong>Rotate and flip.</strong> Quarter turns and mirrors.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" align="center">
+      <img src="pic/readme/features/split-grid.gif" alt="Splitting an image into a grid of separate nodes" />
+      <br /><sub><strong>Split to grid.</strong> Each cell becomes its own connected image node.</sub>
+    </td>
+    <td width="50%" align="center">
+      <img src="pic/readme/features/filter.gif" alt="Adjusting colour on an image node" />
+      <br /><sub><strong>Grade.</strong> Colour adjustments preview live before they are applied.</sub>
+    </td>
+  </tr>
+</table>
+
+### The external-agent link
+
+<table>
+  <tr>
+    <td width="50%" align="center">
+      <img src="pic/readme/features/agent-cli-live.gif" alt="Typed CLI operations building a graph on the live canvas" />
+      <br /><sub><strong>Operations land on the canvas.</strong> <code>workflow.node.create</code> and <code>workflow.connect</code> run through the typed CLI while the visible Workflow updates in place — no screen scraping, no hidden copy of the project.</sub>
+    </td>
+    <td width="50%" align="center">
+      <img src="pic/readme/features/agent-open-panel.gif" alt="Opening the Agent surface from the canvas toolbar" />
+      <br /><sub><strong>Open the Agent surface.</strong> Reachable from the same canvas toolbar.</sub>
+    </td>
+  </tr>
+</table>
+
+Not filmed yet, and deliberately not shown: model-backed generation (this checkout configures no provider) and the video and audio node tools, whose in-browser ffmpeg core currently fails to load — both are recorded as open gaps in the [recording notes](docs/maintenance/readme/DEMO_RECORDING.md).
+
 ## Why Flovart?
 
 Most AI creative tools make you choose between a visual editor and an autonomous agent. Flovart is built around one production state that both can use.

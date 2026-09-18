@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **浏览器视频/音频工具加载修复**：`services/ffmpegClient.ts` 原先把 core 指向 `@ffmpeg/core` 的 **umd** 构建，而 `@ffmpeg/ffmpeg` 固定以模块 worker 启动、模块 worker 里没有 `importScripts`，于是必然走 `(await import(coreURL)).default` 分支；umd 没有默认导出，取到 `undefined` 即抛 `ERROR_IMPORT_FAILURE`（操作卡片显示 `Failed to fetch`）。现改用 core 的 **esm** 构建。同时多线程分支原先向 `@ffmpeg/core` 索取 `ffmpeg-core.worker.js`，该文件只存在于 `@ffmpeg/core-mt`（单线程包的 umd/esm 目录都没有，必然 404），现多线程分支改指 `@ffmpeg/core-mt`。另外把 `@ffmpeg/ffmpeg`、`@ffmpeg/util` 加入 `optimizeDeps.exclude`：被预打包后其类内 `new Worker(new URL('./worker.js', import.meta.url))` 会解析到不存在的 `/node_modules/.vite/deps/worker.js`，worker 起不来、`ffmpeg.load()` 永不 settle，表现为工具静默卡死。三处均在跨域隔离页面内实测 `getFFmpeg()` 加载成功、文件系统可读写、`exec` 可执行。真实 Provider 与宿主内行为未因此改变。
+
 - **发布门禁与 CLI 口径修复**：`release:red-team` 的 CLI help 不变量从旧标题 `Commands:` 更新为当前 canonical 形状（`Bootstrap/admin:` + `Stable operations:`），并新增「`setup` 不得再宣传未发布的 `npx flovart-cli`」回归守护；`release:secret-audit` 为 red-team 中故意构造的假 token 增加**按精确字面值**的豁免（不按文件豁免，避免掩盖同文件后续真凭据）。`flovart setup`、bundle-manager 与 dev-commands 的文案也不再指向 npm registry 中不存在的 `npx flovart-cli`，改为源码路径。
 - **Agent Link bootstrap 冷机修复（缓解 + 根因）**：浏览器 bootstrap 的认证探测原预算为 1200ms，而 `/hosts` 每次请求都重新扫描 Host（本机实测 3.0–4.2s，`/health` 仅 4ms），导致探测被中止、重试耗尽后浏览器无法成为 workspace writer。现仅对 `/hosts` 放宽到 8s，`/health` 保持 1200ms 以便 Agent 缺失时仍能快速失败。**根因已修复**：`discoverAgentHosts` 增加按 `includeVersion` 分键的 5s TTL 缓存（`refresh=true` 旁路），TTL 内重复探测 0ms；fast discovery（PATH 探测）与 deep inspection（`--version`）已按 `includeVersion` 参数分离。`spawnSync` 本身同步串行，天然构成 in-flight 去重。
 - **README 展示面重构**：英文 README 作为 canonical 重排（首屏移除 native-effects roadmap、Quick Start 前移、重复 caveat 收敛），中文版结构对齐；新增真实「外部 Agent CLI 操作 → 同一份可见 Workflow」录屏与其可复现记录，未把 CLI 操作描述为具名 Coding Agent 的对话。

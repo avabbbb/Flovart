@@ -149,12 +149,5 @@
     { "id": "cli", "label": "Local CLI" },
     { "id": "browser-workflow", "label": "Visible Browser Workflow" },
     { "id": "skill-mediated", "label": "Skill-mediated Host" }
-  ],
-  "directorBindings": [
-    { "agentIdentityId": "codex", "runtimeHostKind": "codex" },
-    { "agentIdentityId": "deepseek-harness", "runtimeHostKind": "deepseek" },
-    { "agentIdentityId": "claude-code", "runtimeHostKind": "claude" },
-    { "agentIdentityId": "opencode", "runtimeHostKind": "opencode" },
-    { "agentIdentityId": "pi", "runtimeHostKind": "pi" }
   ]
 }

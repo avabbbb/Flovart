@@ -10,8 +10,6 @@ const registry = freezeDeep(registryDocument);
 const agentIdentities = new Map(registry.agentIdentities.map(identity => [identity.id, identity]));
 const distributionTargets = new Map(registry.distributionTargets.map(target => [target.id, target]));
 const distributionTargetAliases = new Map(Object.entries(registry.distributionTargetAliases || {}));
-const directorBindings = new Map(registry.directorBindings.map(binding => [binding.agentIdentityId, binding]));
-const legacyRuntimeHostKinds = new Map(registry.directorBindings.map(binding => [binding.runtimeHostKind, binding]));
 
 export function getHostRegistry() {
   return registry;
@@ -39,12 +37,3 @@ export function listDistributionTargets() {
   return [...registry.distributionTargets];
 }
 
-export function resolveDirectorBinding(value) {
-  const normalized = String(value || '').trim().toLowerCase();
-  if (directorBindings.has(normalized)) return directorBindings.get(normalized);
-  return legacyRuntimeHostKinds.get(normalized) || null;
-}
-
-export function listDirectorBindings() {
-  return [...registry.directorBindings];
-}

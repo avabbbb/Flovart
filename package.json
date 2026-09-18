@@ -33,6 +33,7 @@
     "ext:build": "node extension/build.mjs",
     "studio:build": "node integrations/studio/build.mjs",
     "workbuddy:build": "node integrations/workbuddy/build.mjs",
+    "workbuddy:validate": "node scripts/check-workbuddy-connector.mjs",
     "build:agent-toolkit": "node tools/flovart/scripts/build-agent-toolkit.mjs",
     "version:check": "node scripts/check-release-version.mjs",
     "publish:cli": "cd tools/flovart && npm publish",

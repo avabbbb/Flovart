@@ -177,7 +177,7 @@ try {
   await page.locator('.studio-top-menu__modes').getByRole('button', { name: '工作流', exact: true }).click();
   await sleep(1000);
   await captureMatrix(page, 'workflow-shell', '.workflow-workspace', { allowCanvasChildren: true });
-  await page.locator('.studio-top-menu__modes').getByRole('button', { name: 'Table', exact: true }).click();
+  await page.locator('.canvas-view-switch').getByRole('tab', { name: 'Table', exact: true }).click();
   await sleep(900);
   await capture(page, 'table', ['table-1024x768', 1024, 768], '.table-workspace', { allowCanvasChildren: true });
   await capture(page, 'table', ['table-640x900', 640, 900], '.table-workspace', { allowCanvasChildren: true });

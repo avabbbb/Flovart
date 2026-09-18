@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1",
   "protocolVersion": "1",
-  "registryHash": "abc139fe2d1903463dddf6429fbb1c0721bd4d6321e43bed30f86bdd6ce790ec",
+  "registryHash": "963705f2699d1bef95490314add610ca85ae68b4859e101b1b624f6c51375ff8",
   "commands": [
     {
       "name": "runtime.status",
@@ -597,90 +597,6 @@
         "format": "json?"
       },
       "availability": "legacy-only"
-    },
-    {
-      "name": "director.bind",
-      "summary": "Bind one supported Agent Identity session to a ProductionSession.",
-      "args": {
-        "agentIdentity": "codex|deepseek-harness|claude-code|opencode|pi",
-        "sessionId": "string",
-        "hostInstanceId": "string?",
-        "projectId": "string?"
-      },
-      "availability": "available"
-    },
-    {
-      "name": "director.handoff",
-      "summary": "Explicitly move one supported Agent Identity session or ProductionSession binding.",
-      "args": {
-        "agentIdentity": "codex|deepseek-harness|claude-code|opencode|pi",
-        "sessionId": "string",
-        "hostInstanceId": "string?",
-        "projectId": "string",
-        "expectedBindingId": "string?"
-      },
-      "availability": "available"
-    },
-    {
-      "name": "director.status",
-      "summary": "Inspect the active Director Session Binding.",
-      "args": {
-        "agentIdentity": "codex|deepseek-harness|claude-code|opencode|pi?",
-        "sessionId": "string?",
-        "projectId": "string?"
-      },
-      "availability": "available"
-    },
-    {
-      "name": "director.unbind",
-      "summary": "Archive the active Director Session Binding.",
-      "args": {
-        "bindingId": "string?"
-      },
-      "availability": "available"
-    },
-    {
-      "name": "crew.intent.submit",
-      "summary": "Submit one bounded Crew Intent to the Workspace Operator.",
-      "args": {
-        "intentJson": "string",
-        "projectId": "string?"
-      },
-      "availability": "available"
-    },
-    {
-      "name": "crew.intent.get",
-      "summary": "Return one Crew Intent by ID.",
-      "args": {
-        "intentId": "string"
-      },
-      "availability": "available"
-    },
-    {
-      "name": "crew.intent.cancel",
-      "summary": "Request cooperative cancellation of one Crew Intent.",
-      "args": {
-        "intentId": "string",
-        "reason": "string?"
-      },
-      "availability": "available"
-    },
-    {
-      "name": "crew.receipt.get",
-      "summary": "Return the Workspace Operator Receipt for one Crew Intent.",
-      "args": {
-        "intentId": "string"
-      },
-      "availability": "available"
-    },
-    {
-      "name": "crew.event.watch",
-      "summary": "Return Crew events strictly after a resumable event cursor.",
-      "args": {
-        "afterEventId": "number?",
-        "limit": "number?"
-      },
-      "availability": "available"
     }
   ]
 }

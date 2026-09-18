@@ -17,6 +17,7 @@ import { executeFlovartCommand } from '../../tools/flovart/core.js';
 import { createMcpServer } from '../../tools/flovart/mcp-server.js';
 import { createOperationGateway } from '../../tools/flovart/operation-gateway.js';
 import { createEnvironmentRunner } from './environment.mjs';
+import { createRealProviderRunner } from './real-provider.mjs';
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -457,8 +458,9 @@ export function createRunner(name, controlled, options) {
     case 'nop': return createNopRunner(controlled, options);
     case 'codex': return createCodexRunner(controlled, options);
     case 'environment': return createEnvironmentRunner(controlled, options);
+    case 'real-provider': return createRealProviderRunner(controlled, options);
     default: throw new Error(`Unknown runner: ${name}`);
   }
 }
 
-export const RUNNER_NAMES = ['oracle', 'cli', 'mcp', 'codex', 'nop', 'environment'];
+export const RUNNER_NAMES = ['oracle', 'cli', 'mcp', 'codex', 'nop', 'environment', 'real-provider'];

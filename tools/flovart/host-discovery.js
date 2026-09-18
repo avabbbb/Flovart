@@ -62,7 +62,6 @@ function probeExecutable(identity, { platform, runner, includeVersion = true }) 
 }
 
 function normalizeProbeResult(identity, result) {
-  const binding = getHostRegistry().directorBindings.find(item => item.agentIdentityId === identity.id);
   const available = Boolean(result?.available);
   return {
     id: identity.id,
@@ -76,13 +75,12 @@ function normalizeProbeResult(identity, result) {
     authStatus: 'not-inspected',
     distributionTargets: identity.distributionTargets,
     runtimeSurfaces: identity.runtimeSurfaces,
-    directorBinding: binding ? 'supported' : 'not-supported',
     diagnostic: identity.status === 'manual-import'
       ? identity.id === 'teleagent'
         ? '在 TeleAgent 中导入 Flovart Skill 并配置 stdio MCP；未检测客户端安装或登录状态。'
         : '通过 WorkBuddy 官方技能页导入 Flovart 技能包；未检测桌面安装或登录状态。'
       : identity.status === 'planned'
-      ? '该 Host 只登记为未来 Projection 候选，本次不探测也不参与 Director Binding。'
+      ? '该 Host 只登记为未来 Projection 候选，本次不探测。'
       : available
         ? '已发现可执行文件；登录状态由 Host 自己管理。'
         : '未在当前 PATH 发现可执行文件。',
@@ -119,7 +117,6 @@ export function discoverAgentHosts(options = {}) {
     schemaVersion: getHostRegistry().schemaVersion,
     scannedAt: new Date().toISOString(),
     agents,
-    directorBindings: getHostRegistry().directorBindings,
   };
   if (eligible) discoveryCache.set(cacheKey, { cachedAt: Date.now(), result });
   return result;

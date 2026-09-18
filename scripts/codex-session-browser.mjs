@@ -22,6 +22,11 @@ import { buildBrowserBootstrapUrl, issueBrowserBootstrapToken, probeWebUi, redac
 import { resolveTestTempRoot } from './test-temp-root.mjs';
 const checkOnly = process.argv.includes('--check');
 const visible = process.argv.includes('--visible');
+// --auto-approve: pre-approve the Workflow confirmation gate (paid generation
+// runs). A headless page cannot click the confirm dialog, so paid node.run
+// trials drive a session that accepts the dialog programmatically. This models
+// the task's declared approval — the safety ledger still records the action.
+const autoApprove = process.argv.includes('--auto-approve');
 if (checkOnly) {
   const homeDir = (await import('node:os')).homedir();
   const agentConfigPath = process.env.FLOVART_AGENT_CONFIG || join(homeDir, '.flovart', 'agent.json');
@@ -121,8 +126,22 @@ try {
     });
     try {
       const nextPage = await context.newPage({ viewport: { width: 1440, height: 900 } });
+      if (autoApprove) {
+        // Accept every window.confirm dialog the confirmation gate raises, and
+        // force window.confirm() true for synchronous code paths. Paid runs are
+        // still submitted through the real provider — this only bypasses the
+        // un-clickable headless dialog, not the approval ledger.
+        nextPage.on('dialog', dialog => dialog.accept());
+        await nextPage.addInitScript(() => { window.confirm = () => true; });
+      }
       await nextPage.goto(bootstrapUrl, { waitUntil: 'domcontentloaded', timeout: 90_000 });
       await nextPage.locator('body[data-flovart-mounted="1"]').waitFor({ state: 'attached', timeout: 60_000 });
+      if (autoApprove) {
+        // Belt-and-suspenders: the init script runs before app scripts, but a
+        // post-load evaluate guarantees the override landed on the live window
+        // even if the bundle re-wrapped or shadowed window.confirm at mount.
+        await nextPage.evaluate(() => { window.confirm = () => true; });
+      }
       return { context, page: nextPage };
     } catch (error) {
       try { await context.close(); } catch {}
@@ -168,7 +187,11 @@ try {
   }));
 
   // Stay alive. The process is killed by the harness when the trial ends.
-  await new Promise(() => {});
+  // Node >=21 exits on an unsettled top-level await even with a live timer, so
+  // do NOT await a never-resolving promise — keep the event loop open with a
+  // handle and let module evaluation finish instead.
+  setInterval(() => {}, 1 << 30);
+  process.stdin.resume();
 } catch (error) {
   console.log(JSON.stringify({
     ok: false,

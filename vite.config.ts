@@ -32,6 +32,14 @@ export default defineConfig(() => {
       // 排除独立 HTML 文件，避免 esbuild 扫描其内联脚本报错
       optimizeDeps: {
         entries: ['index.html'],
+        // @ffmpeg/ffmpeg 必须在依赖预打包之外运行。它的类内部用
+        // `new Worker(new URL('./worker.js', import.meta.url), { type: 'module' })`
+        // 拉起自己的消息 worker；一旦被预打包到 node_modules/.vite/deps/，
+        // import.meta.url 就指向该目录，worker 被解析成
+        // /node_modules/.vite/deps/worker.js —— 这个 chunk 不会生成（404），
+        // 于是 worker 起不来、ffmpeg.load() 永不 settle，所有视频/音频工具
+        // 都会静默卡死。排除后直接加载包内真实 ESM 文件，路径才成立。
+        exclude: ['@ffmpeg/ffmpeg', '@ffmpeg/util'],
         esbuildOptions: {
           target: 'es2022',
           treeShaking: true,

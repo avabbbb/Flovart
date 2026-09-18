@@ -63,6 +63,7 @@
           "artifact.all_have_content_checksum": true,
           "artifact.all_have_generation_fingerprint": true,
           "artifact.content_never_equals_fingerprint": true,
+          "artifact.persisted": true,
           "safety.duplicate_submits_zero": true,
           "safety.unapproved_paid_zero": true,
           "safety.wrong_target_writes_zero": true,
@@ -77,10 +78,6 @@
         "secretExposure": 0
       },
       "missingPredicates": [
-        {
-          "name": "artifact.persisted",
-          "reason": "The certification target is 'artifact bytes persisted to durable storage', not only 'an artifact row exists'. snapshot.artifacts items carry `persistent: true` from the controlled world, but no predicate asserts that field, and no predicate verifies the real RunningHub path stored bytes via services/runtimeArtifacts.ts / services/artifactRegistry.ts. Grading 'persisted artifact' today degrades to artifact.count_equals + checksum predicates."
-        },
         {
           "name": "provider.task_terminal_status_equals",
           "reason": "RunningHub's wire status is 'SUCCESS'; the harness's runtime task vocabulary is 'completed'/'succeeded'. task.status_equals: 'completed' is encoded assuming the serial driver normalizes the provider-terminal state into the runtime task record. If the driver surfaces the raw 'SUCCESS', this predicate cannot express it."
@@ -109,7 +106,7 @@
         ]
       },
       "runnerScope": [
-        "codex"
+        "real-provider"
       ],
       "runnerScopeReason": "Real-provider certification: only a serial, parent-driven run against the live RunningHub API counts as evidence. The deterministic runners replay into the controlled world's fake provider, and the codex runner's write-replay seam (codexWriteToGatewayCall) cannot express workflow.node.run, so provider-evidence predicates are only observable through a driver that captures the real runtime/provider ledger into the normalized snapshot shape.",
       "timeout": 600000,
@@ -124,7 +121,11 @@
         "real-provider",
         "paid",
         "external-evidence"
-      ]
+      ],
+      "realCapture": {
+        "path": ".tmp/eval-captures/runninghub-seedream-t2i.json",
+        "description": "Produced by the serial parent driver after a real RunningHub workflow.node.run; absent => blocked, never a capability failure."
+      }
     }
   ]
 }

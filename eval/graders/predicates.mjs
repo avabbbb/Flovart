@@ -96,11 +96,28 @@ export const PREDICATES = {
   'provider.mode_equals': (snapshot, expected) =>
     snapshot.providerLedger.modes.length > 0 && snapshot.providerLedger.modes.every(mode => mode === expected),
   'provider.cancel_count_equals': (snapshot, expected) => snapshot.providerLedger.cancels === expected,
+  // Every submit's wire declared the expected upstream reference keys. This is
+  // how an image-to-video trial proves the prior artifact travelled as the
+  // first frame instead of the model hallucinating one. `expected` is a list.
+  'provider.submit_references_include': (snapshot, expected) =>
+    snapshot.providerLedger.submitReferenceKeys !== undefined
+    && [...expected].every(key => snapshot.providerLedger.submitReferenceKeys.includes(key)),
 
   // ---- tasks / artifacts -------------------------------------------------
   'task.status_equals': (snapshot, expected) =>
     snapshot.runtime.tasks.length > 0 && snapshot.runtime.tasks.every(task => task.status === expected),
   'task.count_equals': (snapshot, expected) => snapshot.runtime.tasks.length === expected,
+  // Restart-after-submit: the resumed run must reference the SAME upstream
+  // task id, not a freshly submitted one. `expected: true` asserts every submit
+  // collapsed to one distinct taskId; a string asserts it equals that id. Any
+  // second distinct id is a fresh (duplicate) submit.
+  'task.resumed_same_task_id': (snapshot, expected) => {
+    const ids = [...new Set(snapshot.providerLedger.submitTaskIds ?? [])];
+    if (ids.length !== 1) return false;
+    if (expected === true || expected === undefined) return true;
+    return ids[0] === expected;
+  },
+
   'artifact.count_equals': (snapshot, expected) => snapshot.artifacts.items.length === expected,
   'artifact.kind_exists': (snapshot, expected) => snapshot.artifacts.kinds.includes(expected),
   'artifact.provenance_node_exists': (snapshot, expected) =>
@@ -120,6 +137,13 @@ export const PREDICATES = {
     && snapshot.artifacts.items.every(artifact =>
       artifact.contentChecksum && artifact.generationFingerprint
       && artifact.contentChecksum !== artifact.generationFingerprint),
+  // Byte-durability: the artifact is provably readable from durable storage,
+  // not just listed in the index. A real provider driver marks `persisted:true`
+  // only after re-reading the bytes (e.g. from the media store after a restart);
+  // a remote URL that expires in ~24h is provenance, never the durable source.
+  'artifact.persisted': snapshot => snapshot.artifacts.items.length > 0
+    && snapshot.artifacts.items.every(artifact =>
+      artifact.persisted === true && Boolean(artifact.storageKey)),
 
   // ---- environment / runtime discovery -----------------------------------
   // Both directions are enforced: every executed scenario must match its

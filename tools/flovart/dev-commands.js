@@ -17,24 +17,23 @@ const PG_USER = 'postgres';
 const PG_PASSWORD = 'postgres';
 const PG_DB = 'flovart';
 const PG_PORT = '5433';
-const DOCKER_DEFAULT_PORTS = Object.freeze({ db: 5433, hub: 11452, enterprise: 11453, web: 1635 });
+const DOCKER_DEFAULT_PORTS = Object.freeze({ db: 5433, hub: 11452, web: 1635 });
 
 const URLS = {
   web: 'http://localhost:37522',
   hub: 'http://localhost:11452',
-  enterprise: 'http://localhost:11453',
   db: `localhost:${PG_PORT}`,
 };
 
-const SERVICE_ORDER = ['db', 'hub', 'enterprise', 'web'];
+const SERVICE_ORDER = ['db', 'hub', 'web'];
+
 
 export function dockerComposeServices(services = []) {
   const selected = new Set(services);
   if (selected.has('web')) {
     selected.add('db');
     selected.add('hub');
-    selected.add('enterprise');
-  } else if (selected.has('hub') || selected.has('enterprise')) {
+  } else if (selected.has('hub')) {
     selected.add('db');
   }
   return SERVICE_ORDER.filter(name => selected.has(name));
@@ -70,7 +69,6 @@ export function parseDevArgs(argv = []) {
     all: false,
     web: false,
     hub: false,
-    enterprise: false,
     backend: false,
     db: false,
     docker: false,
@@ -101,7 +99,6 @@ export function parseDevArgs(argv = []) {
     else if (arg === '--all' || arg === 'all') options.all = true;
     else if (arg === '--web' || arg === '--frontend' || arg === 'web' || arg === 'frontend') options.web = true;
     else if (arg === '--hub' || arg === 'hub') options.hub = true;
-    else if (arg === '--enterprise' || arg === 'enterprise') options.enterprise = true;
     else if (arg === '--backend' || arg === 'backend') options.backend = true;
     else if (arg === '--db' || arg === 'db') options.db = true;
     else if (arg === '--docker' || arg === 'docker') options.docker = true;
@@ -134,28 +131,25 @@ export function parseDevArgs(argv = []) {
 }
 
 function selectedServices(options, fallbackAll = true) {
-  const requested = options.all || options.web || options.hub || options.enterprise || options.backend || options.db;
+  const requested = options.all || options.web || options.hub || options.backend || options.db;
   const selected = {
     db: options.db,
     hub: options.hub,
-    enterprise: options.enterprise,
     web: options.web,
   };
 
   if (options.all || (!requested && fallbackAll)) {
     selected.db = true;
     selected.hub = true;
-    selected.enterprise = true;
     selected.web = true;
   }
 
   if (options.backend) {
     selected.db = true;
     selected.hub = true;
-    selected.enterprise = true;
   }
 
-  if (selected.hub || selected.enterprise) selected.db = true;
+  if (selected.hub) selected.db = true;
   return SERVICE_ORDER.filter(name => selected[name]);
 }
 
@@ -194,7 +188,7 @@ export function planStart(argv = [], cwd = process.cwd()) {
 function inferSourceStartArgs(argv, cwd) {
   const options = parseDevArgs(argv);
   if (options.source || options.toolkit || !options.open || options.noOpen) return argv;
-  const hasServiceSelection = options.all || options.web || options.hub || options.enterprise || options.backend || options.db;
+  const hasServiceSelection = options.all || options.web || options.hub || options.backend || options.db;
   const projectDir = resolveProjectDir(cwd);
   if (hasServiceSelection || projectDir !== cwd) return argv;
   if (!existsSync(join(projectDir, 'agent', 'index.js')) || !existsSync(join(projectDir, 'vite.config.ts'))) return argv;
@@ -272,7 +266,7 @@ function printPlan(plan, json = false) {
 }
 
 function ensureEnvFiles(projectDir) {
-  for (const dir of ['backend', 'backend/enterprise']) {
+  for (const dir of ['backend']) {
     const dirAbs = join(projectDir, dir);
     const envFile = join(dirAbs, '.env');
     const exampleFile = join(dirAbs, '.env.example');
@@ -290,7 +284,7 @@ async function installProjectDependencies(projectDir, services) {
     await run('npm', ['install'], { cwd: projectDir });
   }
 
-  const needsGo = services.includes('hub') || services.includes('enterprise');
+  const needsGo = services.includes('hub');
   if (needsGo) {
     ensureEnvFiles(projectDir);
     if (checkCommand('go')) {
@@ -298,10 +292,7 @@ async function installProjectDependencies(projectDir, services) {
         log('Downloading Hub Go dependencies...');
         await run('go', ['mod', 'download'], { cwd: join(projectDir, 'backend') });
       }
-      if (services.includes('enterprise')) {
-        log('Downloading Enterprise Go dependencies...');
-        await run('go', ['mod', 'download'], { cwd: join(projectDir, 'backend', 'enterprise') });
-      }
+
     } else {
       warn('Go not found, skipping backend dependencies. Install Go from https://go.dev to run the backend.');
     }
@@ -509,7 +500,6 @@ export async function resolveDockerPorts(plan = {}, env = process.env) {
   const requested = {
     db: env.FLOVART_DB_PORT,
     hub: env.FLOVART_HUB_PORT,
-    enterprise: env.FLOVART_ENTERPRISE_PORT,
     web: plan.webPort ?? env.FLOVART_WEB_PORT,
   };
   const ports = {};
@@ -529,8 +519,7 @@ async function startLocal(projectDir, plan) {
   if (plan.services.includes('web') && !checkCommand('node')) { err('Node.js is required.'); process.exit(1); }
 
   const hubDir = join(projectDir, 'backend');
-  const entDir = join(projectDir, 'backend', 'enterprise');
-  const needsGo = plan.services.includes('hub') || plan.services.includes('enterprise');
+  const needsGo = plan.services.includes('hub');
   const hasGo = checkCommand('go');
   const children = [];
   const detached = plan.detach || plan.json;
@@ -551,7 +540,6 @@ async function startLocal(projectDir, plan) {
     JWT_EXP_HOURS: process.env.JWT_EXP_HOURS || '168',
     CORS_ALLOW: process.env.CORS_ALLOW || '*',
     PORT: process.env.PORT || '11452',
-    ENTERPRISE_PORT: process.env.ENTERPRISE_PORT || '11453',
   };
   if (plan.webPort !== undefined) env.FLOVART_WEB_PORT = String(plan.webPort);
   if (plan.agentPort !== undefined) env.FLOVART_AGENT_PORT = String(plan.agentPort);
@@ -591,9 +579,6 @@ async function startLocal(projectDir, plan) {
   } else {
     if (plan.services.includes('hub')) {
       children.push(spawn('go', ['run', './cmd/server'], { stdio: detached ? 'ignore' : 'inherit', shell: true, cwd: hubDir, env, detached, windowsHide: detached }));
-    }
-    if (plan.services.includes('enterprise')) {
-      children.push(spawn('go', ['run', './cmd/server'], { stdio: detached ? 'ignore' : 'inherit', shell: true, cwd: entDir, env, detached, windowsHide: detached }));
     }
   }
 

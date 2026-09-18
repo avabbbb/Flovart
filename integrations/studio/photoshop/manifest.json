@@ -5,10 +5,14 @@
   "version": "0.3.2",
   "main": "index.html",
   "host": [{ "app": "PS", "minVersion": "23.0.0" }],
-  "entrypoints": [{
-    "type": "panel",
-    "id": "flovartPanel",
-    "label": "Flovart",
-    "minimumSize": { "width": 280, "height": 420 }
-  }]
+  "entrypoints": [
+    {
+      "type": "panel",
+      "id": "flovartPanel",
+      "label": "Flovart",
+      "minimumSize": { "width": 280, "height": 420 }
+    },
+    { "type": "command", "id": "flovartOpenCanvas", "label": "打开 Flovart 画布" },
+    { "type": "command", "id": "flovartGenerateFromSelection", "label": "用当前选择生成" }
+  ]
 }

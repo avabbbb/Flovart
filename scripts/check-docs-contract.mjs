@@ -83,16 +83,23 @@ function gitVisibleDocPaths(rootDir) {
   return paths.filter(relativePath => /\.(?:md|mdx)$/i.test(relativePath) && fs.existsSync(path.join(rootDir, relativePath)));
 }
 
+const TEXT_FILE_EXTENSIONS = new Set(['.js', '.mjs', '.cjs', '.ts', '.tsx', '.json', '.md', '.mdx', '.txt', '.yml', '.yaml', '.toml', '.sh', '.ps1', '.css', '.html', '.svg']);
+
 function packageFileMap(directory) {
   const files = new Map();
-  if (!fs.existsSync(directory)) return files;
   const stack = [''];
   while (stack.length) {
     const segment = stack.pop();
     for (const entry of fs.readdirSync(path.join(directory, segment), { withFileTypes: true })) {
       const relativeName = segment ? `${segment}/${entry.name}` : entry.name;
       if (entry.isDirectory()) stack.push(relativeName);
-      else if (entry.isFile()) files.set(relativeName, fs.readFileSync(path.join(directory, relativeName)));
+      else if (entry.isFile()) {
+        const buffer = fs.readFileSync(path.join(directory, relativeName));
+        // Text files compare with line endings normalized to LF so CRLF checkouts
+        // (core.autocrlf) do not produce false drift; binary assets stay byte-exact.
+        const isText = TEXT_FILE_EXTENSIONS.has(path.extname(entry.name).toLowerCase());
+        files.set(relativeName, isText ? Buffer.from(buffer.toString('utf8').replace(/\r\n/g, '\n'), 'utf8') : buffer);
+      }
     }
   }
   return files;

@@ -17,7 +17,7 @@
   function mountInspector({ root, adapter, controller, getController, hostLabel, onOpenCanvas, defaultImportTarget = { kind: 'new-layer' }, preview = false }) {
     root.replaceChildren();
     root.className = 'flovart-studio-inspector';
-    let disposed = false, busy = false, reading = false, lastSelection = null, activeTab = 'make';
+    let disposed = false, busy = false, reading = false, lastSelection = null, activeTab = 'make', taskStart = 0, taskTimer = null;
     const history = [];
     const resolveController = () => getController ? getController() : controller;
     const header = el('header', undefined, 'fs-header');
@@ -40,6 +40,12 @@
     const refreshButton = button('↻', 'fs-icon-button', () => { void refresh(); });
     refreshButton.setAttribute('aria-label', '刷新宿主选择');
     sourceLabel.append(el('span', '来自当前选择'), refreshButton);
+    const referencesLabel = el('div', undefined, 'fs-section-label');
+    const addReference = button('+ 素材', 'fs-chip-add', () => { void refresh(); });
+    addReference.title = '重新读取当前选择作为参考';
+    addReference.setAttribute('aria-label', addReference.title);
+    referencesLabel.append(el('span', '参考素材'), addReference);
+    const referenceRow = el('div', undefined, 'fs-references');
     const source = el('div', undefined, 'fs-source');
     const thumb = el('div', '▧', 'fs-source-thumb');
     const sourceInfo = el('div', undefined, 'fs-source-info');
@@ -47,7 +53,9 @@
     const context = el('span', hostLabel, 'fs-muted');
     const dimensions = el('span', '等待宿主选择', 'fs-mono fs-muted');
     sourceInfo.append(reference, context, dimensions);
+    const referenceChip = el('span', '当前选择', 'fs-reference-chip fs-muted');
     source.append(thumb, sourceInfo);
+    referenceRow.append(referenceChip);
     const promptLabel = el('label', '你想如何创作？', 'fs-section-label');
     const promptBox = el('div', undefined, 'fs-prompt-box');
     const prompt = el('textarea');
@@ -65,8 +73,10 @@
       recipes.append(button(label, 'fs-recipe', () => { prompt.value = text; update(); prompt.focus(); }));
     }
     const settings = el('div', undefined, 'fs-settings');
-    const method = el('div', undefined, 'fs-setting-row');
-    method.append(el('span', '制作方式'), el('span', 'Flovart 工作流', 'fs-muted'));
+    const modelRow = el('label', undefined, 'fs-setting-row');
+    const model = el('select');
+    model.setAttribute('aria-label', '模型');
+    modelRow.append(el('span', '模型'), model);
     const output = el('label', undefined, 'fs-setting-row');
     const target = el('select');
     target.setAttribute('aria-label', '输出位置');
@@ -75,8 +85,17 @@
     else target.append(option('当前文档 · 新图层', 'new-layer'));
     target.value = defaultImportTarget.kind;
     output.append(el('span', '添加到'), target);
-    settings.append(method, output);
+    settings.append(modelRow, output);
     const generate = button(preview ? '✦  演示生成并添加' : '✦  生成并添加', 'fs-generate');
+    const taskRow = el('div', undefined, 'fs-task');
+    taskRow.hidden = true;
+    taskRow.setAttribute('role', 'status');
+    const taskSpinner = el('span', '', 'fs-task-spinner');
+    const taskLabel = el('span', '制作中…', 'fs-task-label');
+    const taskBar = el('span', undefined, 'fs-task-bar');
+    const taskBarFill = el('span', undefined, 'fs-task-bar-fill');
+    taskBar.append(taskBarFill);
+    taskRow.append(taskSpinner, taskLabel, taskBar);
     const status = el('p', '', 'fs-status');
     status.setAttribute('role', 'status');
     status.setAttribute('aria-live', 'polite');
@@ -85,7 +104,7 @@
     const footer = el('footer', undefined, 'fs-footer');
     const connection = el('span');
     footer.append(connection, el('span', preview ? '交互预览' : hostLabel, 'fs-muted'));
-    form.append(sourceLabel, source, promptLabel, promptBox, recipes, settings, generate, el('div', 'Ctrl / ⌘ + Enter', 'fs-shortcut fs-mono'), status);
+    form.append(sourceLabel, source, referencesLabel, referenceRow, promptLabel, promptBox, recipes, settings, generate, el('div', 'Ctrl / ⌘ + Enter', 'fs-shortcut fs-mono'), taskRow, status);
     root.append(header, tabs, form, results, footer);
     function showTab(tab) {
       activeTab = tab;
@@ -108,12 +127,50 @@
       const linked = Boolean(resolveController());
       promptCount.textContent = String(prompt.value.length);
       generate.disabled = busy || !linked || !lastSelection || !prompt.value.trim();
+      model.disabled = busy;
       target.disabled = busy;
       generate.textContent = busy ? '正在制作…' : preview ? '✦  演示生成并添加' : '✦  生成并添加';
       generate.setAttribute('aria-busy', String(busy));
       connection.textContent = preview ? '○  示例素材' : linked ? '●  Flovart 已连接' : '○  等待 Flovart';
       connection.className = linked && !preview ? 'fs-success' : 'fs-muted';
       if (!linked && !status.textContent) status.textContent = '连接 Flovart 后即可使用当前工作流制作。';
+    }
+    function refreshModels() {
+      const choices = resolveController()?.models;
+      const list = Array.isArray(choices) && choices.length ? choices : [{ label: '自动', value: 'auto' }];
+      model.replaceChildren(...list.map(item => option(item.label || item.name || item.id, item.value || item.id)));
+    }
+    function progressOf(value) {
+      const number = Number(value);
+      return Number.isFinite(number) ? Math.min(1, Math.max(0, number > 1 ? number / 100 : number)) : null;
+    }
+    function formatElapsed(ms) {
+      const seconds = Math.max(0, Math.round(ms / 1000));
+      return seconds < 60 ? `${seconds}秒` : `${Math.floor(seconds / 60)}分${seconds % 60}秒`;
+    }
+    function taskTick() {
+      taskLabel.textContent = `制作中… ${formatElapsed(Date.now() - taskStart)}`;
+    }
+    function taskStartRow() {
+      taskStart = Date.now();
+      taskRow.hidden = false;
+      taskBarFill.style.width = '';
+      taskRow.classList.add('is-indeterminate');
+      taskTick();
+      taskTimer = global.setInterval(taskTick, 500);
+    }
+    function taskProgress(value) {
+      const fraction = progressOf(value);
+      if (fraction === null) return;
+      taskRow.classList.remove('is-indeterminate');
+      taskBarFill.style.width = `${Math.round(fraction * 100)}%`;
+      taskLabel.textContent = `制作中… ${Math.round(fraction * 100)}%`;
+    }
+    function taskStopRow() {
+      if (taskTimer) { global.clearInterval(taskTimer); taskTimer = null; }
+      taskRow.hidden = true;
+      taskRow.classList.remove('is-indeterminate');
+      taskBarFill.style.width = '';
     }
     async function refresh() {
       if (disposed || reading) return;
@@ -126,6 +183,9 @@
         context.textContent = current.title || current.documentName || `${hostLabel} · 尚未打开文档`;
         reference.textContent = selected?.label || '请先选择一个素材';
         dimensions.textContent = selected?.width && selected?.height ? `${Math.round(selected.width)} × ${Math.round(selected.height)} · ${selected.kind === 'video' ? '视频参考' : '图像参考'}` : selected ? '使用当前选择作为参考' : '等待宿主选择';
+        referenceChip.textContent = selected?.label || '当前选择';
+        referenceChip.className = `fs-reference-chip${selected ? '' : ' fs-muted'}`;
+        referenceChip.title = selected ? `${selected.label} · ${selected.kind === 'video' ? '视频' : '图像'}` : '请先选择一个素材';
         if (preview && selected?.previewUrl) {
           if (thumb.firstChild?.src !== selected.previewUrl) {
             const img = el('img'); img.src = selected.previewUrl; img.alt = selected.label; thumb.replaceChildren(img);
@@ -142,10 +202,10 @@
       if (busy || !currentController || !lastSelection || !prompt.value.trim()) return;
       busy = true;
       const submittedPrompt = prompt.value.trim();
-      status.textContent = preview ? '正在演示素材进入画布与结果回填…' : '正在通过 Flovart 工作流制作…';
+      taskStartRow();
       update();
       try {
-        const result = await currentController.generate(submittedPrompt, { ...defaultImportTarget, kind: target.value });
+        const result = await currentController.generate(submittedPrompt, { ...defaultImportTarget, kind: target.value }, taskProgress);
         if (disposed) return;
         if (result?.import?.ok === false) throw new Error(result.import.message || '结果添加失败，请重试。');
         const message = result?.import?.message || '已添加新结果';
@@ -153,18 +213,22 @@
         historyTab.textContent = `本次记录 · ${history.length}`;
         if (activeTab === 'history') showTab('history');
       } catch (error) { if (!disposed) status.textContent = error?.message || '制作失败，请重试。'; }
-      finally { busy = false; update(); }
+      finally { busy = false; taskStopRow(); update(); }
     }
     generate.addEventListener('click', run);
     prompt.addEventListener('input', update);
     prompt.addEventListener('keydown', event => {
       if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) { event.preventDefault(); void run(); }
     });
+    root.addEventListener('keydown', event => {
+      if (event.key === 'Escape' && activeTab !== 'make') { event.preventDefault(); showTab('make'); prompt.focus(); }
+    });
     const onReady = () => { status.textContent = ''; void refresh(); };
+    refreshModels();
     global.addEventListener?.('flovart:link-ready', onReady);
     const subscription = adapter.subscribeContext?.(() => { void refresh(); });
     void refresh(); update();
-    return { refresh, dispose() { disposed = true; subscription?.dispose(); global.removeEventListener?.('flovart:link-ready', onReady); } };
+    return { refresh, dispose() { disposed = true; taskStopRow(); subscription?.dispose(); global.removeEventListener?.('flovart:link-ready', onReady); } };
   }
   global.FlovartStudioUI = { mountInspector };
 })(typeof window !== 'undefined' ? window : globalThis);

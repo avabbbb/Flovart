@@ -40,6 +40,11 @@
 .fs-prompt-box textarea { display: block; width: 100%; min-height: 113px; resize: vertical; border: 0; background: transparent; padding: 12px; line-height: 1.8; outline: none; }
 .fs-prompt-box textarea::placeholder { color: var(--fs-muted); }
 .fs-prompt-foot { display: flex; align-items: center; justify-content: space-between; padding: 2px 12px 9px; font-size: 10px; }
+.fs-references { display: flex; flex-wrap: wrap; gap: 6px; margin: -4px 0 14px; }
+.fs-reference-chip { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; border: 1px solid var(--fs-line); border-radius: 3px; background: var(--fs-input); padding: 3px 8px; font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fs-reference-chip::before { content: '▧'; color: var(--fs-accent); font-size: 11px; }
+.fs-chip-add { border: 1px dashed var(--fs-line); border-radius: 3px; background: transparent; padding: 3px 8px; color: var(--fs-muted) !important; font-size: 10px !important; }
+.fs-chip-add:hover { background: var(--fs-hover); color: var(--fs-ink) !important; }
 .fs-recipes { display: flex; flex-wrap: wrap; gap: 7px; padding: 10px 0 18px; }
 .fs-recipe { border: 1px solid var(--fs-line); border-radius: 3px; background: transparent; padding: 3px 7px; color: var(--fs-muted) !important; font-size: 10px !important; }
 .fs-settings { padding: 4px 0 17px; border-top: 1px solid var(--fs-line); }
@@ -48,6 +53,15 @@
 .fs-generate { width: 100%; height: 35px; border: 0; border-radius: 4px; background: var(--fs-accent); color: var(--fs-on-accent) !important; font-weight: 600 !important; }
 .fs-shortcut { text-align: center; color: var(--fs-muted); padding-top: 7px; font-size: 9px; }
 .fs-status { min-height: 34px; margin: 10px 0 0; color: var(--fs-muted); font-size: 10px; line-height: 1.65; overflow-wrap: anywhere; }
+.fs-task { display: flex; align-items: center; gap: 8px; margin-top: 10px; min-height: 20px; }
+.fs-task-spinner { width: 11px; height: 11px; flex-shrink: 0; border: 1.5px solid var(--fs-line); border-top-color: var(--fs-accent); border-radius: 50%; }
+.fs-task.is-indeterminate .fs-task-spinner { animation: fs-task-spin .8s linear infinite; }
+.fs-task-label { font-size: 10px; color: var(--fs-muted); white-space: nowrap; }
+.fs-task-bar { flex: 1; height: 2px; border-radius: 1px; background: var(--fs-line); overflow: hidden; }
+.fs-task-bar-fill { display: block; height: 100%; width: 0; background: var(--fs-accent); transition: width .25s ease; }
+.fs-task.is-indeterminate .fs-task-bar-fill { width: 100%; transform-origin: left; animation: fs-task-slide 1.4s ease-in-out infinite; }
+@keyframes fs-task-spin { to { transform: rotate(360deg); } }
+@keyframes fs-task-slide { 0% { transform: translateX(-100%); } 60%,100% { transform: translateX(100%); } }
 .fs-footer { margin-top: auto; display: flex; justify-content: space-between; gap: 8px; padding: 10px 17px; border-top: 1px solid var(--fs-line); font-size: 9px; flex-shrink: 0; }
 .fs-success { color: var(--fs-success); }
 .fs-history { flex: 1; padding: 20px 17px; overflow-y: auto; }

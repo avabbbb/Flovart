@@ -73,6 +73,10 @@
           "artifact.all_have_content_checksum": true,
           "artifact.all_have_generation_fingerprint": true,
           "artifact.content_never_equals_fingerprint": true,
+          "artifact.persisted": true,
+          "provider.submit_references_include": [
+            "artifact_seedream_out"
+          ],
           "reference.count_equals": 1,
           "reference.node_has_role": {
             "nodeId": "video_1",
@@ -91,16 +95,7 @@
         "unapprovedPaidActions": 0,
         "secretExposure": 0
       },
-      "missingPredicates": [
-        {
-          "name": "provider.submit_references_include",
-          "reason": "The submit wire carries references (snapshot.providerLedger.submits[].wire.references) but no predicate reads it; only wire.mode is asserted via provider.mode_equals. 'First frame was the prior image artifact' is currently inferred from the node's metadata.references via reference.node_has_role, which is a proxy: it proves the node was configured with the reference, not that the submitted payload sent artifact_seedream_out as firstFrameUrl to RunningHub."
-        },
-        {
-          "name": "artifact.persisted",
-          "reason": "Same gap as runninghub-seedream-t2i-001: no predicate asserts durable byte persistence; the RunningHub path never calls registerWorkflowArtifact today, so a driver that only sees artifact rows cannot distinguish a persisted video from a remote URL that expires in ~24h."
-        }
-      ],
+      "missingPredicates": [],
       "solution": {
         "approvals": [
           "approve one real paid RunningHub Seedance image-to-video generation"
@@ -124,7 +119,7 @@
         ]
       },
       "runnerScope": [
-        "codex"
+        "real-provider"
       ],
       "runnerScopeReason": "Real-provider certification: only a serial, parent-driven run against the live RunningHub API counts as evidence. Deterministic runners replay into the controlled world's fake provider, and the codex write-replay seam cannot express workflow.node.run, so these predicates grade only a driver that captures the real runtime/provider ledger into the normalized snapshot shape.",
       "timeout": 900000,
@@ -140,7 +135,11 @@
         "real-provider",
         "paid",
         "external-evidence"
-      ]
+      ],
+      "realCapture": {
+        "path": ".tmp/eval-captures/runninghub-seedance-i2v.json",
+        "description": "Produced by the serial parent driver after a real RunningHub workflow.node.run; absent => blocked, never a capability failure."
+      }
     }
   ]
 }

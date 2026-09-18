@@ -32,7 +32,7 @@ eval/
   environment/               controlled world (the workspace seam) + snapshot/normaliser
   graders/predicates.mjs     predicate registry (outcome grading)
   graders/nativeEffects/     reserved, see its README
-  runners/                   oracle / cli / mcp / nop / codex / environment
+  runners/                   oracle / cli / mcp / nop / codex / environment / real-provider
   recorders/trajectory.mjs   JSONL trajectory + secret redaction
   tasks/<suite>/*.json       the dataset
   results/<run-id>/          per-trial evidence (generated)
@@ -128,6 +128,7 @@ A task is scoped to the surfaces that can express it:
 | `nop` | nothing at all; used to prove graders discriminate |
 | `codex` | external agent; blocked unless a real binary and opt-in exist |
 | `environment` | real `verifyDiscoveryPermissions()` against real files |
+| `real-provider` | ingests a parent driver's real-run capture (RunningHub paid trials) into the controlled world for grading |
 
 Forbidden in every runner: eval-only Zustand mutation, eval-only database write,
 eval-only native fallback, eval-only Provider bypass. If a surface cannot express
@@ -136,6 +137,27 @@ reported** - never silently dropped.
 
 Grading an error path checks the **error code**, not just "something failed": a
 rejection for the wrong reason does not score (`checkRejectionCodes`).
+
+## Real-provider captures (E5b)
+
+Paid provider submissions are real side effects that cannot be replayed into the
+controlled world (replaying a RunningHub submit would double-charge the account).
+The `real-provider` runner therefore ingests a **capture** produced once by a
+serial parent driver against the live workspace. The driver runs the real
+`workflow.node.run`, reads back the real evidence, and writes a JSON capture;
+the runner fills the controlled world from it so the same predicate engine
+grades real and controlled runs identically.
+
+Capture shape (see `eval/runners/real-provider.mjs` header):
+
+- `project` — final workflow graph (nodes carry `metadata.generationProviderTaskId`).
+- `providerLedger.submits[]` — `{ submitId, taskId, wire: { mode, references: [{key}] }, confirmed, outcome }`. `taskId` is lifted to the top level so `task.resumed_same_task_id` can assert a restart polled the SAME upstream task; `wire.references[].key` carries the upstream resourceId so `provider.submit_references_include` can prove a first frame travelled into the submit.
+- `artifacts[]` — `{ kind, storageKey, persisted, byteLength, contentChecksum, generationFingerprint, remoteUrl, provenance }`. Set `persisted:true` ONLY after re-reading the bytes from durable storage (the media store); `remoteUrl` is provenance (RunningHub links expire ~24h), never the durable source.
+- `tasks[]`, `approvals[]`, `localAssets.references[]`, `safety` counts, `usage` (set `measured:true` only when actually metered).
+
+The capture path is declared on the task via `realCapture.path`. Missing or
+unreadable captures are reported `blocked` (`EXTERNAL_FAILURE`), never a
+capability failure.
 
 ## safety hard gates (E8)
 

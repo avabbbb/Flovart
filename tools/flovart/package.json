@@ -16,7 +16,6 @@
     "bundle-manager.js",
     "bootstrap-coordinator.js",
     "browser-launch-state.js",
-    "crew-command-surface.js",
     "dev-commands.js",
     "agent-surface.js",
     "host-discovery.js",

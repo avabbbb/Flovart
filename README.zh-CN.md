@@ -68,6 +68,85 @@
 
 这段录屏展示的是这件事里 CLI 那一半；「具名 Coding Agent 自己的对话过程」的等价录屏仍然待补，见 [README_VISUAL_TODO.md](docs/maintenance/readme/README_VISUAL_TODO.md)。
 
+## 功能演示
+
+下面每一条都是运行中应用的真实录屏：一个操作，从头到尾，没有合成帧、没有效果图。每条都裁到动作本身。录制方法、可复现命令与边界见 [DEMO_RECORDING.md](docs/maintenance/readme/DEMO_RECORDING.md)。
+
+### 画布操作
+
+<table>
+  <tr>
+    <td width="50%" align="center">
+      <img src="pic/readme/features/canvas-add-node.gif" alt="从画布工具栏添加图片节点与视频节点" />
+      <br /><sub><strong>添加节点。</strong>工具栏的添加菜单涵盖图片、视频、文本、脚本、音频、配置。</sub>
+    </td>
+    <td width="50%" align="center">
+      <img src="pic/readme/features/canvas-connect.gif" alt="从一个节点拖出连线到另一个节点" />
+      <br /><sub><strong>连接。</strong>从节点的输出把手拖到另一个节点，它就成为了输入。</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" align="center">
+      <img src="pic/readme/features/canvas-drag.gif" alt="在画布上拖动节点" />
+      <br /><sub><strong>手动摆放。</strong>节点自由移动，图本身就是状态。</sub>
+    </td>
+    <td width="50%" align="center">
+      <img src="pic/readme/features/canvas-tidy.gif" alt="一键整理画布布局" />
+      <br /><sub><strong>一键整理。</strong>点一下重排整张图。</sub>
+    </td>
+  </tr>
+  <tr>
+    <td colspan="2" align="center">
+      <img src="pic/readme/features/canvas-prompt.gif" alt="在选中的节点上直接输入提示词" />
+      <br /><sub><strong>就地写提示词。</strong>选中节点，直接在节点上写，不需要另开提示词对话框。</sub>
+    </td>
+  </tr>
+</table>
+
+### 图片节点
+
+四个本地操作，跑在同一张本地生成的测试图上，各自产出真实的结果节点。全程不联系任何模型服务。
+
+<table>
+  <tr>
+    <td width="50%" align="center">
+      <img src="pic/readme/features/crop.gif" alt="裁剪图片节点" />
+      <br /><sub><strong>裁剪。</strong>设定裁剪范围后应用。</sub>
+    </td>
+    <td width="50%" align="center">
+      <img src="pic/readme/features/rotate.gif" alt="把图片节点旋转四分之一圈" />
+      <br /><sub><strong>旋转与镜像。</strong>四分之一圈与翻转。</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" align="center">
+      <img src="pic/readme/features/split-grid.gif" alt="把图片切成多个独立节点" />
+      <br /><sub><strong>宫格切分。</strong>每一格成为独立且相连的图片节点。</sub>
+    </td>
+    <td width="50%" align="center">
+      <img src="pic/readme/features/filter.gif" alt="调整图片节点的调色" />
+      <br /><sub><strong>调色。</strong>调整在应用前即可实时预览。</sub>
+    </td>
+  </tr>
+</table>
+
+### 外部 Agent 链路
+
+<table>
+  <tr>
+    <td width="50%" align="center">
+      <img src="pic/readme/features/agent-cli-live.gif" alt="typed CLI 操作在可见画布上搭建节点图" />
+      <br /><sub><strong>操作直接落在画布上。</strong><code>workflow.node.create</code> 与 <code>workflow.connect</code> 通过 typed CLI 执行，可见 Workflow 同步更新——不靠界面抓取，也没有第二份隐藏副本。</sub>
+    </td>
+    <td width="50%" align="center">
+      <img src="pic/readme/features/agent-open-panel.gif" alt="从画布工具栏打开 Agent 界面" />
+      <br /><sub><strong>打开 Agent 界面。</strong>入口就在同一根画布工具栏上。</sub>
+    </td>
+  </tr>
+</table>
+
+尚未录制、也刻意没有展示的：依赖模型的生成能力（本机未配置任何 Provider），以及视频与音频节点工具——它们的浏览器内 ffmpeg core 当前加载失败。两项都作为开放缺口登记在[录制记录](docs/maintenance/readme/DEMO_RECORDING.md)里。
+
 ## 为什么是 Flovart？
 
 很多 AI 创作工具要求你在可视化编辑器和自主 Agent 之间二选一。Flovart 让两者共用同一份制作状态。

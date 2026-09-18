@@ -48,7 +48,7 @@
     },
     "allowedSurfaces": {
       "type": "array",
-      "items": { "enum": ["cli", "mcp", "oracle", "codex", "nop", "environment"] }
+      "items": { "enum": ["cli", "mcp", "oracle", "codex", "nop", "environment", "real-provider"] }
     },
     "forbiddenActions": { "type": "array", "items": { "type": "string" } },
     "expected": {
@@ -89,7 +89,7 @@
     },
     "runnerScope": {
       "type": "array",
-      "items": { "enum": ["oracle", "cli", "mcp", "codex", "nop", "environment"] },
+      "items": { "enum": ["oracle", "cli", "mcp", "codex", "nop", "environment", "real-provider"] },
       "description": "Runners that can express this task. A runner outside the scope is skipped and reported."
     },
     "runnerScopeReason": { "type": "string" },

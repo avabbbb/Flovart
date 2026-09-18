@@ -1,9 +1,9 @@
 {
   "runtime": { "type": "node", "version": "22" },
   "init": {
-    "darwin": "npm install -g flovart-cli@0.3.2",
-    "linux": "npm install -g flovart-cli@0.3.2",
-    "win32": "npm install -g flovart-cli@0.3.2"
+    "darwin": "npx -y @flovart/workbuddy-installer@latest",
+    "linux": "npx -y @flovart/workbuddy-installer@latest",
+    "win32": "npx -y @flovart/workbuddy-installer@latest"
   },
   "auth": {
     "darwin": "flovart-cli workbuddy.auth --json",

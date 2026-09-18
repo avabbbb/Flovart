@@ -1,13 +1,10 @@
 #!/usr/bin/env node
 import { COMMAND_REGISTRY, executeFlovartCommand, formatValue, HELP_TEXT, normalizeCommandName, parseCliArgs, SETUP_TEXT } from './core.js';
-import { getCanonicalRegistry } from './registry.js';
-import { resolveDirectorBinding } from './host-registry.js';
 import { createShadowRuntimeFacade } from './shadow-runtime.js';
 import { readFile } from 'node:fs/promises';
 import { defaultRuntimeActor, FlovartRuntimeClient, RuntimeClientError } from './runtime-client.js';
 import { RUNTIME_COMMANDS, RUNTIME_WRITE_COMMANDS } from './runtime-command-surface.js';
 import { WORKSPACE_COMMANDS, WORKSPACE_WRITE_COMMANDS } from './workspace-command-surface.js';
-import { CREW_COMMANDS, CREW_WRITE_COMMANDS } from './crew-command-surface.js';
 import { RESEARCH_COMMANDS, RESEARCH_WRITE_COMMANDS } from './research-command-surface.js';
 import { collectTopicResearch } from './topic-research.js';
 import { runSkillCommand, SKILL_COMMAND_NAMES } from './skill-commands.js';
@@ -18,7 +15,6 @@ import { createOperationGateway } from './operation-gateway.js';
 import {
   createWorkspaceFacade,
   FlovartWorkspaceClient,
-  FlovartCrewClient,
   WorkspaceClientError,
 } from './workspace-client.js';
 
@@ -87,15 +83,6 @@ function runtimeInvocation(command, parsed) {
   return { commandArgs, options: { ...(idempotencyKey ? { idempotencyKey } : {}) } };
 }
 
-function directorAgentIdentity(parsed, { optional = false } = {}) {
-  const identity = parsed.agentIdentity || parsed['agent-identity'] || parsed.host || parsed._?.[0];
-  if (!identity && optional) return undefined;
-  const binding = resolveDirectorBinding(identity);
-  if (!binding) {
-    throw new WorkspaceClientError('INVALID_ARGUMENT', `Agent Identity 无可用的 Director Runtime Binding：${identity || '(empty)'}`, { retryable: false });
-  }
-  return binding.agentIdentityId;
-}
 
 const rawCommand = argv[0];
 
@@ -263,96 +250,6 @@ if (['install', 'start', 'update'].includes(rawCommand)) {
     return;
   }
 
-  if (CREW_COMMANDS.has(routingCommand)) {
-    const idempotencyKey = args.idempotencyKey || args['idempotency-key'];
-    if (CREW_WRITE_COMMANDS.has(routingCommand) && routingCommand === 'crew.intent.submit' && !idempotencyKey) {
-      printCliResponse(false, command, null, {
-        code: 'INVALID_ARGUMENT',
-        message: `${routingCommand} requires --idempotency-key so retries cannot duplicate Crew Intent work.`,
-        retryable: false,
-      }, { runtime: 'crew' });
-      return;
-    }
-    try {
-      const crew = new FlovartCrewClient();
-      const protocol = await crew.protocol();
-      const registry = getCanonicalRegistry();
-      if (protocol.protocolVersion !== registry.protocolVersion || protocol.registryHash !== registry.registryHash) {
-        printCliResponse(false, command, null, {
-          code: 'PROTOCOL_MISMATCH',
-          message: 'Workspace Adapter Crew 协议版本或 Registry Hash 与本地 CLI 不一致；请先升级或 command.list 重新读取。',
-          retryable: false,
-          details: { protocolVersion: protocol.protocolVersion, registryHash: protocol.registryHash },
-        }, { runtime: 'crew' });
-        return;
-      }
-      let result;
-      switch (routingCommand) {
-        case 'director.bind':
-          result = await crew.bindDirector({
-            agentIdentity: directorAgentIdentity(args),
-            sessionId: args.sessionId || args['session-id'],
-            hostInstanceId: args.hostInstanceId || args['host-instance-id'],
-            projectId: args.projectId || args['project-id'],
-          });
-          break;
-        case 'director.handoff':
-          result = await crew.handoffDirector({
-            agentIdentity: directorAgentIdentity(args),
-            sessionId: args.sessionId || args['session-id'],
-            hostInstanceId: args.hostInstanceId || args['host-instance-id'],
-            projectId: args.projectId || args['project-id'],
-            expectedBindingId: args.expectedBindingId || args['expected-binding-id'],
-          });
-          break;
-        case 'director.status':
-          result = await crew.directorStatus({
-            agentIdentity: directorAgentIdentity(args, { optional: true }),
-            sessionId: args.sessionId || args['session-id'],
-            projectId: args.projectId || args['project-id'],
-          });
-          break;
-        case 'director.unbind':
-          result = await crew.unbindDirector({ bindingId: args.bindingId || args['binding-id'] });
-          break;
-        case 'crew.intent.submit':
-          result = await crew.submitIntent({
-            intentJson: args.intentJson || args['intent-json'] || args._?.[0],
-            projectId: args.projectId || args['project-id'],
-            idempotencyKey,
-            director: args.director ? JSON.parse(args.director) : null,
-          });
-          break;
-        case 'crew.intent.get':
-          result = await crew.getIntent(args.intentId || args['intent-id'] || args._?.[0]);
-          break;
-        case 'crew.intent.cancel':
-          result = await crew.cancelIntent(args.intentId || args['intent-id'] || args._?.[0], args.reason);
-          break;
-        case 'crew.receipt.get':
-          result = await crew.getReceipt(args.intentId || args['intent-id'] || args._?.[0]);
-          break;
-        case 'crew.event.watch':
-          result = await crew.listEvents({
-            afterEventId: args.afterEventId ?? args.after ?? args['after-event-id'],
-            limit: args.limit,
-          });
-          break;
-      }
-      const ok = Boolean(result?.ok);
-      if (args.jsonl || args['jsonl']) {
-        for (const event of result?.events || []) console.log(JSON.stringify(event));
-      } else {
-        printCliResponse(ok, command, result, ok ? null : result?.error || null, { runtime: 'crew', protocolVersion: protocol.protocolVersion, registryHash: protocol.registryHash });
-      }
-    } catch (error) {
-      const crewError = error instanceof WorkspaceClientError
-        ? error.toJSON()
-        : { code: 'CREW_UNAVAILABLE', message: error instanceof Error ? error.message : String(error), retryable: true };
-      printCliResponse(false, command, null, crewError, { runtime: 'crew' });
-    }
-    return;
-  }
 
   if (RESEARCH_COMMANDS.has(routingCommand)) {
     const idempotencyKey = args.idempotencyKey || args['idempotency-key'];

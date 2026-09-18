@@ -204,6 +204,19 @@ export function normalizeWorldSnapshot(snapshot) {
       polls: snapshot.providerLedger.polls,
       retries: snapshot.providerLedger.retries,
       cancels: snapshot.providerLedger.cancels,
+      // Task identity is kept so a restart-after-submit trial can assert that
+      // the SAME upstream task was resumed rather than a fresh one submitted.
+      // submitTaskIds preserves position (not deduplicated): two submits of the
+      // same taskId is exactly the duplicate-submit signal a hard gate watches.
+      submitTaskIds: snapshot.providerLedger.submits
+        .map(entry => entry.taskId ?? entry.wire?.taskId ?? null)
+        .filter(taskId => taskId !== null),
+      // Reference keys each submit declared, so an image-to-video trial can
+      // assert the upstream artifact actually travelled into the submit wire.
+      submitReferenceKeys: [...new Set(snapshot.providerLedger.submits
+        .flatMap(entry => entry.wire?.references ?? [])
+        .map(reference => String(reference?.key ?? reference ?? ''))
+        .filter(Boolean))].sort(),
     },
     localAssets: {
       references: snapshot.localAssets.references
