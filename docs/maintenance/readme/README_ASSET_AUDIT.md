@@ -7,8 +7,8 @@
 | 文件 | 大小 | 被 README 引用 | 引用位置 |
 | --- | --- | --- | --- |
 | `pic/LOGO_optimized.png` | 1.63 MiB | 是 | `README.md:2`、`README.zh-CN.md:2`、`README.en.md:2` |
-| `pic/readme-skill-home.png` | 124 KiB | 是 | `README.md`、`README.zh-CN.md`（Production Skill 两联图） |
-| `pic/readme-skill-detail.png` | 158 KiB | 是 | 同上 |
+| `pic/readme-skill-home.png` | 124 KiB | **否（2026-09-19 移除）** | 原 Production Skill 两联图；内置 Agent + Skill 不再做，连同「Production Skill」段落一并移除，文件已 `git rm`（历史仍可恢复） |
+| `pic/readme-skill-detail.png` | 158 KiB | **否（2026-09-19 移除）** | 同上 |
 | `pic/WorkFlow.png` | 598 KiB | **否（本轮移除引用）** | 原 `README.md:48`；已被 `pic/readme/agent-operations-live-workflow.gif` 取代 |
 | `pic/flovart-app-home.png` | 108 KiB | 否 | — |
 | `pic/flovart-workflow-empty.png` | 76 KiB | 否 | — |

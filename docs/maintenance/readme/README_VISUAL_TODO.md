@@ -18,8 +18,9 @@ README 现在有五类真实视觉素材：
 - `pic/readme/agent-operations-live-workflow.gif` —— 真实录屏：外部 Agent 会话通过 Flovart CLI
   创建项目与节点、连接节点，可见 Workflow 实时更新。记录见 [DEMO_RECORDING.md](./DEMO_RECORDING.md)。
   现展示于 README Architecture 段，作为操作级视角。
-- `pic/readme-skill-home.png` / `pic/readme-skill-detail.png` —— 真实 Production Skill 界面。
 - `pic/readme/agent-operations-final-state.png` —— 上述录屏的终态静帧，GIF 加载失败时的降级素材。
+  （2026-09-19 起，原先的 `pic/readme-skill-home.png` / `pic/readme-skill-detail.png` 已随内置
+  Agent + Skill 一并移除，不再作为 README 素材。）
 - `pic/readme/features/*.gif` —— **功能演示组（Demo D，2026-09-18）**，README 新增
   「Feature tour / 功能演示」章节内嵌。每条一个操作，均由 `scripts/record-feature-clips.mjs`
   在真实 UI 上驱动并录制，共 20 条、合计 12.2 MB：

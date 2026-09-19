@@ -46,27 +46,38 @@
   <img src="pic/readme/hero-agent.gif" alt="An external coding agent editing the same live Flovart Workflow" width="880" />
   <br />
   <sub><strong>An external coding agent editing the same live Flovart Workflow — natural language becomes nodes and edges.</strong><br />
-  The agent (WorkBuddy codebuddy) read the shipped Flovart Skill, then drove the visible Workflow through the typed CLI
+  The agent (WorkBuddy codebuddy) drove the visible Workflow through the typed CLI
   surface: three nodes and two connections created live, with no source edits. No generation step was run, so no paid
   model service was called. Reproduction record: <a href="docs/maintenance/readme/DEMO_RECORDING.md">DEMO_RECORDING.md</a>.</sub>
 </p>
 
-<table>
-  <tr>
-    <td align="center">
-      <img src="pic/readme-skill-home.png" alt="Flovart Production Skill home" />
-      <br />
-      <sub>Choose a production method before entering a project.</sub>
-    </td>
-    <td align="center">
-      <img src="pic/readme-skill-detail.png" alt="Flovart Production Skill onboarding" />
-      <br />
-      <sub>See invocation, cost boundaries and safety guidance before running it.</sub>
-    </td>
-  </tr>
-</table>
-
 Both halves are now on record: the hero above is an external coding agent session editing the live Workflow, and the CLI-only capture sits under [Architecture](#architecture) as the operation-level view. Remaining visual gaps are tracked in [README_VISUAL_TODO.md](docs/maintenance/readme/README_VISUAL_TODO.md).
+
+## Quick start
+
+### For creators
+
+1. Download a preview build from [GitHub Releases](https://github.com/avabbbb/Flovart/releases).
+2. Open Flovart and add an AI service in Settings.
+3. Create or open a Workflow, add references, and start creating.
+
+The Releases page may contain test or preview artifacts; it is not a claim that every host or provider is Stable.
+
+### For coding-agent users
+
+Run from a source checkout while the versioned CLI package remains a release gate:
+
+```bash
+git clone https://github.com/avabbbb/Flovart.git
+cd Flovart
+npm install
+npm run flovart:cli -- start --source --web --open
+npm run flovart:cli -- status --json
+```
+
+Then ask your local agent: **“Open Flovart and work on this Workflow.”**
+
+The normal agent loop is `status`, `workflow.inspect`, `workflow.selection.get`, `workflow.apply` and `workflow.node.run`. Connection setup and diagnostics use `ensure` and `doctor`; development-only browser checks are covered in the [Getting Started guide](docs/overview/quick-start.en.md).
 
 ## Feature tour
 
@@ -214,32 +225,6 @@ Most AI creative tools make you choose between a visual editor and an autonomous
 - **BYOK image + video.** Bring your own providers, models and API keys.
 - **Local-first visual control.** Projects, references and workflow state stay close to your workspace.
 
-## Quick start
-
-### For creators
-
-1. Download a preview build from [GitHub Releases](https://github.com/avabbbb/Flovart/releases).
-2. Open Flovart and add an AI service in Settings.
-3. Create or open a Workflow, add references, and start creating.
-
-The Releases page may contain test or preview artifacts; it is not a claim that every host or provider is Stable.
-
-### For coding-agent users
-
-Run from a source checkout while the versioned CLI package remains a release gate:
-
-```bash
-git clone https://github.com/avabbbb/Flovart.git
-cd Flovart
-npm install
-npm run flovart:cli -- start --source --web --open
-npm run flovart:cli -- status --json
-```
-
-Then ask your local agent: **“Open Flovart and work on this Workflow.”**
-
-The normal agent loop is `status`, `workflow.inspect`, `workflow.selection.get`, `workflow.apply` and `workflow.node.run`. Connection setup and diagnostics use `ensure` and `doctor`; development-only browser checks are covered in the [Getting Started guide](docs/overview/quick-start.en.md).
-
 ## Core capabilities
 
 | Capability | Flovart |
@@ -248,11 +233,10 @@ The normal agent loop is `status`, `workflow.inspect`, `workflow.selection.get`,
 | Human editing | The same graph, assets and results stay directly editable |
 | Models | BYOK and multi-provider adapters, with capability-specific status |
 | References | Graph connections, mentions, local assets and artifacts resolve into generation inputs |
-| Production knowledge | Reusable Production Skills, not only reusable prompt text |
 | Automation | Explicit inspect/apply/run operations with revision and approval boundaries |
 | Data | Local-first storage with documented browser and runtime boundaries |
 
-Compose image, text, video, audio and configuration nodes, keep projects and references close to your workspace, and extend providers, hosts, node operations and Skills through explicit contracts. The three product surfaces are **Workflow** for generation orchestration, **Table** for the still-evolving media-preprocessing workbench, and **Agent** for production control; Table and Agent are real entries, but their remaining implementation work is not presented as complete — see [Features](docs/content/docs/overview/features.en.mdx).
+Compose image, text, video, audio and configuration nodes, keep projects and references close to your workspace, and extend providers, hosts and node operations through explicit contracts. The three product surfaces are **Workflow** for generation orchestration, **Table** for the still-evolving media-preprocessing workbench, and **Agent** for production control; Table and Agent are real entries, but their remaining implementation work is not presented as complete — see [Features](docs/content/docs/overview/features.en.mdx).
 
 ## One workflow, human + agent
 
@@ -270,12 +254,6 @@ Live Workflow  ──────────── Human
 
 With your agent, a brief becomes explicit operations: it reads the current project and revision, applies them, and can run a confirmed node. By hand, you add, move, resize and connect nodes, drop in local files, configure a model, run generation and iterate visually. Both paths converge on the same Workflow authority, so nothing the agent does is invisible to you.
 
-## Production Skills
-
-Prompts are reusable text. Production Skills are reusable production methods: visual language and style rules, shot structure and workflow recipes, checkpoints and human approvals, model policy and cost boundaries, and acceptance criteria for the final artifact.
-
-The repository ships a local Flovart Skill surface and the [VOX Skill reference](https://github.com/avabbbb/vox-director). The wider community contract is still in design and implementation, so this is an active capability rather than a mature marketplace — start with the [Skill guide](docs/overview/skill-guide.md).
-
 ## Bring your own models
 
 ```text
@@ -292,7 +270,7 @@ Flovart does not bundle model services. Configure a provider in the app, choose 
 | Claude Code CLI projection | Experimental |
 | OpenCode CLI projection | Experimental |
 | DeepSeek Harness RC8 bundle/profile | Experimental |
-| WorkBuddy CLI Connector + Skill | Experimental |
+| WorkBuddy CLI Connector | Experimental |
 | CodeBuddy Code | Planned |
 | Pi | Planned |
 | Photoshop UXP panel | Experimental |
@@ -332,7 +310,7 @@ Native-effect work keeps two short paths: one shared generation function produce
 - Projects, assets and generation history are stored primarily in the browser today; cloud sync is not promised.
 - The current Web path stores API keys locally through the encrypted `localforage` vault, while the frontend calls the configured model service directly. Treat the browser as part of the secret boundary.
 - Web, Desktop WebView and extension storage are normally isolated. Cross-entry synchronization through a restricted runtime bridge is still pending.
-- Never put API keys in a Skill, prompt, log or repository. Agent and CLI paths receive redacted readiness and capability state, not raw credentials.
+- Never put API keys in a prompt, log or repository. Agent and CLI paths receive redacted readiness and capability state, not raw credentials.
 - Use only the repository, the [live demo](https://avabbbb.github.io/Flovart/) and desktop artifacts published by the repository's Actions as official project channels. Review each provider's terms and the rights for your inputs and outputs.
 
 Found a vulnerability? Report it privately through the [security policy](SECURITY.md).
@@ -349,7 +327,7 @@ These are directions, not Stable support; follow [the roadmap](docs/content/docs
 
 ## Contributing
 
-Contributions are especially useful in four areas: provider adapters, Production Skills, host integrations and Workflow capabilities. Open an [Issue](https://github.com/avabbbb/Flovart/issues/new/choose), read the [contribution conventions](.github/CONTRIBUTING.md), and include verification evidence with UI changes.
+Contributions are especially useful in three areas: provider adapters, host integrations and Workflow capabilities. Open an [Issue](https://github.com/avabbbb/Flovart/issues/new/choose), read the [contribution conventions](.github/CONTRIBUTING.md), and include verification evidence with UI changes.
 
 ## Acknowledgements
 

@@ -10,7 +10,7 @@
 
 <p align="center">
   开源、本地优先的工作区，你和你的 Coding Agent 操作同一份可见的 Workflow——<br />
-  模型、API Key、素材和可复用的 Production Skill 都在你自己手里。
+  模型、API Key 与素材都在你自己手里。
 </p>
 
 <p align="center">
@@ -46,27 +46,38 @@
   <img src="pic/readme/hero-agent.gif" alt="外部 coding agent 正在编辑同一份可见的 Flovart Workflow" width="880" />
   <br />
   <sub><strong>外部 coding agent 正在编辑同一份可见的 Flovart Workflow —— 自然语言变成节点与连线。</strong><br />
-  该 Agent（WorkBuddy codebuddy）读取仓库自带的 Flovart Skill，再经 typed CLI 驱动可见 Workflow：
+  该 Agent（WorkBuddy codebuddy）经 typed CLI 驱动可见 Workflow：
   现场创建 3 个节点与 2 条连线，没有改动任何源码。未执行生成步骤，因此没有调用付费模型服务。
   可复现记录见 <a href="docs/maintenance/readme/DEMO_RECORDING.md">DEMO_RECORDING.md</a>。</sub>
 </p>
 
-<table>
-  <tr>
-    <td align="center">
-      <img src="pic/readme-skill-home.png" alt="Flovart Production Skill 首页" />
-      <br />
-      <sub>先选择制作方法，再进入项目。</sub>
-    </td>
-    <td align="center">
-      <img src="pic/readme-skill-detail.png" alt="Flovart Production Skill 使用引导" />
-      <br />
-      <sub>运行前先了解调用方式、费用边界和安全信息。</sub>
-    </td>
-  </tr>
-</table>
-
 两半都已记录在案：上面 Hero 是外部 coding agent 会话在编辑可见 Workflow，而纯 CLI 的录屏放在下面[架构](#架构)段作为操作级视角。剩余视觉缺口见 [README_VISUAL_TODO.md](docs/maintenance/readme/README_VISUAL_TODO.md)。
+
+## 快速开始
+
+### 创作者
+
+1. 从 [GitHub Releases](https://github.com/avabbbb/Flovart/releases) 下载预览版。
+2. 打开 Flovart，在设置中添加 AI 服务。
+3. 新建或打开 Workflow，加入参考素材，开始创作。
+
+公开 Releases 页面可能包含测试或预览产物；这不代表所有宿主或 Provider 都已 Stable。
+
+### Coding Agent 用户
+
+在版本化 CLI 包正式发布前，从源码检出运行：
+
+```bash
+git clone https://github.com/avabbbb/Flovart.git
+cd Flovart
+npm install
+npm run flovart:cli -- start --source --web --open
+npm run flovart:cli -- status --json
+```
+
+然后对本地 Agent 说：**「打开 Flovart，在这个 Workflow 上干活。」**
+
+正常 Agent 循环是 `status`、`workflow.inspect`、`workflow.selection.get`、`workflow.apply` 和 `workflow.node.run`；连接准备和诊断用 `ensure` 和 `doctor`；仅供开发使用的浏览器检查见[快速开始](docs/overview/quick-start.md)。
 
 ## 功能演示
 
@@ -214,32 +225,6 @@
 - **BYOK 图片与视频。** 模型服务、模型和 API Key 都用你自己的。
 - **本地优先的可视化控制。** 项目、参考素材和 Workflow 状态都靠近你的工作区。
 
-## 快速开始
-
-### 创作者
-
-1. 从 [GitHub Releases](https://github.com/avabbbb/Flovart/releases) 下载预览版。
-2. 打开 Flovart，在设置中添加 AI 服务。
-3. 新建或打开 Workflow，加入参考素材，开始创作。
-
-公开 Releases 页面可能包含测试或预览产物；这不代表所有宿主或 Provider 都已 Stable。
-
-### Coding Agent 用户
-
-在版本化 CLI 包正式发布前，从源码检出运行：
-
-```bash
-git clone https://github.com/avabbbb/Flovart.git
-cd Flovart
-npm install
-npm run flovart:cli -- start --source --web --open
-npm run flovart:cli -- status --json
-```
-
-然后对本地 Agent 说：**「打开 Flovart，在这个 Workflow 上干活。」**
-
-正常 Agent 循环是 `status`、`workflow.inspect`、`workflow.selection.get`、`workflow.apply` 和 `workflow.node.run`；连接准备和诊断用 `ensure` 和 `doctor`；仅供开发使用的浏览器检查见[快速开始](docs/overview/quick-start.md)。
-
 ## 核心能力
 
 | 能力 | Flovart 的方式 |
@@ -248,11 +233,10 @@ npm run flovart:cli -- status --json
 | 人类编辑 | 同一张图、素材和结果始终可以直接修改 |
 | 模型 | BYOK 与多 Provider 适配，按具体能力标记状态 |
 | 参考素材 | 图连接、提及、素材库和产物会解析成生成输入 |
-| 制作知识 | 可复用 Production Skill，而不只是可复用 Prompt |
 | 自动化 | 显式的 inspect/apply/run 操作，带版本与审批边界 |
 | 数据 | 本地优先，并明确浏览器与 Runtime 的边界 |
 
-你可以把图片、文本、视频、音频和配置节点组合起来，让项目和参考素材留在自己的工作区，并通过明确契约扩展 Provider、宿主、节点操作和 Skill。三个产品入口是：**Workflow** 负责生成编排，**Table** 负责仍在完善中的媒体预处理工作台，**Agent** 负责制作控制；Table 和 Agent 都已接入真实入口，但剩余实现工作尚未完成——详见[功能说明](docs/content/docs/overview/features.mdx)。
+你可以把图片、文本、视频、音频和配置节点组合起来，让项目和参考素材留在自己的工作区，并通过明确契约扩展 Provider、宿主和节点操作。三个产品入口是：**Workflow** 负责生成编排，**Table** 负责仍在完善中的媒体预处理工作台，**Agent** 负责制作控制；Table 和 Agent 都已接入真实入口，但剩余实现工作尚未完成——详见[功能说明](docs/content/docs/overview/features.mdx)。
 
 ## 同一份 Workflow，人和 Agent 共用
 
@@ -270,12 +254,6 @@ Flovart 操作                inspect · select · apply · run
 
 用 Agent 时，一句 brief 会变成明确的操作：它读取当前项目和版本，应用这些操作，并可以运行一个已确认的节点。手工创作时，你照样可以添加、移动、调整大小和连接节点，拖入本地文件，配置模型，运行生成并继续迭代。两条路最终落在同一个 Workflow 权威状态上，所以 Agent 做的事你都能看见。
 
-## Production Skill
-
-Prompt 是可复用的文字；Production Skill 是可复用的制作方法——视觉语言与风格规则、镜头结构与 Workflow 配方、检查点与人工确认、模型策略与成本边界，以及最终产物的验收标准。
-
-仓库内已有 Flovart Skill 使用入口，以及 [VOX Skill 参考实现](https://github.com/avabbbb/vox-director)。更完整的社区契约仍在设计与实现中，所以这是正在发展的能力，不是已经成熟的 Skill 市场——可以从 [Skill 使用手册](docs/overview/skill-guide.md)开始。
-
 ## 使用你自己的模型
 
 ```text
@@ -292,7 +270,7 @@ Flovart 不内置模型服务。你可以在应用中配置 Provider，按需选
 | Claude Code CLI projection | Experimental |
 | OpenCode CLI projection | Experimental |
 | DeepSeek Harness RC8 bundle/profile | Experimental |
-| WorkBuddy CLI Connector + Skill | Experimental |
+| WorkBuddy CLI Connector | Experimental |
 | CodeBuddy Code | Planned |
 | Pi | Planned |
 | Photoshop UXP panel | Experimental |
@@ -332,7 +310,7 @@ CLI 与实验性 stdio MCP 共用操作语义，当前都绑定可见的 Browser
 - 当前项目、素材和生成历史主要保存在浏览器本地，不承诺云同步。
 - 当前 Web 路径通过加密的 `localforage` Vault 在本地保存 API Key，前端再直接请求配置的模型服务；浏览器属于秘密边界的一部分。
 - Web、桌面 WebView 和扩展的存储通常彼此隔离；通过受限 Runtime Bridge 跨入口同步仍在待办中。
-- 不要把 API Key 写进 Skill、Prompt、日志或仓库。Agent 和 CLI 只能拿到脱敏后的就绪与能力状态，不能拿到原始凭据。
+- 不要把 API Key 写进 Prompt、日志或仓库。Agent 和 CLI 只能拿到脱敏后的就绪与能力状态，不能拿到原始凭据。
 - 官方项目渠道仅包括本仓库、[在线 Demo](https://avabbbb.github.io/Flovart/) 和本仓库 Actions 发布的桌面产物。请自行确认 Provider 条款，以及输入素材和输出内容的版权与合规性。
 
 发现漏洞？请通过[安全政策](SECURITY.md)中的私密渠道报告。
@@ -349,7 +327,7 @@ CLI 与实验性 stdio MCP 共用操作语义，当前都绑定可见的 Browser
 
 ## 参与贡献
 
-我们尤其欢迎四类贡献：Provider 适配、Production Skill、宿主集成和 Workflow 能力。请先提交 [Issue](https://github.com/avabbbb/Flovart/issues/new/choose)，阅读[贡献约定](.github/CONTRIBUTING.md)，UI 变更附上验证证据。
+我们尤其欢迎三类贡献：Provider 适配、宿主集成和 Workflow 能力。请先提交 [Issue](https://github.com/avabbbb/Flovart/issues/new/choose)，阅读[贡献约定](.github/CONTRIBUTING.md)，UI 变更附上验证证据。
 
 ## 致谢
 
