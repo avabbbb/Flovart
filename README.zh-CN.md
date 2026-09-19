@@ -53,12 +53,12 @@
 
 <table>
   <tr>
-    <td width="50%" align="center">
+    <td align="center">
       <img src="pic/readme-skill-home.png" alt="Flovart Production Skill 首页" />
       <br />
       <sub>先选择制作方法，再进入项目。</sub>
     </td>
-    <td width="50%" align="center">
+    <td align="center">
       <img src="pic/readme-skill-detail.png" alt="Flovart Production Skill 使用引导" />
       <br />
       <sub>运行前先了解调用方式、费用边界和安全信息。</sub>
@@ -76,28 +76,28 @@
 
 <table>
   <tr>
-    <td width="50%" align="center">
-      <img src="pic/readme/features/canvas-add-node.gif" alt="从画布的添加节点菜单新增节点" />
+    <td align="center">
+      <img src="pic/readme/features/canvas-add-node.gif" alt="从画布的添加节点菜单新增节点" width="420" />
       <br /><sub><strong>添加节点。</strong>工具栏的添加菜单涵盖图片、视频、文本、脚本、音频、配置。</sub>
     </td>
-    <td width="50%" align="center">
-      <img src="pic/readme/features/canvas-connect.gif" alt="从一个节点拖出连线到另一个节点" />
+    <td align="center">
+      <img src="pic/readme/features/canvas-connect.gif" alt="从一个节点拖出连线到另一个节点" width="420" />
       <br /><sub><strong>连接。</strong>从节点的输出把手拖到另一个节点，它就成为了输入。</sub>
     </td>
   </tr>
   <tr>
-    <td width="50%" align="center">
-      <img src="pic/readme/features/canvas-drag.gif" alt="在画布上拖动节点" />
+    <td align="center">
+      <img src="pic/readme/features/canvas-drag.gif" alt="在画布上拖动节点" width="420" />
       <br /><sub><strong>手动摆放。</strong>节点自由移动，图本身就是状态。</sub>
     </td>
-    <td width="50%" align="center">
-      <img src="pic/readme/features/canvas-tidy.gif" alt="一键整理画布布局" />
+    <td align="center">
+      <img src="pic/readme/features/canvas-tidy.gif" alt="一键整理画布布局" width="420" />
       <br /><sub><strong>一键整理。</strong>点一下重排整张图。</sub>
     </td>
   </tr>
   <tr>
     <td colspan="2" align="center">
-      <img src="pic/readme/features/canvas-prompt.gif" alt="在选中的节点上直接输入提示词" />
+      <img src="pic/readme/features/canvas-prompt.gif" alt="在选中的节点上直接输入提示词" width="860" />
       <br /><sub><strong>就地写提示词。</strong>选中节点，直接在节点上写，不需要另开提示词对话框。</sub>
     </td>
   </tr>
@@ -109,22 +109,22 @@
 
 <table>
   <tr>
-    <td width="50%" align="center">
-      <img src="pic/readme/features/crop.gif" alt="裁剪图片节点" />
+    <td align="center">
+      <img src="pic/readme/features/crop.gif" alt="裁剪图片节点" width="420" />
       <br /><sub><strong>裁剪。</strong>设定裁剪范围后应用。</sub>
     </td>
-    <td width="50%" align="center">
-      <img src="pic/readme/features/rotate.gif" alt="把图片节点旋转四分之一圈" />
+    <td align="center">
+      <img src="pic/readme/features/rotate.gif" alt="把图片节点旋转四分之一圈" width="420" />
       <br /><sub><strong>旋转与镜像。</strong>四分之一圈与翻转。</sub>
     </td>
   </tr>
   <tr>
-    <td width="50%" align="center">
-      <img src="pic/readme/features/split-grid.gif" alt="把图片切成多个独立节点" />
+    <td align="center">
+      <img src="pic/readme/features/split-grid.gif" alt="把图片切成多个独立节点" width="420" />
       <br /><sub><strong>宫格切分。</strong>每一格成为独立且相连的图片节点。</sub>
     </td>
-    <td width="50%" align="center">
-      <img src="pic/readme/features/filter.gif" alt="调整图片节点的调色" />
+    <td align="center">
+      <img src="pic/readme/features/filter.gif" alt="调整图片节点的调色" width="420" />
       <br /><sub><strong>调色。</strong>调整在应用前即可实时预览。</sub>
     </td>
   </tr>
@@ -136,32 +136,32 @@
 
 <table>
   <tr>
-    <td width="50%" align="center">
-      <img src="pic/readme/features/video-trim.gif" alt="对视频节点做剪辑" />
+    <td align="center">
+      <img src="pic/readme/features/video-trim.gif" alt="对视频节点做剪辑" width="420" />
       <br /><sub><strong>剪辑。</strong>设定起止点；剪切走 stream copy，不重编码。</sub>
     </td>
-    <td width="50%" align="center">
-      <img src="pic/readme/features/video-av-split.gif" alt="把视频拆成静音视频节点与音频节点" />
+    <td align="center">
+      <img src="pic/readme/features/video-av-split.gif" alt="把视频拆成静音视频节点与音频节点" width="420" />
       <br /><sub><strong>音视频分离。</strong>一个视频变成静音视频节点 + 一个音频节点。</sub>
     </td>
   </tr>
   <tr>
-    <td width="50%" align="center">
-      <img src="pic/readme/features/video-merge.gif" alt="按顺序拼接两个视频节点" />
+    <td align="center">
+      <img src="pic/readme/features/video-merge.gif" alt="按顺序拼接两个视频节点" width="420" />
       <br /><sub><strong>拼接。</strong>选中多个视频节点，按顺序合成一个。</sub>
     </td>
-    <td width="50%" align="center">
-      <img src="pic/readme/features/extract-frame-at.gif" alt="按指定时间点导出视频帧" />
+    <td align="center">
+      <img src="pic/readme/features/extract-frame-at.gif" alt="按指定时间点导出视频帧" width="420" />
       <br /><sub><strong>导出帧。</strong>选一个时间点，把视频里的那一帧变成图片节点。</sub>
     </td>
   </tr>
   <tr>
-    <td width="50%" align="center">
-      <img src="pic/readme/features/extract-first-frame.gif" alt="导出首帧为图片节点" />
+    <td align="center">
+      <img src="pic/readme/features/extract-first-frame.gif" alt="导出首帧为图片节点" width="420" />
       <br /><sub><strong>首帧。</strong>一键得到图片节点。</sub>
     </td>
-    <td width="50%" align="center">
-      <img src="pic/readme/features/extract-last-frame.gif" alt="导出尾帧为图片节点" />
+    <td align="center">
+      <img src="pic/readme/features/extract-last-frame.gif" alt="导出尾帧为图片节点" width="420" />
       <br /><sub><strong>尾帧。</strong>同样一键，取片段末尾那帧。</sub>
     </td>
   </tr>
@@ -171,18 +171,18 @@
 
 <table>
   <tr>
-    <td width="50%" align="center">
-      <img src="pic/readme/features/audio-trim.gif" alt="截取音频节点" />
+    <td align="center">
+      <img src="pic/readme/features/audio-trim.gif" alt="截取音频节点" width="420" />
       <br /><sub><strong>截取。</strong>同样的起止点控件，同样的 stream copy 剪切。</sub>
     </td>
-    <td width="50%" align="center">
-      <img src="pic/readme/features/audio-speed.gif" alt="调整音频播放速度" />
+    <td align="center">
+      <img src="pic/readme/features/audio-speed.gif" alt="调整音频播放速度" width="420" />
       <br /><sub><strong>变速。</strong>0.25×–4×，保持音调不变。</sub>
     </td>
   </tr>
   <tr>
     <td colspan="2" align="center">
-      <img src="pic/readme/features/audio-stem-split.gif" alt="把音频分离为人声与伴奏" />
+      <img src="pic/readme/features/audio-stem-split.gif" alt="把音频分离为人声与伴奏" width="860" />
       <br /><sub><strong>人声/伴奏分离。</strong>输出两个音频节点；原理是立体声相位抵消，单声道或混音复杂的素材分离效果有限。</sub>
     </td>
   </tr>
@@ -192,12 +192,12 @@
 
 <table>
   <tr>
-    <td width="50%" align="center">
-      <img src="pic/readme/features/agent-cli-live.gif" alt="typed CLI 操作在可见画布上搭建节点图" />
+    <td align="center">
+      <img src="pic/readme/features/agent-cli-live.gif" alt="typed CLI 操作在可见画布上搭建节点图" width="420" />
       <br /><sub><strong>操作直接落在画布上。</strong><code>workflow.node.create</code> 与 <code>workflow.connect</code> 通过 typed CLI 执行，可见 Workflow 同步更新——不靠界面抓取，也没有第二份隐藏副本。</sub>
     </td>
-    <td width="50%" align="center">
-      <img src="pic/readme/features/agent-open-panel.gif" alt="从画布工具栏打开 Agent 界面" />
+    <td align="center">
+      <img src="pic/readme/features/agent-open-panel.gif" alt="从画布工具栏打开 Agent 界面" width="420" />
       <br /><sub><strong>打开 Agent 界面。</strong>入口就在同一根画布工具栏上。</sub>
     </td>
   </tr>
@@ -334,6 +334,8 @@ CLI 与实验性 stdio MCP 共用操作语义，当前都绑定可见的 Browser
 - Web、桌面 WebView 和扩展的存储通常彼此隔离；通过受限 Runtime Bridge 跨入口同步仍在待办中。
 - 不要把 API Key 写进 Skill、Prompt、日志或仓库。Agent 和 CLI 只能拿到脱敏后的就绪与能力状态，不能拿到原始凭据。
 - 官方项目渠道仅包括本仓库、[在线 Demo](https://avabbbb.github.io/Flovart/) 和本仓库 Actions 发布的桌面产物。请自行确认 Provider 条款，以及输入素材和输出内容的版权与合规性。
+
+发现漏洞？请通过[安全政策](SECURITY.md)中的私密渠道报告。
 
 ## 创作软件路线图
 

@@ -53,12 +53,12 @@
 
 <table>
   <tr>
-    <td width="50%" align="center">
+    <td align="center">
       <img src="pic/readme-skill-home.png" alt="Flovart Production Skill home" />
       <br />
       <sub>Choose a production method before entering a project.</sub>
     </td>
-    <td width="50%" align="center">
+    <td align="center">
       <img src="pic/readme-skill-detail.png" alt="Flovart Production Skill onboarding" />
       <br />
       <sub>See invocation, cost boundaries and safety guidance before running it.</sub>
@@ -76,28 +76,28 @@ Every clip below is a real recording of the running app — one operation, start
 
 <table>
   <tr>
-    <td width="50%" align="center">
-      <img src="pic/readme/features/canvas-add-node.gif" alt="Adding nodes from the canvas add-node menu" />
+    <td align="center">
+      <img src="pic/readme/features/canvas-add-node.gif" alt="Adding nodes from the canvas add-node menu" width="420" />
       <br /><sub><strong>Add nodes.</strong> The toolbar's add menu covers image, video, text, script, audio and config.</sub>
     </td>
-    <td width="50%" align="center">
-      <img src="pic/readme/features/canvas-connect.gif" alt="Dragging a connection from one node onto another" />
+    <td align="center">
+      <img src="pic/readme/features/canvas-connect.gif" alt="Dragging a connection from one node onto another" width="420" />
       <br /><sub><strong>Connect.</strong> Drag from a node's source handle onto another node to feed it in.</sub>
     </td>
   </tr>
   <tr>
-    <td width="50%" align="center">
-      <img src="pic/readme/features/canvas-drag.gif" alt="Dragging a node across the canvas" />
+    <td align="center">
+      <img src="pic/readme/features/canvas-drag.gif" alt="Dragging a node across the canvas" width="420" />
       <br /><sub><strong>Arrange by hand.</strong> Nodes move freely; the graph itself is the state.</sub>
     </td>
-    <td width="50%" align="center">
-      <img src="pic/readme/features/canvas-tidy.gif" alt="Re-laying out the canvas in one click" />
+    <td align="center">
+      <img src="pic/readme/features/canvas-tidy.gif" alt="Re-laying out the canvas in one click" width="420" />
       <br /><sub><strong>Tidy.</strong> One click re-lays out the whole graph.</sub>
     </td>
   </tr>
   <tr>
     <td colspan="2" align="center">
-      <img src="pic/readme/features/canvas-prompt.gif" alt="Typing a prompt directly on a selected node" />
+      <img src="pic/readme/features/canvas-prompt.gif" alt="Typing a prompt directly on a selected node" width="860" />
       <br /><sub><strong>Prompt in place.</strong> Select a node and write the prompt on the node itself — no separate prompt dialog.</sub>
     </td>
   </tr>
@@ -109,22 +109,22 @@ Four local operations on the same generated fixture plate, each producing a real
 
 <table>
   <tr>
-    <td width="50%" align="center">
-      <img src="pic/readme/features/crop.gif" alt="Cropping an image node" />
+    <td align="center">
+      <img src="pic/readme/features/crop.gif" alt="Cropping an image node" width="420" />
       <br /><sub><strong>Crop.</strong> Set the crop rectangle, then apply.</sub>
     </td>
-    <td width="50%" align="center">
-      <img src="pic/readme/features/rotate.gif" alt="Rotating an image node a quarter turn" />
+    <td align="center">
+      <img src="pic/readme/features/rotate.gif" alt="Rotating an image node a quarter turn" width="420" />
       <br /><sub><strong>Rotate and flip.</strong> Quarter turns and mirrors.</sub>
     </td>
   </tr>
   <tr>
-    <td width="50%" align="center">
-      <img src="pic/readme/features/split-grid.gif" alt="Splitting an image into a grid of separate nodes" />
+    <td align="center">
+      <img src="pic/readme/features/split-grid.gif" alt="Splitting an image into a grid of separate nodes" width="420" />
       <br /><sub><strong>Split to grid.</strong> Each cell becomes its own connected image node.</sub>
     </td>
-    <td width="50%" align="center">
-      <img src="pic/readme/features/filter.gif" alt="Adjusting colour on an image node" />
+    <td align="center">
+      <img src="pic/readme/features/filter.gif" alt="Adjusting colour on an image node" width="420" />
       <br /><sub><strong>Grade.</strong> Colour adjustments preview live before they are applied.</sub>
     </td>
   </tr>
@@ -136,32 +136,32 @@ Also local, also without a model service: these run through the in-browser ffmpe
 
 <table>
   <tr>
-    <td width="50%" align="center">
-      <img src="pic/readme/features/video-trim.gif" alt="Trimming a video node" />
+    <td align="center">
+      <img src="pic/readme/features/video-trim.gif" alt="Trimming a video node" width="420" />
       <br /><sub><strong>Trim.</strong> Set the in/out points; the cut uses stream copy, so nothing is re-encoded.</sub>
     </td>
-    <td width="50%" align="center">
-      <img src="pic/readme/features/video-av-split.gif" alt="Splitting a video into a silent video node and an audio node" />
+    <td align="center">
+      <img src="pic/readme/features/video-av-split.gif" alt="Splitting a video into a silent video node and an audio node" width="420" />
       <br /><sub><strong>Split audio and video.</strong> One video becomes a silent video node plus an audio node.</sub>
     </td>
   </tr>
   <tr>
-    <td width="50%" align="center">
-      <img src="pic/readme/features/video-merge.gif" alt="Merging two video nodes in order" />
+    <td align="center">
+      <img src="pic/readme/features/video-merge.gif" alt="Merging two video nodes in order" width="420" />
       <br /><sub><strong>Merge.</strong> Select several video nodes and join them in order.</sub>
     </td>
-    <td width="50%" align="center">
-      <img src="pic/readme/features/extract-frame-at.gif" alt="Extracting a frame at a chosen timecode" />
+    <td align="center">
+      <img src="pic/readme/features/extract-frame-at.gif" alt="Extracting a frame at a chosen timecode" width="420" />
       <br /><sub><strong>Extract a frame.</strong> Pick a timecode and get an image node out of the video.</sub>
     </td>
   </tr>
   <tr>
-    <td width="50%" align="center">
-      <img src="pic/readme/features/extract-first-frame.gif" alt="Extracting the first frame as an image node" />
+    <td align="center">
+      <img src="pic/readme/features/extract-first-frame.gif" alt="Extracting the first frame as an image node" width="420" />
       <br /><sub><strong>First frame.</strong> One click, straight to an image node.</sub>
     </td>
-    <td width="50%" align="center">
-      <img src="pic/readme/features/extract-last-frame.gif" alt="Extracting the last frame as an image node" />
+    <td align="center">
+      <img src="pic/readme/features/extract-last-frame.gif" alt="Extracting the last frame as an image node" width="420" />
       <br /><sub><strong>Last frame.</strong> Same, from the tail of the clip.</sub>
     </td>
   </tr>
@@ -171,18 +171,18 @@ Also local, also without a model service: these run through the in-browser ffmpe
 
 <table>
   <tr>
-    <td width="50%" align="center">
-      <img src="pic/readme/features/audio-trim.gif" alt="Trimming an audio node" />
+    <td align="center">
+      <img src="pic/readme/features/audio-trim.gif" alt="Trimming an audio node" width="420" />
       <br /><sub><strong>Trim.</strong> Same in/out controls, same stream-copy cut.</sub>
     </td>
-    <td width="50%" align="center">
-      <img src="pic/readme/features/audio-speed.gif" alt="Changing audio playback speed" />
+    <td align="center">
+      <img src="pic/readme/features/audio-speed.gif" alt="Changing audio playback speed" width="420" />
       <br /><sub><strong>Speed.</strong> 0.25×–4× with pitch preserved.</sub>
     </td>
   </tr>
   <tr>
     <td colspan="2" align="center">
-      <img src="pic/readme/features/audio-stem-split.gif" alt="Separating an audio node into vocals and backing track" />
+      <img src="pic/readme/features/audio-stem-split.gif" alt="Separating an audio node into vocals and backing track" width="860" />
       <br /><sub><strong>Separate vocals and backing.</strong> Two audio nodes come out; this is stereo phase cancellation, so mono or heavily mixed material separates less cleanly.</sub>
     </td>
   </tr>
@@ -192,12 +192,12 @@ Also local, also without a model service: these run through the in-browser ffmpe
 
 <table>
   <tr>
-    <td width="50%" align="center">
-      <img src="pic/readme/features/agent-cli-live.gif" alt="Typed CLI operations building a graph on the live canvas" />
+    <td align="center">
+      <img src="pic/readme/features/agent-cli-live.gif" alt="Typed CLI operations building a graph on the live canvas" width="420" />
       <br /><sub><strong>Operations land on the canvas.</strong> <code>workflow.node.create</code> and <code>workflow.connect</code> run through the typed CLI while the visible Workflow updates in place — no screen scraping, no hidden copy of the project.</sub>
     </td>
-    <td width="50%" align="center">
-      <img src="pic/readme/features/agent-open-panel.gif" alt="Opening the Agent surface from the canvas toolbar" />
+    <td align="center">
+      <img src="pic/readme/features/agent-open-panel.gif" alt="Opening the Agent surface from the canvas toolbar" width="420" />
       <br /><sub><strong>Open the Agent surface.</strong> Reachable from the same canvas toolbar.</sub>
     </td>
   </tr>
@@ -334,6 +334,8 @@ Native-effect work keeps two short paths: one shared generation function produce
 - Web, Desktop WebView and extension storage are normally isolated. Cross-entry synchronization through a restricted runtime bridge is still pending.
 - Never put API keys in a Skill, prompt, log or repository. Agent and CLI paths receive redacted readiness and capability state, not raw credentials.
 - Use only the repository, the [live demo](https://avabbbb.github.io/Flovart/) and desktop artifacts published by the repository's Actions as official project channels. Review each provider's terms and the rights for your inputs and outputs.
+
+Found a vulnerability? Report it privately through the [security policy](SECURITY.md).
 
 ## Creative App Roadmap
 
