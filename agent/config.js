@@ -4,15 +4,26 @@ import os from 'node:os';
 import path from 'node:path';
 
 export const DEFAULT_AGENT_PORT = 17373;
-const configuredAgentConfig = process.env.FLOVART_AGENT_CONFIG
-  ? path.resolve(process.env.FLOVART_AGENT_CONFIG)
-  : null;
-export const AGENT_DIR = process.env.FLOVART_AGENT_HOME
-  ? path.resolve(process.env.FLOVART_AGENT_HOME)
-  : configuredAgentConfig
-    ? path.dirname(configuredAgentConfig)
-    : path.join(os.homedir(), '.flovart');
-export const AGENT_CONFIG_FILE = configuredAgentConfig || path.join(AGENT_DIR, 'agent.json');
+// Canonical agent config resolution order:
+//   FLOVART_AGENT_CONFIG (explicit file)
+//   → FLOVART_AGENT_HOME (home dir, file = <home>/agent.json)
+//   → canonical dir (~/.flovart, file = ~/.flovart/agent.json)
+//   → ~/.flovart/agent.json
+// tools/flovart/local-agent.js replicates this exact order for the packaged CLI,
+// which cannot import this module.
+export function resolveAgentHome(env = process.env) {
+  const configured = env.FLOVART_AGENT_CONFIG ? path.resolve(env.FLOVART_AGENT_CONFIG) : null;
+  const dir = env.FLOVART_AGENT_HOME
+    ? path.resolve(env.FLOVART_AGENT_HOME)
+    : configured
+      ? path.dirname(configured)
+      : path.join(os.homedir(), '.flovart');
+  return { dir, configFile: configured || path.join(dir, 'agent.json') };
+}
+
+const agentHome = resolveAgentHome();
+export const AGENT_DIR = agentHome.dir;
+export const AGENT_CONFIG_FILE = agentHome.configFile;
 
 export function loadAgentConfig(create = false) {
   try {

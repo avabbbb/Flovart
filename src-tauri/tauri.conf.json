@@ -30,7 +30,8 @@
     "active": true,
     "targets": ["nsis"],
     "externalBin": [
-      "binaries/flovart-host"
+      "binaries/flovart-host",
+      "binaries/flovart-agent"
     ],
     "icon": [
       "icons/32x32.png",

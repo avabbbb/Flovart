@@ -13,6 +13,7 @@ import { importFlovartModule } from './flovart-modules.js';
 const { discoverAgentHosts } = await importFlovartModule('host-discovery');
 const { getAgentIdentity } = await importFlovartModule('host-registry');
 const { getCanonicalRegistry } = await importFlovartModule('registry');
+const { AGENT_PUBLIC_COMMAND_SET } = await importFlovartModule('agent-surface');
 
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PROJECT_ROOT = path.resolve(process.env.FLOVART_PROJECT_DIR || REPOSITORY_ROOT);
@@ -282,6 +283,13 @@ export function startHttpServer() {
       }
       if (request.method === 'POST' && url.pathname === '/api/tools') {
         const body = await readBody(request);
+        // Gate the forwarder on the same stable Agent surface the CLI/MCP
+        // projections enforce — without this, any local caller could drive a
+        // non-public canonical command (e.g. granular workflow.* / provider.*)
+        // through the loopback endpoint, bypassing the operation gateway.
+        if (!AGENT_PUBLIC_COMMAND_SET.has(String(body.command || ''))) {
+          return json(response, 400, { ok: false, error: { code: 'UNKNOWN_COMMAND', message: `Operation is not part of the stable Agent surface: ${String(body.command)}` } });
+        }
         const result = await session.callCommand(body.command, body.args || {}, body.source || 'agent', body.idempotencyKey, undefined, body.caller);
         return json(response, 200, { ok: true, result });
       }
