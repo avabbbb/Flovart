@@ -16,6 +16,7 @@ const TASK_DIRS = {
   provider: 'provider',
   'production-task': 'production-task',
   agent: 'agent',
+  recovery: 'recovery',
   'local-assets': 'local-assets',
   environment: 'environment',
 };

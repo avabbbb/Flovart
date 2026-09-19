@@ -18,7 +18,7 @@ import { createHash } from 'node:crypto';
 
 import { loadTasks, validateAll, REQUIRED_FIELDS } from './lib/loader.mjs';
 import { runTrial, aggregate, FAILURE_CLASSES } from './lib/engine.mjs';
-import { RUNNER_NAMES } from './runners/deterministic.mjs';
+import { RUNNER_NAMES, EXTERNAL_RUNNERS } from './runners/deterministic.mjs';
 import { listPredicates } from './graders/predicates.mjs';
 import { canonicalHash } from './environment/snapshot.mjs';
 import {
@@ -271,6 +271,11 @@ async function cmdOracle(flags) {
   const knownGaps = [];
   const gapClosed = [];
   const platformSkipped = [];
+  // Tasks whose reference evidence can only come from an external, non-
+  // deterministic surface (a real Codex session, a live RunningHub run). They
+  // are certified elsewhere; inside the deterministic admission gate a missing
+  // external capability is EXTERNAL_FAILURE, never a task violation.
+  const externalGated = [];
   const frozen = [];
   const staleHashes = [];
   const freeze = Boolean(flags['freeze-hashes']);
@@ -308,7 +313,6 @@ async function cmdOracle(flags) {
       continue;
     }
     const allPassed = trialResults.every(score => score.success);
-    if (allPassed) stableTasks += 1;
 
     // A task scoped to another platform is neither admissible nor a violation
     // here; it only has to be reported so the coverage gap stays visible.
@@ -316,6 +320,30 @@ async function cmdOracle(flags) {
       platformSkipped.push({ taskId: task.id, reason: trialResults[0].blockedReason });
       continue;
     }
+
+    // A task whose evidence requires an external, non-deterministic or
+    // host-specific surface (real Codex, a live RunningHub run, a real-ACL
+    // environment probe) is not part of the deterministic admission cohort:
+    // there is no deterministic reference to admit, and a missing external
+    // capability is EXTERNAL_FAILURE, never an AGENT_FAILURE or a violation.
+    // Detected by declaration (runnerScope -> an external runner) and, as a
+    // safety net, by outcome (every trial blocked / EXTERNAL_FAILURE).
+    const externallyScoped = EXTERNAL_RUNNERS.has(qaRunner);
+    const externallyBlocked = trialResults.length > 0 && trialResults.every(
+      score => score.blocked || score.failureClass === 'EXTERNAL_FAILURE');
+    if (externallyScoped || externallyBlocked) {
+      externalGated.push({
+        taskId: task.id,
+        runner: qaRunner,
+        reason: trialResults[0]?.blockedReason
+          ?? trialResults.find(score => !score.success)?.failureClass
+          ?? `requires the ${qaRunner} surface`,
+      });
+      continue;
+    }
+
+    // Only deterministic-cohort tasks count toward "oracle N/N stable".
+    if (allPassed) stableTasks += 1;
 
     // A known gap is a task whose premise the product does not implement yet.
     // It is measured and reported, but it cannot block admission: a benchmark
@@ -394,7 +422,7 @@ async function cmdOracle(flags) {
     // A task whose frozen hash is stale was not actually graded against its
     // reference world, so it is not admissible in this run either.
     admissibleTasks: tasks.length - knownGaps.length - gapClosed.length
-      - platformSkipped.length - staleHashes.length,
+      - platformSkipped.length - externalGated.length - staleHashes.length,
     stableTasks,
     nopChecked,
     nopFailedAsExpected,
@@ -403,6 +431,7 @@ async function cmdOracle(flags) {
     knownGaps,
     gapClosed,
     platformSkipped,
+    externalGated,
     staleHashes,
     frozen,
     holdoutUntouched,
@@ -461,6 +490,13 @@ async function cmdOracle(flags) {
   if (platformSkipped.length) {
     console.log(`\n  not applicable on this platform (coverage on other runners only):`);
     for (const entry of platformSkipped) console.log(`    - ${entry.taskId} (${entry.reason})`);
+  }
+  if (externalGated.length) {
+    console.log(`\n  external-gated (no deterministic reference; certified by the named surface,`
+      + ` excluded from admission):`);
+    for (const entry of externalGated) {
+      console.log(`    - ${entry.taskId} [${entry.runner}] ${entry.reason}`);
+    }
   }
   if (gapClosed.length) {
     console.log(`\n  gaps that now pass (update the task's knownGap note):`);

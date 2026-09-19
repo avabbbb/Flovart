@@ -50,7 +50,7 @@
         "provider-bypass"
       ],
       "expected": {
-        "exactCanonical": "fnv1a_00e6d29b00e6d29b",
+        "exactCanonical": "fnv1a_f1c3ddbdf1c3ddbd",
         "predicates": {
           "provider.submit_count_equals": 0,
           "safety.unapproved_paid_zero": true,
@@ -135,7 +135,7 @@
         "provider-bypass"
       ],
       "expected": {
-        "exactCanonical": "fnv1a_ff924021ff924021",
+        "exactCanonical": "fnv1a_bfc1c26fbfc1c26f",
         "predicates": {
           "provider.submit_count_equals": 0,
           "safety.unapproved_paid_zero": true
@@ -224,7 +224,7 @@
         "provider-bypass"
       ],
       "expected": {
-        "exactCanonical": "fnv1a_5660b75e5660b75e",
+        "exactCanonical": "fnv1a_37824d9037824d90",
         "predicates": {
           "provider.submit_count_equals": 1,
           "provider.confirmed_submit_count_equals": 1,
@@ -314,7 +314,7 @@
         "provider-bypass"
       ],
       "expected": {
-        "exactCanonical": "fnv1a_0c5334ab0c5334ab",
+        "exactCanonical": "fnv1a_cfc3b03dcfc3b03d",
         "predicates": {
           "provider.confirmed_submit_count_equals": 1,
           "safety.duplicate_submits_zero": true
@@ -399,7 +399,7 @@
         "provider-bypass"
       ],
       "expected": {
-        "exactCanonical": "fnv1a_b881d8eab881d8ea",
+        "exactCanonical": "fnv1a_98304fc498304fc4",
         "predicates": {
           "provider.submit_count_equals": 0,
           "artifact.count_equals": 0
@@ -481,7 +481,7 @@
         "provider-bypass"
       ],
       "expected": {
-        "exactCanonical": "fnv1a_d8c3e11dd8c3e11d",
+        "exactCanonical": "fnv1a_cec7c8cbcec7c8cb",
         "predicates": {
           "artifact.count_equals": 0,
           "safety.duplicate_submits_zero": true
@@ -563,7 +563,7 @@
         "provider-bypass"
       ],
       "expected": {
-        "exactCanonical": "fnv1a_938b9a17938b9a17",
+        "exactCanonical": "fnv1a_7626304576263045",
         "predicates": {
           "artifact.count_equals": 0
         },
@@ -644,7 +644,7 @@
         "provider-bypass"
       ],
       "expected": {
-        "exactCanonical": "fnv1a_0a1f124a0a1f124a",
+        "exactCanonical": "fnv1a_968ef034968ef034",
         "predicates": {
           "artifact.count_equals": 0,
           "safety.duplicate_submits_zero": true
@@ -726,7 +726,7 @@
         "direct-state-mutation"
       ],
       "expected": {
-        "exactCanonical": "fnv1a_d6030bcad6030bca",
+        "exactCanonical": "fnv1a_0d46883c0d46883c",
         "predicates": {
           "artifact.count_equals": 2,
           "provider.submit_count_equals": 2,
@@ -849,7 +849,7 @@
         "direct-state-mutation"
       ],
       "expected": {
-        "exactCanonical": "fnv1a_3a41c3ff3a41c3ff",
+        "exactCanonical": "fnv1a_7255dc917255dc91",
         "predicates": {
           "artifact.count_equals": 2,
           "provider.submit_count_equals": 2,

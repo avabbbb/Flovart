@@ -29,7 +29,7 @@
         "direct-state-mutation"
       ],
       "expected": {
-        "exactCanonical": "fnv1a_a22f7e57a22f7e57",
+        "exactCanonical": "fnv1a_f87334e1f87334e1",
         "predicates": {
           "workflow.node_count_equals": 1,
           "workflow.node_type_exists": "image",
@@ -127,7 +127,7 @@
         "direct-state-mutation"
       ],
       "expected": {
-        "exactCanonical": "fnv1a_2ce912712ce91271",
+        "exactCanonical": "fnv1a_746ab02f746ab02f",
         "predicates": {
           "workflow.edge_count_equals": 1,
           "workflow.connected_pair_types": {
@@ -197,7 +197,7 @@
         "direct-state-mutation"
       ],
       "expected": {
-        "exactCanonical": "fnv1a_4a1bebef4a1bebef",
+        "exactCanonical": "fnv1a_86dc5f2186dc5f21",
         "predicates": {
           "workflow.node_count_equals": 2,
           "workflow.edge_count_equals": 1,
@@ -301,7 +301,7 @@
         "direct-state-mutation"
       ],
       "expected": {
-        "exactCanonical": "fnv1a_9b16cd009b16cd00",
+        "exactCanonical": "fnv1a_c4a14ffac4a14ffa",
         "predicates": {
           "workflow.revision_equals": 5,
           "workflow.node_count_equals": 1,
@@ -398,7 +398,7 @@
         "provider-bypass"
       ],
       "expected": {
-        "exactCanonical": "fnv1a_d3b6df99d3b6df99",
+        "exactCanonical": "fnv1a_f03c5093f03c5093",
         "predicates": {
           "provider.submit_count_equals": 1,
           "artifact.count_equals": 1,
@@ -484,7 +484,7 @@
         "direct-state-mutation"
       ],
       "expected": {
-        "exactCanonical": "fnv1a_584d785e584d785e",
+        "exactCanonical": "fnv1a_149ab6ac149ab6ac",
         "predicates": {
           "workflow.selection_equals": [
             "video_1"

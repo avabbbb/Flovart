@@ -162,7 +162,7 @@
       "split": "regression",
       "suite": "environment",
       "difficulty": "advanced",
-      "instruction": "Administrators are not part of the production discovery contract, so a record that grants them full control must be rejected.",
+      "instruction": "Administrators are a privileged built-in principal (SeTakeOwnership/SeBackup/SeRestore), so a record that grants them full control must be accepted - a DACL cannot actually exclude an admin, and a hosted Windows runner legitimately produces this ACE. Only non-privileged principals are rejected.",
       "runnerScope": [
         "environment"
       ],
@@ -190,7 +190,7 @@
           "runtime.discovery_verdicts": [
             {
               "scenario": "administrators-granted",
-              "verdict": "reject"
+              "verdict": "accept"
             }
           ]
         }
@@ -202,7 +202,7 @@
             "args": {
               "scenario": "administrators-granted",
               "platform": "win32",
-              "expect": "reject",
+              "expect": "accept",
               "acl": {
                 "inheritance": "remove",
                 "grant": [
@@ -280,6 +280,75 @@
                 ],
                 "grantReadOnly": [
                   "Everyone"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "timeout": 60000,
+      "repeatPolicy": {
+        "runs": 5
+      },
+      "tags": [
+        "environment",
+        "runtime",
+        "security"
+      ]
+    },
+    {
+      "id": "environment-discovery-users-006",
+      "version": "1",
+      "split": "regression",
+      "suite": "environment",
+      "difficulty": "advanced",
+      "instruction": "BUILTIN\\Users is a non-privileged principal, so a record that grants it full control lets any local account rewrite the connection descriptor and must be rejected.",
+      "runnerScope": [
+        "environment"
+      ],
+      "platforms": [
+        "win32"
+      ],
+      "fixture": {
+        "project": {
+          "id": "project_a",
+          "title": "A",
+          "nodes": [],
+          "connections": [],
+          "selectedNodeIds": []
+        },
+        "revision": 1
+      },
+      "allowedSurfaces": [
+        "environment"
+      ],
+      "forbiddenActions": [
+        "permission-policy-weakening"
+      ],
+      "expected": {
+        "predicates": {
+          "runtime.discovery_verdicts": [
+            {
+              "scenario": "users-granted",
+              "verdict": "reject"
+            }
+          ]
+        }
+      },
+      "solution": {
+        "steps": [
+          {
+            "command": "runtime.discovery.verify",
+            "args": {
+              "scenario": "users-granted",
+              "platform": "win32",
+              "expect": "reject",
+              "acl": {
+                "inheritance": "remove",
+                "grant": [
+                  "SYSTEM:F",
+                  "<CURRENT>:F",
+                  "Users:F"
                 ]
               }
             }

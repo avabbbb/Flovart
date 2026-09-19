@@ -28,7 +28,7 @@
         "direct-state-mutation"
       ],
       "expected": {
-        "exactCanonical": "fnv1a_a22f7e57a22f7e57",
+        "exactCanonical": "fnv1a_f87334e1f87334e1",
         "predicates": {
           "workflow.node_count_equals": 1,
           "workflow.node_type_exists": "image",
@@ -101,7 +101,7 @@
         "direct-state-mutation"
       ],
       "expected": {
-        "exactCanonical": "fnv1a_a7aa2cada7aa2cad",
+        "exactCanonical": "fnv1a_d3754547d3754547",
         "predicates": {
           "workflow.node_count_equals": 2,
           "workflow.node_type_exists": "image",
@@ -225,7 +225,7 @@
         "direct-state-mutation"
       ],
       "expected": {
-        "exactCanonical": "fnv1a_cfeb2f98cfeb2f98",
+        "exactCanonical": "fnv1a_c7f7121ec7f7121e",
         "predicates": {
           "workflow.node_x_greater_than": {
             "a": "video_1",
@@ -331,7 +331,7 @@
         "direct-state-mutation"
       ],
       "expected": {
-        "exactCanonical": "fnv1a_fa9d9b50fa9d9b50",
+        "exactCanonical": "fnv1a_6cbf7c466cbf7c46",
         "predicates": {
           "workflow.node_count_equals": 1,
           "workflow.node_type_absent": "video",
@@ -397,7 +397,7 @@
         "direct-state-mutation"
       ],
       "expected": {
-        "exactCanonical": "fnv1a_b71c9a73b71c9a73",
+        "exactCanonical": "fnv1a_609f1971609f1971",
         "predicates": {
           "workflow.node_count_equals": 0,
           "workflow.revision_equals": 7
@@ -474,7 +474,7 @@
         "direct-state-mutation"
       ],
       "expected": {
-        "exactCanonical": "fnv1a_a22f7e57a22f7e57",
+        "exactCanonical": "fnv1a_f87334e1f87334e1",
         "predicates": {
           "workflow.node_count_equals": 1,
           "workflow.mutation_count_equals": 1,
@@ -582,7 +582,7 @@
         "direct-state-mutation"
       ],
       "expected": {
-        "exactCanonical": "fnv1a_c67694eec67694ee",
+        "exactCanonical": "fnv1a_f97d073cf97d073c",
         "predicates": {
           "workflow.node_count_equals": 1,
           "workflow.revision_equals": 4,
@@ -660,7 +660,7 @@
         "direct-state-mutation"
       ],
       "expected": {
-        "exactCanonical": "fnv1a_57e4323b57e4323b",
+        "exactCanonical": "fnv1a_a3be7bada3be7bad",
         "predicates": {
           "workflow.node_count_equals": 3,
           "workflow.mutation_count_equals": 1,
@@ -769,7 +769,7 @@
         "direct-state-mutation"
       ],
       "expected": {
-        "exactCanonical": "fnv1a_b26e8cc7b26e8cc7",
+        "exactCanonical": "fnv1a_a94d401da94d401d",
         "predicates": {
           "workflow.node_count_equals": 1,
           "workflow.node_title_exists": "Hero Shot",
@@ -868,7 +868,7 @@
         "direct-state-mutation"
       ],
       "expected": {
-        "exactCanonical": "fnv1a_37359d4b37359d4b",
+        "exactCanonical": "fnv1a_6f1596996f159699",
         "predicates": {
           "workflow.node_count_equals": 2,
           "workflow.edge_count_equals": 0
@@ -958,7 +958,7 @@
         "direct-state-mutation"
       ],
       "expected": {
-        "exactCanonical": "fnv1a_454c328d454c328d",
+        "exactCanonical": "fnv1a_975182bf975182bf",
         "predicates": {
           "workflow.edge_count_equals": 1,
           "workflow.edge_role_exists": "first_frame",
@@ -1054,7 +1054,7 @@
         "direct-state-mutation"
       ],
       "expected": {
-        "exactCanonical": "fnv1a_d8561f9bd8561f9b",
+        "exactCanonical": "fnv1a_286b0131286b0131",
         "predicates": {
           "workflow.edge_count_equals": 1,
           "workflow.node_count_equals": 2

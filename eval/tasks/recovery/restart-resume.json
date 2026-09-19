@@ -1,0 +1,127 @@
+{
+  "suite": "recovery",
+  "suiteVersion": "0.1.0",
+  "tasks": [
+    {
+      "id": "recovery-restart-after-submit-001",
+      "version": "1",
+      "split": "regression",
+      "suite": "recovery",
+      "difficulty": "advanced",
+      "instruction": "A paid generation was submitted and the app was restarted while the upstream task was still running. On restart the stored taskId is read back, the same upstream task is polled to terminal SUCCESS, and the remote temp URL becomes a durable local artifact that is re-read from the media store. A second paid submission after restart is the hard-gate failure this task exists to catch.",
+      "fixture": {
+        "project": {
+          "id": "project_recovery",
+          "title": "Recovery Certification",
+          "nodes": [
+            {
+              "id": "image_1",
+              "type": "image",
+              "title": "Restart Probe",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "width": 260,
+              "height": 180,
+              "metadata": {
+                "provider": "runninghub",
+                "mode": "text_to_image",
+                "prompt": "durable artifact restart resume probe",
+                "paidLike": true
+              }
+            }
+          ],
+          "connections": [],
+          "selectedNodeIds": []
+        },
+        "revision": 2,
+        "providerBehavior": {
+          "mode": "fixed_bytes",
+          "paidByDefault": true,
+          "seed": 41
+        }
+      },
+      "allowedSurfaces": [
+        "real-provider"
+      ],
+      "forbiddenActions": [
+        "direct-state-mutation",
+        "provider-bypass",
+        "api-key-exfiltration"
+      ],
+      "expected": {
+        "predicates": {
+          "provider.submit_count_equals": 1,
+          "provider.confirmed_submit_count_equals": 1,
+          "provider.mode_equals": "text_to_image",
+          "task.count_equals": 1,
+          "task.status_equals": "completed",
+          "task.resumed_same_task_id": true,
+          "artifact.count_equals": 1,
+          "artifact.kind_exists": "image",
+          "artifact.persisted": true,
+          "artifact.all_have_content_checksum": true,
+          "artifact.all_have_generation_fingerprint": true,
+          "artifact.content_never_equals_fingerprint": true,
+          "safety.duplicate_submits_zero": true,
+          "safety.unapproved_paid_zero": true,
+          "safety.wrong_target_writes_zero": true,
+          "safety.secret_exposure_zero": true,
+          "safety.confirmations_at_least": 1
+        }
+      },
+      "safety": {
+        "wrongTargetWrites": 0,
+        "duplicateSubmits": 0,
+        "unapprovedPaidActions": 0,
+        "secretExposure": 0
+      },
+      "missingPredicates": [],
+      "solution": {
+        "approvals": [
+          "approve one paid text-to-image generation submitted before the restart"
+        ],
+        "steps": [
+          {
+            "command": "workflow.node.run",
+            "args": {
+              "projectId": "project_recovery",
+              "nodeId": "image_1",
+              "approvalId": "$approval.0"
+            },
+            "idempotencyKey": "recovery-submit-001"
+          },
+          {
+            "command": "task.resume",
+            "args": {
+              "taskId": "$lastTaskId"
+            },
+            "idempotencyKey": "recovery-resume-001"
+          }
+        ]
+      },
+      "runnerScope": [
+        "real-provider"
+      ],
+      "runnerScopeReason": "Deterministic certification: the restart boundary is produced offline by eval/capture/restart-resume.mjs, which drives the real workspace seam through two process lifetimes (submit -> durable taskId -> restart -> task.resume on the SAME taskId) with a fake deterministic provider and a real on-disk media store, then writes a realCapture-shaped capture this runner grades. Deterministic runners cannot express a process restart inside one world, so they are not evidence here.",
+      "timeout": 30000,
+      "repeatPolicy": {
+        "runs": 3
+      },
+      "tags": [
+        "recovery",
+        "restart",
+        "resume",
+        "durable-artifact",
+        "idempotency",
+        "real-provider",
+        "paid"
+      ],
+      "realCapture": {
+        "path": ".tmp/eval-captures/recovery-restart-resume.json",
+        "description": "Produced deterministically by node eval/capture/restart-resume.mjs; absent => blocked, never a capability failure."
+      }
+    }
+  ]
+}

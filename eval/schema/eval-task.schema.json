@@ -10,7 +10,7 @@
     "id": { "type": "string", "minLength": 3 },
     "version": { "type": "string", "minLength": 1 },
     "suite": {
-      "enum": ["workflow", "references", "provider", "production-task", "agent", "local-assets", "environment", "native-effects"]
+      "enum": ["workflow", "references", "provider", "production-task", "agent", "local-assets", "environment", "native-effects", "recovery"]
     },
     "split": { "enum": ["dev", "regression"] },
     "difficulty": { "enum": ["basic", "intermediate", "advanced"] },

@@ -99,6 +99,7 @@ before the Codex runner will do anything other than report itself blocked.
 | `local-assets` | 6 | local folder grants, Chinese paths, managed copies |
 | `environment` | 4 (+1 posix) | Runtime discovery permission contract (the Hosted CI blocker) |
 | `native-effects` | 0 (reserved) | nothing claimed |
+| `recovery` | 1 | durable artifact + taskId-resume across a restart (deterministic capture) |
 
 ## Admission gate (E6)
 

@@ -285,9 +285,19 @@ const honest = () => (controlled, options) => createOracleRunner(controlled, opt
   const task = tasks.find(entry => entry.id === 'workflow-add-connect-002');
   const a = await trial(task, { label: 'determinism-a', trialIndex: 1, runnerFactory: honest() });
   const b = await trial(task, { label: 'determinism-b', trialIndex: 1, runnerFactory: honest() });
-  const same = canonicalHash(a.worldNormalized) === canonicalHash(b.worldNormalized);
-  record('oracle-is-deterministic', same && a.score.success && b.score.success,
-    same ? 'two independent oracle runs produced the same canonical world' : 'canonical worlds differ');
+  // Determinism is only observable when both runs produced a world. Two missing
+  // worlds hash identically (canonicalHash(null)), so folding "did a world
+  // exist?" into this check inverts the signal: it makes identical worlds look
+  // like a breach. `oracle-is-deterministic` breaches ONLY on real divergence;
+  // a missing world is a different failure and is reported under its own id.
+  if (a.worldNormalized == null || b.worldNormalized == null) {
+    record('oracle-produces-gradeable-world', false,
+      `oracle run produced no world to compare (a.success=${a.score.success} b.success=${b.score.success})`);
+  } else {
+    const same = canonicalHash(a.worldNormalized) === canonicalHash(b.worldNormalized);
+    record('oracle-is-deterministic', same,
+      same ? 'two independent oracle runs produced the same canonical world' : 'canonical worlds differ');
+  }
 }
 
 // 12. The exact/hash grader must accept only the world it was frozen against.

@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-09-19T04:22:16.799Z",
+  "tasks": {
+    "total": 63,
+    "dev": 8,
+    "regression": 55,
+    "holdoutLoaded": 0,
+    "knownGaps": 3,
+    "platformScoped": 5,
+    "runnerScoped": 12,
+    "bySuite": {
+      "workflow": 12,
+      "references": 10,
+      "provider": 10,
+      "production-task": 10,
+      "agent": 10,
+      "local-assets": 6,
+      "environment": 5
+    }
+  },
+  "graders": {
+    "predicateAvailable": 57,
+    "predicateAlwaysOn": true,
+    "exactCanonical": 51,
+    "rejectionCodes": 13
+  },
+  "oracle": {
+    "eligible": 51,
+    "repeat": 5,
+    "passed": 51,
+    "nopChecked": 51,
+    "nopFailedAsExpected": 51,
+    "staleHashes": 0,
+    "platformSkipped": 1
+  },
+  "deterministic": {
+    "tasks": 63,
+    "executedTrials": 341,
+    "blockedTrials": 25,
+    "passAt1": 0.8064516129032258,
+    "passPow5": 0.06896551724137931
+  },
+  "environment": {
+    "executedTrials": 20,
+    "notApplicableTrials": 5,
+    "passAt1": 1,
+    "passPow5": 1
+  },
+  "agent": {
+    "eligibleTasks": 1,
+    "plannedTrials": 1,
+    "executedTrials": 1,
+    "blockedTrials": 0,
+    "certifiedTrials": 1,
+    "standInTrials": 0
+  },
+  "usage": {
+    "measuredTrials": 0,
+    "reportableTrials": 0,
+    "tokens": "measured",
+    "cost": "measured"
+  }
+}

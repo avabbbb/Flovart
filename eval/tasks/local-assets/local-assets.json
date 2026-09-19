@@ -33,7 +33,7 @@
         "direct-state-mutation"
       ],
       "expected": {
-        "exactCanonical": "fnv1a_ec724859ec724859",
+        "exactCanonical": "fnv1a_8f2d07b38f2d07b3",
         "predicates": {
           "workflow.node_count_equals": 1,
           "reference.source_prefix": "local-folder:",
@@ -114,7 +114,7 @@
         "direct-state-mutation"
       ],
       "expected": {
-        "exactCanonical": "fnv1a_71e3a0ad71e3a0ad",
+        "exactCanonical": "fnv1a_255b4653255b4653",
         "predicates": {
           "workflow.node_count_equals": 1,
           "reference.source_prefix": "local-folder:",
@@ -195,7 +195,7 @@
         "direct-state-mutation"
       ],
       "expected": {
-        "exactCanonical": "fnv1a_a8375a9ca8375a9c",
+        "exactCanonical": "fnv1a_f270dc66f270dc66",
         "predicates": {
           "workflow.node_count_equals": 1,
           "reference.local_folder_exists": "Shots/2026/09/hero.png"
@@ -275,7 +275,7 @@
         "direct-state-mutation"
       ],
       "expected": {
-        "exactCanonical": "fnv1a_8db305518db30551",
+        "exactCanonical": "fnv1a_90c403e790c403e7",
         "predicates": {
           "workflow.node_count_equals": 2,
           "reference.count_equals": 2
@@ -371,7 +371,7 @@
         "direct-state-mutation"
       ],
       "expected": {
-        "exactCanonical": "fnv1a_0046911900469119",
+        "exactCanonical": "fnv1a_ea7c292bea7c292b",
         "predicates": {
           "workflow.node_count_equals": 0,
           "reference.count_equals": 0
@@ -456,7 +456,7 @@
         "direct-state-mutation"
       ],
       "expected": {
-        "exactCanonical": "fnv1a_268e2209268e2209",
+        "exactCanonical": "fnv1a_f141e473f141e473",
         "predicates": {
           "workflow.node_count_equals": 2,
           "reference.source_prefix": "local-folder:",

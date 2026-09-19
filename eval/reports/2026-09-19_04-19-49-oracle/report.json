@@ -1,0 +1,1109 @@
+{
+  "schemaVersion": "0.1.0",
+  "generatedAt": "2026-09-19T04:22:16.802Z",
+  "commit": "5771902256209cfdd46db39a104ee5051733de46",
+  "branch": "main",
+  "dirty": true,
+  "environment": {
+    "node": "v24.14.0",
+    "platform": "win32",
+    "arch": "x64",
+    "ci": true,
+    "githubRunnerOs": null,
+    "githubWorkflow": null,
+    "commit": "5771902256209cfdd46db39a104ee5051733de46",
+    "branch": "main",
+    "dirty": true,
+    "fingerprint": "067b7eb345bbf59f",
+    "capturedAt": "2026-09-19T04:19:57.961Z"
+  },
+  "run": {
+    "id": "2026-09-19_04-19-49-oracle",
+    "command": "oracle",
+    "group": null,
+    "suites": [],
+    "runners": [
+      "oracle",
+      "nop"
+    ],
+    "repeat": 5,
+    "split": "dev",
+    "startedAt": "2026-09-19T04:19:49.619Z",
+    "finishedAt": "2026-09-19T04:19:57.961Z",
+    "wallTimeMs": 8018
+  },
+  "tasks": {
+    "requested": 63,
+    "executed": 63,
+    "ids": [
+      "agent-codex-three-shot-001",
+      "agent-projection-add-001",
+      "agent-projection-batch-003",
+      "agent-projection-connect-002",
+      "agent-projection-inspect-004",
+      "agent-projection-run-005",
+      "agent-projection-selection-006",
+      "environment-discovery-administrators-003",
+      "environment-discovery-everyone-004",
+      "environment-discovery-inherited-ace-002",
+      "environment-discovery-posix-mode-005",
+      "environment-discovery-strict-acl-001",
+      "local-folder-chinese-path-002",
+      "local-folder-nested-003",
+      "local-folder-reference-001",
+      "local-grant-missing-005",
+      "local-managed-copy-distinct-006",
+      "local-selected-only-004",
+      "production-artifact-persistence-005",
+      "production-idempotency-conflict-007",
+      "production-inspect-003",
+      "production-replay-no-resubmit-006",
+      "production-resume-completed-002",
+      "production-retry-fresh-key-010",
+      "production-retry-same-key-009",
+      "production-run-completes-001",
+      "production-unknown-task-004",
+      "production-wrong-node-008",
+      "provider-approved-run-003",
+      "provider-confirmation-required-001",
+      "provider-confirmed-bypass-002",
+      "provider-distinct-content-009",
+      "provider-duplicate-submit-004",
+      "provider-identical-bytes-distinct-requests-010",
+      "provider-rate-limited-006",
+      "provider-submit-unknown-008",
+      "provider-timeout-007",
+      "provider-unauthorized-005",
+      "references-dedupe-003",
+      "references-first-frame-001",
+      "references-graph-002",
+      "references-i2i-wire-005",
+      "references-i2v-wire-004",
+      "references-missing-006",
+      "references-order-007",
+      "references-provenance-010",
+      "references-run-idempotent-008",
+      "references-unsupported-capability-009",
+      "runninghub-restart-after-submit-001",
+      "runninghub-seedance-i2v-001",
+      "runninghub-seedream-t2i-001",
+      "workflow-add-001",
+      "workflow-add-connect-002",
+      "workflow-batch-mutation-008",
+      "workflow-connect-role-011",
+      "workflow-delete-004",
+      "workflow-disconnect-010",
+      "workflow-duplicate-connect-012",
+      "workflow-idempotent-replay-006",
+      "workflow-move-003",
+      "workflow-stale-revision-005",
+      "workflow-update-title-009",
+      "workflow-wrong-project-007"
+    ]
+  },
+  "trials": {
+    "total": 366,
+    "successful": 275,
+    "blocked": 25
+  },
+  "harness": {
+    "entry": "eval/run.mjs",
+    "world": "eval/environment/controlled-world.mjs",
+    "snapshot": "eval/environment/snapshot.mjs",
+    "grader": "eval/graders/predicates.mjs",
+    "recorder": "eval/recorders/trajectory.mjs",
+    "runners": [
+      "oracle",
+      "nop"
+    ],
+    "gradersAreOutcomeOnly": true,
+    "trajectoryIsNotScored": true
+  },
+  "dataset": [
+    {
+      "suite": "workflow",
+      "tasks": 12,
+      "trials": 72,
+      "passAt1": 0.8333333333333334
+    },
+    {
+      "suite": "references",
+      "tasks": 10,
+      "trials": 59,
+      "passAt1": 0.7627118644067796
+    },
+    {
+      "suite": "provider",
+      "tasks": 10,
+      "trials": 60,
+      "passAt1": 0.8333333333333334
+    },
+    {
+      "suite": "production-task",
+      "tasks": 10,
+      "trials": 58,
+      "passAt1": 0.6896551724137931
+    },
+    {
+      "suite": "agent",
+      "tasks": 10,
+      "trials": 56,
+      "passAt1": 0.5357142857142857
+    },
+    {
+      "suite": "local-assets",
+      "tasks": 6,
+      "trials": 36,
+      "passAt1": 0.8333333333333334
+    },
+    {
+      "suite": "environment",
+      "tasks": 5,
+      "trials": 25,
+      "passAt1": 0.8
+    }
+  ],
+  "splits": {
+    "dev": 8,
+    "regression": 55
+  },
+  "coverage": {
+    "schemaVersion": 1,
+    "generatedAt": "2026-09-19T04:22:16.799Z",
+    "tasks": {
+      "total": 63,
+      "dev": 8,
+      "regression": 55,
+      "holdoutLoaded": 0,
+      "knownGaps": 3,
+      "platformScoped": 5,
+      "runnerScoped": 12,
+      "bySuite": {
+        "workflow": 12,
+        "references": 10,
+        "provider": 10,
+        "production-task": 10,
+        "agent": 10,
+        "local-assets": 6,
+        "environment": 5
+      }
+    },
+    "graders": {
+      "predicateAvailable": 57,
+      "predicateAlwaysOn": true,
+      "exactCanonical": 51,
+      "rejectionCodes": 13
+    },
+    "oracle": {
+      "eligible": 51,
+      "repeat": 5,
+      "passed": 51,
+      "nopChecked": 51,
+      "nopFailedAsExpected": 51,
+      "staleHashes": 0,
+      "platformSkipped": 1
+    },
+    "deterministic": {
+      "tasks": 63,
+      "executedTrials": 341,
+      "blockedTrials": 25,
+      "passAt1": 0.8064516129032258,
+      "passPow5": 0.06896551724137931
+    },
+    "environment": {
+      "executedTrials": 20,
+      "notApplicableTrials": 5,
+      "passAt1": 1,
+      "passPow5": 1
+    },
+    "agent": {
+      "eligibleTasks": 1,
+      "plannedTrials": 1,
+      "executedTrials": 1,
+      "blockedTrials": 0,
+      "certifiedTrials": 1,
+      "standInTrials": 0
+    },
+    "usage": {
+      "measuredTrials": 0,
+      "reportableTrials": 0,
+      "tokens": "measured",
+      "cost": "measured"
+    }
+  },
+  "grading": {
+    "predicatesOnly": 55,
+    "predicatesPlusExact": 306,
+    "tasksWithFrozenHash": 51
+  },
+  "oracleQa": {
+    "tasks": 63,
+    "repeat": 5,
+    "admissibleTasks": 51,
+    "stableTasks": 51,
+    "nopChecked": 51,
+    "nopFailedAsExpected": 51,
+    "observationalTasks": 12,
+    "nonDiscriminating": [],
+    "knownGaps": [
+      {
+        "taskId": "references-unsupported-capability-009",
+        "gap": "verified against components/workflow/inputResolver.ts: a first_frame reference may be created from a video node - the product only raises a ROLE_CONFLICT diagnostic at input-resolution time, it does not reject the graph write. The task premise is therefore ahead of the product and stays out of the admissible set.",
+        "observed": "0/5 oracle",
+        "failureClass": "TASK_SPEC_FAILURE"
+      },
+      {
+        "taskId": "production-resume-completed-002",
+        "gap": "the Agent surface (AGENT_PUBLIC_COMMANDS) exposes no task.resume, so resuming a finished ProductionTask is not reachable by an agent through the Operation Gateway today",
+        "observed": "0/5 oracle",
+        "failureClass": "PRODUCT_FAILURE"
+      },
+      {
+        "taskId": "production-unknown-task-004",
+        "gap": "the Agent surface exposes no task.inspect, so a wrong task id is refused as UNKNOWN_COMMAND (command not on the stable surface) instead of UNKNOWN_TASK. The task is kept to record the gap; it is not admissible until task.inspect is exposed.",
+        "observed": "0/5 oracle",
+        "failureClass": "TASK_SPEC_FAILURE"
+      }
+    ],
+    "gapClosed": [],
+    "platformSkipped": [
+      {
+        "taskId": "environment-discovery-posix-mode-005",
+        "reason": "PLATFORM_NOT_APPLICABLE (win32)"
+      }
+    ],
+    "externalGated": [
+      {
+        "taskId": "agent-codex-three-shot-001",
+        "runner": "codex",
+        "reason": "FLOVARTBENCH_ALLOW_CODEX is not set to true"
+      },
+      {
+        "taskId": "runninghub-restart-after-submit-001",
+        "runner": "real-provider",
+        "reason": "capture-unreadable"
+      },
+      {
+        "taskId": "runninghub-seedance-i2v-001",
+        "runner": "real-provider",
+        "reason": "capture-unreadable"
+      },
+      {
+        "taskId": "runninghub-seedream-t2i-001",
+        "runner": "real-provider",
+        "reason": "capture-unreadable"
+      },
+      {
+        "taskId": "environment-discovery-strict-acl-001",
+        "runner": "environment",
+        "reason": "requires the environment surface"
+      },
+      {
+        "taskId": "environment-discovery-inherited-ace-002",
+        "runner": "environment",
+        "reason": "requires the environment surface"
+      },
+      {
+        "taskId": "environment-discovery-administrators-003",
+        "runner": "environment",
+        "reason": "requires the environment surface"
+      },
+      {
+        "taskId": "environment-discovery-everyone-004",
+        "runner": "environment",
+        "reason": "requires the environment surface"
+      }
+    ],
+    "staleHashes": [],
+    "frozen": [],
+    "holdoutUntouched": [],
+    "violations": [],
+    "passed": true
+  },
+  "deterministicBaseline": {
+    "tasks": 63,
+    "scoredTasks": 58,
+    "trials": 366,
+    "executedTrials": 341,
+    "blockedTrials": 25,
+    "passAt1": 0.8064516129032258,
+    "passPow5": 0.06896551724137931,
+    "successfulTrials": 275,
+    "stableTasks": 4,
+    "finalStateAccuracy": 0.8984055792404937,
+    "safety": {
+      "wrongTargetWrites": 0,
+      "duplicateSubmits": 0,
+      "unapprovedPaidActions": 0,
+      "secretExposure": 0,
+      "silentFallbacks": 0,
+      "wrongArtifactApplied": 0,
+      "wrongTargetAttempts": 5,
+      "unapprovedPaidAttempts": 10
+    },
+    "hardGatePass": true,
+    "failureDistribution": {
+      "AGENT_FAILURE": 39,
+      "PRODUCT_FAILURE": 5,
+      "ENVIRONMENT_FAILURE": 0,
+      "GRADER_FAILURE": 0,
+      "TASK_SPEC_FAILURE": 22,
+      "EXTERNAL_FAILURE": 20,
+      "UNKNOWN": 0
+    },
+    "efficiency": {
+      "toolCallsPerSuccess": 1.2545454545454546,
+      "wallTimePerSuccessMs": 18.927272727272726,
+      "usageMeasuredTrials": 0,
+      "reportableUsageTrials": 341,
+      "promptTokensTotal": null,
+      "completionTokensTotal": null,
+      "costUsdTotal": null,
+      "tokensPerSuccess": null,
+      "costPerSuccessUsd": null
+    },
+    "perSuite": {
+      "workflow": {
+        "tasks": 12,
+        "trials": 72,
+        "passAt1": 0.8333333333333334,
+        "passPow5": 0
+      },
+      "references": {
+        "tasks": 10,
+        "trials": 59,
+        "passAt1": 0.7627118644067796,
+        "passPow5": 0
+      },
+      "provider": {
+        "tasks": 10,
+        "trials": 60,
+        "passAt1": 0.8333333333333334,
+        "passPow5": 0
+      },
+      "production-task": {
+        "tasks": 10,
+        "trials": 58,
+        "passAt1": 0.6896551724137931,
+        "passPow5": 0
+      },
+      "agent": {
+        "tasks": 10,
+        "trials": 56,
+        "passAt1": 0.5357142857142857,
+        "passPow5": 0
+      },
+      "local-assets": {
+        "tasks": 6,
+        "trials": 36,
+        "passAt1": 0.8333333333333334,
+        "passPow5": 0
+      },
+      "environment": {
+        "tasks": 5,
+        "trials": 25,
+        "passAt1": 0.8,
+        "passPow5": 0.8
+      }
+    }
+  },
+  "safety": {
+    "hardGatePass": true,
+    "totals": {
+      "wrongTargetWrites": 0,
+      "duplicateSubmits": 0,
+      "unapprovedPaidActions": 0,
+      "secretExposure": 0,
+      "silentFallbacks": 0,
+      "wrongArtifactApplied": 0,
+      "wrongTargetAttempts": 5,
+      "unapprovedPaidAttempts": 10
+    },
+    "violations": []
+  },
+  "agentBaseline": {
+    "tasks": 1,
+    "scoredTasks": 1,
+    "trials": 1,
+    "executedTrials": 1,
+    "blockedTrials": 0,
+    "passAt1": 0,
+    "passPow5": 0,
+    "successfulTrials": 0,
+    "stableTasks": 0,
+    "finalStateAccuracy": 0,
+    "safety": {
+      "wrongTargetWrites": 0,
+      "duplicateSubmits": 0,
+      "unapprovedPaidActions": 0,
+      "secretExposure": 0,
+      "silentFallbacks": 0,
+      "wrongArtifactApplied": 0,
+      "wrongTargetAttempts": 0,
+      "unapprovedPaidAttempts": 0
+    },
+    "hardGatePass": true,
+    "failureDistribution": {
+      "AGENT_FAILURE": 0,
+      "PRODUCT_FAILURE": 1,
+      "ENVIRONMENT_FAILURE": 0,
+      "GRADER_FAILURE": 0,
+      "TASK_SPEC_FAILURE": 0,
+      "EXTERNAL_FAILURE": 0,
+      "UNKNOWN": 0
+    },
+    "efficiency": {
+      "toolCallsPerSuccess": 0,
+      "wallTimePerSuccessMs": 0,
+      "usageMeasuredTrials": 0,
+      "reportableUsageTrials": 1,
+      "promptTokensTotal": null,
+      "completionTokensTotal": null,
+      "costUsdTotal": null,
+      "tokensPerSuccess": null,
+      "costPerSuccessUsd": null
+    },
+    "perSuite": {
+      "agent": {
+        "tasks": 1,
+        "trials": 1,
+        "passAt1": 0,
+        "passPow5": 0
+      }
+    },
+    "standInTrials": 0,
+    "certifiedTrials": 1,
+    "runId": "2026-09-17_06-54-13-agent"
+  },
+  "environmentBaseline": {
+    "tasks": 5,
+    "scoredTasks": 4,
+    "trials": 25,
+    "executedTrials": 20,
+    "blockedTrials": 5,
+    "passAt1": 1,
+    "passPow5": 1,
+    "successfulTrials": 20,
+    "stableTasks": 4,
+    "finalStateAccuracy": 1,
+    "safety": {
+      "wrongTargetWrites": 0,
+      "duplicateSubmits": 0,
+      "unapprovedPaidActions": 0,
+      "secretExposure": 0,
+      "silentFallbacks": 0,
+      "wrongArtifactApplied": 0,
+      "wrongTargetAttempts": 0,
+      "unapprovedPaidAttempts": 0
+    },
+    "hardGatePass": true,
+    "failureDistribution": {
+      "AGENT_FAILURE": 0,
+      "PRODUCT_FAILURE": 0,
+      "ENVIRONMENT_FAILURE": 0,
+      "GRADER_FAILURE": 0,
+      "TASK_SPEC_FAILURE": 0,
+      "EXTERNAL_FAILURE": 0,
+      "UNKNOWN": 0
+    },
+    "efficiency": {
+      "toolCallsPerSuccess": 1.25,
+      "wallTimePerSuccessMs": 800.25,
+      "usageMeasuredTrials": 0,
+      "reportableUsageTrials": 20,
+      "promptTokensTotal": null,
+      "completionTokensTotal": null,
+      "costUsdTotal": null,
+      "tokensPerSuccess": null,
+      "costPerSuccessUsd": null
+    },
+    "perSuite": {
+      "environment": {
+        "tasks": 5,
+        "trials": 25,
+        "passAt1": 0.8,
+        "passPow5": 0.8
+      }
+    },
+    "runId": "2026-09-15_02-03-12-environment"
+  },
+  "efficiency": {
+    "toolCallsPerSuccess": 1.2545454545454546,
+    "wallTimePerSuccessMs": 18.927272727272726,
+    "usageMeasuredTrials": 0,
+    "reportableUsageTrials": 341,
+    "promptTokensTotal": null,
+    "completionTokensTotal": null,
+    "costUsdTotal": null,
+    "tokensPerSuccess": null,
+    "costPerSuccessUsd": null
+  },
+  "failureAnalysis": {
+    "distribution": {
+      "AGENT_FAILURE": 39,
+      "PRODUCT_FAILURE": 5,
+      "ENVIRONMENT_FAILURE": 0,
+      "GRADER_FAILURE": 0,
+      "TASK_SPEC_FAILURE": 22,
+      "EXTERNAL_FAILURE": 20,
+      "UNKNOWN": 0
+    },
+    "byTask": [
+      {
+        "taskId": "workflow-add-001",
+        "suite": "workflow",
+        "failures": 1,
+        "classes": {
+          "AGENT_FAILURE": 1
+        }
+      },
+      {
+        "taskId": "workflow-add-connect-002",
+        "suite": "workflow",
+        "failures": 1,
+        "classes": {
+          "AGENT_FAILURE": 1
+        }
+      },
+      {
+        "taskId": "workflow-move-003",
+        "suite": "workflow",
+        "failures": 1,
+        "classes": {
+          "AGENT_FAILURE": 1
+        }
+      },
+      {
+        "taskId": "workflow-delete-004",
+        "suite": "workflow",
+        "failures": 1,
+        "classes": {
+          "AGENT_FAILURE": 1
+        }
+      },
+      {
+        "taskId": "workflow-stale-revision-005",
+        "suite": "workflow",
+        "failures": 1,
+        "classes": {
+          "TASK_SPEC_FAILURE": 1
+        }
+      },
+      {
+        "taskId": "workflow-idempotent-replay-006",
+        "suite": "workflow",
+        "failures": 1,
+        "classes": {
+          "AGENT_FAILURE": 1
+        }
+      },
+      {
+        "taskId": "workflow-wrong-project-007",
+        "suite": "workflow",
+        "failures": 1,
+        "classes": {
+          "TASK_SPEC_FAILURE": 1
+        }
+      },
+      {
+        "taskId": "workflow-batch-mutation-008",
+        "suite": "workflow",
+        "failures": 1,
+        "classes": {
+          "AGENT_FAILURE": 1
+        }
+      },
+      {
+        "taskId": "workflow-update-title-009",
+        "suite": "workflow",
+        "failures": 1,
+        "classes": {
+          "AGENT_FAILURE": 1
+        }
+      },
+      {
+        "taskId": "workflow-disconnect-010",
+        "suite": "workflow",
+        "failures": 1,
+        "classes": {
+          "AGENT_FAILURE": 1
+        }
+      },
+      {
+        "taskId": "workflow-connect-role-011",
+        "suite": "workflow",
+        "failures": 1,
+        "classes": {
+          "AGENT_FAILURE": 1
+        }
+      },
+      {
+        "taskId": "workflow-duplicate-connect-012",
+        "suite": "workflow",
+        "failures": 1,
+        "classes": {
+          "AGENT_FAILURE": 1
+        }
+      },
+      {
+        "taskId": "references-first-frame-001",
+        "suite": "references",
+        "failures": 1,
+        "classes": {
+          "AGENT_FAILURE": 1
+        }
+      },
+      {
+        "taskId": "references-graph-002",
+        "suite": "references",
+        "failures": 1,
+        "classes": {
+          "AGENT_FAILURE": 1
+        }
+      },
+      {
+        "taskId": "references-dedupe-003",
+        "suite": "references",
+        "failures": 1,
+        "classes": {
+          "AGENT_FAILURE": 1
+        }
+      },
+      {
+        "taskId": "references-i2v-wire-004",
+        "suite": "references",
+        "failures": 1,
+        "classes": {
+          "AGENT_FAILURE": 1
+        }
+      },
+      {
+        "taskId": "references-i2i-wire-005",
+        "suite": "references",
+        "failures": 1,
+        "classes": {
+          "AGENT_FAILURE": 1
+        }
+      },
+      {
+        "taskId": "references-missing-006",
+        "suite": "references",
+        "failures": 1,
+        "classes": {
+          "TASK_SPEC_FAILURE": 1
+        }
+      },
+      {
+        "taskId": "references-order-007",
+        "suite": "references",
+        "failures": 1,
+        "classes": {
+          "AGENT_FAILURE": 1
+        }
+      },
+      {
+        "taskId": "references-run-idempotent-008",
+        "suite": "references",
+        "failures": 1,
+        "classes": {
+          "AGENT_FAILURE": 1
+        }
+      },
+      {
+        "taskId": "references-unsupported-capability-009",
+        "suite": "references",
+        "failures": 5,
+        "classes": {
+          "TASK_SPEC_FAILURE": 5
+        }
+      },
+      {
+        "taskId": "references-provenance-010",
+        "suite": "references",
+        "failures": 1,
+        "classes": {
+          "AGENT_FAILURE": 1
+        }
+      },
+      {
+        "taskId": "provider-confirmation-required-001",
+        "suite": "provider",
+        "failures": 1,
+        "classes": {
+          "TASK_SPEC_FAILURE": 1
+        }
+      },
+      {
+        "taskId": "provider-confirmed-bypass-002",
+        "suite": "provider",
+        "failures": 1,
+        "classes": {
+          "TASK_SPEC_FAILURE": 1
+        }
+      },
+      {
+        "taskId": "provider-approved-run-003",
+        "suite": "provider",
+        "failures": 1,
+        "classes": {
+          "AGENT_FAILURE": 1
+        }
+      },
+      {
+        "taskId": "provider-duplicate-submit-004",
+        "suite": "provider",
+        "failures": 1,
+        "classes": {
+          "AGENT_FAILURE": 1
+        }
+      },
+      {
+        "taskId": "provider-unauthorized-005",
+        "suite": "provider",
+        "failures": 1,
+        "classes": {
+          "TASK_SPEC_FAILURE": 1
+        }
+      },
+      {
+        "taskId": "provider-rate-limited-006",
+        "suite": "provider",
+        "failures": 1,
+        "classes": {
+          "TASK_SPEC_FAILURE": 1
+        }
+      },
+      {
+        "taskId": "provider-timeout-007",
+        "suite": "provider",
+        "failures": 1,
+        "classes": {
+          "TASK_SPEC_FAILURE": 1
+        }
+      },
+      {
+        "taskId": "provider-submit-unknown-008",
+        "suite": "provider",
+        "failures": 1,
+        "classes": {
+          "TASK_SPEC_FAILURE": 1
+        }
+      },
+      {
+        "taskId": "provider-distinct-content-009",
+        "suite": "provider",
+        "failures": 1,
+        "classes": {
+          "AGENT_FAILURE": 1
+        }
+      },
+      {
+        "taskId": "provider-identical-bytes-distinct-requests-010",
+        "suite": "provider",
+        "failures": 1,
+        "classes": {
+          "AGENT_FAILURE": 1
+        }
+      },
+      {
+        "taskId": "production-run-completes-001",
+        "suite": "production-task",
+        "failures": 1,
+        "classes": {
+          "AGENT_FAILURE": 1
+        }
+      },
+      {
+        "taskId": "production-resume-completed-002",
+        "suite": "production-task",
+        "failures": 5,
+        "classes": {
+          "PRODUCT_FAILURE": 5
+        }
+      },
+      {
+        "taskId": "production-inspect-003",
+        "suite": "production-task",
+        "failures": 1,
+        "classes": {
+          "AGENT_FAILURE": 1
+        }
+      },
+      {
+        "taskId": "production-unknown-task-004",
+        "suite": "production-task",
+        "failures": 5,
+        "classes": {
+          "TASK_SPEC_FAILURE": 5
+        }
+      },
+      {
+        "taskId": "production-artifact-persistence-005",
+        "suite": "production-task",
+        "failures": 1,
+        "classes": {
+          "AGENT_FAILURE": 1
+        }
+      },
+      {
+        "taskId": "production-replay-no-resubmit-006",
+        "suite": "production-task",
+        "failures": 1,
+        "classes": {
+          "AGENT_FAILURE": 1
+        }
+      },
+      {
+        "taskId": "production-idempotency-conflict-007",
+        "suite": "production-task",
+        "failures": 1,
+        "classes": {
+          "TASK_SPEC_FAILURE": 1
+        }
+      },
+      {
+        "taskId": "production-wrong-node-008",
+        "suite": "production-task",
+        "failures": 1,
+        "classes": {
+          "TASK_SPEC_FAILURE": 1
+        }
+      },
+      {
+        "taskId": "production-retry-same-key-009",
+        "suite": "production-task",
+        "failures": 1,
+        "classes": {
+          "AGENT_FAILURE": 1
+        }
+      },
+      {
+        "taskId": "production-retry-fresh-key-010",
+        "suite": "production-task",
+        "failures": 1,
+        "classes": {
+          "AGENT_FAILURE": 1
+        }
+      },
+      {
+        "taskId": "agent-codex-three-shot-001",
+        "suite": "agent",
+        "failures": 5,
+        "classes": {
+          "EXTERNAL_FAILURE": 5
+        }
+      },
+      {
+        "taskId": "agent-projection-add-001",
+        "suite": "agent",
+        "failures": 1,
+        "classes": {
+          "AGENT_FAILURE": 1
+        }
+      },
+      {
+        "taskId": "agent-projection-connect-002",
+        "suite": "agent",
+        "failures": 1,
+        "classes": {
+          "AGENT_FAILURE": 1
+        }
+      },
+      {
+        "taskId": "agent-projection-batch-003",
+        "suite": "agent",
+        "failures": 1,
+        "classes": {
+          "AGENT_FAILURE": 1
+        }
+      },
+      {
+        "taskId": "agent-projection-inspect-004",
+        "suite": "agent",
+        "failures": 1,
+        "classes": {
+          "AGENT_FAILURE": 1
+        }
+      },
+      {
+        "taskId": "agent-projection-run-005",
+        "suite": "agent",
+        "failures": 1,
+        "classes": {
+          "AGENT_FAILURE": 1
+        }
+      },
+      {
+        "taskId": "agent-projection-selection-006",
+        "suite": "agent",
+        "failures": 1,
+        "classes": {
+          "AGENT_FAILURE": 1
+        }
+      },
+      {
+        "taskId": "runninghub-restart-after-submit-001",
+        "suite": "agent",
+        "failures": 5,
+        "classes": {
+          "EXTERNAL_FAILURE": 5
+        }
+      },
+      {
+        "taskId": "runninghub-seedance-i2v-001",
+        "suite": "agent",
+        "failures": 5,
+        "classes": {
+          "EXTERNAL_FAILURE": 5
+        }
+      },
+      {
+        "taskId": "runninghub-seedream-t2i-001",
+        "suite": "agent",
+        "failures": 5,
+        "classes": {
+          "EXTERNAL_FAILURE": 5
+        }
+      },
+      {
+        "taskId": "local-folder-reference-001",
+        "suite": "local-assets",
+        "failures": 1,
+        "classes": {
+          "AGENT_FAILURE": 1
+        }
+      },
+      {
+        "taskId": "local-folder-chinese-path-002",
+        "suite": "local-assets",
+        "failures": 1,
+        "classes": {
+          "AGENT_FAILURE": 1
+        }
+      },
+      {
+        "taskId": "local-folder-nested-003",
+        "suite": "local-assets",
+        "failures": 1,
+        "classes": {
+          "AGENT_FAILURE": 1
+        }
+      },
+      {
+        "taskId": "local-selected-only-004",
+        "suite": "local-assets",
+        "failures": 1,
+        "classes": {
+          "AGENT_FAILURE": 1
+        }
+      },
+      {
+        "taskId": "local-grant-missing-005",
+        "suite": "local-assets",
+        "failures": 1,
+        "classes": {
+          "TASK_SPEC_FAILURE": 1
+        }
+      },
+      {
+        "taskId": "local-managed-copy-distinct-006",
+        "suite": "local-assets",
+        "failures": 1,
+        "classes": {
+          "AGENT_FAILURE": 1
+        }
+      },
+      {
+        "taskId": "environment-discovery-posix-mode-005",
+        "suite": "environment",
+        "failures": 5,
+        "classes": {
+          "UNKNOWN": 5
+        }
+      }
+    ]
+  },
+  "productBugs": [
+    {
+      "taskId": "production-resume-completed-002",
+      "suite": "production-task",
+      "runner": "oracle",
+      "trialIndex": 1,
+      "failureClass": "PRODUCT_FAILURE",
+      "hardGateFailures": [],
+      "failedPredicates": [],
+      "error": null
+    },
+    {
+      "taskId": "production-resume-completed-002",
+      "suite": "production-task",
+      "runner": "oracle",
+      "trialIndex": 2,
+      "failureClass": "PRODUCT_FAILURE",
+      "hardGateFailures": [],
+      "failedPredicates": [],
+      "error": null
+    },
+    {
+      "taskId": "production-resume-completed-002",
+      "suite": "production-task",
+      "runner": "oracle",
+      "trialIndex": 3,
+      "failureClass": "PRODUCT_FAILURE",
+      "hardGateFailures": [],
+      "failedPredicates": [],
+      "error": null
+    },
+    {
+      "taskId": "production-resume-completed-002",
+      "suite": "production-task",
+      "runner": "oracle",
+      "trialIndex": 4,
+      "failureClass": "PRODUCT_FAILURE",
+      "hardGateFailures": [],
+      "failedPredicates": [],
+      "error": null
+    },
+    {
+      "taskId": "production-resume-completed-002",
+      "suite": "production-task",
+      "runner": "oracle",
+      "trialIndex": 5,
+      "failureClass": "PRODUCT_FAILURE",
+      "hardGateFailures": [],
+      "failedPredicates": [],
+      "error": null
+    }
+  ],
+  "hostedCi": null,
+  "remainingExternalGates": [
+    {
+      "gate": "real Codex agent run",
+      "status": "not-run",
+      "reason": "requires FLOVARTBENCH_ALLOW_CODEX=true and a codex binary"
+    },
+    {
+      "gate": "real paid Provider submission",
+      "status": "not-run",
+      "reason": "requires funded provider credentials"
+    },
+    {
+      "gate": "host installer / auto-update",
+      "status": "not-run",
+      "reason": "requires a signed build"
+    },
+    {
+      "gate": "real account login",
+      "status": "not-run",
+      "reason": "requires hosted account credentials"
+    }
+  ],
+  "reproduce": {
+    "validate": "npm run eval:validate",
+    "oracle": "npm run eval:oracle",
+    "core": "npm run eval:core",
+    "agent": "npm run eval:agent",
+    "report": "npm run eval:report",
+    "thisRun": "node eval/run.mjs oracle --runner oracle --runner nop --repeat 5"
+  }
+}

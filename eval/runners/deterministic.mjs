@@ -464,3 +464,16 @@ export function createRunner(name, controlled, options) {
 }
 
 export const RUNNER_NAMES = ['oracle', 'cli', 'mcp', 'codex', 'nop', 'environment', 'real-provider'];
+
+/**
+ * Runners whose evidence comes from a live, non-deterministic or host-specific
+ * surface rather than the controlled world:
+ *   - `codex`         needs a real binary + opt-in
+ *   - `real-provider` replays a parent driver's live capture
+ *   - `environment`   probes the real filesystem/ACLs; the captured world
+ *                     records the host platform, so its verdict is only
+ *                     meaningful on the host it ran on
+ * A missing external capability is EXTERNAL_FAILURE, and a deterministic
+ * admission gate must never read it as a task violation.
+ */
+export const EXTERNAL_RUNNERS = new Set(['codex', 'real-provider', 'environment']);

@@ -48,7 +48,7 @@
         "direct-state-mutation"
       ],
       "expected": {
-        "exactCanonical": "fnv1a_063c269e063c269e",
+        "exactCanonical": "fnv1a_5e0689045e068904",
         "predicates": {
           "task.count_equals": 1,
           "task.status_equals": "completed",
@@ -211,7 +211,7 @@
         "direct-state-mutation"
       ],
       "expected": {
-        "exactCanonical": "fnv1a_4f9cd8a54f9cd8a5",
+        "exactCanonical": "fnv1a_5e5317b75e5317b7",
         "predicates": {
           "task.count_equals": 1,
           "provider.submit_count_equals": 1,
@@ -368,7 +368,7 @@
         "direct-state-mutation"
       ],
       "expected": {
-        "exactCanonical": "fnv1a_aa6b3447aa6b3447",
+        "exactCanonical": "fnv1a_467e3e35467e3e35",
         "predicates": {
           "artifact.count_equals": 1,
           "artifact.provenance_node_exists": "image_1",
@@ -445,7 +445,7 @@
         "direct-state-mutation"
       ],
       "expected": {
-        "exactCanonical": "fnv1a_e2392a00e2392a00",
+        "exactCanonical": "fnv1a_3ba71cba3ba71cba",
         "predicates": {
           "provider.submit_count_equals": 1,
           "task.count_equals": 1,
@@ -546,7 +546,7 @@
         "direct-state-mutation"
       ],
       "expected": {
-        "exactCanonical": "fnv1a_9c6adfde9c6adfde",
+        "exactCanonical": "fnv1a_eefbd96ceefbd96c",
         "predicates": {
           "provider.submit_count_equals": 1,
           "artifact.count_equals": 1
@@ -632,7 +632,7 @@
         "direct-state-mutation"
       ],
       "expected": {
-        "exactCanonical": "fnv1a_4c24866a4c24866a",
+        "exactCanonical": "fnv1a_22302af422302af4",
         "predicates": {
           "provider.submit_count_equals": 0,
           "artifact.count_equals": 0,
@@ -714,7 +714,7 @@
         "direct-state-mutation"
       ],
       "expected": {
-        "exactCanonical": "fnv1a_097ee05b097ee05b",
+        "exactCanonical": "fnv1a_3e8689393e868939",
         "predicates": {
           "provider.submit_count_equals": 1,
           "artifact.count_equals": 1,
@@ -803,7 +803,7 @@
         "direct-state-mutation"
       ],
       "expected": {
-        "exactCanonical": "fnv1a_981f7d65981f7d65",
+        "exactCanonical": "fnv1a_ccd7ee23ccd7ee23",
         "predicates": {
           "provider.submit_count_equals": 1,
           "artifact.count_equals": 1,
