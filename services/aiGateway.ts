@@ -2475,7 +2475,7 @@ export async function generateImageWithProvider(
     model: string,
     key?: UserApiKey,
     images?: VideoImage[],
-    options?: { signal?: AbortSignal; aspectRatio?: VideoAspectRatio; resolution?: string; quality?: string; webSearch?: boolean },
+    options?: { signal?: AbortSignal; aspectRatio?: VideoAspectRatio; resolution?: string; quality?: string; webSearch?: boolean; resumeProviderTaskId?: string; onProviderTaskLifecycle?: (event: ProviderTaskLifecycleEvent) => void | Promise<void> },
 ): Promise<{ newImageBase64: string | null; newImageMimeType: string | null; textResponse: string | null; /** 仅供溯源：远端图片原始 URL（RunningHub 等 24h 临时链接）；本地 base64 仍为内容来源。 */ remoteMediaUrl?: string }> {
     assertResolvedUpstreamModel(model);
     const provider = resolveGenerationProvider(model, key);
@@ -2532,6 +2532,11 @@ export async function generateImageWithProvider(
         }), {
             baseUrl,
             signal: options?.signal,
+            // Persist the provider task id + honor resume so a restart mid-image-run
+            // rejoins the same paid task instead of orphaning it (mirrors the video
+            // path; without this an image submit leaves no taskId to resume).
+            resumeTaskId: options?.resumeProviderTaskId,
+            onTaskId: taskId => options?.onProviderTaskLifecycle?.({ phase: 'submitted', providerTaskId: taskId, submittedAt: Date.now() }),
         });
         const imageUrl = extractRunningHubMediaUrl(result, 'image');
         if (!imageUrl) {

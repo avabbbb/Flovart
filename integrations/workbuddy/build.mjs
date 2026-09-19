@@ -6,13 +6,14 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), 'flovart');
 const output = resolve(root, '..', '..', '..', 'dist-workbuddy', 'flovart');
 const workspace = resolve(root, '..', '..', '..');
 if (!output.startsWith(`${workspace}${sep}`)) throw new Error('WorkBuddy output escaped the workspace');
-// The official WorkBuddy CLI-connector pattern installs the CLI from a
-// published npm package or a published installer (npx -y @scope/installer),
-// never a bundle-local relative path. Because flovart-cli is not yet
-// published, the connector is structurally valid but cannot self-install.
-// We therefore require init to reference a real package specifier (not a
-// missing pinned tarball / nonexistent local file) and surface the release
-// dependency explicitly instead of shipping a broken npm install -g line.
+// The official WorkBuddy CLI-connector pattern installs the CLI directly from
+// a published npm package — npm install -g @flovart/cli@latest — with no
+// intermediate installer package. Because @flovart/cli is not yet published,
+// the connector is structurally valid but cannot self-install; publication is
+// an EXTERNAL_RELEASE_GATE. We therefore require init to reference the real
+// package specifier (not a missing pinned tarball / nonexistent local file /
+// removed @flovart/workbuddy-installer layer) and surface the release
+// dependency explicitly.
 
 const required = [
   'connector-meta.json',
@@ -31,13 +32,14 @@ for (const platform of ['darwin', 'linux', 'win32']) {
 }
 for (const file of required) if (!existsSync(join(root, file))) throw new Error(`WorkBuddy connector missing ${file}`);
 if (JSON.stringify(cli).match(/(?:api.?key|provider.?key|secret|token)/i)) throw new Error('WorkBuddy connector contains a credential-shaped config key');
-// init must not reference a registry package name that we know is unpublished
-// (flovart-cli@x.y.z was never published) nor a bundled file that does not
-// exist. A scoped installer spec is allowed because it is a real, resolvable
-// package once published — publication itself is an EXTERNAL_RELEASE_GATE.
+// init must install the canonical @flovart/cli package directly. The retired
+// @flovart/workbuddy-installer indirection and the never-published flovart-cli
+// name are both structural defects, not release gates.
+const canonicalInit = /npm\s+install\s+-g\s+@flovart\/cli(?:@[\w.-]+)?\s*$/;
 for (const platform of ['darwin', 'linux', 'win32']) {
   const initCmd = cli.init[platform];
-  if (/npm install -g\s+flovart-cli@/.test(initCmd)) throw new Error(`WorkBuddy cli.json init.${platform} installs unpublished package flovart-cli@ (EXTERNAL_RELEASE_GATE: publish flovart-cli or @flovart/workbuddy-installer)`);
+  if (/@flovart\/workbuddy-installer/.test(initCmd)) throw new Error(`WorkBuddy cli.json init.${platform} routes through the removed @flovart/workbuddy-installer layer; init must install @flovart/cli directly`);
+  if (!canonicalInit.test(initCmd)) throw new Error(`WorkBuddy cli.json init.${platform} must be 'npm install -g @flovart/cli@<spec>' (EXTERNAL_RELEASE_GATE: publish @flovart/cli)`);
 }
 if (readFileSync(join(root, 'skills/flovart/SKILL.md'), 'utf8').match(/(?:agentUrl|agentToken|x-flovart-agent-token|MCP|端口|Token)/i)) throw new Error('WorkBuddy Skill leaks connection implementation details');
 

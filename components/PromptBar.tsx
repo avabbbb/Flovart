@@ -1347,7 +1347,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                 else if (setupRequired) onOpenSettings?.();
                                 else if (promptReady && readyState !== 'missing-key' && !videoInputRequirement) onGenerate();
                             }}
-                            disabled={(isLoading && !onStop) || (!isLoading && (!promptReady || (!setupRequired && readyState === 'missing-key') || Boolean(videoInputRequirement)))}
+                            disabled={(isLoading && !onStop) || (!isLoading && (setupRequired ? false : (!promptReady || readyState === 'missing-key' || Boolean(videoInputRequirement))))}
                             aria-label={isLoading && onStop ? (isSeedanceVideoModel ? '停止并尝试取消任务' : '停止生成') : setupRequired ? setupLabel : runLabel || t('promptBar.generate')}
                             title={isLoading && onStop ? (isSeedanceVideoModel ? '停止本地等待并尝试取消上游任务；若已进入生成阶段，上游仍可能继续计费' : '停止生成') : setupRequired ? `${setupLabel}以开始生成` : videoInputRequirement || runLabel || t('promptBar.generate')}
                             className={`isl-go ${compactMode ? 'h-10 w-10 min-w-10 rounded-full p-0 text-xs' : 'h-10 min-w-[116px] px-5 text-sm'}`}

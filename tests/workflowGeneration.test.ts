@@ -153,7 +153,9 @@ describe('workflow generation', () => {
     const remoteUrl = 'https://cdn.runninghub.cn/expires-in-24h.mp4';
     const executeMedia = vi.fn().mockResolvedValue({ ok: true, elementId: 'text-1', capability: 'video', mediaUrl: 'https://output/result', mimeType: 'video/mp4', remoteMediaUrl: remoteUrl });
     const result = await runWorkflowGeneration(source, 'text-1', {
-      userApiKeys: [mappedMediaKey('video', 'flovart:seedance-2', 'video-model', 'runningHub')],
+      // runningHub keys resolve only catalog-verified routes (routeAvailable now
+      // gates on isVerifiedRoute) — use a real catalog routeId, not 'video-model'.
+      userApiKeys: [mappedMediaKey('video', 'flovart:seedance-2', 'rhart-video/sparkvideo-2.0/text-to-video', 'runningHub')],
       executeMedia, fetchMedia: vi.fn().mockResolvedValue(new Blob(['result'])),
       ingestMedia: vi.fn().mockResolvedValue({ type: 'video', storageKey: 'video-key', name: 'result.mp4', mimeType: 'video/mp4', bytes: 6 }),
       encodeDataUrl: vi.fn().mockResolvedValue('data:image/png;base64,AA=='), createVideoPoster: vi.fn().mockResolvedValue(null),

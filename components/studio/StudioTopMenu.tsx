@@ -1,9 +1,10 @@
-import { CircleAlert, CircleCheck, Languages, Moon, Settings, Sun, Monitor, BookOpen, User, Download, RefreshCw, Loader2, Home, Plus, Trash2, ChevronLeft, ChevronRight, Pencil, Check, X } from 'lucide-react';
+import { CircleAlert, CircleCheck, Languages, Moon, Settings, Sun, Monitor, User, Download, RefreshCw, Loader2, Home, Plus, Trash2, ChevronLeft, ChevronRight, Pencil, Check, X } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router';
+import { useNavigate } from 'react-router';
 import { useAuth } from '../../hooks/useAuth';
 import { useUpdaterStore } from '../../stores/useUpdaterStore';
 import { useAgentConnectionStore } from '../../stores/useAgentConnectionStore';
+import { useWorkspaceStore } from '../../stores/useWorkspaceStore';
 import { toLocalLinkPublicStatus } from '../../tools/flovart/public-status';
 import { AuthModal } from '../auth/AuthModal';
 import type { ThemeMode } from '../../types';
@@ -157,14 +158,21 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
               className="isl-pop absolute left-0 top-full z-[90] mt-1.5 min-w-[200px] p-1.5"
               onPointerDown={event => event.stopPropagation()}
             >
-<a
+              <a
                 href="/"
                 className="isl-opt flex items-center gap-2"
                 role="menuitem"
-                onClick={event => { event.preventDefault(); setLogoMenuOpen(false); navigate('/app/home'); }}
+                onClick={event => {
+                  event.preventDefault();
+                  setLogoMenuOpen(false);
+                  const workspace = useWorkspaceStore.getState();
+                  workspace.setActiveView('workflow');
+                  workspace.setCanvasView('spatial');
+                  navigate('/app');
+                }}
               >
                 <Home size={14} />
-                <span className="text-xs font-bold">{isChinese ? '回到首页' : 'Back to home'}</span>
+                <span className="text-xs font-bold">{isChinese ? '回到画布' : 'Back to canvas'}</span>
               </a>
               <button type="button" role="menuitem" className="isl-opt flex items-center gap-2" onClick={() => { projectActions!.create(); setLogoMenuOpen(false); }}>
                 <Plus size={14} />
@@ -252,21 +260,15 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
       </nav>
 
       <div className="studio-top-menu__actions flex min-w-0 items-center justify-end gap-0.5 sm:gap-1">
-        <span
-          title="开发构建标识：刷新后时间变化即代表加载了最新代码"
-          className="hidden items-center rounded px-1.5 py-0.5 text-[9px] font-semibold lg:inline-flex"
-          style={{ color: 'var(--isl-ink-ghost)', background: 'var(--isl-surface-2)' }}
-        >
-          dev {new Date().toLocaleTimeString('zh-CN', { hour12: false })}
-        </span>
-        <Link
-          to="/prompts"
-          className="isl-icon-btn max-sm:!hidden h-8 items-center gap-1.5 px-2 sm:!flex"
-          title={isChinese ? 'SKILL 社区' : 'Skill community'}
-          aria-label={isChinese ? 'SKILL 社区' : 'Skill community'}
-        >
-          <BookOpen size={15} />
-        </Link>
+        {import.meta.env.DEV && (
+          <span
+            title="开发构建标识：刷新后时间变化即代表加载了最新代码"
+            className="hidden items-center rounded px-1.5 py-0.5 text-[9px] font-semibold lg:inline-flex"
+            style={{ color: 'var(--isl-ink-ghost)', background: 'var(--isl-surface-2)' }}
+          >
+            dev {new Date().toLocaleTimeString('zh-CN', { hour12: false })}
+          </span>
+        )}
         <button
           type="button"
           className="isl-icon-btn max-sm:!hidden h-8 items-center gap-1.5 px-2 sm:!flex"
@@ -299,17 +301,18 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
             )}
           </button>
         )}
-        <Link
-          to="/dock"
+        <button
+          type="button"
           data-testid="agent-connection-status"
           className="isl-icon-btn flex h-8 items-center gap-1.5 px-2"
-          title={isChinese ? '打开协作服务开发者诊断' : 'Open collaboration diagnostics'}
+          title={isChinese ? '打开 Agent 工作区' : 'Open Agent workspace'}
           aria-label={agentLabel}
           style={{ color: agentColor }}
+          onClick={() => { useWorkspaceStore.getState().setActiveView('agent'); navigate('/app'); }}
         >
           <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full" style={{ background: agentColor }} />
           <span className="hidden whitespace-nowrap text-[11px] font-semibold xl:inline">{agentLabel}</span>
-        </Link>
+        </button>
         <button
           type="button"
           className="isl-icon-btn flex h-8 min-w-8 shrink-0 items-center gap-1.5 px-2"

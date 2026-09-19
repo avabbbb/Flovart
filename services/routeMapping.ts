@@ -1,4 +1,5 @@
 import type { RouteMappingTarget, UserApiKey } from '../types';
+import { isVerifiedRoute } from './runningHubRouteCatalog';
 
 export type RouteMappingResolution =
   | { status: 'ready'; routeId: string; key: UserApiKey }
@@ -33,6 +34,11 @@ const routeAvailable = (key: UserApiKey, target: RouteMappingTarget, routeId: st
   && Boolean(routeId.trim())
   && keySupportsTarget(key, target)
   && keyExposesRoute(key, routeId)
+  // RunningHub keys may only resolve to Route Catalog–verified routes. Without
+  // this the ~100 builtin models (seedream-v5/kling/vidu/wan/…) submit, then
+  // throw RESOURCE_NOT_EXECUTABLE after the usage reservation — billing the
+  // user for an impossible route. Non-RunningHub providers are unaffected.
+  && (key.provider !== 'runningHub' || isVerifiedRoute(routeId.trim()))
 );
 
 export function resolveRouteMapping(

@@ -58,6 +58,24 @@ interface ActiveRequest {
   runtime: WorkflowGenerationRuntime;
 }
 
+/**
+ * 提交时冻结的执行目标：run 期间允许画布继续编辑其它节点/切换选择，
+ * 产物落点只认 submit 瞬间捕获的 nodeId/位置/引用快照。沿用 draftVersion
+ * 乐观并发令牌，与 draftAuthority/StudioRunRequest 同一机制。
+ */
+export interface WorkflowExecutionTarget {
+  readonly projectId: string;
+  readonly nodeId: string;
+  /** submit 时发起节点快照（位置/尺寸/配置冻结） */
+  readonly selectionSnapshot: WorkflowNode;
+  /** submit 时解析出的图上游引用 */
+  readonly references: readonly unknown[];
+  /** 产物落点：非批量原位替换用此 center/尺寸；批量结果节点由此向右排布 */
+  readonly outputTarget: { readonly nodeId: string; readonly x: number; readonly y: number; readonly width: number; readonly height: number };
+  readonly hostTarget: 'workflow';
+  readonly revision: number;
+}
+
 const activeRequests = new Map<string, ActiveRequest>();
 const requestKey = (projectId: string, nodeId: string) => `${projectId}:${nodeId}`;
 const isAbort = (error: unknown) => Boolean(error && typeof error === 'object' && 'name' in error && error.name === 'AbortError');
@@ -201,6 +219,23 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
       ? runtime.promptIntent
       : promptIntentFromNode(initiating, 'generate');
     const resolvedInputs = resolveWorkflowInputs(initiating, source.nodes, source.connections, { assets: runtime.assets, promptIntent });
+    // ── 冻结 ExecutionTarget：run 期间画布可以继续编辑/切换选择，
+    // 产物落点、批量排布、引用身份都只认 submit 瞬间这份快照。───
+    const executionTarget: WorkflowExecutionTarget = Object.freeze({
+      projectId: project.id,
+      nodeId,
+      selectionSnapshot: Object.freeze({ ...initiating, metadata: Object.freeze({ ...initiating.metadata }), position: Object.freeze({ ...initiating.position }) }),
+      references: Object.freeze(resolvedInputs.references.slice()),
+      outputTarget: Object.freeze({
+        nodeId,
+        x: initiating.position.x,
+        y: initiating.position.y,
+        width: initiating.width,
+        height: initiating.height,
+      }),
+      hostTarget: 'workflow',
+      revision: project.draftVersion || 1,
+    });
     let productMode: ProductModelMode = (config.submode as ProductModelMode | undefined)
       || (mode === 'video' ? 'text-to-video' : 'text-to-image');
     // 未显式选择 submode 时，只从同一份 ResolvedNodeInputs 推导输入模式。
@@ -342,7 +377,7 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
     const count = mode === 'text' ? 1 : Math.max(1, Math.min(4, config.count || 1));
     const batched = count > 1;
     const batchId = batched ? createId() : undefined;
-    const previousStorageKey = initiating.metadata.storageKey;
+    const previousStorageKey = executionTarget.selectionSnapshot.metadata.storageKey;
 
     for (let index = 0; index < count; index += 1) {
       if (!stillActive()) throw abortError();
@@ -353,7 +388,7 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
         const content = await (runtime.executeText || generateTextWithProvider)(effectivePrompt, resolved.routeId, resolved.key, { signal: controller.signal });
         if (!stillActive()) throw abortError();
         if (batched) {
-          const resultNode = createWorkflowNode(createId(), 'text', { x: initiating.position.x + initiating.width + 80, y: initiating.position.y + index * 48 }, { content, status: 'success' });
+          const resultNode = createWorkflowNode(createId(), 'text', { x: executionTarget.outputTarget.x + executionTarget.outputTarget.width + 80, y: executionTarget.outputTarget.y + index * 48 }, { content, status: 'success' });
           resultNode.title = '生成文本';
           preparedNodes.push(resultNode);
           if (!stillActive()) throw abortError();
@@ -473,11 +508,11 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
 
       if (batched) {
         const resultNode = {
-          ...createWorkflowNode(createId(), mode, { x: initiating.position.x + initiating.width + 80, y: initiating.position.y + index * 48 }, {
+          ...createWorkflowNode(createId(), mode, { x: executionTarget.outputTarget.x + executionTarget.outputTarget.width + 80, y: executionTarget.outputTarget.y + index * 48 }, {
             ...record,
             href: undefined,
             status: 'success',
-            config: initiating.metadata.config,
+            config: executionTarget.selectionSnapshot.metadata.config,
             sourceOperationNodeId: isImageOperation ? nodeId : undefined,
             operationTakeId: isImageOperation ? operationTakeId : undefined,
             operationOutputRole: isImageOperation ? 'result_image' : undefined,
@@ -495,7 +530,7 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
         });
       } else {
         const size = fitWorkflowMediaSize(mode, record.naturalWidth, record.naturalHeight);
-        const center = { x: initiating.position.x + initiating.width / 2, y: initiating.position.y + initiating.height / 2 };
+        const center = { x: executionTarget.outputTarget.x + executionTarget.outputTarget.width / 2, y: executionTarget.outputTarget.y + executionTarget.outputTarget.height / 2 };
         const latest = canonical(runtime, current);
         current = {
           ...latest,

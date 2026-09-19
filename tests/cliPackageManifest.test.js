@@ -18,7 +18,7 @@ function localImports(source) {
   return imports;
 }
 
-describe('flovart-cli package manifest', () => {
+describe('@flovart/cli package manifest', () => {
   it('ships every top-level local module reachable by the CLI', () => {
     const missing = [];
     const sourceFiles = readdirSync(packageDir).filter((name) => /\.(?:js|mjs)$/.test(name));

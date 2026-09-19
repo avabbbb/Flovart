@@ -56,7 +56,7 @@ export function AgentWorkspace({ project, onCreateProject, onOpenWorkflow, onOpe
             <div className="agent-external-priority__content">
               <Bot size={28} style={{ color: 'var(--isl-mint)' }} />
               <h2>外部 Agent 优先</h2>
-              <p>从左侧选择 Codex、WorkBuddy 或其他可用助手，它们会通过 Flovart 操作当前 Workflow。</p>
+              <p>左侧 Codex 为 Beta 路径，其他标记「实验性」的助手尚未认证，可通过 Flovart 操作当前 Workflow。</p>
               <p className="agent-external-priority__hint">内置助手是可选的本地备用入口，不会自动接管项目。</p>
               <button type="button" onClick={() => setEmbeddedOpen(true)}>打开可选内置助手</button>
             </div>

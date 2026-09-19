@@ -6,9 +6,16 @@ import { toLinkPublicStatus, type LinkPublicStatus } from '../../services/link/p
 import { useAgentConnectionStore } from '../../stores/useAgentConnectionStore';
 import registry from '../../tools/flovart/contracts/host-registry.v1.json';
 import { AgentHostDiagnostics } from './AgentHostDiagnostics';
-
 const SELECTED_HOST_KEY = 'flovart.agent.selectedHost';
 const PRIMARY_HOSTS = ['codex', 'workbuddy', 'deepseek-harness'];
+// SUPPORT_MATRIX.md Closed Beta freeze: Codex is the promoted host; every other
+// selectable host is experimental and must not render as equally ready.
+const BETA_HOSTS: Record<string, true> = { codex: true };
+const EXPERIMENTAL_LABEL = '实验性';
+
+function hostReadiness(id: string) {
+  return BETA_HOSTS[id] ? { label: 'Beta', experimental: false } : { label: EXPERIMENTAL_LABEL, experimental: true };
+}
 
 function readSelectedHost() {
   try { return localStorage.getItem(SELECTED_HOST_KEY) || 'codex'; } catch { return 'codex'; }
@@ -146,7 +153,10 @@ export function AgentHostPicker({ projectTitle }: AgentHostPickerProps) {
               <h3>{selectedHost.label}</h3>
               <p>{selectedActive ? '已选择' : selectedStatus.label}</p>
             </div>
-            <span className="agent-picker__badge">{selectedActive ? '已准备' : PUBLIC_STATE_LABEL[selectedStatus.state]}</span>
+            <span className="agent-picker__badges">
+              <span className={`agent-picker__badge agent-picker__badge--tier${hostReadiness(selectedHost.id).experimental ? ' is-experimental' : ''}`}>{hostReadiness(selectedHost.id).label}</span>
+              <span className="agent-picker__badge">{selectedActive ? '已准备' : PUBLIC_STATE_LABEL[selectedStatus.state]}</span>
+            </span>
           </div>
           {projectTitle && <div className="agent-picker__current-workflow"><p>当前 Workflow</p><strong title={projectTitle}>{projectTitle}</strong></div>}
           <button type="button" className="agent-picker__primary-action" disabled={selectedActive || Boolean(pendingId)} onClick={() => void useHost(selectedHost.id)}>{selectedBusy ? '正在准备…' : selectedActive ? '当前使用' : actionLabel(selectedStatus, selectedHost.label)}</button>
@@ -168,6 +178,7 @@ export function AgentHostPicker({ projectTitle }: AgentHostPickerProps) {
                   <button type="button" onClick={() => selectHost(id)} aria-pressed={selectedId === id} className="agent-card__body">
                     <strong>{host.label}</strong>
                     <span>{active ? '已选择' : status.label}</span>
+                    <span className={`agent-card__state${hostReadiness(id).experimental ? ' is-experimental' : ''}`}>{hostReadiness(id).label}</span>
                   </button>
                   {active ? <Check size={15} style={{ color: 'var(--isl-mint-deep)' }} aria-label="当前协作 Agent" /> : <button type="button" disabled={Boolean(pendingId)} onClick={() => void useHost(id)} className="agent-card__action">{busy ? '准备中…' : actionLabel(status, host.label)}</button>}
                 </div>

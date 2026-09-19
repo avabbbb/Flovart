@@ -68,6 +68,45 @@ describe('Studio Workflow controller', () => {
     expect(core.run).toHaveBeenCalledWith(expect.objectContaining({ projectId: 'project-1', expectedRevision: 4 }));
     expect(core.artifactGet).toHaveBeenCalledWith({ artifactId: 'artifact-session-1' });
     expect(host.importArtifact).toHaveBeenCalledWith(expect.objectContaining({ artifactId: 'artifact-1' }), undefined);
+    expect(result.executionTarget).toMatchObject({ projectId: 'project-1', hostTarget: 'photoshop', revision: 3 });
+    expect(result.executionTarget.selectionSnapshot).toMatchObject({ selectionId: 'layer-1' });
+    expect(result.executionTarget.references).toEqual([expect.objectContaining({ resourceId: 'creative-host:photoshop:layer-1' })]);
+    expect(result.import).toMatchObject({ ok: true, targetId: 'new-layer' });
+  });
+
+  it('freezes the execution target at submit: artifact lands on the selection captured at submit, not the live one', async () => {
+    const host = adapter();
+    const selectionB: HostSelection = {
+      host: 'photoshop', selectionId: 'layer-9', label: 'Other', kind: 'image',
+      locator: { documentId: 'doc-2', layerId: 9 }, mimeType: 'image/png',
+    };
+    // 运行期间把 live selection 换成 B：submit 后 getSelection 返回 B。
+    let swapped = false;
+    vi.mocked(host.getSelection).mockImplementation(async () => (swapped ? selectionB : selection));
+    const core: FlovartStudioCore = {
+      inspect: vi.fn(async () => project),
+      selection: vi.fn(),
+      registerHostResource: vi.fn(async () => undefined),
+      apply: vi.fn(async () => ({ draftVersion: 4 })),
+      run: vi.fn(async () => {
+        swapped = true; // run 提交后、产物回写前切换宿主选择
+        return { artifact: { artifactId: 'artifact-session-1', kind: 'image', mimeType: 'image/png' } };
+      }),
+      artifactGet: vi.fn(async () => ({ taskId: 'task-1', artifactId: 'artifact-1', mimeType: 'image/png', blob: new Blob(['result'], { type: 'image/png' }) })),
+    };
+    let id = 0;
+    const controller = new StudioWorkflowController(host, core, () => `id-${++id}`);
+
+    const result = await controller.generate('做成夜景海报', { kind: 'new-layer' });
+
+    // artifact 回写使用冻结的 outputTarget（钉住 submit 时 doc-1/layer-1），不认 live 的 doc-2/layer-9。
+    expect(host.importArtifact).toHaveBeenCalledWith(
+      expect.objectContaining({ artifactId: 'artifact-1' }),
+      expect.objectContaining({ kind: 'new-layer', documentId: 'doc-1', sourceSelectionId: 'layer-1' }),
+    );
+    expect(result.executionTarget.selectionSnapshot.selectionId).toBe('layer-1');
+    expect(result.executionTarget.hostTarget).toBe('photoshop');
+    expect(result.executionTarget.projectId).toBe('project-1');
     expect(result.import).toMatchObject({ ok: true, targetId: 'new-layer' });
   });
 

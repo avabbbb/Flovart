@@ -265,6 +265,14 @@
   white-space: nowrap;
 }
 
+.agent-picker__badges { display: flex; flex: 0 0 auto; flex-direction: column; align-items: flex-end; gap: 4px; }
+.agent-picker__badge--tier.is-experimental,
+.agent-card__state.is-experimental {
+  color: var(--isl-ink-soft);
+  background: transparent;
+  border: 1px dashed var(--agent-line);
+}
+
 .agent-picker__current-workflow {
   justify-content: space-between;
   gap: 12px;

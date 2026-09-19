@@ -8,7 +8,7 @@ import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { findDaclLine, FlovartRuntimeClient, parseDaclAces } from '../tools/flovart/runtime-client.js';
+import { assertDiscoveryDacl, findDaclLine, FlovartRuntimeClient, parseDaclAces, verifyDiscoveryPermissions } from '../tools/flovart/runtime-client.js';
 import { getCanonicalRegistry } from '../tools/flovart/registry.js';
 
 const cleanup: Array<() => Promise<void>> = [];
@@ -323,5 +323,71 @@ describe('findDaclLine', () => {
 
   it('returns null when no descriptor was saved', () => {
     expect(findDaclLine('control-v1.json\r\n')).toBeNull();
+  });
+});
+
+// The hosted Windows runner was still red after the SDDL parser was fixed: its
+// hardened discovery file carries an extra ACE for a privileged built-in
+// principal (Administrators) that the strict {owner, SYSTEM} allow-list
+// rejected as 'unexpected DACL principal'. These cases feed the real
+// assertDiscoveryDacl policy the ACEs a hosted runner produces, so the guard's
+// decision is checked directly and on every platform. The policy keeps failing
+// closed for any non-privileged principal, which is what actually protects the
+// bearer token in the record.
+describe('assertDiscoveryDacl', () => {
+  const owner = 'S-1-5-21-1-2-3-1001';
+  const allowAce = (sid, flags = '', inherited = false) => ({ type: 'A', flags, sid, inherited });
+
+  it('accepts the owner+LocalSystem DACL a local run produces', () => {
+    expect(() => assertDiscoveryDacl([allowAce('SY'), allowAce(owner)], owner)).not.toThrow();
+    expect(() => assertDiscoveryDacl([allowAce('S-1-5-18'), allowAce(owner)], owner)).not.toThrow();
+  });
+
+  it('accepts a hosted-runner DACL carrying a privileged Administrators ACE', () => {
+    const aces = [allowAce('SY'), allowAce('BA'), allowAce(owner)];
+    expect(() => assertDiscoveryDacl(aces, owner)).not.toThrow();
+    const numeric = [allowAce('SY'), allowAce('S-1-5-32-544'), allowAce(owner)];
+    expect(() => assertDiscoveryDacl(numeric, owner)).not.toThrow();
+  });
+
+  it('accepts the other privileged service SIDs', () => {
+    expect(() => assertDiscoveryDacl([allowAce('SY'), allowAce('S-1-5-19'), allowAce(owner)], owner)).not.toThrow();
+    expect(() => assertDiscoveryDacl([allowAce('SY'), allowAce('S-1-5-20'), allowAce(owner)], owner)).not.toThrow();
+  });
+
+  it('still rejects every non-privileged principal', () => {
+    const broad = ['S-1-1-0', 'WD', 'S-1-5-32-545', 'BU', 'S-1-5-11', 'AU', 'S-1-5-21-9-9-9-5001'];
+    for (const sid of broad) {
+      expect(() => assertDiscoveryDacl([allowAce('SY'), allowAce(sid), allowAce(owner)], owner), sid).toThrow();
+    }
+  });
+
+  it('still rejects an inherited ACE and a DACL missing owner or SYSTEM', () => {
+    expect(() => assertDiscoveryDacl([allowAce(owner, 'ID', true), allowAce('SY'), allowAce(owner)], owner)).toThrow();
+    expect(() => assertDiscoveryDacl([allowAce('SY')], owner)).toThrow();
+    expect(() => assertDiscoveryDacl([allowAce(owner)], owner)).toThrow();
+  });
+
+  it('end-to-end: verifyDiscoveryPermissions accepts a hosted-runner admin ACE on Windows', async () => {
+    if (process.platform !== 'win32') return;
+    const directory = await mkdtemp(join(tmpdir(), 'flovart-hosted-acl-'));
+    cleanup.push(() => rm(directory, { recursive: true, force: true }));
+    const file = join(directory, 'control-v1.json');
+    await writeFile(file, '{}');
+    const system32 = join(process.env.SystemRoot || 'C:\\Windows', 'System32');
+    const { stdout } = await execFileAsync(join(system32, 'whoami.exe'), ['/user', '/fo', 'csv', '/nh'], {
+      windowsHide: true,
+    });
+    const sid = stdout.match(/S-\d(?:-\d+)+/)?.[0];
+    if (!sid) throw new Error('test SID unavailable');
+    // Grant the hosted-runner shape: owner + LocalSystem + Administrators.
+    await execFileAsync(join(system32, 'icacls.exe'), [
+      file, '/inheritance:r',
+      '/grant:r', `*${sid}:(F)`,
+      '/grant:r', '*S-1-5-18:(F)',
+      '/grant:r', '*S-1-5-32-544:(F)',
+      '/q',
+    ], { windowsHide: true });
+    await expect(verifyDiscoveryPermissions(file)).resolves.toMatch(/^\d+:/);
   });
 });

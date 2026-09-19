@@ -67,11 +67,11 @@ afterEach(() => {
 });
 
 describe('Flovart Agent Toolkit bundle manager', () => {
-  it('uses the published flovart-cli package for bundled entrypoints', () => {
+  it('uses the canonical @flovart/cli package for bundled entrypoints', () => {
     const bundle = createBundleMetadata({ version: '0.3.0', platform: 'win32-x64', runtimeName: 'flovart.exe' });
 
-    expect(bundle.entrypoints.cli.args[0]).toBe('{bundle}/cli/node_modules/flovart-cli/cli.js');
-    expect(bundle.entrypoints.agent.args[0]).toBe('{bundle}/cli/node_modules/flovart-cli/managed-agent/index.js');
+    expect(bundle.entrypoints.cli.args[0]).toBe('{bundle}/cli/node_modules/@flovart/cli/cli.js');
+    expect(bundle.entrypoints.agent.args[0]).toBe('{bundle}/cli/node_modules/@flovart/cli/managed-agent/index.js');
   });
 
   it('downloads, verifies and activates a platform bundle', async () => {

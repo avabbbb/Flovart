@@ -425,8 +425,9 @@ export function FlovartAgentPanel({ project, onActivityChange, onOpenSettings, a
     }
     const referenceContext = references.length ? `引用上下文：\n${references.map(reference => `- @${reference.label}（${reference.type === 'node' ? `工作流节点 nodeId=${reference.id}` : `我的素材 assetId=${reference.id}`}）`).join('\n')}` : '';
     const requestText = [text, referenceContext].filter(Boolean).join('\n\n');
+    const displayText = [text, references.length ? `引用：${references.map(reference => `@${reference.label}`).join('、')}` : ''].filter(Boolean).join('\n\n');
     const assistantId = `stream-${crypto.randomUUID()}`;
-    setMessages(items => [...items, { id: crypto.randomUUID(), role: 'user', text: requestText }]);
+    setMessages(items => [...items, { id: crypto.randomUUID(), role: 'user', text: displayText }]);
     setPrompt('');
     setReferences([]);
     setMentionOpen(false);

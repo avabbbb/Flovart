@@ -29,9 +29,12 @@ const rhVideoKey = (id: string, modes: Array<'text-to-video' | 'image-to-video'>
   capabilities: ['video'],
   key: 'secret',
   models: [],
+  // Route ids must be real Route Catalog entries: routeAvailable now gates
+  // RunningHub on isVerifiedRoute, so an unverified fixture route is correctly
+  // rejected. rhart-video-v3.1-fast has verified text-to-video + image-to-video.
   routeMappings: modes.map(mode => ({
     target: { kind: 'product-mode' as const, productModelId: 'flovart:veo-3.1', mode },
-    routeId: `rhart-video-v3.1/${mode}`,
+    routeId: `rhart-video-v3.1-fast/${mode}`,
     order: 0,
   })),
   createdAt: 1,

@@ -335,7 +335,12 @@ const App: React.FC = () => {
                         const modelId = node.metadata.config?.modelId || '';
                         const submode = node.metadata.config?.submode || 'text-to-video';
                         const route = await resolveRouteMappingForSubmit({ kind: 'product-mode', productModelId: modelId, mode: submode as any }, userApiKeys);
-                        if (route.key.provider !== 'custom') throw new Error('当前 AI 服务暂不支持刷新后恢复视频任务。');
+                        // Resume is supported for any provider whose runner honors
+                        // resumeProviderTaskId: the desktop Runtime ('custom') and
+                        // RunningHub both persist providerTaskId and resume the same
+                        // upstream task. Gating on 'custom' alone made RunningHub
+                        // restart-recovery unreachable despite the mechanism existing.
+                        if (route.key.provider !== 'custom' && route.key.provider !== 'runningHub') throw new Error('当前 AI 服务暂不支持刷新后恢复视频任务。');
                         await workflowExecutor.runNode(
                             { projectId: project.id, nodeId: node.id },
                             { surface: 'recovery', runId: 'recovery_' + providerTaskId, resumeProviderTaskId: providerTaskId },
@@ -458,7 +463,7 @@ const App: React.FC = () => {
     const studioRuntimeStatus = useMemo(() => ({
         tone: 'ready' as const,
         label: language === 'zho' ? '制作台就绪' : 'Production ready',
-        detail: language === 'zho' ? 'DeepSeek Harness 是唯一指挥入口' : 'DeepSeek Harness is the single director',
+        detail: language === 'zho' ? '可选择 Codex、WorkBuddy 或 DeepSeek Harness 作为 Agent 指挥入口' : 'Pick Codex, WorkBuddy, or DeepSeek Harness as your agent director',
     }), [language]);
     const studioMenuModel: StudioMenuModel = useMemo(() => ({
         mode: activeView,

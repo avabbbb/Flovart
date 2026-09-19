@@ -17,7 +17,7 @@
   function mountInspector({ root, adapter, controller, getController, hostLabel, onOpenCanvas, defaultImportTarget = { kind: 'new-layer' }, preview = false }) {
     root.replaceChildren();
     root.className = 'flovart-studio-inspector';
-    let disposed = false, busy = false, reading = false, lastSelection = null, activeTab = 'make', taskStart = 0, taskTimer = null;
+    let disposed = false, busy = false, reading = false, lastSelection = null, activeTab = 'make', taskStart = 0, taskTimer = null, linkedModels = false;
     const history = [];
     const resolveController = () => getController ? getController() : controller;
     const header = el('header', undefined, 'fs-header');
@@ -174,6 +174,8 @@
     }
     async function refresh() {
       if (disposed || reading) return;
+      // Controller can arrive after mount: re-fill the model select once it links.
+      if (resolveController() && !linkedModels) { linkedModels = true; refreshModels(); }
       reading = true;
       try {
         const current = await adapter.getContext();
@@ -223,7 +225,7 @@
     root.addEventListener('keydown', event => {
       if (event.key === 'Escape' && activeTab !== 'make') { event.preventDefault(); showTab('make'); prompt.focus(); }
     });
-    const onReady = () => { status.textContent = ''; void refresh(); };
+    const onReady = () => { status.textContent = ''; refreshModels(); void refresh(); };
     refreshModels();
     global.addEventListener?.('flovart:link-ready', onReady);
     const subscription = adapter.subscribeContext?.(() => { void refresh(); });
