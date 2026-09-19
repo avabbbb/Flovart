@@ -43,7 +43,7 @@ By default, Flovart does not operate a central account system for your local pro
 
 By default, Flovart does not run a project-owned cloud database for your prompts, Workflow files, generated media, or API keys.
 
-If you deploy or use a self-hosted or SaaS backend (community hub or enterprise API), that backend may store user account credentials (hashed passwords, JWT tokens), organization data, department structures, role assignments, and community content. The operator of that deployment is the responsible data controller or personal-information processor and must provide its own privacy notice. This Policy does not make the open-source publisher responsible for an independent deployment.
+If you deploy or use a self-hosted or SaaS backend (community hub), that backend may store user account credentials (hashed passwords, JWT tokens) and community content. The operator of that deployment is the responsible data controller or personal-information processor and must provide its own privacy notice. This Policy does not make the open-source publisher responsible for an independent deployment.
 
 By default, Flovart does not sell personal information.
 

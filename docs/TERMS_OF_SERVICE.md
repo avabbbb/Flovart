@@ -19,7 +19,7 @@ You accept these Terms when you expressly check the acceptance box in Desktop Ed
 
 Flovart is a local-first AI creative workspace. Its current product surfaces are Workflow for node-based generation, Table for focused single-input processing, and Agent for task and coding-agent collaboration, together with AI-assisted creation and project utilities.
 
-Self-hosted deployments may optionally include backend services (community hub and enterprise API) for user authentication, prompt sharing, organization management, department/role-based access control, and desktop auto-update distribution. These backend services are operated and secured by the deployer.
+Self-hosted deployments may optionally include a community hub backend for user authentication, prompt sharing, and desktop auto-update distribution. These backend services are operated and secured by the deployer.
 
 Flovart does not provide AI model service, hosted inference, API credits, payment accounts, or guaranteed access to any third-party provider by default.
 

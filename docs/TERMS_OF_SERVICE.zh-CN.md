@@ -20,7 +20,7 @@
 
 Flovart 是本地优先的 AI 创作工作区。当前正式产品面包括负责节点式生成的 Workflow、负责单一输入处理的 Table，以及负责任务和 Coding Agent 协作的 Agent，并提供 AI 辅助创作与项目工具。
 
-自托管部署可以选择启用社区 Hub 或 Enterprise API，用于账号、社区内容、组织和权限管理。自托管或 SaaS 部署的运营者自行负责该部署的安全、数据与合规。
+自托管部署可以选择启用社区 Hub，用于账号与社区内容管理。自托管或 SaaS 部署的运营者自行负责该部署的安全、数据与合规。
 
 Flovart 默认不提供 AI 模型服务、托管推理、API 额度、Provider 账户或第三方服务可用性保证。你自行选择 Provider、模型、API Key、自定义端点、文件、提示词、引用和 Workflow。
 
