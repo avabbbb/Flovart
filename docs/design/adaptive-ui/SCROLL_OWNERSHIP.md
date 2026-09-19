@@ -10,6 +10,6 @@
 | Agent | context body or conversation messages | session/artifact lists | disabled |
 | Settings dialog | detail body | tab strip and provider/model lists | disabled |
 | Onboarding / Modal | dialog body | folder/model lists | disabled |
-| Home / Community / Enterprise pages | page content | local tables/cards | shell decides |
+| Home / Community pages | page content | local tables/cards | shell decides |
 
 Nested scrolling is intentional only when the cell itself is a data list or a canvas-local interaction surface. New components must document their owner before adding `overflow: auto`.

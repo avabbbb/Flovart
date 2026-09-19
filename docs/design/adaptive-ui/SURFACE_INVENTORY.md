@@ -17,7 +17,7 @@
 | Onboarding | modal wizard | 旧入口含固定 viewport 高度与大 padding 假设 | 短高窗口 CTA 离开视口 | P1 |
 | Modals / dialogs | fixed overlay + panel | AssetAddModal、媒体预览等存在固定 max width/height | 320px 双向滚动或无法关闭 | P0 |
 | Popover / menu | anchored absolute/fixed surfaces | 个别菜单用 `window.innerWidth/Height` clamp | 屏幕边缘越界 | P1 |
-| Home / Community / Enterprise | page shells、cards、tables | 页面级 `100vw/100vh` 和固定 hero/card grids | 嵌入 panel 或窄窗口横溢 | P1 |
+| Home / Community | page shells、cards、tables | 页面级 `100vw/100vh` 和固定 hero/card grids | 嵌入 panel 或窄窗口横溢 | P1 |
 | Tauri / extension / host panels | 同一 React surface 的不同宿主 | 不能假设浏览器 viewport 等于宿主 panel | 280–600px 容器布局不一致 | P1 |
 
 ## 关键状态边界

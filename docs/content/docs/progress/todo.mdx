@@ -39,7 +39,7 @@ title: 后续待办
 ## FlovartBench 后续
 
 - [ ] 在真实 GitHub runner 上跑一次 `flovartbench` workflow，确认 Windows Hosted 下 `eval:validate`、`eval:redteam`、oracle smoke 与 `eval:core` 全绿；本地通过不等于 Hosted 通过。
-- [ ] 用真实 Codex 二进制与 `FLOVARTBENCH_ALLOW_CODEX=true` 产出第一个**已认证** Agent 基线（当前 0/120），并把 `EXTERNAL_FAILURE` 与能力失败分开汇报。
+- [ ] 用真实 Codex 二进制与 `FLOVARTBENCH_ALLOW_CODEX=true` 产出第一个**已认证**的 benchmark Agent 基线（产品级 Golden Task 已由 5 次连续真实 `codex exec` trial 认证，见[待测试确认](pending-test.mdx)；任务集级 `codex` runner 基线仍未跑过），并把 `EXTERNAL_FAILURE` 与能力失败分开汇报。
 - [ ] 建立 holdout 数据集：不进公开仓库，按路径挂载用于认证；任务一旦在仓库暴露即转为 regression 并替换其 holdout 位。
 - [ ] 补齐三个 known gap 对应能力：Agent 稳定面暴露 `task.inspect` / `task.resume`、稳定面提供费用确认参数、`first_frame` 来自 video 时在写入期拒绝而非只报 `ROLE_CONFLICT` 诊断。
 - [ ] `eval/tasks/native-effects/` 与 `eval/graders/nativeEffects/` 保持预留：接入真实 AE/PR 宿主后可断言保存/重开/导出前的持久化，不做无宿主也能通过的占位任务。
@@ -70,7 +70,7 @@ title: 后续待办
 - [ ] 真实 Provider 的认证、参数、参考图/视频 wire、下载持久化、费用、取消、限流和提交未知分别验收；不根据模型名称猜接口。
 - [ ] Runtime-only 路由与浏览器 key 状态分别展示；不向连接器同步原始密钥、不改用户 Plus/OAuth 和代理。
 - [ ] Browser Import 使用实际商店 ID、Native Host 注册与安装卸载验证；素材进入可见项目或 Inbox，不能假成功。
-- [ ] 保留社区作品/Remix、组织权限和 Enterprise 联调需求，按真实账号与数据隔离验收；个人项目与素材不宣传已云同步。
+- [ ] 保留社区作品/Remix 联调需求，按真实账号与数据隔离验收；个人项目与素材不宣传已云同步。
 - [ ] Docker 静态资源、生产部署、生产签名、升级恢复及 Hosted CI/CodeQL 按真实发行范围验证；历史 RC 不代表当前新效果已可发布。
 - [ ] 支持等级和宣传随宿主与 Benchmark 证据更新；首个演示使用真实插件操作、等待、版本比较、重开与导出。
 

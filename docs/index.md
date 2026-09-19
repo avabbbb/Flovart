@@ -28,7 +28,6 @@
 - [提示词资产](dev/prompt-asset-contract.md)
 - [后端响应](content/docs/backend/api-response.mdx)
 - [数据库结构](content/docs/backend/backend-database.mdx)
-- [Enterprise 接口](content/docs/backend/enterprise-api.mdx)
 
 ## 历史验证证据
 

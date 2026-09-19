@@ -5,9 +5,9 @@ import { fileURLToPath } from 'node:url';
 // Phase 22: dedicated static validation for the WorkBuddy CLI connector.
 // integrations/workbuddy/build.mjs already validates structure while copying;
 // this script exists so the connector can be checked without building, and so
-// the unpublished-installer regression is reported honestly: a connector whose
-// init references a package that is not yet published is *structurally valid*
-// but gated on an external release — it is not "connector ready".
+// the release gate is reported honestly: a connector whose init installs the
+// canonical @flovart/cli package is *structurally valid* but stays gated on
+// npm publication — it is not "connector ready" until the package resolves.
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const connectorRoot = join(root, 'integrations', 'workbuddy', 'flovart');
@@ -20,13 +20,14 @@ const requiredFiles = [
   'skills/flovart/SKILL.md',
 ];
 
-// Registry package names we know are NOT published. init referencing one of
-// these is a hard failure: WorkBuddy would run a command that can never resolve.
-const unpublishedPackages = ['flovart-cli'];
-// Scoped installer specifiers are allowed: they resolve once published, and the
-// publication itself is tracked as an EXTERNAL_RELEASE_GATE rather than a
-// structural defect.
-const resolvableInstaller = /@flovart\/workbuddy-installer(?:@[\w.-]+)?/;
+// The connector installs the canonical CLI package directly — there is no
+// intermediate installer layer. @flovart/workbuddy-installer was retired and
+// must never come back; the unscoped flovart-cli name was never published.
+const canonicalCliPackage = '@flovart/cli';
+const canonicalInit = /npm\s+install\s+-g\s+@flovart\/cli(?:@[\w.-]+)?\s*$/;
+// Registry specifiers that must not appear in init: the never-published
+// unscoped name and the removed installer indirection.
+const forbiddenInitSpecifiers = [/flovart-cli@/, /@flovart\/workbuddy-installer/];
 
 const credentialKey = /"(?:api.?key|provider.?key|secret|token|password|credential)"\s*:/i;
 // SKILL.md is user-facing guidance for the WorkBuddy agent; it must not leak
@@ -91,21 +92,28 @@ export function checkWorkBuddyConnector({ connectorDir = connectorRoot, cliSourc
     const cliText = JSON.stringify(cli);
     if (credentialKey.test(cliText)) errors.push('cli.json contains a credential-shaped config key');
 
-    // --- Phase 22: unpublished-package regression ---
-    let sawScopedInstaller = false;
+    // --- Phase 22: canonical-package regression ---
+    // init must install the canonical CLI package directly. The retired
+    // installer indirection and the unscoped flovart-cli name are structural
+    // defects; @flovart/cli itself is real but unpublished, so it surfaces as
+    // an EXTERNAL_RELEASE_GATE note rather than an error.
+    let sawCanonicalInit = false;
     for (const platform of platforms) {
       const initCmd = cli.init?.[platform];
       if (typeof initCmd !== 'string') continue;
-      for (const name of unpublishedPackages) {
-        // Match `npm install -g <name>@<ver>` or any bare `<name>@<ver>` spec.
-        if (new RegExp(`(?:npm\\s+install\\s+-g\\s+|\\b)${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}@`).test(initCmd)) {
-          errors.push(`cli.json init.${platform} installs unpublished package ${name}@ — ${name} was never published to the registry`);
+      for (const pattern of forbiddenInitSpecifiers) {
+        if (pattern.test(initCmd)) {
+          errors.push(`cli.json init.${platform} uses a forbidden specifier (${initCmd}) — init must install ${canonicalCliPackage} directly`);
         }
       }
-      if (resolvableInstaller.test(initCmd)) sawScopedInstaller = true;
+      if (!canonicalInit.test(initCmd)) {
+        errors.push(`cli.json init.${platform} must be 'npm install -g ${canonicalCliPackage}@<spec>'; got ${initCmd}`);
+      } else {
+        sawCanonicalInit = true;
+      }
     }
-    if (sawScopedInstaller) {
-      notes.push('EXTERNAL_RELEASE_GATE: installer package not yet published');
+    if (sawCanonicalInit) {
+      notes.push('EXTERNAL_RELEASE_GATE: @flovart/cli not yet published to the npm registry');
     }
   }
 

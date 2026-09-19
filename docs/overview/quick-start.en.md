@@ -71,7 +71,7 @@ docker compose up --build -d
 
 Visit http://localhost:1635.
 
-The current Compose stack is for local Web, Hub, Enterprise, and PostgreSQL integration only. Static production assets, security settings, and deployment have not completed release acceptance and must not be presented as production-ready.
+The current Compose stack is for local Web, Hub, and PostgreSQL integration only. Static production assets, security settings, and deployment have not completed release acceptance and must not be presented as production-ready.
 
 ## Option 5: Browser Extension
 

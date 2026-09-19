@@ -1,17 +1,20 @@
 # Flovart Support Matrix
 
-这份矩阵是当前仓库证据的发布口径。`Stable` 只表示本地可重复验证的契约或
-能力，不等同于第三方登录、真实付费 Provider、宿主安装或公开发布认证。
+这份矩阵是当前仓库证据的发布口径，并冻结 Closed Beta 范围：只有 `Beta`
+级别的集成是本次发布主推路径；`Experimental` 集成可用但未认证，不得在
+onboarding 或宣传中呈现为与 Beta 路径同等就绪。`Stable` 只表示本地可重复
+验证的契约或能力，`Beta` 只表示发布主推路径，两者都不等同于第三方登录、
+真实付费 Provider、宿主安装或公开发布认证。
 
 ## Agent hosts
 
 | Host / projection | Status | Evidence / boundary |
 | --- | --- | --- |
-| Codex CLI + Browser Workflow | Experimental | Link/Lease focused tests 与 Chrome for Testing smoke，另有 5 次连续真实 `codex exec`（v0.154.0）trial：Codex 读取 `.agents/skills/flovart/SKILL.md` 后经 CLI 驱动真实 Browser Workflow 完成 3 节点 + 2 顺序连接（`workflow.node.create-connected`，trial 3–7，见 `.tmp/codex-trial-*.jsonl`）；真实 Provider wire 进行中，公开安装首次启动 transcript 仍是 External Gate |
+| Codex CLI + Browser Workflow | Beta | 本次发布主推的 Agent 路径。Link/Lease focused tests、Chrome for Testing smoke 与 5 次连续真实 `codex exec`（v0.154.0）trial：Codex 读取 `.agents/skills/flovart/SKILL.md` 后经 CLI 驱动真实 Browser Workflow 完成 3 节点 + 2 顺序连接（`workflow.node.create-connected`，trial 3–7，见 `.tmp/codex-trial-*.jsonl`）；真实 Provider wire 进行中，公开安装首次启动 transcript 仍是 External Gate |
 | Claude Code CLI projection | Experimental | shared Skill/CLI surface；真实登录与公开安装态未认证 |
 | OpenCode CLI projection | Experimental | shared Skill/CLI surface；Host-specific tracer 未认证 |
 | DeepSeek Harness RC8 bundle/profile | Experimental | DSH build、service/tool tests、packed profile install 与 `--dump-config`；真实登录、可见 Browser Workflow tracer、service recovery 仍待认证 |
-| WorkBuddy CLI Connector + Skill | Experimental | official-shape artifact、schema/secret/clean fixture 与 local-ready lifecycle；真实 WorkBuddy client/Marketplace/NL tracer 未运行 |
+| WorkBuddy CLI Connector + Skill | Experimental | official-shape artifact、schema/secret/clean fixture 与 local-ready lifecycle；真实 WorkBuddy client/Marketplace/NL tracer 未运行。Closed Beta 不作为主推路径 |
 | TeleAgent MCP + Skill projection | Experimental | stdio MCP handshake/tool/resource contract 与接入准备包；真实 TeleAgent client/import/NL tracer 未运行 |
 | CodeBuddy Code | Planned | stable Skill/CLI compatibility target；无本机登录 tracer |
 | Pi | Planned | stable Skill/CLI compatibility target；无本机登录 tracer |
@@ -27,7 +30,7 @@
 
 ## Native effects and deeper Agent integration
 
-The following are design targets, not capabilities certified by the panel or MCP tests above. The initial native-effect release targets Windows; macOS will be validated separately and is not a simultaneous-release commitment.
+The following are design targets, not capabilities certified by the panel or MCP tests above. All creative hosts stay `Experimental` for Closed Beta — none is a certified install path. The initial native-effect release targets Windows; macOS will be validated separately and is not a simultaneous-release commitment.
 
 | Capability | Status | Required evidence |
 | --- | --- | --- |
@@ -41,6 +44,11 @@ Scope and proposed benchmarks are defined in the [main design](docs/design/flova
 
 ## Runtime and provider paths
 
+Closed Beta 只认证一条付费 Provider 路径：RunningHub 图片 + 视频（Route
+Catalog 驱动的标准模型线路）。它是本 release 唯一可走认证流程的 Provider
+path，认证完成前其发布状态仍为 `Beta (pending certification)`；其余
+Provider 一律 `Experimental` / unverified，不得写进 Beta 发布口径。
+
 | Capability | Status | Evidence / boundary |
 | --- | --- | --- |
 | Stable CLI surface (`status`, `ensure`, `workflow.inspect`, `workflow.selection.get`, `workflow.apply`, `workflow.node.run`) | Stable contract | registry/CLI/Skill tests；命令仍通过既有 Workspace Adapter 与 Workflow authority |
@@ -48,8 +56,9 @@ Scope and proposed benchmarks are defined in the [main design](docs/design/flova
 | Workspace Lease | Experimental | acquire/validate/renew/release/expire、cross-project、close、revision 和 idempotency focused tests；未完成 20x chaos/持久化压力证据 |
 | ProductionTask v1 projection | Experimental | `task.inspect` / safe `task.resume` over durable ProductionRun/StageRun and scheduler lease；真实 Agent 跨会话、429/提交未知恢复与 Task Center 未认证 |
 | Local Fake Provider HTTP fixture | Stable test fixture | Provider resilience 与 wire tests；不代表第三方账号/账单行为 |
-| OpenAI-compatible BYOK | Experimental | 本地 Fake Provider + Browser/Workflow path；真实供应商、价格、取消语义待认证 |
-| Seedance / RunningHub / other remote providers | Experimental | route/adapter 存在；真实账号、账单和生产失败语义未列为 Stable |
+| RunningHub image + video routes | Beta (pending certification) | 唯一进入认证流程的 Provider path：Schema 驱动 Route Catalog（18 条认证候选线路）+ 真实付费 trial capture（seedream t2i、seedance i2v、restart-after-submit）；真实账号、扣费与恢复语义的认证 gate 见下文 External Gate |
+| OpenAI-compatible BYOK | Experimental / unverified | 本地 Fake Provider + Browser/Workflow path；真实供应商、价格、取消语义待认证，Closed Beta 不作发布承诺 |
+| Seedance direct / other remote providers | Experimental / unverified | route/adapter 存在；真实账号、账单和生产失败语义未验证，Closed Beta 不作发布承诺 |
 
 ## Extensions and packages
 
@@ -72,9 +81,12 @@ Scope and proposed benchmarks are defined in the [main design](docs/design/flova
 - DSH 真实用户登录、可见 Browser Workflow tracer、service unload/reload；
 - Photoshop、Premiere 的真实宿主安装、选择、Provider wire、artifact import；
 - After Effects、Resolve/Resolve Studio 的真实宿主 API、安装和 tracer；
-- 真实 Provider 账号、价格、扣费、取消和服务条款行为；
+- RunningHub 真实账号付费路径的认证 gate：seedream t2i / seedance i2v /
+  restart-after-submit 三次真实付费 trial 的 capture、扣费与恢复语义复核
+  （完成后该行才从 `Beta (pending certification)` 升级为认证路径）；
 - Hosted CodeQL、dependency review、secret scanning/push protection、生产 updater
   signing、Windows Authenticode 和 GitHub Release publication。
 
-README 与产品宣传不得把 `Experimental` / `Planned` / External Gate 写成已认证的
-Stable 能力。
+README、onboarding 与产品宣传不得把 `Experimental` / `Planned` / `Beta (pending
+certification)` / External Gate 写成已认证的 Stable 能力；Closed Beta 只主推
+Codex Agent 路径与 RunningHub Provider 路径。

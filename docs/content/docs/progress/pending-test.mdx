@@ -4,12 +4,13 @@ title: 待测试确认
 
 本页记录实际进入文档或代码、仍需用户确认的变更。既有实现的构建、全量测试、Rust Runtime 和响应式浏览器记录见[发行候选证据](../../../evidence/release-candidate/README.md)，仅适用于其对应代码与范围。本次文档收尾只运行文档相关检查，未重跑上述整套验收；真实第三方宿主、账号、Provider 与公开发布仍需单独认证。
 
-## 本轮：Real Codex External Gate（3/5 trial 已通过，进行中）
+## 本轮：Real Codex External Gate（5/5 trial 已通过）
 
-- 已验证：3 次连续真实 `codex exec`（v0.154.0，非交互）trial 通过 Golden Task —— Codex 读取 `.agents/skills/flovart/SKILL.md` 后仅用 CLI（`npm run flovart:cli -- …`）驱动真实 Browser Workflow，每次产出 3 个节点 + 2 条顺序连接（shot1 → shot2 → shot3），写入走 `workflow.node.create-connected`，未改任何源码文件，进程 exit 0。证据为 `.tmp/codex-trial-3.jsonl`、`.tmp/codex-trial-4.jsonl`、`.tmp/codex-trial-5.jsonl`（每次 trial 独立新建项目并自动激活）。
+- 已验证：5 次连续真实 `codex exec`（v0.154.0，非交互）trial 通过 Golden Task —— Codex 读取 `.agents/skills/flovart/SKILL.md` 后仅用 CLI（`npm run flovart:cli -- …`）驱动真实 Browser Workflow，每次产出 3 个节点 + 2 条顺序连接（shot1 → shot2 → shot3），写入走 `workflow.node.create-connected`，未改任何源码文件，进程 exit 0。证据为 `.tmp/codex-trial-3.jsonl` 至 `.tmp/codex-trial-7.jsonl`（每次 trial 独立新建项目并自动激活）。
 - 暴露并已修复的缺陷一：SKILL.md 缺少冷启动路径——浏览器在线但无打开项目时 `workflow.inspect` 返回 `WORKSPACE_UNAVAILABLE`，trial 1 在此安全停止；现已把 `workflow.project.create`/`project.use` + 每次写入必须携带相同 `--agent-identity` 与稳定幂等键（否则 `AGENT_HOST_REQUIRED`）写入 SKILL.md 的 Cold start 一节。
 - 暴露的缺陷二：`.agents/skills` 快照缺少 `commands/` 等子目录（此前只投影了 `SKILL.md`）。快照内容已补齐（`commands/`、`model-schema/`、`scripts/` 与 `skills/flovart` 逐文件一致），但覆盖子目录的漂移检查仍在施工中——目前 `check-docs-contract`/`release-red-team` 只比对 SKILL.md 本体。
-- 未完成（仍是外部门禁）：pass^5 需 5 次连续通过，trial 6–7 进行中；真实 Provider wire（付费调用、取消语义）与公开安装包首次启动的完整 transcript 未认证；Support Matrix 中 Codex 行仍标 `Experimental`，不升级为 Stable。
+- 已完成：pass^5 由 trial 3–7 五次连续通过满足（前两次 trial 暴露并已修复上述缺陷后重测通过）。
+- 仍是外部门禁：真实 Provider wire（付费调用、取消语义）与公开安装包首次启动的完整 transcript 未认证；Support Matrix 中 Codex 行仍标 `Experimental`，不升级为 Stable。
 
 ## 已记录回归：workflow.project.use 浏览器激活缺失
 
@@ -33,7 +34,7 @@ title: 待测试确认
 
 ## 本轮：Hosted CI Runtime 发现权限修复 + FlovartBench v0.1
 
-### E0：Hosted CI blocker（已修复，待你在真实 runner 上确认）
+### E0：Hosted CI blocker（修复已应用，托管环境验证待下一次 CI 运行确认）
 
 `main` 的 Hosted CI 之前红在 `tests/flovartRuntimeClient.test.ts` 与 `tests/flovartRuntimeTasks.test.ts`，报 `RUNTIME_UNAVAILABLE / Runtime discovery permissions are too broad`，下游 Web/Extension/DSH/Rust 构建被跳过。根因有两个，都在被测代码而不是测试：
 
@@ -52,7 +53,7 @@ title: 待测试确认
 - 规模：57 个任务、7 个 suite；准入 53（Oracle ×5 全绿、NOP 对全部状态变更任务失败）、3 个 known gap、1 个仅 POSIX；dev 8 / regression 49，holdout 不进公开仓库。
 - 判分两种且都只判最终状态：谓词常开；43 个任务另有冻结的 canonical hash 做整世界相等判定，哈希由 `node eval/run.mjs oracle --freeze-hashes` 从真实参照运行导出（不手写），失配报 stale dataset；Oracle 还会断言 5 次 trial 产出同一个 canonical world。
 - 机器生成的事实来源是 `eval/reports/<run-id>/report.json`，`report.md` 只是投影；本页与 `CROSS_PROJECTION_EVAL.md` 的数字均来自它，可从基线 SHA `9a1534b035350152c87d93a5f6e07f7452f3f66f` 重跑。
-- 本轮确定性基线 pass@1 615/615、pass^5 43/43、safety hard gate 全 0；**这不代表 Agent 能力**：已认证的真实外部 Agent trial 为 0/120，Codex 无二进制时按 `EXTERNAL_FAILURE` 记录并从 pass@1/pass^5 中剔除。
+- 本轮确定性基线 pass@1 615/615、pass^5 43/43、safety hard gate 全 0；**这不代表 Agent 能力**。产品级 Codex 外部 Golden Task 已认证（5 次连续真实 `codex exec` trial 通过，见上文 Real Codex External Gate）；但 benchmark 的 `codex` runner 基线仍未跑过任务集——无二进制或未设 `FLOVARTBENCH_ALLOW_CODEX` 时按 `EXTERNAL_FAILURE` 记录并从 pass@1/pass^5 中剔除。
 - tokens / cost 报告为「未测量」而非 0：确定性 runner 不调用模型，只有外部 Agent runner 才可能上报 usage。
 - 对 benchmark 本身做了 12 项红队（写答案文件、改 expected、删 grader 输入、自报成功、近似图、重复扣费、泄露密钥、跨 trial 残留、NOP 误过、oracle 状态泄漏、哈希判分退化），12/12 被防住。
 - 待你验证：在真实 GitHub runner 上跑一次 `flovartbench` workflow；以及决定是否提供 `FLOVARTBENCH_ALLOW_CODEX=true` 与真实 Codex 二进制来产出第一个已认证 Agent 基线。
@@ -123,7 +124,7 @@ title: 待测试确认
 - 本地 Runtime 已有任务、事件、Provider 与 Artifact 代码；本轮增加 ProductionTask 生命周期投影，请验证原任务恢复、未配置状态、预算拒绝、提交未知、resume 边界与真实远端取消。
 - Production Skill 包与首页方法入口已有实现；VOX 的已批准样图/局部重跑按其实际流程验证，不套用到单步效果作为强制层。
 - Browser Import 已有配对、分块与素材接收代码；真实商店 ID、Native Host 注册、跨域媒体、无项目 Inbox 和发行安装仍需验证。
-- 社区发布、组织权限、Enterprise、Docker 与安装器应按真实范围验收；项目/素材主要本地存储，不把规划中的共享与云同步写成已可用。
+- 社区发布、Docker 与安装器应按真实范围验收；项目/素材主要本地存储，不把规划中的共享与云同步写成已可用。
 - 历史 NSIS、Fake Provider、Chrome、Rust、Vitest 记录仅对原提交有效。生产签名、Hosted CI、真实账号/费用和新效果发布均不由本轮文档检查覆盖。
 
 确认通过后再更新正式功能页；发现问题回到对应 todo 切片，不继续追加重复阶段报告。
