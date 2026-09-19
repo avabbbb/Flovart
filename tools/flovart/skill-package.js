@@ -1,5 +1,5 @@
 // Shared, dependency-light helpers for local Skill packages (CLI + agent).
-// Self-contained inside the flovart-cli package so coding agents can manage
+// Self-contained inside the @flovart/cli package so coding agents can manage
 // Skills without the repo checkout. Browser code must NOT import this module
 // (it is Node-side only via callers).
 import { parse } from 'yaml';

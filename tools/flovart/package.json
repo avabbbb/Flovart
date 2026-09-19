@@ -1,5 +1,5 @@
 {
-  "name": "flovart-cli",
+  "name": "@flovart/cli",
   "version": "0.3.2",
   "description": "Flovart CLI, TUI, Skill registry, and local production control for coding agents",
   "type": "module",
@@ -24,8 +24,8 @@
     "local-status.js",
     "operation-gateway.js",
     "mcp-server.js",
-  "public-status.js",
-  "ensure.js",
+    "public-status.js",
+    "ensure.js",
     "tui.js",
     "topic-research.js",
     "research-command-surface.js",
@@ -66,7 +66,7 @@
   "scripts": {
     "prepack": "node scripts/prepare-package.mjs"
   },
-"dependencies": {
+  "dependencies": {
     "@cfworker/json-schema": "^4.1.1",
     "@earendil-works/pi-agent-core": "0.82.1",
     "@earendil-works/pi-ai": "0.82.1",

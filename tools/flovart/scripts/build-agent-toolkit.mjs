@@ -48,9 +48,9 @@ export function createBundleMetadata({ version, platform, runtimeName }) {
     protocolVersion: '1',
     platform,
     entrypoints: {
-      cli: { command: '$NODE', args: ['{bundle}/cli/node_modules/flovart-cli/cli.js'] },
+      cli: { command: '$NODE', args: ['{bundle}/cli/node_modules/@flovart/cli/cli.js'] },
       runtime: { command: runtimeCommand, args: [] },
-      agent: { command: '$NODE', args: ['{bundle}/cli/node_modules/flovart-cli/managed-agent/index.js'] },
+      agent: { command: '$NODE', args: ['{bundle}/cli/node_modules/@flovart/cli/managed-agent/index.js'] },
     },
   };
 }

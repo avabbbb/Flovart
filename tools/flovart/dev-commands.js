@@ -3,7 +3,7 @@ import { existsSync, copyFileSync } from 'node:fs';
 import { createServer as createNetServer } from 'node:net';
 import { homedir, platform } from 'node:os';
 import { dirname, join } from 'node:path';
-import { installToolkit, planToolkitStart, startToolkit } from './bundle-manager.js';
+import { installToolkit, planToolkitStart, startToolkit, uninstallToolkit } from './bundle-manager.js';
 import { inspectLocalAgent, probeWebUi, readLocalAgentConnection, redactBootstrapUrl, waitForLocalAgent, waitForWebUi } from './local-agent.js';
 import { FlovartRuntimeClient } from './runtime-client.js';
 import { FlovartBootstrapCoordinator } from './bootstrap-coordinator.js';
@@ -331,6 +331,29 @@ export async function install(argv = []) {
   await installProjectDependencies(plan.projectDir, plan.services);
   log('Flovart dependencies are ready in ' + plan.projectDir);
   log('Run `flovart start --source --all --open`.');
+}
+
+export async function uninstall(argv = []) {
+  const options = parseDevArgs(argv);
+  if (options.help) {
+    console.log([
+      'Usage: flovart uninstall [--plan] [--json]',
+      '',
+      '移除已安装的 Agent Toolkit（versions、downloads、current 指针、launcher 与 ~/.flovart/bin 下的 flovart shim）。',
+      '不触碰用户配置（agent.json、skills/、research/、project/）。--plan 只打印将删除的路径。',
+    ].join('\n'));
+    return;
+  }
+  const result = await uninstallToolkit({ dryRun: options.plan });
+  if (options.json) {
+    console.log(JSON.stringify({ ok: result.ok, command: 'uninstall', data: result }, null, 2));
+    return result;
+  }
+  if (result.wasInstalled) log(result.message);
+  else log('Flovart Agent Toolkit is not installed; nothing to remove.');
+  for (const target of result.removed) log(`  removed ${target}`);
+  if (result.path?.changed) warn('PATH updated for future terminals; the flovart shim is gone from this session.');
+  return result;
 }
 
 export async function start(argv = []) {

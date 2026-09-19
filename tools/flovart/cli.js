@@ -103,7 +103,7 @@ if (rawCommand === 'mcp' || rawCommand === 'mcp-server') {
   process.exit(0);
 }
 
-if (['install', 'start', 'update'].includes(rawCommand)) {
+if (['install', 'start', 'update', 'uninstall'].includes(rawCommand)) {
   const mod = await import('./dev-commands.js');
   await mod[rawCommand](argv.slice(1));
 } else if (rawCommand === 'agent') {

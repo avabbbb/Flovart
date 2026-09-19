@@ -1,6 +1,6 @@
 // Node-side Skill registry: scans local Skill directories, installs/uninstalls
 // packages under a project-owned `.agents/skills` root, and resolves packages
-// for Agent binding. Lives inside the flovart-cli package so both the CLI and
+// for Agent binding. Lives inside the @flovart/cli package so both the CLI and
 // the local Agent service share one implementation.
 import fs from 'node:fs/promises';
 import os from 'node:os';

@@ -65,6 +65,7 @@ export const HELP_TEXT = [
   'ensure [--no-open]                              Prepare the local Flovart connection',
   'setup                                           Show local setup steps',
   'doctor                                          Diagnose local CLI readiness',
+  'uninstall [--plan] [--json]                     Remove the installed Agent Toolkit and launcher shims',
   '',
   'Stable operations:',
   'status                                          Inspect local readiness',

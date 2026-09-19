@@ -131,6 +131,17 @@ function ensureWindowsUserPath(binDir) {
   });
   return { changed: result.status === 10, supported: true, ok: result.status === 0 || result.status === 10, binDir };
 }
+function removeWindowsUserPath(binDir) {
+  if (platform() !== 'win32') return { changed: false, supported: false, binDir };
+  const script = "$p=[Environment]::GetEnvironmentVariable('Path','User');$b=$env:FLOVART_BIN;$parts=@($p -split ';' | Where-Object { $_ -and $_ -ne $b });if(($parts -join ';') -ne $p){[Environment]::SetEnvironmentVariable('Path',($parts -join ';'),'User');exit 10};exit 0";
+  const result = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], {
+    env: { ...process.env, FLOVART_BIN: binDir },
+    stdio: 'ignore',
+    shell: false,
+  });
+  return { changed: result.status === 10, supported: true, ok: result.status === 0 || result.status === 10, binDir };
+}
+
 
 export async function installToolkit(options = {}) {
   const fetchImpl = options.fetchImpl || globalThis.fetch;
@@ -193,6 +204,54 @@ export function readCurrentToolkit(homeDir) {
   const current = JSON.parse(readFileSync(paths.currentFile, 'utf8'));
   const bundle = JSON.parse(readFileSync(join(current.bundleDir, 'bundle.json'), 'utf8'));
   return { paths, current, bundle };
+}
+
+// Non-interactive inverse of installToolkit: removes the toolkit versions,
+// downloads, current pointer, launcher script, and the flovart bin shims that
+// installToolkit wrote under ~/.flovart. User state outside the toolkit home
+// (agent.json, skills/, research/, project/) is left untouched — `uninstall`
+// removes the CLI's own install artifacts, not the user's configuration.
+// Idempotent: a clean exit when nothing was installed.
+export async function uninstallToolkit(options = {}) {
+  const paths = toolkitPaths(options.homeDir);
+  const dryRun = options.dryRun === true;
+  const installed = (() => {
+    try { return readCurrentToolkit(options.homeDir); } catch { return null; }
+  })();
+
+  const targets = [
+    paths.versionsDir,
+    paths.downloadsDir,
+    paths.currentFile,
+    paths.launcherFile,
+    join(paths.binDir, 'flovart'),
+    join(paths.binDir, 'flovart.cmd'),
+  ];
+  const removed = targets.filter(target => existsSync(target));
+
+  if (!dryRun) {
+    // Remove every versioned bundle + downloads + the current/launcher state,
+    // then the bin shims installToolkit wrote. The bin dir itself is left so an
+    // empty ~/.flovart/bin never shadows a stale PATH entry.
+    for (const target of removed) await rm(target, { recursive: true, force: true });
+  }
+
+  const path = dryRun
+    ? { changed: false, dryRun: true, binDir: paths.binDir }
+    : removeWindowsUserPath(paths.binDir);
+
+  return {
+    ok: true,
+    wasInstalled: Boolean(installed),
+    version: installed?.current?.version || null,
+    bundleDir: installed?.current?.bundleDir || null,
+    removed,
+    path,
+    dryRun,
+    message: installed
+      ? `Flovart Agent Toolkit ${installed.current.version} removed.`
+      : 'Flovart Agent Toolkit was not installed; nothing to remove.',
+  };
 }
 
 function resolveEntrypoint(bundleDir, entry) {

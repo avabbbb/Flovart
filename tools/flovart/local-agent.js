@@ -1,12 +1,25 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]']);
 const DEFAULT_WEB_URL = 'http://127.0.0.1:37522';
 
+// Mirrors the canonical resolution order in agent/config.js (resolveAgentHome):
+//   FLOVART_AGENT_CONFIG (explicit file)
+//   → FLOVART_AGENT_HOME (home dir, file = <home>/agent.json)
+//   → canonical dir (~/.flovart, file = ~/.flovart/agent.json)
+//   → ~/.flovart/agent.json
+// The packaged CLI cannot import agent/config.js (managed-agent/ ships only the
+// agent runtime), so this order is duplicated here — keep both in sync.
 export function agentConfigPath(env = process.env) {
-  return env.FLOVART_AGENT_CONFIG || join(homedir(), '.flovart', 'agent.json');
+  const configured = env.FLOVART_AGENT_CONFIG ? resolve(env.FLOVART_AGENT_CONFIG) : null;
+  const dir = env.FLOVART_AGENT_HOME
+    ? resolve(env.FLOVART_AGENT_HOME)
+    : configured
+      ? dirname(configured)
+      : join(homedir(), '.flovart');
+  return configured || join(dir, 'agent.json');
 }
 
 export function normalizeLocalAgentUrl(value) {
