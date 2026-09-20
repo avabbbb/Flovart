@@ -10,7 +10,7 @@ onboarding 或宣传中呈现为与 Beta 路径同等就绪。`Stable` 只表示
 
 | Host / projection | Status | Evidence / boundary |
 | --- | --- | --- |
-| Codex CLI + Browser Workflow | Beta | 本次发布主推的 Agent 路径。Link/Lease focused tests、Chrome for Testing smoke 与 5 次连续真实 `codex exec`（v0.154.0）trial：Codex 读取 `.agents/skills/flovart/SKILL.md` 后经 CLI 驱动真实 Browser Workflow 完成 3 节点 + 2 顺序连接（`workflow.node.create-connected`，trial 3–7，见 `.tmp/codex-trial-*.jsonl`）；真实 Provider wire 进行中，公开安装首次启动 transcript 仍是 External Gate |
+| Codex CLI + Browser Workflow | Beta | 本次发布主推的 Agent 路径。Link/Lease focused tests、Chrome for Testing smoke 与 5 次连续真实 `codex exec`（v0.154.0）trial：Codex 读取 `.agents/skills/flovart/SKILL.md` 后经 CLI 驱动真实 Browser Workflow 完成 3 节点 + 2 顺序连接（`workflow.node.create-connected`，trial 3–7）。**脱敏证据已入库：`docs/evidence/release-candidate/CODEX_TRIAL_EVIDENCE.md`**；真实 Provider wire 进行中，公开安装首次启动 transcript 仍是 External Gate |
 | Claude Code CLI projection | Experimental | shared Skill/CLI surface；真实登录与公开安装态未认证 |
 | OpenCode CLI projection | Experimental | shared Skill/CLI surface；Host-specific tracer 未认证 |
 | DeepSeek Harness RC8 bundle/profile | Experimental | DSH build、service/tool tests、packed profile install 与 `--dump-config`；真实登录、可见 Browser Workflow tracer、service recovery 仍待认证 |

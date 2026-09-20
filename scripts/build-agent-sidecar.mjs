@@ -262,19 +262,20 @@ function writeSeaConfig(blobPath, mainPath, esmBundlePath) {
 
 function injectSeaBlob(nodeBinary, blobPath, outputBinary) {
   copyFileSync(nodeBinary, outputBinary);
-  // postject is invoked through the npm exec shim so the build has no hard
-  // dependency on a globally installed postject. On Windows `npx` is a .cmd
-  // shim, so resolve it the same way the toolkit builder resolves npm.
-  const npxExecutable = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+  // postject is a pinned devDependency (see package.json) resolved through the
+  // local node_modules/.bin shim — NOT `postject@latest`. A release build must
+  // be reproducible from the same SHA, so the injector version is locked.
+  const binDir = join(REPO_DIR, 'node_modules', '.bin');
+  const postjectBin = join(binDir, process.platform === 'win32' ? 'postject.cmd' : 'postject');
+  const postjectExecutable = existsSync(postjectBin) ? postjectBin : (process.platform === 'win32' ? 'postject.cmd' : 'postject');
   const postjectArgs = [
-    '-y', 'postject@latest',
     outputBinary,
     'NODE_SEA_BLOB',
     blobPath,
     '--sentinel-fuse', NODE_SEA_SENTINEL,
   ];
   if (process.platform === 'darwin') postjectArgs.push('--macho-segment-name', 'NODE_SEA');
-  run(npxExecutable, postjectArgs, { shell: process.platform === 'win32' });
+  run(postjectExecutable, postjectArgs, { shell: process.platform === 'win32' });
 }
 
 export async function buildAgentSidecar(options = {}) {

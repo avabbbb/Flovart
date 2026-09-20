@@ -77,6 +77,8 @@ npm run flovart:cli -- status --json
 
 Then ask your local agent: **“Open Flovart and work on this Workflow.”**
 
+Your agent learns Flovart through the **Agent Integration Skill** at `.agents/skills/flovart/` (mirrored for Claude under `.claude/skills/flovart/` and bundled for WorkBuddy under `integrations/workbuddy/flovart/skills/flovart/`). On a source checkout the harness auto-discovers it; the packaged CLI also ships it so `flovart ensure` can register it. This is a thin adapter — it teaches the agent the 5 operations below; it is not a Production Skill / Marketplace feature.
+
 The normal agent loop is `status`, `workflow.inspect`, `workflow.selection.get`, `workflow.apply` and `workflow.node.run`. Connection setup and diagnostics use `ensure` and `doctor`; development-only browser checks are covered in the [Getting Started guide](docs/overview/quick-start.en.md).
 
 ## Feature tour
@@ -236,7 +238,7 @@ Most AI creative tools make you choose between a visual editor and an autonomous
 | Automation | Explicit inspect/apply/run operations with revision and approval boundaries |
 | Data | Local-first storage with documented browser and runtime boundaries |
 
-Compose image, text, video, audio and configuration nodes, keep projects and references close to your workspace, and extend providers, hosts and node operations through explicit contracts. The three product surfaces are **Workflow** for generation orchestration, **Table** for the still-evolving media-preprocessing workbench, and **Agent** for production control; Table and Agent are real entries, but their remaining implementation work is not presented as complete — see [Features](docs/content/docs/overview/features.en.mdx).
+Compose image, text, video, audio and configuration nodes, keep projects and references close to your workspace, and extend providers, hosts and node operations through explicit contracts. The product model is **Canvas** (the spatial Workflow surface; Table is a secondary view of the same project), **Inspector** (node/selection editing), and **Agent** (the 5-operation control surface). Canvas and Inspector are the primary surfaces; Table and Agent are real entries, but their remaining implementation work is not presented as complete — see [Features](docs/content/docs/overview/features.en.mdx).
 
 ## One workflow, human + agent
 

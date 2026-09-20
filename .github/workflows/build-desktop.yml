@@ -242,6 +242,24 @@ jobs:
           stat "$sidecar_path"
           file binaries/* 2>/dev/null || true
 
+      # ── Agent sidecar pre-build ──
+      # Bundle agent/index.js → single-ESM → Node SEA → flovart-agent-<triple>.
+      # tauri.conf.json externalBin requires this to exist before tauri build;
+      # without it the bundler fails on "resource path binaries/flovart-agent-*".
+      # Runs the SAME agent core as dev (`npm run flovart:agent`) — no second Agent.
+      - name: Build sidecar flovart-agent (Node SEA)
+        shell: bash
+        run: |
+          node scripts/build-agent-sidecar.mjs --target ${{ matrix.rust_target }}
+          agent_path="src-tauri/binaries/flovart-agent-${{ matrix.rust_target }}${{ matrix.sidecar_ext }}"
+          if [[ ! -s "$agent_path" ]]; then
+            echo "Agent sidecar was not produced: $agent_path" >&2
+            exit 1
+          fi
+          echo "=== Agent sidecar ready ==="
+          stat "$agent_path"
+          file "$agent_path" 2>/dev/null || true
+
       # ── Tauri build + 自动签名 + 创建 release ──
       # prerelease 表达式：push 到 main 分支 → nightly；tag → stable；手动触发 → 按 input。
       - name: Compute release metadata
