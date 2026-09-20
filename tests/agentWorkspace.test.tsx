@@ -19,6 +19,7 @@ describe('Agent workspace', () => {
         onCreateProject={vi.fn()}
         onOpenWorkflow={vi.fn()}
         onOpenTable={vi.fn()}
+        onOpenEmbeddedAgent={vi.fn()}
       />,
     );
 
@@ -49,7 +50,7 @@ describe('Agent workspace', () => {
         connectionChanges: [],
       }],
     };
-    render(<AgentWorkspace project={project} onCreateProject={vi.fn()} onOpenWorkflow={vi.fn()} onOpenTable={vi.fn()} />);
+    render(<AgentWorkspace project={project} onCreateProject={vi.fn()} onOpenWorkflow={vi.fn()} onOpenTable={vi.fn()} onOpenEmbeddedAgent={vi.fn()} />);
 
     fireEvent.click(screen.getByRole('button', { name: /时间线/ }));
     expect(screen.getByText('搭建 VOX 分镜画布')).toBeInTheDocument();
@@ -58,7 +59,7 @@ describe('Agent workspace', () => {
 
   it('keeps brief, artifacts, and timeline as lightweight context instead of floating windows', () => {
     const project = { ...createWorkflowProject('移动项目'), id: 'project' };
-    render(<AgentWorkspace project={project} onCreateProject={vi.fn()} onOpenWorkflow={vi.fn()} onOpenTable={vi.fn()} />);
+    render(<AgentWorkspace project={project} onCreateProject={vi.fn()} onOpenWorkflow={vi.fn()} onOpenTable={vi.fn()} onOpenEmbeddedAgent={vi.fn()} />);
 
     expect(screen.getByText(/生成结果会自动汇集在这里/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Brief/ }));

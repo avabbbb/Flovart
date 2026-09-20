@@ -47,19 +47,25 @@ describe('Workflow right panel', () => {
     vi.unstubAllGlobals();
   });
 
-  it('starts collapsed by default and persists its visibility like the Canvas panel', () => {
+  it('starts open by default on desktop and persists its visibility like the Canvas panel', () => {
     renderWorkspace();
 
+    // UX-PRO-04: the right drawer defaults to open on desktop so the assistant
+    // composer is reachable without a manual first-open step.
     const close = screen.getByTitle('收起右侧面板');
     const drawer = close.closest('aside') as HTMLElement;
-    expect(drawer.style.opacity).toBe('0');
-    expect(drawer.style.pointerEvents).toBe('none');
-    expect(screen.queryByTestId('agent-host-picker')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: '打开右侧面板' }));
-    expect(screen.getByRole('region', { name: 'Workflow 上下文' })).toBeInTheDocument();
-    expect(localStorage.getItem('workflowRightPanelOpenV2')).toBe('true');
+    expect(drawer.style.opacity).toBe('1');
+    expect(drawer.style.pointerEvents).toBe('auto');
+    // The Agent tab is the default surface.
+    expect(screen.getByRole('textbox', { name: /开始你的创作/ })).toBeInTheDocument();
+    // Closing persists; reopening restores.
     fireEvent.click(close);
     expect(localStorage.getItem('workflowRightPanelOpenV2')).toBe('false');
+    expect(drawer.style.pointerEvents).toBe('none');
+    fireEvent.click(screen.getByRole('button', { name: '打开右侧面板' }));
+    fireEvent.click(screen.getByRole('button', { name: '上下文' }));
+    expect(screen.getByRole('region', { name: 'Workflow 上下文' })).toBeInTheDocument();
+    expect(localStorage.getItem('workflowRightPanelOpenV2')).toBe('true');
   });
 
   it('starts closed on narrow screens so the drawer cannot block first-run Workflow actions', () => {
@@ -80,14 +86,16 @@ describe('Workflow right panel', () => {
     fireEvent.click(openLayers);
     expect(document.querySelector('.workflow-sidebar')).toBeInTheDocument();
   });
-
-  it('shows Workflow context without mounting an Agent chat or host picker', () => {
+  it('mounts the assistant beside the canvas on the Agent tab, context on its own tab', () => {
     renderWorkspace();
 
+    // Default Agent tab hosts the real assistant so it can sit next to the canvas.
+    expect(screen.getByRole('textbox', { name: /开始你的创作/ })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '上下文' }));
     expect(screen.getByRole('region', { name: 'Workflow 上下文' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '右侧面板测试' })).toBeInTheDocument();
-    expect(screen.queryByTestId('agent-host-picker')).toBeNull();
-    expect(screen.queryByTestId('flovart-main-agent')).toBeNull();
+    expect(screen.queryByRole('textbox', { name: /开始你的创作/ })).toBeNull();
   });
 
   it('searches Workflow assets in the left sidebar popup', () => {

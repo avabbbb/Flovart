@@ -133,7 +133,9 @@ function workflowDropSharedMedia(dataTransfer: DataTransfer): WorkflowSharedMedi
     const raw = dataTransfer.getData(STUDIO_MEDIA_DRAG_TYPE);
     if (!raw) return null;
     const media = JSON.parse(raw) as WorkflowSharedMedia;
-    return media?.id && media?.href && ['image', 'video'].includes(media.type) ? media : null;
+    // `local-folder:` hrefs can carry audio; the shared-media type field is only
+    // a hint — the non-http path resolves the real MIME from the File it loads.
+    return media?.id && media?.href && ['image', 'video', 'audio'].includes(media.type) ? media : null;
   } catch {
     return null;
   }
@@ -244,6 +246,7 @@ export function InfiniteWorkflow({
   assetLibrary,
   focusNodeRequest,
   onOpenAssets,
+  onNotify,
 }: {
   project: WorkflowProject;
   updateProject: (patch: Partial<WorkflowProject>) => void;
@@ -267,6 +270,8 @@ export function InfiniteWorkflow({
   assetLibrary?: AssetLibrary;
   focusNodeRequest?: { nodeId: string; nonce: number };
   onOpenAssets?: () => void;
+  /** Surface a transient status toast (e.g. "已删除节点 — Ctrl+Z 撤销"). */
+  onNotify?: (message: string, level?: 'info' | 'success' | 'warning' | 'error') => void;
 }) {
   useProductionProjectionAdapter(project.id);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -1765,7 +1770,6 @@ export function InfiniteWorkflow({
       if (mountedRef.current && projectRef.current.id === expectedProjectId) setNotice(error instanceof Error ? error.message : '无法读取剪贴板内容');
     }
   }, [addMediaAt, applyOps, commitFrame, screenToWorkflow, selectNodes, viewportCenter]);
-
   const deleteSelection = useCallback(() => {
     if (selectedConnectionId) {
       commitFrame(projectRef.current.nodes, projectRef.current.connections.filter(connection => connection.id !== selectedConnectionId));
@@ -1773,8 +1777,13 @@ export function InfiniteWorkflow({
       return;
     }
     const deletableIds = selectedIdsRef.current.filter(id => !projectRef.current.nodes.find(node => node.id === id)?.isLocked);
-    if (deletableIds.length) applyOps([{ type: 'delete_nodes', ids: deletableIds }]);
-  }, [applyOps, commitFrame, selectedConnectionId]);
+    if (!deletableIds.length) return;
+    applyOps([{ type: 'delete_nodes', ids: deletableIds }]);
+    // UX-HEU-10: surface the destructive action so the user has a recovery path.
+    // Ctrl+Z still restores the nodes — the toast advertises that affordance.
+    onNotify?.(language === 'zho' ? `已删除 ${deletableIds.length} 个节点 — Ctrl+Z 撤销` : `Deleted ${deletableIds.length} node${deletableIds.length > 1 ? 's' : ''} — Ctrl+Z to undo`, 'info');
+  }, [applyOps, commitFrame, language, onNotify, selectedConnectionId]);
+
 
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
@@ -1786,6 +1795,18 @@ export function InfiniteWorkflow({
         return;
       }
       if (event.key === 'Escape') setActiveMedia(null);
+      // UX-HEU-02: Delete/Backspace must work whenever a node is selected, even
+      // if focus happens to sit on a toolbar button — buttons consume
+      // Space/Enter but never Delete. Only editable targets (textarea/input/
+      // contenteditable/video/audio) may swallow the keystroke, because there
+      // Delete means "erase a character", not "erase the node".
+      const isDeleteKey = event.key === 'Delete' || event.key === 'Backspace';
+      if (isDeleteKey) {
+        if (target?.closest(EDITABLE_TARGET)) return;
+        event.preventDefault();
+        deleteSelection();
+        return;
+      }
       if (target?.closest(BLOCKED_TARGET)) return;
       const modifier = event.ctrlKey || event.metaKey;
       const key = event.key.toLowerCase();
@@ -1800,7 +1821,6 @@ export function InfiniteWorkflow({
         if (ids.length >= 2) applyOps([{ type: 'group_nodes', ids, batchId: nanoid(), source: 'manual' }]);
         return;
       }
-      if (event.key === 'Delete' || event.key === 'Backspace') { event.preventDefault(); deleteSelection(); return; }
       if (event.key === '/' && !modifier && !slashMenuRef.current) {
         event.preventDefault();
         const rect = rootRef.current?.getBoundingClientRect();
@@ -1827,7 +1847,20 @@ export function InfiniteWorkflow({
 
   const addNode = useCallback((type: WorkflowNodeType, metadata: WorkflowNodeData['metadata'] = {}) => {
     const center = viewportCenter();
-    applyOps([{ type: 'add_node', node: createWorkflowNode(nanoid(), type, { x: center.x - 170, y: center.y - 110 }, metadata) }]);
+    // UX-PRO-03: dropping every new node at the exact same point means the
+    // newest hides whatever was added before it. Cascade the spawn position
+    // diagonally whenever the proposed slot is already occupied so each node
+    // is visible and grabbable without manual untangling.
+    let x = center.x - 170;
+    let y = center.y - 110;
+    for (let i = 0; i < 12; i += 1) {
+      const occupied = projectRef.current.nodes.some(node =>
+        node.isVisible !== false && Math.abs(node.position.x - x) < 30 && Math.abs(node.position.y - y) < 30);
+      if (!occupied) break;
+      x += 40;
+      y += 40;
+    }
+    applyOps([{ type: 'add_node', node: createWorkflowNode(nanoid(), type, { x, y }, metadata) }]);
   }, [applyOps, viewportCenter]);
 
   const replaceMedia = useCallback(async (node: WorkflowNodeData, file: File) => {
@@ -2574,8 +2607,11 @@ export function InfiniteWorkflow({
           onRun={() => { if (contextMenu.type === 'node' && !projectRef.current.nodes.find(node => node.id === contextMenu.id)?.isLocked) onRunNode(contextMenu.id); setContextMenu(null); }}
           onRename={contextMenu.type === 'node' && ctxNode && !ctxNode.isLocked ? (() => { setRenameSignal({ nodeId: ctxNode.id, nonce: Date.now() }); setContextMenu(null); }) : undefined}
           onDelete={() => {
-            if (contextMenu.type === 'node' && !projectRef.current.nodes.find(node => node.id === contextMenu.id)?.isLocked) applyOps([{ type: 'delete_nodes', ids: [contextMenu.id] }]);
-            else {
+            if (contextMenu.type === 'node' && !projectRef.current.nodes.find(node => node.id === contextMenu.id)?.isLocked) {
+              applyOps([{ type: 'delete_nodes', ids: [contextMenu.id] }]);
+              // UX-HEU-10: same toast as keyboard Delete — advertise undo.
+              onNotify?.(language === 'zho' ? '已删除 1 个节点 — Ctrl+Z 撤销' : 'Deleted 1 node — Ctrl+Z to undo', 'info');
+            } else {
               commitFrame(projectRef.current.nodes, projectRef.current.connections.filter(connection => connection.id !== contextMenu.id));
               setSelectedConnectionId(null);
             }

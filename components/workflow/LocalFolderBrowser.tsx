@@ -1,6 +1,7 @@
 import { AlertTriangle, Check, FolderOpen, Loader2, Plug, RefreshCw, Search, Trash2 } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createWorkflowImageThumbnail, createWorkflowVideoPoster } from './media';
+import { STUDIO_MEDIA_DRAG_TYPE } from '../studio/StudioMediaBrowser';
 import {
   LocalFolderError,
   adoptLocalFolderHandle,
@@ -9,6 +10,7 @@ import {
   getLocalFolderPermission,
   isLocalFolderSupported,
   listLocalFolderSources,
+  localFolderHref,
   pickLocalFolder,
   readLocalFolderFile,
   readLocalFolderThumbnail,
@@ -291,6 +293,52 @@ export const LocalFolderBrowser: React.FC<LocalFolderBrowserProps> = ({ language
     }
   };
 
+  // Insert a single entry — used by double-click and Enter so the canvas gets
+  // exactly one node regardless of the current multi-selection.
+  const insertOne = async (entry: LocalFolderEntry) => {
+    setInserting(true);
+    setNotice(null);
+    try {
+      await onInsert([entry]);
+      setSelected(new Set());
+      setNotice(zho ? `已把 ${entry.name} 放入画布。` : `Added ${entry.name} to the canvas.`);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : (zho ? '放入画布失败。' : 'Failed to add to the canvas.'));
+    } finally {
+      setInserting(false);
+    }
+  };
+
+  // Drag a local-folder entry to the canvas. We emit the shared studio-media
+  // drag type with a `local-folder:` href — the canvas drop handler resolves it
+  // through readLocalFolderFile, so the original file is referenced, not copied.
+  // Dragging a selected card carries the whole selection; an unselected card
+  // drags just itself.
+  const startEntryDrag = (event: React.DragEvent, entry: LocalFolderEntry) => {
+    const picked = selected.has(entry.relativePath) && selected.size > 1
+      ? entries.filter(item => selected.has(item.relativePath))
+      : [entry];
+    const items = picked.map(item => ({
+      id: localFolderHref(item.folderId, item.relativePath),
+      source: 'asset' as const,
+      name: item.name,
+      href: localFolderHref(item.folderId, item.relativePath),
+      mimeType: item.mimeType,
+      // StudioMediaItem types this image|video; the workflow drop parser accepts
+      // audio too and resolves the real kind from the loaded File's MIME, so the
+      // kind stays honest for local-folder audio entries.
+      type: item.kind as 'image' | 'video' | 'audio',
+    }));
+    event.dataTransfer.effectAllowed = 'copy';
+    // The canvas drop path expects a single WorkflowSharedMedia for the primary
+    // payload; extra selected entries ride along in a parallel key.
+    event.dataTransfer.setData(STUDIO_MEDIA_DRAG_TYPE, JSON.stringify(items[0]));
+    if (items.length > 1) {
+      event.dataTransfer.setData('application/x-flovart-local-folder-batch', JSON.stringify(items));
+    }
+    event.dataTransfer.setData('text/plain', JSON.stringify(items[0]));
+  };
+
   if (!supported) {
     return (
       <div className="local-folder-empty" data-testid="local-folder-unsupported">
@@ -329,6 +377,27 @@ export const LocalFolderBrowser: React.FC<LocalFolderBrowserProps> = ({ language
           </button>
         )}
       </div>
+
+      {activeSource && (
+        <div className="local-folder-connected" data-testid="local-folder-connected">
+          <FolderOpen size={12} aria-hidden />
+          <span className="local-folder-connected__name" title={activeSource.name}>{activeSource.name}</span>
+          <span className="local-folder-connected__count">
+            {zho ? `${entries.length} 项` : `${entries.length} items`}
+          </span>
+          <span className={`local-folder-connected__state is-${permission}`}>
+            {permission === 'granted'
+              ? (zho ? '已连接' : 'Connected')
+              : (zho ? '需要授权' : 'Needs access')}
+          </span>
+          <button type="button" className="local-folder-btn" onClick={() => void scan(activeSource.id)} disabled={scanning} title={zho ? '重新扫描' : 'Rescan'}>
+            {scanning ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+          </button>
+          <button type="button" className="local-folder-btn" onClick={() => void forget(activeSource.id)} title={zho ? '忘记该文件夹' : 'Forget folder'}>
+            <Trash2 size={12} />
+          </button>
+        </div>
+      )}
 
       {sources.length > 1 && (
         <div className="local-folder-sources">
@@ -390,7 +459,11 @@ export const LocalFolderBrowser: React.FC<LocalFolderBrowserProps> = ({ language
             ))}
           </div>
 
-          <div className="local-folder-grid" data-testid="local-folder-grid">
+          <div
+            className="local-folder-grid"
+            data-testid="local-folder-grid"
+            onClick={event => { if (event.target === event.currentTarget) setSelected(new Set()); }}
+          >
             {visibleEntries.map(entry => {
               const active = selected.has(entry.relativePath);
               return (
@@ -400,6 +473,10 @@ export const LocalFolderBrowser: React.FC<LocalFolderBrowserProps> = ({ language
                   title={`${entry.relativePath} · ${formatBytes(entry.bytes)}`}
                   className={`local-folder-card${active ? ' is-selected' : ''}`}
                   onClick={() => toggle(entry.relativePath)}
+                  onDoubleClick={() => void insertOne(entry)}
+                  onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); void insertOne(entry); } }}
+                  draggable
+                  onDragStart={event => startEntryDrag(event, entry)}
                   aria-pressed={active}
                   data-testid={`local-folder-card-${entry.relativePath}`}
                 >

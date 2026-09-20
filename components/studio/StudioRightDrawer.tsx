@@ -71,6 +71,11 @@ export const StudioRightDrawer: React.FC<StudioRightDrawerProps> = ({
     width: open ? `min(var(--drawer-width), calc(100% - ${(flush ? 0 : outerGap * 2)}px))` : '0px',
     opacity: open ? 1 : 0,
     pointerEvents: open ? 'auto' : 'none',
+    // `display:none` removes collapsed children from the layout tree entirely —
+    // without it the inner empty-state CTA keeps a real layout rect (64px wide,
+    // centered on the 0px slot) whose center lands off-viewport at x≈1449,
+    // so a11y/hit-test code sees a phantom button that can never be clicked.
+    display: open ? undefined : 'none',
     transform: 'translateX(0)',
   };
 

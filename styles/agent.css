@@ -21,10 +21,19 @@
   margin-inline: auto;
   padding: clamp(16px, 3vw, 40px);
   box-sizing: border-box;
-  overflow: auto;
+  /* The shell is NOT a scroll owner: each column owns its own scroll region so
+     the context header/tabs/footer and the conversation composer stay fixed
+     while only the inner body/messages scroll. */
+  overflow: hidden;
 }
 
-.agent-workspace-shell--empty { display: block; }
+.agent-workspace-shell--empty {
+  display: block;
+  /* The empty state is a single centered panel, not the two-column app shell —
+     it must scroll as a page so the create CTA stays reachable on short
+     viewports instead of being clipped by the shell's overflow:hidden. */
+  overflow: auto;
+}
 
 .agent-workspace-shell__context,
 .agent-workspace-shell__conversation {

@@ -98,6 +98,7 @@ export function FlovartAgentPanel({ project, onActivityChange, onOpenSettings, a
   const workspaceBridge = useRef<WorkflowAgentBridge | undefined>(undefined);
   const abort = useRef<AbortController | undefined>(undefined);
   const composer = useRef<HTMLDivElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
   const textarea = useRef<HTMLTextAreaElement>(null);
   const skillAttachmentDirty = useRef(false);
   const activity = useRef(onActivityChange);
@@ -137,6 +138,46 @@ export function FlovartAgentPanel({ project, onActivityChange, onOpenSettings, a
   }, [assetLibrary?.items, mentionQuery, project.nodes]);
 
   useEffect(() => { activity.current = onActivityChange; }, [onActivityChange]);
+
+  // UX-AGT-02: every popover in the agent panel (生成模式 menu, 制作上下文 /
+  // 安全边界 info panes, 历史对话 list) must dismiss on Escape and on outside
+  // click — the standard transient-layer contract. While open they cover the
+  // composer textarea, so leaving them pinned is a real blocker.
+  useEffect(() => {
+    const anyOpen = modeOpen || infoPanel !== null || sessionsOpen || mentionOpen || attachmentOpen;
+    if (!anyOpen) return;
+    const closeAll = () => {
+      setModeOpen(false);
+      setInfoPanel(null);
+      setSessionsOpen(false);
+      setMentionOpen(false);
+      setAttachmentOpen(false);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') closeAll();
+    };
+    const onPointer = (event: PointerEvent) => {
+      const root = rootRef.current;
+      if (!root) return;
+      const target = event.target as Node | null;
+      if (target && root.contains(target)) {
+        // Click inside the panel — only dismiss if it landed outside the
+        // popover/menu itself so clicks on menu items still register.
+        const el = target as Element;
+        if (el.closest?.('.agent-mode-menu, .agent-session-menu, .agent-mention-menu, .agent-attachment-menu, [aria-expanded="true"]')) return;
+      }
+      closeAll();
+    };
+    document.addEventListener('keydown', onKey);
+    // pointerdown (not mousedown): the canvas uses React synthetic pointer
+    // events that may preventDefault the mousedown that would follow, so a
+    // mousedown listener can be flaky here — pointerdown is the reliable one.
+    document.addEventListener('pointerdown', onPointer);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('pointerdown', onPointer);
+    };
+  }, [modeOpen, infoPanel, sessionsOpen, mentionOpen, attachmentOpen]);
   useEffect(() => {
     skillAttachmentDirty.current = false;
     setSkillAttachment(undefined);
@@ -505,7 +546,7 @@ export function FlovartAgentPanel({ project, onActivityChange, onOpenSettings, a
     : reference.mediaType === 'video' ? <Video size={13} /> : reference.mediaType === 'image' ? <ImageIcon size={13} /> : <Box size={13} />;
 
   return (
-    <div className="workflow-agent is-embedded agent-conversation">
+    <div ref={rootRef} className="workflow-agent is-embedded agent-conversation">
       <header className="workflow-agent__utility agent-conversation__header">
         <strong>对话</strong>
         <span className={`workflow-agent__status is-${needsConfiguration || workspaceStatus === 'error' ? 'error' : status === 'ready' && workspaceStatus === 'ready' ? 'connected' : status}`}>

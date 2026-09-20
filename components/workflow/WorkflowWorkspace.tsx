@@ -16,11 +16,13 @@ import { useWorkflowStore } from './store';
 import type { WorkflowModelOptions } from './WorkflowNodePromptBar';
 import type { WorkflowImageToolHandlers } from './WorkflowNodeToolbar';
 import { WorkflowSidebar } from './WorkflowSidebar';
+import { FlovartAgentPanel } from '../agent/FlovartAgentPanel';
 import { discardWorkflowMediaRecord, fitWorkflowMediaSize, ingestWorkflowMedia, inspectWorkflowMedia, loadWorkflowMediaBlob, releaseWorkflowMediaRecord, workflowBlobToDataUrl, type WorkflowMediaRecord } from './media';
 import { localFolderHref, readLocalFolderFile, type LocalFolderEntry } from '../../services/localFolderSource';
 import type { AssetItem, AssetLibrary } from '../../types';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import type { WorkflowNodeMetadata, WorkflowProject } from './types';
+import { consumeWorkflowAgentDrawerRequest, subscribeWorkflowAgentDrawer } from './agentDrawerRequest';
 import type { PromptIntent } from './promptIntent';
 
 export interface WorkflowWorkspaceProps {
@@ -52,9 +54,11 @@ export interface WorkflowWorkspaceProps {
   onCreateFolder: (parentId: string | null, name: string) => void;
   onRenameFolder: (id: string, name: string) => void;
   onRemoveFolder: (id: string, deleteItems: boolean) => void;
+  /** Bubble a transient status toast up to the app shell (e.g. node deleted). */
+  onNotify?: (message: string, level?: 'info' | 'success' | 'warning' | 'error') => void;
 }
 
-type WorkflowRightTab = 'agent' | 'history';
+type WorkflowRightTab = 'agent' | 'context' | 'history';
 
 const WORKFLOW_DRAWER_MIN = 280;
 const WORKFLOW_DRAWER_DEFAULT = 360;
@@ -101,6 +105,7 @@ export function WorkflowWorkspace({
   onCreateFolder,
   onRenameFolder,
   onRemoveFolder,
+  onNotify,
 }: WorkflowWorkspaceProps) {
   const hydrated = useWorkflowStore(state => state.hydrated);
   const projects = useWorkflowStore(state => state.projects);
@@ -116,7 +121,10 @@ export function WorkflowWorkspace({
   const [mobileLeftOpen, setMobileLeftOpen] = useState(false);
   const leftOpen = mediumViewport ? mobileLeftOpen : desktopLeftOpen;
   const setLeftOpen = (open: boolean) => mediumViewport ? setMobileLeftOpen(open) : setDesktopLeftOpen(open);
-  const [desktopRightOpen, setDesktopRightOpen] = useState(() => localStorage.getItem('workflowRightPanelOpenV2') === 'true');
+  // UX-PRO-04: default the right drawer OPEN on first run — the built-in Agent
+  // is the headline capability and collapsing it to a 2px strip hides it.
+  // Persisted opt-out: once the user collapses it, 'false' sticks.
+  const [desktopRightOpen, setDesktopRightOpen] = useState(() => localStorage.getItem('workflowRightPanelOpenV2') !== 'false');
   const [mobileRightOpen, setMobileRightOpen] = useState(false);
   const rightOpen = mediumViewport ? mobileRightOpen : desktopRightOpen;
   const setRightOpen = (open: boolean) => mediumViewport ? setMobileRightOpen(open) : setDesktopRightOpen(open);
@@ -125,6 +133,7 @@ export function WorkflowWorkspace({
   const [workspaceNotice, setWorkspaceNotice] = useState('');
   const [writerRecoveryPending, setWriterRecoveryPending] = useState(false);
   const [sidebarTabRequest, setSidebarTabRequest] = useState<{ tab: 'layers' | 'assets'; nonce: number }>();
+  const [focusNodeRequest, setFocusNodeRequest] = useState<{ nodeId: string; nonce: number }>();
   const agentConnectionStatus = useAgentConnectionStore(state => state.status);
   const writerStatus = useAgentConnectionStore(state => state.writerStatus);
 
@@ -132,6 +141,20 @@ export function WorkflowWorkspace({
     if (hydrated && projects.length > 0 && !activeProjectId) setActiveProject(projects[0].id);
   }, [activeProjectId, hydrated, projects, setActiveProject]);
 
+  // "打开内置助手" / the canvas's agent affordance ask to surface the assistant
+  // beside the canvas. Consume a request made while we were unmounted, and keep
+  // listening for live requests while mounted.
+  useEffect(() => {
+    const openAgentDrawer = () => {
+      // Consume the nonce so a handled request can't re-fire on a later mount.
+      consumeWorkflowAgentDrawerRequest();
+      setRightTab('agent');
+      setRightOpen(true);
+    };
+    if (consumeWorkflowAgentDrawerRequest()) openAgentDrawer();
+    return subscribeWorkflowAgentDrawer(openAgentDrawer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   useEffect(() => {
     localStorage.setItem('workflowRightPanelWidth', String(rightWidth));
   }, [rightWidth]);
@@ -405,6 +428,7 @@ assetLibrary={assetLibrary}
                 setRightOpen(true);
               }}
               agentOpen={rightOpen && rightTab === 'agent'}
+              focusNodeRequest={focusNodeRequest}
               rightPanelInset={rightOpen && !mediumViewport ? rightWidth + 24 : 12}
               t={t}
               theme={theme}
@@ -420,6 +444,7 @@ assetLibrary={assetLibrary}
                 setSidebarTabRequest({ tab: 'assets', nonce: Date.now() });
                 setLeftOpen(true);
               }}
+              onNotify={onNotify}
             />
           ) : (
             <div className="workflow-empty">
@@ -443,11 +468,31 @@ assetLibrary={assetLibrary}
         activeTab={rightTab}
         onTabChange={tab => setRightTab(tab as WorkflowRightTab)}
         tabs={[
-          { id: 'agent', label: language === 'zho' ? 'Workflow 上下文' : 'Workflow context', icon: undefined },
+          { id: 'agent', label: language === 'zho' ? 'Agent' : 'Agent', icon: undefined },
+          { id: 'context', label: language === 'zho' ? '上下文' : 'Context', icon: undefined },
           { id: 'history', label: language === 'zho' ? '生成历史' : 'History', icon: undefined },
         ]}
       >
         {rightTab === 'agent' && (activeProject ? (
+          <FlovartAgentPanel
+            project={activeProject}
+            onActivityChange={() => undefined}
+            onOpenSettings={() => onOpenSettings?.()}
+            assetLibrary={assetLibrary}
+            userApiKeys={userApiKeys}
+            onFocusNode={nodeId => setFocusNodeRequest({ nodeId, nonce: Date.now() })}
+          />
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, height: '100%', padding: '0 32px', textAlign: 'center', color: 'var(--isl-ink-soft)', fontSize: 13 }}>
+            <strong style={{ color: 'var(--isl-ink)' }}>{language === 'zho' ? '助手需要一个 Workflow 项目' : 'The assistant needs a workflow project'}</strong>
+            <span>{language === 'zho' ? '创建后即可在画布旁与助手对话。' : 'Create one to chat with the assistant beside the canvas.'}</span>
+            <button type="button" aria-label="新建工作流" onClick={() => createProject()}
+              style={{ marginTop: 6, padding: '7px 16px', border: 0, borderRadius: 9, color: '#fff', background: 'var(--isl-accent, #1677ff)', cursor: 'pointer', fontSize: 12 }}>
+              {language === 'zho' ? '创建项目' : 'Create project'}
+            </button>
+          </div>
+        ))}
+        {rightTab === 'context' && (activeProject ? (
           <WorkflowContextPanel project={activeProject} />
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, height: '100%', padding: '0 32px', textAlign: 'center', color: 'var(--isl-ink-soft)', fontSize: 13 }}>

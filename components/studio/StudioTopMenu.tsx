@@ -62,10 +62,18 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
   // LOGO 下拉（回主页/新建工作流/删除工作流）
   const [logoMenuOpen, setLogoMenuOpen] = useState(false);
   const logoMenuRef = useRef<HTMLDivElement>(null);
+  // UX-HEU-01: deleting the current workflow is the most destructive action in
+  // the app — it must not fire on a single misclick. Gate it behind an inline
+  // confirmation inside the same popover so the user sees the project title
+  // they are about to lose.
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   useEffect(() => {
     if (!logoMenuOpen) return;
     const onClick = (event: MouseEvent) => {
-      if (logoMenuRef.current && !logoMenuRef.current.contains(event.target as Node)) setLogoMenuOpen(false);
+      if (logoMenuRef.current && !logoMenuRef.current.contains(event.target as Node)) {
+        setLogoMenuOpen(false);
+        setConfirmingDelete(false);
+      }
     };
     document.addEventListener('mousedown', onClick);
     return () => document.removeEventListener('mousedown', onClick);
@@ -184,11 +192,36 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
                 className="isl-opt flex items-center gap-2"
                 disabled={(projectList?.length || 0) === 0}
                 style={{ color: 'var(--isl-coral-deep)' }}
-                onClick={() => { projectActions!.remove(); setLogoMenuOpen(false); }}
+                onClick={() => { setConfirmingDelete(true); }}
               >
                 <Trash2 size={14} />
                 <span className="text-xs font-bold">{isChinese ? '删除当前工作流' : 'Delete workflow'}</span>
               </button>
+              {confirmingDelete && (
+                <div
+                  role="alertdialog"
+                  aria-label={isChinese ? '删除工作流确认' : 'Confirm workflow delete'}
+                  className="mx-1 mb-1 rounded-md border p-2"
+                  style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-surface-2)' }}
+                >
+                  <p className="m-0 text-[11px] leading-4" style={{ color: 'var(--isl-ink-soft)' }}>
+                    {isChinese ? `确定删除“${title || '当前工作流'}”？此操作不可撤销。` : `Delete "${title || 'current workflow'}"? This cannot be undone.`}
+                  </p>
+                  <div className="mt-1.5 flex justify-end gap-1.5">
+                    <button
+                      type="button"
+                      className="isl-opt text-[11px] font-semibold"
+                      onClick={() => { setConfirmingDelete(false); }}
+                    >{isChinese ? '取消' : 'Cancel'}</button>
+                    <button
+                      type="button"
+                      className="isl-opt rounded px-2 py-0.5 text-[11px] font-semibold"
+                      style={{ background: 'var(--isl-coral-deep)', color: '#fff' }}
+                      onClick={() => { projectActions!.remove(); setConfirmingDelete(false); setLogoMenuOpen(false); }}
+                    >{isChinese ? '删除' : 'Delete'}</button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -305,7 +338,9 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
           type="button"
           data-testid="agent-connection-status"
           className="isl-icon-btn flex h-8 items-center gap-1.5 px-2"
-          title={isChinese ? '打开 Agent 工作区' : 'Open Agent workspace'}
+          title={isChinese
+            ? `Agent ${agentLabel} — 打开工作区查看`
+            : `Agent ${agentLabel} — open workspace`}
           aria-label={agentLabel}
           style={{ color: agentColor }}
           onClick={() => { useWorkspaceStore.getState().setActiveView('agent'); navigate('/app'); }}

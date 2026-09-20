@@ -11,6 +11,7 @@ import { AppShell } from './components/AppShell';
 import { StudioTopMenu, type StudioMenuModel } from './components/studio/StudioTopMenu';
 import { useWorkspaceStore } from './stores/useWorkspaceStore';
 import { flushWorkflowPersistence, useWorkflowStore } from './components/workflow/store';
+import { requestWorkflowAgentDrawer } from './components/workflow/agentDrawerRequest';
 import { getGenerationCapability, type GenerationMode } from './services/generationCapabilities';
 import { cancelWorkflowGeneration, runWorkflowGeneration } from './services/workflowGeneration';
 import { ingestWorkflowMedia, loadWorkflowMediaBlob, releaseWorkflowMediaRecord } from './components/workflow/media';
@@ -557,7 +558,8 @@ const App: React.FC = () => {
                         onOpenSettings={() => setIsSettingsPanelOpen(true)}
                         onEnhancePrompt={handleEnhancePrompt}
                         isEnhancingPrompt={isEnhancingPrompt}
-                        onOpenAgent={() => setActiveView('agent')}
+                        onOpenAgent={() => requestWorkflowAgentDrawer()}
+                        onNotify={(message, level) => toast.show(message, level)}
                     />
                 </Suspense>
             )}
@@ -569,9 +571,11 @@ const App: React.FC = () => {
                 onCreateProject={() => workflowCreateProject(language === 'zho' ? '未命名工作流' : 'Untitled workflow')}
                 onOpenWorkflow={() => setActiveView('workflow')}
                 onOpenTable={handleOpenTable}
-                assetLibrary={assetLibrary}
-                userApiKeys={userApiKeys}
-                onOpenSettings={() => setIsSettingsPanelOpen(true)}
+                onOpenEmbeddedAgent={() => {
+                    requestWorkflowAgentDrawer();
+                    setCanvasView('spatial');
+                    setActiveView('workflow');
+                }}
             />
         </Suspense>
     );

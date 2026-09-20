@@ -4,22 +4,21 @@ import '../../styles/agent.css';
 import { useWorkflowMediaUrl } from '../workflow/media';
 import type { WorkflowNode, WorkflowProject } from '../workflow/types';
 import { AgentHostPicker } from './AgentHostPicker';
-import { FlovartAgentPanel } from './FlovartAgentPanel';
-import type { AssetLibrary, UserApiKey } from '../../types';
 
 interface AgentWorkspaceProps {
   project: WorkflowProject | null;
   onCreateProject: () => void;
   onOpenWorkflow: () => void;
   onOpenTable: (nodeId?: string) => void;
-  assetLibrary?: AssetLibrary;
-  userApiKeys?: UserApiKey[];
-  onOpenSettings?: () => void;
+  /**
+   * Open the built-in assistant beside the canvas. The assistant lives in the
+   * workflow right drawer now, so this navigates to the workflow view and opens
+   * that drawer on the Agent tab rather than expanding a panel inline.
+   */
+  onOpenEmbeddedAgent: () => void;
 }
 
-export function AgentWorkspace({ project, onCreateProject, onOpenWorkflow, onOpenTable, assetLibrary, userApiKeys = [], onOpenSettings = () => undefined }: AgentWorkspaceProps) {
-  const [embeddedOpen, setEmbeddedOpen] = useState(false);
-  const [panelStatus, setPanelStatus] = useState<'idle' | 'running' | 'waiting' | 'done' | 'error'>('idle');
+export function AgentWorkspace({ project, onCreateProject, onOpenWorkflow, onOpenTable, onOpenEmbeddedAgent }: AgentWorkspaceProps) {
   const [activeContext, setActiveContext] = useState<'brief' | 'activity' | 'artifacts' | 'crew'>('artifacts');
   const mediaNodes = useMemo(() => project?.nodes.filter(node => node.type === 'image' || node.type === 'video') || [], [project]);
 
@@ -45,31 +44,21 @@ export function AgentWorkspace({ project, onCreateProject, onOpenWorkflow, onOpe
           {activeContext === 'crew' && <div className="agent-context-empty"><Bot size={24} /><span>外部 Agent 负责当前项目；内置助手可按需打开。</span></div>}
         </section>
         <footer className="agent-workspace-footer">
-          <span className={`agent-status is-${panelStatus}`}><i />{panelStatus === 'error' ? '异常' : panelStatus === 'running' ? '运行中' : panelStatus === 'waiting' ? '需确认' : panelStatus === 'done' ? '已完成' : '已准备'}</span>
+          <span className="agent-status is-idle"><i />连接与诊断</span>
           <button type="button" onClick={onOpenWorkflow}><Grid2X2 size={13} />打开 Workflow</button>
         </footer>
       </aside>
       <section className="agent-workspace-shell__conversation">
         <button type="button" className="agent-workspace-shell__mobile-back" onClick={() => setActiveContext('artifacts')}>← 返回上下文</button>
-        {!embeddedOpen ? (
           <section className="agent-external-priority" aria-label="外部 Agent">
             <div className="agent-external-priority__content">
               <Bot size={28} style={{ color: 'var(--isl-mint)' }} />
               <h2>外部 Agent 优先</h2>
               <p>左侧 Codex 为 Beta 路径，其他标记「实验性」的助手尚未认证，可通过 Flovart 操作当前 Workflow。</p>
-              <p className="agent-external-priority__hint">内置助手是可选的本地备用入口，不会自动接管项目。</p>
-              <button type="button" onClick={() => setEmbeddedOpen(true)}>打开可选内置助手</button>
+              <p className="agent-external-priority__hint">内置助手是可选的本地备用入口，在画布旁的抽屉中打开，不会自动接管项目。</p>
+              <button type="button" onClick={onOpenEmbeddedAgent}>打开可选内置助手</button>
             </div>
           </section>
-        ) : (
-          <FlovartAgentPanel
-            project={project}
-            onActivityChange={setPanelStatus}
-            onOpenSettings={onOpenSettings}
-            assetLibrary={assetLibrary}
-            userApiKeys={userApiKeys}
-          />
-        )}
       </section>
     </main>
   );
