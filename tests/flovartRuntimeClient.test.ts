@@ -380,12 +380,15 @@ describe('assertDiscoveryDacl', () => {
     });
     const sid = stdout.match(/S-\d(?:-\d+)+/)?.[0];
     if (!sid) throw new Error('test SID unavailable');
-    // Grant the hosted-runner shape: owner + LocalSystem + Administrators.
+    // Mirror the production discovery.rs DACL exactly: protected (D:P), owner +
+    // LocalSystem only — no Administrators ACE. The hosted runner failed because
+    // the fixture granted S-1-5-32-544 while the real product file never carries
+    // it; matching the production shape keeps the test honest about what the
+    // verifier accepts. FLOVART_ACL_DEBUG=1 prints the sanitized DACL on failure.
     await execFileAsync(join(system32, 'icacls.exe'), [
       file, '/inheritance:r',
       '/grant:r', `*${sid}:(F)`,
       '/grant:r', '*S-1-5-18:(F)',
-      '/grant:r', '*S-1-5-32-544:(F)',
       '/q',
     ], { windowsHide: true });
     await expect(verifyDiscoveryPermissions(file)).resolves.toMatch(/^\d+:/);

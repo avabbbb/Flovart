@@ -62,6 +62,8 @@ export async function verifyDiscoveryPermissions(path) {
   if (platform() === 'win32') {
     const directory = await mkdtemp(join(tmpdir(), 'flovart-acl-'));
     const aclPath = join(directory, 'acl.txt');
+    let dacl;
+    let aces;
     try {
       windowsSidPromise ||= execFileAsync(windowsSystemExecutable('whoami.exe'), ['/user', '/fo', 'csv', '/nh'], {
         timeout: DEFAULT_TIMEOUT_MS,
@@ -74,11 +76,18 @@ export async function verifyDiscoveryPermissions(path) {
         windowsHide: true,
       });
       const sddl = await readFile(aclPath, 'utf16le');
-      const dacl = findDaclLine(sddl);
+      dacl = findDaclLine(sddl);
       if (dacl === null) throw new Error('unreadable DACL');
-      const aces = parseDaclAces(dacl);
+      aces = parseDaclAces(dacl);
       assertDiscoveryDacl(aces, currentSid);
-    } catch {
+    } catch (error) {
+      // Emit the sanitized DACL shape so a hosted runner failure shows WHICH
+      // rule tripped (unexpected principal / inherited ACE / missing owner or
+      // SYSTEM) without leaking a real path or token. SIDs are already opaque.
+      if (process.env.FLOVART_ACL_DEBUG === '1' && typeof dacl === 'string') {
+        const flags = aces.map(a => `${a.type};${a.flags || '-'};${a.sid}`).join(' | ');
+        process.stderr.write(`[acl-debug] dacl=${dacl} aces=${flags} err=${error instanceof Error ? error.message : String(error)}\n`);
+      }
       throw unavailable('Runtime discovery permissions are too broad.');
     } finally {
       await rm(directory, { recursive: true, force: true });
