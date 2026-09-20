@@ -1,0 +1,278 @@
+[
+  {
+    "state": "activeProject (projects[] + activeProjectId)",
+    "owner": "components/workflow/store.ts — useWorkflowStore (Zustand+persist)",
+    "writers": [
+      "store.createProject / importProjects / setActiveProject / deleteProjects / updateProject",
+      "components/workflow/WorkflowWorkspace.tsx (auto-select first project when hydrated)",
+      "services/workflowDispatcher.ts (setActiveProject via browserDependencies)",
+      "services/productionProjectionAdapter.ts via useProductionProjectionAdapter.updateProject",
+      "App.tsx handleRunWorkflowNode / project transfer / BrowserImportBridge routing"
+    ],
+    "readers": [
+      "App.tsx, RouterHost.tsx, WorkflowWorkspace, InfiniteWorkflow, WorkflowSidebar, WorkflowProjectList, FlovartAgentPanel, BrowserImportBridge, TableWorkspace, dispatchWorkflowCommand, agent bridge snapshot publisher"
+    ],
+    "persistedBy": "localforage 'flovart_workflow_v2'/'workflow_projects' key 'flovart:workflow:projects' (debounced 400ms write, migration backup key)",
+    "issues": [
+      "Also mirrored to agent/session.js on the Node side as `session.snapshot` (pushSnapshot); the browser Zustand store and the Agent process each hold a mutable copy — they reconcile only via revision/lease checks, so they can diverge between pushes",
+      "useProductionProjectionAdapter rewrites nodes/connections/selectedNodeIds into the store every 1.5s when Tauri runtime present — a second writer that bypasses InfiniteWorkflow's own edit path",
+      "media.ts canonicalReferences is a *derived module-global* mirror of projects[].nodes storageKeys (setWorkflowMediaCanonicalProjects called from inside every store setter) — a hidden second copy of node metadata used only for GC"
+    ]
+  },
+  {
+    "state": "selection (selectedNodeIds + selectedConnectionId)",
+    "owner": "split: project.selectedNodeIds persisted in useWorkflowStore; InfiniteWorkflow keeps selectedIdsRef + useState selectedNodeIds + selectedConnectionId locally",
+    "writers": [
+      "InfiniteWorkflow.selectNodes → setState + selectedIdsRef + patchProject(selectedNodeIds)",
+      "useProductionProjectionAdapter → updateProject({selectedNodeIds}) (runtime projection can overwrite selection)",
+      "draftAuthority undo/redo filters selectedNodeIds",
+      "ops.ts 'select_nodes' / focus_node / create_node ops (agent-driven selection)",
+      "WorkflowSidebar layer click → onProjectChange({selectedNodeIds})",
+      "TableWorkspace local useState selectedNodeId (mirrors project.selectedNodeIds[0] via effect)"
+    ],
+    "readers": [
+      "InfiniteWorkflow render + ops, WorkflowSidebar highlight, TableWorkspace row pick, WorkflowAgentBridge snapshot → workflow.selection.get for agents, dsh-plugin WorkflowView selectionContext"
+    ],
+    "persistedBy": "useWorkflowStore persist (partialize includes full projects incl. selectedNodeIds); TableWorkspace copy is ephemeral useState",
+    "issues": [
+      "THREE representations of 'which nodes are selected': project.selectedNodeIds (persisted store), InfiniteWorkflow useState + selectedIdsRef (UI-local), TableWorkspace useState selectedNodeId (view-local). Effects at InfiniteWorkflow.tsx:442-447 reconcile store→local; 404-408 push local→store. Any concurrent writer (projection adapter, agent op, undo) can clobber an in-progress marquee selection.",
+      "Production projection sync calls updateProject({selectedNodeIds: patch.selectedNodeIds}) every 1.5s — selection is rewritten by a background poller even when the user is mid-drag",
+      "selectedConnectionId is UI-local only (never persisted) while selectedNodeIds is persisted — inconsistent: reloading keeps node selection but drops connection selection",
+      "Agent 'select_nodes' ops and the user's click both write the same field with no arbitration — last write wins"
+    ]
+  },
+  {
+    "state": "workflowRevision (project.draftVersion + draftChangeSets + workflowMutationReceipts)",
+    "owner": "useWorkflowStore project record; authority logic in components/workflow/draftAuthority.ts",
+    "writers": [
+      "applyWorkflowMutation (source: 'ui'|'promptbar'|'dsh'|'agent') called from InfiniteWorkflow, WorkflowWorkspace.commitProjectPatch, useProductionProjectionAdapter, workflowDispatcher",
+      "undoWorkflowDraftChangeSet / redoWorkflowDraftChangeSet",
+      "runWorkflowGeneration patches nodes WITHOUT going through draftAuthority for status fields (patchInitiator → onProjectChange → updateProject)"
+    ],
+    "readers": [
+      "workflowWorkspaceAdapter.revisionOf → published to agent host as snapshot.draftVersion",
+      "agent/session.js + workspace-lease.js validate expectedRevision vs currentRevision",
+      "App.tsx handleRunWorkflowNode checks command.expectedRevision",
+      "runWorkflowGeneration captures revision at submit for output landing"
+    ],
+    "persistedBy": "useWorkflowStore persist (inside project record)",
+    "issues": [
+      "Two independent versioning systems on the same document: draftVersion/draftChangeSets (draftAuthority, recorded mutations) and a parallel unrecorded path — runWorkflowGeneration mutates node.metadata.status/progress via plain updateProject with NO draftVersion bump and NO changeSet; undo cannot revert a generation status write, and an agent holding expectedRevision sees 'unchanged' revision while nodes actually changed",
+      "agent/session.js keeps its own copy `snapshot.draftVersion` refreshed only on pushSnapshot — lease validation compares stale revision",
+      "draftChangeSets capped at 100 and receipts at 256; silent truncation means undo history disappears without UI signal"
+    ]
+  },
+  {
+    "state": "agentConnection (status/url/clientId/projectId/revision/writerStatus/host identity)",
+    "owner": "stores/useAgentConnectionStore.ts (Zustand, non-persisted)",
+    "writers": [
+      "services/agentConnectionBootstrap.ts (URL params → session storage → setStatus)",
+      "services/workflowWorkspaceAdapter.ts start/update/onEvent/onStatus — writes status, clientId, projectId, revision, writerStatus, writerClientId, activeHostIdentity/ProjectId",
+      "services/agentHostDiscovery.ts activateAgentHost / activateBrowserWorkflowWriter → setStatus(activeHostIdentity, writerStatus)",
+      "components/agent/AgentHostPicker.tsx setStatus on activation result"
+    ],
+    "readers": [
+      "AgentHostPicker, WorkflowWorkspace (writer revoked banner), StudioTopMenu, hostActivation.ensureHostReady, agentHostDiscovery"
+    ],
+    "persistedBy": "not persisted (connection params in sessionStorage keys flovart.agent.bootstrap.*; dock URL in localStorage 'flovart.agent.url', token in sessionStorage 'flovart.agent.token')",
+    "issues": [
+      "Owner >1 for 'agent connection' fact: useAgentConnectionStore (UI mirror), module-global browserWorkflowBinding (services/browserWorkflowBinding.ts — own listener set), dockCrewClient localStorage+sessionStorage keys, AND the authoritative session.js state in the agent process. Four representations; the store is a *cache* of events pushed over SSE, so it is eventually-consistent and can show writerStatus 'active' after the agent-side writer died",
+      "projectId/revision inside the connection store duplicates workflow store state; update() rewrites it on every project snapshot — a render-loop write path",
+      "Token lives in BOTH sessionStorage (bootstrap keys) and sessionStorage (dockCrewClient DOCK_AGENT_TOKEN_KEY) plus module memory — three copies of the same credential"
+    ]
+  },
+  {
+    "state": "writerLease (WorkspaceLeaseManager)",
+    "owner": "agent/workspace-lease.js WorkspaceLeaseManager — authoritative, inside agent process",
+    "writers": [
+      "session.acquireWorkspaceLease / validate / renew / release / revokeClient",
+      "session.js command pipeline auto-acquires for leased commands (isLeasedWorkflowCommand)",
+      "workflowAgentBridge.ts validateBrowserWorkspaceLease re-checks lease on the browser side before dispatch"
+    ],
+    "readers": [
+      "session.isLeasedWorkflowCommand gate, AgentHostPicker via writerStatus events, workspaceLeaseState() health endpoint"
+    ],
+    "persistedBy": "none (in-memory Maps byOwner/byId, TTL expiry)",
+    "issues": [
+      "Lease validation happens TWICE with different rule sets: session.js validate() (agent side) and workflowAgentBridge.validateBrowserWorkspaceLease (browser side, line ~100) — the browser re-validates a lease issued by the server against its own clock/store; skew or a stale leaseId produces opaque LEASE_* errors the UI does not surface distinctly",
+      "Lease expiry is lazy (expire() only on next acquire/validate) — a dead lease can appear valid in health() output until someone touches it"
+    ]
+  },
+  {
+    "state": "browserWriter slot (activeClientId + snapshots map)",
+    "owner": "agent/session.js WorkflowAgentSession",
+    "writers": [
+      "session.publish (snapshot push claims slot if free), session.activateClient (explicit), SSE close handler (revokes on disconnect)",
+      "activateBrowserWorkflowWriter HTTP /workflow/activate (browser-initiated)"
+    ],
+    "readers": ["agent command routing (boundSnapshot), health(), UI via writer_changed/writer_unavailable events"],
+    "persistedBy": "none",
+    "issues": [
+      "First-connected tab implicitly claims the writer slot (session.js:105-110 'first visible browser claims'); a second tab opening the same project publishes snapshots but cannot write — the UI only learns via writerStatus 'inactive' event with no in-canvas indication of which tab owns the lock",
+      "Snapshot per client is keyed by clientId but the UI store keeps only one writerClientId — two tabs race and the store flaps"
+    ]
+  },
+  {
+    "state": "localFolderGrant (LocalFolderSource + FileSystemDirectoryHandle + permission)",
+    "owner": "services/localFolderSource.ts — module functions over localforage 'flovart'/'local_folder_sources' + 'local_folder_handles' + sessionHandles Map",
+    "writers": [
+      "pickLocalFolder / adoptLocalFolderHandle (DnD) → saveSource+saveHandle",
+      "forgetLocalFolderSource removes source+handle+thumbnails",
+      "requestLocalFolderPermission re-queries handle permission"
+    ],
+    "readers": [
+      "LocalFolderBrowser (useState mirrors: sources, activeId, permission, entries), media.ts localFolderHref resolution, InfiniteWorkflow drop handler"
+    ],
+    "persistedBy": "localforage sources/handles stores; sessionHandles Map is the non-persisted fallback when handle serialization fails; thumbnails separate store",
+    "issues": [
+      "Dual handle storage: persisted IndexedDB handle AND sessionHandles in-memory Map fallback (localFolderSource.ts:140) — 'handle落盘失败时的会话内兜底'; after reload the Map is empty so permission silently flips to 'missing', correct but produces a different UX than the persisted list implies",
+      "LocalFolderBrowser keeps its own sources/permission React state refetched on mount — no subscription, so a grant made in another component (e.g. a second browser instance) is invisible until remount"
+    ]
+  },
+  {
+    "state": "providerTask (generationProviderTaskId, usage records)",
+    "owner": "split: node.metadata.generationProviderTaskId in project store (persisted); activeRequests Map in services/workflowGeneration.ts (ephemeral); UsageRecord rows in usageMonitor localforage 'flovart_usage_v2'",
+    "writers": [
+      "runWorkflowGeneration event handlers set node.metadata.generationProviderTaskId + updateApiUsage(status/providerTaskId)",
+      "App.tsx recovery effect re-runs nodes with resumeProviderTaskId after reload",
+      "cancelWorkflowGeneration clears activeRequests entry"
+    ],
+    "readers": ["App.tsx recovery scan (nodes with providerTaskId + status loading), WorkflowNode metadata, usage summary panel"],
+    "persistedBy": "providerTaskId persisted inside project JSON; UsageRecord persisted in usage store; in-flight AbortController/request map is NOT persisted",
+    "issues": [
+      "Three representations of 'a generation is running': node.metadata.status='loading' (persisted), activeRequests Map entry (memory-only), UsageRecord status (persisted). After reload, metadata says loading and providerTaskId exists but activeRequests is empty — recovery is a heuristic effect (App.tsx:322-360) that re-submits; a task that finished while the tab was closed is re-polled but cancel no-ops",
+      "cancelWorkflowGeneration only deletes the Map entry + aborts; the provider task keeps running remotely and UsageRecord may stay 'running' forever — orphan billing record",
+      "runWorkflowGeneration writes status through onProjectChange→updateProject bypassing draftAuthority — generation status is invisible to revision/undo (see workflowRevision)"
+    ]
+  },
+  {
+    "state": "artifact / media blob (storageKey, posterStorageKey, local-folder href, runtime taskId artifact)",
+    "owner": "components/workflow/media.ts + workflowMediaStorage (localforage 'workflow_media'); runtime artifacts via services/runtimeArtifacts.ts blobCache",
+    "writers": [
+      "ingestWorkflowMedia / saveWorkflowMediaRecord (canvas ingest), mediaResult() in workflowGeneration",
+      "localFolderSource readLocalFolderFile (external files, never copied)",
+      "runtimeArtifacts.loadRuntimeArtifactBlob → blobCache Map (Tauri)"
+    ],
+    "readers": ["WorkflowNode render (storageKey→blob), MediaPreviewModal, TableWorkspace, generation references resolver"],
+    "persistedBy": "localforage workflow_media store; runtime artifacts persisted by desktop runtime; local-folder files on disk",
+    "issues": [
+      "GC reachability depends on module-global canonicalReferences mirror of projects (setWorkflowMediaCanonicalProjects) — media.ts keeps a second copy of 'which storageKeys exist'; transientReferences/pendingReferences sets are unregistered per-owner strings, so a component that forgets unregister leaks media forever",
+      "runtimeArtifacts blobCache is an unbounded Map<taskId, Promise<Blob>> — never evicted; long sessions accumulate every generated artifact in memory",
+      "Three storage backends for the same 'asset' concept: workflow_media blobs, asset_library_v2 dataUrls, local_folder files — a node can reference any of the three with different lifetime rules"
+    ]
+  },
+  {
+    "state": "modelRoute (routeMappings on API keys + resolveRouteMapping)",
+    "owner": "UserApiKey.routeMappings[] persisted inside encrypted key vault; resolution is pure function services/routeMapping.ts",
+    "writers": ["useApiKeys setUserApiKeys → saveKeysEncrypted; SettingsPanel route-mapping editors; mergeSuggestedProductRouteMappings (aiServiceSetup)"],
+    "readers": ["runWorkflowGeneration submit path, PromptBar model display, runtimeAgentTextRoutes sync to desktop runtime"],
+    "persistedBy": "keyVault localforage (encrypted) + mirrored to runtime credential vault via syncRuntimeCredentials + syncRuntimeAgentTextRoutes",
+    "issues": [
+      "Same route truth is pushed to TWO vaults: encrypted localforage keyVault AND the desktop runtime credential store (syncRuntimeCredentials) — a failure between them leaves runtime-side routes stale with only a swallowed catch(()=>{})",
+      "clearKeysOnExit flips persistence off but the runtime sync already pushed keys — clearing local vault does NOT clear runtime vault (reportRuntimeCredentialVault only reports count)"
+    ]
+  },
+  {
+    "state": "generationStatus (node.metadata.status/progress/error/generationRequestId)",
+    "owner": "node.metadata inside project store; written by services/workflowGeneration.ts patchInitiator",
+    "writers": ["runWorkflowGeneration (loading/progress/success/error), cancelWorkflowGeneration (idle), WorkflowWorkspace fallback '生成适配器尚未连接' error write, App.tsx recovery"],
+    "readers": ["WorkflowNode/ConfigPanel/PromptBar/Toolbar render + disable logic, WorkflowWorkspace running/failed counters"],
+    "persistedBy": "inside project JSON persist",
+    "issues": [
+      "Persisted 'loading' survives reload but its driver (activeRequests) does not — UI shows spinner forever until the recovery heuristic fires; if apiKeys not loaded or providerTaskId absent, node is stuck 'loading' with no affordance to reset",
+      "imageToolBusy/videoToolBusy refs in InfiniteWorkflow duplicate the same busy fact in refs+state+metadata.status — three flags for 'tool running' that must be cleared in the right order or a tool locks permanently"
+    ]
+  },
+  {
+    "state": "panel/drawer/shell state (activeView, canvasView, left/right drawer open+tab+width, themeMode, language)",
+    "owner": "split: stores/useWorkspaceStore.ts persists activeView/canvasView/themeMode/language; WorkflowWorkspace.tsx useState owns desktopLeftOpen/mobileLeftOpen/desktopRightOpen/mobileRightOpen/rightTab/rightWidth; agentWorkspaceStore.ts persists agent view layout per project",
+    "writers": [
+      "useWorkspaceStore setters (persist 'flovart-workspace' v2)",
+      "WorkflowWorkspace setState + localStorage 'workflowRightPanelOpenV2' / 'workflowRightPanelWidth' writes",
+      "agentDrawerRequest module-global requestNonce + listeners (cross-view 'open agent drawer' signal)",
+      "agentWorkspaceStore updatePanel/setViewport/resetLayout (localforage 'agent_workspaces')"
+    ],
+    "readers": ["App.tsx shell, StudioTopMenu, WorkflowWorkspace layout, AgentWorkspace panels"],
+    "persistedBy": "zustand persist (workspace store) + raw localStorage keys (right panel) + localforage (agent workspaces) + in-memory agentDrawerRequest nonce",
+    "issues": [
+      "themeMode is double-sourced: persisted inside 'flovart-workspace' (partialize includes themeMode) AND independently read at store-init from localStorage 'themeMode.v1' (useWorkspaceStore.ts:26) — the init reads a DIFFERENT key than the persist writes; on a fresh browser the persist key is empty so themeMode.v1 wins, but after any setThemeMode the two keys can disagree and whichever hydrates last wins",
+      "Four persistence channels for shell UI: zustand persist, raw localStorage, localforage, module nonce — right drawer open state is in localStorage while left drawer is pure useState, so left/right behave differently across reload for no user-visible reason",
+      "agentDrawerRequest is a module-global nonce consumed via consumeWorkflowAgentDrawerRequest — a request fired while WorkflowWorkspace is mounted AND handled by listener is ALSO consumed on next mount (nonce not cleared), can re-open the drawer unexpectedly",
+      "activeView 'agent' vs canvasView 'table'/'spatial' split across two fields; migrations.ts maps old 'table' activeView → canvasView — legacy combos can produce contradictory states (activeView=agent + canvasView=table) that App.tsx renders ambiguously"
+    ]
+  },
+  {
+    "state": "assetLibrary (folders + items)",
+    "owner": "App.tsx useState assetLibrary (React state is the live owner); utils/assetStorage.ts module cachedLibrary is a second in-memory copy",
+    "writers": ["App.tsx setAssetLibrary + saveAssetLibraryAsync effect; assetStorage mutator helpers return new lib; setAssetLibraryCache keeps module cache in sync ONLY when callers remember"],
+    "readers": ["Workflow asset pickers, FlovartAgentPanel mention groups, media.ts getAssetById (reads module cache, not React state), StudioMediaBrowser"],
+    "persistedBy": "localforage 'flovart'/'asset_library_v2' key 'library' (debounced via effect on state change)",
+    "issues": [
+      "Two live copies: React state in App.tsx and module-global cachedLibrary — getAssetById resolves storageKey 'asset-library:<id>' against the module cache, which is only fresh if every mutation path calls setAssetLibraryCache; addAsset/removeAsset helpers do NOT touch the cache (App.tsx must resync manually), so canvas nodes can resolve a deleted asset or fail to resolve a just-added one",
+      "Save is fire-and-forget .catch(console.error) — quota failure silently drops the library while UI keeps showing items"
+    ]
+  },
+  {
+    "state": "generationHistory",
+    "owner": "App.tsx useState generationHistory",
+    "writers": ["App.tsx addGenerationHistoryItem→setState→saveGenerationHistoryAsync effect; saveHistory callback wired into runWorkflowGeneration"],
+    "readers": ["WorkflowWorkspace historyMedia → StudioMediaBrowser history tab, PromptBar history"],
+    "persistedBy": "localforage 'generation_history_v2'/'items' with dataUrl offloaded to mediaIndexedDBSentry blobs",
+    "issues": [
+      "Same dual-copy pattern as assetLibrary (React state is truth, localforage is write-behind); save failure path retries once with 6 items then 'gives up quietly' — history silently diverges from UI",
+      "MAX_HISTORY_ITEMS=18 while separate usageMonitor records keep the billing history — two histories with different retention"
+    ]
+  },
+  {
+    "state": "agentSession / agentMessages (in-app assistant)",
+    "owner": "per-panel: FlovartAgentPanel useState messages + kernelRef/clientRef; browser path BrowserAgentKernel persists sessions to localforage per projectId; managed path agent/kernel.js SqliteSessionRepo + session.js snapshot",
+    "writers": ["FlovartAgentPanel send/stream handlers, kernel.appendMessage, session.subscribe events, consumePendingProductionSkill on project change"],
+    "readers": ["panel render, WorkflowAgentMessages, session list dropdown"],
+    "persistedBy": "browser kernel: localforage key per projectId; managed agent: SQLite session repo on disk; panel useState is a view copy rebuilt from snapshot on mount",
+    "issues": [
+      "Two entirely different session backends chosen by getManagedAgentConnection() at mount (browser kernel vs managed client) — messages, sessions, and skill binding persist in different stores depending on a connection probe; switching between them loses chat history with no migration",
+      "activeChangeSetId lives in kernel private field (browserAgentKernel.ts:510) AND passed to createBrowserAgentTools as constructor arg ('' at panel line 208) — the tool context is frozen with empty changeSetId while the kernel later rotates its own, so tool calls and the kernel disagree on idempotency scope",
+      "project.agentSessions + activeAgentSessionId fields exist on the persisted WorkflowProject (types.ts:432) but nothing writes them anymore (all writers set []) — dead schema still migrated and persisted"
+    ]
+  },
+  {
+    "state": "auth/user (hub account)",
+    "owner": "stores/useAuthStore.ts",
+    "writers": ["login/register/logout/init → authApi + setToken (sessionStorage 'flovart.hub.token' via hubClient)"],
+    "readers": ["auth components, community publish, skillHub"],
+    "persistedBy": "sessionStorage token key (hubClient TOKEN_KEY) + legacy localStorage migration",
+    "issues": [
+      "Token in sessionStorage means login is per-tab — two tabs of the same app have independent auth while sharing the same underlying project data"
+    ]
+  },
+  {
+    "state": "clipboard (canvas nodes + shared clip items)",
+    "owner": "split: InfiniteWorkflow clipboardRef (node copies) + useClipboardStore Zustand (media items)",
+    "writers": ["InfiniteWorkflow copy/cut handlers write both; syncToSharedClipboard bridges ref→store"],
+    "readers": ["paste handler reads clipboardRef; other surfaces read useClipboardStore.items"],
+    "persistedBy": "none (session only)",
+    "issues": [
+      "Two clipboards representing overlapping facts (node graph copy vs media items) updated by the same handlers — they can desync (e.g. clipboardRef cleared at line 434 without clearing store)"
+    ]
+  },
+  {
+    "state": "pendingProductionSkill (composer handoff)",
+    "owner": "stores/useProductionSkillComposerStore.ts",
+    "writers": ["queuePendingProductionSkill (skill launch), FlovartAgentPanel consume on project.id change"],
+    "readers": ["FlovartAgentPanel mount effect"],
+    "persistedBy": "none",
+    "issues": [
+      "Consume-on-mount keyed by project.id: if the drawer is closed when the skill is queued, the pending item sits in the map until the panel next mounts for that project — silent deferred action with no badge"
+    ]
+  },
+  {
+    "state": "updater + skillHub + promptHistory misc stores",
+    "owner": "stores/useUpdaterStore.ts, useSkillHubStore.ts (localStorage 'flovart.skill-hub'), usePromptHistoryStore.ts (localforage 'prompt-history' + isOpen UI flag in same store)",
+    "writers": ["respective store actions; promptHistory.record called from generation submit"],
+    "readers": ["settings/about UI, PromptBar history popover"],
+    "persistedBy": "skillHub: raw localStorage JSON; promptHistory: localforage; updater: none",
+    "issues": [
+      "usePromptHistoryStore mixes persisted entries with ephemeral UI flags (isOpen, pendingInsert) in one store — pendingInsert is a nonce-based cross-component signal (like agentDrawerRequest) duplicating the same pattern a third time; three bespoke nonce-signal mechanisms exist instead of one event bus"
+    ]
+  }
+]

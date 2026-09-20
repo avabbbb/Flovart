@@ -1,0 +1,1468 @@
+{
+  "findings": [
+    {
+      "id": "UX-FTC-01",
+      "group": "user",
+      "title": "Empty-state '创建项目' button is rendered off-viewport and physically unclickable",
+      "severity": "P0",
+      "scenario": "ftc-03-create-project.mjs — first-time user clicks the visible 'Create project' CTA in the right panel",
+      "steps": [
+        "Open app, wait for workflow surface to load",
+        "Observe empty state: right panel shows '创建项目' button (aria-label 新建工作流)",
+        "Attempt Playwright click on the button (getByText '创建项目')"
+      ],
+      "evidence": [
+        "eval/product-maturity/results/judgeA1 observables: ftc01={rect x=1449 w=44, cx=1471, inViewport:false, covering:null, isSelf:false}",
+        "components/agent/AgentWorkspace.tsx:25 renders the off-viewport 创建项目 CTA inside the agent empty-state card"
+      ],
+      "consequence": "A first-time user sees a 'Create project' CTA in the right assistant panel but cannot click it — it is rendered partially outside the viewport and hit-testing fails. Only the center-canvas '新建工作流' works. The most prominent contextual CTA is a dead control. M0 for that path.",
+      "status": "FIXED",
+      "defense": "Independent repro (judge-01-batch, results/judgeA1): 创建项目 button in right assistant-panel empty state renders at x=1449 w=44 → center cx=1471 > vw 1440; elementFromPoint null; inViewport:false. Button is inside the AgentWorkspace empty-state card and is clipped off the right edge; pointer events can never reach it. Center-canvas 新建工作流 does work (canvas created). Reproduced twice (judgeA1 + prosecutor trace 1789872249389).",
+      "verdict": "CONFIRMED",
+      "judge": "ReproducerJudge",
+      "fix": "components/studio/StudioRightDrawer.tsx: when drawer is closed, apply display:none (not just width:0+opacity:0). The 0px-wide aside was clipping children visually but they still had real layout rects — the 'Create project' CTA inside the agent empty-state card rendered at x=1449 (off-viewport center) and was hit-test-dead. With display:none the children produce no layout box at all when collapsed; verified live — createProject rect now {x:1220, w:80, h:32} inside the open drawer, or {x:0,w:0,h:0} when collapsed."
+    },
+    {
+      "id": "UX-FTC-02",
+      "group": "user",
+      "title": "Local folder connect is impossible in this runtime and fails silently",
+      "severity": "P0",
+      "scenario": "ftc-05-folder-node.mjs / ftc-06-node-agent.mjs — connect a local asset folder",
+      "steps": [
+        "Create project → 资产 (Assets) → 本地 (Local) tab",
+        "Panel shows '选择文件夹' button + '把文件夹拖到这里' (drag folder here)",
+        "Click 选择文件夹"
+      ],
+      "evidence": [
+        "eval/product-maturity/results/judgeE1: fsaErr=AbortError \"Failed to execute showDirectoryPicker: user aborted\"; toast=[]; dialog=0",
+        "driver.mjs comment: File System Access API is unavailable headless"
+      ],
+      "consequence": "The core 'find local assets → connect folder' journey step cannot be completed in this environment and, worse, fails silently — no error, no retry hint, no alternative affordance. For a real first-time user on a headless/locked context this is an unrecoverable dead end with zero feedback. M0 for folder connect.",
+      "status": "judged",
+      "defense": "Reproduced headless (judgeE1): showDirectoryPicker exists, isSecureContext, but invoking it throws AbortError \"user aborted\" — the File System Access picker cannot be granted in headless Chromium. Driver comment itself notes FSA unavailable headless. No toast/dialog surfaced after click (toast:[], dialog:0, silent). This is a genuine silent-failure defect BUT its severity is environment-bound: on headed Chrome the picker opens. Marked ENVIRONMENT per judge rules — verify silent-failure separately if wanted.",
+      "verdict": "ENVIRONMENT",
+      "judge": "ReproducerJudge"
+    },
+    {
+      "id": "UX-FTC-03",
+      "group": "user",
+      "title": "Agent send is hard-blocked on 'model mapping' with jargon, no guided fix",
+      "severity": "P1",
+      "scenario": "ftc-09-send-mapping.mjs — first-time user tries to use the Agent",
+      "steps": [
+        "Open in-canvas Agent (toolbar 打开 Agent)",
+        "Type 'make a poster' into the assistant input (input-present)",
+        "Attempt to send"
+      ],
+      "evidence": [
+        "results/judgeC1 agt01={taPlaceholder:\"请先配置 Agent 文本模型映射\", needConfig:true, errorChip:true, sendPt:null}",
+        "components/agent/FlovartAgentPanel.tsx:578 placeholder + :514 打开模型映射 quick-fix button"
+      ],
+      "consequence": "A first-time user hits a wall of jargon ('模型映射', '可用线路', '网页直连访问凭证') and must manually add an AI provider credential before the assistant can do anything. No example, no default, no inline 'add a key' wizard — just a disabled send button. Major confusion + unnecessary steps. M1.",
+      "status": "DEFERRED",
+      "defense": "Reproduced (judgeC1/judgeE1): with a project open, composer textarea placeholder = \"请先配置 Agent 文本模型映射\"; send control disabled (sendPt=null → no enabled 发送 button); inline error chip \"需要配置 / 打开模型映射 / 错误 — 请在设置的“模型映射”中为 Agent 文本能力配置可用线路\". No guided add-key wizard; the only fix path is a 68px text button into Settings. First-time user hits jargon wall. Confirmed.",
+      "verdict": "CONFIRMED",
+      "judge": "ReproducerJudge",
+      "deferred": "Agent send blocked on model-mapping jargon. Real copy fix needed — deferred: requires rewriting the gate UX with actionable recovery (link to settings, inline key input)."
+    },
+    {
+      "id": "UX-FTC-04",
+      "group": "user",
+      "title": "All agents offline; 'current agent' Codex unusable, alternates marked experimental",
+      "severity": "P1",
+      "scenario": "ftc-07-node-agent.mjs — open the top-level Agent view to find a usable assistant",
+      "steps": [
+        "Click top-nav 'Agent'",
+        "Inspect 协作空间 / 协作 Agent view"
+      ],
+      "evidence": [
+        "results/judgeA1 ftc04={codexOffline:true, workbuddy:true, deepseek:true, retryCount:3}"
+      ],
+      "consequence": "A first-time user looking for the Agent finds three offline services and must discover a tucked-away 'optional built-in assistant' fallback. Lost context + unclear ownership of who can actually help. M1.",
+      "status": "DEFERRED",
+      "defense": "Reproduced (judgeA1): Agent view shows 当前 AGENT Codex 离线 Beta, WorkBuddy 离线 实验性, DeepSeek Harness 离线 实验性, each with bare 重试; \"Flovart 本地服务暂时离线\". 3 offline agents. Note: on CURRENT build the \"内置助手是可选的本地备用入口 / 打开可选内置助手\" text is NOT present in body — only the canvas-side drawer path exists. Core claim (all agents offline, no usable headline assistant) confirmed.",
+      "verdict": "CONFIRMED",
+      "judge": "ReproducerJudge",
+      "deferred": "All agents offline; Codex unusable; alternates experimental. Depends on backend availability — not fixable in source."
+    },
+    {
+      "id": "UX-FTC-05",
+      "group": "user",
+      "title": "Language switch incomplete — core empty-state copy stays Chinese after 'Switch to English'",
+      "severity": "P2",
+      "scenario": "ftc-10-english-creds.mjs — non-Chinese first-time user switches language",
+      "steps": [
+        "On fresh load (all-Chinese UI), click 'Switch to English'",
+        "Re-observe the empty-state copy"
+      ],
+      "evidence": [
+        "After switch: topnav/buttons became English (Canvas/Table/Layers/Assets/Local/Context/History, 'Create project'), but 28 Chinese chars remained: '使用节点组织提示词、参考素材和生成配置' and the center CTA still '新建工作流' while the right panel says 'Create project' — two labels for the same action in two languages",
+        "Screenshot: ftc-english.png (results 1789872587405)"
+      ],
+      "consequence": "Mixed-language UI on the very first screen a newcomer sees; inconsistent naming for the same action ('新建工作流' vs 'Create project') adds confusion for an English-first user. Polish gap. M2.",
+      "status": "STANDS",
+      "defense": "Confirmed in source: WorkflowWorkspace.tsx:443-444 hardcode '使用节点组织提示词、参考素材和生成配置。' and '新建工作流' with NO language ternary, while line 482 correctly uses language==='zho'?'创建项目':'Create project'. English mode leaves the center empty-state CTA in Chinese — a real, structural i18n gap, not tester error. STANDS."
+    },
+    {
+      "id": "UX-FTC-06",
+      "group": "user",
+      "title": "Node-type menu exposes unexplained technical terms to a first-time creator",
+      "severity": "P2",
+      "scenario": "ftc-08-agent-drop.mjs — double-click canvas / 添加节点 to create a generation node",
+      "steps": [
+        "Double-click empty canvas (per hint '双击工作流空白处…')",
+        "Read the new-node menu"
+      ],
+      "evidence": [
+        "Menu items: '图片生成 / 视频生成 / 文本生成 / 脚本节点(剧本拆解、分镜编排和批量生成) / 音频参考 / 配置节点(模型、尺寸和生成参数)'",
+        "Model picker (选择图片模型) opens provider list 'GPT Image OpenAI·0/1, Gemini Image Google·0/3, Seedream ByteDance·0/2, Midjourney·0/1' — all 0/N with '去配置', i.e. every model needs prior credential setup",
+        "Node created shows '🔑未配置 AI 服务' before any prompt can run.",
+        "Screenshots: ftc-add-node-menu.png, ftc-model-picker.png, ftc-image-node.png"
+      ],
+      "consequence": "Creating a node works (M3 for mechanics) but every generative capability is pre-gated on provider credentials with '0/N' jargon. A first-timer can place a node yet cannot generate — the gap between 'node on canvas' and 'actual output' is never bridged in-product. M1 for end-to-end generation.",
+      "status": "STANDS",
+      "defense": "Confirmed. The node-type menu and model picker expose '0/N' credential-gated providers ('GPT Image OpenAI·0/1','去配置') with no in-product bridge from 'node placed' to 'can generate'. A first-timer can place a node but every generative capability requires prior BYOK setup. Accurate observation of a real onboarding gap. STANDS."
+    },
+    {
+      "id": "UX-HEU-01",
+      "group": "ux",
+      "title": "Delete current workflow executes instantly with no confirmation and no undo",
+      "severity": "P0",
+      "scenario": "heu-canvas2.mjs — user opens Flovart menu and clicks 删除当前工作流 on a populated canvas",
+      "steps": [
+        "Create a workflow (empty state → 新建工作流), add a 文本 node so the canvas has real content",
+        "Open the Flovart top-left menu",
+        "Click 删除当前工作流"
+      ],
+      "evidence": [
+        "results/judgeD1 heu01={clicked:\"删除当前工作流\",dialog:0,nodesAfter:0,toast:[],bodyHasEmpty:true}",
+        "results/judgeB1 heu01 same: dialog:0 toast:[]"
+      ],
+      "consequence": "A single accidental click on a menu item destroys the entire workflow and all its nodes. No confirmation, no undo offer, no toast. NN/g error-prevention violated on the most destructive action in the app.",
+      "status": "FIXED",
+      "defense": "Reproduced twice (judgeB1 + judgeD1): Flovart menu → 删除当前工作流 executes instantly — nodes→0, zero role=dialog/alertdialog, zero toast, empty-state returns. No confirmation, no undo offer. Confirmed P0.",
+      "verdict": "CONFIRMED",
+      "judge": "ReproducerJudge",
+      "fix": "components/studio/StudioTopMenu.tsx: 'Delete current workflow' menu item now opens an inline role=alertdialog inside the Flovart popover instead of executing instantly. Dialog shows the project title, requires clicking 'Delete' to confirm, offers 'Cancel'. Verified live — judge-04-batch now reports dialog:1 (was 0) and nodes stay at 2 until confirmed."
+    },
+    {
+      "id": "UX-HEU-02",
+      "group": "ux",
+      "title": "Documented Delete/Backspace shortcut does nothing on a selected node — silent no-op",
+      "severity": "P0",
+      "scenario": "heu-canvas2.mjs + heu-canvas3.mjs — user selects a node and presses Delete, exactly as the in-app shortcut card instructs",
+      "steps": [
+        "Add a 文本 node; it is created already selected (class is-selected)",
+        "Click the node body to ensure it holds selection (still is-selected)",
+        "Press Delete; press Backspace"
+      ],
+      "evidence": [
+        "results/judgeE1 heu02={selCount:1, before:2, afterDel:2, focusedTag:\"BUTTON.\"}",
+        "InfiniteWorkflow.tsx:1805 delete handler gated by BLOCKED_TARGET at L1791 which includes button — clicking a node focuses the toolbar add button so Delete is swallowed"
+      ],
+      "consequence": "The app's own documentation teaches a shortcut that does not work. Users press Delete on a clearly selected node, nothing happens, and no feedback explains why — they must independently discover the right-click menu. Silent failure of a documented core gesture.",
+      "status": "FIXED",
+      "defense": "Reproduced (judgeD1, judgeE1): node selected (is-selected, selCount=1), press Delete → node count unchanged (3→3 / 2→2), Backspace same. Shortcut card documents \"Delete 删除节点\" but the window keydown handler at InfiniteWorkflow.tsx:1805 never fires because focus lands on the add-node BUTTON (focusedTag=BUTTON) and BLOCKED_TARGET (L90-91) includes `button` → L1791 early-returns before reaching Delete. Only right-click 删除 works. Documented shortcut silently dead. Confirmed.",
+      "verdict": "CONFIRMED",
+      "judge": "ReproducerJudge",
+      "fix": "components/workflow/InfiniteWorkflow.tsx keydown handler: Delete/Backspace now bypasses BLOCKED_TARGET for button-class targets. Only EDITABLE_TARGET (textarea/input/select/video/audio/contenteditable) still swallows the key — buttons don't consume Delete for their own semantics, so a selected node + focused toolbar button now deletes correctly. Verified live: focus on 'button[aria-label=添加节点]', node is-selected, press Delete → nodeCount drops 1→0 (was a silent no-op)."
+    },
+    {
+      "id": "UX-HEU-03",
+      "group": "ux",
+      "title": "English mode leaves ~all Agent-view strings in Chinese — mixed-language UI",
+      "severity": "P1",
+      "scenario": "heu-probe.mjs step 10 — user clicks 'Switch to English' while on the Agent view",
+      "steps": [
+        "Open Agent view",
+        "Click 'Switch to English' in the top bar"
+      ],
+      "evidence": [
+        "results/judgeB1 heu03={zhChars:28, snippet shows 使用节点组织提示词…新建工作流 while chrome is English}",
+        "AgentWorkspace.tsx:25 hardcoded zh literals"
+      ],
+      "consequence": "An English-speaking user gets an English frame around a Chinese product — agent status, errors and CTAs are unreadable. Consistency + real-world-match violated.",
+      "status": "DEFERRED",
+      "defense": "Reproduced with correct toggle (title-attr click, judgeB1): after Switch to English the top bar is English (Workflow/Agent/Offline/Production ready/Canvas/Table/Layers) BUT the Agent-workspace empty-state card stays Chinese: \"使用节点组织提示词、参考素材和生成配置。新建工作流\" and AgentWorkspace.tsx:25 is a hardcoded Chinese literal (创建画布后，你和助手可以一起编辑，结果会保存在这里). zhChars=28 remain on the Agent view. Mixed-language confirmed (narrower than \"all Agent strings\" but real).",
+      "verdict": "CONFIRMED",
+      "judge": "ReproducerJudge",
+      "deferred": "English mode leaves ~all Agent-view strings in Chinese. Requires i18n sweep across FlovartAgentPanel + AgentWorkspace — large surface."
+    },
+    {
+      "id": "UX-HEU-04",
+      "group": "ux",
+      "title": "Table view is advertised but unreachable — the 'Table' button never switches views",
+      "severity": "P1",
+      "scenario": "heu-nav.mjs + heu-naming.mjs — user clicks the '画布 | Table' view switch on both empty and populated canvases",
+      "steps": [
+        "On first launch (empty state): click Table in the 画布/Table switch",
+        "On a populated canvas (node created): click Table again"
+      ],
+      "evidence": [
+        "results/judgeB1 heu04empty={found:true,isSelf:true} then heu04emptyAfter={hasTable:true, mainText contains 单素材工作台/INPUT/返回 Workflow}",
+        "results/judgeB1 heu04pop={found:true,isSelf:true} heu04popAfter={hasTable:true}"
+      ],
+      "consequence": "A prominently labeled secondary view is dead UI in both states tested. Users clicking it get absolutely nothing — no view, no message. Unreachable advertised control.",
+      "status": "judged",
+      "defense": "FALSE on current build. Table button found at x=717 y=53 (51px), isSelf:true (hittable), and clicking it DID switch: hasTable:true, mainText rendered the Table workspace (\"单素材工作台 / 当前 Workflow / 未选择素材 / 原始输入·图片 / 返回 Workflow\"). Both empty and populated states switched views. The earlier timeout was a stale locator; the view exists and works. Not reproduced.",
+      "verdict": "NOT_REPRODUCED",
+      "judge": "ReproducerJudge"
+    },
+    {
+      "id": "UX-HEU-05",
+      "group": "ux",
+      "title": "Top-bar '离线' badge shows no tooltip and hijacks navigation to the Agent view",
+      "severity": "P1",
+      "scenario": "heu-ctx.mjs — user hovers then clicks the 离线 status badge in the top bar",
+      "steps": [
+        "Hover 离线 badge → look for a tooltip explaining what is offline",
+        "Click the badge"
+      ],
+      "evidence": [
+        "results/judgeA1 heu05badge={found:true,tag:SPAN,title:\"打开 Agent 工作区\"}, heu05tooltip=[], heu05click={mainHasAgent:true}",
+        "StudioTopMenu.tsx:304-313 badge is a nav button to agent view"
+      ],
+      "consequence": "A status indicator that looks like a label behaves as a navigation button with no explanation — users lose their place trying to learn what 'offline' means. Visibility-of-status plus match-with-real-world violated.",
+      "status": "FIXED",
+      "defense": "Reproduced (judgeA1): 离线 badge is a SPAN in top bar; hover produced zero tooltip elements; click navigated app to Agent view (mainHasAgent:true). The button HAS a title=\"打开 Agent 工作区\" attr but no visible/explained offline meaning — a status-looking badge that hijacks to a nav target with no tooltip naming WHAT is offline. Confirmed.",
+      "verdict": "CONFIRMED",
+      "judge": "ReproducerJudge",
+      "fix": "components/studio/StudioTopMenu.tsx: the 离线/Offline agent badge's title now reads 'Agent 离线 — 打开工作区查看' / 'Agent Offline — open workspace' instead of generic '打开 Agent 工作区'. Tooltip names WHAT is offline (the Agent status from toLocalLinkPublicStatus) and explains the click action, fixing the silent-hijack UX. Verified: title attribute on the button now correctly labels the status."
+    },
+    {
+      "id": "UX-HEU-06",
+      "group": "ux",
+      "title": "No help, docs, about, or onboarding affordance exists anywhere in the app",
+      "severity": "P1",
+      "scenario": "heu-nav.mjs — sweep of every visible button/link/aria-label across all views and dialogs",
+      "steps": [
+        "Enumerate all interactive elements and their text/aria-labels on first launch, drawer tabs, settings, login, agent view",
+        "Search for 帮助|文档|help|docs|guide|教程|快捷键|about|关于"
+      ],
+      "evidence": [
+        "results/judgeA1 heu06={hits:[],bodyTextMatch:false}"
+      ],
+      "consequence": "A tool with BYOK model mapping, provider 'lines', and agent hosts offers users no path to documentation. Help-and-documentation heuristic fails outright; every jargon term (模型映射, 线路, 制作台) is a dead end.",
+      "status": "DEFERRED",
+      "defense": "Reproduced (judgeA1): sweep of all buttons/links/aria-labels for 帮助|文档|help|docs|guide|教程|about|关于|onboard|新手指引 → zero hits; bodyTextMatch:false. Only learning aid is the toolbar 快捷键 popover (which documents the broken Delete). Confirmed.",
+      "verdict": "CONFIRMED",
+      "judge": "ReproducerJudge",
+      "deferred": "No help/docs/about/onboarding affordance anywhere. Feature add, not a defect fix."
+    },
+    {
+      "id": "UX-HEU-07",
+      "group": "ux",
+      "title": "Project name has no visible rename affordance — only double-click works, undiscoverably",
+      "severity": "P1",
+      "scenario": "heu-naming.mjs — user tries to rename '未命名工作流' in the top bar",
+      "steps": [
+        "Hover the project name button — check for tooltip or hint",
+        "Single-click the project name — check for menu/rename affordance",
+        "Double-click (blind guess)"
+      ],
+      "evidence": [
+        "results/judgeC1 heu07={found:true,title:\"点击修改工作流名称\"}, heu07single={input:true}, heu07dbl={input:true}"
+      ],
+      "consequence": "Every project stays '未命名工作流' unless the user blindly double-clicks the title. Recognition-vs-recall fails: the capability is invisible at every surface a user would check.",
+      "status": "judged",
+      "defense": "Partially rebutted on current build: the project-name button now HAS title=\"点击修改工作流名称\" (judgeC1) — a hover tooltip naming the rename affordance, and SINGLE click opens the rename input (input:true), not just double-click. So there IS a discoverable affordance today. However the prosecutor ran an older/ambiguous pass; the affordance is a title-only tooltip with no persistent pencil/menu affordance. Whether a title-attr tooltip satisfies \"visible rename affordance\" is a spec-judgment call → SPEC_AMBIGUITY, leaning fixed.",
+      "verdict": "SPEC_AMBIGUITY",
+      "judge": "ReproducerJudge"
+    },
+    {
+      "id": "UX-HEU-08",
+      "group": "ux",
+      "title": "Disabled 发送 button gives no reason — no tooltip, no inline explanation at the control",
+      "severity": "P1",
+      "scenario": "heu-naming.mjs — user types into the Agent composer and hovers the disabled 发送 button",
+      "steps": [
+        "Open canvas with a project (assistant panel visible in right drawer)",
+        "Type into the composer textarea (enabled, placeholder '请先配置 Agent 文本模型映射')",
+        "Hover/focus the disabled 发送 button"
+      ],
+      "evidence": [
+        "results/judgeC1 heu08 tip=[], agt01 sendDisabled path; placeholder 请先配置… is the only co-located hint"
+      ],
+      "consequence": "Error prevention via disabled controls only works if the control explains itself; here the user must hunt the panel for the reason. Same pattern repeats in the model-mapping select. Minor but systemic.",
+      "status": "DEFERRED",
+      "defense": "Reproduced (judgeC1): 发送 button disabled, hover produced tooltips=[]; no title on the control. Reason lives only in the separate panel error chip (\"需要配置/打开模型映射\"). The disabled control itself is silent. Confirmed.",
+      "verdict": "CONFIRMED",
+      "judge": "ReproducerJudge",
+      "deferred": "Disabled 发送 button gives no reason. Real but small — needs disabled-tooltip pattern across many controls."
+    },
+    {
+      "id": "UX-HEU-09",
+      "group": "ux",
+      "title": "'dev' badge + live clock shipped in the top bar; ambiguous project naming (工作流 vs 项目 vs 画布)",
+      "severity": "P2",
+      "scenario": "heu-nav.mjs / heu-ctx.mjs — top bar observed on every screenshot and region dump",
+      "steps": [
+        "Read the top bar left-to-right on first launch and populated canvas"
+      ],
+      "evidence": [
+        "Header text: 'Flovart Workflow 工作流 Agent dev 10:47:25 离线 制作台就绪 Switch to English' — a literal 'dev' badge and ticking clock are permanent chrome (results/heu-nav3 00-initial)",
+        "The same object is called 工作流 (nav, empty-state 新建工作流, header), 项目 (创建项目 CTA, '助手需要一个 Workflow 项目'), 画布 (Agent view '创建画布后…', Flovart menu '回到画布'), and 'Workflow' in English chrome — four terms for one concept in one screen",
+        "Assistant empty state says '助手需要一个 Workflow 项目' with CTA '创建项目' while canvas says '新建工作流' for the same action"
+      ],
+      "consequence": "A debug build marker in production chrome undermines status trust, and four names for the same object forces users to map synonyms mentally. Minimalism + consistency polish gap.",
+      "status": "STANDS",
+      "defense": "Partially defensible but the core observation is accurate. A 'dev' badge and live ticking clock do ship in the top bar (debug chrome in a production-facing surface), and the same object is genuinely named four ways (工作流/项目/画布/Workflow) — verified: StudioTopMenu uses 工作流, WorkflowWorkspace empty-state uses 项目 ('创建项目'), menu uses 画布. The terminology fragmentation is real. Severity P2 is fair. STANDS (could not disprove; only downgrade severity argument)."
+    },
+    {
+      "id": "UX-HEU-10",
+      "group": "ux",
+      "title": "Node deletion has zero confirmation and zero recovery notice — only Ctrl+Z memory saves you",
+      "severity": "P1",
+      "scenario": "heu-ctx.mjs — user right-clicks a node and picks 删除",
+      "steps": [
+        "Right-click node → context menu (复制 创建副本 运行节点 重命名 删除)",
+        "Click 删除"
+      ],
+      "evidence": [
+        "results/judgeD1 heu10={before:2,after:1,toast:[]}",
+        "results/judgeB1 heu10 same"
+      ],
+      "consequence": "Deletion is silent and instantly destructive at node granularity; recovery depends on recalling an undocumented-by-default shortcut. Error recovery + visibility-of-status gap.",
+      "status": "FIXED",
+      "defense": "Reproduced twice (judgeB1, judgeD1): right-click → 删除 removes node instantly (2→1), toasts=[] — no undo snackbar, no confirm. Ctrl+Z restores (documented in shortcut card only). Confirmed.",
+      "verdict": "CONFIRMED",
+      "judge": "ReproducerJudge",
+      "fix": "components/workflow/InfiniteWorkflow.tsx + WorkflowWorkspace.tsx + App.tsx: added an onNotify prop plumbed WorkflowWorkspace→InfiniteWorkflow→App's toast system. Both delete paths (keyboard Delete via deleteSelection, and right-click context-menu 删除) now fire toast '已删除 N 个节点 — Ctrl+Z 撤销'/'Deleted N nodes — Ctrl+Z to undo' after applyOps. Verified live: right-click → 删除 on a node now produces an isl-shell toast reading '🔄已删除 1 个节点 — Ctrl+Z 撤销' (previously toasts=[])."
+    },
+    {
+      "id": "UX-HEU-11",
+      "group": "ux",
+      "title": "Modal layer ordering: '打开模型映射' quick-fix button is occluded by the collapsed-panel toggle",
+      "severity": "P1",
+      "scenario": "heu-naming.mjs step 5 — with the right panel collapsed, the assistant panel's own '打开模型映射' repair CTA cannot be clicked",
+      "steps": [
+        "Collapse the right panel (收起右侧面板)",
+        "Try to click '打开模型映射' — the button the app gives to fix the '需要配置' error"
+      ],
+      "evidence": [
+        "results/judgeE1 heu11={rect x=1511 w=23, cx=1523, inViewport:false, coveringChain:[]} + heu11click=\"timeout\"",
+        "results/judgeD1 heu11 same rect x=1511, covering null"
+      ],
+      "consequence": "The app's own remediation button for the most common blocking error is covered by a floating panel toggle. Users see the error and its fix but cannot click it — an occlusion defect, not just taste.",
+      "status": "FIXED",
+      "defense": "Reproduced & sharpened (judgeD1/judgeE1): with the right panel collapsed, the 打开模型映射 button is rendered at x=1511 (cx=1523 > vw 1440) — pushed OFF-VIEWPORT, elementFromPoint null, getByText click timed out twice. The repair CTA for the blocking config error is unreachable while the panel is collapsed (whether occluded by the toggle or off-edge — either way physically unclickable). Confirmed.",
+      "verdict": "CONFIRMED",
+      "judge": "ReproducerJudge",
+      "fix": "Same root cause as UX-FTC-01 — fixed by StudioRightDrawer.tsx display:none when collapsed. The '打开模型映射' quick-fix button inside FlovartAgentPanel used to render at x=1511 (off-viewport) inside the 2px collapsed drawer; now the drawer either renders open (button reachable at x=1251 inside) or display:none (button not in a11y/hit-test tree at all). Verified live: judge-04-batch heu11.rect now {x:1251, y:100, w:68, isSelf:true} — elementFromPoint hits the actual button."
+    },
+    {
+      "id": "UX-HEU-12",
+      "group": "ux",
+      "title": "Settings '× 关闭设置' is the only close path — no backdrop click, and Escape works but is undiscoverable",
+      "severity": "P2",
+      "scenario": "heu-project.mjs — dismiss the Settings overlay",
+      "steps": [
+        "Open 设置 → full-screen overlay with tabs AI 服务/模型映射/安全",
+        "Try clicking outside the dialog (backdrop)",
+        "Press Escape"
+      ],
+      "evidence": [
+        "Escape does close it (metric settingsEscapeCloses=1) — good; but nothing on the dialog signals that (no 'Esc' hint on the × button, tooltip=[])",
+        "The dialog header copy '主题与语言请在顶栏切换' shows the app knows users look for things here — yet offers no keyboard hint or backdrop affordance; the add-service form has 15 fields with no 'cancel/discard' button visible (results/heu-naming2/02-add-service-form)",
+        "Login dialog likewise: only an icon 'Close' (English aria-label in zh UI — 'Close'/'Show' labels untranslated inside 登录 dialog, results/heu-probe2/07-login)"
+      ],
+      "consequence": "Dismissal relies on convention guesses; the untranslated 'Close'/'Show' aria-labels inside a Chinese dialog also break consistency for screen-reader users. Polish-level but repeatable.",
+      "status": "DEFENDED",
+      "defense": "Largely defensible. Escape DOES close Settings (metric settingsEscapeCloses=1) — so a standard dismissal path works. The complaint reduces to 'no backdrop click' and 'no visible Esc hint' — both polish-level, not functional gaps. Many modal UIs omit backdrop-click intentionally (a 15-field add-service form shouldn't lose state on a misclick). The × 关闭设置 button is present and labeled. The untranslated 'Close'/'Show' aria-labels are a real (minor) a11y inconsistency, but the headline claim 'only one close path' is wrong — Escape is a second, working path."
+    },
+    {
+      "id": "UX-HEU-13",
+      "group": "ux",
+      "title": "Zoom control '100%' is a button that accepts no click — dead affordance on the toolbar",
+      "severity": "P2",
+      "scenario": "heu-canvas.mjs — user clicks the '100%' zoom readout expecting zoom options",
+      "steps": [
+        "Click the '100%' toolbar button"
+      ],
+      "evidence": [
+        "locator.click timed out — element is not clickable although rendered as a toolbar control beside clickable peers (heu-canvas log 'zoom: locator.click: Timeout')",
+        "Toolbox menu (工具箱) offers 适应视图/切换网格/滚轮：平移 — real zoom actions live one menu away, making the dead '100%' readout a false affordance"
+      ],
+      "consequence": "A percent readout styled among buttons invites a click that never lands. Minor dead affordance; zoom reset must be discovered inside 工具箱.",
+      "status": "DEFENDED",
+      "defense": "TESTER ERROR — wrong locator. The zoom '100%' control is a real button with accessible name '重置缩放' and an onClick that opens a zoom menu (WorkflowToolbar.tsx:126). Verified live: getByRole('button',{name:'重置缩放'}) clicks cleanly and reveals '放大/缩小/适应视图/重置缩放'. The prosecutor clicked the text '100%' which is the button's label text, not its accessible name — a locator-miss, not a dead control. The zoom affordance works correctly."
+    },
+    {
+      "id": "UX-HEU-14",
+      "group": "ux",
+      "title": "System status fragmentation: three disconnected offline/config states shown with no single health surface",
+      "severity": "P1",
+      "scenario": "heu-nav/heu-probe — user tries to understand overall app health on first launch",
+      "steps": [
+        "Read top bar: '离线' badge + '制作台就绪' badge coexist",
+        "Open Agent view: Codex '离线 Beta', WorkBuddy '离线 实验性', DeepSeek '离线 实验性', each with bare 重试",
+        "Canvas assistant panel: separate '需要配置 / 错误' state"
+      ],
+      "evidence": [
+        "results/judgeA1 heu14={hasOffline:true,hasReady:true,headStart shows 离线 then 制作台就绪}"
+      ],
+      "consequence": "Users cannot answer 'is the app working?' — the chrome says ready and offline at once, retries are silent, and the diagnostic surface is behind jargon. Visibility-of-system-status fails at the app level even though each piece has a status widget.",
+      "status": "DEFERRED",
+      "defense": "Reproduced (judgeA1): top bar simultaneously shows 离线 AND 制作台就绪 side-by-side (hasOffline:true, hasReady:true). Agent view separately shows Codex/WorkBuddy/DeepSeek all 离线 + bare 重试; canvas panel separately shows 需要配置/错误. Three disconnected status surfaces, contradictory ready/offline chrome. Confirmed.",
+      "verdict": "CONFIRMED",
+      "judge": "ReproducerJudge",
+      "deferred": "Status fragmentation: three disconnected offline/config states. Requires status-model consolidation."
+    },
+    {
+      "id": "UX-AGT-01",
+      "group": "user",
+      "title": "Built-in Agent drawer works beside canvas but web session is unusable: send is blocked by 'model mapping' + 'desktop only' errors",
+      "severity": "P1",
+      "scenario": "eval/product-maturity/scenarios/ux-agent-full.mjs + ux-agent-pass2.mjs",
+      "steps": [
+        "Create project, open right drawer (打开右侧面板 / 打开 Agent toolbar button)",
+        "Agent tab is active; composer textarea visible at x=1102 w=316 inside 360px drawer",
+        "Type 'bubble-check-77' and click 发送 (send)",
+        "Inline errors render: '对话需要配置…请在设置的\"模型映射\"中为 Agent 文本能力配置可用线路' and 'Flovart Agent 未连接：仅桌面端可用'",
+        "Composer retains typed text (taValue unchanged after send); no message bubble is appended"
+      ],
+      "evidence": [
+        "results/judgeC1 agt01={taPlaceholder, needConfig:true, errorChip:true}, afterSend={errors:[需要配置,错误…], bubbleAdded:false}"
+      ],
+      "consequence": "On the web/dev build the built-in assistant cannot complete its core task — every send is rejected with config/desktop-only errors. Placeholder '请先配置 Agent 文本模型映射' advertises a prerequisite with no in-drawer deep link except a tiny '打开模型映射' text button (68x14px, x=1251). User must discover Settings → model mapping with no guided path. Keeping the draft on failure is good; silent-send semantics are fine because an inline error is shown, but a first-time user has no way to make the assistant work from the drawer alone. Maturity: M2 (usable surface, hard-blocked by unguided prerequisite).",
+      "status": "DEFERRED",
+      "defense": "Reproduced (judgeC1): composer textarea present, placeholder 请先配置 Agent 文本模型映射; typed draft retained; send control disabled (sendPt:null); inline errors 需要配置 + 请在设置的\"模型映射\"中…配置可用线路. No in-drawer guided path except the tiny 打开模型映射 text button. Core task blocked by unguided prerequisite. Confirmed.",
+      "verdict": "CONFIRMED",
+      "judge": "ReproducerJudge",
+      "deferred": "Built-in Agent drawer works beside canvas but web session unusable: send blocked by needsConfiguration gate. Subsumes UX-FTC-03 — same fix area."
+    },
+    {
+      "id": "UX-AGT-02",
+      "group": "user",
+      "title": "Generation-mode popover does not dismiss on Escape or outside click; while open it blocks the composer textarea",
+      "severity": "P1",
+      "scenario": "eval/product-maturity/scenarios/ux-agent-pass4.mjs + ux-agent-pass5.mjs",
+      "steps": [
+        "Open Agent drawer, click the '自动' (生成模式) button in composer controls",
+        "Popover '手动模式每个写操作前询问 / 自动模式可逆操作自动推进…' opens over the composer area",
+        "Press Escape → popover still open; click canvas at (500,450) → still open",
+        "Try to click the textarea → '自动模式' <strong> element intercepts pointer events; click times out (8000ms)",
+        "Only re-clicking the same small trigger button dismisses it (verified pass5: toggleDismisses=1, composer reachable after)"
+      ],
+      "evidence": [
+        "results/judgeC1 agt02={popAfterOpen:1,afterEsc:1,afterOutside:1,taHit.isSelf:false covering STRONG,afterToggle:0}"
+      ],
+      "consequence": "A stuck overlay can dead-end the chat composer: users who open the mode menu and click away (the universal dismissal pattern) leave an invisible-blocker state where typing appears impossible. Violates popover conventions (Escape + outside click). P1: recoverable (re-click trigger) but non-obvious; blocks the primary input until discovered.",
+      "status": "FIXED",
+      "defense": "Reproduced (judgeC1): clicked 自动 mode trigger → popover open (1). Escape → still open (1). Outside click at (500,450) → still open (1). Textarea hit-test while popover open → isSelf:false, covered by STRONG element. Only re-clicking the trigger dismissed (afterToggle:0). Violates Escape+outside-click popover convention; blocks composer. Confirmed.",
+      "verdict": "CONFIRMED",
+      "judge": "ReproducerJudge",
+      "fix": "components/agent/FlovartAgentPanel.tsx: added a document-level Escape keydown + mousedown listener that dismisses all transient popovers in the agent panel (modeOpen, infoPanel, sessionsOpen, mentionOpen, attachmentOpen). Outside clicks close the popover; clicks inside the popover or on the trigger button are filtered out so menu items still register. Verified live: judge scenario pops the 自动 mode trigger → Escape now closes it; outside click at (500,450) also closes it; composer textarea hit-test no longer covered while popover is open."
+    },
+    {
+      "id": "UX-AGT-03",
+      "group": "user",
+      "title": "Drawer overlays canvas instead of docking: right 360px of canvas is covered; canvas does not reflow",
+      "severity": "P2",
+      "scenario": "eval/product-maturity/scenarios/ux-agent-full.mjs + ux-agent-pass6.mjs",
+      "steps": [
+        "Open Agent drawer (aside x=1080 w=360, position absolute z-78)",
+        "Canvas host stays full width: workflow-editor rect x=0 w=1440 unchanged",
+        "Drawer covers canvas columns 1080–1440; nodes panned under it are unreachable (elementFromPoint returns aside subtree)"
+      ],
+      "evidence": [
+        "domAssertion: GEOM {aside x=1080 w=360, canvas x=0 w=1440} — canvas width does not shrink when drawer opens",
+        "metric: drawerOverlayPx=360",
+        "screenshot: results/1789872653631-…/10-drawer-open.png"
+      ],
+      "consequence": "Canvas remains 'visible' (letter of the requirement) but up to 25% of the working surface is occluded while chatting; users lose sight of right-side nodes/edges and must close the drawer to reach them. A docked layout (canvas reflows to x=0..1080) or auto-pan would preserve full context. P2 polish/architecture characteristic.",
+      "status": "STANDS",
+      "defense": "Accurate observation: StudioRightDrawer aside is position:absolute at right:0 and the canvas main does not reflow (rightPanelInset only pads, doesn't resize the surface the same way). Right ~360px is occluded. This is arguably an overlay-drawer design choice (VS Code/Figma do the same), not a strict defect, but the factual claim (canvas covered, no reflow) is true. STANDS at P2; defense only reduces it to 'design tradeoff', not a bug."
+    },
+    {
+      "id": "UX-AGT-04",
+      "group": "user",
+      "title": "Drawer resize works via 8px edge handle but affordance is easy to miss and width is not discoverable",
+      "severity": "P2",
+      "scenario": "eval/product-maturity/scenarios/ux-agent-resize.mjs + ux-agent-pass6.mjs",
+      "steps": [
+        "Hover drawer left edge → 8px invisible strip with cursor ew-resize (x=1077, w=8, no visual affordance)",
+        "Drag right: width shrinks 360→280 (works); drag left from new edge widens",
+        "No width indicator, no snap points, no double-click preset (dblclick did nothing)"
+      ],
+      "evidence": [
+        "runtimeState: aside rect 360→280 after drag; handle element 'absolute inset-y-0 left-0 z-[85] w-2 -translate-x-1/2 cursor-ew-resize' has no visible grip",
+        "metric: resizeFinalWidth=280"
+      ],
+      "consequence": "Resize is functional (not broken — earlier no-change readings were off-handle drags) but the only hint is a cursor change on an invisible 8px strip; most users will never discover the drawer is resizable.",
+      "status": "STANDS",
+      "defense": "Accurate. The resize handle is an 8px invisible strip (StudioRightDrawer.tsx:96-106, w-2, -translate-x-1/2, cursor-ew-resize) with no visible grip, no width readout, no snap points. Resize works but is undiscoverable. Verified in source — purely cursor-change affordance on a transparent strip. STANDS at P2."
+    },
+    {
+      "id": "UX-AGT-05",
+      "group": "user",
+      "title": "Collapsed-state hit targets collide: 'open right panel' floating button overlaps the collapsed rail/edge zone",
+      "severity": "P2",
+      "scenario": "eval/product-maturity/scenarios/ux-agent-drawer.mjs (first run) + ux-agent-full.mjs reload state",
+      "steps": [
+        "With drawer collapsed (aside w=2 at x=1438), the '打开右侧面板' floating button sits at x=1400 w=40 — overlapping the rail",
+        "In first run, a plain (non-forced) click on '收起右侧面板' timed out: pointer events intercepted by '打开右侧面板' svg (57 retries)",
+        "After reload with drawer auto-reopened, clicking '打开右侧面板' was intercepted by the open aside itself (data-open=true still showing the open button behind it)"
+      ],
+      "evidence": [
+        "Playwright actionability log: 'svg … lucide-panel-right-open … subtree intercepts pointer events' when targeting collapse button",
+        "After reload: aside[data-open=true] intercepts pointer events over the still-rendered open button",
+        "trace: results/1789872330474-…/trace.zip"
+      ],
+      "consequence": "Stacked/duplicate affordances at the same screen edge make open/close feel flaky depending on state; the open button should hide (or become the collapse toggle) whenever the panel is already open, and vice-versa.",
+      "status": "STANDS",
+      "defense": "The hit-target collision is real. The '打开右侧面板' floating button (z-80) and the drawer aside (z-78) share the right edge; during state transitions the open button's pointerEvents and the aside's z-order produce interception (trace evidence in the finding). Even though line 82 sets pointerEvents:none when open, the transient/stacking collision was observed with 57 retries. STANDS."
+    },
+    {
+      "id": "UX-AGT-06",
+      "group": "user",
+      "title": "VERIFIED OK: in-canvas Agent drawer exists — no need to leave canvas to chat",
+      "severity": "P2",
+      "scenario": "eval/product-maturity/scenarios/ux-agent-full.mjs",
+      "steps": [
+        "Create project → right drawer contains tabs Agent | Context | History",
+        "Composer textarea ('开始你的创作，或者 @ 引用工作流/节点/资源'), Skill picker, attachment, 安全边界, 生成模式, 发送 all present inside drawer at x=1080–1440",
+        "Canvas (workflow-editor 1440x816) stays mounted while chatting; open/close round-trip works (composer hidden when closed, restored on reopen)",
+        "Chat/draft content persists across close→open ('persist-check-123' still present)",
+        "After full page reload, drawer auto-reopens in open state bound to the same project (data-open=true)",
+        "@-mention opens 'agent-reference-picker' (引用节点或我的素材); with a node present it lists '图片 1 image' and inserts a chip on click",
+        "Approval policy exists: 确认策略 popover documents 手动模式 (ask before each write) / 自动模式 (reversible auto; delete/paid/Production/cancel always confirm)",
+        "Top-nav 'Agent' leads to a separate full-page agent picker (canvas unmounted) — redundant path, not required for chatting"
+      ],
+      "evidence": [
+        "assertions passed: drawer open beside canvas, composer visible, canvas wide, persistence, mention picker, return from Context/History tabs",
+        "metrics: mentionPicker=1, toggleDismisses=1, resizeFinalWidth=280",
+        "screenshots: 10-drawer-open, 41-reopened, 65-mention-node, 71-picker-with-node, 72-mention-inserted"
+      ],
+      "consequence": "Core requirement met: the in-canvas drawer path works end-to-end at M2-M3 — layout, tabs, composer, persistence, project binding, @-mentions, and a documented approval policy are all present. What blocks M4 is the unguided model-mapping prerequisite (UX-AGT-01) and popover dismissal (UX-AGT-02). Since the backend is desktop-only in this build, live approval prompts for mutating actions could not be exercised end-to-end — only the policy surface was verified.",
+      "status": "STANDS",
+      "defense": "This is a VERIFIED-OK finding, not a defect — it confirms the in-canvas Agent drawer works end-to-end. No defense needed; it correctly records a passing capability. STANDS (as a positive observation)."
+    },
+    {
+      "id": "ARCH-PATH-01",
+      "group": "arch",
+      "title": "browserWorkflowContract.ts is a pass-through seam wearing a 'contract' name — owns only a version string, no validation or mapping",
+      "severity": "P2",
+      "scenario": "Path B (Built-in Agent -> Workflow mutation) trace",
+      "steps": [
+        "Read services/browserWorkflowContract.ts end-to-end",
+        "Trace all dispatch() callers: services/workflowAgentBridge.ts:270,274 and services/browserAgentKernel.ts:429,433",
+        "Compare with what the contract adds vs dispatchWorkflowCommand directly"
+      ],
+      "evidence": [
+        "codePath: services/browserWorkflowContract.ts:10-17 — createBrowserWorkflowContract returns Object.freeze({version, dispatch}) where dispatch defaults verbatim to dispatchWorkflowCommand",
+        "codePath: services/workflowAgentBridge.ts:163-167 — bridge stores the contract; all real validation (envelope shape, confirmation, idempotency, revision) lives downstream in workflowDispatcher.ts:209-443",
+        "codePath: services/browserAgentKernel.ts:405,429 — kernel creates its own contract instance and calls dispatch; the layer contributes nothing either path couldn't call directly"
+      ],
+      "consequence": "A named boundary that owns no responsibility invites drift: two instantiation sites, an injectable dispatch parameter used only by tests, and a version constant nothing negotiates. Not a bug today — a maintenance hazard: future contributors may assume contract-level guarantees (schema, auth) that do not exist there.",
+      "status": "STANDS",
+      "defense": "Attempted defense failed: verified services/browserWorkflowContract.ts:10-17 is a verbatim pass-through — createBrowserWorkflowContract returns {version, dispatch} with dispatch defaulting to dispatchWorkflowCommand. Grep confirms NO caller ever injects the dispatch parameter (only two instantiation sites: workflowAgentBridge.ts:166 and browserAgentKernel.ts:405, both call createBrowserWorkflowContract() with no arg). BROWSER_WORKFLOW_CONTRACT_VERSION is never negotiated — nothing reads .version. The injectable seam exists only in theory; it is dead flexibility wearing a 'contract' name while all real validation (envelope shape, idempotency, revision, confirmation) lives in workflowDispatcher.ts:209-443. Real debt: a boundary that owns no responsibility."
+    },
+    {
+      "id": "ARCH-PATH-02",
+      "group": "arch",
+      "title": "Built-in Agent has two confirmation-gate orderings (managed bridge vs browser kernel) that must be kept in sync by hand",
+      "severity": "P1",
+      "scenario": "Path B (Built-in Agent -> Workflow mutation) trace",
+      "steps": [
+        "Trace managed path: FlovartAgentAgentPanel -> WorkflowAgentBridge.handleToolCall",
+        "Trace browser path: BrowserAgentKernel tool execute -> workflowContract.dispatch",
+        "Compare gate order"
+      ],
+      "evidence": [
+        "services/workflowAgentBridge.ts:263-276 pre-dispatch confirmWrite",
+        "services/browserAgentKernel.ts:429-434 dispatch-first, no pre-gate",
+        "FlovartAgentPanel.tsx:246 confirmWrite auto-approves in auto mode"
+      ],
+      "consequence": "Same user intent passes through materially different gate sequences depending on which kernel implementation happens to be active (managed sidecar vs in-page). Any future confirmation rule must be written twice; a rule added to only one path silently diverges the two Agent modes.",
+      "status": "DEFERRED",
+      "defense": "Independently re-traced source. workflowAgentBridge.ts:263-270 managed path pre-gates every non-read workflow command via options.confirmWrite BEFORE dispatch (FlovartAgentPanel.tsx:246 auto-approves only when modeRef===\"auto\"), THEN dispatches and handles confirmation.required for high-risk. browserAgentKernel.ts:429-434 has NO pre-dispatch gate — dispatches first, confirms only on result.confirmation.required. Two materially different orderings kept in sync by hand. Confirmed.",
+      "verdict": "CONFIRMED",
+      "judge": "ReproducerJudge",
+      "deferred": "Built-in Agent has two confirmation-gate orderings (managed bridge vs browser kernel). Real architectural divergence."
+    },
+    {
+      "id": "ARCH-PATH-03",
+      "group": "arch",
+      "title": "Provider-resume failure arm bypasses executor error taxonomy; zero-key sessions never resume and recoveryTasks dedupe suppresses any in-session retry",
+      "severity": "P1",
+      "scenario": "Path E (provider resume -> artifact) trace",
+      "steps": [
+        "Read App.tsx:322-360 recovery effect",
+        "Trace failure arm vs the executor path used for normal runs",
+        "Check gating conditions for when the effect fires"
+      ],
+      "evidence": [
+        "App.tsx:323 (apiKeys.length>0 gate), :331-333 (add before attempt), :349-357 (raw updateProject error arm)"
+      ],
+      "consequence": "A failed resume leaves the node in 'error' with an ad-hoc message that looks identical to a generation failure, losing the recovery provenance; users who open the app without configured keys (or hit one transient failure) see permanently stuck-then-errored nodes with no retry affordance.",
+      "status": "DEFERRED",
+      "defense": "Independently verified App.tsx:322-360. (1) catch arm L349-357 writes {status:error,error:message} via raw updateProject — no WorkflowExecutionError code/runId/correlationId, bypassing normalizeWorkflowExecutionError. (2) L323 requires userApiKeys.length>0 → stuck-loading nodes with absent keys get no resume. (3) L331-333 recoveryTasks.current.add BEFORE async attempt → transient failure permanently suppresses in-session retry. Confirmed.",
+      "verdict": "CONFIRMED",
+      "judge": "ReproducerJudge",
+      "deferred": "Provider-resume failure arm bypasses executor error taxonomy. Refactor."
+    },
+    {
+      "id": "ARCH-PATH-04",
+      "group": "arch",
+      "title": "Artifact registration in App.tsx is post-hoc from committed node metadata — superseded/cancelled runs can register artifacts for storageKeys the project discarded",
+      "severity": "P2",
+      "scenario": "Path D (UI Run -> provider -> artifact) trace",
+      "steps": [
+        "Read App.tsx:300-315 post-run artifact registration",
+        "Compare with runWorkflowGeneration abort/supersede semantics"
+      ],
+      "evidence": [
+        "codePath: App.tsx:306-314 — registerWorkflowArtifact is keyed on generatedNode.metadata.storageKey && context.runId after runWorkflowGeneration returns; the artifact binds whatever storageKey the node currently carries",
+        "codePath: services/workflowGeneration.ts:626-628 — on failure/supersede, prepared node storageKeys are discarded; the still-active request may return the canonical project where the node's storageKey was already pruned or replaced by a newer run",
+        "codePath: services/studio/artifactRegistry.ts:22-43 — registry never validates the storageKey is still referenced; it trusts caller input (bounded by 30min TTL, cap 64)"
+      ],
+      "consequence": "A host can receive an artifactId whose backing blob was already deleted (loadWorkflowArtifact returns null later) — a benign but real dangling-reference window. TTL bounds the leak; correctness would require checking isWorkflowMediaKeyReferenced before registering.",
+      "status": "STANDS",
+      "defense": "Verified App.tsx:306-314 — registerWorkflowArtifact is called post-hoc with whatever storageKey generatedNode.metadata carries after runWorkflowGeneration returns; no isWorkflowMediaKeyReferenced check. workflowGeneration.ts:626-628 discards prepared storageKeys on supersede, so a superseded-but-still-resolved run can register an artifact for a pruned key. artifactRegistry.ts:22-43 trusts caller input (no reachability validation), bounded only by 30min TTL + cap 64. The dangling-reference window is real; TTL makes it benign but does not eliminate it. STANDS — a cheap isWorkflowMediaKeyReferenced guard before registering would close it."
+    },
+    {
+      "id": "ARCH-PATH-05",
+      "group": "arch",
+      "title": "Sidecar lease/revision pre-checks run against the last pushed browser snapshot, widening the blind window the browser-side expectedRevision must catch",
+      "severity": "P2",
+      "scenario": "Path C (Codex CLI -> workflow.apply) trace",
+      "steps": [
+        "Read agent/session.js browserLeaseContext + ensureWorkspaceLease",
+        "Check where currentRevision comes from vs when it was pushed",
+        "Confirm browser re-validation exists"
+      ],
+      "evidence": [
+        "codePath: agent/session.js:187-195 — browserLeaseContext.currentRevision = boundSnapshot.draftVersion, where boundSnapshot is the last POST /workflow/state the browser pushed (services/workflowAgentBridge.ts:187-189 pushes on every project change, but any in-flight gap is stale)",
+        "codePath: agent/session.js:204-233 — lease acquire/validate uses context.currentRevision as baseRevision and validates args.expectedRevision against it",
+        "codePath: components/workflow/draftAuthority.ts:263-273 — authoritative REVISION_CONFLICT check happens in applyWorkflowMutation against live draftVersion, so correctness holds; the sidecar check is advisory"
+      ],
+      "consequence": "Correctness is preserved by the browser-side check, but the lease layer can issue a lease against a stale base revision and the CLI then gets REVISION_CONFLICT rather than a lease error — two layers answering the same question with different freshness. Operators see lease acquisition succeed then mutation fail, which reads as flaky.",
+      "status": "DEFENDED",
+      "defense": "Two-sided revision check is REQUIRED, not redundant. The sidecar (agent/session.js:187-233) can only see boundSnapshot — the last POST /workflow/state the browser pushed — because it has no access to live browser store state. Its expectedRevision check is an advisory early-fail. The authoritative check MUST live browser-side: components/workflow/draftAuthority.ts:263-273 applyWorkflowMutation validates expectedRevision against live draftVersion, which is the only place the truth exists. You cannot collapse the layers — the sidecar literally cannot read live draftVersion. Correctness is preserved (prosecutor concedes 'correctness holds'). The residual is cosmetic: a stale-base lease yields REVISION_CONFLICT instead of a lease error. That is the correct error anyway — the revision did change. DEFENDED: the layered check is a necessary consequence of snapshot-based distribution, not debt."
+    },
+    {
+      "id": "ARCH-PATH-06",
+      "group": "arch",
+      "title": "workbuddy.unAuth unconditionally reports local-ready even when nothing was ever connected — indistinguishable from real logout to the host connector",
+      "severity": "P2",
+      "scenario": "Path F (WorkBuddy Skill -> CLI -> Workflow) trace",
+      "steps": [
+        "Read tools/flovart/cli.js:169-175 unAuth branch",
+        "Compare with workbuddy.auth which performs real ensureFlovart",
+        "Check connector statusMatch contract"
+      ],
+      "evidence": [
+        "codePath: tools/flovart/cli.js:169-175 — unAuth prints {state:'local-ready', message:'…不会注销或影响其它 Host'} unconditionally; no state is inspected or cleared",
+        "codePath: integrations/workbuddy/flovart/cli.json:13-24 — statusMatch is the string '\"state\":\"local-ready\"', so WorkBuddy's connector state machine sees unAuth output as proof of readiness",
+        "codePath: tools/flovart/cli.js:156-158 — comment documents the intent: local-ready semantics, no account to revoke; deliberate design, but the response shape collides with the status contract"
+      ],
+      "consequence": "A WorkBuddy connector that runs unAuth then status-like validation will believe the integration is live even on a machine where flovart-cli was never authenticated or services are down. Documented and intentional, but the success shape is indistinguishable from a real logout — a host-level ambiguity rather than an app bug.",
+      "status": "DEFENDED",
+      "defense": "The unconditional 'local-ready' is the CORRECT connector-contract response, not a bug. tools/flovart/cli.js:156-158 documents the intent explicitly: WorkBuddy's connector lifecycle is local-ready semantics, not an OAuth flow — unAuth must NOT revoke Flovart credentials shared by other Hosts, and there is no WorkBuddy account to clear. Returning anything but 'local-ready' would make the WorkBuddy state machine believe the integration is broken. Critically, the honest readiness signal exists separately: workbuddy.status (cli.js:159-162) calls getLocalStatus() and reports state 'local-ready' vs 'offline' truthfully. unAuth is a no-op acknowledgment by design; status is the real probe. A connector that treats unAuth output as proof of readiness is misusing the contract — WorkBuddy's cli.json statusMatch on '\"state\":\"local-ready\"' applies to status, not unAuth. DEFENDED: intentional contract semantics with a real status surface available."
+    },
+    {
+      "id": "ARCH-STATE-01",
+      "group": "arch",
+      "title": "Selection has 3 owners: persisted project.selectedNodeIds + InfiniteWorkflow useState/selectedIdsRef + background projection poller rewrites it every 1.5s",
+      "severity": "P1",
+      "scenario": "Architecture review of state ownership (source read)",
+      "steps": [
+        "Read components/workflow/InfiniteWorkflow.tsx:279-302,404-447 (local selection mirror + reconciliation effects)",
+        "Read components/workflow/useProductionProjectionAdapter.ts:18-51 (updateProject writes selectedNodeIds on every sync)",
+        "Read services/productionProjectionAdapter.ts:90-135 (1.5s polling sync from Tauri runtime)"
+      ],
+      "evidence": [
+        "useProductionProjectionAdapter.ts:27,45 updateProject patches selectedNodeIds from runtime projection",
+        "productionProjectionAdapter.ts syncNow 1.5s poll"
+      ],
+      "consequence": "A background runtime projection can overwrite an in-progress marquee/click selection; agent 'select_nodes' ops race user clicks with last-write-wins; Table view keeps its own divergent selection copy. Selection is user-owned intent being written by a poller.",
+      "status": "DEFERRED",
+      "defense": "Re-traced. project.selectedNodeIds (store-of-record) + InfiniteWorkflow useState/selectedIdsRef mirror (L279,302,404-409,442-447) + productionProjectionAdapter poller rewrites selectedNodeIds on every sync (useProductionProjectionAdapter.ts:27,45 patch selectedNodeIds; syncNow polls runtime). The poller writing user-selection is the live defect: agent/projection writes race user clicks last-write-wins. \"3 owners\" slightly overstates (TableWorkspace is a separate seeded domain) but the poller-owns-selection core is real. Confirmed.",
+      "verdict": "CONFIRMED",
+      "judge": "ReproducerJudge",
+      "deferred": "Selection has 3 owners (persisted selectedNodeIds + useState/selectedIdsRef + 1.5s projection poller). Real defect — the poller can race user clicks — but fixing means consolidating selection ownership across InfiniteWorkflow + adapter + store, an architectural refactor. Out of scope per fix policy."
+    },
+    {
+      "id": "ARCH-STATE-02",
+      "group": "arch",
+      "title": "Generation status writes bypass draftAuthority: node.metadata.status/progress mutated via plain updateProject — no draftVersion bump, no changeSet, invisible to undo and to lease revision checks",
+      "severity": "P1",
+      "scenario": "Compare mutation paths for the same project document",
+      "steps": [
+        "Read services/workflowGeneration.ts:116-124 (patchInitiator + publish → onProjectChange → store.updateProject)",
+        "Read components/workflow/draftAuthority.ts applyWorkflowMutation (revision-bumping path used by UI edits)",
+        "Read App.tsx:269-291 (onProjectChange → useWorkflowStore.getState().updateProject)"
+      ],
+      "evidence": [
+        "App.tsx:269-291 structural updateProject without draftVersion bump",
+        "workflowGeneration.ts:116-124 publish→onProjectChange, no applyWorkflowMutation"
+      ],
+      "consequence": "The document changes while draftVersion stays constant: an agent holding a lease validated against expectedRevision sees 'unchanged' while nodes mutated; undo cannot revert generation writes; the snapshot pushed to the agent host reports a stale revision.",
+      "status": "DEFERRED",
+      "defense": "Re-traced. Generation writes go patchInitiator→publish→onProjectChange→updateProject (workflowGeneration.ts:116-124) — never applyWorkflowMutation, so no draftVersion bump/changeSet/undo. Critically App.tsx:270-275 ensureWorkflowImageGenerateOperation path updateProject({nodes,connections,selectedNodeIds,draftVersion:project.draftVersion}) — structural node creation WITHOUT bumping draftVersion. Not just telemetry: structural writes bypass draft authority. Confirmed.",
+      "verdict": "CONFIRMED",
+      "judge": "ReproducerJudge",
+      "deferred": "Generation status writes bypass draftAuthority — node.metadata.status/progress mutated outside the authority path. Real refactor."
+    },
+    {
+      "id": "ARCH-STATE-03",
+      "group": "arch",
+      "title": "Provider-task/generation-running fact has 3 representations (persisted node.metadata.status, in-memory activeRequests Map, persisted UsageRecord) — reload orphans all three",
+      "severity": "P1",
+      "scenario": "Reload mid-generation / cancel semantics",
+      "steps": [
+        "Read services/workflowGeneration.ts:79 (activeRequests module Map), :163-172 (cancel only aborts local), :451-455 (providerTaskId + usage rows)",
+        "Read App.tsx:322-360 (recovery effect re-submits nodes with providerTaskId+loading after reload)"
+      ],
+      "evidence": [
+        "workflowGeneration.ts:79 Map, :163-172 cancel does not touch provider task/UsageRecord",
+        "App.tsx:323-360 recovery heuristic"
+      ],
+      "consequence": "Cancel does not cancel the billed remote task; UsageRecord can stay 'running'/'queued' forever (phantom billing). Reloaded nodes stuck in persisted 'loading' depend on a heuristic effect; if keys aren't loaded or providerTaskId absent the spinner never clears and there is no reset affordance.",
+      "status": "DEFERRED",
+      "defense": "Re-traced. activeRequests Map (workflowGeneration.ts:79) is the only cancel handle (in-memory, correct). cancelWorkflowGeneration (L163-172) deletes Map entry + sets idle but does NOT cancel remote provider task nor close UsageRecord → phantom running row/billing. Persisted metadata.status=loading is the only durable signal; recovery heuristic (App.tsx:323) requires apiKeysLoaded+providerTaskId+status=loading. Three representations, reload orphans all three seams. Confirmed.",
+      "verdict": "CONFIRMED",
+      "judge": "ReproducerJudge",
+      "deferred": "Provider-task/generation-running fact has 3 representations. Consolidation is architectural."
+    },
+    {
+      "id": "ARCH-STATE-04",
+      "group": "arch",
+      "title": "Agent connection state has 4 owners: Zustand store mirror + browserWorkflowBinding module + sessionStorage/localStorage credential copies + agent-side session.js truth",
+      "severity": "P1",
+      "scenario": "Multi-tab / reconnect coherence of agent connection",
+      "steps": [
+        "Read stores/useAgentConnectionStore.ts (UI store)",
+        "Read services/browserWorkflowBinding.ts (module-global binding + own listener set)",
+        "Read services/agentConnectionBootstrap.ts:9-12 + services/dockCrewClient.ts:58-82 (token in two sessionStorage keys + url in localStorage)",
+        "Read agent/session.js:40-135 (server-side clients/snapshots/activeClientId truth)"
+      ],
+      "evidence": [
+        "agent/session.js:78-110 server evicts on SSE close",
+        "workflowWorkspaceAdapter.ts:40-115 store is SSE cache",
+        "agentConnectionBootstrap.ts:9-12 vs dockCrewClient.ts:58-72 two credential stores"
+      ],
+      "consequence": "writerStatus/connectionStatus in the UI is eventually-consistent and can display 'active' for a dead writer; reconnect flaps the store while module binding and storage copies each make independent decisions. Second tab silently cannot write (session.js:105-110 first-claimer rule) with no canvas-level indication.",
+      "status": "DEFERRED",
+      "defense": "Re-traced. agent/session.js is sole authority (clients/snapshots/activeClientId, first-claimer). Zustand store is a mirror of SSE events (workflowWorkspaceAdapter.ts:40-115). Credentials split across sessionStorage bootstrap + localStorage dockCrew. So \"4 owners\" overstates into authority+mirror, BUT the coherence defect survives: writerStatus can read active after server revoked (session.js evicts on SSE close, store learns only via event); second tab cannot write with no canvas-level signal. Confirmed (narrowed).",
+      "verdict": "CONFIRMED",
+      "judge": "ReproducerJudge",
+      "deferred": "Agent connection state has 4 owners (Zustand + browserWorkflowBinding module + others). Architectural refactor."
+    },
+    {
+      "id": "ARCH-STATE-05",
+      "group": "arch",
+      "title": "themeMode double-sourced: zustand persist key 'flovart-workspace' AND legacy localStorage 'themeMode.v1' read at store init — last hydration wins",
+      "severity": "P2",
+      "scenario": "Theme persistence across reloads",
+      "steps": [
+        "Read stores/useWorkspaceStore.ts:24-31 (init reads 'themeMode.v1'), :46-62 (persist writes 'flovart-workspace' including themeMode)"
+      ],
+      "evidence": [
+        "stores/useWorkspaceStore.ts:26 (localStorage.getItem('themeMode.v1'))",
+        "stores/useWorkspaceStore.ts:57-62 (partialize persists themeMode under a different key)"
+      ],
+      "consequence": "Two storage keys for one fact; on fresh profile themeMode.v1 wins, after persist hydrate order determines value — theme can silently revert to a stale preference.",
+      "status": "DEFENDED",
+      "defense": "The 'themeMode.v1' read at stores/useWorkspaceStore.ts:24-31 is a one-time legacy-migration seed in the store initializer, not an ongoing dual-writer. Zustand persist (key 'flovart-workspace', version 2) hydrates AFTER init and overwrites themeMode with the persisted value — so the persisted key is authoritative and 'last hydration wins' resolves correctly to the newer source. The 'themeMode.v1' seed only matters on a first-run before any persist record exists, which is exactly what a migration shim is for. The only residual is that the old key is never deleted from localStorage (harmless; it is never read again after persist writes the new key). This is the standard legacy-key migration pattern, not a split-brain — the two keys are not concurrently live because persist hydration always wins. DEFENDED."
+    },
+    {
+      "id": "ARCH-STATE-06",
+      "group": "arch",
+      "title": "Asset library kept as React state in App.tsx PLUS module-global cachedLibrary in assetStorage.ts — getAssetById resolves against the module cache that mutator helpers never update",
+      "severity": "P1",
+      "scenario": "Add asset then immediately reference it from a workflow node (asset-library:<id> storageKey)",
+      "steps": [
+        "Read App.tsx:71,111-127 (React state owner + write-behind persist)",
+        "Read utils/assetStorage.ts:44-61 (cachedLibrary + getAssetById reads cache), :203-236 (addAsset/removeAsset return new lib, do NOT touch cache)"
+      ],
+      "evidence": [
+        "grep setAssetLibraryCache in App.tsx = 0 hits; comment at assetStorage.ts:41-42 is false",
+        "media.ts:365 getAssetById reads the stale module cache"
+      ],
+      "consequence": "Canvas nodes can resolve a deleted asset or fail to resolve a just-added one depending on whether App.tsx remembered to resync the module cache — a split-brain on the same library.",
+      "status": "DEFERRED",
+      "defense": "Independently verified & worse than stated. assetStorage.ts:44 cachedLibrary lazy-populated on first getAssetById (L58-61) and NEVER updated by addAsset/removeAsset/renameAsset (L203-236). The code comment at L41-42 claims \"App.tsx 在加载/增删改素材后会调用 setAssetLibraryCache\" — but grep confirms App.tsx imports addAsset/removeAsset/etc yet has ZERO setAssetLibraryCache calls (grep -c = 0); only caller is a test. So the module cache is stale-forever: canvas node resolving asset-library:<id> (media.ts:365) reads a library that never reflects adds/removes after first resolution. Split-brain confirmed.",
+      "verdict": "CONFIRMED",
+      "judge": "ReproducerJudge",
+      "deferred": "Asset library split between React state in App.tsx and module-global cachedLibrary in assetStorage. Consolidation is architectural."
+    },
+    {
+      "id": "ARCH-STATE-07",
+      "group": "arch",
+      "title": "Workspace lease is validated twice against different state: agent-side session.js AND browser-side workflowAgentBridge.validateBrowserWorkspaceLease",
+      "severity": "P1",
+      "scenario": "Lease expiry/clock-skew path between agent host and browser",
+      "steps": [
+        "Read agent/workspace-lease.js:95-124 (server validate rules)",
+        "Read services/workflowAgentBridge.ts:82-100 (browser-side revalidation before dispatch)"
+      ],
+      "evidence": [
+        "agent/workspace-lease.js:95-128 server-side validate",
+        "services/workflowAgentBridge.ts:82-100 client-side revalidate — each validates different authoritative state"
+      ],
+      "consequence": "A lease valid on one side can be rejected on the other (clock skew, stale currentClientId/currentProjectId reads); errors surface as opaque LEASE_TARGET_CHANGED with no UI distinction between 'lease expired' and 'target changed'. Dead leases linger in health() output until touched.",
+      "status": "judged",
+      "defense": "Re-traced both validators. Defender is right that double validation is REQUIRED by the distribution model — sidecar validates against its boundSnapshot/lease registry (early LEASE_* errors), browser re-validates against live useWorkflowStore (browser is authority, sidecar view stale by construction). Not redundant duplication. Residual concern (dead leases linger, opaque LEASE_TARGET_CHANGED) is real but minor. Whether \"validated twice\" is a defect or correct boundary enforcement is a design/spec call → SPEC_AMBIGUITY.",
+      "verdict": "SPEC_AMBIGUITY",
+      "judge": "ReproducerJudge"
+    },
+    {
+      "id": "ARCH-STATE-08",
+      "group": "arch",
+      "title": "Assistant session backend chosen at mount by connection probe — browser kernel (localforage) vs managed agent (SQLite) hold separate message histories with no migration",
+      "severity": "P1",
+      "scenario": "Start with desktop agent running, restart without it (or vice versa) — chat history changes",
+      "steps": [
+        "Read components/agent/FlovartAgentPanel.tsx:229-291 (getManagedAgentConnection() decides backend per mount)",
+        "Read services/browserAgentKernel.ts:57-81 (localforage session persistence per projectId)",
+        "Read agent/kernel.js:84-93 (SqliteSessionRepo per projectId)"
+      ],
+      "evidence": [
+        "FlovartAgentPanel.tsx:229-270 backend chosen by probe",
+        "browserAgentKernel.ts:57-67 localforage vs agent/kernel.js:84-93 SQLite",
+        "FlovartAgentPanel.tsx:208 frozen activeChangeSetId vs kernel rotation"
+      ],
+      "consequence": "Same project, different assistant history depending on a race-y connection probe; pending drafts and bound production skills don't carry over. Tools built with empty activeChangeSetId while kernel uses its own — idempotency keys disagree inside one session.",
+      "status": "DEFERRED",
+      "defense": "Re-traced. Two backends are necessary (browser kernel localforage vs managed SQLite across a process boundary — cannot share). But the finding survives: (a) backend chosen at mount by connection probe → same projectId shows different chat history across restarts, no migration; (b) concrete embedded bug — FlovartAgentPanel.tsx:208 freezes tools with activeChangeSetId=\"\" while kernel rotates its own (browserAgentKernel.ts:510,700,573) → idempotency keys disagree within one session. Confirmed.",
+      "verdict": "CONFIRMED",
+      "judge": "ReproducerJudge",
+      "deferred": "Assistant session backend chosen at mount by connection probe — localforage fallback path. Architectural."
+    },
+    {
+      "id": "ARCH-STATE-09",
+      "group": "arch",
+      "title": "Three bespoke nonce/listener signal mechanisms instead of one event bus: agentDrawerRequest, promptHistory pendingInsert, agentWorkspaceStore ensureLayout patterns",
+      "severity": "P2",
+      "scenario": "Cross-view 'open X' requests",
+      "steps": [
+        "Read components/workflow/agentDrawerRequest.ts (module nonce + listeners + consume-on-mount)",
+        "Read stores/usePromptHistoryStore.ts:28 (pendingInsert nonce)",
+        "Read components/agent/agentWorkspaceStore.ts:68-82 (ensureLayout pattern)"
+      ],
+      "evidence": [
+        "components/workflow/agentDrawerRequest.ts:10-28 (requestNonce consumed at mount even if already handled by live listener — drawer can re-open unexpectedly)",
+        "stores/usePromptHistoryStore.ts:28,37-38 (same nonce-consume pattern, second implementation)"
+      ],
+      "consequence": "Duplicated one-shot-signal machinery with a real bug: consumeWorkflowAgentDrawerRequest is called on mount regardless of whether the live listener already handled it, so a stale nonce re-triggers the drawer.",
+      "status": "STANDS",
+      "defense": "Verified the embedded bug, which makes this more than a style complaint. components/workflow/agentDrawerRequest.ts:13-16 requestWorkflowAgentDrawer increments requestNonce AND notifies live listeners; the live listener (WorkflowWorkspace.tsx:147 subscribeWorkflowAgentDrawer→openAgentDrawer) handles it but NEVER clears requestNonce. Then on next WorkflowWorkspace mount, L146 consumeWorkflowAgentDrawerRequest() sees nonce>0 → returns true → re-opens the drawer unexpectedly. Confirmed: a request already handled while mounted is re-consumed on remount. The duplicated pattern across agentDrawerRequest + promptHistory pendingInsert (usePromptHistoryStore.ts:28,91-92) + agentWorkspaceStore ensureLayout is real bespoke-signal sprawl. Whether 'one event bus' is the right fix is arguable, but the stale-nonce re-open bug is concrete. STANDS."
+    },
+    {
+      "id": "ARCH-STATE-10",
+      "group": "arch",
+      "title": "runtimeArtifacts blobCache is an unbounded Map<taskId, Promise<Blob>> — every runtime artifact held in memory for session lifetime",
+      "severity": "P2",
+      "scenario": "Long desktop session with many runtime-managed generations",
+      "steps": [
+        "Read services/runtimeArtifacts.ts:8-23"
+      ],
+      "evidence": [
+        "services/runtimeArtifacts.ts:8 (const blobCache = new Map()), :22 (set on success, only deleted on error)"
+      ],
+      "consequence": "Unbounded growth: every generated image/video blob cached forever; no eviction on project switch or media release.",
+      "status": "STANDS",
+      "defense": "Verified services/runtimeArtifacts.ts:8-23 — blobCache is a module-global Map<taskId, Promise<Blob>> set on success, deleted ONLY on invoke error (L19). No eviction on project switch, no size cap, no TTL; a long desktop session accumulates every generated image/video blob in memory for the session lifetime. The only mitigation is that loadRuntimeArtifactBlob is gated by isTauri() (L11), so the leak is desktop-only — but that is the target environment for heavy generation. No architectural necessity for an unbounded cache: an LRU or a release-on-unload hook would suffice. STANDS — real unbounded-growth debt."
+    },
+    {
+      "id": "ARCH-STATE-11",
+      "group": "arch",
+      "title": "WorkflowProject.agentSessions/activeAgentSessionId persisted fields are dead schema — all writers set [] but migrations keep carrying them",
+      "severity": "P2",
+      "scenario": "Project document schema hygiene",
+      "steps": [
+        "Read components/workflow/types.ts:432-433, store.ts:22-23, migrations.ts:85-86, projectTransfer.ts:239"
+      ],
+      "evidence": [
+        "components/workflow/types.ts:432-433 (fields declared)",
+        "components/workflow/store.ts:22-23 (always initialized to [] / null; grep shows no writer that populates them)",
+        "components/community/WorkflowUploadModal.tsx:82-84, projectTransfer.ts:239 (explicitly nulled)"
+      ],
+      "consequence": "Persisted per-project fields that nothing reads/writes — dead weight in every project record, misleads future work into thinking per-project agent sessions exist in the document.",
+      "status": "STANDS",
+      "defense": "Confirmed dead schema. components/workflow/types.ts:432-433 declares agentSessions/activeAgentSessionId; every writer initializes to []/null (store.ts:22-23, communityTypes.ts:60-61, WorkflowUploadModal.tsx:82-83, projectTransfer.ts:239) and grep shows NO reader that consumes a populated value. migrations.ts:85-86 carries them forward on every load. One complication for removal: projectTransfer.ts:117 requires Array.isArray(value.agentSessions) in the import validator, so the field is load-bearing in the import contract — deleting it requires updating the validator + migration, not just the type. That makes it load-bearing dead schema rather than trivially deletable, but it is still dead weight in every persisted project record and misleads future work. STANDS."
+    },
+    {
+      "id": "ARCH-STATE-12",
+      "group": "arch",
+      "title": "Clipboard duplicated: InfiniteWorkflow clipboardRef (node graph) + useClipboardStore (media items) updated by same handlers, can desync",
+      "severity": "P2",
+      "scenario": "Copy nodes, paste across surfaces",
+      "steps": [
+        "Read components/workflow/InfiniteWorkflow.tsx:286,434,1688-1718,2423; stores/useClipboardStore.ts"
+      ],
+      "evidence": [
+        "components/workflow/InfiniteWorkflow.tsx:286 (clipboardRef) + :1688 (setItems to store) + :434 (clipboardRef cleared without clearing store)",
+        "stores/useClipboardStore.ts:20-24 (independent store)"
+      ],
+      "consequence": "Two clipboard facts; clearing the ref leaves stale media items in the store — paste in another surface yields nodes that no longer exist in the canvas clipboard.",
+      "status": "DEFENDED",
+      "defense": "The two clipboards hold different payloads for different paste semantics — this is domain separation, not duplication. InfiniteWorkflow clipboardRef holds whole WorkflowNode objects (graph copy: positions, connections context, metadata) for canvas-internal node paste (pasteSelection L1705-1717 re-ids and offsets them). useClipboardStore holds extracted media Blobs (kind/mimeType/naturalWidth) for cross-surface media paste and OS clipboard write (L1690-1694 writes ClipboardItem). pasteSelection prefers the graph clipboard and falls back to media items (L1718+) — intentional: copying nodes pastes nodes; copying media-only falls back to media. The 'desync' at L434 (project switch clears clipboardRef but not the store) is the FEATURE: media assets are meant to carry across projects while a node-graph selection is project-scoped. Two facts, two lifetimes, two consumers. DEFENDED — not a desync bug, an intentional per-project-graph vs cross-project-media split."
+    },
+    {
+      "id": "ARCH-STATE-13",
+      "group": "arch",
+      "title": "Media GC reachability depends on module-global canonicalReferences mirror of project nodes + unregistered transientReferences owner strings",
+      "severity": "P2",
+      "scenario": "Undo history / clipboard holding storageKeys while project deleted",
+      "steps": [
+        "Read components/workflow/media.ts:35-95; store.ts setWorkflowMediaCanonicalProjects call sites"
+      ],
+      "evidence": [
+        "components/workflow/media.ts:35-68 (canonicalReferences + transientReferences + pendingReferences module state)",
+        "components/workflow/media.ts:56-62 (owner-string registry; forgetting unregister leaks forever)"
+      ],
+      "consequence": "A second hidden copy of 'which storageKeys exist' driven by manual register/unregister calls; a missed unregister permanently retains blobs; pruneWorkflowMedia races an in-flight write because canonical mirror updates inside store setters.",
+      "status": "DEFENDED",
+      "defense": "The finding mislabels the mechanism as 'a second hidden copy of which storageKeys exist' — it is not a copy. media.ts:37 canonicalReferences is REBUILT from project nodes on every setWorkflowMediaCanonicalProjects call (L52-54 collectWorkflowMediaKeys) — derived, not mirrored state. The necessary part is transientReferences (L35) + pendingReferences (L36): GC reachability CANNOT be computed from project.nodes alone because a storageKey may be reachable only via an undo-history snapshot, the clipboard, or an in-flight write not yet committed. pruneWorkflowMedia (L64-69) correctly unions canonical + pending + transient before deleting — without the transient registry, undo/clipboard-held blobs would be GC'd. A side-channel reachability registry is the correct architecture for GC over ephemeral refs. Residual risk is real but operational: a missed unregisterWorkflowMediaTransientReferences leaks a blob until reload (bounded, transientReferences is module-lifetime not persistent). DEFENDED — the registry is necessary for correct GC; the fragility is a missed-cleanup risk, not wrong structure."
+    },
+    {
+      "id": "UX-PRO-01",
+      "group": "user",
+      "title": "Selected node's inline prompt bar is a large floating overlay that occludes the Add-Node dropdown menu",
+      "severity": "P1",
+      "scenario": "eval/product-maturity/scenarios/ux-pro10-overlay-block.mjs + ux-pro11-overlay-workaround.mjs",
+      "steps": [
+        "Create a workflow via the empty-state CTA",
+        "Add a 文本 (text) node via toolbar 添加节点 -> it is auto-selected",
+        "While the node stays selected, open the toolbar 添加节点 menu again",
+        "Try to click the 图片 (image) menu item"
+      ],
+      "evidence": [
+        "results/judgeE1 pro01.coveringChain → DIV.inline-prompt-bar [OVERLAY]; pro01click=\"timeout\"",
+        "results/judgeD1 pro01esc overlays stayed 5 → Escape does not dismiss"
+      ],
+      "consequence": "While a node is selected, its 864px prompt-bar overlay sits on top of the add-node dropdown and swallows clicks on menu items. A user cannot add a second node until they discover that clicking empty canvas dismisses the overlay; Escape does nothing. This is a non-obvious interaction trap that blocks the core 'add another node' flow.",
+      "status": "DEFERRED",
+      "defense": "Reproduced twice (judgeD1, judgeE1). With node selected, opening 添加节点 menu: the 图片 menuitem (rect 548,607,156×38) is covered — elementFromPoint returns a DIV inside the inline-prompt-bar overlay chain (coveringChain → DIV.inline-prompt-bar [data-workflow-overlay]). getByRole(menuitem,\"图片\").click() timed out at 4000ms. Escape does NOT dismiss (overlays stayed 5). Only clicking empty canvas reduced overlays to 1 and freed the menu. A selected node's prompt-bar overlay swallows the add-node menu — blocks adding a second node. Confirmed P1.",
+      "verdict": "CONFIRMED",
+      "judge": "ReproducerJudge",
+      "deferred": "Selected node prompt bar occludes Add-Node dropdown. Layout overlap — needs z-index/positioning audit."
+    },
+    {
+      "id": "UX-PRO-02",
+      "group": "user",
+      "title": "No inspector / properties panel exists for the selected object",
+      "severity": "P1",
+      "scenario": "eval/product-maturity/scenarios/ux-pro04-inspector.mjs + ux-pro17-node-params.mjs",
+      "steps": [
+        "Create a workflow, add a node, click it to select",
+        "Look for an inspector, properties panel, or parameter editor anywhere on screen (left sidebar, right drawer, docked panel)"
+      ],
+      "evidence": [
+        "results/judgeD1 pro02={selectedNode:true,inspectorPanels:0,nodeParamControls:0}"
+      ],
+      "consequence": "A professional editor (Premiere/Resolve/Photoshop mental model) expects a persistent inspector that shows the selected object's properties. Here every parameter is crammed into the node's transient action bar; there is no stable, scannable properties surface, so discoverability and fine control of node params are weak.",
+      "status": "DEFERRED",
+      "defense": "Reproduced (judgeD1): node selected (is-selected) → inspectorPanels=0, nodeParamControls=0 inside the node body. No docked inspector/properties surface in any zone; all params live in the node's transient action/prompt bar. Confirmed.",
+      "verdict": "CONFIRMED",
+      "judge": "ReproducerJudge",
+      "deferred": "No inspector / properties panel exists. Feature add."
+    },
+    {
+      "id": "UX-PRO-03",
+      "group": "user",
+      "title": "Newly added nodes stack at the exact same canvas coordinates",
+      "severity": "P1",
+      "scenario": "eval/product-maturity/scenarios/ux-pro13-node-overlap-results.mjs",
+      "steps": [
+        "Create a workflow",
+        "Add a 文本 node, click empty canvas, add a 图片 node, click empty canvas, add a 脚本 node",
+        "Read each node's bounding rect"
+      ],
+      "evidence": [
+        "results/judgeD1 pro03=[{text,x544,y382},{image,x544,y382},{script,x544,y382}] — addNode drops at viewportCenter()-170/110 with no offset (InfiniteWorkflow.tsx:1830)"
+      ],
+      "consequence": "Each new node is dropped at the same origin, so consecutive additions land exactly on top of one another. The newest node hides the previous ones, making the graph look like only one node exists and forcing the user to drag nodes apart before they can even see what was added.",
+      "status": "FIXED",
+      "defense": "Reproduced (judgeD1): added 文本→图片→脚本; all three nodes report identical rect x=544 y=382 — pixel-perfect stacked. Newest hides previous; user must drag apart to see what was added. Confirmed.",
+      "verdict": "CONFIRMED",
+      "judge": "ReproducerJudge",
+      "fix": "components/workflow/InfiniteWorkflow.tsx addNode: cascade the spawn position diagonally (+40,+40) up to 12 times while the proposed slot is occupied by another visible node (within 30px collision radius). Verified live: adding 文本 → 图片 → 脚本 now produces nodes at (358,382), (398,422), (438,462) — previously all three landed at exactly (544,382) stacked on top of each other."
+    },
+    {
+      "id": "UX-PRO-04",
+      "group": "user",
+      "title": "Agent drawer is collapsed to 2px by default and its composer is unusable until manually opened",
+      "severity": "P1",
+      "scenario": "eval/product-maturity/scenarios/ux-pro18-promptbar-default.mjs + ux-pro06-agent-mode.mjs",
+      "steps": [
+        "Load the app fresh and observe the right-hand Agent/context panel",
+        "Create a workflow and check the Agent composer input width while collapsed"
+      ],
+      "evidence": [
+        "results/judgeA1 pro04={panelCls:\"isl-panel compact-right-panel…\",panelRect:{x:1438,w:2},composerRect:null}"
+      ],
+      "consequence": "The headline 'Agent' capability is present in the DOM but visually hidden behind a 2px collapsed strip on first run. A new user gets no affordance that an Agent panel exists or that it needs configuration; the composer is 4px wide. It only becomes usable after discovering and clicking 打开右侧面板 / 打开 Agent.",
+      "status": "FIXED",
+      "defense": "Reproduced (judgeA1): fresh session .compact-right-panel measures x=1438 w=2 — a 2px collapsed strip; composer input clipped (composerRect null / ~4px). Headline Agent capability hidden behind a 2px strip on first run; only 打开右侧面板 reveals it. Confirmed.",
+      "verdict": "CONFIRMED",
+      "judge": "ReproducerJudge",
+      "fix": "components/workflow/WorkflowWorkspace.tsx: desktopRightOpen initial state changed from '=== \"true\"' (default closed) to '!== \"false\"' (default open). The drawer is the headline Agent surface; starting collapsed to a 2px strip hid the composer entirely on first run. localStorage still persists the user's explicit choice — once they collapse it, it stays collapsed. Verified live: fresh session drawer now opens at width=360px (was 2px), composer and 'Create project' CTA reachable."
+    },
+    {
+      "id": "UX-PRO-05",
+      "group": "user",
+      "title": "No visible indication of which node is the current selection outside the node itself",
+      "severity": "P1",
+      "scenario": "eval/product-maturity/scenarios/ux-pro12-assets-selection.mjs",
+      "steps": [
+        "Create a workflow, add nodes, select one",
+        "Look for a selection indicator in the Layers (图层) panel, breadcrumb, status bar, or header"
+      ],
+      "evidence": [
+        "results/judgeD1 pro05={selMarksOutsideNode:0,layersBadge:\"图层\"}, judgeE1 pro05={layerCards:0,selLayerCards:0,selNodeExists:true}"
+      ],
+      "consequence": "Selection state lives only as a CSS class on the canvas node. The Layers panel does not enumerate nodes nor mirror the current selection, and no breadcrumb/status bar names what is selected. On a dense canvas a user cannot tell which object is active or target it from the layer list.",
+      "status": "DEFERRED",
+      "defense": "Reproduced (judgeD1/judgeE1): node is-selected on canvas but selMarksOutsideNode=0 and layerCards=0 — the 图层 panel shows \"图层0\"/empty and carries no selected/active/aria-current mirror for the canvas selection. No breadcrumb/status names the selection. Note: WorkflowSidebar.tsx:211 HAS a workflow-layer-card--selected class, but the layer list rendered 0 cards even with nodes present (panel not populated in this build state), so no selection is mirrored anywhere outside the node. Confirmed.",
+      "verdict": "CONFIRMED",
+      "judge": "ReproducerJudge",
+      "deferred": "No visible selection indicator outside node itself. Feature add."
+    },
+    {
+      "id": "UX-PRO-06",
+      "group": "user",
+      "title": "资产 (Assets) tab is empty and offers no path to get assets onto the canvas",
+      "severity": "P1",
+      "scenario": "eval/product-maturity/scenarios/ux-pro12-assets-selection.mjs",
+      "steps": [
+        "Create a workflow, open the left sidebar (打开图层与资产), switch to the 资产 tab",
+        "Look for asset thumbnails, a drag-to-canvas affordance, or an import button"
+      ],
+      "evidence": [
+        "results/judgeC1 pro06={empty:true,draggables:0,snippet \"这里还没有资产\"}"
+      ],
+      "consequence": "The Assets tab is a dead end: there is no way to browse existing media or pull an asset onto the canvas. For a professional editor, 'Assets -> Canvas' is a core flow; here the assets surface neither lists content nor offers an entry point, so the panel is functionally inert.",
+      "status": "DEFERRED",
+      "defense": "Reproduced (judgeC1): opened 资产 tab → \"这里还没有资产\", imgs:1 (a placeholder), draggables:0, no drop/import affordance in the 资产 tab (only 个人/Agent/按标签筛选 chips). The adjacent 本地 tab has 选择文件夹 but 资产 itself is a dead end — no path to get assets onto canvas. Confirmed.",
+      "verdict": "CONFIRMED",
+      "judge": "ReproducerJudge",
+      "deferred": "资产 (Assets) tab is empty with no path to add. Feature add."
+    },
+    {
+      "id": "UX-PRO-07",
+      "group": "user",
+      "title": "资产管理 button opens no visible surface",
+      "severity": "P2",
+      "scenario": "eval/product-maturity/scenarios/ux-pro13-node-overlap-results.mjs",
+      "steps": [
+        "Create a workflow",
+        "Click the 资产管理 button in the canvas controls (bottom-left)"
+      ],
+      "evidence": [
+        "domAssertion: after clicking 资产管理, the set of visible [role=dialog|modal|drawer|asset-manager] surfaces is empty — no dialog, drawer, or panel appears"
+      ],
+      "consequence": "The asset-management control produces no observable surface, so a user clicking it gets nothing — either a no-op or a surface that fails to mount. Either way it is a dead control on a primary toolbar.",
+      "status": "DEFENDED",
+      "defense": "TESTER ERROR — wrong selector. The 资产管理 button calls onOpenAssets (WorkflowToolbar.tsx:120) -> WorkflowWorkspace.tsx:435-438 setSidebarTabRequest({tab:'assets'}) + setLeftOpen(true). Verified live: clicking 资产管理 opens the left .workflow-sidebar on the 资产 tab showing '资产/图层/本地/个人/Agent/这里还没有资产'. The prosecutor looked only for [role=dialog|modal|drawer|asset-manager] and missed the aside (which has no ARIA role). A real surface opens; the button works."
+    },
+    {
+      "id": "UX-PRO-08",
+      "group": "user",
+      "title": "Local-folder pick aborts with no user-facing feedback",
+      "severity": "P2",
+      "scenario": "eval/product-maturity/scenarios/ux-pro16-run-edit.mjs",
+      "steps": [
+        "Create a workflow, open left sidebar, switch to 本地 tab",
+        "Click 选择文件夹",
+        "When the folder picker aborts/closes, observe what the UI shows"
+      ],
+      "evidence": [
+        "runtimeState: window.showDirectoryPicker exists; the call rejects with 'AbortError: ... The user aborted a request'",
+        "domAssertion: after the abort the only rendered feedback is a generic '需要配置' chip; no dialog/toast/error explains that no folder was selected or why — the sidebar returns to the identical '选择文件夹' empty state"
+      ],
+      "consequence": "When folder selection is cancelled or fails, the user is returned to the same empty state with no message distinguishing 'cancelled' from 'failed'. There is no retry guidance or error surfacing, so a failed grant looks identical to a no-op. (Abort in headless auto-cancels; a real user cancelling sees the same silent result.)",
+      "status": "DEFENDED",
+      "defense": "The silent abort is INTENTIONAL and correct. LocalFolderBrowser.tsx:192 explicitly returns on DOMException AbortError — a user canceling a folder picker should not be shown an error; that is standard, correct behavior (cancel is not a failure). Real failures DO surface: UNSUPPORTED/PERMISSION/MISSING errors render into a role=status notice (line 193 -> line 505 local-folder-notice). The headless AbortError is the env auto-cancel, which the app correctly treats as benign. The finding expects an error message on cancel, which would be wrong UX."
+    },
+    {
+      "id": "UX-PRO-09",
+      "group": "user",
+      "title": "Duplicate/mislabeled create CTAs: identical aria-label '新建工作流' on two buttons, one off-viewport",
+      "severity": "P2",
+      "scenario": "eval/product-maturity/scenarios/ux-pro01c-map-ctas.mjs",
+      "steps": [
+        "Load the app, enumerate all create/new buttons",
+        "Compare the empty-state CTA with the collapsed-Agent-panel CTA"
+      ],
+      "evidence": [
+        "domAssertion: two buttons share aria-label='新建工作流' — the visible empty-state button (text '新建工作流', x=664 in viewport, clickable) and a hidden button (text '创建项目', x=1449 w=44, pointer-events:none, off-viewport) inside the collapsed Agent drawer",
+        "consequence-of-bug: clicking by role/name '创建项目' resolves to the off-viewport pointer-events:none button and times out — a screen-reader or text-driven user is routed to an unreachable control"
+      ],
+      "consequence": "Two create buttons share one accessible name while only one is actually clickable; the other is parked off-viewport in the collapsed panel with pointer-events:none. Assistive-tech and text-based selection can resolve to the dead control, and the visible label ('创建项目') does not match its aria-label ('新建工作流').",
+      "status": "STANDS",
+      "defense": "Confirmed. Two buttons share aria-label='新建工作流': the visible center empty-state CTA (WorkflowWorkspace.tsx:444) and the off-viewport '创建项目' inside the collapsed drawer (line 480). Text/role-driven selection can resolve to the pointer-events:none parked control. Same root cause as UX-FTC-01. Real a11y-labeling defect. STANDS."
+    },
+    {
+      "id": "UX-PRO-10",
+      "group": "user",
+      "title": "Run-node failure surfaces only as a tiny inline node badge with no actionable path",
+      "severity": "P2",
+      "scenario": "eval/product-maturity/scenarios/ux-pro16-run-edit.mjs + ux-pro08-assets-run.mjs",
+      "steps": [
+        "Create a workflow, add a 文本 node (auto-selected)",
+        "Click 运行节点",
+        "Observe where the result/error lands"
+      ],
+      "evidence": [
+        "domAssertion: after running, the node's text becomes '!文本 1尚未配置可用的模型映射。' — an inline badge on the node; no dialog/toast/notification appears",
+        "domAssertion: no 'result' or 'output' region gains content; the run produced no result object identity anywhere (生成历史 stays '这里还没有内容')",
+        "positive: blockingOverlaysDuringRun=0 — the canvas remains interactive during the run (good)"
+      ],
+      "consequence": "A failed run only mutates the node label with a '!' error; there is no surfaced result record, no generation-history entry, and no 'configure model mapping' call-to-action attached to the error. A user must already know that 打开模型映射 lives in the Agent drawer to fix it.",
+      "status": "STANDS",
+      "defense": "Confirmed: a failed run mutates only the node label ('!文本 1 尚未配置可用的模型映射。'); no dialog/toast, no entry in 生成历史, and no 'open model mapping' CTA attached to the error. The error surface is just the node badge. Accurate — error recovery path is missing. STANDS."
+    },
+    {
+      "id": "ARCH-COMP-01",
+      "group": "arch",
+      "title": "components/workflow/InfiniteWorkflow.tsx: 2415-line component (CC≈807) — COMPLEX_AND_MIXED_RESPONSIBILITY",
+      "severity": "P1",
+      "scenario": "Static complexity audit of the workflow canvas editor",
+      "steps": [
+        "Counted top-level declarations in components/workflow/InfiniteWorkflow.tsx via brace tracking",
+        "Measured cyclomatic tokens inside the single InfiniteWorkflow component",
+        "Enumerated its hooks/handlers/JSX responsibilities"
+      ],
+      "evidence": [
+        "wc -l InfiniteWorkflow.tsx = 2640",
+        "38 useState L292-329 spanning 9 domains"
+      ],
+      "consequence": "A single component owns canvas interaction, three media-tool pipelines, batch grouping, clipboard, mentions/assets, history, and 9+ dialog surfaces. Change to any one domain (e.g. audio tool confirmation) requires re-reading a 2400-line file and risks entangling unrelated interaction state (shared interactionRef, overlayHidden, contextMenu). Not a mechanical split candidate — but the media-tool lifecycles (image/video/audio × open/confirm/runtime) and the interaction state machine are self-contained seams that could deepen without touching canvas geometry. Candidate: mixed responsibility; a seam along 'media tool orchestration' and 'pointer interaction' would preserve cohesion while removing ~40% of the body.",
+      "status": "DEFERRED",
+      "defense": "Verified by wc -l: InfiniteWorkflow.tsx = 2640 lines. Single component (L226-2640) owns ~38 useState slots across ≥9 disjoint domains (geometry, interaction state machine, image/video/audio tool lifecycles, clipboard, mentions, batch, menus, preview). Media-tool lifecycles + interaction state machine are self-contained seams. Mixed-responsibility confirmed (prosecutor/defender agree).",
+      "verdict": "CONFIRMED",
+      "judge": "ReproducerJudge",
+      "deferred": "InfiniteWorkflow.tsx is 2415 lines, CC≈807. Confirmed complexity debt — splitting is a large refactor."
+    },
+    {
+      "id": "ARCH-COMP-02",
+      "group": "arch",
+      "title": "services/workflowGeneration.ts runWorkflowGeneration: 476 lines CC≈195 — COMPLEX_AND_MIXED_RESPONSIBILITY",
+      "severity": "P1",
+      "scenario": "Static complexity audit of the generation entry point",
+      "steps": [
+        "Measured function extent and cyclomatic tokens of runWorkflowGeneration (L174-649)",
+        "Mapped the responsibilities executed inside the single function body"
+      ],
+      "evidence": [
+        "workflowGeneration.ts:174-649 single function, 476 lines",
+        "recovery block L436-501 + batch loop L378-524 are extractable seams"
+      ],
+      "consequence": "Generation orchestration, billing reconciliation, task recovery, media persistence, and history/thumbnail production are interleaved in one 476-line function with 195 branch points. The recovery path (L436-501) and the batch loop (L378-524) already read as self-contained phases with clear inputs/outputs — extracting them would not be a mechanical split but a real seam (task recovery is independently testable, as workflowGeneration.test.ts already exercises it through the runtime seam). Candidate: mixed responsibility; biggest risks are (a) abort-check ordering bugs inside the 8× `if (!stillActive())` scatter, (b) storageKey lifecycle rules embedded mid-function.",
+      "status": "DEFERRED",
+      "defense": "Verified: runWorkflowGeneration (workflowGeneration.ts:174-649, 476 lines) interleaves node-type dispatch, capability routing, submode inference, extension validation, prompt preflight, aspect-ratio matching, canonical input, operation-take lifecycle, batch fan-out w/ 8× stillActive() scatter, usage reservation+reconciliation, provider-task recovery (L436-493), media persistence, history thumbnails. Mixed-responsibility confirmed.",
+      "verdict": "CONFIRMED",
+      "judge": "ReproducerJudge",
+      "deferred": "runWorkflowGeneration is 476 lines CC≈195. Large refactor."
+    },
+    {
+      "id": "ARCH-COMP-03",
+      "group": "arch",
+      "title": "services/aiGateway.ts: 4142 lines / 154 top-level decls — COMPLEX_AND_MIXED_RESPONSIBILITY",
+      "severity": "P1",
+      "scenario": "Static complexity audit of the provider gateway",
+      "steps": [
+        "Measured top-level declarations, sizes, cyclomatic in services/aiGateway.ts",
+        "Clustered declaration names by domain prefix"
+      ],
+      "evidence": [
+        "wc -l aiGateway.ts = 4141",
+        "validateApiKey L568-679 + executeUnifiedIgnition L3759-3918 + Seedance cluster in one file"
+      ],
+      "consequence": "One file is simultaneously the capability dictionary, the credential validator, the per-provider HTTP layer (Gemini/OpenAI-compatible/Anthropic/Seedance/RunningHub/user-script), and the unified dispatcher. With 15+ importers each pulling a different subset, any edit touches a file that fan-in makes risky, and unrelated provider code (e.g. Seedance polling) shares review surface with key-validation logic. Candidate: mixed responsibility — the natural seams already exist by provider/domain cluster (seedance block ~25 decls, image ops ~22, key/capability inference ~15) rather than a mechanical split by size.",
+      "status": "DEFERRED",
+      "defense": "Verified by wc -l: aiGateway.ts = 4141 lines, ~154 top-level decls across ≥6 subsystems (key validation+provider inference, capability dictionary, text/prompt enhance, image ops, video/Seedance submit-poll-usage, multimodal slot + unified ignition). 15+ importers pull disjoint subsets. Mixed-responsibility confirmed.",
+      "verdict": "CONFIRMED",
+      "judge": "ReproducerJudge",
+      "deferred": "aiGateway.ts is 4142 lines / 154 decls. Large refactor."
+    },
+    {
+      "id": "ARCH-COMP-04",
+      "group": "arch",
+      "title": "tools/flovart/runtime-client.js: COMPLEX_BUT_COHESIVE — ACL/DACL verification + discovery + HTTP/SSE client in one file but single purpose",
+      "severity": "P2",
+      "scenario": "Static audit of the runtime client",
+      "steps": [
+        "Measured 467 lines, 24 functions, max CC≈20 (parseDaclAces)",
+        "Reviewed the responsibility spread"
+      ],
+      "evidence": [
+        "tools/flovart/runtime-client.js — Windows icacls DACL parsing (L60-204: verifyDiscoveryPermissions/findDaclLine/parseDaclAces/assertDiscoveryDacl/DISCOVERY_ALLOWED_SIDS) + discovery file load/validation (assertDiscovery L210-244) + FlovartRuntimeClient HTTP+SSE class (L254-450) + createRuntimeFacade (L452-466)",
+        "All parts serve one contract: safely locate + authenticate + talk to the local Production Runtime; the DACL code exists only to gate the discovery file the client then reads"
+      ],
+      "consequence": "Cohesive — every function supports the single 'connect to trusted local runtime' mission. Moderate complexity concentrated in Windows ACL parsing (OS-specific, inherently branchy). Not a split candidate; the DACL block is self-contained but its only consumer is this client, so extraction buys nothing. Verdict: COMPLEX_BUT_COHESIVE.",
+      "status": "DEFENDED",
+      "defense": "The prosecutor's own verdict is COMPLEX_BUT_COHESIVE — and it is correct. tools/flovart/runtime-client.js has a single mission: safely locate + authenticate + talk to the local Production Runtime. The Windows DACL parsing block (L60-204) exists ONLY to gate the discovery file the client then reads (assertDiscovery L210-244 feeds FlovartRuntimeClient L254-450). Every function supports the one contract; the complexity is OS-inherent (icacls DACL parsing is unavoidably branchy). Extracting the DACL block buys nothing — its only consumer is this client. This is a security boundary done right: verify ACL before trusting a discovery file. DEFENDED — cohesive, single-purpose, security-driven."
+    },
+    {
+      "id": "ARCH-COMP-05",
+      "group": "arch",
+      "title": "components/agent/AgentHostPicker.tsx + services/managedAgentConnection.ts + services/managedFlovartAgent.ts: all COMPLEX_BUT_COHESIVE (small)",
+      "severity": "P2",
+      "scenario": "Static audit of agent host picker and managed agent connection pair",
+      "steps": [
+        "Measured sizes/complexity: AgentHostPicker 207L (component CC≈31), managedAgentConnection 39L, managedFlovartAgent 122L",
+        "Reviewed responsibility scope"
+      ],
+      "evidence": [
+        "components/agent/AgentHostPicker.tsx:59-206 — one component doing host discovery scan + selection persistence + per-host status mapping + readiness badges; all sub-helpers (publicStatusFor/statusDot/actionLabel/hostReadiness) serve the picker UI only",
+        "services/managedAgentConnection.ts — single function getManagedAgentConnection, one seam (browser binding → dock fallback → Tauri invoke), 4 branch tokens",
+        "services/managedFlovartAgent.ts — ManagedFlovartAgentClient with SSE parsing + turn-event surface; single purpose: stream the managed agent session"
+      ],
+      "consequence": "All three are cohesive single-purpose units of appropriate size. AgentHostPicker's CC≈31 comes from JSX status mapping, not logic sprawl. No action.",
+      "status": "DEFENDED",
+      "defense": "The prosecutor's own verdict is COMPLEX_BUT_COHESIVE and explicitly 'No action'. Verified: AgentHostPicker.tsx (207L, CC≈31 from JSX status-mapping not logic sprawl) does host discovery + selection persistence + readiness badges — one UI purpose; managedAgentConnection.ts (39L, single getManagedAgentConnection, one seam browser→dock→Tauri, 4 branches); managedFlovartAgent.ts (122L, single SSE-stream client for the managed session). All three are small cohesive single-purpose units. There is no debt to defend — the finding is an exoneration. DEFENDED."
+    },
+    {
+      "id": "ARCH-LEG-01",
+      "group": "arch",
+      "title": "components/agent/agentWorkspaceStore.ts: persisted spatial-panel store with 'Production Crew' migration shim is unreachable in production code",
+      "severity": "P1",
+      "scenario": "Dead-legacy hunt: crew/director residue",
+      "steps": [
+        "Found 'crew'/'Production Crew'/'codex-main' legacy naming in agentWorkspaceStore.ts",
+        "Checked all production importers of useAgentWorkspaceStore/createDefaultAgentLayout/ensureLayout/updatePanel/setViewport/resetLayout",
+        "Read AgentWorkspace.tsx to verify it never calls the store"
+      ],
+      "evidence": [
+        "grep: only tests/agentWorkspace.test.tsx references useAgentWorkspaceStore runtime API",
+        "AgentWorkspace.tsx type-only import"
+      ],
+      "consequence": "Dead legacy: a spatial floating-panel canvas design (the old Agent workspace with draggable Production Crew panel) survives as a persisted store whose only runtime effect is holding an IndexedDB connection and running a codex-main→crew-main migration for a UI that no longer exists. The 'crew' kind and 'Production Crew' title are legacy vocabulary the current AgentWorkspace renders as a static tab ('助手'). Candidate for removal: keep AgentPanelStatus type, delete the store+migration+localforage instance, update the two tests.",
+      "status": "DEFERRED",
+      "defense": "Verified: AgentWorkspace.tsx imports ONLY `type AgentPanelStatus`; FlovartAgentPanel uses `import type` too — store module likely never evaluated in production. Runtime API (useAgentWorkspaceStore/ensureLayout/updatePanel/setViewport/resetLayout) consumed only by tests/agentWorkspace*.test.*. Production Crew/crew-main spatial layout + codex-main→crew-main migration serve a dead floating-panel UI. Dead legacy confirmed.",
+      "verdict": "CONFIRMED",
+      "judge": "ReproducerJudge",
+      "deferred": "agentWorkspaceStore.ts has persisted spatial-panel store with Production Crew strings — legacy surface."
+    },
+    {
+      "id": "ARCH-LEG-02",
+      "group": "arch",
+      "title": "components/community/* + components/landing/communityTypes.ts: community marketplace upload chain is unreachable",
+      "severity": "P1",
+      "scenario": "Dead-legacy hunt: old marketplace/community surface",
+      "steps": [
+        "Checked importers of WorkflowUploadModal, communityStore, communityTypes, publishCommunityWorkflow",
+        "Verified no route/menu mounts them"
+      ],
+      "evidence": [
+        "grep: no production importer of WorkflowUploadModal/communityStore/communityTypes",
+        "RouterHost.tsx:36-40 only routes / and /app"
+      ],
+      "consequence": "The entire community/marketplace publish path (modal + localforage store + builtin workflow dataset) is dead code: nothing mounts the modal, so users can never publish, and the builtin COMMUNITY_WORKFLOWS dataset ships but is never rendered. ~500+ lines plus a persisted DB that nothing reads. Candidate for deletion (verify no lazy/dynamic import path — none found).",
+      "status": "DEFERRED",
+      "defense": "Verified: grep fan-in — WorkflowUploadModal has ZERO importers; communityStore/communityTypes imported only by each other and the modal. RouterHost mounts only / and /app; no /community route or menu. Closed dead chain (~500 lines + localforage DB). Confirmed unreachable.",
+      "verdict": "CONFIRMED",
+      "judge": "ReproducerJudge",
+      "deferred": "community/* + communityTypes.ts — marketplace upload surface still present."
+    },
+    {
+      "id": "ARCH-LEG-03",
+      "group": "arch",
+      "title": "services/agentOrchestrator.ts (439L) + services/collaborationPipeline.ts (194L): zero production importers — Director/Crew-era orchestration residue",
+      "severity": "P1",
+      "scenario": "Dead-legacy hunt: old agent orchestration layer",
+      "steps": [
+        "Checked production importers of both files",
+        "Checked what still references them"
+      ],
+      "evidence": [
+        "grep: zero production importers; only the two test files reference them",
+        ".agents/skills/flovart/scripts/add-agent-role.js patches the dead file"
+      ],
+      "consequence": "633 lines of the old multi-role agent orchestrator and collaboration pipeline remain reachable only through their own tests — they pin types like AgentRole/AgentBudget and keep a script (add-agent-role.js) that teaches contributors to extend a dead file. Candidate for deletion: removes a phantom 'Agent role' subsystem that contradicts the current two-role (external harness + workspace operator) model. Keep-or-kill decision needed because tests currently provide the only coverage.",
+      "status": "DEFERRED",
+      "defense": "Verified: grep — agentOrchestrator.ts and collaborationPipeline.ts are reachable ONLY through tests/agentOrchestrator.test.ts + tests/collaborationPipeline.test.ts; zero production importers (nothing in App.tsx/RouterHost graph). Worse: .agents/skills/flovart/scripts/add-agent-role.js patches agentOrchestrator by string surgery, teaching contributors to extend a dead file. Confirmed dead residue.",
+      "verdict": "CONFIRMED",
+      "judge": "ReproducerJudge",
+      "deferred": "agentOrchestrator.ts + collaborationPipeline.ts — zero production callers."
+    },
+    {
+      "id": "ARCH-LEG-04",
+      "group": "arch",
+      "title": "services/uploadApi.ts (R2 presign upload) + services/promptApi.ts runtime client: hub-backend API layer with no callers",
+      "severity": "P2",
+      "scenario": "Dead-legacy hunt: unused provider/hub layer",
+      "steps": [
+        "Checked importers of uploadApi and the promptApi runtime object",
+        "Traced promptAsset.ts which imports promptApi types only"
+      ],
+      "evidence": [
+        "services/uploadApi.ts — uploadApi.presign/confirm + uploadFileToR2 (R2 presigned PUT flow); grep: ZERO importers in ts/tsx/js",
+        "services/promptApi.ts — defines interfaces PromptItem/PromptPack/PageResult + a runtime `promptApi` object (api.get/api.post wrappers over hubClient); grep for 'promptApi.' call sites: only inside promptApi.ts itself and as an unused import-type in promptAsset.ts",
+        "promptAsset.ts imports `type { PromptItem, PromptPack }` only — the runtime API client portion of promptApi.ts is dead; the interfaces are a type-only dependency",
+        "hubClient.ts itself stays alive via stores/useAuthStore.ts (authApi.login/register/me) → AuthModal → StudioTopMenu, so the hub auth path is live; only the prompts/uploads sub-APIs are dead"
+      ],
+      "consequence": "The prompts-library and R2-upload hub sub-APIs are dead — remnants of the community/marketplace backend (consistent with ARCH-LEG-02). uploadApi.ts is fully unreachable; promptApi.ts's runtime object is unreachable (only its types are imported). Candidate: delete uploadApi.ts entirely; split promptApi.ts to a type-only module or inline the interfaces into promptAsset.ts. hubClient survives for auth.",
+      "status": "STANDS",
+      "defense": "Confirmed. services/uploadApi.ts (uploadApi.presign/confirm + uploadFileToR2 R2 presigned PUT flow) has ZERO importers in ts/tsx/js. services/promptApi.ts defines a runtime promptApi object (api.get/post wrappers over hubClient for /prompts CRUD + like) that is unreachable — promptAsset.ts:2 imports only `type { PromptItem, PromptPack }` (type-only). hubClient.ts itself stays live via useAuthStore authApi → AuthModal → StudioTopMenu, so the auth path survives; only the prompts-library and R2-upload sub-APIs are dead (consistent with the dead community backend in ARCH-LEG-02). STANDS — delete uploadApi entirely; promptApi's runtime object is dead (keep the interfaces or inline them into promptAsset)."
+    },
+    {
+      "id": "ARCH-LEG-05",
+      "group": "arch",
+      "title": "#/dock route removed but documented as retained dev surface; dockCrewClient.ts persists as connection fallback",
+      "severity": "P2",
+      "scenario": "Dead-legacy hunt: old Dock surface",
+      "steps": [
+        "Read RouterHost.tsx route table",
+        "Checked remaining dock-named code's reachability"
+      ],
+      "evidence": [
+        "RouterHost.tsx:36-40 — Routes are '/' → /app and '/app' → App only; '#/dock' no longer exists",
+        "CHANGELOG.md L35-36,40 claim '#/dock' is retained as developer connection/diagnostic surface and 'Production Control/Crew Receipt' degraded entry — documentation is stale relative to the route table",
+        "services/dockCrewClient.ts (84L, DOCK_AGENT_URL_KEY/DOCK_AGENT_TOKEN_KEY localStorage, DockClientError, normalizeDockConnection/rememberDockConnection/loadDockConnection/loadDockAgentUrl) — its ONLY production importer is services/managedAgentConnection.ts L3,26 where loadDockConnection() is the non-Tauri fallback for getManagedAgentConnection()",
+        "So dockCrewClient is live as a connection-store mechanism (saved agent URL+token) even though the Dock page that used to write those keys via UI is gone — entries can still be seeded via agentUrl param/bootstrap path"
+      ],
+      "consequence": "Partial legacy: the '#/dock' *surface* is gone (docs lie), but dockCrewClient.ts is alive as the persisted loopback-connection loader behind managedAgentConnection — the name is now misleading (it is the 'saved local agent connection' module, not a dock client). Candidate: rename/split perception aside, the real finding is doc drift — CHANGELOG/pending-test still describe '#/dock' as a retained developer entry that RouterHost no longer serves. Verify whether anything still writes DOCK_AGENT_URL_KEY/DOCK_AGENT_TOKEN_KEY at runtime before calling the client fully live.",
+      "status": "DEFENDED",
+      "defense": "The code is NOT legacy — dockCrewClient.ts is live and necessary. Verified services/managedAgentConnection.ts:3,26 calls loadDockConnection() as the non-Tauri fallback for getManagedAgentConnection(), and dockCrewClient.ts:55-78 persists the remembered loopback agent connection (localStorage URL + sessionStorage token, deliberately keeping the token out of localStorage per L60-62). The '#/dock' ROUTE is gone (RouterHost.tsx:36-40 serves only /app), so the UI surface is dead — but the connection-store module it seeded is still the load-bearing mechanism for a saved local agent connection, reachable via agentUrl param/bootstrap path. The only real defect is doc drift: CHANGELOG L35-40 still describes '#/dock' as a retained developer surface RouterHost no longer serves. DEFENDED on the code (live, necessary fallback); the finding reduces to a stale-doc nit, not dead code."
+    },
+    {
+      "id": "ARCH-LEG-06",
+      "group": "arch",
+      "title": "agent/ directory duplicates tools/flovart/managed-agent/ (12/15 files byte-identical) — source-mode mirror fallback",
+      "severity": "P2",
+      "scenario": "Dead-legacy hunt: duplicated agent runtime",
+      "steps": [
+        "Diffed agent/*.js vs tools/flovart/managed-agent/*.js",
+        "Traced the runtime path that selects between them"
+      ],
+      "evidence": [
+        "agent/ and tools/flovart/managed-agent/ have identical file lists (15 files); 12 are byte-identical; diffs: index.js (agent version imports AGENT_PUBLIC_COMMAND_SET via importFlovartModule; managed version differs ~650 bytes), skill-package.js + skill-registry.js (agent/* are re-export shims to ../tools/flovart/*; managed-agent/* re-export ../skill-package.js relative to packaged layout)",
+        "tools/flovart/cli.js:110 — `await import('./managed-agent/index.js').catch(() => import('../../agent/index.js'))`: agent/ is the fallback when the packaged managed-agent/ subtree is absent (i.e. raw source checkout without prepack)",
+        "package.json + scripts/build-agent-sidecar.mjs + build-agent-toolkit.mjs also reference agent/index.js — it is the source-of-truth copy the toolkit build consumes"
+      ],
+      "consequence": "Not dead, but a duplication pattern: managed-agent/ is a prepack-generated mirror while agent/ is the editable source. Risk: contributors edit one copy (the two index.js files already diverged) — the 12 identical files drift silently since nothing checks parity except the build. Candidate: either generate managed-agent/ at pack time (single source) or document the mirror; flag index.js divergence (AGENT_PUBLIC_COMMAND_SET import present only in agent/) as an already-visible drift.",
+      "status": "DEFENDED",
+      "defense": "Verified the duplication is an intentional source→packaged mirror, not accidental copy-paste. agent/ and tools/flovart/managed-agent/ each hold 15 files; diff confirms 12 byte-identical and exactly 3 differ (index.js, skill-package.js, skill-registry.js) — and those 3 MUST differ because they resolve the public command set and skill-package layout relative to a packaged vs source tree. scripts/build-agent-sidecar.mjs:137,173 generates/patches the managed-agent mirror at pack time. tools/flovart/cli.js:110 'await import(\"./managed-agent/index.js\").catch(() => import(\"../../agent/index.js\"))' is the deliberate fallback so a raw source checkout (no prepack) still works. This is checked-in build output so the CLI runs without a build step — a legitimate pattern. The index.js divergence the finding flags is the POINT (AGENT_PUBLIC_COMMAND_SET resolves differently per layout), not drift. Residual: no automated parity check on the 12 identical files — a hardening opportunity, not debt. DEFENDED."
+    },
+    {
+      "id": "ARCH-LEG-07",
+      "group": "arch",
+      "title": "workers/art-worker.js + workers/art-protocol.js: zero references — old Canvas/Art worker",
+      "severity": "P2",
+      "scenario": "Dead-legacy hunt: old Art/Canvas worker",
+      "steps": [
+        "Checked references to workers/art-worker.js and workers/art-protocol.js",
+        "Correlated with AGENTS.md rule '不恢复旧 Canvas / Art'"
+      ],
+      "evidence": [
+        "workers/art-worker.js, workers/art-protocol.js — grep for 'art-worker'/'art-protocol' across ts/tsx/js/json: ZERO references (excluding the files themselves)",
+        "AGENTS.md L18 explicitly states '不恢复旧 Canvas / Art' — the Art product surface was deliberately retired, yet its worker pair remains",
+        "No vite config, package.json script, or index.html loads them; no Worker('art-worker') construction anywhere"
+      ],
+      "consequence": "Dead files of the retired Art/Canvas surface. Candidate for deletion; harmless at runtime (never loaded) but keeps the retired 'Art' vocabulary alive in the tree.",
+      "status": "STANDS",
+      "defense": "Confirmed dead files. Grep for 'art-worker'/'art-protocol'/'ArtProtocol' across ts/tsx/js/json returns ZERO references outside the two files themselves. No vite config, package.json script, index.html, or Worker('art-worker') construction loads them. AGENTS.md L18 explicitly states '不恢复旧 Canvas / Art' — the Art surface was deliberately retired, yet its worker pair remains in the tree. Harmless at runtime (never loaded) but keeps retired 'Art' vocabulary alive. STANDS — trivial deletion candidate."
+    },
+    {
+      "id": "ARCH-LEG-08",
+      "group": "arch",
+      "title": "inputResolver legacy compat layer: @deprecated projection fields + ResolvedWorkflowInputs alias + legacySeedanceRefs bridge still wired to live SeedanceSlotPicker",
+      "severity": "P2",
+      "scenario": "Dead-legacy hunt: compat aliases",
+      "steps": [
+        "Located @deprecated/legacy markers in components/workflow/inputResolver.ts",
+        "Checked whether the legacy producers/consumers are still live"
+      ],
+      "evidence": [
+        "components/workflow/inputResolver.ts:76 — `/** @deprecated Phase C 会移除这些 compatibility projection */` on ResolvedWorkflowResource.{href,assetId,storageKey,artifactRef} fields; L141 'ResolvedWorkflowInputs' alias '旧名称保留给已有 Graph/Operation 工具调用'; L54 legacySeedanceRefs input option; L137/524/536 legacySourceNodeIds projection; types.ts:167 'legacy-href' locator kind",
+        "Live producer: WorkflowConfigPanel.tsx:119-126 still renders SeedanceSlotPicker writing node config.seedanceRefs for isSeedanceModel — so legacySeedanceRefs/legacySourceNodeIds bridge a LIVE config field, not a dead one",
+        "Consumers of the deprecated projection fields: internal to inputResolver/resourceContract/workflowResourceResolver — the executor-facing fields remain marked for Phase C removal without a tracked cutover"
+      ],
+      "consequence": "This is a declared-but-stale compat layer, not dead code: 'Phase C 会移除' has no removal mechanism, and the UI still produces the legacy shape (seedanceRefs) the resolver then projects. Two-sided finding: (a) the @deprecated fields have lived long enough to need either a cutover owner or removal of the deprecation claim; (b) the live SeedanceSlotPicker→seedanceRefs→legacySourceNodeIds chain means 'legacy' naming understates a current dependency — renaming or a canonical slot model would be more honest than Phase-C deprecation. Candidate.",
+      "status": "STANDS",
+      "defense": "Confirmed and the prosecutor's own framing is accurate: NOT dead code, but a stale/mislabeled compat layer. Verified components/workflow/inputResolver.ts:76 '@deprecated Phase C 会移除' on ResolvedWorkflowResource.{href,assetId,storageKey,artifactRef} projection fields, L54 legacySeedanceRefs option, L137/141 legacySourceNodeIds + ResolvedWorkflowInputs alias, types.ts:167 'legacy-href' locator kind. The bridge is LIVE: WorkflowConfigPanel.tsx:119-126 still renders SeedanceSlotPicker writing node config.seedanceRefs for isSeedanceModel — so legacySeedanceRefs→legacySourceNodeIds maps a CURRENT persisted config field, not a dead one. The compat shim is necessary while config.seedanceRefs remains the stored shape (removing it breaks existing projects), so it can't just be deleted — but 'legacy'/'Phase C 会移除' naming actively understates a live dependency with no cutover owner or removal mechanism. STANDS — real debt as mislabeled-live-dependency; needs a rename/canonical slot model, not deletion."
+    },
+    {
+      "id": "UX-RSP-01",
+      "group": "ux",
+      "title": "Agent page '创建项目' CTA unreachable below ~880px viewport height (overflow:hidden, no scroll)",
+      "severity": "P0",
+      "scenario": "eval/product-maturity/scenarios/uxrsp-height2.mjs + uxrsp-agent4.mjs + uxrsp-evidence.mjs",
+      "steps": [
+        "Open #/app, click 'Agent' tab",
+        "Viewport 1366x768 (most-common laptop): empty-state card 'mt-6 rounded-xl border' is clipped; 创建项目 button bottom=870 > winH=768",
+        "Wheel-scroll at page center: window.scrollY stays 0, document.documentElement.scrollHeight==clientHeight (no page scroll)",
+        "Same at 1280x720 (clip 212px), 1024x500, 768x500, 390x600, 320x640 (CTA top=836 fully below fold)"
+      ],
+      "evidence": [
+        "styles/agent.css:30-34 .agent-workspace-shell--empty { overflow:auto } + comment",
+        "results/judgeRsp1366: shellOverflowY=auto, afterWheel btnTop=623 btnVisible:true, click=clicked"
+      ],
+      "consequence": "On standard laptop (1366x768, 1280x720) and any non-maximized/short window, plus all phones, the primary 'create project' action on the Agent empty state is below an overflow:hidden clip with zero scroll affordance — mouse/touch users cannot reach it. Keyboard Tab reaches it only incidentally via focus scrollIntoView; touch devices have no Tab.",
+      "status": "judged",
+      "defense": "NOT REPRODUCED on current build — already fixed. styles/agent.css:30-34 adds .agent-workspace-shell--empty { overflow:auto } with a comment describing exactly this bug ('it must scroll as a page so the create CTA stays reachable on short viewports instead of being clipped by the shell's overflow:hidden'). Live repro at 1280x720 (judgeRsp1366): CTA initially below fold (btnRect bottom=869 > 720) BUT shellOverflowY=auto, and after mouse.wheel the CTA scrolled into view (btnTop 623, btnVisible:true) and getByRole(创建项目).click() SUCCEEDED. The prosecutor's scrollHeight>clientHeight measurement is correct but the empty-state shell scrolls (overflow:auto), so the CTA IS reachable. Wheel scroll moved the inner shell (window.scrollY stays 0 by design — the shell is the scroller, not the document). Claim of 'no scroll / unreachable' is false on this build.",
+      "verdict": "NOT_REPRODUCED",
+      "judge": "ReproducerJudge"
+    },
+    {
+      "id": "UX-RSP-02",
+      "group": "ux",
+      "title": "Settings dialog 模型映射 detail body is a 279px-tall scroll slot at 320px; no sticky confirm/summary",
+      "severity": "P2",
+      "scenario": "eval/product-maturity/scenarios/uxrsp-settings-geo.mjs + uxrsp-settings-tabs.mjs",
+      "steps": [
+        "Open 设置 → 模型映射 at 320x640",
+        "Dialog is full-viewport (320x640) but detail body .settings-dialog__body is only 279px tall containing a 950px form",
+        "8 controls below fold (选择服务/模型/路线, 添加, 提示词增强/脚本拆解/Agent文本/图像理解 未配置) reachable only by scrolling the thin slot"
+      ],
+      "evidence": [
+        "body rect top=340 bottom=619 h=279 scrollH=950 clientH=279 overflowY=auto — .tmp/rsp-geo GEO json",
+        "wheel scroll inside body works (scrollTop 0→671) — .tmp/rsp-scroll-reach",
+        "screenshot .tmp/rsp-geo/settings-320-models-geo.png"
+      ],
+      "consequence": "Functional but cramped: on small screens the model-mapping editor is squeezed into a <300px scroll slot while ~340px is consumed by the dialog chrome/nav. No sticky footer, so '添加'/save actions require scrolling. Polish issue.",
+      "status": "DEFENDED",
+      "defense": "Content IS reachable: the finding itself confirms wheel scrolling works (scrollTop 0->671), so the 模型映射 detail is not cut off — it is simply a scrollable region sized to the viewport at 320px. A 279px scroll slot on a 320px-wide viewport is expected responsive behavior, not a defect; every field is reachable by scroll. 'No sticky confirm' is a polish suggestion, not a bug. The control is functional and fully reachable."
+    },
+    {
+      "id": "UX-RSP-03",
+      "group": "ux",
+      "title": "Right drawer covers 100% of viewport width at <=768px with no backdrop or canvas affordance",
+      "severity": "P2",
+      "scenario": "eval/product-maturity/scenarios/uxrsp-rdrawer.mjs",
+      "steps": [
+        "Open 打开右侧面板 at 768x844 and 320x844",
+        "Drawer width == viewport width (768/320), coversAll=true — canvas fully hidden",
+        "收起右侧面板 close button is in view and works (drawer closes)"
+      ],
+      "evidence": [
+        ".tmp/rsp-rdrawer: panel {w:320,l:0,r:320,coversAll:true}, closeBtn inView, after close 'closed'",
+        "screenshots .tmp/rsp-rdrawer/rdrawer-320.png, rdrawer-768.png"
+      ],
+      "consequence": "Drawer opens as a full-screen takeover on tablet/mobile with no dim/backdrop tap-to-dismiss and no peek of canvas — user loses spatial context. Dismissible via the close button so not a trap; acceptable pattern but no gesture/backdrop affordance.",
+      "status": "DEFENDED",
+      "defense": "A full-width drawer at <=768px is the CORRECT mobile pattern (drawers go full-screen/overlay on small viewports; there is no room to show canvas beside a 320px panel on a 320px screen). The finding confirms a working close button is in view and the drawer does close ('after close: closed'). A backdrop is a nice-to-have, not a requirement — the primary dismiss affordance (close button) is present and functional. This is intended responsive behavior, not a defect."
+    },
+    {
+      "id": "UX-RSP-04",
+      "group": "ux",
+      "title": "Left sidebar opens as ~96%-width overlay on mobile; collapse control is icon-only '收起' with empty text label",
+      "severity": "P2",
+      "scenario": "eval/product-maturity/scenarios/uxrsp-sidebar.mjs + uxrsp-sidebar7.mjs + uxrsp-sidebar4.mjs",
+      "steps": [
+        "At 390x844 open 打开图层与资产 → sidebar w=374 covers 96% of 390px canvas (coversCanvas)",
+        "The only dismiss control inside the sidebar is an icon-only button (aria-label='收起', empty visible text) at the panel's trailing edge",
+        "Escape key does NOT close it; clicking the canvas edge does NOT close it; the topbar '打开图层与资产' toggle is unmounted while open",
+        "The icon-only 收起 button DOES collapse it (sidebar → gone)"
+      ],
+      "evidence": [
+        "sidebar {w:374,l:12} at 390px coversCanvas=true — .tmp/rsp-sidebar",
+        "after Escape/outside-click sidebar still w=374 — .tmp/rsp-side3",
+        "collapse icon {l:341,aria:'收起'} click → sidebar gone — .tmp/rsp-side7",
+        "dismiss candidates show icon button has empty text — .tmp/rsp-side6 all=['',图层0,资产,本地]"
+      ],
+      "consequence": "On phones the layer/asset sidebar is a near-fullscreen sheet whose only exit is an unlabeled chevron icon; no backdrop-tap, no Escape, no swipe affordance. Users must discover the icon. Reachable but low-discoverability — polish.",
+      "status": "DEFENDED",
+      "defense": "A ~96%-width overlay sidebar on a 390px mobile viewport is the standard mobile pattern (full-screen nav/filter drawer). The collapse control is an icon button WITH aria-label='收起' and it works (click -> sidebar gone). 'Empty text label' is fine for an icon-only button that carries an accessible name; 'no Escape/outside-click' is a minor enhancement, not a defect, since the labeled close control functions. Intended responsive overlay, not a bug."
+    }
+  ],
+  "verdicts": {},
+  "rejections": [],
+  "fixes": []
+}

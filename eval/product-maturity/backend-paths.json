@@ -1,0 +1,311 @@
+[
+  {
+    "id": "path-a-local-folder-to-canvas-node",
+    "name": "A) Local folder -> Canvas node",
+    "entry": "User clicks '放入画布' in WorkflowSidebar's localFolder tab (or drops a folder entry on the canvas)",
+    "modules": [
+      "components/workflow/WorkflowSidebar.tsx (tab host; onInsertLocalFolderEntries prop)",
+      "components/workflow/LocalFolderBrowser.tsx (pickLocalFolder/adoptLocalFolderHandle, scanLocalFolder, selection, drag payload with local-folder: hrefs)",
+      "services/localFolderSource.ts (File System Access API: pickLocalFolder, scanLocalFolder bounded by LOCAL_FOLDER_SCAN_LIMITS, readLocalFolderFile, localFolderHref, sessionHandles/IndexedDB handle+thumbnail caches)",
+      "components/workflow/WorkflowWorkspace.tsx insertLocalFolderEntries (readLocalFolderFile + inspectWorkflowMedia per entry, per-entry failure collection, commitMediaNodes)",
+      "components/workflow/WorkflowWorkspace.tsx layoutMediaNodes/commitMediaNodes (grid layout, createWorkflowNode with metadata.sourceType='localFolder', one commitProjectPatch)",
+      "components/workflow/store.ts useWorkflowStore.updateProject + zustand persist (WORKFLOW_STORE_KEY -> localStorage, debounced persistWrite, persistenceError listener)",
+      "components/workflow/media.ts useWorkflowMediaUrl -> loadWorkflowMediaBlob -> loadFallbackMediaBlob -> parseLocalFolderHref -> readLocalFolderFile (runtime render/read of the original file, no byte copy into project JSON)"
+    ],
+    "stateOwners": [
+      "services/localFolderSource.ts: sources/handles/thumbnails in localforage instances + in-memory sessionHandles fallback",
+      "components/workflow/store.ts: project nodes/metadata persisted via localStorage WORKFLOW_STORE_KEY",
+      "components/workflow/LocalFolderBrowser.tsx: local selection/filter/permission React state (ephemeral)"
+    ],
+    "transformations": [
+      "DirectoryHandle -> LocalFolderSource {id,name} + persisted handle",
+      "LocalFolderEntry -> drag item {id,href:local-folder:<folderId>/<relPath>,source:'asset'}",
+      "LocalFolderEntry -> WorkflowNodeMetadata {sourceType:'localFolder',href,name,mimeType,bytes,naturalWidth,naturalHeight,durationMs,status:'success'}",
+      "local-folder: href -> File (on demand) -> objectURL for render"
+    ],
+    "validationLayers": [
+      "isLocalFolderSupported() gates UI entry (no File System Access API -> explanatory empty state)",
+      "localFolderMediaKind whitelist (EXTENSION_KINDS) + LOCAL_FOLDER_SCAN_LIMITS (maxDepth 3, maxEntries 600)",
+      "readLocalFolderFile path-walk via getDirectoryHandle; LocalFolderError codes PERMISSION/MISSING surface actionable messages",
+      "insertLocalFolderEntries wraps per-entry read in try/catch, counts failures, reports first failure text",
+      "commitProjectPatch -> updateProject -> persist storage write with persistenceError channel"
+    ],
+    "sideEffects": [
+      "IndexedDB writes: source record, directory handle, thumbnail blobs",
+      "localStorage write of project JSON (no file bytes copied)",
+      "workspace notice set on partial failure / project switch"
+    ],
+    "errorMappings": [
+      "showDirectoryPicker absent -> 'environment limit' UI instead of fake access",
+      "permission denied/handle missing -> LocalFolderError(PERMISSION|MISSING) -> entry failure string in notice; node render path surfaces same message via useWorkflowMediaUrl error state",
+      "non-directory drop -> LocalFolderError with clear message (test: localFolderSource.test.ts 'rejects non-directory drops')",
+      "project switched mid-insert -> '画布项目已切换，未写入节点'"
+    ],
+    "passThroughLayers": [
+      "WorkflowSidebar.tsx is a thin host: renders LocalFolderBrowser and forwards onInsert entries unchanged"
+    ],
+    "verdict": {
+      "ownsResponsibility": true,
+      "note": "Each layer owns a real responsibility (browser FS capability, bounded scan, href indirection, media inspect, single-ChangeSet commit, lazy byte read). WorkflowSidebar is a pure host — acceptable composition, not a hidden second state path. Byte-free reference design is consistent: project JSON never stores file bytes; reads re-walk the directory handle."
+    }
+  },
+  {
+    "id": "path-b-builtin-agent-to-workflow-mutation",
+    "name": "B) Built-in Agent (FlovartAgentPanel) -> Workflow mutation",
+    "entry": "User types a prompt in the Workflow drawer Agent panel and sends",
+    "modules": [
+      "components/agent/FlovartAgentPanel.tsx (composer, sessions, mode auto/manual, confirmation UI; chooses backend: ManagedFlovartAgentClient when getManagedAgentConnection() resolves, else BrowserAgentKernel)",
+      "services/managedAgentConnection.ts (Tauri invoke 'managed_agent_connection' -> loopback url+token; browser fallback: getBrowserWorkflowBinding / loadDockConnection)",
+      "services/managedFlovartAgent.ts ManagedFlovartAgentClient.turn (POST /agent/flovart/turn SSE) — managed sidecar path",
+      "agent/flovart.js + agent/kernel.js FlovartAgentKernel (pi-agent-core Agent over SqliteSessionRepo; tools = createFlovartAgentTools(session.callCommand)) — managed sidecar path",
+      "services/browserAgentKernel.ts BrowserAgentKernel (pi-agent-core Agent in-page; BrowserSessionRepo -> localforage; createBrowserAgentStream -> OpenAI-compatible /chat/completions; createBrowserAgentTools)",
+      "services/workflowAgentBridge.ts WorkflowAgentBridge (managed path: SSE /events tool_call -> validateBrowserWorkspaceLease -> confirmWrite gate (auto mode bypasses non-high-risk) -> workflowContract.dispatch or executeFlovartCommand for non-workflow commands; runtime commands gated by RUNTIME_CONFIRM_COMMANDS + Tauri runtime availability)",
+      "services/browserWorkflowContract.ts createBrowserWorkflowContract -> dispatchWorkflowCommand",
+      "services/workflowDispatcher.ts dispatchWorkflowCommand (validateEnvelope, idempotency cache, confirmation gate, command switch; workflow.apply path requires mutationId + expectedRevision; builds WorkflowDocumentOperation[] -> applyWorkflowMutation)",
+      "components/workflow/draftAuthority.ts applyWorkflowMutation (mutationHash canonicalize+sha256, receipt replay check -> IDEMPOTENCY_KEY_REUSE, expectedRevision vs draftVersion -> REVISION_CONFLICT, applyWorkflowDraftChangeSet -> nodes/connections/draftChangeSets/draftRedoStack/objectVersions)",
+      "components/workflow/store.ts updateProject -> persist"
+    ],
+    "stateOwners": [
+      "agent/kernel.js: SqliteSessionRepo (managed) / services/browserAgentKernel.ts BrowserSessionStore localforage (in-page) — chat sessions, production-skill binding entries",
+      "components/workflow/store.ts: WorkflowProject draft (nodes, connections, draftVersion, draftChangeSets, workflowMutationReceipts)",
+      "agent/session.js WorkflowAgentSession: pending requestId map, clients, activeClientId/activeHostWriter, workspaceLease manager (managed path)"
+    ],
+    "transformations": [
+      "user text -> AgentMessage -> tool_call {command:'workflow.apply', args{projectId,expectedRevision,mutationId,operations[]}}",
+      "tool params -> WorkflowCommandEnvelope {id,command,args,source:'agent',idempotencyKey: activeChangeSetId}",
+      "envelope.args -> WorkflowDocumentOperation[] -> ChangeSet + MutationReceipt",
+      "SSE/emitter events -> WorkflowAgentDisplayMessage list for the drawer"
+    ],
+    "validationLayers": [
+      "browserAgentKernel beforeToolCall blocks unregistered tool names; tool params schema built from COMMAND_REGISTRY arg descriptors",
+      "workflowDispatcher validateEnvelope + per-command required/finite/record arg validators; patch cannot set id",
+      "requiresWorkflowConfirmation -> confirmation.required -> bridge/kernel confirm UI -> withWorkflowHumanApproval symbol re-dispatch (caller-supplied 'confirmed' arg rejected — test: 'does not accept a caller-controlled confirmed flag')",
+      "applyWorkflowMutation: mutationId non-empty, ops non-empty + DOCUMENT_OPERATION_TYPES whitelist, expectedRevision integer check, REVISION_CONFLICT, receipt hash replay",
+      "managed path adds: session.callCommand lease/host-writer checks (WORKSPACE_REQUIRED for native/headless workspaceMode, LEASE_TARGET_CHANGED, authorizeExternalHost) and bridge validateBrowserWorkspaceLease"
+    ],
+    "sideEffects": [
+      "Chat session persisted (sqlite file or localforage keys flovart.agent.sessions.<projectId>)",
+      "Workflow draft ChangeSet appended (undoable), draftLog entries for non-ui sources",
+      "POST /workflow/state snapshot pushes; POST /workflow/result replies (managed path)",
+      "window.confirm fallback or in-drawer confirmation card pauses the turn"
+    ],
+    "errorMappings": [
+      "model HTTP failure -> AssistantMessage errorMessage -> 'error' role message in drawer",
+      "tool result ok:false -> thrown Error -> toolResult isError -> red tool message; DENIED when user rejects confirmation",
+      "no agent-text route -> needsConfiguration + fixed copy '请在设置的“模型映射”中…' (jargon flagged separately by UX agents)",
+      "unmanaged sidecar unreachable -> status 'error' + errorMessage(error) message",
+      "dispatcher BAD_REQUEST/NOT_FOUND/REVISION_CONFLICT/IDEMPOTENCY_KEY_REUSE propagate as tool errors"
+    ],
+    "passThroughLayers": [
+      "services/browserWorkflowContract.ts: Object.freeze wrapper that only re-labels dispatchWorkflowCommand as 'contract' — adds a version field but no validation, auth, or mapping of its own; a genuine pass-through seam",
+      "managedFlovartAgent.ts: transport-only SSE decoder (by design; but note it re-implements SSE parsing parallel to WorkflowAgentBridge's EventSource handling — two SSE stacks for one feature)"
+    ],
+    "verdict": {
+      "ownsResponsibility": "mostly",
+      "note": "Dual kernel implementations (in-page BrowserAgentKernel vs sidecar FlovartAgentKernel) duplicate session/skill-binding/confirmation logic; both funnel into the same dispatcher, which is the real authority. browserWorkflowContract.ts is a nominal boundary: it owns only a version constant. Confirmation semantics differ subtly between paths — managed path consults confirmWrite only when !highRisk && !operatorDraftOnly && !read, while browser path relies on dispatcher confirmation.required — same end state, two gate orderings to keep in sync."
+    }
+  },
+  {
+    "id": "path-c-codex-cli-to-workflow-apply",
+    "name": "C) Codex CLI -> workflow.apply",
+    "entry": "Codex (or any coding agent) runs `flovart workflow.apply --agent-identity codex --operations-json ... --idempotency-key ...` guided by skills/flovart/SKILL.md",
+    "modules": [
+      "skills/flovart/SKILL.md (contract doc: ensure -> inspect -> apply with mutationId/idempotencyKey/expectedRevision)",
+      "tools/flovart/cli.js (arg parse, normalizeCommandName, WORKSPACE_COMMANDS routing; rejects writes without --idempotency-key with INVALID_ARGUMENT before any I/O)",
+      "tools/flovart/core.js executeFlovartCommand (workflow.* branch: arg kebab->camel normalization, parseJsonOption for operations/patch/metadata, source='cli', caller{agentIdentity,hostSessionId}; dispatches via runtime.operation (operation-gateway) when command in AGENT_PUBLIC_COMMAND_SET else createWorkspaceFacade dispatch)",
+      "tools/flovart/operation-gateway.js createOperationGateway (assertPublicOperation -> UNKNOWN_COMMAND for non-public commands; assertWriteEnvelope requires idempotencyKey; forces workspaceMode='browser'; callerFromContext validates agentIdentity/hostSessionId pairing)",
+      "tools/flovart/workspace-client.js FlovartWorkspaceClient (reads ~/.flovart/agent.json via managed-agent/config.js; enforces http+loopback-only URL; POST /api/tools with x-flovart-agent-token; maps HTTP/body errors to WorkspaceClientError codes WORKSPACE_UNAVAILABLE/WORKSPACE_TIMEOUT/WORKSPACE_COMMAND_FAILED)",
+      "agent/index.js HTTP server (token check via persistent config token or bootstrap session tokens; POST /api/tools re-gates on AGENT_PUBLIC_COMMAND_SET — second surface check; session.callCommand)",
+      "agent/session.js WorkflowAgentSession.callCommand (workspaceMode native/headless -> WORKSPACE_REQUIRED; requestedClientId vs activeClientId -> LEASE_TARGET_CHANGED; projectId vs bound snapshot -> LEASE_TARGET_CHANGED; cli/mcp-with-caller source -> authorizeExternalHost (AGENT_HOST_REQUIRED / AGENT_WRITER_INACTIVE / AGENT_HOST_SESSION_MISMATCH / AGENT_PROJECT_INACTIVE); ensureWorkspaceLease -> WorkspaceLeaseManager acquire+validate; forwards envelope over SSE 'tool_call' to the bound browser client)",
+      "agent/workspace-lease.js WorkspaceLeaseManager (lease lifecycle: acquire/validate/renew/release/expire, mutation binding)",
+      "services/workflowAgentBridge.ts handleToolCall (browser side: validateBrowserWorkspaceLease, workflow.* -> contract.dispatch, confirmation flow)",
+      "services/workflowDispatcher.ts -> components/workflow/draftAuthority.ts -> components/workflow/store.ts (same tail as path B)",
+      "agent/session.js resolveResult (POST /workflow/result -> pending requestId resolve/reject -> CLI prints result JSON)"
+    ],
+    "stateOwners": [
+      "~/.flovart/agent.json (agent/config.js): sidecar URL + bearer token",
+      "agent/session.js: SSE client registry, pending request map, activeClientId/activeHostWriter, leases",
+      "components/workflow/store.ts: project draft + receipts"
+    ],
+    "transformations": [
+      "argv -> parseCliArgs -> normalized command + camelCase args",
+      "operations-json string -> parsed WorkflowDocumentOperation[]",
+      "CLI args + caller -> WorkflowCommandEnvelope {source:'cli'} -> SSE tool_call -> same envelope -> dispatcher",
+      "WorkflowCommandResult -> POST /workflow/result -> JSON body.result -> printCliResponse --json output"
+    ],
+    "validationLayers": [
+      "cli.js WORKSPACE_WRITE_COMMANDS idempotency-key precondition (client-side, before socket)",
+      "operation-gateway AGENT_PUBLIC_COMMAND_SET whitelist + write-idempotency + caller pairing",
+      "agent/index.js /api/tools second AGENT_PUBLIC_COMMAND_SET gate (defense in depth vs raw loopback callers)",
+      "token auth (persistent + bootstrap credentials), loopback-only client config",
+      "session.callCommand: workspaceMode gate, clientId/projectId binding, host-writer authorization, workspace lease",
+      "dispatcher + draftAuthority validation identical to path B (envelope, ops, revision, idempotent replay)"
+    ],
+    "sideEffects": [
+      "SSE tool_call to the visible browser tab; 60s pending timeout",
+      "workflow mutation committed in the user's live project (single ChangeSet, undoable)",
+      "lease acquired/validated per leased command; agent.json written on sidecar start"
+    ],
+    "errorMappings": [
+      "no agent.json -> WORKSPACE_UNAVAILABLE with WSL-aware guidance text",
+      "non-loopback config URL -> WORKSPACE_UNAVAILABLE (refuses remote)",
+      "no connected browser -> WORKSPACE_UNAVAILABLE '当前没有已连接并同步项目的 Flovart Workflow'",
+      "stale/wrong project -> LEASE_TARGET_CHANGED with hint 'activate the target project in Flovart first'",
+      "host mismatch -> AGENT_WRITER_INACTIVE; missing identity -> AGENT_HOST_REQUIRED (SKILL.md documents the fix)",
+      "sidecar 5xx/timeout -> WORKSPACE_TIMEOUT / retryable flags preserved into CLI error JSON",
+      "dispatcher errors (REVISION_CONFLICT, IDEMPOTENCY_KEY_REUSE, BAD_REQUEST) cross the SSE boundary verbatim via /workflow/result"
+    ],
+    "passThroughLayers": [
+      "tools/flovart/workspace-client.js executeEnvelope: field-level pass-through (command/args/source/idempotencyKey/caller) — justified transport, but it does re-map flat HTTP failures into typed codes, so it owns error semantics",
+      "core.js workflow.* arg normalization block is a pure adapter (kebab-case->camelCase, JSON parse); it owns compatibility, no state"
+    ],
+    "verdict": {
+      "ownsResponsibility": true,
+      "note": "Every layer earns its place: CLI arg adapter, public-surface gateway, authenticated loopback transport, sidecar authorization/lease broker, in-browser dispatcher, draft authority. The double AGENT_PUBLIC_COMMAND_SET check (operation-gateway in CLI + /api/tools in sidecar) is intentional defense-in-depth, documented in code. Real risk is temporal: lease/revision checks in the sidecar are evaluated against the last pushed snapshot (browserLeaseContext.currentRevision = snapshot.draftVersion), then the browser re-validates expectedRevision — correct, but a stale snapshot between inspect and apply widens the blind window the revision check must catch."
+    }
+  },
+  {
+    "id": "path-d-ui-run-to-provider-artifact",
+    "name": "D) UI Run -> provider -> artifact",
+    "entry": "User presses a node's run button (WorkflowNodeToolbar) -> runWorkflowNodeFromUi",
+    "modules": [
+      "App.tsx runWorkflowNodeFromUi (requiresExternalGenerationGate -> getGenerationGateDetails -> window.confirm(buildGenerationGateSummary) — cost/provider gate; promptIntent pass-through)",
+      "services/workflowExecutor.ts createWorkflowExecutor.runNode (runId mint, surface='ui' context, normalizeWorkflowExecutionError)",
+      "App.tsx handleRunWorkflowNode (revision re-check; dispatches operation nodes to workflowVideoOperations/workflowAudioOperations/workflowImageOperations local-transform reruns; ensureWorkflowImageGenerateOperation may materialize an operation node; calls runWorkflowGeneration)",
+      "services/workflowGeneration.ts runWorkflowGeneration (modeFor gate: audio->error 'not supported', script->error; cancel prior activeRequest; node -> loading + generationRequestId; resolveWorkflowInputs; frozen WorkflowExecutionTarget; submode inference from resolved references; resolveRouteMappingForSubmit -> {routeId,key}; resolveProviderGenerationExtension; routed-modes capability check (first-last-frame/reference-to-video/image-to-image/image-to-video); prompt assembly stylePreset+camera+movement+texts+mediaLabels; usePromptHistoryStore.record; runPreflight (optimize + localComplianceCheck -> complianceWarnings -> error); buildCanonicalGenerationInput + diagnostics; providerExtension.generation.validate -> ProviderValidationResult; materializeCanonicalReferences (blob/objectURL, temporaryUrls); providerRequest serialize; reserveApiUsage; executeUnifiedIgnition per batch item with onProgress/onProviderTaskLifecycle/resumeProviderTaskId)",
+      "services/aiGateway.ts executeUnifiedIgnition (180KB provider matrix: routeId -> per-provider submit/poll/cancel/usage; emits ProviderTaskLifecycleEvent submitted/running/cancelled/usage)",
+      "services/workflowGeneration.ts mediaResult -> ingestWorkflowMedia (blob -> workflowMediaStorage IDB record + video poster)",
+      "components/workflow/media.ts storage lifecycle (pendingReferences keep-alive until commit; discard on abort; previous storageKey conditional discard via isWorkflowMediaKeyReferenced)",
+      "services/studio/artifactRegistry.ts registerWorkflowArtifact (opaque {artifactId:runId,kind,mimeType} bound to storageKey, TTL 30min, cap 64) — invoked in App.tsx after success when storageKey exists",
+      "components/workflow/store.ts updateProject per publish() -> debounced localStorage persist; flushWorkflowPersistence when a durable generationProviderTaskId appears",
+      "saveGenerationToHistory -> generation history entry (dataUrl thumbnail)"
+    ],
+    "stateOwners": [
+      "services/workflowGeneration.ts activeRequests Map<projectId:nodeId,{requestId,controller,runtime}> — in-flight run authority + cancellation",
+      "components/workflow/store.ts — node metadata status/progress/error/generationProviderTaskId/usage fields",
+      "components/workflow/media.ts + storage.ts — IDB media blobs, reference tracking (pending/transient/canonical)",
+      "services/studio/artifactRegistry.ts — session artifact registry",
+      "usage monitor (reserveApiUsage/updateApiUsage/refundApiUsage) — billing ledger"
+    ],
+    "transformations": [
+      "node+graph -> ResolvedNodeInputs -> CanonicalGenerationInput -> ProviderWireRequest {productModelId,capability,generationSubmode,aspectRatio,...references[]}",
+      "provider result -> Blob -> WorkflowMediaRecord {storageKey,naturalWidth,naturalHeight,mimeType} -> node metadata patch",
+      "node metadata -> WorkflowArtifactOutput {artifactId,mimeType,kind,name} (storageKey hidden from host contract)"
+    ],
+    "validationLayers": [
+      "UI gate: requiresExternalGenerationGate + confirmRouteFallback + window.confirm cost summary",
+      "executor: expectedRevision double-check inside handleRunWorkflowNode (REVISION_CONFLICT)",
+      "runWorkflowGeneration: model must be platform preset (getProductModel capability match), routed-modes support check per provider, prompt non-empty, preflight compliance, canonicalInput diagnostics error -> throw, providerExtension.validate",
+      "stillActive() guards every publish/commit step against abort/supersede",
+      "dispatcher-side validation applies only when entry is via command surface; UI path enters below it — by design, UI has its own gate"
+    ],
+    "sideEffects": [
+      "External provider HTTP submit + polling (billable), usage ledger writes, abort -> best-effort upstream cancel",
+      "IDB media + poster writes, objectURL churn (temporaryUrls revoked in finally)",
+      "localStorage project writes on every publish(); flush on durable taskId",
+      "prompt history, generation history, artifact registry"
+    ],
+    "errorMappings": [
+      "provider failure -> UnifiedIgnitionResult.ok:false or throw -> node status 'error' with provider message; usage marked failed",
+      "abort -> AbortError -> node 'idle' (not error), usage canceled/refund path via cancelled lifecycle event",
+      "submission-unknown (SeedanceSubmissionUnknownError / abort-after-submit) -> usage 'submission_unknown', billableState 'unknown', node keeps generationProviderTaskId",
+      "compliance -> node error '合规警告：…' + throw",
+      "local-transform capability nodes bypass provider entirely (rerun*Operation)",
+      "normalizeWorkflowExecutionError -> WorkflowRunResult.status 'failed' {code,message} back to dispatcher callers"
+    ],
+    "passThroughLayers": [
+      "workflowExecutor.ts adds only runId + error normalization — thin but real (identity + error taxonomy)",
+      "App.tsx handleRunWorkflowNode is a fat adapter: capability dispatch, operation materialization, runtime wiring — owns real branching, not pass-through"
+    ],
+    "verdict": {
+      "ownsResponsibility": true,
+      "note": "Deep chain with genuine ownership at each layer. Two flagged seams: (1) the confirmation for UI runs is window.confirm in runWorkflowNodeFromUi while dispatcher-driven runs use the envelope confirmation flow — same intent, two UX mechanisms; (2) artifact registration happens in App.tsx post-hoc from generatedNode.metadata, so a run whose node was superseded mid-flight can still register an artifact for a storageKey the project may have discarded — bounded by TTL but worth a defensive check."
+    }
+  },
+  {
+    "id": "path-e-provider-resume-to-artifact",
+    "name": "E) Provider resume -> artifact",
+    "entry": "App mounts / project activates: nodes stuck in metadata.status='loading' with generationProviderTaskId trigger the recovery effect",
+    "modules": [
+      "App.tsx recovery useEffect (gates: apiKeysLoaded && activeWorkflowProjectId && userApiKeys.length>0; filter video mode + loading + generationProviderTaskId; recoveryTasks.current dedupe key project:node:taskId; resolveRouteMappingForSubmit for the node's modelId+submode; provider must be 'custom' or 'runningHub' else throw '当前 AI 服务暂不支持刷新后恢复视频任务')",
+      "services/workflowExecutor.ts runNode {surface:'recovery', runId:'recovery_'+providerTaskId, resumeProviderTaskId:providerTaskId}",
+      "App.tsx handleRunWorkflowNode -> runWorkflowGeneration (same as path D)",
+      "services/workflowGeneration.ts resume selection: runtime.resumeProviderTaskId wins; else initialNode.metadata.status==='loading' && generationProviderTaskId (deliberately reads initialNode, not current, to avoid resurrecting terminal nodes' stale taskIds)",
+      "services/aiGateway.ts provider adapters honoring resumeProviderTaskId: custom/Tauri runtime (skip submit, poll taskId), RunningHub rhRunTask(resumeTaskId) + onTaskId lifecycle; image path also accepts resumeTaskId",
+      "services/workflowGeneration.ts onProviderTaskLifecycle resume annotation ('恢复任务轮询'), then identical commit path -> mediaResult -> ingestWorkflowMedia -> node success -> App.tsx registerWorkflowArtifact",
+      "failure arm: catch in the effect writes node metadata {status:'error',error:message} directly via updateProject (bypasses executor error normalization)"
+    ],
+    "stateOwners": [
+      "App.tsx recoveryTasks ref (in-memory dedupe for the session)",
+      "node metadata.generationProviderTaskId + status='loading' persisted in localStorage — the durable resume key",
+      "provider-side upstream task (external truth)"
+    ],
+    "transformations": [
+      "persisted loading node -> WorkflowRunCommand + recovery context -> provider poll -> Blob -> media record -> node success"
+    ],
+    "validationLayers": [
+      "Provider whitelist gate ('custom'|'runningHub') before attempting resume",
+      "status==='loading' precondition so terminal nodes never resume",
+      "dedupe key prevents double-resume within a session",
+      "downstream identical validation to path D (route resolve, canonical input, provider validate)"
+    ],
+    "sideEffects": [
+      "Read-mostly: polling an existing upstream task; no new submission on the resume branch",
+      "On failure: direct node patch to error (side effect outside the executor seam)"
+    ],
+    "errorMappings": [
+      "unsupported provider -> thrown -> node error '当前 AI 服务暂不支持刷新后恢复视频任务'",
+      "poll failure/abort -> same catch -> generic '视频任务恢复失败，请稍后重试' when message missing",
+      "provider adapter: resume path emits lifecycle 'running' with remoteStatus '恢复任务轮询'"
+    ],
+    "passThroughLayers": [],
+    "verdict": {
+      "ownsResponsibility": true,
+      "note": "Lean path reusing path D's machinery — correct by construction. One asymmetry: the recovery effect's catch writes node error state via updateProject directly instead of returning a WorkflowRunResult through the executor, so recovery failures bypass the RUN_FAILED error taxonomy and any correlationId/runId context; the node ends in 'error' with a hand-built message rather than a normalized code. Also the resume effect requires userApiKeys.length>0 — a project opened before keys hydrate (or with zero keys) silently never resumes until a later state change re-fires the effect; recoveryTasks dedupe means a failed first attempt is not retried within the session."
+    }
+  },
+  {
+    "id": "path-f-workbuddy-skill-to-workflow",
+    "name": "F) WorkBuddy Skill -> CLI -> Workflow",
+    "entry": "WorkBuddy chat invokes the bundled flovart skill; skill instructs the host to run flovart-cli commands",
+    "modules": [
+      "integrations/workbuddy/flovart/connector-meta.json + cli.json (connector descriptor: npm i -g @flovart/cli; auth/status commands map to workbuddy.auth/status/unAuth; statusMatch '\"state\":\"local-ready\"')",
+      "integrations/workbuddy/flovart/skills/flovart/SKILL.md + references/workflow.md (agent-facing contract: flovart-cli ensure -> status -> workflow.inspect/selection.get -> workflow.apply -> workflow.node.run with --agent-identity workbuddy + stable mutation/idempotency ids)",
+      "tools/flovart/cli.js workbuddy.* branches (workbuddy.auth -> ensureFlovart({open:false}); workbuddy.status -> getLocalStatus -> {state:'local-ready'|'offline'}; workbuddy.unAuth -> always local-ready, no-op by design — documented 'never revokes shared credentials')",
+      "tools/flovart/ensure.js ensureFlovart (getLocalStatus -> if not ready spawn 'cli.js start [--source --web] --json --open' -> re-read status -> ensureResponse with HOST_NEEDS_LOGIN/HOST_NEEDS_SETUP/LINK_OFFLINE codes)",
+      "tools/flovart/local-status.js getLocalStatus (probe frontend candidates 127.0.0.1:37522/11451 + web-discovery + env; inspectLocalAgent via agent.json; FlovartRuntimeClient.status optional; browserConnected = agent ready && clients>0 && hasWorkflow)",
+      "then identical to path C: operation-gateway (for AGENT_PUBLIC_COMMAND_SET) or workspace facade -> FlovartWorkspaceClient -> agent/index.js /api/tools -> session.callCommand (source 'cli', caller{agentIdentity:'workbuddy'}) -> SSE tool_call -> browser bridge -> dispatcher -> draftAuthority -> store"
+    ],
+    "stateOwners": [
+      "WorkBuddy side: installed CLI package + connector lifecycle state (local-ready/offline)",
+      "Flovart side: identical to path C (agent.json, session.js, workflow store)",
+      "No WorkBuddy account state exists in Flovart — unAuth is intentionally a no-op"
+    ],
+    "transformations": [
+      "natural language -> skill-guided CLI invocations -> same envelope pipeline as path C",
+      "connector status -> {state:'local-ready'} string match (cli.json statusMatch regex)"
+    ],
+    "validationLayers": [
+      "cli.json pins runtime node 22; SKILL.md requires Node 22.19+",
+      "workbuddy.auth runs real ensure (services must come up), status is a live probe not a cached flag",
+      "downstream identical: public-surface gate, token, host-writer authorization (agentIdentity 'workbuddy' must match activeHostWriter), lease, dispatcher, revision"
+    ],
+    "sideEffects": [
+      "ensure may spawn `flovart start` child process and open the browser (--open suppressed for auth: authSuppressBrowser + open:false)",
+      "same workflow mutations as path C"
+    ],
+    "errorMappings": [
+      "services down -> ensureResponse {ok:false,error.code: LINK_OFFLINE|HOST_NEEDS_LOGIN|HOST_NEEDS_SETUP, action}",
+      "status always prints ok:true with state field — connector parses state, not exit code (statusMatch on local-ready)",
+      "unAuth always reports local-ready + explanatory message — a deliberately hollow success (documented: Flovart holds no WorkBuddy account)"
+    ],
+    "passThroughLayers": [
+      "connector-meta.json/cli.json are pure packaging descriptors (expected for a connector manifest)",
+      "workbuddy.unAuth is a semantic no-op returning success — honest no-op, documented, but a host that treats unAuth as real revocation is misled by the 'local-ready' response shape"
+    ],
+    "verdict": {
+      "ownsResponsibility": "mostly",
+      "note": "Thin but honest layering: connector manifest + skill doc + the shared CLI pipeline. Two real observations: (1) workbuddy.auth only runs ensureFlovart — if services are already up it returns local-ready without proving the browser Workflow link specifically (ensureResponse checks browserConnected via getLocalStatus, so it does — verified); (2) unAuth unconditionally reports success even when nothing was ever connected — semantically correct per the no-account model but indistinguishable from a real logout to WorkBuddy's connector state machine."
+    }
+  }
+]

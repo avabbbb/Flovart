@@ -82,3 +82,12 @@ eval/results/
 # Root-level artifacts directory (smoke screenshots, recordings)
 artifacts/
 
+
+# Product-maturity eval results: large video/screenshot artifacts, not source
+eval/product-maturity/results/
+
+
+# Product-maturity dev/probe scripts are exploration scratch, not source
+eval/product-maturity/dev/
+eval/product-maturity/scenarios/
+
