@@ -51,7 +51,7 @@
   paid model service was called. Reproduction record: <a href="docs/maintenance/readme/DEMO_RECORDING.md">DEMO_RECORDING.md</a>.</sub>
 </p>
 
-Both halves are now on record: the hero above is an external coding agent session editing the live Workflow, and the CLI-only capture sits under [Architecture](#architecture) as the operation-level view. Remaining visual gaps are tracked in [README_VISUAL_TODO.md](docs/maintenance/readme/README_VISUAL_TODO.md).
+**Jump to:** [Quick start](#quick-start) · [Feature tour](#feature-tour) · [Why Flovart?](#why-flovart) · [Core capabilities](#core-capabilities) · [Bring your own models](#bring-your-own-models) · [Compatibility](#integrations-and-compatibility) · [Architecture](#architecture) · [Local-first and security](#local-first-and-security) · [Roadmap](#creative-app-roadmap) · [Contributing](#contributing)
 
 ## Quick start
 
@@ -230,6 +230,8 @@ Most AI creative tools make you choose between a visual editor and an autonomous
 - **Agent-native.** Agents act through typed Flovart operations instead of screen scraping, mouse automation, or a hidden copy of your project.
 - **BYOK image + video.** Bring your own providers, models and API keys.
 - **Local-first visual control.** Projects, references and workflow state stay close to your workspace.
+
+Concretely: you ask your agent for a three-shot product video. It creates the shot nodes in the Workflow you are already looking at and wires them together, then stops where your judgement is needed — references, model choice, which take to keep. You keep editing that same graph by hand from there. Nothing is hidden in a second project, and nothing the agent did has to be redone.
 
 ## Core capabilities
 

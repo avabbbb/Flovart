@@ -51,7 +51,7 @@
   可复现记录见 <a href="docs/maintenance/readme/DEMO_RECORDING.md">DEMO_RECORDING.md</a>。</sub>
 </p>
 
-两半都已记录在案：上面 Hero 是外部 coding agent 会话在编辑可见 Workflow，而纯 CLI 的录屏放在下面[架构](#架构)段作为操作级视角。剩余视觉缺口见 [README_VISUAL_TODO.md](docs/maintenance/readme/README_VISUAL_TODO.md)。
+**快速跳转：** [快速开始](#快速开始) · [功能演示](#功能演示) · [为什么是 Flovart](#为什么是-flovart) · [核心能力](#核心能力) · [使用你自己的模型](#使用你自己的模型) · [集成与兼容性](#集成与兼容性) · [架构](#架构) · [本地优先与安全](#本地优先与安全) · [路线图](#创作软件路线图) · [参与贡献](#参与贡献)
 
 ## 快速开始
 
@@ -228,6 +228,8 @@ npm run flovart:cli -- status --json
 - **Agent-native。** Agent 通过类型化的 Flovart 操作工作，不靠屏幕抓取、鼠标自动化，也不会偷偷创建一份你的项目副本。
 - **BYOK 图片与视频。** 模型服务、模型和 API Key 都用你自己的。
 - **本地优先的可视化控制。** 项目、参考素材和 Workflow 状态都靠近你的工作区。
+
+具体一点：你让 Agent 做一个三镜头产品视频。它在你**正看着的**那份 Workflow 里建出各镜头节点并连好线，然后停在需要你判断的地方——参考素材、模型选择、保留哪一版。接下来你继续用手改同一张图。没有第二份隐藏项目，Agent 做过的事也不需要重做一遍。
 
 ## 核心能力
 
