@@ -46,9 +46,9 @@
   <img src="pic/readme/hero-agent.gif" alt="An external coding agent editing the same live Flovart Workflow" width="880" />
   <br />
   <sub><strong>An external coding agent editing the same live Flovart Workflow — natural language becomes nodes and edges.</strong><br />
-  The agent (WorkBuddy codebuddy) drove the visible Workflow through the typed CLI
-  surface: three nodes and two connections created live, with no source edits. No generation step was run, so no paid
-  model service was called. Reproduction record: <a href="docs/maintenance/readme/DEMO_RECORDING.md">DEMO_RECORDING.md</a>.</sub>
+  Nothing in this clip is done by hand: the agent (WorkBuddy codebuddy) drove the visible Workflow through the typed
+  CLI surface, creating three nodes and two connections live, with no source edits. No generation step was run, so no
+  paid model service was called. Reproduction record: <a href="docs/maintenance/readme/DEMO_RECORDING.md">DEMO_RECORDING.md</a>.</sub>
 </p>
 
 Both halves are now on record: the hero above is an external coding agent session editing the live Workflow, and the CLI-only capture sits under [Architecture](#architecture) as the operation-level view. Remaining visual gaps are tracked in [README_VISUAL_TODO.md](docs/maintenance/readme/README_VISUAL_TODO.md).
@@ -83,7 +83,11 @@ The normal agent loop is `status`, `workflow.inspect`, `workflow.selection.get`,
 
 ## Feature tour
 
-Every clip below is a real recording of the running app — one operation, start to finish, with no composited frames and no mockups. Each is cut to the action. Video and audio tools run ffmpeg.wasm in the browser; their core is pre-warmed before the recorded action, so the clip shows the operation rather than the one-off ~30MB wasm download — **clip length is therefore not the wait time on a first run**. Registration, method and limits: [DEMO_RECORDING.md](docs/maintenance/readme/DEMO_RECORDING.md).
+Every clip below is a real recording of the running app — one operation, start to finish, with no composited frames and no mockups. Each is cut to the action.
+
+**Agent-native, not screen-scraping.** These are operations on the same Workflow an agent drives. The hero above and the CLI capture under [Architecture](#architecture) are agent-driven end to end, with no human input; the tour below is that same surface driven by hand, because that is the path a new user follows first. Node creation, connections, selection, viewport, node moves and resizes, and the node tools are all exposed to agents as typed operations — with revision and idempotency boundaries rather than coordinates on a screen.
+
+Video and audio tools run ffmpeg.wasm in the browser; their core is pre-warmed before the recorded action, so the clip shows the operation rather than the one-off ~30MB wasm download — **clip length is therefore not the wait time on a first run**. Registration, method and limits: [DEMO_RECORDING.md](docs/maintenance/readme/DEMO_RECORDING.md).
 
 ### Canvas
 
@@ -207,7 +211,7 @@ Also local, also without a model service: these run through the in-browser ffmpe
   <tr>
     <td align="center">
       <img src="pic/readme/features/agent-cli-live.gif" alt="Typed CLI operations building a graph on the live canvas" width="420" />
-      <br /><sub><strong>Operations land on the canvas.</strong> <code>workflow.node.create</code> and <code>workflow.connect</code> run through the typed CLI while the visible Workflow updates in place — no screen scraping, no hidden copy of the project.</sub>
+      <br /><sub><strong>Operations land on the canvas.</strong> Driven entirely by the agent — no human input — <code>workflow.node.create</code> and <code>workflow.connect</code> run through the typed CLI while the visible Workflow updates in place: no screen scraping, no hidden copy of the project.</sub>
     </td>
     <td align="center">
       <img src="pic/readme/features/agent-open-panel.gif" alt="Opening the Agent surface from the canvas toolbar" width="420" />

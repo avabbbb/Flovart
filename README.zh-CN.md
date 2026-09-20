@@ -46,7 +46,7 @@
   <img src="pic/readme/hero-agent.gif" alt="外部 coding agent 正在编辑同一份可见的 Flovart Workflow" width="880" />
   <br />
   <sub><strong>外部 coding agent 正在编辑同一份可见的 Flovart Workflow —— 自然语言变成节点与连线。</strong><br />
-  该 Agent（WorkBuddy codebuddy）经 typed CLI 驱动可见 Workflow：
+  这段录屏里没有任何人工操作：该 Agent（WorkBuddy codebuddy）全程经 typed CLI 驱动可见 Workflow，
   现场创建 3 个节点与 2 条连线，没有改动任何源码。未执行生成步骤，因此没有调用付费模型服务。
   可复现记录见 <a href="docs/maintenance/readme/DEMO_RECORDING.md">DEMO_RECORDING.md</a>。</sub>
 </p>
@@ -81,7 +81,11 @@ npm run flovart:cli -- status --json
 
 ## 功能演示
 
-下面每一条都是运行中应用的真实录屏：一个操作，从头到尾，没有合成帧、没有效果图。每条都裁到动作本身。视频与音频工具在浏览器内跑 ffmpeg.wasm，录制动作前会先预热 core，因此片段展示的是操作本身，而不是一次性约 30MB 的 wasm 下载 —— **所以片段时长不等于首次使用时的等待时间**。录制方法、可复现命令与边界见 [DEMO_RECORDING.md](docs/maintenance/readme/DEMO_RECORDING.md)。
+下面每一条都是运行中应用的真实录屏：一个操作，从头到尾，没有合成帧、没有效果图。每条都裁到动作本身。
+
+**Agent 原生，不是界面抓取。** 这些都是作用在同一份 Workflow 上的操作，而那份 Workflow 也可以由 Agent 驱动。上方 Hero 与[架构](#架构)段的 CLI 录屏是**全程由 Agent 驱动、没有任何人工操作**；下面的图库则是同一套界面由人手操作，因为那是新用户最先要走通的路径。节点的创建、连接、选择、视口、移动与缩放，以及各个节点工具，都已作为 typed operation 暴露给 Agent —— 走的是 revision 与幂等边界，而不是屏幕坐标。
+
+视频与音频工具在浏览器内跑 ffmpeg.wasm，录制动作前会先预热 core，因此片段展示的是操作本身，而不是一次性约 30MB 的 wasm 下载 —— **所以片段时长不等于首次使用时的等待时间**。录制方法、可复现命令与边界见 [DEMO_RECORDING.md](docs/maintenance/readme/DEMO_RECORDING.md)。
 
 ### 画布操作
 
@@ -205,7 +209,7 @@ npm run flovart:cli -- status --json
   <tr>
     <td align="center">
       <img src="pic/readme/features/agent-cli-live.gif" alt="typed CLI 操作在可见画布上搭建节点图" width="420" />
-      <br /><sub><strong>操作直接落在画布上。</strong><code>workflow.node.create</code> 与 <code>workflow.connect</code> 通过 typed CLI 执行，可见 Workflow 同步更新——不靠界面抓取，也没有第二份隐藏副本。</sub>
+      <br /><sub><strong>操作直接落在画布上。</strong>全程由 Agent 驱动、没有任何人工操作：<code>workflow.node.create</code> 与 <code>workflow.connect</code> 通过 typed CLI 执行，可见 Workflow 同步更新——不靠界面抓取，也没有第二份隐藏副本。</sub>
     </td>
     <td align="center">
       <img src="pic/readme/features/agent-open-panel.gif" alt="从画布工具栏打开 Agent 界面" width="420" />
