@@ -37,7 +37,7 @@ describe('Flovart Agent panel', () => {
     });
   });
 
-  it('shows a localized configuration state while keeping retry available', async () => {
+  it('shows a guided configuration state and blocks send until setup is ready', async () => {
     const onOpenSettings = vi.fn();
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
         sessionId: 'session-1',
@@ -57,15 +57,19 @@ describe('Flovart Agent panel', () => {
     render(<FlovartAgentPanel project={{ ...createWorkflowProject('Agent 项目'), id: 'project-1' }} onActivityChange={vi.fn()} onOpenSettings={onOpenSettings} />);
 
     expect(await screen.findByText('需要配置')).toBeInTheDocument();
-    expect(screen.getByText('请在设置的“模型映射”中为 Agent 文本能力配置可用线路。')).toBeInTheDocument();
+    expect(screen.getByText('内置助手还需要一个 AI 服务。设置完成后即可在当前画布旁直接对话。')).toBeInTheDocument();
     expect(screen.queryByText('No agent-text route is configured')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: '打开模型映射' }));
+    expect(screen.getByRole('status')).toHaveTextContent('内置助手还需要一个 AI 服务。');
+    fireEvent.click(screen.getByRole('button', { name: '设置 AI' }));
     expect(onOpenSettings).toHaveBeenCalledOnce();
 
-    const composer = screen.getByPlaceholderText('请先配置 Agent 文本模型映射');
+    const composer = screen.getByPlaceholderText('先设置 AI 服务后即可对话');
     expect(composer).toBeEnabled();
+    expect(composer).toHaveAttribute('aria-describedby', 'agent-composer-setup-help');
     fireEvent.change(composer, { target: { value: '配置完成后重试' } });
-    await waitFor(() => expect(screen.getByRole('button', { name: '发送' })).toBeEnabled());
+    expect(screen.getByRole('button', { name: '发送' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: '立即设置' }));
+    expect(onOpenSettings).toHaveBeenCalledTimes(2);
   });
 
   it('mirrors the Agent opening flow with a Skill card, searchable picker, and autonomy menu', async () => {
