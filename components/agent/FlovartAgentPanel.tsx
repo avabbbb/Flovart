@@ -39,7 +39,7 @@ interface AgentReference {
   mediaType?: string;
 }
 
-const AGENT_TEXT_CONFIGURATION_MESSAGE = '请在设置的“模型映射”中为 Agent 文本能力配置可用线路。';
+const AGENT_TEXT_CONFIGURATION_MESSAGE = '内置助手还需要一个 AI 服务。设置完成后即可在当前画布旁直接对话。';
 
 function isAgentTextConfigurationError(error?: string) {
   const message = String(error || '').toLowerCase();
@@ -459,7 +459,7 @@ export function FlovartAgentPanel({ project, onActivityChange, onOpenSettings, a
 
   const send = async () => {
     const text = prompt.trim();
-    if ((!text && references.length === 0) || sending) return;
+    if ((!text && references.length === 0) || sending || needsConfiguration) return;
     if (!client.current && !kernelRef.current) {
       setMessages(items => [...items, { id: crypto.randomUUID(), role: 'error', text: 'Flovart Agent 未连接：仅桌面端可用。' }]);
       return;
@@ -552,7 +552,7 @@ export function FlovartAgentPanel({ project, onActivityChange, onOpenSettings, a
         <span className={`workflow-agent__status is-${needsConfiguration || workspaceStatus === 'error' ? 'error' : status === 'ready' && workspaceStatus === 'ready' ? 'connected' : status}`}>
           <Circle size={8} />{status === 'connecting' ? '连接中' : status === 'error' ? '连接失败' : needsConfiguration ? '需要配置' : workspaceStatus === 'error' ? '工作区断开' : workspaceStatus !== 'ready' ? '同步工作区' : '已就绪'}
         </span>
-        {needsConfiguration && <button type="button" className="ml-2 flex items-center gap-1 text-[9px] font-semibold" onClick={onOpenSettings}><Settings2 size={10} />打开模型映射</button>}
+        {needsConfiguration && <button type="button" className="ml-2 flex items-center gap-1 text-[9px] font-semibold" onClick={onOpenSettings}><Settings2 size={10} />设置 AI</button>}
         <span className="agent-conversation__history ml-auto">
           <button
             type="button"
@@ -616,10 +616,12 @@ export function FlovartAgentPanel({ project, onActivityChange, onOpenSettings, a
                 void send();
               }
             }}
-            placeholder={needsConfiguration ? '请先配置 Agent 文本模型映射' : status === 'ready' ? '告诉 Flovart Agent 你想制作什么' : 'Flovart Agent 连接失败'}
+            placeholder={needsConfiguration ? '先设置 AI 服务后即可对话' : status === 'ready' ? '告诉 Flovart Agent 你想制作什么' : 'Flovart Agent 连接失败'}
             aria-label="开始你的创作，或者 @ 引用工作流/节点/资源"
+            aria-describedby={needsConfiguration ? 'agent-composer-setup-help' : undefined}
             disabled={status === 'connecting'}
           />
+          {needsConfiguration && <div id="agent-composer-setup-help" role="status" className="flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-[10px]" style={{ color: 'var(--isl-ink-soft)', background: 'var(--agent-subtle)' }}><span>内置助手还需要一个 AI 服务。</span><button type="button" className="font-semibold" style={{ color: 'var(--isl-accent)' }} onClick={onOpenSettings}>立即设置</button></div>}
           <div className="agent-composer__controls">
             <div className="agent-composer__tools">
               <div className="agent-attachment-control">
@@ -661,7 +663,7 @@ export function FlovartAgentPanel({ project, onActivityChange, onOpenSettings, a
             </div>
             {sending
               ? <button type="button" className="agent-composer__send" aria-label="停止" onClick={() => { abort.current?.abort(); activity.current('idle'); if (kernelRef.current) kernelRef.current.cancel(); else void client.current?.cancel(project.id); }}><Square size={13} /></button>
-              : <button type="button" className="agent-composer__send" aria-label="发送" onClick={() => void send()} disabled={status !== 'ready' || (!prompt.trim() && references.length === 0)}><Send size={16} /></button>}
+              : <button type="button" className="agent-composer__send" aria-label="发送" onClick={() => void send()} disabled={status !== 'ready' || needsConfiguration || (!prompt.trim() && references.length === 0)}><Send size={16} /></button>}
           </div>
         </div>
       </section>
