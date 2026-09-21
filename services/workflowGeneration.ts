@@ -17,6 +17,7 @@ import { beginWorkflowOperationTake, completeWorkflowOperationTake } from '../co
 import { validateWorkflowOperationOutputs } from '../components/workflow/operationRegistry';
 import type { ProviderMaterializedReference } from './providerGenerationAdapter';
 import { resolveProviderGenerationExtension } from './userScriptProviderAdapter';
+import { displayError } from './displayError';
 
 export interface WorkflowHistoryPayload {
   name?: string;
@@ -632,7 +633,7 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
       if (operation) {
         const completed = completeWorkflowOperationTake(operation, operationTakeId, [], {
           canceled: isAbort(error),
-          error: isAbort(error) ? '生成已停止' : error instanceof Error ? error.message : '生成失败，请重试。',
+          error: isAbort(error) ? '生成已停止' : displayError(error, '生成失败，请重试。'),
           providerTaskId: operation.metadata.generationProviderTaskId,
           usageRecordId: operation.metadata.generationUsageRecordId,
         });
@@ -641,7 +642,7 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
     }
     current = patchInitiator(latest, nodeId, isAbort(error)
       ? { status: 'idle', error: undefined, progress: undefined, generationRequestId: undefined, generationStartedAt: undefined, generationMessage: undefined }
-      : { status: 'error', error: error instanceof Error ? error.message : '生成失败，请重试。', progress: undefined, generationRequestId: undefined, generationStartedAt: undefined, generationMessage: undefined });
+      : { status: 'error', error: displayError(error, '生成失败，请重试。'), progress: undefined, generationRequestId: undefined, generationStartedAt: undefined, generationMessage: undefined });
     return publish(runtime, current);
   } finally {
     temporaryUrls.forEach(url => URL.revokeObjectURL(url));

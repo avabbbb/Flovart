@@ -27,6 +27,11 @@ export default defineConfig(() => {
           'Cross-Origin-Embedder-Policy': 'require-corp',
           'Cache-Control': 'no-store',
         },
+        // src-tauri/target is Rust build output; cargo locks flovart.exe while
+        // compiling and chokidar crashes on EBUSY watching it. Exclude build dirs.
+        watch: {
+          ignored: ['**/src-tauri/target/**', '**/target/**', '**/.git/**'],
+        },
       },
       plugins: [tailwindcss(), react()],
       // 排除独立 HTML 文件，避免 esbuild 扫描其内联脚本报错

@@ -15,7 +15,7 @@
       "additionalProperties": false,
       "required": ["kind", "instanceId"],
       "properties": {
-        "kind": { "enum": ["cli", "mcp", "ui", "native_host", "system"] },
+        "kind": { "enum": ["cli", "mcp", "ui", "panel", "native_host", "system"] },
         "instanceId": { "type": "string", "minLength": 1 }
       }
     },

@@ -2,7 +2,16 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { SettingsPanel } from '../components/SettingsPanel';
+import { translations } from '../utils/translations';
 import type { UserApiKey } from '../types';
+
+const zhT = (key: string, ...args: unknown[]): string => {
+  const value = key.split('.').reduce<unknown>((current, part) => {
+    if (!current || typeof current !== 'object' || !(part in current)) return undefined;
+    return (current as Record<string, unknown>)[part];
+  }, translations.zho as unknown);
+  return String(typeof value === 'function' ? value(...args) : (value ?? key));
+};
 
 function renderSettings(
   userApiKeys: UserApiKey[] = [],
@@ -18,7 +27,7 @@ function renderSettings(
       onDeleteApiKey={() => undefined}
       onUpdateApiKey={onUpdateApiKey}
       onSetDefaultApiKey={() => undefined}
-      t={(key) => key}
+      t={zhT}
       clearKeysOnExit={false}
       setClearKeysOnExit={() => undefined}
     />,

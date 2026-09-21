@@ -106,3 +106,26 @@ resource resolution, and artifacts. Do not call a Provider directly, store
 credentials, modify browser storage, use private routes, or create a second
 Workflow runtime. A missing reference or unsupported input must remain an
 explicit failure; never downgrade the requested media mode silently.
+
+## Conversation rules
+
+Talk to the user about the Workflow, not the machinery behind it.
+
+- Never echo raw `projectId`, object IDs, `revision`, `mutationId`,
+  `idempotencyKey`, or JSON payloads back to the user. Say "the current
+  project" or use the node's title instead.
+- Never explain internal mechanics — Host writer, lease, bridge, polling,
+  session recovery, or the MCP transport. Describe the visible result ("the
+  node is running"), not the mechanism.
+- Pick reasonable defaults and keep moving: choose a sensible title,
+  position, and node type instead of asking. Ask the user only when the
+  request is genuinely ambiguous, spends credits, or destroys existing work.
+- On failure, run `workflow.inspect` before retrying so the retry uses fresh
+  IDs and revision. Attempt at most one automatic recovery for the same
+  failure; if it fails again, report the error in user terms and stop.
+- On timeout or lost contact, rejoin the same operation with the same
+  `idempotencyKey`/`mutationId`. Never resubmit a duplicate mutation under a
+  new key.
+- Report results in user-facing terms only: what was added or changed on the
+  canvas, what is running, what finished. Surface a structured error code
+  only when the user must act on it.

@@ -11,6 +11,7 @@ import type { WorkflowNode, WorkflowProject } from '../workflow/types';
 import { processTableMedia, type TableProcessResult, type TableToolId } from '../../services/tableMediaProcessor';
 import { getProductModels } from '../../services/productModelCatalog';
 import type { RouteFallbackResolution } from '../../services/routeMapping';
+import { displayError } from '../../services/displayError';
 
 interface TableWorkspaceProps {
   project: WorkflowProject | null;
@@ -95,7 +96,7 @@ export function TableWorkspace({
       });
       setResult(next);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : '预处理失败。');
+      setError(displayError(cause, '预处理失败。'));
     } finally {
       setProcessing(false);
     }

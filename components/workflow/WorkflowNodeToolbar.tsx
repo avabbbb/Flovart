@@ -36,7 +36,7 @@ export interface WorkflowAudioToolHandlers {
   stemSplit?: (id: string) => void;
 }
 
-export function WorkflowNodeToolbar({ nodes, onCopy, onDelete, onExport, onRun, onStop, onPromptFocus, onSaveMedia, onReversePrompt, onReplaceMedia, onToggleFreeResize, onAlign, onLayer, onGroup, onUngroup, onExecuteGroup, onPreviewMedia, imageTools, imageToolBusy = false, videoTools, videoToolBusy = false, audioTools, audioToolBusy = false }: {
+export function WorkflowNodeToolbar({ nodes, onCopy, onDelete, onExport, onRun, onStop, onPromptFocus, onSaveMedia, onReversePrompt, onReplaceMedia, onToggleFreeResize, onAlign, onLayer, onGroup, onUngroup, onExecuteGroup, onPreviewMedia, onFrameSelection, imageTools, imageToolBusy = false, videoTools, videoToolBusy = false, audioTools, audioToolBusy = false }: {
   nodes: WorkflowNode[];
   onCopy: (ids: string[]) => void;
   onDelete: (ids: string[]) => void;
@@ -54,6 +54,8 @@ export function WorkflowNodeToolbar({ nodes, onCopy, onDelete, onExport, onRun, 
   onUngroup?: (ids: string[]) => void;
   onExecuteGroup?: (ids: string[]) => void;
   onPreviewMedia?: (id: string) => void;
+  /** 聚焦选中节点（Frame Selection，快捷键 F）。 */
+  onFrameSelection?: () => void;
   imageTools?: WorkflowImageToolHandlers;
   imageToolBusy?: boolean;
   videoTools?: WorkflowVideoToolHandlers;
@@ -70,6 +72,7 @@ export function WorkflowNodeToolbar({ nodes, onCopy, onDelete, onExport, onRun, 
   const mediaUrl = useWorkflowMediaUrl(media?.metadata.storageKey, media?.metadata.href).url;
   const advancedToolBusy = imageToolBusy || node?.metadata.status === 'loading';
   const actions: Array<WorkflowToolbarAction | null | false | undefined> = [
+    onFrameSelection && { key: 'frame-selection', label: '聚焦选中 (F)', icon: <Frame size={18} />, onClick: () => onFrameSelection() },
     { key: 'copy', label: '复制节点', icon: <Copy size={18} />, onClick: () => onCopy(ids) },
     nodes.length > 1 && onGroup && { key: 'group', label: '打组 (Ctrl+G)', icon: <Group size={18} />, onClick: () => onGroup(ids) },
     nodes.length > 1 && onExecuteGroup && { key: 'execute-group', label: '整组执行', icon: <Play size={18} />, onClick: () => onExecuteGroup(ids) },

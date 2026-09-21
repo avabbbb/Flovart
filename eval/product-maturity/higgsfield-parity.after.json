@@ -1,0 +1,107 @@
+{
+  "generated": "2026-09-21",
+  "purpose": "Flovart x Higgsfield productization parity matrix — before/after tracking",
+  "centerDifference": "Higgsfield center = Cloud capability; Flovart center = Workflow state",
+  "sprint": "Lanes 15-18 entry-maturity sprint; independently judged by Agent19 against the current tree (no prosecutor/defender context)",
+  "journeys": [
+    {
+      "journey": "Coding Agent install",
+      "higgsfieldPattern": "one skill install flow (npx skills add, auto-detect agent)",
+      "flovartTarget": "one Flovart integration install flow",
+      "before": "UNASSESSED",
+      "after": "PARTIAL",
+      "evidence": "Single canonical flow exists: `flovart init --target codex|claude-code|opencode|project-skill` (agent-kit.js initCliHost) copies skills/flovart+open-flovart into the host's skill dir, README documents it, `doctor` verifies. But the target must be named — no auto-detect of the installed coding agent, and the packaged `flovart` bin is still release-gated so source-checkout users run `npm run flovart:cli -- init`. One flow, not one-command."
+    },
+    {
+      "journey": "CLI",
+      "higgsfieldPattern": "mature single binary (--json --wait)",
+      "flovartTarget": "one canonical Flovart CLI",
+      "before": "UNASSESSED",
+      "after": "PASS",
+      "evidence": "tools/flovart/cli.js is the single entry (bin: flovart/flovart-cli/flovart-mcp): uniform --json envelope {ok,command,data,error} with exit codes, idempotency-key enforcement on all write commands, help/setup/doctor/command.schema discovery, retired commands explicitly rejected. `workflow.node.run` awaits full generation completion through the in-browser WorkflowExecutor — stronger than a --wait poll flag."
+    },
+    {
+      "journey": "Skill",
+      "higgsfieldPattern": "hides plumbing (no raw IDs/polling)",
+      "flovartTarget": "hide workflow internals",
+      "before": "UNASSESSED",
+      "after": "PASS",
+      "evidence": "skills/flovart/SKILL.md teaches exactly 5 operations (status/inspect/selection.get/apply/node.run) + ensure bootstrap; raw IDs are read from workflow.inspect output, never constructed; revision/idempotency are handled as preconditions not plumbing. Skill explicitly forbids recreating connection flows. Mirrored to .agents/.claude/workbuddy bundles, guarded by check-docs-contract."
+    },
+    {
+      "journey": "Auth/config",
+      "higgsfieldPattern": "login once",
+      "flovartTarget": "provider/agent readiness once (BYOK)",
+      "before": "UNASSESSED",
+      "after": "PASS",
+      "evidence": "Credential wall is now a classified setup card: runtimeHealth.classifyAgentSetupError routes taxonomy codes (PROVIDER_*, HOST_*, WORKSPACE_REQUIRED…) to credential|offline; FlovartAgentPanel renders agent-setup-card with 'Add API key →' (opens Settings) and 'Try offline mode →' actions. BYOK = one Settings visit; needsConfiguration state survives across cold-start, mid-turn errors, and send-intercept paths."
+    },
+    {
+      "journey": "Local media",
+      "higgsfieldPattern": "local path auto handled",
+      "flovartTarget": "zero-copy ref, upload only on run",
+      "before": "UNASSESSED",
+      "after": "PASS",
+      "evidence": "local-folder: hrefs are zero-copy references materialized only at generation time (aiGateway LOCAL_MATERIALIZABLE_PREFIXES); LocalFolderBrowser handles the full grant lifecycle with product-language notices (permission lost → reconnect CTA, NotAllowedError → retry-in-page hint, unsupported env → fallback guidance). Folder-fail notices landed as claimed."
+    },
+    {
+      "journey": "Job waiting",
+      "higgsfieldPattern": "--wait",
+      "flovartTarget": "task/result lifecycle hidden",
+      "before": "UNASSESSED",
+      "after": "PASS",
+      "evidence": "No user/agent-visible polling anywhere: workflow.node.run blocks until terminal status via the WorkflowExecutor; the UI shows progress on the node and stale-loading zombie scan catches orphans after reload. CLI callers get the final result or a typed error in one call — the task/result lifecycle is genuinely hidden."
+    },
+    {
+      "journey": "Recovery",
+      "higgsfieldPattern": "wait existing job",
+      "flovartTarget": "resume same providerTaskId",
+      "before": "UNASSESSED",
+      "after": "PASS",
+      "evidence": "App.tsx:391-429 auto-resumes video nodes still carrying generationProviderTaskId after reload (durable task flush before persistence; custom+runningHub providers honored, not just custom). Nodes that can't resume are caught by InfiniteWorkflow's 6s stale-loading scan and surfaced as 'interrupted — rerun or stop' with a stop-to-reset path."
+    },
+    {
+      "journey": "Agent",
+      "higgsfieldPattern": "coding-agent-first",
+      "flovartTarget": "coding-agent-first",
+      "before": "UNASSESSED",
+      "after": "PASS",
+      "evidence": "Agent is a single global docked right drawer over BOTH Canvas and Table (App.tsx:651 StudioRightDrawer docked={!mediumViewport}, reflow not overlay); top-nav Agent mode deleted and legacy persisted activeView='agent' normalized to workflow (App.tsx:153). Panel has @-references, skill attachment, manual/auto confirm policy, session history; external coding agents get the same surface via Hosts tab + CLI skill."
+    },
+    {
+      "journey": "Host plugin",
+      "higgsfieldPattern": "current media -> result back to host",
+      "flovartTarget": "same",
+      "before": "UNASSESSED",
+      "after": "PARTIAL",
+      "evidence": "browserLink.ts wires __FLOVART_BROWSER_WORKSPACE__ live getters + dispatchWorkflowCommand into a host panel without duplicating state (revision/idempotency preserved), and integrations/studio/after-effects/effect scaffold exists. But the AE effect is a C++ scaffold + manifest, not a shipped plugin; no real host round-trip (selection→generate→back-to-timeline) is demonstrable in-tree."
+    },
+    {
+      "journey": "Product state",
+      "higgsfieldPattern": "cloud assets",
+      "flovartTarget": "Live Workflow",
+      "before": "UNASSESSED",
+      "after": "PASS",
+      "evidence": "WorkflowProject draft is the sole authority: drawer tabs (Agent/Hosts/Context/History) are views over the same project, switching them never unmounts the canvas; agent mutations go through draftChangeSets with expectedRevision; Table commits back into the same project via insertSharedMediaIntoProject."
+    },
+    {
+      "journey": "User jargon",
+      "higgsfieldPattern": "minimal",
+      "flovartTarget": "minimal",
+      "before": "UNASSESSED",
+      "after": "PASS",
+      "evidence": "displayError.ts is the single jargon→product boundary (HTTP codes, network errors, storage quota, revision conflicts; strips ProviderAdapter/CanonicalGenerationInput/stack frames) and is wired to every user-visible surface: ~9 canvas catch sites, ErrorBoundary, TableWorkspace, StudioMediaBrowser, WorkflowProjectList, LocalFolderBrowser, agent chat via agentMessageText, agentHostDiscovery, browserAgentKernel. i18n expanded with browse.* + ~40 agentPanel keys in en+zho."
+    },
+    {
+      "journey": "Install docs",
+      "higgsfieldPattern": "obvious",
+      "flovartTarget": "obvious",
+      "before": "UNASSESSED",
+      "after": "PARTIAL",
+      "evidence": "README quick-start (3 steps for app users, 4 commands for coding-agent users) + docs/overview/quick-start.en.md with 5 deployment options and honest port/bootstrap caveats. Still gaps: no 'download installer → first render' numbered walkthrough for non-devs, install docs split across README/quick-start/installation.zh-CN, and the packaged flovart CLI isn't published so the canonical `flovart` command can't be verified by a newcomer."
+    }
+  ],
+  "summary": { "pass": 9, "partial": 3, "fail": 0 },
+  "verdict": "ENTRY_MATURITY_LARGELY_AT_PARITY: the sprint's core claims verify in code — single docked agent drawer, classified credential wall with real actions, browse-first empty state, unified displayError boundary, providerTaskId resume + stale-loading safety net, zero-copy local media. Residual gaps are distribution-level, not experience-level: no auto-detect one-command skill install, host plugin is a scaffold not a shipped integration, and install docs assume developer fluency.",
+  "independenceNote": "Assessed fresh from the current tree (App.tsx, FlovartAgentPanel, StudioTopMenu, StudioRightDrawer, InfiniteWorkflow, displayError, runtimeHealth, translations, tools/flovart, skills/). Disagrees with the pre-existing after.json on Local media (PASS — grant lifecycle fully handled in product language) and Job waiting (PASS — blocking node.run is stronger than --wait); concurs on install/host-plugin/docs PARTIALs."
+}

@@ -15,6 +15,7 @@ import { getBundledProductionSkill, type ProductionSkillAttachment } from './pro
 import { COMMAND_ALIASES, COMMAND_REGISTRY } from '../tools/flovart/core.js';
 import { AGENT_BROWSER_COMMANDS } from '../tools/flovart/agent-surface.js';
 import type { UserApiKey } from '../types';
+import { displayError } from './displayError';
 
 // ---------------------------------------------------------------------------
 // 会话持久化：localforage 存 InMemorySessionStorage 的 metadata + entries
@@ -359,7 +360,7 @@ export function createBrowserAgentStream(route: BrowserAgentTextRoute): StreamFn
         const message: AssistantMessage = {
           ...startMessage,
           stopReason: aborted ? 'aborted' : 'error',
-          errorMessage: error instanceof Error ? error.message : String(error),
+          errorMessage: displayError(error),
           timestamp: Date.now(),
         };
         stream.push({ type: 'error', reason: aborted ? 'aborted' : 'error', error: message });
@@ -554,7 +555,7 @@ export class BrowserAgentKernel {
         const data = persistedBinding.data as ProductionSkillAttachment;
         if (data?.id && data?.version && data?.contentHash) this.boundProductionSkill = data;
       } catch (error) {
-        this.productionSkillBindingError = error instanceof Error ? error.message : String(error);
+        this.productionSkillBindingError = displayError(error, '技能绑定恢复失败。');
       }
     }
 
@@ -668,7 +669,7 @@ export class BrowserAgentKernel {
         const data = persistedBinding.data as ProductionSkillAttachment;
         if (data?.id && data?.version && data?.contentHash) this.boundProductionSkill = data;
       } catch (error) {
-        this.productionSkillBindingError = error instanceof Error ? error.message : String(error);
+        this.productionSkillBindingError = displayError(error, '技能绑定恢复失败。');
       }
     }
     this.emit({ type: 'session_switched' });

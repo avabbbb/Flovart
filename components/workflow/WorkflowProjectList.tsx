@@ -2,6 +2,7 @@ import { Download, Pencil, Plus, Trash2, Upload, Workflow } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { downloadWorkflowProjects, parseWorkflowProjectFile } from './projectTransfer';
 import { useWorkflowStore } from './store';
+import { displayError } from '../../services/displayError';
 
 export function WorkflowProjectList({ compact = false }: { compact?: boolean }) {
   const projects = useWorkflowStore(state => state.projects);
@@ -33,7 +34,7 @@ export function WorkflowProjectList({ compact = false }: { compact?: boolean }) 
         <div><Workflow size={16} /><strong>Workflow</strong></div>
         <div className="workflow-projects__actions">
           <button type="button" aria-label="导入工作流" title="导入工作流" onClick={() => importInput.current?.click()}><Upload size={15} /></button>
-          <button type="button" aria-label="导出全部工作流" title="导出全部工作流" disabled={!projects.length} onClick={() => { void downloadWorkflowProjects(projects).catch(error => setNotice(error instanceof Error ? error.message : '导出失败')); }}><Download size={15} /></button>
+          <button type="button" aria-label="导出全部工作流" title="导出全部工作流" disabled={!projects.length} onClick={() => { void downloadWorkflowProjects(projects).catch(error => setNotice(displayError(error, '导出失败'))); }}><Download size={15} /></button>
           <button type="button" aria-label="新建工作流" title="新建工作流" onClick={() => createProject()}><Plus size={16} /></button>
           <input ref={importInput} hidden type="file" accept=".json,.workflow.json,application/json" onChange={event => {
             const file = event.target.files?.[0];
@@ -42,7 +43,7 @@ export function WorkflowProjectList({ compact = false }: { compact?: boolean }) 
             void parseWorkflowProjectFile(file).then(imported => {
               importProjects(imported);
               setNotice(`已导入 ${imported.length} 个工作流`);
-            }).catch(error => setNotice(error instanceof Error ? error.message : '导入失败'));
+            }).catch(error => setNotice(displayError(error, '导入失败')));
           }} />
         </div>
       </div>

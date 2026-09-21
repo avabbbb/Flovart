@@ -31,6 +31,7 @@ import type {
 } from '../components/workflow/types';
 import { loadRuntimeArtifactBlob } from './runtimeArtifacts';
 import type { CreativeHostResourceLocator } from './workflowResourceResolver';
+import { displayError } from './displayError';
 
 export interface WorkflowOperationRuntime {
   getProject: () => WorkflowProject | null;
@@ -346,7 +347,7 @@ export async function failWorkflowOperation(
   const project = runtime.getProject();
   const operation = project?.id === projectId ? project.nodes.find(node => node.id === started.operationId) : undefined;
   if (!project || !operation) return;
-  const message = error instanceof Error ? error.message : '媒体处理失败';
+  const message = displayError(error, '媒体处理失败');
   const failed = completeWorkflowOperationTake(operation, started.takeId, [], { error: message });
   await runtime.onProjectChange({
     ...project,

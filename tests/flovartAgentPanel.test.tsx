@@ -63,10 +63,40 @@ describe('Flovart Agent panel', () => {
     expect(onOpenSettings).toHaveBeenCalledOnce();
 
     const composer = screen.getByPlaceholderText('请先配置 Agent 文本模型映射');
+    // Lane15 credential wall: the cold-open config error must carry a real
+    // product action — 'Add API key' opens Settings, 'Try offline' reveals the
+    // browse-first deck instead of leaving a jargon dead end.
+    const card = screen.getByTestId('agent-setup-card');
+    expect(card).toHaveTextContent('添加 API Key');
+    fireEvent.click(screen.getByRole('button', { name: /添加 API Key/ }));
+    expect(onOpenSettings).toHaveBeenCalledTimes(2);
+    fireEvent.click(screen.getByRole('button', { name: /试试离线模式/ }));
+    expect(screen.queryByTestId('agent-setup-card')).not.toBeInTheDocument();
+    expect(screen.getByTestId('agent-browse-first')).toBeInTheDocument();
     expect(composer).toBeEnabled();
     fireEvent.change(composer, { target: { value: '配置完成后重试' } });
     await waitFor(() => expect(screen.getByRole('button', { name: '发送' })).toBeEnabled());
   });
+
+  it('surfaces a product-language offline notice and a browse-first deck on a zero-node project', async () => {
+    // Lane15 gaps #9/#15: with no managed agent AND no agent-text credential the
+    // panel must not die on '仅桌面端可用' — it explains the missing host in
+    // product language and still offers Recent/Templates before the composer.
+    vi.mocked(getManagedAgentConnection).mockRejectedValueOnce(new Error('fetch failed'));
+    const project = { ...createWorkflowProject('空白项目'), id: 'project-blank', nodes: [] };
+    render(<FlovartAgentPanel project={project} onActivityChange={vi.fn()} onOpenSettings={vi.fn()} />);
+
+    // Zero-node first-run: the browse deck renders above the composer.
+    expect(await screen.findByTestId('agent-browse-first')).toBeInTheDocument();
+    expect(screen.getByText('赛博废土武侠短片')).toBeInTheDocument();
+
+    // Cold-open connection failure is classified as offline, not raw jargon.
+    const card = await screen.findByTestId('agent-setup-card');
+    expect(card).toHaveTextContent('协作 Agent');
+    expect(card).not.toHaveTextContent('spawn');
+    expect(card).not.toHaveTextContent('仅桌面端');
+  });
+
 
   it('mirrors the Agent opening flow with a Skill card, searchable picker, and autonomy menu', async () => {
     const project = { ...createWorkflowProject('Agent 空态'), id: 'project-empty' };

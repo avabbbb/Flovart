@@ -13,6 +13,7 @@ import { validateLegacyProviderRequest } from './providerGenerationAdapter';
 import { executeUserScriptProvider, getUserScriptProviderForKey } from './userScriptProviderAdapter';
 import { loadWorkflowMediaBlob } from '../components/workflow/media';
 import { loadRuntimeArtifactBlob } from './runtimeArtifacts';
+import { displayError } from './displayError';
 
 function blobToBase64(blob: Blob): Promise<string> {
     return new Promise((resolve, reject) => {
@@ -3912,36 +3913,11 @@ export async function executeUnifiedIgnition(input: UnifiedIgnitionInput): Promi
             capability,
             errorMessage: aborted
                 ? (reason instanceof Error && reason.name === 'TimeoutError' ? reason.message : '生成已停止，可重新发起。')
-                : productGenerationErrorMessage(message),
+                : displayError(message, message),
         };
     }
 }
 
-export function productGenerationErrorMessage(message: string): string {
-    if (/视频生成超时|连接超时|AI 服务响应超时/.test(message)) return message;
-    if (/\b401\b|unauthori[sz]ed|invalid api key|invalid key|authentication failed/i.test(message)) {
-        return 'API Key 无效或没有访问权限，请在 AI 服务设置中检查。';
-    }
-    if (/\b403\b|forbidden|permission denied/i.test(message)) {
-        return '当前 API Key 没有执行此任务的权限，请检查 AI 服务设置。';
-    }
-    if (/\b429\b|rate[ _-]?limit|too many requests|quota exceeded/i.test(message)) {
-        return 'AI 服务当前限流，请稍后重试。';
-    }
-    if (/\b(?:500|502|503|504)\b|provider error|service unavailable|bad gateway|internal server error/i.test(message)) {
-        return 'AI 服务暂时不可用，任务已失败，可稍后重试。';
-    }
-    if (/非 JSON|malformed response|invalid json/i.test(message)) {
-        return 'AI 服务返回了无法识别的结果，任务已失败，可重试或检查服务配置。';
-    }
-    if (/\b400\b|bad request|invalid request/i.test(message)) {
-        return '当前 AI 服务不接受这组生成参数，请检查模型和参考素材。';
-    }
-    if (/failed to fetch|networkerror|fetch failed|network request failed/i.test(message)) {
-        return '无法连接到该 AI 服务，请检查服务地址后重试。';
-    }
-    return message.replace(/Provider 线路/g, '当前 AI 服务');
-}
 
 export interface ImageToolInput {
     href: string;

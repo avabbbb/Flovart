@@ -1,37 +1,32 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { AgentWorkspace } from '../components/agent/AgentWorkspace';
+import { AgentDrawerEmptyState, AgentHubPanel } from '../components/agent/AgentWorkspace';
 import { createDefaultAgentLayout, useAgentWorkspaceStore } from '../components/agent/agentWorkspaceStore';
 import { createWorkflowProject } from '../components/workflow/store';
 
-describe('Agent workspace', () => {
+describe('Agent drawer hub', () => {
   beforeEach(() => {
     useAgentWorkspaceStore.setState({
       layouts: { project: createDefaultAgentLayout() },
     });
   });
 
-  it('prioritizes external Agents and keeps the built-in helper folded', () => {
+  it('keeps the external-agent host hub reachable inside the drawer', () => {
     const project = { ...createWorkflowProject('Agent 项目'), id: 'project' };
     render(
-      <AgentWorkspace
+      <AgentHubPanel
         project={project}
         onCreateProject={vi.fn()}
         onOpenWorkflow={vi.fn()}
         onOpenTable={vi.fn()}
-        onOpenEmbeddedAgent={vi.fn()}
       />,
     );
 
-    expect(screen.getByTestId('agent-main-workspace')).toHaveClass('agent-workspace-shell');
-    expect(screen.getByRole('region', { name: '协作 Agent' })).toBeInTheDocument();
-    expect(screen.getByRole('region', { name: '外部 Agent' })).toBeInTheDocument();
-    expect(screen.getByText('外部 Agent 优先')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '打开可选内置助手' })).toBeInTheDocument();
+    expect(screen.getByTestId('agent-drawer-hub')).toBeInTheDocument();
+    // The host picker is the external-agent surface folded into the drawer.
+    expect(screen.getByRole('button', { name: /打开 Workflow/ })).toBeInTheDocument();
     expect(screen.queryByRole('textbox', { name: /开始你的创作/ })).not.toBeInTheDocument();
     expect(screen.queryByText('历史对话')).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: '调整面板大小' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('separator')).not.toBeInTheDocument();
   });
 
   it('surfaces Agent edits in the shared canvas timeline', () => {
@@ -50,20 +45,29 @@ describe('Agent workspace', () => {
         connectionChanges: [],
       }],
     };
-    render(<AgentWorkspace project={project} onCreateProject={vi.fn()} onOpenWorkflow={vi.fn()} onOpenTable={vi.fn()} onOpenEmbeddedAgent={vi.fn()} />);
+    render(<AgentHubPanel project={project} onCreateProject={vi.fn()} onOpenWorkflow={vi.fn()} onOpenTable={vi.fn()} />);
 
     fireEvent.click(screen.getByRole('button', { name: /时间线/ }));
     expect(screen.getByText('搭建 VOX 分镜画布')).toBeInTheDocument();
     expect(screen.getByText(/Agent · 已应用/)).toBeInTheDocument();
   });
 
-  it('keeps brief, artifacts, and timeline as lightweight context instead of floating windows', () => {
+  it('keeps brief, artifacts, and timeline as lightweight context tabs', () => {
     const project = { ...createWorkflowProject('移动项目'), id: 'project' };
-    render(<AgentWorkspace project={project} onCreateProject={vi.fn()} onOpenWorkflow={vi.fn()} onOpenTable={vi.fn()} onOpenEmbeddedAgent={vi.fn()} />);
+    render(<AgentHubPanel project={project} onCreateProject={vi.fn()} onOpenWorkflow={vi.fn()} onOpenTable={vi.fn()} />);
 
     expect(screen.getByText(/生成结果会自动汇集在这里/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Brief/ }));
     expect(screen.getByText(/协作 Agent 与 Flovart 使用同一份 Workflow/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /打开 Workflow/ })).toBeInTheDocument();
+  });
+
+  it('folds project-less onboarding into the drawer empty state', () => {
+    const onCreateProject = vi.fn();
+    render(<AgentDrawerEmptyState onCreateProject={onCreateProject} />);
+
+    expect(screen.getByTestId('agent-drawer-empty')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '创建项目' }));
+    expect(onCreateProject).toHaveBeenCalledOnce();
   });
 });

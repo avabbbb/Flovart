@@ -1,5 +1,7 @@
 import { getManagedAgentConnection, type ManagedAgentConnection } from './managedAgentConnection';
 import { useAgentConnectionStore } from '../stores/useAgentConnectionStore';
+import { displayError } from './displayError';
+import { AGENTS_OFFLINE_MESSAGE } from './runtimeHealth';
 
 export interface AgentHostRecord {
   id: string;
@@ -50,7 +52,7 @@ export interface AgentHostDiscoveryOptions {
 
 export async function discoverAgentHosts(options: AgentHostDiscoveryOptions = {}): Promise<AgentHostDiscovery> {
   const connection = await (options.discover || getManagedAgentConnection)().catch(() => null);
-  if (!connection) return { ok: false, state: 'offline', agents: [] };
+  if (!connection) return { ok: false, state: 'offline', agents: [], error: AGENTS_OFFLINE_MESSAGE };
 
   try {
     const response = await (options.fetchImpl || fetch)(`${connection.url}/hosts?refresh=true&includeVersion=false`, {
@@ -74,7 +76,7 @@ export async function discoverAgentHosts(options: AgentHostDiscoveryOptions = {}
       ok: false,
       state: 'error',
       agents: [],
-      error: error instanceof Error ? error.message : 'Agent Host discovery 失败。',
+      error: displayError(error, 'Agent Host discovery 失败。'),
     };
   }
 }

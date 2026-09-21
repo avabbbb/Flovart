@@ -107,30 +107,3 @@ export interface ProviderAdapter {
   reconcileUsage?(handle: ProviderTaskHandle, options?: { apiKey?: UserApiKey; signal?: AbortSignal }): Promise<ProviderUsageResult>;
 }
 
-export class ProviderAdapterRegistry {
-  private readonly adapters = new Map<string, ProviderAdapter>();
-
-  register(adapter: ProviderAdapter): void {
-    this.adapters.set(adapter.id, adapter);
-  }
-
-  get(providerId: string): ProviderAdapter | undefined {
-    return this.adapters.get(providerId);
-  }
-
-  resolve(modelId: string, providerId?: string): ProviderAdapter | undefined {
-    if (providerId) {
-      const direct = this.adapters.get(providerId);
-      if (direct?.supportsModel(modelId)) return direct;
-    }
-    // 无 explicit providerId 时按适配器注册顺序匹配首个 supportsModel 的。
-    // ES2015+ Map 按插入顺序迭代（规范保证），且每个 modelId 通常只被一个 provider 支持，故无歧义。
-    return [...this.adapters.values()].find((adapter) => adapter.supportsModel(modelId));
-  }
-
-  list(): ProviderAdapter[] {
-    return [...this.adapters.values()];
-  }
-}
-
-export const providerAdapterRegistry = new ProviderAdapterRegistry();

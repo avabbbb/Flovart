@@ -5,6 +5,15 @@ import { SettingsPanel } from '../components/SettingsPanel';
 import { resolveProductModelRoute, suggestProductRouteMappings } from '../services/productModelCatalog';
 import { resolveRouteMapping } from '../services/routeMapping';
 import type { UserApiKey } from '../types';
+import { translations } from '../utils/translations';
+
+const zhT = (key: string, ...args: unknown[]): string => {
+    const value = key.split('.').reduce<unknown>((current, part) => {
+        if (!current || typeof current !== 'object' || !(part in current)) return undefined;
+        return (current as Record<string, unknown>)[part];
+    }, translations.zho as unknown);
+    return String(typeof value === 'function' ? value(...args) : (value ?? key));
+};
 
 const { runtimeExecute } = vi.hoisted(() => ({ runtimeExecute: vi.fn() }));
 
@@ -35,7 +44,7 @@ const renderSettings = (userApiKeys: UserApiKey[] = []) => render(
         onDeleteApiKey={() => undefined}
         onUpdateApiKey={() => undefined}
         onSetDefaultApiKey={() => undefined}
-        t={(key) => key}
+        t={zhT}
         clearKeysOnExit={false}
         setClearKeysOnExit={() => undefined}
     />,

@@ -254,11 +254,79 @@
     });
   }
 
+  function createBrowserWorkspaceAdapter(options = {}) {
+    // Panels running on Flovart's own Browser Workflow surface bind to the live
+    // project getter injected by installStudioBrowserLink — a function, not a
+    // state copy — so target/selection resolve through the workflow store at
+    // call time and never fork a second authority.
+    const workspace = () => {
+      const api = options.workspace || global.__FLOVART_BROWSER_WORKSPACE__;
+      if (!api || typeof api.getActiveProject !== 'function') unavailable('Flovart Browser Workflow 尚未注入工作区连接。');
+      return api;
+    };
+    const projectOf = () => workspace().getActiveProject() || null;
+    const selectionFromProject = project => {
+      if (!project || !Array.isArray(project.nodes)) return null;
+      const selectedIds = Array.isArray(project.selectedNodeIds) ? project.selectedNodeIds : [];
+      const node = project.nodes.find(item => selectedIds.includes(item.id)) || null;
+      if (!node) return null;
+      return {
+        host: 'browser-workspace',
+        selectionId: String(node.id),
+        label: node.title || String(node.id),
+        kind: node.type === 'video' ? 'video' : 'image',
+        locator: { projectId: String(project.id), nodeId: String(node.id) },
+        mimeType: node.metadata && node.metadata.mimeType,
+        width: node.metadata && node.metadata.naturalWidth,
+        height: node.metadata && node.metadata.naturalHeight,
+        ...(node.metadata && Number.isFinite(node.metadata.durationMs) ? { durationMs: node.metadata.durationMs } : {}),
+      };
+    };
+    return {
+      id: 'browser-workspace',
+      async getContext() {
+        const project = projectOf();
+        return {
+          host: 'browser-workspace',
+          available: Boolean(project),
+          ...(project ? { projectId: project.id, documentId: project.id, documentName: project.title, title: project.title } : {}),
+        };
+      },
+      async getSelection() {
+        const project = projectOf();
+        if (!project) return null;
+        return selectionFromProject(project);
+      },
+      async materializeSelection(selection) {
+        const current = selectionFromProject(projectOf());
+        if (!current || current.selectionId !== selection.selectionId || locatorKey(current.locator) !== locatorKey(selection.locator)) {
+          unavailable('Flovart 画布当前选择已变化，请重新选择节点。');
+        }
+        const materializer = options.materializeSelection || workspace().materializeSelection;
+        if (typeof materializer !== 'function') unavailable('画布节点物化适配器尚未注入。');
+        return materialized(selection, await materializer({ selection }));
+      },
+      async importArtifact(artifact, target = { kind: 'new-layer' }) {
+        const importer = options.importArtifact || workspace().importArtifact;
+        if (typeof importer !== 'function') unavailable('画布产物回写适配器尚未注入。');
+        const result = await importer({ artifact, target });
+        return result || { ok: true, message: '已添加新结果。' };
+      },
+      subscribeContext(listener) {
+        const api = workspace();
+        if (typeof api.subscribeContext === 'function') return api.subscribeContext(listener);
+        const timer = global.setInterval(async () => listener(await this.getContext()), 500);
+        return { dispose: () => global.clearInterval(timer) };
+      },
+    };
+  }
+
   global.FlovartStudioHosts = {
     createPhotoshopAdapter,
     createPremiereAdapter,
     createAfterEffectsAdapter,
     createResolveAdapter,
+    createBrowserWorkspaceAdapter,
     materialized,
     resourceFor,
     referenceFor,

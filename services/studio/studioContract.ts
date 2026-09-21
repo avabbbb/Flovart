@@ -8,8 +8,8 @@ import type {
 } from '../../components/workflow/types';
 
 export type { WorkflowResource } from '../../components/workflow/types';
+export type CreativeHostId = 'photoshop' | 'premiere' | 'after-effects' | 'resolve' | 'browser-workspace';
 
-export type CreativeHostId = 'photoshop' | 'premiere' | 'after-effects' | 'resolve';
 export type CreativeHostSelectionKind = Extract<WorkflowResourceKind, 'image' | 'video'>;
 
 export interface HostContext {

@@ -131,10 +131,11 @@ function runtimeRouteSuggestions(runtimeProviders: RuntimeProviderStatus[]): Run
     );
 }
 
-function RouteMappingEditor({ userApiKeys, onUpdateApiKey, runtimeProviders }: {
+function RouteMappingEditor({ userApiKeys, onUpdateApiKey, runtimeProviders, t }: {
     userApiKeys: UserApiKey[];
     onUpdateApiKey: SettingsPanelProps['onUpdateApiKey'];
     runtimeProviders?: RuntimeProviderStatus[] | null;
+    t: SettingsPanelProps['t'];
 }) {
     const [productModelId, setProductModelId] = React.useState('');
     const [productMode, setProductMode] = React.useState<ProductModelMode>('text-to-image');
@@ -322,7 +323,7 @@ function RouteMappingEditor({ userApiKeys, onUpdateApiKey, runtimeProviders }: {
         </div>;
     };
     return <section className="space-y-3" data-testid="model-mapping-sections">
-        <div><div className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--isl-ink-ghost)]">模型映射</div><p className="mb-0 mt-1 text-xs leading-5 text-[var(--isl-ink-soft)]">先选择 Flovart 的产品模型或文本能力，再绑定 AI 服务线路。这里是唯一选路来源。</p></div>
+        <div><div className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--isl-ink-ghost)]">{t('settingsExtra.mappingTitle')}</div><p className="mb-0 mt-1 text-xs leading-5 text-[var(--isl-ink-soft)]">{t('settingsExtra.mappingIntro')}</p></div>
         {detectedSuggestions.length > 0 && <div className="rounded-2xl border border-[var(--isl-mint)] bg-[var(--isl-mint-bg)] p-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
                 <div><div className="text-sm font-extrabold text-[var(--isl-mint-deep)]">检测到 {detectedSuggestions.length} 条媒体映射建议</div><div className="mt-1 text-xs text-[var(--isl-ink-soft)]">依据 API Key 实际返回的模型 ID 匹配；确认后才会写入，不会静默改动线路。</div></div>
@@ -360,7 +361,7 @@ function RouteMappingEditor({ userApiKeys, onUpdateApiKey, runtimeProviders }: {
             </div>
         </div>
         <div className="space-y-2"><div><div className="text-sm font-extrabold text-[var(--isl-ink)]">文本与 Agent</div><div className="mt-0.5 text-xs text-[var(--isl-ink-soft)]">提示词增强、脚本拆解与 Agent 文本能力放在媒体模型之后配置。</div></div>{RUNTIME_TARGETS.map(item => renderTarget({ kind: 'runtime-capability', capability: item.capability }, item.label, item.detail))}</div>
-        {userApiKeys.length === 0 && runtimeSuggestions.length === 0 && <div className="rounded-2xl border border-dashed border-[var(--isl-border)] p-5 text-center text-xs text-[var(--isl-ink-soft)]">请先在“AI 服务”中添加网页直连访问凭证，随后再建立模型映射。</div>}
+        {userApiKeys.length === 0 && runtimeSuggestions.length === 0 && <div className="rounded-2xl border border-dashed border-[var(--isl-border)] p-5 text-center text-xs text-[var(--isl-ink-soft)]">{t('settingsExtra.addMappingFirst')}</div>}
     </section>;
 }
 
@@ -536,6 +537,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
     clearKeysOnExit,
     setClearKeysOnExit,
     usageSummary,
+    t,
 }) => {
     const [provider, setProvider] = React.useState<AIProvider>('openai');
     const [apiKey, setApiKey] = React.useState('');
@@ -1099,15 +1101,15 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
             >
                 <div className="settings-dialog__header mb-6 flex items-center justify-between">
                     <div>
-                        <h3 id="settings-title" className="text-xl font-extrabold text-[var(--isl-ink)]">设置</h3>
+                        <h3 id="settings-title" className="text-xl font-extrabold text-[var(--isl-ink)]">{t('settingsExtra.title')}</h3>
                         <p className="mt-1 text-sm text-[var(--isl-ink-soft)]">
                             管理 AI 服务、模型映射和本地安全策略。主题与语言请在顶栏切换。
                         </p>
                     </div>
                     <button
                         type="button"
-                        aria-label="关闭设置"
-                        title="关闭设置"
+                        aria-label={t('settingsExtra.close')}
+                        title={t('settingsExtra.close')}
                         onClick={onClose}
                         className={`settings-dialog__close flex h-10 w-10 items-center justify-center rounded-2xl border transition ${
                             isDark ? 'border-[#2A3140] text-[#98A2B3] hover:bg-[#1B2029]' : 'border-[#E4E7EC] text-[#667085] hover:bg-[#F9FAFB]'
@@ -1121,9 +1123,9 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                     mobile master-detail list below. */}
                 <div className={`settings-dialog__tabs mb-6 flex gap-1 border-b border-[var(--isl-border)] ${mobileDetailOpen ? 'is-detail' : ''}`}>
                     {([
-                        { key: 'api', label: 'AI 服务' },
-                        { key: 'models', label: '模型映射' },
-                        { key: 'security', label: '安全' },
+                        { key: 'api', label: t('settingsExtra.apiTab') },
+                        { key: 'models', label: t('settingsExtra.modelsTab') },
+                        { key: 'security', label: t('settingsExtra.securityTab') },
                     ] as const).map(tab => (
                         <button
                             key={tab.key}
@@ -1143,11 +1145,11 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                     ))}
                 </div>
 
-                <nav className="settings-dialog__mobile-nav" aria-label="设置分类">
+                <nav className="settings-dialog__mobile-nav" aria-label={t('settingsExtra.categoryAria')}>
                     {([
-                        { key: 'api', label: 'AI 服务', detail: 'Provider、API Key 和连接状态' },
-                        { key: 'models', label: '模型映射', detail: '产品模型与路线优先级' },
-                        { key: 'security', label: '安全', detail: '本地数据和退出策略' },
+                        { key: 'api', label: t('settingsExtra.apiTab'), detail: t('settingsExtra.apiTabDetail') },
+                        { key: 'models', label: t('settingsExtra.modelsTab'), detail: t('settingsExtra.modelsTabDetail') },
+                        { key: 'security', label: t('settingsExtra.securityTab'), detail: t('settingsExtra.securityTabDetail') },
                     ] as const).map(item => (
                         <button key={item.key} type="button" onClick={() => { setActiveTab(item.key); setMobileDetailOpen(true); }}>
                             <span><strong>{item.label}</strong><small>{item.detail}</small></span><span aria-hidden="true">›</span>
@@ -1265,7 +1267,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                                     }}
                                     className="isl-chip isl-chip--active px-3 py-1.5 text-xs"
                                 >
-                                    + 添加 AI 服务
+                                    {t('settingsExtra.addService')}
                                 </button>
                             </div>
                         </div>
@@ -1281,8 +1283,8 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                                     isDark ? 'border-[#3A4458] text-[#98A2B3]' : 'border-[#D0D5DD] text-[#667085]'
                                 }`}>
                                     <div className="mb-2 text-lg">🔑</div>
-                                    <div className="font-medium">还没有配置 AI 服务</div>
-                                    <div className="mt-1 text-xs">点击右上方「+ 添加 AI 服务」按钮添加网页直连访问凭证</div>
+                                    <div className="font-medium">{t('settingsExtra.emptyServicesTitle')}</div>
+                                    <div className="mt-1 text-xs">{t('settingsExtra.emptyServicesHint')}</div>
                                 </div>
                             ) : (
                                 <AnimatePresence initial={false}>
@@ -1398,7 +1400,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                     </>
                 )}
 
-                {activeTab === 'models' && <RouteMappingEditor userApiKeys={userApiKeys} onUpdateApiKey={onUpdateApiKey} runtimeProviders={runtimeProviders} />}
+                {activeTab === 'models' && <RouteMappingEditor userApiKeys={userApiKeys} onUpdateApiKey={onUpdateApiKey} runtimeProviders={runtimeProviders} t={t} />}
 
                 {activeTab === 'security' && (
                     <section className="space-y-3">

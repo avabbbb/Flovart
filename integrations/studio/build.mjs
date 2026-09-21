@@ -1,4 +1,5 @@
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -9,7 +10,13 @@ if (!output.startsWith(`${resolve(root, '..', '..')}${sep}`)) throw new Error('S
 const packages = [
   { id: 'photoshop', host: 'PS', manifestVersion: 4, required: ['manifest.json', 'index.html', 'index.js', 'panel.css'] },
   { id: 'premiere', host: 'premierepro', manifestVersion: 5, required: ['manifest.json', 'index.html', 'index.js', 'panel.css'] },
-  { id: 'after-effects', host: 'AEFT', runtime: 'CEP', required: ['manifest.json', 'CSXS/manifest.xml', 'index.html', 'index.js', 'panel.css', 'cep-bridge.js', 'host.jsx'] },
+  { id: 'after-effects', host: 'AEFT', runtime: 'CEP', required: ['manifest.json', 'CSXS/manifest.xml', 'index.html', 'index.js', 'panel.css', 'cep-bridge.js', 'host.jsx'],
+    effect: {
+      dir: 'effect',
+      required: ['FlovartEffect.cpp', 'FlovartEffect.r', 'asset-manifest.json'],
+      entryPoint: 'EffectMain',
+      params: ['Asset Path', 'Blend', 'Version'],
+    }},
   { id: 'resolve', host: 'resolve-studio', runtime: 'resolve-workflow-integration', required: ['manifest.json', 'manifest.xml', 'package.json', 'main.js', 'canvas-url.js', 'preload.js', 'index.html', 'index.js', 'panel.css'] },
 ];
 
@@ -58,6 +65,37 @@ for (const spec of packages) {
   const sourceText = readFileSync(join(source, 'index.js'), 'utf8');
   assert(!/(?:api.?key|provider.?key|secret|token)/i.test(sourceText), `${spec.id} panel contains a credential-shaped implementation`);
   assert(readFileSync(join(source, 'index.html'), 'utf8').includes('shared/inspector.js'), `${spec.id} does not use shared Studio UI`);
+  if (spec.effect) buildEffect(spec, source, target);
+}
+
+function buildEffect(spec, source, target) {
+  const effect = spec.effect;
+  const effectSrc = join(source, effect.dir);
+  for (const file of effect.required) assert(existsSync(join(effectSrc, file)), `${spec.id}/${effect.dir}/${file} missing`);
+
+  const manifest = JSON.parse(readFileSync(join(effectSrc, 'asset-manifest.json'), 'utf8'));
+  assert(manifest.effect?.entryPoint === effect.entryPoint, `${spec.id} effect entry point mismatch`);
+  const names = (manifest.parameters ?? []).map(p => p.name);
+  for (const name of effect.params) assert(names.includes(name), `${spec.id} effect manifest missing param "${name}"`);
+
+  const sdk = process.env.FLOVART_AE_SDK_ROOT;
+  const compiler = process.env.FLOVART_AE_EFFECT_CL || 'cl';
+  if (sdk && existsSync(sdk)) {
+    const probe = spawnSync(compiler, ['/nologo'], { stdio: 'pipe' });
+    if (probe.error || probe.status === null) {
+      console.warn(`[studio] AE SDK present but "${compiler}" unavailable; emitting needs-native-sdk effect source package.`);
+    } else {
+      console.warn('[studio] AE Effect SDK toolchain detected; real compile is a real-host gate (see NATIVE_EFFECT.md). Emitting source package.');
+    }
+  } else {
+    console.warn(`[studio] AE Effect SDK not found (set FLOVART_AE_SDK_ROOT); emitting needs-native-sdk effect source package.`);
+  }
+  manifest.effect.buildStatus = 'needs-native-sdk';
+
+  const effectTarget = join(target, effect.dir);
+  mkdirSync(effectTarget, { recursive: true });
+  cpSync(effectSrc, effectTarget, { recursive: true });
+  writeFileSync(join(effectTarget, 'asset-manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
 }
 
 console.log(`[studio] built ${packages.length} host packages at ${output}`);

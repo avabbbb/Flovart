@@ -3,6 +3,7 @@ import { useMemo, useState, type DragEvent } from 'react';
 import { useWorkflowMediaUrl } from '../workflow/media';
 import { FolderTree, type FolderTreeProps } from './FolderTree';
 import type { AssetFolder } from '../../types';
+import { displayError } from '../../services/displayError';
 
 export const STUDIO_MEDIA_DRAG_TYPE = 'application/x-flovart-studio-media';
 
@@ -113,7 +114,7 @@ export function StudioMediaBrowser({ mode, items, language, onInsert, onRename, 
       await navigator.clipboard?.writeText(prompt);
       setNotice(isChinese ? 'Prompt 已复制' : 'Prompt Copied');
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : (isChinese ? '反推失败' : 'Analysis Failed'));
+      setNotice(displayError(error, isChinese ? '反推失败' : 'Analysis Failed'));
     }
   };
 

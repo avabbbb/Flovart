@@ -22,6 +22,7 @@ import {
   type LocalFolderPermission,
   type LocalFolderSource,
 } from '../../services/localFolderSource';
+import { displayError } from '../../services/displayError';
 
 const runThumbnailTask = createThumbnailLimiter(3);
 
@@ -189,7 +190,16 @@ export const LocalFolderBrowser: React.FC<LocalFolderBrowserProps> = ({ language
       await refreshSources();
       setActiveId(source.id);
     } catch (error) {
-      if (error instanceof DOMException && error.name === 'AbortError') return;
+      // 用户取消/浏览器拒绝都不再静默：取消给一条轻提示，权限拒绝与安全
+      // 拦截给可操作文案；真实错误维持原有 LocalFolderError 文案路径。
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        setNotice(zho ? '已取消选择文件夹。' : 'Folder selection cancelled.');
+        return;
+      }
+      if (error instanceof DOMException && (error.name === 'NotAllowedError' || error.name === 'SecurityError')) {
+        setNotice(zho ? '浏览器拒绝了文件夹访问 — 请在页面中直接点击重试，或检查站点权限。' : 'The browser blocked folder access — click to retry inside the page, or check site permissions.');
+        return;
+      }
       setNotice(error instanceof LocalFolderError ? error.message : (zho ? '无法选择文件夹。' : 'Could not select the folder.'));
     }
   }, [refreshSources, zho]);
@@ -287,7 +297,7 @@ export const LocalFolderBrowser: React.FC<LocalFolderBrowserProps> = ({ language
       setSelected(new Set());
       setNotice(zho ? `已把 ${picked.length} 个素材放入画布。` : `Added ${picked.length} assets to the canvas.`);
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : (zho ? '放入画布失败。' : 'Failed to add to the canvas.'));
+      setNotice(displayError(error, (zho ? '放入画布失败。' : 'Failed to add to the canvas.')));
     } finally {
       setInserting(false);
     }
@@ -303,7 +313,7 @@ export const LocalFolderBrowser: React.FC<LocalFolderBrowserProps> = ({ language
       setSelected(new Set());
       setNotice(zho ? `已把 ${entry.name} 放入画布。` : `Added ${entry.name} to the canvas.`);
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : (zho ? '放入画布失败。' : 'Failed to add to the canvas.'));
+      setNotice(displayError(error, (zho ? '放入画布失败。' : 'Failed to add to the canvas.')));
     } finally {
       setInserting(false);
     }

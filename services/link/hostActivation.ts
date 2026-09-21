@@ -8,6 +8,7 @@ import {
 import { useAgentConnectionStore } from '../../stores/useAgentConnectionStore';
 import { getFlovartHostDefinition } from './hostRegistry';
 import { toLinkPublicStatus } from './publicStatus';
+import { displayError } from '../displayError';
 
 /**
  * Public result of preparing one agent host. The UI renders `state`/`action`
@@ -137,7 +138,7 @@ export async function prepareAgent(hostId: string): Promise<AgentPreparationResu
       }
       return { state: 'needs_setup', label: status.label, message: status.message };
     } catch (error) {
-      return { state: 'error', label: '出错', message: error instanceof Error ? error.message : '暂时无法使用这个助手。' };
+      return { state: 'error', label: '出错', message: displayError(error, '暂时无法使用这个助手。') };
     }
   }
   // Host is detected as usable: hand off to the writer-lease coordinator,
@@ -155,6 +156,6 @@ export async function prepareAgent(hostId: string): Promise<AgentPreparationResu
     if (error instanceof LinkActivationError && error.code === 'HOST_NEEDS_SETUP') {
       return { state: 'needs_setup', label: '需安装', message: error.message };
     }
-    return { state: 'error', label: '出错', message: error instanceof Error ? error.message : '暂时无法使用这个助手。' };
+    return { state: 'error', label: '出错', message: displayError(error, '暂时无法使用这个助手。') };
   }
 }

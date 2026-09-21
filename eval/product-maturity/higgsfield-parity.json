@@ -1,0 +1,19 @@
+{
+  "generated": "2026-09-20",
+  "purpose": "Flovart x Higgsfield productization parity matrix — before/after tracking",
+  "centerDifference": "Higgsfield center = Cloud capability; Flovart center = Workflow state",
+  "journeys": [
+    { "journey": "Coding Agent install", "higgsfieldPattern": "one skill install flow (npx skills add, auto-detect agent)", "flovartTarget": "one Flovart integration install flow", "before": "UNASSESSED", "after": null, "verdict": null },
+    { "journey": "CLI", "higgsfieldPattern": "mature single binary (--json --wait)", "flovartTarget": "one canonical Flovart CLI", "before": "UNASSESSED", "after": null, "verdict": null },
+    { "journey": "Skill", "higgsfieldPattern": "hides plumbing (no raw IDs/polling)", "flovartTarget": "hide workflow internals", "before": "UNASSESSED", "after": null, "verdict": null },
+    { "journey": "Auth/config", "higgsfieldPattern": "login once", "flovartTarget": "provider/agent readiness once (BYOK)", "before": "UNASSESSED", "after": null, "verdict": null },
+    { "journey": "Local media", "higgsfieldPattern": "local path auto handled", "flovartTarget": "zero-copy ref, upload only on run", "before": "UNASSESSED", "after": null, "verdict": null },
+    { "journey": "Job waiting", "higgsfieldPattern": "--wait", "flovartTarget": "task/result lifecycle hidden", "before": "UNASSESSED", "after": null, "verdict": null },
+    { "journey": "Recovery", "higgsfieldPattern": "wait existing job", "flovartTarget": "resume same providerTaskId", "before": "UNASSESSED", "after": null, "verdict": null },
+    { "journey": "Agent", "higgsfieldPattern": "coding-agent-first", "flovartTarget": "coding-agent-first", "before": "UNASSESSED", "after": null, "verdict": null },
+    { "journey": "Host plugin", "higgsfieldPattern": "current media -> result back to host", "flovartTarget": "same", "before": "UNASSESSED", "after": null, "verdict": null },
+    { "journey": "Product state", "higgsfieldPattern": "cloud assets", "flovartTarget": "Live Workflow", "before": "UNASSESSED", "after": null, "verdict": null },
+    { "journey": "User jargon", "higgsfieldPattern": "minimal", "flovartTarget": "minimal", "before": "UNASSESSED", "after": null, "verdict": null },
+    { "journey": "Install docs", "higgsfieldPattern": "obvious", "flovartTarget": "obvious", "before": "UNASSESSED", "after": null, "verdict": null }
+  ]
+}

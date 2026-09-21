@@ -1,4 +1,5 @@
 import { invoke, isTauri } from '@tauri-apps/api/core';
+import { displayError } from './displayError';
 
 export interface RuntimeStatus {
   protocolVersion: '1';
@@ -50,14 +51,19 @@ export function getFlovartRuntimeApi(): FlovartRuntimeApi | null {
   return isTauriRuntimeSurface() ? tauriRuntime : null;
 }
 
+/**
+ * RuntimeCommandResult.error → 上屏文案。
+ * 统一经过 displayError jargon 层，避免把 sidecar 的英文/内部错原样弹进 Toast。
+ */
 export function getRuntimeErrorMessage(
   result: RuntimeCommandResult | null | undefined,
   fallback: string,
 ): string {
   const error = result?.error;
-  if (typeof error === 'string' && error.trim()) return error;
-  if (error && typeof error === 'object' && typeof error.message === 'string' && error.message.trim()) {
-    return error.message;
-  }
-  return fallback;
+  const raw = typeof error === 'string' && error.trim()
+    ? error
+    : error && typeof error === 'object' && typeof error.message === 'string' && error.message.trim()
+      ? error.message
+      : '';
+  return raw ? displayError(raw, fallback) : fallback;
 }

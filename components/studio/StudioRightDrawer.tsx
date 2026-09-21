@@ -19,6 +19,12 @@ export interface StudioRightDrawerProps {
   activeTab: string;
   onTabChange: (id: string) => void;
   flush?: boolean;
+  /**
+   * Docked = in-flow panel that reflows the workspace beside it instead of an
+   * absolute overlay that can cover the selected node. The caller owns the
+   * flex row; the aside switches from `absolute` to `relative` positioning.
+   */
+  docked?: boolean;
   children: React.ReactNode;
 }
 
@@ -34,6 +40,7 @@ export const StudioRightDrawer: React.FC<StudioRightDrawerProps> = ({
   activeTab,
   onTabChange,
   flush = false,
+  docked = false,
   children,
 }) => {
   const [resizing, setResizing] = useState(false);
@@ -61,23 +68,39 @@ export const StudioRightDrawer: React.FC<StudioRightDrawerProps> = ({
   }, [maxWidth, minWidth, onWidthChange, resizing]);
 
   const safeWidth = Math.min(maxWidth, Math.max(minWidth, Number.isFinite(width) ? width : minWidth));
-  const drawerStyle: React.CSSProperties = {
-    top: flush ? 0 : outerGap,
-    right: flush ? 0 : outerGap,
-    bottom: flush ? 0 : outerGap,
-    // Keep the user's preference as a token. CSS clamps it against the
-    // available container; no viewport measurement is needed here.
-    ['--drawer-width' as string]: `${safeWidth}px`,
-    width: open ? `min(var(--drawer-width), calc(100% - ${(flush ? 0 : outerGap * 2)}px))` : '0px',
-    opacity: open ? 1 : 0,
-    pointerEvents: open ? 'auto' : 'none',
-    // `display:none` removes collapsed children from the layout tree entirely —
-    // without it the inner empty-state CTA keeps a real layout rect (64px wide,
-    // centered on the 0px slot) whose center lands off-viewport at x≈1449,
-    // so a11y/hit-test code sees a phantom button that can never be clicked.
-    display: open ? undefined : 'none',
-    transform: 'translateX(0)',
-  };
+  const drawerStyle: React.CSSProperties = docked
+    ? {
+      // In-flow dock: the aside participates in the parent flex row so the
+      // canvas/table reflows and the drawer can never cover the selected node.
+      position: 'relative',
+      flex: '0 0 auto',
+      alignSelf: 'stretch',
+      ['--drawer-width' as string]: `${safeWidth}px`,
+      width: open ? `${safeWidth}px` : '0px',
+      maxWidth: open ? `calc(100% - ${outerGap * 2}px)` : '0px',
+      opacity: open ? 1 : 0,
+      pointerEvents: open ? 'auto' : 'none',
+      // `display:none` removes collapsed children from the layout tree entirely —
+      // without it the inner empty-state CTA keeps a real layout rect (64px wide,
+      // centered on the 0px slot) whose center lands off-viewport at x≈1449,
+      // so a11y/hit-test code sees a phantom button that can never be clicked.
+      display: open ? undefined : 'none',
+      transform: 'translateX(0)',
+    }
+    : {
+      top: flush ? 0 : outerGap,
+      right: flush ? 0 : outerGap,
+      bottom: flush ? 0 : outerGap,
+      // Keep the user's preference as a token. CSS clamps it against the
+      // available container; no viewport measurement is needed here.
+      ['--drawer-width' as string]: `${safeWidth}px`,
+      width: open ? `min(var(--drawer-width), calc(100% - ${(flush ? 0 : outerGap * 2)}px))` : '0px',
+      opacity: open ? 1 : 0,
+      pointerEvents: open ? 'auto' : 'none',
+      // See the docked branch — collapsed children must not keep a layout rect.
+      display: open ? undefined : 'none',
+      transform: 'translateX(0)',
+    };
 
   return (
     <>
@@ -94,7 +117,7 @@ export const StudioRightDrawer: React.FC<StudioRightDrawerProps> = ({
 
       <aside
         ref={asideRef}
-        className={`isl-panel compact-right-panel theme-aware absolute z-[78] flex min-h-0 flex-col overflow-hidden transition-[transform,opacity] duration-200 ${flush ? 'compact-right-panel--flush' : ''}`}
+        className={`isl-panel compact-right-panel theme-aware ${docked ? 'relative' : 'absolute'} z-[78] flex min-h-0 flex-col overflow-hidden transition-[transform,opacity] duration-200 ${flush ? 'compact-right-panel--flush' : ''}`}
         data-open={open ? 'true' : 'false'}
         style={drawerStyle}
       >

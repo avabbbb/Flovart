@@ -184,6 +184,9 @@ describe('InfiniteWorkflow surface interactions', () => {
     expect(node('video-media')).toHaveClass('is-selected');
     expect(node('image-media')).not.toHaveClass('is-selected');
     expect(editor().querySelectorAll('video')).toHaveLength(0);
+    // A held pointerdown on the poster arms a drag; release it before asserting
+    // the overlay is back up (overlay only hides once the pointer moves).
+    fireEvent.pointerUp(window, { pointerId: 22, clientX: 560, clientY: 150 });
     expect(screen.getByTestId('workflow-node-toolbar')).toBeInTheDocument();
     expect(screen.getByTestId('workflow-node-prompt-bar')).toBeInTheDocument();
 
@@ -237,17 +240,20 @@ describe('InfiniteWorkflow surface interactions', () => {
     }
   });
 
-  it('selects image content without starting a node drag', () => {
+  it('drags an image node by its media body', () => {
     const initial = makeProject();
     initial.nodes = [createWorkflowNode('image-media', 'image', { x: 100, y: 100 }, { href: 'data:image/png;base64,aW1hZ2U=' })];
     render(<Harness initial={initial} />);
 
     const image = node('image-media').querySelector<HTMLImageElement>('img')!;
+    // A pointerdown on the media surface must begin a node drag, not just a
+    // selection — the media body is the primary grab region, same as any
+    // editor. Releasing after a move commits the new position.
     fireEvent.pointerDown(image, { button: 0, pointerId: 31, clientX: 140, clientY: 150 });
     fireEvent.pointerMove(window, { pointerId: 31, clientX: 300, clientY: 300 });
     fireEvent.pointerUp(window, { pointerId: 31, clientX: 300, clientY: 300 });
 
-    expect(projectNode('image-media').position).toEqual({ x: 100, y: 100 });
+    expect(projectNode('image-media').position).toEqual({ x: 260, y: 250 });
     expect(node('image-media')).toHaveClass('is-selected');
     expect(screen.getByTestId('workflow-node-toolbar')).toBeInTheDocument();
   });

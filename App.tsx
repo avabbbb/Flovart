@@ -9,12 +9,19 @@ import { useToast } from './hooks/useToast';
 import ToastStack from './components/Toast';
 import { AppShell } from './components/AppShell';
 import { StudioTopMenu, type StudioMenuModel } from './components/studio/StudioTopMenu';
+import { StudioRightDrawer } from './components/studio/StudioRightDrawer';
+import { StudioMediaBrowser } from './components/studio/StudioMediaBrowser';
+import { FlovartAgentPanel } from './components/agent/FlovartAgentPanel';
+import { AgentHubPanel, AgentDrawerEmptyState } from './components/agent/AgentWorkspace';
+import { useMediaQuery } from './hooks/useMediaQuery';
 import { useWorkspaceStore } from './stores/useWorkspaceStore';
 import { flushWorkflowPersistence, useWorkflowStore } from './components/workflow/store';
-import { requestWorkflowAgentDrawer } from './components/workflow/agentDrawerRequest';
+import { consumeWorkflowAgentDrawerRequest, subscribeWorkflowAgentDrawer } from './components/workflow/agentDrawerRequest';
+import type { WorkflowSharedMedia } from './components/workflow/WorkflowConfigPanel';
 import { getGenerationCapability, type GenerationMode } from './services/generationCapabilities';
 import { cancelWorkflowGeneration, runWorkflowGeneration } from './services/workflowGeneration';
-import { ingestWorkflowMedia, loadWorkflowMediaBlob, releaseWorkflowMediaRecord } from './components/workflow/media';
+import { ingestWorkflowMedia, loadWorkflowMediaBlob, releaseWorkflowMediaRecord, workflowBlobToDataUrl } from './components/workflow/media';
+import { insertSharedMediaIntoProject } from './components/workflow/WorkflowWorkspace';
 import { createWorkflowNode } from './components/workflow/constants';
 import { setWorkflowExecutor, setWorkflowNodeToolRunner } from './services/workflowDispatcher';
 import { createWorkflowExecutor, normalizeWorkflowExecutionError, WorkflowExecutionError, type WorkflowExecutionContext, type WorkflowRunAdapterResult, type WorkflowRunCommand } from './services/workflowExecutor';
@@ -35,8 +42,8 @@ import { registerWorkflowArtifact } from './services/studio/artifactRegistry';
 const SettingsPanel = React.lazy(() => import('./components/SettingsPanel').then(m => ({ default: m.SettingsPanel })));
 
 const WorkflowWorkspace = React.lazy(() => import('./components/workflow/WorkflowWorkspace').then(m => ({ default: m.WorkflowWorkspace })));
+const WorkflowContextPanel = React.lazy(() => import('./components/workflow/WorkflowWorkspace').then(m => ({ default: m.WorkflowContextPanel })));
 const TableWorkspace = React.lazy(() => import('./components/table/TableWorkspace').then(m => ({ default: m.TableWorkspace })));
-const AgentWorkspace = React.lazy(() => import('./components/agent/AgentWorkspace').then(m => ({ default: m.AgentWorkspace })));
 const AssetAddModal = React.lazy(() => import('./components/AssetAddModal').then(m => ({ default: m.AssetAddModal })));
 const BrowserImportBridge = React.lazy(() => import('./components/extension/BrowserImportBridge').then(m => ({ default: m.BrowserImportBridge })));
 
@@ -76,6 +83,26 @@ const App: React.FC = () => {
     const [isEnhancingPrompt, setIsEnhancingPrompt] = useState(false);
     const [isAssetPanelOpen, setIsAssetPanelOpen] = useState(false);
     const [tableSourceNodeId, setTableSourceNodeId] = useState<string | null>(null);
+    // Global right drawer: single Agent surface over BOTH Canvas and Table —
+    // docked (reflow) on desktop, overlay on medium viewports.
+    const mediumViewport = useMediaQuery('(max-width: 1023px)');
+    const [desktopRightOpen, setDesktopRightOpen] = useState(() => {
+        try { return localStorage.getItem('workflowRightPanelOpenV2') !== 'false'; } catch { return true; }
+    });
+    const [mobileRightOpen, setMobileRightOpen] = useState(false);
+    const rightOpen = mediumViewport ? mobileRightOpen : desktopRightOpen;
+    const setRightOpen = useCallback((open: boolean) => {
+        if (mediumViewport) setMobileRightOpen(open); else setDesktopRightOpen(open);
+    }, [mediumViewport]);
+    const [rightTab, setRightTab] = useState<'agent' | 'hosts' | 'context' | 'history'>('agent');
+    const [rightWidth, setRightWidth] = useState(() => {
+        try {
+            const stored = Number(localStorage.getItem('workflowRightPanelWidth'));
+            return Number.isFinite(stored) && stored >= 280 && stored <= 640 ? stored : 360;
+        } catch { return 360; }
+    });
+    const [focusNodeRequest, setFocusNodeRequest] = useState<{ nodeId: string; nonce: number } | undefined>(undefined);
+
 
     const toast = useToast();
 
@@ -120,6 +147,48 @@ const App: React.FC = () => {
             setDataReady(true);
         });
     }, []);
+
+    // Legacy persisted sessions may still carry activeView='agent'. Agent is no
+    // longer a top-level mode (it lives in the right drawer) — normalize once.
+    useEffect(() => {
+        if (activeView === 'agent') setActiveView('workflow');
+    }, [activeView, setActiveView]);
+
+    // Cross-surface "open the Agent drawer" requests (top-menu status chip,
+    // canvas toolbar, host hub CTA). Consume any request made before mount and
+    // keep listening while mounted.
+    useEffect(() => {
+        const openAgentDrawer = () => {
+            consumeWorkflowAgentDrawerRequest();
+            setRightTab('agent');
+            setRightOpen(true);
+        };
+        if (consumeWorkflowAgentDrawerRequest()) openAgentDrawer();
+        return subscribeWorkflowAgentDrawer(openAgentDrawer);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    useEffect(() => {
+        try { localStorage.setItem('workflowRightPanelWidth', String(rightWidth)); } catch { /* storage may be unavailable */ }
+    }, [rightWidth]);
+
+    useEffect(() => {
+        try { localStorage.setItem('workflowRightPanelOpenV2', String(desktopRightOpen)); } catch { /* storage may be unavailable */ }
+    }, [desktopRightOpen]);
+
+    useEffect(() => {
+        if (mediumViewport) setMobileRightOpen(false);
+    }, [mediumViewport]);
+
+    const openAgentDrawerTab = useCallback(() => {
+        if (rightOpen && rightTab === 'agent') setRightOpen(false);
+        else { setRightTab('agent'); setRightOpen(true); }
+    }, [rightOpen, rightTab, setRightOpen]);
+
+    const handleFocusNodeFromDrawer = useCallback((nodeId: string) => {
+        setCanvasView('spatial');
+        setFocusNodeRequest({ nodeId, nonce: Date.now() });
+    }, [setCanvasView]);
 
     useEffect(() => {
         if (!dataReady) return;
@@ -415,6 +484,7 @@ const App: React.FC = () => {
     }, [confirmRouteFallback, language, userApiKeys]);
 
     const handleOpenTable = useCallback((nodeId?: string) => {
+        setTableSourceNodeId(nodeId ?? null);
         setActiveView('workflow');
         setCanvasView('table');
     }, [setActiveView, setCanvasView]);
@@ -468,7 +538,7 @@ const App: React.FC = () => {
     }), [language]);
     const studioMenuModel: StudioMenuModel = useMemo(() => ({
         mode: activeView,
-        title: activeView === 'workflow' ? (canvasView === 'table' ? 'Table' : activeWorkflowTitle) : 'Agent',
+        title: canvasView === 'table' ? 'Table' : activeWorkflowTitle,
         themeMode,
         resolvedTheme,
         language,
@@ -489,95 +559,165 @@ const App: React.FC = () => {
         },
     }), [activeView, canvasView, activeWorkflowTitle, resolvedTheme, themeMode, language, setActiveView, setThemeMode, setLanguage, studioRuntimeStatus, workflowProjects, activeWorkflowIndex, activeWorkflowProjectId, workflowCreateProject, workflowDeleteProjects, workflowRenameProject, workflowSetActiveProject]);
 
-    const main = activeView === 'workflow' ? (
-        <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]">
-            <div
-                className="canvas-view-switch flex h-9 shrink-0 items-center justify-center gap-0.5 border-b"
-                style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-card)' }}
-                role="tablist"
-                aria-label={language === 'zho' ? '画布视图' : 'Canvas view'}
-            >
-                {(['spatial', 'table'] as const).map(view => {
-                    const isActive = canvasView === view;
-                    const label = view === 'spatial' ? (language === 'zho' ? '画布' : 'Canvas') : 'Table';
-                    return (
-                        <button
-                            key={view}
-                            type="button"
-                            role="tab"
-                            aria-selected={isActive}
-                            aria-label={view === 'spatial' ? (language === 'zho' ? '画布视图' : 'Canvas view') : 'Table'}
-                            onClick={() => setCanvasView(view)}
-                            className={`shrink-0 whitespace-nowrap rounded-md px-2.5 py-1 text-xs font-bold transition ${isActive ? 'bg-black/5' : 'opacity-50 hover:opacity-80'}`}
-                            style={{ color: 'var(--isl-ink)' }}
-                        >
-                            {label}
-                        </button>
-                    );
-                })}
+    const historyDrawerMedia = workflowSharedMedia.filter(media => (media.source || (media.id.startsWith('history:') ? 'history' : 'asset')) === 'history');
+
+    const insertDrawerMedia = useCallback((media: WorkflowSharedMedia) => {
+        void insertSharedMediaIntoProject(media)
+            .then(result => { if (!result.ok && result.error) toast.show(result.error, 'warning'); });
+    }, [toast]);
+
+    const main = (
+        // One global right drawer spans both noun surfaces — Canvas and Table
+        // are two views of the same Workflow; Agent is the verb beside them.
+        <div className="relative flex h-full min-h-0">
+            <div className="grid h-full min-w-0 flex-1 grid-rows-[auto_minmax(0,1fr)]">
+                <div
+                    className="canvas-view-switch flex h-9 shrink-0 items-center justify-center gap-0.5 border-b"
+                    style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-card)' }}
+                    role="tablist"
+                    aria-label={language === 'zho' ? '画布视图' : 'Canvas view'}
+                >
+                    {(['spatial', 'table'] as const).map(view => {
+                        const isActive = canvasView === view;
+                        const label = view === 'spatial' ? (language === 'zho' ? '画布' : 'Canvas') : 'Table';
+                        return (
+                            <button
+                                key={view}
+                                type="button"
+                                role="tab"
+                                aria-selected={isActive}
+                                aria-label={view === 'spatial' ? (language === 'zho' ? '画布视图' : 'Canvas view') : 'Table'}
+                                onClick={() => setCanvasView(view)}
+                                className={`shrink-0 whitespace-nowrap rounded-md px-2.5 py-1 text-xs font-bold transition ${isActive ? 'bg-black/5' : 'opacity-50 hover:opacity-80'}`}
+                                style={{ color: 'var(--isl-ink)' }}
+                            >
+                                {label}
+                            </button>
+                        );
+                    })}
+                </div>
+                {canvasView === 'table' ? (
+                    <Suspense fallback={<div className="grid h-full place-content-center text-sm opacity-40">正在加载 Table...</div>}>
+                        <TableWorkspace
+                            project={activeWorkflowProject}
+                            userApiKeys={userApiKeys}
+                            confirmRouteFallback={confirmRouteFallback}
+                            initialNodeId={tableSourceNodeId}
+                            onCommit={handleCommitTableResult}
+                            onSaveAsset={handleSaveTableAsset}
+                            onOpenWorkflow={() => setCanvasView('spatial')}
+                            onOpenSettings={() => setIsSettingsPanelOpen(true)}
+                        />
+                    </Suspense>
+                ) : (
+                    <Suspense fallback={<div className="grid h-full place-content-center text-sm opacity-40">正在加载 Workflow...</div>}>
+                        <WorkflowWorkspace
+                            theme={resolvedTheme}
+                            language={language}
+                            resolveGenerationCapability={resolveWorkflowGenerationCapability}
+                            sharedMedia={workflowSharedMedia}
+                            onReversePrompt={handleWorkflowReversePrompt}
+                            onRunNode={runWorkflowNodeFromUi}
+                            onStopNode={(projectId, nodeId) => workflowExecutor.stopNode?.({ projectId, nodeId }, { surface: 'ui' })}
+                            onSaveWorkflowMedia={handleSaveWorkflowMedia}
+                            assetLibrary={assetLibrary}
+                            onRenameAsset={(id, name) => setAssetLibrary(prev => renameAsset(prev, id, name))}
+                            onRemoveAsset={id => setAssetLibrary(prev => removeAsset(prev, id))}
+                            onUpdateAssetTags={(id, tags) => setAssetLibrary(prev => updateAssetTags(prev, id, tags))}
+                            onRemoveAssetFromFolder={(itemId, folderId) => setAssetLibrary(prev => removeAssetFromFolder(prev, itemId, folderId))}
+                            onBatchRemoveAssets={ids => setAssetLibrary(prev => batchRemoveAssets(prev, ids))}
+                            onBatchAddAssetsToFolder={(ids, folderId) => setAssetLibrary(prev => batchAddAssetsToFolder(prev, ids, folderId))}
+                            onBatchAddAssetTags={(ids, tags) => setAssetLibrary(prev => batchAddAssetTags(prev, ids, tags))}
+                            onCreateFolder={(parentId, name) => setAssetLibrary(prev => addFolder(prev, { id: generateId(), name, parentId, createdAt: Date.now() }))}
+                            onRenameFolder={(id, name) => setAssetLibrary(prev => renameFolder(prev, id, name))}
+                            onRemoveFolder={(id, deleteItems) => setAssetLibrary(prev => removeFolder(prev, id, deleteItems))}
+                            t={t}
+                            userApiKeys={userApiKeys}
+                            confirmRouteFallback={confirmRouteFallback}
+                            dynamicModelOptions={dynamicModelOptions}
+                            onOpenSettings={() => setIsSettingsPanelOpen(true)}
+                            onEnhancePrompt={handleEnhancePrompt}
+                            isEnhancingPrompt={isEnhancingPrompt}
+                            onOpenAgent={openAgentDrawerTab}
+                            agentOpen={rightOpen && rightTab === 'agent'}
+                            rightPanelInset={rightOpen && !mediumViewport ? rightWidth + 24 : 12}
+                            focusNodeRequest={focusNodeRequest}
+                            onNotify={(message, level) => toast.show(message, level)}
+                        />
+                    </Suspense>
+                )}
             </div>
-            {canvasView === 'table' ? (
-                <Suspense fallback={<div className="grid h-full place-content-center text-sm opacity-40">正在加载 Table...</div>}>
-                    <TableWorkspace
+
+            <StudioRightDrawer
+                open={rightOpen}
+                onOpenChange={setRightOpen}
+                outerGap={0}
+                width={rightWidth}
+                minWidth={280}
+                maxWidth={640}
+                onWidthChange={setRightWidth}
+                flush
+                docked={!mediumViewport}
+                activeTab={rightTab}
+                onTabChange={tab => setRightTab(tab as 'agent' | 'hosts' | 'context' | 'history')}
+                tabs={[
+                    { id: 'agent', label: language === 'zho' ? 'Agent' : 'Agent', icon: undefined },
+                    { id: 'hosts', label: language === 'zho' ? '协作' : 'Hosts', icon: undefined },
+                    { id: 'context', label: language === 'zho' ? '上下文' : 'Context', icon: undefined },
+                    { id: 'history', label: language === 'zho' ? '生成历史' : 'History', icon: undefined },
+                ]}
+            >
+                {rightTab === 'agent' && (activeWorkflowProject ? (
+                    <FlovartAgentPanel
                         project={activeWorkflowProject}
-                        userApiKeys={userApiKeys}
-                        confirmRouteFallback={confirmRouteFallback}
-                        initialNodeId={tableSourceNodeId}
-                        onCommit={handleCommitTableResult}
-                        onSaveAsset={handleSaveTableAsset}
-                        onOpenWorkflow={() => setCanvasView('spatial')}
+                        onActivityChange={() => undefined}
                         onOpenSettings={() => setIsSettingsPanelOpen(true)}
-                    />
-                </Suspense>
-            ) : (
-                <Suspense fallback={<div className="grid h-full place-content-center text-sm opacity-40">正在加载 Workflow...</div>}>
-                    <WorkflowWorkspace
-                        theme={resolvedTheme}
-                        language={language}
-                        resolveGenerationCapability={resolveWorkflowGenerationCapability}
-                        sharedMedia={workflowSharedMedia}
-                        onReversePrompt={handleWorkflowReversePrompt}
-                        onRunNode={runWorkflowNodeFromUi}
-                        onStopNode={(projectId, nodeId) => workflowExecutor.stopNode?.({ projectId, nodeId }, { surface: 'ui' })}
-                        onSaveWorkflowMedia={handleSaveWorkflowMedia}
                         assetLibrary={assetLibrary}
-                        onRenameAsset={(id, name) => setAssetLibrary(prev => renameAsset(prev, id, name))}
-                        onRemoveAsset={id => setAssetLibrary(prev => removeAsset(prev, id))}
-                        onUpdateAssetTags={(id, tags) => setAssetLibrary(prev => updateAssetTags(prev, id, tags))}
-                        onRemoveAssetFromFolder={(itemId, folderId) => setAssetLibrary(prev => removeAssetFromFolder(prev, itemId, folderId))}
-                        onBatchRemoveAssets={ids => setAssetLibrary(prev => batchRemoveAssets(prev, ids))}
-                        onBatchAddAssetsToFolder={(ids, folderId) => setAssetLibrary(prev => batchAddAssetsToFolder(prev, ids, folderId))}
-                        onBatchAddAssetTags={(ids, tags) => setAssetLibrary(prev => batchAddAssetTags(prev, ids, tags))}
-                        onCreateFolder={(parentId, name) => setAssetLibrary(prev => addFolder(prev, { id: generateId(), name, parentId, createdAt: Date.now() }))}
-                        onRenameFolder={(id, name) => setAssetLibrary(prev => renameFolder(prev, id, name))}
-                        onRemoveFolder={(id, deleteItems) => setAssetLibrary(prev => removeFolder(prev, id, deleteItems))}
-                        t={t}
                         userApiKeys={userApiKeys}
-                        confirmRouteFallback={confirmRouteFallback}
-                        dynamicModelOptions={dynamicModelOptions}
-                        onOpenSettings={() => setIsSettingsPanelOpen(true)}
-                        onEnhancePrompt={handleEnhancePrompt}
-                        isEnhancingPrompt={isEnhancingPrompt}
-                        onOpenAgent={() => requestWorkflowAgentDrawer()}
-                        onNotify={(message, level) => toast.show(message, level)}
+                        onFocusNode={handleFocusNodeFromDrawer}
                     />
-                </Suspense>
-            )}
+                ) : (
+                    // Project-less onboarding folded into the drawer's empty state:
+                    // pick an external host or create the first project in place.
+                    <AgentDrawerEmptyState
+                        onCreateProject={() => workflowCreateProject(language === 'zho' ? '未命名工作流' : 'Untitled workflow')}
+                    />
+                ))}
+                {rightTab === 'hosts' && (
+                    <AgentHubPanel
+                        project={activeWorkflowProject}
+                        onCreateProject={() => workflowCreateProject(language === 'zho' ? '未命名工作流' : 'Untitled workflow')}
+                        onOpenWorkflow={() => setCanvasView('spatial')}
+                        onOpenTable={handleOpenTable}
+                    />
+                )}
+                {rightTab === 'context' && (activeWorkflowProject ? (
+                    <Suspense fallback={null}>
+                        <WorkflowContextPanel project={activeWorkflowProject} />
+                    </Suspense>
+                ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, height: '100%', padding: '0 32px', textAlign: 'center', color: 'var(--isl-ink-soft)', fontSize: 13 }}>
+                        <strong style={{ color: 'var(--isl-ink)' }}>{language === 'zho' ? '制作状态需要一个 Workflow 项目' : 'Context needs a workflow project'}</strong>
+                        <button type="button" aria-label="新建工作流" onClick={() => workflowCreateProject(language === 'zho' ? '未命名工作流' : 'Untitled workflow')}
+                            style={{ marginTop: 6, padding: '7px 16px', border: 0, borderRadius: 9, color: '#fff', background: 'var(--isl-accent, #1677ff)', cursor: 'pointer', fontSize: 12 }}>
+                            {language === 'zho' ? '创建项目' : 'Create project'}
+                        </button>
+                    </div>
+                ))}
+                {rightTab === 'history' && (
+                    <StudioMediaBrowser
+                        mode="history"
+                        items={historyDrawerMedia}
+                        language={language}
+                        onInsert={media => insertDrawerMedia(media)}
+                        onReversePrompt={async media => {
+                            const blob = await loadWorkflowMediaBlob(undefined, media.href);
+                            return handleWorkflowReversePrompt(await workflowBlobToDataUrl(blob), media.mimeType || blob.type, media.width, media.height);
+                        }}
+                    />
+                )}
+            </StudioRightDrawer>
         </div>
-    ) : (
-        <Suspense fallback={<div className="grid h-full place-content-center text-sm opacity-40">正在加载 Agent...</div>}>
-            <AgentWorkspace
-                project={activeWorkflowProject}
-                onCreateProject={() => workflowCreateProject(language === 'zho' ? '未命名工作流' : 'Untitled workflow')}
-                onOpenWorkflow={() => setActiveView('workflow')}
-                onOpenTable={handleOpenTable}
-                onOpenEmbeddedAgent={() => {
-                    requestWorkflowAgentDrawer();
-                    setCanvasView('spatial');
-                    setActiveView('workflow');
-                }}
-            />
-        </Suspense>
     );
 
     return <AppShell

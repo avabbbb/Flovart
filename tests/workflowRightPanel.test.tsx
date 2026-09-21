@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { WorkflowWorkspace } from '../components/workflow/WorkflowWorkspace';
+import { StudioRightDrawer } from '../components/studio/StudioRightDrawer';
+import { WorkflowContextPanel, WorkflowWorkspace } from '../components/workflow/WorkflowWorkspace';
 import { createWorkflowProject, useWorkflowStore } from '../components/workflow/store';
 import { workflowMediaStorage } from '../components/workflow/storage';
 import type { AssetLibrary } from '../types';
@@ -47,55 +48,93 @@ describe('Workflow right panel', () => {
     vi.unstubAllGlobals();
   });
 
-  it('starts open by default on desktop and persists its visibility like the Canvas panel', () => {
+  it('keeps the canvas free of the drawer — the Agent surface is mounted by the App shell', () => {
     renderWorkspace();
 
-    // UX-PRO-04: the right drawer defaults to open on desktop so the assistant
-    // composer is reachable without a manual first-open step.
-    const close = screen.getByTitle('收起右侧面板');
-    const drawer = close.closest('aside') as HTMLElement;
-    expect(drawer.style.opacity).toBe('1');
-    expect(drawer.style.pointerEvents).toBe('auto');
-    // The Agent tab is the default surface.
-    expect(screen.getByRole('textbox', { name: /开始你的创作/ })).toBeInTheDocument();
-    // Closing persists; reopening restores.
-    fireEvent.click(close);
-    expect(localStorage.getItem('workflowRightPanelOpenV2')).toBe('false');
-    expect(drawer.style.pointerEvents).toBe('none');
-    fireEvent.click(screen.getByRole('button', { name: '打开右侧面板' }));
-    fireEvent.click(screen.getByRole('button', { name: '上下文' }));
-    expect(screen.getByRole('region', { name: 'Workflow 上下文' })).toBeInTheDocument();
-    expect(localStorage.getItem('workflowRightPanelOpenV2')).toBe('true');
+    // IA keystone: WorkflowWorkspace no longer owns the right drawer. The
+    // single global drawer lives in App.tsx so it can span Canvas AND Table
+    // without unmounting either surface.
+    expect(document.querySelector('.compact-right-panel')).toBeNull();
+    expect(document.querySelector('.workflow-workspace')).toBeInTheDocument();
   });
 
-  it('starts closed on narrow screens so the drawer cannot block first-run Workflow actions', () => {
-    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 });
-    renderWorkspace();
+  it('docks the drawer in-flow so it reflows the canvas instead of overlaying a selected node', () => {
+    const project = useWorkflowStore.getState().projects[0];
+    render(
+      <div className="relative flex h-full min-h-0">
+        <div className="min-w-0 flex-1">canvas</div>
+        <StudioRightDrawer
+          open
+          onOpenChange={vi.fn()}
+          outerGap={0}
+          width={360}
+          minWidth={280}
+          maxWidth={640}
+          onWidthChange={vi.fn()}
+          flush
+          docked
+          activeTab="context"
+          onTabChange={vi.fn()}
+          tabs={[{ id: 'context', label: '上下文', icon: undefined }]}
+        >
+          <WorkflowContextPanel project={project} />
+        </StudioRightDrawer>
+      </div>,
+    );
 
-    const open = screen.getByRole('button', { name: '打开右侧面板' });
     const drawer = screen.getByTitle('收起右侧面板').closest('aside') as HTMLElement;
-    expect(drawer.style.pointerEvents).toBe('none');
-    expect(open.style.pointerEvents).toBe('auto');
-    expect(document.querySelector('.workflow-sidebar')).toBeNull();
-
-    fireEvent.click(open);
-    expect(drawer.style.pointerEvents).toBe('auto');
-
-    const openLayers = screen.getByRole('button', { name: '打开图层与资产' });
-    expect(openLayers.style.pointerEvents).toBe('auto');
-    fireEvent.click(openLayers);
-    expect(document.querySelector('.workflow-sidebar')).toBeInTheDocument();
-  });
-  it('mounts the assistant beside the canvas on the Agent tab, context on its own tab', () => {
-    renderWorkspace();
-
-    // Default Agent tab hosts the real assistant so it can sit next to the canvas.
-    expect(screen.getByRole('textbox', { name: /开始你的创作/ })).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: '上下文' }));
+    // Docked mode = in-flow relative positioning, so the aside participates in
+    // the flex row and can never cover the selected node.
+    expect(drawer.style.position).toBe('relative');
     expect(screen.getByRole('region', { name: 'Workflow 上下文' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '右侧面板测试' })).toBeInTheDocument();
-    expect(screen.queryByRole('textbox', { name: /开始你的创作/ })).toBeNull();
+  });
+
+  it('collapses to a non-interactive strip that leaves no phantom layout rect', () => {
+    const project = useWorkflowStore.getState().projects[0];
+    const { rerender } = render(
+      <StudioRightDrawer
+        open={false}
+        onOpenChange={vi.fn()}
+        outerGap={0}
+        width={360}
+        minWidth={280}
+        maxWidth={640}
+        onWidthChange={vi.fn()}
+        flush
+        docked
+        activeTab="context"
+        onTabChange={vi.fn()}
+        tabs={[{ id: 'context', label: '上下文', icon: undefined }]}
+      >
+        <WorkflowContextPanel project={project} />
+      </StudioRightDrawer>,
+    );
+
+    const drawer = screen.getByTitle('收起右侧面板').closest('aside') as HTMLElement;
+    expect(drawer.style.display).toBe('none');
+    expect(drawer.style.pointerEvents).toBe('none');
+
+    rerender(
+      <StudioRightDrawer
+        open
+        onOpenChange={vi.fn()}
+        outerGap={0}
+        width={360}
+        minWidth={280}
+        maxWidth={640}
+        onWidthChange={vi.fn()}
+        flush
+        docked
+        activeTab="context"
+        onTabChange={vi.fn()}
+        tabs={[{ id: 'context', label: '上下文', icon: undefined }]}
+      >
+        <WorkflowContextPanel project={project} />
+      </StudioRightDrawer>,
+    );
+    expect(drawer.style.pointerEvents).toBe('auto');
+    expect(drawer.style.display).not.toBe('none');
   });
 
   it('searches Workflow assets in the left sidebar popup', () => {

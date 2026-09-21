@@ -21,12 +21,17 @@ describe('studio layout contracts', () => {
     expect(app).not.toContain('onToggleLanguage=');
   });
 
-  it('mounts the three product surfaces without restoring the old canvas placeholder', () => {
+  it('mounts the canvas surfaces and keeps Agent in the global drawer', () => {
     const app = source('App.tsx');
 
     expect(app).toContain('<WorkflowWorkspace');
     expect(app).toContain('<TableWorkspace');
-    expect(app).toContain('<AgentWorkspace');
+    // Agent is a verb in the right drawer, not a canvas-killing top-nav mode.
+    expect(app).toContain('<FlovartAgentPanel');
+    expect(app).toContain('<AgentHubPanel');
+    expect(app).toContain('<AgentDrawerEmptyState');
+    expect(app).toContain('<StudioRightDrawer');
+    expect(app).not.toContain("activeView === 'workflow' ? (");
     expect(app).not.toContain('React Flow 故事板 + Agent SKILL 即将上线');
   });
 
@@ -34,8 +39,11 @@ describe('studio layout contracts', () => {
     for (const path of ['components/workflow/WorkflowSidebar.tsx', 'components/studio/StudioRightDrawer.tsx']) {
       const file = source(path);
       expect(file, path).not.toMatch(/theme-aware fixed/);
-      expect(file, path).toMatch(/theme-aware absolute/);
+      expect(file, path).toMatch(/theme-aware/);
     }
+    // The right drawer docks (reflows) on desktop instead of overlaying the
+    // canvas — a selected node can never render underneath it.
+    expect(source('components/studio/StudioRightDrawer.tsx')).toContain("docked ? 'relative' : 'absolute'");
   });
 
   it('uses the compact panel shell for the Workflow right drawer', () => {

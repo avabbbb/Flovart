@@ -399,28 +399,28 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                     ? 'generating'
                     : 'ready';
     const setupRequired = readyState === 'missing-key' && Boolean(onOpenSettings);
-    const setupLabel = userApiKeys.length ? '配置 AI 服务' : '添加 AI 服务';
+    const setupLabel = userApiKeys.length ? t('promptBarExtra.configureService') : t('promptBarExtra.addService');
     const readyCopy = readyState === 'missing-key'
-        ? (!userApiKeys.length ? '添加 AI 服务以开始生成' : missingMediaModel ? '请先明确选择产品模型' : '请先配置当前能力的模型映射')
+        ? (!userApiKeys.length ? t('promptBarExtra.addServiceHint') : missingMediaModel ? t('promptBarExtra.pickModelFirst') : t('promptBarExtra.mapRouteFirst'))
         : readyState === 'error'
-            ? (error || '生成失败')
+            ? (error || t('promptBarExtra.generateFailed'))
             : readyState === 'empty'
-                ? '输入你想生成或修改的画面'
+                ? t('promptBarExtra.emptyPromptHint')
                 : readyState === 'invalid-input'
                     ? videoInputRequirement
                 : readyState === 'generating'
-            ? (progressStage || '正在生成，请保持工作流打开')
-                    : '准备就绪，Ctrl+Enter 生成';
+            ? (progressStage || t('promptBarExtra.generatingHint'))
+                    : t('promptBarExtra.readyHint');
     const promptHints = isSelectionActive
-        ? [`已选中 ${selectedElementCount} 个元素`, '描述“怎么改”比描述“是什么”更有效']
+        ? [t('promptBarExtra.selectedElements', selectedElementCount), t('promptBarExtra.describeChangeHint')]
         : attachments.length > 0
-            ? [`已添加 ${attachments.length} 个参考`, '可以继续输入 @ 引用工作流节点']
-            : ['支持拖入图片/视频/音频参考', '输入 @ 可引用工作流节点'];
+            ? [t('promptBarExtra.attachedRefs', attachments.length), t('promptBarExtra.mentionNodeHint')]
+            : [t('promptBarExtra.dropMediaHint'), t('promptBarExtra.mentionNodeHint')];
     const placeholder = useMemo(() => {
-        if (!isSelectionActive) return '使用 @ 引用工作流中的图片，例如：把 @图片1 的人物替换为 @图片2 的兔子';
-        if (selectedElementCount === 1) return '描述你想对当前元素做什么';
-        return `已选中 ${selectedElementCount} 个元素，补充组合生成描述`;
-    }, [isSelectionActive, selectedElementCount]);
+        if (!isSelectionActive) return t('promptBarExtra.placeholderDefault');
+        if (selectedElementCount === 1) return t('promptBarExtra.placeholderSingle');
+        return t('promptBarExtra.placeholderMultiple', selectedElementCount);
+    }, [isSelectionActive, selectedElementCount, t]);
     const addReferenceFiles = onAddReferenceFiles || (onAddAttachments ? ((files: File[]) => onAddAttachments(files)) : undefined);
     const canOpenReferencePicker = Boolean(onSelectWorkflowReference || onSelectAsset || addReferenceFiles);
 
@@ -868,10 +868,10 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                             <div className="w-full p-2">
                                 {generationMode === 'text' ? <>
                                     <div className="px-2 pb-2 text-[11px] font-semibold" style={{ color: 'var(--isl-ink-soft)' }}>Agent 文本映射</div>
-                                    <div className="rounded-[6px] bg-[var(--isl-surface-2)] px-3 py-2.5 text-xs" style={{ color: 'var(--isl-ink)' }}>{activeRoute ? `${activeRoute.key.name || activeRoute.key.provider} · ${activeRoute.routeId}` : '尚未配置 Agent 文本线路'}</div>
-                                    <button type="button" onClick={() => { onOpenSettings?.(); setExpandedPanel(null); }} className="mt-2 w-full rounded-[6px] border border-[var(--isl-border)] px-3 py-2 text-xs font-semibold">打开模型映射</button>
+                                    <div className="rounded-[6px] bg-[var(--isl-surface-2)] px-3 py-2.5 text-xs" style={{ color: 'var(--isl-ink)' }}>{activeRoute ? `${activeRoute.key.name || activeRoute.key.provider} · ${activeRoute.routeId}` : t('promptBarExtra.agentRouteMissing')}</div>
+                                    <button type="button" onClick={() => { onOpenSettings?.(); setExpandedPanel(null); }} className="mt-2 w-full rounded-[6px] border border-[var(--isl-border)] px-3 py-2 text-xs font-semibold">{t('promptBarExtra.openModelMapping')}</button>
                                 </> : <>
-                                    <div className="px-2 pb-2 text-[11px] font-semibold" style={{ color: 'var(--isl-ink-soft)' }}>选择模型</div>
+                                    <div className="px-2 pb-2 text-[11px] font-semibold" style={{ color: 'var(--isl-ink-soft)' }}>{t('promptBarExtra.pickModel')}</div>
                                     {currentModelOptions.map(model => <button key={model} type="button" onClick={() => { changeActiveModel(model); setExpandedPanel(null); }} className={`mb-1 w-full rounded-[6px] border-0 px-2.5 py-2 text-left text-xs font-semibold ${activeModel === model ? 'bg-[var(--isl-mint-bg)] text-[var(--isl-mint-deep)]' : 'text-[var(--isl-ink)] hover:bg-[var(--isl-surface-2)]'}`}>{policy.modelLabel(model)}</button>)}
                                     {currentModelOptions.length === 0 && <div className="px-4 py-12 text-center text-xs" style={{ color: 'var(--isl-ink-soft)' }}>没有可用模型</div>}
                                 </>}
@@ -880,7 +880,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                     </div>
                     {!activeRoute && activeProductModel && (
                                         <button type="button" onClick={onOpenSettings} className="mx-1 mt-1 flex w-[calc(100%-0.5rem)] items-center justify-between rounded-[6px] bg-[var(--isl-surface-2)] px-2.5 py-1.5 text-[11px] font-semibold">
-                                            <span>{activeProductModel.name} 尚未映射 API 线路</span><span>去配置 →</span>
+                                            <span>{t('promptBarExtra.modelNotMapped', activeProductModel.name)}</span><span>{t('promptBarExtra.goConfigure')}</span>
                                         </button>
                                     )}
                                 </>
@@ -1242,10 +1242,10 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                             onClick={onOpenSettings}
                                             className={`${triggerClass} shrink-0 ${compactMode ? 'h-7 w-7 px-0 text-[11px]' : 'h-8 px-3 text-xs'}`}
                                             style={{ color: 'var(--isl-coral-deep)' }}
-                                            aria-label="配置 AI 服务"
-                                            title="尚未配置访问凭证，点击打开设置"
+                                            aria-label={t('promptBarExtra.configureService')}
+                                            title={t('promptBarExtra.noServiceTitle')}
                                         >
-                                            🔑<span className={compactMode ? 'sr-only' : 'ml-1'}>未配置 AI 服务</span>
+                                            🔑<span className={compactMode ? 'sr-only' : 'ml-1'}>{t('promptBarExtra.noServiceChip')}</span>
                                         </button>
                                     );
                                 }
@@ -1336,7 +1336,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                 title={isSeedanceVideoModel ? '创建新的 Seedance 任务，可能再次扣费' : '使用相同参数重新生成'}
                             >
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 4v6h6"/><path d="M3.5 16.5A9 9 0 1 0 2 12"/></svg>
-                                <span className="ml-1">重试</span>
+                                <span className="ml-1">{t('promptBarExtra.retry')}</span>
                             </button>
                         )}
 
@@ -1348,8 +1348,8 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                 else if (promptReady && readyState !== 'missing-key' && !videoInputRequirement) onGenerate();
                             }}
                             disabled={(isLoading && !onStop) || (!isLoading && (setupRequired ? false : (!promptReady || readyState === 'missing-key' || Boolean(videoInputRequirement))))}
-                            aria-label={isLoading && onStop ? (isSeedanceVideoModel ? '停止并尝试取消任务' : '停止生成') : setupRequired ? setupLabel : runLabel || t('promptBar.generate')}
-                            title={isLoading && onStop ? (isSeedanceVideoModel ? '停止本地等待并尝试取消上游任务；若已进入生成阶段，上游仍可能继续计费' : '停止生成') : setupRequired ? `${setupLabel}以开始生成` : videoInputRequirement || runLabel || t('promptBar.generate')}
+                            aria-label={isLoading && onStop ? (isSeedanceVideoModel ? t('promptBarExtra.stopSeedance') : t('promptBarExtra.stopGeneration')) : setupRequired ? setupLabel : runLabel || t('promptBar.generate')}
+                            title={isLoading && onStop ? (isSeedanceVideoModel ? t('promptBarExtra.stopSeedanceTitle') : t('promptBarExtra.stopGeneration')) : setupRequired ? `${setupLabel}以开始生成` : videoInputRequirement || runLabel || t('promptBar.generate')}
                             className={`isl-go ${compactMode ? 'h-10 w-10 min-w-10 rounded-full p-0 text-xs' : 'h-10 min-w-[116px] px-5 text-sm'}`}
                         >
                             {compactMode ? (isLoading && !onStop ? (
@@ -1366,9 +1366,9 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                     <circle className="opacity-30" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                                     <path className="opacity-80" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4Z" />
                                 </svg>
-                            ) : isLoading ? <span className="text-xs font-semibold">{isSeedanceVideoModel ? '停止/取消' : '停止'}</span> : (
+                            ) : isLoading ? <span className="text-xs font-semibold">{isSeedanceVideoModel ? t('promptBarExtra.stopSeedance') : t('promptBarExtra.stopGeneration')}</span> : (
                                 <div className="flex flex-wrap gap-1.5">
-                                    <span className="text-xs font-semibold">{setupRequired ? setupLabel : error ? '重试' : runLabel || (batchCount > 1 ? `生成 ${batchCount} 版` : '开始生成')}</span>
+                                    <span className="text-xs font-semibold">{setupRequired ? setupLabel : error ? t('promptBarExtra.retry') : runLabel || (batchCount > 1 ? t('promptBarExtra.generateVersions', batchCount) : t('promptBarExtra.startGenerating'))}</span>
                                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
                                         <path d="M5 12h14" />
                                         <path d="m12 5 7 7-7 7" />

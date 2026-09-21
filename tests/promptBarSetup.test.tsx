@@ -1,13 +1,21 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { PromptBar } from '../components/PromptBar';
+import { translations } from '../utils/translations';
+
+const zhT = (key: string, ...args: unknown[]): string => {
+  const value = key.split('.').reduce<unknown>((current, part) => {
+    if (!current || typeof current !== 'object' || !(part in current)) return undefined;
+    return (current as Record<string, unknown>)[part];
+  }, translations.zho as unknown);
+  return String(typeof value === 'function' ? value(...args) : (value ?? key));
+};
 
 describe('PromptBar first-run setup', () => {
   it('turns the generate action into an AI service setup CTA when no service is configured', () => {
     const onOpenSettings = vi.fn();
     render(
       <PromptBar
-        t={key => key}
         theme="light"
         prompt="一只猫"
         setPrompt={vi.fn()}
@@ -17,6 +25,7 @@ describe('PromptBar first-run setup', () => {
         isSelectionActive={false}
         selectedElementCount={0}
         userEffects={[]}
+        t={zhT}
         onAddUserEffect={vi.fn()}
         onDeleteUserEffect={vi.fn()}
         generationMode="image"

@@ -4,7 +4,7 @@ G4 将 Provider 扩展分成两层：正式 Provider 仍由 Flovart 维护，用
 
 ## Official adapter
 
-`services/providerGenerationAdapter.ts` 是正式 Provider 的 canonical capability/serialization seam。生命周期任务仍由 `services/providerAdapter.ts` 的 `ProviderAdapterRegistry` 管理。两者都只能消费已解析的输入，不负责发现 Canvas 引用。
+`services/providerGenerationAdapter.ts` 是正式 Provider 的 canonical capability/serialization seam；任务生命周期（submit/poll/cancel/reconcile）在 `services/aiGateway.ts` 的 `executeUnifiedIgnition` 内按 route 直接分派。`services/providerAdapter.ts` 仅保留共享类型（`ProviderTaskHandle`/`ProviderCancelResult`/`ProviderUsageResult` 等）。两者都只消费已解析的输入，不负责发现 Canvas 引用。
 
 ## User Script adapter
 

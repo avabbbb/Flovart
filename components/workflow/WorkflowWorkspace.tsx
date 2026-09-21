@@ -4,8 +4,6 @@ import type { PromptEnhanceMode, PromptEnhanceResult, UserApiKey } from '../../t
 import type { RouteFallbackResolution } from '../../services/routeMapping';
 import '../../styles/workflow.css';
 import type { GenerationCapability, GenerationMode } from '../../services/generationCapabilities';
-import { StudioRightDrawer } from '../studio/StudioRightDrawer';
-import { StudioMediaBrowser, type StudioMediaItem } from '../studio/StudioMediaBrowser';
 import { activateBrowserWorkflowWriter } from '../../services/agentHostDiscovery';
 import { useAgentConnectionStore } from '../../stores/useAgentConnectionStore';
 import { createWorkflowNode } from './constants';
@@ -16,14 +14,13 @@ import { useWorkflowStore } from './store';
 import type { WorkflowModelOptions } from './WorkflowNodePromptBar';
 import type { WorkflowImageToolHandlers } from './WorkflowNodeToolbar';
 import { WorkflowSidebar } from './WorkflowSidebar';
-import { FlovartAgentPanel } from '../agent/FlovartAgentPanel';
-import { discardWorkflowMediaRecord, fitWorkflowMediaSize, ingestWorkflowMedia, inspectWorkflowMedia, loadWorkflowMediaBlob, releaseWorkflowMediaRecord, workflowBlobToDataUrl, type WorkflowMediaRecord } from './media';
+import { discardWorkflowMediaRecord, fitWorkflowMediaSize, ingestWorkflowMedia, inspectWorkflowMedia, loadWorkflowMediaBlob, releaseWorkflowMediaRecord, type WorkflowMediaRecord } from './media';
 import { localFolderHref, readLocalFolderFile, type LocalFolderEntry } from '../../services/localFolderSource';
 import type { AssetItem, AssetLibrary } from '../../types';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import type { WorkflowNodeMetadata, WorkflowProject } from './types';
-import { consumeWorkflowAgentDrawerRequest, subscribeWorkflowAgentDrawer } from './agentDrawerRequest';
 import type { PromptIntent } from './promptIntent';
+import { displayError } from '../../services/displayError';
 
 export interface WorkflowWorkspaceProps {
   theme: 'light' | 'dark';
@@ -43,6 +40,11 @@ export interface WorkflowWorkspaceProps {
   onEnhancePrompt?: (payload: { prompt: string; mode: PromptEnhanceMode; stylePreset?: string }) => Promise<PromptEnhanceResult>;
   isEnhancingPrompt?: boolean;
   onOpenAgent?: () => void;
+  /** Reflects the global Agent drawer (mounted by the App shell, not here). */
+  agentOpen?: boolean;
+  /** Right-drawer width inset so canvas focus/spawn math stays inside the visible region. */
+  rightPanelInset?: number;
+  focusNodeRequest?: { nodeId: string; nonce: number };
   assetLibrary: AssetLibrary;
   onRenameAsset: (id: string, name: string) => void;
   onRemoveAsset: (id: string) => void;
@@ -58,22 +60,116 @@ export interface WorkflowWorkspaceProps {
   onNotify?: (message: string, level?: 'info' | 'success' | 'warning' | 'error') => void;
 }
 
-type WorkflowRightTab = 'agent' | 'context' | 'history';
+export interface WorkflowPatchResult {
+  ok: boolean;
+  error?: string;
+}
 
-const WORKFLOW_DRAWER_MIN = 280;
-const WORKFLOW_DRAWER_DEFAULT = 360;
-const WORKFLOW_DRAWER_MAX = 640;
-
-function readWorkflowDrawerWidth() {
-  if (typeof window === 'undefined') return WORKFLOW_DRAWER_DEFAULT;
+/**
+ * Shared media-insert entry point so the App-level right drawer (History tab)
+ * and the in-canvas sidebar commit through the same mutation path — same
+ * changeset/receipt bookkeeping, same media-record lifecycle.
+ */
+export async function insertSharedMediaIntoProject(media: WorkflowSharedMedia): Promise<WorkflowPatchResult> {
+  const store = useWorkflowStore.getState();
+  const activeProject = store.projects.find(project => project.id === store.activeProjectId) || null;
+  if (!activeProject) return { ok: false, error: '没有可用的 Workflow 项目。' };
+  const expectedProjectId = activeProject.id;
+  let record: WorkflowMediaRecord | undefined;
   try {
-    const stored = Number(localStorage.getItem('workflowRightPanelWidth'));
-    return Number.isFinite(stored) && stored >= WORKFLOW_DRAWER_MIN && stored <= WORKFLOW_DRAWER_MAX
-      ? stored
-      : WORKFLOW_DRAWER_DEFAULT;
-  } catch {
-    return WORKFLOW_DRAWER_DEFAULT;
+    if (!/^https?:\/\//i.test(media.href)) {
+      const blob = await loadWorkflowMediaBlob(undefined, media.href);
+      record = await ingestWorkflowMedia(new File([blob], media.name, { type: blob.type || media.mimeType }));
+    }
+    if (!useWorkflowStore.getState().projects.some(project => project.id === expectedProjectId)) {
+      if (record) await discardWorkflowMediaRecord(record.storageKey);
+      return { ok: false };
+    }
+    const type = record?.type || media.type;
+    const storedMetadata = record && (({ type: _type, ...metadata }) => metadata)(record);
+    const current = useWorkflowStore.getState().projects.find(project => project.id === expectedProjectId);
+    if (!current) {
+      if (record) await discardWorkflowMediaRecord(record.storageKey);
+      return { ok: false };
+    }
+    const nodes = layoutMediaNodes([{
+      type,
+      naturalWidth: record?.naturalWidth || media.width,
+      naturalHeight: record?.naturalHeight || media.height,
+      title: media.name,
+      metadata: storedMetadata
+        ? storedMetadata as WorkflowNodeMetadata
+        : { href: media.href, mimeType: media.mimeType, name: media.name, naturalWidth: media.width, naturalHeight: media.height, status: 'success' },
+    }], current);
+    const committed = commitWorkflowProjectPatch(current.id, { nodes: [...current.nodes, ...nodes], selectedNodeIds: nodes.map(node => node.id) }, '从素材库插入媒体节点');
+    if (!committed.ok) {
+      if (record) await discardWorkflowMediaRecord(record.storageKey);
+      return committed;
+    }
+    if (record) releaseWorkflowMediaRecord(record.storageKey);
+    return { ok: true };
+  } catch (error) {
+    if (record) await discardWorkflowMediaRecord(record.storageKey);
+    return { ok: false, error: displayError(error, '共享素材导入失败') };
   }
+}
+
+/** Apply a node/connection patch through the draft-authority mutation path so undo + receipts stay intact. */
+export function commitWorkflowProjectPatch(projectId: string, patch: Partial<WorkflowProject>, intent: string): WorkflowPatchResult {
+  const current = useWorkflowStore.getState().projects.find(project => project.id === projectId);
+  if (!current) return { ok: false, error: '项目不存在或已删除。' };
+  const ops = workflowDocumentOperationsFromFrames(
+    { nodes: current.nodes, connections: current.connections },
+    { nodes: patch.nodes || current.nodes, connections: patch.connections || current.connections },
+  );
+  if (!ops.length) {
+    useWorkflowStore.getState().updateProject(projectId, patch);
+    return { ok: true };
+  }
+  const result = applyWorkflowMutation(current, {
+    projectId,
+    expectedRevision: current.draftVersion || 1,
+    mutationId: nanoid(),
+    source: 'ui',
+    intent,
+    ops,
+  });
+  if (result.ok === false) return { ok: false, error: result.error.message };
+  useWorkflowStore.getState().updateProject(projectId, {
+    nodes: result.project.nodes,
+    connections: result.project.connections,
+    selectedNodeIds: patch.selectedNodeIds || result.project.selectedNodeIds,
+    viewport: patch.viewport || result.project.viewport,
+    draftVersion: result.project.draftVersion,
+    draftChangeSets: result.project.draftChangeSets,
+    draftRedoStack: result.project.draftRedoStack,
+    workflowMutationReceipts: result.project.workflowMutationReceipts,
+  });
+  return { ok: true };
+}
+
+// 把一批媒体元数据按视口中心铺成节点；单条时保持原有"落在中心"的行为。
+function layoutMediaNodes(
+  items: Array<{ type: 'image' | 'video' | 'audio'; metadata: WorkflowNodeMetadata; naturalWidth?: number; naturalHeight?: number; title: string }>,
+  project: WorkflowProject,
+) {
+  const k = Math.max(project.viewport.k, 0.12);
+  const origin = { x: (360 - project.viewport.x) / k, y: (220 - project.viewport.y) / k };
+  const columns = Math.min(4, Math.max(1, items.length));
+  return items.map((item, index) => {
+    const size = fitWorkflowMediaSize(item.type, item.naturalWidth, item.naturalHeight);
+    const column = index % columns;
+    const row = Math.floor(index / columns);
+    return {
+      ...createWorkflowNode(nanoid(), item.type, {
+        x: origin.x - size.width / 2 + column * 48,
+        y: origin.y - size.height / 2 + row * 48,
+      }, item.metadata),
+      ...size,
+      freeResize: false,
+      title: item.title,
+    };
+  });
 }
 
 export function WorkflowWorkspace({
@@ -94,6 +190,9 @@ export function WorkflowWorkspace({
   onEnhancePrompt,
   isEnhancingPrompt,
   onOpenAgent,
+  agentOpen = false,
+  rightPanelInset = 12,
+  focusNodeRequest,
   assetLibrary,
   onRenameAsset,
   onRemoveAsset,
@@ -114,26 +213,19 @@ export function WorkflowWorkspace({
   const createProject = useWorkflowStore(state => state.createProject);
   const updateProject = useWorkflowStore(state => state.updateProject);
   const activeProject = projects.find(project => project.id === activeProjectId) || null;
-  // These queries only switch interaction mode (inline pane vs drawer). CSS
+  // These queries only switch interaction mode (inline sidebar vs hidden). CSS
   // and container queries own the actual geometry and wrapping.
   const mediumViewport = useMediaQuery('(max-width: 1023px)');
   const [desktopLeftOpen, setDesktopLeftOpen] = useState(true);
   const [mobileLeftOpen, setMobileLeftOpen] = useState(false);
   const leftOpen = mediumViewport ? mobileLeftOpen : desktopLeftOpen;
   const setLeftOpen = (open: boolean) => mediumViewport ? setMobileLeftOpen(open) : setDesktopLeftOpen(open);
-  // UX-PRO-04: default the right drawer OPEN on first run — the built-in Agent
-  // is the headline capability and collapsing it to a 2px strip hides it.
-  // Persisted opt-out: once the user collapses it, 'false' sticks.
-  const [desktopRightOpen, setDesktopRightOpen] = useState(() => localStorage.getItem('workflowRightPanelOpenV2') !== 'false');
-  const [mobileRightOpen, setMobileRightOpen] = useState(false);
-  const rightOpen = mediumViewport ? mobileRightOpen : desktopRightOpen;
-  const setRightOpen = (open: boolean) => mediumViewport ? setMobileRightOpen(open) : setDesktopRightOpen(open);
-  const [rightTab, setRightTab] = useState<WorkflowRightTab>('agent');
-  const [rightWidth, setRightWidth] = useState(readWorkflowDrawerWidth);
   const [workspaceNotice, setWorkspaceNotice] = useState('');
   const [writerRecoveryPending, setWriterRecoveryPending] = useState(false);
   const [sidebarTabRequest, setSidebarTabRequest] = useState<{ tab: 'layers' | 'assets'; nonce: number }>();
-  const [focusNodeRequest, setFocusNodeRequest] = useState<{ nodeId: string; nonce: number }>();
+  // 图层点击 → 画布聚焦：本地请求与 App 下发的 focusNodeRequest 合并，
+  // 谁更新谁生效（nonce 即时间戳）。
+  const [localFocusRequest, setLocalFocusRequest] = useState<{ nodeId: string; nonce: number }>();
   const agentConnectionStatus = useAgentConnectionStore(state => state.status);
   const writerStatus = useAgentConnectionStore(state => state.writerStatus);
 
@@ -141,66 +233,10 @@ export function WorkflowWorkspace({
     if (hydrated && projects.length > 0 && !activeProjectId) setActiveProject(projects[0].id);
   }, [activeProjectId, hydrated, projects, setActiveProject]);
 
-  // "打开内置助手" / the canvas's agent affordance ask to surface the assistant
-  // beside the canvas. Consume a request made while we were unmounted, and keep
-  // listening for live requests while mounted.
-  useEffect(() => {
-    const openAgentDrawer = () => {
-      // Consume the nonce so a handled request can't re-fire on a later mount.
-      consumeWorkflowAgentDrawerRequest();
-      setRightTab('agent');
-      setRightOpen(true);
-    };
-    if (consumeWorkflowAgentDrawerRequest()) openAgentDrawer();
-    return subscribeWorkflowAgentDrawer(openAgentDrawer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  useEffect(() => {
-    localStorage.setItem('workflowRightPanelWidth', String(rightWidth));
-  }, [rightWidth]);
-
-  useEffect(() => {
-    localStorage.setItem('workflowRightPanelOpenV2', String(desktopRightOpen));
-  }, [desktopRightOpen]);
-
-  useEffect(() => {
-    if (mediumViewport) setMobileRightOpen(false);
-  }, [mediumViewport]);
-
   const commitProjectPatch = (projectId: string, patch: Partial<WorkflowProject>, intent: string) => {
-    const current = useWorkflowStore.getState().projects.find(project => project.id === projectId);
-    if (!current) return false;
-    const ops = workflowDocumentOperationsFromFrames(
-      { nodes: current.nodes, connections: current.connections },
-      { nodes: patch.nodes || current.nodes, connections: patch.connections || current.connections },
-    );
-    if (!ops.length) {
-      updateProject(projectId, patch);
-      return true;
-    }
-    const result = applyWorkflowMutation(current, {
-      projectId,
-      expectedRevision: current.draftVersion || 1,
-      mutationId: nanoid(),
-      source: 'ui',
-      intent,
-      ops,
-    });
-    if (result.ok === false) {
-      setWorkspaceNotice(result.error.message);
-      return false;
-    }
-    updateProject(projectId, {
-      nodes: result.project.nodes,
-      connections: result.project.connections,
-      selectedNodeIds: patch.selectedNodeIds || result.project.selectedNodeIds,
-      viewport: patch.viewport || result.project.viewport,
-      draftVersion: result.project.draftVersion,
-      draftChangeSets: result.project.draftChangeSets,
-      draftRedoStack: result.project.draftRedoStack,
-      workflowMutationReceipts: result.project.workflowMutationReceipts,
-    });
-    return true;
+    const result = commitWorkflowProjectPatch(projectId, patch, intent);
+    if (!result.ok && result.error) setWorkspaceNotice(result.error);
+    return result.ok;
   };
 
   const recoverWriter = async () => {
@@ -209,7 +245,7 @@ export function WorkflowWorkspace({
       await activateBrowserWorkflowWriter();
       setWorkspaceNotice('Flovart 画布已重新激活。');
     } catch (error) {
-      setWorkspaceNotice(error instanceof Error ? error.message : 'Flovart 画布暂不可用。');
+      setWorkspaceNotice(displayError(error, 'Flovart 画布暂不可用。'));
     } finally {
       setWriterRecoveryPending(false);
     }
@@ -218,30 +254,6 @@ export function WorkflowWorkspace({
   useEffect(() => {
     if (mediumViewport) setMobileLeftOpen(false);
   }, [mediumViewport]);
-
-  // 把一批媒体元数据按视口中心铺成节点；单条时保持原有"落在中心"的行为。
-  const layoutMediaNodes = (
-    items: Array<{ type: 'image' | 'video' | 'audio'; metadata: WorkflowNodeMetadata; naturalWidth?: number; naturalHeight?: number; title: string }>,
-    project: WorkflowProject,
-  ) => {
-    const k = Math.max(project.viewport.k, 0.12);
-    const origin = { x: (360 - project.viewport.x) / k, y: (220 - project.viewport.y) / k };
-    const columns = Math.min(4, Math.max(1, items.length));
-    return items.map((item, index) => {
-      const size = fitWorkflowMediaSize(item.type, item.naturalWidth, item.naturalHeight);
-      const column = index % columns;
-      const row = Math.floor(index / columns);
-      return {
-        ...createWorkflowNode(nanoid(), item.type, {
-          x: origin.x - size.width / 2 + column * 48,
-          y: origin.y - size.height / 2 + row * 48,
-        }, item.metadata),
-        ...size,
-        freeResize: false,
-        title: item.title,
-      };
-    });
-  };
 
   // 一批素材只产生一个 Draft ChangeSet，避免批量插入把撤销栈冲散。
   const commitMediaNodes = (
@@ -284,7 +296,7 @@ export function WorkflowWorkspace({
           },
         });
       } catch (error) {
-        failures.push(`${entry.name}：${error instanceof Error ? error.message : '读取失败'}`);
+        failures.push(`${entry.name}：${displayError(error, '读取失败')}`);
       }
     }
     const committed = commitMediaNodes(prepared, '从本地文件夹插入素材节点');
@@ -301,42 +313,11 @@ export function WorkflowWorkspace({
 
   const insertSharedMedia = async (media: WorkflowSharedMedia) => {
     if (!activeProject) return;
-    const expectedProjectId = activeProject.id;
-    let record: WorkflowMediaRecord | undefined;
-    try {
-      setWorkspaceNotice('');
-      if (!/^https?:\/\//i.test(media.href)) {
-        const blob = await loadWorkflowMediaBlob(undefined, media.href);
-        record = await ingestWorkflowMedia(new File([blob], media.name, { type: blob.type || media.mimeType }));
-      }
-      if (!useWorkflowStore.getState().projects.some(project => project.id === expectedProjectId)) {
-        if (record) await discardWorkflowMediaRecord(record.storageKey);
-        return;
-      }
-      const type = record?.type || media.type;
-      const storedMetadata = record && (({ type: _type, ...metadata }) => metadata)(record);
-      const committed = commitMediaNodes([{
-        type,
-        naturalWidth: record?.naturalWidth || media.width,
-        naturalHeight: record?.naturalHeight || media.height,
-        title: media.name,
-        metadata: storedMetadata
-          ? storedMetadata as WorkflowNodeMetadata
-          : { href: media.href, mimeType: media.mimeType, name: media.name, naturalWidth: media.width, naturalHeight: media.height, status: 'success' },
-      }], '从素材库插入媒体节点');
-      if (!committed) {
-        if (record) await discardWorkflowMediaRecord(record.storageKey);
-        return;
-      }
-      if (record) releaseWorkflowMediaRecord(record.storageKey);
-    } catch (error) {
-      if (record) await discardWorkflowMediaRecord(record.storageKey);
-      setWorkspaceNotice(error instanceof Error ? error.message : '共享素材导入失败');
-    }
+    setWorkspaceNotice('');
+    const result = await insertSharedMediaIntoProject(media);
+    if (!result.ok && result.error) setWorkspaceNotice(result.error);
   };
 
-  const mediaSourceOf = (media: WorkflowSharedMedia) => media.source || (media.id.startsWith('history:') ? 'history' : 'asset');
-  const historyMedia = Array.isArray(sharedMedia) ? sharedMedia.filter(media => mediaSourceOf(media) === 'history') : [];
 
   const insertAssetItem = (item: AssetItem) => {
     void insertSharedMedia({
@@ -363,7 +344,7 @@ export function WorkflowWorkspace({
       await navigator.clipboard?.writeText(prompt);
       setWorkspaceNotice(language === 'zho' ? 'Prompt 已复制' : 'Prompt Copied');
     } catch (error) {
-      setWorkspaceNotice(error instanceof Error ? error.message : (language === 'zho' ? '反推失败' : 'Analysis Failed'));
+      setWorkspaceNotice(displayError(error, (language === 'zho' ? '反推失败' : 'Analysis Failed')));
     }
   };
 
@@ -393,6 +374,8 @@ assetLibrary={assetLibrary}
           onRemoveFolder={onRemoveFolder}
           onInsertLocalFolderEntries={entries => insertLocalFolderEntries(entries)}
           tabRequest={sidebarTabRequest}
+          onFocusNode={nodeId => setLocalFocusRequest({ nodeId, nonce: Date.now() })}
+          docked={!mediumViewport}
       />
       <main className="workflow-workspace__main">
         {workspaceNotice && <div className="workflow-workspace__notice" role="status">{workspaceNotice}</div>}
@@ -419,17 +402,10 @@ assetLibrary={assetLibrary}
               onSaveWorkflowMedia={nodeId => onSaveWorkflowMedia?.(activeProject.id, nodeId)}
               imageTools={imageTools}
               onReversePrompt={onReversePrompt}
-              onOpenAgent={() => {
-                if (onOpenAgent) {
-                  onOpenAgent();
-                  return;
-                }
-                setRightTab('agent');
-                setRightOpen(true);
-              }}
-              agentOpen={rightOpen && rightTab === 'agent'}
-              focusNodeRequest={focusNodeRequest}
-              rightPanelInset={rightOpen && !mediumViewport ? rightWidth + 24 : 12}
+              onOpenAgent={onOpenAgent}
+              agentOpen={agentOpen}
+              focusNodeRequest={localFocusRequest && localFocusRequest.nonce > (focusNodeRequest?.nonce ?? 0) ? localFocusRequest : focusNodeRequest}
+              rightPanelInset={rightPanelInset}
               t={t}
               theme={theme}
               language={language}
@@ -456,72 +432,11 @@ assetLibrary={assetLibrary}
         </WorkflowGenerationCapabilitiesProvider>
       </main>
 
-      <StudioRightDrawer
-        open={rightOpen}
-        onOpenChange={setRightOpen}
-        outerGap={0}
-        width={rightWidth}
-        minWidth={WORKFLOW_DRAWER_MIN}
-        maxWidth={WORKFLOW_DRAWER_MAX}
-        onWidthChange={setRightWidth}
-        flush
-        activeTab={rightTab}
-        onTabChange={tab => setRightTab(tab as WorkflowRightTab)}
-        tabs={[
-          { id: 'agent', label: language === 'zho' ? 'Agent' : 'Agent', icon: undefined },
-          { id: 'context', label: language === 'zho' ? '上下文' : 'Context', icon: undefined },
-          { id: 'history', label: language === 'zho' ? '生成历史' : 'History', icon: undefined },
-        ]}
-      >
-        {rightTab === 'agent' && (activeProject ? (
-          <FlovartAgentPanel
-            project={activeProject}
-            onActivityChange={() => undefined}
-            onOpenSettings={() => onOpenSettings?.()}
-            assetLibrary={assetLibrary}
-            userApiKeys={userApiKeys}
-            onFocusNode={nodeId => setFocusNodeRequest({ nodeId, nonce: Date.now() })}
-          />
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, height: '100%', padding: '0 32px', textAlign: 'center', color: 'var(--isl-ink-soft)', fontSize: 13 }}>
-            <strong style={{ color: 'var(--isl-ink)' }}>{language === 'zho' ? '助手需要一个 Workflow 项目' : 'The assistant needs a workflow project'}</strong>
-            <span>{language === 'zho' ? '创建后即可在画布旁与助手对话。' : 'Create one to chat with the assistant beside the canvas.'}</span>
-            <button type="button" aria-label="新建工作流" onClick={() => createProject()}
-              style={{ marginTop: 6, padding: '7px 16px', border: 0, borderRadius: 9, color: '#fff', background: 'var(--isl-accent, #1677ff)', cursor: 'pointer', fontSize: 12 }}>
-              {language === 'zho' ? '创建项目' : 'Create project'}
-            </button>
-          </div>
-        ))}
-        {rightTab === 'context' && (activeProject ? (
-          <WorkflowContextPanel project={activeProject} />
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, height: '100%', padding: '0 32px', textAlign: 'center', color: 'var(--isl-ink-soft)', fontSize: 13 }}>
-            <strong style={{ color: 'var(--isl-ink)' }}>制作状态需要一个 Workflow 项目</strong>
-            <span>创建后，Brief、任务状态、回执与产物会在这里汇合。</span>
-            <button type="button" aria-label="新建工作流" onClick={() => createProject()}
-              style={{ marginTop: 6, padding: '7px 16px', border: 0, borderRadius: 9, color: '#fff', background: 'var(--isl-accent, #1677ff)', cursor: 'pointer', fontSize: 12 }}>
-              创建项目
-            </button>
-          </div>
-        ))}
-        {rightTab === 'history' && (
-          <StudioMediaBrowser
-            mode="history"
-            items={historyMedia}
-            language={language}
-            onInsert={media => { void insertSharedMedia(media as WorkflowSharedMedia); }}
-            onReversePrompt={onReversePrompt ? async media => {
-              const blob = await loadWorkflowMediaBlob(undefined, media.href);
-              return onReversePrompt(await workflowBlobToDataUrl(blob), media.mimeType || blob.type, media.width, media.height);
-            } : undefined}
-          />
-        )}
-      </StudioRightDrawer>
     </section>
   );
 }
 
-function WorkflowContextPanel({ project }: { project: WorkflowProject }) {
+export function WorkflowContextPanel({ project }: { project: WorkflowProject }) {
   const running = project.nodes.filter(node => node.metadata.status === 'loading').length;
   const failed = project.nodes.filter(node => node.metadata.status === 'error').length;
   const latestReceipt = [...(project.draftChangeSets || [])].reverse()[0];

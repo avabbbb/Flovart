@@ -71,6 +71,7 @@ import { exportMediaArchive } from '../../utils/batchMediaExport';
 import { computeAutoLayout } from './layoutAlgorithm';
 import { usePromptHistoryStore } from '../../stores/usePromptHistoryStore';
 import { useClipboardStore, type ClipItem } from '../../stores/useClipboardStore';
+import { displayError } from '../../services/displayError';
 
 type Frame = Pick<WorkflowProject, 'nodes' | 'connections'>;
 type ImageToolTransaction = { id: string; projectId: string; nodeId: string; frame: Frame };
@@ -643,7 +644,7 @@ export function InfiniteWorkflow({
           setNotice('背景移除完成');
         }
       }).catch(error => {
-        if (ownsImageToolTransaction(transaction)) setNotice(error instanceof Error ? error.message : '背景移除失败');
+        if (ownsImageToolTransaction(transaction)) setNotice(displayError(error, '背景移除失败'));
       }).finally(() => { releaseImageToolTransaction(transaction); });
       return;
     }
@@ -685,7 +686,7 @@ export function InfiniteWorkflow({
         setNotice(position === 'first' ? '首帧已通过 Operation 导出' : position === 'last' ? '尾帧已通过 Operation 导出' : '当前帧已通过 Operation 导出');
       }
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : '帧导出失败');
+      setNotice(displayError(error, '帧导出失败'));
     } finally {
       videoToolBusyRef.current = false;
       setVideoToolBusy(false);
@@ -753,7 +754,7 @@ export function InfiniteWorkflow({
         videoToolTransactionRef.current = null;
       }
     } catch (error) {
-      setVideoToolError(error instanceof Error ? error.message : '视频处理失败');
+      setVideoToolError(displayError(error, '视频处理失败'));
     } finally {
       videoToolBusyRef.current = false;
       setVideoToolBusy(false);
@@ -826,7 +827,7 @@ export function InfiniteWorkflow({
         audioToolTransactionRef.current = null;
       }
     } catch (error) {
-      setAudioToolError(error instanceof Error ? error.message : '音频处理失败');
+      setAudioToolError(displayError(error, '音频处理失败'));
     } finally {
       audioToolBusyRef.current = false;
       setAudioToolBusy(false);
@@ -956,7 +957,7 @@ export function InfiniteWorkflow({
         releaseImageToolTransaction(transaction);
       }
     } catch (error) {
-      if (ownsImageToolTransaction(transaction)) setImageToolError(error instanceof Error ? error.message : '图片处理失败');
+      if (ownsImageToolTransaction(transaction)) setImageToolError(displayError(error, '图片处理失败'));
     } finally {
       if (ownsImageToolTransaction(transaction)) {
         imageToolBusyRef.current = false;
@@ -1102,7 +1103,7 @@ export function InfiniteWorkflow({
       records.forEach(record => releaseWorkflowMediaRecord(record.storageKey));
     } catch (error) {
       await Promise.all(records.map(record => discardWorkflowMediaRecord(record.storageKey)));
-      setNotice(error instanceof Error ? error.message : '参考图上传失败');
+      setNotice(displayError(error, '参考图上传失败'));
     }
   }, [applyOps, currentSnapshot]);
 
@@ -1191,18 +1192,18 @@ export function InfiniteWorkflow({
     return screenToWorkflow((rect?.left || 0) + availableWidth / 2, (rect?.top || 0) + (rect?.height || 700) / 2);
   }, [rightPanelInset, screenToWorkflow]);
 
-  const focusNode = useCallback((id: string) => {
-    const node = projectRef.current.nodes.find(n => n.id === id);
-    if (!node) return;
+  // 聚焦到一块世界坐标区域（单节点=其包围盒，多选=选区包围盒），
+  // 与 focusNodeRequest 共用同一套 drawer-inset 感知动画。
+  const focusBounds = useCallback((minX: number, minY: number, maxX: number, maxY: number) => {
     const rect = rootRef.current?.getBoundingClientRect();
     if (!rect) return;
     const availableWidth = Math.max(360, rect.width - (rightPanelInset || 0));
     const padding = 120;
-    const targetK = Math.min(1.5, Math.max(0.12, Math.min((availableWidth - padding) / Math.max(1, node.width), (rect.height - padding) / Math.max(1, node.height))));
-    const nodeCenterX = node.position.x + node.width / 2;
-    const nodeCenterY = node.position.y + node.height / 2;
-    const targetX = availableWidth / 2 - nodeCenterX * targetK;
-    const targetY = rect.height / 2 - nodeCenterY * targetK;
+    const targetK = Math.min(1.5, Math.max(0.12, Math.min((availableWidth - padding) / Math.max(1, maxX - minX), (rect.height - padding) / Math.max(1, maxY - minY))));
+    const centerX = (minX + maxX) / 2;
+    const centerY = (minY + maxY) / 2;
+    const targetX = availableWidth / 2 - centerX * targetK;
+    const targetY = rect.height / 2 - centerY * targetK;
     const start = { ...viewportRef.current };
     const dx = targetX - start.x;
     const dy = targetY - start.y;
@@ -1228,6 +1229,26 @@ export function InfiniteWorkflow({
     focusAnimRef.current = window.requestAnimationFrame(tick);
   }, [patchProject, rightPanelInset]);
 
+  const focusNode = useCallback((id: string) => {
+    const node = projectRef.current.nodes.find(n => n.id === id);
+    if (!node) return;
+    focusBounds(node.position.x, node.position.y, node.position.x + node.width, node.position.y + node.height);
+  }, [focusBounds]);
+
+  /** Premiere/AE 式 Frame Selection（F）：把当前选中节点缩放平移到可视区域中央。 */
+  const frameSelection = useCallback(() => {
+    const nodes = selectedIdsRef.current
+      .map(id => projectRef.current.nodes.find(node => node.id === id))
+      .filter((node): node is WorkflowNodeData => Boolean(node && node.isVisible !== false));
+    if (!nodes.length) return;
+    focusBounds(
+      Math.min(...nodes.map(node => node.position.x)),
+      Math.min(...nodes.map(node => node.position.y)),
+      Math.max(...nodes.map(node => node.position.x + node.width)),
+      Math.max(...nodes.map(node => node.position.y + node.height)),
+    );
+  }, [focusBounds]);
+
   useEffect(() => {
     if (!focusNodeRequest) return;
     const node = projectRef.current.nodes.find(item => item.id === focusNodeRequest.nodeId);
@@ -1235,6 +1256,67 @@ export function InfiniteWorkflow({
     selectNodes([node.id]);
     focusNode(node.id);
   }, [focusNode, focusNodeRequest, selectNodes]);
+
+  // 刷新/重载后节点 metadata 里会残留 status:'loading'，但内存中的生成请求
+  // 已不存在 —— 这类"僵尸 loading"永远不会自己结束。挂载时记录快照，宽限
+  // 期（给 App 的 provider-task 恢复留出重新提交的时间）后仍在原地 loading
+  // 的节点视为已中断：用产品语言提示，并允许通过停止按钮复位。
+  const [staleLoadingIds, setStaleLoadingIds] = useState<ReadonlySet<string>>(() => new Set());
+  const staleScanRef = useRef<string | null>(null);
+  useEffect(() => {
+    staleScanRef.current = project.id;
+    setStaleLoadingIds(new Set());
+    const snapshot = new Map(
+      projectRef.current.nodes
+        .filter(node => node.metadata.status === 'loading')
+        .map(node => [node.id, node.metadata.generationStartedAt]),
+    );
+    if (!snapshot.size) return;
+    const timer = window.setTimeout(() => {
+      if (!mountedRef.current || staleScanRef.current !== project.id) return;
+      const stale = new Set(
+        projectRef.current.nodes
+          .filter(node => node.metadata.status === 'loading' && snapshot.get(node.id) === node.metadata.generationStartedAt)
+          .map(node => node.id),
+      );
+      if (!stale.size) return;
+      setStaleLoadingIds(stale);
+      onNotify?.(
+        language === 'zho'
+          ? `${stale.size} 个生成任务已中断 — 选中节点可重新运行或停止`
+          : `${stale.size} generation task${stale.size > 1 ? 's' : ''} interrupted — select the node to rerun or stop it`,
+        'warning',
+      );
+    }, 6000);
+    return () => window.clearTimeout(timer);
+  }, [language, onNotify, project.id]);
+
+  const stopNode = useCallback((nodeId: string) => {
+    if (staleLoadingIds.has(nodeId)) {
+      const node = projectRef.current.nodes.find(item => item.id === nodeId);
+      if (!node) return;
+      applyOps([{
+        type: 'update_node',
+        id: nodeId,
+        metadata: {
+          ...node.metadata,
+          status: 'error',
+          error: language === 'zho' ? '生成已中断，可重新运行' : 'Generation interrupted — run again to retry',
+          progress: undefined,
+          generationRequestId: undefined,
+          generationStartedAt: undefined,
+          generationMessage: undefined,
+        },
+      }]);
+      setStaleLoadingIds(current => {
+        const next = new Set(current);
+        next.delete(nodeId);
+        return next;
+      });
+      return;
+    }
+    onStopNode?.(nodeId);
+  }, [applyOps, language, onStopNode, staleLoadingIds]);
 
   const handleSlashCommand = useCallback((command: SlashCommand) => {
     setSlashMenu(null);
@@ -1308,7 +1390,7 @@ export function InfiniteWorkflow({
       else releaseWorkflowMediaRecord(record.storageKey);
     } catch (error) {
       if (record) await discardWorkflowMediaRecord(record.storageKey);
-      if (mountedRef.current && projectRef.current.id === expectedProjectId) setNotice(error instanceof Error ? error.message : '媒体文件导入失败');
+      if (mountedRef.current && projectRef.current.id === expectedProjectId) setNotice(displayError(error, '媒体文件导入失败'));
     }
   }, [applyOps]);
 
@@ -1337,7 +1419,7 @@ export function InfiniteWorkflow({
       if (!mountedRef.current || projectRef.current.id !== expectedProjectId) return;
       await addMediaAt(new File([blob], media.name, { type: blob.type || media.mimeType }), center, expectedProjectId);
     } catch (error) {
-      if (mountedRef.current && projectRef.current.id === expectedProjectId) setNotice(error instanceof Error ? error.message : '共享素材导入失败');
+      if (mountedRef.current && projectRef.current.id === expectedProjectId) setNotice(displayError(error, '共享素材导入失败'));
     }
   }, [addMediaAt, applyOps]);
 
@@ -1438,6 +1520,9 @@ export function InfiniteWorkflow({
       let dx = point.x - interaction.start.x;
       let dy = point.y - interaction.start.y;
       interaction.moved = dx !== 0 || dy !== 0;
+      // Hide the selection overlay only once this press has turned into a real
+      // drag — a click without movement keeps the toolbar visible.
+      if (interaction.moved) setOverlayHidden(true);
       let snapGuidesState: { x?: number[]; y?: number[] } | null = null;
       if (snapEnabledRef.current && interaction.positions.size > 0) {
         const SNAP_THRESHOLD = 8;
@@ -1767,7 +1852,7 @@ export function InfiniteWorkflow({
         applyOps([{ type: 'add_node', node: createWorkflowNode(nanoid(), 'text', { x: center.x - 170, y: center.y - 110 }, { content: text }) }]);
       }
     } catch (error) {
-      if (mountedRef.current && projectRef.current.id === expectedProjectId) setNotice(error instanceof Error ? error.message : '无法读取剪贴板内容');
+      if (mountedRef.current && projectRef.current.id === expectedProjectId) setNotice(displayError(error, '无法读取剪贴板内容'));
     }
   }, [addMediaAt, applyOps, commitFrame, screenToWorkflow, selectNodes, viewportCenter]);
   const deleteSelection = useCallback(() => {
@@ -1821,6 +1906,8 @@ export function InfiniteWorkflow({
         if (ids.length >= 2) applyOps([{ type: 'group_nodes', ids, batchId: nanoid(), source: 'manual' }]);
         return;
       }
+      // F — Frame Selection（Premiere/AE 约定）：无修饰键时把选中节点居中缩放。
+      if (!modifier && key === 'f') { event.preventDefault(); frameSelection(); return; }
       if (event.key === '/' && !modifier && !slashMenuRef.current) {
         event.preventDefault();
         const rect = rootRef.current?.getBoundingClientRect();
@@ -1843,7 +1930,7 @@ export function InfiniteWorkflow({
       window.removeEventListener('keydown', keydown);
       window.removeEventListener('keyup', keyup);
     };
-  }, [applyOps, cancelInteraction, closeCreateMenu, copySelection, deleteSelection, pasteSelection, redo, selectNodes, undo]);
+  }, [applyOps, cancelInteraction, closeCreateMenu, copySelection, deleteSelection, frameSelection, pasteSelection, redo, selectNodes, undo]);
 
   const addNode = useCallback((type: WorkflowNodeType, metadata: WorkflowNodeData['metadata'] = {}) => {
     const center = viewportCenter();
@@ -1904,7 +1991,7 @@ export function InfiniteWorkflow({
         commitFrame(projectRef.current.nodes.map(item => item.id === node.id
           ? { ...item, metadata: { ...item.metadata, uploading: false } }
           : item), projectRef.current.connections);
-        setNotice(error instanceof Error ? error.message : '媒体文件替换失败');
+        setNotice(displayError(error, '媒体文件替换失败'));
       }
     }
   }, [commitFrame]);
@@ -2047,7 +2134,14 @@ export function InfiniteWorkflow({
     if (activeMedia && (ids.length !== 1 || ids[0] !== activeMedia.nodeId)) setActiveMedia(null);
     selectNodes(ids);
     if (!ids.includes(node.id) || node.isLocked) return;
-    if (target?.closest('video,audio,[data-workflow-media-preview]')) {
+    // Only native media CONTROLS should capture the pointer (an active
+    // <video controls>/<audio> scrubber genuinely consumes a drag). Passive
+    // media surfaces — an image <img>, a video poster/preview, a placeholder —
+    // must move the node on drag, matching every editor's grab-the-frame model.
+    // Previously [data-workflow-media-preview] was also excluded, which made
+    // the whole media body undraggable: dropped/inserted media nodes could be
+    // selected but never moved.
+    if (target?.closest('video,audio')) {
       setOverlayHidden(false);
       return;
     }
@@ -2060,7 +2154,9 @@ export function InfiniteWorkflow({
       frame,
       moved: false,
     };
-    setOverlayHidden(true);
+    // Don't hide the overlay yet: a plain press selects the node, and the
+    // toolbar must stay up for a click. We only hide it once the pointer
+    // actually moves into a drag — see updateInteraction's `moved` flip.
   };
 
   const isTrueBackground = (target: EventTarget | null) => {
@@ -2116,7 +2212,7 @@ export function InfiniteWorkflow({
       })), `Flovart-Workflow-${project.title}`, project.title);
       setNotice(`已按工作流顺序导出 ${count} 个媒体文件。`);
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : '批量导出失败。');
+      setNotice(displayError(error, '批量导出失败。'));
     }
   };
   const overlayBounds = selectedNodeData.length ? selectedNodeData.reduce((bounds, node) => ({
@@ -2455,8 +2551,9 @@ export function InfiniteWorkflow({
             onDelete={ids => applyOps([{ type: 'delete_nodes', ids }])}
             onExport={nodes => { void exportSelectedMedia(nodes); }}
             onRun={id => onRunNode(id)}
-            onStop={onStopNode}
+            onStop={stopNode}
             onPromptFocus={() => setPromptFocusSignal(value => value + 1)}
+            onFrameSelection={frameSelection}
             onSaveMedia={onSaveWorkflowMedia}
             onGroup={ids => applyOps([{ type: 'group_nodes', ids, batchId: nanoid(), source: 'manual' }])}
             onUngroup={ids => applyOps([{ type: 'ungroup_nodes', ids }])}
@@ -2470,7 +2567,7 @@ export function InfiniteWorkflow({
                   applyOps([{ type: 'update_node', id, metadata: { ...node.metadata, prompt } }]);
                   setPromptFocusSignal(value => value + 1);
                 })
-                .catch(error => setNotice(error instanceof Error ? error.message : '反推 Prompt 失败'));
+                .catch(error => setNotice(displayError(error, '反推 Prompt 失败')));
             } : undefined}
             imageTools={{ ...builtInImageTools, ...imageTools }}
             imageToolBusy={Boolean(imageTool || imageToolBusy || imageToolTransactionRef.current)}
@@ -2505,7 +2602,7 @@ export function InfiniteWorkflow({
           />
         </div>
         {selectedNodeData.length === 1 && selectedNodeData[0].type === 'config' && <div data-workflow-overlay style={{ position: 'absolute', zIndex: 69, left: configLeft, top: promptTop, width: 420 }} onWheel={event => event.stopPropagation()}>
-          <WorkflowConfigPanel node={selectedNodeData[0]} nodes={project.nodes} connections={project.connections} onChange={metadata => applyOps([{ type: 'update_node', id: selectedNodeData[0].id, metadata }])} onRun={() => onRunNode(selectedNodeData[0].id)} onStop={onStopNode ? () => onStopNode(selectedNodeData[0].id) : undefined} />
+          <WorkflowConfigPanel node={selectedNodeData[0]} nodes={project.nodes} connections={project.connections} onChange={metadata => applyOps([{ type: 'update_node', id: selectedNodeData[0].id, metadata }])} onRun={() => onRunNode(selectedNodeData[0].id)} onStop={() => stopNode(selectedNodeData[0].id)} />
         </div>}
         {selectedNodeData.length === 1 && ['image', 'video', 'text', 'operation'].includes(selectedNodeData[0].type) && <div data-workflow-overlay style={{ position: 'absolute', zIndex: 69, left: promptLeft, top: promptTop }}>
       <WorkflowNodePromptBar width={promptWidth} node={selectedNodeData[0]} nodes={project.nodes} connections={project.connections} t={t} theme={theme} language={language} userApiKeys={userApiKeys} dynamicModelOptions={dynamicModelOptions} onOpenSettings={onOpenSettings} onEnhancePrompt={onEnhancePrompt} isEnhancingPrompt={isEnhancingPrompt} onChange={metadata => applyOps([{ type: 'update_node', id: selectedNodeData[0].id, metadata }])} onPromptIntent={intent => { promptIntentRef.current = intent; }} onRun={() => { const intent = promptIntentRef.current?.targetNodeId === selectedNodeData[0].id ? promptIntentRef.current : undefined; promptIntentRef.current = null; onRunNode(selectedNodeData[0].id, intent || undefined); }} onStop={onStopNode ? () => onStopNode(selectedNodeData[0].id) : undefined} focusSignal={promptFocusSignal} onDisconnectReference={fromNodeId => { const targetId = selectedNodeData[0].id; const conn = project.connections.find(c => c.toNodeId === targetId && c.fromNodeId === fromNodeId); if (!conn) return; applyOps([{ type: 'delete_connections', ids: [conn.id] }]); }} onReorderReference={nextIds => handleReorderReferences(selectedNodeData[0].id, nextIds)} assetFolders={assetFolders} assetItems={assetSuggestions} assetLibrary={assetLibrary} onSelectWorkflowReference={selectedNodeData[0] ? (nodeId => handleSelectWorkflowReference(nodeId, selectedNodeData[0].id)) : undefined} onAddReferenceFiles={selectedNodeData[0] ? (files => handleAddReferenceFiles(files, selectedNodeData[0].id)) : undefined} onSelectAsset={selectedNodeData[0] ? (assetId => handleSelectAsset(assetId, selectedNodeData[0].id)) : undefined} onResolvePastedMentions={mentions => handleResolvePastedMentions(mentions, selectedNodeData[0].id)} onPasteUnresolvedMentions={labels => setNotice(`未能唯一匹配引用：${labels.map(label => `@${label}`).join('、')}，已保留为普通文字。`)} skillEnabled={false} />

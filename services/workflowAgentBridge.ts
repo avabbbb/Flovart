@@ -7,6 +7,7 @@ import { createBrowserWorkflowContract, type BrowserWorkflowContract } from './b
 import { redactWorkflowAgentValue, withWorkflowHumanApproval, type WorkflowCommandEnvelope, type WorkflowCommandResult } from './workflowDispatcher';
 import { workflowCommandSummary } from '../components/workflow/agentOps';
 import { getWorkflowOperationCapabilityByNodeTool } from '../components/workflow/operationRegistry';
+import { displayError } from './displayError';
 import { buildGenerationGateSummary, getGenerationGateDetails } from './generationGate';
 
 const RUNTIME_COMMANDS = new Set([
@@ -267,12 +268,28 @@ export class WorkflowAgentBridge {
           this.emit('tool_result', { requestId, command: envelope.command, result });
           return;
         }
+        // Gap #14 hardening — sidecar lease blind window:
+        // 入口处的 validateBrowserWorkspaceLease 只在收到 tool_call 时跑一次；
+        // confirm/confirmWrite 是异步人审，期间 lease 可能 expiresAt 过期或
+        // activeProject/clientId 被其它写入者抢占。dispatch 前必须复核一次，
+        // 否则确认通过后会带着已失效的 Lease 落写。
+        const leaseRecheck = validateBrowserWorkspaceLease(envelope, this.clientId);
+        if (leaseRecheck) {
+          result = leaseRecheck;
+          await this.post('/workflow/result', { requestId, clientId: this.clientId, result });
+          this.emit('tool_result', { requestId, command: envelope.command, result });
+          return;
+        }
         result = await this.workflowContract.dispatch(envelope);
         if (result.confirmation?.required) {
           const approved = await this.confirm(workflowConfirmationSummary(envelope));
-          result = approved
-            ? await this.workflowContract.dispatch(withWorkflowHumanApproval(envelope))
-            : { ok: false, commandId: envelope.id, error: { code: 'DENIED', message: '用户拒绝了 Workflow 变更。' } } satisfies WorkflowCommandResult;
+          // 第二道确认同样可能耗时——Lease 在批准后仍需再验一次。
+          const postApprovalLease = approved ? validateBrowserWorkspaceLease(envelope, this.clientId) : null;
+          result = !approved
+            ? { ok: false, commandId: envelope.id, error: { code: 'DENIED', message: '用户拒绝了 Workflow 变更。' } } satisfies WorkflowCommandResult
+            : postApprovalLease
+              ? postApprovalLease
+              : await this.workflowContract.dispatch(withWorkflowHumanApproval(envelope));
         }
       } else {
         if (!READ_COMMANDS.has(envelope.command) && !await this.confirm(envelope.command)) {
@@ -284,7 +301,7 @@ export class WorkflowAgentBridge {
       await this.post('/workflow/result', { requestId, clientId: this.clientId, result });
       this.emit('tool_result', { requestId, command: envelope.command, result });
     } catch (cause) {
-      const message = cause instanceof Error ? cause.message : String(cause);
+      const message = displayError(cause, 'Agent 命令执行失败。');
       try { await this.post('/workflow/result', { requestId, clientId: this.clientId, error: message }); } catch { /* SSE reconnect will surface the transport error. */ }
       this.emit('tool_result', { requestId, command: envelope.command, error: message });
     }

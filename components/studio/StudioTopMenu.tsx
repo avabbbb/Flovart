@@ -5,6 +5,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useUpdaterStore } from '../../stores/useUpdaterStore';
 import { useAgentConnectionStore } from '../../stores/useAgentConnectionStore';
 import { useWorkspaceStore } from '../../stores/useWorkspaceStore';
+import { requestWorkflowAgentDrawer } from '../workflow/agentDrawerRequest';
 import { toLocalLinkPublicStatus } from '../../tools/flovart/public-status';
 import { AuthModal } from '../auth/AuthModal';
 import type { ThemeMode } from '../../types';
@@ -272,11 +273,13 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
       </div>
 
       <nav className="studio-top-menu__modes flex min-w-0 items-center justify-center gap-0.5" aria-label={isChinese ? '工作区' : 'Workspace'}>
-        {(['workflow', 'agent'] as const).map(tabMode => {
-          const isActive = mode === tabMode;
-          const label = tabMode === 'workflow'
-            ? (isChinese ? '工作流' : 'Workflow')
-            : 'Agent';
+        {/* Agent is a verb that operates on the workflow, not a peer surface —
+            it lives in the global right drawer. Only the Workflow noun is a
+            top-level mode now; rendering 'agent' here used to unmount the
+            canvas entirely (IA gap #1). */}
+        {(['workflow'] as const).map(tabMode => {
+          const isActive = mode === tabMode || mode === 'agent';
+          const label = isChinese ? '工作流' : 'Workflow';
           return (
             <button
               key={tabMode}
@@ -339,11 +342,11 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
           data-testid="agent-connection-status"
           className="isl-icon-btn flex h-8 items-center gap-1.5 px-2"
           title={isChinese
-            ? `Agent ${agentLabel} — 打开工作区查看`
-            : `Agent ${agentLabel} — open workspace`}
+            ? `Agent ${agentLabel} — 打开助手面板`
+            : `Agent ${agentLabel} — open assistant panel`}
           aria-label={agentLabel}
           style={{ color: agentColor }}
-          onClick={() => { useWorkspaceStore.getState().setActiveView('agent'); navigate('/app'); }}
+          onClick={() => { requestWorkflowAgentDrawer(); navigate('/app'); }}
         >
           <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full" style={{ background: agentColor }} />
           <span className="hidden whitespace-nowrap text-[11px] font-semibold xl:inline">{agentLabel}</span>

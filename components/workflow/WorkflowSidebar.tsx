@@ -30,6 +30,13 @@ export interface WorkflowSidebarProps {
   /** 本地文件夹直读：只把用户选中的条目放进画布。 */
   onInsertLocalFolderEntries?: (entries: LocalFolderEntry[]) => void | Promise<void>;
   tabRequest?: { tab: SidebarTab; nonce: number };
+  /** 图层点击后让画布聚焦到该节点（select+reveal 一体，避免选中画布外节点不可见）。 */
+  onFocusNode?: (nodeId: string) => void;
+  /**
+   * Docked = 常驻侧栏参与 flex 布局、画布为之让位，也不再有点外部自动收起；
+   * 默认（false）维持旧的 transient 浮层行为（窄视口下仍然覆盖画布）。
+   */
+  docked?: boolean;
 }
 
 type SidebarTab = 'layers' | 'assets' | 'localFolder';
@@ -64,6 +71,8 @@ export const WorkflowSidebar: React.FC<WorkflowSidebarProps> = ({
   onRemoveFolder,
   onInsertLocalFolderEntries,
   tabRequest,
+  onFocusNode,
+  docked = false,
 }) => {
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [tab, setTab] = useState<SidebarTab>('layers');
@@ -74,9 +83,9 @@ export const WorkflowSidebar: React.FC<WorkflowSidebarProps> = ({
     if (tabRequest) setTab(tabRequest.tab);
   }, [tabRequest]);
 
-  // 点外部收起
+  // 点外部收起：仅 transient 浮层模式需要；docked 常驻侧栏不自动收起。
   useEffect(() => {
-    if (!open) return;
+    if (!open || docked) return;
     const onClick = (event: MouseEvent) => {
       const target = event.target as Node;
       if (panelRef.current && !panelRef.current.contains(target) && triggerRef.current && !triggerRef.current.contains(target)) {
@@ -85,7 +94,7 @@ export const WorkflowSidebar: React.FC<WorkflowSidebarProps> = ({
     };
     document.addEventListener('mousedown', onClick);
     return () => document.removeEventListener('mousedown', onClick);
-  }, [open, onOpenChange]);
+  }, [docked, open, onOpenChange]);
 
   const patchNode = (id: string, patch: Partial<WorkflowNode>) => {
     if (!project) return;
@@ -122,12 +131,21 @@ export const WorkflowSidebar: React.FC<WorkflowSidebarProps> = ({
         <PanelLeftClose size={18} className="rotate-180" />
       </button>
 
-      {/* 弹出浮层 */}
+      {/* 弹出浮层 / 常驻侧栏 */}
       {open && (
         <aside
           ref={panelRef}
-          className="workflow-sidebar theme-aware absolute z-40 flex min-h-0 flex-col overflow-hidden rounded-2xl border-[1.5px]"
-          style={{
+          className={`workflow-sidebar theme-aware ${docked ? 'relative self-stretch' : 'absolute'} z-40 flex min-h-0 flex-col overflow-hidden rounded-2xl border-[1.5px]`}
+          style={docked ? {
+            // In-flow dock：aside 参与 .workflow-workspace 的 flex 行，画布为之让位，
+            // 图层点击后聚焦的节点不会被浮层遮住。
+            flex: '0 0 auto',
+            width: `clamp(200px, 19vw, 300px)`,
+            margin: outerGap,
+            background: 'var(--isl-card)',
+            borderColor: 'var(--isl-border)',
+            boxShadow: 'var(--isl-shadow-lg)',
+          } : {
             top: outerGap,
             left: outerGap,
             bottom: outerGap,
@@ -207,7 +225,11 @@ export const WorkflowSidebar: React.FC<WorkflowSidebarProps> = ({
                       onDragStart={event => { event.dataTransfer.setData('text/plain', node.id); event.dataTransfer.effectAllowed = 'move'; setDraggedId(node.id); }}
                       onDragOver={event => event.preventDefault()}
                       onDrop={() => reorder(node.id)}
-                      onClick={() => project && onProjectChange({ selectedNodeIds: [node.id] })}
+                      onClick={() => {
+                        if (!project) return;
+                        if (onFocusNode) onFocusNode(node.id);
+                        else onProjectChange({ selectedNodeIds: [node.id] });
+                      }}
                       className={`workflow-layer-card group mb-0.5 flex h-9 items-center gap-1.5 rounded-lg pl-1 pr-1.5 text-xs transition-colors duration-150 ${selected ? 'workflow-layer-card--selected' : ''}`}
                       style={{ color: 'var(--isl-ink)' }}
                       title={node.title}

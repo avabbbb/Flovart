@@ -6,6 +6,7 @@ import {
   prepareAgentHostProjection,
 } from '../agentHostDiscovery';
 import { defineFlovartHost, type FlovartHostDefinition, type FlovartHostKind, type FlovartHostLifecycleAdapter } from './hostDefinition';
+import { displayError } from '../displayError';
 
 const kindOf = (category: string): FlovartHostKind => {
   if (category === 'harness') return 'native-plugin';
@@ -42,7 +43,7 @@ function defaultLifecycle(id: string): Partial<FlovartHostLifecycleAdapter> {
           const result = await prepareAgentHostProjection(id);
           return result.ok ? { ok: true } : { ok: false, error: { code: 'HOST_NEEDS_SETUP', message: '协作助手尚未准备完成。' } };
         } catch (error) {
-          return { ok: false, error: { code: 'HOST_NEEDS_SETUP', message: error instanceof Error ? error.message : '协作助手尚未准备完成。' } };
+          return { ok: false, error: { code: 'HOST_NEEDS_SETUP', message: displayError(error, '协作助手尚未准备完成。') } };
         }
       },
       activate: async () => {
@@ -50,7 +51,7 @@ function defaultLifecycle(id: string): Partial<FlovartHostLifecycleAdapter> {
           const result = await activateAgentHost(id);
           return { ok: true, projectId: result.activeHostWriter?.projectId || null };
         } catch (error) {
-          return { ok: false, error: { code: 'LINK_OFFLINE', message: error instanceof Error ? error.message : '协作助手暂时无法激活。' } };
+          return { ok: false, error: { code: 'LINK_OFFLINE', message: displayError(error, '协作助手暂时无法激活。') } };
         }
       },
     } : {}),

@@ -1,4 +1,4 @@
-import { AtSign, Box, Check, Circle, Hand, History, Image as ImageIcon, Plus, RotateCw, Send, Settings2, ShieldCheck, Square, Trash2, Video, WandSparkles, X } from 'lucide-react';
+import { AtSign, Box, Check, Circle, Hand, History, Image as ImageIcon, KeyRound, LayoutGrid, Plus, RotateCw, Send, Settings2, ShieldCheck, Square, Trash2, Video, WandSparkles, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getManagedAgentConnection } from '../../services/managedAgentConnection';
 import {
@@ -20,6 +20,11 @@ import {
 import { createLocalSkillRegistry } from '../../services/localSkillRegistry';
 import { consumePendingProductionSkill } from '../../stores/useProductionSkillComposerStore';
 import { BrowserAgentKernel, createBrowserAgentTools, resolveBrowserAgentTextRoute } from '../../services/browserAgentKernel';
+import { displayError as toDisplayError } from '../../services/displayError';
+import { agentSetupMessage, classifyAgentSetupError, type AgentSetupBlocker } from '../../services/runtimeHealth';
+import { useWorkspaceStore } from '../../stores/useWorkspaceStore';
+import { translations } from '../../utils/translations';
+import { COMMUNITY_WORKFLOWS } from '../landing/communityTypes';
 import type { AssetLibrary, UserApiKey } from '../../types';
 
 interface FlovartAgentPanelProps {
@@ -47,8 +52,8 @@ function isAgentTextConfigurationError(error?: string) {
     || message.includes('no configured agent-text credential');
 }
 
-function displayError(error: string) {
-  return isAgentTextConfigurationError(error) ? AGENT_TEXT_CONFIGURATION_MESSAGE : error;
+function agentMessageText(error: string) {
+  return isAgentTextConfigurationError(error) ? AGENT_TEXT_CONFIGURATION_MESSAGE : toDisplayError(error);
 }
 
 function formatSessionTime(value: string) {
@@ -73,7 +78,7 @@ function displayMessages(snapshot: {
   return snapshot.messages.map(message => ({
     id: message.id,
     role: (message.error ? 'error' : message.role) as WorkflowAgentDisplayMessage['role'],
-    text: message.error ? displayError(message.error) : message.text,
+    text: message.error ? agentMessageText(message.error) : message.text,
     title: message.role === 'tool' ? message.toolName : undefined,
     status: message.role === 'tool' ? message.isError ? 'error' : 'success' : undefined,
     createdAt: message.timestamp ? new Date(message.timestamp).toISOString() : undefined,
@@ -123,6 +128,23 @@ export function FlovartAgentPanel({ project, onActivityChange, onOpenSettings, a
   const [sessionsOpen, setSessionsOpen] = useState(false);
   const [sessionList, setSessionList] = useState<Array<{ id: string; title: string; updatedAt: string }>>([]);
   const [activeSessionId, setActiveSessionId] = useState('');
+  // Lane15 first-run UX: `setupBlocker` classifies a cold-open/send failure via
+  // the executor taxonomy (runtimeHealth) instead of raw strings, so the panel
+  // can render a real next step ('Add API key' / 'browse offline') instead of a
+  // jargon dead end. `browseFirst` is the offline-mode escape: it suppresses the
+  // blocker card and surfaces templates/recent sessions above the composer.
+  const [setupBlocker, setSetupBlocker] = useState<AgentSetupBlocker | null>(null);
+  const [browseFirst, setBrowseFirst] = useState(false);
+  const language = useWorkspaceStore(s => s.language);
+  const t = useCallback((key: string, ...args: number[]): string => {
+    const dict = translations[language] || translations.en;
+    const value = key.split('.').reduce<unknown>((current, part) => {
+      if (!current || typeof current !== 'object' || !(part in current)) return undefined;
+      return (current as Record<string, unknown>)[part];
+    }, dict as unknown);
+    if (typeof value === 'function') return String(value(...args));
+    return value === undefined ? key : String(value);
+  }, [language]);
 
   const referenceGroups = useMemo(() => {
     const query = mentionQuery.trim().toLowerCase();
@@ -225,6 +247,7 @@ export function FlovartAgentPanel({ project, onActivityChange, onOpenSettings, a
     kernelRef.current = undefined;
     setConfirmation(undefined);
     setStatus('connecting');
+    setSetupBlocker(null);
 
     const startBrowserKernel = async () => {
       const route = resolveBrowserAgentTextRoute(userApiKeysRef.current);
@@ -233,6 +256,7 @@ export function FlovartAgentPanel({ project, onActivityChange, onOpenSettings, a
         setStatus('ready');
         setWorkspaceStatus('ready');
         setNeedsConfiguration(true);
+        setSetupBlocker('credential');
         setMessages([{ id: 'agent-text-config', role: 'error', text: AGENT_TEXT_CONFIGURATION_MESSAGE }]);
         activity.current('error');
         return;
@@ -263,6 +287,7 @@ export function FlovartAgentPanel({ project, onActivityChange, onOpenSettings, a
       setStatus('ready');
       setWorkspaceStatus('ready');
       setNeedsConfiguration(false);
+      setSetupBlocker(null);
       activity.current(snapshot.messages.length ? 'done' : 'idle');
       void refreshSessions();
     };
@@ -307,14 +332,19 @@ export function FlovartAgentPanel({ project, onActivityChange, onOpenSettings, a
         setStatus('ready');
         const configurationNeeded = snapshotNeedsConfiguration(snapshot);
         setNeedsConfiguration(configurationNeeded);
+        setSetupBlocker(configurationNeeded ? 'credential' : null);
         activity.current(configurationNeeded ? 'error' : snapshot.messages.length ? 'done' : 'idle');
       })
       .catch(error => {
         if (!active) return;
+        // Cold-open failure: classify via the executor/host taxonomy so the
+        // panel can offer a real next step instead of a jargon dead end.
+        const blocker = classifyAgentSetupError(error);
         setStatus('error');
         setWorkspaceStatus('error');
-        setNeedsConfiguration(false);
-        setMessages([{ id: 'connection-error', role: 'error', text: errorMessage(error) }]);
+        setNeedsConfiguration(blocker === 'credential');
+        setSetupBlocker(blocker === 'unknown' ? 'offline' : blocker);
+        setMessages([{ id: 'connection-error', role: 'error', text: agentSetupMessage(blocker === 'unknown' ? 'offline' : blocker, error) }]);
         activity.current('error');
       });
     return () => {
@@ -452,8 +482,14 @@ export function FlovartAgentPanel({ project, onActivityChange, onOpenSettings, a
         status: event.isError ? 'error' : 'success',
       } : item));
     } else if (event.type === 'error') {
-      setNeedsConfiguration(isAgentTextConfigurationError(event.message));
-      setMessages(items => [...items, { id: crypto.randomUUID(), role: 'error', text: displayError(event.message) }]);
+      // Mid-turn errors are usually transient; only a credential wall earns the
+      // guided-action card — everything else stays a plain message.
+      const blocker = classifyAgentSetupError(event.message);
+      if (blocker === 'credential' || isAgentTextConfigurationError(event.message)) {
+        setNeedsConfiguration(true);
+        setSetupBlocker('credential');
+      }
+      setMessages(items => [...items, { id: crypto.randomUUID(), role: 'error', text: agentMessageText(event.message) }]);
     }
   };
 
@@ -461,7 +497,12 @@ export function FlovartAgentPanel({ project, onActivityChange, onOpenSettings, a
     const text = prompt.trim();
     if ((!text && references.length === 0) || sending) return;
     if (!client.current && !kernelRef.current) {
-      setMessages(items => [...items, { id: crypto.randomUUID(), role: 'error', text: 'Flovart Agent 未连接：仅桌面端可用。' }]);
+      // Agents-offline / credential wall: never dump '仅桌面端可用'. When the
+      // missing piece is an agent-text route the blocker is credential (a key
+      // fixes it); otherwise the managed host is simply not running (offline).
+      const blocker: AgentSetupBlocker = needsConfiguration ? 'credential' : 'offline';
+      setSetupBlocker(blocker);
+      setMessages(items => [...items, { id: crypto.randomUUID(), role: 'error', text: agentSetupMessage(blocker) }]);
       return;
     }
     const referenceContext = references.length ? `引用上下文：\n${references.map(reference => `- @${reference.label}（${reference.type === 'node' ? `工作流节点 nodeId=${reference.id}` : `我的素材 assetId=${reference.id}`}）`).join('\n')}` : '';
@@ -475,6 +516,7 @@ export function FlovartAgentPanel({ project, onActivityChange, onOpenSettings, a
     setSending(true);
     setStatus('ready');
     setNeedsConfiguration(false);
+    setSetupBlocker(null);
     activity.current('running');
     const controller = new AbortController();
     abort.current = controller;
@@ -496,8 +538,12 @@ export function FlovartAgentPanel({ project, onActivityChange, onOpenSettings, a
     } catch (error) {
       if (!controller.signal.aborted) {
         const message = errorMessage(error);
-        setNeedsConfiguration(isAgentTextConfigurationError(message));
-        setMessages(items => [...items, { id: crypto.randomUUID(), role: 'error', text: displayError(message) }]);
+        const blocker = classifyAgentSetupError(error);
+        if (blocker === 'credential' || isAgentTextConfigurationError(message)) {
+          setNeedsConfiguration(true);
+          setSetupBlocker('credential');
+        }
+        setMessages(items => [...items, { id: crypto.randomUUID(), role: 'error', text: agentMessageText(message) }]);
         activity.current('error');
       }
     } finally {
@@ -548,28 +594,28 @@ export function FlovartAgentPanel({ project, onActivityChange, onOpenSettings, a
   return (
     <div ref={rootRef} className="workflow-agent is-embedded agent-conversation">
       <header className="workflow-agent__utility agent-conversation__header">
-        <strong>对话</strong>
+        <strong>{t('agentPanel.title')}</strong>
         <span className={`workflow-agent__status is-${needsConfiguration || workspaceStatus === 'error' ? 'error' : status === 'ready' && workspaceStatus === 'ready' ? 'connected' : status}`}>
-          <Circle size={8} />{status === 'connecting' ? '连接中' : status === 'error' ? '连接失败' : needsConfiguration ? '需要配置' : workspaceStatus === 'error' ? '工作区断开' : workspaceStatus !== 'ready' ? '同步工作区' : '已就绪'}
+          <Circle size={8} />{status === 'connecting' ? t('agentPanel.statusConnecting') : status === 'error' ? t('agentPanel.statusError') : needsConfiguration ? t('agentPanel.statusNeedConfig') : workspaceStatus === 'error' ? t('agentPanel.statusWorkspaceDisconnected') : workspaceStatus !== 'ready' ? t('agentPanel.statusSyncing') : t('agentPanel.statusReady')}
         </span>
-        {needsConfiguration && <button type="button" className="ml-2 flex items-center gap-1 text-[9px] font-semibold" onClick={onOpenSettings}><Settings2 size={10} />打开模型映射</button>}
+        {needsConfiguration && <button type="button" className="ml-2 flex items-center gap-1 text-[9px] font-semibold" onClick={onOpenSettings}><Settings2 size={10} />{t('agentPanel.openModelMapping')}</button>}
         <span className="agent-conversation__history ml-auto">
           <button
             type="button"
-            aria-label="历史对话"
+            aria-label={t('agentPanel.history')}
             aria-expanded={sessionsOpen}
-            title="历史对话"
+            title={t('agentPanel.history')}
             onClick={() => { setSessionsOpen(open => !open); if (!sessionsOpen) void refreshSessions(); }}
           ><History size={13} />{sessionList.length ? `${sessionList.length}` : ''}</button>
           {sessionsOpen && (
-            <div className="agent-session-menu" role="menu" aria-label="历史对话列表">
-              <button type="button" role="menuitem" onClick={() => void handleNewConversation()}><Plus size={14} /><span><strong>新对话</strong><small>开启一段全新会话</small></span></button>
+            <div className="agent-session-menu" role="menu" aria-label={t('agentPanel.history')}>
+              <button type="button" role="menuitem" onClick={() => void handleNewConversation()}><Plus size={14} /><span><strong>{t('agentPanel.newChat')}</strong><small>{t('agentPanel.newChatHint')}</small></span></button>
               <div className="agent-session-menu__list">
-                {sessionList.length === 0 && <p className="agent-session-menu__empty">暂无历史对话</p>}
+                {sessionList.length === 0 && <p className="agent-session-menu__empty">{t('agentPanel.noHistory')}</p>}
                 {sessionList.map(session => (
                   <div key={session.id} className={`agent-session-menu__item${session.id === activeSessionId ? ' is-active' : ''}`}>
                     <button type="button" role="menuitem" onClick={() => void handleOpenSession(session.id)}>
-                      <strong>{session.title || '新对话'}</strong>
+                      <strong>{session.title || t('agentPanel.newChat')}</strong>
                       <small>{formatSessionTime(session.updatedAt)}</small>
                     </button>
                     <button type="button" aria-label={`删除对话 ${session.title}`} onClick={() => void handleDeleteSession(session.id)}><Trash2 size={12} /></button>
@@ -582,6 +628,25 @@ export function FlovartAgentPanel({ project, onActivityChange, onOpenSettings, a
       </header>
       <section className="workflow-agent__body">
         <div className="agent-conversation__messages"><WorkflowAgentMessages messages={messages} running={sending} /></div>
+        {setupBlocker && !browseFirst && (
+          <div role="alert" data-testid="agent-setup-card" className="mx-3 mb-2 rounded-xl border px-3 py-2.5" style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-surface-2)' }}>
+            <p style={{ margin: 0, fontSize: 12, lineHeight: 1.7, color: 'var(--isl-ink-soft)' }}>{agentSetupMessage(setupBlocker)}</p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
+              <button type="button" onClick={onOpenSettings} className="isl-chip flex items-center gap-1 px-3 py-1.5 text-xs font-semibold" style={{ color: 'var(--isl-mint-deep)' }}><KeyRound size={13} />{t('agentPanel.addApiKey')} →</button>
+              <button type="button" onClick={() => setBrowseFirst(true)} className="isl-chip flex items-center gap-1 px-3 py-1.5 text-xs font-semibold"><LayoutGrid size={13} />{t('agentPanel.tryOffline')} →</button>
+            </div>
+          </div>
+        )}
+        <BrowseFirstDeck
+          visible={!messages.some(message => message.role === 'user' || message.role === 'assistant' || message.role === 'tool')}
+          expanded={browseFirst || project.nodes.length === 0}
+          sessions={sessionList}
+          activeSessionId={activeSessionId}
+          onOpenSession={id => void handleOpenSession(id)}
+          onPickTemplate={value => { setPrompt(value); window.requestAnimationFrame(() => textarea.current?.focus()); }}
+          offline={browseFirst}
+          t={t}
+        />
         {!messages.some(message => message.role === 'user' || message.role === 'assistant' || message.role === 'tool') && !skillAttachment && <ProductionSkillDeck
           attachment={skillAttachment}
           onChange={value => { skillAttachmentDirty.current = true; setSkillAttachment(value); }}
@@ -589,7 +654,7 @@ export function FlovartAgentPanel({ project, onActivityChange, onOpenSettings, a
           onPromptChange={setPrompt}
           showWelcome
         />}
-        {confirmation && <div className="workflow-agent__confirm"><strong>Agent 请求确认</strong><p>{confirmation.summary}</p><div><button type="button" onClick={() => { confirmationRef.current = undefined; confirmation.resolve(false); setConfirmation(undefined); activity.current('running'); }}>拒绝</button><button type="button" onClick={() => { confirmationRef.current = undefined; confirmation.resolve(true); setConfirmation(undefined); activity.current('running'); }}>允许</button></div></div>}
+        {confirmation && <div className="workflow-agent__confirm"><strong>{t('agentPanel.confirmTitle')}</strong><p>{confirmation.summary}</p><div><button type="button" onClick={() => { confirmationRef.current = undefined; confirmation.resolve(false); setConfirmation(undefined); activity.current('running'); }}>{t('agentPanel.deny')}</button><button type="button" onClick={() => { confirmationRef.current = undefined; confirmation.resolve(true); setConfirmation(undefined); activity.current('running'); }}>{t('agentPanel.allow')}</button></div></div>}
         <div ref={composer} className="workflow-agent__composer">
           <ProductionSkillDeck attachment={skillAttachment} onChange={value => { skillAttachmentDirty.current = true; setSkillAttachment(value); }} dropTargetRef={composer} />
           {mentionOpen && <div className="agent-reference-picker" role="listbox" aria-label="@ 引用节点和资产">
@@ -616,46 +681,46 @@ export function FlovartAgentPanel({ project, onActivityChange, onOpenSettings, a
                 void send();
               }
             }}
-            placeholder={needsConfiguration ? '请先配置 Agent 文本模型映射' : status === 'ready' ? '告诉 Flovart Agent 你想制作什么' : 'Flovart Agent 连接失败'}
-            aria-label="开始你的创作，或者 @ 引用工作流/节点/资源"
+            placeholder={needsConfiguration ? t('agentPanel.composerNeedConfig') : status === 'ready' ? t('agentPanel.composerPlaceholder') : t('agentPanel.composerOffline')}
+            aria-label={t('agentPanel.composerAria')}
             disabled={status === 'connecting'}
           />
           <div className="agent-composer__controls">
             <div className="agent-composer__tools">
               <div className="agent-attachment-control">
-                <button type="button" aria-label="添加附件" aria-expanded={attachmentOpen} onClick={() => { setAttachmentOpen(open => !open); setMentionOpen(false); }}><Plus size={17} /></button>
-                {attachmentOpen && <div className="agent-attachment-menu" role="menu" aria-label="添加引用">
-                  <button type="button" role="menuitem" onClick={() => openReferencePicker('node')}><Box size={15} /><span><strong>引用工作流节点</strong><small>从当前画布选择</small></span></button>
-                  <button type="button" role="menuitem" onClick={() => openReferencePicker('asset')}><ImageIcon size={15} /><span><strong>从我的素材添加</strong><small>{assetLibrary?.items.length || 0} 个本地资产</small></span></button>
+                <button type="button" aria-label={t('agentPanel.addAttachment')} aria-expanded={attachmentOpen} onClick={() => { setAttachmentOpen(open => !open); setMentionOpen(false); }}><Plus size={17} /></button>
+                {attachmentOpen && <div className="agent-attachment-menu" role="menu" aria-label={t('agentPanel.addAttachment')}>
+                  <button type="button" role="menuitem" onClick={() => openReferencePicker('node')}><Box size={15} /><span><strong>{t('agentPanel.referenceNodes')}</strong><small>{t('agentPanel.referenceNodesHint')}</small></span></button>
+                  <button type="button" role="menuitem" onClick={() => openReferencePicker('asset')}><ImageIcon size={15} /><span><strong>{t('agentPanel.referenceAssets')}</strong><small>{t('agentPanel.referenceAssetCount', assetLibrary?.items.length || 0)}</small></span></button>
                 </div>}
               </div>
               <div className="agent-mode-control">
-                <button type="button" aria-label="制作上下文" aria-expanded={infoPanel === 'context'} title="查看当前项目上下文" onClick={() => setInfoPanel(panel => panel === 'context' ? null : 'context')}><WandSparkles size={16} /></button>
-                {infoPanel === 'context' && <div className="agent-mode-menu" role="dialog" aria-label="制作上下文">
+                <button type="button" aria-label={t('agentPanel.productionContext')} aria-expanded={infoPanel === 'context'} title={t('agentPanel.productionContext')} onClick={() => setInfoPanel(panel => panel === 'context' ? null : 'context')}><WandSparkles size={16} /></button>
+                {infoPanel === 'context' && <div className="agent-mode-menu" role="dialog" aria-label={t('agentPanel.productionContext')}>
                   <div style={{ padding: '10px 12px' }}>
                     <strong style={{ display: 'block', fontSize: 13 }}>{project.title}</strong>
                     <div style={{ display: 'flex', gap: 14, marginTop: 8 }}>
-                      {[[project.nodes.length, '节点'], [project.connections.length, '连接'], [(project.draftChangeSets || []).length, '变更']].map(([value, label]) => <span key={String(label)} style={{ fontSize: 11, color: 'var(--isl-ink-soft)' }}><b style={{ display: 'block', fontSize: 15, color: 'var(--isl-ink)' }}>{value}</b>{label}</span>)}
+                      {[[project.nodes.length, t('agentPanel.nodes')], [project.connections.length, t('agentPanel.connections')], [(project.draftChangeSets || []).length, t('agentPanel.changes')]].map(([value, label]) => <span key={String(label)} style={{ fontSize: 11, color: 'var(--isl-ink-soft)' }}><b style={{ display: 'block', fontSize: 15, color: 'var(--isl-ink)' }}>{value}</b>{label}</span>)}
                     </div>
                     <p style={{ margin: '10px 0 0', fontSize: 10, lineHeight: 1.6, color: 'var(--isl-ink-ghost)' }}>Agent 自动读取当前 Workflow Draft，可逆操作直接进入画布时间线，无需手动同步。</p>
                   </div>
                 </div>}
               </div>
               <div className="agent-mode-control">
-                <button type="button" aria-label="安全边界" aria-expanded={infoPanel === 'safety'} title="查看确认策略" onClick={() => setInfoPanel(panel => panel === 'safety' ? null : 'safety')}><ShieldCheck size={16} /></button>
-                {infoPanel === 'safety' && <div className="agent-mode-menu" role="dialog" aria-label="安全边界">
+                <button type="button" aria-label={t('agentPanel.safetyBoundary')} aria-expanded={infoPanel === 'safety'} title={t('agentPanel.confirmPolicy')} onClick={() => setInfoPanel(panel => panel === 'safety' ? null : 'safety')}><ShieldCheck size={16} /></button>
+                {infoPanel === 'safety' && <div className="agent-mode-menu" role="dialog" aria-label={t('agentPanel.safetyBoundary')}>
                   <div style={{ padding: '10px 12px' }}>
-                    <strong style={{ display: 'block', fontSize: 13 }}>确认策略</strong>
+                    <strong style={{ display: 'block', fontSize: 13 }}>{t('agentPanel.confirmPolicy')}</strong>
                     <p style={{ margin: '8px 0 0', fontSize: 10, lineHeight: 1.7, color: 'var(--isl-ink-soft)' }}>{mode === 'manual' ? '手动模式：每个 Workflow 写操作都会先询问。' : '自动模式：可逆操作自动推进；'}<br />删除、付费生成、Production 批准/运行、任务取消<b style={{ color: 'var(--isl-ink)' }}>始终需要确认</b>。</p>
                   </div>
                 </div>}
               </div>
-              <button type="button" aria-label="重新同步" title="重新同步" onClick={() => void workspaceBridge.current?.pushSnapshot(project).catch(() => setWorkspaceStatus('error'))}><RotateCw size={15} /></button>
+              <button type="button" aria-label={t('agentPanel.resync')} title={t('agentPanel.resync')} onClick={() => void workspaceBridge.current?.pushSnapshot(project).catch(() => setWorkspaceStatus('error'))}><RotateCw size={15} /></button>
               <div className="agent-mode-control">
-                <button type="button" aria-label="生成模式" aria-expanded={modeOpen} onClick={() => setModeOpen(value => !value)}>{mode === 'manual' ? <Hand size={15} /> : <RotateCw size={15} />}<span>{mode === 'manual' ? '手动' : '自动'}</span></button>
-                {modeOpen && <div className="agent-mode-menu" role="menu" aria-label="生成模式">
-                  <button type="button" role="menuitem" aria-pressed={mode === 'manual'} onClick={() => { modeRef.current = 'manual'; setMode('manual'); setModeOpen(false); }}><Hand size={17} /><span><strong>手动模式</strong><small>每个写操作前询问</small></span>{mode === 'manual' && <Check size={15} />}</button>
-                  <button type="button" role="menuitem" aria-pressed={mode === 'auto'} onClick={() => { modeRef.current = 'auto'; setMode('auto'); setModeOpen(false); }}><RotateCw size={17} /><span><strong>自动模式</strong><small>可逆操作自动推进；付费、删除仍确认</small></span>{mode === 'auto' && <Check size={15} />}</button>
+                <button type="button" aria-label={t('agentPanel.generationMode')} aria-expanded={modeOpen} onClick={() => setModeOpen(value => !value)}>{mode === 'manual' ? <Hand size={15} /> : <RotateCw size={15} />}<span>{mode === 'manual' ? t('agentPanel.manualMode') : t('agentPanel.autoMode')}</span></button>
+                {modeOpen && <div className="agent-mode-menu" role="menu" aria-label={t('agentPanel.generationMode')}>
+                  <button type="button" role="menuitem" aria-pressed={mode === 'manual'} onClick={() => { modeRef.current = 'manual'; setMode('manual'); setModeOpen(false); }}><Hand size={17} /><span><strong>{t('agentPanel.manualMode')}</strong><small>{t('agentPanel.manualModeHint')}</small></span>{mode === 'manual' && <Check size={15} />}</button>
+                  <button type="button" role="menuitem" aria-pressed={mode === 'auto'} onClick={() => { modeRef.current = 'auto'; setMode('auto'); setModeOpen(false); }}><RotateCw size={17} /><span><strong>{t('agentPanel.autoMode')}</strong><small>{t('agentPanel.autoModeHint')}</small></span>{mode === 'auto' && <Check size={15} />}</button>
                 </div>}
               </div>
             </div>
@@ -673,4 +738,74 @@ function ReferenceGroup({ label, items, onSelect, icon, empty }: { label: string
   return <section className="agent-reference-group"><strong>{label}</strong>{items.length
     ? items.slice(0, 12).map(item => <button type="button" role="option" key={`${item.type}:${item.id}`} onClick={() => onSelect(item)}>{icon(item)}<span>{item.label}</span><small>{item.type === 'node' ? item.mediaType : item.mediaType?.replace(/^\w+\//, '')}</small></button>)
     : <p>{empty}</p>}</section>;
+}
+
+
+/**
+ * Browse-first strip (gap #9): a first-run user lands on a creation form with
+ * nothing to react to. Before the composer this shows two zero-commitment
+ * entries — recent sessions to reopen, and the built-in community template
+ * gallery — each click prefills a starting brief instead of demanding a prompt
+ * from scratch. Renders only while the conversation is empty; `expanded` marks
+ * the first-run case (zero-node project or explicit offline browsing).
+ */
+function BrowseFirstDeck({ visible, expanded, sessions, activeSessionId, onOpenSession, onPickTemplate, offline, t }: {
+  visible: boolean;
+  expanded: boolean;
+  sessions: Array<{ id: string; title: string; updatedAt: string }>;
+  activeSessionId: string;
+  onOpenSession: (id: string) => void;
+  onPickTemplate: (brief: string) => void;
+  offline: boolean;
+  t: (key: string, ...args: number[]) => string;
+}) {
+  if (!visible || !expanded) return null;
+  const templates = COMMUNITY_WORKFLOWS.slice(0, 4);
+  return (
+    <section aria-label={t('browse.title')} data-testid="agent-browse-first" className="mx-3 mb-2 rounded-xl border px-3 py-2.5" style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-surface)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <LayoutGrid size={15} style={{ color: 'var(--isl-mint-deep)', flexShrink: 0 }} />
+        <div style={{ minWidth: 0 }}>
+          <strong style={{ display: 'block', fontSize: 12, color: 'var(--isl-ink)' }}>{offline ? t('browse.offlineMode') : t('browse.title')}</strong>
+          <small style={{ fontSize: 10, color: 'var(--isl-ink-ghost)' }}>{offline ? t('browse.offlineHint') : t('browse.subtitle')}</small>
+        </div>
+      </div>
+      {sessions.length > 0 && (
+        <div style={{ marginTop: 8 }} aria-label={t('browse.recent')}>
+          <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--isl-ink-ghost)' }}>{t('browse.recent')}</span>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+            {sessions.slice(0, 3).map(session => (
+              <button
+                key={session.id}
+                type="button"
+                className="isl-chip flex items-center gap-1 px-2 py-1 text-[11px]"
+                style={session.id === activeSessionId ? { color: 'var(--isl-mint-deep)' } : undefined}
+                onClick={() => onOpenSession(session.id)}
+              >
+                <History size={12} />
+                <span>{session.title || t('agentPanel.newChat')}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      <div style={{ marginTop: 8 }} aria-label={t('browse.templates')}>
+        <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--isl-ink-ghost)' }}>{t('browse.templates')}</span>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 6, marginTop: 4 }}>
+          {templates.map(item => (
+            <button
+              key={item.id}
+              type="button"
+              title={`${t('browse.useTemplate')}：${item.title}`}
+              onClick={() => onPickTemplate(`${item.title}：${item.description || item.workflowJson.nodes.map(node => node.metadata?.prompt || '').filter(Boolean)[0] || ''}`)}
+              style={{ background: item.gradient, border: 0, borderRadius: 9, padding: '10px 10px 8px', textAlign: 'left', color: '#fff', cursor: 'pointer' }}
+            >
+              <span style={{ display: 'block', fontSize: 11, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.title}</span>
+              <small style={{ fontSize: 9, opacity: 0.85 }}>{item.author.name}</small>
+            </button>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
 }

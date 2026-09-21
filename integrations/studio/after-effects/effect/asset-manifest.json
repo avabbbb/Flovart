@@ -1,0 +1,68 @@
+{
+  "effect": {
+    "name": "Flovart Scene Replace",
+    "matchName": "FLOVART_SceneReplace",
+    "category": "Flovart",
+    "entryPoint": "EffectMain",
+    "singleEntryPoint": "FlovartEffect.cpp",
+    "product": "after-effects",
+    "targetSdk": "After Effects C++ Effect SDK (version pinned at real-host gate)",
+    "buildStatus": "needs-native-sdk",
+    "description": "Renders one pinned local asset blended over the current frame. Milestone-1 skeleton: not compiled on this machine; see NATIVE_EFFECT.md for the External Gate checklist."
+  },
+  "parameters": [
+    {
+      "id": 1,
+      "symbol": "FLOVART_PARAM_ASSET_PATH",
+      "name": "Asset Path",
+      "type": "path",
+      "persisted": true,
+      "keyframable": false,
+      "default": null,
+      "role": "Pinned local media file decoded for the current frame. Written by the generation pipeline; the render path only reads it."
+    },
+    {
+      "id": 2,
+      "symbol": "FLOVART_PARAM_BLEND",
+      "name": "Blend",
+      "type": "float-slider",
+      "persisted": true,
+      "keyframable": true,
+      "min": 0,
+      "max": 100,
+      "default": 100,
+      "precision": "hundredths",
+      "role": "Mix intensity: 0 shows the original frame, 100 shows the asset."
+    },
+    {
+      "id": 3,
+      "symbol": "FLOVART_PARAM_VERSION",
+      "name": "Version",
+      "type": "int-slider",
+      "persisted": true,
+      "keyframable": false,
+      "min": 1,
+      "max": 9999,
+      "default": 1,
+      "role": "Applied asset version slot (V1, V2, ...). Full version ids arrive with the generation pipeline slice."
+    }
+  ],
+  "dataflow": [
+    "load pinned file from Asset Path (the only file read in the render path)",
+    "decode the source frame matching the current integer output frame",
+    "blend asset over the input frame by Blend percent",
+    "return the composited frame; if the asset is missing, pass input through and flag a display error"
+  ],
+  "nonGoals": [
+    "no network access, no generation calls, no agent/browser/service dependency in the render path",
+    "no transform/mask/tracking editor — host-native controls cover those",
+    "no generic Host SDK abstraction — this file targets the AE Effect SDK directly"
+  ],
+  "externalGate": [
+    "compile with the real AE Effect SDK on Windows (verify SDK-VERIFY marks in FlovartEffect.cpp)",
+    "lock the asset decoder library (OpenImageIO candidate) and pixel format",
+    "apply effect, set all three parameters, save project, reopen and verify values",
+    "scrub to random frames and compare pixels against an independent reference (<=1 per channel, 8-bit SDR)",
+    "export with the machine offline; verify no generation request occurs"
+  ]
+}

@@ -7,9 +7,16 @@ import { WorkflowNode } from '../components/workflow/WorkflowNode';
 import { WorkflowNodePromptBar } from '../components/workflow/WorkflowNodePromptBar';
 import { PromptBar } from '../components/PromptBar';
 import { AssetLibraryBrowser } from '../components/studio/AssetLibraryBrowser';
+import { translations } from '../utils/translations';
 import type { UserApiKey } from '../types';
 
-const t = (key: string) => key;
+const t = (key: string, ...args: unknown[]): string => {
+  const value = key.split('.').reduce<unknown>((current, part) => {
+    if (!current || typeof current !== 'object' || !(part in current)) return undefined;
+    return (current as Record<string, unknown>)[part];
+  }, translations.zho as unknown);
+  return String(typeof value === 'function' ? value(...args) : (value ?? key));
+};
 const node = createWorkflowNode('image', 'image', { x: 100, y: 80 }, {
   prompt: '初始提示词',
   config: { mode: 'image', modelId: 'image-model' },
@@ -98,7 +105,7 @@ describe('workflow node overlays', () => {
       onRun={onRun}
     />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'promptBar.generate' }));
+    fireEvent.click(screen.getByRole('button', { name: '生成' }));
     expect(onRun).toHaveBeenCalledOnce();
     expect(onPromptIntent).toHaveBeenLastCalledWith({
       targetNodeId: 'prompt-image',
@@ -214,7 +221,7 @@ describe('workflow node overlays', () => {
     const audioNode = createWorkflowNode('audio-ref', 'audio', { x: 0, y: 240 }, { href: 'https://cdn.example.com/music.mp3', mimeType: 'audio/mpeg' });
     audioNode.title = '配乐';
     render(<WorkflowNodePromptBar node={videoNode} nodes={[videoNode, audioNode]} connections={[{ id: 'audio-link', fromNodeId: 'audio-ref', toNodeId: 'veo-reference' }]} t={t} theme="light" language="zho" userApiKeys={[googleVeoKey]} dynamicModelOptions={{ text: [], image: [], video: ['flovart:veo-3.1'] }} onChange={vi.fn()} onRun={vi.fn()} />);
-    const generate = screen.getByRole('button', { name: 'promptBar.generate' });
+    const generate = screen.getByRole('button', { name: '生成' });
     expect(generate).toBeDisabled();
     expect(generate).toHaveAttribute('title', '当前 AI 服务不接收 @音频 参考');
     fireEvent.click(screen.getByTitle('视频生成方式'));
@@ -241,7 +248,7 @@ describe('workflow node overlays', () => {
       prompt: '让人物转身', config: { mode: 'video', modelId: 'flovart:seedance-2', submode: 'image-to-video', durationSec: 5, resolution: '720p' },
     });
     render(<WorkflowNodePromptBar node={videoNode} nodes={[videoNode]} t={t} theme="light" language="zho" userApiKeys={[videoProductKey]} dynamicModelOptions={{ text: [], image: [], video: ['flovart:seedance-2'] }} onChange={vi.fn()} onRun={vi.fn()} />);
-    const generate = screen.getByRole('button', { name: 'promptBar.generate' });
+    const generate = screen.getByRole('button', { name: '生成' });
     expect(generate).toBeDisabled();
     expect(generate).toHaveAttribute('title', '图生视频需要添加 1 张图片');
     fireEvent.click(screen.getByTitle('视频生成方式'));
@@ -402,7 +409,7 @@ describe('workflow node overlays', () => {
       onRun={onRun}
     />);
 
-    const run = screen.getByRole('button', { name: 'promptBar.generate' });
+    const run = screen.getByRole('button', { name: '生成' });
     expect(run).toBeDisabled();
     fireEvent.click(run);
     expect(onRun).not.toHaveBeenCalled();

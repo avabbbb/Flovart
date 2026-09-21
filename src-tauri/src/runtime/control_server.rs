@@ -383,6 +383,37 @@ fn handle_request(mut request: Request, runtime: &Arc<ProductionRuntime>, token:
                 Err(error) => respond_runtime_error(request, error),
             }
         }
+        (&Method::Get, path) if path.starts_with("/v1/artifacts/") => {
+            let task_id = path.trim_start_matches("/v1/artifacts/");
+            if task_id.is_empty() || task_id.contains('/') || task_id.contains('\\') {
+                respond_error(
+                    request,
+                    404,
+                    RuntimeError::new("ROUTE_UNAVAILABLE", "Unknown runtime artifact route"),
+                );
+                return;
+            }
+            match runtime.read_artifact(task_id) {
+                Ok(payload) => {
+                    let mut response =
+                        Response::from_data(payload.bytes).with_status_code(StatusCode(200));
+                    response.add_header(
+                        Header::from_bytes(
+                            "Content-Type",
+                            payload.mime_type.as_str(),
+                        )
+                        .expect("header"),
+                    );
+                    response
+                        .add_header(Header::from_bytes("Cache-Control", "no-store").expect("header"));
+                    response.add_header(
+                        Header::from_bytes("X-Content-Type-Options", "nosniff").expect("header"),
+                    );
+                    let _ = request.respond(response);
+                }
+                Err(error) => respond_runtime_error(request, error),
+            }
+        }
         (&Method::Post, path) if path.starts_with("/v1/tasks/") && path.ends_with(":cancel") => {
             let task_id = path
                 .trim_start_matches("/v1/tasks/")

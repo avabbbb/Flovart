@@ -19,6 +19,7 @@ import {
   serializeProviderGenerationRequest,
   validateReferenceSet,
 } from './providerGenerationAdapter';
+import { displayError } from './displayError';
 
 /**
  * User Provider 的“脚本”是受限 JSON mapping，而不是任意 JavaScript。
@@ -491,7 +492,7 @@ export class UserScriptProviderAdapter {
         canceled: false,
         reason: 'network_error',
         upstreamStillRunning: true,
-        message: error instanceof Error ? error.message : 'User Provider 取消失败。',
+        message: displayError(error, 'User Provider 取消失败。'),
       };
     }
   }

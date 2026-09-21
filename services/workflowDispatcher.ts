@@ -8,6 +8,7 @@ import { getWorkflowOperationCapabilityByNodeTool, parseWorkflowOperationNodeToo
 import { getWorkflowPersistenceError, useWorkflowStore } from '../components/workflow/store';
 import type { WorkflowConnection, WorkflowDocumentOperation, WorkflowMutationSource, WorkflowNode, WorkflowNodeMetadata, WorkflowNodeType, WorkflowProject } from '../components/workflow/types';
 import { normalizeWorkflowExecutionError, type WorkflowExecutor, type WorkflowRunCommand, type WorkflowRunResult } from './workflowExecutor';
+import { displayError } from './displayError';
 
 export interface WorkflowCommandEnvelope {
   id: string;
@@ -438,7 +439,7 @@ export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDepende
       cache(cacheKey, result);
       return result;
     } catch (cause) {
-      return error(envelope.id, 'BAD_REQUEST', cause instanceof Error ? cause.message : String(cause));
+      return error(envelope.id, 'BAD_REQUEST', displayError(cause));
     }
   };
 }

@@ -5,7 +5,9 @@ import {
   redactWorkflowAgentSnapshot,
   requiresRuntimeAgentConfirmation,
   runtimeAgentConfirmationSummary,
+  validateBrowserWorkspaceLease,
 } from '../services/workflowAgentBridge';
+import type { WorkflowCommandEnvelope } from '../services/workflowDispatcher';
 import { dispatchWorkflowCommand, setWorkflowExecutor, withWorkflowHumanApproval } from '../services/workflowDispatcher';
 import { createWorkflowNode } from '../components/workflow/constants';
 import { createWorkflowProject, useWorkflowStore } from '../components/workflow/store';
@@ -71,6 +73,30 @@ describe('workflow Agent browser bridge', () => {
       source: 'agent',
       args: { gateType: 'style-reference', approvedStageKey: 'style:bakeoff:swiss-modern' },
     })).toContain('style:bakeoff:swiss-modern');
+  });
+
+  it('rejects a workflow command whose workspace lease has expired (lease blind-window re-check)', () => {
+    const project = createWorkflowProject('Lease 测试');
+    project.id = 'project-lease';
+    useWorkflowStore.setState({ projects: [project], activeProjectId: project.id, hydrated: true });
+    const envelope: WorkflowCommandEnvelope = {
+      id: 'lease-1',
+      command: 'workflow.node.run',
+      source: 'agent',
+      args: { projectId: project.id, nodeId: 'n1' },
+      workspaceLease: {
+        leaseId: 'lease-1',
+        agentIdentity: 'codex',
+        clientId: 'client-A',
+        projectId: project.id,
+        baseRevision: project.draftVersion || 1,
+        issuedAt: 0,
+        expiresAt: 1_000,
+      },
+    };
+    // now = 2_000 > expiresAt 1_000 → lease expired even though the entry-time check passed earlier
+    const result = validateBrowserWorkspaceLease(envelope, 'client-A', 2_000);
+    expect(result?.error?.code).toBe('LEASE_EXPIRED');
   });
 
   it('freezes production.dry-run against the inspected visible Draft and source nodes', async () => {
