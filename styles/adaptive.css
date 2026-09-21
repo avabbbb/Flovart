@@ -158,10 +158,20 @@ body,
   container-type: inline-size;
 }
 
-.workflow-sidebar {
+/* Overlay (non-docked) sidebar floats over the canvas: its width is bounded by
+   the workspace container. The docked sidebar sets its own width inline — it
+   must NOT be sized by cqw of a container it lives inside (self-referential),
+   so all these rules are scoped to :not([data-docked]). */
+.workflow-sidebar:not([data-docked]) {
   width: min(300px, 28cqw) !important;
   max-width: calc(100% - 16px);
   min-width: 200px;
+}
+
+.workflow-sidebar[data-docked] {
+  /* Docked column: a fixed, viewport-independent width. The inline clamp
+     (200px→300px) is authoritative here; no container query may override it. */
+  flex-shrink: 0;
 }
 
 .compact-right-panel {
@@ -341,7 +351,7 @@ body,
 }
 
 @container (max-width: 1023px) {
-  .workflow-sidebar {
+  .workflow-sidebar:not([data-docked]) {
     width: min(320px, calc(100% - 16px)) !important;
   }
 
@@ -358,7 +368,7 @@ body,
 }
 
 @container (max-width: 760px) {
-  .workflow-sidebar {
+  .workflow-sidebar:not([data-docked]) {
     width: calc(100% - 16px) !important;
     min-width: 0;
   }

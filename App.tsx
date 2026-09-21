@@ -570,7 +570,7 @@ const App: React.FC = () => {
         // One global right drawer spans both noun surfaces — Canvas and Table
         // are two views of the same Workflow; Agent is the verb beside them.
         <div className="relative flex h-full min-h-0">
-            <div className="grid h-full min-w-0 flex-1 grid-rows-[auto_minmax(0,1fr)]">
+            <div className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col">
                 {/* Three peer views — Canvas | Table | Agent — switched in the
                     topbar's center modes slot (single top row). */}
                 {canvasView === 'agent' ? (

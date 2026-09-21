@@ -11,17 +11,23 @@ function fallbackMatch(query: string, width: number): boolean {
 export function useMediaQuery(query: string): boolean {
   const subscribe = (onStoreChange: () => void) => {
     if (typeof window === 'undefined') return () => undefined;
-    if (typeof window.matchMedia !== 'function') {
-      window.addEventListener('resize', onStoreChange);
-      return () => window.removeEventListener('resize', onStoreChange);
+    // Listen to BOTH the matchMedia change event AND window resize. Emulated
+    // viewports and some embed contexts don't reliably fire matchMedia change,
+    // but they always fire resize — belt-and-suspenders so docked↔overlay
+    // flips actually propagate.
+    window.addEventListener('resize', onStoreChange);
+    let media: MediaQueryList | undefined;
+    if (typeof window.matchMedia === 'function') {
+      media = window.matchMedia(query);
+      const handleChange = () => onStoreChange();
+      if (typeof media.addEventListener === 'function') media.addEventListener('change', handleChange);
+      else media.addListener(handleChange);
     }
-    const media = window.matchMedia(query);
-    const handleChange = () => onStoreChange();
-    if (typeof media.addEventListener === 'function') media.addEventListener('change', handleChange);
-    else media.addListener(handleChange);
     return () => {
-      if (typeof media.removeEventListener === 'function') media.removeEventListener('change', handleChange);
-      else media.removeListener(handleChange);
+      window.removeEventListener('resize', onStoreChange);
+      if (!media) return;
+      if (typeof media.removeEventListener === 'function') media.removeEventListener('change', onStoreChange);
+      else media.removeListener(onStoreChange);
     };
   };
   const getSnapshot = () => {

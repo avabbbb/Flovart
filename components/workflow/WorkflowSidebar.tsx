@@ -135,7 +135,8 @@ export const WorkflowSidebar: React.FC<WorkflowSidebarProps> = ({
       {open && (
         <aside
           ref={panelRef}
-          className={`workflow-sidebar theme-aware ${docked ? 'relative self-stretch' : 'absolute'} z-40 flex min-h-0 flex-col overflow-hidden ${docked ? '' : 'rounded-2xl border-[1.5px]'}`}
+          data-docked={docked ? 'true' : undefined}
+          className={`workflow-sidebar theme-aware ${docked ? 'relative self-stretch' : 'absolute'} z-40 flex min-w-0 flex-col overflow-hidden ${docked ? '' : 'rounded-2xl border-[1.5px]'}`}
           style={docked ? {
             // In-flow dock：aside 参与 .workflow-workspace 的 flex 行，画布为之让位，
             // 图层点击后聚焦的节点不会被浮层遮住。Visual parity with the right
