@@ -1945,3 +1945,87 @@ input[type='range'].toolbar-range::-moz-range-thumb:hover {
   transform: none;
   box-shadow: none;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   FLAT DENSITY LAYER — compact pro-tool chrome (Linear / Higgsfield style).
+   The isl-* system above is a "chunky parchment" skin: 3px pressable drops,
+   999px pills, translateY lifts, big radii. This layer flattens it in place
+   by overriding tokens and neutralizing the tactile chrome — no markup churn.
+   ═══════════════════════════════════════════════════════════════════════════ */
+:root {
+  /* Flat radii — square-ish control corners, tight pills only where semantic */
+  --isl-r-sm: 5px;
+  --isl-r: 6px;
+  --isl-r-lg: 8px;
+  --isl-r-pill: 7px;
+
+  /* Kill the pressable 3D drops — flat surfaces use a thin border + hairline */
+  --isl-drop-sm: 0;
+  --isl-drop: 0;
+  --isl-drop-lg: 0;
+  --isl-edge: transparent;
+  --isl-edge-mint: transparent;
+  --isl-edge-coral: transparent;
+
+  /* Flat shadows — none on chrome, one soft elevation for true popovers */
+  --isl-shadow-sm: 0 1px 2px rgba(0,0,0,0.16);
+  --isl-shadow: 0 4px 14px rgba(0,0,0,0.18);
+  --isl-shadow-lg: 0 10px 30px rgba(0,0,0,0.24);
+}
+
+/* Flat icon buttons — square, no lift, hairline hover only */
+.isl-icon-btn,
+.isl-row,
+.isl-chip,
+.isl-tab,
+.isl-panel {
+  box-shadow: none !important;
+  transition: background 140ms ease, border-color 140ms ease, color 140ms ease !important;
+}
+.isl-icon-btn:hover:not(:disabled),
+.isl-icon-btn:active:not(:disabled),
+.isl-row:hover,
+.isl-chip:hover:not(:disabled),
+.isl-chip--active:hover,
+.isl-tab:hover {
+  transform: none !important;
+}
+.isl-icon-btn:hover:not(:disabled) { border-color: var(--isl-border-strong); }
+.isl-icon-btn--active { box-shadow: none !important; }
+.isl-panel { border-width: 1px; }
+.isl-row, .isl-icon-btn, .isl-tabbar, .isl-panel { border-width: 1px; }
+
+/* Topbar — flat compact bar with a real bottom hairline (was borderless/floating) */
+.studio-top-menu {
+  height: 44px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--isl-border);
+  background: var(--isl-surface);
+}
+
+/* Canvas|Table segmented control — a real pill group, not bare floating text */
+.studio-top-menu__modes {
+  display: inline-flex;
+  gap: 0;
+  padding: 2px;
+  border-radius: 6px;
+  border: 1px solid var(--isl-border);
+  background: var(--isl-surface-sunk);
+}
+.studio-top-menu__modes button {
+  border-radius: 4px;
+  min-height: 24px;
+  padding-inline: 12px;
+  font-weight: 600;
+  opacity: 1;
+}
+.studio-top-menu__modes button[aria-selected="true"] {
+  background: var(--isl-card);
+  color: var(--isl-ink);
+  box-shadow: none;
+}
+.studio-top-menu__modes button[aria-selected="false"] {
+  background: transparent;
+  color: var(--isl-ink-soft);
+}
+.studio-top-menu__modes button[aria-selected="false"]:hover { color: var(--isl-ink); }
