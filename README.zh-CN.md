@@ -1,3 +1,14 @@
+---
+AIGC:
+  ContentProducer: '001191110102MAD55U9H0F10002'
+  ContentPropagator: '001191110102MAD55U9H0F10002'
+  Label: '1'
+  ProduceID: '503a6bd1-a517-42cd-84bd-e46ba68dca90'
+  PropagateID: '503a6bd1-a517-42cd-84bd-e46ba68dca90'
+  ReservedCode1: 'cf8b84c5-c9fb-4404-a4e5-4a9ee8d12407'
+  ReservedCode2: 'cf8b84c5-c9fb-4404-a4e5-4a9ee8d12407'
+---
+
 <p align="center">
   <img src="pic/LOGO_optimized.png" alt="Flovart" width="180" />
 </p>
@@ -29,7 +40,7 @@
   <img src="https://img.shields.io/badge/Local--first-E8453C" alt="本地优先" />
   <img src="https://img.shields.io/badge/BYOK-E8453C" alt="自带 API Key" />
   <img src="https://img.shields.io/badge/Image%20%2B%20Video-E8453C" alt="图片与视频" />
-  <img src="https://img.shields.io/badge/License-AGPL--3.0--only-E8453C" alt="AGPL-3.0-only License" />
+  <img src="https://img.shields.io/badge/License-MIT-E8453C" alt="MIT License" />
   <a href="https://github.com/avabbbb/Flovart/releases"><img src="https://img.shields.io/github/downloads/avabbbb/Flovart/total?color=E8453C&logo=github" alt="GitHub Downloads" /></a>
   <a href="https://github.com/avabbbb/Flovart"><img src="https://img.shields.io/github/stars/avabbbb/Flovart?color=E8453C" alt="GitHub Stars" /></a>
 </p>
@@ -341,6 +352,6 @@ CLI 与实验性 stdio MCP 共用操作语义，当前都绑定可见的 Browser
 
 ## 协议与声明
 
-Flovart 基于 [GNU Affero General Public License v3.0 only](./LICENSE) 开源。使用本项目即表示同意[使用条款](./docs/TERMS_OF_SERVICE.md)和[隐私政策](./docs/PRIVACY_POLICY.md)。
+Flovart 基于 [MIT License](./LICENSE) 开源。使用本项目即表示同意[使用条款](./docs/TERMS_OF_SERVICE.md)和[隐私政策](./docs/PRIVACY_POLICY.md)。
 
 Flovart 不内置模型服务，也不对生成内容主张知识产权。你需要自行确认所选模型、输入素材和生成结果的版权、合规性与合法使用。更多信息见[项目数据与统计](stats/README.md)。

@@ -2,6 +2,7 @@
   "name": "flovart",
   "private": true,
   "version": "0.3.2",
+  "license": "MIT",
   "type": "module",
   "engines": {
     "node": ">=22.19.0"

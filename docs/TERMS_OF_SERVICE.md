@@ -1,3 +1,14 @@
+---
+AIGC:
+  ContentProducer: '001191110102MAD55U9H0F10002'
+  ContentPropagator: '001191110102MAD55U9H0F10002'
+  Label: '1'
+  ProduceID: '100f5766-99e7-42fa-a497-b2e3b4a3598e'
+  PropagateID: '100f5766-99e7-42fa-a497-b2e3b4a3598e'
+  ReservedCode1: '344740da-b3c3-47ae-a18f-3ac2928f4069'
+  ReservedCode2: '344740da-b3c3-47ae-a18f-3ac2928f4069'
+---
+
 # Flovart End User Terms and Disclaimer
 
 Status: Pre-release draft. These Terms become effective when linked from an official public release.
@@ -10,7 +21,7 @@ Primary legal jurisdiction: Hong Kong Special Administrative Region.
 
 [中文版本](./TERMS_OF_SERVICE.zh-CN.md)
 
-These Terms govern the official Flovart Desktop Edition, the Official WebUI at `https://avabbbb.github.io/Flovart/`, the official Flovart Edge Extension, and any optional service expressly linked to these Terms. The source code is separately licensed under AGPL-3.0-only; these Terms do not reduce or add restrictions to rights granted by that license.
+These Terms govern the official Flovart Desktop Edition, the Official WebUI at `https://avabbbb.github.io/Flovart/`, the official Flovart Edge Extension, and any optional service expressly linked to these Terms. The source code is separately licensed under the MIT License; these Terms do not reduce or add restrictions to rights granted by that license.
 
 You accept these Terms when you expressly check the acceptance box in Desktop Edition or the Official WebUI before first persisting a Provider Secret or making a Provider request, or when you continue using the Edge Extension after its first-use disclosure. If you do not agree, do not connect a Provider or use the Edge Extension.
 
@@ -41,15 +52,13 @@ You are responsible for your device, browser profile, API keys, project files, l
 
 ## 3. Source license
 
-The Flovart source code is licensed under AGPL-3.0-only.
+The Flovart source code is licensed under the MIT License.
 
-AGPL-3.0 is a strong copyleft license. If you copy, modify, distribute, host, or provide network access to Flovart or a modified version, you may need to preserve notices, provide corresponding source code, and comply with other AGPL-3.0 obligations.
-
-You are responsible for understanding whether your copying, modification, distribution, hosted service, private fork, commercial build, extension, or integration triggers license obligations.
+The MIT License is a permissive license that allows you to use, copy, modify, merge, publish, distribute, sublicense, and sell copies of the Software with minimal restrictions, provided you include the copyright notice and permission notice.
 
 The official license text is in the repository [LICENSE](../LICENSE) file.
 
-To the extent these Terms conflict with AGPL-3.0-only regarding use, copying, modification, or distribution of the source code, the AGPL license controls. Product rules in these Terms apply to official binaries, the official store extension, optional services, Provider use, and conduct outside the scope of the source license.
+To the extent these Terms conflict with the MIT License regarding use, copying, modification, or distribution of the source code, the MIT license controls. Product rules in these Terms apply to official binaries, the official store extension, optional services, Provider use, and conduct outside the scope of the source license.
 
 
 ## 4. API keys and third-party services
@@ -165,7 +174,7 @@ The Terms version shown at the top identifies the version you accepted.
 
 Material changes affecting Provider charges, data flows, permissions, or responsibility boundaries require renewed local acceptance before the next Provider request. Non-material wording or contact changes may be published without interrupting local-only editing.
 
-If you do not agree to updated Terms, you may continue using rights granted by AGPL-3.0-only for the source code, but must not use an official feature or service that requires acceptance of the updated Terms.
+If you do not agree to updated Terms, you may continue using rights granted by the MIT License for the source code, but must not use an official feature or service that requires acceptance of the updated Terms.
 
 ## 14. Governing law and mandatory rights
 

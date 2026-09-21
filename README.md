@@ -1,3 +1,14 @@
+---
+AIGC:
+  ContentProducer: '001191110102MAD55U9H0F10002'
+  ContentPropagator: '001191110102MAD55U9H0F10002'
+  Label: '1'
+  ProduceID: 'dc3c0fe1-169b-4f2d-add5-19cbafac7369'
+  PropagateID: 'dc3c0fe1-169b-4f2d-add5-19cbafac7369'
+  ReservedCode1: '1ea32e0c-e497-4f7e-adbf-70c8e8bbd65a'
+  ReservedCode2: '1ea32e0c-e497-4f7e-adbf-70c8e8bbd65a'
+---
+
 <p align="center">
   <img src="pic/LOGO_optimized.png" alt="Flovart" width="180" />
 </p>
@@ -29,7 +40,7 @@
   <img src="https://img.shields.io/badge/Local--first-E8453C" alt="Local-first" />
   <img src="https://img.shields.io/badge/BYOK-E8453C" alt="Bring your own key" />
   <img src="https://img.shields.io/badge/Image%20%2B%20Video-E8453C" alt="Image and video" />
-  <img src="https://img.shields.io/badge/License-AGPL--3.0--only-E8453C" alt="AGPL-3.0-only License" />
+  <img src="https://img.shields.io/badge/License-MIT-E8453C" alt="MIT License" />
   <a href="https://github.com/avabbbb/Flovart/releases"><img src="https://img.shields.io/github/downloads/avabbbb/Flovart/total?color=E8453C&logo=github" alt="GitHub Downloads" /></a>
   <a href="https://github.com/avabbbb/Flovart"><img src="https://img.shields.io/github/stars/avabbbb/Flovart?color=E8453C" alt="GitHub Stars" /></a>
 </p>
@@ -343,6 +354,6 @@ Thanks to [@labiaaaaaaaaa](https://github.com/labiaaaaaaaaa) for driving third-p
 
 ## License and disclaimer
 
-Flovart is licensed under the [GNU Affero General Public License v3.0 only](./LICENSE). By using the project, you agree to the [Terms of Service](./docs/TERMS_OF_SERVICE.md) and [Privacy Policy](./docs/PRIVACY_POLICY.md).
+Flovart is licensed under the [MIT License](./LICENSE). By using the project, you agree to the [Terms of Service](./docs/TERMS_OF_SERVICE.md) and [Privacy Policy](./docs/PRIVACY_POLICY.md).
 
 Flovart does not bundle model services and makes no intellectual-property claim over generated content. You are responsible for the copyright, compliance and lawful use of your models, input assets and generated output. See [project data and statistics](stats/README.md).

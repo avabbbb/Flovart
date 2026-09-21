@@ -1,3 +1,14 @@
+---
+AIGC:
+  ContentProducer: '001191110102MAD55U9H0F10002'
+  ContentPropagator: '001191110102MAD55U9H0F10002'
+  Label: '1'
+  ProduceID: 'bd226305-0ccc-479c-bff7-fb6456ed96ed'
+  PropagateID: 'bd226305-0ccc-479c-bff7-fb6456ed96ed'
+  ReservedCode1: '820681c7-2a79-491d-9c05-5ec55eaee9c3'
+  ReservedCode2: '820681c7-2a79-491d-9c05-5ec55eaee9c3'
+---
+
 # Flovart 用户协议与免责声明
 
 状态：公开发布前草案。本协议在官方公开版本链接并展示后生效。
@@ -10,7 +21,7 @@
 
 [English controlling version](./TERMS_OF_SERVICE.md)
 
-本协议适用于官方 Flovart Desktop Edition、位于 `https://avabbbb.github.io/Flovart/` 的 Official WebUI、官方 Flovart Edge Extension，以及明确链接本协议的可选服务。源代码另行依照 AGPL-3.0-only 授权；本协议不减少该开源许可证授予的权利，也不向其增加额外限制。
+本协议适用于官方 Flovart Desktop Edition、位于 `https://avabbbb.github.io/Flovart/` 的 Official WebUI、官方 Flovart Edge Extension，以及明确链接本协议的可选服务。源代码另行依照 MIT License 授权；本协议不减少该开源许可证授予的权利，也不向其增加额外限制。
 
 当你在 Desktop Edition 或 Official WebUI 首次持久保存 Provider Secret 或首次发起 Provider 请求前主动勾选同意，或者在 Edge Extension 首次使用说明后继续使用扩展时，即表示接受本协议。如果你不同意，请勿连接 Provider 或使用 Edge Extension。
 
@@ -34,9 +45,9 @@ Desktop Edition 与 Official WebUI 的核心能力无需注册 Flovart 账号。
 
 ## 3. 开源许可
 
-Flovart 源代码依照 AGPL-3.0-only 授权。复制、修改、分发、托管、提供网络访问或发布修改版时，你可能需要保留声明、提供对应源代码并履行该许可证的其他义务。
+Flovart 源代码依照 MIT License 授权。MIT 是宽松许可，允许你使用、复制、修改、合并、发布、分发、再授权和销售软件副本，只需保留版权声明和许可声明。
 
-官方许可文本位于仓库根目录 `LICENSE`。如果本协议与 AGPL-3.0-only 在源代码使用、复制、修改或分发方面冲突，以 AGPL-3.0-only 为准。本协议只约束官方二进制、官方商店扩展、可选服务、Provider 使用以及开源许可范围以外的行为。
+官方许可文本位于仓库根目录 `LICENSE`。如果本协议与 MIT License 在源代码使用、复制、修改或分发方面冲突，以 MIT License 为准。本协议只约束官方二进制、官方商店扩展、可选服务、Provider 使用以及开源许可范围以外的行为。
 
 ## 4. API Key、第三方 Provider 与自定义端点
 
@@ -96,7 +107,7 @@ Flovart 按“现状”和“可用”状态提供。在法律允许的最大范
 
 影响 Provider 费用、数据流、浏览器权限或责任边界的实质变更将使用新的协议版本，并在下一次 Provider 请求前要求重新确认。仅修正文案或公开联系方式的非实质变更可以不打断纯本地编辑。
 
-如果不同意更新后的协议，你仍可依照 AGPL-3.0-only 行使源代码权利，但不得继续使用要求接受新协议的官方功能或服务。
+如果不同意更新后的协议，你仍可依照 MIT License 行使源代码权利，但不得继续使用要求接受新协议的官方功能或服务。
 
 ## 14. 适用法律与强制性权利
 
