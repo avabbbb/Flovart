@@ -114,7 +114,7 @@ export interface RecipePackage {
 // API Key & Model Preferences
 export type ThemeMode = 'light' | 'dark' | 'system';
 export type WorkspaceView = 'workflow' | 'agent';
-export type CanvasView = 'spatial' | 'table' | 'agent';
+export type CanvasView = 'spatial' | 'table';
 export type AIProvider = 'openai' | 'anthropic' | 'google' | 'qwen' | 'deepseek' | 'xai' | 'siliconflow' | 'keling' | 'flux' | 'midjourney' | 'runningHub' | 'minimax' | 'volcengine' | 'openrouter' | 'openai_compatible' | 'custom';
 export type AICapability = 'text' | 'image' | 'video' | 'agent';
 

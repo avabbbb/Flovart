@@ -12,7 +12,7 @@ import { StudioTopMenu, type StudioMenuModel } from './components/studio/StudioT
 import { StudioRightDrawer } from './components/studio/StudioRightDrawer';
 import { StudioMediaBrowser } from './components/studio/StudioMediaBrowser';
 import { FlovartAgentPanel } from './components/agent/FlovartAgentPanel';
-import { AgentHubPanel, AgentDrawerEmptyState } from './components/agent/AgentWorkspace';
+import { AgentDrawerEmptyState, AgentHostHeader } from './components/agent/AgentWorkspace';
 import { useMediaQuery } from './hooks/useMediaQuery';
 import { useWorkspaceStore } from './stores/useWorkspaceStore';
 import { flushWorkflowPersistence, useWorkflowStore } from './components/workflow/store';
@@ -94,7 +94,7 @@ const App: React.FC = () => {
     const setRightOpen = useCallback((open: boolean) => {
         if (mediumViewport) setMobileRightOpen(open); else setDesktopRightOpen(open);
     }, [mediumViewport]);
-    const [rightTab, setRightTab] = useState<'agent' | 'hosts' | 'context' | 'history'>('agent');
+    const [rightTab, setRightTab] = useState<'agent' | 'inspector' | 'history'>('agent');
     const [rightWidth, setRightWidth] = useState(() => {
         try {
             const stored = Number(localStorage.getItem('workflowRightPanelWidth'));
@@ -571,35 +571,10 @@ const App: React.FC = () => {
         // are two views of the same Workflow; Agent is the verb beside them.
         <div className="relative flex h-full min-h-0">
             <div className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col">
-                {/* Three peer views — Canvas | Table | Agent — switched in the
-                    topbar's center modes slot (single top row). */}
-                {canvasView === 'agent' ? (
-                    // Full-page Agent view — the third peer surface. Hosts picker
-                    // on top, built-in assistant below; the right drawer stays the
-                    // quick in-context surface.
-                    <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]">
-                        <AgentHubPanel
-                            project={activeWorkflowProject}
-                            onCreateProject={() => workflowCreateProject(language === 'zho' ? '未命名工作流' : 'Untitled workflow')}
-                            onOpenWorkflow={() => setCanvasView('spatial')}
-                            onOpenTable={handleOpenTable}
-                        />
-                        {activeWorkflowProject ? (
-                            <FlovartAgentPanel
-                                project={activeWorkflowProject}
-                                onActivityChange={() => undefined}
-                                onOpenSettings={() => setIsSettingsPanelOpen(true)}
-                                assetLibrary={assetLibrary}
-                                userApiKeys={userApiKeys}
-                                onFocusNode={handleFocusNodeFromDrawer}
-                            />
-                        ) : (
-                            <AgentDrawerEmptyState
-                                onCreateProject={() => workflowCreateProject(language === 'zho' ? '未命名工作流' : 'Untitled workflow')}
-                            />
-                        )}
-                    </div>
-                ) : canvasView === 'table' ? (
+                {/* Two peer views of one Workflow — Canvas | Table. Agent is a
+                    persistent right panel (single entry via the status dot), not
+                    a third page. */}
+                {canvasView === 'table' ? (
                     <Suspense fallback={<div className="grid h-full place-content-center text-sm opacity-40">正在加载 Table...</div>}>
                         <TableWorkspace
                             project={activeWorkflowProject}
@@ -662,39 +637,36 @@ const App: React.FC = () => {
                 flush
                 docked={!mediumViewport}
                 activeTab={rightTab}
-                onTabChange={tab => setRightTab(tab as 'agent' | 'hosts' | 'context' | 'history')}
+                onTabChange={tab => setRightTab(tab as 'agent' | 'inspector' | 'history')}
                 tabs={[
-                    { id: 'agent', label: language === 'zho' ? 'Agent' : 'Agent', icon: undefined },
-                    { id: 'hosts', label: language === 'zho' ? '协作' : 'Hosts', icon: undefined },
-                    { id: 'context', label: language === 'zho' ? '上下文' : 'Context', icon: undefined },
-                    { id: 'history', label: language === 'zho' ? '生成历史' : 'History', icon: undefined },
+                    { id: 'agent', label: 'Agent', icon: undefined },
+                    { id: 'inspector', label: language === 'zho' ? '检查器' : 'Inspector', icon: undefined },
+                    { id: 'history', label: language === 'zho' ? '历史' : 'History', icon: undefined },
                 ]}
             >
                 {rightTab === 'agent' && (activeWorkflowProject ? (
-                    <FlovartAgentPanel
-                        project={activeWorkflowProject}
-                        onActivityChange={() => undefined}
-                        onOpenSettings={() => setIsSettingsPanelOpen(true)}
-                        assetLibrary={assetLibrary}
-                        userApiKeys={userApiKeys}
-                        onFocusNode={handleFocusNodeFromDrawer}
-                    />
+                    <div className="flex h-full min-h-0 flex-col">
+                        {/* External host selection lives in the Agent panel header —
+                            not a peer "协作" tab and not a full page. One concept,
+                            one place. */}
+                        <AgentHostHeader project={activeWorkflowProject} />
+                        <div className="min-h-0 flex-1">
+                            <FlovartAgentPanel
+                                project={activeWorkflowProject}
+                                onActivityChange={() => undefined}
+                                onOpenSettings={() => setIsSettingsPanelOpen(true)}
+                                assetLibrary={assetLibrary}
+                                userApiKeys={userApiKeys}
+                                onFocusNode={handleFocusNodeFromDrawer}
+                            />
+                        </div>
+                    </div>
                 ) : (
-                    // Project-less onboarding folded into the drawer's empty state:
-                    // pick an external host or create the first project in place.
                     <AgentDrawerEmptyState
                         onCreateProject={() => workflowCreateProject(language === 'zho' ? '未命名工作流' : 'Untitled workflow')}
                     />
                 ))}
-                {rightTab === 'hosts' && (
-                    <AgentHubPanel
-                        project={activeWorkflowProject}
-                        onCreateProject={() => workflowCreateProject(language === 'zho' ? '未命名工作流' : 'Untitled workflow')}
-                        onOpenWorkflow={() => setCanvasView('spatial')}
-                        onOpenTable={handleOpenTable}
-                    />
-                )}
-                {rightTab === 'context' && (activeWorkflowProject ? (
+                {rightTab === 'inspector' && (activeWorkflowProject ? (
                     <Suspense fallback={null}>
                         <WorkflowContextPanel project={activeWorkflowProject} />
                     </Suspense>

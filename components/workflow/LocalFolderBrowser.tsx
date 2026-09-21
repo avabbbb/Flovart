@@ -376,16 +376,6 @@ export const LocalFolderBrowser: React.FC<LocalFolderBrowserProps> = ({ language
           <FolderOpen size={13} />
           <span>{zho ? '选择文件夹' : 'Choose folder'}</span>
         </button>
-        {activeId && (
-          <button type="button" className="local-folder-btn" onClick={() => void scan(activeId)} disabled={scanning} title={zho ? '重新扫描' : 'Rescan'}>
-            {scanning ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
-          </button>
-        )}
-        {activeId && (
-          <button type="button" className="local-folder-btn" onClick={() => void forget(activeId)} title={zho ? '忘记该文件夹' : 'Forget folder'}>
-            <Trash2 size={13} />
-          </button>
-        )}
       </div>
 
       {activeSource && (
