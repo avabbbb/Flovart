@@ -17,17 +17,19 @@ export function useMediaQuery(query: string): boolean {
     // flips actually propagate.
     window.addEventListener('resize', onStoreChange);
     let media: MediaQueryList | undefined;
+    const handleChange = () => onStoreChange();
     if (typeof window.matchMedia === 'function') {
       media = window.matchMedia(query);
-      const handleChange = () => onStoreChange();
       if (typeof media.addEventListener === 'function') media.addEventListener('change', handleChange);
       else media.addListener(handleChange);
     }
     return () => {
       window.removeEventListener('resize', onStoreChange);
       if (!media) return;
-      if (typeof media.removeEventListener === 'function') media.removeEventListener('change', onStoreChange);
-      else media.removeListener(onStoreChange);
+      // Remove the SAME handleChange we added above — removing onStoreChange
+      // instead would leak the change listener on every unmount.
+      if (typeof media.removeEventListener === 'function') media.removeEventListener('change', handleChange);
+      else media.removeListener(handleChange);
     };
   };
   const getSnapshot = () => {

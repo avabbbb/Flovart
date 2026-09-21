@@ -5,6 +5,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useUpdaterStore } from '../../stores/useUpdaterStore';
 import { useAgentConnectionStore } from '../../stores/useAgentConnectionStore';
 import { useWorkspaceStore } from '../../stores/useWorkspaceStore';
+import { requestWorkflowAgentDrawer } from '../workflow/agentDrawerRequest';
 import { toLocalLinkPublicStatus } from '../../tools/flovart/public-status';
 import { AuthModal } from '../auth/AuthModal';
 import type { ThemeMode } from '../../types';
@@ -340,19 +341,20 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
             )}
           </button>
         )}
-        <span
+        <button
+          type="button"
           data-testid="agent-connection-status"
-          role="status"
-          className="flex h-8 items-center gap-1.5 px-2"
+          className="isl-icon-btn flex h-8 items-center gap-1.5 px-2"
           title={isChinese
-            ? `Agent ${agentLabel} — 用画布工具栏的 Bot 按钮打开`
-            : `Agent ${agentLabel} — open via the canvas Bot button`}
+            ? `Agent ${agentLabel} — 打开助手面板`
+            : `Agent ${agentLabel} — open assistant panel`}
           aria-label={agentLabel}
-          style={{ color: agentColor, cursor: 'default' }}
+          style={{ color: agentColor }}
+          onClick={() => { requestWorkflowAgentDrawer(); navigate('/app'); }}
         >
           <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full" style={{ background: agentColor }} />
           <span className="hidden whitespace-nowrap text-[11px] font-semibold xl:inline">{agentLabel}</span>
-        </span>
+        </button>
         {/* Status is a pure indicator — not a hidden Settings shortcut. Only the
             gear opens Settings. Hover shows detail; a status popover could come
             later if diagnostics need a surface. */}

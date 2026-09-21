@@ -12,7 +12,7 @@ import { StudioTopMenu, type StudioMenuModel } from './components/studio/StudioT
 import { StudioRightDrawer } from './components/studio/StudioRightDrawer';
 import { StudioMediaBrowser } from './components/studio/StudioMediaBrowser';
 import { FlovartAgentPanel } from './components/agent/FlovartAgentPanel';
-import { AgentDrawerEmptyState, AgentHostHeader } from './components/agent/AgentWorkspace';
+import { AgentHubPanel, AgentDrawerEmptyState } from './components/agent/AgentWorkspace';
 import { useMediaQuery } from './hooks/useMediaQuery';
 import { useWorkspaceStore } from './stores/useWorkspaceStore';
 import { flushWorkflowPersistence, useWorkflowStore } from './components/workflow/store';
@@ -94,7 +94,7 @@ const App: React.FC = () => {
     const setRightOpen = useCallback((open: boolean) => {
         if (mediumViewport) setMobileRightOpen(open); else setDesktopRightOpen(open);
     }, [mediumViewport]);
-    const [rightTab, setRightTab] = useState<'agent' | 'inspector' | 'history'>('agent');
+    const [rightTab, setRightTab] = useState<'agent' | 'hosts' | 'context' | 'history'>('agent');
     const [rightWidth, setRightWidth] = useState(() => {
         try {
             const stored = Number(localStorage.getItem('workflowRightPanelWidth'));
@@ -637,36 +637,37 @@ const App: React.FC = () => {
                 flush
                 docked={!mediumViewport}
                 activeTab={rightTab}
-                onTabChange={tab => setRightTab(tab as 'agent' | 'inspector' | 'history')}
+                onTabChange={tab => setRightTab(tab as 'agent' | 'hosts' | 'context' | 'history')}
                 tabs={[
                     { id: 'agent', label: 'Agent', icon: undefined },
-                    { id: 'inspector', label: language === 'zho' ? '检查器' : 'Inspector', icon: undefined },
-                    { id: 'history', label: language === 'zho' ? '历史' : 'History', icon: undefined },
+                    { id: 'hosts', label: language === 'zho' ? '协作' : 'Hosts', icon: undefined },
+                    { id: 'context', label: language === 'zho' ? '上下文' : 'Context', icon: undefined },
+                    { id: 'history', label: language === 'zho' ? '生成历史' : 'History', icon: undefined },
                 ]}
             >
                 {rightTab === 'agent' && (activeWorkflowProject ? (
-                    <div className="flex h-full min-h-0 flex-col">
-                        {/* External host selection lives in the Agent panel header —
-                            not a peer "协作" tab and not a full page. One concept,
-                            one place. */}
-                        <AgentHostHeader project={activeWorkflowProject} />
-                        <div className="min-h-0 flex-1">
-                            <FlovartAgentPanel
-                                project={activeWorkflowProject}
-                                onActivityChange={() => undefined}
-                                onOpenSettings={() => setIsSettingsPanelOpen(true)}
-                                assetLibrary={assetLibrary}
-                                userApiKeys={userApiKeys}
-                                onFocusNode={handleFocusNodeFromDrawer}
-                            />
-                        </div>
-                    </div>
+                    <FlovartAgentPanel
+                        project={activeWorkflowProject}
+                        onActivityChange={() => undefined}
+                        onOpenSettings={() => setIsSettingsPanelOpen(true)}
+                        assetLibrary={assetLibrary}
+                        userApiKeys={userApiKeys}
+                        onFocusNode={handleFocusNodeFromDrawer}
+                    />
                 ) : (
                     <AgentDrawerEmptyState
                         onCreateProject={() => workflowCreateProject(language === 'zho' ? '未命名工作流' : 'Untitled workflow')}
                     />
                 ))}
-                {rightTab === 'inspector' && (activeWorkflowProject ? (
+                {rightTab === 'hosts' && (
+                    <AgentHubPanel
+                        project={activeWorkflowProject}
+                        onCreateProject={() => workflowCreateProject(language === 'zho' ? '未命名工作流' : 'Untitled workflow')}
+                        onOpenWorkflow={() => setCanvasView('spatial')}
+                        onOpenTable={handleOpenTable}
+                    />
+                )}
+                {rightTab === 'context' && (activeWorkflowProject ? (
                     <Suspense fallback={null}>
                         <WorkflowContextPanel project={activeWorkflowProject} />
                     </Suspense>
