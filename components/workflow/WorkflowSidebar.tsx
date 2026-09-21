@@ -135,16 +135,17 @@ export const WorkflowSidebar: React.FC<WorkflowSidebarProps> = ({
       {open && (
         <aside
           ref={panelRef}
-          className={`workflow-sidebar theme-aware ${docked ? 'relative self-stretch' : 'absolute'} z-40 flex min-h-0 flex-col overflow-hidden rounded-2xl border-[1.5px]`}
+          className={`workflow-sidebar theme-aware ${docked ? 'relative self-stretch' : 'absolute'} z-40 flex min-h-0 flex-col overflow-hidden ${docked ? '' : 'rounded-2xl border-[1.5px]'}`}
           style={docked ? {
             // In-flow dock：aside 参与 .workflow-workspace 的 flex 行，画布为之让位，
-            // 图层点击后聚焦的节点不会被浮层遮住。
+            // 图层点击后聚焦的节点不会被浮层遮住。Visual parity with the right
+            // drawer: a flush docked column (single divider border), not a
+            // floating rounded card — matching radius/shadow on only one side
+            // reads as a popup sitting on the canvas.
             flex: '0 0 auto',
             width: `clamp(200px, 19vw, 300px)`,
-            margin: outerGap,
             background: 'var(--isl-card)',
-            borderColor: 'var(--isl-border)',
-            boxShadow: 'var(--isl-shadow-lg)',
+            borderRight: '1px solid var(--isl-border)',
           } : {
             top: outerGap,
             left: outerGap,

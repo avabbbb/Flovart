@@ -571,31 +571,8 @@ const App: React.FC = () => {
         // are two views of the same Workflow; Agent is the verb beside them.
         <div className="relative flex h-full min-h-0">
             <div className="grid h-full min-w-0 flex-1 grid-rows-[auto_minmax(0,1fr)]">
-                <div
-                    className="canvas-view-switch flex h-9 shrink-0 items-center justify-center gap-0.5 border-b"
-                    style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-card)' }}
-                    role="tablist"
-                    aria-label={language === 'zho' ? '画布视图' : 'Canvas view'}
-                >
-                    {(['spatial', 'table'] as const).map(view => {
-                        const isActive = canvasView === view;
-                        const label = view === 'spatial' ? (language === 'zho' ? '画布' : 'Canvas') : 'Table';
-                        return (
-                            <button
-                                key={view}
-                                type="button"
-                                role="tab"
-                                aria-selected={isActive}
-                                aria-label={view === 'spatial' ? (language === 'zho' ? '画布视图' : 'Canvas view') : 'Table'}
-                                onClick={() => setCanvasView(view)}
-                                className={`shrink-0 whitespace-nowrap rounded-md px-2.5 py-1 text-xs font-bold transition ${isActive ? 'bg-black/5' : 'opacity-50 hover:opacity-80'}`}
-                                style={{ color: 'var(--isl-ink)' }}
-                            >
-                                {label}
-                            </button>
-                        );
-                    })}
-                </div>
+                {/* 画布|Table switcher moved into StudioTopMenu's center modes
+                    slot — the second top row is gone (IA dedupe PR-A). */}
                 {canvasView === 'table' ? (
                     <Suspense fallback={<div className="grid h-full place-content-center text-sm opacity-40">正在加载 Table...</div>}>
                         <TableWorkspace

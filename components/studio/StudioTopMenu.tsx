@@ -56,6 +56,10 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
   const { actions, language, mode, status, themeMode, resolvedTheme, title, projectList, activeProjectIndex, projectActions } = model;
   const navigate = useNavigate();
   const isChinese = language === 'zho';
+  // The real view switch (Canvas vs Table) lives here in the single top bar —
+  // not on a second row. Read it straight from the workspace store.
+  const canvasView = useWorkspaceStore(s => s.canvasView);
+  const setCanvasView = useWorkspaceStore(s => s.setCanvasView);
   const settingsLabel = isChinese ? '设置' : 'Settings';
   const { user, isLoggedIn } = useAuth();
   const [authOpen, setAuthOpen] = useState(false);
@@ -272,22 +276,22 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
         )}
       </div>
 
-      <nav className="studio-top-menu__modes flex min-w-0 items-center justify-center gap-0.5" aria-label={isChinese ? '工作区' : 'Workspace'}>
-        {/* Agent is a verb that operates on the workflow, not a peer surface —
-            it lives in the global right drawer. Only the Workflow noun is a
-            top-level mode now; rendering 'agent' here used to unmount the
-            canvas entirely (IA gap #1). */}
-        {(['workflow'] as const).map(tabMode => {
-          const isActive = mode === tabMode || mode === 'agent';
-          const label = isChinese ? '工作流' : 'Workflow';
+      <nav className="studio-top-menu__modes flex min-w-0 items-center justify-center gap-0.5" aria-label={isChinese ? '画布视图' : 'Canvas view'} role="tablist">
+        {/* The real noun-switcher lives here in the single top bar. Agent is a
+            verb in the global right drawer, not a peer mode — the old dead
+            '工作流' pill and the separate .canvas-view-switch row are gone. */}
+        {(['spatial', 'table'] as const).map(view => {
+          const isActive = canvasView === view;
+          const label = view === 'spatial' ? (isChinese ? '画布' : 'Canvas') : 'Table';
           return (
             <button
-              key={tabMode}
+              key={view}
               type="button"
-              onClick={() => actions.changeMode(tabMode)}
+              role="tab"
+              aria-selected={isActive}
+              onClick={() => setCanvasView(view)}
               className={`shrink-0 whitespace-nowrap rounded-md px-2.5 py-1 text-xs font-bold transition ${isActive ? 'bg-black/5' : 'opacity-50 hover:opacity-80'}`}
               style={{ color: 'var(--isl-ink)' }}
-              aria-pressed={isActive}
             >
               {label}
             </button>
@@ -351,17 +355,20 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
           <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full" style={{ background: agentColor }} />
           <span className="hidden whitespace-nowrap text-[11px] font-semibold xl:inline">{agentLabel}</span>
         </button>
-        <button
-          type="button"
-          className="isl-icon-btn flex h-8 min-w-8 shrink-0 items-center gap-1.5 px-2"
-          onClick={actions.openSettings}
+        {/* Status is a pure indicator — not a hidden Settings shortcut. Only the
+            gear opens Settings. Hover shows detail; a status popover could come
+            later if diagnostics need a surface. */}
+        <span
+          data-testid="runtime-status-chip"
+          className="flex h-8 min-w-8 shrink-0 cursor-default items-center gap-1.5 px-2"
           title={status.detail}
           aria-label={`${status.label}: ${status.detail}`}
+          role="status"
           style={{ color: status.tone === 'ready' ? 'var(--isl-mint-deep)' : 'var(--isl-coral-deep)' }}
         >
           {status.tone === 'ready' ? <CircleCheck size={15} /> : <CircleAlert size={15} />}
           <span className="hidden whitespace-nowrap text-[11px] font-semibold lg:inline">{status.label}</span>
-        </button>
+        </span>
         <button type="button" className="isl-icon-btn h-8 w-8 shrink-0" onClick={actions.toggleLanguage} title={isChinese ? 'Switch to English' : '切换到中文'}>
           <Languages size={15} />
           <span className="sr-only">{isChinese ? 'Switch to English' : '切换到中文'}</span>
