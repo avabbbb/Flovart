@@ -571,9 +571,35 @@ const App: React.FC = () => {
         // are two views of the same Workflow; Agent is the verb beside them.
         <div className="relative flex h-full min-h-0">
             <div className="grid h-full min-w-0 flex-1 grid-rows-[auto_minmax(0,1fr)]">
-                {/* 画布|Table switcher moved into StudioTopMenu's center modes
-                    slot — the second top row is gone (IA dedupe PR-A). */}
-                {canvasView === 'table' ? (
+                {/* Three peer views — Canvas | Table | Agent — switched in the
+                    topbar's center modes slot (single top row). */}
+                {canvasView === 'agent' ? (
+                    // Full-page Agent view — the third peer surface. Hosts picker
+                    // on top, built-in assistant below; the right drawer stays the
+                    // quick in-context surface.
+                    <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]">
+                        <AgentHubPanel
+                            project={activeWorkflowProject}
+                            onCreateProject={() => workflowCreateProject(language === 'zho' ? '未命名工作流' : 'Untitled workflow')}
+                            onOpenWorkflow={() => setCanvasView('spatial')}
+                            onOpenTable={handleOpenTable}
+                        />
+                        {activeWorkflowProject ? (
+                            <FlovartAgentPanel
+                                project={activeWorkflowProject}
+                                onActivityChange={() => undefined}
+                                onOpenSettings={() => setIsSettingsPanelOpen(true)}
+                                assetLibrary={assetLibrary}
+                                userApiKeys={userApiKeys}
+                                onFocusNode={handleFocusNodeFromDrawer}
+                            />
+                        ) : (
+                            <AgentDrawerEmptyState
+                                onCreateProject={() => workflowCreateProject(language === 'zho' ? '未命名工作流' : 'Untitled workflow')}
+                            />
+                        )}
+                    </div>
+                ) : canvasView === 'table' ? (
                     <Suspense fallback={<div className="grid h-full place-content-center text-sm opacity-40">正在加载 Table...</div>}>
                         <TableWorkspace
                             project={activeWorkflowProject}

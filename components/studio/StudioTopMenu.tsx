@@ -277,12 +277,12 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
       </div>
 
       <nav className="studio-top-menu__modes flex min-w-0 items-center justify-center gap-0.5" aria-label={isChinese ? '画布视图' : 'Canvas view'} role="tablist">
-        {/* The real noun-switcher lives here in the single top bar. Agent is a
-            verb in the global right drawer, not a peer mode — the old dead
-            '工作流' pill and the separate .canvas-view-switch row are gone. */}
-        {(['spatial', 'table'] as const).map(view => {
+        {/* Three peer views: Canvas | Table | Agent — the original 3-surface
+            plan. Agent is a full-page view here; the right drawer keeps the
+            quick assistant surface. */}
+        {(['spatial', 'table', 'agent'] as const).map(view => {
           const isActive = canvasView === view;
-          const label = view === 'spatial' ? (isChinese ? '画布' : 'Canvas') : 'Table';
+          const label = view === 'spatial' ? (isChinese ? 'Canvas' : 'Canvas') : view === 'table' ? 'Table' : 'Agent';
           return (
             <button
               key={view}
