@@ -227,7 +227,7 @@ body,
   min-height: 0;
 }
 
-.workflow-toolbar {
+.workflow-workspace .workflow-toolbar {
   --workflow-control-size: clamp(32px, 4cqi, 36px);
   max-width: calc(100% - 16px);
   min-width: 0;
@@ -237,15 +237,15 @@ body,
   scrollbar-width: none;
 }
 
-.workflow-toolbar::-webkit-scrollbar,
-.workflow-canvas-controls::-webkit-scrollbar {
+.workflow-workspace .workflow-toolbar::-webkit-scrollbar,
+.workflow-workspace .workflow-canvas-controls::-webkit-scrollbar {
   display: none;
 }
 
-.workflow-toolbar__button,
-.workflow-toolbar__add-btn,
-.workflow-toolbar__add-wrap,
-.workflow-toolbar__popover-wrap {
+.workflow-workspace .workflow-toolbar__button,
+.workflow-workspace .workflow-toolbar__add-btn,
+.workflow-workspace .workflow-toolbar__add-wrap,
+.workflow-workspace .workflow-toolbar__popover-wrap {
   width: var(--workflow-control-size) !important;
   height: var(--workflow-control-size) !important;
   min-width: var(--workflow-control-size) !important;
@@ -253,14 +253,14 @@ body,
   flex: 0 0 var(--workflow-control-size);
 }
 
-.workflow-toolbar__add-wrap,
-.workflow-toolbar__popover-wrap {
+.workflow-workspace .workflow-toolbar__add-wrap,
+.workflow-workspace .workflow-toolbar__popover-wrap {
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-.workflow-canvas-controls {
+.workflow-workspace .workflow-canvas-controls {
   max-width: calc(100% - 24px);
   overflow-x: auto;
   overscroll-behavior-inline: contain;
