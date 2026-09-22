@@ -426,6 +426,14 @@
       "watchers": 0,
       "releases": 29,
       "downloads": 36
+    },
+    {
+      "date": "2026-09-22",
+      "stars": 137,
+      "forks": 34,
+      "watchers": 0,
+      "releases": 32,
+      "downloads": 36
     }
   ],
   "releaseAssets": [
@@ -434,6 +442,60 @@
       "name": "Flovart_0.2.0_x64-setup.exe",
       "downloads": 36,
       "updatedAt": "2026-06-02T08:23:17Z"
+    },
+    {
+      "release": "nightly-94-e1d671e",
+      "name": "Flovart_0.3.2_amd64.AppImage",
+      "downloads": 0,
+      "updatedAt": "2026-09-21T15:34:33Z"
+    },
+    {
+      "release": "nightly-94-e1d671e",
+      "name": "Flovart_0.3.2_amd64.deb",
+      "downloads": 0,
+      "updatedAt": "2026-09-21T15:34:28Z"
+    },
+    {
+      "release": "nightly-94-e1d671e",
+      "name": "Flovart_0.3.2_x64-setup.exe",
+      "downloads": 0,
+      "updatedAt": "2026-09-21T15:36:33Z"
+    },
+    {
+      "release": "nightly-93-33faa59",
+      "name": "Flovart_0.3.2_amd64.AppImage",
+      "downloads": 0,
+      "updatedAt": "2026-09-21T11:41:26Z"
+    },
+    {
+      "release": "nightly-93-33faa59",
+      "name": "Flovart_0.3.2_amd64.deb",
+      "downloads": 0,
+      "updatedAt": "2026-09-21T11:41:22Z"
+    },
+    {
+      "release": "nightly-93-33faa59",
+      "name": "Flovart_0.3.2_x64-setup.exe",
+      "downloads": 0,
+      "updatedAt": "2026-09-21T11:44:40Z"
+    },
+    {
+      "release": "nightly-92-13d3739",
+      "name": "Flovart_0.3.2_amd64.AppImage",
+      "downloads": 0,
+      "updatedAt": "2026-09-21T09:53:15Z"
+    },
+    {
+      "release": "nightly-92-13d3739",
+      "name": "Flovart_0.3.2_amd64.deb",
+      "downloads": 0,
+      "updatedAt": "2026-09-21T09:53:12Z"
+    },
+    {
+      "release": "nightly-92-13d3739",
+      "name": "Flovart_0.3.2_x64-setup.exe",
+      "downloads": 0,
+      "updatedAt": "2026-09-21T09:54:45Z"
     },
     {
       "release": "nightly-91-e65db7e",
@@ -922,5 +984,5 @@
       "updatedAt": "2026-09-06T12:12:04Z"
     }
   ],
-  "updatedAt": "2026-09-21T05:05:08.949Z"
+  "updatedAt": "2026-09-22T05:06:54.860Z"
 }
