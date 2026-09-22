@@ -49,7 +49,7 @@ export const useWorkspaceStore = create<WorkspaceStore>()(
         // v1 persisted 'table' as a top-level view; Table 现在是 Canvas 二级视图。
         const raw: Record<string, unknown> = persisted && typeof persisted === 'object' ? persisted as Record<string, unknown> : {};
         const activeView: WorkspaceView = raw.activeView === 'agent' ? 'agent' : 'workflow';
-        const canvasView: CanvasView = raw.activeView === 'table' || raw.canvasView === 'table' ? 'table' : 'spatial';
+        const canvasView: CanvasView = raw.activeView === 'table' || raw.canvasView === 'table' ? 'table' : raw.canvasView === 'agent' ? 'agent' : 'spatial';
         const themeMode: ThemeMode = raw.themeMode === 'light' || raw.themeMode === 'dark' || raw.themeMode === 'system' ? raw.themeMode : 'system';
         const language: 'en' | 'zho' = raw.language === 'en' ? 'en' : 'zho';
         return { activeView, canvasView, themeMode, language };
