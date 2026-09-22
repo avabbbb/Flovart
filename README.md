@@ -255,7 +255,7 @@ Concretely: you ask your agent for a three-shot product video. It creates the sh
 | Automation | Explicit inspect/apply/run operations with revision and approval boundaries |
 | Data | Local-first storage with documented browser and runtime boundaries |
 
-Compose image, text, video, audio and configuration nodes, keep projects and references close to your workspace, and extend providers, hosts and node operations through explicit contracts. The product model is **Canvas** (the spatial Workflow surface; Table is a secondary view of the same project), **Inspector** (node/selection editing), and **Agent** (the 5-operation control surface). Canvas and Inspector are the primary surfaces; Table and Agent are real entries, but their remaining implementation work is not presented as complete — see [Features](docs/content/docs/overview/features.en.mdx).
+Compose image, text, video, audio and configuration nodes, keep projects and references close to your workspace, and extend providers, hosts and node operations through explicit contracts. The product model is **Canvas** (the spatial Workflow surface; Table is an alternate view of the same project), **Inspector** (node/selection editing), and **Agent** (the global right drawer hosting the 5-operation control surface). Canvas and Inspector are the primary surfaces; Table and Agent are real entries, but their remaining implementation work is not presented as complete — see [Features](docs/content/docs/overview/features.en.mdx).
 
 ## One workflow, human + agent
 
@@ -308,7 +308,7 @@ flowchart LR
   L --> W
   W --> P["Provider adapters"]
   W --> R["Local assets + artifacts"]
-  T["Table workspace"] -. separate surface .-> W
+  T["Table view"] -. alternate view of the same Workflow .-> W
 ```
 
 CLI and the experimental stdio MCP share operation semantics and the current Browser Workflow binding. Deterministic operations do not require a second AI to reinterpret them.

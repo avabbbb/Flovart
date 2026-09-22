@@ -51,7 +51,7 @@ Coding Agent / DSH
 
 ## 已确认的约束
 
-- Workflow、Table、Agent 是三个产品工作区，不能因为新集成再创建第四个 Canvas/Native workspace。
+- Canvas 与 Table 是同一 Workflow 的两种视图，Agent 是全局右侧抽屉；不能因为新集成再创建第四个 Canvas/Native workspace，也不得把 Agent 重新独立成对等的工作区页面。
 - Browser Workflow 仍是可见 Workflow 的 authority；新 CLI/MCP/Host 不得隐式创建 native fallback。
 - Provider credentials 不进入 Skill、Host Context、MCP result、CLI stdout、DSH service state 或宿主面板。
 - Host adapter 只负责上下文、选区物化和产物导入，不能直连 Provider 或拥有 Workflow mutation 逻辑。

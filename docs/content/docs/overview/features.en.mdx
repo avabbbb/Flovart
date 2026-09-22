@@ -4,17 +4,17 @@ title: Features
 
 Flovart currently provides local-first Workflow and agent creation surfaces. Native effects are the development direction: generate replacement media in AE/PR, adjust a cached result locally, and open Flovart for more complex workflows. This direction is not a shipped capability.
 
-## Current workspaces
+## Current surfaces
 
-| Workspace | Purpose | Boundary |
+| Surface | Purpose | Boundary |
 | --- | --- | --- |
-| Workflow | Prompts, references, models, dependencies, tasks and results | Main surface exists; provider behavior requires actual verification |
-| Table | Independent node-based media processing | Entry exists; main workbench remains to be implemented |
-| Agent | Assistant connection, tasks, context and artifacts | Connection UI exists; deeper two-way sessions require per-agent implementation and verification |
+| Canvas | Prompts, references, models, dependencies, tasks and results — the spatial Workflow view | Main surface exists; provider behavior requires actual verification |
+| Table | Tabular view of the same Workflow | Entry exists; main workbench remains to be implemented |
+| Agent | Assistant connection, tasks, context and artifacts — hosted in the global right drawer | Connection UI exists; deeper two-way sessions require per-agent implementation and verification |
 
 Workflow provides media nodes, PromptBar, connections, local assets and editable generation results. Pending changes for media selection, references, result versions and recovery are listed in [pending verification](../progress/pending-test.mdx).
 
-Each workspace owns its graph and history. Table does not share Workflow nodes; Agent is not another generation graph. The removed Canvas/Art surfaces are not returning.
+Canvas and Table are two views of the same Workflow; Agent is a global right drawer, not a peer workspace or another generation graph. The removed Canvas/Art surfaces are not returning.
 
 ## CLI, skills and assistants
 

@@ -29,7 +29,7 @@
 只交付一个产品和按需安装的组件：
 
 - 宿主插件：生成面板与原生效果，用户的日常入口。
-- Flovart 工作区：Workflow 做生成编排，Table 做独立媒体处理，Agent 做对话、任务与产物协作。三者保持独立入口和各自状态，不把 Agent 变成 Workflow/Table 的重复控制面。
+- Flovart 主应用：Canvas 做生成编排，Table 是同一 Workflow 的表格视图，Agent 是全局右侧抽屉里承载对话、任务与产物协作的表面，不把 Agent 变成 Workflow/Table 的重复控制面或独立工作区。
 - 本地服务与连接器：后台任务、素材文件、CLI/Skill 和 Agent 接入；CLI + Skill 是外部 Agent 的默认路径，MCP 只作为可选投影，不扩张为新的运行时。
 
 用户可直接使用插件按钮，无需先配置 Agent。第一次生成才配置 AI 服务并展示本次范围和费用；模型服务账号与 Agent 账号分开。现有 Plus/OAuth、代理和 Provider 配置不得被连接引导改写。
