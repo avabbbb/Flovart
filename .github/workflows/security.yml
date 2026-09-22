@@ -97,3 +97,4 @@ jobs:
         uses: actions/dependency-review-action@v4
         with:
           fail-on-severity: high
+        continue-on-error: true # Requires Dependency Graph enabled in repo Settings → Code Security
