@@ -180,7 +180,7 @@
 .workflow-node__script-more { font-size: 11px; color: var(--wf-muted); text-align: center; padding: 2px; }
 .workflow-spin { animation: workflow-spin 1s linear infinite; } @keyframes workflow-spin { to { transform: rotate(360deg); } }
 .workflow-toolbar { position: absolute; z-index: 40; left: 50%; bottom: 12px; transform: translateX(-50%); display: flex; align-items: center; gap: 4px; padding: 4px; border: 1.5px solid var(--isl-border); border-radius: 16px; background: var(--isl-card); box-shadow: var(--isl-shadow); backdrop-filter: blur(16px); }
-.workflow-canvas-controls { position:absolute;z-index:40;left:12px;bottom:12px;display:flex;height:40px;align-items:center;gap:1px;color:var(--wf-text); }
+.workflow-canvas-controls { position:absolute;z-index:40;right:12px;bottom:12px;display:flex;height:40px;align-items:center;gap:1px;color:var(--wf-text); }
 .workflow-canvas-controls .isl-icon-btn { width:34px!important;height:34px!important;border:0!important;border-radius:9px!important;box-shadow:none!important;background:transparent!important; }
 .workflow-canvas-controls__assets { display:flex;height:34px;align-items:center;gap:6px;border:0;border-radius:9px;padding:0 8px;color:var(--wf-muted);background:transparent;font-size:11px;cursor:pointer; }
 .workflow-canvas-controls__assets:hover,.workflow-canvas-controls__zoom:hover { color:var(--wf-text);background:var(--isl-surface-2); }
