@@ -1,8 +1,7 @@
 /* Table keeps its own media-processing graph, but its chrome reflows around it. */
 
 .table-workspace {
-  container-type: inline-size;
-  grid-template-columns: minmax(180px, 220px) minmax(0, 1fr);
+  grid-template-columns: clamp(168px, 20%, 220px) minmax(0, 1fr);
   width: 100%;
   min-width: 0;
   min-height: 0;
@@ -21,7 +20,7 @@
 }
 
 .table-workspace__main--with-tools {
-  grid-template-columns: minmax(0, 1fr) minmax(220px, 256px);
+  grid-template-columns: minmax(0, 1fr) clamp(220px, 24%, 280px);
 }
 
 .table-workspace__main img,
@@ -33,7 +32,7 @@
   max-height: calc(100dvh - 190px);
 }
 
-@container (max-width: 900px) {
+@container studio-surface (width <= 900px) {
   .table-workspace {
     grid-template-columns: minmax(160px, 190px) minmax(0, 1fr);
   }
@@ -50,7 +49,7 @@
   }
 }
 
-@container (max-width: 640px) {
+@container studio-surface (width <= 640px) {
   .table-workspace {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto minmax(0, 1fr);

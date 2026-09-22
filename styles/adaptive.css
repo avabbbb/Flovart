@@ -55,7 +55,22 @@ body,
 }
 
 .app-shell {
-  container-type: inline-size;
+  container: app-shell / inline-size;
+}
+
+.studio-layout {
+  container: studio-workspace / inline-size;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+}
+
+.studio-layout__surface {
+  container: studio-surface / inline-size;
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 0;
 }
 
 .app-shell__workspace,
@@ -155,7 +170,7 @@ body,
 
 /* Workflow is a 2-D surface; only its chrome participates in reflow. */
 .workflow-workspace {
-  container-type: inline-size;
+  container: workflow-space / inline-size;
 }
 
 /* Overlay (non-docked) sidebar floats over the canvas: its width is bounded by
@@ -176,11 +191,33 @@ body,
 
 .compact-right-panel {
   --drawer-width: var(--panel-preferred);
-  width: min(var(--drawer-width), calc(100% - 16px));
-  max-width: calc(100% - 16px);
+  --drawer-min-width: var(--panel-min);
+  --drawer-max-width: var(--panel-max);
+  --drawer-outer-gap: 0px;
+  container: assistant-drawer / inline-size;
   min-width: 0;
   min-height: 0;
   overscroll-behavior: contain;
+}
+
+.compact-right-panel[data-open='false'] {
+  display: none;
+}
+
+.compact-right-panel[data-open='true'][data-docked='true'] {
+  width: min(var(--drawer-width), var(--drawer-max-width), 42%);
+  min-width: min(var(--drawer-min-width), 42%);
+  max-width: min(var(--drawer-max-width), 42%);
+  flex: 0 1 min(var(--drawer-width), var(--drawer-max-width), 42%);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.compact-right-panel[data-open='true'][data-docked='false'] {
+  width: min(var(--drawer-width), calc(100% - (2 * var(--drawer-outer-gap))));
+  max-width: calc(100% - (2 * var(--drawer-outer-gap)));
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .compact-right-panel > :last-child,
@@ -190,9 +227,44 @@ body,
   min-height: 0;
 }
 
-.workflow-toolbar {
+.workflow-workspace .workflow-toolbar {
+  --workflow-control-size: clamp(32px, 4cqi, 36px);
   max-width: calc(100% - 16px);
   min-width: 0;
+  gap: clamp(2px, .45cqi, 4px);
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: none;
+}
+
+.workflow-workspace .workflow-toolbar::-webkit-scrollbar,
+.workflow-workspace .workflow-canvas-controls::-webkit-scrollbar {
+  display: none;
+}
+
+.workflow-workspace .workflow-toolbar__button,
+.workflow-workspace .workflow-toolbar__add-btn,
+.workflow-workspace .workflow-toolbar__add-wrap,
+.workflow-workspace .workflow-toolbar__popover-wrap {
+  width: var(--workflow-control-size) !important;
+  height: var(--workflow-control-size) !important;
+  min-width: var(--workflow-control-size) !important;
+  min-height: var(--workflow-control-size) !important;
+  flex: 0 0 var(--workflow-control-size);
+}
+
+.workflow-workspace .workflow-toolbar__add-wrap,
+.workflow-workspace .workflow-toolbar__popover-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.workflow-workspace .workflow-canvas-controls {
+  max-width: calc(100% - 24px);
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: none;
 }
 
 .workflow-toolbar__library,
@@ -211,28 +283,6 @@ body,
 .workflow-node-prompt {
   width: min(var(--workflow-node-prompt-width, 880px), calc(100cqw - 16px));
   max-width: calc(100% - 16px);
-}
-
-/* Table: the JSX declares semantics, CSS chooses the number of panes. */
-.table-workspace {
-  container-type: inline-size;
-  grid-template-columns: minmax(180px, 220px) minmax(0, 1fr) !important;
-}
-
-.table-workspace__main,
-.table-workspace__main--with-tools {
-  grid-template-columns: minmax(0, 1fr) minmax(220px, 256px) !important;
-}
-
-.table-workspace__main > section,
-.table-workspace__tools,
-.table-workspace > aside {
-  min-width: 0;
-  min-height: 0;
-}
-
-.table-preview-media {
-  max-height: calc(var(--app-height) - 190px);
 }
 
 /* Settings and host cards adapt to the space their caller gives them. */
@@ -350,37 +400,16 @@ body,
   min-width: 0;
 }
 
-@container (max-width: 1023px) {
+@container workflow-space (width <= 1023px) {
   .workflow-sidebar:not([data-docked]) {
     width: min(320px, calc(100% - 16px)) !important;
   }
-
-  .compact-right-panel {
-    top: 8px !important;
-    right: 8px !important;
-    bottom: 8px !important;
-    width: min(var(--drawer-width), calc(100% - 16px)) !important;
-    max-width: calc(100% - 16px);
-    border-radius: 16px;
-  }
-
-  .compact-right-panel > [role='separator'] { display: none; }
 }
 
-@container (max-width: 760px) {
+@container workflow-space (width <= 760px) {
   .workflow-sidebar:not([data-docked]) {
     width: calc(100% - 16px) !important;
     min-width: 0;
-  }
-
-  .compact-right-panel,
-  .compact-right-panel--flush {
-    top: 0 !important;
-    right: 0 !important;
-    bottom: 0 !important;
-    width: 100% !important;
-    max-width: 100%;
-    border-radius: 0 !important;
   }
 
   .workflow-toolbar {
@@ -388,9 +417,48 @@ body,
   }
 
   .workflow-toolbar__history-direct { display: none; }
+
+  .workflow-canvas-controls__assets span {
+    display: none;
+  }
 }
 
-@media (max-width: 1023px) {
+@container assistant-drawer (width <= 360px) {
+  .compact-right-panel__quicktabs .isl-tab span {
+    display: none;
+  }
+
+  .compact-right-panel__quicktabs .isl-tab {
+    padding-inline: 4px;
+  }
+}
+
+@container app-shell (width <= 1023px) {
+  .compact-right-panel[data-open='true'][data-docked='false'] {
+    top: 8px !important;
+    right: 8px !important;
+    bottom: 8px !important;
+    width: min(var(--drawer-width), calc(100% - 16px));
+    max-width: calc(100% - 16px);
+    border-radius: 16px;
+  }
+
+  .compact-right-panel > [role='separator'] { display: none; }
+}
+
+@container app-shell (width <= 760px) {
+  .compact-right-panel[data-open='true'][data-docked='false'],
+  .compact-right-panel--flush[data-open='true'][data-docked='false'] {
+    top: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    width: 100%;
+    max-width: 100%;
+    border-radius: 0 !important;
+  }
+}
+
+@container app-shell (width <= 1023px) {
   .app-shell__content,
   .app-shell__content[data-sidebar-layout='with-sidebars'] {
     grid-template-columns: minmax(0, 1fr);
@@ -400,27 +468,6 @@ body,
   .app-shell__right-sidebar {
     width: 100%;
     max-width: none;
-  }
-
-  .table-workspace,
-  .table-workspace__main--with-tools {
-    grid-template-columns: minmax(0, 1fr) !important;
-  }
-
-  .table-workspace > aside {
-    max-height: min(28dvh, 220px);
-    border-right: 0;
-    border-bottom: 1px solid var(--isl-border);
-  }
-
-  .table-workspace__tools {
-    max-height: min(36dvh, 280px);
-    border-left: 0 !important;
-    border-top: 1px solid var(--isl-border);
-  }
-
-  .table-preview-media {
-    max-height: calc(var(--app-height) - 250px);
   }
 }
 

@@ -569,8 +569,12 @@ const App: React.FC = () => {
     const main = (
         // One global right drawer spans both noun surfaces — Canvas and Table
         // are two views of the same Workflow; Agent is the verb beside them.
-        <div className="relative flex h-full min-h-0">
-            <div className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col">
+        <div
+            className="studio-layout relative flex h-full min-h-0 min-w-0"
+            data-drawer-open={canvasView !== 'agent' && rightOpen ? 'true' : 'false'}
+            data-drawer-docked={!mediumViewport ? 'true' : 'false'}
+        >
+            <div className="studio-layout__surface relative flex h-full min-h-0 min-w-0 flex-1 flex-col">
                 {/* Three top-level surfaces. Agent is connection management only;
                     the built-in assistant remains in the right drawer beside the
                     two Workflow views. */}
@@ -620,7 +624,6 @@ const App: React.FC = () => {
                             isEnhancingPrompt={isEnhancingPrompt}
                             onOpenAgent={openAgentDrawerTab}
                             agentOpen={rightOpen && rightTab === 'agent'}
-                            rightPanelInset={rightOpen && !mediumViewport ? rightWidth + 24 : 12}
                             focusNodeRequest={focusNodeRequest}
                             onNotify={(message, level) => toast.show(message, level)}
                         />

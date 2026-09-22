@@ -243,7 +243,6 @@ export function InfiniteWorkflow({
   onEnhancePrompt,
   isEnhancingPrompt,
   agentOpen,
-  rightPanelInset,
   assetLibrary,
   focusNodeRequest,
   onOpenAssets,
@@ -258,7 +257,6 @@ export function InfiniteWorkflow({
   imageTools?: WorkflowImageToolHandlers;
   onOpenAgent?: () => void;
   agentOpen?: boolean;
-  rightPanelInset?: number;
   t?: (key: string, ...args: any[]) => string;
   theme?: 'light' | 'dark';
   language?: 'en' | 'zho';
@@ -1188,16 +1186,16 @@ export function InfiniteWorkflow({
 
   const viewportCenter = useCallback(() => {
     const rect = rootRef.current?.getBoundingClientRect();
-    const availableWidth = Math.max(360, (rect?.width || 1000) - (rightPanelInset || 0));
+    const availableWidth = Math.max(360, rect?.width || 1000);
     return screenToWorkflow((rect?.left || 0) + availableWidth / 2, (rect?.top || 0) + (rect?.height || 700) / 2);
-  }, [rightPanelInset, screenToWorkflow]);
+  }, [screenToWorkflow]);
 
   // 聚焦到一块世界坐标区域（单节点=其包围盒，多选=选区包围盒），
   // 与 focusNodeRequest 共用同一套 drawer-inset 感知动画。
   const focusBounds = useCallback((minX: number, minY: number, maxX: number, maxY: number) => {
     const rect = rootRef.current?.getBoundingClientRect();
     if (!rect) return;
-    const availableWidth = Math.max(360, rect.width - (rightPanelInset || 0));
+    const availableWidth = Math.max(360, rect.width);
     const padding = 120;
     const targetK = Math.min(1.5, Math.max(0.12, Math.min((availableWidth - padding) / Math.max(1, maxX - minX), (rect.height - padding) / Math.max(1, maxY - minY))));
     const centerX = (minX + maxX) / 2;
@@ -1227,7 +1225,7 @@ export function InfiniteWorkflow({
       }
     };
     focusAnimRef.current = window.requestAnimationFrame(tick);
-  }, [patchProject, rightPanelInset]);
+  }, [patchProject]);
 
   const focusNode = useCallback((id: string) => {
     const node = projectRef.current.nodes.find(n => n.id === id);
@@ -2045,14 +2043,14 @@ export function InfiniteWorkflow({
     const rect = rootRef.current?.getBoundingClientRect();
     const nodes = projectRef.current.nodes.filter(node => node.isVisible !== false);
     if (!rect || nodes.length === 0) return;
-    const availableWidth = Math.max(360, rect.width - (rightPanelInset || 0));
+    const availableWidth = Math.max(360, rect.width);
     const minX = Math.min(...nodes.map(node => node.position.x));
     const minY = Math.min(...nodes.map(node => node.position.y));
     const maxX = Math.max(...nodes.map(node => node.position.x + node.width));
     const maxY = Math.max(...nodes.map(node => node.position.y + node.height));
     const k = Math.min(1.5, Math.max(0.12, Math.min((availableWidth - 160) / Math.max(1, maxX - minX), (rect.height - 160) / Math.max(1, maxY - minY))));
     patchProject({ viewport: { x: availableWidth / 2 - ((minX + maxX) / 2) * k, y: rect.height / 2 - ((minY + maxY) / 2) * k, k } });
-  }, [patchProject, rightPanelInset]);
+  }, [patchProject]);
 
   const zoomBy = useCallback((factor: number) => {
     setFocusBadge(false);
@@ -2221,12 +2219,14 @@ export function InfiniteWorkflow({
     right: Math.max(bounds.right, node.position.x + node.width),
     bottom: Math.max(bounds.bottom, node.position.y + node.height),
   }), { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity }) : null;
-  const workflowWidth = Math.max(360, (rootSize?.width || 1000) - (rightPanelInset || 0));
+  // The workflow root already reflects the space left by docked panels. Keep
+  // overlay geometry local to that measured container instead of subtracting
+  // the drawer a second time in JavaScript.
+  const workflowWidth = Math.max(360, rootSize?.width || 1000);
   const overlayCenter = overlayBounds ? project.viewport.x + ((overlayBounds.left + overlayBounds.right) / 2) * project.viewport.k : 0;
   const toolbarLeft = Math.max(8, Math.min(overlayCenter, workflowWidth - 8));
   const toolbarTop = overlayBounds ? Math.max(8, project.viewport.y + overlayBounds.top * project.viewport.k - Math.max(72, 56 + 28 * project.viewport.k)) : 0;
-  // PromptBar 让位行程减半：右侧面板弹出时只左移一半距离，避免过度偏移
-  const promptWorkflowWidth = Math.max(360, (rootSize?.width || 1000) - Math.round((rightPanelInset || 0) / 2));
+  const promptWorkflowWidth = workflowWidth;
   const promptWidth = Math.min(880, Math.max(360, promptWorkflowWidth - 16));
   const promptLeft = Math.max(8, Math.min(overlayCenter - promptWidth / 2, promptWorkflowWidth - promptWidth - 8));
   const configLeft = Math.max(8, Math.min(overlayCenter - 210, workflowWidth - 428));
@@ -2288,7 +2288,7 @@ export function InfiniteWorkflow({
     const k = project.viewport.k || 1;
     const left = -project.viewport.x / k;
     const top = -project.viewport.y / k;
-    const width = Math.max(320, (rootSize?.width || 1200) - (rightPanelInset || 0));
+    const width = Math.max(320, rootSize?.width || 1200);
     const height = Math.max(240, rootSize?.height || 800);
     return {
       left: left - VIEWPORT_CULL_MARGIN,
@@ -2296,7 +2296,7 @@ export function InfiniteWorkflow({
       right: left + width / k + VIEWPORT_CULL_MARGIN,
       bottom: top + height / k + VIEWPORT_CULL_MARGIN,
     };
-  }, [project.viewport.k, project.viewport.x, project.viewport.y, rightPanelInset, rootSize?.height, rootSize?.width]);
+  }, [project.viewport.k, project.viewport.x, project.viewport.y, rootSize?.height, rootSize?.width]);
 
   const renderNodes = useMemo(() => displayNodes.filter(node => {
     if (node.isVisible === false || hiddenByBatch.has(node.id)) return false;
@@ -2412,7 +2412,6 @@ export function InfiniteWorkflow({
         onZoomIn={zoomIn}
         onZoomOut={zoomOut}
         onZoomReset={zoomReset}
-        rightInset={rightPanelInset}
       />
       <div ref={worldRef} className="workflow-world" style={{ transform: `translate(${project.viewport.x}px, ${project.viewport.y}px) scale(${project.viewport.k})` }}>
         <WorkflowConnections

@@ -42,8 +42,6 @@ export interface WorkflowWorkspaceProps {
   onOpenAgent?: () => void;
   /** Reflects the global Agent drawer (mounted by the App shell, not here). */
   agentOpen?: boolean;
-  /** Right-drawer width inset so canvas focus/spawn math stays inside the visible region. */
-  rightPanelInset?: number;
   focusNodeRequest?: { nodeId: string; nonce: number };
   assetLibrary: AssetLibrary;
   onRenameAsset: (id: string, name: string) => void;
@@ -191,7 +189,6 @@ export function WorkflowWorkspace({
   isEnhancingPrompt,
   onOpenAgent,
   agentOpen = false,
-  rightPanelInset = 12,
   focusNodeRequest,
   assetLibrary,
   onRenameAsset,
@@ -405,7 +402,6 @@ assetLibrary={assetLibrary}
               onOpenAgent={onOpenAgent}
               agentOpen={agentOpen}
               focusNodeRequest={localFocusRequest && localFocusRequest.nonce > (focusNodeRequest?.nonce ?? 0) ? localFocusRequest : focusNodeRequest}
-              rightPanelInset={rightPanelInset}
               t={t}
               theme={theme}
               language={language}

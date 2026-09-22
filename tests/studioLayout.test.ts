@@ -61,26 +61,40 @@ describe('studio layout contracts', () => {
     expect(workflowStyles).not.toContain('.workflow-agent__composer button { width: 34px;');
   });
 
-  it('keeps Workflow overlays and controls inside their usable canvas region', () => {
+  it('keeps Workflow overlays inside the measured canvas container without drawer math', () => {
+    const app = source('App.tsx');
+    const workspace = source('components/workflow/WorkflowWorkspace.tsx');
     const workflow = source('components/workflow/InfiniteWorkflow.tsx');
     const toolbar = source('components/workflow/WorkflowToolbar.tsx');
     const workflowStyles = source('styles/workflow.css');
 
     expect(workflowStyles).toContain('.workflow-toolbar__add-menu { position: absolute; bottom: calc(100% + 6px);');
-    expect(toolbar).toContain("style={constrained ? { left: `calc((100% - ${Math.min(rightInset, 220)}px) / 2)` } : undefined}");
+    expect(app).not.toContain('rightPanelInset=');
+    expect(workspace).not.toContain('rightPanelInset');
+    expect(workflow).not.toContain('rightPanelInset');
+    expect(toolbar).not.toContain('rightInset');
+    expect(workflow).toContain('const workflowWidth = Math.max(360, rootSize?.width || 1000);');
+    expect(workflow).toContain('const promptWorkflowWidth = workflowWidth;');
     expect(workflow).toContain('Math.max(72, 56 + 28 * project.viewport.k)');
     expect(workflow).toContain('const dockSafeTop = rootHeight - 60;');
     expect(workflowStyles.match(/overflow: clip/g)?.length).toBeGreaterThanOrEqual(2);
   });
-  it('keeps bottom toolbar controls and assistant tabs aligned when panels open', () => {
+  it('uses one responsive layout system for shell, drawer, toolbar, and Table', () => {
+    const adaptive = source('styles/adaptive.css');
     const workflowStyles = source('styles/workflow.css');
-    const shellStyles = source('styles/index.css');
+    const tableStyles = source('styles/table.css');
+    const drawer = source('components/studio/StudioRightDrawer.tsx');
 
-    expect(workflowStyles).toContain('.workflow-toolbar--inset > .workflow-toolbar__popover-wrap > .isl-icon-btn');
-    expect(workflowStyles).toContain('.workflow-toolbar--inset > .workflow-toolbar__popover-wrap { width:32px;height:32px;flex:0 0 32px; }');
-    expect(shellStyles).toContain('.compact-right-panel__quicktabs .isl-tab:hover,');
-    expect(shellStyles).toContain('transform: none !important;');
-    expect(shellStyles).toContain('.compact-right-panel__quicktabs > button:hover,');
+    expect(adaptive).toContain('container: app-shell / inline-size;');
+    expect(adaptive).toContain('container: studio-workspace / inline-size;');
+    expect(adaptive).toContain('container: studio-surface / inline-size;');
+    expect(adaptive).toContain('container: workflow-space / inline-size;');
+    expect(adaptive).toContain('container: assistant-drawer / inline-size;');
+    expect(adaptive).toContain('@container assistant-drawer (width <= 360px)');
+    expect(adaptive).toContain('--workflow-control-size: clamp(32px, 4cqi, 36px);');
+    expect(workflowStyles).not.toContain('workflow-toolbar--inset');
+    expect(tableStyles).toContain('@container studio-surface (width <= 900px)');
+    expect(drawer).toContain("data-docked={docked ? 'true' : 'false'}");
   });
 
 });
