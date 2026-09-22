@@ -12,7 +12,7 @@ import { StudioTopMenu, type StudioMenuModel } from './components/studio/StudioT
 import { StudioRightDrawer } from './components/studio/StudioRightDrawer';
 import { StudioMediaBrowser } from './components/studio/StudioMediaBrowser';
 import { FlovartAgentPanel } from './components/agent/FlovartAgentPanel';
-import { AgentHubPanel, AgentDrawerEmptyState } from './components/agent/AgentWorkspace';
+import { AgentConnectionsPage, AgentDrawerEmptyState } from './components/agent/AgentWorkspace';
 import { useMediaQuery } from './hooks/useMediaQuery';
 import { useWorkspaceStore } from './stores/useWorkspaceStore';
 import { flushWorkflowPersistence, useWorkflowStore } from './components/workflow/store';
@@ -538,7 +538,7 @@ const App: React.FC = () => {
     }), [language]);
     const studioMenuModel: StudioMenuModel = useMemo(() => ({
         mode: activeView,
-        title: canvasView === 'table' ? 'Table' : activeWorkflowTitle,
+        title: canvasView === 'table' ? 'Table' : canvasView === 'agent' ? 'Agent' : activeWorkflowTitle,
         themeMode,
         resolvedTheme,
         language,
@@ -571,9 +571,12 @@ const App: React.FC = () => {
         // are two views of the same Workflow; Agent is the verb beside them.
         <div className="relative flex h-full min-h-0">
             <div className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col">
-                {/* 画布|Table switcher moved into StudioTopMenu's center modes
-                    slot — the second top row is gone (IA dedupe PR-A). */}
-                {canvasView === 'table' ? (
+                {/* Three top-level surfaces. Agent is connection management only;
+                    the built-in assistant remains in the right drawer beside the
+                    two Workflow views. */}
+                {canvasView === 'agent' ? (
+                    <AgentConnectionsPage project={activeWorkflowProject} />
+                ) : canvasView === 'table' ? (
                     <Suspense fallback={<div className="grid h-full place-content-center text-sm opacity-40">正在加载 Table...</div>}>
                         <TableWorkspace
                             project={activeWorkflowProject}
@@ -626,7 +629,7 @@ const App: React.FC = () => {
             </div>
 
             <StudioRightDrawer
-                open={rightOpen}
+                open={canvasView !== 'agent' && rightOpen}
                 onOpenChange={setRightOpen}
                 outerGap={0}
                 width={rightWidth}
@@ -636,10 +639,9 @@ const App: React.FC = () => {
                 flush
                 docked={!mediumViewport}
                 activeTab={rightTab}
-                onTabChange={tab => setRightTab(tab as 'agent' | 'hosts' | 'context' | 'history')}
+                onTabChange={tab => setRightTab(tab as 'agent' | 'context' | 'history')}
                 tabs={[
-                    { id: 'agent', label: language === 'zho' ? 'Agent' : 'Agent', icon: undefined },
-                    { id: 'hosts', label: language === 'zho' ? '协作' : 'Hosts', icon: undefined },
+                    { id: 'agent', label: language === 'zho' ? '助手' : 'Assistant', icon: undefined },
                     { id: 'context', label: language === 'zho' ? '上下文' : 'Context', icon: undefined },
                     { id: 'history', label: language === 'zho' ? '生成历史' : 'History', icon: undefined },
                 ]}
@@ -660,14 +662,6 @@ const App: React.FC = () => {
                         onCreateProject={() => workflowCreateProject(language === 'zho' ? '未命名工作流' : 'Untitled workflow')}
                     />
                 ))}
-                {rightTab === 'hosts' && (
-                    <AgentHubPanel
-                        project={activeWorkflowProject}
-                        onCreateProject={() => workflowCreateProject(language === 'zho' ? '未命名工作流' : 'Untitled workflow')}
-                        onOpenWorkflow={() => setCanvasView('spatial')}
-                        onOpenTable={handleOpenTable}
-                    />
-                )}
                 {rightTab === 'context' && (activeWorkflowProject ? (
                     <Suspense fallback={null}>
                         <WorkflowContextPanel project={activeWorkflowProject} />
