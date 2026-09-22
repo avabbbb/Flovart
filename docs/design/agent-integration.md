@@ -12,7 +12,7 @@
 
 ## 2. 稳定操作面
 
-模型日常只需要五个稳定操作：
+模型日常以五个稳定操作为 baseline：
 
 - `status`
 - `workflow.inspect`
@@ -20,7 +20,7 @@
 - `workflow.apply`
 - `workflow.node.run`
 
-连接准备与诊断使用 `ensure` / `doctor`。更细的内部命令可以存在，但不自动进入 Agent-facing surface。
+连接准备与诊断使用 `ensure` / `doctor`。更细的兼容 helper 可以存在；只有 canonical Skill 明确需要它来弥补当前 stable operation 的表达缺口时才教给 Agent，并且仍走同一 mutation/authority 边界。它不能演变成第二套 Agent-facing 产品 surface。
 
 ## 3. Transport
 

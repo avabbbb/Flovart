@@ -53,7 +53,7 @@ Canvas 和 Table 旁边共享一个 contextual right drawer：
 3. MCP 是同一 operation contract 的可选投影。
 4. 内置 Assistant 调用同一业务能力，不拥有更高权限。
 
-稳定 model-facing operations 只保留：
+稳定 model-facing baseline 保留：
 
 - `status`
 - `workflow.inspect`
@@ -61,7 +61,7 @@ Canvas 和 Table 旁边共享一个 contextual right drawer：
 - `workflow.apply`
 - `workflow.node.run`
 
-`ensure` / `doctor` 属于连接准备与诊断，不是模型日常操作面。
+`ensure` / `doctor` 属于连接准备与诊断，不是模型日常操作面。Canonical Skill 可以在当前五个稳定 operation 无法安全表达某个兼容动作时记录少量 granular helper；helper 不是新的产品 surface，也不能绕过同一 mutation/authority 边界。
 
 禁止为了一个 Host 再复制 Workflow schema、Provider route、权限模型或生成实现。详细边界见 [Agent Integration](./agent-integration.md)。
 
