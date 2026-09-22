@@ -1,71 +1,41 @@
-import { Boxes, CircleDot, Grid2X2, Sparkles } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { Sparkles } from 'lucide-react';
 import '../../styles/agent.css';
-import { useWorkflowMediaUrl } from '../workflow/media';
-import type { WorkflowNode, WorkflowProject } from '../workflow/types';
+import type { WorkflowProject } from '../workflow/types';
 import { AgentHostPicker } from './AgentHostPicker';
 
-interface AgentHubPanelProps {
-  project: WorkflowProject | null;
-  onCreateProject: () => void;
-  onOpenWorkflow: () => void;
-  onOpenTable: (nodeId?: string) => void;
-}
-
-type AgentHubContext = 'brief' | 'activity' | 'artifacts';
-
 /**
- * Agent = verb, not a peer mode: this is the external-agent host hub folded
- * into the global right drawer. It keeps the old Agent workspace's reachable
- * surface (host picker + Brief/Artifacts/Timeline) beside the canvas instead
- * of replacing it.
+ * Dedicated top-level Agent surface.
+ *
+ * This page is for discovering, preparing, and switching local/external coding
+ * agents (Codex, WorkBuddy, etc.). It intentionally does not contain the
+ * built-in Flovart assistant; that assistant stays beside Canvas/Table in the
+ * right drawer so users can keep the work visible while chatting.
  */
-export function AgentHubPanel({ project, onCreateProject, onOpenWorkflow, onOpenTable }: AgentHubPanelProps) {
-  const [activeContext, setActiveContext] = useState<AgentHubContext>('artifacts');
-  const mediaNodes = useMemo(() => project?.nodes.filter(node => node.type === 'image' || node.type === 'video') || [], [project]);
-
-  if (!project) return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden" data-testid="agent-drawer-hub" style={{ color: 'var(--isl-ink)' }}>
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        <AgentHostPicker />
-        <CreateProjectCard onCreateProject={onCreateProject} />
-      </div>
-    </div>
-  );
-
+export function AgentConnectionsPage({ project }: { project: WorkflowProject | null }) {
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden" data-testid="agent-drawer-hub" style={{ color: 'var(--isl-ink)' }}>
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        <AgentHostPicker projectTitle={project.title} />
-        <nav className="agent-workspace-tabs" aria-label="Agent 上下文">
-          <button type="button" aria-pressed={activeContext === 'brief'} onClick={() => setActiveContext('brief')}><Sparkles size={14} />Brief</button>
-          <button type="button" aria-pressed={activeContext === 'artifacts'} onClick={() => setActiveContext('artifacts')}><Boxes size={14} />产物</button>
-          <button type="button" aria-pressed={activeContext === 'activity'} onClick={() => setActiveContext('activity')}><CircleDot size={14} />时间线</button>
-        </nav>
-        <section className="min-h-0">
-          {activeContext === 'brief' && <BriefPanel project={project} />}
-          {activeContext === 'activity' && <ActivityPanel project={project} />}
-          {activeContext === 'artifacts' && <ArtifactsPanel nodes={mediaNodes} onOpenTable={onOpenTable} />}
-        </section>
+    <div className="h-full min-h-0 overflow-y-auto" data-testid="agent-connections-page" style={{ color: 'var(--isl-ink)' }}>
+      <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 p-4 sm:p-6">
+        <header className="max-w-2xl">
+          <span className="text-[10px] font-bold uppercase tracking-[0.12em]" style={{ color: 'var(--isl-ink-ghost)' }}>Agent</span>
+          <h1 className="mt-1 text-lg font-bold">{'连接本地 Agent'}</h1>
+          <p className="mt-1 text-xs leading-5" style={{ color: 'var(--isl-ink-soft)' }}>
+            连接 Codex、WorkBuddy 等本地 Agent。这里负责连接和状态；内置助手仍在画布右侧使用。
+          </p>
+        </header>
+        <AgentHostPicker projectTitle={project?.title} />
       </div>
-      <footer className="agent-workspace-footer">
-        <span className="agent-status is-idle"><i />连接与诊断</span>
-        <button type="button" onClick={onOpenWorkflow}><Grid2X2 size={13} />打开 Workflow</button>
-      </footer>
     </div>
   );
 }
 
 /**
- * Project-less onboarding for the global Agent drawer. The built-in assistant
- * cannot chat before a Workflow exists, so the drawer's Agent tab falls back
- * to this: pick an external host or create the first project in place.
+ * Project-less onboarding for the in-context assistant drawer. A Workflow is
+ * required before the built-in assistant can edit the shared canvas.
  */
 export function AgentDrawerEmptyState({ onCreateProject }: { onCreateProject: () => void }) {
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden" data-testid="agent-drawer-empty" style={{ color: 'var(--isl-ink)' }}>
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <AgentHostPicker />
         <CreateProjectCard onCreateProject={onCreateProject} />
       </div>
     </div>
@@ -81,24 +51,4 @@ function CreateProjectCard({ onCreateProject }: { onCreateProject: () => void })
       <button type="button" className="mx-auto mt-3 rounded-lg border px-3 py-2 text-xs font-semibold" style={{ borderColor: 'var(--isl-border)' }} onClick={onCreateProject}>创建项目</button>
     </div>
   );
-}
-
-function BriefPanel({ project }: { project: WorkflowProject }) {
-  const running = project.nodes.filter(node => node.metadata.status === 'loading').length;
-  return <div className="agent-brief"><p>制作上下文</p><h2>{project.title}</h2><span>协作 Agent 与 Flovart 使用同一份 Workflow；可逆操作会直接保存，付费执行和删除仍由你确认。</span><div>{[[project.nodes.length, '节点'], [project.connections.length, '连接'], [running, '运行中']].map(([value, label]) => <section key={label}><strong>{value}</strong><small>{label}</small></section>)}</div></div>;
-}
-
-function ActivityPanel({ project }: { project: WorkflowProject }) {
-  const changes = [...(project.draftChangeSets || [])].reverse().slice(0, 10);
-  if (changes.length) return <div className="agent-activity">{changes.map(change => <div key={change.id}><strong>{change.intent}</strong><small>{change.actor === 'agent' ? 'Agent' : '你'} · {{ completed: '已应用', partial: '部分应用', failed: '失败', undone: '已撤销' }[change.status]} · v{change.resultDraftVersion}</small></div>)}</div>;
-  return <div className="agent-context-empty"><CircleDot size={24} /><span>任务运行后，状态会留在这里。<br />不必翻聊天记录。</span></div>;
-}
-
-function ArtifactsPanel({ nodes, onOpenTable }: { nodes: WorkflowNode[]; onOpenTable: (nodeId?: string) => void }) {
-  return <div className="agent-artifacts">{nodes.map(node => <ArtifactCard key={node.id} node={node} onClick={() => onOpenTable(node.id)} />)}{!nodes.length && <div className="agent-context-empty"><Boxes size={25} /><span>生成结果会自动汇集在这里。<br />你可以随时送往 Table 继续处理。</span></div>}</div>;
-}
-
-function ArtifactCard({ node, onClick }: { node: WorkflowNode; onClick: () => void }) {
-  const media = useWorkflowMediaUrl(node.metadata.storageKey, node.metadata.href);
-  return <button type="button" className="agent-artifact-card" onClick={onClick}>{node.type === 'video' ? <video src={media.url || undefined} muted playsInline /> : <img src={media.url || undefined} alt="" />}<span><strong>{node.title}</strong><small>{node.metadata.status || 'ready'}</small></span></button>;
 }
