@@ -1186,16 +1186,16 @@ export function InfiniteWorkflow({
 
   const viewportCenter = useCallback(() => {
     const rect = rootRef.current?.getBoundingClientRect();
-    const availableWidth = Math.max(360, (rect?.width || 1000) - (rightPanelInset || 0));
+    const availableWidth = Math.max(360, rect?.width || 1000);
     return screenToWorkflow((rect?.left || 0) + availableWidth / 2, (rect?.top || 0) + (rect?.height || 700) / 2);
-  }, [rightPanelInset, screenToWorkflow]);
+  }, [screenToWorkflow]);
 
   // 聚焦到一块世界坐标区域（单节点=其包围盒，多选=选区包围盒），
   // 与 focusNodeRequest 共用同一套 drawer-inset 感知动画。
   const focusBounds = useCallback((minX: number, minY: number, maxX: number, maxY: number) => {
     const rect = rootRef.current?.getBoundingClientRect();
     if (!rect) return;
-    const availableWidth = Math.max(360, rect.width - (rightPanelInset || 0));
+    const availableWidth = Math.max(360, rect.width);
     const padding = 120;
     const targetK = Math.min(1.5, Math.max(0.12, Math.min((availableWidth - padding) / Math.max(1, maxX - minX), (rect.height - padding) / Math.max(1, maxY - minY))));
     const centerX = (minX + maxX) / 2;
@@ -1225,7 +1225,7 @@ export function InfiniteWorkflow({
       }
     };
     focusAnimRef.current = window.requestAnimationFrame(tick);
-  }, [patchProject, rightPanelInset]);
+  }, [patchProject]);
 
   const focusNode = useCallback((id: string) => {
     const node = projectRef.current.nodes.find(n => n.id === id);
@@ -2043,14 +2043,14 @@ export function InfiniteWorkflow({
     const rect = rootRef.current?.getBoundingClientRect();
     const nodes = projectRef.current.nodes.filter(node => node.isVisible !== false);
     if (!rect || nodes.length === 0) return;
-    const availableWidth = Math.max(360, rect.width - (rightPanelInset || 0));
+    const availableWidth = Math.max(360, rect.width);
     const minX = Math.min(...nodes.map(node => node.position.x));
     const minY = Math.min(...nodes.map(node => node.position.y));
     const maxX = Math.max(...nodes.map(node => node.position.x + node.width));
     const maxY = Math.max(...nodes.map(node => node.position.y + node.height));
     const k = Math.min(1.5, Math.max(0.12, Math.min((availableWidth - 160) / Math.max(1, maxX - minX), (rect.height - 160) / Math.max(1, maxY - minY))));
     patchProject({ viewport: { x: availableWidth / 2 - ((minX + maxX) / 2) * k, y: rect.height / 2 - ((minY + maxY) / 2) * k, k } });
-  }, [patchProject, rightPanelInset]);
+  }, [patchProject]);
 
   const zoomBy = useCallback((factor: number) => {
     setFocusBadge(false);
@@ -2288,7 +2288,7 @@ export function InfiniteWorkflow({
     const k = project.viewport.k || 1;
     const left = -project.viewport.x / k;
     const top = -project.viewport.y / k;
-    const width = Math.max(320, (rootSize?.width || 1200) - (rightPanelInset || 0));
+    const width = Math.max(320, rootSize?.width || 1200);
     const height = Math.max(240, rootSize?.height || 800);
     return {
       left: left - VIEWPORT_CULL_MARGIN,
@@ -2296,7 +2296,7 @@ export function InfiniteWorkflow({
       right: left + width / k + VIEWPORT_CULL_MARGIN,
       bottom: top + height / k + VIEWPORT_CULL_MARGIN,
     };
-  }, [project.viewport.k, project.viewport.x, project.viewport.y, rightPanelInset, rootSize?.height, rootSize?.width]);
+  }, [project.viewport.k, project.viewport.x, project.viewport.y, rootSize?.height, rootSize?.width]);
 
   const renderNodes = useMemo(() => displayNodes.filter(node => {
     if (node.isVisible === false || hiddenByBatch.has(node.id)) return false;
