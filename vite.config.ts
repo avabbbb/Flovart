@@ -30,7 +30,7 @@ export default defineConfig(() => {
         // src-tauri/target is Rust build output; cargo locks flovart.exe while
         // compiling and chokidar crashes on EBUSY watching it. Exclude build dirs.
         watch: {
-          ignored: ['**/src-tauri/target/**', '**/target/**', '**/.git/**'],
+          ignored: ['**/src-tauri/target/**', '**/target/**', '**/.git/**', '**/.tmp/**'],
         },
       },
       plugins: [tailwindcss(), react()],
