@@ -5,6 +5,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useUpdaterStore } from '../../stores/useUpdaterStore';
 import { useAgentConnectionStore } from '../../stores/useAgentConnectionStore';
 import { useWorkspaceStore } from '../../stores/useWorkspaceStore';
+import { requestWorkflowAgentDrawer } from '../workflow/agentDrawerRequest';
 import { toLocalLinkPublicStatus } from '../../tools/flovart/public-status';
 import { AuthModal } from '../auth/AuthModal';
 import type { ThemeMode } from '../../types';
@@ -276,12 +277,12 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
       </div>
 
       <nav className="studio-top-menu__modes flex min-w-0 items-center justify-center gap-0.5" aria-label={isChinese ? '画布视图' : 'Canvas view'} role="tablist">
-        {/* Two peer views of one Workflow: Canvas | Table. Agent is a persistent
-            right panel (opened from the status dot), NOT a third page — the IA
-            freeze forbids Agent existing as page+drawer+button simultaneously. */}
+        {/* The real noun-switcher lives here in the single top bar. Agent is a
+            verb in the global right drawer, not a peer mode — the old dead
+            '工作流' pill and the separate .canvas-view-switch row are gone. */}
         {(['spatial', 'table'] as const).map(view => {
           const isActive = canvasView === view;
-          const label = view === 'spatial' ? 'Canvas' : 'Table';
+          const label = view === 'spatial' ? (isChinese ? '画布' : 'Canvas') : 'Table';
           return (
             <button
               key={view}
@@ -340,19 +341,20 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
             )}
           </button>
         )}
-        <span
+        <button
+          type="button"
           data-testid="agent-connection-status"
-          role="status"
-          className="flex h-8 items-center gap-1.5 px-2"
+          className="isl-icon-btn flex h-8 items-center gap-1.5 px-2"
           title={isChinese
-            ? `Agent ${agentLabel} — 用画布工具栏的 Bot 按钮打开`
-            : `Agent ${agentLabel} — open via the canvas Bot button`}
+            ? `Agent ${agentLabel} — 打开助手面板`
+            : `Agent ${agentLabel} — open assistant panel`}
           aria-label={agentLabel}
-          style={{ color: agentColor, cursor: 'default' }}
+          style={{ color: agentColor }}
+          onClick={() => { requestWorkflowAgentDrawer(); navigate('/app'); }}
         >
           <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full" style={{ background: agentColor }} />
           <span className="hidden whitespace-nowrap text-[11px] font-semibold xl:inline">{agentLabel}</span>
-        </span>
+        </button>
         {/* Status is a pure indicator — not a hidden Settings shortcut. Only the
             gear opens Settings. Hover shows detail; a status popover could come
             later if diagnostics need a surface. */}
