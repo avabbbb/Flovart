@@ -1,157 +1,62 @@
-# Flovart
+# Flovart current terms
 
-Flovart 以创作软件插件为入口，结合本地 Agent、生成素材与可继续编辑的原生效果。本文只定义当前产品语言，行为和实现统一见主设计。
+本文只保留会直接影响当前实现的术语。产品行为以[主设计](../../design/flovart-native-effects.md)为准。
 
-## 创作与效果
+## Product surfaces
 
-**Flovart 插件**：
-安装在创作软件中的 Flovart 入口，包含制作面板以及宿主支持的原生效果。
-_Avoid_: 完整工作区副本、独立网页即原生插件。
+**Canvas**  
+空间化 Workflow 创作面。旧文档中的“Canvas/Art 双系统”不恢复。
 
-**原生效果**：
-宿主可识别、保存、重新打开并参与预览和导出的 Flovart 效果；视频参数可按支持范围设置关键帧。
-_Avoid_: 素材导入按钮、网页预览、外部生成任务。
+**Table**  
+结构化媒体处理视图。可以维护局部处理状态，但不是第二份 Workflow authority；结果通过明确 commit 返回 Workflow/素材库。
 
-**场景替换**：
-为指定图片或视频范围生成替代内容，再由效果控制其与原素材的合成。
-_Avoid_: 默认人物自动保留、整片自动剪辑、实时提示词生成。
+**Agent surface**  
+顶栏的本地/外部 Coding Agent 连接中心：discover / prepare / status / switch。  
+_Avoid_: full-page chat、Tasks/Artifacts/Context 工作区。
 
-**效果实例**：
-某个宿主工程中应用于明确对象的一次 Flovart 效果，拥有自己的已应用版本与调整参数。
-_Avoid_: 生成任务、公共配方、共享素材文件。
+**Assistant drawer**  
+Canvas/Table 旁的 contextual drawer，包含 Assistant / Context / History。  
+_Avoid_: Host picker、Agent 安装、Agent connection management。
 
-**制作面板**：
-宿主内用于参考素材、提示词、生成任务和候选版本的紧凑界面。
-_Avoid_: 原生效果参数组、完整 Workflow。
+## Agent and operations
 
-**制作配方（Production Skill）**：
-描述制作方法、输入要求、参数、参考流程与验收标准的可复用内容包。
-_Avoid_: 调度器、可执行插件、Provider 账号。
+**Agent Integration Skill**  
+教 Codex、WorkBuddy 等如何使用 Flovart 稳定操作。  
+_Avoid_: Production Skill Marketplace、权限授予、连接协议本身。
 
-**Operation Skill**：
-教外部助手正确调用 Flovart 工具并核对结果的操作说明。
-_Avoid_: 制作配方、MCP 连接本身、权限授权。
+**Stable Agent operations**  
+`status`、`workflow.inspect`、`workflow.selection.get`、`workflow.apply`、`workflow.node.run`。
 
-## 任务与素材
+**Flovart Link**  
+本地 Host/Workflow 连接能力名称。  
+_Avoid_: 第二份 Workflow、通用业务层或另一套 scheduler。
 
-**生成任务**：
-固定输入、参考、参数和目标后发起的一次生成工作，拥有可查询状态和结果。
-_Avoid_: Agent 会话、宿主渲染帧、整张 Workflow。
+**Provider**  
+真正提供图像/视频/模型能力的服务。  
+_Avoid_: Coding Agent、CLI/MCP、creative host。
 
-**素材版本（Artifact Version）**：
-一次生成或处理得到的固定结果及来源描述，可作为候选或被效果引用。
-_Avoid_: 当前画面、可变下载链接、临时预览。
+## Workflow and artifacts
 
-**候选版本**：
-已经完成并保存、尚未或不再被当前效果使用的素材版本。
-_Avoid_: 任务已完成即自动应用。
+**Workflow**  
+用户与 Agent 共用的可见生产图。
 
-**已应用版本**：
-效果实例当前明确选择、用于宿主预览和导出的素材版本。
-_Avoid_: 最新返回结果、最新创建结果。
+**Workflow mutation**  
+针对明确项目和期望版本的一次结构化修改。
 
-**素材缓存**：
-为宿主可靠读取素材版本而保存的本地媒体；被工程引用时属于正式工程依赖。
-_Avoid_: 可随时删除的临时文件、云同步副本。
+**Artifact / result**  
+生成或本地处理得到的可识别结果。需要持久化时必须有稳定 identity，不能只依赖临时 URL。
 
-**目标引用**：
-明确指出某次操作所针对的宿主工程、对象、效果实例和素材范围的关联。
-_Avoid_: 当前随意选区、最近打开的项目。
+**Generation task**  
+固定输入、目标、参数与幂等 identity 后的一次生成工作。不是聊天会话。
 
-**变更回执**：
-记录一次操作作用的目标、结果与版本的凭据；重试可以据此核对是否已执行。
-_Avoid_: 聊天中说成功、进度动画、生成费用授权。
+## Creative hosts
 
-## 工作区
+**Creative host**  
+Photoshop / Premiere / After Effects / Resolve 等宿主。
 
-**Workflow**：
-组织参考素材、生成步骤、依赖和结果的可编辑工作区。
-_Avoid_: 宿主时间线、Table 图、生成任务数据库。
+**Native effect**  
+由宿主保存并参与预览/导出的效果。面板、素材导入按钮或网页预览本身不等于 native effect。
 
-**Workflow Draft**：
-用户或 Agent 正在编辑的 Workflow 项目内容。
-_Avoid_: 第二份执行计划、聊天消息、结果列表。
+## Historical terms
 
-**Workflow Mutation**：
-针对明确项目与期望版本的一次结构化图修改。
-_Avoid_: 生成提交、直接更改 UI 内存、宿主效果参数。
-
-**Table**：
-独立组织媒体输入、处理节点和输出的工作区。
-_Avoid_: 电子表格、Workflow 生成图、旧 Canvas。
-
-**Agent Workspace**：
-在 Flovart 中发出任务、查看用户可见对话、状态与产物的协作入口。
-_Avoid_: 固定制作组层级、完整外部桌面复制、Workflow 右侧抽屉。
-
-**Agent Panel**：
-Agent 工作区中的对话、任务、上下文或产物展示单元。
-_Avoid_: Workflow 节点、原生效果实例。
-
-**PromptBar**：
-当前 Workflow 选择对象的提示词与生成参数编辑入口。
-_Avoid_: Agent 主会话、Provider 请求日志。
-
-**媒体引用**：
-制作步骤对输入图片、视频、文本或已有结果的关联，包含其输入用途。
-_Avoid_: 无真实目标的高亮文字、重复媒体副本。
-
-## Agent 与服务
-
-**本地 Agent**：
-用户选择的 Codex、WorkBuddy 等任务助手，可从外部调用 Flovart，也可经已支持接口被 Flovart 使用。
-_Avoid_: 图像/视频 Provider、固定内置 Operator。
-
-**Agent 会话**：
-由对应助手维护的一段对话与执行上下文。
-_Avoid_: 生成任务、宿主工程、跨助手共享记忆。
-
-**任务交接**：
-把目标、输入摘要、已完成结果与未完成事项交给另一助手继续处理。
-_Avoid_: 复制登录态、无损迁移隐藏上下文。
-
-**本地生成服务**：
-在本机管理生成任务与持久素材的执行程序，各入口共享它的结果。
-_Avoid_: 第二个 Agent、云端 API 转发平台、多个独立 Runtime。
-
-**Flovart Link**：
-Flovart 中连接宿主与助手的功能名称。
-_Avoid_: 独立业务层、另一份工作区、另一套调度器。
-
-**Provider**：
-实际提供图像、视频或其他模型能力的服务。
-_Avoid_: 本地 Agent、CLI/MCP、创作宿主。
-
-**产品模型**：
-用户在 Flovart 中选择的生成模型或能力名称。
-_Avoid_: 私有 API Key、具体网络请求。
-
-**Route Mapping**：
-用户选择的产品模型到实际 Provider 能力的配置关系。
-_Avoid_: 凭据副本、效果实例、Agent 会话。
-
-**生成费用授权**：
-用户对明确输入、范围和费用条件的生成操作所作决定。
-_Avoid_: Agent 工具权限、开放会话预算、自动确认全部弹窗。
-
-## 分享与分发
-
-**App Home**：
-继续本地项目、发现作品和制作配方的产品首页。
-_Avoid_: 新的创作工作区。
-
-**Local Work**：
-用户本地保存的作品，尚未通过发布动作对外公开。
-_Avoid_: 自动上传内容、公开社区作品。
-
-**Published Work**：
-用户明确发布的作品，可附带允许他人复用的制作内容。
-_Avoid_: 所有本地素材、全部工程备份。
-
-**Remix Bundle**：
-作品附带的制作配方与参考 Workflow，用于他人使用自己的素材和模型复刻。
-_Avoid_: 凭据包、完整私有项目、原作者运行状态。
-
-**实验能力**：
-已有代码或原型，但尚未完成所声明使用条件下的真实验证。
-_Avoid_: 正式支持、包构建通过即宿主认证。
+Production Crew、Director、Workspace Operator、Production Skill、Native Draft、Dock production control、enterprise credits/approval 都属于历史/实验概念，不应作为当前产品 IA 推导新功能。需要背景时看[历史快照](../../archive/historical-design/2026-09-23-canonicalization.md)。
