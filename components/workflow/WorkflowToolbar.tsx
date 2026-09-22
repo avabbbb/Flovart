@@ -75,7 +75,6 @@ export function WorkflowToolbar({
   onZoomIn?: () => void;
   onZoomOut?: () => void;
   onZoomReset?: () => void;
-  rightInset?: number;
 }) {
   const sharedMedia = useWorkflowSharedMedia();
   const [libraryOpen, setLibraryOpen] = useState(false);
