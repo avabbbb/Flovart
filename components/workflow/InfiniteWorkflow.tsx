@@ -243,7 +243,6 @@ export function InfiniteWorkflow({
   onEnhancePrompt,
   isEnhancingPrompt,
   agentOpen,
-  rightPanelInset,
   assetLibrary,
   focusNodeRequest,
   onOpenAssets,
@@ -258,7 +257,6 @@ export function InfiniteWorkflow({
   imageTools?: WorkflowImageToolHandlers;
   onOpenAgent?: () => void;
   agentOpen?: boolean;
-  rightPanelInset?: number;
   t?: (key: string, ...args: any[]) => string;
   theme?: 'light' | 'dark';
   language?: 'en' | 'zho';
@@ -2221,12 +2219,14 @@ export function InfiniteWorkflow({
     right: Math.max(bounds.right, node.position.x + node.width),
     bottom: Math.max(bounds.bottom, node.position.y + node.height),
   }), { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity }) : null;
-  const workflowWidth = Math.max(360, (rootSize?.width || 1000) - (rightPanelInset || 0));
+  // The workflow root already reflects the space left by docked panels. Keep
+  // overlay geometry local to that measured container instead of subtracting
+  // the drawer a second time in JavaScript.
+  const workflowWidth = Math.max(360, rootSize?.width || 1000);
   const overlayCenter = overlayBounds ? project.viewport.x + ((overlayBounds.left + overlayBounds.right) / 2) * project.viewport.k : 0;
   const toolbarLeft = Math.max(8, Math.min(overlayCenter, workflowWidth - 8));
   const toolbarTop = overlayBounds ? Math.max(8, project.viewport.y + overlayBounds.top * project.viewport.k - Math.max(72, 56 + 28 * project.viewport.k)) : 0;
-  // PromptBar 让位行程减半：右侧面板弹出时只左移一半距离，避免过度偏移
-  const promptWorkflowWidth = Math.max(360, (rootSize?.width || 1000) - Math.round((rightPanelInset || 0) / 2));
+  const promptWorkflowWidth = workflowWidth;
   const promptWidth = Math.min(880, Math.max(360, promptWorkflowWidth - 16));
   const promptLeft = Math.max(8, Math.min(overlayCenter - promptWidth / 2, promptWorkflowWidth - promptWidth - 8));
   const configLeft = Math.max(8, Math.min(overlayCenter - 210, workflowWidth - 428));
@@ -2412,7 +2412,6 @@ export function InfiniteWorkflow({
         onZoomIn={zoomIn}
         onZoomOut={zoomOut}
         onZoomReset={zoomReset}
-        rightInset={rightPanelInset}
       />
       <div ref={worldRef} className="workflow-world" style={{ transform: `translate(${project.viewport.x}px, ${project.viewport.y}px) scale(${project.viewport.k})` }}>
         <WorkflowConnections
