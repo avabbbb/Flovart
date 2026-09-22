@@ -1,4 +1,4 @@
-import { History, MessageSquare, PanelRightClose, PanelRightOpen } from 'lucide-react';
+import { History, MessageSquare, PanelRightClose, PanelRightOpen, SlidersHorizontal } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
 
 export interface StudioDrawerTab {
@@ -142,7 +142,7 @@ export const StudioRightDrawer: React.FC<StudioRightDrawerProps> = ({
                 onClick={() => onTabChange(tab.id)}
                 title={tab.label}
               >
-                {tab.icon || (tab.id === 'history' ? <History size={15} /> : <MessageSquare size={15} />)}
+                {tab.icon || (tab.id === 'history' ? <History size={15} /> : tab.id === 'context' ? <SlidersHorizontal size={15} /> : <MessageSquare size={15} />)}
                 <span className="truncate">{tab.label}</span>
               </button>
             ))}
