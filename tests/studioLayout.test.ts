@@ -72,4 +72,15 @@ describe('studio layout contracts', () => {
     expect(workflow).toContain('const dockSafeTop = rootHeight - 60;');
     expect(workflowStyles.match(/overflow: clip/g)?.length).toBeGreaterThanOrEqual(2);
   });
+  it('keeps bottom toolbar controls and assistant tabs aligned when panels open', () => {
+    const workflowStyles = source('styles/workflow.css');
+    const shellStyles = source('styles/index.css');
+
+    expect(workflowStyles).toContain('.workflow-toolbar--inset > .workflow-toolbar__popover-wrap > .isl-icon-btn');
+    expect(workflowStyles).toContain('.workflow-toolbar--inset > .workflow-toolbar__popover-wrap { width:32px;height:32px;flex:0 0 32px; }');
+    expect(shellStyles).toContain('.compact-right-panel__quicktabs .isl-tab:hover,');
+    expect(shellStyles).toContain('transform: none !important;');
+    expect(shellStyles).toContain('.compact-right-panel__quicktabs > button:hover,');
+  });
+
 });

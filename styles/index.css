@@ -368,11 +368,22 @@ body {
     min-width: 0;
     height: 32px;
     flex: 1 1 0;
+    align-items: center;
     justify-content: center;
     gap: 5px;
     border: 0;
+    border-radius: 6px;
     padding: 0 7px;
     background: transparent;
+    box-shadow: none !important;
+    line-height: 1;
+    transform: none !important;
+}
+.compact-right-panel__quicktabs .isl-tab:hover,
+.compact-right-panel__quicktabs .isl-tab:active,
+.compact-right-panel__quicktabs .isl-tab--active {
+    transform: none !important;
+    box-shadow: none !important;
 }
 .compact-right-panel__quicktabs .isl-tab span {
     position: static;
@@ -393,9 +404,17 @@ body {
     width: 32px;
     height: 32px;
     flex: 0 0 32px;
+    align-self: center;
     border: 0;
+    border-radius: 6px;
     background: transparent;
-    box-shadow: none;
+    box-shadow: none !important;
+    transform: none !important;
+}
+.compact-right-panel__quicktabs > button:hover,
+.compact-right-panel__quicktabs > button:active {
+    box-shadow: none !important;
+    transform: none !important;
 }
 
 .inline-prompt-bar {
