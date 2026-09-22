@@ -12,7 +12,7 @@ import { StudioTopMenu, type StudioMenuModel } from './components/studio/StudioT
 import { StudioRightDrawer } from './components/studio/StudioRightDrawer';
 import { StudioMediaBrowser } from './components/studio/StudioMediaBrowser';
 import { FlovartAgentPanel } from './components/agent/FlovartAgentPanel';
-import { AgentDrawerEmptyState, AgentHostHeader } from './components/agent/AgentWorkspace';
+import { AgentConnectionsPage, AgentDrawerEmptyState } from './components/agent/AgentWorkspace';
 import { useMediaQuery } from './hooks/useMediaQuery';
 import { useWorkspaceStore } from './stores/useWorkspaceStore';
 import { flushWorkflowPersistence, useWorkflowStore } from './components/workflow/store';
@@ -94,7 +94,7 @@ const App: React.FC = () => {
     const setRightOpen = useCallback((open: boolean) => {
         if (mediumViewport) setMobileRightOpen(open); else setDesktopRightOpen(open);
     }, [mediumViewport]);
-    const [rightTab, setRightTab] = useState<'agent' | 'inspector' | 'history'>('agent');
+    const [rightTab, setRightTab] = useState<'agent' | 'hosts' | 'context' | 'history'>('agent');
     const [rightWidth, setRightWidth] = useState(() => {
         try {
             const stored = Number(localStorage.getItem('workflowRightPanelWidth'));
@@ -538,7 +538,7 @@ const App: React.FC = () => {
     }), [language]);
     const studioMenuModel: StudioMenuModel = useMemo(() => ({
         mode: activeView,
-        title: canvasView === 'table' ? 'Table' : activeWorkflowTitle,
+        title: canvasView === 'table' ? 'Table' : canvasView === 'agent' ? 'Agent' : activeWorkflowTitle,
         themeMode,
         resolvedTheme,
         language,
@@ -571,10 +571,12 @@ const App: React.FC = () => {
         // are two views of the same Workflow; Agent is the verb beside them.
         <div className="relative flex h-full min-h-0">
             <div className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col">
-                {/* Two peer views of one Workflow — Canvas | Table. Agent is a
-                    persistent right panel (single entry via the status dot), not
-                    a third page. */}
-                {canvasView === 'table' ? (
+                {/* Three top-level surfaces. Agent is connection management only;
+                    the built-in assistant remains in the right drawer beside the
+                    two Workflow views. */}
+                {canvasView === 'agent' ? (
+                    <AgentConnectionsPage project={activeWorkflowProject} />
+                ) : canvasView === 'table' ? (
                     <Suspense fallback={<div className="grid h-full place-content-center text-sm opacity-40">正在加载 Table...</div>}>
                         <TableWorkspace
                             project={activeWorkflowProject}
@@ -627,7 +629,7 @@ const App: React.FC = () => {
             </div>
 
             <StudioRightDrawer
-                open={rightOpen}
+                open={canvasView !== 'agent' && rightOpen}
                 onOpenChange={setRightOpen}
                 outerGap={0}
                 width={rightWidth}
@@ -637,36 +639,30 @@ const App: React.FC = () => {
                 flush
                 docked={!mediumViewport}
                 activeTab={rightTab}
-                onTabChange={tab => setRightTab(tab as 'agent' | 'inspector' | 'history')}
+                onTabChange={tab => setRightTab(tab as 'agent' | 'context' | 'history')}
                 tabs={[
-                    { id: 'agent', label: 'Agent', icon: undefined },
-                    { id: 'inspector', label: language === 'zho' ? '检查器' : 'Inspector', icon: undefined },
-                    { id: 'history', label: language === 'zho' ? '历史' : 'History', icon: undefined },
+                    { id: 'agent', label: language === 'zho' ? '助手' : 'Assistant', icon: undefined },
+                    { id: 'context', label: language === 'zho' ? '上下文' : 'Context', icon: undefined },
+                    { id: 'history', label: language === 'zho' ? '生成历史' : 'History', icon: undefined },
                 ]}
             >
                 {rightTab === 'agent' && (activeWorkflowProject ? (
-                    <div className="flex h-full min-h-0 flex-col">
-                        {/* External host selection lives in the Agent panel header —
-                            not a peer "协作" tab and not a full page. One concept,
-                            one place. */}
-                        <AgentHostHeader project={activeWorkflowProject} />
-                        <div className="min-h-0 flex-1">
-                            <FlovartAgentPanel
-                                project={activeWorkflowProject}
-                                onActivityChange={() => undefined}
-                                onOpenSettings={() => setIsSettingsPanelOpen(true)}
-                                assetLibrary={assetLibrary}
-                                userApiKeys={userApiKeys}
-                                onFocusNode={handleFocusNodeFromDrawer}
-                            />
-                        </div>
-                    </div>
+                    <FlovartAgentPanel
+                        project={activeWorkflowProject}
+                        onActivityChange={() => undefined}
+                        onOpenSettings={() => setIsSettingsPanelOpen(true)}
+                        assetLibrary={assetLibrary}
+                        userApiKeys={userApiKeys}
+                        onFocusNode={handleFocusNodeFromDrawer}
+                    />
                 ) : (
+                    // Project-less onboarding folded into the drawer's empty state:
+                    // pick an external host or create the first project in place.
                     <AgentDrawerEmptyState
                         onCreateProject={() => workflowCreateProject(language === 'zho' ? '未命名工作流' : 'Untitled workflow')}
                     />
                 ))}
-                {rightTab === 'inspector' && (activeWorkflowProject ? (
+                {rightTab === 'context' && (activeWorkflowProject ? (
                     <Suspense fallback={null}>
                         <WorkflowContextPanel project={activeWorkflowProject} />
                     </Suspense>

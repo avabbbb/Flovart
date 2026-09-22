@@ -130,7 +130,7 @@ export function TableWorkspace({
         <button type="button" className="m-2 flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-semibold hover:bg-black/5" onClick={onOpenWorkflow}><ArrowRight size={13} />返回 Workflow</button>
       </aside>
 
-      <main className={`table-workspace__main grid min-h-0 ${hasSource ? 'table-workspace__main--with-tools' : ''}`}>
+      <main className="table-workspace__main table-workspace__main--with-tools grid min-h-0">
         <section className="relative flex min-h-0 flex-col">
           <div className="flex h-10 shrink-0 items-center justify-between border-b px-3" style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-card)' }}>
             <div className="min-w-0"><strong className="block truncate text-xs">{sourceName}</strong><span className="text-[10px]" style={{ color: 'var(--isl-ink-ghost)' }}>{result ? '处理结果' : '原始输入'} · {isVideo ? '视频' : '图片'}</span></div>
@@ -159,16 +159,15 @@ export function TableWorkspace({
           {error && <div role="alert" className="mx-3 mb-2 rounded-lg border px-3 py-2 text-xs" style={{ borderColor: 'var(--isl-coral)', color: 'var(--isl-coral-deep)', background: 'color-mix(in srgb,var(--isl-coral) 9%,transparent)' }}>{error}{/API Key|模型|端点/.test(error) && <button type="button" className="ml-2 underline" onClick={onOpenSettings}>打开设置</button>}</div>}
         </section>
 
-        {hasSource && (
-          <motion.aside className="table-workspace__tools flex min-h-0 flex-col border-l" style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-card)' }} initial={{ x: 18, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ type: 'spring', stiffness: 420, damping: 32 }}>
-            <div className="border-b p-3" style={{ borderColor: 'var(--isl-border)' }}><p className="m-0 text-[10px] font-bold uppercase tracking-[.16em]" style={{ color: 'var(--isl-ink-ghost)' }}>Process</p><strong className="text-sm">预处理工具</strong></div>
+        <motion.aside className="table-workspace__tools flex min-h-0 flex-col border-l" style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-card)' }} initial={{ x: 18, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ type: 'spring', stiffness: 420, damping: 32 }}>
+            <div className="border-b p-3" style={{ borderColor: 'var(--isl-border)' }}><p className="m-0 text-[10px] font-bold uppercase tracking-[.16em]" style={{ color: 'var(--isl-ink-ghost)' }}>Process</p><strong className="text-sm">预处理工具</strong>{!hasSource && <p className="mt-1 text-[10px] leading-4" style={{ color: 'var(--isl-ink-ghost)' }}>先从左侧选择图片 / 视频，工具会在这里直接可用。</p>}</div>
             <div className="min-h-0 flex-1 space-y-1 overflow-y-auto p-2">
               {TOOLS.map(tool => {
-                const disabled = Boolean(isVideo && tool.imageOnly);
+                const disabled = !hasSource || Boolean(isVideo && tool.imageOnly);
                 const Icon = tool.icon;
-                return <button key={tool.id} type="button" disabled={disabled} onClick={() => setSelectedTool(tool.id)} className="flex w-full gap-2 rounded-lg border p-2 text-left transition disabled:cursor-not-allowed disabled:opacity-35" style={{ borderColor: selectedTool === tool.id ? 'var(--isl-mint)' : 'transparent', background: selectedTool === tool.id ? 'var(--isl-mint-bg)' : 'transparent' }}><Icon className="mt-0.5 shrink-0" size={14} /><span><strong className="block text-xs">{tool.name}</strong><span className="mt-0.5 block text-[10px] leading-4" style={{ color: 'var(--isl-ink-soft)' }}>{tool.detail}</span></span></button>;
+                return <button key={tool.id} type="button" disabled={disabled} onClick={() => setSelectedTool(tool.id)} className="flex w-full gap-2 rounded-lg border p-2 text-left transition disabled:cursor-not-allowed disabled:opacity-35" style={{ borderColor: hasSource && selectedTool === tool.id ? 'var(--isl-mint)' : 'transparent', background: hasSource && selectedTool === tool.id ? 'var(--isl-mint-bg)' : 'transparent' }}><Icon className="mt-0.5 shrink-0" size={14} /><span><strong className="block text-xs">{tool.name}</strong><span className="mt-0.5 block text-[10px] leading-4" style={{ color: 'var(--isl-ink-soft)' }}>{tool.detail}</span></span></button>;
               })}
-              {requiresProductModel && <div className="mt-2 rounded-lg border p-2" style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-surface-sunk)' }}>
+              {requiresProductModel && hasSource && <div className="mt-2 rounded-lg border p-2" style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-surface-sunk)' }}>
                 <label className="mb-1 block text-[10px] font-bold" style={{ color: 'var(--isl-ink-soft)' }}>图片产品模型</label>
                 <select aria-label="图片产品模型" value={selectedProductModelId} onChange={event => setSelectedProductModelId(event.target.value)} className="h-8 w-full rounded-md border px-2 text-[11px] outline-none" style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-card)', color: 'var(--isl-ink)' }}>
                   <option value="">请选择模型</option>
@@ -178,10 +177,9 @@ export function TableWorkspace({
               {selectedTool === 'wardrobe' && <motion.textarea initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 78 }} transition={{ type: 'spring', stiffness: 360, damping: 30 }} className="mt-2 w-full resize-none rounded-lg border p-2 text-[11px] outline-none" style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-surface-sunk)' }} value={wardrobePrompt} onChange={event => setWardrobePrompt(event.target.value)} placeholder="可选：描述目标服装；留空使用中性基础款" />}
             </div>
             <div className="space-y-2 border-t p-3" style={{ borderColor: 'var(--isl-border)' }}>
-              {!result ? <button type="button" disabled={processing || (requiresProductModel && !selectedProductModelId)} onClick={() => void process()} className="flex w-full items-center justify-center gap-2 rounded-lg py-2 text-xs font-bold disabled:opacity-45" style={{ background: 'var(--isl-mint)', color: 'white' }}><WandSparkles size={14} />{requiresProductModel && !selectedProductModelId ? '请先选择模型' : '执行处理'}</button> : <><div className="flex items-center gap-1.5 text-[11px] font-semibold" style={{ color: 'var(--isl-mint-deep)' }}><CircleCheck size={13} />结果已就绪</div><button type="button" onClick={() => void onCommit(result, selectedNode?.id || null, `${sourceName}-${selectedTool}`)} className="flex w-full items-center justify-center gap-2 rounded-lg py-2 text-xs font-bold" style={{ background: 'var(--isl-mint)', color: 'white' }}><ArrowRight size={14} />发送到 Workflow</button><button type="button" onClick={() => void onSaveAsset(result, `${sourceName}-${selectedTool}`)} className="flex w-full items-center justify-center gap-2 rounded-lg border py-2 text-xs font-semibold" style={{ borderColor: 'var(--isl-border)' }}><Save size={13} />保存到素材库</button></>}
+              {!result ? <button type="button" disabled={!hasSource || processing || (requiresProductModel && !selectedProductModelId)} onClick={() => void process()} className="flex w-full items-center justify-center gap-2 rounded-lg py-2 text-xs font-bold disabled:cursor-not-allowed disabled:opacity-45" style={{ background: 'var(--isl-mint)', color: 'white' }}><WandSparkles size={14} />{!hasSource ? '先选择素材' : requiresProductModel && !selectedProductModelId ? '请先选择模型' : '执行处理'}</button> : <><div className="flex items-center gap-1.5 text-[11px] font-semibold" style={{ color: 'var(--isl-mint-deep)' }}><CircleCheck size={13} />结果已就绪</div><button type="button" onClick={() => void onCommit(result, selectedNode?.id || null, `${sourceName}-${selectedTool}`)} className="flex w-full items-center justify-center gap-2 rounded-lg py-2 text-xs font-bold" style={{ background: 'var(--isl-mint)', color: 'white' }}><ArrowRight size={14} />发送到 Workflow</button><button type="button" onClick={() => void onSaveAsset(result, `${sourceName}-${selectedTool}`)} className="flex w-full items-center justify-center gap-2 rounded-lg border py-2 text-xs font-semibold" style={{ borderColor: 'var(--isl-border)' }}><Save size={13} />保存到素材库</button></>}
             </div>
           </motion.aside>
-        )}
       </main>
     </div>
   );

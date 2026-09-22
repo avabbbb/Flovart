@@ -25,14 +25,18 @@ const project: WorkflowProject = {
 };
 
 describe('Table focused workspace', () => {
-  it('discloses tools only after one source is selected', async () => {
+  it('keeps the tool rail visible and explains why actions are unavailable without a source', async () => {
     const view = render(<TableWorkspace {...baseProps} project={null} />);
     expect(screen.getByText('先选择一个输入')).toBeTruthy();
-    expect(screen.queryByText('预处理工具')).toBeNull();
+    expect(screen.getByText('预处理工具')).toBeTruthy();
+    expect(screen.getByText(/先从左侧选择图片/)).toBeTruthy();
+    expect(screen.getByRole('button', { name: /全能参考准备/ })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '先选择素材' })).toBeDisabled();
 
     view.rerender(<TableWorkspace {...baseProps} project={project} />);
     expect(await screen.findByText('预处理工具')).toBeTruthy();
-    expect(screen.getByText('全能参考准备')).toBeTruthy();
+    expect(screen.getByRole('button', { name: /全能参考准备/ })).toBeEnabled();
     expect(screen.getByText('人物抠出')).toBeTruthy();
+    expect(screen.getByRole('button', { name: '执行处理' })).toBeEnabled();
   });
 });

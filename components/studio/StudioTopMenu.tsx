@@ -276,12 +276,12 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
       </div>
 
       <nav className="studio-top-menu__modes flex min-w-0 items-center justify-center gap-0.5" aria-label={isChinese ? '画布视图' : 'Canvas view'} role="tablist">
-        {/* Two peer views of one Workflow: Canvas | Table. Agent is a persistent
-            right panel (opened from the status dot), NOT a third page — the IA
-            freeze forbids Agent existing as page+drawer+button simultaneously. */}
-        {(['spatial', 'table'] as const).map(view => {
+        {/* Three product surfaces: Canvas and Table work on the Workflow; Agent
+            is the dedicated local-agent connection/control page. The built-in
+            assistant remains a separate in-context drawer beside Canvas/Table. */}
+        {(['spatial', 'table', 'agent'] as const).map(view => {
           const isActive = canvasView === view;
-          const label = view === 'spatial' ? 'Canvas' : 'Table';
+          const label = view === 'spatial' ? (isChinese ? '画布' : 'Canvas') : view === 'table' ? 'Table' : 'Agent';
           return (
             <button
               key={view}
@@ -345,8 +345,8 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
           role="status"
           className="flex h-8 items-center gap-1.5 px-2"
           title={isChinese
-            ? `Agent ${agentLabel} — 用画布工具栏的 Bot 按钮打开`
-            : `Agent ${agentLabel} — open via the canvas Bot button`}
+            ? `Agent ${agentLabel} — 在 Agent 页面管理本地连接`
+            : `Agent ${agentLabel} — manage local connections in the Agent page`}
           aria-label={agentLabel}
           style={{ color: agentColor, cursor: 'default' }}
         >

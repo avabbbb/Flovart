@@ -21,14 +21,15 @@ describe('studio layout contracts', () => {
     expect(app).not.toContain('onToggleLanguage=');
   });
 
-  it('mounts the canvas surfaces and keeps Agent in the global drawer', () => {
+  it('mounts the three surfaces and keeps the built-in assistant in the global drawer', () => {
     const app = source('App.tsx');
 
     expect(app).toContain('<WorkflowWorkspace');
     expect(app).toContain('<TableWorkspace');
-    // Agent is a verb in the right drawer, not a canvas-killing top-nav mode.
+    // Agent is a dedicated local-agent connection surface; the built-in
+    // assistant remains in the right drawer beside Canvas/Table.
+    expect(app).toContain('<AgentConnectionsPage');
     expect(app).toContain('<FlovartAgentPanel');
-    expect(app).toContain('<AgentHubPanel');
     expect(app).toContain('<AgentDrawerEmptyState');
     expect(app).toContain('<StudioRightDrawer');
     expect(app).not.toContain("activeView === 'workflow' ? (");
