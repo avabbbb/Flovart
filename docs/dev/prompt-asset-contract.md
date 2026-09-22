@@ -17,6 +17,6 @@ interface PromptAsset {
 }
 ```
 
-Workflow PromptBar 或 Director 可以消费 PromptAsset 的文本、标签和引用角色，再交给既有 `PromptIntent → GenerationReference[] → CanonicalGenerationInput`。Asset 不得保存 API Key、Authorization、Provider wire body 或私有文件路径。归一化器会过滤未知引用角色，并拒绝明显的凭据文本。
+Workflow PromptBar、内置 Assistant 或外部 Agent operation 可以消费 PromptAsset 的文本、标签和引用角色，再交给既有 `PromptIntent → GenerationReference[] → CanonicalGenerationInput`。Asset 不得保存 API Key、Authorization、Provider wire body 或私有文件路径。归一化器会过滤未知引用角色，并拒绝明显的凭据文本。
 
-Production Skill 与 PromptAsset 是两种不同的输入：Skill 描述制作方法和验收 Gate，PromptAsset 描述一段可插入的创作提示。二者都不能替代 Runtime、Mutation Core 或 Provider Adapter。
+Agent Integration Skill 与 PromptAsset 是两种不同层次：Skill 描述外部 Agent 如何安全调用 Flovart，PromptAsset 描述一段可插入的创作输入。历史 Production Skill / recipe 可以作为实验内容存在，但不是 PromptAsset 的正式并列产品层，也不能替代 Runtime、Mutation Core 或 Provider Adapter。

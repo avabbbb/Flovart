@@ -62,7 +62,16 @@ HIGGSFIELD parity 报告和一段中间实现曾主张：
 
 历史 Hub 文档曾出现 organizations、departments、roles、credits、API-key pool、quota、approval 等企业模型。当前 backend database 文档已经按真实 Hub model 收敛；这些 enterprise 概念不属于当前产品设计。
 
-### H. 一次性方向问题与成熟度报告
+### H. 旧施工计划与 refactor baseline
+
+以下文件属于特定阶段的施工/基线，不再作为 active design：
+- `docs/dev/higgsfield-style-plugin-plan.md`：以“插件优先”拆出的执行计划，其中大量任务已被当前 workspace/host 边界重新解释；
+- `docs/dev/workflow-large-project-interaction-design.md`：大型画布 Render Planner / Canvas Engine Port 的方案稿，未作为当前架构硬约束；
+- `docs/refactor/canvas-execution-baseline.md`：特定提交上的 Phase baseline，里面的 DSH/Native Workspace/Agent Workspace 状态只对当时成立。
+
+其中仍有价值的性能原则（按可见区域加载、视频 poster、避免大媒体全量挂载）继续由代码和 current design 约束；原始施工文本从 Git history 查看。
+
+### I. 一次性方向问题与成熟度报告
 
 以下文件曾用于某一轮评审/决策：
 - `HIGGSFIELD_PARITY_PRODUCTIZATION_REPORT.md`
@@ -95,5 +104,6 @@ Canvas / Table right drawer
 - `docs/design/ecosystem/*`
 - `docs/design/sol-next-step-questions.md`
 - ADR 0025 / 0039
+- 旧 Higgsfield plugin plan / large-project interaction design / canvas refactor baseline
 
 需要查看原文时使用 Git history，不要把它们复制回 active design tree。

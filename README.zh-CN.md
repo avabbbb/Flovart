@@ -253,7 +253,7 @@ npm run flovart:cli -- status --json
 | 自动化 | 显式的 inspect/apply/run 操作，带版本与审批边界 |
 | 数据 | 本地优先，并明确浏览器与 Runtime 的边界 |
 
-你可以把图片、文本、视频、音频和配置节点组合起来，让项目和参考素材留在自己的工作区，并通过明确契约扩展 Provider、宿主和节点操作。三个产品入口是：**Workflow** 负责生成编排，**Table** 负责仍在完善中的媒体预处理工作台，**Agent** 负责制作控制；Table 和 Agent 都已接入真实入口，但剩余实现工作尚未完成——详见[功能说明](docs/content/docs/overview/features.mdx)。
+你可以把图片、文本、视频、音频和配置节点组合起来，让项目和参考素材留在自己的工作区，并通过明确契约扩展 Provider、宿主和节点操作。当前顶栏三个产品 surface 是：**Canvas** 负责空间化 Workflow，**Table** 负责结构化媒体处理，**Agent** 只负责本地/外部 Coding Agent 的连接、准备、状态与切换；内置 **Assistant / Context / History** 留在 Canvas/Table 右侧 drawer，不在 Agent 页复制——详见[功能说明](docs/content/docs/overview/features.mdx)。
 
 ## 同一份 Workflow，人和 Agent 共用
 
@@ -320,7 +320,7 @@ CLI 与实验性 stdio MCP 共用操作语义，当前都绑定可见的 Browser
   <a href="docs/maintenance/readme/DEMO_RECORDING.md">DEMO_RECORDING.md</a>。</sub>
 </p>
 
-原生效果保持两条短路径：同一生成函数产出持久素材版本，宿主效果读取固定版本并本地渲染——不强制经过导演、Operator 或制作组层级。产品、交互、实现和评测集中在[主设计](docs/design/flovart-native-effects.md)；[当前实现记录](docs/design/ecosystem/CURRENT_ARCHITECTURE.md)只解释现有代码，不是另一套产品目标。
+原生效果保持两条短路径：同一生成函数产出持久素材版本，宿主效果读取固定版本并本地渲染——不强制经过导演、Operator 或制作组层级。产品范围与系统边界统一见[主设计](docs/design/flovart-native-effects.md)，Agent transport/authority 见 [Agent Integration](docs/design/agent-integration.md)；历史 CURRENT/TARGET 架构报告不再参与当前产品决策。
 
 ## 本地优先与安全
 
