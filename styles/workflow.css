@@ -196,7 +196,13 @@
 .workflow-toolbar__shortcut-card span { display:flex;align-items:center;justify-content:space-between;gap:12px;color:var(--wf-muted); }
 .workflow-toolbar__shortcut-card kbd { border:1px solid var(--wf-border);border-radius:5px;padding:2px 5px;color:var(--wf-text);background:var(--isl-surface-2);font:inherit; }
 .workflow-toolbar--inset { gap: 2px; padding: 3px; }
-.workflow-toolbar--inset > .isl-icon-btn,.workflow-toolbar--inset > .workflow-toolbar__add-wrap > .isl-icon-btn { width: 32px !important; height: 32px !important; }
+.workflow-toolbar__add-wrap,
+.workflow-toolbar__popover-wrap { display:flex;align-items:center;justify-content:center; }
+.workflow-toolbar--inset > .isl-icon-btn,
+.workflow-toolbar--inset > .workflow-toolbar__add-wrap > .isl-icon-btn,
+.workflow-toolbar--inset > .workflow-toolbar__popover-wrap > .isl-icon-btn { width: 32px !important; height: 32px !important; min-width:32px !important; min-height:32px !important; }
+.workflow-toolbar--inset > .workflow-toolbar__add-wrap,
+.workflow-toolbar--inset > .workflow-toolbar__popover-wrap { width:32px;height:32px;flex:0 0 32px; }
 .workflow-toolbar--inset .workflow-toolbar__divider { margin-inline: 1px; }
 .workflow-toolbar__library button { border: 0; background: transparent; cursor: pointer; color: inherit; }
 .workflow-toolbar__library-filters button.is-active { color: var(--wf-text); background: color-mix(in srgb,var(--wf-accent) 14%,transparent); }
