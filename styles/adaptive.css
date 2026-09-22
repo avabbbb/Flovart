@@ -67,6 +67,7 @@ body,
 }
 
 .studio-layout__surface {
+  container: studio-surface / inline-size;
   min-width: 0;
   min-height: 0;
   flex: 1 1 0;
