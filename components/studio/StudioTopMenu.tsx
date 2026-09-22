@@ -22,17 +22,13 @@ export interface StudioMenuProjectRef {
   title: string;
 }
 
-export type StudioMode = 'workflow' | 'agent';
-
 export interface StudioMenuModel {
-  mode: StudioMode;
   title: string;
   themeMode: ThemeMode;
   resolvedTheme: 'light' | 'dark';
   language: 'en' | 'zho';
   status: StudioMenuStatus;
   actions: {
-    changeMode: (mode: StudioMode) => void;
     setThemeMode: (mode: ThemeMode) => void;
     toggleLanguage: () => void;
     openSettings: () => void;
@@ -53,7 +49,7 @@ export interface StudioTopMenuProps {
 }
 
 export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
-  const { actions, language, mode, status, themeMode, resolvedTheme, title, projectList, activeProjectIndex, projectActions } = model;
+  const { actions, language, status, themeMode, resolvedTheme, title, projectList, activeProjectIndex, projectActions } = model;
   const navigate = useNavigate();
   const isChinese = language === 'zho';
   // The real view switch (Canvas vs Table) lives here in the single top bar —
@@ -178,9 +174,7 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
                 onClick={event => {
                   event.preventDefault();
                   setLogoMenuOpen(false);
-                  const workspace = useWorkspaceStore.getState();
-                  workspace.setActiveView('workflow');
-                  workspace.setCanvasView('spatial');
+                  useWorkspaceStore.getState().setCanvasView('spatial');
                   navigate('/app');
                 }}
               >

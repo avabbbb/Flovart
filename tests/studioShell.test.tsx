@@ -9,9 +9,8 @@ vi.mock('../hooks/useAuth', () => ({
   useAuth: () => ({ user: null, isLoggedIn: false }),
 }));
 
-const menuModel = (mode: 'workflow' | 'agent'): StudioMenuModel => ({
-  mode,
-  title: mode === 'workflow' ? 'Workflow project' : 'Agent',
+const menuModel = (): StudioMenuModel => ({
+  title: 'Workflow project',
   themeMode: 'light',
   resolvedTheme: 'light',
   language: 'zho',
@@ -21,7 +20,6 @@ const menuModel = (mode: 'workflow' | 'agent'): StudioMenuModel => ({
     detail: '视频生成尚未配置',
   },
   actions: {
-    changeMode: vi.fn(),
     setThemeMode: vi.fn(),
     toggleLanguage: vi.fn(),
     openSettings: vi.fn(),
@@ -29,8 +27,8 @@ const menuModel = (mode: 'workflow' | 'agent'): StudioMenuModel => ({
 });
 
 describe('shared studio shell', () => {
-  it.each(['workflow', 'agent'] as const)('uses the same menu model in %s mode', mode => {
-    const model = menuModel(mode);
+  it('renders the shared menu model and routes settings through it', () => {
+    const model = menuModel();
     render(<MemoryRouter><StudioTopMenu model={model} /></MemoryRouter>);
 
     expect(screen.getAllByText(model.title).length).toBeGreaterThan(0);

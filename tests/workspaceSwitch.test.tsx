@@ -6,12 +6,20 @@ describe('workspace switching', () => {
     expect(DEFAULT_WORKSPACE_LANGUAGE).toBe('zho');
   });
 
-  it('keeps Workflow and Agent as explicit persisted views', () => {
-    useWorkspaceStore.getState().setActiveView('workflow');
-    expect(useWorkspaceStore.getState().activeView).toBe('workflow');
+  it('drops a persisted top-level agent view on rehydrate', async () => {
+    // IA freeze: Agent lives in the global right drawer — a legacy v2 session
+    // that persisted activeView='agent' must not let 'agent' into live state.
+    localStorage.setItem('flovart-workspace', JSON.stringify({
+      state: { activeView: 'agent', canvasView: 'spatial', themeMode: 'dark', language: 'en' },
+      version: 2,
+    }));
+    await useWorkspaceStore.persist.rehydrate();
 
-    useWorkspaceStore.getState().setActiveView('agent');
-    expect(useWorkspaceStore.getState().activeView).toBe('agent');
+    const state = useWorkspaceStore.getState() as unknown as Record<string, unknown>;
+    expect(state.canvasView).toBe('spatial');
+    expect(state.themeMode).toBe('dark');
+    expect(state.language).toBe('en');
+    expect(Object.values(state)).not.toContain('agent');
   });
 
   it('keeps Table as a Canvas secondary view', () => {
