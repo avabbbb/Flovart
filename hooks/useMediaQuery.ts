@@ -17,17 +17,19 @@ export function useMediaQuery(query: string): boolean {
     // flips actually propagate.
     window.addEventListener('resize', onStoreChange);
     let media: MediaQueryList | undefined;
+    let handleChange: (() => void) | undefined;
     if (typeof window.matchMedia === 'function') {
       media = window.matchMedia(query);
-      const handleChange = () => onStoreChange();
+      handleChange = () => onStoreChange();
       if (typeof media.addEventListener === 'function') media.addEventListener('change', handleChange);
       else media.addListener(handleChange);
     }
     return () => {
       window.removeEventListener('resize', onStoreChange);
       if (!media) return;
-      if (typeof media.removeEventListener === 'function') media.removeEventListener('change', onStoreChange);
-      else media.removeListener(onStoreChange);
+      if (!handleChange) return;
+      if (typeof media.removeEventListener === 'function') media.removeEventListener('change', handleChange);
+      else media.removeListener(handleChange);
     };
   };
   const getSnapshot = () => {
