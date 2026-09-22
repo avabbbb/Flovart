@@ -343,21 +343,60 @@ body {
 }
 
 .compact-right-panel__quicktabs {
-    position: absolute;
-    /* 必须高于 .agent-conversation 的 z-index:60（嵌入 Agent 面板会盖住 tab 栏） */
-    z-index: 80;
-    top: 7px;
-    right: 8px;
+    position: relative;
+    z-index: 2;
     display: flex;
+    flex: 0 0 auto;
+    min-height: 42px;
     align-items: center;
-    gap: 2px;
+    gap: 6px;
+    border-bottom: 1px solid var(--isl-border);
+    padding: 5px 6px;
+    background: var(--isl-card);
 }
 
-.compact-right-panel__quicktabs .isl-tabbar { gap: 2px; background: transparent; border: 0; padding: 0; }
-.compact-right-panel__quicktabs .isl-tab { flex: none; width: 30px; height: 30px; padding: 0; background: transparent; border: 0; }
-.compact-right-panel__quicktabs .isl-tab span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
-.compact-right-panel__quicktabs .isl-tab--active { display: none; }
-.compact-right-panel__quicktabs > button { width: 30px; height: 30px; border: 0; background: transparent; box-shadow: none; }
+.compact-right-panel__quicktabs .isl-tabbar {
+    display: flex;
+    min-width: 0;
+    flex: 1;
+    gap: 4px;
+    border: 0;
+    padding: 0;
+    background: transparent;
+}
+.compact-right-panel__quicktabs .isl-tab {
+    min-width: 0;
+    height: 32px;
+    flex: 1 1 0;
+    justify-content: center;
+    gap: 5px;
+    border: 0;
+    padding: 0 7px;
+    background: transparent;
+}
+.compact-right-panel__quicktabs .isl-tab span {
+    position: static;
+    width: auto;
+    height: auto;
+    min-width: 0;
+    overflow: hidden;
+    clip: auto;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.compact-right-panel__quicktabs .isl-tab--active {
+    display: inline-flex;
+    color: var(--isl-ink);
+    background: var(--isl-surface-2);
+}
+.compact-right-panel__quicktabs > button {
+    width: 32px;
+    height: 32px;
+    flex: 0 0 32px;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+}
 
 .inline-prompt-bar {
     box-sizing: border-box;
