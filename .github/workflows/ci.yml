@@ -32,9 +32,6 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
-        env:
-          FLOVART_SKIP_ACL_VERIFY: '1'
-          FLOVART_ACL_DEBUG: '1'
 
       - name: Install DSH plugin dependencies
         run: npm --prefix dsh-plugin ci
@@ -59,9 +56,6 @@ jobs:
 
       - name: Unit and integration tests
         run: npm test -- --reporter=dot
-        env:
-          FLOVART_SKIP_ACL_VERIFY: '1'
-          FLOVART_ACL_DEBUG: '1'
 
       - name: Web build
         run: npm run build
