@@ -55,23 +55,6 @@ export function AgentHubPanel({ project, onCreateProject, onOpenWorkflow, onOpen
     </div>
   );
 }
-/**
- * Slim external-host switcher for the top of the Agent panel. The full picker
- * collapses into a details row so host selection is reachable without owning a
- * peer "协作" tab or a page.
- */
-export function AgentHostHeader({ project }: { project: WorkflowProject }) {
-  const [expanded, setExpanded] = useState(false);
-  return (
-    <div className="agent-host-header">
-      <button type="button" className="agent-host-header__toggle" onClick={() => setExpanded(e => !e)} aria-expanded={expanded}>
-        <CircleDot size={12} />
-        <span>{expanded ? '外部 Host' : '切换外部 Host'}</span>
-      </button>
-      {expanded && <AgentHostPicker projectTitle={project.title} />}
-    </div>
-  );
-}
 
 /**
  * Project-less onboarding for the global Agent drawer. The built-in assistant
