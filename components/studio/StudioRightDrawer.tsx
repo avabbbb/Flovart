@@ -20,6 +20,12 @@ export interface StudioRightDrawerProps {
   onTabChange: (id: string) => void;
   flush?: boolean;
   /**
+   * When true, a closed drawer also hides its floating reopen affordance —
+   * used when the surrounding view force-collapses the drawer and offers no
+   * meaningful content for it (e.g. Table view).
+   */
+  hideReopenButton?: boolean;
+  /**
    * Docked = in-flow panel that reflows the workspace beside it instead of an
    * absolute overlay that can cover the selected node. The caller owns the
    * flex row; the aside switches from `absolute` to `relative` positioning.
@@ -40,6 +46,7 @@ export const StudioRightDrawer: React.FC<StudioRightDrawerProps> = ({
   activeTab,
   onTabChange,
   flush = false,
+  hideReopenButton = false,
   docked = false,
   children,
 }) => {
@@ -104,16 +111,18 @@ export const StudioRightDrawer: React.FC<StudioRightDrawerProps> = ({
 
   return (
     <>
-      <button
-        type="button"
-        className="isl-icon-btn theme-aware absolute h-10 w-10"
-        style={{ right: outerGap, top: outerGap, zIndex: 80, opacity: open ? 0 : 1, pointerEvents: open ? 'none' : 'auto' }}
-        onClick={() => onOpenChange(true)}
-        title="打开右侧面板"
-        aria-label="打开右侧面板"
-      >
-        <PanelRightOpen size={18} />
-      </button>
+      {!hideReopenButton && (
+        <button
+          type="button"
+          className="isl-icon-btn theme-aware absolute h-10 w-10"
+          style={{ right: outerGap, top: outerGap, zIndex: 80, opacity: open ? 0 : 1, pointerEvents: open ? 'none' : 'auto' }}
+          onClick={() => onOpenChange(true)}
+          title="打开右侧面板"
+          aria-label="打开右侧面板"
+        >
+          <PanelRightOpen size={18} />
+        </button>
+      )}
 
       <aside
         ref={asideRef}

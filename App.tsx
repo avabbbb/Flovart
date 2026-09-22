@@ -108,8 +108,6 @@ const App: React.FC = () => {
 
     const language = useWorkspaceStore(s => s.language);
     const setLanguage = useWorkspaceStore(s => s.setLanguage);
-    const activeView = useWorkspaceStore(s => s.activeView);
-    const setActiveView = useWorkspaceStore(s => s.setActiveView);
     const canvasView = useWorkspaceStore(s => s.canvasView);
     const setCanvasView = useWorkspaceStore(s => s.setCanvasView);
     const themeMode = useWorkspaceStore(s => s.themeMode);
@@ -147,12 +145,6 @@ const App: React.FC = () => {
             setDataReady(true);
         });
     }, []);
-
-    // Legacy persisted sessions may still carry activeView='agent'. Agent is no
-    // longer a top-level mode (it lives in the right drawer) — normalize once.
-    useEffect(() => {
-        if (activeView === 'agent') setActiveView('workflow');
-    }, [activeView, setActiveView]);
 
     // Cross-surface "open the Agent drawer" requests (top-menu status chip,
     // canvas toolbar, host hub CTA). Consume any request made before mount and
@@ -485,9 +477,8 @@ const App: React.FC = () => {
 
     const handleOpenTable = useCallback((nodeId?: string) => {
         setTableSourceNodeId(nodeId ?? null);
-        setActiveView('workflow');
         setCanvasView('table');
-    }, [setActiveView, setCanvasView]);
+    }, [setCanvasView]);
 
     const handleCommitTableResult = useCallback(async (result: TableProcessResult, sourceNodeId: string | null, name: string) => {
         const project = useWorkflowStore.getState().projects.find(item => item.id === useWorkflowStore.getState().activeProjectId);
@@ -537,14 +528,12 @@ const App: React.FC = () => {
         detail: language === 'zho' ? '可选择 Codex、WorkBuddy 或 DeepSeek Harness 作为 Agent 指挥入口' : 'Pick Codex, WorkBuddy, or DeepSeek Harness as your agent director',
     }), [language]);
     const studioMenuModel: StudioMenuModel = useMemo(() => ({
-        mode: activeView,
         title: canvasView === 'table' ? 'Table' : activeWorkflowTitle,
         themeMode,
         resolvedTheme,
         language,
         status: studioRuntimeStatus,
         actions: {
-            changeMode: setActiveView,
             setThemeMode,
             toggleLanguage: () => setLanguage(language === 'zho' ? 'en' : 'zho'),
             openSettings: () => setIsSettingsPanelOpen(true),
@@ -557,7 +546,7 @@ const App: React.FC = () => {
             rename: (newTitle: string) => { if (activeWorkflowProjectId) workflowRenameProject(activeWorkflowProjectId, newTitle); },
             setActiveByIndex: (index: number) => { const target = workflowProjects[index]; if (target) workflowSetActiveProject(target.id); },
         },
-    }), [activeView, canvasView, activeWorkflowTitle, resolvedTheme, themeMode, language, setActiveView, setThemeMode, setLanguage, studioRuntimeStatus, workflowProjects, activeWorkflowIndex, activeWorkflowProjectId, workflowCreateProject, workflowDeleteProjects, workflowRenameProject, workflowSetActiveProject]);
+    }), [canvasView, activeWorkflowTitle, resolvedTheme, themeMode, language, setThemeMode, setLanguage, studioRuntimeStatus, workflowProjects, activeWorkflowIndex, activeWorkflowProjectId, workflowCreateProject, workflowDeleteProjects, workflowRenameProject, workflowSetActiveProject]);
 
     const historyDrawerMedia = workflowSharedMedia.filter(media => (media.source || (media.id.startsWith('history:') ? 'history' : 'asset')) === 'history');
 
@@ -565,6 +554,11 @@ const App: React.FC = () => {
         void insertSharedMediaIntoProject(media)
             .then(result => { if (!result.ok && result.error) toast.show(result.error, 'warning'); });
     }, [toast]);
+    // The right drawer only carries meaningful content beside the spatial
+    // canvas; on Table it renders as a dead empty block. Collapse it there
+    // while preserving the user's open intent for when they switch back.
+    const effectiveRightOpen = canvasView === 'table' ? false : rightOpen;
+
 
     const main = (
         // One global right drawer spans both noun surfaces — Canvas and Table
@@ -627,8 +621,9 @@ const App: React.FC = () => {
             </div>
 
             <StudioRightDrawer
-                open={rightOpen}
+                open={effectiveRightOpen}
                 onOpenChange={setRightOpen}
+                hideReopenButton={canvasView === 'table'}
                 outerGap={0}
                 width={rightWidth}
                 minWidth={280}
