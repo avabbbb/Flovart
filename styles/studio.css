@@ -15,7 +15,7 @@
 
 .studio-top-menu__modes::-webkit-scrollbar { display: none; }
 
-@media (max-width: 767px) {
+@container app-shell (width <= 767px) {
   .studio-top-menu {
     grid-template-columns: minmax(0, 1fr) auto;
     grid-template-rows: minmax(40px, auto) 32px;
@@ -38,7 +38,7 @@
   .studio-top-menu__modes button { min-height: 28px; padding-inline: 12px; }
 }
 
-@media (max-width: 420px) {
+@container app-shell (width <= 420px) {
   .studio-top-menu { padding-inline: 6px; }
   .studio-top-menu__leading { gap: 5px; }
   .studio-top-menu__actions { gap: 0; }
