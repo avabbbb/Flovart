@@ -73,6 +73,11 @@ export const StudioRightDrawer: React.FC<StudioRightDrawerProps> = ({
     ['--drawer-min-width' as string]: `${minWidth}px`,
     ['--drawer-max-width' as string]: `${maxWidth}px`,
     ['--drawer-outer-gap' as string]: `${flush ? 0 : outerGap}px`,
+    // Keep collapsed content out of hit-testing/layout even before stylesheets
+    // hydrate (tests, cold loads, embedded hosts). CSS owns sizing; this only
+    // owns the binary visibility state.
+    display: open ? undefined : 'none',
+    pointerEvents: open ? 'auto' : 'none',
     ...(docked
       ? {
         position: 'relative',
