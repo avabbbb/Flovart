@@ -68,39 +68,22 @@ export const StudioRightDrawer: React.FC<StudioRightDrawerProps> = ({
   }, [maxWidth, minWidth, onWidthChange, resizing]);
 
   const safeWidth = Math.min(maxWidth, Math.max(minWidth, Number.isFinite(width) ? width : minWidth));
-  const drawerStyle: React.CSSProperties = docked
-    ? {
-      // In-flow dock: the aside participates in the parent flex row so the
-      // canvas/table reflows and the drawer can never cover the selected node.
-      position: 'relative',
-      flex: '0 0 auto',
-      alignSelf: 'stretch',
-      ['--drawer-width' as string]: `${safeWidth}px`,
-      width: open ? `${safeWidth}px` : '0px',
-      maxWidth: open ? `calc(100% - ${outerGap * 2}px)` : '0px',
-      opacity: open ? 1 : 0,
-      pointerEvents: open ? 'auto' : 'none',
-      // `display:none` removes collapsed children from the layout tree entirely —
-      // without it the inner empty-state CTA keeps a real layout rect (64px wide,
-      // centered on the 0px slot) whose center lands off-viewport at x≈1449,
-      // so a11y/hit-test code sees a phantom button that can never be clicked.
-      display: open ? undefined : 'none',
-      transform: 'translateX(0)',
-    }
-    : {
-      top: flush ? 0 : outerGap,
-      right: flush ? 0 : outerGap,
-      bottom: flush ? 0 : outerGap,
-      // Keep the user's preference as a token. CSS clamps it against the
-      // available container; no viewport measurement is needed here.
-      ['--drawer-width' as string]: `${safeWidth}px`,
-      width: open ? `min(var(--drawer-width), calc(100% - ${(flush ? 0 : outerGap * 2)}px))` : '0px',
-      opacity: open ? 1 : 0,
-      pointerEvents: open ? 'auto' : 'none',
-      // See the docked branch — collapsed children must not keep a layout rect.
-      display: open ? undefined : 'none',
-      transform: 'translateX(0)',
-    };
+  const drawerStyle: React.CSSProperties = {
+    ['--drawer-width' as string]: `${safeWidth}px`,
+    ['--drawer-min-width' as string]: `${minWidth}px`,
+    ['--drawer-max-width' as string]: `${maxWidth}px`,
+    ['--drawer-outer-gap' as string]: `${flush ? 0 : outerGap}px`,
+    ...(docked
+      ? {
+        position: 'relative',
+        alignSelf: 'stretch',
+      }
+      : {
+        top: flush ? 0 : outerGap,
+        right: flush ? 0 : outerGap,
+        bottom: flush ? 0 : outerGap,
+      }),
+  };
 
   return (
     <>
@@ -119,6 +102,7 @@ export const StudioRightDrawer: React.FC<StudioRightDrawerProps> = ({
         ref={asideRef}
         className={`isl-panel compact-right-panel theme-aware ${docked ? 'relative' : 'absolute'} z-[78] flex min-h-0 flex-col overflow-hidden transition-[transform,opacity] duration-200 ${flush ? 'compact-right-panel--flush' : ''}`}
         data-open={open ? 'true' : 'false'}
+        data-docked={docked ? 'true' : 'false'}
         style={drawerStyle}
       >
         <div
