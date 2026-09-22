@@ -72,9 +72,20 @@ jobs:
       - name: DSH plugin build
         run: npm --prefix dsh-plugin run build
 
+      - name: Build Tauri agent sidecar fixture
+        shell: pwsh
+        run: |
+          node scripts/build-agent-sidecar.mjs --target x86_64-pc-windows-msvc
+          $agent = 'src-tauri/binaries/flovart-agent-x86_64-pc-windows-msvc.exe'
+          if (-not (Test-Path -LiteralPath $agent -PathType Leaf)) {
+            throw "Agent sidecar was not produced: $agent"
+          }
+          if ((Get-Item -LiteralPath $agent).Length -le 0) {
+            throw "Agent sidecar is empty: $agent"
+          }
+
       - name: Rust tests
         run: cargo test --manifest-path src-tauri/Cargo.toml --all-targets
-        continue-on-error: true # Requires flovart-agent sidecar binary built locally; not in repo
 
       - name: Git diff check
         run: git diff --check
