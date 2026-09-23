@@ -1025,8 +1025,26 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 const text = await file.text();
                 const parsed = JSON.parse(text);
                 if (!Array.isArray(parsed)) throw new Error('格式错误');
+                const legalProviders = new Set(Object.keys(providerBaseUrl));
+                let importedCount = 0;
+                let skippedCount = 0;
                 for (const item of parsed) {
-                    if (!item.provider || !item.key || item.key === '***') continue;
+                    // 逐项结构校验：provider 合法、key 非空（排除导出占位 "***"），
+                    // routeMappings / pricingRules 若存在必须是数组且每项字段齐全；不合法项跳过并计数
+                    const routeMappingsOk = item.routeMappings == null
+                        || (Array.isArray(item.routeMappings) && item.routeMappings.every(
+                            (mapping: RouteMappingBinding) => mapping?.target?.kind && mapping.routeId,
+                        ));
+                    const pricingRulesOk = item.pricingRules == null
+                        || (Array.isArray(item.pricingRules) && item.pricingRules.every(
+                            (rule: ApiPricingRule) => rule?.id,
+                        ));
+                    const valid = item && typeof item === 'object'
+                        && legalProviders.has(item.provider)
+                        && typeof item.key === 'string' && item.key.trim() !== '' && item.key !== '***'
+                        && routeMappingsOk
+                        && pricingRulesOk;
+                    if (!valid) { skippedCount++; continue; }
                     onAddApiKey({
                         provider: item.provider,
                         capabilities: item.capabilities || inferCapabilitiesByProvider(item.provider),
@@ -1043,7 +1061,9 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                         pricingRules: item.pricingRules,
                         budgetPolicy: item.budgetPolicy,
                     });
+                    importedCount++;
                 }
+                alert(`导入完成：成功 ${importedCount} 条，跳过 ${skippedCount} 条`);
             } catch {
                 alert('导入失败：文件格式不正确');
             }
@@ -1083,9 +1103,14 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
         setBatchTestResults({});
         const results: Record<string, { ok: boolean; message?: string }> = {};
         for (const item of userApiKeys) {
-            const result = await validateApiKey(item.provider, item.key, item.baseUrl, item.extraConfig);
-            results[item.id] = result;
-            onUpdateApiKey(item.id, { status: result.ok ? 'ok' : 'error' });
+            try {
+                const result = await validateApiKey(item.provider, item.key, item.baseUrl, item.extraConfig);
+                results[item.id] = result;
+                onUpdateApiKey(item.id, { status: result.ok ? 'ok' : 'error' });
+            } catch (error) {
+                // 单个 Key 校验抛异常（网络/解析失败）不中断批量流程，记为失败后继续下一项
+                results[item.id] = { ok: false, message: String(error?.message || error) };
+            }
             setBatchTestResults({ ...results });
         }
         setIsBatchTesting(false);

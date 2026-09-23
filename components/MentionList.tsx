@@ -243,8 +243,9 @@ const MentionList = forwardRef<MentionListHandle, MentionListProps>(
         };
 
         const pickEntry = (entry: RenderEntry) => {
-            if (!entry.clickable) return;
             const item = entry.item;
+            // folder/back 导航条目 clickable 为 false，但不能被拦截，否则文件夹浏览失效
+            if (!entry.clickable && item?.kind !== 'folder' && item?.kind !== 'back') return;
             if (item.kind === 'folder' || item.kind === 'back') {
                 navigateFolder(item.folderId ?? null);
                 return;

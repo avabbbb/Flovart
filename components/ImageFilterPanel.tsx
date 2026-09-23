@@ -38,7 +38,7 @@ export const ImageFilterPanel: React.FC<ImageFilterPanelProps> = ({
   onClose,
   onReset,
 }) => {
-  const [expandedGroup, setExpandedGroup] = useState<'basic' | 'color' | 'effect'>('basic');
+  const [expandedGroup, setExpandedGroup] = useState<'' | 'basic' | 'color' | 'effect'>('basic');
 
   const getValue = useCallback(
     (key: keyof ImageFilters) => filters[key] ?? DEFAULT_IMAGE_FILTERS[key],
@@ -130,7 +130,7 @@ export const ImageFilterPanel: React.FC<ImageFilterPanelProps> = ({
           return (
             <div key={group.id}>
               <button
-                onClick={() => setExpandedGroup(isExpanded ? group.id : group.id)}
+                onClick={() => setExpandedGroup(isExpanded ? '' : group.id)}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -144,7 +144,6 @@ export const ImageFilterPanel: React.FC<ImageFilterPanelProps> = ({
                   fontWeight: 700,
                   color: 'var(--isl-ink)',
                 }}
-                onMouseDown={() => setExpandedGroup(group.id)}
               >
                 <span>
                   {group.label}

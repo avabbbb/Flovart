@@ -7,6 +7,7 @@ import { Check, ChevronRight, ChevronsDown, Maximize2, Plus, Star, Undo2 } from 
 import type { AssetLibrary, PromptEnhanceMode, PromptEnhanceResult, UserApiKey } from '../../types';
 import type { RouteFallbackResolution } from '../../services/routeMapping';
 import { STUDIO_MEDIA_DRAG_TYPE } from '../studio/StudioMediaBrowser';
+import { mediaKindOf } from '../studio/assetLibraryShared';
 import type { AssetSuggestion } from '../MentionList';
 import type { MentionData } from '../MediaMentionExtension';
 import { createWorkflowNode, WORKFLOW_NODE_SPECS } from './constants';
@@ -367,6 +368,7 @@ export function InfiniteWorkflow({
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
+      if (focusAnimRef.current !== null) window.cancelAnimationFrame(focusAnimRef.current);
       unregisterWorkflowMediaTransientReferences(mediaReferenceOwnerRef.current);
       void pruneWorkflowMedia();
     };
@@ -572,12 +574,11 @@ export function InfiniteWorkflow({
   }, [commitFrame]);
 
   const restoreLayout = useCallback(() => {
-    setLayoutToast(prev => {
-      if (!prev) return null;
-      commitFrame(prev.prev, projectRef.current.connections);
-      return null;
-    });
-  }, [commitFrame]);
+    // 副作用移出 setState updater（updater 必须是纯函数）：先读当前 toast、提交还原、再清空。
+    if (!layoutToast) return;
+    commitFrame(layoutToast.prev, projectRef.current.connections);
+    setLayoutToast(null);
+  }, [commitFrame, layoutToast]);
 
   useEffect(() => {
     if (!layoutToast) return;
@@ -656,16 +657,23 @@ export function InfiniteWorkflow({
     storyboard: ids => { setStoryboardNodeIds(ids); openImageTool('storyboard', ids[0]); },
   }), [openImageTool]);
 
-  const openVideoTool = useCallback((kind: WorkflowVideoToolState['kind'], nodeId: string) => {
+  const openVideoTool = useCallback((kind: WorkflowVideoToolState['kind'], nodeId: string, nodeIds?: string[]) => {
     if (videoToolTransactionRef.current || videoTool || videoToolBusyRef.current) {
       setNotice('请先完成或关闭当前视频工具');
       return;
     }
-    if (projectRef.current.nodes.find(node => node.id === nodeId)?.metadata.status === 'loading') return;
+    const target = projectRef.current.nodes.find(node => node.id === nodeId);
+    // 打开前校验目标是有媒体的 video 节点：无媒体时对话框渲染 null，videoTool 置位后
+    // 将没有任何 UI 能关闭它，所有工具入口被永久锁死。
+    if (!target || target.type !== 'video' || !(target.metadata.storageKey || target.metadata.href || target.metadata.artifactRef?.taskId)) {
+      setNotice('目标视频节点缺少媒体，无法使用视频工具');
+      return;
+    }
+    if (target.metadata.status === 'loading') return;
     setVideoToolError(null);
     const transaction = { id: nanoid(), projectId: projectRef.current.id, nodeId, frame: currentFrame() };
     videoToolTransactionRef.current = transaction;
-    setVideoTool({ kind, nodeId });
+    setVideoTool({ kind, nodeId, ...(nodeIds ? { nodeIds } : {}) });
   }, [currentFrame, videoTool]);
 
   const handleExtractFrame = useCallback(async (id: string, position: 'first' | 'current' | 'last', currentTimeSec?: number) => {
@@ -694,7 +702,8 @@ export function InfiniteWorkflow({
   const builtInVideoTools = useMemo<WorkflowVideoToolHandlers>(() => ({
     trim: id => openVideoTool('trim', id),
     avSplit: id => openVideoTool('av-split', id),
-    merge: ids => { if (ids.length > 0) openVideoTool('merge', ids[0]); },
+    // merge 需要携带完整选中 id 列表，确认时回传真实选中集而非全库视频。
+    merge: ids => { if (ids.length > 0) openVideoTool('merge', ids[0], ids); },
     extractFrame: handleExtractFrame,
     extractFrameAt: id => openVideoTool('extract-frame', id),
   }), [openVideoTool, handleExtractFrame]);
@@ -736,7 +745,8 @@ export function InfiniteWorkflow({
         result = await runWorkflowVideoExtractFrameOperation(transaction.projectId, node.id, confirmation.position, imageToolRuntime, confirmation.currentTimeSec);
         successNotice = `已提取 ${confirmation.currentTimeSec != null ? `${confirmation.currentTimeSec.toFixed(1)}s` : confirmation.position === 'last' ? '尾帧' : '首帧'}`;
       } else if (confirmation.kind === 'merge') {
-        const selectedNodes = projectRef.current.nodes.filter(n => n.type === 'video' && (confirmation.nodeIds.length === 0 || confirmation.nodeIds.includes(n.id)));
+        // 只拼接确认时回传的真实选中集；空列表视为无效选择（不再回退为全库视频）。
+        const selectedNodes = projectRef.current.nodes.filter(n => n.type === 'video' && confirmation.nodeIds.includes(n.id));
         if (selectedNodes.length < 2) { setVideoToolError('至少需要选择 2 个视频节点'); return; }
         result = await runWorkflowVideoMergeOperation(transaction.projectId, selectedNodes.map(item => item.id), imageToolRuntime);
         successNotice = '视频拼接完成';
@@ -991,6 +1001,22 @@ export function InfiniteWorkflow({
     return true;
   }, [applyDraftProject]);
 
+  // Slash/分镜/整组等批量入口的 runNode 串行队列（按 projectId）：逐个发起，避免同一
+  // 批次内多个 run 的 prepare 写回互相覆盖。onRunNode 契约返回 void；若适配器实际
+  // 返回 thenable 则等它落定，否则让出一个宏任务再放行下一个。
+  const runNodeQueueRef = useRef(new Map<string, Promise<unknown>>());
+  const enqueueRunNode = useCallback((nodeId: string) => {
+    const projectId = projectRef.current.id;
+    const queue = runNodeQueueRef.current;
+    const previous = queue.get(projectId) ?? Promise.resolve();
+    const next = previous.then(async () => {
+      const result = onRunNode(nodeId) as unknown;
+      if (result && typeof (result as Promise<unknown>).then === 'function') await result;
+      else await new Promise<void>(resolve => window.setTimeout(resolve, 0));
+    });
+    queue.set(projectId, next.catch(() => undefined));
+  }, [onRunNode]);
+
   const assetFolders = useMemo(() => assetLibrary?.folders || [], [assetLibrary]);
   const assetSuggestions = useMemo<AssetSuggestion[]>(() => (assetLibrary?.items || []).map(item => ({
     id: item.id,
@@ -998,7 +1024,7 @@ export function InfiniteWorkflow({
     folderIds: item.folderIds,
     tags: item.tags,
     thumbnail: item.dataUrl,
-    elementType: (item.mimeType.startsWith('video/') ? 'video' : 'image') as 'image' | 'video',
+    elementType: mediaKindOf(item.mimeType) as 'image' | 'video',
   })), [assetLibrary]);
 
   const handleResolvePastedMentions = useCallback((mentions: MentionData[], targetNodeId: string): Array<MentionData | null> => {
@@ -1128,8 +1154,12 @@ export function InfiniteWorkflow({
     const startX = scriptNode.position.x + scriptNode.width + 80;
     const startY = scriptNode.position.y;
 
+    // 新节点占据的网格区域（x 条带 × y 波段）都参与避让：只判 x 会把远处
+    // 不同高度的节点也当成障碍，导致新分镜被推出很远。
+    const rows = Math.ceil(shotsToGenerate.length / perRow);
     const rightEdge = Math.max(startX, ...snapshot.nodes
-      .filter(n => n.position.x < startX + perRow * (nodeWidth + gapX) && n.position.x + n.width > startX)
+      .filter(n => n.position.x < startX + perRow * (nodeWidth + gapX) && n.position.x + n.width > startX
+        && n.position.y < startY + rows * (nodeHeight + gapY) && n.position.y + n.height > startY)
       .map(n => n.position.x + n.width + gapX));
     const originX = rightEdge > startX ? rightEdge : startX;
 
@@ -1165,10 +1195,10 @@ export function InfiniteWorkflow({
 
     const success = applyOps(ops);
     if (success) {
-      newNodeIds.forEach(id => void onRunNode(id));
+      newNodeIds.forEach(id => enqueueRunNode(id));
       selectNodes(newNodeIds);
     }
-  }, [applyOps, currentSnapshot, onRunNode, selectNodes]);
+  }, [applyOps, currentSnapshot, enqueueRunNode, selectNodes]);
 
   const screenToWorkflow = useCallback((clientX: number, clientY: number): WorkflowPoint => {
     const rect = rootRef.current?.getBoundingClientRect();
@@ -1364,10 +1394,10 @@ export function InfiniteWorkflow({
     ops.push({ type: 'group_nodes', ids: newNodeIds, batchId, source: 'auto' });
     const success = applyOps(ops);
     if (success) {
-      newNodeIds.forEach(id => void onRunNode(id));
+      newNodeIds.forEach(id => enqueueRunNode(id));
       selectNodes(newNodeIds);
     }
-  }, [applyOps, currentSnapshot, onRunNode, selectNodes, viewportCenter]);
+  }, [applyOps, currentSnapshot, enqueueRunNode, selectNodes, viewportCenter]);
 
   const addMediaAt = useCallback(async (file: File, center: WorkflowPoint, expectedProjectId = projectRef.current.id) => {
     let record: WorkflowMediaRecord | undefined;
@@ -2473,7 +2503,10 @@ export function InfiniteWorkflow({
             mediaActive={activeMedia?.projectId === project.id && activeMedia.nodeId === node.id}
             onActivateMedia={node.type === 'video' && (node.metadata.storageKey || node.metadata.href || node.metadata.artifactRef?.taskId)
               ? () => {
-                setActiveMedia({ projectId: project.id, nodeId: node.id });
+                // 幂等：onMouseOver 每次划过都会触发；同一节点直接复用原引用，避免不必要的新对象引发全量重渲染。
+                setActiveMedia(current => current?.projectId === project.id && current.nodeId === node.id
+                  ? current
+                  : { projectId: project.id, nodeId: node.id });
               }
               : undefined}
             onDeactivateMedia={() => setActiveMedia(active => active?.projectId === project.id && active.nodeId === node.id ? null : active)}
@@ -2556,14 +2589,15 @@ export function InfiniteWorkflow({
             onSaveMedia={onSaveWorkflowMedia}
             onGroup={ids => applyOps([{ type: 'group_nodes', ids, batchId: nanoid(), source: 'manual' }])}
             onUngroup={ids => applyOps([{ type: 'ungroup_nodes', ids }])}
-            onExecuteGroup={ids => topoSort(projectRef.current.nodes, projectRef.current.connections, ids).forEach(id => onRunNode(id))}
+            onExecuteGroup={ids => topoSort(projectRef.current.nodes, projectRef.current.connections, ids).forEach(id => enqueueRunNode(id))}
             onReversePrompt={onReversePrompt ? (id, mediaUrl) => {
               const node = projectRef.current.nodes.find(item => item.id === id);
               if (!node || node.isLocked) return;
               void onReversePrompt(mediaUrl, node.metadata.mimeType || 'image/png', node.metadata.naturalWidth, node.metadata.naturalHeight)
                 .then(prompt => {
                   if (!prompt || projectRef.current.nodes.find(item => item.id === id)?.isLocked) return;
-                  applyOps([{ type: 'update_node', id, metadata: { ...node.metadata, prompt } }]);
+                  // update_node 是浅合并：只传 prompt，避免 await 期间过期的 node.metadata 整体覆盖最新状态。
+                  applyOps([{ type: 'update_node', id, metadata: { prompt } }]);
                   setPromptFocusSignal(value => value + 1);
                 })
                 .catch(error => setNotice(displayError(error, '反推 Prompt 失败')));

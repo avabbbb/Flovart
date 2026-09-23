@@ -151,16 +151,22 @@ export const LocalFolderBrowser: React.FC<LocalFolderBrowserProps> = ({ language
 
   useEffect(() => { void refreshSources(); }, [refreshSources]);
 
-  const scan = useCallback(async (folderId: string) => {
+  const scan = useCallback(async (folderId: string, isCurrent?: () => boolean) => {
+    const stale = () => (isCurrent ? !isCurrent() : false);
     setScanning(true);
     setNotice(null);
     try {
-      setEntries(await scanLocalFolder(folderId));
+      const result = await scanLocalFolder(folderId);
+      // 快速切换文件夹时只让最新一次扫描的结果落地，避免旧结果覆盖新目录。
+      if (stale()) return;
+      setEntries(result);
     } catch (error) {
+      if (stale()) return;
       setEntries([]);
       setNotice(error instanceof LocalFolderError ? error.message : (zho ? '读取文件夹失败。' : 'Failed to read the folder.'));
     } finally {
-      setScanning(false);
+      // 过期扫描不再触碰状态，scanning 由最新一次扫描或切换目录的分支负责复位。
+      if (!stale()) setScanning(false);
     }
   }, [zho]);
 
@@ -168,6 +174,7 @@ export const LocalFolderBrowser: React.FC<LocalFolderBrowserProps> = ({ language
     if (!activeId) {
       setPermission('missing');
       setEntries([]);
+      setScanning(false);
       return;
     }
     let cancelled = false;
@@ -175,7 +182,7 @@ export const LocalFolderBrowser: React.FC<LocalFolderBrowserProps> = ({ language
       const state = await getLocalFolderPermission(activeId);
       if (cancelled) return;
       setPermission(state);
-      if (state === 'granted') await scan(activeId);
+      if (state === 'granted') await scan(activeId, () => !cancelled);
       else setEntries([]);
     })();
     return () => { cancelled = true; };
@@ -220,6 +227,8 @@ export const LocalFolderBrowser: React.FC<LocalFolderBrowserProps> = ({ language
   }, [refreshSources]);
 
   const handleDrop = useCallback(async (event: React.DragEvent<HTMLDivElement>) => {
+    // 必须在同步段最开头阻止默认行为：任何分支提前返回都不能让浏览器打开拖入的文件。
+    event.preventDefault();
     const items = Array.from(event.dataTransfer?.items || []) as Array<DataTransferItem & { getAsFileSystemHandle?: () => Promise<unknown> }>;
     // DataTransferItem 在事件回调返回后失效，必须同步取到 promise 再 await。
     const pending: Promise<unknown>[] = [];
@@ -236,7 +245,6 @@ export const LocalFolderBrowser: React.FC<LocalFolderBrowserProps> = ({ language
       setNotice(zho ? '当前浏览器不支持从拖放中保留文件夹引用，请改用“选择文件夹”。' : 'This browser cannot keep a folder reference from a drop. Use "Choose folder" instead.');
       return;
     }
-    event.preventDefault();
     setDropping(false);
     setNotice(null);
     for (const promise of pending) {

@@ -201,14 +201,17 @@ export function FlovartAgentPanel({ project, onActivityChange, onOpenSettings, a
     };
   }, [modeOpen, infoPanel, sessionsOpen, mentionOpen, attachmentOpen]);
   useEffect(() => {
+    // 与下方主连接 effect 相同的 active 防护：异步 settle 后组件可能已卸载/切换项目
+    let active = true;
     skillAttachmentDirty.current = false;
     setSkillAttachment(undefined);
     setReferences([]);
     setMentionOpen(false);
     const pending = consumePendingProductionSkill(project.id);
-    if (!pending) return;
+    if (!pending) return () => { active = false; };
     setPrompt(pending.prompt);
     const showError = (message: string) => {
+      if (!active) return;
       skillAttachmentDirty.current = false;
       setMessages(items => [...items, { id: crypto.randomUUID(), role: 'error', text: message }]);
     };
@@ -216,15 +219,19 @@ export function FlovartAgentPanel({ project, onActivityChange, onOpenSettings, a
     if (bundled && bundled.version === pending.skillVersion) {
       skillAttachmentDirty.current = true;
       void createProductionSkillAttachment(bundled)
-        .then(setSkillAttachment)
+        .then(attachment => {
+          if (active) setSkillAttachment(attachment);
+        })
         .catch(error => showError(errorMessage(error)));
-      return;
+      return () => { active = false; };
     }
     void (async () => {
       try {
         const registry = await createLocalSkillRegistry();
+        if (!active) return;
         if (!registry) throw new Error('本机 Skill 需要桌面端 Managed Agent 连接。');
         const manifest = await registry.getSkillManifest(pending.skillId);
+        if (!active) return;
         if (manifest.version !== pending.skillVersion) {
           throw new Error(`制作 Skill 版本不匹配：${pending.skillId}@${pending.skillVersion}`);
         }
@@ -240,6 +247,7 @@ export function FlovartAgentPanel({ project, onActivityChange, onOpenSettings, a
         showError(errorMessage(error));
       }
     })();
+    return () => { active = false; };
   }, [project.id]);
   useEffect(() => {
     let active = true;

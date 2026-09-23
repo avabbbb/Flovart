@@ -21,6 +21,7 @@ import { useMediaQuery } from '../../hooks/useMediaQuery';
 import type { WorkflowNodeMetadata, WorkflowProject } from './types';
 import type { PromptIntent } from './promptIntent';
 import { displayError } from '../../services/displayError';
+import { mediaKindOf } from '../studio/assetLibraryShared';
 
 export interface WorkflowWorkspaceProps {
   theme: 'light' | 'dark';
@@ -324,7 +325,8 @@ export function WorkflowWorkspace({
       name: item.name || '我的素材',
       href: item.dataUrl,
       mimeType: item.mimeType,
-      type: item.mimeType.startsWith('video') ? 'video' : 'image',
+      // type 字段如实传递（含 audio）：画布 drop 解析会按文件真实 MIME 还原类型。
+      type: mediaKindOf(item.mimeType) as WorkflowSharedMedia['type'],
       folderIds: item.folderIds,
       tags: item.tags,
       width: item.width,

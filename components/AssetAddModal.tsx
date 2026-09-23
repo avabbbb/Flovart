@@ -12,16 +12,23 @@ interface AssetAddModalProps {
 
 function buildOrderedFolders(folders: AssetFolder[]): Array<AssetFolder & { depth: number }> {
     const byParent = new Map<string | null, AssetFolder[]>();
+    const allIds = new Set(folders.map(f => f.id));
     for (const f of folders) {
-        const list = byParent.get(f.parentId) || [];
+        // 孤儿文件夹（parentId 指向不存在的 id）按根级显示，避免整棵子树从列表中丢失
+        const parentKey = f.parentId !== null && !allIds.has(f.parentId) ? null : f.parentId;
+        const list = byParent.get(parentKey) || [];
         list.push(f);
-        byParent.set(f.parentId, list);
+        byParent.set(parentKey, list);
     }
     for (const list of byParent.values()) list.sort((a, b) => a.name.localeCompare(b.name, 'zh'));
     const out: Array<AssetFolder & { depth: number }> = [];
+    const visited = new Set<string>();
     const walk = (parentId: string | null, depth: number) => {
         const children = byParent.get(parentId) || [];
         for (const c of children) {
+            // 环保护：异常 parentId 环 / 重复 id 不再无限递归或重复输出
+            if (visited.has(c.id)) continue;
+            visited.add(c.id);
             out.push({ ...c, depth });
             walk(c.id, depth + 1);
         }

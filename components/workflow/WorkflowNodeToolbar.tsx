@@ -64,12 +64,13 @@ export function WorkflowNodeToolbar({ nodes, onCopy, onDelete, onExport, onRun, 
   audioToolBusy?: boolean;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
-  if (!nodes.length) return null;
-  const ids = nodes.map(node => node.id);
+  // Hook 必须在任何提前 return 之前无条件调用；nodes 为空时入参为 undefined。
   const node = nodes.length === 1 ? nodes[0] : null;
   const media = node && (node.type === 'image' || node.type === 'video' || node.type === 'audio') ? node : null;
-  const selectedMedia = nodes.filter(item => item.type === 'image' || item.type === 'video' || item.type === 'audio');
   const mediaUrl = useWorkflowMediaUrl(media?.metadata.storageKey, media?.metadata.href).url;
+  if (!nodes.length) return null;
+  const ids = nodes.map(node => node.id);
+  const selectedMedia = nodes.filter(item => item.type === 'image' || item.type === 'video' || item.type === 'audio');
   const advancedToolBusy = imageToolBusy || node?.metadata.status === 'loading';
   const actions: Array<WorkflowToolbarAction | null | false | undefined> = [
     onFrameSelection && { key: 'frame-selection', label: '聚焦选中 (F)', icon: <Frame size={18} />, onClick: () => onFrameSelection() },

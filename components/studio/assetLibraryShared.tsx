@@ -4,13 +4,23 @@ import { useWorkflowMediaUrl } from '../workflow/media';
 import type { StudioMediaItem } from './StudioMediaBrowser';
 import type { AssetFolder, AssetItem } from '../../types';
 
+/** 按 MIME 判定媒体类型：audio 不再被误归为 image（原 startsWith('video') ? video : image 会把音频当图片）。 */
+export function mediaKindOf(mimeType: string): 'image' | 'video' | 'audio' {
+  const lower = (mimeType || '').toLowerCase();
+  if (lower.startsWith('audio')) return 'audio';
+  if (lower.startsWith('video')) return 'video';
+  return 'image';
+}
+
 export function assetToStudio(item: AssetItem): StudioMediaItem {
   return {
     id: item.id,
     name: item.name || '',
     href: item.dataUrl,
     mimeType: item.mimeType,
-    type: item.mimeType.startsWith('video') ? 'video' : 'image',
+    // type 字段如实传递（含 audio）：画布 drop 解析会按文件真实 MIME 还原类型，
+    // 与 LocalFolderBrowser 对 audio 条目的处理一致。
+    type: mediaKindOf(item.mimeType) as StudioMediaItem['type'],
     folderIds: item.folderIds,
     tags: item.tags,
     width: item.width,

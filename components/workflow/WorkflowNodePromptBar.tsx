@@ -1,5 +1,5 @@
 import { BookOpen } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import type { AssetFolder, AssetLibrary, UserApiKey, GenerationMode, PromptEnhanceMode, PromptEnhanceResult } from '../../types';
 import { PromptBar } from '../PromptBar';
 import { extractMentions, type MentionData } from '../MediaMentionExtension';
@@ -194,6 +194,9 @@ export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme,
     };
   };
   const handleGenerate = () => {
+    // 默认模型在运行提交时解析回填：不再由 effect 静默写 store（会污染撤销历史，
+    // 且 undo 后会立即重填）。此时是用户主动点击，写入是合法的历史记录。
+    if (!config.modelId && defaultMappedModelId) patchConfig({ modelId: defaultMappedModelId });
     const current = latestPromptIntent();
     emitPromptIntent(current.text, current.ids, 'generate');
     onRun();
@@ -227,12 +230,6 @@ export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme,
 
   const patchConfig = (patch: Partial<WorkflowGenerationConfig>) => onChange({ config: { ...config, ...patch } });
 
-  useEffect(() => {
-    if (config.modelId || !defaultMappedModelId) return;
-    patchConfig({ modelId: defaultMappedModelId });
-  // The model is filled once; subsequent user selection remains authoritative.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [config.modelId, defaultMappedModelId]);
   const translatedPrompts = t('quickPrompts');
   const prompts = Array.isArray(translatedPrompts) ? translatedPrompts.filter((item): item is { name: string; value: string } => Boolean(item) && typeof item.name === 'string' && typeof item.value === 'string') : [];
   const promptAssets = prompts.map((item, index) => promptAssetFromQuickPrompt({ id: `quick:${index}`, title: item.name, text: item.value, modality: generationMode === 'keyframe' ? 'image' : generationMode }));

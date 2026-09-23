@@ -435,6 +435,9 @@ export function WorkflowNode({
 }
 
 function OperationNodeCard({ node, onRun }: { node: WorkflowNodeData; onRun: () => void }) {
+  // 单张生成：结果媒体原位写在 operation 节点 metadata 上（storageKey/href），显示结果图。
+  // Hook 必须无条件调用（提前 return 会改变 Hook 数量），operation 判断放在其后。
+  const resultMedia = useWorkflowMediaUrl(node.metadata.storageKey, node.metadata.href);
   const operation = node.metadata.operation;
   if (!operation) return <div className="workflow-operation-card"><span>Operation 配方缺失</span></div>;
   const latestTake = operation.takes.at(-1);
@@ -444,8 +447,6 @@ function OperationNodeCard({ node, onRun }: { node: WorkflowNodeData; onRun: () 
     : latestTake?.status === 'error' ? '执行失败'
       : latestTake?.status === 'success' ? '已完成'
         : latestTake?.status === 'running' ? '执行中' : '待执行';
-  // 单张生成：结果媒体原位写在 operation 节点 metadata 上（storageKey/href），显示结果图
-  const resultMedia = useWorkflowMediaUrl(node.metadata.storageKey, node.metadata.href);
   if (resultMedia.url) {
     return (
       <div className="workflow-operation-card workflow-operation-card--result" data-testid="workflow-operation-card">

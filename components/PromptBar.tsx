@@ -21,6 +21,7 @@ import { useWorkflowMediaUrl } from './workflow/media';
 import { createPromptBarGenerationPolicy, PROMPT_IMAGE_MODE_ORDER, PROMPT_VIDEO_MODE_ORDER, type VideoAspectRatio } from '../services/promptBarPolicy';
 
 import { readColdMedia } from '../utils/mediaIndexedDB';
+import { displayError } from '../services/displayError';
 import { AssetReferencePicker, type ReferencePickerWorkflowItem } from './studio/AssetReferencePicker';
 import { ResponsivePopover } from './ResponsivePopover';
 
@@ -296,12 +297,17 @@ export const PromptBar: React.FC<PromptBarProps> = ({
     const fileInputRef = useRef<HTMLInputElement>(null);
     const dragDepthRef = useRef(0);
     const latestPromptRef = useRef(prompt);
+    // 防止提交链（@ 解析 + 生成）重入：双击发送/Enter 与按钮同帧触发时只生效一次
+    const submittingRef = useRef(false);
 
     const [expandedPanel, setExpandedPanel] = useState<ExpandPanel>(null);
     const [popoverAnchor, setPopoverAnchor] = useState<HTMLElement | null>(null);
+    // 稳定的锚点包装对象：避免每次渲染新建 { current } 导致 ResponsivePopover 定位 effect 反复执行
+    const popoverAnchorBoxRef = useRef<HTMLElement | null>(null);
     // 面板从触发按钮旁自然展开（锚定按钮而非整个 PromptBar 根）
     const togglePanel = (panel: ExpandPanel, trigger: HTMLElement) => {
         setExpandedPanel(previous => (previous === panel ? null : panel));
+        popoverAnchorBoxRef.current = trigger;
         setPopoverAnchor(trigger);
     };
     const [isDragActive, setIsDragActive] = useState(false);
@@ -440,18 +446,24 @@ export const PromptBar: React.FC<PromptBarProps> = ({
 
     /** 编辑器 Enter 提交 */
     const handleEditorSubmit = useCallback(async () => {
-        // 提交前：把提示词里纯文本的 @名称 解析为真实引用（用户可能手动输入 @资产1 而未走选择器）
-        if (richEditorRef.current) {
-            resolveEditorMentions(richEditorRef.current, pasteReferenceItems, onResolvePastedMentions);
-            // 等 editor 文档更新回流到 prompt 状态，再触发生成
-            await new Promise<void>(resolve => setTimeout(resolve, 0));
+        if (submittingRef.current) return;
+        submittingRef.current = true;
+        try {
+            // 提交前：把提示词里纯文本的 @名称 解析为真实引用（用户可能手动输入 @资产1 而未走选择器）
+            if (richEditorRef.current) {
+                resolveEditorMentions(richEditorRef.current, pasteReferenceItems, onResolvePastedMentions);
+                // 等 editor 文档更新回流到 prompt 状态，再触发生成
+                await new Promise<void>(resolve => setTimeout(resolve, 0));
+            }
+            if (!(runWithoutPrompt || latestPromptRef.current.trim()) || isLoading || videoInputRequirement) return;
+            if (readyState === 'missing-key') {
+                onOpenSettings?.();
+                return;
+            }
+            onGenerate();
+        } finally {
+            submittingRef.current = false;
         }
-        if (!(runWithoutPrompt || latestPromptRef.current.trim()) || isLoading || videoInputRequirement) return;
-        if (readyState === 'missing-key') {
-            onOpenSettings?.();
-            return;
-        }
-        onGenerate();
     }, [isLoading, onGenerate, onOpenSettings, pasteReferenceItems, onResolvePastedMentions, readyState, runWithoutPrompt, videoInputRequirement]);
 
     const replacePrompt = useCallback((value: string) => {
@@ -476,6 +488,9 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                 setPreTranslatePrompt(previous);
                 replacePrompt(result.enhancedPrompt.trim());
             }
+        } catch (error) {
+            // 翻译线路异常（限流/网络/Key 失效等）：经 displayError 映射为可展示文案后提示，不再静默吞掉
+            alert(displayError(error, '翻译失败，请稍后重试。'));
         } finally {
             setIsTranslating(false);
         }
@@ -809,7 +824,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                 </div>
 
                 {expandedPanel && (
-                    <ResponsivePopover anchorRef={popoverAnchor ? { current: popoverAnchor } : rootRef} preferredSide={popoverDirection} width={popoverWidth} dataTestId="prompt-floating-panel">
+                    <ResponsivePopover anchorRef={popoverAnchor ? popoverAnchorBoxRef : rootRef} preferredSide={popoverDirection} width={popoverWidth} dataTestId="prompt-floating-panel">
                         <div
                             data-panel={expandedPanel}
                             className="isl-pop"
@@ -1345,7 +1360,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                             onClick={() => {
                                 if (isLoading && onStop) onStop();
                                 else if (setupRequired) onOpenSettings?.();
-                                else if (promptReady && readyState !== 'missing-key' && !videoInputRequirement) onGenerate();
+                                else if (promptReady && readyState !== 'missing-key' && !videoInputRequirement) void handleEditorSubmit();
                             }}
                             disabled={(isLoading && !onStop) || (!isLoading && (setupRequired ? false : (!promptReady || readyState === 'missing-key' || Boolean(videoInputRequirement))))}
                             aria-label={isLoading && onStop ? (isSeedanceVideoModel ? t('promptBarExtra.stopSeedance') : t('promptBarExtra.stopGeneration')) : setupRequired ? setupLabel : runLabel || t('promptBar.generate')}

@@ -81,7 +81,6 @@ function buildSuggestionExtension(
 
                         return {
                             onStart(props) {
-                                console.log('[RichPromptEditor] @ onStart', { itemsCount: (props.items as MentionItem[])?.length, hasClientRect: !!props.clientRect });
                                 currentQuery = (props.query as string) || '';
                                 container = document.createElement('div');
                                 document.body.appendChild(container);
@@ -381,11 +380,12 @@ const RichPromptEditor = forwardRef<RichPromptEditorHandle, RichPromptEditorProp
             },
             setText(text: string) {
                 if (!editor) return;
-                editor.commands.setContent(buildDocFromText(text), false as unknown as Record<string, never>);
+                // tiptap v3：setContent 的 emitUpdate 默认即为 true（此前传 false 也会走默认值），显式声明保持契约
+                editor.commands.setContent(buildDocFromText(text), { emitUpdate: true });
             },
             setDocument(document: Record<string, unknown>) {
                 if (!editor) return;
-                editor.commands.setContent(normalizeDocument('', document), false as unknown as Record<string, never>);
+                editor.commands.setContent(normalizeDocument('', document), { emitUpdate: true });
             },
             getJSON() {
                 return (editor?.getJSON() ?? {}) as Record<string, unknown>;

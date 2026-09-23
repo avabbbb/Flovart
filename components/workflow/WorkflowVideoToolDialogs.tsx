@@ -1,10 +1,11 @@
 import { Button, Modal, Slider } from 'antd';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { getVideoDuration } from '../../services/videoTools';
 import { isFFmpegSupported, isMultiThreadAvailable } from '../../services/ffmpegClient';
 
 export type WorkflowVideoToolKind = 'trim' | 'av-split' | 'merge' | 'extract-frame';
-export interface WorkflowVideoToolState { kind: WorkflowVideoToolKind; nodeId: string }
+/** nodeIds：merge 工具持久保存的选中节点 id 列表，确认时原样回传。 */
+export interface WorkflowVideoToolState { kind: WorkflowVideoToolKind; nodeId: string; nodeIds?: string[] }
 export type WorkflowVideoToolConfirmation =
   | { kind: 'trim'; startSec: number; endSec: number }
   | { kind: 'av-split' }
@@ -24,7 +25,7 @@ export function WorkflowVideoToolDialogs({ tool, node, mediaUrl, busy, error, on
   const common = { open: true, mediaUrl, busy, error, onClose };
   if (tool.kind === 'trim') return <TrimDialog {...common} onConfirm={(startSec, endSec) => onConfirm({ kind: 'trim', startSec, endSec })} />;
   if (tool.kind === 'av-split') return <SimpleVideoDialog {...common} title="音视频分离" description="将视频的音频轨和视频轨分离，分别创建独立的音频节点和静音视频节点。" action="分离音视频" onConfirm={() => onConfirm({ kind: 'av-split' })} />;
-  if (tool.kind === 'merge') return <SimpleVideoDialog {...common} title="视频拼接" description="将选中的多个视频片段按顺序拼接为一个视频。仅支持相同分辨率和帧率的片段。" action="拼接视频" onConfirm={() => onConfirm({ kind: 'merge', nodeIds: [] })} />;
+  if (tool.kind === 'merge') return <SimpleVideoDialog {...common} title="视频拼接" description="将选中的多个视频片段按顺序拼接为一个视频。仅支持相同分辨率和帧率的片段。" action="拼接视频" onConfirm={() => onConfirm({ kind: 'merge', nodeIds: tool.nodeIds || [] })} />;
   if (tool.kind === 'extract-frame') return <ExtractFrameDialog {...common} onConfirm={(currentTimeSec) => onConfirm({ kind: 'extract-frame', position: 'current', currentTimeSec })} />;
   return null;
 }
@@ -46,18 +47,21 @@ function TrimDialog(props: CommonProps & { onConfirm: (startSec: number, endSec:
   const [duration, setDuration] = useState(0);
   const [start, setStart] = useState(0);
   const [end, setEnd] = useState(0);
-  const videoRef = useState<HTMLVideoElement | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
     void getVideoDuration(new Blob([''])).catch(() => {});
     const video = document.createElement('video');
     video.preload = 'metadata';
     video.onloadedmetadata = () => {
+      if (cancelled) return;
       const d = video.duration || 0;
       setDuration(d);
       setEnd(d);
     };
     video.src = props.mediaUrl;
+    return () => { cancelled = true; video.onloadedmetadata = null; };
   }, [props.mediaUrl]);
 
   return <Modal {...modalProps(props, 720)} title="视频剪辑">
@@ -93,15 +97,18 @@ function ExtractFrameDialog(props: CommonProps & { onConfirm: (currentTimeSec: n
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
     const video = document.createElement('video');
     video.preload = 'metadata';
     video.onloadedmetadata = () => {
+      if (cancelled) return;
       const d = video.duration || 0;
       setDuration(d);
       setTimeSec(d > 1 ? Math.floor(d / 2) : 0);
       setLoaded(true);
     };
     video.src = props.mediaUrl;
+    return () => { cancelled = true; video.onloadedmetadata = null; };
   }, [props.mediaUrl]);
 
   return <Modal {...modalProps(props, 720)} title="提取指定帧">

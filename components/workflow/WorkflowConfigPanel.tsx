@@ -163,7 +163,7 @@ export function WorkflowConfigPanel({ node, nodes, connections = [], onChange, o
         <div className="workflow-config__row"><label>光圈</label><select aria-label="光圈" value={config.camera?.aperture || ''} onChange={event => updateConfig({ camera: { ...config.camera, aperture: event.target.value || undefined } })}><option value="">无</option>{CAMERA_OPTIONS.apertures.map(value => <option key={value}>{value}</option>)}</select></div>
       </>}
       {config.mode === 'video' && <div className="workflow-config__row"><label>运镜</label><select aria-label="运镜" value={config.cameraMovement || ''} onChange={event => updateConfig({ cameraMovement: event.target.value || undefined })}><option value="">无</option>{CAMERA_MOVEMENTS.map(movement => <option key={movement.id} value={movement.id}>{movement.name}</option>)}</select></div>}
-      {config.mode === 'video' && config.cameraMovement === '' && <div className="workflow-config__row"><label>自定义运镜</label><input aria-label="自定义运镜" value={config.customMovement || ''} placeholder="英文运镜描述" onChange={event => updateConfig({ customMovement: event.target.value || undefined })} /></div>}
+      {config.mode === 'video' && !config.cameraMovement && <div className="workflow-config__row"><label>自定义运镜</label><input aria-label="自定义运镜" value={config.customMovement || ''} placeholder="英文运镜描述" onChange={event => updateConfig({ customMovement: event.target.value || undefined })} /></div>}
       {node.metadata.error && <p className="workflow-config__error">{node.metadata.error}</p>}
       {status === 'loading' && <p role="status">生成中{node.metadata.progress === undefined ? '' : ` · ${Math.round(node.metadata.progress)}%`}</p>}
       {audioUnsupported && <p className="workflow-config__error">音频生成暂未支持</p>}

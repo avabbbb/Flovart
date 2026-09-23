@@ -1,6 +1,5 @@
 import { Button, Modal, Slider } from 'antd';
 import { useEffect, useState } from 'react';
-import { getAudioDuration } from '../../services/audioTools';
 import { isFFmpegSupported, isMultiThreadAvailable } from '../../services/ffmpegClient';
 import type { WorkflowNode } from './types';
 
@@ -59,14 +58,17 @@ function AudioTrimDialog(props: CommonProps & { onConfirm: (startSec: number, en
   const [end, setEnd] = useState(0);
 
   useEffect(() => {
+    let cancelled = false;
     const audio = document.createElement('audio');
     audio.preload = 'metadata';
     audio.onloadedmetadata = () => {
+      if (cancelled) return;
       const d = audio.duration || 0;
       setDuration(d);
       setEnd(d);
     };
     audio.src = props.mediaUrl;
+    return () => { cancelled = true; audio.onloadedmetadata = null; };
   }, [props.mediaUrl]);
 
   return <Modal {...modalProps(props, 720)} title="音频截取">

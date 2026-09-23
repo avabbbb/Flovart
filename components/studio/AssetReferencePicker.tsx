@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { AssetLibrary } from '../../types';
 import { useWorkflowMediaUrl } from '../workflow/media';
-import { AssetCardPreview, FolderBreadcrumb, MediaTabs, type MediaFilter } from './assetLibraryShared';
+import { AssetCardPreview, FolderBreadcrumb, MediaTabs, mediaKindOf, type MediaFilter } from './assetLibraryShared';
 
 export interface ReferencePickerWorkflowItem {
   id: string;
@@ -44,6 +44,7 @@ export function AssetReferencePicker({ open, language, workflowItems, connectedI
   const [folderId, setFolderId] = useState<string | null>(null);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const connected = useMemo(() => new Set(connectedIds), [connectedIds]);
 
   useEffect(() => {
@@ -52,6 +53,7 @@ export function AssetReferencePicker({ open, language, workflowItems, connectedI
     setFilter('all');
     setFolderId(null);
     setSelectedTags([]);
+    setUploadError(null);
     const onKey = (event: KeyboardEvent) => event.key === 'Escape' && onClose();
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -67,7 +69,7 @@ export function AssetReferencePicker({ open, language, workflowItems, connectedI
     return !normalizedQuery || `${item.label} ${item.description || ''}`.toLocaleLowerCase().includes(normalizedQuery);
   }), [workflowItems, filter, normalizedQuery]);
   const visibleAssets = useMemo(() => (library?.items || []).filter(item => {
-    const mediaType = item.mimeType.startsWith('video/') ? 'video' : 'image';
+    const mediaType = mediaKindOf(item.mimeType);
     if (filter !== 'all' && mediaType !== filter) return false;
     if (folderId && !item.folderIds.includes(folderId)) return false;
     if (selectedTags.length > 0 && !selectedTags.some(tag => tag === '其它' ? item.tags.length === 0 : item.tags.includes(tag))) return false;
@@ -125,13 +127,28 @@ export function AssetReferencePicker({ open, language, workflowItems, connectedI
                       event.target.value = '';
                       if (!files.length) return;
                       setBusy(true);
-                      try { await onUploadFiles(files); onClose(); } finally { setBusy(false); }
+                      setUploadError(null);
+                      try {
+                        await onUploadFiles(files);
+                        onClose();
+                      } catch (error) {
+                        // 上传失败不再静默关闭：留在弹窗内提示错误，可重试。
+                        setUploadError(error instanceof Error && error.message
+                          ? error.message
+                          : (isChinese ? '上传参考图失败，请重试。' : 'Failed to upload references. Please try again.'));
+                      } finally {
+                        setBusy(false);
+                      }
                     }} />
                     <button type="button" disabled={busy} onClick={() => inputRef.current?.click()} className="isl-go flex h-9 shrink-0 items-center gap-1.5 px-3 text-xs"><MonitorUp size={14} />{busy ? (isChinese ? '上传中' : 'Uploading') : (isChinese ? '本地上传' : 'Upload')}</button>
                   </>
                 )}
                 <button type="button" onClick={onClose} className="isl-icon-btn h-9 w-9 shrink-0" aria-label={isChinese ? '关闭' : 'Close'}><X size={17} /></button>
               </header>
+
+              {uploadError && (
+                <div role="alert" className="border-b px-4 py-2 text-xs" style={{ borderColor: 'var(--isl-border)', color: '#ef4444' }}>{uploadError}</div>
+              )}
 
               {source === 'assets' && (
                 <div className="border-b px-4 py-2" style={{ borderColor: 'var(--isl-border)' }}>

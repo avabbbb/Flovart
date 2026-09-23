@@ -1,5 +1,6 @@
 import { Image as ImageIcon, Video as VideoIcon, Music as AudioIcon, X } from 'lucide-react';
 import { useMemo } from 'react';
+import { useWorkflowMediaUrl } from './media';
 import type { SeedanceReferences, WorkflowNode } from './types';
 
 export interface SeedanceSlotPickerProps {
@@ -38,6 +39,14 @@ function setRefsArray(value: SeedanceReferences, kind: SlotKind, arr: string[]):
   if (kind === 'image') return { ...value, imageRefs: arr };
   if (kind === 'video') return { ...value, videoRefs: arr };
   return { ...value, audioRefs: arr };
+}
+
+/** 槽位缩略图：href 可能是 IdbRef/asset 引用而非可直接渲染的 URL，经 media hook 解析；取不到时回退名称文本。 */
+function SeedanceSlotThumb({ node }: { node: WorkflowNode }) {
+  const media = useWorkflowMediaUrl(node.metadata.storageKey, node.metadata.href);
+  return media.url
+    ? <img src={media.url} alt={node.title} className="workflow-seedance-picker__thumb" />
+    : <span className="workflow-seedance-picker__name" title={node.title}>{node.title}</span>;
 }
 
 export function SeedanceSlotPicker({ nodes, value, onChange }: SeedanceSlotPickerProps) {
@@ -88,8 +97,8 @@ export function SeedanceSlotPicker({ nodes, value, onChange }: SeedanceSlotPicke
                   <div key={index} className={`workflow-seedance-picker__slot ${filled ? 'is-filled' : ''}`}>
                     {filled && node ? (
                       <>
-                        {slot.kind === 'image' && node.metadata.href ? (
-                          <img src={node.metadata.href} alt={node.title} className="workflow-seedance-picker__thumb" />
+                        {slot.kind === 'image' ? (
+                          <SeedanceSlotThumb node={node} />
                         ) : (
                           <span className="workflow-seedance-picker__name" title={node.title}>{node.title}</span>
                         )}

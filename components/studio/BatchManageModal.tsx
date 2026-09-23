@@ -18,12 +18,15 @@ interface BatchManageModalProps {
 
 type MediaFilter = 'all' | 'image' | 'video';
 
-function buildFolderTree(folders: AssetFolder[], parentId: string | null = null, depth = 0): Array<{ folder: AssetFolder; depth: number }> {
+function buildFolderTree(folders: AssetFolder[], parentId: string | null = null, depth = 0, visited: Set<string> = new Set()): Array<{ folder: AssetFolder; depth: number }> {
   const out: Array<{ folder: AssetFolder; depth: number }> = [];
   const children = folders.filter(f => f.parentId === parentId);
   for (const child of children) {
+    // 防环：parentId 成环的脏数据不再重复展开，避免无限递归。
+    if (visited.has(child.id)) continue;
+    visited.add(child.id);
     out.push({ folder: child, depth });
-    out.push(...buildFolderTree(folders, child.id, depth + 1));
+    out.push(...buildFolderTree(folders, child.id, depth + 1, visited));
   }
   return out;
 }

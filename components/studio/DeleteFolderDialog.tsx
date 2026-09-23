@@ -1,6 +1,6 @@
 import { Modal, Button } from 'antd';
 import { AlertTriangle, FolderInput, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { AssetFolder } from '../../types';
 
 export type DeleteFolderMode = 'move' | 'delete-all';
@@ -16,6 +16,10 @@ export interface DeleteFolderDialogProps {
 
 export function DeleteFolderDialog({ open, folder, itemCount, subfolderCount, onCancel, onConfirm }: DeleteFolderDialogProps) {
   const [mode, setMode] = useState<DeleteFolderMode>('move');
+  // 每次打开都回到安全默认项，避免上一次对话选择的「永久删除」跨对话框保留。
+  useEffect(() => {
+    if (open) setMode('move');
+  }, [open]);
   if (!folder) return null;
   const displayName = folder.name || '未命名文件夹';
   const hasContent = itemCount > 0 || subfolderCount > 0;

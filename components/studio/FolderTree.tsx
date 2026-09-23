@@ -57,21 +57,24 @@ function buildTree(folders: AssetFolder[], itemFolderIdLists: string[][]): TreeN
     }
     return count;
   };
-  const build = (parentId: string | null): TreeNode[] => {
+  const build = (parentId: string | null, visited: Set<string>): TreeNode[] => {
     const childFolders = childMap.get(parentId) || [];
-    return childFolders.map(folder => {
-      const children = build(folder.id);
+    return childFolders.flatMap(folder => {
+      // 防环：脏数据形成 parentId 环时不再重复展开，避免无限递归。
+      if (visited.has(folder.id)) return [];
+      visited.add(folder.id);
+      const children = build(folder.id, visited);
       const subfolderCount = children.reduce((sum, child) => sum + 1 + child.subfolderCount, 0);
-      return {
+      return [{
         folder,
         children,
         itemCount: itemCounts.get(folder.id) || 0,
         totalItemCount: totalItemsIn(folder.id),
         subfolderCount,
-      };
+      }];
     });
   };
-  return build(null);
+  return build(null, new Set());
 }
 
 function FolderRow({

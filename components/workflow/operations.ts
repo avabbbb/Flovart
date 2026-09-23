@@ -1,5 +1,6 @@
 import { canonicalize } from 'json-canonicalize';
 import { createWorkflowNode } from './constants';
+import { useWorkflowStore } from './store';
 import {
   getWorkflowOperationCapability,
   parseWorkflowOperationParameters,
@@ -290,34 +291,46 @@ function hasMedia(node: WorkflowNode) {
   return Boolean(node.metadata.storageKey || node.metadata.href || node.metadata.artifactRef?.taskId);
 }
 
+/** 读取 store 中该项目的最新状态；store 不含该项目时（测试等场景）退回调用方快照。 */
+function latestProjectSnapshot(projectId: string, fallback: WorkflowProject): WorkflowProject {
+  return useWorkflowStore.getState().projects.find(item => item.id === projectId) || fallback;
+}
+
 export async function ensureWorkflowImageGenerateOperation(input: {
   project: WorkflowProject;
   nodeId: string;
   createId: () => string;
   now?: string;
 }): Promise<{ project: WorkflowProject; operationNodeId: string; created: boolean }> {
-  const source = input.project.nodes.find(node => node.id === input.nodeId);
+  // 幂等安全实现：以 store 最新状态为基准计算。调用方（App.tsx）会把返回的 project
+  // 整体写回 store；若基于传入快照计算，等待期间的并发修改会被整体覆盖（互踩）。
+  const base = latestProjectSnapshot(input.project.id, input.project);
+  const source = base.nodes.find(node => node.id === input.nodeId);
   if (!source) throw new Error('图片生成节点不存在');
   if (source.type === 'operation') {
     if (source.metadata.operation?.capabilityId !== 'image.generate@1') throw new Error('该 Operation 不是图片生成步骤');
-    return { project: input.project, operationNodeId: source.id, created: false };
+    return { project: base, operationNodeId: source.id, created: false };
   }
   const mode = source.metadata.config?.mode || (source.type === 'config' || source.type === 'image' ? 'image' : source.type);
-  if (mode !== 'image') return { project: input.project, operationNodeId: source.id, created: false };
+  if (mode !== 'image') return { project: base, operationNodeId: source.id, created: false };
 
   const now = input.now || new Date().toISOString();
   const sourceHasMedia = source.type === 'image' && hasMedia(source);
   // 有媒体节点也原位替换为 operation；原图复制成隐藏输入节点保留图生图参考，画布不再多出可见节点
   const hiddenInputId = sourceHasMedia ? input.createId() : undefined;
-  const operationId = sourceHasMedia ? source.id : source.id;
-  const upstream = input.project.connections
+  // 原位替换语义：无论是否有媒体，operation 节点都复用源节点 id，连线与引用身份保持不变。
+  const operationId = source.id;
+  const upstream = base.connections
     .filter(connection => connection.toNodeId === source.id)
-    .map(connection => input.project.nodes.find(node => node.id === connection.fromNodeId))
+    .map(connection => base.nodes.find(node => node.id === connection.fromNodeId))
     .filter((node): node is WorkflowNode => Boolean(node));
   const orderIndex = new Map(upstream.map((node, index) => [node.id, index]));
+  // 有媒体时文本上游一并纳入 bindings（reference_image 与 prompt_context 混合），
+  // 否则文本不进 prompt，且其旧连线会在 operation 下一次同步连线时被静默删除。
   const candidates = sourceHasMedia
-    ? [{ ...source, id: hiddenInputId! } as WorkflowNode]
+    ? [{ ...source, id: hiddenInputId! } as WorkflowNode, ...upstream.filter(node => node.type === 'text')]
     : upstream;
+  if (sourceHasMedia && hiddenInputId) orderIndex.set(hiddenInputId, -1); // 参考图排在文本上游之前
   const bindings = candidates
     .filter(node => node.type === 'image' || node.type === 'text')
     .sort((left, right) => (orderIndex.get(left.id) ?? Number.MAX_SAFE_INTEGER) - (orderIndex.get(right.id) ?? Number.MAX_SAFE_INTEGER))
@@ -355,24 +368,38 @@ export async function ensureWorkflowImageGenerateOperation(input: {
         position: { x: source.position.x, y: source.position.y },
       } as WorkflowNode
     : undefined;
-  const replacedNodes = sourceHasMedia
-    ? [hiddenInput!, ...input.project.nodes.map(node => node.id === source.id ? operation : node)]
-    : input.project.nodes.map(node => node.id === source.id ? operation : node);
-  const removedIncomingIds = new Set(sourceHasMedia ? [] : input.project.connections.filter(connection => connection.toNodeId === source.id).map(connection => connection.id));
-  const connections = [
-    ...input.project.connections.filter(connection => !removedIncomingIds.has(connection.id)),
-    ...workflowOperationInputConnections(operation),
-  ];
-  return {
-    operationNodeId: operation.id,
-    created: true,
-    project: {
-      ...input.project,
-      nodes: replacedNodes,
-      connections,
-      selectedNodeIds: [operation.id],
-      draftVersion: (input.project.draftVersion || 1) + 1,
-      updatedAt: now,
-    },
-  };
+  // 连线清理与无媒体分支保持一致：成为 binding 的上游（有媒体分支=文本上游），
+  // 其旧连线由 binding 连线替换；其余上游连线保持原样。
+  const upstreamTextIds = new Set(upstream.filter(node => node.type === 'text').map(node => node.id));
+  const removedIncomingIds = new Set(
+    (sourceHasMedia
+      ? base.connections.filter(connection => connection.toNodeId === source.id && upstreamTextIds.has(connection.fromNodeId))
+      : base.connections.filter(connection => connection.toNodeId === source.id)
+    ).map(connection => connection.id),
+  );
+  const addedConnections = workflowOperationInputConnections(operation);
+  // 把本节点相关变更应用到任意基线：只替换 source 节点、移除被替换的旧连线、追加 binding 连线。
+  const applyChanges = (target: WorkflowProject): WorkflowProject => ({
+    ...target,
+    nodes: (hiddenInput ? [hiddenInput, ...target.nodes] : target.nodes)
+      .map(node => node.id === source.id ? operation : node),
+    connections: [
+      ...target.connections.filter(connection => !removedIncomingIds.has(connection.id)),
+      ...addedConnections,
+    ],
+    selectedNodeIds: [operation.id],
+    draftVersion: (target.draftVersion || 1) + 1,
+    updatedAt: now,
+  });
+  // 返回前再读一次最新状态并按 id/连线 id 合并，只让本节点的变更落到最新基线上，
+  // 其他节点的并发修改原样保留，避免调用方整体写回时覆盖。
+  const fresh = latestProjectSnapshot(input.project.id, base);
+  if (fresh !== base) {
+    const freshSource = fresh.nodes.find(node => node.id === source.id);
+    // 幂等保护：等待期间源节点被并发删除或已转换成 operation 时不再重复创建。
+    if (!freshSource || freshSource.type === 'operation') {
+      return { project: fresh, operationNodeId: source.id, created: false };
+    }
+  }
+  return { operationNodeId: operation.id, created: true, project: applyChanges(fresh) };
 }
