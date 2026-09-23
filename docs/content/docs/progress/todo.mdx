@@ -2,44 +2,76 @@
 title: 后续待办
 ---
 
-本页只记录**尚未完成**的工作。当前产品边界以 [主设计](../../../design/flovart-native-effects.md) 为准；已实现但仍需现实环境确认的内容移到 [待测试确认](pending-test.mdx)。
+本页只记录未完成工作。主方向以[原生效果与 Agent 协作设计](../../../design/flovart-native-effects.md)为准；实际完成的代码或文档移入[待测试确认](pending-test.mdx)。删除旧计划不等于对应代码已迁移。
 
-## P0：把当前三 surface 做实
+## 第一阶段：AE / PR 场景替换
 
-- [ ] Canvas：继续收敛引用、缺失素材、运行中改参、晚到结果与大媒体性能，不引入第二份 Workflow 状态。
-- [ ] Table：把现有结构化媒体处理入口补成稳定的输入 → 处理 → 输出闭环，统一进度、取消、内存限制与结果 commit。
-- [ ] Agent connection hub：逐个验证 Codex / WorkBuddy / Claude Code / OpenCode / DSH 的安装、登录、状态、切换与真实调用，不在 Agent 页恢复内置聊天。
-- [ ] Assistant drawer：验证 Canvas/Table 上的 Assistant / Context / History 在项目切换、窄窗口、断线与恢复时不复制 Host 状态或产生第二份会话权威。
-- [ ] 清理仍有运行时引用的 Production Crew / Director / Operator / Production Skill 遗留代码；每次删除必须先证明真实调用点已被当前短路径替代。
+- [ ] 记录原型目标宿主版本、SDK、Windows 构建环境和样例素材；核对主设计中“插件独立生成”“整段替换加遮罩”的两项推荐假设。
+- [ ] 按已确认的 Windows 首版范围完成安装、保存重开与导出；macOS 后续单独排期，不作为同期交付目标。
+- [ ] 将 AE 原生效果源码编译并安装到真实宿主；验证固定素材读取、混合、关键帧、随机帧、裁剪/遮罩/上游输出偏移、保存重开和关闭服务后的导出；验证候选列表随合成隔离；完成重入/多帧并发压力验证后再声明 MFR 支持。输出范围标志须在实现 extent/offset 处理后才加入。
+- [ ] 首版参数限于素材版本与混合强度，优先复用宿主变换/遮罩/关键帧；宿主组合能力不足时记录限制，不先开发自己的抠像跟踪编辑器。
+- [ ] 在 PR 验证 AE 效果核心的实际兼容；记录差异，不先建设通用 Host SDK。
+- [ ] 完成持久素材版本与工程打包/重定位：源码现在把 Workflow Artifact ID、Provider task ID（如有）、Blob SHA-256、字节数及现有尺寸/时长写入 CEP `USER_DATA` 内容哈希文件名和 AE 候选图层注释，并从当前合成恢复候选列表；AE 导入解释的帧率、帧时长、像素宽高比、Alpha 与项目色彩上下文也已记录，但权威帧数和嵌入色彩配置仍缺；导入、恢复与应用路径已核对文件长度，尺寸相同的替换仍需磁盘 SHA-256 回读识别；缺失素材报告与阻止应用已有源码实现，仍需真实 AE 验证并实现按校验和重定位/回链及工程收集/跨目录重定位，需覆盖候选列表合成隔离、复制效果、撤销、另存工程、移动素材、重开面板和晚到结果。
+- [ ] 把一个短片段接到现有真实 Provider：固定输入、范围、提示词与模型，返回同一持久任务，完成失败、取消和提交未知恢复。
+- [ ] 收敛本地生成入口，验证无 UI 启动、Provider 能力等价和素材存储；不新增 Node/Rust 双调度器，Browser 工具仍保留明确绑定。
+- [ ] 完成 12 个片段与 4 个合成序列的 Benchmark，所有初始状态为未测；指标与记录方法见主设计第 6 节。
 
-## P0：Agent operation 可靠性
+## 第二阶段：Agent 双入口与其它宿主
 
-- [ ] 修复并回归 `workflow.project.use` 的 browser activation ack，确保下一次 inspect/lease 已绑定新项目。
-- [ ] 对稳定 operation 补齐错项目、revision drift、幂等 replay、未知提交与恢复 tracer。
-- [ ] WorkBuddy 真实 Connector 导入与自然语言调用。
-- [ ] Codex / Claude Code / OpenCode / DSH 按 Support Matrix 各自补齐真实用户会话证据。
-- [ ] TeleAgent 只有在真实 MCP Host 导入、权限、等待与自然语言 tracer 通过后再升级状态。
+- [ ] 继续扩展 CLI/MCP/DSH 的权限、错误与真实 Host parity；当前 CLI/MCP 已对四个 Workflow operation 完成受控 normalized/state-hash parity，MCP 仍只覆盖五个稳定工具。
+- [ ] Codex 外部 Skill/CLI/MCP 调用明确效果目标；Flovart 内部使用官方 app-server，实测登录、对话、工具、审批和恢复。
+- [ ] WorkBuddy 现有 CLI Connector 完成真实导入与自然语言调用；双向本地助理 API 完成应用审核、授权、在线状态与历史验证，不能冒充离线连接。
+- [ ] PS 接原生滤镜，验证选区、素材版本、参数回编、智能滤镜可行性和工程重开。
+- [ ] Resolve 分别验证 Workflow Integration 联动与 OFX 效果；确认 Studio/OS/SDK 条件。先修复导入后媒体文件生命周期，不能以独立窗口冒充原生效果。
+- [ ] TeleAgent 真实客户端导入、权限、长任务等待和自然语言 tracer；当前仅有 MCP + canonical Skill 准备包。
+- [ ] 现有 DSH、Claude、OpenCode 接入按实际支持矩阵维护，不将其升级或私有宿主复制设为首个效果的前置条件。
 
-## P1：Provider 与生成
+## 下一步：轻面板与素材入口
 
-- [ ] 真实 Provider 分别验证认证、参考图/视频 wire、参数、下载持久化、费用、取消、429 与提交未知。
-- [ ] 浏览器 key 与 Desktop Runtime credential 边界继续显式展示；不把两者文档化成已经统一托管。
-- [ ] 导出/打包前检测本地引用失效，不能静默输出错误内容。
-- [ ] 长任务继续复用现有 durable identity/checkpoint，不再建第二套 ProductionTask/Workflow 状态。
+按“给本地 Agent 加一个随手可用的创作小功能”方向收敛：对话归助手，文件留在本地，任务只保存一份，面板与画布只是查看和编辑入口。本地文件夹直读已落地（见[待测试确认](pending-test.mdx)与 [ADR 0071](../../../adr/0071-local-folder-reference-media.md)），下面是剩余部分。
 
-## P1：创作软件宿主
+- [ ] 轻面板壳只保留「素材 / 任务 / 打开画布」三个入口，不再要求用户二次配置 Agent 或进入重复的制作控制面。「素材」已有真实实现，需要与「任务」「打开画布」收敛到同一面板，并确定唯一挂载位置（`/dock` 宿主嵌入面或画布内浮层），不新开第三个并列入口。
+- [ ] 交互可参考 WorkDaddy 的小按钮与输入框旁快捷操作，但其 CDP 注入不是默认连接方式；各助手入口适配单独验证，不承诺 Codex 支持同样的界面注入。宿主 iframe 中目录授权可能被浏览器禁用，需提供降级入口并逐个实测。
+- [ ] 助手直接给文件夹路径的读取走 CLI/MCP 与本地服务：需要在本地服务新增受限目录读取接口，做路径校验、授权范围与最小权限设计；不能在前端用猜测路径实现，也不能因为已支持目录授权就宣称该路径已通。
+- [ ] 导出、打包与渲染需要处理“引用失效”：导出前检测缺失并显式失败或要求用户明确旁路，不能静默输出错误内容。
+- [ ] `ingestWorkflowMedia` 继续服务文件粘贴与外部来源（导入副本语义不变）；不要把文件夹引用改写成同一条复制路径，也不要让新增缓存与 Workflow 媒体清理共用同一存储实例。
 
-- [ ] After Effects / Premiere 先完成真实安装、选择目标、生成素材应用、保存重开和离线导出。
-- [ ] Photoshop 验证选区、结果回编与可逆编辑。
-- [ ] Resolve 分别验证 Workflow Integration 与 OFX/宿主效果边界。
-- [ ] 原生效果 render callback 只读取固定本地素材，不联网、不依赖 Agent 在线。
-- [ ] Windows 首批验证通过后再独立排期 macOS，不用源码可移植性代替真实验收。
+## FlovartBench 后续
 
-## P1：发行与证据
+- [ ] 在真实 GitHub runner 上跑一次 `flovartbench` workflow，确认 Windows Hosted 下 `eval:validate`、`eval:redteam`、oracle smoke 与 `eval:core` 全绿；本地通过不等于 Hosted 通过。
+- [ ] 用真实 Codex 二进制与 `FLOVARTBENCH_ALLOW_CODEX=true` 产出第一个**已认证**的 benchmark Agent 基线（产品级 Golden Task 已由 5 次连续真实 `codex exec` trial 认证，见[待测试确认](pending-test.mdx)；任务集级 `codex` runner 基线仍未跑过），并把 `EXTERNAL_FAILURE` 与能力失败分开汇报。
+- [ ] 建立 holdout 数据集：不进公开仓库，按路径挂载用于认证；任务一旦在仓库暴露即转为 regression 并替换其 holdout 位。
+- [ ] 补齐三个 known gap 对应能力：Agent 稳定面暴露 `task.inspect` / `task.resume`、稳定面提供费用确认参数、`first_frame` 来自 video 时在写入期拒绝而非只报 `ROLE_CONFLICT` 诊断。
+- [ ] `eval/tasks/native-effects/` 与 `eval/graders/nativeEffects/` 保持预留：接入真实 AE/PR 宿主后可断言保存/重开/导出前的持久化，不做无宿主也能通过的占位任务。
+- [ ] 用真实付费 Provider 跑 provider suite 的已批准路径，替换 Fake Provider 语义；真实验证扣费、429、提交未知与取消。
+- [ ] 媒体与 Table：按实际需求推进，不因 benchmark 建设而扩充范围。
 
-- [ ] Hosted CI / CodeQL / release packaging / production signing 按当前候选 SHA 真实跑通。
-- [ ] 真实付费 Provider 与真实 Creative Host 不使用 Fake Provider / package build 证据替代。
-- [ ] Support Matrix 只根据新的真实 tracer 升级，不用旧 RC 数字推断当前代码。
-- [ ] 文档检查保证 active design tree 只保留 current design，不再新增 CURRENT/TARGET/AUDIT 平行目标稿。
+## 精简实现
 
-每个切片只写“可见目标、最少实现、验证证据”。历史施工过程由 Git 与 archive snapshot 保存。
+- [ ] 按当前切片清理只转发的包装、重复状态和重复执行路径；每次替换给出现有调用点和回归证据。
+- [ ] 取消新功能对内部 Operator、Crew Intent、导演投影与复杂 ProductionSpec 的强制依赖；现有相关代码逐处核对后再改，不能整目录盲删。
+- [ ] 保留必要目标/版本校验、幂等、费用确认、任务恢复、素材完整性；去掉中间层不能去掉这些行为。
+- [ ] 原生效果只消费固定素材，不调用网络、不依赖 Agent；本地生成队列先顺序执行，不引入新队列基础设施。
+
+## 现有工作区维护：按实际需求排期
+
+- [ ] Workflow：继续修复 PromptBar/媒体直接选择、原比例、本地拖入、引用顺序与缺失提示、运行中改参和晚到结果；保留现有交互与撤销。
+- [ ] 现有媒体操作：补齐图片处理等尚未贯通的实际入口，统一来源与版本；减少重复 Prompt、引用数组和多处 Provider 参数处理。
+- [ ] 大图性能（剩余）：缩略图按需生成与离屏播放器暂停继续按实际性能问题优化；不先增加可替换画布端口或语义 LOD 平台。
+- [ ] Config 节点删除、Scene Prediction 与音频生成继续留作后续需求，按具体任务分别验证，不阻塞原生效果。
+- [ ] Table 主体仍待实现：先输入→处理→输出最小节点图；人物抠图、深度/结构参考、风格化、视频批处理和故事版按真实需求逐项推进，不一次建全套算法链。
+- [ ] Table 与 Workflow 用明确素材引用和导入交接，保持各自图与历史；大文件需要进度、取消和内存限制。
+- [ ] Agent 空间中接入真实外部对话/任务/产物回执，保持外部 Agent 为主入口；内置 Assistant 继续保持可选，不新增重复控制面或第二套主记忆。
+- [ ] 保留现有 Production Skill、VOX、已批准参考图与局部重跑能力；后续只补实际用到的步骤，不以完整成片平台为本轮前置。
+- [ ] ProductionTask 继续补齐跨会话 checkpoint、恢复后的真实 scheduler tracer 与任务中心，不复制 Workflow 状态。
+
+## Provider、社区与发行
+
+- [ ] 真实 Provider 的认证、参数、参考图/视频 wire、下载持久化、费用、取消、限流和提交未知分别验收；不根据模型名称猜接口。
+- [ ] Runtime-only 路由与浏览器 key 状态分别展示；不向连接器同步原始密钥、不改用户 Plus/OAuth 和代理。
+- [ ] Browser Import 使用实际商店 ID、Native Host 注册与安装卸载验证；素材进入可见项目或 Inbox，不能假成功。
+- [ ] 保留社区作品/Remix 联调需求，按真实账号与数据隔离验收；个人项目与素材不宣传已云同步。
+- [ ] Docker 静态资源、生产部署、生产签名、升级恢复及 Hosted CI/CodeQL 按真实发行范围验证；历史 RC 不代表当前新效果已可发布。
+- [ ] 支持等级和宣传随宿主与 Benchmark 证据更新；首个演示使用真实插件操作、等待、版本比较、重开与导出。
+
+不再采用几十阶段通用 Launch 总计划作为日常开发前置。每个切片只保留“可见目标、最少实现、对应验证”。
