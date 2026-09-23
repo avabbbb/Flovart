@@ -13,6 +13,7 @@ Flovart 当前提供 Workflow 与本地 Agent 创作入口；新方向是以原�
 ## 设计与进度
 
 - [原生效果与 Agent 协作主设计](design/flovart-native-effects.md)
+- [产品叙事、Agent 上手与可复用 Workflow 参考提案](design/product-story-agent-onboarding.md) — outcome-first Hero、Skill/Studio 双入口、Plan → Approve → Run、选择性重跑与反馈对象；**提案，不覆盖主设计**
 - [后续待办](content/docs/progress/todo.mdx)
 - [待测试确认](content/docs/progress/pending-test.mdx)
 - [AI / 开发者索引](index.md)
