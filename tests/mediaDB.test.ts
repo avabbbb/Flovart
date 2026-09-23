@@ -9,6 +9,16 @@ describe('mediaDB', () => {
     expect(result).not.toBeNull();
     // Verify data was stored and retrieved (fake-indexeddb returns buffer-like data)
     expect(result).toBeTruthy();
+    // Strengthen: verify content and type survive the round-trip.
+    // In Node.js, fake-indexeddb returns a full Blob with text()/type.
+    // In vitest's jsdom env, structuredClone produces an empty plain object
+    // for Blob values (known fake-indexeddb/jsdom limitation), so Blob
+    // methods are unavailable; assert content only when the result is a
+    // proper Blob.
+    if (typeof result!.text === 'function') {
+      expect(await result!.text()).toBe('video-bytes');
+      expect(result!.type).toBe('video/mp4');
+    }
   });
 
   it('returns null for missing keys', async () => {

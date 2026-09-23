@@ -1,8 +1,8 @@
 //! 命令桥队列。
 //!
 //! 替换之前的 `.flovart/command-queue.json` 文件轮询；改为内存里的 Mutex<Vec<Entry>。
-//! 外部 CLI / MCP / 扩展通过 HTTP `POST /commands/queue` 或直接 `bridge_enqueue` 入队，
-//! WebUI 端 `bridge_tick` 拉取 pending 改成 `running` 状态的一条记录。
+//! 外部 CLI / MCP / 扩展通过 deeplink 或内部 `bridge_enqueue` 入队，
+//! WebUI 端通过 `bridge_tick` 拉取 pending 改成 `running` 状态的一条记录。
 //! WebUI 完成后 `bridge_complete(id, result)` 写回。
 //!
 //! 持久化：每次入队 / 完成都写 SQLite `sync_log`，崩溃后可重建。
@@ -23,6 +23,10 @@ pub struct BridgeEntry {
     pub created_at: i64,
     pub updated_at: i64,
 }
+
+/// R6-L07: Maximum number of pending entries the bridge queue will hold.
+/// When this limit is reached, the oldest pending entry is evicted.
+const BRIDGE_QUEUE_MAX_PENDING: usize = 256;
 
 pub struct BridgeQueue {
     entries: Mutex<Vec<BridgeEntry>>,
@@ -50,7 +54,20 @@ impl BridgeQueue {
             created_at: now,
             updated_at: now,
         };
-        self.entries.lock().push(entry.clone());
+        let mut guard = self.entries.lock();
+        // R6-L07: Enforce pending capacity — evict oldest pending entries.
+        let pending_count = guard.iter().filter(|e| e.status == "pending").count();
+        if pending_count >= BRIDGE_QUEUE_MAX_PENDING {
+            if let Some(idx) = guard.iter().position(|e| e.status == "pending") {
+                let removed = guard.remove(idx);
+                log::warn!(
+                    "Bridge queue at capacity ({}); evicted oldest pending entry {}",
+                    BRIDGE_QUEUE_MAX_PENDING,
+                    removed.id
+                );
+            }
+        }
+        guard.push(entry.clone());
         entry
     }
 
@@ -81,74 +98,16 @@ impl BridgeQueue {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub fn list(&self) -> Vec<BridgeEntry> {
         self.entries.lock().clone()
     }
 
+    #[allow(dead_code)]
     pub fn clear_done(&self) -> usize {
         let mut guard = self.entries.lock();
         let before = guard.len();
         guard.retain(|e| e.status != "done");
         before - guard.len()
     }
-}
-
-// ── Tauri commands ─────────────────────────────────────────
-
-#[tauri::command]
-pub fn bridge_enqueue(
-    ctx: tauri::State<'_, std::sync::Arc<crate::FlovartContext>>,
-    command: String,
-    args: serde_json::Value,
-    source: Option<String>,
-) -> FlovartResult<BridgeEntry> {
-    let src = source.unwrap_or_else(|| "unknown".into());
-    let entry = ctx.bridge_queue.enqueue(command, args, src.clone());
-    let _ = ctx.state_db.sync_log(
-        "bridge",
-        &entry.id,
-        "enqueue",
-        &src,
-        Some(&serde_json::to_string(&entry).unwrap_or_default()),
-    );
-    Ok(entry)
-}
-
-#[tauri::command]
-pub fn bridge_tick(
-    ctx: tauri::State<'_, std::sync::Arc<crate::FlovartContext>>,
-) -> FlovartResult<Option<BridgeEntry>> {
-    Ok(ctx.bridge_queue.tick())
-}
-
-#[tauri::command]
-pub fn bridge_complete(
-    ctx: tauri::State<'_, std::sync::Arc<crate::FlovartContext>>,
-    id: String,
-    result: Option<serde_json::Value>,
-    error: Option<serde_json::Value>,
-) -> FlovartResult<()> {
-    ctx.bridge_queue.complete(&id, result, error.clone())?;
-    let _ = ctx.state_db.sync_log(
-        "bridge",
-        &id,
-        "complete",
-        "webui",
-        error.as_ref().map(|e| e.to_string()).as_deref(),
-    );
-    Ok(())
-}
-
-#[tauri::command]
-pub fn bridge_list(
-    ctx: tauri::State<'_, std::sync::Arc<crate::FlovartContext>>,
-) -> FlovartResult<Vec<BridgeEntry>> {
-    Ok(ctx.bridge_queue.list())
-}
-
-#[tauri::command]
-pub fn bridge_clear(
-    ctx: tauri::State<'_, std::sync::Arc<crate::FlovartContext>>,
-) -> FlovartResult<usize> {
-    Ok(ctx.bridge_queue.clear_done())
 }

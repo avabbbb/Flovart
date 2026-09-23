@@ -95,8 +95,8 @@ export function createTrajectoryRecorder({ runDir, taskId, trialIndex, metadata 
     },
     async finalise({ worldFinal, worldNormalized, score, timing }) {
       await ensureDir();
-      await writeFile(join(trialDir, 'world-final.json'), `${JSON.stringify(worldFinal, null, 2)}\n`, 'utf8');
-      await writeFile(join(trialDir, 'world-normalized.json'), `${JSON.stringify(worldNormalized, null, 2)}\n`, 'utf8');
+      await writeFile(join(trialDir, 'world-final.json'), `${JSON.stringify(redactSecrets(worldFinal), null, 2)}\n`, 'utf8');
+      await writeFile(join(trialDir, 'world-normalized.json'), `${JSON.stringify(redactSecrets(worldNormalized), null, 2)}\n`, 'utf8');
       await writeFile(join(trialDir, 'score.json'), `${JSON.stringify(score, null, 2)}\n`, 'utf8');
       await appendFile(trajectoryPath, `${JSON.stringify({ kind: 'final', timing, score })}\n`, 'utf8');
     },

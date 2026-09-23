@@ -115,6 +115,15 @@ const GROUND_TRUTH = {
   'ST-12-grader-accepts-nop': { nopAccepted: true },
 };
 
+// Fixtures whose detector cannot be computed from page DOM (they test judgment
+// logic, not visual state) are marked as injected-ground-truth. The rest use
+// real DOM measurement so the detection logic is genuinely exercised.
+const INJECT_ONLY = new Set([
+  'ST-10-dup-state-owner',   // counts duplicate state owners — no DOM element to inspect
+  'ST-11-pass-through-facade', // detects a pass-through facade — logic judgment, not DOM
+  'ST-12-grader-accepts-nop',  // detects whether a grader accepts a no-op — logic judgment
+]);
+
 const browser = await chromium.launch({ headless: true, channel: 'chrome' });
 const results = [];
 for (const fx of FIXTURES) {
@@ -122,8 +131,9 @@ for (const fx of FIXTURES) {
   const page = await ctx.newPage();
   await page.setContent(`<html><body>${fx.html}</body></html>`);
   // Detectors: real DOM measurement for DOM fixtures; injected ground truth for logic ones.
-  const observed = await page.evaluate(gt => {
-    const out = { ...gt };
+  const injected = INJECT_ONLY.has(fx.id);
+  const observed = await page.evaluate((gt, inject) => {
+    const out = inject ? { ...gt } : {};
     const shell = document.getElementById('shell');
     if (shell) {
       out.shellNoScroll = getComputedStyle(shell).overflow === 'hidden';
@@ -139,17 +149,34 @@ for (const fx of FIXTURES) {
     if (agentLink) out.agentSeparate = true;
     const runs = document.querySelector('.runs');
     if (runs) out.runCount = parseInt(runs.textContent, 10);
+    // ST-03: source identity visible on the grid (data-source attr or source label element)
+    const grid = document.querySelector('.grid');
+    if (grid) {
+      out.sourceVisible = Boolean(grid.querySelector('[data-source], .source-label, .source-name') || grid.hasAttribute('data-source'));
+      // ST-07: permission notice present (banner, alert, or permission-related element)
+      out.permissionNotice = Boolean(document.querySelector('[data-permission], .permission-notice, .permission-banner, [role="alert"]'));
+    }
+    // ST-06: result targets the current selection (result text must relate to selected node)
+    const selNode = document.querySelector('.node.sel');
+    const resultEl = document.querySelector('.result');
+    if (selNode && resultEl) {
+      const selText = (selNode.textContent || '').trim();
+      const resultText = (resultEl.textContent || '').trim();
+      out.resultTargetsSelection = resultText.includes(selText) || selText.includes(resultText);
+    }
     return out;
-  }, GROUND_TRUTH[fx.id]);
+  }, GROUND_TRUTH[fx.id], injected);
   const detected = fx.check(observed);
-  results.push({ id: fx.id, name: fx.name, detected });
+  results.push({ id: fx.id, name: fx.name, detected, mode: injected ? 'injected-ground-truth' : 'measured' });
   await ctx.close();
 }
 await browser.close();
 
 const detected = results.filter(r => r.detected).length;
-const summary = { total: FIXTURES.length, detected, pass: detected === FIXTURES.length, results };
+const measured = results.filter(r => r.detected && r.mode === 'measured').length;
+const injectedCount = results.filter(r => r.detected && r.mode === 'injected-ground-truth').length;
+const summary = { total: FIXTURES.length, detected, measured, injected: injectedCount, pass: detected === FIXTURES.length, results };
 await writeFile(join(outDir, 'selftest.json'), JSON.stringify(summary, null, 2));
-console.log(`SELF-TEST: ${detected}/${FIXTURES.length} detected -> ${summary.pass ? 'PASS' : 'FAIL'}`);
+console.log(`SELF-TEST: ${measured}/${FIXTURES.length} measured, ${injectedCount}/${FIXTURES.length} injected -> ${summary.pass ? 'PASS' : 'FAIL'}`);
 results.forEach(r => console.log(` ${r.detected ? '✓' : '✗'} ${r.id} ${r.name}`));
 process.exit(summary.pass ? 0 : 1);

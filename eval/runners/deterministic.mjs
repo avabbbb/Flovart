@@ -356,12 +356,13 @@ async function runCodexExec(task, controlled) {
     });
     child.stdout.on('data', chunk => { stdout += chunk; });
     child.stderr.on('data', chunk => { stderr += chunk; });
-    child.once('error', err => resolve({ transcript: '', exitCode: null, error: `codex spawn failed: ${err.message}` }));
-    child.once('close', code => resolve({ transcript: stdout, exitCode: code, error: null }));
-    setTimeout(() => {
+    const timer = setTimeout(() => {
       child.kill('SIGKILL');
       resolve({ transcript: stdout, exitCode: null, error: 'codex exec timed out' });
     }, task.timeout ?? 120_000);
+    timer.unref?.();
+    child.once('error', err => { clearTimeout(timer); resolve({ transcript: '', exitCode: null, error: `codex spawn failed: ${err.message}` }); });
+    child.once('close', code => { clearTimeout(timer); resolve({ transcript: stdout, exitCode: code, error: null }); });
   });
 }
 

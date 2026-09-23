@@ -3,7 +3,7 @@
  * 包括 Google (models.list)、OpenAI (/models)、Anthropic (/messages) 等格式校验
  * 以及 generateImageWithProvider 对不支持 provider 的报错行为
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
     validateApiKey,
     getCapabilityDictionary,
@@ -19,6 +19,13 @@ import {
 } from '../services/aiGateway';
 import { BUILTIN_RUNNINGHUB_MODELS, normalizeRunningHubModelEndpoint } from '../services/runningHubService';
 import { normalizeProviderBaseUrl } from '../services/baseUrl';
+
+// Save the original globalThis.fetch so afterEach can restore it after tests
+// that directly assign globalThis.fetch = vi.fn()… (~67 occurrences).
+const _originalFetch = globalThis.fetch;
+afterEach(() => {
+    globalThis.fetch = _originalFetch;
+});
 
 function mockJsonResponse(body: unknown, status = 200) {
     return {

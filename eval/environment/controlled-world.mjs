@@ -551,7 +551,7 @@ export function createControlledWorld(options = {}) {
       fail('INVALID_ARGUMENT', 'workflow.node.run requires an idempotencyKey.');
     }
     const config = nodeGenerationConfig(node, args);
-    const requestHash = checksum({ nodeId: args.nodeId, mode: config.mode, prompt: config.prompt });
+    const requestHash = checksum({ nodeId: args.nodeId, mode: config.mode, prompt: config.prompt, references: config.references });
     const replayed = replayOf(options.idempotencyKey, requestHash);
     if (replayed) return { ...replayed, replayed: true };
 

@@ -177,6 +177,7 @@ describe('web.open', () => {
 
   it('honors FLOVART_WEBUI_PORTS over the default probe order', async () => {
     const opener = vi.fn();
+    const previousPorts = process.env.FLOVART_WEBUI_PORTS;
     process.env.FLOVART_WEBUI_PORTS = 'http://127.0.0.1:8080,http://127.0.0.1:9000';
     vi.stubGlobal('fetch', vi.fn(async input => {
       return String(input) === 'http://127.0.0.1:8080'
@@ -189,7 +190,8 @@ describe('web.open', () => {
       expect(result.opened).toBe('http://127.0.0.1:8080');
     } finally {
       vi.unstubAllGlobals();
-      delete process.env.FLOVART_WEBUI_PORTS;
+      if (previousPorts === undefined) delete process.env.FLOVART_WEBUI_PORTS;
+      else process.env.FLOVART_WEBUI_PORTS = previousPorts;
     }
   });
 

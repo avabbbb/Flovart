@@ -61,7 +61,7 @@ describe('Lane17 verification', () => {
     vi.spyOn(window, 'requestAnimationFrame').mockImplementation(cb => { cb(performance.now() + 500); return 1; });
     vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => undefined);
   });
-  afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); });
+  afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); vi.unstubAllGlobals(); });
 
   it('F key frames a selected node by animating the viewport toward it', async () => {
     render(<Harness />);

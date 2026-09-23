@@ -11,6 +11,7 @@
     "deep-link:default",
     "runtime-control",
     "keyring-metadata",
-    "managed-agent-connection"
+    "managed-agent-connection",
+    "browser-import"
   ]
 }

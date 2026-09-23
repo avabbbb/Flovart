@@ -8,10 +8,43 @@ use std::{
     fs,
     path::{Path, PathBuf},
     process::Command,
+    sync::atomic::{AtomicBool, Ordering},
 };
 
 use super::fail;
 use crate::runtime::store::{ClaimedTask, RuntimeStore};
+use crate::runtime::validate_store_relpath;
+
+/// Lease renewal interval for local media executors (matches worker.rs LEASE_MS).
+const LEASE_MS: i64 = 500;
+
+/// Check cancellation, stopping, and lease renewal. Returns `true` if the
+/// task should abort (cancelled or lease lost).  On cancellation the task is
+/// marked cancelled (not completed/failed) via `store.cancel_task`.
+fn check_abort(
+    store: &RuntimeStore,
+    task: &ClaimedTask,
+    worker_id: &str,
+    stopping: &AtomicBool,
+) -> bool {
+    if stopping.load(Ordering::Acquire) {
+        return true;
+    }
+    if store
+        .cancellation_requested(&task.id, worker_id)
+        .unwrap_or(false)
+    {
+        let _ = store.cancel_task(&task.id, worker_id);
+        return true;
+    }
+    if !store
+        .renew_lease(&task.id, worker_id, LEASE_MS)
+        .unwrap_or(false)
+    {
+        return true;
+    }
+    false
+}
 
 /// Resolve a completed source task's artifact into an absolute path under the
 /// artifact root, mirroring the RunningHub image-to-video source resolution.
@@ -36,10 +69,8 @@ fn artifact_path(
         .get("storeRelpath")
         .and_then(Value::as_str)
         .ok_or_else(|| format!("source artifact has no storeRelpath: {task_id}"))?;
-    let relative = Path::new(store_relpath)
-        .strip_prefix("runtime-artifacts")
-        .unwrap_or_else(|_| Path::new(store_relpath));
-    Ok((artifact_root.join(relative), artifact))
+    let path = validate_store_relpath(store_relpath, artifact_root)?;
+    Ok((path, artifact))
 }
 
 fn persist_artifact(
@@ -106,11 +137,17 @@ fn escape_srt_time(ms: i64) -> String {
 }
 
 /// Escape a path for use inside an ffmpeg filter argument (Windows drive
-/// colons and backslashes must be escaped).
+/// colons and backslashes must be escaped; single quotes and filter-syntax
+/// metacharacters must also be escaped to prevent injection).
 fn escape_filter_path(path: &Path) -> String {
     path.to_string_lossy()
         .replace('\\', "/")
         .replace(':', "\\:")
+        .replace('\'', "\\\\'")
+        .replace(',', "\\,")
+        .replace(';', "\\;")
+        .replace('[', "\\[")
+        .replace(']', "\\]")
 }
 
 /// audio.tts — synthesize narration with the OS speech engine (Windows
@@ -119,6 +156,7 @@ fn escape_filter_path(path: &Path) -> String {
 pub fn run_tts(
     store: &RuntimeStore,
     worker_id: &str,
+    stopping: &AtomicBool,
     artifact_root: Option<&Path>,
     task: &ClaimedTask,
 ) {
@@ -132,6 +170,10 @@ pub fn run_tts(
         );
         return;
     };
+    // R6-H02: Check cancellation before starting work.
+    if check_abort(store, task, worker_id, stopping) {
+        return;
+    }
     if !cfg!(windows) {
         fail(
             store,
@@ -222,6 +264,10 @@ Write-Output "rate=5 duration=$probe overflow=true"
         wav = wav_path.to_string_lossy().replace('\'', "''"),
         target_sec = (target_ms as f64 / 1000.0) - 0.5,
     );
+    // TODO: The PowerShell TTS rate-search loop is a blocking spawn that
+    // cannot be interrupted mid-execution.  A future improvement should use
+    // spawn + try_wait so cancellation can kill the process.  For now we
+    // check before and after the spawn.
     let result = run_tool(
         "powershell",
         &[
@@ -231,6 +277,10 @@ Write-Output "rate=5 duration=$probe overflow=true"
             script,
         ],
     );
+    // R6-H02: Check cancellation after the blocking TTS spawn.
+    if check_abort(store, task, worker_id, stopping) {
+        return;
+    }
     let _ = fs::remove_file(&text_path);
     let synth_info = match result {
         Ok(output) => output.trim().to_owned(),
@@ -293,6 +343,7 @@ Write-Output "rate=5 duration=$probe overflow=true"
 pub fn run_render(
     store: &RuntimeStore,
     worker_id: &str,
+    stopping: &AtomicBool,
     artifact_root: Option<&Path>,
     task: &ClaimedTask,
 ) {
@@ -306,6 +357,10 @@ pub fn run_render(
         );
         return;
     };
+    // R6-H02: Check cancellation before starting work.
+    if check_abort(store, task, worker_id, stopping) {
+        return;
+    }
     let delivery = task
         .args
         .get("delivery")
@@ -495,8 +550,19 @@ pub fn run_render(
     );
     args.push(output_path.to_string_lossy().into_owned());
 
+    // TODO: The ffmpeg render is a blocking spawn that cannot be interrupted
+    // mid-execution.  A future improvement should use spawn + try_wait so
+    // cancellation can kill the process.  For now we check before and after.
+    // R6-H02: Check cancellation before the blocking ffmpeg render.
+    if check_abort(store, task, worker_id, stopping) {
+        return;
+    }
     let render_result = run_tool("ffmpeg", &args);
     let _ = fs::remove_file(&srt_path);
+    // R6-H02: Check cancellation after the blocking ffmpeg render.
+    if check_abort(store, task, worker_id, stopping) {
+        return;
+    }
     if let Err(message) = render_result {
         fail(store, task, worker_id, "CAPABILITY_UNAVAILABLE", &message);
         return;
@@ -543,6 +609,7 @@ pub fn run_render(
 pub fn run_verify(
     store: &RuntimeStore,
     worker_id: &str,
+    stopping: &AtomicBool,
     artifact_root: Option<&Path>,
     task: &ClaimedTask,
 ) {
@@ -556,6 +623,10 @@ pub fn run_verify(
         );
         return;
     };
+    // R6-H02: Check cancellation before starting work.
+    if check_abort(store, task, worker_id, stopping) {
+        return;
+    }
     let Some(source_task_id) = task.args.get("sourceTaskId").and_then(Value::as_str) else {
         fail(
             store,
@@ -595,6 +666,10 @@ pub fn run_verify(
             return;
         }
     };
+    // R6-H02: Check cancellation after ffprobe verification.
+    if check_abort(store, task, worker_id, stopping) {
+        return;
+    }
     let duration_sec = media
         .pointer("/format/duration")
         .and_then(Value::as_str)

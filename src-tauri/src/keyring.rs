@@ -40,6 +40,40 @@ pub fn entry_account(provider: &str, key_id: &str) -> String {
     format!("{provider}:{key_id}")
 }
 
+/// Validate provider and key_id before constructing a keyring entry.
+/// Prevents ':' injection (which would break the `provider:keyId` account
+/// format) and enforces reasonable length limits.
+fn validate_keyring_inputs(provider: &str, key_id: &str, label: Option<&str>) -> FlovartResult<()> {
+    if provider.is_empty() || provider.len() > 128 {
+        return Err(FlovartError::InvalidInput(
+            "provider must be 1-128 characters".to_owned(),
+        ));
+    }
+    if provider.contains(':') {
+        return Err(FlovartError::InvalidInput(
+            "provider must not contain ':'".to_owned(),
+        ));
+    }
+    if key_id.is_empty() || key_id.len() > 256 {
+        return Err(FlovartError::InvalidInput(
+            "keyId must be 1-256 characters".to_owned(),
+        ));
+    }
+    if key_id.contains(':') {
+        return Err(FlovartError::InvalidInput(
+            "keyId must not contain ':'".to_owned(),
+        ));
+    }
+    if let Some(label) = label {
+        if label.len() > 256 {
+            return Err(FlovartError::InvalidInput(
+                "label must not exceed 256 characters".to_owned(),
+            ));
+        }
+    }
+    Ok(())
+}
+
 pub fn parse_account(account: &str) -> Option<(String, String)> {
     let mut parts = account.splitn(2, ':');
     let provider = parts.next()?.to_string();
@@ -59,6 +93,7 @@ pub fn keyring_set(
     secret: String,
     label: Option<String>,
 ) -> FlovartResult<KeyringEntry> {
+    validate_keyring_inputs(&provider, &key_id, label.as_deref())?;
     let account = entry_account(&provider, &key_id);
     let entry = build_entry(&account)?;
     entry

@@ -188,6 +188,7 @@ impl BrowserImportStore {
     pub fn open(database_path: &Path, artifact_root: &Path) -> Result<Self, RuntimeContractError> {
         fs::create_dir_all(artifact_root.join("browser-import").join(".staging"))?;
         let connection = Connection::open(database_path)?;
+        connection.busy_timeout(std::time::Duration::from_millis(250))?;
         connection.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;")?;
         connection.execute_batch(SCHEMA)?;
         Ok(Self {

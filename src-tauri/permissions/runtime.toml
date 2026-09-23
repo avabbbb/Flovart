@@ -12,3 +12,17 @@ commands.allow = ["keyring_set", "keyring_delete", "keyring_list", "keyring_repo
 identifier = "managed-agent-connection"
 description = "Allows the main Flovart WebUI to start and discover the authenticated loopback Managed Agent."
 commands.allow = ["managed_agent_connection"]
+
+[[permission]]
+identifier = "browser-import"
+description = "Allows the main Flovart WebUI to manage browser extension pairings and imported artifacts."
+commands.allow = [
+  "browser_import_pairing_list_pending",
+  "browser_import_pairing_approve",
+  "browser_import_pairing_reject",
+  "browser_import_destination_set",
+  "browser_import_list_pending",
+  "browser_import_route_to_project",
+  "browser_import_mark_consumed",
+  "browser_import_artifact_read",
+]

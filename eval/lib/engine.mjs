@@ -115,9 +115,15 @@ export async function runTrial(task, { runnerName, runDir, metadata, trialIndex,
         rejectionObserved: false,
         observedRejectionCodes: [],
         rejectionCodeFailures: [],
+        gradingMode: 'predicates',
+        gradingLayers: { safety: 'pass', semantic: 'not-applicable', exact: 'not-frozen' },
+        canonicalHash: null,
+        canonicalHashExpected: null,
+        canonicalHashMatched: null,
         timing: { wallTimeMs: 0 },
         efficiency: { toolCalls: 0, stepFailures: 0 },
         usage: { promptTokens: 0, completionTokens: 0, costUsd: 0, measured: false },
+        error: null,
         knownGap: graded.knownGap,
       },
       worldFinal: null,
@@ -301,6 +307,7 @@ export async function runTrial(task, { runnerName, runDir, metadata, trialIndex,
     // Only meaningful when a runner actually reported usage. A false "measured"
     // flag is a claim about the harness, not a claim that the run was free.
     usage: runnerOutcome?.usage ?? { promptTokens: 0, completionTokens: 0, costUsd: 0, measured: false },
+    error: runnerOutcome?.error ?? runnerError?.message ?? null,
     knownGap: task.knownGap ?? null,
   };
 

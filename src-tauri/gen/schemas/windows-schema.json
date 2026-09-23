@@ -345,6 +345,12 @@
       "description": "Permission identifier",
       "oneOf": [
         {
+          "description": "Allows the main Flovart WebUI to manage browser extension pairings and imported artifacts.",
+          "type": "string",
+          "const": "browser-import",
+          "markdownDescription": "Allows the main Flovart WebUI to manage browser extension pairings and imported artifacts."
+        },
+        {
           "description": "Allows the main Flovart WebUI to write, delete, and list credential metadata without reading raw secrets back.",
           "type": "string",
           "const": "keyring-metadata",

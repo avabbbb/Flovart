@@ -25,6 +25,7 @@ describe('workflow media', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it.each([

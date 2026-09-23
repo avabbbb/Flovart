@@ -502,6 +502,8 @@ impl RuntimeStore {
             "runStatus": next_status,
             "blockers": blockers
         });
+        // R6-L05: Guard against command_id collision.
+        check_command_id_conflict(&transaction, command_id, idempotency_key)?;
         transaction
             .execute(
                 "INSERT INTO command_receipts(
@@ -1000,6 +1002,10 @@ impl RuntimeStore {
                 events: format!("/v1/events?taskId={task_id}"),
             },
         };
+        // R6-L05: Guard against command_id PRIMARY KEY collision with a
+        // different idempotency key (would otherwise surface as a raw
+        // SQLite constraint error).
+        check_command_id_conflict(&transaction, command_id, idempotency_key)?;
         transaction
             .execute(
                 "INSERT INTO command_receipts(
@@ -2244,6 +2250,8 @@ impl RuntimeStore {
                 )
                 .map_err(store_unavailable)?;
         }
+        // R6-L05: Guard against command_id collision.
+        check_command_id_conflict(&transaction, command_id, idempotency_key)?;
         transaction
             .execute(
                 "INSERT INTO command_receipts(
@@ -2432,4 +2440,43 @@ fn idempotency_conflict(existing_hash: &str, received_hash: &str) -> RuntimeErro
         })),
         action_url: None,
     }
+}
+
+/// R6-L05: Check whether `command_id` already exists in command_receipts
+/// with a *different* idempotency key.  The table's PRIMARY KEY is
+/// `command_id`, so a duplicate would cause a raw SQLite constraint error
+/// instead of a clean IDEMPOTENCY_CONFLICT.  This check ensures the caller
+/// gets a structured error before the INSERT is attempted.
+///
+/// `existing_key` is the idempotency key the caller is about to use, so that
+/// a legitimate replay (same key) is not flagged.
+fn check_command_id_conflict(
+    transaction: &rusqlite::Transaction<'_>,
+    command_id: &str,
+    existing_key: &str,
+) -> Result<(), RuntimeError> {
+    let conflict = transaction
+        .query_row(
+            "SELECT idempotency_key FROM command_receipts WHERE command_id = ?1",
+            [command_id],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()
+        .map_err(store_unavailable)?;
+    if let Some(key) = conflict {
+        if key != existing_key {
+            return Err(RuntimeError {
+                code: "IDEMPOTENCY_CONFLICT".to_owned(),
+                message: "Command ID was already used with a different idempotency key.".to_owned(),
+                retryable: false,
+                details: Some(json!({
+                    "commandId": command_id,
+                    "existingIdempotencyKey": key,
+                    "receivedIdempotencyKey": existing_key,
+                })),
+                action_url: None,
+            });
+        }
+    }
+    Ok(())
 }

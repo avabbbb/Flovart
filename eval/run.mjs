@@ -556,6 +556,7 @@ function toEntry(score) {
     efficiency: score.efficiency,
     usage: score.usage,
     timing: score.timing,
+    error: score.error,
     gradingMode: score.gradingMode,
     canonicalHash: score.canonicalHash,
     canonicalHashExpected: score.canonicalHashExpected,

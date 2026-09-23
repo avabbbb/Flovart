@@ -37,12 +37,12 @@ export const VIEWPORTS = {
  * Launch a traced, fresh-context browser session against the live app.
  * Returns a session with helpers + a `finish()` that writes the evidence pack.
  */
-export async function openSession({ viewport = VIEWPORTS.desktop, outDir, name = 'session' } = {}) {
+export async function openSession({ viewport = VIEWPORTS.desktop, outDir, name = 'session', headless = true } = {}) {
   const out = outDir || join(here, 'results', `${Date.now()}-${name}`);
   await mkdir(out, { recursive: true });
 
   const browser = await chromium.launch({
-    headless: true,
+    headless,
     // Prefer the bundled browser; fall back to system Chrome when the Playwright
     // browser cache doesn't match this playwright version.
     channel: process.env.FLOVART_NO_SYSTEM_CHROME ? undefined : 'chrome',

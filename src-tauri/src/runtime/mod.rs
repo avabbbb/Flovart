@@ -39,6 +39,36 @@ use std::{
 use store::RuntimeStore;
 use uuid::Uuid;
 
+/// Validate and resolve a `storeRelpath` value against the artifact root.
+/// Strips the `runtime-artifacts/` prefix, rejects absolute paths and
+/// `ParentDir` components, then canonicalizes and verifies the result
+/// stays within the root.  Returns the resolved absolute path on success.
+pub fn validate_store_relpath(
+    store_relpath: &str,
+    artifact_root: &Path,
+) -> Result<PathBuf, String> {
+    let relative_path = store_relpath
+        .strip_prefix("runtime-artifacts/")
+        .or_else(|| store_relpath.strip_prefix("runtime-artifacts\\"))
+        .ok_or_else(|| "artifact path is invalid".to_owned())?;
+    let relative_path = Path::new(relative_path);
+    if relative_path.is_absolute()
+        || relative_path
+            .components()
+            .any(|component| matches!(component, std::path::Component::ParentDir))
+    {
+        return Err("artifact path escapes the runtime artifact root".to_owned());
+    }
+    let canonical_root = std::fs::canonicalize(artifact_root)
+        .map_err(|error| format!("artifact root is unavailable: {error}"))?;
+    let path = std::fs::canonicalize(artifact_root.join(relative_path))
+        .map_err(|error| format!("artifact is unavailable: {error}"))?;
+    if !path.starts_with(&canonical_root) {
+        return Err("artifact path is outside the runtime artifact root".to_owned());
+    }
+    Ok(path)
+}
+
 pub struct ProductionRuntime {
     runtime_version: String,
     runtime_instance_id: String,
@@ -158,47 +188,15 @@ impl ProductionRuntime {
             .ok_or_else(|| {
                 RuntimeError::new("RUNTIME_UNAVAILABLE", "Media artifact path is missing")
             })?;
-        let relative_path = store_relpath
-            .strip_prefix("runtime-artifacts/")
-            .or_else(|| store_relpath.strip_prefix("runtime-artifacts\\"))
-            .ok_or_else(|| {
-                RuntimeError::new("RUNTIME_UNAVAILABLE", "Media artifact path is invalid")
-            })?;
-        let relative_path = Path::new(relative_path);
-        if relative_path.is_absolute()
-            || relative_path
-                .components()
-                .any(|component| matches!(component, std::path::Component::ParentDir))
-        {
-            return Err(RuntimeError::new(
-                "RUNTIME_UNAVAILABLE",
-                "Media artifact path escapes the runtime artifact root",
-            ));
-        }
         let root = self.artifact_root.as_ref().ok_or_else(|| {
             RuntimeError::new(
                 "RUNTIME_UNAVAILABLE",
                 "Runtime artifact storage is unavailable",
             )
         })?;
-        let canonical_root = std::fs::canonicalize(root).map_err(|error| {
-            RuntimeError::new(
-                "RUNTIME_UNAVAILABLE",
-                format!("Media artifact root is unavailable: {error}"),
-            )
+        let path = validate_store_relpath(store_relpath, root).map_err(|message| {
+            RuntimeError::new("RUNTIME_UNAVAILABLE", message)
         })?;
-        let path = std::fs::canonicalize(root.join(relative_path)).map_err(|error| {
-            RuntimeError::new(
-                "RUNTIME_UNAVAILABLE",
-                format!("Media artifact is unavailable: {error}"),
-            )
-        })?;
-        if !path.starts_with(&canonical_root) {
-            return Err(RuntimeError::new(
-                "RUNTIME_UNAVAILABLE",
-                "Media artifact path is outside the runtime artifact root",
-            ));
-        }
         let bytes = std::fs::read(path).map_err(|error| {
             RuntimeError::new(
                 "RUNTIME_UNAVAILABLE",
@@ -623,6 +621,26 @@ impl ProductionRuntime {
                         message: format!(
                             "ProductionRun must be approved before execution (status: {run_status})."
                         ),
+                        retryable: false,
+                        details: Some(serde_json::json!({
+                            "runStatus": run_status,
+                            "blockers": status.get("blockers")
+                        })),
+                        action_url: None,
+                    });
+                }
+                // R6-H04: Reject execution when any director gate is still required.
+                let has_director_blocker = status
+                    .get("blockers")
+                    .and_then(Value::as_array)
+                    .into_iter()
+                    .flatten()
+                    .filter_map(Value::as_str)
+                    .any(|blocker| blocker.starts_with("DIRECTOR_GATE_REQUIRED:"));
+                if has_director_blocker {
+                    return Err(RuntimeError {
+                        code: "PRECONDITION_FAILED".to_owned(),
+                        message: "ProductionRun has unresolved director gates; approve or reject them before execution.".to_owned(),
                         retryable: false,
                         details: Some(serde_json::json!({
                             "runStatus": run_status,

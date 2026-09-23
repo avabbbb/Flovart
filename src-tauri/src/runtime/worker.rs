@@ -21,11 +21,13 @@ use super::{
         GROK_VIDEO_IMAGE_ROUTE, GROK_VIDEO_ROUTE, VEO_LITE_ROUTE,
     },
     store::{ClaimedTask, RuntimeStore, StageExec},
+    validate_store_relpath,
 };
 
 mod local_media;
 
-const IDLE_POLL: Duration = Duration::from_millis(20);
+const IDLE_POLL_MIN: Duration = Duration::from_millis(20);
+const IDLE_POLL_MAX: Duration = Duration::from_secs(2);
 const SAFE_POINT: Duration = Duration::from_millis(10);
 const VIDEO_POLL: Duration = Duration::from_secs(10);
 const SCHEDULER_POLL: Duration = Duration::from_secs(2);
@@ -47,10 +49,13 @@ impl RuntimeWorker {
         let scheduler_store = store.clone();
         let scheduler_id = super::ProductionRuntime::new_id("worker");
         let scheduler_thread = std::thread::spawn(move || {
+            let mut idle_count: u32 = 0;
             while !scheduler_stopping.load(Ordering::Acquire) {
                 match scheduler_store.claim_next_task_filtered(&scheduler_id, LEASE_MS, Some(true))
                 {
-                    Ok(Some(task)) => match task.kind.as_str() {
+                    Ok(Some(task)) => {
+                        idle_count = 0;
+                        match task.kind.as_str() {
                         "production.run" => run_production_execution(
                             &scheduler_store,
                             &scheduler_id,
@@ -68,11 +73,20 @@ impl RuntimeWorker {
                                 }),
                             );
                         }
+                        }
                     },
-                    Ok(None) => std::thread::sleep(IDLE_POLL),
+                    Ok(None) => {
+                        idle_count = idle_count.saturating_add(1);
+                        let backoff = IDLE_POLL_MIN
+                            * 2u32.saturating_pow(idle_count.min(7));
+                        std::thread::sleep(backoff.min(IDLE_POLL_MAX));
+                    }
                     Err(error) => {
                         log::warn!("Runtime scheduler ledger poll failed: {}", error.message);
-                        std::thread::sleep(IDLE_POLL);
+                        idle_count = idle_count.saturating_add(1);
+                        let backoff = IDLE_POLL_MIN
+                            * 2u32.saturating_pow(idle_count.min(7));
+                        std::thread::sleep(backoff.min(IDLE_POLL_MAX));
                     }
                 }
             }
@@ -84,9 +98,12 @@ impl RuntimeWorker {
         let executor_artifact_root = artifact_root;
         let executor_id = super::ProductionRuntime::new_id("exec");
         let executor_thread = std::thread::spawn(move || {
+            let mut idle_count: u32 = 0;
             while !executor_stopping.load(Ordering::Acquire) {
                 match store.claim_next_task_filtered(&executor_id, LEASE_MS, Some(false)) {
-                    Ok(Some(task)) => match task.kind.as_str() {
+                    Ok(Some(task)) => {
+                        idle_count = 0;
+                        match task.kind.as_str() {
                         "runtime.test.delay" => {
                             run_delay(&store, &executor_id, &executor_stopping, &task)
                         }
@@ -94,18 +111,21 @@ impl RuntimeWorker {
                         "audio.tts" => local_media::run_tts(
                             &store,
                             &executor_id,
+                            &executor_stopping,
                             executor_artifact_root.as_deref(),
                             &task,
                         ),
                         "media.render" => local_media::run_render(
                             &store,
                             &executor_id,
+                            &executor_stopping,
                             executor_artifact_root.as_deref(),
                             &task,
                         ),
                         "media.verify" => local_media::run_verify(
                             &store,
                             &executor_id,
+                            &executor_stopping,
                             executor_artifact_root.as_deref(),
                             &task,
                         ),
@@ -134,11 +154,20 @@ impl RuntimeWorker {
                                 }),
                             );
                         }
+                        }
                     },
-                    Ok(None) => std::thread::sleep(IDLE_POLL),
+                    Ok(None) => {
+                        idle_count = idle_count.saturating_add(1);
+                        let backoff = IDLE_POLL_MIN
+                            * 2u32.saturating_pow(idle_count.min(7));
+                        std::thread::sleep(backoff.min(IDLE_POLL_MAX));
+                    }
                     Err(error) => {
                         log::warn!("Runtime executor ledger poll failed: {}", error.message);
-                        std::thread::sleep(IDLE_POLL);
+                        idle_count = idle_count.saturating_add(1);
+                        let backoff = IDLE_POLL_MIN
+                            * 2u32.saturating_pow(idle_count.min(7));
+                        std::thread::sleep(backoff.min(IDLE_POLL_MAX));
                     }
                 }
             }
@@ -250,22 +279,47 @@ fn stage_child_command(
                 .get("durationMs")
                 .and_then(Value::as_i64)
                 .unwrap_or(6_000);
-            // Grok image-to-video is fixed at 6 s / 720p on the trusted route.
-            Some((
-                "generate.video".to_owned(),
-                json!({
-                    "prompt": input.get("prompt").and_then(Value::as_str).unwrap_or_default(),
-                    "provider": "runningHub",
-                    "productModel": "flovart:grok-imagine-video-1.5",
-                    "durationSec": 6,
-                    "aspectRatio": input.get("aspectRatio").and_then(Value::as_str).unwrap_or("16:9"),
-                    "resolution": "720p",
-                    "generateAudio": false,
-                    "sourceImageIds": [source_task_id],
-                    "requestedDurationMs": duration_ms,
-                    "credentialId": Value::Null
-                }),
-            ))
+            // R6-H03: Route by duration — ≤6 s uses Grok image-to-video (720p/6s),
+            // >6 s uses Veo 3.1 Lite with mapped durationSec (4/6/8), matching
+            // the estimate logic in production.rs build_route_plan.
+            if duration_ms <= 6_000 {
+                Some((
+                    "generate.video".to_owned(),
+                    json!({
+                        "prompt": input.get("prompt").and_then(Value::as_str).unwrap_or_default(),
+                        "provider": "runningHub",
+                        "productModel": "flovart:grok-imagine-video-1.5",
+                        "durationSec": 6,
+                        "aspectRatio": input.get("aspectRatio").and_then(Value::as_str).unwrap_or("16:9"),
+                        "resolution": "720p",
+                        "generateAudio": false,
+                        "sourceImageIds": [source_task_id],
+                        "requestedDurationMs": duration_ms,
+                        "credentialId": Value::Null
+                    }),
+                ))
+            } else {
+                let duration_sec = match duration_ms {
+                    d if d <= 4_000 => 4,
+                    d if d <= 6_000 => 6,
+                    _ => 8,
+                };
+                Some((
+                    "generate.video".to_owned(),
+                    json!({
+                        "prompt": input.get("prompt").and_then(Value::as_str).unwrap_or_default(),
+                        "provider": "runningHub",
+                        "productModel": "flovart:veo-3.1-lite",
+                        "durationSec": duration_sec,
+                        "aspectRatio": input.get("aspectRatio").and_then(Value::as_str).unwrap_or("16:9"),
+                        "resolution": "720p",
+                        "generateAudio": true,
+                        "sourceImageIds": [source_task_id],
+                        "requestedDurationMs": duration_ms,
+                        "credentialId": Value::Null
+                    }),
+                ))
+            }
         }
         "audio.tts" => Some(("audio.tts".to_owned(), input.clone())),
         "media.render" => {
@@ -842,6 +896,10 @@ fn run_google_video(
             return;
         }
         _ => {
+            // R6-H01: Check cancellation before committing to submission.
+            if cancellation_requested(store, task, worker_id) {
+                return;
+            }
             let submitting = json!({
                 "phase": "submitting",
                 "provider": "google",
@@ -1281,10 +1339,19 @@ fn run_runninghub_generation(
                 );
                 return;
             }
-            let relative = Path::new(store_relpath.unwrap())
-                .strip_prefix("runtime-artifacts")
-                .unwrap_or_else(|_| Path::new(store_relpath.unwrap()));
-            let source_path = artifact_root.join(relative);
+            let source_path = match validate_store_relpath(store_relpath.unwrap(), artifact_root) {
+                Ok(path) => path,
+                Err(message) => {
+                    fail(
+                        store,
+                        task,
+                        worker_id,
+                        "SOURCE_ARTIFACT_UNAVAILABLE",
+                        &format!("Source image Artifact path is invalid: {message}"),
+                    );
+                    return;
+                }
+            };
             let bytes = match fs::read(&source_path) {
                 Ok(bytes) => bytes,
                 Err(_) => {

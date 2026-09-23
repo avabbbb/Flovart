@@ -72,6 +72,7 @@ CREATE INDEX IF NOT EXISTS idx_sync_log_entity ON sync_log(entity, entity_id, ti
 impl StateDb {
     pub fn open(path: &Path) -> FlovartResult<Self> {
         let conn = Connection::open(path)?;
+        conn.busy_timeout(std::time::Duration::from_millis(250))?;
         conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;")?;
         conn.execute_batch(SCHEMA)?;
         Ok(Self {
@@ -171,12 +172,6 @@ impl StateDb {
 
 // ── Tauri commands ─────────────────────────────────────────
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
-pub struct StateKv {
-    pub key: String,
-    pub value: String,
-}
-
 #[tauri::command]
 pub fn state_set(
     ctx: tauri::State<'_, std::sync::Arc<crate::FlovartContext>>,
@@ -201,39 +196,4 @@ pub fn state_get(
     key: String,
 ) -> FlovartResult<Option<String>> {
     ctx.state_db.kv_get(&key)
-}
-
-#[tauri::command]
-pub fn state_delete(
-    ctx: tauri::State<'_, std::sync::Arc<crate::FlovartContext>>,
-    key: String,
-) -> FlovartResult<bool> {
-    let n = ctx.state_db.kv_delete(&key)?;
-    let _ = ctx.state_db.sync_log("kv", &key, "delete", "webui", None);
-    Ok(n)
-}
-
-#[tauri::command]
-pub fn state_keys(
-    ctx: tauri::State<'_, std::sync::Arc<crate::FlovartContext>>,
-    prefix: Option<String>,
-) -> FlovartResult<Vec<String>> {
-    match prefix.as_deref() {
-        Some(p) if !p.is_empty() => {
-            let pairs = ctx.state_db.kv_list_prefix(p)?;
-            Ok(pairs.into_iter().map(|(k, _)| k).collect())
-        }
-        _ => ctx.state_db.kv_keys(),
-    }
-}
-
-#[tauri::command]
-pub fn state_dump(
-    ctx: tauri::State<'_, std::sync::Arc<crate::FlovartContext>>,
-) -> FlovartResult<Vec<StateKv>> {
-    let pairs = ctx.state_db.kv_dump()?;
-    Ok(pairs
-        .into_iter()
-        .map(|(key, value)| StateKv { key, value })
-        .collect())
 }
