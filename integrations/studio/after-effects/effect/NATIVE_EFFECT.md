@@ -67,7 +67,7 @@ When a real toolchain + SDK exist, verify all `SDK-VERIFY` markers against the i
 
 Nothing here certifies After Effects, Premiere Pro, Photoshop or Resolve.
 
-Required real-host evidence is defined in [AFTER_EFFECTS_REAL_HOST_CHECKLIST.md](../AFTER_EFFECTS_REAL_HOST_CHECKLIST.md), including:
+Required real-host evidence is defined in [AFTER_EFFECTS_REAL_HOST_CHECKLIST.md](../../AFTER_EFFECTS_REAL_HOST_CHECKLIST.md), including:
 
 - real SDK compile;
 - Effect Controls/Timeline behavior;
