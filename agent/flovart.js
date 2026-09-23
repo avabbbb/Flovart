@@ -15,6 +15,9 @@ export class FlovartAgentService {
     this.streamFn = streamFn;
     this.tools = tools;
     this.sessions = new Map();
+    // 每个 projectId 一条串行发送队列：同项目 turn 链式排队执行，
+    // 避免 kernel.activeChangeSetId 被并发 turn 交叉污染。
+    this.sendQueues = new Map();
   }
 
   async getSession(projectId) {
@@ -41,8 +44,14 @@ export class FlovartAgentService {
     return (await this.getSession(projectId)).snapshot();
   }
 
-  async send(projectId, text, images = [], skillAttachment) {
-    return (await this.getSession(projectId)).send(text, images, skillAttachment);
+  send(projectId, text, images = [], skillAttachment) {
+    const id = String(projectId || 'default');
+    const previous = this.sendQueues.get(id) || Promise.resolve();
+    const run = previous.then(() => this.getSession(id).then(kernel => kernel.send(text, images, skillAttachment)));
+    const tail = run.then(() => undefined, () => undefined);
+    this.sendQueues.set(id, tail);
+    tail.then(() => { if (this.sendQueues.get(id) === tail) this.sendQueues.delete(id); });
+    return run;
   }
 
   async subscribe(projectId, listener) {
@@ -50,12 +59,16 @@ export class FlovartAgentService {
   }
 
   async cancel(projectId) {
-    (await this.getSession(projectId)).cancel();
+    const id = String(projectId || 'default');
+    // 会话不存在时不再强开新 session。
+    if (!this.sessions.has(id)) return;
+    (await this.getSession(id)).cancel();
   }
 
   async close() {
     const sessions = await Promise.allSettled(this.sessions.values());
     await Promise.all(sessions.flatMap(result => result.status === 'fulfilled' ? [result.value.close()] : []));
     this.sessions.clear();
+    this.sendQueues.clear();
   }
 }

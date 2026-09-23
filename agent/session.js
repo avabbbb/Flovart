@@ -70,12 +70,20 @@ export class WorkflowAgentSession {
     response.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
     this.clients.set(clientId, response);
     sendEvent(response, 'hello', { ok: true, clientId });
-    const timer = setInterval(() => sendEvent(response, 'ping', { time: Date.now() }), 15000);
+    const timer = setInterval(() => {
+      try {
+        sendEvent(response, 'ping', { time: Date.now() });
+      } catch {
+        clearInterval(timer);
+      }
+    }, 15000);
     response.on('close', () => {
       clearInterval(timer);
       // A reconnect may reuse a client id before the old SSE response emits
-      // `close`. Never let the old response evict the replacement session.
-      if (this.clients.get(clientId) !== response) return;
+      // `close`. Never let the old response evict the replacement session; a
+      // client that was already removed must still run lease/pending cleanup.
+      const current = this.clients.get(clientId);
+      if (current && current !== response) return;
       this.clients.delete(clientId);
       this.snapshots.delete(clientId);
       this.workspaceLease.revokeClient(clientId);

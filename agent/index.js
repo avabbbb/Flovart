@@ -20,6 +20,17 @@ const PROJECT_ROOT = path.resolve(process.env.FLOVART_PROJECT_DIR || REPOSITORY_
 const WORKSPACE_ONLY = process.env.FLOVART_WORKSPACE_ONLY === '1';
 
 const json = (response, status, body) => {
+  // SSE 等流式端点可能已经写出响应头：二次 writeHead 会抛 ERR_HTTP_HEADERS_SENT
+  // 并击穿进程，此时只能降级为补写一行 SSE error 事件后收尾。
+  if (response.headersSent || response.writableEnded) {
+    try {
+      if (!response.writableEnded && !response.destroyed) {
+        response.write(`event: error\ndata: ${JSON.stringify(body)}\n\n`);
+        response.end();
+      }
+    } catch { /* connection already closed */ }
+    return;
+  }
   response.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' });
   response.end(JSON.stringify(body, (key, value) => key === 'stack' || key === 'cause' ? undefined : value));
 };
@@ -27,7 +38,8 @@ const json = (response, status, body) => {
 const MAX_BODY_BYTES = 36 * 1024 * 1024;
 
 const readBody = request => new Promise((resolve, reject) => {
-  let body = '';
+  // 用 Buffer 数组收集、end 时统一解码，避免字符串累加切断跨 chunk 的多字节 UTF-8 字符。
+  const chunks = [];
   let bytes = 0;
   let failed = false;
   request.on('data', chunk => {
@@ -38,25 +50,23 @@ const readBody = request => new Promise((resolve, reject) => {
       reject(new Error('request body too large'));
       return;
     }
-    body += chunk;
+    chunks.push(chunk);
   });
   request.on('end', () => {
     if (failed) return;
-    try { resolve(body ? JSON.parse(body) : {}); }
+    try { resolve(chunks.length ? JSON.parse(Buffer.concat(chunks).toString('utf8')) : {}); }
     catch (error) { reject(error); }
   });
   request.on('error', reject);
 });
 
 const requestToken = request => String(request.headers['x-flovart-agent-token'] || '');
-const validPersistentToken = (request, url, token) => {
-  const queryToken = url.searchParams.get('token');
-  const headerToken = requestToken(request);
-  return Boolean(token) && (queryToken === token || headerToken === token);
-};
+// 持久 token 只接受 header 通道，避免长期凭证经 URL query 泄漏到日志/历史；
+// 短期一次性 session token 保留 query 通道（EventSource 无法自定义 header）。
+const validPersistentToken = (request, token) => Boolean(token) && requestToken(request) === token;
 
 const validToken = (request, url, token, credentials) => (
-  validPersistentToken(request, url, token)
+  validPersistentToken(request, token)
   || credentials.isSessionToken(url.searchParams.get('token'))
   || credentials.isSessionToken(requestToken(request))
 );
@@ -70,23 +80,48 @@ function isLoopbackOrigin(origin) {
   }
 }
 
+function originTokenAllowed(request, url, config, credentials) {
+  return config.origin === request.headers.origin
+    || credentials.isSessionToken(url.searchParams.get('token'))
+    || credentials.isSessionToken(requestToken(request));
+}
+
 function setCors(request, response, url, config, credentials) {
   const origin = request.headers.origin;
-  response.setHeader('Access-Control-Allow-Origin', origin || '*');
-  response.setHeader('Access-Control-Allow-Headers', 'content-type,x-flovart-agent-token,x-flovart-bootstrap-token');
-  response.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-  response.setHeader('Access-Control-Allow-Private-Network', 'true');
-  if (!origin || request.method === 'OPTIONS' || url.pathname === '/health' || url.pathname === '/config') return true;
-  if (url.pathname === '/bootstrap/exchange') return isLoopbackOrigin(origin);
+  // 无 Origin 的本机 CLI/脚本调用没有 CORS 语义，不再无条件回写 ACAO。
+  if (!origin) return true;
+  response.setHeader('Vary', 'Origin');
+  const applyCorsHeaders = () => {
+    response.setHeader('Access-Control-Allow-Origin', origin);
+    response.setHeader('Access-Control-Allow-Headers', 'content-type,x-flovart-agent-token,x-flovart-bootstrap-token');
+    response.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+    response.setHeader('Access-Control-Allow-Private-Network', 'true');
+  };
+  // 预检响应体不会被页面脚本读取，数据面判定在随后的实际请求上执行；
+  // 首次绑定 origin 的 bootstrap 流程依赖预检可达。
+  if (request.method === 'OPTIONS') {
+    applyCorsHeaders();
+    return true;
+  }
+  if (url.pathname === '/bootstrap/exchange') {
+    if (isLoopbackOrigin(origin)) applyCorsHeaders();
+    return isLoopbackOrigin(origin);
+  }
   if (url.pathname === '/bootstrap/issue') return false;
-  if (config.origin !== origin && validPersistentToken(request, url, config.token)) {
+  // /health、/config 是无鉴权就绪探针：保持跨源可读（浏览器首连依赖），
+  // 未授权来源的响应字段已在路由层收敛为最小就绪信号。
+  if (url.pathname === '/health' || url.pathname === '/config') {
+    applyCorsHeaders();
+    return true;
+  }
+  // 其余端点先完成 origin/token 判定，仅判定通过时才回写 ACAO。
+  if (config.origin !== origin && validPersistentToken(request, config.token)) {
     config.origin = origin;
     saveAgentConfig(config);
   }
-  response.setHeader('Vary', 'Origin');
-  return config.origin === origin
-    || credentials.isSessionToken(url.searchParams.get('token'))
-    || credentials.isSessionToken(requestToken(request));
+  const allowed = originTokenAllowed(request, url, config, credentials);
+  if (allowed) applyCorsHeaders();
+  return allowed;
 }
 
 export function startHttpServer() {
@@ -118,32 +153,59 @@ export function startHttpServer() {
   };
 
   const server = http.createServer(async (request, response) => {
-    const url = new URL(request.url || '/', config.url);
-    bootstrapCredentials.expire();
-    if (!setCors(request, response, url, config, bootstrapCredentials)) return json(response, 403, { ok: false, error: 'origin not allowed' });
-    if (request.method === 'OPTIONS') return json(response, 200, { ok: true });
-    if (url.pathname === '/health') return json(response, 200, { ...session.health(), serviceMode: WORKSPACE_ONLY ? 'workspace-only' : 'agent' });
-    if (url.pathname === '/config') return json(response, 200, { ok: true, url: config.url, hasToken: true, originBound: Boolean(config.origin) });
-    if (request.method === 'POST' && url.pathname === '/bootstrap/issue') {
-      if (request.headers.origin || !validPersistentToken(request, url, config.token)) {
-        return json(response, 401, { ok: false, error: { code: 'BOOTSTRAP_ISSUE_UNAUTHORIZED', message: '只能由本机启动器签发 Browser bootstrap credential。' } });
+    let url;
+    try {
+      // 鉴权热路径纳入 try/catch：URL 解析、CORS/origin 判定、bootstrap 与
+      // token 校验的异常只影响当前请求，不再击穿进程。
+      url = new URL(request.url || '/', config.url);
+      bootstrapCredentials.expire();
+      if (!setCors(request, response, url, config, bootstrapCredentials)) return json(response, 403, { ok: false, error: 'origin not allowed' });
+      if (request.method === 'OPTIONS') return json(response, 200, { ok: true });
+      if (url.pathname === '/health') {
+        const health = session.health();
+        // 带 Origin 但未通过 origin/token 判定的调用（任意网站的脚本）只拿就绪信号；
+        // 本机 CLI/脚本（无 Origin）与已授权来源仍拿全量状态。
+        if (request.headers.origin && !originTokenAllowed(request, url, config, bootstrapCredentials)) {
+          return json(response, 200, { ok: true, serviceMode: WORKSPACE_ONLY ? 'workspace-only' : 'agent', hasWorkflow: Boolean(health.hasWorkflow) });
+        }
+        return json(response, 200, { ...health, serviceMode: WORKSPACE_ONLY ? 'workspace-only' : 'agent' });
       }
-      return json(response, 200, { ok: true, ...bootstrapCredentials.issue() });
-    }
-    if (request.method === 'POST' && url.pathname === '/bootstrap/exchange') {
-      try {
-        const exchanged = bootstrapCredentials.exchange(request.headers['x-flovart-bootstrap-token']);
-        return json(response, 200, { ok: true, ...exchanged });
-      } catch (error) {
-        const known = error instanceof BootstrapCredentialError ? error : new BootstrapCredentialError('BOOTSTRAP_INVALID', 'Browser bootstrap credential 无效。');
-        return json(response, 401, { ok: false, error: known.toJSON() });
+      if (url.pathname === '/config') {
+        if (request.headers.origin && !originTokenAllowed(request, url, config, bootstrapCredentials)) {
+          return json(response, 200, { ok: true });
+        }
+        return json(response, 200, { ok: true, url: config.url, hasToken: true, originBound: Boolean(config.origin) });
       }
+      if (request.method === 'POST' && url.pathname === '/bootstrap/issue') {
+        if (request.headers.origin || !validPersistentToken(request, config.token)) {
+          return json(response, 401, { ok: false, error: { code: 'BOOTSTRAP_ISSUE_UNAUTHORIZED', message: '只能由本机启动器签发 Browser bootstrap credential。' } });
+        }
+        return json(response, 200, { ok: true, ...bootstrapCredentials.issue() });
+      }
+      if (request.method === 'POST' && url.pathname === '/bootstrap/exchange') {
+        try {
+          const exchanged = bootstrapCredentials.exchange(request.headers['x-flovart-bootstrap-token']);
+          return json(response, 200, { ok: true, ...exchanged });
+        } catch (error) {
+          const known = error instanceof BootstrapCredentialError ? error : new BootstrapCredentialError('BOOTSTRAP_INVALID', 'Browser bootstrap credential 无效。');
+          return json(response, 401, { ok: false, error: known.toJSON() });
+        }
+      }
+      if (!validToken(request, url, config.token, bootstrapCredentials)) return json(response, 401, { ok: false, error: 'invalid token' });
+    } catch (error) {
+      return json(response, 500, { ok: false, error: { code: 'INTERNAL_ERROR', message: 'Agent 服务处理失败，请重试。' } });
     }
-    if (!validToken(request, url, config.token, bootstrapCredentials)) return json(response, 401, { ok: false, error: 'invalid token' });
 
     try {
       if (request.method === 'GET' && url.pathname === '/events') {
-        session.openEvents(url, response);
+        try {
+          session.openEvents(url, response);
+        } catch {
+          // openEvents 已写出 SSE 头时，json() 内部会降级为单行 error 事件收尾，
+          // 避免对已发送响应二次 writeHead。
+          json(response, 500, { ok: false, error: { code: 'INTERNAL_ERROR', message: 'Agent 服务处理失败，请重试。' } });
+          return;
+        }
         trackSse(response);
         return;
       }
@@ -250,14 +312,27 @@ export function startHttpServer() {
         }
         let packageResponse;
         try {
-          packageResponse = await fetch(new URL(`/api/skills/${encodeURIComponent(id)}/package.json`, hub.origin));
+          // 下载加 30s 超时，避免失联/恶意的 Skill Hub 挂住请求。
+          packageResponse = await fetch(new URL(`/api/skills/${encodeURIComponent(id)}/package.json`, hub.origin), { signal: AbortSignal.timeout(30_000) });
         } catch {
           return json(response, 502, { ok: false, error: { message: `无法从 Skill Hub 下载 ${id}。` } });
         }
         if (!packageResponse.ok) {
           return json(response, 502, { ok: false, error: { message: `Skill Hub 返回 HTTP ${packageResponse.status}。` } });
         }
-        const pkg = await packageResponse.json().catch(() => null);
+        let packageBuffer;
+        try {
+          packageBuffer = await packageResponse.arrayBuffer();
+        } catch {
+          return json(response, 502, { ok: false, error: { message: `无法从 Skill Hub 下载 ${id}。` } });
+        }
+        if (packageBuffer.byteLength > 8 * 1024 * 1024) {
+          return json(response, 400, { ok: false, error: { message: 'Skill 包超过 8MB 大小上限。' } });
+        }
+        let pkg = null;
+        try {
+          pkg = JSON.parse(Buffer.from(packageBuffer).toString('utf8'));
+        } catch { /* 解析失败走下方统一的 400 分支 */ }
         if (!pkg || typeof pkg !== 'object' || String(pkg.id) !== id) {
           return json(response, 400, { ok: false, error: { message: 'Skill 包格式无效。' } });
         }

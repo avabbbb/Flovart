@@ -41,7 +41,9 @@ async function loadBundledPackage(id) {
     }
   }
   if (!entries || !entries.length) return null;
-  const manifest = parse(entries.find(entry => entry.path === 'flovart.skill.yaml').content);
+  const manifestEntry = entries.find(entry => entry.path === 'flovart.skill.yaml');
+  if (!manifestEntry) throw new Error(`内置 Skill 缺少 flovart.skill.yaml：${id}`);
+  const manifest = parse(manifestEntry.content);
   return { manifest, entries, contentHash: await hashSkillPackageEntries(entries) };
 }
 

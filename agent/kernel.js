@@ -76,61 +76,74 @@ export class FlovartAgentKernel {
     this.systemPrompt = systemPrompt;
     this.resolveProductionSkill = resolveProductionSkill;
     this.listeners = new Set();
+    this.persistedProductionSkillBinding = null;
   }
 
   async openSession({ projectId, cwd }) {
     if (this.session) throw new Error('Flovart Agent session is already open');
     this.env = new NodeExecutionEnv({ cwd });
-    this.repo = new SqliteSessionRepo({
-      env: this.env,
-      sqlite: createNodeSqliteFactory(),
-      databasePath: this.databasePath,
-    });
-    const metadata = (await this.repo.list({ cwd }))
-      .find(item => item.metadata?.projectId === projectId && item.metadata?.role === 'main');
-    this.session = metadata
-      ? await this.repo.open(metadata)
-      : await this.repo.create({ cwd, metadata: { projectId, role: 'main' } });
-    const entries = await this.session.getBranch();
-    const persistedBinding = [...entries].reverse().find(entry => (
-      entry.type === 'custom' && entry.customType === PRODUCTION_SKILL_BINDING_ENTRY
-    ));
-    if (persistedBinding?.data) {
-      try {
-        this.boundProductionSkill = await this.resolveProductionSkill(persistedBinding.data);
-      } catch (error) {
-        this.productionSkillBindingError = error instanceof Error ? error.message : String(error);
+    try {
+      this.repo = new SqliteSessionRepo({
+        env: this.env,
+        sqlite: createNodeSqliteFactory(),
+        databasePath: this.databasePath,
+      });
+      const metadata = (await this.repo.list({ cwd }))
+        .find(item => item.metadata?.projectId === projectId && item.metadata?.role === 'main');
+      this.session = metadata
+        ? await this.repo.open(metadata)
+        : await this.repo.create({ cwd, metadata: { projectId, role: 'main' } });
+      const entries = await this.session.getBranch();
+      const persistedBinding = [...entries].reverse().find(entry => (
+        entry.type === 'custom' && entry.customType === PRODUCTION_SKILL_BINDING_ENTRY
+      ));
+      // 缓存持久绑定记录供 send() 判断：绑定解析失败时，显式解除也必须落
+      // null 记录，否则重启后旧绑定会从会话历史复活。
+      this.persistedProductionSkillBinding = persistedBinding?.data ?? null;
+      if (this.persistedProductionSkillBinding) {
+        try {
+          this.boundProductionSkill = await this.resolveProductionSkill(this.persistedProductionSkillBinding);
+        } catch (error) {
+          this.productionSkillBindingError = error instanceof Error ? error.message : String(error);
+        }
       }
+      const context = await this.session.buildContext();
+      const wrappedTools = this.tools.map(tool => tool.execute ? {
+        ...tool,
+        execute: (toolCallId, input, signal) => tool.execute(toolCallId, {
+          ...input,
+          ...(this.activeChangeSetId ? { changeSetId: this.activeChangeSetId } : {}),
+        }, signal),
+      } : tool);
+      this.agent = new Agent({
+        initialState: {
+          systemPrompt: this.boundProductionSkill
+            ? `${this.systemPrompt}\n\n${this.boundProductionSkill.systemContext}`
+            : this.systemPrompt,
+          model: this.model,
+          tools: wrappedTools,
+          messages: context.messages,
+        },
+        streamFn: this.streamFn,
+        beforeToolCall: async ({ toolCall }) => (
+          this.tools.some(tool => tool.name === toolCall.name)
+            ? undefined
+            : { block: true, reason: `未注册的 Flovart 工具：${toolCall.name}` }
+        ),
+      });
+      this.unsubscribe = this.agent.subscribe(async event => {
+        if (event.type === 'message_end') await this.session.appendMessage(event.message);
+        for (const listener of this.listeners) await listener(event);
+      });
+      return this.snapshot();
+    } catch (error) {
+      // 打开失败时清理已创建的 env（含半开的 session/repo 引用），再抛出原始错误。
+      try { await this.env.cleanup(); } catch { /* cleanup 尽力而为 */ }
+      this.env = undefined;
+      this.repo = undefined;
+      this.session = undefined;
+      throw error;
     }
-    const context = await this.session.buildContext();
-    const wrappedTools = this.tools.map(tool => tool.execute ? {
-      ...tool,
-      execute: (toolCallId, input, signal) => tool.execute(toolCallId, {
-        ...input,
-        ...(this.activeChangeSetId ? { changeSetId: this.activeChangeSetId } : {}),
-      }, signal),
-    } : tool);
-    this.agent = new Agent({
-      initialState: {
-        systemPrompt: this.boundProductionSkill
-          ? `${this.systemPrompt}\n\n${this.boundProductionSkill.systemContext}`
-          : this.systemPrompt,
-        model: this.model,
-        tools: wrappedTools,
-        messages: context.messages,
-      },
-      streamFn: this.streamFn,
-      beforeToolCall: async ({ toolCall }) => (
-        this.tools.some(tool => tool.name === toolCall.name)
-          ? undefined
-          : { block: true, reason: `未注册的 Flovart 工具：${toolCall.name}` }
-      ),
-    });
-    this.unsubscribe = this.agent.subscribe(async event => {
-      if (event.type === 'message_end') await this.session.appendMessage(event.message);
-      for (const listener of this.listeners) await listener(event);
-    });
-    return this.snapshot();
   }
 
   subscribe(listener) {
@@ -144,9 +157,12 @@ export class FlovartAgentKernel {
     if (!prompt && images.length === 0) throw new Error('Flovart Agent message is empty');
     this.activeChangeSetId = crypto.randomUUID();
     if (skillAttachment === null) {
-      if (this.boundProductionSkill) {
+      // 存在持久绑定记录或绑定解析失败时，解除操作都要落 null 记录，
+      // 否则重启后旧绑定会从会话历史复活。
+      if (this.boundProductionSkill || this.productionSkillBindingError || this.persistedProductionSkillBinding) {
         this.boundProductionSkill = undefined;
         this.productionSkillBindingError = undefined;
+        this.persistedProductionSkillBinding = null;
         this.agent.state.systemPrompt = this.systemPrompt;
         await this.session.appendCustomEntry(PRODUCTION_SKILL_BINDING_ENTRY, null);
       }
@@ -159,10 +175,13 @@ export class FlovartAgentKernel {
       this.boundProductionSkill = resolved;
       this.productionSkillBindingError = undefined;
       this.agent.state.systemPrompt = `${this.systemPrompt}\n\n${this.boundProductionSkill.systemContext}`;
-      if (changed) await this.session.appendCustomEntry(
-        PRODUCTION_SKILL_BINDING_ENTRY,
-        publicProductionSkill(this.boundProductionSkill),
-      );
+      if (changed) {
+        this.persistedProductionSkillBinding = publicProductionSkill(this.boundProductionSkill);
+        await this.session.appendCustomEntry(
+          PRODUCTION_SKILL_BINDING_ENTRY,
+          this.persistedProductionSkillBinding,
+        );
+      }
     }
     await this.agent.prompt(prompt, images);
     return this.snapshot();
@@ -200,6 +219,7 @@ export class FlovartAgentKernel {
     this.repo = undefined;
     this.boundProductionSkill = undefined;
     this.productionSkillBindingError = undefined;
+    this.persistedProductionSkillBinding = null;
     this.env = undefined;
   }
 }
