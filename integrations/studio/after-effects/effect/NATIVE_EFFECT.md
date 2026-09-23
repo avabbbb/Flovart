@@ -1,8 +1,27 @@
 # Flovart native effect — After Effects slice
 
-Milestone 1 of the [main design](../../../docs/design/flovart-native-effects.md) §5.2:
-prove host integration with a **fixed local asset** before any generation call.
-The panel package (`../`, CEP) is unchanged — a panel is not a native effect.
+Status: **PLANNED / READY FOR REAL SDK PROTOTYPE, NOT CERTIFIED**.
+
+This slice implements the fixed-artifact side of the [creative-host / native-effect design](../../../docs/design/flovart-native-effects.md#8-创作软件宿主与原生效果): prove that an AE effect can persist a durable local media version and render it deterministically before connecting generation.
+
+The sibling CEP panel is a separate Experimental light-panel path. A panel build does not certify this native effect, and a native-effect compile does not certify the panel.
+
+## Product/UI contract
+
+The first effect should feel like a normal After Effects effect, not a miniature Flovart web app.
+
+Use host-native Effect Controls / Timeline behavior wherever possible:
+
+| Control | Behavior | Keyframable | Notes |
+| --- | --- | --- | --- |
+| Source / Version | Pins a durable local artifact/version | no | Changing it never performs network generation inside render |
+| Blend / Mix | Mixes Flovart result with source | yes | Standard host parameter |
+| Status | Missing/unreadable/version state | no | Must fail visibly |
+| Open in Flovart / New Version | Optional command outside render | no | Only if current SDK/host integration can implement it safely |
+
+Do not duplicate Position, Scale, Mask, Feather, Tracking or generic transform tools that AE already provides.
+
+Only add custom Effect Controls or Composition/Layer UI if standard parameters cannot express the required interaction. Custom UI must use AE SDK event/coordinate callbacks and be tested under zoom, downsample and transformed layers.
 
 ## Files
 
@@ -10,58 +29,53 @@ The panel package (`../`, CEP) is unchanged — a panel is not a native effect.
 | --- | --- |
 | `FlovartEffect.cpp` | Single-entry-point AE Effect SDK skeleton (`EffectMain`). |
 | `FlovartEffect.r` | PiPL resource: name `Flovart Scene Replace`, match name `FLOVART_SceneReplace`. |
-| `asset-manifest.json` | Machine-readable parameter manifest, also copied into the build output and stamped by `studio:build`. |
+| `asset-manifest.json` | Machine-readable parameter/build manifest. |
 
-## Parameter manifest
+## Current skeleton parameters
 
 | # | Name | Type | Persisted | Keyframable | Default | Role |
 | --- | --- | --- | --- | --- | --- | --- |
-| 1 | Asset Path | path | yes | no | none | Pinned local media file this instance renders. Written by the generation pipeline; the render path only reads it. |
+| 1 | Asset Path | path | yes | no | none | Pinned local media file. This is a prototype representation of Source/Version and must be verified against the real SDK. |
 | 2 | Blend | float slider 0–100 % | yes | yes | 100 | Mix intensity: 0 = original frame, 100 = asset. |
-| 3 | Version | int slider 1–9999 | yes | no | 1 | Applied asset-version slot (V1, V2, …). Full version ids arrive with the generation pipeline. |
+| 3 | Version | int slider 1–9999 | yes | no | 1 | Prototype version slot. Durable artifact identity must not depend on this integer alone. |
 
-## Dataflow
+The production UI may replace `Asset Path + Version` with a safer artifact/version parameter representation after the real SDK prototype. Do not expose an editable raw path merely because the current skeleton stores one.
+
+## Render dataflow
 
 ```text
-Asset Path (pinned local file — the only file read in the render path)
-  -> decode source frame for the current integer output frame
-  -> blend over the input frame by Blend percent
+fixed durable artifact/version
+  -> decode source frame for current output time
+  -> blend over input frame by Mix
   -> return composited frame
 ```
 
-- The render path performs **no network access, no generation calls, and no
-  dependency on an agent, browser, or service being online** (main design §4.3).
-- A missing or undecoded asset passes the input frame through unchanged and
-  raises `PF_OutFlag_DISPLAY_ERROR_MESSAGE` — it never silently exports wrong
-  content (main design §3.3).
-- Pixel decode is not hand-rolled. The decoder library (OpenImageIO is the
-  candidate) and pixel format are locked at the real-SDK prototype; until then
-  `FLOVART_HAS_ASSET_DECODER` is undefined and the asset reports as missing.
-- Position, scale, mask, feather and keyframes stay on host-native controls;
-  this effect deliberately adds no transform/keying/tracking editor.
+Hard boundary:
+
+- render performs **no network access, generation call, Agent call or service wait**;
+- missing/unreadable media must be visible and must not silently export a wrong frame;
+- pixel decode uses a maintained decoder/library rather than a handwritten codec;
+- artifact metadata must eventually cover frame rate/time base, color space/transfer, alpha and pixel format.
 
 ## Build status
 
-`asset-manifest.json` reports `buildStatus: "needs-native-sdk"`. There is no
-AE Effect SDK or C++ toolchain on this build machine, so `npm run studio:build`
-copies the source package and marks it in the build log instead of producing an
-`.aex`. When a toolchain + SDK exist, set `FLOVART_AE_SDK_ROOT` (and
-`FLOVART_AE_EFFECT_CL` for the compiler if it is not on `PATH`) and rebuild.
+`asset-manifest.json` currently reports `buildStatus: "needs-native-sdk"`. The repository build does not contain an AE SDK/toolchain, so `npm run studio:build` copies the source package instead of producing a certified `.aex`.
 
-## External Gate — required before claiming host support
+When a real toolchain + SDK exist, verify all `SDK-VERIFY` markers against the installed/current Adobe SDK rather than assuming the skeleton signatures are final.
 
-This code is **ready for compile, not certified**. Nothing here certifies AE,
-PR, PS, or Resolve. Required real-host evidence:
+## External Gate
 
-1. **Real AE SDK compile** — build `FlovartEffect.cpp` + `FlovartEffect.r`
-   against the Adobe AE Effect SDK on Windows; verify every `SDK-VERIFY` mark
-   (path-param suite/signature, `PF_Param_PATH` naming, PiPL flag values).
-2. **Parameter save/reopen** — apply the effect to a layer, set all three
-   parameters, save the project, quit AE, reopen, and confirm the values
-   persist exactly.
-3. **Random-frame render** — scrub to arbitrary frames (not just frame 0) and
-   compare output pixels against an independently computed reference
-   (8-bit SDR, ≤1 per channel); confirm no wrong-frame or black-alpha output.
-4. **Offline export** — unplug the network, render/export the composition, and
-   verify the output is produced with zero generation requests and no missing
-   asset silently exported.
+Nothing here certifies After Effects, Premiere Pro, Photoshop or Resolve.
+
+Required real-host evidence is defined in [AFTER_EFFECTS_REAL_HOST_CHECKLIST.md](../../AFTER_EFFECTS_REAL_HOST_CHECKLIST.md), including:
+
+- real SDK compile;
+- Effect Controls/Timeline behavior;
+- parameter save/reopen;
+- keyframes;
+- random-frame pixel reference;
+- missing/moved artifact handling;
+- offline export;
+- color/alpha/pixel-format evidence.
+
+Only after those pass should `SUPPORT_MATRIX.md` be upgraded.

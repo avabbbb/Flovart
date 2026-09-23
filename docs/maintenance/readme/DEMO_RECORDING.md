@@ -75,7 +75,7 @@ Support Matrix status of what was used:
 
 ### 依赖的改动（否则这段录屏无法产生）
 
-录制过程中发现并修复了一个真实缺陷，详见 `README_CLAIM_AUDIT.md`（修复提交：`66ac1f7`）：
+录制过程中发现并修复了一个真实缺陷，该缺陷来自当时的 README/claim 审计（历史摘要见 `../../archive/historical-design/2026-09-23-readme-launch-audits.md`；修复提交：`66ac1f7`）：
 
 ```text
 services/agentConnectionBootstrap.ts

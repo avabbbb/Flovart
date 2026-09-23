@@ -25,8 +25,8 @@ onboarding 或宣传中呈现为与 Beta 路径同等就绪。`Stable` 只表示
 | --- | --- | --- |
 | Photoshop UXP panel | Experimental | `npm run studio:build`、manifest v4、shared `CreativeHostAdapter` 与 layer contract/mock tests；真实 UXP layer → I2I → new layer 是 External Gate |
 | Premiere Pro UXP panel | Experimental | `npm run studio:build`、manifest v5 / 25.6+、clip/frame contract/mock tests；真实 UXP → artifact → Project import 是 External Gate |
-| After Effects | Experimental | `dist-studio/after-effects` CEP panel 与 Link-injected layer bridge；真实 AE tracer 仍是 External Gate |
-| DaVinci Resolve Studio | Experimental | `dist-studio/resolve` Workflow Integration panel 与 Link-injected Media Pool bridge；真实 Studio tracer 仍是 External Gate |
+| After Effects | Experimental | 当前轻面板为 `dist-studio/after-effects` CEP/ExtendScript bridge；planned native effect 为独立 C++ Effect SDK 路径。不得假设 AE 已有可发布 UXP host；两条路径均需独立真实宿主认证 |
+| DaVinci Resolve Studio | Experimental | `dist-studio/resolve` 为 Workflow Integration Electron panel（sandbox/context isolation）；planned OFX 为独立路径。真实 Studio selection → artifact → Media Pool tracer 仍是 External Gate |
 
 ## Native effects and deeper Agent integration
 
@@ -67,8 +67,8 @@ Provider 一律 `Experimental` / unverified，不得写进 Beta 发布口径。
 | `dist-workbuddy/flovart` | Experimental artifact | 可生成并校验；需 WorkBuddy client/Marketplace certification |
 | `dist-studio/photoshop` | Experimental artifact | 可生成并校验；Link 注入的 materialize/import/controller 尚未在真实 Photoshop 运行 |
 | `dist-studio/premiere` | Experimental artifact | 可生成并校验；Link 注入的 frame/import/controller 尚未在真实 Premiere 运行 |
-| `dist-studio/after-effects` | Experimental artifact | 可生成并校验；CEP/ExtendScript bridge 与真实 AE layer tracer 尚未认证 |
-| `dist-studio/resolve` | Experimental artifact | 可生成并校验；Workflow Integration bridge 与真实 Studio Media Pool tracer 尚未认证 |
+| `dist-studio/after-effects` | Experimental artifact | CEP/ExtendScript light-panel artifact；真实 AE layer tracer 尚未认证，且不代表 C++ native effect |
+| `dist-studio/resolve` | Experimental artifact | Resolve Studio Workflow Integration artifact；真实 Media Pool tracer 尚未认证，且不代表 OFX effect |
 | `@flovart/dsh-plugin` | Experimental | RC8 profile 可安装；真实认证会话与完整 recovery 未完成 |
 | `tools/flovart/mcp-server.js` / `flovart-mcp` | Experimental artifact | canonical five-tool stdio projection 与 MCP SDK tests；真实 MCP Host import、Agent session 与 Provider path 未认证 |
 | Built-in Workflow node plugins | Experimental | trusted in-process code，故障隔离不是安全 sandbox |

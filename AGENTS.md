@@ -1,92 +1,126 @@
 # AGENTS.md
 
-本文件约束 Flovart 的 AI / 自动化开发。系统和开发者指令优先，其次是用户当前明确要求，再次是本文件及项目文档。用户已确认的决定跨轮次有效；旧设计不得覆盖新要求。
+本文件约束 Flovart 的 AI / 自动化开发。优先级：系统/开发者指令 > 用户当前明确要求 > 本文件 > 项目文档。用户已确认的新决定覆盖旧稿；历史文档不得反向改变当前产品方向。
 
-## 开始工作与讨论
+## 1. 开始前先确认当前事实
 
-- 先读相关现有代码、docs/index.md 和当前主设计 docs/design/flovart-native-effects.md，核对实现与目标的差距。
-- 仅在答案会实质改变产品范围、交互或实施路径时使用 ASK，一次问一个关键问题并给建议；能查代码回答的不要转问用户。用户要求直接执行时不强制启动访谈，不为已授权编辑、常规验证或普通收尾反复索要许可。未确认的实质取舍明确标为假设，不伪装成用户决定。
-- 以当前会话日期核验会变化的 SDK、官方接口、产品能力与许可证，优先官方文档和真实源码；简单本地编辑不强制多轮联网。不写死年份，不扮演或自称真实人物。
-- 回答使用中文，区分已实现、已验证、设计目标与待确认假设。包能构建、mock 通过和 SDK 存在都不代表真实宿主可用。
+开始任何实质修改前，先读：
+1. `docs/index.md`
+2. 与任务相关的 current-truth 文档
+3. 真实代码与 `SUPPORT_MATRIX.md`
 
-## 当前产品方向
+产品与系统目标唯一由 `docs/design/flovart-native-effects.md` 定义。不要从 archive、旧 audit、release evidence 或 Git 历史推导当前需求。
 
-- 当前顶栏产品 surface 固定为 **Canvas | Table | Agent**。
-- Canvas = 空间化 Workflow；Table = 结构化媒体处理；Agent = 本地/外部 Coding Agent 的发现、准备、状态与切换中心。
-- **内置 Assistant 不属于顶级 Agent 页**。它只在 Canvas/Table 右侧 contextual drawer 中，与 Context / History 并列。
-- 禁止重新引入 Agent full-page chat / Tasks / Artifacts / Context 工作区；禁止在 Agent 页再嵌 Assistant；禁止在 Assistant drawer 复制 Host picker。
-- 外部 Agent 与内置 Assistant 调用同一受控业务能力。CLI + Agent Integration Skill 是默认外部路径，MCP 是同一 operation contract 的可选投影。
-- Production Crew / Director / Operator / Production Skill Marketplace / Enterprise org-credit-approval 都不是当前必经产品层；遗留代码按真实调用点渐进清理，不因文档降级就整目录盲删。
-- 创作软件插件与原生效果继续作为重要宿主扩展方向，但不覆盖当前 Canvas | Table | Agent IA，也不要求所有生成任务必须经过插件。
-- 当前 Browser Workflow 绑定继续作为稳定 Agent operation 的可见权威；改造前不能假称已迁移到另一份 Native Draft/Runtime Workflow。
+会变化的 SDK、宿主 API、许可证、模型/Provider 能力必须按当前日期核验官方文档和真实源码。构建通过、mock 通过、manifest 存在都不等于真实宿主/账号已认证。
 
-## 首要工程原则：短路径、少状态、少层级
+## 2. 当前产品边界
 
-- 先用现有函数直接实现当前任务。只因真实复用、独立状态所有权或必要宿主/进程/凭据边界拆模块；不为未来假设建抽象。
-- 不新增只转发的 Manager、Facade、Coordinator、Service/Repository 包装或组件。既有 Go HTTP 分层按下面规则沿用，不把同样层级复制到每个插件。
-- 不为一个生成任务强制增加导演、制作组、意图队列、编译计划和多份状态投影。已有确定性工具直接执行，不再交另一个模型重新解释。
-- 同一任务只有一个执行者和一份状态记录；同一能力只有一份业务实现。CLI/MCP/面板只做入参、调用和结果转换，不逐层启动 CLI 子进程转发。
-- 新增一层必须说明解决的具体已复现问题及被替代的旧路径。能在同目录普通函数中解决就不拆包、注册中心、消息总线、通用插件内核或新微服务。
-- 抽象与接口在第二个真实使用场景出现时再提取；不为“所有模型/所有宿主”写大量分支。
-- 简洁不等于删掉错误处理、输入校验、目标绑定、幂等、取消、素材持久化和必要的费用授权。这些直接放在拥有对应状态的函数中。
-- 项目尚未上线，默认不写旧数据兼容、双轨模型和自动迁移兜底。涉及用户现有配置和素材时先明确保留范围，不以简化为由丢数据。
-- 不改无关文件，不顺手重构；先看 git status，保护已有用户改动。替换旧实现时只删已经确认被取代的部分。
-- 日期、协议、解析、压缩、加密、图像/视频编解码使用成熟库；不手写底层能力。
+顶级产品 surface 固定为 **Canvas | Table | Agent**：
 
-## 原生效果、文件与 Agent 边界
+- **Canvas**：空间化 Workflow，用户与 Agent 操作同一份可见生产状态。
+- **Table**：结构化媒体处理，不是第二份 Workflow authority。
+- **Agent**：本地/外部 Coding Agent 的发现、准备、状态与切换中心。
+- **Assistant / Context / History**：只在 Canvas/Table 的 contextual drawer 中，不复制到 Agent 页。
 
-- 生成路径为“入口 → 同一任务函数 → 现有 Provider → 持久素材版本”；渲染路径为“宿主效果 → 固定素材 → 当前帧”。不得在渲染回调请求网络、等待模型或依赖浏览器/Agent 在线。
-- 效果参数与关键帧由宿主工程保存；任务与媒体由本地服务保存。素材必须有来源、固定版本、校验和、帧率及色彩信息，不能仅靠临时 URL。
-- 生成完成先保存为候选，明确应用才替换当前效果版本。晚到任务不得覆盖新选择；撤销应用不删除已生成媒体。
-- 宿主导入后不得立即删除仍被工程引用的文件。打包、移动、重定位、关闭服务后重开与导出必须实测。
-- PS/PR/AE/Resolve 各按其真实 SDK、UI、线程和撤销机制实现。UXP 不是完整浏览器，不预设整套 Web UI 可直接复用。
-- Agent 不直接写 React/Zustand、本地项目数据库或 Provider 私有接口。外部调用必须校验明确工程/对象与期望版本；重试使用同一幂等键，未知提交先查询。
-- Codex/WorkBuddy 等优先官方 Skill、CLI、MCP、app-server/Open API；一个适配器的失败不应阻塞其他入口。未确认身份的 TeleAgent 不宣称支持。
-- 不读取、改写或迁移用户的 Plus/OAuth、代理或其他 Agent 私有凭据。Agent 的工具权限与模型生成费用授权分开；既有批准范围内不重复弹窗，扩大范围才再确认。
-- 当前浏览器直连 Provider 的 key 与 Desktop Runtime 凭据是两种实现边界。不能声称已经统一托管；连接器、项目、日志、Skill 和媒体元数据不携带原始 key。
+不要重新引入 Agent full-page chat、Tasks/Artifacts/Context 工作区、Production Crew / Director / Operator 必经层、Production Skill Marketplace 或第二套 Canvas/Workflow。
 
-## 代码约定
+外部 Agent 默认走 **Skill + CLI**；MCP 是同一 operation contract 的可选投影。内置 Assistant、宿主面板和外部 Agent 必须复用同一业务能力与权限边界。
 
-- 网站后端沿用 Go + Gin + GORM：handler 处理 HTTP，service 处理业务与校验，repository 处理数据库，model 定义结构。沿用 model.Query、Normalize 和分页筛选，业务响应保持 { code, data, msg }。
-- 本地 Runtime 已有 Rust/Tauri，CLI/Agent 已有 Node。沿用相应职责，不为原生效果复制第二套调度器或给本机请求增加 Go 云服务中转。
-- 前端沿用 React、TypeScript、Vite、Ant Design、Tailwind、Zustand，版本以 package.json/lockfile 为准。写 Ant Design 代码前参考 https://ant.design/llms-full.txt 并核对安装版本。
-- Web API 与 Provider 适配在 services/；跨页面状态在 stores/；共有 UI 副作用在 hooks/，功能私有 hook 留在同目录。
-- 已有全局 store/hook、配置和常量直接从对应入口读取，不层层透传。只在多个入口真实复用时提升共享代码。
-- Workflow 使用 components/workflow/、stores/workflow/；Table 使用 components/table/；Agent 使用 components/agent/；宿主代码使用 integrations/studio/。不新增旧 canvas/art 目录。
-- 组件用函数组件和现有 hooks，图标使用 lucide-react 或现有 Ant Design 图标，产品文案中文。单入口不拆只改名或转发 props 的包装组件。
-- 浏览器业务数据用 localforage，localStorage 仅放极小配置；不存业务列表、媒体/base64 或大 JSON。宿主长期素材用持久文件，不用浏览器存储替代。
-- 新增数据表时同步 docs/content/docs/backend/backend-database.mdx，并区分网站数据库与本地存储，不能用未来字段冒充已建表。
+## 3. 首要工程原则：短路径、单一权威
 
-## UI 与交互
+- 同一能力只保留一份业务实现；CLI/MCP/Host adapter 只做参数、权限上下文与结果转换。
+- 同一任务只有一个 durable identity 和一份状态；重试依赖幂等与查询，不复制任务。
+- 只有出现第二个真实复用场景、独立状态所有权或必要进程/凭据边界时才抽模块。
+- 不新增只转发的 Manager / Facade / Coordinator / Repository 层，不为未来假设建通用总线。
+- 确定性工具直接执行，不再交给第二个模型重新解释。
+- 不因“精简”删除目标绑定、revision、幂等、取消、错误恢复、费用授权、素材持久化或权限校验。
+- 不顺手改无关文件；保护已有用户改动。替换旧实现时，只删已证明被当前路径取代的部分。
 
-- 复用 CSS 变量、Ant Design token 和现有弹性布局；不硬编码黑白、stone/slate 色阶或在私有组件重复深浅色分支。
-- 顶部工具栏和状态低视觉重量：默认无边框、阴影或胶囊，仅轻微 hover。样式留在组件/功能目录，全局 CSS 只放基础变量、重置与跨页共用规则。
-- 保留 PromptBar 与 ElementToolbar 的既有产品交互。点击图片或视频内容本身必须显示两者，并验证挂载后的稳定渲染。
-- 图片节点尊重原始比例；本地拖入图片/视频不能只依赖 MIME。大媒体避免全量挂载播放器。
-- 持续任务反馈克制且不掩盖真实状态；需要弹性动画时用 motion spring，不用手写 CSS keyframes 模拟。
-- 新 UI 必须挂到真实入口并验证可见路径；未挂载组件、占位页面、孤立面板不算交付。Agent 不只作为 Workflow 右侧抽屉。
+## 4. Workflow、生成与素材
 
-## 验证与宣传
+当前 Browser Workflow 仍是稳定 Agent operation 的可见权威；迁移 authority 必须先改 contract，再改实现和文档。
 
-- 测试匹配改动风险：文档跑文档/链接检查；代码跑相关检查；原生效果进真实宿主。已有检查通过后不无理由重复或扩张测试。
-- 基准测试遵循主设计第 6 节；固定素材、宿主/模型/硬件版本，分开测插件正确性、生成质量和 Agent 成功率。阈值是目标，未测保持未测。
-- 不用旧提交的 build/test 数字作为当前能力或新效果的证据。真实登录、付费 Provider、宿主保存重开与导出必须独立验证。
-- 浏览器验收使用 Playwright 的 Chrome for Testing、动态隔离端口、--no-open；不得调用默认浏览器或把 37522/17373 当固定地址。Agent binding 经一次性 bootstrap 建立。
-- 所有本地测试、profile、CLI 临时配置和截图放当前 H: 工作区 .tmp/ 或 artifacts/，不用 C: Temp 或用户目录；测试结束关闭并清理 profile。
-- 宣传依实际支持矩阵：区分开发中、实验可用、真实宿主验证；不承诺未验证的实时 AI 生成、完全离线、多宿主全支持、无缝 Agent 记忆迁移或云同步。
+稳定 model-facing baseline：
+- `status`
+- `workflow.inspect`
+- `workflow.selection.get`
+- `workflow.apply`
+- `workflow.node.run`
 
-## 文档治理
+生成路径保持：
 
-- Current truth 只认 docs/index.md 列出的 7 份核心文档；主产品/系统目标唯一由 docs/design/flovart-native-effects.md 定义。只有必要且难逆转的决策才加短 ADR。
-- docs/index.md 是 AI 索引；docs/maintenance/agent/CONTEXT.md 只保留精简领域词，不放协议、表结构、接口或施工阶段。
-- 新决定覆盖旧稿时同步更新引用并从 active design tree 删除过时方案；Git 保留原文，必要时只在 docs/archive/historical-design/ 留一份蒸馏快照。禁止新增并列 CURRENT/TARGET/AUDIT/GOAL/HANDOFF 文档参与产品决策。
-- todo.mdx 只记录未完成工作；实际完成后移到 pending-test.mdx，用户验证后再更新 features.mdx。每次交付都核对这两份进度文档；文档完成不等于功能完成。
-- CHANGELOG.md 的 Unreleased 只保留版本级摘要，不复制施工流水。接口响应和数据库文档仍分别在 docs/content/docs/backend/api-response.mdx 与 backend-database.mdx。
-- README 简洁，区分当前能力与开发方向。README.md、README.en.md 和中文入口保留 rule34 访问计数器及 Downloads/Stars；计数是展示次数，不是独立访客。计数服务异常先实时验证，再换已验证兼容服务，不直接删除。
-- README 只用真实可访问界面的有内容截图；不以空白、设置或断连画面充当核心展示。Docker 静态路径、云同步和原生插件未验证前如实标注。
-- 文档不写会过期的“现在是某年”或无依据完成日期；证据中的版本、提交和实际测量条件需保留。
-- 用户反复强调的规则放到本文件最相关章节，用可执行措辞去重，不无限追加重复条目。
+```text
+UI / Agent / Host entry
+→ same generation/business function
+→ Provider adapter
+→ durable artifact/version
+→ Workflow / Table / Host consumer
+```
 
-## 发版本
+素材需要稳定来源、版本与校验信息；临时 URL、聊天消息、base64 不能冒充 durable artifact。晚到任务不能覆盖用户已选择的新版本。
 
-仅在用户明确要求发版本时执行：整理 CHANGELOG.md 的 Unreleased 为新版本并保留空标题，按当前版本号提升 VERSION，把当前全部未提交代码提交到 Git，再给该提交打对应版本 tag。发版本流程不编译、不测试、不构建，除非用户另有明确要求；不自行推送或发布。
+## 5. Creative host / native effect 规则
+
+宿主扩展只是 projection，不建立第二套 Workflow、Provider、任务或资产系统。详细产品/UI 设计以主设计 §8 为准。
+
+共同硬边界：
+
+- **宿主轻面板**负责当前 selection → intent/reference → plan → generate → import；复杂编排打开 Flovart Canvas。
+- **native effect / OFX**负责宿主参数、关键帧、固定版本预览与导出；render callback 不联网、不等待模型、不依赖 Agent/Flovart 在线。
+- 面板/Effect 默认新增结果，不静默覆盖当前素材；替换必须显式且可恢复。
+- UI 跟随宿主主题、密度、键盘/焦点和尺寸约束，不把完整 Web Canvas 缩进窄面板。
+
+Host-specific：
+
+- **After Effects**：当前 panel 是 Experimental CEP/ExtendScript bridge；native effect 走 C++ Effect SDK。不要假设 AE 已支持可发布的 UXP host，也不要把 panel 说成 native effect。
+- **DaVinci Resolve Studio**：Workflow Integration 使用 Electron sandbox + context isolation + preload/contextBridge；支持时优先 Promise API。Workflow Integration 与 planned OFX effect 是两条路径。
+- **Photoshop / Premiere**：按其当期官方 UXP host API 和 manifest 约束实现，不把浏览器 API 支持度投射到 UXP。
+- Provider key、Agent token、Plus/OAuth 或用户私有凭据不得进入宿主工程、Skill、日志或素材 metadata。
+
+真实宿主认证至少覆盖：安装、选择/目标绑定、生成/导入、取消/失败、保存重开、素材缺失、离线导出；native effect 还要覆盖参数持久化、随机帧、色彩/alpha/帧率与关键帧。
+
+## 6. UI 与交互
+
+- 复用现有 CSS 变量、Ant Design token 与 container-driven layout；不要重新引入 viewport inset 补丁。
+- 新 UI 必须挂到真实入口并验证可见路径；未挂载组件或 mock-only 面板不算交付。
+- PromptBar、ElementToolbar 和原始媒体比例行为按现有产品保持。
+- 持续任务显示真实状态，不能用动画掩盖未知提交、失败或 Provider 未响应。
+- 宿主面板优先单列、当前选择优先、一个主 CTA；高级设置折叠。完整历史/依赖/复杂 Workflow 回 Canvas。
+
+## 7. 代码边界
+
+- Web：React + TypeScript + Vite + Ant Design + Tailwind + Zustand，以 lockfile 为准。
+- 网站后端：Go + Gin + GORM，沿用现有 handler/service/repository/model 分工。
+- Local Runtime：Rust/Tauri；CLI/Agent：Node。不要为原生效果复制第二套调度器。
+- Workflow：`components/workflow/`、`stores/workflow/`；Table：`components/table/`；Agent：`components/agent/`；宿主：`integrations/studio/`。
+- 浏览器业务数据用 localforage；localStorage 只放极小配置。宿主长期素材必须是 durable file/artifact。
+- 新增数据表同步 `docs/content/docs/backend/backend-database.mdx`，不要用未来字段冒充已建表。
+
+## 8. 验证与发布口径
+
+- 测试匹配改动风险：文档跑 docs/link checks；代码跑相关测试；宿主/原生效果进真实应用。
+- 真实支持状态只由 `SUPPORT_MATRIX.md` 升级；旧 RC 数字、旧截图和旧 build 不能证明当前版本。
+- Provider 认证需区分 Fake fixture 与真实账号、扣费、429、取消和 unknown-submit。
+- 不宣传未验证的实时生成、宿主 Stable 支持、完全离线、云同步、无缝 Agent 登录态迁移或跨平台等价性。
+- 浏览器验收使用仓库规定的 Chrome for Testing / 动态隔离端口；临时测试文件放项目 `.tmp/` 或 `artifacts/`。
+
+## 9. 文档治理
+
+`docs/index.md` 定义 current truth。原则：
+
+- 主设计只保留一个；不要新增并列 CURRENT / TARGET / AUDIT / GOAL / HANDOFF 决策文档。
+- 产品设计变化直接更新主设计；Agent 专项更新 `agent-integration.md`；布局更新 `adaptive-layout.md`。
+- 新 proposal 必须明确 **PROPOSAL / REFERENCE**，被接受后蒸馏进 current truth，再删除或归档 proposal。
+- `todo.mdx` 只放未完成；已实现但需现实验证移到 `pending-test.mdx`；验证后再更新 features。
+- 历史施工包、README audit、阶段性 launch checklist 不留在 active tree；有长期价值的只保留一份简短 archive snapshot，细节由 Git history 保存。
+- README 保持 outcome-first，同时严格跟随 Support Matrix；不要复制内部 transport、端口或过时测试数字。
+
+## 10. 提问与执行
+
+只在答案会实质改变产品范围、不可逆数据/发布行为或实施路线时 ASK；一次只问一个关键问题并给建议。用户已明确要求直接执行时，不为常规编辑、验证和收尾重复索要许可。
+
+回答使用中文，并明确区分：**已实现 / 已验证 / 设计目标 / 假设**。
+
+## 11. 发版本
+
+只有用户明确要求发版本时才执行版本流程：整理 CHANGELOG、提升 VERSION、提交当前授权范围内的改动并打 tag。不要自行发布、推送第三方商店或做未授权的生产签名。

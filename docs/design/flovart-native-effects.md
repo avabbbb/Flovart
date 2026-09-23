@@ -123,17 +123,86 @@ Table 是独立的媒体处理视图，可以拥有自己的局部处理状态�
 
 ## 8. 创作软件宿主与原生效果
 
-AE / Premiere / Photoshop / Resolve 集成继续作为重要扩展方向。当前支持级别必须以 [Support Matrix](../../SUPPORT_MATRIX.md) 为准。
+AE / Premiere / Photoshop / Resolve 集成继续作为重要扩展方向。当前支持级别必须以 [Support Matrix](../../SUPPORT_MATRIX.md) 为准。宿主集成只是一组 projection，不创建第二套 Workflow、Provider、任务或权限模型。
 
-原生效果的目标约束仍成立：
+### 8.1 三层产品职责
+
+| 层 | 用户目的 | UI 原则 | 不承担 |
+| --- | --- | --- | --- |
+| **宿主轻面板 / Workflow Integration** | 从当前图层、素材或 clip 发起生成，把结果带回宿主 | 小、快、贴近宿主；只展示当前选择、参考、意图、模型/目标、执行状态与结果 | 完整画布、复杂编排、第二份历史/资产库 |
+| **原生 Effect / OFX** | 在宿主时间线/Effect Controls 中保存参数、关键帧与固定素材版本并稳定预览/导出 | 优先使用宿主原生参数与交互；效果实例就是工程的一部分 | 网络生成、Agent 会话、长任务调度 |
+| **Flovart Canvas** | 复杂 Workflow、跨素材编排、版本比较、依赖与 Agent 协作 | 完整视觉工作台 | 冒充宿主原生 Effect UI |
+
+宿主面板的核心闭环固定为：
+
+```text
+当前选择
+→ 描述想做什么 / 添加参考
+→ 选择必要的模型与输出位置
+→ 查看将要执行的生成计划
+→ 生成
+→ 结果作为新素材/新图层/Media Pool item 返回宿主
+→ 复杂修改时打开同一 Flovart Workflow
+```
+
+默认不要把完整 Canvas 塞进 300–400px 面板。面板只解决“当前宿主上下文里的下一步”，复杂工作显式展开到 Flovart。
+
+### 8.2 面板 UI 设计基线
+
+面板遵循宿主而不是 Flovart 网页首页的视觉重量：
+
+- 使用宿主主题、字号、控件密度和键盘焦点；品牌只保留低重量 wordmark/状态，不做大 Hero。
+- 首屏必须先显示**当前选择**和**下一动作**，不能先放模型市场、Provider 设置或历史大列表。
+- Prompt/intent 是主输入，但允许“当前选择作为参考”、附加参考和短 recipe；recipe 只是填充意图，不创建第二套 Production Skill 产品层。
+- 模型选择默认 `Auto`，只有用户需要控制成本/能力时展开；Provider key 永不进入宿主 panel。
+- “生成并添加”前，若会产生付费调用、多个变体或覆盖性动作，显示 compact plan/费用范围；范围不变时不重复确认。
+- 运行中展示真实阶段、取消/失败/重试语义；未知提交先查询，不把 timeout 当作“未发生”。
+- 结果默认以**新增**方式导入；替换/覆盖必须是明确动作，并保留上一版本引用。
+- History 只展示当前宿主会话/对象的最近结果；完整版本、依赖与跨项目历史回 Flovart Canvas。
+- 窄面板优先单列滚动；避免固定大缩略图、横向工具条和多级 tab。高级设置折叠，不与主 CTA 争视觉权重。
+- 面板断开 Flovart 时只显示可行动恢复状态（连接、重试、打开 Flovart），不暴露内部端口、Writer/Lease/Projection 术语。
+
+### 8.3 After Effects
+
+AE 当前分成两条明确路径，不能混写：
+
+1. **实验面板**：仓库当前仍是 CEP/ExtendScript bridge，只用于“选中图层 → Flovart 生成 → 新素材/新图层”的轻入口；它不等于 native effect，也不能因为 Adobe 正在推进 UXP 就宣称 AE 已迁 UXP。
+2. **原生效果**：使用 After Effects C++ Effect SDK。参数、关键帧、保存/重开与渲染由 Effect Controls / Timeline / Composition UI 承担；需要直接操控画面时才使用 SDK 的 custom ECW / Comp UI。
+
+原生 effect 第一版保持极小参数面：
+
+- **Source / Version**：固定到 durable local artifact，切换版本不触发网络；
+- **Blend / Mix**：可关键帧；
+- **Status**：素材缺失、版本不可读等明确状态；
+- **Open in Flovart / Generate new version**：如果宿主 API/面板能安全提供命令入口，它只发起异步任务，不进入 render callback。
+
+Position、Scale、Mask、Feather、Tracking 等宿主已有能力优先交给 AE 自己，不在 Flovart effect 里复制编辑器。
+
+Adobe 是否为 After Effects 提供可发布的 UXP host 路径必须以当期官方 host 文档为准；在此之前，CEP panel 与 C++ Effect SDK 分别按现状维护，不做“全量 Web UI 直接迁入 AE”的假设。
+
+### 8.4 DaVinci Resolve
+
+Resolve 第一阶段是 **Resolve Studio Workflow Integration** 轻面板，而不是声称嵌入 Inspector 的 native panel：
+
+- 从 `Workspace > Workflow Integrations` 打开；
+- 当前实现按 Electron sandbox + `contextIsolation` + preload/contextBridge 组织，不在 renderer 开 `nodeIntegration`；
+- 对支持 Promise API 的 Resolve 版本优先使用异步 API，避免 UI 因同步 scripting call 阻塞；
+- 首个闭环只做“当前 Media Pool / timeline selection → materialize → Flovart → Media Pool import”；
+- 在没有稳定 selection identity 与撤销语义前，不自动插入/替换 timeline item。
+
+Resolve 的 **OFX effect** 是另一条 planned 路径：效果实例保存固定版本和宿主参数，在 render path 仅读取本地素材；生成、下载、Agent 与费用确认都在效果渲染之外完成。
+
+### 8.5 原生效果共同约束
 
 - 生成任务异步产生固定素材版本；
 - 宿主预览/导出只读取固定素材，不在 render callback 请求网络；
 - 参数随宿主工程保存；
 - 保存重开、离线导出、素材移动/缺失必须真实验证；
-- 首批验证优先 Windows，其他平台按真实证据升级。
+- 首批验证优先 Windows，其他平台按真实证据升级；
+- 色彩空间、alpha、帧率、时间基准和像素格式必须进入 artifact metadata 与宿主验收，不用“看起来正常”替代验证；
+- UI/Effect 的“已加载”与 Provider/Agent 的“已连接”分开显示，避免把宿主可用性与在线生成能力绑死。
 
-这部分是 roadmap / host integration，不改变 Flovart 当前 Canvas | Table | Agent IA。
+宿主实现细节和真实验证清单见 `integrations/studio/`。这部分是 roadmap / host integration，不改变 Flovart 当前 Canvas | Table | Agent IA。
 
 ## 9. 响应式布局
 
