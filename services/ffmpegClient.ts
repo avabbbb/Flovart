@@ -22,6 +22,31 @@ import type { FFmpeg } from '@ffmpeg/ffmpeg';
 const SINGLE_THREAD_BASE = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm';
 const MULTI_THREAD_BASE = 'https://unpkg.com/@ffmpeg/core-mt@0.12.6/dist/esm';
 
+// TODO: 后续应本地打包 assets + SRI 校验，避免从 unpkg CDN 动态加载 ~31MB core
+const ACCEPTED_JS_TYPES = new Set(['text/javascript', 'application/javascript', 'application/x-javascript']);
+
+async function safeToBlobURL(url: string, expectedType: string): Promise<string> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`加载 ffmpeg core 失败 (HTTP ${res.status})：${url}`);
+  const contentType = (res.headers.get('Content-Type') || '').toLowerCase().split(';')[0].trim();
+  if (contentType) {
+    if (expectedType === 'text/javascript') {
+      if (!ACCEPTED_JS_TYPES.has(contentType)) {
+        throw new Error(`ffmpeg core Content-Type 校验失败：期望 JavaScript，实际 ${contentType}`);
+      }
+    } else if (expectedType === 'application/wasm') {
+      if (contentType !== 'application/wasm') {
+        throw new Error(`ffmpeg core Content-Type 校验失败：期望 application/wasm，实际 ${contentType}`);
+      }
+    }
+  }
+  const blob = await res.blob();
+  if (blob.size < 1024) {
+    throw new Error(`ffmpeg core 文件过小（${blob.size} bytes），可能下载不完整：${url}`);
+  }
+  return URL.createObjectURL(new Blob([blob], { type: expectedType }));
+}
+
 let ffmpegInstance: FFmpeg | null = null;
 let loadingPromise: Promise<FFmpeg> | null = null;
 
@@ -31,17 +56,16 @@ export async function getFFmpeg(): Promise<FFmpeg> {
 
   loadingPromise = (async () => {
     const { FFmpeg } = await import('@ffmpeg/ffmpeg');
-    const { toBlobURL } = await import('@ffmpeg/util');
     const ffmpeg = new FFmpeg();
 
     if (isMultiThreadAvailable()) {
-      const coreURL = await toBlobURL(`${MULTI_THREAD_BASE}/ffmpeg-core.js`, 'text/javascript');
-      const wasmURL = await toBlobURL(`${MULTI_THREAD_BASE}/ffmpeg-core.wasm`, 'application/wasm');
-      const workerURL = await toBlobURL(`${MULTI_THREAD_BASE}/ffmpeg-core.worker.js`, 'text/javascript');
+      const coreURL = await safeToBlobURL(`${MULTI_THREAD_BASE}/ffmpeg-core.js`, 'text/javascript');
+      const wasmURL = await safeToBlobURL(`${MULTI_THREAD_BASE}/ffmpeg-core.wasm`, 'application/wasm');
+      const workerURL = await safeToBlobURL(`${MULTI_THREAD_BASE}/ffmpeg-core.worker.js`, 'text/javascript');
       await ffmpeg.load({ coreURL, wasmURL, workerURL });
     } else {
-      const coreURL = await toBlobURL(`${SINGLE_THREAD_BASE}/ffmpeg-core.js`, 'text/javascript');
-      const wasmURL = await toBlobURL(`${SINGLE_THREAD_BASE}/ffmpeg-core.wasm`, 'application/wasm');
+      const coreURL = await safeToBlobURL(`${SINGLE_THREAD_BASE}/ffmpeg-core.js`, 'text/javascript');
+      const wasmURL = await safeToBlobURL(`${SINGLE_THREAD_BASE}/ffmpeg-core.wasm`, 'application/wasm');
       await ffmpeg.load({ coreURL, wasmURL });
     }
 

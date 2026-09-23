@@ -138,20 +138,33 @@ async function toDataUrl(blob: Blob): Promise<string> {
   });
 }
 
-async function mediaResult(result: Extract<UnifiedIgnitionResult, { ok: true }>, mode: 'image' | 'video', runtime: WorkflowGenerationRuntime) {
+async function mediaResult(
+  result: Extract<UnifiedIgnitionResult, { ok: true }>,
+  mode: 'image' | 'video',
+  runtime: WorkflowGenerationRuntime,
+  signal?: AbortSignal,
+) {
+  let record: WorkflowMediaRecord | undefined;
   try {
     const blob = /^data:/i.test(result.mediaUrl)
       ? await workflowDataUrlToBlob(result.mediaUrl)
-      : await (runtime.fetchMedia || (href => fetch(href).then(response => {
+      : await (runtime.fetchMedia || (href => fetch(href, {
+        // 产物下载同时受外层取消（停止生成/新 run 抢占）与 120s 超时约束，避免无限挂起。
+        signal: signal
+          ? AbortSignal.any([signal, AbortSignal.timeout(120_000)])
+          : AbortSignal.timeout(120_000),
+      }).then(response => {
         if (!response.ok) throw new Error('无法下载生成结果');
         return response.blob();
       })))(result.mediaUrl);
     const extension = mode === 'video' ? 'mp4' : 'png';
     const file = typeof File === 'undefined' ? Object.assign(blob, { name: `workflow-result.${extension}`, lastModified: Date.now() }) as File : new File([blob], `workflow-result.${extension}`, { type: result.mimeType || blob.type, lastModified: Date.now() });
-    const record = await (runtime.ingestMedia || ingestWorkflowMedia)(file);
+    record = await (runtime.ingestMedia || ingestWorkflowMedia)(file);
     // 远端临时 URL（RunningHub 等 24h 链接）只进 provenance；节点媒体以本地 storageKey 为准。
     return { blob, record: result.remoteMediaUrl ? { ...record, remoteUrl: result.remoteMediaUrl } : record };
   } finally {
+    // 外层已中止时丢弃刚入库的半成品引用，避免悬挂媒体残留。
+    if (signal?.aborted && record) await discardWorkflowMediaRecord(record.storageKey).catch(() => undefined);
     if (result.mediaUrl.startsWith('blob:')) URL.revokeObjectURL(result.mediaUrl);
   }
 }
@@ -501,7 +514,7 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
       }
       if (usage) await updateApiUsage(usage.id, { status: 'succeeded' });
       if (!stillActive()) throw abortError();
-      const { blob, record } = await mediaResult(result, mode, runtime);
+      const { blob, record } = await raceAbort(mediaResult(result, mode, runtime, controller.signal), controller.signal);
       if (!stillActive()) {
         await discardWorkflowMediaRecord(record.storageKey);
         throw abortError();
@@ -592,7 +605,7 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
         connections: [...latest.connections, ...preparedConnections],
       };
     } else {
-      current = patchInitiator(current, nodeId, { status: 'success' as const, error: undefined, progress: 100, generationRequestId: undefined, generationStartedAt: undefined, generationMessage: undefined });
+      current = patchInitiator(canonical(runtime, current), nodeId, { status: 'success' as const, error: undefined, progress: 100, generationRequestId: undefined, generationStartedAt: undefined, generationMessage: undefined });
     }
     if (operationTakeId) {
       const operation = current.nodes.find(node => node.id === nodeId);

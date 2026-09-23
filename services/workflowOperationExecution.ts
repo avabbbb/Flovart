@@ -312,8 +312,12 @@ export async function commitWorkflowOperation(
       draftVersion: (latest.draftVersion || 1) + 1,
       updatedAt: new Date().toISOString(),
     };
-    await runtime.onProjectChange(next);
-    records.forEach(recordItem => releaseWorkflowMediaRecord(recordItem.storageKey));
+    try {
+      await runtime.onProjectChange(next);
+    } finally {
+      // onProjectChange 抛错（持久化失败等）也必须释放 ingest 持有的引用，避免媒体引用泄漏。
+      records.forEach(recordItem => releaseWorkflowMediaRecord(recordItem.storageKey));
+    }
     return { status: 'committed', project: next };
   }
 
@@ -333,8 +337,12 @@ export async function commitWorkflowOperation(
     draftVersion: (latest.draftVersion || 1) + 1,
     updatedAt: new Date().toISOString(),
   };
-  await runtime.onProjectChange(next);
-  records.forEach(record => releaseWorkflowMediaRecord(record.storageKey));
+  try {
+    await runtime.onProjectChange(next);
+  } finally {
+    // onProjectChange 抛错（持久化失败等）也必须释放 ingest 持有的引用，避免媒体引用泄漏。
+    records.forEach(record => releaseWorkflowMediaRecord(record.storageKey));
+  }
   return { status: 'committed', project: next };
 }
 

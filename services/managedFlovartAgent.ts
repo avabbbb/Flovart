@@ -48,7 +48,12 @@ function parseSseBlock(block: string) {
     if (line.startsWith('data:')) data.push(line.slice(5).trimStart());
   });
   if (!type || !data.length) return undefined;
-  return { type, data: JSON.parse(data.join('\n')) };
+  try {
+    return { type, data: JSON.parse(data.join('\n')) };
+  } catch (error) {
+    console.warn('[FlovartAgent] 忽略无法解析的 SSE 数据块。', error);
+    return undefined;
+  }
 }
 
 export class ManagedFlovartAgentClient {

@@ -44,7 +44,7 @@ function displayModel(modelId?: string) {
 }
 
 function findService(keys: UserApiKey[], mediaType: 'image' | 'video') {
-  const key = keys.find(item => item.capabilities.includes(mediaType)) || keys[0];
+  const key = keys.find(item => item.capabilities?.length ? item.capabilities.includes(mediaType) : false) || keys[0];
   return key ? (key.name || PROVIDER_LABELS[key.provider] || '当前 AI 服务') : '当前 AI 服务';
 }
 

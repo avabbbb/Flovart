@@ -57,12 +57,12 @@ export async function runPreflight(
   }
 
   if (caps.promptOptimization && options.optimize !== false && prompt.trim()) {
-    const route = await resolveRouteMappingForSubmit(
-      { kind: 'runtime-capability', capability: 'prompt-enhancement' },
-      userApiKeys,
-      options.confirmRouteFallback,
-    );
     try {
+      const route = await resolveRouteMappingForSubmit(
+        { kind: 'runtime-capability', capability: 'prompt-enhancement' },
+        userApiKeys,
+        options.confirmRouteFallback,
+      );
       const optimized = await generateTextWithProvider(
         `${OPTIMIZATION_SYSTEM_PROMPT}\n\n[原始提示词]\n${prompt}`,
         route.routeId,
@@ -74,6 +74,8 @@ export async function runPreflight(
         result.skippedOptimization = false;
       }
     } catch {
+      // 映射未配置 / 备用线路未确认 / 优化请求失败时跳过优化，
+      // 继续用原始提示词生成，而不是让整次生成失败。
       result.skippedOptimization = true;
     }
   }

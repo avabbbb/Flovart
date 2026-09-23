@@ -1039,9 +1039,9 @@ export async function generateTextWithProvider(
 
     if (provider === 'google') {
         const googleBase = key?.baseUrl ? normalizeProviderBaseUrl('google', key.baseUrl) : getGeminiRestBaseUrl();
-        const response = await fetch(`${googleBase}/models/${encodeURIComponent(mappedModel)}:generateContent?key=${encodeURIComponent(apiKey)}`, {
+        const response = await fetch(`${googleBase}/models/${encodeURIComponent(mappedModel)}:generateContent`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
             signal: options?.signal,
             body: JSON.stringify({
                 systemInstruction: options?.systemPrompt ? { parts: [{ text: options.systemPrompt }] } : undefined,
@@ -2161,15 +2161,22 @@ export async function reversePromptWithProvider(
     const instruction = buildReversePromptInstruction(lang, meta);
     const provider = resolveGenerationProvider(model, key);
 
+    // 统一物化非 data: 输入（blob: 与远程 URL），避免把整串 URL 当 base64 发给供应商
+    if (!imageHref.startsWith('data:')) {
+        const fetched = await fetchImageUrlToBase64(imageHref);
+        imageHref = `data:${fetched.newImageMimeType};base64,${fetched.newImageBase64}`;
+        mimeType = fetched.newImageMimeType;
+    }
+
     if (provider === 'google') {
         const apiKey = requireApiKey(provider, key);
         const effectiveModel = model || 'gemini-2.5-flash';
         const base64Data = imageHref.includes(',') ? imageHref.split(',')[1] : imageHref;
         const googleBase = key?.baseUrl ? normalizeProviderBaseUrl('google', key.baseUrl) : getGeminiRestBaseUrl();
-        const url = `${googleBase}/models/${encodeURIComponent(effectiveModel)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+        const url = `${googleBase}/models/${encodeURIComponent(effectiveModel)}:generateContent`;
         const response = await fetch(url, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
             body: JSON.stringify({
                 contents: [{
                     parts: [
@@ -2254,9 +2261,7 @@ export async function reversePromptWithProvider(
         ? buildOpenRouterHeaders(apiKey)
         : buildProviderHeaders(apiKey, key);
 
-    const imageContent = imageHref.startsWith('data:')
-        ? { type: 'image_url' as const, image_url: { url: imageHref } }
-        : { type: 'image_url' as const, image_url: { url: imageHref } };
+    const imageContent = { type: 'image_url' as const, image_url: { url: imageHref } };
 
     const response = await fetch(`${baseUrl}/chat/completions`, {
         method: 'POST',
@@ -2302,15 +2307,22 @@ export async function reversePromptStreamWithProvider(
     const provider = resolveGenerationProvider(model, key);
     let full = '';
 
+    // 统一物化非 data: 输入（blob: 与远程 URL），避免把整串 URL 当 base64 发给供应商
+    if (!imageHref.startsWith('data:')) {
+        const fetched = await fetchImageUrlToBase64(imageHref, signal);
+        imageHref = `data:${fetched.newImageMimeType};base64,${fetched.newImageBase64}`;
+        mimeType = fetched.newImageMimeType;
+    }
+
     if (provider === 'google') {
         const apiKey = requireApiKey(provider, key);
         const effectiveModel = model || 'gemini-2.5-flash';
         const base64Data = imageHref.includes(',') ? imageHref.split(',')[1] : imageHref;
         const googleBase = key?.baseUrl ? normalizeProviderBaseUrl('google', key.baseUrl) : getGeminiRestBaseUrl();
-        const url = `${googleBase}/models/${encodeURIComponent(effectiveModel)}:streamGenerateContent?alt=sse&key=${encodeURIComponent(apiKey)}`;
+        const url = `${googleBase}/models/${encodeURIComponent(effectiveModel)}:streamGenerateContent?alt=sse`;
         const response = await fetch(url, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
             signal,
             body: JSON.stringify({
                 contents: [{
@@ -2412,9 +2424,7 @@ export async function reversePromptStreamWithProvider(
         ? buildOpenRouterHeaders(apiKey)
         : buildProviderHeaders(apiKey, key);
 
-    const imageContent = imageHref.startsWith('data:')
-        ? { type: 'image_url' as const, image_url: { url: imageHref } }
-        : { type: 'image_url' as const, image_url: { url: imageHref } };
+    const imageContent = { type: 'image_url' as const, image_url: { url: imageHref } };
 
     const response = await fetch(`${baseUrl}/chat/completions`, {
         method: 'POST',
@@ -2476,7 +2486,7 @@ export async function generateImageWithProvider(
     model: string,
     key?: UserApiKey,
     images?: VideoImage[],
-    options?: { signal?: AbortSignal; aspectRatio?: VideoAspectRatio; resolution?: string; quality?: string; webSearch?: boolean; resumeProviderTaskId?: string; onProviderTaskLifecycle?: (event: ProviderTaskLifecycleEvent) => void | Promise<void> },
+    options?: { signal?: AbortSignal; aspectRatio?: VideoAspectRatio; resolution?: string; quality?: string; webSearch?: boolean; resumeProviderTaskId?: string; onProviderTaskLifecycle?: (event: ProviderTaskLifecycleEvent) => void | Promise<void>; onProgress?: (message: string) => void },
 ): Promise<{ newImageBase64: string | null; newImageMimeType: string | null; textResponse: string | null; /** 仅供溯源：远端图片原始 URL（RunningHub 等 24h 临时链接）；本地 base64 仍为内容来源。 */ remoteMediaUrl?: string }> {
     assertResolvedUpstreamModel(model);
     const provider = resolveGenerationProvider(model, key);
@@ -2500,9 +2510,17 @@ export async function generateImageWithProvider(
     }
     const refs = limitProviderImageInputs(images ?? [], provider, model, key);
 
+    // 统一物化 blob: 等本地引用（非 data: / 非 http(s)）为 data: URL，避免直接发给远程供应商。
+    // http(s) 与 data: 可直传 openrouter/generic 分支；RunningHub/OpenAI 分支有自己的物化流程。
+    const materializedRefs = await Promise.all(refs.map(async image => {
+        if (/^data:/i.test(image.href) || /^https?:\/\//i.test(image.href)) return image;
+        const fetched = await fetchImageUrlToBase64(image.href, options?.signal);
+        return { ...image, href: `data:${fetched.newImageMimeType};base64,${fetched.newImageBase64}`, mimeType: fetched.newImageMimeType };
+    }));
+
     if (provider === 'google') {
         if (isGoogleImageEditModel(model)) {
-            return editImage(refs, prompt, undefined, key?.key, options?.signal, {
+            return editImage(materializedRefs, prompt, undefined, key?.key, options?.signal, {
                 model,
                 aspectRatio: options?.aspectRatio === 'adaptive' ? undefined : options?.aspectRatio,
                 imageSize: options?.resolution,
@@ -2517,7 +2535,7 @@ export async function generateImageWithProvider(
         const apiKey = requireApiKey(provider, key);
         const baseUrl = getBaseUrl(provider, key);
         const modelEndpoint = assertRunningHubModelEndpoint(mapProviderModel(model, key) || key?.defaultModel || model);
-        const runningHubRefs = await prepareRunningHubReferences(apiKey, refs, {
+        const runningHubRefs = await prepareRunningHubReferences(apiKey, materializedRefs, {
             baseUrl,
             signal: options?.signal,
         });
@@ -2538,6 +2556,7 @@ export async function generateImageWithProvider(
             // path; without this an image submit leaves no taskId to resume).
             resumeTaskId: options?.resumeProviderTaskId,
             onTaskId: taskId => options?.onProviderTaskLifecycle?.({ phase: 'submitted', providerTaskId: taskId, submittedAt: Date.now() }),
+            ...(options?.onProgress ? { onProgress: (status: string, attempt: number) => options.onProgress!(`RunningHub ${status} (${attempt})`) } : {}),
         });
         const imageUrl = extractRunningHubMediaUrl(result, 'image');
         if (!imageUrl) {
@@ -2555,7 +2574,7 @@ export async function generateImageWithProvider(
         const apiKey = requireApiKey(provider, key);
         const baseUrl = getBaseUrl(provider, key);
         const content: any[] = [{ type: 'text', text: prompt }];
-        for (const image of refs) {
+        for (const image of materializedRefs) {
             content.push({ type: 'image_url', image_url: { url: image.href } });
         }
         const response = await fetch(`${baseUrl}/chat/completions`, {
@@ -2596,8 +2615,8 @@ export async function generateImageWithProvider(
         const imageSize = getOpenAIImageSize(options?.resolution, options?.aspectRatio);
 
         // With reference images: use /images/edits (multipart) or chat/completions fallback
-        if (refs.length > 0) {
-            const materializedRefs = await materializeOpenAIImageReferences(refs, options?.signal);
+        if (materializedRefs.length > 0) {
+            const formRefs = await materializeOpenAIImageReferences(materializedRefs, options?.signal);
             const formData = new FormData();
             formData.append('model', mappedModel);
             formData.append('prompt', prompt);
@@ -2613,7 +2632,7 @@ export async function generateImageWithProvider(
                 output_compression: key?.extraConfig?.outputCompression ? Number(key.extraConfig.outputCompression) : undefined,
             }));
 
-            materializedRefs.forEach((image, index) => {
+            formRefs.forEach((image, index) => {
                 const parsed = parseDataUrl(image.href, image.mimeType);
                 formData.append(
                     'image',
@@ -2645,7 +2664,7 @@ export async function generateImageWithProvider(
             // Custom fallback: chat/completions with images
             if (provider === 'custom') {
                 const chatContent: any[] = [{ type: 'text', text: prompt }];
-                for (const image of materializedRefs) {
+                for (const image of formRefs) {
                     chatContent.push({ type: 'image_url', image_url: { url: image.href } });
                 }
                 const chatResponse = await fetch(`${baseUrl}/chat/completions`, {
@@ -2734,7 +2753,7 @@ export async function generateImageWithProvider(
     const baseUrl = getBaseUrl(provider, key);
     const mappedModel = mapProviderModel(model, key);
     const content: any[] = [{ type: 'text', text: prompt }];
-    for (const image of refs) {
+    for (const image of materializedRefs) {
         content.push({ type: 'image_url', image_url: { url: image.href } });
     }
 
@@ -2891,7 +2910,7 @@ export async function editImageWithProvider(
         // Custom fallback: 通过 chat/completions 进行图片编辑
         if (provider === 'custom' || provider === 'openai_compatible') {
             const content: any[] = [{ type: 'text', text: prompt }];
-            for (const image of images) {
+            for (const image of inputImages) {
                 content.push({ type: 'image_url', image_url: { url: image.href } });
             }
             if (options?.mask) {
@@ -3185,7 +3204,7 @@ export async function cancelSeedanceVideoTask(
             || raw?.data?.cancelled === true
             || raw?.code === 0
             || raw?.success === true
-            || (route === 'ark' && res.status === 200 && raw == null);
+            || (route === 'ark' && (res.status === 200 || res.status === 204) && raw == null);
         return {
             canceled: Boolean(okFlag),
             reason: okFlag ? 'ok' : 'not_cancellable',
@@ -3353,11 +3372,15 @@ export async function generateVideoWithProvider(
     const firstImageSlot = multimodalSlots.find(slot => slot.kind === 'image' && slot.role === 'first_frame')
         || multimodalSlots.find(slot => slot.kind === 'image');
     const usesFirstFrame = !options?.generationSubmode || options.generationSubmode === 'image-to-video' || options.generationSubmode === 'first-last-frame';
-    const firstFrame = usesFirstFrame
+    const rawFirstFrame = usesFirstFrame
         ? references.find(r => r.slotRole === 'first_frame')
             || references[0]
             || (firstImageSlot ? { href: firstImageSlot.href, mimeType: firstImageSlot.mimeType, slotRole: String(firstImageSlot.role || 'unassigned') } : undefined)
         : undefined;
+    // 物化 blob: 引用为 data: URL — MiniMax/Keling/xAI 直传分支无法访问本地 blob:
+    const firstFrame = rawFirstFrame && /^blob:/i.test(rawFirstFrame.href)
+        ? { ...rawFirstFrame, href: await blobToDataUrl(rawFirstFrame.href) }
+        : rawFirstFrame;
     throwIfAborted(options?.signal);
 
     if (provider === 'runningHub') {
@@ -3608,7 +3631,8 @@ export async function generateVideoWithProvider(
             if (!videoSlot) {
                 throw new Error('xAI 视频扩展至少需要 1 个视频素材作为驱动视频。');
             }
-            createBody.video = { url: videoSlot.href };
+            // 物化 blob: 引用为 data: URL — xAI 直传分支无法访问本地 blob:
+            createBody.video = { url: /^blob:/i.test(videoSlot.href) ? await blobToDataUrl(videoSlot.href) : videoSlot.href };
             if (options?.durationSec != null) {
                 createBody.duration = options.durationSec;
             }
@@ -3884,6 +3908,9 @@ export async function executeUnifiedIgnition(input: UnifiedIgnitionInput): Promi
             resolution: params.resolution,
             quality: params.quality,
             webSearch: params.webSearch,
+            resumeProviderTaskId: input.resumeProviderTaskId,
+            onProviderTaskLifecycle: input.onProviderTaskLifecycle,
+            onProgress: message => input.onProgress?.(35, message),
         });
 
         if (!result.newImageBase64 || !result.newImageMimeType) {

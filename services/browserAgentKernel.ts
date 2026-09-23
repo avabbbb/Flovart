@@ -657,7 +657,6 @@ export class BrowserAgentKernel {
     this.unsubscribe?.();
     this.unsubscribe = null;
     this.session = await this.repo.open({ id: sessionId });
-    await this.buildAgent();
     const entries = await this.session.getBranch();
     const persistedBinding = [...entries].reverse().find((entry): entry is Extract<typeof entry, { type: 'custom'; customType: string; data?: unknown }> => (
       entry.type === 'custom' && entry.customType === PRODUCTION_SKILL_BINDING_ENTRY
@@ -672,6 +671,7 @@ export class BrowserAgentKernel {
         this.productionSkillBindingError = displayError(error, '技能绑定恢复失败。');
       }
     }
+    await this.buildAgent();
     this.emit({ type: 'session_switched' });
     return this.snapshot();
   }
@@ -698,6 +698,7 @@ export class BrowserAgentKernel {
     if (!this.agent || !this.session) throw new Error('Flovart Agent session is not open');
     const prompt = String(text || '').trim();
     if (!prompt && images.length === 0) throw new Error('Flovart Agent message is empty');
+    if (images.length > 0) throw new Error('Browser Agent 暂不支持发送图片，仅支持文本消息。');
     this.activeChangeSetId = crypto.randomUUID();
 
     if (skillAttachment === null) {
@@ -713,7 +714,7 @@ export class BrowserAgentKernel {
         || this.boundProductionSkill.version !== skillAttachment.version
         || this.boundProductionSkill.contentHash !== skillAttachment.contentHash;
       this.boundProductionSkill = skillAttachment;
-      this.productionSkillBindingError = undefined;
+      this.productionSkillBindingError = null;
       const bundled = getBundledProductionSkill(skillAttachment.id);
       this.agent.state.systemPrompt = `${this.systemPrompt}\n\n${bundled ? bundled.skillSource.slice(0, 2000) : skillAttachment.displayName}`;
       if (changed) await this.session.appendCustomEntry(PRODUCTION_SKILL_BINDING_ENTRY, {

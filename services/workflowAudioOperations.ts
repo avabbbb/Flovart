@@ -1,5 +1,6 @@
 import { parseWorkflowOperationParameters } from '../components/workflow/operationRegistry';
 import { changeAudioSpeed, splitAudioStems, trimAudio } from './audioTools';
+import { enqueueFFmpegTask } from './videoTools';
 import {
   commitWorkflowOperation,
   failWorkflowOperation,
@@ -41,7 +42,8 @@ async function executeAudioTrim(
   try {
     const source = started.sourceNodes[0];
     const blob = await loadWorkflowOperationSourceBlob(source, runtime);
-    const result = await (runtime.executeAudioTrim || trimAudio)(blob, parameters.startSec, parameters.endSec, source.metadata.name || 'audio.mp3');
+    // audioTools 与 videoTools 共享同一 ffmpeg 单例/虚拟文件系统，必须经串行队列执行。
+    const result = await enqueueFFmpegTask(() => (runtime.executeAudioTrim || trimAudio)(blob, parameters.startSec, parameters.endSec, source.metadata.name || 'audio.mp3'));
     return await commitWorkflowOperation(runtime, projectId, started, [{
       blob: result.blob,
       title: `截取 ${result.durationSec.toFixed(1)}s`,
@@ -65,11 +67,20 @@ export async function runWorkflowAudioStemSplitOperation(
     sources: [{ nodeId: sourceNodeId, role: 'source_audio' }],
     parameters: {},
   });
+  return executeAudioStemSplit(projectId, started, runtime);
+}
+
+async function executeAudioStemSplit(
+  projectId: string,
+  started: StartedWorkflowOperation,
+  runtime: WorkflowAudioOperationRuntime,
+) {
   try {
     const source = started.sourceNodes[0];
     const blob = await loadWorkflowOperationSourceBlob(source, runtime);
     const baseName = (source.metadata.name || 'audio').replace(/\.[^.]+$/, '');
-    const result = await (runtime.executeAudioStemSplit || splitAudioStems)(blob, source.metadata.name || 'audio.mp3');
+    // audioTools 与 videoTools 共享同一 ffmpeg 单例/虚拟文件系统，必须经串行队列执行。
+    const result = await enqueueFFmpegTask(() => (runtime.executeAudioStemSplit || splitAudioStems)(blob, source.metadata.name || 'audio.mp3'));
     return await commitWorkflowOperation(runtime, projectId, started, [
       { blob: result.vocalsBlob, title: '人声', fileName: `vocals-${baseName}.mp3`, mimeType: 'audio/mpeg', role: 'result_audio' },
       { blob: result.instrumentalBlob, title: '伴奏', fileName: `instrumental-${baseName}.mp3`, mimeType: 'audio/mpeg', role: 'result_audio' },
@@ -103,7 +114,8 @@ async function executeAudioSpeed(
   try {
     const source = started.sourceNodes[0];
     const blob = await loadWorkflowOperationSourceBlob(source, runtime);
-    const result = await (runtime.executeAudioSpeed || changeAudioSpeed)(blob, speed, source.metadata.name || 'audio.mp3');
+    // audioTools 与 videoTools 共享同一 ffmpeg 单例/虚拟文件系统，必须经串行队列执行。
+    const result = await enqueueFFmpegTask(() => (runtime.executeAudioSpeed || changeAudioSpeed)(blob, speed, source.metadata.name || 'audio.mp3'));
     const baseName = (source.metadata.name || 'audio').replace(/\.[^.]+$/, '');
     return await commitWorkflowOperation(runtime, projectId, started, [{
       blob: result,
@@ -132,6 +144,9 @@ export async function rerunWorkflowAudioOperation(
   if (record.capabilityId === 'audio.speed@1') {
     const { speed } = parseWorkflowOperationParameters(record.capabilityId, record.recipe.parameters) as { speed: number };
     return executeAudioSpeed(projectId, await restartWorkflowOperation(runtime, projectId, operationNodeId), speed, runtime);
+  }
+  if (record.capabilityId === 'audio.stem-split@1') {
+    return executeAudioStemSplit(projectId, await restartWorkflowOperation(runtime, projectId, operationNodeId), runtime);
   }
   throw new Error('该 Operation 不是可重跑的音频处理步骤');
 }

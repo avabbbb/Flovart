@@ -79,6 +79,7 @@ export async function changeAudioSpeed(blob: Blob, speed: number, originalName =
 }
 
 function buildAtempoChain(speed: number): string {
+  if (!Number.isFinite(speed) || speed <= 0) throw new Error(`无效的音频变速倍率：${speed}（必须为正数）。`);
   const factors: number[] = [];
   let remaining = speed;
   while (remaining > 2.0) {

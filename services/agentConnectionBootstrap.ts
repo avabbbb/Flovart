@@ -179,6 +179,7 @@ async function requestJson(url: URL, options: AgentConnectionBootstrapOptions, t
 }
 
 async function exchangeBootstrapCredential(url: string, bootstrapToken: string, options: AgentConnectionBootstrapOptions) {
+  if (!url) throw new Error('缺少 Flovart Agent 地址，无法完成 bootstrap。');
   const result = await requestJson(
     new URL('/bootstrap/exchange', url),
     options,

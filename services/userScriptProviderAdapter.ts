@@ -113,7 +113,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isLoopback(hostname: string): boolean {
   const host = hostname.toLowerCase();
-  return host === 'localhost' || host === '::1' || host === '127.0.0.1' || host.startsWith('127.');
+  if (host === 'localhost' || host === '::1' || host === '[::1]' || host === '0.0.0.0') return true;
+  // 剥掉 IPv6 方括号后判定（URL.hostname 对 IPv6 地址保留 [..] 形式）。
+  const bare = host.startsWith('[') && host.endsWith(']') ? host.slice(1, -1) : host;
+  if (bare.startsWith('127.')) return true;
+  // IPv6 映射回环：::ffff:127.x.x.x 解析出内嵌 IPv4 再判断。
+  const mappedIpv4 = bare.match(/^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/i)?.[1];
+  return Boolean(mappedIpv4 && mappedIpv4.startsWith('127.'));
 }
 
 function assertSafeEndpoint(endpoint: string): URL {
@@ -481,11 +487,13 @@ export class UserScriptProviderAdapter {
     try {
       const raw = await this.request(this.definition.cancel.request, { taskId: handle.taskId }, { ...options, signal: undefined }, handle.taskId);
       const success = this.definition.cancel.successPath ? readPath(raw.raw, this.definition.cancel.successPath) : true;
+      // 仅显式成功值才算确认取消；其余（字符串 'false'、0、错误文案等）一律视为未确认。
+      const ok = success === true || success === 'true' || success === 1;
       return {
-        canceled: success !== false,
-        reason: success !== false ? 'ok' : 'not_cancellable',
-        upstreamStillRunning: success === false,
-        message: success === false ? 'User Provider 未确认取消。' : undefined,
+        canceled: ok,
+        reason: ok ? 'ok' : 'not_cancellable',
+        upstreamStillRunning: !ok,
+        message: ok ? undefined : 'User Provider 未确认取消。',
       };
     } catch (error) {
       return {

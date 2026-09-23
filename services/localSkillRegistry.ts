@@ -63,18 +63,30 @@ export class ManagedSkillRegistryClient implements SkillRegistryClient {
   ) {}
 
   private async request(path: string, init?: RequestInit): Promise<unknown> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(new DOMException('请求超时', 'TimeoutError')), 15_000);
+    if (init?.signal) {
+      if (init.signal.aborted) controller.abort();
+      else init.signal.addEventListener('abort', () => controller.abort(), { once: true });
+    }
     let response: Response;
     try {
       response = await this.fetcher(`${this.connection.url}${path}`, {
         ...init,
+        signal: controller.signal,
         headers: {
           'x-flovart-agent-token': this.connection.token,
           ...(init?.body ? { 'content-type': 'application/json' } : {}),
           ...(init?.headers || {}),
         },
       });
-    } catch {
+    } catch (err) {
+      if (controller.signal.aborted && !(init?.signal?.aborted)) {
+        throw new SkillRegistryError('UNAVAILABLE', '本机 Skill 注册表请求超时（15s），请确认本地 Agent 服务响应正常。');
+      }
       throw new SkillRegistryError('UNAVAILABLE', '本机 Skill 注册表不可用：请确认桌面端与本地 Agent 服务已启动。');
+    } finally {
+      clearTimeout(timer);
     }
     const body = await response.json().catch(() => ({}));
     if (!response.ok || (body && typeof body === 'object' && (body as { ok?: boolean }).ok === false)) {

@@ -18,8 +18,7 @@
  * - veo-3.1-generate-preview: 视频生成
  * 
  * 【API Key 配置】
- * 从环境变量 process.env.API_KEY 读取 Gemini API Key
- * 需要在 .env.local 文件中配置：GEMINI_API_KEY=your_key
+ * 通过应用内 Settings → API Keys 配置 Gemini API Key（setGeminiRuntimeConfig）
  * 
  * 【错误处理】
  * - API 调用失败会抛出详细错误信息
@@ -30,8 +29,6 @@
 import { GoogleGenAI, Modality, GenerateContentResponse, GenerateVideosOperation, VideoGenerationReferenceType } from "@google/genai";
 import type { PromptEnhanceRequest, PromptEnhanceResult } from "../types";
 
-// 从用户配置或 runtime config 获取 API Key（不在 bundle 中硬编码任何密钥）
-const API_KEY: string | undefined = undefined;
 let runtimeConfig: {
   textApiKey?: string;
   imageApiKey?: string;
@@ -69,7 +66,6 @@ export function setGeminiRuntimeConfig(config: {
  *   1. explicitKey（函数参数显式传入，来自 aiGateway 路由）
  *   2. runtimeConfig 中对应 capability 的 key
  *   3. runtimeConfig 中其他 capability 的 key（回退链）
- *   4. 环境变量 process.env.API_KEY（.env 文件配置）
  *
  * @param capability - 使用场景：text（LLM 润色）、image（图片生成/编辑）、video（视频生成）
  * @param explicitKey - 可选的显式 API Key，优先级最高
@@ -82,12 +78,11 @@ function getApiKey(capability: "text" | "image" | "video" = "text", explicitKey?
       : capability === "image"
         ? runtimeConfig.imageApiKey
         : runtimeConfig.videoApiKey;
-  const key = scopedKey || runtimeConfig.textApiKey || runtimeConfig.imageApiKey || runtimeConfig.videoApiKey || API_KEY;
+  const key = scopedKey || runtimeConfig.textApiKey || runtimeConfig.imageApiKey || runtimeConfig.videoApiKey;
   if (!key) {
     throw new Error(
       "Gemini API key is not configured. " +
-      "Please add your Google API key in Settings → API Keys (recommended), " +
-      "or set GEMINI_API_KEY in a .env.local file and restart the dev server."
+      "Please add your Google API key in Settings → API Keys."
     );
   }
   return key;
@@ -537,8 +532,13 @@ export async function generateVideo(
   onProgress('Generation started, this may take a few minutes.');
 
   // 步骤5：轮询检查生成状态
+  const MAX_POLL_MS = 600_000;
+  const pollStart = Date.now();
   while (!operation.done) {
     if (options?.signal?.aborted) throw options.signal.reason || new DOMException('已停止等待；供应商任务可能仍在运行。', 'AbortError');
+    if (Date.now() - pollStart > MAX_POLL_MS) {
+      throw new Error('Veo 视频生成超时（已等待超过 10 分钟）。');
+    }
     onProgress(progressMessages[messageIndex % progressMessages.length]);
     messageIndex++;
     await new Promise(resolve => setTimeout(resolve, 10000));  // 每10秒检查一次

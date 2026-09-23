@@ -6,6 +6,7 @@
 import { resolveRouteIdByDocId } from './runningHubRouteCatalog';
 
 const RH_BASE = 'https://www.runninghub.cn/openapi/v2';
+const RH_HOST = 'https://www.runninghub.cn';
 const POLL_INTERVAL = 5000; // 5s
 const MAX_POLL_ATTEMPTS = 120; // 10 minutes max
 
@@ -520,13 +521,15 @@ export function normalizeRunningHubModelEndpoint(modelEndpoint?: string) {
   const familyKey = value.toLowerCase().replace(/\s+/g, '');
   const familyAlias = RUNNINGHUB_FAMILY_ALIASES[familyKey];
   if (familyAlias) return familyAlias;
-  return value;
+  // 过滤空段与相对路径段（. / ..），防止 path traversal 片段拼进最终任务 URL。
+  return value.split('/').filter(segment => segment && segment !== '.' && segment !== '..').join('/');
 }
 
 export function isLikelyRunningHubModelEndpoint(modelEndpoint?: string) {
   const normalized = normalizeRunningHubModelEndpoint(modelEndpoint);
   if (!normalized) return false;
   if (!/^[A-Za-z0-9._/-]+$/.test(normalized)) return false;
+  if (normalized.split('/').some(segment => segment === '.' || segment === '..')) return false;
   if (/^(query|page-api)$/i.test(normalized)) return false;
   if (/^media\/upload\/binary$/i.test(normalized)) return false;
   if (/^(call-api|search-api|runninghub-api-doc)/i.test(normalized)) return false;
@@ -685,12 +688,11 @@ export async function rhUploadFile(
   const formData = new FormData();
   formData.append('file', file, fileName || 'upload.png');
   const uploadUrl = `${rhBase(options.baseUrl)}/media/upload/binary`;
-  const res = await fetch(uploadUrl, {
-    signal: options.signal,
+  const res = await fetchWithTimeout(uploadUrl, {
     method: 'POST',
     headers: { Authorization: `Bearer ${apiKey}` },
     body: formData,
-  });
+  }, 30_000, options.signal);
   if (!res.ok) {
     const text = await res.text();
     throw new Error(withRunningHubDebug(`RunningHub upload failed (${res.status}): ${text}`, {
@@ -813,11 +815,11 @@ export async function rhRunTask(
 export async function rhTestApiKey(apiKey: string, baseUrl?: string): Promise<boolean> {
   try {
     // Use a lightweight query with a dummy task ID to test auth
-    const res = await fetch(`${rhBase(baseUrl)}/query`, {
+    const res = await fetchWithTimeout(`${rhBase(baseUrl)}/query`, {
       method: 'POST',
       headers: rhHeaders(apiKey),
       body: JSON.stringify({ taskId: '1234567890123456789' }),
-    });
+    }, 30_000);
     // If auth fails, RunningHub may still return HTTP 200 with a business error code.
     // A missing dummy task means the key reached the API; auth codes/messages mean it did not.
     if (res.status === 401 || res.status === 403) return false;
@@ -828,307 +830,6 @@ export async function rhTestApiKey(apiKey: string, baseUrl?: string): Promise<bo
       return false;
     }
     return true;
-  } catch {
-    return false;
-  }
-}
-
-// ════════════════════════════════════════════════════════════════════
-// RunningHub WebApp（AI 应用）API — 工作流编排接口
-//
-// 与上方 v2 标准模型 API 独立：
-// - 认证方式不同（apiKey in body/query，非 Bearer header）
-// - 基址不同（task/openapi + api/webapp，非 openapi/v2）
-// - 交互模式不同（获取节点 → 修改参数 → 提交 → 轮询结果）
-// ════════════════════════════════════════════════════════════════════
-
-const RH_HOST = 'https://www.runninghub.cn';
-const WEBAPP_POLL_INTERVAL = 5000; // 5s
-const WEBAPP_MAX_POLL_ATTEMPTS = 120; // 10 min max
-
-/** WebApp 节点信息 — 描述一个可修改的工作流节点 */
-export interface RHWebAppNodeInfo {
-  nodeId: string;
-  nodeName: string;
-  fieldName: string;
-  fieldValue: string;
-  fieldType: 'IMAGE' | 'AUDIO' | 'VIDEO' | 'STRING' | 'LIST';
-  description: string;
-  fieldData?: unknown; // LIST 类型时包含可选值列表
-}
-
-/** WebApp 提交响应 */
-export interface RHWebAppSubmitResult {
-  taskId: string;
-  promptTips?: string; // JSON 字符串，包含 node_errors 等
-}
-
-/** WebApp 任务输出项 */
-export interface RHWebAppOutputItem {
-  fileUrl: string;
-  fileType?: string;
-  nodeId?: string;
-}
-
-/** WebApp 查询响应码含义 */
-export type RHWebAppTaskStatus = 'SUCCESS' | 'RUNNING' | 'QUEUED' | 'FAILED' | 'UNKNOWN';
-
-/**
- * 获取 WebApp 的可修改节点列表
- *
- * @param apiKey - RunningHub API Key
- * @param webappId - AI 应用 ID（WebApp 链接末尾数字）
- * @returns nodeInfoList — 所有可修改的节点
- */
-export async function rhGetWebAppNodes(
-  apiKey: string,
-  webappId: string,
-): Promise<RHWebAppNodeInfo[]> {
-  // 注意：apiCallDemo 端点官方定义为 GET，apiKey 必须放在 query 中（端点限制）。
-  // 额外附加 Authorization Bearer header 作为认证双保险（AI 应用接口支持）。
-  const url = `${RH_HOST}/api/webapp/apiCallDemo?apiKey=${encodeURIComponent(apiKey)}&webappId=${encodeURIComponent(webappId)}`;
-  const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${apiKey}` },
-  });
-
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    throw new Error(`RunningHub WebApp 获取节点失败 (${res.status}): ${text || res.statusText}`);
-  }
-
-  const json = await res.json();
-  if (json.code !== 0) {
-    throw new Error(`RunningHub WebApp 错误: ${json.msg || JSON.stringify(json)}`);
-  }
-
-  return json.data?.nodeInfoList || [];
-}
-
-/**
- * 上传文件到 RunningHub（用于 IMAGE/AUDIO/VIDEO 类型节点）
- *
- * @param apiKey - RunningHub API Key
- * @param file - 要上传的文件
- * @returns 上传后的文件名（如 api/xxxx.jpg），用作 fieldValue
- */
-export async function rhUploadWebAppFile(
-  apiKey: string,
-  file: File | Blob,
-  fileName?: string,
-): Promise<string> {
-  const formData = new FormData();
-  formData.append('apiKey', apiKey);
-  formData.append('fileType', 'input');
-  formData.append('file', file, fileName || 'upload.png');
-
-  const res = await fetch(`${RH_HOST}/task/openapi/upload`, {
-    method: 'POST',
-    body: formData,
-  });
-
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    throw new Error(`RunningHub WebApp 文件上传失败 (${res.status}): ${text || res.statusText}`);
-  }
-
-  const json = await res.json();
-  if (json.code !== 0 || !json.data?.fileName) {
-    throw new Error(`RunningHub WebApp 上传错误: ${json.msg || '未返回 fileName'}`);
-  }
-
-  return json.data.fileName;
-}
-
-/**
- * 上传 data URL 图片到 WebApp
- */
-export async function rhUploadWebAppDataUrl(
-  apiKey: string,
-  dataUrl: string,
-): Promise<string> {
-  const blob = dataUrlToBlob(dataUrl);
-  const ext = blob.type.split('/')[1] || 'png';
-  return rhUploadWebAppFile(apiKey, blob, `upload.${ext}`);
-}
-
-/**
- * 提交 WebApp 任务
- *
- * @param apiKey - RunningHub API Key
- * @param webappId - AI 应用 ID
- * @param nodeInfoList - 修改后的节点信息列表
- * @returns 包含 taskId 和 promptTips 的提交结果
- */
-export async function rhSubmitWebAppTask(
-  apiKey: string,
-  webappId: string,
-  nodeInfoList: RHWebAppNodeInfo[],
-  signal?: AbortSignal,
-): Promise<RHWebAppSubmitResult> {
-  const res = await fetch(`${RH_HOST}/task/openapi/ai-app/run`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      webappId,
-      apiKey,
-      nodeInfoList,
-    }),
-    signal,
-  });
-
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    throw new Error(`RunningHub WebApp 提交任务失败 (${res.status}): ${text || res.statusText}`);
-  }
-
-  const json = await res.json();
-  if (json.code !== 0) {
-    throw new Error(`RunningHub WebApp 提交错误: ${json.msg || JSON.stringify(json)}`);
-  }
-
-  const taskId = json.data?.taskId;
-  if (!taskId) {
-    throw new Error('RunningHub WebApp: 未返回 taskId');
-  }
-
-  // 检查 promptTips 中的 node_errors
-  const promptTips = json.data?.promptTips;
-  if (promptTips) {
-    try {
-      const tips = JSON.parse(promptTips);
-      const nodeErrors = tips.node_errors;
-      if (nodeErrors && Object.keys(nodeErrors).length > 0) {
-        throw new Error(`RunningHub WebApp 节点错误: ${JSON.stringify(nodeErrors)}`);
-      }
-    } catch (e) {
-      if (e instanceof Error && e.message.startsWith('RunningHub WebApp 节点错误')) {
-        throw e;
-      }
-      // promptTips 解析失败不阻塞
-    }
-  }
-
-  return { taskId, promptTips };
-}
-
-/**
- * 查询 WebApp 任务输出（含状态判断）
- *
- * @returns status + outputs 数组（成功时）或 failedReason（失败时）
- */
-export async function rhQueryWebAppOutputs(
-  apiKey: string,
-  taskId: string,
-  signal?: AbortSignal,
-): Promise<{
-  status: RHWebAppTaskStatus;
-  outputs: RHWebAppOutputItem[];
-  failedReason?: string;
-}> {
-  const res = await fetch(`${RH_HOST}/task/openapi/outputs`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ apiKey, taskId }),
-    signal,
-  });
-
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    throw new Error(`RunningHub WebApp 查询失败 (${res.status}): ${text || res.statusText}`);
-  }
-
-  const json = await res.json();
-  const code = json.code;
-
-  // code=0 → 成功，data 是输出数组
-  if (code === 0 && Array.isArray(json.data)) {
-    return {
-      status: 'SUCCESS',
-      outputs: json.data.map((item: Record<string, unknown>) => ({
-        fileUrl: item.fileUrl || '',
-        fileType: item.fileType,
-        nodeId: item.nodeId,
-      })),
-    };
-  }
-
-  // code=805 → 失败
-  if (code === 805) {
-    const reason = json.data?.failedReason;
-    return {
-      status: 'FAILED',
-      outputs: [],
-      failedReason: reason
-        ? `${reason.node_name}: ${reason.exception_message}`
-        : json.msg || '任务失败',
-    };
-  }
-
-  // code=804 → 运行中, code=813 → 排队中
-  if (code === 804) return { status: 'RUNNING', outputs: [] };
-  if (code === 813) return { status: 'QUEUED', outputs: [] };
-
-  // 其余非 0 code（含 802 认证错误、811 等）视为失败，避免静默 UNKNOWN
-  return {
-    status: 'FAILED',
-    outputs: [],
-    failedReason: json.msg || `RunningHub 错误码 ${code}`,
-  };
-}
-
-/**
- * 运行完整的 WebApp 工作流 — 提交任务 + 自动轮询直到完成
- *
- * @param apiKey - RunningHub API Key
- * @param webappId - AI 应用 ID
- * @param nodeInfoList - 修改后的节点信息列表
- * @param onProgress - 进度回调（状态, 轮询次数）
- * @returns 最终输出项数组
- */
-export async function rhRunWebApp(
-  apiKey: string,
-  webappId: string,
-  nodeInfoList: RHWebAppNodeInfo[],
-  onProgress?: (status: RHWebAppTaskStatus, attempt: number) => void,
-  signal?: AbortSignal,
-): Promise<RHWebAppOutputItem[]> {
-  const { taskId } = await rhSubmitWebAppTask(apiKey, webappId, nodeInfoList, signal);
-
-  for (let i = 0; i < WEBAPP_MAX_POLL_ATTEMPTS; i++) {
-    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
-    // abortible sleep：signal abort 时提前结束等待
-    await new Promise<void>((resolve) => {
-      if (signal?.aborted) { resolve(); return; }
-      const timer = setTimeout(resolve, WEBAPP_POLL_INTERVAL);
-      signal?.addEventListener('abort', () => { clearTimeout(timer); resolve(); }, { once: true });
-    });
-    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
-
-    const result = await rhQueryWebAppOutputs(apiKey, taskId, signal);
-    onProgress?.(result.status, i + 1);
-
-    if (result.status === 'SUCCESS') return result.outputs;
-    if (result.status === 'FAILED') {
-      throw new Error(`RunningHub WebApp 任务失败: ${result.failedReason || '未知错误'}`);
-    }
-    // QUEUED / RUNNING → 继续轮询
-  }
-
-  throw new Error('RunningHub WebApp 任务超时（超过 10 分钟）');
-}
-
-/** 快速验证 WebApp API Key（尝试用一个随机 webappId 获取节点） */
-export async function rhTestWebAppApiKey(apiKey: string): Promise<boolean> {
-  try {
-    // 用 dummy webappId 请求，如果 key 错误会返回非 0 code
-    const url = `${RH_HOST}/api/webapp/apiCallDemo?apiKey=${encodeURIComponent(apiKey)}&webappId=test-0000`;
-    const res = await fetch(url);
-    // 401/403 → 无效 key
-    return res.status !== 401 && res.status !== 403;
   } catch {
     return false;
   }

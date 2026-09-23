@@ -70,19 +70,35 @@ async function request<T>(
   if (init.body && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
   }
-  const res = await fetch(url, { ...init, headers });
-  const text = await res.text();
-  let payload: ApiResponse<T> | null = null;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(new DOMException('请求超时', 'TimeoutError')), 15_000);
+  if (init.signal) {
+    if (init.signal.aborted) controller.abort();
+    else init.signal.addEventListener('abort', () => controller.abort(), { once: true });
+  }
   try {
-    payload = text ? (JSON.parse(text) as ApiResponse<T>) : null;
-  } catch {
-    throw new ApiError(res.status, `响应解析失败 (${res.status})`);
+    const res = await fetch(url, { ...init, signal: controller.signal, headers });
+    const text = await res.text();
+    let payload: ApiResponse<T> | null = null;
+    try {
+      payload = text ? (JSON.parse(text) as ApiResponse<T>) : null;
+    } catch {
+      throw new ApiError(res.status, `响应解析失败 (${res.status})`);
+    }
+    if (!res.ok || !payload || payload.code !== 0) {
+      const msg = payload?.msg || `请求失败 (${res.status})`;
+      throw new ApiError(payload?.code ?? res.status, msg);
+    }
+    return payload.data;
+  } catch (err) {
+    if (err instanceof ApiError) throw err;
+    if (controller.signal.aborted && !(init.signal?.aborted)) {
+      throw new ApiError(-1, '请求超时（15s），请检查网络或稍后重试。');
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
   }
-  if (!res.ok || !payload || payload.code !== 0) {
-    const msg = payload?.msg || `请求失败 (${res.status})`;
-    throw new ApiError(payload?.code ?? res.status, msg);
-  }
-  return payload.data;
 }
 
 export const api = {

@@ -5,6 +5,8 @@
  */
 
 import localforage from 'localforage';
+import { sha256 } from '@noble/hashes/sha2.js';
+import { bytesToHex, utf8ToBytes } from '@noble/hashes/utils.js';
 import type { AIProvider, AICapability } from '../types';
 import { getOpenAICompatibleBaseUrlCandidates, normalizeProviderBaseUrl } from './baseUrl';
 import { isLikelyRunningHubModelEndpoint, normalizeRunningHubModelEndpoint, rhTestApiKey, BUILTIN_RUNNINGHUB_MODELS, stripRunningHubVersionName } from './runningHubService';
@@ -350,12 +352,13 @@ async function fetchRunningHubModels(apiKey: string, baseUrl?: string): Promise<
 
     let pageModels: FetchedModel[] = [];
     try {
-        const response = await fetch(RUNNINGHUB_DOCS_MODEL_URL);
+        const response = await fetchWithModelDiscoveryTimeout(RUNNINGHUB_DOCS_MODEL_URL);
         if (response.ok) {
             pageModels = parseRunningHubPageModels(await response.text());
         }
-    } catch {
+    } catch (error) {
         // Public page fetch can fail behind strict networks; the user can still add model IDs manually.
+        console.warn('[ModelFetcher] RunningHub 文档页模型列表拉取失败。', error);
     }
 
     const builtinModels: FetchedModel[] = BUILTIN_RUNNINGHUB_MODELS.map(item => ({
@@ -493,9 +496,9 @@ export async function fetchModelsWithCache(
     baseUrl?: string,
     forceRefresh = false,
 ): Promise<FetchModelsResult> {
-    const fp = keyFingerprint(apiKey);
+    const cacheKey = modelCacheKey(provider, apiKey, baseUrl);
     if (!forceRefresh) {
-        const cached = await getCachedModels(provider, fp);
+        const cached = await getCachedModels(cacheKey);
         if (cached) {
             let models = cached.models;
             if (provider === 'runningHub') {
@@ -527,7 +530,7 @@ export async function fetchModelsWithCache(
     }
     const result = await fetchModelsForProvider(provider, apiKey, baseUrl);
     if (result.ok && result.models.length > 0) {
-        await setCachedModels(provider, fp, result.models, result.endpointFlavor);
+        await setCachedModels(cacheKey, result.models, result.endpointFlavor);
     }
     return result;
 }
