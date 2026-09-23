@@ -1,8 +1,22 @@
 import { createWorkflowNode } from '../../components/workflow/constants';
 import type { WorkflowDocumentOperation, WorkflowProject, WorkflowResourceReference } from '../../components/workflow/types';
+import { sha256 } from '@noble/hashes/sha2.js';
+import { bytesToHex } from '@noble/hashes/utils.js';
 import { nanoid } from 'nanoid';
 import { hostSelectionResource, StudioContractError, type CreativeHostAdapter, type CreativeHostId, type FlovartStudioCore, type HostContext, type HostImportResult, type HostImportTarget, type HostSelection, type MaterializedHostSelection, type StudioApplyRequest, type WorkflowResource } from './studioContract';
 import { workflowResultArtifactId, workflowResultRevision, workflowResultTaskId } from './studioClient';
+
+const ARTIFACT_HASH_CHUNK_SIZE = 1024 * 1024;
+
+async function hashArtifactBlob(blob: Blob): Promise<string> {
+  const hasher = sha256.create();
+  for (let offset = 0; offset < blob.size; offset += ARTIFACT_HASH_CHUNK_SIZE) {
+    const chunk = new Uint8Array(await blob.slice(offset, offset + ARTIFACT_HASH_CHUNK_SIZE).arrayBuffer());
+    hasher.update(chunk);
+    if (offset + chunk.byteLength < blob.size) await new Promise<void>(resolve => setTimeout(resolve, 0));
+  }
+  return bytesToHex(hasher.digest());
+}
 
 export interface StudioGenerationResult {
   projectId: string;
@@ -162,6 +176,12 @@ export class StudioWorkflowController {
     if (!taskId && !artifactId) throw new StudioContractError('HOST_IMPORT_FAILED', 'Flovart 没有返回可回写的制作产物。', true);
     const artifact = await this.core.artifactGet({ ...(taskId ? { taskId } : {}), ...(artifactId ? { artifactId } : {}) });
     if (!artifact) throw new StudioContractError('HOST_IMPORT_FAILED', 'Flovart 已运行，但暂时没有可回写的产物。', true);
+    if (executionTarget.hostTarget === 'after-effects') {
+      if (!artifact.blob) throw new StudioContractError('HOST_IMPORT_FAILED', 'After Effects 固定素材需要可读取的本地产物字节。', true);
+      if (artifact.blob.size === 0) throw new StudioContractError('HOST_IMPORT_FAILED', 'Flovart 返回了空素材，无法固定为版本。', true);
+      artifact.sha256 = await hashArtifactBlob(artifact.blob);
+      artifact.byteSize = artifact.blob.size;
+    }
     // 回写只使用冻结的 outputTarget（携带 submit 时宿主文档/选择的 pin），
     // 即使运行期间 live selection 换成 B，产物仍落在 A 对应的文档/输出位置。
     const imported: HostImportResult = await this.adapter.importArtifact(artifact, executionTarget.outputTarget);

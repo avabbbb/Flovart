@@ -7,6 +7,7 @@ const MAX_ARTIFACTS = 64;
 
 interface Entry {
   artifact: WorkflowArtifactOutput;
+  metadata: Pick<FlovartArtifact, 'taskId' | 'prompt' | 'modelId' | 'byteSize' | 'width' | 'height' | 'durationMs'>;
   storageKey: string;
   expiresAt: number;
 }
@@ -25,6 +26,13 @@ export function registerWorkflowArtifact(input: {
   kind: 'image' | 'video' | 'audio';
   mimeType?: string;
   name?: string;
+  prompt?: string;
+  modelId?: string;
+  taskId?: string;
+  byteSize?: number;
+  width?: number;
+  height?: number;
+  durationMs?: number;
 }, now = Date.now()) {
   const artifactId = input.artifactId.trim();
   const storageKey = input.storageKey.trim();
@@ -36,8 +44,17 @@ export function registerWorkflowArtifact(input: {
     kind: input.kind,
     ...(input.name ? { name: input.name } : {}),
   };
+  const metadata: Entry['metadata'] = {
+    ...(input.prompt ? { prompt: input.prompt } : {}),
+    ...(input.modelId ? { modelId: input.modelId } : {}),
+    ...(input.taskId ? { taskId: input.taskId } : {}),
+    ...(Number.isFinite(input.byteSize) && input.byteSize! >= 0 ? { byteSize: input.byteSize } : {}),
+    ...(Number.isFinite(input.width) && input.width! > 0 ? { width: input.width } : {}),
+    ...(Number.isFinite(input.height) && input.height! > 0 ? { height: input.height } : {}),
+    ...(Number.isFinite(input.durationMs) && input.durationMs! > 0 ? { durationMs: input.durationMs } : {}),
+  };
   entries.delete(artifactId);
-  entries.set(artifactId, { artifact, storageKey, expiresAt: now + ARTIFACT_TTL_MS });
+  entries.set(artifactId, { artifact, metadata, storageKey, expiresAt: now + ARTIFACT_TTL_MS });
   prune(now);
   return artifact;
 }
@@ -49,7 +66,7 @@ export async function loadWorkflowArtifact(artifactId: string, now = Date.now())
   entries.delete(artifactId);
   entries.set(artifactId, entry);
   const blob = await loadWorkflowMediaBlob(entry.storageKey).catch(() => null);
-  return blob ? { ...entry.artifact, blob } : null;
+  return blob ? { ...entry.artifact, ...entry.metadata, blob } : null;
 }
 
 export function clearWorkflowArtifacts() {

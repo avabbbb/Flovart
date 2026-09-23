@@ -379,6 +379,13 @@ const App: React.FC = () => {
                 kind: generatedNode.type === 'video' ? 'video' : generatedNode.type === 'audio' ? 'audio' : 'image',
                 mimeType: generatedNode.metadata.mimeType,
                 name: generatedNode.metadata.name || generatedNode.title,
+                prompt: generatedNode.metadata.prompt,
+                modelId: generatedNode.metadata.config?.modelId,
+                taskId: generatedNode.metadata.generationProviderTaskId,
+                byteSize: generatedNode.metadata.bytes,
+                width: generatedNode.metadata.naturalWidth,
+                height: generatedNode.metadata.naturalHeight,
+                durationMs: generatedNode.metadata.durationMs,
             })
             : undefined;
         return { status: 'completed', canonicalInput, ...(committedArtifact ? { artifact: committedArtifact } : {}) };

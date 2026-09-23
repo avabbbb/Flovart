@@ -54,8 +54,15 @@ export interface FlovartArtifact {
   artifactId?: string;
   taskId?: string;
   name?: string;
+  prompt?: string;
+  modelId?: string;
   kind?: 'image' | 'video' | 'audio';
   mimeType: string;
+  sha256?: string;
+  byteSize?: number;
+  width?: number;
+  height?: number;
+  durationMs?: number;
   href?: string;
   blob?: Blob;
 }
@@ -63,6 +70,57 @@ export interface FlovartArtifact {
 export interface HostImportResult {
   ok: boolean;
   targetId?: string;
+  message?: string;
+  /** Metadata read from the imported After Effects footage source. */
+  sourceMedia?: HostSourceMediaMetadata | null;
+  /** Snapshot of the active AE project's color-processing context. */
+  projectColorContext?: HostProjectColorContext | null;
+}
+
+export interface HostSourceMediaMetadata {
+  width?: number;
+  height?: number;
+  durationSeconds?: number;
+  frameRate?: number;
+  frameDurationSeconds?: number;
+  nativeFrameRate?: number;
+  displayFrameRate?: number;
+  conformFrameRate?: number;
+  pixelAspectRatio?: number;
+  isStill?: boolean;
+  hasAlpha?: boolean;
+  alphaMode?: 'ignore' | 'straight' | 'premultiplied' | 'unknown';
+  invertAlpha?: boolean;
+  premultipliedColor?: [number, number, number];
+}
+
+export interface HostProjectColorContext {
+  workingSpace?: string;
+  workingGamma?: number;
+  bitsPerChannel?: 8 | 16 | 32;
+  linearBlending?: boolean;
+  linearizeWorkingSpace?: boolean;
+  compensateForSceneReferredProfiles?: boolean;
+}
+
+export interface HostNativeEffectRequest {
+  candidateLayerId: string;
+  sourceSelection: HostSelection;
+}
+
+export interface HostNativeCandidate {
+  candidateLayerId: string;
+  artifactId: string;
+  sha256: string;
+  name?: string;
+  mediaAvailable?: boolean;
+  prompt?: string;
+  modelId?: string;
+  byteSize?: number;
+  providerTaskId?: string;
+  sourceMedia?: HostSourceMediaMetadata | null;
+  projectColorContext?: HostProjectColorContext | null;
+  sourceSelection?: HostSelection | null;
   message?: string;
 }
 
@@ -77,6 +135,10 @@ export interface CreativeHostAdapter {
   getSelection(): Promise<HostSelection | null>;
   materializeSelection(selection: HostSelection): Promise<MaterializedHostSelection>;
   importArtifact(artifact: FlovartArtifact, target?: HostImportTarget): Promise<HostImportResult>;
+  /** Optional host-native application step after a candidate artifact was imported. */
+  applyNativeEffect?(request: HostNativeEffectRequest): Promise<HostImportResult>;
+  /** Optional read from the host's persisted candidate records; no parallel app-side history. */
+  listNativeCandidates?(documentId?: string): Promise<HostNativeCandidate[]>;
   subscribeContext?(listener: (context: HostContext) => void): Disposable;
 }
 
