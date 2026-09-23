@@ -17,8 +17,50 @@
   function mountInspector({ root, adapter, controller, getController, hostLabel, onOpenCanvas, defaultImportTarget = { kind: 'new-layer' }, preview = false }) {
     root.replaceChildren();
     root.className = 'flovart-studio-inspector';
-    let disposed = false, busy = false, reading = false, lastSelection = null, activeTab = 'make', taskStart = 0, taskTimer = null, linkedModels = false;
+    let disposed = false, busy = false, reading = false, lastSelection = null, activeTab = 'make', activeDocumentId = null, taskStart = 0, taskTimer = null, linkedModels = false, applyingCandidateId = null, lastNativeCandidate = null, loadingCandidates = false;
     const history = [];
+    const knownCandidateIds = new Set();
+    const loadedCandidateDocuments = new Set();
+    const candidateKey = (documentId, layerId) => `${String(documentId)}:${String(layerId)}`;
+    function candidateMetadataText(item) {
+      const media = item?.sourceMedia;
+      const color = item?.projectColorContext;
+      if (!media && !color) return '';
+      const details = [];
+      if (Number.isFinite(media?.width) && Number.isFinite(media?.height)) {
+        details.push(`${Math.round(media.width)} × ${Math.round(media.height)}`);
+      }
+      const frameRate = media?.displayFrameRate || media?.frameRate || media?.nativeFrameRate;
+      if (media?.isStill !== true && Number.isFinite(frameRate) && frameRate > 0) details.push(`${Number(frameRate.toFixed(3))} fps`);
+      if (Number.isFinite(media?.durationSeconds) && media.durationSeconds > 0) {
+        details.push(`${Number(media.durationSeconds.toFixed(2))} 秒`);
+      }
+      if (Number.isFinite(media?.pixelAspectRatio) && media.pixelAspectRatio > 0) {
+        details.push(`PAR ${Number(media.pixelAspectRatio.toFixed(4))}`);
+      }
+      if (media?.hasAlpha === true) {
+        const alphaModes = { ignore: '忽略', straight: '直通', premultiplied: '预乘', unknown: '未知' };
+        details.push(`Alpha ${alphaModes[media.alphaMode] || '已检测'}`);
+      } else if (media?.hasAlpha === false) details.push('无 Alpha');
+      if (color && typeof color.workingSpace === 'string') {
+        details.push(`项目色彩 ${color.workingSpace || '关闭'}`);
+      }
+      if (Number.isFinite(color?.workingGamma) && color.workingGamma > 0) {
+        details.push(`Gamma ${Number(color.workingGamma.toFixed(3))}`);
+      }
+      if (Number.isFinite(color?.bitsPerChannel)) details.push(`${color.bitsPerChannel} bpc`);
+      if (typeof color?.linearizeWorkingSpace === 'boolean') details.push(color.linearizeWorkingSpace ? '工作空间线性化' : '工作空间未线性化');
+      if (typeof color?.linearBlending === 'boolean') details.push(color.linearBlending ? '线性混合' : '非线性混合');
+      return details.length ? `AE 解释：${details.join(' · ')}` : '';
+    }
+    function visibleHistory() {
+      return adapter.id === 'after-effects'
+        ? history.filter(item => item.documentId && item.documentId === activeDocumentId)
+        : history;
+    }
+    function updateHistoryTab() {
+      historyTab.textContent = `${adapter.id === 'after-effects' ? '候选版本' : '本次记录'} · ${visibleHistory().length}`;
+    }
     const resolveController = () => getController ? getController() : controller;
     const header = el('header', undefined, 'fs-header');
     const brand = el('div', undefined, 'fs-brand');
@@ -33,7 +75,7 @@
     const tabs = el('nav', undefined, 'fs-tabs');
     tabs.setAttribute('aria-label', 'Flovart 面板');
     const makeTab = button('制作', 'fs-tab is-active', () => showTab('make'));
-    const historyTab = button('本次记录', 'fs-tab', () => showTab('history'));
+    const historyTab = button(adapter.id === 'after-effects' ? '候选版本' : '本次记录', 'fs-tab', () => showTab('history'));
     tabs.append(makeTab, historyTab);
     const form = el('div', undefined, 'fs-form');
     const sourceLabel = el('div', undefined, 'fs-section-label');
@@ -81,7 +123,7 @@
     const target = el('select');
     target.setAttribute('aria-label', '输出位置');
     if (adapter.id === 'premiere') target.append(option('项目素材箱', 'project'));
-    else if (adapter.id === 'after-effects') target.append(option('当前合成 · 新图层', 'new-layer'), option('项目素材箱', 'project'));
+    else if (adapter.id === 'after-effects') target.append(option('当前合成 · 新图层', 'new-layer'));
     else target.append(option('当前文档 · 新图层', 'new-layer'));
     target.value = defaultImportTarget.kind;
     output.append(el('span', '添加到'), target);
@@ -99,13 +141,120 @@
     const status = el('p', '', 'fs-status');
     status.setAttribute('role', 'status');
     status.setAttribute('aria-live', 'polite');
+    const applyNative = typeof adapter.applyNativeEffect === 'function'
+      ? button('应用为场景替换效果', 'fs-generate fs-native-apply', () => {
+        if (lastNativeCandidate) void applyNativeCandidate(lastNativeCandidate);
+      })
+      : null;
+    if (applyNative) applyNative.hidden = true;
     const results = el('div', undefined, 'fs-history');
     results.hidden = true;
+    const refreshCandidates = typeof adapter.listNativeCandidates === 'function'
+      ? button('↻', 'fs-icon-button', () => { void refreshPersistedCandidates(); })
+      : null;
+    if (refreshCandidates) {
+      refreshCandidates.title = '重新检查当前合成中的候选素材';
+      refreshCandidates.setAttribute('aria-label', refreshCandidates.title);
+    }
     const footer = el('footer', undefined, 'fs-footer');
     const connection = el('span');
     footer.append(connection, el('span', preview ? '交互预览' : hostLabel, 'fs-muted'));
     form.append(sourceLabel, source, referencesLabel, referenceRow, promptLabel, promptBox, recipes, settings, generate, el('div', 'Ctrl / ⌘ + Enter', 'fs-shortcut fs-mono'), taskRow, status);
+    if (applyNative) form.append(applyNative);
     root.append(header, tabs, form, results, footer);
+    function renderHistory() {
+      const entries = visibleHistory();
+      const heading = el('div', undefined, 'fs-history-heading');
+      heading.append(el('p', entries.length ? '已保存候选与本次制作记录' : '当前合成还没有候选版本。', 'fs-muted'));
+      if (refreshCandidates) heading.append(refreshCandidates);
+      results.replaceChildren(heading);
+      entries.slice().reverse().forEach(item => {
+        const row = el('div', undefined, 'fs-history-item');
+        const message = !item.persistent && item.mediaAvailable === false
+          ? `${item.message} · ${item.mediaMessage || '候选素材文件缺失'}`
+          : item.message;
+        row.append(el('span', '✓', 'fs-success'), el('div', item.prompt), el('small', message, 'fs-muted'));
+        const metadataText = candidateMetadataText(item);
+        if (metadataText) row.append(el('small', metadataText, 'fs-muted'));
+        if (item.nativeCandidate && applyNative) {
+          const applyVersion = button(item.applied ? '重新应用此候选' : '应用此候选', 'fs-recipe', () => { void applyNativeCandidate(item); });
+          applyVersion.title = `应用到原始图层「${item.nativeCandidate.sourceSelection.label}」`;
+          applyVersion.disabled = busy || Boolean(applyingCandidateId) || item.mediaAvailable === false;
+          row.append(el('small', `目标图层：${item.nativeCandidate.sourceSelection.label}`, 'fs-muted'));
+          row.append(applyVersion);
+        }
+        results.append(row);
+      });
+    }
+    async function loadPersistedCandidates() {
+      if (disposed || loadingCandidates || typeof adapter.listNativeCandidates !== 'function') return;
+      let documentId = '';
+      try {
+        const current = await adapter.getContext();
+        if (!current.available || !current.documentId) return;
+        documentId = String(current.documentId);
+        if (loadedCandidateDocuments.has(documentId)) return;
+        loadingCandidates = true;
+        const candidates = await adapter.listNativeCandidates(documentId);
+        if (disposed) return;
+        for (const candidate of candidates) {
+          const key = candidate?.candidateLayerId ? candidateKey(documentId, candidate.candidateLayerId) : '';
+          if (!key) continue;
+          if (knownCandidateIds.has(key)) {
+            const existing = history.find(item => item.documentId === documentId && item.candidateLayerId === String(candidate.candidateLayerId));
+            if (existing && !existing.persistent) {
+              existing.mediaAvailable = candidate.mediaAvailable;
+              existing.mediaMessage = candidate.message;
+            }
+            continue;
+          }
+          knownCandidateIds.add(key);
+          const hashPrefix = candidate.sha256 ? ` · SHA-256 ${candidate.sha256.slice(0, 12)}` : '';
+          const modelLabel = candidate.modelId ? ` · ${candidate.modelId}` : '';
+          history.push({
+            documentId,
+            candidateLayerId: candidate.candidateLayerId,
+            prompt: candidate.prompt || candidate.name || `候选版本 ${String(candidate.artifactId || '').slice(0, 8)}`,
+            message: `${candidate.message || '已从当前合成恢复'}${modelLabel}${hashPrefix}`,
+            mediaAvailable: candidate.mediaAvailable,
+            ...(candidate.sourceSelection ? {
+            nativeCandidate: {
+              candidateLayerId: candidate.candidateLayerId,
+              sourceSelection: candidate.sourceSelection,
+            },
+            sourceMedia: candidate.sourceMedia,
+            projectColorContext: candidate.projectColorContext,
+            applied: false,
+            } : {}),
+            persistent: true,
+          });
+        }
+        loadedCandidateDocuments.add(documentId);
+        updateHistoryTab();
+        if (activeTab === 'history') renderHistory();
+        update();
+      } catch (error) {
+        if (!disposed) status.textContent = error?.message || '无法读取当前合成中的 Flovart 候选。';
+      } finally {
+        loadingCandidates = false;
+        if (documentId && activeDocumentId && activeDocumentId !== documentId && !loadedCandidateDocuments.has(activeDocumentId)) {
+          void loadPersistedCandidates();
+        }
+      }
+    }
+    async function refreshPersistedCandidates() {
+      const documentId = activeDocumentId;
+      if (disposed || loadingCandidates || !documentId || typeof adapter.listNativeCandidates !== 'function') return;
+      for (let index = history.length - 1; index >= 0; index--) {
+        const item = history[index];
+        if (!item.persistent || item.documentId !== documentId) continue;
+        if (item.candidateLayerId) knownCandidateIds.delete(candidateKey(documentId, item.candidateLayerId));
+        history.splice(index, 1);
+      }
+      loadedCandidateDocuments.delete(documentId);
+      renderHistory();
+      await loadPersistedCandidates();
+    }
     function showTab(tab) {
       activeTab = tab;
       form.hidden = tab !== 'make'; results.hidden = tab !== 'history';
@@ -114,19 +263,21 @@
       makeTab.setAttribute('aria-current', tab === 'make' ? 'page' : 'false');
       historyTab.setAttribute('aria-current', tab === 'history' ? 'page' : 'false');
       if (tab === 'history') {
-        results.replaceChildren(el('p', history.length ? '本次会话的制作记录' : '你的下一个灵感，从这里开始。', 'fs-muted'));
-        history.slice().reverse().forEach(item => {
-          const row = el('div', undefined, 'fs-history-item');
-          row.append(el('span', '✓', 'fs-success'), el('div', item.prompt), el('small', item.message, 'fs-muted'));
-          results.append(row);
-        });
+        renderHistory();
+        void loadPersistedCandidates();
       }
     }
     function update() {
       if (disposed) return;
       const linked = Boolean(resolveController());
+      const nativeCandidateMatchesDocument = adapter.id !== 'after-effects'
+        || Boolean(lastNativeCandidate?.documentId && lastNativeCandidate.documentId === activeDocumentId);
       promptCount.textContent = String(prompt.value.length);
       generate.disabled = busy || !linked || !lastSelection || !prompt.value.trim();
+      if (applyNative) {
+        applyNative.hidden = !lastNativeCandidate || !nativeCandidateMatchesDocument;
+        applyNative.disabled = busy || Boolean(applyingCandidateId) || !lastNativeCandidate || !nativeCandidateMatchesDocument || lastNativeCandidate.mediaAvailable === false;
+      }
       model.disabled = busy;
       target.disabled = busy;
       generate.textContent = busy ? '正在制作…' : preview ? '✦  演示生成并添加' : '✦  生成并添加';
@@ -172,6 +323,34 @@
       taskRow.classList.remove('is-indeterminate');
       taskBarFill.style.width = '';
     }
+    async function applyNativeCandidate(item) {
+      if (disposed || !item?.nativeCandidate || applyingCandidateId) return;
+      const candidateId = item.nativeCandidate.candidateLayerId;
+      applyingCandidateId = candidateId;
+      update();
+      try {
+        if (adapter.id === 'after-effects') {
+          const current = await adapter.getContext();
+          if (!current.available || String(current.documentId || '') !== String(item.documentId || '')) {
+            throw new Error('当前合成已切换；请切换回候选所属合成后再应用。');
+          }
+        }
+        const applied = await adapter.applyNativeEffect(item.nativeCandidate);
+        if (disposed) return;
+        if (!applied || applied.ok === false) throw new Error(applied?.message || '场景替换效果应用失败。');
+        item.applied = true;
+        item.message = applied.message || '已应用为场景替换效果';
+        status.textContent = item.message;
+        if (applyNative && lastNativeCandidate === item) applyNative.textContent = '重新应用此候选';
+        if (activeTab === 'history') showTab('history');
+      } catch (error) {
+        if (!disposed) status.textContent = error?.message || '场景替换效果应用失败。';
+      } finally {
+        applyingCandidateId = null;
+        update();
+        if (activeTab === 'history') showTab('history');
+      }
+    }
     async function refresh() {
       if (disposed || reading) return;
       // Controller can arrive after mount: re-fill the model select once it links.
@@ -179,6 +358,9 @@
       reading = true;
       try {
         const current = await adapter.getContext();
+        const nextDocumentId = current.available && current.documentId ? String(current.documentId) : null;
+        const documentChanged = nextDocumentId !== activeDocumentId;
+        activeDocumentId = nextDocumentId;
         const selected = current.available ? await adapter.getSelection() : null;
         if (disposed) return;
         lastSelection = selected;
@@ -193,6 +375,11 @@
             const img = el('img'); img.src = selected.previewUrl; img.alt = selected.label; thumb.replaceChildren(img);
           }
         } else thumb.textContent = selected ? '▧' : '+';
+        if (documentChanged) {
+          updateHistoryTab();
+          if (activeTab === 'history' && activeDocumentId) void loadPersistedCandidates();
+          if (activeTab === 'history') renderHistory();
+        }
       } catch (error) {
         if (disposed) return;
         lastSelection = null; reference.textContent = '无法读取当前选择';
@@ -211,8 +398,45 @@
         if (disposed) return;
         if (result?.import?.ok === false) throw new Error(result.import.message || '结果添加失败，请重试。');
         const message = result?.import?.message || '已添加新结果';
-        history.push({ prompt: submittedPrompt, message }); status.textContent = message;
-        historyTab.textContent = `本次记录 · ${history.length}`;
+        const selectionSnapshot = result?.executionTarget?.selectionSnapshot || result?.materialized?.selection;
+        const candidateLayerId = result?.import?.targetId;
+        const capturedDocumentId = selectionSnapshot?.locator?.documentId;
+        const nativeCandidate = adapter.applyNativeEffect
+          && selectionSnapshot?.host === adapter.id
+          && result?.materialized?.selection?.host === adapter.id
+          && capturedDocumentId !== undefined
+          && capturedDocumentId !== null
+          && candidateLayerId
+          ? { candidateLayerId: String(candidateLayerId), sourceSelection: selectionSnapshot }
+          : null;
+        const documentId = nativeCandidate?.sourceSelection?.locator?.documentId;
+        const item = {
+          prompt: submittedPrompt,
+          message,
+          ...(nativeCandidate ? {
+            nativeCandidate,
+            sourceMedia: result.import?.sourceMedia,
+            projectColorContext: result.import?.projectColorContext,
+            applied: false,
+            documentId: String(documentId || ''),
+            candidateLayerId: String(candidateLayerId),
+          } : {}),
+        };
+        history.push(item);
+        lastNativeCandidate = nativeCandidate ? item : null;
+        if (applyNative) {
+          applyNative.hidden = !nativeCandidate;
+          applyNative.textContent = '应用为场景替换效果';
+          if (nativeCandidate) {
+            applyNative.title = `应用到原始图层「${selectionSnapshot.label}」`;
+            applyNative.setAttribute('aria-label', applyNative.title);
+          }
+        }
+        status.textContent = nativeCandidate
+          ? `${message} 点击下方按钮后，才会应用到原始图层「${selectionSnapshot.label}」。`
+          : message;
+        if (candidateLayerId && documentId) knownCandidateIds.add(candidateKey(documentId, candidateLayerId));
+        updateHistoryTab();
         if (activeTab === 'history') showTab('history');
       } catch (error) { if (!disposed) status.textContent = error?.message || '制作失败，请重试。'; }
       finally { busy = false; taskStopRow(); update(); }

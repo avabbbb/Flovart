@@ -8,18 +8,52 @@
     "product": "after-effects",
     "targetSdk": "After Effects C++ Effect SDK (version pinned at real-host gate)",
     "buildStatus": "needs-native-sdk",
-    "description": "Renders one pinned local asset blended over the current frame. Milestone-1 skeleton: not compiled on this machine; see NATIVE_EFFECT.md for the External Gate checklist."
+    "pixelIndependence": "declared",
+    "outputExtent": "not-declared-pending-extent-and-origin-support",
+    "multiFrameRendering": "not-declared-pending-real-host-thread-safety-test",
+    "description": "Bilinearly resamples and blends an imported footage layer over the current frame. CEP source writes a content-addressed candidate and a version manifest in the layer comment; project portability is unverified. Source code is not compiled or host-certified."
+  },
+  "assetVersionRecord": {
+    "schemaVersion": 1,
+    "storage": "CEP USER_DATA",
+    "filename": "flovart-asset-<artifactId>-sha256-<digest>.<ext>",
+    "manifestLocation": "After Effects candidate layer comment",
+    "fields": [
+      "application and assetType",
+      "artifactId",
+      "providerTaskId when available",
+      "sha256",
+      "byteSize",
+      "kind",
+      "mimeType",
+      "name",
+      "prompt and modelId when available",
+      "width and height when available",
+      "durationMs when available",
+      "After Effects interpreted width, height, duration, frame rates, frame duration, and pixel aspect ratio",
+      "After Effects interpreted alpha presence, mode, inversion, and premultiplication color when available",
+      "project color working space, gamma, bit depth, and linearization settings",
+      "sourceCompId and sourceLayerId when imported against a selection"
+    ],
+    "limitations": [
+      "manifest is provenance metadata and is not checked by the native render callback",
+      "the native render path reads 8-bit pixels; the CEP application action refuses projects whose bit depth is not 8",
+      "output extent and origin handling are not implemented or declared",
+      "candidate source existence and byte size are checked before apply, but relocation/relinking and disk hash verification are not implemented",
+      "captured media values describe After Effects' imported interpretation; embedded source color profile and authoritative frame count are not recorded",
+      "project collection, cross-machine portability, and disk-file checksum revalidation are unverified"
+    ]
   },
   "parameters": [
     {
       "id": 1,
-      "symbol": "FLOVART_PARAM_ASSET_PATH",
-      "name": "Asset Path",
-      "type": "path",
+      "symbol": "FLOVART_PARAM_ASSET_VERSION",
+      "name": "Asset Version",
+      "type": "layer",
       "persisted": true,
       "keyframable": false,
-      "default": null,
-      "role": "Pinned local media file decoded for the current frame. Written by the generation pipeline; the render path only reads it."
+      "default": "none",
+      "role": "The selected After Effects footage layer is the applied media version. The AEP stores the layer reference; current media bytes remain in CEP USER_DATA."
     },
     {
       "id": 2,
@@ -32,37 +66,31 @@
       "max": 100,
       "default": 100,
       "precision": "hundredths",
-      "role": "Mix intensity: 0 shows the original frame, 100 shows the asset."
-    },
-    {
-      "id": 3,
-      "symbol": "FLOVART_PARAM_VERSION",
-      "name": "Version",
-      "type": "int-slider",
-      "persisted": true,
-      "keyframable": false,
-      "min": 1,
-      "max": 9999,
-      "default": 1,
-      "role": "Applied asset version slot (V1, V2, ...). Full version ids arrive with the generation pipeline slice."
+      "role": "Mix intensity: 0 shows the original frame, 100 shows the selected media version."
     }
   ],
   "dataflow": [
-    "load pinned file from Asset Path (the only file read in the render path)",
-    "decode the source frame matching the current integer output frame",
-    "blend asset over the input frame by Blend percent",
-    "return the composited frame; if the asset is missing, pass input through and flag a display error"
+    "check out the selected footage layer from After Effects at the current frame",
+    "blend the checked-out frame with the effect input by Blend percent",
+    "check the layer back in before returning",
+    "if checkout fails or no layer pixels are available, report a render error rather than outputting a successful pass-through"
   ],
   "nonGoals": [
-    "no network access, no generation calls, no agent/browser/service dependency in the render path",
+    "no filesystem path parsing or image/video decoder in the render callback",
+    "no network access, generation calls, or Agent/browser/service dependency in the render callback",
     "no transform/mask/tracking editor — host-native controls cover those",
     "no generic Host SDK abstraction — this file targets the AE Effect SDK directly"
   ],
   "externalGate": [
-    "compile with the real AE Effect SDK on Windows (verify SDK-VERIFY marks in FlovartEffect.cpp)",
-    "lock the asset decoder library (OpenImageIO candidate) and pixel format",
-    "apply effect, set all three parameters, save project, reopen and verify values",
-    "scrub to random frames and compare pixels against an independent reference (<=1 per channel, 8-bit SDR)",
-    "export with the machine offline; verify no generation request occurs"
+    "compile with the real AE Effect SDK and Windows toolchain; reconcile SDK version and PiPL flags",
+    "apply a candidate through CEP and verify the exact source layer id is bound",
+    "test 8-bit blend output against an independent reference, including alpha, row padding, cropped extent, masks, and upstream origin changes",
+    "save, close, and reopen a project and verify the footage reference and Blend keyframes",
+    "apply V1 then V2, undo and redo, and confirm V1 media remains available",
+    "export with the Flovart service and network stopped",
+    "test missing footage and unsupported bit depth error visibility",
+    "verify After Effects to Premiere effect compatibility separately",
+    "enable output extent only after clipped extent and origin handling passes",
+    "enable Multi-Frame Rendering only after thread-safety analysis and real-host stress testing"
   ]
 }

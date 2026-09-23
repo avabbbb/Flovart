@@ -17,8 +17,8 @@ resource 'PiPL' (16000) {
         AE_Effect_Version { 65536 /* 1.0.0 */ },
         AE_Effect_Match_Name { "FLOVART_SceneReplace" },
         AE_Effect_Info_Flags { 0 },
-        AE_Effect_Global_OutFlags { 0x00000004 /* PIX_INDEPENDENT */ | 0x00020000 /* USE_OUTPUT_EXTENT */ },
-        AE_Effect_Global_OutFlags_2 { 0x00000002 /* SUPPORTS_THREADED_RENDERING */ },
+        AE_Effect_Global_OutFlags { 0x00000004 /* PIX_INDEPENDENT */ },
+        AE_Effect_Global_OutFlags_2 { 0 /* no unverified MFR/thread-safety claim */ },
         AE_ImageInfo_Extension { 0 },
         AE_Effect_Support_URL { "https://flovart.local/support" },
         CodeWin64X86 { "EffectMain" }

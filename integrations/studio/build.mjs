@@ -15,7 +15,7 @@ const packages = [
       dir: 'effect',
       required: ['FlovartEffect.cpp', 'FlovartEffect.r', 'asset-manifest.json'],
       entryPoint: 'EffectMain',
-      params: ['Asset Path', 'Blend', 'Version'],
+      params: ['Asset Version', 'Blend'],
     }},
   { id: 'resolve', host: 'resolve-studio', runtime: 'resolve-workflow-integration', required: ['manifest.json', 'manifest.xml', 'package.json', 'main.js', 'canvas-url.js', 'preload.js', 'index.html', 'index.js', 'panel.css'] },
 ];

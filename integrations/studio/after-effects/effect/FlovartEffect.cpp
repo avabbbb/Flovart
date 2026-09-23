@@ -1,269 +1,300 @@
 /*
- * FlovartEffect.cpp — Flovart scene-replace native effect, milestone-1 slice.
+ * FlovartEffect.cpp — fixed-footage scene replacement for After Effects.
  *
- * Dataflow (docs/design/flovart-native-effects.md §4):
- *   pinned local asset file -> decode -> blend(intensity) -> current output frame
- *
- * Rules baked into this file:
- *   - the render path never touches the network, never waits on generation,
- *     and never depends on an agent, browser, or service being online;
- *   - the only file read is the pinned asset path stored in
- *     FLOVART_PARAM_ASSET_PATH;
- *   - a missing or undecoded asset passes the input frame through unchanged
- *     and raises PF_OutFlag_DISPLAY_ERROR_MESSAGE — never silent wrong output.
- *
- * This is a source skeleton. It targets the Adobe After Effects C++ Effect SDK
- * but has NOT been compiled here (no SDK/MSVC on the build machine;
- * asset-manifest.json reports buildStatus "needs-native-sdk"). Lines marked
- * SDK-VERIFY must be checked against the actual SDK headers during the
- * real-host gate in NATIVE_EFFECT.md.
+ * The host-owned "Asset Version" layer parameter pins an imported footage
+ * layer in the AEP. Render checks that layer out at the current composition
+ * time, blends it with the effect input, and checks it back in. This keeps
+ * project media/relink behavior with After Effects and keeps the render path
+ * local, synchronous, and independent of Flovart, Providers, and Agents.
  */
 
 #include "AE_Effect.h"
 #include "AE_EffectCB.h"
+#include "AE_EffectCBSuites.h"
+#include "AE_GeneralPlug.h"
 #include "AE_Macros.h"
 #include "Param_Utils.h"
-#include "AE_EffectCBSuites.h"
 #include "String_Utils.h"
-#include "AEFX_SuiteHandlerTemplate.h"
-#include "AE_GeneralPlug.h"
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include <stdint.h>
+#include <stddef.h>
 
-#define FLOVART_EFFECT_NAME       "Flovart Scene Replace"
-#define FLOVART_ASSET_PATH_MAX    1024
-#define FLOVART_BLEND_MAX          100 /* percent */
+#define FLOVART_EFFECT_NAME "Flovart Scene Replace"
+#define FLOVART_BLEND_MAX 100
 
-/*
- * Parameter layout — must stay in sync with asset-manifest.json.
- * FLOVART_INPUT is the layer the effect is applied to.
- */
+#if defined(_WIN32)
+#define FLOVART_DLL_EXPORT __declspec(dllexport)
+#elif defined(__APPLE__)
+#define FLOVART_DLL_EXPORT __attribute__((visibility("default")))
+#else
+#error Unsupported platform for the Flovart After Effects effect
+#endif
+
 enum {
     FLOVART_INPUT = 0,
-    FLOVART_PARAM_ASSET_PATH,
+    FLOVART_PARAM_ASSET_VERSION,
     FLOVART_PARAM_BLEND,
-    FLOVART_PARAM_VERSION,
     FLOVART_NUM_PARAMS
 };
 
-/* Decoded pinned-asset frame, filled by the locked decoder library. */
-struct FlovartAsset {
-    A_long          width;
-    A_long          height;
-    unsigned char  *pixels;   /* 8-bit BGRA/RGBA straight, decoder-owned */
-};
-
-/*
- * Pixel decode is intentionally NOT hand-rolled (main design §4.3: reuse a
- * mature library; OpenImageIO is the candidate). The library and pixel format
- * are locked during the real-SDK prototype; until then
- * FLOVART_HAS_ASSET_DECODER stays undefined and the effect reports the asset
- * as missing instead of drawing wrong pixels.
- */
-#ifdef FLOVART_HAS_ASSET_DECODER
-extern "C" A_Boolean FlovartDecodeFrame(const char *path, A_long frame, FlovartAsset *out);
-#endif
-
-static A_long CurrentFrame(PF_InData *in_data)
-{
-    /* Integer frames + rational fps per main design §4.3; time_step is the
-     * per-frame duration in the effect's time units. */
-    return in_data->current_time / in_data->time_step;
-}
-
-static bool LoadPinnedAssetFrame(const char *path, A_long frame, FlovartAsset *out)
-{
-    /* The ONLY file access in the render path: the pinned asset path stored
-     * in the effect parameter. No URLs, no temp blobs, no service calls. */
-    FILE *fp = fopen(path, "rb");
-    if (!fp) return false;
-
-#ifdef FLOVART_HAS_ASSET_DECODER
-    fclose(fp);
-    return FlovartDecodeFrame(path, frame, out) != FALSE;
-#else
-    /* Skeleton build: prove the file is readable, then report missing until
-     * the decoder library is locked and compiled in. */
-    unsigned char probe[16];
-    size_t got = fread(probe, 1, sizeof(probe), fp);
-    fclose(fp);
-    (void)got; (void)frame; (void)out;
-    return false;
-#endif
-}
-
-static PF_Err ResolvePinnedAssetPath(PF_InData *in_data, PF_ParamDef *asset_param,
-                                     char *out_path, A_long out_len)
-{
-    /* PATH params store a PF_PathID resolved through PathDataSuite.
-     * SDK-VERIFY: exact suite name/version and PF_GetPathString signature
-     * differ across SDK releases; PF_PathID_NONE means "not pinned yet". */
-    if (asset_param->u.pd.path_id == PF_PathID_NONE) return PF_Err_BAD_CALLBACK_PARAM;
-
-    AEFX_SuiteScoper<PF_PathDataSuite1> path_suite(in_data, kPFPathDataSuite, kPFPathDataSuiteVersion1);
-    return path_suite->PF_GetPathString(in_data->effect_ref, asset_param->u.pd.path_id,
-                                        FALSE, out_path, out_len);
-}
-
-static void CopyInputThrough(const PF_LayerDef *input, PF_LayerDef *output)
-{
-    const A_long w = output->extent_hint.right - output->extent_hint.left;
-    const A_long h = output->extent_hint.bottom - output->extent_hint.top;
-
-    for (A_long y = 0; y < h; ++y) {
-        const PF_Pixel8 *src = (const PF_Pixel8 *)((const char *)input->data + (size_t)y * (size_t)input->rowbytes);
-        PF_Pixel8 *dst = (PF_Pixel8 *)((char *)output->data + (size_t)y * (size_t)output->rowbytes);
-        memcpy(dst, src, (size_t)w * sizeof(PF_Pixel8));
-    }
-}
-
-/* output = input * (1 - mix) + asset * mix, per pixel, over the overlap. */
-static void CompositeAsset8(const PF_LayerDef *input, const FlovartAsset *asset,
-                            double mix, PF_LayerDef *output)
-{
-    const A_long w = output->extent_hint.right - output->extent_hint.left;
-    const A_long h = output->extent_hint.bottom - output->extent_hint.top;
-    const A_long keep = 256L - (A_long)(mix * 256.0);
-    const A_long add  = (A_long)(mix * 256.0);
-
-    for (A_long y = 0; y < h; ++y) {
-        const PF_Pixel8 *src = (const PF_Pixel8 *)((const char *)input->data + (size_t)y * (size_t)input->rowbytes);
-        PF_Pixel8 *dst = (PF_Pixel8 *)((char *)output->data + (size_t)y * (size_t)output->rowbytes);
-        const unsigned char *arow = (y < asset->height)
-            ? asset->pixels + (size_t)y * (size_t)asset->width * 4 : NULL;
-
-        for (A_long x = 0; x < w; ++x) {
-            if (!arow || x >= asset->width) { dst[x] = src[x]; continue; }
-            const unsigned char *a = arow + (size_t)x * 4;
-            dst[x].red   = (A_u_char)((src[x].red   * keep + a[0] * add) >> 8);
-            dst[x].green = (A_u_char)((src[x].green * keep + a[1] * add) >> 8);
-            dst[x].blue  = (A_u_char)((src[x].blue  * keep + a[2] * add) >> 8);
-            dst[x].alpha = (A_u_char)((src[x].alpha * keep + a[3] * add) >> 8);
-        }
-    }
-}
-
-static PF_Err About(PF_InData *in_data, PF_OutData *out_data,
-                    PF_ParamDef *params[], PF_LayerDef *output)
+static PF_Err About(PF_OutData *out_data)
 {
     AEFX_CLR_STRUCT(*out_data);
     PF_SPRINTF(out_data->return_msg,
-               "%s v1.0\rPinned-asset scene replace. Renders a fixed local "
-               "asset over the current frame; never generates or fetches.",
+               "%s v1.0\rBlends a project-pinned footage layer over the current frame.",
                FLOVART_EFFECT_NAME);
     return PF_Err_NONE;
 }
 
-static PF_Err GlobalSetup(PF_InData *in_data, PF_OutData *out_data,
-                          PF_ParamDef *params[], PF_LayerDef *output)
+static PF_Err GlobalSetup(PF_OutData *out_data)
 {
+    AEFX_CLR_STRUCT(*out_data);
     out_data->my_version = PF_VERSION(1, 0, 0, PF_Stage_DEVELOP, 1);
-    /* Skeleton is 8-bit only; DEEP_COLOR_AWARE is a real-host gate item. */
-    out_data->out_flags  = PF_OutFlag_PIX_INDEPENDENT | PF_OutFlag_USE_OUTPUT_EXTENT;
-    out_data->out_flags2 = PF_OutFlag2_SUPPORTS_THREADED_RENDERING;
+    out_data->out_flags = PF_OutFlag_PIX_INDEPENDENT;
+    out_data->out_flags2 = PF_OutFlag2_NONE;
     return PF_Err_NONE;
 }
 
-static PF_Err ParamsSetup(PF_InData *in_data, PF_OutData *out_data,
-                          PF_ParamDef *params[], PF_LayerDef *output)
+static PF_Err ParamsSetup(PF_InData *in_data, PF_OutData *out_data)
 {
-    PF_Err      err = PF_Err_NONE;
     PF_ParamDef def;
 
-    /* 1. Asset Path — pinned local media file this instance renders.
-     * Persists with the project; cannot time-vary. The generation pipeline
-     * writes the committed asset path here; the render path only reads it. */
     AEFX_CLR_STRUCT(def);
-    def.param_type = PF_Param_PATH; /* SDK-VERIFY: PF_Param_PATH vs PF_ParamType_PATH */
-    strcpy(def.name, "Asset Path");
-    def.flags      = PF_ParamFlag_CANNOT_TIME_VARY | PF_ParamFlag_CANNOT_INTERP;
-    def.uu.id      = FLOVART_PARAM_ASSET_PATH;
-    def.u.pd.path_id = PF_PathID_NONE;
-    err = PF_AddParam(in_data->effect_ref, -1, &def);
-    if (err) return err;
+    PF_ADD_LAYER("Asset Version", PF_LayerDefault_NONE, FLOVART_PARAM_ASSET_VERSION);
 
-    /* 2. Blend — mix intensity 0..100%, keyframable within the verified range. */
     AEFX_CLR_STRUCT(def);
     PF_ADD_FLOAT_SLIDERX("Blend",
-                         0, FLOVART_BLEND_MAX,        /* valid min/max  */
-                         0, FLOVART_BLEND_MAX,        /* slider min/max */
-                         FLOVART_BLEND_MAX,           /* default 100%   */
+                         0, FLOVART_BLEND_MAX,
+                         0, FLOVART_BLEND_MAX,
+                         FLOVART_BLEND_MAX,
                          PF_Precision_HUNDREDTHS,
-                         0,                           /* display flags  */
-                         0,                           /* param flags    */
+                         PF_ValueDisplayFlag_PERCENT,
+                         0,
                          FLOVART_PARAM_BLEND);
-    if (err) return err;
-
-    /* 3. Version — integer slot of the applied asset version (V1, V2, ...).
-     * String/UUID version ids are deferred to the generation pipeline slice;
-     * an integer is enough to prove project persistence + reopen. */
-    AEFX_CLR_STRUCT(def);
-    def.param_type        = PF_Param_SLIDER;
-    strcpy(def.name, "Version");
-    def.flags             = PF_ParamFlag_CANNOT_TIME_VARY | PF_ParamFlag_CANNOT_INTERP;
-    def.uu.id             = FLOVART_PARAM_VERSION;
-    def.u.sd.dephault     = 1;
-    def.u.sd.valid_min    = 1;
-    def.u.sd.slider_min   = 1;
-    def.u.sd.valid_max    = 9999;
-    def.u.sd.slider_max   = 9999;
-    err = PF_AddParam(in_data->effect_ref, -1, &def);
-    if (err) return err;
 
     out_data->num_params = FLOVART_NUM_PARAMS;
     return PF_Err_NONE;
 }
 
-static PF_Err Render(PF_InData *in_data, PF_OutData *out_data,
-                     PF_ParamDef *params[], PF_LayerDef *output)
+static double MapPixelCenter(A_long destination, double source_scale, A_long source_size)
 {
-    const double mix = params[FLOVART_PARAM_BLEND]->u.fs_d.value / (double)FLOVART_BLEND_MAX;
+    double mapped = ((double)destination + 0.5) * source_scale - 0.5;
+    if (mapped < 0.0) mapped = 0.0;
+    if (mapped > (double)(source_size - 1)) mapped = (double)(source_size - 1);
+    return mapped;
+}
 
-    char path[FLOVART_ASSET_PATH_MAX];
-    path[0] = '\0';
-    const PF_Err path_err = ResolvePinnedAssetPath(in_data, params[FLOVART_PARAM_ASSET_PATH],
-                                                   path, sizeof(path));
+static A_u_char MixChannel(A_u_char input, A_u_char asset, double blend)
+{
+    const double mixed = (double)input * (1.0 - blend) + (double)asset * blend;
+    return (A_u_char)(mixed + 0.5);
+}
 
-    FlovartAsset asset;
-    AEFX_CLR_STRUCT(asset);
-    const bool have_asset =
-        (path_err == PF_Err_NONE) && LoadPinnedAssetFrame(path, CurrentFrame(in_data), &asset);
+static A_u_char InterpolateChannel(A_u_char top_left,
+                                   A_u_char top_right,
+                                   A_u_char bottom_left,
+                                   A_u_char bottom_right,
+                                   double x_fraction,
+                                   double y_fraction)
+{
+    const double top = (double)top_left + ((double)top_right - (double)top_left) * x_fraction;
+    const double bottom = (double)bottom_left + ((double)bottom_right - (double)bottom_left) * x_fraction;
+    const double value = top + (bottom - top) * y_fraction;
+    return (A_u_char)(value + 0.5);
+}
 
-    if (!have_asset) {
-        /* Missing/undecoded pinned asset: show the original frame and mark it
-         * explicitly — never silently export wrong content (main design §3.3). */
-        CopyInputThrough(&params[FLOVART_INPUT]->u.ld, output);
-        out_data->out_flags |= PF_OutFlag_DISPLAY_ERROR_MESSAGE;
-        PF_SPRINTF(out_data->return_msg,
-                   "Flovart: pinned asset missing or not decoded yet.");
-        return PF_Err_NONE;
+static bool HasValidWorldLayout8(const PF_EffectWorld *world)
+{
+    if (!world || world->width <= 0 || world->height <= 0 || world->rowbytes <= 0) {
+        return false;
     }
 
-    CompositeAsset8(&params[FLOVART_INPUT]->u.ld, &asset, mix, output);
+    const uint64_t minimum_rowbytes = (uint64_t)world->width * (uint64_t)sizeof(PF_Pixel8);
+    const uint64_t max_size = (uint64_t)((size_t)-1);
+    if (minimum_rowbytes > max_size || (uint64_t)world->rowbytes < minimum_rowbytes) {
+        return false;
+    }
+
+    const uint64_t last_row_offset = (uint64_t)(world->height - 1) * (uint64_t)world->rowbytes;
+    return last_row_offset <= max_size - minimum_rowbytes;
+}
+
+static PF_Pixel8 SampleBilinear(const PF_Pixel8 *pixels,
+                                A_long rowbytes,
+                                A_long width,
+                                A_long height,
+                                double x,
+                                double y)
+{
+    const A_long x0 = (A_long)x;
+    const A_long y0 = (A_long)y;
+    const A_long x1 = x0 + (x0 + 1 < width ? 1 : 0);
+    const A_long y1 = y0 + (y0 + 1 < height ? 1 : 0);
+    const double x_fraction = x - (double)x0;
+    const double y_fraction = y - (double)y0;
+    const PF_Pixel8 *row0 = (const PF_Pixel8 *)((const char *)pixels + (size_t)y0 * (size_t)rowbytes);
+    const PF_Pixel8 *row1 = (const PF_Pixel8 *)((const char *)pixels + (size_t)y1 * (size_t)rowbytes);
+    const PF_Pixel8 top_left = row0[x0];
+    const PF_Pixel8 top_right = row0[x1];
+    const PF_Pixel8 bottom_left = row1[x0];
+    const PF_Pixel8 bottom_right = row1[x1];
+    PF_Pixel8 sampled;
+
+    sampled.alpha = InterpolateChannel(top_left.alpha, top_right.alpha, bottom_left.alpha, bottom_right.alpha, x_fraction, y_fraction);
+    sampled.red = InterpolateChannel(top_left.red, top_right.red, bottom_left.red, bottom_right.red, x_fraction, y_fraction);
+    sampled.green = InterpolateChannel(top_left.green, top_right.green, bottom_left.green, bottom_right.green, x_fraction, y_fraction);
+    sampled.blue = InterpolateChannel(top_left.blue, top_right.blue, bottom_left.blue, bottom_right.blue, x_fraction, y_fraction);
+    return sampled;
+}
+
+static PF_Err Composite8(PF_EffectWorld *input,
+                         PF_EffectWorld *asset,
+                         PF_EffectWorld *output,
+                         double blend)
+{
+    PF_Pixel8 *input_pixels = NULL;
+    PF_Pixel8 *asset_pixels = NULL;
+    PF_Pixel8 *output_pixels = NULL;
+
+    if (!HasValidWorldLayout8(input)
+        || !HasValidWorldLayout8(asset)
+        || !HasValidWorldLayout8(output)) {
+        return PF_Err_BAD_CALLBACK_PARAM;
+    }
+
+    PF_Err err = PF_GET_PIXEL_DATA8(input, NULL, &input_pixels);
+    if (err) return err;
+    err = PF_GET_PIXEL_DATA8(asset, NULL, &asset_pixels);
+    if (err) return err;
+    err = PF_GET_PIXEL_DATA8(output, NULL, &output_pixels);
+    if (err) return err;
+
+    if (!input_pixels || !asset_pixels || !output_pixels) {
+        return PF_Err_BAD_CALLBACK_PARAM;
+    }
+
+    const A_Boolean input_matches_output = input->width == output->width && input->height == output->height;
+    const A_Boolean asset_matches_output = asset->width == output->width && asset->height == output->height;
+    const double input_scale_x = (double)input->width / (double)output->width;
+    const double input_scale_y = (double)input->height / (double)output->height;
+    const double asset_scale_x = (double)asset->width / (double)output->width;
+    const double asset_scale_y = (double)asset->height / (double)output->height;
+    for (A_long y = 0; y < output->height; ++y) {
+        const double input_y = input_matches_output ? 0.0 : MapPixelCenter(y, input_scale_y, input->height);
+        const double asset_y = asset_matches_output ? 0.0 : MapPixelCenter(y, asset_scale_y, asset->height);
+        const PF_Pixel8 *input_row = input_matches_output
+            ? (const PF_Pixel8 *)((const char *)input_pixels + (size_t)y * (size_t)input->rowbytes)
+            : NULL;
+        const PF_Pixel8 *asset_row = asset_matches_output
+            ? (const PF_Pixel8 *)((const char *)asset_pixels + (size_t)y * (size_t)asset->rowbytes)
+            : NULL;
+        PF_Pixel8 *output_row = (PF_Pixel8 *)((char *)output_pixels + (size_t)y * (size_t)output->rowbytes);
+
+        for (A_long x = 0; x < output->width; ++x) {
+            const double input_x = input_matches_output ? 0.0 : MapPixelCenter(x, input_scale_x, input->width);
+            const double asset_x = asset_matches_output ? 0.0 : MapPixelCenter(x, asset_scale_x, asset->width);
+            const PF_Pixel8 source = input_matches_output
+                ? input_row[x]
+                : SampleBilinear(input_pixels, input->rowbytes, input->width, input->height, input_x, input_y);
+            const PF_Pixel8 replacement = asset_matches_output
+                ? asset_row[x]
+                : SampleBilinear(asset_pixels, asset->rowbytes, asset->width, asset->height, asset_x, asset_y);
+            PF_Pixel8 *destination = output_row + x;
+
+            destination->alpha = MixChannel(source.alpha, replacement.alpha, blend);
+            destination->red = MixChannel(source.red, replacement.red, blend);
+            destination->green = MixChannel(source.green, replacement.green, blend);
+            destination->blue = MixChannel(source.blue, replacement.blue, blend);
+        }
+    }
+
     return PF_Err_NONE;
 }
 
-extern "C" DllExport PF_Err EffectMain(
-    PF_Cmd       cmd,
-    PF_InData   *in_data,
-    PF_OutData  *out_data,
-    PF_ParamDef *params[],
-    PF_LayerDef *output,
-    void        *extra)
+static PF_Err Render(PF_InData *in_data,
+                     PF_OutData *out_data,
+                     PF_ParamDef *params[],
+                     PF_LayerDef *output)
 {
     PF_Err err = PF_Err_NONE;
-    try {
-        switch (cmd) {
-        case PF_Cmd_ABOUT:        err = About(in_data, out_data, params, output);       break;
-        case PF_Cmd_GLOBAL_SETUP: err = GlobalSetup(in_data, out_data, params, output); break;
-        case PF_Cmd_PARAMS_SETUP: err = ParamsSetup(in_data, out_data, params, output); break;
-        case PF_Cmd_RENDER:       err = Render(in_data, out_data, params, output);      break;
-        default: break;
-        }
-    } catch (PF_Err &thrown) {
-        err = thrown;
+    PF_ParamDef asset_checkout;
+    AEFX_CLR_STRUCT(asset_checkout);
+
+    if (!in_data || !out_data || !params
+        || !params[FLOVART_INPUT]
+        || !params[FLOVART_PARAM_ASSET_VERSION]
+        || !params[FLOVART_PARAM_BLEND]
+        || !output) {
+        return PF_Err_BAD_CALLBACK_PARAM;
     }
-    return err;
+
+    const double blend_value = params[FLOVART_PARAM_BLEND]->u.fs_d.value;
+    if (blend_value != blend_value) {
+        out_data->out_flags |= PF_OutFlag_DISPLAY_ERROR_MESSAGE;
+        PF_SPRINTF(out_data->return_msg, "Flovart: Blend must be a valid number.");
+        return PF_Err_BAD_CALLBACK_PARAM;
+    }
+
+    PF_EffectWorld *input = &params[FLOVART_INPUT]->u.ld;
+    err = PF_CHECKOUT_PARAM(in_data,
+                            FLOVART_PARAM_ASSET_VERSION,
+                            in_data->current_time,
+                            in_data->time_step,
+                            in_data->time_scale,
+                            &asset_checkout);
+    if (err) {
+        out_data->out_flags |= PF_OutFlag_DISPLAY_ERROR_MESSAGE;
+        PF_SPRINTF(out_data->return_msg,
+                   "Flovart: After Effects could not read the selected Asset Version layer.");
+        return err;
+    }
+
+    PF_EffectWorld *asset = &asset_checkout.u.ld;
+    const double blend = blend_value <= 0.0
+        ? 0.0
+        : blend_value >= FLOVART_BLEND_MAX
+            ? 1.0
+            : blend_value / (double)FLOVART_BLEND_MAX;
+
+    const A_Boolean has_pixels = asset->width > 0
+        && asset->height > 0;
+
+    if (!has_pixels) {
+        out_data->out_flags |= PF_OutFlag_DISPLAY_ERROR_MESSAGE;
+        PF_SPRINTF(out_data->return_msg,
+                   "Flovart: choose an imported footage layer in Asset Version.");
+        err = PF_Err_BAD_CALLBACK_PARAM;
+    } else {
+        err = Composite8(input, asset, output, blend);
+        if (err) {
+            out_data->out_flags |= PF_OutFlag_DISPLAY_ERROR_MESSAGE;
+            PF_SPRINTF(out_data->return_msg,
+                       "Flovart: the selected footage could not be rendered as 8-bit pixels.");
+        }
+    }
+
+    const PF_Err checkin_err = PF_CHECKIN_PARAM(in_data, &asset_checkout);
+    return err ? err : checkin_err;
+}
+
+extern "C" FLOVART_DLL_EXPORT PF_Err EffectMain(
+    PF_Cmd cmd,
+    PF_InData *in_data,
+    PF_OutData *out_data,
+    PF_ParamDef *params[],
+    PF_LayerDef *output,
+    void *extra)
+{
+    switch (cmd) {
+    case PF_Cmd_ABOUT:
+        return About(out_data);
+    case PF_Cmd_GLOBAL_SETUP:
+        return GlobalSetup(out_data);
+    case PF_Cmd_PARAMS_SETUP:
+        return ParamsSetup(in_data, out_data);
+    case PF_Cmd_RENDER:
+        return Render(in_data, out_data, params, output);
+    default:
+        return PF_Err_NONE;
+    }
 }

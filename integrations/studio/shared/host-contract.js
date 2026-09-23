@@ -227,6 +227,23 @@
         return { dispose: () => global.clearInterval(timer) };
       },
     };
+    if (id === 'after-effects') {
+      adapter.listNativeCandidates = async documentId => {
+        const value = await call('listNativeCandidates', documentId);
+        if (!Array.isArray(value)) return [];
+        return value.map(candidate => ({
+          ...candidate,
+          candidateLayerId: String(candidate?.candidateLayerId || ''),
+          artifactId: String(candidate?.artifactId || ''),
+          sha256: String(candidate?.sha256 || ''),
+          mediaAvailable: typeof candidate?.mediaAvailable === 'boolean' ? candidate.mediaAvailable : undefined,
+          ...(candidate?.sourceSelection ? {
+            sourceSelection: normalizeSelection(id, candidate.sourceSelection, defaultKind),
+          } : { sourceSelection: null }),
+        })).filter(candidate => candidate.candidateLayerId && candidate.artifactId && /^[a-f0-9]{64}$/i.test(candidate.sha256));
+      };
+      adapter.applyNativeEffect = request => call('applyNativeEffect', request);
+    }
     return adapter;
   }
 

@@ -1,70 +1,96 @@
 # After Effects host certification
 
-Status: `EXTERNAL_GATE`.
+Status: `EXTERNAL_GATE`. The workspace contains a CEP panel and an uncompiled
+AE Effect SDK source prototype. Neither package build output nor source presence
+certifies a native effect. The current development machine has no detected AE
+installation, AE SDK path, or Windows C++ build toolchain.
 
-There are **two different AE deliverables** and they must be certified independently:
+## Package and target binding
 
-1. `dist-studio/after-effects`: Experimental CEP/ExtendScript light panel;
-2. `integrations/studio/after-effects/effect`: planned C++ Effect SDK native effect.
+- Record Windows, After Effects 22.0 or newer, CEP, AE Effect SDK, and compiler
+  versions. Exact document/layer binding uses the persistent `Item.id` and
+  `Layer.id` scripting APIs introduced in AE 22.0.
+- Build and install `dist-studio/after-effects`; verify the CEP panel loads in
+  the declared After Effects version.
+- Confirm selection changes update the panel context. Generate from layer A,
+  switch to layer B while generation runs, and prove the candidate is imported
+  into A's captured composition. If A or its composition disappears, import
+  must fail visibly and must not fall back to the active composition/layer.
+- Set the playhead to a known source frame and keep another item queued in the
+  Render Queue. Confirm reference materialization uses the captured frame,
+  writes exactly one PNG with alpha, restores the queued item's render state
+  without re-queuing completed/unqueueable items, and leaves no temporary comp
+  or queue item behind. Confirm a
+  missing PNG-alpha output template fails visibly. Repeat with a nonzero
+  composition start time and a selected layer that has a parent, track matte,
+  camera, or layer-dependent effect; confirm the isolated reference preserves
+  the expected pixels or record which source configurations must be rejected.
+- Confirm the imported candidate layer starts disabled so it cannot alter the
+  composition before the explicit apply action; verify the native layer
+  parameter can still read its footage when disabled.
+- Move or rename a candidate file. Confirm the candidate tab reports the
+  missing source after its refresh action, refuses to apply it, and AE reports
+  an already-applied missing source as a render failure. Relocation/relinking
+  still needs a content-hash verification path before it can be implemented.
+- Inspect a candidate's CEP `USER_DATA` filename and layer-comment manifest.
+  Confirm artifact ID, SHA-256, byte size, provider task ID when present, and
+  dimensions/duration match the generated Blob. Compare the stored AE footage
+  interpretation (frame rate, frame duration, pixel aspect, alpha mode) and
+  project color context (working space, gamma, bit depth, linear settings) with
+  the host UI, and confirm the candidate row displays those values. These are
+  AE interpretation/context snapshots, not proof of the file's embedded color
+  profile or authoritative frame count. Ensure no provider key or other
+  credential is stored. The checksum currently identifies the source Blob;
+  persisted-file readback verification remains unimplemented.
+- Confirm the panel refuses to apply the effect in 16/32 bpc projects. Apply it
+  in an 8 bpc project, change the project depth, then verify the existing effect
+  either renders a visible error or is otherwise blocked; that post-apply depth
+  change is not handled by the current CEP guard.
+- Close and reopen the panel with the same composition active. Open the
+  candidate tab and confirm it restores each saved candidate and its original
+  source layer binding from the layer comments.
+- Switch to a different composition while the panel stays open. Confirm the
+  candidate list and the one-click apply action only show entries bound to the
+  active composition; switch back and confirm its saved candidates return.
+  Triggering an apply from a stale captured entry after switching must fail
+  without modifying either composition.
+- Verify the independent **Apply as Scene Replace** action targets A and does
+  not modify B. Inspect the composition before/after and verify the original
+  footage remains available.
 
-Do not report either one as evidence for the other.
+## Native effect
 
-## A. Light panel tracer
+- Compile `effect/FlovartEffect.cpp` and `effect/FlovartEffect.r` with the
+  operator-provided Windows AE SDK and its PiPL resource toolchain. Verify the
+  exported entry point, PiPL flags, match name, and parameter names against the
+  compiled plugin loaded by After Effects.
+- On synthetic 8-bit SDR input, compare Blend 0/50/100 against an independent
+  reference. Cover pixel-center bilinear samples for equal, upscaled, and
+  downscaled source dimensions, alpha, padded rowbytes, random
+  frame order, malformed world dimensions/rowbytes, NaN Blend, cropped layers,
+  masks, upstream buffer/origin changes, and missing footage/error display.
+  Verify a valid all-black or fully transparent frame is still rendered as
+  media. Record unsupported project bit depths explicitly. The source does not
+  request `PF_OutFlag_USE_OUTPUT_EXTENT`; only add it after the effect correctly
+  handles clipped extents and output origins.
+- The source currently does not declare Multi-Frame Rendering support. Stress
+  re-entrant and concurrent frame requests with MFR enabled before setting the
+  threaded-rendering flag in both PiPL and source; record per-frame differences
+  and crashes/hangs.
+- Apply V1 then V2, keyframe Blend, undo/redo, save, close, and reopen. Confirm
+  the selected version and host keyframes persist and both candidate footages
+  remain available.
+- With Flovart and the network stopped, preview and export. Collect the project
+  to another folder, reopen it, and verify every applied footage reference;
+  separately move/relink a source asset and confirm missing media cannot be
+  mistaken for a successful render.
+- Confirm a project reopened on the same machine resolves its CEP `USER_DATA`
+  candidate. Until project collection and relinking are implemented and tested,
+  do not assume the layer-comment manifest makes the media portable.
+- Verify Premiere compatibility independently for the exact Premiere and AE
+  versions; sharing source or SDK lineage is not compatibility evidence.
 
-The installed After Effects version must still support the chosen CEP/ExtendScript path. Do not infer UXP support from Photoshop/Premiere or from Adobe's general UXP migration direction; verify After Effects' current official host documentation first.
-
-Inject `window.__FLOVART_AFTER_EFFECTS_BRIDGE__` with `getContext`, `getSelection`, `materializeLayer` and `importArtifact`. The panel uses the shared `CreativeHostAdapter` and does not own Provider credentials.
-
-First tracer:
-
-```text
-selected layer
-  -> provider-neutral reference
-  -> Flovart generation path
-  -> durable artifact
-  -> new footage / new layer
-```
-
-Required evidence:
-
-- package install and visible docked/resizable panel;
-- context and selection update when the active layer changes;
-- canonical input + Provider wire fixture;
-- result is **added**, not silently replacing the source;
-- before/after layer or Project item list;
-- disconnect/reconnect state is actionable and does not expose internal transport details;
-- narrow/wide panel resize remains usable.
-
-## B. Native C++ effect tracer
-
-Use the current After Effects C++ Effect SDK and validate against the installed AE release.
-
-The first native effect should stay small:
-
-- fixed durable Source/Version;
-- keyframable Blend/Mix;
-- explicit missing/unreadable asset status;
-- optional command to open Flovart / request a new version **outside** the render callback.
-
-Do not duplicate Position, Scale, Mask, Feather or Tracking controls that AE already owns.
-
-Required evidence:
-
-1. real SDK compile on Windows;
-2. effect appears in AE and uses host Effect Controls / Timeline correctly;
-3. save → quit → reopen preserves parameters and fixed artifact identity;
-4. random-frame rendering matches an independent reference;
-5. keyframes behave correctly;
-6. missing/moved artifact fails visibly rather than exporting wrong content;
-7. offline export completes with no network, Provider or Agent dependency;
-8. color depth / alpha / pixel format behavior is recorded for the tested project.
-
-Custom Effect Controls or Composition/Layer UI is only justified when standard host parameters cannot express the interaction. If custom UI is used, verify zoom/downsample/coordinate transforms using the SDK callbacks rather than OS assumptions.
-
-## Evidence wording
-
-Allowed after only package/mock checks:
-
-> After Effects integration package exists and is Experimental; real-host certification remains open.
-
-Do **not** say “AE plugin supported”, “native effect ready”, or “UXP-compatible” without the corresponding real evidence.
+The CEP bridge still depends on the existing Browser-bound Workflow generation
+path. Source code now records a version manifest and Blob checksum, but this
+slice does not certify independent plugin generation, project-portable media
+versions, relinking, disk-file checksum readback, video time mapping, or masks.
