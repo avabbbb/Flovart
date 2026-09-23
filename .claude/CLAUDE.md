@@ -2,6 +2,17 @@
 
 ## Claude Code
 
-Use `npm run flovart:cli -- <command> --json` when the user asks to operate Flovart from outside the app. You are the planner; Flovart only exposes deterministic image/video runtime tools.
+Use [docs/index.md](../docs/index.md) as the document map and the canonical Flovart Skill under `.claude/skills/flovart` for operation details. Do not infer current architecture from archived reports, old ADRs, one-off plans, or historical evidence.
 
-Prefer the project skill under `.claude/skills/flovart` when the task mentions Flovart, Canvas, Codex/Claude/OpenCode integration, runtime tools, storyboard image generation, or video generation.
+When operating Flovart from outside the app, prefer:
+
+- `ensure` for preparation;
+- `status`;
+- `workflow.inspect`;
+- `workflow.selection.get`;
+- `workflow.apply`;
+- `workflow.node.run`.
+
+The visible Browser Workflow remains the current authority for these stable operations. The top-level Agent page is connection/control only; the built-in Assistant stays beside Canvas/Table.
+
+Do not bypass Flovart by writing React/Zustand state, browser storage, Runtime databases or Provider private APIs directly. Use the same idempotency/revision rules documented by the canonical Skill.

@@ -1,238 +1,173 @@
-# Flovart：原生效果与 Agent 协作设计
+# Flovart 当前产品与系统主设计
 
-这是当前唯一的产品与系统主设计。它替代旧 Agent 分层设计、Link 目标稿和 Production Runtime V1 扩张计划；旧代码不会因文档改写自动完成重构。术语见[领域词](../maintenance/agent/CONTEXT.md)，可用性见[支持矩阵](../../SUPPORT_MATRIX.md)，实施进度见[待办](../content/docs/progress/todo.mdx)。
+> Canonical current design. 文件名保留为 `flovart-native-effects.md` 仅为兼容既有链接；本文不再把“原生效果插件”当成 Flovart 的唯一产品身份。
 
-## 1. 决定与边界
+本文是 Flovart 当前唯一的产品与系统主设计。它定义当前 IA、状态权威、Agent 边界、生成与素材边界，以及创作软件宿主扩展方向。历史 Agent / Crew / Director / Operator / Production Skill / Dock / Enterprise 方案不得反向覆盖本文。
 
-| 项目 | 决定 | 依据 |
+配套 current-truth 文档：
+- [Agent Integration](./agent-integration.md)
+- [Adaptive Layout](./adaptive-layout.md)
+- [当前功能](../content/docs/overview/features.mdx)
+- [待办](../content/docs/progress/todo.mdx)
+- [待测试确认](../content/docs/progress/pending-test.mdx)
+- [Support Matrix](../../SUPPORT_MATRIX.md)
+
+## 1. 一句话产品定义
+
+Flovart 是一个 local-first、agent-native 的视觉制作工作台：人和 Coding Agent 操作同一份可见 Workflow；用户继续拥有模型、API Key、素材和最终编辑权。
+
+创作软件插件与原生效果是 Flovart 的宿主扩展方向，不是另一套产品，不重建第二份 Workflow，也不要求所有用户先进入插件。
+
+## 2. 当前信息架构
+
+当前顶栏只有三个产品 surface：
+
+| Surface | 当前职责 | 不承担 |
 | --- | --- | --- |
-| 产品入口 | 插件为主，需要复杂编排时展开 Flovart | 用户已确认 |
-| 目标宿主 | 先 AE/PR 验证，再接 PS；Resolve 联动另做适配 | 用户已确认 |
-| 首版平台 | Windows 优先；macOS 后续单独验证，不承诺同期支持 | 用户通过 ASK 确认 |
-| 核心能力 | Flovart 自己的原生效果；第一款为生成素材与场景替换 | 用户已确认 |
-| 生成体验 | 先生成固定结果，再实时调整混合、遮罩与视频关键帧 | 用户已确认 |
-| Agent | 外部助手优先；Flovart 内置 Assistant 作为可选、无额外特权的任务入口 | 用户已确认 |
-| 复杂度 | 普通函数直接完成业务；不增加强制内置 Operator、制作组、通用总线或插件内核 | 用户明确要求精简 |
-| 插件独立性 | 推荐只开宿主和本地服务即可生成，不要求打开 Workflow | 设计假设：ASK 未返回选择；实现前核对 |
-| 第一款替换范围 | 推荐整段短素材替换，加宿主遮罩混合；自动人物分割和跟踪后置 | 设计假设：ASK 未返回选择；实现前核对 |
+| **Canvas** | 空间化 Workflow：素材、节点、连线、生成、结果与手工编辑 | Agent 连接管理；完整聊天工作区 |
+| **Table** | 结构化媒体处理：选择输入、执行局部处理、把结果送回 Workflow/素材库 | 第二份 Workflow 权威；Agent 会话 |
+| **Agent** | 本地/外部 Coding Agent 的发现、准备、连接状态与切换中心 | 内置 Assistant；任务聊天；Context/History 副本 |
 
-本主设计定义产品目标与边界。目标接口、原生效果、性能数值均不代表已经实现或测得；实现进度以待办和待测试确认页为准。未确认的假设不作为删除现有能力或启动大范围代码重构的授权。
+Canvas 和 Table 旁边共享一个 contextual right drawer：
 
-## 2. 产品设计
+- **Assistant**：Flovart 内置助手，只针对当前项目工作；
+- **Context**：当前 Workflow 上下文；
+- **History**：生成历史。
 
-一句话：在熟悉的创作软件里生成新素材，把结果作为可保存、可调节的 Flovart 效果继续编辑，也可以让自己的 Agent 帮忙完成制作。
+硬边界：
 
-首批用户是使用 AE/PR 制作短视频、广告和视觉合成的个人创作者。首个任务限定为一个镜头片段的替换；长片、自动完整剪辑、多人实时协作、云同步和第三方效果市场不进入首个交付。
+- Agent 页不得重新嵌入 Assistant。
+- Assistant drawer 不负责 Host picker / Agent 安装 / 连接管理。
+- 不再创建 Agent full-page chat workspace。
+- 不把 Canvas/Table/Agent 再包装成 Crew、Director、Operator 等必经产品层。
+- 不恢复旧 Canvas/Art 双系统。
 
-首版安装包与原生效果验收限定 Windows。macOS 的编译、签名、安装及宿主差异作为后续独立工作，不以源码可移植或网页可访问推断插件已经跨平台。
+## 3. Agent 产品模型
 
-只交付一个产品和按需安装的组件：
+外部 Agent 是一等调用者，但不是 Workflow 权威。
 
-- 宿主插件：生成面板与原生效果，用户的日常入口。
-- Flovart 工作区：Workflow 做生成编排，Table 做独立媒体处理，Agent 做对话、任务与产物协作。三者保持独立入口和各自状态，不把 Agent 变成 Workflow/Table 的重复控制面。
-- 本地服务与连接器：后台任务、素材文件、CLI/Skill 和 Agent 接入；CLI + Skill 是外部 Agent 的默认路径，MCP 只作为可选投影，不扩张为新的运行时。
+默认接入路径：
 
-用户可直接使用插件按钮，无需先配置 Agent。第一次生成才配置 AI 服务并展示本次范围和费用；模型服务账号与 Agent 账号分开。现有 Plus/OAuth、代理和 Provider 配置不得被连接引导改写。
+1. Agent Integration Skill 告诉 Codex、WorkBuddy、Claude Code 等如何调用 Flovart。
+2. CLI 是默认 transport。
+3. MCP 是同一 operation contract 的可选投影。
+4. 内置 Assistant 调用同一业务能力，不拥有更高权限。
 
-### 2.1 生态分发
+稳定 model-facing baseline 保留：
 
-制作配方复用已有 Production Skill 包：制作说明、参考 Workflow、参数、示例和所需能力。同一配方可以生成静态图或视频，但不承诺各模型和宿主产生完全相同的结果。
+- `status`
+- `workflow.inspect`
+- `workflow.selection.get`
+- `workflow.apply`
+- `workflow.node.run`
 
-Operation Skill 教外部助手操作 Flovart，CLI 提供默认能力投影，MCP 仅按需提供同一能力的可选投影，Workflow 表达具体步骤。内置 Assistant 可以打开，但不拥有更高权限，也不自动接管项目。配方不是另一套调度器，不包含凭据或任意执行代码。第一阶段只做官方配方与安装入口；社区分发沿用现有作品/Remix 逻辑，不另建市场、账号和计费体系。收费方式及商业 SDK 授权另行决定，不在设计中编造价格。
+`ensure` / `doctor` 属于连接准备与诊断，不是模型日常操作面。Canonical Skill 可以在当前五个稳定 operation 无法安全表达某个兼容动作时记录少量 granular helper；helper 不是新的产品 surface，也不能绕过同一 mutation/authority 边界。
 
-## 3. 交互设计
+禁止为了一个 Host 再复制 Workflow schema、Provider route、权限模型或生成实现。详细边界见 [Agent Integration](./agent-integration.md)。
 
-### 3.1 首次使用
+## 4. 状态与权威
 
-安装器发现宿主 → 选择安装 AE/PR 组件 → 打开宿主的 Flovart 面板 → 选择图层或片段 → 添加 Flovart 场景替换效果 → 设置参考和提示词 → 确认本次生成 → 比较候选 → 应用版本 → 在原生控件中继续调整。
-
-未检测到宿主时说明缺少什么和支持版本；不要把 PATH 检测等同于安装成功。未选择对象时只显示“请选择图层或片段”。面板连接由安装器/本地服务自动发现，不要求手填端口、Token、Session ID。
-
-### 3.2 两种控件各做一件事
-
-| 位置 | 内容 | 更新行为 |
-| --- | --- | --- |
-| Flovart 面板 | 提示词、参考素材、时间范围、模型、生成、进度、取消、版本对比、展开 Workflow | 生成参数修改只形成草稿；点击生成才提交新任务 |
-| 原生效果控件 | 已应用版本、混合强度、位置/缩放、遮罩及羽化；视频支持已验证参数的关键帧 | 使用已保存素材本地渲染，不触发远程生成 |
-
-面板默认紧凑单列，参考/参数按需展开。工作区继续使用现有主题和弹性布局；宿主面板遵循宿主主题。UXP 不是完整浏览器，不预设整套 React/Ant Design UI 可原样嵌入；共享业务函数和文案，宿主 UI 用其实际支持的控件。
-
-首版自有效果参数先限于素材版本与混合强度。位置、缩放、遮罩、羽化和关键帧优先沿用宿主现有能力，不为这一效果再开发一个变换、抠像或跟踪编辑器；宿主无法组合的部分先记录限制。
-
-“原生”定义为：效果出现在宿主效果/滤镜入口，参数可随工程保存，视频端可按支持范围设置关键帧，效果参与宿主预览和导出。单独的网页面板不满足该定义。PS 以滤镜、选区和可回编参数验收，不套用视频关键帧语义。
-
-### 3.3 版本、并发与错误
-
-- 生成中继续显示已应用的 V1；V2 完成后进入候选列表，由用户明确应用。晚到结果不能覆盖用户刚选的 V3。
-- 任务绑定提交时的工程、合成/序列、图层/片段、效果实例和素材范围；切换工程、复制效果或重新选择不能改变正在执行的目标。
-- 复制效果默认复用固定素材版本；首次编辑生成配方时建立独立效果实例身份。另存工程后重新核对项目位置及素材根目录。
-- 改提示词不自动花费；重复点击返回同一任务。失败说明输入、网络、额度、文件或宿主错误，并给一个直接恢复动作。
-- 取消停止后续工作；Provider 无法取消时显示“已请求取消，供应商可能仍计费”，保留查询身份，不显示虚假成功。
-- 撤销应用恢复上一个版本及参数；不删除已经产生的素材，也不把撤销解释为退款。
-- 没有有效结果时预览显示原画面并明确标示未生成/素材缺失；最终导出前必须检测缺失并失败或要求用户明确旁路，不能静默导出错误内容。
-
-## 4. 系统设计：两条短路径
-
-```text
-生成：面板 / CLI / MCP → 同一任务函数 → 现有 Provider 适配 → 保存素材版本
-渲染：宿主效果 → 读取固定素材版本 → 遮罩与混合 → 返回当前帧
-```
-
-外部 Agent 负责理解自然语言、选择工具；任务函数负责执行。Flovart 内置 Assistant 是可选的同一工具入口，不自动成为默认协作者，也不拥有绕过确认、费用或目标校验的权限。确定性命令直接调用业务函数，不再先经另一个内部 AI 重新解释。CLI + Skill 是默认外部路径，MCP 只是同一能力的可选协议投影，不串联为 MCP → CLI 子进程 → 多层代理。Link 保留为连接相关代码的名称，不发展成独立业务服务。
-
-### 4.1 状态归属
-
-| 数据 | 唯一保存者 | 其他入口保存什么 |
-| --- | --- | --- |
-| 图层、时间线、效果参数、关键帧、撤销 | PS/PR/AE/Resolve 工程 | 明确的目标引用与必要上下文 |
-| 生成输入、任务状态、Provider 任务 ID、结果版本 | 本地生成服务 | taskId、进度、结果引用 |
-| 已生成媒体 | 持久素材目录 | 素材 ID、相对路径、校验和 |
-| Workflow 图、Table 图 | 各自现有项目存储 | 引用或显式导入的副本，不双写同一节点 |
-| Agent 主会话 | 对应 Agent 宿主/官方运行时 | 非秘密会话引用、用户可见消息与任务关联 |
-
-首个效果不强制创建 Workflow 项目、ProductionSession、ProductionSpec、StageRun 和导演绑定。复用现有任务/Artifact 记录；如果旧执行器要求额外对象，应在收敛时去掉这一依赖，不给单步效果再套一层“配方编译平台”。复杂 Workflow 继续保留其真实依赖图，不能用精简为理由取消必要的任务恢复或引用关系。
-
-### 4.2 最小数据
-
-下列是语义字段，不要求为每个名词建表或类；优先扩展已有 task/Artifact 结构。
-
-| 记录 | 最少需要的内容 |
+| 状态 | 当前权威 |
 | --- | --- |
-| 任务 | ID、幂等键及请求摘要、固定输入快照、目标引用、状态、Provider 任务 ID、结果引用、可解释错误 |
-| 素材版本 | ID、来源任务、文件及校验和、尺寸、帧率/帧数、色彩与 Alpha 信息、配方摘要 |
-| 效果实例 | 宿主保存的实例身份、已应用素材版本、源范围与时间映射、混合参数；已有宿主关键帧直接沿用 |
+| 可见 Workflow 图、节点、选区、viewport | Browser Workflow store / browser binding |
+| Agent 连接发现、准备、状态 | Flovart Link / host discovery |
+| 长任务、Provider job、Artifact | Local Runtime / existing task implementation |
+| 浏览器本地项目、素材库、生成历史 | 当前 browser local-first storage |
+| 创作软件工程、原生效果参数、关键帧 | 对应宿主工程 |
 
-请求摘要包含输入文件指纹、时间范围、提示词、参考、模型与生成参数；界面布局、混合强度和关键帧不改变生成请求摘要。不同来源/参数不能复用一个幂等键。实际发给 Provider 的非秘密规范化输入需要保存，不能只存不可解释的 hash。
+规则：
 
-任务主状态：`queued → running → completed | failed | canceled`。Provider 已提交但回执丢失时标记待核实的提交状态，查询原任务；不能盲目重提。UI 关闭不取消生成，恢复只读取已有状态；首版单机顺序队列即可，不引入 Redis、消息总线或分布式工作流引擎。
+- Agent 只能通过公开 operation 修改 Workflow，不能直接写 React/Zustand 或数据库。
+- 同一任务只有一份 durable identity；重试依赖幂等与查询，不复制任务。
+- Provider key 不进入 Skill、连接器、项目或日志。
+- “已准备/已连接”不等于真实 Agent 会话已成功执行。
+- Browser Workflow 当前仍是稳定 Agent 操作的可见权威；未来迁移必须先改 contract，再改文档。
 
-### 4.3 文件与渲染
+## 5. Workflow、Table 与素材
 
-- 先下载到暂存文件，校验后原子提交到持久素材目录；文件齐全后才把任务标为完成。
-- 效果保存精确版本和相对素材引用，不保存临时 URL、Blob URL、base64 或全部媒体字节。
-- 素材持有工程引用时不得自动清理；保存/打包必须带上已应用版本。移动目录后提供重定位并校验内容，不能根据文件名误配。
-- 渲染函数不得访问网络、等待生成或依赖 Agent、浏览器及生成服务在线。只使用固定文件和宿主当前帧参数；版本切换在宿主允许的修改时机完成并触发缓存失效。
-- 生成与解码采用现有成熟库/Provider 适配。首个短片段优先验证图片序列作为随机帧读取缓存；具体库、像素格式与 SDK ABI 在原型验证后锁定，不手写编解码器。
-- 统一时间使用整数帧与有理帧率；记录源入点和偏移。首版先验证固定帧率 SDR，变速、倒放、HDR、超长片段在未测前明确不支持，不静默拉伸帧数。
-- 保存并验证色彩空间、Alpha 预乘方式、像素宽高比和输出尺寸；插件按宿主 SDK 的线程规则实现，多帧渲染不共享可变的“当前帧”。
+Canvas 的 Workflow 是当前主要创作状态。
 
-## 5. 具体实现与现有代码收敛
+Table 是独立的媒体处理视图，可以拥有自己的局部处理状态，但结果通过明确的素材/节点引用回到 Workflow 或素材库；它不是第二个产品数据库，也不与 Canvas 做隐式双写。
 
-### 5.1 当前源码事实
+素材必须保留真实来源和可恢复身份。远端 URL、临时 data URL 或聊天消息不能冒充 durable artifact。
 
-| 位置 | 当前可复用部分 | 尚不能宣称 |
-| --- | --- | --- |
-| `integrations/studio/` | 面板包、宿主资源引用、导入导出桥接形状 | 原生效果、真实宿主认证 |
-| `services/workflowExecutor.ts`、`components/workflow/inputResolver.ts` | 统一输入与现有生成语义 | 关闭浏览器后插件独立生成 |
-| `src-tauri/src/runtime/` | 任务、Provider、持久存储、本地控制服务 | 无 UI 独立启动及与所有前端 Provider 完全等价 |
-| `tools/flovart/`、`agent/` | CLI、命令描述、五工具 stdio MCP、共用操作入口、当前 Browser 绑定 | 原生效果工具、真实 MCP 客户端认证 |
-| `integrations/workbuddy/`、`dsh-plugin/` | 现有连接包与适配 | 双向实时对话和所有官方版本已认证 |
+## 6. 生成路径
 
-已看到的具体风险：PS/PR 面板仍等待注入回调；Resolve 导入文件后立即删除暂存路径，需验证宿主是否复制媒体，正式素材不能依赖这种行为。上述是代码检查所得，不代替宿主运行证据。
+确定性路径保持短：
 
-### 5.2 最少模块与顺序
+生成入口（UI / Agent operation / future host panel）
+→ 同一 generation/business function
+→ Provider adapter
+→ durable result/artifact
+→ 可见 Workflow / Table / host consumer
 
-1. **先做 AE 原生效果小样**：在 `integrations/studio/` 增加效果源码及构建入口，读取一个固定本地素材，暴露混合参数，完成保存重开与渲染。先用固定资产证明宿主接入，不调用模型。
-2. **验证 PR 复用**：AE SDK 效果可适配 PR，但必须验证参数、像素格式、线程、时间映射和构建产物。能共用的渲染函数放同一源码文件，宿主差异留在入口；不预建通用 Host SDK。
-3. **接真实生成**：优先复用现有 Rust Runtime 的任务、文件和 Provider；补无 UI 启动入口并逐项核对现有 Provider 能力。TS 的输入整理只抽离必要纯函数；不得在 Rust 与 Node 各新增一套调度器。若目标 Provider 在 Runtime 不可用，明确记录迁移缺口，不写一个新的生成网关掩盖差异。
-4. **接插件面板**：面板调用同一生成任务入口，候选明确应用到效果实例。宿主 ID、撤销、参数保存和工程关闭事件由宿主入口处理。
-5. **接 CLI/Skill 与 Agent**：复用现有 CLI + Skill 默认入口和共用操作入口，MCP 只作为同一能力的可选投影，不再新建第二个 MCP Server。新效果命令只有实现、schema 和验证齐备后才进入 Skill；现有工具仍按 Browser 绑定执行，不能自动变成无 UI 效果接口。
-6. **再接 PS、WorkBuddy 双向、Resolve**：扩展前复用已验证的素材版本与任务函数，只增加确有差异的宿主/Agent 调用代码。
+不引入：
+- Director → Crew → Operator → Worker 的强制链；
+- MCP → CLI 子进程 → 第二套业务逻辑；
+- 为未来假设预建通用 Manager / Facade / Bus。
 
-后端 Go/Gin/GORM 继续处理已有网站/社区业务，不为了本机效果增加一跳云端业务服务。Node CLI/Agent 代码可以承担协议接入；它不拥有另一份任务数据库。宿主渲染线程不进入 HTTP/Node/Rust 控制链。
+费用确认、目标绑定、幂等、取消、提交未知恢复和素材完整性属于业务函数自身，不因“精简”删除。
 
-单个模块只为三个理由拆分：确实复用、独立状态所有权、宿主/进程/凭据边界。仅转发参数的 Manager/Facade/Coordinator 不成立。新增层必须写明解决哪个已复现问题、替代什么旧路径；同一修改同时删掉重复实现，不能长期叠加“新旧兼容层”。
+## 7. Skill 与 recipe
 
-### 5.3 宿主能力
+正式产品概念只有 **Agent Integration Skill**：教外部 Agent 如何使用 Flovart 的稳定操作。
 
-| 宿主 | 面板与任务 | 原生效果 | 首次验收 |
-| --- | --- | --- | --- |
-| AE | 现有 CEP/脚本面板起步，按安装版本核验 | AE C++ Effect SDK | 参数/关键帧、随机帧、保存重开、离线导出 |
-| PR | UXP；仅确有需要时使用 Hybrid | 优先复用 AE 效果核心并做 PR 适配 | 片段范围、Effect Controls、时间线导出 |
-| PS | UXP | PS C++ Filter SDK | 选区、滤镜参数、智能滤镜可行性、保存重开 |
-| Resolve Studio | Workflow Integration | OpenFX | Media Pool/时间线联动、OFX 参数、固定版本渲染 |
+仓库里既有 VOX、Production Skill catalog、recipe 等代码/内容可以继续作为实验方法或兼容资产存在，但：
 
-Premiere UXP 基线为 25.6+，Hybrid 需要 26.2+；首个安装包只声明实测版本。Hybrid 加载 C++ 不等同于注册原生视频效果。AE/PR 共用源码不代表可免测发布同一二进制。Resolve Workflow Integration 不是 Inspector 效果控件；实际 SDK 和操作系统支持以安装包验证为准。[Premiere Hybrid](https://developer.adobe.com/premiere-pro/uxp/plugins/hybrid-plugins/)、[AE SDK 能力](https://github.com/AdobeDocs/after-effects/blob/main/src/pages/index.md)、[PS 滤镜与 Hybrid](https://developer.adobe.com/photoshop/uxp/guides/hybrid-plugins)、[Resolve Studio](https://www.blackmagicdesign.com/sg/products/davinciresolve/studio)、[OpenFX](https://github.com/AcademySoftwareFoundation/openfx)。
+- 不作为一级 IA；
+- 不进入 Agent 页 onboarding 的必经流程；
+- 不建立 Production Skill Marketplace 作为当前产品承诺；
+- 不要求新功能先编译成 Production Skill 才能运行。
 
-### 5.4 Agent 双向接入
+相关遗留代码按真实调用点逐步收敛，不能仅因文档降级就整目录删除。
 
-外部助手：Skill → CLI（默认）或 MCP（可选投影）→ 同一任务函数。内部任务入口：用户消息 → 可选的 Flovart Assistant → 同一批 Flovart 工具。Workflow、Table、Agent 仍是三个独立入口；选择外部 Agent 或打开内置 Assistant 都不转移工程所有权，不读取别的助手私有账号数据库；一次效果写入绑定明确目标和期望版本。
+## 8. 创作软件宿主与原生效果
 
-- Codex：外部沿用现有 Skill/CLI；内部通过 app-server 承接用户可见会话、事件和审批，优先本地 stdio、锁定版本。官方文档对实验性接口及 WebSocket 有限制，必须另做登录与恢复验证。[官方文档](https://developers.openai.com/codex/app-server)
-- WorkBuddy：外部连接器在 CLI + Skill 与 MCP + Skill 中选择一个包形态，不能混装成同一个连接器；内部可使用官方本地助理 API，但要申请应用、scope 和用户授权，经 HTTPS 平台访问，不能宣传完全离线。本地助理状态/历史与云端 ACP 流不同，不能推断本地端支持相同流式能力。[连接器](https://open.workbuddy.cn/docs/connector)、[第三方应用](https://open.workbuddy.cn/docs/third-party-app)、[Open API](https://open.workbuddy.cn/docs/openapi)
-- DSH、Claude、OpenCode 等保留已有接入，不因新效果项目改写其宿主；内置深度对话按各自官方能力另验。TeleAgent 身份未确定，暂不标支持。
-- Agent 切换只交接任务目标、输入摘要、当前结果和待办，重新读取任务状态；不声称把不同助手的完整记忆或登录态迁移成功。
+AE / Premiere / Photoshop / Resolve 集成继续作为重要扩展方向。当前支持级别必须以 [Support Matrix](../../SUPPORT_MATRIX.md) 为准。
 
-本地服务负责费用、目标、输入和幂等校验。Agent 工具权限不等于生成费用授权；已确认范围内执行不重复要求批准，新增费用或改变目标才重新确认。生成中断优先查询原任务，不通过“自动点击所有确认”实现无人值守。
+原生效果的目标约束仍成立：
 
-## 6. 评测与 Benchmark
+- 生成任务异步产生固定素材版本；
+- 宿主预览/导出只读取固定素材，不在 render callback 请求网络；
+- 参数随宿主工程保存；
+- 保存重开、离线导出、素材移动/缺失必须真实验证；
+- 首批验证优先 Windows，其他平台按真实证据升级。
 
-本节定义待执行评测，所有指标初始为 **未测**。测试数量与阈值是首版建议验收目标，不是现有结果或营销承诺。首个原型完成后先固定机器与 SDK，再冻结阈值；失败不得靠删样例变成通过。
+这部分是 roadmap / host integration，不改变 Flovart 当前 Canvas | Table | Agent IA。
 
-首轮只统计 Windows 实测结果，明确 OS 与 AE/PR 版本；后续 macOS 重跑对应评测，不合并为无条件跨平台分数。
+## 9. 响应式布局
 
-### 6.1 固定评测集
+布局以 container-driven composition 为当前基线：
 
-先建立 12 个获授权的 5 秒、1080p、固定 24 fps、SDR 片段：静物、人物运动、遮挡/细边缘、镜头运动各 3 个。每个输入配固定时间范围、提示词、参考图、人工验收要点和文件 hash。另用 4 个人工可计算的合成序列测试 Alpha、帧号、关键帧和混合像素；PS 阶段增加 6 张透明/选区/不同尺寸的静态图。
+- App shell、Studio surface、Workflow space 使用明确的容器责任；
+- Canvas/Table/Assistant drawer 根据实际容器宽度 reflow；
+- 不恢复 `rightPanelInset`、固定 viewport 补丁或结构性 absolute columns；
+- 每个 surface 明确唯一主要 scroll owner。
 
-分开报告三组结果：固定素材的插件正确性、真实 Provider 的生成质量、真实 Agent 的任务成功率。Fake Provider 只验证协议与恢复，不能贡献视觉质量分数。整段替换不得按“人物完全保留”打广告；若该要求进入范围，应新增主体/背景独立指标及跟踪样例。
+详细规则见 [Adaptive Layout](./adaptive-layout.md)。
 
-### 6.2 验收矩阵
+## 10. 当前明确不采用
 
-| 类别 | 方法 | 建议通过线 |
-| --- | --- | --- |
-| 宿主正确性 | 4 个合成序列，关键帧/随机 seek/首尾帧/不同入点，与独立计算参考比较 | SDR 8-bit 每通道最大误差 ≤ 1；无错帧、Alpha 黑边；适用像素格式分别报告 |
-| 持久性 | 12 个片段保存重开；关闭 Agent/服务并断网后导出 | 12/12 固定版本可重开并导出；不产生生成请求 |
-| 幂等与恢复 | 双击、断连、回执丢失、进程中断、晚到结果，每类重复 5 次 | 无重复自动提交、跨目标写入或错误版本覆盖；未知提交明确待核实 |
-| 版本操作 | 应用 V1/V2、撤销重做、复制效果、另存工程、移动素材目录 | 目标及素材版本正确；缺失可重定位；导出前能检测缺失 |
-| 缓存性能 | 固定资产，冷启动与预热后分开记录；每宿主 3 轮 | 建议预热后单效果 1080p/24fps 播放不掉帧，调参到预览 p95 ≤ 100 ms；冷读单列不混入 |
-| 资源使用 | 连续使用 30 分钟，反复切换 20 个版本 | 无崩溃、无持续无界内存增长；记录峰值内存/显存、磁盘缓存，不伪造固定硬件通用上限 |
-| 生成质量 | 12 个真实片段每项 3 次；至少 2 人独立看提示遵循、可用性、时序稳定，各 1–5 分 | 建议 ≥ 10/12 样例多数尝试可用；各项平均 ≥ 4，严重时序错误单列；分歧保留 |
-| Agent 成功率 | 读取正确选区、准备生成、查询、应用指定版本、断线恢复共 20 个固定任务；每 Agent 单独跑 | 建议 ≥ 18/20；错误目标/越权费用/假成功为 0；必须有工具回执和宿主结果 |
-| 安装与首次使用 | 5 名未参与开发用户完成安装到首个结果；人工辅助需记录 | 建议 ≥ 4/5 无开发者介入成功；记录总时长并单列模型等待时间 |
+以下属于历史方案，不再是当前设计：
 
-最终成片导出与预览必须绑定相同素材版本、色彩设置和效果参数。涉及多帧渲染、GPU 或不同宿主的差异需单独复现，不能用截图主观相似替代像素/帧校验。
+- Agent = 对话 / Tasks / Artifacts / Context 的完整顶级工作区；
+- Agent 被彻底降级为唯一 global drawer、取消顶级 Agent surface；
+- Production Crew / Director / Workspace Operator 作为用户必经层；
+- Production Skill / VOX 作为一级产品分类或市场；
+- Enterprise organizations / credits / approval / API-key pool 产品模型；
+- Dock / Native Draft / DSH 专用架构成为所有 Agent 的公共主链；
+- 多份 CURRENT / TARGET / AUDIT 文档共同决定产品方向。
 
-### 6.3 对照与记录
+历史背景统一见 [2026-09-23 文档 canonicalization 快照](../archive/historical-design/2026-09-23-canonicalization.md)。
 
-基线 A 为现有“生成→下载→导入→手工合成”流程，基线 B 为插件流程；同一素材、模型版本、参数、网络与机器，顺序交替。比较人工点击数、主动操作时间、失败恢复步骤和最终可用结果；Provider 等待和扣费单列，不能把不同模型速度算作插件提速。
+## 11. 文档与验证规则
 
-每次保存一个机器可读结果文件：代码提交、插件构建、OS/CPU/GPU/内存、宿主/SDK/模型版本、输入 hash、请求参数、重复次数、成功/失败/未测、冷/热 p50/p95、成本与失败样例。原始记录与脱敏录屏放 `artifacts/native-effects/`，临时 profile 放 `.tmp/`；真实 key 不进入证据。
+产品事实优先级：
 
-先做代表性 12 例，扩大样本必须针对具体失败模式。不要再列几十阶段通用“总门禁”。每一步只跑影响到的测试：协议用契约测试，原生效果必须进真实宿主；文档修改只跑文档和链接检查。旧 RC 数字保留其原提交证据，不能复用为新效果 Benchmark。
+1. 当前用户明确决定；
+2. 当前可运行代码与真实 UI；
+3. 本文与其它 current-truth 文档；
+4. Support Matrix / 测试证据；
+5. 历史快照与 Git history。
 
-## 7. 宣传口径
-
-| 场合 | 可用措辞 | 证据要求 |
-| --- | --- | --- |
-| 当前 README | 本地优先的 Workflow 与 Agent 创作工具，正在开发原生效果插件 | 当前支持矩阵；新方向明确标“开发中” |
-| 原型展示 | Flovart 场景替换原型：生成一个版本，再在 AE/PR 中调节 | 真实宿主录屏，标注软件/插件版本和未完成项 |
-| 宿主验证后 | 在 AE/PR 中生成、比较并应用素材版本，继续调整混合与关键帧 | 对应宿主实际安装、保存重开和导出通过 |
-| Agent 接入验证后 | 用 Codex/WorkBuddy 完成所展示的 Flovart 任务 | 该 Agent 的真实会话、工具回执和结果；逐个声明 |
-| 性能宣传 | 在指定硬件与素材规格下达到测得的播放/交互表现 | 可复跑 Benchmark，提供失败样例和条件 |
-
-未来主文案建议：“生成新场景，继续在你的剪辑软件里精修。” 首个演示依次展示选中片段、生成等待、V1/V2 对比、关键帧调节、保存重开和导出。加速等待必须标注，不用假进度或预制输出冒充实时生成。
-
-首版平台措辞固定为“Windows 优先，macOS 后续验证”；不得用“支持 Adobe”省略实际宿主、平台和版本限制。
-
-禁止未验证宣称：实时 AI 视频生成、支持所有模型/宿主、人物自动完美保留、跨 Agent 无缝记忆迁移、完全离线生成、云同步已完成、一键无人值守成片。不能因为有 SDK、安装包或单元测试，就写成正式支持。
-
-## 8. 实施里程碑与文档治理
-
-本轮 Agent 入口收敛不等于原生效果交付。原生效果仍是下一条独立切片，必须按下表从 AE/PR 宿主真实保存、重开、渲染和导出开始验收；Workflow、Table、Agent 的网页入口、CLI/Skill 或测试通过都不能替代宿主证据。
-
-| 顺序 | 交付 | 完成证据 |
-| --- | --- | --- |
-| 1 | AE 固定素材原生效果 + PR 兼容验证 | 参数、关键帧、随机帧、重开与离线导出 |
-| 2 | 单任务真实生成、持久素材版本、候选应用 | 真实 Provider 与故障恢复，不依赖 Agent 在线 |
-| 3 | CLI/MCP 同一业务入口 + Codex 双入口 | schema 对齐、真实助手操作同一效果、费用/目标正确 |
-| 4 | PS 滤镜及 WorkBuddy 官方双向接入 | 各自真实 SDK/客户端/账号证据 |
-| 5 | Resolve Workflow Integration + OpenFX | 对应 Studio/OS 版本实测，不能只交独立 Electron 窗口 |
-
-一个切片未通，优先修该切片，不靠增加抽象层、扩展宿主数量或新增术语解释失败。现有代码按切片收敛；删除过时设计不授权一次重写所有 Runtime/Provider。
-
-产品目标只维护本主设计；术语、必要 ADR、实际支持矩阵与当前代码契约各有自己的用途。`ecosystem/` 记录已有 CLI/MCP/DSH 和面板实现及测试，不要求新原生效果先经过 Browser Workflow 或建设通用 Gateway/Host SDK。实现任务进 todo，真正完成的变更才进 pending-test，用户验证后才更新正式功能。历史审计放证据区并标明其基线；过时方案从活动文档删除，由 Git 历史恢复，不再复制到新的“历史目标”目录。
-
-本轮整合吸收了旧文档中的目标绑定、版本检查、幂等、原始素材保护、恢复与费用边界；撤销了“禁止公开 MCP”“只能外部主对话”“所有任务经过内部 Operator”“插件必须经过可见画布”“先做通用插件平台”等目标约束。原 Browser 工具在代码改造前仍按当前绑定契约执行，不能用新设计为隐藏 fallback 背书。
-
-参考项目：[Pascal CLI/MCP](https://github.com/pascalorg/editor/blob/main/packages/mcp/README.md) 用于共享项目与持久回执；[WorkDaddy](https://github.com/babygoton/WorkDaddy) 用于任务恢复和贴近现有助手的体验参考，其 CDP 注入不作为默认连接方式；[OpenImageIO](https://github.com/AcademySoftwareFoundation/OpenImageIO) 是原生图像 I/O 的候选库，采用前核对实际格式、体积和许可。
+实现、构建、mock、manifest 或 SDK 存在都不等于真实第三方 Host/Provider 已认证。功能完成后先进入 pending-test；真实确认后再进入 features。

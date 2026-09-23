@@ -11,12 +11,14 @@
 
 ## 当前产品方向
 
-- 插件为主，需要复杂编排时展开 Flovart；先 AE/PR 原生效果，再接 PS，Resolve 使用 Workflow Integration 与 OpenFX 分别联动任务和效果。
-- 原生效果首版 Windows 优先；macOS 单独排期与验收，不承诺同期支持，不把已有 Web 跨平台能力算作原生插件支持。
-- 第一款能力是生成素材与场景替换：异步生成固定素材版本，再本地调整混合、遮罩和视频关键帧。原生效果必须参与宿主保存、重开和导出；面板不等于原生效果。
-- 外部 Agent 调用和 Flovart 内部任务入口都在目标内。CLI 与 MCP 使用同一组业务能力，Skill 描述使用步骤；不再坚持“禁止 MCP”或“所有任务必须经过内置 Operator”。
-- Workflow 负责生成编排，Table 负责独立节点式媒体处理，Agent 负责对话、任务和产物协作。保持各自状态，不恢复旧 Canvas / Art，不把插件变成第四套通用画布。
-- 当前代码的 Browser Workflow 绑定继续有效，改造前不能隐藏 fallback 到其它项目。插件独立生成是主设计中的推荐目标，不能假称已经实现。
+- 当前顶栏产品 surface 固定为 **Canvas | Table | Agent**。
+- Canvas = 空间化 Workflow；Table = 结构化媒体处理；Agent = 本地/外部 Coding Agent 的发现、准备、状态与切换中心。
+- **内置 Assistant 不属于顶级 Agent 页**。它只在 Canvas/Table 右侧 contextual drawer 中，与 Context / History 并列。
+- 禁止重新引入 Agent full-page chat / Tasks / Artifacts / Context 工作区；禁止在 Agent 页再嵌 Assistant；禁止在 Assistant drawer 复制 Host picker。
+- 外部 Agent 与内置 Assistant 调用同一受控业务能力。CLI + Agent Integration Skill 是默认外部路径，MCP 是同一 operation contract 的可选投影。
+- Production Crew / Director / Operator / Production Skill Marketplace / Enterprise org-credit-approval 都不是当前必经产品层；遗留代码按真实调用点渐进清理，不因文档降级就整目录盲删。
+- 创作软件插件与原生效果继续作为重要宿主扩展方向，但不覆盖当前 Canvas | Table | Agent IA，也不要求所有生成任务必须经过插件。
+- 当前 Browser Workflow 绑定继续作为稳定 Agent operation 的可见权威；改造前不能假称已迁移到另一份 Native Draft/Runtime Workflow。
 
 ## 首要工程原则：短路径、少状态、少层级
 
@@ -75,9 +77,9 @@
 
 ## 文档治理
 
-- 当前主设计唯一：docs/design/flovart-native-effects.md。产品、交互、系统、实现、Benchmark 和宣传原则集中维护，只有必要的难逆转决策才加短 ADR。
+- Current truth 只认 docs/index.md 列出的 7 份核心文档；主产品/系统目标唯一由 docs/design/flovart-native-effects.md 定义。只有必要且难逆转的决策才加短 ADR。
 - docs/index.md 是 AI 索引；docs/maintenance/agent/CONTEXT.md 只保留精简领域词，不放协议、表结构、接口或施工阶段。
-- 新决定覆盖旧稿时同步更新引用并删除过时活动方案；Git 保留历史，不再堆新的 GOAL/HANDOFF/TARGET 文档。历史验证证据可保留，但必须明确仅适用于其原基线。
+- 新决定覆盖旧稿时同步更新引用并从 active design tree 删除过时方案；Git 保留原文，必要时只在 docs/archive/historical-design/ 留一份蒸馏快照。禁止新增并列 CURRENT/TARGET/AUDIT/GOAL/HANDOFF 文档参与产品决策。
 - todo.mdx 只记录未完成工作；实际完成后移到 pending-test.mdx，用户验证后再更新 features.mdx。每次交付都核对这两份进度文档；文档完成不等于功能完成。
 - CHANGELOG.md 的 Unreleased 只保留版本级摘要，不复制施工流水。接口响应和数据库文档仍分别在 docs/content/docs/backend/api-response.mdx 与 backend-database.mdx。
 - README 简洁，区分当前能力与开发方向。README.md、README.en.md 和中文入口保留 rule34 访问计数器及 Downloads/Stars；计数是展示次数，不是独立访客。计数服务异常先实时验证，再换已验证兼容服务，不直接删除。

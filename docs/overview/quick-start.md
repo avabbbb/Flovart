@@ -37,7 +37,7 @@ npm run flovart:cli -- workflow.inspect --json
 node tools/flovart/mcp-server.js
 ```
 
-在支持本地 stdio 的客户端配置上述进程入口，工作目录指向本仓库；具体配置按该客户端文档和实际版本核验。MCP 的五个工具仍操作已绑定的可见 Browser Workflow，不提供无 UI 原生效果能力。详见[当前操作契约](../design/ecosystem/OPERATION_SURFACE.md)。
+在支持本地 stdio 的客户端配置上述进程入口，工作目录指向本仓库；具体配置按该客户端文档和实际版本核验。MCP 的五个工具仍操作已绑定的可见 Browser Workflow，不提供无 UI 原生效果能力。详见[Agent Integration](../design/agent-integration.md)。
 
 现有 DSH 适配继续使用自己的服务入口，但不要求所有用户安装 DSH、导演台或完整 Dock。Agent/CLI/MCP 不读取、输出或保存原始 Provider key；工具可调用不等于已批准付费生成。
 

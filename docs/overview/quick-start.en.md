@@ -37,7 +37,7 @@ Start the MCP server from the source checkout:
 node tools/flovart/mcp-server.js
 ```
 
-Configure that process in a client supporting local stdio, with this repository as its working directory; verify the client's own configuration format and version. The five MCP tools still operate on the bound, visible Browser Workflow. They are not headless native-effect tools. See the [current operation contract](../design/ecosystem/OPERATION_SURFACE.md).
+Configure that process in a client supporting local stdio, with this repository as its working directory; verify the client's own configuration format and version. The five MCP tools still operate on the bound, visible Browser Workflow. They are not headless native-effect tools. See the [Agent Integration](../design/agent-integration.md).
 
 Existing DSH integrations keep their service entry point; other users do not need DSH or a director/Dock setup. Agents and transports must not read, print or store raw Provider keys. Tool access is not approval for paid generation.
 

@@ -2,37 +2,49 @@
 title: Features
 ---
 
-Flovart currently provides local-first Workflow and agent creation surfaces. Native effects are the development direction: generate replacement media in AE/PR, adjust a cached result locally, and open Flovart for more complex workflows. This direction is not a shipped capability.
+Flovart is currently a local-first, agent-native visual production workspace. Humans and coding agents operate on the same visible Workflow while providers, API keys, assets and final editing remain under the user's control.
 
-## Current workspaces
+## Current product surfaces
 
-| Workspace | Purpose | Boundary |
+| Surface | Responsibility | Boundary |
 | --- | --- | --- |
-| Workflow | Prompts, references, models, dependencies, tasks and results | Main surface exists; provider behavior requires actual verification |
-| Table | Independent node-based media processing | Entry exists; main workbench remains to be implemented |
-| Agent | Assistant connection, tasks, context and artifacts | Connection UI exists; deeper two-way sessions require per-agent implementation and verification |
+| **Canvas** | Spatial Workflow for nodes, assets, connections, generation and result editing | Primary creation surface |
+| **Table** | Structured media processing and explicit commit back to Workflow/assets | Not a second Workflow authority |
+| **Agent** | Discover, prepare, inspect and switch local/external coding agents such as Codex and WorkBuddy | **Not a chat page**; does not embed the built-in Assistant |
 
-Workflow provides media nodes, PromptBar, connections, local assets and editable generation results. Pending changes for media selection, references, result versions and recovery are listed in [pending verification](../progress/pending-test.mdx).
+Canvas and Table share one contextual right drawer: **Assistant / Context / History**. The built-in Assistant has no extra privilege over external agents and does not manage host installation or connection.
 
-Each workspace owns its graph and history. Table does not share Workflow nodes; Agent is not another generation graph. The removed Canvas/Art surfaces are not returning.
+Older designs that made Agent a full-page chat workspace, or removed the top-level Agent surface entirely in favor of one global drawer, are historical only.
 
-## CLI, skills and assistants
+## Agent operations
 
-The current Operation Skill uses the CLI to inspect and operate a visible Workflow. Everyday operations are status, workflow.inspect, workflow.selection.get, workflow.apply and workflow.node.run; ensure prepares the connection. command.list/schema are for discovery, compatibility diagnostics or debugging.
+External agents use the Agent Integration Skill + CLI by default. The stable daily surface is:
 
-Codex, Claude, OpenCode, DSH, WorkBuddy, and TeleAgent have different integration and verification boundaries. Flovart now ships a local stdio MCP projection for the five stable operations; real TeleAgent import and Agent tracing remain an External Gate. See the [Skill guide](../../../overview/skill-guide.md), [ecosystem architecture](../../../design/ecosystem/TARGET_ARCHITECTURE.md), and [support matrix](../../../../SUPPORT_MATRIX.md).
+- `status`
+- `workflow.inspect`
+- `workflow.selection.get`
+- `workflow.apply`
+- `workflow.node.run`
 
-## Creative software plugins
+`ensure` and `doctor` handle connection setup/diagnostics. The stdio MCP server is an optional projection of the same operation contract, not a second implementation.
 
-Experimental PS/PR/AE/Resolve panels and media bridges exist. Real-host selection, processing and import remain to be verified. Native effects, keyframes, project reopening and offline export are planned capabilities; building a panel package does not prove them.
+Real support levels for Codex, Claude Code, OpenCode, WorkBuddy, DSH and TeleAgent are tracked independently in the [Support Matrix](../../../../SUPPORT_MATRIX.md).
 
-The [main design](../../../design/flovart-native-effects.md) owns the product, interaction, implementation, benchmarks and claim boundaries.
+## Workflow and media
 
-## Local data and models
+Canvas supports image, video, audio, text and configuration nodes plus references, connections, local media tools and visible results.
 
-- Projects, media and generation history are currently stored mainly in the browser; cloud sync is not promised.
-- The browser path uses local keys and direct provider requests. Desktop Runtime has a separate credential/task implementation; unified hosting is not a completed claim.
-- Users configure model services. Connectors, skills, projects and logs must not receive raw provider keys.
-- Real model quality, charges, cancellation and host compatibility require separate evidence.
+Table is a structured media-processing view. Results return to Workflow or the asset library through explicit commits; Table does not silently mirror Canvas state.
 
-See the [backlog](../progress/todo.mdx) for unfinished work. Promote features only after actual verification.
+## Providers and local data
+
+- The visible Browser Workflow remains the current authority for stable agent operations.
+- Users configure their own providers; billing, rate limits, cancellation and unknown-submit recovery are verified per provider.
+- Browser and Desktop Runtime credential/task boundaries are documented separately.
+- Connectors, Skills, projects and logs must not carry raw provider keys.
+
+## Creative hosts
+
+Photoshop, Premiere, After Effects and Resolve are reported only at the evidence level in the [Support Matrix](../../../../SUPPORT_MATRIX.md). Native effects, save/reopen, keyframes and offline export become supported only after real-host verification.
+
+See the [current product/system design](../../../design/flovart-native-effects.md), [todo](../progress/todo.mdx) and [pending verification](../progress/pending-test.mdx).

@@ -2,37 +2,49 @@
 title: 功能特性
 ---
 
-Flovart 当前是本地优先的 Workflow 与 Agent 创作工具。正在开发的新方向是原生效果插件：先在 AE/PR 生成素材与替换场景，再本地调节效果，复杂编排时展开 Flovart。该方向仍是设计/开发中，不能作为已可用功能。
+Flovart 当前是 local-first、agent-native 的视觉制作工作台。人和 Coding Agent 操作同一份可见 Workflow；模型、API Key、素材与最终编辑权仍在用户一侧。
 
-## 当前工作区
+## 当前产品 surface
 
-| 工作区 | 职责 | 当前边界 |
+| Surface | 当前职责 | 当前边界 |
 | --- | --- | --- |
-| Workflow | 提示词、参考素材、模型、生成依赖、任务与结果 | 已有主体；具体能力按真实 Provider 与项目验证 |
-| Table | 独立节点式媒体处理 | 入口已有，主体仍待实现 |
-| Agent | 助手接入、任务、上下文与产物协作 | 已有接入 UI；双向深度会话按助手逐个实现/验证 |
+| **Canvas** | 空间化 Workflow：节点、素材、连线、生成与结果编辑 | 当前主要创作面 |
+| **Table** | 结构化媒体处理：选择输入、局部处理、把结果送回 Workflow/素材库 | 不是第二份 Workflow 权威 |
+| **Agent** | Codex、WorkBuddy 等本地/外部 Coding Agent 的发现、准备、状态与切换 | **不是聊天页**，不嵌内置 Assistant |
 
-Workflow 可组织图片、文本、视频、音频及配置节点，使用 PromptBar、连线、本地素材和生成结果继续编辑。节点选择、媒体拖入、引用、操作候选与恢复的待验证变更见[待测试确认](../progress/pending-test.mdx)。
+Canvas / Table 旁边共享右侧 contextual drawer：**Assistant / Context / History**。Assistant 是 Flovart 内置助手；它不拥有比外部 Agent 更高的工具权限，也不承担 Host 连接管理。
 
-三个工作区保持自己的状态与历史。Table 不与 Workflow 混图，Agent 不作为第四张生成画布。已删除 Canvas/Art 不恢复。
+这套 IA 以当前顶栏和运行代码为准。旧的“Agent full-page chat workspace”与“Agent 只剩 global drawer”都已归档。
 
-## CLI、Skill 与助手
+## Agent 操作
 
-现有 Operation Skill 通过 CLI 让助手检查和操作可见 Workflow；日常使用 status、workflow.inspect、workflow.selection.get、workflow.apply、workflow.node.run，ensure 负责准备连接。command.list/schema 属于 discovery、兼容诊断或调试。
+外部 Agent 默认通过 Agent Integration Skill + CLI 使用 Flovart。稳定日常操作为：
 
-Codex、Claude、OpenCode、DSH、WorkBuddy 与 TeleAgent 的接入程度不同，不能用一个工具调用成功声称全部可用。当前已提供只投影五个稳定操作的本地 stdio MCP；真实 TeleAgent 客户端导入与 Agent tracer 仍为 External Gate。详细使用见[Skill 手册](../../../overview/skill-guide.md)、[生态架构](../../../design/ecosystem/TARGET_ARCHITECTURE.md)和[支持矩阵](../../../../SUPPORT_MATRIX.md)。
+- `status`
+- `workflow.inspect`
+- `workflow.selection.get`
+- `workflow.apply`
+- `workflow.node.run`
 
-## 创作软件插件
+`ensure` / `doctor` 用于连接准备和诊断。stdio MCP 是同一 operation contract 的可选投影，不维护第二份业务实现。
 
-当前 PS/PR/AE/Resolve 有 Experimental 面板包与素材桥接代码，仍待真实宿主导入、处理、回写验证。原生效果、关键帧、保存重开与离线导出是待开发/验证能力，包构建不代表这些能力已实现。
+Codex、Claude Code、OpenCode、WorkBuddy、DSH、TeleAgent 的真实支持级别分别见 [Support Matrix](../../../../SUPPORT_MATRIX.md)，不能用一个 Host 的成功推导其它 Host 已可用。
 
-完整产品、交互、实现、Benchmark 与宣传边界统一见[主设计](../../../design/flovart-native-effects.md)，不在功能页复制目标规格。
+## Workflow 与媒体
 
-## 本地数据与模型
+Canvas 支持图片、视频、音频、文本与配置等 Workflow 节点，以及引用、连线、局部媒体工具和可见结果。
 
-- 当前项目、素材与生成记录主要保存在浏览器本地，不承诺云同步。
-- 当前浏览器路径使用本地 key 并前端直连；Desktop Runtime 有独立凭据/任务实现，不能声称所有入口已统一托管。
-- 用户自行配置模型服务；连接器、Skill、项目与日志不应接收原始 Provider key。
-- 真实模型质量、费用、取消及宿主兼容性需分别验证。
+Table 提供结构化媒体处理视图；其结果通过明确 commit 回到 Workflow 或素材库。Table 不与 Canvas 隐式双写状态。
 
-未完成工作见[后续待办](../progress/todo.mdx)。正式能力仅在真实验证后更新。
+## Provider 与本地数据
+
+- 当前 Web/Browser Workflow 仍是稳定 Agent operation 的可见权威。
+- 用户自行配置 Provider；真实费用、限流、取消与提交未知需要按 Provider 分别验证。
+- Browser 与 Desktop Runtime 的凭据/任务边界仍需如实区分。
+- 连接器、Skill、项目与日志不应携带 Provider 原始 key。
+
+## 创作软件宿主
+
+Photoshop / Premiere / After Effects / Resolve 目前按 [Support Matrix](../../../../SUPPORT_MATRIX.md) 标记真实证据等级。原生效果、保存重开、关键帧与离线导出只有通过真实宿主验证后才升级为正式能力。
+
+完整产品边界见 [当前主设计](../../../design/flovart-native-effects.md)。未完成工作见 [后续待办](../progress/todo.mdx)，已实现但仍需现实环境确认的内容见 [待测试确认](../progress/pending-test.mdx)。

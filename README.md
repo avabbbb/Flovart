@@ -255,7 +255,7 @@ Concretely: you ask your agent for a three-shot product video. It creates the sh
 | Automation | Explicit inspect/apply/run operations with revision and approval boundaries |
 | Data | Local-first storage with documented browser and runtime boundaries |
 
-Compose image, text, video, audio and configuration nodes, keep projects and references close to your workspace, and extend providers, hosts and node operations through explicit contracts. The product model is **Canvas** (the spatial Workflow surface; Table is a secondary view of the same project), **Inspector** (node/selection editing), and **Agent** (the 5-operation control surface). Canvas and Inspector are the primary surfaces; Table and Agent are real entries, but their remaining implementation work is not presented as complete — see [Features](docs/content/docs/overview/features.en.mdx).
+Compose image, text, video, audio and configuration nodes, keep projects and references close to your workspace, and extend providers, hosts and node operations through explicit contracts. The top-level product surfaces are **Canvas** (the spatial Workflow), **Table** (structured media processing), and **Agent** (the local/external coding-agent connection hub). The built-in **Assistant / Context / History** stays in a contextual drawer beside Canvas/Table and is not duplicated inside Agent — see [Features](docs/content/docs/overview/features.en.mdx).
 
 ## One workflow, human + agent
 
@@ -322,7 +322,7 @@ CLI and the experimental stdio MCP share operation semantics and the current Bro
   <a href="docs/maintenance/readme/DEMO_RECORDING.md">DEMO_RECORDING.md</a>.</sub>
 </p>
 
-Native-effect work keeps two short paths: one shared generation function produces durable media versions, and the host effect reads a fixed version and renders locally — no director/Operator/crew chain. Product scope, interactions, implementation and benchmarks live in the [main design](docs/design/flovart-native-effects.md); the [current implementation record](docs/design/ecosystem/CURRENT_ARCHITECTURE.md) describes existing code, not a second target architecture.
+Native-effect work keeps two short paths: one shared generation function produces durable media versions, and the host effect reads a fixed version and renders locally — no director/Operator/crew chain. Product scope and system boundaries live in the [main design](docs/design/flovart-native-effects.md); agent transport/authority details live in [Agent Integration](docs/design/agent-integration.md). Historical target/current architecture reports no longer participate in product decisions.
 
 ## Local-first and security
 
