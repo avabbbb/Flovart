@@ -122,7 +122,7 @@ Operation Skill 教外部助手操作 Flovart，CLI 提供默认能力投影，M
 
 | 位置 | 当前可复用部分 | 尚不能宣称 |
 | --- | --- | --- |
-| `integrations/studio/` | 面板包、宿主资源引用、AE 原生效果源码原型及候选应用桥接；AE CEP 源码按 Workflow Artifact ID + SHA-256 命名本机素材，在候选图层注释保存版本与目标 ID，并按当前合成恢复候选列表；AE 导入后记录宿主解释的帧率、帧时长、像素宽高比、Alpha 解释和项目色彩上下文；列表检查素材源是否存在，效果只声明已实现的像素独立能力 | 已编译原生效果、MFR 并发认证、输出范围/偏移处理、缺失素材重定位/回链、工程自包含、磁盘 hash 回读、嵌入素材色彩配置及权威帧数、真实宿主认证 |
+| `integrations/studio/` | 面板包、宿主资源引用、AE 原生效果源码原型及候选应用桥接；AE CEP 源码按 Workflow Artifact ID + SHA-256 命名本机素材，在候选图层注释保存版本与目标 ID，并按当前合成恢复候选列表；AE 导入后记录宿主解释的帧率、帧时长、像素宽高比、Alpha 解释和项目色彩上下文；CEP 写盘后回读暂存文件并校验字节数与 SHA-256，再重命名为固定版本路径，应用前重新校验候选素材；效果只声明已实现的像素独立能力 | 已编译原生效果、MFR 并发认证、输出范围/偏移处理、缺失素材重定位/回链、工程自包含、应用后渲染期间的文件篡改检测、嵌入素材色彩配置及权威帧数、CEP 大文件回读开销验证、真实宿主认证 |
 | `services/workflowExecutor.ts`、`components/workflow/inputResolver.ts` | 统一输入与现有生成语义 | 关闭浏览器后插件独立生成 |
 | `src-tauri/src/runtime/` | 任务、Provider、持久存储、本地控制服务 | 无 UI 独立启动及与所有前端 Provider 完全等价 |
 | `tools/flovart/`、`agent/` | CLI、命令描述、五工具 stdio MCP、共用操作入口、当前 Browser 绑定 | 原生效果工具、真实 MCP 客户端认证 |

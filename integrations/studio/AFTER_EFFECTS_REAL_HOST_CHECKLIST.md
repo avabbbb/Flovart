@@ -2,8 +2,9 @@
 
 Status: `EXTERNAL_GATE`. The workspace contains a CEP panel and an uncompiled
 AE Effect SDK source prototype. Neither package build output nor source presence
-certifies a native effect. The current development machine has no detected AE
-installation, AE SDK path, or Windows C++ build toolchain.
+certifies a native effect. MSVC 14.44, MSBuild, Windows SDK 10.0.26100.0, and
+`rc.exe` are installed outside the current `PATH`; no After Effects installation
+or configured AE SDK path has been detected.
 
 ## Package and target binding
 
@@ -29,9 +30,10 @@ installation, AE SDK path, or Windows C++ build toolchain.
   composition before the explicit apply action; verify the native layer
   parameter can still read its footage when disabled.
 - Move or rename a candidate file. Confirm the candidate tab reports the
-  missing source after its refresh action, refuses to apply it, and AE reports
-  an already-applied missing source as a render failure. Relocation/relinking
-  still needs a content-hash verification path before it can be implemented.
+  missing source after its refresh action, refuses to apply it, and CEP blocks
+  a same-size replacement whose SHA-256 differs. AE must report an already-
+  applied missing source as a render failure. Automatic relocation/relinking is
+  not implemented; any future relink must verify the recorded hash first.
 - Inspect a candidate's CEP `USER_DATA` filename and layer-comment manifest.
   Confirm artifact ID, SHA-256, byte size, provider task ID when present, and
   dimensions/duration match the generated Blob. Compare the stored AE footage
@@ -40,8 +42,9 @@ installation, AE SDK path, or Windows C++ build toolchain.
   the host UI, and confirm the candidate row displays those values. These are
   AE interpretation/context snapshots, not proof of the file's embedded color
   profile or authoritative frame count. Ensure no provider key or other
-  credential is stored. The checksum currently identifies the source Blob;
-  persisted-file readback verification remains unimplemented.
+  credential is stored. Confirm staged-file readback and the final content-
+  addressed file match the recorded byte size and SHA-256. Large-file CEP memory
+  use and host compatibility still require measurement.
 - Confirm the panel refuses to apply the effect in 16/32 bpc projects. Apply it
   in an 8 bpc project, change the project depth, then verify the existing effect
   either renders a visible error or is otherwise blocked; that post-apply depth
@@ -91,6 +94,7 @@ installation, AE SDK path, or Windows C++ build toolchain.
   versions; sharing source or SDK lineage is not compatibility evidence.
 
 The CEP bridge still depends on the existing Browser-bound Workflow generation
-path. Source code now records a version manifest and Blob checksum, but this
-slice does not certify independent plugin generation, project-portable media
-versions, relinking, disk-file checksum readback, video time mapping, or masks.
+path. Source code stages and verifies candidate files and checks their SHA-256
+before apply, but this does not certify independent plugin generation,
+project-portable media versions, relinking, post-apply file integrity during
+rendering, video time mapping, or masks.

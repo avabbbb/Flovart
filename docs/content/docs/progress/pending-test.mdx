@@ -9,8 +9,8 @@ title: 待测试确认
 - 已实现源码：AE C++ 效果改为读取宿主 `Asset Version` 图层参数并按当前帧混合输入，移除了将 `PF_Param_PATH` 当普通文件路径的错误路径；未实现 `extent_hint` 和输出偏移处理前不声明输出范围支持。面板生成后先导入候选，用户再显式应用到提交时绑定的原始合成/图层。目标不存在时明确失败，不切换到当前活动目标。
 - 已实现源码：候选导入和效果应用各自归入 AE Undo Group；新效果创建后参数配置失败会移除半成品效果。Studio 构建清单与效果参数清单同步为 `Asset Version` / `Blend`。
 - 已实现源码：候选图层默认关闭可见开关，只有用户执行“应用”后才影响原合成；CEP 清单要求 AE 22.0+，宿主也会在缺少稳定合成/图层 ID 时返回版本提示。候选关闭时仍能否被效果采样待真实宿主确认。
-- 已实现源码：AE 候选恢复检查当前合成的 FootageItem 文件状态和字节数；候选页可手动刷新，文件缺失或长度不符时显示原因、禁用列表应用与当前结果的顶部应用按钮，ExtendScript 也会在应用前再次拒绝。文件选择、SHA-256 回链替换还未实现，当前只是源码路径。
-- 已实现源码：候选导入会比较落盘文件字节数与 Artifact 元数据；恢复和应用时检查候选文件长度是否仍与版本清单一致。尺寸相同的替换文件仍无法识别，磁盘 SHA-256 回读与按校验和回链待实现。
+- 已实现源码：AE 候选恢复检查当前合成的 FootageItem 文件状态和字节数；候选页可手动刷新，文件缺失或长度不符时显示原因、禁用列表应用与当前结果的顶部应用按钮。CEP 应用桥接在调用 ExtendScript 前按候选 ID 重新读取当前合成清单，并校验候选绑定的合成、源图层、文件字节数与 SHA-256；校验失败不会进入宿主应用调用。缺失素材仍没有重新定位/回链入口。
+- 已实现源码：候选导入先写入同目录唯一暂存文件，回读校验字节数和 SHA-256 后再通过 CEP rename 提交到内容寻址路径；校验不匹配时不导入，固定版本路径已存在时只在现有文件哈希匹配后复用，不覆盖它。Apply 前会再次读取文件，所以同尺寸替换会被拒绝。真实 CEP rename、Web Crypto 兼容与并发渲染未在 AE 验证。
 - 已实现源码：AE 8-bit 效果对不同尺寸的输入/候选素材使用像素中心双线性重采样后混合 RGBA；尺寸相同时走逐行直接采样，避免不必要的插值。尚未编译或与参考渲染/性能基线对比，alpha、颜色空间和宿主实际采样行为仍待真实 AE 验证。
 - 已实现源码：AE 参考素材物化带上提交时冻结的合成 ID、图层 ID 与图层时间；脚本把所选图层复制到单帧临时合成，使用独立 Render Queue 项和 PNG Alpha 模板，只暂时取消既有 QUEUED 项并在收尾恢复，失败时清理临时项目和输出。未在真实 AE 验证帧选择、输出模板、队列恢复、取消路径，以及父级/轨道遮罩/相机/跨图层效果依赖是否完整保留。
 - 已实现源码：AE 候选导入时把宿主报告的画幅、时长、帧率/帧时长、像素宽高比、Alpha 解释，以及 AE 项目工作色彩空间、Gamma、位深和线性化设置写入候选图层注释；候选恢复接口会返回这些字段，面板候选项也展示主要信息。它们描述 AE 导入解释与项目上下文，不代表嵌入素材色彩配置或权威帧数；当前实现未在真实 AE 验证这些属性读取或候选数据回读。
@@ -19,11 +19,11 @@ title: 待测试确认
 - 已实现源码：AE CEP 应用入口读取项目位深，非 8 bpc 时在修改图层前拒绝应用；原生回调仍只处理 8-bit 像素。尚未在 AE 验证 16/32 bpc 拒绝文案，以及效果应用后再切换项目位深时的渲染错误表现。
 - 已实现源码：AE 面板把物化参考帧的宽高标为当前合成尺寸；临时 PNG 确实按原合成画幅渲染，避免把素材源尺寸误当成导出参考图尺寸。仍需在真实 AE 确认 Render Queue 输出文件与报告尺寸一致。
 - 已实现源码：Studio 本地 Artifact registry 保留 Provider task ID、生成提示、模型、字节数和已有尺寸/时长，外部 Workflow 命令仍只返回不透明 Artifact ID；AE 回写前分块计算 Blob SHA-256，CEP 将素材写入 `USER_DATA`，文件名包含 artifact ID 与 checksum，AE 候选图层注释保存版本/目标 manifest，并供面板从当前合成恢复候选记录。注释只作溯源，不进入渲染；不写 Provider 凭据。
-- 已实现源码：CEP Base64 编码不再为整份文件创建逐字节字符串数组，改为小段字节转码后拼成 CEP 所需的单个 Base64 参数；这只降低转码临时对象峰值，`cep.fs.writeFile` 仍整块写入，未实现磁盘流式分块或读取回写文件重新计算 SHA-256，CEP 运行时兼容性也未验证。
+- 已实现源码：CEP Base64 编码不再为整份文件创建逐字节字符串数组，改为小段字节转码后拼成 CEP 所需的单个 Base64 参数；`cep.fs.writeFile` 和 `cep.fs.readFile` 仍整块写/读，回读 SHA-256 使用 Web Crypto。大视频的面板内存和响应时间、CEP Web Crypto 兼容性仍未测。
 - 已实现源码：AE Render 入口拒绝缺失必需参数指针和 NaN Blend；Composite 在读取像素前检查 world 尺寸、rowbytes、最小每行字节数与末行偏移可表示范围，并通过 `PF_GET_PIXEL_DATA8` 取像素指针。该防护只校验宿主提供的 world 元数据，不能证明实际底层缓冲区长度；尚未针对 AE SDK 编译。
 - 已实现源码：效果入口不再依赖未包含的 `DllExport` 宏；源码按 Windows/macOS 平台声明仅 `EffectMain` 导出，其他平台在编译期拒绝。实际 DLL 符号表、PiPL 与 SDK ABI 仍须在真实 Windows SDK 工具链验证；macOS 仍非本轮支持目标。
-- 未验证：本轮没有运行构建、测试或宿主操作。当前机器未发现 After Effects 安装、AE SDK 或 Windows C++ 工具链；`.aex` 未编译，参数 ABI、PiPL、像素输出、撤销、合成切换隔离和宿主渲染都未实测。源码当前不声明 MFR 支持，需在真实宿主验证重入与并发渲染后再开放。
-- 未完成：候选仍经现有 Browser-bound Workflow 生成；当前 CEP 用户数据文件与图层注释不等于工程自包含。素材容器的权威帧数与嵌入色彩配置、磁盘 hash 回读、工程打包/跨目录重定位、按校验和回链，以及缺失报告/禁用应用的真实宿主确认、视频时间映射及遮罩流程仍未实现或验证。详细门禁见 [After Effects host checklist](../../../integrations/studio/AFTER_EFFECTS_REAL_HOST_CHECKLIST.md) 和 [native effect source note](../../../integrations/studio/after-effects/effect/NATIVE_EFFECT.md)。正式支持状态未升级。
+- 已验证源码：`npm test -- tests/studioAfterEffectsBridge.test.ts` 的 5 项 CEP 桥接测试通过，覆盖暂存写入与磁盘回读、同尺寸篡改拒绝、已存在内容寻址文件的安全复用、路径不泄露到面板契约，以及 Apply 前重新校验；新增测试的独立 TypeScript 检查通过；`npm run docs:check` 检查 149 个文档通过。仓库级 `npx tsc --noEmit --pretty false` 仍在未改动的 `services/modelFetcher.ts` 报 3 个错误（499、501、533 行）。尚未运行 Studio package build、真实 CEP 或宿主操作。MSVC 14.44、MSBuild、Windows SDK 10.0.26100.0 与 `rc.exe` 已安装但不在当前 PATH；未发现 After Effects 安装或配置的 AE SDK，因此 `.aex` 未编译，参数 ABI、PiPL、像素输出、撤销、合成切换隔离和宿主渲染都未实测。源码当前不声明 MFR 支持，需在真实宿主验证重入与并发渲染后再开放。
+- 未完成：候选仍经现有 Browser-bound Workflow 生成；当前 CEP 用户数据文件与图层注释不等于工程自包含。素材容器的权威帧数与嵌入色彩配置、工程打包/跨目录重定位、按校验和回链、应用后 render 阶段的文件完整性检测，以及缺失报告/禁用应用的真实宿主确认、视频时间映射及遮罩流程仍未实现或验证。详细门禁见 [After Effects host checklist](../../../integrations/studio/AFTER_EFFECTS_REAL_HOST_CHECKLIST.md) 和 [native effect source note](../../../integrations/studio/after-effects/effect/NATIVE_EFFECT.md)。正式支持状态未升级。
 
 ## 本轮：Real Codex External Gate（5/5 trial 已通过）
 
