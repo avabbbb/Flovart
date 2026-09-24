@@ -314,8 +314,8 @@ export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme,
         preserveReferenceAspectRatio={config.preserveReferenceAspectRatio === true}
         onPreserveReferenceAspectRatioChange={enabled => patchConfig({ preserveReferenceAspectRatio: enabled })}
         selectedTextModel={undefined}
-        selectedImageModel={generationMode === 'image' ? config.modelId : undefined}
-        selectedVideoModel={generationMode === 'video' ? config.modelId : undefined}
+        selectedImageModel={generationMode === 'image' ? config.modelId || defaultMappedModelId : undefined}
+        selectedVideoModel={generationMode === 'video' ? config.modelId || defaultMappedModelId : undefined}
         textModelOptions={[]}
         imageModelOptions={dynamicModelOptions.image}
         videoModelOptions={dynamicModelOptions.video}

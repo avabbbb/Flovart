@@ -629,26 +629,9 @@ impl ProductionRuntime {
                         action_url: None,
                     });
                 }
-                // R6-H04: Reject execution when any director gate is still required.
-                let has_director_blocker = status
-                    .get("blockers")
-                    .and_then(Value::as_array)
-                    .into_iter()
-                    .flatten()
-                    .filter_map(Value::as_str)
-                    .any(|blocker| blocker.starts_with("DIRECTOR_GATE_REQUIRED:"));
-                if has_director_blocker {
-                    return Err(RuntimeError {
-                        code: "PRECONDITION_FAILED".to_owned(),
-                        message: "ProductionRun has unresolved director gates; approve or reject them before execution.".to_owned(),
-                        retryable: false,
-                        details: Some(serde_json::json!({
-                            "runStatus": run_status,
-                            "blockers": status.get("blockers")
-                        })),
-                        action_url: None,
-                    });
-                }
+                // Director gates are stage-scoped: the scheduler must start
+                // so it can pause at the matching stage and await review.
+                // The worker enforces each stage's requiredGates before submit.
                 let normalized_args = serde_json::json!({ "runId": run_id });
                 let payload_hash = Self::hash_payload(&serde_json::json!({
                     "command": "production.run",

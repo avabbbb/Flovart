@@ -223,14 +223,14 @@ describe('workflow generation', () => {
     expect(result.nodes.find(item => item.id === 'config-1')?.metadata.error).toContain('明确选择图片产品模型');
   });
 
-  it('does not bypass the prompt-enhancement mapping when automatic optimization is enabled', async () => {
+  it('continues with the original prompt when optional enhancement has no mapped route', async () => {
     const source = project();
     source.nodes[2].metadata.config = {
       mode: 'video',
       modelId: 'flovart:seedance-2',
       enhancePrompt: true,
     };
-    const executeMedia = vi.fn();
+    const executeMedia = vi.fn().mockResolvedValue({ ok: false, errorMessage: 'fixture provider stop' });
 
     const result = await runWorkflowGeneration(source, 'config-1', {
       userApiKeys: [mappedMediaKey('video', 'flovart:seedance-2', 'doubao-seedance-2-0-260128', 'volcengine')],
@@ -238,8 +238,11 @@ describe('workflow generation', () => {
       onProjectChange: vi.fn(),
     });
 
-    expect(executeMedia).not.toHaveBeenCalled();
-    expect(result.nodes.find(item => item.id === 'config-1')?.metadata.error).toContain('尚未配置可用的模型映射');
+    expect(executeMedia).toHaveBeenCalledWith(expect.objectContaining({
+      modelId: 'doubao-seedance-2-0-260128',
+      prompt: '电影光线\n\n银色机器人',
+    }));
+    expect(result.nodes.find(item => item.id === 'config-1')?.metadata.error).toBe('fixture provider stop');
   });
 
   it('uses mentioned durable media, filters unsupported references, and persists generated blobs', async () => {

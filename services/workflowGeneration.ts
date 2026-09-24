@@ -3,7 +3,7 @@ import { CAMERA_MOVEMENTS, createWorkflowNode, STYLE_PRESETS } from '../componen
 import { buildCanonicalGenerationInput, resolveWorkflowInputs, type CanonicalGenerationInput, type WorkflowAssetReferenceInput } from '../components/workflow/inputResolver';
 import { promptIntentFromNode, type PromptIntent } from '../components/workflow/promptIntent';
 import { createWorkflowVideoPoster, discardWorkflowMediaRecord, fitWorkflowMediaSize, ingestWorkflowMedia, isWorkflowMediaKeyReferenced, releaseWorkflowMediaRecord, workflowDataUrlToBlob, type WorkflowMediaRecord } from '../components/workflow/media';
-import type { WorkflowGenerationMode, WorkflowNode, WorkflowProject } from '../components/workflow/types';
+import type { WorkflowGenerationMode, WorkflowNode, WorkflowNodeMetadata, WorkflowProject } from '../components/workflow/types';
 import type { ProductModelMode, UserApiKey } from '../types';
 import { executeUnifiedIgnition, generateTextWithProvider, SeedanceSubmissionUnknownError, type UnifiedIgnitionInput, type UnifiedIgnitionResult } from './aiGateway';
 import { getGenerationCapability } from './generationCapabilities';
@@ -211,6 +211,13 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
   const preparedHistory: WorkflowHistoryPayload[] = [];
   let committed = false;
   let operationTakeId: string | undefined;
+  let singleNodeOutput: {
+    type?: WorkflowNode['type'];
+    position?: WorkflowNode['position'];
+    width?: number;
+    height?: number;
+    metadata: Partial<WorkflowNodeMetadata>;
+  } | undefined;
 
   const stillActive = () => {
     if (activeRequests.get(key)?.requestId !== requestId || controller.signal.aborted) return false;
@@ -409,6 +416,10 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
           preparedConnections.push({ id: createId(), fromNodeId: nodeId, toNodeId: resultNode.id });
         } else {
           const latest = canonical(runtime, current);
+          singleNodeOutput = {
+            type: 'text',
+            metadata: { content, status: 'loading', error: undefined, progress: 100 },
+          };
           current = {
             ...latest,
             nodes: latest.nodes.map(node => node.id === nodeId
@@ -546,6 +557,20 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
         const size = fitWorkflowMediaSize(mode, record.naturalWidth, record.naturalHeight);
         const center = { x: executionTarget.outputTarget.x + executionTarget.outputTarget.width / 2, y: executionTarget.outputTarget.y + executionTarget.outputTarget.height / 2 };
         const latest = canonical(runtime, current);
+        singleNodeOutput = {
+          type: mode,
+          position: { x: center.x - size.width / 2, y: center.y - size.height / 2 },
+          width: size.width,
+          height: size.height,
+          metadata: {
+            ...record,
+            href: undefined,
+            status: 'loading',
+            error: undefined,
+            progress: 100,
+            ...(operationTakeId ? { operationTakeId, sourceOperationNodeId: nodeId } : {}),
+          },
+        };
         current = {
           ...latest,
           nodes: latest.nodes.map(node => node.id === nodeId
@@ -605,7 +630,23 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
         connections: [...latest.connections, ...preparedConnections],
       };
     } else {
-      current = patchInitiator(canonical(runtime, current), nodeId, { status: 'success' as const, error: undefined, progress: 100, generationRequestId: undefined, generationStartedAt: undefined, generationMessage: undefined });
+      const latest = canonical(runtime, current);
+      current = singleNodeOutput
+        ? {
+            ...latest,
+            nodes: latest.nodes.map(node => node.id === nodeId
+              ? {
+                  ...node,
+                  ...(singleNodeOutput.type ? { type: singleNodeOutput.type } : {}),
+                  ...(singleNodeOutput.position ? { position: singleNodeOutput.position } : {}),
+                  ...(singleNodeOutput.width !== undefined ? { width: singleNodeOutput.width } : {}),
+                  ...(singleNodeOutput.height !== undefined ? { height: singleNodeOutput.height } : {}),
+                  metadata: { ...node.metadata, ...singleNodeOutput.metadata },
+                }
+              : node),
+          }
+        : latest;
+      current = patchInitiator(current, nodeId, { status: 'success' as const, error: undefined, progress: 100, generationRequestId: undefined, generationStartedAt: undefined, generationMessage: undefined });
     }
     if (operationTakeId) {
       const operation = current.nodes.find(node => node.id === nodeId);

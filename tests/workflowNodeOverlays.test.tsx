@@ -85,7 +85,7 @@ describe('workflow node overlays', () => {
     expect(screen.getByText('选择模型')).toBeInTheDocument();
   });
 
-  it('emits a provider-neutral PromptIntent before running the selected node', () => {
+  it('emits a provider-neutral PromptIntent before running the selected node', async () => {
     const onPromptIntent = vi.fn();
     const onRun = vi.fn();
     const promptNode = createWorkflowNode('prompt-image', 'image', { x: 0, y: 0 }, {
@@ -106,7 +106,7 @@ describe('workflow node overlays', () => {
     />);
 
     fireEvent.click(screen.getByRole('button', { name: '生成' }));
-    expect(onRun).toHaveBeenCalledOnce();
+    await waitFor(() => expect(onRun).toHaveBeenCalledOnce());
     expect(onPromptIntent).toHaveBeenLastCalledWith({
       targetNodeId: 'prompt-image',
       text: '初始提示词',

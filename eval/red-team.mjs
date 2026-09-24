@@ -7,7 +7,7 @@
 //
 //   npm run eval:redteam
 
-import { mkdir, readFile, writeFile, readdir } from 'node:fs/promises';
+import { mkdir, readFile, writeFile, readdir, rm } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -56,13 +56,13 @@ function taskOf(overrides = {}) {
   };
 }
 
-async function trial(task, { label, trialIndex = 1, runnerFactory, runnerName = 'injected' }) {
+async function trial(task, { label, trialIndex = 1, runnerFactory, runnerName = 'injected', metadata = {} }) {
   const dir = join(sandbox, label);
   await mkdir(dir, { recursive: true });
   return runTrial(task, {
     runnerName,
     runDir: dir,
-    metadata: { phase: 'redteam' },
+    metadata: { phase: 'redteam', ...metadata },
     trialIndex,
     repeats: 1,
     runnerFactory,
@@ -216,11 +216,17 @@ const honest = () => (controlled, options) => createOracleRunner(controlled, opt
     `duplicates=${duplicates} hardGate=${JSON.stringify(score.hardGateFailures)}`);
 }
 
-// 8. A secret in the tool arguments and in an error message must never reach
-//    the recorded evidence.
+// 8. Untrusted metadata, world state, runner/provider/tool errors, arguments,
+//    results, notes, approvals, scores and final events share one redaction
+//    boundary. Scan every JSON/JSONL file recursively under this trial.
 {
   const secret = 'sk-live-REDTEAM0000000000000000000';
   const headerSecret = 'ghp_REDTEAM000000000000000000000000';
+  const opaqueToken = 'opaque-REDTEAM-token-value-000000000000';
+  const bearerToken = 'eyJhbGciOiJub25lIn0.eyJzdWIiOiJ0ZXN0In0.signature-part-is-long-enough';
+  const checksum = 'd'.repeat(64);
+  const label = 'secret-leak';
+  await rm(join(sandbox, label), { recursive: true, force: true });
   const { score } = await trial(taskOf({
     solution: {
       steps: [{
@@ -237,30 +243,82 @@ const honest = () => (controlled, options) => createOracleRunner(controlled, opt
       }],
     },
   }), {
-    label: 'secret-leak',
+    label,
+    metadata: {
+      description: `runner metadata included ${secret} and Bearer ${headerSecret}`,
+      apiKey: checksum,
+      artifactChecksum: checksum,
+    },
     runnerFactory: (controlled, options) => ({
       name: 'leaky',
       async run(currentTask) {
         const step = currentTask.solution.steps[0];
-        options?.trajectory?.recordToolCall({
+        controlled.world.project.nodes.push({
+          id: 'redteam-secret-node',
+          type: 'image',
+          title: `nested error text: token=${opaqueToken}; ${secret}`,
+          position: { x: 0, y: 0 },
+          metadata: { apiKey: checksum, bearer: `Bearer ${headerSecret}`, contentChecksum: checksum },
+        });
+        await options?.trajectory?.recordToolCall({
           surface: 'leaky',
           command: step.command,
-          args: step.args,
+          args: { ...step.args, nested: { note: `failed with ${secret}`, token: opaqueToken } },
           result: { ok: false, error: { code: 'LEAKED', message: `failed with ${secret} and Bearer ${headerSecret}` } },
         });
-        return { completedSteps: true, error: { code: 'LEAKED', message: `failed with ${secret}` } };
+        await options?.trajectory?.recordToolResult({
+          result: { message: `provider returned token=${opaqueToken}`, checksum },
+        });
+        await options?.trajectory?.recordApproval({
+          reason: `approved after ${secret}`,
+          metadata: { authorization: `Bearer ${headerSecret}`, proof: `token=${opaqueToken}` },
+        });
+        await options?.trajectory?.recordProviderEvent({
+          error: new Error(`provider rejected ${secret}; ${bearerToken}`),
+          request: { sessionToken: opaqueToken },
+        });
+        await options?.trajectory?.recordError({ message: `nested runner error ${bearerToken}` });
+        await options?.trajectory?.recordNote({ text: `note contains ghp token ${headerSecret} and ${secret}` });
+        throw new Error(`runner failed with ${secret}; Bearer ${headerSecret}; token=${opaqueToken}`);
       },
     }),
   });
-  const files = await walk(join(sandbox, 'secret-leak'));
+  const trialDir = join(sandbox, label, 'redteam-task', 'trial-01');
+  const files = (await walk(trialDir)).filter(file => /\.(?:json|jsonl)$/i.test(file));
+  const expectedFiles = new Set(['metadata.json', 'trajectory.jsonl', 'world-final.json', 'world-normalized.json', 'score.json']);
+  const foundFiles = new Set(files.map(file => file.split(/[\\/]/).at(-1)));
+  const missingFiles = [...expectedFiles].filter(file => !foundFiles.has(file));
   let leaked = false;
+  let malformed = false;
+  let preservedChecksum = false;
+  const returnedScoreLeaked = [secret, headerSecret, opaqueToken, bearerToken]
+    .some(value => JSON.stringify(score).includes(value));
   for (const file of files) {
-    if (!/\.(json|jsonl)$/.test(file)) continue;
     const text = await readFile(file, 'utf8');
-    if (text.includes(secret) || text.includes(headerSecret)) leaked = true;
+    if ([secret, headerSecret, opaqueToken, bearerToken].some(value => text.includes(value))) leaked = true;
+    if (text.includes(checksum) && /world-final\.json$/.test(file)) preservedChecksum = true;
+    try {
+      if (/\.jsonl$/i.test(file)) {
+        for (const line of text.split(/\r?\n/).filter(Boolean)) JSON.parse(line);
+      } else {
+        JSON.parse(text);
+      }
+    } catch {
+      malformed = true;
+    }
   }
-  record('secrets-never-reach-the-trajectory', !leaked && score.success === false,
-    leaked ? 'a secret was found in the recorded evidence' : 'no secret in any recorded file');
+  record('secrets-never-reach-the-trajectory', !leaked && !returnedScoreLeaked && !malformed && !missingFiles.length && preservedChecksum && score.success === false,
+    leaked
+      ? 'a credential value was found in recursively scanned JSON/JSONL evidence'
+      : returnedScoreLeaked
+        ? 'a credential value escaped through the engine score returned to aggregate writers'
+      : malformed
+        ? 'an evidence JSON/JSONL artifact was malformed'
+        : missingFiles.length
+          ? `evidence artifacts missing: ${missingFiles.join(', ')}`
+          : !preservedChecksum
+            ? 'an ordinary SHA-256 artifact checksum was unexpectedly redacted'
+            : `all ${files.length} JSON/JSONL artifacts scanned; credentials redacted and SHA-256 checksum preserved`);
 }
 
 // 9. State must not survive from one trial to the next.
