@@ -39,9 +39,12 @@
       "manifest is provenance metadata and is not checked by the native render callback",
       "the native render path reads 8-bit pixels; the CEP application action refuses projects whose bit depth is not 8",
       "output extent and origin handling are not implemented or declared",
-      "candidate source existence and byte size are checked before apply, but relocation/relinking and disk hash verification are not implemented",
+      "CEP verifies the staged file's byte size and SHA-256 before renaming it to the content-addressed path, then rechecks the candidate before apply",
+      "the native render callback does not detect external changes made after apply",
+      "relocation/relinking and project collection are not implemented",
       "captured media values describe After Effects' imported interpretation; embedded source color profile and authoritative frame count are not recorded",
-      "project collection, cross-machine portability, and disk-file checksum revalidation are unverified"
+      "project collection and cross-machine portability are unverified",
+      "CEP full-file readback cost and host compatibility, especially for large video files, are unverified"
     ]
   },
   "parameters": [
