@@ -165,7 +165,7 @@ describe('aiGateway - validateApiKey', () => {
                 headers: expect.objectContaining({ Authorization: 'Bearer 0123456789abcdef0123456789abcdef' }),
             }),
         );
-        expect(globalThis.fetch).toHaveBeenNthCalledWith(2, 'https://www.runninghub.ai/page-api');
+        expect(globalThis.fetch).toHaveBeenNthCalledWith(2, 'https://www.runninghub.ai/page-api', expect.objectContaining({ signal: expect.any(AbortSignal) }));
     });
 
     it('RunningHub provider 不把 HTTP 200 的业务认证错误误判为已验证', async () => {
@@ -647,6 +647,10 @@ describe('aiGateway - generateImageWithProvider', () => {
     it('forwards cancellation to the provider request and returns a readable stop message', async () => {
         const controller = new AbortController();
         globalThis.fetch = vi.fn((_url: RequestInfo | URL, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
+            if (init?.signal?.aborted) {
+                reject(new DOMException('生成已停止', 'AbortError'));
+                return;
+            }
             init?.signal?.addEventListener('abort', () => reject(new DOMException('生成已停止', 'AbortError')), { once: true });
         }));
 

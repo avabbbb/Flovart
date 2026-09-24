@@ -2512,11 +2512,13 @@ export async function generateImageWithProvider(
 
     // 统一物化 blob: 等本地引用（非 data: / 非 http(s)）为 data: URL，避免直接发给远程供应商。
     // http(s) 与 data: 可直传 openrouter/generic 分支；RunningHub/OpenAI 分支有自己的物化流程。
-    const materializedRefs = await Promise.all(refs.map(async image => {
-        if (/^data:/i.test(image.href) || /^https?:\/\//i.test(image.href)) return image;
-        const fetched = await fetchImageUrlToBase64(image.href, options?.signal);
-        return { ...image, href: `data:${fetched.newImageMimeType};base64,${fetched.newImageBase64}`, mimeType: fetched.newImageMimeType };
-    }));
+    const materializedRefs = provider === 'runningHub'
+        ? refs
+        : await Promise.all(refs.map(async image => {
+            if (/^data:/i.test(image.href) || /^https?:\/\//i.test(image.href)) return image;
+            const fetched = await fetchImageUrlToBase64(image.href, options?.signal);
+            return { ...image, href: `data:${fetched.newImageMimeType};base64,${fetched.newImageBase64}`, mimeType: fetched.newImageMimeType };
+        }));
 
     if (provider === 'google') {
         if (isGoogleImageEditModel(model)) {

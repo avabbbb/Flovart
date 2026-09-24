@@ -11,7 +11,7 @@ import { createControlledWorld } from '../environment/controlled-world.mjs';
 import { canonicalHash, captureWorldSnapshot, normalizeWorldSnapshot } from '../environment/snapshot.mjs';
 import { evaluatePredicates } from '../graders/predicates.mjs';
 import { createRunner } from '../runners/deterministic.mjs';
-import { createTrajectoryRecorder } from '../recorders/trajectory.mjs';
+import { createTrajectoryRecorder, redactSecrets } from '../recorders/trajectory.mjs';
 
 /**
  * Counters that represent real damage. Blocked attempts are deliberately not
@@ -96,7 +96,7 @@ export async function runTrial(task, { runnerName, runDir, metadata, trialIndex,
   // way, so it is reported as skipped instead of as a failure.
   if (Array.isArray(task.platforms) && task.platforms.length && !task.platforms.includes(platformKind())) {
     return {
-      score: {
+      score: redactSecrets({
         taskId: task.id,
         taskVersion: task.version,
         suite: task.suite,
@@ -125,7 +125,7 @@ export async function runTrial(task, { runnerName, runDir, metadata, trialIndex,
         usage: { promptTokens: 0, completionTokens: 0, costUsd: 0, measured: false },
         error: null,
         knownGap: graded.knownGap,
-      },
+      }),
       worldFinal: null,
       worldNormalized: null,
       controlled: null,
@@ -311,14 +311,15 @@ export async function runTrial(task, { runnerName, runDir, metadata, trialIndex,
     knownGap: task.knownGap ?? null,
   };
 
+  const evidenceScore = redactSecrets(score);
   await recorder.finalise({
     worldFinal,
     worldNormalized,
-    score,
-    timing: score.timing,
+    score: evidenceScore,
+    timing: evidenceScore.timing,
   });
 
-  return { score, worldFinal, worldNormalized, controlled };
+  return { score: evidenceScore, worldFinal, worldNormalized, controlled };
 }
 
 /**

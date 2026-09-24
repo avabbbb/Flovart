@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { createWorkflowNode } from '../components/workflow/constants';
 import { createWorkflowOperationInputBinding, createWorkflowOperationNode, updateWorkflowOperationFromMetadata } from '../components/workflow/operations';
@@ -90,7 +90,7 @@ describe('workflow operation node surface', () => {
     expect(screen.getByTestId('workflow-node-prompt-bar')).toBeInTheDocument();
     expect(onChange).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: '运行' }));
-    expect(onRun).toHaveBeenCalledOnce();
+    await waitFor(() => expect(onRun).toHaveBeenCalledOnce());
     fireEvent.change(screen.getByLabelText('宽度'), { target: { value: '70' } });
     const patch = onChange.mock.calls.at(-1)?.[0];
     expect(patch.config.operationParameters).toEqual({ x: .1, y: .2, width: .7, height: .6 });
