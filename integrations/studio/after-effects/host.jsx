@@ -340,12 +340,13 @@ var FlovartAE = (function () {
           ? "候选素材文件缺失，需重新定位后才能应用"
           : sourceFile.length !== expectedByteSize
             ? "候选素材字节数与版本记录不一致，需重新定位后才能应用"
-            : "已保存的候选素材";
+            : "文件存在且大小匹配；应用前将校验 SHA-256";
       candidates.push({
         candidateLayerId: String(layer.id),
         artifactId: String(manifest.artifactId || ""),
         sha256: String(manifest.sha256 || ""),
         mediaAvailable: mediaAvailable,
+        sourcePath: sourceExists ? sourceFile.fsName : null,
         byteSize: manifest.byteSize,
         sourceMedia: manifest.sourceMedia || null,
         projectColorContext: manifest.projectColorContext || null,

@@ -47,6 +47,50 @@
     var binary = atob(value);
     return Uint8Array.from(binary, function (character) { return character.charCodeAt(0); });
   };
+  var readFileBytes = function (file) {
+    var read = cep && cep.fs && cep.fs.readFile ? cep.fs.readFile(file, cep.encoding && cep.encoding.Base64) : null;
+    if (!read || read.err || typeof read.data !== 'string') {
+      return Promise.reject(new Error('After Effects 无法回读候选素材文件。'));
+    }
+    try {
+      return Promise.resolve(bytesFromBase64(read.data));
+    } catch (error) {
+      return Promise.reject(new Error('After Effects 回读的候选素材不是有效的 Base64 数据。'));
+    }
+  };
+  var sha256Hex = function (bytes) {
+    var subtle = global.crypto && global.crypto.subtle;
+    if (!subtle || typeof subtle.digest !== 'function') {
+      return Promise.reject(new Error('当前 CEP 运行时不支持 SHA-256 回读校验。'));
+    }
+    return Promise.resolve(subtle.digest('SHA-256', bytes)).then(function (digest) {
+      return Array.prototype.map.call(new Uint8Array(digest), function (byte) {
+        return byte.toString(16).padStart(2, '0');
+      }).join('');
+    });
+  };
+  var verifyFile = function (file, metadata) {
+    var expectedHash = String(metadata && metadata.sha256 || '').toLowerCase();
+    var expectedByteSize = metadata && metadata.byteSize;
+    if (!file || !/^[a-f0-9]{64}$/.test(expectedHash)
+        || typeof expectedByteSize !== 'number'
+        || !isFinite(expectedByteSize)
+        || Math.floor(expectedByteSize) !== expectedByteSize
+        || expectedByteSize <= 0) {
+      return Promise.reject(new Error('候选素材缺少有效的 SHA-256 或字节数记录。'));
+    }
+    return readFileBytes(file).then(function (bytes) {
+      if (bytes.length !== expectedByteSize) {
+        throw new Error('候选素材文件字节数与版本记录不一致。');
+      }
+      return sha256Hex(bytes).then(function (actualHash) {
+        if (actualHash !== expectedHash) {
+          throw new Error('候选素材文件 SHA-256 与版本记录不一致。');
+        }
+        return true;
+      });
+    });
+  };
   var base64FromBytes = function (bytes) {
     var encoded = [];
     var chunkSize = 0x6000;
@@ -73,12 +117,35 @@
     if (cep.fs.deleteFile) cep.fs.deleteFile(file);
     return Promise.resolve({ blob: new Blob([bytes], { type: mimeType || 'image/png' }), kind: 'image', mimeType: mimeType || 'image/png' });
   };
-  var writeBlob = function (file, blob) {
+  var writeBlob = function (file, blob, metadata) {
     return blob.arrayBuffer().then(function (buffer) {
       var bytes = new Uint8Array(buffer);
       var encoded = base64FromBytes(bytes);
       var value = cep && cep.fs && cep.fs.writeFile ? cep.fs.writeFile(file, encoded, cep.encoding && cep.encoding.Base64) : null;
       if (!value || value.err) throw new Error('After Effects 无法写入 Flovart 产物。');
+    }).then(function () {
+      return verifyFile(file, metadata);
+    });
+  };
+  var discardFile = function (file) {
+    if (cep && cep.fs && cep.fs.deleteFile) cep.fs.deleteFile(file);
+  };
+  var persistBlob = function (file, extension, blob, metadata) {
+    var stagingFile = filePath('asset-stage', extension);
+    if (!stagingFile) return Promise.reject(new Error('After Effects CEP 无法创建候选素材暂存路径。'));
+    return writeBlob(stagingFile, blob, metadata).then(function () {
+      var renamed = cep && cep.fs && cep.fs.rename ? cep.fs.rename(stagingFile, file) : null;
+      if (renamed && !renamed.err) return;
+      return verifyFile(file, metadata).then(function () {
+        // A previous project may already reference this content-addressed file.
+        // Reuse it only when its bytes match; never overwrite or delete it here.
+        discardFile(stagingFile);
+      }, function () {
+        throw new Error('After Effects 无法将已校验的候选素材提交到固定版本路径。');
+      });
+    }).catch(function (error) {
+      discardFile(stagingFile);
+      throw error;
     });
   };
   var bridge = {
@@ -109,7 +176,10 @@
       if (!artifact.blob || (artifact.byteSize !== undefined && artifact.byteSize !== artifact.blob.size)) {
         return Promise.reject(new Error('After Effects 产物字节数与素材元数据不一致。'));
       }
-      return writeBlob(file, payload.artifact.blob).then(function () {
+      return persistBlob(file, extension, payload.artifact.blob, {
+        sha256: artifact.sha256,
+        byteSize: artifact.blob.size,
+      }).then(function () {
         return hostCall('importArtifact', [file, payload.target || null, {
           artifactId: artifact.artifactId,
           taskId: artifact.taskId || null,
@@ -126,10 +196,51 @@
         }]).then(parse);
       });
     },
-    listNativeCandidates: function (documentId) { return hostCall('listNativeCandidates', [documentId]).then(parse); },
+    listNativeCandidates: function (documentId) {
+      return hostCall('listNativeCandidates', [documentId]).then(parse).then(function (candidates) {
+        if (!Array.isArray(candidates)) return candidates;
+        return candidates.map(function (candidate) {
+          if (!candidate || typeof candidate !== 'object') return candidate;
+          var result = {};
+          Object.keys(candidate).forEach(function (key) {
+            if (key !== 'sourcePath') result[key] = candidate[key];
+          });
+          return result;
+        });
+      });
+    },
     applyNativeEffect: function (request) {
       if (nativeBridge && typeof nativeBridge.applyNativeEffect === 'function') return nativeBridge.applyNativeEffect(request);
-      return hostCall('applyNativeEffect', [request]).then(parse);
+      var selection = request && request.sourceSelection;
+      var locator = selection && selection.locator;
+      var documentId = locator && locator.documentId;
+      var candidateLayerId = request && request.candidateLayerId;
+      if (documentId === undefined || documentId === null || candidateLayerId === undefined || candidateLayerId === null) {
+        return Promise.reject(new Error('场景替换缺少候选素材或原始图层引用。'));
+      }
+      if (selection.selectionId === undefined || selection.selectionId === null
+          || locator.layerId === undefined || locator.layerId === null
+          || String(selection.selectionId) !== String(locator.layerId)) {
+        return Promise.reject(new Error('原始 After Effects 图层引用无效，请重新选择素材。'));
+      }
+      return hostCall('listNativeCandidates', [documentId]).then(parse).then(function (candidates) {
+        var candidate = Array.isArray(candidates) ? candidates.filter(function (item) {
+          return item && String(item.candidateLayerId) === String(candidateLayerId);
+        })[0] : null;
+        var candidateSelection = candidate && candidate.sourceSelection;
+        if (!candidate || !candidateSelection
+            || String(candidateSelection.selectionId) !== String(selection.selectionId)
+            || String(candidateSelection.locator && candidateSelection.locator.documentId) !== String(documentId)
+            || String(candidateSelection.locator && candidateSelection.locator.layerId) !== String(locator.layerId)) {
+          throw new Error(candidate && candidate.message || '候选素材不属于当前原始图层，无法应用。');
+        }
+        if (!candidate.mediaAvailable || !candidate.sourcePath) {
+          throw new Error(candidate.message || '候选素材文件缺失或大小不符，无法应用。');
+        }
+        return verifyFile(candidate.sourcePath, candidate);
+      }).then(function () {
+        return hostCall('applyNativeEffect', [request]).then(parse);
+      });
     },
   };
   global.__FLOVART_AFTER_EFFECTS_BRIDGE__ = bridge;
