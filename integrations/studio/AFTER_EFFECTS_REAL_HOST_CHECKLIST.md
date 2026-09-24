@@ -2,9 +2,11 @@
 
 Status: `EXTERNAL_GATE`. The workspace contains a CEP panel and an uncompiled
 AE Effect SDK source prototype. Neither package build output nor source presence
-certifies a native effect. MSVC 14.44, MSBuild, Windows SDK 10.0.26100.0, and
-`rc.exe` are installed outside the current `PATH`; no After Effects installation
-or configured AE SDK path has been detected.
+certifies a native effect. This environment has After Effects 24.0.3, MSVC
+14.44, MSBuild 17.14, Windows SDK 10.0.26100.0, and `rc.exe`. No
+`FLOVART_AE_SDK_ROOT`, AE SDK headers, sample project, or PiPL resource tool was
+found in the checked SDK/download/workspace locations; the host has not loaded
+this effect.
 
 ## Package and target binding
 

@@ -27,7 +27,7 @@ The effect currently exposes the host layer reference and a keyframeable `Blend`
 
 ## Build status
 
-`asset-manifest.json` reports `buildStatus: "needs-native-sdk"`. MSVC 14.44, MSBuild, Windows SDK 10.0.26100.0, and `rc.exe` are installed outside the current `PATH`; no After Effects installation or configured AE SDK path has been detected. Without AE SDK headers, sample project, and PiPL resource tool, the Studio package build can copy source files but cannot produce or validate a loadable `.aex` here.
+`asset-manifest.json` reports `buildStatus: "needs-native-sdk"`. The environment has After Effects 24.0.3, MSVC 14.44, MSBuild 17.14, Windows SDK 10.0.26100.0, and `rc.exe`. No `FLOVART_AE_SDK_ROOT`, AE SDK headers, sample project, or PiPL resource tool was found in the checked SDK/download/workspace locations. The Studio package build can copy source files but cannot produce or validate a loadable `.aex` here; the installed host has not loaded this effect.
 
 The Adobe SDK's Windows sample projects generate PiPL resources through their supplied resource toolchain. Do not substitute an ad hoc `.rc` resource or mark this source compiled until it has been built against an operator-provided SDK version and loaded by a real AE installation.
 
