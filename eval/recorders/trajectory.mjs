@@ -13,7 +13,7 @@ const SECRET_VALUE_PATTERNS = [
   /\bghp_[A-Za-z0-9]{20,}\b/g,
   /\bxox[baprs]-[A-Za-z0-9-]{10,}\b/g,
   /Bearer\s+[A-Za-z0-9._-]{12,}/gi,
-  /\b[0-9a-f]{64}\b/gi,
+  /\b(?:api[-_ ]?key|access[-_ ]?token|refresh[-_ ]?token|secret|password)\b\s*[:=]?\s*[A-Za-z0-9._-]{12,}/gi,
 ];
 
 const REDACTED = '[REDACTED]';
@@ -42,6 +42,10 @@ export function redactSecrets(value, seen = new WeakSet()) {
   return value;
 }
 
+function serializeEvidence(value, pretty = false) {
+  return JSON.stringify(redactSecrets(value), null, pretty ? 2 : undefined);
+}
+
 export function createTrajectoryRecorder({ runDir, taskId, trialIndex, metadata }) {
   const trialDir = join(runDir, taskId, `trial-${String(trialIndex).padStart(2, '0')}`);
   const trajectoryPath = join(trialDir, 'trajectory.jsonl');
@@ -56,10 +60,10 @@ export function createTrajectoryRecorder({ runDir, taskId, trialIndex, metadata 
   async function append(event) {
     await ensureDir();
     sequence += 1;
-    const line = JSON.stringify({
+    const line = serializeEvidence({
       sequence,
       at: new Date().toISOString(),
-      ...redactSecrets(event),
+      ...event,
     });
     await appendFile(trajectoryPath, `${line}\n`, 'utf8');
   }
@@ -71,7 +75,7 @@ export function createTrajectoryRecorder({ runDir, taskId, trialIndex, metadata 
       await ensureDir();
       await writeFile(
         join(trialDir, 'metadata.json'),
-        `${JSON.stringify(redactSecrets({ taskId, trialIndex, ...metadata }), null, 2)}\n`,
+        `${serializeEvidence({ taskId, trialIndex, ...metadata }, true)}\n`,
         'utf8',
       );
     },
@@ -95,10 +99,10 @@ export function createTrajectoryRecorder({ runDir, taskId, trialIndex, metadata 
     },
     async finalise({ worldFinal, worldNormalized, score, timing }) {
       await ensureDir();
-      await writeFile(join(trialDir, 'world-final.json'), `${JSON.stringify(redactSecrets(worldFinal), null, 2)}\n`, 'utf8');
-      await writeFile(join(trialDir, 'world-normalized.json'), `${JSON.stringify(redactSecrets(worldNormalized), null, 2)}\n`, 'utf8');
-      await writeFile(join(trialDir, 'score.json'), `${JSON.stringify(score, null, 2)}\n`, 'utf8');
-      await appendFile(trajectoryPath, `${JSON.stringify({ kind: 'final', timing, score })}\n`, 'utf8');
+      await writeFile(join(trialDir, 'world-final.json'), `${serializeEvidence(worldFinal, true)}\n`, 'utf8');
+      await writeFile(join(trialDir, 'world-normalized.json'), `${serializeEvidence(worldNormalized, true)}\n`, 'utf8');
+      await writeFile(join(trialDir, 'score.json'), `${serializeEvidence(score, true)}\n`, 'utf8');
+      await appendFile(trajectoryPath, `${serializeEvidence({ kind: 'final', timing, score })}\n`, 'utf8');
     },
   };
 }

@@ -197,8 +197,10 @@ async function readErrorMessage(response: Response, requestLabel: string): Promi
 async function fetchGoogleModels(apiKey: string, baseUrl?: string): Promise<FetchModelsResult> {
     try {
         const base = normalizeProviderBaseUrl('google', baseUrl || 'https://generativelanguage.googleapis.com/v1beta');
-        const url = `${base}/models?key=${encodeURIComponent(apiKey)}`;
-        const res = await fetchWithModelDiscoveryTimeout(url);
+        const url = `${base}/models`;
+        const res = await fetchWithModelDiscoveryTimeout(url, {
+            headers: { 'x-goog-api-key': apiKey },
+        });
         if (!res.ok) {
             return { ok: false, models: [], error: await readErrorMessage(res, 'Google 模型列表拉取失败') };
         }
@@ -465,9 +467,9 @@ interface CachedModels {
     endpointFlavor?: string;
 }
 
-async function getCachedModels(provider: AIProvider, keyFingerprint: string): Promise<CachedModels | null> {
+async function getCachedModels(cacheIdentity: string): Promise<CachedModels | null> {
     try {
-        const cached = await modelCacheStorage.getItem<CachedModels>(`${CACHE_KEY_PREFIX}${provider}_${keyFingerprint}`);
+        const cached = await modelCacheStorage.getItem<CachedModels>(`${CACHE_KEY_PREFIX}${cacheIdentity}`);
         if (!cached) return null;
         if (Date.now() - cached.fetchedAt > MODEL_CACHE_TTL) return null;
         return cached;
@@ -476,15 +478,20 @@ async function getCachedModels(provider: AIProvider, keyFingerprint: string): Pr
     }
 }
 
-async function setCachedModels(provider: AIProvider, keyFingerprint: string, models: FetchedModel[], endpointFlavor?: string) {
+async function setCachedModels(cacheIdentity: string, models: FetchedModel[], endpointFlavor?: string) {
     try {
         const entry: CachedModels = { models, fetchedAt: Date.now(), endpointFlavor };
-        await modelCacheStorage.setItem(`${CACHE_KEY_PREFIX}${provider}_${keyFingerprint}`, entry);
+        await modelCacheStorage.setItem(`${CACHE_KEY_PREFIX}${cacheIdentity}`, entry);
     } catch { /* storage full — silent */ }
 }
 
-function keyFingerprint(apiKey: string): string {
-    return apiKey.slice(0, 6) + '...' + apiKey.slice(-4);
+function modelCacheIdentity(provider: AIProvider, apiKey: string, baseUrl?: string): string {
+    const keyHash = bytesToHex(sha256(utf8ToBytes(apiKey))).slice(0, 32);
+    const endpoint = baseUrl?.trim()
+        ? normalizeProviderBaseUrl(provider, baseUrl)
+        : 'default';
+    const endpointHash = bytesToHex(sha256(utf8ToBytes(endpoint))).slice(0, 16);
+    return `${provider}.${keyHash}.${endpointHash}`;
 }
 
 /**
@@ -496,7 +503,7 @@ export async function fetchModelsWithCache(
     baseUrl?: string,
     forceRefresh = false,
 ): Promise<FetchModelsResult> {
-    const cacheKey = modelCacheKey(provider, apiKey, baseUrl);
+    const cacheKey = modelCacheIdentity(provider, apiKey, baseUrl);
     if (!forceRefresh) {
         const cached = await getCachedModels(cacheKey);
         if (cached) {
