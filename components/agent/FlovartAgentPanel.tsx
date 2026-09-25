@@ -44,26 +44,36 @@ interface AgentReference {
   mediaType?: string;
 }
 
-const AGENT_TEXT_CONFIGURATION_MESSAGE = '请在设置的“模型映射”中为 Agent 文本能力配置可用线路。';
-
 function isAgentTextConfigurationError(error?: string) {
   const message = String(error || '').toLowerCase();
   return message.includes('no agent-text route')
     || message.includes('no configured agent-text credential');
 }
 
-function agentMessageText(error: string) {
-  return isAgentTextConfigurationError(error) ? AGENT_TEXT_CONFIGURATION_MESSAGE : toDisplayError(error);
+function agentMessageText(error: string, language: 'en' | 'zho') {
+  return isAgentTextConfigurationError(error) ? translations[language].agentPanel.textRouteRequired : toDisplayError(error);
 }
 
-function formatSessionTime(value: string) {
+function localizedAgentSetupMessage(kind: AgentSetupBlocker, cause: unknown, language: 'en' | 'zho') {
+  if (kind === 'credential') return translations[language].agentPanel.setupCredential;
+  if (kind === 'offline') return translations[language].agentPanel.setupOffline;
+  return agentSetupMessage(kind, cause);
+}
+
+function formatSessionTime(value: string, language: 'en' | 'zho') {
   const time = new Date(value).getTime();
   if (!Number.isFinite(time)) return '';
   const delta = Date.now() - time;
-  if (delta < 60_000) return '刚刚';
-  if (delta < 3_600_000) return `${Math.floor(delta / 60_000)} 分钟前`;
-  if (delta < 86_400_000) return `${Math.floor(delta / 3_600_000)} 小时前`;
-  return new Date(time).toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' });
+  if (language === 'en') {
+    if (delta < 60_000) return 'Just now';
+    if (delta < 3_600_000) return `${Math.floor(delta / 60_000)} min ago`;
+    if (delta < 86_400_000) return `${Math.floor(delta / 3_600_000)} hr ago`;
+  } else {
+    if (delta < 60_000) return '刚刚';
+    if (delta < 3_600_000) return `${Math.floor(delta / 60_000)} 分钟前`;
+    if (delta < 86_400_000) return `${Math.floor(delta / 3_600_000)} 小时前`;
+  }
+  return new Date(time).toLocaleDateString(language === 'en' ? 'en-US' : 'zh-CN', { month: 'numeric', day: 'numeric' });
 }
 
 function snapshotNeedsConfiguration(snapshot: FlovartAgentSnapshot) {
@@ -74,11 +84,11 @@ function snapshotNeedsConfiguration(snapshot: FlovartAgentSnapshot) {
 function displayMessages(snapshot: {
   messages: Array<{ id: string; role: string; text: string; toolName?: string; isError?: boolean; timestamp?: number; error?: string }>;
   boundProductionSkill?: ProductionSkillAttachment | null;
-}): WorkflowAgentDisplayMessage[] {
+}, language: 'en' | 'zho'): WorkflowAgentDisplayMessage[] {
   return snapshot.messages.map(message => ({
     id: message.id,
     role: (message.error ? 'error' : message.role) as WorkflowAgentDisplayMessage['role'],
-    text: message.error ? agentMessageText(message.error) : message.text,
+    text: message.error ? agentMessageText(message.error, language) : message.text,
     title: message.role === 'tool' ? message.toolName : undefined,
     status: message.role === 'tool' ? message.isError ? 'error' : 'success' : undefined,
     createdAt: message.timestamp ? new Date(message.timestamp).toISOString() : undefined,
@@ -89,16 +99,16 @@ function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error || 'Flovart Agent 运行失败');
 }
 
-function toolResultText(result: unknown) {
+function toolResultText(result: unknown, language: 'en' | 'zho') {
   const content = (result as { content?: Array<{ type?: string; text?: string }> })?.content;
-  return content?.filter(item => item.type === 'text').map(item => item.text).filter(Boolean).join('\n') || 'Workflow 操作已完成';
+  return content?.filter(item => item.type === 'text').map(item => item.text).filter(Boolean).join('\n') || (language === 'en' ? 'Workflow operation completed.' : 'Workflow 操作已完成');
 }
 
 export function FlovartAgentPanel({ project, onActivityChange, onOpenSettings, assetLibrary, onFocusNode, userApiKeys = [] }: FlovartAgentPanelProps) {
   const client = useRef<ManagedFlovartAgentClient | undefined>(undefined);
   const kernelRef = useRef<BrowserAgentKernel | undefined>(undefined);
   const unsubscribeRef = useRef<(() => void) | undefined>(undefined);
-  const userApiKeysRef = useRef(userApiKeys);
+const userApiKeysRef = useRef(userApiKeys);
   userApiKeysRef.current = userApiKeys;
   const workspaceBridge = useRef<WorkflowAgentBridge | undefined>(undefined);
   const abort = useRef<AbortController | undefined>(undefined);
@@ -136,6 +146,8 @@ export function FlovartAgentPanel({ project, onActivityChange, onOpenSettings, a
   const [setupBlocker, setSetupBlocker] = useState<AgentSetupBlocker | null>(null);
   const [browseFirst, setBrowseFirst] = useState(false);
   const language = useWorkspaceStore(s => s.language);
+  const languageRef = useRef(language);
+  languageRef.current = language;
   const t = useCallback((key: string, ...args: number[]): string => {
     const dict = translations[language] || translations.en;
     const value = key.split('.').reduce<unknown>((current, part) => {
@@ -265,7 +277,7 @@ export function FlovartAgentPanel({ project, onActivityChange, onOpenSettings, a
         setWorkspaceStatus('ready');
         setNeedsConfiguration(true);
         setSetupBlocker('credential');
-        setMessages([{ id: 'agent-text-config', role: 'error', text: AGENT_TEXT_CONFIGURATION_MESSAGE }]);
+        setMessages([{ id: 'agent-text-config', role: 'error', text: translations[language].agentPanel.textRouteRequired }]);
         activity.current('error');
         return;
       }
@@ -290,7 +302,7 @@ export function FlovartAgentPanel({ project, onActivityChange, onOpenSettings, a
         mapKernelEvent(event);
       });
       unsubscribeRef.current = unsubscribe;
-      setMessages(displayMessages(snapshot));
+      setMessages(displayMessages(snapshot, language));
       if (snapshot.boundProductionSkill) setSkillAttachment(snapshot.boundProductionSkill);
       setStatus('ready');
       setWorkspaceStatus('ready');
@@ -332,7 +344,7 @@ export function FlovartAgentPanel({ project, onActivityChange, onOpenSettings, a
           bridge.connect();
           await bridge.pushSnapshot(project);
         }
-        setMessages(displayMessages(snapshot));
+        setMessages(displayMessages(snapshot, language));
         if (!skillAttachmentDirty.current) setSkillAttachment(snapshot.boundProductionSkill);
         if (snapshot.productionSkillBindingError) {
           setMessages(items => [...items, { id: 'skill-binding-error', role: 'error', text: snapshot.productionSkillBindingError! }]);
@@ -352,7 +364,7 @@ export function FlovartAgentPanel({ project, onActivityChange, onOpenSettings, a
         setWorkspaceStatus('error');
         setNeedsConfiguration(blocker === 'credential');
         setSetupBlocker(blocker === 'unknown' ? 'offline' : blocker);
-        setMessages([{ id: 'connection-error', role: 'error', text: agentSetupMessage(blocker === 'unknown' ? 'offline' : blocker, error) }]);
+        setMessages([{ id: 'connection-error', role: 'error', text: localizedAgentSetupMessage(blocker === 'unknown' ? 'offline' : blocker, error, language) }]);
         activity.current('error');
       });
     return () => {
@@ -408,7 +420,7 @@ export function FlovartAgentPanel({ project, onActivityChange, onOpenSettings, a
     }
     if (event.type === 'session_switched') {
       const kernel = kernelRef.current;
-      if (kernel) void kernel.snapshot().then(snapshot => setMessages(displayMessages(snapshot as FlovartAgentSnapshot)));
+      if (kernel) void kernel.snapshot().then(snapshot => setMessages(displayMessages(snapshot as FlovartAgentSnapshot, languageRef.current)));
       return;
     }
   }, []);
@@ -468,7 +480,7 @@ export function FlovartAgentPanel({ project, onActivityChange, onOpenSettings, a
         : [...items, { id: assistantId, role: 'assistant', text: event.delta }]);
     } else if (event.type === 'snapshot') {
       setNeedsConfiguration(snapshotNeedsConfiguration(event.snapshot));
-      setMessages(displayMessages(event.snapshot));
+      setMessages(displayMessages(event.snapshot, language));
       skillAttachmentDirty.current = false;
       setSkillAttachment(event.snapshot.boundProductionSkill);
     } else if (event.type === 'tool-start') {
@@ -478,14 +490,14 @@ export function FlovartAgentPanel({ project, onActivityChange, onOpenSettings, a
         id: `tool-${event.id}`,
         role: 'tool',
         title: event.name,
-        text: needsApproval ? '等待你的 Production 授权' : productionTool ? '正在读取或编译 Production Plan' : '正在操作同一 Workflow Draft',
+        text: needsApproval ? translations[language].agentPanel.toolWaitingApproval : productionTool ? translations[language].agentPanel.toolPreparingPlan : translations[language].agentPanel.toolUpdatingDraft,
         detail: event.args,
         status: 'pending',
       }]);
     } else if (event.type === 'tool-end') {
       setMessages(items => items.map(item => item.id === `tool-${event.id}` ? {
         ...item,
-        text: toolResultText(event.result),
+        text: toolResultText(event.result, language),
         detail: event.result,
         status: event.isError ? 'error' : 'success',
       } : item));
@@ -497,7 +509,7 @@ export function FlovartAgentPanel({ project, onActivityChange, onOpenSettings, a
         setNeedsConfiguration(true);
         setSetupBlocker('credential');
       }
-      setMessages(items => [...items, { id: crypto.randomUUID(), role: 'error', text: agentMessageText(event.message) }]);
+      setMessages(items => [...items, { id: crypto.randomUUID(), role: 'error', text: agentMessageText(event.message, language) }]);
     }
   };
 
@@ -510,7 +522,7 @@ export function FlovartAgentPanel({ project, onActivityChange, onOpenSettings, a
       // fixes it); otherwise the managed host is simply not running (offline).
       const blocker: AgentSetupBlocker = needsConfiguration ? 'credential' : 'offline';
       setSetupBlocker(blocker);
-      setMessages(items => [...items, { id: crypto.randomUUID(), role: 'error', text: agentSetupMessage(blocker) }]);
+      setMessages(items => [...items, { id: crypto.randomUUID(), role: 'error', text: localizedAgentSetupMessage(blocker, undefined, language) }]);
       return;
     }
     const referenceContext = references.length ? `引用上下文：\n${references.map(reference => `- @${reference.label}（${reference.type === 'node' ? `工作流节点 nodeId=${reference.id}` : `我的素材 assetId=${reference.id}`}）`).join('\n')}` : '';
@@ -551,7 +563,7 @@ export function FlovartAgentPanel({ project, onActivityChange, onOpenSettings, a
           setNeedsConfiguration(true);
           setSetupBlocker('credential');
         }
-        setMessages(items => [...items, { id: crypto.randomUUID(), role: 'error', text: agentMessageText(message) }]);
+        setMessages(items => [...items, { id: crypto.randomUUID(), role: 'error', text: agentMessageText(message, language) }]);
         activity.current('error');
       }
     } finally {
@@ -624,7 +636,7 @@ export function FlovartAgentPanel({ project, onActivityChange, onOpenSettings, a
                   <div key={session.id} className={`agent-session-menu__item${session.id === activeSessionId ? ' is-active' : ''}`}>
                     <button type="button" role="menuitem" onClick={() => void handleOpenSession(session.id)}>
                       <strong>{session.title || t('agentPanel.newChat')}</strong>
-                      <small>{formatSessionTime(session.updatedAt)}</small>
+                      <small>{formatSessionTime(session.updatedAt, language)}</small>
                     </button>
                     <button type="button" aria-label={`删除对话 ${session.title}`} onClick={() => void handleDeleteSession(session.id)}><Trash2 size={12} /></button>
                   </div>
@@ -635,10 +647,10 @@ export function FlovartAgentPanel({ project, onActivityChange, onOpenSettings, a
         </span>
       </header>
       <section className="workflow-agent__body">
-        <div className="agent-conversation__messages"><WorkflowAgentMessages messages={messages} running={sending} /></div>
+        <div className="agent-conversation__messages"><WorkflowAgentMessages messages={messages} running={sending} language={language} /></div>
         {setupBlocker && !browseFirst && (
           <div role="alert" data-testid="agent-setup-card" className="mx-3 mb-2 rounded-xl border px-3 py-2.5" style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-surface-2)' }}>
-            <p style={{ margin: 0, fontSize: 12, lineHeight: 1.7, color: 'var(--isl-ink-soft)' }}>{agentSetupMessage(setupBlocker)}</p>
+            <p style={{ margin: 0, fontSize: 12, lineHeight: 1.7, color: 'var(--isl-ink-soft)' }}>{localizedAgentSetupMessage(setupBlocker, undefined, language)}</p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
               <button type="button" onClick={onOpenSettings} className="isl-chip flex items-center gap-1 px-3 py-1.5 text-xs font-semibold" style={{ color: 'var(--isl-mint-deep)' }}><KeyRound size={13} />{t('agentPanel.addApiKey')} →</button>
               <button type="button" onClick={() => setBrowseFirst(true)} className="isl-chip flex items-center gap-1 px-3 py-1.5 text-xs font-semibold"><LayoutGrid size={13} />{t('agentPanel.tryOffline')} →</button>

@@ -586,9 +586,9 @@ const App: React.FC = () => {
                     the built-in assistant remains in the right drawer beside the
                     two Workflow views. */}
                 {canvasView === 'agent' ? (
-                    <AgentConnectionsPage project={activeWorkflowProject} />
+                    <AgentConnectionsPage project={activeWorkflowProject} language={language} />
                 ) : canvasView === 'table' ? (
-                    <Suspense fallback={<div className="grid h-full place-content-center text-sm opacity-40">正在加载 Table...</div>}>
+                    <Suspense fallback={<div className="grid h-full place-content-center text-sm opacity-40">{language === 'zho' ? '正在加载 Table...' : 'Loading Table...'}</div>}>
                         <TableWorkspace
                             project={activeWorkflowProject}
                             userApiKeys={userApiKeys}
@@ -598,10 +598,11 @@ const App: React.FC = () => {
                             onSaveAsset={handleSaveTableAsset}
                             onOpenWorkflow={() => setCanvasView('spatial')}
                             onOpenSettings={() => setIsSettingsPanelOpen(true)}
+                            language={language}
                         />
                     </Suspense>
                 ) : (
-                    <Suspense fallback={<div className="grid h-full place-content-center text-sm opacity-40">正在加载 Workflow...</div>}>
+                    <Suspense fallback={<div className="grid h-full place-content-center text-sm opacity-40">{language === 'zho' ? '正在加载 Workflow...' : 'Loading Workflow...'}</div>}>
                         <WorkflowWorkspace
                             theme={resolvedTheme}
                             language={language}
@@ -669,6 +670,7 @@ const App: React.FC = () => {
                     // Project-less onboarding folded into the drawer's empty state:
                     // pick an external host or create the first project in place.
                     <AgentDrawerEmptyState
+                        language={language}
                         onCreateProject={() => workflowCreateProject(language === 'zho' ? '未命名工作流' : 'Untitled workflow')}
                     />
                 ))}
