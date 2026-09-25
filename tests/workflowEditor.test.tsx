@@ -47,8 +47,8 @@ function Harness({ initial = makeProject(), sharedMedia = [] }: { initial?: Work
 
 const editor = () => screen.getByTestId('workflow-editor');
 const node = (id: string) => editor().querySelector<HTMLElement>(`[data-workflow-node-id="${id}"]`)!;
-const sourceHandle = () => node('source').querySelector<HTMLButtonElement>('[aria-label="从此节点连接"]')!;
-const resizeHandle = () => node('source').querySelector<HTMLButtonElement>('[aria-label="调整节点大小"]')!;
+const sourceHandle = () => node('source').querySelector<HTMLButtonElement>('.workflow-handle--source')!;
+const resizeHandle = () => node('source').querySelector<HTMLButtonElement>('.workflow-resize')!;
 const worldTransform = () => (editor().querySelector<HTMLElement>('.workflow-world')?.style.transform || '');
 const projectState = (): WorkflowProject => JSON.parse(screen.getByTestId('workflow-project-state').textContent || '{}');
 const projectNode = (id: string) => projectState().nodes.find(item => item.id === id)!;
@@ -451,7 +451,7 @@ describe('InfiniteWorkflow surface interactions', () => {
     fireEvent.click(screen.getByRole('button', { name: '撤销' }));
     expect(projectNode('source').position).toEqual({ x: 100, y: 100 });
 
-    const resize = node('source').querySelector<HTMLButtonElement>('[aria-label="调整节点大小"]')!;
+    const resize = node('source').querySelector<HTMLButtonElement>('.workflow-resize')!;
     fireEvent.pointerDown(resize, { button: 0, clientX: 440, clientY: 320 });
     fireEvent.pointerUp(window, { clientX: 441, clientY: 321 });
     expect(node('source').style.width).toBe('341px');
@@ -467,7 +467,7 @@ describe('InfiniteWorkflow surface interactions', () => {
     fireEvent.pointerCancel(window);
     expect(projectNode('source').position).toEqual({ x: 100, y: 100 });
 
-    const resize = node('source').querySelector<HTMLButtonElement>('[aria-label="调整节点大小"]')!;
+    const resize = node('source').querySelector<HTMLButtonElement>('.workflow-resize')!;
     fireEvent.pointerDown(resize, { button: 0, clientX: 440, clientY: 320 });
     fireEvent.pointerMove(window, { clientX: 500, clientY: 370 });
     fireEvent.blur(window);
@@ -918,12 +918,12 @@ describe('InfiniteWorkflow surface interactions', () => {
     render(<Harness initial={initial} />);
 
     const imageNode = node('image-ratio');
-    fireEvent.pointerDown(imageNode.querySelector('[aria-label="调整节点大小"]')!, { button: 0, clientX: 500, clientY: 325 });
+    fireEvent.pointerDown(imageNode.querySelector('.workflow-resize')!, { button: 0, clientX: 500, clientY: 325 });
     fireEvent.pointerUp(window, { clientX: 600, clientY: 425 });
     expect(Number.parseFloat(imageNode.style.width) / Number.parseFloat(imageNode.style.height)).toBeCloseTo(16 / 9, 2);
 
     const videoNode = node('video-ratio');
-    fireEvent.pointerDown(videoNode.querySelector('[aria-label="调整节点大小"]')!, { button: 0, clientX: 780, clientY: 420 });
+    fireEvent.pointerDown(videoNode.querySelector('.workflow-resize')!, { button: 0, clientX: 780, clientY: 420 });
     fireEvent.pointerUp(window, { clientX: 880, clientY: 520 });
     expect(Number.parseFloat(videoNode.style.width) / Number.parseFloat(videoNode.style.height)).toBeCloseTo(1080 / 1920, 2);
   });

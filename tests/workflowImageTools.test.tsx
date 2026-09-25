@@ -49,6 +49,47 @@ describe('workflow image tools UI', () => {
     expect(screen.getByRole('img')).toHaveStyle({ filter: 'brightness(1.2)' });
   });
 
+  it('supports keyboard selection, context menu, connection, and resize actions', () => {
+    const onKeyboardSelect = vi.fn();
+    const onKeyboardContextMenu = vi.fn();
+    const onKeyboardConnectStart = vi.fn();
+    const onKeyboardConnectTarget = vi.fn();
+    const onKeyboardResize = vi.fn();
+    render(<WorkflowNode
+      node={image}
+      selected={false}
+      language="en"
+      onPointerDown={vi.fn()}
+      onConnectStart={vi.fn()}
+      onResizeStart={vi.fn()}
+      onChangeText={vi.fn()}
+      onChangeMetadata={vi.fn()}
+      onRun={vi.fn()}
+      onContextMenu={vi.fn()}
+      onReplaceMedia={vi.fn()}
+      onRemoveMedia={vi.fn()}
+      onKeyboardSelect={onKeyboardSelect}
+      onKeyboardContextMenu={onKeyboardContextMenu}
+      onKeyboardConnectStart={onKeyboardConnectStart}
+      onKeyboardConnectTarget={onKeyboardConnectTarget}
+      onKeyboardResize={onKeyboardResize}
+    />);
+
+    const node = screen.getByRole('group', { name: '图片 workflow node' });
+    node.focus();
+    fireEvent.keyDown(node, { key: 'Enter' });
+    fireEvent.keyDown(node, { key: 'ContextMenu' });
+    fireEvent.click(screen.getByRole('button', { name: `Connect from ${image.title}` }));
+    fireEvent.click(screen.getByRole('button', { name: `Connect to ${image.title}` }));
+    fireEvent.keyDown(screen.getByRole('button', { name: `Resize ${image.title}` }), { key: 'ArrowRight', shiftKey: true });
+
+    expect(onKeyboardSelect).toHaveBeenCalledOnce();
+    expect(onKeyboardContextMenu).toHaveBeenCalledOnce();
+    expect(onKeyboardConnectStart).toHaveBeenCalledOnce();
+    expect(onKeyboardConnectTarget).toHaveBeenCalledOnce();
+    expect(onKeyboardResize).toHaveBeenCalledWith(64, 0);
+  });
+
   it('opens crop, filter, upscale, outpaint, mask and split interfaces with real confirmations', () => {
     const onConfirm = vi.fn();
     const { rerender } = render(<WorkflowImageToolDialogs tool={{ kind: 'crop', nodeId: 'image' }} node={image} mediaUrl={image.metadata.href!} busy={false} error={null} onClose={vi.fn()} onConfirm={onConfirm} />);

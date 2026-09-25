@@ -306,6 +306,7 @@ export function InfiniteWorkflow({
   const [selectedConnectionId, setSelectedConnectionId] = useState<string | null>(null);
   const [selectionBox, setSelectionBox] = useState<SelectionBox | null>(null);
   const [connectionDrag, setConnectionDrag] = useState<{ sourceId: string; point: WorkflowPoint; targetId: string | null; direction: 'out' | 'in'; local: WorkflowPoint } | null>(null);
+  const [keyboardConnectionSourceId, setKeyboardConnectionSourceId] = useState<string | null>(null);
   const [createMenu, setCreateMenu] = useState<WorkflowCreateMenuState | null>(null);
   const [contextMenu, setContextMenu] = useState<WorkflowContextMenuState | null>(null);
   const [renameSignal, setRenameSignal] = useState<{ nodeId: string; nonce: number } | null>(null);
@@ -1907,7 +1908,7 @@ export function InfiniteWorkflow({
         spacePressedRef.current = true;
         return;
       }
-      if (event.key === 'Escape') setActiveMedia(null);
+      if (event.key === 'Escape') { setActiveMedia(null); setKeyboardConnectionSourceId(null); }
       // UX-HEU-02: Delete/Backspace must work whenever a node is selected, even
       // if focus happens to sit on a toolbar button — buttons consume
       // Space/Enter but never Delete. Only editable targets (textarea/input/
@@ -2499,6 +2500,7 @@ export function InfiniteWorkflow({
           return <WorkflowNode
             key={node.id}
             node={node}
+            language={language}
             selected={selectedNodes.has(node.id)}
             mediaActive={activeMedia?.projectId === project.id && activeMedia.nodeId === node.id}
             onActivateMedia={node.type === 'video' && (node.metadata.storageKey || node.metadata.href || node.metadata.artifactRef?.taskId)
@@ -2554,6 +2556,41 @@ export function InfiniteWorkflow({
               setSelectedConnectionId(null);
               selectNodes([node.id]);
               setContextMenu({ type: 'node', id: node.id, x: event.clientX, y: event.clientY });
+            }}
+            onKeyboardContextMenu={event => {
+              event.preventDefault();
+              const rect = event.currentTarget.getBoundingClientRect();
+              setSelectedConnectionId(null);
+              selectNodes([node.id]);
+              setContextMenu({ type: 'node', id: node.id, x: rect.left + Math.min(24, rect.width / 2), y: rect.top + Math.min(24, rect.height / 2) });
+            }}
+            onKeyboardSelect={() => { selectNodes([node.id]); focusNode(node.id); }}
+            onKeyboardConnectStart={() => {
+              if (node.isLocked) return;
+              setKeyboardConnectionSourceId(current => {
+                const next = current === node.id ? null : node.id;
+                setNotice(next
+                  ? language === 'en' ? `Source selected: ${node.title}. Focus a target node and activate its connection handle.` : `已选择“${node.title}”作为连接起点。请聚焦目标节点并激活连接按钮。`
+                  : null);
+                return next;
+              });
+              selectNodes([node.id]);
+            }}
+            onKeyboardConnectTarget={() => {
+              if (!keyboardConnectionSourceId) {
+                setNotice(language === 'en' ? 'Choose a source node first.' : '请先选择连接起点。');
+                return;
+              }
+              if (keyboardConnectionSourceId === node.id) return;
+              const connected = applyOps([{ type: 'connect_nodes', fromNodeId: keyboardConnectionSourceId, toNodeId: node.id }]);
+              setKeyboardConnectionSourceId(null);
+              setNotice(connected
+                ? language === 'en' ? `Connected to ${node.title}.` : `已连接到“${node.title}”。`
+                : language === 'en' ? 'Could not connect these nodes.' : '无法连接这两个节点。');
+            }}
+            onKeyboardResize={(widthDelta, heightDelta) => {
+              if (node.isLocked) return;
+              applyOps([{ type: 'update_node', id: node.id, patch: { width: Math.max(160, node.width + widthDelta), height: Math.max(100, node.height + heightDelta) } }]);
             }}
             batchCount={expandedBatch ? batch?.length : undefined}
             isBatchPrimary={expandedBatch ? node.id === primaryId : undefined}
@@ -2713,6 +2750,8 @@ export function InfiniteWorkflow({
           return (
         <WorkflowContextMenu
           state={contextMenu}
+          language={language}
+          onClose={() => setContextMenu(null)}
           onSetPrimary={canSetPrimary ? (() => {
             if (!ctxNode?.batchId) return;
             applyOps([{ type: 'set_batch_primary', batchId: ctxNode.batchId, nodeId: ctxNode.id }]);
@@ -2798,7 +2837,7 @@ export function InfiniteWorkflow({
           />
         );
       })()}
-      <MediaPreviewModal node={previewNode} onClose={() => setPreviewNode(null)} />
+      <MediaPreviewModal node={previewNode} onClose={() => setPreviewNode(null)} language={language} />
     </div>
   );
 }

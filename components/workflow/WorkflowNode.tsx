@@ -46,6 +46,12 @@ export function WorkflowNode({
   onChangeMetadata,
   onRun,
   onContextMenu,
+  onKeyboardContextMenu,
+  onKeyboardSelect,
+  onKeyboardConnectStart,
+  onKeyboardConnectTarget,
+  onKeyboardResize,
+  language = 'zho',
   onReplaceMedia,
   onRemoveMedia,
   onActivateMedia,
@@ -74,6 +80,12 @@ export function WorkflowNode({
   onChangeMetadata: (metadata: WorkflowNodeData['metadata']) => void;
   onRun: () => void;
   onContextMenu: (event: ReactMouseEvent<HTMLDivElement>) => void;
+  onKeyboardContextMenu?: (event: ReactKeyboardEvent<HTMLDivElement>) => void;
+  onKeyboardSelect?: () => void;
+  onKeyboardConnectStart?: () => void;
+  onKeyboardConnectTarget?: () => void;
+  onKeyboardResize?: (widthDelta: number, heightDelta: number) => void;
+  language?: 'en' | 'zho';
   onReplaceMedia: (file: File) => void;
   onRemoveMedia: () => void;
   onActivateMedia?: () => void;
@@ -213,6 +225,9 @@ export function WorkflowNode({
     <motion.div
       data-workflow-node-id={node.id}
       className={`workflow-node workflow-node--${node.type}${selected ? ' is-selected' : ''}${isDropTarget ? ' is-drop-target' : ''}`}
+      role="group"
+      aria-label={language === 'en' ? `${node.title} workflow node` : `${node.title} 工作流节点`}
+      tabIndex={0}
       style={{ x: node.position.x, y: node.position.y, width: node.width, height: node.height }}
       initial={{ scale: 0.85, opacity: 0 }}
       animate={{ scale: isLoading ? [1, 1.015, 1] : 1, opacity: 1 }}
@@ -233,6 +248,16 @@ export function WorkflowNode({
         onFocusNode?.();
       }}
       onContextMenu={event => { event.preventDefault(); event.stopPropagation(); onContextMenu(event); }}
+      onKeyDown={event => {
+        if (event.target !== event.currentTarget) return;
+        if (event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey)) {
+          event.preventDefault();
+          onKeyboardContextMenu?.(event);
+        } else if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onKeyboardSelect?.();
+        }
+      }}
       onMouseOver={node.type === 'video' && hasMediaReference ? keepVideoLoaded : undefined}
       onMouseOut={node.type === 'video' && hasMediaReference ? event => {
         const related = event.relatedTarget as Node | null;
@@ -243,10 +268,10 @@ export function WorkflowNode({
       onDragLeave={event => { if (!isMedia) return; const related = event.relatedTarget as Node | null; if (related && (event.currentTarget as HTMLElement).contains(related)) return; setDropTarget(false); }}
       onDrop={event => { if (!isMedia) return; event.preventDefault(); event.stopPropagation(); setDropTarget(false); const file = event.dataTransfer.files?.[0]; if (file) onReplaceMedia(file); }}
     >
-      <button className="workflow-handle workflow-handle--target" aria-label="连接到此节点" data-workflow-target={node.id} onPointerDown={onConnectStartTarget}>
+      <button type="button" className="workflow-handle workflow-handle--target" aria-label={language === 'en' ? `Connect to ${node.title}` : `连接到${node.title}`} title={language === 'en' ? 'Activate to complete a keyboard connection' : '激活以完成键盘连接'} data-workflow-target={node.id} onPointerDown={onConnectStartTarget} onClick={event => { if (event.detail === 0) onKeyboardConnectTarget?.(); }}>
         <span className="workflow-handle__plus" aria-hidden="true"><Plus size={12} strokeWidth={2.5} /></span>
       </button>
-      <button className="workflow-handle workflow-handle--source" aria-label="从此节点连接" onPointerDown={onConnectStart}>
+      <button type="button" className="workflow-handle workflow-handle--source" aria-label={language === 'en' ? `Connect from ${node.title}` : `从${node.title}连接`} title={language === 'en' ? 'Activate, then choose a target node' : '激活后选择目标节点'} onPointerDown={onConnectStart} onClick={event => { if (event.detail === 0) onKeyboardConnectStart?.(); }}>
         <span className="workflow-handle__plus" aria-hidden="true"><Plus size={12} strokeWidth={2.5} /></span>
       </button>
       {status === 'error' && <span className="workflow-node__error-badge" title={node.metadata.error}>!</span>}
@@ -429,7 +454,15 @@ export function WorkflowNode({
         )}
         {status === 'error' && node.metadata.error && <div className="workflow-node__generation-error" title={node.metadata.error}>{node.metadata.error}</div>}
       </div>
-      <button className="workflow-resize" aria-label="调整节点大小" onPointerDown={onResizeStart} />
+      <button type="button" className="workflow-resize" aria-label={language === 'en' ? `Resize ${node.title}` : `调整${node.title}大小`} title={language === 'en' ? 'Use arrow keys to resize' : '使用方向键调整大小'} onPointerDown={onResizeStart} onKeyDown={event => {
+        const step = event.shiftKey ? 64 : 16;
+        const deltas = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] } as const;
+        const delta = deltas[event.key as keyof typeof deltas];
+        if (!delta) return;
+        event.preventDefault();
+        event.stopPropagation();
+        onKeyboardResize?.(delta[0], delta[1]);
+      }} />
     </motion.div>
   );
 }

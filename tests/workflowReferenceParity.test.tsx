@@ -18,7 +18,7 @@ describe('workflow reference parity', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '删除 重要工作流' }));
     expect(useWorkflowStore.getState().projects).toHaveLength(1);
-    expect(screen.getByRole('dialog', { name: '删除工作流确认' })).toHaveTextContent('不能撤销');
+    expect(screen.getByRole('alertdialog', { name: '删除“重要工作流”？' })).toHaveTextContent('不能撤销');
     fireEvent.click(screen.getByRole('button', { name: '取消' }));
     expect(useWorkflowStore.getState().projects).toHaveLength(1);
     fireEvent.click(screen.getByRole('button', { name: '删除 重要工作流' }));

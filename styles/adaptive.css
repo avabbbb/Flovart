@@ -232,14 +232,9 @@ body,
   max-width: calc(100% - 16px);
   min-width: 0;
   gap: clamp(2px, .45cqi, 4px);
-  overflow-x: auto;
-  overscroll-behavior-inline: contain;
-  scrollbar-width: none;
-}
-
-.workflow-workspace .workflow-toolbar::-webkit-scrollbar,
-.workflow-workspace .workflow-canvas-controls::-webkit-scrollbar {
-  display: none;
+  flex-wrap: wrap;
+  justify-content: center;
+  overflow: visible;
 }
 
 .workflow-workspace .workflow-toolbar__button,
