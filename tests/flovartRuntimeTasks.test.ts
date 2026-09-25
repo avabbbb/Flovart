@@ -204,6 +204,77 @@ describe('Flovart Runtime tasks', () => {
     })]);
   });
 
+  it('routes the no-provider Resolve fixture with its caller-stable idempotency key', async () => {
+    const { discoveryPath, receipt, requests } = await fixture();
+
+    const result = await runCli([
+      'runtime.test.fixture-image',
+      '--idempotency-key', 'resolve-fixture-stable-key',
+      '--json',
+    ], {
+      FLOVART_RUNTIME_DISCOVERY: discoveryPath,
+    });
+
+    expect(result.code, JSON.stringify(result)).toBe(0);
+    expect(result.stderr).toBe('');
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      ok: true,
+      command: 'runtime.test.fixture-image',
+      data: receipt,
+      runtime: 'production-runtime',
+    });
+    expect(requests).toEqual([expect.objectContaining({
+      command: 'runtime.test.fixture-image',
+      args: {},
+      actor: { kind: 'cli', instanceId: 'cli_local' },
+      idempotencyKey: 'resolve-fixture-stable-key',
+    })]);
+  });
+
+  it('routes artifact.locate task identity through the Runtime CLI', async () => {
+    const { discoveryPath, receipt, requests } = await fixture();
+
+    const result = await runCli([
+      'artifact.locate',
+      '--task-id', 'task_fixture',
+      '--json',
+    ], {
+      FLOVART_RUNTIME_DISCOVERY: discoveryPath,
+    });
+
+    expect(result.code, JSON.stringify(result)).toBe(0);
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      ok: true,
+      command: 'artifact.locate',
+      data: receipt,
+      runtime: 'production-runtime',
+    });
+    expect(requests).toEqual([expect.objectContaining({
+      command: 'artifact.locate',
+      args: { taskId: 'task_fixture' },
+      actor: { kind: 'cli', instanceId: 'cli_local' },
+    })]);
+  });
+
+  it('rejects a Resolve fixture command without an idempotency key before Runtime submission', async () => {
+    const { discoveryPath, requests } = await fixture();
+
+    const result = await runCli([
+      'runtime.test.fixture-image',
+      '--json',
+    ], {
+      FLOVART_RUNTIME_DISCOVERY: discoveryPath,
+    });
+
+    expect(result.code).toBe(1);
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      ok: false,
+      command: 'runtime.test.fixture-image',
+      error: { code: 'INVALID_ARGUMENT' },
+    });
+    expect(requests).toEqual([]);
+  });
+
   it('resumes the Runtime SSE ledger with Last-Event-ID', async () => {
     const { discoveryPath, httpRequests } = await fixture();
     const client = new FlovartRuntimeClient({
