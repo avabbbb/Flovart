@@ -123,6 +123,7 @@
     const target = el('select');
     target.setAttribute('aria-label', '输出位置');
     if (adapter.id === 'premiere') target.append(option('项目素材箱', 'project'));
+    else if (adapter.id === 'resolve') target.append(option('Media Pool', 'media-pool'));
     else if (adapter.id === 'after-effects') target.append(option('当前合成 · 新图层', 'new-layer'));
     else target.append(option('当前文档 · 新图层', 'new-layer'));
     target.value = defaultImportTarget.kind;
