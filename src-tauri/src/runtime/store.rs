@@ -121,6 +121,27 @@ impl RuntimeStore {
         )
     }
 
+    pub fn submit_fixture_image(
+        &self,
+        command_id: &str,
+        actor_kind: &str,
+        actor_instance_id: &str,
+        idempotency_key: &str,
+        payload_hash: &str,
+        args: &Value,
+    ) -> Result<TaskReceipt, RuntimeError> {
+        self.submit_task(
+            command_id,
+            actor_kind,
+            actor_instance_id,
+            idempotency_key,
+            payload_hash,
+            "runtime.test.fixture-image",
+            args,
+            100,
+        )
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn submit_image(
         &self,

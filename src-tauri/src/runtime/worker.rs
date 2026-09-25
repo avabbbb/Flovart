@@ -32,6 +32,7 @@ const SAFE_POINT: Duration = Duration::from_millis(10);
 const VIDEO_POLL: Duration = Duration::from_secs(10);
 const SCHEDULER_POLL: Duration = Duration::from_secs(2);
 const LEASE_MS: i64 = 500;
+const RESOLVE_R1_FIXTURE_IMAGE: &[u8] = include_bytes!("../../../public/favicon.png");
 
 pub struct RuntimeWorker {
     stopping: Arc<AtomicBool>,
@@ -107,6 +108,13 @@ impl RuntimeWorker {
                         "runtime.test.delay" => {
                             run_delay(&store, &executor_id, &executor_stopping, &task)
                         }
+                        "runtime.test.fixture-image" => run_fixture_image(
+                            &store,
+                            &executor_id,
+                            &executor_stopping,
+                            executor_artifact_root.as_deref(),
+                            &task,
+                        ),
                         "production.dry-run" => run_production_plan(&store, &executor_id, &task),
                         "audio.tts" => local_media::run_tts(
                             &store,
@@ -781,6 +789,63 @@ fn run_delay(store: &RuntimeStore, worker_id: &str, stopping: &AtomicBool, task:
     }
     if !stopping.load(Ordering::Acquire) && !cancellation_requested(store, task, worker_id) {
         let _ = store.complete_task(&task.id, worker_id, &json!({ "delayedMs": delay_ms }));
+    }
+}
+
+fn run_fixture_image(
+    store: &RuntimeStore,
+    worker_id: &str,
+    stopping: &AtomicBool,
+    artifact_root: Option<&Path>,
+    task: &ClaimedTask,
+) {
+    if stopping.load(Ordering::Acquire) || cancellation_requested(store, task, worker_id) {
+        return;
+    }
+    let Some(artifact_root) = artifact_root else {
+        fail(
+            store,
+            task,
+            worker_id,
+            "ARTIFACT_STORAGE_UNAVAILABLE",
+            "Runtime artifact storage is unavailable.",
+        );
+        return;
+    };
+    match persist_media(
+        artifact_root,
+        &task.id,
+        "image",
+        "png",
+        RESOLVE_R1_FIXTURE_IMAGE,
+    ) {
+        Ok((store_relpath, sha256, byte_size)) => {
+            let artifact_id = format!("sha256:{sha256}");
+            let _ = store.complete_task(
+                &task.id,
+                worker_id,
+                &json!({
+                    "fixture": "resolve-r1-image-v1",
+                    "providerCalled": false,
+                    "costMicros": 0,
+                    "artifact": {
+                        "artifactId": artifact_id,
+                        "kind": "image",
+                        "mimeType": "image/png",
+                        "storeRelpath": store_relpath,
+                        "sha256": sha256,
+                        "byteSize": byte_size
+                    }
+                }),
+            );
+        }
+        Err(_) => fail(
+            store,
+            task,
+            worker_id,
+            "ARTIFACT_WRITE_FAILED",
+            "Runtime could not persist the deterministic image fixture.",
+        ),
     }
 }
 

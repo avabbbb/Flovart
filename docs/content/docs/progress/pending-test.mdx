@@ -4,11 +4,19 @@ title: 待测试确认
 
 本页记录实际进入文档或代码、仍需用户确认的变更。既有实现的构建、全量测试、Rust Runtime 和响应式浏览器记录见[发行候选证据](../../../evidence/release-candidate/README.md)，仅适用于其对应代码与范围；本页每一节分别注明对应范围的验证结果。真实第三方宿主、账号、Provider 与公开发布仍需单独认证。
 
-> **2026-09-27 当前状态**：第一宿主仍是 Resolve Studio 21.1。当前工作树新增了 Resolve 面板、候选导入状态与 durable artifact 的源码实现；它们仍未在 Resolve Studio 21.1 真机运行。宿主 native MCP 由 Resolve 提供，Iris 不应再造一套 MCP Server。AE 源码/候选完整性工作保留为 Experimental evidence，不是当前第一交付 gate。
+> **2026-09-27 当前状态**：第一宿主仍是 Resolve Studio 21.1。main 已合入 Resolve 面板、候选导入状态与 durable artifact 的源码实现；它们仍未在 Resolve Studio 21.1 真机运行。宿主 native MCP 由 Resolve 提供，Iris 不应再造一套 MCP Server。AE 源码/候选完整性工作保留为 Experimental evidence，不是当前第一交付 gate。
+## Resolve R1：deterministic artifact Runtime slice
 
-## 当前 worktree：Resolve 面板与 durable candidate 源码
+- 已实现：`runtime.test.fixture-image` 通过既有 Runtime task ledger 和 Worker，把仓库内固定 `public/favicon.png` 作为 PNG fixture 持久化到 Runtime Artifact 目录；提交要求幂等键，不调用 Provider，任务结果明确记录 `providerCalled: false` 与 `costMicros: 0`。
+- 已实现：`artifact.locate --task-id <taskId>` 只为 completed task 返回本机持久文件路径；复用 store-relative path containment 校验，并重核文件类型、字节数和 SHA-256。Runtime `read_artifact` 也执行同样的完整性检查；同尺寸内容篡改会失败。
+- 本地验证：`cargo test --manifest-path src-tauri/Cargo.toml --test resolve_r1_artifact -- --nocapture` 通过 3/3，覆盖幂等提交、Runtime 重开后的 Artifact 定位/读取、未完成任务拒绝和同尺寸篡改拒绝；运行时设置 `TAURI_CONFIG={"bundle":{"externalBin":[]}}` 是因为隔离 worktree 没有 Agent sidecar，此次测试没有验证安装包 sidecar。`npx vitest run tests/flovartRuntimeTasks.test.ts tests/flovartRuntimeRegistry.test.ts tests/studioResolveInspector.test.ts` 通过 18/18；`npx tsc --noEmit` 在安装 `dsh-plugin` 锁定依赖后通过；`npm run docs:check` 与 `npm run studio:build` 通过。Studio build 日志仍报告未配置 AE SDK / Resolve WorkflowIntegration.node，这不是 Resolve 宿主验证。
+- CLI tracer 顺序：`runtime.test.fixture-image --idempotency-key <unique-key>` → `task.get --task-id <taskId>` → `artifact.locate --task-id <taskId>`。最后一步只把通过校验的持久本机路径交给同机 Resolve import；不得写进项目元数据或外部服务。
+- Flovart canonical Skill 及 `.agents` / `.claude` 镜像记录了 Resolve 21.1 R0/R1 tracer 的目标复核、幂等提交、bounded Media Pool import 与 Timeline 零变化要求；fixture 明确不是根据选中素材生成的 AI 结果。
+- 仍待真实宿主验证：Resolve Studio 21.1 native MCP 连接、选中媒体上下文冻结、该路径能否被宿主安全导入 Media Pool、Timeline 保持不变以及重启后素材可用。以上本地 Runtime/CLI 测试不代表 Resolve 导入成功，也没有把 R1 Golden Task 标记完成。
 
-状态：**源码已改，真实宿主尚未验证；当前改动仍在未提交 worktree。** 相关实现位于 `integrations/studio/resolve/` 与 `services/studio/`。
+## 当前 main：Resolve 面板与 durable candidate 源码
+
+状态：**源码已合入 main，真实宿主尚未验证。** 相关实现位于 `integrations/studio/resolve/` 与 `services/studio/`；本节记录源码状态，不代表完整产品路径可达。
 
 - 已实现源码：Resolve Inspector 路径加入中英文界面、Current Clip / Generate / References / Model / Output / Task / Candidates 与低权重 Open in Iris footer；Resolve 的 `Output` 提供 `Media Pool`，旧 `制作` / `本次记录` tab 不再用于该路径。候选提供 Preview、Add to Media Pool、确认/拒绝/未知状态；unknown 状态提示先检查 Media Pool，并禁用盲重试。
 - 已实现但未接入产品路径的源码：`StudioWorkflowController.prepareCandidate()` 可复用现有生成路径，校验 Blob、声明字节数和 SHA-256，持久化候选并保留冻结 target；`importCandidate()` 对同一候选使用冻结 target，成功可幂等返回，结果未知时锁存并禁止自动重发。当前 `installStudioBrowserLink()` 没有生产调用者，而 `resolve/index.js` 只读取全局 controller；因此该 controller 与 Resolve 面板之间尚未完成生产 wiring，不能声称这些动作已从真实面板可达。
@@ -17,9 +25,9 @@ title: 待测试确认
 - 当前本机发现：Windows 11 Pro for Workstations `10.0.26200`（build `26200`）；Resolve 注册表版本为 `21.0.00020`，并非目标 21.1，且注册表信息本身不能确认 Studio license/edition；Resolve 进程检查时未运行；Node `v24.14.0` / npm `11.9.0`；在 Resolve 安装路径与默认 ProgramData SamplePlugin 路径均未发现 `WorkflowIntegration.node`。未捕获 native MCP / Codex 连接与 Resolve selection 证据。详见 [Resolve 真机验收清单](../../../../integrations/studio/RESOLVE_REAL_HOST_CHECKLIST.md)。
 - Chromium Resolve-panel fixture matrix：`.tmp/resolve-panel-browser-matrix.mjs` 以 mock host/controller 挂载共享 Inspector；在 280、300、320、360、400、480、560、768、1024、1920px 检查均无横向溢出，`Output` 选项存在且默认值为 `Media Pool`，候选导入成功态可在 English / 简体中文之间切换。矩阵与截图在 `.tmp/resolve-panel-browser-evidence/`（含 `matrix.json`；记录 `pageErrors: []`）。这是 Chromium fixture，不是真实 Resolve/Studio/MCP 证据，也没有调用 Resolve API。
 - Chrome app smoke：`npm run test:browser:chrome` 使用隔离动态端口并等待应用 mounted；本轮 mounted 成功，未观察到 console/page errors。等待 harness 的默认 timeout 为 45 秒。该 smoke 验证 Iris 浏览器应用可挂载，不验证 Resolve 面板在宿主内加载或 Media Pool 导入。
-- 编排缺口（源码审计）：稳定 `workflow.node.run` 只返回不透明 artifact identity；Browser artifact registry 是 30 分钟 / 最多 64 项的内存索引，Blob 读取仅在应用内 `artifactGet` seam，CLI 没有 Browser artifact 物化命令。现有 Agent/Browser 桥使用 JSON/SSE，Agent 请求体整体缓冲上限 36 MiB，base64 可用素材约 27 MiB；没有二进制流、分块确认或断点恢复，因此不能把它当作 64 MiB 素材通道。Resolve `persistArtifact` 的 IPC 落盘模块也尚未接生产 controller。Runtime 按 task ID 提供的字节端点没有对应 CLI 导出合同，且不对应 Browser Workflow artifact identity；不得把内部 `storeRelpath` 当公开路径。必须先定义并验证窄的同机 binary handoff，再声称 Agent CLI 能把 artifact 交给 Resolve。
+- 编排缺口（源码审计）：稳定 `workflow.node.run` 只返回不透明 artifact identity；Browser artifact registry 是 30 分钟 / 最多 64 项的内存索引，Blob 读取仅在应用内 `artifactGet` seam，CLI 没有 Browser artifact 物化命令。现有 Agent/Browser 桥使用 JSON/SSE，Agent 请求体整体缓冲上限 36 MiB，base64 可用素材约 27 MiB；没有二进制流、分块确认或断点恢复，因此不能把它当作 64 MiB 素材通道。Resolve `persistArtifact` 的 IPC 落盘模块也尚未接生产 controller。Resolve R1 现在增加 `artifact.locate --task-id` CLI 合同：只为 completed Runtime task 返回经字节数与 SHA-256 复核的持久本机路径，不公开内部 `storeRelpath`。该路径合同尚未通过真实 Resolve native MCP 验证；它也不映射 Browser Workflow artifact identity。Browser Workflow 的大素材仍无 binary handoff，不能把 36 MiB JSON/SSE 路径当作素材通道。
 - 本地门禁：`npx tsc --noEmit` 通过；锁文件依赖下 `npm test -- --exclude '**/.tmp/**'` 为 `178 files passed`、`1196 passed / 1 skipped`；`npm run test:critical` 为 `10/10`，每轮 9 files / 53 tests；定向面板与 Skill 回归 8 files / 81 tests；`npm run build`、`npm run ext:build`、`npm run docs:check`、`npm run release:red-team`、`npm run release:secret-audit` 通过；`eval:validate` 检查 65 tasks / 57 predicates 通过，`eval:redteam` 为 12/12。`npm run studio:build` 能生成 4 个包，但日志显示 AE SDK 与 Resolve `WorkflowIntegration.node` 均缺失，输出不是已验证可运行的宿主包。本地结果不是 GitHub Hosted CI 结果，也不验证 Resolve 宿主。
-- Hosted CI 历史基线：run `36252046485`（HEAD `539a8e8`）记录为 7 个测试文件、16 项失败、1147 passed；本 worktree 的本地结果发生在当前远端 main 之前。当前本地 `origin/main` ref 为 `721e96e2`，与用户提供的远端 HEAD 一致；此前 `git fetch origin main` 曾遇到 GitHub TLS `SSL_ERROR_SYSCALL`，此分支 HEAD 仍为 `539a8e8`。Hosted CI 修复后结果尚无；`modelFetcher.ts` 曾有的 3 个 TypeScript 错误已由 PR #19 修复，不是当前 blocker。
+- Hosted CI 历史基线：run `36252046485`（HEAD `539a8e8`）与 `721e96e2` 均为旧基线，只用于解释此前失败来源，不代表当前 main 状态；`modelFetcher.ts` 曾有的 3 个 TypeScript 错误已由 PR #19 修复。当前状态以最新 main commit 的 GitHub Actions 为准。
 
 ## 历史基线：UI foundation 首轮（2026-09-25 记录）
 
