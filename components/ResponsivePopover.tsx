@@ -1,4 +1,4 @@
-import React, { useLayoutEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion } from 'motion/react';
 
@@ -32,7 +32,10 @@ export function ResponsivePopover({
   dataTestId,
 }: ResponsivePopoverProps) {
   const panelRef = useRef<HTMLDivElement>(null);
+  const closeRequestRef = useRef(onRequestClose);
+  const restoreFocusRef = useRef(true);
   const [position, setPosition] = useState({ left: 12, top: 12, maxHeight: 320, side: 'up' as ResponsivePopoverSide, ready: false });
+  closeRequestRef.current = onRequestClose;
 
   useLayoutEffect(() => {
     const panel = panelRef.current;
@@ -114,6 +117,45 @@ export function ResponsivePopover({
     };
   }, [anchorRef, preferredSide, width]);
 
+  useEffect(() => {
+    const panel = panelRef.current;
+    if (!panel || !position.ready) return;
+    const firstControl = panel.querySelector<HTMLElement>(
+      'button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
+    );
+    firstControl?.focus({ preventScroll: true });
+  }, [position.ready]);
+
+  useEffect(() => {
+    const panel = panelRef.current;
+    const anchor = anchorRef.current;
+    if (!panel || !anchor || !closeRequestRef.current) return;
+
+    const closeFromOutside = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node) || panel.contains(target) || anchor.contains(target)) return;
+      restoreFocusRef.current = false;
+      closeRequestRef.current?.();
+    };
+    const closeFromEscape = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      event.stopPropagation();
+      restoreFocusRef.current = true;
+      closeRequestRef.current?.();
+      anchor.focus({ preventScroll: true });
+    };
+
+    document.addEventListener('pointerdown', closeFromOutside, true);
+    document.addEventListener('keydown', closeFromEscape, true);
+    return () => {
+      document.removeEventListener('pointerdown', closeFromOutside, true);
+      document.removeEventListener('keydown', closeFromEscape, true);
+      if (restoreFocusRef.current && panel.contains(document.activeElement)) anchor.focus({ preventScroll: true });
+      restoreFocusRef.current = true;
+    };
+  }, [anchorRef]);
+
   if (typeof document === 'undefined') return null;
 
   return createPortal(
@@ -135,6 +177,7 @@ export function ResponsivePopover({
         data-responsive-popover
         data-prompt-floating-panel={dataTestId === 'prompt-floating-panel' ? true : undefined}
         data-testid={dataTestId}
+        tabIndex={-1}
         data-side={position.side}
         data-preferred-side={preferredSide}
         className={`theme-aware flv-responsive-popover isl-scrollbar ${className}`.trim()}
