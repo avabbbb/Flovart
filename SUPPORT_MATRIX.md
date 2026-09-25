@@ -26,7 +26,7 @@ onboarding 或宣传中呈现为与 Beta 路径同等就绪。`Stable` 只表示
 | Photoshop UXP panel | Experimental | `npm run studio:build`、manifest v4、shared `CreativeHostAdapter` 与 layer contract/mock tests；真实 UXP layer → I2I → new layer 是 External Gate |
 | Premiere Pro UXP panel | Experimental | `npm run studio:build`、manifest v5 / 25.6+、clip/frame contract/mock tests；真实 UXP → artifact → Project import 是 External Gate |
 | After Effects | Experimental | 当前轻面板为 `dist-studio/after-effects` CEP/ExtendScript bridge；planned native effect 为独立 C++ Effect SDK 路径。不得假设 AE 已有可发布 UXP host；两条路径均需独立真实宿主认证 |
-| DaVinci Resolve Studio | Experimental | `dist-studio/resolve` 为 Workflow Integration Electron panel（sandbox/context isolation）；planned OFX 为独立路径。真实 Studio selection → artifact → Media Pool tracer 仍是 External Gate |
+| DaVinci Resolve Studio 21.1 | Experimental | **当前第一宿主方向**：优先验证 Blackmagic native MCP + Flovart Skill/CLI；`dist-studio/resolve` Workflow Integration 降为轻面板 / measured fallback，planned OFX 独立后置。真实 native MCP 连接、selection → durable artifact → Media Pool tracer 仍是 External Gate |
 
 ## Native effects and deeper Agent integration
 
@@ -36,7 +36,7 @@ The following are design targets, not capabilities certified by the panel or MCP
 | --- | --- | --- |
 | AE / PR native Flovart effects | Planned | Real effect controls, fixed media versions, keyframes, saved project and offline export |
 | Photoshop native filter | Planned | Real filter integration, selection, editable parameters and project reopening |
-| Resolve OpenFX effect | Planned | Real OFX instance, parameter persistence and fixed-version rendering |
+| Resolve OpenFX effect | Planned / deferred | 仅在 MCP-first 真实流程证明需要 fixed-version effect parameters / keyframes / offline effect rendering 后启动；需独立 Real OFX evidence |
 | Native-effect generation without an open Workflow | Proposed | Confirm scope; verify headless service, Provider parity and persistent assets |
 | Internal Codex / WorkBuddy task entry | Planned | Official integration, real account, visible conversation, tools, approval and recovery |
 
@@ -80,7 +80,7 @@ Provider 一律 `Experimental` / unverified，不得写进 Beta 发布口径。
 - WorkBuddy 真实客户端/Marketplace 安装与自然语言 tracer；
 - DSH 真实用户登录、可见 Browser Workflow tracer、service unload/reload；
 - Photoshop、Premiere 的真实宿主安装、选择、Provider wire、artifact import；
-- After Effects、Resolve/Resolve Studio 的真实宿主 API、安装和 tracer；
+- After Effects 的真实宿主 API / 安装 gate；Resolve Studio 21.1 的 native MCP 真实连接、Agent selection tracer、durable artifact → Media Pool 导入与 panel UX；
 - RunningHub 真实账号付费路径的认证 gate：seedream t2i / seedance i2v /
   restart-after-submit 三次真实付费 trial 的 capture、扣费与恢复语义复核
   （完成后该行才从 `Beta (pending certification)` 升级为认证路径）；
