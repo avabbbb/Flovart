@@ -4,27 +4,37 @@ title: 后续待办
 
 本页只记录未完成工作。主方向以[原生效果与 Agent 协作设计](../../../design/flovart-native-effects.md)为准；实际完成的代码或文档移入[待测试确认](pending-test.mdx)。删除旧计划不等于对应代码已迁移。
 
-## 第一阶段：AE / PR 场景替换
+## 第一阶段：Resolve Studio 21.1 MCP-first
 
-- [ ] 记录原型目标宿主版本、SDK、Windows 构建环境和样例素材；核对主设计中“插件独立生成”“整段替换加遮罩”的两项推荐假设。
-- [ ] 按已确认的 Windows 首版范围完成安装、保存重开与导出；macOS 后续单独排期，不作为同期交付目标。
-- [ ] 将 AE 原生效果源码编译并安装到真实宿主；验证固定素材读取、混合、关键帧、随机帧、裁剪/遮罩/上游输出偏移、保存重开和关闭服务后的导出；验证候选列表随合成隔离；完成重入/多帧并发压力验证后再声明 MFR 支持。输出范围标志须在实现 extent/offset 处理后才加入。
-- [ ] 首版参数限于素材版本与混合强度，优先复用宿主变换/遮罩/关键帧；宿主组合能力不足时记录限制，不先开发自己的抠像跟踪编辑器。
-- [ ] 在 PR 验证 AE 效果核心的实际兼容；记录差异，不先建设通用 Host SDK。
-- [ ] 完成持久素材版本与工程打包/重定位：源码现在把 Workflow Artifact ID、Provider task ID（如有）、Blob SHA-256、字节数及现有尺寸/时长写入 CEP `USER_DATA` 内容哈希文件名和 AE 候选图层注释，并从当前合成恢复候选列表；导入解释的帧率、帧时长、像素宽高比、Alpha 与项目色彩上下文也已记录，但权威帧数和嵌入色彩配置仍缺。CEP 已实现暂存文件落盘后读回校验 SHA-256，再重命名为内容寻址路径；Apply 前按绑定合成与候选 ID 重新校验文件 hash，可拒绝同尺寸替换。仍需测真实 CEP 兼容性和大视频回读成本，并实现按校验和重定位/回链、工程收集/跨目录重定位及应用后渲染阶段的缺失/篡改检测；真实 AE 需覆盖合成隔离、复制效果、撤销、另存工程、移动素材、重开面板和晚到结果。
-- [ ] 把一个短片段接到现有真实 Provider：固定输入、范围、提示词与模型，返回同一持久任务，完成失败、取消和提交未知恢复。
-- [ ] 收敛本地生成入口，验证无 UI 启动、Provider 能力等价和素材存储；不新增 Node/Rust 双调度器，Browser 工具仍保留明确绑定。
-- [ ] 完成 12 个片段与 4 个合成序列的 Benchmark，所有初始状态为未测；指标与记录方法见主设计第 6 节。
+当前第一宿主已切换为 **DaVinci Resolve Studio 21.1**。目标不是先开发更大的插件，而是先证明 Blackmagic native MCP + Flovart Skill/CLI + durable artifact + Media Pool 的真实纵向闭环。专项 UI/交互见 [Resolve 21.1 Product & UI Spec](../../../../integrations/studio/resolve/PRODUCT_UI_SPEC.md)。
 
-## 第二阶段：Agent 双入口与其它宿主
+- [ ] 在真实 Resolve Studio 21.1 中执行 `File > Setup AI Assistants`，验证一个真实外部 Agent（优先 Codex）连接；记录 Resolve build、OS、Agent 版本、实际 MCP tool surface 与连接配置，不用社区工具数量替代本机事实。
+- [ ] 用 native MCP 读取当前 project / timeline / Media Pool selection，冻结 project + selection identity；用户随后切换选择时，进行中的 Flovart 任务不得 retarget。
+- [ ] 第一条 Golden Task 不依赖真实 Provider：当前选择 → deterministic/fake Flovart artifact → durable file → **Add to Media Pool**；原 Timeline 保持不变。
+- [ ] 修复 Resolve 当前 shared inspector 的输出项：`index.js` 传入 `{ kind: 'media-pool' }`，但通用 output select 目前未创建 Media Pool option。真实面板必须明确显示 `Output: Media Pool`。
+- [ ] 按 Resolve Inspector / Media Pool 视觉规律重做轻面板层级：Connection → Current Clip → Generate → References → Model(Auto) → Output → Task → Candidates → Open in Flovart。不要做全屏 chat、MCP 管理页、模型商城或第二份 Timeline。
+- [ ] 面板完成 no-project / no-selection / ready / running / candidate / disconnected / error 状态；窄宽窗口实测，无横向滚动，当前选择与 pending target 必须能同时被用户理解。
+- [ ] P0 candidate 只允许 Preview + Add to Media Pool。P1 才做 Add to new track；P2 Replace/Commit 必须显式确认、提交前重新读取 target identity，并验证 undo/recovery。
+- [ ] 真实 Studio 环境验证媒体文件生命周期：Resolve 导入后临时文件不能立即删除导致 offline media；落盘 Artifact 由 Flovart 持久管理，Media Pool 指向可长期读取的文件。
+- [ ] Windows 下实测英文与中文 project/bin/marker/text；社区报告的 Python UTF-8/CJK 问题只有复现后才加入 `PYTHONUTF8` 或转义策略。
+- [ ] native MCP 有 bounded / unsafe script surface 时默认只用 bounded path；unsafe filesystem/network escape 不为 Demo 自动开启。
+- [ ] 接一个且只接一个已批准 RunningHub 路径：selected clip → real generation → durable artifact → Media Pool。记录计费、取消、429、unknown-after-submit 与重连语义。
+- [ ] Hero 录屏固定为 20–35 秒：选中 Resolve clip → Agent 读上下文 → Flovart 真生成 → panel 出 candidate → Add to Media Pool。加速等待必须标注，不把 mock 当真实生成。
 
-- [ ] 继续扩展 CLI/MCP/DSH 的权限、错误与真实 Host parity；当前 CLI/MCP 已对四个 Workflow operation 完成受控 normalized/state-hash parity，MCP 仍只覆盖五个稳定工具。
-- [ ] Codex 外部 Skill/CLI/MCP 调用明确效果目标；Flovart 内部使用官方 app-server，实测登录、对话、工具、审批和恢复。
-- [ ] WorkBuddy 现有 CLI Connector 完成真实导入与自然语言调用；双向本地助理 API 完成应用审核、授权、在线状态与历史验证，不能冒充离线连接。
-- [ ] PS 接原生滤镜，验证选区、素材版本、参数回编、智能滤镜可行性和工程重开。
-- [ ] Resolve 分别验证 Workflow Integration 联动与 OFX 效果；确认 Studio/OS/SDK 条件。先修复导入后媒体文件生命周期，不能以独立窗口冒充原生效果。
-- [ ] TeleAgent 真实客户端导入、权限、长任务等待和自然语言 tracer；当前仅有 MCP + canonical Skill 准备包。
-- [ ] 现有 DSH、Claude、OpenCode 接入按实际支持矩阵维护，不将其升级或私有宿主复制设为首个效果的前置条件。
+## 第二阶段：Resolve 深层写入
+
+- [ ] Add to new video track：不删除、不覆盖原 clip；轨道/时间范围与项目身份在提交前复核。
+- [ ] Replace / Commit：明确确认、可恢复/撤销、晚到任务不跨目标覆盖；失败后 source 仍可用。
+- [ ] 只有用户需求证明“固定版本参数 + 关键帧 + 离线 effect rendering”必要后才启动 Resolve OFX；MCP / Workflow Integration 成功不能冒充 OFX 已验证。
+- [ ] Resolve panel 与 native MCP 若出现能力重叠，优先删除重复 adapter；只有 native MCP 的真实 gap 才允许保留 custom bridge 路径。
+
+## 后续：AE / PR 场景替换（保留，不再阻塞第一宿主）
+
+- [ ] 现有 AE CEP / C++ Effect SDK 源码、SHA-256 candidate integrity 与文档证据保持 Experimental；暂停继续扩张，直到 Resolve-first 真实切片跑通。
+- [ ] 恢复时再记录目标 AE/PR 版本、SDK、Windows 构建环境和样例素材；真实编译/安装、保存重开、离线导出仍是 gate。
+- [ ] AE native effect 继续验证固定素材读取、混合、关键帧、随机帧、裁剪/遮罩/上游输出偏移、MFR、工程重定位和应用后完整性；不因已有源码升级支持状态。
+- [ ] PR 兼容独立验证，不因 AE SDK lineage 推断 Premiere 可用。
+- [ ] PS、WorkBuddy、TeleAgent、DSH、Claude、OpenCode 等继续按实际需求与支持矩阵排期，不作为 Resolve-first 前置条件。
 
 ## 下一步：轻面板与素材入口
 
