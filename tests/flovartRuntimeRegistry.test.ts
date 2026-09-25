@@ -34,16 +34,20 @@ describe('Production Runtime canonical registry', () => {
     const commandNames = Object.keys(registry.commands);
 
     expect(registry.protocolVersion).toBe('1');
-    expect(registry.registryHash).toBe('963705f2699d1bef95490314add610ca85ae68b4859e101b1b624f6c51375ff8');
+    expect(registry.registryHash).toBe('e2251d5f8e71c1c212a95673104a9d23bc0ed94c5674f964b9baaa0b55cf2f25');
     expect(hashCanonicalRegistryDocument(registryDocument)).toBe(registry.registryHash);
     expect(Object.isFrozen(registry.commands)).toBe(true);
     expect(Object.isFrozen(registry.commands['runtime.status'].args)).toBe(true);
+    expect(registry.commands['runtime.test.fixture-image']?.args).toEqual({});
+    expect(registry.commands['artifact.locate']?.args).toEqual({ taskId: 'string' });
     expect(commandNames).toEqual(expect.arrayContaining([
       'runtime.status',
       'command.list',
       'command.schema',
       'runtime.test.delay',
+      'runtime.test.fixture-image',
       'task.get',
+      'artifact.locate',
       'task.inspect',
       'task.resume',
       'task.list',
@@ -51,7 +55,7 @@ describe('Production Runtime canonical registry', () => {
       'event.stream',
       'workflow.selection.get',
     ]));
-    for (const command of ['runtime.test.delay', 'task.get', 'task.inspect', 'task.resume', 'task.list', 'task.cancel', 'event.stream']) {
+    for (const command of ['runtime.test.delay', 'runtime.test.fixture-image', 'task.get', 'artifact.locate', 'task.inspect', 'task.resume', 'task.list', 'task.cancel', 'event.stream']) {
       expect(registry.commands[command]?.availability).toBe('available');
     }
     expect(commandNames).not.toContain('workflow.run');
@@ -110,6 +114,7 @@ describe('Production Runtime canonical registry', () => {
     ]));
     expect(RUNTIME_WRITE_COMMAND_NAMES).toEqual([
       'runtime.test.delay',
+      'runtime.test.fixture-image',
       'task.cancel',
       'agent-text.route.sync',
       'production.dry-run',

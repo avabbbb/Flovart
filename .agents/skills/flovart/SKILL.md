@@ -64,6 +64,56 @@ code, inspect before retrying, and stop safely when the visible workspace is
 unavailable or the target/revision changed. Never choose another project or
 retry a mutation with a new identity.
 
+## Resolve Studio 21.1 — no-provider Media Pool tracer
+
+Use this path only for the Resolve R0/R1 host-validation task. Resolve owns
+project, timeline, selection, and Media Pool state. Flovart CLI owns the local
+deterministic fixture task and its durable Artifact.
+
+Before starting, verify the installed product is Resolve Studio 21.1 and that
+its native MCP is connected to the same local Resolve instance. Discover the
+tool names and current API through that MCP; do not guess from another Resolve
+version. If 21.1 or the native MCP is unavailable, stop and report the exact
+host gate instead of presenting a mock as Resolve evidence.
+
+For the no-provider tracer:
+
+1. Use Resolve native MCP to read the current project, timeline, and selected
+   clip. Keep their stable identities and the timeline state for this task;
+   recheck them before a Resolve write. If the selected target changes, stop
+   instead of retargeting.
+2. Submit the fixed local fixture with one unique idempotency key:
+
+   ```bash
+   flovart runtime.test.fixture-image --idempotency-key <unique-key> --json
+   ```
+
+   From this source checkout, use `npm run flovart:cli --` before the command.
+   If submission status is unknown, retry with the same key, never a new one.
+3. Poll the returned task ID with `flovart task.get --task-id <taskId> --json`
+   until it is completed. Stop on failure or cancellation.
+4. Resolve the completed file immediately before import:
+
+   ```bash
+   flovart artifact.locate --task-id <taskId> --json
+   ```
+
+   The result is a local path plus the verified MIME type, byte size, and
+   SHA-256. Use that path only for the immediate host import; do not write it
+   into project metadata.
+5. Use a bounded Media Pool import operation exposed by the installed Resolve
+   native MCP. Do not add the fixture to the Timeline, replace a clip, delete
+   or overwrite media, or run unrestricted scripts. If the installed MCP has
+   no safe bounded import path, stop and report that concrete gap.
+6. Re-read the Media Pool and Timeline through Resolve MCP. Confirm the item
+   appears in the Media Pool and the Timeline state is unchanged.
+
+`runtime.test.fixture-image` imports the repository's fixed `public/favicon.png`
+as a no-provider fixture. It verifies the local task-to-file handoff only; it
+does not use the selected clip as a visual reference and is not AI generation.
+Never describe it as a generated scene or as a completed real-host tracer until
+Resolve visibly accepts the file and the Timeline comparison passes.
+
 ## Cold start — no project open
 
 `workflow.inspect` returns `WORKSPACE_UNAVAILABLE` when the browser is
