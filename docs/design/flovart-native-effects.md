@@ -1,4 +1,4 @@
-# Flovart：原生效果与 Agent 协作设计
+# Flovart：创作宿主与 Agent 协作设计
 
 这是当前唯一的产品与系统主设计。它替代旧 Agent 分层设计、Link 目标稿和 Production Runtime V1 扩张计划；旧代码不会因文档改写自动完成重构。术语见[领域词](../maintenance/agent/CONTEXT.md)，可用性见[支持矩阵](../../SUPPORT_MATRIX.md)，实施进度见[待办](../content/docs/progress/todo.mdx)。
 
@@ -6,70 +6,109 @@
 
 | 项目 | 决定 | 依据 |
 | --- | --- | --- |
-| 产品入口 | 插件为主，需要复杂编排时展开 Flovart | 用户已确认 |
-| 目标宿主 | 先 AE/PR 验证，再接 PS；Resolve 联动另做适配 | 用户已确认 |
+| 第一宿主 | **DaVinci Resolve Studio 21.1 first**；先验证官方 native MCP + Flovart Skill 的真实闭环 | 用户 2026-09-25 确认 |
+| 产品入口 | 外部 Agent 与 Resolve 21.1 native MCP 负责宿主操作；Flovart 轻面板负责上下文、生成、候选与确认；复杂编排再展开 Flovart | 用户确认 + 21.1 新能力 |
+| AE / PR | 保留现有 Experimental 实现与证据，暂停作为首个交付阻塞项；Resolve 纵向切片跑通后再恢复 | 用户确认 |
 | 首版平台 | Windows 优先；macOS 后续单独验证，不承诺同期支持 | 用户通过 ASK 确认 |
-| 核心能力 | Flovart 自己的原生效果；第一款为生成素材与场景替换 | 用户已确认 |
-| 生成体验 | 先生成固定结果，再实时调整混合、遮罩与视频关键帧 | 用户已确认 |
-| Agent | 外部助手优先；Flovart 内置 Assistant 作为可选、无额外特权的任务入口 | 用户已确认 |
-| 复杂度 | 普通函数直接完成业务；不增加强制内置 Operator、制作组、通用总线或插件内核 | 用户明确要求精简 |
-| 插件独立性 | 推荐只开宿主和本地服务即可生成，不要求打开 Workflow | 设计假设：ASK 未返回选择；实现前核对 |
-| 第一款替换范围 | 推荐整段短素材替换，加宿主遮罩混合；自动人物分割和跟踪后置 | 设计假设：ASK 未返回选择；实现前核对 |
+| 首个核心能力 | 当前 Resolve 选中片段 → Flovart 生成固定候选 → **非破坏性导入 Media Pool** | 用户确认 |
+| Timeline 写入 | P1 才允许“添加到新轨道”；P2 才做显式 Replace/Commit，并在提交前重新确认目标身份 | 风险分级 |
+| OFX / 原生效果 | Resolve OFX 后置；只有固定版本参数、关键帧或离线渲染出现真实需求后才进入首版 | 用户确认 |
+| Agent | 外部助手优先；Flovart Skill 教 Agent 同时使用 Resolve native MCP 与 Flovart CLI；不复制第二套 Resolve MCP | 用户确认 |
+| 复杂度 | 官方宿主能力优先；普通函数直接完成业务，不增加强制 Operator、制作组、通用总线或“每个 Resolve API 一个 Flovart tool” | 用户明确要求精简 |
+| Provider / 费用 | Resolve 不保存 Provider key；付费生成仍由 Flovart 计划/费用边界控制 | 现有安全边界 |
 
-本主设计定义产品目标与边界。目标接口、原生效果、性能数值均不代表已经实现或测得；实现进度以待办和待测试确认页为准。未确认的假设不作为删除现有能力或启动大范围代码重构的授权。
+本主设计定义产品目标与边界。Resolve 21.1 的具体 MCP tool 名、数量和 Scripting API 以用户机器上的实际 Studio 版本为准，不把社区实测细节冻结成产品 contract。实现进度仍以待办、待测试确认和 Support Matrix 为准。
 
 ## 2. 产品设计
 
-一句话：在熟悉的创作软件里生成新素材，把结果作为可保存、可调节的 Flovart 效果继续编辑，也可以让自己的 Agent 帮忙完成制作。
+一句话：**在 Resolve 里选中一个片段，让自己的 Agent 调用 Flovart 生成一个新版本，审核后安全地送回 Media Pool；复杂制作再展开 Flovart。**
 
-首批用户是使用 AE/PR 制作短视频、广告和视觉合成的个人创作者。首个任务限定为一个镜头片段的替换；长片、自动完整剪辑、多人实时协作、云同步和第三方效果市场不进入首个交付。
+首批用户是使用 DaVinci Resolve Studio 21.1 做短视频、广告和创作者内容的个人剪辑师。首个任务不是“让 AI 自动剪完一条片”，而是把一个明确的当前片段变成一个可审核、可追踪、不会破坏原时间线的新候选。
 
-首版安装包与原生效果验收限定 Windows。macOS 的编译、签名、安装及宿主差异作为后续独立工作，不以源码可移植或网页可访问推断插件已经跨平台。
+第一阶段不要求用户安装 Flovart 自己的 Resolve MCP server。Blackmagic Studio 21.1 已提供 native MCP；Flovart 应优先利用该宿主控制面，把自己的价值放在生成、引用、持久 Artifact、版本与 Workflow 上。
 
-只交付一个产品和按需安装的组件：
+产品由四个协作面组成：
 
-- 宿主插件：生成面板与原生效果，用户的日常入口。
-- Flovart 工作区：Workflow 做生成编排，Table 做独立媒体处理，Agent 做对话、任务与产物协作。三者保持独立入口和各自状态，不把 Agent 变成 Workflow/Table 的重复控制面。
-- 本地服务与连接器：后台任务、素材文件、CLI/Skill 和 Agent 接入；CLI + Skill 是外部 Agent 的默认路径，MCP 只作为可选投影，不扩张为新的运行时。
+- **Resolve native MCP**：宿主控制面。由外部 Agent 读取工程/选择、查询当前 Scripting API，并在受控范围内执行 Resolve 操作。
+- **Flovart Resolve 轻面板**：人类审核面。只显示当前 Clip、Prompt/Reference、Plan/Cost、Task、Candidates 与 Open in Flovart，不承载完整 Agent 聊天。
+- **Flovart Skill + CLI**：生成能力面。教外部 Agent 使用 Flovart 的稳定操作、生成任务、持久素材与恢复语义。
+- **Flovart 工作区**：复杂 Workflow、版本比较、依赖与多镜头制作。Canvas | Table | Agent 的现有 IA 不因 Resolve 改写。
 
-用户可直接使用插件按钮，无需先配置 Agent。第一次生成才配置 AI 服务并展示本次范围和费用；模型服务账号与 Agent 账号分开。现有 Plus/OAuth、代理和 Provider 配置不得被连接引导改写。
+第一阶段默认动作是“生成候选并导入 Media Pool”。原 Timeline 保持不变。只有用户明确要求后，后续阶段才增加新轨道写入与 Replace/Commit。
+
+Resolve OFX、AE/PR 原生效果、PS 滤镜继续保留为后续宿主能力，不再作为 Resolve-first Hero 的前置条件。
 
 ### 2.1 生态分发
 
-制作配方复用已有 Production Skill 包：制作说明、参考 Workflow、参数、示例和所需能力。同一配方可以生成静态图或视频，但不承诺各模型和宿主产生完全相同的结果。
+Operation Skill 负责教外部助手组合 **Resolve native MCP + Flovart CLI**：宿主状态从 Resolve 读取，生成与 Artifact 从 Flovart 读取。Skill 不复制 Resolve 的完整 API 文档，也不把官方 native MCP 包装成第二套 Flovart MCP。
 
-Operation Skill 教外部助手操作 Flovart，CLI 提供默认能力投影，MCP 仅按需提供同一能力的可选投影，Workflow 表达具体步骤。内置 Assistant 可以打开，但不拥有更高权限，也不自动接管项目。配方不是另一套调度器，不包含凭据或任意执行代码。第一阶段只做官方配方与安装入口；社区分发沿用现有作品/Remix 逻辑，不另建市场、账号和计费体系。收费方式及商业 SDK 授权另行决定，不在设计中编造价格。
+制作配方继续复用已有 Production Skill 包；配方可以描述创作方法、参考 Workflow、模型需求与结果验收，但不拥有宿主工程 truth、不包含 Provider 凭据，也不自动获得 Timeline 覆盖权限。
+
+如果用户机器上的 Resolve native MCP 缺少某个第一阶段必需操作，先记录具体 gap、版本与复现，再决定是否复用现有 Workflow Integration bridge。不能因为“以后可能需要”而预先建设通用 Resolve Gateway。
 
 ## 3. 交互设计
 
+Resolve 专项的完整 UI/交互规范见 [Resolve 21.1 Product & UI Spec](../../integrations/studio/resolve/PRODUCT_UI_SPEC.md)。实现 Agent 必须先读该文档，并在视觉修改前重新打开 Blackmagic 当前 Edit / Cut / Media 官方页面核对真实宿主界面。
+
 ### 3.1 首次使用
 
-安装器发现宿主 → 选择安装 AE/PR 组件 → 打开宿主的 Flovart 面板 → 选择图层或片段 → 添加 Flovart 场景替换效果 → 设置参考和提示词 → 确认本次生成 → 比较候选 → 应用版本 → 在原生控件中继续调整。
+第一阶段路径：
 
-未检测到宿主时说明缺少什么和支持版本；不要把 PATH 检测等同于安装成功。未选择对象时只显示“请选择图层或片段”。面板连接由安装器/本地服务自动发现，不要求手填端口、Token、Session ID。
+~~~text
+安装 / 打开 Resolve Studio 21.1
+→ File > Setup AI Assistants
+→ 验证一个真实外部 Agent 已连接
+→ 打开项目并选择一个 Media Pool clip 或 timeline item
+→ Agent 或 Flovart 面板读取当前上下文
+→ 输入创作意图 / References
+→ Flovart 显示必要的模型与费用范围
+→ 提交一次生成
+→ Candidate ready
+→ 用户审核
+→ Add to Media Pool
+~~~
 
-### 3.2 两种控件各做一件事
+第一阶段到 Media Pool 为止，不自动替换 Timeline。
 
-| 位置 | 内容 | 更新行为 |
+未检测到 Studio 21.1、没有打开项目、没有选择素材、native MCP 未连接或 Flovart 未连接时，只显示一个清楚的恢复动作。不要暴露端口、Lease、MCP JSON、Token 或内部 bridge 名称。
+
+### 3.2 四个 Surface 各做一件事
+
+| Surface | 内容 | 不承担 |
 | --- | --- | --- |
-| Flovart 面板 | 提示词、参考素材、时间范围、模型、生成、进度、取消、版本对比、展开 Workflow | 生成参数修改只形成草稿；点击生成才提交新任务 |
-| 原生效果控件 | 已应用版本、混合强度、位置/缩放、遮罩及羽化；视频支持已验证参数的关键帧 | 使用已保存素材本地渲染，不触发远程生成 |
+| 外部 Agent + Resolve native MCP | 理解自然语言、读取 Resolve 上下文、查询当前 API、执行受控宿主操作 | Provider key、Flovart 任务 truth、第二份素材库 |
+| Flovart Resolve 轻面板 | Current Clip、Prompt/Reference、Plan/Cost、Task、Candidates、导入动作 | Agent 全聊天、Timeline 编辑器、完整 Canvas |
+| Flovart Skill + CLI | 生成任务、Artifact、恢复、Flovart operation semantics | 复制 Resolve 全量 Scripting API |
+| Flovart Canvas | 多镜头、依赖、复杂引用、版本比较与 Workflow | 冒充 Resolve Timeline / Media Pool |
 
-面板默认紧凑单列，参考/参数按需展开。工作区继续使用现有主题和弹性布局；宿主面板遵循宿主主题。UXP 不是完整浏览器，不预设整套 React/Ant Design UI 可原样嵌入；共享业务函数和文案，宿主 UI 用其实际支持的控件。
+面板视觉以 Resolve Inspector 为主要参考：紧凑单列、当前选择优先、弱品牌、克制分隔、一个主 CTA。不要把网页首页卡片、超大 logo、复杂 tab、模型市场或系统设置塞进窄面板。
 
-首版自有效果参数先限于素材版本与混合强度。位置、缩放、遮罩、羽化和关键帧优先沿用宿主现有能力，不为这一效果再开发一个变换、抠像或跟踪编辑器；宿主无法组合的部分先记录限制。
+第一版面板信息顺序固定为：
 
-“原生”定义为：效果出现在宿主效果/滤镜入口，参数可随工程保存，视频端可按支持范围设置关键帧，效果参与宿主预览和导出。单独的网页面板不满足该定义。PS 以滤镜、选区和可回编参数验收，不套用视频关键帧语义。
+~~~text
+Connection
+→ Current Clip
+→ Generate
+→ References
+→ Model (Auto by default)
+→ Output (Media Pool)
+→ Task
+→ Candidates
+→ Open in Flovart
+~~~
+
+当前共享面板传入 Resolve 的 `media-pool` target，但通用 select 仍未创建对应 Media Pool option；这是待修的真实实现缺口，不得用 mock 截图掩盖。
 
 ### 3.3 版本、并发与错误
 
-- 生成中继续显示已应用的 V1；V2 完成后进入候选列表，由用户明确应用。晚到结果不能覆盖用户刚选的 V3。
-- 任务绑定提交时的工程、合成/序列、图层/片段、效果实例和素材范围；切换工程、复制效果或重新选择不能改变正在执行的目标。
-- 复制效果默认复用固定素材版本；首次编辑生成配方时建立独立效果实例身份。另存工程后重新核对项目位置及素材根目录。
-- 改提示词不自动花费；重复点击返回同一任务。失败说明输入、网络、额度、文件或宿主错误，并给一个直接恢复动作。
-- 取消停止后续工作；Provider 无法取消时显示“已请求取消，供应商可能仍计费”，保留查询身份，不显示虚假成功。
-- 撤销应用恢复上一个版本及参数；不删除已经产生的素材，也不把撤销解释为退款。
-- 没有有效结果时预览显示原画面并明确标示未生成/素材缺失；最终导出前必须检测缺失并失败或要求用户明确旁路，不能静默导出错误内容。
+- 生成任务冻结提交时的 project / timeline / clip 或 Media Pool item 身份；用户在 Resolve 继续切换选择不能改变正在执行的目标。
+- P0 Candidate 只进入 Media Pool，不删除、不覆盖、不替换原 Timeline clip。
+- P1 “Add to new track”需要明确用户/Agent 指令；P2 “Replace/Commit”需要提交前重新读取目标身份并确认可恢复路径。
+- 改提示词不自动花费；重复点击依赖现有幂等/任务查询，不能用第二个 id 偷偷重复计费。
+- Provider 无法取消时显示“已请求取消，供应商可能仍计费”；unknown-after-submit 保留原 task identity 并查询，不重新提交。
+- 外部 Agent 可以自动读取项目、选择与 API 文档；付费生成、Timeline Replace/Delete、覆盖已有导出文件等高影响动作仍按权限/确认边界执行。
+- 如果 Resolve native MCP 提供 bounded 与 unsafe script 两种执行面，默认只使用 bounded path；unsafe filesystem/network escape 默认拒绝。
+- 社区报告的 Windows CJK/Python UTF-8 问题必须在本机先复现，再加入兼容处理；不能未经验证把社区 workaround 写成产品依赖。
 
 ## 4. 系统设计：两条短路径
 
@@ -145,14 +184,18 @@ Operation Skill 教外部助手操作 Flovart，CLI 提供默认能力投影，M
 
 ### 5.3 宿主能力
 
-| 宿主 | 面板与任务 | 原生效果 | 首次验收 |
+| 宿主 | 第一控制面 | Flovart UI / 深层能力 | 首次验收 |
 | --- | --- | --- | --- |
-| AE | 现有 CEP/脚本面板起步，按安装版本核验 | AE C++ Effect SDK | 参数/关键帧、随机帧、保存重开、离线导出 |
-| PR | UXP；仅确有需要时使用 Hybrid | 优先复用 AE 效果核心并做 PR 适配 | 片段范围、Effect Controls、时间线导出 |
-| PS | UXP | PS C++ Filter SDK | 选区、滤镜参数、智能滤镜可行性、保存重开 |
-| Resolve Studio | Workflow Integration | OpenFX | Media Pool/时间线联动、OFX 参数、固定版本渲染 |
+| **Resolve Studio 21.1** | **Blackmagic native MCP** | 现有 Workflow Integration 轻面板后续收敛；OFX 后置 | Agent 真实连接、读取选择、Flovart 生成、durable artifact、Media Pool 导入 |
+| AE | 现有 CEP/脚本面板 | C++ Effect SDK 现有 Experimental 源码保留，暂停首个 gate | 恢复时再做真实 .aex、重开与离线导出 |
+| PR | UXP；仅确有需要时使用 Hybrid | 原生效果后续单独验证 | 片段范围、Effect Controls、时间线导出 |
+| PS | UXP | PS C++ Filter SDK 后续 | 选区、滤镜参数、保存重开 |
 
-Premiere UXP 基线为 25.6+，Hybrid 需要 26.2+；首个安装包只声明实测版本。Hybrid 加载 C++ 不等同于注册原生视频效果。AE/PR 共用源码不代表可免测发布同一二进制。Resolve Workflow Integration 不是 Inspector 效果控件；实际 SDK 和操作系统支持以安装包验证为准。[Premiere Hybrid](https://developer.adobe.com/premiere-pro/uxp/plugins/hybrid-plugins/)、[AE SDK 能力](https://github.com/AdobeDocs/after-effects/blob/main/src/pages/index.md)、[PS 滤镜与 Hybrid](https://developer.adobe.com/photoshop/uxp/guides/hybrid-plugins)、[Resolve Studio](https://www.blackmagicdesign.com/sg/products/davinciresolve/studio)、[OpenFX](https://github.com/AcademySoftwareFoundation/openfx)。
+Resolve Studio 21.1 是当前第一宿主。官方 support 页面在 2026-09-08 的 Studio 21.1 更新说明中列出 AI assistant integration 与 20 个新 scripting APIs；native MCP 的具体工具表必须从安装版本读取，不以第三方文章中的固定数量做兼容承诺。
+
+现有 `integrations/studio/resolve/` Electron Workflow Integration 不删除，但它从“必须先做的宿主控制层”降为**人类轻面板 / fallback adapter**：官方 native MCP 能完成的 Agent 宿主操作不再重复建设。Resolve OFX 仍是独立后续能力，不能拿 MCP 或 Workflow Integration 的成功证明 OFX 已支持。
+
+Premiere / AE / PS 的具体 SDK、版本与兼容边界继续以各自官方文档和真实宿主证据为准。[Blackmagic Support](https://www.blackmagicdesign.com/cn/support/)、[Resolve Edit](https://www.blackmagicdesign.com/products/davinciresolve/edit)、[Resolve Media](https://www.blackmagicdesign.com/products/davinciresolve/media)、[OpenFX](https://github.com/AcademySoftwareFoundation/openfx)。
 
 ### 5.4 Agent 双向接入
 
@@ -219,20 +262,24 @@ Premiere UXP 基线为 25.6+，Hybrid 需要 26.2+；首个安装包只声明实
 
 ## 8. 实施里程碑与文档治理
 
-本轮 Agent 入口收敛不等于原生效果交付。原生效果仍是下一条独立切片，必须按下表从 AE/PR 宿主真实保存、重开、渲染和导出开始验收；Workflow、Table、Agent 的网页入口、CLI/Skill 或测试通过都不能替代宿主证据。
+当前实施顺序已经切换为 **Resolve Studio 21.1 MCP-first**。AE/PR 源码与研究保留，但不再阻塞第一个真实宿主 Demo。
 
 | 顺序 | 交付 | 完成证据 |
 | --- | --- | --- |
-| 1 | AE 固定素材原生效果 + PR 兼容验证 | 参数、关键帧、随机帧、重开与离线导出 |
-| 2 | 单任务真实生成、持久素材版本、候选应用 | 真实 Provider 与故障恢复，不依赖 Agent 在线 |
-| 3 | CLI/MCP 同一业务入口 + Codex 双入口 | schema 对齐、真实助手操作同一效果、费用/目标正确 |
-| 4 | PS 滤镜及 WorkBuddy 官方双向接入 | 各自真实 SDK/客户端/账号证据 |
-| 5 | Resolve Workflow Integration + OpenFX | 对应 Studio/OS 版本实测，不能只交独立 Electron 窗口 |
+| 1 | Resolve Studio 21.1 native MCP 真实连接 | File > Setup AI Assistants 后一个真实 Agent 能读取当前项目/选择；记录安装版本与实际 tool surface |
+| 2 | Resolve MCP + Flovart CLI 最小纵向闭环 | 当前选择 → 一个 deterministic/fake Flovart artifact → 正确 Media Pool 导入；原 Timeline 不变 |
+| 3 | Resolve 轻面板 UI 收敛 | Current Clip → Generate → Task → Candidates → Add to Media Pool → Open in Flovart；窄/宽面板真实宿主可用 |
+| 4 | 一个真实 RunningHub Provider tracer | 真实付费生成、durable artifact、取消/unknown-submit、Media Pool 导入 |
+| 5 | Add to new track | 不破坏原素材；目标/轨道身份可验证 |
+| 6 | Replace / Commit | 显式确认、提交前目标复核、可恢复/撤销语义 |
+| 7 | Resolve OFX | 只有真实用户需求证明固定版本效果/关键帧/离线渲染必要后才进入 |
+| 8 | 恢复 AE/PR 原生效果与其它宿主 | 按各自真实 SDK / 宿主证据继续，不复用 Resolve 认证 |
 
-一个切片未通，优先修该切片，不靠增加抽象层、扩展宿主数量或新增术语解释失败。现有代码按切片收敛；删除过时设计不授权一次重写所有 Runtime/Provider。
+第一阶段不要把“做一个更大的 Resolve 插件”当作进展。优先验证官方 MCP、现有 Flovart 生成路径和 Media Pool 之间最短的真实链路。native MCP 不足时才用具体 gap 驱动现有 Workflow Integration bridge。
 
-产品目标只维护本主设计；术语、必要 ADR、实际支持矩阵与当前代码契约各有自己的用途。`ecosystem/` 记录已有 CLI/MCP/DSH 和面板实现及测试，不要求新原生效果先经过 Browser Workflow 或建设通用 Gateway/Host SDK。实现任务进 todo，真正完成的变更才进 pending-test，用户验证后才更新正式功能。历史审计放证据区并标明其基线；过时方案从活动文档删除，由 Git 历史恢复，不再复制到新的“历史目标”目录。
+Resolve 面板实现必须遵循 [Resolve 21.1 Product & UI Spec](../../integrations/studio/resolve/PRODUCT_UI_SPEC.md)。视觉参考优先 Blackmagic Edit / Cut / Media / Inspector；社区 MCP 面板只用于失败恢复和 observability 参考，不照搬成另一个后台管理系统。
 
-本轮整合吸收了旧文档中的目标绑定、版本检查、幂等、原始素材保护、恢复与费用边界；撤销了“禁止公开 MCP”“只能外部主对话”“所有任务经过内部 Operator”“插件必须经过可见画布”“先做通用插件平台”等目标约束。原 Browser 工具在代码改造前仍按当前绑定契约执行，不能用新设计为隐藏 fallback 背书。
+一个切片未通，优先修该切片，不靠增加抽象层、扩展宿主数量、复制 MCP tool 或新增术语解释失败。产品目标只维护本主设计；Resolve 专项文档是 subordinate implementation reference，不建立第二份产品 authority。
 
-参考项目：[Pascal CLI/MCP](https://github.com/pascalorg/editor/blob/main/packages/mcp/README.md) 用于共享项目与持久回执；[WorkDaddy](https://github.com/babygoton/WorkDaddy) 用于任务恢复和贴近现有助手的体验参考，其 CDP 注入不作为默认连接方式；[OpenImageIO](https://github.com/AcademySoftwareFoundation/OpenImageIO) 是原生图像 I/O 的候选库，采用前核对实际格式、体积和许可。
+参考：[Blackmagic Support](https://www.blackmagicdesign.com/cn/support/)、[Resolve Edit](https://www.blackmagicdesign.com/products/davinciresolve/edit)、[Resolve Cut](https://www.blackmagicdesign.com/products/davinciresolve/cut)、[Resolve Media](https://www.blackmagicdesign.com/products/davinciresolve/media)、[community Resolve MCP control panel](https://github.com/samuelgursky/davinci-resolve-mcp)、[community Resolve CLI/MCP field guide](https://github.com/dmmdea/davinci-resolve-cli)。
+
