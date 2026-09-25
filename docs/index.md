@@ -22,6 +22,7 @@
 - [Agent Skill 使用](overview/skill-guide.md)
 - [Studio host integration](../integrations/studio/README.md)
 - [AE real-host checklist](../integrations/studio/AFTER_EFFECTS_REAL_HOST_CHECKLIST.md)
+- [Resolve 21.1 Product & UI Spec](../integrations/studio/resolve/PRODUCT_UI_SPEC.md) — Resolve-first panel hierarchy, MCP/Skill split, safety and Hero contract
 - [Resolve real-host checklist](../integrations/studio/RESOLVE_REAL_HOST_CHECKLIST.md)
 - [后端响应](content/docs/backend/api-response.mdx)
 - [数据库结构](content/docs/backend/backend-database.mdx)

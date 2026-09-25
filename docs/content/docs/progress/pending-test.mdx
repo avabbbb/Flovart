@@ -4,6 +4,8 @@ title: 待测试确认
 
 本页记录实际进入文档或代码、仍需用户确认的变更。既有实现的构建、全量测试、Rust Runtime 和响应式浏览器记录见[发行候选证据](../../../evidence/release-candidate/README.md)，仅适用于其对应代码与范围；本页每一节分别注明对应范围的验证结果。真实第三方宿主、账号、Provider 与公开发布仍需单独认证。
 
+> **2026-09-25 产品优先级变更**：第一宿主已切换为 Resolve Studio 21.1 MCP-first。下面已实现的 AE 源码/候选完整性工作仍作为 Experimental evidence 保留，但不再是当前第一交付 gate；不要因为它排在本页前面继续横向扩 AE。Resolve 当前已有 Workflow Integration 源码，但 native MCP 真实连接、Media Pool Golden Task 与新 UI 仍属于待办。
+
 ## 本轮：AE 场景替换原生效果源码与候选应用入口
 
 - 已实现源码：AE C++ 效果改为读取宿主 `Asset Version` 图层参数并按当前帧混合输入，移除了将 `PF_Param_PATH` 当普通文件路径的错误路径；未实现 `extent_hint` 和输出偏移处理前不声明输出范围支持。面板生成后先导入候选，用户再显式应用到提交时绑定的原始合成/图层。目标不存在时明确失败，不切换到当前活动目标。

@@ -61,7 +61,7 @@ UI / Agent / Host entry
 
 ## 5. Creative host / native effect 规则
 
-宿主扩展只是 projection，不建立第二套 Workflow、Provider、任务或资产系统。详细产品/UI 设计以主设计 §8 为准。
+宿主扩展只是 projection，不建立第二套 Workflow、Provider、任务或资产系统。共同产品边界以主设计 §3 / §5.3 为准；Resolve 实现还必须遵循 `integrations/studio/resolve/PRODUCT_UI_SPEC.md`。
 
 共同硬边界：
 
@@ -72,8 +72,9 @@ UI / Agent / Host entry
 
 Host-specific：
 
-- **After Effects**：当前 panel 是 Experimental CEP/ExtendScript bridge；native effect 走 C++ Effect SDK。不要假设 AE 已支持可发布的 UXP host，也不要把 panel 说成 native effect。
-- **DaVinci Resolve Studio**：Workflow Integration 使用 Electron sandbox + context isolation + preload/contextBridge；支持时优先 Promise API。Workflow Integration 与 planned OFX effect 是两条路径。
+- **DaVinci Resolve Studio 21.1 first**：Agent 宿主操作优先使用 Blackmagic native MCP；Flovart Skill + CLI 提供生成与 Artifact。现有 Workflow Integration 只做轻面板 / fallback adapter，OFX 后置。不要创建第二套 Resolve MCP，也不要为每个 Scripting API 建 Flovart wrapper。
+- **Resolve UI**：实现前先读 `integrations/studio/resolve/PRODUCT_UI_SPEC.md`，并重新打开 Blackmagic 当前 Edit / Cut / Media 官方页面核对视觉。面板必须是 Resolve-native-feeling contextual inspector，不是聊天页、后台 dashboard 或缩小版 Canvas。
+- **After Effects**：当前 CEP + C++ Effect SDK 工作保留为 Experimental，但暂停作为第一宿主 gate；不要继续扩张，除非当前 Resolve-first 切片明确需要共享修复。
 - **Photoshop / Premiere**：按其当期官方 UXP host API 和 manifest 约束实现，不把浏览器 API 支持度投射到 UXP。
 - Provider key、Agent token、Plus/OAuth 或用户私有凭据不得进入宿主工程、Skill、日志或素材 metadata。
 
@@ -86,6 +87,8 @@ Host-specific：
 - PromptBar、ElementToolbar 和原始媒体比例行为按现有产品保持。
 - 持续任务显示真实状态，不能用动画掩盖未知提交、失败或 Provider 未响应。
 - 宿主面板优先单列、当前选择优先、一个主 CTA；高级设置折叠。完整历史/依赖/复杂 Workflow 回 Canvas。
+- Resolve P0 的唯一安全输出是 **Add to Media Pool**；P1 才允许 Add to new track，P2 才做 Replace/Commit。实现 Agent 不得为了“更像成品”跳过非破坏性阶段。
+- Resolve 外部 Agent 的聊天保留在 Codex/Claude 等原宿主；Flovart panel 只显示 context / plan / task / candidate / confirmation。
 
 ## 7. 代码边界
 
