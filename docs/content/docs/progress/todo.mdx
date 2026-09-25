@@ -8,6 +8,7 @@ title: 后续待办
 
 当前第一宿主已切换为 **DaVinci Resolve Studio 21.1**。目标不是先开发更大的插件，而是先证明 Blackmagic native MCP + Flovart Skill/CLI + durable artifact + Media Pool 的真实纵向闭环。专项 UI/交互见 [Resolve 21.1 Product & UI Spec](../../../../integrations/studio/resolve/PRODUCT_UI_SPEC.md)。
 
+- [ ] 将模型发现与 FlovartBench 证据脱敏修复合入 main 后，重跑 GitHub CI 与 FlovartBench；在 Hosted checks 通过前不宣称 main 已绿。
 - [ ] 在真实 Resolve Studio 21.1 中执行 `File > Setup AI Assistants`，验证一个真实外部 Agent（优先 Codex）连接；记录 Resolve build、OS、Agent 版本、实际 MCP tool surface 与连接配置，不用社区工具数量替代本机事实。
 - [ ] 用 native MCP 读取当前 project / timeline / Media Pool selection，冻结 project + selection identity；用户随后切换选择时，进行中的 Flovart 任务不得 retarget。
 - [ ] 第一条 Golden Task 不依赖真实 Provider：当前选择 → deterministic/fake Flovart artifact → durable file → **Add to Media Pool**；原 Timeline 保持不变。

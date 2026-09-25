@@ -193,14 +193,21 @@ async function readErrorMessage(response: Response, requestLabel: string): Promi
     return `${requestLabel}: ${truncateResponseSnippet(text)}`;
 }
 
+function redactExactSecret(message: string, secret: string): string {
+    return secret ? message.split(secret).join('[REDACTED]') : message;
+}
+
 // ── Google Gemini ──────────────────────────────────
 async function fetchGoogleModels(apiKey: string, baseUrl?: string): Promise<FetchModelsResult> {
     try {
         const base = normalizeProviderBaseUrl('google', baseUrl || 'https://generativelanguage.googleapis.com/v1beta');
-        const url = `${base}/models?key=${encodeURIComponent(apiKey)}`;
-        const res = await fetchWithModelDiscoveryTimeout(url);
+        const url = `${base}/models`;
+        const res = await fetchWithModelDiscoveryTimeout(url, {
+            headers: { 'x-goog-api-key': apiKey },
+        });
         if (!res.ok) {
-            return { ok: false, models: [], error: await readErrorMessage(res, 'Google 模型列表拉取失败') };
+            const error = await readErrorMessage(res, 'Google 模型列表拉取失败');
+            return { ok: false, models: [], error: redactExactSecret(error, apiKey) };
         }
         const data = await readJsonResponse<any>(res, 'Google 模型列表响应');
         const models: FetchedModel[] = (data.models || [])
@@ -229,7 +236,8 @@ async function fetchGoogleModels(apiKey: string, baseUrl?: string): Promise<Fetc
             });
         return { ok: true, models, modelDiscovery: 'available', endpointFlavor: 'google', capabilitySummary: summarizeCapabilities(models), effectiveBaseUrl: base };
     } catch (err) {
-        return { ok: false, models: [], error: err instanceof Error ? err.message : '网络错误' };
+        const message = err instanceof Error ? err.message : '网络错误';
+        return { ok: false, models: [], error: redactExactSecret(message, apiKey) };
     }
 }
 
@@ -465,9 +473,9 @@ interface CachedModels {
     endpointFlavor?: string;
 }
 
-async function getCachedModels(provider: AIProvider, keyFingerprint: string): Promise<CachedModels | null> {
+async function getCachedModels(cacheKey: string): Promise<CachedModels | null> {
     try {
-        const cached = await modelCacheStorage.getItem<CachedModels>(`${CACHE_KEY_PREFIX}${provider}_${keyFingerprint}`);
+        const cached = await modelCacheStorage.getItem<CachedModels>(cacheKey);
         if (!cached) return null;
         if (Date.now() - cached.fetchedAt > MODEL_CACHE_TTL) return null;
         return cached;
@@ -476,15 +484,25 @@ async function getCachedModels(provider: AIProvider, keyFingerprint: string): Pr
     }
 }
 
-async function setCachedModels(provider: AIProvider, keyFingerprint: string, models: FetchedModel[], endpointFlavor?: string) {
+async function setCachedModels(cacheKey: string, models: FetchedModel[], endpointFlavor?: string) {
     try {
         const entry: CachedModels = { models, fetchedAt: Date.now(), endpointFlavor };
-        await modelCacheStorage.setItem(`${CACHE_KEY_PREFIX}${provider}_${keyFingerprint}`, entry);
+        await modelCacheStorage.setItem(cacheKey, entry);
     } catch { /* storage full — silent */ }
 }
 
 function keyFingerprint(apiKey: string): string {
-    return apiKey.slice(0, 6) + '...' + apiKey.slice(-4);
+    return bytesToHex(sha256(utf8ToBytes(apiKey)));
+}
+
+function modelCacheKey(provider: AIProvider, apiKey: string, baseUrl?: string): string {
+    const defaultBaseUrl = provider === 'google'
+        ? 'https://generativelanguage.googleapis.com/v1beta'
+        : PROVIDER_BASE_URLS[provider];
+    const endpoint = normalizeProviderBaseUrl(provider, baseUrl || defaultBaseUrl);
+    const identity = `${provider}\0${endpoint}\0${keyFingerprint(apiKey)}`;
+    const identityFingerprint = bytesToHex(sha256(utf8ToBytes(identity)));
+    return `${CACHE_KEY_PREFIX}${provider}_${identityFingerprint}`;
 }
 
 /**

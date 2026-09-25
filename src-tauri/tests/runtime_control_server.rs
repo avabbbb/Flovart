@@ -1,6 +1,7 @@
 use flovart_lib::runtime::{ControlServer, ProductionRuntime};
 use rusqlite::{params, Connection};
 use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
 use std::{
     fs,
     io::{Read, Write},
@@ -434,6 +435,7 @@ fn panel_can_submit_poll_and_download_an_artifact_without_a_browser() {
     // 3. Materialize a finished artifact the way the worker would have
     //    (persisted file + artifact metadata in result_json).
     let artifact_bytes = b"\x89PNG\r\n\x1a\npanel-direct-artifact".to_vec();
+    let artifact_sha256 = hex::encode(Sha256::digest(&artifact_bytes));
     let images_dir = database_path
         .parent()
         .expect("db parent")
@@ -453,7 +455,7 @@ fn panel_can_submit_poll_and_download_an_artifact_without_a_browser() {
                         "kind": "image",
                         "mimeType": "image/png",
                         "storeRelpath": format!("runtime-artifacts/images/{task_id}.png"),
-                        "sha256": "b".repeat(64),
+                        "sha256": artifact_sha256,
                         "byteSize": artifact_bytes.len()
                     }
                 })

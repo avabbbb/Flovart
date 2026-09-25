@@ -33,6 +33,7 @@ use serde::Serialize;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::{
+    collections::HashSet,
     io::Read,
     path::{Path, PathBuf},
     sync::Arc,
@@ -86,6 +87,35 @@ pub struct ProductionRuntime {
 pub struct RuntimeArtifactPayload {
     pub mime_type: String,
     pub bytes: Vec<u8>,
+}
+
+fn unscoped_director_gate_blockers(status: &Value) -> Vec<String> {
+    let mut stage_gates = HashSet::new();
+    if let Some(stages) = status.get("stages").and_then(Value::as_array) {
+        for stage in stages {
+            if let Some(required_gates) = stage
+                .get("input")
+                .and_then(|input| input.get("requiredGates"))
+                .and_then(Value::as_array)
+            {
+                stage_gates.extend(required_gates.iter().filter_map(Value::as_str));
+            }
+        }
+    }
+
+    status
+        .get("blockers")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .filter(|blocker| {
+            blocker
+                .strip_prefix("DIRECTOR_GATE_REQUIRED:")
+                .is_some_and(|gate| !stage_gates.contains(gate))
+        })
+        .map(str::to_owned)
+        .collect()
 }
 
 impl ProductionRuntime {
@@ -750,22 +780,18 @@ impl ProductionRuntime {
                         action_url: None,
                     });
                 }
-                // R6-H04: Reject execution when any director gate is still required.
-                let has_director_blocker = status
-                    .get("blockers")
-                    .and_then(Value::as_array)
-                    .into_iter()
-                    .flatten()
-                    .filter_map(Value::as_str)
-                    .any(|blocker| blocker.starts_with("DIRECTOR_GATE_REQUIRED:"));
-                if has_director_blocker {
+                // Stage-scoped gates (for example, keyframe review) must not
+                // prevent the scheduler from starting. A required director gate
+                // with no stage owner cannot be enforced later, so block it here.
+                let unscoped_director_blockers = unscoped_director_gate_blockers(&status);
+                if !unscoped_director_blockers.is_empty() {
                     return Err(RuntimeError {
                         code: "PRECONDITION_FAILED".to_owned(),
-                        message: "ProductionRun has unresolved director gates; approve or reject them before execution.".to_owned(),
+                        message: "ProductionRun has unresolved director gates that are not assigned to an execution stage.".to_owned(),
                         retryable: false,
                         details: Some(serde_json::json!({
                             "runStatus": run_status,
-                            "blockers": status.get("blockers")
+                            "blockers": unscoped_director_blockers
                         })),
                         action_url: None,
                     });
@@ -1378,4 +1404,40 @@ pub fn browser_import_artifact_read(
     import_id: String,
 ) -> Result<BrowserImportArtifactPayload, RuntimeError> {
     runtime.browser_imports().read_artifact_payload(&import_id)
+}
+
+#[cfg(test)]
+mod director_gate_scope_tests {
+    use super::unscoped_director_gate_blockers;
+    use serde_json::json;
+
+    #[test]
+    fn stage_scoped_director_gates_do_not_block_scheduler_startup() {
+        let status = json!({
+            "blockers": [
+                "DIRECTOR_GATE_REQUIRED:style-reference",
+                "DIRECTOR_GATE_REQUIRED:keyframe-review",
+                "DIRECTOR_GATE_REQUIRED:ocr"
+            ],
+            "stages": [
+                { "input": { "requiredGates": ["style-reference"] } },
+                { "input": { "requiredGates": ["keyframe-review", "ocr"] } }
+            ]
+        });
+
+        assert!(unscoped_director_gate_blockers(&status).is_empty());
+    }
+
+    #[test]
+    fn director_gates_without_a_stage_owner_remain_a_startup_blocker() {
+        let status = json!({
+            "blockers": ["DIRECTOR_GATE_REQUIRED:human-policy-review"],
+            "stages": [{ "input": { "requiredGates": ["style-reference"] } }]
+        });
+
+        assert_eq!(
+            unscoped_director_gate_blockers(&status),
+            vec!["DIRECTOR_GATE_REQUIRED:human-policy-review"]
+        );
+    }
 }

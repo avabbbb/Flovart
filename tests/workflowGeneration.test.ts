@@ -223,23 +223,28 @@ describe('workflow generation', () => {
     expect(result.nodes.find(item => item.id === 'config-1')?.metadata.error).toContain('明确选择图片产品模型');
   });
 
-  it('does not bypass the prompt-enhancement mapping when automatic optimization is enabled', async () => {
+  it('continues with the original prompt when optional automatic optimization has no route', async () => {
     const source = project();
     source.nodes[2].metadata.config = {
       mode: 'video',
       modelId: 'flovart:seedance-2',
       enhancePrompt: true,
     };
-    const executeMedia = vi.fn();
+    const executeMedia = vi.fn().mockResolvedValue({ ok: true, elementId: 'config-1', capability: 'video', mediaUrl: 'https://output/video.mp4', mimeType: 'video/mp4' });
+    let canonicalInput: unknown;
 
-    const result = await runWorkflowGeneration(source, 'config-1', {
+    await runWorkflowGeneration(source, 'config-1', {
       userApiKeys: [mappedMediaKey('video', 'flovart:seedance-2', 'doubao-seedance-2-0-260128', 'volcengine')],
       executeMedia,
+      onCanonicalInput: input => { canonicalInput = input; },
+      fetchMedia: vi.fn().mockResolvedValue(new Blob(['video'])),
+      ingestMedia: vi.fn().mockResolvedValue({ type: 'video', storageKey: 'video-result', name: 'result.mp4', mimeType: 'video/mp4', bytes: 5 }),
+      createVideoPoster: vi.fn().mockResolvedValue(null),
       onProjectChange: vi.fn(),
     });
 
-    expect(executeMedia).not.toHaveBeenCalled();
-    expect(result.nodes.find(item => item.id === 'config-1')?.metadata.error).toContain('尚未配置可用的模型映射');
+    expect(executeMedia).toHaveBeenCalledOnce();
+    expect(canonicalInput).toMatchObject({ prompt: '电影光线\n\n银色机器人' });
   });
 
   it('uses mentioned durable media, filters unsupported references, and persists generated blobs', async () => {

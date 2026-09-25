@@ -56,13 +56,13 @@ function taskOf(overrides = {}) {
   };
 }
 
-async function trial(task, { label, trialIndex = 1, runnerFactory, runnerName = 'injected' }) {
+async function trial(task, { label, trialIndex = 1, runnerFactory, runnerName = 'injected', metadata = { phase: 'redteam' } }) {
   const dir = join(sandbox, label);
   await mkdir(dir, { recursive: true });
   return runTrial(task, {
     runnerName,
     runDir: dir,
-    metadata: { phase: 'redteam' },
+    metadata,
     trialIndex,
     repeats: 1,
     runnerFactory,
@@ -221,6 +221,8 @@ const honest = () => (controlled, options) => createOracleRunner(controlled, opt
 {
   const secret = 'sk-live-REDTEAM0000000000000000000';
   const headerSecret = 'ghp_REDTEAM000000000000000000000000';
+  const bearerSecret = 'Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1c2VyIn0.signaturelong';
+  const artifactSha256 = 'a'.repeat(64);
   const { score } = await trial(taskOf({
     solution: {
       steps: [{
@@ -238,29 +240,60 @@ const honest = () => (controlled, options) => createOracleRunner(controlled, opt
     },
   }), {
     label: 'secret-leak',
+    metadata: { phase: 'redteam', note: `metadata includes ${secret}`, nested: { token: headerSecret } },
     runnerFactory: (controlled, options) => ({
       name: 'leaky',
       async run(currentTask) {
         const step = currentTask.solution.steps[0];
-        options?.trajectory?.recordToolCall({
+        await options?.trajectory?.recordToolCall({
           surface: 'leaky',
           command: step.command,
           args: step.args,
-          result: { ok: false, error: { code: 'LEAKED', message: `failed with ${secret} and Bearer ${headerSecret}` } },
+          result: { ok: false, error: { code: 'LEAKED', message: `failed with ${secret} and ${bearerSecret}` } },
         });
-        return { completedSteps: true, error: { code: 'LEAKED', message: `failed with ${secret}` } };
+        await options?.trajectory?.recordApproval({ metadata: { accessToken: bearerSecret } });
+        await options?.trajectory?.recordProviderEvent({ error: { detail: `provider leaked ${headerSecret}` } });
+        await options?.trajectory?.recordNote({ text: `note leaked ${secret}; artifact=${artifactSha256}` });
+        await options?.trajectory?.recordError({ error: { message: `nested error ${bearerSecret}` } });
+        return { completedSteps: true, error: { code: 'LEAKED', message: `failed with ${secret} and ${headerSecret}` } };
       },
     }),
   });
   const files = await walk(join(sandbox, 'secret-leak'));
-  let leaked = false;
+  const leaks = [];
+  const parseFailures = [];
+  const recordedStrings = [];
   for (const file of files) {
     if (!/\.(json|jsonl)$/.test(file)) continue;
-    const text = await readFile(file, 'utf8');
-    if (text.includes(secret) || text.includes(headerSecret)) leaked = true;
+    const source = await readFile(file, 'utf8');
+    const records = [];
+    try {
+      if (file.endsWith('.jsonl')) {
+        for (const [index, line] of source.split(/\r?\n/).entries()) {
+          if (!line.trim()) continue;
+          try {
+            records.push(JSON.parse(line));
+          } catch {
+            parseFailures.push(`${file}:${index + 1}`);
+          }
+        }
+      } else {
+        records.push(JSON.parse(source));
+      }
+    } catch {
+      parseFailures.push(file);
+    }
+    for (const record of records) collectStrings(record, recordedStrings);
   }
-  record('secrets-never-reach-the-trajectory', !leaked && score.success === false,
-    leaked ? 'a secret was found in the recorded evidence' : 'no secret in any recorded file');
+  for (const candidate of [secret, headerSecret, bearerSecret]) {
+    if (recordedStrings.some(value => value.includes(candidate))) leaks.push(candidate.slice(0, 8));
+  }
+  const hashPreserved = recordedStrings.some(value => value.includes(artifactSha256));
+  const evidenceFiles = files.filter(file => /\.(json|jsonl)$/.test(file)).length;
+  const safe = leaks.length === 0 && parseFailures.length === 0 && evidenceFiles >= 5 && hashPreserved;
+  record('secrets-never-reach-the-trajectory', safe && score.success === false,
+    safe ? `parsed ${evidenceFiles} JSON/JSONL evidence files; no secrets; artifact SHA-256 preserved`
+      : `files=${evidenceFiles} leaks=${leaks.length} parseFailures=${parseFailures.length} hashPreserved=${hashPreserved}`);
 }
 
 // 9. State must not survive from one trial to the next.
@@ -336,6 +369,22 @@ async function walk(root) {
     else found.push(full);
   }
   return found;
+}
+
+function collectStrings(value, strings) {
+  if (typeof value === 'string') {
+    strings.push(value);
+    return;
+  }
+  if (Array.isArray(value)) {
+    for (const entry of value) collectStrings(entry, strings);
+    return;
+  }
+  if (!value || typeof value !== 'object') return;
+  for (const [key, nested] of Object.entries(value)) {
+    strings.push(key);
+    collectStrings(nested, strings);
+  }
 }
 
 const breached = results.filter(entry => !entry.ok);

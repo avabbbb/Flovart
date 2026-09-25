@@ -118,6 +118,7 @@ export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme,
     modelIds: availableProductModelIds,
     userApiKeys,
   });
+  const selectedModelId = config.modelId || defaultMappedModelId;
   const mentionItems = toWorkflowMentionItems([
     ...getOrderedImageReferences(node, nodes, connections),
     ...getWorkflowInputNodes(node, nodes, connections).filter(item => item.type === 'text'),
@@ -314,8 +315,8 @@ export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme,
         preserveReferenceAspectRatio={config.preserveReferenceAspectRatio === true}
         onPreserveReferenceAspectRatioChange={enabled => patchConfig({ preserveReferenceAspectRatio: enabled })}
         selectedTextModel={undefined}
-        selectedImageModel={generationMode === 'image' ? config.modelId : undefined}
-        selectedVideoModel={generationMode === 'video' ? config.modelId : undefined}
+        selectedImageModel={generationMode === 'image' ? selectedModelId : undefined}
+        selectedVideoModel={generationMode === 'video' ? selectedModelId : undefined}
         textModelOptions={[]}
         imageModelOptions={dynamicModelOptions.image}
         videoModelOptions={dynamicModelOptions.video}

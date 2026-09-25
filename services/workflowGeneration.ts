@@ -211,6 +211,8 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
   const preparedHistory: WorkflowHistoryPayload[] = [];
   let committed = false;
   let operationTakeId: string | undefined;
+  let targetResultPatch: ((node: WorkflowNode) => WorkflowNode) | undefined;
+  let uncommittedDirectStorageKey: string | undefined;
 
   const stillActive = () => {
     if (activeRequests.get(key)?.requestId !== requestId || controller.signal.aborted) return false;
@@ -415,6 +417,11 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
               ? { ...node, type: 'text', metadata: { ...node.metadata, content, status: 'loading' as const, error: undefined, progress: 100 } }
               : node),
           };
+          targetResultPatch = node => ({
+            ...node,
+            type: 'text',
+            metadata: { ...node.metadata, content, status: 'loading', error: undefined, progress: 100 },
+          });
         }
         if (!stillActive()) throw abortError();
         const dataUrl = await (runtime.encodeDataUrl || toDataUrl)(new Blob([content], { type: 'text/plain' })).catch(() => '');
@@ -546,6 +553,14 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
         const size = fitWorkflowMediaSize(mode, record.naturalWidth, record.naturalHeight);
         const center = { x: executionTarget.outputTarget.x + executionTarget.outputTarget.width / 2, y: executionTarget.outputTarget.y + executionTarget.outputTarget.height / 2 };
         const latest = canonical(runtime, current);
+        const resultMetadata = {
+          ...record,
+          href: undefined,
+          status: 'loading' as const,
+          error: undefined,
+          progress: 100,
+          ...(operationTakeId ? { operationTakeId, sourceOperationNodeId: nodeId } : {}),
+        };
         current = {
           ...latest,
           nodes: latest.nodes.map(node => node.id === nodeId
@@ -555,18 +570,19 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
                 position: { x: center.x - size.width / 2, y: center.y - size.height / 2 },
                 width: size.width,
                 height: size.height,
-                metadata: {
-                  ...node.metadata,
-                  ...record,
-                  href: undefined,
-                  status: 'loading' as const,
-                  error: undefined,
-                  progress: 100,
-                  ...(operationTakeId ? { operationTakeId, sourceOperationNodeId: nodeId } : {}),
-                },
+                metadata: { ...node.metadata, ...resultMetadata },
               }
             : node),
         };
+        targetResultPatch = node => ({
+          ...node,
+          type: mode as 'image' | 'video',
+          position: { x: center.x - size.width / 2, y: center.y - size.height / 2 },
+          width: size.width,
+          height: size.height,
+          metadata: { ...node.metadata, ...resultMetadata },
+        });
+        uncommittedDirectStorageKey = record.storageKey;
         if (previousStorageKey && previousStorageKey !== record.storageKey) {
           // 旧图可能同时被隐藏输入、克隆节点或撤销历史引用（storageKey 无引用计数），
           // 只有确认无任何其它持有者时才物理删除，否则交给 prune 按可达性回收。
@@ -605,7 +621,12 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
         connections: [...latest.connections, ...preparedConnections],
       };
     } else {
-      current = patchInitiator(canonical(runtime, current), nodeId, { status: 'success' as const, error: undefined, progress: 100, generationRequestId: undefined, generationStartedAt: undefined, generationMessage: undefined });
+      const latest = canonical(runtime, current);
+      current = {
+        ...latest,
+        nodes: latest.nodes.map(node => node.id === nodeId && targetResultPatch ? targetResultPatch(node) : node),
+      };
+      current = patchInitiator(current, nodeId, { status: 'success' as const, error: undefined, progress: 100, generationRequestId: undefined, generationStartedAt: undefined, generationMessage: undefined });
     }
     if (operationTakeId) {
       const operation = current.nodes.find(node => node.id === nodeId);
@@ -637,7 +658,10 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
     return current;
   } catch (error) {
     const active = activeRequests.get(key);
-    if (!committed) await Promise.all(preparedNodes.map(node => node.metadata.storageKey ? discardWorkflowMediaRecord(node.metadata.storageKey) : Promise.resolve()));
+    if (!committed) await Promise.all([
+      ...preparedNodes.map(node => node.metadata.storageKey ? discardWorkflowMediaRecord(node.metadata.storageKey) : Promise.resolve()),
+      uncommittedDirectStorageKey ? discardWorkflowMediaRecord(uncommittedDirectStorageKey) : Promise.resolve(),
+    ]);
     if (active && active.requestId !== requestId) return canonical(runtime, current);
     if (activeRequests.get(key)?.requestId === requestId) activeRequests.delete(key);
     let latest = canonical(runtime, current);
