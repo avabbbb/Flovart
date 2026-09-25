@@ -11,7 +11,7 @@ title: 后续待办
 - [ ] 在真实 Resolve Studio 21.1 中执行 `File > Setup AI Assistants`，验证一个真实外部 Agent（优先 Codex）连接；记录 Resolve build、OS、Agent 版本、实际 MCP tool surface 与连接配置，不用社区工具数量替代本机事实。
 - [ ] 用 native MCP 读取当前 project / timeline / Media Pool selection，冻结 project + selection identity；用户随后切换选择时，进行中的 Flovart 任务不得 retarget。
 - [ ] 第一条 Golden Task 不依赖真实 Provider：当前选择 → deterministic/fake Flovart artifact → durable file → **Add to Media Pool**；原 Timeline 保持不变。
-- [ ] 修复 Resolve 当前 shared inspector 的输出项：`index.js` 传入 `{ kind: 'media-pool' }`，但通用 output select 目前未创建 Media Pool option。真实面板必须明确显示 `Output: Media Pool`。
+- [ ] 在真实 Resolve Studio 面板中核实共享 Inspector 显示 `Output: Media Pool`、保持所选输出并生成正确入参；网页单测覆盖不替代宿主内验收。
 - [ ] 按 Resolve Inspector / Media Pool 视觉规律重做轻面板层级：Connection → Current Clip → Generate → References → Model(Auto) → Output → Task → Candidates → Open in Flovart。不要做全屏 chat、MCP 管理页、模型商城或第二份 Timeline。
 - [ ] 面板完成 no-project / no-selection / ready / running / candidate / disconnected / error 状态；窄宽窗口实测，无横向滚动，当前选择与 pending target 必须能同时被用户理解。
 - [ ] P0 candidate 只允许 Preview + Add to Media Pool。P1 才做 Add to new track；P2 Replace/Commit 必须显式确认、提交前重新读取 target identity，并验证 undo/recovery。

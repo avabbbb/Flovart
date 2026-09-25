@@ -6,6 +6,21 @@ title: 待测试确认
 
 > **2026-09-25 产品优先级变更**：第一宿主已切换为 Resolve Studio 21.1 MCP-first。下面已实现的 AE 源码/候选完整性工作仍作为 Experimental evidence 保留，但不再是当前第一交付 gate；不要因为它排在本页前面继续横向扩 AE。Resolve 当前已有 Workflow Integration 源码，但 native MCP 真实连接、Media Pool Golden Task 与新 UI 仍属于待办。
 
+## 本轮：UI foundation 基础修复与响应式浏览器验收
+
+- 已实现：工作区基础圆角、分隔线、面板和浮层样式收敛；Workflow 工具栏窄屏改为换行布局，避免滚动容器裁掉浮层；Workflow Context Menu 使用 viewport 限位、内部滚动、键盘方向导航、Escape 和焦点恢复；工具栏弹层互斥，并支持外部点击关闭和 Escape。
+- 未通过全仓类型门禁：`npx tsc --noEmit --pretty false` 仍报 DSH 插件依赖未安装、`services/modelFetcher.ts` 既有 3 项错误（499、501、533 行）；本轮修改文件没有新增 TypeScript 错误。Studio package build 只证明打包流程可运行，日志仍显示未配置 AE SDK 和 Resolve `WorkflowIntegration.node`，不代表真实宿主验证。
+- 未完成验收：Settings 英文界面仍有大量中文硬编码；并非所有页面、浮层和 stress string 均已在真实浏览器逐项覆盖；所有浮层四角只对 Workflow Context Menu 做了组件测试，尚未全量做宿主级视觉检查；Resolve 真实 280px 面板、Settings 各状态及真实 Resolve 工程内 Output/候选行为仍待验收。真实 Resolve/MCP/Studio Host 没有在本轮运行。
+- 已实现：Agent 连接页、Table 空状态、PromptBar、Workflow 工具箱、工作流项目列表及首屏 Production Skill 面板补齐英文副本；Resolve shared Inspector 增加 Media Pool 输出选项；媒体预览改为可命名、可关闭、支持 Escape 与焦点恢复的 dialog；工作流节点支持键盘选择、上下文菜单、起止连接与方向键缩放；删除工作流确认框增加 alertdialog 语义、焦点管理和 Escape。
+- 已验证：Vitest 8 个聚焦文件 28/28 通过（含 Workflow keyboard actions、工具栏弹层互斥/外部点击/Escape 焦点恢复、项目删除 alertdialog、Media Preview Modal、英文界面、ResponsivePopover、Context Menu 四角限位、Resolve Inspector 输出选项）。`npm run build`、`npm run studio:build`、`npm run docs:check`（149 份文档）通过。
+- 已验证：`npm run test:browser:responsive` 使用 Chrome for Testing 与临时 profile 通过，生成 33 张截图。Canvas 6 个尺寸（768×700 至 1920×1080，并含 1280×600）、Table 280–1280px、Agent 页面 12 个断点，以及 EN/ZH 重点路径均未检测到视口横向溢出；中英文长节点标题在画布内截断且不撑宽视口；实际打开并点击了 Canvas 工具箱、英文 PromptBar 选项弹层，验证 Escape 和焦点回到触发按钮。截图与覆盖矩阵位于 `artifacts/ui-audit/`。
+- 已验证：UI 定向回归 8 个文件 28/28 通过；额外 `workflowEditor`、`workflowReferenceParity`、`tableWorkspace` 三组回归 49/49 通过，覆盖此前发现的节点拖拽/缩放查询、删除确认角色和 Table 标题重复问题。
+- 全量门禁仍红：`npm test -- --exclude '**/.tmp/**'` 共 174 个文件，1142 passed、12 failed、1 skipped，另有 DSH 测试套件因缺少 `dsh-plugin/node_modules/@deepseek-ai/cordis` 无法加载。12 个失败（AI Gateway 5、Workflow generation 4、Workflow node overlay 2、Workflow operation 1）在原始基线 worktree 复现；本轮 UI 改动没有新增全量回归失败。
+- 未通过全仓类型门禁：`npx tsc --noEmit --pretty false` 仍报 DSH 插件依赖未安装及 `services/modelFetcher.ts` 既有 3 项错误（499、501、533 行）；本轮修改文件没有新增 TypeScript 错误。`npm run build`、`npm run studio:build`、`npm run docs:check`（149 份文档）通过。Studio package build 只证明打包流程可运行，日志仍显示未配置 AE SDK 和 Resolve `WorkflowIntegration.node`，不代表真实宿主验证。
+- 未完成验收：Settings 英文界面仍有大量中文硬编码；并非所有页面、浮层和 stress string 均已在真实浏览器逐项覆盖；所有浮层四角只对 Workflow Context Menu 做了组件测试，尚未全量做宿主级视觉检查；Resolve 真实 280px 面板、Settings 各状态及真实 Resolve 工程内 Output/候选行为仍待验收。真实 Resolve/MCP/Studio Host 没有在本轮运行。
+- 未通过全仓类型门禁：`npx tsc --noEmit --pretty false` 仍报 DSH 插件依赖未安装、`services/modelFetcher.ts` 既有 3 项错误（499、501、533 行）；本轮修改文件没有新增 TypeScript 错误。Studio package build 只证明打包流程可运行，日志仍显示未配置 AE SDK 和 Resolve `WorkflowIntegration.node`，不代表真实宿主验证。
+- 未完成验收：Settings 英文界面仍有大量中文硬编码；并非所有页面、浮层和 stress string 均已在真实浏览器逐项覆盖；所有浮层四角只对 Workflow Context Menu 做了组件测试，尚未全量做宿主级视觉检查；Resolve 真实 280px 面板、Settings 各状态及真实 Resolve 工程内 Output/候选行为仍待验收。真实 Resolve/MCP/Studio Host 没有在本轮运行。
+
 ## 本轮：AE 场景替换原生效果源码与候选应用入口
 
 - 已实现源码：AE C++ 效果改为读取宿主 `Asset Version` 图层参数并按当前帧混合输入，移除了将 `PF_Param_PATH` 当普通文件路径的错误路径；未实现 `extent_hint` 和输出偏移处理前不声明输出范围支持。面板生成后先导入候选，用户再显式应用到提交时绑定的原始合成/图层。目标不存在时明确失败，不切换到当前活动目标。
