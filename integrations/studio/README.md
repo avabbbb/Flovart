@@ -23,10 +23,17 @@ not a real host certification.
 
 These panels are not native effects. The After Effects package also carries an
 uncompiled C++ Effect SDK source prototype and an explicit candidate-apply bridge;
-neither is a built or host-certified effect. The [main design](../../docs/design/flovart-native-effects.md)
-defines the next direction: generate durable media through one shared task path,
-then render a fixed version locally inside the host effect. Existing selection/import
-checks do not certify effect parameters, keyframes, project reopening or offline export.
+neither is a built or host-certified effect.
+
+The current first-host direction is **DaVinci Resolve Studio 21.1 MCP-first**:
+use Blackmagic's native MCP for Agent-side Resolve control, Flovart Skill/CLI for
+generation and durable artifacts, and keep the Resolve Workflow Integration as a
+thin human-review surface / measured fallback. See
+[Resolve Product & UI Spec](resolve/PRODUCT_UI_SPEC.md) and the
+[main design](../../docs/design/flovart-native-effects.md).
+
+Existing selection/import checks do not certify real native MCP connectivity,
+timeline mutation safety, OFX parameters, project reopening or offline effect export.
 
 ## Current support
 
@@ -35,7 +42,7 @@ checks do not certify effect parameters, keyframes, project reopening or offline
 | Photoshop | `dist-studio/photoshop` | manifest/build checks and shared host contract tests | Experimental; real host is an External Gate |
 | Premiere Pro | `dist-studio/premiere` | manifest/build checks and shared host contract tests | Experimental; real host is an External Gate |
 | After Effects | `dist-studio/after-effects` | CEP panel and uncompiled Effect SDK source package; real CEP bridge and `.aex` build remain External Gates | Experimental; real CEP/ExtendScript host is an External Gate |
-| DaVinci Resolve Studio | `dist-studio/resolve` | Workflow Integration package/build checks and injected bridge contract | Experimental; real Studio host is an External Gate |
+| DaVinci Resolve Studio 21.1 | native MCP + `dist-studio/resolve` | native MCP is the preferred Agent control path; panel package/build and injected bridge remain implementation evidence only | Experimental; real MCP connection + selection → artifact → Media Pool tracer is an External Gate |
 
 Build the available panel packages with:
 
