@@ -61,7 +61,7 @@ UI / Agent / Host entry
 
 ## 5. Creative host / native effect 规则
 
-宿主扩展只是 projection，不建立第二套 Workflow、Provider、任务或资产系统。详细产品/UI 设计以主设计 §8 为准。
+宿主扩展只是 projection，不建立第二套 Workflow、Provider、任务或资产系统。共同产品边界以主设计 §3 / §5.3 为准；Resolve 实现还必须遵循 `integrations/studio/resolve/PRODUCT_UI_SPEC.md`。
 
 共同硬边界：
 
