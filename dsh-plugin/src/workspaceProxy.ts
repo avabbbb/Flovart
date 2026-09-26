@@ -11,6 +11,33 @@ const ROUTES = new Map<string, ReadonlySet<string>>([
 ])
 const MAX_BODY_BYTES = 36 * 1024 * 1024
 
+class RequestBodyTooLargeError extends Error {
+  constructor() {
+    super('request body too large')
+    this.name = 'RequestBodyTooLargeError'
+  }
+}
+
+/**
+ * Same-origin gate for the harness proxy. Browser traffic must either carry
+ * Sec-Fetch-Site: same-origin or an Origin matching the harness origin the
+ * request actually reached (the Host it dialed); requests without fetch
+ * metadata (local CLI/tooling) are not browser CSRF traffic and pass through.
+ */
+function sameOriginRequest(request: IncomingMessage): boolean {
+  const site = request.headers['sec-fetch-site']
+  if (typeof site === 'string' && site !== 'same-origin' && site !== 'none') return false
+  const origin = request.headers.origin
+  if (typeof origin !== 'string' || origin === '') return true
+  const host = request.headers.host
+  if (typeof host !== 'string' || host === '') return false
+  try {
+    return new URL(origin).host === host
+  } catch {
+    return false
+  }
+}
+
 function json(response: ServerResponse, status: number, body: unknown): void {
   response.writeHead(status, {
     'content-type': 'application/json; charset=utf-8',
@@ -67,7 +94,7 @@ async function readBody(request: IncomingMessage): Promise<Buffer | undefined> {
   for await (const chunk of request) {
     const value = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
     size += value.length
-    if (size > MAX_BODY_BYTES) throw new Error('request body too large')
+    if (size > MAX_BODY_BYTES) throw new RequestBodyTooLargeError()
     chunks.push(value)
   }
   return chunks.length > 0 ? Buffer.concat(chunks) : undefined
@@ -79,7 +106,7 @@ export function createWorkspaceProxyHandler(
 ): (request: IncomingMessage, response: ServerResponse) => Promise<void> {
   return async (request, response) => {
     if (!config.workspaceToken) {
-      json(response, 503, { ok: false, error: { message: 'Workspace Operator 尚未由 Flovart Harness 启动器准备。' } })
+      json(response, 503, { ok: false, error: { message: 'Workspace Operator 尚未由 Iris Harness 启动器准备。' } })
       return
     }
     let target: URL | null
@@ -91,6 +118,10 @@ export function createWorkspaceProxyHandler(
     }
     if (!target) {
       json(response, 404, { ok: false, error: { message: 'Workspace 路由不存在。' } })
+      return
+    }
+    if (!sameOriginRequest(request)) {
+      json(response, 403, { ok: false, error: { message: 'Workspace 代理仅接受同源请求。' } })
       return
     }
     try {
@@ -112,7 +143,11 @@ export function createWorkspaceProxyHandler(
         'cache-control': 'no-store',
       })
       response.end(payload)
-    } catch {
+    } catch (error) {
+      if (error instanceof RequestBodyTooLargeError) {
+        json(response, 413, { ok: false, error: { message: '请求体超过 36 MB 限制。' } })
+        return
+      }
       json(response, 502, { ok: false, error: { message: '无法连接本机 Workspace Operator。' } })
     }
   }

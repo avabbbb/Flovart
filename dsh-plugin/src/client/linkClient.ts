@@ -56,7 +56,7 @@ function unwrapResult(value: unknown): unknown {
   if (source.ok === false) {
     const error = record(source.error)
     throw new FlovartLinkError(
-      text(error?.message || source.message, 'Flovart Workflow 命令失败。'),
+      text(error?.message || source.message, 'Iris Workflow 命令失败。'),
       { code: typeof error?.code === 'string' ? error.code : null, status: 400, details: record(error?.details) },
     )
   }
@@ -117,12 +117,12 @@ export class FlovartLinkClient {
         headers: { ...(init.body ? { 'content-type': 'application/json' } : {}), ...(init.headers || {}) },
       })
     } catch {
-      throw new FlovartLinkError('Flovart 本地服务暂时不可用。', { code: 'LINK_OFFLINE', status: 0 })
+      throw new FlovartLinkError('Iris 本地服务暂时不可用。', { code: 'LINK_OFFLINE', status: 0 })
     }
     const body = await response.json().catch(() => null)
     if (!response.ok || record(body)?.ok === false) {
       const error = record(record(body)?.error)
-      throw new FlovartLinkError(text(error?.message || record(body)?.message, `Flovart Link 返回 HTTP ${response.status}`), {
+      throw new FlovartLinkError(text(error?.message || record(body)?.message, `Iris Link 返回 HTTP ${response.status}`), {
         code: typeof error?.code === 'string' ? error.code : null,
         status: response.status,
         details: record(error?.details),

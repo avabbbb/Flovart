@@ -16,7 +16,7 @@
       "16": "icons/icon16.png",
       "32": "icons/icon32.png"
     },
-    "default_title": "Flovart Browser Import"
+    "default_title": "Iris Browser Import"
   },
   "background": {
     "service_worker": "background/service-worker.js",

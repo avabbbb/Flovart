@@ -113,7 +113,11 @@
       return Promise.reject(new Error('After Effects 无法读取参考素材。'));
     }
     var bytes;
-    try { bytes = bytesFromBase64(read.data); } catch (error) { bytes = Uint8Array.from(read.data, function (character) { return character.charCodeAt(0); }); }
+    try { bytes = bytesFromBase64(read.data); } catch (error) {
+      // 不能把非法 base64 当原始字节回退解码（会产出乱码）；直接失败。
+      if (cep && cep.fs && cep.fs.deleteFile) cep.fs.deleteFile(file);
+      return Promise.reject(new Error('素材 base64 数据无效'));
+    }
     if (cep.fs.deleteFile) cep.fs.deleteFile(file);
     return Promise.resolve({ blob: new Blob([bytes], { type: mimeType || 'image/png' }), kind: 'image', mimeType: mimeType || 'image/png' });
   };
@@ -122,7 +126,7 @@
       var bytes = new Uint8Array(buffer);
       var encoded = base64FromBytes(bytes);
       var value = cep && cep.fs && cep.fs.writeFile ? cep.fs.writeFile(file, encoded, cep.encoding && cep.encoding.Base64) : null;
-      if (!value || value.err) throw new Error('After Effects 无法写入 Flovart 产物。');
+      if (!value || value.err) throw new Error('After Effects 无法写入 Iris 产物。');
     }).then(function () {
       return verifyFile(file, metadata);
     });

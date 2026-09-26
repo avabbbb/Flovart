@@ -85,11 +85,11 @@
         if (!layer || !document || String(document.id) !== String(selection.locator.documentId) || String(layer.id) !== String(selection.locator.layerId)) {
           unavailable('Photoshop 当前选择已变化，请重新选择图层。');
         }
-        if (typeof options.exportLayer !== 'function') unavailable('Photoshop 图层导出适配器尚未由 Flovart Link 注入。');
+        if (typeof options.exportLayer !== 'function') unavailable('Photoshop 图层导出适配器尚未由 Iris Link 注入。');
         return materialized(selection, await options.exportLayer({ document, layer, selection }));
       },
       async importArtifact(artifact, target) {
-        if (typeof options.importArtifact !== 'function') unavailable('Photoshop 产物导入适配器尚未由 Flovart Link 注入。');
+        if (typeof options.importArtifact !== 'function') unavailable('Photoshop 产物导入适配器尚未由 Iris Link 注入。');
         return options.importArtifact({ app, artifact, target });
       },
       subscribeContext(listener) {
@@ -138,11 +138,11 @@
       },
       async materializeSelection(selection) {
         activeSelection = selection;
-        if (typeof options.materializeClip !== 'function') unavailable('Premiere 当前帧物化适配器尚未由 Flovart Link 注入。');
+        if (typeof options.materializeClip !== 'function') unavailable('Premiere 当前帧物化适配器尚未由 Iris Link 注入。');
         return materialized(selection, await options.materializeClip({ project: activeProject, selection }));
       },
       async importArtifact(artifact, target) {
-        if (typeof options.importArtifact !== 'function') unavailable('Premiere 产物导入适配器尚未由 Flovart Link 注入。');
+        if (typeof options.importArtifact !== 'function') unavailable('Premiere 产物导入适配器尚未由 Iris Link 注入。');
         return options.importArtifact({ project: activeProject, artifact, target });
       },
       subscribeContext(listener) {
@@ -212,12 +212,12 @@
         }
         const bridge = getBridge();
         const materializer = bridge[materializeKey] || bridge.materializeSelection;
-        if (typeof materializer !== 'function') unavailable(`${label} 物化适配器尚未由 Flovart Link 注入。`);
+        if (typeof materializer !== 'function') unavailable(`${label} 物化适配器尚未由 Iris Link 注入。`);
         return materialized(selection, await materializer.call(bridge, { selection, target: defaultImportTarget }));
       },
       async importArtifact(artifact, target = defaultImportTarget) {
         const result = await call('importArtifact', { artifact, target });
-        return result || { ok: true, message: `${label} 已接收 Flovart 产物。` };
+        return result || { ok: true, message: `${label} 已接收 Iris 产物。` };
       },
       get lastSelection() { return lastSelection; },
       subscribeContext(listener) {
@@ -278,7 +278,7 @@
     // call time and never fork a second authority.
     const workspace = () => {
       const api = options.workspace || global.__FLOVART_BROWSER_WORKSPACE__;
-      if (!api || typeof api.getActiveProject !== 'function') unavailable('Flovart Browser Workflow 尚未注入工作区连接。');
+      if (!api || typeof api.getActiveProject !== 'function') unavailable('Iris Browser Workflow 尚未注入工作区连接。');
       return api;
     };
     const projectOf = () => workspace().getActiveProject() || null;
@@ -317,7 +317,7 @@
       async materializeSelection(selection) {
         const current = selectionFromProject(projectOf());
         if (!current || current.selectionId !== selection.selectionId || locatorKey(current.locator) !== locatorKey(selection.locator)) {
-          unavailable('Flovart 画布当前选择已变化，请重新选择节点。');
+          unavailable('Iris 画布当前选择已变化，请重新选择节点。');
         }
         const materializer = options.materializeSelection || workspace().materializeSelection;
         if (typeof materializer !== 'function') unavailable('画布节点物化适配器尚未注入。');

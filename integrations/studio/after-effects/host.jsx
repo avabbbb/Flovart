@@ -237,7 +237,7 @@ var FlovartAE = (function () {
         || !isFinite(artifactMetadata.byteSize)
         || Math.floor(artifactMetadata.byteSize) !== artifactMetadata.byteSize
         || artifactMetadata.byteSize <= 0) {
-      return failure("Flovart 候选素材缺少有效的版本身份或完整性信息。");
+      return failure("Iris 候选素材缺少有效的版本身份或完整性信息。");
     }
 
     var sourceLayer = null;
@@ -247,16 +247,16 @@ var FlovartAE = (function () {
     }
 
     var file = new File(filePath);
-    if (!file.exists) return failure("Flovart 产物文件不存在。");
-    if (file.length !== artifactMetadata.byteSize) return failure("Flovart 产物文件字节数与版本记录不一致。");
+    if (!file.exists) return failure("Iris 产物文件不存在。");
+    if (file.length !== artifactMetadata.byteSize) return failure("Iris 产物文件字节数与版本记录不一致。");
 
     var footage = null;
     var layer = null;
-    app.beginUndoGroup("导入 Flovart 候选素材");
+    app.beginUndoGroup("导入 Iris 候选素材");
     try {
       footage = app.project.importFile(new ImportOptions(file));
       layer = comp.layers.add(footage);
-      layer.name = artifactMetadata.name ? "Flovart - " + artifactMetadata.name : "Flovart - Candidate";
+      layer.name = artifactMetadata.name ? "Iris - " + artifactMetadata.name : "Iris - Candidate";
       var manifest = {
         application: "Flovart",
         schemaVersion: 1,
@@ -302,7 +302,7 @@ var FlovartAE = (function () {
     } catch (error) {
       try { if (layer) layer.remove(); } catch (removeLayerError) {}
       try { if (footage) footage.remove(); } catch (removeFootageError) {}
-      return failure(error && error.message ? error.message : "Flovart 产物导入 After Effects 失败。");
+      return failure(error && error.message ? error.message : "Iris 产物导入 After Effects 失败。");
     } finally {
       app.endUndoGroup();
     }
@@ -383,7 +383,7 @@ var FlovartAE = (function () {
     var projectBitDepth = app.project ? app.project.bitsPerChannel : null;
     if (projectBitDepth !== 8) {
       return failure(projectBitDepth
-        ? "当前 After Effects 项目为 " + projectBitDepth + " bpc；Flovart Scene Replace 目前只支持 8 bpc 项目。"
+        ? "当前 After Effects 项目为 " + projectBitDepth + " bpc；Iris Scene Replace 目前只支持 8 bpc 项目。"
         : "无法读取当前 After Effects 项目位深；为避免使用不受支持的像素格式，未应用效果。");
     }
 
@@ -439,25 +439,25 @@ var FlovartAE = (function () {
 
     var effect = findSceneReplaceEffect(effects);
     if (!effect && !effects.canAddProperty("FLOVART_SceneReplace")) {
-      return failure("Flovart Scene Replace 原生效果尚未安装或未被 After Effects 加载。");
+      return failure("Iris Scene Replace 原生效果尚未安装或未被 After Effects 加载。");
     }
 
-    app.beginUndoGroup("应用 Flovart 场景替换");
+    app.beginUndoGroup("应用 Iris 场景替换");
     var createdEffect = false;
     try {
       var isNew = !effect;
       if (isNew) {
         effect = effects.addProperty("FLOVART_SceneReplace");
-        if (!effect) throw new Error("After Effects 无法创建 Flovart Scene Replace 效果。");
+        if (!effect) throw new Error("After Effects 无法创建 Iris Scene Replace 效果。");
         createdEffect = true;
-        effect.name = "Flovart Scene Replace";
+        effect.name = "Iris Scene Replace";
       }
 
       var assetVersion = effect.property("Asset Version");
-      if (!assetVersion) throw new Error("Flovart Scene Replace 缺少 Asset Version 参数。");
+      if (!assetVersion) throw new Error("Iris Scene Replace 缺少 Asset Version 参数。")
       var blend = isNew ? effect.property("Blend") : null;
       if (isNew) {
-        if (!blend) throw new Error("Flovart Scene Replace 缺少 Blend 参数。");
+        if (!blend) throw new Error("Iris Scene Replace 缺少 Blend 参数。")
       }
 
       assetVersion.setValue(candidateLayer.index);
@@ -470,7 +470,7 @@ var FlovartAE = (function () {
       if (createdEffect && effect) {
         try { effect.remove(); } catch (removeEffectError) {}
       }
-      return failure(error && error.message ? error.message : "应用 Flovart Scene Replace 失败。");
+      return failure(error && error.message ? error.message : "应用 Iris Scene Replace 失败。")
     } finally {
       app.endUndoGroup();
     }

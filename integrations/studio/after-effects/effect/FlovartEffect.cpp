@@ -8,6 +8,7 @@
  * local, synchronous, and independent of Flovart, Providers, and Agents.
  */
 
+#include "AEConfig.h"
 #include "AE_Effect.h"
 #include "AE_EffectCB.h"
 #include "AE_EffectCBSuites.h"
@@ -19,7 +20,7 @@
 #include <stdint.h>
 #include <stddef.h>
 
-#define FLOVART_EFFECT_NAME "Flovart Scene Replace"
+#define FLOVART_EFFECT_NAME "Iris Scene Replace"
 #define FLOVART_BLEND_MAX 100
 
 #if defined(_WIN32)
@@ -37,7 +38,7 @@ enum {
     FLOVART_NUM_PARAMS
 };
 
-static PF_Err About(PF_OutData *out_data)
+static PF_Err About(PF_InData *in_data, PF_OutData *out_data)
 {
     AEFX_CLR_STRUCT(*out_data);
     PF_SPRINTF(out_data->return_msg,
@@ -147,7 +148,8 @@ static PF_Pixel8 SampleBilinear(const PF_Pixel8 *pixels,
     return sampled;
 }
 
-static PF_Err Composite8(PF_EffectWorld *input,
+static PF_Err Composite8(PF_InData *in_data,
+                         PF_EffectWorld *input,
                          PF_EffectWorld *asset,
                          PF_EffectWorld *output,
                          double blend)
@@ -231,7 +233,7 @@ static PF_Err Render(PF_InData *in_data,
     const double blend_value = params[FLOVART_PARAM_BLEND]->u.fs_d.value;
     if (blend_value != blend_value) {
         out_data->out_flags |= PF_OutFlag_DISPLAY_ERROR_MESSAGE;
-        PF_SPRINTF(out_data->return_msg, "Flovart: Blend must be a valid number.");
+        PF_SPRINTF(out_data->return_msg, "Iris: Blend must be a valid number.");
         return PF_Err_BAD_CALLBACK_PARAM;
     }
 
@@ -245,7 +247,7 @@ static PF_Err Render(PF_InData *in_data,
     if (err) {
         out_data->out_flags |= PF_OutFlag_DISPLAY_ERROR_MESSAGE;
         PF_SPRINTF(out_data->return_msg,
-                   "Flovart: After Effects could not read the selected Asset Version layer.");
+                   "Iris: After Effects could not read the selected Asset Version layer.");
         return err;
     }
 
@@ -262,14 +264,14 @@ static PF_Err Render(PF_InData *in_data,
     if (!has_pixels) {
         out_data->out_flags |= PF_OutFlag_DISPLAY_ERROR_MESSAGE;
         PF_SPRINTF(out_data->return_msg,
-                   "Flovart: choose an imported footage layer in Asset Version.");
+                   "Iris: choose an imported footage layer in Asset Version.");
         err = PF_Err_BAD_CALLBACK_PARAM;
     } else {
-        err = Composite8(input, asset, output, blend);
+        err = Composite8(in_data, input, asset, output, blend);
         if (err) {
             out_data->out_flags |= PF_OutFlag_DISPLAY_ERROR_MESSAGE;
             PF_SPRINTF(out_data->return_msg,
-                       "Flovart: the selected footage could not be rendered as 8-bit pixels.");
+                       "Iris: the selected footage could not be rendered as 8-bit pixels.");
         }
     }
 
@@ -287,7 +289,7 @@ extern "C" FLOVART_DLL_EXPORT PF_Err EffectMain(
 {
     switch (cmd) {
     case PF_Cmd_ABOUT:
-        return About(out_data);
+        return About(in_data, out_data);
     case PF_Cmd_GLOBAL_SETUP:
         return GlobalSetup(out_data);
     case PF_Cmd_PARAMS_SETUP:

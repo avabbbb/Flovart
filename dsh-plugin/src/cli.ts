@@ -4,7 +4,7 @@
  * touches loopback private routes, WebUI state, Discovery Tokens or MCP.
  */
 
-import { spawn, spawnSync, type SpawnSyncOptionsWithStringEncoding } from 'node:child_process'
+import { spawn } from 'node:child_process'
 import type { FlovartPluginConfig } from './config.ts'
 
 export interface CliFailure {
@@ -70,61 +70,6 @@ function errnoCode(error: Error): string | undefined {
     : undefined
 }
 
-export function runCliSync(
-  config: FlovartPluginConfig,
-  command: string,
-  args: Record<string, unknown> = {},
-  timeoutMs = 10000,
-): CliOutcome {
-  const argv = buildCliCommand(config.cli, command, args)
-  const options: SpawnSyncOptionsWithStringEncoding = { windowsHide: true, encoding: 'utf8', timeout: timeoutMs }
-  let result
-  try {
-    result = spawnSync(argv[0], argv.slice(1), options)
-  } catch {
-    return {
-      ok: false,
-      command,
-      data: null,
-      error: {
-        code: 'CLI_SPAWN_FAILED',
-        message: `无法启动 Flovart CLI：${argv[0]}。请安装 Agent Toolkit 或设置 FLOVART_CLI。`,
-        retryable: false,
-      },
-    }
-  }
-  if (result.error) {
-    const code = errnoCode(result.error)
-    if (code === 'ETIMEDOUT') {
-      return {
-        ok: false,
-        command,
-        data: null,
-        error: { code: 'CLI_TIMEOUT', message: `命令 ${command} 执行超时`, retryable: true },
-      }
-    }
-    return {
-      ok: false,
-      command,
-      data: null,
-      error: {
-        code: code === 'ENOENT' ? 'CLI_NOT_FOUND' : 'CLI_SPAWN_FAILED',
-        message: `无法启动 Flovart CLI：${argv[0]}（${result.error.message}）。请安装 Agent Toolkit 或设置 FLOVART_CLI。`,
-        retryable: false,
-      },
-    }
-  }
-  if (result.status !== 0 && (result.stdout ?? '') === '') {
-    return {
-      ok: false,
-      command,
-      data: null,
-      error: { code: 'CLI_ERROR', message: (result.stderr ?? '').slice(0, 2000), retryable: false },
-    }
-  }
-  return parseCliOutcome(command, result.stdout ?? '', result.stderr ?? '')
-}
-
 export async function runCli(
   config: FlovartPluginConfig,
   command: string,
@@ -165,7 +110,7 @@ export async function runCli(
         ok: false, command, data: null,
         error: {
           code: code === 'ENOENT' ? 'CLI_NOT_FOUND' : 'CLI_SPAWN_FAILED',
-          message: `无法启动 Flovart CLI：${argv[0]}（${error.message}）。请安装 Agent Toolkit 或设置 FLOVART_CLI。`,
+          message: `无法启动 Iris CLI：${argv[0]}（${error.message}）。请安装 Agent Toolkit 或设置 FLOVART_CLI。`,
           retryable: false,
         },
       })

@@ -7,7 +7,7 @@
     importArtifact: window.__FLOVART_PHOTOSHOP_IMPORT_ARTIFACT__,
   });
   const openCanvas = () => {
-    if (!window.__FLOVART_OPEN_CANVAS__) throw new Error('请连接 Flovart 后打开画布。');
+    if (!window.__FLOVART_OPEN_CANVAS__) throw new Error('请连接 Iris 后打开画布。');
     return window.__FLOVART_OPEN_CANVAS__();
   };
   const getController = () => window.__FLOVART_STUDIO_CONTROLLER__ || null;
@@ -16,7 +16,7 @@
     if (id === 'flovartGenerateFromSelection') {
       const controller = getController();
       const prompt = (window.__FLOVART_COMMAND_PROMPT__ || '延续当前选择的风格与构图，生成一个新图层。').trim();
-      if (!controller) throw new Error('请连接 Flovart 后再使用当前选择生成。');
+      if (!controller) throw new Error('请连接 Iris 后再使用当前选择生成。');
       return controller.generate(prompt, { kind: 'new-layer' });
     }
     return undefined;
@@ -24,7 +24,10 @@
   // A command entrypoint signals itself through `uxp.entrypoints` when it is
   // invoked; only the persistent `panel` entrypoint mounts the inspector.
   const entrypoint = window.uxp?.entrypoints?.lastInvoked;
-  if (entrypoint?.type === 'command') { runCommand(entrypoint.id); return; }
+  if (entrypoint?.type === 'command') {
+    runCommand(entrypoint.id).catch(error => console.error('[Flovart Studio] Photoshop 命令执行失败', error));
+    return;
+  }
   const panel = window.FlovartStudioUI.mountInspector({
     root: document.getElementById('app'),
     adapter: host,

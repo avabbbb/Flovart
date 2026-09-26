@@ -25,7 +25,7 @@ export function apply(ctx: ClientContext): void {
   ctx.slots.inject('conversation.view', () => ctx.slots.register({
     name: 'conversation.view',
     id: 'flovart',
-    label: 'Flovart',
+    label: 'Iris',
   }, WorkflowView))
   ctx.slots.inject('shell.overlay', () => ctx.slots.register({
     name: 'shell.overlay',

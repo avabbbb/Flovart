@@ -22,7 +22,7 @@ function render(status) {
     error: '连接或导入失败',
   }[state] || '尚未连接';
   statusMessage.textContent = status?.message || '连接 Desktop 后即可右键导入图片';
-  connectButton.textContent = state === 'error' ? '重新连接' : '连接 / 打开 Flovart Desktop';
+  connectButton.textContent = state === 'error' ? '重新连接' : '连接 / 打开 Iris Desktop';
   const lastReceipt = status?.receipt;
   receipt.hidden = !lastReceipt;
   if (lastReceipt) {

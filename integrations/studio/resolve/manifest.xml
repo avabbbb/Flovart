@@ -2,9 +2,9 @@
 <BlackmagicDesign>
   <Plugin>
     <Id>com.flovart.studio.resolve</Id>
-    <Name>Flovart</Name>
+    <Name>Iris</Name>
     <Version>0.3.2</Version>
-    <Description>Flovart contextual creative inspector</Description>
+    <Description>Iris contextual creative inspector</Description>
     <FilePath>main.js</FilePath>
   </Plugin>
 </BlackmagicDesign>

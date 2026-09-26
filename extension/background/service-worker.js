@@ -23,17 +23,17 @@ chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.removeAll(() => {
     chrome.contextMenus.create({
       id: MENU_IMPORT,
-      title: '添加图片到 Flovart',
+      title: '添加图片到 Iris',
       contexts: ['image'],
     });
     chrome.contextMenus.create({
       id: MENU_IMPORT_VIDEO,
-      title: '添加视频到 Flovart',
+      title: '添加视频到 Iris',
       contexts: ['video'],
     });
     chrome.contextMenus.create({
       id: MENU_OPEN,
-      title: '连接 / 打开 Flovart Desktop',
+      title: '连接 / 打开 Iris Desktop',
       contexts: ['page', 'image', 'video', 'selection'],
     });
   });
@@ -42,7 +42,9 @@ chrome.runtime.onInstalled.addListener(() => {
 chrome.contextMenus.onClicked.addListener((info, tab) => {
   if (info.menuItemId === MENU_IMPORT) void importSelectedMedia(info, tab, 'image');
   if (info.menuItemId === MENU_IMPORT_VIDEO) void importSelectedMedia(info, tab, 'video');
-  if (info.menuItemId === MENU_OPEN) void connectDesktop();
+  if (info.menuItemId === MENU_OPEN) {
+    connectDesktop().catch(error => console.error('[Flovart Browser Import] 连接 Desktop 失败', error));
+  }
 });
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
@@ -54,17 +56,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 });
 
 async function connectDesktop() {
-  await setBridgeStatus('connecting', '正在连接 Flovart Desktop…');
+  await setBridgeStatus('connecting', '正在连接 Iris Desktop…');
   let session;
   try {
     session = new NativeSession();
-    const pairing = nativeResult(await session.request({
-      type: 'bridge.hello',
-      protocolVersion: '1',
-      capabilities: ['browser.import.image'],
-    }, 35_000));
+    const pairing = nativeResult(await requestPairing(session, ['browser.import.image']));
     if (pairing.status === 'rejected') throw new Error('Desktop 已拒绝此扩展连接');
-    await setBridgeStatus('connected', 'Flovart Desktop 已连接');
+    await setBridgeStatus('connected', 'Iris Desktop 已连接');
     return pairing;
   } catch (error) {
     await setBridgeStatus('error', userFacingError(error));
@@ -72,6 +70,21 @@ async function connectDesktop() {
   } finally {
     session?.disconnect();
   }
+}
+
+/**
+ * bridge.hello may wait up to 35s for the user to approve pairing in Desktop,
+ * which outlives the MV3 service-worker idle window. Pinging the native port
+ * every 20s keeps port traffic flowing so the service worker is not retired
+ * mid-wait.
+ */
+function requestPairing(session, capabilities) {
+  const keepalive = setInterval(() => session.keepalive(), 20_000);
+  return session.request({
+    type: 'bridge.hello',
+    protocolVersion: '1',
+    capabilities,
+  }, 35_000).finally(() => clearInterval(keepalive));
 }
 
 async function importSelectedMedia(info, tab, kind) {
@@ -84,11 +97,7 @@ async function importSelectedMedia(info, tab, kind) {
   try {
     const media = await mediaPromise;
     session = new NativeSession();
-    const pairing = nativeResult(await session.request({
-      type: 'bridge.hello',
-      protocolVersion: '1',
-      capabilities: BRIDGE_CAPABILITIES,
-    }, 35_000));
+    const pairing = nativeResult(await requestPairing(session, BRIDGE_CAPABILITIES));
     if (pairing.status === 'rejected') throw new Error('Desktop 已拒绝此扩展连接');
 
     const sha256 = await sha256Hex(media.bytes);
@@ -155,22 +164,28 @@ function formatBytes(bytes) {
 function userFacingError(error) {
   const text = errorMessage(error);
   if (/拒绝|rejected/i.test(text)) {
-    return `${text}。请在 Flovart Desktop 的首次连接弹窗中点击“允许”。`;
+    return `${text}。请在 Iris Desktop 的首次连接弹窗中点击“允许”。`;
   }
   if (/Native Host|Host 已断开|响应超时|No such native messenger|未找到|无法连接/i.test(text)) {
-    return `${text}。请先启动 Flovart Desktop（首次会自动注册 Native Host），或手动执行 extension/register-native-host.ps1。`;
+    return `${text}。请先启动 Iris Desktop（首次会自动注册 Native Host），或手动执行 extension/register-native-host.ps1。`;
   }
   return text;
 }
 
 const HISTORY_KEY = 'flovartImportHistory';
 const HISTORY_LIMIT = 5;
+// 导入历史写入串行化：读-改-写之间不再被并发导入穿插覆盖。
+let importHistoryWrite = Promise.resolve();
 
 async function appendImportHistory(name, destination) {
-  const stored = await chrome.storage.local.get(HISTORY_KEY);
-  const existing = Array.isArray(stored[HISTORY_KEY]) ? stored[HISTORY_KEY] : [];
-  const next = [{ name, destination, at: Date.now() }, ...existing].slice(0, HISTORY_LIMIT);
-  await chrome.storage.local.set({ [HISTORY_KEY]: next });
+  const write = importHistoryWrite.then(async () => {
+    const stored = await chrome.storage.local.get(HISTORY_KEY);
+    const existing = Array.isArray(stored[HISTORY_KEY]) ? stored[HISTORY_KEY] : [];
+    const next = [{ name, destination, at: Date.now() }, ...existing].slice(0, HISTORY_LIMIT);
+    await chrome.storage.local.set({ [HISTORY_KEY]: next });
+  });
+  importHistoryWrite = write.catch(() => {});
+  await write;
 }
 
 export { HISTORY_KEY, HISTORY_LIMIT };

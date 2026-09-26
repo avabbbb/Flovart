@@ -114,8 +114,14 @@ async function materializeClip({ selection: expected }) {
 
 async function importArtifact({ artifact, target }) {
   if ((target?.kind || 'media-pool') !== 'media-pool') throw new Error('Resolve 第一版只支持写入 Media Pool。');
-  const bytes = Array.isArray(artifact?.bytes) ? Buffer.from(artifact.bytes) : null;
-  if (!bytes?.length) throw new Error('Flovart 没有返回可导入的 Resolve 产物。');
+  const raw = artifact?.bytes;
+  // 渲染端现传 Uint8Array（结构化克隆）；兼容旧版普通数组负载。
+  const bytes = Array.isArray(raw)
+    ? Buffer.from(raw)
+    : raw instanceof Uint8Array
+      ? Buffer.from(raw.buffer, raw.byteOffset, raw.byteLength)
+      : null;
+  if (!bytes?.length) throw new Error('Iris 没有返回可导入的 Resolve 产物。');
   const extension = artifact.mimeType === 'image/png' ? '.png' : artifact.mimeType === 'image/jpeg' ? '.jpg' : artifact.mimeType === 'video/quicktime' ? '.mov' : '.mp4';
   const filePath = path.join(os.tmpdir(), 'flovart-result-' + crypto.randomUUID() + extension);
   fs.writeFileSync(filePath, bytes);
