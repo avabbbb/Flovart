@@ -1,4 +1,4 @@
-﻿name: Bug 报告
+name: Bug 报告
 description: 提交可复现的错误、崩溃或行为回归
 title: "[Bug] "
 body:

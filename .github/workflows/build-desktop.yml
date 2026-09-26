@@ -1,4 +1,4 @@
-﻿# Flovart - Tauri 桌面应用全平台构建 + 自动发布
+# Flovart - Tauri 桌面应用全平台构建 + 自动发布
 #
 # 触发条件：
 #   1. 推送到 main          → 创建 Draft Prerelease（不自动公开）

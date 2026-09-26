@@ -307,7 +307,7 @@ fn wait_for_pairing(
             Some("pending") => {
                 return error_value_retryable(
                     "PAIRING_REQUIRED",
-                    "Approve this extension in Flovart Desktop, then retry.",
+                    "Approve this extension in Iris Desktop, then retry.",
                     true,
                 )
             }
@@ -342,7 +342,7 @@ fn discover_runtime() -> Result<DiscoveryRecord, Value> {
         thread::sleep(Duration::from_millis(100));
     }
     Err(runtime_unavailable(
-        "Flovart Desktop did not become ready before the bridge timeout.",
+        "Iris Desktop did not become ready before the bridge timeout.",
     ))
 }
 
@@ -365,11 +365,11 @@ fn runtime_reachable(discovery: &DiscoveryRecord) -> bool {
 
 fn wake_desktop() -> Result<(), Value> {
     let executable = desktop_executable().ok_or_else(|| {
-        runtime_unavailable("Flovart Desktop executable could not be located by the Native Host.")
+        runtime_unavailable("Iris Desktop executable could not be located by the Native Host.")
     })?;
     Command::new(&executable).spawn().map_err(|error| {
         runtime_unavailable(format!(
-            "Flovart Desktop could not be started from {}: {error}",
+            "Iris Desktop could not be started from {}: {error}",
             executable.display()
         ))
     })?;

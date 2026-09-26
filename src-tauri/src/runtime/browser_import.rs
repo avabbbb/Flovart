@@ -788,7 +788,7 @@ impl BrowserImportStore {
             )),
             _ => Err(RuntimeError::new(
                 "PAIRING_REQUIRED",
-                "Approve this browser extension in Flovart Desktop",
+                "Approve this browser extension in Iris Desktop",
             )),
         }
     }
