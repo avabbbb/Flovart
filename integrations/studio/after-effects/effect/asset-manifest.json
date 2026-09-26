@@ -1,8 +1,8 @@
 {
   "effect": {
-    "name": "Flovart Scene Replace",
+    "name": "Iris Scene Replace",
     "matchName": "FLOVART_SceneReplace",
-    "category": "Flovart",
+    "category": "Iris",
     "entryPoint": "EffectMain",
     "singleEntryPoint": "FlovartEffect.cpp",
     "product": "after-effects",
@@ -11,7 +11,7 @@
     "pixelIndependence": "declared",
     "outputExtent": "not-declared-pending-extent-and-origin-support",
     "multiFrameRendering": "not-declared-pending-real-host-thread-safety-test",
-    "description": "Bilinearly resamples and blends an imported footage layer over the current frame. CEP source writes a content-addressed candidate and a version manifest in the layer comment; project portability is unverified. Source code is not compiled or host-certified."
+    "description": "Bilinearly resamples and blends an imported footage layer over the current frame. CEP source writes a content-addressed candidate and a version manifest in the layer comment; project portability is unverified. The Windows source has compiled with SDK 26.5 and its module loaded in AE 24.0.3; effect registration and render behavior are not yet certified."
   },
   "assetVersionRecord": {
     "schemaVersion": 1,

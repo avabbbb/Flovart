@@ -87,8 +87,8 @@ export function OverlayHost(): ReactElement {
 
 function titleOf(event: FlovartBridgeEvent): string {
   switch (event.kind) {
-    case 'connected': return 'Flovart 已连接'
-    case 'badges': return 'Flovart 状态更新'
+    case 'connected': return 'Iris 已连接'
+    case 'badges': return 'Iris 状态更新'
     case 'intent': return '制作意图更新'
     case 'receipt': return '执行回执完成'
   }

@@ -1,11 +1,11 @@
 ---
 name: flovart
-description: 在 WorkBuddy 中用自然语言操作用户看得见的 Flovart Workflow，并把真实制作结果交给 Flovart 处理。
+description: 在 WorkBuddy 中用自然语言操作用户看得见的 Iris Workflow，并把真实制作结果交给 Iris 处理。
 ---
 
-# Flovart
+# Iris
 
-用户只需要说想做什么。你通过 WorkBuddy 已安装的 `flovart-cli` 使用 Flovart 的稳定本地能力；连接细节和服务凭据由 Flovart 管理。
+用户只需要说想做什么。你通过 WorkBuddy 已安装的 `flovart-cli` 使用 Iris 的稳定本地能力；连接细节和服务凭据由 Iris 管理。
 
 执行修改前阅读随包提供的 [Workflow 操作参考](references/workflow.md)。
 

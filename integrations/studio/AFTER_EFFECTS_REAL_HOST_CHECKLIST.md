@@ -1,12 +1,12 @@
 # After Effects host certification
 
-Status: `EXTERNAL_GATE`. The workspace contains a CEP panel and an uncompiled
-AE Effect SDK source prototype. Neither package build output nor source presence
-certifies a native effect. This environment has After Effects 24.0.3, MSVC
-14.44, MSBuild 17.14, Windows SDK 10.0.26100.0, and `rc.exe`. No
-`FLOVART_AE_SDK_ROOT`, AE SDK headers, sample project, or PiPL resource tool was
-found in the checked SDK/download/workspace locations; the host has not loaded
-this effect.
+Status: `EXTERNAL_GATE`. The workspace contains a CEP panel and a Windows x64
+AE Effect source compiled with Adobe's After Effects Plug-in SDK 26.5. This
+environment has After Effects 24.0.3, MSVC 14.44, MSBuild 17.14, Windows SDK
+10.0.26100.0, and `rc.exe`. The real host log and process module list recorded
+the `.aex` load, but menu registration, parameter UI, pixels, project save and
+offline export are still unverified. Build details and local evidence are in
+`.tmp/ae-sdk/evidence/environment.md`; SDK files stay outside Git.
 
 ## Package and target binding
 
@@ -65,10 +65,11 @@ this effect.
 
 ## Native effect
 
-- Compile `effect/FlovartEffect.cpp` and `effect/FlovartEffect.r` with the
-  operator-provided Windows AE SDK and its PiPL resource toolchain. Verify the
-  exported entry point, PiPL flags, match name, and parameter names against the
-  compiled plugin loaded by After Effects.
+- The source has compiled as a Windows x64 `.aex` through Adobe's SDK PiPL
+  resource flow; `EffectMain` export and PiPL display/match names are verified.
+  Confirm the effect is registered in AE 24.0.3, expose the expected parameter
+  controls, and exercise it against synthetic frames before treating this gate
+  as passed.
 - On synthetic 8-bit SDR input, compare Blend 0/50/100 against an independent
   reference. Cover pixel-center bilinear samples for equal, upscaled, and
   downscaled source dimensions, alpha, padded rowbytes, random

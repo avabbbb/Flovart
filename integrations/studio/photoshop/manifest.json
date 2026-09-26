@@ -1,7 +1,7 @@
 {
   "manifestVersion": 4,
   "id": "com.flovart.studio.photoshop",
-  "name": "Flovart",
+  "name": "Iris",
   "version": "0.3.2",
   "main": "index.html",
   "host": [{ "app": "PS", "minVersion": "23.0.0" }],
@@ -9,10 +9,10 @@
     {
       "type": "panel",
       "id": "flovartPanel",
-      "label": "Flovart",
+      "label": "Iris",
       "minimumSize": { "width": 280, "height": 420 }
     },
-    { "type": "command", "id": "flovartOpenCanvas", "label": "打开 Flovart 画布" },
+    { "type": "command", "id": "flovartOpenCanvas", "label": "打开 Iris 画布" },
     { "type": "command", "id": "flovartGenerateFromSelection", "label": "用当前选择生成" }
   ]
 }

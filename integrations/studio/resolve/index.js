@@ -10,7 +10,7 @@
     hostLabel: 'DaVinci Resolve · Clip',
     defaultImportTarget: { kind: 'media-pool' },
     onOpenCanvas: () => {
-      if (!window.__FLOVART_OPEN_CANVAS__) throw new Error('请连接 Flovart 后打开画布。');
+      if (!window.__FLOVART_OPEN_CANVAS__) throw new Error('请连接 Iris 后打开画布。');
       return window.__FLOVART_OPEN_CANVAS__();
     },
   });

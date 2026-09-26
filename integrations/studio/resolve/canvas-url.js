@@ -21,7 +21,7 @@ function resolveCanvasUrl({ env = process.env, fsApi = fs, homeDir = os.homedir(
     try { raw = JSON.parse(fsApi.readFileSync(discoveryFile, 'utf8'))?.url || ''; } catch {}
   }
   const url = normalizeCanvasUrl(raw);
-  if (!url) throw new Error('未找到已启动的 Flovart WebUI，请先运行 Flovart 启动器并连接 Link。');
+  if (!url) throw new Error('未找到已启动的 Iris WebUI，请先运行 Iris 启动器并连接 Link。');
   return url;
 }
 

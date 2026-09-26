@@ -1,10 +1,10 @@
 {
   "extension_name": {
-    "message": "Flovart Browser Import",
+    "message": "Iris Browser Import",
     "description": "扩展名称"
   },
   "extension_description": {
-    "message": "把你明确右键选择的网页图片安全传入 Flovart Desktop Workflow；不保存 API Key，不扫描整页。",
+    "message": "把你明确右键选择的网页图片安全传入 Iris Desktop Workflow；不保存 API Key，不扫描整页。",
     "description": "扩展描述"
   }
 }
