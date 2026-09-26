@@ -120,7 +120,7 @@ Host-specific：
 
 - 主设计只保留一个；不要新增并列 CURRENT / TARGET / AUDIT / GOAL / HANDOFF 决策文档。
 - 产品设计变化直接更新主设计；Agent 专项更新 `agent-integration.md`；布局更新 `adaptive-layout.md`。
-- 项目内 Coding Agent Skill 的 canonical source 是 `.agents/skills/flovart/`；不要重新创建根目录 `skills/flovart/` 重复副本。
+- `skills/flovart/` 是 canonical Skill package；`.agents/skills/flovart/`、`.claude/skills/flovart/` 等是兼容投影 / committed snapshot。不要反转 source-of-truth，也不要手工让这些投影漂移。
 - 新 proposal 必须明确 **PROPOSAL / REFERENCE**，被接受后蒸馏进 current truth，再删除或归档 proposal。
 - `todo.mdx` 只放未完成；已实现但需现实验证移到 `pending-test.mdx`；验证后再更新 features。
 - 历史施工包、README audit、阶段性 launch checklist 不留在 active tree；有长期价值的只保留一份简短 archive snapshot，细节由 Git history 保存。
