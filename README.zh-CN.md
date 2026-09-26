@@ -9,19 +9,20 @@ AIGC:
   ReservedCode2: 'cf8b84c5-c9fb-4404-a4e5-4a9ee8d12407'
 ---
 
-<p align="center">
-  <img src="pic/LOGO_optimized.png" alt="Flovart" width="180" />
-</p>
-
-<h1 align="center">Flovart</h1>
+<h1 align="center">Iris</h1>
 
 <p align="center">
-  <strong>你的 Coding Agent，现在有一个可视化制作工作台。</strong>
+  <strong>把 AI 创作 Agent 放进你本来就在用的专业工具里。</strong>
 </p>
 
 <p align="center">
-  开源、本地优先的工作区，你和你的 Coding Agent 操作同一份可见的 Workflow——<br />
-  模型、API Key 与素材都在你自己手里。
+  开源、本地优先的专业创作 AI 层——第一宿主从 DaVinci Resolve Studio 21.1 开始。<br />
+  剪辑工程继续留在宿主里，Agent 理解上下文，Iris 负责生成、参考素材、持久产物与候选版本。
+</p>
+
+<p align="center">
+  <sub><strong>原名 Flovart。</strong> 对外产品品牌现在统一为 Iris；现有 <code>flovart</code> CLI、包路径、
+  仓库 URL 与内部兼容标识在迁移期继续保留，避免打断现有 Agent 和脚本。</sub>
 </p>
 
 <p align="center">
@@ -46,7 +47,7 @@ AIGC:
 </p>
 
 <p align="center">
-  <a href="stats/README.md"><img src="https://tally.yuki.sh/hits/flovart/readme.svg?theme=rule34" alt="Flovart README 访问计数" /></a>
+  <a href="stats/README.md"><img src="https://tally.yuki.sh/hits/flovart/readme.svg?theme=rule34" alt="Iris README 访问计数" /></a>
   <br />
   <sub>README 展示次数 · 第三方计数，非独立访客</sub>
 </p>
@@ -54,22 +55,22 @@ AIGC:
 ## 实际效果
 
 <p align="center">
-  <img src="pic/readme/hero-agent.gif" alt="外部 coding agent 正在编辑同一份可见的 Flovart Workflow" width="880" />
+  <img src="pic/readme/hero-agent.gif" alt="外部 coding agent 正在编辑同一份可见的 Iris Workflow" width="880" />
   <br />
-  <sub><strong>外部 coding agent 正在编辑同一份可见的 Flovart Workflow —— 自然语言变成节点与连线。</strong><br />
+  <sub><strong>当前已录制的 Agent / Workflow 能力——自然语言变成节点与连线。</strong><br />
   这段录屏里没有任何人工操作：该 Agent（WorkBuddy codebuddy）全程经 typed CLI 驱动可见 Workflow，
   现场创建 3 个节点与 2 条连线，没有改动任何源码。未执行生成步骤，因此没有调用付费模型服务。
-  可复现记录见 <a href="docs/maintenance/readme/DEMO_RECORDING.md">DEMO_RECORDING.md</a>。</sub>
+  Resolve native MCP → 候选 → Media Pool 的 Hero 仍属于真实宿主 External Gate，因此这里暂时不把它伪装成已完成。可复现记录见 <a href="docs/maintenance/readme/DEMO_RECORDING.md">DEMO_RECORDING.md</a>。</sub>
 </p>
 
-**快速跳转：** [快速开始](#快速开始) · [功能演示](#功能演示) · [为什么是 Flovart](#为什么是-flovart) · [核心能力](#核心能力) · [使用你自己的模型](#使用你自己的模型) · [集成与兼容性](#集成与兼容性) · [架构](#架构) · [本地优先与安全](#本地优先与安全) · [路线图](#创作软件路线图) · [参与贡献](#参与贡献)
+**快速跳转：** [快速开始](#快速开始) · [功能演示](#功能演示) · [为什么是 Iris](#为什么是-iris) · [核心能力](#核心能力) · [使用你自己的模型](#使用你自己的模型) · [集成与兼容性](#集成与兼容性) · [架构](#架构) · [本地优先与安全](#本地优先与安全) · [路线图](#创作软件路线图) · [参与贡献](#参与贡献)
 
 ## 快速开始
 
 ### 创作者
 
 1. 从 [GitHub Releases](https://github.com/avabbbb/Flovart/releases) 下载预览版。
-2. 打开 Flovart，在设置中添加 AI 服务。
+2. 打开 Iris，在设置中添加 AI 服务。
 3. 新建或打开 Workflow，加入参考素材，开始创作。
 
 公开 Releases 页面可能包含测试或预览产物；这不代表所有宿主或 Provider 都已 Stable。
@@ -86,7 +87,7 @@ npm run flovart:cli -- start --source --web --open
 npm run flovart:cli -- status --json
 ```
 
-然后对本地 Agent 说：**「打开 Flovart，在这个 Workflow 上干活。」**
+然后对本地 Agent 说：**「打开 Iris，在这个 Workflow 上干活。」**
 
 正常 Agent 循环是 `status`、`workflow.inspect`、`workflow.selection.get`、`workflow.apply` 和 `workflow.node.run`；连接准备和诊断用 `ensure` 和 `doctor`；仅供开发使用的浏览器检查见[快速开始](docs/overview/quick-start.md)。
 
@@ -231,20 +232,23 @@ npm run flovart:cli -- status --json
 
 尚未录制、也刻意没有展示的：依赖模型的生成能力与依赖模型的图片工具（图片生成、高清放大、移除背景、拆分图层、图片编辑/扩图）——本机未配置任何 Provider，没有可诚实展示的结果。该缺口登记在[录制记录](docs/maintenance/readme/DEMO_RECORDING.md)里。
 
-## 为什么是 Flovart？
+## 为什么是 Iris？
 
-很多 AI 创作工具要求你在可视化编辑器和自主 Agent 之间二选一。Flovart 让两者共用同一份制作状态。
+很多 AI 创作工具要求你先把工作搬到它自己的画布里。**Iris 反过来：进入你已经在用的专业创作软件。**
 
-- **同一份活着的 Workflow。** 你和 Agent 改的是同一张图、同一批素材、同一个结果。
-- **Agent-native。** Agent 通过类型化的 Flovart 操作工作，不靠屏幕抓取、鼠标自动化，也不会偷偷创建一份你的项目副本。
-- **BYOK 图片与视频。** 模型服务、模型和 API Key 都用你自己的。
-- **本地优先的可视化控制。** 项目、参考素材和 Workflow 状态都靠近你的工作区。
+宿主继续掌握剪辑工程和时间线，外部 Agent 读取创作上下文，Iris 负责生成、参考素材、持久 Artifact 和可审核的候选版本；只有多镜头、复杂引用或可复用 Workflow 真正需要时，才展开完整 Iris 工作区。
 
-具体一点：你让 Agent 做一个三镜头产品视频。它在你**正看着的**那份 Workflow 里建出各镜头节点并连好线，然后停在需要你判断的地方——参考素材、模型选择、保留哪一版。接下来你继续用手改同一张图。没有第二份隐藏项目，Agent 做过的事也不需要重做一遍。
+- **留在编辑器里。** 第一宿主方向是 DaVinci Resolve Studio 21.1；其它创作宿主在真实宿主验证前继续保持 Experimental。
+- **Agent-native。** Agent 通过类型化能力和宿主原生控制面工作，不依赖鼠标坐标或屏幕抓取。
+- **默认非破坏。** 生成结果先成为 Candidate；Resolve-first 的 P0 只做到 **Add to Media Pool**，不会先替换原 Timeline。
+- **BYOK 图片与视频。** Provider、模型和 API Key 由你自己选择。
+- **本地优先。** 在当前实现支持范围内，项目相关状态、参考素材与生成产物尽量留在创作工作区附近。
+
+Canvas 仍然是多镜头、复杂依赖和 Workflow 编排的 power surface，**但它不再是 Iris 的产品前提。**
 
 ## 核心能力
 
-| 能力 | Flovart 的方式 |
+| 能力 | Iris 的方式 |
 | --- | --- |
 | Agent 控制 | 通过类型化操作直接作用于真实可见 Workflow |
 | 人类编辑 | 同一张图、素材和结果始终可以直接修改 |
@@ -261,7 +265,7 @@ npm run flovart:cli -- status --json
 你的 Agent                  Codex · WorkBuddy · Claude Code
       │
       ▼
-Flovart 操作                inspect · select · apply · run
+Iris 操作                   inspect · select · apply · run
       │
       ▼
 活着的 Workflow  ────────── 人
@@ -277,7 +281,7 @@ Flovart 操作                inspect · select · apply · run
 你的 Provider → 你的 API Key → 你的素材 + Workflow → 你的生成结果
 ```
 
-Flovart 不内置模型服务。你可以在应用中配置 Provider，按需选择能力和模型，并自行承担 Provider 条款、费用和产物权利。OpenAI-compatible BYOK 与远程 Provider 路径当前为 Experimental：代码里有适配器，不等于真实付费服务已认证。
+Iris 不内置模型服务。你可以在应用中配置 Provider，按需选择能力和模型，并自行承担 Provider 条款、费用和产物权利。OpenAI-compatible BYOK 与远程 Provider 路径当前为 Experimental：代码里有适配器，不等于真实付费服务已认证。
 
 ## 集成与兼容性
 
@@ -302,17 +306,17 @@ Flovart 不内置模型服务。你可以在应用中配置 Provider，按需选
 ```mermaid
 flowchart LR
   H["人类创作者"] <--> W["Live Workflow"]
-  A["Coding Agent Harness"] --> L["Flovart Link + CLI"]
+  A["Coding Agent Harness"] --> L["Iris Link + flovart CLI"]
   L --> W
   W --> P["Provider 适配层"]
   W --> R["本地素材 + 产物"]
   T["Table 工作区"] -. 独立入口 .-> W
 ```
 
-CLI 与实验性 stdio MCP 共用操作语义，当前都绑定可见的 Browser Workflow。确定性操作直接执行，不需要第二个 AI 再解释一遍。
+现有 `flovart` CLI 名称在 Iris 改名期间继续作为兼容入口。CLI 与实验性 stdio MCP 共用操作语义，当前都绑定可见的 Browser Workflow。确定性操作直接执行，不需要第二个 AI 再解释一遍。
 
 <p align="center">
-  <img src="pic/readme/agent-operations-live-workflow.gif" alt="Flovart CLI 操作在可见 Workflow 中创建节点与连线" width="720" />
+  <img src="pic/readme/agent-operations-live-workflow.gif" alt="Iris 兼容 CLI 操作在可见 Workflow 中创建节点与连线" width="720" />
   <br />
   <sub><strong>同一主张的操作级视角。</strong>一个项目和三个节点由 <code>workflow.project.create</code>、
   <code>workflow.node.create</code> 和 <code>workflow.connect</code> 创建（1.5 倍速播放）——
@@ -334,13 +338,23 @@ CLI 与实验性 stdio MCP 共用操作语义，当前都绑定可见的 Browser
 
 ## 创作软件路线图
 
-深入创作软件的 Flovart 原生效果仍是规划开发，与当前的实验性面板不是一回事；首版目标优先 Windows AE/PR：生成一个版本，在宿主内继续精修，复杂任务再展开 Workflow。macOS 会单独排期验证，不承诺同期支持。
+当前第一宿主方向已经切换为 **DaVinci Resolve Studio 21.1 first**。
 
-- 用固定素材验证 AE/PR 原生效果、参数保存与离线导出；
-- 接入持久生成任务和外部/内部 Agent 入口，共用操作能力；
-- 首条宿主流程通过后再接 Photoshop 与 Resolve。
+第一条产品闭环刻意保持很窄：
 
-这些是方向，不是 Stable 支持。证据进度见[开发计划](docs/content/docs/progress/todo.mdx)和[待用户确认](docs/content/docs/progress/pending-test.mdx)。
+```text
+当前 Resolve 选择
+→ Agent 理解任务
+→ Iris 生成持久 Candidate
+→ 用户审核
+→ Add to Media Pool
+```
+
+P0 不修改原 Timeline。Add to new track 是后续 gate；Replace / Commit 只有在目标重新校验与恢复语义跑通后才进入。Resolve OFX 也后置，只有真实工作流证明需要宿主持久参数、关键帧或离线 effect rendering 时才启动。
+
+After Effects、Premiere Pro 与 Photoshop 现有工作继续保留为 Experimental，不用于宣称已认证宿主支持。
+
+这些是方向，不是 Stable 支持。证据进度见[开发计划](docs/content/docs/progress/todo.mdx)、[待用户确认](docs/content/docs/progress/pending-test.mdx)和 [Support Matrix](SUPPORT_MATRIX.md)。
 
 ## 参与贡献
 
@@ -352,6 +366,6 @@ CLI 与实验性 stdio MCP 共用操作语义，当前都绑定可见的 Browser
 
 ## 协议与声明
 
-Flovart 基于 [MIT License](./LICENSE) 开源。使用本项目即表示同意[使用条款](./docs/TERMS_OF_SERVICE.md)和[隐私政策](./docs/PRIVACY_POLICY.md)。
+Iris 基于 [MIT License](./LICENSE) 开源。使用本项目即表示同意[使用条款](./docs/TERMS_OF_SERVICE.md)和[隐私政策](./docs/PRIVACY_POLICY.md)。
 
-Flovart 不内置模型服务，也不对生成内容主张知识产权。你需要自行确认所选模型、输入素材和生成结果的版权、合规性与合法使用。更多信息见[项目数据与统计](stats/README.md)。
+Iris 不内置模型服务，也不对生成内容主张知识产权。你需要自行确认所选模型、输入素材和生成结果的版权、合规性与合法使用。更多信息见[项目数据与统计](stats/README.md)。
