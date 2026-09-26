@@ -1,14 +1,3 @@
----
-AIGC:
-  ContentProducer: '001191110102MAD55U9H0F10002'
-  ContentPropagator: '001191110102MAD55U9H0F10002'
-  Label: '1'
-  ProduceID: '503a6bd1-a517-42cd-84bd-e46ba68dca90'
-  PropagateID: '503a6bd1-a517-42cd-84bd-e46ba68dca90'
-  ReservedCode1: 'cf8b84c5-c9fb-4404-a4e5-4a9ee8d12407'
-  ReservedCode2: 'cf8b84c5-c9fb-4404-a4e5-4a9ee8d12407'
----
-
 <h1 align="center">Iris</h1>
 
 <p align="center">
@@ -21,8 +10,8 @@ AIGC:
 </p>
 
 <p align="center">
-  <sub><strong>原名 Flovart。</strong> 对外产品品牌现在统一为 Iris；现有 <code>flovart</code> CLI、包路径、
-  仓库 URL 与内部兼容标识在迁移期继续保留，避免打断现有 Agent 和脚本。</sub>
+  <sub><strong>原名 Flovart。</strong> 现在产品与仓库统一叫 Iris；旧的 <code>flovart</code> CLI、
+  Skill / package 路径与内部兼容标识暂时保留，避免打断现有 Agent 与脚本。</sub>
 </p>
 
 <p align="center">
@@ -30,8 +19,8 @@ AIGC:
 </p>
 
 <p align="center">
-  <a href="https://avabbbb.github.io/Flovart/"><strong>在线体验</strong></a> ·
-  <a href="https://github.com/avabbbb/Flovart/releases"><strong>下载预览版</strong></a> ·
+  <a href="https://avabbbb.github.io/Iris/"><strong>在线体验</strong></a> ·
+  <a href="https://github.com/avabbbb/Iris/releases"><strong>下载预览版</strong></a> ·
   <a href="docs/overview/quick-start.md">快速开始</a> ·
   <a href="SUPPORT_MATRIX.md">兼容性</a>
 </p>
@@ -42,8 +31,8 @@ AIGC:
   <img src="https://img.shields.io/badge/BYOK-E8453C" alt="自带 API Key" />
   <img src="https://img.shields.io/badge/Image%20%2B%20Video-E8453C" alt="图片与视频" />
   <img src="https://img.shields.io/badge/License-MIT-E8453C" alt="MIT License" />
-  <a href="https://github.com/avabbbb/Flovart/releases"><img src="https://img.shields.io/github/downloads/avabbbb/Flovart/total?color=E8453C&logo=github" alt="GitHub Downloads" /></a>
-  <a href="https://github.com/avabbbb/Flovart"><img src="https://img.shields.io/github/stars/avabbbb/Flovart?color=E8453C" alt="GitHub Stars" /></a>
+  <a href="https://github.com/avabbbb/Iris/releases"><img src="https://img.shields.io/github/downloads/avabbbb/Iris/total?color=E8453C&logo=github" alt="GitHub Downloads" /></a>
+  <a href="https://github.com/avabbbb/Iris"><img src="https://img.shields.io/github/stars/avabbbb/Iris?color=E8453C" alt="GitHub Stars" /></a>
 </p>
 
 <p align="center">
@@ -63,13 +52,42 @@ AIGC:
   Resolve native MCP → 候选 → Media Pool 的 Hero 仍属于真实宿主 External Gate，因此这里暂时不把它伪装成已完成。可复现记录见 <a href="docs/maintenance/readme/DEMO_RECORDING.md">DEMO_RECORDING.md</a>。</sub>
 </p>
 
+## Iris 现在已经能做什么
+
+下面都是**当前版本真实录屏**，不是 Mock。Resolve native MCP → Candidate → Media Pool 仍然属于 External Gate，所以 README 顶部只展示今天已经有证据的能力。
+
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <img src="pic/readme/features/agent-cli-live.gif" alt="Agent 通过 Iris typed operations 修改同一份可见 Workflow。" width="420" />
+      <br /><sub><strong>Agent → 真实 Workflow。</strong>不是屏幕点击，操作直接落到同一个可编辑项目。</sub>
+    </td>
+    <td align="center" width="50%">
+      <img src="pic/readme/features/canvas-prompt.gif" alt="创作者直接在当前节点上修改 Prompt。" width="420" />
+      <br /><sub><strong>原地 Prompt。</strong>人和 Agent 最终落到同一份可见、可继续编辑的工作面。</sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <img src="pic/readme/features/crop.gif" alt="在 Iris 中裁剪图片并生成显式结果节点。" width="420" />
+      <br /><sub><strong>图片操作。</strong>本地编辑得到明确、可复用的结果。</sub>
+    </td>
+    <td align="center">
+      <img src="pic/readme/features/video-trim.gif" alt="在 Iris 中对视频片段执行裁剪。" width="420" />
+      <br /><sub><strong>视频操作。</strong>裁剪等媒体工具直接在当前工作区本地运行。</sub>
+    </td>
+  </tr>
+</table>
+
+**更多真实操作 GIF 见下面的[完整功能演示](#功能演示)。**
+
 **快速跳转：** [快速开始](#快速开始) · [功能演示](#功能演示) · [为什么是 Iris](#为什么是-iris) · [核心能力](#核心能力) · [使用你自己的模型](#使用你自己的模型) · [集成与兼容性](#集成与兼容性) · [架构](#架构) · [本地优先与安全](#本地优先与安全) · [路线图](#创作软件路线图) · [参与贡献](#参与贡献)
 
 ## 快速开始
 
 ### 创作者
 
-1. 从 [GitHub Releases](https://github.com/avabbbb/Flovart/releases) 下载预览版。
+1. 从 [GitHub Releases](https://github.com/avabbbb/Iris/releases) 下载预览版。
 2. 打开 Iris，在设置中添加 AI 服务。
 3. 新建或打开 Workflow，加入参考素材，开始创作。
 
@@ -80,8 +98,8 @@ AIGC:
 在版本化 CLI 包正式发布前，从源码检出运行：
 
 ```bash
-git clone https://github.com/avabbbb/Flovart.git
-cd Flovart
+git clone https://github.com/avabbbb/Iris.git
+cd Iris
 npm install
 npm run flovart:cli -- start --source --web --open
 npm run flovart:cli -- status --json
@@ -332,7 +350,7 @@ flowchart LR
 - 当前 Web 路径通过加密的 `localforage` Vault 在本地保存 API Key，前端再直接请求配置的模型服务；浏览器属于秘密边界的一部分。
 - Web、桌面 WebView 和扩展的存储通常彼此隔离；通过受限 Runtime Bridge 跨入口同步仍在待办中。
 - 不要把 API Key 写进 Prompt、日志或仓库。Agent 和 CLI 只能拿到脱敏后的就绪与能力状态，不能拿到原始凭据。
-- 官方项目渠道仅包括本仓库、[在线 Demo](https://avabbbb.github.io/Flovart/) 和本仓库 Actions 发布的桌面产物。请自行确认 Provider 条款，以及输入素材和输出内容的版权与合规性。
+- 官方项目渠道仅包括本仓库、[在线 Demo](https://avabbbb.github.io/Iris/) 和本仓库 Actions 发布的桌面产物。请自行确认 Provider 条款，以及输入素材和输出内容的版权与合规性。
 
 发现漏洞？请通过[安全政策](SECURITY.md)中的私密渠道报告。
 
@@ -358,7 +376,7 @@ After Effects、Premiere Pro 与 Photoshop 现有工作继续保留为 Experimen
 
 ## 参与贡献
 
-我们尤其欢迎三类贡献：Provider 适配、宿主集成和 Workflow 能力。请先提交 [Issue](https://github.com/avabbbb/Flovart/issues/new/choose)，阅读[贡献约定](.github/CONTRIBUTING.md)，UI 变更附上验证证据。
+我们尤其欢迎三类贡献：Provider 适配、宿主集成和 Workflow 能力。请先提交 [Issue](https://github.com/avabbbb/Iris/issues/new/choose)，阅读[贡献约定](.github/CONTRIBUTING.md)，UI 变更附上验证证据。
 
 ## 致谢
 
