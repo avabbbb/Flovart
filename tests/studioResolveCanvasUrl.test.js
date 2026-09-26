@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+﻿import { describe, expect, it } from 'vitest';
 import { normalizeCanvasUrl, resolveCanvasUrl } from '../integrations/studio/resolve/canvas-url.js';
 import { resolveTestTempRoot } from '../scripts/test-temp-root.mjs';
 
@@ -15,6 +15,6 @@ describe('Resolve canvas URL discovery', () => {
   });
 
   it('fails closed when no discovered WebUI exists or the address is not loopback', () => {
-    expect(() => resolveCanvasUrl({ env: {}, fsApi: { readFileSync: () => JSON.stringify({ url: 'https://example.com' }) }, homeDir: testTempRoot })).toThrow('未找到已启动的 Flovart WebUI');
+    expect(() => resolveCanvasUrl({ env: {}, fsApi: { readFileSync: () => JSON.stringify({ url: 'https://example.com' }) }, homeDir: testTempRoot })).toThrow('未找到已启动的 Iris WebUI');
   });
 });

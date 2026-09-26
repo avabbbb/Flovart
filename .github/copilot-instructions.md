@@ -1,4 +1,4 @@
-# Flovart Copilot Instructions
+﻿# Iris Copilot Instructions
 
 Read [AGENTS.md](../AGENTS.md) first. The canonical document map is [docs/index.md](../docs/index.md). If an older report, audit, ADR, plan, or comment conflicts with those files, treat the older text as historical.
 
