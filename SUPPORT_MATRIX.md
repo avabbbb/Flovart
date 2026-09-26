@@ -34,7 +34,7 @@ The following are design targets, not capabilities certified by the panel or MCP
 
 | Capability | Status | Required evidence |
 | --- | --- | --- |
-| AE / PR native Flovart effects | Planned | Real effect controls, fixed media versions, keyframes, saved project and offline export |
+| AE / PR native Iris effects | Planned | Real effect controls, fixed media versions, keyframes, saved project and offline export |
 | Photoshop native filter | Planned | Real filter integration, selection, editable parameters and project reopening |
 | Resolve OpenFX effect | Planned / deferred | 仅在 MCP-first 真实流程证明需要 fixed-version effect parameters / keyframes / offline effect rendering 后启动；需独立 Real OFX evidence |
 | Native-effect generation without an open Workflow | Proposed | Confirm scope; verify headless service, Provider parity and persistent assets |
