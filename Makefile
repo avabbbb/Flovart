@@ -3,7 +3,7 @@
 COMPOSE ?= docker compose
 
 help:
-	@echo "Flovart Docker 管理命令"
+	@echo "Iris Docker 管理命令"
 	@echo ""
 	@echo "使用方法: make [命令]"
 	@echo ""
@@ -30,12 +30,12 @@ build:
 up:
 	@echo "正在启动全部容器..."
 	$(COMPOSE) up -d --build
-	@echo "容器已启动：Web http://localhost:11451"
+	@echo "容器已启动：Web http://localhost:1635"
 
 web:
 	@echo "正在启动 Web 及依赖服务..."
 	$(COMPOSE) up -d --build web
-	@echo "Web: http://localhost:11451"
+	@echo "Web: http://localhost:1635"
 
 backend:
 	@echo "正在启动后端与数据库..."
@@ -71,7 +71,7 @@ rebuild:
 	@echo "正在无缓存重建..."
 	$(COMPOSE) build --no-cache
 	$(COMPOSE) up -d
-	@echo "重新构建完成：Web http://localhost:11451"
+	@echo "重新构建完成：Web http://localhost:1635"
 
 status:
 	@echo "容器状态:"
