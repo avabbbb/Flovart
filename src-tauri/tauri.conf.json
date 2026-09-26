@@ -1,6 +1,6 @@
 {
   "$schema": "https://raw.githubusercontent.com/tauri-apps/tauri/dev/crates/tauri-config-schema/schema.json",
-  "productName": "Flovart",
+  "productName": "Iris",
   "version": "0.3.2",
   "identifier": "com.flovart.desktop",
   "build": {
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Flovart",
+        "title": "Iris",
         "width": 1280,
         "height": 800,
         "minWidth": 800,

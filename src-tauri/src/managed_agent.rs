@@ -509,7 +509,7 @@ impl ManagedAgentHost {
                 if let Ok(pid) = raw.trim().parse::<u32>() {
                     if pid != std::process::id() && pid_alive(pid) {
                         return Err(format!(
-                            "Managed Agent is already owned by another Flovart process (pid {pid})."
+                            "Managed Agent is already owned by another Iris process (pid {pid})."
                         ));
                     }
                 }

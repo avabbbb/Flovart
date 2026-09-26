@@ -1,4 +1,4 @@
-﻿# Flovart - 每日仓库数据快照
+# Flovart - 每日仓库数据快照
 #
 # GitHub Traffic API 只保留最近 14 天数据，本工作流每天抓取并累积到 stats/history.json。
 # views / clones 需要 TRAFFIC_PAT：推荐 Fine-grained PAT，仅授权本仓库的 Administration: read。

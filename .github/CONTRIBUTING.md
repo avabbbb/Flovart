@@ -1,4 +1,4 @@
-﻿# Iris 贡献约定 | Contributing
+# Iris 贡献约定 | Contributing
 
 [中文](#中文) · [English](#english)
 

@@ -1,4 +1,4 @@
-﻿import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { normalizeCanvasUrl, resolveCanvasUrl } from '../integrations/studio/resolve/canvas-url.js';
 import { resolveTestTempRoot } from '../scripts/test-temp-root.mjs';
 
