@@ -1,14 +1,3 @@
----
-AIGC:
-  ContentProducer: '001191110102MAD55U9H0F10002'
-  ContentPropagator: '001191110102MAD55U9H0F10002'
-  Label: '1'
-  ProduceID: 'dc3c0fe1-169b-4f2d-add5-19cbafac7369'
-  PropagateID: 'dc3c0fe1-169b-4f2d-add5-19cbafac7369'
-  ReservedCode1: '1ea32e0c-e497-4f7e-adbf-70c8e8bbd65a'
-  ReservedCode2: '1ea32e0c-e497-4f7e-adbf-70c8e8bbd65a'
----
-
 <h1 align="center">Iris</h1>
 
 <p align="center">
@@ -21,8 +10,8 @@ AIGC:
 </p>
 
 <p align="center">
-  <sub><strong>Formerly Flovart.</strong> The public product name is now Iris. Existing <code>flovart</code> CLI commands, package paths,
-  repository URLs and internal compatibility identifiers remain during the migration.</sub>
+  <sub><strong>Formerly Flovart.</strong> Iris is the public product and repository name. The legacy <code>flovart</code> CLI,
+  Skill/package paths and internal compatibility identifiers remain temporarily so existing Agent workflows do not break.</sub>
 </p>
 
 <p align="center">
@@ -30,8 +19,8 @@ AIGC:
 </p>
 
 <p align="center">
-  <a href="https://avabbbb.github.io/Flovart/"><strong>Try live demo</strong></a> ·
-  <a href="https://github.com/avabbbb/Flovart/releases"><strong>Download preview</strong></a> ·
+  <a href="https://avabbbb.github.io/Iris/"><strong>Try live demo</strong></a> ·
+  <a href="https://github.com/avabbbb/Iris/releases"><strong>Download preview</strong></a> ·
   <a href="docs/overview/quick-start.en.md">Get started</a> ·
   <a href="SUPPORT_MATRIX.md">Compatibility</a>
 </p>
@@ -42,8 +31,8 @@ AIGC:
   <img src="https://img.shields.io/badge/BYOK-E8453C" alt="Bring your own key" />
   <img src="https://img.shields.io/badge/Image%20%2B%20Video-E8453C" alt="Image and video" />
   <img src="https://img.shields.io/badge/License-MIT-E8453C" alt="MIT License" />
-  <a href="https://github.com/avabbbb/Flovart/releases"><img src="https://img.shields.io/github/downloads/avabbbb/Flovart/total?color=E8453C&logo=github" alt="GitHub Downloads" /></a>
-  <a href="https://github.com/avabbbb/Flovart"><img src="https://img.shields.io/github/stars/avabbbb/Flovart?color=E8453C" alt="GitHub Stars" /></a>
+  <a href="https://github.com/avabbbb/Iris/releases"><img src="https://img.shields.io/github/downloads/avabbbb/Iris/total?color=E8453C&logo=github" alt="GitHub Downloads" /></a>
+  <a href="https://github.com/avabbbb/Iris"><img src="https://img.shields.io/github/stars/avabbbb/Iris?color=E8453C" alt="GitHub Stars" /></a>
 </p>
 
 <p align="center">
@@ -63,13 +52,42 @@ AIGC:
   paid model service was called. The Resolve-native MCP → candidate → Media Pool Hero remains an External Gate and is deliberately not presented here as finished. Reproduction record: <a href="docs/maintenance/readme/DEMO_RECORDING.md">DEMO_RECORDING.md</a>.</sub>
 </p>
 
+## What Iris can already do
+
+These are **real recordings from the current build**, not mockups. The Resolve-native MCP → candidate → Media Pool flow is still an External Gate, so the top of the README shows only capabilities we can prove today.
+
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <img src="pic/readme/features/agent-cli-live.gif" alt="An Agent uses typed Iris operations to build a visible Workflow." width="420" />
+      <br /><sub><strong>Agent → live Workflow.</strong> Typed operations update the same visible project — no screen scraping.</sub>
+    </td>
+    <td align="center" width="50%">
+      <img src="pic/readme/features/canvas-prompt.gif" alt="A creator edits a prompt directly on a selected Workflow node." width="420" />
+      <br /><sub><strong>Prompt in place.</strong> Human and Agent work converge on the same editable surface.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <img src="pic/readme/features/crop.gif" alt="A creator crops an image and produces a result node." width="420" />
+      <br /><sub><strong>Image operations.</strong> Local edits produce explicit, reusable results.</sub>
+    </td>
+    <td align="center">
+      <img src="pic/readme/features/video-trim.gif" alt="A creator trims a video clip inside Iris." width="420" />
+      <br /><sub><strong>Video operations.</strong> Trim and other media tools run locally in the current workspace.</sub>
+    </td>
+  </tr>
+</table>
+
+**More real operation GIFs are in the [full feature tour](#feature-tour).**
+
 **Jump to:** [Quick start](#quick-start) · [Feature tour](#feature-tour) · [Why Iris?](#why-iris) · [Core capabilities](#core-capabilities) · [Bring your own models](#bring-your-own-models) · [Compatibility](#integrations-and-compatibility) · [Architecture](#architecture) · [Local-first and security](#local-first-and-security) · [Roadmap](#creative-app-roadmap) · [Contributing](#contributing)
 
 ## Quick start
 
 ### For creators
 
-1. Download a preview build from [GitHub Releases](https://github.com/avabbbb/Flovart/releases).
+1. Download a preview build from [GitHub Releases](https://github.com/avabbbb/Iris/releases).
 2. Open Iris and add an AI service in Settings.
 3. Create or open a Workflow, add references, and start creating.
 
@@ -80,8 +98,8 @@ The Releases page may contain test or preview artifacts; it is not a claim that 
 Run from a source checkout while the versioned CLI package remains a release gate:
 
 ```bash
-git clone https://github.com/avabbbb/Flovart.git
-cd Flovart
+git clone https://github.com/avabbbb/Iris.git
+cd Iris
 npm install
 npm run flovart:cli -- start --source --web --open
 npm run flovart:cli -- status --json
@@ -334,7 +352,7 @@ Native-effect work keeps two short paths: one shared generation function produce
 - The current Web path stores API keys locally through the encrypted `localforage` vault, while the frontend calls the configured model service directly. Treat the browser as part of the secret boundary.
 - Web, Desktop WebView and extension storage are normally isolated. Cross-entry synchronization through a restricted runtime bridge is still pending.
 - Never put API keys in a prompt, log or repository. Agent and CLI paths receive redacted readiness and capability state, not raw credentials.
-- Use only the repository, the [live demo](https://avabbbb.github.io/Flovart/) and desktop artifacts published by the repository's Actions as official project channels. Review each provider's terms and the rights for your inputs and outputs.
+- Use only the repository, the [live demo](https://avabbbb.github.io/Iris/) and desktop artifacts published by the repository's Actions as official project channels. Review each provider's terms and the rights for your inputs and outputs.
 
 Found a vulnerability? Report it privately through the [security policy](SECURITY.md).
 
@@ -360,7 +378,7 @@ These are directions, not Stable support; follow [the roadmap](docs/content/docs
 
 ## Contributing
 
-Contributions are especially useful in three areas: provider adapters, host integrations and Workflow capabilities. Open an [Issue](https://github.com/avabbbb/Flovart/issues/new/choose), read the [contribution conventions](.github/CONTRIBUTING.md), and include verification evidence with UI changes.
+Contributions are especially useful in three areas: provider adapters, host integrations and Workflow capabilities. Open an [Issue](https://github.com/avabbbb/Iris/issues/new/choose), read the [contribution conventions](.github/CONTRIBUTING.md), and include verification evidence with UI changes.
 
 ## Acknowledgements
 

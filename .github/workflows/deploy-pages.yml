@@ -1,7 +1,7 @@
-# Flovart - GitHub Pages 自动部署
+# Iris - GitHub Pages 自动部署
 #
 # 触发条件：推送到 main 分支时自动构建并部署到 GitHub Pages
-# 部署地址：https://<username>.github.io/Flovart/
+# 部署地址：https://<username>.github.io/Iris/
 
 name: Deploy to GitHub Pages
 
@@ -39,7 +39,7 @@ jobs:
         run: |
           export VITE_APP_VERSION="$(node -p "require('./package.json').version")"
           export VITE_APP_COMMIT_SHA="${GITHUB_SHA}"
-          export VITE_BASE_PATH="/Flovart/"
+          export VITE_BASE_PATH="/Iris/"
           npx vite build
 
       # GitHub Pages SPA 需要 404.html 来处理客户端路由

@@ -5,8 +5,8 @@
 ## 方式一：本地运行
 
 ```bash
-git clone https://github.com/avabbbb/Flovart.git
-cd Flovart
+git clone https://github.com/avabbbb/Iris.git
+cd Iris
 npm install
 npm run flovart:cli -- start --source --web --open
 ```
@@ -64,8 +64,8 @@ Iris 正在持续推进 **OpenAI-compatible** 第三方端点（如中转站、�
 ## 方式四：Docker 本地联调
 
 ```bash
-git clone https://github.com/avabbbb/Flovart.git
-cd Flovart
+git clone https://github.com/avabbbb/Iris.git
+cd Iris
 docker compose up --build -d
 ```
 

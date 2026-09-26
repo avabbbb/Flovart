@@ -1,6 +1,6 @@
 # Iris brand migration
 
-Status: active public-brand migration.
+Status: public brand and repository rename complete; technical compatibility migration remains active.
 
 ## Decision
 
@@ -33,16 +33,15 @@ Keep `flovart` for now in:
 - `tools/flovart/`;
 - internal event names and globals;
 - CSS/data attributes;
-- repository URL `avabbbb/Flovart` until a separate repository-rename step is approved.
 
 Do not mass search-and-replace these identifiers.
 
 ## Future migration order
 
-1. Public brand cutover — **this phase**.
-2. Add new Iris aliases for CLI/package/Skill entry points while preserving `flovart` compatibility.
-3. Update automation, documentation, release assets and external integrations to consume the Iris aliases.
-4. Rename the GitHub repository only after Pages, Actions, badges, external links and local remotes have an explicit migration plan.
+1. Public brand cutover — **complete**.
+2. GitHub repository rename to `avabbbb/Iris` — **complete**; Pages/docs/link cleanup follows the new repository path.
+3. Add new Iris aliases for CLI/package/Skill entry points while preserving `flovart` compatibility.
+4. Update automation, release assets and external integrations to consume the Iris aliases.
 5. Deprecate legacy `flovart` identifiers only after a compatibility window and real-user migration evidence.
 
 ## Positioning

@@ -5,8 +5,8 @@ Five deployment options — pick the one that fits you:
 ## Option 1: Run Locally
 
 ```bash
-git clone https://github.com/avabbbb/Flovart.git
-cd Flovart
+git clone https://github.com/avabbbb/Iris.git
+cd Iris
 npm install
 npm run flovart:cli -- start --source --web --open
 ```
@@ -64,8 +64,8 @@ Iris is continuously advancing **OpenAI-compatible** third-party endpoint adapta
 ## Option 4: Docker Local Integration
 
 ```bash
-git clone https://github.com/avabbbb/Flovart.git
-cd Flovart
+git clone https://github.com/avabbbb/Iris.git
+cd Iris
 docker compose up --build -d
 ```
 
