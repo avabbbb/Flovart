@@ -1,4 +1,4 @@
-name: Bug 报告
+﻿name: Bug 报告
 description: 提交可复现的错误、崩溃或行为回归
 title: "[Bug] "
 body:
@@ -58,7 +58,7 @@ body:
     id: environment
     attributes:
       label: 环境
-      description: Flovart 版本或提交、Web/Desktop、浏览器、操作系统。
+      description: Iris 版本或提交、Web/Desktop、浏览器、操作系统。
       placeholder: "Flovart 0.3.0；Desktop；Windows 11"
     validations:
       required: true

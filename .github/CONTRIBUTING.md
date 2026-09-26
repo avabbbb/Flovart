@@ -1,10 +1,10 @@
-# Flovart 贡献约定 | Contributing
+﻿# Iris 贡献约定 | Contributing
 
 [中文](#中文) · [English](#english)
 
 ## 中文
 
-感谢参与 Flovart。为了让讨论和审查保持低成本，我们采用：
+感谢参与 Iris。为了让讨论和审查保持低成本，我们采用：
 
 > 一个 Issue 只描述一个可判断的问题；一个 PR 只交付一个可验证的目标。
 
@@ -47,7 +47,7 @@
 
 ## English
 
-Thank you for contributing to Flovart. We keep collaboration predictable with one rule:
+Thank you for contributing to Iris. We keep collaboration predictable with one rule:
 
 > One Issue describes one decidable problem; one PR delivers one verifiable outcome.
 
@@ -70,6 +70,6 @@ Search existing Issues first, then use the [Issue chooser](https://github.com/av
 5. Run relevant tests, normally `npm run test` and `npm run build`; list exact commands and explain omitted checks.
 6. Check `todo.mdx` and `pending-test.mdx` whenever feature status changes.
 
-Flovart has three official surfaces: **Workflow, Table, and Agent**. Do not restore the removed Canvas or Art surfaces. Any telemetry, external request, secret access, persistence change, or paid-provider path must disclose its data and security impact in the PR.
+Iris has three official surfaces: **Workflow, Table, and Agent**. Do not restore the removed Canvas or Art surfaces. Any telemetry, external request, secret access, persistence change, or paid-provider path must disclose its data and security impact in the PR.
 
 By contributing, you agree that your work is released under [AGPL-3.0-only](../LICENSE). Please also follow the [Code of Conduct](CODE_OF_CONDUCT.md).

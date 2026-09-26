@@ -13,7 +13,7 @@ npm run flovart:cli -- start --source --web --open
 
 The launcher prepares the WebUI and local Browser Agent together, then opens the main Workflow route `#/app` with a one-time bootstrap handoff. Do not paste `37522` into the address bar and expect Agent binding; the direct URL is only the ordinary WebUI. If no AI service is configured, click "Later" to enter an editable Canvas; click "Add AI service" when you are ready to generate.
 
-In source mode, `37522` is only the preferred port. If it is occupied, Flovart automatically selects an available loopback port and reports the actual URL. For an isolated test run, use `npm run flovart:cli -- start --source --web --web-port=0 --agent-port=0 --no-open --json`.
+In source mode, `37522` is only the preferred port. If it is occupied, Iris automatically selects an available loopback port and reports the actual URL. For an isolated test run, use `npm run flovart:cli -- start --source --web --web-port=0 --agent-port=0 --no-open --json`.
 
 Do not use `--open` for automated browser acceptance because it delegates to the Windows default browser. Run `npm run test:browser:chrome` instead; it uses Playwright's Chrome for Testing executable, an isolated profile, dynamic ports, and a one-time bootstrap URL, then cleans up the test processes.
 
@@ -45,11 +45,11 @@ The [main design](../design/flovart-native-effects.md) defines future native eff
 
 ## Option 3: Third-Party Service Adaptation
 
-Flovart is continuously advancing **OpenAI-compatible** third-party endpoint adaptation (e.g., relay stations, enterprise intranet gateways). You can select **Custom Provider** in Settings and connect it as follows:
+Iris is continuously advancing **OpenAI-compatible** third-party endpoint adaptation (e.g., relay stations, enterprise intranet gateways). You can select **Custom Provider** in Settings and connect it as follows:
 
-1. **Service address** — Enter your endpoint address (for example, `https://api.example.com/v1`; Flovart normalizes compatible paths automatically).
+1. **Service address** — Enter your endpoint address (for example, `https://api.example.com/v1`; Iris normalizes compatible paths automatically).
 2. **API Key** — Enter the credential for this AI service.
-3. **Model** — Flovart discovers models automatically when the service exposes `/models`; if discovery is unavailable, enter a model manually.
+3. **Model** — Iris discovers models automatically when the service exposes `/models`; if discovery is unavailable, enter a model manually.
 4. **Capability declaration** — Configure capabilities only in Advanced settings when automatic inference is not enough.
 
 > **Note on adaptation**: Third-party compatibility rules are still iterating. You are welcome to help improve the adaptation rules and samples so more model services can integrate reliably.

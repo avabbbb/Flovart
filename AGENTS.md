@@ -1,6 +1,13 @@
 # AGENTS.md
 
-本文件约束 Flovart 的 AI / 自动化开发。优先级：系统/开发者指令 > 用户当前明确要求 > 本文件 > 项目文档。用户已确认的新决定覆盖旧稿；历史文档不得反向改变当前产品方向。
+本文件约束 Iris（原 Flovart）的 AI / 自动化开发。优先级：系统/开发者指令 > 用户当前明确要求 > 本文件 > 项目文档。用户已确认的新决定覆盖旧稿；历史文档不得反向改变当前产品方向。
+
+## 0. 品牌迁移规则
+
+- **对外品牌统一使用 Iris**：README、网站标题、宿主面板、用户文案、宣传和新截图不得继续把 Flovart 当作当前产品名。
+- **技术兼容标识暂时保留 `flovart`**：CLI 命令、npm/package 名、Skill 目录、工具路径、事件名、CSS/data attributes、GitHub 仓库 URL 等不得在没有迁移计划和兼容 alias 的情况下批量重命名。
+- 看到旧文档中的 Flovart 时，先判断它是“品牌文案”还是“兼容标识”。品牌文案改为 Iris；兼容标识保持原样，除非当前任务明确包含迁移。
+- 仓库改名、CLI 改名、包 scope 改名属于独立 migration，不和普通 UI/文档 PR 混做。
 
 ## 1. 开始前先确认当前事实
 
@@ -65,14 +72,14 @@ UI / Agent / Host entry
 
 共同硬边界：
 
-- **宿主轻面板**负责当前 selection → intent/reference → plan → generate → import；复杂编排打开 Flovart Canvas。
-- **native effect / OFX**负责宿主参数、关键帧、固定版本预览与导出；render callback 不联网、不等待模型、不依赖 Agent/Flovart 在线。
+- **宿主轻面板**负责当前 selection → intent/reference → plan → generate → import；复杂编排打开 Iris Canvas。
+- **native effect / OFX**负责宿主参数、关键帧、固定版本预览与导出；render callback 不联网、不等待模型、不依赖 Agent/Iris 在线。
 - 面板/Effect 默认新增结果，不静默覆盖当前素材；替换必须显式且可恢复。
 - UI 跟随宿主主题、密度、键盘/焦点和尺寸约束，不把完整 Web Canvas 缩进窄面板。
 
 Host-specific：
 
-- **DaVinci Resolve Studio 21.1 first**：Agent 宿主操作优先使用 Blackmagic native MCP；Flovart Skill + CLI 提供生成与 Artifact。现有 Workflow Integration 只做轻面板 / fallback adapter，OFX 后置。不要创建第二套 Resolve MCP，也不要为每个 Scripting API 建 Flovart wrapper。
+- **DaVinci Resolve Studio 21.1 first**：Agent 宿主操作优先使用 Blackmagic native MCP；Iris Skill + legacy `flovart` CLI 提供生成与 Artifact。现有 Workflow Integration 只做轻面板 / fallback adapter，OFX 后置。不要创建第二套 Resolve MCP，也不要为每个 Scripting API 建 Flovart wrapper。
 - **Resolve UI**：实现前先读 `integrations/studio/resolve/PRODUCT_UI_SPEC.md`，并重新打开 Blackmagic 当前 Edit / Cut / Media 官方页面核对视觉。面板必须是 Resolve-native-feeling contextual inspector，不是聊天页、后台 dashboard 或缩小版 Canvas。
 - **After Effects**：当前 CEP + C++ Effect SDK 工作保留为 Experimental，但暂停作为第一宿主 gate；不要继续扩张，除非当前 Resolve-first 切片明确需要共享修复。
 - **Photoshop / Premiere**：按其当期官方 UXP host API 和 manifest 约束实现，不把浏览器 API 支持度投射到 UXP。
@@ -88,7 +95,7 @@ Host-specific：
 - 持续任务显示真实状态，不能用动画掩盖未知提交、失败或 Provider 未响应。
 - 宿主面板优先单列、当前选择优先、一个主 CTA；高级设置折叠。完整历史/依赖/复杂 Workflow 回 Canvas。
 - Resolve P0 的唯一安全输出是 **Add to Media Pool**；P1 才允许 Add to new track，P2 才做 Replace/Commit。实现 Agent 不得为了“更像成品”跳过非破坏性阶段。
-- Resolve 外部 Agent 的聊天保留在 Codex/Claude 等原宿主；Flovart panel 只显示 context / plan / task / candidate / confirmation。
+- Resolve 外部 Agent 的聊天保留在 Codex/Claude 等原宿主；Iris panel 只显示 context / plan / task / candidate / confirmation。
 
 ## 7. 代码边界
 

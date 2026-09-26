@@ -1,4 +1,4 @@
-# Flovart：创作宿主与 Agent 协作设计
+# Iris：创作宿主与 Agent 协作设计
 
 这是当前唯一的产品与系统主设计。它替代旧 Agent 分层设计、Link 目标稿和 Production Runtime V1 扩张计划；旧代码不会因文档改写自动完成重构。术语见[领域词](../maintenance/agent/CONTEXT.md)，可用性见[支持矩阵](../../SUPPORT_MATRIX.md)，实施进度见[待办](../content/docs/progress/todo.mdx)。
 
@@ -6,33 +6,33 @@
 
 | 项目 | 决定 | 依据 |
 | --- | --- | --- |
-| 第一宿主 | **DaVinci Resolve Studio 21.1 first**；先验证官方 native MCP + Flovart Skill 的真实闭环 | 用户 2026-09-25 确认 |
-| 产品入口 | 外部 Agent 与 Resolve 21.1 native MCP 负责宿主操作；Flovart 轻面板负责上下文、生成、候选与确认；复杂编排再展开 Flovart | 用户确认 + 21.1 新能力 |
+| 第一宿主 | **DaVinci Resolve Studio 21.1 first**；先验证官方 native MCP + Iris Skill 的真实闭环 | 用户 2026-09-25 确认 |
+| 产品入口 | 外部 Agent 与 Resolve 21.1 native MCP 负责宿主操作；Iris 轻面板负责上下文、生成、候选与确认；复杂编排再展开 Iris | 用户确认 + 21.1 新能力 |
 | AE / PR | 保留现有 Experimental 实现与证据，暂停作为首个交付阻塞项；Resolve 纵向切片跑通后再恢复 | 用户确认 |
 | 首版平台 | Windows 优先；macOS 后续单独验证，不承诺同期支持 | 用户通过 ASK 确认 |
-| 首个核心能力 | 当前 Resolve 选中片段 → Flovart 生成固定候选 → **非破坏性导入 Media Pool** | 用户确认 |
+| 首个核心能力 | 当前 Resolve 选中片段 → Iris 生成固定候选 → **非破坏性导入 Media Pool** | 用户确认 |
 | Timeline 写入 | P1 才允许“添加到新轨道”；P2 才做显式 Replace/Commit，并在提交前重新确认目标身份 | 风险分级 |
 | OFX / 原生效果 | Resolve OFX 后置；只有固定版本参数、关键帧或离线渲染出现真实需求后才进入首版 | 用户确认 |
-| Agent | 外部助手优先；Flovart Skill 教 Agent 同时使用 Resolve native MCP 与 Flovart CLI；不复制第二套 Resolve MCP | 用户确认 |
-| 复杂度 | 官方宿主能力优先；普通函数直接完成业务，不增加强制 Operator、制作组、通用总线或“每个 Resolve API 一个 Flovart tool” | 用户明确要求精简 |
-| Provider / 费用 | Resolve 不保存 Provider key；付费生成仍由 Flovart 计划/费用边界控制 | 现有安全边界 |
+| Agent | 外部助手优先；Iris Skill 教 Agent 同时使用 Resolve native MCP 与 legacy `flovart` CLI；不复制第二套 Resolve MCP | 用户确认 |
+| 复杂度 | 官方宿主能力优先；普通函数直接完成业务，不增加强制 Operator、制作组、通用总线或“每个 Resolve API 一个 Iris tool” | 用户明确要求精简 |
+| Provider / 费用 | Resolve 不保存 Provider key；付费生成仍由 Iris 计划/费用边界控制 | 现有安全边界 |
 
 本主设计定义产品目标与边界。Resolve 21.1 的具体 MCP tool 名、数量和 Scripting API 以用户机器上的实际 Studio 版本为准，不把社区实测细节冻结成产品 contract。实现进度仍以待办、待测试确认和 Support Matrix 为准。
 
 ## 2. 产品设计
 
-一句话：**在 Resolve 里选中一个片段，让自己的 Agent 调用 Flovart 生成一个新版本，审核后安全地送回 Media Pool；复杂制作再展开 Flovart。**
+一句话：**在 Resolve 里选中一个片段，让自己的 Agent 调用 Iris 生成一个新版本，审核后安全地送回 Media Pool；复杂制作再展开 Iris。**
 
 首批用户是使用 DaVinci Resolve Studio 21.1 做短视频、广告和创作者内容的个人剪辑师。首个任务不是“让 AI 自动剪完一条片”，而是把一个明确的当前片段变成一个可审核、可追踪、不会破坏原时间线的新候选。
 
-第一阶段不要求用户安装 Flovart 自己的 Resolve MCP server。Blackmagic Studio 21.1 已提供 native MCP；Flovart 应优先利用该宿主控制面，把自己的价值放在生成、引用、持久 Artifact、版本与 Workflow 上。
+第一阶段不要求用户安装 Iris 自己的 Resolve MCP server。Blackmagic Studio 21.1 已提供 native MCP；Iris 应优先利用该宿主控制面，把自己的价值放在生成、引用、持久 Artifact、版本与 Workflow 上。
 
 产品由四个协作面组成：
 
 - **Resolve native MCP**：宿主控制面。由外部 Agent 读取工程/选择、查询当前 Scripting API，并在受控范围内执行 Resolve 操作。
-- **Flovart Resolve 轻面板**：人类审核面。只显示当前 Clip、Prompt/Reference、Plan/Cost、Task、Candidates 与 Open in Flovart，不承载完整 Agent 聊天。
-- **Flovart Skill + CLI**：生成能力面。教外部 Agent 使用 Flovart 的稳定操作、生成任务、持久素材与恢复语义。
-- **Flovart 工作区**：复杂 Workflow、版本比较、依赖与多镜头制作。Canvas | Table | Agent 的现有 IA 不因 Resolve 改写。
+- **Iris Resolve 轻面板**：人类审核面。只显示当前 Clip、Prompt/Reference、Plan/Cost、Task、Candidates 与 Open in Iris，不承载完整 Agent 聊天。
+- **Iris Skill + legacy `flovart` CLI**：生成能力面。教外部 Agent 使用 Iris 的稳定操作、生成任务、持久素材与恢复语义。
+- **Iris 工作区**：复杂 Workflow、版本比较、依赖与多镜头制作。Canvas | Table | Agent 的现有 IA 不因 Resolve 改写。
 
 第一阶段默认动作是“生成候选并导入 Media Pool”。原 Timeline 保持不变。只有用户明确要求后，后续阶段才增加新轨道写入与 Replace/Commit。
 
@@ -40,7 +40,7 @@ Resolve OFX、AE/PR 原生效果、PS 滤镜继续保留为后续宿主能力，
 
 ### 2.1 生态分发
 
-Operation Skill 负责教外部助手组合 **Resolve native MCP + Flovart CLI**：宿主状态从 Resolve 读取，生成与 Artifact 从 Flovart 读取。Skill 不复制 Resolve 的完整 API 文档，也不把官方 native MCP 包装成第二套 Flovart MCP。
+Operation Skill 负责教外部助手组合 **Resolve native MCP + legacy `flovart` CLI**：宿主状态从 Resolve 读取，生成与 Artifact 从 Iris 读取。Skill 不复制 Resolve 的完整 API 文档，也不把官方 native MCP 包装成第二套 Iris MCP。
 
 制作配方继续复用已有 Production Skill 包；配方可以描述创作方法、参考 Workflow、模型需求与结果验收，但不拥有宿主工程 truth、不包含 Provider 凭据，也不自动获得 Timeline 覆盖权限。
 
@@ -59,9 +59,9 @@ Resolve 专项的完整 UI/交互规范见 [Resolve 21.1 Product & UI Spec](../.
 → File > Setup AI Assistants
 → 验证一个真实外部 Agent 已连接
 → 打开项目并选择一个 Media Pool clip 或 timeline item
-→ Agent 或 Flovart 面板读取当前上下文
+→ Agent 或 Iris 面板读取当前上下文
 → 输入创作意图 / References
-→ Flovart 显示必要的模型与费用范围
+→ Iris 显示必要的模型与费用范围
 → 提交一次生成
 → Candidate ready
 → 用户审核
@@ -70,16 +70,16 @@ Resolve 专项的完整 UI/交互规范见 [Resolve 21.1 Product & UI Spec](../.
 
 第一阶段到 Media Pool 为止，不自动替换 Timeline。
 
-未检测到 Studio 21.1、没有打开项目、没有选择素材、native MCP 未连接或 Flovart 未连接时，只显示一个清楚的恢复动作。不要暴露端口、Lease、MCP JSON、Token 或内部 bridge 名称。
+未检测到 Studio 21.1、没有打开项目、没有选择素材、native MCP 未连接或 Iris 未连接时，只显示一个清楚的恢复动作。不要暴露端口、Lease、MCP JSON、Token 或内部 bridge 名称。
 
 ### 3.2 四个 Surface 各做一件事
 
 | Surface | 内容 | 不承担 |
 | --- | --- | --- |
-| 外部 Agent + Resolve native MCP | 理解自然语言、读取 Resolve 上下文、查询当前 API、执行受控宿主操作 | Provider key、Flovart 任务 truth、第二份素材库 |
-| Flovart Resolve 轻面板 | Current Clip、Prompt/Reference、Plan/Cost、Task、Candidates、导入动作 | Agent 全聊天、Timeline 编辑器、完整 Canvas |
-| Flovart Skill + CLI | 生成任务、Artifact、恢复、Flovart operation semantics | 复制 Resolve 全量 Scripting API |
-| Flovart Canvas | 多镜头、依赖、复杂引用、版本比较与 Workflow | 冒充 Resolve Timeline / Media Pool |
+| 外部 Agent + Resolve native MCP | 理解自然语言、读取 Resolve 上下文、查询当前 API、执行受控宿主操作 | Provider key、Iris 任务 truth、第二份素材库 |
+| Iris Resolve 轻面板 | Current Clip、Prompt/Reference、Plan/Cost、Task、Candidates、导入动作 | Agent 全聊天、Timeline 编辑器、完整 Canvas |
+| Iris Skill + legacy `flovart` CLI | 生成任务、Artifact、恢复、Iris operation semantics | 复制 Resolve 全量 Scripting API |
+| Iris Canvas | 多镜头、依赖、复杂引用、版本比较与 Workflow | 冒充 Resolve Timeline / Media Pool |
 
 面板视觉以 Resolve Inspector 为主要参考：紧凑单列、当前选择优先、弱品牌、克制分隔、一个主 CTA。不要把网页首页卡片、超大 logo、复杂 tab、模型市场或系统设置塞进窄面板。
 
@@ -94,7 +94,7 @@ Connection
 → Output (Media Pool)
 → Task
 → Candidates
-→ Open in Flovart
+→ Open in Iris
 ~~~
 
 当前共享面板传入 Resolve 的 `media-pool` target，但通用 select 仍未创建对应 Media Pool option；这是待修的真实实现缺口，不得用 mock 截图掩盖。
@@ -117,7 +117,7 @@ Connection
 渲染：宿主效果 → 读取固定素材版本 → 遮罩与混合 → 返回当前帧
 ```
 
-外部 Agent 负责理解自然语言、选择工具；任务函数负责执行。Flovart 内置 Assistant 是可选的同一工具入口，不自动成为默认协作者，也不拥有绕过确认、费用或目标校验的权限。确定性命令直接调用业务函数，不再先经另一个内部 AI 重新解释。CLI + Skill 是默认外部路径，MCP 只是同一能力的可选协议投影，不串联为 MCP → CLI 子进程 → 多层代理。Link 保留为连接相关代码的名称，不发展成独立业务服务。
+外部 Agent 负责理解自然语言、选择工具；任务函数负责执行。Iris 内置 Assistant 是可选的同一工具入口，不自动成为默认协作者，也不拥有绕过确认、费用或目标校验的权限。确定性命令直接调用业务函数，不再先经另一个内部 AI 重新解释。CLI + Skill 是默认外部路径，MCP 只是同一能力的可选协议投影，不串联为 MCP → CLI 子进程 → 多层代理。Link 保留为连接相关代码的名称，不发展成独立业务服务。
 
 ### 4.1 状态归属
 
@@ -184,9 +184,9 @@ Connection
 
 ### 5.3 宿主能力
 
-| 宿主 | 第一控制面 | Flovart UI / 深层能力 | 首次验收 |
+| 宿主 | 第一控制面 | Iris UI / 深层能力 | 首次验收 |
 | --- | --- | --- | --- |
-| **Resolve Studio 21.1** | **Blackmagic native MCP** | 现有 Workflow Integration 轻面板后续收敛；OFX 后置 | Agent 真实连接、读取选择、Flovart 生成、durable artifact、Media Pool 导入 |
+| **Resolve Studio 21.1** | **Blackmagic native MCP** | 现有 Workflow Integration 轻面板后续收敛；OFX 后置 | Agent 真实连接、读取选择、Iris 生成、durable artifact、Media Pool 导入 |
 | AE | 现有 CEP/脚本面板 | C++ Effect SDK 现有 Experimental 源码保留，暂停首个 gate | 恢复时再做真实 .aex、重开与离线导出 |
 | PR | UXP；仅确有需要时使用 Hybrid | 原生效果后续单独验证 | 片段范围、Effect Controls、时间线导出 |
 | PS | UXP | PS C++ Filter SDK 后续 | 选区、滤镜参数、保存重开 |
@@ -199,7 +199,7 @@ Premiere / AE / PS 的具体 SDK、版本与兼容边界继续以各自官方文
 
 ### 5.4 Agent 双向接入
 
-外部助手：Skill → CLI（默认）或 MCP（可选投影）→ 同一任务函数。内部任务入口：用户消息 → 可选的 Flovart Assistant → 同一批 Flovart 工具。Workflow、Table、Agent 仍是三个独立入口；选择外部 Agent 或打开内置 Assistant 都不转移工程所有权，不读取别的助手私有账号数据库；一次效果写入绑定明确目标和期望版本。
+外部助手：Skill → CLI（默认）或 MCP（可选投影）→ 同一任务函数。内部任务入口：用户消息 → 可选的 Iris Assistant → 同一批 Iris 工具。Workflow、Table、Agent 仍是三个独立入口；选择外部 Agent 或打开内置 Assistant 都不转移工程所有权，不读取别的助手私有账号数据库；一次效果写入绑定明确目标和期望版本。
 
 - Codex：外部沿用现有 Skill/CLI；内部通过 app-server 承接用户可见会话、事件和审批，优先本地 stdio、锁定版本。官方文档对实验性接口及 WebSocket 有限制，必须另做登录与恢复验证。[官方文档](https://developers.openai.com/codex/app-server)
 - WorkBuddy：外部连接器在 CLI + Skill 与 MCP + Skill 中选择一个包形态，不能混装成同一个连接器；内部可使用官方本地助理 API，但要申请应用、scope 和用户授权，经 HTTPS 平台访问，不能宣传完全离线。本地助理状态/历史与云端 ACP 流不同，不能推断本地端支持相同流式能力。[连接器](https://open.workbuddy.cn/docs/connector)、[第三方应用](https://open.workbuddy.cn/docs/third-party-app)、[Open API](https://open.workbuddy.cn/docs/openapi)
@@ -249,9 +249,9 @@ Premiere / AE / PS 的具体 SDK、版本与兼容边界继续以各自官方文
 | 场合 | 可用措辞 | 证据要求 |
 | --- | --- | --- |
 | 当前 README | 本地优先的 Workflow 与 Agent 创作工具，正在开发原生效果插件 | 当前支持矩阵；新方向明确标“开发中” |
-| 原型展示 | Flovart 场景替换原型：生成一个版本，再在 AE/PR 中调节 | 真实宿主录屏，标注软件/插件版本和未完成项 |
+| 原型展示 | Iris 场景替换原型：生成一个版本，再在 AE/PR 中调节 | 真实宿主录屏，标注软件/插件版本和未完成项 |
 | 宿主验证后 | 在 AE/PR 中生成、比较并应用素材版本，继续调整混合与关键帧 | 对应宿主实际安装、保存重开和导出通过 |
-| Agent 接入验证后 | 用 Codex/WorkBuddy 完成所展示的 Flovart 任务 | 该 Agent 的真实会话、工具回执和结果；逐个声明 |
+| Agent 接入验证后 | 用 Codex/WorkBuddy 完成所展示的 Iris 任务 | 该 Agent 的真实会话、工具回执和结果；逐个声明 |
 | 性能宣传 | 在指定硬件与素材规格下达到测得的播放/交互表现 | 可复跑 Benchmark，提供失败样例和条件 |
 
 未来主文案建议：“生成新场景，继续在你的剪辑软件里精修。” 首个演示依次展示选中片段、生成等待、V1/V2 对比、关键帧调节、保存重开和导出。加速等待必须标注，不用假进度或预制输出冒充实时生成。
@@ -267,15 +267,15 @@ Premiere / AE / PS 的具体 SDK、版本与兼容边界继续以各自官方文
 | 顺序 | 交付 | 完成证据 |
 | --- | --- | --- |
 | 1 | Resolve Studio 21.1 native MCP 真实连接 | File > Setup AI Assistants 后一个真实 Agent 能读取当前项目/选择；记录安装版本与实际 tool surface |
-| 2 | Resolve MCP + Flovart CLI 最小纵向闭环 | 当前选择 → 一个 deterministic/fake Flovart artifact → 正确 Media Pool 导入；原 Timeline 不变 |
-| 3 | Resolve 轻面板 UI 收敛 | Current Clip → Generate → Task → Candidates → Add to Media Pool → Open in Flovart；窄/宽面板真实宿主可用 |
+| 2 | Resolve MCP + Iris CLI 最小纵向闭环 | 当前选择 → 一个 deterministic/fake Iris artifact → 正确 Media Pool 导入；原 Timeline 不变 |
+| 3 | Resolve 轻面板 UI 收敛 | Current Clip → Generate → Task → Candidates → Add to Media Pool → Open in Iris；窄/宽面板真实宿主可用 |
 | 4 | 一个真实 RunningHub Provider tracer | 真实付费生成、durable artifact、取消/unknown-submit、Media Pool 导入 |
 | 5 | Add to new track | 不破坏原素材；目标/轨道身份可验证 |
 | 6 | Replace / Commit | 显式确认、提交前目标复核、可恢复/撤销语义 |
 | 7 | Resolve OFX | 只有真实用户需求证明固定版本效果/关键帧/离线渲染必要后才进入 |
 | 8 | 恢复 AE/PR 原生效果与其它宿主 | 按各自真实 SDK / 宿主证据继续，不复用 Resolve 认证 |
 
-第一阶段不要把“做一个更大的 Resolve 插件”当作进展。优先验证官方 MCP、现有 Flovart 生成路径和 Media Pool 之间最短的真实链路。native MCP 不足时才用具体 gap 驱动现有 Workflow Integration bridge。
+第一阶段不要把“做一个更大的 Resolve 插件”当作进展。优先验证官方 MCP、现有 Iris 生成路径和 Media Pool 之间最短的真实链路。native MCP 不足时才用具体 gap 驱动现有 Workflow Integration bridge。
 
 Resolve 面板实现必须遵循 [Resolve 21.1 Product & UI Spec](../../integrations/studio/resolve/PRODUCT_UI_SPEC.md)。视觉参考优先 Blackmagic Edit / Cut / Media / Inspector；社区 MCP 面板只用于失败恢复和 observability 参考，不照搬成另一个后台管理系统。
 
