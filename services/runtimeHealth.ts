@@ -71,11 +71,11 @@ export function classifyAgentSetupError(cause: unknown): AgentSetupBlocker {
 export const AGENT_CREDENTIAL_MESSAGE = '助手需要一个可用的 AI 服务访问凭证才能对话。添加一个 API Key 或完成模型映射后即可开始。';
 
 /** offline 阻塞的主文案：指路到协作页签连接一个正在运行的 Host。 */
-export const AGENTS_OFFLINE_MESSAGE = 'Flovart 需要一个正在运行的协作 Agent（如 Codex、Claude 或 OpenCode）才能继续。打开「协作」页签连接一个助手，或在设置中添加 AI 服务后使用内置助手。';
+export const AGENTS_OFFLINE_MESSAGE = 'Iris 需要一个正在运行的协作 Agent（如 Codex、Claude 或 OpenCode）才能继续。打开「协作」页签连接一个助手，或在设置中添加 AI 服务后使用内置助手。';
 
 /** 按阻塞类别取主文案；unknown 回退到 displayError 译文。 */
 export function agentSetupMessage(kind: AgentSetupBlocker, cause?: unknown): string {
     if (kind === 'credential') return AGENT_CREDENTIAL_MESSAGE;
     if (kind === 'offline') return AGENTS_OFFLINE_MESSAGE;
-    return displayError(cause, 'Flovart Agent 暂时不可用，请稍后重试。');
+    return displayError(cause, 'Iris Agent 暂时不可用，请稍后重试。');
 }

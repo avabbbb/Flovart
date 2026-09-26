@@ -41,7 +41,7 @@ export function sanitizeMediaFileStem(value: string | undefined, fallback: strin
 export function prepareOrderedMediaFiles(sources: PositionedMediaSource[], projectName?: string): OrderedMediaFile[] {
   const ordered = [...sources].sort((a, b) => a.y - b.y || a.x - b.x || a.id.localeCompare(b.id, 'zh-CN'));
   const digits = Math.max(3, String(ordered.length).length);
-  const safeProject = projectName ? sanitizeMediaFileStem(projectName, 'Flovart') : undefined;
+  const safeProject = projectName ? sanitizeMediaFileStem(projectName, 'Iris') : undefined;
   return ordered.map((source, index) => {
     const ext = extensionFor(source.mimeType);
     const safeName = sanitizeMediaFileStem(source.name, '媒体');
@@ -66,7 +66,7 @@ export async function exportMediaArchive(sources: PositionedMediaSource[], archi
   const url = URL.createObjectURL(archive);
   const anchor = document.createElement('a');
   anchor.href = url;
-  anchor.download = `${sanitizeMediaFileStem(archiveName, 'Flovart-媒体')}.zip`;
+  anchor.download = `${sanitizeMediaFileStem(archiveName, 'Iris-媒体')}.zip`;
   document.body.appendChild(anchor);
   anchor.click();
   anchor.remove();

@@ -16,7 +16,7 @@ export function commandData<T>(value: unknown): T {
   const response = record(value);
   if (response?.ok === false) {
     const error = record(response.error);
-    throw new Error(`${String(error?.code || 'COMMAND_FAILED')}: ${String(error?.message || 'Flovart 命令失败')}`);
+    throw new Error(`${String(error?.code || 'COMMAND_FAILED')}: ${String(error?.message || 'Iris 命令失败')}`);
   }
   if (response && 'result' in response) return response.result as T;
   if (response && 'data' in response) return response.data as T;

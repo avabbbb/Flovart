@@ -37,7 +37,7 @@ function headers(connection: ManagedAgentConnection, body = false) {
 
 async function responseError(response: Response) {
   const body = await response.json().catch(() => ({}));
-  return new Error(body?.error?.message || body?.error || `Flovart Agent 请求失败（HTTP ${response.status}）`);
+  return new Error(body?.error?.message || body?.error || `Iris Agent 请求失败（HTTP ${response.status}）`);
 }
 
 function parseSseBlock(block: string) {
@@ -82,7 +82,7 @@ export class ManagedFlovartAgentClient {
     });
     if (!response.ok) throw await responseError(response);
     const reader = response.body?.getReader();
-    if (!reader) throw new Error('Flovart Agent 没有返回事件流。');
+    if (!reader) throw new Error('Iris Agent 没有返回事件流。');
     const decoder = new TextDecoder();
     let buffer = '';
     while (true) {
@@ -109,7 +109,7 @@ export class ManagedFlovartAgentClient {
           result: event.data?.result,
           isError: Boolean(event.data?.isError),
         });
-        else if (event.type === 'error') emit({ type: 'error', message: String(event.data?.message || 'Flovart Agent 运行失败') });
+        else if (event.type === 'error') emit({ type: 'error', message: String(event.data?.message || 'Iris Agent 运行失败') });
       }
       if (done) break;
     }

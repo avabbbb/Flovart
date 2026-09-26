@@ -449,8 +449,8 @@ export function createBrowserAgentTools(dependencies: BrowserAgentToolDependenci
 // 内核：复刻 agent/kernel.js 的生命周期，浏览器实现（持久化/流/工具）
 // ---------------------------------------------------------------------------
 
-const BROWSER_DEFAULT_SYSTEM_PROMPT = `你是 Flovart Agent，负责把用户的创作目标整理为可审查的制作计划。
-你只能使用已注册的 Flovart 制作工具，不得访问 Shell、任意文件或 Provider Secret。
+const BROWSER_DEFAULT_SYSTEM_PROMPT = `你是 Iris Agent，负责把用户的创作目标整理为可审查的制作计划。
+你只能使用已注册的 Iris 制作工具，不得访问 Shell、任意文件或 Provider Secret。
 处理当前项目时先调用 flovart_workflow_inspect；需要当前选区时再调用 flovart_workflow_selection_get，不得猜测项目、节点或连接 ID。
 稳定的 Browser Agent 工具只有 workflow.inspect、workflow.selection.get、workflow.apply、workflow.node.run；command.list/schema 属于 CLI discovery/debug，不要当作模型工具调用。
 Workflow 修改只使用 flovart_workflow_apply 的结构化 operations；节点执行只使用 flovart_workflow_node_run，并继续交给 WorkflowExecutor，不得模拟鼠标或直接修改 React state。
@@ -565,7 +565,7 @@ export class BrowserAgentKernel {
 
   /** 用当前 session + route 构建 PI Agent 实例；会话切换后复用。 */
   private async buildAgent(): Promise<void> {
-    if (!this.session) throw new Error('Flovart Agent session is not open');
+    if (!this.session) throw new Error('Iris Agent session is not open');
     const context = await this.session.buildContext();
     const wrappedTools = this.tools.map(tool => tool.execute ? {
       ...tool,
@@ -607,7 +607,7 @@ export class BrowserAgentKernel {
       beforeToolCall: async ({ toolCall }) => (
         this.tools.some(tool => tool.name === toolCall.name)
           ? undefined
-          : { block: true, reason: `未注册的 Flovart 工具：${toolCall.name}` }
+          : { block: true, reason: `未注册的 Iris 工具：${toolCall.name}` }
       ),
     });
 
@@ -648,7 +648,7 @@ export class BrowserAgentKernel {
   /** 切换到历史列表中的指定会话。 */
   async openSessionById(sessionId: string): Promise<unknown> {
     if (!this.repo) await this.openSession();
-    if (!this.repo) throw new Error('Flovart Agent session store is unavailable');
+    if (!this.repo) throw new Error('Iris Agent session store is unavailable');
     if (this.session) {
       const metadata = await this.session.getMetadata();
       if (metadata.id === sessionId) return this.snapshot();
@@ -695,9 +695,9 @@ export class BrowserAgentKernel {
   }
 
   async send(text: string, images: string[] = [], skillAttachment?: ProductionSkillAttachment | null): Promise<unknown> {
-    if (!this.agent || !this.session) throw new Error('Flovart Agent session is not open');
+    if (!this.agent || !this.session) throw new Error('Iris Agent session is not open');
     const prompt = String(text || '').trim();
-    if (!prompt && images.length === 0) throw new Error('Flovart Agent message is empty');
+    if (!prompt && images.length === 0) throw new Error('Iris Agent message is empty');
     if (images.length > 0) throw new Error('Browser Agent 暂不支持发送图片，仅支持文本消息。');
     this.activeChangeSetId = crypto.randomUUID();
 
@@ -744,7 +744,7 @@ export class BrowserAgentKernel {
     messages: Array<ReturnType<typeof snapshotMessage>>;
     running: boolean;
   }> {
-    if (!this.session) throw new Error('Flovart Agent session is not open');
+    if (!this.session) throw new Error('Iris Agent session is not open');
     const metadata = await this.session.getMetadata();
     const entries = await this.session.getBranch();
     return {

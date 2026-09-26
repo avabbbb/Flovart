@@ -43,9 +43,9 @@ export async function ensureHostReady(
   if (!definition) throw new LinkActivationError('HOST_NOT_FOUND', '这个协作助手暂不可用。');
 
   const current = useAgentConnectionStore.getState();
-  if (!current.projectId) throw new LinkActivationError('WORKSPACE_REQUIRED', '请先打开一个 Flovart 项目。');
+  if (!current.projectId) throw new LinkActivationError('WORKSPACE_REQUIRED', '请先打开一个 Iris 项目。');
   if (current.status !== 'ready' || !current.clientId) {
-    throw new LinkActivationError('LINK_OFFLINE', 'Flovart 本地服务暂时不可用。');
+    throw new LinkActivationError('LINK_OFFLINE', 'Iris 本地服务暂时不可用。');
   }
   const targetProjectId = current.projectId;
   const assertTarget = () => {
@@ -64,7 +64,7 @@ export async function ensureHostReady(
   assertTarget();
   if (!discovery.ok || discovery.state !== 'ready') {
     const error = 'error' in discovery ? discovery.error : undefined;
-    throw new LinkActivationError('LINK_OFFLINE', error || 'Flovart 本地服务暂时不可用。');
+    throw new LinkActivationError('LINK_OFFLINE', error || 'Iris 本地服务暂时不可用。');
   }
   const detected = discovery.agents.find(host => host.id === agentIdentity);
   if (definition.kind !== 'coding-agent' || detected?.status === 'manual-import' || !detected?.available) {

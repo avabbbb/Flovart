@@ -2238,7 +2238,7 @@ export function InfiniteWorkflow({
         name: node.metadata.name || node.title,
         mimeType: node.metadata.mimeType,
         loadBlob: () => loadWorkflowMediaBlob(node.metadata.storageKey, node.metadata.href),
-      })), `Flovart-Workflow-${project.title}`, project.title);
+      })), `Iris-Workflow-${project.title}`, project.title);
       setNotice(`已按工作流顺序导出 ${count} 个媒体文件。`);
     } catch (error) {
       setNotice(displayError(error, '批量导出失败。'));

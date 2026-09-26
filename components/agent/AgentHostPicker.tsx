@@ -51,15 +51,15 @@ interface AgentHostPickerProps {
 export function AgentHostPicker({ projectTitle, language = 'zho' }: AgentHostPickerProps) {
   const zh = language === 'zho';
   const copy = zh ? {
-    aria: '协作 Agent', title: '协作 Agent', description: '选择你习惯的助手，Flovart 会准备当前项目。', refresh: '刷新协作状态', current: '当前协作 Agent', currentAgent: '当前 Agent', selected: '已选择', ready: '已准备',
+    aria: '协作 Agent', title: '协作 Agent', description: '选择你习惯的助手，Iris 会准备当前项目。', refresh: '刷新协作状态', current: '当前协作 Agent', currentAgent: '当前 Agent', selected: '已选择', ready: '已准备',
     workflow: '当前 Workflow', preparing: '正在准备…', inUse: '当前使用', messageReady: '已选择并准备连接。', others: '其他 Agent', switchHint: '可随时切换', active: '当前协作 Agent', diagnostics: '高级诊断',
     state: { ready: '已准备', needs_setup: '需安装', needs_login: '需登录', offline: '离线' },
-    message: { ready: '可以操作当前项目。', needs_setup: '先安装或导入这个助手的 Flovart 入口。', needs_login: '请先登录这个助手，再回来继续。', offline: 'Flovart 本地服务暂时离线。' },
+    message: { ready: '可以操作当前项目。', needs_setup: '先安装或导入这个助手的 Iris 入口。', needs_login: '请先登录这个助手，再回来继续。', offline: 'Iris 本地服务暂时离线。' },
   } : {
-    aria: 'Collaborating Agent', title: 'Collaborating agent', description: 'Choose the assistant you prefer. Flovart will prepare it for this project.', refresh: 'Refresh connection status', current: 'Current collaborating agent', currentAgent: 'Current agent', selected: 'Selected', ready: 'Ready',
+    aria: 'Collaborating Agent', title: 'Collaborating agent', description: 'Choose the assistant you prefer. Iris will prepare it for this project.', refresh: 'Refresh connection status', current: 'Current collaborating agent', currentAgent: 'Current agent', selected: 'Selected', ready: 'Ready',
     workflow: 'Current Workflow', preparing: 'Preparing…', inUse: 'In use', messageReady: 'is selected and ready to connect.', others: 'Other agents', switchHint: 'Switch at any time', active: 'Current collaborating agent', diagnostics: 'Advanced diagnostics',
     state: { ready: 'Ready', needs_setup: 'Setup needed', needs_login: 'Sign in required', offline: 'Offline' },
-    message: { ready: 'Ready to work with the current project.', needs_setup: 'Install or import the Flovart entry point for this assistant.', needs_login: 'Sign in to this assistant, then return here.', offline: 'Flovart local service is currently offline.' },
+    message: { ready: 'Ready to work with the current project.', needs_setup: 'Install or import the Iris entry point for this assistant.', needs_login: 'Sign in to this assistant, then return here.', offline: 'Iris local service is currently offline.' },
   };
   const [discovery, setDiscovery] = useState<AgentHostDiscovery>({ ok: false, state: 'offline', agents: [] });
   const [selectedId, setSelectedId] = useState(readSelectedHost);

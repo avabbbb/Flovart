@@ -96,7 +96,7 @@ function displayMessages(snapshot: {
 }
 
 function errorMessage(error: unknown) {
-  return error instanceof Error ? error.message : String(error || 'Flovart Agent 运行失败');
+  return error instanceof Error ? error.message : String(error || 'Iris Agent 运行失败');
 }
 
 function toolResultText(result: unknown, language: 'en' | 'zho') {

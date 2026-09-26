@@ -41,7 +41,7 @@ export interface BrowserImportReceipt {
 
 function requireDesktop() {
   if (typeof window === 'undefined' || !isTauri()) {
-    throw new Error('Browser Import 只在 Flovart Desktop 中可用');
+    throw new Error('Browser Import 只在 Iris Desktop 中可用');
   }
 }
 

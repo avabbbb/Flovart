@@ -24,7 +24,7 @@ export function parseBrowserImportHref(href: string): string | null {
 
 export async function loadBrowserImportArtifactBlob(importId: string, fallbackMimeType?: string): Promise<Blob> {
   if (typeof window === 'undefined' || !isTauri()) {
-    throw new Error('浏览器导入 Artifact 只能在 Flovart Desktop 中读取');
+    throw new Error('浏览器导入 Artifact 只能在 Iris Desktop 中读取');
   }
   const cached = cache.get(importId);
   if (cached) return cached;

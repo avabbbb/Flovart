@@ -156,12 +156,12 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
           <button
             type="button"
             className="flex items-center gap-2 rounded-lg p-0.5 transition hover:bg-black/5"
-            aria-label="Flovart 菜单"
-            title={canManageProjects ? (isChinese ? '点击打开工作流菜单' : 'Open workflow menu') : 'Flovart'}
+            aria-label="Iris 菜单"
+            title={canManageProjects ? (isChinese ? '点击打开工作流菜单' : 'Open workflow menu') : 'Iris'}
             onClick={() => { if (canManageProjects) setLogoMenuOpen(open => !open); }}
           >
             <img src="/favicon.png" alt="" className="h-7 w-7 rounded-lg" />
-            <span className="hidden text-sm font-black tracking-[-0.03em] sm:inline" style={{ color: 'var(--isl-ink)' }}>Flovart</span>
+            <span className="hidden text-sm font-black tracking-[-0.03em] sm:inline" style={{ color: 'var(--isl-ink)' }}>Iris</span>
           </button>
           {logoMenuOpen && canManageProjects && (
             <div
