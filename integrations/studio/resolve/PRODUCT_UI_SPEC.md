@@ -1,4 +1,4 @@
-# Flovart × DaVinci Resolve Studio 21.1 — Product & UI Spec
+# Iris × DaVinci Resolve Studio 21.1 — Product & UI Spec
 
 Status: **CURRENT IMPLEMENTATION REFERENCE**  
 Authority: subordinate to docs/design/flovart-native-effects.md  
@@ -13,7 +13,7 @@ If this file conflicts with the main product design, the main design wins.
 
 ## 1. Why Resolve is first now
 
-DaVinci Resolve Studio 21.1 changes the shortest path to a real Flovart host demo.
+DaVinci Resolve Studio 21.1 changes the shortest path to a real Iris host demo.
 
 Blackmagic Design's 2026-09-08 Studio 21.1 release adds **AI assistant integration**, a native MCP server and new scripting APIs. The product direction is therefore:
 
@@ -23,7 +23,7 @@ external Agent
      ├── Resolve Studio 21.1 native MCP
      │      └── project / media pool / timeline / render operations
      │
-     └── Flovart Skill + CLI
+     └── Iris Skill + legacy `flovart` CLI
             └── generation / references / durable artifacts / Workflow
 
                  ↓
@@ -31,7 +31,7 @@ external Agent
          the same Resolve project
 ~~~
 
-The first milestone does **not** require Flovart to recreate Resolve's MCP server, expose hundreds of Resolve tools, or finish an OFX effect.
+The first milestone does **not** require Iris to recreate Resolve's MCP server, expose hundreds of Resolve tools, or finish an OFX effect.
 
 After Effects work remains Experimental and is not deleted; it is paused as the blocking first host while the Resolve-first vertical slice is proven.
 
@@ -44,9 +44,9 @@ After Effects work remains Experimental and is not deleted; it is paused as the 
 
 ### Community observations: useful, not product contracts
 
-Recent direct inspection of the 21.1 MCP reports a deliberately small tool surface centered on API/document discovery and script execution instead of one MCP tool per Resolve action. Treat the exact tool count and names as **observed implementation detail**, not a stable Flovart contract.
+Recent direct inspection of the 21.1 MCP reports a deliberately small tool surface centered on API/document discovery and script execution instead of one MCP tool per Resolve action. Treat the exact tool count and names as **observed implementation detail**, not a stable Iris contract.
 
-A Windows community test also reports UTF-8/CJK issues in generated Python unless the assistant process uses UTF-8-safe handling. Reproduce locally before adding a workaround to Flovart.
+A Windows community test also reports UTF-8/CJK issues in generated Python unless the assistant process uses UTF-8-safe handling. Reproduce locally before adding a workaround to Iris.
 
 ---
 
@@ -54,7 +54,7 @@ A Windows community test also reports UTF-8/CJK issues in generated Python unles
 
 First user-facing promise:
 
-> **Select a clip in Resolve. Ask your Agent or Flovart for a new version. Review it, then bring it back to the Media Pool without leaving the edit.**
+> **Select a clip in Resolve. Ask your Agent or Iris for a new version. Review it, then bring it back to the Media Pool without leaving the edit.**
 
 The product is not:
 
@@ -64,11 +64,11 @@ The product is not:
 - a second Agent host;
 - an MCP manager UI;
 - an OFX marketplace;
-- a copy of the full Flovart Canvas in a 320px panel.
+- a copy of the full Iris Canvas in a 320px panel.
 
 The panel is a **contextual production inspector**.
 
-The Agent does reasoning in its existing host. Resolve owns edit state. Flovart owns generation tasks and durable generated artifacts.
+The Agent does reasoning in its existing host. Resolve owns edit state. Iris owns generation tasks and durable generated artifacts.
 
 ---
 
@@ -81,11 +81,11 @@ Resolve Studio 21.1 running
         ↓
 user selects one Media Pool clip or timeline item
         ↓
-Flovart panel shows the exact current selection
+Iris panel shows the exact current selection
         ↓
 user enters intent OR asks external Agent
         ↓
-Flovart prepares one generation plan
+Iris prepares one generation plan
         ↓
 user approves paid generation when required
         ↓
@@ -135,7 +135,7 @@ Responsibilities:
 - import media;
 - later add to timeline / render after the corresponding safety gate.
 
-Flovart must not wrap every Resolve API method as a new Flovart MCP tool.
+Iris must not wrap every Resolve API method as a new Iris MCP tool.
 
 Preferred pattern:
 
@@ -149,20 +149,20 @@ Agent
 
 If the native MCP is insufficient for one required operation, record the concrete gap before adding a custom bridge.
 
-### 4.2 Flovart Skill + CLI — generation plane
+### 4.2 Iris Skill + legacy `flovart` CLI — generation plane
 
 Responsibilities:
 
-- understand Flovart operation semantics;
+- understand Iris operation semantics;
 - prepare references;
 - start/query/cancel generation;
 - preserve provider task identity;
 - materialize durable artifact versions;
-- open the full Flovart Workflow only when the task becomes genuinely complex.
+- open the full Iris Workflow only when the task becomes genuinely complex.
 
-The Skill should teach the Agent how to combine **Resolve MCP + Flovart CLI**. It should not duplicate Resolve's API reference.
+The Skill should teach the Agent how to combine **Resolve MCP + legacy `flovart` CLI**. It should not duplicate Resolve's API reference.
 
-### 4.3 Flovart Resolve panel — human review plane
+### 4.3 Iris Resolve panel — human review plane
 
 The panel exists for:
 
@@ -172,7 +172,7 @@ The panel exists for:
 - task status;
 - candidate review;
 - explicit import/apply actions;
-- “Open in Flovart”.
+- “Open in Iris”.
 
 It does **not** own the Agent conversation.
 
@@ -188,7 +188,7 @@ Do not make OFX a prerequisite for the first Resolve MCP demo.
 
 ### Primary visual reference: Resolve Inspector
 
-Blackmagic's Inspector pattern is the strongest reference for the Flovart panel:
+Blackmagic's Inspector pattern is the strongest reference for the Iris panel:
 
 - dense single-column hierarchy;
 - parameters grouped into collapsible sections;
@@ -198,7 +198,7 @@ Blackmagic's Inspector pattern is the strongest reference for the Flovart panel:
 - controls align to a predictable label/value rhythm;
 - no marketing card grid inside the working UI.
 
-Flovart should feel like a **good Resolve-native utility with Flovart identity**, not a website iframe.
+Iris should feel like a **good Resolve-native utility with Iris identity**, not a website iframe.
 
 ### Secondary visual references
 
@@ -209,7 +209,7 @@ Flovart should feel like a **good Resolve-native utility with Flovart identity**
 
 ### Proposed panel sizing
 
-These are Flovart design targets, not Blackmagic requirements:
+These are Iris design targets, not Blackmagic requirements:
 
 - default width: **340–380 px**;
 - minimum usable width: **280 px**;
@@ -231,7 +231,7 @@ Do not keep generic top-level “制作 / 历史” tabs merely because the shar
 Resolve-first hierarchy:
 
 ~~~text
-Flovart                              ● Ready
+Iris                              ● Ready
 ────────────────────────────────────────────
 
 CURRENT CLIP
@@ -262,7 +262,7 @@ CANDIDATES
 └──────────────────────────────────────────┘
 
 ────────────────────────────────────────────
-Open in Flovart ↗
+Open in Iris ↗
 ~~~
 
 When no candidate exists, do not show an empty “History” product area.
@@ -278,8 +278,8 @@ When multiple candidates exist, show them inline below Task or behind a lightwei
 Display only actionable status:
 
 - ● Resolve connected
-- ● Flovart ready
-- ○ Flovart unavailable — Reconnect
+- ● Iris ready
+- ○ Iris unavailable — Reconnect
 - ○ Resolve Studio 21.1 MCP not configured — Setup guide
 
 Do not show:
@@ -331,7 +331,7 @@ Default: Auto.
 
 Expand model/provider only when the user requests control or Auto cannot resolve a compatible route.
 
-Provider credentials stay in Flovart settings, never in Resolve panel fields.
+Provider credentials stay in Iris settings, never in Resolve panel fields.
 
 ### 7.6 Output
 
@@ -393,9 +393,9 @@ Secondary: Preview.
 
 Do not put five equally strong buttons on every card.
 
-### 7.10 Open in Flovart
+### 7.10 Open in Iris
 
-Persistent low-weight footer action: **Open in Flovart ↗**.
+Persistent low-weight footer action: **Open in Iris ↗**.
 
 Use it for:
 
@@ -405,7 +405,7 @@ Use it for:
 - version comparison;
 - complex model routing.
 
-Opening Flovart should preserve the same task/artifact context.
+Opening Iris should preserve the same task/artifact context.
 
 ---
 
@@ -413,7 +413,7 @@ Opening Flovart should preserve the same task/artifact context.
 
 ### No project
 
-Open a Resolve project to use Flovart. No empty form.
+Open a Resolve project to use Iris. No empty form.
 
 ### Project, no selection
 
@@ -459,7 +459,7 @@ Preserve draft prompt/reference choices where safe and offer one recovery action
 | --- | --- |
 | Read project / selection / metadata | automatic |
 | Search Resolve API/docs | automatic |
-| Prepare Flovart generation plan | automatic |
+| Prepare Iris generation plan | automatic |
 | Paid generation | confirm if outside already approved scope |
 | Import result to Media Pool | low-risk; allowed after generation intent |
 | Add candidate to new track | explicit user/Agent instruction |
@@ -477,14 +477,14 @@ Do not silently enable a broad unsafe executor to make a demo work.
 
 ## 10. MCP design rule: small stable surface, dynamic API knowledge
 
-The first-party Resolve 21.1 MCP is valuable partly because the Agent can inspect current API/documentation instead of Flovart freezing a huge copy of Resolve into its own tool schema.
+The first-party Resolve 21.1 MCP is valuable partly because the Agent can inspect current API/documentation instead of Iris freezing a huge copy of Resolve into its own tool schema.
 
-Flovart should learn from that pattern:
+Iris should learn from that pattern:
 
 - stable tools stay small;
 - domain procedure lives in Skill;
 - current host API comes from the host / current docs;
-- app-specific business safety stays in Flovart;
+- app-specific business safety stays in Iris;
 - a new wrapper tool needs a repeated product reason, not just API availability.
 
 Do not create resolve.clip.trim, resolve.clip.move, resolve.clip.foo wrappers for every scripting method before a user flow needs them.
@@ -500,8 +500,8 @@ Target demo: **20–35 seconds**, one believable operation.
 2. External Agent receives:
    "Make a rainy-night version of this shot. Keep the duration."
 3. Agent reads Resolve context via native MCP.
-4. Agent invokes Flovart generation path.
-5. Flovart panel shows the frozen target + real task status.
+4. Agent invokes Iris generation path.
+5. Iris panel shows the frozen target + real task status.
 6. Candidate appears.
 7. User clicks Add to Media Pool.
 8. Resolve Media Pool visibly receives the asset.
@@ -524,13 +524,13 @@ Do not make “automatic replacement” the first Hero; non-destructive import i
 - Record exact MCP tool surface from the installed version.
 - Test English + Chinese project/bin/marker text on Windows; only add UTF-8 mitigation if reproduced.
 
-### R1 — native MCP + Flovart, no custom panel dependency
+### R1 — native MCP + Iris, no custom panel dependency
 
 Golden task:
 
 ~~~text
 read current selection
-→ generate one local/fake deterministic artifact through Flovart
+→ generate one local/fake deterministic artifact through Iris
 → import artifact to Media Pool
 ~~~
 
@@ -544,7 +544,7 @@ Refactor the Resolve panel to this spec:
 - Generate;
 - Task;
 - Candidates;
-- Open in Flovart.
+- Open in Iris.
 
 Fix the Media Pool output-select mismatch.
 
@@ -584,14 +584,14 @@ The Resolve-first slice is successful when all are evidenced on a real machine:
 
 1. Resolve Studio 21.1 native MCP connects to one supported external Agent.
 2. Agent can read the intended project/selection.
-3. Flovart can create/query one generation without creating a second host state.
+3. Iris can create/query one generation without creating a second host state.
 4. Target remains frozen if the user changes selection during generation.
-5. Result becomes a durable Flovart artifact.
+5. Result becomes a durable Iris artifact.
 6. Result is imported into the correct Resolve Media Pool.
 7. Original media/timeline is unchanged in P0.
 8. Panel shows correct current clip, task and candidate state.
 9. Panel remains usable narrow/wide and visually consistent with Resolve.
-10. Flovart/Resolve disconnects fail visibly and recoverably.
+10. Iris/Resolve disconnects fail visibly and recoverably.
 11. Provider credentials and Agent credentials do not enter project metadata or screenshots.
 12. The complete flow is recorded from the real host.
 
@@ -634,7 +634,7 @@ Do not:
 - add account/provider setup screens to Resolve;
 - auto-delete or auto-replace source clips;
 - use unsafe arbitrary script execution by default;
-- make the panel look like Flovart's marketing site;
+- make the panel look like Iris's marketing site;
 - claim Free Resolve support from Studio evidence.
 
 The implementation Agent should prefer a boring, native-feeling panel with a spectacular end-to-end result over a spectacular panel with an unverified host path.

@@ -1,4 +1,4 @@
-# Flovart Support Matrix
+# Iris Support Matrix
 
 这份矩阵是当前仓库证据的发布口径，并冻结 Closed Beta 范围：只有 `Beta`
 级别的集成是本次发布主推路径；`Experimental` 集成可用但未认证，不得在
@@ -26,7 +26,7 @@ onboarding 或宣传中呈现为与 Beta 路径同等就绪。`Stable` 只表示
 | Photoshop UXP panel | Experimental | `npm run studio:build`、manifest v4、shared `CreativeHostAdapter` 与 layer contract/mock tests；真实 UXP layer → I2I → new layer 是 External Gate |
 | Premiere Pro UXP panel | Experimental | `npm run studio:build`、manifest v5 / 25.6+、clip/frame contract/mock tests；真实 UXP → artifact → Project import 是 External Gate |
 | After Effects | Experimental | 当前轻面板为 `dist-studio/after-effects` CEP/ExtendScript bridge；planned native effect 为独立 C++ Effect SDK 路径。不得假设 AE 已有可发布 UXP host；两条路径均需独立真实宿主认证 |
-| DaVinci Resolve Studio 21.1 | Experimental | **当前第一宿主方向**：优先验证 Blackmagic native MCP + Flovart Skill/CLI；`dist-studio/resolve` Workflow Integration 降为轻面板 / measured fallback，planned OFX 独立后置。真实 native MCP 连接、selection → durable artifact → Media Pool tracer 仍是 External Gate |
+| DaVinci Resolve Studio 21.1 | Experimental | **当前第一宿主方向**：优先验证 Blackmagic native MCP + Iris Skill / legacy `flovart` CLI；`dist-studio/resolve` Workflow Integration 降为轻面板 / measured fallback，planned OFX 独立后置。真实 native MCP 连接、selection → durable artifact → Media Pool tracer 仍是 External Gate |
 
 ## Native effects and deeper Agent integration
 

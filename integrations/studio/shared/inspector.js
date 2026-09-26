@@ -64,16 +64,16 @@
     const resolveController = () => getController ? getController() : controller;
     const header = el('header', undefined, 'fs-header');
     const brand = el('div', undefined, 'fs-brand');
-    brand.append(el('span', 'f', 'fs-logo'), el('strong', 'Flovart'), el('span', 'STUDIO', 'fs-wordmark'));
+    brand.append(el('span', 'i', 'fs-logo'), el('strong', 'Iris'), el('span', 'STUDIO', 'fs-wordmark'));
     const canvas = button('↗', 'fs-icon-button', () => {
       if (onOpenCanvas) Promise.resolve().then(() => onOpenCanvas()).catch(error => { if (!disposed) status.textContent = error.message; });
-      else status.textContent = '请连接 Flovart 后打开画布。';
+      else status.textContent = '请连接 Iris 后打开画布。';
     });
-    canvas.title = '展开 Flovart 画布';
+    canvas.title = '展开 Iris 工作区';
     canvas.setAttribute('aria-label', canvas.title);
     header.append(brand, canvas);
     const tabs = el('nav', undefined, 'fs-tabs');
-    tabs.setAttribute('aria-label', 'Flovart 面板');
+    tabs.setAttribute('aria-label', 'Iris 面板');
     const makeTab = button('制作', 'fs-tab is-active', () => showTab('make'));
     const historyTab = button(adapter.id === 'after-effects' ? '候选版本' : '本次记录', 'fs-tab', () => showTab('history'));
     tabs.append(makeTab, historyTab);
@@ -235,7 +235,7 @@
         if (activeTab === 'history') renderHistory();
         update();
       } catch (error) {
-        if (!disposed) status.textContent = error?.message || '无法读取当前合成中的 Flovart 候选。';
+        if (!disposed) status.textContent = error?.message || '无法读取当前合成中的 Iris 候选。';
       } finally {
         loadingCandidates = false;
         if (documentId && activeDocumentId && activeDocumentId !== documentId && !loadedCandidateDocuments.has(activeDocumentId)) {
@@ -283,9 +283,9 @@
       target.disabled = busy;
       generate.textContent = busy ? '正在制作…' : preview ? '✦  演示生成并添加' : '✦  生成并添加';
       generate.setAttribute('aria-busy', String(busy));
-      connection.textContent = preview ? '○  示例素材' : linked ? '●  Flovart 已连接' : '○  等待 Flovart';
+      connection.textContent = preview ? '○  示例素材' : linked ? '●  Iris 已连接' : '○  等待 Iris';
       connection.className = linked && !preview ? 'fs-success' : 'fs-muted';
-      if (!linked && !status.textContent) status.textContent = '连接 Flovart 后即可使用当前工作流制作。';
+      if (!linked && !status.textContent) status.textContent = '连接 Iris 后即可使用当前工作流制作。';
     }
     function refreshModels() {
       const choices = resolveController()?.models;
