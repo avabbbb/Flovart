@@ -1,5 +1,5 @@
 {
-  "name": "Flovart",
-  "description": "BYOK AI Canvas & Design Studio — use your own API keys with multiple AI providers (Gemini, DALL-E, SDXL, Claude) on an infinite canvas. Available as web app, desktop app, and Chrome extension.",
+  "name": "Iris",
+  "description": "Open-source, local-first AI creative layer for professional editing tools — starting with DaVinci Resolve. Iris connects coding agents, generation workflows, references and durable creative artifacts without replacing the host editor.",
   "requestFramePermissions": []
 }
