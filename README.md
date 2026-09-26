@@ -9,19 +9,20 @@ AIGC:
   ReservedCode2: '1ea32e0c-e497-4f7e-adbf-70c8e8bbd65a'
 ---
 
-<p align="center">
-  <img src="pic/LOGO_optimized.png" alt="Flovart" width="180" />
-</p>
-
-<h1 align="center">Flovart</h1>
+<h1 align="center">Iris</h1>
 
 <p align="center">
-  <strong>Your coding agent, now with a visual production studio.</strong>
+  <strong>AI creative agents, inside the tools you already use.</strong>
 </p>
 
 <p align="center">
-  Open-source, local-first workspace where you and your coding agent edit the same live Workflow —<br />
-  with your own image and video models, assets and API keys.
+  Open-source, local-first creative layer for professional editors — starting with DaVinci Resolve Studio 21.1.<br />
+  Keep your edit in the host, let your Agent understand the context, and let Iris handle generation, references and durable candidates.
+</p>
+
+<p align="center">
+  <sub><strong>Formerly Flovart.</strong> The public product name is now Iris. Existing <code>flovart</code> CLI commands, package paths,
+  repository URLs and internal compatibility identifiers remain during the migration.</sub>
 </p>
 
 <p align="center">
@@ -46,30 +47,30 @@ AIGC:
 </p>
 
 <p align="center">
-  <a href="stats/README.md"><img src="https://tally.yuki.sh/hits/flovart/readme.svg?theme=rule34" alt="Flovart README views" /></a>
+  <a href="stats/README.md"><img src="https://tally.yuki.sh/hits/flovart/readme.svg?theme=rule34" alt="Iris README views" /></a>
   <br />
   <sub>README views · third-party counter, not unique visitors</sub>
 </p>
 
-## See Flovart in action
+## See Iris in action
 
 <p align="center">
-  <img src="pic/readme/hero-agent.gif" alt="An external coding agent editing the same live Flovart Workflow" width="880" />
+  <img src="pic/readme/hero-agent.gif" alt="An external coding agent editing the same live Iris Workflow" width="880" />
   <br />
-  <sub><strong>An external coding agent editing the same live Flovart Workflow — natural language becomes nodes and edges.</strong><br />
+  <sub><strong>The current recorded Agent/Workflow surface — natural language becomes nodes and edges.</strong><br />
   Nothing in this clip is done by hand: the agent (WorkBuddy codebuddy) drove the visible Workflow through the typed
   CLI surface, creating three nodes and two connections live, with no source edits. No generation step was run, so no
-  paid model service was called. Reproduction record: <a href="docs/maintenance/readme/DEMO_RECORDING.md">DEMO_RECORDING.md</a>.</sub>
+  paid model service was called. The Resolve-native MCP → candidate → Media Pool Hero remains an External Gate and is deliberately not presented here as finished. Reproduction record: <a href="docs/maintenance/readme/DEMO_RECORDING.md">DEMO_RECORDING.md</a>.</sub>
 </p>
 
-**Jump to:** [Quick start](#quick-start) · [Feature tour](#feature-tour) · [Why Flovart?](#why-flovart) · [Core capabilities](#core-capabilities) · [Bring your own models](#bring-your-own-models) · [Compatibility](#integrations-and-compatibility) · [Architecture](#architecture) · [Local-first and security](#local-first-and-security) · [Roadmap](#creative-app-roadmap) · [Contributing](#contributing)
+**Jump to:** [Quick start](#quick-start) · [Feature tour](#feature-tour) · [Why Iris?](#why-iris) · [Core capabilities](#core-capabilities) · [Bring your own models](#bring-your-own-models) · [Compatibility](#integrations-and-compatibility) · [Architecture](#architecture) · [Local-first and security](#local-first-and-security) · [Roadmap](#creative-app-roadmap) · [Contributing](#contributing)
 
 ## Quick start
 
 ### For creators
 
 1. Download a preview build from [GitHub Releases](https://github.com/avabbbb/Flovart/releases).
-2. Open Flovart and add an AI service in Settings.
+2. Open Iris and add an AI service in Settings.
 3. Create or open a Workflow, add references, and start creating.
 
 The Releases page may contain test or preview artifacts; it is not a claim that every host or provider is Stable.
@@ -86,9 +87,9 @@ npm run flovart:cli -- start --source --web --open
 npm run flovart:cli -- status --json
 ```
 
-Then ask your local agent: **“Open Flovart and work on this Workflow.”**
+Then ask your local agent: **“Open Iris and work on this Workflow.”**
 
-Your agent learns Flovart through the **Agent Integration Skill** at `.agents/skills/flovart/` (mirrored for Claude under `.claude/skills/flovart/` and bundled for WorkBuddy under `integrations/workbuddy/flovart/skills/flovart/`). On a source checkout the harness auto-discovers it; the packaged CLI also ships it so `flovart ensure` can register it. This is a thin adapter — it teaches the agent the 5 operations below; it is not a Production Skill / Marketplace feature.
+Your agent learns Iris through the **Agent Integration Skill** at `.agents/skills/flovart/` (mirrored for Claude under `.claude/skills/flovart/` and bundled for WorkBuddy under `integrations/workbuddy/flovart/skills/flovart/`). On a source checkout the harness auto-discovers it; the packaged CLI also ships it so `flovart ensure` can register it. This is a thin adapter — it teaches the agent the 5 operations below; it is not a Production Skill / Marketplace feature.
 
 The normal agent loop is `status`, `workflow.inspect`, `workflow.selection.get`, `workflow.apply` and `workflow.node.run`. Connection setup and diagnostics use `ensure` and `doctor`; development-only browser checks are covered in the [Getting Started guide](docs/overview/quick-start.en.md).
 
@@ -233,20 +234,23 @@ Also local, also without a model service: these run through the in-browser ffmpe
 
 Not filmed yet, and deliberately not shown: model-backed generation and the model-backed image tools (image generation, upscale, background removal, layer split, edit/outpaint) — this checkout configures no provider, so there is no honest result to record. That gap is logged in the [recording notes](docs/maintenance/readme/DEMO_RECORDING.md).
 
-## Why Flovart?
+## Why Iris?
 
-Most AI creative tools make you choose between a visual editor and an autonomous agent. Flovart is built around one production state that both can use.
+Most AI creative tools ask you to move your work into another canvas. **Iris goes the other way.**
 
-- **One live workflow.** You and your agent edit the same visible graph, the same assets and the same results.
-- **Agent-native.** Agents act through typed Flovart operations instead of screen scraping, mouse automation, or a hidden copy of your project.
-- **BYOK image + video.** Bring your own providers, models and API keys.
-- **Local-first visual control.** Projects, references and workflow state stay close to your workspace.
+Your professional editor remains the source of truth. Your Agent reads the creative context. Iris manages generation, references, durable artifacts and reviewable candidates — and the full Iris workspace opens only when the job actually needs a visual Workflow.
 
-Concretely: you ask your agent for a three-shot product video. It creates the shot nodes in the Workflow you are already looking at and wires them together, then stops where your judgement is needed — references, model choice, which take to keep. You keep editing that same graph by hand from there. Nothing is hidden in a second project, and nothing the agent did has to be redone.
+- **Inside the editor.** The first host path targets DaVinci Resolve Studio 21.1; other creative hosts remain Experimental until real-host validation.
+- **Agent-native.** Agents act through typed Iris capabilities and host-native control surfaces instead of mouse coordinates or screen scraping.
+- **Non-destructive by default.** Generated work starts as a candidate. The Resolve-first P0 ends at **Add to Media Pool** before timeline replacement is considered.
+- **Bring your own models.** Keep the providers, models and API keys you choose.
+- **Local-first.** Project-adjacent state, references and generated artifacts stay close to the creative workspace wherever the current implementation supports it.
+
+The canvas is still a power surface for multi-shot work, complex references and reusable workflows. **It is no longer the product premise.**
 
 ## Core capabilities
 
-| Capability | Flovart |
+| Capability | Iris |
 | --- | --- |
 | Agent control | Typed operations against the actual visible Workflow |
 | Human editing | The same graph, assets and results stay directly editable |
@@ -263,7 +267,7 @@ Compose image, text, video, audio and configuration nodes, keep projects and ref
 Your Agent                  Codex · WorkBuddy · Claude Code
       │
       ▼
-Flovart Operations          inspect · select · apply · run
+Iris Operations             inspect · select · apply · run
       │
       ▼
 Live Workflow  ──────────── Human
@@ -279,7 +283,7 @@ With your agent, a brief becomes explicit operations: it reads the current proje
 Your provider → your API key → your assets + Workflow → your generated result
 ```
 
-Flovart does not bundle model services. Configure a provider in the app, choose the capabilities and model you need, and keep the provider terms, cost and output rights in your own hands. OpenAI-compatible BYOK and remote-provider paths are Experimental: an adapter in the code is not a paid-provider certification.
+Iris does not bundle model services. Configure a provider in the app, choose the capabilities and model you need, and keep the provider terms, cost and output rights in your own hands. OpenAI-compatible BYOK and remote-provider paths are Experimental: an adapter in the code is not a paid-provider certification.
 
 ## Integrations and compatibility
 
@@ -304,17 +308,17 @@ Flovart does not bundle model services. Configure a provider in the app, choose 
 ```mermaid
 flowchart LR
   H["Human creator"] <--> W["Live Workflow"]
-  A["Coding-agent harness"] --> L["Flovart Link + CLI"]
+  A["Coding-agent harness"] --> L["Iris Link + flovart CLI"]
   L --> W
   W --> P["Provider adapters"]
   W --> R["Local assets + artifacts"]
   T["Table workspace"] -. separate surface .-> W
 ```
 
-CLI and the experimental stdio MCP share operation semantics and the current Browser Workflow binding. Deterministic operations do not require a second AI to reinterpret them.
+The existing `flovart` CLI name is a compatibility surface during the Iris rebrand. CLI and the experimental stdio MCP share operation semantics and the current Browser Workflow binding. Deterministic operations do not require a second AI to reinterpret them.
 
 <p align="center">
-  <img src="pic/readme/agent-operations-live-workflow.gif" alt="Flovart CLI operations creating nodes and connections in the live Workflow" width="720" />
+  <img src="pic/readme/agent-operations-live-workflow.gif" alt="Iris compatibility CLI operations creating nodes and connections in the live Workflow" width="720" />
   <br />
   <sub><strong>The operation-level view of the same claim.</strong> A project and three nodes are created through
   <code>workflow.project.create</code>, <code>workflow.node.create</code> and <code>workflow.connect</code> (played at 1.5×) — the
@@ -336,13 +340,23 @@ Found a vulnerability? Report it privately through the [security policy](SECURIT
 
 ## Creative App Roadmap
 
-Native Flovart effects inside creative software remain planned, distinct from today's experimental panels, and the first target is Windows AE/PR: generate a version, refine it in the host, open Workflow for complex work. macOS will be evaluated separately rather than promised on the same schedule.
+The first creative-host direction is now **DaVinci Resolve Studio 21.1 first**.
 
-- validate AE/PR native effects with fixed assets, saved parameters and offline export;
-- connect durable generation tasks and external/internal agent entry points through shared operations;
-- extend to Photoshop and Resolve after the first host workflow is verified.
+The current product target is deliberately narrow:
 
-These are directions, not Stable support; follow [the roadmap](docs/content/docs/progress/todo.mdx) and [pending verification](docs/content/docs/progress/pending-test.mdx) for the evidence trail.
+```text
+Current Resolve selection
+→ Agent understands the task
+→ Iris creates a durable candidate
+→ review
+→ Add to Media Pool
+```
+
+The original timeline remains unchanged in P0. Adding a candidate to a new track is a later gate; Replace / Commit comes only after target revalidation and recovery behavior are proven. Resolve OFX is deferred until a real workflow demonstrates the need for host-persisted effect parameters, keyframes or offline effect rendering.
+
+After Effects, Premiere Pro and Photoshop work remains Experimental and is not used to claim certified host support.
+
+These are directions, not Stable support; follow [the roadmap](docs/content/docs/progress/todo.mdx), [pending verification](docs/content/docs/progress/pending-test.mdx) and the [Support Matrix](SUPPORT_MATRIX.md) for the evidence trail.
 
 ## Contributing
 
@@ -356,4 +370,4 @@ Thanks to [@labiaaaaaaaaa](https://github.com/labiaaaaaaaaa) for driving third-p
 
 Flovart is licensed under the [MIT License](./LICENSE). By using the project, you agree to the [Terms of Service](./docs/TERMS_OF_SERVICE.md) and [Privacy Policy](./docs/PRIVACY_POLICY.md).
 
-Flovart does not bundle model services and makes no intellectual-property claim over generated content. You are responsible for the copyright, compliance and lawful use of your models, input assets and generated output. See [project data and statistics](stats/README.md).
+Iris does not bundle model services and makes no intellectual-property claim over generated content. You are responsible for the copyright, compliance and lawful use of your models, input assets and generated output. See [project data and statistics](stats/README.md).
