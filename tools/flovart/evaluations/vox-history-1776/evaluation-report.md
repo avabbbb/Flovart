@@ -6,7 +6,7 @@
 
 这证明当前系统已经能支撑**受控的单条风格化短片生产链**，但还不能宣称已经形成“任意第三方导演 Skill + 一个 Key = 稳定成片”的 UGC 制作平台。主要缺口是 Director Skill ABI、ProductionRun/Shot/Artifact 领域模型、统一后期命令、预算审批、远端取消和第三方 Skill 权限沙箱。
 
-成片：[vox-history-1776.mp4](./vox-history-1776.mp4)
+成片：`vox-history-1776.mp4`（生成媒体已从源码树移出；结构化验收记录继续保留，见 `../README.md`）
 
 ## 题材与事实边界
 
