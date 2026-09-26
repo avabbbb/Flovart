@@ -66,7 +66,7 @@ function defaultLifecycle(id: string): Partial<FlovartHostLifecycleAdapter> {
 const EXTERNAL_PACKAGE_HOSTS: Record<string, { fileName: string; installed: string }> = {
   workbuddy: {
     fileName: 'flovart-workbuddy.zip',
-    installed: '安装包已下载，在 WorkBuddy 的技能页导入后即可使用 Flovart。',
+    installed: '安装包已下载，在 WorkBuddy 的技能页导入后即可使用 Iris。',
   },
   'deepseek-harness': {
     fileName: '',

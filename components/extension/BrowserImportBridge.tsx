@@ -139,7 +139,7 @@ export function BrowserImportBridge() {
       onOk={() => pendingPairing && void decidePairing(pendingPairing, true)}
     >
       <Typography.Paragraph>
-        此扩展请求把你明确右键选择的图片传入 Flovart。它不能读取桌面端 AI 服务凭据，
+        此扩展请求把你明确右键选择的图片传入 Iris。它不能读取桌面端 AI 服务凭据，
         也不能直接调用生成服务。
       </Typography.Paragraph>
       <Typography.Text type="secondary" copyable>

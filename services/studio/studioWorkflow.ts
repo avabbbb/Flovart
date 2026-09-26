@@ -61,7 +61,7 @@ function freezeSelection(selection: HostSelection): HostSelection {
 }
 
 function requireProject(project: WorkflowProject | null | undefined): WorkflowProject {
-  if (!project) throw new StudioContractError('WORKSPACE_UNAVAILABLE', 'Flovart 当前没有可用的 Workflow。', true);
+  if (!project) throw new StudioContractError('WORKSPACE_UNAVAILABLE', 'Iris 当前没有可用的 Workflow。', true);
   return project;
 }
 
@@ -99,7 +99,7 @@ export function buildStudioReferenceOperations(
     prompt: prompt.trim(),
     config: { mode: 'image', submode: 'image-to-image' },
   });
-  target.title = 'Flovart 结果';
+  target.title = 'Iris 结果';
   return {
     sourceNodeId,
     targetNodeId,
@@ -173,12 +173,12 @@ export class StudioWorkflowController {
     });
     const taskId = workflowResultTaskId(run);
     const artifactId = workflowResultArtifactId(run);
-    if (!taskId && !artifactId) throw new StudioContractError('HOST_IMPORT_FAILED', 'Flovart 没有返回可回写的制作产物。', true);
+    if (!taskId && !artifactId) throw new StudioContractError('HOST_IMPORT_FAILED', 'Iris 没有返回可回写的制作产物。', true);
     const artifact = await this.core.artifactGet({ ...(taskId ? { taskId } : {}), ...(artifactId ? { artifactId } : {}) });
-    if (!artifact) throw new StudioContractError('HOST_IMPORT_FAILED', 'Flovart 已运行，但暂时没有可回写的产物。', true);
+    if (!artifact) throw new StudioContractError('HOST_IMPORT_FAILED', 'Iris 已运行，但暂时没有可回写的产物。', true);
     if (executionTarget.hostTarget === 'after-effects') {
       if (!artifact.blob) throw new StudioContractError('HOST_IMPORT_FAILED', 'After Effects 固定素材需要可读取的本地产物字节。', true);
-      if (artifact.blob.size === 0) throw new StudioContractError('HOST_IMPORT_FAILED', 'Flovart 返回了空素材，无法固定为版本。', true);
+      if (artifact.blob.size === 0) throw new StudioContractError('HOST_IMPORT_FAILED', 'Iris 返回了空素材，无法固定为版本。', true);
       artifact.sha256 = await hashArtifactBlob(artifact.blob);
       artifact.byteSize = artifact.blob.size;
     }

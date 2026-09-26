@@ -87,7 +87,7 @@ export class WorkflowWorkspaceAdapter {
           clientId: this.bridge?.getClientId?.() || null,
           projectId: projectIdOf(this.latestProject),
           revision: revisionOf(this.latestProject),
-          error: status === 'error' ? 'Flovart Agent 连接中断。' : null,
+          error: status === 'error' ? 'Iris Agent 连接中断。' : null,
         });
         if (this.connected) this.schedulePublish();
       },
