@@ -7,7 +7,7 @@ const expected = String(process.argv[2] || readFileSync(resolve(root, 'VERSION')
 const rootPackage = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'));
 const tauriConfig = JSON.parse(readFileSync(resolve(root, 'src-tauri/tauri.conf.json'), 'utf8'));
 const lockfile = JSON.parse(readFileSync(resolve(root, 'package-lock.json'), 'utf8'));
-const releaseRepository = 'avabbbb/Flovart';
+const releaseRepository = 'avabbbb/Iris';
 const retiredRepositoryOwner = ['Paker', 'kk'].join('-');
 const sources = {
   VERSION: readFileSync(resolve(root, 'VERSION'), 'utf8').trim(),
@@ -51,4 +51,4 @@ if (mismatches.length || errors.length) {
   details.push(...errors);
   throw new Error(details.join('; '));
 }
-console.log(`Flovart release identity is aligned at ${expected} (${releaseRepository}).`);
+console.log(`Iris release identity is aligned at ${expected} (${releaseRepository}).`);

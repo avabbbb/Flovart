@@ -122,10 +122,9 @@ RunningHub Grok 路线即使收到 `generateAudio=false`，下载的 MP4 仍含 
 - 缺点：部分 GPT Image 2 静帧仍生成了英文标题或标签，违反“无可读文字”的提示约束。成片可用，但正式导演流水线应增加 OCR Gate，并对命中的镜头自动重做或局部擦除。
 - 旁白使用 Windows `Microsoft Huihui Desktop`，53.811 秒后补静音至 60 秒。它适合测试，不是最终商业配音质量。
 
-验证制品：
+验证制品（结构化记录保留在仓库；生成媒体已从源码树移出，见 `../README.md`）：
 
 - `film-verification.json`
-- `contact-sheet.png`
 - `narration.metadata.json`
 - `tasks.final.json`
 
@@ -143,10 +142,9 @@ Playwright 在真实 `/#/app` 页面连接本机 Agent 后，CLI 完成：
 
 断言结果：4 个节点、3 条连线、脚本坐标 `{x:500,y:140}`、最终 SHA 与交付文件一致、浏览器 console error 为 0。
 
-证据：
+证据（结构化记录保留在仓库；截图已移出源码树，见 `../README.md`）：
 
 - `workflow-sync-verification.json`
-- `workflow-cli-sync.png`
 
 目前 Runtime Artifact 只有私有 `storeRelpath`。Workflow 节点能同步 `artifactRef`、SHA、时长和状态，但浏览器没有受控的 Artifact URL，因此最终视频节点不能自动播放。不能用 `file://` 或把私有路径塞进画布绕过这个边界；应实现只读 `workflow.projection.get` 和受鉴权的 Artifact stream URL。
 

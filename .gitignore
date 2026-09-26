@@ -44,6 +44,7 @@ artifacts/responsive-agent-link/
 artifacts/responsive-followup/
 artifacts/responsive/
 .tmp/
+.temp/
 
 # Playwright MCP temp files
 .playwright-mcp/
@@ -92,3 +93,11 @@ eval/product-maturity/results/
 eval/product-maturity/dev/
 eval/product-maturity/scenarios/
 
+
+# Historical evaluation media is evidence output, not source. Keep reports,
+# specs and verification JSON in Git; publish generated binaries as CI/Release artifacts.
+tools/flovart/evaluations/**/*.mp4
+tools/flovart/evaluations/**/*.wav
+tools/flovart/evaluations/**/*.png
+tools/flovart/evaluations/**/*.jpg
+tools/flovart/evaluations/**/*.jpeg

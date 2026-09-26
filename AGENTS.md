@@ -5,7 +5,7 @@
 ## 0. 品牌迁移规则
 
 - **对外品牌统一使用 Iris**：README、网站标题、宿主面板、用户文案、宣传和新截图不得继续把 Flovart 当作当前产品名。
-- **技术兼容标识暂时保留 `flovart`**：CLI 命令、npm/package 名、Skill 目录、工具路径、事件名、CSS/data attributes、GitHub 仓库 URL 等不得在没有迁移计划和兼容 alias 的情况下批量重命名。
+- **技术兼容标识暂时保留 `flovart`**：CLI 命令、npm/package 名、`.agents/skills/flovart/` 与镜像 Skill 路径、`tools/flovart/`、事件名、CSS/data attributes 等不得在没有迁移计划和兼容 alias 的情况下批量重命名。GitHub 仓库已正式改名为 `avabbbb/Iris`。
 - 看到旧文档中的 Flovart 时，先判断它是“品牌文案”还是“兼容标识”。品牌文案改为 Iris；兼容标识保持原样，除非当前任务明确包含迁移。
 - 仓库改名、CLI 改名、包 scope 改名属于独立 migration，不和普通 UI/文档 PR 混做。
 
@@ -120,6 +120,7 @@ Host-specific：
 
 - 主设计只保留一个；不要新增并列 CURRENT / TARGET / AUDIT / GOAL / HANDOFF 决策文档。
 - 产品设计变化直接更新主设计；Agent 专项更新 `agent-integration.md`；布局更新 `adaptive-layout.md`。
+- `skills/flovart/` 是 canonical Skill package；`.agents/skills/flovart/`、`.claude/skills/flovart/` 等是兼容投影 / committed snapshot。不要反转 source-of-truth，也不要手工让这些投影漂移。
 - 新 proposal 必须明确 **PROPOSAL / REFERENCE**，被接受后蒸馏进 current truth，再删除或归档 proposal。
 - `todo.mdx` 只放未完成；已实现但需现实验证移到 `pending-test.mdx`；验证后再更新 features。
 - 历史施工包、README audit、阶段性 launch checklist 不留在 active tree；有长期价值的只保留一份简短 archive snapshot，细节由 Git history 保存。

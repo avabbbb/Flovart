@@ -1,8 +1,8 @@
 [package]
 name = "flovart"
 version = "0.3.2"
-description = "Flovart - AI-powered creative workspace"
-authors = ["Flovart"]
+description = "Iris - AI creative layer for professional editing tools"
+authors = ["Iris"]
 edition = "2021"
 default-run = "flovart"
 
