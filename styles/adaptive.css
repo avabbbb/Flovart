@@ -265,7 +265,8 @@ body,
 .workflow-toolbar__library,
 .workflow-toolbar__shortcut-card,
 .workflow-toolbar__compact-menu {
-  max-width: calc(100% - 24px);
+  /* Keep portaled toolbar popovers within the viewport. */
+  max-width: calc(100vw - 16px);
 }
 
 .workflow-config,
@@ -416,6 +417,11 @@ body,
   .workflow-canvas-controls__assets span {
     display: none;
   }
+}
+
+@container workflow-space (width <= 420px) {
+  /* Keep the canvas controls reachable when the main toolbar wraps into rows. */
+  .workflow-canvas-controls { top: 12px; bottom: auto; }
 }
 
 @container assistant-drawer (width <= 360px) {

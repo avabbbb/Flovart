@@ -1,3 +1,4 @@
+import assert from 'node:assert/strict';
 import { execFileSync, spawn } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
@@ -75,7 +76,7 @@ async function waitFor(stage, check, timeoutMs = 45_000, intervalMs = 250) {
   throw new Error(`Chrome smoke 等待本地服务超时 (${detail})。`);
 }
 
-async function waitForWebDiscovery(env, timeoutMs) {
+async function waitForWebDiscovery(env, timeoutMs = 45_000) {
   const deadline = Date.now() + timeoutMs;
   let lastError = null;
   let lastObservation = 'discovery-file-missing';
@@ -125,6 +126,84 @@ function stopProcessTree(child) {
     return;
   }
   try { child.kill('SIGTERM'); } catch {}
+}
+
+async function auditWorkflowToolbar(page, outputDir) {
+  await page.getByRole('button', { name: /新建工作流|New workflow/ }).first().click();
+  await page.locator('.workflow-toolbar').waitFor({ state: 'visible', timeout: 30_000 });
+
+  const cases = [
+    { key: 'add', trigger: { zh: '添加节点', en: 'Add node' }, popup: { zh: '[role="menu"][aria-label="添加节点"]', en: '[role="menu"][aria-label="Add nodes"]' }, minWidth: 150 },
+    { key: 'tools', trigger: { zh: '工具箱', en: 'Tools' }, popup: { zh: '[role="menu"][aria-label="画布工具箱"]', en: '[role="menu"][aria-label="Canvas tools"]' }, minWidth: 150 },
+    { key: 'shared-media', trigger: { zh: '共享素材', en: 'Shared media' }, popup: '[data-testid="workflow-toolbar-library"]', minWidth: 240 },
+    { key: 'history', trigger: { zh: '历史', en: 'History' }, popup: { zh: '[role="menu"][aria-label="历史操作"]', en: '[role="menu"][aria-label="History actions"]' }, minWidth: 150 },
+    { key: 'shortcuts', trigger: { zh: '快捷键', en: 'Keyboard shortcuts' }, popup: { zh: '[role="dialog"][aria-label="画布快捷键"]', en: '[role="dialog"][aria-label="Canvas shortcuts"]' }, minWidth: 180 },
+  ];
+  const audit = [];
+  const runLocale = async (locale, widths) => {
+    for (const width of widths) {
+      const height = width === 280 ? 700 : 900;
+      await page.setViewportSize({ width, height });
+      const layout = await page.evaluate(() => {
+        const controls = document.querySelector('.workflow-canvas-controls')?.getBoundingClientRect();
+        const toolbar = document.querySelector('.workflow-toolbar')?.getBoundingClientRect();
+        const overlap = controls && toolbar ? {
+          width: Math.max(0, Math.min(controls.right, toolbar.right) - Math.max(controls.left, toolbar.left)),
+          height: Math.max(0, Math.min(controls.bottom, toolbar.bottom) - Math.max(controls.top, toolbar.top)),
+        } : null;
+        return { documentWidth: document.documentElement.scrollWidth, controls: controls && { x: controls.x, y: controls.y, right: controls.right, bottom: controls.bottom }, toolbar: toolbar && { x: toolbar.x, y: toolbar.y, right: toolbar.right, bottom: toolbar.bottom }, overlap };
+      });
+      await page.screenshot({ path: join(outputDir, `workflow-toolbar-${locale}-${width}.png`), fullPage: true });
+      assert.ok(layout.documentWidth <= width + 1, `${locale} ${width}px: document overflows to ${layout.documentWidth}px`);
+      assert.ok(!layout.overlap || layout.overlap.width === 0 || layout.overlap.height === 0, `${locale} ${width}px: bottom controls overlap (${JSON.stringify(layout)})`);
+
+      const viewportCases = [...cases, {
+        key: 'zoom',
+        trigger: { zh: '重置缩放', en: 'Reset zoom' },
+        toolbar: { zh: '画布控制', en: 'Canvas controls' },
+        popup: { zh: '[role="menu"][aria-label="画布控制"]', en: '[role="menu"][aria-label="Canvas controls"]' },
+        minWidth: 150,
+      }];
+      for (const item of viewportCases) {
+        const toolbarName = item.toolbar?.[locale] || (locale === 'zh' ? '工作流工具栏' : 'Workflow toolbar');
+        const trigger = page.getByRole('toolbar', { name: toolbarName }).getByRole('button', { name: item.trigger[locale] });
+        assert.ok(await trigger.isVisible(), `${locale} ${width}px: ${item.key} trigger is not visible`);
+        await trigger.click();
+        const selector = typeof item.popup === 'string' ? item.popup : item.popup[locale];
+        const popup = page.locator(selector);
+        await popup.waitFor({ state: 'visible', timeout: 3_000 });
+        await page.waitForTimeout(100);
+        const geometry = await popup.evaluate(element => {
+          const rect = element.getBoundingClientRect();
+          const clippedBy = [];
+          for (let parent = element.parentElement; parent; parent = parent.parentElement) {
+            const style = getComputedStyle(parent);
+            const clipsX = /(hidden|clip|auto|scroll)/.test(style.overflowX);
+            const clipsY = /(hidden|clip|auto|scroll)/.test(style.overflowY);
+            if (!clipsX && !clipsY) continue;
+            const parentRect = parent.getBoundingClientRect();
+            if ((clipsX && (rect.left < parentRect.left || rect.right > parentRect.right)) || (clipsY && (rect.top < parentRect.top || rect.bottom > parentRect.bottom))) clippedBy.push(parent.className || parent.tagName);
+          }
+          return { x: rect.x, y: rect.y, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height, scrollWidth: element.scrollWidth, clientWidth: element.clientWidth, clippedBy, focusInside: element.contains(document.activeElement) };
+        });
+        assert.ok(geometry.x >= -1 && geometry.y >= -1 && geometry.right <= width + 1 && geometry.bottom <= height + 1, `${locale} ${width}px: ${item.key} popup outside viewport (${JSON.stringify(geometry)})`);
+        assert.ok(geometry.width >= Math.min(item.minWidth, width - 16) - 1, `${locale} ${width}px: ${item.key} popup collapsed to ${geometry.width}px`);
+        assert.deepEqual(geometry.clippedBy, [], `${locale} ${width}px: ${item.key} popup clipped by an ancestor`);
+        assert.ok(geometry.focusInside, `${locale} ${width}px: ${item.key} did not receive keyboard focus`);
+        await page.screenshot({ path: join(outputDir, `workflow-toolbar-${locale}-${width}-${item.key}.png`) });
+        await page.keyboard.press('Escape');
+        await popup.waitFor({ state: 'detached', timeout: 3_000 });
+        assert.ok(await trigger.evaluate(element => element === document.activeElement), `${locale} ${width}px: ${item.key} did not restore focus after Escape`);
+        audit.push({ locale, width, key: item.key, ...geometry });
+      }
+    }
+  };
+
+  await runLocale('zh', [1440, 768, 280]);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.getByRole('button', { name: 'Switch to English' }).click();
+  await runLocale('en', [1440, 768, 280]);
+  return audit;
 }
 
 const cli = spawn(process.execPath, cliArgs, {
@@ -193,6 +272,9 @@ try {
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(`${message} healthLast=${describeWaitValue(lastHealthObservation)}`);
   }
+  const uiAuditDir = join(projectDir, '.tmp', 'ui-audit');
+  await mkdir(uiAuditDir, { recursive: true });
+  const workflowToolbarAudit = await auditWorkflowToolbar(page, uiAuditDir);
   const finalUrl = page.url();
   if (/[?&](agentToken|token)=/i.test(finalUrl)) throw new Error('Bootstrap secret remained in the browser URL.');
   result = {
@@ -203,6 +285,7 @@ try {
     browserConnected: true,
     clients: Number(health.clients || 0),
     hasWorkflow: Boolean(health.hasWorkflow),
+    workflowToolbarAudit,
     finalUrl,
     consoleErrors,
     pageErrors,
