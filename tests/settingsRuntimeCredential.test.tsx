@@ -2,6 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { SettingsPanel } from '../components/SettingsPanel';
+import { translations } from '../utils/translations';
 
 const { runtimeExecute } = vi.hoisted(() => ({ runtimeExecute: vi.fn() }));
 
@@ -22,6 +23,14 @@ const multiCredentialStatus = {
     ],
 };
 
+const zhT = (key: string, ...args: unknown[]): string => {
+    const value = key.split('.').reduce<unknown>((current, part) => {
+        if (!current || typeof current !== 'object' || !(part in current)) return undefined;
+        return (current as Record<string, unknown>)[part];
+    }, translations.zho as unknown);
+    return String(typeof value === 'function' ? value(...args) : (value ?? key));
+};
+
 const renderSettings = (onAddApiKey: (payload: unknown) => void = () => undefined) => render(
     <SettingsPanel
         isOpen
@@ -32,7 +41,7 @@ const renderSettings = (onAddApiKey: (payload: unknown) => void = () => undefine
         onDeleteApiKey={() => undefined}
         onUpdateApiKey={() => undefined}
         onSetDefaultApiKey={() => undefined}
-        t={(key) => key}
+        t={zhT}
         clearKeysOnExit={false}
         setClearKeysOnExit={() => undefined}
     />,
@@ -82,7 +91,7 @@ describe('SettingsPanel runtime credential selection', () => {
                 onDeleteApiKey={() => undefined}
                 onUpdateApiKey={() => undefined}
                 onSetDefaultApiKey={() => undefined}
-                t={(key) => key}
+                t={zhT}
                 clearKeysOnExit={false}
                 setClearKeysOnExit={() => undefined}
             />,

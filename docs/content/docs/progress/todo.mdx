@@ -6,20 +6,22 @@ title: 后续待办
 
 ## 第一阶段：Resolve Studio 21.1 MCP-first
 
-当前第一宿主已切换为 **DaVinci Resolve Studio 21.1**。目标不是先开发更大的插件，而是先证明 Blackmagic native MCP + Flovart Skill/CLI + durable artifact + Media Pool 的真实纵向闭环。专项 UI/交互见 [Resolve 21.1 Product & UI Spec](../../../../integrations/studio/resolve/PRODUCT_UI_SPEC.md)。
+当前第一宿主是 **DaVinci Resolve Studio 21.1**。预期真实链路为 **Resolve native MCP → 外部 Agent → Iris Skill + legacy `flovart` CLI → durable artifact → Media Pool**；Resolve 自带控制面，不在 Iris 中再实现第二个 Resolve MCP Server。当前 worktree 已有面板和持久候选的源码改动，详见[待测试确认](pending-test.mdx)；源码、组件测试和 package build 均不等于真实宿主支持。专项 UI/交互见 [Resolve 21.1 Product & UI Spec](../../../../integrations/studio/resolve/PRODUCT_UI_SPEC.md)。
 
-- [ ] 在真实 Resolve Studio 21.1 中执行 `File > Setup AI Assistants`，验证一个真实外部 Agent（优先 Codex）连接；记录 Resolve build、OS、Agent 版本、实际 MCP tool surface 与连接配置，不用社区工具数量替代本机事实。
-- [ ] 用 native MCP 读取当前 project / timeline / Media Pool selection，冻结 project + selection identity；用户随后切换选择时，进行中的 Flovart 任务不得 retarget。
-- [ ] 第一条 Golden Task 不依赖真实 Provider：当前选择 → deterministic/fake Flovart artifact → durable file → **Add to Media Pool**；原 Timeline 保持不变。
-- [ ] 在真实 Resolve Studio 面板中核实共享 Inspector 显示 `Output: Media Pool`、保持所选输出并生成正确入参；网页单测覆盖不替代宿主内验收。
-- [ ] 按 Resolve Inspector / Media Pool 视觉规律重做轻面板层级：Connection → Current Clip → Generate → References → Model(Auto) → Output → Task → Candidates → Open in Flovart。不要做全屏 chat、MCP 管理页、模型商城或第二份 Timeline。
-- [ ] 面板完成 no-project / no-selection / ready / running / candidate / disconnected / error 状态；窄宽窗口实测，无横向滚动，当前选择与 pending target 必须能同时被用户理解。
-- [ ] P0 candidate 只允许 Preview + Add to Media Pool。P1 才做 Add to new track；P2 Replace/Commit 必须显式确认、提交前重新读取 target identity，并验证 undo/recovery。
-- [ ] 真实 Studio 环境验证媒体文件生命周期：Resolve 导入后临时文件不能立即删除导致 offline media；落盘 Artifact 由 Flovart 持久管理，Media Pool 指向可长期读取的文件。
+- [ ] 在真实 Resolve **Studio 21.1** 中执行 `File > Setup AI Assistants`，连接真实外部 Agent（优先 Codex）；记录 Resolve build、OS、许可证/版本信息、Agent 版本、实际 MCP tool surface 与连接结果。
+- [ ] 完成并记录 Resolve native MCP → Agent → Iris Skill/legacy `flovart` CLI → durable artifact → Media Pool 的真实编排。当前 CLI 尚无已验证的 Runtime artifact 本地落盘/移交路径；先沿用现有业务能力补齐最窄可行交接，不伪造素材路径、不新增 MCP Server。
+- [ ] 接通 Resolve panel 的生产 controller wiring：当前 `installStudioBrowserLink()` 只有测试调用，`resolve/index.js` 读取的 `__FLOVART_STUDIO_CONTROLLER__` 没有已验证的生产注入路径；不能把未挂载 controller 当成面板功能。
+- [ ] 为 Agent CLI → Resolve durable artifact 建立同机 binary handoff：当前 Workspace Adapter 是 JSON/SSE、请求体整体缓冲 36 MiB，base64 可承载素材约 27 MiB，不能运输 64 MiB 候选。使用受限的 artifact identity / frozen target / 内容校验 / userData 落盘合同；拒绝任意路径、Runtime 私有 `storeRelpath`、第二个 Resolve MCP 与 base64 大对象。
+- [ ] `Open in Iris` 目前仅调用无参数 `onOpenCanvas()`，未传 workflow/project/task/artifact/target；定义带目标绑定与最小披露的显式 handoff contract，并由目标 Iris surface 消费，不能静默丢 context。
+- [ ] 先做只读 tracer：Agent 读取真实 project / timeline / selection，并与 Resolve UI 核对 project 与 item identity；后续切换选择不得改变已冻结任务目标。
+- [ ] 第一条写入 Golden Task 不依赖付费 Provider：当前选择 → deterministic fixture artifact → Iris durable file → **Add to Media Pool**；原 Timeline 保持不变。
+- [ ] 在真实宿主中验证当前面板源码：`Output: Media Pool`、所选目标、冻结 task target、候选预览与 Add 状态；确认 unknown import 不会盲重试。
+- [ ] 在 Resolve Studio 中覆盖无项目、无选择、ready、running、candidate、断连和失败状态；验证中英文、280–480px 面板宽度、键盘操作、无横向溢出及 Open in Iris 上下文交接。
+- [ ] 关闭项目并重启 Resolve 后重开，确认已导入媒体仍 online；确认文件路径移动/缺失时错误可见。当前源码保留 durable 文件，Resolve 是否复制或引用源路径仍待实测。
 - [ ] Windows 下实测英文与中文 project/bin/marker/text；社区报告的 Python UTF-8/CJK 问题只有复现后才加入 `PYTHONUTF8` 或转义策略。
 - [ ] native MCP 有 bounded / unsafe script surface 时默认只用 bounded path；unsafe filesystem/network escape 不为 Demo 自动开启。
-- [ ] 接一个且只接一个已批准 RunningHub 路径：selected clip → real generation → durable artifact → Media Pool。记录计费、取消、429、unknown-after-submit 与重连语义。
-- [ ] Hero 录屏固定为 20–35 秒：选中 Resolve clip → Agent 读上下文 → Flovart 真生成 → panel 出 candidate → Add to Media Pool。加速等待必须标注，不把 mock 当真实生成。
+- [ ] 只有 P0 真机闭环通过后，接一个且只接一个已批准 RunningHub 路径：selected clip → real generation → durable artifact → Media Pool。记录计费、取消、429、unknown-after-submit 与重连语义。
+- [ ] Hero 录屏固定为 20–35 秒：选中 Resolve clip → Agent 读上下文 → Iris 真生成 → panel 出 candidate → Add to Media Pool。加速等待必须标注，不把 fixture/mock 当真实生成。
 
 ## 第二阶段：Resolve 深层写入
 
