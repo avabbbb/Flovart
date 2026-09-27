@@ -416,6 +416,9 @@ body {
 .compact-right-panel__quicktabs--icons .compact-right-panel__quicktab-label {
     display: none;
 }
+.compact-right-panel__quicktabs--icons > button {
+  margin-inline-start: auto;
+}
 .compact-right-panel__quicktabs .isl-tab--active {
     color: var(--isl-ink);
     background: var(--isl-surface-2);
