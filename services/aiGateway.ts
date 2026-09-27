@@ -1223,12 +1223,25 @@ function uniqueLimitedUrls(urls: string[], max: number) {
 async function blobToDataUrl(href: string): Promise<string> {
     const res = await fetch(href);
     const blob = await res.blob();
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(String(reader.result || ''));
-        reader.onerror = () => reject(reader.error || new Error('无法读取本地媒体'));
-        reader.readAsDataURL(blob);
-    });
+    const buffer = typeof blob.arrayBuffer === 'function'
+        ? await blob.arrayBuffer()
+        : await new Promise<ArrayBuffer>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => {
+                if (reader.result instanceof ArrayBuffer) resolve(reader.result);
+                else reject(new Error('无法读取本地媒体'));
+            };
+            reader.onerror = () => reject(reader.error || new Error('无法读取本地媒体'));
+            reader.readAsArrayBuffer(blob);
+        });
+    const bytes = new Uint8Array(buffer);
+    let binary = '';
+    const chunkSize = 0x8000;
+    for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+        binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
+    }
+    const mimeType = blob.type || res.headers.get('content-type') || 'application/octet-stream';
+    return `data:${mimeType};base64,${btoa(binary)}`;
 }
 
 /**

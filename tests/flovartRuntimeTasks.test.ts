@@ -39,7 +39,11 @@ async function protectDiscovery(path: string) {
 function runCli(args: string[], env: NodeJS.ProcessEnv) {
   return new Promise<{ code: number | null; stdout: string; stderr: string }>((resolve, reject) => {
     const child = spawn(process.execPath, [join(process.cwd(), 'tools', 'flovart', 'cli.js'), ...args], {
-      env: { ...process.env, ...env },
+      env: {
+        ...process.env,
+        ...env,
+        ...(process.platform === 'win32' ? { FLOVART_ACL_DEBUG: '1' } : {}),
+      },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     let stdout = '';
@@ -47,7 +51,13 @@ function runCli(args: string[], env: NodeJS.ProcessEnv) {
     child.stdout.setEncoding('utf8').on('data', chunk => { stdout += chunk; });
     child.stderr.setEncoding('utf8').on('data', chunk => { stderr += chunk; });
     child.once('error', reject);
-    child.once('close', code => resolve({ code, stdout, stderr }));
+    child.once('close', code => {
+      if (code !== 0) {
+        const diagnostics = stderr.split(/\r?\n/).filter(line => line.startsWith('[acl-debug]'));
+        if (diagnostics.length) process.stderr.write(`${diagnostics.join('\n')}\n`);
+      }
+      resolve({ code, stdout, stderr });
+    });
   });
 }
 
