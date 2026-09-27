@@ -90,6 +90,39 @@ describe('Workflow right panel', () => {
     expect(screen.getByRole('heading', { name: '右侧面板测试' })).toBeInTheDocument();
   });
 
+  it('centers icon-only quick tabs while keeping each tab accessible by name', () => {
+    render(
+      <StudioRightDrawer
+        open
+        onOpenChange={vi.fn()}
+        outerGap={0}
+        width={360}
+        minWidth={280}
+        maxWidth={640}
+        onWidthChange={vi.fn()}
+        flush
+        docked
+        activeTab="agent"
+        onTabChange={vi.fn()}
+        tabs={[
+          { id: 'agent', label: '助手', icon: undefined },
+          { id: 'context', label: '上下文', icon: undefined },
+          { id: 'history', label: '生成历史', icon: undefined },
+        ]}
+      >
+        <div />
+      </StudioRightDrawer>,
+    );
+
+    const centeredBar = document.querySelector('.compact-right-panel__quicktabs-icons');
+    expect(centeredBar).not.toBeNull();
+    expect(centeredBar?.parentElement).toHaveClass('compact-right-panel__quicktabs--icons');
+    for (const label of ['助手', '上下文', '生成历史']) {
+      expect(screen.getByRole('button', { name: label })).toHaveAttribute('title', label);
+      expect(screen.getByRole('button', { name: label }).querySelector('.compact-right-panel__quicktab-label')).not.toBeNull();
+    }
+  });
+
   it('collapses to a non-interactive strip that leaves no phantom layout rect', () => {
     const project = useWorkflowStore.getState().projects[0];
     const { rerender } = render(

@@ -121,18 +121,19 @@ export const StudioRightDrawer: React.FC<StudioRightDrawerProps> = ({
             event.preventDefault();
           }}
         />
-        <div className={flush ? 'compact-right-panel__quicktabs' : 'flex shrink-0 items-center gap-1.5 border-b px-2 py-2'} style={{ borderColor: 'var(--isl-border)' }}>
-          <div className="isl-tabbar isl-tabbar--ac min-w-0 flex-1">
+        <div className={flush ? 'compact-right-panel__quicktabs compact-right-panel__quicktabs--icons' : 'flex shrink-0 items-center gap-1.5 border-b px-2 py-2'} style={{ borderColor: 'var(--isl-border)' }}>
+          <div className={`isl-tabbar isl-tabbar--ac min-w-0 ${flush ? 'compact-right-panel__quicktabs-icons' : 'flex-1'}`}>
             {tabs.map(tab => (
               <button
                 key={tab.id}
                 type="button"
                 className={`isl-tab min-w-0 flex-1 justify-center gap-1.5 ${activeTab === tab.id ? 'isl-tab--active' : ''}`}
                 onClick={() => onTabChange(tab.id)}
+                aria-label={tab.label}
                 title={tab.label}
               >
                 {tab.icon || (tab.id === 'history' ? <History size={15} /> : tab.id === 'context' ? <SlidersHorizontal size={15} /> : <MessageSquare size={15} />)}
-                <span className="truncate">{tab.label}</span>
+                <span className={flush ? 'compact-right-panel__quicktab-label' : 'truncate'}>{tab.label}</span>
               </button>
             ))}
           </div>

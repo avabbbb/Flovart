@@ -206,6 +206,89 @@ async function auditWorkflowToolbar(page, outputDir) {
   return audit;
 }
 
+async function auditAgentConnectionsPage(page, outputDir) {
+  const audit = [];
+  const visitAgent = async () => {
+    await page.getByRole('tab', { name: 'Agent', exact: true }).click();
+    await page.getByTestId('agent-connections-surface').waitFor({ state: 'visible', timeout: 10_000 });
+  };
+  const runLocale = async locale => {
+    for (const width of [1440, 768, 280]) {
+      await page.setViewportSize({ width, height: 900 });
+      const geometry = await page.getByTestId('agent-connections-surface').evaluate(surface => {
+        const rect = surface.getBoundingClientRect();
+        const style = getComputedStyle(surface);
+        return {
+          x: rect.left,
+          right: rect.right,
+          width: rect.width,
+          documentWidth: document.documentElement.scrollWidth,
+          borderWidth: style.borderTopWidth,
+          borderStyle: style.borderTopStyle,
+          borderColor: style.borderTopColor,
+        };
+      });
+      assert.ok(geometry.borderWidth === '1px' && geometry.borderStyle === 'solid', `${locale} ${width}px: Agent surface frame missing (${JSON.stringify(geometry)})`);
+      assert.ok(geometry.borderColor !== 'rgba(0, 0, 0, 0)', `${locale} ${width}px: Agent surface border is transparent`);
+      assert.ok(geometry.x >= -1 && geometry.right <= width + 1, `${locale} ${width}px: Agent surface outside viewport (${JSON.stringify(geometry)})`);
+      assert.ok(geometry.documentWidth <= width + 1, `${locale} ${width}px: Agent page has horizontal overflow (${geometry.documentWidth}px)`);
+      const filename = `agent-connections-${locale}-${width}.png`;
+      await page.screenshot({ path: join(outputDir, filename), fullPage: true });
+      audit.push({ locale, width, ...geometry, screenshot: filename });
+    }
+  };
+
+  await visitAgent();
+  await runLocale('en');
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.getByRole('button', { name: '切换到中文' }).click();
+  await runLocale('zh');
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.getByRole('button', { name: 'Switch to English' }).click();
+
+  await page.getByRole('tab', { name: 'Canvas', exact: true }).click();
+  const quicktabs = page.locator('.compact-right-panel__quicktabs--icons');
+  await quicktabs.waitFor({ state: 'visible', timeout: 10_000 });
+  const tabLayout = await quicktabs.evaluate(element => {
+    const group = element.querySelector('.compact-right-panel__quicktabs-icons');
+    if (!group) return null;
+    const groupRect = group.getBoundingClientRect();
+    const containerRect = element.getBoundingClientRect();
+    const buttons = [...group.querySelectorAll('button')];
+    return {
+      buttonLabels: buttons.map(button => button.getAttribute('aria-label')),
+      visibleText: buttons.some(button => {
+        const label = button.querySelector('.compact-right-panel__quicktab-label');
+        return label && getComputedStyle(label).display !== 'none';
+      }),
+      centerOffset: Math.abs((groupRect.left + groupRect.right) / 2 - (containerRect.left + containerRect.right) / 2),
+    };
+  });
+  assert.deepEqual(tabLayout?.buttonLabels, ['Assistant', 'Context', 'History'], 'Right panel icon tabs need accessible names and stable order.');
+  assert.equal(tabLayout?.visibleText, false, 'Right panel quick tabs should be icon-only.');
+  assert.ok((tabLayout?.centerOffset ?? Infinity) <= 1, `Right panel icon tabs are not centered (${JSON.stringify(tabLayout)}).`);
+  await page.screenshot({ path: join(outputDir, 'right-panel-icon-tabs-en-1440.png') });
+
+  await page.setViewportSize({ width: 280, height: 700 });
+  await page.getByRole('button', { name: '打开右侧面板' }).click();
+  await quicktabs.waitFor({ state: 'visible', timeout: 10_000 });
+  const narrowTabLayout = await quicktabs.evaluate(element => {
+    const group = element.querySelector('.compact-right-panel__quicktabs-icons');
+    if (!group) return null;
+    const groupRect = group.getBoundingClientRect();
+    const containerRect = element.getBoundingClientRect();
+    return {
+      centerOffset: Math.abs((groupRect.left + groupRect.right) / 2 - (containerRect.left + containerRect.right) / 2),
+      right: groupRect.right,
+      buttonCount: group.querySelectorAll('button').length,
+    };
+  });
+  assert.equal(narrowTabLayout?.buttonCount, 3, 'Narrow right panel must keep all three quick tabs.');
+  assert.ok((narrowTabLayout?.centerOffset ?? Infinity) <= 1 && (narrowTabLayout?.right ?? Infinity) <= 280, `Narrow right panel icons are clipped or off-center (${JSON.stringify(narrowTabLayout)}).`);
+  await page.screenshot({ path: join(outputDir, 'right-panel-icon-tabs-en-280.png') });
+  return { agentPage: audit, rightPanelTabs: tabLayout, narrowRightPanelTabs: narrowTabLayout };
+}
+
 const cli = spawn(process.execPath, cliArgs, {
   cwd: projectDir,
   env,
@@ -275,6 +358,7 @@ try {
   const uiAuditDir = join(projectDir, '.tmp', 'ui-audit');
   await mkdir(uiAuditDir, { recursive: true });
   const workflowToolbarAudit = await auditWorkflowToolbar(page, uiAuditDir);
+  const agentConnectionsAudit = await auditAgentConnectionsPage(page, uiAuditDir);
   const finalUrl = page.url();
   if (/[?&](agentToken|token)=/i.test(finalUrl)) throw new Error('Bootstrap secret remained in the browser URL.');
   result = {
@@ -286,6 +370,7 @@ try {
     clients: Number(health.clients || 0),
     hasWorkflow: Boolean(health.hasWorkflow),
     workflowToolbarAudit,
+    agentConnectionsAudit,
     finalUrl,
     consoleErrors,
     pageErrors,

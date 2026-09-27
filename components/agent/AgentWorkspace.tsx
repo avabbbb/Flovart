@@ -18,14 +18,14 @@ export function AgentConnectionsPage({ project, language = 'zho' }: { project: W
   return (
     <div className="h-full min-h-0 overflow-y-auto" data-testid="agent-connections-page" style={{ color: 'var(--isl-ink)' }}>
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 p-4 sm:p-6">
-        <header className="max-w-2xl">
-          <span className="text-[10px] font-bold uppercase tracking-[0.12em]" style={{ color: 'var(--isl-ink-ghost)' }}>Agent</span>
-          <h1 className="mt-1 text-lg font-bold">{copy.connect}</h1>
-          <p className="mt-1 text-xs leading-5" style={{ color: 'var(--isl-ink-soft)' }}>
-            {copy.intro}
-          </p>
-        </header>
-        <AgentHostPicker projectTitle={project?.title} language={language} />
+        <section className="agent-connections-page__surface" data-testid="agent-connections-surface" aria-labelledby="agent-connections-title">
+          <header className="agent-connections-page__header">
+            <span className="text-[10px] font-bold uppercase tracking-[0.12em]" style={{ color: 'var(--isl-ink-ghost)' }}>Agent</span>
+            <h1 id="agent-connections-title">{copy.connect}</h1>
+            <p>{copy.intro}</p>
+          </header>
+          <AgentHostPicker projectTitle={project?.title} language={language} />
+        </section>
       </div>
     </div>
   );
