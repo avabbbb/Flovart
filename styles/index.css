@@ -356,13 +356,13 @@ body {
 }
 
 .compact-right-panel__quicktabs .isl-tabbar {
-    display: flex;
-    min-width: 0;
-    flex: 1;
-    gap: 4px;
-    border: 0;
-    padding: 0;
-    background: transparent;
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  gap: 4px;
+  border: 0;
+  padding: 0;
+  background: transparent;
 }
 .compact-right-panel__quicktabs .isl-tab {
     min-width: 0;
@@ -394,6 +394,26 @@ body {
     clip: auto;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+.compact-right-panel__quicktabs--icons .compact-right-panel__quicktabs-icons {
+    position: absolute;
+    left: 50%;
+    width: max-content;
+    flex: 0 0 auto;
+    display: grid;
+    grid-template-columns: repeat(3, 36px);
+    gap: 4px;
+    transform: translateX(-50%);
+}
+.compact-right-panel__quicktabs--icons .isl-tab {
+    width: 36px;
+    min-width: 36px;
+    flex: 0 0 36px;
+    justify-self: center;
+    padding-inline: 0;
+}
+.compact-right-panel__quicktabs--icons .compact-right-panel__quicktab-label {
+    display: none;
 }
 .compact-right-panel__quicktabs .isl-tab--active {
     display: inline-flex;

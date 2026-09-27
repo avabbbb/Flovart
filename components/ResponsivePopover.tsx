@@ -123,7 +123,7 @@ export function ResponsivePopover({
     const firstControl = panel.querySelector<HTMLElement>(
       'button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
     );
-    firstControl?.focus({ preventScroll: true });
+    (firstControl ?? panel).focus({ preventScroll: true });
   }, [position.ready]);
 
   useEffect(() => {

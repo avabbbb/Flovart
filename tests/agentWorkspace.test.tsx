@@ -9,6 +9,8 @@ describe('Agent surfaces', () => {
     render(<AgentConnectionsPage project={project} />);
 
     expect(screen.getByTestId('agent-connections-page')).toBeInTheDocument();
+    expect(screen.getByTestId('agent-connections-surface')).toHaveClass('agent-connections-page__surface');
+    expect(screen.getByTestId('agent-connections-surface')).toHaveAttribute('aria-labelledby', 'agent-connections-title');
     expect(screen.getByRole('heading', { name: '连接本地 Agent' })).toBeInTheDocument();
     expect(screen.getByTestId('agent-host-picker')).toBeInTheDocument();
     expect(screen.getByText(/内置助手仍在画布右侧使用/)).toBeInTheDocument();

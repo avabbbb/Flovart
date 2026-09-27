@@ -169,6 +169,38 @@
 
 .agent-workspace-footer button { padding: 0 8px; }
 
+.agent-connections-page__surface {
+  min-width: 0;
+  border: 1px solid var(--isl-border-strong);
+  border-radius: var(--isl-r-lg);
+  background: var(--isl-card);
+}
+
+.agent-connections-page__header {
+  padding: clamp(16px, 2.5vw, 24px);
+  border-bottom: 1px solid var(--isl-border-strong);
+  background: var(--isl-surface-2);
+}
+
+.agent-connections-page__header h1,
+.agent-connections-page__header p { margin: 0; }
+
+.agent-connections-page__header h1 {
+  margin-top: 4px;
+  color: var(--isl-ink);
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.agent-connections-page__header p {
+  max-width: 64ch;
+  margin-top: 6px;
+  color: var(--isl-ink-soft);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
 .agent-host-picker {
   container-type: inline-size;
   min-width: 0;
@@ -240,7 +272,7 @@
 .agent-picker__current,
 .agent-picker__others {
   min-width: 0;
-  border: 1px solid var(--agent-line);
+  border: 1px solid var(--isl-border-strong);
   border-radius: 14px;
   background: var(--agent-panel);
 }
