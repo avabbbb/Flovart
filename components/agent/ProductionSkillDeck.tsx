@@ -15,7 +15,6 @@ import { hubSkillExternalUrl } from '../../services/skillHubClient';
 import { buildProductionSkillStarterPrompt, productionSkillHandle } from '../../services/productionSkillLaunch';
 import { useSkillHubStore } from '../../stores/useSkillHubStore';
 import { useWorkspaceStore } from '../../stores/useWorkspaceStore';
-import voxSkillCover from '../../tools/flovart/evaluations/vox-sky-blue-2026-08-04/preview-hook.jpg';
 
 const SKILL_ACCENTS = [
   ['#f4b452', '#df6b3f'],
@@ -218,7 +217,7 @@ export function ProductionSkillDeck({
       description: skill.description,
       version: skill.version,
       handle: productionSkillHandle(skill),
-      cover: skill.id === 'community.vox-director' ? voxSkillCover : undefined,
+      cover: undefined,
       accent: SKILL_ACCENTS[index % SKILL_ACCENTS.length],
       source: 'bundled',
       installed: true,
