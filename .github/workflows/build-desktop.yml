@@ -427,12 +427,16 @@ jobs:
           set -euo pipefail
           installer_dir="dist/release-artifacts/installers"
           mkdir -p "$installer_dir"
-          mapfile -t files < <(find src-tauri/target -type f -name '*.dmg' -path '*/bundle/*' -print)
-          if [[ "${#files[@]}" -eq 0 ]]; then
+          found=0
+          while IFS= read -r file; do
+            [[ -n "$file" ]] || continue
+            cp "$file" "$installer_dir/"
+            found=1
+          done < <(find src-tauri/target -type f -name '*.dmg' -path '*/bundle/*' -print)
+          if [[ "$found" -ne 1 ]]; then
             echo 'No macOS DMG was produced under src-tauri/target/**/bundle.' >&2
             exit 1
           fi
-          for file in "${files[@]}"; do cp "$file" "$installer_dir/"; done
           (cd "$installer_dir" && shasum -a 256 -- * | sort) > dist/release-artifacts/SHA256SUMS.txt
 
       - name: Stage Linux release artifacts
