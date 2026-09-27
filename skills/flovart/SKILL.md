@@ -1,11 +1,11 @@
 ---
 name: flovart
-description: Use Flovart's visible Workflow through its stable Agent surface. Use when an agent must prepare the workspace, inspect the current graph, read selection, apply document changes, or run a Workflow node.
+description: Use Iris's visible Workflow through its stable Agent surface. Use when an agent must prepare the workspace, inspect the current graph, read selection, apply document changes, or run a Workflow node.
 ---
 
-# Flovart
+# Iris
 
-Flovart is the visible Workflow authority. The Link layer prepares the local
+Iris is the visible Workflow authority. The Link layer prepares the local
 session automatically. Do not ask the user for connection details and do not
 recreate a connection flow in the conversation.
 
@@ -101,11 +101,21 @@ a bare `workflow.apply` `add_node` operation requires. Prefer it over a raw
 npm run flovart:cli -- workflow.node.create-connected --from-node-id <id> --type text --title "Shot 2" --x 420 --y 120 --agent-identity codex --idempotency-key <key> --json
 ```
 
-The UI and Flovart Core own Provider routing, credentials, cost confirmation,
+The UI and Iris own Provider routing, credentials, cost confirmation,
 resource resolution, and artifacts. Do not call a Provider directly, store
 credentials, modify browser storage, use private routes, or create a second
 Workflow runtime. A missing reference or unsupported input must remain an
 explicit failure; never downgrade the requested media mode silently.
+
+## Resolve host boundary
+
+For DaVinci Resolve, use Resolve Studio's own native MCP for host context and
+project operations; do not create or configure a second Resolve MCP server.
+The current `flovart` CLI Workflow operations do not materialize a Runtime
+artifact into a durable local file that Resolve can import. Do not infer a file
+path from a task/artifact ID, call private Runtime endpoints, or report a Media
+Pool import from the task result alone. Until an explicit artifact handoff path
+is available and real-host verified, report this boundary clearly.
 
 ## Conversation rules
 

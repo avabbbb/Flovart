@@ -20,7 +20,18 @@ const key = {
   baseUrl: 'https://generativelanguage.googleapis.com', createdAt: 0, updatedAt: 0,
 };
 
-const binaryResponse = (value: string, type: string) => new Response(value, { status: 200, headers: { 'Content-Type': type } });
+const binaryResponse = (value: string, type: string) => {
+  const bytes = new TextEncoder().encode(value);
+  return {
+    ok: true,
+    status: 200,
+    headers: { get: (name: string) => name.toLowerCase() === 'content-type' ? type : null },
+    // FileReader in this jsdom test accepts the DOM Blob implementation. Node's
+    // native Response.blob() returns a different Blob realm on Node 22 runners.
+    blob: async () => new window.Blob([bytes], { type }),
+    arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
+  } as Response;
+};
 
 describe('Veo PromptBar mode adapter', () => {
   beforeEach(() => {
