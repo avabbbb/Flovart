@@ -48,6 +48,10 @@ export interface HostImportTarget {
   kind: 'new-layer' | 'project' | 'media-pool' | 'timeline';
   name?: string;
   afterPlayhead?: boolean;
+  /** Frozen Resolve project identity used to reject imports after a project switch. */
+  projectId?: string;
+  /** Frozen source identity shown with the generated candidate. */
+  sourceSelectionId?: string;
 }
 
 export interface FlovartArtifact {
@@ -67,10 +71,21 @@ export interface FlovartArtifact {
   blob?: Blob;
 }
 
+export type HostImportStatus = 'confirmed' | 'rejected' | 'unknown';
+
 export interface HostImportResult {
   ok: boolean;
+  /** Optional for older non-Resolve host adapters; candidate imports always return a classified status. */
+  importStatus?: HostImportStatus;
   targetId?: string;
   message?: string;
+  artifactId?: string;
+  taskId?: string;
+  modelId?: string;
+  sha256?: string;
+  byteSize?: number;
+  createdAt?: string;
+  mediaPoolItemId?: string;
   /** Metadata read from the imported After Effects footage source. */
   sourceMedia?: HostSourceMediaMetadata | null;
   /** Snapshot of the active AE project's color-processing context. */
@@ -124,6 +139,43 @@ export interface HostNativeCandidate {
   message?: string;
 }
 
+export interface HostArtifactPersistence {
+  status: 'persisted';
+  artifactId: string;
+  taskId?: string;
+  modelId?: string;
+  sha256: string;
+  byteSize: number;
+  mimeType: string;
+  createdAt: string;
+}
+
+/** A generated Resolve asset waiting for the user to import it into the Media Pool. */
+export interface StudioGenerationCandidate {
+  candidateId: string;
+  artifact: FlovartArtifact & {
+    artifactId: string;
+    blob: Blob;
+    sha256: string;
+    byteSize: number;
+  };
+  persistenceReceipt: HostArtifactPersistence;
+  executionTarget: StudioExecutionTarget;
+  run: unknown;
+  materialized: MaterializedHostSelection;
+}
+
+/** Narrow controller view used by a prepared candidate; declared here to avoid a second target shape. */
+export interface StudioExecutionTarget {
+  readonly projectId: string;
+  readonly nodeId: string;
+  readonly selectionSnapshot: HostSelection;
+  readonly references: readonly WorkflowResourceReference[];
+  readonly outputTarget: HostImportTarget | undefined;
+  readonly hostTarget: CreativeHostId;
+  readonly revision: number;
+}
+
 export interface Disposable {
   dispose(): void;
 }
@@ -134,7 +186,8 @@ export interface CreativeHostAdapter {
   getContext(): Promise<HostContext>;
   getSelection(): Promise<HostSelection | null>;
   materializeSelection(selection: HostSelection): Promise<MaterializedHostSelection>;
-  importArtifact(artifact: FlovartArtifact, target?: HostImportTarget): Promise<HostImportResult>;
+  persistArtifact?(artifact: FlovartArtifact): Promise<HostArtifactPersistence>;
+  importArtifact(artifact: FlovartArtifact, target?: HostImportTarget, persistenceReceipt?: HostArtifactPersistence): Promise<HostImportResult>;
   /** Optional host-native application step after a candidate artifact was imported. */
   applyNativeEffect?(request: HostNativeEffectRequest): Promise<HostImportResult>;
   /** Optional read from the host's persisted candidate records; no parallel app-side history. */

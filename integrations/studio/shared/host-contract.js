@@ -215,8 +215,8 @@
         if (typeof materializer !== 'function') unavailable(`${label} 物化适配器尚未由 Iris Link 注入。`);
         return materialized(selection, await materializer.call(bridge, { selection, target: defaultImportTarget }));
       },
-      async importArtifact(artifact, target = defaultImportTarget) {
-        const result = await call('importArtifact', { artifact, target });
+      async importArtifact(artifact, target = defaultImportTarget, persistenceReceipt) {
+        const result = await call('importArtifact', { artifact, target, ...(persistenceReceipt ? { persistence: persistenceReceipt } : {}) });
         return result || { ok: true, message: `${label} 已接收 Iris 产物。` };
       },
       get lastSelection() { return lastSelection; },
@@ -260,7 +260,7 @@
   }
 
   function createResolveAdapter(options = {}) {
-    return bridgeAdapter({
+    const adapter = bridgeAdapter({
       id: 'resolve',
       label: 'DaVinci Resolve Studio',
       defaultKind: 'video',
@@ -269,6 +269,20 @@
       materializeKey: 'materializeClip',
       defaultImportTarget: { kind: 'media-pool' },
     });
+    adapter.persistArtifact = async artifact => {
+      const receipt = await injectedBridge(options, '__FLOVART_RESOLVE_BRIDGE__', 'DaVinci Resolve').persistArtifact?.({ artifact });
+      if (!receipt || receipt.status !== 'persisted'
+          || !receipt.artifactId
+          || !/^[a-f0-9]{64}$/i.test(String(receipt.sha256 || ''))
+          || !Number.isSafeInteger(receipt.byteSize)
+          || receipt.byteSize <= 0
+          || !receipt.mimeType
+          || !receipt.createdAt) {
+        unavailable('DaVinci Resolve 没有返回有效的 durable artifact receipt。');
+      }
+      return receipt;
+    };
+    return adapter;
   }
 
   function createBrowserWorkspaceAdapter(options = {}) {

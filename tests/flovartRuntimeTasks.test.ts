@@ -185,6 +185,7 @@ describe('Flovart Runtime tasks', () => {
       '--json',
     ], {
       FLOVART_RUNTIME_DISCOVERY: discoveryPath,
+      FLOVART_ACL_DEBUG: '1',
     });
 
     expect(result.code, JSON.stringify(result)).toBe(0);

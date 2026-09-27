@@ -44,16 +44,28 @@ describe('Studio host bridge contract', () => {
 
   it('keeps Resolve Studio clip identity and uses the Media Pool target', async () => {
     let readCount = 0;
+    let importRequest: Record<string, unknown> | undefined;
+    const receipt = {
+      status: 'persisted', artifactId: 'artifact-1', taskId: 'task-1', modelId: 'video-model',
+      sha256: 'a'.repeat(64), byteSize: 4, mimeType: 'video/mp4', createdAt: '2026-09-27T00:00:00.000Z',
+    };
     const bridge = {
       getContext: async () => ({ available: true, projectId: 'project-1', title: 'Project 1' }),
       getSelection: async () => ({ selectionId: 'clip-2', label: 'Shot 02', kind: 'video', locator: readCount++ ? { clipId: 'clip-2', projectId: 'project-1' } : { projectId: 'project-1', clipId: 'clip-2' } }),
       materializeClip: async () => ({ blob: new Blob(['clip'], { type: 'video/mp4' }) }),
-      importArtifact: async ({ target }: { target: { kind: string } }) => ({ ok: true, targetId: target.kind }),
+      persistArtifact: async () => receipt,
+      importArtifact: async (request: Record<string, any>) => {
+        importRequest = request;
+        return { ok: true, targetId: request.target.kind };
+      },
     };
     const adapter = hosts().createResolveAdapter({ bridge });
     const selection = await adapter.getSelection();
     expect(selection).toMatchObject({ host: 'resolve', selectionId: 'clip-2', kind: 'video' });
     await expect(adapter.materializeSelection(selection!)).resolves.toMatchObject({ resource: { kind: 'video' } });
-    await expect(adapter.importArtifact({ mimeType: 'video/mp4' }, { kind: 'media-pool' })).resolves.toEqual({ ok: true, targetId: 'media-pool' });
+    await expect(adapter.persistArtifact({ mimeType: 'video/mp4' })).resolves.toMatchObject({ status: 'persisted', sha256: receipt.sha256 });
+    await expect(adapter.importArtifact({ mimeType: 'video/mp4' }, { kind: 'media-pool' }, receipt)).resolves.toEqual({ ok: true, targetId: 'media-pool' });
+    expect(importRequest).toMatchObject({ persistence: receipt, target: { kind: 'media-pool' } });
+    expect(importRequest).not.toHaveProperty('persistence.filePath');
   });
 });

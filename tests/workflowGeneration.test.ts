@@ -223,14 +223,14 @@ describe('workflow generation', () => {
     expect(result.nodes.find(item => item.id === 'config-1')?.metadata.error).toContain('明确选择图片产品模型');
   });
 
-  it('continues with the original prompt when optional enhancement has no mapped route', async () => {
+  it('uses the original prompt when optional automatic optimization has no mapped text route', async () => {
     const source = project();
     source.nodes[2].metadata.config = {
       mode: 'video',
       modelId: 'flovart:seedance-2',
       enhancePrompt: true,
     };
-    const executeMedia = vi.fn().mockResolvedValue({ ok: false, errorMessage: 'fixture provider stop' });
+    const executeMedia = vi.fn().mockResolvedValue({ ok: false, errorMessage: 'fixture generation stopped' });
 
     const result = await runWorkflowGeneration(source, 'config-1', {
       userApiKeys: [mappedMediaKey('video', 'flovart:seedance-2', 'doubao-seedance-2-0-260128', 'volcengine')],
@@ -238,11 +238,13 @@ describe('workflow generation', () => {
       onProjectChange: vi.fn(),
     });
 
+    expect(executeMedia).toHaveBeenCalledOnce();
     expect(executeMedia).toHaveBeenCalledWith(expect.objectContaining({
       modelId: 'doubao-seedance-2-0-260128',
-      prompt: '电影光线\n\n银色机器人',
+      productModelId: 'flovart:seedance-2',
+      prompt: expect.stringContaining('电影光线'),
     }));
-    expect(result.nodes.find(item => item.id === 'config-1')?.metadata.error).toBe('fixture provider stop');
+    expect(result.nodes.find(item => item.id === 'config-1')?.metadata.error).toBe('fixture generation stopped');
   });
 
   it('uses mentioned durable media, filters unsupported references, and persists generated blobs', async () => {

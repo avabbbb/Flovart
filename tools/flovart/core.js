@@ -58,11 +58,11 @@ export const QUICK_COMMANDS = [
 ];
 
 export const HELP_TEXT = [
-  'Flovart Agent Bridge exposes deterministic tools for external agents.',
-  'External Agents plan; this CLI executes explicit Flovart operations.',
+  'Iris exposes deterministic tools for external agents through the legacy flovart CLI.',
+  'External Agents plan; this CLI executes explicit Iris Workflow operations.',
   '',
   'Bootstrap/admin:',
-  'ensure [--no-open]                              Prepare the local Flovart connection',
+  'ensure [--no-open]                              Prepare the local Iris connection',
   'setup                                           Show local setup steps',
   'doctor                                          Diagnose local CLI readiness',
   'uninstall [--plan] [--json]                     Remove the installed Agent Toolkit and launcher shims',

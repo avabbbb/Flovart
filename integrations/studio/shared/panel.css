@@ -70,3 +70,48 @@
 .fs-history-heading p { margin: 0; }
 .fs-history-item { border-bottom: 1px solid var(--fs-line); padding: 14px 0; overflow-wrap: anywhere; }
 .fs-history-item div { margin: 5px 0; }
+
+/* Resolve is a narrow inspector, not the shared Studio tab shell. */
+.flovart-studio-inspector[data-studio-host="resolve"] { min-width: 0; }
+.flovart-studio-inspector[data-studio-host="resolve"] .fs-header { gap: 8px; min-height: 38px; padding: 6px 10px; border-bottom: 1px solid var(--fs-line); }
+.flovart-studio-inspector[data-studio-host="resolve"] .fs-brand { flex: 0 0 auto; }
+.flovart-studio-inspector[data-studio-host="resolve"] .fs-brand strong { font-size: 13px; }
+.fs-header-status { min-width: 0; margin-left: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; }
+.fs-locale-toggle { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 2px; }
+.fs-locale-button { min-width: 25px; height: 23px; border: 1px solid transparent; border-radius: 3px; padding: 0 4px; background: transparent; color: var(--fs-muted) !important; font-size: 10px !important; }
+.fs-locale-button[aria-pressed="true"] { border-color: var(--fs-line); background: var(--fs-hover); color: var(--fs-ink) !important; }
+.fs-resolve-form { padding: 10px; }
+.fs-resolve-form > .fs-section-label { margin-bottom: 6px; }
+.fs-resolve-form .fs-source { margin: 0 0 12px; min-width: 0; }
+.fs-resolve-form .fs-source-info { flex: 1 1 auto; }
+.fs-resolve-form .fs-source-info strong { overflow-wrap: anywhere; }
+.fs-resolve-form .fs-source-info span { text-overflow: ellipsis; }
+.fs-resolve-form .fs-resolve-generate-heading { margin: 0 0 5px; }
+.fs-resolve-form .fs-prompt-box textarea { min-height: 78px; resize: vertical; }
+.fs-resolve-form .fs-prompt-foot { min-height: 21px; }
+.fs-resolve-form .fs-references { margin: 0 0 8px; }
+.fs-resolve-form .fs-setting-row { min-height: 29px; }
+.fs-resolve-form .fs-setting-value { flex: 0 0 auto; color: var(--fs-ink); font-size: 11px; }
+.fs-resolve-form .fs-generate { min-height: 34px; }
+.fs-resolve-form .fs-shortcut { padding-top: 5px; }
+.fs-resolve-form .fs-task { flex-wrap: wrap; gap: 5px 8px; }
+.fs-resolve-form .fs-task-label { min-width: 0; flex: 1 1 70%; white-space: normal; overflow-wrap: anywhere; }
+.fs-resolve-form .fs-task-bar { flex: 1 0 100%; }
+.fs-resolve-form .fs-status { min-height: 0; margin-top: 7px; }
+.fs-resolve-state-heading { margin: 10px 0 5px; }
+.fs-resolve-candidate-list { display: flex; flex-direction: column; }
+.fs-resolve-candidate { display: flex; flex-direction: column; gap: 4px; min-width: 0; border-top: 1px solid var(--fs-line); padding: 8px 0; }
+.fs-resolve-candidate-prompt { overflow-wrap: anywhere; line-height: 1.45; }
+.fs-resolve-candidate small { overflow-wrap: anywhere; font-size: 10px; }
+.fs-candidate-model { font-family: 'Cascadia Code', Consolas, monospace; }
+.fs-candidate-preview { min-width: 0; max-height: 190px; overflow: hidden; border: 1px solid var(--fs-line); border-radius: 3px; background: #171717; }
+.fs-candidate-preview img,.fs-candidate-preview video { display: block; width: 100%; max-height: 188px; object-fit: contain; }
+.fs-candidate-add { width: 100%; min-height: 32px; margin-top: 2px; white-space: normal; overflow-wrap: anywhere; }
+.fs-candidate-add.is-complete { border: 1px solid var(--fs-line); background: transparent; color: var(--fs-success) !important; font-weight: 500 !important; cursor: default; }
+.fs-candidate-preview-button { align-self: flex-start; }
+.fs-footer.fs-resolve-footer { justify-content: flex-end; padding: 6px 10px; }
+.fs-open-in-iris { border: 0; background: transparent; color: var(--fs-muted) !important; padding: 2px 0; font-size: 10px !important; }
+.fs-open-in-iris:hover { color: var(--fs-ink) !important; text-decoration: underline; }
+.flovart-studio-inspector[data-studio-host="resolve"] button:focus-visible,
+.flovart-studio-inspector[data-studio-host="resolve"] select:focus-visible,
+.flovart-studio-inspector[data-studio-host="resolve"] textarea:focus-visible { outline-offset: 1px; }

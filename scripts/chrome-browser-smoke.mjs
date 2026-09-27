@@ -75,7 +75,7 @@ async function waitFor(stage, check, timeoutMs = 45_000, intervalMs = 250) {
   throw new Error(`Chrome smoke 等待本地服务超时 (${detail})。`);
 }
 
-async function waitForWebDiscovery(env, timeoutMs) {
+async function waitForWebDiscovery(env, timeoutMs = 45_000) {
   const deadline = Date.now() + timeoutMs;
   let lastError = null;
   let lastObservation = 'discovery-file-missing';

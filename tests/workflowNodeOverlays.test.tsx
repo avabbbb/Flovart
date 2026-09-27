@@ -78,6 +78,38 @@ describe('workflow node overlays', () => {
     expect(screen.getByRole('button', { name: '4s' })).toBeInTheDocument();
   });
 
+  it('shows a mapped default model without persisting it until Generate is clicked', async () => {
+    const initialNode = createWorkflowNode('mapped-default-video', 'video', { x: 0, y: 0 }, {
+      prompt: 'Create a cinematic night scene',
+      config: { mode: 'video' },
+    });
+    const onChange = vi.fn();
+    const onRun = vi.fn();
+
+    render(<WorkflowNodePromptBar
+      node={initialNode}
+      nodes={[initialNode]}
+      t={t}
+      theme="light"
+      language="zho"
+      userApiKeys={[videoProductKey]}
+      dynamicModelOptions={{ text: [], image: [], video: ['flovart:seedance-2'] }}
+      onChange={onChange}
+      onRun={onRun}
+    />);
+
+    await waitFor(() => expect(screen.getByText(/Seedance/)).toBeInTheDocument());
+    const generate = screen.getByRole('button', { name: '生成' });
+    expect(generate).toBeEnabled();
+    expect(onChange).not.toHaveBeenCalled();
+    expect(initialNode.metadata.config?.modelId).toBeUndefined();
+
+    fireEvent.click(generate);
+
+    await waitFor(() => expect(onRun).toHaveBeenCalledOnce());
+    expect(onChange).toHaveBeenCalledWith({ config: { mode: 'video', modelId: 'flovart:seedance-2' } });
+  });
+
   it('keeps the parameter entry visible before a model is configured', () => {
     const blankVideo = createWorkflowNode('unmapped-video', 'video', { x: 0, y: 0 });
     render(<WorkflowNodePromptBar node={blankVideo} nodes={[blankVideo]} t={t} theme="light" language="zho" userApiKeys={[]} dynamicModelOptions={{ text: [], image: [], video: ['flovart:seedance-2'] }} onChange={vi.fn()} onRun={vi.fn()} />);

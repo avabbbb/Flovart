@@ -4,9 +4,28 @@ title: 待测试确认
 
 本页记录实际进入文档或代码、仍需用户确认的变更。既有实现的构建、全量测试、Rust Runtime 和响应式浏览器记录见[发行候选证据](../../../evidence/release-candidate/README.md)，仅适用于其对应代码与范围；本页每一节分别注明对应范围的验证结果。真实第三方宿主、账号、Provider 与公开发布仍需单独认证。
 
-> **2026-09-25 产品优先级变更**：第一宿主已切换为 Resolve Studio 21.1 MCP-first。下面已实现的 AE 源码/候选完整性工作仍作为 Experimental evidence 保留，但不再是当前第一交付 gate；不要因为它排在本页前面继续横向扩 AE。Resolve 当前已有 Workflow Integration 源码，但 native MCP 真实连接、Media Pool Golden Task 与新 UI 仍属于待办。
+> **2026-09-27 当前状态**：第一宿主仍是 Resolve Studio 21.1。当前工作树新增了 Resolve 面板、候选导入状态与 durable artifact 的源码实现；它们仍未在 Resolve Studio 21.1 真机运行。宿主 native MCP 由 Resolve 提供，Iris 不应再造一套 MCP Server。AE 源码/候选完整性工作保留为 Experimental evidence，不是当前第一交付 gate。
 
-## 本轮：UI foundation 基础修复与响应式浏览器验收
+## 当前 worktree：Resolve 面板与 durable candidate 源码
+
+状态：**源码已改，真实宿主尚未验证；当前改动仍在未提交 worktree。** 相关实现位于 `integrations/studio/resolve/` 与 `services/studio/`。
+
+- 已实现源码：Resolve Inspector 路径加入中英文界面、Current Clip / Generate / References / Model / Output / Task / Candidates 与低权重 Open in Iris footer；Resolve 的 `Output` 提供 `Media Pool`，旧 `制作` / `本次记录` tab 不再用于该路径。候选提供 Preview、Add to Media Pool、确认/拒绝/未知状态；unknown 状态提示先检查 Media Pool，并禁用盲重试。
+- 已实现但未接入产品路径的源码：`StudioWorkflowController.prepareCandidate()` 可复用现有生成路径，校验 Blob、声明字节数和 SHA-256，持久化候选并保留冻结 target；`importCandidate()` 对同一候选使用冻结 target，成功可幂等返回，结果未知时锁存并禁止自动重发。当前 `installStudioBrowserLink()` 没有生产调用者，而 `resolve/index.js` 只读取全局 controller；因此该 controller 与 Resolve 面板之间尚未完成生产 wiring，不能声称这些动作已从真实面板可达。
+- 已实现但未接入产品路径的源码：Resolve main process 可把候选保存在 Electron `app.getPath('userData')/artifacts/resolve` 下，以内容寻址并写 provenance sidecar；IPC receipt 不返回本机文件路径。导入前重验 artifact identity、size、SHA-256 与项目 ID，通过绑定项目的 Media Pool API 导入；上限 64 MiB；不立即删除源文件；导入调用后的异常标记 `unknown`。这些模块目前未由生产 controller 调用。
+- 验证边界：Artifact store、IPC 和 panel/controller 的测试使用本地文件与 fake Resolve API；它们只验证源码 contract，不证明 Resolve 21.1 会加载面板、接受 `ImportMedia`、保存文件引用、重启后保持 online 或与 native MCP 联通。当前源码没有 artifact 清理/GC 策略，不能据此推断何时可删文件。
+- 当前本机发现：Windows 11 Pro for Workstations `10.0.26200`（build `26200`）；Resolve 注册表版本为 `21.0.00020`，并非目标 21.1，且注册表信息本身不能确认 Studio license/edition；Resolve 进程检查时未运行；Node `v24.14.0` / npm `11.9.0`；在 Resolve 安装路径与默认 ProgramData SamplePlugin 路径均未发现 `WorkflowIntegration.node`。未捕获 native MCP / Codex 连接与 Resolve selection 证据。详见 [Resolve 真机验收清单](../../../../integrations/studio/RESOLVE_REAL_HOST_CHECKLIST.md)。
+- Chromium Resolve-panel fixture matrix：`.tmp/resolve-panel-browser-matrix.mjs` 以 mock host/controller 挂载共享 Inspector；在 280、300、320、360、400、480、560、768、1024、1920px 检查均无横向溢出，`Output` 选项存在且默认值为 `Media Pool`，候选导入成功态可在 English / 简体中文之间切换。矩阵与截图在 `.tmp/resolve-panel-browser-evidence/`（含 `matrix.json`；记录 `pageErrors: []`）。这是 Chromium fixture，不是真实 Resolve/Studio/MCP 证据，也没有调用 Resolve API。
+- Chrome app smoke：`npm run test:browser:chrome` 使用隔离动态端口并等待应用 mounted；本轮 mounted 成功，未观察到 console/page errors。等待 harness 的默认 timeout 为 45 秒。该 smoke 验证 Iris 浏览器应用可挂载，不验证 Resolve 面板在宿主内加载或 Media Pool 导入。
+- 编排缺口（源码审计）：稳定 `workflow.node.run` 只返回不透明 artifact identity；Browser artifact registry 是 30 分钟 / 最多 64 项的内存索引，Blob 读取仅在应用内 `artifactGet` seam，CLI 没有 Browser artifact 物化命令。现有 Agent/Browser 桥使用 JSON/SSE，Agent 请求体整体缓冲上限 36 MiB，base64 可用素材约 27 MiB；没有二进制流、分块确认或断点恢复，因此不能把它当作 64 MiB 素材通道。Resolve `persistArtifact` 的 IPC 落盘模块也尚未接生产 controller。Runtime 按 task ID 提供的字节端点没有对应 CLI 导出合同，且不对应 Browser Workflow artifact identity；不得把内部 `storeRelpath` 当公开路径。必须先定义并验证窄的同机 binary handoff，再声称 Agent CLI 能把 artifact 交给 Resolve。
+- 本地门禁：`npx tsc --noEmit` 通过；锁文件依赖下 `npm test -- --exclude '**/.tmp/**'` 为 `178 files passed`、`1196 passed / 1 skipped`；`npm run test:critical` 为 `10/10`，每轮 9 files / 53 tests；定向面板与 Skill 回归 8 files / 81 tests；`npm run build`、`npm run ext:build`、`npm run docs:check`、`npm run release:red-team`、`npm run release:secret-audit` 通过；`eval:validate` 检查 65 tasks / 57 predicates 通过，`eval:redteam` 为 12/12。`npm run studio:build` 能生成 4 个包，但日志显示 AE SDK 与 Resolve `WorkflowIntegration.node` 均缺失，输出不是已验证可运行的宿主包。本地结果不是 GitHub Hosted CI 结果，也不验证 Resolve 宿主。
+- Hosted CI 历史基线：run `36252046485`（HEAD `539a8e8`）记录为 7 个测试文件、16 项失败、1147 passed；本 worktree 的本地结果发生在当前远端 main 之前。当前本地 `origin/main` ref 为 `721e96e2`，与用户提供的远端 HEAD 一致；此前 `git fetch origin main` 曾遇到 GitHub TLS `SSL_ERROR_SYSCALL`，此分支 HEAD 仍为 `539a8e8`。Hosted CI 修复后结果尚无；`modelFetcher.ts` 曾有的 3 个 TypeScript 错误已由 PR #19 修复，不是当前 blocker。
+
+## 历史基线：UI foundation 首轮（2026-09-25 记录）
+
+> 以下记录保留首轮 UI Foundation 的当时结果，HEAD 未记录；其中 modelFetcher 错误、Settings 英文缺口及对应测试数字均为历史基线，不代表当前 worktree/main 状态。后续 #19 修复了 modelFetcher，#21 合入了 UI Foundation Phase 1；本页“当前 worktree”小节记录本轮状态。
+
+### UI foundation 基础修复与响应式浏览器验收
 
 - 已实现：工作区基础圆角、分隔线、面板和浮层样式收敛；Workflow 工具栏窄屏改为换行布局，避免滚动容器裁掉浮层；Workflow Context Menu 使用 viewport 限位、内部滚动、键盘方向导航、Escape 和焦点恢复；工具栏弹层互斥，并支持外部点击关闭和 Escape。
 - 未通过全仓类型门禁：`npx tsc --noEmit --pretty false` 仍报 DSH 插件依赖未安装、`services/modelFetcher.ts` 既有 3 项错误（499、501、533 行）；本轮修改文件没有新增 TypeScript 错误。Studio package build 只证明打包流程可运行，日志仍显示未配置 AE SDK 和 Resolve `WorkflowIntegration.node`，不代表真实宿主验证。
