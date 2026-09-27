@@ -3,7 +3,9 @@ export const RUNTIME_COMMAND_NAMES = Object.freeze([
   'command.list',
   'command.schema',
   'runtime.test.delay',
+  'runtime.test.fixture-image',
   'task.get',
+  'artifact.locate',
   'task.inspect',
   'task.resume',
   'task.list',
@@ -22,6 +24,7 @@ export const RUNTIME_COMMAND_NAMES = Object.freeze([
 
 export const RUNTIME_WRITE_COMMAND_NAMES = Object.freeze([
   'runtime.test.delay',
+  'runtime.test.fixture-image',
   'task.cancel',
   'agent-text.route.sync',
   'production.dry-run',

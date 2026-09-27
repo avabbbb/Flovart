@@ -33,6 +33,7 @@ use serde::Serialize;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::{
+    io::Read,
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -176,7 +177,71 @@ impl ProductionRuntime {
     }
 
     pub fn read_artifact(&self, task_id: &str) -> Result<RuntimeArtifactPayload, RuntimeError> {
+        let (path, mime_type, expected_sha256, expected_byte_size) = self.artifact_file(task_id)?;
+        let bytes = std::fs::read(path).map_err(|_| {
+            RuntimeError::new("RUNTIME_UNAVAILABLE", "Media artifact cannot be read")
+        })?;
+        let actual_sha256 = hex::encode(Sha256::digest(&bytes));
+        if bytes.len() as u64 != expected_byte_size || actual_sha256 != expected_sha256 {
+            return Err(RuntimeError::new(
+                "RUNTIME_UNAVAILABLE",
+                "Media artifact failed integrity verification",
+            ));
+        }
+        Ok(RuntimeArtifactPayload { mime_type, bytes })
+    }
+
+    pub fn locate_artifact(&self, task_id: &str) -> Result<Value, RuntimeError> {
+        let (path, mime_type, expected_sha256, expected_byte_size) = self.artifact_file(task_id)?;
+        let mut file = std::fs::File::open(&path).map_err(|_| {
+            RuntimeError::new("RUNTIME_UNAVAILABLE", "Media artifact cannot be read")
+        })?;
+        let actual_byte_size = file
+            .metadata()
+            .map_err(|_| RuntimeError::new("RUNTIME_UNAVAILABLE", "Media artifact cannot be read"))?
+            .len();
+        if actual_byte_size != expected_byte_size {
+            return Err(RuntimeError::new(
+                "RUNTIME_UNAVAILABLE",
+                "Media artifact failed integrity verification",
+            ));
+        }
+        let mut hasher = Sha256::new();
+        let mut buffer = [0_u8; 64 * 1024];
+        loop {
+            let bytes_read = file.read(&mut buffer).map_err(|_| {
+                RuntimeError::new("RUNTIME_UNAVAILABLE", "Media artifact cannot be read")
+            })?;
+            if bytes_read == 0 {
+                break;
+            }
+            hasher.update(&buffer[..bytes_read]);
+        }
+        let actual_sha256 = hex::encode(hasher.finalize());
+        if actual_sha256 != expected_sha256 {
+            return Err(RuntimeError::new(
+                "RUNTIME_UNAVAILABLE",
+                "Media artifact failed integrity verification",
+            ));
+        }
+        Ok(serde_json::json!({
+            "taskId": task_id,
+            "artifactId": format!("sha256:{expected_sha256}"),
+            "path": path.to_string_lossy(),
+            "mimeType": mime_type,
+            "sha256": expected_sha256,
+            "byteSize": expected_byte_size
+        }))
+    }
+
+    fn artifact_file(&self, task_id: &str) -> Result<(PathBuf, String, String, u64), RuntimeError> {
         let task = self.get_task(task_id)?;
+        if task.status != "completed" {
+            return Err(RuntimeError::new(
+                "TASK_NOT_COMPLETED",
+                "Media artifact is available only after its task completes",
+            ));
+        }
         let artifact = task
             .result
             .as_ref()
@@ -197,20 +262,48 @@ impl ProductionRuntime {
         let path = validate_store_relpath(store_relpath, root).map_err(|message| {
             RuntimeError::new("RUNTIME_UNAVAILABLE", message)
         })?;
-        let bytes = std::fs::read(path).map_err(|error| {
-            RuntimeError::new(
-                "RUNTIME_UNAVAILABLE",
-                format!("Media artifact cannot be read: {error}"),
-            )
+        let metadata = std::fs::metadata(&path).map_err(|_| {
+            RuntimeError::new("RUNTIME_UNAVAILABLE", "Media artifact cannot be read")
         })?;
-        Ok(RuntimeArtifactPayload {
-            mime_type: artifact
-                .get("mimeType")
-                .and_then(Value::as_str)
-                .unwrap_or("application/octet-stream")
-                .to_owned(),
-            bytes,
-        })
+        let expected_sha256 = artifact
+            .get("sha256")
+            .and_then(Value::as_str)
+            .ok_or_else(|| {
+                RuntimeError::new("RUNTIME_UNAVAILABLE", "Media artifact checksum is missing")
+            })?;
+        if expected_sha256.len() != 64
+            || !expected_sha256.bytes().all(|byte| byte.is_ascii_hexdigit())
+        {
+            return Err(RuntimeError::new(
+                "RUNTIME_UNAVAILABLE",
+                "Media artifact checksum is invalid",
+            ));
+        }
+        let expected_byte_size = artifact
+            .get("byteSize")
+            .and_then(Value::as_u64)
+            .ok_or_else(|| {
+                RuntimeError::new("RUNTIME_UNAVAILABLE", "Media artifact size is missing")
+            })?;
+        if !metadata.is_file() || metadata.len() != expected_byte_size {
+            return Err(RuntimeError::new(
+                "RUNTIME_UNAVAILABLE",
+                "Media artifact failed integrity verification",
+            ));
+        }
+        let mime_type = artifact
+            .get("mimeType")
+            .and_then(Value::as_str)
+            .ok_or_else(|| {
+                RuntimeError::new("RUNTIME_UNAVAILABLE", "Media artifact MIME type is missing")
+            })?
+            .to_owned();
+        Ok((
+            path,
+            mime_type,
+            expected_sha256.to_ascii_lowercase(),
+            expected_byte_size,
+        ))
     }
 
     pub fn list_tasks(
@@ -471,6 +564,34 @@ impl ProductionRuntime {
                 .map_err(|error| RuntimeError::new("RUNTIME_UNAVAILABLE", error.to_string()))?;
                 self.store
                     .submit_delay(
+                        envelope["commandId"].as_str().unwrap_or_default(),
+                        envelope["actor"]["kind"].as_str().unwrap_or_default(),
+                        envelope["actor"]["instanceId"].as_str().unwrap_or_default(),
+                        idempotency_key,
+                        &payload_hash,
+                        args,
+                    )
+                    .and_then(to_value)
+            }
+            "runtime.test.fixture-image" => {
+                let idempotency_key = envelope
+                    .get("idempotencyKey")
+                    .and_then(Value::as_str)
+                    .ok_or_else(|| {
+                        RuntimeError::new(
+                            "INVALID_ARGUMENT",
+                            "runtime.test.fixture-image requires idempotencyKey",
+                        )
+                    })?;
+                let args = &envelope["args"];
+                validate_exact_args(args, &[])?;
+                let payload_hash = Self::hash_payload(&serde_json::json!({
+                    "command": "runtime.test.fixture-image",
+                    "args": args,
+                }))
+                .map_err(|error| RuntimeError::new("RUNTIME_UNAVAILABLE", error.to_string()))?;
+                self.store
+                    .submit_fixture_image(
                         envelope["commandId"].as_str().unwrap_or_default(),
                         envelope["actor"]["kind"].as_str().unwrap_or_default(),
                         envelope["actor"]["instanceId"].as_str().unwrap_or_default(),
@@ -916,6 +1037,14 @@ impl ProductionRuntime {
                     RuntimeError::new("INVALID_ARGUMENT", "task.get requires taskId")
                 })?;
                 self.get_task(task_id).and_then(to_value)
+            }
+            "artifact.locate" => {
+                let args = &envelope["args"];
+                validate_exact_args(args, &["taskId"])?;
+                let task_id = args.get("taskId").and_then(Value::as_str).ok_or_else(|| {
+                    RuntimeError::new("INVALID_ARGUMENT", "artifact.locate requires taskId")
+                })?;
+                self.locate_artifact(task_id)
             }
             "task.inspect" => {
                 let args = &envelope["args"];
