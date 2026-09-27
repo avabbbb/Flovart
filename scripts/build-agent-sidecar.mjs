@@ -23,7 +23,7 @@
 //         npm run build:agent-sidecar
 //
 // --target defaults to the host Rust target triple (only
-// x86_64-pc-windows-msvc is currently exercised by release packaging).
+// release packaging now exercises native Windows, macOS and Linux targets).
 
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, rmSync, writeFileSync, copyFileSync, readFileSync } from 'node:fs';
@@ -262,6 +262,15 @@ function writeSeaConfig(blobPath, mainPath, esmBundlePath) {
 
 function injectSeaBlob(nodeBinary, blobPath, outputBinary) {
   copyFileSync(nodeBinary, outputBinary);
+
+  // Node's SEA flow requires removing the existing Mach-O signature before
+  // postject mutates the binary, then signing the injected executable again.
+  // Keep this ad-hoc at the sidecar stage; Tauri may later apply a Developer ID
+  // identity to the final app bundle when release secrets are configured.
+  if (process.platform === 'darwin') {
+    run('codesign', ['--remove-signature', outputBinary]);
+  }
+
   // postject is a pinned devDependency (see package.json) resolved through the
   // local node_modules/.bin shim — NOT `postject@latest`. A release build must
   // be reproducible from the same SHA, so the injector version is locked.
@@ -276,6 +285,10 @@ function injectSeaBlob(nodeBinary, blobPath, outputBinary) {
   ];
   if (process.platform === 'darwin') postjectArgs.push('--macho-segment-name', 'NODE_SEA');
   run(postjectExecutable, postjectArgs, { shell: process.platform === 'win32' });
+
+  if (process.platform === 'darwin') {
+    run('codesign', ['--sign', '-', '--force', outputBinary]);
+  }
 }
 
 export async function buildAgentSidecar(options = {}) {
