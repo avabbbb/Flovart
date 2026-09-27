@@ -196,7 +196,6 @@
     if (adapter.id === 'premiere') target.append(option('项目素材箱', 'project'));
     else if (isResolve) target.append(option(t('mediaPool'), 'media-pool'));
     else if (adapter.id === 'after-effects') target.append(option('当前合成 · 新图层', 'new-layer'));
-    else if (adapter.id === 'resolve') target.append(option('Media Pool', 'media-pool'));
     else target.append(option('当前文档 · 新图层', 'new-layer'));
     target.value = defaultImportTarget.kind;
     const outputLabel = el('span', isResolve ? t('output') : '添加到');
