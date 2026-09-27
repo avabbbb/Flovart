@@ -21,7 +21,7 @@ function readExpectedVersion(value) {
 function installerFiles(installerDir) {
   if (!existsSync(installerDir)) return [];
   return readdirSync(installerDir)
-    .filter(name => /\.(?:exe|msi|deb|AppImage)$/i.test(name))
+    .filter(name => /\.(?:exe|msi|deb|AppImage|dmg)$/i.test(name))
     .map(name => join(installerDir, name))
     .filter(path => statSync(path).isFile());
 }
