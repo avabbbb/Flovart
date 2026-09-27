@@ -10,7 +10,7 @@ title: 待测试确认
 - 已实现：`runtime.test.fixture-image` 通过既有 Runtime task ledger 和 Worker，把仓库内固定 `public/favicon.png` 作为 PNG fixture 持久化到 Runtime Artifact 目录；提交要求幂等键，不调用 Provider，任务结果明确记录 `providerCalled: false` 与 `costMicros: 0`。
 - 已实现：`artifact.locate --task-id <taskId>` 只为 completed task 返回本机持久文件路径；复用 store-relative path containment 校验，并重核文件类型、字节数和 SHA-256。Runtime `read_artifact` 也执行同样的完整性检查；同尺寸内容篡改会失败。
 - 本地验证：`cargo test --manifest-path src-tauri/Cargo.toml --test resolve_r1_artifact -- --nocapture` 通过 3/3，覆盖幂等提交、Runtime 重开后的 Artifact 定位/读取、未完成任务拒绝和同尺寸篡改拒绝；运行时设置 `TAURI_CONFIG={"bundle":{"externalBin":[]}}` 是因为隔离 worktree 没有 Agent sidecar，此次测试没有验证安装包 sidecar。`npx vitest run tests/flovartRuntimeTasks.test.ts tests/flovartRuntimeRegistry.test.ts tests/studioInspector.test.ts` 通过 23/23，沿用已有 Resolve Inspector Media Pool UI 覆盖；`npx tsc --noEmit` 在安装 `dsh-plugin` 锁定依赖后通过；`npm run docs:check` 与 `npm run studio:build` 通过。Studio build 日志仍报告未配置 AE SDK / Resolve WorkflowIntegration.node，这不是 Resolve 宿主验证。
-- CLI tracer 顺序：`runtime.test.fixture-image --idempotency-key <unique-key>` → `task.get --task-id <taskId>` → `artifact.locate --task-id <taskId>`。最后一步只把通过校验的持久本机路径交给同机 Resolve import；不得写进项目元数据或外部服务。
+- Skill 规定的 CLI tracer 顺序：`runtime.test.fixture-image --idempotency-key <unique-key>` → `task.get --task-id <taskId>` → `artifact.locate --task-id <taskId>`。`artifact.locate` 返回通过校验的本机路径，预期仅临时传给同机 Resolve MCP 的 Media Pool import；当前尚未实际执行或真机验证这一步，不把路径写进项目元数据或外部服务。
 - Flovart canonical Skill 及 `.agents` / `.claude` 镜像记录了 Resolve 21.1 R0/R1 tracer 的目标复核、幂等提交、bounded Media Pool import 与 Timeline 零变化要求；fixture 明确不是根据选中素材生成的 AI 结果。
 - 仍待真实宿主验证：Resolve Studio 21.1 native MCP 连接、选中媒体上下文冻结、该路径能否被宿主安全导入 Media Pool、Timeline 保持不变以及重启后素材可用。以上本地 Runtime/CLI 测试不代表 Resolve 导入成功，也没有把 R1 Golden Task 标记完成。
 
@@ -31,7 +31,7 @@ title: 待测试确认
 
 ## 历史基线：UI foundation 首轮（2026-09-25 记录）
 
-> 以下记录保留首轮 UI Foundation 的当时结果，HEAD 未记录；其中 modelFetcher 错误、Settings 英文缺口及对应测试数字均为历史基线，不代表当前 worktree/main 状态。后续 #19 修复了 modelFetcher，#21 合入了 UI Foundation Phase 1；本页“当前 worktree”小节记录本轮状态。
+> 以下记录保留首轮 UI Foundation 的当时结果，HEAD 未记录；其中 modelFetcher 错误、Settings 英文缺口及对应测试数字均为历史基线，不代表当前 main 状态。后续 #19 修复了 modelFetcher，#21 合入了 UI Foundation Phase 1；本页“当前 main”小节记录本轮状态。
 
 ### UI foundation 基础修复与响应式浏览器验收
 
