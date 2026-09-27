@@ -11,7 +11,7 @@ import { createControlledWorld } from '../environment/controlled-world.mjs';
 import { canonicalHash, captureWorldSnapshot, normalizeWorldSnapshot } from '../environment/snapshot.mjs';
 import { evaluatePredicates } from '../graders/predicates.mjs';
 import { createRunner } from '../runners/deterministic.mjs';
-import { createTrajectoryRecorder, serializeEvidence } from '../recorders/trajectory.mjs';
+import { createTrajectoryRecorder, redactSecrets, serializeEvidence } from '../recorders/trajectory.mjs';
 
 /**
  * Counters that represent real damage. Blocked attempts are deliberately not
