@@ -365,6 +365,7 @@ body {
   background: transparent;
 }
 .compact-right-panel__quicktabs .isl-tab {
+    display: inline-flex;
     min-width: 0;
     height: 32px;
     flex: 1 1 0;
@@ -416,7 +417,6 @@ body {
     display: none;
 }
 .compact-right-panel__quicktabs .isl-tab--active {
-    display: inline-flex;
     color: var(--isl-ink);
     background: var(--isl-surface-2);
 }
