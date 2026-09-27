@@ -9,6 +9,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { FAILURE_CLASSES } from './engine.mjs';
+import { serializeEvidence } from '../recorders/trajectory.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 export const evalRoot = join(here, '..');
@@ -463,14 +464,15 @@ export function buildCoverage({ dataset, oracle, baselines, runs }) {
 }
 
 export async function writeReport(report) {
-  const outDir = join(REPORTS_DIR, report.run.id);
+  const safeReport = JSON.parse(serializeEvidence(report));
+  const outDir = join(REPORTS_DIR, safeReport.run.id);
   await mkdir(outDir, { recursive: true });
-  await writeFile(join(outDir, 'report.json'), `${JSON.stringify(report, null, 2)}\n`, 'utf8');
-  await writeFile(join(outDir, 'report.md'), renderReportMarkdown(report), 'utf8');
+  await writeFile(join(outDir, 'report.json'), `${serializeEvidence(safeReport, true)}\n`, 'utf8');
+  await writeFile(join(outDir, 'report.md'), renderReportMarkdown(safeReport), 'utf8');
   const paths = { outDir, json: join(outDir, 'report.json'), markdown: join(outDir, 'report.md') };
-  if (report.coverage) {
+  if (safeReport.coverage) {
     paths.coverage = join(outDir, 'coverage.json');
-    await writeFile(paths.coverage, `${JSON.stringify(report.coverage, null, 2)}\n`, 'utf8');
+    await writeFile(paths.coverage, `${serializeEvidence(safeReport.coverage, true)}\n`, 'utf8');
   }
   return paths;
 }

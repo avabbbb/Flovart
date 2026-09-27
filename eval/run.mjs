@@ -21,6 +21,7 @@ import { runTrial, aggregate, FAILURE_CLASSES } from './lib/engine.mjs';
 import { RUNNER_NAMES, EXTERNAL_RUNNERS } from './runners/deterministic.mjs';
 import { listPredicates } from './graders/predicates.mjs';
 import { canonicalHash } from './environment/snapshot.mjs';
+import { serializeEvidence } from './recorders/trajectory.mjs';
 import {
   RESULTS_DIR,
   buildCoverage,
@@ -452,11 +453,11 @@ async function cmdOracle(flags) {
     wallTimeMs,
     oracleQa: qa,
   };
-  await writeFile(join(runDir, 'run.json'), `${JSON.stringify(run, null, 2)}\n`, 'utf8');
-  await writeFile(join(runDir, 'summary.json'), `${JSON.stringify({
+  await writeFile(join(runDir, 'run.json'), `${serializeEvidence(run, true)}\n`, 'utf8');
+  await writeFile(join(runDir, 'summary.json'), `${serializeEvidence({
     aggregate: aggregate(entries),
     entries,
-  }, null, 2)}\n`, 'utf8');
+  }, true)}\n`, 'utf8');
 
   console.log(`\nOracle / NOP admission gate`);
   console.log(`  tasks: ${qa.tasks}  repeat: ${repeat}`);
@@ -653,8 +654,8 @@ async function cmdRun(flags) {
       ? { standInTrials, certifiedTrials }
       : null,
   };
-  await writeFile(join(runDir, 'run.json'), `${JSON.stringify(run, null, 2)}\n`, 'utf8');
-  await writeFile(join(runDir, 'summary.json'), `${JSON.stringify(summary, null, 2)}\n`, 'utf8');
+  await writeFile(join(runDir, 'run.json'), `${serializeEvidence(run, true)}\n`, 'utf8');
+  await writeFile(join(runDir, 'summary.json'), `${serializeEvidence(summary, true)}\n`, 'utf8');
 
   const agg = summary.aggregate;
   console.log(`\n  pass@1 : ${(agg.passAt1 * 100).toFixed(1)}% (${agg.successfulTrials}/${agg.trials})`);

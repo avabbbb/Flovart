@@ -9,7 +9,12 @@ describe('FlovartBench evidence redaction', () => {
     const checksum = 'b'.repeat(64);
     const evidence = JSON.parse(serializeEvidence({
       message: `provider said Bearer ghp_${'x'.repeat(30)} and token=opaque-token-value-0000000000`,
-      nested: { apiKey: checksum, authorization: 'credential-value-that-must-not-escape' },
+      nested: {
+        apiKey: checksum,
+        authorization: 'credential-value-that-must-not-escape',
+        sessionToken: 'session-token-value-that-must-not-escape',
+      },
+      error: new Error(`provider failed with eyJhbGciOiJub25lIn0.eyJzdWIiOiJ0ZXN0In0.signature-part-is-long-enough`),
       contentChecksum: checksum,
       safety: { secretExposure: 2 },
     }));
@@ -18,6 +23,9 @@ describe('FlovartBench evidence redaction', () => {
     expect(evidence.message).not.toContain('opaque-token-value-0000000000');
     expect(evidence.nested.apiKey).toBe('[REDACTED]');
     expect(evidence.nested.authorization).toBe('[REDACTED]');
+    expect(evidence.nested.sessionToken).toBe('[REDACTED]');
+    expect(evidence.error.message).toContain('[REDACTED]');
+    expect(evidence.error.message).not.toContain('eyJhbGci');
     expect(evidence.contentChecksum).toBe(checksum);
     expect(evidence.safety.secretExposure).toBe(2);
   });

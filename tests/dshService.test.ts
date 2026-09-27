@@ -3,10 +3,52 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Context } from '../dsh-plugin/node_modules/@deepseek-ai/cordis';
 import { describe, expect, it } from 'vitest';
+import { runCliSync } from '../dsh-plugin/src/cli';
 import { artifactFromTask } from '../dsh-plugin/src/service';
 import { FlovartService } from '../dsh-plugin/src/service';
 
 describe('DeepSeek Harness Flovart service', () => {
+  it('runs a synchronous CLI probe and returns its parsed outcome', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'flovart-dsh-sync-cli-'));
+    const cliFile = join(directory, 'cli.mjs');
+    writeFileSync(cliFile, [
+      "console.log(JSON.stringify({ ok: true, data: { commands: { status: { availability: 'stable' } } } }))",
+    ].join('\n'));
+
+    try {
+      const outcome = runCliSync({
+        cli: `${JSON.stringify(process.execPath)} ${JSON.stringify(cliFile)}`,
+        toolTimeoutMs: 2_000,
+        workspaceMode: 'browser',
+        workspaceUrl: 'http://127.0.0.1:17372',
+        workspaceToken: '',
+      }, 'command.list');
+
+      expect(outcome).toMatchObject({
+        ok: true,
+        command: 'command.list',
+        data: { commands: { status: { availability: 'stable' } } },
+        error: null,
+      });
+
+      writeFileSync(cliFile, "console.error('probe failed'); process.exitCode = 1\n");
+      const failedProbe = runCliSync({
+        cli: `${JSON.stringify(process.execPath)} ${JSON.stringify(cliFile)}`,
+        toolTimeoutMs: 2_000,
+        workspaceMode: 'browser',
+        workspaceUrl: 'http://127.0.0.1:17372',
+        workspaceToken: '',
+      }, 'command.list');
+      expect(failedProbe).toMatchObject({
+        ok: false,
+        error: { code: 'CLI_ERROR', retryable: false },
+      });
+      expect(failedProbe.error?.message.trim()).toBe('probe failed');
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   it('projects the real Runtime task Artifact instead of the legacy asset list', () => {
     expect(artifactFromTask({
       id: 'task-1',

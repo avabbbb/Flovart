@@ -11,7 +11,7 @@ import { createControlledWorld } from '../environment/controlled-world.mjs';
 import { canonicalHash, captureWorldSnapshot, normalizeWorldSnapshot } from '../environment/snapshot.mjs';
 import { evaluatePredicates } from '../graders/predicates.mjs';
 import { createRunner } from '../runners/deterministic.mjs';
-import { createTrajectoryRecorder, redactSecrets } from '../recorders/trajectory.mjs';
+import { createTrajectoryRecorder, serializeEvidence } from '../recorders/trajectory.mjs';
 
 /**
  * Counters that represent real damage. Blocked attempts are deliberately not
@@ -311,7 +311,9 @@ export async function runTrial(task, { runnerName, runDir, metadata, trialIndex,
     knownGap: task.knownGap ?? null,
   };
 
-  const evidenceScore = redactSecrets(score);
+  // Use the same serialisation boundary as the on-disk trial artifacts so the
+  // value returned to aggregate writers cannot reintroduce unsanitized errors.
+  const evidenceScore = JSON.parse(serializeEvidence(score));
   await recorder.finalise({
     worldFinal,
     worldNormalized,
