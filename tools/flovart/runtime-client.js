@@ -79,15 +79,21 @@ export async function verifyDiscoveryPermissions(path) {
       dacl = findDaclLine(sddl);
       if (dacl === null) throw new Error('unreadable DACL');
       aces = parseDaclAces(dacl);
-      assertDiscoveryDacl(aces, currentSid);
-    } catch (error) {
-      // Emit the sanitized DACL shape so a hosted runner failure shows WHICH
-      // rule tripped (unexpected principal / inherited ACE / missing owner or
-      // SYSTEM) without leaking a real path or token. SIDs are already opaque.
-      if (process.env.FLOVART_ACL_DEBUG === '1' && typeof dacl === 'string') {
-        const flags = aces.map(a => `${a.type};${a.flags || '-'};${a.sid}`).join(' | ');
-        process.stderr.write(`[acl-debug] dacl=${dacl} aces=${flags} err=${error instanceof Error ? error.message : String(error)}\n`);
+      if (
+        aces.some(ace => ace.type === 'A' && ace.sid === 'LA')
+        && !aces.some(ace => ace.sid === currentSid)
+      ) {
+        // icacls /save may abbreviate the local Administrator SID as LA. Ask
+        // Windows whether this file's DACL explicitly contains the current
+        // numeric SID before treating that alias as the same principal.
+        await execFileAsync(windowsSystemExecutable('icacls.exe'), [path, '/findsid', `*${currentSid}`, '/q'], {
+          timeout: DEFAULT_TIMEOUT_MS,
+          windowsHide: true,
+        });
+        aces = aces.map(ace => (ace.sid === 'LA' ? { ...ace, sid: currentSid } : ace));
       }
+      assertDiscoveryDacl(aces, currentSid);
+    } catch {
       throw unavailable('Runtime discovery permissions are too broad.');
     } finally {
       await rm(directory, { recursive: true, force: true });

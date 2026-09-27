@@ -39,7 +39,10 @@ async function protectDiscovery(path: string) {
 function runCli(args: string[], env: NodeJS.ProcessEnv) {
   return new Promise<{ code: number | null; stdout: string; stderr: string }>((resolve, reject) => {
     const child = spawn(process.execPath, [join(process.cwd(), 'tools', 'flovart', 'cli.js'), ...args], {
-      env: { ...process.env, ...env },
+      env: {
+        ...process.env,
+        ...env,
+      },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     let stdout = '';

@@ -7,16 +7,25 @@
 import { mkdir, writeFile, appendFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-const SECRET_KEY_PATTERN = /(api[-_]?key|authorization|bearer|\btoken\b|access[-_]?token|refresh[-_]?token|secret|credential|password|cookie)/i;
+const SECRET_KEY_PATTERN = /(api[-_]?key|authorization|bearer|(?:^|[^a-z0-9])token(?:$|[^a-z0-9])|access[-_]?token|refresh[-_]?token|(?:^|[^a-z0-9])secret(?:$|[^a-z0-9])|credential|password|cookie)/i;
 const SECRET_VALUE_PATTERNS = [
   /\bsk-[A-Za-z0-9_-]{16,}\b/g,
   /\bghp_[A-Za-z0-9]{20,}\b/g,
   /\bxox[baprs]-[A-Za-z0-9-]{10,}\b/g,
+  /\beyJ[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{8,}\b/g,
   /Bearer\s+[A-Za-z0-9._-]{12,}/gi,
-  /\b(?:api[-_ ]?key|access[-_ ]?token|refresh[-_ ]?token|secret|password)\b\s*[:=]?\s*[A-Za-z0-9._-]{12,}/gi,
+  /\b(?:api[-_ ]?key|access[-_ ]?token|refresh[-_ ]?token|(?:[a-z0-9]+[-_ ]?)?token|authorization|credential|secret|password|cookie)\b\s*[:=]\s*(?:"[^"]*"|'[^']*'|[A-Za-z0-9_~+./=-]{12,})/gi,
 ];
 
 const REDACTED = '[REDACTED]';
+
+function isSensitiveKey(key) {
+  // Preserve the safety counter; splitting camel case lets sessionToken and
+  // providerSecret still match the credential-key rules below.
+  if (/^secret[_-]?exposure$/i.test(key)) return false;
+  const normalized = key.replace(/([a-z0-9])([A-Z])/g, '$1_$2');
+  return SECRET_KEY_PATTERN.test(normalized);
+}
 
 export function redactSecrets(value, seen = new WeakSet()) {
   if (value === null || value === undefined) return value;
@@ -24,6 +33,18 @@ export function redactSecrets(value, seen = new WeakSet()) {
     let output = value;
     for (const pattern of SECRET_VALUE_PATTERNS) output = output.replace(pattern, REDACTED);
     return output;
+  }
+  if (value instanceof Error) {
+    if (seen.has(value)) return '<circular>';
+    seen.add(value);
+    const normalized = { name: value.name, message: value.message };
+    if (value.cause !== undefined) normalized.cause = value.cause;
+    for (const [key, nested] of Object.entries(value)) normalized[key] = nested;
+    const result = {};
+    for (const [key, nested] of Object.entries(normalized)) {
+      result[key] = isSensitiveKey(key) ? REDACTED : redactSecrets(nested, seen);
+    }
+    return result;
   }
   if (Array.isArray(value)) {
     if (seen.has(value)) return '<circular>';
@@ -35,14 +56,14 @@ export function redactSecrets(value, seen = new WeakSet()) {
     seen.add(value);
     const result = {};
     for (const [key, nested] of Object.entries(value)) {
-      result[key] = SECRET_KEY_PATTERN.test(key) ? REDACTED : redactSecrets(nested, seen);
+      result[key] = isSensitiveKey(key) ? REDACTED : redactSecrets(nested, seen);
     }
     return result;
   }
   return value;
 }
 
-function serializeEvidence(value, pretty = false) {
+export function serializeEvidence(value, pretty = false) {
   return JSON.stringify(redactSecrets(value), null, pretty ? 2 : undefined);
 }
 

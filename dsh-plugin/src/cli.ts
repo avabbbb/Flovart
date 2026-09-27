@@ -4,7 +4,7 @@
  * touches loopback private routes, WebUI state, Discovery Tokens or MCP.
  */
 
-import { spawn } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import type { FlovartPluginConfig } from './config.ts'
 
 export interface CliFailure {
@@ -62,6 +62,70 @@ export function parseCliOutcome(command: string, stdout: string, stderr: string)
       error: { code: 'CLI_INVALID_JSON', message: (stdout || stderr).slice(0, 2000), retryable: false },
     }
   }
+}
+
+/** Run a short, bounded CLI probe for the synchronous Cordis lifecycle hook. */
+export function runCliSync(
+  config: FlovartPluginConfig,
+  command: string,
+  args: Record<string, unknown> = {},
+): CliOutcome {
+  const commandArgs = command.startsWith('workflow.')
+    ? { ...args, workspaceMode: 'browser', agentIdentity: args.agentIdentity || 'deepseek-harness' }
+    : args
+  const argv = buildCliCommand(config.cli, command, commandArgs)
+
+  let result: ReturnType<typeof spawnSync>
+  try {
+    result = spawnSync(argv[0], argv.slice(1), {
+      encoding: 'utf8',
+      windowsHide: true,
+      timeout: config.toolTimeoutMs,
+      maxBuffer: 64 * 1024 * 1024,
+      killSignal: 'SIGKILL',
+    })
+  } catch (error) {
+    const code = errnoCode(error as Error)
+    return {
+      ok: false,
+      command,
+      data: null,
+      error: {
+        code: code === 'ENOENT' ? 'CLI_NOT_FOUND' : 'CLI_SPAWN_FAILED',
+        message: `无法启动 Iris CLI：${argv[0]}（${(error as Error).message}）。请安装 Agent Toolkit 或设置 FLOVART_CLI。`,
+        retryable: false,
+      },
+    }
+  }
+
+  if (result.error) {
+    const code = errnoCode(result.error)
+    const timedOut = code === 'ETIMEDOUT'
+    return {
+      ok: false,
+      command,
+      data: null,
+      error: {
+        code: timedOut ? 'CLI_TIMEOUT' : code === 'ENOENT' ? 'CLI_NOT_FOUND' : 'CLI_SPAWN_FAILED',
+        message: timedOut
+          ? `命令 ${command} 执行超过 ${config.toolTimeoutMs}ms 已终止`
+          : `无法启动 Iris CLI：${argv[0]}（${result.error.message}）。请安装 Agent Toolkit 或设置 FLOVART_CLI。`,
+        retryable: timedOut,
+      },
+    }
+  }
+
+  const stdout = typeof result.stdout === 'string' ? result.stdout : result.stdout?.toString('utf8') ?? ''
+  const stderr = typeof result.stderr === 'string' ? result.stderr : result.stderr?.toString('utf8') ?? ''
+  if (result.status !== 0 && stdout === '') {
+    return {
+      ok: false,
+      command,
+      data: null,
+      error: { code: 'CLI_ERROR', message: stderr.slice(0, 2000), retryable: false },
+    }
+  }
+  return parseCliOutcome(command, stdout, stderr)
 }
 
 function errnoCode(error: Error): string | undefined {

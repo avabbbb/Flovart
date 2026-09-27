@@ -117,7 +117,10 @@ async function fixture() {
 function runCli(args: string[], env: NodeJS.ProcessEnv) {
   return new Promise<{ code: number | null; stdout: string; stderr: string }>((resolve, reject) => {
     const child = spawn(process.execPath, [join(process.cwd(), 'tools', 'flovart', 'cli.js'), ...args], {
-      env: { ...process.env, ...env },
+      env: {
+        ...process.env,
+        ...env,
+      },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     let stdout = '';
@@ -298,9 +301,8 @@ describe('parseDaclAces', () => {
 });
 
 // icacls /save writes the saved file name on the first line and the descriptor
-// after it. On GitHub's Windows runners the test temp root sits on the D: drive,
-// so the name line can also begin with "D:" and must not be mistaken for the
-// DACL. This is why the two hosted-CI runtime tests failed locally-green runs.
+// after it. On Windows runners the name line can begin with "D:" and must not
+// be mistaken for the DACL.
 describe('findDaclLine', () => {
   it('reads the DACL that follows a plain file name', () => {
     const dacl = findDaclLine('control-v1.json\r\nD:PAI(A;;FA;;;SY)(A;;FA;;;S-1-5-21-1-2-3-1001)\r\n');
@@ -326,14 +328,9 @@ describe('findDaclLine', () => {
   });
 });
 
-// The hosted Windows runner was still red after the SDDL parser was fixed: its
-// hardened discovery file carries an extra ACE for a privileged built-in
-// principal (Administrators) that the strict {owner, SYSTEM} allow-list
-// rejected as 'unexpected DACL principal'. These cases feed the real
-// assertDiscoveryDacl policy the ACEs a hosted runner produces, so the guard's
-// decision is checked directly and on every platform. The policy keeps failing
-// closed for any non-privileged principal, which is what actually protects the
-// bearer token in the record.
+// icacls /save may serialize the current local Administrator SID as LA. Keep
+// the pure policy strict; verifyDiscoveryPermissions must first confirm that
+// alias against the numeric current SID with icacls /findsid.
 describe('assertDiscoveryDacl', () => {
   const owner = 'S-1-5-21-1-2-3-1001';
   const allowAce = (sid, flags = '', inherited = false) => ({ type: 'A', flags, sid, inherited });
@@ -341,6 +338,12 @@ describe('assertDiscoveryDacl', () => {
   it('accepts the owner+LocalSystem DACL a local run produces', () => {
     expect(() => assertDiscoveryDacl([allowAce('SY'), allowAce(owner)], owner)).not.toThrow();
     expect(() => assertDiscoveryDacl([allowAce('S-1-5-18'), allowAce(owner)], owner)).not.toThrow();
+  });
+
+  it('does not treat the SDDL Local Administrator alias as a globally trusted principal', () => {
+    const localAdministratorSid = 'S-1-5-21-1-2-3-500';
+    expect(() => assertDiscoveryDacl([allowAce('SY'), allowAce('LA')], localAdministratorSid)).toThrow('unexpected DACL principal');
+    expect(() => assertDiscoveryDacl([allowAce('SY'), allowAce('LA')], owner)).toThrow('unexpected DACL principal');
   });
 
   it('accepts a hosted-runner DACL carrying a privileged Administrators ACE', () => {
@@ -368,7 +371,7 @@ describe('assertDiscoveryDacl', () => {
     expect(() => assertDiscoveryDacl([allowAce(owner)], owner)).toThrow();
   });
 
-  it('end-to-end: verifyDiscoveryPermissions accepts a hosted-runner admin ACE on Windows', async () => {
+  it('end-to-end: verifyDiscoveryPermissions accepts the current account SDDL alias on Windows', async () => {
     if (process.platform !== 'win32') return;
     const directory = await mkdtemp(join(tmpdir(), 'flovart-hosted-acl-'));
     cleanup.push(() => rm(directory, { recursive: true, force: true }));
@@ -381,10 +384,9 @@ describe('assertDiscoveryDacl', () => {
     const sid = stdout.match(/S-\d(?:-\d+)+/)?.[0];
     if (!sid) throw new Error('test SID unavailable');
     // Mirror the production discovery.rs DACL exactly: protected (D:P), owner +
-    // LocalSystem only — no Administrators ACE. The hosted runner failed because
-    // the fixture granted S-1-5-32-544 while the real product file never carries
-    // it; matching the production shape keeps the test honest about what the
-    // verifier accepts. FLOVART_ACL_DEBUG=1 prints the sanitized DACL on failure.
+    // LocalSystem only — no Administrators ACE. On hosted Windows, icacls may
+    // serialize this current-user SID as LA; the verifier must confirm that
+    // alias against the numeric SID before accepting it.
     await execFileAsync(join(system32, 'icacls.exe'), [
       file, '/inheritance:r',
       '/grant:r', `*${sid}:(F)`,
