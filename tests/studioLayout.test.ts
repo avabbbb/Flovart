@@ -61,14 +61,21 @@ describe('studio layout contracts', () => {
     expect(workflowStyles).not.toContain('.workflow-agent__composer button { width: 34px;');
   });
 
-  it('keeps Workflow overlays inside the measured canvas container without drawer math', () => {
+  it('keeps Workflow popovers viewport-anchored without drawer math', () => {
     const app = source('App.tsx');
     const workspace = source('components/workflow/WorkflowWorkspace.tsx');
     const workflow = source('components/workflow/InfiniteWorkflow.tsx');
     const toolbar = source('components/workflow/WorkflowToolbar.tsx');
+    const popover = source('components/ResponsivePopover.tsx');
     const workflowStyles = source('styles/workflow.css');
+    const layoutStyles = source('styles/index.css');
 
-    expect(workflowStyles).toContain('.workflow-toolbar__add-menu { position: absolute; bottom: calc(100% + 6px);');
+    expect(toolbar).toContain("import { ResponsivePopover } from '../ResponsivePopover';");
+    expect(toolbar).toContain('className="workflow-toolbar__add-menu-content"');
+    expect(popover).toContain('return createPortal(');
+    expect(popover).toContain('document.body');
+    expect(layoutStyles).toMatch(/\.flv-responsive-popover\s*\{\s*position:\s*fixed;/);
+    expect(workflowStyles).not.toContain('.workflow-toolbar__add-menu { position: absolute;');
     expect(app).not.toContain('rightPanelInset=');
     expect(workspace).not.toContain('rightPanelInset');
     expect(workflow).not.toContain('rightPanelInset');
