@@ -474,6 +474,14 @@
       "watchers": 0,
       "releases": 45,
       "downloads": 36
+    },
+    {
+      "date": "2026-09-28",
+      "stars": 138,
+      "forks": 34,
+      "watchers": 0,
+      "releases": 52,
+      "downloads": 36
     }
   ],
   "releaseAssets": [
@@ -482,6 +490,162 @@
       "name": "Flovart_0.2.0_x64-setup.exe",
       "downloads": 36,
       "updatedAt": "2026-06-02T08:23:17Z"
+    },
+    {
+      "release": "nightly-121-d25b587",
+      "name": "Iris_0.3.2_aarch64.dmg",
+      "downloads": 0,
+      "updatedAt": "2026-09-27T17:12:48Z"
+    },
+    {
+      "release": "nightly-121-d25b587",
+      "name": "Iris_0.3.2_amd64.AppImage",
+      "downloads": 0,
+      "updatedAt": "2026-09-27T17:14:08Z"
+    },
+    {
+      "release": "nightly-121-d25b587",
+      "name": "Iris_0.3.2_amd64.deb",
+      "downloads": 0,
+      "updatedAt": "2026-09-27T17:14:04Z"
+    },
+    {
+      "release": "nightly-121-d25b587",
+      "name": "Iris_0.3.2_x64-setup.exe",
+      "downloads": 0,
+      "updatedAt": "2026-09-27T17:15:26Z"
+    },
+    {
+      "release": "nightly-120-c17999a",
+      "name": "Iris_0.3.2_aarch64.dmg",
+      "downloads": 0,
+      "updatedAt": "2026-09-27T16:55:23Z"
+    },
+    {
+      "release": "nightly-120-c17999a",
+      "name": "Iris_0.3.2_amd64.AppImage",
+      "downloads": 0,
+      "updatedAt": "2026-09-27T16:55:06Z"
+    },
+    {
+      "release": "nightly-120-c17999a",
+      "name": "Iris_0.3.2_amd64.deb",
+      "downloads": 0,
+      "updatedAt": "2026-09-27T16:55:03Z"
+    },
+    {
+      "release": "nightly-120-c17999a",
+      "name": "Iris_0.3.2_x64-setup.exe",
+      "downloads": 0,
+      "updatedAt": "2026-09-27T16:55:33Z"
+    },
+    {
+      "release": "nightly-120-c17999a",
+      "name": "Iris_0.3.2_x64.dmg",
+      "downloads": 0,
+      "updatedAt": "2026-09-27T17:07:58Z"
+    },
+    {
+      "release": "nightly-115-7a40cb8",
+      "name": "Iris_0.3.2_aarch64.dmg",
+      "downloads": 0,
+      "updatedAt": "2026-09-27T15:47:30Z"
+    },
+    {
+      "release": "nightly-115-7a40cb8",
+      "name": "Iris_0.3.2_amd64.AppImage",
+      "downloads": 0,
+      "updatedAt": "2026-09-27T15:43:03Z"
+    },
+    {
+      "release": "nightly-115-7a40cb8",
+      "name": "Iris_0.3.2_amd64.deb",
+      "downloads": 0,
+      "updatedAt": "2026-09-27T15:42:59Z"
+    },
+    {
+      "release": "nightly-115-7a40cb8",
+      "name": "Iris_0.3.2_x64-setup.exe",
+      "downloads": 0,
+      "updatedAt": "2026-09-27T15:44:54Z"
+    },
+    {
+      "release": "nightly-115-7a40cb8",
+      "name": "Iris_0.3.2_x64.dmg",
+      "downloads": 0,
+      "updatedAt": "2026-09-27T16:05:27Z"
+    },
+    {
+      "release": "nightly-114-a4fc470",
+      "name": "Iris_0.3.2_amd64.AppImage",
+      "downloads": 0,
+      "updatedAt": "2026-09-27T15:35:26Z"
+    },
+    {
+      "release": "nightly-114-a4fc470",
+      "name": "Iris_0.3.2_amd64.deb",
+      "downloads": 0,
+      "updatedAt": "2026-09-27T15:35:22Z"
+    },
+    {
+      "release": "nightly-114-a4fc470",
+      "name": "Iris_0.3.2_x64-setup.exe",
+      "downloads": 0,
+      "updatedAt": "2026-09-27T15:37:27Z"
+    },
+    {
+      "release": "nightly-112-27d1c74",
+      "name": "Iris_0.3.2_amd64.AppImage",
+      "downloads": 0,
+      "updatedAt": "2026-09-27T15:04:48Z"
+    },
+    {
+      "release": "nightly-112-27d1c74",
+      "name": "Iris_0.3.2_amd64.deb",
+      "downloads": 0,
+      "updatedAt": "2026-09-27T15:04:44Z"
+    },
+    {
+      "release": "nightly-112-27d1c74",
+      "name": "Iris_0.3.2_x64-setup.exe",
+      "downloads": 0,
+      "updatedAt": "2026-09-27T15:07:29Z"
+    },
+    {
+      "release": "nightly-111-3855de6",
+      "name": "Iris_0.3.2_amd64.AppImage",
+      "downloads": 0,
+      "updatedAt": "2026-09-27T11:22:29Z"
+    },
+    {
+      "release": "nightly-111-3855de6",
+      "name": "Iris_0.3.2_amd64.deb",
+      "downloads": 0,
+      "updatedAt": "2026-09-27T11:22:25Z"
+    },
+    {
+      "release": "nightly-111-3855de6",
+      "name": "Iris_0.3.2_x64-setup.exe",
+      "downloads": 0,
+      "updatedAt": "2026-09-27T11:25:33Z"
+    },
+    {
+      "release": "nightly-109-721e96e",
+      "name": "Iris_0.3.2_amd64.AppImage",
+      "downloads": 0,
+      "updatedAt": "2026-09-27T06:18:14Z"
+    },
+    {
+      "release": "nightly-109-721e96e",
+      "name": "Iris_0.3.2_amd64.deb",
+      "downloads": 0,
+      "updatedAt": "2026-09-27T06:18:11Z"
+    },
+    {
+      "release": "nightly-109-721e96e",
+      "name": "Iris_0.3.2_x64-setup.exe",
+      "downloads": 0,
+      "updatedAt": "2026-09-27T06:19:26Z"
     },
     {
       "release": "nightly-107-b0647b0",
@@ -1258,5 +1422,5 @@
       "updatedAt": "2026-09-06T12:12:04Z"
     }
   ],
-  "updatedAt": "2026-09-27T05:25:09.224Z"
+  "updatedAt": "2026-09-28T05:32:24.634Z"
 }
