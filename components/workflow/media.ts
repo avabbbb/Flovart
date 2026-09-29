@@ -7,6 +7,7 @@ import { getAssetById } from '../../utils/assetStorage';
 import { loadRuntimeArtifactBlob } from '../../services/runtimeArtifacts';
 import { loadBrowserImportArtifactBlob, parseBrowserImportHref } from '../../services/browserImportArtifacts';
 import { LocalFolderError, parseLocalFolderHref, readLocalFolderFile } from '../../services/localFolderSource';
+import { fetchRemoteMediaBlob, shouldUseDesktopNativeFetch } from '../../services/desktopNetwork';
 import { workflowMediaStorage } from './storage';
 import type { WorkflowArtifactRef, WorkflowNode, WorkflowNodeMetadata, WorkflowNodeType, WorkflowProject } from './types';
 
@@ -332,9 +333,7 @@ function decodeDataUrl(dataUrl: string): Blob {
 export async function workflowDataUrlToBlob(dataUrl: string): Promise<Blob> {
   const trimmed = dataUrl.trim();
   if (/^data:/i.test(trimmed)) return decodeDataUrl(trimmed);
-  const response = await fetch(dataUrl);
-  if (!response.ok) throw new Error('无法读取图片结果');
-  return response.blob();
+  return fetchRemoteMediaBlob(dataUrl);
 }
 
 export function isFetchableMediaHref(href: string) {
@@ -369,9 +368,7 @@ export async function loadFallbackMediaBlob(href: string): Promise<Blob> {
   if (!isFetchableMediaHref(href)) {
     throw new Error('无法读取本地媒体引用，请重新导入素材');
   }
-  const response = await fetch(href);
-  if (!response.ok) throw new Error('无法读取图片文件');
-  return response.blob();
+  return fetchRemoteMediaBlob(href);
 }
 
 export async function loadWorkflowMediaBlob(storageKey?: string, href?: string, artifactRef?: WorkflowArtifactRef): Promise<Blob> {
@@ -419,7 +416,8 @@ function inspectImageElement(url: string): Promise<HTMLImageElement> {
 export function useWorkflowMediaUrl(storageKey?: string, fallbackHref?: string, artifactRef?: WorkflowArtifactRef) {
   const artifactKey = artifactRef?.taskId || '';
   const mediaKey = storageKey || artifactKey || fallbackHref || '';
-  const immediateUrl = storageKey ? null : (fallbackHref && !isFetchableMediaHref(fallbackHref) ? null : fallbackHref || null);
+  const nativeRemote = shouldUseDesktopNativeFetch(fallbackHref);
+  const immediateUrl = storageKey || nativeRemote ? null : (fallbackHref && !isFetchableMediaHref(fallbackHref) ? null : fallbackHref || null);
   const [state, setState] = useState<{ key: string; url: string | null; error: string | null }>({
     key: mediaKey,
     url: immediateUrl,
@@ -430,7 +428,7 @@ export function useWorkflowMediaUrl(storageKey?: string, fallbackHref?: string, 
     let active = true;
     let objectUrl: string | null = null;
     setState({ key: mediaKey, url: immediateUrl, error: null });
-    if (!storageKey && !artifactRef && (!fallbackHref || isFetchableMediaHref(fallbackHref))) return () => undefined;
+    if (!storageKey && !artifactRef && (!fallbackHref || (isFetchableMediaHref(fallbackHref) && !nativeRemote))) return () => undefined;
     void loadWorkflowMediaBlob(storageKey, fallbackHref, artifactRef).then(blob => {
       if (!active) return;
       if (!blob) {
@@ -453,7 +451,7 @@ export function useWorkflowMediaUrl(storageKey?: string, fallbackHref?: string, 
       active = false;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [artifactKey, artifactRef?.mimeType, fallbackHref, mediaKey, storageKey]);
+  }, [artifactKey, artifactRef?.mimeType, fallbackHref, mediaKey, nativeRemote, storageKey]);
 
   return state.key === mediaKey ? state : { url: immediateUrl, error: null };
 }
