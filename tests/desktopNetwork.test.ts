@@ -41,7 +41,13 @@ describe('desktopNetwork', () => {
       url: 'https://cdn.example.com/result.mp4',
     });
     expect(blob.type).toBe('video/mp4');
-    expect([...new Uint8Array(await blob.arrayBuffer())]).toEqual([1, 2, 3]);
+    const body = await new Promise<Uint8Array>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(new Uint8Array(reader.result as ArrayBuffer));
+      reader.onerror = () => reject(reader.error);
+      reader.readAsArrayBuffer(blob);
+    });
+    expect([...body]).toEqual([1, 2, 3]);
   });
 
   it('does not route blob/data URLs through the native remote downloader', () => {
