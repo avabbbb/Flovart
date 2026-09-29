@@ -1,9 +1,10 @@
 import { Download, Plus, Search, Sparkles, Trash2 } from 'lucide-react';
 import { useMemo, useState, type DragEvent } from 'react';
-import { useWorkflowMediaUrl } from '../workflow/media';
+import { loadWorkflowMediaBlob, useWorkflowMediaUrl } from '../workflow/media';
 import { FolderTree, type FolderTreeProps } from './FolderTree';
 import type { AssetFolder } from '../../types';
 import { displayError } from '../../services/displayError';
+import { downloadBlob, openRemoteMediaUrl } from '../../services/desktopNetwork';
 
 export const STUDIO_MEDIA_DRAG_TYPE = 'application/x-flovart-studio-media';
 
@@ -54,18 +55,41 @@ function StudioMediaPreview({ item }: { item: StudioMediaItem }) {
 }
 
 function StudioMediaDownload({ item, isChinese }: { item: StudioMediaItem; isChinese: boolean }) {
-  const media = useWorkflowMediaUrl(undefined, item.href);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const onDownload = async () => {
+    if (busy) return;
+    setBusy(true);
+    setError('');
+    try {
+      const blob = await loadWorkflowMediaBlob(undefined, item.href);
+      downloadBlob(blob, item.name);
+    } catch (downloadError) {
+      const message = displayError(downloadError, isChinese ? '下载失败。' : 'Download failed.');
+      setError(message);
+      if (/^https:\/\//i.test(item.href)) {
+        try {
+          await openRemoteMediaUrl(item.href);
+          return;
+        } catch (openError) {
+          setError(displayError(openError, message));
+        }
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
   return (
-    <a
+    <button
+      type="button"
       className="isl-icon-btn flex h-7 w-7 items-center justify-center"
-      href={media.url || '#'}
-      download={item.name}
-      aria-disabled={!media.url}
+      disabled={busy}
       aria-label={`${isChinese ? '下载' : 'Download'} ${item.name}`}
-      onClick={event => { if (!media.url) event.preventDefault(); }}
+      title={error || (isChinese ? '下载' : 'Download')}
+      onClick={() => { void onDownload(); }}
     >
       <Download size={13} aria-hidden="true" />
-    </a>
+    </button>
   );
 }
 
