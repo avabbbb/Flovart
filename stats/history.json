@@ -482,6 +482,14 @@
       "watchers": 0,
       "releases": 52,
       "downloads": 36
+    },
+    {
+      "date": "2026-09-29",
+      "stars": 138,
+      "forks": 34,
+      "watchers": 0,
+      "releases": 53,
+      "downloads": 36
     }
   ],
   "releaseAssets": [
@@ -490,6 +498,36 @@
       "name": "Flovart_0.2.0_x64-setup.exe",
       "downloads": 36,
       "updatedAt": "2026-06-02T08:23:17Z"
+    },
+    {
+      "release": "nightly-126-231d90c",
+      "name": "Iris_0.3.2_aarch64.dmg",
+      "downloads": 0,
+      "updatedAt": "2026-09-29T02:44:30Z"
+    },
+    {
+      "release": "nightly-126-231d90c",
+      "name": "Iris_0.3.2_amd64.AppImage",
+      "downloads": 0,
+      "updatedAt": "2026-09-29T02:42:58Z"
+    },
+    {
+      "release": "nightly-126-231d90c",
+      "name": "Iris_0.3.2_amd64.deb",
+      "downloads": 0,
+      "updatedAt": "2026-09-29T02:42:53Z"
+    },
+    {
+      "release": "nightly-126-231d90c",
+      "name": "Iris_0.3.2_x64-setup.exe",
+      "downloads": 0,
+      "updatedAt": "2026-09-29T02:44:32Z"
+    },
+    {
+      "release": "nightly-126-231d90c",
+      "name": "Iris_0.3.2_x64.dmg",
+      "downloads": 0,
+      "updatedAt": "2026-09-29T03:02:15Z"
     },
     {
       "release": "nightly-121-d25b587",
@@ -1422,5 +1460,5 @@
       "updatedAt": "2026-09-06T12:12:04Z"
     }
   ],
-  "updatedAt": "2026-09-28T05:32:24.634Z"
+  "updatedAt": "2026-09-29T05:50:34.733Z"
 }
