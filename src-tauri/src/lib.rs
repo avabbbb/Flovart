@@ -14,6 +14,7 @@ pub mod deeplink;
 pub mod errors;
 pub mod keyring;
 pub mod managed_agent;
+pub mod remote_media;
 pub mod runtime;
 pub mod state;
 
@@ -149,6 +150,8 @@ pub fn run() {
             runtime::browser_import_mark_consumed,
             runtime::browser_import_artifact_read,
             managed_agent::managed_agent_connection,
+            remote_media::desktop_fetch_remote_media,
+            remote_media::desktop_open_remote_url,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Iris");

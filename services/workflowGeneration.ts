@@ -18,6 +18,7 @@ import { validateWorkflowOperationOutputs } from '../components/workflow/operati
 import type { ProviderMaterializedReference } from './providerGenerationAdapter';
 import { resolveProviderGenerationExtension } from './userScriptProviderAdapter';
 import { displayError } from './displayError';
+import { fetchRemoteMediaBlob } from './desktopNetwork';
 
 export interface WorkflowHistoryPayload {
   name?: string;
@@ -148,14 +149,12 @@ async function mediaResult(
   try {
     const blob = /^data:/i.test(result.mediaUrl)
       ? await workflowDataUrlToBlob(result.mediaUrl)
-      : await (runtime.fetchMedia || (href => fetch(href, {
-        // 产物下载同时受外层取消（停止生成/新 run 抢占）与 120s 超时约束，避免无限挂起。
+      : await (runtime.fetchMedia || (href => fetchRemoteMediaBlob(href, {
+        // 桌面端通过 Rust IPC 下载远程产物，绕过 WebView CORS；Web 端仍使用浏览器 fetch。
         signal: signal
           ? AbortSignal.any([signal, AbortSignal.timeout(120_000)])
           : AbortSignal.timeout(120_000),
-      }).then(response => {
-        if (!response.ok) throw new Error('无法下载生成结果');
-        return response.blob();
+        fallbackMimeType: result.mimeType,
       })))(result.mediaUrl);
     const extension = mode === 'video' ? 'mp4' : 'png';
     const file = typeof File === 'undefined' ? Object.assign(blob, { name: `workflow-result.${extension}`, lastModified: Date.now() }) as File : new File([blob], `workflow-result.${extension}`, { type: result.mimeType || blob.type, lastModified: Date.now() });
