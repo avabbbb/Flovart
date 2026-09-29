@@ -1,11 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const invoke = vi.fn();
-const isTauri = vi.fn(() => true);
+const mocks = vi.hoisted(() => ({
+  invoke: vi.fn(),
+  isTauri: vi.fn(() => true),
+}));
 
 vi.mock('@tauri-apps/api/core', () => ({
-  invoke,
-  isTauri,
+  invoke: mocks.invoke,
+  isTauri: mocks.isTauri,
 }));
 
 import {
@@ -25,17 +27,17 @@ function framedPayload(mimeType: string, body: number[]) {
 
 describe('desktopNetwork', () => {
   beforeEach(() => {
-    invoke.mockReset();
-    isTauri.mockReset();
-    isTauri.mockReturnValue(true);
+    mocks.invoke.mockReset();
+    mocks.isTauri.mockReset();
+    mocks.isTauri.mockReturnValue(true);
   });
 
   it('uses raw Tauri IPC for HTTPS media in the desktop app', async () => {
-    invoke.mockResolvedValueOnce(framedPayload('video/mp4', [1, 2, 3]));
+    mocks.invoke.mockResolvedValueOnce(framedPayload('video/mp4', [1, 2, 3]));
 
     const blob = await fetchRemoteMediaBlob('https://cdn.example.com/result.mp4');
 
-    expect(invoke).toHaveBeenCalledWith('desktop_fetch_remote_media', {
+    expect(mocks.invoke).toHaveBeenCalledWith('desktop_fetch_remote_media', {
       url: 'https://cdn.example.com/result.mp4',
     });
     expect(blob.type).toBe('video/mp4');
@@ -49,17 +51,17 @@ describe('desktopNetwork', () => {
   });
 
   it('opens HTTPS fallback URLs through the desktop opener command', async () => {
-    invoke.mockResolvedValueOnce(undefined);
+    mocks.invoke.mockResolvedValueOnce(undefined);
 
     await openRemoteMediaUrl('https://cdn.example.com/result.mp4');
 
-    expect(invoke).toHaveBeenCalledWith('desktop_open_remote_url', {
+    expect(mocks.invoke).toHaveBeenCalledWith('desktop_open_remote_url', {
       url: 'https://cdn.example.com/result.mp4',
     });
   });
 
   it('rejects malformed native media frames', async () => {
-    invoke.mockResolvedValueOnce(new Uint8Array([1, 2]).buffer);
+    mocks.invoke.mockResolvedValueOnce(new Uint8Array([1, 2]).buffer);
 
     await expect(fetchRemoteMediaBlob('https://cdn.example.com/result.mp4'))
       .rejects.toThrow('桌面媒体响应无效');
