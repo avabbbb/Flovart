@@ -41,7 +41,7 @@ or unredacted logs into any report or Issue — this rule is already in the
 ### Scope
 
 In scope — the trust boundaries documented in the
-[threat model](docs/evidence/release-candidate/THREAT_MODEL.md):
+[threat model](docs/archive/2026-10-07/evidence/release-candidate/THREAT_MODEL.md):
 
 - **Loopback Runtime / Agent bridge auth** — bypass of the loopback bearer token,
   Origin-binding, or workspace-lease checks on the `127.0.0.1` Agent/Runtime surfaces.
@@ -114,7 +114,7 @@ MAINTAINER CHECKLIST — GitHub-side settings this file cannot verify
 -----------------------------------------------------------------------------
 A SECURITY.md and a workflow file do not enable hosting controls. Before or during
 Public Beta the repository owner should confirm each item in the GitHub UI/API and
-update this file (and docs/evidence/release-candidate/GITHUB_REPOSITORY_SECURITY_CHECKLIST.md)
+update this file (and docs/archive/2026-10-07/evidence/release-candidate/GITHUB_REPOSITORY_SECURITY_CHECKLIST.md)
 with the observed state:
 
 - [ ] Enable **Private vulnerability reporting** (Settings → Security → Code security
@@ -138,7 +138,7 @@ with the observed state:
       matching `.github/CONTRIBUTING.md`; README.md/README.zh-CN.md link here.
 
 Evidence snapshot to reconcile against:
-`docs/evidence/release-candidate/GITHUB_REPOSITORY_SECURITY_CHECKLIST.md`
+`docs/archive/2026-10-07/evidence/release-candidate/GITHUB_REPOSITORY_SECURITY_CHECKLIST.md`
 (read-only API audit, 2026-09-02).
 ---------------------------------------------------------------------------- -->
 
@@ -175,7 +175,7 @@ Flovart 目前不提供独立的安全邮箱，与[服务条款](docs/TERMS_OF_S
 
 ### 范围
 
-在范围内 —— 对应[威胁模型](docs/evidence/release-candidate/THREAT_MODEL.md)中的信任边界：
+在范围内 —— 对应[威胁模型](docs/archive/2026-10-07/evidence/release-candidate/THREAT_MODEL.md)中的信任边界：
 
 - **Loopback Runtime / Agent Bridge 鉴权**——绕过 `127.0.0.1` Agent/Runtime 的
   bearer token、Origin 绑定或 Workspace Lease 校验。

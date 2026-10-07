@@ -365,7 +365,7 @@ const CATALOG = {
 // multi-thread branch asked @ffmpeg/core for a worker file only @ffmpeg/core-mt
 // ships (404), and Vite's dependency pre-bundling broke
 // `new Worker(new URL('./worker.js', import.meta.url))` so `ffmpeg.load()` never
-// settled. See docs/maintenance/readme/DEMO_RECORDING.md.
+// settled. See docs/archive/2026-10-07/maintenance/readme/DEMO_RECORDING.md.
 const FFMPEG_TOOLS = new Set([
   'video-trim', 'video-av-split', 'extract-last-frame', 'extract-first-frame',
   'extract-frame-at', 'video-merge', 'audio-trim', 'audio-speed', 'audio-stem-split',

@@ -2,7 +2,7 @@
 title: 待测试确认
 ---
 
-本页记录实际进入文档或代码、仍需用户确认的变更。既有实现的构建、全量测试、Rust Runtime 和响应式浏览器记录见[发行候选证据](../../../evidence/release-candidate/README.md)，仅适用于其对应代码与范围；本页每一节分别注明对应范围的验证结果。真实第三方宿主、账号、Provider 与公开发布仍需单独认证。
+本页记录实际进入文档或代码、仍需用户确认的变更。既有实现的构建、全量测试、Rust Runtime 和响应式浏览器记录见[发行候选证据](../../../archive/2026-10-07/evidence/release-candidate/README.md)，仅适用于其对应代码与范围；本页每一节分别注明对应范围的验证结果。真实第三方宿主、账号、Provider 与公开发布仍需单独认证。
 
 > **2026-09-27 当前状态**：第一宿主仍是 Resolve Studio 21.1。main 已合入 Resolve 面板、候选导入状态与 durable artifact 的源码实现；它们仍未在 Resolve Studio 21.1 真机运行。宿主 native MCP 由 Resolve 提供，Iris 不应再造一套 MCP Server。AE 源码/候选完整性工作保留为 Experimental evidence，不是当前第一交付 gate。
 ## Resolve R1：deterministic artifact Runtime slice
@@ -67,7 +67,7 @@ title: 待测试确认
 - 已实现源码：AE Render 入口拒绝缺失必需参数指针和 NaN Blend；Composite 在读取像素前检查 world 尺寸、rowbytes、最小每行字节数与末行偏移可表示范围，并通过 `PF_GET_PIXEL_DATA8` 取像素指针。该防护只校验宿主提供的 world 元数据，不能证明实际底层缓冲区长度；尚未针对 AE SDK 编译。
 - 已实现源码：效果入口不再依赖未包含的 `DllExport` 宏；源码按 Windows/macOS 平台声明仅 `EffectMain` 导出，其他平台在编译期拒绝。实际 DLL 符号表、PiPL 与 SDK ABI 仍须在真实 Windows SDK 工具链验证；macOS 仍非本轮支持目标。
 - 已验证源码：`npm test -- tests/studioAfterEffectsBridge.test.ts` 的 5 项 CEP 桥接测试通过，覆盖暂存写入与磁盘回读、同尺寸篡改拒绝、已存在内容寻址文件的安全复用、路径不泄露到面板契约，以及 Apply 前重新校验；新增测试的独立 TypeScript 检查通过；`npm run docs:check` 检查 149 个文档通过。仓库级 `npx tsc --noEmit --pretty false` 仍在未改动的 `services/modelFetcher.ts` 报 3 个错误（499、501、533 行）。尚未运行 Studio package build、真实 CEP 或宿主操作。MSVC 14.44、MSBuild、Windows SDK 10.0.26100.0 与 `rc.exe` 已安装但不在当前 PATH；未发现 After Effects 安装或配置的 AE SDK，因此 `.aex` 未编译，参数 ABI、PiPL、像素输出、撤销、合成切换隔离和宿主渲染都未实测。源码当前不声明 MFR 支持，需在真实宿主验证重入与并发渲染后再开放。
-- 未完成：候选仍经现有 Browser-bound Workflow 生成；当前 CEP 用户数据文件与图层注释不等于工程自包含。素材容器的权威帧数与嵌入色彩配置、工程打包/跨目录重定位、按校验和回链、应用后 render 阶段的文件完整性检测，以及缺失报告/禁用应用的真实宿主确认、视频时间映射及遮罩流程仍未实现或验证。详细门禁见 [After Effects host checklist](../../../integrations/studio/AFTER_EFFECTS_REAL_HOST_CHECKLIST.md) 和 [native effect source note](../../../integrations/studio/after-effects/effect/NATIVE_EFFECT.md)。正式支持状态未升级。
+- 未完成：候选仍经现有 Browser-bound Workflow 生成；当前 CEP 用户数据文件与图层注释不等于工程自包含。素材容器的权威帧数与嵌入色彩配置、工程打包/跨目录重定位、按校验和回链、应用后 render 阶段的文件完整性检测，以及缺失报告/禁用应用的真实宿主确认、视频时间映射及遮罩流程仍未实现或验证。详细门禁见 [After Effects host checklist](../../../../integrations/studio/AFTER_EFFECTS_REAL_HOST_CHECKLIST.md) 和 [native effect source note](../../../../integrations/studio/after-effects/effect/NATIVE_EFFECT.md)。正式支持状态未升级。
 
 ## 本轮：Real Codex External Gate（5/5 trial 已通过）
 
@@ -82,7 +82,7 @@ title: 待测试确认
 - 症状：外部 Agent 运行 `workflow.project.use --project-id X` 后返回 `ok` 与 `{ projectId: X }`，但 `/health`（`workspace.status`）的 `activeProjectId` 仍是旧项目；后续 `workflow.inspect --agent-identity codex` 读取的仍是旧项目，若再对 X 显式传 `--project-id X` 会被 `agent/session.js:355` 以 `LEASE_TARGET_CHANGED` 拒绝——`project.use` 表面上成功，实际没有切换 agent 侧绑定目标。
 - 根因：命令只穿过 Browser 执行，且没有任何「切换确认」握手。链路为 `cli.js → FlovartWorkspaceClient.execute → POST /api/tools → agent/session.js callCommand:331 → SSE tool_call → services/workflowAgentBridge.ts:270 → workflowDispatcher.ts:242-246`。`workflowDispatcher.ts:244` 的 `dependencies.setActiveProject(projectId)` 只改浏览器 store 的 `activeProjectId`（`components/workflow/store.ts:191`），随后 dispatcher 立即返回 `{ projectId }`——它只是回显请求参数，不是浏览器已切换的 ack。agent 侧绑定要等浏览器 store 订阅触发 `workflowWorkspaceAdapter.update()` → `pushSnapshot` → `POST /workflow/state` → `agent/session.js:96-117 updateSnapshot` 后才更新；由于 `project.use` 不在 `LEASED_WORKFLOW_COMMANDS`（`agent/session.js:7-12`）内，session 对该命令不取 lease、不等快照，resolve 时机早于回环完成。在这段窗口内 `callCommand:347` 的 `boundSnapshot` 仍是旧 projectId：`/health` 的 `activeProjectId` 读旧值，对 X 显式传 `--project-id` 的后续写入会被 `callCommand:355-365` 以 `LEASE_TARGET_CHANGED` 拒绝，而不带 projectId 的 `inspect` 读到旧项目。本地指针更新（`setActiveProject`）被当成交互终点，browser→agent 的状态回环完全在临界区之外。
 - 预期语义（浏览器激活命令）：`project.use` 应是一条浏览器激活 RPC，而非普通 mutation——`callCommand` 收到后向 Browser 发送「切到项目 X」请求；浏览器 `setActiveProject(X)` → store 变化触发 `pushSnapshot(X)` → session `updateSnapshot` 把 `boundSnapshot.id` 更新为 X → 此时才向调用方 resolve，并让下一次 `ensureWorkspaceLease` 在 X 上签新 lease。当前实现把「本地指针更新」当成交互终点，绕过了 browser→agent 的状态回环，于是 inspect/lease/写目标三者各自依据不同时间点的快照。
-- 为何暂不修：不在 5/5 Golden Task 的关键路径上——trial 走 `workflow.project.create`（新项目自动成为 active 并经 pushSnapshot 自然绑定），`project.use` 只在「跨已有项目切换」场景才暴露；修复需要在 session ↔ browser 之间新增一轮「切换确认」握手的真实行为改动，按用户指示作为独立回归跟踪，不混入本轮外部门禁收尾。预期语义已冻结为 [ADR 0072](../../../adr/0072-project-use-is-a-browser-activation.md)。
+- 为何暂不修：不在 5/5 Golden Task 的关键路径上——trial 走 `workflow.project.create`（新项目自动成为 active 并经 pushSnapshot 自然绑定），`project.use` 只在「跨已有项目切换」场景才暴露；修复需要在 session ↔ browser 之间新增一轮「切换确认」握手的真实行为改动，按用户指示作为独立回归跟踪，不混入本轮外部门禁收尾。预期语义已冻结为 [ADR 0072](../../../archive/2026-10-07/adr/0072-project-use-is-a-browser-activation.md)。
 - 修复草案：把 `workflow.project.use` 加入 leased/确认命令集，或在 `callCommand` 里对它特判为「发送 tool_call → 等 boundSnapshot.id === args.projectId（带超时）→ resolve」；同时让 `workflowDispatcher.project.use` 分支在浏览器侧返回新 `activeProjectId` 作为 ack 载荷，而不是仅回显请求参数。
 
 
@@ -125,7 +125,7 @@ title: 待测试确认
 
 ## 本轮：新方向与文档精简
 
-- 已建立[唯一主设计](../../../design/flovart-native-effects.md)，集中产品、交互、系统、具体实现、Benchmark、宣传与实施顺序。
+- 已建立[唯一主设计](../../../design/00-overview.md)，集中产品、交互、系统、具体实现、Benchmark、宣传与实施顺序。
 - 已记录用户确认的插件主入口、AE/PR→PS、Flovart 自有原生效果、场景替换、缓存后实时调整和 Agent 双入口。
 - 已通过 ASK 确认 Windows 首版优先；主设计、待办和宣传明确 macOS 后续单独验证，不承诺同期支持。
 - 已把旧 Agent/Link/Runtime 目标稿及重复施工计划合并清理，术语表与 AGENTS.md 改为短路径、少状态、少中间层。
@@ -139,7 +139,7 @@ title: 待测试确认
 
 按“素材就地读取、默认引用原文件”的方向把本地素材从“导入副本”扩出第二条路径；原导入路径不变，仍服务文件粘贴与外部来源。
 
-- 新增 `services/localFolderSource.ts`：目录授权（`showDirectoryPicker`）、目录句柄本地持久化、按深度/数量上限扫描媒体条目、按相对路径读取原文件、缩略图缓存、权限查询与重新授权。决策见 [ADR 0071](../../../adr/0071-local-folder-reference-media.md)。
+- 新增 `services/localFolderSource.ts`：目录授权（`showDirectoryPicker`）、目录句柄本地持久化、按深度/数量上限扫描媒体条目、按相对路径读取原文件、缩略图缓存、权限查询与重新授权。决策见 [ADR 0071](../../../archive/2026-10-07/adr/0071-local-folder-reference-media.md)。
 - 节点用 `local-folder:<folderId>/<相对路径>` 引用素材，`sourceType` 为 `localFolder`；项目 JSON 不保存字节、base64 或临时 URL。`loadFallbackMediaBlob` 增加该前缀解析，`useWorkflowMediaUrl` 原样透出“权限失效 / 原文件被移动”的原因，便于用户重新定位。
 - 新增 `components/workflow/LocalFolderBrowser.tsx` 并挂到 Workflow 侧栏新增的「本地文件夹」页签（真实入口，非占位）：可“选择文件夹”或拖入文件夹、按类型与文件名筛选、缩略图进入视口才生成并缓存、多选后一次性“放入画布”。未选中的条目不会生成节点。
 - 批量放入画布共用一个 Draft ChangeSet；插入前只读取选中文件的尺寸与时长，不复制字节。

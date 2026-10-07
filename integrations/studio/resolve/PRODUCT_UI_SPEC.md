@@ -1,7 +1,7 @@
 # Iris × DaVinci Resolve Studio 21.1 — Product & UI Spec
 
 Status: **CURRENT IMPLEMENTATION REFERENCE**  
-Authority: subordinate to docs/design/flovart-native-effects.md  
+Authority: subordinate to docs/design/00-overview.md  
 Target: **DaVinci Resolve Studio 21.1 first**  
 Updated: 2026-09-25
 

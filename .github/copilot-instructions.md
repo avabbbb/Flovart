@@ -29,7 +29,7 @@ External agents must not write React/Zustand state, browser storage, Provider pr
 
 ## Layout
 
-The current Studio layout is container-driven (#15). Follow [Adaptive Layout](../docs/design/adaptive-layout.md).
+The current Studio layout is container-driven (#15). Follow the layout section of [Interaction Design](../docs/design/01-interaction.md).
 
 Do not restore JS drawer-inset math, fixed structural viewport patches, legacy `rightPanelInset`/`rightInset`, or page-level absolute columns. Canvas coordinate overlays are a separate concern from page composition.
 

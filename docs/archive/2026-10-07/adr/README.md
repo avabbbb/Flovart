@@ -18,4 +18,4 @@
 - [0065：Workflow 版本与幂等](0065-idempotent-revisioned-workflow-mutations.md)
 - [0068：首次生成与费用范围](0068-first-safe-generation-boundaries.md)
 
-旧 ADR 0025（Production Skill 产品层）与 0039（Agent full collaboration workspace）已被当前 IA supersede；背景统一见[历史快照](../archive/historical-design/2026-09-23-canonicalization.md)，原文从 Git history 查看。
+旧 ADR 0025（Production Skill 产品层）与 0039（Agent full collaboration workspace）已被当前 IA supersede；背景统一见[历史快照](../../historical-design/2026-09-23-canonicalization.md)，原文从 Git history 查看。
