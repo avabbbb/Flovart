@@ -27,6 +27,8 @@
       openInIris: '在 Iris 中打开 ↗', openInIrisUnavailable: 'Iris Canvas 暂不可用。', resolveUnavailable: '项目不可用', irisUnavailable: 'Iris 未连接', selectClipStatus: '选择片段', readyStatus: '已就绪',
       refreshSelection: '刷新当前片段', promptLabel: '生成描述', mediaPoolClip: 'Media Pool 片段', timelineItem: '时间线片段',
       languageChinese: '简体中文', languageEnglish: 'English',
+      fromCanvas: '来自 Iris 画布', canvasSendHint: '画布里发来的结果，确认后才会加入 Media Pool；不改动时间线。', sending: '正在添加…',
+      compare: '对比', compareHide: '收起对比', compareSlider: '拖动比较两个候选', compareLeft: '左', compareRight: '右',
     },
     en: {
       language: 'Language', currentClip: 'CURRENT CLIP', generate: 'GENERATE', references: 'REFERENCES', task: 'TASK', candidates: 'CANDIDATES',
@@ -41,6 +43,8 @@
       openInIris: 'Open in Iris ↗', openInIrisUnavailable: 'Iris Canvas is not available.', resolveUnavailable: 'Project unavailable', irisUnavailable: 'Iris is not connected', selectClipStatus: 'Select a clip', readyStatus: 'Ready',
       refreshSelection: 'Refresh current clip', promptLabel: 'Generation prompt', mediaPoolClip: 'Media Pool clip', timelineItem: 'Timeline item',
       languageChinese: 'Simplified Chinese', languageEnglish: 'English',
+      fromCanvas: 'FROM IRIS CANVAS', canvasSendHint: 'Results sent from the canvas. They join the Media Pool only after you confirm; the timeline is not changed.', sending: 'Adding…',
+      compare: 'Compare', compareHide: 'Hide compare', compareSlider: 'Drag to compare two candidates', compareLeft: 'Left', compareRight: 'Right',
     },
   };
 
@@ -227,9 +231,91 @@
     const resolveCandidates = isResolve ? el('section', undefined, 'fs-resolve-candidates') : null;
     const resolveCandidatesHeading = isResolve ? el('div', t('candidates'), 'fs-section-label fs-resolve-state-heading') : null;
     const resolveCandidateList = isResolve ? el('div', undefined, 'fs-resolve-candidate-list') : null;
+    const resolveCompare = isResolve ? el('div', undefined, 'fs-resolve-compare') : null;
     if (resolveCandidates) {
       resolveCandidates.hidden = true;
-      resolveCandidates.append(resolveCandidatesHeading, resolveCandidateList);
+      resolveCandidates.append(resolveCandidatesHeading, resolveCompare, resolveCandidateList);
+    }
+    // 来自画布的发送请求：只读投影，确认（点击）后才导入 Media Pool。
+    const canvasSends = isResolve ? el('section', undefined, 'fs-resolve-canvas-sends') : null;
+    const canvasSendsHeading = isResolve ? el('div', t('fromCanvas'), 'fs-section-label fs-resolve-state-heading') : null;
+    const canvasSendsList = isResolve ? el('div', undefined, 'fs-resolve-candidate-list') : null;
+    if (canvasSends) {
+      canvasSends.hidden = true;
+      canvasSends.title = t('canvasSendHint');
+      canvasSends.append(canvasSendsHeading, canvasSendsList);
+    }
+    let canvasSendRequests = [];
+    let sendingCanvasNodeId = null;
+    const canvasSendErrors = new Map();
+    async function refreshCanvasSends() {
+      const controller = resolveController();
+      if (!isResolve || disposed || typeof controller?.listCanvasSendRequests !== 'function') return;
+      try { canvasSendRequests = await controller.listCanvasSendRequests(); }
+      catch { canvasSendRequests = []; }
+      if (!disposed) renderCanvasSends();
+    }
+    function renderCanvasSends() {
+      if (!canvasSends) return;
+      canvasSends.hidden = canvasSendRequests.length === 0;
+      canvasSendsHeading.textContent = `${t('fromCanvas')} · ${canvasSendRequests.length}`;
+      canvasSendsList.replaceChildren();
+      for (const entry of canvasSendRequests) {
+        const row = el('article', undefined, 'fs-resolve-candidate');
+        row.append(el('div', entry.title, 'fs-resolve-candidate-prompt'));
+        const error = canvasSendErrors.get(entry.nodeId);
+        if (error) { const note = el('small', error, 'fs-candidate-import-warning'); note.setAttribute('role', 'status'); row.append(note); }
+        const sending = sendingCanvasNodeId === entry.nodeId;
+        const add = button(sending ? t('sending') : t('addToMediaPool'), 'fs-generate fs-candidate-add', () => { void sendCanvasEntry(entry); });
+        add.disabled = busy || sendingCanvasNodeId !== null || importingCandidateId !== null;
+        row.append(add);
+        canvasSendsList.append(row);
+      }
+    }
+    async function sendCanvasEntry(entry) {
+      const controller = resolveController();
+      if (!controller?.sendCanvasResult || sendingCanvasNodeId) return;
+      sendingCanvasNodeId = entry.nodeId;
+      canvasSendErrors.delete(entry.nodeId);
+      renderCanvasSends();
+      try {
+        const result = await controller.sendCanvasResult(entry.nodeId);
+        status.textContent = result?.importStatus === 'confirmed' ? t('addedToMediaPool') : result?.importStatus === 'unknown' ? t('importUnknown') : (result?.message || t('importFailed'));
+        if (result?.importStatus !== 'confirmed') canvasSendErrors.set(entry.nodeId, status.textContent);
+      } catch (error) {
+        canvasSendErrors.set(entry.nodeId, error?.message || t('importFailed'));
+      } finally {
+        sendingCanvasNodeId = null;
+        if (!disposed) await refreshCanvasSends();
+      }
+    }
+    // 两两擦除对比：只在本地比较，不写宿主。
+    let compareOpen = false;
+    function renderResolveCompare(entries) {
+      if (!resolveCompare) return;
+      const images = entries.filter(item => item.candidate?.artifact?.blob && String(item.candidate.artifact.mimeType || '').startsWith('image/'));
+      resolveCompare.replaceChildren();
+      if (images.length < 2) { resolveCompare.hidden = true; compareOpen = false; return; }
+      resolveCompare.hidden = false;
+      const toggle = button(compareOpen ? t('compareHide') : t('compare'), 'fs-recipe fs-compare-toggle', () => { compareOpen = !compareOpen; renderResolveCompare(entries); });
+      toggle.setAttribute('aria-expanded', String(compareOpen));
+      resolveCompare.append(toggle);
+      if (!compareOpen) return;
+      const [left, right] = images;
+      try {
+        left.previewUrl ||= global.URL.createObjectURL(left.candidate.artifact.blob);
+        right.previewUrl ||= global.URL.createObjectURL(right.candidate.artifact.blob);
+      } catch { status.textContent = t('previewUnavailable'); return; }
+      const stage = el('div', undefined, 'fs-compare-stage');
+      const base = el('img'); base.src = left.previewUrl; base.alt = `${t('compareLeft')}: ${left.prompt}`;
+      const top = el('img'); top.src = right.previewUrl; top.alt = `${t('compareRight')}: ${right.prompt}`; top.className = 'fs-compare-top';
+      const slider = el('input'); slider.type = 'range'; slider.min = '0'; slider.max = '100'; slider.value = '50'; slider.className = 'fs-compare-slider';
+      slider.setAttribute('aria-label', t('compareSlider'));
+      const apply = () => { top.style.clipPath = `inset(0 0 0 ${slider.value}%)`; };
+      slider.addEventListener('input', apply);
+      apply();
+      stage.append(base, top);
+      resolveCompare.append(stage, slider);
     }
     const refreshCandidates = typeof adapter.listNativeCandidates === 'function'
       ? button('↻', 'fs-icon-button', () => { void refreshPersistedCandidates(); })
@@ -256,6 +342,7 @@
     if (taskSectionLabel) form.append(taskSectionLabel);
     form.append(taskRow, status);
     if (resolveCandidates) form.append(resolveCandidates);
+    if (canvasSends) form.append(canvasSends);
     if (applyNative) form.append(applyNative);
     if (isResolve) root.append(header, form, footer);
     else root.append(header, tabs, form, results, footer);
@@ -280,6 +367,7 @@
       if (!isResolve) return;
       const entries = history.slice().reverse();
       resolveCandidatesHeading.textContent = `${t('candidates')} · ${entries.length}`;
+      renderResolveCompare(entries);
       resolveCandidateList.replaceChildren();
       for (const item of entries) {
         const row = el('article', undefined, 'fs-resolve-candidate');
@@ -717,7 +805,7 @@
           if (activeTab === 'history' && activeDocumentId) void loadPersistedCandidates();
           if (activeTab === 'history') renderHistory();
         }
-        if (isResolve) renderResolveCandidates();
+        if (isResolve) { renderResolveCandidates(); void refreshCanvasSends(); }
       } catch (error) {
         if (disposed) return;
         lastSelection = null;

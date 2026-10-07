@@ -15,6 +15,7 @@ import type {
   WorkflowOperationInputRole,
   WorkflowOperationRecipe,
   WorkflowOperationTake,
+  WorkflowOperationTakeMedia,
   WorkflowPoint,
   WorkflowProject,
   WorkflowNodeMetadata,
@@ -189,7 +190,7 @@ export function completeWorkflowOperationTake(
   node: WorkflowNode,
   takeId: string,
   outputNodeIds: string[],
-  options: { error?: string; canceled?: boolean; providerTaskId?: string; usageRecordId?: string; now?: string } = {},
+  options: { error?: string; canceled?: boolean; providerTaskId?: string; usageRecordId?: string; now?: string; outputMedia?: WorkflowOperationTakeMedia } = {},
 ): WorkflowNode {
   const operation = node.metadata.operation;
   if (!operation) return node;
@@ -205,6 +206,7 @@ export function completeWorkflowOperationTake(
     providerTaskId: options.providerTaskId,
     usageRecordId: options.usageRecordId,
     error: options.error,
+    ...(options.outputMedia && !options.error && !options.canceled ? { outputMedia: pickTakeMedia(options.outputMedia) } : {}),
   } as WorkflowOperationTake : item);
   return {
     ...node,
@@ -232,11 +234,33 @@ function nextSelection(operation: NonNullable<WorkflowNode['metadata']['operatio
 }
 
 /**
- * Take 是否可以被单独选中：结果写在独立输出节点上的 Take 才能切换；
- * 原位写回 Operation 节点自身的单张生成，旧结果已被覆盖，暂不可切换（见 docs §8.1 版本条缺口）。
+ * Take 是否可以被单独选中：结果在独立输出节点上，或原位结果在 Take 上留存了媒体（outputMedia）。
+ * 本功能之前产生的原位结果没有留存媒体，旧版本无法切回。
  */
 export function isWorkflowOperationTakeSelectable(node: WorkflowNode, take: WorkflowOperationTake): boolean {
-  return take.status === 'success' && take.outputNodeIds.length > 0 && !take.outputNodeIds.includes(node.id);
+  if (take.status !== 'success' || take.outputNodeIds.length === 0) return false;
+  return take.outputNodeIds.includes(node.id) ? Boolean(take.outputMedia?.storageKey) : true;
+}
+
+const TAKE_MEDIA_KEYS = ['storageKey', 'mimeType', 'name', 'bytes', 'naturalWidth', 'naturalHeight', 'posterStorageKey'] as const;
+
+export function pickTakeMedia(record: WorkflowOperationTakeMedia): WorkflowOperationTakeMedia {
+  const source = record as unknown as Record<string, unknown>;
+  const media: Record<string, unknown> = {};
+  for (const key of TAKE_MEDIA_KEYS) if (source[key] !== undefined) media[key] = source[key];
+  return media as unknown as WorkflowOperationTakeMedia;
+}
+
+/**
+ * 让原位结果节点显示“当前选中”Take 的媒体。
+ * 用在原位写回之后：若用户明确选过旧版本，新结果只留在 Take 上，节点继续显示用户选的那一版。
+ */
+export function applySelectedTakeMedia(node: WorkflowNode): WorkflowNode {
+  const operation = node.metadata.operation;
+  const take = operation?.selectedTakeId ? operation.takes.find(item => item.id === operation.selectedTakeId) : undefined;
+  if (!take?.outputMedia?.storageKey || !take.outputNodeIds.includes(node.id)) return node;
+  if (node.metadata.storageKey === take.outputMedia.storageKey) return node;
+  return { ...node, metadata: { ...node.metadata, ...take.outputMedia, href: undefined, operationTakeId: take.id } };
 }
 
 /** 明确选择一个成功的 Take（人点版本条或 Agent 调用）。返回新节点；无效选择原样返回。 */
@@ -245,11 +269,11 @@ export function selectWorkflowOperationTake(node: WorkflowNode, takeId: string):
   const take = operation?.takes.find(item => item.id === takeId);
   if (!operation || !take || !isWorkflowOperationTakeSelectable(node, take)) return node;
   if (operation.selectedTakeId === takeId && operation.selectedTakeSource === 'explicit') return node;
-  return {
+  return applySelectedTakeMedia({
     ...node,
     objectVersion: (node.objectVersion || 0) + 1,
     metadata: { ...node.metadata, operation: { ...operation, selectedTakeId: takeId, selectedTakeSource: 'explicit' } },
-  };
+  });
 }
 
 /** 版本条数据：只列出成功的 Take，按完成顺序编号 v1…vN。 */

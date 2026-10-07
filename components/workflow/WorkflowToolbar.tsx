@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'motion/react';
-import { Bot, FileText, Focus, Grid2X2, Hand, History, Keyboard, Library, Magnet, Map, MousePointer2, Plus, Redo2, Settings2, SlidersHorizontal, Type, Undo2, Video, Image, Music2, Workflow, Spline, ZoomIn, ZoomOut } from 'lucide-react';
+import { Bot, FileText, Focus, Grid2X2, Hand, History, Keyboard, Library, Magnet, Map, MousePointer2, Plus, Redo2, RotateCcw, Send, Settings2, SlidersHorizontal, Type, Undo2, Video, Image, Music2, Workflow, Spline, ZoomIn, ZoomOut } from 'lucide-react';
 import { Tooltip } from 'antd';
 import type React from 'react';
 import { useMemo, useRef, useState } from 'react';
@@ -38,6 +38,9 @@ const TOOLBAR_COPY = {
     addOption: (type: WorkflowNodeType) => ({ image: 'Image', video: 'Video', text: 'Text', script: 'Script', audio: 'Audio', config: 'Generation settings' }[type] || type),
     zoomPercent: (value: number) => `${value}%`,
     revision: (value: number) => `rev ${value}`, revisionHint: 'Draft revision. Every saved change by you or an Agent advances it.',
+    rerunStale: (count: number) => `Rerun ${count} stale`, rerunStaleHint: 'Runs only out-of-date nodes, upstream first. Up-to-date results are reused.',
+    sendToHost: (host: string) => `Send to ${host}`, sendHint: 'Adds a send request. Confirm it in the host panel to add the result to the Media Pool. Your timeline is not changed.',
+    sendStatus: { requested: 'Waiting for host panel', imported: 'In Media Pool', rejected: 'Host rejected', unknown: 'Check the Media Pool' } as Record<string, string>,
   },
   zho: {
     canvasControls: '画布控制', assetManagement: '资产管理', autoArrange: '一键整理节点', minimap: '小地图',
@@ -52,6 +55,9 @@ const TOOLBAR_COPY = {
     addOption: (type: WorkflowNodeType) => ({ image: '图片', video: '视频', text: '文本', script: '脚本', audio: '音频', config: '配置' }[type] || type),
     zoomPercent: (value: number) => `${value}%`,
     revision: (value: number) => `rev ${value}`, revisionHint: '草稿修订号。你或 Agent 每次保存修改都会推进它。',
+    rerunStale: (count: number) => `重跑 ${count} 个过期节点`, rerunStaleHint: '只运行过期的节点，上游先跑；未过期的结果直接复用。',
+    sendToHost: (host: string) => `发送到 ${host}`, sendHint: '登记一个发送请求，在宿主面板确认后加入 Media Pool；不会改动你的时间线。',
+    sendStatus: { requested: '等待宿主面板确认', imported: '已在 Media Pool', rejected: '宿主拒绝了导入', unknown: '请检查 Media Pool' } as Record<string, string>,
   },
 } as const;
 
@@ -82,6 +88,9 @@ export function WorkflowToolbar({
   onZoomOut,
   onZoomReset,
   revision,
+  staleCount = 0,
+  onRerunStale,
+  hostSend,
   agentOpen,
 }: {
   tool: WorkflowTool;
@@ -112,6 +121,11 @@ export function WorkflowToolbar({
   onZoomReset?: () => void;
   /** 当前草稿 revision（draftVersion）；人和 Agent 的每次成功 mutation 都会推进它。 */
   revision?: number;
+  /** 当前需要重跑的节点数（派生）；大于 0 时显示“只重跑过期节点”。 */
+  staleCount?: number;
+  onRerunStale?: () => void;
+  /** 选中结果可发送回宿主时出现；已登记过时显示状态而不是按钮。 */
+  hostSend?: { host: string; onSend: () => void; status?: 'requested' | 'imported' | 'rejected' | 'unknown' };
 }) {
   const sharedMedia = useWorkflowSharedMedia();
   const language = useWorkspaceStore(state => state.language);
@@ -185,6 +199,14 @@ export function WorkflowToolbar({
       {onToggleSnap && <Tip title={copy.snap}><button type="button" className={btn(Boolean(snapEnabled))} aria-label={copy.snap} onClick={onToggleSnap}><Magnet size={17} /></button></Tip>}
       {typeof revision === 'number' && revision > 0 && (
         <Tip title={copy.revisionHint}><span className="workflow-canvas-controls__revision" data-testid="workflow-revision" aria-label={`${copy.revision(revision)}. ${copy.revisionHint}`} aria-live="polite">{copy.revision(revision)}</span></Tip>
+      )}
+      {staleCount > 0 && onRerunStale && (
+        <Tip title={copy.rerunStaleHint}><button type="button" className="workflow-canvas-controls__action" data-testid="workflow-rerun-stale" onClick={onRerunStale}><RotateCcw size={14} aria-hidden="true" />{copy.rerunStale(staleCount)}</button></Tip>
+      )}
+      {hostSend && (
+        hostSend.status
+          ? <span className="workflow-canvas-controls__send-status" role="status" data-testid="workflow-host-send-status">{copy.sendStatus[hostSend.status]}</span>
+          : <Tip title={copy.sendHint}><button type="button" className="workflow-canvas-controls__action workflow-canvas-controls__action--primary" data-testid="workflow-host-send" onClick={hostSend.onSend}><Send size={14} aria-hidden="true" />{copy.sendToHost(hostSend.host)}</button></Tip>
       )}
       <div className="workflow-toolbar__zoom-wrap">
         <button type="button" className="workflow-canvas-controls__zoom" aria-label={copy.zoomReset} aria-expanded={zoomOpen} onClick={event => togglePopover('zoom', event.currentTarget)}>{copy.zoomPercent(Math.round((zoomLevel ?? 1) * 100))}</button>

@@ -11,7 +11,8 @@ import {
   workflowOperationInputConnections,
 } from '../components/workflow/operations';
 import { createWorkflowNode } from '../components/workflow/constants';
-import { deriveWorkflowRunStates } from '../components/workflow/runState';
+import { deriveWorkflowRunStates, planWorkflowStaleRerun } from '../components/workflow/runState';
+import { collectWorkflowMediaKeys } from '../components/workflow/media';
 import type { WorkflowConnection, WorkflowNode } from '../components/workflow/types';
 
 const at = (minute: number) => new Date(Date.UTC(2026, 9, 7, 9, minute)).toISOString();
@@ -91,6 +92,17 @@ describe('derived workflow run state', () => {
     expect(states.get('up-out')).toEqual({ state: 'stale', reason: 'upstream-newer' });
   });
 
+  it('plans a selective rerun of only the stale operations, upstream first', async () => {
+    const graph = await chain();
+    const crop = graph.nodes.find(node => node.id === 'crop')!;
+    const edited = updateWorkflowOperationRecipe(crop, { parameters: { x: 0, y: 0, width: .5, height: .5 }, now: at(5) });
+    expect(planWorkflowStaleRerun({ ...graph, nodes: replace(graph.nodes, edited) })).toEqual(['crop', 'upscale']);
+    const upscale = graph.nodes.find(node => node.id === 'upscale')!;
+    const downstreamOnly = updateWorkflowOperationRecipe(upscale, { parameters: { targetLongEdge: 4096, algorithm: 'high' }, now: at(5) });
+    expect(planWorkflowStaleRerun({ ...graph, nodes: replace(graph.nodes, downstreamOnly) })).toEqual(['upscale']);
+    expect(planWorkflowStaleRerun(graph)).toEqual([]);
+  });
+
   it('keeps running and failed nodes in their own state', async () => {
     const graph = await chain();
     const upscale = graph.nodes.find(node => node.id === 'upscale')!;
@@ -150,5 +162,34 @@ describe('operation versions and explicit selection', () => {
     const node = selectWorkflowOperationTake(await twoTakes(), 'take-1');
     const states = deriveWorkflowRunStates({ nodes: [node], connections: [] });
     expect(states.get('crop')?.state).toBe('done');
+  });
+
+  it('in-place results keep their media per take, so an older version can be selected again', async () => {
+    let node = await createWorkflowOperationNode({ id: 'gen', capabilityId: 'image.generate@1', position: { x: 0, y: 0 }, prompt: 'rain', parameters: { count: 1 }, now: at(0) });
+    for (const [index, key] of ['key-1', 'key-2'].entries()) {
+      const begun = await beginWorkflowOperationTake(node, { id: `t${index + 1}`, snapshotId: `s${index + 1}`, now: at(index * 2 + 1) });
+      node = completeWorkflowOperationTake(begun.node, `t${index + 1}`, ['gen'], { now: at(index * 2 + 2), outputMedia: { storageKey: key, mimeType: 'image/png', naturalWidth: 10, naturalHeight: 10 } });
+      node = { ...node, metadata: { ...node.metadata, storageKey: key } };
+    }
+    expect(listWorkflowOperationVersions(node).every(version => version.selectable)).toBe(true);
+    const back = selectWorkflowOperationTake(node, 't1');
+    expect(back.metadata).toMatchObject({ storageKey: 'key-1', operationTakeId: 't1' });
+    expect([...collectWorkflowMediaKeys([{ nodes: [back] }])].sort()).toEqual(['key-1', 'key-2']);
+  });
+
+  it('a late in-place result keeps showing the version the user chose', async () => {
+    const { applySelectedTakeMedia } = await import('../components/workflow/operations');
+    let node = await createWorkflowOperationNode({ id: 'gen', capabilityId: 'image.generate@1', position: { x: 0, y: 0 }, prompt: 'rain', parameters: { count: 1 }, now: at(0) });
+    for (const [index, key] of ['key-1', 'key-2'].entries()) {
+      const begun = await beginWorkflowOperationTake(node, { id: `t${index + 1}`, snapshotId: `s${index + 1}`, now: at(index * 2 + 1) });
+      node = completeWorkflowOperationTake(begun.node, `t${index + 1}`, ['gen'], { now: at(index * 2 + 2), outputMedia: { storageKey: key } });
+    }
+    node = selectWorkflowOperationTake(node, 't1');
+    const begun = await beginWorkflowOperationTake(node, { id: 't3', snapshotId: 's3', now: at(9) });
+    const late = completeWorkflowOperationTake(begun.node, 't3', ['gen'], { now: at(10), outputMedia: { storageKey: 'key-3' } });
+    const written = applySelectedTakeMedia({ ...late, metadata: { ...late.metadata, storageKey: 'key-3' } });
+    expect(written.metadata.storageKey).toBe('key-1');
+    expect(written.metadata.operation?.selectedTakeId).toBe('t1');
+    expect(listWorkflowOperationVersions(written).map(version => version.label)).toEqual(['v1', 'v2', 'v3']);
   });
 });

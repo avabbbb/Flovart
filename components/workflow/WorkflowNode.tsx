@@ -1,4 +1,4 @@
-import { Camera, Check, ChevronsDown, Clapperboard, FileText, Image as ImageIcon, Music2, Pause, Pencil, Play, Plus, RefreshCw, Sparkles, Star, Upload, Video, Volume2, VolumeX, X } from 'lucide-react';
+import { Bot, Camera, Check, ChevronsDown, Clapperboard, FileText, Image as ImageIcon, Music2, Pause, Pencil, Play, Plus, RefreshCw, Sparkles, Star, Upload, Video, Volume2, VolumeX, X } from 'lucide-react';
 import { Component, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import { motion } from 'motion/react';
 import { WorkflowConfigPanel } from './WorkflowConfigPanel';
@@ -9,6 +9,7 @@ import { getWorkflowNodePlugin, type WorkflowNodePluginContext, type WorkflowNod
 import type { WorkflowNode as WorkflowNodeData } from './types';
 import { listWorkflowOperationVersions } from './operations';
 import type { WorkflowNodeRunInfo, WorkflowStaleReason } from './runState';
+import type { WorkflowNodePresence } from './presence';
 
 function WorkflowPluginSurface({ plugin, pluginContext }: { plugin: WorkflowNodePluginDefinition; pluginContext: WorkflowNodePluginContext }) {
   return <>
@@ -72,6 +73,7 @@ export function WorkflowNode({
   pluginContext,
   runState,
   onSelectTake,
+  presence,
 }: {
   node: WorkflowNodeData;
   selected: boolean;
@@ -111,6 +113,8 @@ export function WorkflowNode({
   runState?: WorkflowNodeRunInfo;
   /** 明确选择 Operation 的某个版本（Take）。 */
   onSelectTake?: (takeId: string) => void;
+  /** 最近一次改动来自 Agent / CLI / 面板时的在场标记（deriveWorkflowPresence）。 */
+  presence?: WorkflowNodePresence;
 }) {
   const status = node.metadata.status || 'idle';
   const progress = Math.max(0, Math.min(100, Math.round(node.metadata.progress || 0)));
@@ -284,6 +288,8 @@ export function WorkflowNode({
       </button>
       {status === 'error' && <span className="workflow-node__error-badge" title={node.metadata.error}>!</span>}
       {runState?.state === 'stale' && <WorkflowStaleBadge reason={runState.reason} language={language} />}
+      {presence && <WorkflowPresenceChip presence={presence} language={language} />}
+      {node.metadata.hostSend && <WorkflowHostSendChip status={node.metadata.hostSend.status} host={node.metadata.hostSend.host} language={language} />}
       {batchCount && batchCount > 1 && (
         <div className="workflow-node__batch-actions" data-workflow-overlay>
           {onCollapseBatch && <button type="button" title="收起结果" onPointerDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); onCollapseBatch(); }}><ChevronsDown size={13} />{batchCount}张</button>}
@@ -488,6 +494,28 @@ const RUN_STATE_COPY = {
     versions: '版本', newer: '新版本已到，你的选择保持不变。', selectVersion: (label: string) => `选择 ${label}`, inPlace: '早期结果已原位覆盖',
   },
 } as const;
+
+const PRESENCE_COPY = {
+  en: { actors: { agent: 'Agent', cli: 'CLI', operator: 'Host panel' }, edited: (actor: string, intent: string, revision: number) => `${actor} changed this at rev ${revision}${intent ? `: ${intent}` : ''}` },
+  zho: { actors: { agent: 'Agent', cli: 'CLI', operator: '宿主面板' }, edited: (actor: string, intent: string, revision: number) => `${actor} 在 rev ${revision} 修改了这里${intent ? `：${intent}` : ''}` },
+} as const;
+
+function WorkflowPresenceChip({ presence, language }: { presence: WorkflowNodePresence; language: 'en' | 'zho' }) {
+  const copy = PRESENCE_COPY[language];
+  const actor = copy.actors[presence.actor];
+  const title = copy.edited(actor, presence.intent, presence.revision);
+  return <span className={`workflow-node__presence workflow-node__presence--${presence.actor}`} data-testid="workflow-node-presence" title={title} aria-label={title}><Bot size={10} aria-hidden="true" />{actor}</span>;
+}
+
+const HOST_SEND_COPY = {
+  en: { requested: (host: string) => `Sent to ${host} · awaiting confirm`, imported: () => 'In Media Pool', rejected: () => 'Host rejected', unknown: () => 'Check Media Pool' },
+  zho: { requested: (host: string) => `已发往 ${host} · 待确认`, imported: () => '已在 Media Pool', rejected: () => '宿主拒绝', unknown: () => '请检查 Media Pool' },
+} as const;
+
+function WorkflowHostSendChip({ status, host, language }: { status: 'requested' | 'imported' | 'rejected' | 'unknown'; host: string; language: 'en' | 'zho' }) {
+  const label = HOST_SEND_COPY[language][status](host === 'resolve' ? 'Resolve' : host);
+  return <span className={`workflow-node__host-send workflow-node__host-send--${status}`} data-testid="workflow-node-host-send" role="status">{label}</span>;
+}
 
 function WorkflowStaleBadge({ reason, language }: { reason?: WorkflowStaleReason; language: 'en' | 'zho' }) {
   const copy = RUN_STATE_COPY[language];

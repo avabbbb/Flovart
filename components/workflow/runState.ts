@@ -116,3 +116,33 @@ export function deriveWorkflowRunStates(project: GraphInput): Map<string, Workfl
   for (const node of project.nodes) resolve(node);
   return result;
 }
+
+/**
+ * 选择性重跑计划：只包含 stale 的 Operation 节点，按整张图的拓扑顺序排列（上游先跑）。
+ * 未 stale 的节点不在计划里，它们的已选结果直接复用。输出节点不单独调度，跟随 Operation。
+ */
+export function planWorkflowStaleRerun(project: GraphInput, states = deriveWorkflowRunStates(project)): string[] {
+  const byId = new Map(project.nodes.map(node => [node.id, node]));
+  const outgoing = new Map<string, string[]>();
+  const inDegree = new Map(project.nodes.map(node => [node.id, 0]));
+  for (const connection of project.connections) {
+    if (!byId.has(connection.fromNodeId) || !byId.has(connection.toNodeId)) continue;
+    const list = outgoing.get(connection.fromNodeId) || [];
+    list.push(connection.toNodeId);
+    outgoing.set(connection.fromNodeId, list);
+    inDegree.set(connection.toNodeId, (inDegree.get(connection.toNodeId) || 0) + 1);
+  }
+  const queue = project.nodes.filter(node => inDegree.get(node.id) === 0).map(node => node.id);
+  const order: string[] = [];
+  while (queue.length) {
+    const id = queue.shift()!;
+    order.push(id);
+    for (const next of outgoing.get(id) || []) {
+      const degree = (inDegree.get(next) || 0) - 1;
+      inDegree.set(next, degree);
+      if (degree === 0) queue.push(next);
+    }
+  }
+  // 环上的节点不进入计划：无法确定先后，交给人处理。
+  return order.filter(id => byId.get(id)?.metadata.operation && states.get(id)?.state === 'stale');
+}
