@@ -215,10 +215,57 @@ export function completeWorkflowOperationTake(
       operation: {
         ...operation,
         takes: completed,
-        selectedTakeId: status === 'success' ? takeId : operation.selectedTakeId,
+        ...nextSelection(operation, status === 'success' ? takeId : undefined),
       },
     },
   };
+}
+
+/** 晚到结果不抢用户选择：只有在没有明确选择时，新成功的 Take 才成为当前选择。 */
+function nextSelection(operation: NonNullable<WorkflowNode['metadata']['operation']>, successfulTakeId: string | undefined) {
+  if (!successfulTakeId) return { selectedTakeId: operation.selectedTakeId, selectedTakeSource: operation.selectedTakeSource };
+  const explicit = operation.selectedTakeSource === 'explicit'
+    && operation.takes.some(take => take.id === operation.selectedTakeId && take.status === 'success');
+  return explicit
+    ? { selectedTakeId: operation.selectedTakeId, selectedTakeSource: operation.selectedTakeSource }
+    : { selectedTakeId: successfulTakeId, selectedTakeSource: operation.selectedTakeSource };
+}
+
+/**
+ * Take 是否可以被单独选中：结果写在独立输出节点上的 Take 才能切换；
+ * 原位写回 Operation 节点自身的单张生成，旧结果已被覆盖，暂不可切换（见 docs §8.1 版本条缺口）。
+ */
+export function isWorkflowOperationTakeSelectable(node: WorkflowNode, take: WorkflowOperationTake): boolean {
+  return take.status === 'success' && take.outputNodeIds.length > 0 && !take.outputNodeIds.includes(node.id);
+}
+
+/** 明确选择一个成功的 Take（人点版本条或 Agent 调用）。返回新节点；无效选择原样返回。 */
+export function selectWorkflowOperationTake(node: WorkflowNode, takeId: string): WorkflowNode {
+  const operation = node.metadata.operation;
+  const take = operation?.takes.find(item => item.id === takeId);
+  if (!operation || !take || !isWorkflowOperationTakeSelectable(node, take)) return node;
+  if (operation.selectedTakeId === takeId && operation.selectedTakeSource === 'explicit') return node;
+  return {
+    ...node,
+    objectVersion: (node.objectVersion || 0) + 1,
+    metadata: { ...node.metadata, operation: { ...operation, selectedTakeId: takeId, selectedTakeSource: 'explicit' } },
+  };
+}
+
+/** 版本条数据：只列出成功的 Take，按完成顺序编号 v1…vN。 */
+export function listWorkflowOperationVersions(node: WorkflowNode) {
+  const operation = node.metadata.operation;
+  if (!operation) return [];
+  const successes = operation.takes.filter(take => take.status === 'success');
+  const latestId = successes.at(-1)?.id;
+  const selectedId = operation.selectedTakeId && successes.some(take => take.id === operation.selectedTakeId) ? operation.selectedTakeId : latestId;
+  return successes.map((take, index) => ({
+    takeId: take.id,
+    label: `v${index + 1}`,
+    selected: take.id === selectedId,
+    latest: take.id === latestId,
+    selectable: isWorkflowOperationTakeSelectable(node, take),
+  }));
 }
 
 export function workflowOperationInputConnections(node: WorkflowNode): WorkflowConnection[] {

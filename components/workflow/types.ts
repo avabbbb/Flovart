@@ -133,6 +133,11 @@ export interface WorkflowOperationRecord {
   recipe: WorkflowOperationRecipe;
   takes: WorkflowOperationTake[];
   selectedTakeId?: string;
+  /**
+   * 选中来源：`explicit` = 人或 Agent 明确选择；缺省 / `auto` = 系统跟随最新成功结果。
+   * 明确选择后，晚到的 Take 只追加为新版本，不再改变 selectedTakeId。
+   */
+  selectedTakeSource?: 'auto' | 'explicit';
 }
 
 export interface WorkflowProviderConfig {

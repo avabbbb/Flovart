@@ -46,3 +46,15 @@ describe('WorkflowToolbar popover behavior', () => {
     expect(screen.queryByText(/工具箱/)).not.toBeInTheDocument();
   });
 });
+
+describe('WorkflowToolbar revision', () => {
+  it('shows the current draft revision when one is known', () => {
+    render(<WorkflowToolbar tool="select" canUndo={false} canRedo={false} onToolChange={vi.fn()} onAddNode={vi.fn()} onAddSharedMedia={vi.fn()} onUndo={vi.fn()} onRedo={vi.fn()} onFit={vi.fn()} onToggleGrid={vi.fn()} revision={42} />);
+    expect(screen.getByTestId('workflow-revision')).toHaveTextContent('rev 42');
+  });
+
+  it('hides the revision before the draft has one', () => {
+    mountToolbar();
+    expect(screen.queryByTestId('workflow-revision')).not.toBeInTheDocument();
+  });
+});

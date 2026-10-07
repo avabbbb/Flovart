@@ -37,6 +37,7 @@ const TOOLBAR_COPY = {
     noMatches: 'No matching media.', emptyLibrary: 'The media library and generation history are empty.', wheelPan: 'Wheel: pan', wheelZoom: 'Wheel: zoom',
     addOption: (type: WorkflowNodeType) => ({ image: 'Image', video: 'Video', text: 'Text', script: 'Script', audio: 'Audio', config: 'Generation settings' }[type] || type),
     zoomPercent: (value: number) => `${value}%`,
+    revision: (value: number) => `rev ${value}`, revisionHint: 'Draft revision. Every saved change by you or an Agent advances it.',
   },
   zho: {
     canvasControls: '画布控制', assetManagement: '资产管理', autoArrange: '一键整理节点', minimap: '小地图',
@@ -50,6 +51,7 @@ const TOOLBAR_COPY = {
     noMatches: '没有匹配的素材。', emptyLibrary: '素材库和生成历史为空。', wheelPan: '滚轮：平移', wheelZoom: '滚轮：缩放',
     addOption: (type: WorkflowNodeType) => ({ image: '图片', video: '视频', text: '文本', script: '脚本', audio: '音频', config: '配置' }[type] || type),
     zoomPercent: (value: number) => `${value}%`,
+    revision: (value: number) => `rev ${value}`, revisionHint: '草稿修订号。你或 Agent 每次保存修改都会推进它。',
   },
 } as const;
 
@@ -79,6 +81,7 @@ export function WorkflowToolbar({
   onZoomIn,
   onZoomOut,
   onZoomReset,
+  revision,
   agentOpen,
 }: {
   tool: WorkflowTool;
@@ -107,6 +110,8 @@ export function WorkflowToolbar({
   onZoomIn?: () => void;
   onZoomOut?: () => void;
   onZoomReset?: () => void;
+  /** 当前草稿 revision（draftVersion）；人和 Agent 的每次成功 mutation 都会推进它。 */
+  revision?: number;
 }) {
   const sharedMedia = useWorkflowSharedMedia();
   const language = useWorkspaceStore(state => state.language);
@@ -178,6 +183,9 @@ export function WorkflowToolbar({
       {onToggleMinimap && <Tip title={copy.minimap}><button type="button" className={btn(Boolean(minimapOpen))} aria-label={copy.minimap} onClick={onToggleMinimap}><Map size={17} /></button></Tip>}
       {onToggleEdges && <Tip title={edgesVisible === false ? copy.showEdges : copy.hideEdges}><button type="button" className={btn(edgesVisible !== false)} aria-label={edgesVisible === false ? copy.showEdges : copy.hideEdges} onClick={onToggleEdges}><Spline size={17} /></button></Tip>}
       {onToggleSnap && <Tip title={copy.snap}><button type="button" className={btn(Boolean(snapEnabled))} aria-label={copy.snap} onClick={onToggleSnap}><Magnet size={17} /></button></Tip>}
+      {typeof revision === 'number' && revision > 0 && (
+        <Tip title={copy.revisionHint}><span className="workflow-canvas-controls__revision" data-testid="workflow-revision" aria-label={`${copy.revision(revision)}. ${copy.revisionHint}`} aria-live="polite">{copy.revision(revision)}</span></Tip>
+      )}
       <div className="workflow-toolbar__zoom-wrap">
         <button type="button" className="workflow-canvas-controls__zoom" aria-label={copy.zoomReset} aria-expanded={zoomOpen} onClick={event => togglePopover('zoom', event.currentTarget)}>{copy.zoomPercent(Math.round((zoomLevel ?? 1) * 100))}</button>
       </div>

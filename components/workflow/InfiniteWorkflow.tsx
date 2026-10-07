@@ -46,6 +46,8 @@ import { WorkflowConfigPanel } from './WorkflowConfigPanel';
 import { ScriptNodeEditor } from './ScriptNodeEditor';
 import { SlashMenu } from './SlashMenu';
 import { WorkflowToolbar, type WorkflowTool } from './WorkflowToolbar';
+import { deriveWorkflowRunStates } from './runState';
+import { selectWorkflowOperationTake } from './operations';
 import { useProductionProjectionAdapter } from './useProductionProjectionAdapter';
 import { composeImageGrid } from './gridComposer';
 import { LIGHTING_PRESETS, buildRelightPrompt } from './LightingPresets';
@@ -2227,6 +2229,8 @@ export function InfiniteWorkflow({
     height: Math.abs(selectionBox.current.y - selectionBox.start.y),
   } : undefined;
   const selectedNodes = useMemo(() => new Set(selectedNodeIds), [selectedNodeIds]);
+  // 派生运行状态（stale 等）：纯计算，不写回项目。
+  const runStates = useMemo(() => deriveWorkflowRunStates({ nodes: project.nodes, connections: project.connections }), [project.nodes, project.connections]);
   const selectedNodeData = displayNodes.filter(node => node.isVisible !== false && selectedNodes.has(node.id));
   const exportSelectedMedia = async (nodes: WorkflowNodeData[]) => {
     const media = nodes.filter(node => node.type === 'image' || node.type === 'video' || node.type === 'audio');
@@ -2418,6 +2422,7 @@ export function InfiniteWorkflow({
     >
       <WorkflowToolbar
         tool={tool}
+        revision={project.draftVersion}
         canUndo={Boolean(project.draftChangeSets?.some(changeSet => changeSet.status === 'completed' || changeSet.status === 'partial'))}
         canRedo={Boolean(project.draftRedoStack?.length)}
         onToolChange={setTool}
@@ -2550,6 +2555,13 @@ export function InfiniteWorkflow({
             onChangeText={content => { if (!node.isLocked) applyOps([{ type: 'update_node', id: node.id, metadata: { content } }]); }}
             onChangeMetadata={metadata => { if (!node.isLocked) applyOps([{ type: 'update_node', id: node.id, metadata }]); }}
             onRun={() => { if (!node.isLocked) onRunNode(node.id); }}
+            runState={runStates.get(node.id)}
+            onSelectTake={node.metadata.operation ? takeId => {
+              const current = projectRef.current.nodes.find(item => item.id === node.id);
+              if (!current || current.isLocked) return;
+              const next = selectWorkflowOperationTake(current, takeId);
+              if (next !== current) applyOps([{ type: 'update_node', id: node.id, metadata: next.metadata, replaceMetadata: true }]);
+            } : undefined}
             onReplaceMedia={file => { if (!node.isLocked) void replaceMedia(node, file); }}
             onRemoveMedia={() => { if (!node.isLocked) removeMedia(node); }}
             onContextMenu={event => {
