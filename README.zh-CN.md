@@ -52,6 +52,30 @@
   Resolve native MCP → 候选 → Media Pool 的 Hero 仍属于真实宿主 External Gate，因此这里暂时不把它伪装成已完成。可复现记录见 <a href="docs/maintenance/readme/DEMO_RECORDING.md">DEMO_RECORDING.md</a>。</sub>
 </p>
 
+
+## 产品愿景——我要做的就是视频里的这种交互与 UI
+
+<p align="center">
+  <a href="pic/readme/vision/Iris_Vision_3min_v5.mp4">
+    <img src="pic/readme/vision/Iris_Vision_3min_v5-poster.jpg" alt="Iris 产品愿景：从 Resolve 内的 AI Layer 交互展开到 Iris 可视化工作流" width="880" />
+  </a>
+  <br />
+  <sub><strong>Iris Vision · 3 分钟。</strong>点击图片观看完整视频。<br />
+  <strong>这是概念片 / 设计目标，不代表视频里的每个画面今天都已经实现。</strong></sub>
+</p>
+
+这支视频就是 **Iris 产品交互、UI 和宿主协作方式的 North Star**。产品最终应该尽量接近视频里的感觉：
+
+- **先留在剪辑软件里。** Resolve 继续是工程与时间线的权威；Iris 只围绕当前片段出现一个窄、轻、上下文明确的操作层。
+- **Draw where. Say what. Get a layer.** 直接在画面上指出区域，再用自然语言说想要什么，得到可审核的 AI 叠加层候选，而不是先把原片替掉。
+- **先候选，再提交。** 结果先比较；每个版本都保留；用户明确选中的版本不会被晚到结果偷偷覆盖。
+- **人和 Agent 操作同一份可见状态。** Agent 在场、revision、哪些结果已经 stale，都能在同一个 Workflow 上看见，人也能继续手改。
+- **只有复杂任务才展开完整 Iris。** 多步引用、过期分支、版本历史和复杂制作才进入 Canvas；宿主里的小面板不膨胀成第二个 Iris。
+- **结果非破坏性回到宿主。** 先经过可审核的交接进入 Media Pool；只有真实验证过宿主能力后，才进一步上新图层 / 新轨道，而不是直接改原素材。
+- **Local-first。** 素材、工程上下文和持久结果尽量留在本机；需要调用外部模型时明确告诉用户，并按 Provider 边界执行。
+
+下面的真实录屏仍然只负责说明**当前版本已经能证明的能力**；真实宿主与兼容状态以 [Support Matrix](SUPPORT_MATRIX.md) 为准。产品与系统边界见[主设计](docs/design/flovart-native-effects.md)、[Agent Integration](docs/design/agent-integration.md)、[Adaptive Layout](docs/design/adaptive-layout.md) 和 [Resolve 21.1 Product & UI Spec](integrations/studio/resolve/PRODUCT_UI_SPEC.md)。
+
 ## Iris 现在已经能做什么
 
 下面都是**当前版本真实录屏**，不是 Mock。Resolve native MCP → Candidate → Media Pool 仍然属于 External Gate，所以 README 顶部只展示今天已经有证据的能力。
