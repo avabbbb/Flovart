@@ -283,7 +283,8 @@ const userApiKeysRef = useRef(userApiKeys);
       }
       const confirm = (summary: string) => new Promise<boolean>(resolve => {
         const next = { summary, resolve };
-        confirmationRef.current = next;
+        confirmationRef.current?.resolve(false); // a newer request supersedes; never leave the agent waiting
+              confirmationRef.current = next;
         setConfirmation(next);
         activity.current('waiting');
       });
@@ -325,12 +326,14 @@ const userApiKeysRef = useRef(userApiKeys);
             token: connection.token,
             confirm: summary => new Promise<boolean>(resolve => {
               const next = { summary, resolve };
+              confirmationRef.current?.resolve(false); // a newer request supersedes; never leave the agent waiting
               confirmationRef.current = next;
               setConfirmation(next);
               activity.current('waiting');
             }),
             confirmWrite: summary => modeRef.current === 'auto' || new Promise<boolean>(resolve => {
               const next = { summary, resolve };
+              confirmationRef.current?.resolve(false); // a newer request supersedes; never leave the agent waiting
               confirmationRef.current = next;
               setConfirmation(next);
               activity.current('waiting');

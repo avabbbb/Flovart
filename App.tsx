@@ -7,6 +7,8 @@ import { reversePromptStreamWithProvider, enhancePromptWithProvider } from './se
 import { useApiKeys, normalizeApiKeyEntry } from './hooks/useApiKeys';
 import { useToast } from './hooks/useToast';
 import ToastStack from './components/Toast';
+import { ConfirmHost } from './components/ConfirmHost';
+import { requestUiConfirm } from './services/uiConfirm';
 import { AppShell } from './components/AppShell';
 import { StudioTopMenu, type StudioMenuModel } from './components/studio/StudioTopMenu';
 import { StudioRightDrawer } from './components/studio/StudioRightDrawer';
@@ -234,9 +236,11 @@ const App: React.FC = () => {
     }, [language]);
 
 
-    const confirmRouteFallback = useCallback((resolution: RouteFallbackResolution) => window.confirm(
-        `主线路 ${resolution.unavailablePrimary.key.name || resolution.unavailablePrimary.key.provider} · ${resolution.unavailablePrimary.routeId || '未配置'} 当前不可用。\n\n是否改用 ${resolution.key.name || resolution.key.provider} · ${resolution.routeId}？`,
-    ), []);
+    const confirmRouteFallback = useCallback((resolution: RouteFallbackResolution) => requestUiConfirm({
+        title: '主线路暂不可用',
+        body: `${resolution.unavailablePrimary.key.name || resolution.unavailablePrimary.key.provider} · ${resolution.unavailablePrimary.routeId || '未配置'} 当前不可用，改用 ${resolution.key.name || resolution.key.provider} · ${resolution.routeId}？`,
+        confirmLabel: '改用备用线路',
+    }), []);
 
     const handleEnhancePrompt = useCallback(async (payload: { prompt: string; mode: PromptEnhanceMode; stylePreset?: string }) => {
         setIsEnhancingPrompt(true);
@@ -393,7 +397,16 @@ const App: React.FC = () => {
 
     const workflowExecutor = useMemo(() => createWorkflowExecutor({
         runNode: (command, context) => handleRunWorkflowNode(command, context),
-        stopNode: ({ projectId, nodeId }) => { cancelWorkflowGeneration(projectId, nodeId); },
+        stopNode: ({ projectId, nodeId }) => {
+            if (cancelWorkflowGeneration(projectId, nodeId)) return;
+            // No live request behind this node (interrupted run, lost tab, recovery
+            // gave up): Stop must still free it, never leave it spinning.
+            const latest = useWorkflowStore.getState().projects.find(item => item.id === projectId);
+            if (!latest?.nodes.some(item => item.id === nodeId && item.metadata.status === 'loading')) return;
+            useWorkflowStore.getState().updateProject(projectId, {
+                nodes: latest.nodes.map(item => item.id === nodeId ? { ...item, metadata: { ...item.metadata, status: 'idle', error: undefined, progress: undefined, generationRequestId: undefined, generationStartedAt: undefined, generationMessage: undefined } } : item),
+            });
+        },
     }), [handleRunWorkflowNode]);
     useEffect(() => {
         if (!apiKeysLoaded || !activeWorkflowProjectId || userApiKeys.length === 0) return;
@@ -439,14 +452,20 @@ const App: React.FC = () => {
         if (!node) return;
         const capabilityId = node.metadata.operation?.capabilityId;
         const capability = capabilityId ? getWorkflowOperationCapability(capabilityId) : undefined;
-        if (requiresExternalGenerationGate(node, capability)) {
-            const details = getGenerationGateDetails(node, capability, userApiKeys);
-            if (!window.confirm(buildGenerationGateSummary(details))) {
-                toast.show('已取消生成。', 'info');
-                return;
-            }
+        const run = () => { void workflowExecutor.runNode({ projectId, nodeId, ...(promptIntent ? { promptIntent } : {}) }, { surface: 'ui' }); };
+        if (!requiresExternalGenerationGate(node, capability)) { run(); return; }
+        if (!userApiKeys.length) {
+            toast.show('还没有可用的 AI 服务。在设置 → AI 服务里添加一个 API Key 后再生成。', 'warning');
+            return;
         }
-        void workflowExecutor.runNode({ projectId, nodeId, ...(promptIntent ? { promptIntent } : {}) }, { surface: 'ui' });
+        // Non-blocking: the canvas stays usable while the user decides, and an
+        // unanswered request cancels itself instead of holding the node.
+        const details = getGenerationGateDetails(node, capability, userApiKeys);
+        void requestUiConfirm({
+            title: details.mediaType === 'video' ? '开始生成视频？' : '开始生成图片？',
+            body: buildGenerationGateSummary(details),
+            confirmLabel: '生成',
+        }).then(approved => { if (approved) run(); });
     }, [toast, userApiKeys, workflowExecutor]);
 
     const handleSaveWorkflowMedia = useCallback(async (projectId: string, nodeId: string) => {
@@ -742,6 +761,7 @@ const App: React.FC = () => {
                 <BrowserImportBridge />
             </Suspense>
             <ToastStack toasts={toast.toasts} onDismiss={toast.dismiss} />
+            <ConfirmHost />
         </>}
     />;
 };

@@ -73,7 +73,6 @@ export function buildGenerationGateSummary(details: GenerationGateDetails) {
     `AI 服务：${details.serviceLabel}`,
     `模型：${details.modelLabel}`,
     `任务：${details.taskCount} 个${mediaLabel}生成`,
-    '此操作将调用你的 AI 服务，并可能产生费用。',
-    '确定开始生成吗？',
+    '会调用你的 AI 服务，可能产生费用。',
   ].join('\n');
 }

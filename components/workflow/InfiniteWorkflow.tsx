@@ -49,6 +49,7 @@ import { WorkflowToolbar, type WorkflowTool } from './WorkflowToolbar';
 import { useProductionProjectionAdapter } from './useProductionProjectionAdapter';
 import { composeImageGrid } from './gridComposer';
 import { LIGHTING_PRESETS, buildRelightPrompt } from './LightingPresets';
+import { isWorkflowGenerationActive } from '../../services/workflowGeneration';
 import type { WorkflowConnection, WorkflowDocumentOperation, WorkflowNode as WorkflowNodeData, WorkflowNodeType, WorkflowPoint, WorkflowProject, WorkflowSnapshot, WorkflowViewport, ScriptShot, SlashCommand } from './types';
 import {
   runWorkflowCropOperation,
@@ -1287,65 +1288,57 @@ export function InfiniteWorkflow({
   }, [focusNode, focusNodeRequest, selectNodes]);
 
   // 刷新/重载后节点 metadata 里会残留 status:'loading'，但内存中的生成请求
-  // 已不存在 —— 这类"僵尸 loading"永远不会自己结束。挂载时记录快照，宽限
-  // 期（给 App 的 provider-task 恢复留出重新提交的时间）后仍在原地 loading
-  // 的节点视为已中断：用产品语言提示，并允许通过停止按钮复位。
-  const [staleLoadingIds, setStaleLoadingIds] = useState<ReadonlySet<string>>(() => new Set());
-  const staleScanRef = useRef<string | null>(null);
-  useEffect(() => {
-    staleScanRef.current = project.id;
-    setStaleLoadingIds(new Set());
-    const snapshot = new Map(
-      projectRef.current.nodes
-        .filter(node => node.metadata.status === 'loading')
-        .map(node => [node.id, node.metadata.generationStartedAt]),
-    );
-    if (!snapshot.size) return;
-    const timer = window.setTimeout(() => {
-      if (!mountedRef.current || staleScanRef.current !== project.id) return;
-      const stale = new Set(
-        projectRef.current.nodes
-          .filter(node => node.metadata.status === 'loading' && snapshot.get(node.id) === node.metadata.generationStartedAt)
-          .map(node => node.id),
-      );
-      if (!stale.size) return;
-      setStaleLoadingIds(stale);
-      onNotify?.(
-        language === 'zho'
-          ? `${stale.size} 个生成任务已中断 — 选中节点可重新运行或停止`
-          : `${stale.size} generation task${stale.size > 1 ? 's' : ''} interrupted — select the node to rerun or stop it`,
-        'warning',
-      );
-    }, 6000);
-    return () => window.clearTimeout(timer);
-  }, [language, onNotify, project.id]);
-
-  const stopNode = useCallback((nodeId: string) => {
-    if (staleLoadingIds.has(nodeId)) {
+  // 已不存在 —— 这类"僵尸 loading"永远不会自己结束，也会挡住编辑。
+  const interruptedMessage = language === 'zho' ? '生成已中断，点「重试」重新运行' : 'Generation interrupted — press Retry to run again';
+  const markInterrupted = useCallback((nodeIds: string[]) => {
+    const ops = nodeIds.flatMap(nodeId => {
       const node = projectRef.current.nodes.find(item => item.id === nodeId);
-      if (!node) return;
-      applyOps([{
-        type: 'update_node',
+      if (!node || node.metadata.status !== 'loading') return [];
+      return [{
+        type: 'update_node' as const,
         id: nodeId,
         metadata: {
           ...node.metadata,
-          status: 'error',
-          error: language === 'zho' ? '生成已中断，可重新运行' : 'Generation interrupted — run again to retry',
+          status: 'error' as const,
+          error: interruptedMessage,
           progress: undefined,
           generationRequestId: undefined,
           generationStartedAt: undefined,
           generationMessage: undefined,
         },
-      }]);
-      setStaleLoadingIds(current => {
-        const next = new Set(current);
-        next.delete(nodeId);
-        return next;
-      });
-      return;
-    }
+      }];
+    });
+    if (ops.length) applyOps(ops);
+    return ops.length;
+  }, [applyOps, interruptedMessage]);
+  useEffect(() => {
+    // A node left in "loading" with no live request in this session (the tab was
+    // reloaded or closed mid-run) will never finish by itself. Turn it straight
+    // into a retryable error so it is never locked. Only a video with a provider
+    // task id gets a short grace period, because App may resume that task.
+    const loading = projectRef.current.nodes.filter(node => node.metadata.status === 'loading' && !isWorkflowGenerationActive(project.id, node.id));
+    if (!loading.length) return;
+    const resumable = (node: WorkflowNodeData) => node.metadata.config?.mode === 'video' && Boolean(node.metadata.generationProviderTaskId);
+    const immediate = loading.filter(node => !resumable(node)).map(node => node.id);
+    let count = markInterrupted(immediate);
+    const waiting = loading.filter(resumable).map(node => node.id);
+    const notify = (n: number) => {
+      if (n) onNotify?.(language === 'zho' ? `${n} 个生成任务已中断，可以直接重试` : `${n} generation task${n > 1 ? 's were' : ' was'} interrupted — retry any time`, 'warning');
+    };
+    if (!waiting.length) { notify(count); return; }
+    const timer = window.setTimeout(() => {
+      if (!mountedRef.current) return;
+      count += markInterrupted(waiting.filter(nodeId => !isWorkflowGenerationActive(project.id, nodeId)));
+      notify(count);
+    }, 6000);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project.id]);
+
+  const stopNode = useCallback((nodeId: string) => {
+    if (!isWorkflowGenerationActive(project.id, nodeId) && markInterrupted([nodeId])) return;
     onStopNode?.(nodeId);
-  }, [applyOps, language, onStopNode, staleLoadingIds]);
+  }, [markInterrupted, onStopNode, project.id]);
 
   const handleSlashCommand = useCallback((command: SlashCommand) => {
     setSlashMenu(null);

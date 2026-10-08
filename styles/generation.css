@@ -49,3 +49,30 @@
 @media (prefers-reduced-motion: reduce) {
   .flv-generation-glass__status { animation: none; }
 }
+
+/* In-app confirmation (replaces window.confirm; never blocks the canvas). */
+.iris-confirm {
+  position: fixed;
+  top: 64px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(420px, calc(100vw - 32px));
+  padding: 14px 16px;
+  border-radius: var(--isl-r-lg);
+  background: var(--isl-card);
+  border: 1px solid var(--isl-border-strong);
+  box-shadow: var(--isl-shadow-lg);
+  color: var(--isl-ink);
+  font-family: var(--isl-font);
+  font-size: 13px;
+}
+.iris-confirm strong { display: block; font-size: 14px; }
+.iris-confirm p { margin: 6px 0 0; color: var(--isl-ink-soft); white-space: pre-line; line-height: 1.5; }
+.iris-confirm__actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+.iris-confirm__actions button {
+  height: 30px; padding: 0 14px; border-radius: var(--isl-r-pill);
+  border: 1px solid var(--isl-border); background: transparent; color: var(--isl-ink); font-weight: 600; cursor: pointer;
+}
+.iris-confirm__actions button[data-tone] { background: var(--isl-mint); border-color: var(--isl-mint); color: #fff; }
+.iris-confirm__actions button[data-tone='danger'] { background: var(--isl-coral); border-color: var(--isl-coral); }
+.iris-confirm__actions button:focus-visible { outline: 2px solid var(--isl-mint-deep); outline-offset: 2px; }
