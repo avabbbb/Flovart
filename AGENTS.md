@@ -16,7 +16,7 @@
 2. 与任务相关的 current-truth 文档
 3. 真实代码与 `SUPPORT_MATRIX.md`
 
-产品与系统目标唯一由 `docs/design/flovart-native-effects.md` 定义。不要从 archive、旧 audit、release evidence 或 Git 历史推导当前需求。
+产品与系统目标由 `docs/design/00-overview.md`（总体设计）定义；所有交互遵守 `docs/design/01-interaction.md`（简单直接、不硬编码、不死锁）；模块细节见 `docs/design/1x-*.md`。不要从 archive、旧 audit、release evidence 或 Git 历史推导当前需求。
 
 会变化的 SDK、宿主 API、许可证、模型/Provider 能力必须按当前日期核验官方文档和真实源码。构建通过、mock 通过、manifest 存在都不等于真实宿主/账号已认证。
 
@@ -68,7 +68,7 @@ UI / Agent / Host entry
 
 ## 5. Creative host / native effect 规则
 
-宿主扩展只是 projection，不建立第二套 Workflow、Provider、任务或资产系统。共同产品边界以主设计 §3 / §5.3 为准；Resolve 实现还必须遵循 `integrations/studio/resolve/PRODUCT_UI_SPEC.md`。
+宿主扩展只是 projection，不建立第二套 Workflow、Provider、任务或资产系统。共同产品边界以 `docs/design/14-creative-hosts.md` 为准；Resolve 实现还必须遵循 `integrations/studio/resolve/PRODUCT_UI_SPEC.md`。
 
 共同硬边界：
 
@@ -118,8 +118,8 @@ Host-specific：
 
 `docs/index.md` 定义 current truth。原则：
 
-- 主设计只保留一个；不要新增并列 CURRENT / TARGET / AUDIT / GOAL / HANDOFF 决策文档。
-- 产品设计变化直接更新主设计；Agent 专项更新 `agent-integration.md`；布局更新 `adaptive-layout.md`。
+- `docs/design/` 最多 10 份：总体设计、交互设计、每个模块一份、质量与治理。不要新增并列 CURRENT / TARGET / AUDIT / GOAL / HANDOFF 决策文档；超过 10 份先合并。
+- 产品变化更新 `00-overview.md`；交互与布局变化更新 `01-interaction.md`；模块变化更新对应模块文档；新增模块才新增模块文档。
 - `skills/flovart/` 是 canonical Skill package；`.agents/skills/flovart/`、`.claude/skills/flovart/` 等是兼容投影 / committed snapshot。不要反转 source-of-truth，也不要手工让这些投影漂移。
 - 新 proposal 必须明确 **PROPOSAL / REFERENCE**，被接受后蒸馏进 current truth，再删除或归档 proposal。
 - `todo.mdx` 只放未完成；已实现但需现实验证移到 `pending-test.mdx`；验证后再更新 features。

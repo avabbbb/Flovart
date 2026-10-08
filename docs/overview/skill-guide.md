@@ -1,6 +1,6 @@
 # Agent Skill 与外部 Agent 使用
 
-本页描述当前 Agent Integration Skill。产品 IA 见[主设计](../design/flovart-native-effects.md)，真实 Host 状态见[支持矩阵](../../SUPPORT_MATRIX.md)。
+本页描述当前 Agent Integration Skill。产品 IA 见[主设计](../design/00-overview.md)，真实 Host 状态见[支持矩阵](../../SUPPORT_MATRIX.md)。
 
 ## Agent Integration Skill 是什么
 

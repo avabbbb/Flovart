@@ -59,4 +59,4 @@ Photoshop / Premiere / After Effects / Resolve 等宿主。
 
 ## Historical terms
 
-Production Crew、Director、Workspace Operator、Production Skill、Native Draft、Dock production control、enterprise credits/approval 都属于历史/实验概念，不应作为当前产品 IA 推导新功能。需要背景时看[历史快照](../../archive/historical-design/2026-09-23-canonicalization.md)。
+Production Crew、Director、Workspace Operator、Production Skill、Native Draft、Dock production control、enterprise credits/approval 都属于历史/实验概念，不应作为当前产品 IA 推导新功能。需要背景时看[历史快照](../../../historical-design/2026-09-23-canonicalization.md)。

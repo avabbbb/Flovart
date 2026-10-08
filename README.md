@@ -49,7 +49,7 @@
   <sub><strong>The current recorded Agent/Workflow surface — natural language becomes nodes and edges.</strong><br />
   Nothing in this clip is done by hand: the agent (WorkBuddy codebuddy) drove the visible Workflow through the typed
   CLI surface, creating three nodes and two connections live, with no source edits. No generation step was run, so no
-  paid model service was called. The Resolve-native MCP → candidate → Media Pool Hero remains an External Gate and is deliberately not presented here as finished. Reproduction record: <a href="docs/maintenance/readme/DEMO_RECORDING.md">DEMO_RECORDING.md</a>.</sub>
+  paid model service was called. The Resolve-native MCP → candidate → Media Pool Hero remains an External Gate and is deliberately not presented here as finished. Reproduction record: <a href="docs/archive/2026-10-07/maintenance/readme/DEMO_RECORDING.md">DEMO_RECORDING.md</a>.</sub>
 </p>
 
 ## What Iris can already do
@@ -117,7 +117,7 @@ Every clip below is a real recording of the running app — one operation, start
 
 **Agent-native, not screen-scraping.** These are operations on the same Workflow an agent drives. The hero above and the CLI capture under [Architecture](#architecture) are agent-driven end to end, with no human input; the tour below is that same surface driven by hand, because that is the path a new user follows first. Node creation, connections, selection, viewport, node moves and resizes, and the node tools are all exposed to agents as typed operations — with revision and idempotency boundaries rather than coordinates on a screen.
 
-Video and audio tools run ffmpeg.wasm in the browser; their core is pre-warmed before the recorded action, so the clip shows the operation rather than the one-off ~30MB wasm download — **clip length is therefore not the wait time on a first run**. Registration, method and limits: [DEMO_RECORDING.md](docs/maintenance/readme/DEMO_RECORDING.md).
+Video and audio tools run ffmpeg.wasm in the browser; their core is pre-warmed before the recorded action, so the clip shows the operation rather than the one-off ~30MB wasm download — **clip length is therefore not the wait time on a first run**. Registration, method and limits: [DEMO_RECORDING.md](docs/archive/2026-10-07/maintenance/readme/DEMO_RECORDING.md).
 
 ### Canvas
 
@@ -250,7 +250,7 @@ Also local, also without a model service: these run through the in-browser ffmpe
   </tr>
 </table>
 
-Not filmed yet, and deliberately not shown: model-backed generation and the model-backed image tools (image generation, upscale, background removal, layer split, edit/outpaint) — this checkout configures no provider, so there is no honest result to record. That gap is logged in the [recording notes](docs/maintenance/readme/DEMO_RECORDING.md).
+Not filmed yet, and deliberately not shown: model-backed generation and the model-backed image tools (image generation, upscale, background removal, layer split, edit/outpaint) — this checkout configures no provider, so there is no honest result to record. That gap is logged in the [recording notes](docs/archive/2026-10-07/maintenance/readme/DEMO_RECORDING.md).
 
 ## Why Iris?
 
@@ -341,10 +341,10 @@ The existing `flovart` CLI name is a compatibility surface during the Iris rebra
   <sub><strong>The operation-level view of the same claim.</strong> A project and three nodes are created through
   <code>workflow.project.create</code>, <code>workflow.node.create</code> and <code>workflow.connect</code> (played at 1.5×) — the
   typed operations the external-agent session above drives end-to-end. Capture record:
-  <a href="docs/maintenance/readme/DEMO_RECORDING.md">DEMO_RECORDING.md</a>.</sub>
+  <a href="docs/archive/2026-10-07/maintenance/readme/DEMO_RECORDING.md">DEMO_RECORDING.md</a>.</sub>
 </p>
 
-Native-effect work keeps two short paths: one shared generation function produces durable media versions, and the host effect reads a fixed version and renders locally — no director/Operator/crew chain. Product scope and system boundaries live in the [main design](docs/design/flovart-native-effects.md); agent transport/authority details live in [Agent Integration](docs/design/agent-integration.md). Historical target/current architecture reports no longer participate in product decisions.
+Native-effect work keeps two short paths: one shared generation function produces durable media versions, and the host effect reads a fixed version and renders locally — no director/Operator/crew chain. Product scope and system boundaries live in the [main design](docs/design/00-overview.md); agent transport/authority details live in [Agent Integration](docs/design/12-agent.md). Historical target/current architecture reports no longer participate in product decisions.
 
 ## Local-first and security
 

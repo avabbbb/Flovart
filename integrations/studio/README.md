@@ -30,7 +30,7 @@ use Blackmagic's native MCP for Agent-side Resolve control, Flovart Skill/CLI fo
 generation and durable artifacts, and keep the Resolve Workflow Integration as a
 thin human-review surface / measured fallback. See
 [Resolve Product & UI Spec](resolve/PRODUCT_UI_SPEC.md) and the
-[main design](../../docs/design/flovart-native-effects.md).
+[main design](../../docs/design/00-overview.md).
 
 Existing selection/import checks do not certify real native MCP connectivity,
 timeline mutation safety, OFX parameters, project reopening or offline effect export.
