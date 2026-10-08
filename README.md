@@ -52,6 +52,30 @@
   paid model service was called. The Resolve-native MCP → candidate → Media Pool Hero remains an External Gate and is deliberately not presented here as finished. Reproduction record: <a href="docs/maintenance/readme/DEMO_RECORDING.md">DEMO_RECORDING.md</a>.</sub>
 </p>
 
+
+## Product vision — the interaction we're building toward
+
+<p align="center">
+  <a href="pic/readme/vision/Iris_Vision_3min_v5.mp4">
+    <img src="pic/readme/vision/Iris_Vision_3min_v5-poster.jpg" alt="Iris product vision: Resolve-first AI layer workflow opening into the Iris visual canvas" width="880" />
+  </a>
+  <br />
+  <sub><strong>Iris Vision · 3 minutes.</strong> Click the image to watch the film.<br />
+  <strong>Concept film / design target — not a claim that every scene is implemented today.</strong></sub>
+</p>
+
+This film is the **north star for Iris product interaction and UI**. The product we are building should feel like this:
+
+- **Stay in the editor first.** Resolve remains the source of truth; Iris appears as a narrow contextual layer around the clip you are already working on.
+- **Draw where. Say what. Get a layer.** Point at the frame, describe the intent, then generate reviewable AI-layer candidates instead of replacing the source clip.
+- **Candidates before commits.** Compare results visually, keep every version, and never let a late result silently replace the version you explicitly chose.
+- **Human + Agent, one visible state.** Agent activity, revisions and out-of-date results are visible on the same Workflow that the creator can edit by hand.
+- **Open the full Iris canvas only when the job needs it.** Multi-step references, stale branches, version history and more complex production expand into the visual Workflow instead of turning the host panel into a second app.
+- **Return to the host non-destructively.** Approved results flow back through a reviewable handoff — Media Pool first, then a new layer/track only when that host capability is actually verified.
+- **Local-first by default.** Footage, project context and durable results stay close to the creator's machine; external model calls are explicit and provider-scoped.
+
+The sections below remain the evidence for what the current build can prove today. For implementation status and real-host gates, see the [Support Matrix](SUPPORT_MATRIX.md). Product/system details live in the [main design](docs/design/flovart-native-effects.md), [Agent Integration](docs/design/agent-integration.md), [Adaptive Layout](docs/design/adaptive-layout.md), and the [Resolve 21.1 Product & UI Spec](integrations/studio/resolve/PRODUCT_UI_SPEC.md).
+
 ## What Iris can already do
 
 These are **real recordings from the current build**, not mockups. The Resolve-native MCP → candidate → Media Pool flow is still an External Gate, so the top of the README shows only capabilities we can prove today.

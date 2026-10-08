@@ -3,7 +3,7 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { resolveCanvasUrl } = require('./canvas-url');
+const { buildCanvasHandoffUrl, resolveCanvasUrl } = require('./canvas-url');
 const { persistResolveArtifact, readPersistedResolveArtifact } = require('./artifact-store');
 
 const PLUGIN_ID = 'com.flovart.studio.resolve';
@@ -330,8 +330,11 @@ function registerIpc() {
   ipcMain.handle('flovart:persist-artifact', persistArtifact);
   ipcMain.handle('flovart:import-artifact', importArtifact);
   ipcMain.handle('flovart:open-canvas', async () => {
-    await shell.openExternal(resolveCanvasUrl());
-    return { ok: true };
+    // 交接只用主进程刚从 Resolve 读到的选择，不信任渲染进程传来的 locator。
+    let current = null;
+    try { current = await selection(); } catch {}
+    await shell.openExternal(buildCanvasHandoffUrl(resolveCanvasUrl(), current) || resolveCanvasUrl());
+    return { ok: true, handoff: Boolean(current) };
   });
 }
 

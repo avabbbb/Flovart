@@ -446,7 +446,7 @@ const App: React.FC = () => {
                 return;
             }
         }
-        void workflowExecutor.runNode({ projectId, nodeId, ...(promptIntent ? { promptIntent } : {}) }, { surface: 'ui' });
+        return workflowExecutor.runNode({ projectId, nodeId, ...(promptIntent ? { promptIntent } : {}) }, { surface: 'ui' }).then(() => undefined);
     }, [toast, userApiKeys, workflowExecutor]);
 
     const handleSaveWorkflowMedia = useCallback(async (projectId: string, nodeId: string) => {

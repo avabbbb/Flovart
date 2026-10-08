@@ -16,6 +16,8 @@ import {
 import {
   beginWorkflowOperationTake,
   completeWorkflowOperationTake,
+  applySelectedTakeMedia,
+  pickTakeMedia,
   createWorkflowOperationInputBinding,
   createWorkflowOperationNode,
   workflowOperationInputConnections,
@@ -284,7 +286,7 @@ export async function commitWorkflowOperation(
   // 仅「生成类」单输出（图片生成）结果原位写回 operation 节点自身；处理类（裁剪/放大等）保持 operation→output 链
   const isGenerate = capability.id === 'image.generate@1';
   const singleInPlace = isGenerate && normalized.length === 1 && !Number.isInteger(normalized[0].column) && !Number.isInteger(normalized[0].row);
-  const completed = completeWorkflowOperationTake(latestOperation, started.takeId, singleInPlace ? [latestOperation.id] : outputNodes.map(node => node.id));
+  const completed = completeWorkflowOperationTake(latestOperation, started.takeId, singleInPlace ? [latestOperation.id] : outputNodes.map(node => node.id), singleInPlace ? { outputMedia: pickTakeMedia(records[0]) } : {});
 
   if (singleInPlace) {
     const record = records[0];
@@ -292,7 +294,7 @@ export async function commitWorkflowOperation(
     const next: WorkflowProject = {
       ...latest,
       nodes: latest.nodes.map(node => node.id === latestOperation.id
-        ? {
+        ? applySelectedTakeMedia({
             ...completed,
             type: normalized[0].nodeType,
             width: size.width,
@@ -306,7 +308,7 @@ export async function commitWorkflowOperation(
               sourceOperationNodeId: latestOperation.id,
               operationOutputRole: normalized[0].role,
             },
-          }
+          })
         : node),
       selectedNodeIds: [latestOperation.id],
       draftVersion: (latest.draftVersion || 1) + 1,

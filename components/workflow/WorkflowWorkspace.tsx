@@ -20,6 +20,7 @@ import type { AssetItem, AssetLibrary } from '../../types';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import type { WorkflowNodeMetadata, WorkflowProject } from './types';
 import type { PromptIntent } from './promptIntent';
+import { createWorkflowHostSourceNode, findWorkflowNodeForHandoff, parseWorkflowHostHandoff, stripWorkflowHostHandoff, type WorkflowHostHandoff } from './hostLink';
 import { displayError } from '../../services/displayError';
 import { mediaKindOf } from '../studio/assetLibraryShared';
 
@@ -147,6 +148,32 @@ export function commitWorkflowProjectPatch(projectId: string, patch: Partial<Wor
   return { ok: true };
 }
 
+/**
+ * Open in Iris 交接：宿主面板带着片段 locator 打开 Canvas。
+ * 同一片段已在画布上就选中并居中它；否则在图的右侧新建一个宿主片段节点。经 draft-authority 提交，可撤销。
+ */
+export function applyWorkflowHostHandoff(projectId: string, handoff: WorkflowHostHandoff, viewportSize = { width: 960, height: 640 }): WorkflowPatchResult & { nodeId?: string } {
+  const current = useWorkflowStore.getState().projects.find(project => project.id === projectId);
+  if (!current) return { ok: false, error: '项目不存在或已删除。' };
+  const existing = findWorkflowNodeForHandoff(current, handoff);
+  const node = existing || createWorkflowHostSourceNode(nanoid(), handoff, {
+    x: Math.max(0, ...current.nodes.map(item => item.position.x + item.width)) + (current.nodes.length ? 120 : 0),
+    y: current.nodes.length ? Math.min(...current.nodes.map(item => item.position.y)) : 0,
+  });
+  const k = current.viewport.k || 1;
+  const viewport = {
+    k,
+    x: viewportSize.width / 2 - (node.position.x + node.width / 2) * k,
+    y: viewportSize.height / 2 - (node.position.y + node.height / 2) * k,
+  };
+  if (existing) {
+    useWorkflowStore.getState().updateProject(projectId, { selectedNodeIds: [existing.id], viewport });
+    return { ok: true, nodeId: existing.id };
+  }
+  const committed = commitWorkflowProjectPatch(projectId, { nodes: [...current.nodes, node], selectedNodeIds: [node.id], viewport }, `从 ${handoff.host} 打开「${handoff.label}」`);
+  return committed.ok ? { ok: true, nodeId: node.id } : committed;
+}
+
 // 把一批媒体元数据按视口中心铺成节点；单条时保持原有"落在中心"的行为。
 function layoutMediaNodes(
   items: Array<{ type: 'image' | 'video' | 'audio'; metadata: WorkflowNodeMetadata; naturalWidth?: number; naturalHeight?: number; title: string }>,
@@ -211,6 +238,19 @@ export function WorkflowWorkspace({
   const createProject = useWorkflowStore(state => state.createProject);
   const updateProject = useWorkflowStore(state => state.updateProject);
   const activeProject = projects.find(project => project.id === activeProjectId) || null;
+  // Open in Iris：读取 URL hash 中的宿主交接参数，处理后从地址栏移除，避免刷新重复执行。
+  useEffect(() => {
+    if (!activeProjectId || typeof window === 'undefined') return;
+    const consume = () => {
+      const handoff = parseWorkflowHostHandoff(window.location.hash);
+      if (!handoff) return;
+      applyWorkflowHostHandoff(activeProjectId, handoff, { width: window.innerWidth, height: window.innerHeight });
+      window.history.replaceState(window.history.state, '', `${window.location.pathname}${window.location.search}${stripWorkflowHostHandoff(window.location.hash)}`);
+    };
+    consume();
+    window.addEventListener('hashchange', consume);
+    return () => window.removeEventListener('hashchange', consume);
+  }, [activeProjectId]);
   // These queries only switch interaction mode (inline sidebar vs hidden). CSS
   // and container queries own the actual geometry and wrapping.
   const mediumViewport = useMediaQuery('(max-width: 1023px)');
@@ -392,8 +432,9 @@ assetLibrary={assetLibrary}
               project={activeProject}
               updateProject={patch => updateProject(activeProject.id, patch)}
               onRunNode={(nodeId, promptIntent) => {
-                if (onRunNode) void onRunNode(activeProject.id, nodeId, promptIntent);
-                else commitProjectPatch(activeProject.id, {
+                // 返回运行 Promise：画布的串行队列（整组执行 / 选择性重跑）据此等上游跑完再跑下游。
+                if (onRunNode) return onRunNode(activeProject.id, nodeId, promptIntent);
+                commitProjectPatch(activeProject.id, {
                   nodes: activeProject.nodes.map(node => node.id === nodeId ? { ...node, metadata: { ...node.metadata, status: 'error', error: '生成适配器尚未连接' } } : node),
                 }, '记录节点执行适配器错误');
               }}
