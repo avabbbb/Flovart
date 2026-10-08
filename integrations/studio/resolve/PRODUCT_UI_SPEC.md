@@ -3,7 +3,7 @@
 Status: **CURRENT IMPLEMENTATION REFERENCE**  
 Authority: subordinate to docs/design/flovart-native-effects.md  
 Target: **DaVinci Resolve Studio 21.1 first**  
-Updated: 2026-09-25
+Updated: 2026-10-08
 
 This document defines the first Resolve-specific product slice, panel interaction and visual direction. It exists so implementation Agents do not invent a second editor, a chat product, or a generic web dashboard inside Resolve.
 
@@ -377,6 +377,15 @@ If progress is unknown, use an honest indeterminate state. Never animate fake pe
 
 Cancellation keeps the provider task identity for later query/recovery.
 
+The panel's progress callback accepts either a number (0–1 or 0–100) or a structured stream event:
+
+~~~js
+{ stage: 'submitting' | 'generating' | 'downloading' | 'verifying', progress?: number,
+  partialImage?: Blob | 'data:image/…' | 'blob:…' | 'https:…', partialIndex?: number, partialTotal?: number }
+~~~
+
+Stages render as a four-step strip under the task row. A partial image (for example a GPT Image partial preview) replaces the pending card's picture; other URL schemes are ignored. On ready, the spinner and bar disappear and the row reads `✓ Ready · took Ns`.
+
 ### 7.9 Candidate card
 
 Each candidate should show:
@@ -393,9 +402,19 @@ Secondary: Preview.
 
 Do not put five equally strong buttons on every card.
 
+### 7.10a Quiet hints
+
+Every section label carries a small static `?` marker. It never opens by itself, never blocks input, and opens one sentence of guidance only when clicked. Empty states carry the next step in words. The same rule applies to the Iris Canvas.
+
+### 7.10b Agent prefill
+
+An external Agent may dispatch `flovart:agent-request` with `{ agent, prompt }`. The panel shows `Codex prepared 1 generation [Fill in & review]`. It only prefills the prompt; the user still presses Generate.
+
 ### 7.10 Open in Iris
 
 Persistent low-weight footer action: **Open in Iris ↗**.
+
+When the controller exposes `pullCanvasResult()`, a sibling **Pull from canvas** action brings the canvas's latest persisted candidate back into Candidates (Gyroflow-style round trip). It passes the same persistence check as a generated candidate.
 
 Use it for:
 

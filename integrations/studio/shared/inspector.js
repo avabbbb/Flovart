@@ -27,6 +27,15 @@
       openInIris: '在 Iris 中打开 ↗', openInIrisUnavailable: 'Iris Canvas 暂不可用。', resolveUnavailable: '项目不可用', irisUnavailable: 'Iris 未连接', selectClipStatus: '选择片段', readyStatus: '已就绪',
       refreshSelection: '刷新当前片段', promptLabel: '生成描述', mediaPoolClip: 'Media Pool 片段', timelineItem: '时间线片段',
       languageChinese: '简体中文', languageEnglish: 'English',
+      hintToggle: '这是什么？', stageSubmit: '提交', stageGenerate: '生成', stageDownload: '下载', stageVerify: '校验',
+      readyIn: '已就绪 · 用时', partialPreview: '预览', partialWaiting: '等待第一张预览…',
+      alphaYes: '透明 ✓', alphaNo: '不透明', alphaChecking: '检查透明度…',
+      agentPrepared: '准备了 1 个生成', agentReview: '填入并审核', agentDismiss: '忽略', agentFallback: 'Agent',
+      pullFromCanvas: '取回画布结果', pulling: '正在取回…', nothingToPull: '画布里还没有可取回的结果。',
+      hintClip: '在 Resolve 里点选一个 Media Pool 素材或时间线片段，Iris 会以它为参考。切换选择不会影响正在进行的任务。',
+      hintGenerate: '用一句话描述你想要的结果，例如「透明背景的霓虹标题」。点击生成后会出一个候选，不会改动时间线。',
+      hintTask: '四个阶段依次点亮。不知道进度时只显示动画，不会编造百分比。',
+      hintCandidates: '棋盘格表示透明区域。确认满意后再添加到 Media Pool，原片不会被替换。',
     },
     en: {
       language: 'Language', currentClip: 'CURRENT CLIP', generate: 'GENERATE', references: 'REFERENCES', task: 'TASK', candidates: 'CANDIDATES',
@@ -41,6 +50,15 @@
       openInIris: 'Open in Iris ↗', openInIrisUnavailable: 'Iris Canvas is not available.', resolveUnavailable: 'Project unavailable', irisUnavailable: 'Iris is not connected', selectClipStatus: 'Select a clip', readyStatus: 'Ready',
       refreshSelection: 'Refresh current clip', promptLabel: 'Generation prompt', mediaPoolClip: 'Media Pool clip', timelineItem: 'Timeline item',
       languageChinese: 'Simplified Chinese', languageEnglish: 'English',
+      hintToggle: 'What is this?', stageSubmit: 'Submit', stageGenerate: 'Generate', stageDownload: 'Download', stageVerify: 'Verify',
+      readyIn: 'Ready · took', partialPreview: 'Preview', partialWaiting: 'Waiting for the first preview…',
+      alphaYes: 'Transparent ✓', alphaNo: 'Opaque', alphaChecking: 'Checking alpha…',
+      agentPrepared: 'prepared 1 generation', agentReview: 'Fill in & review', agentDismiss: 'Dismiss', agentFallback: 'Agent',
+      pullFromCanvas: 'Pull from canvas', pulling: 'Pulling…', nothingToPull: 'The canvas has no result to pull yet.',
+      hintClip: 'Select a Media Pool clip or timeline item in Resolve. Iris uses it as the reference. Changing selection never retargets a running task.',
+      hintGenerate: 'Describe the result in one sentence, e.g. "neon title on a transparent background". Generate makes a candidate and never touches the timeline.',
+      hintTask: 'The four stages light up in order. When progress is unknown, only the animation runs. No made-up percentages.',
+      hintCandidates: 'The checkerboard shows transparent areas. Add to Media Pool only when you like it. The source clip is never replaced.',
     },
   };
 
@@ -59,7 +77,7 @@
     }
     let currentLocale = resolveLocale();
     const t = key => isResolve ? resolveCopy[currentLocale][key] : '';
-    let disposed = false, busy = false, reading = false, lastSelection = null, activeTab = 'make', activeDocumentId = null, taskStart = 0, taskTimer = null, linkedModels = false, applyingCandidateId = null, lastNativeCandidate = null, loadingCandidates = false, resolveProjectAvailable = false, resolveTaskState = null, resolveProgress = null, resolveTaskTargetLabel = '', importingCandidateId = null;
+    let disposed = false, busy = false, reading = false, lastSelection = null, activeTab = 'make', activeDocumentId = null, taskStart = 0, taskTimer = null, linkedModels = false, applyingCandidateId = null, lastNativeCandidate = null, loadingCandidates = false, resolveProjectAvailable = false, resolveTaskState = null, resolveProgress = null, resolveTaskTargetLabel = '', resolveTaskPrompt = '', importingCandidateId = null;
     const history = [];
     const knownCandidateIds = new Set();
     const loadedCandidateDocuments = new Set();
@@ -161,7 +179,9 @@
     const referenceChip = el('span', isResolve ? t('noSelection') : '当前选择', 'fs-reference-chip fs-muted');
     source.append(thumb, sourceInfo);
     referenceRow.append(referenceChip);
-    const generateLabel = isResolve ? el('div', t('generate'), 'fs-section-label fs-resolve-generate-heading') : null;
+    const generateLabel = isResolve ? el('div', undefined, 'fs-section-label fs-resolve-generate-heading') : null;
+    const generateLabelText = isResolve ? el('span', t('generate')) : null;
+    if (generateLabel) generateLabel.append(generateLabelText);
     const promptLabel = el('label', isResolve ? t('promptLabel') : '你想如何创作？', 'fs-section-label');
     const promptBox = el('div', undefined, 'fs-prompt-box');
     const prompt = el('textarea');
@@ -211,7 +231,9 @@
     const taskBarFill = el('span', undefined, 'fs-task-bar-fill');
     taskBar.append(taskBarFill);
     taskRow.append(taskSpinner, taskLabel, taskBar);
-    const taskSectionLabel = isResolve ? el('div', t('task'), 'fs-section-label fs-resolve-state-heading') : null;
+    const taskSectionLabel = isResolve ? el('div', undefined, 'fs-section-label fs-resolve-state-heading') : null;
+    const taskSectionText = isResolve ? el('span', t('task')) : null;
+    if (taskSectionLabel) taskSectionLabel.append(taskSectionText);
     if (taskSectionLabel) taskSectionLabel.hidden = true;
     const status = el('p', '', 'fs-status');
     status.setAttribute('role', 'status');
@@ -225,7 +247,9 @@
     const results = el('div', undefined, 'fs-history');
     results.hidden = true;
     const resolveCandidates = isResolve ? el('section', undefined, 'fs-resolve-candidates') : null;
-    const resolveCandidatesHeading = isResolve ? el('div', t('candidates'), 'fs-section-label fs-resolve-state-heading') : null;
+    const resolveCandidatesHeading = isResolve ? el('div', undefined, 'fs-section-label fs-resolve-state-heading') : null;
+    const resolveCandidatesHeadingText = isResolve ? el('span', t('candidates')) : null;
+    if (resolveCandidatesHeading) resolveCandidatesHeading.append(resolveCandidatesHeadingText);
     const resolveCandidateList = isResolve ? el('div', undefined, 'fs-resolve-candidate-list') : null;
     if (resolveCandidates) {
       resolveCandidates.hidden = true;
@@ -240,24 +264,97 @@
     }
     const footer = el('footer', undefined, 'fs-footer');
     const connection = el('span');
-    let openInIris = null;
+    let openInIris = null, pullFromCanvas = null, pulling = false;
     if (isResolve) {
       footer.classList.add('fs-resolve-footer');
       openInIris = button(t('openInIris'), 'fs-open-in-iris', () => {
         if (onOpenCanvas) Promise.resolve().then(() => onOpenCanvas()).catch(error => { if (!disposed) status.textContent = error.message; });
         else status.textContent = t('openInIrisUnavailable');
       });
-      footer.append(openInIris);
+      // Gyroflow-style round trip: send work to the canvas, then bring its latest result back here.
+      pullFromCanvas = button(t('pullFromCanvas'), 'fs-open-in-iris fs-pull-canvas', () => { void pullCanvasResult(); });
+      pullFromCanvas.hidden = true;
+      footer.append(pullFromCanvas, openInIris);
     } else footer.append(connection, el('span', preview ? '交互预览' : hostLabel, 'fs-muted'));
     const shortcut = el('div', 'Ctrl / ⌘ + Enter', 'fs-shortcut fs-mono');
+    // Quiet, static guidance: a small marker that never pops up by itself; one sentence only when asked.
+    const hints = [];
+    function attachHint(label, key) {
+      if (!isResolve || !label) return null;
+      const marker = button('?', 'fs-hint-marker');
+      const note = el('p', t(key), 'fs-hint');
+      note.hidden = true;
+      note.id = `fs-hint-${key}`;
+      marker.setAttribute('aria-controls', note.id);
+      marker.setAttribute('aria-expanded', 'false');
+      marker.title = t('hintToggle'); marker.setAttribute('aria-label', t('hintToggle'));
+      marker.addEventListener('click', () => {
+        note.hidden = !note.hidden;
+        marker.setAttribute('aria-expanded', String(!note.hidden));
+        marker.classList.toggle('is-open', !note.hidden);
+      });
+      label.classList.add('fs-has-hint');
+      label.append(marker);
+      label.after(note);
+      hints.push({ marker, note, key, label });
+      return note;
+    }
+    const stageKeys = ['submitting', 'generating', 'downloading', 'verifying'];
+    const stageCopy = { submitting: 'stageSubmit', generating: 'stageGenerate', downloading: 'stageDownload', verifying: 'stageVerify' };
+    const stageRow = isResolve ? el('ol', undefined, 'fs-stages') : null;
+    const stageNodes = {};
+    if (stageRow) for (const key of stageKeys) { stageNodes[key] = el('li', t(stageCopy[key]), 'fs-stage'); stageRow.append(stageNodes[key]); }
+    let resolveStage = null, resolveElapsed = 0, pendingPartial = null;
+    function renderStages() {
+      if (!stageRow) return;
+      const index = resolveTaskState === 'ready' ? stageKeys.length : stageKeys.indexOf(resolveStage);
+      stageKeys.forEach((key, i) => {
+        stageNodes[key].textContent = t(stageCopy[key]);
+        stageNodes[key].className = `fs-stage${i < index ? ' is-done' : i === index ? ' is-active' : ''}${resolveTaskState === 'failed' && i === index ? ' is-failed' : ''}`;
+        if (i === index && resolveTaskState === 'generating') stageNodes[key].setAttribute('aria-current', 'step');
+        else stageNodes[key].removeAttribute('aria-current');
+      });
+    }
+    const agentBanner = isResolve ? el('div', undefined, 'fs-agent-banner') : null;
+    let agentRequest = null;
+    if (agentBanner) agentBanner.hidden = true;
+    function renderAgentBanner() {
+      if (!agentBanner) return;
+      agentBanner.replaceChildren();
+      agentBanner.hidden = !agentRequest;
+      if (!agentRequest) return;
+      const text = el('span', `${agentRequest.agent || t('agentFallback')} ${t('agentPrepared')}`, 'fs-agent-text');
+      const review = button(t('agentReview'), 'fs-agent-review', () => {
+        prompt.value = agentRequest.prompt; agentRequest = null; renderAgentBanner(); update(); prompt.focus();
+      });
+      const dismiss = button('×', 'fs-icon-button fs-agent-dismiss', () => { agentRequest = null; renderAgentBanner(); });
+      dismiss.setAttribute('aria-label', t('agentDismiss'));
+      agentBanner.append(el('span', '●', 'fs-agent-dot'), text, review, dismiss);
+    }
+    const onAgentRequest = event => {
+      const detail = event?.detail || {};
+      if (!isResolve || typeof detail.prompt !== 'string' || !detail.prompt.trim()) return;
+      // An Agent can only prefill; paid generation still waits for the user's click.
+      agentRequest = { agent: typeof detail.agent === 'string' ? detail.agent.slice(0, 40) : '', prompt: detail.prompt.slice(0, 8000) };
+      renderAgentBanner();
+    };
+    if (agentBanner) form.append(agentBanner);
     form.append(sourceLabel, source);
     if (generateLabel) form.append(generateLabel);
     form.append(promptLabel, promptBox, recipes, referencesLabel, referenceRow, settings, generate, shortcut);
     if (taskSectionLabel) form.append(taskSectionLabel);
-    form.append(taskRow, status);
+    form.append(taskRow);
+    if (stageRow) { stageRow.hidden = true; form.append(stageRow); }
+    form.append(status);
     if (resolveCandidates) form.append(resolveCandidates);
     if (applyNative) form.append(applyNative);
-    if (isResolve) root.append(header, form, footer);
+    if (isResolve) {
+      attachHint(sourceLabel, 'hintClip');
+      attachHint(generateLabel, 'hintGenerate');
+      attachHint(taskSectionLabel, 'hintTask');
+      attachHint(resolveCandidatesHeading, 'hintCandidates');
+      root.append(header, form, footer);
+    }
     else root.append(header, tabs, form, results, footer);
     if (isResolve) {
       status.hidden = true;
@@ -273,14 +370,28 @@
       }
       if (taskSectionLabel) taskSectionLabel.hidden = !resolveProjectAvailable || !resolveTaskState;
       taskRow.hidden = !resolveProjectAvailable || !resolveTaskState;
-      if (resolveCandidates) resolveCandidates.hidden = !resolveProjectAvailable || history.length === 0;
+      if (resolveCandidates) resolveCandidates.hidden = !resolveProjectAvailable || (history.length === 0 && !(busy && resolveTaskState === 'generating'));
+      if (stageRow) stageRow.hidden = taskRow.hidden || resolveTaskState === 'ready';
+      for (const hint of hints) if (hint.label.hidden || hint.label.closest('[hidden]')) { hint.note.hidden = true; hint.marker.setAttribute('aria-expanded', 'false'); hint.marker.classList.remove('is-open'); }
       status.hidden = !status.textContent;
     }
     function renderResolveCandidates() {
       if (!isResolve) return;
       const entries = history.slice().reverse();
-      resolveCandidatesHeading.textContent = `${t('candidates')} · ${entries.length}`;
+      resolveCandidatesHeadingText.textContent = `${t('candidates')} · ${entries.length}`;
       resolveCandidateList.replaceChildren();
+      if (busy && resolveTaskState === 'generating') {
+        const pending = el('article', undefined, 'fs-resolve-candidate is-pending');
+        const frame = el('div', undefined, `fs-candidate-preview fs-checker${pendingPartial ? '' : ' is-skeleton'}`);
+        if (pendingPartial) {
+          const img = el('img'); img.src = pendingPartial.url; img.alt = t('partialPreview'); frame.append(img);
+          const count = pendingPartial.total ? ` ${pendingPartial.index + 1}/${pendingPartial.total}` : '';
+          frame.append(el('span', `${t('partialPreview')}${count}`, 'fs-alpha-badge'));
+        } else frame.append(el('span', t('partialWaiting'), 'fs-skeleton-text'));
+        pending.append(frame, el('div', resolveTaskPrompt, 'fs-resolve-candidate-prompt fs-muted'));
+        pending.setAttribute('aria-busy', 'true');
+        resolveCandidateList.append(pending);
+      }
       for (const item of entries) {
         const row = el('article', undefined, 'fs-resolve-candidate');
         row.append(el('div', item.prompt, 'fs-resolve-candidate-prompt'));
@@ -298,31 +409,26 @@
         const artifact = item.candidate?.artifact;
         const mimeType = typeof artifact?.mimeType === 'string' ? artifact.mimeType : '';
         const canPreview = Boolean(artifact?.blob && (mimeType.startsWith('image/') || mimeType.startsWith('video/')));
-        const previewBox = el('div', undefined, 'fs-candidate-preview');
-        previewBox.hidden = true;
+        // Result first: the picture leads the card, on a checkerboard so transparency is visible.
         if (canPreview) {
-          const previewButton = button(t('preview'), 'fs-recipe fs-candidate-preview-button');
-          previewButton.setAttribute('aria-expanded', 'false');
-          previewButton.addEventListener('click', () => {
-            previewBox.hidden = !previewBox.hidden;
-            previewButton.textContent = previewBox.hidden ? t('preview') : t('hidePreview');
-            previewButton.setAttribute('aria-expanded', String(!previewBox.hidden));
-            if (!previewBox.hidden && !previewBox.firstChild) {
-              try {
-                item.previewUrl ||= global.URL.createObjectURL(artifact.blob);
-                const media = mimeType.startsWith('video/') ? el('video') : el('img');
-                media.src = item.previewUrl;
-                if (media.tagName === 'VIDEO') { media.controls = true; media.preload = 'metadata'; media.setAttribute('aria-label', t('preview')); }
-                else media.alt = `${item.prompt} — ${t('preview')}`;
-                previewBox.append(media);
-              } catch {
-                previewBox.hidden = true;
-                status.textContent = t('previewUnavailable');
-                update();
-              }
+          const previewBox = el('div', undefined, 'fs-candidate-preview fs-checker');
+          try {
+            item.previewUrl ||= global.URL.createObjectURL(artifact.blob);
+            const media = mimeType.startsWith('video/') ? el('video') : el('img');
+            media.src = item.previewUrl;
+            if (media.tagName === 'VIDEO') { media.controls = true; media.muted = true; media.preload = 'metadata'; media.setAttribute('aria-label', t('preview')); }
+            else media.alt = `${item.prompt} — ${t('preview')}`;
+            previewBox.append(media);
+            if (mimeType.startsWith('image/')) {
+              const badge = el('span', t(item.alpha === true ? 'alphaYes' : item.alpha === false ? 'alphaNo' : 'alphaChecking'), `fs-alpha-badge${item.alpha === true ? ' is-alpha' : ''}`);
+              badge.hidden = item.alpha !== true && item.alpha !== false;
+              if (item.alpha === undefined) void detectAlpha(item);
+              previewBox.append(badge);
             }
-          });
-          row.append(previewButton, previewBox);
+            row.prepend(previewBox);
+          } catch {
+            status.textContent = t('previewUnavailable');
+          }
         }
         const addButton = button(
           imported ? t('addedToMediaPool')
@@ -337,6 +443,24 @@
         resolveCandidateList.append(row);
       }
       setResolveLayout();
+    }
+    async function detectAlpha(item) {
+      // Measure the real pixels; a transparent-background request is not proof of alpha.
+      if (item.alphaChecking) return;
+      item.alphaChecking = true;
+      try {
+        const bitmap = await global.createImageBitmap(item.candidate.artifact.blob);
+        const width = Math.min(256, bitmap.width), height = Math.max(1, Math.round(bitmap.height * width / bitmap.width));
+        const canvasNode = document.createElement('canvas');
+        canvasNode.width = width; canvasNode.height = height;
+        const context2d = canvasNode.getContext('2d', { willReadFrequently: true });
+        context2d.drawImage(bitmap, 0, 0, width, height);
+        const data = context2d.getImageData(0, 0, width, height).data;
+        let transparent = false;
+        for (let i = 3; i < data.length; i += 4) if (data[i] < 250) { transparent = true; break; }
+        item.alpha = transparent;
+      } catch { item.alpha = null; }
+      if (!disposed && item.alpha !== null) renderResolveCandidates();
     }
     function isPersistedResolveCandidate(candidate) {
       const artifact = candidate?.artifact;
@@ -404,6 +528,27 @@
         if (!disposed) { renderResolveCandidates(); update(); }
       }
     }
+    async function pullCanvasResult() {
+      const currentController = resolveController();
+      if (disposed || pulling || busy || typeof currentController?.pullCanvasResult !== 'function') return;
+      pulling = true; pullFromCanvas.textContent = t('pulling'); update();
+      try {
+        const result = await currentController.pullCanvasResult();
+        if (disposed) return;
+        if (!result) { status.textContent = t('nothingToPull'); return; }
+        if (!isPersistedResolveCandidate(result)) throw new Error(t('prepareFailed'));
+        if (history.some(entry => entry.candidateId === result.candidateId)) return;
+        const frozenSelection = result.executionTarget.selectionSnapshot;
+        history.push({ candidateId: result.candidateId, candidate: result, prompt: typeof result.prompt === 'string' ? result.prompt : '', selectionLabel: frozenSelection.label || '', importState: 'ready' });
+        status.textContent = '';
+        renderResolveCandidates();
+      } catch (error) {
+        if (!disposed) status.textContent = error?.message || t('failed');
+      } finally {
+        pulling = false;
+        if (!disposed) { pullFromCanvas.textContent = t('pullFromCanvas'); update(); }
+      }
+    }
     function setResolveLocale(nextLocale) {
       if (!isResolve || !resolveCopy[nextLocale] || currentLocale === nextLocale) return;
       currentLocale = nextLocale;
@@ -416,7 +561,7 @@
       languageEn.setAttribute('aria-pressed', String(currentLocale === 'en'));
       sourceLabel.firstChild.textContent = t('currentClip');
       referencesLabelText.textContent = t('references');
-      if (generateLabel) generateLabel.textContent = t('generate');
+      if (generateLabelText) generateLabelText.textContent = t('generate');
       promptLabel.textContent = t('promptLabel');
       prompt.placeholder = t('promptPlaceholder');
       promptFootText.textContent = t('currentReference');
@@ -425,15 +570,18 @@
       outputLabel.textContent = t('output');
       target.setAttribute('aria-label', `${t('output')}: ${t('mediaPool')}`);
       target.options[0].textContent = t('mediaPool');
-      taskSectionLabel.textContent = t('task');
-      resolveCandidatesHeading.textContent = t('candidates');
+      taskSectionText.textContent = t('task');
+      resolveCandidatesHeadingText.textContent = t('candidates');
       openInIris.textContent = t('openInIris');
+      if (pullFromCanvas) pullFromCanvas.textContent = t('pullFromCanvas');
+      for (const hint of hints) { hint.note.textContent = t(hint.key); hint.marker.title = t('hintToggle'); hint.marker.setAttribute('aria-label', t('hintToggle')); }
+      renderStages(); renderAgentBanner();
       refreshButton.setAttribute('aria-label', t('refreshSelection'));
       if (resolveTaskState === 'generating') {
         taskLabel.textContent = resolveProgress === null
           ? `${t('generating')}${resolveTaskTargetLabel ? ` · ${resolveTaskTargetLabel}` : ''}`
           : `${t('generating')}${resolveTaskTargetLabel ? ` · ${resolveTaskTargetLabel}` : ''} · ${Math.round(resolveProgress * 100)}%`;
-      } else if (resolveTaskState === 'ready') taskLabel.textContent = t('ready');
+      } else if (resolveTaskState === 'ready') taskLabel.textContent = resolveElapsed ? `✓ ${t('readyIn')} ${formatElapsed(resolveElapsed)}` : t('ready');
       else if (resolveTaskState === 'failed') taskLabel.textContent = t('failed');
       if (lastSelection) {
         referenceChip.textContent = lastSelection.label || t('noSelection');
@@ -580,13 +728,15 @@
             : !lastSelection ? `○  ${t('selectClipStatus')}`
               : `●  ${t('readyStatus')}`;
         headerStatus.className = `fs-header-status ${resolveProjectAvailable && linked && lastSelection ? 'fs-success' : 'fs-muted'}`;
+        pullFromCanvas.hidden = typeof currentController?.pullCanvasResult !== 'function';
+        pullFromCanvas.disabled = busy || pulling;
         languageZh.setAttribute('aria-pressed', String(currentLocale === 'zh-CN'));
         languageEn.setAttribute('aria-pressed', String(currentLocale === 'en'));
         if (resolveTaskState === 'generating') {
           taskLabel.textContent = resolveProgress === null
             ? `${t('generating')}${resolveTaskTargetLabel ? ` · ${resolveTaskTargetLabel}` : ''} · ${formatElapsed(Date.now() - taskStart)}`
             : `${t('generating')}${resolveTaskTargetLabel ? ` · ${resolveTaskTargetLabel}` : ''} · ${Math.round(resolveProgress * 100)}%`;
-        } else if (resolveTaskState === 'ready') taskLabel.textContent = t('ready');
+        } else if (resolveTaskState === 'ready') taskLabel.textContent = resolveElapsed ? `✓ ${t('readyIn')} ${formatElapsed(resolveElapsed)}` : t('ready');
         else if (resolveTaskState === 'failed') taskLabel.textContent = t('failed');
         setResolveLayout();
       } else {
@@ -601,6 +751,17 @@
       const choices = resolveController()?.models;
       const list = Array.isArray(choices) && choices.length ? choices : [{ label: '自动', value: 'auto' }];
       model.replaceChildren(...list.map(item => option(item.label || item.name || item.id, item.value || item.id)));
+    }
+    function rangeText(range) {
+      const fps = Number(range?.fps), start = Number(range?.startFrame), end = Number(range?.endFrame);
+      if (!(fps > 0) || !Number.isFinite(start) || !Number.isFinite(end) || end < start) return '';
+      const base = Math.round(fps);
+      const tc = frame => {
+        const f = Math.max(0, Math.round(frame));
+        const pad = n => String(n).padStart(2, '0');
+        return `${pad(Math.floor(f / (base * 3600)))}:${pad(Math.floor(f / (base * 60)) % 60)}:${pad(Math.floor(f / base) % 60)}:${pad(f % base)}`;
+      };
+      return `${tc(start)} – ${tc(end)}`;
     }
     function progressOf(value) {
       const number = Number(value);
@@ -620,7 +781,7 @@
     }
     function taskStartRow() {
       taskStart = Date.now();
-      if (isResolve) { resolveTaskState = 'generating'; resolveProgress = null; }
+      if (isResolve) { resolveTaskState = 'generating'; resolveProgress = null; resolveStage = 'submitting'; pendingPartial = null; taskRow.classList.remove('is-done'); renderStages(); }
       taskRow.hidden = false;
       taskBarFill.style.width = '';
       taskRow.classList.add('is-indeterminate');
@@ -629,6 +790,22 @@
       if (isResolve) { renderResolveCandidates(); update(); }
     }
     function taskProgress(value) {
+      if (isResolve && value && typeof value === 'object') {
+        // Structured stream event: { stage?, progress?, partialImage?, partialIndex?, partialTotal? }
+        if (stageKeys.includes(value.stage)) { resolveStage = value.stage; renderStages(); }
+        if (value.partialImage && (typeof value.partialImage === 'string' || value.partialImage instanceof global.Blob)) {
+          if (pendingPartial?.url && pendingPartial.owned) global.URL?.revokeObjectURL?.(pendingPartial.url);
+          const owned = typeof value.partialImage !== 'string';
+          let url = '';
+          try { url = owned ? global.URL.createObjectURL(value.partialImage) : value.partialImage; } catch { url = ''; }
+          if (url && (owned || /^(data:image\/|blob:|https:)/.test(url))) {
+            pendingPartial = { url, owned, index: Number(value.partialIndex) || 0, total: Number(value.partialTotal) || 0 };
+            renderResolveCandidates();
+          }
+        }
+        if (value.progress === undefined || value.progress === null) return;
+        value = value.progress;
+      }
       const fraction = progressOf(value);
       if (fraction === null) return;
       if (isResolve) resolveProgress = fraction;
@@ -640,6 +817,14 @@
     }
     function taskStopRow(preserveResolveState = false) {
       if (taskTimer) { global.clearInterval(taskTimer); taskTimer = null; }
+      if (isResolve) {
+        resolveElapsed = Date.now() - taskStart;
+        if (pendingPartial?.owned) global.URL?.revokeObjectURL?.(pendingPartial.url);
+        pendingPartial = null;
+        taskRow.classList.toggle('is-done', resolveTaskState === 'ready');
+        taskRow.classList.toggle('is-failed', resolveTaskState === 'failed');
+        renderStages();
+      }
       taskRow.hidden = isResolve && preserveResolveState ? false : true;
       taskRow.classList.remove('is-indeterminate');
       taskBarFill.style.width = '';
@@ -695,7 +880,8 @@
           context.hidden = !projectName;
           reference.textContent = selected?.label || (current.available ? t('noSelection') : t('noProject'));
           const sourceKind = selected?.locator?.clipId ? t('mediaPoolClip') : selected?.locator?.timelineItemId ? t('timelineItem') : '';
-          dimensions.textContent = sourceKind || (selected?.width && selected?.height ? `${Math.round(selected.width)} × ${Math.round(selected.height)}` : '');
+          const range = rangeText(selected?.range);
+          dimensions.textContent = [sourceKind || (selected?.width && selected?.height ? `${Math.round(selected.width)} × ${Math.round(selected.height)}` : ''), range].filter(Boolean).join(' · ');
           dimensions.hidden = !dimensions.textContent;
           referenceChip.textContent = selected?.label || (current.available ? t('noSelection') : t('noProject'));
           referenceChip.title = selected?.label || (current.available ? t('selectClip') : t('openProject'));
@@ -742,6 +928,7 @@
       const submittedPrompt = prompt.value.trim();
       const submittedSelectionLabel = lastSelection.label || '';
       resolveTaskTargetLabel = isResolve ? submittedSelectionLabel : '';
+      resolveTaskPrompt = submittedPrompt;
       if (isResolve) status.textContent = '';
       taskStartRow();
       update();
@@ -838,6 +1025,7 @@
     const onReady = () => { status.textContent = ''; refreshModels(); void refresh(); };
     refreshModels();
     global.addEventListener?.('flovart:link-ready', onReady);
+    if (isResolve) global.addEventListener?.('flovart:agent-request', onAgentRequest);
     const subscription = adapter.subscribeContext?.(() => { void refresh(); });
     void refresh(); update();
     return { refresh, dispose() {
@@ -845,6 +1033,7 @@
       taskStopRow();
       subscription?.dispose();
       global.removeEventListener?.('flovart:link-ready', onReady);
+      global.removeEventListener?.('flovart:agent-request', onAgentRequest);
       if (isResolve) for (const item of history) if (item.previewUrl) global.URL?.revokeObjectURL?.(item.previewUrl);
     } };
   }

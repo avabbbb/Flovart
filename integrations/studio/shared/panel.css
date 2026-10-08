@@ -115,3 +115,40 @@
 .flovart-studio-inspector[data-studio-host="resolve"] button:focus-visible,
 .flovart-studio-inspector[data-studio-host="resolve"] select:focus-visible,
 .flovart-studio-inspector[data-studio-host="resolve"] textarea:focus-visible { outline-offset: 1px; }
+/* Resolve is always a dark host, whatever the OS theme: lock the Inspector palette. */
+.flovart-studio-inspector[data-studio-host="resolve"] { --fs-bg: #1f1f21; --fs-input: #161618; --fs-ink: #d9d9d9; --fs-muted: #8b8b8f; --fs-line: #2e2e31; --fs-accent: #e0703a; --fs-on-accent: #1a0d05; --fs-hover: #2a2a2d; --fs-success: #6fbf8e; --fs-warn: #d9a441; color-scheme: dark; }
+@media (prefers-color-scheme: light), (prefers-color-scheme: lightest) {
+  .flovart-studio-inspector[data-studio-host="resolve"] { --fs-bg: #1f1f21; --fs-input: #161618; --fs-ink: #d9d9d9; --fs-muted: #8b8b8f; --fs-line: #2e2e31; --fs-accent: #e0703a; --fs-on-accent: #1a0d05; --fs-hover: #2a2a2d; --fs-success: #6fbf8e; }
+}
+.flovart-studio-inspector[data-studio-host="resolve"] .fs-section-label { font-size: 10px; letter-spacing: .06em; color: var(--fs-muted); }
+/* Quiet hints: a static marker, never a popup. */
+.fs-has-hint { display: flex; align-items: center; gap: 6px; }
+.fs-hint-marker { width: 14px; height: 14px; padding: 0; border: 1px solid var(--fs-line); border-radius: 50%; background: transparent; color: var(--fs-muted) !important; font-size: 9px !important; line-height: 12px; cursor: help; opacity: .7; }
+.fs-hint-marker:hover, .fs-hint-marker.is-open { opacity: 1; border-color: var(--fs-muted); color: var(--fs-ink) !important; }
+.fs-has-hint .fs-icon-button { margin-left: auto; }
+.fs-hint { margin: 0 0 8px; padding: 6px 8px; border-left: 2px solid var(--fs-line); color: var(--fs-muted); font-size: 10px; line-height: 1.55; }
+/* Stage stepper */
+.fs-stages { display: flex; gap: 4px; margin: 6px 0 0; padding: 0; list-style: none; }
+.fs-stage { flex: 1; padding-top: 5px; border-top: 2px solid var(--fs-line); color: var(--fs-muted); font-size: 9px; text-align: left; }
+.fs-stage.is-done { border-top-color: var(--fs-success); color: var(--fs-ink); }
+.fs-stage.is-active { border-top-color: var(--fs-accent); color: var(--fs-ink); }
+.fs-stage.is-failed { border-top-color: #d0584b; color: #e38b80; }
+.fs-task.is-done .fs-task-spinner, .fs-task.is-done .fs-task-bar, .fs-task.is-failed .fs-task-spinner, .fs-task.is-failed .fs-task-bar { display: none; }
+.fs-task.is-done .fs-task-label { color: var(--fs-success); }
+/* Result-first candidate */
+.fs-checker { position: relative; background-color: #2b2b2e; background-image: linear-gradient(45deg,#3a3a3e 25%,transparent 25%),linear-gradient(-45deg,#3a3a3e 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#3a3a3e 75%),linear-gradient(-45deg,transparent 75%,#3a3a3e 75%); background-size: 12px 12px; background-position: 0 0,0 6px,6px -6px,-6px 0; }
+.fs-resolve-candidate .fs-candidate-preview { display: block; aspect-ratio: 16 / 9; border: 1px solid var(--fs-line); border-radius: 3px; overflow: hidden; margin-bottom: 4px; }
+.fs-resolve-candidate .fs-candidate-preview img, .fs-resolve-candidate .fs-candidate-preview video { display: block; width: 100%; height: 100%; object-fit: contain; }
+.fs-alpha-badge { position: absolute; right: 5px; bottom: 5px; padding: 1px 6px; border-radius: 2px; background: rgba(0,0,0,.7); color: #cfcfcf; font-size: 9px; }
+.fs-alpha-badge.is-alpha { color: var(--fs-success); }
+.fs-candidate-preview.is-skeleton { display: flex !important; align-items: center; justify-content: center; animation: fs-pulse 1.6s ease-in-out infinite; }
+.fs-skeleton-text { color: var(--fs-muted); font-size: 10px; background: rgba(0,0,0,.55); padding: 2px 8px; border-radius: 2px; }
+@keyframes fs-pulse { 50% { opacity: .55; } }
+@media (prefers-reduced-motion: reduce) { .fs-candidate-preview.is-skeleton { animation: none; } }
+/* Agent prefill banner: it suggests, the user decides */
+.fs-agent-banner { display: flex; align-items: center; gap: 6px; margin: 0 0 10px; padding: 6px 8px; border: 1px solid var(--fs-line); border-radius: 3px; background: var(--fs-input); font-size: 10px; }
+.fs-agent-dot { color: var(--fs-accent); font-size: 8px; }
+.fs-agent-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fs-agent-review { border: 1px solid var(--fs-accent); border-radius: 3px; background: transparent; color: var(--fs-accent) !important; padding: 2px 7px; font-size: 10px !important; }
+.fs-agent-dismiss { width: 18px; height: 18px; font-size: 13px !important; }
+.fs-resolve-footer { justify-content: flex-end; gap: 12px; }

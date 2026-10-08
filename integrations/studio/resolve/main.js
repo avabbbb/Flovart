@@ -139,11 +139,20 @@ async function selectionFromProject(project) {
     if (!item) return null;
     const timelineId = await getId(timeline);
     const itemId = await getId(item);
+    let range;
+    try {
+      // Timeline frame numbers, so the panel can show the record timecode of the captured item.
+      const startFrame = Number(await item.GetStart?.());
+      const endFrame = Number(await item.GetEnd?.());
+      const fps = Number(await timeline.GetSetting?.('timelineFrameRate'));
+      if (Number.isFinite(startFrame) && Number.isFinite(endFrame) && fps > 0) range = { startFrame, endFrame, fps };
+    } catch { range = undefined; }
     return {
       selectionId: itemId,
       label: await getName(item, 'Timeline item ' + itemId),
       kind: 'video',
       locator: { projectId, ...(timelineId ? { timelineId } : {}), timelineItemId: itemId },
+      ...(range ? { range } : {}),
       mimeType: 'video/mp4',
     };
   } catch {
