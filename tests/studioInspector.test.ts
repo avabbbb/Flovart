@@ -174,11 +174,11 @@ describe('Resolve Studio Iris inspector', () => {
     expect(importCandidate).toHaveBeenCalledTimes(1);
 
     root.querySelector<HTMLButtonElement>('.fs-locale-toggle button[aria-label="English"]')!.click();
-    expect(root.textContent).toContain('CURRENT CLIP');
-    expect(root.textContent).toContain('GENERATE');
-    expect(root.textContent).toContain('REFERENCES');
-    expect(root.textContent).toContain('TASK');
-    expect(root.textContent).toContain('CANDIDATES · 1');
+    expect(root.textContent).toContain('Current clip');
+    expect(root.textContent).toContain('Generate');
+    expect(root.textContent).toContain('References');
+    expect(root.textContent).toContain('Task');
+    expect(root.textContent).toContain('Candidates · 1');
     expect(root.textContent).toContain('Open in Iris');
     expect(root.querySelector('.fs-setting-static')?.textContent).toBe('ModelAuto');
     expect(root.querySelector('.fs-candidate-add')?.textContent).toBe('Added to Media Pool');

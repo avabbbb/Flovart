@@ -152,3 +152,82 @@
 .fs-agent-review { border: 1px solid var(--fs-accent); border-radius: 3px; background: transparent; color: var(--fs-accent) !important; padding: 2px 7px; font-size: 10px !important; }
 .fs-agent-dismiss { width: 18px; height: 18px; font-size: 13px !important; }
 .fs-resolve-footer { justify-content: flex-end; gap: 12px; }
+/* ---- Resolve Inspector look (v2) ----
+   Modelled on the native Inspector that OFX plugins (e.g. Gyroflow) get for free:
+   blue-violet greys, collapsible groups, right-aligned labels, grey pill buttons, red only for focus/active. */
+.flovart-studio-inspector[data-studio-host="resolve"],
+.flovart-studio-inspector[data-studio-host="resolve"][data-studio-host] {
+  --fs-bg: #28282e; --fs-group: #2e2e35; --fs-input: #1f1f1f; --fs-ink: #d4d4d8; --fs-muted: #8e8e95;
+  --fs-line: #3a3a41; --fs-pill: #55555c; --fs-accent: #e64b3d; --fs-on-accent: #fff; --fs-hover: #34343b;
+  --fs-success: #d4d4d8; --fs-warn: #d9a441;
+  font: 12px/1.5 'Open Sans', 'Segoe UI', 'Helvetica Neue', sans-serif;
+}
+@media (prefers-color-scheme: light), (prefers-color-scheme: lightest) {
+  .flovart-studio-inspector[data-studio-host="resolve"] { --fs-bg: #28282e; --fs-input: #1f1f1f; --fs-ink: #d4d4d8; --fs-muted: #8e8e95; --fs-line: #3a3a41; --fs-accent: #e64b3d; --fs-hover: #34343b; --fs-success: #d4d4d8; }
+}
+.flovart-studio-inspector[data-studio-host="resolve"] .fs-header { background: var(--fs-bg); border-bottom: 1px solid #1c1c20; }
+.flovart-studio-inspector[data-studio-host="resolve"] .fs-brand strong { font-size: 13px; font-weight: 600; color: #ececef; }
+.flovart-studio-inspector[data-studio-host="resolve"] .fs-header-status.fs-success { color: var(--fs-ink); }
+.flovart-studio-inspector[data-studio-host="resolve"] .fs-header-status.fs-success::first-letter { color: var(--fs-accent); }
+.flovart-studio-inspector[data-studio-host="resolve"] .fs-resolve-form { padding: 0 0 8px; }
+/* Groups */
+.fs-group { border-bottom: 1px solid #1c1c20; }
+.fs-group > .fs-group-body { padding: 4px 12px 10px; }
+.flovart-studio-inspector[data-studio-host="resolve"] .fs-group-header {
+  display: flex; align-items: center; gap: 4px; min-height: 30px; margin: 0; padding: 0 8px 0 4px;
+  font-size: 12px; letter-spacing: 0; font-weight: 400; color: var(--fs-ink);
+}
+.fs-group-toggle { width: 20px; height: 20px; padding: 0; border: 0; background: transparent; color: var(--fs-muted) !important; }
+.fs-group-toggle::before { content: ''; display: inline-block; width: 6px; height: 6px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: translateY(-2px) rotate(45deg); transition: transform .12s; }
+.fs-group.is-collapsed .fs-group-toggle::before { transform: rotate(-45deg); }
+.fs-group.is-collapsed > .fs-group-body, .fs-group.is-collapsed > .fs-hint { display: none; }
+.fs-group-toggle:hover { color: var(--fs-ink) !important; }
+.fs-group > .fs-hint { margin: 0 12px 6px 28px; }
+/* Rows: right-aligned label column, like Inspector parameters */
+.flovart-studio-inspector[data-studio-host="resolve"] .fs-group-body > .fs-section-label:not(.fs-group-header) { margin: 2px 0 4px; font-size: 11px; letter-spacing: 0; color: var(--fs-muted); }
+.flovart-studio-inspector[data-studio-host="resolve"] .fs-settings { border-top: 0; padding: 4px 0 6px; }
+.flovart-studio-inspector[data-studio-host="resolve"] .fs-setting-row { justify-content: flex-start; gap: 12px; min-height: 26px; }
+.flovart-studio-inspector[data-studio-host="resolve"] .fs-setting-row > span:first-child { width: 64px; flex: 0 0 64px; text-align: right; color: var(--fs-muted); }
+.flovart-studio-inspector[data-studio-host="resolve"] .fs-setting-row select,
+.flovart-studio-inspector[data-studio-host="resolve"] .fs-setting-value { height: 22px; line-height: 20px; padding: 0 6px; border: 1px solid #141416; border-radius: 2px; background: var(--fs-input); }
+.flovart-studio-inspector[data-studio-host="resolve"] .fs-prompt-box { border-color: #141416; border-radius: 2px; background: var(--fs-input); }
+.flovart-studio-inspector[data-studio-host="resolve"] .fs-prompt-box:focus-within { border-color: var(--fs-accent); }
+.flovart-studio-inspector[data-studio-host="resolve"] .fs-reference-chip { border-color: var(--fs-line); background: transparent; border-radius: 2px; }
+.flovart-studio-inspector[data-studio-host="resolve"] .fs-reference-chip::before { color: var(--fs-muted); }
+.flovart-studio-inspector[data-studio-host="resolve"] .fs-source-thumb { border-color: #141416; background: var(--fs-input); }
+/* Pill buttons: one shape for every action, no coloured primary */
+.flovart-studio-inspector[data-studio-host="resolve"] .fs-generate,
+.flovart-studio-inspector[data-studio-host="resolve"] .fs-candidate-add,
+.flovart-studio-inspector[data-studio-host="resolve"] .fs-open-in-iris,
+.flovart-studio-inspector[data-studio-host="resolve"] .fs-agent-review {
+  width: auto; height: auto; min-height: 24px; padding: 2px 14px; border: 1px solid var(--fs-pill); border-radius: 12px;
+  background: transparent; color: var(--fs-ink) !important; font-size: 12px !important; font-weight: 400 !important; text-decoration: none;
+}
+.flovart-studio-inspector[data-studio-host="resolve"] .fs-generate { margin: 4px 0 0 76px; }
+.flovart-studio-inspector[data-studio-host="resolve"] .fs-candidate-add { align-self: flex-start; margin-top: 4px; }
+.flovart-studio-inspector[data-studio-host="resolve"] .fs-generate:hover:not(:disabled),
+.flovart-studio-inspector[data-studio-host="resolve"] .fs-candidate-add:hover:not(:disabled),
+.flovart-studio-inspector[data-studio-host="resolve"] .fs-open-in-iris:hover,
+.flovart-studio-inspector[data-studio-host="resolve"] .fs-agent-review:hover { background: var(--fs-hover); border-color: #707078; }
+.flovart-studio-inspector[data-studio-host="resolve"] .fs-candidate-add.is-complete { border-color: var(--fs-line); color: var(--fs-muted) !important; }
+.flovart-studio-inspector[data-studio-host="resolve"] button:disabled { opacity: .4; }
+.flovart-studio-inspector[data-studio-host="resolve"] .fs-footer { justify-content: flex-start; gap: 6px; padding: 8px 12px; border-top: 1px solid #1c1c20; }
+/* Hint marker: a small ring, like Resolve's ↺/◇ glyphs, never a popup */
+.flovart-studio-inspector[data-studio-host="resolve"] .fs-hint-marker { margin-left: auto; border-color: #4a4a51; opacity: .8; }
+.flovart-studio-inspector[data-studio-host="resolve"] .fs-has-hint .fs-hint-marker ~ .fs-icon-button { margin-left: 2px; }
+.flovart-studio-inspector[data-studio-host="resolve"] .fs-hint { border-left-color: var(--fs-accent); background: #232328; }
+/* Stages: red for the active step, as Resolve marks the playhead and focus */
+.flovart-studio-inspector[data-studio-host="resolve"] .fs-stage.is-done { border-top-color: #6a6a72; }
+.flovart-studio-inspector[data-studio-host="resolve"] .fs-stage.is-active { border-top-color: var(--fs-accent); }
+.flovart-studio-inspector[data-studio-host="resolve"] .fs-task-bar-fill { background: var(--fs-accent); }
+.flovart-studio-inspector[data-studio-host="resolve"] .fs-task-spinner { border-top-color: var(--fs-accent); }
+.flovart-studio-inspector[data-studio-host="resolve"] .fs-alpha-badge.is-alpha { color: #ececef; }
+.flovart-studio-inspector[data-studio-host="resolve"] .fs-resolve-candidate { border-top: 0; padding: 4px 0 10px; }
+.flovart-studio-inspector[data-studio-host="resolve"] .fs-resolve-candidate + .fs-resolve-candidate { border-top: 1px solid var(--fs-line); padding-top: 10px; }
+.flovart-studio-inspector[data-studio-host="resolve"] .fs-agent-banner { margin: 8px 12px; border-color: var(--fs-line); background: #232328; }
+.flovart-studio-inspector[data-studio-host="resolve"] .fs-agent-dot { color: var(--fs-accent); }
+.flovart-studio-inspector[data-studio-host="resolve"] .fs-locale-button[aria-pressed="true"] { border-color: var(--fs-pill); background: transparent; }
+.flovart-studio-inspector[data-studio-host="resolve"] .fs-group-header .fs-icon-button { margin-left: auto; width: 20px; height: 20px; font-size: 14px !important; }
+.flovart-studio-inspector[data-studio-host="resolve"] .fs-group-header .fs-icon-button + .fs-hint-marker { margin-left: 4px; }
+/* The stage strip already shows progress; one indicator is enough. */
+.flovart-studio-inspector[data-studio-host="resolve"] .fs-task .fs-task-bar { display: none; }

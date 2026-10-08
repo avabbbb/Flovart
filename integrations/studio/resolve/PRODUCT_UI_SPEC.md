@@ -228,42 +228,36 @@ The panel must remain usable when resized narrow and must not require horizontal
 
 Do not keep generic top-level “制作 / 历史” tabs merely because the shared panel already has them.
 
-Resolve-first hierarchy:
+Resolve-first hierarchy. The panel imitates the native Resolve Inspector, the way OFX plugins
+such as Gyroflow appear (they are drawn by Resolve itself): collapsible groups with a chevron,
+right-aligned row labels, equal grey pill buttons and no coloured primary button. Red (#E64B3D)
+is reserved for focus and the active stage, as in Resolve.
 
 ~~~text
 Iris                              ● Ready
 ────────────────────────────────────────────
-
-CURRENT CLIP
-[ thumb ]  Interview_A_003.mov
-           Timeline 1 · V1
-           00:01:12:08 – 00:01:17:08
-
-GENERATE
-┌──────────────────────────────────────────┐
-│ Replace the background with...           │
-│                                          │
-└──────────────────────────────────────────┘
-[ Current clip ] [+ Reference]
-
-Model                              Auto ▾
-Output                       Media Pool ▾
-
-[ ✦ Generate candidate ]
-
-TASK
-Generating · 42%                         ×
-
-CANDIDATES
-┌──────────────────────────────────────────┐
-│ [16:9 thumb]  V2                        │
-│ Seedance · 5s · ready                   │
-│ [Preview]              [Add to Media Pool]
-└──────────────────────────────────────────┘
-
+⌄ Current clip                          ?  ↻
+  [ thumb ]  Interview_A_003.mov
+             Timeline 1 · V1
+             00:01:12:08 – 00:01:17:08
+⌄ Generate                              ?
+      Prompt  ┌────────────────────────────┐
+              │ Replace the background ... │
+              └────────────────────────────┘
+       Model  Auto
+      Output  Media Pool
+              ( Generate candidate )
+⌄ Task                                  ?
+  Submit ─ Generate ─ Download ─ Verify
+⌄ Candidates · 1                        ?
+  [16:9 result on checkerboard]   Alpha ✓
+  ( Add to Media Pool )
 ────────────────────────────────────────────
-Open in Iris ↗
+( Pull canvas result )  ( Open in Iris ↗ )
 ~~~
+
+Palette (sampled from Resolve 21 and the Gyroflow OFX Inspector): group background #28282E,
+header rows #2E2E35, fields #1F1F1F, lines #3A3A41, text #D4D4D8, muted #8E8E95, red #E64B3D.
 
 When no candidate exists, do not show an empty “History” product area.
 

@@ -20,12 +20,12 @@
       noProject: '打开一个 Resolve 项目', noSelection: '选择一个片段或素材',
       promptPlaceholder: '描述新镜头、运动、光线或变化…', currentReference: '当前片段用作参考',
       model: '模型', auto: '自动', output: '输出', mediaPool: 'Media Pool',
-      generateCandidate: '✦  生成候选', generating: '生成中…', demoGenerate: '✦  演示生成候选',
+      generateCandidate: '生成候选', generating: '生成中…', demoGenerate: '演示生成候选',
       ready: '已就绪', candidateReady: '等待审核', failed: '失败', adding: '正在添加…', addToMediaPool: '添加到 Media Pool', retryAdd: '重试添加',
       importUnknown: '导入状态未知。请先检查 Resolve Media Pool，确认候选是否已添加；确认前不要重试。', verifyMediaPoolFirst: '先核对 Media Pool',
       preview: '预览', hidePreview: '收起预览', previewUnavailable: '当前环境无法预览此候选。', prepareFailed: '候选未能完成持久化校验。', importFailed: '无法添加到 Media Pool。候选已保留，可重试。', addedToMediaPool: '已添加到 Media Pool', importNotConfirmed: 'Resolve 尚未确认将结果添加到 Media Pool。', basedOn: '基于',
       openInIris: '在 Iris 中打开 ↗', openInIrisUnavailable: 'Iris Canvas 暂不可用。', resolveUnavailable: '项目不可用', irisUnavailable: 'Iris 未连接', selectClipStatus: '选择片段', readyStatus: '已就绪',
-      refreshSelection: '刷新当前片段', promptLabel: '生成描述', mediaPoolClip: 'Media Pool 片段', timelineItem: '时间线片段',
+      refreshSelection: '刷新当前片段', promptLabel: '描述', mediaPoolClip: 'Media Pool 片段', timelineItem: '时间线片段',
       languageChinese: '简体中文', languageEnglish: 'English',
       hintToggle: '这是什么？', stageSubmit: '提交', stageGenerate: '生成', stageDownload: '下载', stageVerify: '校验',
       readyIn: '已就绪 · 用时', partialPreview: '预览', partialWaiting: '等待第一张预览…',
@@ -38,17 +38,17 @@
       hintCandidates: '棋盘格表示透明区域。确认满意后再添加到 Media Pool，原片不会被替换。',
     },
     en: {
-      language: 'Language', currentClip: 'CURRENT CLIP', generate: 'GENERATE', references: 'REFERENCES', task: 'TASK', candidates: 'CANDIDATES',
+      language: 'Language', currentClip: 'Current clip', generate: 'Generate', references: 'References', task: 'Task', candidates: 'Candidates',
       openProject: 'Open a Resolve project to use Iris.', selectClip: 'Select a Media Pool clip or timeline item.',
       noProject: 'Open a Resolve project', noSelection: 'Select a clip or media item',
       promptPlaceholder: 'Describe the new shot, motion, lighting, or change…', currentReference: 'Current clip used as reference',
       model: 'Model', auto: 'Auto', output: 'Output', mediaPool: 'Media Pool',
-      generateCandidate: '✦  Generate candidate', generating: 'Generating…', demoGenerate: '✦  Preview generation',
+      generateCandidate: 'Generate candidate', generating: 'Generating…', demoGenerate: 'Preview generation',
       ready: 'Ready', candidateReady: 'Ready for review', failed: 'Failed', adding: 'Adding…', addToMediaPool: 'Add to Media Pool', retryAdd: 'Retry Add',
       importUnknown: 'Import status is unknown. Check the Resolve Media Pool to confirm whether the candidate was added. Do not retry before confirming.', verifyMediaPoolFirst: 'Verify Media Pool first',
       preview: 'Preview', hidePreview: 'Hide preview', previewUnavailable: 'This candidate cannot be previewed in the current host.', prepareFailed: 'Candidate did not pass persistence validation.', importFailed: 'Could not add to Media Pool. The candidate is retained and can be retried.', addedToMediaPool: 'Added to Media Pool', importNotConfirmed: 'Resolve did not confirm that the result was added to the Media Pool.', basedOn: 'Based on',
       openInIris: 'Open in Iris ↗', openInIrisUnavailable: 'Iris Canvas is not available.', resolveUnavailable: 'Project unavailable', irisUnavailable: 'Iris is not connected', selectClipStatus: 'Select a clip', readyStatus: 'Ready',
-      refreshSelection: 'Refresh current clip', promptLabel: 'Generation prompt', mediaPoolClip: 'Media Pool clip', timelineItem: 'Timeline item',
+      refreshSelection: 'Refresh current clip', promptLabel: 'Prompt', mediaPoolClip: 'Media Pool clip', timelineItem: 'Timeline item',
       languageChinese: 'Simplified Chinese', languageEnglish: 'English',
       hintToggle: 'What is this?', stageSubmit: 'Submit', stageGenerate: 'Generate', stageDownload: 'Download', stageVerify: 'Verify',
       readyIn: 'Ready · took', partialPreview: 'Preview', partialWaiting: 'Waiting for the first preview…',
@@ -339,15 +339,51 @@
       renderAgentBanner();
     };
     if (agentBanner) form.append(agentBanner);
-    form.append(sourceLabel, source);
-    if (generateLabel) form.append(generateLabel);
-    form.append(promptLabel, promptBox, recipes, referencesLabel, referenceRow, settings, generate, shortcut);
-    if (taskSectionLabel) form.append(taskSectionLabel);
-    form.append(taskRow);
-    if (stageRow) { stageRow.hidden = true; form.append(stageRow); }
-    form.append(status);
-    if (resolveCandidates) form.append(resolveCandidates);
-    if (applyNative) form.append(applyNative);
+    // Resolve: Inspector-style collapsible groups (the way OFX plugins such as Gyroflow appear natively).
+    const groups = {};
+    function group(key, label, ...body) {
+      const node = el('section', undefined, 'fs-group');
+      node.dataset.group = key;
+      const content = el('div', undefined, 'fs-group-body');
+      content.append(...body.filter(Boolean));
+      const chevron = button('', 'fs-group-toggle', () => {
+        const collapsed = node.classList.toggle('is-collapsed');
+        chevron.setAttribute('aria-expanded', String(!collapsed));
+      });
+      chevron.setAttribute('aria-expanded', 'true');
+      label.classList.add('fs-group-header');
+      label.prepend(chevron);
+      node.append(label, content);
+      groups[key] = node;
+      return node;
+    }
+    if (isResolve) {
+      if (stageRow) stageRow.hidden = true;
+      const candidateBody = el('div', undefined, 'fs-group-body');
+      candidateBody.append(resolveCandidateList);
+      form.append(
+        group('clip', sourceLabel, source),
+        group('generate', generateLabel, promptLabel, promptBox, referencesLabel, referenceRow, settings, generate),
+        group('task', taskSectionLabel, taskRow, stageRow, status),
+      );
+      resolveCandidates.classList.add('fs-group');
+      resolveCandidates.dataset.group = 'candidates';
+      const candidateChevron = button('', 'fs-group-toggle', () => {
+        const collapsed = resolveCandidates.classList.toggle('is-collapsed');
+        candidateChevron.setAttribute('aria-expanded', String(!collapsed));
+      });
+      candidateChevron.setAttribute('aria-expanded', 'true');
+      resolveCandidatesHeading.classList.add('fs-group-header');
+      resolveCandidatesHeading.prepend(candidateChevron);
+      resolveCandidates.append(candidateBody);
+      form.append(resolveCandidates);
+    } else {
+      form.append(sourceLabel, source);
+      form.append(promptLabel, promptBox, recipes, referencesLabel, referenceRow, settings, generate, shortcut);
+      form.append(taskRow);
+      form.append(status);
+      if (applyNative) form.append(applyNative);
+    }
     if (isResolve) {
       attachHint(sourceLabel, 'hintClip');
       attachHint(generateLabel, 'hintGenerate');
@@ -368,7 +404,9 @@
       for (const node of [generateLabel, promptLabel, promptBox, referencesLabel, referenceRow, settings, generate, shortcut]) {
         if (node) node.hidden = !canGenerate;
       }
+      if (groups.generate) groups.generate.hidden = !canGenerate;
       if (taskSectionLabel) taskSectionLabel.hidden = !resolveProjectAvailable || !resolveTaskState;
+      if (groups.task) groups.task.hidden = !resolveProjectAvailable || !resolveTaskState;
       taskRow.hidden = !resolveProjectAvailable || !resolveTaskState;
       if (resolveCandidates) resolveCandidates.hidden = !resolveProjectAvailable || (history.length === 0 && !(busy && resolveTaskState === 'generating'));
       if (stageRow) stageRow.hidden = taskRow.hidden || resolveTaskState === 'ready';
@@ -378,7 +416,7 @@
     function renderResolveCandidates() {
       if (!isResolve) return;
       const entries = history.slice().reverse();
-      resolveCandidatesHeadingText.textContent = `${t('candidates')} · ${entries.length}`;
+      resolveCandidatesHeadingText.textContent = entries.length ? `${t('candidates')} · ${entries.length}` : t('candidates');
       resolveCandidateList.replaceChildren();
       if (busy && resolveTaskState === 'generating') {
         const pending = el('article', undefined, 'fs-resolve-candidate is-pending');
