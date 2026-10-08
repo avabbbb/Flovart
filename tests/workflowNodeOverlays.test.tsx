@@ -10,6 +10,12 @@ import { AssetLibraryBrowser } from '../components/studio/AssetLibraryBrowser';
 import { translations } from '../utils/translations';
 import type { UserApiKey } from '../types';
 
+function overflowAction(name: string) {
+  const more = screen.queryAllByRole('button', { name: '更多' }).find(button => button.getAttribute('aria-expanded') !== 'true');
+  if (more) fireEvent.click(more);
+  return screen.getByRole('menuitem', { name });
+}
+
 const t = (key: string, ...args: unknown[]): string => {
   const value = key.split('.').reduce<unknown>((current, part) => {
     if (!current || typeof current !== 'object' || !(part in current)) return undefined;
@@ -469,11 +475,11 @@ describe('workflow node overlays', () => {
     const onExport = vi.fn();
     const nodes = [node, { ...node, id: 'second' }];
     render(<WorkflowNodeToolbar nodes={nodes} onCopy={vi.fn()} onDelete={vi.fn()} onAlign={onAlign} onExport={onExport} />);
-    ['左对齐节点', '水平居中节点', '右对齐节点', '顶部对齐节点', '垂直居中节点', '底部对齐节点'].forEach(name => fireEvent.click(screen.getByRole('button', { name })));
+    ['左对齐节点', '水平居中节点', '右对齐节点', '顶部对齐节点', '垂直居中节点', '底部对齐节点'].forEach(name => fireEvent.click(overflowAction(name)));
     fireEvent.click(screen.getByRole('button', { name: '批量导出所选媒体' }));
     expect(onAlign.mock.calls.map(call => call[0])).toEqual(['left', 'horizontal-center', 'right', 'top', 'vertical-center', 'bottom']);
     expect(onExport).toHaveBeenCalledWith(nodes);
-    expect(screen.queryByRole('button', { name: '保存到素材库' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: '保存到素材库' })).not.toBeInTheDocument();
   });
 
   it('covers a generating workflow media node with the shared frosted state', () => {
@@ -580,8 +586,8 @@ describe('workflow node overlays', () => {
   it('moves selected nodes to the front or back through the shared toolbar', () => {
     const onLayer = vi.fn();
     render(<WorkflowNodeToolbar nodes={[node]} onCopy={vi.fn()} onDelete={vi.fn()} onLayer={onLayer} />);
-    fireEvent.click(screen.getByRole('button', { name: '移到最前' }));
-    fireEvent.click(screen.getByRole('button', { name: '移到最后' }));
+    fireEvent.click(overflowAction('移到最前'));
+    fireEvent.click(overflowAction('移到最后'));
     expect(onLayer.mock.calls.map(call => call[0])).toEqual(['front', 'back']);
   });
 
@@ -589,13 +595,17 @@ describe('workflow node overlays', () => {
     const callbacks = { focus: vi.fn(), save: vi.fn(), replace: vi.fn(), resize: vi.fn(), run: vi.fn(), stop: vi.fn() };
     const media = { ...node, metadata: { ...node.metadata, href: 'data:image/png;base64,AA==', name: 'image.png' } };
     const { container, rerender } = render(<WorkflowNodeToolbar nodes={[media]} onCopy={vi.fn()} onDelete={vi.fn()} onRun={callbacks.run} onStop={callbacks.stop} onPromptFocus={callbacks.focus} onSaveMedia={callbacks.save} onReplaceMedia={callbacks.replace} onToggleFreeResize={callbacks.resize} />);
-    fireEvent.click(screen.getByRole('button', { name: '编辑提示词' }));
-    fireEvent.click(screen.getByRole('button', { name: '保存到素材库' }));
-    fireEvent.click(screen.getByRole('button', { name: '切换自由缩放' }));
-    fireEvent.click(screen.getByRole('button', { name: '运行节点' }));
+    fireEvent.click(overflowAction('编辑提示词'));
+    fireEvent.click(overflowAction('保存到素材库'));
+    fireEvent.click(overflowAction('切换自由缩放'));
+    // Generate lives in the prompt bar; the toolbar has no plain run button.
+    expect(screen.queryByRole('button', { name: '运行节点' })).not.toBeInTheDocument();
     fireEvent.change(container.querySelector('input[type="file"]')!, { target: { files: [new File(['x'], 'replacement.png', { type: 'image/png' })] } });
     expect(screen.getByRole('link', { name: '下载媒体' })).toHaveAttribute('download', 'image.png');
-    expect([callbacks.focus, callbacks.save, callbacks.resize, callbacks.run, callbacks.replace].every(callback => callback.mock.calls.length === 1)).toBe(true);
+    expect([callbacks.focus, callbacks.save, callbacks.resize, callbacks.replace].every(callback => callback.mock.calls.length === 1)).toBe(true);
+    rerender(<WorkflowNodeToolbar nodes={[{ ...media, metadata: { ...media.metadata, status: 'error' } }]} onCopy={vi.fn()} onDelete={vi.fn()} onRun={callbacks.run} onStop={callbacks.stop} />);
+    fireEvent.click(screen.getByRole('button', { name: '重试节点' }));
+    expect(callbacks.run).toHaveBeenCalledWith(media.id);
     rerender(<WorkflowNodeToolbar nodes={[{ ...media, metadata: { ...media.metadata, status: 'loading' } }]} onCopy={vi.fn()} onDelete={vi.fn()} onRun={callbacks.run} onStop={callbacks.stop} />);
     fireEvent.click(screen.getByRole('button', { name: '停止节点' }));
     expect(callbacks.stop).toHaveBeenCalledWith(media.id);
@@ -605,9 +615,9 @@ describe('workflow node overlays', () => {
     const imageTools = { crop: vi.fn(), filter: vi.fn(), upscale: vi.fn(), removeBackground: vi.fn(), outpaint: vi.fn(), mask: vi.fn(), splitLayers: vi.fn() };
     const mediaNode = { ...node, metadata: { ...node.metadata, href: 'data:image/png;base64,AA==' } };
     const { rerender } = render(<WorkflowNodeToolbar nodes={[mediaNode]} onCopy={vi.fn()} onDelete={vi.fn()} imageTools={imageTools} />);
-    ['裁剪图片', '图片滤镜', '高清放大', '移除背景', '扩展画面', '编辑蒙版', '拆分图层'].forEach(name => fireEvent.click(screen.getByRole('button', { name })));
+    ['裁剪图片', '图片滤镜', '高清放大', '移除背景', '扩展画面', '编辑蒙版', '拆分图层'].forEach(name => fireEvent.click(overflowAction(name)));
     expect(Object.values(imageTools).every(handler => handler.mock.calls[0][0] === mediaNode.id)).toBe(true);
     rerender(<WorkflowNodeToolbar nodes={[mediaNode]} onCopy={vi.fn()} onDelete={vi.fn()} />);
-    expect(screen.queryByRole('button', { name: '裁剪图片' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: '裁剪图片' })).not.toBeInTheDocument();
   });
 });

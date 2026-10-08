@@ -1,6 +1,7 @@
 import { AlignCenter, AlignLeft, AlignRight, ArrowDownToLine, ArrowUpToLine, AudioLines, ChevronsDown, ChevronsUp, Copy, Crop, Download, Eraser, Expand, FilePenLine, Frame, Grid2x2, Group, Layers3, Library, Lightbulb, Maximize2, MessageSquareText, Play, RefreshCw, RotateCw, ScanLine, ScanText, Scissors, SlidersHorizontal, Square, Trash2, Ungroup, ZoomIn, Gauge } from 'lucide-react';
 import { useRef } from 'react';
-import { WorkflowToolbarActions, WorkflowToolbarShell, type WorkflowToolbarAction } from './WorkflowToolbarPrimitives';
+import { MoreHorizontal } from 'lucide-react';
+import { WorkflowToolbarActions, WorkflowToolbarMenu, WorkflowToolbarShell, type WorkflowToolbarAction } from './WorkflowToolbarPrimitives';
 import { useWorkflowMediaUrl } from './media';
 import { WORKFLOW_NODE_TOOL_LABELS } from './nodeToolCatalog';
 import type { WorkflowNode } from './types';
@@ -35,6 +36,8 @@ export interface WorkflowAudioToolHandlers {
   speed?: (id: string) => void;
   stemSplit?: (id: string) => void;
 }
+
+const PRIMARY_KEYS = new Set(['stop', 'run', 'copy', 'download', 'preview', 'group', 'execute-group', 'ungroup', 'export-selection', 'delete']);
 
 export function WorkflowNodeToolbar({ nodes, onCopy, onDelete, onExport, onRun, onStop, onPromptFocus, onSaveMedia, onReversePrompt, onReplaceMedia, onToggleFreeResize, onAlign, onLayer, onGroup, onUngroup, onExecuteGroup, onPreviewMedia, onFrameSelection, imageTools, imageToolBusy = false, videoTools, videoToolBusy = false, audioTools, audioToolBusy = false }: {
   nodes: WorkflowNode[];
@@ -109,27 +112,33 @@ export function WorkflowNodeToolbar({ nodes, onCopy, onDelete, onExport, onRun, 
     node?.type === 'audio' && mediaUrl && audioTools?.speed && { key: 'audio-speed', label: WORKFLOW_NODE_TOOL_LABELS['audio-speed'], icon: <Gauge size={18} />, disabled: audioToolBusy, onClick: () => audioTools.speed?.(node.id) },
     node?.type === 'audio' && mediaUrl && audioTools?.stemSplit && { key: 'audio-stem-split', label: WORKFLOW_NODE_TOOL_LABELS['audio-stem-split'], icon: <AudioLines size={18} />, disabled: audioToolBusy, onClick: () => audioTools.stemSplit?.(node.id) },
     node && (node.type === 'image' || node.type === 'video') && onToggleFreeResize && { key: 'resize', label: '切换自由缩放', icon: <Expand size={18} />, active: Boolean(node.freeResize), onClick: () => onToggleFreeResize(node.id) },
+    // Generate lives in the prompt bar. The toolbar only carries the state
+    // change you need right now: Stop while running, Retry after a failure.
     node && node.type !== 'audio' && node.type !== 'script' && node.metadata.status === 'loading' && onStop
       ? { key: 'stop', label: '停止节点', icon: <Square size={17} />, onClick: () => onStop(node.id) }
-      : node && node.type !== 'audio' && node.type !== 'script' && onRun && { key: 'run', label: node.metadata.status === 'error' ? '重试节点' : '运行节点', icon: node.metadata.status === 'error' ? <RefreshCw size={18} /> : <Play size={18} />, onClick: () => onRun(node.id) },
+      : node && node.type !== 'audio' && node.type !== 'script' && node.metadata.status === 'error' && onRun && { key: 'run', label: '重试节点', icon: <RefreshCw size={18} />, onClick: () => onRun(node.id) },
     { key: 'delete', label: '删除节点', icon: <Trash2 size={18} />, danger: true, onClick: () => onDelete(ids) },
   ];
+  const alignActions: WorkflowToolbarAction[] = nodes.length > 1 && onAlign ? [
+    { key: 'left', label: '左对齐节点', icon: <AlignLeft size={16} />, onClick: () => onAlign('left') },
+    { key: 'horizontal-center', label: '水平居中节点', icon: <AlignCenter size={16} />, onClick: () => onAlign('horizontal-center') },
+    { key: 'right', label: '右对齐节点', icon: <AlignRight size={16} />, onClick: () => onAlign('right') },
+    { key: 'top', label: '顶部对齐节点', icon: <ArrowUpToLine size={16} />, onClick: () => onAlign('top') },
+    { key: 'vertical-center', label: '垂直居中节点', icon: <AlignCenter size={16} />, onClick: () => onAlign('vertical-center') },
+    { key: 'bottom', label: '底部对齐节点', icon: <ArrowDownToLine size={16} />, onClick: () => onAlign('bottom') },
+  ] : [];
+  // A handful of always-visible actions; everything else sits, labelled, behind "更多".
+  const present = actions.filter((action): action is WorkflowToolbarAction => Boolean(action));
+  const primary = present.filter(action => PRIMARY_KEYS.has(action.key));
+  const overflow = [...present.filter(action => !PRIMARY_KEYS.has(action.key)), ...alignActions];
   return (
     <WorkflowToolbarShell testId="workflow-node-toolbar">
-      {nodes.length > 1 && onAlign && <>
-        <WorkflowToolbarActions actions={[
-          { key: 'left', label: '左对齐节点', icon: <AlignLeft size={18} />, onClick: () => onAlign('left') },
-          { key: 'horizontal-center', label: '水平居中节点', icon: <AlignCenter size={18} />, onClick: () => onAlign('horizontal-center') },
-          { key: 'right', label: '右对齐节点', icon: <AlignRight size={18} />, onClick: () => onAlign('right') },
-          { key: 'top', label: '顶部对齐节点', icon: <ArrowUpToLine size={18} />, onClick: () => onAlign('top') },
-          { key: 'vertical-center', label: '垂直居中节点', icon: <AlignCenter size={18} />, onClick: () => onAlign('vertical-center') },
-          { key: 'bottom', label: '底部对齐节点', icon: <ArrowDownToLine size={18} />, onClick: () => onAlign('bottom') },
-        ]} />
-      </>}
       {media && onReplaceMedia && <>
         <input ref={inputRef} hidden type="file" accept={`${media.type}/*`} onChange={event => { const file = event.target.files?.[0]; if (file) onReplaceMedia(media.id, file); event.target.value = ''; }} />
       </>}
-      <WorkflowToolbarActions actions={actions} />
+      <WorkflowToolbarActions actions={primary.filter(action => action.key !== 'delete')} />
+      {overflow.length > 0 && <WorkflowToolbarMenu label="更多" icon={<MoreHorizontal size={18} />} actions={overflow} />}
+      <WorkflowToolbarActions actions={primary.filter(action => action.key === 'delete')} />
     </WorkflowToolbarShell>
   );
 }

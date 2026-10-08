@@ -89,7 +89,9 @@ const App: React.FC = () => {
     // docked (reflow) on desktop, overlay on medium viewports.
     const mediumViewport = useMediaQuery('(max-width: 1023px)');
     const [desktopRightOpen, setDesktopRightOpen] = useState(() => {
-        try { return localStorage.getItem('workflowRightPanelOpenV2') !== 'false'; } catch { return true; }
+        // Closed by default so a first visit sees one clear canvas; the drawer
+        // opens from the Agent button and remembers the user's choice after that.
+        try { return localStorage.getItem('workflowRightPanelOpenV3') === 'true'; } catch { return false; }
     });
     const [mobileRightOpen, setMobileRightOpen] = useState(false);
     const rightOpen = mediumViewport ? mobileRightOpen : desktopRightOpen;
@@ -175,7 +177,7 @@ const App: React.FC = () => {
     }, [rightWidth]);
 
     useEffect(() => {
-        try { localStorage.setItem('workflowRightPanelOpenV2', String(desktopRightOpen)); } catch { /* storage may be unavailable */ }
+        try { localStorage.setItem('workflowRightPanelOpenV3', String(desktopRightOpen)); } catch { /* storage may be unavailable */ }
     }, [desktopRightOpen]);
 
     useEffect(() => {
@@ -557,11 +559,16 @@ const App: React.FC = () => {
         toast.show('已保存到我的素材。', 'success');
     }, [toast]);
 
-    const studioRuntimeStatus = useMemo(() => ({
+    const hasAiService = userApiKeys.length > 0;
+    const studioRuntimeStatus = useMemo(() => hasAiService ? {
         tone: 'ready' as const,
-        label: language === 'zho' ? '制作台就绪' : 'Production ready',
-        detail: language === 'zho' ? '可选择 Codex、WorkBuddy 或 DeepSeek Harness 作为 Agent 指挥入口' : 'Pick Codex, WorkBuddy, or DeepSeek Harness as your agent director',
-    }), [language]);
+        label: language === 'zho' ? '就绪' : 'Ready',
+        detail: language === 'zho' ? 'AI 服务已配置，可以生成。' : 'AI service configured — ready to generate.',
+    } : {
+        tone: 'warning' as const,
+        label: language === 'zho' ? 'AI 服务未配置' : 'No AI service',
+        detail: language === 'zho' ? '点这里在设置里添加一个 API Key，之后就能生成。' : 'Click to add an API key in Settings, then you can generate.',
+    }, [hasAiService, language]);
     const studioMenuModel: StudioMenuModel = useMemo(() => ({
         mode: activeView,
         title: canvasView === 'table' ? 'Table' : canvasView === 'agent' ? 'Agent' : activeWorkflowTitle,

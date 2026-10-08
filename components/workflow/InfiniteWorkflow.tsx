@@ -2251,7 +2251,10 @@ export function InfiniteWorkflow({
   const toolbarLeft = Math.max(8, Math.min(overlayCenter, workflowWidth - 8));
   const toolbarTop = overlayBounds ? Math.max(8, project.viewport.y + overlayBounds.top * project.viewport.k - Math.max(72, 56 + 28 * project.viewport.k)) : 0;
   const promptWorkflowWidth = workflowWidth;
-  const promptWidth = Math.min(880, Math.max(360, promptWorkflowWidth - 16));
+  // The prompt bar belongs to the node: about as wide as the node on screen
+  // (420-560px), never a full-width strip that hides the canvas.
+  const overlayScreenWidth = overlayBounds ? (overlayBounds.right - overlayBounds.left) * project.viewport.k : 0;
+  const promptWidth = Math.min(promptWorkflowWidth - 16, Math.max(420, Math.min(560, overlayScreenWidth + 80)));
   const promptLeft = Math.max(8, Math.min(overlayCenter - promptWidth / 2, promptWorkflowWidth - promptWidth - 8));
   const configLeft = Math.max(8, Math.min(overlayCenter - 210, workflowWidth - 428));
   const promptTop = overlayBounds ? (() => {
@@ -2437,6 +2440,17 @@ export function InfiniteWorkflow({
         onZoomOut={zoomOut}
         onZoomReset={zoomReset}
       />
+      {project.nodes.length === 0 && (
+        // The empty canvas is its own guide: one sentence and the two most common starts.
+        <div className="workflow-canvas-empty" data-workflow-overlay onPointerDown={event => event.stopPropagation()}>
+          <strong>{language === 'zho' ? '从一个节点开始' : 'Start with a node'}</strong>
+          <span>{language === 'zho' ? '双击空白处可以添加任意节点，也可以把图片或视频直接拖进来。' : 'Double-click anywhere to add a node, or drop an image or video here.'}</span>
+          <div>
+            <button type="button" onClick={() => addNode('image')}>{language === 'zho' ? '图片节点' : 'Image node'}</button>
+            <button type="button" onClick={() => addNode('video')}>{language === 'zho' ? '视频节点' : 'Video node'}</button>
+          </div>
+        </div>
+      )}
       <div ref={worldRef} className="workflow-world" style={{ transform: `translate(${project.viewport.x}px, ${project.viewport.y}px) scale(${project.viewport.k})` }}>
         <WorkflowConnections
           nodes={connectionNodes}

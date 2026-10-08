@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'motion/react';
-import { Bot, FileText, Focus, Grid2X2, Hand, History, Keyboard, Library, Magnet, Map, MousePointer2, Plus, Redo2, Settings2, SlidersHorizontal, Type, Undo2, Video, Image, Music2, Workflow, Spline, ZoomIn, ZoomOut } from 'lucide-react';
+import { Bot, FileText, Focus, Grid2X2, Hand, Keyboard, Library, Magnet, Map, MousePointer2, Plus, Redo2, Settings2, SlidersHorizontal, Type, Undo2, Video, Image, Music2, Workflow, Spline, ZoomIn, ZoomOut } from 'lucide-react';
 import { Tooltip } from 'antd';
 import type React from 'react';
 import { useMemo, useRef, useState } from 'react';
@@ -118,9 +118,7 @@ export function WorkflowToolbar({
   const popoverAnchorRef = useRef<HTMLElement | null>(null);
   const addOpen = openPopover === 'add';
   const libraryOpen = openPopover === 'library';
-  const historyOpen = openPopover === 'history';
   const toolsOpen = openPopover === 'tools';
-  const shortcutsOpen = openPopover === 'shortcuts';
   const zoomOpen = openPopover === 'zoom';
   const togglePopover = (name: ToolbarPopover, trigger: HTMLElement) => {
     if (openPopover === name) { setOpenPopover(null); return; }
@@ -142,10 +140,15 @@ export function WorkflowToolbar({
       {ADD_OPTIONS.map(option => { const Icon = option.icon; return <motion.button key={option.type} type="button" role="menuitem" className="workflow-toolbar__add-item" onClick={() => { onAddNode(option.type); closePopover(true); }} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}><span className="workflow-toolbar__add-item-icon"><Icon size={16} /></span><span>{copy.addOption(option.type)}</span></motion.button>; })}
     </ResponsivePopover>
   ) : openPopover === 'tools' ? (
-    <ResponsivePopover anchorRef={popoverAnchorRef} preferredSide="up" width={174} role="menu" ariaLabel={copy.toolbox} className="workflow-toolbar__compact-menu" onRequestClose={() => setOpenPopover(null)}>
+    <ResponsivePopover anchorRef={popoverAnchorRef} preferredSide="up" width={196} role="menu" ariaLabel={copy.toolbox} className="workflow-toolbar__compact-menu" onRequestClose={() => setOpenPopover(null)}>
       <button type="button" role="menuitem" onClick={() => { onFit(); closePopover(true); }}><Focus size={15} />{copy.fit}</button>
+      {onAutoLayout && <button type="button" role="menuitem" onClick={() => { onAutoLayout(); closePopover(true); }}><Workflow size={15} />{copy.autoArrange}</button>}
+      {onToggleMinimap && <button type="button" role="menuitemcheckbox" aria-checked={Boolean(minimapOpen)} onClick={() => { onToggleMinimap(); closePopover(true); }}><Map size={15} />{copy.minimap}{minimapOpen ? ' ✓' : ''}</button>}
+      {onToggleEdges && <button type="button" role="menuitem" onClick={() => { onToggleEdges(); closePopover(true); }}><Spline size={15} />{edgesVisible === false ? copy.showEdges : copy.hideEdges}</button>}
+      {onToggleSnap && <button type="button" role="menuitemcheckbox" aria-checked={Boolean(snapEnabled)} onClick={() => { onToggleSnap(); closePopover(true); }}><Magnet size={15} />{copy.snap}{snapEnabled ? ' ✓' : ''}</button>}
       <button type="button" role="menuitem" onClick={() => { onToggleGrid(); closePopover(true); }}><Grid2X2 size={15} />{language === 'en' ? 'Toggle grid' : '切换网格'}</button>
       {setWheelMode && wheelMode && <button type="button" role="menuitem" onClick={() => { setWheelMode(wheelMode === 'pan' ? 'zoom' : 'pan'); closePopover(true); }}>{wheelMode === 'pan' ? <MousePointer2 size={15} /> : <ZoomIn size={15} />}{wheelMode === 'pan' ? copy.wheelPan : copy.wheelZoom}</button>}
+      <button type="button" role="menuitem" onClick={() => setOpenPopover('shortcuts')}><Keyboard size={15} />{copy.shortcuts}</button>
     </ResponsivePopover>
   ) : openPopover === 'zoom' ? (
     <ResponsivePopover anchorRef={popoverAnchorRef} preferredSide="up" width={174} role="menu" ariaLabel={copy.canvasControls} className="workflow-toolbar__compact-menu" onRequestClose={() => setOpenPopover(null)}>
@@ -172,16 +175,6 @@ export function WorkflowToolbar({
   ) : null;
   return (
     <div className="workflow-toolbar-layer">
-    <div className="workflow-canvas-controls theme-aware" role="toolbar" aria-label={copy.canvasControls}>
-      <Tip title={copy.assetManagement}><button type="button" className="workflow-canvas-controls__assets" aria-label={copy.assetManagement} onClick={onOpenAssets || (event => togglePopover('library', event.currentTarget))}><Library size={17} /><span>{copy.assetManagement}</span></button></Tip>
-      {onAutoLayout && <Tip title={`${copy.autoArrange} Alt+Shift+F`}><button type="button" className={btn()} aria-label={copy.autoArrange} onClick={onAutoLayout}><Workflow size={17} /></button></Tip>}
-      {onToggleMinimap && <Tip title={copy.minimap}><button type="button" className={btn(Boolean(minimapOpen))} aria-label={copy.minimap} onClick={onToggleMinimap}><Map size={17} /></button></Tip>}
-      {onToggleEdges && <Tip title={edgesVisible === false ? copy.showEdges : copy.hideEdges}><button type="button" className={btn(edgesVisible !== false)} aria-label={edgesVisible === false ? copy.showEdges : copy.hideEdges} onClick={onToggleEdges}><Spline size={17} /></button></Tip>}
-      {onToggleSnap && <Tip title={copy.snap}><button type="button" className={btn(Boolean(snapEnabled))} aria-label={copy.snap} onClick={onToggleSnap}><Magnet size={17} /></button></Tip>}
-      <div className="workflow-toolbar__zoom-wrap">
-        <button type="button" className="workflow-canvas-controls__zoom" aria-label={copy.zoomReset} aria-expanded={zoomOpen} onClick={event => togglePopover('zoom', event.currentTarget)}>{copy.zoomPercent(Math.round((zoomLevel ?? 1) * 100))}</button>
-      </div>
-    </div>
     <div className="workflow-toolbar theme-aware" role="toolbar" aria-label={copy.workflowToolbar}>
       <div className="workflow-toolbar__add-wrap">
         <Tip title={copy.addNode}><button type="button" className="isl-icon-btn workflow-toolbar__add-btn" aria-label={copy.addNode} aria-expanded={addOpen} onClick={event => togglePopover('add', event.currentTarget)}><motion.span animate={{ rotate: addOpen ? 45 : 0 }} transition={{ type: 'spring', stiffness: 400, damping: 22 }}><Plus size={20} /></motion.span></button></Tip>
@@ -201,8 +194,9 @@ export function WorkflowToolbar({
       <Tip title={copy.sharedMedia}><button type="button" className={btn(libraryOpen)} aria-label={copy.sharedMedia} aria-expanded={libraryOpen} onClick={event => togglePopover('library', event.currentTarget)}><Library size={18} /></button></Tip>
       <Tip title={copy.undo}><button type="button" className={`${btn()} workflow-toolbar__history-direct`} aria-label={copy.undo} disabled={!canUndo} onClick={onUndo}><Undo2 size={17} /></button></Tip>
       <Tip title={copy.redo}><button type="button" className={`${btn()} workflow-toolbar__history-direct`} aria-label={copy.redo} disabled={!canRedo} onClick={onRedo}><Redo2 size={17} /></button></Tip>
-      <div className="workflow-toolbar__popover-wrap"><Tip title={copy.history}><button type="button" className={btn(historyOpen)} aria-label={copy.history} aria-expanded={historyOpen} onClick={event => togglePopover('history', event.currentTarget)}><History size={18} /></button></Tip></div>
-      <div className="workflow-toolbar__popover-wrap"><Tip title={copy.shortcuts}><button type="button" className={btn(shortcutsOpen)} aria-label={copy.shortcuts} aria-expanded={shortcutsOpen} onClick={event => togglePopover('shortcuts', event.currentTarget)}><Keyboard size={18} /></button></Tip></div>
+      <div className="workflow-toolbar__zoom-wrap">
+        <button type="button" className="workflow-canvas-controls__zoom" aria-label={copy.zoomReset} aria-expanded={zoomOpen} onClick={event => togglePopover('zoom', event.currentTarget)}>{copy.zoomPercent(Math.round((zoomLevel ?? 1) * 100))}</button>
+      </div>
       {onOpenAgent && <Tip title={agentOpen ? copy.agentClose : copy.agentOpen}><button type="button" className={btn(Boolean(agentOpen))} aria-label={agentOpen ? copy.agentClose : copy.agentOpen} aria-pressed={Boolean(agentOpen)} onClick={() => { closePopover(); onOpenAgent(); }}><Bot size={18} /></button></Tip>}
     </div>
     {activePopover}

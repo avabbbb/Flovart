@@ -495,3 +495,19 @@
 .local-folder-empty{display:flex;flex-direction:column;align-items:center;gap:6px;padding:24px 14px;color:var(--wf-muted);text-align:center}
 .local-folder-empty p{margin:0;font-size:10px;line-height:1.6}
 .local-folder-empty__hint{opacity:.75}
+
+/* Empty canvas guide: one sentence, two starts, never blocks the surface. */
+.workflow-canvas-empty { position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%); z-index: 5; display: grid; gap: 8px; justify-items: center; max-width: 360px; padding: 18px 22px; text-align: center; border: 1px dashed var(--wf-border); border-radius: 14px; background: color-mix(in srgb, var(--wf-panel) 88%, transparent); color: var(--wf-muted); font-size: 12px; line-height: 1.6; }
+.workflow-canvas-empty strong { color: var(--text-primary, var(--isl-ink)); font-size: 15px; }
+.workflow-canvas-empty div { display: flex; gap: 8px; margin-top: 4px; }
+.workflow-canvas-empty button { height: 30px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--wf-border); background: var(--wf-strong); color: var(--text-primary, var(--isl-ink)); font-weight: 600; cursor: pointer; }
+.workflow-canvas-empty button:first-child { background: var(--isl-mint, #38bda6); border-color: transparent; color: #fff; }
+
+/* Node toolbar overflow: labelled actions instead of a row of unlabelled icons. */
+.workflow-toolbar-menu { position: relative; display: inline-flex; }
+.workflow-toolbar-menu__list { position: absolute; top: calc(100% + 10px); left: 50%; transform: translateX(-50%); z-index: 80; display: grid; min-width: 184px; max-height: 360px; overflow-y: auto; padding: 4px; border: 1px solid var(--isl-border); border-radius: var(--isl-r-lg, 12px); background: var(--isl-card); box-shadow: var(--isl-shadow-lg, 0 12px 32px rgba(0,0,0,.16)); }
+.workflow-toolbar-menu__list > button, .workflow-toolbar-menu__list > a { display: flex; align-items: center; gap: 10px; height: 32px; padding: 0 10px; border: 0; border-radius: 8px; background: transparent; color: var(--isl-ink); font-size: 12px; text-align: left; text-decoration: none; cursor: pointer; white-space: nowrap; }
+.workflow-toolbar-menu__list > button:hover, .workflow-toolbar-menu__list > a:hover { background: var(--isl-surface-2, rgba(0,0,0,.05)); }
+.workflow-toolbar-menu__list > button:disabled { opacity: .4; cursor: default; }
+.workflow-toolbar-menu__list > button[data-active='true'] { color: var(--isl-mint-deep); }
+.workflow-toolbar-menu__list svg { width: 15px; height: 15px; flex: none; }
