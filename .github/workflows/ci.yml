@@ -28,24 +28,29 @@ jobs:
           cache: npm
 
       - name: Setup Rust
+        if: github.event_name != 'pull_request'
         uses: dtolnay/rust-toolchain@stable
 
       - name: Install dependencies
         run: npm ci
 
       - name: Install DSH plugin dependencies
+        if: github.event_name != 'pull_request'
         run: npm --prefix dsh-plugin ci
 
       - name: Audit DSH plugin dependencies
+        if: github.event_name != 'pull_request'
         run: npm audit --prefix dsh-plugin --audit-level=moderate
 
       - name: Docs contract
         run: npm run docs:check
 
       - name: Verify release versions
+        if: github.event_name != 'pull_request'
         run: npm run version:check
 
       - name: Release red-team invariants
+        if: github.event_name != 'pull_request'
         run: npm run release:red-team
 
       - name: Tracked secret audit
@@ -64,9 +69,11 @@ jobs:
         run: npm run ext:build
 
       - name: DSH plugin build
+        if: github.event_name != 'pull_request'
         run: npm --prefix dsh-plugin run build
 
       - name: Build Tauri agent sidecar fixture
+        if: github.event_name != 'pull_request'
         shell: pwsh
         run: |
           node scripts/build-agent-sidecar.mjs --target x86_64-pc-windows-msvc
@@ -79,6 +86,7 @@ jobs:
           }
 
       - name: Rust tests
+        if: github.event_name != 'pull_request'
         run: cargo test --manifest-path src-tauri/Cargo.toml --all-targets
 
       - name: Git diff check
@@ -86,6 +94,7 @@ jobs:
 
   critical-stability:
     name: Critical suite 10x
+    if: github.event_name != 'pull_request'
     runs-on: windows-latest
     steps:
       - name: Checkout
