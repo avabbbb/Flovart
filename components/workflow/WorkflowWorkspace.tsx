@@ -422,9 +422,9 @@ assetLibrary={assetLibrary}
             />
           ) : (
             <div className="workflow-empty">
-              <h1>Workflow</h1>
-              <p>使用节点组织提示词、参考素材和生成配置。</p>
-              <button type="button" aria-label="新建工作流" onClick={() => createProject()}>新建工作流</button>
+              <h1>{language === 'zho' ? '画布' : 'Canvas'}</h1>
+              <p>{language === 'zho' ? '把参考素材、提示词和生成步骤连成一条线，结果都留在这里。' : 'Connect references, prompts and generation steps. Every result stays here.'}</p>
+              <button type="button" onClick={() => createProject()}>{language === 'zho' ? '新建画布' : 'New canvas'}</button>
             </div>
           )}
         </WorkflowGenerationCapabilitiesProvider>

@@ -1,3 +1,4 @@
+import { requestUiConfirm } from './uiConfirm';
 import { executeFlovartCommand } from '../tools/flovart/core.js';
 import { canonicalize } from 'json-canonicalize';
 import { useWorkflowStore } from '../components/workflow/store';
@@ -308,7 +309,7 @@ export class WorkflowAgentBridge {
   }
 
   private confirm(summary: string) {
-    return this.options.confirm ? this.options.confirm(summary) : window.confirm(`Agent 请求执行：${summary}`);
+    return this.options.confirm ? this.options.confirm(summary) : requestUiConfirm({ title: 'Agent 请求执行', body: summary, confirmLabel: '允许', cancelLabel: '拒绝' });
   }
 
   private post(path: string, body: unknown, params?: Record<string, string>) {

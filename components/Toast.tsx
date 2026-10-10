@@ -1,12 +1,13 @@
 import React from 'react';
+import { CircleAlert, CircleCheck, Info, TriangleAlert } from 'lucide-react';
 import { Z } from '../utils/zLayers';
 import type { ToastItem } from '../hooks/useToast';
 
-const LEVEL_STYLES: Record<ToastItem['level'], { accent: string; icon: string }> = {
-  info:    { accent: 'var(--isl-mint)',  icon: '🔄' },
-  success: { accent: 'var(--isl-mint)',  icon: '✅' },
-  warning: { accent: 'var(--isl-sun)',   icon: '⚠️' },
-  error:   { accent: 'var(--isl-coral)', icon: '' },
+const LEVEL_STYLES: Record<ToastItem['level'], { accent: string; icon: React.ReactNode }> = {
+  info:    { accent: 'var(--isl-mint)',  icon: <Info size={16} /> },
+  success: { accent: 'var(--isl-mint)',  icon: <CircleCheck size={16} /> },
+  warning: { accent: 'var(--isl-sun)',   icon: <TriangleAlert size={16} /> },
+  error:   { accent: 'var(--isl-coral)', icon: <CircleAlert size={16} /> },
 };
 
 interface ToastStackProps {
@@ -30,7 +31,7 @@ export default function ToastStack({ toasts, onDismiss }: ToastStackProps) {
             className="isl-shell isl-bounce-in pointer-events-auto flex max-w-lg items-center p-3"
             style={{ borderLeftWidth: '5px', borderLeftColor: s.accent }}
           >
-            {s.icon && <span className="mr-2">{s.icon}</span>}
+            <span className="mr-2 flex shrink-0" aria-hidden="true" style={{ color: s.accent }}>{s.icon}</span>
             <span className="flex-grow text-sm font-bold" style={{ color: 'var(--isl-ink)' }}>{t.message}</span>
             <button
               onClick={() => onDismiss(t.id)}

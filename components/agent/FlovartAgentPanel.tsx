@@ -283,7 +283,8 @@ const userApiKeysRef = useRef(userApiKeys);
       }
       const confirm = (summary: string) => new Promise<boolean>(resolve => {
         const next = { summary, resolve };
-        confirmationRef.current = next;
+        confirmationRef.current?.resolve(false); // a newer request supersedes; never leave the agent waiting
+              confirmationRef.current = next;
         setConfirmation(next);
         activity.current('waiting');
       });
@@ -325,12 +326,14 @@ const userApiKeysRef = useRef(userApiKeys);
             token: connection.token,
             confirm: summary => new Promise<boolean>(resolve => {
               const next = { summary, resolve };
+              confirmationRef.current?.resolve(false); // a newer request supersedes; never leave the agent waiting
               confirmationRef.current = next;
               setConfirmation(next);
               activity.current('waiting');
             }),
             confirmWrite: summary => modeRef.current === 'auto' || new Promise<boolean>(resolve => {
               const next = { summary, resolve };
+              confirmationRef.current?.resolve(false); // a newer request supersedes; never leave the agent waiting
               confirmationRef.current = next;
               setConfirmation(next);
               activity.current('waiting');
@@ -611,6 +614,7 @@ const userApiKeysRef = useRef(userApiKeys);
     ? reference.mediaType?.startsWith('video/') ? <Video size={13} /> : <ImageIcon size={13} />
     : reference.mediaType === 'video' ? <Video size={13} /> : reference.mediaType === 'image' ? <ImageIcon size={13} /> : <Box size={13} />;
 
+  const setupGate = Boolean(setupBlocker) && !browseFirst;
   return (
     <div ref={rootRef} className="workflow-agent is-embedded agent-conversation">
       <header className="workflow-agent__utility agent-conversation__header">
@@ -647,7 +651,8 @@ const userApiKeysRef = useRef(userApiKeys);
         </span>
       </header>
       <section className="workflow-agent__body">
-        <div className="agent-conversation__messages"><WorkflowAgentMessages messages={messages} running={sending} language={language} /></div>
+        {/* When setup is the blocker, the setup card is the one thing to read: drop the duplicate red config error and the browse/skill decks under it. */}
+        <div className="agent-conversation__messages"><WorkflowAgentMessages messages={setupGate ? messages.filter(message => message.id !== 'agent-text-config') : messages} running={sending} language={language} /></div>
         {setupBlocker && !browseFirst && (
           <div role="alert" data-testid="agent-setup-card" className="mx-3 mb-2 rounded-xl border px-3 py-2.5" style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-surface-2)' }}>
             <p style={{ margin: 0, fontSize: 12, lineHeight: 1.7, color: 'var(--isl-ink-soft)' }}>{localizedAgentSetupMessage(setupBlocker, undefined, language)}</p>
@@ -658,7 +663,7 @@ const userApiKeysRef = useRef(userApiKeys);
           </div>
         )}
         <BrowseFirstDeck
-          visible={!messages.some(message => message.role === 'user' || message.role === 'assistant' || message.role === 'tool')}
+          visible={!setupGate && !messages.some(message => message.role === 'user' || message.role === 'assistant' || message.role === 'tool')}
           expanded={browseFirst || project.nodes.length === 0}
           sessions={sessionList}
           activeSessionId={activeSessionId}
@@ -667,7 +672,7 @@ const userApiKeysRef = useRef(userApiKeys);
           offline={browseFirst}
           t={t}
         />
-        {!messages.some(message => message.role === 'user' || message.role === 'assistant' || message.role === 'tool') && !skillAttachment && <ProductionSkillDeck
+        {!setupGate && !messages.some(message => message.role === 'user' || message.role === 'assistant' || message.role === 'tool') && !skillAttachment && <ProductionSkillDeck
           attachment={skillAttachment}
           onChange={value => { skillAttachmentDirty.current = true; setSkillAttachment(value); }}
           dropTargetRef={composer}
