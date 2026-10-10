@@ -5,6 +5,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { resolveCanvasUrl } = require('./canvas-url');
 const { persistResolveArtifact, readPersistedResolveArtifact } = require('./artifact-store');
+const { withCandidatesBin } = require('./candidates-bin');
 
 const PLUGIN_ID = 'com.flovart.studio.resolve';
 const MAX_MATERIALIZED_BYTES = 64 * 1024 * 1024;
@@ -138,11 +139,20 @@ async function selectionFromProject(project) {
     if (!item) return null;
     const timelineId = await getId(timeline);
     const itemId = await getId(item);
+    let range;
+    try {
+      // Timeline frame numbers, so the panel can show the record timecode of the captured item.
+      const startFrame = Number(await item.GetStart?.());
+      const endFrame = Number(await item.GetEnd?.());
+      const fps = Number(await timeline.GetSetting?.('timelineFrameRate'));
+      if (Number.isFinite(startFrame) && Number.isFinite(endFrame) && fps > 0) range = { startFrame, endFrame, fps };
+    } catch { range = undefined; }
     return {
       selectionId: itemId,
       label: await getName(item, 'Timeline item ' + itemId),
       kind: 'video',
       locator: { projectId, ...(timelineId ? { timelineId } : {}), timelineItemId: itemId },
+      ...(range ? { range } : {}),
       mimeType: 'video/mp4',
     };
   } catch {
@@ -304,7 +314,7 @@ async function importArtifact({ artifact, persistence, target }) {
   let importInvoked = false;
   try {
     importInvoked = true;
-    const items = await mediaPool.ImportMedia([persisted.filePath]);
+    const { result: items, bin } = await withCandidatesBin(mediaPool, () => mediaPool.ImportMedia([persisted.filePath]));
     const ok = Array.isArray(items) ? items.length > 0 : Boolean(items);
     if (!ok) return importFailure('rejected', 'Resolve 没有接受导入；Iris 已保留本地产物文件，可重试。', persisted);
     const importedItemId = Array.isArray(items) && items[0] ? await getId(items[0]) : undefined;
@@ -313,8 +323,11 @@ async function importArtifact({ artifact, persistence, target }) {
       importStatus: 'confirmed',
       targetId: 'media-pool',
       ...(importedItemId ? { mediaPoolItemId: importedItemId } : {}),
+      ...(bin ? { mediaPoolBin: bin } : {}),
       ...importMetadata(persisted),
-      message: '已添加到 Resolve Media Pool；Iris 已保留本地产物文件。',
+      message: bin
+        ? `已添加到 Resolve Media Pool 的「${bin}」；Iris 已保留本地产物文件。`
+        : '已添加到 Resolve Media Pool；Iris 已保留本地产物文件。',
     };
   } catch {
     return importFailure(importInvoked ? 'unknown' : 'rejected', importInvoked
