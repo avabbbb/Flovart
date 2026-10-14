@@ -33,7 +33,12 @@ const mimeFor = filePath => ({
   '.mxf': 'video/mxf',
 }[path.extname(filePath).toLowerCase()] || 'application/octet-stream');
 const locatorKey = locator => JSON.stringify(Object.entries(locator || {}).sort(([left], [right]) => left.localeCompare(right)));
-
+const sha256hex = buffer => crypto.createHash('sha256').update(buffer).digest('hex');
+const artifactsDir = () => {
+  const dir = path.join(app.getPath('userData'), 'artifacts');
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
+};
 function artifactBytes(artifact) {
   const value = artifact?.bytes;
   const supported = Buffer.isBuffer(value) || (ArrayBuffer.isView(value) && value.BYTES_PER_ELEMENT === 1) || Array.isArray(value);
@@ -329,6 +334,8 @@ function registerIpc() {
   ipcMain.handle('flovart:materialize-clip', materializeClip);
   ipcMain.handle('flovart:persist-artifact', persistArtifact);
   ipcMain.handle('flovart:import-artifact', importArtifact);
+  ipcMain.handle('flovart:artifact-dir', async () => artifactsDir());
+  ipcMain.handle('flovart:locale', async () => app.getLocale());
   ipcMain.handle('flovart:open-canvas', async () => {
     await shell.openExternal(resolveCanvasUrl());
     return { ok: true };
@@ -337,8 +344,10 @@ function registerIpc() {
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 380,
+    width: 360,
     height: 600,
+    // PRODUCT_UI_SPEC: default 340–380px, minimum usable 280px. Panel CSS is
+    // fluid down to 280; allow the host to dock it at the minimum.
     minWidth: 280,
     minHeight: 460,
     webPreferences: {

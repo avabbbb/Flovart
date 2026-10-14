@@ -74,8 +74,8 @@ describe('Flovart Workflow-only CLI contract', () => {
   });
 
   it('rejects removed legacy mutation commands instead of silently mapping them', async () => {
-    await expect(executeFlovartCommand('element.create', {}, {})).rejects.toThrow('Unknown Flovart command');
-    await expect(executeFlovartCommand('project.create', {}, {})).rejects.toThrow('Unknown Flovart command');
-    await expect(executeFlovartCommand('upload', {}, {})).rejects.toThrow('Unknown Flovart command');
+    await expect(executeFlovartCommand('element.create', {}, {})).rejects.toThrow('Unknown Iris command');
+    await expect(executeFlovartCommand('project.create', {}, {})).rejects.toThrow('Unknown Iris command');
+    await expect(executeFlovartCommand('upload', {}, {})).rejects.toThrow('Unknown Iris command');
   });
 });

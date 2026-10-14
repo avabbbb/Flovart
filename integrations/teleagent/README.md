@@ -1,7 +1,7 @@
-# Flovart × TeleAgent
+# Iris × TeleAgent
 
 这是 TeleAgent 的接入准备包，不是未经官方 schema 验证的 Marketplace
-Connector。Flovart 已提供一个基于 canonical Agent surface 的本地 stdio MCP
+Connector。Iris 已提供一个基于 canonical Agent surface 的本地 stdio MCP
 projection；真实 TeleAgent 导入、权限、长任务等待和错误展示仍属于
 `EXTERNAL_TELEAGENT_CERTIFICATION`。
 
@@ -9,7 +9,7 @@ projection；真实 TeleAgent 导入、权限、长任务等待和错误展示�
 
 ```text
 TeleAgent
-  ├─ canonical Flovart Skill
+  ├─ canonical Iris Skill
   └─ local stdio MCP
        └─ flovart_status
           flovart_workflow_inspect
@@ -31,7 +31,7 @@ flovart-mcp
 ```
 
 MCP Server 只通过现有本机 Workspace Adapter 操作可见 Browser Workflow；它
-不读取 Provider API Key，不在 TeleAgent 中保存 Flovart token，也不创建第二套
+不读取 Provider API Key，不在 TeleAgent 中保存 Iris token，也不创建第二套
 Workflow 状态。写操作必须携带 `idempotencyKey`，调用方可以额外提供
 `agentIdentity: "teleagent"` 和 `hostSessionId` 参与 Active Host 校验。
 
@@ -47,5 +47,5 @@ Skill 的业务语义以仓库根目录 `.agents/skills/flovart/SKILL.md` 为准
 - [ ] 导入本地 stdio MCP 并完成握手；
 - [ ] `workflow.inspect` 能读取当前可见 Workflow；
 - [ ] `workflow.apply` 与 `workflow.run` 的失败码可见且不丢失；
-- [ ] TeleAgent 会话退出后，运行中的 Flovart 任务不会被错误地伪装为已完成；
+- [ ] TeleAgent 会话退出后，运行中的 Iris 任务不会被错误地伪装为已完成；
 - [ ] MCP 结果、Skill 和客户端日志中没有 API Key、Authorization 或本机 token。

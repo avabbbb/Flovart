@@ -29,6 +29,11 @@ contextBridge.exposeInMainWorld('__FLOVART_RESOLVE_BRIDGE__', {
     const payload = await artifactPayload(artifact, !persistence);
     return ipcRenderer.invoke('flovart:import-artifact', { artifact: payload, target, persistence });
   },
+  artifactDir: () => ipcRenderer.invoke('flovart:artifact-dir'),
+  // Resolve's own UI language is not exposed to the panel; use the OS/app locale.
+  locale: () => ipcRenderer.invoke('flovart:locale'),
+  // 不暴露 subscribeContext：主进程不产生 context-changed 事件，让 host-contract
+  // 的 bridgeAdapter 落到轮询回退（同 Photoshop/Premiere 面板），上下文才能真的刷新。
 });
 
 contextBridge.exposeInMainWorld('__FLOVART_OPEN_CANVAS__', () => ipcRenderer.invoke('flovart:open-canvas'));

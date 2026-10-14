@@ -1,6 +1,6 @@
-# Flovart 文档
+# Iris 文档
 
-Flovart 当前提供 Workflow 与本地 Agent 创作入口；AE / Premiere / Photoshop / Resolve 是宿主扩展方向。实验面板、native effect / OFX 和 Flovart Canvas 是不同产品层，当前支持状态统一看 [SUPPORT_MATRIX.md](../SUPPORT_MATRIX.md)。
+Iris 当前提供 Workflow 与本地 Agent 创作入口；AE / Premiere / Photoshop / Resolve 是宿主扩展方向。实验面板、native effect / OFX 和 Iris Canvas 是不同产品层，当前支持状态统一看 [SUPPORT_MATRIX.md](../SUPPORT_MATRIX.md)。
 
 ## 开始使用
 

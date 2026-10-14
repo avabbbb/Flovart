@@ -7,8 +7,8 @@ import {
 } from '@earendil-works/pi-storage-sqlite-node';
 import { resolveProductionSkillAttachment } from './production-skills.js';
 
-const DEFAULT_SYSTEM_PROMPT = `你是 Flovart Agent，负责把用户的创作目标整理为可审查的制作计划。
-你只能使用已注册的 Flovart 制作工具，不得访问 Shell、任意文件或 Provider Secret。
+const DEFAULT_SYSTEM_PROMPT = `你是 Iris Agent，负责把用户的创作目标整理为可审查的制作计划。
+你只能使用已注册的 Iris 制作工具，不得访问 Shell、任意文件或 Provider Secret。
 先调用 flovart_status 确认 Agent Session，再调用 flovart_workflow_inspect；需要当前选区时再调用 flovart_workflow_selection_get，不得猜测项目、节点或连接 ID。
 稳定的 Agent 工具只有 status、workflow.inspect、workflow.selection.get、workflow.apply、workflow.node.run。command.list/schema 属于 CLI discovery/debug，不要当作模型工具调用。
 Workflow 修改只使用 flovart_workflow_apply 的结构化 operations；节点执行只使用 flovart_workflow_node_run，并继续交给 WorkflowExecutor，不得模拟鼠标或直接修改 React state。
@@ -80,7 +80,7 @@ export class FlovartAgentKernel {
   }
 
   async openSession({ projectId, cwd }) {
-    if (this.session) throw new Error('Flovart Agent session is already open');
+    if (this.session) throw new Error('Iris Agent session is already open');
     this.env = new NodeExecutionEnv({ cwd });
     try {
       this.repo = new SqliteSessionRepo({
@@ -128,7 +128,7 @@ export class FlovartAgentKernel {
         beforeToolCall: async ({ toolCall }) => (
           this.tools.some(tool => tool.name === toolCall.name)
             ? undefined
-            : { block: true, reason: `未注册的 Flovart 工具：${toolCall.name}` }
+            : { block: true, reason: `未注册的 Iris 工具：${toolCall.name}` }
         ),
       });
       this.unsubscribe = this.agent.subscribe(async event => {
@@ -152,9 +152,9 @@ export class FlovartAgentKernel {
   }
 
   async send(text, images = [], skillAttachment) {
-    if (!this.agent) throw new Error('Flovart Agent session is not open');
+    if (!this.agent) throw new Error('Iris Agent session is not open');
     const prompt = String(text || '').trim();
-    if (!prompt && images.length === 0) throw new Error('Flovart Agent message is empty');
+    if (!prompt && images.length === 0) throw new Error('Iris Agent message is empty');
     this.activeChangeSetId = crypto.randomUUID();
     if (skillAttachment === null) {
       // 存在持久绑定记录或绑定解析失败时，解除操作都要落 null 记录，
@@ -192,7 +192,7 @@ export class FlovartAgentKernel {
   }
 
   async snapshot() {
-    if (!this.session) throw new Error('Flovart Agent session is not open');
+    if (!this.session) throw new Error('Iris Agent session is not open');
     const metadata = await this.session.getMetadata();
     const entries = await this.session.getBranch();
     return {

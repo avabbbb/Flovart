@@ -1,6 +1,6 @@
-# Flovart Browser Import（本地开发）
+# Iris Browser Import（本地开发）
 
-这个扩展是 Desktop-first 的薄伴侣：只把用户明确右键选择的图片或视频（MP4/WebM），以分块 Native Messaging 传给 Flovart Desktop。它不保存 Provider Secret、不直连 Provider、不内嵌完整 WebUI，也不扫描整页。导入时有分块进度反馈，popup 保留最近 5 条导入历史与失败引导（Desktop 未启动 / 连接被拒）。视频导入需要 Desktop 侧的 `browser.import.video` 能力（协议 V1，配对新扩展时自动批准）。
+这个扩展是 Desktop-first 的薄伴侣：只把用户明确右键选择的图片或视频（MP4/WebM），以分块 Native Messaging 传给 Iris Desktop。它不保存 Provider Secret、不直连 Provider、不内嵌完整 WebUI，也不扫描整页。导入时有分块进度反馈，popup 保留最近 5 条导入历史与失败引导（Desktop 未启动 / 连接被拒）。视频导入需要 Desktop 侧的 `browser.import.video` 能力（协议 V1，配对新扩展时自动批准）。
 
 ## 本地安装
 
@@ -19,7 +19,7 @@
    powershell -ExecutionPolicy Bypass -File extension/register-native-host.ps1 -ExtensionId <EDGE_EXTENSION_ID> -Browser Edge
    ```
 
-4. 启动 Flovart Desktop，重新加载扩展。在任意网页图片上右键选择“添加图片到 Flovart”；首次连接需要在 Desktop 明确批准。
+4. 启动 Iris Desktop，重新加载扩展。在任意网页图片上右键选择“添加图片到 Iris”；首次连接需要在 Desktop 明确批准。
 
 从旧版扩展升级到 1.3 时，扩展会删除旧 `chrome.storage.local` 中的 Provider 凭证、Base64 待导入图、反推结果和整页采集数据；Desktop Keyring 与 Workflow 数据不受影响。
 

@@ -90,7 +90,7 @@
     "test 8-bit blend output against an independent reference, including alpha, row padding, cropped extent, masks, and upstream origin changes",
     "save, close, and reopen a project and verify the footage reference and Blend keyframes",
     "apply V1 then V2, undo and redo, and confirm V1 media remains available",
-    "export with the Flovart service and network stopped",
+    "export with the Iris service and network stopped",
     "test missing footage and unsupported bit depth error visibility",
     "verify After Effects to Premiere effect compatibility separately",
     "enable output extent only after clipped extent and origin handling passes",

@@ -399,6 +399,7 @@ body {
 .compact-right-panel__quicktabs--icons .compact-right-panel__quicktabs-icons {
     position: absolute;
     left: 50%;
+    z-index: 1;
     width: max-content;
     flex: 0 0 auto;
     display: grid;
@@ -407,17 +408,25 @@ body {
     transform: translateX(-50%);
 }
 .compact-right-panel__quicktabs--icons .isl-tab {
+    box-sizing: border-box;
+    display: inline-flex;
     width: 36px;
     min-width: 36px;
+    max-width: 36px;
+    height: 32px;
     flex: 0 0 36px;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
     justify-self: center;
-    padding-inline: 0;
 }
 .compact-right-panel__quicktabs--icons .compact-right-panel__quicktab-label {
     display: none;
 }
 .compact-right-panel__quicktabs--icons > button {
-  margin-inline-start: auto;
+    position: relative;
+    z-index: 1;
+    margin-inline-start: auto;
 }
 .compact-right-panel__quicktabs .isl-tab--active {
     color: var(--isl-ink);

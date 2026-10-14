@@ -9,50 +9,50 @@ AIGC:
   ReservedCode2: '344740da-b3c3-47ae-a18f-3ac2928f4069'
 ---
 
-# Flovart End User Terms and Disclaimer
+# Iris End User Terms and Disclaimer
 
 Status: Pre-release draft. These Terms become effective when linked from an official public release.
 
 Terms version: 1.0-draft
 
-Publisher: Flovart, published and maintained by the Hong Kong individual open-source developer [@avabbbb](https://github.com/avabbbb) ("Flovart", "we", "us").
+Publisher: Iris, published and maintained by the Hong Kong individual open-source developer [@avabbbb](https://github.com/avabbbb) ("Iris", "we", "us").
 
 Primary legal jurisdiction: Hong Kong Special Administrative Region.
 
 [中文版本](./TERMS_OF_SERVICE.zh-CN.md)
 
-These Terms govern the official Flovart Desktop Edition, the Official WebUI at `https://avabbbb.github.io/Flovart/`, the official Flovart Edge Extension, and any optional service expressly linked to these Terms. The source code is separately licensed under the MIT License; these Terms do not reduce or add restrictions to rights granted by that license.
+These Terms govern the official Iris Desktop Edition, the Official WebUI at `https://avabbbb.github.io/Flovart/`, the official Iris Edge Extension, and any optional service expressly linked to these Terms. The source code is separately licensed under the MIT License; these Terms do not reduce or add restrictions to rights granted by that license.
 
 You accept these Terms when you expressly check the acceptance box in Desktop Edition or the Official WebUI before first persisting a Provider Secret or making a Provider request, or when you continue using the Edge Extension after its first-use disclosure. If you do not agree, do not connect a Provider or use the Edge Extension.
 
 
 ## 1. Service description
 
-Flovart is a local-first AI creative workspace. Its current product surfaces are Workflow for node-based generation, Table for focused single-input processing, and Agent for task and coding-agent collaboration, together with AI-assisted creation and project utilities.
+Iris is a local-first AI creative workspace. Its current product surfaces are Workflow for node-based generation, Table for focused single-input processing, and Agent for task and coding-agent collaboration, together with AI-assisted creation and project utilities.
 
 Self-hosted deployments may optionally include a community hub backend for user authentication, prompt sharing, and desktop auto-update distribution. These backend services are operated and secured by the deployer.
 
-Flovart does not provide AI model service, hosted inference, API credits, payment accounts, or guaranteed access to any third-party provider by default.
+Iris does not provide AI model service, hosted inference, API credits, payment accounts, or guaranteed access to any third-party provider by default.
 
 You choose the providers, models, API keys, custom endpoints, local files, prompts, references, and workflows you use.
 
-Desktop Edition and the Official WebUI can be used without registering a Flovart account. The Official WebUI and Desktop WebView currently create separate origin/profile-scoped workspaces. The official Edge Extension is an optional thin companion and is not required for Workflow, Table, Agent, or Provider use.
+Desktop Edition and the Official WebUI can be used without registering a Iris account. The Official WebUI and Desktop WebView currently create separate origin/profile-scoped workspaces. The official Edge Extension is an optional thin companion and is not required for Workflow, Table, Agent, or Provider use.
 
 We may update, change, hide, rename, remove, or discontinue features over time.
 
 
 ## 2. Eligibility and responsibility
 
-You must be old enough and legally permitted to use Flovart in your jurisdiction.
+You must be old enough and legally permitted to use Iris in your jurisdiction.
 
-If you use Flovart for a business, organization, client, employer, or other entity, you represent that you have authority to do so.
+If you use Iris for a business, organization, client, employer, or other entity, you represent that you have authority to do so.
 
 You are responsible for your device, browser profile, API keys, project files, local storage, exports, extensions, workflows, generated content, and any activity that happens through your setup.
 
 
 ## 3. Source license
 
-The Flovart source code is licensed under the MIT License.
+The Iris source code is licensed under the MIT License.
 
 The MIT License is a permissive license that allows you to use, copy, modify, merge, publish, distribute, sublicense, and sell copies of the Software with minimal restrictions, provided you include the copyright notice and permission notice.
 
@@ -63,9 +63,9 @@ To the extent these Terms conflict with the MIT License regarding use, copying, 
 
 ## 4. API keys and third-party services
 
-Flovart uses a bring-your-own-key model.
+Iris uses a bring-your-own-key model.
 
-You may configure official or third-party Providers, proxies, aggregators, self-hosted gateways, custom Base URLs, and model identifiers. Flovart does not certify an endpoint merely because the software allows you to enter or call it.
+You may configure official or third-party Providers, proxies, aggregators, self-hosted gateways, custom Base URLs, and model identifiers. Iris does not certify an endpoint merely because the software allows you to enter or call it.
 
 You are responsible for obtaining, securing, rotating, revoking, and paying for your own API keys and provider accounts.
 
@@ -73,14 +73,14 @@ When you call a third-party AI provider or custom endpoint, you may transmit pro
 
 Third-party providers are governed by their own terms, privacy policies, billing rules, data practices, retention rules, safety policies, and acceptable-use policies.
 
-Flovart is not responsible for third-party identity, security, pricing, charges, outages, moderation, data retention, training practices, policy enforcement, account suspension, endpoint behavior, protocol compatibility, or output quality.
+Iris is not responsible for third-party identity, security, pricing, charges, outages, moderation, data retention, training practices, policy enforcement, account suspension, endpoint behavior, protocol compatibility, or output quality.
 
 You are responsible for all fees, quota usage, losses, and disputes caused by your provider keys, endpoints, or workflows.
 
 
 ## 5. Local data and security risk
 
-Flovart is designed to keep project data local where possible, but local-first does not mean risk-free.
+Iris is designed to keep project data local where possible, but local-first does not mean risk-free.
 
 Depending on your environment, data may be stored in browser localStorage, IndexedDB, extension storage, desktop app storage, local files, operating-system caches, browser profiles, synced browser accounts, cloud backups, or other local mechanisms.
 
@@ -102,13 +102,13 @@ Only grant browser permissions or import page context when you understand what d
 
 ## 7. User content and generated output
 
-You retain responsibility for the prompts, files, images, videos, references, text, project data, workflows, and other materials you provide to Flovart.
+You retain responsibility for the prompts, files, images, videos, references, text, project data, workflows, and other materials you provide to Iris.
 
-As between you and Flovart maintainers, you are responsible for reviewing the ownership, license, legality, reliability, accuracy, and appropriateness of your inputs and outputs.
+As between you and Iris maintainers, you are responsible for reviewing the ownership, license, legality, reliability, accuracy, and appropriateness of your inputs and outputs.
 
 AI-generated output can be wrong, incomplete, outdated, misleading, biased, unsafe, offensive, infringing, or unsuitable for your intended use.
 
-Flovart does not guarantee that AI output is accurate, original, lawful, non-infringing, commercially usable, or fit for a particular purpose.
+Iris does not guarantee that AI output is accurate, original, lawful, non-infringing, commercially usable, or fit for a particular purpose.
 
 You should independently evaluate output before publishing, selling, relying on, or distributing it.
 
@@ -117,9 +117,9 @@ You must not use output relating to identifiable individuals in a way that could
 
 ## 8. Acceptable use
 
-You agree to use Flovart only for lawful purposes and in accordance with these Terms.
+You agree to use Iris only for lawful purposes and in accordance with these Terms.
 
-You agree not to use Flovart to create, edit, automate, distribute, or facilitate unlawful, abusive, exploitative, deceptive, privacy-invasive, infringing, or harmful content.
+You agree not to use Iris to create, edit, automate, distribute, or facilitate unlawful, abusive, exploitative, deceptive, privacy-invasive, infringing, or harmful content.
 
 You agree not to violate third-party rights, including copyright, trademark, privacy, publicity, confidentiality, contractual, or data-protection rights.
 
@@ -130,29 +130,29 @@ You agree not to upload secrets, passwords, API keys, private personal data, reg
 
 ## 9. No high-stakes reliance
 
-Flovart and its AI outputs are not designed for legal, medical, financial, safety-critical, employment, credit, housing, insurance, education, or other high-impact decisions.
+Iris and its AI outputs are not designed for legal, medical, financial, safety-critical, employment, credit, housing, insurance, education, or other high-impact decisions.
 
-Do not rely on Flovart output as a substitute for professional judgment.
+Do not rely on Iris output as a substitute for professional judgment.
 
 Where an output may affect real-world decisions or rights, qualified human review and compliance review are required.
 
 
 ## 10. Privacy
 
-Your use of Flovart is also governed by the [Privacy Policy](./PRIVACY_POLICY.md).
+Your use of Iris is also governed by the [Privacy Policy](./PRIVACY_POLICY.md).
 
-Flovart itself is intended to operate locally, but your actions may still transmit data to third parties when you call providers, use custom endpoints, load remote media, use browser extensions, export files, publish work, sync browser data, use cloud backup, or enable integrations.
+Iris itself is intended to operate locally, but your actions may still transmit data to third parties when you call providers, use custom endpoints, load remote media, use browser extensions, export files, publish work, sync browser data, use cloud backup, or enable integrations.
 
 You are responsible for deciding what data may be transmitted and whether you have the right to transmit it.
 
 
 ## 11. No warranties
 
-Flovart is provided as is and as available.
+Iris is provided as is and as available.
 
-To the maximum extent permitted by law, Flovart is provided without warranties of any kind, whether express, implied, statutory, or otherwise.
+To the maximum extent permitted by law, Iris is provided without warranties of any kind, whether express, implied, statutory, or otherwise.
 
-No warranty is made that Flovart will be secure, uninterrupted, error-free, accurate, compatible, lawful for your use case, or fit for a particular purpose.
+No warranty is made that Iris will be secure, uninterrupted, error-free, accurate, compatible, lawful for your use case, or fit for a particular purpose.
 
 No warranty is made that third-party providers, browser APIs, local storage, extensions, custom endpoints, generated output, exported files, or workflows will behave as expected.
 
@@ -180,7 +180,7 @@ If you do not agree to updated Terms, you may continue using rights granted by t
 
 These Terms are governed by the laws of the Hong Kong Special Administrative Region, without regard to conflict-of-law rules. The courts of Hong Kong have non-exclusive jurisdiction over disputes relating to these Terms.
 
-Nothing in these Terms excludes consumer, privacy, personal-information, or other rights that cannot lawfully be excluded in the place where you live or use Flovart. Users in Mainland China retain any mandatory rights that apply under the Personal Information Protection Law and other applicable laws. Users in Hong Kong retain any mandatory rights under the Personal Data (Privacy) Ordinance and other applicable laws.
+Nothing in these Terms excludes consumer, privacy, personal-information, or other rights that cannot lawfully be excluded in the place where you live or use Iris. Users in Mainland China retain any mandatory rights that apply under the Personal Information Protection Law and other applicable laws. Users in Hong Kong retain any mandatory rights under the Personal Data (Privacy) Ordinance and other applicable laws.
 
 
 ## 15. Contact
@@ -189,4 +189,4 @@ Project repository: [github.com/avabbbb/Flovart](https://github.com/avabbbb/Flov
 
 Public support, policy questions, and notices: [GitHub Issues](https://github.com/avabbbb/Flovart/issues)
 
-Do not post API keys, passwords, identity documents, private media, confidential information, or other sensitive personal information in a public GitHub Issue. Flovart does not currently provide a separate private support email. Because official local builds do not normally send project data to the publisher, most local data access and deletion requests must be completed on the user's own device as described in the Privacy Policy.
+Do not post API keys, passwords, identity documents, private media, confidential information, or other sensitive personal information in a public GitHub Issue. Iris does not currently provide a separate private support email. Because official local builds do not normally send project data to the publisher, most local data access and deletion requests must be completed on the user's own device as described in the Privacy Policy.

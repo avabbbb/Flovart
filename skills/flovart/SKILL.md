@@ -1,19 +1,19 @@
 ---
 name: flovart
-description: Use Iris's visible Workflow through its stable Agent surface. Use when an agent must prepare the workspace, inspect the current graph, read selection, apply document changes, or run a Workflow node.
+description: Use Iris's Workflow and guide a Resolve native-MCP handoff through the compatible flovart CLI when current interfaces support it.
 ---
 
 # Iris
 
-Iris is the visible Workflow authority. The Link layer prepares the local
+Iris's visible Browser Workflow is the current Workflow authority. The Link layer prepares the local
 session automatically. Do not ask the user for connection details and do not
 recreate a connection flow in the conversation.
 
 This Skill expects Node.js 22.19.0 or newer when the local CLI is run.
 
-## Normal loop
+## Normal Browser Workflow loop
 
-Start every new task with:
+Start every new Browser Workflow task with:
 
 ```bash
 flovart ensure --json
@@ -46,8 +46,9 @@ flovart workflow.apply
 flovart workflow.node.run
 ```
 
-The same five operations are available through the optional local stdio MCP
-projection for MCP-capable hosts such as TeleAgent. The MCP names are
+The same five operations are available through Iris's optional local stdio MCP
+projection for MCP-capable hosts such as TeleAgent. This is separate from any
+creative host's native MCP. The Iris MCP names are
 `flovart_status`, `flovart_workflow_inspect`, `flovart_workflow_selection`,
 `flovart_workflow_apply`, and `flovart_workflow_run`. MCP is a transport
 projection, not a second Workflow runtime; use the CLI path for Codex,
@@ -136,7 +137,7 @@ and omitting it on `project.create`/`workflow.apply` makes the write fail with
 
 ## Intent mapping
 
-- “打开 Flovart” → `ensure`, then `workflow.inspect`.
+- “打开 Iris” → `ensure`, then `workflow.inspect`.
 - “查看当前 Workflow” → `workflow.inspect`.
 - “当前选择” → `workflow.selection.get`.
 - Add, delete, move, resize, connect, disconnect, or edit → one `workflow.apply`.
@@ -151,7 +152,7 @@ a bare `workflow.apply` `add_node` operation requires. Prefer it over a raw
 npm run flovart:cli -- workflow.node.create-connected --from-node-id <id> --type text --title "Shot 2" --x 420 --y 120 --agent-identity codex --idempotency-key <key> --json
 ```
 
-The UI and Iris own Provider routing, credentials, cost confirmation,
+The Iris UI and Core own Provider routing, credentials, cost confirmation,
 resource resolution, and artifacts. Do not call a Provider directly, store
 credentials, modify browser storage, use private routes, or create a second
 Workflow runtime. A missing reference or unsupported input must remain an

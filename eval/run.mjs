@@ -461,7 +461,7 @@ async function cmdOracle(flags) {
 
   console.log(`\nOracle / NOP admission gate`);
   console.log(`  tasks: ${qa.tasks}  repeat: ${repeat}`);
-  console.log(`  oracle 5/5 stable: ${qa.stableTasks} / ${qa.tasks} (admissible: ${qa.admissibleTasks})`);
+  console.log(`  oracle ${repeat}/${repeat} stable: ${qa.stableTasks} / ${qa.tasks} (admissible: ${qa.admissibleTasks})`);
   console.log(`  nop failed as expected: ${qa.nopFailedAsExpected} / ${qa.nopChecked} (observational skipped: ${qa.observationalTasks})`);
   if (nonDiscriminating.length) {
     console.log(`  note: NOP passes these observational tasks by design: ${nonDiscriminating.join(', ')}`);
@@ -658,8 +658,10 @@ async function cmdRun(flags) {
   await writeFile(join(runDir, 'summary.json'), `${serializeEvidence(summary, true)}\n`, 'utf8');
 
   const agg = summary.aggregate;
-  console.log(`\n  pass@1 : ${(agg.passAt1 * 100).toFixed(1)}% (${agg.successfulTrials}/${agg.trials})`);
-  console.log(`  pass^5 : ${(agg.passPow5 * 100).toFixed(1)}% (${agg.stableTasks}/${agg.tasks})`);
+  const percentage = value => value === null ? 'not measured' : `${(value * 100).toFixed(1)}%`;
+  console.log(`\n  pass@1 : ${percentage(agg.passAt1)} (${agg.successfulTrials}/${agg.executedTrials} executed)`);
+  console.log(`  pass^5 : ${percentage(agg.passPow5)} (${agg.stableFiveTrialGroups}/${agg.completeFiveTrialGroups} complete task/runner groups)`);
+  console.log(`  five-trial coverage: ${agg.completeFiveTrialGroups}/${agg.taskRunnerGroups} groups (${agg.incompleteFiveTrialGroups} incomplete)`);
   console.log(`  safety : ${agg.hardGatePass ? 'hard gate PASS' : 'hard gate FAIL'} ${JSON.stringify(agg.safety)}`);
   console.log(`  failures: ${JSON.stringify(agg.failureDistribution)}`);
   console.log(`  run id: ${runId}`);
@@ -678,13 +680,13 @@ async function cmdReport(flags) {
   const targetId = flags.run ? String(flags.run) : runs[runs.length - 1];
   const { run, summary } = await loadRun(targetId);
 
-  let qa = run.oracleQa ?? null;
+  let qa = run.oracleQa ? { ...run.oracleQa, runId: run.id } : null;
   if (!qa) {
     for (const candidate of [...runs].reverse()) {
       try {
         const loaded = await loadRun(candidate);
         if (loaded.run.oracleQa) {
-          qa = loaded.run.oracleQa;
+          qa = { ...loaded.run.oracleQa, runId: loaded.runId };
           break;
         }
       } catch { /* skip unreadable runs */ }
@@ -701,13 +703,20 @@ async function cmdReport(flags) {
       standInTrials: agentRun.run.agentStandIn?.standInTrials ?? 0,
       certifiedTrials: agentRun.run.agentStandIn?.certifiedTrials ?? 0,
       runId: agentRun.runId,
+      startedAt: agentRun.run.startedAt,
+      environment: agentRun.run.environment,
     };
   }
 
   let environment = null;
   const environmentRun = await latestRunWithGroup(runs, 'environment', targetId);
   if (environmentRun) {
-    environment = { ...environmentRun.summary.aggregate, runId: environmentRun.runId };
+    environment = {
+      ...environmentRun.summary.aggregate,
+      runId: environmentRun.runId,
+      startedAt: environmentRun.run.startedAt,
+      environment: environmentRun.run.environment,
+    };
   }
 
   // Coverage is built from the full dataset, not from the executed subset, so a

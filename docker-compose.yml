@@ -19,12 +19,16 @@ services:
     build: ./backend
     environment:
       PORT: "11452"
+      # Inside the container the hub must listen on all interfaces so the
+      # host port mapping can reach it; the published host port below is
+      # loopback-only, so nothing outside the machine can talk to it.
+      HUB_BIND: "0.0.0.0"
       DATABASE_URL: "postgres://postgres:postgres@db:5432/flovart?sslmode=disable"
-      JWT_SECRET: "flovart-dev-secret-change-in-production"
+      JWT_SECRET: "${FLOVART_HUB_JWT_SECRET:-flovart-dev-secret-change-in-production}"
       JWT_EXP_HOURS: "168"
-      CORS_ALLOW: "*"
+      CORS_ALLOW: "loopback"
     ports:
-      - "${FLOVART_HUB_PORT:-11452}:11452"
+      - "127.0.0.1:${FLOVART_HUB_PORT:-11452}:11452"
     depends_on:
       db:
         condition: service_healthy

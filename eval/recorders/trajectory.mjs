@@ -10,11 +10,13 @@ import { join } from 'node:path';
 const SECRET_KEY_PATTERN = /(api[-_]?key|authorization|bearer|(?:^|[^a-z0-9])token(?:$|[^a-z0-9])|access[-_]?token|refresh[-_]?token|(?:^|[^a-z0-9])secret(?:$|[^a-z0-9])|credential|password|cookie)/i;
 const SECRET_VALUE_PATTERNS = [
   /\bsk-[A-Za-z0-9_-]{16,}\b/g,
-  /\bghp_[A-Za-z0-9]{20,}\b/g,
+  /\bgh[pousr]_[A-Za-z0-9]{20,}\b/g,
   /\bxox[baprs]-[A-Za-z0-9-]{10,}\b/g,
   /\beyJ[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{8,}\b/g,
   /Bearer\s+[A-Za-z0-9._-]{12,}/gi,
   /\b(?:api[-_ ]?key|access[-_ ]?token|refresh[-_ ]?token|(?:[a-z0-9]+[-_ ]?)?token|authorization|credential|secret|password|cookie)\b\s*[:=]\s*(?:"[^"]*"|'[^']*'|[A-Za-z0-9_~+./=-]{12,})/gi,
+  /\bAKIA[0-9A-Z]{16,}\b/g,
+  /\bAIza[0-9A-Za-z_-]{35}\b/g,
 ];
 
 const REDACTED = '[REDACTED]';

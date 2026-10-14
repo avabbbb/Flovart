@@ -79,10 +79,10 @@ export const HELP_TEXT = [
 ].join('\n');
 
 export const SETUP_TEXT = [
-  'Flovart Agent Toolkit setup (run from a source checkout):',
+  'Iris Agent Toolkit setup (run from a source checkout):',
   '1. npm install',
   '2. npm run flovart:cli -- start --source --web --open',
-  '3. Enter provider credentials only in the local Flovart Runtime/WebUI',
+  '3. Enter provider credentials only in the local Iris Runtime/WebUI',
   '4. npm run flovart:cli -- status --json',
   '5. npm run flovart:cli -- workflow.inspect --json',
   '',
@@ -492,7 +492,7 @@ export async function executeFlovartCommand(commandName, args = {}, runtime = {}
       const schema = COMMAND_REGISTRY[commandKey];
       return schema
         ? { ok: true, command: commandKey, schema: { ...schema, aliases: getCommandAliases(commandKey) } }
-        : { ok: false, error: { code: 'UNKNOWN_COMMAND', message: `Unknown Flovart command: ${requested}` } };
+        : { ok: false, error: { code: 'UNKNOWN_COMMAND', message: `Unknown Iris command: ${requested}` } };
     }
     case 'inspiration.search': {
       const { searchInspiration } = await loadAgentKit();
@@ -622,7 +622,7 @@ export async function executeFlovartCommand(commandName, args = {}, runtime = {}
     case 'export.project':
       return await runtime.export?.project?.({ format: args.format || 'json' });
     default:
-      throw new Error(`Unknown Flovart command: ${commandName}`);
+      throw new Error(`Unknown Iris command: ${commandName}`);
   }
 }
 
@@ -634,7 +634,7 @@ export function planFlovartInput(rawInput, session = createFlovartSession()) {
   session.lastTool = command;
   return {
     title: command,
-    steps: [`Run deterministic Flovart tool: ${command}`],
+    steps: [`Run deterministic Iris tool: ${command}`],
     run: async ({ runtime }) => executeFlovartCommand(command, args, runtime),
   };
 }

@@ -31,10 +31,10 @@ flovart-cli workflow.node.run --agent-identity workbuddy --project-id <id> --nod
 
 ## 用户语言映射
 
-- “打开 Flovart” → `ensure`，确认结果后再 `workflow.inspect`。
+- “打开 Iris” → `ensure`，确认结果后再 `workflow.inspect`。
 - “查看当前 Workflow” → `workflow.inspect`。
 - “选中的内容/当前选择” → `workflow.selection.get`。
 - “新增、删除、移动、连线、修改节点” → 一次 `workflow.apply`，提交完整 operations。
 - “运行这个节点” → 先确认节点和版本，再 `workflow.node.run`。
 
-Provider 配置、费用确认和生成凭据由 Flovart 管理。配置或本地服务缺失时告诉用户去 Flovart 的产品设置或点击自动修复，不在聊天中收集敏感信息。
+Provider 配置、费用确认和生成凭据由 Iris 管理。配置或本地服务缺失时告诉用户去 Iris 的产品设置或点击自动修复，不在聊天中收集敏感信息。

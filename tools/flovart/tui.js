@@ -12,14 +12,14 @@ function resolveCliPath() {
 }
 
 export const HELP_TEXT = `
-Flovart Terminal Command Center
+Iris Terminal Command Center
 
   /runtime              inspect Production Runtime
   /workspace            inspect visible Workflow connection
   /tasks                list durable Runtime tasks
   /research <topic>     collect Reddit/X topic signals
   /models               list Product Models
-  /run <cli args>       run any canonical Flovart command
+  /run <cli args>       run any canonical flovart command
   /start                start Runtime/WebUI + Codex agent
   /clear                clear command output
   /help                 show command help
@@ -152,7 +152,7 @@ export async function readTuiDashboard() {
 
 export function formatTuiSnapshot(model) {
   const lines = [
-    '┌ Flovart Terminal Command Center ─────────────────────────────',
+    '┌ Iris Terminal Command Center ────────────────────────────────',
     `│ Runtime   ${model.runtime.state} ${model.runtime.detail}`.trimEnd(),
     `│ Workflow  ${model.workspace.state} ${model.workspace.detail}`.trimEnd(),
     `│ Tasks     ${model.tasks.length} recent`,
@@ -239,7 +239,7 @@ function TerminalApp() {
 
   return h(Box, { flexDirection: 'column', paddingX: 1 },
     h(Box, { justifyContent: 'space-between' },
-      h(Text, { bold: true, color: 'cyan' }, 'FLOVART'),
+      h(Text, { bold: true, color: 'cyan' }, 'IRIS'),
       h(Text, { dimColor: true }, 'Terminal Command Center'),
     ),
     h(Box, null,

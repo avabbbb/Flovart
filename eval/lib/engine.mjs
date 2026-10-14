@@ -457,8 +457,9 @@ function classifyFailure({
 
 /**
  * Aggregate trials into STATE-Bench-style metrics.
- * pass@1 = successful trials / total trials.
- * pass^5 = tasks whose every trial succeeded / total tasks.
+ * pass@1 = successful executed trials / executed trials.
+ * pass^5 = stable, complete five-trial task/runner groups / complete groups.
+ * Missing, blocked or duplicated trials cannot certify five-run reliability.
  */
 export function aggregate(results) {
   const byTask = new Map();
@@ -468,19 +469,19 @@ export function aggregate(results) {
   }
 
   const totalTrials = results.length;
-  const successfulTrials = results.filter(result => result.success).length;
+  const successfulTrials = results.filter(result => !result.blocked && result.success).length;
   const blockedTrials = results.filter(result => result.blocked).length;
   // A trial that never ran cannot be evidence about capability, so pass@1 is
   // reported over the trials that actually executed.
   const executedTrials = totalTrials - blockedTrials;
 
   const taskCount = byTask.size;
-  // pass^k is over the trials that actually ran: a task is stable when every
-  // executed trial succeeded. Blocked trials are counted separately instead of
-  // silently turning a stable task into an unstable one.
+  const reliability = fiveTrialReliability(results);
+  // Keep the task count for consumers; reliability cohorts are task/runner pairs.
   const stableTasks = [...byTask.values()].filter(trials => {
-    const executed = trials.filter(trial => !trial.blocked);
-    return executed.length > 0 && executed.every(trial => trial.success);
+    const taskReliability = fiveTrialReliability(trials);
+    return taskReliability.incompleteFiveTrialGroups === 0
+      && taskReliability.stableFiveTrialGroups === taskReliability.taskRunnerGroups;
   }).length;
   const scoredTasks = [...byTask.values()].filter(trials => !trials.every(trial => trial.blocked)).length;
 
@@ -503,7 +504,8 @@ export function aggregate(results) {
     for (const key of Object.keys(safetyTotals)) safetyTotals[key] += result.safety[key] ?? 0;
   }
 
-  const predicateAccuracy = results.reduce((sum, result) => sum + (result.predicateAccuracy ?? 0), 0);
+  const predicateAccuracy = results.filter(result => !result.blocked)
+    .reduce((sum, result) => sum + (result.predicateAccuracy ?? 0), 0);
   const successful = results.filter(result => result.success);
 
   // Token and cost accounting only exists when a runner reported it. Reporting
@@ -521,8 +523,8 @@ export function aggregate(results) {
     trials: totalTrials,
     executedTrials,
     blockedTrials,
-    passAt1: executedTrials ? successfulTrials / executedTrials : 0,
-    passPow5: scoredTasks ? stableTasks / scoredTasks : 0,
+    passAt1: executedTrials ? successfulTrials / executedTrials : null,
+    ...reliability,
     successfulTrials,
     stableTasks,
     finalStateAccuracy: executedTrials ? predicateAccuracy / executedTrials : 0,
@@ -568,9 +570,43 @@ function aggregateBySuite(results) {
     output[suite] = {
       tasks: byTask.size,
       trials: entries.length,
-      passAt1: entries.filter(entry => entry.success).length / entries.length,
-      passPow5: [...byTask.values()].filter(trials => trials.every(trial => trial.success)).length / byTask.size,
+      executedTrials: entries.filter(entry => !entry.blocked).length,
+      blockedTrials: entries.filter(entry => entry.blocked).length,
+      passAt1: entries.some(entry => !entry.blocked)
+        ? entries.filter(entry => !entry.blocked && entry.success).length
+          / entries.filter(entry => !entry.blocked).length
+        : null,
+      ...fiveTrialReliability(entries),
     };
   }
   return output;
+}
+
+function fiveTrialReliability(results) {
+  const groups = new Map();
+  for (const result of results) {
+    const key = JSON.stringify([result.taskId, result.runner]);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(result);
+  }
+  let completeFiveTrialGroups = 0;
+  let stableFiveTrialGroups = 0;
+  for (const trials of groups.values()) {
+    const indices = new Set(trials.map(trial => trial.trialIndex));
+    const complete = trials.length === 5 && indices.size === 5
+      && [1, 2, 3, 4, 5].every(index => indices.has(index))
+      && trials.every(trial => !trial.blocked);
+    if (!complete) continue;
+    completeFiveTrialGroups += 1;
+    if (trials.every(trial => trial.success)) stableFiveTrialGroups += 1;
+  }
+  return {
+    taskRunnerGroups: groups.size,
+    completeFiveTrialGroups,
+    stableFiveTrialGroups,
+    incompleteFiveTrialGroups: groups.size - completeFiveTrialGroups,
+    passPow5: completeFiveTrialGroups
+      ? stableFiveTrialGroups / completeFiveTrialGroups
+      : null,
+  };
 }

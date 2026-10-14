@@ -86,7 +86,7 @@ offline export are still unverified. Build details and local evidence are in
 - Apply V1 then V2, keyframe Blend, undo/redo, save, close, and reopen. Confirm
   the selected version and host keyframes persist and both candidate footages
   remain available.
-- With Flovart and the network stopped, preview and export. Collect the project
+- With Iris and the network stopped, preview and export. Collect the project
   to another folder, reopen it, and verify every applied footage reference;
   separately move/relink a source asset and confirm missing media cannot be
   mistaken for a successful render.

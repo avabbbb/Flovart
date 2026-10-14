@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -96,22 +97,32 @@ func main() {
 		}
 	}
 
-	log.Printf("flovart/hub listening on :%s", cfg.Port)
-	if err := r.Run(":" + cfg.Port); err != nil {
+	log.Printf("flovart/hub listening on %s:%s", cfg.Bind, cfg.Port)
+	if err := r.Run(cfg.Bind + ":" + cfg.Port); err != nil {
 		log.Fatalf("server: %v", err)
 	}
 }
 
 func corsMiddleware(allow string) gin.HandlerFunc {
+	allow = strings.ToLower(strings.TrimSpace(allow))
 	return func(c *gin.Context) {
 		origin := c.GetHeader("Origin")
-		switch allow {
-		case "*":
+		switch {
+		case allow == "loopback":
+			// 本地开发模式：仅放行回环与 Tauri WebView 来源，回显具体 Origin 并携带凭据。
+			// 开发页面的端口是动态分配的，无法用固定 Origin 白名单表达。
+			if isLoopbackOrigin(origin) {
+				c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
+				c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+				c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+				c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
+			}
+		case allow == "*":
 			// 通配模式：不回显 Origin、不携带凭据
 			c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
 			c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 			c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-		case "", "off":
+		case allow == "", allow == "off":
 			// 关闭 CORS：不输出任何 CORS 头
 		default:
 			// 白名单模式：仅放行匹配的 Origin 并携带凭据
@@ -128,6 +139,28 @@ func corsMiddleware(allow string) gin.HandlerFunc {
 		}
 		c.Next()
 	}
+}
+
+// isLoopbackOrigin 判断 Origin 是否为本机回环或 Tauri WebView 来源。
+// tauri://localhost（macOS/Linux WebView）与 http://tauri.localhost（Windows）
+// 都是桌面壳的本地来源；其余非回环来源一律不放行。
+func isLoopbackOrigin(origin string) bool {
+	u, err := url.Parse(strings.ToLower(origin))
+	if err != nil || u.Host == "" {
+		return false
+	}
+	host := u.Hostname()
+	if u.Scheme == "tauri" {
+		return host == "localhost"
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return false
+	}
+	switch host {
+	case "localhost", "127.0.0.1", "::1", "tauri.localhost":
+		return true
+	}
+	return false
 }
 
 func atoiDefault(s string, def int) int {

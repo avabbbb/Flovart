@@ -33,7 +33,7 @@ $manifestPath = Join-Path $manifestDirectory "$hostName.json"
 $allowedOrigins = $ExtensionId | Sort-Object -Unique | ForEach-Object { "chrome-extension://$_/" }
 $manifest = [ordered]@{
   name = $hostName
-  description = 'Flovart Desktop Browser Import Bridge'
+  description = 'Iris Desktop Browser Import Bridge'
   path = $resolvedHost
   type = 'stdio'
   allowed_origins = @($allowedOrigins)
@@ -48,7 +48,7 @@ $registryPaths = switch ($Browser) {
   }
 }
 
-if ($PSCmdlet.ShouldProcess($manifestPath, '注册 Flovart Native Messaging Host')) {
+if ($PSCmdlet.ShouldProcess($manifestPath, '注册 Iris Native Messaging Host')) {
   [System.IO.Directory]::CreateDirectory($manifestDirectory) | Out-Null
   $json = $manifest | ConvertTo-Json -Depth 4
   [System.IO.File]::WriteAllText($manifestPath, $json, [System.Text.UTF8Encoding]::new($false))
@@ -58,5 +58,5 @@ if ($PSCmdlet.ShouldProcess($manifestPath, '注册 Flovart Native Messaging Host
   }
   Write-Host "Native Host 已注册：$manifestPath"
   Write-Host "允许扩展：$($allowedOrigins -join ', ')"
-  Write-Host '请在 Edge/Chrome 扩展管理页重新加载 Flovart Browser Import。'
+  Write-Host '请在 Edge/Chrome 扩展管理页重新加载 Iris Browser Import。'
 }
