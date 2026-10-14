@@ -9,19 +9,19 @@ AIGC:
   ReservedCode2: '820681c7-2a79-491d-9c05-5ec55eaee9c3'
 ---
 
-# Flovart 用户协议与免责声明
+# Iris 用户协议与免责声明
 
 状态：公开发布前草案。本协议在官方公开版本链接并展示后生效。
 
 协议版本：1.0-draft
 
-发布者：Flovart，由香港个人开源开发者 [@avabbbb](https://github.com/avabbbb) 发布和维护（下称“Flovart”或“我们”）。
+发布者：Iris，由香港个人开源开发者 [@avabbbb](https://github.com/avabbbb) 发布和维护（下称“Iris”或“我们”）。
 
 主要法域：中华人民共和国香港特别行政区。
 
 [English controlling version](./TERMS_OF_SERVICE.md)
 
-本协议适用于官方 Flovart Desktop Edition、位于 `https://avabbbb.github.io/Flovart/` 的 Official WebUI、官方 Flovart Edge Extension，以及明确链接本协议的可选服务。源代码另行依照 MIT License 授权；本协议不减少该开源许可证授予的权利，也不向其增加额外限制。
+本协议适用于官方 Iris Desktop Edition、位于 `https://avabbbb.github.io/Flovart/` 的 Official WebUI、官方 Iris Edge Extension，以及明确链接本协议的可选服务。源代码另行依照 MIT License 授权；本协议不减少该开源许可证授予的权利，也不向其增加额外限制。
 
 当你在 Desktop Edition 或 Official WebUI 首次持久保存 Provider Secret 或首次发起 Provider 请求前主动勾选同意，或者在 Edge Extension 首次使用说明后继续使用扩展时，即表示接受本协议。如果你不同意，请勿连接 Provider 或使用 Edge Extension。
 
@@ -29,13 +29,13 @@ AIGC:
 
 ## 1. 产品说明
 
-Flovart 是本地优先的 AI 创作工作区。当前正式产品面包括负责节点式生成的 Workflow、负责单一输入处理的 Table，以及负责任务和 Coding Agent 协作的 Agent，并提供 AI 辅助创作与项目工具。
+Iris 是本地优先的 AI 创作工作区。当前正式产品面包括负责节点式生成的 Workflow、负责单一输入处理的 Table，以及负责任务和 Coding Agent 协作的 Agent，并提供 AI 辅助创作与项目工具。
 
 自托管部署可以选择启用社区 Hub，用于账号与社区内容管理。自托管或 SaaS 部署的运营者自行负责该部署的安全、数据与合规。
 
-Flovart 默认不提供 AI 模型服务、托管推理、API 额度、Provider 账户或第三方服务可用性保证。你自行选择 Provider、模型、API Key、自定义端点、文件、提示词、引用和 Workflow。
+Iris 默认不提供 AI 模型服务、托管推理、API 额度、Provider 账户或第三方服务可用性保证。你自行选择 Provider、模型、API Key、自定义端点、文件、提示词、引用和 Workflow。
 
-Desktop Edition 与 Official WebUI 的核心能力无需注册 Flovart 账号。Official WebUI 与 Desktop WebView 当前分别创建按 origin / profile 隔离的工作区。官方 Edge Extension 是可选薄伴侣；不安装扩展不影响 Workflow、Table、Agent 或第三方 Provider 使用。
+Desktop Edition 与 Official WebUI 的核心能力无需注册 Iris 账号。Official WebUI 与 Desktop WebView 当前分别创建按 origin / profile 隔离的工作区。官方 Edge Extension 是可选薄伴侣；不安装扩展不影响 Workflow、Table、Agent 或第三方 Provider 使用。
 
 ## 2. 使用资格与责任
 
@@ -45,17 +45,17 @@ Desktop Edition 与 Official WebUI 的核心能力无需注册 Flovart 账号。
 
 ## 3. 开源许可
 
-Flovart 源代码依照 MIT License 授权。MIT 是宽松许可，允许你使用、复制、修改、合并、发布、分发、再授权和销售软件副本，只需保留版权声明和许可声明。
+Iris 源代码依照 MIT License 授权。MIT 是宽松许可，允许你使用、复制、修改、合并、发布、分发、再授权和销售软件副本，只需保留版权声明和许可声明。
 
 官方许可文本位于仓库根目录 `LICENSE`。如果本协议与 MIT License 在源代码使用、复制、修改或分发方面冲突，以 MIT License 为准。本协议只约束官方二进制、官方商店扩展、可选服务、Provider 使用以及开源许可范围以外的行为。
 
 ## 4. API Key、第三方 Provider 与自定义端点
 
-Flovart 采用 BYOK（用户自带 Key）模式。你可以配置官方或第三方 Provider、代理、聚合服务、自托管网关、自定义 Base URL 和模型标识。软件允许填写或调用某个端点，不代表 Flovart 对其身份、安全性、兼容性或质量作出认证。
+Iris 采用 BYOK（用户自带 Key）模式。你可以配置官方或第三方 Provider、代理、聚合服务、自托管网关、自定义 Base URL 和模型标识。软件允许填写或调用某个端点，不代表 Iris 对其身份、安全性、兼容性或质量作出认证。
 
 你负责合法获取、妥善保管、轮换和撤销 API Key，并支付 Provider 产生的全部费用。调用第三方服务时，提示词、图片、视频、文件、引用、生成结果、请求元数据和账户标识等内容可能发送给该服务。
 
-第三方 Provider 适用其自己的协议、隐私政策、计费规则、数据保留、训练、审核和可接受使用政策。Flovart 不对第三方身份、安全、收费、重复扣费、服务中断、审核、数据处理、账号封禁、协议兼容或输出质量负责。
+第三方 Provider 适用其自己的协议、隐私政策、计费规则、数据保留、训练、审核和可接受使用政策。Iris 不对第三方身份、安全、收费、重复扣费、服务中断、审核、数据处理、账号封禁、协议兼容或输出质量负责。
 
 ## 5. 本地数据与安全风险
 
@@ -75,25 +75,25 @@ Flovart 采用 BYOK（用户自带 Key）模式。你可以配置官方或第三
 
 你对输入的提示词、文件、图片、视频、引用、项目数据和 Workflow 负责，并负责审查生成结果的所有权、许可、合法性、准确性和适用性。
 
-AI 输出可能错误、过时、误导、有偏见、不安全、侵权或不适合特定用途。Flovart 不保证输出准确、原创、合法、不侵权、可商业使用或适合特定目的。发布、销售、依赖或分发输出前必须独立审查。
+AI 输出可能错误、过时、误导、有偏见、不安全、侵权或不适合特定用途。Iris 不保证输出准确、原创、合法、不侵权、可商业使用或适合特定目的。发布、销售、依赖或分发输出前必须独立审查。
 
 ## 8. 可接受使用
 
-你只能依法使用 Flovart，不得用其制作、编辑、自动化或传播违法、欺诈、剥削、侵权、侵犯隐私或有害内容；不得绕过 Provider 安全机制、限流、认证、支付、网站保护、访问控制或法律限制。
+你只能依法使用 Iris，不得用其制作、编辑、自动化或传播违法、欺诈、剥削、侵权、侵犯隐私或有害内容；不得绕过 Provider 安全机制、限流、认证、支付、网站保护、访问控制或法律限制。
 
 除非具有合法依据、必要授权并理解接收方规则，不得上传秘密、密码、他人 API Key、受监管数据、机密客户文件或无权使用的材料。
 
 ## 9. 高风险用途
 
-Flovart 及其 AI 输出不面向法律、医疗、金融、安全关键、就业、信贷、住房、保险、教育或其他高影响决策，不得替代专业判断。可能影响现实权利或重大利益的输出必须经过合格人员复核。
+Iris 及其 AI 输出不面向法律、医疗、金融、安全关键、就业、信贷、住房、保险、教育或其他高影响决策，不得替代专业判断。可能影响现实权利或重大利益的输出必须经过合格人员复核。
 
 ## 10. 隐私
 
-你的使用同时受《Flovart 隐私政策》约束。本地项目不会因为“本地优先”而阻止你主动向第三方传输数据；你必须自行判断是否有权发送相关内容以及接收方是否可信。
+你的使用同时受《Iris 隐私政策》约束。本地项目不会因为“本地优先”而阻止你主动向第三方传输数据；你必须自行判断是否有权发送相关内容以及接收方是否可信。
 
 ## 11. 不作保证
 
-Flovart 按“现状”和“可用”状态提供。在法律允许的最大范围内，不提供任何明示、默示、法定或其他保证，包括安全、不中断、无错误、准确、兼容、适销、特定用途适用或不侵权保证。
+Iris 按“现状”和“可用”状态提供。在法律允许的最大范围内，不提供任何明示、默示、法定或其他保证，包括安全、不中断、无错误、准确、兼容、适销、特定用途适用或不侵权保证。
 
 我们不保证第三方 Provider、浏览器 API、本地存储、扩展、自定义端点、生成结果、导出文件或 Workflow 按预期工作。
 
@@ -123,4 +123,4 @@ https://github.com/avabbbb/Flovart
 公开支持、政策问题与通知：
 https://github.com/avabbbb/Flovart/issues
 
-请勿在公开 GitHub Issue 中发布 API Key、密码、身份证明、私人媒体、机密信息或其他敏感个人信息。Flovart 目前不提供单独的私人支持邮箱。官方本地版本通常不会把项目数据发送给发布者，因此大部分本地数据访问和删除操作应按照隐私政策在用户自己的设备上完成。
+请勿在公开 GitHub Issue 中发布 API Key、密码、身份证明、私人媒体、机密信息或其他敏感个人信息。Iris 目前不提供单独的私人支持邮箱。官方本地版本通常不会把项目数据发送给发布者，因此大部分本地数据访问和删除操作应按照隐私政策在用户自己的设备上完成。

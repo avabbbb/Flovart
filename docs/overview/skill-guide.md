@@ -4,7 +4,7 @@
 
 ## Agent Integration Skill 是什么
 
-它是一份给 Codex、WorkBuddy、Claude Code 等 Coding Agent 的操作说明：告诉 Agent 如何准备 Flovart、读取当前 Workflow、应用结构化修改、运行节点并核对结果。
+它是一份给 Codex、WorkBuddy、Claude Code 等 Coding Agent 的操作说明：告诉 Agent 如何准备 Iris、读取当前 Workflow、应用结构化修改、运行节点并核对结果。
 
 它不是：
 - Agent 连接本身；
@@ -17,7 +17,7 @@
 
 ## 当前外部 Agent 流程
 
-1. 通过 `ensure` 准备 Flovart 与对应 Skill。
+1. 通过 `ensure` 准备 Iris 与对应 Skill。
 2. 打开并绑定真实可见 Workflow。
 3. Agent 先 `status` / `workflow.inspect`，需要时读取 selection。
 4. 使用 `workflow.apply` 做结构化编辑。
@@ -51,6 +51,6 @@ TeleAgent 等 MCP Host 只有完成真实客户端导入与 tracer 后才能升�
 
 顶栏 Agent 页负责 Host discovery / prepare / status / switch。
 
-Canvas/Table 右侧 Assistant 是 Flovart 内置助手。二者不复制 Host picker、会话或 Context/History。
+Canvas/Table 右侧 Assistant 是 Iris 内置助手。二者不复制 Host picker、会话或 Context/History。
 
 切换 Agent 只交接显式目标、素材与 operation result，不迁移账号、隐藏上下文或假装会话完全相同。

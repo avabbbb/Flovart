@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="pic/LOGO_optimized.png" alt="Flovart" width="140" />
+  <img src="pic/LOGO_optimized.png" alt="Iris" width="140" />
 </p>
 
-<h1 align="center">Flovart</h1>
+<h1 align="center">Iris</h1>
 
 <p align="center">
   <img src="https://img.shields.io/badge/License-AGPL--3.0--only-E8453C" alt="AGPL-3.0-only License" />
@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <a href="stats/README.md"><img src="https://tally.yuki.sh/hits/flovart/readme.svg?theme=rule34" alt="Flovart README views" /></a>
+  <a href="stats/README.md"><img src="https://tally.yuki.sh/hits/flovart/readme.svg?theme=rule34" alt="Iris README views" /></a>
   <br />
   <sub>README views · third-party counter, not unique visitors</sub>
 </p>

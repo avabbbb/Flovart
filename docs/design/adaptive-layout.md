@@ -1,4 +1,4 @@
-# Flovart Adaptive Layout
+# Iris Adaptive Layout
 
 > Current design after the container-driven Studio refactor (#15). 旧 CURRENT/TARGET/AUDIT 文档均为历史基线。
 

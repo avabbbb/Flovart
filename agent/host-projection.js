@@ -33,8 +33,8 @@ export function prepareAgentHostProjection(input = {}) {
       agentIdentity: { id: identity.id, label: identity.label },
       distributionTarget: { id: isTeleAgent ? 'teleagent-skill' : 'workbuddy-skill', label: isTeleAgent ? 'TeleAgent 技能包' : 'WorkBuddy 技能包', kind: 'skill' },
       projection: { status: 'external', skillReady: false, bootstrapReady: false, message: isTeleAgent
-        ? '在 TeleAgent 中导入 Flovart Skill，并配置本地 stdio MCP Server；真实客户端行为仍需认证。'
-        : '在 WorkBuddy 的技能页导入下载的 Flovart 技能包，再发送连接指令。' },
+        ? '在 TeleAgent 中导入 Iris Skill，并配置本地 stdio MCP Server；真实客户端行为仍需认证。'
+        : '在 WorkBuddy 的技能页导入下载的 Iris 技能包，再发送连接指令。' },
     };
   }
 
@@ -49,11 +49,11 @@ export function prepareAgentHostProjection(input = {}) {
   }
 
   const installed = initCliHost({ target: target.id, projectDir: input.projectDir });
-  if (!installed.ok) return failure('PROJECTION_FAILED', `${identity.label} 的 Flovart Skill 暂时无法准备。`, { agentIdentity: identity.id, distributionTarget: target.id });
+  if (!installed.ok) return failure('PROJECTION_FAILED', `${identity.label} 的 Iris Skill 暂时无法准备。`, { agentIdentity: identity.id, distributionTarget: target.id });
   return {
     ok: true,
     agentIdentity: { id: identity.id, label: identity.label },
     distributionTarget: { id: target.id, label: target.label, kind: target.kind },
-    projection: { status: 'ready', skillReady: true, bootstrapReady: true, message: `${identity.label} 的 Flovart Skill 已准备。` },
+    projection: { status: 'ready', skillReady: true, bootstrapReady: true, message: `${identity.label} 的 Iris Skill 已准备。` },
   };
 }

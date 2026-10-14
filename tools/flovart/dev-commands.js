@@ -1,4 +1,5 @@
 import { spawn, execFileSync, execSync } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
 import { existsSync, copyFileSync } from 'node:fs';
 import { createServer as createNetServer } from 'node:net';
 import { homedir, platform } from 'node:os';
@@ -556,13 +557,21 @@ async function startLocal(projectDir, plan) {
     }
   }
 
+  if (!process.env.JWT_SECRET && !plan.json) {
+    warn('JWT_SECRET not set: using a random dev secret. Hub logins reset on every start; set JWT_SECRET to keep sessions across restarts.');
+  }
   const env = {
     ...process.env,
     DATABASE_URL: process.env.DATABASE_URL || `postgres://${PG_USER}:${PG_PASSWORD}@localhost:${PG_PORT}/${PG_DB}?sslmode=disable`,
-    JWT_SECRET: process.env.JWT_SECRET || 'flovart-dev-secret-change-in-production',
+    // Never fall back to a guessable constant: a known-but-fixed JWT secret
+    // lets anyone who reads this repository forge dev-hub auth tokens.
+    JWT_SECRET: process.env.JWT_SECRET || randomBytes(32).toString('hex'),
     JWT_EXP_HOURS: process.env.JWT_EXP_HOURS || '168',
-    CORS_ALLOW: process.env.CORS_ALLOW || '*',
+    // Local development only serves loopback pages; the Go hub treats this
+    // value as "echo any localhost/127.0.0.1/Tauri origin, with credentials".
+    CORS_ALLOW: process.env.CORS_ALLOW || 'loopback',
     PORT: process.env.PORT || '11452',
+    HUB_BIND: process.env.HUB_BIND || '127.0.0.1',
   };
   if (plan.webPort !== undefined) env.FLOVART_WEB_PORT = String(plan.webPort);
   if (plan.agentPort !== undefined) env.FLOVART_AGENT_PORT = String(plan.agentPort);

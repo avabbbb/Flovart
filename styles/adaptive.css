@@ -423,8 +423,27 @@ body,
     display: none;
   }
 
+  .compact-right-panel__quicktabs .isl-tabbar {
+    position: absolute;
+    left: 50%;
+    width: max-content;
+    flex: 0 0 auto;
+    display: grid;
+    grid-template-columns: repeat(3, 36px);
+    gap: 4px;
+    transform: translateX(-50%);
+  }
+
+  .compact-right-panel__quicktabs > button {
+    margin-inline-start: auto;
+  }
+
   .compact-right-panel__quicktabs .isl-tab {
-    padding-inline: 4px;
+    width: 36px;
+    min-width: 36px;
+    flex: 0 0 36px;
+    justify-self: center;
+    padding-inline: 0;
   }
 }
 

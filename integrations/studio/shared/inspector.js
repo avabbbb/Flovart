@@ -1,4 +1,14 @@
 (function (global) {
+  'use strict';
+
+  // ---------------------------------------------------------------------------
+  // Iris Studio contextual inspector (Resolve-first).
+  // Implements integrations/studio/resolve/PRODUCT_UI_SPEC.md §6/§7:
+  //   Current Clip → Generate → References → Model → Output → Task → Candidates
+  //   → Open in Iris. No marketing card grid, no embedded Agent chat, no 制作/历史
+  //   tabs. Provider credentials never enter the panel.
+  // ---------------------------------------------------------------------------
+
   function el(tag, text, className) {
     const node = document.createElement(tag);
     if (text !== undefined) node.textContent = text;
@@ -13,15 +23,159 @@
   }
   function option(label, value) { const node = el('option', label); node.value = value; return node; }
 
-  // The real UXP/CEP packages and the browser preview mount this same UI.
+  // --- Locale ----------------------------------------------------------------
+  // Language resolution: explicit ?lang= / data attr / navigator.language.
+  // 'zh' covers zh-CN/zh-TW/zh-Hans; default fallback English.
+  function resolveLocale() {
+    try {
+      const params = new URLSearchParams(global.location && global.location.search || '');
+      const q = (params.get('lang') || params.get('locale') || '').toLowerCase();
+      if (q.startsWith('zh')) return 'zh';
+      if (q.startsWith('en')) return 'en';
+      const docLang = (global.document && global.document.documentElement.lang || '').toLowerCase();
+      if (docLang.startsWith('zh')) return 'zh';
+      const nav = (global.navigator && (navigator.languages && navigator.languages[0] || navigator.language) || '').toLowerCase();
+      if (nav.startsWith('zh')) return 'zh';
+    } catch (_) {}
+    return 'en';
+  }
+
+  const STR = {
+    en: {
+      panelAria: 'Iris panel',
+      currentClip: 'CURRENT CLIP',
+      generate: 'GENERATE',
+      references: 'REFERENCES',
+      refreshSelAria: 'Refresh host selection',
+      addReferenceAria: 'Re-read current selection as a reference',
+      addReference: '+ Reference',
+      currentSelectionChip: 'Current selection',
+      promptLabel: 'Describe the new shot, motion, lighting or change…',
+      promptFootRef: 'Current clip used as reference',
+      model: 'Model',
+      output: 'Output',
+      outputMediaPool: 'Media Pool',
+      outputProjectBin: 'Project bin',
+      outputNewLayerComp: 'Current comp · new layer',
+      outputNewLayerDoc: 'Current doc · new layer',
+      generateCta: '✦  Generate candidate',
+      generateCtaPreview: '✦  Demo generate & add',
+      generating: 'Generating…',
+      task: 'TASK',
+      candidates: 'CANDIDATES',
+      candidatesEmpty: 'No candidates yet.',
+      openInIris: 'Open in Iris ↗',
+      connectToOpen: 'Connect Iris to open the workspace.',
+      openCanvasTitle: 'Open Iris workspace',
+      connected: 'Iris connected',
+      waiting: 'Waiting for Iris',
+      sampleMedia: 'Sample media',
+      selectLayerOrClip: 'Select a layer or clip',
+      waitingHostSel: 'Waiting for host selection',
+      noDocOpen: 'No project open',
+      selectMediaFirst: 'Select a media clip first',
+      videoRef: 'video reference',
+      imageRef: 'image reference',
+      useCurrentAsRef: 'Use current selection as reference',
+      selChanged: 'Current selection changed',
+      auto: 'Auto',
+      sec: 's', min: 'min',
+      failedRetry: 'Generation failed. Retry.',
+      resultAdded: 'Result added.',
+      addFailed: 'Failed to add result. Retry.',
+      applyFailed: 'Failed to apply as scene-replace effect.',
+      appliedAsEffect: 'Applied as scene-replace effect',
+      reapplyCandidate: 'Re-apply this candidate',
+      applyCandidate: 'Apply this candidate',
+      applyToLayerPrefix: 'Apply to original layer',
+      candidatesTabAe: 'Candidates',
+      historyTab: 'History',
+      makeTab: 'Make',
+      recoveredFromComp: 'Recovered from current comp',
+      candidateFileMissing: 'candidate file missing',
+      preview: 'Preview',
+      addToMediaPool: 'Add to Media Pool',
+      recipeCinematic: 'Cinematic', recipeCinematicP: 'Keep subject and framing; add soft cinematic light, fine grain and natural color.',
+      recipeBg: 'Replace background', recipeBgP: 'Keep subject detail and proportion; replace background with a misty natural landscape matching light and perspective.',
+      recipeConcept: 'Concept explore', recipeConceptP: 'Keep the visual subject; explore a bold but believable sci-fi art direction, emphasizing environment scale and narrative.',
+      connectHint: 'Connect Iris to use this workflow.',
+      promptCharsUnit: '',
+    },
+    zh: {
+      panelAria: 'Iris 面板',
+      currentClip: '当前片段',
+      generate: '生成',
+      references: '参考素材',
+      refreshSelAria: '刷新宿主选择',
+      addReferenceAria: '重新读取当前选择作为参考',
+      addReference: '+ 素材',
+      currentSelectionChip: '当前选择',
+      promptLabel: '描述想要的镜头、运动、光线或变化…',
+      promptFootRef: '当前片段作为参考',
+      model: '模型',
+      output: '输出',
+      outputMediaPool: 'Media Pool',
+      outputProjectBin: '项目素材箱',
+      outputNewLayerComp: '当前合成 · 新图层',
+      outputNewLayerDoc: '当前文档 · 新图层',
+      generateCta: '✦  生成候选',
+      generateCtaPreview: '✦  演示生成并添加',
+      generating: '生成中…',
+      task: '任务',
+      candidates: '候选',
+      candidatesEmpty: '还没有候选。',
+      openInIris: '在 Iris 中打开 ↗',
+      connectToOpen: '连接 Iris 后即可打开工作区。',
+      openCanvasTitle: '打开 Iris 工作区',
+      connected: 'Iris 已连接',
+      waiting: '等待 Iris',
+      sampleMedia: '示例素材',
+      selectLayerOrClip: '选择一个图层或素材',
+      waitingHostSel: '等待宿主选择',
+      noDocOpen: '尚未打开项目',
+      selectMediaFirst: '请先选择一个素材',
+      videoRef: '视频参考',
+      imageRef: '图像参考',
+      useCurrentAsRef: '使用当前选择作为参考',
+      selChanged: '当前选择已变化',
+      auto: '自动',
+      sec: '秒', min: '分',
+      failedRetry: '生成失败，请重试。',
+      resultAdded: '已添加新结果',
+      addFailed: '结果添加失败，请重试。',
+      applyFailed: '场景替换效果应用失败。',
+      appliedAsEffect: '已应用为场景替换效果',
+      reapplyCandidate: '重新应用此候选',
+      applyCandidate: '应用此候选',
+      applyToLayerPrefix: '应用到原始图层',
+      candidatesTabAe: '候选版本',
+      historyTab: '本次记录',
+      makeTab: '制作',
+      recoveredFromComp: '已从当前合成恢复',
+      candidateFileMissing: '候选素材文件缺失',
+      preview: '预览',
+      addToMediaPool: '添加到 Media Pool',
+      recipeCinematic: '电影感', recipeCinematicP: '保留主体和构图，增加柔和的电影光线、细腻颗粒与自然色彩。',
+      recipeBg: '更换背景', recipeBgP: '保留主体的细节和比例，将背景替换为雾气中的自然风景，匹配光线和透视。',
+      recipeConcept: '概念探索', recipeConceptP: '保持视觉主体，探索一个大胆但可信的科幻美术方向，强调环境尺度与叙事感。',
+      connectHint: '连接 Iris 后即可使用当前工作流制作。',
+      promptCharsUnit: '',
+    },
+  };
+  const L = STR[resolveLocale()] || STR.en;
+
   function mountInspector({ root, adapter, controller, getController, hostLabel, onOpenCanvas, defaultImportTarget = { kind: 'new-layer' }, preview = false }) {
     root.replaceChildren();
     root.className = 'flovart-studio-inspector';
-    let disposed = false, busy = false, reading = false, lastSelection = null, activeTab = 'make', activeDocumentId = null, taskStart = 0, taskTimer = null, linkedModels = false, applyingCandidateId = null, lastNativeCandidate = null, loadingCandidates = false;
+    let disposed = false, busy = false, reading = false, lastSelection = null, lastContext = null,
+        taskStart = 0, taskTimer = null, linkedModels = false, applyingCandidateId = null,
+        lastNativeCandidate = null, loadingCandidates = false, frozenTarget = null;
     const history = [];
     const knownCandidateIds = new Set();
     const loadedCandidateDocuments = new Set();
+    let activeDocumentId = null;
     const candidateKey = (documentId, layerId) => `${String(documentId)}:${String(layerId)}`;
+
     function candidateMetadataText(item) {
       const media = item?.sourceMedia;
       const color = item?.projectColorContext;
@@ -33,160 +187,184 @@
       const frameRate = media?.displayFrameRate || media?.frameRate || media?.nativeFrameRate;
       if (media?.isStill !== true && Number.isFinite(frameRate) && frameRate > 0) details.push(`${Number(frameRate.toFixed(3))} fps`);
       if (Number.isFinite(media?.durationSeconds) && media.durationSeconds > 0) {
-        details.push(`${Number(media.durationSeconds.toFixed(2))} 秒`);
+        details.push(`${Number(media.durationSeconds.toFixed(2))} s`);
       }
       if (Number.isFinite(media?.pixelAspectRatio) && media.pixelAspectRatio > 0) {
         details.push(`PAR ${Number(media.pixelAspectRatio.toFixed(4))}`);
       }
-      if (media?.hasAlpha === true) {
-        const alphaModes = { ignore: '忽略', straight: '直通', premultiplied: '预乘', unknown: '未知' };
-        details.push(`Alpha ${alphaModes[media.alphaMode] || '已检测'}`);
-      } else if (media?.hasAlpha === false) details.push('无 Alpha');
-      if (color && typeof color.workingSpace === 'string') {
-        details.push(`项目色彩 ${color.workingSpace || '关闭'}`);
-      }
-      if (Number.isFinite(color?.workingGamma) && color.workingGamma > 0) {
-        details.push(`Gamma ${Number(color.workingGamma.toFixed(3))}`);
-      }
-      if (Number.isFinite(color?.bitsPerChannel)) details.push(`${color.bitsPerChannel} bpc`);
-      if (typeof color?.linearizeWorkingSpace === 'boolean') details.push(color.linearizeWorkingSpace ? '工作空间线性化' : '工作空间未线性化');
-      if (typeof color?.linearBlending === 'boolean') details.push(color.linearBlending ? '线性混合' : '非线性混合');
-      return details.length ? `AE 解释：${details.join(' · ')}` : '';
+      if (media?.hasAlpha === true) details.push('Alpha');
+      else if (media?.hasAlpha === false) details.push('no Alpha');
+      return details.join(' · ');
     }
-    function visibleHistory() {
-      return adapter.id === 'after-effects'
-        ? history.filter(item => item.documentId && item.documentId === activeDocumentId)
-        : history;
-    }
-    function updateHistoryTab() {
-      historyTab.textContent = `${adapter.id === 'after-effects' ? '候选版本' : '本次记录'} · ${visibleHistory().length}`;
-    }
+
     const resolveController = () => getController ? getController() : controller;
+
+    // --- Header: brand + readiness (no semantic ↗ here; Open in Iris lives in footer)
     const header = el('header', undefined, 'fs-header');
     const brand = el('div', undefined, 'fs-brand');
-    brand.append(el('span', 'i', 'fs-logo'), el('strong', 'Iris'), el('span', 'STUDIO', 'fs-wordmark'));
-    const canvas = button('↗', 'fs-icon-button', () => {
-      if (onOpenCanvas) Promise.resolve().then(() => onOpenCanvas()).catch(error => { if (!disposed) status.textContent = error.message; });
-      else status.textContent = '请连接 Iris 后打开画布。';
-    });
-    canvas.title = '展开 Iris 工作区';
-    canvas.setAttribute('aria-label', canvas.title);
-    header.append(brand, canvas);
-    const tabs = el('nav', undefined, 'fs-tabs');
-    tabs.setAttribute('aria-label', 'Iris 面板');
-    const makeTab = button('制作', 'fs-tab is-active', () => showTab('make'));
-    const historyTab = button(adapter.id === 'after-effects' ? '候选版本' : '本次记录', 'fs-tab', () => showTab('history'));
-    tabs.append(makeTab, historyTab);
+    brand.append(el('span', 'i', 'fs-logo'), el('strong', 'Iris'));
+    const headerStatus = el('span', '', 'fs-header-status');
+    header.append(brand, headerStatus);
+
     const form = el('div', undefined, 'fs-form');
-    const sourceLabel = el('div', undefined, 'fs-section-label');
+
+    // --- CURRENT CLIP ----------------------------------------------------------
+    const clipSection = el('section', undefined, 'fs-block');
+    const clipHead = el('div', undefined, 'fs-section-label');
     const refreshButton = button('↻', 'fs-icon-button', () => { void refresh(); });
-    refreshButton.setAttribute('aria-label', '刷新宿主选择');
-    sourceLabel.append(el('span', '来自当前选择'), refreshButton);
-    const referencesLabel = el('div', undefined, 'fs-section-label');
-    const addReference = button('+ 素材', 'fs-chip-add', () => { void refresh(); });
-    addReference.title = '重新读取当前选择作为参考';
-    addReference.setAttribute('aria-label', addReference.title);
-    referencesLabel.append(el('span', '参考素材'), addReference);
-    const referenceRow = el('div', undefined, 'fs-references');
-    const source = el('div', undefined, 'fs-source');
+    refreshButton.setAttribute('aria-label', L.refreshSelAria);
+    clipHead.append(el('span', L.currentClip), refreshButton);
+    const clipBody = el('div', undefined, 'fs-source');
     const thumb = el('div', '▧', 'fs-source-thumb');
-    const sourceInfo = el('div', undefined, 'fs-source-info');
-    const reference = el('strong', '选择一个图层或素材');
-    const context = el('span', hostLabel, 'fs-muted');
-    const dimensions = el('span', '等待宿主选择', 'fs-mono fs-muted');
-    sourceInfo.append(reference, context, dimensions);
-    const referenceChip = el('span', '当前选择', 'fs-reference-chip fs-muted');
-    source.append(thumb, sourceInfo);
+    const clipInfo = el('div', undefined, 'fs-source-info');
+    const clipName = el('strong', L.selectLayerOrClip);
+    const clipContext = el('span', hostLabel, 'fs-muted');
+    const clipMeta = el('span', L.waitingHostSel, 'fs-mono fs-muted');
+    const selChanged = el('span', '', 'fs-stale');
+    clipInfo.append(clipName, clipContext, clipMeta, selChanged);
+    clipBody.append(thumb, clipInfo);
+    clipSection.append(clipHead, clipBody);
+
+    // --- GENERATE --------------------------------------------------------------
+    const genSection = el('section', undefined, 'fs-block');
+    const genHead = el('div', undefined, 'fs-section-label');
+    const addReference = button(L.addReference, 'fs-chip-add', () => { void refresh(); });
+    addReference.title = L.addReferenceAria;
+    addReference.setAttribute('aria-label', addReference.title);
+    genHead.append(el('span', L.generate), addReference);
+    const referenceRow = el('div', undefined, 'fs-references');
+    const referenceChip = el('span', L.currentSelectionChip, 'fs-reference-chip fs-muted');
     referenceRow.append(referenceChip);
-    const promptLabel = el('label', '你想如何创作？', 'fs-section-label');
     const promptBox = el('div', undefined, 'fs-prompt-box');
     const prompt = el('textarea');
     prompt.id = 'flovart-studio-prompt';
-    promptLabel.htmlFor = prompt.id;
-    prompt.rows = 5;
+    prompt.rows = 4;
     prompt.maxLength = 8000;
-    prompt.placeholder = '描述画面、光线与氛围，\n让灵感继续向前。';
+    prompt.placeholder = L.promptLabel;
+    prompt.setAttribute('aria-label', L.promptLabel);
     const promptFoot = el('div', undefined, 'fs-prompt-foot');
     const promptCount = el('span', '0', 'fs-mono fs-muted');
-    promptFoot.append(el('span', '当前选择作为参考', 'fs-muted'), promptCount);
+    promptFoot.append(el('span', L.promptFootRef, 'fs-muted'), promptCount);
     promptBox.append(prompt, promptFoot);
     const recipes = el('div', undefined, 'fs-recipes');
-    for (const [label, text] of [['电影感', '保留主体和构图，增加柔和的电影光线、细腻颗粒与自然色彩。'], ['更换背景', '保留主体的细节和比例，将背景替换为雾气中的自然风景，匹配光线和透视。'], ['概念探索', '保持视觉主体，探索一个大胆但可信的科幻美术方向，强调环境尺度与叙事感。']]) {
+    for (const [label, text] of [[L.recipeCinematic, L.recipeCinematicP], [L.recipeBg, L.recipeBgP], [L.recipeConcept, L.recipeConceptP]]) {
       recipes.append(button(label, 'fs-recipe', () => { prompt.value = text; update(); prompt.focus(); }));
     }
     const settings = el('div', undefined, 'fs-settings');
     const modelRow = el('label', undefined, 'fs-setting-row');
     const model = el('select');
-    model.setAttribute('aria-label', '模型');
-    modelRow.append(el('span', '模型'), model);
+    model.setAttribute('aria-label', L.model);
+    modelRow.append(el('span', L.model), model);
     const output = el('label', undefined, 'fs-setting-row');
     const target = el('select');
-    target.setAttribute('aria-label', '输出位置');
-    if (adapter.id === 'premiere') target.append(option('项目素材箱', 'project'));
-    else if (adapter.id === 'resolve') target.append(option('Media Pool', 'media-pool'));
-    else if (adapter.id === 'after-effects') target.append(option('当前合成 · 新图层', 'new-layer'));
-    else target.append(option('当前文档 · 新图层', 'new-layer'));
+    target.setAttribute('aria-label', L.output);
+    if (adapter.id === 'premiere') target.append(option(L.outputProjectBin, 'project'));
+    else if (adapter.id === 'resolve') target.append(option(L.outputMediaPool, 'media-pool'));
+    else if (adapter.id === 'after-effects') target.append(option(L.outputNewLayerComp, 'new-layer'));
+    else target.append(option(L.outputNewLayerDoc, 'new-layer'));
     target.value = defaultImportTarget.kind;
-    output.append(el('span', '添加到'), target);
+    output.append(el('span', L.output), target);
     settings.append(modelRow, output);
-    const generate = button(preview ? '✦  演示生成并添加' : '✦  生成并添加', 'fs-generate');
+    const generate = button(preview ? L.generateCtaPreview : L.generateCta, 'fs-generate');
+    genSection.append(genHead, referenceRow, promptBox, recipes, settings, generate);
+
+    // --- TASK (frozen target) ---------------------------------------------------
+    const taskSection = el('section', undefined, 'fs-block fs-task-section');
+    const taskHead = el('div', undefined, 'fs-section-label');
+    taskHead.append(el('span', L.task));
     const taskRow = el('div', undefined, 'fs-task');
-    taskRow.hidden = true;
     taskRow.setAttribute('role', 'status');
     const taskSpinner = el('span', '', 'fs-task-spinner');
-    const taskLabel = el('span', '制作中…', 'fs-task-label');
+    const taskLabel = el('span', L.generating, 'fs-task-label');
     const taskBar = el('span', undefined, 'fs-task-bar');
     const taskBarFill = el('span', undefined, 'fs-task-bar-fill');
     taskBar.append(taskBarFill);
     taskRow.append(taskSpinner, taskLabel, taskBar);
+    const taskTarget = el('div', '', 'fs-task-target fs-muted');
+    taskSection.append(taskHead, taskRow, taskTarget);
+    taskSection.hidden = true;
     const status = el('p', '', 'fs-status');
     status.setAttribute('role', 'status');
     status.setAttribute('aria-live', 'polite');
-    const applyNative = typeof adapter.applyNativeEffect === 'function'
-      ? button('应用为场景替换效果', 'fs-generate fs-native-apply', () => {
-        if (lastNativeCandidate) void applyNativeCandidate(lastNativeCandidate);
-      })
-      : null;
-    if (applyNative) applyNative.hidden = true;
-    const results = el('div', undefined, 'fs-history');
-    results.hidden = true;
+
+    // --- CANDIDATES --------------------------------------------------------------
+    const candSection = el('section', undefined, 'fs-block fs-candidates');
+    const candHead = el('div', undefined, 'fs-section-label');
+    const candTitle = el('span', L.candidates);
+    candHead.append(candTitle);
     const refreshCandidates = typeof adapter.listNativeCandidates === 'function'
       ? button('↻', 'fs-icon-button', () => { void refreshPersistedCandidates(); })
       : null;
     if (refreshCandidates) {
-      refreshCandidates.title = '重新检查当前合成中的候选素材';
-      refreshCandidates.setAttribute('aria-label', refreshCandidates.title);
+      refreshCandidates.title = L.refreshSelAria;
+      refreshCandidates.setAttribute('aria-label', L.refreshSelAria);
+      candHead.append(refreshCandidates);
     }
+    const candList = el('div', undefined, 'fs-candidate-list');
+    candSection.append(candHead, candList);
+    candSection.hidden = true;
+
+    const applyNative = typeof adapter.applyNativeEffect === 'function'
+      ? button(L.applyCandidate, 'fs-generate fs-native-apply', () => {
+        if (lastNativeCandidate) void applyNativeCandidate(lastNativeCandidate);
+      })
+      : null;
+    if (applyNative) applyNative.hidden = true;
+
+    // --- Footer: connection + Open in Iris ---------------------------------------
     const footer = el('footer', undefined, 'fs-footer');
     const connection = el('span');
-    footer.append(connection, el('span', preview ? '交互预览' : hostLabel, 'fs-muted'));
-    form.append(sourceLabel, source, referencesLabel, referenceRow, promptLabel, promptBox, recipes, settings, generate, el('div', 'Ctrl / ⌘ + Enter', 'fs-shortcut fs-mono'), taskRow, status);
+    const openLink = button(L.openInIris, 'fs-open-link', () => {
+      if (onOpenCanvas) Promise.resolve().then(() => onOpenCanvas()).catch(error => { if (!disposed) status.textContent = error.message; });
+      else status.textContent = L.connectToOpen;
+    });
+    openLink.title = L.openCanvasTitle;
+    footer.append(connection, openLink);
+
+    form.append(clipSection, genSection, taskSection, status, candSection);
     if (applyNative) form.append(applyNative);
-    root.append(header, tabs, form, results, footer);
-    function renderHistory() {
-      const entries = visibleHistory();
-      const heading = el('div', undefined, 'fs-history-heading');
-      heading.append(el('p', entries.length ? '已保存候选与本次制作记录' : '当前合成还没有候选版本。', 'fs-muted'));
-      if (refreshCandidates) heading.append(refreshCandidates);
-      results.replaceChildren(heading);
+    root.append(header, form, footer);
+
+    // --- Candidates rendering -----------------------------------------------------
+    function renderCandidates() {
+      const entries = adapter.id === 'after-effects'
+        ? history.filter(item => item.documentId && item.documentId === activeDocumentId)
+        : history;
+      candSection.hidden = entries.length === 0;
+      candTitle.textContent = `${L.candidates} · ${entries.length}`;
+      candList.replaceChildren();
       entries.slice().reverse().forEach(item => {
-        const row = el('div', undefined, 'fs-history-item');
-        const message = !item.persistent && item.mediaAvailable === false
-          ? `${item.message} · ${item.mediaMessage || '候选素材文件缺失'}`
+        const card = el('div', undefined, 'fs-candidate-card');
+        const poster = el('div', '▧', 'fs-candidate-thumb');
+        if (item.previewUrl) { const img = el('img'); img.src = item.previewUrl; img.alt = item.prompt; poster.replaceChildren(img); }
+        const body = el('div', undefined, 'fs-candidate-body');
+        body.append(el('strong', item.versionLabel || item.prompt || L.candidates));
+        const metaLine = [item.modelLabel, item.durationLabel, item.resolutionLabel].filter(Boolean).join(' · ');
+        if (metaLine) body.append(el('small', metaLine, 'fs-muted'));
+        const metaText = candidateMetadataText(item);
+        if (metaText) body.append(el('small', metaText, 'fs-muted'));
+        const msg = !item.persistent && item.mediaAvailable === false
+          ? `${item.message} · ${item.mediaMessage || L.candidateFileMissing}`
           : item.message;
-        row.append(el('span', '✓', 'fs-success'), el('div', item.prompt), el('small', message, 'fs-muted'));
-        const metadataText = candidateMetadataText(item);
-        if (metadataText) row.append(el('small', metadataText, 'fs-muted'));
+        if (msg) body.append(el('small', msg, 'fs-muted'));
+        const actions = el('div', undefined, 'fs-candidate-actions');
+        if (item.previewUrl) actions.append(button(L.preview, 'fs-recipe', () => { try { global.open(item.previewUrl, '_blank'); } catch (_) {} }));
+        // P0 primary action label reflects the actual import target.
+        const primaryLabel = adapter.id === 'resolve' ? L.addToMediaPool : (item.message || L.resultAdded);
+        actions.append(el('span', primaryLabel, 'fs-candidate-done'));
         if (item.nativeCandidate && applyNative) {
-          const applyVersion = button(item.applied ? '重新应用此候选' : '应用此候选', 'fs-recipe', () => { void applyNativeCandidate(item); });
-          applyVersion.title = `应用到原始图层「${item.nativeCandidate.sourceSelection.label}」`;
+          const applyVersion = button(item.applied ? L.reapplyCandidate : L.applyCandidate, 'fs-recipe', () => { void applyNativeCandidate(item); });
+          applyVersion.title = `${L.applyToLayerPrefix}「${item.nativeCandidate.sourceSelection.label}」`;
           applyVersion.disabled = busy || Boolean(applyingCandidateId) || item.mediaAvailable === false;
-          row.append(el('small', `目标图层：${item.nativeCandidate.sourceSelection.label}`, 'fs-muted'));
-          row.append(applyVersion);
+          body.append(el('small', `${L.applyToLayerPrefix}：${item.nativeCandidate.sourceSelection.label}`, 'fs-muted'));
+          actions.append(applyVersion);
         }
-        results.append(row);
+        card.append(poster, body);
+        body.append(actions);
+        candList.append(card);
       });
     }
+
     async function loadPersistedCandidates() {
       if (disposed || loadingCandidates || typeof adapter.listNativeCandidates !== 'function') return;
       let documentId = '';
@@ -215,27 +393,26 @@
           history.push({
             documentId,
             candidateLayerId: candidate.candidateLayerId,
-            prompt: candidate.prompt || candidate.name || `候选版本 ${String(candidate.artifactId || '').slice(0, 8)}`,
-            message: `${candidate.message || '已从当前合成恢复'}${modelLabel}${hashPrefix}`,
+            prompt: candidate.prompt || candidate.name || `Candidate ${String(candidate.artifactId || '').slice(0, 8)}`,
+            message: `${candidate.message || L.recoveredFromComp}${modelLabel}${hashPrefix}`,
             mediaAvailable: candidate.mediaAvailable,
             ...(candidate.sourceSelection ? {
-            nativeCandidate: {
-              candidateLayerId: candidate.candidateLayerId,
-              sourceSelection: candidate.sourceSelection,
-            },
-            sourceMedia: candidate.sourceMedia,
-            projectColorContext: candidate.projectColorContext,
-            applied: false,
+              nativeCandidate: {
+                candidateLayerId: candidate.candidateLayerId,
+                sourceSelection: candidate.sourceSelection,
+              },
+              sourceMedia: candidate.sourceMedia,
+              projectColorContext: candidate.projectColorContext,
+              applied: false,
             } : {}),
             persistent: true,
           });
         }
         loadedCandidateDocuments.add(documentId);
-        updateHistoryTab();
-        if (activeTab === 'history') renderHistory();
+        renderCandidates();
         update();
       } catch (error) {
-        if (!disposed) status.textContent = error?.message || '无法读取当前合成中的 Iris 候选。';
+        if (!disposed) status.textContent = error?.message || 'Could not read candidates.';
       } finally {
         loadingCandidates = false;
         if (documentId && activeDocumentId && activeDocumentId !== documentId && !loadedCandidateDocuments.has(activeDocumentId)) {
@@ -253,21 +430,25 @@
         history.splice(index, 1);
       }
       loadedCandidateDocuments.delete(documentId);
-      renderHistory();
+      renderCandidates();
       await loadPersistedCandidates();
     }
-    function showTab(tab) {
-      activeTab = tab;
-      form.hidden = tab !== 'make'; results.hidden = tab !== 'history';
-      makeTab.className = `fs-tab${tab === 'make' ? ' is-active' : ''}`;
-      historyTab.className = `fs-tab${tab === 'history' ? ' is-active' : ''}`;
-      makeTab.setAttribute('aria-current', tab === 'make' ? 'page' : 'false');
-      historyTab.setAttribute('aria-current', tab === 'history' ? 'page' : 'false');
-      if (tab === 'history') {
-        renderHistory();
-        void loadPersistedCandidates();
-      }
+
+    // --- Frozen target / selection freshness --------------------------------------
+    function selectionChangedSinceFreeze() {
+      if (!frozenTarget || !lastSelection) return false;
+      return frozenTarget.selectionId && lastSelection.selectionId && frozenTarget.selectionId !== lastSelection.selectionId;
     }
+    function renderTaskTarget() {
+      if (!frozenTarget) { taskTarget.textContent = ''; return; }
+      const parts = [frozenTarget.label];
+      if (frozenTarget.timelineLabel) parts.push(frozenTarget.timelineLabel);
+      if (frozenTarget.trackLabel) parts.push(frozenTarget.trackLabel);
+      taskTarget.textContent = parts.join(' · ');
+      selChanged.textContent = selectionChangedSinceFreeze() ? L.selChanged : '';
+      selChanged.className = 'fs-stale' + (selectionChangedSinceFreeze() ? ' is-visible' : '');
+    }
+
     function update() {
       if (disposed) return;
       const linked = Boolean(resolveController());
@@ -281,15 +462,18 @@
       }
       model.disabled = busy;
       target.disabled = busy;
-      generate.textContent = busy ? '正在制作…' : preview ? '✦  演示生成并添加' : '✦  生成并添加';
+      generate.textContent = busy ? L.generating : preview ? L.generateCtaPreview : L.generateCta;
       generate.setAttribute('aria-busy', String(busy));
-      connection.textContent = preview ? '○  示例素材' : linked ? '●  Iris 已连接' : '○  等待 Iris';
+      connection.textContent = preview ? `○  ${L.sampleMedia}` : linked ? `●  ${L.connected}` : `○  ${L.waiting}`;
       connection.className = linked && !preview ? 'fs-success' : 'fs-muted';
-      if (!linked && !status.textContent) status.textContent = '连接 Iris 后即可使用当前工作流制作。';
+      headerStatus.textContent = linked ? '● Ready' : '○';
+      headerStatus.className = 'fs-header-status ' + (linked ? 'fs-success' : 'fs-muted');
+      if (!linked && !status.textContent) status.textContent = L.connectHint;
+      renderTaskTarget();
     }
     function refreshModels() {
       const choices = resolveController()?.models;
-      const list = Array.isArray(choices) && choices.length ? choices : [{ label: '自动', value: 'auto' }];
+      const list = Array.isArray(choices) && choices.length ? choices : [{ label: L.auto, value: 'auto' }];
       model.replaceChildren(...list.map(item => option(item.label || item.name || item.id, item.value || item.id)));
     }
     function progressOf(value) {
@@ -298,14 +482,14 @@
     }
     function formatElapsed(ms) {
       const seconds = Math.max(0, Math.round(ms / 1000));
-      return seconds < 60 ? `${seconds}秒` : `${Math.floor(seconds / 60)}分${seconds % 60}秒`;
+      return seconds < 60 ? `${seconds}${L.sec}` : `${Math.floor(seconds / 60)}${L.min}${seconds % 60}${L.sec}`;
     }
     function taskTick() {
-      taskLabel.textContent = `制作中… ${formatElapsed(Date.now() - taskStart)}`;
+      taskLabel.textContent = `${L.generating} ${formatElapsed(Date.now() - taskStart)}`;
     }
     function taskStartRow() {
       taskStart = Date.now();
-      taskRow.hidden = false;
+      taskSection.hidden = false;
       taskBarFill.style.width = '';
       taskRow.classList.add('is-indeterminate');
       taskTick();
@@ -316,14 +500,14 @@
       if (fraction === null) return;
       taskRow.classList.remove('is-indeterminate');
       taskBarFill.style.width = `${Math.round(fraction * 100)}%`;
-      taskLabel.textContent = `制作中… ${Math.round(fraction * 100)}%`;
+      taskLabel.textContent = `${L.generating} ${Math.round(fraction * 100)}%`;
     }
     function taskStopRow() {
       if (taskTimer) { global.clearInterval(taskTimer); taskTimer = null; }
-      taskRow.hidden = true;
       taskRow.classList.remove('is-indeterminate');
       taskBarFill.style.width = '';
     }
+
     async function applyNativeCandidate(item) {
       if (disposed || !item?.nativeCandidate || applyingCandidateId) return;
       const candidateId = item.nativeCandidate.candidateLayerId;
@@ -338,23 +522,23 @@
         }
         const applied = await adapter.applyNativeEffect(item.nativeCandidate);
         if (disposed) return;
-        if (!applied || applied.ok === false) throw new Error(applied?.message || '场景替换效果应用失败。');
+        if (!applied || applied.ok === false) throw new Error(applied?.message || L.applyFailed);
         item.applied = true;
-        item.message = applied.message || '已应用为场景替换效果';
+        item.message = applied.message || L.appliedAsEffect;
         status.textContent = item.message;
-        if (applyNative && lastNativeCandidate === item) applyNative.textContent = '重新应用此候选';
-        if (activeTab === 'history') showTab('history');
+        if (applyNative && lastNativeCandidate === item) applyNative.textContent = L.reapplyCandidate;
+        renderCandidates();
       } catch (error) {
-        if (!disposed) status.textContent = error?.message || '场景替换效果应用失败。';
+        if (!disposed) status.textContent = error?.message || L.applyFailed;
       } finally {
         applyingCandidateId = null;
         update();
-        if (activeTab === 'history') showTab('history');
+        renderCandidates();
       }
     }
+
     async function refresh() {
       if (disposed || reading) return;
-      // Controller can arrive after mount: re-fill the model select once it links.
       if (resolveController() && !linkedModels) { linkedModels = true; refreshModels(); }
       reading = true;
       try {
@@ -362,44 +546,60 @@
         const nextDocumentId = current.available && current.documentId ? String(current.documentId) : null;
         const documentChanged = nextDocumentId !== activeDocumentId;
         activeDocumentId = nextDocumentId;
+        lastContext = current;
         const selected = current.available ? await adapter.getSelection() : null;
         if (disposed) return;
         lastSelection = selected;
-        context.textContent = current.title || current.documentName || `${hostLabel} · 尚未打开文档`;
-        reference.textContent = selected?.label || '请先选择一个素材';
-        dimensions.textContent = selected?.width && selected?.height ? `${Math.round(selected.width)} × ${Math.round(selected.height)} · ${selected.kind === 'video' ? '视频参考' : '图像参考'}` : selected ? '使用当前选择作为参考' : '等待宿主选择';
-        referenceChip.textContent = selected?.label || '当前选择';
+        clipContext.textContent = current.title || current.documentName || `${hostLabel} · ${L.noDocOpen}`;
+        clipName.textContent = selected?.label || L.selectMediaFirst;
+        // Clip meta: kind + dimensions + source type; timecode/track only when host supplies them.
+        const metaBits = [];
+        if (selected?.kind === 'video') metaBits.push(L.videoRef); else if (selected) metaBits.push(L.imageRef);
+        if (selected?.width && selected?.height) metaBits.push(`${Math.round(selected.width)} × ${Math.round(selected.height)}`);
+        if (selected?.timeRange) metaBits.push(selected.timeRange);
+        else if (selected?.timecode) metaBits.push(selected.timecode);
+        clipMeta.textContent = selected ? (metaBits.length ? metaBits.join(' · ') : L.useCurrentAsRef) : L.waitingHostSel;
+        referenceChip.textContent = selected?.label || L.currentSelectionChip;
         referenceChip.className = `fs-reference-chip${selected ? '' : ' fs-muted'}`;
-        referenceChip.title = selected ? `${selected.label} · ${selected.kind === 'video' ? '视频' : '图像'}` : '请先选择一个素材';
+        referenceChip.title = selected ? `${selected.label} · ${selected.kind === 'video' ? 'video' : 'image'}` : L.selectMediaFirst;
         if (preview && selected?.previewUrl) {
           if (thumb.firstChild?.src !== selected.previewUrl) {
             const img = el('img'); img.src = selected.previewUrl; img.alt = selected.label; thumb.replaceChildren(img);
           }
         } else thumb.textContent = selected ? '▧' : '+';
         if (documentChanged) {
-          updateHistoryTab();
-          if (activeTab === 'history' && activeDocumentId) void loadPersistedCandidates();
-          if (activeTab === 'history') renderHistory();
+          if (activeDocumentId) void loadPersistedCandidates();
+          renderCandidates();
         }
       } catch (error) {
         if (disposed) return;
-        lastSelection = null; reference.textContent = '无法读取当前选择';
-        status.textContent = error?.message || '宿主上下文不可用。';
+        lastSelection = null; clipName.textContent = 'Could not read selection';
+        status.textContent = error?.message || 'Host context unavailable.';
       } finally { reading = false; update(); }
     }
+
     async function run() {
       const currentController = resolveController();
       if (busy || !currentController || !lastSelection || !prompt.value.trim()) return;
       busy = true;
       const submittedPrompt = prompt.value.trim();
+      // Freeze the target identity at submit; it must NOT follow later selection changes.
+      frozenTarget = {
+        selectionId: lastSelection.selectionId,
+        label: lastSelection.label,
+        kind: lastSelection.kind,
+        locator: lastSelection.locator,
+        timelineLabel: lastSelection.timelineLabel || lastContext?.timelineLabel || '',
+        trackLabel: lastSelection.trackLabel || '',
+      };
       taskStartRow();
       update();
       try {
-        const result = await currentController.generate(submittedPrompt, { ...defaultImportTarget, kind: target.value }, taskProgress);
+        const result = await currentController.generate(submittedPrompt, { ...defaultImportTarget, kind: target.value, frozenTarget }, taskProgress);
         if (disposed) return;
-        if (result?.import?.ok === false) throw new Error(result.import.message || '结果添加失败，请重试。');
-        const message = result?.import?.message || '已添加新结果';
-        const selectionSnapshot = result?.executionTarget?.selectionSnapshot || result?.materialized?.selection;
+        if (result?.import?.ok === false) throw new Error(result.import.message || L.addFailed);
+        const message = result?.import?.message || L.resultAdded;
+        const selectionSnapshot = result?.executionTarget?.selectionSnapshot || result?.materialized?.selection || frozenTarget;
         const candidateLayerId = result?.import?.targetId;
         const capturedDocumentId = selectionSnapshot?.locator?.documentId;
         const nativeCandidate = adapter.applyNativeEffect
@@ -411,9 +611,16 @@
           ? { candidateLayerId: String(candidateLayerId), sourceSelection: selectionSnapshot }
           : null;
         const documentId = nativeCandidate?.sourceSelection?.locator?.documentId;
+        const media = result?.import?.sourceMedia || result?.materialized?.media || {};
         const item = {
           prompt: submittedPrompt,
           message,
+          versionLabel: `V${history.length + 1}`,
+          modelLabel: result?.model || result?.modelId || '',
+          durationLabel: Number.isFinite(media.durationSeconds) ? `${Number(media.durationSeconds.toFixed(1))}s` : (Number.isFinite(media.durationMs) ? `${(media.durationMs / 1000).toFixed(1)}s` : ''),
+          resolutionLabel: (Number.isFinite(media.width) && Number.isFinite(media.height)) ? `${media.width} × ${media.height}` : '',
+          previewUrl: result?.import?.previewUrl || result?.materialized?.previewUrl || '',
+          artifact: { artifactId: result?.import?.artifactId || result?.artifactId, path: result?.import?.artifact?.path, sha256: result?.import?.artifact?.sha256 },
           ...(nativeCandidate ? {
             nativeCandidate,
             sourceMedia: result.import?.sourceMedia,
@@ -427,28 +634,24 @@
         lastNativeCandidate = nativeCandidate ? item : null;
         if (applyNative) {
           applyNative.hidden = !nativeCandidate;
-          applyNative.textContent = '应用为场景替换效果';
+          applyNative.textContent = L.applyCandidate;
           if (nativeCandidate) {
-            applyNative.title = `应用到原始图层「${selectionSnapshot.label}」`;
+            applyNative.title = `${L.applyToLayerPrefix}「${selectionSnapshot.label}」`;
             applyNative.setAttribute('aria-label', applyNative.title);
           }
         }
         status.textContent = nativeCandidate
-          ? `${message} 点击下方按钮后，才会应用到原始图层「${selectionSnapshot.label}」。`
+          ? `${message} ${L.applyToLayerPrefix}「${selectionSnapshot.label}」.`
           : message;
         if (candidateLayerId && documentId) knownCandidateIds.add(candidateKey(documentId, candidateLayerId));
-        updateHistoryTab();
-        if (activeTab === 'history') showTab('history');
-      } catch (error) { if (!disposed) status.textContent = error?.message || '制作失败，请重试。'; }
+        renderCandidates();
+      } catch (error) { if (!disposed) status.textContent = error?.message || L.failedRetry; }
       finally { busy = false; taskStopRow(); update(); }
     }
     generate.addEventListener('click', run);
     prompt.addEventListener('input', update);
     prompt.addEventListener('keydown', event => {
       if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) { event.preventDefault(); void run(); }
-    });
-    root.addEventListener('keydown', event => {
-      if (event.key === 'Escape' && activeTab !== 'make') { event.preventDefault(); showTab('make'); prompt.focus(); }
     });
     const onReady = () => { status.textContent = ''; refreshModels(); void refresh(); };
     refreshModels();

@@ -22,6 +22,7 @@ const secretFilePattern = /(^|[\\/])(?:\.env(?:\.|$)|id_(?:rsa|dsa|ecdsa|ed25519
 const intentionalFixtures = new Set([
   'sk-live-REDTEAM0000000000000000000',
   'ghp_REDTEAM000000000000000000000000',
+  'AKIAREDTEAM000000000',
 ]);
 
 function repositoryFiles() {

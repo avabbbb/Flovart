@@ -1,4 +1,4 @@
-# Flovart Agent Integration
+# Iris Agent Integration
 
 > Current design. 本文只定义 Agent 接入与操作边界；产品 IA 以 [主设计](./flovart-native-effects.md) 为准。
 
@@ -55,7 +55,7 @@ Transport 只做参数解码、权限上下文与结果编码。业务逻辑不�
 
 内部 Writer、Projection、URL、Token、协议版本等只放高级诊断。
 
-“已准备”只代表 Flovart 已完成本地准备，不代表真实第三方会话、登录、权限或自然语言任务已经通过。
+“已准备”只代表 Iris 已完成本地准备，不代表真实第三方会话、登录、权限或自然语言任务已经通过。
 
 ## 6. 当前不采用
 
@@ -78,5 +78,15 @@ Transport 只做参数解码、权限上下文与结果编码。业务逻辑不�
 - 断线恢复；
 - 错项目保护；
 - Provider 费用与取消（如果任务会生成）。
+
+### 7.1 Agent 评测口径
+
+复用 `eval/` harness，按证据来源分别报告：受控环境中的确定性 operation、真实外部 Agent、真实 Browser 最终状态与真实 Provider/宿主结果。确定性 reference replay 和 transcript 写操作回放不能替代独立的真实最终状态校验，也不能贡献真实 Agent E2E 认证。
+
+`pass@1` 的分母为已执行 trial；blocked、已知缺口和 surface 不适用项另列。`pass^5` 按 task × runner 分组，只有完整执行 trial 1–5 的组才进入分母；不足五次、重复 trial 或含 blocked 的组列为 incomplete。没有完整组时记未测，不报告 0% 或 100%。同时展示完整组/总组，避免只看可执行子集的高分。其它重复次数不冒充五次可靠性；各维度不压缩成一个总分。
+
+错目标写入、未经授权付费、重复提交、密钥泄漏和错误版本应用保持安全硬门槛；被系统拦截的尝试单列。受控环境零事件不证明真实账号和宿主零风险。正式支持等级仍只由 Support Matrix 的对应现实证据决定。
+
+每个 bad case 保留预期/实际、脱敏轨迹与最终状态、版本、影响、首个偏离点、根因证据、漏检原因、负责人和关闭条件。根因区分 Agent、产品、环境、外部服务、任务定义、评分器或未知。每例记录分诊；严重安全事件单独复盘，同根因普通失败合并。修复后验证原例、同族变体和正常任务，跟踪复发；已知回归改善不能代替独立任务集的泛化验证。
 
 历史 CLI/MCP/DSH 目标架构与 projection audit 已归档，不再作为并列产品设计。

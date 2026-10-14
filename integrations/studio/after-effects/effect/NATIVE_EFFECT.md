@@ -1,4 +1,4 @@
-# Flovart native effect — After Effects slice
+# Iris native effect — After Effects slice
 
 This is the fixed-media source slice from the [main design](../../../docs/design/flovart-native-effects.md) §5.2. A generated artifact is first imported as a candidate footage layer. The user then explicitly applies that candidate to the source layer captured when generation started.
 
@@ -9,7 +9,7 @@ The CEP panel and native effect are separate packages. The panel is not itself a
 | File | Role |
 | --- | --- |
 | `FlovartEffect.cpp` | AE Effect SDK entry point; exports only `EffectMain`, reads the selected footage layer at the current frame, and blends it with the effect input. |
-| `FlovartEffect.r` | PiPL resource: display name `Flovart Scene Replace`, match name `FLOVART_SceneReplace`. |
+| `FlovartEffect.r` | PiPL resource: display name `Iris Scene Replace`, match name `FLOVART_SceneReplace`. |
 | `asset-manifest.json` | Parameter and dataflow contract copied into the Studio package. |
 | `../host.jsx` | Imports a candidate into the captured composition and applies or updates the effect on the captured source layer. |
 
@@ -40,7 +40,7 @@ This source change is not a host certification. Required evidence:
 3. Verify Blend 0/50/100, keyframed Blend, alpha behavior, different footage dimensions, padded rowbytes, invalid/overflowing world metadata, NaN Blend rejection, cropped layers, masks, upstream buffer/origin changes, and pixel output against an independent 8-bit SDR reference. Do not enable output-extent handling until the clipped extent and output-origin cases pass.
 4. Verify a cleared `Asset Version` parameter produces a render error while a valid black/transparent frame remains valid media.
 5. Apply V1 then V2, undo/redo, save, close, and reopen the project. Confirm V1 remains available and V2 remains the applied layer.
-6. Stop Flovart and disconnect the network, then preview and export. Missing footage must remain visible in the render log and must not be exported as a successful replacement.
+6. Stop Iris and disconnect the network, then preview and export. Missing footage must remain visible in the render log and must not be exported as a successful replacement.
 7. Stress random-seek and concurrent frame requests with MFR enabled in AE. Set the MFR flag in PiPL and source only after the test passes.
 8. Collect the project into another folder, reopen it, and verify the content-addressed CEP asset remains available; then move the asset and verify missing-footage detection and relink behavior.
 9. Verify effect compatibility with the declared Premiere version separately; AE SDK compatibility does not certify PR behavior.

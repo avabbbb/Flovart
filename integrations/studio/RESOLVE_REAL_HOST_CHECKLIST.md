@@ -2,7 +2,7 @@
 
 Status: `EXTERNAL_GATE`.
 
-Current first path: **Blackmagic native MCP + Flovart Skill/CLI**, followed by the Flovart Resolve light panel. The existing Workflow Integration Electron package remains Experimental and may be used as a human-review surface or a measured fallback. A future OFX effect is a separate later deliverable.
+Current first path: **Blackmagic native MCP + Iris Skill/CLI**, followed by the Iris Resolve light panel. The existing Workflow Integration Electron package remains Experimental and may be used as a human-review surface or a measured fallback. A future OFX effect is a separate later deliverable.
 
 Product/UI contract: [resolve/PRODUCT_UI_SPEC.md](resolve/PRODUCT_UI_SPEC.md).
 
@@ -14,8 +14,8 @@ Record before any claim:
 - DaVinci Resolve **Studio 21.1** exact build;
 - license type/status sufficient for the native AI assistant integration;
 - external Agent name/version;
-- Flovart commit;
-- Node/runtime versions needed by Flovart;
+- Iris commit;
+- Node/runtime versions needed by Iris;
 - actual MCP tools exposed by this installed Resolve build.
 
 Do not infer Studio behavior from Free Resolve.
@@ -30,7 +30,7 @@ In real Resolve Studio 21.1:
 4. verify the Agent can query the running Resolve project;
 5. capture the exact MCP tool list and connection evidence.
 
-The exact tool names/count are not a Flovart compatibility contract. Community reports describe a small API/doc-search + script-execution surface, but the installed build is authoritative.
+The exact tool names/count are not a Iris compatibility contract. Community reports describe a small API/doc-search + script-execution surface, but the installed build is authoritative.
 
 ### Windows UTF-8 tracer
 
@@ -44,7 +44,7 @@ A community 21.1 test reports Python/CJK encoding failures on Windows and a `PYT
 
 ## 2. Read-only target identity
 
-Before Flovart generation:
+Before Iris generation:
 
 - read current project identity;
 - read current timeline identity if applicable;
@@ -61,7 +61,7 @@ First real-host success condition:
 ~~~text
 Resolve selection
   -> capture immutable target identity
-  -> Flovart deterministic/fake artifact
+  -> Iris deterministic/fake artifact
   -> durable local artifact file
   -> import to correct Resolve Media Pool
   -> original timeline unchanged
@@ -78,7 +78,7 @@ Required evidence:
 
 If the native MCP cannot perform the required import operation, document the exact missing capability before using the existing Workflow Integration bridge.
 
-## 4. Flovart Resolve panel
+## 4. Iris Resolve panel
 
 The panel must follow [PRODUCT_UI_SPEC.md](resolve/PRODUCT_UI_SPEC.md).
 
@@ -90,7 +90,7 @@ Required real-host states:
 - running generation;
 - candidate ready;
 - Resolve disconnected;
-- Flovart disconnected;
+- Iris disconnected;
 - failure/retry.
 
 Required UI evidence:
@@ -103,7 +103,7 @@ Required UI evidence:
 - no embedded Agent chat;
 - narrow/wide resizing without horizontal scrolling;
 - candidate primary action is `Add to Media Pool`;
-- `Open in Flovart` preserves task/artifact context.
+- `Open in Iris` preserves task/artifact context.
 
 Known implementation issue to verify/fix before certification: the current Resolve adapter passes `{ kind: 'media-pool' }`, while the generic shared output select currently creates only non-Resolve options and may leave the select value unmatched.
 
@@ -113,13 +113,13 @@ The current experimental Workflow Integration writes a temporary result file and
 
 Verify:
 
-- imported media remains online after the Flovart import call returns;
+- imported media remains online after the Iris import call returns;
 - closing/reopening the project retains readable media;
 - restarting Resolve retains readable media;
-- Flovart can map the Media Pool item to a durable artifact/version;
+- Iris can map the Media Pool item to a durable artifact/version;
 - missing/moved artifact fails visibly.
 
-If Resolve references the source file, switch the implementation to the Flovart durable artifact location rather than deleting a temp file.
+If Resolve references the source file, switch the implementation to the Iris durable artifact location rather than deleting a temp file.
 
 ## 6. One real Provider tracer
 
@@ -131,7 +131,7 @@ Use one approved RunningHub route:
 selected clip/frame
   -> materialize reference
   -> one paid generation
-  -> durable Flovart artifact
+  -> durable Iris artifact
   -> Media Pool import
 ~~~
 
@@ -218,7 +218,7 @@ MCP, panel or Media Pool success does not certify OFX.
 
 Allowed after MCP + P0 only:
 
-> Resolve Studio 21.1 native MCP and Flovart Media Pool generation/import flow were real-host validated on the recorded environment.
+> Resolve Studio 21.1 native MCP and Iris Media Pool generation/import flow were real-host validated on the recorded environment.
 
 Do not say:
 

@@ -23,7 +23,9 @@ describe('Resolve Studio shared inspector', () => {
       defaultImportTarget: { kind: 'media-pool' },
     });
     await vi.waitFor(() => expect(root.querySelector('.fs-source-info strong')?.textContent).toBe('Interview_A.mov'));
-    const output = root.querySelector<HTMLSelectElement>('.fs-setting-row select[aria-label="输出位置"]');
+    // Spec §6 IA: CURRENT CLIP, GENERATE, Output Media Pool, single CTA.
+    expect(root.querySelector('.fs-section-label span')?.textContent).toBe('CURRENT CLIP');
+    const output = root.querySelector<HTMLSelectElement>('.fs-setting-row select[aria-label="Output"]');
     expect(output).not.toBeNull();
     expect(Array.from(output!.options).map(item => [item.textContent, item.value])).toContainEqual(['Media Pool', 'media-pool']);
     expect(output!.value).toBe('media-pool');
@@ -33,9 +35,11 @@ describe('Resolve Studio shared inspector', () => {
     root.querySelector<HTMLButtonElement>('.fs-generate')!.click();
     await vi.waitFor(() => expect(generate).toHaveBeenCalledWith(
       'Generate another variation from the current selected timeline clip',
-      { kind: 'media-pool' },
+      expect.objectContaining({ kind: 'media-pool', frozenTarget: expect.objectContaining({ selectionId: 'clip-1', label: 'Interview_A.mov' }) }),
       expect.any(Function),
     ));
+    // Frozen target identity shown in the task section while generating.
+    expect(root.querySelector('.fs-task-target')?.textContent).toContain('Interview_A.mov');
     inspector.dispose();
     root.remove();
   });

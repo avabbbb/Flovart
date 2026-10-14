@@ -17,6 +17,16 @@ export const repoRoot = join(evalRoot, '..');
 export const RESULTS_DIR = join(evalRoot, 'results');
 export const REPORTS_DIR = join(evalRoot, 'reports');
 
+function renderFiveTrialReliability(baseline, percentage) {
+  if (typeof baseline.completeFiveTrialGroups !== 'number') {
+    return ['- pass^5: n/a (legacy aggregate; complete five-trial coverage was not recorded)'];
+  }
+  return [
+    `- pass^5: ${percentage(baseline.passPow5)} (${baseline.stableFiveTrialGroups}/${baseline.completeFiveTrialGroups} complete task/runner groups)`,
+    `- Five-trial coverage: ${baseline.completeFiveTrialGroups}/${baseline.taskRunnerGroups} groups; ${baseline.incompleteFiveTrialGroups} incomplete`,
+  ];
+}
+
 export async function listRuns() {
   let entries = [];
   try {
@@ -49,16 +59,22 @@ export function buildReport({ run, summary, qa, coverage, baselines }) {
   const tasks = run.tasks ?? [];
   const bySuite = {};
   for (const entry of entries) {
-    bySuite[entry.suite] ??= { tasks: new Set(), trials: 0, success: 0 };
+    bySuite[entry.suite] ??= { tasks: new Set(), trials: 0, executed: 0, blocked: 0, success: 0 };
     bySuite[entry.suite].tasks.add(entry.taskId);
     bySuite[entry.suite].trials += 1;
-    if (entry.success) bySuite[entry.suite].success += 1;
+    if (entry.blocked) bySuite[entry.suite].blocked += 1;
+    else {
+      bySuite[entry.suite].executed += 1;
+      if (entry.success) bySuite[entry.suite].success += 1;
+    }
   }
   const dataset = Object.entries(bySuite).map(([suite, value]) => ({
     suite,
     tasks: value.tasks.size,
     trials: value.trials,
-    passAt1: value.trials ? value.success / value.trials : 0,
+    executedTrials: value.executed,
+    blockedTrials: value.blocked,
+    passAt1: value.executed ? value.success / value.executed : null,
   }));
 
   const splits = {};
@@ -105,6 +121,8 @@ export function buildReport({ run, summary, qa, coverage, baselines }) {
       runners: run.runners ?? [],
       repeat: run.repeat ?? 1,
       split: run.split ?? 'dev',
+      excludedKnownGaps: run.excludedKnownGaps ?? [],
+      skippedForSurface: run.skippedForSurface ?? [],
       startedAt: run.startedAt,
       finishedAt: run.finishedAt,
       wallTimeMs: run.wallTimeMs ?? null,
@@ -165,7 +183,7 @@ export function buildReport({ run, summary, qa, coverage, baselines }) {
       agent: 'npm run eval:agent',
       report: 'npm run eval:report',
       thisRun: `node eval/run.mjs ${run.command ?? 'run'}${run.group ? ` --group ${run.group}` : ''}`
-        + `${(run.runners ?? []).map(runner => ` --runner ${runner}`).join('')}`
+        + `${run.runners?.length ? ` --runner ${run.runners.join(',')}` : ''}`
         + ` --repeat ${run.repeat ?? 1}`,
     },
   };
@@ -198,7 +216,7 @@ function defaultExternalGates() {
 export function renderReportMarkdown(report) {
   const pct = value => (value === null || value === undefined ? 'n/a' : `${(value * 100).toFixed(1)}%`);
   const lines = [];
-  lines.push('# FlovartBench Report');
+  lines.push('# Iris Evaluation Report');
   lines.push('');
   lines.push(`- Run id: \`${report.run.id}\``);
   lines.push(`- Generated: ${report.generatedAt}`);
@@ -216,6 +234,15 @@ export function renderReportMarkdown(report) {
   lines.push(`- Tasks executed: ${report.tasks.executed} / ${report.tasks.requested}`);
   lines.push(`- Trials: ${report.trials.total} (successful ${report.trials.successful}, blocked ${report.trials.blocked})`);
   lines.push(`- Repeat per task: ${report.run.repeat}`);
+  if (report.run.excludedKnownGaps.length) {
+    lines.push(`- Excluded known gaps: ${report.run.excludedKnownGaps.join(', ')}`);
+  }
+  if (report.run.skippedForSurface.length) {
+    lines.push(`- Surface-scoped exclusions: ${report.run.skippedForSurface.length} task/runner pairs`);
+    for (const entry of report.run.skippedForSurface) {
+      lines.push(`  - ${entry.taskId} / ${entry.runner}: ${entry.reason}`);
+    }
+  }
   lines.push('');
 
   lines.push('## Dataset');
@@ -247,10 +274,14 @@ export function renderReportMarkdown(report) {
     lines.push('- Not included in this run. Use `npm run eval:oracle`.');
   } else {
     const qa = report.oracleQa;
+    if (qa.runId) lines.push(`- QA source run: ${qa.runId}`);
     lines.push(`- Tasks checked: ${qa.tasks}`);
-    lines.push(`- Oracle 5/5 stable: ${qa.stableTasks} / ${qa.tasks}`);
+    lines.push(`- Oracle ${qa.repeat}/${qa.repeat} stable: ${qa.stableTasks} / ${qa.tasks}`);
     lines.push(`- NOP correctly failed: ${qa.nopFailedAsExpected} / ${qa.nopChecked}`);
     lines.push(`- Admission: ${qa.passed ? 'PASS' : 'FAIL'}`);
+    for (const gap of qa.knownGaps ?? []) {
+      lines.push(`- Known gap (excluded): ${gap.taskId}, ${gap.observed}, ${gap.failureClass}`);
+    }
     if (qa.violations.length) {
       lines.push('');
       lines.push('Violations:');
@@ -264,8 +295,8 @@ export function renderReportMarkdown(report) {
   if (!baseline) {
     lines.push('- No aggregate in this run.');
   } else {
-    lines.push(`- pass@1: ${pct(baseline.passAt1)} (${baseline.successfulTrials}/${baseline.trials})`);
-    lines.push(`- pass^5: ${pct(baseline.passPow5)} (${baseline.stableTasks}/${baseline.tasks})`);
+    lines.push(`- pass@1: ${pct(baseline.passAt1)} (${baseline.successfulTrials}/${baseline.executedTrials} executed)`);
+    lines.push(...renderFiveTrialReliability(baseline, pct));
     lines.push(`- Final-state accuracy (mean predicate pass rate): ${pct(baseline.finalStateAccuracy)}`);
     lines.push(`- Blocked trials: ${baseline.blockedTrials}`);
   }
@@ -294,11 +325,14 @@ export function renderReportMarkdown(report) {
     lines.push('- Not included in this run. Use `npm run eval:agent`.');
   } else {
     const agent = report.agentBaseline;
+    lines.push(`- Reference source run: ${agent.runId ?? 'unknown'} (${agent.startedAt ?? 'date not recorded'})`);
+    lines.push('- Separate-run reference; not a measurement of the current run or checkout.');
     lines.push(`- pass@1: ${pct(agent.passAt1)}`);
-    lines.push(`- pass^5: ${pct(agent.passPow5)}`);
-    lines.push(`- Certified external agent runs: ${agent.certifiedTrials} / ${agent.trials}`);
+    lines.push(...renderFiveTrialReliability(agent, pct));
+    lines.push(`- External runner trials executed: ${agent.certifiedTrials} / ${agent.trials}`);
+    lines.push('- Transcript replay alone does not certify the live Browser final state.');
     if (agent.standInTrials) {
-      lines.push(`- Stand-in (non-certified) trials: ${agent.standInTrials} - these do not count as agent results.`);
+      lines.push(`- Blocked external runner trials: ${agent.standInTrials} - these do not count as executed agent results.`);
     }
     if (agent.failureDistribution) {
       const nonZero = Object.entries(agent.failureDistribution).filter(([, count]) => count > 0);
@@ -312,8 +346,10 @@ export function renderReportMarkdown(report) {
     lines.push('- Not included in this run. Use `node eval/run.mjs run --group environment`.');
   } else {
     const env = report.environmentBaseline;
+    lines.push(`- Reference source run: ${env.runId ?? 'unknown'} (${env.startedAt ?? 'date not recorded'})`);
+    lines.push('- Separate-run reference; not a measurement of the current run or checkout.');
     lines.push(`- pass@1: ${pct(env.passAt1)} (${env.successfulTrials}/${env.executedTrials} executed)`);
-    lines.push(`- pass^5: ${pct(env.passPow5)} (${env.stableTasks}/${env.scoredTasks})`);
+    lines.push(...renderFiveTrialReliability(env, pct));
     if (env.blockedTrials) lines.push(`- Excluded as not applicable on this platform: ${env.blockedTrials} trial(s)`);
   }
   lines.push('');

@@ -81,4 +81,40 @@ describe('FlovartBench evidence redaction', () => {
       await rm(runDir, { recursive: true, force: true });
     }
   });
+
+  it('redacts compound credential keys and prefixless credentials while keeping safety metrics', () => {
+    // The JWT reuses the red-team fixture value so the release secret audit
+    // keeps a single canonical fake credential per shape.
+    const jwt = 'eyJhbGciOiJub25lIn0.eyJzdWIiOiJ0ZXN0In0.signature-part-is-long-enough';
+    const awsKey = 'AKIAREDTEAM000000000';
+    const googleKey = 'AIzaREDTEAM' + '0'.repeat(28);
+    const evidence = JSON.parse(serializeEvidence({
+      compound: {
+        bearerToken: 'unit-bearer-value-0000001',
+        clientSecret: 'unit-client-value-00000002',
+        secretKey: 'unit-secret-value-0000003',
+        sessionToken: 'unit-session-value-000004',
+        privateKey: 'unit-private-value-000005',
+        sessionId: 'unit-sessionid-value-0006',
+      },
+      messages: {
+        error: `auth failed with ${jwt}`,
+        upstream: `rejected ${awsKey} and ${googleKey}`,
+      },
+      safety: { secretExposure: 2 },
+      contentChecksum: 'd'.repeat(64),
+    }));
+
+    expect(evidence.compound.bearerToken).toBe('[REDACTED]');
+    expect(evidence.compound.clientSecret).toBe('[REDACTED]');
+    expect(evidence.compound.secretKey).toBe('[REDACTED]');
+    expect(evidence.compound.sessionToken).toBe('[REDACTED]');
+    expect(evidence.compound.privateKey).toBe('[REDACTED]');
+    expect(evidence.compound.sessionId).toBe('[REDACTED]');
+    expect(evidence.messages.error).not.toContain('eyJ');
+    expect(evidence.messages.upstream).not.toContain('AKIA');
+    expect(evidence.messages.upstream).not.toContain('AIza');
+    expect(evidence.safety.secretExposure).toBe(2);
+    expect(evidence.contentChecksum).toBe('d'.repeat(64));
+  });
 });

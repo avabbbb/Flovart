@@ -1,19 +1,19 @@
 ---
 name: flovart
-description: Use Flovart's visible Workflow through its stable Agent surface. Use when an agent must prepare the workspace, inspect the current graph, read selection, apply document changes, or run a Workflow node.
+description: Use Iris's Workflow and guide a Resolve native-MCP handoff through the compatible flovart CLI when current interfaces support it.
 ---
 
-# Flovart
+# Iris
 
-Flovart is the visible Workflow authority. The Link layer prepares the local
+Iris's visible Browser Workflow is the current Workflow authority. The Link layer prepares the local
 session automatically. Do not ask the user for connection details and do not
 recreate a connection flow in the conversation.
 
 This Skill expects Node.js 22.19.0 or newer when the local CLI is run.
 
-## Normal loop
+## Normal Browser Workflow loop
 
-Start every new task with:
+Start every new Browser Workflow task with:
 
 ```bash
 flovart ensure --json
@@ -46,8 +46,9 @@ flovart workflow.apply
 flovart workflow.node.run
 ```
 
-The same five operations are available through the optional local stdio MCP
-projection for MCP-capable hosts such as TeleAgent. The MCP names are
+The same five operations are available through Iris's optional local stdio MCP
+projection for MCP-capable hosts such as TeleAgent. This is separate from any
+creative host's native MCP. The Iris MCP names are
 `flovart_status`, `flovart_workflow_inspect`, `flovart_workflow_selection`,
 `flovart_workflow_apply`, and `flovart_workflow_run`. MCP is a transport
 projection, not a second Workflow runtime; use the CLI path for Codex,
@@ -63,6 +64,68 @@ After a write, inspect again. If a command fails, preserve its structured error
 code, inspect before retrying, and stop safely when the visible workspace is
 unavailable or the target/revision changed. Never choose another project or
 retry a mutation with a new identity.
+
+## DaVinci Resolve native MCP handoff
+
+Resolve Studio's native MCP is the host control plane. Discover its available
+tools and current scripting documentation from the installed Resolve/Agent
+integration each session; tool names and exposed operations are not an Iris
+contract. Use that native integration for read-only project, timeline, and
+selection inspection first. Do not create or install an Iris Resolve MCP
+server, guess tool names, or run an unbounded script when the available
+operation cannot be established.
+
+Before generation, record the project and selected item's identity from the
+actual Resolve response, along with any timeline, track, range, timecode, and
+media identity fields that Resolve exposes. Do not invent unavailable fields.
+Freeze that target for the task. If selection changes while work is running,
+keep the original target and report the change; never retarget to the new
+selection. Keep Agent reasoning in its existing host. Show the target, intent,
+and any paid route/cost for human review, and obtain the required generation
+approval before submitting.
+
+The current Runtime CLI has durable-generation commands, but inspect the live
+registry/schema before using them:
+
+```bash
+flovart command.list --json
+flovart command.schema --command generate.image --json
+flovart command.schema --command generate.video --json
+flovart command.schema --command task.get --json
+```
+
+Use only the arguments exposed by those schemas. A submitted Runtime task's
+`taskId` is its durable identity: query that same task with `task.get` and
+preserve the returned task/artifact provenance, checksum, and size. Runtime
+write commands require a stable `--idempotency-key`; if submission status is
+unknown, never create a new key or blindly submit a duplicate. If the original
+task cannot be identified or replayed safely, stop. The current media result
+uses `taskId` as its durable handle and does not separately return an
+`artifactId`. Do not call a Provider directly or place credentials in Resolve,
+the Skill, logs, or artifact metadata.
+
+**Current Resolve handoff limitation:** the canonical CLI can submit/query
+Runtime generation and the task result records a relative `storeRelpath`,
+checksum, and byte size. The CLI does not currently expose a supported command
+that resolves that private Runtime path to a durable local file or reads the
+artifact bytes for Resolve. The `workflow.node.run` artifact lookup is backed
+by a process-local registry with a 30-minute TTL and is not a durable Resolve
+handoff. Also, the direct Runtime generation schemas accept source image/video
+task IDs that already exist in Iris Runtime; they do not accept the Resolve
+selection itself as a source. Therefore, if the selected Resolve media is not
+represented by a supported Iris reference, stop before paid submission. If a
+completed artifact cannot be materialized through a supported Iris interface
+as a stable local file, stop before Media Pool import. Do not guess an
+app-data path, call private Runtime endpoints, treat `storeRelpath` as an
+absolute path, or claim the artifact was imported.
+
+When both a source reference and a stable local artifact are available through
+supported Iris interfaces, let the user review the candidate and explicitly
+approve **Add to Media Pool**. Use only the installed native MCP operation
+whose current documentation confirms that bounded import behavior, then
+re-read the Media Pool to verify the new item and confirm the original
+timeline was unchanged. Do not automatically import, replace, overwrite, or
+delete the source.
 
 ## Cold start — no project open
 
@@ -86,7 +149,7 @@ and omitting it on `project.create`/`workflow.apply` makes the write fail with
 
 ## Intent mapping
 
-- “打开 Flovart” → `ensure`, then `workflow.inspect`.
+- “打开 Iris” → `ensure`, then `workflow.inspect`.
 - “查看当前 Workflow” → `workflow.inspect`.
 - “当前选择” → `workflow.selection.get`.
 - Add, delete, move, resize, connect, disconnect, or edit → one `workflow.apply`.
@@ -101,7 +164,7 @@ a bare `workflow.apply` `add_node` operation requires. Prefer it over a raw
 npm run flovart:cli -- workflow.node.create-connected --from-node-id <id> --type text --title "Shot 2" --x 420 --y 120 --agent-identity codex --idempotency-key <key> --json
 ```
 
-The UI and Flovart Core own Provider routing, credentials, cost confirmation,
+The Iris UI and Core own Provider routing, credentials, cost confirmation,
 resource resolution, and artifacts. Do not call a Provider directly, store
 credentials, modify browser storage, use private routes, or create a second
 Workflow runtime. A missing reference or unsupported input must remain an

@@ -1,11 +1,11 @@
-# FlovartBench v0.1
+# Iris Agent Evaluation (`FlovartBench` v0.1)
 
-A system-level eval harness for Flovart's Agent / Workflow / Runtime chain.
+A system-level eval harness for Iris's Agent / Workflow / Runtime chain.
 
 It answers one question:
 
 > Can a real agent, given only a natural-language instruction and no reference
-> answer, drive Flovart through the real CLI / MCP / Workflow / Runtime surfaces
+> answer, drive Iris through the real CLI / MCP / Workflow / Runtime surfaces
 > to the correct final state - repeatedly - without writing to the wrong
 > project, double-charging a Provider, bypassing cost approval, or leaking a
 > secret?
@@ -20,6 +20,20 @@ It answers one question:
 | Repeated success over a single success | `pass@1` and `pass^5` are reported side by side |
 | Holdout improvement over public-task overfitting | split policy below |
 | Safety hard gates are never averaged | `collectHardGateFailures()` - one breach fails the run |
+
+Evidence is reported by source. Deterministic operation runs certify controlled
+contracts. The current Codex runner replays transcript writes into the controlled
+world; its score requires independent live Browser final-state evidence before
+being used as real Agent E2E certification. Provider and host certification retain
+their separate real-world gates.
+
+`pass@1` uses executed trials, with blocked coverage shown separately. `pass^5`
+uses complete **task × runner** groups: exactly five non-blocked trials with
+distinct indices 1–5. Short, duplicate, blocked or other-length groups are
+incomplete for this metric. No complete group means `null` / not measured.
+Reports show stable/complete groups and complete/total groups together; runner
+cohorts are never pooled to manufacture a complete repetition set. Legacy reports
+without completion coverage cannot supply certified five-trial reliability.
 
 ## Layout
 

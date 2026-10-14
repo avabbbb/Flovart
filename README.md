@@ -54,6 +54,21 @@ AIGC:
 
 ## See Iris in action
 
+Two 60-second promo cuts — v2 (8 MB) and v4 (27 MB, higher bitrate):
+
+<table>
+  <tr>
+    <td align="center">
+      <video src="vid/Iris_Promo_60s_v2.mp4" controls muted width="420"></video>
+      <br /><sub><strong>Promo cut v2.</strong> 60 seconds · <a href="vid/Iris_Promo_60s_v2.mp4">source file</a></sub>
+    </td>
+    <td align="center">
+      <video src="vid/Iris_Promo_60s_v4.mp4" controls muted width="420"></video>
+      <br /><sub><strong>Promo cut v4.</strong> 60 seconds · <a href="vid/Iris_Promo_60s_v4.mp4">source file</a></sub>
+    </td>
+  </tr>
+</table>
+
 <p align="center">
   <img src="pic/readme/hero-agent.gif" alt="An external coding agent editing the same live Iris Workflow" width="880" />
   <br />

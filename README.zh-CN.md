@@ -54,6 +54,21 @@ AIGC:
 
 ## 实际效果
 
+两支 60 秒宣传片——v2（8 MB）与 v4（27 MB，码率更高）：
+
+<table>
+  <tr>
+    <td align="center">
+      <video src="vid/Iris_Promo_60s_v2.mp4" controls muted width="420"></video>
+      <br /><sub><strong>宣传片 v2。</strong>60 秒 · <a href="vid/Iris_Promo_60s_v2.mp4">源文件</a></sub>
+    </td>
+    <td align="center">
+      <video src="vid/Iris_Promo_60s_v4.mp4" controls muted width="420"></video>
+      <br /><sub><strong>宣传片 v4。</strong>60 秒 · <a href="vid/Iris_Promo_60s_v4.mp4">源文件</a></sub>
+    </td>
+  </tr>
+</table>
+
 <p align="center">
   <img src="pic/readme/hero-agent.gif" alt="外部 coding agent 正在编辑同一份可见的 Iris Workflow" width="880" />
   <br />

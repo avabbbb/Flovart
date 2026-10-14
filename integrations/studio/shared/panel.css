@@ -2,7 +2,7 @@
   --fs-bg: var(--uxp-host-background-color, #282828); --fs-input: var(--uxp-input-background-color, #202020);
   --fs-ink: var(--uxp-host-text-color, #e3e3e3); --fs-muted: #a0a0a0; --fs-line: #3c3c3c;
   --fs-accent: #8caefe; --fs-on-accent: #152448; --fs-hover: #363636; --fs-success: #80c5a5;
-  display: flex; flex-direction: column; min-width: 260px; height: 100%; min-height: 0;
+  display: flex; flex-direction: column; min-width: 0; height: 100%; min-height: 0;
   color: var(--fs-ink); background: var(--fs-bg); font: 12px/1.5 'Segoe UI', sans-serif;
 }
 @media (prefers-color-scheme: light), (prefers-color-scheme: lightest) {
@@ -64,6 +64,24 @@
 @keyframes fs-task-spin { to { transform: rotate(360deg); } }
 @keyframes fs-task-slide { 0% { transform: translateX(-100%); } 60%,100% { transform: translateX(100%); } }
 .fs-footer { margin-top: auto; display: flex; justify-content: space-between; gap: 8px; padding: 7px 10px; border-top: 1px solid var(--fs-line); font-size: 9px; flex-shrink: 0; }
+.fs-header-status { font-size: 10px; }
+.fs-block { margin-bottom: 4px; }
+.fs-stale { display: none; color: #e0a34a; font-size: 10px; }
+.fs-stale.is-visible { display: inline; }
+.fs-task-section { margin-top: 10px; }
+.fs-task-target { font-size: 10px; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fs-candidates { margin-top: 12px; }
+.fs-candidate-list { display: flex; flex-direction: column; gap: 8px; }
+.fs-candidate-card { display: flex; gap: 9px; border: 1px solid var(--fs-line); border-radius: 4px; background: var(--fs-input); padding: 8px; }
+.fs-candidate-thumb { width: 56px; height: 34px; flex-shrink: 0; background: var(--fs-bg); border: 1px solid var(--fs-line); border-radius: 3px; display: flex; align-items: center; justify-content: center; font-size: 14px; overflow: hidden; }
+.fs-candidate-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.fs-candidate-body { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 3px; }
+.fs-candidate-body strong { font-size: 11px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fs-candidate-body small { font-size: 10px; overflow-wrap: anywhere; }
+.fs-candidate-actions { display: flex; align-items: center; gap: 6px; margin-top: 4px; }
+.fs-candidate-done { font-size: 10px; color: var(--fs-success); }
+.fs-open-link { border: 0; background: transparent; color: var(--fs-muted) !important; font-size: 9px; padding: 0; text-align: right; }
+.fs-open-link:hover { color: var(--fs-ink) !important; text-decoration: underline; }
 .fs-success { color: var(--fs-success); }
 .fs-history { flex: 1; min-height: 0; padding: 12px 10px; overflow-y: auto; }
 .fs-history-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
