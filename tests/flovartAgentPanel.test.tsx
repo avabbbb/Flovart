@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { within, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { FlovartAgentPanel } from '../components/agent/FlovartAgentPanel';
@@ -86,15 +86,18 @@ describe('Flovart Agent panel', () => {
     const project = { ...createWorkflowProject('空白项目'), id: 'project-blank', nodes: [] };
     render(<FlovartAgentPanel project={project} onActivityChange={vi.fn()} onOpenSettings={vi.fn()} />);
 
-    // Zero-node first-run: the browse deck renders above the composer.
-    expect(await screen.findByTestId('agent-browse-first')).toBeInTheDocument();
-    expect(screen.getByText('赛博废土武侠短片')).toBeInTheDocument();
-
-    // Cold-open connection failure is classified as offline, not raw jargon.
+    // Cold-open connection failure is classified as offline, not raw jargon,
+    // and it is the one thing on screen: no deck stacked under it.
     const card = await screen.findByTestId('agent-setup-card');
     expect(card).toHaveTextContent('协作 Agent');
     expect(card).not.toHaveTextContent('spawn');
     expect(card).not.toHaveTextContent('仅桌面端');
+    expect(screen.queryByTestId('agent-browse-first')).not.toBeInTheDocument();
+
+    // Choosing to look around first reveals the browse deck (Recent/Templates).
+    fireEvent.click(within(card).getByRole('button', { name: /先逛逛|离线/ }));
+    expect(await screen.findByTestId('agent-browse-first')).toBeInTheDocument();
+    expect(screen.getByText('赛博废土武侠短片')).toBeInTheDocument();
   });
 
 

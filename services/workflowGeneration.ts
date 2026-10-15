@@ -173,6 +173,11 @@ function raceAbort<T>(promise: Promise<T>, signal: AbortSignal) {
   return Promise.race([promise, new Promise<T>((_, reject) => signal.addEventListener('abort', () => reject(abortError()), { once: true }))]);
 }
 
+/** True while this session holds a live request for the node (used to tell real runs from interrupted ones). */
+export function isWorkflowGenerationActive(projectId: string, nodeId: string) {
+  return activeRequests.has(requestKey(projectId, nodeId));
+}
+
 export function cancelWorkflowGeneration(projectId: string, nodeId: string) {
   const key = requestKey(projectId, nodeId);
   const active = activeRequests.get(key);

@@ -157,26 +157,13 @@ export const WorkflowSidebar: React.FC<WorkflowSidebarProps> = ({
             boxShadow: 'var(--isl-shadow-lg)',
           }}
         >
-          <div className="flex h-11 shrink-0 items-center justify-between px-3">
-            <strong className="text-xs" style={{ color: 'var(--isl-ink)' }}>
-              {tab === 'layers'
-                ? (language === 'zho' ? '图层' : 'Layers')
-                : tab === 'assets'
-                  ? (language === 'zho' ? '资产' : 'Assets')
-                  : (language === 'zho' ? '本地文件夹' : 'Local folder')}
-            </strong>
-            <button type="button" className="isl-icon-btn h-8 w-8" onClick={() => onOpenChange(false)} title={language === 'zho' ? '收起' : 'Close'} aria-label={language === 'zho' ? '收起' : 'Close'}>
-              <X size={16} />
-            </button>
-          </div>
-
           {/* tab 切换 */}
-          <div className="flex shrink-0 items-center gap-1 px-3 pt-1 pb-2">
+          <div className="flex shrink-0 items-center gap-1 px-3 pt-3 pb-2">
             <button
               type="button"
               data-testid="sidebar-tab-layers"
               onClick={() => setTab('layers')}
-              className="flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] font-bold transition"
+              className="flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-1.5 py-1.5 text-[11px] font-bold transition"
               style={{
                 background: tab === 'layers' ? 'var(--isl-surface-2)' : 'transparent',
                 color: tab === 'layers' ? 'var(--isl-ink)' : 'var(--isl-ink-soft)',
@@ -184,13 +171,13 @@ export const WorkflowSidebar: React.FC<WorkflowSidebarProps> = ({
             >
               <Layers size={13} />
               <span>{language === 'zho' ? '图层' : 'Layers'}</span>
-              <span className="text-[10px] tabular-nums opacity-70">{project?.nodes.length || 0}</span>
+              {Boolean(project?.nodes.length) && <span className="text-[10px] tabular-nums opacity-70">{project?.nodes.length}</span>}
             </button>
             <button
               type="button"
               data-testid="sidebar-tab-assets"
               onClick={() => setTab('assets')}
-              className="flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] font-bold transition"
+              className="flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-1.5 py-1.5 text-[11px] font-bold transition"
               style={{
                 background: tab === 'assets' ? 'var(--isl-surface-2)' : 'transparent',
                 color: tab === 'assets' ? 'var(--isl-ink)' : 'var(--isl-ink-soft)',
@@ -203,7 +190,7 @@ export const WorkflowSidebar: React.FC<WorkflowSidebarProps> = ({
               type="button"
               data-testid="sidebar-tab-local-folder"
               onClick={() => setTab('localFolder')}
-              className="flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] font-bold transition"
+              className="flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-1.5 py-1.5 text-[11px] font-bold transition"
               style={{
                 background: tab === 'localFolder' ? 'var(--isl-surface-2)' : 'transparent',
                 color: tab === 'localFolder' ? 'var(--isl-ink)' : 'var(--isl-ink-soft)',
@@ -212,12 +199,15 @@ export const WorkflowSidebar: React.FC<WorkflowSidebarProps> = ({
               <FolderOpen size={13} />
               <span>{language === 'zho' ? '本地' : 'Local'}</span>
             </button>
+            <button type="button" className="isl-icon-btn h-8 w-8 shrink-0" onClick={() => onOpenChange(false)} title={language === 'zho' ? '收起' : 'Close'} aria-label={language === 'zho' ? '收起' : 'Close'}>
+              <X size={16} />
+            </button>
           </div>
 
           <div className="flex min-h-0 flex-1 flex-col">
             {tab === 'layers' ? (
               <div className="min-h-0 flex-1 overflow-auto px-2 pb-2 pt-1">
-        {!project?.nodes.length && <p className="px-2 py-6 text-center text-xs" style={{ color: 'var(--isl-ink-soft)' }}>{language === 'zho' ? '双击工作流空白处或从顶部工具栏添加节点' : 'Double-click the Workflow surface or use the toolbar to add nodes'}</p>}
+        {project && !project.nodes.length && <p className="px-2 py-6 text-center text-xs" style={{ color: 'var(--isl-ink-soft)' }}>{language === 'zho' ? '还没有节点。双击画布空白处添加。' : 'No nodes yet. Double-click the canvas to add one.'}</p>}
                 {[...(project?.nodes || [])].reverse().map(node => {
                   const selected = Boolean(project?.selectedNodeIds.includes(node.id));
                   return (

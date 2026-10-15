@@ -1,4 +1,4 @@
-import { CircleAlert, CircleCheck, Languages, Moon, Settings, Sun, Monitor, User, Download, RefreshCw, Loader2, Home, Plus, Trash2, ChevronLeft, ChevronRight, Pencil, Check, X } from 'lucide-react';
+import { Languages, Moon, Settings, Sun, Monitor, User, Download, RefreshCw, Loader2, Home, Plus, Trash2, ChevronLeft, ChevronRight, Pencil, Check, X } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useAuth } from '../../hooks/useAuth';
@@ -340,33 +340,26 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
             )}
           </button>
         )}
-        <span
-          data-testid="agent-connection-status"
-          role="status"
-          className="flex h-8 items-center gap-1.5 px-2"
-          title={isChinese
-            ? `Agent ${agentLabel} — 在 Agent 页面管理本地连接`
-            : `Agent ${agentLabel} — manage local connections in the Agent page`}
-          aria-label={agentLabel}
-          style={{ color: agentColor, cursor: 'default' }}
-        >
-          <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full" style={{ background: agentColor }} />
-          <span className="hidden whitespace-nowrap text-[11px] font-semibold xl:inline">{agentLabel}</span>
-        </span>
-        {/* Status is a pure indicator — not a hidden Settings shortcut. Only the
-            gear opens Settings. Hover shows detail; a status popover could come
-            later if diagnostics need a surface. */}
-        <span
-          data-testid="runtime-status-chip"
-          className="flex h-8 min-w-8 shrink-0 cursor-default items-center gap-1.5 px-2"
-          title={status.detail}
-          aria-label={`${status.label}: ${status.detail}`}
-          role="status"
-          style={{ color: status.tone === 'ready' ? 'var(--isl-mint-deep)' : 'var(--isl-coral-deep)' }}
-        >
-          {status.tone === 'ready' ? <CircleCheck size={15} /> : <CircleAlert size={15} />}
-          <span className="hidden whitespace-nowrap text-[11px] font-semibold lg:inline">{status.label}</span>
-        </span>
+        {/* One honest status line (Gyroflow-style): the AI service decides
+            whether you can generate; the optional local Agent rides in the
+            tooltip and as a second word only when connected. Not configured
+            is a setup step, not an error, so it is never red; it opens
+            Settings because that is the one thing to do about it. */}
+        {(() => {
+          const ready = status.tone === 'ready';
+          const label = ready && agentReady ? `${status.label} · Agent` : status.label;
+          const color = ready ? 'var(--isl-mint-deep)' : 'var(--isl-ink-soft)';
+          const title = `${status.detail}${isChinese ? `\nAgent：${agentLabel}（在 Agent 页面管理）` : `\nAgent: ${agentLabel} (manage in the Agent page)`}`;
+          const content = <>
+            <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full" style={{ background: ready ? 'var(--isl-mint)' : 'var(--isl-ink-ghost)' }} />
+            <span className="whitespace-nowrap text-[11px] font-semibold">{label}</span>
+          </>;
+          return ready ? (
+            <span data-testid="runtime-status-chip" role="status" aria-label={`${label}: ${status.detail}`} title={title} className="flex h-8 shrink-0 cursor-default items-center gap-1.5 px-2" style={{ color }}>{content}</span>
+          ) : (
+            <button type="button" data-testid="runtime-status-chip" aria-label={`${label}: ${status.detail}`} title={title} onClick={actions.openSettings} className="isl-icon-btn flex h-8 w-auto shrink-0 items-center gap-1.5 px-2" style={{ color }}>{content}</button>
+          );
+        })()}
         <button type="button" className="isl-icon-btn h-8 w-8 shrink-0" onClick={actions.toggleLanguage} title={isChinese ? 'Switch to English' : '切换到中文'}>
           <Languages size={15} />
           <span className="sr-only">{isChinese ? 'Switch to English' : '切换到中文'}</span>
