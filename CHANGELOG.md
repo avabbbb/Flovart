@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.0-beta.1 — Closed beta / 内测版 (2026-10-15)
+## 0.1.0-beta.2 — Closed beta / 内测版 (2026-10-15)
 
 - Restore the Flovart product name across Canvas, Table, Agent, desktop, host panels and current documentation; preserve persisted IDs and protocol compatibility.
 - Consolidate the shell, documentation, Workflow run-state/version/handoff, Resolve Inspector and non-blocking Canvas simplification PRs into main.
