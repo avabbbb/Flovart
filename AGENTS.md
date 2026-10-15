@@ -109,6 +109,8 @@ Host-specific：
 ## 8. 验证与发布口径
 
 - 测试匹配改动风险：文档跑 docs/link checks；代码跑相关测试；宿主/原生效果进真实应用。
+- **普通开发 / PR 走快速通道**：本地 Agent 只跑与当前改动直接相关的一轮验证，不得在每次小改后重复全仓测试、10x 稳定性、完整 Benchmark、全平台打包或发布审计。若本地环境缺 SDK / 宿主 / 依赖，明确写 `NOT_RUN locally`，可把普通 PR 的确定性验证交给 GitHub Actions，而不是为了“先验全绿”反复卡住施工。
+- **重门禁只在该出现的阶段出现**：10x critical、完整 FlovartBench、依赖审计、CodeQL、Rust/sidecar 发布验证与全平台安装包属于 main / scheduled / manual / release qualification；普通 PR 不把这些当合并前置。Tracked secret audit、目标/revision/幂等、unknown-after-submit、不授权的破坏性/外部写入等真实安全边界仍然 fail-closed。
 - 真实支持状态只由 `SUPPORT_MATRIX.md` 升级；旧 RC 数字、旧截图和旧 build 不能证明当前版本。
 - Provider 认证需区分 Fake fixture 与真实账号、扣费、429、取消和 unknown-submit。
 - 不宣传未验证的实时生成、宿主 Stable 支持、完全离线、云同步、无缝 Agent 登录态迁移或跨平台等价性。

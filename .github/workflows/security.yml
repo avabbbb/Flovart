@@ -34,6 +34,7 @@ jobs:
 
   dependency-audit:
     name: npm dependency audit
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -58,6 +59,7 @@ jobs:
 
   codeql:
     name: CodeQL (${{ matrix.language }})
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       actions: read
@@ -86,8 +88,9 @@ jobs:
         uses: github/codeql-action/analyze@v4
 
   dependency-review:
-    name: Dependency review
+    name: Dependency review (advisory on PR)
     if: github.event_name == 'pull_request'
+    continue-on-error: true
     runs-on: ubuntu-latest
     permissions:
       contents: read

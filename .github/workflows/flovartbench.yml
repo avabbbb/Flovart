@@ -2,8 +2,8 @@ name: FlovartBench
 
 # Layered so that no tier needs a credential the repository does not have.
 #
-#   pull_request   validate + red team + the dev split only       (no secrets)
-#   schedule/main  full regression split + environment transfer x5
+#   pull_request   dataset contract only (fast, deterministic)
+#   schedule/main  red team + dev split + full regression / environment transfer
 #   dispatch       real external agent x5, only when explicitly asked for
 #
 # A missing external capability (no codex binary, no funded Provider) reports as
@@ -49,9 +49,11 @@ jobs:
         run: npm run eval:validate
 
       - name: Red team the benchmark
+        if: github.event_name != 'pull_request'
         run: npm run eval:redteam
 
       - name: Dev split on every deterministic surface
+        if: github.event_name != 'pull_request'
         run: node eval/run.mjs run --split dev --runner oracle,cli,mcp --repeat 1
 
   deterministic:
