@@ -60,7 +60,7 @@ afterEach(() => {
   localStorage.clear();
 });
 
-describe('Resolve Studio Iris inspector', () => {
+describe('Resolve Studio Flovart inspector', () => {
   it('keeps guidance quiet: hint markers are closed until the user opens one', async () => {
     const { root } = mountResolveInspector();
     await vi.waitFor(() => expect(root.querySelector('.fs-source-info strong')?.textContent).toBe('Interview_A.mov'));
@@ -134,7 +134,7 @@ describe('Resolve Studio Iris inspector', () => {
     expect(output!.value).toBe('media-pool');
     expect(root.querySelector('.fs-source-info span.fs-mono')?.textContent).toBe('Media Pool 片段');
     expect(root.querySelector<HTMLElement>('.fs-source-info span.fs-mono')?.hidden).toBe(false);
-    expect(root.textContent).toContain('在 Iris 中打开');
+    expect(root.textContent).toContain('在 Flovart 中打开');
 
     const prompt = root.querySelector<HTMLTextAreaElement>('textarea');
     prompt!.value = '根据当前选中的时间线片段生成一个新的场景版本';
@@ -179,7 +179,7 @@ describe('Resolve Studio Iris inspector', () => {
     expect(root.textContent).toContain('References');
     expect(root.textContent).toContain('Task');
     expect(root.textContent).toContain('Candidates · 1');
-    expect(root.textContent).toContain('Open in Iris');
+    expect(root.textContent).toContain('Open in Flovart');
     expect(root.querySelector('.fs-setting-static')?.textContent).toBe('ModelAuto');
     expect(root.querySelector('.fs-candidate-add')?.textContent).toBe('Added to Media Pool');
     root.querySelector<HTMLButtonElement>('.fs-locale-toggle button[aria-label="Simplified Chinese"]')!.click();
@@ -188,7 +188,7 @@ describe('Resolve Studio Iris inspector', () => {
     inspector.dispose();
   });
 
-  it('accepts a frozen Resolve project when its ID differs from the Iris Workflow project', async () => {
+  it('accepts a frozen Resolve project when its ID differs from the Flovart Workflow project', async () => {
     const resolveProjectId = 'resolve-project-7';
     const workflowProjectId = 'iris-workflow-project-42';
     const { root, inspector } = mountResolveInspector({

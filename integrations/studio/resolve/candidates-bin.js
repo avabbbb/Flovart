@@ -1,8 +1,8 @@
-// Resolves (or creates) the "Iris Candidates" bin under the Media Pool root so
+// Resolves (or creates) the "Flovart Candidates" bin under the Media Pool root so
 // every imported candidate lands in one predictable place. It never deletes or
 // renames user bins, and always restores the user's previously open bin.
 
-const CANDIDATES_BIN_NAME = 'Iris Candidates';
+const CANDIDATES_BIN_NAME = 'Flovart Candidates';
 
 const call = async (target, method, ...args) => {
   const fn = target?.[method];

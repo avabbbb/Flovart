@@ -1,6 +1,6 @@
 {
   "$schema": "https://raw.githubusercontent.com/tauri-apps/tauri/dev/crates/tauri-config-schema/schema.json",
-  "productName": "Iris",
+  "productName": "Flovart",
   "version": "0.3.2",
   "identifier": "com.flovart.desktop",
   "build": {
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Iris",
+        "title": "Flovart",
         "width": 1280,
         "height": 800,
         "minWidth": 800,
@@ -70,7 +70,7 @@
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEY4NUIyQTRCQkVBNzFCMTgKUldRWUc2ZStTeXBiK0twR3kwVlp1YkV4UVN5cUhJVldlVzErc1BjYXZoS2JJdU1FT3BNU3Z3NmYK",
       "endpoints": [
-        "https://github.com/avabbbb/Iris/releases/latest/download/latest.json"
+        "https://github.com/avabbbb/Flovart/releases/latest/download/latest.json"
       ],
       "windows": {
         "installMode": "passive"

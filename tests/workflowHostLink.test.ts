@@ -99,7 +99,7 @@ describe('send to timeline request', () => {
   });
 });
 
-describe('Open in Iris handoff', () => {
+describe('Open in Flovart handoff', () => {
   it('parses a whitelisted handoff and keeps other hash parameters when stripping it', () => {
     const hash = '#/app?flovartAgentUrl=x&host=resolve&label=Shot%2004&kind=video&loc.projectId=resolve-a&loc.timelineItemId=item-7';
     expect(parseWorkflowHostHandoff(hash)).toEqual({ host: 'resolve', label: 'Shot 04', kind: 'video', locator: { projectId: 'resolve-a', timelineItemId: 'item-7' } });

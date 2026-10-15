@@ -21,7 +21,7 @@ function resolveCanvasUrl({ env = process.env, fsApi = fs, homeDir = os.homedir(
     try { raw = JSON.parse(fsApi.readFileSync(discoveryFile, 'utf8'))?.url || ''; } catch {}
   }
   const url = normalizeCanvasUrl(raw);
-  if (!url) throw new Error('未找到已启动的 Iris WebUI，请先运行 Iris 启动器并连接 Link。');
+  if (!url) throw new Error('未找到已启动的 Flovart WebUI，请先运行 Flovart 启动器并连接 Link。');
   return url;
 }
 
@@ -29,7 +29,7 @@ const SAFE_LOCATOR_KEY = /^[A-Za-z][A-Za-z0-9]{0,31}$/;
 const SAFE_LOCATOR_VALUE = /^[\w.:\-/ ]{1,200}$/u;
 
 /**
- * Open in Iris 交接：把当前片段的 opaque locator 放进 hash 查询参数（只在本机 loopback 上传递）。
+ * Open in Flovart 交接：把当前片段的 opaque locator 放进 hash 查询参数（只在本机 loopback 上传递）。
  * 不含路径、Token 或素材字节；Canvas 侧按同一白名单解析（components/workflow/hostLink.ts）。
  */
 function buildCanvasHandoffUrl(baseUrl, selection, host = 'resolve') {

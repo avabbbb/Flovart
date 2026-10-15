@@ -110,8 +110,8 @@
 .fs-candidate-add.is-complete { border: 1px solid var(--fs-line); background: transparent; color: var(--fs-success) !important; font-weight: 500 !important; cursor: default; }
 .fs-candidate-preview-button { align-self: flex-start; }
 .fs-footer.fs-resolve-footer { justify-content: flex-end; padding: 6px 10px; }
-.fs-open-in-iris { border: 0; background: transparent; color: var(--fs-muted) !important; padding: 2px 0; font-size: 10px !important; }
-.fs-open-in-iris:hover { color: var(--fs-ink) !important; text-decoration: underline; }
+.fs-open-in-flovart { border: 0; background: transparent; color: var(--fs-muted) !important; padding: 2px 0; font-size: 10px !important; }
+.fs-open-in-flovart:hover { color: var(--fs-ink) !important; text-decoration: underline; }
 .flovart-studio-inspector[data-studio-host="resolve"] button:focus-visible,
 .flovart-studio-inspector[data-studio-host="resolve"] select:focus-visible,
 .flovart-studio-inspector[data-studio-host="resolve"] textarea:focus-visible { outline-offset: 1px; }
@@ -205,7 +205,7 @@
 /* Pill buttons: one shape for every action, no coloured primary */
 .flovart-studio-inspector[data-studio-host="resolve"] .fs-generate,
 .flovart-studio-inspector[data-studio-host="resolve"] .fs-candidate-add,
-.flovart-studio-inspector[data-studio-host="resolve"] .fs-open-in-iris,
+.flovart-studio-inspector[data-studio-host="resolve"] .fs-open-in-flovart,
 .flovart-studio-inspector[data-studio-host="resolve"] .fs-agent-review {
   width: auto; height: auto; min-height: 24px; padding: 2px 14px; border: 1px solid var(--fs-pill); border-radius: 12px;
   background: transparent; color: var(--fs-ink) !important; font-size: 12px !important; font-weight: 400 !important; text-decoration: none;
@@ -214,7 +214,7 @@
 .flovart-studio-inspector[data-studio-host="resolve"] .fs-candidate-add { align-self: flex-start; margin-top: 4px; }
 .flovart-studio-inspector[data-studio-host="resolve"] .fs-generate:hover:not(:disabled),
 .flovart-studio-inspector[data-studio-host="resolve"] .fs-candidate-add:hover:not(:disabled),
-.flovart-studio-inspector[data-studio-host="resolve"] .fs-open-in-iris:hover,
+.flovart-studio-inspector[data-studio-host="resolve"] .fs-open-in-flovart:hover,
 .flovart-studio-inspector[data-studio-host="resolve"] .fs-agent-review:hover { background: var(--fs-hover); border-color: #707078; }
 .flovart-studio-inspector[data-studio-host="resolve"] .fs-candidate-add.is-complete { border-color: var(--fs-line); color: var(--fs-muted) !important; }
 .flovart-studio-inspector[data-studio-host="resolve"] button:disabled { opacity: .4; }

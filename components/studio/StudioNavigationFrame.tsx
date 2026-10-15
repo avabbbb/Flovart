@@ -107,7 +107,7 @@ export const StudioNavigationFrame: React.FC<StudioNavigationFrameProps> = ({
             <div className="studio-project-sidebar__header">
               {!collapsed && (
                 <div className="studio-project-sidebar__heading">
-                  <span className="studio-project-sidebar__eyebrow">IRIS</span>
+                  <span className="studio-project-sidebar__eyebrow">FLOVART</span>
                   <strong>{isChinese ? '工作流' : 'Workflows'}</strong>
                 </div>
               )}

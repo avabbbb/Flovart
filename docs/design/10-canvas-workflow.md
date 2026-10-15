@@ -4,7 +4,7 @@
 
 ## 1. 职责
 
-Canvas 是空间化的 Workflow 创作面：节点、素材、连线、生成与结果编辑。人和 Agent 操作的是**同一份可见 Workflow**；复杂制作（多镜头、依赖、版本比较）都在这里完成。宿主面板的 “Open in Iris” 落到这里。
+Canvas 是空间化的 Workflow 创作面：节点、素材、连线、生成与结果编辑。人和 Agent 操作的是**同一份可见 Workflow**；复杂制作（多镜头、依赖、版本比较）都在这里完成。宿主面板的 “Open in Flovart” 落到这里。
 
 不承担：冒充宿主 Timeline / Media Pool；第二套 Workflow；Agent 全页聊天。
 

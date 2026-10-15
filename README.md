@@ -1,17 +1,12 @@
-<h1 align="center">Iris</h1>
+<h1 align="center">Flovart</h1>
 
 <p align="center">
-  <strong>AI creative agents, inside the tools you already use.</strong>
+  <strong>Your footage. Plus one layer.</strong>
 </p>
 
 <p align="center">
   Open-source, local-first creative layer for professional editors — starting with DaVinci Resolve Studio 21.1.<br />
-  Keep your edit in the host, let your Agent understand the context, and let Iris handle generation, references and durable candidates.
-</p>
-
-<p align="center">
-  <sub><strong>Formerly Flovart.</strong> Iris is the public product and repository name. The legacy <code>flovart</code> CLI,
-  Skill/package paths and internal compatibility identifiers remain temporarily so existing Agent workflows do not break.</sub>
+  Keep your edit in the host, let your Agent understand the context, and let Flovart handle generation, references and durable candidates.
 </p>
 
 <p align="center">
@@ -19,8 +14,8 @@
 </p>
 
 <p align="center">
-  <a href="https://avabbbb.github.io/Iris/"><strong>Try live demo</strong></a> ·
-  <a href="https://github.com/avabbbb/Iris/releases"><strong>Download preview</strong></a> ·
+  <a href="https://avabbbb.github.io/Flovart/"><strong>Try live demo</strong></a> ·
+  <a href="https://github.com/avabbbb/Flovart/releases"><strong>Download preview</strong></a> ·
   <a href="docs/overview/quick-start.en.md">Get started</a> ·
   <a href="SUPPORT_MATRIX.md">Compatibility</a>
 </p>
@@ -31,20 +26,31 @@
   <img src="https://img.shields.io/badge/BYOK-E8453C" alt="Bring your own key" />
   <img src="https://img.shields.io/badge/Image%20%2B%20Video-E8453C" alt="Image and video" />
   <img src="https://img.shields.io/badge/License-MIT-E8453C" alt="MIT License" />
-  <a href="https://github.com/avabbbb/Iris/releases"><img src="https://img.shields.io/github/downloads/avabbbb/Iris/total?color=E8453C&logo=github" alt="GitHub Downloads" /></a>
-  <a href="https://github.com/avabbbb/Iris"><img src="https://img.shields.io/github/stars/avabbbb/Iris?color=E8453C" alt="GitHub Stars" /></a>
+  <a href="https://github.com/avabbbb/Flovart/releases"><img src="https://img.shields.io/github/downloads/avabbbb/Flovart/total?color=E8453C&logo=github" alt="GitHub Downloads" /></a>
+  <a href="https://github.com/avabbbb/Flovart"><img src="https://img.shields.io/github/stars/avabbbb/Flovart?color=E8453C" alt="GitHub Stars" /></a>
 </p>
 
 <p align="center">
-  <a href="stats/README.md"><img src="https://tally.yuki.sh/hits/flovart/readme.svg?theme=rule34" alt="Iris README views" /></a>
+  <a href="stats/README.md"><img src="https://tally.yuki.sh/hits/flovart/readme.svg?theme=rule34" alt="Flovart README views" /></a>
   <br />
   <sub>README views · third-party counter, not unique visitors</sub>
 </p>
 
-## See Iris in action
+
+## Watch the 60-second concept film
+
+[![Watch Flovart: Your footage. Plus one layer.](pic/readme/vision/Flovart_Promo_60s_v4-poster.jpg)](https://github.com/avabbbb/Flovart/raw/refs/heads/main/pic/readme/vision/Flovart_Promo_60s_v4.mp4)
+
+**Keep the original. Describe the change. Compare candidates.** Flovart brings your coding Agent and a visible creative Workflow together. Canvas handles multi-step work, Table handles batches, and Agent connects your preferred assistant.
+
+The film shows the Resolve-first design target: point at a frame, generate creative layers, compare takes, and return an approved result. **Concept film, recorded before the Flovart name was restored; its closing card still says Iris.** Native host integration and alpha-layer/new-track output remain experimental or planned. Today, the recorded Agent → Workflow operations below are the verified starting point; Resolve P0 targets explicit **Add to Media Pool**.
+
+**0.1.0 closed beta:** Windows EXE and macOS DMG builds are distributed through [Releases](https://github.com/avabbbb/Flovart/releases). Platform builds are tested separately; installers do not certify creative-host or paid-provider support. See the [Support Matrix](SUPPORT_MATRIX.md).
+
+## See Flovart in action
 
 <p align="center">
-  <img src="pic/readme/hero-agent.gif" alt="An external coding agent editing the same live Iris Workflow" width="880" />
+  <img src="pic/readme/hero-agent.gif" alt="An external coding agent editing the same live Flovart Workflow" width="880" />
   <br />
   <sub><strong>The current recorded Agent/Workflow surface — natural language becomes nodes and edges.</strong><br />
   Nothing in this clip is done by hand: the agent (WorkBuddy codebuddy) drove the visible Workflow through the typed
@@ -56,34 +62,34 @@
 ## Product vision — the interaction we're building toward
 
 <p align="center">
-  <a href="pic/readme/vision/Iris_Vision_3min_v5.mp4">
-    <img src="pic/readme/vision/Iris_Vision_3min_v5-poster.jpg" alt="Iris product vision: Resolve-first AI layer workflow opening into the Iris visual canvas" width="880" />
+  <a href="pic/readme/vision/Flovart_Vision_3min_v5.mp4">
+    <img src="pic/readme/vision/Flovart_Vision_3min_v5-poster.jpg" alt="Flovart product vision: Resolve-first AI layer workflow opening into the Flovart visual canvas" width="880" />
   </a>
   <br />
-  <sub><strong>Iris Vision · 3 minutes.</strong> Click the image to watch the film.<br />
+  <sub><strong>Flovart Vision · 3 minutes.</strong> Click the image to watch the film.<br />
   <strong>Concept film / design target — not a claim that every scene is implemented today.</strong></sub>
 </p>
 
-This film is the **north star for Iris product interaction and UI**. The product we are building should feel like this:
+This film is the **north star for Flovart product interaction and UI**. The product we are building should feel like this:
 
-- **Stay in the editor first.** Resolve remains the source of truth; Iris appears as a narrow contextual layer around the clip you are already working on.
+- **Stay in the editor first.** Resolve remains the source of truth; Flovart appears as a narrow contextual layer around the clip you are already working on.
 - **Draw where. Say what. Get a layer.** Point at the frame, describe the intent, then generate reviewable AI-layer candidates instead of replacing the source clip.
 - **Candidates before commits.** Compare results visually, keep every version, and never let a late result silently replace the version you explicitly chose.
 - **Human + Agent, one visible state.** Agent activity, revisions and out-of-date results are visible on the same Workflow that the creator can edit by hand.
-- **Open the full Iris canvas only when the job needs it.** Multi-step references, stale branches, version history and more complex production expand into the visual Workflow instead of turning the host panel into a second app.
+- **Open the full Flovart canvas only when the job needs it.** Multi-step references, stale branches, version history and more complex production expand into the visual Workflow instead of turning the host panel into a second app.
 - **Return to the host non-destructively.** Approved results flow back through a reviewable handoff — Media Pool first, then a new layer/track only when that host capability is actually verified.
 - **Local-first by default.** Footage, project context and durable results stay close to the creator's machine; external model calls are explicit and provider-scoped.
 
-The sections below remain the evidence for what the current build can prove today. For implementation status and real-host gates, see the [Support Matrix](SUPPORT_MATRIX.md). Product/system details live in the [main design](docs/design/flovart-native-effects.md), [Agent Integration](docs/design/agent-integration.md), [Adaptive Layout](docs/design/adaptive-layout.md), and the [Resolve 21.1 Product & UI Spec](integrations/studio/resolve/PRODUCT_UI_SPEC.md).
+The sections below remain the evidence for what the current build can prove today. For implementation status and real-host gates, see the [Support Matrix](SUPPORT_MATRIX.md). Product/system details live in the [main design](docs/design/00-overview.md), [Agent Integration](docs/design/12-agent.md), [Adaptive Layout](docs/design/01-interaction.md), and the [Resolve 21.1 Product & UI Spec](integrations/studio/resolve/PRODUCT_UI_SPEC.md).
 
-## What Iris can already do
+## What Flovart can already do
 
 These are **real recordings from the current build**, not mockups. The Resolve-native MCP → candidate → Media Pool flow is still an External Gate, so the top of the README shows only capabilities we can prove today.
 
 <table>
   <tr>
     <td align="center" width="50%">
-      <img src="pic/readme/features/agent-cli-live.gif" alt="An Agent uses typed Iris operations to build a visible Workflow." width="420" />
+      <img src="pic/readme/features/agent-cli-live.gif" alt="An Agent uses typed Flovart operations to build a visible Workflow." width="420" />
       <br /><sub><strong>Agent → live Workflow.</strong> Typed operations update the same visible project — no screen scraping.</sub>
     </td>
     <td align="center" width="50%">
@@ -97,7 +103,7 @@ These are **real recordings from the current build**, not mockups. The Resolve-n
       <br /><sub><strong>Image operations.</strong> Local edits produce explicit, reusable results.</sub>
     </td>
     <td align="center">
-      <img src="pic/readme/features/video-trim.gif" alt="A creator trims a video clip inside Iris." width="420" />
+      <img src="pic/readme/features/video-trim.gif" alt="A creator trims a video clip inside Flovart." width="420" />
       <br /><sub><strong>Video operations.</strong> Trim and other media tools run locally in the current workspace.</sub>
     </td>
   </tr>
@@ -105,14 +111,14 @@ These are **real recordings from the current build**, not mockups. The Resolve-n
 
 **More real operation GIFs are in the [full feature tour](#feature-tour).**
 
-**Jump to:** [Quick start](#quick-start) · [Feature tour](#feature-tour) · [Why Iris?](#why-iris) · [Core capabilities](#core-capabilities) · [Bring your own models](#bring-your-own-models) · [Compatibility](#integrations-and-compatibility) · [Architecture](#architecture) · [Local-first and security](#local-first-and-security) · [Roadmap](#creative-app-roadmap) · [Contributing](#contributing)
+**Jump to:** [Quick start](#quick-start) · [Feature tour](#feature-tour) · [Why Flovart?](#why-flovart) · [Core capabilities](#core-capabilities) · [Bring your own models](#bring-your-own-models) · [Compatibility](#integrations-and-compatibility) · [Architecture](#architecture) · [Local-first and security](#local-first-and-security) · [Roadmap](#creative-app-roadmap) · [Contributing](#contributing)
 
 ## Quick start
 
 ### For creators
 
-1. Download a preview build from [GitHub Releases](https://github.com/avabbbb/Iris/releases).
-2. Open Iris and add an AI service in Settings.
+1. Download a preview build from [GitHub Releases](https://github.com/avabbbb/Flovart/releases).
+2. Open Flovart and add an AI service in Settings.
 3. Create or open a Workflow, add references, and start creating.
 
 The Releases page may contain test or preview artifacts; it is not a claim that every host or provider is Stable.
@@ -122,16 +128,16 @@ The Releases page may contain test or preview artifacts; it is not a claim that 
 Run from a source checkout while the versioned CLI package remains a release gate:
 
 ```bash
-git clone https://github.com/avabbbb/Iris.git
-cd Iris
+git clone https://github.com/avabbbb/Flovart.git
+cd Flovart
 npm install
 npm run flovart:cli -- start --source --web --open
 npm run flovart:cli -- status --json
 ```
 
-Then ask your local agent: **“Open Iris and work on this Workflow.”**
+Then ask your local agent: **“Open Flovart and work on this Workflow.”**
 
-Your agent learns Iris through the **Agent Integration Skill** at `.agents/skills/flovart/` (mirrored for Claude under `.claude/skills/flovart/` and bundled for WorkBuddy under `integrations/workbuddy/flovart/skills/flovart/`). On a source checkout the harness auto-discovers it; the packaged CLI also ships it so `flovart ensure` can register it. This is a thin adapter — it teaches the agent the 5 operations below; it is not a Production Skill / Marketplace feature.
+Your agent learns Flovart through the **Agent Integration Skill** at `.agents/skills/flovart/` (mirrored for Claude under `.claude/skills/flovart/` and bundled for WorkBuddy under `integrations/workbuddy/flovart/skills/flovart/`). On a source checkout the harness auto-discovers it; the packaged CLI also ships it so `flovart ensure` can register it. This is a thin adapter — it teaches the agent the 5 operations below; it is not a Production Skill / Marketplace feature.
 
 The normal agent loop is `status`, `workflow.inspect`, `workflow.selection.get`, `workflow.apply` and `workflow.node.run`. Connection setup and diagnostics use `ensure` and `doctor`; development-only browser checks are covered in the [Getting Started guide](docs/overview/quick-start.en.md).
 
@@ -276,14 +282,14 @@ Also local, also without a model service: these run through the in-browser ffmpe
 
 Not filmed yet, and deliberately not shown: model-backed generation and the model-backed image tools (image generation, upscale, background removal, layer split, edit/outpaint) — this checkout configures no provider, so there is no honest result to record. That gap is logged in the [recording notes](docs/archive/2026-10-07/maintenance/readme/DEMO_RECORDING.md).
 
-## Why Iris?
+## Why Flovart?
 
-Most AI creative tools ask you to move your work into another canvas. **Iris goes the other way.**
+Most AI creative tools ask you to move your work into another canvas. **Flovart goes the other way.**
 
-Your professional editor remains the source of truth. Your Agent reads the creative context. Iris manages generation, references, durable artifacts and reviewable candidates — and the full Iris workspace opens only when the job actually needs a visual Workflow.
+Your professional editor remains the source of truth. Your Agent reads the creative context. Flovart manages generation, references, durable artifacts and reviewable candidates — and the full Flovart workspace opens only when the job actually needs a visual Workflow.
 
 - **Inside the editor.** The first host path targets DaVinci Resolve Studio 21.1; other creative hosts remain Experimental until real-host validation.
-- **Agent-native.** Agents act through typed Iris capabilities and host-native control surfaces instead of mouse coordinates or screen scraping.
+- **Agent-native.** Agents act through typed Flovart capabilities and host-native control surfaces instead of mouse coordinates or screen scraping.
 - **Non-destructive by default.** Generated work starts as a candidate. The Resolve-first P0 ends at **Add to Media Pool** before timeline replacement is considered.
 - **Bring your own models.** Keep the providers, models and API keys you choose.
 - **Local-first.** Project-adjacent state, references and generated artifacts stay close to the creative workspace wherever the current implementation supports it.
@@ -292,7 +298,7 @@ The canvas is still a power surface for multi-shot work, complex references and 
 
 ## Core capabilities
 
-| Capability | Iris |
+| Capability | Flovart |
 | --- | --- |
 | Agent control | Typed operations against the actual visible Workflow |
 | Human editing | The same graph, assets and results stay directly editable |
@@ -309,7 +315,7 @@ Compose image, text, video, audio and configuration nodes, keep projects and ref
 Your Agent                  Codex · WorkBuddy · Claude Code
       │
       ▼
-Iris Operations             inspect · select · apply · run
+Flovart Operations             inspect · select · apply · run
       │
       ▼
 Live Workflow  ──────────── Human
@@ -325,7 +331,7 @@ With your agent, a brief becomes explicit operations: it reads the current proje
 Your provider → your API key → your assets + Workflow → your generated result
 ```
 
-Iris does not bundle model services. Configure a provider in the app, choose the capabilities and model you need, and keep the provider terms, cost and output rights in your own hands. OpenAI-compatible BYOK and remote-provider paths are Experimental: an adapter in the code is not a paid-provider certification.
+Flovart does not bundle model services. Configure a provider in the app, choose the capabilities and model you need, and keep the provider terms, cost and output rights in your own hands. OpenAI-compatible BYOK and remote-provider paths are Experimental: an adapter in the code is not a paid-provider certification.
 
 ## Integrations and compatibility
 
@@ -350,17 +356,17 @@ Iris does not bundle model services. Configure a provider in the app, choose the
 ```mermaid
 flowchart LR
   H["Human creator"] <--> W["Live Workflow"]
-  A["Coding-agent harness"] --> L["Iris Link + flovart CLI"]
+  A["Coding-agent harness"] --> L["Flovart Link + flovart CLI"]
   L --> W
   W --> P["Provider adapters"]
   W --> R["Local assets + artifacts"]
   T["Table workspace"] -. separate surface .-> W
 ```
 
-The existing `flovart` CLI name is a compatibility surface during the Iris rebrand. CLI and the experimental stdio MCP share operation semantics and the current Browser Workflow binding. Deterministic operations do not require a second AI to reinterpret them.
+The existing `flovart` CLI name is a compatibility surface during the Flovart rebrand. CLI and the experimental stdio MCP share operation semantics and the current Browser Workflow binding. Deterministic operations do not require a second AI to reinterpret them.
 
 <p align="center">
-  <img src="pic/readme/agent-operations-live-workflow.gif" alt="Iris compatibility CLI operations creating nodes and connections in the live Workflow" width="720" />
+  <img src="pic/readme/agent-operations-live-workflow.gif" alt="Flovart compatibility CLI operations creating nodes and connections in the live Workflow" width="720" />
   <br />
   <sub><strong>The operation-level view of the same claim.</strong> A project and three nodes are created through
   <code>workflow.project.create</code>, <code>workflow.node.create</code> and <code>workflow.connect</code> (played at 1.5×) — the
@@ -376,7 +382,7 @@ Native-effect work keeps two short paths: one shared generation function produce
 - The current Web path stores API keys locally through the encrypted `localforage` vault, while the frontend calls the configured model service directly. Treat the browser as part of the secret boundary.
 - Web, Desktop WebView and extension storage are normally isolated. Cross-entry synchronization through a restricted runtime bridge is still pending.
 - Never put API keys in a prompt, log or repository. Agent and CLI paths receive redacted readiness and capability state, not raw credentials.
-- Use only the repository, the [live demo](https://avabbbb.github.io/Iris/) and desktop artifacts published by the repository's Actions as official project channels. Review each provider's terms and the rights for your inputs and outputs.
+- Use only the repository, the [live demo](https://avabbbb.github.io/Flovart/) and desktop artifacts published by the repository's Actions as official project channels. Review each provider's terms and the rights for your inputs and outputs.
 
 Found a vulnerability? Report it privately through the [security policy](SECURITY.md).
 
@@ -389,7 +395,7 @@ The current product target is deliberately narrow:
 ```text
 Current Resolve selection
 → Agent understands the task
-→ Iris creates a durable candidate
+→ Flovart creates a durable candidate
 → review
 → Add to Media Pool
 ```
@@ -402,7 +408,7 @@ These are directions, not Stable support; follow [the roadmap](docs/content/docs
 
 ## Contributing
 
-Contributions are especially useful in three areas: provider adapters, host integrations and Workflow capabilities. Open an [Issue](https://github.com/avabbbb/Iris/issues/new/choose), read the [contribution conventions](.github/CONTRIBUTING.md), and include verification evidence with UI changes.
+Contributions are especially useful in three areas: provider adapters, host integrations and Workflow capabilities. Open an [Issue](https://github.com/avabbbb/Flovart/issues/new/choose), read the [contribution conventions](.github/CONTRIBUTING.md), and include verification evidence with UI changes.
 
 ## Acknowledgements
 
@@ -410,6 +416,6 @@ Thanks to [@labiaaaaaaaaa](https://github.com/labiaaaaaaaaa) for driving third-p
 
 ## License and disclaimer
 
-Iris is licensed under the [MIT License](./LICENSE). By using the project, you agree to the [Terms of Service](./docs/TERMS_OF_SERVICE.md) and [Privacy Policy](./docs/PRIVACY_POLICY.md).
+Flovart is licensed under the [MIT License](./LICENSE). By using the project, you agree to the [Terms of Service](./docs/TERMS_OF_SERVICE.md) and [Privacy Policy](./docs/PRIVACY_POLICY.md).
 
-Iris does not bundle model services and makes no intellectual-property claim over generated content. You are responsible for the copyright, compliance and lawful use of your models, input assets and generated output. See [project data and statistics](stats/README.md).
+Flovart does not bundle model services and makes no intellectual-property claim over generated content. You are responsible for the copyright, compliance and lawful use of your models, input assets and generated output. See [project data and statistics](stats/README.md).

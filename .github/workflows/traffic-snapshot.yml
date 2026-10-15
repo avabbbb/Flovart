@@ -85,7 +85,7 @@ jobs:
             fs.writeFileSync(path, JSON.stringify(history, null, 2) + '\n');
 
             await core.summary
-              .addHeading('Iris repository snapshot')
+              .addHeading('Flovart repository snapshot')
               .addTable([
                 [{ data: 'Metric', header: true }, { data: 'Value', header: true }],
                 ['Stars', String(info.stargazers_count)],

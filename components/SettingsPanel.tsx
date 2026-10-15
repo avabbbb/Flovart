@@ -1024,7 +1024,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `iris-api-configs-${new Date().toISOString().slice(0, 10)}.json`;
+        a.download = `flovart-api-configs-${new Date().toISOString().slice(0, 10)}.json`;
         a.click();
         URL.revokeObjectURL(url);
     };
@@ -1108,7 +1108,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `iris-api-configs-full-${new Date().toISOString().slice(0, 10)}.json`;
+        a.download = `flovart-api-configs-full-${new Date().toISOString().slice(0, 10)}.json`;
         a.click();
         URL.revokeObjectURL(url);
     };

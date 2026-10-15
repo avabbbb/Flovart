@@ -18,10 +18,10 @@ export function ConfirmHost() {
   }, [request]);
   if (!request) return null;
   return (
-    <div className="iris-confirm theme-aware" role="alertdialog" aria-labelledby="iris-confirm-title" style={{ zIndex: Z.notification }}>
-      <strong id="iris-confirm-title">{request.title}</strong>
+    <div className="flovart-confirm theme-aware" role="alertdialog" aria-labelledby="flovart-confirm-title" style={{ zIndex: Z.notification }}>
+      <strong id="flovart-confirm-title">{request.title}</strong>
       {request.body && <p>{request.body}</p>}
-      <div className="iris-confirm__actions">
+      <div className="flovart-confirm__actions">
         <button type="button" onClick={() => answerUiConfirm(request.id, false)}>{request.cancelLabel}</button>
         <button type="button" ref={confirmRef} data-tone={request.tone} onClick={() => answerUiConfirm(request.id, true)}>{request.confirmLabel}</button>
       </div>

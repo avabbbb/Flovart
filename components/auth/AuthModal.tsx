@@ -60,7 +60,7 @@ export function AuthModal({ open, onClose, onSuccess }: AuthModalProps) {
       open={open}
       onCancel={handleClose}
       footer={null}
-      title={mode === 'login' ? '登录 Iris' : '注册 Iris'}
+      title={mode === 'login' ? '登录 Flovart' : '注册 Flovart'}
       width={380}
       centered
     >

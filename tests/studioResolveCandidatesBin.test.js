@@ -19,7 +19,7 @@ function mediaPoolFake({ existing = [], addFails = false, setFails = false } = {
   return { pool, calls, current: () => current };
 }
 
-describe('Resolve Iris Candidates bin', () => {
+describe('Resolve Flovart Candidates bin', () => {
   it('reuses an existing bin instead of creating a duplicate', async () => {
     const { pool, calls } = mediaPoolFake({ existing: ['B-roll', CANDIDATES_BIN_NAME] });
     const bin = await findOrCreateCandidatesBin(pool);

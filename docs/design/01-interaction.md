@@ -1,4 +1,4 @@
-# Iris 交互设计
+# Flovart 交互设计
 
 > 状态：**Current truth**。所有 surface（宿主面板、Canvas、Table、Agent 连接中心、Assistant）的交互都遵守本文。模块文档只补充本模块特有的界面，不得与本文冲突。
 
@@ -41,7 +41,7 @@
 
 ### 4.1 每个状态都有出口
 
-每个界面状态必须至少提供一个：**返回 / 取消 / 重试 / 在别处打开（Open in Iris）**。状态表（§6）中出口列不能为空，否则不允许合入。
+每个界面状态必须至少提供一个：**返回 / 取消 / 重试 / 在别处打开（Open in Flovart）**。状态表（§6）中出口列不能为空，否则不允许合入。
 
 ### 4.2 等待都有上限
 
@@ -83,7 +83,7 @@ idle → planning → awaiting_approval → queued → running → completed
 | queued / running | 真实进度或“等待供应商” | — | 取消；关闭面板（任务继续） |
 | unknown_submit | “正在确认是否已提交”，不锁界面 | — | 继续其他工作；查看详情 |
 | completed | 候选结果 | 下一步（导入 / 应用） | 重新生成；丢弃 |
-| failed | 可读原因 + 建议 | 重试 / 修改 | 诊断；Open in Iris |
+| failed | 可读原因 + 建议 | 重试 / 修改 | 诊断；Open in Flovart |
 | canceled | “已取消”及计费提示 | 重新开始 | — |
 
 ## 6. 核心流程
@@ -102,17 +102,17 @@ idle → planning → awaiting_approval → queued → running → completed
 
 | 步骤 | 状态 | 主动作 | 出口 |
 | --- | --- | --- | --- |
-| 无项目 / 无选择 | 一句话说明 + 示意 | 无（等待选择，不阻塞） | Open in Iris |
+| 无项目 / 无选择 | 一句话说明 + 示意 | 无（等待选择，不阻塞） | Open in Flovart |
 | 有选择 | Current Clip 卡 | Generate | 切换工具 |
 | Draw | 当前帧上画区域；可清除、可撤销笔画 | 完成 | 取消（不影响已有输入） |
 | 候选生成 | 网格中每格独立进度 | — | 单格取消 / 全部取消 |
 | 候选就绪 | 网格；悬停预览为叠加在当前帧上 | 选定 | 重新生成某一格 |
 | 已选定 | 选中格高亮 | Add to Media Pool / Add to new track | 换一个 |
-| 已上轨道 | 轨道上显示 Iris 片段 | — | 开关；删除；替换为另一候选 |
+| 已上轨道 | 轨道上显示 Flovart 片段 | — | 开关；删除；替换为另一候选 |
 
 规则：
 - 预览永远是“叠加在原帧上”，原片在任何步骤都不被写入。
-- 未选中的候选留在 Media Pool 的 Iris bin，不自动删除；清理是用户显式动作。
+- 未选中的候选留在 Media Pool 的 Flovart bin，不自动删除；清理是用户显式动作。
 - 能力探测失败时，P1 入口退化为“已导入 Media Pool，可拖到时间线”，不出现无法完成的按钮。
 
 ### 6.2 Agent 发起
@@ -149,7 +149,7 @@ idle → planning → awaiting_approval → queued → running → completed
 
 ## 7. 文案与反馈
 
-- 用动词开头的按钮：Generate、Add to Media Pool、Add to new track、Open in Iris。
+- 用动词开头的按钮：Generate、Add to Media Pool、Add to new track、Open in Flovart。
 - 错误文案 = 发生了什么 + 用户能做什么，例如“供应商限流，30 秒后可重试”。不暴露端口、Lease、MCP JSON、Token、内部 bridge 名称。
 - 未上线能力在演示 / 宣传中标注 **Coming soon**；产品界面里不显示无法使用的入口。
 - 中英文同步；文案长度变化不得造成布局溢出。

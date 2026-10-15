@@ -1,20 +1,20 @@
-# Iris 总体设计
+# Flovart 总体设计
 
 > 状态：**Current truth**（2026-10-07 文档重构）。本文是产品与系统的唯一总纲；各模块细节见同目录模块文档，交互规则见[交互设计](01-interaction.md)。
 > 标注约定：**已实现** = 代码在主干；**已验证** = 有 Support Matrix 证据；**设计目标** = 尚未实现；**假设** = 待真实环境确认。
 
 ## 1. 一句话
 
-**在你已经在用的创作软件里，让你自己的 Agent 调用 Iris，给素材加一层可开关、可替换的 AI 创意层；原素材不动，复杂制作再展开 Iris。**
+**在你已经在用的创作软件里，让你自己的 Agent 调用 Flovart，给素材加一层可开关、可替换的 AI 创意层；原素材不动，复杂制作再展开 Flovart。**
 
 对外短句：*Your footage. Plus one layer.*
 
-Iris（原 Flovart）是 local-first、agent-native、BYOK 的创作工作台。用户的模型、Key、素材和最终编辑权始终在用户一侧。
+Flovart是 local-first、agent-native、BYOK 的创作工作台。用户的模型、Key、素材和最终编辑权始终在用户一侧。
 
 ## 2. 目标用户与首个任务
 
 - 首批用户：用 DaVinci Resolve Studio 21.1 做短视频、广告、创作者内容的个人剪辑师；同时会用 Codex / Claude Code 等 Coding Agent。
-- 首个任务：选中时间线上的一个片段 → 描述想要的效果（可在画面上圈一笔）→ Iris 生成若干**叠加层候选** → 比较、选定 → 非破坏性送回宿主。
+- 首个任务：选中时间线上的一个片段 → 描述想要的效果（可在画面上圈一笔）→ Flovart 生成若干**叠加层候选** → 比较、选定 → 非破坏性送回宿主。
 - 不是首个任务：让 AI 自动剪完一条片、替换整段原素材、实时 AI 视频。
 
 ## 3. 产品组成（模块地图）
@@ -40,7 +40,7 @@ Iris（原 Flovart）是 local-first、agent-native、BYOK 的创作工作台。
 5. **能力驱动、不硬编码**：工具、模型、候选数量、宿主能力、文案全部来自注册表 / 能力发现 / 配置，UI 按 schema 渲染（规则见交互设计 §3）。
 6. **永不死锁**：任何状态都有出口，任何等待都可取消或超时，任何锁都会过期（规则见交互设计 §4）。
 7. **真实状态优先**：动画不能掩盖失败、未知提交或 Provider 无响应。
-8. **宿主原生感**：宿主里的 Iris 是一个窄而克制的 contextual inspector，不是聊天页、后台或缩小版 Canvas。
+8. **宿主原生感**：宿主里的 Flovart 是一个窄而克制的 contextual inspector，不是聊天页、后台或缩小版 Canvas。
 
 ## 5. 关键决策（保留自历史 ADR）
 
@@ -87,7 +87,7 @@ Iris（原 Flovart）是 local-first、agent-native、BYOK 的创作工作台。
 | --- | --- | --- |
 | R0 | Resolve 21.1 native MCP 真实连接 | 真实 Agent 读到当前项目与选择；记录版本与实际 tool 列表 |
 | R1 | 最小闭环（不付费） | 当前选择 → fixture 叠加层 → 持久文件 → Media Pool；原时间线不变 |
-| R2 | 轻面板收敛 | Current Clip → Tools → Generate → Task → Candidates → Add to Media Pool → Open in Iris |
+| R2 | 轻面板收敛 | Current Clip → Tools → Generate → Task → Candidates → Add to Media Pool → Open in Flovart |
 | R3 | 一条真实 Provider | 真实付费、取消、unknown-submit、持久素材、Media Pool |
 | R4 | 上新轨道（P1） | 叠加层放在源轨道上方并对齐；开关后原片逐像素不变；删除即撤销 |
 | R5 | Replace / Commit（P2） | 显式确认、提交前复核目标、可撤销 |
@@ -123,10 +123,10 @@ Iris（原 Flovart）是 local-first、agent-native、BYOK 的创作工作台。
 | Provider | 真正提供模型能力的服务 | Coding Agent、CLI、宿主 |
 | Creative host | Resolve / AE / PR / PS 等宿主 | — |
 | Native effect | 宿主保存并参与预览 / 导出的效果 | 面板按钮、网页预览 |
-| Iris Link | 本地宿主 / Workflow 连接能力的代码名 | 第二份 Workflow、业务总线 |
+| Flovart Link | 本地宿主 / Workflow 连接能力的代码名 | 第二份 Workflow、业务总线 |
 
 历史概念（Production Crew、Director、Workspace Operator、Native Draft、Dock production control、enterprise credits）不再用于推导新功能。
 
 ## 11. 品牌与兼容标识
 
-对外统一用 **Iris**。技术兼容标识（`flovart` CLI、npm 包名、Skill 路径、事件名、CSS data 属性）暂时保留；改名是独立迁移，必须带别名与弃用说明，不与普通文档 / UI PR 混做。
+对外统一用 **Flovart**。技术兼容标识（`flovart` CLI、npm 包名、Skill 路径、事件名、CSS data 属性）暂时保留；改名是独立迁移，必须带别名与弃用说明，不与普通文档 / UI PR 混做。

@@ -1591,7 +1591,7 @@ function buildOpenRouterHeaders(apiKey: string) {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${apiKey}`,
         'HTTP-Referer': globalThis.location?.origin || 'https://flovart.app',
-        'X-OpenRouter-Title': 'Iris',
+        'X-OpenRouter-Title': 'Flovart',
     };
 }
 
@@ -3850,7 +3850,7 @@ export async function executeUnifiedIgnition(input: UnifiedIgnitionInput): Promi
         const effectivePrompt = buildPromptWithReferenceBindings(prompt, input.references);
         if (userScriptProvider) {
             if (!input.canonicalInput || !input.materializedReferences) {
-                throw new UnsupportedGenerationInputError('自定义 AI 服务必须通过 Iris 的统一生成输入进入 Workflow。');
+                throw new UnsupportedGenerationInputError('自定义 AI 服务必须通过 Flovart 的统一生成输入进入 Workflow。');
             }
             const scriptResult = await executeUserScriptProvider(
                 userScriptProvider,

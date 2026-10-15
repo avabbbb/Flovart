@@ -10,7 +10,7 @@ const { withCandidatesBin } = require('./candidates-bin');
 const PLUGIN_ID = 'com.flovart.studio.resolve';
 const MAX_MATERIALIZED_BYTES = 64 * 1024 * 1024;
 const MAX_IMPORTED_ARTIFACT_BYTES = 64 * 1024 * 1024;
-const SAFE_INTEGRATION_ERROR = 'Iris 无法连接 DaVinci Resolve；请确认 Resolve 集成组件已安装后重试。';
+const SAFE_INTEGRATION_ERROR = 'Flovart 无法连接 DaVinci Resolve；请确认 Resolve 集成组件已安装后重试。';
 const SAFE_CONTEXT_ERROR = '无法安全读取 Resolve 项目状态；请确认项目已打开后重试。';
 const SAFE_SELECTION_ERROR = '无法安全读取 Resolve 当前选择；请重新选择素材后重试。';
 const SAFE_SOURCE_ERROR = '无法安全读取 Resolve 选中的本地素材；请确认素材在线后重试。';
@@ -39,9 +39,9 @@ function artifactBytes(artifact) {
   const value = artifact?.bytes;
   const supported = Buffer.isBuffer(value) || (ArrayBuffer.isView(value) && value.BYTES_PER_ELEMENT === 1) || Array.isArray(value);
   const byteLength = supported ? value.length : 0;
-  if (!supported || byteLength <= 0) throw new Error('Iris 没有返回可持久化的 Resolve 产物字节。');
+  if (!supported || byteLength <= 0) throw new Error('Flovart 没有返回可持久化的 Resolve 产物字节。');
   if (byteLength > MAX_IMPORTED_ARTIFACT_BYTES) {
-    throw new Error('Resolve 产物超过 64 MB 的本地面板传输上限；请先在 Iris 中导出较小版本。');
+    throw new Error('Resolve 产物超过 64 MB 的本地面板传输上限；请先在 Flovart 中导出较小版本。');
   }
   const bytes = Buffer.from(value);
   return bytes;
@@ -224,7 +224,7 @@ async function materializeClip({ selection: expected }) {
     if (!item || currentItemId !== expected.locator.timelineItemId) {
       throw new Error('Resolve 当前时间线片段已变化，请重新选择素材。');
     }
-    filePath = path.join(os.tmpdir(), 'iris-resolve-frame-' + crypto.randomUUID() + '.png');
+    filePath = path.join(os.tmpdir(), 'flovart-resolve-frame-' + crypto.randomUUID() + '.png');
     try {
       if (!await item.ExportCurrentFrameAsStill(filePath)) throw new Error('export-failed');
     } catch {
@@ -257,7 +257,7 @@ async function persistArtifact({ artifact }) {
   try {
     persisted = persistResolveArtifact({ rootDir: app.getPath('userData'), bytes, artifact });
   } catch {
-    throw new Error('Iris 无法安全保存或校验 Resolve 候选文件；请检查本地存储空间后重试。');
+    throw new Error('Flovart 无法安全保存或校验 Resolve 候选文件；请检查本地存储空间后重试。');
   }
   const { filePath, ...persistence } = persisted;
   return { status: 'persisted', ...persistence };
@@ -287,7 +287,7 @@ async function importArtifact({ artifact, persistence, target }) {
     try {
       persisted = persistResolveArtifact({ rootDir: app.getPath('userData'), bytes, artifact });
     } catch {
-      return importFailure('rejected', 'Iris 无法安全保存或校验 Resolve 候选文件；未执行导入。');
+      return importFailure('rejected', 'Flovart 无法安全保存或校验 Resolve 候选文件；未执行导入。');
     }
   }
   let resolve;
@@ -302,8 +302,8 @@ async function importArtifact({ artifact, persistence, target }) {
   }
   if (!resolve || !project || activeProjectId !== targetProjectId) {
     return importFailure('rejected', !resolve || !project
-      ? 'Resolve 当前没有可用项目；候选文件已保存在 Iris 本地，打开原项目后重试导入。'
-      : 'Resolve 当前项目已改变；候选文件已保存在 Iris 本地，请切回原项目后重试导入。', persisted);
+      ? 'Resolve 当前没有可用项目；候选文件已保存在 Flovart 本地，打开原项目后重试导入。'
+      : 'Resolve 当前项目已改变；候选文件已保存在 Flovart 本地，请切回原项目后重试导入。', persisted);
   }
   let mediaPool;
   try { mediaPool = await project.GetMediaPool(); }
@@ -316,7 +316,7 @@ async function importArtifact({ artifact, persistence, target }) {
     importInvoked = true;
     const { result: items, bin } = await withCandidatesBin(mediaPool, () => mediaPool.ImportMedia([persisted.filePath]));
     const ok = Array.isArray(items) ? items.length > 0 : Boolean(items);
-    if (!ok) return importFailure('rejected', 'Resolve 没有接受导入；Iris 已保留本地产物文件，可重试。', persisted);
+    if (!ok) return importFailure('rejected', 'Resolve 没有接受导入；Flovart 已保留本地产物文件，可重试。', persisted);
     const importedItemId = Array.isArray(items) && items[0] ? await getId(items[0]) : undefined;
     return {
       ok: true,
@@ -326,13 +326,13 @@ async function importArtifact({ artifact, persistence, target }) {
       ...(bin ? { mediaPoolBin: bin } : {}),
       ...importMetadata(persisted),
       message: bin
-        ? `已添加到 Resolve Media Pool 的「${bin}」；Iris 已保留本地产物文件。`
-        : '已添加到 Resolve Media Pool；Iris 已保留本地产物文件。',
+        ? `已添加到 Resolve Media Pool 的「${bin}」；Flovart 已保留本地产物文件。`
+        : '已添加到 Resolve Media Pool；Flovart 已保留本地产物文件。',
     };
   } catch {
     return importFailure(importInvoked ? 'unknown' : 'rejected', importInvoked
       ? 'Resolve 已收到导入请求，但没有确认结果。请先检查 Media Pool；在确认前不要重试此候选。'
-      : 'Resolve 导入失败；Iris 已保留本地产物文件，可重试。', persisted);
+      : 'Resolve 导入失败；Flovart 已保留本地产物文件，可重试。', persisted);
   }
 }
 

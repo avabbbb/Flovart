@@ -1,11 +1,11 @@
 ---
 name: flovart
-description: Use Iris's visible Workflow through its stable Agent surface. Use when an agent must prepare the workspace, inspect the current graph, read selection, apply document changes, or run a Workflow node.
+description: Use Flovart's visible Workflow through its stable Agent surface. Use when an agent must prepare the workspace, inspect the current graph, read selection, apply document changes, or run a Workflow node.
 ---
 
-# Iris
+# Flovart
 
-Iris is the visible Workflow authority. The Link layer prepares the local
+Flovart is the visible Workflow authority. The Link layer prepares the local
 session automatically. Do not ask the user for connection details and do not
 recreate a connection flow in the conversation.
 
@@ -102,8 +102,8 @@ For the no-provider tracer:
    SHA-256. Use that path only for the immediate host import; do not write it
    into project metadata.
 5. Use a bounded Media Pool import operation exposed by the installed Resolve
-   native MCP. Import into a root-level bin named `Iris Candidates` (create it
-   with `MediaPool.AddSubFolder(root, "Iris Candidates")` if missing, make it
+   native MCP. Import into a root-level bin named `Flovart Candidates` (create it
+   with `MediaPool.AddSubFolder(root, "Flovart Candidates")` if missing, make it
    current with `SetCurrentFolder`, then restore the user's previous folder
    after import). Never rename, move, or delete existing bins. Do not add the fixture to the Timeline, replace a clip, delete
    or overwrite media, or run unrestricted scripts. If the installed MCP has
@@ -154,7 +154,7 @@ a bare `workflow.apply` `add_node` operation requires. Prefer it over a raw
 npm run flovart:cli -- workflow.node.create-connected --from-node-id <id> --type text --title "Shot 2" --x 420 --y 120 --agent-identity codex --idempotency-key <key> --json
 ```
 
-The UI and Iris own Provider routing, credentials, cost confirmation,
+The UI and Flovart own Provider routing, credentials, cost confirmation,
 resource resolution, and artifacts. Do not call a Provider directly, store
 credentials, modify browser storage, use private routes, or create a second
 Workflow runtime. A missing reference or unsupported input must remain an

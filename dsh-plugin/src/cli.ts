@@ -92,7 +92,7 @@ export function runCliSync(
       data: null,
       error: {
         code: code === 'ENOENT' ? 'CLI_NOT_FOUND' : 'CLI_SPAWN_FAILED',
-        message: `无法启动 Iris CLI：${argv[0]}（${(error as Error).message}）。请安装 Agent Toolkit 或设置 FLOVART_CLI。`,
+        message: `无法启动 Flovart CLI：${argv[0]}（${(error as Error).message}）。请安装 Agent Toolkit 或设置 FLOVART_CLI。`,
         retryable: false,
       },
     }
@@ -109,7 +109,7 @@ export function runCliSync(
         code: timedOut ? 'CLI_TIMEOUT' : code === 'ENOENT' ? 'CLI_NOT_FOUND' : 'CLI_SPAWN_FAILED',
         message: timedOut
           ? `命令 ${command} 执行超过 ${config.toolTimeoutMs}ms 已终止`
-          : `无法启动 Iris CLI：${argv[0]}（${result.error.message}）。请安装 Agent Toolkit 或设置 FLOVART_CLI。`,
+          : `无法启动 Flovart CLI：${argv[0]}（${result.error.message}）。请安装 Agent Toolkit 或设置 FLOVART_CLI。`,
         retryable: timedOut,
       },
     }
@@ -174,7 +174,7 @@ export async function runCli(
         ok: false, command, data: null,
         error: {
           code: code === 'ENOENT' ? 'CLI_NOT_FOUND' : 'CLI_SPAWN_FAILED',
-          message: `无法启动 Iris CLI：${argv[0]}（${error.message}）。请安装 Agent Toolkit 或设置 FLOVART_CLI。`,
+          message: `无法启动 Flovart CLI：${argv[0]}（${error.message}）。请安装 Agent Toolkit 或设置 FLOVART_CLI。`,
           retryable: false,
         },
       })
