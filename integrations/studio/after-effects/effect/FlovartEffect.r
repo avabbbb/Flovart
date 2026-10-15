@@ -16,8 +16,8 @@
 resource 'PiPL' (16000) {
     {
         Kind { AEEffect },
-        Name { "Iris Scene Replace" },
-        Category { "Iris" },
+        Name { "Flovart Scene Replace" },
+        Category { "Flovart" },
 #ifdef AE_OS_WIN
     #if defined(AE_PROC_INTELx64)
         CodeWin64X86 { "EffectMain" },

@@ -55,8 +55,8 @@ const lifecycleCommands = new Set(['ensure']);
 const commandInvocation = /(?:npx\s+flovart-cli|npm\s+run\s+flovart:cli\s+--|flovart-cli)\s+([a-z][a-z0-9]*(?:[.-][a-z0-9]+)*)/gi;
 const schemaCommand = /--command\s+([a-z][a-z0-9]*(?:[.-][a-z0-9]+)*)/gi;
 const publicDocPath = /^(?:README(?:\.en|\.zh-CN)?\.md|docs\/overview\/|docs\/content\/docs\/)/i;
-const installerVersion = /Flovart[_ -](\d+\.\d+\.\d+)_x64-setup\.exe/gi;
-const tagVersion = /\bgit tag v(\d+\.\d+\.\d+)\b/gi;
+const installerVersion = /Flovart[_ -](\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)_x64-setup\.exe/gi;
+const tagVersion = /\bgit tag v(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)\b/gi;
 const retiredPublicPathPatterns = [
   [/\bcanvas\.inspect\b/i, 'canvas.inspect'],
   [/\.flovart[\\/]command-queue\.json/i, 'file command queue'],

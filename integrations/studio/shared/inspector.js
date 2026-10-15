@@ -24,7 +24,7 @@
       ready: '已就绪', candidateReady: '等待审核', failed: '失败', adding: '正在添加…', addToMediaPool: '添加到 Media Pool', retryAdd: '重试添加',
       importUnknown: '导入状态未知。请先检查 Resolve Media Pool，确认候选是否已添加；确认前不要重试。', verifyMediaPoolFirst: '先核对 Media Pool',
       preview: '预览', hidePreview: '收起预览', previewUnavailable: '当前环境无法预览此候选。', prepareFailed: '候选未能完成持久化校验。', importFailed: '无法添加到 Media Pool。候选已保留，可重试。', addedToMediaPool: '已添加到 Media Pool', importNotConfirmed: 'Resolve 尚未确认将结果添加到 Media Pool。', basedOn: '基于',
-      openInIris: '在 Flovart 中打开 ↗', openInIrisUnavailable: 'Flovart Canvas 暂不可用。', resolveUnavailable: '项目不可用', irisUnavailable: 'Flovart 未连接', selectClipStatus: '选择片段', readyStatus: '已就绪',
+      openInFlovart: '在 Flovart 中打开 ↗', openInFlovartUnavailable: 'Flovart Canvas 暂不可用。', resolveUnavailable: '项目不可用', flovartUnavailable: 'Flovart 未连接', selectClipStatus: '选择片段', readyStatus: '已就绪',
       refreshSelection: '刷新当前片段', promptLabel: '描述', mediaPoolClip: 'Media Pool 片段', timelineItem: '时间线片段',
       languageChinese: '简体中文', languageEnglish: 'English',
       fromCanvas: '来自 Flovart 画布', canvasSendHint: '画布里发来的结果，确认后才会加入 Media Pool；不改动时间线。', sending: '正在添加…',
@@ -49,7 +49,7 @@
       ready: 'Ready', candidateReady: 'Ready for review', failed: 'Failed', adding: 'Adding…', addToMediaPool: 'Add to Media Pool', retryAdd: 'Retry Add',
       importUnknown: 'Import status is unknown. Check the Resolve Media Pool to confirm whether the candidate was added. Do not retry before confirming.', verifyMediaPoolFirst: 'Verify Media Pool first',
       preview: 'Preview', hidePreview: 'Hide preview', previewUnavailable: 'This candidate cannot be previewed in the current host.', prepareFailed: 'Candidate did not pass persistence validation.', importFailed: 'Could not add to Media Pool. The candidate is retained and can be retried.', addedToMediaPool: 'Added to Media Pool', importNotConfirmed: 'Resolve did not confirm that the result was added to the Media Pool.', basedOn: 'Based on',
-      openInIris: 'Open in Flovart ↗', openInIrisUnavailable: 'Flovart Canvas is not available.', resolveUnavailable: 'Project unavailable', irisUnavailable: 'Flovart is not connected', selectClipStatus: 'Select a clip', readyStatus: 'Ready',
+      openInFlovart: 'Open in Flovart ↗', openInFlovartUnavailable: 'Flovart Canvas is not available.', resolveUnavailable: 'Project unavailable', flovartUnavailable: 'Flovart is not connected', selectClipStatus: 'Select a clip', readyStatus: 'Ready',
       refreshSelection: 'Refresh current clip', promptLabel: 'Prompt', mediaPoolClip: 'Media Pool clip', timelineItem: 'Timeline item',
       languageChinese: 'Simplified Chinese', languageEnglish: 'English',
       fromCanvas: 'FROM FLOVART CANVAS', canvasSendHint: 'Results sent from the canvas. They join the Media Pool only after you confirm; the timeline is not changed.', sending: 'Adding…',
@@ -350,17 +350,17 @@
     }
     const footer = el('footer', undefined, 'fs-footer');
     const connection = el('span');
-    let openInIris = null, pullFromCanvas = null, pulling = false;
+    let openInFlovart = null, pullFromCanvas = null, pulling = false;
     if (isResolve) {
       footer.classList.add('fs-resolve-footer');
-      openInIris = button(t('openInIris'), 'fs-open-in-flovart', () => {
+      openInFlovart = button(t('openInFlovart'), 'fs-open-in-flovart', () => {
         if (onOpenCanvas) Promise.resolve().then(() => onOpenCanvas()).catch(error => { if (!disposed) status.textContent = error.message; });
-        else status.textContent = t('openInIrisUnavailable');
+        else status.textContent = t('openInFlovartUnavailable');
       });
       // Gyroflow-style round trip: send work to the canvas, then bring its latest result back here.
       pullFromCanvas = button(t('pullFromCanvas'), 'fs-open-in-flovart fs-pull-canvas', () => { void pullCanvasResult(); });
       pullFromCanvas.hidden = true;
-      footer.append(pullFromCanvas, openInIris);
+      footer.append(pullFromCanvas, openInFlovart);
     } else footer.append(connection, el('span', preview ? '交互预览' : hostLabel, 'fs-muted'));
     const shortcut = el('div', 'Ctrl / ⌘ + Enter', 'fs-shortcut fs-mono');
     // Quiet, static guidance: a small marker that never pops up by itself; one sentence only when asked.
@@ -621,7 +621,7 @@
       const currentController = resolveController();
       if (disposed || !item?.candidateId || item.importState === 'imported' || item.importState === 'unknown' || item.importState === 'importing' || importingCandidateId) return;
       if (typeof currentController?.importCandidate !== 'function') {
-        status.textContent = t('irisUnavailable');
+        status.textContent = t('flovartUnavailable');
         update();
         return;
       }
@@ -698,7 +698,7 @@
       target.options[0].textContent = t('mediaPool');
       taskSectionText.textContent = t('task');
       resolveCandidatesHeadingText.textContent = t('candidates');
-      openInIris.textContent = t('openInIris');
+      openInFlovart.textContent = t('openInFlovart');
       if (pullFromCanvas) pullFromCanvas.textContent = t('pullFromCanvas');
       for (const hint of hints) { hint.note.textContent = t(hint.key); hint.marker.title = t('hintToggle'); hint.marker.setAttribute('aria-label', t('hintToggle')); }
       renderStages(); renderAgentBanner();
@@ -850,7 +850,7 @@
         generate.textContent = busy ? `${t('generating')}` : preview ? t('demoGenerate') : t('generateCandidate');
         headerStatus.textContent = !resolveProjectAvailable
           ? `○  ${t('resolveUnavailable')}`
-          : !linked ? `○  ${t('irisUnavailable')}`
+          : !linked ? `○  ${t('flovartUnavailable')}`
             : !lastSelection ? `○  ${t('selectClipStatus')}`
               : `●  ${t('readyStatus')}`;
         headerStatus.className = `fs-header-status ${resolveProjectAvailable && linked && lastSelection ? 'fs-success' : 'fs-muted'}`;

@@ -35,7 +35,6 @@ jobs:
         run: npm ci
 
       - name: Install DSH plugin dependencies
-        if: github.event_name != 'pull_request'
         run: npm --prefix dsh-plugin ci
 
       - name: Audit DSH plugin dependencies
