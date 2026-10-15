@@ -17,7 +17,7 @@ const packages = [
       entryPoint: 'EffectMain',
       params: ['Asset Version', 'Blend'],
     }},
-  { id: 'resolve', host: 'resolve-studio', runtime: 'resolve-workflow-integration', required: ['manifest.json', 'manifest.xml', 'package.json', 'main.js', 'artifact-store.js', 'canvas-url.js', 'preload.js', 'index.html', 'index.js', 'panel.css'] },
+  { id: 'resolve', host: 'resolve-studio', runtime: 'resolve-workflow-integration', required: ['manifest.json', 'manifest.xml', 'package.json', 'main.js', 'artifact-store.js', 'candidates-bin.js', 'canvas-url.js', 'preload.js', 'index.html', 'index.js', 'panel.css'] },
 ];
 
 function assert(condition, message) {

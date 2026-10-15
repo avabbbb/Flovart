@@ -61,6 +61,64 @@ afterEach(() => {
 });
 
 describe('Resolve Studio Iris inspector', () => {
+  it('keeps guidance quiet: hint markers are closed until the user opens one', async () => {
+    const { root } = mountResolveInspector();
+    await vi.waitFor(() => expect(root.querySelector('.fs-source-info strong')?.textContent).toBe('Interview_A.mov'));
+    const markers = Array.from(root.querySelectorAll<HTMLButtonElement>('.fs-hint-marker'));
+    expect(markers.length).toBeGreaterThanOrEqual(2);
+    expect(Array.from(root.querySelectorAll<HTMLElement>('.fs-hint')).every(note => note.hidden)).toBe(true);
+    markers[0].click();
+    expect(markers[0].getAttribute('aria-expanded')).toBe('true');
+    expect(root.querySelector<HTMLElement>(`#${markers[0].getAttribute('aria-controls')}`)?.hidden).toBe(false);
+    expect(root.querySelector<HTMLElement>(`#${markers[0].getAttribute('aria-controls')}`)?.textContent).toContain('Media Pool');
+  });
+
+  it('streams stages and partial previews into a pending card before the candidate is ready', async () => {
+    let report: ((value: unknown) => void) | undefined;
+    let finish: ((value: unknown) => void) | undefined;
+    const prepareCandidate = vi.fn((_prompt: string, _target: unknown, onProgress: (value: unknown) => void) => {
+      report = onProgress;
+      return new Promise(resolve => { finish = resolve; });
+    });
+    const { root } = mountResolveInspector({ prepareCandidate });
+    await vi.waitFor(() => expect(root.querySelector('.fs-source-info strong')?.textContent).toBe('Interview_A.mov'));
+    const prompt = root.querySelector<HTMLTextAreaElement>('textarea')!;
+    prompt.value = '透明背景的霓虹标题';
+    prompt.dispatchEvent(new Event('input', { bubbles: true }));
+    root.querySelector<HTMLButtonElement>('.fs-generate')!.click();
+    await vi.waitFor(() => expect(root.querySelector('.fs-resolve-candidate.is-pending')).not.toBeNull());
+    expect(root.querySelector('.fs-stage.is-active')?.textContent).toBe('提交');
+    report!({ stage: 'generating', partialImage: 'data:image/png;base64,AAAA', partialIndex: 0, partialTotal: 3 });
+    expect(root.querySelector('.fs-stage.is-active')?.textContent).toBe('生成');
+    expect(root.querySelector('.fs-resolve-candidate.is-pending img')?.getAttribute('src')).toBe('data:image/png;base64,AAAA');
+    expect(root.querySelector('.fs-resolve-candidate.is-pending')?.textContent).toContain('预览 1/3');
+    report!({ stage: 'downloading', partialImage: 'javascript:alert(1)' });
+    expect(root.querySelector('.fs-resolve-candidate.is-pending img')?.getAttribute('src')).toBe('data:image/png;base64,AAAA');
+    expect(root.querySelector('.fs-stage.is-done')?.textContent).toBe('提交');
+    finish!(preparedCandidate());
+    await vi.waitFor(() => expect(root.querySelector('.fs-resolve-candidate.is-pending')).toBeNull());
+    expect(root.querySelector<HTMLElement>('.fs-stages')?.hidden).toBe(true);
+  });
+
+  it('lets an Agent prefill the prompt but never starts a paid generation by itself', async () => {
+    const { root, prepareCandidate } = mountResolveInspector();
+    await vi.waitFor(() => expect(root.querySelector('.fs-source-info strong')?.textContent).toBe('Interview_A.mov'));
+    window.dispatchEvent(new CustomEvent('flovart:agent-request', { detail: { agent: 'Codex', prompt: '雨夜版本，保持时长' } }));
+    expect(root.querySelector<HTMLElement>('.fs-agent-banner')?.hidden).toBe(false);
+    expect(root.querySelector('.fs-agent-banner')?.textContent).toContain('Codex 准备了 1 个生成');
+    root.querySelector<HTMLButtonElement>('.fs-agent-review')!.click();
+    expect(root.querySelector<HTMLTextAreaElement>('textarea')?.value).toBe('雨夜版本，保持时长');
+    expect(root.querySelector<HTMLElement>('.fs-agent-banner')?.hidden).toBe(true);
+    expect(prepareCandidate).not.toHaveBeenCalled();
+  });
+
+  it('shows the captured record timecode for a timeline item', async () => {
+    const { root } = mountResolveInspector({
+      selection: { host: 'resolve', selectionId: 'item-1', label: 'Skate_A.mov', kind: 'video', locator: { projectId: 'project-1', timelineItemId: 'item-1' }, range: { startFrame: 86400 + 30, endFrame: 86400 + 150, fps: 30 } } as never,
+    });
+    await vi.waitFor(() => expect(root.querySelector('.fs-source-info span.fs-mono')?.textContent).toBe('时间线片段 · 00:48:01:00 – 00:48:05:00'));
+  });
+
   it('prepares a durable candidate first, then imports only after explicit Add to Media Pool', async () => {
     const { root, adapter, prepareCandidate, importCandidate, inspector } = mountResolveInspector();
     await vi.waitFor(() => expect(root.querySelector('.fs-source-info strong')?.textContent).toBe('Interview_A.mov'));
@@ -89,8 +147,10 @@ describe('Resolve Studio Iris inspector', () => {
     ));
     await vi.waitFor(() => expect(root.querySelector('.fs-resolve-candidate')?.textContent).toContain('添加到 Media Pool'));
     expect(importCandidate).not.toHaveBeenCalled();
-    expect(root.querySelector('.fs-resolve-candidate')?.textContent).toContain('预览');
-    expect(root.querySelector('.fs-task-label')?.textContent).toBe('已就绪');
+    expect(root.querySelector('.fs-resolve-candidate .fs-candidate-preview.fs-checker img')).not.toBeNull();
+    expect(root.querySelector('.fs-resolve-candidate')?.firstElementChild?.classList.contains('fs-candidate-preview')).toBe(true);
+    expect(root.querySelector('.fs-task-label')?.textContent).toContain('已就绪');
+    expect(root.querySelector('.fs-task')?.classList.contains('is-done')).toBe(true);
     expect(root.querySelector('.fs-resolve-candidate')?.textContent).toContain('基于 Interview_A.mov');
     expect(root.querySelector('.fs-resolve-candidate')?.textContent).toContain('model-id');
     expect(root.textContent).not.toContain('00:00');
@@ -114,11 +174,11 @@ describe('Resolve Studio Iris inspector', () => {
     expect(importCandidate).toHaveBeenCalledTimes(1);
 
     root.querySelector<HTMLButtonElement>('.fs-locale-toggle button[aria-label="English"]')!.click();
-    expect(root.textContent).toContain('CURRENT CLIP');
-    expect(root.textContent).toContain('GENERATE');
-    expect(root.textContent).toContain('REFERENCES');
-    expect(root.textContent).toContain('TASK');
-    expect(root.textContent).toContain('CANDIDATES · 1');
+    expect(root.textContent).toContain('Current clip');
+    expect(root.textContent).toContain('Generate');
+    expect(root.textContent).toContain('References');
+    expect(root.textContent).toContain('Task');
+    expect(root.textContent).toContain('Candidates · 1');
     expect(root.textContent).toContain('Open in Iris');
     expect(root.querySelector('.fs-setting-static')?.textContent).toBe('ModelAuto');
     expect(root.querySelector('.fs-candidate-add')?.textContent).toBe('Added to Media Pool');

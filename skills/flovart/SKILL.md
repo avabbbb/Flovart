@@ -102,7 +102,10 @@ For the no-provider tracer:
    SHA-256. Use that path only for the immediate host import; do not write it
    into project metadata.
 5. Use a bounded Media Pool import operation exposed by the installed Resolve
-   native MCP. Do not add the fixture to the Timeline, replace a clip, delete
+   native MCP. Import into a root-level bin named `Iris Candidates` (create it
+   with `MediaPool.AddSubFolder(root, "Iris Candidates")` if missing, make it
+   current with `SetCurrentFolder`, then restore the user's previous folder
+   after import). Never rename, move, or delete existing bins. Do not add the fixture to the Timeline, replace a clip, delete
    or overwrite media, or run unrestricted scripts. If the installed MCP has
    no safe bounded import path, stop and report that concrete gap.
 6. Re-read the Media Pool and Timeline through Resolve MCP. Confirm the item
