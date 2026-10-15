@@ -115,3 +115,10 @@
 .flovart-studio-inspector[data-studio-host="resolve"] button:focus-visible,
 .flovart-studio-inspector[data-studio-host="resolve"] select:focus-visible,
 .flovart-studio-inspector[data-studio-host="resolve"] textarea:focus-visible { outline-offset: 1px; }
+.fs-resolve-compare { display: flex; flex-direction: column; gap: 6px; }
+.fs-compare-toggle { align-self: flex-start; }
+.fs-compare-stage { position: relative; overflow: hidden; border: 1px solid var(--fs-line); border-radius: 3px; background: #171717; }
+.fs-compare-stage img { display: block; width: 100%; max-height: 220px; object-fit: contain; }
+.fs-compare-stage .fs-compare-top { position: absolute; inset: 0; height: 100%; }
+.fs-compare-slider { width: 100%; }
+.fs-resolve-canvas-sends { display: flex; flex-direction: column; gap: 6px; }

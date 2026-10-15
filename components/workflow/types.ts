@@ -115,6 +115,17 @@ export interface WorkflowExecutionPromptSnapshot {
   routeId?: string;
 }
 
+/** 原位写回 Operation 节点的单张结果在该 Take 上留存的媒体字段，用于切回旧版本。 */
+export interface WorkflowOperationTakeMedia {
+  storageKey: string;
+  mimeType?: string;
+  name?: string;
+  bytes?: number;
+  naturalWidth?: number;
+  naturalHeight?: number;
+  posterStorageKey?: string;
+}
+
 export interface WorkflowOperationTake {
   id: string;
   status: WorkflowOperationTakeStatus;
@@ -123,6 +134,8 @@ export interface WorkflowOperationTake {
   completedAt?: string;
   snapshot: WorkflowExecutionPromptSnapshot;
   outputNodeIds: string[];
+  /** 仅原位结果：该 Take 的媒体（媒体 GC 会把它视为可达引用）。 */
+  outputMedia?: WorkflowOperationTakeMedia;
   providerTaskId?: string;
   usageRecordId?: string;
   error?: string;
@@ -133,6 +146,11 @@ export interface WorkflowOperationRecord {
   recipe: WorkflowOperationRecipe;
   takes: WorkflowOperationTake[];
   selectedTakeId?: string;
+  /**
+   * 选中来源：`explicit` = 人或 Agent 明确选择；缺省 / `auto` = 系统跟随最新成功结果。
+   * 明确选择后，晚到的 Take 只追加为新版本，不再改变 selectedTakeId。
+   */
+  selectedTakeSource?: 'auto' | 'explicit';
 }
 
 export interface WorkflowProviderConfig {
@@ -252,6 +270,7 @@ export interface WorkflowNodeMetadata {
   artifactRef?: WorkflowArtifactRef;
   /** 由 Creative Host 注入的 provider-neutral 资源定位信息。 */
   resourceLocator?: WorkflowResourceLocator;
+  hostSend?: WorkflowHostSendRequest;
   poster?: string;
   /** 本地视频首帧 JPEG 的独立持久化键；不得内嵌为项目 JSON 的 base64。 */
   posterStorageKey?: string;
@@ -300,6 +319,23 @@ export interface WorkflowNodeMetadata {
     stageKey?: string | null;
     capabilityId?: string | null;
   };
+}
+
+/** Canvas 登记的“发送到宿主”请求；宿主面板读取后经用户确认执行。 */
+export type WorkflowHostSendStatus = 'requested' | 'imported' | 'rejected' | 'unknown';
+
+export interface WorkflowHostSendRequest {
+  requestId: string;
+  host: string;
+  /** 宿主项目身份（冻结），宿主面板导入前必须核对。 */
+  hostProjectId?: string;
+  sourceNodeId: string;
+  sourceLocator: Record<string, string | number>;
+  target: 'media-pool';
+  status: WorkflowHostSendStatus;
+  requestedAt: string;
+  updatedAt?: string;
+  message?: string;
 }
 
 export interface WorkflowNode {

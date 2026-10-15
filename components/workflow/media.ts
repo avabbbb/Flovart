@@ -42,6 +42,11 @@ function collectNodeKeys(nodes: WorkflowNode[], keys = new Set<string>()) {
     const metadata = node.metadata || {};
     if (metadata.storageKey) keys.add(metadata.storageKey);
     if (metadata.posterStorageKey) keys.add(metadata.posterStorageKey);
+    // 原位生成的旧版本媒体挂在 Take 上，仍可被切回，必须保持可达。
+    metadata.operation?.takes?.forEach(take => {
+      if (take.outputMedia?.storageKey) keys.add(take.outputMedia.storageKey);
+      if (take.outputMedia?.posterStorageKey) keys.add(take.outputMedia.posterStorageKey);
+    });
   });
   return keys;
 }

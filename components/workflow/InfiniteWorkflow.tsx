@@ -46,6 +46,11 @@ import { WorkflowConfigPanel } from './WorkflowConfigPanel';
 import { ScriptNodeEditor } from './ScriptNodeEditor';
 import { SlashMenu } from './SlashMenu';
 import { WorkflowToolbar, type WorkflowTool } from './WorkflowToolbar';
+import { deriveWorkflowRunStates, planWorkflowStaleRerun } from './runState';
+import { deriveWorkflowPresence } from './presence';
+import { buildWorkflowHostSendPatch, listWorkflowHostClips, workflowHostSendEligibility } from './hostLink';
+import { WorkflowHostStrip } from './WorkflowHostStrip';
+import { selectWorkflowOperationTake } from './operations';
 import { useProductionProjectionAdapter } from './useProductionProjectionAdapter';
 import { composeImageGrid } from './gridComposer';
 import { LIGHTING_PRESETS, buildRelightPrompt } from './LightingPresets';
@@ -2227,6 +2232,19 @@ export function InfiniteWorkflow({
     height: Math.abs(selectionBox.current.y - selectionBox.start.y),
   } : undefined;
   const selectedNodes = useMemo(() => new Set(selectedNodeIds), [selectedNodeIds]);
+  // 派生运行状态（stale 等）：纯计算，不写回项目。
+  const runStates = useMemo(() => deriveWorkflowRunStates({ nodes: project.nodes, connections: project.connections }), [project.nodes, project.connections]);
+  const stalePlan = useMemo(() => planWorkflowStaleRerun({ nodes: project.nodes, connections: project.connections }, runStates), [project.nodes, project.connections, runStates]);
+  const presenceByNode = useMemo(() => deriveWorkflowPresence({ nodes: project.nodes, draftChangeSets: project.draftChangeSets }), [project.nodes, project.draftChangeSets]);
+  const hostClips = useMemo(() => listWorkflowHostClips({ nodes: project.nodes, connections: project.connections }), [project.nodes, project.connections]);
+  const selectedHostSend = useMemo(() => {
+    if (selectedNodeIds.length !== 1) return undefined;
+    const node = project.nodes.find(item => item.id === selectedNodeIds[0]);
+    if (!node) return undefined;
+    if (node.metadata.hostSend) return { nodeId: node.id, host: node.metadata.hostSend.host, status: node.metadata.hostSend.status };
+    const eligibility = workflowHostSendEligibility({ nodes: project.nodes, connections: project.connections }, node.id);
+    return eligibility.ok ? { nodeId: node.id, host: eligibility.source.host, status: undefined } : undefined;
+  }, [project.nodes, project.connections, selectedNodeIds]);
   const selectedNodeData = displayNodes.filter(node => node.isVisible !== false && selectedNodes.has(node.id));
   const exportSelectedMedia = async (nodes: WorkflowNodeData[]) => {
     const media = nodes.filter(node => node.type === 'image' || node.type === 'video' || node.type === 'audio');
@@ -2418,6 +2436,20 @@ export function InfiniteWorkflow({
     >
       <WorkflowToolbar
         tool={tool}
+        revision={project.draftVersion}
+        staleCount={stalePlan.length}
+        onRerunStale={() => planWorkflowStaleRerun({ nodes: projectRef.current.nodes, connections: projectRef.current.connections })
+          .filter(id => !projectRef.current.nodes.find(node => node.id === id)?.isLocked)
+          .forEach(id => enqueueRunNode(id))}
+        hostSend={selectedHostSend ? {
+          host: selectedHostSend.host === 'resolve' ? 'Resolve' : selectedHostSend.host,
+          status: selectedHostSend.status,
+          onSend: () => {
+            const current = projectRef.current;
+            const patch = buildWorkflowHostSendPatch(current, selectedHostSend.nodeId, { requestId: nanoid(), now: new Date().toISOString() });
+            if (patch) applyOps([{ type: 'update_node', id: selectedHostSend.nodeId, metadata: patch }]);
+          },
+        } : undefined}
         canUndo={Boolean(project.draftChangeSets?.some(changeSet => changeSet.status === 'completed' || changeSet.status === 'partial'))}
         canRedo={Boolean(project.draftRedoStack?.length)}
         onToolChange={setTool}
@@ -2550,6 +2582,14 @@ export function InfiniteWorkflow({
             onChangeText={content => { if (!node.isLocked) applyOps([{ type: 'update_node', id: node.id, metadata: { content } }]); }}
             onChangeMetadata={metadata => { if (!node.isLocked) applyOps([{ type: 'update_node', id: node.id, metadata }]); }}
             onRun={() => { if (!node.isLocked) onRunNode(node.id); }}
+            runState={runStates.get(node.id)}
+            presence={presenceByNode.get(node.id)}
+            onSelectTake={node.metadata.operation ? takeId => {
+              const current = projectRef.current.nodes.find(item => item.id === node.id);
+              if (!current || current.isLocked) return;
+              const next = selectWorkflowOperationTake(current, takeId);
+              if (next !== current) applyOps([{ type: 'update_node', id: node.id, metadata: next.metadata, replaceMetadata: true }]);
+            } : undefined}
             onReplaceMedia={file => { if (!node.isLocked) void replaceMedia(node, file); }}
             onRemoveMedia={() => { if (!node.isLocked) removeMedia(node); }}
             onContextMenu={event => {
@@ -2678,6 +2718,7 @@ export function InfiniteWorkflow({
       <WorkflowNodePromptBar width={promptWidth} node={selectedNodeData[0]} nodes={project.nodes} connections={project.connections} t={t} theme={theme} language={language} userApiKeys={userApiKeys} dynamicModelOptions={dynamicModelOptions} onOpenSettings={onOpenSettings} onEnhancePrompt={onEnhancePrompt} isEnhancingPrompt={isEnhancingPrompt} onChange={metadata => applyOps([{ type: 'update_node', id: selectedNodeData[0].id, metadata }])} onPromptIntent={intent => { promptIntentRef.current = intent; }} onRun={() => { const intent = promptIntentRef.current?.targetNodeId === selectedNodeData[0].id ? promptIntentRef.current : undefined; promptIntentRef.current = null; onRunNode(selectedNodeData[0].id, intent || undefined); }} onStop={onStopNode ? () => onStopNode(selectedNodeData[0].id) : undefined} focusSignal={promptFocusSignal} onDisconnectReference={fromNodeId => { const targetId = selectedNodeData[0].id; const conn = project.connections.find(c => c.toNodeId === targetId && c.fromNodeId === fromNodeId); if (!conn) return; applyOps([{ type: 'delete_connections', ids: [conn.id] }]); }} onReorderReference={nextIds => handleReorderReferences(selectedNodeData[0].id, nextIds)} assetFolders={assetFolders} assetItems={assetSuggestions} assetLibrary={assetLibrary} onSelectWorkflowReference={selectedNodeData[0] ? (nodeId => handleSelectWorkflowReference(nodeId, selectedNodeData[0].id)) : undefined} onAddReferenceFiles={selectedNodeData[0] ? (files => handleAddReferenceFiles(files, selectedNodeData[0].id)) : undefined} onSelectAsset={selectedNodeData[0] ? (assetId => handleSelectAsset(assetId, selectedNodeData[0].id)) : undefined} onResolvePastedMentions={mentions => handleResolvePastedMentions(mentions, selectedNodeData[0].id)} onPasteUnresolvedMentions={labels => setNotice(`未能唯一匹配引用：${labels.map(label => `@${label}`).join('、')}，已保留为普通文字。`)} skillEnabled={false} />
         </div>}
       </>}
+      <WorkflowHostStrip clips={hostClips} language={language} onFocusClip={focusNode} />
       {minimapOpen && <WorkflowMiniMap nodes={displayNodes.filter(node => node.isVisible !== false)} viewport={project.viewport} onCenter={(x, y) => {
         setFocusBadge(false);
         const rect = rootRef.current?.getBoundingClientRect();

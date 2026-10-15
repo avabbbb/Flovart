@@ -1,12 +1,19 @@
 import { createWorkflowNode } from '../../components/workflow/constants';
-import type { WorkflowDocumentOperation, WorkflowProject } from '../../components/workflow/types';
+import type { WorkflowDocumentOperation, WorkflowHostSendRequest, WorkflowProject } from '../../components/workflow/types';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex } from '@noble/hashes/utils.js';
 import { nanoid } from 'nanoid';
-import { hostSelectionResource, StudioContractError, type CreativeHostAdapter, type FlovartArtifact, type FlovartStudioCore, type HostArtifactPersistence, type HostContext, type HostImportResult, type HostImportTarget, type HostSelection, type MaterializedHostSelection, type StudioApplyRequest, type StudioExecutionTarget, type StudioGenerationCandidate, type WorkflowResource } from './studioContract';
+import { hostSelectionReference, hostSelectionResource, StudioContractError, type CreativeHostAdapter, type FlovartArtifact, type FlovartStudioCore, type HostArtifactPersistence, type HostContext, type HostImportResult, type HostImportTarget, type HostSelection, type MaterializedHostSelection, type StudioApplyRequest, type StudioExecutionTarget, type StudioGenerationCandidate, type WorkflowResource } from './studioContract';
 import { workflowResultArtifactId, workflowResultRevision, workflowResultTaskId } from './studioClient';
 
 export type { StudioExecutionTarget } from './studioContract';
+
+export interface CanvasSendRequest {
+  projectId: string;
+  nodeId: string;
+  title: string;
+  request: WorkflowHostSendRequest;
+}
 
 const ARTIFACT_HASH_CHUNK_SIZE = 1024 * 1024;
 
@@ -281,7 +288,16 @@ export class StudioWorkflowController {
     if (this.adapter.id !== 'resolve') throw new StudioContractError('HOST_IMPORT_FAILED', '候选审核当前仅用于 Resolve Media Pool。');
     if (target.kind !== 'media-pool') throw new StudioContractError('HOST_IMPORT_FAILED', 'Resolve 候选必须先进入 Media Pool。');
     const prepared = await this.runGeneration(prompt, target);
-    const artifact = prepared.artifact;
+    return this.persistCandidate(prepared.artifact, prepared.executionTarget, prepared.run, prepared.materialized);
+  }
+
+  /** 校验字节 / SHA-256 / 格式并 durable 持久化，登记为待导入候选（生成候选与 Canvas 发送共用）。 */
+  private async persistCandidate(
+    artifact: FlovartArtifact,
+    executionTarget: StudioExecutionTarget,
+    run: unknown,
+    materialized: MaterializedHostSelection,
+  ): Promise<StudioGenerationCandidate> {
     if (!artifact.blob || artifact.blob.size <= 0) {
       throw new StudioContractError('HOST_IMPORT_FAILED', 'Resolve 候选需要可读取的非空本地产物字节。', true);
     }
@@ -312,12 +328,97 @@ export class StudioWorkflowController {
       candidateId,
       artifact: Object.freeze(normalizedArtifact),
       persistenceReceipt,
-      executionTarget: prepared.executionTarget,
-      run: prepared.run,
-      materialized: prepared.materialized,
+      executionTarget,
+      run,
+      materialized,
     });
     this.candidates.set(candidateId, { candidate });
     return candidate;
+  }
+
+  /**
+   * Canvas 登记的“发送到宿主”请求（只读）。只列出属于当前宿主、当前宿主项目、仍待确认的请求。
+   * 宿主项目身份不一致时不列出，避免把结果导入到别的 Resolve 项目。
+   */
+  async listCanvasSendRequests(): Promise<CanvasSendRequest[]> {
+    const context = await this.adapter.getContext();
+    if (!context.available) return [];
+    const project = requireProject(await this.core.inspect());
+    return project.nodes
+      .filter(node => node.metadata.hostSend?.status === 'requested' && node.metadata.hostSend.host === this.adapter.id)
+      .filter(node => !node.metadata.hostSend?.hostProjectId || !context.projectId || node.metadata.hostSend.hostProjectId === context.projectId)
+      .map(node => ({ projectId: project.id, nodeId: node.id, title: node.title, request: node.metadata.hostSend! }));
+  }
+
+  /**
+   * 用户在宿主面板确认后执行一个 Canvas 发送请求：取运行产物 → 校验并持久化 → 导入 Media Pool →
+   * 把结果写回请求状态。复用候选导入的全部安全检查（冻结宿主项目、未知结果不重试）。
+   */
+  async sendCanvasResult(nodeId: string): Promise<HostImportResult> {
+    if (this.adapter.id !== 'resolve') throw new StudioContractError('HOST_IMPORT_FAILED', '从画布发送当前仅支持 Resolve Media Pool。');
+    const context = await this.adapter.getContext();
+    if (!context.available) throw new StudioContractError('HOST_CONTEXT_UNAVAILABLE', '当前 Resolve 没有可用项目。', true);
+    const project = requireProject(await this.core.inspect());
+    const node = project.nodes.find(item => item.id === nodeId);
+    const request = node?.metadata.hostSend;
+    if (!node || !request || request.host !== this.adapter.id || request.status !== 'requested') {
+      throw new StudioContractError('HOST_IMPORT_FAILED', '找不到这个画布发送请求，可能已处理或被撤销。');
+    }
+    if (request.hostProjectId && context.projectId && request.hostProjectId !== context.projectId) {
+      throw new StudioContractError('HOST_CONTEXT_UNAVAILABLE', '这个结果属于另一个 Resolve 项目，请切回原项目后再导入。', true);
+    }
+    const ref = node.metadata.artifactRef;
+    if (!ref?.taskId && !ref?.artifactId) {
+      throw new StudioContractError('HOST_IMPORT_FAILED', '这个结果还没有可交接的运行产物；请在画布中重新运行后再发送。', true);
+    }
+    const artifact = await this.core.artifactGet({ ...(ref.taskId ? { taskId: ref.taskId } : {}), ...(ref.artifactId ? { artifactId: ref.artifactId } : {}) });
+    if (!artifact) throw new StudioContractError('HOST_IMPORT_FAILED', 'Iris 暂时取不到这个结果的产物，请稍后重试。', true);
+    const selection: HostSelection = freezeSelection({
+      host: this.adapter.id,
+      selectionId: request.sourceNodeId,
+      label: node.title,
+      kind: 'video',
+      locator: { ...request.sourceLocator },
+    });
+    const resource = hostSelectionResource(selection);
+    const materialized: MaterializedHostSelection = { selection, resource, reference: hostSelectionReference(selection, resource) };
+    const executionTarget: StudioExecutionTarget = Object.freeze({
+      projectId: project.id,
+      nodeId,
+      selectionSnapshot: selection,
+      references: Object.freeze([materialized.reference]),
+      outputTarget: freezeOutputTarget({ kind: 'media-pool' }, selection),
+      hostTarget: selection.host,
+      revision: project.draftVersion || 1,
+    });
+    const candidate = await this.persistCandidate(artifact, executionTarget, null, materialized);
+    const result = await this.importCandidate(candidate.candidateId);
+    await this.recordCanvasSendResult(project.id, nodeId, result);
+    return result;
+  }
+
+  private async recordCanvasSendResult(projectId: string, nodeId: string, result: HostImportResult) {
+    const status = result.importStatus === 'confirmed' ? 'imported' : result.importStatus === 'rejected' ? 'rejected' : 'unknown';
+    // 状态回写失败不改变导入事实：导入结果已返回给面板，画布下次刷新可重试回写。
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const latest = requireProject(await this.core.inspect(projectId));
+      const current = latest.nodes.find(item => item.id === nodeId)?.metadata.hostSend;
+      if (!current) return;
+      const mutationId = this.createId();
+      try {
+        await this.core.apply({
+          projectId: latest.id,
+          expectedRevision: latest.draftVersion || 1,
+          mutationId,
+          idempotencyKey: mutationId,
+          operations: [{ type: 'update_node', id: nodeId, metadata: { hostSend: { ...current, status, updatedAt: new Date().toISOString(), ...(result.message ? { message: result.message } : {}) } } }],
+          intent: status === 'imported' ? '结果已加入 Resolve Media Pool' : '记录 Resolve 导入结果',
+        });
+        return;
+      } catch {
+        // revision 冲突：重读一次再试；仍失败则放弃回写。
+      }
+    }
   }
 
   async importCandidate(candidateId: string): Promise<HostImportResult> {
