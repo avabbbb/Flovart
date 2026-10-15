@@ -49,7 +49,7 @@
   <sub><strong>当前已录制的 Agent / Workflow 能力——自然语言变成节点与连线。</strong><br />
   这段录屏里没有任何人工操作：该 Agent（WorkBuddy codebuddy）全程经 typed CLI 驱动可见 Workflow，
   现场创建 3 个节点与 2 条连线，没有改动任何源码。未执行生成步骤，因此没有调用付费模型服务。
-  Resolve native MCP → 候选 → Media Pool 的 Hero 仍属于真实宿主 External Gate，因此这里暂时不把它伪装成已完成。可复现记录见 <a href="docs/maintenance/readme/DEMO_RECORDING.md">DEMO_RECORDING.md</a>。</sub>
+  Resolve native MCP → 候选 → Media Pool 的 Hero 仍属于真实宿主 External Gate，因此这里暂时不把它伪装成已完成。可复现记录见 <a href="docs/archive/2026-10-07/maintenance/readme/DEMO_RECORDING.md">DEMO_RECORDING.md</a>。</sub>
 </p>
 
 ## Iris 现在已经能做什么
@@ -115,7 +115,7 @@ npm run flovart:cli -- status --json
 
 **Agent 原生，不是界面抓取。** 这些都是作用在同一份 Workflow 上的操作，而那份 Workflow 也可以由 Agent 驱动。上方 Hero 与[架构](#架构)段的 CLI 录屏是**全程由 Agent 驱动、没有任何人工操作**；下面的图库则是同一套界面由人手操作，因为那是新用户最先要走通的路径。节点的创建、连接、选择、视口、移动与缩放，以及各个节点工具，都已作为 typed operation 暴露给 Agent —— 走的是 revision 与幂等边界，而不是屏幕坐标。
 
-视频与音频工具在浏览器内跑 ffmpeg.wasm，录制动作前会先预热 core，因此片段展示的是操作本身，而不是一次性约 30MB 的 wasm 下载 —— **所以片段时长不等于首次使用时的等待时间**。录制方法、可复现命令与边界见 [DEMO_RECORDING.md](docs/maintenance/readme/DEMO_RECORDING.md)。
+视频与音频工具在浏览器内跑 ffmpeg.wasm，录制动作前会先预热 core，因此片段展示的是操作本身，而不是一次性约 30MB 的 wasm 下载 —— **所以片段时长不等于首次使用时的等待时间**。录制方法、可复现命令与边界见 [DEMO_RECORDING.md](docs/archive/2026-10-07/maintenance/readme/DEMO_RECORDING.md)。
 
 ### 画布操作
 
@@ -248,7 +248,7 @@ npm run flovart:cli -- status --json
   </tr>
 </table>
 
-尚未录制、也刻意没有展示的：依赖模型的生成能力与依赖模型的图片工具（图片生成、高清放大、移除背景、拆分图层、图片编辑/扩图）——本机未配置任何 Provider，没有可诚实展示的结果。该缺口登记在[录制记录](docs/maintenance/readme/DEMO_RECORDING.md)里。
+尚未录制、也刻意没有展示的：依赖模型的生成能力与依赖模型的图片工具（图片生成、高清放大、移除背景、拆分图层、图片编辑/扩图）——本机未配置任何 Provider，没有可诚实展示的结果。该缺口登记在[录制记录](docs/archive/2026-10-07/maintenance/readme/DEMO_RECORDING.md)里。
 
 ## 为什么是 Iris？
 
@@ -339,10 +339,10 @@ flowchart LR
   <sub><strong>同一主张的操作级视角。</strong>一个项目和三个节点由 <code>workflow.project.create</code>、
   <code>workflow.node.create</code> 和 <code>workflow.connect</code> 创建（1.5 倍速播放）——
   上面 Hero 里那个外部 Agent 会话端到端驱动的正是这些 typed 操作。录制记录：
-  <a href="docs/maintenance/readme/DEMO_RECORDING.md">DEMO_RECORDING.md</a>。</sub>
+  <a href="docs/archive/2026-10-07/maintenance/readme/DEMO_RECORDING.md">DEMO_RECORDING.md</a>。</sub>
 </p>
 
-原生效果保持两条短路径：同一生成函数产出持久素材版本，宿主效果读取固定版本并本地渲染——不强制经过导演、Operator 或制作组层级。产品范围与系统边界统一见[主设计](docs/design/flovart-native-effects.md)，Agent transport/authority 见 [Agent Integration](docs/design/agent-integration.md)；历史 CURRENT/TARGET 架构报告不再参与当前产品决策。
+原生效果保持两条短路径：同一生成函数产出持久素材版本，宿主效果读取固定版本并本地渲染——不强制经过导演、Operator 或制作组层级。产品范围与系统边界统一见[主设计](docs/design/00-overview.md)，Agent transport/authority 见 [Agent Integration](docs/design/12-agent.md)；历史 CURRENT/TARGET 架构报告不再参与当前产品决策。
 
 ## 本地优先与安全
 

@@ -1,6 +1,6 @@
 # Flovart native effect — After Effects slice
 
-This is the fixed-media source slice from the [main design](../../../docs/design/flovart-native-effects.md) §5.2. A generated artifact is first imported as a candidate footage layer. The user then explicitly applies that candidate to the source layer captured when generation started.
+This is the fixed-media source slice from the [Creative Hosts design](../../../../docs/design/14-creative-hosts.md) §4. A generated artifact is first imported as a candidate footage layer. The user then explicitly applies that candidate to the source layer captured when generation started.
 
 The CEP panel and native effect are separate packages. The panel is not itself a native effect.
 

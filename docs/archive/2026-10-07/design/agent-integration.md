@@ -1,6 +1,6 @@
 # Flovart Agent Integration
 
-> Current design. 本文只定义 Agent 接入与操作边界；产品 IA 以 [主设计](./flovart-native-effects.md) 为准。
+> Current design. 本文只定义 Agent 接入与操作边界；产品 IA 以 [主设计](flovart-native-effects.md) 为准。
 
 ## 1. 两个不同概念
 
@@ -68,7 +68,7 @@ Transport 只做参数解码、权限上下文与结果编码。业务逻辑不�
 
 ## 7. 验证
 
-真实支持状态只看 [Support Matrix](../../SUPPORT_MATRIX.md)。至少分别验证：
+真实支持状态只看 [Support Matrix](../../../../SUPPORT_MATRIX.md)。至少分别验证：
 
 - 安装/发现；
 - 登录态；
