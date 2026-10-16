@@ -107,7 +107,8 @@ if (['install', 'start', 'update', 'uninstall'].includes(rawCommand)) {
   const mod = await import('./dev-commands.js');
   await mod[rawCommand](argv.slice(1));
 } else if (rawCommand === 'agent') {
-  await import('./managed-agent/index.js').catch(() => import('../../agent/index.js'));
+  const managedAgentSpecifier = './managed-agent/index.js';
+  await import(/* @vite-ignore */ managedAgentSpecifier).catch(() => import('../../agent/index.js'));
 } else {
   const parsedArgs = parseCliArgs(argv.slice(1));
   const normalizedAtomic = normalizeAtomicAlias(rawCommand, parsedArgs);
