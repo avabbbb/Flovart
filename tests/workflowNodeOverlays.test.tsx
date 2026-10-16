@@ -10,6 +10,9 @@ import { AssetLibraryBrowser } from '../components/studio/AssetLibraryBrowser';
 import { translations } from '../utils/translations';
 import type { UserApiKey } from '../types';
 
+const desktopNetworkMocks = vi.hoisted(() => ({ saveMediaUrl: vi.fn(() => Promise.resolve(true)) }));
+vi.mock('../services/desktopNetwork', async importOriginal => ({ ...(await importOriginal<typeof import('../services/desktopNetwork')>()), saveMediaUrl: desktopNetworkMocks.saveMediaUrl }));
+
 function overflowAction(name: string) {
   const more = screen.queryAllByRole('button', { name: '更多' }).find(button => button.getAttribute('aria-expanded') !== 'true');
   if (more) fireEvent.click(more);
@@ -601,7 +604,8 @@ describe('workflow node overlays', () => {
     // Generate lives in the prompt bar; the toolbar has no plain run button.
     expect(screen.queryByRole('button', { name: '运行节点' })).not.toBeInTheDocument();
     fireEvent.change(container.querySelector('input[type="file"]')!, { target: { files: [new File(['x'], 'replacement.png', { type: 'image/png' })] } });
-    expect(screen.getByRole('link', { name: '下载媒体' })).toHaveAttribute('download', 'image.png');
+    fireEvent.click(screen.getByRole('button', { name: '下载媒体' }));
+    expect(desktopNetworkMocks.saveMediaUrl).toHaveBeenCalledWith('data:image/png;base64,AA==', 'image.png');
     expect([callbacks.focus, callbacks.save, callbacks.resize, callbacks.replace].every(callback => callback.mock.calls.length === 1)).toBe(true);
     rerender(<WorkflowNodeToolbar nodes={[{ ...media, metadata: { ...media.metadata, status: 'error' } }]} onCopy={vi.fn()} onDelete={vi.fn()} onRun={callbacks.run} onStop={callbacks.stop} />);
     fireEvent.click(screen.getByRole('button', { name: '重试节点' }));

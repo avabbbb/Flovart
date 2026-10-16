@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 // 仓库开发时读 agent/config.js；npm 打包后读 managed-agent/config.js（prepare-package 复制）。
-const configModule = await import('./managed-agent/config.js').catch(() => import('../../agent/config.js'));
+const configModule = await import(/* @vite-ignore */ './managed-agent/config.js').catch(() => import('../../agent/config.js'));
 const { AGENT_CONFIG_FILE, loadAgentConfig } = configModule;
 
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]']);
