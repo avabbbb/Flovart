@@ -1337,7 +1337,7 @@ dependencies = [
 
 [[package]]
 name = "flovart"
-version = "0.1.0-beta.2"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
