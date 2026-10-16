@@ -180,8 +180,19 @@ export function cancelWorkflowGeneration(projectId: string, nodeId: string) {
   activeRequests.delete(key);
   active.controller.abort();
   const project = active.runtime.getProject?.();
-  if (project) void publish(active.runtime, patchInitiator(project, nodeId, { status: 'idle', error: undefined, progress: undefined, generationRequestId: undefined, generationStartedAt: undefined, generationMessage: undefined }));
+  if (project) publish(active.runtime, patchInitiator(project, nodeId, { status: 'idle', error: undefined, progress: undefined, generationRequestId: undefined, generationStartedAt: undefined, generationMessage: undefined }))
+    .catch(error => console.warn('[Workflow] Stop state publish failed.', error));
   return true;
+}
+
+/**
+ * 刷新后仍是 loading、本会话没有对应执行中请求、且无法续接上游视频任务的节点。
+ * 这些节点不会再有任何回调把它们拉出 loading，必须显式转为错误态。
+ */
+export function findInterruptedWorkflowNodes(project: WorkflowProject, options: { readonly canResume: boolean }): WorkflowNode[] {
+  return project.nodes.filter(node => node.metadata.status === 'loading'
+    && !activeRequests.has(requestKey(project.id, node.id))
+    && !(options.canResume && node.metadata.config?.mode === 'video' && node.metadata.generationProviderTaskId));
 }
 
 export async function runWorkflowGeneration(project: WorkflowProject, nodeId: string, runtime: WorkflowGenerationRuntime): Promise<WorkflowProject> {
@@ -427,6 +438,8 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
 
       const usage = runtime.executeMedia ? null : await reserveApiUsage({ key: resolved.key, productModelId: selectionRef, routeId: resolved.routeId, type: mode === 'video' ? 'video' : 'image', durationSec: config.durationSec, count: 1, resolution: config.resolution, quality: config.quality });
       let usageReconciled = false;
+      // 上游任务一旦提交，本地停止只是不再等待；没有供应商确认取消时，计费状态只能是 unknown。
+      let submittedProviderTaskId: string | undefined;
       if (usage) {
         current = patchInitiator(canonical(runtime, current), nodeId, {
           generationUsageRecordId: usage.id,
@@ -463,6 +476,7 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
            },
           onProviderTaskLifecycle: async event => {
             if (!usage) return;
+            if (event.phase === 'submitted' || event.phase === 'running') submittedProviderTaskId = event.providerTaskId;
             if (event.phase === 'submitted') {
               await updateApiUsage(usage.id, { status: 'queued', providerTaskId: event.providerTaskId, submitTime: event.submittedAt });
               current = patchInitiator(canonical(runtime, current), nodeId, { generationProviderTaskId: event.providerTaskId, generationMessage: '任务已提交，等待供应商处理' });
@@ -501,15 +515,23 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
         result = await raceAbort(provider, controller.signal);
       } catch (error) {
         const isSeedance = resolved.routeId.toLowerCase().includes('seedance');
+        // 用户停止后供应商可能抛出非 AbortError（如 fetch 中断的 TypeError），以 signal 状态为准。
+        const aborted = isAbort(error) || controller.signal.aborted;
         if (usage) await updateApiUsage(usage.id, {
-          status: error instanceof SeedanceSubmissionUnknownError || (isSeedance && isAbort(error)) ? 'submission_unknown' : isAbort(error) ? 'canceled' : 'failed',
+          status: error instanceof SeedanceSubmissionUnknownError || (aborted && (isSeedance || submittedProviderTaskId)) ? 'submission_unknown' : aborted ? 'canceled' : 'failed',
+          ...(submittedProviderTaskId ? { providerTaskId: submittedProviderTaskId } : {}),
           ...(usageReconciled ? {} : { billableState: 'unknown' as const }),
-          error: error instanceof Error ? error.message : '生成失败',
+          error: aborted ? '生成已停止' : error instanceof Error ? error.message : '生成失败',
         });
-        throw error;
+        throw aborted && !isAbort(error) ? abortError() : error;
       }
       if (controller.signal.aborted) throw abortError();
       if (!result.ok) {
+        // 供应商侧已把用户停止归一成 aborted；不能记为失败，也不能把节点置为 error。
+        if ('aborted' in result && result.aborted) {
+          if (usage) await updateApiUsage(usage.id, { status: submittedProviderTaskId ? 'submission_unknown' : 'canceled', ...(usageReconciled ? {} : { billableState: 'unknown' as const }), error: '生成已停止' });
+          throw abortError();
+        }
         const errorMessage = 'errorMessage' in result ? result.errorMessage : '生成失败';
         if (usage) await updateApiUsage(usage.id, { status: 'failed', billableState: 'unknown', error: errorMessage });
         throw new Error(errorMessage);
@@ -701,6 +723,7 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
     }
     return current;
   } catch (error) {
+    const aborted = isAbort(error) || controller.signal.aborted;
     const active = activeRequests.get(key);
     if (!committed) {
       await Promise.all([
@@ -715,15 +738,15 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
       const operation = latest.nodes.find(node => node.id === nodeId);
       if (operation) {
         const completed = completeWorkflowOperationTake(operation, operationTakeId, [], {
-          canceled: isAbort(error),
-          error: isAbort(error) ? '生成已停止' : displayError(error, '生成失败，请重试。'),
+          canceled: aborted,
+          error: aborted ? '生成已停止' : displayError(error, '生成失败，请重试。'),
           providerTaskId: operation.metadata.generationProviderTaskId,
           usageRecordId: operation.metadata.generationUsageRecordId,
         });
         latest = { ...latest, nodes: latest.nodes.map(node => node.id === nodeId ? completed : node) };
       }
     }
-    current = patchInitiator(latest, nodeId, isAbort(error)
+    current = patchInitiator(latest, nodeId, aborted
       ? { status: 'idle', error: undefined, progress: undefined, generationRequestId: undefined, generationStartedAt: undefined, generationMessage: undefined }
       : { status: 'error', error: displayError(error, '生成失败，请重试。'), progress: undefined, generationRequestId: undefined, generationStartedAt: undefined, generationMessage: undefined });
     return publish(runtime, current);

@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { buildCanonicalGenerationInput, resolveWorkflowInputs } from '../components/workflow/inputResolver';
 import { createWorkflowNode } from '../components/workflow/constants';
-import { createWorkflowExecutor } from '../services/workflowExecutor';
+import { createWorkflowExecutor, normalizeWorkflowExecutionError } from '../services/workflowExecutor';
+import { SeedanceSubmissionUnknownError } from '../services/aiGateway';
 
 describe('workflow executor seam', () => {
   it('passes surface for tracing, creates a run identity, and preserves the workflow command', async () => {
@@ -80,5 +81,24 @@ describe('workflow executor seam', () => {
       ],
     });
     expect(runNode.mock.calls.map(([, context]) => context.surface)).toEqual(['ui', 'browser-agent', 'cli', 'runtime']);
+  });
+});
+
+describe('workflow error code normalization', () => {
+  it('keeps the Seedance submission-unknown code from the thrown error and from its persisted message', () => {
+    const thrown = new SeedanceSubmissionUnknownError();
+    expect(normalizeWorkflowExecutionError(thrown).code).toBe('SEEDANCE_SUBMISSION_UNKNOWN');
+    expect(normalizeWorkflowExecutionError(new Error(thrown.message)).code).toBe('SEEDANCE_SUBMISSION_UNKNOWN');
+  });
+
+  it('does not infer UNSUPPORTED_INPUT_MODE or REVISION_CONFLICT from incidental words', () => {
+    expect(normalizeWorkflowExecutionError(new Error('首帧上传失败，请重试')).code).not.toBe('UNSUPPORTED_INPUT_MODE');
+    expect(normalizeWorkflowExecutionError(new Error('图生视频生成失败')).code).not.toBe('UNSUPPORTED_INPUT_MODE');
+    expect(normalizeWorkflowExecutionError(new Error('API Key 已过期')).code).not.toBe('REVISION_CONFLICT');
+  });
+
+  it('still infers explicit unsupported-mode and revision messages', () => {
+    expect(normalizeWorkflowExecutionError(new Error('当前线路不支持首帧输入')).code).toBe('UNSUPPORTED_INPUT_MODE');
+    expect(normalizeWorkflowExecutionError(new Error('Workflow 草稿版本已变化：期望 2，当前 3。')).code).toBe('REVISION_CONFLICT');
   });
 });

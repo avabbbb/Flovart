@@ -62,7 +62,8 @@ describe('Block1: baseUrl passthrough', () => {
         expect(mockFetch).toHaveBeenCalledOnce();
         const calledUrl = mockFetch.mock.calls[0][0] as string;
         expect(calledUrl).toContain('https://custom-proxy.com/v1beta/models');
-        expect(calledUrl).toContain('key=test-api-key');
+        expect(calledUrl).not.toContain('test-api-key');
+        expect(mockFetch.mock.calls[0][1]).toMatchObject({ headers: { 'x-goog-api-key': 'test-api-key' } });
         expect(calledUrl).not.toContain('generativelanguage.googleapis.com');
 
         vi.unstubAllGlobals();

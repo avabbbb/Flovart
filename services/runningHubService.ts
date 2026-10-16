@@ -649,31 +649,35 @@ export async function rhQueryTask(
  * v2 standard model API (unified task system). Swallows all errors so abort
  * flow is never blocked by a failed cancel.
  */
+/** 从 RunningHub baseUrl（含代理路径前缀）规范推导取消端点。 */
+export function rhCancelUrl(baseUrl?: string): string {
+  const url = new URL((baseUrl || RH_BASE).trim());
+  const prefix = url.pathname.replace(/\/+$/, '').replace(/\/openapi\/v2$/i, '');
+  url.pathname = prefix + '/task/openapi/cancel';
+  url.search = '';
+  url.hash = '';
+  return url.toString();
+}
+
+/** 请求供应商取消任务；非 2xx 或业务码非 0 时抛错，由调用方决定如何处理。 */
 export async function rhCancelTask(
   apiKey: string,
   taskId: string,
   options: Pick<RHRunOptions, 'baseUrl'> = {},
 ): Promise<void> {
   if (!apiKey || !taskId) return;
-  const host = (options.baseUrl || RH_HOST).replace(/\/openapi\/v2\/?$/i, '').replace(/\/+$/, '');
-  const url = `${host}/task/openapi/cancel`;
-  try {
-    const res = await fetchWithTimeout(url, {
-      method: 'POST',
-      headers: rhHeaders(apiKey),
-      body: JSON.stringify({ apiKey, taskId }),
-    }, 15_000);
-    if (!res.ok) {
-      console.warn('[RunningHub] cancel request failed', { status: res.status, taskId });
-      return;
-    }
-    const json = await res.json();
-    const code = firstString(json?.code);
-    if (code && code !== '0') {
-      console.warn('[RunningHub] cancel returned non-success', { code, msg: json?.msg, taskId });
-    }
-  } catch {
-    console.warn('[RunningHub] cancel request failed', { taskId });
+  const res = await fetchWithTimeout(rhCancelUrl(options.baseUrl), {
+    method: 'POST',
+    headers: rhHeaders(apiKey),
+    body: JSON.stringify({ apiKey, taskId }),
+  }, 15_000);
+  if (!res.ok) {
+    throw new Error('RunningHub 取消任务失败：HTTP ' + res.status);
+  }
+  const json = await res.json().catch(() => null);
+  const code = firstString(json?.code);
+  if (code && code !== '0') {
+    throw new Error(('RunningHub 取消任务失败：' + code + ' ' + (firstString(json?.msg) || '')).trim());
   }
 }
 
@@ -792,7 +796,9 @@ export async function rhRunTask(
     } catch (err) {
       // User abort: stop polling AND cancel the server task so it stops consuming quota.
       if (options.signal?.aborted) {
-        await rhCancelTask(apiKey, taskId, { baseUrl: options.baseUrl });
+        await rhCancelTask(apiKey, taskId, { baseUrl: options.baseUrl }).catch(cancelError => {
+          console.warn('[RunningHub] cancel request failed', { taskId, error: cancelError instanceof Error ? cancelError.message : String(cancelError) });
+        });
         throw err;
       }
       // Query timeout: log and continue polling (server task may still be running fine).

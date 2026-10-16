@@ -19,7 +19,7 @@ import { flushWorkflowPersistence, useWorkflowStore } from './components/workflo
 import { consumeWorkflowAgentDrawerRequest, subscribeWorkflowAgentDrawer } from './components/workflow/agentDrawerRequest';
 import type { WorkflowSharedMedia } from './components/workflow/WorkflowConfigPanel';
 import { getGenerationCapability, type GenerationMode } from './services/generationCapabilities';
-import { cancelWorkflowGeneration, runWorkflowGeneration } from './services/workflowGeneration';
+import { cancelWorkflowGeneration, findInterruptedWorkflowNodes, runWorkflowGeneration } from './services/workflowGeneration';
 import { ingestWorkflowMedia, loadWorkflowMediaBlob, releaseWorkflowMediaRecord, workflowBlobToDataUrl } from './components/workflow/media';
 import { insertSharedMediaIntoProject } from './components/workflow/WorkflowWorkspace';
 import { createWorkflowNode } from './components/workflow/constants';
@@ -124,6 +124,7 @@ const App: React.FC = () => {
 
     const activeWorkflowIndex = useMemo(() => Math.max(0, workflowProjects.findIndex(p => p.id === activeWorkflowProjectId)), [workflowProjects, activeWorkflowProjectId]);
     const recoveryTasks = React.useRef(new Set<string>());
+    const interruptCheckedProjects = React.useRef(new Set<string>());
 
     const resolvedTheme: 'light' | 'dark' = themeMode === 'system' ? systemTheme : themeMode;
     const themePalette = THEME_PALETTES[resolvedTheme];
@@ -372,6 +373,11 @@ const App: React.FC = () => {
             const normalized = normalizeWorkflowExecutionError(new Error(failureMessage), context.runId);
             return { status: 'failed', error: { code: normalized.code, message: normalized.message }, canonicalInput };
         }
+        // 停止后节点回到 idle；被新 run 取代时 generationRequestId 已换成别的 run。两者都没有产物，不能报 completed。
+        const supersededBy = generatedNode?.metadata.generationRequestId;
+        if (!generatedNode || generatedNode.metadata.status === 'idle' || (supersededBy && context.runId && supersededBy !== context.runId)) {
+            return { status: 'cancelled', canonicalInput };
+        }
         const committedArtifact = generatedNode?.metadata.storageKey && context.runId
             ? registerWorkflowArtifact({
                 artifactId: context.runId,
@@ -396,9 +402,28 @@ const App: React.FC = () => {
         stopNode: ({ projectId, nodeId }) => { cancelWorkflowGeneration(projectId, nodeId); },
     }), [handleRunWorkflowNode]);
     useEffect(() => {
-        if (!apiKeysLoaded || !activeWorkflowProjectId || userApiKeys.length === 0) return;
+        if (!apiKeysLoaded || !activeWorkflowProjectId) return;
         const project = workflowProjects.find(item => item.id === activeWorkflowProjectId);
         if (!project) return;
+        const canResume = userApiKeys.length > 0;
+        // 刷新前的 loading 节点若无法续接会永远转圈。每个项目只在本会话首次进入时清理一次，
+        // 之后的 loading 都来自本会话的真实运行，避免误伤其它执行器正在跑的节点。
+        if (!interruptCheckedProjects.current.has(project.id)) {
+            interruptCheckedProjects.current.add(project.id);
+            const interruptedIds = new Set(findInterruptedWorkflowNodes(project, { canResume }).map(node => node.id));
+            if (interruptedIds.size > 0) {
+                const { message } = normalizeWorkflowExecutionError(new Error(canResume ? '页面刷新后生成已中断，请重新运行。' : '缺少可用的 API Key，无法恢复刷新前的生成任务。'));
+                const latest = useWorkflowStore.getState().projects.find(item => item.id === project.id);
+                if (latest) {
+                    useWorkflowStore.getState().updateProject(project.id, {
+                        nodes: latest.nodes.map(item => interruptedIds.has(item.id) && item.metadata.status === 'loading'
+                            ? { ...item, metadata: { ...item.metadata, status: 'error', error: message, generationMessage: undefined, progress: undefined, generationRequestId: undefined } }
+                            : item),
+                    });
+                }
+            }
+        }
+        if (!canResume) return;
         project.nodes
             .filter(node => node.metadata.status === 'loading' && node.metadata.generationProviderTaskId && node.metadata.config?.mode === 'video')
             .forEach(node => {
@@ -423,7 +448,9 @@ const App: React.FC = () => {
                             { surface: 'recovery', runId: 'recovery_' + providerTaskId, resumeProviderTaskId: providerTaskId },
                         );
                     } catch (error) {
-                        const message = error instanceof Error ? error.message : '视频任务恢复失败，请稍后重试。';
+                        // 允许后续重新触发恢复；错误文案走统一归类，不暴露原始异常。
+                        recoveryTasks.current.delete(recoveryKey);
+                        const message = normalizeWorkflowExecutionError(error, 'recovery_' + providerTaskId).message;
                         const latest = useWorkflowStore.getState().projects.find(item => item.id === project.id);
                         if (latest) {
                             useWorkflowStore.getState().updateProject(project.id, {

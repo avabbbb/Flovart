@@ -99,6 +99,7 @@ describe('inferProviderFromModel', () => {
         expect(inferCapabilityFromModelName('flux-schnell-dev')).toBe('image');
         expect(inferCapabilityFromModelName('midjourney-v6-alpha')).toBe('image');
         expect(inferCapabilityFromModelName('flux-kontext-pro')).toBe('image');
+        expect(inferCapabilityFromModelName('emoji-style-image')).toBe('image');
         expect(getDynamicParamSchema('veo-3.1-generate-preview')).toEqual({
             hasSeed: true,
             hasCfgScale: false,
@@ -129,6 +130,7 @@ describe('inferProviderFromKey', () => {
         expect(inferProviderFromKey(`sk-${'a'.repeat(40)}`)).toBeNull();
         expect(inferProviderFromKey(`sk-proj-${'a'.repeat(24)}`)).toBe('openai');
         expect(inferProviderFromKey(`sk-ant-${'a'.repeat(24)}`)).toBe('anthropic');
+        expect(inferProviderFromKey('0123456789abcdef0123456789abcdef')).toBeNull();
     });
 });
 

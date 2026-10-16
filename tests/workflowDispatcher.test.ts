@@ -375,6 +375,31 @@ describe('workflow dispatcher', () => {
     expect(result).toMatchObject({ ok: false, commandId: 'provider-error', error: { code: 'PROVIDER_REQUEST_FAILED', message: 'Provider 暂时不可用。' } });
   });
 
+  it('shares one in-flight run for concurrent duplicates with the same idempotencyKey', async () => {
+    const gate = Promise.withResolvers<{ status: 'completed' }>();
+    const runNode = vi.fn().mockReturnValue(gate.promise);
+    const { dispatch } = setup(createWorkflowExecutor({ runNode }));
+    const envelope = { id: 'dup-run', command: 'workflow.node.run', args: { nodeId: 'image-1', confirmed: true }, source: 'cli' as const, idempotencyKey: 'run-once' };
+
+    const first = dispatch(envelope);
+    const second = dispatch({ ...envelope, id: 'dup-run-2' });
+    await vi.waitFor(() => expect(runNode).toHaveBeenCalledTimes(1));
+    gate.resolve({ status: 'completed' });
+    const [a, b] = await Promise.all([first, second]);
+
+    expect(a.ok).toBe(true);
+    expect(b).toEqual(a);
+    expect(runNode).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports a stopped or superseded run as cancelled instead of success', async () => {
+    const { dispatch } = setup(createWorkflowExecutor({ runNode: vi.fn().mockResolvedValue({ status: 'cancelled' }) }));
+
+    const result = await dispatch({ id: 'stopped-run', command: 'workflow.node.run', args: { nodeId: 'image-1', confirmed: true }, source: 'cli' });
+
+    expect(result).toMatchObject({ ok: false, commandId: 'stopped-run', error: { code: 'RUN_CANCELLED' } });
+  });
+
   it('records agent/operator draft actions into the project draft log but skips pure UI edits', async () => {
     const { dispatch, dependencies } = setup();
     await dispatch({ id: 'create', command: 'workflow.node.create', args: { type: 'text', title: '旁白', confirmed: true }, source: 'agent' });

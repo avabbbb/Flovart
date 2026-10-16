@@ -207,7 +207,7 @@ export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDepende
     while (idempotencyCache.size > MAX_IDEMPOTENCY_ENTRIES) idempotencyCache.delete(idempotencyCache.keys().next().value!);
   };
 
-  return async (envelope: WorkflowCommandEnvelope): Promise<WorkflowCommandResult> => {
+  const execute = async (envelope: WorkflowCommandEnvelope): Promise<WorkflowCommandResult> => {
     const envelopeError = validateEnvelope(envelope);
     if (envelopeError) return envelopeError;
     const documentMutation = DOCUMENT_MUTATION_COMMANDS.has(envelope.command);
@@ -291,6 +291,9 @@ export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDepende
         }
         if (executionResult?.status === 'failed') {
           return error(envelope.id, executionResult.error?.code || 'RUN_FAILED', executionResult.error?.message || 'Workflow 生成失败，请重试。');
+        }
+        if (executionResult?.status === 'cancelled') {
+          return error(envelope.id, 'RUN_CANCELLED', '生成已停止或被新的运行取代，未产生结果。');
         }
         const latestProject = dependencies.getState().projects.find(item => item.id === project.id) || project;
         dependencies.updateProject(project.id, draftLogPatch(latestProject, envelope, true, { nodeIds: [nodeId] }));
@@ -441,6 +444,17 @@ export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDepende
     } catch (cause) {
       return error(envelope.id, 'BAD_REQUEST', displayError(cause));
     }
+  };
+  const inFlightRuns = new Map<string, Promise<WorkflowCommandResult>>();
+  return (envelope: WorkflowCommandEnvelope): Promise<WorkflowCommandResult> => {
+    // 同一 idempotencyKey 的并发重复 run（Agent 重试、双击）共享一次执行；结果缓存只在完成后写入，挡不住并发。
+    const key = envelope?.command === 'workflow.node.run' && envelope.idempotencyKey ? envelope.source + ':' + envelope.idempotencyKey : undefined;
+    if (!key) return execute(envelope);
+    const pending = inFlightRuns.get(key);
+    if (pending) return pending;
+    const running = execute(envelope).finally(() => inFlightRuns.delete(key));
+    inFlightRuns.set(key, running);
+    return running;
   };
 }
 

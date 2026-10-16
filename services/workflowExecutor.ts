@@ -11,6 +11,8 @@ export type WorkflowRunErrorCode =
   | 'REVISION_CONFLICT'
   | 'PROVIDER_VALIDATION_FAILED'
   | 'PROVIDER_REQUEST_FAILED'
+  /** 上游可能已创建并计费；调用方不得自动重试或切换线路。 */
+  | 'SEEDANCE_SUBMISSION_UNKNOWN'
   | 'RUN_FAILED';
 
 export interface WorkflowRunCommand {
@@ -44,7 +46,7 @@ export interface WorkflowRunResult {
   runId: string;
   projectId: string;
   nodeId: string;
-  status: 'completed' | 'failed';
+  status: 'completed' | 'failed' | 'cancelled';
   error?: WorkflowRunFailure;
   artifact?: WorkflowArtifactOutput;
   /** 只供执行追踪和测试使用，不由 Dispatcher 回传给外部 Agent。 */
@@ -62,7 +64,7 @@ export interface WorkflowExecutorAdapters {
 }
 
 export interface WorkflowRunAdapterResult {
-  status?: 'completed' | 'failed';
+  status?: 'completed' | 'failed' | 'cancelled';
   error?: WorkflowRunFailure;
   artifact?: WorkflowArtifactOutput;
   canonicalInput?: CanonicalGenerationInput;
@@ -93,6 +95,7 @@ const ERROR_CODES = new Set<WorkflowRunErrorCode>([
   'REVISION_CONFLICT',
   'PROVIDER_VALIDATION_FAILED',
   'PROVIDER_REQUEST_FAILED',
+  'SEEDANCE_SUBMISSION_UNKNOWN',
   'RUN_FAILED',
 ]);
 
@@ -103,8 +106,10 @@ function errorCode(cause: unknown): WorkflowRunErrorCode | undefined {
 }
 
 function inferErrorCode(message: string): WorkflowRunErrorCode {
-  if (/版本|revision|过期|冲突/i.test(message)) return 'REVISION_CONFLICT';
-  if (/不支持|unsupported|图生图|图生视频|首帧|末帧/i.test(message)) return 'UNSUPPORTED_INPUT_MODE';
+  // 节点状态只保存文案，推断必须保守：只匹配明确语义，避免“首帧上传失败”“API Key 已过期”被误归类。
+  if (/提交结果未知|submission[ _-]?unknown/i.test(message)) return 'SEEDANCE_SUBMISSION_UNKNOWN';
+  if (/revision|版本(冲突|已过期|已变化|不一致)|修订冲突/i.test(message)) return 'REVISION_CONFLICT';
+  if (/不支持|unsupported/i.test(message)) return 'UNSUPPORTED_INPUT_MODE';
   if (/校验|validation/i.test(message)) return 'PROVIDER_VALIDATION_FAILED';
   if (/不可执行|artifact|媒体.*缺失|资源.*缺失|无法.*(媒体|资源)/i.test(message)) return 'RESOURCE_NOT_EXECUTABLE';
   if (/解析|引用|mention|resource|节点.*不存在/i.test(message)) return 'INPUT_RESOLUTION_FAILED';

@@ -65,7 +65,7 @@ export function setGeminiRuntimeConfig(config: {
  * 按优先级解析可用的 API Key：
  *   1. explicitKey（函数参数显式传入，来自 aiGateway 路由）
  *   2. runtimeConfig 中对应 capability 的 key
- *   3. runtimeConfig 中其他 capability 的 key（回退链）
+ *   不再跨 capability 回退：文本 key 可能属于另一个账号/代理，借用会把图片/视频计费打到错误的 key 上。
  *
  * @param capability - 使用场景：text（LLM 润色）、image（图片生成/编辑）、video（视频生成）
  * @param explicitKey - 可选的显式 API Key，优先级最高
@@ -78,7 +78,7 @@ function getApiKey(capability: "text" | "image" | "video" = "text", explicitKey?
       : capability === "image"
         ? runtimeConfig.imageApiKey
         : runtimeConfig.videoApiKey;
-  const key = scopedKey || runtimeConfig.textApiKey || runtimeConfig.imageApiKey || runtimeConfig.videoApiKey;
+  const key = scopedKey;
   if (!key) {
     throw new Error(
       "Gemini API key is not configured. " +
@@ -149,8 +149,8 @@ function normalizeGeminiErrorMessage(message: string, status?: number): string {
 export async function validateGeminiApiKey(apiKey: string, baseUrl?: string): Promise<{ ok: boolean; message?: string }> {
   try {
     const base = (baseUrl || runtimeConfig.baseUrl || 'https://generativelanguage.googleapis.com/v1beta').replace(/\/+$/, '');
-    const url = `${base}/models?key=${encodeURIComponent(apiKey)}&pageSize=1`;
-    const res = await fetch(url);
+    // key 放请求头，避免进入代理/浏览器历史与访问日志。
+    const res = await fetch(base + '/models?pageSize=1', { headers: { 'x-goog-api-key': apiKey } });
     if (res.ok) return { ok: true };
     const body = await res.json().catch(() => ({}));
     const msg = body?.error?.message || `HTTP ${res.status}`;
@@ -405,9 +405,12 @@ export async function editImage(
  */
 export async function generateImageFromText(prompt: string, apiKey?: string, signal?: AbortSignal, options?: { model?: string; baseUrl?: string }): Promise<{ newImageBase64: string | null; newImageMimeType: string | null; textResponse: string | null; }> {
   try {
+    // imagen-4.0-generate-001 已于 2026-08-17 关停，不再静默兜底到它；未指定模型时直接报错。
+    const model = options?.model || runtimeConfig.textToImageModel;
+    if (!model) throw new Error('未指定 Imagen 模型，请在设置中选择可用的文生图模型。');
     const ai = getClient("image", apiKey, options?.baseUrl);
     const response = await ai.models.generateImages({
-        model: options?.model || runtimeConfig.textToImageModel || 'imagen-4.0-generate-001',  // Imagen 专用接口；调用方必传 Imagen 模型
+        model,  // Imagen 专用接口；调用方必传 Imagen 模型
         prompt: prompt,
         config: {
           abortSignal: signal,
@@ -476,7 +479,7 @@ export async function generateVideo(
   onProgress: (message: string) => void,
   image?: ImageInput,
   apiKey?: string,
-  options?: { model?: string; durationSec?: number; resolution?: string; generateAudio?: boolean; signal?: AbortSignal; lastFrame?: ImageInput; referenceImages?: ImageInput[]; baseUrl?: string },
+  options?: { model?: string; durationSec?: number; resolution?: string; generateAudio?: boolean; signal?: AbortSignal; lastFrame?: ImageInput; referenceImages?: ImageInput[]; baseUrl?: string; pollTimeoutMs?: number },
 ): Promise<{ videoBlob: Blob; mimeType: string }> {
   const ai = getClient("video", apiKey, options?.baseUrl);
   // 步骤1：初始化
@@ -532,7 +535,7 @@ export async function generateVideo(
   onProgress('Generation started, this may take a few minutes.');
 
   // 步骤5：轮询检查生成状态
-  const MAX_POLL_MS = 600_000;
+  const MAX_POLL_MS = options?.pollTimeoutMs ?? 600_000;
   const pollStart = Date.now();
   while (!operation.done) {
     if (options?.signal?.aborted) throw options.signal.reason || new DOMException('已停止等待；供应商任务可能仍在运行。', 'AbortError');

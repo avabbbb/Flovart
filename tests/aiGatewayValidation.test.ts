@@ -2048,6 +2048,30 @@ describe('aiGateway - generateVideoWithProvider', () => {
         );
     });
 
+    it('统一视频接口提交成功后查询失败，不会换候选地址重复提交', async () => {
+        globalThis.fetch = vi.fn()
+            .mockResolvedValueOnce(mockJsonResponse({ task_id: 'task-123' }))
+            .mockImplementation(async () => new Response(JSON.stringify({ error: { message: 'upstream down' } }), {
+                status: 500,
+                headers: { 'Content-Type': 'application/json' },
+            }));
+
+        await expect(generateVideoWithProvider('test video prompt', 'veo3-fast', {
+            id: '4',
+            provider: 'custom',
+            capabilities: ['video'],
+            key: 'sk-test-key',
+            baseUrl: ['https:', '', 'gateway.example.com', 'v1'].join('/'),
+            extraConfig: { endpointFlavor: 'openai-compatible' },
+            createdAt: 0,
+            updatedAt: 0,
+        })).rejects.toThrow();
+
+        const submissions = vi.mocked(globalThis.fetch).mock.calls
+            .filter(([url, init]) => String(url).endsWith('/v2/videos/generations') && (init as RequestInit | undefined)?.method === 'POST');
+        expect(submissions).toHaveLength(1);
+    });
+
     it('passes user generateAudio/seed/returnLastFrame overrides into sparkvideo text-to-video payload', async () => {
         globalThis.fetch = vi.fn()
             .mockResolvedValueOnce(mockJsonResponse({

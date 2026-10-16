@@ -14,6 +14,7 @@ import { executeUserScriptProvider, getUserScriptProviderForKey } from './userSc
 import { loadWorkflowMediaBlob } from '../components/workflow/media';
 import { loadRuntimeArtifactBlob } from './runtimeArtifacts';
 import { displayError } from './displayError';
+import { fetchRemoteMediaBlob, RemoteMediaFetchError } from './desktopNetwork';
 
 function blobToBase64(blob: Blob): Promise<string> {
     return new Promise((resolve, reject) => {
@@ -169,7 +170,7 @@ export interface UnifiedIgnitionInput {
 
 export type UnifiedIgnitionResult =
     | { ok: true; elementId: string; mediaUrl: string; mimeType: string; capability: ElementMediaCapability; textResponse?: string | null; /** 仅供溯源：远端已下载结果的原始 URL（RunningHub 等 24h 临时链接）。持久化层据此保留来源，节点媒体仍以本地存储为准。 */ remoteMediaUrl?: string }
-    | { ok: false; elementId: string; errorMessage: string; capability: ElementMediaCapability };
+    | { ok: false; elementId: string; errorMessage: string; capability: ElementMediaCapability; /** 用户停止（非超时）导致的失败；调用方据此区分停止与真实失败，不要匹配文案。 */ aborted?: boolean };
 
 export type ElementMediaCapability = 'image' | 'video';
 
@@ -189,7 +190,7 @@ export interface ModelParamSchema {
 export const DEFAULT_PROVIDER_MODELS: Partial<Record<AIProvider, ProviderModelMap>> = {
     google: {
         text: ['gemini-3-flash-preview', 'gemini-3.1-pro-preview', 'gemini-3.1-flash-lite-preview', 'gemini-2.5-pro', 'gemini-2.5-flash'],
-        image: ['gemini-3.1-flash-image', 'gemini-3.1-flash-lite-image', 'gemini-3-pro-image', 'imagen-4.0-generate-001'],
+        image: ['gemini-3.1-flash-image', 'gemini-3.1-flash-lite-image', 'gemini-3-pro-image'],
         video: ['veo-3.1-generate-preview', 'veo-3.1-fast-generate-preview', 'veo-3.1-lite-generate-preview'],
     },
     openai: {
@@ -249,7 +250,7 @@ export const DEFAULT_PROVIDER_MODELS: Partial<Record<AIProvider, ProviderModelMa
     },
     openrouter: {
         text: ['openrouter/auto', 'google/gemini-3-flash-preview', 'anthropic/claude-opus-4-6', 'deepseek/deepseek-r1'],
-        image: ['openai/gpt-image-1', 'google/imagen-4.0-generate-001'],
+        image: ['openai/gpt-image-1'],
         video: [],
     },
     openai_compatible: {
@@ -278,6 +279,7 @@ type CustomProviderExtraConfig = Record<string, string> | undefined;
 
 export type VideoAspectRatio = '16:9' | '9:16' | '1:1' | '4:3' | '3:4' | '3:2' | '2:3' | '4:5' | '5:4' | '1:4' | '4:1' | '1:8' | '8:1' | '21:9' | '9:21' | 'adaptive';
 
+// 别名供 Tokenhub 等中转使用；官方方舟需要的带版本号 ID（doubao-seedance-2-0-260128）由 volcengine 预设提供，用户显式选择。
 const DEFAULT_SEEDANCE_MODEL = 'doubao-seedance-2.0';
 const SEEDANCE_RESOLUTIONS = ['480p', '720p', '1080p'] as const;
 const SEEDANCE_RATIOS: VideoAspectRatio[] = ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9', 'adaptive'];
@@ -713,7 +715,7 @@ export function inferProviderFromKey(apiKey: string): AIProvider | null {
     if (/^sk-sf/i.test(trimmed)) return 'siliconflow';
     if (/^xai-/i.test(trimmed)) return 'xai';
     if (/^eyJ/i.test(trimmed)) return 'minimax'; // MiniMax keys start with eyJ (JWT-like)
-    if (/^[a-f0-9]{32}$/i.test(trimmed)) return 'runningHub'; // 32-char hex
+    // 32 位十六进制不是 RunningHub 独有格式（MD5/各类代理 key 都是），不自动推断。
     return null;
 }
 
@@ -825,7 +827,7 @@ export function inferCapabilityFromModel(model: string): AICapability | undefine
     const normalized = stripModelProviderPrefix(model);
     if (!normalized) return undefined;
     if (normalized.includes('seedance')) return 'video';
-    if (/^(veo([-.\d]|$)|video|wan|seedance|vidu|pika|runway|higgsfield|luma|kling|keling|sora|sdols|hailuo|qwen-video|liveportrait|videoretalk|emo|gemini-omni|happyhorse|ltx|pixverse|skyreels)/.test(normalized)) return 'video';
+    if (/^(veo([-.\d]|$)|video|wan|seedance|vidu|pika|runway|higgsfield|luma|kling|keling|sora|sdols|hailuo|qwen-video|liveportrait|videoretalk|emo(?:[-_.\d]|$)|gemini-omni|happyhorse|ltx|pixverse|skyreels)/.test(normalized)) return 'video';
     if (/(^|[-_/])(text|image|reference|start|end|multimodal)?-?to-video|video-edit|edit-video|motion-control|video-extend/.test(normalized)) return 'video';
     if (/^(rhart-image|runninghub-image|imagen|dall-e|gpt-image|flux|stable-diffusion|sdxl|midjourney|recraft|ideogram|qwen-image|seedream|seededit|nano-banana|jimeng|doubao-image|omni-image|grok-image|f-|z-image|xai\/rhart|xai\/grok-imagine-image)/.test(normalized)) return 'image';
     if (/(^|[-_/])(text|image)-to-image|image-edit|edit-channel|edit-official|\/edit(?:-|$)/.test(normalized)) return 'image';
@@ -835,6 +837,9 @@ export function inferCapabilityFromModel(model: string): AICapability | undefine
 }
 
 export function inferCapabilityFromModelName(modelName: string): ElementMediaCapability {
+    // 先用完整 ID 做精确推断；只取末段做子串匹配会把 xxx/video-upscale-image、emoji-* 等误判为视频。
+    const precise = inferCapabilityFromModel(modelName);
+    if (precise === 'video' || precise === 'image') return precise;
     const stripped = stripModelProviderPrefix(modelName);
     const normalized = stripped.includes('/') ? stripped.split('/').pop() || stripped : stripped;
 
@@ -842,7 +847,7 @@ export function inferCapabilityFromModelName(modelName: string): ElementMediaCap
         return 'video';
     }
 
-    if (/^(veo([-.\d]|$)|video|wan|seedance|vidu|pika|runway|higgsfield|luma|kling|keling|sora|sdols|hailuo|qwen-video|liveportrait|videoretalk|emo|cogvideo|hunyuan-video)/.test(normalized)) {
+    if (/^(veo([-.\d]|$)|video|wan|seedance|vidu|pika|runway|higgsfield|luma|kling|keling|sora|sdols|hailuo|qwen-video|liveportrait|videoretalk|emo(?:[-_.\d]|$)|cogvideo|hunyuan-video)/.test(normalized)) {
         return 'video';
     }
 
@@ -1491,13 +1496,19 @@ function extractRunningHubMediaUrl(
     kind: 'image' | 'video',
 ) {
     const items = result.results?.filter(item => item.url) || [];
-    if (items.length === 0) return null;
-    const typed = items.find(item => {
-        const hint = `${item.outputType || ''} ${item.url}`.toLowerCase();
-        const isVideo = /\.(mp4|mov|webm)(?:[?#].*)?$/.test(hint) || /\b(mp4|mov|webm|video)\b/.test(hint);
-        return kind === 'video' ? isVideo : !isVideo;
-    });
-    return typed?.url || items[0].url || null;
+    // 只接受类型匹配的结果；类型无法判断时才允许回退，绝不把 txt/json/另一种媒体当作结果。
+    const classify = (item: { url?: string; outputType?: string }): 'image' | 'video' | 'other' | 'unknown' => {
+        const type = (item.outputType || '').trim().toLowerCase();
+        const path = (item.url || '').split(/[?#]/)[0].toLowerCase();
+        const ext = path.includes('.') ? path.slice(path.lastIndexOf('.') + 1) : '';
+        const hint = type || ext;
+        if (!hint) return 'unknown';
+        if (/^(mp4|mov|webm|m4v|video)/.test(hint)) return 'video';
+        if (/^(png|jpe?g|webp|gif|bmp|avif|image)/.test(hint)) return 'image';
+        return type ? 'other' : 'unknown';
+    };
+    const typed = items.find(item => classify(item) === kind);
+    return typed?.url || items.find(item => classify(item) === 'unknown')?.url || null;
 }
 
 /**
@@ -1510,10 +1521,21 @@ async function fetchImageUrlToBase64(url: string, externalSignal?: AbortSignal):
     if (externalSignal?.aborted) controller.abort();
     else externalSignal?.addEventListener('abort', abortFromCaller, { once: true });
     try {
-        const res = await fetch(url, { signal: controller.signal });
-        if (!res.ok) throw new Error(`下载图片失败 (${res.status}): ${url}`);
-        const blob = await res.blob();
+        // 桌面端经 Rust IPC 下载绕过 WebView CORS；Web 端跨域拦截归一为可理解的 RemoteMediaFetchError。
+        let blob: Blob;
+        try {
+            blob = await fetchRemoteMediaBlob(url, { signal: controller.signal });
+        } catch (error) {
+            if (error instanceof RemoteMediaFetchError && error.status !== undefined) {
+                throw new Error(`下载图片失败 (${error.status}): ${url}`);
+            }
+            throw error;
+        }
         const mimeType = blob.type || 'image/png';
+        // 代理/CDN 出错时常以 200 返回 HTML 或 JSON，不能当作图片入库。
+        if (blob.type && !/^image\//i.test(blob.type) && !/^(application\/octet-stream|binary\/octet-stream)$/i.test(blob.type)) {
+            throw new Error('下载结果不是图片（' + blob.type + '）。');
+        }
         if (typeof blob.arrayBuffer !== 'function') {
             const dataUrl = await blobToBase64(blob);
             const separator = dataUrl.indexOf(',');
@@ -1842,6 +1864,11 @@ function extractVideoOutputUrl(payload: any) {
         || payload?.data?.task_result?.videos?.[0]?.url;
 }
 
+function unifiedVideoRequestSignal(signal: AbortSignal | undefined, timeoutMs: number): AbortSignal {
+    const timeout = AbortSignal.timeout(timeoutMs);
+    return signal ? AbortSignal.any([signal, timeout]) : timeout;
+}
+
 async function generateVideoWithUnifiedAsyncApi(
     prompt: string,
     model: string,
@@ -1864,6 +1891,8 @@ async function generateVideoWithUnifiedAsyncApi(
     let lastError: Error | null = null;
 
     for (const apiBase of apiBaseCandidates) {
+        // 任务一旦在某个候选地址创建（或正在恢复），换下一个地址只会重复提交、重复扣费。
+        let taskCommitted = Boolean(options?.resumeProviderTaskId);
         try {
             let taskId = options?.resumeProviderTaskId;
             if (!taskId) {
@@ -1899,6 +1928,7 @@ async function generateVideoWithUnifiedAsyncApi(
                     }
                     throw new Error(failure);
                 }
+                taskCommitted = true;
 
                 const createJson = await readJsonResponse<any>(createRes, '统一视频接口提交响应');
                 taskId = extractTaskId(createJson);
@@ -1923,7 +1953,7 @@ async function generateVideoWithUnifiedAsyncApi(
                 onProgress(delay <= 2000 ? '任务已提交，正在排队...' : '正在生成视频，请稍候...');
                 const queryRes = await fetch(`${apiBase}/v2/videos/generations/${encodeURIComponent(taskId)}`, {
                     headers: { Authorization: `Bearer ${apiKey}` },
-                    signal: options?.signal,
+                    signal: unifiedVideoRequestSignal(options?.signal, 30_000),
                 });
 
                 if (!queryRes.ok) {
@@ -1944,7 +1974,7 @@ async function generateVideoWithUnifiedAsyncApi(
                     }
 
                     onProgress('Downloading generated video...');
-                    const videoRes = await fetch(outputUrl, { signal: options?.signal });
+                    const videoRes = await fetch(outputUrl, { signal: unifiedVideoRequestSignal(options?.signal, 120_000) });
                     if (!videoRes.ok) {
                         throw new Error(`视频下载失败: ${videoRes.statusText}`);
                     }
@@ -1958,6 +1988,7 @@ async function generateVideoWithUnifiedAsyncApi(
             }
         } catch (error) {
             if (options?.signal?.aborted) throw error;
+            if (taskCommitted) throw error;
             lastError = error instanceof Error ? error : new Error(String(error));
         }
     }
@@ -2366,9 +2397,11 @@ export async function reversePromptStreamWithProvider(
                 if (payload === '[DONE]') continue;
                 try {
                     const json = JSON.parse(payload);
+                    const streamError = sseErrorMessage(json);
+                    if (streamError) throw new SseStreamError(streamError);
                     const chunk = json?.candidates?.[0]?.content?.parts?.[0]?.text || '';
                     if (chunk) { full += chunk; onChunk(chunk); }
-                } catch { /* skip malformed JSON */ }
+                } catch (error) { if (error instanceof SseStreamError) throw error; /* skip malformed JSON */ }
             }
         }
         return full.trim();
@@ -2420,11 +2453,13 @@ export async function reversePromptStreamWithProvider(
                 if (payload === '[DONE]') continue;
                 try {
                     const json = JSON.parse(payload);
+                    const streamError = sseErrorMessage(json);
+                    if (streamError) throw new SseStreamError(streamError);
                     if (json.type === 'content_block_delta') {
                         const chunk = json.delta?.text || '';
                         if (chunk) { full += chunk; onChunk(chunk); }
                     }
-                } catch { /* skip malformed JSON */ }
+                } catch (error) { if (error instanceof SseStreamError) throw error; /* skip malformed JSON */ }
             }
         }
         return full.trim();
@@ -2476,12 +2511,32 @@ export async function reversePromptStreamWithProvider(
             if (payload === '[DONE]') continue;
             try {
                 const json = JSON.parse(payload);
+                const streamError = sseErrorMessage(json);
+                if (streamError) throw new SseStreamError(streamError);
                 const chunk = json.choices?.[0]?.delta?.content || '';
                 if (chunk) { full += chunk; onChunk(chunk); }
-            } catch { /* skip malformed JSON */ }
+            } catch (error) { if (error instanceof SseStreamError) throw error; /* skip malformed JSON */ }
         }
     }
     return full.trim();
+}
+
+/** 供应商在流中下发的错误事件；与“单行 JSON 损坏”区分，必须抛给调用方而不是静默返回半截文本。 */
+class SseStreamError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = 'SseStreamError';
+    }
+}
+
+function sseErrorMessage(json: unknown): string | undefined {
+    if (!json || typeof json !== 'object') return undefined;
+    const record = json as { type?: unknown; error?: unknown };
+    if (record.error === undefined && record.type !== 'error') return undefined;
+    const error = record.error;
+    if (typeof error === 'string' && error) return error;
+    if (error && typeof error === 'object' && 'message' in error && typeof error.message === 'string' && error.message) return error.message;
+    return '供应商流式响应返回错误。';
 }
 
 /**
@@ -3444,6 +3499,7 @@ export async function generateVideoWithProvider(
             : [];
         return generateVideo(prompt, aspectRatio === '9:16' ? '9:16' : '16:9', onProgress, firstFrame, key?.key, {
             model,
+            pollTimeoutMs: options?.pollTimeoutMs,
             durationSec: options?.durationSec,
             resolution: options?.resolution,
             generateAudio: options?.generateAudio,
@@ -3493,7 +3549,7 @@ export async function generateVideoWithProvider(
         let fileId: string | undefined;
         const miniMaxPollStart = Date.now();
         while (true) {
-            if (Date.now() - miniMaxPollStart > 600_000) {
+            if (Date.now() - miniMaxPollStart > (options?.pollTimeoutMs ?? 600_000)) {
                 throw new Error('MiniMax 视频生成超时（已等待超过 10 分钟）');
             }
             onProgress(progressMessages[messageIndex % progressMessages.length]);
@@ -3595,7 +3651,7 @@ export async function generateVideoWithProvider(
         let videoUrl: string | undefined;
         const kelingPollStart = Date.now();
         while (true) {
-            if (Date.now() - kelingPollStart > 600_000) {
+            if (Date.now() - kelingPollStart > (options?.pollTimeoutMs ?? 600_000)) {
                 throw new Error('Keling 视频生成超时（已等待超过 10 分钟）');
             }
             onProgress(progressMessages[messageIndex % progressMessages.length]);
@@ -3694,7 +3750,7 @@ export async function generateVideoWithProvider(
         let videoUrl: string | undefined;
         const xaiPollStart = Date.now();
         while (true) {
-            if (Date.now() - xaiPollStart > 600_000) {
+            if (Date.now() - xaiPollStart > (options?.pollTimeoutMs ?? 600_000)) {
                 throw new Error('xAI 视频生成超时（已等待超过 10 分钟）');
             }
             onProgress(progressMessages[messageIndex % progressMessages.length]);
@@ -3754,7 +3810,7 @@ export async function generateVideoWithProvider(
 
         try {
             while (true) {
-                if (Date.now() - seedancePollStart > 600_000) {
+                if (Date.now() - seedancePollStart > (options?.pollTimeoutMs ?? 600_000)) {
                     throw new Error('Seedance 视频生成超时（已等待超过 10 分钟）');
                 }
                 onProgress(seedanceProgressMessages[seedanceMsgIndex % seedanceProgressMessages.length]);
@@ -3949,12 +4005,14 @@ export async function executeUnifiedIgnition(input: UnifiedIgnitionInput): Promi
         const reason = input.signal?.aborted ? input.signal.reason : error;
         const aborted = input.signal?.aborted || (error instanceof Error && error.name === 'AbortError');
         const message = error instanceof Error ? error.message : '多模态点火失败。';
+        const timedOut = reason instanceof Error && reason.name === 'TimeoutError';
         return {
             ok: false,
             elementId: input.elementId,
             capability,
+            aborted: Boolean(aborted) && !timedOut,
             errorMessage: aborted
-                ? (reason instanceof Error && reason.name === 'TimeoutError' ? reason.message : '生成已停止，可重新发起。')
+                ? (timedOut ? (reason as Error).message : '生成已停止，可重新发起。')
                 : displayError(message, message),
         };
     }
