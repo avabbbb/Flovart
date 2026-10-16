@@ -171,7 +171,7 @@ jobs:
             rust_target: aarch64-apple-darwin
             binary_name: flovart-host
             sidecar_ext: ''
-            bundle_args: --bundles dmg
+            bundle_args: --bundles app,dmg
             installer_glob: |
               **/*.dmg
             label: macOS Apple Silicon
@@ -179,7 +179,7 @@ jobs:
             rust_target: x86_64-apple-darwin
             binary_name: flovart-host
             sidecar_ext: ''
-            bundle_args: --bundles dmg
+            bundle_args: --bundles app,dmg
             installer_glob: |
               **/*.dmg
             label: macOS Intel
