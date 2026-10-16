@@ -5,6 +5,7 @@
  */
 
 import { spawn, spawnSync } from 'node:child_process'
+import type { SpawnSyncReturns } from 'node:child_process'
 import type { FlovartPluginConfig } from './config.ts'
 
 export interface CliFailure {
@@ -75,7 +76,7 @@ export function runCliSync(
     : args
   const argv = buildCliCommand(config.cli, command, commandArgs)
 
-  let result: ReturnType<typeof spawnSync>
+  let result: SpawnSyncReturns<string>
   try {
     result = spawnSync(argv[0], argv.slice(1), {
       encoding: 'utf8',
@@ -115,8 +116,8 @@ export function runCliSync(
     }
   }
 
-  const stdout = typeof result.stdout === 'string' ? result.stdout : result.stdout?.toString('utf8') ?? ''
-  const stderr = typeof result.stderr === 'string' ? result.stderr : result.stderr?.toString('utf8') ?? ''
+  const stdout = result.stdout ?? ''
+  const stderr = result.stderr ?? ''
   if (result.status !== 0 && stdout === '') {
     return {
       ok: false,
@@ -186,40 +187,3 @@ export async function runCli(
   })
 }
 
-/**
- * Synchronous probe path used by the service health check, which runs on the
- * cordis scheduler and cannot await. Shares the same argv builder + outcome
- * parser as runCli so both paths report identical error shapes.
- */
-export function runCliSync(
-  config: FlovartPluginConfig,
-  command: string,
-  args: Record<string, unknown> = {},
-): CliOutcome {
-  const commandArgs = command.startsWith('workflow.')
-    ? { ...args, workspaceMode: 'browser', agentIdentity: args.agentIdentity || 'deepseek-harness' }
-    : args
-  const argv = buildCliCommand(config.cli, command, commandArgs)
-  const result = spawnSync(argv[0], argv.slice(1), {
-    windowsHide: true,
-    timeout: config.toolTimeoutMs,
-    maxBuffer: 8 * 1024 * 1024,
-    encoding: 'utf8',
-  })
-  if (result.error) {
-    const code = errnoCode(result.error)
-    const timedOut = (result.error as NodeJS.ErrnoException & { killed?: boolean }).killed === true
-      || (result.error as NodeJS.ErrnoException).code === 'ETIMEDOUT'
-    return {
-      ok: false, command, data: null,
-      error: timedOut
-        ? { code: 'CLI_TIMEOUT', message: `命令 ${command} 执行超过 ${config.toolTimeoutMs}ms 已终止`, retryable: true }
-        : {
-            code: code === 'ENOENT' ? 'CLI_NOT_FOUND' : 'CLI_SPAWN_FAILED',
-            message: `无法启动 Iris CLI：${argv[0]}（${result.error.message}）。请安装 Agent Toolkit 或设置 FLOVART_CLI。`,
-            retryable: false,
-          },
-    }
-  }
-  return parseCliOutcome(command, result.stdout ?? '', result.stderr ?? '')
-}

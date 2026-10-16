@@ -7,7 +7,7 @@
 import { mkdir, writeFile, appendFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-const SECRET_KEY_PATTERN = /(api[-_]?key|authorization|bearer|(?:^|[^a-z0-9])token(?:$|[^a-z0-9])|access[-_]?token|refresh[-_]?token|(?:^|[^a-z0-9])secret(?:$|[^a-z0-9])|credential|password|cookie)/i;
+const SECRET_KEY_PATTERN = /(api[-_]?key|authorization|bearer|(?:^|[^a-z0-9])token(?:$|[^a-z0-9])|access[-_]?token|refresh[-_]?token|(?:^|[^a-z0-9])secret(?:$|[^a-z0-9])|private[-_]?key|session[-_]?id|credential|password|cookie)/i;
 const SECRET_VALUE_PATTERNS = [
   /\bsk-[A-Za-z0-9_-]{16,}\b/g,
   /\bgh[pousr]_[A-Za-z0-9]{20,}\b/g,

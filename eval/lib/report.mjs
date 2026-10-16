@@ -53,6 +53,8 @@ export async function loadRun(runId) {
 /**
  * Build the machine-readable report. Sections follow the GOAL's final report
  * format so the Markdown is a projection of this object and never the reverse.
+ *
+ * @param {{ run: any; summary: any; qa?: any; coverage?: any; baselines?: any }} input
  */
 export function buildReport({ run, summary, qa, coverage, baselines }) {
   const aggregate = summary?.aggregate ?? null;
