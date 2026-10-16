@@ -90,7 +90,10 @@ export function verifyUpdaterArtifacts({
       continue;
     }
     const versionPattern = new RegExp(`(?:^|[_-])v?${escapeRegExp(version)}(?:[_\\-.]|$)`, 'i');
-    if (!versionPattern.test(artifactName) || artifactName.endsWith('.sig')) {
+    // Tauri names macOS updater bundles <Product>[_<arch>].app.tar.gz with no version;
+    // they are still bound to this release by the signature check below.
+    const isDarwinAppBundle = platform.startsWith('darwin') && /\.app\.tar\.gz$/i.test(artifactName);
+    if ((!isDarwinAppBundle && !versionPattern.test(artifactName)) || artifactName.endsWith('.sig')) {
       errors.push(`${platform}: updater artifact filename does not match release version ${version}`);
       continue;
     }
