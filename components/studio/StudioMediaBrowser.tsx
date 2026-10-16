@@ -4,7 +4,7 @@ import { loadWorkflowMediaBlob, useWorkflowMediaUrl } from '../workflow/media';
 import { FolderTree, type FolderTreeProps } from './FolderTree';
 import type { AssetFolder } from '../../types';
 import { displayError } from '../../services/displayError';
-import { downloadBlob, openRemoteMediaUrl } from '../../services/desktopNetwork';
+import { openRemoteMediaUrl, saveBlob } from '../../services/desktopNetwork';
 
 export const STUDIO_MEDIA_DRAG_TYPE = 'application/x-flovart-studio-media';
 
@@ -63,7 +63,7 @@ function StudioMediaDownload({ item, isChinese }: { item: StudioMediaItem; isChi
     setError('');
     try {
       const blob = await loadWorkflowMediaBlob(undefined, item.href);
-      downloadBlob(blob, item.name);
+      await saveBlob(blob, item.name);
     } catch (downloadError) {
       const message = displayError(downloadError, isChinese ? '下载失败。' : 'Download failed.');
       setError(message);

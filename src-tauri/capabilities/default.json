@@ -12,6 +12,7 @@
     "runtime-control",
     "keyring-metadata",
     "managed-agent-connection",
-    "browser-import"
+    "browser-import",
+    "desktop-files"
   ]
 }

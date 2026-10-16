@@ -3,6 +3,7 @@ import { ChevronRight, Download, Folder, FolderInput, LayoutGrid, MoreHorizontal
 import type { DragEvent as ReactDragEvent } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useWorkflowMediaUrl } from '../workflow/media';
+import { saveMediaUrl } from '../../services/desktopNetwork';
 import { DeleteFolderDialog, type DeleteFolderMode } from './DeleteFolderDialog';
 import { BatchManageModal } from './BatchManageModal';
 import {
@@ -196,17 +197,16 @@ function AssetCard({ item, isChinese, onInsert, onRename, onRemove, onTagsUpdate
           <Sparkles size={14} />
         </button>
       )}
-      <a
+      <button
+        type="button"
         className="absolute bottom-2 left-2 flex h-8 w-8 items-center justify-center rounded-lg border-[1.5px] opacity-0 transition group-hover:opacity-100"
-        href={media.url || '#'}
-        download={item.name || 'asset'}
-        aria-disabled={!media.url}
-        onClick={event => { if (!media.url) event.preventDefault(); }}
+        disabled={!media.url}
+        onClick={() => { if (media.url) void saveMediaUrl(media.url, item.name || 'asset').catch(error => console.warn('[Assets] Download failed.', error)); }}
         aria-label={`${isChinese ? '下载' : 'Download'} ${item.name || ''}`}
         style={{ background: 'rgba(0,0,0,0.45)', borderColor: 'transparent', color: 'white' }}
       >
         <Download size={14} />
-      </a>
+      </button>
     </motion.article>
   );
 }

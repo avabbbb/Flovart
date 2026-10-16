@@ -1,0 +1,4 @@
+[[permission]]
+identifier = "desktop-files"
+description = "Allows the main Iris WebUI to save user-initiated downloads through the native save dialog."
+commands.allow = ["desktop_save_file"]

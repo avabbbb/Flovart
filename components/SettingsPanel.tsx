@@ -1,3 +1,4 @@
+import { saveBlob } from '../services/desktopNetwork';
 import React from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import type { UserApiKey, AIProvider, AICapability, ModelItem, ProductModelMode, ApiPricingRule, ApiBudgetPolicy, RouteMappingBinding, RouteMappingTarget, RuntimeRouteCapability } from '../types';
@@ -1021,12 +1022,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
             key: '***', // 不导出明文 key
         }));
         const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `iris-api-configs-${new Date().toISOString().slice(0, 10)}.json`;
-        a.click();
-        URL.revokeObjectURL(url);
+        void saveBlob(blob, `iris-api-configs-${new Date().toISOString().slice(0, 10)}.json`).catch(error => console.warn('[Settings] Export failed.', error));
     };
 
     /** 导入 JSON 配置文件 */
@@ -1105,12 +1101,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
             budgetPolicy: k.budgetPolicy,
         }));
         const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `iris-api-configs-full-${new Date().toISOString().slice(0, 10)}.json`;
-        a.click();
-        URL.revokeObjectURL(url);
+        void saveBlob(blob, `iris-api-configs-full-${new Date().toISOString().slice(0, 10)}.json`).catch(error => console.warn('[Settings] Export failed.', error));
     };
 
     /** 一键测试所有 Key */

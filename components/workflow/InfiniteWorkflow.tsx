@@ -2239,7 +2239,7 @@ export function InfiniteWorkflow({
         mimeType: node.metadata.mimeType,
         loadBlob: () => loadWorkflowMediaBlob(node.metadata.storageKey, node.metadata.href),
       })), `Iris-Workflow-${project.title}`, project.title);
-      setNotice(`已按工作流顺序导出 ${count} 个媒体文件。`);
+      setNotice(count ? `已按工作流顺序导出 ${count} 个媒体文件。` : '已取消导出。');
     } catch (error) {
       setNotice(displayError(error, '批量导出失败。'));
     }

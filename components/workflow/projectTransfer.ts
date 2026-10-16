@@ -1,3 +1,4 @@
+import { saveBlob } from '../../services/desktopNetwork';
 import { nanoid } from 'nanoid';
 import { createWorkflowVideoPoster, persistWorkflowVideoPoster, workflowDataUrlToBlob, workflowBlobToDataUrl } from './media';
 import { validateWorkflowConnection } from './ops';
@@ -69,12 +70,7 @@ export async function downloadWorkflowProjects(projects: WorkflowProject[], file
   if (!projects.length) throw new Error('没有可导出的工作流');
   const exported = await serializeWorkflowProjects(projects);
   const blob = new Blob([JSON.stringify(exported, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = `${safeFileName(fileName)}.workflow.json`;
-  anchor.click();
-  URL.revokeObjectURL(url);
+  return saveBlob(blob, safeFileName(fileName) + '.workflow.json');
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

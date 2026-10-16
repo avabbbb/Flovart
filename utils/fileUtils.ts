@@ -1,3 +1,4 @@
+import { saveBlob } from '../services/desktopNetwork';
 
 const MIME_BY_EXTENSION: Record<string, string> = {
   png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif', avif: 'image/avif', bmp: 'image/bmp', svg: 'image/svg+xml',
@@ -99,11 +100,7 @@ export const validateAndResizeImage = async (
     return { dataUrl: outDataUrl, mimeType: outMime, width: newW, height: newH, resized: true };
 };
 
-export const downloadDataUrl = (dataUrl: string, filename: string) => {
-    const a = document.createElement('a');
-    a.href = dataUrl;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+export const downloadDataUrl = async (dataUrl: string, filename: string): Promise<boolean> => {
+    const blob = await (await fetch(dataUrl)).blob();
+    return saveBlob(blob, filename);
 };

@@ -1,3 +1,4 @@
+import { saveBlob } from '../services/desktopNetwork';
 import { BlobReader, BlobWriter, ZipWriter } from '@zip.js/zip.js';
 
 export interface PositionedMediaSource {
@@ -63,13 +64,6 @@ export async function exportMediaArchive(sources: PositionedMediaSource[], archi
     await writer.add(file.fileName, new BlobReader(blob), { level: 0 });
   }
   const archive = await writer.close();
-  const url = URL.createObjectURL(archive);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = `${sanitizeMediaFileStem(archiveName, 'Iris-媒体')}.zip`;
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 0);
-  return files.length;
+  const saved = await saveBlob(archive, sanitizeMediaFileStem(archiveName, 'Iris-媒体') + '.zip');
+  return saved ? files.length : 0;
 }

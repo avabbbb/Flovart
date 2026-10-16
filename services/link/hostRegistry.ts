@@ -1,3 +1,4 @@
+import { saveBlob } from '../desktopNetwork';
 import registry from '../../tools/flovart/contracts/host-registry.v1.json';
 import { createWorkBuddySkillPackage } from '../agentSkillPackage';
 import {
@@ -81,12 +82,7 @@ const externalPackageAdapters = (id: string): Partial<FlovartHostLifecycleAdapte
     prepare: async () => {
       if (!entry.fileName) return { ok: false, message: entry.installed };
       const blob = await createWorkBuddySkillPackage();
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = entry.fileName;
-      link.click();
-      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      if (!(await saveBlob(blob, entry.fileName))) return { ok: false, message: '已取消保存' };
       return { ok: true, message: entry.installed };
     },
   };

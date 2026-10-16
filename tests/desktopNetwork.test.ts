@@ -73,3 +73,56 @@ describe('desktopNetwork', () => {
       .rejects.toThrow('桌面媒体响应无效');
   });
 });
+
+import { describe as describeCors, expect as expectCors, it as itCors, vi as viCors } from 'vitest';
+import { fetchRemoteMediaBlob as fetchRemoteMediaBlobForCors, RemoteMediaFetchError as RemoteMediaFetchErrorForCors } from '../services/desktopNetwork';
+
+describeCors('fetchRemoteMediaBlob - web CORS', () => {
+    itCors('normalizes a browser CORS rejection into a readable error that keeps the remote url', async () => {
+        const originalFetch = globalThis.fetch;
+        globalThis.fetch = viCors.fn(async () => { throw new TypeError('Failed to fetch'); }) as typeof fetch;
+        try {
+            const error = await fetchRemoteMediaBlobForCors('http://cdn.example.com/out.mp4').catch((e: unknown) => e);
+            expectCors(error).toBeInstanceOf(RemoteMediaFetchErrorForCors);
+            expectCors((error as InstanceType<typeof RemoteMediaFetchErrorForCors>).corsBlocked).toBe(true);
+            expectCors((error as Error).message).toContain('http://cdn.example.com/out.mp4');
+        } finally {
+            globalThis.fetch = originalFetch;
+        }
+    });
+
+    itCors('keeps the HTTP status for non-ok responses', async () => {
+        const originalFetch = globalThis.fetch;
+        globalThis.fetch = viCors.fn(async () => new Response('nope', { status: 403 })) as typeof fetch;
+        try {
+            const error = await fetchRemoteMediaBlobForCors('http://cdn.example.com/out.png').catch((e: unknown) => e);
+            expectCors(error).toBeInstanceOf(RemoteMediaFetchErrorForCors);
+            expectCors((error as InstanceType<typeof RemoteMediaFetchErrorForCors>).corsBlocked).toBe(false);
+            expectCors((error as InstanceType<typeof RemoteMediaFetchErrorForCors>).status).toBe(403);
+        } finally {
+            globalThis.fetch = originalFetch;
+        }
+    });
+});
+
+import { saveBlob as saveBlobForDesktop } from '../services/desktopNetwork';
+
+describeCors('saveBlob - desktop', () => {
+    itCors('writes through the native save dialog and appends a missing extension', async () => {
+        mocks.isTauri.mockReturnValue(true);
+        mocks.invoke.mockReset();
+        mocks.invoke.mockResolvedValueOnce('C:/Users/me/Downloads/result 1.png');
+        const saved = await saveBlobForDesktop(new Blob([new Uint8Array([1, 2, 3])], { type: 'image/png' }), '结果 1');
+        expectCors(saved).toBe(true);
+        expectCors(mocks.invoke).toHaveBeenCalledWith('desktop_save_file', new Uint8Array([1, 2, 3]), {
+            headers: { 'x-iris-file-name': encodeURIComponent('结果 1.png') },
+        });
+    });
+
+    itCors('reports a cancelled dialog as not saved', async () => {
+        mocks.isTauri.mockReturnValue(true);
+        mocks.invoke.mockReset();
+        mocks.invoke.mockResolvedValueOnce(null);
+        expectCors(await saveBlobForDesktop(new Blob(['{}'], { type: 'application/json' }), 'config.json')).toBe(false);
+    });
+});

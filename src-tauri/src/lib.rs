@@ -11,6 +11,7 @@
 
 pub mod bridge;
 pub mod deeplink;
+pub mod desktop_files;
 pub mod errors;
 pub mod keyring;
 pub mod managed_agent;
@@ -62,6 +63,7 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_deep_link::init())
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             // ── 1. 初始化 SQLite ──
             let app_data_dir = app
@@ -152,6 +154,7 @@ pub fn run() {
             managed_agent::managed_agent_connection,
             remote_media::desktop_fetch_remote_media,
             remote_media::desktop_open_remote_url,
+            desktop_files::desktop_save_file,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Iris");

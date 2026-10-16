@@ -1,5 +1,6 @@
 import { AlignCenter, AlignLeft, AlignRight, ArrowDownToLine, ArrowUpToLine, AudioLines, ChevronsDown, ChevronsUp, Copy, Crop, Download, Eraser, Expand, FilePenLine, Frame, Grid2x2, Group, Layers3, Library, Lightbulb, Maximize2, MessageSquareText, Play, RefreshCw, RotateCw, ScanLine, ScanText, Scissors, SlidersHorizontal, Square, Trash2, Ungroup, ZoomIn, Gauge } from 'lucide-react';
 import { useRef } from 'react';
+import { saveMediaUrl } from '../../services/desktopNetwork';
 import { WorkflowToolbarActions, WorkflowToolbarShell, type WorkflowToolbarAction } from './WorkflowToolbarPrimitives';
 import { useWorkflowMediaUrl } from './media';
 import { WORKFLOW_NODE_TOOL_LABELS } from './nodeToolCatalog';
@@ -82,7 +83,7 @@ export function WorkflowNodeToolbar({ nodes, onCopy, onDelete, onExport, onRun, 
     onLayer && { key: 'front', label: '移到最前', icon: <ChevronsUp size={18} />, onClick: () => onLayer('front') },
     onLayer && { key: 'back', label: '移到最后', icon: <ChevronsDown size={18} />, onClick: () => onLayer('back') },
     node && onPromptFocus && node.type !== 'audio' && node.type !== 'script' && { key: 'prompt', label: '编辑提示词', icon: <MessageSquareText size={18} />, onClick: () => onPromptFocus(node.id) },
-    media && mediaUrl && { key: 'download', label: '下载媒体', icon: <Download size={18} />, href: mediaUrl, download: media.metadata.name || media.id },
+    media && mediaUrl && { key: 'download', label: '下载媒体', icon: <Download size={18} />, onClick: () => { void saveMediaUrl(mediaUrl, media.metadata.name || media.id).catch(error => console.warn('[Workflow] Media download failed.', error)); } },
     media?.type === 'image' && onSaveMedia && { key: 'save', label: '保存到素材库', icon: <Library size={18} />, onClick: () => onSaveMedia(media.id) },
     media && mediaUrl && onPreviewMedia && { key: 'preview', label: '放大预览', icon: <Maximize2 size={18} />, onClick: () => onPreviewMedia(media.id) },
     media?.type === 'image' && mediaUrl && onReversePrompt && { key: 'reverse-prompt', label: '反推 Prompt', icon: <ScanText size={18} />, disabled: advancedToolBusy, onClick: () => onReversePrompt(media.id, mediaUrl) },
