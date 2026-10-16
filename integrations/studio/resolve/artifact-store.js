@@ -99,7 +99,7 @@ function persistResolveArtifact({ rootDir, bytes, artifact = {}, now = new Date(
     throw new Error('Resolve 产物需要有效的应用数据目录。');
   }
   if (!Buffer.isBuffer(bytes) || bytes.length === 0) {
-    throw new Error('Iris 没有返回可导入的 Resolve 产物字节。');
+    throw new Error('Flovart 没有返回可导入的 Resolve 产物字节。');
   }
   if (artifact.byteSize !== undefined
       && (!Number.isSafeInteger(artifact.byteSize) || artifact.byteSize !== bytes.length)) {

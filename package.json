@@ -1,7 +1,7 @@
 {
   "name": "flovart",
   "private": true,
-  "version": "0.3.2",
+  "version": "0.1.0-beta.2",
   "license": "MIT",
   "type": "module",
   "engines": {
@@ -108,5 +108,5 @@
     "vite": "^6.2.0",
     "vitest": "^4.1.0"
   },
-  "description": "Iris — an open-source, local-first AI creative layer for professional editing tools."
+  "description": "Flovart — an open-source, local-first AI creative layer for professional editing tools."
 }

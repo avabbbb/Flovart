@@ -1,4 +1,4 @@
-//! Iris Tauri 库入口。
+//! Flovart Tauri 库入口。
 //!
 //! 模块划分：
 //! - `keyring` : 操作系统 Keyring 包装（API Key 持久化）
@@ -157,7 +157,7 @@ pub fn run() {
             desktop_files::desktop_save_file,
         ])
         .build(tauri::generate_context!())
-        .expect("error while building Iris");
+        .expect("error while building Flovart");
 
     app.run(|app_handle, event| {
         if matches!(event, tauri::RunEvent::Exit) {

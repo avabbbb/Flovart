@@ -46,9 +46,15 @@ import { WorkflowConfigPanel } from './WorkflowConfigPanel';
 import { ScriptNodeEditor } from './ScriptNodeEditor';
 import { SlashMenu } from './SlashMenu';
 import { WorkflowToolbar, type WorkflowTool } from './WorkflowToolbar';
+import { deriveWorkflowRunStates, planWorkflowStaleRerun } from './runState';
+import { deriveWorkflowPresence } from './presence';
+import { buildWorkflowHostSendPatch, listWorkflowHostClips, workflowHostSendEligibility } from './hostLink';
+import { WorkflowHostStrip } from './WorkflowHostStrip';
+import { selectWorkflowOperationTake } from './operations';
 import { useProductionProjectionAdapter } from './useProductionProjectionAdapter';
 import { composeImageGrid } from './gridComposer';
 import { LIGHTING_PRESETS, buildRelightPrompt } from './LightingPresets';
+import { isWorkflowGenerationActive } from '../../services/workflowGeneration';
 import type { WorkflowConnection, WorkflowDocumentOperation, WorkflowNode as WorkflowNodeData, WorkflowNodeType, WorkflowPoint, WorkflowProject, WorkflowSnapshot, WorkflowViewport, ScriptShot, SlashCommand } from './types';
 import {
   runWorkflowCropOperation,
@@ -1287,65 +1293,57 @@ export function InfiniteWorkflow({
   }, [focusNode, focusNodeRequest, selectNodes]);
 
   // 刷新/重载后节点 metadata 里会残留 status:'loading'，但内存中的生成请求
-  // 已不存在 —— 这类"僵尸 loading"永远不会自己结束。挂载时记录快照，宽限
-  // 期（给 App 的 provider-task 恢复留出重新提交的时间）后仍在原地 loading
-  // 的节点视为已中断：用产品语言提示，并允许通过停止按钮复位。
-  const [staleLoadingIds, setStaleLoadingIds] = useState<ReadonlySet<string>>(() => new Set());
-  const staleScanRef = useRef<string | null>(null);
-  useEffect(() => {
-    staleScanRef.current = project.id;
-    setStaleLoadingIds(new Set());
-    const snapshot = new Map(
-      projectRef.current.nodes
-        .filter(node => node.metadata.status === 'loading')
-        .map(node => [node.id, node.metadata.generationStartedAt]),
-    );
-    if (!snapshot.size) return;
-    const timer = window.setTimeout(() => {
-      if (!mountedRef.current || staleScanRef.current !== project.id) return;
-      const stale = new Set(
-        projectRef.current.nodes
-          .filter(node => node.metadata.status === 'loading' && snapshot.get(node.id) === node.metadata.generationStartedAt)
-          .map(node => node.id),
-      );
-      if (!stale.size) return;
-      setStaleLoadingIds(stale);
-      onNotify?.(
-        language === 'zho'
-          ? `${stale.size} 个生成任务已中断 — 选中节点可重新运行或停止`
-          : `${stale.size} generation task${stale.size > 1 ? 's' : ''} interrupted — select the node to rerun or stop it`,
-        'warning',
-      );
-    }, 6000);
-    return () => window.clearTimeout(timer);
-  }, [language, onNotify, project.id]);
-
-  const stopNode = useCallback((nodeId: string) => {
-    if (staleLoadingIds.has(nodeId)) {
+  // 已不存在 —— 这类"僵尸 loading"永远不会自己结束，也会挡住编辑。
+  const interruptedMessage = language === 'zho' ? '生成已中断，点「重试」重新运行' : 'Generation interrupted — press Retry to run again';
+  const markInterrupted = useCallback((nodeIds: string[]) => {
+    const ops = nodeIds.flatMap(nodeId => {
       const node = projectRef.current.nodes.find(item => item.id === nodeId);
-      if (!node) return;
-      applyOps([{
-        type: 'update_node',
+      if (!node || node.metadata.status !== 'loading') return [];
+      return [{
+        type: 'update_node' as const,
         id: nodeId,
         metadata: {
           ...node.metadata,
-          status: 'error',
-          error: language === 'zho' ? '生成已中断，可重新运行' : 'Generation interrupted — run again to retry',
+          status: 'error' as const,
+          error: interruptedMessage,
           progress: undefined,
           generationRequestId: undefined,
           generationStartedAt: undefined,
           generationMessage: undefined,
         },
-      }]);
-      setStaleLoadingIds(current => {
-        const next = new Set(current);
-        next.delete(nodeId);
-        return next;
-      });
-      return;
-    }
+      }];
+    });
+    if (ops.length) applyOps(ops);
+    return ops.length;
+  }, [applyOps, interruptedMessage]);
+  useEffect(() => {
+    // A node left in "loading" with no live request in this session (the tab was
+    // reloaded or closed mid-run) will never finish by itself. Turn it straight
+    // into a retryable error so it is never locked. Only a video with a provider
+    // task id gets a short grace period, because App may resume that task.
+    const loading = projectRef.current.nodes.filter(node => node.metadata.status === 'loading' && !isWorkflowGenerationActive(project.id, node.id));
+    if (!loading.length) return;
+    const resumable = (node: WorkflowNodeData) => node.metadata.config?.mode === 'video' && Boolean(node.metadata.generationProviderTaskId);
+    const immediate = loading.filter(node => !resumable(node)).map(node => node.id);
+    let count = markInterrupted(immediate);
+    const waiting = loading.filter(resumable).map(node => node.id);
+    const notify = (n: number) => {
+      if (n) onNotify?.(language === 'zho' ? `${n} 个生成任务已中断，可以直接重试` : `${n} generation task${n > 1 ? 's were' : ' was'} interrupted — retry any time`, 'warning');
+    };
+    if (!waiting.length) { notify(count); return; }
+    const timer = window.setTimeout(() => {
+      if (!mountedRef.current) return;
+      count += markInterrupted(waiting.filter(nodeId => !isWorkflowGenerationActive(project.id, nodeId)));
+      notify(count);
+    }, 6000);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project.id]);
+
+  const stopNode = useCallback((nodeId: string) => {
+    if (!isWorkflowGenerationActive(project.id, nodeId) && markInterrupted([nodeId])) return;
     onStopNode?.(nodeId);
-  }, [applyOps, language, onStopNode, staleLoadingIds]);
+  }, [markInterrupted, onStopNode, project.id]);
 
   const handleSlashCommand = useCallback((command: SlashCommand) => {
     setSlashMenu(null);
@@ -2227,6 +2225,19 @@ export function InfiniteWorkflow({
     height: Math.abs(selectionBox.current.y - selectionBox.start.y),
   } : undefined;
   const selectedNodes = useMemo(() => new Set(selectedNodeIds), [selectedNodeIds]);
+  // 派生运行状态（stale 等）：纯计算，不写回项目。
+  const runStates = useMemo(() => deriveWorkflowRunStates({ nodes: project.nodes, connections: project.connections }), [project.nodes, project.connections]);
+  const stalePlan = useMemo(() => planWorkflowStaleRerun({ nodes: project.nodes, connections: project.connections }, runStates), [project.nodes, project.connections, runStates]);
+  const presenceByNode = useMemo(() => deriveWorkflowPresence({ nodes: project.nodes, draftChangeSets: project.draftChangeSets }), [project.nodes, project.draftChangeSets]);
+  const hostClips = useMemo(() => listWorkflowHostClips({ nodes: project.nodes, connections: project.connections }), [project.nodes, project.connections]);
+  const selectedHostSend = useMemo(() => {
+    if (selectedNodeIds.length !== 1) return undefined;
+    const node = project.nodes.find(item => item.id === selectedNodeIds[0]);
+    if (!node) return undefined;
+    if (node.metadata.hostSend) return { nodeId: node.id, host: node.metadata.hostSend.host, status: node.metadata.hostSend.status };
+    const eligibility = workflowHostSendEligibility({ nodes: project.nodes, connections: project.connections }, node.id);
+    return eligibility.ok ? { nodeId: node.id, host: eligibility.source.host, status: undefined } : undefined;
+  }, [project.nodes, project.connections, selectedNodeIds]);
   const selectedNodeData = displayNodes.filter(node => node.isVisible !== false && selectedNodes.has(node.id));
   const exportSelectedMedia = async (nodes: WorkflowNodeData[]) => {
     const media = nodes.filter(node => node.type === 'image' || node.type === 'video' || node.type === 'audio');
@@ -2238,7 +2249,7 @@ export function InfiniteWorkflow({
         name: node.metadata.name || node.title,
         mimeType: node.metadata.mimeType,
         loadBlob: () => loadWorkflowMediaBlob(node.metadata.storageKey, node.metadata.href),
-      })), `Iris-Workflow-${project.title}`, project.title);
+      })), `Flovart-Workflow-${project.title}`, project.title);
       setNotice(count ? `已按工作流顺序导出 ${count} 个媒体文件。` : '已取消导出。');
     } catch (error) {
       setNotice(displayError(error, '批量导出失败。'));
@@ -2258,7 +2269,10 @@ export function InfiniteWorkflow({
   const toolbarLeft = Math.max(8, Math.min(overlayCenter, workflowWidth - 8));
   const toolbarTop = overlayBounds ? Math.max(8, project.viewport.y + overlayBounds.top * project.viewport.k - Math.max(72, 56 + 28 * project.viewport.k)) : 0;
   const promptWorkflowWidth = workflowWidth;
-  const promptWidth = Math.min(880, Math.max(360, promptWorkflowWidth - 16));
+  // The prompt bar belongs to the node: about as wide as the node on screen
+  // (420-560px), never a full-width strip that hides the canvas.
+  const overlayScreenWidth = overlayBounds ? (overlayBounds.right - overlayBounds.left) * project.viewport.k : 0;
+  const promptWidth = Math.min(promptWorkflowWidth - 16, Math.max(420, Math.min(560, overlayScreenWidth + 80)));
   const promptLeft = Math.max(8, Math.min(overlayCenter - promptWidth / 2, promptWorkflowWidth - promptWidth - 8));
   const configLeft = Math.max(8, Math.min(overlayCenter - 210, workflowWidth - 428));
   const promptTop = overlayBounds ? (() => {
@@ -2418,6 +2432,20 @@ export function InfiniteWorkflow({
     >
       <WorkflowToolbar
         tool={tool}
+        revision={project.draftVersion}
+        staleCount={stalePlan.length}
+        onRerunStale={() => planWorkflowStaleRerun({ nodes: projectRef.current.nodes, connections: projectRef.current.connections })
+          .filter(id => !projectRef.current.nodes.find(node => node.id === id)?.isLocked)
+          .forEach(id => enqueueRunNode(id))}
+        hostSend={selectedHostSend ? {
+          host: selectedHostSend.host === 'resolve' ? 'Resolve' : selectedHostSend.host,
+          status: selectedHostSend.status,
+          onSend: () => {
+            const current = projectRef.current;
+            const patch = buildWorkflowHostSendPatch(current, selectedHostSend.nodeId, { requestId: nanoid(), now: new Date().toISOString() });
+            if (patch) applyOps([{ type: 'update_node', id: selectedHostSend.nodeId, metadata: patch }]);
+          },
+        } : undefined}
         canUndo={Boolean(project.draftChangeSets?.some(changeSet => changeSet.status === 'completed' || changeSet.status === 'partial'))}
         canRedo={Boolean(project.draftRedoStack?.length)}
         onToolChange={setTool}
@@ -2444,6 +2472,17 @@ export function InfiniteWorkflow({
         onZoomOut={zoomOut}
         onZoomReset={zoomReset}
       />
+      {project.nodes.length === 0 && (
+        // The empty canvas is its own guide: one sentence and the two most common starts.
+        <div className="workflow-canvas-empty" data-workflow-overlay onPointerDown={event => event.stopPropagation()}>
+          <strong>{language === 'zho' ? '从一个节点开始' : 'Start with a node'}</strong>
+          <span>{language === 'zho' ? '双击空白处可以添加任意节点，也可以把图片或视频直接拖进来。' : 'Double-click anywhere to add a node, or drop an image or video here.'}</span>
+          <div>
+            <button type="button" onClick={() => addNode('image')}>{language === 'zho' ? '图片节点' : 'Image node'}</button>
+            <button type="button" onClick={() => addNode('video')}>{language === 'zho' ? '视频节点' : 'Video node'}</button>
+          </div>
+        </div>
+      )}
       <div ref={worldRef} className="workflow-world" style={{ transform: `translate(${project.viewport.x}px, ${project.viewport.y}px) scale(${project.viewport.k})` }}>
         <WorkflowConnections
           nodes={connectionNodes}
@@ -2550,6 +2589,14 @@ export function InfiniteWorkflow({
             onChangeText={content => { if (!node.isLocked) applyOps([{ type: 'update_node', id: node.id, metadata: { content } }]); }}
             onChangeMetadata={metadata => { if (!node.isLocked) applyOps([{ type: 'update_node', id: node.id, metadata }]); }}
             onRun={() => { if (!node.isLocked) onRunNode(node.id); }}
+            runState={runStates.get(node.id)}
+            presence={presenceByNode.get(node.id)}
+            onSelectTake={node.metadata.operation ? takeId => {
+              const current = projectRef.current.nodes.find(item => item.id === node.id);
+              if (!current || current.isLocked) return;
+              const next = selectWorkflowOperationTake(current, takeId);
+              if (next !== current) applyOps([{ type: 'update_node', id: node.id, metadata: next.metadata, replaceMetadata: true }]);
+            } : undefined}
             onReplaceMedia={file => { if (!node.isLocked) void replaceMedia(node, file); }}
             onRemoveMedia={() => { if (!node.isLocked) removeMedia(node); }}
             onContextMenu={event => {
@@ -2678,6 +2725,7 @@ export function InfiniteWorkflow({
       <WorkflowNodePromptBar width={promptWidth} node={selectedNodeData[0]} nodes={project.nodes} connections={project.connections} t={t} theme={theme} language={language} userApiKeys={userApiKeys} dynamicModelOptions={dynamicModelOptions} onOpenSettings={onOpenSettings} onEnhancePrompt={onEnhancePrompt} isEnhancingPrompt={isEnhancingPrompt} onChange={metadata => applyOps([{ type: 'update_node', id: selectedNodeData[0].id, metadata }])} onPromptIntent={intent => { promptIntentRef.current = intent; }} onRun={() => { const intent = promptIntentRef.current?.targetNodeId === selectedNodeData[0].id ? promptIntentRef.current : undefined; promptIntentRef.current = null; onRunNode(selectedNodeData[0].id, intent || undefined); }} onStop={onStopNode ? () => onStopNode(selectedNodeData[0].id) : undefined} focusSignal={promptFocusSignal} onDisconnectReference={fromNodeId => { const targetId = selectedNodeData[0].id; const conn = project.connections.find(c => c.toNodeId === targetId && c.fromNodeId === fromNodeId); if (!conn) return; applyOps([{ type: 'delete_connections', ids: [conn.id] }]); }} onReorderReference={nextIds => handleReorderReferences(selectedNodeData[0].id, nextIds)} assetFolders={assetFolders} assetItems={assetSuggestions} assetLibrary={assetLibrary} onSelectWorkflowReference={selectedNodeData[0] ? (nodeId => handleSelectWorkflowReference(nodeId, selectedNodeData[0].id)) : undefined} onAddReferenceFiles={selectedNodeData[0] ? (files => handleAddReferenceFiles(files, selectedNodeData[0].id)) : undefined} onSelectAsset={selectedNodeData[0] ? (assetId => handleSelectAsset(assetId, selectedNodeData[0].id)) : undefined} onResolvePastedMentions={mentions => handleResolvePastedMentions(mentions, selectedNodeData[0].id)} onPasteUnresolvedMentions={labels => setNotice(`未能唯一匹配引用：${labels.map(label => `@${label}`).join('、')}，已保留为普通文字。`)} skillEnabled={false} />
         </div>}
       </>}
+      <WorkflowHostStrip clips={hostClips} language={language} onFocusClip={focusNode} />
       {minimapOpen && <WorkflowMiniMap nodes={displayNodes.filter(node => node.isVisible !== false)} viewport={project.viewport} onCenter={(x, y) => {
         setFocusBadge(false);
         const rect = rootRef.current?.getBoundingClientRect();

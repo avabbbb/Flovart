@@ -1,6 +1,6 @@
 # Iris：创作宿主与 Agent 协作设计
 
-这是当前唯一的产品与系统主设计。它替代旧 Agent 分层设计、Link 目标稿和 Production Runtime V1 扩张计划；旧代码不会因文档改写自动完成重构。术语见[领域词](../maintenance/agent/CONTEXT.md)，可用性见[支持矩阵](../../SUPPORT_MATRIX.md)，实施进度见[待办](../content/docs/progress/todo.mdx)。
+这是当前唯一的产品与系统主设计。它替代旧 Agent 分层设计、Link 目标稿和 Production Runtime V1 扩张计划；旧代码不会因文档改写自动完成重构。术语见[领域词](../maintenance/agent/CONTEXT.md)，可用性见[支持矩阵](../../../../SUPPORT_MATRIX.md)，实施进度见[待办](../../../content/docs/progress/todo.mdx)。
 
 ## 1. 决定与边界
 
@@ -48,7 +48,7 @@ Operation Skill 负责教外部助手组合 **Resolve native MCP + legacy `flova
 
 ## 3. 交互设计
 
-Resolve 专项的完整 UI/交互规范见 [Resolve 21.1 Product & UI Spec](../../integrations/studio/resolve/PRODUCT_UI_SPEC.md)。实现 Agent 必须先读该文档，并在视觉修改前重新打开 Blackmagic 当前 Edit / Cut / Media 官方页面核对真实宿主界面。
+Resolve 专项的完整 UI/交互规范见 [Resolve 21.1 Product & UI Spec](../../../../integrations/studio/resolve/PRODUCT_UI_SPEC.md)。实现 Agent 必须先读该文档，并在视觉修改前重新打开 Blackmagic 当前 Edit / Cut / Media 官方页面核对真实宿主界面。
 
 ### 3.1 首次使用
 
@@ -277,7 +277,7 @@ Premiere / AE / PS 的具体 SDK、版本与兼容边界继续以各自官方文
 
 第一阶段不要把“做一个更大的 Resolve 插件”当作进展。优先验证官方 MCP、现有 Iris 生成路径和 Media Pool 之间最短的真实链路。native MCP 不足时才用具体 gap 驱动现有 Workflow Integration bridge。
 
-Resolve 面板实现必须遵循 [Resolve 21.1 Product & UI Spec](../../integrations/studio/resolve/PRODUCT_UI_SPEC.md)。视觉参考优先 Blackmagic Edit / Cut / Media / Inspector；社区 MCP 面板只用于失败恢复和 observability 参考，不照搬成另一个后台管理系统。
+Resolve 面板实现必须遵循 [Resolve 21.1 Product & UI Spec](../../../../integrations/studio/resolve/PRODUCT_UI_SPEC.md)。视觉参考优先 Blackmagic Edit / Cut / Media / Inspector；社区 MCP 面板只用于失败恢复和 observability 参考，不照搬成另一个后台管理系统。
 
 一个切片未通，优先修该切片，不靠增加抽象层、扩展宿主数量、复制 MCP tool 或新增术语解释失败。产品目标只维护本主设计；Resolve 专项文档是 subordinate implementation reference，不建立第二份产品 authority。
 

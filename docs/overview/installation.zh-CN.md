@@ -2,7 +2,7 @@
 
 本指引面向**不熟悉电脑操作**的使用者。使用 Windows 安装包时不需要安装
 Node.js、Rust 或打开命令行。
-当前候选安装包文件名：`Flovart_0.3.2_x64-setup.exe`（大小以发布页为准）。
+当前候选安装包文件名：`Flovart_0.1.0-beta.2_x64-setup.exe`（大小以发布页为准）。
 
 ---
 
@@ -14,7 +14,7 @@ Node.js、Rust 或打开命令行。
 
 ## 二、安装步骤（约 2 分钟）
 
-1. 双击安装包 `Flovart_0.3.2_x64-setup.exe`。
+1. 双击安装包 `Flovart_0.1.0-beta.2_x64-setup.exe`。
 2. 如果弹出蓝色「Windows 已保护你的电脑」窗口——**这是正常的**（软件还没购买微软的数字签名证书），请按下面操作放行：
    - 先确认文件来自 Iris 官方发布页，并核对发布页提供的 SHA-256。
    - 未签名的本地测试包不要直接放行；正式包应在完成 Windows 签名后发布。
@@ -48,7 +48,7 @@ Node.js、Rust 或打开命令行。
 
 ## 六、给分发者的说明
 
-- 本地构建产物：`src-tauri/target/release/bundle/nsis/Flovart_0.3.2_x64-setup.exe`；本地构建使用 `src-tauri/tauri.local.conf.json`，不生成正式更新签名。
+- 本地构建产物：`src-tauri/target/release/bundle/nsis/Flovart_0.1.0-beta.2_x64-setup.exe`；本地构建使用 `src-tauri/tauri.local.conf.json`，不生成正式更新签名。
 - 正式发布流程：由维护者在确认 Hosted release gate、生产签名和产物校验通过后，再按 `.github/workflows/build-desktop.yml` 发布；未完成这些外部门禁前，不应宣称 `latest.json` 或自动更新已经可用。
 - 安装器采用「当前用户」模式（`installMode: currentUser`）：无需管理员权限、不弹 UAC、卸载干净，最适合分发给普通用户。
 - 若要消除 SmartScreen 首次拦截，需要代码签名证书（OV 证书或 Azure Trusted Signing），在 `src-tauri/tauri.conf.json → bundle.windows.certificateThumbprint` 填入指纹后重新出包。

@@ -13,7 +13,7 @@ import { usePromptHistoryStore } from '../stores/usePromptHistoryStore';
 import { refundApiUsage, reserveApiUsage, updateApiUsage } from '../utils/usageMonitor';
 import { resolveRouteMappingForSubmit, type RouteFallbackResolution } from './routeMapping';
 import { requireWorkflowResourceHref, type CreativeHostResourceLocator } from './workflowResourceResolver';
-import { beginWorkflowOperationTake, completeWorkflowOperationTake } from '../components/workflow/operations';
+import { applySelectedTakeMedia, beginWorkflowOperationTake, completeWorkflowOperationTake, pickTakeMedia } from '../components/workflow/operations';
 import { validateWorkflowOperationOutputs } from '../components/workflow/operationRegistry';
 import type { ProviderMaterializedReference } from './providerGenerationAdapter';
 import { resolveProviderGenerationExtension } from './userScriptProviderAdapter';
@@ -171,6 +171,11 @@ async function mediaResult(
 function raceAbort<T>(promise: Promise<T>, signal: AbortSignal) {
   if (signal.aborted) return Promise.reject<T>(abortError());
   return Promise.race([promise, new Promise<T>((_, reject) => signal.addEventListener('abort', () => reject(abortError()), { once: true }))]);
+}
+
+/** True while this session holds a live request for the node (used to tell real runs from interrupted ones). */
+export function isWorkflowGenerationActive(projectId: string, nodeId: string) {
+  return activeRequests.has(requestKey(projectId, nodeId));
 }
 
 export function cancelWorkflowGeneration(projectId: string, nodeId: string) {
@@ -700,10 +705,11 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
         // 批量输出 = 新建结果节点；单张输出 = 原位替换后的节点自身
         const outputNodeIds = preparedNodes.length > 0 ? preparedNodes.map(node => node.id) : [nodeId];
         validateWorkflowOperationOutputs('image.generate@1', outputNodeIds.map(() => ({ role: 'result_image' as const, nodeType: 'image' as const })));
-        const completed = completeWorkflowOperationTake(operation, operationTakeId, outputNodeIds, {
+        const completed = applySelectedTakeMedia(completeWorkflowOperationTake(operation, operationTakeId, outputNodeIds, {
           providerTaskId: operation.metadata.generationProviderTaskId,
           usageRecordId: operation.metadata.generationUsageRecordId,
-        });
+          ...(preparedNodes.length === 0 && singleMediaRecord ? { outputMedia: pickTakeMedia(singleMediaRecord) } : {}),
+        }));
         current = { ...current, nodes: current.nodes.map(node => node.id === nodeId ? completed : node) };
       }
     }

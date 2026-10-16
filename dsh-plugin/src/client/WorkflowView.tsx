@@ -1,8 +1,8 @@
 /**
- * DSH's browser half is a contextual view of Iris's visible Workflow.
+ * DSH's browser half is a contextual view of Flovart's visible Workflow.
  * It never creates a local Draft, owns a mutation store, or calls a Provider.
  * Mutations stay in ctx.flovart and therefore use the same Browser Authority
- * as the Iris WebUI.
+ * as the Flovart WebUI.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactElement } from 'react'
@@ -77,7 +77,7 @@ export function WorkflowView({ sessionId: _sessionId, session }: WorkflowViewPro
     try {
       const health = await client.health()
       if (!health.hasWorkflow || health.clients < 1) {
-        throw new FlovartLinkError('请先在 Iris 中打开一个可见的 Workflow。', { code: 'WORKSPACE_REQUIRED', status: 409 })
+        throw new FlovartLinkError('请先在 Flovart 中打开一个可见的 Workflow。', { code: 'WORKSPACE_REQUIRED', status: 409 })
       }
       const next = await client.inspect(health.activeProjectId || undefined)
       if (request !== requestRef.current) return
@@ -142,7 +142,7 @@ export function WorkflowView({ sessionId: _sessionId, session }: WorkflowViewPro
     <header style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 42, padding: '6px 12px', borderBottom: '1px solid var(--dsh-border, rgba(128,128,128,0.25))', flexWrap: 'wrap' }}>
       <div style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontWeight: 650, fontSize: 13 }}>
         <span style={{ width: 8, height: 8, borderRadius: '50%', background: statusColor(status) }} />
-        <span>Iris</span>
+        <span>Flovart</span>
       </div>
       <span style={{ ...mutedTextStyle, fontSize: 11 }}>{statusLabel(status)}</span>
       {project && <span style={{ ...mutedTextStyle, fontSize: 11 }}>{project.title} · v{project.revision ?? '—'}</span>}
@@ -182,8 +182,8 @@ export function WorkflowView({ sessionId: _sessionId, session }: WorkflowViewPro
         {header}
         <div style={{ flex: 1, display: 'grid', placeItems: 'center', padding: 24, overflow: 'auto' }}>
           <div style={{ width: 'min(520px, 100%)', display: 'grid', gap: 12, padding: 20, border: '1px solid var(--dsh-border, rgba(128,128,128,0.25))', borderRadius: 10, background: 'var(--dsh-bg-subtle, transparent)' }}>
-            <strong>{status === 'error' ? 'Iris Workflow 暂不可用' : '正在准备当前 Workflow'}</strong>
-            <span style={{ ...mutedTextStyle, fontSize: 12, lineHeight: 1.6 }}>{errorText || '正在通过 Iris Link 检查可见 Browser Workflow。DSH 不会创建隐藏副本。'}</span>
+            <strong>{status === 'error' ? 'Flovart Workflow 暂不可用' : '正在准备当前 Workflow'}</strong>
+            <span style={{ ...mutedTextStyle, fontSize: 12, lineHeight: 1.6 }}>{errorText || '正在通过 Flovart Link 检查可见 Browser Workflow。DSH 不会创建隐藏副本。'}</span>
             {status === 'error' && <button type="button" style={{ ...buttonStyle, width: 'fit-content', background: 'var(--dsw-alias-button-primary-fill, #1f6feb)', color: 'var(--dsw-alias-label-primary-inverted, #fff)' }} onClick={() => void refresh()}>重新检查</button>}
           </div>
         </div>
@@ -200,7 +200,7 @@ export function WorkflowView({ sessionId: _sessionId, session }: WorkflowViewPro
           <h2 style={{ margin: 0, fontSize: 16 }}>{project.title}</h2>
           <span style={{ ...mutedTextStyle, fontSize: 11 }}>{project.nodes.length} 个节点 · {project.connections.length} 条连接</span>
         </div>
-        <p style={{ ...mutedTextStyle, margin: 0, fontSize: 12, lineHeight: 1.6 }}>这里显示 Iris 当前可见 Workflow 的摘要；修改和生成由 DSH 的 Iris tools 通过同一份 Browser Authority 执行。</p>
+        <p style={{ ...mutedTextStyle, margin: 0, fontSize: 12, lineHeight: 1.6 }}>这里显示 Flovart 当前可见 Workflow 的摘要；修改和生成由 DSH 的 Flovart tools 通过同一份 Browser Authority 执行。</p>
         <div style={{ display: 'grid', gap: 8 }} aria-label="当前 Workflow 节点">
           {project.nodes.length === 0 && <span style={{ ...mutedTextStyle, fontSize: 12 }}>当前 Workflow 还没有节点。</span>}
           {project.nodes.map(node => (

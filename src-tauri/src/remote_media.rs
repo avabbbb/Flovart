@@ -116,7 +116,7 @@ pub async fn desktop_fetch_remote_media(url: String) -> Result<Response, String>
         .redirect(Policy::none())
         .connect_timeout(Duration::from_secs(15))
         .timeout(Duration::from_secs(120))
-        .user_agent(concat!("Iris/", env!("CARGO_PKG_VERSION")))
+        .user_agent(concat!("Flovart/", env!("CARGO_PKG_VERSION")))
         .build()
         .map_err(|error| format!("Could not initialize desktop media client: {error}"))?;
 

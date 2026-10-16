@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { within, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { FlovartAgentPanel } from '../components/agent/FlovartAgentPanel';
@@ -86,15 +86,18 @@ describe('Flovart Agent panel', () => {
     const project = { ...createWorkflowProject('空白项目'), id: 'project-blank', nodes: [] };
     render(<FlovartAgentPanel project={project} onActivityChange={vi.fn()} onOpenSettings={vi.fn()} />);
 
-    // Zero-node first-run: the browse deck renders above the composer.
-    expect(await screen.findByTestId('agent-browse-first')).toBeInTheDocument();
-    expect(screen.getByText('赛博废土武侠短片')).toBeInTheDocument();
-
-    // Cold-open connection failure is classified as offline, not raw jargon.
+    // Cold-open connection failure is classified as offline, not raw jargon,
+    // and it is the one thing on screen: no deck stacked under it.
     const card = await screen.findByTestId('agent-setup-card');
     expect(card).toHaveTextContent('协作 Agent');
     expect(card).not.toHaveTextContent('spawn');
     expect(card).not.toHaveTextContent('仅桌面端');
+    expect(screen.queryByTestId('agent-browse-first')).not.toBeInTheDocument();
+
+    // Choosing to look around first reveals the browse deck (Recent/Templates).
+    fireEvent.click(within(card).getByRole('button', { name: /先逛逛|离线/ }));
+    expect(await screen.findByTestId('agent-browse-first')).toBeInTheDocument();
+    expect(screen.getByText('赛博废土武侠短片')).toBeInTheDocument();
   });
 
 
@@ -221,7 +224,7 @@ describe('Flovart Agent panel', () => {
     fireEvent.click(screen.getByRole('button', { name: '添加 VOX Skill' }));
     expect(await screen.findByRole('button', { name: '移除 VOX Skill' })).toBeInTheDocument();
 
-    fireEvent.change(screen.getByPlaceholderText('告诉 Iris Agent 你想制作什么'), {
+    fireEvent.change(screen.getByPlaceholderText('告诉 Flovart Agent 你想制作什么'), {
       target: { value: '制作一个 30 秒中文剪纸解释视频' },
     });
     fireEvent.click(screen.getByRole('button', { name: '发送' }));
@@ -251,7 +254,7 @@ describe('Flovart Agent panel', () => {
       return new Response(JSON.stringify({ sessionId: 'session-ref', projectId: project.id, running: false, messages: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     }));
     render(<FlovartAgentPanel project={project} onActivityChange={vi.fn()} onOpenSettings={vi.fn()} onFocusNode={onFocusNode} assetLibrary={{ folders: [], items: [{ id: 'asset-1', name: '角色定帧', folderIds: [], tags: [], dataUrl: 'data:image/png;base64,AA==', mimeType: 'image/png', width: 512, height: 512, createdAt: 1 }] }} />);
-    const input = await screen.findByPlaceholderText('告诉 Iris Agent 你想制作什么');
+    const input = await screen.findByPlaceholderText('告诉 Flovart Agent 你想制作什么');
     fireEvent.change(input, { target: { value: '参考 @主' } });
     fireEvent.click(screen.getByRole('option', { name: /主视频/ }));
     fireEvent.click(screen.getByRole('button', { name: '定位节点 主视频' }));
@@ -290,7 +293,7 @@ describe('Flovart Agent panel', () => {
     render(<FlovartAgentPanel project={project} onActivityChange={vi.fn()} onOpenSettings={vi.fn()} />);
     expect(await screen.findByRole('button', { name: '移除 VOX Skill' })).toBeInTheDocument();
     resolveSession();
-    await screen.findByPlaceholderText('告诉 Iris Agent 你想制作什么');
+    await screen.findByPlaceholderText('告诉 Flovart Agent 你想制作什么');
 
     expect(screen.getByRole('button', { name: '移除 VOX Skill' })).toBeInTheDocument();
     expect(screen.getByDisplayValue('从当前画布制作 VOX 短片')).toBeInTheDocument();

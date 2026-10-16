@@ -1,13 +1,14 @@
 # AGENTS.md
 
-本文件约束 Iris（原 Flovart）的 AI / 自动化开发。优先级：系统/开发者指令 > 用户当前明确要求 > 本文件 > 项目文档。用户已确认的新决定覆盖旧稿；历史文档不得反向改变当前产品方向。
+本文件约束 Flovart的 AI / 自动化开发。优先级：系统/开发者指令 > 用户当前明确要求 > 本文件 > 项目文档。用户已确认的新决定覆盖旧稿；历史文档不得反向改变当前产品方向。
 
-## 0. 品牌迁移规则
+## 0. 品牌规则
 
-- **对外品牌统一使用 Iris**：README、网站标题、宿主面板、用户文案、宣传和新截图不得继续把 Flovart 当作当前产品名。
-- **技术兼容标识暂时保留 `flovart`**：CLI 命令、npm/package 名、`.agents/skills/flovart/` 与镜像 Skill 路径、`tools/flovart/`、事件名、CSS/data attributes 等不得在没有迁移计划和兼容 alias 的情况下批量重命名。GitHub 仓库已正式改名为 `avabbbb/Iris`。
-- 看到旧文档中的 Flovart 时，先判断它是“品牌文案”还是“兼容标识”。品牌文案改为 Iris；兼容标识保持原样，除非当前任务明确包含迁移。
-- 仓库改名、CLI 改名、包 scope 改名属于独立 migration，不和普通 UI/文档 PR 混做。
+- **对外产品名称统一为 Flovart**：新 UI、标题、按钮、宿主面板、README 和当前文档不再引入 Iris 品牌。
+- CLI、Skill、package、环境变量和命令中已有的 `flovart` 保持不动。
+- 旧 `iris-*` 的数据库字段、协议字段、持久化 key、兼容 ID 与已存素材路径保持兼容，不做全局替换；纯展示、CSS 和新导出文件名可以清理。
+- 当前 canonical GitHub repository 经核验为 `avabbbb/Flovart`。仓库或协议迁移不得混入普通品牌清理。
+- 历史归档和更名前的视频可保留原始名称，引用时说明历史背景。
 
 ## 1. 开始前先确认当前事实
 
@@ -16,7 +17,7 @@
 2. 与任务相关的 current-truth 文档
 3. 真实代码与 `SUPPORT_MATRIX.md`
 
-产品与系统目标唯一由 `docs/design/flovart-native-effects.md` 定义。不要从 archive、旧 audit、release evidence 或 Git 历史推导当前需求。
+产品与系统目标由 `docs/design/00-overview.md`（总体设计）定义；所有交互遵守 `docs/design/01-interaction.md`（简单直接、不硬编码、不死锁）；模块细节见 `docs/design/1x-*.md`。不要从 archive、旧 audit、release evidence 或 Git 历史推导当前需求。
 
 会变化的 SDK、宿主 API、许可证、模型/Provider 能力必须按当前日期核验官方文档和真实源码。构建通过、mock 通过、manifest 存在都不等于真实宿主/账号已认证。
 
@@ -68,18 +69,18 @@ UI / Agent / Host entry
 
 ## 5. Creative host / native effect 规则
 
-宿主扩展只是 projection，不建立第二套 Workflow、Provider、任务或资产系统。共同产品边界以主设计 §3 / §5.3 为准；Resolve 实现还必须遵循 `integrations/studio/resolve/PRODUCT_UI_SPEC.md`。
+宿主扩展只是 projection，不建立第二套 Workflow、Provider、任务或资产系统。共同产品边界以 `docs/design/14-creative-hosts.md` 为准；Resolve 实现还必须遵循 `integrations/studio/resolve/PRODUCT_UI_SPEC.md`。
 
 共同硬边界：
 
-- **宿主轻面板**负责当前 selection → intent/reference → plan → generate → import；复杂编排打开 Iris Canvas。
-- **native effect / OFX**负责宿主参数、关键帧、固定版本预览与导出；render callback 不联网、不等待模型、不依赖 Agent/Iris 在线。
+- **宿主轻面板**负责当前 selection → intent/reference → plan → generate → import；复杂编排打开 Flovart Canvas。
+- **native effect / OFX**负责宿主参数、关键帧、固定版本预览与导出；render callback 不联网、不等待模型、不依赖 Agent/Flovart 在线。
 - 面板/Effect 默认新增结果，不静默覆盖当前素材；替换必须显式且可恢复。
 - UI 跟随宿主主题、密度、键盘/焦点和尺寸约束，不把完整 Web Canvas 缩进窄面板。
 
 Host-specific：
 
-- **DaVinci Resolve Studio 21.1 first**：Agent 宿主操作优先使用 Blackmagic native MCP；Iris Skill + legacy `flovart` CLI 提供生成与 Artifact。现有 Workflow Integration 只做轻面板 / fallback adapter，OFX 后置。不要创建第二套 Resolve MCP，也不要为每个 Scripting API 建 Flovart wrapper。
+- **DaVinci Resolve Studio 21.1 first**：Agent 宿主操作优先使用 Blackmagic native MCP；Flovart Skill + legacy `flovart` CLI 提供生成与 Artifact。现有 Workflow Integration 只做轻面板 / fallback adapter，OFX 后置。不要创建第二套 Resolve MCP，也不要为每个 Scripting API 建 Flovart wrapper。
 - **Resolve UI**：实现前先读 `integrations/studio/resolve/PRODUCT_UI_SPEC.md`，并重新打开 Blackmagic 当前 Edit / Cut / Media 官方页面核对视觉。面板必须是 Resolve-native-feeling contextual inspector，不是聊天页、后台 dashboard 或缩小版 Canvas。
 - **After Effects**：当前 CEP + C++ Effect SDK 工作保留为 Experimental，但暂停作为第一宿主 gate；不要继续扩张，除非当前 Resolve-first 切片明确需要共享修复。
 - **Photoshop / Premiere**：按其当期官方 UXP host API 和 manifest 约束实现，不把浏览器 API 支持度投射到 UXP。
@@ -95,7 +96,7 @@ Host-specific：
 - 持续任务显示真实状态，不能用动画掩盖未知提交、失败或 Provider 未响应。
 - 宿主面板优先单列、当前选择优先、一个主 CTA；高级设置折叠。完整历史/依赖/复杂 Workflow 回 Canvas。
 - Resolve P0 的唯一安全输出是 **Add to Media Pool**；P1 才允许 Add to new track，P2 才做 Replace/Commit。实现 Agent 不得为了“更像成品”跳过非破坏性阶段。
-- Resolve 外部 Agent 的聊天保留在 Codex/Claude 等原宿主；Iris panel 只显示 context / plan / task / candidate / confirmation。
+- Resolve 外部 Agent 的聊天保留在 Codex/Claude 等原宿主；Flovart panel 只显示 context / plan / task / candidate / confirmation。
 
 ## 7. 代码边界
 
@@ -109,6 +110,8 @@ Host-specific：
 ## 8. 验证与发布口径
 
 - 测试匹配改动风险：文档跑 docs/link checks；代码跑相关测试；宿主/原生效果进真实应用。
+- **普通开发 / PR 走快速通道**：本地 Agent 只跑与当前改动直接相关的一轮验证，不得在每次小改后重复全仓测试、10x 稳定性、完整 Benchmark、全平台打包或发布审计。若本地环境缺 SDK / 宿主 / 依赖，明确写 `NOT_RUN locally`，可把普通 PR 的确定性验证交给 GitHub Actions，而不是为了“先验全绿”反复卡住施工。
+- **重门禁只在该出现的阶段出现**：10x critical、完整 FlovartBench、依赖审计、CodeQL、Rust/sidecar 发布验证与全平台安装包属于 main / scheduled / manual / release qualification；普通 PR 不把这些当合并前置。Tracked secret audit、目标/revision/幂等、unknown-after-submit、不授权的破坏性/外部写入等真实安全边界仍然 fail-closed。
 - 真实支持状态只由 `SUPPORT_MATRIX.md` 升级；旧 RC 数字、旧截图和旧 build 不能证明当前版本。
 - Provider 认证需区分 Fake fixture 与真实账号、扣费、429、取消和 unknown-submit。
 - 不宣传未验证的实时生成、宿主 Stable 支持、完全离线、云同步、无缝 Agent 登录态迁移或跨平台等价性。
@@ -118,8 +121,8 @@ Host-specific：
 
 `docs/index.md` 定义 current truth。原则：
 
-- 主设计只保留一个；不要新增并列 CURRENT / TARGET / AUDIT / GOAL / HANDOFF 决策文档。
-- 产品设计变化直接更新主设计；Agent 专项更新 `agent-integration.md`；布局更新 `adaptive-layout.md`。
+- `docs/design/` 最多 10 份：总体设计、交互设计、每个模块一份、质量与治理。不要新增并列 CURRENT / TARGET / AUDIT / GOAL / HANDOFF 决策文档；超过 10 份先合并。
+- 产品变化更新 `00-overview.md`；交互与布局变化更新 `01-interaction.md`；模块变化更新对应模块文档；新增模块才新增模块文档。
 - `skills/flovart/` 是 canonical Skill package；`.agents/skills/flovart/`、`.claude/skills/flovart/` 等是兼容投影 / committed snapshot。不要反转 source-of-truth，也不要手工让这些投影漂移。
 - 新 proposal 必须明确 **PROPOSAL / REFERENCE**，被接受后蒸馏进 current truth，再删除或归档 proposal。
 - `todo.mdx` 只放未完成；已实现但需现实验证移到 `pending-test.mdx`；验证后再更新 features。

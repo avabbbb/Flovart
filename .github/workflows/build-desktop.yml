@@ -2,7 +2,7 @@
 #
 # 触发条件：
 #   1. 推送到 main          → 创建 Draft Prerelease（不自动公开）
-#   2. 推送 v* tag         → 出正式 Release  (stable 频道)
+#   2. 推送 v* tag         → 完整验证后发布（v0.* 为内测 Prerelease）
 #   3. workflow_dispatch   → 手动触发，默认只做 Draft dry-run
 #
 # 构建矩阵：Windows x64 / macOS Apple Silicon / macOS Intel / Linux x64
@@ -53,7 +53,7 @@ permissions:
 
 # 串行跑同一组的 job，避免 prerelease 标签 race condition
 concurrency:
-  group: 'desktop-build'
+  group: 'desktop-build-${{ github.ref }}'
   cancel-in-progress: false
 
 jobs:
@@ -117,6 +117,18 @@ jobs:
 
       - name: DSH plugin build
         run: npm --prefix dsh-plugin run build
+
+      - name: Build Tauri agent sidecar fixture
+        shell: pwsh
+        run: |
+          node scripts/build-agent-sidecar.mjs --target x86_64-pc-windows-msvc
+          $agent = 'src-tauri/binaries/flovart-agent-x86_64-pc-windows-msvc.exe'
+          if (-not (Test-Path -LiteralPath $agent -PathType Leaf)) {
+            throw "Agent sidecar was not produced: $agent"
+          }
+          if ((Get-Item -LiteralPath $agent).Length -le 0) {
+            throw "Agent sidecar is empty: $agent"
+          }
 
       - name: Rust tests
         run: cargo test --manifest-path src-tauri/Cargo.toml --all-targets
@@ -217,6 +229,12 @@ jobs:
           workspaces: src-tauri -> target
           shared-key: ${{ matrix.rust_target }}
 
+      - name: Configure ad-hoc macOS signing
+        if: startsWith(matrix.platform, 'macos-')
+        shell: bash
+        run: |
+          node --input-type=module -e "import fs from 'node:fs'; const p='src-tauri/tauri.conf.json'; const c=JSON.parse(fs.readFileSync(p,'utf8')); c.bundle.macOS={...c.bundle.macOS,signingIdentity:'-'}; fs.writeFileSync(p,JSON.stringify(c,null,2)+'\n');"
+
       - name: Install npm dependencies
         run: npm ci
 
@@ -293,21 +311,24 @@ jobs:
             {
               echo "is_tag=true"
               echo "tag_name=${GITHUB_REF_NAME}"
-              echo "release_name=Iris ${GITHUB_REF_NAME}"
+              echo "release_name=Flovart ${GITHUB_REF_NAME} (Closed Beta)"
               echo "release_body<<EOF"
-              echo "## Iris Stable Release / 正式版"
+              echo "## Flovart Release / 发行版"
               echo ""
               echo "**English:**"
-              echo "- Iris main app + flovart-host launcher (Chrome / Edge Native Messaging host)"
+              echo "- Flovart main app + flovart-host launcher (Chrome / Edge Native Messaging host)"
               echo "- Windows, macOS (Apple Silicon + Intel) and Linux installers with multi-language NSIS on Windows (EN / 简中 / 繁中 / 日 / 韩 / FR / DE / ES / IT / PT-BR / RU)"
-              echo "- Signed auto-update artifacts"
+              echo "- Signed updater artifacts; v0.x builds are prereleases, not stable updates"
+              echo "- Creative hosts: Experimental; paid-provider certification pending (see SUPPORT_MATRIX.md)"
+              echo "- macOS: ad-hoc signed, not notarized; Windows: no Authenticode signature"
               echo ""
               echo "**简体中文：**"
-              echo "- 包含 Iris 主程序 + flovart-host 启动器（Chrome / Edge 原生消息宿主）"
+              echo "- 包含 Flovart 主程序 + flovart-host 启动器（Chrome / Edge 原生消息宿主）"
               echo "- Windows、macOS（Apple Silicon + Intel）和 Linux 安装包，Windows NSIS 安装器支持 11 种语言（英 / 简中 / 繁中 / 日 / 韩 / 法 / 德 / 西 / 意 / 葡 / 俄）"
-              echo "- 已签名自动更新产物"
+              echo "- 更新产物已签名；v0.x 为内测预发布，不进入稳定自动更新频道"
+              echo "- 宿主集成 Experimental，付费 Provider 认证待完成；详见 SUPPORT_MATRIX.md"
               echo "EOF"
-              if [[ "${GITHUB_REF_NAME}" == *-* ]]; then
+              if [[ "${GITHUB_REF_NAME}" == *-* || "${GITHUB_REF_NAME}" == v0.* ]]; then
                 echo "prerelease=true"
               else
                 echo "prerelease=false"
@@ -318,18 +339,18 @@ jobs:
             {
               echo "is_tag=false"
               echo "tag_name=nightly-${GITHUB_RUN_NUMBER}-${GITHUB_SHA::7}"
-              echo "release_name=Iris Nightly v__VERSION__ (build #${GITHUB_RUN_NUMBER})"
+              echo "release_name=Flovart Nightly v__VERSION__ (build #${GITHUB_RUN_NUMBER})"
               echo "release_body<<EOF"
-              echo "## Iris Nightly Build / 预发布版"
+              echo "## Flovart Nightly Build / 预发布版"
               echo ""
               echo "**English:**"
-              echo "- Iris main app + flovart-host launcher"
+              echo "- Flovart main app + flovart-host launcher"
               echo "- Windows, macOS (Apple Silicon + Intel) and Linux installers"
               echo "- Multi-language NSIS installer (EN / 简中 / 繁中 / 日 / 韩 / FR / DE / ES / IT / PT-BR / RU)"
               echo "- This is a pre-release, may be unstable"
               echo ""
               echo "**简体中文：**"
-              echo "- 包含 Iris 主程序 + flovart-host 启动器"
+              echo "- 包含 Flovart 主程序 + flovart-host 启动器"
               echo "- 提供 Windows、macOS（Apple Silicon + Intel）和 Linux 安装包"
               echo "- NSIS 安装器支持 11 种语言（英 / 简中 / 繁中 / 日 / 韩 / 法 / 德 / 西 / 意 / 葡 / 俄）"
               echo "- 这是预发布版本，可能不稳定"
@@ -484,8 +505,9 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          cp dist/release-artifacts/SHA256SUMS.txt "dist/release-artifacts/SHA256SUMS-${{ matrix.rust_target }}.txt"
           gh release upload "${{ steps.meta.outputs.tag_name }}" \
-            dist/release-artifacts/SHA256SUMS.txt \
+            dist/release-artifacts/SHA256SUMS-${{ matrix.rust_target }}.txt \
             dist/release-artifacts/flovart-${{ matrix.platform }}-sbom.spdx.json \
             --clobber
 
@@ -596,7 +618,11 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if [[ "${{ github.ref }}" == refs/tags/* ]]; then
-            gh release edit "${{ github.ref_name }}" --draft=false
+            if [[ "${{ github.ref_name }}" == v0.* || "${{ github.ref_name }}" == *-* ]]; then
+              gh release edit "${{ github.ref_name }}" --draft=false --prerelease --latest=false
+            else
+              gh release edit "${{ github.ref_name }}" --draft=false
+            fi
           else
             release_name="nightly-${{ github.run_number }}-${GITHUB_SHA::7}"
             gh release edit "$release_name" --draft=false --prerelease

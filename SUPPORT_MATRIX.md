@@ -1,4 +1,4 @@
-# Iris Support Matrix
+# Flovart Support Matrix
 
 这份矩阵是当前仓库证据的发布口径，并冻结 Closed Beta 范围：只有 `Beta`
 级别的集成是本次发布主推路径；`Experimental` 集成可用但未认证，不得在
@@ -10,7 +10,7 @@ onboarding 或宣传中呈现为与 Beta 路径同等就绪。`Stable` 只表示
 
 | Host / projection | Status | Evidence / boundary |
 | --- | --- | --- |
-| Codex CLI + Browser Workflow | Beta | 本次发布主推的 Agent 路径。Link/Lease focused tests、Chrome for Testing smoke 与 5 次连续真实 `codex exec`（v0.154.0）trial：Codex 读取 `.agents/skills/flovart/SKILL.md` 后经 CLI 驱动真实 Browser Workflow 完成 3 节点 + 2 顺序连接（`workflow.node.create-connected`，trial 3–7）。**脱敏证据已入库：`docs/evidence/release-candidate/CODEX_TRIAL_EVIDENCE.md`**；真实 Provider wire 进行中，公开安装首次启动 transcript 仍是 External Gate |
+| Codex CLI + Browser Workflow | Beta | 本次发布主推的 Agent 路径。Link/Lease focused tests、Chrome for Testing smoke 与 5 次连续真实 `codex exec`（v0.154.0）trial：Codex 读取 `.agents/skills/flovart/SKILL.md` 后经 CLI 驱动真实 Browser Workflow 完成 3 节点 + 2 顺序连接（`workflow.node.create-connected`，trial 3–7）。**脱敏证据已入库：`docs/archive/2026-10-07/evidence/release-candidate/CODEX_TRIAL_EVIDENCE.md`**；真实 Provider wire 进行中，公开安装首次启动 transcript 仍是 External Gate |
 | Claude Code CLI projection | Experimental | shared Skill/CLI surface；真实登录与公开安装态未认证 |
 | OpenCode CLI projection | Experimental | shared Skill/CLI surface；Host-specific tracer 未认证 |
 | DeepSeek Harness RC8 bundle/profile | Experimental | DSH build、service/tool tests、packed profile install 与 `--dump-config`；真实登录、可见 Browser Workflow tracer、service recovery 仍待认证 |
@@ -26,7 +26,7 @@ onboarding 或宣传中呈现为与 Beta 路径同等就绪。`Stable` 只表示
 | Photoshop UXP panel | Experimental | `npm run studio:build`、manifest v4、shared `CreativeHostAdapter` 与 layer contract/mock tests；真实 UXP layer → I2I → new layer 是 External Gate |
 | Premiere Pro UXP panel | Experimental | `npm run studio:build`、manifest v5 / 25.6+、clip/frame contract/mock tests；真实 UXP → artifact → Project import 是 External Gate |
 | After Effects | Experimental | 当前轻面板为 `dist-studio/after-effects` CEP/ExtendScript bridge；planned native effect 为独立 C++ Effect SDK 路径。不得假设 AE 已有可发布 UXP host；两条路径均需独立真实宿主认证 |
-| DaVinci Resolve Studio 21.1 | Experimental | **当前第一宿主方向**：优先验证 Blackmagic native MCP + Iris Skill / legacy `flovart` CLI；`dist-studio/resolve` Workflow Integration 降为轻面板 / measured fallback，planned OFX 独立后置。真实 native MCP 连接、selection → durable artifact → Media Pool tracer 仍是 External Gate |
+| DaVinci Resolve Studio 21.1 | Experimental | **当前第一宿主方向**：优先验证 Blackmagic native MCP + Flovart Skill / legacy `flovart` CLI；`dist-studio/resolve` Workflow Integration 降为轻面板 / measured fallback，planned OFX 独立后置。真实 native MCP 连接、selection → durable artifact → Media Pool tracer 仍是 External Gate |
 
 ## Native effects and deeper Agent integration
 
@@ -34,13 +34,13 @@ The following are design targets, not capabilities certified by the panel or MCP
 
 | Capability | Status | Required evidence |
 | --- | --- | --- |
-| AE / PR native Iris effects | Planned | Real effect controls, fixed media versions, keyframes, saved project and offline export |
+| AE / PR native Flovart effects | Planned | Real effect controls, fixed media versions, keyframes, saved project and offline export |
 | Photoshop native filter | Planned | Real filter integration, selection, editable parameters and project reopening |
 | Resolve OpenFX effect | Planned / deferred | 仅在 MCP-first 真实流程证明需要 fixed-version effect parameters / keyframes / offline effect rendering 后启动；需独立 Real OFX evidence |
 | Native-effect generation without an open Workflow | Proposed | Confirm scope; verify headless service, Provider parity and persistent assets |
 | Internal Codex / WorkBuddy task entry | Planned | Official integration, real account, visible conversation, tools, approval and recovery |
 
-Scope and proposed benchmarks are defined in the [main design](docs/design/flovart-native-effects.md).
+Scope and proposed benchmarks are defined in the [main design](docs/design/00-overview.md).
 
 ## Runtime and provider paths
 

@@ -106,7 +106,7 @@ export function createWorkspaceProxyHandler(
 ): (request: IncomingMessage, response: ServerResponse) => Promise<void> {
   return async (request, response) => {
     if (!config.workspaceToken) {
-      json(response, 503, { ok: false, error: { message: 'Workspace Operator 尚未由 Iris Harness 启动器准备。' } })
+      json(response, 503, { ok: false, error: { message: 'Workspace Operator 尚未由 Flovart Harness 启动器准备。' } })
       return
     }
     let target: URL | null

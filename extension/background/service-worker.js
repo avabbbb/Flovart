@@ -23,17 +23,17 @@ chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.removeAll(() => {
     chrome.contextMenus.create({
       id: MENU_IMPORT,
-      title: '添加图片到 Iris',
+      title: '添加图片到 Flovart',
       contexts: ['image'],
     });
     chrome.contextMenus.create({
       id: MENU_IMPORT_VIDEO,
-      title: '添加视频到 Iris',
+      title: '添加视频到 Flovart',
       contexts: ['video'],
     });
     chrome.contextMenus.create({
       id: MENU_OPEN,
-      title: '连接 / 打开 Iris Desktop',
+      title: '连接 / 打开 Flovart Desktop',
       contexts: ['page', 'image', 'video', 'selection'],
     });
   });
@@ -56,13 +56,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 });
 
 async function connectDesktop() {
-  await setBridgeStatus('connecting', '正在连接 Iris Desktop…');
+  await setBridgeStatus('connecting', '正在连接 Flovart Desktop…');
   let session;
   try {
     session = new NativeSession();
     const pairing = nativeResult(await requestPairing(session, ['browser.import.image']));
     if (pairing.status === 'rejected') throw new Error('Desktop 已拒绝此扩展连接');
-    await setBridgeStatus('connected', 'Iris Desktop 已连接');
+    await setBridgeStatus('connected', 'Flovart Desktop 已连接');
     return pairing;
   } catch (error) {
     await setBridgeStatus('error', userFacingError(error));
@@ -164,10 +164,10 @@ function formatBytes(bytes) {
 function userFacingError(error) {
   const text = errorMessage(error);
   if (/拒绝|rejected/i.test(text)) {
-    return `${text}。请在 Iris Desktop 的首次连接弹窗中点击“允许”。`;
+    return `${text}。请在 Flovart Desktop 的首次连接弹窗中点击“允许”。`;
   }
   if (/Native Host|Host 已断开|响应超时|No such native messenger|未找到|无法连接/i.test(text)) {
-    return `${text}。请先启动 Iris Desktop（首次会自动注册 Native Host），或手动执行 extension/register-native-host.ps1。`;
+    return `${text}。请先启动 Flovart Desktop（首次会自动注册 Native Host），或手动执行 extension/register-native-host.ps1。`;
   }
   return text;
 }

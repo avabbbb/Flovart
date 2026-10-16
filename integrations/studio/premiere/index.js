@@ -6,7 +6,7 @@
     importArtifact: window.__FLOVART_PREMIERE_IMPORT_ARTIFACT__,
   });
   const openCanvas = () => {
-    if (!window.__FLOVART_OPEN_CANVAS__) throw new Error('请连接 Iris 后打开画布。');
+    if (!window.__FLOVART_OPEN_CANVAS__) throw new Error('请连接 Flovart 后打开画布。');
     return window.__FLOVART_OPEN_CANVAS__();
   };
   const getController = () => window.__FLOVART_STUDIO_CONTROLLER__ || null;
@@ -15,7 +15,7 @@
     if (id === 'flovartGenerateFromSelection') {
       const controller = getController();
       const prompt = (window.__FLOVART_COMMAND_PROMPT__ || '延续当前素材的风格与剪辑节奏，生成一个新素材箱片段。').trim();
-      if (!controller) throw new Error('请连接 Iris 后再使用当前选择生成。');
+      if (!controller) throw new Error('请连接 Flovart 后再使用当前选择生成。');
       return controller.generate(prompt, { kind: 'project' });
     }
     return undefined;

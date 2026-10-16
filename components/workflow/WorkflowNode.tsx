@@ -1,4 +1,4 @@
-import { Camera, Check, ChevronsDown, Clapperboard, FileText, Image as ImageIcon, Music2, Pause, Pencil, Play, Plus, Sparkles, Star, Upload, Video, Volume2, VolumeX, X } from 'lucide-react';
+import { Bot, Camera, Check, ChevronsDown, Clapperboard, FileText, Image as ImageIcon, Music2, Pause, Pencil, Play, Plus, RefreshCw, Sparkles, Star, Upload, Video, Volume2, VolumeX, X } from 'lucide-react';
 import { Component, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import { motion } from 'motion/react';
 import { WorkflowConfigPanel } from './WorkflowConfigPanel';
@@ -7,6 +7,9 @@ import { buildCssFilter } from '../ImageFilterPanel';
 import { useWorkflowMediaUrl } from './media';
 import { getWorkflowNodePlugin, type WorkflowNodePluginContext, type WorkflowNodePluginDefinition } from './nodePluginSdk';
 import type { WorkflowNode as WorkflowNodeData } from './types';
+import { listWorkflowOperationVersions } from './operations';
+import type { WorkflowNodeRunInfo, WorkflowStaleReason } from './runState';
+import type { WorkflowNodePresence } from './presence';
 
 function WorkflowPluginSurface({ plugin, pluginContext }: { plugin: WorkflowNodePluginDefinition; pluginContext: WorkflowNodePluginContext }) {
   return <>
@@ -68,6 +71,9 @@ export function WorkflowNode({
   renameSignal,
   onNeedPoster,
   pluginContext,
+  runState,
+  onSelectTake,
+  presence,
 }: {
   node: WorkflowNodeData;
   selected: boolean;
@@ -103,6 +109,12 @@ export function WorkflowNode({
   /** 视频缺少封面时通知画布按需补齐（由画布持有请求，避免节点卸载后遗留缓存）。 */
   onNeedPoster?: () => void;
   pluginContext?: WorkflowNodePluginContext;
+  /** 派生运行状态（deriveWorkflowRunStates）；只用于显示，不改变节点数据。 */
+  runState?: WorkflowNodeRunInfo;
+  /** 明确选择 Operation 的某个版本（Take）。 */
+  onSelectTake?: (takeId: string) => void;
+  /** 最近一次改动来自 Agent / CLI / 面板时的在场标记（deriveWorkflowPresence）。 */
+  presence?: WorkflowNodePresence;
 }) {
   const status = node.metadata.status || 'idle';
   const progress = Math.max(0, Math.min(100, Math.round(node.metadata.progress || 0)));
@@ -275,6 +287,9 @@ export function WorkflowNode({
         <span className="workflow-handle__plus" aria-hidden="true"><Plus size={12} strokeWidth={2.5} /></span>
       </button>
       {status === 'error' && <span className="workflow-node__error-badge" title={node.metadata.error}>!</span>}
+      {runState?.state === 'stale' && <WorkflowStaleBadge reason={runState.reason} language={language} />}
+      {presence && <WorkflowPresenceChip presence={presence} language={language} />}
+      {node.metadata.hostSend && <WorkflowHostSendChip status={node.metadata.hostSend.status} host={node.metadata.hostSend.host} language={language} />}
       {batchCount && batchCount > 1 && (
         <div className="workflow-node__batch-actions" data-workflow-overlay>
           {onCollapseBatch && <button type="button" title="收起结果" onPointerDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); onCollapseBatch(); }}><ChevronsDown size={13} />{batchCount}张</button>}
@@ -409,7 +424,7 @@ export function WorkflowNode({
           <WorkflowConfigPanel node={node} onChange={onChangeMetadata} onRun={onRun} />
         )}
         {node.type === 'script' && <ScriptNodeCard node={node} />}
-        {node.type === 'operation' && <OperationNodeCard node={node} onRun={onRun} />}
+        {node.type === 'operation' && <OperationNodeCard node={node} onRun={onRun} onSelectTake={onSelectTake} language={language} />}
           </>}
         {mediaDetails && <span className="workflow-node__media-details">{mediaDetails}</span>}
         {status === 'loading' && (
@@ -467,7 +482,72 @@ export function WorkflowNode({
   );
 }
 
-function OperationNodeCard({ node, onRun }: { node: WorkflowNodeData; onRun: () => void }) {
+const RUN_STATE_COPY = {
+  en: {
+    stale: 'Stale',
+    reasons: { 'recipe-edited': 'Settings changed since this result. Run again to update.', 'upstream-stale': 'An upstream node is out of date.', 'upstream-newer': 'An upstream result is newer than this one.' },
+    versions: 'Versions', newer: 'New version ready. Your selection is kept.', selectVersion: (label: string) => `Select ${label}`, inPlace: 'Earlier results were replaced in place',
+  },
+  zho: {
+    stale: '需重跑',
+    reasons: { 'recipe-edited': '这个结果之后配置已修改，重新运行即可更新。', 'upstream-stale': '上游节点已过期。', 'upstream-newer': '上游结果比这个结果更新。' },
+    versions: '版本', newer: '新版本已到，你的选择保持不变。', selectVersion: (label: string) => `选择 ${label}`, inPlace: '早期结果已原位覆盖',
+  },
+} as const;
+
+const PRESENCE_COPY = {
+  en: { actors: { agent: 'Agent', cli: 'CLI', operator: 'Host panel' }, edited: (actor: string, intent: string, revision: number) => `${actor} changed this at rev ${revision}${intent ? `: ${intent}` : ''}` },
+  zho: { actors: { agent: 'Agent', cli: 'CLI', operator: '宿主面板' }, edited: (actor: string, intent: string, revision: number) => `${actor} 在 rev ${revision} 修改了这里${intent ? `：${intent}` : ''}` },
+} as const;
+
+function WorkflowPresenceChip({ presence, language }: { presence: WorkflowNodePresence; language: 'en' | 'zho' }) {
+  const copy = PRESENCE_COPY[language];
+  const actor = copy.actors[presence.actor];
+  const title = copy.edited(actor, presence.intent, presence.revision);
+  return <span className={`workflow-node__presence workflow-node__presence--${presence.actor}`} data-testid="workflow-node-presence" title={title} aria-label={title}><Bot size={10} aria-hidden="true" />{actor}</span>;
+}
+
+const HOST_SEND_COPY = {
+  en: { requested: (host: string) => `Sent to ${host} · awaiting confirm`, imported: () => 'In Media Pool', rejected: () => 'Host rejected', unknown: () => 'Check Media Pool' },
+  zho: { requested: (host: string) => `已发往 ${host} · 待确认`, imported: () => '已在 Media Pool', rejected: () => '宿主拒绝', unknown: () => '请检查 Media Pool' },
+} as const;
+
+function WorkflowHostSendChip({ status, host, language }: { status: 'requested' | 'imported' | 'rejected' | 'unknown'; host: string; language: 'en' | 'zho' }) {
+  const label = HOST_SEND_COPY[language][status](host === 'resolve' ? 'Resolve' : host);
+  return <span className={`workflow-node__host-send workflow-node__host-send--${status}`} data-testid="workflow-node-host-send" role="status">{label}</span>;
+}
+
+function WorkflowStaleBadge({ reason, language }: { reason?: WorkflowStaleReason; language: 'en' | 'zho' }) {
+  const copy = RUN_STATE_COPY[language];
+  const title = reason ? copy.reasons[reason] : copy.stale;
+  return <span className="workflow-node__stale-badge" data-testid="workflow-node-stale" role="status" title={title} aria-label={`${copy.stale}: ${title}`}><RefreshCw size={10} aria-hidden="true" />{copy.stale}</span>;
+}
+
+function OperationVersionStrip({ node, onSelectTake, language }: { node: WorkflowNodeData; onSelectTake?: (takeId: string) => void; language: 'en' | 'zho' }) {
+  const versions = listWorkflowOperationVersions(node);
+  if (versions.length < 2) return null;
+  const copy = RUN_STATE_COPY[language];
+  const newerWaiting = versions.some(version => version.latest && !version.selected);
+  return (
+    <div className="workflow-operation-card__versions" data-testid="workflow-operation-versions" data-workflow-overlay role="group" aria-label={copy.versions}>
+      {versions.map(version => (
+        <button
+          key={version.takeId}
+          type="button"
+          className={version.selected ? 'is-selected' : undefined}
+          aria-pressed={version.selected}
+          disabled={!version.selectable || !onSelectTake}
+          title={version.selectable ? copy.selectVersion(version.label) : copy.inPlace}
+          onPointerDown={event => event.stopPropagation()}
+          onClick={event => { event.stopPropagation(); if (version.selectable) onSelectTake?.(version.takeId); }}
+        >{version.label}</button>
+      ))}
+      {newerWaiting && <span className="workflow-operation-card__newer" role="status">{copy.newer}</span>}
+    </div>
+  );
+}
+
+function OperationNodeCard({ node, onRun, onSelectTake, language = 'zho' }: { node: WorkflowNodeData; onRun: () => void; onSelectTake?: (takeId: string) => void; language?: 'en' | 'zho' }) {
   // 单张生成：结果媒体原位写在 operation 节点 metadata 上（storageKey/href），显示结果图。
   // Hook 必须无条件调用（提前 return 会改变 Hook 数量），operation 判断放在其后。
   const resultMedia = useWorkflowMediaUrl(node.metadata.storageKey, node.metadata.href);
@@ -487,7 +567,9 @@ function OperationNodeCard({ node, onRun }: { node: WorkflowNodeData; onRun: () 
           ? <video src={resultMedia.url} muted playsInline loop style={{ width: '100%', maxHeight: 260, objectFit: 'contain' }} data-workflow-media-preview />
           : <img src={resultMedia.url} alt={`${node.title} 生成结果`} draggable={false} loading="lazy" data-workflow-media-preview style={{ width: '100%', maxHeight: 260, objectFit: 'contain' }} />}
         <div className="workflow-operation-card__row"><strong>{parameterLabel}</strong><span>{statusLabel}</span></div>
-        <div className="workflow-operation-card__footer">
+        <OperationVersionStrip node={node} onSelectTake={onSelectTake} language={language} />
+        <OperationVersionStrip node={node} onSelectTake={onSelectTake} language={language} />
+      <div className="workflow-operation-card__footer">
           <span>{operation.recipe.inputBindings.length} 输入 · {operation.takes.length} Take</span>
           <button type="button" data-workflow-overlay onPointerDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); onRun(); }} disabled={node.metadata.status === 'loading'}>
             <Play size={11} fill="currentColor" />{latestTake?.status === 'error' ? '重试' : '运行'}
@@ -500,6 +582,7 @@ function OperationNodeCard({ node, onRun }: { node: WorkflowNodeData; onRun: () 
     <div className="workflow-operation-card" data-testid="workflow-operation-card">
       <div className="workflow-operation-card__row"><strong>{parameterLabel}</strong><span>{statusLabel}</span></div>
       <p title={operation.recipe.promptDocument.text}>{operation.recipe.promptDocument.text || '无文本 Prompt · 参数型操作'}</p>
+      <OperationVersionStrip node={node} onSelectTake={onSelectTake} language={language} />
       <div className="workflow-operation-card__footer">
         <span>{operation.recipe.inputBindings.length} 输入 · {operation.takes.length} Take</span>
         <button type="button" data-workflow-overlay onPointerDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); onRun(); }} disabled={node.metadata.status === 'loading'}>

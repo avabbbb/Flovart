@@ -437,7 +437,7 @@ impl ProductionRuntime {
                         .ok_or_else(|| {
                             RuntimeError::new(
                                 "UNKNOWN_COMMAND",
-                                format!("Unknown Iris command: {command}"),
+                                format!("Unknown Flovart command: {command}"),
                             )
                         }),
                     None => serde_json::to_value(&self.registry).map_err(|error| {
@@ -1185,7 +1185,7 @@ impl ProductionRuntime {
         if !self.registry.commands.contains_key(command) {
             return Err(RuntimeError::new(
                 "UNKNOWN_COMMAND",
-                format!("Unknown Iris command: {command}"),
+                format!("Unknown Flovart command: {command}"),
             ));
         }
         Ok(())

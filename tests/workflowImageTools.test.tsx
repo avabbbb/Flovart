@@ -10,6 +10,12 @@ import { workflowMediaStorage } from '../components/workflow/storage';
 import type { WorkflowProject } from '../components/workflow/types';
 import * as imageToolService from '../services/workflowImageOperations';
 
+function overflowAction(name: string) {
+  const more = screen.queryAllByRole('button', { name: '更多' }).find(button => button.getAttribute('aria-expanded') !== 'true');
+  if (more) fireEvent.click(more);
+  return screen.getByRole('menuitem', { name });
+}
+
 const image = createWorkflowNode('image', 'image', { x: 0, y: 0 }, { href: 'data:image/png;base64,AA==', mimeType: 'image/png', filters: { brightness: 120 } });
 
 afterEach(async () => {
@@ -116,7 +122,7 @@ describe('workflow image tools UI', () => {
 
   it('previews filters on the canvas, confirms one history entry, and restores them on cancel', async () => {
     render(<ImageHarness initial={imageProject()} />);
-    fireEvent.click(screen.getByRole('button', { name: '图片滤镜' }));
+    fireEvent.click(overflowAction('图片滤镜'));
     fireEvent.change(document.querySelector('.image-filter-panel input[type="range"]')!, { target: { value: '135' } });
     await waitFor(() => expect(screen.getByRole('img', { name: '图片' })).toHaveStyle({ filter: 'brightness(1.35)' }));
     expect(screen.getByRole('button', { name: '撤销' })).toBeDisabled();
@@ -125,7 +131,7 @@ describe('workflow image tools UI', () => {
     fireEvent.click(screen.getByRole('button', { name: '撤销' }));
     expect(screen.getByRole('img', { name: '图片' }).style.filter).toBe('');
 
-    fireEvent.click(screen.getByRole('button', { name: '图片滤镜' }));
+    fireEvent.click(overflowAction('图片滤镜'));
     fireEvent.change(document.querySelector('.image-filter-panel input[type="range"]')!, { target: { value: '145' } });
     fireEvent.click(document.querySelector('.image-filter-panel button')!);
     await waitFor(() => expect(screen.getByRole('img', { name: '图片' }).style.filter).toBe(''));
@@ -141,7 +147,7 @@ describe('workflow image tools UI', () => {
     vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({ drawImage: vi.fn() } as any);
     vi.spyOn(HTMLCanvasElement.prototype, 'toBlob').mockImplementation(callback => callback(new Blob(['crop'], { type: 'image/png' })));
     render(<ImageHarness initial={imageProject()} />);
-    fireEvent.click(screen.getByRole('button', { name: '裁剪图片' }));
+    fireEvent.click(overflowAction('裁剪图片'));
     fireEvent.click(screen.getByRole('button', { name: '应用裁剪' }));
     const state = screen.getByTestId('image-harness-state');
     await waitFor(() => expect(state).toHaveAttribute('data-connection-count', '2'));
@@ -167,7 +173,7 @@ describe('workflow image tools UI', () => {
     const projectA = imageProject();
     const projectB = { ...imageProject(), id: 'other-project', nodes: [], selectedNodeIds: [] };
     const view = render(<WorkflowGenerationCapabilitiesProvider><InfiniteWorkflow project={projectA} updateProject={vi.fn()} onRunNode={vi.fn()} /></WorkflowGenerationCapabilitiesProvider>);
-    fireEvent.click(screen.getByRole('button', { name: '移除背景' }));
+    fireEvent.click(overflowAction('移除背景'));
     await waitFor(() => expect(imageToolService.runWorkflowRemoveBackgroundOperation).toHaveBeenCalled());
     view.rerender(<WorkflowGenerationCapabilitiesProvider><InfiniteWorkflow project={projectB} updateProject={vi.fn()} onRunNode={vi.fn()} /></WorkflowGenerationCapabilitiesProvider>);
     finish({ status: 'stale', project: projectB });
@@ -185,10 +191,10 @@ describe('workflow image tools UI', () => {
     const project = { ...imageProject(), nodes: [imageNode('image-a', 0), imageNode('image-b', 440)], selectedNodeIds: ['image-a'] };
     render(<ImageHarness initial={project} />);
 
-    fireEvent.click(screen.getByRole('button', { name: '移除背景' }));
+    fireEvent.click(overflowAction('移除背景'));
     fireEvent.pointerDown(document.querySelector('[data-workflow-node-id="image-b"]')!, { button: 0, pointerId: 2, clientX: 520, clientY: 120 });
     fireEvent.pointerUp(window, { pointerId: 2, clientX: 520, clientY: 120 });
-    const filterButton = await screen.findByRole('button', { name: '图片滤镜' });
+    const filterButton = (await screen.findAllByRole('button', { name: '更多' }), overflowAction('图片滤镜'));
     expect(filterButton).toBeDisabled();
     fireEvent.click(filterButton);
     expect(screen.queryByText('图片调色')).not.toBeInTheDocument();
@@ -212,17 +218,17 @@ describe('workflow image tools UI', () => {
     const projectA = { ...imageProject(), id: 'project-a', nodes: [imageNode('image-a', 0)], selectedNodeIds: ['image-a'] };
     const projectB = { ...imageProject(), id: 'project-b', nodes: [imageNode('image-b', 0)], selectedNodeIds: ['image-b'] };
     const view = render(<WorkflowGenerationCapabilitiesProvider><InfiniteWorkflow project={projectA} updateProject={vi.fn()} onRunNode={vi.fn()} /></WorkflowGenerationCapabilitiesProvider>);
-    fireEvent.click(screen.getByRole('button', { name: '移除背景' }));
+    fireEvent.click(overflowAction('移除背景'));
 
     view.rerender(<WorkflowGenerationCapabilitiesProvider><InfiniteWorkflow project={projectB} updateProject={vi.fn()} onRunNode={vi.fn()} /></WorkflowGenerationCapabilitiesProvider>);
-    fireEvent.click(screen.getByRole('button', { name: '移除背景' }));
+    fireEvent.click(overflowAction('移除背景'));
     expect(imageToolService.runWorkflowRemoveBackgroundOperation).toHaveBeenCalledTimes(2);
     await act(async () => {
       pending.get('project-a')?.({ status: 'stale', project: projectA });
       await Promise.resolve();
     });
 
-    const filterButton = screen.getByRole('button', { name: '图片滤镜' });
+    const filterButton = overflowAction('图片滤镜');
     expect(filterButton).toBeDisabled();
     fireEvent.click(filterButton);
     expect(screen.queryByText('图片调色')).not.toBeInTheDocument();

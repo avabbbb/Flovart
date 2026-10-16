@@ -5,6 +5,9 @@ import { getWorkflowOperationInputRoleForNodeType, validateWorkflowOperationInpu
 import { createWorkflowOperationInputBinding, updateWorkflowOperationFromMetadata, updateWorkflowOperationRecipe, workflowOperationInputConnections } from './operations';
 import type { WorkflowConnection, WorkflowNode, WorkflowNodeMetadata, WorkflowOp, WorkflowOperationInputBinding, WorkflowOperationInputRole, WorkflowSnapshot } from './types';
 
+/** 只改这些字段时不触碰 Operation 配方（不置空 recipeHash，不制造 stale）。 */
+const RECIPE_NEUTRAL_METADATA_KEYS = new Set<string>(['hostSend']);
+
 export interface WorkflowOpResult {
   snapshot: WorkflowSnapshot;
   rejections: WorkflowOpRejection[];
@@ -254,7 +257,7 @@ function normalizeDocumentNode(node: WorkflowNode): WorkflowNode {
       const base = { ...current, ...op.patch, metadata: current.metadata };
       const updated = op.replaceMetadata
         ? { ...base, metadata: op.patch?.metadata || op.metadata || {} }
-        : current.metadata.operation && Object.keys(metadataPatch).length > 0
+        : current.metadata.operation && Object.keys(metadataPatch).some(key => !RECIPE_NEUTRAL_METADATA_KEYS.has(key))
         ? updateWorkflowOperationFromMetadata(base, metadataPatch)
         : { ...base, metadata: { ...current.metadata, ...metadataPatch } };
       snapshot = {

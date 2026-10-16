@@ -1,8 +1,8 @@
-# Iris — DaVinci Resolve Studio 21.1 host certification
+# Flovart — DaVinci Resolve Studio 21.1 host certification
 
 Status: `EXTERNAL_GATE`.
 
-Current first path: **Resolve native MCP → external Agent (for example, Codex) → Iris Skill + legacy `flovart` CLI → durable artifact → Resolve Media Pool**. Resolve owns its MCP control plane; Iris must not add a second Resolve MCP server. The Iris Resolve light panel is a human review/generation surface and a measured fallback adapter. The existing Workflow Integration Electron package remains Experimental. A future OFX effect is a separate later deliverable.
+Current first path: **Resolve native MCP → external Agent (for example, Codex) → Flovart Skill + legacy `flovart` CLI → durable artifact → Resolve Media Pool**. Resolve owns its MCP control plane; Flovart must not add a second Resolve MCP server. The Flovart Resolve light panel is a human review/generation surface and a measured fallback adapter. The existing Workflow Integration Electron package remains Experimental. A future OFX effect is a separate later deliverable.
 
 Product/UI contract: [resolve/PRODUCT_UI_SPEC.md](resolve/PRODUCT_UI_SPEC.md).
 
@@ -29,8 +29,8 @@ Record before any claim:
 - DaVinci Resolve **Studio 21.1** exact build;
 - license type/status sufficient for the native AI assistant integration;
 - external Agent name/version;
-- Iris commit;
-- Node/runtime versions needed by Iris;
+- Flovart commit;
+- Node/runtime versions needed by Flovart;
 - actual MCP tools exposed by this installed Resolve build.
 
 Do not infer Studio behavior from Free Resolve.
@@ -45,7 +45,7 @@ In real Resolve Studio 21.1:
 4. verify the Agent can query the running Resolve project;
 5. capture the exact MCP tool list and connection evidence.
 
-The exact tool names/count are not an Iris compatibility contract. Community reports describe a small API/doc-search + script-execution surface, but the installed build is authoritative.
+The exact tool names/count are not an Flovart compatibility contract. Community reports describe a small API/doc-search + script-execution surface, but the installed build is authoritative.
 
 ### Windows UTF-8 tracer
 
@@ -59,7 +59,7 @@ A community 21.1 test reports Python/CJK encoding failures on Windows and a `PYT
 
 ## 2. Read-only target identity
 
-Before Iris generation:
+Before Flovart generation:
 
 - read current project identity;
 - read current timeline identity if applicable;
@@ -76,7 +76,7 @@ First real-host success condition:
 ~~~text
 Resolve selection
   -> capture immutable target identity
-  -> Iris deterministic fixture artifact
+  -> Flovart deterministic fixture artifact
   -> durable local artifact file
   -> import to correct Resolve Media Pool
   -> original timeline unchanged
@@ -93,15 +93,15 @@ Required evidence:
 
 If the native MCP cannot perform the required import operation, document the exact missing capability before using the existing Workflow Integration bridge.
 
-## 4. Iris Resolve panel
+## 4. Flovart Resolve panel
 
 The panel must follow [PRODUCT_UI_SPEC.md](resolve/PRODUCT_UI_SPEC.md).
 
 ### Current worktree source status — not real-host evidence
 
-The current vertical worktree contains source changes for a compact Resolve-specific Inspector path: English/Chinese labels, Current Clip, Generate, References, Model, `Output: Media Pool`, Task, Candidate cards, and a persistent `Open in Iris` footer. The old Resolve `制作` / `本次记录` tab navigation is removed from that path. Candidate state distinguishes confirmed import, explicit rejection, and unknown outcome; an unknown outcome disables blind retry.
+The current vertical worktree contains source changes for a compact Resolve-specific Inspector path: English/Chinese labels, Current Clip, Generate, References, Model, `Output: Media Pool`, Task, Candidate cards, and a persistent `Open in Flovart` footer. The old Resolve `制作` / `本次记录` tab navigation is removed from that path. Candidate state distinguishes confirmed import, explicit rejection, and unknown outcome; an unknown outcome disables blind retry.
 
-The panel/controller source contains frozen-target and durable-candidate contracts, but they are not production-wired: `installStudioBrowserLink()` has no production caller, while `resolve/index.js` only reads `__FLOVART_STUDIO_CONTROLLER__`. The CLI/Browser JSON/SSE bridge cannot carry the bounded 64 MiB artifact payload (36 MiB request cap; roughly 27 MiB binary if base64 encoded). The `Open in Iris` footer also calls `onOpenCanvas()` without workflow/project/task/artifact/target context. Component tests and package output therefore do not establish a reachable panel generation/import path. The current local registry reports Resolve `21.0.00020`, and the Workflow Integration native module is missing from the checked install path, so this worktree has no real Resolve 21.1 panel evidence.
+The panel/controller source contains frozen-target and durable-candidate contracts, but they are not production-wired: `installStudioBrowserLink()` has no production caller, while `resolve/index.js` only reads `__FLOVART_STUDIO_CONTROLLER__`. The CLI/Browser JSON/SSE bridge cannot carry the bounded 64 MiB artifact payload (36 MiB request cap; roughly 27 MiB binary if base64 encoded). The `Open in Flovart` footer also calls `onOpenCanvas()` without workflow/project/task/artifact/target context. Component tests and package output therefore do not establish a reachable panel generation/import path. The current local registry reports Resolve `21.0.00020`, and the Workflow Integration native module is missing from the checked install path, so this worktree has no real Resolve 21.1 panel evidence.
 
 Required real-host states:
 
@@ -111,7 +111,7 @@ Required real-host states:
 - running generation;
 - candidate ready;
 - Resolve disconnected;
-- Iris disconnected;
+- Flovart disconnected;
 - failure/retry.
 
 Required UI evidence:
@@ -124,7 +124,7 @@ Required UI evidence:
 - no embedded Agent chat;
 - narrow/wide resizing without horizontal scrolling;
 - candidate primary action is `Add to Media Pool`;
-- `Open in Iris` carries workflow/project/task/artifact/target through an explicit context handoff; the current source does not pass these arguments.
+- `Open in Flovart` carries workflow/project/task/artifact/target through an explicit context handoff; the current source does not pass these arguments.
 
 Still to verify in the real host: the Media Pool option must render and remain selected at the target panel widths; selection/context and task target must match Resolve; the panel must load and recover correctly inside Studio 21.1. The former source mismatch between `{ kind: 'media-pool' }` and the shared select is fixed in the current worktree, but only source/component checks are available so far.
 
@@ -138,10 +138,10 @@ Do not assume that Resolve copies/owns the bytes. The previous implementation's 
 
 Verify:
 
-- imported media remains online after the Iris import call returns;
+- imported media remains online after the Flovart import call returns;
 - closing/reopening the project retains readable media;
 - restarting Resolve retains readable media;
-- Iris can map the Media Pool item to a durable artifact/version;
+- Flovart can map the Media Pool item to a durable artifact/version;
 - missing/moved artifact fails visibly.
 
 Do not delete or garbage-collect the durable source until real project close/reopen and Resolve restart tests establish whether and when it is safe. The actual Media Pool API binding and whether the project references or copies the file remain unverified.
@@ -156,7 +156,7 @@ Use one approved RunningHub route:
 selected clip/frame
   -> materialize reference
   -> one paid generation
-  -> durable Iris artifact
+  -> durable Flovart artifact
   -> Media Pool import
 ~~~
 
@@ -241,9 +241,9 @@ MCP, panel or Media Pool success does not certify OFX.
 
 ## Evidence wording
 
-Allowed after native MCP + Iris artifact handoff + P0 have all passed in the real host:
+Allowed after native MCP + Flovart artifact handoff + P0 have all passed in the real host:
 
-> Resolve Studio 21.1 native MCP and Iris durable-artifact-to-Media-Pool flow were real-host validated on the recorded environment.
+> Resolve Studio 21.1 native MCP and Flovart durable-artifact-to-Media-Pool flow were real-host validated on the recorded environment.
 
 Do not say:
 

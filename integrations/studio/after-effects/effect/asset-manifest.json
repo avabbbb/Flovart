@@ -1,8 +1,8 @@
 {
   "effect": {
-    "name": "Iris Scene Replace",
+    "name": "Flovart Scene Replace",
     "matchName": "FLOVART_SceneReplace",
-    "category": "Iris",
+    "category": "Flovart",
     "entryPoint": "EffectMain",
     "singleEntryPoint": "FlovartEffect.cpp",
     "product": "after-effects",

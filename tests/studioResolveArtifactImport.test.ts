@@ -184,7 +184,7 @@ describe('Resolve Media Pool import lifetime', () => {
 
   it('does not expose native module load paths through the Resolve context contract', async () => {
     const rootDir = temporaryRoot();
-    const nativePath = 'H:\\private\\Iris\\WorkflowIntegration.node';
+    const nativePath = 'H:\\private\\Flovart\\WorkflowIntegration.node';
     const { handlers } = createMainProcessHarness(
       rootDir,
       () => [],

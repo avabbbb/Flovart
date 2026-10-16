@@ -7,8 +7,11 @@ import { reversePromptStreamWithProvider, enhancePromptWithProvider } from './se
 import { useApiKeys, normalizeApiKeyEntry } from './hooks/useApiKeys';
 import { useToast } from './hooks/useToast';
 import ToastStack from './components/Toast';
+import { ConfirmHost } from './components/ConfirmHost';
+import { requestUiConfirm } from './services/uiConfirm';
 import { AppShell } from './components/AppShell';
 import { StudioTopMenu, type StudioMenuModel } from './components/studio/StudioTopMenu';
+import { StudioNavigationFrame } from './components/studio/StudioNavigationFrame';
 import { StudioRightDrawer } from './components/studio/StudioRightDrawer';
 import { StudioMediaBrowser } from './components/studio/StudioMediaBrowser';
 import { FlovartAgentPanel } from './components/agent/FlovartAgentPanel';
@@ -87,7 +90,9 @@ const App: React.FC = () => {
     // docked (reflow) on desktop, overlay on medium viewports.
     const mediumViewport = useMediaQuery('(max-width: 1023px)');
     const [desktopRightOpen, setDesktopRightOpen] = useState(() => {
-        try { return localStorage.getItem('workflowRightPanelOpenV2') !== 'false'; } catch { return true; }
+        // Closed by default so a first visit sees one clear canvas; the drawer
+        // opens from the Agent button and remembers the user's choice after that.
+        try { return localStorage.getItem('workflowRightPanelOpenV3') === 'true'; } catch { return false; }
     });
     const [mobileRightOpen, setMobileRightOpen] = useState(false);
     const rightOpen = mediumViewport ? mobileRightOpen : desktopRightOpen;
@@ -174,7 +179,7 @@ const App: React.FC = () => {
     }, [rightWidth]);
 
     useEffect(() => {
-        try { localStorage.setItem('workflowRightPanelOpenV2', String(desktopRightOpen)); } catch { /* storage may be unavailable */ }
+        try { localStorage.setItem('workflowRightPanelOpenV3', String(desktopRightOpen)); } catch { /* storage may be unavailable */ }
     }, [desktopRightOpen]);
 
     useEffect(() => {
@@ -235,9 +240,11 @@ const App: React.FC = () => {
     }, [language]);
 
 
-    const confirmRouteFallback = useCallback((resolution: RouteFallbackResolution) => window.confirm(
-        `主线路 ${resolution.unavailablePrimary.key.name || resolution.unavailablePrimary.key.provider} · ${resolution.unavailablePrimary.routeId || '未配置'} 当前不可用。\n\n是否改用 ${resolution.key.name || resolution.key.provider} · ${resolution.routeId}？`,
-    ), []);
+    const confirmRouteFallback = useCallback((resolution: RouteFallbackResolution) => requestUiConfirm({
+        title: '主线路暂不可用',
+        body: `${resolution.unavailablePrimary.key.name || resolution.unavailablePrimary.key.provider} · ${resolution.unavailablePrimary.routeId || '未配置'} 当前不可用，改用 ${resolution.key.name || resolution.key.provider} · ${resolution.routeId}？`,
+        confirmLabel: '改用备用线路',
+    }), []);
 
     const handleEnhancePrompt = useCallback(async (payload: { prompt: string; mode: PromptEnhanceMode; stylePreset?: string }) => {
         setIsEnhancingPrompt(true);
@@ -399,7 +406,16 @@ const App: React.FC = () => {
 
     const workflowExecutor = useMemo(() => createWorkflowExecutor({
         runNode: (command, context) => handleRunWorkflowNode(command, context),
-        stopNode: ({ projectId, nodeId }) => { cancelWorkflowGeneration(projectId, nodeId); },
+        stopNode: ({ projectId, nodeId }) => {
+            if (cancelWorkflowGeneration(projectId, nodeId)) return;
+            // No live request behind this node (interrupted run, lost tab, recovery
+            // gave up): Stop must still free it, never leave it spinning.
+            const latest = useWorkflowStore.getState().projects.find(item => item.id === projectId);
+            if (!latest?.nodes.some(item => item.id === nodeId && item.metadata.status === 'loading')) return;
+            useWorkflowStore.getState().updateProject(projectId, {
+                nodes: latest.nodes.map(item => item.id === nodeId ? { ...item, metadata: { ...item.metadata, status: 'idle', error: undefined, progress: undefined, generationRequestId: undefined, generationStartedAt: undefined, generationMessage: undefined } } : item),
+            });
+        },
     }), [handleRunWorkflowNode]);
     useEffect(() => {
         if (!apiKeysLoaded || !activeWorkflowProjectId) return;
@@ -466,14 +482,20 @@ const App: React.FC = () => {
         if (!node) return;
         const capabilityId = node.metadata.operation?.capabilityId;
         const capability = capabilityId ? getWorkflowOperationCapability(capabilityId) : undefined;
-        if (requiresExternalGenerationGate(node, capability)) {
-            const details = getGenerationGateDetails(node, capability, userApiKeys);
-            if (!window.confirm(buildGenerationGateSummary(details))) {
-                toast.show('已取消生成。', 'info');
-                return;
-            }
+        const run = () => { void workflowExecutor.runNode({ projectId, nodeId, ...(promptIntent ? { promptIntent } : {}) }, { surface: 'ui' }); };
+        if (!requiresExternalGenerationGate(node, capability)) { run(); return; }
+        if (!userApiKeys.length) {
+            toast.show('还没有可用的 AI 服务。在设置 → AI 服务里添加一个 API Key 后再生成。', 'warning');
+            return;
         }
-        void workflowExecutor.runNode({ projectId, nodeId, ...(promptIntent ? { promptIntent } : {}) }, { surface: 'ui' });
+        // Non-blocking: the canvas stays usable while the user decides, and an
+        // unanswered request cancels itself instead of holding the node.
+        const details = getGenerationGateDetails(node, capability, userApiKeys);
+        void requestUiConfirm({
+            title: details.mediaType === 'video' ? '开始生成视频？' : '开始生成图片？',
+            body: buildGenerationGateSummary(details),
+            confirmLabel: '生成',
+        }).then(approved => { if (approved) run(); });
     }, [toast, userApiKeys, workflowExecutor]);
 
     const handleSaveWorkflowMedia = useCallback(async (projectId: string, nodeId: string) => {
@@ -565,11 +587,16 @@ const App: React.FC = () => {
         toast.show('已保存到我的素材。', 'success');
     }, [toast]);
 
-    const studioRuntimeStatus = useMemo(() => ({
+    const hasAiService = userApiKeys.length > 0;
+    const studioRuntimeStatus = useMemo(() => hasAiService ? {
         tone: 'ready' as const,
-        label: language === 'zho' ? '制作台就绪' : 'Production ready',
-        detail: language === 'zho' ? '可选择 Codex、WorkBuddy 或 DeepSeek Harness 作为 Agent 指挥入口' : 'Pick Codex, WorkBuddy, or DeepSeek Harness as your agent director',
-    }), [language]);
+        label: language === 'zho' ? '就绪' : 'Ready',
+        detail: language === 'zho' ? 'AI 服务已配置，可以生成。' : 'AI service configured — ready to generate.',
+    } : {
+        tone: 'warning' as const,
+        label: language === 'zho' ? 'AI 服务未配置' : 'No AI service',
+        detail: language === 'zho' ? '点这里在设置里添加一个 API Key，之后就能生成。' : 'Click to add an API key in Settings, then you can generate.',
+    }, [hasAiService, language]);
     const studioMenuModel: StudioMenuModel = useMemo(() => ({
         mode: activeView,
         title: canvasView === 'table' ? 'Table' : canvasView === 'agent' ? 'Agent' : activeWorkflowTitle,
@@ -733,7 +760,20 @@ const App: React.FC = () => {
     return <AppShell
         themeBackground={themePalette.appBackground}
         topBar={<StudioTopMenu model={studioMenuModel} />}
-        main={main}
+        main={(
+            <StudioNavigationFrame
+                language={language}
+                canvasView={canvasView}
+                projects={workflowProjects.map(project => ({ id: project.id, title: project.title }))}
+                activeProjectId={activeWorkflowProjectId}
+                onCanvasViewChange={setCanvasView}
+                onSelectProject={workflowSetActiveProject}
+                onCreateProject={() => workflowCreateProject(language === 'zho' ? '未命名工作流' : 'Untitled workflow')}
+                onOpenSettings={() => setIsSettingsPanelOpen(true)}
+            >
+                {main}
+            </StudioNavigationFrame>
+        )}
         overlays={<>
             <Suspense fallback={null}>
                 <SettingsPanel
@@ -769,6 +809,7 @@ const App: React.FC = () => {
                 <BrowserImportBridge />
             </Suspense>
             <ToastStack toasts={toast.toasts} onDismiss={toast.dismiss} />
+            <ConfirmHost />
         </>}
     />;
 };

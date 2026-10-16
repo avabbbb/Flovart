@@ -1,17 +1,12 @@
-<h1 align="center">Iris</h1>
+<h1 align="center">Flovart</h1>
 
 <p align="center">
-  <strong>把 AI 创作 Agent 放进你本来就在用的专业工具里。</strong>
+  <strong>保留你的原片，多一层创意。</strong>
 </p>
 
 <p align="center">
   开源、本地优先的专业创作 AI 层——第一宿主从 DaVinci Resolve Studio 21.1 开始。<br />
-  剪辑工程继续留在宿主里，Agent 理解上下文，Iris 负责生成、参考素材、持久产物与候选版本。
-</p>
-
-<p align="center">
-  <sub><strong>原名 Flovart。</strong> 现在产品与仓库统一叫 Iris；旧的 <code>flovart</code> CLI、
-  Skill / package 路径与内部兼容标识暂时保留，避免打断现有 Agent 与脚本。</sub>
+  剪辑工程继续留在宿主里，Agent 理解上下文，Flovart 负责生成、参考素材、持久产物与候选版本。
 </p>
 
 <p align="center">
@@ -19,8 +14,8 @@
 </p>
 
 <p align="center">
-  <a href="https://avabbbb.github.io/Iris/"><strong>在线体验</strong></a> ·
-  <a href="https://github.com/avabbbb/Iris/releases"><strong>下载预览版</strong></a> ·
+  <a href="https://avabbbb.github.io/Flovart/"><strong>在线体验</strong></a> ·
+  <a href="https://github.com/avabbbb/Flovart/releases"><strong>下载预览版</strong></a> ·
   <a href="docs/overview/quick-start.md">快速开始</a> ·
   <a href="SUPPORT_MATRIX.md">兼容性</a>
 </p>
@@ -31,15 +26,26 @@
   <img src="https://img.shields.io/badge/BYOK-E8453C" alt="自带 API Key" />
   <img src="https://img.shields.io/badge/Image%20%2B%20Video-E8453C" alt="图片与视频" />
   <img src="https://img.shields.io/badge/License-MIT-E8453C" alt="MIT License" />
-  <a href="https://github.com/avabbbb/Iris/releases"><img src="https://img.shields.io/github/downloads/avabbbb/Iris/total?color=E8453C&logo=github" alt="GitHub Downloads" /></a>
-  <a href="https://github.com/avabbbb/Iris"><img src="https://img.shields.io/github/stars/avabbbb/Iris?color=E8453C" alt="GitHub Stars" /></a>
+  <a href="https://github.com/avabbbb/Flovart/releases"><img src="https://img.shields.io/github/downloads/avabbbb/Flovart/total?color=E8453C&logo=github" alt="GitHub Downloads" /></a>
+  <a href="https://github.com/avabbbb/Flovart"><img src="https://img.shields.io/github/stars/avabbbb/Flovart?color=E8453C" alt="GitHub Stars" /></a>
 </p>
 
 <p align="center">
-  <a href="stats/README.md"><img src="https://tally.yuki.sh/hits/flovart/readme.svg?theme=rule34" alt="Iris README 访问计数" /></a>
+  <a href="stats/README.md"><img src="https://tally.yuki.sh/hits/flovart/readme.svg?theme=rule34" alt="Flovart README 访问计数" /></a>
   <br />
   <sub>README 展示次数 · 第三方计数，非独立访客</sub>
 </p>
+
+
+## 先看 60 秒概念片
+
+[![观看 Flovart：保留原片，多一层创意](pic/readme/vision/Flovart_Promo_60s_v4-poster.jpg)](https://github.com/avabbbb/Flovart/raw/refs/heads/main/pic/readme/vision/Flovart_Promo_60s_v4.mp4)
+
+**保留原片，描述变化，比较候选。** Flovart 把你自己的 Coding Agent 和可见创作 Workflow 放在一起：Canvas 做多步创作，Table 做批量处理，Agent 连接你习惯的助手。
+
+影片展示 Resolve-first 的设计目标：指出画面位置，生成创意层，比较多个版本，再送回选定结果。**这是更名前录制的概念片，片尾仍显示 Iris。** 宿主集成、透明叠加层和新增轨道仍属 Experimental / Planned；当前已验证起点是下方真实录屏中的 Agent → Workflow 操作。Resolve P0 只以显式 **Add to Media Pool** 为安全输出。
+
+**0.1.0 内测版：** Windows EXE 与 macOS DMG 通过 [Releases](https://github.com/avabbbb/Flovart/releases) 分发。平台安装包分别验证，打包成功不等于宿主和付费 Provider 已认证；具体状态见 [Support Matrix](SUPPORT_MATRIX.md)。
 
 ## 实际效果
 
@@ -59,22 +65,46 @@
 </table>
 
 <p align="center">
-  <img src="pic/readme/hero-agent.gif" alt="外部 coding agent 正在编辑同一份可见的 Iris Workflow" width="880" />
+  <img src="pic/readme/hero-agent.gif" alt="外部 coding agent 正在编辑同一份可见的 Flovart Workflow" width="880" />
   <br />
   <sub><strong>当前已录制的 Agent / Workflow 能力——自然语言变成节点与连线。</strong><br />
   这段录屏里没有任何人工操作：该 Agent（WorkBuddy codebuddy）全程经 typed CLI 驱动可见 Workflow，
   现场创建 3 个节点与 2 条连线，没有改动任何源码。未执行生成步骤，因此没有调用付费模型服务。
-  Resolve native MCP → 候选 → Media Pool 的 Hero 仍属于真实宿主 External Gate，因此这里暂时不把它伪装成已完成。可复现记录见 <a href="docs/maintenance/readme/DEMO_RECORDING.md">DEMO_RECORDING.md</a>。</sub>
+  Resolve native MCP → 候选 → Media Pool 的 Hero 仍属于真实宿主 External Gate，因此这里暂时不把它伪装成已完成。可复现记录见 <a href="docs/archive/2026-10-07/maintenance/readme/DEMO_RECORDING.md">DEMO_RECORDING.md</a>。</sub>
 </p>
 
-## Iris 现在已经能做什么
+
+## 产品愿景——我要做的就是视频里的这种交互与 UI
+
+<p align="center">
+  <a href="pic/readme/vision/Flovart_Vision_3min_v5.mp4">
+    <img src="pic/readme/vision/Flovart_Vision_3min_v5-poster.jpg" alt="Flovart 产品愿景：从 Resolve 内的 AI Layer 交互展开到 Flovart 可视化工作流" width="880" />
+  </a>
+  <br />
+  <sub><strong>Flovart Vision · 3 分钟。</strong>点击图片观看完整视频。<br />
+  <strong>这是概念片 / 设计目标，不代表视频里的每个画面今天都已经实现。</strong></sub>
+</p>
+
+这支视频就是 **Flovart 产品交互、UI 和宿主协作方式的 North Star**。产品最终应该尽量接近视频里的感觉：
+
+- **先留在剪辑软件里。** Resolve 继续是工程与时间线的权威；Flovart 只围绕当前片段出现一个窄、轻、上下文明确的操作层。
+- **Draw where. Say what. Get a layer.** 直接在画面上指出区域，再用自然语言说想要什么，得到可审核的 AI 叠加层候选，而不是先把原片替掉。
+- **先候选，再提交。** 结果先比较；每个版本都保留；用户明确选中的版本不会被晚到结果偷偷覆盖。
+- **人和 Agent 操作同一份可见状态。** Agent 在场、revision、哪些结果已经 stale，都能在同一个 Workflow 上看见，人也能继续手改。
+- **只有复杂任务才展开完整 Flovart。** 多步引用、过期分支、版本历史和复杂制作才进入 Canvas；宿主里的小面板不膨胀成第二个 Flovart。
+- **结果非破坏性回到宿主。** 先经过可审核的交接进入 Media Pool；只有真实验证过宿主能力后，才进一步上新图层 / 新轨道，而不是直接改原素材。
+- **Local-first。** 素材、工程上下文和持久结果尽量留在本机；需要调用外部模型时明确告诉用户，并按 Provider 边界执行。
+
+下面的真实录屏仍然只负责说明**当前版本已经能证明的能力**；真实宿主与兼容状态以 [Support Matrix](SUPPORT_MATRIX.md) 为准。产品与系统边界见[主设计](docs/design/00-overview.md)、[Agent Integration](docs/design/12-agent.md)、[Adaptive Layout](docs/design/01-interaction.md) 和 [Resolve 21.1 Product & UI Spec](integrations/studio/resolve/PRODUCT_UI_SPEC.md)。
+
+## Flovart 现在已经能做什么
 
 下面都是**当前版本真实录屏**，不是 Mock。Resolve native MCP → Candidate → Media Pool 仍然属于 External Gate，所以 README 顶部只展示今天已经有证据的能力。
 
 <table>
   <tr>
     <td align="center" width="50%">
-      <img src="pic/readme/features/agent-cli-live.gif" alt="Agent 通过 Iris typed operations 修改同一份可见 Workflow。" width="420" />
+      <img src="pic/readme/features/agent-cli-live.gif" alt="Agent 通过 Flovart typed operations 修改同一份可见 Workflow。" width="420" />
       <br /><sub><strong>Agent → 真实 Workflow。</strong>不是屏幕点击，操作直接落到同一个可编辑项目。</sub>
     </td>
     <td align="center" width="50%">
@@ -84,11 +114,11 @@
   </tr>
   <tr>
     <td align="center">
-      <img src="pic/readme/features/crop.gif" alt="在 Iris 中裁剪图片并生成显式结果节点。" width="420" />
+      <img src="pic/readme/features/crop.gif" alt="在 Flovart 中裁剪图片并生成显式结果节点。" width="420" />
       <br /><sub><strong>图片操作。</strong>本地编辑得到明确、可复用的结果。</sub>
     </td>
     <td align="center">
-      <img src="pic/readme/features/video-trim.gif" alt="在 Iris 中对视频片段执行裁剪。" width="420" />
+      <img src="pic/readme/features/video-trim.gif" alt="在 Flovart 中对视频片段执行裁剪。" width="420" />
       <br /><sub><strong>视频操作。</strong>裁剪等媒体工具直接在当前工作区本地运行。</sub>
     </td>
   </tr>
@@ -96,14 +126,14 @@
 
 **更多真实操作 GIF 见下面的[完整功能演示](#功能演示)。**
 
-**快速跳转：** [快速开始](#快速开始) · [功能演示](#功能演示) · [为什么是 Iris](#为什么是-iris) · [核心能力](#核心能力) · [使用你自己的模型](#使用你自己的模型) · [集成与兼容性](#集成与兼容性) · [架构](#架构) · [本地优先与安全](#本地优先与安全) · [路线图](#创作软件路线图) · [参与贡献](#参与贡献)
+**快速跳转：** [快速开始](#快速开始) · [功能演示](#功能演示) · [为什么是 Flovart](#为什么是-flovart) · [核心能力](#核心能力) · [使用你自己的模型](#使用你自己的模型) · [集成与兼容性](#集成与兼容性) · [架构](#架构) · [本地优先与安全](#本地优先与安全) · [路线图](#创作软件路线图) · [参与贡献](#参与贡献)
 
 ## 快速开始
 
 ### 创作者
 
-1. 从 [GitHub Releases](https://github.com/avabbbb/Iris/releases) 下载预览版。
-2. 打开 Iris，在设置中添加 AI 服务。
+1. 从 [GitHub Releases](https://github.com/avabbbb/Flovart/releases) 下载预览版。
+2. 打开 Flovart，在设置中添加 AI 服务。
 3. 新建或打开 Workflow，加入参考素材，开始创作。
 
 公开 Releases 页面可能包含测试或预览产物；这不代表所有宿主或 Provider 都已 Stable。
@@ -113,14 +143,14 @@
 在版本化 CLI 包正式发布前，从源码检出运行：
 
 ```bash
-git clone https://github.com/avabbbb/Iris.git
-cd Iris
+git clone https://github.com/avabbbb/Flovart.git
+cd Flovart
 npm install
 npm run flovart:cli -- start --source --web --open
 npm run flovart:cli -- status --json
 ```
 
-然后对本地 Agent 说：**「打开 Iris，在这个 Workflow 上干活。」**
+然后对本地 Agent 说：**「打开 Flovart，在这个 Workflow 上干活。」**
 
 正常 Agent 循环是 `status`、`workflow.inspect`、`workflow.selection.get`、`workflow.apply` 和 `workflow.node.run`；连接准备和诊断用 `ensure` 和 `doctor`；仅供开发使用的浏览器检查见[快速开始](docs/overview/quick-start.md)。
 
@@ -130,7 +160,7 @@ npm run flovart:cli -- status --json
 
 **Agent 原生，不是界面抓取。** 这些都是作用在同一份 Workflow 上的操作，而那份 Workflow 也可以由 Agent 驱动。上方 Hero 与[架构](#架构)段的 CLI 录屏是**全程由 Agent 驱动、没有任何人工操作**；下面的图库则是同一套界面由人手操作，因为那是新用户最先要走通的路径。节点的创建、连接、选择、视口、移动与缩放，以及各个节点工具，都已作为 typed operation 暴露给 Agent —— 走的是 revision 与幂等边界，而不是屏幕坐标。
 
-视频与音频工具在浏览器内跑 ffmpeg.wasm，录制动作前会先预热 core，因此片段展示的是操作本身，而不是一次性约 30MB 的 wasm 下载 —— **所以片段时长不等于首次使用时的等待时间**。录制方法、可复现命令与边界见 [DEMO_RECORDING.md](docs/maintenance/readme/DEMO_RECORDING.md)。
+视频与音频工具在浏览器内跑 ffmpeg.wasm，录制动作前会先预热 core，因此片段展示的是操作本身，而不是一次性约 30MB 的 wasm 下载 —— **所以片段时长不等于首次使用时的等待时间**。录制方法、可复现命令与边界见 [DEMO_RECORDING.md](docs/archive/2026-10-07/maintenance/readme/DEMO_RECORDING.md)。
 
 ### 画布操作
 
@@ -263,13 +293,13 @@ npm run flovart:cli -- status --json
   </tr>
 </table>
 
-尚未录制、也刻意没有展示的：依赖模型的生成能力与依赖模型的图片工具（图片生成、高清放大、移除背景、拆分图层、图片编辑/扩图）——本机未配置任何 Provider，没有可诚实展示的结果。该缺口登记在[录制记录](docs/maintenance/readme/DEMO_RECORDING.md)里。
+尚未录制、也刻意没有展示的：依赖模型的生成能力与依赖模型的图片工具（图片生成、高清放大、移除背景、拆分图层、图片编辑/扩图）——本机未配置任何 Provider，没有可诚实展示的结果。该缺口登记在[录制记录](docs/archive/2026-10-07/maintenance/readme/DEMO_RECORDING.md)里。
 
-## 为什么是 Iris？
+## 为什么是 Flovart？
 
-很多 AI 创作工具要求你先把工作搬到它自己的画布里。**Iris 反过来：进入你已经在用的专业创作软件。**
+很多 AI 创作工具要求你先把工作搬到它自己的画布里。**Flovart 反过来：进入你已经在用的专业创作软件。**
 
-宿主继续掌握剪辑工程和时间线，外部 Agent 读取创作上下文，Iris 负责生成、参考素材、持久 Artifact 和可审核的候选版本；只有多镜头、复杂引用或可复用 Workflow 真正需要时，才展开完整 Iris 工作区。
+宿主继续掌握剪辑工程和时间线，外部 Agent 读取创作上下文，Flovart 负责生成、参考素材、持久 Artifact 和可审核的候选版本；只有多镜头、复杂引用或可复用 Workflow 真正需要时，才展开完整 Flovart 工作区。
 
 - **留在编辑器里。** 第一宿主方向是 DaVinci Resolve Studio 21.1；其它创作宿主在真实宿主验证前继续保持 Experimental。
 - **Agent-native。** Agent 通过类型化能力和宿主原生控制面工作，不依赖鼠标坐标或屏幕抓取。
@@ -277,11 +307,11 @@ npm run flovart:cli -- status --json
 - **BYOK 图片与视频。** Provider、模型和 API Key 由你自己选择。
 - **本地优先。** 在当前实现支持范围内，项目相关状态、参考素材与生成产物尽量留在创作工作区附近。
 
-Canvas 仍然是多镜头、复杂依赖和 Workflow 编排的 power surface，**但它不再是 Iris 的产品前提。**
+Canvas 仍然是多镜头、复杂依赖和 Workflow 编排的 power surface，**但它不再是 Flovart 的产品前提。**
 
 ## 核心能力
 
-| 能力 | Iris 的方式 |
+| 能力 | Flovart 的方式 |
 | --- | --- |
 | Agent 控制 | 通过类型化操作直接作用于真实可见 Workflow |
 | 人类编辑 | 同一张图、素材和结果始终可以直接修改 |
@@ -298,7 +328,7 @@ Canvas 仍然是多镜头、复杂依赖和 Workflow 编排的 power surface，*
 你的 Agent                  Codex · WorkBuddy · Claude Code
       │
       ▼
-Iris 操作                   inspect · select · apply · run
+Flovart 操作                   inspect · select · apply · run
       │
       ▼
 活着的 Workflow  ────────── 人
@@ -314,7 +344,7 @@ Iris 操作                   inspect · select · apply · run
 你的 Provider → 你的 API Key → 你的素材 + Workflow → 你的生成结果
 ```
 
-Iris 不内置模型服务。你可以在应用中配置 Provider，按需选择能力和模型，并自行承担 Provider 条款、费用和产物权利。OpenAI-compatible BYOK 与远程 Provider 路径当前为 Experimental：代码里有适配器，不等于真实付费服务已认证。
+Flovart 不内置模型服务。你可以在应用中配置 Provider，按需选择能力和模型，并自行承担 Provider 条款、费用和产物权利。OpenAI-compatible BYOK 与远程 Provider 路径当前为 Experimental：代码里有适配器，不等于真实付费服务已认证。
 
 ## 集成与兼容性
 
@@ -339,25 +369,25 @@ Iris 不内置模型服务。你可以在应用中配置 Provider，按需选择
 ```mermaid
 flowchart LR
   H["人类创作者"] <--> W["Live Workflow"]
-  A["Coding Agent Harness"] --> L["Iris Link + flovart CLI"]
+  A["Coding Agent Harness"] --> L["Flovart Link + flovart CLI"]
   L --> W
   W --> P["Provider 适配层"]
   W --> R["本地素材 + 产物"]
   T["Table 工作区"] -. 独立入口 .-> W
 ```
 
-现有 `flovart` CLI 名称在 Iris 改名期间继续作为兼容入口。CLI 与实验性 stdio MCP 共用操作语义，当前都绑定可见的 Browser Workflow。确定性操作直接执行，不需要第二个 AI 再解释一遍。
+现有 `flovart` CLI 名称在 Flovart 改名期间继续作为兼容入口。CLI 与实验性 stdio MCP 共用操作语义，当前都绑定可见的 Browser Workflow。确定性操作直接执行，不需要第二个 AI 再解释一遍。
 
 <p align="center">
-  <img src="pic/readme/agent-operations-live-workflow.gif" alt="Iris 兼容 CLI 操作在可见 Workflow 中创建节点与连线" width="720" />
+  <img src="pic/readme/agent-operations-live-workflow.gif" alt="Flovart 兼容 CLI 操作在可见 Workflow 中创建节点与连线" width="720" />
   <br />
   <sub><strong>同一主张的操作级视角。</strong>一个项目和三个节点由 <code>workflow.project.create</code>、
   <code>workflow.node.create</code> 和 <code>workflow.connect</code> 创建（1.5 倍速播放）——
   上面 Hero 里那个外部 Agent 会话端到端驱动的正是这些 typed 操作。录制记录：
-  <a href="docs/maintenance/readme/DEMO_RECORDING.md">DEMO_RECORDING.md</a>。</sub>
+  <a href="docs/archive/2026-10-07/maintenance/readme/DEMO_RECORDING.md">DEMO_RECORDING.md</a>。</sub>
 </p>
 
-原生效果保持两条短路径：同一生成函数产出持久素材版本，宿主效果读取固定版本并本地渲染——不强制经过导演、Operator 或制作组层级。产品范围与系统边界统一见[主设计](docs/design/flovart-native-effects.md)，Agent transport/authority 见 [Agent Integration](docs/design/agent-integration.md)；历史 CURRENT/TARGET 架构报告不再参与当前产品决策。
+原生效果保持两条短路径：同一生成函数产出持久素材版本，宿主效果读取固定版本并本地渲染——不强制经过导演、Operator 或制作组层级。产品范围与系统边界统一见[主设计](docs/design/00-overview.md)，Agent transport/authority 见 [Agent Integration](docs/design/12-agent.md)；历史 CURRENT/TARGET 架构报告不再参与当前产品决策。
 
 ## 本地优先与安全
 
@@ -365,7 +395,7 @@ flowchart LR
 - 当前 Web 路径通过加密的 `localforage` Vault 在本地保存 API Key，前端再直接请求配置的模型服务；浏览器属于秘密边界的一部分。
 - Web、桌面 WebView 和扩展的存储通常彼此隔离；通过受限 Runtime Bridge 跨入口同步仍在待办中。
 - 不要把 API Key 写进 Prompt、日志或仓库。Agent 和 CLI 只能拿到脱敏后的就绪与能力状态，不能拿到原始凭据。
-- 官方项目渠道仅包括本仓库、[在线 Demo](https://avabbbb.github.io/Iris/) 和本仓库 Actions 发布的桌面产物。请自行确认 Provider 条款，以及输入素材和输出内容的版权与合规性。
+- 官方项目渠道仅包括本仓库、[在线 Demo](https://avabbbb.github.io/Flovart/) 和本仓库 Actions 发布的桌面产物。请自行确认 Provider 条款，以及输入素材和输出内容的版权与合规性。
 
 发现漏洞？请通过[安全政策](SECURITY.md)中的私密渠道报告。
 
@@ -378,7 +408,7 @@ flowchart LR
 ```text
 当前 Resolve 选择
 → Agent 理解任务
-→ Iris 生成持久 Candidate
+→ Flovart 生成持久 Candidate
 → 用户审核
 → Add to Media Pool
 ```
@@ -391,7 +421,7 @@ After Effects、Premiere Pro 与 Photoshop 现有工作继续保留为 Experimen
 
 ## 参与贡献
 
-我们尤其欢迎三类贡献：Provider 适配、宿主集成和 Workflow 能力。请先提交 [Issue](https://github.com/avabbbb/Iris/issues/new/choose)，阅读[贡献约定](.github/CONTRIBUTING.md)，UI 变更附上验证证据。
+我们尤其欢迎三类贡献：Provider 适配、宿主集成和 Workflow 能力。请先提交 [Issue](https://github.com/avabbbb/Flovart/issues/new/choose)，阅读[贡献约定](.github/CONTRIBUTING.md)，UI 变更附上验证证据。
 
 ## 致谢
 
@@ -399,6 +429,6 @@ After Effects、Premiere Pro 与 Photoshop 现有工作继续保留为 Experimen
 
 ## 协议与声明
 
-Iris 基于 [MIT License](./LICENSE) 开源。使用本项目即表示同意[使用条款](./docs/TERMS_OF_SERVICE.md)和[隐私政策](./docs/PRIVACY_POLICY.md)。
+Flovart 基于 [MIT License](./LICENSE) 开源。使用本项目即表示同意[使用条款](./docs/TERMS_OF_SERVICE.md)和[隐私政策](./docs/PRIVACY_POLICY.md)。
 
-Iris 不内置模型服务，也不对生成内容主张知识产权。你需要自行确认所选模型、输入素材和生成结果的版权、合规性与合法使用。更多信息见[项目数据与统计](stats/README.md)。
+Flovart 不内置模型服务，也不对生成内容主张知识产权。你需要自行确认所选模型、输入素材和生成结果的版权、合规性与合法使用。更多信息见[项目数据与统计](stats/README.md)。

@@ -58,8 +58,8 @@ body:
     id: environment
     attributes:
       label: 环境
-      description: Iris 版本或提交、Web/Desktop、浏览器、操作系统。
-      placeholder: "Iris 0.3.0；Desktop；Windows 11"
+      description: Flovart 版本或提交、Web/Desktop、浏览器、操作系统。
+      placeholder: "Flovart 0.3.0；Desktop；Windows 11"
     validations:
       required: true
   - type: textarea

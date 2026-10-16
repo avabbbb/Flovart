@@ -76,8 +76,8 @@ describe('DeepSeek Harness contextual Workflow view', () => {
 
     render(<WorkflowView sessionId={sessionId} />)
 
-    expect(await screen.findByText('Iris Workflow 暂不可用')).toBeInTheDocument()
-    expect(screen.getByText('请先在 Iris 中打开一个可见的 Workflow。')).toBeInTheDocument()
+    expect(await screen.findByText('Flovart Workflow 暂不可用')).toBeInTheDocument()
+    expect(screen.getByText('请先在 Flovart 中打开一个可见的 Workflow。')).toBeInTheDocument()
     expect(fetchMock.mock.calls.some(([input]) => new URL(String(input)).pathname.endsWith('/api/tools'))).toBe(false)
   })
 

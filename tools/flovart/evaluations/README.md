@@ -18,6 +18,6 @@ Do **not** commit generated binary media here:
 
 Those outputs are evidence artifacts rather than source. Publish future generated media through CI artifacts, GitHub Releases or project-controlled object storage, and link the artifact location from the evaluation report when long-term access matters.
 
-Historical generated media removed during the Iris repository-hygiene pass remains recoverable from Git history before that cleanup unless repository history is intentionally rewritten later.
+Historical generated media removed during the Flovart repository-hygiene pass remains recoverable from Git history before that cleanup unless repository history is intentionally rewritten later.
 
 The reports in this directory may still use the former **Flovart** product name. That wording is historical context, not current branding.

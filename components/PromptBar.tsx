@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, Reorder } from 'motion/react';
+import { KeyRound } from 'lucide-react';
 import type {
     AssetFolder,
     AssetLibrary,
@@ -1296,7 +1297,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                             aria-label={t('promptBarExtra.configureService')}
                                             title={t('promptBarExtra.noServiceTitle')}
                                         >
-                                            🔑<span className={compactMode ? 'sr-only' : 'ml-1'}>{t('promptBarExtra.noServiceChip')}</span>
+                                            <KeyRound size={14} aria-hidden="true" /><span className={compactMode ? 'sr-only' : 'ml-1'}>{t('promptBarExtra.noServiceChip')}</span>
                                         </button>
                                     );
                                 }

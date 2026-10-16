@@ -13,7 +13,7 @@ export class NativeSession {
       entry.resolve(message);
     });
     this.port.onDisconnect.addListener(() => {
-      const message = runtime.lastError?.message || 'Iris Native Host 已断开';
+      const message = runtime.lastError?.message || 'Flovart Native Host 已断开';
       for (const entry of this.pending.values()) {
         clearTimeout(entry.timer);
         entry.reject(new Error(message));
@@ -27,7 +27,7 @@ export class NativeSession {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(requestId);
-        reject(new Error('Iris Desktop 响应超时'));
+        reject(new Error('Flovart Desktop 响应超时'));
       }, timeoutMs);
       this.pending.set(requestId, { resolve, reject, timer });
       this.port.postMessage({ ...message, requestId });
@@ -58,7 +58,7 @@ export class NativeSession {
 
 export function nativeResult(response) {
   if (response?.ok) return response.result;
-  const error = new Error(response?.error?.message || 'Iris Native Host 请求失败');
+  const error = new Error(response?.error?.message || 'Flovart Native Host 请求失败');
   error.code = response?.error?.code;
   error.retryable = Boolean(response?.error?.retryable);
   throw error;

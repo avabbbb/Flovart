@@ -163,21 +163,30 @@ describe('Lane17 verification', () => {
     await waitFor(() => expect(screen.getByText('已取消选择文件夹。')).toBeInTheDocument());
   });
 
-  it('stopping a stale loading node resets it to an interrupted error state', async () => {
-    vi.useFakeTimers();
+  it('an interrupted loading node becomes retryable at once instead of staying locked', async () => {
     const p = makeProject();
     p.nodes[0].metadata = { ...p.nodes[0].metadata, status: 'loading', generationStartedAt: Date.now() - 99999, progress: 40 };
     p.selectedNodeIds = ['far-away'];
-    render(<Harness initial={p} onNotify={vi.fn()} />);
-    await act(async () => { vi.advanceTimersByTime(6500); });
-    vi.useRealTimers();
-    // stale node renders the toolbar stop affordance; clicking it must clear the zombie loading
-    const stop = await screen.findByRole('button', { name: '停止节点' });
-    fireEvent.click(stop);
+    const onNotify = vi.fn();
+    render(<Harness initial={p} onNotify={onNotify} />);
     await waitFor(() => {
       const node = projectState().nodes.find(n => n.id === 'far-away')!;
       expect(node.metadata.status).toBe('error');
       expect(node.metadata.error).toContain('中断');
+      expect(node.metadata.progress).toBeUndefined();
     });
+    expect(onNotify).toHaveBeenCalledWith(expect.stringContaining('中断'), 'warning');
+  });
+
+  it('a resumable video task gets a short grace period before it is marked interrupted', async () => {
+    vi.useFakeTimers();
+    const p = makeProject();
+    p.nodes[0].metadata = { ...p.nodes[0].metadata, status: 'loading', generationStartedAt: Date.now() - 99999, generationProviderTaskId: 'task-1', config: { ...(p.nodes[0].metadata.config || {}), mode: 'video' } as any };
+    render(<Harness initial={p} onNotify={vi.fn()} />);
+    await act(async () => { vi.advanceTimersByTime(1000); });
+    expect(projectState().nodes.find(n => n.id === 'far-away')!.metadata.status).toBe('loading');
+    await act(async () => { vi.advanceTimersByTime(6000); });
+    vi.useRealTimers();
+    await waitFor(() => expect(projectState().nodes.find(n => n.id === 'far-away')!.metadata.status).toBe('error'));
   });
 });
