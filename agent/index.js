@@ -362,8 +362,14 @@ export function startHttpServer() {
         // projections enforce — without this, any local caller could drive a
         // non-public canonical command (e.g. granular workflow.* / provider.*)
         // through the loopback endpoint, bypassing the operation gateway.
-        if (!AGENT_PUBLIC_COMMAND_SET.has(String(body.command || ''))) {
-          return json(response, 400, { ok: false, error: { code: 'UNKNOWN_COMMAND', message: `Operation is not part of the stable Agent surface: ${String(body.command)}` } });
+        // Exception: the trusted local launcher/CLI (no Origin header + valid
+        // persistent token, the same test /bootstrap/issue uses) may call the
+        // full canonical command set; browser/web origins and session tokens
+        // stay restricted to the public surface.
+        const command = String(body.command || '');
+        const trustedLocalCli = !request.headers.origin && validPersistentToken(request, config.token);
+        if (!trustedLocalCli && !AGENT_PUBLIC_COMMAND_SET.has(command)) {
+          return json(response, 400, { ok: false, error: { code: 'UNKNOWN_COMMAND', message: 'Operation is not part of the stable Agent surface: ' + command } });
         }
         const result = await session.callCommand(body.command, body.args || {}, body.source || 'agent', body.idempotencyKey, undefined, body.caller);
         return json(response, 200, { ok: true, result });
