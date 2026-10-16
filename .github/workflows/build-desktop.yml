@@ -379,6 +379,38 @@ jobs:
 
       - name: Build & publish Tauri app
         if: github.event_name != 'pull_request'
+        id: tauri_build
+        continue-on-error: ${{ runner.os == 'macOS' }}
+        uses: tauri-apps/tauri-action@action-v0.6.2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: ${{ steps.meta.outputs.tag_name }}
+          releaseName: ${{ steps.meta.outputs.release_name }}
+          releaseBody: ${{ steps.meta.outputs.release_body }}
+          releaseDraft: true
+          prerelease: ${{ steps.meta.outputs.prerelease }}
+          includeUpdaterJson: ${{ steps.meta.outputs.updater }}
+          args: --config ${{ steps.meta.outputs.tauri_config }} --target ${{ matrix.rust_target }} ${{ matrix.bundle_args }}
+
+      # macOS runners intermittently fail bundle_dmg.sh (hdiutil resource busy).
+      # Detach stale DMG volumes and retry the same build once.
+      - name: Clean stale DMG mounts (macOS retry)
+        if: github.event_name != 'pull_request' && runner.os == 'macOS' && steps.tauri_build.outcome == 'failure'
+        shell: bash
+        run: |
+          set -uo pipefail
+          hdiutil info || true
+          for dev in $(hdiutil info | awk '/^\/dev\/disk/ {print $1}' | sort -u); do
+            hdiutil detach "$dev" -force || true
+          done
+          find src-tauri/target -type f -print | grep -E '/bundle/.+/rw[.][^/]+[.]dmg$' | while IFS= read -r f; do rm -f "$f"; done || true
+          sleep 15
+
+      - name: Build & publish Tauri app (macOS retry)
+        if: github.event_name != 'pull_request' && runner.os == 'macOS' && steps.tauri_build.outcome == 'failure'
         uses: tauri-apps/tauri-action@action-v0.6.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -409,14 +441,17 @@ jobs:
             exit 1
           fi
           cp latest.json "$artifact_dir/latest.json"
-          mapfile -t signatures < <(find src-tauri/target -type f -name '*.sig' -path '*/bundle/*' -print)
-          if [[ "${#signatures[@]}" -eq 0 ]]; then
+          # macOS ships bash 3.2 (no mapfile); use a portable loop.
+          sig_count=0
+          while IFS= read -r signature; do
+            [[ -n "$signature" ]] || continue
+            cp "$signature" "$artifact_dir/$(basename "$signature")"
+            sig_count=$((sig_count + 1))
+          done < <(find src-tauri/target -type f -print | grep -E '/bundle/.+[.]sig$' || true)
+          if [[ "$sig_count" -eq 0 ]]; then
             echo 'Stable tag build did not produce an updater .sig sidecar.' >&2
             exit 1
           fi
-          for signature in "${signatures[@]}"; do
-            cp "$signature" "$artifact_dir/$(basename "$signature")"
-          done
 
       # 将 Tauri 产物收敛到稳定目录，供 checksum、SBOM 和 provenance 使用。
       # 只复制 bundle 目录中的安装包，避免把 sidecar 当作发布物。
