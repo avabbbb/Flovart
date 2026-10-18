@@ -18,6 +18,7 @@ export type WorkflowOperationNodeToolName =
   | 'edit'
   | 'rotate'
   | 'split-grid'
+  | 'layer'
   | 'video-trim'
   | 'video-av-split'
   | 'video-merge'
@@ -99,6 +100,17 @@ const imageRotateParameters = z.object({
 const imageSplitGridParameters = z.object({
   rows: z.number().int().min(1).max(6).default(2),
   cols: z.number().int().min(1).max(6).default(2),
+});
+
+export const WORKFLOW_LAYER_STYLES = ['doodle', 'glow', 'title', 'sticker'] as const;
+export type WorkflowLayerStyle = typeof WORKFLOW_LAYER_STYLES[number];
+export const WORKFLOW_LAYER_STYLE_LABELS: Readonly<Record<WorkflowLayerStyle, string>> = {
+  doodle: '涂鸦', glow: '光晕', title: '标题', sticker: '贴纸',
+};
+
+const imageLayerParameters = z.object({
+  style: z.enum(WORKFLOW_LAYER_STYLES).default('doodle'),
+  count: z.number().int().min(1).max(4).default(4),
 });
 
 const videoTrimParameters = z.object({
@@ -230,6 +242,25 @@ export const WORKFLOW_OPERATION_CAPABILITIES: Readonly<Record<WorkflowOperationC
       { key: 'cols', kind: 'number', label: '列', min: 1, max: 6, step: 1 },
     ],
     summarizeParameters: parameters => `${parameters.rows || 2} × ${parameters.cols || 2}`,
+  },
+  'image.layer@1': {
+    id: 'image.layer@1', label: '叠加层', mediaType: 'image',
+    inputRoles: [
+      { role: 'source_image', nodeTypes: ['image'], min: 1, max: 1 },
+      { role: 'mask_image', nodeTypes: ['image'], min: 0, max: 1 },
+    ],
+    outputRoles: [{ role: 'result_image', nodeType: 'image', min: 1, max: 4 }],
+    executor: 'provider-image-tool', confirmation: 'paid-operation-subgraph', workflow: true, table: false,
+    uiKey: 'image-layer', nodeTool: 'layer',
+    agentUsage: 'layer 必须提供 prompt，可选 style（doodle/glow/title/sticker）、count（1-4，默认 4）与 maskNodeId 或 maskHref/maskMimeType；输出与原图同尺寸的透明叠加层候选，不改原图',
+    parameters: imageLayerParameters,
+    nodeToolArguments: imageEditToolArguments,
+    parameterControls: [
+      { key: 'style', kind: 'select', label: '风格', options: WORKFLOW_LAYER_STYLES.map(value => ({ label: WORKFLOW_LAYER_STYLE_LABELS[value], value })) },
+      { key: 'count', kind: 'number', label: '候选', min: 1, max: 4, step: 1 },
+    ],
+    promptRequired: true,
+    summarizeParameters: parameters => (WORKFLOW_LAYER_STYLE_LABELS[parameters.style as WorkflowLayerStyle] || WORKFLOW_LAYER_STYLE_LABELS.doodle) + ' · ×' + (parameters.count || 4),
   },
   'video.trim@1': {
     id: 'video.trim@1', label: '视频剪辑', mediaType: 'video',

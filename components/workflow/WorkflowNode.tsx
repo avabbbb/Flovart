@@ -10,6 +10,8 @@ import type { WorkflowNode as WorkflowNodeData } from './types';
 import { listWorkflowOperationVersions } from './operations';
 import type { WorkflowNodeRunInfo, WorkflowStaleReason } from './runState';
 import type { WorkflowNodePresence } from './presence';
+import type { WorkflowLayerPreview } from './layerPreview';
+import { WorkflowLayerCandidates } from './WorkflowLayerCandidates';
 
 function WorkflowPluginSurface({ plugin, pluginContext }: { plugin: WorkflowNodePluginDefinition; pluginContext: WorkflowNodePluginContext }) {
   return <>
@@ -74,6 +76,7 @@ export function WorkflowNode({
   runState,
   onSelectTake,
   presence,
+  layerPreview,
 }: {
   node: WorkflowNodeData;
   selected: boolean;
@@ -115,6 +118,8 @@ export function WorkflowNode({
   onSelectTake?: (takeId: string) => void;
   /** 最近一次改动来自 Agent / CLI / 面板时的在场标记（deriveWorkflowPresence）。 */
   presence?: WorkflowNodePresence;
+  /** 叠加层 Operation 当前 Take 的源图与候选（deriveWorkflowLayerPreview）；只用于显示。 */
+  layerPreview?: WorkflowLayerPreview;
 }) {
   const status = node.metadata.status || 'idle';
   const progress = Math.max(0, Math.min(100, Math.round(node.metadata.progress || 0)));
@@ -424,7 +429,7 @@ export function WorkflowNode({
           <WorkflowConfigPanel node={node} onChange={onChangeMetadata} onRun={onRun} />
         )}
         {node.type === 'script' && <ScriptNodeCard node={node} />}
-        {node.type === 'operation' && <OperationNodeCard node={node} onRun={onRun} onSelectTake={onSelectTake} language={language} />}
+        {node.type === 'operation' && <OperationNodeCard node={node} onRun={onRun} onSelectTake={onSelectTake} language={language} layerPreview={layerPreview} />}
           </>}
         {mediaDetails && <span className="workflow-node__media-details">{mediaDetails}</span>}
         {status === 'loading' && (
@@ -484,12 +489,12 @@ export function WorkflowNode({
 
 const RUN_STATE_COPY = {
   en: {
-    stale: 'Stale',
+    stale: 'Changed',
     reasons: { 'recipe-edited': 'Settings changed since this result. Run again to update.', 'upstream-stale': 'An upstream node is out of date.', 'upstream-newer': 'An upstream result is newer than this one.' },
     versions: 'Versions', newer: 'New version ready. Your selection is kept.', selectVersion: (label: string) => `Select ${label}`, inPlace: 'Earlier results were replaced in place',
   },
   zho: {
-    stale: '需重跑',
+    stale: '已变更',
     reasons: { 'recipe-edited': '这个结果之后配置已修改，重新运行即可更新。', 'upstream-stale': '上游节点已过期。', 'upstream-newer': '上游结果比这个结果更新。' },
     versions: '版本', newer: '新版本已到，你的选择保持不变。', selectVersion: (label: string) => `选择 ${label}`, inPlace: '早期结果已原位覆盖',
   },
@@ -547,7 +552,7 @@ function OperationVersionStrip({ node, onSelectTake, language }: { node: Workflo
   );
 }
 
-function OperationNodeCard({ node, onRun, onSelectTake, language = 'zho' }: { node: WorkflowNodeData; onRun: () => void; onSelectTake?: (takeId: string) => void; language?: 'en' | 'zho' }) {
+function OperationNodeCard({ node, onRun, onSelectTake, language = 'zho', layerPreview }: { node: WorkflowNodeData; onRun: () => void; onSelectTake?: (takeId: string) => void; language?: 'en' | 'zho'; layerPreview?: WorkflowLayerPreview }) {
   // 单张生成：结果媒体原位写在 operation 节点 metadata 上（storageKey/href），显示结果图。
   // Hook 必须无条件调用（提前 return 会改变 Hook 数量），operation 判断放在其后。
   const resultMedia = useWorkflowMediaUrl(node.metadata.storageKey, node.metadata.href);
@@ -568,7 +573,6 @@ function OperationNodeCard({ node, onRun, onSelectTake, language = 'zho' }: { no
           : <img src={resultMedia.url} alt={`${node.title} 生成结果`} draggable={false} loading="lazy" data-workflow-media-preview style={{ width: '100%', maxHeight: 260, objectFit: 'contain' }} />}
         <div className="workflow-operation-card__row"><strong>{parameterLabel}</strong><span>{statusLabel}</span></div>
         <OperationVersionStrip node={node} onSelectTake={onSelectTake} language={language} />
-        <OperationVersionStrip node={node} onSelectTake={onSelectTake} language={language} />
       <div className="workflow-operation-card__footer">
           <span>{operation.recipe.inputBindings.length} 输入 · {operation.takes.length} Take</span>
           <button type="button" data-workflow-overlay onPointerDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); onRun(); }} disabled={node.metadata.status === 'loading'}>
@@ -581,7 +585,9 @@ function OperationNodeCard({ node, onRun, onSelectTake, language = 'zho' }: { no
   return (
     <div className="workflow-operation-card" data-testid="workflow-operation-card">
       <div className="workflow-operation-card__row"><strong>{parameterLabel}</strong><span>{statusLabel}</span></div>
-      <p title={operation.recipe.promptDocument.text}>{operation.recipe.promptDocument.text || '无文本 Prompt · 参数型操作'}</p>
+      {layerPreview?.candidates.length
+        ? <WorkflowLayerCandidates key={layerPreview.takeId} preview={layerPreview} language={language} />
+        : <p title={operation.recipe.promptDocument.text}>{operation.recipe.promptDocument.text || '无文本 Prompt · 参数型操作'}</p>}
       <OperationVersionStrip node={node} onSelectTake={onSelectTake} language={language} />
       <div className="workflow-operation-card__footer">
         <span>{operation.recipe.inputBindings.length} 输入 · {operation.takes.length} Take</span>

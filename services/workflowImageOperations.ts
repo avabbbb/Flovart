@@ -12,8 +12,8 @@ import {
   type WorkflowCropRect,
   type WorkflowMediaRecord,
 } from '../components/workflow/media';
-import { parseWorkflowOperationParameters } from '../components/workflow/operationRegistry';
-import type { WorkflowNode } from '../components/workflow/types';
+import { parseWorkflowOperationParameters, WORKFLOW_LAYER_STYLE_LABELS, type WorkflowLayerStyle } from '../components/workflow/operationRegistry';
+import type { WorkflowNode, WorkflowOperationCapabilityId } from '../components/workflow/types';
 import type { UserApiKey } from '../types';
 import {
   editImageWithProvider,
@@ -270,25 +270,41 @@ export async function runWorkflowImageEditOperation(
   const { node: source } = requireWorkflowMediaNode(runtime, projectId, sourceNodeId, 'image');
   const modelId = source.metadata.config?.modelId;
   const resolved = await resolveImageRoute(runtime, modelId);
+  const started = await startMaskedImageOperation(runtime, projectId, source, 'image.edit@1', mask, { variant }, prompt, modelId, resolved.routeId);
+  return executeImageEdit(projectId, started, prompt, variant, resolved.routeId, resolved.key, runtime);
+}
+
+/** 源图 + 可选蒙版的 Operation 启动：蒙版以独立图片节点进入图，启动失败时丢弃已导入的蒙版媒体。 */
+async function startMaskedImageOperation(
+  runtime: WorkflowImageOperationRuntime,
+  projectId: string,
+  source: WorkflowNode,
+  capabilityId: Extract<WorkflowOperationCapabilityId, 'image.edit@1' | 'image.layer@1'>,
+  mask: WorkflowImageEditMask | undefined,
+  parameters: Record<string, unknown>,
+  prompt: string,
+  modelId: string | undefined,
+  routeId: string,
+): Promise<StartedWorkflowOperation> {
   const preparedMask = mask ? await createMaskNode(source, mask, runtime) : undefined;
   let started: StartedWorkflowOperation;
   try {
     started = await startWorkflowOperation({
-      runtime, projectId, capabilityId: 'image.edit@1',
+      runtime, projectId, capabilityId,
       sources: [
-        { nodeId: sourceNodeId, role: 'source_image' },
+        { nodeId: source.id, role: 'source_image' },
         ...(preparedMask ? [{ nodeId: preparedMask.node.id, role: 'mask_image' as const }] : []),
       ],
       additionalSourceNodes: preparedMask?.record ? [preparedMask.node] : undefined,
-      parameters: { variant }, prompt, productModelId: modelId, routeId: resolved.routeId,
-      anchorNodeId: sourceNodeId,
+      parameters, prompt, productModelId: modelId, routeId,
+      anchorNodeId: source.id,
     });
   } catch (error) {
     if (preparedMask?.record) await discardWorkflowMediaRecord(preparedMask.record.storageKey);
     throw error;
   }
   if (preparedMask?.record) releaseWorkflowMediaRecord(preparedMask.record.storageKey);
-  return executeImageEdit(projectId, started, prompt, variant, resolved.routeId, resolved.key, runtime);
+  return started;
 }
 
 const EDIT_TITLES: Record<WorkflowImageEditVariant, string> = {
@@ -315,6 +331,69 @@ async function executeImageEdit(
       blob: await dataUrlBlob(result.newImageBase64, mimeType),
       title: EDIT_TITLES[variant], fileName: `${variant}.png`, mimeType, role: 'result_image',
     }]);
+  } catch (error) {
+    await failWorkflowOperation(runtime, projectId, started, error);
+    throw error;
+  }
+}
+
+export interface WorkflowLayerParameters { style: WorkflowLayerStyle; count: number }
+
+/** 叠加层 Prompt：用户意图 + 固定的透明叠加层约束（与原图同尺寸、对齐、叠加层外完全透明）。 */
+export function composeWorkflowLayerPrompt(prompt: string, style: WorkflowLayerStyle): string {
+  return [
+    prompt.trim(),
+    '只生成一层「' + WORKFLOW_LAYER_STYLE_LABELS[style] + '」叠加层：与原图同尺寸并对齐原图构图；叠加层以外区域完全透明（PNG Alpha），不要包含原图像素。',
+  ].filter(Boolean).join('\n\n');
+}
+
+export async function runWorkflowLayerOperation(
+  projectId: string,
+  sourceNodeId: string,
+  input: { prompt: string; style?: WorkflowLayerStyle; count?: number; mask?: WorkflowImageEditMask },
+  runtime: WorkflowImageOperationRuntime,
+): Promise<WorkflowImageToolOutcome> {
+  if (!input.prompt.trim()) throw new Error('叠加层需要描述要加什么');
+  const parameters = parseWorkflowOperationParameters('image.layer@1', { style: input.style, count: input.count }) as unknown as WorkflowLayerParameters;
+  const { node: source } = requireWorkflowMediaNode(runtime, projectId, sourceNodeId, 'image');
+  const modelId = source.metadata.config?.modelId;
+  const resolved = await resolveImageRoute(runtime, modelId);
+  const started = await startMaskedImageOperation(runtime, projectId, source, 'image.layer@1', input.mask, { ...parameters }, input.prompt, modelId, resolved.routeId);
+  return executeLayer(projectId, started, input.prompt, parameters, resolved.routeId, resolved.key, runtime);
+}
+
+async function executeLayer(
+  projectId: string,
+  started: StartedWorkflowOperation,
+  prompt: string,
+  parameters: WorkflowLayerParameters,
+  routeId: string,
+  key: Parameters<typeof editImageWithProvider>[3],
+  runtime: WorkflowImageOperationRuntime,
+) {
+  try {
+    const { input } = await imageInput(started.sourceNodes[0], runtime);
+    const maskSource = started.sourceNodes[1];
+    const mask = maskSource ? (await imageInput(maskSource, runtime)).input : undefined;
+    const layerPrompt = composeWorkflowLayerPrompt(prompt, parameters.style);
+    const execute = runtime.executeEdit || editImageWithProvider;
+    // 顺序执行：不对同一付费端点并发打满限流；任一候选失败则整个 Take 失败，不提交半组结果。
+    const outputs = [];
+    for (let index = 0; index < parameters.count; index += 1) {
+      const result = await execute([input], layerPrompt, routeId, key, mask ? { mask } : undefined);
+      if (!result.newImageBase64) throw new Error(result.textResponse || '叠加层没有返回可用结果');
+      const mimeType = result.newImageMimeType || 'image/png';
+      outputs.push({
+        blob: await dataUrlBlob(result.newImageBase64, mimeType),
+        title: '叠加层 ' + (index + 1),
+        fileName: 'layer-' + (index + 1) + '.png',
+        mimeType,
+        role: 'result_image' as const,
+        column: index % 2,
+        row: Math.floor(index / 2),
+      });
+    }
+    return await commitWorkflowOperation(runtime, projectId, started, outputs);
   } catch (error) {
     await failWorkflowOperation(runtime, projectId, started, error);
     throw error;
@@ -434,6 +513,20 @@ export async function rerunWorkflowImageOperation(
       await restartWorkflowOperation(runtime, projectId, operationNodeId, resolved.routeId),
       record.recipe.promptDocument.text,
       variant,
+      resolved.routeId,
+      resolved.key,
+      runtime,
+    );
+  }
+  if (record.capabilityId === 'image.layer@1') {
+    const parameters = parseWorkflowOperationParameters(record.capabilityId, record.recipe.parameters) as unknown as WorkflowLayerParameters;
+    const modelId = record.recipe.productModelId || sourceNodes[0]?.metadata.config?.modelId;
+    const resolved = await resolveImageRoute(runtime, modelId);
+    return executeLayer(
+      projectId,
+      await restartWorkflowOperation(runtime, projectId, operationNodeId, resolved.routeId),
+      record.recipe.promptDocument.text,
+      parameters,
       resolved.routeId,
       resolved.key,
       runtime,

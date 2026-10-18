@@ -1,7 +1,9 @@
 import type { WorkflowNodeToolName } from '../components/workflow/nodeToolCatalog';
+import { WORKFLOW_LAYER_STYLES, type WorkflowLayerStyle } from '../components/workflow/operationRegistry';
 import {
   runWorkflowCropOperation,
   runWorkflowImageEditOperation,
+  runWorkflowLayerOperation,
   runWorkflowRemoveBackgroundOperation,
   runWorkflowRotateOperation,
   runWorkflowSplitGridOperation,
@@ -74,6 +76,18 @@ export async function runWorkflowNodeTool(
       return runWorkflowSplitGridOperation(projectId, nodeId, {
         rows: Math.round(finite(args.rows, 2, 1, 6)), cols: Math.round(finite(args.cols, 2, 1, 6)),
       }, runtime);
+    case 'layer': {
+      const mask = args.maskNodeId
+        ? { nodeId: String(args.maskNodeId) }
+        : args.maskHref
+          ? { href: String(args.maskHref), mimeType: String(args.maskMimeType || 'image/png') }
+          : undefined;
+      const requestedStyle = String(args.style || 'doodle');
+      const style = ((WORKFLOW_LAYER_STYLES as readonly string[]).includes(requestedStyle) ? requestedStyle : 'doodle') as WorkflowLayerStyle;
+      return runWorkflowLayerOperation(projectId, nodeId, {
+        prompt: String(args.prompt || ''), style, count: Math.round(finite(args.count, 4, 1, 4)), mask,
+      }, runtime);
+    }
     case 'video-trim':
       return runWorkflowVideoTrimOperation(projectId, nodeId, {
         startSec: finite(args.startSec, 0, 0, Number.MAX_SAFE_INTEGER), endSec: finite(args.endSec, 0, 0, Number.MAX_SAFE_INTEGER),

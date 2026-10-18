@@ -5,8 +5,10 @@ import type { ImageFilters } from '../../types';
 import type { WorkflowCropRect } from './media';
 import type { WorkflowNode } from './types';
 import { LIGHTING_PRESETS, type LightingPreset } from './LightingPresets';
+import type { WorkflowLayerStyle } from './operationRegistry';
+import { WorkflowLayerDialog } from './WorkflowLayerDialog';
 
-export type WorkflowImageToolKind = 'crop' | 'filter' | 'upscale' | 'remove-background' | 'outpaint' | 'mask' | 'split' | 'rotate' | 'splitGrid' | 'annotate' | 'relight' | 'storyboard';
+export type WorkflowImageToolKind = 'crop' | 'filter' | 'upscale' | 'remove-background' | 'outpaint' | 'mask' | 'split' | 'rotate' | 'splitGrid' | 'annotate' | 'relight' | 'storyboard' | 'layer';
 export interface WorkflowImageToolState { kind: WorkflowImageToolKind; nodeId: string }
 export type WorkflowImageToolConfirmation =
   | { kind: 'crop'; crop: WorkflowCropRect }
@@ -19,7 +21,8 @@ export type WorkflowImageToolConfirmation =
   | { kind: 'splitGrid'; rows: number; cols: number }
   | { kind: 'annotate'; annotatedDataUrl: string }
   | { kind: 'relight'; preset: string; intensity: number; color: string; smart: boolean }
-  | { kind: 'storyboard'; cols: number; showIndex: boolean };
+  | { kind: 'storyboard'; cols: number; showIndex: boolean }
+  | { kind: 'layer'; prompt: string; style: WorkflowLayerStyle; count: number; maskDataUrl?: string };
 
 export function WorkflowImageToolDialogs({ tool, node, mediaUrl, busy, error, onClose, onPreview, onConfirm }: {
   tool: WorkflowImageToolState | null;
@@ -44,6 +47,7 @@ export function WorkflowImageToolDialogs({ tool, node, mediaUrl, busy, error, on
   if (tool.kind === 'annotate') return <AnnotateDialog {...common} onConfirm={dataUrl => onConfirm({ kind: 'annotate', annotatedDataUrl: dataUrl })} />;
   if (tool.kind === 'relight') return <RelightDialog {...common} onConfirm={(preset, intensity, color, smart) => onConfirm({ kind: 'relight', preset, intensity, color, smart })} />;
   if (tool.kind === 'storyboard') return <StoryboardDialog {...common} onConfirm={(cols, showIndex) => onConfirm({ kind: 'storyboard', cols, showIndex })} />;
+  if (tool.kind === 'layer') return <WorkflowLayerDialog {...common} onConfirm={(prompt, style, count, maskDataUrl) => onConfirm({ kind: 'layer', prompt, style, count, maskDataUrl })} />;
   return null;
 }
 

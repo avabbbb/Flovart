@@ -1,4 +1,4 @@
-import { AlignCenter, AlignLeft, AlignRight, ArrowDownToLine, ArrowUpToLine, AudioLines, ChevronsDown, ChevronsUp, Copy, Crop, Download, Eraser, Expand, FilePenLine, Frame, Grid2x2, Group, Layers3, Library, Lightbulb, Maximize2, MessageSquareText, Play, RefreshCw, RotateCw, ScanLine, ScanText, Scissors, SlidersHorizontal, Square, Trash2, Ungroup, ZoomIn, Gauge } from 'lucide-react';
+import { AlignCenter, AlignLeft, AlignRight, ArrowDownToLine, ArrowUpToLine, AudioLines, ChevronsDown, ChevronsUp, Copy, Crop, Download, Eraser, Expand, FilePenLine, Frame, Grid2x2, Group, Layers, Layers3, Library, Lightbulb, Maximize2, MessageSquareText, Play, RefreshCw, RotateCw, ScanLine, ScanText, Scissors, SlidersHorizontal, Square, Trash2, Ungroup, ZoomIn, Gauge } from 'lucide-react';
 import { useRef } from 'react';
 import { MoreHorizontal } from 'lucide-react';
 import { saveMediaUrl } from '../../services/desktopNetwork';
@@ -21,6 +21,7 @@ export interface WorkflowImageToolHandlers {
   splitGrid?: (id: string) => void;
   annotate?: (id: string) => void;
   relight?: (id: string) => void;
+  layer?: (id: string) => void;
   storyboard?: (ids: string[]) => void;
 }
 
@@ -102,6 +103,7 @@ export function WorkflowNodeToolbar({ nodes, onCopy, onDelete, onExport, onRun, 
     node?.type === 'image' && mediaUrl && imageTools?.splitGrid && { key: 'splitGrid', label: WORKFLOW_NODE_TOOL_LABELS['split-grid'], icon: <Grid2x2 size={18} />, disabled: advancedToolBusy, onClick: () => imageTools.splitGrid?.(node.id) },
     node?.type === 'image' && mediaUrl && imageTools?.annotate && { key: 'annotate', label: '标注涂鸦', icon: <ScanLine size={18} />, disabled: advancedToolBusy, onClick: () => imageTools.annotate?.(node.id) },
     node?.type === 'image' && mediaUrl && imageTools?.relight && { key: 'relight', label: '打光面板', icon: <Lightbulb size={18} />, disabled: advancedToolBusy, onClick: () => imageTools.relight?.(node.id) },
+    node?.type === 'image' && mediaUrl && imageTools?.layer && { key: 'layer', label: '叠加层', icon: <Layers size={18} />, disabled: advancedToolBusy, onClick: () => imageTools.layer?.(node.id) },
     selectedMedia.length > 1 && selectedMedia.every(n => n.type === 'image') && imageTools?.storyboard && { key: 'storyboard', label: '分镜组拼接', icon: <Frame size={18} />, disabled: advancedToolBusy, onClick: () => imageTools.storyboard?.(ids) },
     node?.type === 'video' && mediaUrl && videoTools?.trim && { key: 'video-trim', label: WORKFLOW_NODE_TOOL_LABELS['video-trim'], icon: <Scissors size={18} />, disabled: videoToolBusy, onClick: () => videoTools.trim?.(node.id) },
     node?.type === 'video' && mediaUrl && videoTools?.avSplit && { key: 'video-av-split', label: WORKFLOW_NODE_TOOL_LABELS['video-av-split'], icon: <ScanLine size={18} />, disabled: videoToolBusy, onClick: () => videoTools.avSplit?.(node.id) },

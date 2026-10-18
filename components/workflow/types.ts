@@ -64,6 +64,7 @@ export type WorkflowOperationCapabilityId =
   | 'image.edit@1'
   | 'image.rotate@1'
   | 'image.split-grid@1'
+  | 'image.layer@1'
   | 'video.trim@1'
   | 'video.av-split@1'
   | 'video.merge@1'

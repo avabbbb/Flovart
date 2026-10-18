@@ -1,3 +1,4 @@
+import { deriveWorkflowLayerPreview } from './layerPreview';
 import { nanoid } from 'nanoid';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { RefObject } from 'react';
@@ -59,6 +60,7 @@ import type { WorkflowConnection, WorkflowDocumentOperation, WorkflowNode as Wor
 import {
   runWorkflowCropOperation,
   runWorkflowImageEditOperation,
+  runWorkflowLayerOperation,
   runWorkflowRemoveBackgroundOperation,
   runWorkflowRotateOperation,
   runWorkflowSplitGridOperation,
@@ -661,6 +663,7 @@ export function InfiniteWorkflow({
     crop: id => openImageTool('crop', id), filter: id => openImageTool('filter', id), upscale: id => openImageTool('upscale', id),
     removeBackground: id => openImageTool('remove-background', id), outpaint: id => openImageTool('outpaint', id), mask: id => openImageTool('mask', id), splitLayers: id => openImageTool('split', id),
     rotate: id => openImageTool('rotate', id), splitGrid: id => openImageTool('splitGrid', id), annotate: id => openImageTool('annotate', id), relight: id => openImageTool('relight', id),
+    layer: id => openImageTool('layer', id),
     storyboard: ids => { setStoryboardNodeIds(ids); openImageTool('storyboard', ids[0]); },
   }), [openImageTool]);
 
@@ -930,6 +933,16 @@ export function InfiniteWorkflow({
         const result = await runWorkflowImageEditOperation(transaction.projectId, node.id, prompt, 'relight', undefined, imageToolRuntime);
         if (!ownsImageToolTransaction(transaction)) return;
         if (result?.status === 'committed') { pushHistory(transaction.frame); setImageTool(null); releaseImageToolTransaction(transaction); }
+        else if (result?.status === 'stale') { setImageTool(null); setImageToolError(null); releaseImageToolTransaction(transaction); }
+        return;
+      }
+      if (confirmation.kind === 'layer') {
+        const result = await runWorkflowLayerOperation(transaction.projectId, node.id, {
+          prompt: confirmation.prompt, style: confirmation.style, count: confirmation.count,
+          mask: confirmation.maskDataUrl ? { href: confirmation.maskDataUrl, mimeType: 'image/png' } : undefined,
+        }, imageToolRuntime);
+        if (!ownsImageToolTransaction(transaction)) return;
+        if (result?.status === 'committed') { pushHistory(transaction.frame); setNotice('叠加层已生成 ' + confirmation.count + ' 个候选'); setImageTool(null); releaseImageToolTransaction(transaction); }
         else if (result?.status === 'stale') { setImageTool(null); setImageToolError(null); releaseImageToolTransaction(transaction); }
         return;
       }
@@ -2590,6 +2603,7 @@ export function InfiniteWorkflow({
             onChangeMetadata={metadata => { if (!node.isLocked) applyOps([{ type: 'update_node', id: node.id, metadata }]); }}
             onRun={() => { if (!node.isLocked) onRunNode(node.id); }}
             runState={runStates.get(node.id)}
+            layerPreview={deriveWorkflowLayerPreview(node, project.nodes)}
             presence={presenceByNode.get(node.id)}
             onSelectTake={node.metadata.operation ? takeId => {
               const current = projectRef.current.nodes.find(item => item.id === node.id);
