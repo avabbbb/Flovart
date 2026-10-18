@@ -7,6 +7,7 @@ import type { WorkflowNode } from './types';
 import { LIGHTING_PRESETS, type LightingPreset } from './LightingPresets';
 import type { WorkflowLayerStyle } from './operationRegistry';
 import { WorkflowLayerDialog } from './WorkflowLayerDialog';
+import type { LassoPoint } from './lasso';
 
 export type WorkflowImageToolKind = 'crop' | 'filter' | 'upscale' | 'remove-background' | 'outpaint' | 'mask' | 'split' | 'rotate' | 'splitGrid' | 'annotate' | 'relight' | 'storyboard' | 'layer';
 export interface WorkflowImageToolState { kind: WorkflowImageToolKind; nodeId: string }
@@ -24,7 +25,7 @@ export type WorkflowImageToolConfirmation =
   | { kind: 'storyboard'; cols: number; showIndex: boolean }
   | { kind: 'layer'; prompt: string; style: WorkflowLayerStyle; count: number; maskDataUrl?: string };
 
-export function WorkflowImageToolDialogs({ tool, node, mediaUrl, busy, error, onClose, onPreview, onConfirm }: {
+export function WorkflowImageToolDialogs({ tool, node, mediaUrl, busy, error, onClose, onPreview, onConfirm, layerPoints }: {
   tool: WorkflowImageToolState | null;
   node: WorkflowNode | null;
   mediaUrl: string;
@@ -33,6 +34,7 @@ export function WorkflowImageToolDialogs({ tool, node, mediaUrl, busy, error, on
   onClose: () => void;
   onPreview?: (filters: Partial<ImageFilters>) => void;
   onConfirm: (payload: WorkflowImageToolConfirmation) => void;
+  layerPoints?: readonly LassoPoint[];
 }) {
   if (!tool || !node || !mediaUrl) return null;
   const common = { open: true, mediaUrl, busy, error, onClose };
@@ -47,7 +49,7 @@ export function WorkflowImageToolDialogs({ tool, node, mediaUrl, busy, error, on
   if (tool.kind === 'annotate') return <AnnotateDialog {...common} onConfirm={dataUrl => onConfirm({ kind: 'annotate', annotatedDataUrl: dataUrl })} />;
   if (tool.kind === 'relight') return <RelightDialog {...common} onConfirm={(preset, intensity, color, smart) => onConfirm({ kind: 'relight', preset, intensity, color, smart })} />;
   if (tool.kind === 'storyboard') return <StoryboardDialog {...common} onConfirm={(cols, showIndex) => onConfirm({ kind: 'storyboard', cols, showIndex })} />;
-  if (tool.kind === 'layer') return <WorkflowLayerDialog {...common} onConfirm={(prompt, style, count, maskDataUrl) => onConfirm({ kind: 'layer', prompt, style, count, maskDataUrl })} />;
+  if (tool.kind === 'layer') return <WorkflowLayerDialog {...common} initialPoints={layerPoints} onConfirm={(prompt, style, count, maskDataUrl) => onConfirm({ kind: 'layer', prompt, style, count, maskDataUrl })} />;
   return null;
 }
 

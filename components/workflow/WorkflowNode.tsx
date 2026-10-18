@@ -1,4 +1,6 @@
 import { Bot, Camera, Check, ChevronsDown, Clapperboard, FileText, Image as ImageIcon, Music2, Pause, Pencil, Play, Plus, RefreshCw, Sparkles, Star, Upload, Video, Volume2, VolumeX, X } from 'lucide-react';
+import { WorkflowNodeLasso } from './WorkflowNodeLasso';
+import type { LassoPoint } from './lasso';
 import { Component, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import { motion } from 'motion/react';
 import { WorkflowConfigPanel } from './WorkflowConfigPanel';
@@ -77,6 +79,8 @@ export function WorkflowNode({
   onSelectTake,
   presence,
   layerPreview,
+  lassoActive,
+  onLassoDone,
 }: {
   node: WorkflowNodeData;
   selected: boolean;
@@ -120,6 +124,10 @@ export function WorkflowNode({
   presence?: WorkflowNodePresence;
   /** 叠加层 Operation 当前 Take 的源图与候选（deriveWorkflowLayerPreview）；只用于显示。 */
   layerPreview?: WorkflowLayerPreview;
+  /** 节点内套索模式（叠加层）；仅对已有媒体的图片节点生效。 */
+  lassoActive?: boolean;
+  /** null 取消；[] 整图；否则为原图像素坐标的闭合路径。 */
+  onLassoDone?: (points: LassoPoint[] | null) => void;
 }) {
   const status = node.metadata.status || 'idle';
   const progress = Math.max(0, Math.min(100, Math.round(node.metadata.progress || 0)));
@@ -344,7 +352,7 @@ export function WorkflowNode({
           : <>
         {isMedia && (media.url || hasMediaReference) && <div className="workflow-node__drag-handle" data-workflow-drag-handle />}
         {node.type === 'image' && (media.url
-          ? <><img src={media.url} alt={node.title} draggable={false} data-workflow-media-preview style={{ filter: buildCssFilter(node.metadata.filters) }} />{mediaActions}</>
+          ? <><img src={media.url} alt={node.title} draggable={false} data-workflow-media-preview style={{ filter: buildCssFilter(node.metadata.filters) }} />{lassoActive && onLassoDone ? <WorkflowNodeLasso width={node.metadata.naturalWidth} height={node.metadata.naturalHeight} language={language} onDone={onLassoDone} /> : mediaActions}</>
           : <div className="workflow-node__empty"><ImageIcon size={26} /><span>{mediaError || '图片节点'}</span>{mediaActions}</div>)}
         {node.type === 'video' && (hasMediaReference
           ? videoActive

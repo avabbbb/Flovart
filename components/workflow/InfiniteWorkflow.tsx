@@ -2,6 +2,7 @@ import { deriveWorkflowLayerPreview } from './layerPreview';
 import { nanoid } from 'nanoid';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { RefObject } from 'react';
+import type { LassoPoint } from './lasso';
 import type { DragEvent as ReactDragEvent, PointerEvent as ReactPointerEvent } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Check, ChevronRight, ChevronsDown, Maximize2, Plus, Star, Undo2 } from 'lucide-react';
@@ -323,6 +324,8 @@ export function InfiniteWorkflow({
   const [overlayHidden, setOverlayHidden] = useState(false);
   const [promptFocusSignal, setPromptFocusSignal] = useState(0);
   const [imageTool, setImageTool] = useState<WorkflowImageToolState | null>(null);
+  const [lassoNodeId, setLassoNodeId] = useState<string | null>(null);
+  const [layerLassoPoints, setLayerLassoPoints] = useState<LassoPoint[] | undefined>(undefined);
   const [imageToolBusy, setImageToolBusy] = useState(false);
   const [imageToolError, setImageToolError] = useState<string | null>(null);
   const [videoTool, setVideoTool] = useState<WorkflowVideoToolState | null>(null);
@@ -663,9 +666,18 @@ export function InfiniteWorkflow({
     crop: id => openImageTool('crop', id), filter: id => openImageTool('filter', id), upscale: id => openImageTool('upscale', id),
     removeBackground: id => openImageTool('remove-background', id), outpaint: id => openImageTool('outpaint', id), mask: id => openImageTool('mask', id), splitLayers: id => openImageTool('split', id),
     rotate: id => openImageTool('rotate', id), splitGrid: id => openImageTool('splitGrid', id), annotate: id => openImageTool('annotate', id), relight: id => openImageTool('relight', id),
-    layer: id => openImageTool('layer', id),
+    layer: id => {
+      const target = projectRef.current.nodes.find(node => node.id === id);
+      // 有媒体的图片节点先在节点内圈选，再进入参数弹窗；其余情况直接弹窗。
+      if (target?.type === 'image' && (target.metadata.storageKey || target.metadata.href) && target.metadata.status !== 'loading' && !imageTool && !imageToolTransactionRef.current) {
+        setLayerLassoPoints(undefined);
+        setLassoNodeId(id);
+        return;
+      }
+      openImageTool('layer', id);
+    },
     storyboard: ids => { setStoryboardNodeIds(ids); openImageTool('storyboard', ids[0]); },
-  }), [openImageTool]);
+  }), [imageTool, openImageTool]);
 
   const openVideoTool = useCallback((kind: WorkflowVideoToolState['kind'], nodeId: string, nodeIds?: string[]) => {
     if (videoToolTransactionRef.current || videoTool || videoToolBusyRef.current) {
@@ -2604,6 +2616,13 @@ export function InfiniteWorkflow({
             onRun={() => { if (!node.isLocked) onRunNode(node.id); }}
             runState={runStates.get(node.id)}
             layerPreview={deriveWorkflowLayerPreview(node, project.nodes)}
+            lassoActive={lassoNodeId === node.id}
+            onLassoDone={lassoNodeId === node.id ? points => {
+              setLassoNodeId(null);
+              if (!points) return;
+              setLayerLassoPoints(points.length >= 3 ? points : undefined);
+              openImageTool('layer', node.id);
+            } : undefined}
             presence={presenceByNode.get(node.id)}
             onSelectTake={node.metadata.operation ? takeId => {
               const current = projectRef.current.nodes.find(item => item.id === node.id);
@@ -2855,6 +2874,7 @@ export function InfiniteWorkflow({
         tool={imageTool}
         node={activeImageToolNode}
         mediaUrl={activeImageToolMedia.url || ''}
+        layerPoints={imageTool?.kind === 'layer' ? layerLassoPoints : undefined}
         busy={imageToolBusy}
         error={imageToolError || activeImageToolMedia.error}
         onClose={closeImageTool}
