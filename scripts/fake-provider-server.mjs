@@ -64,6 +64,7 @@ function requestSummary(req, body) {
     prompt: typeof json?.prompt === 'string' ? json.prompt : undefined,
     referenceCount: references.length || multipartReferenceCount,
     referenceRoles: Array.isArray(json?.reference_roles) ? json.reference_roles.map(String).slice(0, 16) : [],
+    hasMask: /name="mask"/.test(text) || typeof json?.mask === 'string',
     bodyType: json ? 'json' : req.headers['content-type']?.split(';')[0] || 'unknown',
   };
 }
