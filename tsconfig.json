@@ -27,5 +27,5 @@
     "allowImportingTsExtensions": true,
     "noEmit": true
   },
-  "exclude": ["src-tauri/**", "dsh-plugin/**", "node_modules", "dist", "dist-extension"]
+  "exclude": ["src-tauri/**", "node_modules", "dist", "dist-extension"]
 }

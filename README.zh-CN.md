@@ -353,7 +353,6 @@ Flovart 不内置模型服务。你可以在应用中配置 Provider，按需选
 | Codex CLI + Browser Workflow | Experimental |
 | Claude Code CLI projection | Experimental |
 | OpenCode CLI projection | Experimental |
-| DeepSeek Harness RC8 bundle/profile | Experimental |
 | WorkBuddy CLI Connector | Experimental |
 | CodeBuddy Code | Planned |
 | Pi | Planned |

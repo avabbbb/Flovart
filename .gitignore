@@ -73,8 +73,6 @@ src-tauri/.tauri_private_key
 src-tauri/.tauri_private_key.pub
 .flovart/
 
-# dsh-plugin build output
-dsh-plugin/lib/
 
 # FlovartBench raw evidence: trajectories and snapshots for every trial.
 # The generated reports under eval/reports/ are the artifact of record; the raw

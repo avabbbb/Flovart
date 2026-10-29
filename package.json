@@ -24,8 +24,6 @@
     "test:watch": "vitest",
     "flovart:cli": "node tools/flovart/cli.js",
     "flovart:agent": "node agent/index.js",
-    "dsh:profile:install": "npm --prefix dsh-plugin run build && npm --prefix dsh-plugin run profile:install",
-    "dsh:start": "npm run dsh:profile:install && npm --prefix dsh-plugin run profile:start",
     "prototype:vox-film": "node tools/flovart/prototypes/vox-film/index.mjs",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",

@@ -69,10 +69,6 @@ const EXTERNAL_PACKAGE_HOSTS: Record<string, { fileName: string; installed: stri
     fileName: 'flovart-workbuddy.zip',
     installed: '安装包已下载，在 WorkBuddy 的技能页导入后即可使用 Flovart。',
   },
-  'deepseek-harness': {
-    fileName: '',
-    installed: 'DeepSeek Harness 插件尚未在当前环境就绪，请先完成插件安装。',
-  },
 };
 
 const externalPackageAdapters = (id: string): Partial<FlovartHostLifecycleAdapter> => {

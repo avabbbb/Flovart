@@ -7,7 +7,7 @@ import { useAgentConnectionStore } from '../../stores/useAgentConnectionStore';
 import registry from '../../tools/flovart/contracts/host-registry.v1.json';
 import { AgentHostDiagnostics } from './AgentHostDiagnostics';
 const SELECTED_HOST_KEY = 'flovart.agent.selectedHost';
-const PRIMARY_HOSTS = ['codex', 'workbuddy', 'deepseek-harness'];
+const PRIMARY_HOSTS = ['codex', 'workbuddy'];
 // SUPPORT_MATRIX.md Closed Beta freeze: Codex is the promoted host; every other
 // selectable host is experimental and must not render as equally ready.
 const BETA_HOSTS: Record<string, true> = { codex: true };
@@ -24,7 +24,7 @@ function publicStatusFor(host: AgentHostRecord | undefined, connectionStatus: st
     service: connectionStatus === 'ready' || connectionStatus === 'connecting' || connectionStatus === 'error' ? connectionStatus : 'offline',
     // A ready local service is enough to classify an unavailable host as setup-needed.
     // Writer ownership is shown separately by `active`; treating it as a hard
-    // prerequisite would incorrectly turn WorkBuddy/DSH setup into "offline".
+    // prerequisite would incorrectly turn WorkBuddy setup into "offline".
     writerActive: writerActive || connectionStatus === 'ready',
     host: host || { available: false, status: 'unknown' },
   });

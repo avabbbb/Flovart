@@ -48,14 +48,8 @@ jobs:
       - name: Install production and development dependency graph
         run: npm ci --ignore-scripts --registry=https://registry.npmjs.org
 
-      - name: Install DSH plugin dependency graph
-        run: npm --prefix dsh-plugin ci --ignore-scripts --registry=https://registry.npmjs.org
-
       - name: Audit npm dependencies
         run: npm run release:dependency-audit
-
-      - name: Audit DSH plugin dependencies
-        run: npm audit --prefix dsh-plugin --registry=https://registry.npmjs.org --audit-level=moderate
 
   codeql:
     name: CodeQL (${{ matrix.language }})

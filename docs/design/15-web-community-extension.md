@@ -31,7 +31,7 @@
 ## 5. 安装与发行
 
 - 插件是日常入口，复杂编排展开 Flovart；安装器按实际宿主安装组件并复用一个本地服务。普通用户不需手装 Node / Go / Git。
-- 发行物：Desktop（Tauri）、`dist-studio/*` 宿主包、`dist-workbuddy/flovart`、`@flovart/dsh-plugin`、MCP server。各自状态见 Support Matrix。
+- 发行物：Desktop（Tauri）、`dist-studio/*` 宿主包、`dist-workbuddy/flovart`、MCP server。各自状态见 Support Matrix。
 - 只有用户明确要求才走发版流程（CHANGELOG → VERSION → tag）；不自行推商店或生产签名。
 
 ## 6. 验证

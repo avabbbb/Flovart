@@ -13,7 +13,6 @@ onboarding 或宣传中呈现为与 Beta 路径同等就绪。`Stable` 只表示
 | Codex CLI + Browser Workflow | Beta | 本次发布主推的 Agent 路径。Link/Lease focused tests、Chrome for Testing smoke 与 5 次连续真实 `codex exec`（v0.154.0）trial：Codex 读取 `.agents/skills/flovart/SKILL.md` 后经 CLI 驱动真实 Browser Workflow 完成 3 节点 + 2 顺序连接（`workflow.node.create-connected`，trial 3–7）。**脱敏证据已入库：`docs/archive/2026-10-07/evidence/release-candidate/CODEX_TRIAL_EVIDENCE.md`**；真实 Provider wire 进行中，公开安装首次启动 transcript 仍是 External Gate |
 | Claude Code CLI projection | Experimental | shared Skill/CLI surface；真实登录与公开安装态未认证 |
 | OpenCode CLI projection | Experimental | shared Skill/CLI surface；Host-specific tracer 未认证 |
-| DeepSeek Harness RC8 bundle/profile | Experimental | DSH build、service/tool tests、packed profile install 与 `--dump-config`；真实登录、可见 Browser Workflow tracer、service recovery 仍待认证 |
 | WorkBuddy CLI Connector + Skill | Experimental | official-shape artifact、schema/secret/clean fixture 与 local-ready lifecycle；真实 WorkBuddy client/Marketplace/NL tracer 未运行。Closed Beta 不作为主推路径 |
 | TeleAgent MCP + Skill projection | Experimental | stdio MCP handshake/tool/resource contract 与接入准备包；真实 TeleAgent client/import/NL tracer 未运行 |
 | CodeBuddy Code | Planned | stable Skill/CLI compatibility target；无本机登录 tracer |
@@ -69,7 +68,6 @@ Provider 一律 `Experimental` / unverified，不得写进 Beta 发布口径。
 | `dist-studio/premiere` | Experimental artifact | 可生成并校验；Link 注入的 frame/import/controller 尚未在真实 Premiere 运行 |
 | `dist-studio/after-effects` | Experimental artifact | CEP/ExtendScript light-panel artifact；真实 AE layer tracer 尚未认证，且不代表 C++ native effect |
 | `dist-studio/resolve` | Experimental artifact | Resolve Studio Workflow Integration artifact；真实 Media Pool tracer 尚未认证，且不代表 OFX effect |
-| `@flovart/dsh-plugin` | Experimental | RC8 profile 可安装；真实认证会话与完整 recovery 未完成 |
 | `tools/flovart/mcp-server.js` / `flovart-mcp` | Experimental artifact | canonical five-tool stdio projection 与 MCP SDK tests；真实 MCP Host import、Agent session 与 Provider path 未认证 |
 | Built-in Workflow node plugins | Experimental | trusted in-process code，故障隔离不是安全 sandbox |
 | Community Skill package install | Experimental | 安装边界有路径/大小/数量/重复项校验，第三方包安全仍需签名与权限策略 |
@@ -78,7 +76,6 @@ Provider 一律 `Experimental` / unverified，不得写进 Beta 发布口径。
 
 - 真实 Codex 登录和从公开安装包首次启动的完整 transcript；
 - WorkBuddy 真实客户端/Marketplace 安装与自然语言 tracer；
-- DSH 真实用户登录、可见 Browser Workflow tracer、service unload/reload；
 - Photoshop、Premiere 的真实宿主安装、选择、Provider wire、artifact import；
 - After Effects 的真实宿主 API / 安装 gate；Resolve Studio 21.1 的 native MCP 真实连接、Agent selection tracer、durable artifact → Media Pool 导入与 panel UX；
 - RunningHub 真实账号付费路径的认证 gate：seedream t2i / seedance i2v /

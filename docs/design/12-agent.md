@@ -6,7 +6,7 @@
 
 | 概念 | 是什么 | 不是什么 |
 | --- | --- | --- |
-| **外部 Agent 接入** | Codex、Claude Code、OpenCode、WorkBuddy、DSH 等通过 Skill + CLI（或 MCP 投影）调用 Flovart | 第二套业务实现 |
+| **外部 Agent 接入** | Codex、Claude Code、OpenCode、WorkBuddy 等通过 Skill + CLI（或 MCP 投影）调用 Flovart | 第二套业务实现 |
 | **Agent surface** | 顶栏连接中心：发现、准备、状态、切换 | 聊天页、Tasks / Artifacts 工作区 |
 | **Assistant drawer** | Canvas / Table 旁的内置上下文助手，调用同一批受控操作 | Host picker、Agent 安装、更高权限 |
 

@@ -35,14 +35,6 @@ describe('Agent Host Projection preparation', () => {
     expect(readFileSync(join(projectDir, '.agents', 'skills', 'flovart', 'SKILL.md'), 'utf8')).toContain('workflow.apply');
   });
 
-  it('keeps DSH on its external Plugin/Profile projection', () => {
-    const result = prepareAgentHostProjection({
-      agentIdentity: 'deepseek-harness',
-      discover: () => ({ agents: [available('deepseek-harness')] }),
-    });
-    expect(result).toMatchObject({ ok: true, projection: { status: 'external', skillReady: false } });
-  });
-
   it('offers WorkBuddy import without claiming that the app or Skill is installed', () => {
     const result = prepareAgentHostProjection({ agentIdentity: 'workbuddy', discover: () => ({ agents: [] }) });
     expect(result).toMatchObject({

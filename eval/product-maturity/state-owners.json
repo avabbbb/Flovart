@@ -31,7 +31,7 @@
       "TableWorkspace local useState selectedNodeId (mirrors project.selectedNodeIds[0] via effect)"
     ],
     "readers": [
-      "InfiniteWorkflow render + ops, WorkflowSidebar highlight, TableWorkspace row pick, WorkflowAgentBridge snapshot → workflow.selection.get for agents, dsh-plugin WorkflowView selectionContext"
+      "InfiniteWorkflow render + ops, WorkflowSidebar highlight, TableWorkspace row pick, WorkflowAgentBridge snapshot → workflow.selection.get for agents"
     ],
     "persistedBy": "useWorkflowStore persist (partialize includes full projects incl. selectedNodeIds); TableWorkspace copy is ephemeral useState",
     "issues": [

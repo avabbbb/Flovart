@@ -169,7 +169,7 @@ const dirExists = async dir => {
   }
 };
 
-// ---- WebUI opener (native OS hand-off, same mechanism as deepseek-harness) ----
+// ---- WebUI opener (native OS hand-off) ----
 
 async function probeCandidate(candidate, timeoutMs = 600) {
   return Boolean(await probeWebUi(candidate, { timeoutMs }).catch(() => null));

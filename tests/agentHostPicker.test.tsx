@@ -9,13 +9,13 @@ vi.mock('../services/agentHostDiscovery', () => ({ discoverAgentHosts: vi.fn() }
 vi.mock('../services/link/hostActivation', () => ({ prepareAgent: vi.fn() }));
 
 const host = (id: string, available = true, status = available ? 'available' : 'unavailable'): AgentHostRecord => ({
-  id, label: id === 'deepseek-harness' ? 'DeepSeek Harness' : id[0].toUpperCase() + id.slice(1), category: id === 'workbuddy' ? 'mainstream-host' : id === 'deepseek-harness' ? 'harness' : 'coding-agent', status, available,
+  id, label: id[0].toUpperCase() + id.slice(1), category: id === 'workbuddy' ? 'mainstream-host' : 'coding-agent', status, available,
   executable: id, path: null, version: null, authStatus: 'not-inspected', distributionTargets: [], runtimeSurfaces: [], diagnostic: '已取得状态',
 });
 const discovery = (codexAvailable = true): AgentHostDiscovery => ({
   ok: true,
   state: 'ready',
-  agents: [host('codex', codexAvailable), host('workbuddy', false, 'manual-import'), host('deepseek-harness', false, 'external-plugin')],
+  agents: [host('codex', codexAvailable), host('workbuddy', false, 'manual-import')],
 });
 
 beforeEach(() => {
@@ -73,7 +73,7 @@ describe('Link 2.0 agent selection', () => {
   it('refreshes changed availability when the host count stays the same', async () => {
     vi.mocked(discoverAgentHosts).mockResolvedValueOnce(discovery(false)).mockResolvedValueOnce(discovery(true));
     render(<AgentHostPicker />);
-    await waitFor(() => expect(screen.getAllByRole('button', { name: '设置' })).toHaveLength(3));
+    await waitFor(() => expect(screen.getAllByRole('button', { name: '设置' })).toHaveLength(2));
     fireEvent.click(screen.getByRole('button', { name: '刷新协作状态' }));
     await waitFor(() => expect(screen.getByRole('button', { name: '使用 Codex' })).toBeEnabled());
   });

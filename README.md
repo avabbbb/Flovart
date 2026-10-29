@@ -355,7 +355,6 @@ Flovart does not bundle model services. Configure a provider in the app, choose 
 | Codex CLI + Browser Workflow | Experimental |
 | Claude Code CLI projection | Experimental |
 | OpenCode CLI projection | Experimental |
-| DeepSeek Harness RC8 bundle/profile | Experimental |
 | WorkBuddy CLI Connector | Experimental |
 | CodeBuddy Code | Planned |
 | Pi | Planned |

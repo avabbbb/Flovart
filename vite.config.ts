@@ -53,8 +53,7 @@ export default defineConfig(() => {
       resolve: {
         // 优先加载 .tsx/.ts 源文件，避免陈旧未跟踪 .js 副本遮蔽源码
         extensions: ['.tsx', '.ts', '.jsx', '.js', '.json', '.mjs'],
-        // dsh-plugin pins an independent RC8 dev graph; host tests still need
-        // one shared React dispatcher.
+        // Keep a single React dispatcher across linked packages.
         dedupe: ['react', 'react-dom'],
         alias: {
           '@': path.resolve(__dirname, '.'),
