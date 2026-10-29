@@ -41,6 +41,7 @@ import { DESIGN_BOOLEAN_LABELS } from '../../services/design/booleanOps';
 import type { DesignElementKind } from '../../services/design/designTypes';
 import type { WorkflowSharedMedia } from './WorkflowConfigPanel';
 import { WorkflowMiniMap } from './WorkflowMiniMap';
+import { WorkflowQuickToggles } from './WorkflowQuickToggles';
 import { WorkflowNode } from './WorkflowNode';
 import { workflowNodePluginContextFromProject } from './nodePluginSdk';
 import { MediaPreviewModal } from './MediaPreviewModal';
@@ -2921,6 +2922,17 @@ export function InfiniteWorkflow({
         </div>}
       </>}
       <WorkflowHostStrip clips={hostClips} language={language} onFocusClip={focusNode} />
+      <WorkflowQuickToggles
+        language={language}
+        minimapOpen={minimapOpen}
+        onToggleMinimap={() => setMinimapOpen(open => !open)}
+        snapEnabled={snapEnabled}
+        onToggleSnap={() => setSnapEnabled(snap => !snap)}
+        edgesVisible={edgesVisible}
+        onToggleEdges={() => setEdgesVisible(v => !v)}
+        gridOn={(project.backgroundMode || 'dots') !== 'none'}
+        onToggleGrid={() => patchProject({ backgroundMode: projectRef.current.backgroundMode === 'none' ? 'dots' : projectRef.current.backgroundMode === 'dots' ? 'lines' : 'none' })}
+      />
       {minimapOpen && <WorkflowMiniMap nodes={displayNodes.filter(node => node.isVisible !== false)} viewport={project.viewport} onCenter={(x, y) => {
         setFocusBadge(false);
         const rect = rootRef.current?.getBoundingClientRect();

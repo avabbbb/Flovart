@@ -15,6 +15,7 @@ import { normalizeProviderBaseUrl } from '../services/baseUrl';
 import { getProductModel, getProductModels, suggestProductRouteMappings } from '../services/productModelCatalog';
 import { getKeyModelIds } from '../utils/modelRefs';
 import { getFlovartRuntimeApi } from '../services/flovartRuntime';
+import { UserScriptAdapterSection } from './settings/UserScriptAdapterSection';
 import '../styles/settings.css';
 
 interface RuntimeProviderStatus {
@@ -390,25 +391,12 @@ type ProviderPreset = {
     featured?: boolean;
 };
 
+// 只内置三种协议入口；其他服务由用户让 Agent 写适配脚本（见 userScriptAuthoring）。
 const PROVIDER_PRESETS: ProviderPreset[] = [
     {
-        id: 'runninghub-standard',
-        name: 'RunningHub standard models',
-        shortName: 'RH',
-        labelKey: 'settingsExtra.preset.runningHubStandard',
-        provider: 'runningHub',
-        websiteUrl: 'https://www.runninghub.cn/call-api/search-api/standard-model?search=',
-        baseUrl: providerBaseUrl.runningHub,
-        capabilities: ['image', 'video'],
-        requestFormat: 'native',
-        authHeaderName: 'Authorization',
-        authScheme: 'Bearer',
-        featured: true,
-    },
-    {
         id: 'custom',
-        name: 'Custom configuration',
-        shortName: 'CU',
+        name: 'OpenAI compatible',
+        shortName: 'OA',
         labelKey: 'settingsExtra.preset.custom',
         shortNameKey: 'settingsExtra.preset.customShort',
         provider: 'custom',
@@ -418,76 +406,14 @@ const PROVIDER_PRESETS: ProviderPreset[] = [
         requestFormat: 'openai',
         authHeaderName: 'Authorization',
         authScheme: 'Bearer',
-    },
-    {
-        id: 'claude-official',
-        name: 'Claude Official',
-        shortName: 'AI',
-        provider: 'anthropic',
-        websiteUrl: 'https://www.anthropic.com/claude-code',
-        baseUrl: providerBaseUrl.anthropic,
-        capabilities: ['text'],
-        requestFormat: 'anthropic',
-        authHeaderName: 'x-api-key',
-        authScheme: '',
-        defaultModel: 'claude-sonnet-4-6',
-        models: ['claude-opus-4-6', 'claude-sonnet-4-6', 'claude-haiku-4-5'],
-    },
-    {
-        id: 'deepseek',
-        name: 'DeepSeek',
-        shortName: 'DS',
-        provider: 'deepseek',
-        websiteUrl: 'https://platform.deepseek.com',
-        baseUrl: providerBaseUrl.deepseek,
-        capabilities: ['text'],
-        requestFormat: 'openai',
-        defaultModel: 'deepseek-v4-flash',
-        models: ['deepseek-v4-flash', 'deepseek-v4-pro', 'deepseek-chat', 'deepseek-reasoner'],
-    },
-    {
-        id: 'openai-gpt-image',
-        name: 'OpenAI GPT Image 2',
-        shortName: 'GI',
-        provider: 'openai',
-        websiteUrl: 'https://platform.openai.com/docs/guides/image-generation',
-        baseUrl: providerBaseUrl.openai,
-        capabilities: ['image'],
-        requestFormat: 'openai',
-        defaultModel: 'gpt-image-2',
-        models: ['gpt-image-2', 'gpt-image-1.5', 'gpt-image-1'],
-    },
-    {
-        id: 'runninghub-global',
-        name: 'RunningHub global site',
-        shortName: 'RH',
-        labelKey: 'settingsExtra.preset.runningHubGlobal',
-        provider: 'runningHub',
-        websiteUrl: 'https://www.runninghub.ai',
-        baseUrl: 'https://www.runninghub.ai/openapi/v2',
-        capabilities: ['image', 'video'],
-        requestFormat: 'native',
-        authHeaderName: 'Authorization',
-        authScheme: 'Bearer',
-    },
-    {
-        id: 'seedance-2',
-        name: 'Seedance 2.0',
-        shortName: 'S2',
-        provider: 'volcengine',
-        websiteUrl: 'https://console.volcengine.com/ark',
-        baseUrl: providerBaseUrl.volcengine,
-        capabilities: ['video'],
-        requestFormat: 'openai',
-        defaultModel: 'doubao-seedance-2-0-260128',
-        models: ['doubao-seedance-2-0-260128', 'doubao-seedance-2-0-fast-260128'],
+        featured: true,
     },
     {
         id: 'google-visual',
-        name: 'Google Visual Models',
-        shortName: 'GO',
+        name: 'Gemini',
+        shortName: 'GE',
         provider: 'google',
-        websiteUrl: 'https://ai.google.dev/gemini-api/docs',
+        websiteUrl: '',
         baseUrl: providerBaseUrl.google,
         capabilities: ['image', 'video'],
         requestFormat: 'google',
@@ -495,38 +421,16 @@ const PROVIDER_PRESETS: ProviderPreset[] = [
         models: ['gemini-3-pro-image', 'gemini-3.1-flash-image', 'gemini-3.1-flash-lite-image', 'veo-3.1-generate-preview', 'veo-3.1-fast-generate-preview', 'veo-3.1-lite-generate-preview'],
     },
     {
-        id: 'kling-video',
-        name: 'Kling VIDEO',
-        shortName: 'KL',
-        provider: 'keling',
-        websiteUrl: 'https://app.klingai.com/cn/dev/document-api/apiReference/updateNotice',
-        baseUrl: providerBaseUrl.keling,
+        id: 'seedance-2',
+        name: 'Volcengine Seedance',
+        shortName: 'SD',
+        provider: 'volcengine',
+        websiteUrl: '',
+        baseUrl: providerBaseUrl.volcengine,
         capabilities: ['video'],
-        requestFormat: 'native',
-    },
-    {
-        id: 'openrouter',
-        name: 'OpenRouter',
-        shortName: 'OR',
-        provider: 'openrouter',
-        websiteUrl: 'https://openrouter.ai',
-        baseUrl: providerBaseUrl.openrouter,
-        capabilities: ['text', 'image'],
         requestFormat: 'openai',
-        defaultModel: 'openrouter/auto',
-        models: ['openrouter/auto', 'anthropic/claude-sonnet-4-6', 'openai/gpt-image-2', 'openai/gpt-image-1', 'google/gemini-3-flash-preview'],
-    },
-    {
-        id: 'siliconflow',
-        name: 'SiliconFlow',
-        shortName: 'SF',
-        provider: 'siliconflow',
-        websiteUrl: 'https://siliconflow.cn',
-        baseUrl: providerBaseUrl.siliconflow,
-        capabilities: ['text', 'image'],
-        requestFormat: 'openai',
-        defaultModel: 'deepseek-ai/DeepSeek-V3',
-        models: ['deepseek-ai/DeepSeek-V3', 'Qwen/Qwen2.5-72B-Instruct'],
+        defaultModel: 'doubao-seedance-2-0-260128',
+        models: ['doubao-seedance-2-0-260128', 'doubao-seedance-2-0-fast-260128'],
     },
 ];
 
@@ -1288,7 +1192,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                                     onClick={() => {
                                         setEditingKeyId(null);
                                         setDisplayName('');
-                                        applyProviderPreset(PROVIDER_PRESETS.find(preset => preset.id === 'openai-gpt-image') || PROVIDER_PRESETS[0], { resetKey: true });
+                                        applyProviderPreset(PROVIDER_PRESETS[0], { resetKey: true, fillName: true });
                                         setShowKeyModal(true);
                                     }}
                                     className="isl-chip isl-chip--active px-3 py-1.5 text-xs"
@@ -1642,6 +1546,21 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                                 <div className={`rounded-xl px-3 py-2 text-xs ${isDark ? 'bg-[#161A22] text-[#98A2B3]' : 'bg-[#F8FAFC] text-[#667085]'}`}>
                                     {t('settingsExtra.keyDialog.compatibilityNote')}
                                 </div>
+                            )}
+
+                            {provider === 'custom' && (
+                                <UserScriptAdapterSection
+                                    key={editingKeyId || 'new'}
+                                    scriptId={extraConfig.providerScriptId}
+                                    modelName={editDefaultModel}
+                                    t={t}
+                                    onBind={scriptId => setExtraConfig(prev => {
+                                        const next = { ...prev };
+                                        if (scriptId) next.providerScriptId = scriptId;
+                                        else delete next.providerScriptId;
+                                        return next;
+                                    })}
+                                />
                             )}
 
                             {provider === 'runningHub' && (

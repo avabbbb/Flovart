@@ -145,6 +145,7 @@ and omitting it on `project.create`/`workflow.apply` makes the write fail with
 - “当前选择” → `workflow.selection.get`.
 - Add, delete, move, resize, connect, disconnect, or edit → one `workflow.apply`.
 - Run a node → `workflow.node.run` after confirming the node from inspection.
+- Run several independent nodes → one `workflow.node.run` with `nodeIds`; the user confirms cost once for the batch and the result lists each node's outcome. Rerun only failed nodes.
 
 For a sequence of nodes, the granular `workflow.node.create-connected` adapter
 is the reliable path — it fills the node defaults (including `storageKey`) that

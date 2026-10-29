@@ -47,9 +47,9 @@ describe('SettingsPanel provider configuration UI', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /添加 API Key|添加供应商|添加 AI 服务/i }));
 
-    expect(screen.getByText('常用 AI 服务')).toBeTruthy();
-    expect(screen.getByText('自定义配置')).toBeTruthy();
-    expect(screen.getByText('Claude Official')).toBeTruthy();
+    expect(screen.getByText('内置协议')).toBeTruthy();
+    expect(screen.getAllByText('OpenAI 兼容').length).toBeGreaterThan(0);
+    expect(screen.getByText('Gemini')).toBeTruthy();
     expect(screen.queryByText('固定模型路由绑定')).toBeNull();
     expect(screen.getByText('价格规则')).toBeTruthy();
     expect(screen.getByText('预算策略')).toBeTruthy();
@@ -81,7 +81,7 @@ describe('SettingsPanel provider configuration UI', () => {
     expect(escapedDelete).not.toHaveBeenCalled();
     expect(input).toBeInTheDocument();
     expect(input.value).toBe('');
-    expect(screen.getByText('常用 AI 服务')).toBeInTheDocument();
+    expect(screen.getByText('内置协议')).toBeInTheDocument();
     window.removeEventListener('keydown', escapedDelete);
   });
 
@@ -189,16 +189,16 @@ describe('SettingsPanel provider configuration UI', () => {
     });
   });
 
-  it('shows RunningHub packaged provider entry', async () => {
+  it('ships only the OpenAI-compatible, Gemini and Seedance protocol presets', async () => {
     renderSettings();
 
     fireEvent.click(screen.getByRole('button', { name: /添加 API Key|添加供应商|添加 AI 服务/i }));
 
-    expect(screen.getByText('RunningHub 标准模型')).toBeTruthy();
-    expect(screen.getByText('RunningHub 海外站')).toBeTruthy();
-    expect(screen.getAllByText('点击获取官方模型').length).toBeGreaterThanOrEqual(1);
-    expect(screen.queryByText('全能图片G-2.0-图生图-低价渠道版')).toBeNull();
-    expect(screen.queryByText('全能视频V3.1-fast-图生视频-低价渠道版')).toBeNull();
+    expect(screen.getByText('Volcengine Seedance')).toBeTruthy();
+    for (const removed of ['RunningHub 标准模型', 'RunningHub 海外站', 'Claude Official', 'DeepSeek', 'OpenRouter', 'SiliconFlow', 'Kling VIDEO']) {
+      expect(screen.queryByText(removed)).toBeNull();
+    }
+    expect(screen.getByText('适配脚本（可选）')).toBeTruthy();
   });
 
   it('does not expose a separate Agent model preference in the creative model list', () => {

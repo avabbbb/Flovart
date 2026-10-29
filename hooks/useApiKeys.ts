@@ -23,6 +23,7 @@ import {
 } from '../services/runtimeCredentials';
 import { syncRuntimeAgentTextRoutes } from '../services/runtimeAgentTextRoutes';
 import { mergeSuggestedProductRouteMappings } from '../services/aiServiceSetup';
+import { loadStoredUserScriptProviders } from '../services/userScriptAuthoring';
 
 const generateId = () => `id_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
@@ -180,6 +181,7 @@ export function useApiKeys(isSettingsPanelOpen: boolean) {
     useEffect(() => {
         let cancelled = false;
         (async () => {
+            loadStoredUserScriptProviders();
             await migrateLegacyKeys();
             const keys = await loadKeysDecrypted<Partial<UserApiKey>[]>();
             if (cancelled) return;

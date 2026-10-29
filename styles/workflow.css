@@ -618,3 +618,10 @@
 
 .workflow-restyle-group { display: flex; flex-direction: column; gap: 6px; }
 .workflow-restyle-options { display: flex; flex-wrap: wrap; gap: 6px; }
+/* Bottom-left quick toggles: minimap, snap, edges, grid. */
+.workflow-quick-toggles { position: absolute; z-index: 40; left: 12px; bottom: 12px; display: flex; gap: 2px; padding: 3px; border: 1px solid var(--wf-border); border-radius: 11px; background: color-mix(in srgb, var(--wf-panel) 92%, transparent); backdrop-filter: blur(8px); }
+.workflow-quick-toggle { display: inline-flex; width: 30px; height: 30px; align-items: center; justify-content: center; border: 0; border-radius: 8px; color: var(--wf-muted); background: transparent; cursor: pointer; }
+.workflow-quick-toggle:hover { color: var(--wf-text); background: color-mix(in srgb, var(--wf-text) 8%, transparent); }
+.workflow-quick-toggle.is-active { color: var(--wf-accent); background: color-mix(in srgb, var(--wf-accent) 16%, transparent); }
+.workflow-quick-toggle:focus-visible { outline: 2px solid var(--wf-accent); outline-offset: 1px; }
+@media (max-width: 640px) { .workflow-quick-toggles { display: none; } }
