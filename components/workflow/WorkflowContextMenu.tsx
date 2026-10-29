@@ -1,12 +1,13 @@
-import { Copy, CopyPlus, Library, Pencil, Play, Star, Trash2 } from 'lucide-react';
+import { CheckSquare, ClipboardPaste, Copy, CopyPlus, Library, Maximize2, Pencil, Play, Plus, Star, Trash2 } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react';
 
 export type WorkflowContextMenuState =
   | { type: 'node'; id: string; x: number; y: number }
-  | { type: 'connection'; id: string; x: number; y: number };
+  | { type: 'connection'; id: string; x: number; y: number }
+  | { type: 'pane'; x: number; y: number };
 
-export function WorkflowContextMenu({ state, language = 'zho', onCopy, onDuplicate, onSaveMedia, onDelete, onRun, onSetPrimary, onRename, onClose }: {
+export function WorkflowContextMenu({ state, language = 'zho', count = 1, onCopy, onDuplicate, onSaveMedia, onDelete, onRun, onSetPrimary, onRename, onPaste, onSelectAll, onAddNode, onFitView, onClose }: {
   state: WorkflowContextMenuState;
   language?: 'en' | 'zho';
   onCopy: () => void;
@@ -16,11 +17,16 @@ export function WorkflowContextMenu({ state, language = 'zho', onCopy, onDuplica
   onRun: () => void;
   onSetPrimary?: () => void;
   onRename?: () => void;
+  count?: number;
+  onPaste?: () => void;
+  onSelectAll?: () => void;
+  onAddNode?: () => void;
+  onFitView?: () => void;
   onClose: () => void;
 }) {
   const copy = language === 'zho'
-    ? { node: '节点菜单', connection: '连接菜单', copy: '复制', duplicate: '创建副本', save: '保存到我的素材', run: '运行节点', primary: '设为主图', rename: '重命名', delete: '删除' }
-    : { node: 'Node menu', connection: 'Connection menu', copy: 'Copy', duplicate: 'Duplicate', save: 'Save to media library', run: 'Run node', primary: 'Set as primary', rename: 'Rename', delete: 'Delete' };
+    ? { node: '节点菜单', connection: '连接菜单', pane: '画布菜单', copy: '复制', duplicate: '创建副本', save: '保存到我的素材', run: '运行节点', primary: '设为主图', rename: '重命名', delete: '删除', paste: '粘贴', selectAll: '全选', addNode: '添加节点', fitView: '适应视图' }
+    : { node: 'Node menu', connection: 'Connection menu', pane: 'Canvas menu', copy: 'Copy', duplicate: 'Duplicate', save: 'Save to media library', run: 'Run node', primary: 'Set as primary', rename: 'Rename', delete: 'Delete', paste: 'Paste', selectAll: 'Select all', addNode: 'Add node', fitView: 'Fit view' };
   const menuRef = useRef<HTMLDivElement>(null);
   const previousFocus = useRef<HTMLElement | null>(null);
   const [position, setPosition] = useState({ left: state.x, top: state.y, maxHeight: 480, ready: false });
@@ -92,7 +98,7 @@ export function WorkflowContextMenu({ state, language = 'zho', onCopy, onDuplica
     <div
       ref={menuRef}
       role="menu"
-      aria-label={state.type === 'node' ? copy.node : copy.connection}
+      aria-label={copy[state.type]}
       data-workflow-overlay
       data-testid="workflow-context-menu"
       className="workflow-context-menu"
@@ -116,7 +122,11 @@ export function WorkflowContextMenu({ state, language = 'zho', onCopy, onDuplica
       {state.type === 'node' && <button type="button" role="menuitem" onClick={onRun}><Play size={14} />{copy.run}</button>}
       {state.type === 'node' && onSetPrimary && <button type="button" role="menuitem" onClick={onSetPrimary}><Star size={14} />{copy.primary}</button>}
       {state.type === 'node' && onRename && <button type="button" role="menuitem" onClick={onRename}><Pencil size={14} />{copy.rename}</button>}
-      <button type="button" role="menuitem" className="is-danger" onClick={onDelete}><Trash2 size={14} />{copy.delete}</button>
+      {state.type === 'pane' && onAddNode && <button type="button" role="menuitem" onClick={onAddNode}><Plus size={14} />{copy.addNode}</button>}
+      {state.type === 'pane' && onPaste && <button type="button" role="menuitem" onClick={onPaste}><ClipboardPaste size={14} />{copy.paste}</button>}
+      {state.type === 'pane' && onSelectAll && <button type="button" role="menuitem" onClick={onSelectAll}><CheckSquare size={14} />{copy.selectAll}</button>}
+      {state.type === 'pane' && onFitView && <button type="button" role="menuitem" onClick={onFitView}><Maximize2 size={14} />{copy.fitView}</button>}
+      {state.type !== 'pane' && <button type="button" role="menuitem" className="is-danger" onClick={onDelete}><Trash2 size={14} />{copy.delete}{count > 1 ? ' (' + count + ')' : ''}</button>}
     </div>,
     document.body,
   );

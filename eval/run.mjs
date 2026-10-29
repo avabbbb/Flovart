@@ -31,6 +31,7 @@ import {
   renderReportMarkdown,
   writeReport,
 } from './lib/report.mjs';
+import { cmdCompare } from './lib/compare.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const evalRoot = here;
@@ -563,6 +564,10 @@ function toEntry(score) {
     canonicalHashExpected: score.canonicalHashExpected,
     canonicalHashMatched: score.canonicalHashMatched,
     knownGap: score.knownGap,
+    claim: score.claim,
+    layerResults: score.layerResults,
+    failedLayer: score.failedLayer,
+    executionDiagnostics: score.executionDiagnostics,
   };
 }
 
@@ -671,6 +676,7 @@ async function cmdRun(flags) {
 }
 
 async function cmdReport(flags) {
+  if (flags.compare !== undefined) return cmdCompare(flags);
   const runs = await listRuns();
   if (!runs.length) {
     console.log('No benchmark runs found. Run `npm run eval:core` first.');
@@ -787,7 +793,7 @@ function printUsage() {
   node eval/run.mjs validate [--suite NAME]
   node eval/run.mjs oracle   [--suite NAME] [--task ID] [--repeat N]
   node eval/run.mjs run      [--group core|agent] [--suite NAME] [--runner a,b] [--repeat N] [--task ID] [--split dev|regression]
-  node eval/run.mjs report   [--run RUN_ID]
+  node eval/run.mjs report   [--run RUN_ID] | [--compare RUN_A RUN_B]
 
   runners: ${RUNNER_NAMES.join(', ')}
   failure classes: ${FAILURE_CLASSES.join(', ')}`);

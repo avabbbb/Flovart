@@ -60,9 +60,22 @@ function workflowConfirmationSummary(envelope: WorkflowCommandEnvelope) {
   if (envelope.command === 'workflow.node.run') {
     const state = useWorkflowStore.getState();
     const projectId = String(envelope.args.projectId || state.activeProjectId || '');
-    const nodeId = String(envelope.args.nodeId || envelope.args.id || '');
-    const node = state.projects.find(project => project.id === projectId)?.nodes.find(item => item.id === nodeId);
-    if (node) return buildGenerationGateSummary(getGenerationGateDetails(node, undefined, []));
+    const project = state.projects.find(item => item.id === projectId);
+    const rawIds = envelope.args.nodeIds;
+    const nodeIds = Array.isArray(rawIds)
+      ? rawIds.map(String)
+      : typeof rawIds === 'string' ? rawIds.split(',').map(value => value.trim()).filter(Boolean) : [String(envelope.args.nodeId || envelope.args.id || '')];
+    const nodes = nodeIds.flatMap(nodeId => {
+      const node = project?.nodes.find(item => item.id === nodeId);
+      return node ? [node] : [];
+    });
+    if (nodeIds.length === 1 && nodes.length === 1) return buildGenerationGateSummary(getGenerationGateDetails(nodes[0], undefined, []));
+    if (nodes.length > 1) {
+      return [
+        '批量运行 ' + nodes.length + ' 个节点，一次确认覆盖本批：',
+        ...nodes.map(node => '「' + node.title + '」\n' + buildGenerationGateSummary(getGenerationGateDetails(node, undefined, []))),
+      ].join('\n\n');
+    }
   }
   return workflowCommandSummary(envelope.command, envelope.args);
 }

@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1",
   "protocolVersion": "1",
-  "registryHash": "e2251d5f8e71c1c212a95673104a9d23bc0ed94c5674f964b9baaa0b55cf2f25",
+  "registryHash": "198e61b940551ad81046b367d8e3dd892d93c25832f9cd3725c73cab8b4dbd08",
   "commands": [
     {
       "name": "runtime.status",
@@ -506,10 +506,11 @@
     },
     {
       "name": "workflow.node.run",
-      "summary": "Run one Workflow config node through browser providers.",
+      "summary": "Run one Workflow config node, or a batch of independent nodes via nodeIds under one confirmation, through browser providers.",
       "args": {
         "projectId": "string?",
-        "nodeId": "string",
+        "nodeId": "string?",
+        "nodeIds": "string[]?",
         "expectedRevision": "number?"
       },
       "availability": "available"

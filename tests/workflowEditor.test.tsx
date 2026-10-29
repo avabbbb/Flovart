@@ -76,9 +76,20 @@ describe('InfiniteWorkflow surface interactions', () => {
   it('keeps the workflow point under the cursor fixed while zooming', () => {
     render(<Harness />);
 
-    fireEvent.wheel(editor(), { clientX: 400, clientY: 300, deltaY: -200, ctrlKey: true });
+    const frames: FrameRequestCallback[] = [];
+    vi.stubGlobal('requestAnimationFrame', vi.fn((callback: FrameRequestCallback) => frames.push(callback)));
+    vi.stubGlobal('cancelAnimationFrame', vi.fn());
+    const before = projectState().viewport;
+
+    // 同一帧内的两次 wheel 合并为一次视口写入。
+    fireEvent.wheel(editor(), { clientX: 400, clientY: 300, deltaY: -100, ctrlKey: true });
+    fireEvent.wheel(editor(), { clientX: 400, clientY: 300, deltaY: -100, ctrlKey: true });
+    expect(projectState().viewport).toEqual(before);
+    expect(frames).toHaveLength(1);
+    act(() => { frames.splice(0).forEach(callback => callback(16)); });
 
     const { x, y, k } = projectState().viewport;
+    expect(k).toBeCloseTo(before.k * Math.exp(200 * 0.0015));
     expect((400 - x) / k).toBeCloseTo(400);
     expect((300 - y) / k).toBeCloseTo(300);
   });
@@ -513,11 +524,11 @@ describe('InfiniteWorkflow surface interactions', () => {
     const items = screen.getAllByRole('menuitem');
     await waitFor(() => expect(items[0]).toHaveFocus());
     fireEvent.keyDown(menu, { key: 'End' });
-    expect(items[5]).toHaveFocus();
+    expect(items[items.length - 1]).toHaveFocus();
     fireEvent.keyDown(menu, { key: 'Home' });
     expect(items[0]).toHaveFocus();
     fireEvent.keyDown(menu, { key: 'ArrowUp' });
-    expect(items[5]).toHaveFocus();
+    expect(items[items.length - 1]).toHaveFocus();
     fireEvent.keyDown(menu, { key: 'Home' });
     fireEvent.keyDown(menu, { key: 'ArrowDown' });
     fireEvent.keyDown(menu, { key: 'ArrowDown' });

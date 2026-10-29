@@ -40,8 +40,10 @@ export function describeWorkflowDraftCommand(command: string, args: Record<strin
       return `移动节点「${nodeId}」`;
     case 'workflow.node.resize':
       return `调整节点「${nodeId}」尺寸`;
-    case 'workflow.node.run':
-      return `运行节点「${nodeId}」`;
+    case 'workflow.node.run': {
+      const ids = Array.isArray(args.nodeIds) ? args.nodeIds : typeof args.nodeIds === 'string' ? args.nodeIds.split(',').filter(Boolean) : [];
+      return ids.length ? '批量运行 ' + ids.length + ' 个节点' : '运行节点「' + nodeId + '」';
+    }
     case 'workflow.node.stop':
       return `停止节点「${nodeId}」`;
     case 'workflow.node.tool':

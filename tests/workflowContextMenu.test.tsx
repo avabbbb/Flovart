@@ -66,4 +66,24 @@ describe('WorkflowContextMenu', () => {
     expect(trigger).toHaveFocus();
     getRect.mockRestore();
   });
+
+  it('offers canvas actions on the pane menu without node-only or destructive items', () => {
+    const onAddNode = vi.fn();
+    const onPaste = vi.fn();
+    const onSelectAll = vi.fn();
+    const onFitView = vi.fn();
+    render(<WorkflowContextMenu state={{ type: 'pane', x: 20, y: 20 }} onCopy={vi.fn()} onDelete={vi.fn()} onRun={vi.fn()} onAddNode={onAddNode} onPaste={onPaste} onSelectAll={onSelectAll} onFitView={onFitView} onClose={vi.fn()} />);
+    expect(screen.getByRole('menu', { name: '画布菜单' })).toBeInTheDocument();
+    expect(screen.getAllByRole('menuitem').map(item => item.textContent)).toEqual(['添加节点', '粘贴', '全选', '适应视图']);
+    fireEvent.click(screen.getByRole('menuitem', { name: '添加节点' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: '粘贴' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: '全选' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: '适应视图' }));
+    expect([onAddNode, onPaste, onSelectAll, onFitView].map(fn => fn.mock.calls.length)).toEqual([1, 1, 1, 1]);
+  });
+
+  it('shows the selection count on node delete', () => {
+    render(<WorkflowContextMenu state={{ type: 'node', id: 'node-1', x: 20, y: 20 }} count={3} language="en" onCopy={vi.fn()} onDelete={vi.fn()} onRun={vi.fn()} onClose={vi.fn()} />);
+    expect(screen.getByRole('menuitem', { name: 'Delete (3)' })).toBeInTheDocument();
+  });
 });

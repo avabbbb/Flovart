@@ -23,6 +23,12 @@ export const WORKFLOW_NODE_SPECS: Record<BuiltinWorkflowNodeType, { title: strin
     height: 156,
     metadata: { prompt: '', status: 'idle', config: { mode: 'image' } },
   },
+  design: {
+    title: '图形',
+    width: 240,
+    height: 160,
+    metadata: { status: 'idle', design: { kind: 'rect', fill: { type: 'solid', color: '#5B8DEF' }, cornerRadius: 12 } },
+  },
 };
 
 export const INITIAL_WORKFLOW_VIEWPORT = { x: 0, y: 0, k: 1 } as const;

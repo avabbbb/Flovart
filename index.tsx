@@ -3,8 +3,12 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { RouterHost } from './RouterHost';
 import { bootstrapRuntimeCredentials } from './services/bootstrapRuntimeCredentials';
+import { installCrashLog } from './utils/crashLog';
+import { AppErrorBoundary } from './components/AppErrorBoundary';
 import './styles/index.css';
 import './styles/adaptive.css';
+
+installCrashLog();
 
 void bootstrapRuntimeCredentials().catch(() => {
   // Browser builds and unavailable Desktop IPC keep using the encrypted Web Vault.
@@ -18,7 +22,9 @@ if (!rootElement) {
 const root = ReactDOM.createRoot(rootElement);
 root.render(
   <React.StrictMode>
-    <RouterHost />
+    <AppErrorBoundary>
+      <RouterHost />
+    </AppErrorBoundary>
   </React.StrictMode>
 );
 

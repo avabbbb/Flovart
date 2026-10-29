@@ -1,8 +1,9 @@
-import { FileText, Image, Music2, Settings2, Type, Video, X } from 'lucide-react';
+import { Circle, FileText, Frame, Image, Music2, PenTool, Settings2, Square, Type, Video, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useRef } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import type { WorkflowNodeType, WorkflowPoint } from './types';
+import type { DesignElementKind } from '../../services/design/designTypes';
 
 export interface WorkflowCreateMenuState {
   world: WorkflowPoint;
@@ -11,18 +12,23 @@ export interface WorkflowCreateMenuState {
   targetId?: string;
 }
 
-const OPTIONS: Array<{ type: WorkflowNodeType; title: string; description: string; icon: typeof Type }> = [
+const OPTIONS: Array<{ type: WorkflowNodeType; designKind?: DesignElementKind; title: string; description: string; icon: typeof Type }> = [
   { type: 'image', title: '图片生成', description: '创建图片生成节点', icon: Image },
   { type: 'video', title: '视频生成', description: '创建视频生成节点', icon: Video },
   { type: 'text', title: '文本生成', description: '脚本、文案和提示词', icon: Type },
   { type: 'script', title: '脚本节点', description: '剧本拆解、分镜编排和批量生成', icon: FileText },
   { type: 'audio', title: '音频参考', description: '添加音频参考输入', icon: Music2 },
   { type: 'config', title: '配置节点', description: '模型、尺寸和生成参数', icon: Settings2 },
+  { type: 'design', designKind: 'frame', title: '画板', description: '手机、海报、A4 等尺寸画板', icon: Frame },
+  { type: 'design', designKind: 'rect', title: '矩形', description: '圆角矩形，支持渐变与描边', icon: Square },
+  { type: 'design', designKind: 'ellipse', title: '椭圆', description: '圆形与椭圆', icon: Circle },
+  { type: 'design', designKind: 'text', title: '文字', description: '排版文字，支持富文本', icon: Type },
+  { type: 'design', designKind: 'path', title: '钢笔', description: '贝塞尔矢量路径', icon: PenTool },
 ];
 
 export function WorkflowCreateMenu({ state, onCreate, onClose }: {
   state: WorkflowCreateMenuState;
-  onCreate: (type: WorkflowNodeType) => void;
+  onCreate: (type: WorkflowNodeType, designKind?: DesignElementKind) => void;
   onClose: () => void;
 }) {
   const listRef = useRef<HTMLDivElement>(null);
@@ -81,11 +87,11 @@ export function WorkflowCreateMenu({ state, onCreate, onClose }: {
             const Icon = option.icon;
             return (
               <motion.button
-                key={option.type}
+                key={option.designKind ?? option.type}
                 type="button"
                 role="menuitem"
                 className="workflow-create-menu__item"
-                onClick={() => onCreate(option.type)}
+                onClick={() => onCreate(option.type, option.designKind)}
                 initial={{ opacity: 0, x: -12 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -12 }}

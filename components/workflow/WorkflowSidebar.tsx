@@ -104,16 +104,40 @@ export const WorkflowSidebar: React.FC<WorkflowSidebarProps> = ({
     });
   };
 
-  const reorder = (targetId: string) => {
-    if (!project || !draggedId || draggedId === targetId) return;
-    const nodes = [...project.nodes];
-    const from = nodes.findIndex(node => node.id === draggedId);
-    const target = nodes.findIndex(node => node.id === targetId);
-    if (from < 0 || target < 0) return;
-    const [node] = nodes.splice(from, 1);
-    nodes.splice(nodes.findIndex(item => item.id === targetId) + 1, 0, node);
-    onProjectChange({ nodes, updatedAt: new Date().toISOString() });
+  type LayerDropZone = 'above' | 'below';
+  const [dropHint, setDropHint] = useState<{ id: string; zone: LayerDropZone } | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  // 行高为 0（如测试环境无布局）时沿用旧行为：放到目标上方（数组中目标之后）。
+  const dropZoneOf = (event: React.DragEvent<HTMLElement>): LayerDropZone => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    if (!rect.height) return 'above';
+    return (event.clientY - rect.top) / rect.height < 0.5 ? 'above' : 'below';
+  };
+
+  const reorder = (targetId: string, zone: LayerDropZone = 'above') => {
+    const sourceId = draggedId;
     setDraggedId(null);
+    setDropHint(null);
+    if (!project || !sourceId || sourceId === targetId) return;
+    const nodes = [...project.nodes];
+    const from = nodes.findIndex(node => node.id === sourceId);
+    if (from < 0) return;
+    const [moved] = nodes.splice(from, 1);
+    const target = nodes.findIndex(node => node.id === targetId);
+    if (target < 0) return;
+    // 列表倒序展示：视觉“上方”= 数组中更靠后（更高层级）。
+    nodes.splice(zone === 'above' ? target + 1 : target, 0, moved);
+    if (nodes.every((node, index) => node === project.nodes[index])) return;
+    onProjectChange({ nodes, updatedAt: new Date().toISOString() });
+  };
+
+  const commitRename = (id: string, value: string) => {
+    setEditingId(null);
+    const title = value.trim();
+    const node = project?.nodes.find(item => item.id === id);
+    if (!node || !title || title === node.title) return;
+    patchNode(id, { title });
   };
 
   return (
@@ -213,10 +237,20 @@ export const WorkflowSidebar: React.FC<WorkflowSidebarProps> = ({
                   return (
                     <div
                       key={node.id}
-                      draggable
+                      draggable={editingId !== node.id}
+                      data-drop={dropHint?.id === node.id ? dropHint.zone : undefined}
+                      data-off={node.isVisible === false ? 'true' : undefined}
                       onDragStart={event => { event.dataTransfer.setData('text/plain', node.id); event.dataTransfer.effectAllowed = 'move'; setDraggedId(node.id); }}
-                      onDragOver={event => event.preventDefault()}
-                      onDrop={() => reorder(node.id)}
+                      onDragOver={event => {
+                        event.preventDefault();
+                        if (!draggedId || draggedId === node.id) return;
+                        const zone = dropZoneOf(event);
+                        setDropHint(hint => hint?.id === node.id && hint.zone === zone ? hint : { id: node.id, zone });
+                      }}
+                      onDragLeave={() => setDropHint(hint => hint?.id === node.id ? null : hint)}
+                      onDrop={event => { event.preventDefault(); reorder(node.id, dropZoneOf(event)); }}
+                      onDragEnd={() => { setDraggedId(null); setDropHint(null); }}
+                      onDoubleClick={event => { event.stopPropagation(); setEditingId(node.id); }}
                       onClick={() => {
                         if (!project) return;
                         if (onFocusNode) onFocusNode(node.id);
@@ -230,7 +264,25 @@ export const WorkflowSidebar: React.FC<WorkflowSidebarProps> = ({
                         <GripVertical size={13} />
                       </span>
                       <span className="shrink-0" style={{ color: 'var(--isl-ink-soft)' }}>{nodeIcon(node)}</span>
-                      <span className="min-w-0 flex-1 truncate">{node.title}</span>
+                      {editingId === node.id ? (
+                        <input
+                          className="workflow-layer-card__input min-w-0 flex-1"
+                          autoFocus
+                          defaultValue={node.title}
+                          aria-label={language === 'zho' ? '重命名图层' : 'Rename layer'}
+                          onClick={event => event.stopPropagation()}
+                          onDoubleClick={event => event.stopPropagation()}
+                          onFocus={event => event.currentTarget.select()}
+                          onBlur={event => { if (event.currentTarget.dataset.cancel === 'true') setEditingId(null); else commitRename(node.id, event.currentTarget.value); }}
+                          onKeyDown={event => {
+                            event.stopPropagation();
+                            if (event.key === 'Enter') event.currentTarget.blur();
+                            if (event.key === 'Escape') { event.currentTarget.dataset.cancel = 'true'; event.currentTarget.blur(); }
+                          }}
+                        />
+                      ) : (
+                        <span className="workflow-layer-card__name min-w-0 flex-1 truncate">{node.title}</span>
+                      )}
                       <button
                         type="button"
                         className="workflow-layer-card__action shrink-0 rounded p-0.5 transition-opacity"

@@ -37,7 +37,7 @@
 
 ### 审查边界
 
-- 产品只有 **Workflow、Table、Agent** 三个正式部分，不恢复旧 Canvas / Art。
+- 产品顶栏是 **Canvas、Table、Agent** 三个正式 surface；不恢复旧的 Canvas / Art 双系统。
 - Provider 与 API 请求适配放在根目录 `services/`；共享状态优先使用现有 store/hook。
 - 当前项目、素材和生成记录主要保存在浏览器本地，不把未实现的云同步写成正式能力。
 - 新增遥测、外部请求、Secret 读取、持久化字段或费用路径时，PR 必须单独说明数据与安全影响。
@@ -70,6 +70,6 @@ Search existing Issues first, then use the [Issue chooser](https://github.com/av
 5. Run relevant tests, normally `npm run test` and `npm run build`; list exact commands and explain omitted checks.
 6. Check `todo.mdx` and `pending-test.mdx` whenever feature status changes.
 
-Flovart has three official surfaces: **Workflow, Table, and Agent**. Do not restore the removed Canvas or Art surfaces. Any telemetry, external request, secret access, persistence change, or paid-provider path must disclose its data and security impact in the PR.
+Flovart's top-level surfaces are **Canvas, Table, and Agent**. Do not restore the old Canvas/Art dual system. Any telemetry, external request, secret access, persistence change, or paid-provider path must disclose its data and security impact in the PR.
 
-By contributing, you agree that your work is released under [AGPL-3.0-only](../LICENSE). Please also follow the [Code of Conduct](CODE_OF_CONDUCT.md).
+By contributing, you agree that your work is released under the <a href="../LICENSE">MIT License</a>. Please also follow the <a href="CODE_OF_CONDUCT.md">Code of Conduct</a>.

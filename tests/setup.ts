@@ -54,3 +54,8 @@ export function resetBlobUrls(): void {
   _activeUrls.clear();
   _blobCounter = 0;
 }
+
+// Suites assert the Chinese UI; pin the locale so detectWorkspaceLanguage() picks Chinese under jsdom (en-US).
+if (typeof window !== 'undefined') {
+  Object.defineProperty(window.navigator, 'language', { value: 'zh-CN', configurable: true });
+}

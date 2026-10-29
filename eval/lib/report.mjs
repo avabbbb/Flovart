@@ -8,7 +8,7 @@ import { mkdir, writeFile, readFile, readdir } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { FAILURE_CLASSES } from './engine.mjs';
+import { FAILURE_CLASSES, FALSE_SUCCESS_GATE } from './engine.mjs';
 import { serializeEvidence } from '../recorders/trajectory.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -17,6 +17,8 @@ export const repoRoot = join(evalRoot, '..');
 
 export const RESULTS_DIR = join(evalRoot, 'results');
 export const REPORTS_DIR = join(evalRoot, 'reports');
+
+const LAYER_COLUMNS = ['CTX', 'SCOPE', 'CAPABILITY', 'EXECUTION', 'OUTCOME', 'SAFETY', 'PASS', 'UNATTRIBUTED'];
 
 function renderFiveTrialReliability(baseline, percentage) {
   if (typeof baseline.completeFiveTrialGroups !== 'number') {
@@ -97,7 +99,8 @@ export function buildReport({ run, summary, qa, coverage, baselines }) {
   }
 
   const productBugs = entries
-    .filter(entry => entry.failureClass === 'PRODUCT_FAILURE' || entry.hardGateFailures?.length)
+    .filter(entry => entry.failureClass === 'PRODUCT_FAILURE'
+      || (entry.hardGateFailures ?? []).some(name => name !== FALSE_SUCCESS_GATE))
     .map(entry => ({
       taskId: entry.taskId,
       suite: entry.suite,
@@ -175,6 +178,12 @@ export function buildReport({ run, summary, qa, coverage, baselines }) {
     failureAnalysis: {
       distribution: failures,
       byTask: groupFailuresByTask(entries),
+      byLayer: crossTabulate(entries, entry => entry.suite, failedLayerOf),
+      classByLayer: crossTabulate(
+        entries.filter(entry => !entry.success),
+        entry => entry.failureClass ?? 'UNKNOWN',
+        failedLayerOf,
+      ),
     },
     productBugs,
     hostedCi: run.hostedCi ?? null,
@@ -205,6 +214,40 @@ function groupFailuresByTask(entries) {
     record.classes[name] = (record.classes[name] ?? 0) + 1;
   }
   return [...byTask.values()];
+}
+
+function failedLayerOf(entry) {
+  return entry.failedLayer ?? (entry.success ? 'PASS' : 'UNATTRIBUTED');
+}
+
+/** Executed-trial counts keyed by row then column. Blocked trials are not evidence. */
+function crossTabulate(entries, rowOf, columnOf) {
+  const rows = {};
+  for (const entry of entries) {
+    if (entry.blocked) continue;
+    const row = rowOf(entry);
+    const column = columnOf(entry);
+    rows[row] ??= {};
+    rows[row][column] = (rows[row][column] ?? 0) + 1;
+  }
+  return rows;
+}
+
+function renderCrossTable(title, rowLabel, table) {
+  const rows = Object.entries(table ?? {}).sort(([a], [b]) => a.localeCompare(b));
+  if (!rows.length) return [];
+  const present = new Set(rows.flatMap(([, counts]) => Object.keys(counts)));
+  const columns = [
+    ...LAYER_COLUMNS.filter(name => present.has(name)),
+    ...[...present].filter(name => !LAYER_COLUMNS.includes(name)).sort(),
+  ];
+  const lines = ['', title + ':', ''];
+  lines.push('| ' + [rowLabel, ...columns].join(' | ') + ' |');
+  lines.push('| ' + [rowLabel, ...columns].map(() => '---').join(' | ') + ' |');
+  for (const [row, counts] of rows) {
+    lines.push('| ' + [row, ...columns.map(name => counts[name] ?? 0)].join(' | ') + ' |');
+  }
+  return lines;
 }
 
 function defaultExternalGates() {
@@ -390,6 +433,8 @@ export function renderReportMarkdown(report) {
       lines.push(`- ${entry.taskId} (${entry.suite}): ${entry.failures} failing trial(s) ${JSON.stringify(entry.classes)}`);
     }
   }
+  lines.push(...renderCrossTable('Failed layer by suite', 'Suite', report.failureAnalysis.byLayer));
+  lines.push(...renderCrossTable('Failure class by failed layer', 'Class', report.failureAnalysis.classByLayer));
   lines.push('');
 
   lines.push('## Product Bugs (suspected)');

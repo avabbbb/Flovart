@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'motion/react';
-import { Bot, FileText, Focus, Grid2X2, Hand, History, Keyboard, Library, Magnet, Map, MousePointer2, Plus, Redo2, RotateCcw, Send, Settings2, SlidersHorizontal, Type, Undo2, Video, Image, Music2, Workflow, Spline, ZoomIn, ZoomOut } from 'lucide-react';
+import { Bot, Camera, FileDown, FileText, Focus, Grid2X2, Hand, History, ImageDown, Keyboard, Library, Magnet, Map, MousePointer2, Plus, Redo2, RotateCcw, Send, Settings2, SlidersHorizontal, Trash2, Type, Undo2, Video, Image, Music2, Workflow, Spline, ZoomIn, ZoomOut } from 'lucide-react';
 import { Tooltip } from 'antd';
 import type React from 'react';
 import { useMemo, useRef, useState } from 'react';
@@ -41,6 +41,9 @@ const TOOLBAR_COPY = {
     rerunStale: (count: number) => `Rerun ${count} stale`, rerunStaleHint: 'Runs only out-of-date nodes, upstream first. Up-to-date results are reused.',
     sendToHost: (host: string) => `Send to ${host}`, sendHint: 'Adds a send request. Confirm it in the host panel to add the result to the Media Pool. Your timeline is not changed.',
     sendStatus: { requested: 'Waiting for host panel', imported: 'In Media Pool', rejected: 'Host rejected', unknown: 'Check the Media Pool' } as Record<string, string>,
+    exportPng: 'Export PNG', exportPdf: 'Export PDF', selectionSuffix: ' (selection)', saveSnapshot: 'Save', snapshotName: 'Snapshot name (optional)',
+    snapshots: 'Snapshots', restoreSnapshot: 'Restore this snapshot. You can undo it.', deleteSnapshot: 'Delete snapshot', noSnapshots: 'No snapshots yet.',
+    snapshotNodes: (count: number) => count + ' nodes',
   },
   zho: {
     canvasControls: '画布控制', assetManagement: '资产管理', autoArrange: '一键整理节点', minimap: '小地图',
@@ -58,6 +61,9 @@ const TOOLBAR_COPY = {
     rerunStale: (count: number) => `重跑 ${count} 个过期节点`, rerunStaleHint: '只运行过期的节点，上游先跑；未过期的结果直接复用。',
     sendToHost: (host: string) => `发送到 ${host}`, sendHint: '登记一个发送请求，在宿主面板确认后加入 Media Pool；不会改动你的时间线。',
     sendStatus: { requested: '等待宿主面板确认', imported: '已在 Media Pool', rejected: '宿主拒绝了导入', unknown: '请检查 Media Pool' } as Record<string, string>,
+    exportPng: '导出 PNG', exportPdf: '导出 PDF', selectionSuffix: '（所选）', saveSnapshot: '保存', snapshotName: '快照名称（可选）',
+    snapshots: '快照', restoreSnapshot: '恢复此快照，可撤销。', deleteSnapshot: '删除快照', noSnapshots: '还没有快照。',
+    snapshotNodes: (count: number) => count + ' 个节点',
   },
 } as const;
 
@@ -92,6 +98,12 @@ export function WorkflowToolbar({
   onRerunStale,
   hostSend,
   agentOpen,
+  onExportCanvas,
+  exportSelection = false,
+  snapshots,
+  onSaveSnapshot,
+  onRestoreSnapshot,
+  onDeleteSnapshot,
 }: {
   tool: WorkflowTool;
   canUndo: boolean;
@@ -126,6 +138,14 @@ export function WorkflowToolbar({
   onRerunStale?: () => void;
   /** 选中结果可发送回宿主时出现；已登记过时显示状态而不是按钮。 */
   hostSend?: { host: string; onSend: () => void; status?: 'requested' | 'imported' | 'rejected' | 'unknown' };
+  /** 导出画布：有选区时只导出选区。 */
+  onExportCanvas?: (format: 'png' | 'pdf') => void;
+  exportSelection?: boolean;
+  /** 命名快照列表（旧→新）与操作。 */
+  snapshots?: Array<{ id: string; name: string; createdAt: string; nodeCount: number }>;
+  onSaveSnapshot?: (name: string) => void;
+  onRestoreSnapshot?: (id: string) => void;
+  onDeleteSnapshot?: (id: string) => void;
 }) {
   const sharedMedia = useWorkflowSharedMedia();
   const language = useWorkspaceStore(state => state.language);
@@ -133,6 +153,11 @@ export function WorkflowToolbar({
   const [libraryQuery, setLibraryQuery] = useState('');
   const [libraryType, setLibraryType] = useState<'all' | 'image' | 'video'>('all');
   const [openPopover, setOpenPopover] = useState<ToolbarPopover | null>(null);
+  const [snapshotName, setSnapshotName] = useState('');
+  const snapshotTime = (iso: string) => {
+    const date = new Date(iso);
+    return Number.isNaN(date.getTime()) ? '' : date.toLocaleString(language === 'zho' ? 'zh-CN' : 'en-US', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+  };
   const popoverTriggerRef = useRef<HTMLElement | null>(null);
   const popoverAnchorRef = useRef<HTMLElement | null>(null);
   const addOpen = openPopover === 'add';
@@ -167,6 +192,8 @@ export function WorkflowToolbar({
       {onToggleSnap && <button type="button" role="menuitemcheckbox" aria-checked={Boolean(snapEnabled)} onClick={() => { onToggleSnap(); closePopover(true); }}><Magnet size={15} />{copy.snap}{snapEnabled ? ' ✓' : ''}</button>}
       <button type="button" role="menuitem" onClick={() => { onToggleGrid(); closePopover(true); }}><Grid2X2 size={15} />{language === 'en' ? 'Toggle grid' : '切换网格'}</button>
       {setWheelMode && wheelMode && <button type="button" role="menuitem" onClick={() => { setWheelMode(wheelMode === 'pan' ? 'zoom' : 'pan'); closePopover(true); }}>{wheelMode === 'pan' ? <MousePointer2 size={15} /> : <ZoomIn size={15} />}{wheelMode === 'pan' ? copy.wheelPan : copy.wheelZoom}</button>}
+      {onExportCanvas && <button type="button" role="menuitem" data-testid="workflow-export-png" onClick={() => { onExportCanvas('png'); closePopover(true); }}><ImageDown size={15} />{copy.exportPng}{exportSelection ? copy.selectionSuffix : ''}</button>}
+      {onExportCanvas && <button type="button" role="menuitem" data-testid="workflow-export-pdf" onClick={() => { onExportCanvas('pdf'); closePopover(true); }}><FileDown size={15} />{copy.exportPdf}{exportSelection ? copy.selectionSuffix : ''}</button>}
       <button type="button" role="menuitem" onClick={() => setOpenPopover('shortcuts')}><Keyboard size={15} />{copy.shortcuts}</button>
     </ResponsivePopover>
   ) : openPopover === 'zoom' ? (
@@ -177,9 +204,30 @@ export function WorkflowToolbar({
       <button type="button" role="menuitem" onClick={() => { onZoomReset?.(); closePopover(true); }}><span>100%</span>{copy.resetZoom}</button>
     </ResponsivePopover>
   ) : openPopover === 'history' ? (
-    <ResponsivePopover anchorRef={popoverAnchorRef} preferredSide="up" width={174} role="menu" ariaLabel={copy.historyActions} className="workflow-toolbar__compact-menu" onRequestClose={() => setOpenPopover(null)}>
+    <ResponsivePopover anchorRef={popoverAnchorRef} preferredSide="up" width={onSaveSnapshot ? 264 : 174} role="menu" ariaLabel={copy.historyActions} className="workflow-toolbar__compact-menu" onRequestClose={() => setOpenPopover(null)}>
       <button type="button" role="menuitem" disabled={!canUndo} onClick={() => { onUndo(); closePopover(true); }}><Undo2 size={15} />{copy.undo}</button>
       <button type="button" role="menuitem" disabled={!canRedo} onClick={() => { onRedo(); closePopover(true); }}><Redo2 size={15} />{copy.redo}</button>
+      {onSaveSnapshot && (
+        <>
+          <div className="workflow-toolbar__menu-divider" role="separator" />
+          <form className="workflow-toolbar__snapshot-form" data-testid="workflow-snapshot-form" onSubmit={event => { event.preventDefault(); onSaveSnapshot(snapshotName); setSnapshotName(''); }}>
+            <input value={snapshotName} maxLength={60} placeholder={copy.snapshotName} aria-label={copy.snapshotName} onChange={event => setSnapshotName(event.target.value)} onKeyDown={event => event.stopPropagation()} />
+            <button type="submit"><Camera size={14} />{copy.saveSnapshot}</button>
+          </form>
+          <div className="workflow-toolbar__snapshot-list" role="group" aria-label={copy.snapshots}>
+            {snapshots?.length ? [...snapshots].reverse().map(snapshot => (
+              <div key={snapshot.id} className="workflow-toolbar__snapshot-row">
+                <button type="button" role="menuitem" title={copy.restoreSnapshot} onClick={() => { onRestoreSnapshot?.(snapshot.id); closePopover(true); }}>
+                  <History size={14} />
+                  <span className="workflow-toolbar__snapshot-name">{snapshot.name}</span>
+                  <span className="workflow-toolbar__snapshot-meta">{copy.snapshotNodes(snapshot.nodeCount)} · {snapshotTime(snapshot.createdAt)}</span>
+                </button>
+                {onDeleteSnapshot && <button type="button" className="workflow-toolbar__snapshot-delete" aria-label={copy.deleteSnapshot} title={copy.deleteSnapshot} onClick={() => onDeleteSnapshot(snapshot.id)}><Trash2 size={13} /></button>}
+              </div>
+            )) : <p className="workflow-toolbar__snapshot-empty">{copy.noSnapshots}</p>}
+          </div>
+        </>
+      )}
     </ResponsivePopover>
   ) : openPopover === 'shortcuts' ? (
     <ResponsivePopover anchorRef={popoverAnchorRef} preferredSide="up" width={240} role="dialog" ariaLabel={copy.shortcutsTitle} className="workflow-toolbar__shortcut-card" onRequestClose={() => setOpenPopover(null)}>

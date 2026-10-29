@@ -145,6 +145,7 @@ and omitting it on `project.create`/`workflow.apply` makes the write fail with
 - “当前选择” → `workflow.selection.get`.
 - Add, delete, move, resize, connect, disconnect, or edit → one `workflow.apply`.
 - Run a node → `workflow.node.run` after confirming the node from inspection.
+- Run several independent nodes → one `workflow.node.run` with `nodeIds`; the user confirms cost once for the batch and the result lists each node's outcome. Rerun only failed nodes.
 
 For a sequence of nodes, the granular `workflow.node.create-connected` adapter
 is the reliable path — it fills the node defaults (including `storageKey`) that
@@ -170,6 +171,28 @@ artifact into a durable local file that Resolve can import. Do not infer a file
 path from a task/artifact ID, call private Runtime endpoints, or report a Media
 Pool import from the task result alone. Until an explicit artifact handoff path
 is available and real-host verified, report this boundary clearly.
+
+## Ending a task: the outcome claim
+
+When a task is finished, stopped, or refused, make the very last line of your
+final message one JSON object and nothing else, for example:
+
+    {"flovartClaim":{"status":"succeeded"}}
+    {"flovartClaim":{"status":"failed","code":"REVISION_MISMATCH"}}
+    {"flovartClaim":{"status":"unsupported","code":"UNKNOWN_COMMAND"}}
+
+- succeeded: every requested change or run is visible in the Workflow after a
+  fresh workflow.inspect. Never claim success from a command reply alone.
+- failed: the capability exists but this attempt did not complete; code is the
+  structured error code the failing command returned.
+- unsupported: the product refused the capability itself, for example the
+  operation is not part of the stable surface. Change nothing to work around
+  it, and give the refusal code exactly as returned.
+
+Give code for failed and unsupported, never invent one. The claim is checked
+against the real final Workflow: a success claim over an unfinished result
+counts against the run, and a claim never turns a failure into a pass. This
+line is a machine-readable ending, not part of what you tell the user.
 
 ## Conversation rules
 

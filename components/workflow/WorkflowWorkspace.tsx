@@ -1,3 +1,4 @@
+import { WorkflowStartScreen } from './WorkflowStartScreen';
 import { nanoid } from 'nanoid';
 import { useEffect, useState } from 'react';
 import type { PromptEnhanceMode, PromptEnhanceResult, UserApiKey } from '../../types';
@@ -462,11 +463,11 @@ assetLibrary={assetLibrary}
               onNotify={onNotify}
             />
           ) : (
-            <div className="workflow-empty">
-              <h1>{language === 'zho' ? '画布' : 'Canvas'}</h1>
-              <p>{language === 'zho' ? '把参考素材、提示词和生成步骤连成一条线，结果都留在这里。' : 'Connect references, prompts and generation steps. Every result stays here.'}</p>
-              <button type="button" onClick={() => createProject()}>{language === 'zho' ? '新建画布' : 'New canvas'}</button>
-            </div>
+            <WorkflowStartScreen
+              language={language}
+              onStart={seed => createProject(seed.title, { nodes: seed.nodes, connections: seed.connections })}
+              onBlank={() => createProject()}
+            />
           )}
         </WorkflowGenerationCapabilitiesProvider>
       </main>

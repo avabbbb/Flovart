@@ -16,6 +16,12 @@ interface UISlice {
 
 export const DEFAULT_WORKSPACE_LANGUAGE = 'zho' as const;
 
+export function detectWorkspaceLanguage(locale?: string): 'en' | 'zho' {
+  const value = locale ?? (typeof navigator !== 'undefined' ? navigator.language : '');
+  if (!value) return DEFAULT_WORKSPACE_LANGUAGE;
+  return value.toLowerCase().startsWith('zh') ? 'zho' : 'en';
+}
+
 const createUISlice = (set: any): UISlice => ({
   activeView: 'workflow',
   setActiveView: (activeView) => set({ activeView }),
@@ -30,7 +36,7 @@ const createUISlice = (set: any): UISlice => ({
     }
   })(),
   setThemeMode: (mode) => set({ themeMode: mode }),
-  language: DEFAULT_WORKSPACE_LANGUAGE,
+  language: detectWorkspaceLanguage(),
   setLanguage: (lang) => set({ language: lang }),
 });
 

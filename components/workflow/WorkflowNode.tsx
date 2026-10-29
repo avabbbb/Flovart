@@ -14,6 +14,7 @@ import type { WorkflowNodeRunInfo, WorkflowStaleReason } from './runState';
 import type { WorkflowNodePresence } from './presence';
 import type { WorkflowLayerPreview } from './layerPreview';
 import { WorkflowLayerCandidates } from './WorkflowLayerCandidates';
+import { renderDesignSvg } from '../../services/design/render';
 
 function WorkflowPluginSurface({ plugin, pluginContext }: { plugin: WorkflowNodePluginDefinition; pluginContext: WorkflowNodePluginContext }) {
   return <>
@@ -41,6 +42,14 @@ class WorkflowPluginErrorBoundary extends Component<{ children: ReactNode; plugi
   }
 }
 
+function DesignNodeSurface({ node }: { node: WorkflowNodeData }) {
+  const design = node.metadata.design;
+  if (!design) return <div className="workflow-node__empty"><ImageIcon size={26} /><span>图形节点</span></div>;
+  // renderDesignSvg 已对全部属性值与文本做 XML 转义，可安全作为 innerHTML。
+  const svg = renderDesignSvg(design, node.width, node.height, { idPrefix: `design-${node.id}`, fluid: true });
+  return <div className="workflow-node__design" data-testid="workflow-design-node" style={{ width: '100%', height: '100%' }} dangerouslySetInnerHTML={{ __html: svg }} />;
+}
+
 export function WorkflowNode({
   node,
   selected,
@@ -52,6 +61,7 @@ export function WorkflowNode({
   onChangeText,
   onChangeMetadata,
   onRun,
+  onStop,
   onContextMenu,
   onKeyboardContextMenu,
   onKeyboardSelect,
@@ -92,6 +102,7 @@ export function WorkflowNode({
   onChangeText: (value: string) => void;
   onChangeMetadata: (metadata: WorkflowNodeData['metadata']) => void;
   onRun: () => void;
+  onStop?: () => void;
   onContextMenu: (event: ReactMouseEvent<HTMLDivElement>) => void;
   onKeyboardContextMenu?: (event: ReactKeyboardEvent<HTMLDivElement>) => void;
   onKeyboardSelect?: () => void;
@@ -437,7 +448,8 @@ export function WorkflowNode({
           <WorkflowConfigPanel node={node} onChange={onChangeMetadata} onRun={onRun} />
         )}
         {node.type === 'script' && <ScriptNodeCard node={node} />}
-        {node.type === 'operation' && <OperationNodeCard node={node} onRun={onRun} onSelectTake={onSelectTake} language={language} layerPreview={layerPreview} />}
+        {node.type === 'operation' && <OperationNodeCard node={node} onRun={onRun} onStop={onStop} onSelectTake={onSelectTake} language={language} layerPreview={layerPreview} />}
+        {node.type === 'design' && <DesignNodeSurface node={node} />}
           </>}
         {mediaDetails && <span className="workflow-node__media-details">{mediaDetails}</span>}
         {status === 'loading' && (
@@ -560,7 +572,7 @@ function OperationVersionStrip({ node, onSelectTake, language }: { node: Workflo
   );
 }
 
-function OperationNodeCard({ node, onRun, onSelectTake, language = 'zho', layerPreview }: { node: WorkflowNodeData; onRun: () => void; onSelectTake?: (takeId: string) => void; language?: 'en' | 'zho'; layerPreview?: WorkflowLayerPreview }) {
+function OperationNodeCard({ node, onRun, onStop, onSelectTake, language = 'zho', layerPreview }: { node: WorkflowNodeData; onRun: () => void; onStop?: () => void; onSelectTake?: (takeId: string) => void; language?: 'en' | 'zho'; layerPreview?: WorkflowLayerPreview }) {
   // 单张生成：结果媒体原位写在 operation 节点 metadata 上（storageKey/href），显示结果图。
   // Hook 必须无条件调用（提前 return 会改变 Hook 数量），operation 判断放在其后。
   const resultMedia = useWorkflowMediaUrl(node.metadata.storageKey, node.metadata.href);
@@ -583,9 +595,11 @@ function OperationNodeCard({ node, onRun, onSelectTake, language = 'zho', layerP
         <OperationVersionStrip node={node} onSelectTake={onSelectTake} language={language} />
       <div className="workflow-operation-card__footer">
           <span>{operation.recipe.inputBindings.length} 输入 · {operation.takes.length} Take</span>
-          <button type="button" data-workflow-overlay onPointerDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); onRun(); }} disabled={node.metadata.status === 'loading'}>
-            <Play size={11} fill="currentColor" />{latestTake?.status === 'error' ? '重试' : '运行'}
-          </button>
+          {node.metadata.status === 'loading' && onStop
+            ? <button type="button" data-workflow-overlay onPointerDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); onStop(); }}>{language === 'en' ? 'Stop' : '停止'}</button>
+            : <button type="button" data-workflow-overlay onPointerDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); onRun(); }} disabled={node.metadata.status === 'loading'}>
+                <Play size={11} fill="currentColor" />{latestTake?.status === 'error' ? '重试' : '运行'}
+              </button>}
         </div>
       </div>
     );
@@ -599,9 +613,11 @@ function OperationNodeCard({ node, onRun, onSelectTake, language = 'zho', layerP
       <OperationVersionStrip node={node} onSelectTake={onSelectTake} language={language} />
       <div className="workflow-operation-card__footer">
         <span>{operation.recipe.inputBindings.length} 输入 · {operation.takes.length} Take</span>
-        <button type="button" data-workflow-overlay onPointerDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); onRun(); }} disabled={node.metadata.status === 'loading'}>
-          <Play size={11} fill="currentColor" />{latestTake?.status === 'error' ? '重试' : '运行'}
-        </button>
+        {node.metadata.status === 'loading' && onStop
+          ? <button type="button" data-workflow-overlay onPointerDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); onStop(); }}>{language === 'en' ? 'Stop' : '停止'}</button>
+          : <button type="button" data-workflow-overlay onPointerDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); onRun(); }} disabled={node.metadata.status === 'loading'}>
+              <Play size={11} fill="currentColor" />{latestTake?.status === 'error' ? '重试' : '运行'}
+            </button>}
       </div>
     </div>
   );

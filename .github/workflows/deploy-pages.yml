@@ -33,7 +33,20 @@ jobs:
           node-version: 22
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
+
+      # 发布门控：与 ci.yml 一致，验证失败则不部署 Pages
+      - name: Docs contract
+        run: npm run docs:check
+
+      - name: Release version identity
+        run: npm run version:check
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Unit tests
+        run: npm test -- --reporter=dot
 
       - name: Build for GitHub Pages
         run: |

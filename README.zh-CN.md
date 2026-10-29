@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  开源、本地优先的专业创作 AI 层——第一宿主从 DaVinci Resolve Studio 21.1 开始。<br />
+  开源、本地优先的 Workflow + Agent 创作工具；DaVinci Resolve Studio 21.1 宿主层开发中（Experimental）。<br />
   剪辑工程继续留在宿主里，Agent 理解上下文，Flovart 负责生成、参考素材、持久产物与候选版本。
 </p>
 
@@ -23,7 +23,6 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Agent--native-E8453C" alt="Agent-native" />
   <img src="https://img.shields.io/badge/Local--first-E8453C" alt="本地优先" />
-  <img src="https://img.shields.io/badge/BYOK-E8453C" alt="自带 API Key" />
   <img src="https://img.shields.io/badge/Image%20%2B%20Video-E8453C" alt="图片与视频" />
   <img src="https://img.shields.io/badge/License-MIT-E8453C" alt="MIT License" />
   <a href="https://github.com/avabbbb/Flovart/releases"><img src="https://img.shields.io/github/downloads/avabbbb/Flovart/total?color=E8453C&logo=github" alt="GitHub Downloads" /></a>
@@ -45,24 +44,16 @@
 
 影片展示 Resolve-first 的设计目标：指出画面位置，生成创意层，比较多个版本，再送回选定结果。**这是更名前录制的概念片，片尾仍显示 Iris。** 宿主集成、透明叠加层和新增轨道仍属 Experimental / Planned；当前已验证起点是下方真实录屏中的 Agent → Workflow 操作。Resolve P0 只以显式 **Add to Media Pool** 为安全输出。
 
-**0.1.0 内测版：** Windows EXE 与 macOS DMG 通过 [Releases](https://github.com/avabbbb/Flovart/releases) 分发。平台安装包分别验证，打包成功不等于宿主和付费 Provider 已认证；具体状态见 [Support Matrix](SUPPORT_MATRIX.md)。
+**0.2.0 内测版：** Windows EXE 与 macOS DMG 通过 [Releases](https://github.com/avabbbb/Flovart/releases) 分发。平台安装包分别验证，打包成功不等于宿主和付费 Provider 已认证；具体状态见 [Support Matrix](SUPPORT_MATRIX.md)。
 
 ## 实际效果
 
-两支 60 秒宣传片——v2（8 MB）与 v4（27 MB，码率更高）：
+Flovart 60 秒宣传片：
 
-<table>
-  <tr>
-    <td align="center">
-      <video src="vid/Iris_Promo_60s_v2.mp4" controls muted width="420"></video>
-      <br /><sub><strong>宣传片 v2。</strong>60 秒 · <a href="vid/Iris_Promo_60s_v2.mp4">源文件</a></sub>
-    </td>
-    <td align="center">
-      <video src="vid/Iris_Promo_60s_v4.mp4" controls muted width="420"></video>
-      <br /><sub><strong>宣传片 v4。</strong>60 秒 · <a href="vid/Iris_Promo_60s_v4.mp4">源文件</a></sub>
-    </td>
-  </tr>
-</table>
+<p align="center">
+  <video src="pic/readme/vision/Flovart_Promo_60s_v4.mp4" controls muted width="720"></video>
+  <br /><sub><strong>宣传片 v4。</strong>60 秒 · <a href="pic/readme/vision/Flovart_Promo_60s_v4.mp4">源文件</a></sub>
+</p>
 
 <p align="center">
   <img src="pic/readme/hero-agent.gif" alt="外部 coding agent 正在编辑同一份可见的 Flovart Workflow" width="880" />
@@ -133,10 +124,18 @@
 ### 创作者
 
 1. 从 [GitHub Releases](https://github.com/avabbbb/Flovart/releases) 下载预览版。
-2. 打开 Flovart，在设置中添加 AI 服务。
+2. 打开 Flovart，在设置中添加 AI 服务。Closed Beta 请使用 RunningHub（图像 + 视频，Beta 待认证）；其他 Provider 为 Experimental。
 3. 新建或打开 Workflow，加入参考素材，开始创作。
 
 公开 Releases 页面可能包含测试或预览产物；这不代表所有宿主或 Provider 都已 Stable。
+
+### 已知限制（0.2.0 内测版）
+
+- Beta 路径只有 Codex CLI + Browser Workflow（Agent）与 RunningHub 图像 + 视频（Provider，待认证）。DaVinci Resolve、WorkBuddy、Claude Code、OpenCode、Gemini、OpenAI-compatible BYOK 等其余路径均为 Experimental。
+- 安装包未签名：Windows 未配置 Authenticode，会出现 SmartScreen 提示；macOS 为 ad-hoc 签名且未公证，Gatekeeper 会要求确认。
+- 付费生成由 Provider 侧计费。生成中停止或刷新页面后，Provider 仍可能扣费；重新运行前请先在 Provider 控制台确认。
+- 部分生成错误提示目前只有中文。
+- 遇到问题？请提交「内测反馈」 Issue，并附上崩溃日志导出（错误页上的「复制诊断」）。
 
 ### Coding Agent 用户
 
@@ -304,7 +303,7 @@ npm run flovart:cli -- status --json
 - **留在编辑器里。** 第一宿主方向是 DaVinci Resolve Studio 21.1；其它创作宿主在真实宿主验证前继续保持 Experimental。
 - **Agent-native。** Agent 通过类型化能力和宿主原生控制面工作，不依赖鼠标坐标或屏幕抓取。
 - **默认非破坏。** 生成结果先成为 Candidate；Resolve-first 的 P0 只做到 **Add to Media Pool**，不会先替换原 Timeline。
-- **BYOK 图片与视频。** Provider、模型和 API Key 由你自己选择。
+- **自带模型。** Beta Provider 路径是 RunningHub 图像 + 视频（认证中）；其它 Provider 与 OpenAI-compatible BYOK 为 Experimental。
 - **本地优先。** 在当前实现支持范围内，项目相关状态、参考素材与生成产物尽量留在创作工作区附近。
 
 Canvas 仍然是多镜头、复杂依赖和 Workflow 编排的 power surface，**但它不再是 Flovart 的产品前提。**
@@ -325,7 +324,7 @@ Canvas 仍然是多镜头、复杂依赖和 Workflow 编排的 power surface，*
 ## 同一份 Workflow，人和 Agent 共用
 
 ```text
-你的 Agent                  Codex · WorkBuddy · Claude Code
+你的 Agent                  Codex（Beta）· WorkBuddy、Claude Code（Experimental）
       │
       ▼
 Flovart 操作                   inspect · select · apply · run
@@ -344,13 +343,13 @@ Flovart 操作                   inspect · select · apply · run
 你的 Provider → 你的 API Key → 你的素材 + Workflow → 你的生成结果
 ```
 
-Flovart 不内置模型服务。你可以在应用中配置 Provider，按需选择能力和模型，并自行承担 Provider 条款、费用和产物权利。OpenAI-compatible BYOK 与远程 Provider 路径当前为 Experimental：代码里有适配器，不等于真实付费服务已认证。
+Flovart 不内置模型服务。你可以在应用中配置 Provider，按需选择能力和模型，并自行承担 Provider 条款、费用和产物权利。OpenAI-compatible BYOK 与远程 Provider 路径当前为 Experimental：代码里有适配器，不等于真实付费服务已认证。Closed Beta 只认证一条付费 Provider 路径：RunningHub 图像 + 视频，认证完成前状态为 Beta（待认证）。
 
 ## 集成与兼容性
 
 | Host 或 package | 当前状态 |
 | --- | --- |
-| Codex CLI + Browser Workflow | Experimental |
+| Codex CLI + Browser Workflow | Beta |
 | Claude Code CLI projection | Experimental |
 | OpenCode CLI projection | Experimental |
 | WorkBuddy CLI Connector | Experimental |

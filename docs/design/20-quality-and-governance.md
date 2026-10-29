@@ -38,6 +38,8 @@
 
 每次运行保存机器可读结果（提交、构建、OS / GPU、宿主 / SDK / 模型版本、输入 hash、参数、次数、冷 / 热 p50 / p95、成本、失败样例）。原始记录放 `artifacts/`，真实 Key 不进证据。
 
+「假成功为 0」由 FlovartBench 硬门 `false-success-claims` 确定性度量（Agent 自报成功但最终状态不成立即整轮失败）；每个失败按漏斗层归因（`failedLayer`），细则见 [eval/README](../../eval/README.md)。
+
 ## 4. 文档治理
 
 ### 4.1 结构（上限 10 份设计文档）

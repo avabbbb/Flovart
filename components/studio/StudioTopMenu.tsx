@@ -1,4 +1,4 @@
-import { Languages, Moon, Settings, Sun, Monitor, User, Download, RefreshCw, Loader2, Home, Plus, Trash2, ChevronLeft, ChevronRight, Pencil, Check, X } from 'lucide-react';
+import { Languages, Moon, Settings, Sun, Monitor, User, Download, RefreshCw, Loader2, Plus, Trash2, Pencil, Check, X, ChevronDown, Search } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useAuth } from '../../hooks/useAuth';
@@ -63,25 +63,34 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
   const { user, isLoggedIn } = useAuth();
   const [authOpen, setAuthOpen] = useState(false);
   const isTauri = Boolean((window as any)?.__TAURI__ || (window as any)?.__TAURI_INTERNALS__);
-  // LOGO 下拉（回主页/新建工作流/删除工作流）
-  const [logoMenuOpen, setLogoMenuOpen] = useState(false);
-  const logoMenuRef = useRef<HTMLDivElement>(null);
+  // 工作流切换器：顶部唯一的工作流入口（切换 / 搜索 / 新建 / 重命名 / 删除）。
+  // 原左侧图标栏与项目侧栏已移除，避免与顶部栏重复。
+  const [projectMenuOpen, setProjectMenuOpen] = useState(false);
+  const [projectQuery, setProjectQuery] = useState('');
+  const projectMenuRef = useRef<HTMLDivElement>(null);
   // UX-HEU-01: deleting the current workflow is the most destructive action in
   // the app — it must not fire on a single misclick. Gate it behind an inline
   // confirmation inside the same popover so the user sees the project title
   // they are about to lose.
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const closeProjectMenu = () => {
+    setProjectMenuOpen(false);
+    setConfirmingDelete(false);
+    setProjectQuery('');
+  };
   useEffect(() => {
-    if (!logoMenuOpen) return;
+    if (!projectMenuOpen) return;
     const onClick = (event: MouseEvent) => {
-      if (logoMenuRef.current && !logoMenuRef.current.contains(event.target as Node)) {
-        setLogoMenuOpen(false);
-        setConfirmingDelete(false);
-      }
+      if (projectMenuRef.current && !projectMenuRef.current.contains(event.target as Node)) closeProjectMenu();
     };
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') closeProjectMenu(); };
     document.addEventListener('mousedown', onClick);
-    return () => document.removeEventListener('mousedown', onClick);
-  }, [logoMenuOpen]);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onClick);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [projectMenuOpen]);
 
   // 工作流名称 inline 编辑
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -110,13 +119,11 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
   const cancelTitle = () => { setTitleDraft(title); setIsEditingTitle(false); };
 
   const canManageProjects = Boolean(projectList && projectActions);
-  const hasMultipleProjects = (projectList?.length || 0) > 1;
   const projectIndex = activeProjectIndex ?? 0;
-  const switchProject = (direction: 1 | -1) => {
-    if (!hasMultipleProjects) return;
-    const next = (projectIndex + direction + projectList!.length) % projectList!.length;
-    projectActions!.setActiveByIndex(next);
-  };
+  const normalizedQuery = projectQuery.trim().toLowerCase();
+  const filteredProjects = (projectList || [])
+    .map((project, index) => ({ project, index }))
+    .filter(({ project }) => !normalizedQuery || (project.title || '').toLowerCase().includes(normalizedQuery));
   const upStatus = useUpdaterStore(s => s.status);
   const upVersion = useUpdaterStore(s => s.availableVersion);
   const upProgress = useUpdaterStore(s => s.downloadProgress);
@@ -151,125 +158,156 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
       className="studio-top-menu theme-aware relative z-50 grid min-h-12 shrink-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-1 px-2 py-1.5 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:px-4"
       style={{ background: 'var(--app-bg)' }}
     >
-      <div className="studio-top-menu__leading flex min-w-0 items-center gap-2">
-        <div ref={logoMenuRef} className="relative shrink-0">
-          <button
-            type="button"
-            className="flex items-center gap-2 rounded-lg p-0.5 transition hover:bg-black/5"
-            aria-label="Flovart 菜单"
-            title={canManageProjects ? (isChinese ? '点击打开工作流菜单' : 'Open workflow menu') : 'Flovart'}
-            onClick={() => { if (canManageProjects) setLogoMenuOpen(open => !open); }}
-          >
-            <img src="/favicon.png" alt="" className="h-7 w-7 rounded-lg" />
-            <span className="hidden text-sm font-black tracking-[-0.03em] sm:inline" style={{ color: 'var(--isl-ink)' }}>Flovart</span>
-          </button>
-          {logoMenuOpen && canManageProjects && (
-            <div
-              role="menu"
-              aria-label={isChinese ? '工作流菜单' : 'Workflow menu'}
-              className="isl-pop absolute left-0 top-full z-[90] mt-1.5 min-w-[200px] p-1.5"
-              onPointerDown={event => event.stopPropagation()}
-            >
-              <a
-                href="/"
-                className="isl-opt flex items-center gap-2"
-                role="menuitem"
-                onClick={event => {
-                  event.preventDefault();
-                  setLogoMenuOpen(false);
-                  const workspace = useWorkspaceStore.getState();
-                  workspace.setActiveView('workflow');
-                  workspace.setCanvasView('spatial');
-                  navigate('/app');
-                }}
-              >
-                <Home size={14} />
-                <span className="text-xs font-bold">{isChinese ? '回到画布' : 'Back to canvas'}</span>
-              </a>
-              <button type="button" role="menuitem" className="isl-opt flex items-center gap-2" onClick={() => { projectActions!.create(); setLogoMenuOpen(false); }}>
-                <Plus size={14} />
-                <span className="text-xs font-bold">{isChinese ? '新建工作流' : 'New workflow'}</span>
-              </button>
-              <button
-                type="button"
-                role="menuitem"
-                className="isl-opt flex items-center gap-2"
-                disabled={(projectList?.length || 0) === 0}
-                style={{ color: 'var(--isl-coral-deep)' }}
-                onClick={() => { setConfirmingDelete(true); }}
-              >
-                <Trash2 size={14} />
-                <span className="text-xs font-bold">{isChinese ? '删除当前工作流' : 'Delete workflow'}</span>
-              </button>
-              {confirmingDelete && (
-                <div
-                  role="alertdialog"
-                  aria-label={isChinese ? '删除工作流确认' : 'Confirm workflow delete'}
-                  className="mx-1 mb-1 rounded-md border p-2"
-                  style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-surface-2)' }}
-                >
-                  <p className="m-0 text-[11px] leading-4" style={{ color: 'var(--isl-ink-soft)' }}>
-                    {isChinese ? `确定删除“${title || '当前工作流'}”？此操作不可撤销。` : `Delete "${title || 'current workflow'}"? This cannot be undone.`}
-                  </p>
-                  <div className="mt-1.5 flex justify-end gap-1.5">
-                    <button
-                      type="button"
-                      className="isl-opt text-[11px] font-semibold"
-                      onClick={() => { setConfirmingDelete(false); }}
-                    >{isChinese ? '取消' : 'Cancel'}</button>
-                    <button
-                      type="button"
-                      className="isl-opt rounded px-2 py-0.5 text-[11px] font-semibold"
-                      style={{ background: 'var(--isl-coral-deep)', color: '#fff' }}
-                      onClick={() => { projectActions!.remove(); setConfirmingDelete(false); setLogoMenuOpen(false); }}
-                    >{isChinese ? '删除' : 'Delete'}</button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-        <span className="hidden h-4 w-px sm:block" style={{ background: 'var(--isl-border)' }} />
+      <div className='studio-top-menu__leading flex min-w-0 items-center gap-2'>
+        <button
+          type='button'
+          className='flex shrink-0 items-center gap-2 rounded-lg p-0.5 transition hover:bg-black/5'
+          aria-label={isChinese ? '回到画布' : 'Back to canvas'}
+          title={isChinese ? '回到画布' : 'Back to canvas'}
+          onClick={() => {
+            const workspace = useWorkspaceStore.getState();
+            workspace.setActiveView('workflow');
+            workspace.setCanvasView('spatial');
+            navigate('/app');
+          }}
+        >
+          <img src='/favicon.png' alt='' className='h-7 w-7 rounded-lg' />
+          <span className='hidden text-sm font-black tracking-[-0.03em] sm:inline' style={{ color: 'var(--isl-ink)' }}>Flovart</span>
+        </button>
+        <span className='hidden h-4 w-px sm:block' style={{ background: 'var(--isl-border)' }} />
         {canManageProjects ? (
-          <div className="flex min-w-0 items-center gap-1.5">
+          <div ref={projectMenuRef} className='relative flex min-w-0 items-center'>
             {isEditingTitle ? (
-              <div className="flex min-w-0 items-center gap-0.5">
+              <div className='flex min-w-0 items-center gap-0.5'>
                 <input
                   autoFocus
                   value={titleDraft}
                   onChange={event => setTitleDraft(event.target.value)}
                   onKeyDown={event => { if (event.key === 'Enter') commitTitle(); if (event.key === 'Escape') cancelTitle(); }}
                   onBlur={commitTitle}
-                  className="min-w-0 max-w-[180px] rounded-md border-[1.5px] px-1.5 py-0.5 text-xs font-semibold outline-none"
+                  className='min-w-0 max-w-[180px] rounded-md border-[1.5px] px-1.5 py-0.5 text-xs font-semibold outline-none'
                   style={{ borderColor: 'var(--isl-mint)', background: 'var(--isl-surface-2)', color: 'var(--isl-ink)' }}
                   aria-label={isChinese ? '工作流名称' : 'Workflow name'}
                 />
-                <button type="button" className="isl-icon-btn h-6 w-6" onClick={commitTitle} aria-label={isChinese ? '确认' : 'Confirm'}><Check size={13} /></button>
-                <button type="button" className="isl-icon-btn h-6 w-6" onClick={cancelTitle} aria-label={isChinese ? '取消' : 'Cancel'}><X size={13} /></button>
+                <button type='button' className='isl-icon-btn h-6 w-6' onClick={commitTitle} aria-label={isChinese ? '确认' : 'Confirm'}><Check size={13} /></button>
+                <button type='button' className='isl-icon-btn h-6 w-6' onClick={cancelTitle} aria-label={isChinese ? '取消' : 'Cancel'}><X size={13} /></button>
               </div>
             ) : (
               <button
-                type="button"
-                className="group hidden min-w-0 items-center gap-1 rounded-md px-1 py-0.5 transition hover:bg-black/5 min-[540px]:flex"
-                onClick={() => setIsEditingTitle(true)}
-                title={isChinese ? '点击修改工作流名称' : 'Click to rename workflow'}
+                type='button'
+                className='flex min-w-0 items-center gap-1 rounded-md px-1.5 py-0.5 transition hover:bg-black/5'
+                aria-haspopup='menu'
+                aria-expanded={projectMenuOpen}
+                aria-label={isChinese ? '切换工作流' : 'Switch workflow'}
+                title={isChinese ? '切换或管理工作流，双击重命名' : 'Switch or manage workflows. Double-click to rename'}
+                onClick={() => { if (projectMenuOpen) closeProjectMenu(); else setProjectMenuOpen(true); }}
+                onDoubleClick={() => { closeProjectMenu(); setIsEditingTitle(true); }}
               >
-                <strong className="min-w-0 truncate text-xs font-semibold" style={{ color: 'var(--isl-ink-soft)' }}>
+                <strong className='min-w-0 max-w-[220px] truncate text-xs font-semibold' style={{ color: 'var(--isl-ink-soft)' }}>
                   {title || 'Workflow'}
                 </strong>
-                <Pencil size={10} className="shrink-0 opacity-0 transition group-hover:opacity-60" />
+                {(projectList?.length || 0) > 1 && (
+                  <span className='tabular-nums text-[10px] font-bold' style={{ color: 'var(--isl-ink-ghost)' }}>{(projectIndex + 1) + '/' + projectList!.length}</span>
+                )}
+                <ChevronDown size={12} className='shrink-0 opacity-60' />
               </button>
             )}
-            {hasMultipleProjects && (
-              <div className="flex shrink-0 items-center gap-0.5">
-                <button type="button" className="isl-icon-btn h-6 w-6" onClick={() => switchProject(-1)} aria-label={isChinese ? '上一个工作流' : 'Previous workflow'} disabled={projectList!.length < 2}><ChevronLeft size={13} /></button>
-                <span className="tabular-nums text-[11px] font-bold" style={{ color: 'var(--isl-ink-soft)' }} title={isChinese ? `${projectIndex + 1} / ${projectList!.length} 个工作流` : `${projectIndex + 1} / ${projectList!.length} workflows`}>{projectIndex + 1}/{projectList!.length}</span>
-                <button type="button" className="isl-icon-btn h-6 w-6" onClick={() => switchProject(1)} aria-label={isChinese ? '下一个工作流' : 'Next workflow'} disabled={projectList!.length < 2}><ChevronRight size={13} /></button>
+            {projectMenuOpen && (
+              <div
+                role='menu'
+                aria-label={isChinese ? '工作流菜单' : 'Workflow menu'}
+                className='isl-pop absolute left-0 top-full z-[90] mt-1.5 w-[260px] p-1.5'
+                onPointerDown={event => event.stopPropagation()}
+              >
+                <button type='button' role='menuitem' className='isl-opt flex w-full items-center gap-2' onClick={() => { projectActions!.create(); closeProjectMenu(); }}>
+                  <Plus size={14} />
+                  <span className='text-xs font-bold'>{isChinese ? '新建工作流' : 'New workflow'}</span>
+                </button>
+                <label className='mx-1 my-1 flex items-center gap-1.5 rounded-md border px-2 py-1' style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-surface-2)' }}>
+                  <Search size={12} className='shrink-0 opacity-60' />
+                  <input
+                    autoFocus
+                    value={projectQuery}
+                    onChange={event => setProjectQuery(event.target.value)}
+                    onKeyDown={event => {
+                      if (event.key === 'Enter' && filteredProjects[0]) {
+                        projectActions!.setActiveByIndex(filteredProjects[0].index);
+                        closeProjectMenu();
+                      }
+                    }}
+                    placeholder={isChinese ? '搜索工作流' : 'Search workflows'}
+                    aria-label={isChinese ? '搜索工作流' : 'Search workflows'}
+                    className='min-w-0 flex-1 bg-transparent text-xs outline-none'
+                    style={{ color: 'var(--isl-ink)' }}
+                  />
+                </label>
+                <div className='max-h-[280px] overflow-y-auto' role='group' aria-label={isChinese ? '全部工作流' : 'All workflows'}>
+                  {filteredProjects.map(({ project, index }) => {
+                    const isActive = index === projectIndex;
+                    return (
+                      <button
+                        key={project.id}
+                        type='button'
+                        role='menuitemradio'
+                        aria-checked={isActive}
+                        className={'isl-opt flex w-full items-center gap-2' + (isActive ? ' isl-opt--active' : '')}
+                        title={project.title}
+                        onClick={() => { if (!isActive) projectActions!.setActiveByIndex(index); closeProjectMenu(); }}
+                      >
+                        <span aria-hidden='true' className='h-1.5 w-1.5 shrink-0 rounded-full' style={{ background: isActive ? 'var(--isl-mint)' : 'var(--isl-ink-ghost)' }} />
+                        <span className='min-w-0 flex-1 truncate text-left text-xs font-bold'>{project.title || (isChinese ? '未命名工作流' : 'Untitled workflow')}</span>
+                        {isActive && <Check size={11} className='shrink-0 opacity-70' />}
+                      </button>
+                    );
+                  })}
+                  {filteredProjects.length === 0 && (
+                    <p className='m-0 px-2 py-1.5 text-[11px]' style={{ color: 'var(--isl-ink-ghost)' }}>
+                      {(projectList?.length || 0) === 0 ? (isChinese ? '还没有工作流' : 'No workflows yet') : (isChinese ? '没有匹配的工作流' : 'No matching workflows')}
+                    </p>
+                  )}
+                </div>
+                <div className='mx-1 my-1 h-px' style={{ background: 'var(--isl-border)' }} />
+                <button type='button' role='menuitem' className='isl-opt flex w-full items-center gap-2' disabled={(projectList?.length || 0) === 0} onClick={() => { closeProjectMenu(); setIsEditingTitle(true); }}>
+                  <Pencil size={14} />
+                  <span className='text-xs font-bold'>{isChinese ? '重命名当前工作流' : 'Rename workflow'}</span>
+                </button>
+                <button
+                  type='button'
+                  role='menuitem'
+                  className='isl-opt flex w-full items-center gap-2'
+                  disabled={(projectList?.length || 0) === 0}
+                  style={{ color: 'var(--isl-coral-deep)' }}
+                  onClick={() => setConfirmingDelete(true)}
+                >
+                  <Trash2 size={14} />
+                  <span className='text-xs font-bold'>{isChinese ? '删除当前工作流' : 'Delete workflow'}</span>
+                </button>
+                {confirmingDelete && (
+                  <div
+                    role='alertdialog'
+                    aria-label={isChinese ? '删除工作流确认' : 'Confirm workflow delete'}
+                    className='mx-1 mb-1 rounded-md border p-2'
+                    style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-surface-2)' }}
+                  >
+                    <p className='m-0 text-[11px] leading-4' style={{ color: 'var(--isl-ink-soft)' }}>
+                      {isChinese ? '确定删除“' + (title || '当前工作流') + '”？此操作不可撤销。' : 'Delete “' + (title || 'current workflow') + '”? This cannot be undone.'}
+                    </p>
+                    <div className='mt-1.5 flex justify-end gap-1.5'>
+                      <button type='button' className='isl-opt text-[11px] font-semibold' onClick={() => setConfirmingDelete(false)}>{isChinese ? '取消' : 'Cancel'}</button>
+                      <button
+                        type='button'
+                        className='isl-opt rounded px-2 py-0.5 text-[11px] font-semibold'
+                        style={{ background: 'var(--isl-coral-deep)', color: '#fff' }}
+                        onClick={() => { projectActions!.remove(); closeProjectMenu(); }}
+                      >{isChinese ? '删除' : 'Delete'}</button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
         ) : (
-          <strong className="hidden min-w-0 truncate text-xs font-semibold min-[540px]:block" style={{ color: 'var(--isl-ink-soft)' }}>
+          <strong className='min-w-0 truncate text-xs font-semibold' style={{ color: 'var(--isl-ink-soft)' }}>
             {title || 'Workflow'}
           </strong>
         )}

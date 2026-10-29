@@ -1,7 +1,7 @@
 {
   "name": "flovart",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "license": "MIT",
   "type": "module",
   "engines": {
@@ -69,6 +69,7 @@
     "antd": "^6.4.4",
     "embla-carousel-react": "^8.6.0",
     "fast-xml-parser": "^5.10.1",
+    "imagetracerjs": "^1.2.6",
     "ink": "^6.8.0",
     "ink-text-input": "^6.0.0",
     "json-canonicalize": "^2.0.0",
@@ -77,6 +78,7 @@
     "lucide-react": "^1.20.0",
     "motion": "^12.40.0",
     "nanoid": "^5.1.16",
+    "polygon-clipping": "^0.15.7",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "react-konva": "^19.2.4",

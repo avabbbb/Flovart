@@ -477,6 +477,7 @@ const App: React.FC = () => {
                 })();
             });
     }, [activeWorkflowProjectId, apiKeysLoaded, userApiKeys, workflowExecutor, workflowProjects]);
+    const pendingRunRef = React.useRef<{ projectId: string; nodeId: string; promptIntent?: PromptIntent } | null>(null);
     const runWorkflowNodeFromUi = useCallback((projectId: string, nodeId: string, promptIntent?: PromptIntent) => {
         const node = useWorkflowStore.getState().projects.find(item => item.id === projectId)?.nodes.find(item => item.id === nodeId);
         if (!node) return;
@@ -485,7 +486,10 @@ const App: React.FC = () => {
         const run = () => { void workflowExecutor.runNode({ projectId, nodeId, ...(promptIntent ? { promptIntent } : {}) }, { surface: 'ui' }); };
         if (!requiresExternalGenerationGate(node, capability)) { run(); return; }
         if (!userApiKeys.length) {
-            toast.show('还没有可用的 AI 服务。在设置 → AI 服务里添加一个 API Key 后再生成。', 'warning');
+            // Keep the user's intent: open Settings now and resume this run (still gated) once a key exists.
+            pendingRunRef.current = { projectId, nodeId, promptIntent };
+            toast.show(language === 'en' ? 'Add an AI service API key in Settings; this node will continue once it is saved.' : '还没有可用的 AI 服务。在设置里添加 API Key 后会自动继续这次生成。', 'warning');
+            setIsSettingsPanelOpen(true);
             return;
         }
         // Non-blocking: the canvas stays usable while the user decides, and an
@@ -495,8 +499,16 @@ const App: React.FC = () => {
             title: details.mediaType === 'video' ? '开始生成视频？' : '开始生成图片？',
             body: buildGenerationGateSummary(details),
             confirmLabel: '生成',
+            onDismissed: () => toast.show(language === 'en' ? 'The generation request expired and nothing was submitted. Press Run again.' : '生成确认已过期，未提交任何任务。请重新点击运行。', 'warning'),
         }).then(approved => { if (approved) run(); });
-    }, [toast, userApiKeys, workflowExecutor]);
+    }, [language, toast, userApiKeys, workflowExecutor]);
+
+    useEffect(() => {
+        const pendingRun = pendingRunRef.current;
+        if (!pendingRun || !userApiKeys.length) return;
+        pendingRunRef.current = null;
+        runWorkflowNodeFromUi(pendingRun.projectId, pendingRun.nodeId, pendingRun.promptIntent);
+    }, [runWorkflowNodeFromUi, userApiKeys.length]);
 
     const handleSaveWorkflowMedia = useCallback(async (projectId: string, nodeId: string) => {
         const node = useWorkflowStore.getState().projects.find(item => item.id === projectId)?.nodes.find(item => item.id === nodeId);
@@ -599,7 +611,7 @@ const App: React.FC = () => {
     }, [hasAiService, language]);
     const studioMenuModel: StudioMenuModel = useMemo(() => ({
         mode: activeView,
-        title: canvasView === 'table' ? 'Table' : canvasView === 'agent' ? 'Agent' : activeWorkflowTitle,
+        title: activeWorkflowTitle,
         themeMode,
         resolvedTheme,
         language,
@@ -766,10 +778,6 @@ const App: React.FC = () => {
                 canvasView={canvasView}
                 projects={workflowProjects.map(project => ({ id: project.id, title: project.title }))}
                 activeProjectId={activeWorkflowProjectId}
-                onCanvasViewChange={setCanvasView}
-                onSelectProject={workflowSetActiveProject}
-                onCreateProject={() => workflowCreateProject(language === 'zho' ? '未命名工作流' : 'Untitled workflow')}
-                onOpenSettings={() => setIsSettingsPanelOpen(true)}
             >
                 {main}
             </StudioNavigationFrame>

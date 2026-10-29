@@ -32,7 +32,13 @@ import { summarizeWorkflowOps, topoSort, validateWorkflowConnection } from './op
 import { buildWorkflowPromptPasteOps } from './promptPaste';
 import { WorkflowConnections } from './WorkflowConnections';
 import { WorkflowContextMenu, type WorkflowContextMenuState } from './WorkflowContextMenu';
+import { alignNodes, arrowNudge, distributeNodes, duplicateNodes, offsetNodes } from './arrange';
 import { WorkflowCreateMenu, type WorkflowCreateMenuState } from './WorkflowCreateMenu';
+import { DesignInspector } from './DesignInspector';
+import { createDesignTemplate } from '../../services/design/presets';
+import { buildBooleanElement, findFrameChildren, layoutFrameChildren } from '../../services/design/designActions';
+import { DESIGN_BOOLEAN_LABELS } from '../../services/design/booleanOps';
+import type { DesignElementKind } from '../../services/design/designTypes';
 import type { WorkflowSharedMedia } from './WorkflowConfigPanel';
 import { WorkflowMiniMap } from './WorkflowMiniMap';
 import { WorkflowNode } from './WorkflowNode';
@@ -61,9 +67,12 @@ import type { WorkflowConnection, WorkflowDocumentOperation, WorkflowNode as Wor
 import {
   runWorkflowCropOperation,
   runWorkflowImageEditOperation,
+  runWorkflowOutpaintOperation,
+  runWorkflowMoveObjectOperation,
   runWorkflowLayerOperation,
   runWorkflowRemoveBackgroundOperation,
   runWorkflowRotateOperation,
+  runWorkflowVectorizeOperation,
   runWorkflowSplitGridOperation,
   runWorkflowSplitLayersOperation,
   runWorkflowUpscaleOperation,
@@ -78,6 +87,8 @@ import {
 } from '../../services/workflowVideoOperations';
 import { runWorkflowAudioSpeedOperation, runWorkflowAudioStemSplitOperation, runWorkflowAudioTrimOperation } from '../../services/workflowAudioOperations';
 import { exportMediaArchive } from '../../utils/batchMediaExport';
+import { exportWorkflowCanvas, pickWorkflowExportNodes, type WorkflowCanvasExportFormat } from './canvasExport';
+import { addWorkflowSnapshot, createWorkflowSnapshot, removeWorkflowSnapshot, workflowSnapshotFrame } from './snapshots';
 import { computeAutoLayout } from './layoutAlgorithm';
 import { usePromptHistoryStore } from '../../stores/usePromptHistoryStore';
 import { useClipboardStore, type ClipItem } from '../../stores/useClipboardStore';
@@ -102,6 +113,8 @@ const NODE_ACTION_TARGET = 'button,textarea,input,select,[contenteditable="true"
 const BLOCKED_TARGET = `${NODE_ACTION_TARGET},video,audio`;
 const EDITABLE_TARGET = 'textarea,input,select,video,audio,[contenteditable="true"]';
 const SPACE_BLOCKED_TARGET = `${EDITABLE_TARGET},[role="menu"],[role="dialog"]`;
+// Delete/Backspace 只在画布本身生效：对话框、菜单里的按键不能删掉背后的节点。
+const DELETE_BLOCKED_TARGET = `${SPACE_BLOCKED_TARGET},[role="alertdialog"],[aria-modal="true"]`;
 const CONNECTION_NODE_PADDING = 24;
 const CONNECTION_HANDLE_RADIUS = 18;
 /** 视口裁剪留出的世界坐标边距，避免节点刚滑出屏幕就被卸载。 */
@@ -524,6 +537,59 @@ export function InfiniteWorkflow({
     pushHistory(currentFrame(), { nodes, connections });
   }, [currentFrame, pushHistory]);
 
+  // 导出：有选区只导出选区，否则导出全部可见节点。
+  const exportCanvas = useCallback(async (format: WorkflowCanvasExportFormat) => {
+    const nodes = pickWorkflowExportNodes(projectRef.current.nodes, selectedIdsRef.current);
+    if (!nodes.length) {
+      setNotice('画布中没有可导出的内容');
+      return;
+    }
+    try {
+      const saved = await exportWorkflowCanvas(nodes, format, 'Flovart-' + projectRef.current.title);
+      if (mountedRef.current) setNotice(saved ? '已导出 ' + format.toUpperCase() : '已取消导出。');
+    } catch (error) {
+      if (mountedRef.current) setNotice(displayError(error, '画布导出失败'));
+    }
+  }, []);
+
+  // 快照：保存/删除只改项目字段；恢复走 pushHistory，与普通编辑一样可撤销。
+  const saveSnapshot = useCallback((name: string) => {
+    const current = projectRef.current;
+    if (!current.nodes.length) {
+      setNotice('画布为空，无需保存快照');
+      return;
+    }
+    const snapshot = createWorkflowSnapshot({ nodes: current.nodes, connections: current.connections, viewport: viewportRef.current }, name);
+    patchProject({ snapshots: addWorkflowSnapshot(current.snapshots, snapshot) });
+    setNotice('已保存快照“' + snapshot.name + '”');
+  }, [patchProject]);
+
+  const restoreSnapshot = useCallback((id: string) => {
+    const snapshot = projectRef.current.snapshots?.find(item => item.id === id);
+    if (!snapshot) return;
+    setNotice(pushHistory(currentFrame(), workflowSnapshotFrame(snapshot), '恢复快照')
+      ? '已恢复快照“' + snapshot.name + '”，可撤销'
+      : '快照恢复失败：画布已更新，请重试');
+  }, [currentFrame, pushHistory]);
+
+  const deleteSnapshot = useCallback((id: string) => {
+    patchProject({ snapshots: removeWorkflowSnapshot(projectRef.current.snapshots, id) });
+  }, [patchProject]);
+
+  // 方向键连续微调只记一条撤销：按住期间只预览，松开方向键、按下其它键或窗口失焦时合并提交。
+  // 提交被修订冲突拒绝时回退预览，保持可见工作流与草稿历史一致。
+  const nudgeBaseRef = useRef<Frame | null>(null);
+  const flushNudge = useCallback(() => {
+    const base = nudgeBaseRef.current;
+    if (!base) return;
+    nudgeBaseRef.current = null;
+    if (!pushHistory(base, currentFrame(), '移动节点')) patchProject({ nodes: base.nodes });
+  }, [currentFrame, patchProject, pushHistory]);
+  // 键盘监听会随依赖重新绑定，不能在其 cleanup 里提交；只在卸载时补交未完成的微调。
+  const flushNudgeRef = useRef(flushNudge);
+  flushNudgeRef.current = flushNudge;
+  useEffect(() => () => flushNudgeRef.current(), []);
+
   // 视频封面只是派生缓存：补齐后直接写回 metadata，不产生撤销记录，也不推进草稿版本。
   const applyVideoPoster = useCallback((nodeId: string, posterStorageKey: string) => {
     const current = projectRef.current.nodes;
@@ -665,7 +731,7 @@ export function InfiniteWorkflow({
   const builtInImageTools = useMemo<WorkflowImageToolHandlers>(() => ({
     crop: id => openImageTool('crop', id), filter: id => openImageTool('filter', id), upscale: id => openImageTool('upscale', id),
     removeBackground: id => openImageTool('remove-background', id), outpaint: id => openImageTool('outpaint', id), mask: id => openImageTool('mask', id), splitLayers: id => openImageTool('split', id),
-    rotate: id => openImageTool('rotate', id), splitGrid: id => openImageTool('splitGrid', id), annotate: id => openImageTool('annotate', id), relight: id => openImageTool('relight', id),
+    rotate: id => openImageTool('rotate', id), splitGrid: id => openImageTool('splitGrid', id), annotate: id => openImageTool('annotate', id), relight: id => openImageTool('relight', id), restyle: id => openImageTool('restyle', id), vectorize: id => openImageTool('vectorize', id), moveObject: id => openImageTool('move', id),
     layer: id => {
       const target = projectRef.current.nodes.find(node => node.id === id);
       // 有媒体的图片节点先在节点内圈选，再进入参数弹窗；其余情况直接弹窗。
@@ -918,6 +984,13 @@ export function InfiniteWorkflow({
         else if (result?.status === 'stale') { setImageTool(null); setImageToolError(null); releaseImageToolTransaction(transaction); }
         return;
       }
+      if (confirmation.kind === 'vectorize') {
+        const result = await runWorkflowVectorizeOperation(transaction.projectId, node.id, confirmation.preset, imageToolRuntime);
+        if (!ownsImageToolTransaction(transaction)) return;
+        if (result.status === 'committed') { pushHistory(transaction.frame); setNotice('矢量化完成'); setImageTool(null); releaseImageToolTransaction(transaction); }
+        else { setImageTool(null); setImageToolError(null); releaseImageToolTransaction(transaction); }
+        return;
+      }
       if (confirmation.kind === 'rotate') {
         const result = await runWorkflowRotateOperation(transaction.projectId, node.id, confirmation.action, imageToolRuntime);
         if (!ownsImageToolTransaction(transaction)) return;
@@ -983,7 +1056,9 @@ export function InfiniteWorkflow({
       let result: WorkflowImageToolOutcome | null = null;
       if (confirmation.kind === 'upscale') result = await runWorkflowUpscaleOperation(transaction.projectId, node.id, { targetLongEdge: confirmation.targetLongEdge, algorithm: confirmation.algorithm }, imageToolRuntime);
       if (confirmation.kind === 'split') result = await runWorkflowSplitLayersOperation(transaction.projectId, node.id, imageToolRuntime);
-      if (confirmation.kind === 'outpaint') result = await runWorkflowImageEditOperation(transaction.projectId, node.id, `向${{ left: '左侧', right: '右侧', top: '上方', bottom: '下方', all: '四周' }[confirmation.direction]}扩展画面。${confirmation.prompt}`, 'outpaint', undefined, imageToolRuntime);
+      if (confirmation.kind === 'move') result = await runWorkflowMoveObjectOperation(transaction.projectId, node.id, { points: confirmation.points, dx: confirmation.dx, dy: confirmation.dy, prompt: confirmation.prompt }, imageToolRuntime);
+      if (confirmation.kind === 'outpaint') result = await runWorkflowOutpaintOperation(transaction.projectId, node.id, { direction: confirmation.direction, amount: confirmation.amount, prompt: confirmation.prompt }, imageToolRuntime);
+      if (confirmation.kind === 'restyle') result = await runWorkflowImageEditOperation(transaction.projectId, node.id, confirmation.prompt, 'edit', undefined, imageToolRuntime);
       if (confirmation.kind === 'mask') result = await runWorkflowImageEditOperation(transaction.projectId, node.id, confirmation.prompt, 'mask', { href: confirmation.maskDataUrl, mimeType: 'image/png' }, imageToolRuntime);
       if (!ownsImageToolTransaction(transaction)) return;
       if (result?.status === 'committed' && result.project.id === transaction.projectId && projectRef.current.id === transaction.projectId && result.project.nodes.some(item => item.id === transaction.nodeId)) {
@@ -1920,11 +1995,20 @@ export function InfiniteWorkflow({
     // Ctrl+Z still restores the nodes — the toast advertises that affordance.
     onNotify?.(language === 'zho' ? `已删除 ${deletableIds.length} 个节点 — Ctrl+Z 撤销` : `Deleted ${deletableIds.length} node${deletableIds.length > 1 ? 's' : ''} — Ctrl+Z to undo`, 'info');
   }, [applyOps, commitFrame, language, onNotify, selectedConnectionId]);
+  const duplicateSelection = useCallback(() => {
+    const result = duplicateNodes(projectRef.current.nodes, selectedIdsRef.current);
+    if (!result) return;
+    commitFrame(result.nodes, projectRef.current.connections);
+    selectNodes(result.ids);
+  }, [commitFrame, selectNodes]);
 
 
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
+      if (nudgeBaseRef.current && !event.key.startsWith('Arrow')) flushNudge();
       const target = event.target instanceof Element ? event.target : null;
+      // The non-modal confirm owns its own keys; Delete/Esc there must not act on the canvas selection.
+      if (target?.closest('.flovart-confirm')) return;
       if (event.code === 'Space') {
         if (target?.closest(SPACE_BLOCKED_TARGET)) return;
         event.preventDefault();
@@ -1939,7 +2023,7 @@ export function InfiniteWorkflow({
       // Delete means "erase a character", not "erase the node".
       const isDeleteKey = event.key === 'Delete' || event.key === 'Backspace';
       if (isDeleteKey) {
-        if (target?.closest(EDITABLE_TARGET)) return;
+        if (target?.closest(DELETE_BLOCKED_TARGET)) return;
         event.preventDefault();
         deleteSelection();
         return;
@@ -1952,6 +2036,16 @@ export function InfiniteWorkflow({
       if (modifier && key === 'c') { event.preventDefault(); copySelection(); return; }
       if (modifier && key === 'v') { event.preventDefault(); void pasteSelection(); return; }
       if (modifier && key === 'a') { event.preventDefault(); selectNodes(projectRef.current.nodes.filter(node => node.isVisible !== false).map(node => node.id)); return; }
+      if (modifier && key === 'd') { event.preventDefault(); duplicateSelection(); return; }
+      const nudge = !modifier && selectedIdsRef.current.length ? arrowNudge(event.key, event.shiftKey) : null;
+      if (nudge) {
+        event.preventDefault();
+        const next = offsetNodes(projectRef.current.nodes, selectedIdsRef.current, nudge[0], nudge[1]);
+        if (!next) return;
+        if (!nudgeBaseRef.current) nudgeBaseRef.current = currentFrame();
+        patchProject({ nodes: next });
+        return;
+      }
       if (modifier && key === 'g') {
         event.preventDefault();
         const ids = selectedIdsRef.current;
@@ -1959,7 +2053,9 @@ export function InfiniteWorkflow({
         return;
       }
       // F — Frame Selection（Premiere/AE 约定）：无修饰键时把选中节点居中缩放。
-      if (!modifier && key === 'f') { event.preventDefault(); frameSelection(); return; }
+      // Alt+Shift+F — 自动整理（快捷键卡片已公布）；用 event.code 兼容 macOS Option 组合字符。
+      if (!modifier && event.altKey && event.shiftKey && event.code === 'KeyF') { event.preventDefault(); autoLayout(); return; }
+      if (!modifier && !event.altKey && key === 'f') { event.preventDefault(); frameSelection(); return; }
       if (event.key === '/' && !modifier && !slashMenuRef.current) {
         event.preventDefault();
         const rect = rootRef.current?.getBoundingClientRect();
@@ -1975,14 +2071,17 @@ export function InfiniteWorkflow({
     };
     const keyup = (event: KeyboardEvent) => {
       if (event.code === 'Space') spacePressedRef.current = false;
+      if (event.key.startsWith('Arrow')) flushNudge();
     };
     window.addEventListener('keydown', keydown);
     window.addEventListener('keyup', keyup);
+    window.addEventListener('blur', flushNudge);
     return () => {
       window.removeEventListener('keydown', keydown);
       window.removeEventListener('keyup', keyup);
+      window.removeEventListener('blur', flushNudge);
     };
-  }, [applyOps, cancelInteraction, closeCreateMenu, copySelection, deleteSelection, frameSelection, pasteSelection, redo, selectNodes, undo]);
+  }, [applyOps, autoLayout, cancelInteraction, closeCreateMenu, copySelection, currentFrame, deleteSelection, duplicateSelection, flushNudge, frameSelection, pasteSelection, patchProject, redo, selectNodes, undo]);
 
   const addNode = useCallback((type: WorkflowNodeType, metadata: WorkflowNodeData['metadata'] = {}) => {
     const center = viewportCenter();
@@ -2075,9 +2174,13 @@ export function InfiniteWorkflow({
       : item), projectRef.current.connections);
   }, [commitFrame]);
 
-  const createFromMenu = useCallback((type: WorkflowNodeType) => {
+  const createFromMenu = useCallback((type: WorkflowNodeType, designKind?: DesignElementKind) => {
     if (!createMenu) return;
-    const node = createWorkflowNode(nanoid(), type, createMenu.world);
+    let node = createWorkflowNode(nanoid(), type, createMenu.world);
+    if (type === 'design' && designKind) {
+      const template = createDesignTemplate(designKind);
+      node = { ...createWorkflowNode(node.id, 'design', createMenu.world, { design: template.design }), title: template.title, width: template.width, height: template.height };
+    }
     let success: boolean;
     if (createMenu.sourceId) {
       success = applyOps([{ type: 'create_connected_node', fromNodeId: createMenu.sourceId, node }]);
@@ -2405,30 +2508,56 @@ export function InfiniteWorkflow({
   useEffect(() => {
     const root = rootRef.current;
     if (!root) return;
+    // 每帧最多写一次视口：触控板一帧内可触发多次 wheel，逐次 patchProject 会导致整画布重复渲染。
+    let frame: number | null = null;
+    let pending: { zoom: boolean; dx: number; dy: number; clientX: number; clientY: number } | null = null;
+    const flush = () => {
+      frame = null;
+      const next = pending;
+      pending = null;
+      if (!next) return;
+      const viewport = viewportRef.current;
+      if (next.zoom) {
+        const rect = root.getBoundingClientRect();
+        const world = screenToWorkflow(next.clientX, next.clientY);
+        const k = Math.min(3, Math.max(0.12, viewport.k * Math.exp(-next.dy * 0.0015)));
+        patchProject({ viewport: {
+          x: next.clientX - (rect?.left || 0) - world.x * k,
+          y: next.clientY - (rect?.top || 0) - world.y * k,
+          k,
+        } });
+      } else {
+        patchProject({ viewport: { ...viewport, x: viewport.x - next.dx, y: viewport.y - next.dy } });
+      }
+    };
     const onWheel = (event: WheelEvent) => {
       if (event.target instanceof Element && event.target.closest(BLOCKED_TARGET)) return;
       event.preventDefault();
       if (focusAnimRef.current !== null) { window.cancelAnimationFrame(focusAnimRef.current); focusAnimRef.current = null; }
       setFocusBadge(false);
-      if (event.ctrlKey || wheelMode === 'zoom') {
-        const rect = root.getBoundingClientRect();
-        const world = screenToWorkflow(event.clientX, event.clientY);
-        const k = Math.min(3, Math.max(0.12, viewportRef.current.k * Math.exp(-event.deltaY * 0.0015)));
-        patchProject({ viewport: {
-          x: event.clientX - (rect?.left || 0) - world.x * k,
-          y: event.clientY - (rect?.top || 0) - world.y * k,
-          k,
-        } });
-      } else {
-        patchProject({ viewport: {
-          ...viewportRef.current,
-          x: viewportRef.current.x - event.deltaX,
-          y: viewportRef.current.y - event.deltaY,
-        } });
+      const zoom = event.ctrlKey || wheelMode === 'zoom';
+      if (pending && pending.zoom !== zoom) {
+        if (frame !== null) window.cancelAnimationFrame(frame);
+        flush();
       }
+      if (pending) {
+        pending.dx += event.deltaX;
+        pending.dy += event.deltaY;
+        pending.clientX = event.clientX;
+        pending.clientY = event.clientY;
+      } else {
+        pending = { zoom, dx: event.deltaX, dy: event.deltaY, clientX: event.clientX, clientY: event.clientY };
+      }
+      if (frame === null) frame = window.requestAnimationFrame(flush);
     };
     root.addEventListener('wheel', onWheel, { passive: false });
-    return () => root.removeEventListener('wheel', onWheel);
+    return () => {
+      root.removeEventListener('wheel', onWheel);
+      // 重新绑定或卸载时只丢弃未提交的一帧滚动，不在 cleanup 里写项目。
+      if (frame !== null) window.cancelAnimationFrame(frame);
+      frame = null;
+      pending = null;
+    };
   }, [wheelMode, patchProject, screenToWorkflow]);
 
   return (
@@ -2453,7 +2582,13 @@ export function InfiniteWorkflow({
         event.preventDefault();
         openCreateMenu(event.clientX, event.clientY);
       }}
-      onContextMenu={event => event.preventDefault()}
+      onContextMenu={event => {
+        event.preventDefault();
+        if (tool === 'pan' || !isTrueBackground(event.target)) return;
+        setSelectedConnectionId(null);
+        closeCreateMenu();
+        setContextMenu({ type: 'pane', x: event.clientX, y: event.clientY });
+      }}
     >
       <WorkflowToolbar
         tool={tool}
@@ -2496,6 +2631,12 @@ export function InfiniteWorkflow({
         onZoomIn={zoomIn}
         onZoomOut={zoomOut}
         onZoomReset={zoomReset}
+        onExportCanvas={format => { void exportCanvas(format); }}
+        exportSelection={selectedNodeIds.length > 0}
+        snapshots={project.snapshots?.map(snapshot => ({ id: snapshot.id, name: snapshot.name, createdAt: snapshot.createdAt, nodeCount: snapshot.nodes.length }))}
+        onSaveSnapshot={saveSnapshot}
+        onRestoreSnapshot={restoreSnapshot}
+        onDeleteSnapshot={deleteSnapshot}
       />
       {project.nodes.length === 0 && (
         // The empty canvas is its own guide: one sentence and the two most common starts.
@@ -2614,6 +2755,7 @@ export function InfiniteWorkflow({
             onChangeText={content => { if (!node.isLocked) applyOps([{ type: 'update_node', id: node.id, metadata: { content } }]); }}
             onChangeMetadata={metadata => { if (!node.isLocked) applyOps([{ type: 'update_node', id: node.id, metadata }]); }}
             onRun={() => { if (!node.isLocked) onRunNode(node.id); }}
+            onStop={() => stopNode(node.id)}
             runState={runStates.get(node.id)}
             layerPreview={deriveWorkflowLayerPreview(node, project.nodes)}
             lassoActive={lassoNodeId === node.id}
@@ -2634,7 +2776,7 @@ export function InfiniteWorkflow({
             onRemoveMedia={() => { if (!node.isLocked) removeMedia(node); }}
             onContextMenu={event => {
               setSelectedConnectionId(null);
-              selectNodes([node.id]);
+              if (!selectedIdsRef.current.includes(node.id)) selectNodes([node.id]);
               setContextMenu({ type: 'node', id: node.id, x: event.clientX, y: event.clientY });
             }}
             onKeyboardContextMenu={event => {
@@ -2706,6 +2848,31 @@ export function InfiniteWorkflow({
             onSaveMedia={onSaveWorkflowMedia}
             onGroup={ids => applyOps([{ type: 'group_nodes', ids, batchId: nanoid(), source: 'manual' }])}
             onUngroup={ids => applyOps([{ type: 'ungroup_nodes', ids }])}
+            onDesignBoolean={(operation, ids) => {
+              // 按图层顺序（底到顶）取形状；结果替换原形状。
+              const selected = projectRef.current.nodes.filter(item => ids.includes(item.id) && !item.isLocked);
+              const shapes = selected.flatMap(item => item.metadata.design ? [{ element: item.metadata.design, x: item.position.x, y: item.position.y, width: item.width, height: item.height }] : []);
+              const result = buildBooleanElement(operation, shapes);
+              if (!result) { setNotice(DESIGN_BOOLEAN_LABELS[operation] + '失败：需要至少两个有重叠的矩形、椭圆或路径'); return; }
+              const node = { ...createWorkflowNode(nanoid(), 'design', { x: result.box.x, y: result.box.y }, { design: result.element }), title: DESIGN_BOOLEAN_LABELS[operation], width: result.box.width, height: result.box.height };
+              applyOps([{ type: 'add_node', node }, { type: 'delete_nodes', ids: selected.map(item => item.id) }]);
+            }}
+            onApplyFrameLayout={id => {
+              const frameNode = projectRef.current.nodes.find(item => item.id === id);
+              const design = frameNode?.metadata.design;
+              const layout = design?.frame?.autoLayout;
+              if (!frameNode || !design || !layout || frameNode.isLocked) return;
+              const frameBox = { id: frameNode.id, x: frameNode.position.x, y: frameNode.position.y, width: frameNode.width, height: frameNode.height };
+              const candidates = projectRef.current.nodes
+                .filter(item => item.id !== id && !item.isLocked && item.isVisible !== false)
+                .map(item => ({ id: item.id, x: item.position.x, y: item.position.y, width: item.width, height: item.height }));
+              const update = layoutFrameChildren(design, frameBox, findFrameChildren(frameBox, candidates, layout.direction));
+              if (!update) { setNotice('画板内没有可排列的节点'); return; }
+              applyOps([
+                { type: 'update_node', id, patch: { position: { x: update.frame.x, y: update.frame.y }, width: update.frame.width, height: update.frame.height } },
+                ...Object.entries(update.children).map(([childId, box]) => ({ type: 'update_node' as const, id: childId, patch: { position: { x: box.x, y: box.y }, width: box.width, height: box.height } })),
+              ]);
+            }}
             onExecuteGroup={ids => topoSort(projectRef.current.nodes, projectRef.current.connections, ids).forEach(id => enqueueRunNode(id))}
             onReversePrompt={onReversePrompt ? (id, mediaUrl) => {
               const node = projectRef.current.nodes.find(item => item.id === id);
@@ -2734,25 +2901,20 @@ export function InfiniteWorkflow({
               commitFrame(position === 'front' ? [...remaining, ...selected] : [...selected, ...remaining], projectRef.current.connections);
             }}
             onAlign={alignment => {
-              if (selectedNodeData.length < 2) return;
-              const horizontal = alignment === 'left' || alignment === 'horizontal-center' || alignment === 'right';
-              const target = alignment === 'left' ? Math.min(...selectedNodeData.map(node => node.position.x))
-                : alignment === 'right' ? Math.max(...selectedNodeData.map(node => node.position.x + node.width))
-                  : alignment === 'horizontal-center' ? selectedNodeData.reduce((sum, node) => sum + node.position.x + node.width / 2, 0) / selectedNodeData.length
-                    : alignment === 'top' ? Math.min(...selectedNodeData.map(node => node.position.y))
-                      : alignment === 'bottom' ? Math.max(...selectedNodeData.map(node => node.position.y + node.height))
-                        : selectedNodeData.reduce((sum, node) => sum + node.position.y + node.height / 2, 0) / selectedNodeData.length;
-              commitFrame(projectRef.current.nodes.map(node => {
-                if (!selectedNodes.has(node.id)) return node;
-                return horizontal
-                  ? { ...node, position: { ...node.position, x: alignment === 'left' ? target : alignment === 'right' ? target - node.width : target - node.width / 2 } }
-                  : { ...node, position: { ...node.position, y: alignment === 'top' ? target : alignment === 'bottom' ? target - node.height : target - node.height / 2 } };
-              }), projectRef.current.connections);
+              const next = alignNodes(projectRef.current.nodes, selectedIdsRef.current, alignment);
+              if (next) commitFrame(next, projectRef.current.connections);
+            }}
+            onDistribute={direction => {
+              const next = distributeNodes(projectRef.current.nodes, selectedIdsRef.current, direction);
+              if (next) commitFrame(next, projectRef.current.connections);
             }}
           />
         </div>
         {selectedNodeData.length === 1 && selectedNodeData[0].type === 'config' && <div data-workflow-overlay style={{ position: 'absolute', zIndex: 69, left: configLeft, top: promptTop, width: 420 }} onWheel={event => event.stopPropagation()}>
           <WorkflowConfigPanel node={selectedNodeData[0]} nodes={project.nodes} connections={project.connections} onChange={metadata => applyOps([{ type: 'update_node', id: selectedNodeData[0].id, metadata }])} onRun={() => onRunNode(selectedNodeData[0].id)} onStop={() => stopNode(selectedNodeData[0].id)} />
+        </div>}
+        {selectedNodeData.length === 1 && selectedNodeData[0].type === 'design' && selectedNodeData[0].metadata.design && <div data-workflow-overlay style={{ position: 'absolute', zIndex: 69, left: configLeft, top: promptTop }} onWheel={event => event.stopPropagation()}>
+          <DesignInspector node={selectedNodeData[0]} onChange={({ design, size }) => applyOps([{ type: 'update_node', id: selectedNodeData[0].id, metadata: { design }, ...(size ? { patch: size } : {}) }])} />
         </div>}
         {selectedNodeData.length === 1 && ['image', 'video', 'text', 'operation'].includes(selectedNodeData[0].type) && <div data-workflow-overlay style={{ position: 'absolute', zIndex: 69, left: promptLeft, top: promptTop }}>
       <WorkflowNodePromptBar width={promptWidth} node={selectedNodeData[0]} nodes={project.nodes} connections={project.connections} t={t} theme={theme} language={language} userApiKeys={userApiKeys} dynamicModelOptions={dynamicModelOptions} onOpenSettings={onOpenSettings} onEnhancePrompt={onEnhancePrompt} isEnhancingPrompt={isEnhancingPrompt} onChange={metadata => applyOps([{ type: 'update_node', id: selectedNodeData[0].id, metadata }])} onPromptIntent={intent => { promptIntentRef.current = intent; }} onRun={() => { const intent = promptIntentRef.current?.targetNodeId === selectedNodeData[0].id ? promptIntentRef.current : undefined; promptIntentRef.current = null; onRunNode(selectedNodeData[0].id, intent || undefined); }} onStop={onStopNode ? () => onStopNode(selectedNodeData[0].id) : undefined} focusSignal={promptFocusSignal} onDisconnectReference={fromNodeId => { const targetId = selectedNodeData[0].id; const conn = project.connections.find(c => c.toNodeId === targetId && c.fromNodeId === fromNodeId); if (!conn) return; applyOps([{ type: 'delete_connections', ids: [conn.id] }]); }} onReorderReference={nextIds => handleReorderReferences(selectedNodeData[0].id, nextIds)} assetFolders={assetFolders} assetItems={assetSuggestions} assetLibrary={assetLibrary} onSelectWorkflowReference={selectedNodeData[0] ? (nodeId => handleSelectWorkflowReference(nodeId, selectedNodeData[0].id)) : undefined} onAddReferenceFiles={selectedNodeData[0] ? (files => handleAddReferenceFiles(files, selectedNodeData[0].id)) : undefined} onSelectAsset={selectedNodeData[0] ? (assetId => handleSelectAsset(assetId, selectedNodeData[0].id)) : undefined} onResolvePastedMentions={mentions => handleResolvePastedMentions(mentions, selectedNodeData[0].id)} onPasteUnresolvedMentions={labels => setNotice(`未能唯一匹配引用：${labels.map(label => `@${label}`).join('、')}，已保留为普通文字。`)} skillEnabled={false} />
@@ -2833,40 +2995,22 @@ export function InfiniteWorkflow({
           state={contextMenu}
           language={language}
           onClose={() => setContextMenu(null)}
+          count={contextMenu.type === 'node' ? Math.max(1, selectedIdsRef.current.length) : 1}
+          onAddNode={() => { setContextMenu(null); openCreateMenu(contextMenu.x, contextMenu.y); }}
+          onPaste={() => { setContextMenu(null); void pasteSelection(); }}
+          onSelectAll={() => { setContextMenu(null); selectNodes(projectRef.current.nodes.filter(node => node.isVisible !== false).map(node => node.id)); }}
+          onFitView={() => { setContextMenu(null); fitView(); }}
           onSetPrimary={canSetPrimary ? (() => {
             if (!ctxNode?.batchId) return;
             applyOps([{ type: 'set_batch_primary', batchId: ctxNode.batchId, nodeId: ctxNode.id }]);
             setContextMenu(null);
           }) : undefined}
-          onCopy={() => {
-            if (contextMenu.type === 'node') {
-              const nodes = projectRef.current.nodes.filter(node => node.id === contextMenu.id);
-              clipboardRef.current = nodes;
-              setClipboardVersion(version => version + 1);
-              syncToSharedClipboard(nodes);
-            }
-            setContextMenu(null);
-          }}
-          onDuplicate={contextMenu.type === 'node' && ctxNode && !ctxNode.isLocked ? (() => {
-            const duplicate = { ...ctxNode, id: nanoid(), position: { x: ctxNode.position.x + 32, y: ctxNode.position.y + 32 }, metadata: { ...ctxNode.metadata } };
-            commitFrame([...projectRef.current.nodes, duplicate], projectRef.current.connections);
-            selectNodes([duplicate.id]);
-            setContextMenu(null);
-          }) : undefined}
+          onCopy={() => { copySelection(); setContextMenu(null); }}
+          onDuplicate={ctxNode && !ctxNode.isLocked ? (() => { duplicateSelection(); setContextMenu(null); }) : undefined}
           onSaveMedia={contextMenu.type === 'node' && ctxNode && ['image', 'video', 'audio'].includes(ctxNode.type) && (ctxNode.metadata.storageKey || ctxNode.metadata.href || ctxNode.metadata.artifactRef?.taskId) && onSaveWorkflowMedia ? (() => { onSaveWorkflowMedia(ctxNode.id); setContextMenu(null); }) : undefined}
           onRun={() => { if (contextMenu.type === 'node' && !projectRef.current.nodes.find(node => node.id === contextMenu.id)?.isLocked) onRunNode(contextMenu.id); setContextMenu(null); }}
           onRename={contextMenu.type === 'node' && ctxNode && !ctxNode.isLocked ? (() => { setRenameSignal({ nodeId: ctxNode.id, nonce: Date.now() }); setContextMenu(null); }) : undefined}
-          onDelete={() => {
-            if (contextMenu.type === 'node' && !projectRef.current.nodes.find(node => node.id === contextMenu.id)?.isLocked) {
-              applyOps([{ type: 'delete_nodes', ids: [contextMenu.id] }]);
-              // UX-HEU-10: same toast as keyboard Delete — advertise undo.
-              onNotify?.(language === 'zho' ? '已删除 1 个节点 — Ctrl+Z 撤销' : 'Deleted 1 node — Ctrl+Z to undo', 'info');
-            } else {
-              commitFrame(projectRef.current.nodes, projectRef.current.connections.filter(connection => connection.id !== contextMenu.id));
-              setSelectedConnectionId(null);
-            }
-            setContextMenu(null);
-          }}
+          onDelete={() => { if (contextMenu.type !== 'pane') deleteSelection(); setContextMenu(null); }}
         />
           );
         })()}

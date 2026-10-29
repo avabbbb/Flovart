@@ -392,6 +392,20 @@ type ProviderPreset = {
 
 const PROVIDER_PRESETS: ProviderPreset[] = [
     {
+        id: 'runninghub-standard',
+        name: 'RunningHub standard models',
+        shortName: 'RH',
+        labelKey: 'settingsExtra.preset.runningHubStandard',
+        provider: 'runningHub',
+        websiteUrl: 'https://www.runninghub.cn/call-api/search-api/standard-model?search=',
+        baseUrl: providerBaseUrl.runningHub,
+        capabilities: ['image', 'video'],
+        requestFormat: 'native',
+        authHeaderName: 'Authorization',
+        authScheme: 'Bearer',
+        featured: true,
+    },
+    {
         id: 'custom',
         name: 'Custom configuration',
         shortName: 'CU',
@@ -404,7 +418,6 @@ const PROVIDER_PRESETS: ProviderPreset[] = [
         requestFormat: 'openai',
         authHeaderName: 'Authorization',
         authScheme: 'Bearer',
-        featured: true,
     },
     {
         id: 'claude-official',
@@ -443,21 +456,6 @@ const PROVIDER_PRESETS: ProviderPreset[] = [
         requestFormat: 'openai',
         defaultModel: 'gpt-image-2',
         models: ['gpt-image-2', 'gpt-image-1.5', 'gpt-image-1'],
-        featured: true,
-    },
-    {
-        id: 'runninghub-standard',
-        name: 'RunningHub standard models',
-        shortName: 'RH',
-        labelKey: 'settingsExtra.preset.runningHubStandard',
-        provider: 'runningHub',
-        websiteUrl: 'https://www.runninghub.cn/call-api/search-api/standard-model?search=',
-        baseUrl: providerBaseUrl.runningHub,
-        capabilities: ['image', 'video'],
-        requestFormat: 'native',
-        authHeaderName: 'Authorization',
-        authScheme: 'Bearer',
-        featured: true,
     },
     {
         id: 'runninghub-global',
@@ -483,7 +481,6 @@ const PROVIDER_PRESETS: ProviderPreset[] = [
         requestFormat: 'openai',
         defaultModel: 'doubao-seedance-2-0-260128',
         models: ['doubao-seedance-2-0-260128', 'doubao-seedance-2-0-fast-260128'],
-        featured: true,
     },
     {
         id: 'google-visual',
@@ -496,7 +493,6 @@ const PROVIDER_PRESETS: ProviderPreset[] = [
         requestFormat: 'google',
         defaultModel: 'gemini-3.1-flash-image',
         models: ['gemini-3-pro-image', 'gemini-3.1-flash-image', 'gemini-3.1-flash-lite-image', 'veo-3.1-generate-preview', 'veo-3.1-fast-generate-preview', 'veo-3.1-lite-generate-preview'],
-        featured: true,
     },
     {
         id: 'kling-video',
@@ -507,7 +503,6 @@ const PROVIDER_PRESETS: ProviderPreset[] = [
         baseUrl: providerBaseUrl.keling,
         capabilities: ['video'],
         requestFormat: 'native',
-        featured: true,
     },
     {
         id: 'openrouter',
@@ -520,7 +515,6 @@ const PROVIDER_PRESETS: ProviderPreset[] = [
         requestFormat: 'openai',
         defaultModel: 'openrouter/auto',
         models: ['openrouter/auto', 'anthropic/claude-sonnet-4-6', 'openai/gpt-image-2', 'openai/gpt-image-1', 'google/gemini-3-flash-preview'],
-        featured: true,
     },
     {
         id: 'siliconflow',

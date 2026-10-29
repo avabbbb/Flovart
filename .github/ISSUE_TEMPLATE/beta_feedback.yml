@@ -1,0 +1,48 @@
+name: Beta feedback / 内测反馈
+description: Report a problem or suggestion from the 0.2.0 Closed Beta / 反馈 0.2.0 内测中的问题或建议
+labels: ["beta-feedback"]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Version / 版本
+      placeholder: "0.2.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: path
+    attributes:
+      label: Path used / 使用路径
+      options:
+        - Codex CLI + Browser Workflow (Beta)
+        - RunningHub image / video (Beta, pending certification)
+        - Other, Experimental / 其他 Experimental 路径
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: OS / 系统
+      options:
+        - Windows
+        - macOS (Apple Silicon)
+        - macOS (Intel)
+        - Browser only / 仅浏览器
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened and what you expected / 发生了什么，你期望什么
+      description: Steps to reproduce if you can / 尽量写出复现步骤
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Crash-log export / 崩溃日志导出
+      description: On the error screen click Copy diagnostics and paste here. It is redacted locally; still remove anything private. / 在错误页点击「复制诊断」后粘贴到这里。日志已在本地脱敏，仍请删除私密信息。
+      render: json
+  - type: textarea
+    id: billing
+    attributes:
+      label: Paid generation involved? / 是否涉及付费生成
+      description: Provider, approximate time, and whether you stopped, reloaded or reran / Provider、大致时间，以及是否停止、刷新或重跑

@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "runA": "2026-10-19_05-20-31-core",
+  "runB": "2026-10-19_07-06-54-core",
+  "trials": {
+    "a": {
+      "total": 645,
+      "executed": 645,
+      "blocked": 0,
+      "failed": 0
+    },
+    "b": {
+      "total": 645,
+      "executed": 645,
+      "blocked": 0,
+      "failed": 0
+    },
+    "sampleMismatch": false
+  },
+  "statusCounts": {},
+  "failures": [],
+  "failureClassDelta": [],
+  "hardGateFailureDelta": []
+}

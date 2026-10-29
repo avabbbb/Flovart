@@ -5,7 +5,6 @@
 import React, { useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router';
 import App from './App';
-import { ErrorBoundary } from './components/ErrorBoundary';
 import { useWorkflowStore } from './components/workflow/store';
 import { useProductionProjectionAdapter } from './components/workflow/useProductionProjectionAdapter';
 import { useWorkflowWorkspaceAdapter } from './components/workflow/useWorkflowWorkspaceAdapter';
@@ -31,7 +30,6 @@ export function RouterHost() {
   }, []);
 
   return (
-    <ErrorBoundary>
       <HashRouter>
         <Routes>
           <Route path="/" element={<Navigate to="/app" replace />} />
@@ -39,6 +37,5 @@ export function RouterHost() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </HashRouter>
-    </ErrorBoundary>
   );
 }

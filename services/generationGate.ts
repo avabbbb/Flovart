@@ -11,6 +11,8 @@ export interface GenerationGateDetails {
   modelLabel: string;
   mediaType: 'image' | 'video';
   taskCount: number;
+  /** null/undefined means no pricing rule matched; the gate must still say the cost is unknown. */
+  estimatedCost?: { amount: number; currency: 'USD' | 'CNY' } | null;
 }
 
 const PROVIDER_LABELS: Record<string, string> = {
@@ -28,14 +30,13 @@ const PROVIDER_LABELS: Record<string, string> = {
 
 const isMediaNode = (node: Pick<WorkflowNode, 'type'>) => ['image', 'video'].includes(node.type);
 
-/** Provider generation and paid image tools are the only operations that need an external-cost gate. */
+/** Default-deny: everything except a known local transform may call a paid service, so it must pass the cost gate. */
 export function requiresExternalGenerationGate(
   node: Pick<WorkflowNode, 'type'>,
   capability?: GenerationCapability,
 ): boolean {
   if (capability?.executor === 'local-transform') return false;
-  if (capability?.executor === 'provider-generation' || capability?.executor === 'provider-image-tool') return true;
-  return !capability && isMediaNode(node);
+  return Boolean(capability) || isMediaNode(node);
 }
 
 function displayModel(modelId?: string) {
@@ -67,12 +68,18 @@ export function getGenerationGateDetails(
   };
 }
 
+export function formatGenerationCost(estimate?: GenerationGateDetails['estimatedCost']) {
+  if (!estimate) return '预计费用：未知（以 AI 服务账单为准）';
+  return '预计费用：约 ' + estimate.currency + ' ' + estimate.amount.toFixed(2);
+}
+
 export function buildGenerationGateSummary(details: GenerationGateDetails) {
   const mediaLabel = details.mediaType === 'video' ? '视频' : '图片';
   return [
-    `AI 服务：${details.serviceLabel}`,
-    `模型：${details.modelLabel}`,
-    `任务：${details.taskCount} 个${mediaLabel}生成`,
+    'AI 服务：' + details.serviceLabel,
+    '模型：' + details.modelLabel,
+    '任务：' + details.taskCount + ' 个' + mediaLabel + '生成',
+    formatGenerationCost(details.estimatedCost),
     '会调用你的 AI 服务，可能产生费用。',
   ].join('\n');
 }

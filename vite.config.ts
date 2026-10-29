@@ -2,6 +2,7 @@ import path from 'path';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
+import { configDefaults } from 'vitest/config';
 
 // Tauri 期望固定端口；CLI source bootstrap 通过 FLOVART_DYNAMIC_WEB_PORT
 // 显式启用动态端口，避免把用户带到无关的 localhost 服务。
@@ -86,6 +87,9 @@ export default defineConfig(() => {
         // auto-detected worker count; four workers keep the full suite
         // deterministic without changing test isolation.
         maxWorkers: 4,
+        // Stale worktrees, backups and build output carry their own React copies;
+        // collecting tests from them fails with invalid hook calls.
+        exclude: [...configDefaults.exclude, '**/.tmp/**', '**/.temp/**', '**/.claude/**', '**/dist-*/**'],
       },
     };
 });

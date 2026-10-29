@@ -1,6 +1,7 @@
 import type { ImageFilters, ProductModelMode } from '../../types';
+import type { DesignElement } from '../../services/design/designTypes';
 
-export type BuiltinWorkflowNodeType = 'image' | 'text' | 'video' | 'audio' | 'config' | 'script' | 'operation';
+export type BuiltinWorkflowNodeType = 'image' | 'text' | 'video' | 'audio' | 'config' | 'script' | 'operation' | 'design';
 /** 外部 Node Plugin 可以使用稳定的自定义 type；内置交互仍只对 Builtin 类型做专门处理。 */
 export type WorkflowNodeType = BuiltinWorkflowNodeType | (string & {});
 export type WorkflowNodeStatus = 'idle' | 'loading' | 'success' | 'error';
@@ -63,6 +64,7 @@ export type WorkflowOperationCapabilityId =
   | 'image.split-layers@1'
   | 'image.edit@1'
   | 'image.rotate@1'
+  | 'image.vectorize@1'
   | 'image.split-grid@1'
   | 'image.layer@1'
   | 'video.trim@1'
@@ -303,6 +305,8 @@ export interface WorkflowNodeMetadata {
   generationMessage?: string;
   filters?: Partial<ImageFilters>;
   scriptBreakdown?: ScriptBreakdown;
+  /** 设计元素（画板/矩形/椭圆/文字/钢笔路径）；仅 design 节点使用。 */
+  design?: DesignElement;
   primaryImageId?: string;
   /** 显式 Workflow Operation 的唯一可编辑配方与不可变执行记录。 */
   operation?: WorkflowOperationRecord;
@@ -474,6 +478,8 @@ export interface WorkflowProject {
   draftRedoStack?: string[];
   draftVersion?: number;
   workflowMutationReceipts?: WorkflowMutationReceipt[];
+  /** 用户命名的画布快照（本地保存，恢复时走可撤销的文档变更）。 */
+  snapshots?: WorkflowNamedSnapshot[];
   createdAt: string;
   updatedAt: string;
 }
@@ -485,6 +491,15 @@ export interface WorkflowSnapshot {
   connections: WorkflowConnection[];
   selectedNodeIds: string[];
   viewport: WorkflowViewport;
+}
+
+export interface WorkflowNamedSnapshot {
+  id: string;
+  name: string;
+  createdAt: string;
+  nodes: WorkflowNode[];
+  connections: WorkflowConnection[];
+  viewport?: WorkflowViewport;
 }
 
 export type WorkflowDocumentOperation =

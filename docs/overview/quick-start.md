@@ -11,13 +11,13 @@ npm install
 npm run flovart:cli -- start --source --web --open
 ```
 
-启动器会同时准备 WebUI 和本机 Browser Agent，并通过一次性启动握手打开主 Workflow 路由 `#/app`。不要直接把 `37522` 粘贴到地址栏来期待 Agent binding；直接地址只代表普通 WebUI 页面。首次没有配置 AI 服务时，先点「稍后再说」即可进入可编辑的 Canvas；需要生成时，再点击「添加 AI 服务」完成配置。
+启动器会同时准备 WebUI 和本机 Browser Agent，并通过一次性启动握手打开主 Workflow 路由 `#/app`。不要直接把 `37522` 粘贴到地址栏来期待 Agent binding；直接地址只代表普通 WebUI 页面。首次进入会看到空白的新建 Canvas，没有配置 AI 服务也可以直接编辑；需要生成时，再在设置中添加 AI 服务。
 
 源码启动时 `37522` 只是首选端口：如果被占用，Flovart 会自动选择可用的本机端口并把实际地址写入启动结果。需要隔离测试时可运行 `npm run flovart:cli -- start --source --web --web-port=0 --agent-port=0 --no-open --json`。
 
 自动化浏览器验收不要使用 `--open`，因为它会调用 Windows 默认浏览器；运行 `npm run test:browser:chrome`，脚本会使用 Playwright 的 Chrome for Testing、隔离 profile、随机端口和一次性 bootstrap URL，结束后自动清理测试进程。
 
-> 推荐 [Google AI Studio](https://aistudio.google.com/apikey) 免费获取 Gemini 凭据。
+> Closed Beta 请配置 RunningHub（图像 + 视频）：这是唯一进入认证的 Provider 路径，当前状态为 Beta（待认证）。Gemini、OpenAI-compatible BYOK 等其他 Provider 均为 Experimental。详见[支持矩阵](../../SUPPORT_MATRIX.md)。
 
 ## 方式二：用 Agent / CLI / MCP 操作 Workflow
 

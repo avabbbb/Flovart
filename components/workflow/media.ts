@@ -51,11 +51,18 @@ function collectNodeKeys(nodes: WorkflowNode[], keys = new Set<string>()) {
   return keys;
 }
 
-export function collectWorkflowMediaKeys(projects: Array<Pick<WorkflowProject, 'nodes'>>) {
-  return projects.reduce((keys, project) => collectNodeKeys(project.nodes, keys), new Set<string>());
+export type WorkflowMediaProjectLike = Pick<WorkflowProject, 'nodes'> & { snapshots?: Array<{ nodes: WorkflowNode[] }> };
+
+// 命名快照里的节点也引用媒体，必须保持可达，否则恢复快照后图片丢失。
+export function collectWorkflowMediaKeys(projects: WorkflowMediaProjectLike[]) {
+  return projects.reduce((keys, project) => {
+    collectNodeKeys(project.nodes, keys);
+    project.snapshots?.forEach(snapshot => collectNodeKeys(snapshot.nodes || [], keys));
+    return keys;
+  }, new Set<string>());
 }
 
-export function setWorkflowMediaCanonicalProjects(projects: Array<Pick<WorkflowProject, 'nodes'>>) {
+export function setWorkflowMediaCanonicalProjects(projects: WorkflowMediaProjectLike[]) {
   canonicalReferences = collectWorkflowMediaKeys(projects);
 }
 

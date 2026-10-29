@@ -120,6 +120,10 @@ const videoTrimParameters = z.object({
 
 const noParameters = z.object({});
 
+const imageVectorizeParameters = z.object({
+  preset: z.enum(['detailed', 'poster', 'line']).default('detailed'),
+});
+
 const videoMergeToolArguments = z.object({
   sourceNodeIds: z.array(z.string().min(1)).min(2),
 }).refine(value => new Set(value.sourceNodeIds).size === value.sourceNodeIds.length, '视频拼接来源不能重复');
@@ -229,6 +233,18 @@ export const WORKFLOW_OPERATION_CAPABILITIES: Readonly<Record<WorkflowOperationC
       { label: '逆时针 90°', value: 'rotate-270' }, { label: '水平镜像', value: 'flip-h' }, { label: '垂直镜像', value: 'flip-v' },
     ] }],
     summarizeParameters: parameters => ({ 'rotate-90': '顺时针 90°', 'rotate-180': '旋转 180°', 'rotate-270': '逆时针 90°', 'flip-h': '水平镜像', 'flip-v': '垂直镜像' }[String(parameters.action)] || '顺时针 90°'),
+  },
+  'image.vectorize@1': {
+    id: 'image.vectorize@1', label: '矢量化', mediaType: 'image',
+    inputRoles: [{ role: 'source_image', nodeTypes: ['image'], min: 1, max: 1 }],
+    outputRoles: [{ role: 'result_image', nodeType: 'image', min: 1, max: 1 }],
+    executor: 'local-transform', confirmation: 'none', workflow: true, table: true,
+    uiKey: 'image-vectorize',
+    parameters: imageVectorizeParameters,
+    parameterControls: [{ key: 'preset', kind: 'select', label: '风格', options: [
+      { label: '细节', value: 'detailed' }, { label: '色块', value: 'poster' }, { label: '线稿', value: 'line' },
+    ] }],
+    summarizeParameters: parameters => ({ detailed: '细节', poster: '色块', line: '线稿' }[String(parameters.preset)] || '细节') + ' · SVG',
   },
   'image.split-grid@1': {
     id: 'image.split-grid@1', label: '宫格切分', mediaType: 'image',

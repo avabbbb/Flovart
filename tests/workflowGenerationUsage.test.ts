@@ -94,7 +94,7 @@ describe('停止生成时的 usage 状态', () => {
   });
 
   it('上游已提交后停止：记为 submission_unknown 并保留 providerTaskId', async () => {
-    await runUntilStopped(async input => {
+    const latest = await runUntilStopped(async input => {
       await input.onProviderTaskLifecycle?.({ phase: 'submitted', providerTaskId: 'upstream-1', submittedAt: 1 });
       stop();
       return never();
@@ -107,10 +107,14 @@ describe('停止生成时的 usage 状态', () => {
       billableState: 'unknown',
     });
     expect(mocks.refundApiUsage).not.toHaveBeenCalled();
+    const node = latest.nodes.find(item => item.id === 'config-1');
+    expect(node?.metadata.status).toBe('error');
+    expect(node?.metadata.generationBillableState).toBe('unknown');
+    expect(node?.metadata.error).toContain('计费');
   });
 
   it('供应商确认取消：退还预留费用', async () => {
-    await runUntilStopped(async input => {
+    const latest = await runUntilStopped(async input => {
       await input.onProviderTaskLifecycle?.({ phase: 'submitted', providerTaskId: 'upstream-2', submittedAt: 1 });
       await input.onProviderTaskLifecycle?.({ phase: 'cancelled', providerTaskId: 'upstream-2', canceled: true });
       stop();
@@ -118,5 +122,6 @@ describe('停止生成时的 usage 状态', () => {
     });
 
     expect(mocks.refundApiUsage).toHaveBeenCalledWith('usage-1', '供应商已确认取消');
+    expect(latest.nodes.find(item => item.id === 'config-1')?.metadata.status).toBe('idle');
   });
 });

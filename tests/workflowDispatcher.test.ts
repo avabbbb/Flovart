@@ -400,6 +400,43 @@ describe('workflow dispatcher', () => {
     expect(result).toMatchObject({ ok: false, commandId: 'stopped-run', error: { code: 'RUN_CANCELLED' } });
   });
 
+  it('runs a nodeIds batch under one confirmation and reports each node', async () => {
+    const runNode = vi.fn().mockImplementation(async (command: { nodeId: string }) => (
+      command.nodeId === 'image-2' ? { status: 'cancelled' } : { status: 'completed' }
+    ));
+    const { dispatch, dependencies } = setup(createWorkflowExecutor({ runNode }));
+    dependencies.getState().projects[0].nodes.push(createWorkflowNode('image-2', 'image', { x: 0, y: 0 }, { href: 'data:image/png;base64,X', mimeType: 'image/png' }));
+    const envelope = { id: 'batch-run', command: 'workflow.node.run', args: { nodeIds: ['image-1', 'image-2'] }, source: 'agent' as const };
+
+    const pending = await dispatch(envelope);
+    expect(pending.confirmation).toMatchObject({ required: true });
+    expect(runNode).not.toHaveBeenCalled();
+
+    const result = await dispatch(withWorkflowHumanApproval(envelope));
+    expect(runNode).toHaveBeenCalledTimes(2);
+    expect(result).toMatchObject({
+      ok: true,
+      result: {
+        failed: 1,
+        runs: [
+          { nodeId: 'image-1', ok: true },
+          { nodeId: 'image-2', ok: false, error: { code: 'RUN_CANCELLED' } },
+        ],
+      },
+    });
+  });
+
+  it('rejects ambiguous or unknown batch targets before running', async () => {
+    const runNode = vi.fn();
+    const { dispatch } = setup(createWorkflowExecutor({ runNode }));
+    const both = await dispatch({ id: 'both', command: 'workflow.node.run', args: { nodeId: 'image-1', nodeIds: ['image-1'] }, source: 'cli' });
+    const missing = await dispatch({ id: 'missing', command: 'workflow.node.run', args: { nodeIds: ['image-1', 'ghost'] }, source: 'cli' });
+
+    expect(both.error?.code).toBe('BAD_REQUEST');
+    expect(missing.error?.code).toBe('NOT_FOUND');
+    expect(runNode).not.toHaveBeenCalled();
+  });
+
   it('records agent/operator draft actions into the project draft log but skips pure UI edits', async () => {
     const { dispatch, dependencies } = setup();
     await dispatch({ id: 'create', command: 'workflow.node.create', args: { type: 'text', title: '旁白', confirmed: true }, source: 'agent' });

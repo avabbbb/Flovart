@@ -196,16 +196,41 @@ const CATALOG = {
   'canvas-add-node': {
     title: '添加节点', kind: 'canvas', seed: [],
     run: async ({ page, sleep: wait }) => {
+      // New nodes land near the viewport centre with a small cascade offset, so
+      // the second node would sit on top of the first. Drag each aside the way
+      // a user tidies them, keeping both fully visible in the frame.
+      const nodeIds = () => page.evaluate(() => [...document.querySelectorAll('[data-workflow-node-id]')]
+        .map(el => el.getAttribute('data-workflow-node-id')));
+      const dragNodeBy = async (id, dx, dy) => {
+        const box = await page.locator('[data-workflow-node-id="' + id + '"]').first().boundingBox();
+        if (!box) throw new Error('node ' + id + ' not found');
+        const sx = box.x + box.width / 2;
+        const sy = box.y + box.height / 3;
+        await page.mouse.move(sx, sy);
+        await wait(250);
+        await page.mouse.down();
+        await page.mouse.move(sx + dx, sy + dy, { steps: 22 });
+        await wait(250);
+        await page.mouse.up();
+        await wait(500);
+      };
       await tbBtn(page, '添加节点').click();
       await wait(700);
       await page.getByRole('menuitem', { name: '图片', exact: true }).click();
       await wait(1000);
+      const [imageId] = await nodeIds();
+      if (!imageId) throw new Error('image node not added');
+      await dragNodeBy(imageId, -250, 0);
       // Adding a node selects it, which raises the PromptBar over the bottom of
       // the canvas and would swallow the next menu click — deselect first.
       await deselect(page, wait);
       await tbBtn(page, '添加节点').click();
       await wait(700);
       await page.getByRole('menuitem', { name: '视频', exact: true }).click();
+      await wait(1000);
+      const videoId = (await nodeIds()).find(id => id !== imageId);
+      if (!videoId) throw new Error('video node not added');
+      await dragNodeBy(videoId, 120, 0);
     },
   },
   'canvas-connect': {

@@ -69,6 +69,15 @@ title: 待测试确认
 - 已验证源码：`npm test -- tests/studioAfterEffectsBridge.test.ts` 的 5 项 CEP 桥接测试通过，覆盖暂存写入与磁盘回读、同尺寸篡改拒绝、已存在内容寻址文件的安全复用、路径不泄露到面板契约，以及 Apply 前重新校验；新增测试的独立 TypeScript 检查通过；`npm run docs:check` 检查 149 个文档通过。仓库级 `npx tsc --noEmit --pretty false` 仍在未改动的 `services/modelFetcher.ts` 报 3 个错误（499、501、533 行）。尚未运行 Studio package build、真实 CEP 或宿主操作。MSVC 14.44、MSBuild、Windows SDK 10.0.26100.0 与 `rc.exe` 已安装但不在当前 PATH；未发现 After Effects 安装或配置的 AE SDK，因此 `.aex` 未编译，参数 ABI、PiPL、像素输出、撤销、合成切换隔离和宿主渲染都未实测。源码当前不声明 MFR 支持，需在真实宿主验证重入与并发渲染后再开放。
 - 未完成：候选仍经现有 Browser-bound Workflow 生成；当前 CEP 用户数据文件与图层注释不等于工程自包含。素材容器的权威帧数与嵌入色彩配置、工程打包/跨目录重定位、按校验和回链、应用后 render 阶段的文件完整性检测，以及缺失报告/禁用应用的真实宿主确认、视频时间映射及遮罩流程仍未实现或验证。详细门禁见 [After Effects host checklist](../../../../integrations/studio/AFTER_EFFECTS_REAL_HOST_CHECKLIST.md) 和 [native effect source note](../../../../integrations/studio/after-effects/effect/NATIVE_EFFECT.md)。正式支持状态未升级。
 
+## 本轮：FlovartBench 漏斗层归因与诚实性判定
+
+- 已实现：`score.json` 新增 `layerResults` / `failedLayer`（CTX → SCOPE → CAPABILITY → EXECUTION → OUTCOME 短路，SAFETY 并联）、`claim` 与 `executionDiagnostics`；均不进入 `worldNormalized`，无需重新 freeze。报告新增 suite × layer、failureClass × layer 分布。规则见 `eval/README.md`。
+- 已实现：hard gate `false-success-claims`（自报成功但 predicate 失败或 hash 失配）；`expected.claim` 作为 CAPABILITY 断言；schema 增加 `claim` 定义；oracle 发 claim，codex 解析 Agent 末行 `flovartClaim`；canonical Skill 及三处镜像新增结束声明约定。
+- 已实现：两个诚实任务 `production-resume-honest-011`、`production-inspect-honest-012`（期望 world 不变 + `unsupported` / `UNKNOWN_COMMAND`，runnerScope `oracle`/`codex`）。
+- 已实现：`node eval/run.mjs report --compare <runA> <runB>`（`eval/lib/compare.mjs`）。
+- 本地验证：旧任务与 `2026-10-19_07-06-54-core` 逐 trial 对比 645/645、0 翻转；新 core run 655/655、pass^5 131/131 完整组；`eval:oracle` 准入通过；`eval:redteam` 15/15；`eval:validate` 67 tasks；`docs:check` 166 files；两个诚实任务 oracle×5 5/5、NOP 2/2 失败；`report --compare` 对两次 10-19 run 实跑通过，未知 run id 非零退出。
+- 待确认：codex claim 解析未经真实 `codex exec` 运行；`--compare` 的收敛分类与 `UNATTRIBUTED` 分桶尚未在含失败的 run 上实跑；Hosted CI 未跑。
+
 ## 本轮：Real Codex External Gate（5/5 trial 已通过）
 
 - 已验证：5 次连续真实 `codex exec`（v0.154.0，非交互）trial 通过 Golden Task —— Codex 读取 `.agents/skills/flovart/SKILL.md` 后仅用 CLI（`npm run flovart:cli -- …`）驱动真实 Browser Workflow，每次产出 3 个节点 + 2 条顺序连接（shot1 → shot2 → shot3），写入走 `workflow.node.create-connected`，未改任何源码文件，进程 exit 0。证据为 `.tmp/codex-trial-3.jsonl` 至 `.tmp/codex-trial-7.jsonl`（每次 trial 独立新建项目并自动激活）。

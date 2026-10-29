@@ -54,6 +54,10 @@ title: 后续待办
 - [ ] 用真实 Codex 二进制与 `FLOVARTBENCH_ALLOW_CODEX=true` 产出第一个**已认证**的 benchmark Agent 基线（产品级 Golden Task 已由 5 次连续真实 `codex exec` trial 认证，见[待测试确认](pending-test.mdx)；任务集级 `codex` runner 基线仍未跑过），并把 `EXTERNAL_FAILURE` 与能力失败分开汇报。
 - [ ] 建立 holdout 数据集：不进公开仓库，按路径挂载用于认证；任务一旦在仓库暴露即转为 regression 并替换其 holdout 位。
 - [ ] 补齐三个 known gap 对应能力：Agent 稳定面暴露 `task.inspect` / `task.resume`、稳定面提供费用确认参数、`first_frame` 来自 video 时在写入期拒绝而非只报 `ROLE_CONFLICT` 诊断。
+- [ ] `references-unsupported-capability-009` 无法派生诚实任务：gateway 接受 video → `first_frame` 写入，`ROLE_CONFLICT` 只是 `components/workflow/inputResolver.ts` 的 UI 诊断。写入期拒绝落地后再补对应 `honesty` 任务。
+- [ ] trial 证据路径 `<task>/trial-NN/` 不含 runner，oracle/cli/mcp 互相覆盖（2026-10-19 core 645 个 trial 只有 225 份 `score.json` 可读；`summary.json` 完整，分数不受影响）。改为 `<task>/<runner>/trial-NN/` 并同步 README 与读取方。
+- [ ] 用真实 `codex exec` 端到端验证 `flovartClaim` 末行解析与 `false-success-claims` 硬门；`report --compare` 的收敛分类需在含失败的 run 上实跑一次。
+- [ ] session-capture runner（M4）：本轮未实现（子代理网络失败，无残留代码）。照 real-provider capture 导入真实会话并产出 `flovartClaim`，注册到 `RUNNER_NAMES` 后再加回 schema 的 `allowedSurfaces` / `runnerScope` 枚举。
 - [ ] `eval/tasks/native-effects/` 与 `eval/graders/nativeEffects/` 保持预留：接入真实 AE/PR 宿主后可断言保存/重开/导出前的持久化，不做无宿主也能通过的占位任务。
 - [ ] 用真实付费 Provider 跑 provider suite 的已批准路径，替换 Fake Provider 语义；真实验证扣费、429、提交未知与取消。
 - [ ] 媒体与 Table：按实际需求推进，不因 benchmark 建设而扩充范围。

@@ -178,6 +178,19 @@ export function isWorkflowGenerationActive(projectId: string, nodeId: string) {
   return activeRequests.has(requestKey(projectId, nodeId));
 }
 
+const STOPPED_BILLING_UNKNOWN = '已停止本地等待；上游可能仍在运行并计费，请在用量记录中核对后再重跑。';
+
+/** Stop must not hide a possible upstream charge: an unrefunded submitted task stays visible as an error. */
+function stoppedPatch(node: WorkflowNode | undefined) {
+  const meta = node?.metadata;
+  const billingUnknown = meta?.generationBillableState === 'unknown'
+    || (Boolean(meta?.generationProviderTaskId) && meta?.generationBillableState !== 'refunded');
+  const cleared = { progress: undefined, generationRequestId: undefined, generationStartedAt: undefined, generationMessage: undefined };
+  return billingUnknown
+    ? { ...cleared, status: 'error' as const, error: STOPPED_BILLING_UNKNOWN, generationBillableState: 'unknown' as const }
+    : { ...cleared, status: 'idle' as const, error: undefined };
+}
+
 export function cancelWorkflowGeneration(projectId: string, nodeId: string) {
   const key = requestKey(projectId, nodeId);
   const active = activeRequests.get(key);
@@ -185,7 +198,7 @@ export function cancelWorkflowGeneration(projectId: string, nodeId: string) {
   activeRequests.delete(key);
   active.controller.abort();
   const project = active.runtime.getProject?.();
-  if (project) publish(active.runtime, patchInitiator(project, nodeId, { status: 'idle', error: undefined, progress: undefined, generationRequestId: undefined, generationStartedAt: undefined, generationMessage: undefined }))
+  if (project) publish(active.runtime, patchInitiator(project, nodeId, stoppedPatch(project.nodes.find(item => item.id === nodeId))))
     .catch(error => console.warn('[Workflow] Stop state publish failed.', error));
   return true;
 }
@@ -753,7 +766,7 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
       }
     }
     current = patchInitiator(latest, nodeId, aborted
-      ? { status: 'idle', error: undefined, progress: undefined, generationRequestId: undefined, generationStartedAt: undefined, generationMessage: undefined }
+      ? stoppedPatch(latest.nodes.find(node => node.id === nodeId))
       : { status: 'error', error: displayError(error, '生成失败，请重试。'), progress: undefined, generationRequestId: undefined, generationStartedAt: undefined, generationMessage: undefined });
     return publish(runtime, current);
   } finally {

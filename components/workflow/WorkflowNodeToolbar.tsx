@@ -1,4 +1,6 @@
-import { AlignCenter, AlignLeft, AlignRight, ArrowDownToLine, ArrowUpToLine, AudioLines, ChevronsDown, ChevronsUp, Copy, Crop, Download, Eraser, Expand, FilePenLine, Frame, Grid2x2, Group, Layers, Layers3, Library, Lightbulb, Maximize2, MessageSquareText, Play, RefreshCw, RotateCw, ScanLine, ScanText, Scissors, SlidersHorizontal, Square, Trash2, Ungroup, ZoomIn, Gauge } from 'lucide-react';
+import { AlignCenter, AlignLeft, AlignRight, ArrowDownToLine, ArrowUpToLine, AudioLines, ChevronsDown, ChevronsUp, Copy, Crop, Download, Eraser, Expand, FilePenLine, Frame, Grid2x2, Group, Layers, Layers3, Library, Lightbulb, Maximize2, MessageSquareText, Play, RefreshCw, RotateCw, ScanLine, ScanText, Scissors, SlidersHorizontal, Square, Trash2, Ungroup, ZoomIn, Gauge, Palette, PenTool, Move } from 'lucide-react';
+import { AlignHorizontalSpaceAround, AlignVerticalSpaceAround } from 'lucide-react';
+import type { WorkflowAlignment, WorkflowDistributeAxis } from './arrange';
 import { useRef } from 'react';
 import { MoreHorizontal } from 'lucide-react';
 import { saveMediaUrl } from '../../services/desktopNetwork';
@@ -6,8 +8,12 @@ import { WorkflowToolbarActions, WorkflowToolbarMenu, WorkflowToolbarShell, type
 import { useWorkflowMediaUrl } from './media';
 import { WORKFLOW_NODE_TOOL_LABELS } from './nodeToolCatalog';
 import type { WorkflowNode } from './types';
+import { DESIGN_BOOLEAN_LABELS, type DesignBooleanOperation } from '../../services/design/booleanOps';
 
-type Alignment = 'left' | 'horizontal-center' | 'right' | 'top' | 'vertical-center' | 'bottom';
+const DESIGN_BOOLEAN_ORDER: readonly DesignBooleanOperation[] = ['union', 'subtract', 'intersect', 'exclude'];
+const DESIGN_BOOLEAN_KINDS = new Set(['rect', 'ellipse', 'path']);
+
+type Alignment = WorkflowAlignment;
 
 export interface WorkflowImageToolHandlers {
   crop?: (id: string) => void;
@@ -21,6 +27,9 @@ export interface WorkflowImageToolHandlers {
   splitGrid?: (id: string) => void;
   annotate?: (id: string) => void;
   relight?: (id: string) => void;
+  vectorize?: (id: string) => void;
+  moveObject?: (id: string) => void;
+  restyle?: (id: string) => void;
   layer?: (id: string) => void;
   storyboard?: (ids: string[]) => void;
 }
@@ -41,7 +50,7 @@ export interface WorkflowAudioToolHandlers {
 
 const PRIMARY_KEYS = new Set(['stop', 'run', 'copy', 'download', 'preview', 'group', 'execute-group', 'ungroup', 'export-selection', 'delete']);
 
-export function WorkflowNodeToolbar({ nodes, onCopy, onDelete, onExport, onRun, onStop, onPromptFocus, onSaveMedia, onReversePrompt, onReplaceMedia, onToggleFreeResize, onAlign, onLayer, onGroup, onUngroup, onExecuteGroup, onPreviewMedia, onFrameSelection, imageTools, imageToolBusy = false, videoTools, videoToolBusy = false, audioTools, audioToolBusy = false }: {
+export function WorkflowNodeToolbar({ nodes, onCopy, onDelete, onExport, onRun, onStop, onPromptFocus, onSaveMedia, onReversePrompt, onReplaceMedia, onToggleFreeResize, onAlign, onDistribute, onLayer, onGroup, onUngroup, onExecuteGroup, onPreviewMedia, onFrameSelection, onDesignBoolean, onApplyFrameLayout, imageTools, imageToolBusy = false, videoTools, videoToolBusy = false, audioTools, audioToolBusy = false }: {
   nodes: WorkflowNode[];
   onCopy: (ids: string[]) => void;
   onDelete: (ids: string[]) => void;
@@ -54,6 +63,7 @@ export function WorkflowNodeToolbar({ nodes, onCopy, onDelete, onExport, onRun, 
   onReplaceMedia?: (id: string, file: File) => void;
   onToggleFreeResize?: (id: string) => void;
   onAlign?: (alignment: Alignment) => void;
+  onDistribute?: (direction: WorkflowDistributeAxis) => void;
   onLayer?: (position: 'front' | 'back') => void;
   onGroup?: (ids: string[]) => void;
   onUngroup?: (ids: string[]) => void;
@@ -61,6 +71,9 @@ export function WorkflowNodeToolbar({ nodes, onCopy, onDelete, onExport, onRun, 
   onPreviewMedia?: (id: string) => void;
   /** 聚焦选中节点（Frame Selection，快捷键 F）。 */
   onFrameSelection?: () => void;
+  // 设计元素：多选形状做布尔运算；画板按自动布局排列内部节点。
+  onDesignBoolean?: (operation: DesignBooleanOperation, ids: string[]) => void;
+  onApplyFrameLayout?: (id: string) => void;
   imageTools?: WorkflowImageToolHandlers;
   imageToolBusy?: boolean;
   videoTools?: WorkflowVideoToolHandlers;
@@ -84,6 +97,10 @@ export function WorkflowNodeToolbar({ nodes, onCopy, onDelete, onExport, onRun, 
     nodes.length > 1 && onExecuteGroup && { key: 'execute-group', label: '整组执行', icon: <Play size={18} />, onClick: () => onExecuteGroup(ids) },
     nodes.length > 1 && onUngroup && nodes.some(n => n.batchId) && { key: 'ungroup', label: '取消打组', icon: <Ungroup size={18} />, onClick: () => onUngroup(ids) },
     nodes.length > 1 && selectedMedia.length > 0 && onExport && { key: 'export-selection', label: '批量导出所选媒体', icon: <Download size={18} />, onClick: () => onExport(nodes) },
+    ...(nodes.length > 1 && onDesignBoolean && nodes.every(item => item.type === 'design' && DESIGN_BOOLEAN_KINDS.has(item.metadata.design?.kind ?? ''))
+      ? DESIGN_BOOLEAN_ORDER.map(operation => ({ key: 'design-boolean-' + operation, label: DESIGN_BOOLEAN_LABELS[operation], icon: <Layers3 size={18} />, onClick: () => onDesignBoolean(operation, ids) }))
+      : []),
+    node?.type === 'design' && node.metadata.design?.frame?.autoLayout && onApplyFrameLayout && { key: 'apply-frame-layout', label: '应用自动布局', icon: <Grid2x2 size={18} />, onClick: () => onApplyFrameLayout(node.id) },
     onLayer && { key: 'front', label: '移到最前', icon: <ChevronsUp size={18} />, onClick: () => onLayer('front') },
     onLayer && { key: 'back', label: '移到最后', icon: <ChevronsDown size={18} />, onClick: () => onLayer('back') },
     node && onPromptFocus && node.type !== 'audio' && node.type !== 'script' && { key: 'prompt', label: '编辑提示词', icon: <MessageSquareText size={18} />, onClick: () => onPromptFocus(node.id) },
@@ -100,9 +117,12 @@ export function WorkflowNodeToolbar({ nodes, onCopy, onDelete, onExport, onRun, 
     node?.type === 'image' && mediaUrl && imageTools?.mask && { key: 'mask', label: '编辑蒙版', icon: <ScanLine size={18} />, disabled: advancedToolBusy, onClick: () => imageTools.mask?.(node.id) },
     node?.type === 'image' && mediaUrl && imageTools?.splitLayers && { key: 'split', label: WORKFLOW_NODE_TOOL_LABELS['split-layers'], icon: <Layers3 size={18} />, disabled: advancedToolBusy, onClick: () => imageTools.splitLayers?.(node.id) },
     node?.type === 'image' && mediaUrl && imageTools?.rotate && { key: 'rotate', label: WORKFLOW_NODE_TOOL_LABELS.rotate, icon: <RotateCw size={18} />, disabled: advancedToolBusy, onClick: () => imageTools.rotate?.(node.id) },
+    node?.type === 'image' && mediaUrl && imageTools?.vectorize && { key: 'vectorize', label: '矢量化', icon: <PenTool size={18} />, disabled: advancedToolBusy, onClick: () => imageTools.vectorize?.(node.id) },
+    node?.type === 'image' && mediaUrl && imageTools?.moveObject && { key: 'move-object', label: '移动物体', icon: <Move size={18} />, disabled: advancedToolBusy, onClick: () => imageTools.moveObject?.(node.id) },
     node?.type === 'image' && mediaUrl && imageTools?.splitGrid && { key: 'splitGrid', label: WORKFLOW_NODE_TOOL_LABELS['split-grid'], icon: <Grid2x2 size={18} />, disabled: advancedToolBusy, onClick: () => imageTools.splitGrid?.(node.id) },
     node?.type === 'image' && mediaUrl && imageTools?.annotate && { key: 'annotate', label: '标注涂鸦', icon: <ScanLine size={18} />, disabled: advancedToolBusy, onClick: () => imageTools.annotate?.(node.id) },
     node?.type === 'image' && mediaUrl && imageTools?.relight && { key: 'relight', label: '打光面板', icon: <Lightbulb size={18} />, disabled: advancedToolBusy, onClick: () => imageTools.relight?.(node.id) },
+    node?.type === 'image' && mediaUrl && imageTools?.restyle && { key: 'restyle', label: '视角与风格', icon: <Palette size={18} />, disabled: advancedToolBusy, onClick: () => imageTools.restyle?.(node.id) },
     node?.type === 'image' && mediaUrl && imageTools?.layer && { key: 'layer', label: '叠加层', icon: <Layers size={18} />, disabled: advancedToolBusy, onClick: () => imageTools.layer?.(node.id) },
     selectedMedia.length > 1 && selectedMedia.every(n => n.type === 'image') && imageTools?.storyboard && { key: 'storyboard', label: '分镜组拼接', icon: <Frame size={18} />, disabled: advancedToolBusy, onClick: () => imageTools.storyboard?.(ids) },
     node?.type === 'video' && mediaUrl && videoTools?.trim && { key: 'video-trim', label: WORKFLOW_NODE_TOOL_LABELS['video-trim'], icon: <Scissors size={18} />, disabled: videoToolBusy, onClick: () => videoTools.trim?.(node.id) },
@@ -129,6 +149,10 @@ export function WorkflowNodeToolbar({ nodes, onCopy, onDelete, onExport, onRun, 
     { key: 'top', label: '顶部对齐节点', icon: <ArrowUpToLine size={16} />, onClick: () => onAlign('top') },
     { key: 'vertical-center', label: '垂直居中节点', icon: <AlignCenter size={16} />, onClick: () => onAlign('vertical-center') },
     { key: 'bottom', label: '底部对齐节点', icon: <ArrowDownToLine size={16} />, onClick: () => onAlign('bottom') },
+    ...(nodes.length > 2 && onDistribute ? [
+      { key: 'distribute-horizontal', label: '水平等距分布', icon: <AlignHorizontalSpaceAround size={16} />, onClick: () => onDistribute('horizontal') },
+      { key: 'distribute-vertical', label: '垂直等距分布', icon: <AlignVerticalSpaceAround size={16} />, onClick: () => onDistribute('vertical') },
+    ] : []),
   ] : [];
   // A handful of always-visible actions; everything else sits, labelled, behind "更多".
   const present = actions.filter((action): action is WorkflowToolbarAction => Boolean(action));

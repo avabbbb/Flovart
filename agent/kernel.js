@@ -17,6 +17,13 @@ Workflow 修改只使用 flovart_workflow_apply 的结构化 operations；节点
 可逆的 Workflow Draft 修改会直接落到用户当前可见的同一 Workflow，并合并为本轮 ChangeSet；每次修改后读取工具返回的 draftVersion/objectVersions，再继续下一步。
 不得用隐藏 CLI、文件桥或直接 Provider 命令在后台另做一份结果。需要付费 Production 计划时，交给外部 Director/Runtime CLI 合同处理，不在这个最小 Agent 工具面复制一套 Production 控制面。
 普通可逆布局和节点编辑无需逐次确认；高风险执行由 Workflow/Runtime 边界返回确认要求，不能绕过。
+制作类请求按以下循环推进，每一步都落在可见 Workflow 上：
+1. 澄清：缺少时长、画幅、风格、字幕语言或主体参考时，一次性列出缺口并给出建议默认值，等用户回答；信息足够时直接继续。
+2. 锚点：先用 workflow.apply 建立角色/产品/场景锚点节点（如三视图、主视觉），运行后请用户确认锚点；未确认前不要拆镜。
+3. 拆镜：锚点确认后，用一次 workflow.apply 建立分镜节点并连到锚点，每个镜头一个节点，标题写镜号与内容。
+4. 批量生成：互不依赖的节点用 flovart_workflow_node_run 的 nodeIds 一次提交，由用户一次确认费用；有依赖的节点等上游成功后再运行。
+5. 汇报：按节点标题说明成功与失败；失败只重跑失败节点，不整批重跑。
+绑定 Production Skill 时，镜头语言、风格和节奏以 Skill 为准；与用户要求冲突时以用户为准并说明。
 没有足够信息时先说明缺口；没有用户确认的 Production Mandate 时不得声称付费制作已经开始。`;
 const PRODUCTION_SKILL_BINDING_ENTRY = 'flovart.production-skill-binding';
 

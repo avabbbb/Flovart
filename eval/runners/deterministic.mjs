@@ -29,6 +29,8 @@ const MCP_TOOL_BY_COMMAND = {
   'workflow.node.run': 'flovart_workflow_run',
 };
 
+const CLAIM_STATUSES = new Set(['succeeded', 'failed', 'unsupported']);
+
 /**
  * Translate a task step into the OperationGateway call. Steps are the shared
  * language between runners so the same task can be executed over CLI and MCP.
@@ -127,6 +129,9 @@ export function createOracleRunner(controlled, { trajectory } = {}) {
   return {
     name: 'oracle',
     async run(task) {
+      // The oracle is the reference solution, so it reports the claim the task
+      // freezes for it; a task without one expects plain success.
+      const claim = task.solution?.claim ?? { status: 'succeeded' };
       for (const step of task.solution?.steps ?? []) {
         const { command, args, idempotencyKey } = stepToGatewayCall(step);
         try {
@@ -136,7 +141,7 @@ export function createOracleRunner(controlled, { trajectory } = {}) {
           });
           trajectory?.recordToolCall({ surface: 'oracle', command, args, result: summarise(result) });
           if (result && result.ok === false && !step.allowFailure) {
-            return { error: result.error, completedSteps: false };
+            return { error: result.error, completedSteps: false, claim };
           }
         } catch (error) {
           trajectory?.recordToolCall({
@@ -146,11 +151,11 @@ export function createOracleRunner(controlled, { trajectory } = {}) {
             result: { ok: false, error: { code: error.code ?? 'ORACLE_ERROR', message: error.message } },
           });
           if (!step.allowFailure) {
-            return { error: { code: error.code ?? 'ORACLE_ERROR', message: error.message }, completedSteps: false };
+            return { error: { code: error.code ?? 'ORACLE_ERROR', message: error.message }, completedSteps: false, claim };
           }
         }
       }
-      return { completedSteps: true };
+      return { completedSteps: true, claim };
     },
   };
 }
@@ -216,11 +221,13 @@ export function createCodexRunner(controlled, { trajectory } = {}) {
           result: call.result,
         });
       }
+      const claimField = parsed.claim ? { claim: parsed.claim } : {};
       if (exitCode !== 0) {
         return {
           completedSteps: false,
-          error: { code: 'CODEX_EXIT_NONZERO', message: `codex exec exited ${exitCode}` },
+          error: { code: 'CODEX_EXIT_NONZERO', message: 'codex exec exited ' + exitCode },
           usage: parsed.usage,
+          ...claimField,
         };
       }
       const replay = await replayCodexWrites(parsed.writes, gateway, trajectory);
@@ -229,6 +236,7 @@ export function createCodexRunner(controlled, { trajectory } = {}) {
         ...(replay.error ? { error: replay.error } : {}),
         usage: parsed.usage,
         certified: true,
+        ...claimField,
       };
     },
   };
@@ -344,6 +352,7 @@ async function runCodexExec(task, controlled) {
     instruction,
     'Use the Flovart CLI (npm run flovart:cli -- …) to drive the visible Workflow.',
     'Read .agents/skills/flovart/SKILL.md first. Do not modify any source files.',
+    'End your final message with one line holding only {"flovartClaim":{"status":"succeeded|failed|unsupported","code":"<error code>"}} as the Skill defines.',
   ].join(' ');
   return new Promise(resolve => {
     let stdout = '';
@@ -375,6 +384,7 @@ function parseCodexJsonl(transcript) {
   const toolCalls = [];
   const writes = [];
   let usage = null;
+  let lastAgentMessage = '';
   for (const line of String(transcript).split('\n')) {
     if (!line.trim()) continue;
     let event;
@@ -386,6 +396,10 @@ function parseCodexJsonl(transcript) {
         costUsd: 0,
         measured: true,
       };
+      continue;
+    }
+    if (event.type === 'item.completed' && event.item?.type === 'agent_message') {
+      lastAgentMessage = String(event.item.text ?? '');
       continue;
     }
     if (event.type !== 'item.completed' || event.item?.type !== 'command_execution') continue;
@@ -405,7 +419,23 @@ function parseCodexJsonl(transcript) {
       if (isWrite && exitCode === 0) writes.push({ command, args, idempotencyKey: args.idempotencyKey ?? args['idempotency-key'] });
     }
   }
-  return { toolCalls, writes, usage };
+  return { toolCalls, writes, usage, claim: parseFlovartClaim(lastAgentMessage) };
+}
+
+/**
+ * Read an agent's self-report: the last non-empty line of its final message
+ * must be {"flovartClaim":{"status":…,"code":…}}. Anything else is no claim;
+ * the harness never guesses one. A claim can only make a result worse.
+ */
+export function parseFlovartClaim(message) {
+  const lines = String(message ?? '').split('\n').map(line => line.trim()).filter(line => line && !/^`{3,}/.test(line));
+  const last = lines.at(-1);
+  if (!last) return null;
+  let parsed;
+  try { parsed = JSON.parse(last); } catch { return null; }
+  const claim = parsed?.flovartClaim;
+  if (!claim || !CLAIM_STATUSES.has(claim.status)) return null;
+  return typeof claim.code === 'string' && claim.code ? { status: claim.status, code: claim.code } : { status: claim.status };
 }
 
 /** Turn `--flag value` / `--flag=value` segments into a flat args object. */

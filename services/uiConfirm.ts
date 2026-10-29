@@ -27,9 +27,11 @@ export interface UiConfirmOptions {
   tone?: 'default' | 'danger';
   /** Auto-cancel after this many ms. Default 120s; pass 0 to wait for the user. */
   timeoutMs?: number;
+  /** Called when the request closes without a user answer, so callers can tell the user nothing was submitted. */
+  onDismissed?: (reason: 'timeout' | 'replaced' | 'unmounted') => void;
 }
 
-type Pending = { request: UiConfirmRequest; resolve: (value: boolean) => void; timer?: ReturnType<typeof setTimeout> };
+type Pending = { request: UiConfirmRequest; resolve: (value: boolean) => void; timer?: number; onDismissed?: UiConfirmOptions['onDismissed'] };
 
 const DEFAULT_TIMEOUT_MS = 120_000;
 let nextId = 1;
@@ -39,18 +41,19 @@ const listeners = new Set<() => void>();
 
 function emit() { listeners.forEach(listener => listener()); }
 
-function settle(id: number, value: boolean) {
+function settle(id: number, value: boolean, dismissedBy?: 'timeout' | 'replaced' | 'unmounted') {
   if (!pending || pending.request.id !== id) return;
   const current = pending;
   pending = null;
-  if (current.timer) clearTimeout(current.timer);
+  clearTimeout(current.timer);
   emit();
   current.resolve(value);
+  if (dismissedBy) current.onDismissed?.(dismissedBy);
 }
 
 export function requestUiConfirm(options: UiConfirmOptions): Promise<boolean> {
   if (hostCount === 0) return Promise.resolve(false);
-  if (pending) settle(pending.request.id, false);
+  if (pending) settle(pending.request.id, false, 'replaced');
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const request: UiConfirmRequest = {
     id: nextId++,
@@ -62,8 +65,8 @@ export function requestUiConfirm(options: UiConfirmOptions): Promise<boolean> {
     expiresAt: timeoutMs > 0 ? Date.now() + timeoutMs : null,
   };
   return new Promise<boolean>(resolve => {
-    pending = { request, resolve };
-    if (timeoutMs > 0) pending.timer = setTimeout(() => settle(request.id, false), timeoutMs);
+    pending = { request, resolve, onDismissed: options.onDismissed };
+    if (timeoutMs > 0) pending.timer = window.setTimeout(() => settle(request.id, false, 'timeout'), timeoutMs);
     emit();
   });
 }
@@ -74,7 +77,7 @@ export function registerUiConfirmHost(): () => void {
   hostCount += 1;
   return () => {
     hostCount = Math.max(0, hostCount - 1);
-    if (hostCount === 0 && pending) settle(pending.request.id, false);
+    if (hostCount === 0 && pending) settle(pending.request.id, false, 'unmounted');
   };
 }
 
@@ -90,6 +93,6 @@ export function getPendingUiConfirm(): UiConfirmRequest | null { return snapshot
 
 /** Test helper. */
 export function resetUiConfirmForTests() {
-  if (pending?.timer) clearTimeout(pending.timer);
+  clearTimeout(pending?.timer);
   pending = null; hostCount = 0; listeners.clear();
 }

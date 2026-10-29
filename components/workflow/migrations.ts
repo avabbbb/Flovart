@@ -1,5 +1,6 @@
 import { workflowStorage } from './storage';
-import type { WorkflowConnection, WorkflowNode, WorkflowProject, WorkflowViewport } from './types';
+import { WORKFLOW_SNAPSHOT_LIMIT } from './snapshots';
+import type { WorkflowConnection, WorkflowNamedSnapshot, WorkflowNode, WorkflowProject, WorkflowViewport } from './types';
 
 export const WORKFLOW_PERSISTENCE_VERSION = 1;
 export const WORKFLOW_BACKUP_KEY = 'flovart:workflow:projects:backup';
@@ -60,6 +61,31 @@ function connectionOf(value: unknown, index: number, nodeIds: Set<string>): Work
   } as WorkflowConnection;
 }
 
+// 单个快照损坏时只丢弃该快照，不影响项目本身加载。
+function snapshotsOf(value: unknown): WorkflowNamedSnapshot[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item): WorkflowNamedSnapshot[] => {
+    if (!isRecord(item) || typeof item.id !== 'string' || !Array.isArray(item.nodes)) return [];
+    try {
+      const nodes = item.nodes.map(nodeOf);
+      const nodeIds = new Set(nodes.map(node => node.id));
+      const connections = (Array.isArray(item.connections) ? item.connections : [])
+        .map((connection, index) => connectionOf(connection, index, nodeIds))
+        .filter((connection): connection is WorkflowConnection => Boolean(connection));
+      return [{
+        id: item.id,
+        name: typeof item.name === 'string' && item.name.trim() ? item.name : '未命名快照',
+        createdAt: typeof item.createdAt === 'string' ? item.createdAt : new Date(0).toISOString(),
+        nodes,
+        connections,
+        ...(isRecord(item.viewport) ? { viewport: viewportOf(item.viewport) } : {}),
+      }];
+    } catch {
+      return [];
+    }
+  }).slice(-WORKFLOW_SNAPSHOT_LIMIT);
+}
+
 export function migrateWorkflowProject(value: unknown, now = new Date().toISOString()): WorkflowProject {
   if (!isRecord(value) || typeof value.id !== 'string' || typeof value.title !== 'string') {
     throw new Error('工作流迁移失败：项目缺少 id 或 title');
@@ -89,6 +115,7 @@ export function migrateWorkflowProject(value: unknown, now = new Date().toISOStr
     draftRedoStack: Array.isArray(value.draftRedoStack) ? value.draftRedoStack : [],
     draftVersion,
     workflowMutationReceipts: Array.isArray(value.workflowMutationReceipts) ? value.workflowMutationReceipts : [],
+    ...(Array.isArray(value.snapshots) ? { snapshots: snapshotsOf(value.snapshots) } : { snapshots: undefined }),
     createdAt: typeof value.createdAt === 'string' ? value.createdAt : now,
     updatedAt: typeof value.updatedAt === 'string' ? value.updatedAt : now,
   };

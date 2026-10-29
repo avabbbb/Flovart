@@ -1,3 +1,6 @@
+import { VECTORIZE_PRESET_LABELS, type VectorizePreset } from '../../services/vectorizeImage';
+import { clampMoveOffset, tracePolygon, type NormalizedPoint } from '../../services/moveObjectCanvas';
+import { computeOutpaintLayout, type OutpaintDirection } from '../../services/outpaintCanvas';
 import { Button, Input, Modal, Segmented, Slider, ColorPicker } from 'antd';
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { ImageFilterPanel, buildCssFilter } from '../ImageFilterPanel';
@@ -9,14 +12,17 @@ import type { WorkflowLayerStyle } from './operationRegistry';
 import { WorkflowLayerDialog } from './WorkflowLayerDialog';
 import type { LassoPoint } from './lasso';
 
-export type WorkflowImageToolKind = 'crop' | 'filter' | 'upscale' | 'remove-background' | 'outpaint' | 'mask' | 'split' | 'rotate' | 'splitGrid' | 'annotate' | 'relight' | 'storyboard' | 'layer';
+export type WorkflowImageToolKind = 'crop' | 'filter' | 'upscale' | 'remove-background' | 'outpaint' | 'mask' | 'split' | 'rotate' | 'splitGrid' | 'annotate' | 'relight' | 'restyle' | 'vectorize' | 'move' | 'storyboard' | 'layer';
 export interface WorkflowImageToolState { kind: WorkflowImageToolKind; nodeId: string }
 export type WorkflowImageToolConfirmation =
   | { kind: 'crop'; crop: WorkflowCropRect }
   | { kind: 'filter'; filters: Partial<ImageFilters> }
   | { kind: 'upscale'; targetLongEdge: number; algorithm: 'high' | 'bilinear' | 'nearest' }
-  | { kind: 'outpaint'; direction: 'left' | 'right' | 'top' | 'bottom' | 'all'; prompt: string }
+  | { kind: 'outpaint'; direction: OutpaintDirection; amount: number; prompt: string }
   | { kind: 'mask'; prompt: string; maskDataUrl: string }
+  | { kind: 'restyle'; prompt: string }
+  | { kind: 'vectorize'; preset: VectorizePreset }
+  | { kind: 'move'; points: NormalizedPoint[]; dx: number; dy: number; prompt: string }
   | { kind: 'split' }
   | { kind: 'rotate'; action: 'rotate-90' | 'rotate-180' | 'rotate-270' | 'flip-h' | 'flip-v' }
   | { kind: 'splitGrid'; rows: number; cols: number }
@@ -41,9 +47,12 @@ export function WorkflowImageToolDialogs({ tool, node, mediaUrl, busy, error, on
   if (tool.kind === 'crop') return <CropDialog {...common} onConfirm={crop => onConfirm({ kind: 'crop', crop })} />;
   if (tool.kind === 'filter') return <FilterDialog {...common} filters={node.metadata.filters || {}} onPreview={onPreview} onConfirm={filters => onConfirm({ kind: 'filter', filters })} />;
   if (tool.kind === 'upscale') return <UpscaleDialog {...common} onConfirm={(targetLongEdge, algorithm) => onConfirm({ kind: 'upscale', targetLongEdge, algorithm })} />;
-  if (tool.kind === 'outpaint') return <OutpaintDialog {...common} onConfirm={(direction, prompt) => onConfirm({ kind: 'outpaint', direction, prompt })} />;
+  if (tool.kind === 'outpaint') return <OutpaintDialog {...common} onConfirm={(direction, amount, prompt) => onConfirm({ kind: 'outpaint', direction, amount, prompt })} />;
   if (tool.kind === 'mask') return <MaskDialog {...common} onConfirm={(prompt, maskDataUrl) => onConfirm({ kind: 'mask', prompt, maskDataUrl })} />;
+  if (tool.kind === 'restyle') return <RestyleDialog {...common} onConfirm={prompt => onConfirm({ kind: 'restyle', prompt })} />;
   if (tool.kind === 'split') return <SimpleConfirmDialog {...common} title="拆分图层" description="AI 会识别主体、背景和独立物体，并在右侧创建相连的图片节点。" action="拆分图层" onConfirm={() => onConfirm({ kind: 'split' })} />;
+  if (tool.kind === 'move') return <MoveObjectDialog {...common} onConfirm={(points, dx, dy, prompt) => onConfirm({ kind: 'move', points, dx, dy, prompt })} />;
+  if (tool.kind === 'vectorize') return <VectorizeDialog {...common} onConfirm={preset => onConfirm({ kind: 'vectorize', preset })} />;
   if (tool.kind === 'rotate') return <RotateFlipDialog {...common} onConfirm={action => onConfirm({ kind: 'rotate', action })} />;
   if (tool.kind === 'splitGrid') return <SplitGridDialog {...common} onConfirm={(rows, cols) => onConfirm({ kind: 'splitGrid', rows, cols })} />;
   if (tool.kind === 'annotate') return <AnnotateDialog {...common} onConfirm={dataUrl => onConfirm({ kind: 'annotate', annotatedDataUrl: dataUrl })} />;
@@ -109,20 +118,33 @@ function UpscaleDialog(props: CommonProps & { onConfirm: (target: number, algori
   </Modal>;
 }
 
-function OutpaintDialog(props: CommonProps & { onConfirm: (direction: 'left' | 'right' | 'top' | 'bottom' | 'all', prompt: string) => void }) {
-  const [direction, setDirection] = useState<'left' | 'right' | 'top' | 'bottom' | 'all'>('right');
-  const [prompt, setPrompt] = useState('自然延展画面，保持原图风格、光影和透视一致');
+function OutpaintDialog(props: CommonProps & { onConfirm: (direction: OutpaintDirection, amount: number, prompt: string) => void }) {
+  const [direction, setDirection] = useState<OutpaintDirection>('right');
+  const [amount, setAmount] = useState(0.5);
+  const [natural, setNatural] = useState({ width: 1024, height: 768 });
+  const [prompt, setPrompt] = useState('');
+  const layout = computeOutpaintLayout(natural.width, natural.height, direction, amount);
   return <Modal {...modalProps(props)} title="扩展画面"><div className="workflow-image-tool__grid" data-workflow-overlay>
-    <div className="workflow-image-tool__preview"><img src={props.mediaUrl} alt="扩图预览" /></div>
-    <div className="workflow-image-tool__controls"><label>扩展方向<Segmented block value={direction} options={[['left', '左'], ['right', '右'], ['top', '上'], ['bottom', '下'], ['all', '四周']].map(([value, label]) => ({ value, label }))} onChange={value => setDirection(value as typeof direction)} /></label><label>扩图要求<Input.TextArea rows={6} value={prompt} onChange={event => setPrompt(event.target.value)} /></label><DialogError error={props.error} /><Button type="primary" loading={props.busy} disabled={!prompt.trim()} onClick={() => props.onConfirm(direction, prompt.trim())}>开始扩展</Button></div>
+    <div className="workflow-image-tool__preview"><div className="workflow-outpaint-frame" style={{ aspectRatio: layout.width + ' / ' + layout.height }}><img src={props.mediaUrl} alt="扩图预览" draggable={false} onLoad={event => setNatural({ width: event.currentTarget.naturalWidth || 1024, height: event.currentTarget.naturalHeight || 768 })} style={{ left: (layout.offsetX / layout.width * 100) + '%', top: (layout.offsetY / layout.height * 100) + '%', width: (layout.sourceWidth / layout.width * 100) + '%', height: (layout.sourceHeight / layout.height * 100) + '%' }} /></div></div>
+    <div className="workflow-image-tool__controls">
+      <label>扩展方向<Segmented block value={direction} options={[['left', '左'], ['right', '右'], ['top', '上'], ['bottom', '下'], ['all', '四周']].map(([value, label]) => ({ value, label }))} onChange={value => setDirection(value as OutpaintDirection)} /></label>
+      <label>扩展幅度<Segmented block value={amount} options={[{ label: '25%', value: 0.25 }, { label: '50%', value: 0.5 }, { label: '100%', value: 1 }]} onChange={value => setAmount(Number(value))} /></label>
+      <span className="workflow-outpaint-size">输出 {layout.width} x {layout.height}</span>
+      <label>补充要求（可选）<Input.TextArea rows={4} value={prompt} placeholder="例如：右侧加一片海滩" onChange={event => setPrompt(event.target.value)} /></label>
+      <DialogError error={props.error} />
+      <Button type="primary" loading={props.busy} onClick={() => props.onConfirm(direction, amount, prompt.trim())}>开始扩展</Button>
+    </div>
   </div></Modal>;
 }
+
+const ERASE_PROMPT = '移除涂抹区域内的物体或文字，用周围背景自然补全，不留痕迹；未涂抹区域保持不变。';
 
 function MaskDialog(props: CommonProps & { onConfirm: (prompt: string, mask: string) => void }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const drawing = useRef(false);
   const last = useRef({ x: 0, y: 0 });
   const [prompt, setPrompt] = useState('修改涂抹区域，保持未选区域不变');
+  const [mode, setMode] = useState<'repaint' | 'erase'>('repaint');
   const [brush, setBrush] = useState(42);
   const [hasMask, setHasMask] = useState(false);
   const point = (event: ReactPointerEvent<HTMLCanvasElement>) => {
@@ -139,11 +161,31 @@ function MaskDialog(props: CommonProps & { onConfirm: (prompt: string, mask: str
     const mask = document.createElement('canvas'); mask.width = canvas.width; mask.height = canvas.height;
     const context = mask.getContext('2d'); if (!context) return;
     context.fillStyle = '#fff'; context.fillRect(0, 0, mask.width, mask.height); context.globalCompositeOperation = 'destination-out'; context.drawImage(canvas, 0, 0);
-    props.onConfirm(prompt.trim(), mask.toDataURL('image/png'));
+    props.onConfirm(mode === 'erase' ? ERASE_PROMPT : prompt.trim(), mask.toDataURL('image/png'));
   };
   return <Modal {...modalProps(props, 900)} title="局部遮罩编辑"><div className="workflow-image-tool__grid" data-workflow-overlay>
     <div className="workflow-image-tool__mask"><img src={props.mediaUrl} alt="蒙版编辑" onLoad={event => { const canvas = canvasRef.current; if (!canvas) return; canvas.width = event.currentTarget.naturalWidth || 1024; canvas.height = event.currentTarget.naturalHeight || 768; }} /><canvas ref={canvasRef} width={1024} height={768} onPointerDown={event => { drawing.current = true; last.current = point(event); event.currentTarget.setPointerCapture(event.pointerId); }} onPointerMove={draw} onPointerUp={() => { drawing.current = false; }} /></div>
-    <div className="workflow-image-tool__controls"><label>笔刷大小<Slider min={8} max={160} value={brush} onChange={setBrush} /></label><label>修改要求<Input.TextArea rows={6} value={prompt} onChange={event => setPrompt(event.target.value)} /></label><Button onClick={() => { const canvas = canvasRef.current; canvas?.getContext('2d')?.clearRect(0, 0, canvas.width, canvas.height); setHasMask(false); }}>重置蒙版</Button><DialogError error={props.error} /><Button type="primary" loading={props.busy} disabled={!prompt.trim() || !hasMask} onClick={submit}>AI 修改</Button></div>
+    <div className="workflow-image-tool__controls"><label>笔刷大小<Slider min={8} max={160} value={brush} onChange={setBrush} /></label><label>模式<Segmented block value={mode} options={[{ label: '局部重绘', value: 'repaint' }, { label: '擦除', value: 'erase' }]} onChange={value => setMode(value as 'repaint' | 'erase')} /></label>{mode === 'repaint' ? <label>修改要求<Input.TextArea rows={6} value={prompt} onChange={event => setPrompt(event.target.value)} /></label> : <p>涂抹要去掉的物体、文字或路人，AI 会用周围背景补全。</p>}<Button onClick={() => { const canvas = canvasRef.current; canvas?.getContext('2d')?.clearRect(0, 0, canvas.width, canvas.height); setHasMask(false); }}>重置蒙版</Button><DialogError error={props.error} /><Button type="primary" loading={props.busy} disabled={(mode === 'repaint' && !prompt.trim()) || !hasMask} onClick={submit}>AI 修改</Button></div>
+  </div></Modal>;
+}
+
+const RESTYLE_VIEWS = [['keep', '保持原视角', ''], ['front', '正面', '换成正面视角'], ['threeQuarter', '3/4 侧面', '换成四分之三侧面视角'], ['side', '侧面', '换成正侧面视角'], ['back', '背面', '换成背面视角'], ['top', '俯视', '换成俯视视角'], ['low', '仰视', '换成仰视视角'], ['closeup', '特写', '换成主体特写'], ['wide', '远景', '换成远景全身构图']] as const;
+const RESTYLE_STYLES = [['keep', '保持原风格', ''], ['photo', '写实摄影', '转为写实摄影风格'], ['anime', '日系动画', '转为日系动画风格'], ['render', '3D 渲染', '转为 3D 渲染风格'], ['watercolor', '水彩', '转为水彩插画风格'], ['oil', '油画', '转为古典油画风格'], ['ink', '水墨', '转为中国水墨画风格'], ['line', '线稿', '转为黑白线稿'], ['pixel', '像素', '转为像素艺术风格']] as const;
+
+function RestyleDialog(props: CommonProps & { onConfirm: (prompt: string) => void }) {
+  const [view, setView] = useState<string>('keep');
+  const [style, setStyle] = useState<string>('keep');
+  const [extra, setExtra] = useState('');
+  const prompt = [RESTYLE_VIEWS.find(item => item[0] === view)?.[2], RESTYLE_STYLES.find(item => item[0] === style)?.[2], extra.trim()].filter(Boolean).join('；');
+  return <Modal {...modalProps(props)} title={'视角与风格'}><div className={'workflow-image-tool__grid'} data-workflow-overlay>
+    <div className={'workflow-image-tool__preview'}><img src={props.mediaUrl} alt={'视角与风格预览'} /></div>
+    <div className={'workflow-image-tool__controls'}>
+      <div className={'workflow-restyle-group'}><span>视角</span><div className={'workflow-restyle-options'}>{RESTYLE_VIEWS.map(([value, label]) => <Button key={value} size={'small'} type={view === value ? 'primary' : 'default'} onClick={() => setView(value)}>{label}</Button>)}</div></div>
+      <div className={'workflow-restyle-group'}><span>风格</span><div className={'workflow-restyle-options'}>{RESTYLE_STYLES.map(([value, label]) => <Button key={value} size={'small'} type={style === value ? 'primary' : 'default'} onClick={() => setStyle(value)}>{label}</Button>)}</div></div>
+      <label>补充要求（可选）<Input.TextArea rows={3} value={extra} placeholder={'例如：换成夜景、加上雪'} onChange={event => setExtra(event.target.value)} /></label>
+      <DialogError error={props.error} />
+      <Button type={'primary'} loading={props.busy} disabled={!prompt} onClick={() => props.onConfirm('保持主体身份、外观细节和关键特征不变。' + prompt)}>生成新版本</Button>
+    </div>
   </div></Modal>;
 }
 
@@ -295,4 +337,104 @@ function StoryboardDialog(props: CommonProps & { onConfirm: (cols: number, showI
       </div>
     </div>
   </Modal>;
+}
+
+const VECTORIZE_PRESET_HINTS: Record<VectorizePreset, string> = {
+  detailed: '16 色，保留细节，适合插画和照片转矢量',
+  poster: '6 色并预先模糊，色块干净，适合海报和图标',
+  line: '黑白两色，适合线稿、Logo 和文字',
+};
+
+function VectorizeDialog(props: CommonProps & { onConfirm: (preset: VectorizePreset) => void }) {
+  const [preset, setPreset] = useState<VectorizePreset>('detailed');
+  return <Modal {...modalProps(props)} title="矢量化"><div data-workflow-overlay style={{ display: 'grid', gap: 12 }}>
+    <Segmented block value={preset} options={(Object.keys(VECTORIZE_PRESET_LABELS) as VectorizePreset[]).map(value => ({ label: VECTORIZE_PRESET_LABELS[value], value }))} onChange={value => setPreset(value as VectorizePreset)} />
+    <p style={{ margin: 0, opacity: 0.75 }}>{VECTORIZE_PRESET_HINTS[preset]}。在本地浏览器内描摹，长边超过 1024px 会先等比缩小，结果以 SVG 节点出现在右侧。</p>
+    <Button type="primary" loading={props.busy} onClick={() => props.onConfirm(preset)}>开始矢量化</Button>
+  </div></Modal>;
+}
+
+function MoveObjectDialog(props: CommonProps & { onConfirm: (points: NormalizedPoint[], dx: number, dy: number, prompt: string) => void }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const imageRef = useRef<HTMLImageElement>(null);
+  const [points, setPoints] = useState<NormalizedPoint[]>([]);
+  const [phase, setPhase] = useState<'select' | 'move'>('select');
+  const [offset, setOffset] = useState({ dx: 0, dy: 0 });
+  const [extra, setExtra] = useState('');
+  const drag = useRef<{ x: number; y: number; dx: number; dy: number } | null>(null);
+  const selecting = useRef(false);
+  const point = (event: ReactPointerEvent<HTMLCanvasElement>): NormalizedPoint => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    return { x: Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width)), y: Math.min(1, Math.max(0, (event.clientY - rect.top) / rect.height)) };
+  };
+  useEffect(() => {
+    const canvas = canvasRef.current; const image = imageRef.current;
+    const context = canvas?.getContext('2d');
+    if (!canvas || !context) return;
+    const { width, height } = canvas;
+    context.clearRect(0, 0, width, height);
+    if (points.length < 2) return;
+    context.lineWidth = Math.max(2, Math.round(width / 300));
+    if (phase === 'select') {
+      context.strokeStyle = '#1677ff';
+      tracePolygon(context, points, width, height);
+      context.stroke();
+      return;
+    }
+    context.save();
+    context.setLineDash([10, 8]);
+    context.strokeStyle = 'rgba(255,255,255,0.9)';
+    tracePolygon(context, points, width, height);
+    context.stroke();
+    context.restore();
+    if (image && image.complete) {
+      context.save();
+      tracePolygon(context, points, width, height, offset.dx, offset.dy);
+      context.clip();
+      context.drawImage(image, offset.dx * width, offset.dy * height, width, height);
+      context.restore();
+    }
+    context.strokeStyle = '#1677ff';
+    tracePolygon(context, points, width, height, offset.dx, offset.dy);
+    context.stroke();
+  }, [points, phase, offset]);
+  const reset = () => { setPoints([]); setPhase('select'); setOffset({ dx: 0, dy: 0 }); };
+  const onPointerDown = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    event.currentTarget.setPointerCapture(event.pointerId);
+    const next = point(event);
+    if (phase === 'select') { selecting.current = true; setPoints([next]); return; }
+    drag.current = { x: next.x, y: next.y, dx: offset.dx, dy: offset.dy };
+  };
+  const onPointerMove = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    const next = point(event);
+    if (phase === 'select') {
+      if (!selecting.current) return;
+      setPoints(current => {
+        const last = current[current.length - 1];
+        return last && Math.hypot(next.x - last.x, next.y - last.y) < 0.004 ? current : [...current, next];
+      });
+      return;
+    }
+    const start = drag.current;
+    if (start) setOffset(clampMoveOffset(points, start.dx + next.x - start.x, start.dy + next.y - start.y));
+  };
+  const onPointerUp = () => {
+    if (phase === 'select') {
+      selecting.current = false;
+      if (points.length >= 3) setPhase('move'); else setPoints([]);
+      return;
+    }
+    drag.current = null;
+  };
+  const moved = phase === 'move' && Math.hypot(offset.dx, offset.dy) > 0.005;
+  return <Modal {...modalProps(props, 900)} title="移动物体"><div className="workflow-image-tool__grid" data-workflow-overlay>
+    <div className="workflow-image-tool__mask"><img ref={imageRef} src={props.mediaUrl} alt="移动物体" onLoad={event => { const canvas = canvasRef.current; if (!canvas) return; canvas.width = event.currentTarget.naturalWidth || 1024; canvas.height = event.currentTarget.naturalHeight || 768; }} /><canvas ref={canvasRef} width={1024} height={768} style={{ cursor: phase === 'select' ? 'crosshair' : 'move', touchAction: 'none' }} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp} /></div>
+    <div className="workflow-image-tool__controls">
+      <p>{phase === 'select' ? '第一步：按住鼠标沿物体轮廓圈一圈，松开后自动闭合。' : '第二步：在画面上拖动，把物体放到新位置。原位置会用背景补全，新位置会补光影和接缝。'}</p>
+      <label>补充要求（可选）<Input.TextArea rows={4} value={extra} placeholder="例如：保持物体大小不变，地面加上投影" onChange={event => setExtra(event.target.value)} /></label>
+      <Button onClick={reset} disabled={props.busy}>重新圈选</Button>
+      <DialogError error={props.error} />
+      <Button type="primary" loading={props.busy} disabled={!moved} onClick={() => props.onConfirm(points, offset.dx, offset.dy, extra.trim())}>开始移动</Button>
+    </div>
+  </div></Modal>;
 }

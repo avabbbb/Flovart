@@ -19,7 +19,7 @@ describe('Flovart Workflow-only CLI contract', () => {
     expect(names).toContain('workflow.node.run');
     expect(names).toContain('provider.select-model');
     expect(names.some(name => /(^|\.)(canvas|element)(\.|$)/i.test(name))).toBe(false);
-    expect(COMMAND_REGISTRY['workflow.node.run'].args).toMatchObject({ projectId: 'string?', nodeId: 'string' });
+    expect(COMMAND_REGISTRY['workflow.node.run'].args).toMatchObject({ projectId: 'string?', nodeId: 'string?', nodeIds: 'string[]?' });
   });
 
   it('forwards normalized Workflow arguments through the deterministic dispatcher', async () => {

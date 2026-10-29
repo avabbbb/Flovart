@@ -4,7 +4,7 @@
 
 ## English
 
-Iris is a local-first product: projects, assets, generation history and provider API keys
+Flovart is a local-first product: projects, assets, generation history and provider API keys
 live primarily on the user's own device. Because Closed Beta testing means strangers will
 touch provider keys, local files, the loopback Runtime and Agent permission boundaries,
 please report vulnerabilities privately instead of opening a public Issue.
@@ -13,8 +13,8 @@ please report vulnerabilities privately instead of opening a public Issue.
 
 | Version | Supported |
 | --- | --- |
-| `0.3.x` (current beta line, on `main`) | Yes — security fixes land here |
-| `0.2.x` and earlier public tags (e.g. `v0.2.0-test`) | No — upgrade to the latest `main` build |
+| 0.2.x (current Closed Beta line, on main) | Yes — security fixes land here |
+| 0.3.x previews and older public test tags (e.g. v0.2.0-test) | No — upgrade to the latest 0.2.x build |
 
 The beta line is a release candidate, not a stable channel. Only the most recent
 `main`-line build is evaluated for security fixes.
@@ -27,7 +27,7 @@ Use **GitHub private vulnerability reporting** on the repository's Security tab:
   and choose **"Report a vulnerability"** (Private vulnerability reporting → draft
   security advisory). This keeps the report private between you and the maintainers.
 
-Iris does not currently provide a separate private security email — this matches the
+Flovart does not currently provide a separate private security email — this matches the
 contact policy in the [Terms of Service](docs/TERMS_OF_SERVICE.md) and
 [Privacy Policy](docs/PRIVACY_POLICY.md). If private vulnerability reporting is not yet
 enabled on the repository (see the maintainer checklist below), open a minimal public
@@ -90,12 +90,12 @@ Out of scope:
 
 ### Provider API keys are user-supplied and local-only
 
-Iris does **not** bundle model services and does not hold your provider keys. Keys are
-entered by the user, stored locally (the Web path uses an encrypted `localforage` vault),
+Flovart does **not** bundle model services and does not hold your provider keys. Keys are
+entered by the user, stored locally (the Web path uses a localforage vault that is obfuscated at rest: its key derives from browser data, so it stops casual reading but not malware or same-origin scripts),
 and sent only to the provider endpoint the user configured. Agent and CLI paths receive
 redacted readiness/capability state, not raw credentials. A leaked key is almost always a
 device-side or provider-side incident — rotate it at the provider first, then report the
-Iris path that exposed it if one exists.
+Flovart path that exposed it if one exists.
 
 ### Security controls already in the repository
 
@@ -144,7 +144,7 @@ Evidence snapshot to reconcile against:
 
 ## 中文
 
-Iris 是本地优先产品：项目、素材、生成历史和 Provider API Key 主要保存在用户自己的设备上。
+Flovart 是本地优先产品：项目、素材、生成历史和 Provider API Key 主要保存在用户自己的设备上。
 Closed Beta 意味着外部测试者会接触 Provider Key、本地文件、loopback Runtime 与 Agent 权限边界，
 请通过私下渠道报告漏洞，不要直接开公开 Issue。
 
@@ -152,8 +152,8 @@ Closed Beta 意味着外部测试者会接触 Provider Key、本地文件、loop
 
 | 版本 | 是否支持 |
 | --- | --- |
-| `0.3.x`（当前 beta 线，`main` 分支） | 支持 —— 安全修复落在这里 |
-| `0.2.x` 及更早的公开 tag（如 `v0.2.0-test`） | 不支持 —— 请升级到最新 `main` 构建 |
+| 0.2.x（当前内测线，main 分支） | 支持 —— 安全修复落在这里 |
+| 0.3.x 预览版及更早的公开测试 tag（如 v0.2.0-test） | 不支持 —— 请升级到最新 0.2.x 构建 |
 
 beta 线是发布候选，不是稳定通道；只有最新的 `main` 构建会接受安全修复评估。
 
@@ -165,7 +165,7 @@ beta 线是发布候选，不是稳定通道；只有最新的 `main` 构建会�
   选择 **"Report a vulnerability"**（Private vulnerability reporting → 草稿安全公告），
   报告只在你与维护者之间可见。
 
-Iris 目前不提供独立的安全邮箱，与[服务条款](docs/TERMS_OF_SERVICE.zh-CN.md)和
+Flovart 目前不提供独立的安全邮箱，与[服务条款](docs/TERMS_OF_SERVICE.zh-CN.md)和
 [隐私政策](docs/PRIVACY_POLICY.zh-CN.md)中的联系方式一致。如果仓库尚未开启私密漏洞报告
 （见上方维护者清单），只开一个最小化公开 Issue 写明「安全问题——需要私下联系」，
 **不要**附细节、PoC、Key 或未脱敏日志。
@@ -214,7 +214,7 @@ Iris 目前不提供独立的安全邮箱，与[服务条款](docs/TERMS_OF_SERV
 
 ### Provider API Key 由用户自备、仅保存在本地
 
-Iris **不**捆绑模型服务，也不持有你的 Provider Key。Key 由用户输入、保存在本地
-（Web 路径使用加密的 `localforage` Vault），只发往用户自己配置的 Provider 端点。
+Flovart **不**捆绑模型服务，也不持有你的 Provider Key。Key 由用户输入、保存在本地
+（Web 路径使用本地混淆存储的 localforage Vault：密钥来自浏览器信息，只能防止随手查看，不能防恶意软件或同源脚本），只发往用户自己配置的 Provider 端点。
 Agent 与 CLI 只能拿到脱敏后的就绪/能力状态，拿不到原始凭据。Key 泄漏几乎都是设备侧或
-Provider 侧事件——先去 Provider 处轮换 Key，再报告可能暴露它的 Iris 路径（如果存在）。
+Provider 侧事件——先去 Provider 处轮换 Key，再报告可能暴露它的 Flovart 路径（如果存在）。

@@ -24,6 +24,9 @@ import {
 import { splitGrid } from './gridSplitter';
 import { transformImage } from './imageTransform';
 import { resolveRouteMappingForSubmit, type RouteFallbackResolution } from './routeMapping';
+import { buildOutpaintCanvas, type OutpaintDirection } from './outpaintCanvas';
+import { vectorizeImageBlob, type VectorizePreset } from './vectorizeImage';
+import { buildMoveObjectCanvas, type NormalizedPoint } from './moveObjectCanvas';
 import {
   commitWorkflowOperation,
   failWorkflowOperation,
@@ -49,6 +52,9 @@ export interface WorkflowImageOperationRuntime extends WorkflowOperationRuntime 
   executeCrop?: (blob: Blob, crop: WorkflowCropRect) => Promise<Blob>;
   executeRotate?: typeof transformImage;
   executeSplitGrid?: typeof splitGrid;
+  executeOutpaintCanvas?: typeof buildOutpaintCanvas;
+  executeVectorize?: typeof vectorizeImageBlob;
+  executeMoveObjectCanvas?: typeof buildMoveObjectCanvas;
 }
 
 export type WorkflowImageEditVariant = 'edit' | 'outpaint' | 'mask' | 'annotate' | 'relight';
@@ -235,6 +241,31 @@ async function executeSplitLayers(
   }
 }
 
+// 本地矢量化：imagetracerjs 在浏览器内描摹，结果为 SVG 图片节点，不消耗模型额度。
+export async function runWorkflowVectorizeOperation(
+  projectId: string,
+  sourceNodeId: string,
+  preset: VectorizePreset,
+  runtime: WorkflowImageOperationRuntime,
+): Promise<WorkflowImageToolOutcome> {
+  const started = await startWorkflowOperation({
+    runtime, projectId, capabilityId: 'image.vectorize@1',
+    sources: [{ nodeId: sourceNodeId, role: 'source_image' }],
+    parameters: { preset },
+  });
+  try {
+    const source = started.sourceNodes[0];
+    const svg = await (runtime.executeVectorize || vectorizeImageBlob)(await loadWorkflowOperationSourceBlob(source, runtime), preset);
+    const baseName = (source.metadata.name || 'image').replace(/\.[^.]+$/, '');
+    return await commitWorkflowOperation(runtime, projectId, started, [{
+      blob: svg, title: '矢量化', fileName: baseName + '.svg', mimeType: 'image/svg+xml', role: 'result_image',
+    }]);
+  } catch (error) {
+    await failWorkflowOperation(runtime, projectId, started, error);
+    throw error;
+  }
+}
+
 async function createMaskNode(
   source: WorkflowNode,
   mask: WorkflowImageEditMask,
@@ -272,6 +303,49 @@ export async function runWorkflowImageEditOperation(
   const resolved = await resolveImageRoute(runtime, modelId);
   const started = await startMaskedImageOperation(runtime, projectId, source, 'image.edit@1', mask, { variant }, prompt, modelId, resolved.routeId);
   return executeImageEdit(projectId, started, prompt, variant, resolved.routeId, resolved.key, runtime);
+}
+
+const OUTPAINT_DIRECTION_LABELS: Record<OutpaintDirection, string> = { left: '左侧', right: '右侧', top: '上方', bottom: '下方', all: '四周' };
+
+// 真实扩图：先把源图放进更大的画布，再用“新区域透明、原图白色”的蒙版走局部重绘。
+export async function runWorkflowOutpaintOperation(
+  projectId: string,
+  sourceNodeId: string,
+  input: { direction: OutpaintDirection; amount: number; prompt: string },
+  runtime: WorkflowImageOperationRuntime,
+): Promise<WorkflowImageToolOutcome> {
+  const { node: source } = requireWorkflowMediaNode(runtime, projectId, sourceNodeId, 'image');
+  const modelId = source.metadata.config?.modelId;
+  const resolved = await resolveImageRoute(runtime, modelId);
+  const padded = await (runtime.executeOutpaintCanvas || buildOutpaintCanvas)(await loadWorkflowOperationSourceBlob(source, runtime), input.direction, input.amount);
+  const encode = runtime.encodeDataUrl || workflowBlobToDataUrl;
+  const { layout } = padded;
+  const prompt = [
+    '把画面向' + OUTPAINT_DIRECTION_LABELS[input.direction] + '扩展到 ' + layout.width + 'x' + layout.height + '：原图位于 (' + layout.offsetX + ', ' + layout.offsetY + ')，尺寸 ' + layout.sourceWidth + 'x' + layout.sourceHeight + '。保持原图像素不变，只补全空白区域，延续原图的风格、光影、透视和内容。',
+    input.prompt.trim(),
+  ].filter(Boolean).join('\n\n');
+  const started = await startMaskedImageOperation(runtime, projectId, source, 'image.edit@1', { href: await encode(padded.mask), mimeType: 'image/png' }, { variant: 'outpaint' }, prompt, modelId, resolved.routeId);
+  return executeImageEdit(projectId, started, prompt, 'outpaint', resolved.routeId, resolved.key, runtime, { href: await encode(padded.image), mimeType: 'image/png' });
+}
+
+// 移动物体：选区像素贴到新位置，原选区 + 新位置边缘走局部重绘，补背景与光影。
+export async function runWorkflowMoveObjectOperation(
+  projectId: string,
+  sourceNodeId: string,
+  input: { points: NormalizedPoint[]; dx: number; dy: number; prompt: string },
+  runtime: WorkflowImageOperationRuntime,
+): Promise<WorkflowImageToolOutcome> {
+  const { node: source } = requireWorkflowMediaNode(runtime, projectId, sourceNodeId, 'image');
+  const modelId = source.metadata.config?.modelId;
+  const resolved = await resolveImageRoute(runtime, modelId);
+  const prepared = await (runtime.executeMoveObjectCanvas || buildMoveObjectCanvas)(await loadWorkflowOperationSourceBlob(source, runtime), input.points, input.dx, input.dy);
+  const encode = runtime.encodeDataUrl || workflowBlobToDataUrl;
+  const prompt = [
+    '图中的物体已被移动到新位置。请在遮罩区域内：把原位置的空缺用周围背景自然补全，不留残影；让新位置物体的边缘与环境融合，补上合理的投影、反射和光照。物体本身的外形、颜色和细节保持不变，遮罩外区域保持不变。',
+    input.prompt.trim(),
+  ].filter(Boolean).join('\n\n');
+  const started = await startMaskedImageOperation(runtime, projectId, source, 'image.edit@1', { href: await encode(prepared.mask), mimeType: 'image/png' }, { variant: 'mask' }, prompt, modelId, resolved.routeId);
+  return executeImageEdit(projectId, started, prompt, 'mask', resolved.routeId, resolved.key, runtime, { href: await encode(prepared.image), mimeType: 'image/png' });
 }
 
 /** 源图 + 可选蒙版的 Operation 启动：蒙版以独立图片节点进入图，启动失败时丢弃已导入的蒙版媒体。 */
@@ -319,9 +393,10 @@ async function executeImageEdit(
   routeId: string,
   key: Parameters<typeof editImageWithProvider>[3],
   runtime: WorkflowImageOperationRuntime,
+  sourceOverride?: { href: string; mimeType: string },
 ) {
   try {
-    const { input } = await imageInput(started.sourceNodes[0], runtime);
+    const input = sourceOverride || (await imageInput(started.sourceNodes[0], runtime)).input;
     const maskSource = started.sourceNodes[1];
     const mask = maskSource ? (await imageInput(maskSource, runtime)).input : undefined;
     const result = await (runtime.executeEdit || editImageWithProvider)([input], prompt, routeId, key, mask ? { mask } : undefined);

@@ -199,6 +199,17 @@ function requiresWorkflowConfirmation(envelope: WorkflowCommandEnvelope) {
   return getWorkflowOperationCapabilityByNodeTool(tool)?.confirmation !== 'none';
 }
 
+/** workflow.node.run 的目标节点：nodeId 单跑，或 nodeIds 一次确认后批量并行。 */
+function workflowRunNodeIds(args: Record<string, unknown>): string[] {
+  if (args.nodeIds === undefined) return [requiredString(args.nodeId || args.id, 'nodeId')];
+  if (args.nodeId !== undefined || args.id !== undefined) throw new Error('nodeId 与 nodeIds 只能二选一。');
+  const raw = typeof args.nodeIds === 'string' ? args.nodeIds.split(',') : args.nodeIds;
+  if (!Array.isArray(raw)) throw new Error('nodeIds 必须是节点 ID 数组。');
+  const nodeIds = [...new Set(raw.map(value => requiredString(typeof value === 'string' ? value.trim() : value, 'nodeIds')))];
+  if (!nodeIds.length) throw new Error('nodeIds 不能为空。');
+  return nodeIds;
+}
+
 export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDependencies) {
   const idempotencyCache = new Map<string, WorkflowCommandResult>();
   const cache = (key: string | undefined, result: WorkflowCommandResult) => {
@@ -269,40 +280,69 @@ export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDepende
       } else if (!project) {
         return error(envelope.id, 'NOT_FOUND', '当前没有可用的 Workflow 项目。');
       } else if (command === 'workflow.node.run' || command === 'workflow.node.stop') {
-        const nodeId = requiredString(args.nodeId || args.id, 'nodeId');
-        if (!project.nodes.some(node => node.id === nodeId)) return error(envelope.id, 'NOT_FOUND', `节点不存在：${nodeId}`);
+        const nodeIds = command === 'workflow.node.run' ? workflowRunNodeIds(args) : [requiredString(args.nodeId || args.id, 'nodeId')];
+        const missingNodeId = nodeIds.find(nodeId => !project.nodes.some(node => node.id === nodeId));
+        if (missingNodeId) return error(envelope.id, 'NOT_FOUND', '节点不存在：' + missingNodeId);
         const executor = dependencies.getExecutor?.() || dependencies.executor;
         if (!executor || (command === 'workflow.node.stop' && !executor.stopNode)) {
           return error(envelope.id, 'RUNNER_UNAVAILABLE', command === 'workflow.node.run' ? 'Workflow 生成适配器尚未连接。' : 'Workflow 停止适配器尚未连接。');
         }
         const expectedRevision = args.expectedRevision === undefined ? undefined : finiteNumber(args.expectedRevision, 'expectedRevision');
         if (expectedRevision !== undefined && expectedRevision !== (project.draftVersion || 1)) {
-          return error(envelope.id, 'REVISION_CONFLICT', `Workflow 草稿版本已变化：期望 ${expectedRevision}，当前 ${project.draftVersion || 1}。`);
+          return error(envelope.id, 'REVISION_CONFLICT', 'Workflow 草稿版本已变化：期望 ' + expectedRevision + '，当前 ' + (project.draftVersion || 1) + '。');
         }
         const surface = envelope.source === 'agent' ? 'browser-agent' : envelope.source === 'operator' ? 'runtime' : envelope.source;
-        const runCommand: WorkflowRunCommand = { projectId: project.id, nodeId, ...(expectedRevision === undefined ? {} : { expectedRevision }) };
-        let executionResult: WorkflowRunResult | undefined;
-        try {
-          if (command === 'workflow.node.run') executionResult = await executor.runNode(runCommand, { surface, correlationId: envelope.id });
-          else await executor.stopNode!(runCommand, { surface, correlationId: envelope.id });
-        } catch (cause) {
-          const normalized = normalizeWorkflowExecutionError(cause);
-          return error(envelope.id, normalized.code, normalized.message);
+        const runCommandFor = (nodeId: string): WorkflowRunCommand => ({ projectId: project.id, nodeId, ...(expectedRevision === undefined ? {} : { expectedRevision }) });
+        if (command === 'workflow.node.stop' || nodeIds.length === 1) {
+          const [nodeId] = nodeIds;
+          let executionResult: WorkflowRunResult | undefined;
+          try {
+            if (command === 'workflow.node.run') executionResult = await executor.runNode(runCommandFor(nodeId), { surface, correlationId: envelope.id });
+            else await executor.stopNode!(runCommandFor(nodeId), { surface, correlationId: envelope.id });
+          } catch (cause) {
+            const normalized = normalizeWorkflowExecutionError(cause);
+            return error(envelope.id, normalized.code, normalized.message);
+          }
+          if (executionResult?.status === 'failed') {
+            return error(envelope.id, executionResult.error?.code || 'RUN_FAILED', executionResult.error?.message || 'Workflow 生成失败，请重试。');
+          }
+          if (executionResult?.status === 'cancelled') {
+            return error(envelope.id, 'RUN_CANCELLED', '生成已停止或被新的运行取代，未产生结果。');
+          }
+          const latestProject = dependencies.getState().projects.find(item => item.id === project.id) || project;
+          dependencies.updateProject(project.id, draftLogPatch(latestProject, envelope, true, { nodeIds: [nodeId] }));
+          result = { ok: true, commandId: envelope.id, result: {
+            projectId: project.id,
+            nodeId,
+            ...(executionResult ? { runId: executionResult.runId } : {}),
+            ...(executionResult?.artifact ? { artifact: executionResult.artifact } : {}),
+          } };
+        } else {
+          // 批量：一次确认覆盖整批；各节点并行交给同一 WorkflowExecutor，逐节点报告结果，失败只影响自身。
+          const runs = await Promise.all(nodeIds.map(async nodeId => {
+            try {
+              const executionResult = await executor.runNode(runCommandFor(nodeId), { surface, correlationId: envelope.id + ':' + nodeId });
+              if (executionResult?.status === 'failed') {
+                return { nodeId, ok: false, error: { code: executionResult.error?.code || 'RUN_FAILED', message: executionResult.error?.message || 'Workflow 生成失败，请重试。' } };
+              }
+              if (executionResult?.status === 'cancelled') {
+                return { nodeId, ok: false, error: { code: 'RUN_CANCELLED', message: '生成已停止或被新的运行取代，未产生结果。' } };
+              }
+              return { nodeId, ok: true, ...(executionResult ? { runId: executionResult.runId } : {}), ...(executionResult?.artifact ? { artifact: executionResult.artifact } : {}) };
+            } catch (cause) {
+              const normalized = normalizeWorkflowExecutionError(cause);
+              return { nodeId, ok: false, error: { code: normalized.code, message: normalized.message } };
+            }
+          }));
+          const succeeded = runs.filter(run => run.ok).map(run => run.nodeId);
+          if (!succeeded.length) {
+            const first = runs.map(run => ('error' in run ? run.error : undefined)).find(Boolean);
+            return error(envelope.id, first?.code || 'RUN_FAILED', '批量运行的 ' + runs.length + ' 个节点全部失败：' + (first?.message || ''));
+          }
+          const latestProject = dependencies.getState().projects.find(item => item.id === project.id) || project;
+          dependencies.updateProject(project.id, draftLogPatch(latestProject, envelope, true, { nodeIds: succeeded }));
+          result = { ok: true, commandId: envelope.id, result: { projectId: project.id, runs, failed: runs.length - succeeded.length } };
         }
-        if (executionResult?.status === 'failed') {
-          return error(envelope.id, executionResult.error?.code || 'RUN_FAILED', executionResult.error?.message || 'Workflow 生成失败，请重试。');
-        }
-        if (executionResult?.status === 'cancelled') {
-          return error(envelope.id, 'RUN_CANCELLED', '生成已停止或被新的运行取代，未产生结果。');
-        }
-        const latestProject = dependencies.getState().projects.find(item => item.id === project.id) || project;
-        dependencies.updateProject(project.id, draftLogPatch(latestProject, envelope, true, { nodeIds: [nodeId] }));
-        result = { ok: true, commandId: envelope.id, result: {
-          projectId: project.id,
-          nodeId,
-          ...(executionResult ? { runId: executionResult.runId } : {}),
-          ...(executionResult?.artifact ? { artifact: executionResult.artifact } : {}),
-        } };
       } else if (command === 'workflow.node.tool') {
         const nodeId = requiredString(args.nodeId || args.id, 'nodeId');
         const tool = requiredString(args.tool, 'tool');

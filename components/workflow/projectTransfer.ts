@@ -22,7 +22,7 @@ export interface WorkflowExportFile {
   projects: Array<{ project: WorkflowProject; assets: WorkflowExportAsset[] }>;
 }
 
-const nodeTypes = new Set(['image', 'text', 'video', 'audio', 'config']);
+const nodeTypes = new Set(['image', 'text', 'video', 'audio', 'config', 'design']);
 const backgroundModes = new Set(['dots', 'lines', 'none']);
 
 function portableProject(project: WorkflowProject): WorkflowProject {

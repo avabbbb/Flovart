@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildGenerationGateSummary, getGenerationGateDetails, requiresExternalGenerationGate } from '../services/generationGate';
+import { buildGenerationGateSummary, formatGenerationCost, getGenerationGateDetails, requiresExternalGenerationGate } from '../services/generationGate';
 import { createWorkflowNode } from '../components/workflow/constants';
 
 describe('external generation gate', () => {
@@ -8,6 +8,17 @@ describe('external generation gate', () => {
     expect(requiresExternalGenerationGate(image, { executor: 'provider-generation', mediaType: 'image' })).toBe(true);
     expect(requiresExternalGenerationGate(image, { executor: 'provider-image-tool', mediaType: 'image' })).toBe(true);
     expect(requiresExternalGenerationGate(image, { executor: 'local-transform', mediaType: 'image' })).toBe(false);
+  });
+
+  it('gates unknown executors instead of failing open', () => {
+    const image = createWorkflowNode('image', 'image', { x: 0, y: 0 });
+    expect(requiresExternalGenerationGate(image, { executor: 'future-executor', mediaType: 'image' })).toBe(true);
+    expect(requiresExternalGenerationGate(image, { mediaType: 'image' })).toBe(true);
+  });
+
+  it('always states the estimated cost or that it is unknown', () => {
+    expect(formatGenerationCost(null)).toContain('未知');
+    expect(formatGenerationCost({ amount: 1.5, currency: 'CNY' })).toBe('预计费用：约 CNY 1.50');
   });
 
   it('builds a product-language confirmation without credentials or wire terms', () => {
@@ -23,6 +34,7 @@ describe('external generation gate', () => {
     expect(summary).toContain('模型：grok-imagine-video');
     expect(summary).toContain('任务：2 个视频生成');
     expect(summary).toContain('可能产生费用');
+    expect(summary).toContain('预计费用：未知');
     expect(summary).not.toContain('secret');
     expect(summary).not.toContain('Provider');
   });

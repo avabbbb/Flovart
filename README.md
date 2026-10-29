@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  Open-source, local-first creative layer for professional editors — starting with DaVinci Resolve Studio 21.1.<br />
+  Open-source, local-first Workflow + Agent creative tool. The DaVinci Resolve Studio 21.1 host layer is in development (Experimental).<br />
   Keep your edit in the host, let your Agent understand the context, and let Flovart handle generation, references and durable candidates.
 </p>
 
@@ -23,7 +23,6 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Agent--native-E8453C" alt="Agent-native" />
   <img src="https://img.shields.io/badge/Local--first-E8453C" alt="Local-first" />
-  <img src="https://img.shields.io/badge/BYOK-E8453C" alt="Bring your own key" />
   <img src="https://img.shields.io/badge/Image%20%2B%20Video-E8453C" alt="Image and video" />
   <img src="https://img.shields.io/badge/License-MIT-E8453C" alt="MIT License" />
   <a href="https://github.com/avabbbb/Flovart/releases"><img src="https://img.shields.io/github/downloads/avabbbb/Flovart/total?color=E8453C&logo=github" alt="GitHub Downloads" /></a>
@@ -45,24 +44,16 @@
 
 The film shows the Resolve-first design target: point at a frame, generate creative layers, compare takes, and return an approved result. **Concept film, recorded before the Flovart name was restored; its closing card still says Iris.** Native host integration and alpha-layer/new-track output remain experimental or planned. Today, the recorded Agent → Workflow operations below are the verified starting point; Resolve P0 targets explicit **Add to Media Pool**.
 
-**0.1.0 closed beta:** Windows EXE and macOS DMG builds are distributed through [Releases](https://github.com/avabbbb/Flovart/releases). Platform builds are tested separately; installers do not certify creative-host or paid-provider support. See the [Support Matrix](SUPPORT_MATRIX.md).
+**0.2.0 closed beta:** Windows EXE and macOS DMG builds are distributed through [Releases](https://github.com/avabbbb/Flovart/releases). Platform builds are tested separately; installers do not certify creative-host or paid-provider support. See the [Support Matrix](SUPPORT_MATRIX.md).
 
 ## See Flovart in action
 
-Two 60-second promo cuts — v2 (8 MB) and v4 (27 MB, higher bitrate):
+The 60-second Flovart promo cut:
 
-<table>
-  <tr>
-    <td align="center">
-      <video src="vid/Iris_Promo_60s_v2.mp4" controls muted width="420"></video>
-      <br /><sub><strong>Promo cut v2.</strong> 60 seconds · <a href="vid/Iris_Promo_60s_v2.mp4">source file</a></sub>
-    </td>
-    <td align="center">
-      <video src="vid/Iris_Promo_60s_v4.mp4" controls muted width="420"></video>
-      <br /><sub><strong>Promo cut v4.</strong> 60 seconds · <a href="vid/Iris_Promo_60s_v4.mp4">source file</a></sub>
-    </td>
-  </tr>
-</table>
+<p align="center">
+  <video src="pic/readme/vision/Flovart_Promo_60s_v4.mp4" controls muted width="720"></video>
+  <br /><sub><strong>Promo cut v4.</strong> 60 seconds · <a href="pic/readme/vision/Flovart_Promo_60s_v4.mp4">source file</a></sub>
+</p>
 
 <p align="center">
   <img src="pic/readme/hero-agent.gif" alt="An external coding agent editing the same live Flovart Workflow" width="880" />
@@ -133,10 +124,18 @@ These are **real recordings from the current build**, not mockups. The Resolve-n
 ### For creators
 
 1. Download a preview build from [GitHub Releases](https://github.com/avabbbb/Flovart/releases).
-2. Open Flovart and add an AI service in Settings.
+2. Open Flovart and add an AI service in Settings. For the Closed Beta, use RunningHub (image + video, Beta pending certification); other providers are Experimental.
 3. Create or open a Workflow, add references, and start creating.
 
 The Releases page may contain test or preview artifacts; it is not a claim that every host or provider is Stable.
+
+### Known limitations (0.2.0 Closed Beta)
+
+- Beta paths are Codex CLI + Browser Workflow (agent) and RunningHub image + video (provider, pending certification). Everything else, including DaVinci Resolve, WorkBuddy, Claude Code, OpenCode, Gemini and OpenAI-compatible BYOK, is Experimental.
+- Builds are unsigned: Windows shows a SmartScreen warning (Authenticode is not configured) and macOS uses ad-hoc signing without notarization, so Gatekeeper asks for confirmation.
+- Paid generations bill on the provider side. If you stop or reload during a generation, the provider may still charge; check your provider console before rerunning.
+- Some generation error messages are still Chinese-only.
+- Found a problem? Open a Beta feedback issue and attach the crash-log export (Copy diagnostics on the error screen).
 
 ### For coding-agent users
 
@@ -306,7 +305,7 @@ Your professional editor remains the source of truth. Your Agent reads the creat
 - **Inside the editor.** The first host path targets DaVinci Resolve Studio 21.1; other creative hosts remain Experimental until real-host validation.
 - **Agent-native.** Agents act through typed Flovart capabilities and host-native control surfaces instead of mouse coordinates or screen scraping.
 - **Non-destructive by default.** Generated work starts as a candidate. The Resolve-first P0 ends at **Add to Media Pool** before timeline replacement is considered.
-- **Bring your own models.** Keep the providers, models and API keys you choose.
+- **Bring your own models.** RunningHub image + video is the Beta provider path (pending certification); other providers and OpenAI-compatible BYOK are Experimental.
 - **Local-first.** Project-adjacent state, references and generated artifacts stay close to the creative workspace wherever the current implementation supports it.
 
 The canvas is still a power surface for multi-shot work, complex references and reusable workflows. **It is no longer the product premise.**
@@ -327,7 +326,7 @@ Compose image, text, video, audio and configuration nodes, keep projects and ref
 ## One workflow, human + agent
 
 ```text
-Your Agent                  Codex · WorkBuddy · Claude Code
+Your Agent                  Codex (Beta) · WorkBuddy, Claude Code (Experimental)
       │
       ▼
 Flovart Operations             inspect · select · apply · run
@@ -346,13 +345,13 @@ With your agent, a brief becomes explicit operations: it reads the current proje
 Your provider → your API key → your assets + Workflow → your generated result
 ```
 
-Flovart does not bundle model services. Configure a provider in the app, choose the capabilities and model you need, and keep the provider terms, cost and output rights in your own hands. OpenAI-compatible BYOK and remote-provider paths are Experimental: an adapter in the code is not a paid-provider certification.
+Flovart does not bundle model services. Configure a provider in the app, choose the capabilities and model you need, and keep the provider terms, cost and output rights in your own hands. OpenAI-compatible BYOK and remote-provider paths are Experimental: an adapter in the code is not a paid-provider certification. The Closed Beta certifies one paid provider path, RunningHub image + video, still Beta (pending certification) until certification completes.
 
 ## Integrations and compatibility
 
 | Host or package | Status |
 | --- | --- |
-| Codex CLI + Browser Workflow | Experimental |
+| Codex CLI + Browser Workflow | Beta |
 | Claude Code CLI projection | Experimental |
 | OpenCode CLI projection | Experimental |
 | WorkBuddy CLI Connector | Experimental |

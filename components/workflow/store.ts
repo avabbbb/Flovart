@@ -36,7 +36,7 @@ interface WorkflowStore {
   projects: WorkflowProject[];
   activeProjectId: string | null;
   setHydrated: (hydrated: boolean) => void;
-  createProject: (title?: string) => string;
+  createProject: (title?: string, seed?: Pick<WorkflowProject, 'nodes' | 'connections'>) => string;
   importProjects: (projects: WorkflowProject[]) => void;
   setActiveProject: (id: string | null) => void;
   renameProject: (id: string, title: string) => void;
@@ -114,6 +114,13 @@ export function flushWorkflowPersistence(): Promise<void> {
   return write ? persistWrite(write) : activeWrite || Promise.resolve();
 }
 
+// 关闭/刷新标签页或切到后台时立即落盘，避免丢失 400ms 防抖窗口内的最后一次编辑。
+if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+  const flushOnHide = () => { if (pendingWrite) void flushWorkflowPersistence(); };
+  window.addEventListener('pagehide', flushOnHide);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushOnHide(); });
+}
+
 export function normalizeWorkflowProject(project: WorkflowProject): WorkflowProject {
   return migrateWorkflowProject(project);
 }
@@ -174,8 +181,8 @@ export const useWorkflowStore = create<WorkflowStore>()(
       projects: [],
       activeProjectId: null,
       setHydrated: hydrated => set({ hydrated }),
-      createProject: (title) => {
-        const project = createWorkflowProject(title);
+      createProject: (title, seed) => {
+        const project = seed ? { ...createWorkflowProject(title), nodes: seed.nodes, connections: seed.connections } : createWorkflowProject(title);
         set(state => {
           const projects = [project, ...state.projects];
           setWorkflowMediaCanonicalProjects(projects);

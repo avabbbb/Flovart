@@ -1,9 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_WORKSPACE_LANGUAGE, useWorkspaceStore } from '../stores/useWorkspaceStore';
+import { DEFAULT_WORKSPACE_LANGUAGE, detectWorkspaceLanguage, useWorkspaceStore } from '../stores/useWorkspaceStore';
 
 describe('workspace switching', () => {
   it('starts a fresh workspace in Chinese', () => {
     expect(DEFAULT_WORKSPACE_LANGUAGE).toBe('zho');
+  });
+
+  it('follows the browser locale for a fresh workspace', () => {
+    expect(detectWorkspaceLanguage('zh-CN')).toBe('zho');
+    expect(detectWorkspaceLanguage('zh-TW')).toBe('zho');
+    expect(detectWorkspaceLanguage('en-US')).toBe('en');
+    expect(detectWorkspaceLanguage('')).toBe('zho');
   });
 
   it('keeps Workflow and Agent as explicit persisted views', () => {
