@@ -15,6 +15,7 @@ import { loadWorkflowMediaBlob } from '../components/workflow/media';
 import { loadRuntimeArtifactBlob } from './runtimeArtifacts';
 import { displayError } from './displayError';
 import { fetchRemoteMediaBlob, RemoteMediaFetchError } from './desktopNetwork';
+import { startLatencySpan, trackLatency, type LatencySpan } from './providerLatency';
 
 function blobToBase64(blob: Blob): Promise<string> {
     return new Promise((resolve, reject) => {
@@ -1025,6 +1026,9 @@ function parseTextResponseContent(json: any): string {
     return '';
 }
 
+// 改写、反推、结构化输出、工具调用等有标准答案的任务默认低温；创作类调用方显式传更高的 temperature。
+export const STABLE_TEXT_TEMPERATURE = 0.2;
+
 export async function generateTextWithProvider(
     prompt: string,
     model: string,
@@ -1033,6 +1037,8 @@ export async function generateTextWithProvider(
         systemPrompt?: string;
         temperature?: number;
         maxTokens?: number;
+        // 仅 Google 与 OpenAI 兼容接口透传；Anthropic 无 seed 参数。第三方 API 即使固定 seed 也只保证尽力复现。
+        seed?: number;
         signal?: AbortSignal;
     },
 ): Promise<string> {
@@ -1042,55 +1048,66 @@ export async function generateTextWithProvider(
     const baseUrl = getBaseUrl(provider, key);
     const mappedModel = mapProviderModel(model, key);
 
-    if (provider === 'google') {
-        const googleBase = key?.baseUrl ? normalizeProviderBaseUrl('google', key.baseUrl) : getGeminiRestBaseUrl();
-        const response = await fetch(`${googleBase}/models/${encodeURIComponent(mappedModel)}:generateContent`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
-            signal: options?.signal,
-            body: JSON.stringify({
-                systemInstruction: options?.systemPrompt ? { parts: [{ text: options.systemPrompt }] } : undefined,
-                contents: [{ role: 'user', parts: [{ text: prompt }] }],
-                generationConfig: { temperature: options?.temperature ?? 0.7, maxOutputTokens: options?.maxTokens ?? 4096 },
-            }),
-        });
-        if (!response.ok) throw new Error(await readErrorResponse(response, 'Google LLM 请求失败'));
-        const json = await readJsonResponse<any>(response, 'Google LLM 响应');
-        return json?.candidates?.[0]?.content?.parts?.map((part: { text?: string }) => part.text || '').join('\n').trim() || '';
-    }
+    return trackLatency({ op: 'text', provider, model: mappedModel }, options?.signal, async span => {
+        if (provider === 'google') {
+            const googleBase = key?.baseUrl ? normalizeProviderBaseUrl('google', key.baseUrl) : getGeminiRestBaseUrl();
+            const response = await fetch(`${googleBase}/models/${encodeURIComponent(mappedModel)}:generateContent`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+                signal: options?.signal,
+                body: JSON.stringify({
+                    systemInstruction: options?.systemPrompt ? { parts: [{ text: options.systemPrompt }] } : undefined,
+                    contents: [{ role: 'user', parts: [{ text: prompt }] }],
+                    generationConfig: {
+                        temperature: options?.temperature ?? STABLE_TEXT_TEMPERATURE,
+                        maxOutputTokens: options?.maxTokens ?? 4096,
+                        ...(options?.seed !== undefined ? { seed: options.seed } : {}),
+                    },
+                }),
+            });
+            span.mark('ttfb');
+            if (!response.ok) throw new Error(await readErrorResponse(response, 'Google LLM 请求失败'));
+            const json = await readJsonResponse<any>(response, 'Google LLM 响应');
+            return json?.candidates?.[0]?.content?.parts?.map((part: { text?: string }) => part.text || '').join('\n').trim() || '';
+        }
 
-    if (provider === 'anthropic' || usesAnthropicRequestFormat(key)) {
-        const response = await fetch(`${baseUrl}/messages`, {
+        if (provider === 'anthropic' || usesAnthropicRequestFormat(key)) {
+            const response = await fetch(`${baseUrl}/messages`, {
+                method: 'POST',
+                headers: buildProviderHeaders(apiKey, key, { anthropic: true }),
+                signal: options?.signal,
+                body: JSON.stringify({
+                    model: mappedModel,
+                    max_tokens: options?.maxTokens ?? 4096,
+                    temperature: options?.temperature ?? STABLE_TEXT_TEMPERATURE,
+                    system: options?.systemPrompt,
+                    messages: [{ role: 'user', content: prompt }],
+                }),
+            });
+            span.mark('ttfb');
+            if (!response.ok) throw new Error(await readErrorResponse(response, 'Anthropic LLM 请求失败'));
+            return parseTextResponseContent(await readJsonResponse<any>(response, 'Anthropic LLM 响应'));
+        }
+
+        const response = await fetch(`${baseUrl}/chat/completions`, {
             method: 'POST',
-            headers: buildProviderHeaders(apiKey, key, { anthropic: true }),
+            headers: provider === 'openrouter' ? buildOpenRouterHeaders(apiKey) : buildProviderHeaders(apiKey, key),
             signal: options?.signal,
             body: JSON.stringify({
                 model: mappedModel,
+                temperature: options?.temperature ?? STABLE_TEXT_TEMPERATURE,
                 max_tokens: options?.maxTokens ?? 4096,
-                system: options?.systemPrompt,
-                messages: [{ role: 'user', content: prompt }],
+                ...(options?.seed !== undefined ? { seed: options.seed } : {}),
+                messages: [
+                    ...(options?.systemPrompt ? [{ role: 'system', content: options.systemPrompt }] : []),
+                    { role: 'user', content: prompt },
+                ],
             }),
         });
-        if (!response.ok) throw new Error(await readErrorResponse(response, 'Anthropic LLM 请求失败'));
-        return parseTextResponseContent(await readJsonResponse<any>(response, 'Anthropic LLM 响应'));
-    }
-
-    const response = await fetch(`${baseUrl}/chat/completions`, {
-        method: 'POST',
-        headers: provider === 'openrouter' ? buildOpenRouterHeaders(apiKey) : buildProviderHeaders(apiKey, key),
-        signal: options?.signal,
-        body: JSON.stringify({
-            model: mappedModel,
-            temperature: options?.temperature ?? 0.7,
-            max_tokens: options?.maxTokens ?? 4096,
-            messages: [
-                ...(options?.systemPrompt ? [{ role: 'system', content: options.systemPrompt }] : []),
-                { role: 'user', content: prompt },
-            ],
-        }),
+        span.mark('ttfb');
+        if (!response.ok) throw new Error(await readErrorResponse(response, `${PROVIDER_LABELS[provider] || provider} LLM 请求失败`));
+        return parseTextResponseContent(await readJsonResponse<any>(response, `${PROVIDER_LABELS[provider] || provider} LLM 响应`));
     });
-    if (!response.ok) throw new Error(await readErrorResponse(response, `${PROVIDER_LABELS[provider] || provider} LLM 请求失败`));
-    return parseTextResponseContent(await readJsonResponse<any>(response, `${PROVIDER_LABELS[provider] || provider} LLM 响应`));
 }
 
 export function isGoogleImageEditModel(model: string): boolean {
@@ -1699,29 +1716,30 @@ function inferPromptModeHint(request: PromptEnhanceRequest) {
     ].join('\n');
 }
 
-function safeParsePromptResult(raw: string, fallbackPrompt: string): PromptEnhanceResult {
+// 严格解析：JSON 损坏或缺少 enhancedPrompt 视为格式失败，返回 undefined，由调用方决定重试或降级。
+function parsePromptResult(raw: string): PromptEnhanceResult | undefined {
     const clean = raw
         .replace(/^```json\s*/i, '')
         .replace(/^```/i, '')
         .replace(/```$/i, '')
         .trim();
 
+    let parsed: unknown;
     try {
-        const parsed = JSON.parse(clean) as Partial<PromptEnhanceResult>;
-        return {
-            enhancedPrompt: parsed.enhancedPrompt?.trim() || fallbackPrompt,
-            negativePrompt: parsed.negativePrompt?.trim() || '',
-            suggestions: Array.isArray(parsed.suggestions) ? parsed.suggestions.filter(Boolean).slice(0, 8) : [],
-            notes: parsed.notes?.trim() || '',
-        };
+        parsed = JSON.parse(clean);
     } catch {
-        return {
-            enhancedPrompt: fallbackPrompt,
-            negativePrompt: '',
-            suggestions: [],
-            notes: raw || 'No response content returned by model.',
-        };
+        return undefined;
     }
+    if (!parsed || typeof parsed !== 'object' || !('enhancedPrompt' in parsed) || typeof parsed.enhancedPrompt !== 'string' || !parsed.enhancedPrompt.trim()) return undefined;
+    const fields: { enhancedPrompt: unknown; negativePrompt?: unknown; suggestions?: unknown; notes?: unknown } = parsed;
+    return {
+        enhancedPrompt: parsed.enhancedPrompt.trim(),
+        negativePrompt: typeof fields.negativePrompt === 'string' ? fields.negativePrompt.trim() : '',
+        suggestions: Array.isArray(fields.suggestions)
+            ? fields.suggestions.filter((item): item is string => typeof item === 'string' && item.trim() !== '').slice(0, 8)
+            : [],
+        notes: typeof fields.notes === 'string' ? fields.notes.trim() : '',
+    };
 }
 
 export function inferProviderFromModel(model: string): AIProvider {
@@ -1889,6 +1907,7 @@ async function generateVideoWithUnifiedAsyncApi(
     const aspectRatio = options?.aspectRatio || '16:9';
     const onProgress = options?.onProgress || (() => {});
     let lastError: Error | null = null;
+    const span = startLatencySpan({ op: 'video-unified', provider: 'custom', model });
 
     for (const apiBase of apiBaseCandidates) {
         // 任务一旦在某个候选地址创建（或正在恢复），换下一个地址只会重复提交、重复扣费。
@@ -1929,6 +1948,7 @@ async function generateVideoWithUnifiedAsyncApi(
                     throw new Error(failure);
                 }
                 taskCommitted = true;
+                span.mark('submitted');
 
                 const createJson = await readJsonResponse<any>(createRes, '统一视频接口提交响应');
                 taskId = extractTaskId(createJson);
@@ -1955,6 +1975,7 @@ async function generateVideoWithUnifiedAsyncApi(
                     headers: { Authorization: `Bearer ${apiKey}` },
                     signal: unifiedVideoRequestSignal(options?.signal, 30_000),
                 });
+                span.poll();
 
                 if (!queryRes.ok) {
                     throw new Error(await readErrorResponse(queryRes, '统一视频接口查询失败'));
@@ -1968,6 +1989,7 @@ async function generateVideoWithUnifiedAsyncApi(
                 }
 
                 if (status === 'succeeded') {
+                    span.mark('generated');
                     const outputUrl = extractVideoOutputUrl(queryJson);
                     if (!outputUrl) {
                         throw new Error('视频生成完成但未返回下载链接');
@@ -1980,6 +2002,7 @@ async function generateVideoWithUnifiedAsyncApi(
                     }
                     const videoBlob = await videoRes.blob();
                     const mimeType = videoRes.headers.get('Content-Type') || 'video/mp4';
+                    span.end();
                     return { videoBlob, mimeType };
                 }
 
@@ -1987,13 +2010,17 @@ async function generateVideoWithUnifiedAsyncApi(
                 delay = Math.min(delay * 2, 8000);
             }
         } catch (error) {
-            if (options?.signal?.aborted) throw error;
-            if (taskCommitted) throw error;
+            if (options?.signal?.aborted || taskCommitted) {
+                span.fail(error, options?.signal);
+                throw error;
+            }
             lastError = error instanceof Error ? error : new Error(String(error));
         }
     }
 
-    throw lastError || new Error('当前自定义端点未暴露可用的视频统一接口。');
+    const failure = lastError || new Error('当前自定义端点未暴露可用的视频统一接口。');
+    span.fail(failure);
+    throw failure;
 }
 
 function seedanceReferenceLabel(kind: MultimodalSlotKind, index: number): string {
@@ -2057,12 +2084,12 @@ export function getModelCapabilityTags(model: string): string {
     return tags.join('');
 }
 
-async function enhancePromptWithOpenAICompatible(
+async function requestPromptEnhanceOpenAICompatible(
     request: PromptEnhanceRequest,
     model: string,
     provider: AIProvider,
     key?: UserApiKey
-): Promise<PromptEnhanceResult> {
+): Promise<string> {
     const apiKey = requireApiKey(provider, key);
     const baseUrl = getBaseUrl(provider, key);
     const headers: Record<string, string> = provider === 'openrouter'
@@ -2076,7 +2103,7 @@ async function enhancePromptWithOpenAICompatible(
         headers,
         body: JSON.stringify({
             model,
-            temperature: 0.6,
+            temperature: STABLE_TEXT_TEMPERATURE,
             messages: [
                 { role: 'system', content: inferPromptModeHint(request) },
                 { role: 'user', content: request.prompt },
@@ -2090,15 +2117,14 @@ async function enhancePromptWithOpenAICompatible(
     }
 
     const json = await response.json();
-    const raw = json?.choices?.[0]?.message?.content || '';
-    return safeParsePromptResult(raw, request.prompt);
+    return json?.choices?.[0]?.message?.content || '';
 }
 
-async function enhancePromptWithAnthropic(
+async function requestPromptEnhanceAnthropic(
     request: PromptEnhanceRequest,
     model: string,
     key?: UserApiKey
-): Promise<PromptEnhanceResult> {
+): Promise<string> {
     const apiKey = requireApiKey('anthropic', key);
     const baseUrl = getBaseUrl('anthropic', key);
     const response = await fetch(`${baseUrl}/messages`, {
@@ -2111,6 +2137,7 @@ async function enhancePromptWithAnthropic(
         body: JSON.stringify({
             model,
             max_tokens: 1024,
+            temperature: STABLE_TEXT_TEMPERATURE,
             system: inferPromptModeHint(request),
             messages: [{ role: 'user', content: request.prompt }],
         }),
@@ -2125,7 +2152,7 @@ async function enhancePromptWithAnthropic(
     const raw = Array.isArray(json?.content)
         ? json.content.map((item: { text?: string }) => item.text || '').join('\n')
         : '';
-    return safeParsePromptResult(raw, request.prompt);
+    return raw;
 }
 
 /**
@@ -2150,11 +2177,14 @@ export async function enhancePromptWithProvider(
         return enhancePromptWithGemini(request, key?.key);
     }
 
-    if (provider === 'anthropic') {
-        return enhancePromptWithAnthropic(request, model, key);
-    }
+    const requestRaw = () => provider === 'anthropic'
+        ? requestPromptEnhanceAnthropic(request, model, key)
+        : requestPromptEnhanceOpenAICompatible(request, model, provider, key);
 
-    return enhancePromptWithOpenAICompatible(request, model, provider, key);
+    // 低温仍可能输出损坏的 JSON：格式失败只重试一次；HTTP/网络错误直接抛出，避免放大时延与费用。
+    const firstRaw = await requestRaw();
+    const result = parsePromptResult(firstRaw) ?? parsePromptResult(await requestRaw());
+    return result ?? { enhancedPrompt: request.prompt, negativePrompt: '', suggestions: [], notes: firstRaw || 'No response content returned by model.' };
 }
 
 /**
@@ -2228,6 +2258,7 @@ export async function reversePromptWithProvider(
                         { inlineData: { mimeType, data: base64Data } },
                     ],
                 }],
+                generationConfig: { temperature: STABLE_TEXT_TEMPERATURE },
             }),
         });
         if (!response.ok) {
@@ -2253,6 +2284,7 @@ export async function reversePromptWithProvider(
             body: JSON.stringify({
                 model: model || 'claude-sonnet-4-6',
                 max_tokens: 1024,
+                temperature: STABLE_TEXT_TEMPERATURE,
                 messages: [{
                     role: 'user',
                     content: [
@@ -2281,6 +2313,7 @@ export async function reversePromptWithProvider(
             body: JSON.stringify({
                 model: mapProviderModel(model, key),
                 max_tokens: 1024,
+                temperature: STABLE_TEXT_TEMPERATURE,
                 messages: [{
                     role: 'user',
                     content: [
@@ -2313,6 +2346,7 @@ export async function reversePromptWithProvider(
         body: JSON.stringify({
             model: mapProviderModel(model || 'gpt-5.4-mini', key),
             max_tokens: 1024,
+            temperature: STABLE_TEXT_TEMPERATURE,
             messages: [{
                 role: 'user',
                 content: [
@@ -2349,14 +2383,34 @@ export async function reversePromptStreamWithProvider(
 ): Promise<string> {
     const instruction = buildReversePromptInstruction(lang, meta);
     const provider = resolveGenerationProvider(model, key);
-    let full = '';
 
-    // 统一物化非 data: 输入（blob: 与远程 URL），避免把整串 URL 当 base64 发给供应商
+    // 统一物化非 data: 输入（blob: 与远程 URL），避免把整串 URL 当 base64 发给供应商；物化耗时不计入供应商时延。
     if (!imageHref.startsWith('data:')) {
         const fetched = await fetchImageUrlToBase64(imageHref, signal);
         imageHref = `data:${fetched.newImageMimeType};base64,${fetched.newImageBase64}`;
         mimeType = fetched.newImageMimeType;
     }
+
+    return trackLatency({ op: 'vision-stream', provider, model: model || 'default' }, signal, span => streamReversePrompt({
+        provider, instruction, imageHref, mimeType, model, key, signal, span,
+        onChunk: chunk => { span.mark('firstChunk'); onChunk(chunk); },
+    }));
+}
+
+interface ReversePromptStreamRequest {
+    provider: AIProvider;
+    instruction: string;
+    imageHref: string;
+    mimeType: string;
+    model: string;
+    key: UserApiKey | undefined;
+    signal: AbortSignal | undefined;
+    span: LatencySpan;
+    onChunk: (text: string) => void;
+}
+
+async function streamReversePrompt({ provider, instruction, imageHref, mimeType, model, key, signal, span, onChunk }: ReversePromptStreamRequest): Promise<string> {
+    let full = '';
 
     if (provider === 'google') {
         const apiKey = requireApiKey(provider, key);
@@ -2375,8 +2429,10 @@ export async function reversePromptStreamWithProvider(
                         { inlineData: { mimeType, data: base64Data } },
                     ],
                 }],
+                generationConfig: { temperature: STABLE_TEXT_TEMPERATURE },
             }),
         });
+        span.mark('ttfb');
         if (!response.ok) {
             const text = await response.text().catch(() => '');
             throw new Error(`Google Vision 请求失败 (${response.status}): ${text || response.statusText}`);
@@ -2423,6 +2479,7 @@ export async function reversePromptStreamWithProvider(
             body: JSON.stringify({
                 model: model || 'claude-sonnet-4-6',
                 max_tokens: 1024,
+                temperature: STABLE_TEXT_TEMPERATURE,
                 stream: true,
                 messages: [{
                     role: 'user',
@@ -2433,6 +2490,7 @@ export async function reversePromptStreamWithProvider(
                 }],
             }),
         });
+        span.mark('ttfb');
         if (!response.ok) {
             const text = await response.text().catch(() => '');
             throw new Error(`Anthropic Vision 请求失败 (${response.status}): ${text || response.statusText}`);
@@ -2481,6 +2539,7 @@ export async function reversePromptStreamWithProvider(
         body: JSON.stringify({
             model: mapProviderModel(model || 'gpt-5.4-mini', key),
             max_tokens: 1024,
+            temperature: STABLE_TEXT_TEMPERATURE,
             stream: true,
             messages: [{
                 role: 'user',
@@ -2491,6 +2550,7 @@ export async function reversePromptStreamWithProvider(
             }],
         }),
     });
+    span.mark('ttfb');
     if (!response.ok) {
         const text = await response.text().catch(() => '');
         throw new Error(`${PROVIDER_LABELS[provider] || provider} Vision 请求失败 (${response.status}): ${text || response.statusText}`);

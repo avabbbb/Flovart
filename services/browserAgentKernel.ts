@@ -287,7 +287,8 @@ export function createBrowserAgentStream(route: BrowserAgentTextRoute): StreamFn
               })),
             } : {}),
             stream: true,
-            temperature: 0.7,
+            // 工具选择与参数需要可复现，与 aiGateway 的 STABLE_TEXT_TEMPERATURE 保持一致。
+            temperature: 0.2,
             max_tokens: 16384,
           }),
         });

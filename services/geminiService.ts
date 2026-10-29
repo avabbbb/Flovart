@@ -226,6 +226,8 @@ export async function enhancePromptWithGemini(request: PromptEnhanceRequest, api
           },
         ],
       },
+      // 与 aiGateway 的 STABLE_TEXT_TEMPERATURE 一致；直接导入会形成循环依赖。
+      config: { temperature: 0.2 },
     });
 
     const raw = getTextFromResponse(response);
