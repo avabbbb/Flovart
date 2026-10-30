@@ -434,7 +434,9 @@ export function sanitizeProductGenerationParams(productModelId: string | undefin
   const resolution = capability.resolutions.find(value => value.toLowerCase() === input.resolution?.toLowerCase())
     || capability.resolutions.find(value => value.toLowerCase() === (model.capability === 'video' ? '720p' : '1k'))
     || capability.resolutions[0];
-  const quality = capability.qualities.includes(input.quality || '') ? input.quality : capability.qualities[0];
+  const quality = capability.qualities.includes(input.quality || '')
+    ? input.quality
+    : capability.qualities.includes('high') ? 'high' : capability.qualities[0];
   let durationSec = input.durationSec !== undefined && capability.durations.includes(input.durationSec) ? input.durationSec : capability.durations.find(value => value > 0);
   if (model.id.startsWith('flovart:veo-3.1')) {
     const constrainedMode = mode === 'reference-to-video' || mode === 'video-extension';

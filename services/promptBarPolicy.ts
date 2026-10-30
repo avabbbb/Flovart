@@ -62,7 +62,8 @@ function productFamily(model: ReturnType<typeof getProductModels>[number]): stri
 export function promptModelLabel(mode: GenerationMode, textModel?: string, imageModel?: string, videoModel?: string, userApiKeys: UserApiKey[] = []) {
   if (mode === 'text') return '文本映射';
   const model = mode === 'video' || mode === 'keyframe' ? videoModel : imageModel;
-  if (!model) return mode === 'video' || mode === 'keyframe' ? '选择视频模型' : '选择图片模型';
+  // 未选模型返回空串，由 UI 按当前语言显示占位文案
+  if (!model) return '';
   const product = getProductModel(model);
   if (product) return product.name;
   const provider = modelRefProvider(model, userApiKeys);
@@ -119,9 +120,11 @@ export function createPromptBarGenerationPolicy(input: {
     .filter(group => group.models.length > 0);
   const displayedModelGroup = filteredProductModelGroups.find(group => group.family === input.activeModelFamily) || filteredProductModelGroups[0];
   // 未选模型时存储值可能是视频默认 720p；显示/摘要用能力范围内的有效值，不回写状态（回写会产生 undo 历史）
-  const effectiveResolution = !activeCapabilities || activeCapabilities.resolutions.length === 0 ? undefined
-    : input.videoResolution && activeCapabilities.resolutions.includes(input.videoResolution) ? input.videoResolution
-      : activeCapabilities.resolutions[0];
+  const resolutionOptions = activeCapabilities?.resolutions || [];
+  const effectiveResolution = resolutionOptions.length === 0 ? undefined
+    : resolutionOptions.find(value => value.toLowerCase() === input.videoResolution?.toLowerCase())
+      || resolutionOptions.find(value => value.toLowerCase() === (videoLikeMode ? '720p' : '1k'))
+      || resolutionOptions[0];
   // LibTV 式摘要：比例 · 分辨率 · 画质 · 时长 · 数量，例如 16:9 · 720P · 7s · 1个
   const paramSummary = !activeCapabilities ? '' : [
     activeCapabilities.aspectRatios.length > 0 && input.activeRatio ? (input.preserveReferenceAspectRatio ? '原比例' : input.activeRatio === 'adaptive' ? '自适应' : input.activeRatio) : undefined,

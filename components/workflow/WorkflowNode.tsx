@@ -50,6 +50,37 @@ function DesignNodeSurface({ node }: { node: WorkflowNodeData }) {
   return <div className="workflow-node__design" data-testid="workflow-design-node" style={{ width: '100%', height: '100%' }} dangerouslySetInnerHTML={{ __html: svg }} />;
 }
 
+// 连接点吸附（360°）：光标进入节点左右两侧的吸附区后，+ 圆点以该边上离光标最近的点为锚，
+// 朝光标方向偏移（半径封顶），可出框并上下左右任意方向跟随。直接写吸附区上的 CSS 变量，不触发 React 重渲染。
+// 几何常量须与 styles/workflow.css 中 .workflow-handle-zone 保持一致。
+const handleMagnetRadius = 56;
+const handleZoneOuter = 72;
+const handleZonePadY = 40;
+const handleHalf = 11;
+
+function trackWorkflowHandle(event: ReactPointerEvent<HTMLDivElement>, side: 'in' | 'out') {
+  const zone = event.currentTarget;
+  const rect = zone.getBoundingClientRect();
+  const width = zone.offsetWidth;
+  const ratio = width > 0 && rect.width > 0 ? rect.width / width : 1;
+  const localX = (event.clientX - rect.left) / ratio;
+  const localY = (event.clientY - rect.top) / ratio;
+  const nodeBottom = zone.offsetHeight - handleZonePadY;
+  const edgeX = side === 'in' ? handleZoneOuter : width - handleZoneOuter;
+  const anchorY = Math.min(Math.max(handleZonePadY + handleHalf, nodeBottom - handleHalf), Math.max(handleZonePadY + handleHalf, localY));
+  const dx = localX - edgeX;
+  const dy = localY - anchorY;
+  const distance = Math.hypot(dx, dy);
+  const shrink = distance > handleMagnetRadius ? distance / handleMagnetRadius : 1;
+  zone.style.setProperty('--wf-handle-x', edgeX + dx / shrink + 'px');
+  zone.style.setProperty('--wf-handle-y', anchorY + dy / shrink + 'px');
+}
+
+function resetWorkflowHandle(event: ReactPointerEvent<HTMLDivElement>) {
+  event.currentTarget.style.removeProperty('--wf-handle-x');
+  event.currentTarget.style.removeProperty('--wf-handle-y');
+}
+
 export function WorkflowNode({
   node,
   selected,
@@ -307,12 +338,16 @@ export function WorkflowNode({
       onDragLeave={event => { if (!isMedia) return; const related = event.relatedTarget as Node | null; if (related && (event.currentTarget as HTMLElement).contains(related)) return; setDropTarget(false); }}
       onDrop={event => { if (!isMedia) return; event.preventDefault(); event.stopPropagation(); setDropTarget(false); const file = event.dataTransfer.files?.[0]; if (file) onReplaceMedia(file); }}
     >
+      <div className="workflow-handle-zone workflow-handle-zone--target" data-workflow-target={node.id} onPointerMove={event => trackWorkflowHandle(event, 'in')} onPointerLeave={resetWorkflowHandle} onPointerDown={event => { if (event.target === event.currentTarget) onConnectStartTarget?.(event as unknown as ReactPointerEvent<HTMLButtonElement>); }}>
       <button type="button" className="workflow-handle workflow-handle--target" aria-label={language === 'en' ? `Connect to ${node.title}` : `连接到${node.title}`} title={language === 'en' ? 'Activate to complete a keyboard connection' : '激活以完成键盘连接'} data-workflow-target={node.id} onPointerDown={onConnectStartTarget} onClick={event => { if (event.detail === 0) onKeyboardConnectTarget?.(); }}>
         <span className="workflow-handle__plus" aria-hidden="true"><Plus size={12} strokeWidth={2.5} /></span>
       </button>
+      </div>
+      <div className="workflow-handle-zone workflow-handle-zone--source" onPointerMove={event => trackWorkflowHandle(event, 'out')} onPointerLeave={resetWorkflowHandle} onPointerDown={event => { if (event.target === event.currentTarget) onConnectStart(event as unknown as ReactPointerEvent<HTMLButtonElement>); }}>
       <button type="button" className="workflow-handle workflow-handle--source" aria-label={language === 'en' ? `Connect from ${node.title}` : `从${node.title}连接`} title={language === 'en' ? 'Activate, then choose a target node' : '激活后选择目标节点'} onPointerDown={onConnectStart} onClick={event => { if (event.detail === 0) onKeyboardConnectStart?.(); }}>
         <span className="workflow-handle__plus" aria-hidden="true"><Plus size={12} strokeWidth={2.5} /></span>
       </button>
+      </div>
       {status === 'error' && <span className="workflow-node__error-badge" title={node.metadata.error}>!</span>}
       {runState?.state === 'stale' && <WorkflowStaleBadge reason={runState.reason} language={language} />}
       {presence && <WorkflowPresenceChip presence={presence} language={language} />}

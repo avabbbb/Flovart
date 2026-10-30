@@ -186,6 +186,8 @@ export function ResponsivePopover({
           top: position.top,
           width: `min(${width}px, calc(100% - 24px))`,
           maxHeight: position.maxHeight,
+          // 暴露可用高度给内部滚动区，使内层列表收敛到浮层内，避免外层与内层双滚动条
+          ...({ '--flv-popover-max-h': position.maxHeight + 'px' } as {}),
           visibility: position.ready ? 'visible' : 'hidden',
           overflowY: 'auto',
           overflowX: 'hidden',

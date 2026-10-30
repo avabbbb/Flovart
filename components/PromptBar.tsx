@@ -901,8 +901,8 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                             <div className='p-2.5' onWheel={event => event.stopPropagation()}>
                             {expandedPanel === 'model' && (
                                 <>
-                                    <div className="mb-2 flex items-center justify-between gap-2 px-1"><span className="text-[12px] font-semibold" style={{ color: 'var(--isl-ink)' }}>{ui('选择模型', 'Choose model')}</span><span className="inline-flex max-w-[60%] items-center gap-1.5 truncate rounded-full bg-[var(--isl-surface-2)] px-2 py-0.5 text-[10px] font-medium" style={{ color: 'var(--isl-ink-soft)' }}><span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: activeRoute ? 'var(--isl-mint)' : 'var(--isl-ink-ghost)' }} /><span className="truncate">{ui('当前', 'Current')} · {policy.modelLabelForMode()}</span></span></div>
-                                    <div data-testid="prompt-model-progressive" data-density="compact" className="flex max-h-[min(360px,68vh)] flex-col overflow-hidden">
+                                    <div className="mb-2 flex items-center justify-between gap-2 px-1"><span className="text-[12px] font-semibold" style={{ color: 'var(--isl-ink)' }}>{ui('选择模型', 'Choose model')}</span><span className="inline-flex max-w-[60%] items-center gap-1.5 truncate rounded-full bg-[var(--isl-surface-2)] px-2 py-0.5 text-[10px] font-medium" style={{ color: 'var(--isl-ink-soft)' }}><span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: activeRoute ? 'var(--isl-mint)' : 'var(--isl-ink-ghost)' }} /><span className="truncate">{ui('当前', 'Current')} · {policy.modelLabelForMode() || (videoLikeMode ? ui('选择视频模型', 'Choose video model') : ui('选择图片模型', 'Choose image model'))}</span></span></div>
+                                    <div data-testid="prompt-model-progressive" data-density="compact" className="flex flex-col overflow-hidden" style={{ maxHeight: 'min(360px, 68vh, calc(var(--flv-popover-max-h, 400px) - 88px))' }}>
                         {productModels.length > 0 ? (
                             <>
                                 {modelCapabilityFilters.length > 1 && (
@@ -916,7 +916,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                     {filteredProductModelGroups.flatMap(group => group.models).map(product => {
                                         const configured = policy.isProductModelConfigured(product.id);
                                         const selected = activeModel === product.id || activeProductModel?.id === product.id;
-                                        return <button key={product.id} type="button" title={product.description} aria-pressed={selected} onClick={() => {
+                                        return <button key={product.id} type="button" title={ui(product.description, '') || undefined} aria-pressed={selected} onClick={() => {
                                             if (!configured) { onOpenSettings?.(); setExpandedPanel(null); return; }
                                             changeActiveModel(product.id);
                                             setExpandedPanel(null);
@@ -924,7 +924,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                             <span aria-hidden="true" className="prompt-model-icon">{product.name.slice(0, 1)}</span>
                                             <span className="min-w-0 flex-1">
                                                 <span className="block truncate text-[12px] font-semibold">{product.name}</span>
-                                                <span className="prompt-model-desc">{product.description}</span>
+                                                {ui(product.description, '') && <span className="prompt-model-desc">{ui(product.description, '')}</span>}
                                             </span>
                                             <span className="prompt-model-badge">{configured ? (product.badge || ui('已连接', 'Connected')) : ui('去配置', 'Configure')}</span>
                                         </button>;
@@ -1019,7 +1019,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                             {expandedPanel === 'parameters' && activeCapabilities && (
                                 <>
                                     <div className="mb-1.5 px-1 text-[11px] font-semibold" style={{ color: 'var(--isl-ink)' }}>{ui('生成参数', 'Generation settings')}</div>
-                                    <div data-testid="prompt-parameter-panel" data-density="compact" className="max-h-[320px] space-y-2 overflow-y-auto px-0.5 pb-0.5 isl-scrollbar">
+                                    <div data-testid="prompt-parameter-panel" data-density="compact" className="space-y-2 overflow-y-auto px-0.5 pb-0.5 isl-scrollbar" style={{ maxHeight: 'min(320px, calc(var(--flv-popover-max-h, 360px) - 60px))' }}>
                                         {!activeProductModel && (
                                             <div className="flex items-center justify-between gap-2 rounded-[6px] bg-[var(--isl-surface-2)] px-2 py-1.5 text-[10px] leading-4 text-[var(--isl-ink-soft)]">
                                                 <span>{activeRoute ? ui('当前模型不在产品目录中，显示通用参数；实际支持以供应商为准。', 'This model is not in the catalog, so generic settings are shown. Provider support may vary.') : ui('尚未选择模型，当前显示通用参数。', 'No model selected yet; generic settings are shown.')}</span>
@@ -1388,9 +1388,9 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                             })()}
 
                             {!hideGenerationOptions && <div className="relative min-w-[5.5rem] shrink-[2]">
-                                <button type="button" aria-haspopup="dialog" aria-expanded={expandedPanel === 'model'} onClick={event => togglePanel('model', event.currentTarget)} className={`${triggerClass} min-w-0 max-w-full ${expandedPanel === 'model' ? activeTriggerClass : ''}`} title={policy.modelLabelForMode()}>
+                                <button type="button" aria-haspopup="dialog" aria-expanded={expandedPanel === 'model'} onClick={event => togglePanel('model', event.currentTarget)} className={triggerClass + ' min-w-0 max-w-full ' + (expandedPanel === 'model' ? activeTriggerClass : '')} title={policy.modelLabelForMode() || (videoLikeMode ? ui('选择视频模型', 'Choose video model') : ui('选择图片模型', 'Choose image model'))}>
                                     <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full" style={{ background: activeRoute ? 'var(--isl-mint)' : 'var(--isl-ink-ghost)' }} />
-                                    <span className="min-w-0 max-w-[150px] truncate font-semibold text-[var(--isl-ink)]">{policy.modelLabelForMode()}</span>
+                                    <span className="min-w-0 max-w-[150px] truncate font-semibold text-[var(--isl-ink)]">{policy.modelLabelForMode() || (videoLikeMode ? ui('选择视频模型', 'Choose video model') : ui('选择图片模型', 'Choose image model'))}</span>
                                     <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 opacity-60"><path d="m6 9 6 6 6-6" /></svg>
                                 </button>
                             </div>}

@@ -6,7 +6,8 @@ import type { RefObject } from 'react';
 import type { LassoPoint } from './lasso';
 import type { DragEvent as ReactDragEvent, PointerEvent as ReactPointerEvent } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Check, ChevronRight, ChevronsDown, Maximize2, Plus, Star, Undo2 } from 'lucide-react';
+import { Check, ChevronRight, ChevronsDown, Download, Maximize2, Plus, Star, Undo2 } from 'lucide-react';
+import { saveMediaUrl } from '../../services/desktopNetwork';
 import type { AssetLibrary, PromptEnhanceMode, PromptEnhanceResult, UserApiKey } from '../../types';
 import type { RouteFallbackResolution } from '../../services/routeMapping';
 import { STUDIO_MEDIA_DRAG_TYPE } from '../studio/StudioMediaBrowser';
@@ -236,6 +237,7 @@ function WorkflowBatchGallery({ group, selectedId, onSelect, onCollapse, onSetPr
     selected.type === 'video' ? undefined : selected.metadata.storageKey,
     selected.type === 'video' ? undefined : selected.metadata.href,
   );
+  const downloadMedia = useWorkflowMediaUrl(selected.metadata.storageKey, selected.metadata.href);
   const index = Math.max(0, group.findIndex(node => node.id === selected.id));
   return <motion.div className="workflow-batch-gallery" style={{ x: root.position.x, y: root.position.y, width: root.width, height: root.height }} initial={{ opacity: 0, scale: .94 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: .94 }} transition={{ type: 'spring', stiffness: 360, damping: 28 }} onPointerDown={onPointerDown}>
     {selected.type === 'video'
@@ -244,6 +246,7 @@ function WorkflowBatchGallery({ group, selectedId, onSelect, onCollapse, onSetPr
     <div className="workflow-batch-stack__title"><span>{selected.title}</span></div>
     <button type="button" className="workflow-batch-stack__expand" data-workflow-overlay onPointerDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); onCollapse(); }}><span>{group.length}张</span><ChevronsDown size={15} /></button>
     {selected.id !== primaryId && <button type="button" className="workflow-batch-gallery__set-primary" data-workflow-overlay onPointerDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); onSetPrimary(selected.id); }}><Star size={13} />设为主图</button>}
+    <button type="button" className="workflow-batch-gallery__set-primary" style={{ left: 'auto', right: 14 }} data-workflow-overlay aria-label="下载当前结果" title="下载当前结果" disabled={!downloadMedia.url} onPointerDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); if (!downloadMedia.url) return; void saveMediaUrl(downloadMedia.url, selected.metadata.name || selected.title || selected.id).catch(error => console.warn('[Workflow] Batch item download failed.', error)); }}><Download size={13} />下载</button>
     <div className="workflow-batch-gallery__rail" data-workflow-overlay onPointerDown={event => event.stopPropagation()}>
       <span className="workflow-batch-gallery__counter">{index + 1} / {group.length}</span>
       <div className="workflow-batch-gallery__thumbs">{group.map(node => <WorkflowBatchThumb key={node.id} node={node} active={node.id === selected.id} primary={node.id === primaryId} onSelect={() => onSelect(node.id)} />)}</div>

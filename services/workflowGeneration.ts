@@ -470,7 +470,8 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
         continue;
       }
 
-      const usage = runtime.executeMedia ? null : await reserveApiUsage({ key: resolved.key, productModelId: selectionRef, routeId: resolved.routeId, type: mode === 'video' ? 'video' : 'image', durationSec: config.durationSec, count: 1, resolution: config.resolution, quality: config.quality });
+      const reservedDuration = typeof providerRequest.durationSec === 'number' && providerRequest.durationSec > 0 ? providerRequest.durationSec : undefined;
+      const usage = runtime.executeMedia ? null : await reserveApiUsage({ key: resolved.key, productModelId: selectionRef, routeId: resolved.routeId, type: mode === 'video' ? 'video' : 'image', durationSec: reservedDuration, count: 1, resolution: providerRequest.resolution, quality: providerRequest.quality });
       let usageReconciled = false;
       // 上游任务一旦提交，本地停止只是不再等待；没有供应商确认取消时，计费状态只能是 unknown。
       let submittedProviderTaskId: string | undefined;

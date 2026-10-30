@@ -1480,6 +1480,12 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                                 </div>
                             )}
 
+                            <details className="group rounded-2xl border border-[var(--isl-border)]" open={!!editingKeyId && !!(extraConfig.remark || extraConfig.websiteUrl)} data-testid="key-dialog-service-info">
+                                <summary className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-2xl px-3 py-2.5 [&::-webkit-details-marker]:hidden">
+                                    <span className="min-w-0"><span className="block text-sm font-bold text-[var(--isl-ink)]">{t('settingsExtra.keyDialog.serviceInfoTitle')}</span><span className="mt-0.5 block truncate text-[11px] text-[var(--isl-ink-soft)]">{displayName || t('settingsExtra.keyDialog.serviceInfoHint')}</span></span>
+                                    <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="shrink-0 opacity-60 transition-transform group-open:rotate-180"><path d="m6 9 6 6 6-6" /></svg>
+                                </summary>
+                                <div className="space-y-3 px-3 pb-3">
                             <div className="grid gap-3 md:grid-cols-2">
                                 <label>
                                     <span className="mb-1.5 block text-sm font-bold text-[var(--isl-ink)]">{t('settingsExtra.keyDialog.serviceName')}</span>
@@ -1495,6 +1501,8 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                                 <span className="mb-1.5 block text-sm font-bold text-[var(--isl-ink)]">{t('settingsExtra.keyDialog.website')}</span>
                                 <input value={extraConfig.websiteUrl || ''} onChange={(event) => updateExtraConfig('websiteUrl', event.target.value)} placeholder={t('settingsExtra.keyDialog.websitePlaceholder')} className={inputClass} />
                             </label>
+                                </div>
+                            </details>
 
                             <div className="settings-key-dialog__key-row flex gap-2">
                                 <label className="min-w-0 flex-1">
@@ -1560,6 +1568,12 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                             )}
 
                             {provider === 'custom' && (
+                                <details className="group rounded-2xl border border-[var(--isl-border)]" open={!!extraConfig.providerScriptId} data-testid="key-dialog-adapter-disclosure">
+                                    <summary className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-2xl px-3 py-2.5 [&::-webkit-details-marker]:hidden">
+                                        <span className="min-w-0"><span className="block text-sm font-bold text-[var(--isl-ink)]">{t('settingsExtra.keyDialog.adapterToggle')}</span><span className="mt-0.5 block truncate text-[11px] text-[var(--isl-ink-soft)]">{t('settingsExtra.keyDialog.adapterToggleHint')}</span></span>
+                                        <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="shrink-0 opacity-60 transition-transform group-open:rotate-180"><path d="m6 9 6 6 6-6" /></svg>
+                                    </summary>
+                                    <div className="px-2 pb-2">
                                 <UserScriptAdapterSection
                                     key={editingKeyId || 'new'}
                                     scriptId={extraConfig.providerScriptId}
@@ -1572,6 +1586,8 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                                         return next;
                                     })}
                                 />
+                                    </div>
+                                </details>
                             )}
 
                             {provider === 'runningHub' && (
@@ -1657,6 +1673,12 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                                 )}
                             </div>
 
+                            <details className="group rounded-2xl border border-[var(--isl-border)]" open={editPricingRules.length > 0 || editBudgetPolicy.enabled} data-testid="key-dialog-more-settings">
+                                <summary className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-2xl px-3 py-2.5 [&::-webkit-details-marker]:hidden">
+                                    <span className="min-w-0"><span className="block text-sm font-bold text-[var(--isl-ink)]">{t('settingsExtra.keyDialog.moreSettingsTitle')}</span><span className="mt-0.5 block truncate text-[11px] text-[var(--isl-ink-soft)]">{t('settingsExtra.keyDialog.moreSettingsHint')}</span></span>
+                                    <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="shrink-0 opacity-60 transition-transform group-open:rotate-180"><path d="m6 9 6 6 6-6" /></svg>
+                                </summary>
+                                <div className="space-y-3 px-3 pb-3">
                             <div className={sectionPanelClass}>
                                 <div className="mb-3 flex items-center justify-between gap-3">
                                     <div><div className="text-sm font-bold text-[var(--isl-ink)]">{t('settingsExtra.keyDialog.pricingTitle')}</div><div className="mt-0.5 text-[11px] text-[var(--isl-ink-soft)]">{t('settingsExtra.keyDialog.pricingDetails')}</div></div>
@@ -1781,6 +1803,8 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                                     className={`${inputClass} mt-2 min-h-24 resize-y font-mono text-xs`}
                                 />
                             </div>
+                                </div>
+                            </details>
                         </div>
 
                         <div className={`settings-key-dialog__footer shrink-0 border-t px-6 py-4 ${isDark ? 'border-[#2A3140] bg-[#12151B]' : 'border-[#E4E7EC] bg-white'}`}>
