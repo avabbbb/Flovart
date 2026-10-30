@@ -10,6 +10,7 @@ import manifestSource from '../.agents/skills/vox-director/flovart.skill.yaml?ra
 import openaiSource from '../.agents/skills/vox-director/agents/openai.yaml?raw';
 import skillSource from '../.agents/skills/vox-director/SKILL.md?raw';
 import { hashProductionSkillSnapshot } from './productionSkillSnapshot.js';
+import { skillInputsSchema, type SkillInputSlot } from './skillInputs';
 
 const permissionSchema = z.object({
   network: z.literal('none'),
@@ -41,6 +42,7 @@ const manifestSchema = z.object({
     adaptation: z.literal('flovart-provider-neutral-example'),
   }).strict(),
   trustTier: z.literal('bundled-example'),
+  inputs: skillInputsSchema.optional(),
 }).strict();
 
 const openaiMetadataSchema = z.object({
@@ -57,6 +59,7 @@ export interface BundledProductionSkill {
   displayName: string;
   description: string;
   defaultPrompt: string;
+  inputs: readonly SkillInputSlot[];
   trustTier: 'bundled-example';
   license: string;
   sourceUrl: string;
@@ -89,6 +92,7 @@ const bundledSkills: readonly BundledProductionSkill[] = Object.freeze([Object.f
   displayName: metadata.display_name,
   description: metadata.short_description,
   defaultPrompt: metadata.default_prompt,
+  inputs: Object.freeze(manifest.inputs ?? []),
   trustTier: manifest.trustTier,
   license: manifest.license,
   sourceUrl: manifest.provenance.source,

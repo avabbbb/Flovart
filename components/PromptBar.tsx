@@ -138,6 +138,20 @@ export interface PromptBarProps {
 
 type ExpandPanel = 'model' | 'submode' | 'parameters' | 'more' | 'batch' | null;
 
+/** LibTV 式顶部工具条：点开后把常用描述词追加到提示词末尾（不调用任何服务）。 */
+const PROMPT_SNIPPET_GROUPS: Record<'image' | 'video', Array<{ id: string; zho: string; en: string; items: string[] }>> = {
+    image: [
+        { id: 'style', zho: '风格', en: 'Style', items: ['电影感画面', '写实摄影', '日系动漫', '3D 渲染', '水彩插画', '赛博朋克', '极简扁平', '胶片颗粒质感'] },
+        { id: 'light', zho: '光影', en: 'Lighting', items: ['柔和自然光', '黄金时刻逆光', '霓虹夜景灯光', '棚拍柔光', '高对比硬光', '丁达尔光束'] },
+        { id: 'framing', zho: '构图', en: 'Framing', items: ['特写', '中景', '全景', '俯拍视角', '仰拍视角', '对称构图'] },
+    ],
+    video: [
+        { id: 'camera', zho: '运镜', en: 'Camera', items: ['固定镜头', '缓慢推镜头', '缓慢拉镜头', '横向平移', '环绕运镜', '跟拍主体', '航拍俯冲', '手持轻微晃动'] },
+        { id: 'effect', zho: '特效', en: 'Effects', items: ['慢动作', '延时摄影', '粒子飘散', '光晕闪烁', '烟雾弥漫', '雨滴飘落'] },
+        { id: 'subject', zho: '主体', en: 'Subject', items: ['主体保持一致', '人物自然眨眼', '人物缓慢转头', '衣物随风摆动'] },
+    ],
+};
+
 const PRODUCT_MODE_LABELS: Record<ProductModelMode, { zho: string; en: string }> = {
     'text-to-image': { zho: '文生图', en: 'Text to image' },
     'image-to-image': { zho: '图生图', en: 'Image to image' },
@@ -347,10 +361,11 @@ export const PromptBar: React.FC<PromptBarProps> = ({
     const [activeModelFamily, setActiveModelFamily] = useState('');
     const [isTranslating, setIsTranslating] = useState(false);
     const [preTranslatePrompt, setPreTranslatePrompt] = useState<string | null>(null);
+    const [snippetMenu, setSnippetMenu] = useState<string | null>(null);
 
-    const triggerClass = `inline-flex items-center gap-1 rounded px-1.5 font-semibold transition-colors hover:bg-[var(--isl-surface-2)] ${compactMode ? 'h-6 text-[10px]' : 'h-7 text-[11px]'}`;
-    const activeTriggerClass = 'text-[var(--isl-mint-deep)]';
-    const popoverWidth = expandedPanel === 'model' ? 660 : expandedPanel === 'submode' ? 360 : expandedPanel === 'parameters' ? 430 : expandedPanel === 'more' ? 480 : expandedPanel === 'batch' ? 100 : 400;
+    const triggerClass = 'inline-flex items-center gap-1.5 rounded-lg border border-transparent bg-transparent px-2 font-medium text-[var(--isl-ink-soft)] transition-colors hover:bg-[var(--isl-surface-2)] hover:text-[var(--isl-ink)] ' + (compactMode ? 'h-7 text-[11px]' : 'h-8 text-[12px]');
+    const activeTriggerClass = '!border-[var(--isl-mint)] !bg-[var(--isl-mint-bg)] !text-[var(--isl-mint-deep)]';
+    const popoverWidth = expandedPanel === 'model' ? 340 : expandedPanel === 'submode' ? 360 : expandedPanel === 'parameters' ? 360 : expandedPanel === 'more' ? 480 : expandedPanel === 'batch' ? 100 : 400;
     const shellClass = 'isl-shell';
 
     const editorReferenceItems = useMemo<MentionItem[]>(() => mentionItems || [], [mentionItems]);
@@ -408,7 +423,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
     const {
         videoLikeMode, activeModel, activeProductModel, activeSubmode, activeRoute, activeRouteContext,
         activeCapabilities, productModels, productModelGroups, modelCapabilityFilters, filteredProductModelGroups, displayedModelGroup,
-        paramSummary, isSeedanceVideoModel, isSeedanceFastModel, routedVideoModes, routedImageModes, activeKey,
+        paramSummary, effectiveResolution, isSeedanceVideoModel, isSeedanceFastModel, routedVideoModes, routedImageModes, activeKey,
         estimatedCostLabel, mentionedReferences, mentionedImageCount, effectiveReferenceLimits, videoInputRequirement,
         paramDisabledReason, currentModelOptions,
     } = policy;
@@ -533,8 +548,10 @@ export const PromptBar: React.FC<PromptBarProps> = ({
     }, [preTranslatePrompt, replacePrompt]);
 
     useEffect(() => {
-        if (!activeProductModel || !activeCapabilities || generationMode === 'text') return;
+        if (!activeCapabilities || generationMode === 'text') return;
         const capabilities = activeCapabilities;
+        // 未选模型时不回写分辨率：回写会产生一条 undo 历史；显示用的有效分辨率由 policy 按通用能力推导
+        if (!activeProductModel) return;
         const availableModes = generationMode === 'video' && routedVideoModes.length ? routedVideoModes
             : generationMode === 'image' && routedImageModes.length ? routedImageModes
             : capabilities.modes;
@@ -649,7 +666,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
     return (
         <div ref={rootRef} className={`theme-aware w-full ${className || ''}`.trim()}>
             <div
-                className={`relative overflow-visible border transition-all duration-300 ${shellClass} ${shellClassName || ''} ${isDragActive ? (isDark ? 'scale-[1.01] border-[#4B5B78]' : 'scale-[1.01] border-[#B2CCFF]') : ''}`.trim()}
+                className={('relative overflow-visible border transition-all duration-300 ' + shellClass + ' prompt-libtv ' + (shellClassName || '') + ' ' + (isDragActive ? (isDark ? 'scale-[1.01] border-[#4B5B78]' : 'scale-[1.01] border-[#B2CCFF]') : '')).trim()}
                 onDragEnter={event => {
                     if (!Array.from(event.dataTransfer.items).some(item => isSupportedAttachment(item.type))) return;
                     event.preventDefault();
@@ -710,27 +727,42 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                         '--prompt-editor-line-height': compactMode ? '1.4' : '1.5',
                     } as React.CSSProperties}
                 >
-                    {(canOpenReferencePicker || (imageReferenceChips?.length || 0) > 0) && (
+                    {generationMode !== 'text' && (canOpenReferencePicker || Boolean(onAddAttachments) || !hideGenerationOptions) && (
+                        <div className="prompt-toolrow" data-testid="prompt-tool-row">
+                            {(onAddAttachments || canOpenReferencePicker) && (
+                                <button type="button" className="prompt-toolchip" onClick={() => (onAddAttachments ? fileInputRef.current?.click() : setReferencePickerOpen(true))} title={ui('上传本地图片、视频或音频', 'Upload a local image, video, or audio file')}>
+                                    <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>{ui('上传', 'Upload')}
+                                </button>
+                            )}
+                            {canOpenReferencePicker && (
+                                <button type="button" className="prompt-toolchip" onClick={() => setReferencePickerOpen(true)} data-testid="prompt-reference-add" aria-label={ui('添加工作流参考', 'Add workflow reference')} title={ui('从工作流节点、资产管理或本地上传添加参考', 'Add a reference from a workflow node, asset library, or local file')}>
+                                    <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="3" /><path d="m3 16 5-5 4 4 3-3 6 6" /></svg>{ui('画布参考', 'Canvas reference')}
+                                </button>
+                            )}
+                            {!hideGenerationOptions && PROMPT_SNIPPET_GROUPS[videoLikeMode ? 'video' : 'image'].map(group => (
+                                <button key={group.id} type="button" className={'prompt-toolchip' + (snippetMenu === group.id ? ' is-active' : '')} aria-expanded={snippetMenu === group.id} onClick={() => setSnippetMenu(current => (current === group.id ? null : group.id))}>{ui(group.zho, group.en)}</button>
+                            ))}
+                        </div>
+                    )}
+                    {snippetMenu && !hideGenerationOptions && (() => {
+                        const group = PROMPT_SNIPPET_GROUPS[videoLikeMode ? 'video' : 'image'].find(item => item.id === snippetMenu);
+                        if (!group) return null;
+                        return (
+                            <div className="prompt-snippets" role="menu" aria-label={ui(group.zho, group.en)}>
+                                {group.items.map(item => (
+                                    <button key={item} type="button" role="menuitem" onClick={() => { const base = prompt.trim(); replacePrompt(base ? `${base}，${item}` : item); setSnippetMenu(null); }}>{item}</button>
+                                ))}
+                            </div>
+                        );
+                    })()}
+                    {(imageReferenceChips?.length || 0) > 0 && (
                         <div
-                            className={`${compactMode ? 'mb-1.5' : 'mb-2.5'} flex min-h-14 items-center overflow-x-auto overflow-y-visible px-1 pt-1 isl-scrollbar pb-1`}
+                            className={`${compactMode ? 'mb-1.5' : 'mb-2'} flex items-center overflow-x-auto overflow-y-visible px-0.5 pt-1 pb-1 isl-scrollbar`}
                             data-testid="prompt-image-refs"
-                            data-layout={(imageReferenceChips?.length || 0) > 1 ? 'jimeng-stack' : (imageReferenceChips?.length || 0) === 1 ? 'single' : 'empty'}
+                            data-layout={(imageReferenceChips?.length || 0) > 1 ? 'jimeng-stack' : 'single'}
                             onMouseEnter={() => setReferencesExpanded(true)}
                             onMouseLeave={() => setReferencesExpanded(false)}
                         >
-                            {canOpenReferencePicker && (
-                                <motion.button
-                                    type="button"
-                                    whileTap={{ scale: 0.92 }}
-                                    onClick={() => setReferencePickerOpen(true)}
-                                    className="mr-2 flex h-12 w-12 shrink-0 -rotate-3 items-center justify-center rounded-[10px] border border-dashed text-xl font-light transition hover:rotate-0 hover:border-[var(--isl-mint)] hover:bg-[var(--isl-mint-bg)]"
-                                    style={{ borderColor: 'var(--isl-border)', color: 'var(--isl-ink-soft)', background: 'var(--isl-surface-2)' }}
-                                aria-label={ui('添加工作流参考', 'Add workflow reference')}
-                                title={ui('从工作流节点、资产管理或本地上传添加参考', 'Add a reference from a workflow node, asset library, or local file')}
-                                    data-testid="prompt-reference-add"
-                                >+
-                                </motion.button>
-                            )}
                             {imageReferenceChips && imageReferenceChips.length > 0 && onImageReferenceReorder && (
                               <Reorder.Group
                                 axis="x"
@@ -747,12 +779,12 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                         value={chip}
                                         layout
                                         transition={{ type: 'spring', stiffness: 420, damping: 32 }}
-                                        className="group relative flex h-12 w-12 shrink-0 list-none items-center overflow-visible rounded-[10px] border shadow-sm"
+                                        className="group relative flex h-10 w-10 shrink-0 list-none items-center overflow-visible rounded-[8px] border shadow-sm"
                                         style={{
                                             borderColor: chip.mentioned ? 'var(--isl-mint)' : 'var(--isl-border)',
                                             background: chip.mentioned ? 'var(--isl-mint-bg)' : 'var(--isl-surface-2)',
                                             cursor: 'grab',
-                                            marginLeft: index === 0 ? 0 : referencesExpanded || imageReferenceChips.length === 1 ? 7 : -27,
+                                            marginLeft: index === 0 ? 0 : referencesExpanded || imageReferenceChips.length === 1 ? 6 : -22,
                                             zIndex: index + 1,
                                             transform: referencesExpanded || imageReferenceChips.length === 1 ? 'rotate(0deg)' : `rotate(${index % 2 ? 5 : -5}deg)`,
                                         }}
@@ -869,62 +901,45 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                             <div className='p-2.5' onWheel={event => event.stopPropagation()}>
                             {expandedPanel === 'model' && (
                                 <>
-                                    <div className="mb-1.5 px-1 text-[11px] font-semibold" style={{ color: 'var(--isl-ink)' }}>{ui('选择模型', 'Choose model')}</div>
-                                    <div data-testid="prompt-model-progressive" data-density="compact" className="flex h-[320px] max-h-[68vh] overflow-hidden">
+                                    <div className="mb-2 flex items-center justify-between gap-2 px-1"><span className="text-[12px] font-semibold" style={{ color: 'var(--isl-ink)' }}>{ui('选择模型', 'Choose model')}</span><span className="inline-flex max-w-[60%] items-center gap-1.5 truncate rounded-full bg-[var(--isl-surface-2)] px-2 py-0.5 text-[10px] font-medium" style={{ color: 'var(--isl-ink-soft)' }}><span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: activeRoute ? 'var(--isl-mint)' : 'var(--isl-ink-ghost)' }} /><span className="truncate">{ui('当前', 'Current')} · {policy.modelLabelForMode()}</span></span></div>
+                                    <div data-testid="prompt-model-progressive" data-density="compact" className="flex max-h-[min(360px,68vh)] flex-col overflow-hidden">
                         {productModels.length > 0 ? (
                             <>
-                                <div className="flex w-[150px] shrink-0 flex-col border-r p-1" style={{ borderColor: 'var(--isl-border)' }}>
+                                {modelCapabilityFilters.length > 1 && (
                                     <div className="flex flex-wrap gap-1 px-1 pb-1.5">
-                                        <button type="button" onClick={() => setModelCapabilityFilter('all')} className={`h-5 rounded-[5px] px-1.5 text-[9px] font-semibold ${modelCapabilityFilter === 'all' ? 'isl-chip--active' : 'isl-chip'}`}>{ui('全部', 'All')}</button>
-                                        {modelCapabilityFilters.map(mode => <button key={mode} type="button" onClick={() => setModelCapabilityFilter(mode)} className={`h-5 rounded-[5px] px-1.5 text-[9px] font-semibold ${modelCapabilityFilter === mode ? 'isl-chip--active' : 'isl-chip'}`}>{productModeLabel(mode, language)}</button>)}
+                                        <button type="button" onClick={() => setModelCapabilityFilter('all')} className={'h-6 rounded-full px-2 text-[10px] font-semibold ' + (modelCapabilityFilter === 'all' ? 'isl-chip--active' : 'isl-chip')}>{ui('全部', 'All')}</button>
+                                        {modelCapabilityFilters.map(mode => <button key={mode} type="button" onClick={() => setModelCapabilityFilter(mode)} className={'h-6 rounded-full px-2 text-[10px] font-semibold ' + (modelCapabilityFilter === mode ? 'isl-chip--active' : 'isl-chip')}>{productModeLabel(mode, language)}</button>)}
                                     </div>
-                                    <div className="min-h-0 flex-1 space-y-px overflow-y-auto pr-0.5 isl-scrollbar">
-                                        {filteredProductModelGroups.map(group => {
-                                            const active = displayedModelGroup?.family === group.family;
-                                            return <button
-                                                key={group.family}
-                                                type="button"
-                                                onClick={() => setActiveModelFamily(active ? '' : group.family)}
-                                                className={`flex h-8 w-full items-center gap-1.5 rounded-[5px] px-1.5 text-left transition ${active ? 'bg-[var(--isl-mint-bg)]' : 'hover:bg-[var(--isl-surface-2)]'}`}
-                                                title={group.family}
-                                            >
-                                        <span className="min-w-0 flex-1"><span className="block truncate text-[11px] font-semibold" style={{ color: active ? 'var(--isl-mint-deep)' : 'var(--isl-ink)' }}>{group.family}</span><span className="block text-[8px]" style={{ color: 'var(--isl-ink-ghost)' }}>{group.company} · {group.models.filter(product => policy.isProductModelConfigured(product.id)).length}/{group.models.length}</span></span>
-                                                <span aria-hidden="true" style={{ color: 'var(--isl-ink-ghost)', fontSize: 9 }}>{active ? '‹' : '›'}</span>
-                                            </button>;
-                                        })}
-                                    </div>
-                                </div>
-                                <div className="min-w-0 flex-1 p-1">
-                                    <div className="px-1 pb-1 text-[10px] font-semibold" style={{ color: 'var(--isl-ink-soft)' }}>{displayedModelGroup?.family || ui('模型', 'Model')}</div>
-                                    <div className="min-h-0 max-h-[270px] space-y-0.5 overflow-y-auto pr-0.5 isl-scrollbar">
-                                        {displayedModelGroup?.models.map(product => {
-                                            const configured = policy.isProductModelConfigured(product.id);
-                                            const selected = activeModel === product.id || activeProductModel?.id === product.id;
-                                            const route = policy.resolveAnyProductRoute(product.id);
-                                            return <button key={product.id} type="button" onClick={() => {
-                                                if (!configured) { onOpenSettings?.(); setExpandedPanel(null); return; }
-                                                changeActiveModel(product.id);
-                                                setExpandedPanel(null);
-                                            }} className={`flex w-full items-center gap-2 rounded-[6px] border-0 px-2 py-1.5 text-left transition ${selected ? 'bg-[var(--isl-mint-bg)]' : 'hover:bg-[var(--isl-surface-2)]'} ${configured ? '' : 'opacity-55'}`}>
-                                                <span className="min-w-0 flex-1"><span className="block truncate text-[11px] font-semibold" style={{ color: selected ? 'var(--isl-mint-deep)' : 'var(--isl-ink)' }}>{product.name}</span>
-                                                    <span className="mt-px flex flex-wrap gap-1">{product.capabilities.modes.map(mode => <span key={mode} className="rounded-[4px] px-1 text-[8px]" style={{ background: 'var(--isl-surface-2)', color: 'var(--isl-ink-soft)' }}>{productModeLabel(mode, language)}</span>)}</span>
-                                                    {route && <span className="mt-px block truncate text-[8px]" style={{ color: 'var(--isl-ink-ghost)' }}>{route.key.name || route.key.provider} · {route.routeId}</span>}
-                                                </span>
-                                                <span className="shrink-0 text-[9px] font-semibold" style={{ color: configured ? 'var(--isl-mint-deep)' : 'var(--isl-ink-ghost)' }}>{configured ? product.badge || ui('已连接', 'Connected') : ui('去配置', 'Configure')}</span>
-                                            </button>;
-                                        })}
-                                    </div>
+                                )}
+                                {/* LibTV 式：单列模型列表，图标 + 名称 + 标签；悬停或选中时展开一行描述 */}
+                                <div className="min-h-0 flex-1 space-y-0.5 overflow-y-auto pr-0.5 isl-scrollbar">
+                                    {filteredProductModelGroups.flatMap(group => group.models).map(product => {
+                                        const configured = policy.isProductModelConfigured(product.id);
+                                        const selected = activeModel === product.id || activeProductModel?.id === product.id;
+                                        return <button key={product.id} type="button" title={product.description} aria-pressed={selected} onClick={() => {
+                                            if (!configured) { onOpenSettings?.(); setExpandedPanel(null); return; }
+                                            changeActiveModel(product.id);
+                                            setExpandedPanel(null);
+                                        }} className={'prompt-model-row' + (selected ? ' is-active' : '') + (configured ? '' : ' opacity-55')}>
+                                            <span aria-hidden="true" className="prompt-model-icon">{product.name.slice(0, 1)}</span>
+                                            <span className="min-w-0 flex-1">
+                                                <span className="block truncate text-[12px] font-semibold">{product.name}</span>
+                                                <span className="prompt-model-desc">{product.description}</span>
+                                            </span>
+                                            <span className="prompt-model-badge">{configured ? (product.badge || ui('已连接', 'Connected')) : ui('去配置', 'Configure')}</span>
+                                        </button>;
+                                    })}
                                 </div>
                             </>
                         ) : (
                             <div className="w-full p-2">
                                 {generationMode === 'text' ? <>
                                     <div className="px-2 pb-2 text-[11px] font-semibold" style={{ color: 'var(--isl-ink-soft)' }}>{ui('Agent 文本映射', 'Agent text route')}</div>
-                                    <div className="rounded-[6px] bg-[var(--isl-surface-2)] px-3 py-2.5 text-xs" style={{ color: 'var(--isl-ink)' }}>{activeRoute ? `${activeRoute.key.name || activeRoute.key.provider} · ${activeRoute.routeId}` : t('promptBarExtra.agentRouteMissing')}</div>
+                                    <div className="rounded-[6px] bg-[var(--isl-surface-2)] px-3 py-2.5 text-xs" style={{ color: 'var(--isl-ink)' }}>{activeRoute ? (activeRoute.key.name || activeRoute.key.provider) + ' · ' + activeRoute.routeId : t('promptBarExtra.agentRouteMissing')}</div>
                                     <button type="button" onClick={() => { onOpenSettings?.(); setExpandedPanel(null); }} className="mt-2 w-full rounded-[6px] border border-[var(--isl-border)] px-3 py-2 text-xs font-semibold">{t('promptBarExtra.openModelMapping')}</button>
                                 </> : <>
                                     <div className="px-2 pb-2 text-[11px] font-semibold" style={{ color: 'var(--isl-ink-soft)' }}>{t('promptBarExtra.pickModel')}</div>
-                                    {currentModelOptions.map(model => <button key={model} type="button" onClick={() => { changeActiveModel(model); setExpandedPanel(null); }} className={`mb-1 w-full rounded-[6px] border-0 px-2.5 py-2 text-left text-xs font-semibold ${activeModel === model ? 'bg-[var(--isl-mint-bg)] text-[var(--isl-mint-deep)]' : 'text-[var(--isl-ink)] hover:bg-[var(--isl-surface-2)]'}`}>{policy.modelLabel(model)}</button>)}
+                                    {currentModelOptions.map(model => <button key={model} type="button" onClick={() => { changeActiveModel(model); setExpandedPanel(null); }} className={'prompt-model-row' + (activeModel === model ? ' is-active' : '')}><span aria-hidden="true" className="prompt-model-icon">{policy.modelLabel(model).slice(0, 1)}</span><span className="min-w-0 flex-1 truncate text-[12px] font-semibold">{policy.modelLabel(model)}</span></button>)}
                                     {currentModelOptions.length === 0 && <div className="px-4 py-12 text-center text-xs" style={{ color: 'var(--isl-ink-soft)' }}>{ui('没有可用模型', 'No models available')}</div>}
                                 </>}
                             </div>
@@ -1001,14 +1016,20 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                     </div>
                                 </div>
                             )}
-                            {expandedPanel === 'parameters' && activeProductModel && activeCapabilities && (
+                            {expandedPanel === 'parameters' && activeCapabilities && (
                                 <>
                                     <div className="mb-1.5 px-1 text-[11px] font-semibold" style={{ color: 'var(--isl-ink)' }}>{ui('生成参数', 'Generation settings')}</div>
                                     <div data-testid="prompt-parameter-panel" data-density="compact" className="max-h-[320px] space-y-2 overflow-y-auto px-0.5 pb-0.5 isl-scrollbar">
+                                        {!activeProductModel && (
+                                            <div className="flex items-center justify-between gap-2 rounded-[6px] bg-[var(--isl-surface-2)] px-2 py-1.5 text-[10px] leading-4 text-[var(--isl-ink-soft)]">
+                                                <span>{activeRoute ? ui('当前模型不在产品目录中，显示通用参数；实际支持以供应商为准。', 'This model is not in the catalog, so generic settings are shown. Provider support may vary.') : ui('尚未选择模型，当前显示通用参数。', 'No model selected yet; generic settings are shown.')}</span>
+                                                <button type="button" className="isl-chip h-6 shrink-0 rounded-[6px] px-2 text-[10px] font-medium" onClick={() => setExpandedPanel('model')}>{ui('选择模型', 'Choose model')}</button>
+                                            </div>
+                                        )}
                                         {activeCapabilities.qualities.length > 0 && (
                                             <div>
-                                                <div className="mb-1 text-[10px] font-semibold" style={{ color: 'var(--isl-ink-soft)' }}>{ui('画质', 'Quality')}</div>
-                                                <div className="flex flex-wrap gap-1.5">
+                                                <div className="prompt-seglabel">{ui('画质', 'Quality')}</div>
+                                                <div className="prompt-seg">
                                                     {activeCapabilities.qualities.map(quality => (
                                                         <button key={quality} type="button" onClick={() => onGenerationQualityChange?.(quality)} className={`h-7 rounded-[6px] px-2 text-[11px] font-medium ${generationQuality === quality ? 'isl-chip--active' : 'isl-chip'}`}>{quality === 'low' ? ui('低画质', 'Low') : quality === 'medium' ? ui('标准画质', 'Standard') : ui('高画质', 'High')}</button>
                                                     ))}
@@ -1017,8 +1038,8 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                         )}
 {activeCapabilities.resolutions.length > 0 && (
                                             <div>
-                                                <div className="mb-1 text-[10px] font-semibold" style={{ color: 'var(--isl-ink-soft)' }}>{generationMode === 'video' ? ui('分辨率', 'Resolution') : ui('尺寸', 'Size')}</div>
-                                                <div className="flex flex-wrap gap-1.5">
+                                                <div className="prompt-seglabel">{generationMode === 'video' ? ui('分辨率', 'Resolution') : ui('尺寸', 'Size')}</div>
+                                                <div className="prompt-seg">
                                                     {activeCapabilities.resolutions.map(resolution => {
                                                         const disabledReason = getParamDisabledReason('resolution', resolution);
                                                         return (
@@ -1028,7 +1049,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                                                 disabled={!!disabledReason}
                                                                 title={disabledReason || undefined}
                                                                 onClick={() => { if (!disabledReason) onVideoResolutionChange?.(resolution); }}
-                                                                className={`h-7 rounded-[6px] px-2 text-[11px] font-medium transition ${disabledReason ? 'cursor-not-allowed opacity-35' : ''} ${videoResolution === resolution ? 'isl-chip--active' : 'isl-chip'}`}
+                                                                className={'h-7 rounded-[6px] px-2 text-[11px] font-medium transition ' + (disabledReason ? 'cursor-not-allowed opacity-35 ' : '') + (effectiveResolution === resolution ? 'isl-chip--active' : 'isl-chip')}
                                                             >
                                                                 {resolution}
                                                             </button>
@@ -1039,8 +1060,8 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                         )}
                                         {activeCapabilities.aspectRatios.length > 0 && (
                                             <div>
-                                                <div className="mb-1 text-[10px] font-semibold" style={{ color: 'var(--isl-ink-soft)' }}>{ui('比例', 'Aspect ratio')}</div>
-                                                <div className="flex flex-wrap gap-1.5">
+                                                <div className="prompt-seglabel">{ui('比例', 'Aspect ratio')}</div>
+                                                <div className="prompt-seg prompt-ratio-grid">
                                                     {activeCapabilities.aspectRatios.map(ratio => {
                                                         const disabledReason = getParamDisabledReason('aspectRatio', ratio);
                                                         const isActive = activeRatio === ratio && !preserveReferenceAspectRatio;
@@ -1052,8 +1073,9 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                                                 disabled={!!disabledReason}
                                                                 title={disabledReason || undefined}
                                                                 onClick={() => { if (!disabledReason) { setActiveRatio(ratio); onPreserveReferenceAspectRatioChange?.(false); } }}
-                                                                className={`h-7 rounded-[6px] px-2 text-[11px] font-medium transition ${dimClass} ${isActive ? 'isl-chip--active' : 'isl-chip'}`}
+                                                                className={'h-7 rounded-[6px] px-2 text-[11px] font-medium transition prompt-ratio-tile ' + dimClass + ' ' + (isActive ? 'isl-chip--active' : 'isl-chip')}
                                                             >
+                                                                {ratio !== 'adaptive' && (() => { const [rw, rh] = String(ratio).split(':').map(Number); const scale = 14 / Math.max(rw || 1, rh || 1); return <span aria-hidden="true" className="prompt-ratio-shape" style={{ width: Math.max(5, Math.round((rw || 1) * scale)), height: Math.max(5, Math.round((rh || 1) * scale)) }} />; })()}
                                                                 {ratio === 'adaptive' ? ui('自适应', 'Adaptive') : ratio}
                                                             </button>
                                                         );
@@ -1074,39 +1096,100 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                         )}
 {generationMode === 'video' && activeCapabilities.durations.length > 0 && (
                                             <div>
-                                                <div className="mb-1 text-[10px] font-semibold" style={{ color: 'var(--isl-ink-soft)' }}>{ui('时长', 'Duration')}</div>
-                                                <div className="flex flex-wrap gap-1.5">
-                                                    {activeCapabilities.durations.map(duration => {
-                                                        const disabledReason = getParamDisabledReason('durationSec', duration);
+                                                <div className="prompt-seglabel">{ui('视频时长', 'Duration')}</div>
+                                                {(() => {
+                                                    // LibTV 式：连续可选的时长用滑块；只有少数固定档位时保留分段按钮。
+                                                    const durations = activeCapabilities.durations.filter(duration => duration > 0);
+                                                    const useSlider = durations.length > 3 && durations.length === activeCapabilities.durations.length;
+                                                    if (useSlider) {
+                                                        const index = Math.max(0, durations.indexOf(videoDurationSec ?? durations[0]));
                                                         return (
-                                                            <button
-                                                                key={duration}
-                                                                type="button"
-                                                                disabled={!!disabledReason}
-                                                                title={disabledReason || (duration === -1 ? ui('不限', 'Unlimited') : `${duration} ${ui('秒', 'seconds')}`)}
-                                                                onClick={() => { if (!disabledReason) onVideoDurationSecChange?.(duration); }}
-                                                                className={`h-7 rounded-[6px] px-2 text-[11px] font-medium transition ${disabledReason ? 'cursor-not-allowed opacity-35' : ''} ${videoDurationSec === duration ? 'isl-chip--active' : 'isl-chip'}`}
-                                                            >
-                                                                {duration === -1 ? ui('不限', 'Unlimited') : `${duration}s`}
-                                                            </button>
+                                                            <div className="prompt-duration" data-testid="prompt-duration-slider">
+                                                                <input
+                                                                    type="range"
+                                                                    min={0}
+                                                                    max={durations.length - 1}
+                                                                    step={1}
+                                                                    value={index}
+                                                                    aria-label={ui('视频时长', 'Video duration')}
+                                                                    aria-valuetext={durations[index] + 's'}
+                                                                    onChange={event => {
+                                                                        const next = durations[Number(event.target.value)];
+                                                                        if (next !== undefined && !getParamDisabledReason('durationSec', next)) onVideoDurationSecChange?.(next);
+                                                                    }}
+                                                                />
+                                                                <span className="prompt-duration-value">{durations[index]}<small>s</small></span>
+                                                            </div>
                                                         );
-                                                    })}
-                                                </div>
+                                                    }
+                                                    return (
+                                                        <div className="prompt-seg">
+                                                            {activeCapabilities.durations.map(duration => {
+                                                                const disabledReason = getParamDisabledReason('durationSec', duration);
+                                                                return (
+                                                                    <button
+                                                                        key={duration}
+                                                                        type="button"
+                                                                        disabled={!!disabledReason}
+                                                                        title={disabledReason || (duration === -1 ? ui('不限', 'Unlimited') : duration + ' ' + ui('秒', 'seconds'))}
+                                                                        onClick={() => { if (!disabledReason) onVideoDurationSecChange?.(duration); }}
+                                                                        className={'h-7 rounded-[6px] px-2 text-[11px] font-medium transition ' + (disabledReason ? 'cursor-not-allowed opacity-35 ' : '') + (videoDurationSec === duration ? 'isl-chip--active' : 'isl-chip')}
+                                                                    >
+                                                                        {duration === -1 ? ui('不限', 'Unlimited') : duration + 's'}
+                                                                    </button>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    );
+                                                })()}
                                             </div>
                                         )}
                                         {generationMode === 'video' && activeCapabilities.audioControl === 'optional' && (
                                             <div>
-                                                <div className="mb-1.5 text-[10px] font-bold" style={{ color: 'var(--isl-ink-soft)' }}>{ui('生成音频', 'Generated audio')}</div>
-                                                <div className="grid grid-cols-2 gap-1.5">
+                                                <div className="prompt-seglabel">{ui('生成音频', 'Generated audio')}</div>
+                                                <div className="prompt-seg">
                                                     <button type="button" aria-pressed={videoGenerateAudio} onClick={() => onVideoGenerateAudioChange?.(true)} className={`h-7 rounded-[6px] px-2 text-[11px] font-medium ${videoGenerateAudio ? 'isl-chip--active' : 'isl-chip'}`}>{ui('开启', 'On')}</button>
                                                     <button type="button" aria-pressed={!videoGenerateAudio} onClick={() => onVideoGenerateAudioChange?.(false)} className={`h-7 rounded-[6px] px-2 text-[11px] font-medium ${!videoGenerateAudio ? 'isl-chip--active' : 'isl-chip'}`}>{ui('关闭', 'Off')}</button>
                                                 </div>
                                             </div>
                                         )}
                                         {generationMode === 'video' && activeCapabilities.audioControl === 'always' && <div className="rounded-[14px] bg-[var(--isl-surface-2)] px-3 py-2 text-xs font-bold text-[var(--isl-ink-soft)]">{ui('该模型始终生成原生音频', 'This model always generates native audio.')}</div>}
-                                        {activeProductModel.id.startsWith('flovart:veo-3.1') && (activeSubmode === 'reference-to-video' || videoResolution?.toLowerCase() !== '720p') && <div className="rounded-[14px] bg-[var(--isl-mint-bg)] px-3 py-2 text-[11px] font-semibold text-[var(--isl-mint-deep)]">{ui('当前 Veo 组合按官方约束固定为 8 秒。', 'This Veo configuration is fixed at 8 seconds by the model requirements.')}</div>}
+                                        {activeProductModel?.id.startsWith('flovart:veo-3.1') && (activeSubmode === 'reference-to-video' || videoResolution?.toLowerCase() !== '720p') && <div className="rounded-[14px] bg-[var(--isl-mint-bg)] px-3 py-2 text-[11px] font-semibold text-[var(--isl-mint-deep)]">{ui('当前 Veo 组合按官方约束固定为 8 秒。', 'This Veo configuration is fixed at 8 seconds by the model requirements.')}</div>}
+                                        {(generationMode === 'image' || (generationMode === 'video' && allowVideoBatch)) && onBatchCountChange && (
+                                            <div>
+                                                <div className="prompt-seglabel">{ui('生成数量', 'Count')}</div>
+                                                <div className="prompt-seg">
+                                                    {[1, 2, 4].map(count => (
+                                                        <button key={count} type="button" aria-pressed={batchCount === count} onClick={() => onBatchCountChange(count)} title={count === 1 ? ui('单张方案', 'One variation') : ui(`输出 ${count} 张方案`, `Generate ${count} variations`)} className={`h-7 rounded-[6px] px-2 text-[11px] font-medium ${batchCount === count ? 'isl-chip--active' : 'isl-chip'}`}>{generationMode === 'video' ? ui(`${count} 个`, `${count}`) : ui(`${count} 张`, `${count}`)}</button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                        {(activeCapabilities.supportsWebSearch || activeCapabilities.supportsRealPersonCheck) && (
+                                            <div className="prompt-advanced" data-testid="prompt-advanced-inline">
+                                                <div className="prompt-seglabel">{ui('高级设置', 'Advanced')}</div>
+                                                {activeCapabilities.supportsWebSearch && (
+                                                    <label className="prompt-advanced-row">
+                                                        <span>{ui('联网搜索', 'Web search')}</span>
+                                                        <input type="checkbox" role="switch" checked={!!webSearchEnabled} onChange={event => onWebSearchToggle?.(event.target.checked)} />
+                                                    </label>
+                                                )}
+                                                {activeCapabilities.supportsRealPersonCheck && (
+                                                    <label className="prompt-advanced-row">
+                                                        <span>{ui('真人素材预检测', 'Real-person content check')}</span>
+                                                        <input type="checkbox" role="switch" checked={!!realPersonCheckEnabled} onChange={event => onRealPersonCheckToggle?.(event.target.checked)} />
+                                                    </label>
+                                                )}
+                                            </div>
+                                        )}
                                     </div>
                                 </>
+                            )}
+                            {expandedPanel === 'parameters' && !activeCapabilities && (
+                                <div className="flex flex-col items-start gap-2 px-1 py-1" data-testid="prompt-parameter-empty">
+                                    <div className="text-[11px] leading-4" style={{ color: 'var(--isl-ink-soft)' }}>{ui('先选一个模型，才能设置比例、尺寸和时长。', 'Pick a model to set ratio, size, and duration.')}</div>
+                                    <button type="button" className="isl-chip h-7 rounded-[6px] px-2.5 text-[11px] font-medium" onClick={() => setExpandedPanel('model')}>{ui('选择模型', 'Choose model')}</button>
+                                </div>
                             )}
                             {expandedPanel === 'more' && (
                                 <>
@@ -1282,9 +1365,9 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                     </ResponsivePopover>
                 )}
 
-                <div className={`relative flex items-center gap-2 border-t ${compactMode ? 'px-2.5 py-2' : 'px-3 py-2.5'}`} style={{ borderColor: 'var(--isl-border)' }}>
+                <div className={'relative flex items-center gap-2 ' + (compactMode ? 'px-2.5 pb-2 pt-1' : 'px-3 pb-3 pt-1.5')}>
                     <div className="min-w-0 flex-1 overflow-hidden">
-                        <div className="flex flex-nowrap items-center gap-2 overflow-x-auto isl-scrollbar">
+                        <div className="flex flex-nowrap items-center gap-1 overflow-hidden">
                             {!hideGenerationOptions && (() => {
                                 const keyCount = userApiKeys.length;
                                 if (keyCount === 0) {
@@ -1293,7 +1376,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                             type="button"
                                             onClick={onOpenSettings}
                                             className={`${triggerClass} shrink-0 ${compactMode ? 'h-7 w-7 px-0 text-[11px]' : 'h-8 px-3 text-xs'}`}
-                                            style={{ color: 'var(--isl-coral-deep)' }}
+                                            style={{ color: 'var(--isl-ink)', opacity: 0.55 }}
                                             aria-label={t('promptBarExtra.configureService')}
                                             title={t('promptBarExtra.noServiceTitle')}
                                         >
@@ -1304,10 +1387,11 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                 return null;
                             })()}
 
-                            {!hideGenerationOptions && <div className="relative">
-                                <button type="button" aria-haspopup="dialog" aria-expanded={expandedPanel === 'model'} onClick={event => togglePanel('model', event.currentTarget)} className={`${triggerClass} shrink-0 ${expandedPanel === 'model' ? activeTriggerClass : ''}`}>
-                                    <span className="max-w-[150px] truncate">{policy.modelLabelForMode()}</span>
-                                    
+                            {!hideGenerationOptions && <div className="relative min-w-[5.5rem] shrink-[2]">
+                                <button type="button" aria-haspopup="dialog" aria-expanded={expandedPanel === 'model'} onClick={event => togglePanel('model', event.currentTarget)} className={`${triggerClass} min-w-0 max-w-full ${expandedPanel === 'model' ? activeTriggerClass : ''}`} title={policy.modelLabelForMode()}>
+                                    <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full" style={{ background: activeRoute ? 'var(--isl-mint)' : 'var(--isl-ink-ghost)' }} />
+                                    <span className="min-w-0 max-w-[150px] truncate font-semibold text-[var(--isl-ink)]">{policy.modelLabelForMode()}</span>
+                                    <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 opacity-60"><path d="m6 9 6 6 6-6" /></svg>
                                 </button>
                             </div>}
 
@@ -1326,11 +1410,16 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                             )}
 
                             {!hideGenerationOptions && generationMode !== 'text' && (
-                                <button type="button" aria-haspopup="dialog" aria-expanded={activeProductModel ? expandedPanel === 'parameters' : expandedPanel === 'model'} onClick={event => activeProductModel ? togglePanel('parameters', event.currentTarget) : togglePanel('model', event.currentTarget)} className={`${triggerClass} shrink-0 ${(activeProductModel ? expandedPanel === 'parameters' : expandedPanel === 'model') ? activeTriggerClass : ''}`} title={ui('生成参数', 'Generation settings')}>
-                                    <span className="max-w-[220px] truncate">{paramSummary || ui('参数', 'Settings')}</span>
+                                <button type="button" aria-haspopup="dialog" aria-expanded={expandedPanel === 'parameters'} onClick={event => togglePanel('parameters', event.currentTarget)} className={triggerClass + ' min-w-[6rem] shrink' + (expandedPanel === 'parameters' ? ' ' + activeTriggerClass : '')} title={ui('生成参数', 'Generation settings')}>
+                                    <svg aria-hidden="true" className="shrink-0" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0" /><circle cx="16" cy="6" r="2" /><circle cx="10" cy="12" r="2" /><circle cx="18" cy="18" r="2" /></svg>
+                                    <span className="min-w-0 truncate">{paramSummary || ui('参数', 'Settings')}</span>
                                 </button>
                             )}
 
+                        </div>
+                    </div>
+
+                    <div className="flex shrink-0 items-center gap-2">
                             {!hideGenerationOptions && <button
                                 type="button"
                                 onClick={onAutoEnhanceToggle}
@@ -1358,21 +1447,9 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>
                                 </button>
                             </div>}
-                        </div>
-                    </div>
-
-                    <div className="flex shrink-0 items-center gap-2">
                         {!hideGenerationOptions && activeProductModel && (
                             <div className="flex h-8 shrink-0 items-center px-2.5 text-[11px] font-bold" title={providerUsageLabel ? ui('供应商返回的本次用量', 'Usage reported by provider') : estimatedCostLabel ? ui('按当前 API Key 计价规则估算；最终以供应商账单或 Token 回执为准', 'Estimated from the current API key pricing; provider billing or token usage is final') : ui('当前 API Key 尚未配置可计算的计价规则', 'No pricing rule is configured for the current API key')}>
-                                <span style={{ color: providerUsageLabel || estimatedCostLabel ? 'var(--isl-mint-deep)' : 'var(--isl-ink-ghost)' }}>{providerUsageLabel || estimatedCostLabel || ui('费用 --', 'Cost --')}</span>
-                            </div>
-                        )}
-                        {!hideGenerationOptions && (generationMode === 'image' || generationMode === 'video' && allowVideoBatch) && onBatchCountChange && (
-                            <div className="relative">
-                                <button type="button" aria-haspopup="dialog" aria-expanded={expandedPanel === 'batch'} onClick={event => togglePanel('batch', event.currentTarget)} className={`${triggerClass} shrink-0 ${expandedPanel === 'batch' ? activeTriggerClass : ''}`} title={ui('批量方案数量', 'Number of variations')}>
-                                    <span className="text-xs font-bold">×{batchCount}</span>
-                                    
-                                </button>
+                                <span className="inline-flex items-center gap-1" style={{ color: providerUsageLabel || estimatedCostLabel ? 'var(--isl-ink-soft)' : 'var(--isl-ink-ghost)' }}><svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z" /></svg>{providerUsageLabel || estimatedCostLabel || '--'}</span>
                             </div>
                         )}
 
@@ -1402,30 +1479,17 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                             disabled={(isLoading && !onStop) || (!isLoading && (setupRequired ? false : (!promptReady || readyState === 'missing-key' || Boolean(videoInputRequirement))))}
                             aria-label={isLoading && onStop ? (isSeedanceVideoModel ? t('promptBarExtra.stopSeedance') : t('promptBarExtra.stopGeneration')) : setupRequired ? setupLabel : runLabel || t('promptBar.generate')}
                             title={isLoading && onStop ? (isSeedanceVideoModel ? t('promptBarExtra.stopSeedanceTitle') : t('promptBarExtra.stopGeneration')) : setupRequired ? ui(`${setupLabel}以开始生成`, `${setupLabel} to start generation`) : localizedVideoInputRequirement || runLabel || t('promptBar.generate')}
-                            className={`isl-go ${compactMode ? 'h-10 w-10 min-w-10 rounded-full p-0 text-xs' : 'h-10 min-w-[116px] px-5 text-sm'}`}
+                            className="isl-go prompt-go h-9 w-9 min-w-9 rounded-full p-0"
                         >
-                            {compactMode ? (isLoading && !onStop ? (
-                                <svg className="h-3.5 w-3.5 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            {isLoading && !onStop ? (
+                                <svg className="h-3.5 w-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
                                     <circle className="opacity-30" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                                     <path className="opacity-80" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4Z" />
                                 </svg>
                             ) : isLoading ? (
                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2" /></svg>
                             ) : (
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"><path d="M12 19V5"/><path d="m6 11 6-6 6 6"/></svg>
-                            )) : isLoading && !onStop ? (
-                                <svg className="h-3.5 w-3.5 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                    <circle className="opacity-30" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                    <path className="opacity-80" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4Z" />
-                                </svg>
-                            ) : isLoading ? <span className="text-xs font-semibold">{isSeedanceVideoModel ? t('promptBarExtra.stopSeedance') : t('promptBarExtra.stopGeneration')}</span> : (
-                                <div className="flex flex-wrap gap-1.5">
-                                    <span className="text-xs font-semibold">{setupRequired ? setupLabel : error ? t('promptBarExtra.retry') : runLabel || (batchCount > 1 ? t('promptBarExtra.generateVersions', batchCount) : t('promptBarExtra.startGenerating'))}</span>
-                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                                        <path d="M5 12h14" />
-                                        <path d="m12 5 7 7-7 7" />
-                                    </svg>
-                                </div>
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M12 19V5"/><path d="m6 11 6-6 6 6"/></svg>
                             )}
                         </button>
                     </div>

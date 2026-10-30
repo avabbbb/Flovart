@@ -204,3 +204,5 @@ export async function getUsageSummary(keys: UserApiKey[]): Promise<Map<string, K
 export async function getKeyRecords(keyId: string): Promise<UsageRecord[]> { return (await readRecords()).filter(record => record.keyId === keyId); }
 export async function clearAllUsageData(): Promise<void> { await usageStore.removeItem(RECORDS_KEY); }
 export function formatCost(cents: number, currency: 'USD' | 'CNY' = 'USD'): string { return `${currency === 'USD' ? '$' : '¥'}${(cents / 100).toFixed(cents < 100 ? 3 : 2)}`; }
+/** 全部调用记录（含图片/视频预估与实际费用），供设置「用量」页汇总。 */
+export async function listUsageRecords(): Promise<UsageRecord[]> { return readRecords(); }

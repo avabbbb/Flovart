@@ -101,6 +101,7 @@ export const normalizeApiKeyEntry = (item: Partial<UserApiKey>): UserApiKey | nu
         routeMappings: item.routeMappings,
         pricingRules: item.pricingRules,
         budgetPolicy: item.budgetPolicy,
+        ...(item.streamUsage === 'request' ? { streamUsage: 'request' as const } : {}),
         createdAt: item.createdAt || Date.now(),
         updatedAt: item.updatedAt || Date.now(),
     };

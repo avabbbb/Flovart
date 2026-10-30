@@ -96,6 +96,35 @@ function requiredString(value, label) {
   return text;
 }
 
+const SKILL_INPUT_KINDS = new Set(['text', 'longtext', 'image', 'video', 'audio', 'choice']);
+
+// Mirror of services/skillInputs.ts; keep both in sync. Absent inputs -> [].
+function parseSkillInputs(value) {
+  if (value === undefined || value === null) return [];
+  if (!Array.isArray(value)) throw new Error('Production Skill inputs 必须是数组');
+  if (value.length > 12) throw new Error('Production Skill inputs 最多 12 个');
+  const seen = new Set();
+  return value.map((slot, index) => {
+    const at = 'inputs[' + index + ']';
+    const id = requiredString(slot?.id, at + '.id');
+    if (!/^[a-z][\w-]{0,63}$/.test(id) || seen.has(id)) throw new Error('Production Skill ' + at + '.id 无效或重复：' + id);
+    seen.add(id);
+    const kind = String(slot.kind || 'text');
+    if (!SKILL_INPUT_KINDS.has(kind)) throw new Error('Production Skill ' + at + '.kind 无效：' + kind);
+    const options = Array.isArray(slot.options) ? slot.options.map(String).filter(Boolean) : undefined;
+    if (kind === 'choice' && !options?.length) throw new Error('Production Skill ' + at + ' choice 缺少 options');
+    return {
+      id,
+      label: requiredString(slot.label, at + '.label'),
+      kind,
+      required: slot.required === true,
+      ...(typeof slot.placeholder === 'string' ? { placeholder: slot.placeholder } : {}),
+      ...(options?.length ? { options } : {}),
+      ...(typeof slot.default === 'string' ? { default: slot.default } : {}),
+    };
+  });
+}
+
 /**
  * Parse a `flovart.skill.yaml` manifest into the fields the CLI/agent need.
  * Throws on structural violations so invalid packages are never trusted.
@@ -132,6 +161,7 @@ export function parseProductionSkillManifest(yamlText) {
     capabilities,
     gates,
     permissions,
+    inputs: parseSkillInputs(manifest.inputs),
   };
 }
 

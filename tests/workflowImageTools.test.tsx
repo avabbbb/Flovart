@@ -11,6 +11,8 @@ import type { WorkflowProject } from '../components/workflow/types';
 import * as imageToolService from '../services/workflowImageOperations';
 
 function overflowAction(name: string) {
+  const promoted = screen.queryAllByRole('button', { name })[0];
+  if (promoted) return promoted;
   const more = screen.queryAllByRole('button', { name: '更多' }).find(button => button.getAttribute('aria-expanded') !== 'true');
   if (more) fireEvent.click(more);
   return screen.getByRole('menuitem', { name });

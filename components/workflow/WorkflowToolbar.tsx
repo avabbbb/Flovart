@@ -44,6 +44,7 @@ const TOOLBAR_COPY = {
     exportPng: 'Export PNG', exportPdf: 'Export PDF', selectionSuffix: ' (selection)', saveSnapshot: 'Save', snapshotName: 'Snapshot name (optional)',
     snapshots: 'Snapshots', restoreSnapshot: 'Restore this snapshot. You can undo it.', deleteSnapshot: 'Delete snapshot', noSnapshots: 'No snapshots yet.',
     snapshotNodes: (count: number) => count + ' nodes',
+    autoDerive: 'Auto-derive new videos', autoFirstFrame: 'Auto first frame', autoLastFrame: 'Auto last frame', autoAvSplit: 'Auto split audio/video',
   },
   zho: {
     canvasControls: '画布控制', assetManagement: '资产管理', autoArrange: '一键整理节点', minimap: '小地图',
@@ -64,6 +65,7 @@ const TOOLBAR_COPY = {
     exportPng: '导出 PNG', exportPdf: '导出 PDF', selectionSuffix: '（所选）', saveSnapshot: '保存', snapshotName: '快照名称（可选）',
     snapshots: '快照', restoreSnapshot: '恢复此快照，可撤销。', deleteSnapshot: '删除快照', noSnapshots: '还没有快照。',
     snapshotNodes: (count: number) => count + ' 个节点',
+    autoDerive: '新视频自动派生', autoFirstFrame: '自动截首帧', autoLastFrame: '自动截尾帧', autoAvSplit: '自动音视频分离',
   },
 } as const;
 
@@ -104,6 +106,8 @@ export function WorkflowToolbar({
   onSaveSnapshot,
   onRestoreSnapshot,
   onDeleteSnapshot,
+  autoMediaDerive,
+  onToggleAutoMediaDerive,
 }: {
   tool: WorkflowTool;
   canUndo: boolean;
@@ -146,6 +150,9 @@ export function WorkflowToolbar({
   onSaveSnapshot?: (name: string) => void;
   onRestoreSnapshot?: (id: string) => void;
   onDeleteSnapshot?: (id: string) => void;
+  /** 新视频（上传/生成完成）自动截帧、音视频分离；默认全部关闭。 */
+  autoMediaDerive?: { firstFrame: boolean; lastFrame: boolean; avSplit: boolean };
+  onToggleAutoMediaDerive?: (key: 'firstFrame' | 'lastFrame' | 'avSplit') => void;
 }) {
   const sharedMedia = useWorkflowSharedMedia();
   const language = useWorkspaceStore(state => state.language);
@@ -194,6 +201,13 @@ export function WorkflowToolbar({
       {setWheelMode && wheelMode && <button type="button" role="menuitem" onClick={() => { setWheelMode(wheelMode === 'pan' ? 'zoom' : 'pan'); closePopover(true); }}>{wheelMode === 'pan' ? <MousePointer2 size={15} /> : <ZoomIn size={15} />}{wheelMode === 'pan' ? copy.wheelPan : copy.wheelZoom}</button>}
       {onExportCanvas && <button type="button" role="menuitem" data-testid="workflow-export-png" onClick={() => { onExportCanvas('png'); closePopover(true); }}><ImageDown size={15} />{copy.exportPng}{exportSelection ? copy.selectionSuffix : ''}</button>}
       {onExportCanvas && <button type="button" role="menuitem" data-testid="workflow-export-pdf" onClick={() => { onExportCanvas('pdf'); closePopover(true); }}><FileDown size={15} />{copy.exportPdf}{exportSelection ? copy.selectionSuffix : ''}</button>}
+      {autoMediaDerive && onToggleAutoMediaDerive && <>
+        <div className="workflow-toolbar__menu-divider" role="separator" aria-label={copy.autoDerive} title={copy.autoDerive} />
+        <button type="button" role="menuitemcheckbox" data-testid="workflow-auto-first-frame" aria-checked={autoMediaDerive.firstFrame} onClick={() => onToggleAutoMediaDerive('firstFrame')}><Camera size={15} />{copy.autoFirstFrame}{autoMediaDerive.firstFrame ? ' ✓' : ''}</button>
+        <button type="button" role="menuitemcheckbox" data-testid="workflow-auto-last-frame" aria-checked={autoMediaDerive.lastFrame} onClick={() => onToggleAutoMediaDerive('lastFrame')}><Camera size={15} />{copy.autoLastFrame}{autoMediaDerive.lastFrame ? ' ✓' : ''}</button>
+        <button type="button" role="menuitemcheckbox" data-testid="workflow-auto-av-split" aria-checked={autoMediaDerive.avSplit} onClick={() => onToggleAutoMediaDerive('avSplit')}><Workflow size={15} />{copy.autoAvSplit}{autoMediaDerive.avSplit ? ' ✓' : ''}</button>
+        <div className="workflow-toolbar__menu-divider" role="separator" />
+      </>}
       <button type="button" role="menuitem" onClick={() => setOpenPopover('shortcuts')}><Keyboard size={15} />{copy.shortcuts}</button>
     </ResponsivePopover>
   ) : openPopover === 'zoom' ? (

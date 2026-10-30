@@ -48,7 +48,10 @@ export interface WorkflowAudioToolHandlers {
   stemSplit?: (id: string) => void;
 }
 
-const PRIMARY_KEYS = new Set(['stop', 'run', 'copy', 'download', 'preview', 'group', 'execute-group', 'ungroup', 'export-selection', 'delete']);
+// LibTV 式：常用媒体工具直接带文字露出，其余收进「更多」。
+const PRIMARY_KEYS = new Set(['stop', 'run', 'copy', 'group', 'execute-group', 'ungroup', 'export-selection', 'delete', 'upscale', 'remove-background', 'splitGrid', 'split', 'reverse-prompt', 'video-trim', 'video-av-split', 'video-frame-first', 'video-frame-last', 'video-frame-at', 'video-merge']);
+// LibTV 式：下载 / 放大预览放在工具条最右侧，只显示图标。
+const ICON_KEYS = new Set(['download', 'preview']);
 
 export function WorkflowNodeToolbar({ nodes, onCopy, onDelete, onExport, onRun, onStop, onPromptFocus, onSaveMedia, onReversePrompt, onReplaceMedia, onToggleFreeResize, onAlign, onDistribute, onLayer, onGroup, onUngroup, onExecuteGroup, onPreviewMedia, onFrameSelection, onDesignBoolean, onApplyFrameLayout, imageTools, imageToolBusy = false, videoTools, videoToolBusy = false, audioTools, audioToolBusy = false }: {
   nodes: WorkflowNode[];
@@ -157,15 +160,16 @@ export function WorkflowNodeToolbar({ nodes, onCopy, onDelete, onExport, onRun, 
   // A handful of always-visible actions; everything else sits, labelled, behind "更多".
   const present = actions.filter((action): action is WorkflowToolbarAction => Boolean(action));
   const primary = present.filter(action => PRIMARY_KEYS.has(action.key));
-  const overflow = [...present.filter(action => !PRIMARY_KEYS.has(action.key)), ...alignActions];
+  const iconOnly = present.filter(action => ICON_KEYS.has(action.key));
+  const overflow = [...present.filter(action => !PRIMARY_KEYS.has(action.key) && !ICON_KEYS.has(action.key)), ...alignActions];
   return (
     <WorkflowToolbarShell testId="workflow-node-toolbar">
       {media && onReplaceMedia && <>
         <input ref={inputRef} hidden type="file" accept={`${media.type}/*`} onChange={event => { const file = event.target.files?.[0]; if (file) onReplaceMedia(media.id, file); event.target.value = ''; }} />
       </>}
-      <WorkflowToolbarActions actions={primary.filter(action => action.key !== 'delete')} />
+      <WorkflowToolbarActions showLabels actions={primary.filter(action => action.key !== 'delete')} />
       {overflow.length > 0 && <WorkflowToolbarMenu label="更多" icon={<MoreHorizontal size={18} />} actions={overflow} />}
-      <WorkflowToolbarActions actions={primary.filter(action => action.key === 'delete')} />
+      <WorkflowToolbarActions actions={[...iconOnly, ...primary.filter(action => action.key === 'delete')]} />
     </WorkflowToolbarShell>
   );
 }

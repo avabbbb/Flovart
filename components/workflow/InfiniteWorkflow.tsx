@@ -1,3 +1,4 @@
+import { anchorApprovalPatch } from '../../services/anchorApproval';
 import { deriveWorkflowLayerPreview } from './layerPreview';
 import { nanoid } from 'nanoid';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -13,6 +14,7 @@ import { mediaKindOf } from '../studio/assetLibraryShared';
 import type { AssetSuggestion } from '../MentionList';
 import type { MentionData } from '../MediaMentionExtension';
 import { createWorkflowNode, WORKFLOW_NODE_SPECS } from './constants';
+import { inheritGenerationConfig } from '../../services/generationInheritance';
 import { applyWorkflowMutation, redoWorkflowDraftChangeSet, undoWorkflowDraftChangeSet, workflowDocumentOperationsFromFrames } from './draftAuthority';
 import {
   discardWorkflowMediaRecord,
@@ -86,6 +88,7 @@ import {
   runWorkflowVideoMergeOperation,
   runWorkflowVideoTrimOperation,
 } from '../../services/workflowVideoOperations';
+import { loadAutoMediaDeriveSettings, planAutoMediaDerivations, saveAutoMediaDeriveSettings, type AutoMediaDeriveSettings } from '../../services/autoMediaDerive';
 import { runWorkflowAudioSpeedOperation, runWorkflowAudioStemSplitOperation, runWorkflowAudioTrimOperation } from '../../services/workflowAudioOperations';
 import { exportMediaArchive } from '../../utils/batchMediaExport';
 import { exportWorkflowCanvas, pickWorkflowExportNodes, type WorkflowCanvasExportFormat } from './canvasExport';
@@ -797,6 +800,35 @@ export function InfiniteWorkflow({
     extractFrameAt: id => openVideoTool('extract-frame', id),
   }), [openVideoTool, handleExtractFrame]);
 
+  // 自动派生（默认关闭）：视频节点新进入成功状态时，按设置串行执行截帧 / 音视频分离 Operation。
+  const [autoMediaDerive, setAutoMediaDerive] = useState<AutoMediaDeriveSettings>(() => loadAutoMediaDeriveSettings());
+  const autoDerivePrevRef = useRef<{ projectId: string; nodes: typeof project.nodes } | null>(null);
+  const autoDeriveHandledRef = useRef(new Set<string>());
+  const autoDeriveQueueRef = useRef<Promise<void>>(Promise.resolve());
+  useEffect(() => {
+    const previous = autoDerivePrevRef.current;
+    const previousNodes = previous && previous.projectId === project.id ? previous.nodes : undefined;
+    autoDerivePrevRef.current = { projectId: project.id, nodes: project.nodes };
+    const tasks = planAutoMediaDerivations(previousNodes, project.nodes, autoMediaDerive, autoDeriveHandledRef.current);
+    if (tasks.length === 0) return;
+    tasks.forEach(task => autoDeriveHandledRef.current.add(task.nodeId));
+    const projectId = project.id;
+    for (const task of tasks) {
+      autoDeriveQueueRef.current = autoDeriveQueueRef.current.then(async () => {
+        if (projectRef.current.id !== projectId || !projectRef.current.nodes.some(node => node.id === task.nodeId)) return;
+        const frame = currentFrame();
+        try {
+          const result = task.kind === 'av-split'
+            ? await runWorkflowVideoAvSplitOperation(projectId, task.nodeId, imageToolRuntime)
+            : await runWorkflowVideoExtractFrameOperation(projectId, task.nodeId, task.kind === 'first-frame' ? 'first' : 'last', imageToolRuntime);
+          if (result.status === 'committed' && projectRef.current.id === projectId) pushHistory(frame);
+        } catch (error) {
+          setNotice(displayError(error, task.kind === 'av-split' ? '自动音视频分离失败' : '自动截帧失败'));
+        }
+      });
+    }
+  }, [project.id, project.nodes, autoMediaDerive, currentFrame, imageToolRuntime, pushHistory]);
+
   const activeVideoToolNode = videoTool ? project.nodes.find(node => node.id === videoTool.nodeId) || null : null;
   const activeVideoToolMedia = useWorkflowMediaUrl(activeVideoToolNode?.metadata.storageKey, activeVideoToolNode?.metadata.href);
 
@@ -1276,6 +1308,11 @@ export function InfiniteWorkflow({
     const batchId = nanoid();
     const updatedShots: ScriptShot[] = [...breakdown.shots];
 
+    // 参数继承：新分镜沿用本脚本已有同模式分镜的模型/比例/风格，避免回退到默认模型。
+    const inheritedConfig = inheritGenerationConfig(mode, breakdown.shots.map(shot => {
+      const existingId = mode === 'image' ? shot.imageNodeId : shot.videoNodeId;
+      return existingId ? snapshot.nodes.find(n => n.id === existingId) : undefined;
+    }));
     shotsToGenerate.forEach((shot, index) => {
       const col = index % perRow;
       const row = Math.floor(index / perRow);
@@ -1286,7 +1323,7 @@ export function InfiniteWorkflow({
       const newNode = createWorkflowNode(nodeId, mode, {
         x: originX + col * (nodeWidth + gapX),
         y: startY + row * (nodeHeight + gapY),
-      }, { prompt, status: 'idle' });
+      }, { prompt, status: 'idle', ...(inheritedConfig ? { config: inheritedConfig } : {}) });
       newNode.title = `分镜 ${shot.index + 1}`;
       ops.push({ type: 'add_node', node: newNode });
       ops.push({ type: 'connect_nodes', fromNodeId: scriptNodeId, toNodeId: nodeId });
@@ -1475,6 +1512,7 @@ export function InfiniteWorkflow({
     const ops: WorkflowDocumentOperation[] = [];
     const newNodeIds: string[] = [];
     const batchId = nanoid();
+    const inheritedConfig = inheritGenerationConfig(command.mode, usedSources);
     for (let i = 0; i < command.generateCount; i++) {
       const col = i % cols;
       const row = Math.floor(i / cols);
@@ -1484,7 +1522,7 @@ export function InfiniteWorkflow({
       const newNode = createWorkflowNode(nodeId, command.mode, {
         x: startX + col * (nodeWidth + gapX),
         y: startY + row * (nodeHeight + gapY),
-      }, { prompt, status: 'idle' });
+      }, { prompt, status: 'idle', ...(inheritedConfig ? { config: inheritedConfig } : {}) });
       newNode.title = `${command.label} ${i + 1}`;
       ops.push({ type: 'add_node', node: newNode });
       for (const sourceId of sourceIds) {
@@ -2329,14 +2367,15 @@ export function InfiniteWorkflow({
     setSlashMenu(null);
     setNotice(null);
     setSelectedConnectionId(null);
-    if (event.button === 0 && (event.ctrlKey || event.metaKey) && tool === 'select') {
+    if (event.button === 0 && tool === 'select' && !spacePressedRef.current) {
       event.preventDefault();
       const point = screenToWorkflow(event.clientX, event.clientY);
-      const box = { start: point, current: point, additive: event.shiftKey, initialIds: [...selectedIdsRef.current] };
+      const additive = event.shiftKey || event.ctrlKey || event.metaKey;
+      const box = { start: point, current: point, additive, initialIds: [...selectedIdsRef.current] };
       interactionRef.current = { type: 'selection', pointerId: event.pointerId, box };
       setOverlayHidden(true);
       setSelectionBox(box);
-      if (!event.shiftKey) selectNodes([]);
+      if (!additive) selectNodes([]);
       return;
     }
     if (event.button === 0 || event.button === 1) {
@@ -2396,7 +2435,15 @@ export function InfiniteWorkflow({
   const workflowWidth = Math.max(360, rootSize?.width || 1000);
   const overlayCenter = overlayBounds ? project.viewport.x + ((overlayBounds.left + overlayBounds.right) / 2) * project.viewport.k : 0;
   const toolbarLeft = Math.max(8, Math.min(overlayCenter, workflowWidth - 8));
-  const toolbarTop = overlayBounds ? Math.max(8, project.viewport.y + overlayBounds.top * project.viewport.k - Math.max(72, 56 + 28 * project.viewport.k)) : 0;
+  // 选中节点属于已画框的分组时，工具条要浮在分组框表头之上，不压住「分组 N 个节点」标签（框顶 = 组内最高节点 - 20 - 44，见 groupFrames）。
+  const selectedGroupTop = selectedNodeData.reduce((top, node) => {
+    if (!node.batchId || !(node.batchGroupSource === 'manual' || expandedBatches.has(node.batchId))) return top;
+    const members = project.nodes.filter(member => member.batchId === node.batchId);
+    if (members.length < 2) return top;
+    return Math.min(top, ...members.map(member => member.position.y - 64));
+  }, Infinity);
+  const overlayTop = overlayBounds ? Math.min(overlayBounds.top, selectedGroupTop) : 0;
+  const toolbarTop = overlayBounds ? Math.max(8, project.viewport.y + overlayTop * project.viewport.k - Math.max(72, 56 + 28 * project.viewport.k) + (overlayTop < overlayBounds.top ? 24 : 0)) : 0;
   const promptWorkflowWidth = workflowWidth;
   // The prompt bar belongs to the node: about as wide as the node on screen
   // (420-560px), never a full-width strip that hides the canvas.
@@ -2429,7 +2476,7 @@ export function InfiniteWorkflow({
   const hiddenByBatch = useMemo(() => {
     const hidden = new Set<string>();
     for (const [batchId, group] of batchGroups) {
-      if (group.length > 1 && (!expandedBatches.has(batchId) || group.length > 4)) {
+      if (group.length > 1 && !group.some(node => node.batchGroupSource === 'manual') && (!expandedBatches.has(batchId) || group.length > 4)) {
         for (const node of group) hidden.add(node.id);
       }
     }
@@ -2439,7 +2486,7 @@ export function InfiniteWorkflow({
   const collapsedBatches = useMemo(() => {
     const result: { batchId: string; head: WorkflowNodeData; count: number }[] = [];
     for (const [batchId, group] of batchGroups) {
-      if (group.length > 1 && !expandedBatches.has(batchId)) {
+      if (group.length > 1 && !group.some(node => node.batchGroupSource === 'manual') && !expandedBatches.has(batchId)) {
         const root = group.find(n => n.batchIndex === 0) || group[0];
         const primaryId = root?.metadata.primaryImageId;
         const head = (primaryId && group.find(n => n.id === primaryId)) || root;
@@ -2450,10 +2497,27 @@ export function InfiniteWorkflow({
   }, [batchGroups, expandedBatches]);
 
   const expandedBatchGalleries = useMemo(() => [...batchGroups].flatMap(([batchId, group]) => (
-    group.length > 4 && expandedBatches.has(batchId)
+    group.length > 4 && expandedBatches.has(batchId) && !group.some(node => node.batchGroupSource === 'manual')
       ? [{ batchId, group: [...group].sort((left, right) => (left.batchIndex ?? 0) - (right.batchIndex ?? 0)) }]
       : []
   )), [batchGroups, expandedBatches]);
+
+  // LibTV 式分组框：手动分组常驻展开并画框，展开中的自动批次也画框；框体不拦截指针，只有标签可拖动整组。
+  const groupFrames = useMemo(() => [...batchGroups].flatMap(([batchId, group]) => {
+    if (group.length < 2 || group.some(node => hiddenByBatch.has(node.id))) return [];
+    const manual = group.some(node => node.batchGroupSource === 'manual');
+    if (!manual && !expandedBatches.has(batchId)) return [];
+    const hues = [150, 8, 210, 38, 280];
+    const pad = 20;
+    const left = Math.min(...group.map(node => node.position.x)) - pad;
+    // 节点标题浮在节点框上方约 20px；给分组标签留出独立表头，避免压住标题。
+    const top = Math.min(...group.map(node => node.position.y)) - pad - 44;
+    const right = Math.max(...group.map(node => node.position.x + node.width)) + pad;
+    const bottom = Math.max(...group.map(node => node.position.y + node.height)) + pad;
+    let hash = 0;
+    for (const char of batchId) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+    return [{ batchId, group, manual, hue: hues[hash % hues.length], box: { left, top, width: right - left, height: bottom - top } }];
+  }), [batchGroups, expandedBatches, hiddenByBatch]);
 
   // 视口裁剪：只挂载视口附近的节点 DOM；连线额外保留与可见节点相邻的一端，避免边线断裂。
   // 首帧尚未测量到容器尺寸时不裁剪，避免挂载瞬间丢节点（也兼容无布局的测试环境）。
@@ -2628,6 +2692,12 @@ export function InfiniteWorkflow({
         edgesVisible={edgesVisible}
         onToggleEdges={() => setEdgesVisible(v => !v)}
         onAutoLayout={autoLayout}
+        autoMediaDerive={autoMediaDerive}
+        onToggleAutoMediaDerive={key => setAutoMediaDerive(current => {
+          const next = { ...current, [key]: !current[key] };
+          saveAutoMediaDeriveSettings(next);
+          return next;
+        })}
         zoomLevel={project.viewport.k}
         onZoomIn={zoomIn}
         onZoomOut={zoomOut}
@@ -2651,6 +2721,13 @@ export function InfiniteWorkflow({
         </div>
       )}
       <div ref={worldRef} className="workflow-world" style={{ transform: `translate(${project.viewport.x}px, ${project.viewport.y}px) scale(${project.viewport.k})` }}>
+        {groupFrames.map(({ batchId, group, manual, hue, box }) => (
+          <div key={`group-frame-${batchId}`} className="workflow-group-frame" data-workflow-group-frame={batchId} data-source={manual ? 'manual' : 'auto'} style={{ left: box.left, top: box.top, width: box.width, height: box.height, ['--group-hue' as string]: hue }}>
+            <div className="workflow-group-frame__label" data-workflow-overlay onPointerDown={event => startBatchDrag(event, batchId, group)} title={language === 'zho' ? '拖动以移动整组' : 'Drag to move the group'}>
+              {language === 'zho' ? `分组 ${group.length} 个节点` : `Group · ${group.length} nodes`}
+            </div>
+          </div>
+        ))}
         <WorkflowConnections
           nodes={connectionNodes}
           connections={edgesVisible === false ? [] : project.connections.filter(connection => {
@@ -2823,6 +2900,11 @@ export function InfiniteWorkflow({
             onPreviewMedia={setPreviewNode}
             onNeedPoster={() => requestVideoPoster(node.id)}
             onChangeTitle={title => { if (!node.isLocked) applyOps([{ type: 'update_node', id: node.id, patch: { title } }]); }}
+            onToggleAnchorApproval={node.anchor ? () => {
+              if (node.isLocked) return;
+              const patch = anchorApprovalPatch(node);
+              if (patch) applyOps([{ type: 'update_node', id: node.id, patch }]);
+            } : undefined}
             renameSignal={renameSignal?.nodeId === node.id ? renameSignal.nonce : undefined}
             onFocusNode={() => focusNode(node.id)}
             pluginContext={workflowNodePluginContextFromProject({

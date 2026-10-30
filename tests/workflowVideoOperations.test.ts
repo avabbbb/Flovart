@@ -140,4 +140,14 @@ describe('workflow video operation executors', () => {
       status: 'error', error: 'ffmpeg 不可用', operation: { takes: [{ status: 'error', error: 'ffmpeg 不可用' }] },
     });
   });
+
+  it('merges clips in shot.index order regardless of selection order', async () => {
+    const state = harness();
+    const [one, two] = state.current.nodes;
+    one.shot = { index: 2 };
+    two.shot = { index: 1 };
+    const executeVideoMerge = vi.fn().mockResolvedValue(new Blob(['merged'], { type: 'video/mp4' }));
+    await runWorkflowVideoMergeOperation('project-video', ['video-1', 'video-2'], { ...state.runtime, executeVideoMerge });
+    expect(executeVideoMerge).toHaveBeenCalledWith([expect.any(Blob), expect.any(Blob)], ['two.mp4', 'one.mp4']);
+  });
 });

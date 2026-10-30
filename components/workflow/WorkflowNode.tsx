@@ -81,6 +81,7 @@ export function WorkflowNode({
   onDoubleClick,
   onPreviewMedia,
   onChangeTitle,
+  onToggleAnchorApproval,
   onFocusNode,
   renameSignal,
   onNeedPoster,
@@ -122,6 +123,8 @@ export function WorkflowNode({
   onDoubleClick?: () => void;
   onPreviewMedia?: (node: WorkflowNodeData) => void;
   onChangeTitle?: (title: string) => void;
+  /** 锚点节点：批准/取消批准（画布用 update_node 写入，可撤销）。 */
+  onToggleAnchorApproval?: () => void;
   onFocusNode?: () => void;
   renameSignal?: number;
   /** 视频缺少封面时通知画布按需补齐（由画布持有请求，避免节点卸载后遗留缓存）。 */
@@ -351,6 +354,27 @@ export function WorkflowNode({
           <span className="workflow-node__title-text">{node.title}</span>
           <Pencil className="workflow-node__title-edit-icon" size={11} />
           {mediaDimensions && <span className="workflow-node__title-meta">{mediaDimensions}</span>}
+          {node.anchor && (
+            <button
+              type="button"
+              className={`workflow-node__anchor-chip${node.anchor.approved ? ' is-approved' : ''}`}
+              data-testid="anchor-approval-toggle"
+              data-workflow-overlay
+              aria-pressed={node.anchor.approved}
+              disabled={!onToggleAnchorApproval}
+              title={node.anchor.approved
+                ? (language === 'en' ? 'Revoke approval: downstream shots stop using this anchor' : '取消批准：下游镜头将不再使用该锚点')
+                : (language === 'en' ? 'Approve: shots will reference this anchor' : '批准：镜头生成时自动引用该锚点')}
+              onPointerDown={event => event.stopPropagation()}
+              onDoubleClick={event => event.stopPropagation()}
+              onClick={event => { event.stopPropagation(); onToggleAnchorApproval?.(); }}
+            >
+              {node.anchor.approved && <Check size={11} />}
+              {node.anchor.approved
+                ? (language === 'en' ? 'Approved' : '已批准')
+                : (language === 'en' ? 'Approve' : '批准锚点')}
+            </button>
+          )}
         </div>
       )}
       <div className="workflow-node__body">

@@ -213,6 +213,8 @@ function normalizeDocumentNode(node: WorkflowNode): WorkflowNode {
   if (node.batchIndex !== undefined) normalized.batchIndex = node.batchIndex;
   if (node.batchGroupSource !== undefined) normalized.batchGroupSource = node.batchGroupSource;
   if (node.objectVersion !== undefined) normalized.objectVersion = node.objectVersion;
+  if (node.shot !== undefined) normalized.shot = node.shot;
+  if (node.anchor !== undefined) normalized.anchor = node.anchor;
   return normalized;
 }
 

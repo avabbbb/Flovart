@@ -7,7 +7,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 
 import { readSkillPackageEntries, SkillRegistry } from './skill-registry.js';
-import { safeSkillPackageName } from './skill-package.js';
+import { parseProductionSkillManifest, safeSkillPackageName } from './skill-package.js';
 import {
   assertInstallableHubUrl,
   fetchHubSkillList,
@@ -41,6 +41,8 @@ const SKILL_COMMAND_NAMES = new Set([
   'skill.install',
   'skill.uninstall',
   'skill.hub.list',
+  'skill.init',
+  'skill.validate',
   'web.open',
 ]);
 
@@ -56,6 +58,55 @@ function okResult(result) {
 
 function resolveProjectDir(raw) {
   return path.resolve(String(raw || process.cwd()));
+}
+
+function scaffoldSkillFiles(id, handle, displayName) {
+  const manifest = [
+    'schemaVersion: flovart.production-skill/1',
+    'id: ' + id,
+    'version: 0.1.0',
+    'runtime:',
+    '  minVersion: 0.3.0',
+    'capabilities:',
+    '  - image.generate',
+    '  - video.generate',
+    'permissions:',
+    '  network: none',
+    '  secrets: none',
+    '  filesystem: package-readonly',
+    'gates:',
+    '  - id: approve-spec',
+    '    type: spec',
+    'license: MIT',
+    'inputs:',
+    '  - id: topic',
+    '    label: ' + JSON.stringify('主题或 Brief'),
+    '    kind: longtext',
+    '    required: true',
+    '    placeholder: ' + JSON.stringify('在这里填写主题或粘贴 Brief'),
+    '',
+  ].join('\n');
+  const skill = [
+    '---',
+    'name: ' + handle,
+    'description: ' + JSON.stringify(displayName + '：把主题编译成可审片的 Flovart 制作计划'),
+    '---',
+    '',
+    '# ' + displayName,
+    '',
+    '1. 读取 inputs（topic 等），先输出叙事节拍与视觉方案，等待用户确认（gate: approve-spec）。',
+    '2. 确认后按镜头创建 Flovart 节点；付费生成必须经过确认或自动模式的授权上限。',
+    '3. 输出 ProductionSpec，供审片与复跑。',
+    '',
+  ].join('\n');
+  const openai = [
+    'interface:',
+    '  display_name: ' + JSON.stringify(displayName),
+    '  short_description: ' + JSON.stringify(displayName + ' 制作计划 Skill'),
+    '  default_prompt: ' + JSON.stringify('Use $' + handle + ' to turn my topic into a Flovart production plan.'),
+    '',
+  ].join('\n');
+  return { 'flovart.skill.yaml': manifest, 'SKILL.md': skill, 'agents/openai.yaml': openai };
 }
 
 export async function runSkillCommand(command, args = {}) {
@@ -143,6 +194,42 @@ export async function runSkillCommand(command, args = {}) {
         return okResult({ command, hubUrl: normalized, skills });
       } catch (cause) {
         return error(cause?.code || 'UNREACHABLE', cause instanceof Error ? cause.message : String(cause));
+      }
+    }
+
+    case 'skill.init': {
+      if (!id) return error('INVALID_ARGUMENT', 'skill.init 需要 <id>（如 community.my-skill）。');
+      if (!safeSkillPackageName(id)) return error('INVALID_ARGUMENT', '无效的 Skill id：' + id);
+      const handle = id.split('.').at(-1);
+      const dir = path.resolve(String(args.dir || path.join(projectDir, '.agents', 'skills', handle)));
+      if (await dirExists(dir)) return error('ALREADY_EXISTS', '目录已存在，拒绝覆盖：' + dir);
+      const files = scaffoldSkillFiles(id, handle, String(args.name || handle));
+      try {
+        parseProductionSkillManifest(files['flovart.skill.yaml']);
+      } catch (cause) {
+        return error('REJECTED', cause instanceof Error ? cause.message : String(cause));
+      }
+      for (const [relative, content] of Object.entries(files)) {
+        const target = path.join(dir, relative);
+        await fs.mkdir(path.dirname(target), { recursive: true });
+        await fs.writeFile(target, content, 'utf8');
+      }
+      return okResult({ command, id, dir, files: Object.keys(files), next: ['skill.validate --from-dir ' + dir, 'skill.install ' + id + ' --from-dir ' + dir] });
+    }
+
+    case 'skill.validate': {
+      const fromDir = String(args.fromDir ?? args['from-dir'] ?? args._?.[0] ?? '').trim();
+      if (!fromDir) return error('INVALID_ARGUMENT', 'skill.validate 需要 --from-dir <dir>。');
+      const dir = path.resolve(fromDir);
+      try {
+        const entries = await readSkillPackageEntries(dir);
+        const manifestEntry = entries.find(entry => entry.path === 'flovart.skill.yaml');
+        if (!manifestEntry) return error('PACKAGE_REJECTED', '缺少 flovart.skill.yaml：' + dir);
+        const manifest = parseProductionSkillManifest(manifestEntry.content);
+        const warnings = entries.some(entry => entry.path === 'SKILL.md') ? [] : ['缺少 SKILL.md：Agent 无法读取执行说明'];
+        return okResult({ command, dir, manifest, fileCount: entries.length, warnings });
+      } catch (cause) {
+        return error('PACKAGE_REJECTED', cause instanceof Error ? cause.message : String(cause));
       }
     }
 

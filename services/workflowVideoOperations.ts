@@ -1,6 +1,7 @@
 import { parseWorkflowOperationParameters } from '../components/workflow/operationRegistry';
 import { extractVideoFrame, type VideoFramePosition } from './videoFrameExtractor';
 import { mergeVideos, splitAudioVideo, trimVideo } from './videoTools';
+import { orderNodesByShot } from './shotPlanning';
 import {
   commitWorkflowOperation,
   failWorkflowOperation,
@@ -110,8 +111,10 @@ async function executeVideoMerge(
   runtime: WorkflowVideoOperationRuntime,
 ) {
   try {
-    const blobs = await Promise.all(started.sourceNodes.map(source => loadWorkflowOperationSourceBlob(source, runtime)));
-    const merged = await (runtime.executeVideoMerge || mergeVideos)(blobs, started.sourceNodes.map(source => source.metadata.name || 'video.mp4'));
+    // 镜头表拼接：有 shot.index 的按镜号排序，其余按选择顺序。
+    const ordered = orderNodesByShot(started.sourceNodes);
+    const blobs = await Promise.all(ordered.map(source => loadWorkflowOperationSourceBlob(source, runtime)));
+    const merged = await (runtime.executeVideoMerge || mergeVideos)(blobs, ordered.map(source => source.metadata.name || 'video.mp4'));
     return await commitWorkflowOperation(runtime, projectId, started, [{
       blob: merged, title: '视频拼接', fileName: 'merged.mp4', mimeType: merged.type || 'video/mp4', role: 'result_video',
     }]);

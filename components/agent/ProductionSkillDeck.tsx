@@ -13,6 +13,7 @@ import {
 import { createLocalSkillRegistry, skillRegistryErrorMessage } from '../../services/localSkillRegistry';
 import { hubSkillExternalUrl } from '../../services/skillHubClient';
 import { buildProductionSkillStarterPrompt, productionSkillHandle } from '../../services/productionSkillLaunch';
+import type { SkillInputSlot } from '../../services/skillInputs';
 import { useSkillHubStore } from '../../stores/useSkillHubStore';
 import { useWorkspaceStore } from '../../stores/useWorkspaceStore';
 
@@ -268,14 +269,17 @@ export function ProductionSkillDeck({
     setLoading(true);
     setDeckError(null);
     try {
+      let inputs: readonly SkillInputSlot[] | undefined;
       if (skill.source === 'bundled') {
         const bundled = getBundledProductionSkill(skill.id);
-        if (!bundled) throw new Error(`${copy.missingBundled}: ${skill.id}`);
+        if (!bundled) throw new Error(copy.missingBundled + ': ' + skill.id);
+        inputs = bundled.inputs;
         onChange(await createProductionSkillAttachment(bundled));
       } else {
         const registry = await createLocalSkillRegistry();
         if (!registry) throw new Error(copy.desktopRequired);
         const manifest = await registry.getSkillManifest(skill.id);
+        inputs = manifest.inputs;
         onChange(createSkillAttachment({
           id: manifest.id,
           version: manifest.version,
@@ -284,7 +288,7 @@ export function ProductionSkillDeck({
           trustTier: manifest.trustTier,
         }));
       }
-      if (seedPrompt) onPromptChange?.(buildProductionSkillStarterPrompt({ id: skill.id, version: skill.version || '', displayName: skill.name }));
+      if (seedPrompt) onPromptChange?.(buildProductionSkillStarterPrompt({ id: skill.id, version: skill.version || '', displayName: skill.name, inputs }));
       setOpen(false);
       setQuery('');
     } catch (error) {

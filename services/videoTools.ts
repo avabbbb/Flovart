@@ -98,12 +98,12 @@ async function splitAudioVideoOnFFmpeg(blob: Blob, originalName: string): Promis
 
   try {
     await ffmpeg.writeFile(inputName, await fetchFile(blob));
+    // 先提取音轨：无音轨的视频会在这里失败，直接给出明确原因，避免白做视频轨。
+    const audioCode = await ffmpeg.exec(['-i', inputName, '-vn', '-acodec', 'libmp3lame', '-q:a', '2', audioOutput]);
+    if (audioCode !== 0) throw new Error('未能提取音轨：源视频可能没有音频，无需分离');
     // 提取纯视频轨 (静音)
     const videoCode = await ffmpeg.exec(['-i', inputName, '-an', '-c:v', 'copy', videoOutput]);
     assertFFmpegExitCode(videoCode);
-    // 提取纯音频轨
-    const audioCode = await ffmpeg.exec(['-i', inputName, '-vn', '-acodec', 'libmp3lame', '-q:a', '2', audioOutput]);
-    assertFFmpegExitCode(audioCode);
 
     const videoData = await ffmpeg.readFile(videoOutput);
     const audioData = await ffmpeg.readFile(audioOutput);

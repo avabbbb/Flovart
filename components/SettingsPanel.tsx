@@ -1,3 +1,4 @@
+import { TokenUsageSection, usageTabLabel } from './TokenUsageSection';
 import { saveBlob } from '../services/desktopNetwork';
 import React from 'react';
 import { AnimatePresence, motion } from 'motion/react';
@@ -465,6 +466,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
     const [editDefaultModel, setEditDefaultModel] = React.useState('');
     const [editPricingRules, setEditPricingRules] = React.useState<ApiPricingRule[]>([]);
     const [editBudgetPolicy, setEditBudgetPolicy] = React.useState<ApiBudgetPolicy>({ enabled: false, monthlyLimit: 100, warningPercent: 80, hardStop: true, currency: 'USD' });
+    const [editStreamUsage, setEditStreamUsage] = React.useState(false);
     const [newModelId, setNewModelId] = React.useState('');
     const [extraConfig, setExtraConfig] = React.useState<Record<string, string>>({});
     // 批量测试状态
@@ -478,7 +480,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
     const [autoDetectedProvider, setAutoDetectedProvider] = React.useState<AIProvider | null>(null);
     const [endpointFlavor, setEndpointFlavor] = React.useState<'google' | 'openai-compatible' | 'openrouter-compatible' | null>(null);
     const [detectedCapabilities, setDetectedCapabilities] = React.useState<AICapability[]>([]);
-    const [activeTab, setActiveTab] = React.useState<'api' | 'models' | 'security'>('api');
+    const [activeTab, setActiveTab] = React.useState<'api' | 'models' | 'security' | 'usage'>('api');
     const [mobileDetailOpen, setMobileDetailOpen] = React.useState(false);
     const [showAdvancedApi, setShowAdvancedApi] = React.useState(false);
     const [runtimeProviders, setRuntimeProviders] = React.useState<RuntimeProviderStatus[] | null>(null);
@@ -698,6 +700,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 extraConfig: extraToSave,
                 pricingRules: editPricingRules,
                 budgetPolicy: editBudgetPolicy,
+                streamUsage: editStreamUsage ? 'request' : undefined,
             });
         } else {
             // 新增模式
@@ -715,6 +718,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 extraConfig: extraToSave,
                 pricingRules: editPricingRules,
                 budgetPolicy: editBudgetPolicy,
+                streamUsage: editStreamUsage ? 'request' : undefined,
             });
         }
         handleCancelEdit();
@@ -733,6 +737,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
         setExtraConfig(item.extraConfig || {});
         setEditPricingRules(item.pricingRules || []);
         setEditBudgetPolicy(item.budgetPolicy || { enabled: false, monthlyLimit: 100, warningPercent: 80, hardStop: true, currency: 'USD' });
+        setEditStreamUsage(item.streamUsage === 'request');
         setEndpointFlavor((item.extraConfig?.endpointFlavor as 'google' | 'openai-compatible' | 'openrouter-compatible' | undefined) || null);
         setDetectedCapabilities(item.capabilities?.length ? [...item.capabilities] : []);
         setValidationResult(null);
@@ -750,6 +755,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
         setExtraConfig({});
         setEditPricingRules([]);
         setEditBudgetPolicy({ enabled: false, monthlyLimit: 100, warningPercent: 80, hardStop: true, currency: 'USD' });
+        setEditStreamUsage(false);
         setValidationResult(null);
         setFetchedModels([]);
         setFetchError(null);
@@ -917,6 +923,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
             routeMappings: k.routeMappings,
             pricingRules: k.pricingRules,
             budgetPolicy: k.budgetPolicy,
+            streamUsage: k.streamUsage,
             key: '***', // 不导出明文 key
         }));
         const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
@@ -970,6 +977,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                         routeMappings: item.routeMappings,
                         pricingRules: item.pricingRules,
                         budgetPolicy: item.budgetPolicy,
+                        streamUsage: item.streamUsage === 'request' ? 'request' : undefined,
                     });
                     importedCount++;
                 }
@@ -997,6 +1005,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
             routeMappings: k.routeMappings,
             pricingRules: k.pricingRules,
             budgetPolicy: k.budgetPolicy,
+            streamUsage: k.streamUsage,
         }));
         const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
         void saveBlob(blob, `flovart-api-configs-full-${new Date().toISOString().slice(0, 10)}.json`).catch(error => console.warn('[Settings] Export failed.', error));
@@ -1054,6 +1063,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                         { key: 'api', label: t('settingsExtra.apiTab') },
                         { key: 'models', label: t('settingsExtra.modelsTab') },
                         { key: 'security', label: t('settingsExtra.securityTab') },
+                        { key: 'usage', label: usageTabLabel(t) },
                     ] as const).map(tab => (
                         <button
                             key={tab.key}
@@ -1367,6 +1377,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                         </div>
                     </section>
                 )}
+                {activeTab === 'usage' && <TokenUsageSection t={t} />}
                 </motion.div>
                 </AnimatePresence>
             </div>
@@ -1692,6 +1703,15 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                                     <label className="text-[11px] text-[var(--isl-ink-soft)]">{t('settingsExtra.keyDialog.currency')}<select value={editBudgetPolicy.currency} onChange={event => setEditBudgetPolicy(policy => ({ ...policy, currency: event.target.value as 'USD' | 'CNY' }))} className={`${inputClass} mt-1`}><option value="USD">USD</option><option value="CNY">CNY</option></select></label>
                                     <label className="flex items-end"><button type="button" onClick={() => setEditBudgetPolicy(policy => ({ ...policy, hardStop: !policy.hardStop }))} aria-pressed={editBudgetPolicy.hardStop} className={`isl-chip w-full px-3 py-2.5 text-xs ${editBudgetPolicy.hardStop ? 'isl-chip--active' : ''}`}>{t('settingsExtra.keyDialog.overBudgetBlock')} · {t(editBudgetPolicy.hardStop ? 'settingsExtra.keyDialog.enabled' : 'settingsExtra.keyDialog.disabled')}</button></label>
                                 </motion.div>}
+                            </div>
+                            <div className={sectionPanelClass} data-testid="key-stream-usage">
+                                <div className="flex items-center justify-between gap-3">
+                                    <div>
+                                        <div className="text-sm font-bold text-[var(--isl-ink)]">流式用量</div>
+                                        <div className="mt-0.5 text-[11px] text-[var(--isl-ink-soft)]">开启后在 OpenAI 兼容流式请求中附带 stream_options.include_usage，让网关返回 Token 用量；网关拒绝（400）时自动去掉重试。默认关闭，不改请求。</div>
+                                    </div>
+                                    <button type="button" onClick={() => setEditStreamUsage(value => !value)} aria-pressed={editStreamUsage} data-testid="key-stream-usage-toggle" className={`isl-chip shrink-0 px-3 py-1.5 text-xs ${editStreamUsage ? 'isl-chip--active' : ''}`}>{editStreamUsage ? '请求 usage' : '仅被动读取'}</button>
+                                </div>
                             </div>
 
                             {/* extraConfig（如 Google Veo projectId） */}

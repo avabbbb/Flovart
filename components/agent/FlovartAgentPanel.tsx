@@ -6,10 +6,11 @@ import {
   type FlovartAgentSnapshot,
   type FlovartAgentTurnEvent,
 } from '../../services/managedFlovartAgent';
-import { WorkflowAgentBridge } from '../../services/workflowAgentBridge';
+import { setAgentGateKeysProvider, WorkflowAgentBridge } from '../../services/workflowAgentBridge';
 import { WorkflowAgentMessages, type WorkflowAgentDisplayMessage } from '../workflow/WorkflowAgentMessages';
 import type { WorkflowProject } from '../workflow/types';
 import type { AgentPanelStatus } from './agentWorkspaceStore';
+import { consumeSpendMandate, createSpendMandate, defaultMandateTasks, describeSpendMandate, evaluateSpendMandate, spendDemand, type AgentConfirmRequest, type AgentSpendMandate } from '../../services/agentSpendMandate';
 import { ProductionSkillDeck } from './ProductionSkillDeck';
 import {
   createProductionSkillAttachment,
@@ -112,13 +113,16 @@ const userApiKeysRef = useRef(userApiKeys);
   userApiKeysRef.current = userApiKeys;
   const workspaceBridge = useRef<WorkflowAgentBridge | undefined>(undefined);
   const abort = useRef<AbortController | undefined>(undefined);
+  type PendingConfirmation = { summary: string; resolve: (approved: boolean) => void; request?: AgentConfirmRequest; offerMandate?: boolean };
   const composer = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const textarea = useRef<HTMLTextAreaElement>(null);
   const skillAttachmentDirty = useRef(false);
   const activity = useRef(onActivityChange);
   const modeRef = useRef<'manual' | 'auto'>('auto');
-  const confirmationRef = useRef<{ summary: string; resolve: (approved: boolean) => void } | undefined>(undefined);
+  const confirmationRef = useRef<PendingConfirmation | undefined>(undefined);
+  // 自动模式付费授权：第一次生成时确认上限，之后上限内的生成自动批准。
+  const mandateRef = useRef<AgentSpendMandate | null>(null);
   const [messages, setMessages] = useState<WorkflowAgentDisplayMessage[]>([]);
   const [prompt, setPrompt] = useState('');
   const [skillAttachment, setSkillAttachment] = useState<ProductionSkillAttachment>();
@@ -126,13 +130,37 @@ const userApiKeysRef = useRef(userApiKeys);
   const [workspaceStatus, setWorkspaceStatus] = useState<'connecting' | 'ready' | 'error'>('connecting');
   const [sending, setSending] = useState(false);
   const [needsConfiguration, setNeedsConfiguration] = useState(false);
-  const [confirmation, setConfirmation] = useState<{ summary: string; resolve: (approved: boolean) => void }>();
+  const [confirmation, setConfirmation] = useState<PendingConfirmation>();
+  const [mandate, setMandate] = useState<AgentSpendMandate | null>(null);
+  const [mandateTasks, setMandateTasks] = useState(10);
   const [mode, setMode] = useState<'manual' | 'auto'>('auto');
   const [modeOpen, setModeOpen] = useState(false);
   const [references, setReferences] = useState<AgentReference[]>([]);
   const [mentionOpen, setMentionOpen] = useState(false);
   const [mentionQuery, setMentionQuery] = useState('');
   const [attachmentOpen, setAttachmentOpen] = useState(false);
+  const askConfirmation = useRef((summary: string, request?: AgentConfirmRequest): Promise<boolean> => {
+    const current = mandateRef.current;
+    if (modeRef.current === 'auto' && current && request && evaluateSpendMandate(current, request).allow) {
+      const next = consumeSpendMandate(current, request);
+      mandateRef.current = next;
+      setMandate(next);
+      return Promise.resolve(true);
+    }
+    return new Promise<boolean>(resolve => {
+      const offerMandate = modeRef.current === 'auto' && request?.kind === 'generation' && (request.gates?.length ?? 0) > 0;
+      if (offerMandate) setMandateTasks(defaultMandateTasks(request));
+      const next: PendingConfirmation = { summary, resolve, request, offerMandate };
+      confirmationRef.current?.resolve(false); // a newer request supersedes; never leave the agent waiting
+      confirmationRef.current = next;
+      setConfirmation(next);
+      activity.current('waiting');
+    });
+  }).current;
+  useEffect(() => {
+    setAgentGateKeysProvider(() => userApiKeysRef.current);
+    return () => setAgentGateKeysProvider(null);
+  }, []);
   const [replaceTarget, setReplaceTarget] = useState<AgentReference | null>(null);
   const [infoPanel, setInfoPanel] = useState<'context' | 'safety' | null>(null);
   const [sessionsOpen, setSessionsOpen] = useState(false);
@@ -266,6 +294,8 @@ const userApiKeysRef = useRef(userApiKeys);
     client.current = undefined;
     kernelRef.current = undefined;
     setConfirmation(undefined);
+    mandateRef.current = null;
+    setMandate(null);
     setStatus('connecting');
     setSetupBlocker(null);
 
@@ -281,13 +311,7 @@ const userApiKeysRef = useRef(userApiKeys);
         activity.current('error');
         return;
       }
-      const confirm = (summary: string) => new Promise<boolean>(resolve => {
-        const next = { summary, resolve };
-        confirmationRef.current?.resolve(false); // a newer request supersedes; never leave the agent waiting
-              confirmationRef.current = next;
-        setConfirmation(next);
-        activity.current('waiting');
-      });
+      const confirm = askConfirmation;
       const kernel = new BrowserAgentKernel({
         projectId: project.id,
         route,
@@ -324,13 +348,7 @@ const userApiKeysRef = useRef(userApiKeys);
           const bridge = new WorkflowAgentBridge({
             url: connection.url,
             token: connection.token,
-            confirm: summary => new Promise<boolean>(resolve => {
-              const next = { summary, resolve };
-              confirmationRef.current?.resolve(false); // a newer request supersedes; never leave the agent waiting
-              confirmationRef.current = next;
-              setConfirmation(next);
-              activity.current('waiting');
-            }),
+            confirm: askConfirmation,
             confirmWrite: summary => modeRef.current === 'auto' || new Promise<boolean>(resolve => {
               const next = { summary, resolve };
               confirmationRef.current?.resolve(false); // a newer request supersedes; never leave the agent waiting
@@ -679,7 +697,23 @@ const userApiKeysRef = useRef(userApiKeys);
           onPromptChange={setPrompt}
           showWelcome
         />}
-        {confirmation && <div className="workflow-agent__confirm"><strong>{t('agentPanel.confirmTitle')}</strong><p>{confirmation.summary}</p><div><button type="button" onClick={() => { confirmationRef.current = undefined; confirmation.resolve(false); setConfirmation(undefined); activity.current('running'); }}>{t('agentPanel.deny')}</button><button type="button" onClick={() => { confirmationRef.current = undefined; confirmation.resolve(true); setConfirmation(undefined); activity.current('running'); }}>{t('agentPanel.allow')}</button></div></div>}
+        {confirmation && <div className="workflow-agent__confirm"><strong>{t('agentPanel.confirmTitle')}</strong><p>{confirmation.summary}</p>
+          {confirmation.offerMandate && <div className="workflow-agent__mandate">
+            {mandate && <small>{`自动授权已到上限（${describeSpendMandate(mandate)}），需要重新授权。`}</small>}
+            <label>批准后，本会话自动模式最多自动生成 <input type="number" min={1} value={mandateTasks} onChange={event => setMandateTasks(Math.max(1, Math.floor(Number(event.target.value) || 1)))} aria-label="自动生成任务上限" /> 个任务（含本批），超出会再次询问；删除、取消始终单独确认。</label>
+          </div>}
+          <div>
+            <button type="button" onClick={() => { confirmationRef.current = undefined; confirmation.resolve(false); setConfirmation(undefined); activity.current('running'); }}>{t('agentPanel.deny')}</button>
+            {confirmation.offerMandate && confirmation.request && <button type="button" onClick={() => {
+              const request = confirmation.request!;
+              const granted = consumeSpendMandate(createSpendMandate({ maxTasks: Math.max(mandateTasks, spendDemand(request.gates).tasks) }), request);
+              mandateRef.current = granted;
+              setMandate(granted);
+              confirmationRef.current = undefined; confirmation.resolve(true); setConfirmation(undefined); activity.current('running');
+            }}>批准并自动进行</button>}
+            <button type="button" onClick={() => { confirmationRef.current = undefined; confirmation.resolve(true); setConfirmation(undefined); activity.current('running'); }}>{confirmation.offerMandate ? '仅批准本次' : t('agentPanel.allow')}</button>
+          </div>
+        </div>}
         <div ref={composer} className="workflow-agent__composer">
           <ProductionSkillDeck attachment={skillAttachment} onChange={value => { skillAttachmentDirty.current = true; setSkillAttachment(value); }} dropTargetRef={composer} />
           {mentionOpen && <div className="agent-reference-picker" role="listbox" aria-label="@ 引用节点和资产">
@@ -731,21 +765,13 @@ const userApiKeysRef = useRef(userApiKeys);
                   </div>
                 </div>}
               </div>
-              <div className="agent-mode-control">
-                <button type="button" aria-label={t('agentPanel.safetyBoundary')} aria-expanded={infoPanel === 'safety'} title={t('agentPanel.confirmPolicy')} onClick={() => setInfoPanel(panel => panel === 'safety' ? null : 'safety')}><ShieldCheck size={16} /></button>
-                {infoPanel === 'safety' && <div className="agent-mode-menu" role="dialog" aria-label={t('agentPanel.safetyBoundary')}>
-                  <div style={{ padding: '10px 12px' }}>
-                    <strong style={{ display: 'block', fontSize: 13 }}>{t('agentPanel.confirmPolicy')}</strong>
-                    <p style={{ margin: '8px 0 0', fontSize: 10, lineHeight: 1.7, color: 'var(--isl-ink-soft)' }}>{mode === 'manual' ? '手动模式：每个 Workflow 写操作都会先询问。' : '自动模式：可逆操作自动推进；'}<br />删除、付费生成、Production 批准/运行、任务取消<b style={{ color: 'var(--isl-ink)' }}>始终需要确认</b>。</p>
-                  </div>
-                </div>}
-              </div>
               <button type="button" aria-label={t('agentPanel.resync')} title={t('agentPanel.resync')} onClick={() => void workspaceBridge.current?.pushSnapshot(project).catch(() => setWorkspaceStatus('error'))}><RotateCw size={15} /></button>
               <div className="agent-mode-control">
                 <button type="button" aria-label={t('agentPanel.generationMode')} aria-expanded={modeOpen} onClick={() => setModeOpen(value => !value)}>{mode === 'manual' ? <Hand size={15} /> : <RotateCw size={15} />}<span>{mode === 'manual' ? t('agentPanel.manualMode') : t('agentPanel.autoMode')}</span></button>
                 {modeOpen && <div className="agent-mode-menu" role="menu" aria-label={t('agentPanel.generationMode')}>
-                  <button type="button" role="menuitem" aria-pressed={mode === 'manual'} onClick={() => { modeRef.current = 'manual'; setMode('manual'); setModeOpen(false); }}><Hand size={17} /><span><strong>{t('agentPanel.manualMode')}</strong><small>{t('agentPanel.manualModeHint')}</small></span>{mode === 'manual' && <Check size={15} />}</button>
+                  <button type="button" role="menuitem" aria-pressed={mode === 'manual'} onClick={() => { modeRef.current = 'manual'; mandateRef.current = null; setMandate(null); setMode('manual'); setModeOpen(false); }}><Hand size={17} /><span><strong>{t('agentPanel.manualMode')}</strong><small>{t('agentPanel.manualModeHint')}</small></span>{mode === 'manual' && <Check size={15} />}</button>
                   <button type="button" role="menuitem" aria-pressed={mode === 'auto'} onClick={() => { modeRef.current = 'auto'; setMode('auto'); setModeOpen(false); }}><RotateCw size={17} /><span><strong>{t('agentPanel.autoMode')}</strong><small>{t('agentPanel.autoModeHint')}</small></span>{mode === 'auto' && <Check size={15} />}</button>
+                  <p style={{ margin: 0, padding: '6px 12px 8px', fontSize: 10, lineHeight: 1.6, color: 'var(--isl-ink-ghost)' }}>删除、付费生成、Production 批准/运行、任务取消始终单独确认。</p>
                 </div>}
               </div>
             </div>

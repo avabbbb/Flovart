@@ -1,3 +1,4 @@
+import { planAnchorConnections } from './anchorLock';
 import { nanoid } from 'nanoid';
 import { CAMERA_MOVEMENTS, createWorkflowNode, STYLE_PRESETS } from '../components/workflow/constants';
 import { buildCanonicalGenerationInput, resolveWorkflowInputs, type CanonicalGenerationInput, type WorkflowAssetReferenceInput } from '../components/workflow/inputResolver';
@@ -224,6 +225,21 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
   const mode = modeFor(initialNode);
   if (mode === 'audio') {
     return publish(runtime, patchInitiator(canonical(runtime, project), nodeId, { status: 'error', error: '音频生成暂未支持', progress: undefined }));
+  }
+  // 角色/风格锁定：镜头节点生成前，把已批准锚点接成可见连线；锚点未批准/缺失则不生成。
+  if (initialNode.shot) {
+    const base = canonical(runtime, project);
+    const plan = planAnchorConnections(base.nodes, base.connections, () => nanoid());
+    const blocking = plan.issues.filter(issue => issue.shotNodeId === nodeId);
+    if (blocking.length > 0) {
+      return publish(runtime, patchInitiator(base, nodeId, { status: 'error', error: blocking.map(issue => issue.message).join('；'), progress: undefined }));
+    }
+    const added = plan.connections.filter(connection => connection.toNodeId === nodeId);
+    if (added.length > 0) {
+      const withAnchors: WorkflowProject = { ...base, connections: [...base.connections, ...added] };
+      await publish(runtime, withAnchors);
+      project = withAnchors;
+    }
   }
 
   cancelWorkflowGeneration(project.id, nodeId);

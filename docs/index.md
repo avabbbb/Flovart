@@ -13,6 +13,9 @@
 | [14 Creative Hosts](design/14-creative-hosts.md) | Resolve 首发、叠加层、上轨道、原生效果 |
 | [15 Web, Community & Extension](design/15-web-community-extension.md) | 网站后端、社区、浏览器导入、发行 |
 | [20 质量与治理](design/20-quality-and-governance.md) | 证据分级、评测、文档规则 |
+| [30 竞品机制复刻](design/30-competitive-replication.zh-CN.md) | LibTV / RHTV / Higgsfield 机制对照、分镜与一致性方案 |
+| [31 Notion 式紧凑 UI](design/31-notion-compact-ui.zh-CN.md) | 扁平分层、密度与组件改造清单 |
+| [32 流式用量](design/32-stream-usage.zh-CN.md) | SSE 统一读取、usage 累积、缺失计数与 opt-in |
 
 支持等级只看 [SUPPORT_MATRIX](../SUPPORT_MATRIX.md)；AI / 自动化开发约束见 [AGENTS.md](../AGENTS.md)。
 
@@ -27,6 +30,7 @@
 - [快速开始](overview/quick-start.md) / [Getting Started](overview/quick-start.en.md)
 - [Windows 安装](overview/installation.zh-CN.md)
 - [Agent Skill 使用](overview/skill-guide.md)
+- [新用户操作手册与竞品对比](overview/user-manual.zh-CN.md)
 
 ## 实现附录（在代码目录内）
 

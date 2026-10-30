@@ -28,11 +28,12 @@ export interface WorkflowToolbarAction {
   disabled?: boolean;
 }
 
-export function WorkflowToolbarActions({ actions }: { actions: Array<WorkflowToolbarAction | null | false | undefined> }) {
+export function WorkflowToolbarActions({ actions, showLabels = false }: { actions: Array<WorkflowToolbarAction | null | false | undefined>; showLabels?: boolean }) {
+  const sizeClass = showLabels ? 'workflow-toolbar-labelled h-9 w-auto gap-1.5 px-2.5' : 'h-9 w-9';
   return <>{actions.filter((action): action is WorkflowToolbarAction => Boolean(action)).map(action => action.href ? (
-    <a key={action.key} className="isl-icon-btn h-9 w-9" aria-label={action.label} title={action.label} href={action.href} download={action.download}>{action.icon}</a>
+    <a key={action.key} className={`isl-icon-btn ${sizeClass}`} aria-label={action.label} title={action.label} href={action.href} download={action.download}>{action.icon}{showLabels && <span>{action.label}</span>}</a>
   ) : (
-    <button key={action.key} type="button" disabled={action.disabled} className={`isl-icon-btn h-9 w-9 disabled:opacity-40 ${action.active ? 'isl-icon-btn--active' : ''}`} aria-label={action.label} title={action.label} style={action.danger ? { color: 'var(--isl-coral-deep)' } : undefined} onClick={action.onClick}>{action.icon}</button>
+    <button key={action.key} type="button" disabled={action.disabled} className={`isl-icon-btn ${sizeClass} disabled:opacity-40 ${action.active ? 'isl-icon-btn--active' : ''}`} aria-label={action.label} title={action.label} style={action.danger ? { color: 'var(--isl-coral-deep)' } : undefined} onClick={action.onClick}>{action.icon}{showLabels && <span>{action.label}</span>}</button>
   ))}</>;
 }
 

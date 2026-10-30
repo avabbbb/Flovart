@@ -1,5 +1,7 @@
 import type { UserApiKey } from '../types';
 import type { WorkflowNode } from '../components/workflow/types';
+import { resolveAnyProductRoute, resolveProductModelRoute } from './productModelCatalog';
+import { estimateApiCost } from '../utils/usageMonitor';
 
 type GenerationCapability = {
     executor?: string;
@@ -60,11 +62,32 @@ export function getGenerationGateDetails(
   const modelId = operation?.recipe.productModelId || config?.modelId;
   const rawCount = operation?.recipe.parameters.count ?? config?.count ?? 1;
   const taskCount = Math.max(1, Number.isFinite(Number(rawCount)) ? Number(rawCount) : 1);
+  const params = { ...(config || {}), ...(operation?.recipe.parameters || {}) } as Record<string, unknown>;
+  const submode = typeof params.submode === 'string' ? params.submode as Parameters<typeof resolveProductModelRoute>[1] : undefined;
+  const candidates = modelId ? [...new Set([modelId, modelId.replace(/^flovart:/, '')])] : [];
+  let route: { model: { id: string }; routeId: string; key: UserApiKey } | null = null;
+  if (keys.length) {
+    for (const candidate of candidates) {
+      route = (submode && resolveProductModelRoute(candidate, submode, keys)) || resolveAnyProductRoute(candidate, keys);
+      if (route) break;
+    }
+  }
+  const estimatedCost = route ? estimateApiCost({
+    key: route.key,
+    productModelId: route.model.id,
+    routeId: route.routeId,
+    type: mediaType,
+    count: taskCount,
+    durationSec: mediaType === 'video' && typeof params.durationSec === 'number' && params.durationSec > 0 ? params.durationSec : undefined,
+    resolution: typeof params.resolution === 'string' ? params.resolution : undefined,
+    quality: typeof params.quality === 'string' ? params.quality : undefined,
+  }) : null;
   return {
-    serviceLabel: findService(keys, mediaType),
+    serviceLabel: route ? (route.key.name || PROVIDER_LABELS[route.key.provider] || '当前 AI 服务') : findService(keys, mediaType),
     modelLabel: displayModel(modelId),
     mediaType,
     taskCount,
+    estimatedCost,
   };
 }
 

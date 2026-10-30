@@ -33,3 +33,23 @@ provenance:
   source: https://github.com/avabbbb/vox-director
   adaptation: flovart-provider-neutral-example
 trustTier: bundled-example
+inputs:
+  - id: topic
+    label: 主题或 Brief
+    kind: longtext
+    required: true
+    placeholder: 在这里填写主题或粘贴 Brief
+  - id: duration
+    label: 时长
+    kind: choice
+    options: ["15 秒", "30 秒", "60 秒"]
+    default: 30 秒
+  - id: language
+    label: 语言
+    kind: choice
+    options: [中文, English]
+    default: 中文
+  - id: references
+    label: 参考素材（可选）
+    kind: image
+    placeholder: 可选

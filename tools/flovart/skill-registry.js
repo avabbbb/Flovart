@@ -173,6 +173,7 @@ export class SkillRegistry {
       capabilities: manifest.capabilities,
       gates: manifest.gates,
       permissions: manifest.permissions,
+      inputs: manifest.inputs,
       files: entries.map(entry => ({ path: entry.path, size: entry.content.length })),
     };
   }

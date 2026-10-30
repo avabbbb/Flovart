@@ -357,7 +357,30 @@ export interface WorkflowNode {
   batchId?: string;
   batchIndex?: number;
   batchGroupSource?: WorkflowBatchGroupSource;
+  /** 结构化分镜（LibTV/Higgsfield 式镜头表）：可选，缺省即普通节点。 */
+  shot?: WorkflowShotMeta;
+  /** 角色/场景/产品/风格锚点；仅 approved 时作为下游一致性参考。 */
+  anchor?: WorkflowAnchorMeta;
   metadata: WorkflowNodeMetadata;
+}
+
+export interface WorkflowShotMeta {
+  /** 1 起的镜号，决定成片拼接顺序。 */
+  index: number;
+  durationSec?: number;
+  scene?: string;
+  camera?: string;
+  dialogue?: string;
+  /** 显式指定的锚点节点；未指定时使用上游连线中的已批准锚点。 */
+  anchorNodeIds?: string[];
+}
+
+export type WorkflowAnchorKind = 'character' | 'scene' | 'product' | 'style';
+
+export interface WorkflowAnchorMeta {
+  kind: WorkflowAnchorKind;
+  approved: boolean;
+  approvedAt?: string;
 }
 
 /** 节点输出契约：节点自己声明下游可消费的资源，不由 resolver 按 node.type 猜测。 */

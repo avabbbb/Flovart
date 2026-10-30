@@ -5,6 +5,7 @@ import { AssetLibraryBrowser } from '../studio/AssetLibraryBrowser';
 import { LocalFolderBrowser } from './LocalFolderBrowser';
 import type { LocalFolderEntry } from '../../services/localFolderSource';
 import type { AssetItem, AssetLibrary } from '../../types';
+import { useWorkflowMediaUrl } from './media';
 
 export interface WorkflowSidebarProps {
   open: boolean;
@@ -256,14 +257,14 @@ export const WorkflowSidebar: React.FC<WorkflowSidebarProps> = ({
                         if (onFocusNode) onFocusNode(node.id);
                         else onProjectChange({ selectedNodeIds: [node.id] });
                       }}
-                      className={`workflow-layer-card group mb-0.5 flex h-9 items-center gap-1.5 rounded-lg pl-1 pr-1.5 text-xs transition-colors duration-150 ${selected ? 'workflow-layer-card--selected' : ''}`}
+                      className={`workflow-layer-card group mb-0.5 flex h-11 items-center gap-2 rounded-lg pl-1 pr-1.5 text-xs transition-colors duration-150 ${selected ? 'workflow-layer-card--selected' : ''}`}
                       style={{ color: 'var(--isl-ink)' }}
                       title={node.title}
                     >
                       <span className="workflow-layer-card__handle shrink-0 cursor-grab" style={{ color: 'var(--isl-ink-soft)' }}>
                         <GripVertical size={13} />
                       </span>
-                      <span className="shrink-0" style={{ color: 'var(--isl-ink-soft)' }}>{nodeIcon(node)}</span>
+                      <LayerThumb node={node} />
                       {editingId === node.id ? (
                         <input
                           className="workflow-layer-card__input min-w-0 flex-1"
@@ -334,3 +335,11 @@ export const WorkflowSidebar: React.FC<WorkflowSidebarProps> = ({
     </>
   );
 };
+
+/** 图层缩略图：图片/视频显示真实画面，其余类型显示类型图标。 */
+function LayerThumb({ node }: { node: WorkflowNode }) {
+  const { url } = useWorkflowMediaUrl(node.metadata.storageKey, node.metadata.href);
+  if (node.type === 'image' && url) return <img className="workflow-layer-card__thumb" src={url} alt="" draggable={false} />;
+  if (node.type === 'video' && url) return <video className="workflow-layer-card__thumb" src={`${url}#t=0.1`} muted playsInline preload="metadata" />;
+  return <span className="workflow-layer-card__thumb workflow-layer-card__thumb--icon">{nodeIcon(node)}</span>;
+}

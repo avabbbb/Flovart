@@ -220,6 +220,59 @@ body,
   pointer-events: auto;
 }
 
+/* LibTV 式浮动玻璃面板（未停靠时浮在画布上） */
+.compact-right-panel[data-open='true'][data-docked='false'] {
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--isl-border) 70%, transparent);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--isl-card) 72%, transparent) !important;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(24px) saturate(150%);
+  -webkit-backdrop-filter: blur(24px) saturate(150%);
+}
+
+/* 桌面端始终停靠：停靠态也做成悬浮毛玻璃卡片（内缩、圆角、半透明） */
+.compact-right-panel[data-open='true'][data-docked='true'] {
+  margin: 8px 8px 8px 0;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--isl-border) 70%, transparent);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--isl-card) 78%, transparent) !important;
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.12);
+  backdrop-filter: blur(24px) saturate(150%);
+  -webkit-backdrop-filter: blur(24px) saturate(150%);
+}
+
+:root[data-theme='dark'] .compact-right-panel[data-open='true'] {
+  background: rgba(28, 29, 34, 0.78) !important;
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.5);
+}
+
+.compact-right-panel[data-docked='true'] .agent-conversation {
+  --agent-panel: transparent;
+}
+
+/* flush 抽屉在 index.css 里强制直角；桌面停靠态改为悬浮圆角卡片 */
+.compact-right-panel.compact-right-panel--flush[data-open='true'][data-docked='true'] {
+  border: 1px solid color-mix(in srgb, var(--isl-border) 70%, transparent);
+  border-radius: 16px !important;
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.12) !important;
+}
+
+:root[data-theme='dark'] .compact-right-panel.compact-right-panel--flush[data-open='true'][data-docked='true'] {
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.5) !important;
+}
+
+.compact-right-panel[data-docked='false'] .agent-conversation {
+  --agent-panel: transparent;
+}
+
+.compact-right-panel[data-docked='false'] .agent-skill-picker {
+  background: var(--isl-card);
+}
+
 .compact-right-panel > :last-child,
 .compact-right-panel .agent-conversation,
 .compact-right-panel .workflow-agent {

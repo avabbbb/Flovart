@@ -816,6 +816,35 @@ describe('workflow generation', () => {
     expect(result.nodes.find(node => node.id === operationNodeId)?.metadata.error).toBeUndefined();
     expect(result.nodes.find(node => node.id === operationNodeId)?.metadata.status).toBe('success');
   });
+
+  it('blocks a shot node whose declared anchor is not approved', async () => {
+    const source = project();
+    source.nodes = source.nodes.map(node => node.id === 'image-1'
+      ? { ...node, anchor: { kind: 'character' as const, approved: false } }
+      : node.id === 'config-1' ? { ...node, shot: { index: 1, anchorNodeIds: ['image-1'] } } : node);
+    const executeMedia = vi.fn();
+    const result = await runWorkflowGeneration(source, 'config-1', { userApiKeys: [imageKey], executeMedia });
+    const shotNode = result.nodes.find(node => node.id === 'config-1')!;
+    expect(shotNode.metadata.status).toBe('error');
+    expect(shotNode.metadata.error).toContain('尚未批准');
+    expect(executeMedia).not.toHaveBeenCalled();
+  });
+
+  it('connects approved anchors to a shot node before generating', async () => {
+    const source = project();
+    source.nodes = [
+      ...source.nodes.map(node => node.id === 'config-1' ? { ...node, shot: { index: 1 } } : node),
+      { id: 'hero', type: 'image', title: '角色锚点', position: { x: 0, y: 480 }, width: 300, height: 200, anchor: { kind: 'character', approved: true }, metadata: { href: 'data:image/png;base64,AA==', mimeType: 'image/png' } },
+    ];
+    const result = await runWorkflowGeneration(source, 'config-1', {
+      userApiKeys: [imageKey],
+      executeMedia: vi.fn().mockResolvedValue({ ok: true, elementId: 'config-1', capability: 'image', mediaUrl: 'https://output/result', mimeType: 'image/png' }),
+      fetchMedia: vi.fn().mockResolvedValue(new Blob(['result'])),
+      ingestMedia: vi.fn().mockResolvedValue({ type: 'image', storageKey: 'result-key', name: 'result.png', mimeType: 'image/png', bytes: 6, naturalWidth: 800, naturalHeight: 400 }),
+      encodeDataUrl: vi.fn().mockResolvedValue('data:image/png;base64,AA=='),
+    });
+    expect(result.connections.some(connection => connection.fromNodeId === 'hero' && connection.toNodeId === 'config-1' && connection.kind === 'data')).toBe(true);
+  });
 });
 
   describe('provider task resume on re-run', () => {

@@ -19,6 +19,7 @@ import {
 import { estimateApiCost } from '../utils/usageMonitor';
 import { resolveRouteMapping } from './routeMapping';
 import { modelRefLabel, modelRefModelId, modelRefProvider } from '../utils/modelRefs';
+import type { ProductModelCapability } from './productModelCatalog';
 
 export type { VideoAspectRatio } from './aiGateway';
 
@@ -37,6 +38,16 @@ export function promptProductModeLabel(mode: ProductModelMode) {
   };
   return labels[mode];
 }
+
+// 不在产品目录里的模型（旧节点遗留 id、自定义模型）使用通用参数，保证参数面板始终可用；实际支持以供应商为准。
+const GENERIC_IMAGE_CAPABILITIES: ProductModelCapability = {
+  modes: ['text-to-image', 'image-to-image'], aspectRatios: ['1:1', '3:2', '2:3', '16:9', '9:16', '4:3', '3:4'], resolutions: ['1K', '2K', '4K'], durations: [], qualities: ['low', 'medium', 'high'], counts: [1, 2, 4],
+  audioControl: 'none', supportsWebSearch: false, supportsRealPersonCheck: false, supportsSeed: false, maxImageReferences: 8, maxVideoReferences: 0, maxAudioReferences: 0,
+};
+const GENERIC_VIDEO_CAPABILITIES: ProductModelCapability = {
+  modes: ['text-to-video', 'image-to-video'], aspectRatios: ['16:9', '9:16'], resolutions: ['720p', '1080p'], durations: [4, 6, 8], qualities: [], counts: [1],
+  audioControl: 'none', supportsWebSearch: false, supportsRealPersonCheck: false, supportsSeed: false, maxImageReferences: 1, maxVideoReferences: 0, maxAudioReferences: 0,
+};
 
 function productFamily(model: ReturnType<typeof getProductModels>[number]): string {
   if (model.id.includes('seedance')) return 'Seedance';
@@ -81,7 +92,11 @@ export function createPromptBarGenerationPolicy(input: {
 }) {
   const videoLikeMode = input.generationMode === 'video' || input.generationMode === 'keyframe';
   const activeModel = input.generationMode === 'text' ? input.selectedTextModel : videoLikeMode ? input.selectedVideoModel : input.selectedImageModel;
-  const activeProductModel = getProductModel(activeModel);
+  // Key 自定义模型以 model ref（含 keyId / provider 前缀）保存；按底层模型 id 回落匹配产品模型，否则尺寸/比例/时长面板会整体消失。
+  const rawModelId = activeModel ? modelRefModelId(activeModel) : '';
+  const activeProductModel = getProductModel(activeModel)
+    || getProductModel(rawModelId)
+    || getProductModel(rawModelId.split('/').pop());
   const activeSubmode = input.generationSubmode || (input.generationMode === 'video' ? 'text-to-video' : 'text-to-image');
   const activeRoute = activeProductModel
     ? resolveProductModelRoute(activeProductModel.id, activeSubmode, input.userApiKeys)
@@ -91,7 +106,7 @@ export function createPromptBarGenerationPolicy(input: {
   const activeRouteContext = { provider: activeRoute?.key.provider, routeId: activeRoute?.routeId };
   const activeCapabilities = activeProductModel
     ? getEffectiveProductModelCapabilities(activeProductModel.id, activeSubmode, activeRouteContext)
-    : undefined;
+    : input.generationMode === 'text' ? undefined : videoLikeMode ? GENERIC_VIDEO_CAPABILITIES : GENERIC_IMAGE_CAPABILITIES;
   const productModels = input.generationMode === 'text' ? [] : getProductModels(videoLikeMode ? 'video' : 'image');
   const productModelGroups = [...productModels.reduce((groups, product) => {
     const family = productFamily(product);
@@ -103,12 +118,17 @@ export function createPromptBarGenerationPolicy(input: {
     .map(group => ({ ...group, models: group.models.filter(product => input.modelCapabilityFilter === 'all' || product.capabilities.modes.includes(input.modelCapabilityFilter)) }))
     .filter(group => group.models.length > 0);
   const displayedModelGroup = filteredProductModelGroups.find(group => group.family === input.activeModelFamily) || filteredProductModelGroups[0];
-  const paramSummary = !activeProductModel || !activeCapabilities ? '' : [
-    activeProductModel.capability === 'image' && input.generationQuality ? (input.generationQuality === 'low' ? '低画面' : input.generationQuality === 'medium' ? '标准' : '高画面') : undefined,
-    activeCapabilities.resolutions.length > 0 && input.videoResolution ? input.videoResolution : undefined,
-    activeCapabilities.aspectRatios.length > 0 && input.activeRatio ? input.preserveReferenceAspectRatio ? '原比例' : input.activeRatio === 'adaptive' ? '自适应' : input.activeRatio : undefined,
-    input.generationMode === 'video' && activeCapabilities.durations.length > 0 ? input.videoDurationSec === -1 ? '无限时' : `${input.videoDurationSec}s` : undefined,
-    input.batchCount > 1 ? `×${input.batchCount}` : undefined,
+  // 未选模型时存储值可能是视频默认 720p；显示/摘要用能力范围内的有效值，不回写状态（回写会产生 undo 历史）
+  const effectiveResolution = !activeCapabilities || activeCapabilities.resolutions.length === 0 ? undefined
+    : input.videoResolution && activeCapabilities.resolutions.includes(input.videoResolution) ? input.videoResolution
+      : activeCapabilities.resolutions[0];
+  // LibTV 式摘要：比例 · 分辨率 · 画质 · 时长 · 数量，例如 16:9 · 720P · 7s · 1个
+  const paramSummary = !activeCapabilities ? '' : [
+    activeCapabilities.aspectRatios.length > 0 && input.activeRatio ? (input.preserveReferenceAspectRatio ? '原比例' : input.activeRatio === 'adaptive' ? '自适应' : input.activeRatio) : undefined,
+    effectiveResolution,
+    !videoLikeMode && activeCapabilities.qualities.length > 0 && input.generationQuality ? (input.generationQuality === 'low' ? '低画面' : input.generationQuality === 'medium' ? '标准' : '高画面') : undefined,
+    input.generationMode === 'video' && activeCapabilities.durations.length > 0 ? (input.videoDurationSec === -1 ? '无限时' : input.videoDurationSec + 's') : undefined,
+    String(input.batchCount) + (videoLikeMode ? '个' : '张'),
   ].filter(Boolean).join(' · ');
   const isSeedanceVideoModel = videoLikeMode && !!input.selectedVideoModel && modelRefModelId(input.selectedVideoModel).toLowerCase().includes('seedance') || activeProductModel?.id.includes('seedance') === true;
   const isSeedanceFastModel = isSeedanceVideoModel && modelRefModelId(input.selectedVideoModel).toLowerCase().includes('fast');
@@ -142,7 +162,11 @@ export function createPromptBarGenerationPolicy(input: {
         : activeSubmode === 'reference-to-video' && mentionedReferences.length < 1 ? '全能参考需要添加至少 1 个素材'
           : referenceCompatibilityIssue;
   const paramDisabledReason = (kind: 'resolution' | 'aspectRatio' | 'durationSec', value: string | number): string | null => {
-    if (!activeProductModel) return '请先选择模型';
+    if (!activeProductModel) {
+      if (!activeCapabilities) return '请先选择模型';
+      const options: readonly (string | number)[] = kind === 'resolution' ? activeCapabilities.resolutions : kind === 'aspectRatio' ? activeCapabilities.aspectRatios : activeCapabilities.durations;
+      return options.includes(value) ? null : '当前模式下此选项不可用';
+    }
     const base: { mode: ProductModelMode; aspectRatio?: VideoAspectRatio; resolution?: string; durationSec?: number } = { mode: activeSubmode };
     if (kind === 'aspectRatio') base.aspectRatio = value as VideoAspectRatio; else base.aspectRatio = input.activeRatio;
     if (kind === 'resolution') base.resolution = String(value); else base.resolution = input.videoResolution;
@@ -153,9 +177,9 @@ export function createPromptBarGenerationPolicy(input: {
   return {
     videoLikeMode, activeModel, activeProductModel, activeSubmode, activeRoute, activeRouteContext, activeCapabilities,
     productModels, productModelGroups, modelCapabilityFilters, filteredProductModelGroups, displayedModelGroup,
-    paramSummary, isSeedanceVideoModel, isSeedanceFastModel, routedVideoModes, routedImageModes, activeKey,
+    paramSummary, effectiveResolution, isSeedanceVideoModel, isSeedanceFastModel, routedVideoModes, routedImageModes, activeKey,
     estimatedCostLabel, mentionedReferences, mentionedImageCount, effectiveReferenceLimits, referenceCompatibilityIssue,
-    videoInputRequirement, paramDisabledReason,
+    videoInputRequirement, paramDisabledReason, usesGenericCapabilities: !activeProductModel && !!activeCapabilities,
     currentModelOptions: input.generationMode === 'text' ? input.textModelOptions : videoLikeMode ? input.videoModelOptions : input.imageModelOptions,
     isProductModelConfigured: (modelId: string) => isProductModelConfigured(modelId, input.userApiKeys),
     resolveAnyProductRoute: (modelId: string) => resolveAnyProductRoute(modelId, input.userApiKeys),

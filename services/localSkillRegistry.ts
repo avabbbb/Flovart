@@ -5,6 +5,7 @@
 
 import { getManagedAgentConnection, type ManagedAgentConnection } from './managedAgentConnection';
 import { SkillHubError } from './skillHubClient';
+import type { SkillInputSlot } from './skillInputs';
 
 export type LocalSkillKind = 'production' | 'coding-agent';
 
@@ -34,6 +35,7 @@ export interface LocalSkillManifest {
   gates: Array<{ id: string; type: string }>;
   permissions: { network: string; secrets: string; filesystem: string };
   files: Array<{ path: string; size: number }>;
+  inputs?: SkillInputSlot[];
 }
 
 export class SkillRegistryError extends Error {

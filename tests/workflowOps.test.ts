@@ -42,6 +42,17 @@ describe('applyWorkflowOps', () => {
     });
   });
 
+  it('keeps shot and anchor metadata on add_node and update_node', () => {
+    const added = applyWorkflowOps(snapshot(), [
+      { type: 'add_node', node: { id: 'hero', type: 'image', title: '角色锚点', position: { x: 0, y: 400 }, width: 320, height: 240, metadata: {}, anchor: { kind: 'character', approved: false } } },
+      { type: 'add_node', node: { id: 'shot-1', type: 'config', title: '镜 1', position: { x: 420, y: 400 }, width: 340, height: 240, metadata: {}, shot: { index: 1, durationSec: 4, anchorNodeIds: ['hero'] } } },
+      { type: 'update_node', id: 'hero', patch: { anchor: { kind: 'character', approved: true } } },
+    ]);
+    const nodes = added.snapshot.nodes;
+    expect(nodes.find(node => node.id === 'shot-1')?.shot).toEqual({ index: 1, durationSec: 4, anchorNodeIds: ['hero'] });
+    expect(nodes.find(node => node.id === 'hero')?.anchor).toEqual({ kind: 'character', approved: true });
+  });
+
   it('returns explicit reasons for invalid connections', () => {
     const connected = {
       ...snapshot(),

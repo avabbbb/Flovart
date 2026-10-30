@@ -14,6 +14,8 @@ const desktopNetworkMocks = vi.hoisted(() => ({ saveMediaUrl: vi.fn(() => Promis
 vi.mock('../services/desktopNetwork', async importOriginal => ({ ...(await importOriginal<typeof import('../services/desktopNetwork')>()), saveMediaUrl: desktopNetworkMocks.saveMediaUrl }));
 
 function overflowAction(name: string) {
+  const promoted = screen.queryAllByRole('button', { name })[0];
+  if (promoted) return promoted;
   const more = screen.queryAllByRole('button', { name: '更多' }).find(button => button.getAttribute('aria-expanded') !== 'true');
   if (more) fireEvent.click(more);
   return screen.getByRole('menuitem', { name });
@@ -303,8 +305,8 @@ describe('workflow node overlays', () => {
         const onSelectWorkflowReference = vi.fn().mockReturnValue('source');
         render(<WorkflowNodePromptBar node={target} nodes={[target, source]} t={t} theme="light" language="zho" userApiKeys={[productKey]} dynamicModelOptions={{ text: [], image: ['flovart:gpt-image-2'], video: [] }} onChange={vi.fn()} onRun={vi.fn()} onSelectWorkflowReference={onSelectWorkflowReference} />);
 
-    const refs = screen.getByTestId('prompt-image-refs');
-    expect(refs.querySelectorAll('button')).toHaveLength(1);
+    expect(screen.queryByTestId('prompt-image-refs')).not.toBeInTheDocument();
+    expect(within(screen.getByTestId('prompt-tool-row')).getByTestId('prompt-reference-add')).toHaveTextContent('画布参考');
     fireEvent.click(screen.getByTestId('prompt-reference-add'));
     expect(screen.getByTestId('asset-reference-picker')).toBeInTheDocument();
     fireEvent.click(screen.getByText('图片1').closest('button')!);

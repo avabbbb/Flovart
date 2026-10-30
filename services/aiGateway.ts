@@ -1,3 +1,7 @@
+import { recordTokenUsage } from './tokenUsage';
+import { readSseJson } from './sse';
+import { commitStreamUsage, createStreamUsageAccumulator, streamOutcome, type StreamUsageProtocol } from './streamUsage';
+import { fetchStreamWithUsageOptIn } from './streamUsageOptIn';
 import type { AICapability, AIProvider, ProductModelMode, PromptEnhanceRequest, PromptEnhanceResult, UserApiKey } from '../types';
 import { editImage, enhancePromptWithGemini, generateImageFromText, generateVideo, validateGeminiApiKey, getGeminiRestBaseUrl } from './geminiService';
 import { fetchModelsForProvider, type FetchModelsResult } from './modelFetcher';
@@ -1068,6 +1072,7 @@ export async function generateTextWithProvider(
             span.mark('ttfb');
             if (!response.ok) throw new Error(await readErrorResponse(response, 'Google LLM 请求失败'));
             const json = await readJsonResponse<any>(response, 'Google LLM 响应');
+            recordTokenUsage({ provider, model: mappedModel, source: 'text', raw: json });
             return json?.candidates?.[0]?.content?.parts?.map((part: { text?: string }) => part.text || '').join('\n').trim() || '';
         }
 
@@ -1086,7 +1091,9 @@ export async function generateTextWithProvider(
             });
             span.mark('ttfb');
             if (!response.ok) throw new Error(await readErrorResponse(response, 'Anthropic LLM 请求失败'));
-            return parseTextResponseContent(await readJsonResponse<any>(response, 'Anthropic LLM 响应'));
+            const json = await readJsonResponse<any>(response, 'Anthropic LLM 响应');
+            recordTokenUsage({ provider, model: mappedModel, source: 'text', raw: json });
+            return parseTextResponseContent(json);
         }
 
         const response = await fetch(`${baseUrl}/chat/completions`, {
@@ -1106,7 +1113,9 @@ export async function generateTextWithProvider(
         });
         span.mark('ttfb');
         if (!response.ok) throw new Error(await readErrorResponse(response, `${PROVIDER_LABELS[provider] || provider} LLM 请求失败`));
-        return parseTextResponseContent(await readJsonResponse<any>(response, `${PROVIDER_LABELS[provider] || provider} LLM 响应`));
+        const json = await readJsonResponse<any>(response, `${PROVIDER_LABELS[provider] || provider} LLM 响应`);
+        recordTokenUsage({ provider, model: mappedModel, source: 'text', raw: json });
+        return parseTextResponseContent(json);
     });
 }
 
@@ -2117,6 +2126,7 @@ async function requestPromptEnhanceOpenAICompatible(
     }
 
     const json = await response.json();
+    recordTokenUsage({ provider, model, source: 'prompt-enhance', raw: json });
     return json?.choices?.[0]?.message?.content || '';
 }
 
@@ -2149,6 +2159,7 @@ async function requestPromptEnhanceAnthropic(
     }
 
     const json = await response.json();
+    recordTokenUsage({ provider: 'anthropic', model, source: 'prompt-enhance', raw: json });
     const raw = Array.isArray(json?.content)
         ? json.content.map((item: { text?: string }) => item.text || '').join('\n')
         : '';
@@ -2266,6 +2277,7 @@ export async function reversePromptWithProvider(
             throw new Error(`Google Vision 请求失败 (${response.status}): ${text || response.statusText}`);
         }
         const json = await response.json();
+        recordTokenUsage({ provider, model: effectiveModel, source: 'reverse-prompt', raw: json });
         return json?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
     }
 
@@ -2299,6 +2311,7 @@ export async function reversePromptWithProvider(
             throw new Error(`Anthropic Vision 请求失败 (${response.status}): ${text || response.statusText}`);
         }
         const json = await response.json();
+        recordTokenUsage({ provider, model: model || 'claude-sonnet-4-6', source: 'reverse-prompt', raw: json });
         return (json?.content || []).map((b: { text?: string }) => b.text || '').join('\n').trim();
     }
 
@@ -2328,6 +2341,7 @@ export async function reversePromptWithProvider(
             throw new Error(`Anthropic Vision 请求失败 (${response.status}): ${text || response.statusText}`);
         }
         const json = await response.json();
+        recordTokenUsage({ provider, model: mapProviderModel(model, key), source: 'reverse-prompt', raw: json });
         return (json?.content || []).map((b: { text?: string }) => b.text || '').join('\n').trim();
     }
 
@@ -2361,6 +2375,7 @@ export async function reversePromptWithProvider(
         throw new Error(`${PROVIDER_LABELS[provider] || provider} Vision 请求失败 (${response.status}): ${text || response.statusText}`);
     }
     const json = await response.json();
+    recordTokenUsage({ provider, model: mapProviderModel(model || 'gpt-5.4-mini', key), source: 'reverse-prompt', raw: json });
     return json?.choices?.[0]?.message?.content?.trim() || '';
 }
 
@@ -2410,7 +2425,6 @@ interface ReversePromptStreamRequest {
 }
 
 async function streamReversePrompt({ provider, instruction, imageHref, mimeType, model, key, signal, span, onChunk }: ReversePromptStreamRequest): Promise<string> {
-    let full = '';
 
     if (provider === 'google') {
         const apiKey = requireApiKey(provider, key);
@@ -2437,30 +2451,7 @@ async function streamReversePrompt({ provider, instruction, imageHref, mimeType,
             const text = await response.text().catch(() => '');
             throw new Error(`Google Vision 请求失败 (${response.status}): ${text || response.statusText}`);
         }
-        const reader = response.body?.getReader();
-        if (!reader) throw new Error('无法获取响应流');
-        const decoder = new TextDecoder();
-        let buffer = '';
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split('\n');
-            buffer = lines.pop() || '';
-            for (const line of lines) {
-                if (!line.startsWith('data: ')) continue;
-                const payload = line.slice(6).trim();
-                if (payload === '[DONE]') continue;
-                try {
-                    const json = JSON.parse(payload);
-                    const streamError = sseErrorMessage(json);
-                    if (streamError) throw new SseStreamError(streamError);
-                    const chunk = json?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-                    if (chunk) { full += chunk; onChunk(chunk); }
-                } catch (error) { if (error instanceof SseStreamError) throw error; /* skip malformed JSON */ }
-            }
-        }
-        return full.trim();
+        return consumeReversePromptStream(response, 'gemini', json => json?.candidates?.[0]?.content?.parts?.[0]?.text || '', { provider, model: effectiveModel, source: REVERSE_PROMPT_STREAM_SOURCE }, signal, onChunk);
     }
 
     if (provider === 'anthropic') {
@@ -2495,32 +2486,7 @@ async function streamReversePrompt({ provider, instruction, imageHref, mimeType,
             const text = await response.text().catch(() => '');
             throw new Error(`Anthropic Vision 请求失败 (${response.status}): ${text || response.statusText}`);
         }
-        const reader = response.body?.getReader();
-        if (!reader) throw new Error('无法获取响应流');
-        const decoder = new TextDecoder();
-        let buffer = '';
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split('\n');
-            buffer = lines.pop() || '';
-            for (const line of lines) {
-                if (!line.startsWith('data: ')) continue;
-                const payload = line.slice(6).trim();
-                if (payload === '[DONE]') continue;
-                try {
-                    const json = JSON.parse(payload);
-                    const streamError = sseErrorMessage(json);
-                    if (streamError) throw new SseStreamError(streamError);
-                    if (json.type === 'content_block_delta') {
-                        const chunk = json.delta?.text || '';
-                        if (chunk) { full += chunk; onChunk(chunk); }
-                    }
-                } catch (error) { if (error instanceof SseStreamError) throw error; /* skip malformed JSON */ }
-            }
-        }
-        return full.trim();
+        return consumeReversePromptStream(response, 'anthropic', json => (json?.type === 'content_block_delta' ? json.delta?.text || '' : ''), { provider, model: model || 'claude-sonnet-4-6', source: REVERSE_PROMPT_STREAM_SOURCE }, signal, onChunk);
     }
 
     // OpenAI / OpenRouter / Custom / DeepSeek / Qwen / etc. (OpenAI-compatible SSE)
@@ -2532,53 +2498,69 @@ async function streamReversePrompt({ provider, instruction, imageHref, mimeType,
 
     const imageContent = { type: 'image_url' as const, image_url: { url: imageHref } };
 
-    const response = await fetch(`${baseUrl}/chat/completions`, {
-        method: 'POST',
-        headers,
-        signal,
-        body: JSON.stringify({
-            model: mapProviderModel(model || 'gpt-5.4-mini', key),
-            max_tokens: 1024,
-            temperature: STABLE_TEXT_TEMPERATURE,
-            stream: true,
-            messages: [{
-                role: 'user',
-                content: [
-                    { type: 'text', text: instruction },
-                    imageContent,
-                ],
-            }],
-        }),
-    });
+    const response = await fetchStreamWithUsageOptIn(`${baseUrl}/chat/completions`, { method: 'POST', headers, signal }, {
+        model: mapProviderModel(model || 'gpt-5.4-mini', key),
+        max_tokens: 1024,
+        temperature: STABLE_TEXT_TEMPERATURE,
+        stream: true,
+        messages: [{
+            role: 'user',
+            content: [
+                { type: 'text', text: instruction },
+                imageContent,
+            ],
+        }],
+    }, key?.streamUsage);
     span.mark('ttfb');
     if (!response.ok) {
         const text = await response.text().catch(() => '');
         throw new Error(`${PROVIDER_LABELS[provider] || provider} Vision 请求失败 (${response.status}): ${text || response.statusText}`);
     }
-    const reader = response.body?.getReader();
-    if (!reader) throw new Error('无法获取响应流');
-    const decoder = new TextDecoder();
-    let buffer = '';
-    while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-        for (const line of lines) {
-            if (!line.startsWith('data: ')) continue;
-            const payload = line.slice(6).trim();
-            if (payload === '[DONE]') continue;
-            try {
-                const json = JSON.parse(payload);
-                const streamError = sseErrorMessage(json);
-                if (streamError) throw new SseStreamError(streamError);
-                const chunk = json.choices?.[0]?.delta?.content || '';
-                if (chunk) { full += chunk; onChunk(chunk); }
-            } catch (error) { if (error instanceof SseStreamError) throw error; /* skip malformed JSON */ }
+    return consumeReversePromptStream(response, 'openai', json => json?.choices?.[0]?.delta?.content || '', { provider, model: mapProviderModel(model || 'gpt-5.4-mini', key), source: REVERSE_PROMPT_STREAM_SOURCE }, signal, onChunk);
+}
+
+const REVERSE_PROMPT_STREAM_SOURCE = 'reverse-prompt-stream';
+
+/** 三家流式 chunk 里只读的文本字段；全部可选，形态不符时取到的是 undefined → ''。 */
+interface StreamChunk {
+    type?: string;
+    delta?: { text?: string };
+    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+    choices?: Array<{ delta?: { content?: string } }>;
+}
+
+/**
+ * 流式反推的公共消费循环：统一 SSE 解析（L2）、被动累积 usage（L1）、结束时只提交一次（L3）。
+ * 供应商错误事件仍抛 SseStreamError；取消/出错也会记录（已消耗的 Token 可能已计费）。
+ */
+async function consumeReversePromptStream(
+    response: Response,
+    protocol: StreamUsageProtocol,
+    pick: (json: StreamChunk) => string,
+    meta: { provider: string; model: string; source: string },
+    signal: AbortSignal | undefined,
+    onChunk: (text: string) => void,
+): Promise<string> {
+    const usage = createStreamUsageAccumulator(protocol);
+    let full = '';
+    let outcome: 'ok' | 'aborted' | 'error' = 'error';
+    try {
+        for await (const json of readSseJson(response)) {
+            const streamError = sseErrorMessage(json);
+            if (streamError) throw new SseStreamError(streamError);
+            usage.feed(json);
+            // 已经过 JSON.parse 的供应商对象；pick 只用可选链读取，字段缺失时返回 ''。
+            const chunk = pick((json ?? {}) as StreamChunk);
+            if (chunk) { full += chunk; onChunk(chunk); }
         }
+        outcome = 'ok';
+        return full.trim();
+    } catch (error) {
+        outcome = streamOutcome(error, signal);
+        throw error;
+    } finally {
+        commitStreamUsage(meta, usage, outcome);
     }
-    return full.trim();
 }
 
 /** 供应商在流中下发的错误事件；与“单行 JSON 损坏”区分，必须抛给调用方而不是静默返回半截文本。 */

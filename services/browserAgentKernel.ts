@@ -1,3 +1,6 @@
+import { readSseEvents } from './sse';
+import { commitStreamUsage, createStreamUsageAccumulator, streamOutcome } from './streamUsage';
+import { fetchStreamWithUsageOptIn, type StreamUsageMode } from './streamUsageOptIn';
 // 浏览器内置 Flovart Agent 内核：直接用 pi-agent-core 在 Web 端跑 Agent，
 // 不依赖外部 Managed Agent 服务。会话持久化到 localforage，模型走 OpenAI 兼容
 // agent-text 线路（与桌面 Runtime 的 agent-text.route.sync 同源配置），
@@ -12,6 +15,8 @@ import { isOpenAICompatibleProvider, resolveProviderBaseUrl } from './baseUrl';
 import { createBrowserWorkflowContract } from './browserWorkflowContract';
 import { withWorkflowHumanApproval } from './workflowDispatcher';
 import { getBundledProductionSkill, type ProductionSkillAttachment } from './productionSkillCatalog';
+import { workflowConfirmRequest } from './workflowAgentBridge';
+import type { AgentConfirmRequest } from './agentSpendMandate';
 import { COMMAND_ALIASES, COMMAND_REGISTRY } from '../tools/flovart/core.js';
 import { AGENT_BROWSER_COMMANDS } from '../tools/flovart/agent-surface.js';
 import type { UserApiKey } from '../types';
@@ -150,6 +155,8 @@ class BrowserSessionRepo {
 export interface BrowserAgentTextRoute {
   provider: string;
   model: string;
+  /** 来自 Key 的流式 usage opt-in；缺省 passive，不改请求。 */
+  streamUsage?: StreamUsageMode;
   baseUrl: string;
   apiKey: string;
 }
@@ -182,6 +189,7 @@ export function resolveBrowserAgentTextRoute(keys: UserApiKey[]): BrowserAgentTe
     model: first.model,
     baseUrl: resolveProviderBaseUrl(first.key.provider, first.key.baseUrl),
     apiKey: first.key.key,
+    ...(first.key.streamUsage === 'request' ? { streamUsage: 'request' as const } : {}),
   };
 }
 
@@ -270,36 +278,32 @@ export function createBrowserAgentStream(route: BrowserAgentTextRoute): StreamFn
     };
     void (async () => {
       try {
-        const response = await fetch(`${route.baseUrl}/chat/completions`, {
+        const response = await fetchStreamWithUsageOptIn(`${route.baseUrl}/chat/completions`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${route.apiKey}`,
           },
           signal: options?.signal,
-          body: JSON.stringify({
-            model: route.model,
-            messages: context.messages.map(toOpenAIMessage),
-            ...(context.tools?.length ? {
-              tools: context.tools.map(tool => ({
-                type: 'function',
-                function: { name: tool.name, description: tool.description, parameters: tool.parameters },
-              })),
-            } : {}),
-            stream: true,
-            // 工具选择与参数需要可复现，与 aiGateway 的 STABLE_TEXT_TEMPERATURE 保持一致。
-            temperature: 0.2,
-            max_tokens: 16384,
-          }),
-        });
+        }, {
+          model: route.model,
+          messages: context.messages.map(toOpenAIMessage),
+          ...(context.tools?.length ? {
+            tools: context.tools.map(tool => ({
+              type: 'function',
+              function: { name: tool.name, description: tool.description, parameters: tool.parameters },
+            })),
+          } : {}),
+          stream: true,
+          // 工具选择与参数需要可复现，与 aiGateway 的 STABLE_TEXT_TEMPERATURE 保持一致。
+          temperature: 0.2,
+          max_tokens: 16384,
+        }, route.streamUsage);
         if (!response.ok) {
           const body = await response.text().catch(() => '');
           throw new Error(`模型请求失败（HTTP ${response.status}）：${body.slice(0, 200)}`);
         }
-        const reader = response.body?.getReader();
-        if (!reader) throw new Error('模型没有返回流');
-        const decoder = new TextDecoder();
-        let buffer = '';
+        if (!response.body) throw new Error('模型没有返回流');
         let text = '';
         const toolCalls: Array<{ index: number; id?: string; name?: string; arguments?: string }> = [];
         let finishReason = '';
@@ -316,19 +320,15 @@ export function createBrowserAgentStream(route: BrowserAgentTextRoute): StreamFn
           return { ...startMessage, content };
         };
 
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          const blocks = buffer.split(/\n\n/);
-          buffer = blocks.pop() || '';
-          for (const block of blocks) {
-            const dataLine = block.split(/\r?\n/).find(line => line.startsWith('data:'));
-            if (!dataLine) continue;
-            const data = dataLine.slice(5).trim();
+        const usage = createStreamUsageAccumulator('openai');
+        const usageMeta = { provider: String(route.provider), model: route.model, source: 'browser-agent' };
+        try {
+          for await (const event of readSseEvents(response)) {
+            const data = event.data.trim();
             if (!data || data === '[DONE]') continue;
-            let json: { choices?: Array<{ delta?: Record<string, unknown>; finish_reason?: string | null }> };
+            let json: { choices?: Array<{ delta?: Record<string, unknown>; finish_reason?: string | null }>; usage?: unknown };
             try { json = JSON.parse(data); } catch { continue; }
+            usage.feed(json);
             const delta = json.choices?.[0]?.delta || {};
             if (typeof delta.content === 'string' && delta.content) {
               text += delta.content;
@@ -348,7 +348,11 @@ export function createBrowserAgentStream(route: BrowserAgentTextRoute): StreamFn
             }
             if (json.choices?.[0]?.finish_reason) finishReason = json.choices[0].finish_reason;
           }
+        } catch (error) {
+          commitStreamUsage(usageMeta, usage, streamOutcome(error, options?.signal));
+          throw error;
         }
+        commitStreamUsage(usageMeta, usage, 'ok');
         const message: AssistantMessage = {
           ...partial(),
           stopReason: finishReason === 'tool_calls' ? 'toolUse' : 'stop',
@@ -398,7 +402,7 @@ function descriptorSchema(descriptor: string) {
 export interface BrowserAgentToolDependencies {
   projectId: string;
   /** 高风险操作（删除、付费、Production 运行等）的用户确认；返回 false 表示拒绝 */
-  confirm: (summary: string) => Promise<boolean>;
+  confirm: (summary: string, request?: AgentConfirmRequest) => Promise<boolean>;
   /** 当前 Agent 回合的幂等键（可逆写操作合并进同一 ChangeSet） */
   activeChangeSetId: string;
 }
@@ -430,7 +434,7 @@ export function createBrowserAgentTools(dependencies: BrowserAgentToolDependenci
         } as const;
         let result = await workflowContract.dispatch(envelope);
         if (result.confirmation?.required) {
-          const approved = await dependencies.confirm(result.confirmation.summary);
+          const approved = await dependencies.confirm(result.confirmation.summary, workflowConfirmRequest(envelope));
           if (!approved) throw new Error('用户拒绝了该操作');
           result = await workflowContract.dispatch(withWorkflowHumanApproval(envelope));
         }
@@ -463,8 +467,8 @@ Workflow 修改只使用 flovart_workflow_apply 的结构化 operations；节点
 没有足够信息时先说明缺口；没有用户确认的 Production Mandate 时不得声称付费制作已经开始。
 制作类请求按以下循环推进，每一步都落在可见 Workflow 上：
 1. 澄清：缺少时长、画幅、风格、字幕语言或主体参考时，一次性列出缺口并给出建议默认值，等用户回答；信息足够时直接继续。
-2. 锚点：先用 workflow.apply 建立角色/产品/场景锚点节点（如三视图、主视觉），运行后请用户确认锚点；未确认前不要拆镜。
-3. 拆镜：锚点确认后，用一次 workflow.apply 建立分镜节点并连到锚点，每个镜头一个节点，标题写镜号与内容。
+2. 锚点：先用 workflow.apply 建立角色/产品/场景锚点节点（如三视图、主视觉），节点写入 anchor: { kind, approved: false }；运行后请用户确认锚点，确认后用 update_node 把 approved 设为 true；未确认前不要拆镜。
+3. 拆镜：锚点确认后，用一次 workflow.apply 建立分镜节点，每个镜头一个节点，标题写镜号与内容，并写入 shot: { index, durationSec, scene, camera, dialogue, anchorNodeIds }；生成时会自动连上已批准锚点。
 4. 批量生成：互不依赖的节点用 flovart_workflow_node_run 的 nodeIds 一次提交，由用户一次确认费用；有依赖的节点等上游成功后再运行。
 5. 汇报：按节点标题说明成功与失败；失败只重跑失败节点，不整批重跑。
 绑定 Production Skill 时，镜头语言、风格和节奏以 Skill 为准；与用户要求冲突时以用户为准并说明。

@@ -94,14 +94,27 @@ describe('InfiniteWorkflow surface interactions', () => {
     expect((300 - y) / k).toBeCloseTo(300);
   });
 
-  it('pans by dragging the true background', () => {
+  it('pans by middle-button dragging the true background', () => {
     render(<Harness />);
 
-    fireEvent.pointerDown(editor(), { button: 0, clientX: 100, clientY: 100 });
+    fireEvent.pointerDown(editor(), { button: 1, clientX: 100, clientY: 100 });
     fireEvent.pointerMove(window, { clientX: 145, clientY: 128 });
     fireEvent.pointerUp(window, { clientX: 145, clientY: 128 });
 
     expect(worldTransform()).toContain('translate(45px, 28px)');
+  });
+
+  it('box-selects by plain left-dragging the true background', () => {
+    render(<Harness />);
+    const before = worldTransform();
+
+    fireEvent.pointerDown(editor(), { button: 0, clientX: 20, clientY: 20 });
+    fireEvent.pointerMove(window, { buttons: 1, clientX: 900, clientY: 500 });
+    fireEvent.pointerUp(window, { clientX: 900, clientY: 500 });
+
+    expect(worldTransform()).toBe(before);
+    expect(node('source')).toHaveClass('is-selected');
+    expect(node('target')).toHaveClass('is-selected');
   });
 
   it('supports modifier node selection and additive box selection', () => {

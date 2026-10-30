@@ -10,6 +10,17 @@ import { workflowCommandSummary } from '../components/workflow/agentOps';
 import { getWorkflowOperationCapabilityByNodeTool } from '../components/workflow/operationRegistry';
 import { displayError } from './displayError';
 import { buildGenerationGateSummary, getGenerationGateDetails } from './generationGate';
+import type { AgentConfirmRequest } from './agentSpendMandate';
+import type { UserApiKey as GateApiKey } from '../types';
+
+let agentGateKeysProvider: () => GateApiKey[] = () => [];
+/** 面板注入当前 API Key，让 Agent 确认摘要能估算费用；未注入时费用显示为未知。 */
+export function setAgentGateKeysProvider(provider: (() => GateApiKey[]) | null) {
+  agentGateKeysProvider = provider || (() => []);
+}
+function agentGateKeys(): GateApiKey[] {
+  try { return agentGateKeysProvider(); } catch { return []; }
+}
 
 const RUNTIME_COMMANDS = new Set([
   'runtime.status', 'command.list', 'command.schema', 'provider.status',
@@ -30,7 +41,7 @@ export interface WorkflowAgentBridgeOptions {
   token: string;
   onEvent?: (type: string, payload: any) => void;
   onStatus?: (status: 'connecting' | 'connected' | 'disconnected' | 'error') => void;
-  confirm?: (summary: string) => boolean | Promise<boolean>;
+  confirm?: (summary: string, request?: AgentConfirmRequest) => boolean | Promise<boolean>;
   confirmWrite?: (summary: string) => boolean | Promise<boolean>;
   workflowContract?: BrowserWorkflowContract;
 }
@@ -56,24 +67,43 @@ export function runtimeAgentConfirmationSummary(envelope: WorkflowCommandEnvelop
   return envelope.command;
 }
 
+function workflowRunNodes(envelope: WorkflowCommandEnvelope) {
+  const state = useWorkflowStore.getState();
+  const projectId = String(envelope.args.projectId || state.activeProjectId || '');
+  const project = state.projects.find(item => item.id === projectId);
+  const rawIds = envelope.args.nodeIds;
+  const nodeIds = Array.isArray(rawIds)
+    ? rawIds.map(String)
+    : typeof rawIds === 'string' ? rawIds.split(',').map(value => value.trim()).filter(Boolean) : [String(envelope.args.nodeId || envelope.args.id || '')];
+  const nodes = nodeIds.flatMap(nodeId => {
+    const node = project?.nodes.find(item => item.id === nodeId);
+    return node ? [node] : [];
+  });
+  return { nodeIds, nodes };
+}
+
+/** 结构化确认请求：自动模式的付费授权只认 generation，且要求每个目标节点都能解析。 */
+export function workflowConfirmRequest(envelope: WorkflowCommandEnvelope): AgentConfirmRequest {
+  if (envelope.command === 'workflow.node.run') {
+    const { nodeIds, nodes } = workflowRunNodes(envelope);
+    return {
+      kind: 'generation',
+      command: envelope.command,
+      gates: nodes.length === nodeIds.length ? nodes.map(node => getGenerationGateDetails(node, undefined, agentGateKeys())) : [],
+    };
+  }
+  if (envelope.command.endsWith('.delete')) return { kind: 'destructive', command: envelope.command };
+  return { kind: 'other', command: envelope.command };
+}
+
 function workflowConfirmationSummary(envelope: WorkflowCommandEnvelope) {
   if (envelope.command === 'workflow.node.run') {
-    const state = useWorkflowStore.getState();
-    const projectId = String(envelope.args.projectId || state.activeProjectId || '');
-    const project = state.projects.find(item => item.id === projectId);
-    const rawIds = envelope.args.nodeIds;
-    const nodeIds = Array.isArray(rawIds)
-      ? rawIds.map(String)
-      : typeof rawIds === 'string' ? rawIds.split(',').map(value => value.trim()).filter(Boolean) : [String(envelope.args.nodeId || envelope.args.id || '')];
-    const nodes = nodeIds.flatMap(nodeId => {
-      const node = project?.nodes.find(item => item.id === nodeId);
-      return node ? [node] : [];
-    });
-    if (nodeIds.length === 1 && nodes.length === 1) return buildGenerationGateSummary(getGenerationGateDetails(nodes[0], undefined, []));
+    const { nodeIds, nodes } = workflowRunNodes(envelope);
+    if (nodeIds.length === 1 && nodes.length === 1) return buildGenerationGateSummary(getGenerationGateDetails(nodes[0], undefined, agentGateKeys()));
     if (nodes.length > 1) {
       return [
         '批量运行 ' + nodes.length + ' 个节点，一次确认覆盖本批：',
-        ...nodes.map(node => '「' + node.title + '」\n' + buildGenerationGateSummary(getGenerationGateDetails(node, undefined, []))),
+        ...nodes.map(node => '「' + node.title + '」\n' + buildGenerationGateSummary(getGenerationGateDetails(node, undefined, agentGateKeys()))),
       ].join('\n\n');
     }
   }
@@ -296,7 +326,7 @@ export class WorkflowAgentBridge {
         }
         result = await this.workflowContract.dispatch(envelope);
         if (result.confirmation?.required) {
-          const approved = await this.confirm(workflowConfirmationSummary(envelope));
+          const approved = await this.confirm(workflowConfirmationSummary(envelope), workflowConfirmRequest(envelope));
           // 第二道确认同样可能耗时——Lease 在批准后仍需再验一次。
           const postApprovalLease = approved ? validateBrowserWorkspaceLease(envelope, this.clientId) : null;
           result = !approved
@@ -321,8 +351,8 @@ export class WorkflowAgentBridge {
     }
   }
 
-  private confirm(summary: string) {
-    return this.options.confirm ? this.options.confirm(summary) : requestUiConfirm({ title: 'Agent 请求执行', body: summary, confirmLabel: '允许', cancelLabel: '拒绝' });
+  private confirm(summary: string, request?: AgentConfirmRequest) {
+    return this.options.confirm ? this.options.confirm(summary, request) : requestUiConfirm({ title: 'Agent 请求执行', body: summary, confirmLabel: '允许', cancelLabel: '拒绝' });
   }
 
   private post(path: string, body: unknown, params?: Record<string, string>) {
