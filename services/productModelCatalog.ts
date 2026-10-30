@@ -411,6 +411,16 @@ export function productModelLabel(value: string): string {
   return getProductModel(value)?.name || value;
 }
 
+// 不在产品目录里的模型（旧节点遗留 id、自定义模型）使用通用参数；参数面板和请求清洗共用这一份，实际支持以供应商为准。
+export const GENERIC_IMAGE_CAPABILITIES: ProductModelCapability = {
+  modes: ['text-to-image', 'image-to-image'], aspectRatios: ['1:1', '3:2', '2:3', '16:9', '9:16', '4:3', '3:4'], resolutions: ['1K', '2K', '4K'], durations: [], qualities: ['low', 'medium', 'high'], counts: [1, 2, 4],
+  audioControl: 'none', supportsWebSearch: false, supportsRealPersonCheck: false, supportsSeed: false, maxImageReferences: 8, maxVideoReferences: 0, maxAudioReferences: 0,
+};
+export const GENERIC_VIDEO_CAPABILITIES: ProductModelCapability = {
+  modes: ['text-to-video', 'image-to-video'], aspectRatios: ['16:9', '9:16'], resolutions: ['720p', '1080p'], durations: [4, 6, 8], qualities: [], counts: [1],
+  audioControl: 'none', supportsWebSearch: false, supportsRealPersonCheck: false, supportsSeed: false, maxImageReferences: 1, maxVideoReferences: 0, maxAudioReferences: 0,
+};
+
 export function sanitizeProductGenerationParams(productModelId: string | undefined, input: {
   mode?: ProductModelMode;
   aspectRatio?: VideoAspectRatio;
@@ -422,9 +432,19 @@ export function sanitizeProductGenerationParams(productModelId: string | undefin
   webSearch?: boolean;
   realPersonCheck?: boolean;
   referenceCount?: number;
+  // 非目录模型按媒体类型套用通用能力清洗；目录模型忽略。
+  mediaType?: 'image' | 'video';
 }, context?: ProductRouteContext) {
   const model = getProductModel(productModelId);
-  if (!model) return input;
+  if (!model) {
+    // 非目录模型：只清洗明显不属于该媒体类型的值（图片残留 720p、时长 -1/0），其余原样交给供应商。
+    if (!input.mediaType) return input;
+    const generic = input.mediaType === 'video' ? GENERIC_VIDEO_CAPABILITIES : GENERIC_IMAGE_CAPABILITIES;
+    const resolution = generic.resolutions.find(value => value.toLowerCase() === input.resolution?.toLowerCase())
+      || generic.resolutions.find(value => value.toLowerCase() === (input.mediaType === 'video' ? '720p' : '1k'));
+    const durationSec = input.mediaType === 'video' && input.durationSec !== undefined && input.durationSec > 0 ? input.durationSec : undefined;
+    return { ...input, resolution, durationSec, generateAudio: input.mediaType === 'video' ? input.generateAudio : undefined };
+  }
   const requestedMode = input.mode && model.capabilities.modes.includes(input.mode) ? input.mode : model.capabilities.modes[0];
   const capability = getEffectiveProductModelCapabilities(model.id, requestedMode, context) || model.capabilities;
   const mode = input.mode === 'video-extension' && model.id.startsWith('flovart:veo-3.1')

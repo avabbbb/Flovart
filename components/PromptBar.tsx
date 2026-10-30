@@ -722,8 +722,8 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                         '--prompt-editor-placeholder': 'var(--isl-ink-ghost)',
                         '--prompt-editor-caret': 'var(--isl-mint-deep)',
                         '--prompt-editor-scrollbar': isDark ? '#4a3a26' : '#e3d7bd',
-                        '--prompt-editor-min-height': compactMode ? '42px' : '48px',
-                        '--prompt-editor-font-size': compactMode ? '13px' : '14px',
+                        '--prompt-editor-min-height': compactMode ? '76px' : '56px',
+                        '--prompt-editor-font-size': '14px',
                         '--prompt-editor-line-height': compactMode ? '1.4' : '1.5',
                     } as React.CSSProperties}
                 >
@@ -1229,7 +1229,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                                                 type="button"
                                                                 disabled={disabled}
                                                                 onClick={() => onVideoResolutionChange?.(resolution)}
-                                                                className={`rounded-[12px] px-2 py-1.5 text-xs font-bold transition ${disabled ? 'cursor-not-allowed opacity-35' : ''} ${videoResolution === resolution ? 'isl-chip--active' : 'isl-chip'}`}
+                                                                className={`rounded-[12px] px-2 py-1.5 text-xs font-bold transition ${disabled ? 'cursor-not-allowed opacity-35' : ''} ${effectiveResolution === resolution ? 'isl-chip--active' : 'isl-chip'}`}
                                                                 title={disabled ? ui('Fast 模型不支持 1080p，会自动降到 720p', 'Fast does not support 1080p; it will use 720p.') : resolution}
                                                             >
                                                                 {resolution}

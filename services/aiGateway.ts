@@ -2038,18 +2038,38 @@ function seedanceReferenceLabel(kind: MultimodalSlotKind, index: number): string
     return `音频${index + 1}`;
 }
 
-function buildSeedancePromptText(prompt: string, slots: MultimodalSlot[]): string {
+// 火山方舟官方示例：提示词直接用 图片N / 视频N / 音频N（也可写作 @图片N）指代 content 中同类素材的先后顺序，
+// 不需要额外的编号说明。这里把用户的 @名称 一次性改写为该素材在本次 content 里的序号，
+// 避免画布上的编号（如上游第 2 张图）与实际传参顺序错位。
+export function buildSeedancePromptText(prompt: string, slots: MultimodalSlot[]): string {
     const counts: Partial<Record<MultimodalSlotKind, number>> = {};
-    const labels = slots.map((slot) => {
-        counts[slot.kind] = counts[slot.kind] || 0;
-        const label = seedanceReferenceLabel(slot.kind, counts[slot.kind]);
-        counts[slot.kind] = counts[slot.kind] + 1;
+    const aliasToLabel = new Map<string, string>();
+    for (const slot of slots) {
+        const index = counts[slot.kind] || 0;
+        counts[slot.kind] = index + 1;
         const alias = normalizeMentionLabel(slot.label);
-        return alias ? `${label}=${alias}` : label;
-    });
+        if (alias && !aliasToLabel.has(alias)) aliasToLabel.set(alias, seedanceReferenceLabel(slot.kind, index));
+    }
     const text = prompt.trim();
-    if (!labels.length) return text;
-    return `参考素材编号：${labels.join('、')}。请按这些编号理解提示词中的图片、视频和音频引用，角色和主体不要混淆。\n\n${text}`;
+    if (!aliasToLabel.size) return text;
+    // 长名优先；只拦截紧跟数字的情况（@图片1 不吞掉 @图片12），中文正文可直接紧跟在引用后
+    const aliases = [...aliasToLabel.keys()].sort((left, right) => right.length - left.length);
+    const digit = /\p{N}/u;
+    let output = '';
+    let cursor = 0;
+    while (cursor < text.length) {
+        const hit = text[cursor] === '@'
+            ? aliases.find(alias => text.startsWith(alias, cursor) && !digit.test(text.charAt(cursor + alias.length)))
+            : undefined;
+        if (hit) {
+            output += '@' + aliasToLabel.get(hit);
+            cursor += hit.length;
+        } else {
+            output += text[cursor];
+            cursor += 1;
+        }
+    }
+    return output;
 }
 
 function buildSeedanceContentItems(prompt: string, slots: MultimodalSlot[], capability: CapabilityDictionary): Array<Record<string, unknown>> {
@@ -2596,7 +2616,7 @@ export async function generateImageWithProvider(
     model: string,
     key?: UserApiKey,
     images?: VideoImage[],
-    options?: { signal?: AbortSignal; aspectRatio?: VideoAspectRatio; resolution?: string; quality?: string; webSearch?: boolean; resumeProviderTaskId?: string; onProviderTaskLifecycle?: (event: ProviderTaskLifecycleEvent) => void | Promise<void>; onProgress?: (message: string) => void },
+    options?: { signal?: AbortSignal; aspectRatio?: VideoAspectRatio; resolution?: string; quality?: string; webSearch?: boolean; realPersonCheck?: boolean; resumeProviderTaskId?: string; onProviderTaskLifecycle?: (event: ProviderTaskLifecycleEvent) => void | Promise<void>; onProgress?: (message: string) => void },
 ): Promise<{ newImageBase64: string | null; newImageMimeType: string | null; textResponse: string | null; /** 仅供溯源：远端图片原始 URL（RunningHub 等 24h 临时链接）；本地 base64 仍为内容来源。 */ remoteMediaUrl?: string }> {
     assertResolvedUpstreamModel(model);
     const provider = resolveGenerationProvider(model, key);
@@ -2657,7 +2677,7 @@ export async function generateImageWithProvider(
             aspectRatio: options?.aspectRatio,
             resolution: options?.resolution,
             userParams: {
-                ...(options?.webSearch !== undefined ? { webSearch: options.webSearch } : {}),
+                ...(options?.webSearch !== undefined ? { webSearch: options.webSearch } : {}), ...(options?.realPersonCheck !== undefined ? { realPersonMode: options.realPersonCheck } : {}),
                 ...(options?.quality !== undefined ? { hd: options.quality === 'hd' || options.quality === 'high' } : {}),
             },
         }), {
@@ -3441,7 +3461,7 @@ export async function generateVideoWithProvider(
         seed?: number;
         cameraFixed?: boolean;
         watermark?: boolean;
-        returnLastFrame?: boolean;
+        returnLastFrame?: boolean; realPersonCheck?: boolean;
        generateAudio?: boolean;
        serviceTier?: string;
        safetyIdentifier?: string;
@@ -3514,7 +3534,7 @@ export async function generateVideoWithProvider(
             userParams: {
                 ...(options?.generateAudio !== undefined ? { generateAudio: options.generateAudio } : {}),
                 ...(options?.seed !== undefined ? { seed: options.seed } : {}),
-                ...(options?.returnLastFrame !== undefined ? { returnLastFrame: options.returnLastFrame } : {}),
+                ...(options?.returnLastFrame !== undefined ? { returnLastFrame: options.returnLastFrame } : {}), ...(options?.realPersonCheck !== undefined ? { realPersonMode: options.realPersonCheck } : {}),
             },
         }), {
             baseUrl,
@@ -3915,6 +3935,7 @@ export async function executeUnifiedIgnition(input: UnifiedIgnitionInput): Promi
             webSearch: input.webSearch,
             realPersonCheck: input.realPersonCheck,
             referenceCount: input.references?.length || 0,
+            mediaType: capability === 'video' ? 'video' : capability === 'image' ? 'image' : undefined,
         }, { provider: input.apiKeyPayload?.provider, routeId: input.modelId });
         if (input.generationCapability) {
             if (input.generationSubmode && params.mode !== input.generationSubmode) {
@@ -3945,7 +3966,10 @@ export async function executeUnifiedIgnition(input: UnifiedIgnitionInput): Promi
             const issue = explainReferenceCompatibility(input.productModelId, params.mode as ProductModelMode, referenceKinds, { provider: input.apiKeyPayload?.provider, routeId: input.modelId });
             if (issue) throw new Error(issue);
         }
-        const effectivePrompt = buildPromptWithReferenceBindings(prompt, input.references);
+        // Seedance（火山方舟）由 buildSeedancePromptText 把 @名称 改写为 content 顺序编号，不再叠加通用的中文绑定前言。
+        const effectivePrompt = resolveGenerationProvider(input.modelId, input.apiKeyPayload) === 'volcengine'
+            ? prompt.trim()
+            : buildPromptWithReferenceBindings(prompt, input.references);
         if (userScriptProvider) {
             if (!input.canonicalInput || !input.materializedReferences) {
                 throw new UnsupportedGenerationInputError('自定义 AI 服务必须通过 Flovart 的统一生成输入进入 Workflow。');
@@ -3999,7 +4023,7 @@ export async function executeUnifiedIgnition(input: UnifiedIgnitionInput): Promi
                 aspectRatio: params.aspectRatio || getDynamicParamSchema(input.modelId).defaultAspectRatio || '16:9',
                 durationSec: params.durationSec,
                 resolution: params.resolution,
-                generateAudio: params.generateAudio,
+                generateAudio: params.generateAudio, realPersonCheck: params.realPersonCheck,
                 watermark: input.watermark,
                 generationSubmode: params.mode,
                 references: videoRefs,
@@ -4020,7 +4044,7 @@ export async function executeUnifiedIgnition(input: UnifiedIgnitionInput): Promi
             aspectRatio: params.aspectRatio,
             resolution: params.resolution,
             quality: params.quality,
-            webSearch: params.webSearch,
+            webSearch: params.webSearch, realPersonCheck: params.realPersonCheck,
             resumeProviderTaskId: input.resumeProviderTaskId,
             onProviderTaskLifecycle: input.onProviderTaskLifecycle,
             onProgress: message => input.onProgress?.(35, message),

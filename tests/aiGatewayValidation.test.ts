@@ -352,7 +352,7 @@ describe('aiGateway - Seedance multimodal slots', () => {
             return_last_frame: true,
         });
         expect(body.content).toEqual([
-            { type: 'text', text: '参考素材编号：图片1=@role-a、图片2=@role-b、图片3=@role-c、视频1、音频1。请按这些编号理解提示词中的图片、视频和音频引用，角色和主体不要混淆。\n\ntwo characters cross the room' },
+            { type: 'text', text: 'two characters cross the room' },
             { type: 'image_url', image_url: { url: 'data:image/png;base64,aW1hZ2Ux' }, role: 'reference_image' },
             { type: 'image_url', image_url: { url: 'data:image/png;base64,aW1hZ2Uy' }, role: 'first_frame' },
             { type: 'image_url', image_url: { url: 'data:image/png;base64,aW1hZ2Uz' }, role: 'last_frame' },
@@ -437,7 +437,7 @@ describe('aiGateway - Seedance multimodal slots', () => {
             watermark: false,
         });
         expect(body.content).toEqual([
-            { type: 'text', text: '参考素材编号：图片1、视频1、音频1。请按这些编号理解提示词中的图片、视频和音频引用，角色和主体不要混淆。\n\nfirst-person tea commercial' },
+            { type: 'text', text: 'first-person tea commercial' },
             { type: 'image_url', image_url: { url: 'https://ark-project.tos-cn-beijing.volces.com/doc_image/r2v_tea_pic1.jpg' }, role: 'reference_image' },
             { type: 'video_url', video_url: { url: 'https://ark-project.tos-cn-beijing.volces.com/doc_video/r2v_tea_video1.mp4' }, role: 'reference_video' },
             { type: 'audio_url', audio_url: { url: 'https://ark-project.tos-cn-beijing.volces.com/doc_audio/r2v_tea_audio1.mp3' }, role: 'reference_audio' },

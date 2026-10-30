@@ -1,18 +1,14 @@
 /**
- * ============================================
- * @ 元素引用下拉菜单组件（Phase 2：分区 + 文件夹浏览）
- * ============================================
- *
- * 三类分区：
- *   1. 已连接：当前生成节点上游已连接节点
- *   2. 个人素材库：两级文件夹浏览 / 跨文件夹搜索 50 条
- *   3. Skill：Anthropic Claude Skills 占位（本轮 disabled）
- *
- * 文件夹导航状态由组件内部维护；query 非空时切换为跨文件夹搜索模式。
- * 键盘上下方向跨分区遍历，文件夹/返回条目通过 onClick 触发导航而非 command。
+ * @ 引用菜单（LibTV 式两级菜单）
+ * 左列：素材引用 → 图片 / 视频 / 音频 / 文本（当前节点已连线的上游节点），以及 资产（个人素材库，可按文件夹浏览）。
+ * 右列：当前类别的条目。点名称直接插入一个引用；勾选多项后回车或点「插入 N 项」一次插入。
+ * 输入 @ 后继续打字即搜索：切换为跨类别平铺结果（上游节点 + 素材，素材最多 50 条）。
+ * 键盘：↑↓ 在当前列移动，→/回车 进入子菜单，← 返回，空格 勾选，回车 插入。
  */
 
 import React, { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import { AudioLines, Check, ChevronLeft, ChevronRight, FileText, Folder, FolderOpen, Image as ImageIcon, Search, Video } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import type { AssetFolder } from '../types';
 import { isFetchableMediaHref } from './workflow/media';
 
@@ -26,7 +22,7 @@ export interface MentionItem {
     aliases?: string[];
     sourceType?: 'connected' | 'assetLibrary';
     assetId?: string;
-    kind?: 'item' | 'folder' | 'back' | 'skillDisabled';
+    kind?: 'item' | 'folder' | 'back';
     folderId?: string;
 }
 
@@ -40,8 +36,11 @@ export interface AssetSuggestion {
     elementType: 'image' | 'video';
 }
 
+/** Tiptap command 载荷：单个条目，或勾选后一次插入多个 */
+export type MentionCommandPayload = MentionItem | { batch: MentionItem[] };
+
 interface MentionListProps {
-    /** 已连接节点（已按 query 过滤） */
+    /** 当前节点已连线的上游节点（图片/视频/音频/文本） */
     connectedItems: MentionItem[];
     /** 全部素材文件夹（扁平，含 parentId） */
     assetFolders: AssetFolder[];
@@ -49,309 +48,283 @@ interface MentionListProps {
     assetItems: AssetSuggestion[];
     /** 当前 @ query（来自 Tiptap suggestion plugin） */
     query: string;
-    /** 选择实际条目（connected / asset）时调用，由 Tiptap command 接管 */
-    command: (item: MentionItem) => void;
-    /** Skill 分区是否可用；本轮恒为 false，仅显示占位 */
-    skillEnabled?: boolean;
+    command: (payload: MentionCommandPayload) => void;
 }
 
 export interface MentionListHandle {
     onKeyDown: (props: { event: KeyboardEvent }) => boolean;
 }
 
-const typeIcon: Record<string, string> = {
-    image: '🖼',
-    video: '🎬',
-    shape: '⬜',
-    text: '📝',
-    path: '✏️',
-    group: '📦',
-    arrow: '➡️',
-    line: '📏',
-    folder: '📁',
-    skill: '⚡',
-};
+type CategoryId = 'image' | 'video' | 'audio' | 'text' | 'asset';
 
-interface RenderEntry {
-    item: MentionItem;
-    sectionTitle: string | null;
-    sectionIndex: number;
-    clickable: boolean;
-}
+const CATEGORIES: Array<{ id: CategoryId; label: string; icon: LucideIcon }> = [
+    { id: 'image', label: '图片', icon: ImageIcon },
+    { id: 'video', label: '视频', icon: Video },
+    { id: 'audio', label: '音频', icon: AudioLines },
+    { id: 'text', label: '文本', icon: FileText },
+    { id: 'asset', label: '资产', icon: FolderOpen },
+];
 
-const SECTION_CONNECTED = '已连接';
-const SECTION_LIBRARY = '个人素材库';
-const SECTION_SKILL = 'Skill';
+const TYPE_ICONS: Record<string, LucideIcon> = { image: ImageIcon, video: Video, audio: AudioLines, text: FileText };
+
+const rowKey = (row: MentionItem) => (row.sourceType || 'connected') + ':' + row.id;
+
+const asConnected = (item: MentionItem): MentionItem => ({ ...item, kind: 'item', sourceType: item.sourceType || 'connected' });
+
+const assetToItem = (asset: AssetSuggestion): MentionItem => ({
+    id: asset.id,
+    label: asset.name || '未命名素材',
+    thumbnail: asset.thumbnail,
+    elementType: asset.elementType,
+    kind: 'item',
+    sourceType: 'assetLibrary',
+    assetId: asset.id,
+});
 
 const MentionList = forwardRef<MentionListHandle, MentionListProps>(
-    ({ connectedItems, assetFolders, assetItems, query, command, skillEnabled = false }, ref) => {
-        const [selectedIndex, setSelectedIndex] = useState(0);
-        const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
-        const containerRef = useRef<HTMLDivElement>(null);
+    ({ connectedItems, assetFolders, assetItems, query, command }, ref) => {
+        const normalizedQuery = query.trim().toLowerCase();
+        const searching = normalizedQuery.length > 0;
+        const hasLibrary = assetFolders.length > 0 || assetItems.length > 0;
 
-        // 当 connectedItems / assetItems / query / activeFolderId 变化时重建扁平渲染列表
-        const entries = useMemo<RenderEntry[]>(() => {
-            const list: RenderEntry[] = [];
-            const normalizedQuery = query.trim().toLowerCase();
-            let sectionIndex = 0;
-
-            // 分区 1：已连接
-            if (connectedItems.length > 0) {
-                connectedItems.forEach(item => {
-                    list.push({
-                        item: { ...item, kind: 'item', sourceType: item.sourceType || 'connected' },
-                        sectionTitle: SECTION_CONNECTED,
-                        sectionIndex,
-                        clickable: true,
-                    });
-                });
-                sectionIndex++;
+        const counts = useMemo(() => {
+            const result: Record<CategoryId, number> = { image: 0, video: 0, audio: 0, text: 0, asset: assetItems.length };
+            for (const item of connectedItems) {
+                const key = item.elementType as CategoryId;
+                if (key !== 'asset' && key in result) result[key] += 1;
             }
+            return result;
+        }, [connectedItems, assetItems.length]);
+        const isEnabled = (id: CategoryId) => (id === 'asset' ? hasLibrary : counts[id] > 0);
 
-            // 分区 2：个人素材库
-            const hasLibrary = assetFolders.length > 0 || assetItems.length > 0;
-            if (hasLibrary) {
-                let libraryEntries: MentionItem[] = [];
+        const [rootIndex, setRootIndex] = useState(() => Math.max(0, CATEGORIES.findIndex(category => isEnabled(category.id))));
+        const [activeCategory, setActiveCategory] = useState<CategoryId | null>(() => {
+            const first = CATEGORIES.find(category => isEnabled(category.id));
+            return first ? first.id : null;
+        });
+        const [focus, setFocus] = useState<'root' | 'sub'>('root');
+        const [subIndex, setSubIndex] = useState(0);
+        const [folderId, setFolderId] = useState<string | null>(null);
+        const [checked, setChecked] = useState<Map<string, MentionItem>>(() => new Map());
+        const listRef = useRef<HTMLDivElement>(null);
 
-                if (normalizedQuery) {
-                    // 跨文件夹搜索：name + tags 匹配，最多 50 条
-                    const results = assetItems
-                        .filter(a =>
-                            a.name.toLowerCase().includes(normalizedQuery) ||
-                            a.tags.some(t => t.toLowerCase().includes(normalizedQuery))
-                        )
-                        .slice(0, 50);
-                    libraryEntries = results.map(a => ({
-                        id: a.id,
-                        label: a.name || '未命名素材',
-                        thumbnail: a.thumbnail,
-                        elementType: a.elementType,
-                        kind: 'item',
-                        sourceType: 'assetLibrary',
-                        assetId: a.id,
-                    }));
-                } else if (activeFolderId) {
-                    // 在文件夹内：显示返回 + 子文件夹 + 该文件夹内 items
-                    const currentFolder = assetFolders.find(f => f.id === activeFolderId);
-                    const parentFolderId = currentFolder?.parentId ?? null;
-                    libraryEntries.push({
-                        id: `__back__:${parentFolderId ?? 'root'}`,
-                        label: `＜ 返回${parentFolderId ? '' : ' 到素材库'}`,
-                        thumbnail: '',
-                        elementType: 'folder',
-                        kind: 'back',
-                        folderId: parentFolderId,
-                    });
-                    const subFolders = assetFolders.filter(f => f.parentId === activeFolderId);
-                    subFolders.forEach(f => {
-                        libraryEntries.push({
-                            id: `folder:${f.id}`,
-                            label: f.name,
-                            thumbnail: '',
-                            elementType: 'folder',
-                            kind: 'folder',
-                            folderId: f.id,
-                        });
-                    });
-                    const itemsInFolder = assetItems.filter(a => a.folderIds.includes(activeFolderId));
-                    itemsInFolder.forEach(a => {
-                        libraryEntries.push({
-                            id: a.id,
-                            label: a.name || '未命名素材',
-                            thumbnail: a.thumbnail,
-                            elementType: a.elementType,
-                            kind: 'item',
-                            sourceType: 'assetLibrary',
-                            assetId: a.id,
-                        });
-                    });
-                } else {
-                    // 在根：显示根文件夹
-                    const rootFolders = assetFolders.filter(f => f.parentId === null);
-                    rootFolders.forEach(f => {
-                        libraryEntries.push({
-                            id: `folder:${f.id}`,
-                            label: f.name,
-                            thumbnail: '',
-                            elementType: 'folder',
-                            kind: 'folder',
-                            folderId: f.id,
-                        });
-                    });
-                }
-
-                libraryEntries.forEach((item, i) => {
-                    list.push({
-                        item,
-                        sectionTitle: i === 0 ? SECTION_LIBRARY : null,
-                        sectionIndex,
-                        clickable: item.kind === 'item',
-                    });
-                });
-                if (libraryEntries.length === 0 && normalizedQuery) {
-                    list.push({
-                        item: {
-                            id: '__library_empty__',
-                            label: '没有匹配的素材',
-                            thumbnail: '',
-                            elementType: 'empty',
-                            kind: 'skillDisabled',
-                        },
-                        sectionTitle: SECTION_LIBRARY,
-                        sectionIndex,
-                        clickable: false,
-                    });
-                }
-                sectionIndex++;
+        const subRows = useMemo<MentionItem[]>(() => {
+            if (searching) {
+                const matches = (text?: string) => !!text && text.toLowerCase().includes(normalizedQuery);
+                const connected = connectedItems
+                    .filter(item => matches(item.label) || item.aliases?.some(matches) || matches(item.description))
+                    .map(asConnected);
+                const assets = assetItems
+                    .filter(asset => matches(asset.name) || asset.tags.some(matches))
+                    .slice(0, 50)
+                    .map(assetToItem);
+                return [...connected, ...assets];
             }
-
-            // 分区 3：Skill（占位）
-            if (!skillEnabled) {
-                list.push({
-                    item: {
-                        id: '__skill__',
-                        label: 'Skill（即将开放）',
-                        thumbnail: '',
-                        elementType: 'skill',
-                        kind: 'skillDisabled',
-                    },
-                    sectionTitle: SECTION_SKILL,
-                    sectionIndex,
-                    clickable: false,
-                });
+            if (!activeCategory) return [];
+            if (activeCategory !== 'asset') {
+                return connectedItems.filter(item => item.elementType === activeCategory).map(asConnected);
             }
+            const rows: MentionItem[] = [];
+            if (folderId) {
+                const parentId = assetFolders.find(folder => folder.id === folderId)?.parentId ?? undefined;
+                rows.push({ id: '__back__:' + (parentId ?? 'root'), label: '返回上级', thumbnail: '', elementType: 'folder', kind: 'back', folderId: parentId });
+            }
+            for (const folder of assetFolders) {
+                if ((folder.parentId ?? null) !== folderId) continue;
+                rows.push({ id: 'folder:' + folder.id, label: folder.name, thumbnail: '', elementType: 'folder', kind: 'folder', folderId: folder.id });
+            }
+            const inFolder = folderId
+                ? assetItems.filter(asset => asset.folderIds.includes(folderId))
+                : assetItems.filter(asset => asset.folderIds.length === 0);
+            return [...rows, ...inFolder.map(assetToItem)];
+        }, [searching, normalizedQuery, connectedItems, assetItems, assetFolders, activeCategory, folderId]);
 
-            return list;
-        }, [connectedItems, assetFolders, assetItems, query, activeFolderId, skillEnabled]);
-
-        // 列表变化时重置高亮
+        useEffect(() => { setSubIndex(0); }, [activeCategory, folderId, normalizedQuery]);
+        useEffect(() => { setFocus(searching ? 'sub' : 'root'); }, [searching]);
         useEffect(() => {
-            setSelectedIndex(0);
-        }, [entries]);
+            listRef.current?.querySelector<HTMLElement>('[data-sub-index="' + subIndex + '"]')?.scrollIntoView?.({ block: 'nearest' });
+        }, [subIndex]);
 
-        // 高亮项滚动入视
-        useEffect(() => {
-            const el = containerRef.current?.querySelector<HTMLButtonElement>(
-                `[data-index="${selectedIndex}"]`
-            );
-            el?.scrollIntoView({ block: 'nearest' });
-        }, [selectedIndex]);
-
-        const navigateFolder = (folderId: string | null) => {
-            setActiveFolderId(folderId);
-            setSelectedIndex(0);
+        const openCategory = (id: CategoryId) => {
+            if (!isEnabled(id)) return;
+            setActiveCategory(id);
+            setFolderId(null);
         };
 
-        const pickEntry = (entry: RenderEntry) => {
-            const item = entry.item;
-            // folder/back 导航条目 clickable 为 false，但不能被拦截，否则文件夹浏览失效
-            if (!entry.clickable && item?.kind !== 'folder' && item?.kind !== 'back') return;
-            if (item.kind === 'folder' || item.kind === 'back') {
-                navigateFolder(item.folderId ?? null);
+        const activateRow = (row: MentionItem) => {
+            if (row.kind === 'folder' || row.kind === 'back') {
+                setFolderId(row.folderId ?? null);
                 return;
             }
-            // 实际选择（connected / assetLibrary），交给 Tiptap command
-            command(item);
+            command(row);
         };
 
-        const selectIndex = (index: number) => {
-            const entry = entries[index];
-            if (entry) pickEntry(entry);
+        const toggle = (row: MentionItem) => {
+            if (row.kind !== 'item') return;
+            setChecked(previous => {
+                const next = new Map(previous);
+                const key = rowKey(row);
+                if (next.has(key)) next.delete(key);
+                else next.set(key, row);
+                return next;
+            });
+        };
+
+        const insertChecked = () => command({ batch: [...checked.values()] });
+
+        const enterRootCategory = () => {
+            const id = CATEGORIES[rootIndex].id;
+            if (!isEnabled(id)) return;
+            openCategory(id);
+            setFocus('sub');
+        };
+
+        const step = (delta: number) => {
+            if (focus === 'sub') {
+                if (subRows.length) setSubIndex(index => (index + delta + subRows.length) % subRows.length);
+                return;
+            }
+            const total = CATEGORIES.length;
+            for (let offset = 1; offset <= total; offset += 1) {
+                const next = (((rootIndex + delta * offset) % total) + total) % total;
+                if (!isEnabled(CATEGORIES[next].id)) continue;
+                setRootIndex(next);
+                openCategory(CATEGORIES[next].id);
+                return;
+            }
         };
 
         useImperativeHandle(ref, () => ({
             onKeyDown({ event }: { event: KeyboardEvent }) {
-                if (event.key === 'ArrowUp') {
-                    setSelectedIndex(i => {
-                        for (let step = 1; step <= entries.length; step++) {
-                            const next = (i - step + entries.length) % entries.length;
-                            const e = entries[next];
-                            if (e.clickable || e.item.kind === 'folder' || e.item.kind === 'back') return next;
-                        }
-                        return i;
-                    });
+                const { key } = event;
+                if (key === 'ArrowDown' || key === 'ArrowUp') {
+                    step(key === 'ArrowDown' ? 1 : -1);
                     return true;
                 }
-                if (event.key === 'ArrowDown') {
-                    setSelectedIndex(i => {
-                        for (let step = 1; step <= entries.length; step++) {
-                            const next = (i + step) % entries.length;
-                            const e = entries[next];
-                            if (e.clickable || e.item.kind === 'folder' || e.item.kind === 'back') return next;
-                        }
-                        return i;
-                    });
+                if (key === 'ArrowRight' && focus === 'root' && !searching) {
+                    enterRootCategory();
                     return true;
                 }
-                if (event.key === 'Enter') {
-                    selectIndex(selectedIndex);
+                if (key === 'ArrowLeft' && focus === 'sub' && !searching) {
+                    if (activeCategory === 'asset' && folderId) {
+                        setFolderId(assetFolders.find(folder => folder.id === folderId)?.parentId ?? null);
+                    } else {
+                        setFocus('root');
+                    }
+                    return true;
+                }
+                if (key === ' ' && focus === 'sub') {
+                    const row = subRows[subIndex];
+                    if (row?.kind !== 'item') return false;
+                    toggle(row);
+                    return true;
+                }
+                if (key === 'Enter') {
+                    if (checked.size > 0) insertChecked();
+                    else if (focus === 'root') enterRootCategory();
+                    else if (subRows[subIndex]) activateRow(subRows[subIndex]);
                     return true;
                 }
                 return false;
             },
         }));
 
-        if (entries.length === 0) {
-            return (
-                <div style={styles.container}>
-                            <div style={styles.empty}>工作流中暂无可引用节点，也没有可用素材</div>
-                </div>
-            );
-        }
+        const keepEditorFocus = (event: React.MouseEvent) => event.preventDefault();
 
-        return (
-            <div style={styles.container} ref={containerRef}>
-                {entries.map((entry, index) => {
-                    const { item, sectionTitle, clickable } = entry;
-                    const isFolder = item.kind === 'folder';
-                    const isBack = item.kind === 'back';
-                    const isSkill = item.kind === 'skillDisabled';
-                    const isItem = item.kind === 'item';
-                    const isActive = index === selectedIndex && (clickable || isFolder || isBack);
-
+        const rows = (
+            <div style={styles.list} ref={listRef} data-testid="mention-submenu" role="listbox">
+                {subRows.length === 0 && (
+                    <div style={styles.empty}>{searching ? '没有匹配的节点或素材' : '这里还没有内容'}</div>
+                )}
+                {subRows.map((row, index) => {
+                    const isItem = row.kind === 'item';
+                    const isChecked = checked.has(rowKey(row));
+                    const focused = focus === 'sub' && index === subIndex;
+                    const TypeIcon = TYPE_ICONS[row.elementType] || ImageIcon;
                     return (
-                        <React.Fragment key={`${item.id}-${index}`}>
-                            {sectionTitle && <div style={styles.sectionHeader}>{sectionTitle}</div>}
-                            <button
-                                data-index={index}
-                                onClick={() => pickEntry(entry)}
-                                disabled={isSkill}
-                                style={{
-                                    ...styles.item,
-                                    ...(isFolder ? styles.folderItem : {}),
-                                    ...(isBack ? styles.backItem : {}),
-                                    ...(isSkill ? styles.skillItem : {}),
-                                    ...(isActive ? styles.itemActive : {}),
-                                }}
-                                onMouseEnter={() => (clickable || isFolder || isBack) && setSelectedIndex(index)}
-                                title={isSkill ? '即将支持 Anthropic Claude Skills 作为参考资源' : undefined}
-                            >
+                        <div
+                            key={rowKey(row) + '-' + index}
+                            data-sub-index={index}
+                            role="option"
+                            aria-selected={focused}
+                            onMouseEnter={() => { setFocus('sub'); setSubIndex(index); }}
+                            onMouseDown={keepEditorFocus}
+                            onClick={() => activateRow(row)}
+                            style={{ ...styles.row, ...(focused ? styles.rowActive : {}) }}
+                        >
+                            {isItem ? (
+                                <span
+                                    role="checkbox"
+                                    aria-checked={isChecked}
+                                    aria-label={'选择 ' + row.label}
+                                    onClick={event => { event.stopPropagation(); toggle(row); }}
+                                    style={{ ...styles.checkbox, ...(isChecked ? styles.checkboxOn : {}) }}
+                                >
+                                    {isChecked && <Check size={11} strokeWidth={3} />}
+                                </span>
+                            ) : row.kind === 'back' ? <ChevronLeft size={15} style={styles.icon} /> : <Folder size={15} style={styles.icon} />}
+                            {isItem && (
                                 <span style={styles.thumb}>
-                                    {item.thumbnail && isFetchableMediaHref(item.thumbnail) ? (
-                                        <img src={item.thumbnail} alt={item.label} style={styles.thumbImg} />
-                                    ) : (
-                                        <span style={styles.thumbFallback}>
-                                            {typeIcon[item.elementType] || (isFolder ? '📁' : isSkill ? '⚡' : '🔷')}
-                                        </span>
-                                    )}
+                                    {row.thumbnail && isFetchableMediaHref(row.thumbnail)
+                                        ? <img src={row.thumbnail} alt="" style={styles.thumbImg} />
+                                        : <TypeIcon size={13} style={styles.icon} />}
                                 </span>
-                                <span style={styles.info}>
-                                    <span style={styles.label}>{item.label}</span>
-                                    <span style={styles.type}>
-                                        {isFolder
-                                            ? '文件夹'
-                                            : isBack
-                                                ? '返回上级'
-                                                : isSkill
-                                                    ? '即将开放'
-                                                    : item.description || item.elementType}
-                                    </span>
-                                </span>
-                                {(isFolder || isBack) && <span style={styles.chevron}>{isBack ? '' : '›'}</span>}
-                            </button>
-                        </React.Fragment>
+                            )}
+                            <span style={styles.label}>{row.label}</span>
+                            {row.kind === 'folder' && <ChevronRight size={13} style={styles.chevron} />}
+                        </div>
                     );
                 })}
+                {checked.size > 0 && (
+                    <button type="button" style={styles.insert} onMouseDown={keepEditorFocus} onClick={insertChecked}>
+                        插入 {checked.size} 项
+                    </button>
+                )}
+            </div>
+        );
+
+        return (
+            <div style={styles.shell} data-testid="mention-menu">
+                <div style={styles.card}>
+                    <div style={styles.search}>
+                        <Search size={13} />
+                        <span style={query ? styles.searchText : undefined}>{query || '搜索'}</span>
+                    </div>
+                    {searching ? rows : (
+                        <>
+                            <div style={styles.sectionHeader}>素材引用</div>
+                            {CATEGORIES.map((category, index) => {
+                                const Icon = category.icon;
+                                const enabled = isEnabled(category.id);
+                                const highlighted = activeCategory === category.id || (focus === 'root' && index === rootIndex);
+                                return (
+                                    <button
+                                        key={category.id}
+                                        type="button"
+                                        data-testid={'mention-category-' + category.id}
+                                        disabled={!enabled}
+                                        onMouseEnter={() => { if (!enabled) return; setRootIndex(index); setFocus('root'); openCategory(category.id); }}
+                                        onMouseDown={keepEditorFocus}
+                                        onClick={() => { openCategory(category.id); setFocus('sub'); }}
+                                        style={{
+                                            ...styles.row,
+                                            ...(category.id === 'asset' ? styles.assetRow : {}),
+                                            ...(highlighted && enabled ? styles.rowActive : {}),
+                                            ...(enabled ? {} : styles.rowDisabled),
+                                        }}
+                                    >
+                                        <Icon size={15} style={styles.icon} />
+                                        <span style={styles.label}>{category.label}</span>
+                                        {category.id !== 'asset' && counts[category.id] > 0 && <span style={styles.count}>{counts[category.id]}</span>}
+                                        {category.id !== 'asset' || hasLibrary ? <ChevronRight size={13} style={styles.chevron} /> : null}
+                                    </button>
+                                );
+                            })}
+                            {connectedItems.length === 0 && <div style={styles.hint}>把上游节点连到当前节点后，可在这里 @ 引用</div>}
+                        </>
+                    )}
+                </div>
+                {!searching && activeCategory && <div style={{ ...styles.card, ...styles.subCard }}>{rows}</div>}
             </div>
         );
     }
@@ -363,105 +336,143 @@ export default MentionList;
 // ---- 样式 -------------------------------------------------------
 
 const styles: Record<string, React.CSSProperties> = {
-    container: {
-        background: 'var(--panel-bg, #ffffff)',
-        border: '1px solid var(--border-color, #e5e7eb)',
-        borderRadius: '12px',
-        boxShadow: '0 8px 28px rgba(0,0,0,0.18)',
-        padding: '4px',
-        minWidth: '220px',
-        maxWidth: '280px',
-        maxHeight: '320px',
-        overflowY: 'auto',
+    shell: {
+        display: 'flex',
+        alignItems: 'flex-start',
+        gap: '6px',
         zIndex: 9999,
     },
-    sectionHeader: {
-        fontSize: '10px',
-        fontWeight: 600,
-        color: 'var(--text-muted, #9ca3af)',
-        textTransform: 'uppercase',
-        letterSpacing: '0.06em',
-        padding: '6px 8px 3px',
-        borderTop: '1px solid var(--border-color, #f0f0f0)',
-        marginTop: '2px',
+    card: {
+        width: '168px',
+        padding: '6px',
+        borderRadius: '12px',
+        background: 'var(--isl-card, #1f1f23)',
+        border: '1px solid var(--isl-border, rgba(255,255,255,0.08))',
+        boxShadow: '0 10px 30px rgba(0,0,0,0.28)',
+        color: 'var(--isl-ink, #e8e8ea)',
     },
-    item: {
+    subCard: {
+        width: '188px',
+    },
+    search: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '6px',
+        height: '30px',
+        padding: '0 9px',
+        marginBottom: '4px',
+        borderRadius: '8px',
+        border: '1px solid var(--isl-border, rgba(255,255,255,0.1))',
+        fontSize: '12px',
+        color: 'var(--isl-ink-soft, #8b8b93)',
+    },
+    searchText: {
+        color: 'var(--isl-ink, #e8e8ea)',
+    },
+    sectionHeader: {
+        padding: '6px 8px 4px',
+        fontSize: '11px',
+        color: 'var(--isl-ink-soft, #8b8b93)',
+    },
+    list: {
+        maxHeight: '300px',
+        overflowY: 'auto',
+    },
+    row: {
         display: 'flex',
         alignItems: 'center',
         gap: '8px',
         width: '100%',
-        padding: '5px 8px',
+        height: '30px',
+        padding: '0 8px',
         border: 'none',
-        borderRadius: '8px',
+        borderRadius: '7px',
         background: 'transparent',
-        cursor: 'pointer',
+        color: 'inherit',
+        fontSize: '12.5px',
         textAlign: 'left',
+        cursor: 'pointer',
         transition: 'background 0.12s',
-        color: 'var(--text-primary, #111827)',
     },
-    folderItem: {
-        fontWeight: 500,
+    rowActive: {
+        background: 'var(--isl-surface-2, rgba(255,255,255,0.08))',
     },
-    backItem: {
-        color: 'var(--text-muted, #6b7280)',
-        fontStyle: 'italic',
+    rowDisabled: {
+        opacity: 0.4,
+        cursor: 'default',
     },
-    skillItem: {
-        opacity: 0.5,
-        cursor: 'not-allowed',
+    assetRow: {
+        marginTop: '2px',
     },
-    itemActive: {
-        background: 'rgba(99, 102, 241, 0.15)',
+    icon: {
+        flexShrink: 0,
+        color: 'var(--isl-ink-soft, #a1a1aa)',
+    },
+    label: {
+        flex: 1,
+        minWidth: 0,
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap',
+    },
+    count: {
+        fontSize: '11px',
+        color: 'var(--isl-ink-soft, #8b8b93)',
+    },
+    chevron: {
+        flexShrink: 0,
+        color: 'var(--isl-ink-soft, #8b8b93)',
+    },
+    checkbox: {
+        display: 'grid',
+        placeItems: 'center',
+        flexShrink: 0,
+        width: '15px',
+        height: '15px',
+        borderRadius: '4px',
+        border: '1.5px solid var(--isl-ink-soft, #6b6b73)',
+        color: '#fff',
+    },
+    checkboxOn: {
+        background: 'var(--isl-mint-deep, #16a34a)',
+        borderColor: 'var(--isl-mint-deep, #16a34a)',
     },
     thumb: {
+        display: 'grid',
+        placeItems: 'center',
         flexShrink: 0,
-        width: '28px',
-        height: '28px',
-        borderRadius: '6px',
+        width: '22px',
+        height: '22px',
         overflow: 'hidden',
-        background: 'var(--panel-soft, #f3f4f6)',
-        border: '1px solid var(--border-color, #e5e7eb)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
+        borderRadius: '5px',
+        background: 'var(--isl-surface-2, rgba(255,255,255,0.06))',
     },
     thumbImg: {
         width: '100%',
         height: '100%',
         objectFit: 'cover',
     },
-    thumbFallback: {
-        fontSize: '14px',
-        lineHeight: 1,
-    },
-    info: {
-        display: 'flex',
-        flexDirection: 'column',
-        minWidth: 0,
-        flex: 1,
-    },
-    label: {
+    insert: {
+        width: '100%',
+        height: '28px',
+        marginTop: '4px',
+        border: 'none',
+        borderRadius: '7px',
+        background: 'var(--isl-mint-deep, #16a34a)',
+        color: '#fff',
         fontSize: '12px',
-        fontWeight: 500,
-        color: 'var(--text-primary, #111827)',
-        overflow: 'hidden',
-        textOverflow: 'ellipsis',
-        whiteSpace: 'nowrap',
+        fontWeight: 600,
+        cursor: 'pointer',
     },
-    type: {
-        fontSize: '10px',
-        color: 'var(--text-muted, #9ca3af)',
-        textTransform: 'capitalize',
-    },
-    chevron: {
-        fontSize: '14px',
-        color: 'var(--text-muted, #9ca3af)',
-        marginLeft: '4px',
-        flexShrink: 0,
+    hint: {
+        padding: '6px 8px 2px',
+        fontSize: '11px',
+        lineHeight: 1.4,
+        color: 'var(--isl-ink-soft, #8b8b93)',
     },
     empty: {
-        padding: '10px 12px',
+        padding: '10px 8px',
         fontSize: '12px',
-        color: 'var(--text-muted, #9ca3af)',
+        color: 'var(--isl-ink-soft, #8b8b93)',
     },
 };

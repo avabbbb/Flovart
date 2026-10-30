@@ -15,6 +15,8 @@ import {
   resolveProductModelRoute,
   resolveAnyProductRoute,
   sanitizeProductGenerationParams,
+  GENERIC_IMAGE_CAPABILITIES,
+  GENERIC_VIDEO_CAPABILITIES,
 } from './productModelCatalog';
 import { estimateApiCost } from '../utils/usageMonitor';
 import { resolveRouteMapping } from './routeMapping';
@@ -40,14 +42,6 @@ export function promptProductModeLabel(mode: ProductModelMode) {
 }
 
 // 不在产品目录里的模型（旧节点遗留 id、自定义模型）使用通用参数，保证参数面板始终可用；实际支持以供应商为准。
-const GENERIC_IMAGE_CAPABILITIES: ProductModelCapability = {
-  modes: ['text-to-image', 'image-to-image'], aspectRatios: ['1:1', '3:2', '2:3', '16:9', '9:16', '4:3', '3:4'], resolutions: ['1K', '2K', '4K'], durations: [], qualities: ['low', 'medium', 'high'], counts: [1, 2, 4],
-  audioControl: 'none', supportsWebSearch: false, supportsRealPersonCheck: false, supportsSeed: false, maxImageReferences: 8, maxVideoReferences: 0, maxAudioReferences: 0,
-};
-const GENERIC_VIDEO_CAPABILITIES: ProductModelCapability = {
-  modes: ['text-to-video', 'image-to-video'], aspectRatios: ['16:9', '9:16'], resolutions: ['720p', '1080p'], durations: [4, 6, 8], qualities: [], counts: [1],
-  audioControl: 'none', supportsWebSearch: false, supportsRealPersonCheck: false, supportsSeed: false, maxImageReferences: 1, maxVideoReferences: 0, maxAudioReferences: 0,
-};
 
 function productFamily(model: ReturnType<typeof getProductModels>[number]): string {
   if (model.id.includes('seedance')) return 'Seedance';

@@ -6,7 +6,7 @@ import type { RefObject } from 'react';
 import type { LassoPoint } from './lasso';
 import type { DragEvent as ReactDragEvent, PointerEvent as ReactPointerEvent } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Check, ChevronRight, ChevronsDown, Download, Maximize2, Plus, Star, Undo2 } from 'lucide-react';
+import { Check, Download, History, Maximize2, Minimize2, Plus, Star, Undo2 } from 'lucide-react';
 import { saveMediaUrl } from '../../services/desktopNetwork';
 import type { AssetLibrary, PromptEnhanceMode, PromptEnhanceResult, UserApiKey } from '../../types';
 import type { RouteFallbackResolution } from '../../services/routeMapping';
@@ -177,9 +177,10 @@ function WorkflowVideoPreview({ node, className }: { node: WorkflowNodeData; cla
     : <div className={`${className || ''} workflow-video-placeholder`} role="img" aria-label={`${node.title} 视频预览`} data-testid="workflow-video-placeholder" data-workflow-media-preview>视频预览</div>;
 }
 
-function WorkflowBatchStack({ head, count, onPointerDown, onExpand }: {
+function WorkflowBatchStack({ head, count, historyOpen = false, onPointerDown, onExpand }: {
   head: WorkflowNodeData;
   count: number;
+  historyOpen?: boolean;
   onPointerDown: (event: ReactPointerEvent<HTMLDivElement>) => void;
   onExpand: () => void;
 }) {
@@ -187,71 +188,182 @@ function WorkflowBatchStack({ head, count, onPointerDown, onExpand }: {
     head.type === 'video' ? undefined : head.metadata.storageKey,
     head.type === 'video' ? undefined : head.metadata.href,
   );
+  const unit = head.type === 'video' ? '个' : '张';
+  // LibTV 式叠放：两层卡片斜错在主图之后，悬停时向右下散开一点，提示可展开。
   return (
     <motion.div
       className="workflow-batch-stack"
       style={{ x: head.position.x, y: head.position.y, width: head.width, height: head.height }}
-      initial={{ opacity: 0, scale: 0.9 }}
-      animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.9 }}
-      transition={{ type: 'spring', stiffness: 380, damping: 24, mass: 0.8 }}
-      whileHover={{ scale: 1.02 }}
+      variants={{ rest: { opacity: 1, scale: 1 }, hover: { opacity: 1, scale: 1.012 } }}
+      initial={{ opacity: 0, scale: 0.94 }}
+      animate="rest"
+      whileHover="hover"
+      exit={{ opacity: 0, transition: { duration: 0.12 } }}
+      transition={{ type: 'spring', stiffness: 380, damping: 26, mass: 0.8 }}
       onPointerDown={onPointerDown}
+      onDoubleClick={event => { event.stopPropagation(); onExpand(); }}
     >
-      <div className="workflow-batch-stack__layer" style={{ transform: 'translate(7px, 7px)' }} />
-      <div className="workflow-batch-stack__layer" style={{ transform: 'translate(3.5px, 3.5px)' }} />
+      <motion.div className="workflow-batch-stack__layer" variants={{ rest: { x: 10, y: 6, rotate: 2.5 }, hover: { x: 16, y: 10, rotate: 4 } }} transition={{ type: 'spring', stiffness: 420, damping: 24 }} />
+      <motion.div className="workflow-batch-stack__layer" variants={{ rest: { x: 5, y: 3, rotate: 1 }, hover: { x: 8, y: 5, rotate: 1.8 } }} transition={{ type: 'spring', stiffness: 420, damping: 24 }} />
       {head.type === 'video'
         ? <WorkflowVideoPreview node={head} className="workflow-batch-stack__preview" />
         : media.url && <img src={media.url} alt={head.title} className="workflow-batch-stack__preview" draggable={false} />}
       <div className="workflow-batch-stack__title"><span>{head.title}</span></div>
-      <button type="button" className="workflow-batch-stack__expand" data-workflow-overlay onPointerDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); onExpand(); }} aria-label={`展开 ${count} 个结果`}>
-        <span>{count}张</span><ChevronRight size={16} />
+      <button type="button" className={'workflow-batch-stack__expand' + (historyOpen ? ' is-active' : '')} data-workflow-overlay title={count > 4 ? '生成历史' : '展开全部结果'} aria-pressed={count > 4 ? historyOpen : undefined} onPointerDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); onExpand(); }} aria-label={count > 4 ? '查看生成历史（' + count + ' 个结果）' : '展开 ' + count + ' 个结果'}>
+        {count > 4 ? <History size={12} /> : <Maximize2 size={12} />}<span>{count + unit}</span>
       </button>
     </motion.div>
   );
 }
 
-function WorkflowBatchThumb({ node, active, primary, onSelect }: { node: WorkflowNodeData; active: boolean; primary: boolean; onSelect: () => void }) {
-  const media = useWorkflowMediaUrl(
+const BATCH_GRID_GAP = 12;
+
+function WorkflowBatchCell({ node, index, count, column, row, cellWidth, cellHeight, primary, onCollapse, onSetPrimary, onPointerDown }: {
+  node: WorkflowNodeData;
+  index: number;
+  count: number;
+  column: number;
+  row: number;
+  cellWidth: number;
+  cellHeight: number;
+  primary: boolean;
+  onCollapse: () => void;
+  onSetPrimary: (nodeId: string) => void;
+  onPointerDown: (event: ReactPointerEvent<HTMLDivElement>) => void;
+}) {
+  const preview = useWorkflowMediaUrl(
     node.type === 'video' ? undefined : node.metadata.storageKey,
     node.type === 'video' ? undefined : node.metadata.href,
   );
-  return <button type="button" className={`workflow-batch-gallery__thumb${active ? ' is-active' : ''}`} onPointerDown={event => event.stopPropagation()} onClick={onSelect} title={`${node.title}${primary ? ' · 主图' : ''}`}>
-    {node.type === 'video' ? <WorkflowVideoPreview node={node} /> : media.url && <img src={media.url} alt={node.title} />}
-    {primary && <Check size={11} className="workflow-batch-gallery__primary-mark" />}
-  </button>;
+  const download = useWorkflowMediaUrl(node.metadata.storageKey, node.metadata.href);
+  const left = column * (cellWidth + BATCH_GRID_GAP);
+  const top = row * (cellHeight + BATCH_GRID_GAP);
+  // 展开时从叠放位置（主图所在格）弹出到网格位；收起时反向飞回叠放位置。
+  const stacked = { x: -left + Math.min(index, 2) * 5, y: -top + Math.min(index, 2) * 3, scale: 0.96, opacity: index === 0 ? 1 : 0 };
+  return (
+    <motion.div
+      className={'workflow-batch-cell' + (primary ? ' is-primary' : '')}
+      data-testid="workflow-batch-cell"
+      style={{ left, top, width: cellWidth, height: cellHeight, zIndex: count - index }}
+      initial={stacked}
+      animate={{ x: 0, y: 0, scale: 1, opacity: 1, transition: { type: 'spring', stiffness: 420, damping: 32, mass: 0.7, delay: index * 0.04 } }}
+      exit={{ ...stacked, transition: { type: 'spring', stiffness: 520, damping: 40, delay: (count - 1 - index) * 0.025 } }}
+      onPointerDown={onPointerDown}
+    >
+      {node.type === 'video'
+        ? <WorkflowVideoPreview node={node} className="workflow-batch-cell__media" />
+        : preview.url && <img src={preview.url} alt={node.title} className="workflow-batch-cell__media" draggable={false} />}
+      {primary && <span className="workflow-batch-cell__badge"><Check size={11} />主图</span>}
+      <div className="workflow-batch-cell__actions" data-workflow-overlay onPointerDown={event => event.stopPropagation()}>
+        <button type="button" title="下载" aria-label={'下载第 ' + (index + 1) + ' 个结果'} disabled={!download.url} onClick={event => { event.stopPropagation(); if (!download.url) return; void saveMediaUrl(download.url, node.metadata.name || node.title || node.id).catch(error => console.warn('[Workflow] Batch item download failed.', error)); }}><Download size={12} />下载</button>
+        {primary
+          ? <button type="button" title="收起结果" aria-label="收起结果" onClick={event => { event.stopPropagation(); onCollapse(); }}><Minimize2 size={12} />收起</button>
+          : <button type="button" title="设为主图" onClick={event => { event.stopPropagation(); onSetPrimary(node.id); }}><Star size={12} />设为主图</button>}
+      </div>
+    </motion.div>
+  );
 }
 
-function WorkflowBatchGallery({ group, selectedId, onSelect, onCollapse, onSetPrimary, onPointerDown }: {
+// LibTV 式展开：以主图为左上角铺成网格（≤4 两列，更多三列），每格带 下载 / 设为主图，主图格带 收起。
+function WorkflowBatchGallery({ group, onCollapse, onSetPrimary, onPointerDown }: {
   group: WorkflowNodeData[];
-  selectedId?: string;
-  onSelect: (nodeId: string) => void;
   onCollapse: () => void;
   onSetPrimary: (nodeId: string) => void;
   onPointerDown: (event: ReactPointerEvent<HTMLDivElement>) => void;
 }) {
   const root = group.find(node => node.batchIndex === 0) || group[0];
   const primaryId = root.metadata.primaryImageId || root.id;
-  const selected = group.find(node => node.id === selectedId) || group.find(node => node.id === primaryId) || root;
-  const media = useWorkflowMediaUrl(
-    selected.type === 'video' ? undefined : selected.metadata.storageKey,
-    selected.type === 'video' ? undefined : selected.metadata.href,
+  const head = group.find(node => node.id === primaryId) || root;
+  const ordered = [head, ...group.filter(node => node.id !== head.id)];
+  const columns = ordered.length <= 4 ? 2 : 3;
+  const rows = Math.ceil(ordered.length / columns);
+  const cellWidth = head.width;
+  const cellHeight = head.height;
+  return (
+    <motion.div
+      className="workflow-batch-gallery"
+      data-testid="workflow-batch-gallery"
+      style={{ x: head.position.x, y: head.position.y, width: columns * cellWidth + (columns - 1) * BATCH_GRID_GAP, height: rows * cellHeight + (rows - 1) * BATCH_GRID_GAP }}
+      initial={{ opacity: 1 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 1 }}
+      onPointerDown={onPointerDown}
+    >
+      {ordered.map((node, index) => (
+        <WorkflowBatchCell
+          key={node.id}
+          node={node}
+          index={index}
+          count={ordered.length}
+          column={index % columns}
+          row={Math.floor(index / columns)}
+          cellWidth={cellWidth}
+          cellHeight={cellHeight}
+          primary={node.id === primaryId}
+          onCollapse={onCollapse}
+          onSetPrimary={onSetPrimary}
+          onPointerDown={onPointerDown}
+        />
+      ))}
+    </motion.div>
   );
-  const downloadMedia = useWorkflowMediaUrl(selected.metadata.storageKey, selected.metadata.href);
-  const index = Math.max(0, group.findIndex(node => node.id === selected.id));
-  return <motion.div className="workflow-batch-gallery" style={{ x: root.position.x, y: root.position.y, width: root.width, height: root.height }} initial={{ opacity: 0, scale: .94 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: .94 }} transition={{ type: 'spring', stiffness: 360, damping: 28 }} onPointerDown={onPointerDown}>
-    {selected.type === 'video'
-      ? <WorkflowVideoPreview node={selected} className="workflow-batch-gallery__media" />
-      : media.url && <img src={media.url} alt={selected.title} className="workflow-batch-gallery__media" draggable={false} />}
-    <div className="workflow-batch-stack__title"><span>{selected.title}</span></div>
-    <button type="button" className="workflow-batch-stack__expand" data-workflow-overlay onPointerDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); onCollapse(); }}><span>{group.length}张</span><ChevronsDown size={15} /></button>
-    {selected.id !== primaryId && <button type="button" className="workflow-batch-gallery__set-primary" data-workflow-overlay onPointerDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); onSetPrimary(selected.id); }}><Star size={13} />设为主图</button>}
-    <button type="button" className="workflow-batch-gallery__set-primary" style={{ left: 'auto', right: 14 }} data-workflow-overlay aria-label="下载当前结果" title="下载当前结果" disabled={!downloadMedia.url} onPointerDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); if (!downloadMedia.url) return; void saveMediaUrl(downloadMedia.url, selected.metadata.name || selected.title || selected.id).catch(error => console.warn('[Workflow] Batch item download failed.', error)); }}><Download size={13} />下载</button>
-    <div className="workflow-batch-gallery__rail" data-workflow-overlay onPointerDown={event => event.stopPropagation()}>
-      <span className="workflow-batch-gallery__counter">{index + 1} / {group.length}</span>
-      <div className="workflow-batch-gallery__thumbs">{group.map(node => <WorkflowBatchThumb key={node.id} node={node} active={node.id === selected.id} primary={node.id === primaryId} onSelect={() => onSelect(node.id)} />)}</div>
-    </div>
-  </motion.div>;
+}
+
+function WorkflowBatchHistoryThumb({ node, index, primary, onSelect }: { node: WorkflowNodeData; index: number; primary: boolean; onSelect: () => void }) {
+  const preview = useWorkflowMediaUrl(
+    node.type === 'video' ? undefined : node.metadata.storageKey,
+    node.type === 'video' ? undefined : node.metadata.href,
+  );
+  return (
+    <motion.button
+      type="button"
+      className={'workflow-batch-history__thumb' + (primary ? ' is-primary' : '')}
+      title={primary ? '当前主图' : '设为主图'}
+      aria-label={'第 ' + (index + 1) + ' 个结果' + (primary ? '（主图）' : '，设为主图')}
+      aria-pressed={primary}
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0, transition: { delay: Math.min(index, 12) * 0.02 } }}
+      onClick={onSelect}
+    >
+      {node.type === 'video' ? <WorkflowVideoPreview node={node} /> : preview.url && <img src={preview.url} alt={node.title} draggable={false} loading="lazy" />}
+      {primary && <span className="workflow-batch-history__mark"><Check size={11} /></span>}
+    </motion.button>
+  );
+}
+
+// LibTV 式生成历史：超过 4 个结果不铺网格，叠放主图保留在原位，右侧弹出可滚动的三列缩略图面板，点缩略图切换主图。
+function WorkflowBatchHistory({ head, group, onClose, onSetPrimary }: {
+  head: WorkflowNodeData;
+  group: WorkflowNodeData[];
+  onClose: () => void;
+  onSetPrimary: (nodeId: string) => void;
+}) {
+  return (
+    <motion.div
+      className="workflow-batch-history"
+      data-testid="workflow-batch-history"
+      data-workflow-overlay
+      role="dialog"
+      aria-label={'生成历史，共 ' + group.length + ' 个结果'}
+      style={{ left: head.position.x + head.width + 16, top: head.position.y, height: Math.max(head.height, 360) }}
+      initial={{ opacity: 0, x: -20, scale: 0.97 }}
+      animate={{ opacity: 1, x: 0, scale: 1 }}
+      exit={{ opacity: 0, x: -20, scale: 0.97, transition: { duration: 0.14 } }}
+      transition={{ type: 'spring', stiffness: 420, damping: 34 }}
+      onPointerDown={event => event.stopPropagation()}
+      onWheel={event => event.stopPropagation()}
+    >
+      <div className="workflow-batch-history__header">
+        <span className="workflow-batch-history__title">生成历史<span className="workflow-batch-history__count">{group.length}</span></span>
+        <button type="button" title="收起生成历史" aria-label="收起生成历史" onClick={onClose}><Minimize2 size={13} /></button>
+      </div>
+      <div className="workflow-batch-history__grid isl-scrollbar">
+        {group.map((node, index) => (
+          <WorkflowBatchHistoryThumb key={node.id} node={node} index={index} primary={node.id === head.id} onSelect={() => { if (node.id !== head.id) onSetPrimary(node.id); }} />
+        ))}
+      </div>
+    </motion.div>
+  );
 }
 
 export function InfiniteWorkflow({
@@ -356,7 +468,6 @@ export function InfiniteWorkflow({
   const [audioToolError, setAudioToolError] = useState<string | null>(null);
   const [storyboardNodeIds, setStoryboardNodeIds] = useState<string[] | null>(null);
   const [expandedBatches, setExpandedBatches] = useState<Set<string>>(new Set());
-  const [batchPreviewIds, setBatchPreviewIds] = useState<Record<string, string>>({});
   const [scriptEditorNodeId, setScriptEditorNodeId] = useState<string | null>(null);
   const [slashMenu, setSlashMenu] = useState<{ x: number; y: number } | null>(null);
   const [previewNode, setPreviewNode] = useState<WorkflowNodeData | null>(null);
@@ -2448,15 +2559,15 @@ export function InfiniteWorkflow({
   const overlayTop = overlayBounds ? Math.min(overlayBounds.top, selectedGroupTop) : 0;
   const toolbarTop = overlayBounds ? Math.max(8, project.viewport.y + overlayTop * project.viewport.k - Math.max(72, 56 + 28 * project.viewport.k) + (overlayTop < overlayBounds.top ? 24 : 0)) : 0;
   const promptWorkflowWidth = workflowWidth;
-  // The prompt bar belongs to the node: about as wide as the node on screen
-  // (420-560px), never a full-width strip that hides the canvas.
+  // The prompt bar belongs to the node but reads as a roomy composer (LibTV ratio):
+  // about 1.4x the node's on-screen width, 520-760px, clamped to the workflow area.
   const overlayScreenWidth = overlayBounds ? (overlayBounds.right - overlayBounds.left) * project.viewport.k : 0;
-  const promptWidth = Math.min(promptWorkflowWidth - 16, Math.max(420, Math.min(560, overlayScreenWidth + 80)));
+  const promptWidth = Math.min(promptWorkflowWidth - 16, Math.max(520, Math.min(760, overlayScreenWidth * 1.4)));
   const promptLeft = Math.max(8, Math.min(overlayCenter - promptWidth / 2, promptWorkflowWidth - promptWidth - 8));
   const configLeft = Math.max(8, Math.min(overlayCenter - 210, workflowWidth - 428));
   const promptTop = overlayBounds ? (() => {
     const rootHeight = rootSize?.height || 700;
-    const estimatedPromptHeight = 176;
+    const estimatedPromptHeight = 220;
     const below = project.viewport.y + overlayBounds.bottom * project.viewport.k + 12;
     const dockSafeTop = rootHeight - 60;
     if (below + estimatedPromptHeight <= dockSafeTop) return below;
@@ -2479,7 +2590,7 @@ export function InfiniteWorkflow({
   const hiddenByBatch = useMemo(() => {
     const hidden = new Set<string>();
     for (const [batchId, group] of batchGroups) {
-      if (group.length > 1 && !group.some(node => node.batchGroupSource === 'manual') && (!expandedBatches.has(batchId) || group.length > 4)) {
+      if (group.length > 1 && !group.some(node => node.batchGroupSource === 'manual')) {
         for (const node of group) hidden.add(node.id);
       }
     }
@@ -2489,7 +2600,7 @@ export function InfiniteWorkflow({
   const collapsedBatches = useMemo(() => {
     const result: { batchId: string; head: WorkflowNodeData; count: number }[] = [];
     for (const [batchId, group] of batchGroups) {
-      if (group.length > 1 && !group.some(node => node.batchGroupSource === 'manual') && !expandedBatches.has(batchId)) {
+      if (group.length > 1 && !group.some(node => node.batchGroupSource === 'manual') && (!expandedBatches.has(batchId) || group.length > 4)) {
         const root = group.find(n => n.batchIndex === 0) || group[0];
         const primaryId = root?.metadata.primaryImageId;
         const head = (primaryId && group.find(n => n.id === primaryId)) || root;
@@ -2500,10 +2611,17 @@ export function InfiniteWorkflow({
   }, [batchGroups, expandedBatches]);
 
   const expandedBatchGalleries = useMemo(() => [...batchGroups].flatMap(([batchId, group]) => (
-    group.length > 4 && expandedBatches.has(batchId) && !group.some(node => node.batchGroupSource === 'manual')
+    group.length > 1 && group.length <= 4 && expandedBatches.has(batchId) && !group.some(node => node.batchGroupSource === 'manual')
       ? [{ batchId, group: [...group].sort((left, right) => (left.batchIndex ?? 0) - (right.batchIndex ?? 0)) }]
       : []
   )), [batchGroups, expandedBatches]);
+
+  // 超过 4 个结果的自动批次：展开时保留叠放主图，在右侧弹出生成历史面板。
+  const historyBatches = useMemo(() => collapsedBatches.flatMap(({ batchId, head, count }) => (
+    count > 4 && expandedBatches.has(batchId)
+      ? [{ batchId, head, group: [...(batchGroups.get(batchId) || [])].sort((left, right) => (left.batchIndex ?? 0) - (right.batchIndex ?? 0)) }]
+      : []
+  )), [batchGroups, collapsedBatches, expandedBatches]);
 
   // LibTV 式分组框：手动分组常驻展开并画框，展开中的自动批次也画框；框体不拦截指针，只有标签可拖动整组。
   const groupFrames = useMemo(() => [...batchGroups].flatMap(([batchId, group]) => {
@@ -2760,22 +2878,30 @@ export function InfiniteWorkflow({
         <AnimatePresence>
         {collapsedBatches.map(({ batchId, head, count }) => (
           <WorkflowBatchStack
-            key={`batch-stack-${batchId}`}
+            key={'batch-stack-' + batchId}
             head={head}
             count={count}
+            historyOpen={expandedBatches.has(batchId)}
             onPointerDown={event => { const group = batchGroups.get(batchId) || []; if (group.length) startBatchDrag(event, batchId, group); }}
             onExpand={() => toggleBatch(batchId)}
           />
         ))}
         {expandedBatchGalleries.map(({ batchId, group }) => (
           <WorkflowBatchGallery
-            key={`batch-gallery-${batchId}`}
+            key={'batch-gallery-' + batchId}
             group={group}
-            selectedId={batchPreviewIds[batchId]}
-            onSelect={nodeId => setBatchPreviewIds(current => ({ ...current, [batchId]: nodeId }))}
             onCollapse={() => toggleBatch(batchId)}
             onSetPrimary={nodeId => applyOps([{ type: 'set_batch_primary', batchId, nodeId }])}
             onPointerDown={event => startBatchDrag(event, batchId, group)}
+          />
+        ))}
+        {historyBatches.map(({ batchId, head, group }) => (
+          <WorkflowBatchHistory
+            key={'batch-history-' + batchId}
+            head={head}
+            group={group}
+            onClose={() => toggleBatch(batchId)}
+            onSetPrimary={nodeId => applyOps([{ type: 'set_batch_primary', batchId, nodeId }])}
           />
         ))}
         {renderNodes.map(node => {

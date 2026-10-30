@@ -1,3 +1,4 @@
+import { buildReferenceHintExtension, REFERENCE_HINT_STYLES } from './promptReferenceHint';
 import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from 'react';
 import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -65,7 +66,7 @@ function buildSuggestionExtension(
                         let componentRef: React.RefObject<MentionListHandle> = React.createRef();
                         let currentQuery: string = '';
 
-                        const renderList = (items: MentionItem[], command: (item: MentionItem) => void) => {
+                        const renderList = (items: MentionItem[], command: (payload: MentionItem | { batch: MentionItem[] }) => void) => {
                             reactRoot?.render(
                                 <MentionList
                                     ref={componentRef}
@@ -74,7 +75,6 @@ function buildSuggestionExtension(
                                     assetItems={assetItemsRef.current}
                                     query={currentQuery}
                                     command={command}
-                                    skillEnabled={skillEnabled}
                                 />
                             );
                         };
@@ -146,18 +146,16 @@ function buildSuggestionExtension(
                         };
                     },
                     command({ editor, range, props }) {
-                        const item = props as MentionItem;
-                        let mentionId = item.id;
-                        if (item.sourceType === 'assetLibrary' && item.assetId && onSelectAssetRef.current) {
-                            const newNodeId = onSelectAssetRef.current(item.assetId);
-                            if (!newNodeId) return;
-                            mentionId = newNodeId;
-                        }
-                        editor
-                            .chain()
-                            .focus()
-                            .deleteRange(range)
-                            .insertContent({
+                        // 单个条目或勾选后的批量条目；素材先物化为上游节点，物化失败的跳过。
+                        const payload = props as MentionItem | { batch: MentionItem[] };
+                        const picked = 'batch' in payload ? payload.batch : [payload];
+                        const content = picked.flatMap(item => {
+                            let mentionId: string | undefined = item.id;
+                            if (item.sourceType === 'assetLibrary' && item.assetId && onSelectAssetRef.current) {
+                                mentionId = onSelectAssetRef.current(item.assetId);
+                            }
+                            if (!mentionId) return [];
+                            return [{
                                 type: 'mediaMention',
                                 attrs: {
                                     id: mentionId,
@@ -168,9 +166,10 @@ function buildSuggestionExtension(
                                     sourceType: item.sourceType ?? null,
                                     assetId: item.assetId ?? null,
                                 },
-                            })
-                            .insertContent(' ')
-                            .run();
+                            }, { type: 'text', text: ' ' }];
+                        });
+                        if (content.length === 0) return;
+                        editor.chain().focus().deleteRange(range).insertContent(content).run();
                     },
                 }),
             ];
@@ -286,6 +285,7 @@ const RichPromptEditor = forwardRef<RichPromptEditorHandle, RichPromptEditorProp
                 }),
                 MediaMentionNode,
                 buildSuggestionExtension(getFilteredItems, assetFoldersRef, assetItemsRef, onSelectAssetRef, skillEnabled),
+                buildReferenceHintExtension(() => referenceItemsRef.current),
             ],
             content: normalizeDocument(initialText, initialDocument),
             editable: !disabled,
@@ -410,7 +410,7 @@ const RichPromptEditor = forwardRef<RichPromptEditorHandle, RichPromptEditorProp
 
         return (
             <>
-                <style>{editorStyles()}</style>
+                <style>{editorStyles() + REFERENCE_HINT_STYLES}</style>
                 <EditorContent editor={editor} />
             </>
         );

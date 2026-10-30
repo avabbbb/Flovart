@@ -9,7 +9,7 @@ import type { ProductModelMode, UserApiKey } from '../types';
 import { executeUnifiedIgnition, generateTextWithProvider, SeedanceSubmissionUnknownError, type UnifiedIgnitionInput, type UnifiedIgnitionResult } from './aiGateway';
 import { getGenerationCapability } from './generationCapabilities';
 import { runPreflight } from './promptPreflight';
-import { getProductModel, getRoutedImageModes, getRoutedVideoModes } from './productModelCatalog';
+import { getProductModel, getRoutedImageModes, getRoutedVideoModes, sanitizeProductGenerationParams } from './productModelCatalog';
 import { usePromptHistoryStore } from '../stores/usePromptHistoryStore';
 import { refundApiUsage, reserveApiUsage, updateApiUsage } from '../utils/usageMonitor';
 import { resolveRouteMappingForSubmit, type RouteFallbackResolution } from './routeMapping';
@@ -470,8 +470,15 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
         continue;
       }
 
-      const reservedDuration = typeof providerRequest.durationSec === 'number' && providerRequest.durationSec > 0 ? providerRequest.durationSec : undefined;
-      const usage = runtime.executeMedia ? null : await reserveApiUsage({ key: resolved.key, productModelId: selectionRef, routeId: resolved.routeId, type: mode === 'video' ? 'video' : 'image', durationSec: reservedDuration, count: 1, resolution: providerRequest.resolution, quality: providerRequest.quality });
+      // 计费按清洗后的参数预估：供应商会回落不支持的分辨率/时长，-1（自动）不计入预估时长。
+      const billed = sanitizeProductGenerationParams(providerRequest.productModelId, {
+        mode: generationSubmode as Parameters<typeof sanitizeProductGenerationParams>[1]['mode'],
+        aspectRatio: providerRequest.aspectRatio as UnifiedIgnitionInput['aspectRatio'],
+        resolution: providerRequest.resolution, quality: providerRequest.quality, durationSec: providerRequest.durationSec,
+        mediaType: mode === 'video' ? 'video' : 'image',
+      }, { provider: resolved.key.provider, routeId: resolved.routeId });
+      const reservedDuration = typeof billed.durationSec === 'number' && billed.durationSec > 0 ? billed.durationSec : undefined;
+      const usage = runtime.executeMedia ? null : await reserveApiUsage({ key: resolved.key, productModelId: selectionRef, routeId: resolved.routeId, type: mode === 'video' ? 'video' : 'image', durationSec: reservedDuration, count: 1, resolution: billed.resolution, quality: billed.quality });
       let usageReconciled = false;
       // 上游任务一旦提交，本地停止只是不再等待；没有供应商确认取消时，计费状态只能是 unknown。
       let submittedProviderTaskId: string | undefined;
