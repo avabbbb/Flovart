@@ -308,13 +308,22 @@ export function createBrowserAgentStream(route: BrowserAgentTextRoute): StreamFn
         const toolCalls: Array<{ index: number; id?: string; name?: string; arguments?: string }> = [];
         let finishReason = '';
 
-        const partial = () => {
+        const invalidToolCalls: string[] = [];
+        const partial = (strict = false) => {
           const content: AssistantMessage['content'] = [];
           if (text) content.push({ type: 'text', text });
           for (const toolCall of toolCalls) {
             if (!toolCall.id || !toolCall.name) continue;
             let argumentsValue: Record<string, unknown> = {};
-            try { argumentsValue = toolCall.arguments ? JSON.parse(toolCall.arguments) : {}; } catch { /* 未完整时忽略 */ }
+            try {
+              argumentsValue = toolCall.arguments ? JSON.parse(toolCall.arguments) : {};
+            } catch {
+              // 流式中途参数未完整属正常；最终消息仍无法解析时拒绝执行，绝不以 {} 调用工具。
+              if (strict) {
+                invalidToolCalls.push(toolCall.name);
+                continue;
+              }
+            }
             content.push({ type: 'toolCall', id: toolCall.id, name: toolCall.name, arguments: argumentsValue });
           }
           return { ...startMessage, content };
@@ -353,9 +362,14 @@ export function createBrowserAgentStream(route: BrowserAgentTextRoute): StreamFn
           throw error;
         }
         commitStreamUsage(usageMeta, usage, 'ok');
+        const finalMessage = partial(true);
+        if (invalidToolCalls.length) {
+          const truncated = finishReason === 'length' ? '，输出被 max_tokens 截断' : '';
+          throw new Error('模型返回的工具参数不完整或不是合法 JSON（' + invalidToolCalls.join('、') + truncated + '），未执行任何工具，画布未改动。');
+        }
         const message: AssistantMessage = {
-          ...partial(),
-          stopReason: finishReason === 'tool_calls' ? 'toolUse' : 'stop',
+          ...finalMessage,
+          stopReason: finishReason === 'tool_calls' ? 'toolUse' : finishReason === 'length' ? 'length' : 'stop',
           timestamp: Date.now(),
         };
         stream.push({ type: 'done', reason: message.stopReason as 'stop' | 'length' | 'toolUse', message });

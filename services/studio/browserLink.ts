@@ -321,8 +321,26 @@ function createBrowserWorkspaceAdapter(globalScope: StudioGlobal): CreativeHostA
     subscribeContext(listener) {
       const api = workspace();
       if (typeof api.subscribeContext === 'function') return api.subscribeContext(listener);
-      const timer = setInterval(async () => listener(await adapter.getContext()), 500);
-      return { dispose: () => clearInterval(timer) };
+      // 递归 setTimeout：上一次 getContext 未落定前不发起下一次，避免重叠请求乱序回写。
+      let disposed = false;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const tick = async () => {
+        try {
+          const context = await adapter.getContext();
+          if (!disposed) listener(context);
+        } catch {
+          // 单次读取失败不终止订阅，下一轮重试。
+        } finally {
+          if (!disposed) timer = setTimeout(tick, 500);
+        }
+      };
+      timer = setTimeout(tick, 500);
+      return {
+        dispose: () => {
+          disposed = true;
+          clearTimeout(timer);
+        },
+      };
     },
   };
   return adapter;

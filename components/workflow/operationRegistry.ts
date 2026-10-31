@@ -77,6 +77,10 @@ const cropParameters = z.object({
   height: z.number().positive().max(1),
 }).refine(value => value.x + value.width <= 1 && value.y + value.height <= 1, '裁剪范围不能超出图片');
 
+const avSplitParameters = z.object({
+  audio: z.enum(['full', 'vocals', 'background']).default('full'),
+});
+
 const upscaleParameters = z.object({
   targetLongEdge: z.number().int().min(512).max(8192),
   algorithm: z.enum(['high', 'bilinear', 'nearest']).default('high'),
@@ -299,9 +303,9 @@ export const WORKFLOW_OPERATION_CAPABILITIES: Readonly<Record<WorkflowOperationC
       { role: 'result_audio', nodeType: 'audio', min: 1, max: 1 },
     ],
     executor: 'local-transform', confirmation: 'none', workflow: true, table: true,
-    uiKey: 'video-av-split', nodeTool: 'video-av-split', agentUsage: 'video-av-split 无额外参数，输出纯视频与纯音频',
-    parameters: noParameters,
-    summarizeParameters: () => '视频轨 + 音频轨',
+    uiKey: 'video-av-split', nodeTool: 'video-av-split', agentUsage: 'video-av-split 可选 audio：full（默认，完整音轨）/ vocals（人声）/ background（背景音）；输出无声视频与一条音频',
+    parameters: avSplitParameters,
+    summarizeParameters: parameters => parameters.audio === 'vocals' ? '无声视频 + 人声' : parameters.audio === 'background' ? '无声视频 + 背景音' : '无声视频 + 音频',
   },
   'video.merge@1': {
     id: 'video.merge@1', label: '视频拼接', mediaType: 'video',

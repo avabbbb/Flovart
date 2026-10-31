@@ -125,14 +125,30 @@ export function ProductionSkillDeck({
   dropTargetRef,
   onPromptChange,
   showWelcome = false,
+  open: openProp,
+  onOpenChange,
+  searchQuery,
+  keyboardRef,
 }: {
   attachment?: ProductionSkillAttachment;
   onChange: (attachment?: ProductionSkillAttachment) => void;
   dropTargetRef: RefObject<HTMLElement | null>;
   onPromptChange?: (prompt: string) => void;
   showWelcome?: boolean;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  /** Text typed after "/" in the composer; drives the search and keeps focus in the composer. */
+  searchQuery?: string;
+  /** 输入框把方向键/Enter 转交给列表：↓ 进入列表，↑ 越过第一项回到输入框，Enter 选中高亮项。返回 true 表示已消费。 */
+  keyboardRef?: { current: ((key: string) => boolean) | null };
 }) {
-  const [open, setOpen] = useState(false);
+  const [openState, setOpenState] = useState(false);
+  const open = openProp ?? openState;
+  const setOpen = (next: boolean | ((value: boolean) => boolean)) => {
+    const value = typeof next === 'function' ? next(open) : next;
+    if (openProp === undefined) setOpenState(value);
+    onOpenChange?.(value);
+  };
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState('');
   const [shuffleOffset, setShuffleOffset] = useState(0);
@@ -142,6 +158,8 @@ export function ProductionSkillDeck({
   const [hubUrlDraft, setHubUrlDraft] = useState('');
   const [installingId, setInstallingId] = useState<string | null>(null);
   const [deckError, setDeckError] = useState<string | null>(null);
+  // -1 = 焦点仍在输入框，列表无高亮。
+  const [highlight, setHighlight] = useState(-1);
   const reduceMotion = useReducedMotion();
   const language = useWorkspaceStore(state => state.language);
   const copy = COPY[language];
@@ -161,6 +179,12 @@ export function ProductionSkillDeck({
 
   useEffect(() => { setHubUrlDraft(hubUrl); }, [hubUrl]);
   useEffect(() => { if (open) void refreshLocal(); }, [open, refreshLocal]);
+  useEffect(() => {
+    if (searchQuery === undefined) return;
+    setActiveTab('local');
+    setQuery(searchQuery);
+  }, [searchQuery]);
+  useEffect(() => { setHighlight(-1); }, [query, open, activeTab]);
 
   // 收藏持久化到本地（localforage）
   useEffect(() => {
@@ -298,6 +322,20 @@ export function ProductionSkillDeck({
     }
   };
 
+  useEffect(() => {
+    if (!keyboardRef) return;
+    keyboardRef.current = (key: string) => {
+      if (!open || activeTab !== 'local') return false;
+      const count = filteredSkills.length;
+      if (key === 'ArrowDown') { if (count) setHighlight(index => Math.min(index + 1, count - 1)); return true; }
+      if (key === 'ArrowUp') { if (highlight < 0) return false; setHighlight(index => index - 1); return true; }
+      // 未进入列表时也吞掉 Enter，避免把半截 /xxx 当消息发出去。
+      if (key === 'Enter') { const skill = filteredSkills[highlight]; if (skill) void attach(skill); return true; }
+      return false;
+    };
+    return () => { keyboardRef.current = null; };
+  });
+
   const startInstall = async (skill: DeckSkill) => {
     if (!hubUrl) { setDeckError(copy.configureHub); return; }
     setInstallingId(skill.id);
@@ -329,7 +367,9 @@ export function ProductionSkillDeck({
       dragSnapToOrigin
       onDragEnd={(_, info) => { if (droppedInComposer(info.point)) void attach(skill); }}
       transition={{ type: 'spring', stiffness: 520, damping: 30 }}
-      className="agent-skill-picker__row"
+      className={`agent-skill-picker__row${index === highlight ? ' is-highlighted' : ''}`}
+      data-highlighted={index === highlight || undefined}
+      ref={index === highlight ? (element: HTMLDivElement | null) => element?.scrollIntoView?.({ block: 'nearest' }) : undefined}
       role="group"
       aria-label={skill.name}
     >
@@ -435,7 +475,7 @@ export function ProductionSkillDeck({
                   </button>
                 </div>
                 {activeTab === 'local' && (
-                  <label><Search size={15} /><input autoFocus aria-label={copy.search} placeholder={copy.search} value={query} onChange={event => setQuery(event.target.value)} /></label>
+                  <label><Search size={15} /><input autoFocus={searchQuery === undefined} aria-label={copy.search} placeholder={copy.search} value={query} onChange={event => setQuery(event.target.value)} /></label>
                 )}
               </div>
               <div className="agent-skill-picker__list">

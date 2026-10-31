@@ -730,6 +730,8 @@ const App: React.FC = () => {
                         onOpenSettings={() => setIsSettingsPanelOpen(true)}
                         assetLibrary={assetLibrary}
                         userApiKeys={userApiKeys}
+                        onAddApiKey={handleAddApiKey}
+                        onUpdateApiKey={handleUpdateApiKey}
                         onFocusNode={handleFocusNodeFromDrawer}
                     />
                 ) : (

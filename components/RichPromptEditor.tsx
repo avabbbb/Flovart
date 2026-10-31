@@ -47,7 +47,6 @@ function buildSuggestionExtension(
     assetFoldersRef: { current: AssetFolder[] },
     assetItemsRef: { current: AssetSuggestion[] },
     onSelectAssetRef: { current: ((assetId: string) => string | undefined) | null },
-    skillEnabled: boolean,
 ) {
     return Extension.create({
         name: 'mediaMentionSuggestion',
@@ -215,12 +214,10 @@ export interface RichPromptEditorProps {
     /** 批量把粘贴内容里的来源 id / assetId 绑定为当前节点可用的上游引用。返回值与入参数组按索引对应。 */
     onResolvePastedMentions?: (mentions: MentionData[]) => Array<MentionData | null>;
     onPasteUnresolvedMentions?: (labels: string[]) => void;
-    /** Skill 分区是否可用；本轮默认 false 仅显示占位 */
-    skillEnabled?: boolean;
 }
 
 const RichPromptEditor = forwardRef<RichPromptEditorHandle, RichPromptEditorProps>(
-    ({ referenceItems, pasteReferenceItems = referenceItems, placeholder = '输入提示词，@ 引用工作流节点或资产...', disabled, onTextChange, onSubmit, initialText = '', initialDocument, assetFolders = [], assetItems = [], onSelectAsset, onResolvePastedMentions, onPasteUnresolvedMentions, skillEnabled = false }, ref) => {
+    ({ referenceItems, pasteReferenceItems = referenceItems, placeholder = '输入提示词，@ 引用工作流节点或资产...', disabled, onTextChange, onSubmit, initialText = '', initialDocument, assetFolders = [], assetItems = [], onSelectAsset, onResolvePastedMentions, onPasteUnresolvedMentions }, ref) => {
         const referenceItemsRef = useRef(referenceItems);
         const pasteReferenceItemsRef = useRef(pasteReferenceItems);
         const assetFoldersRef = useRef(assetFolders);
@@ -284,7 +281,7 @@ const RichPromptEditor = forwardRef<RichPromptEditorHandle, RichPromptEditorProp
                     horizontalRule: false,
                 }),
                 MediaMentionNode,
-                buildSuggestionExtension(getFilteredItems, assetFoldersRef, assetItemsRef, onSelectAssetRef, skillEnabled),
+                buildSuggestionExtension(getFilteredItems, assetFoldersRef, assetItemsRef, onSelectAssetRef),
                 buildReferenceHintExtension(() => referenceItemsRef.current),
             ],
             content: normalizeDocument(initialText, initialDocument),

@@ -66,7 +66,7 @@ const modeFor = (node: WorkflowNode, config?: WorkflowGenerationConfig): Generat
   return mode === 'text' || mode === 'video' ? mode : 'image';
 };
 
-export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme, language, userApiKeys, dynamicModelOptions, onOpenSettings, onEnhancePrompt, isEnhancingPrompt, onChange, onPromptIntent, onRun, onStop, focusSignal, onDisconnectReference, onReorderReference, assetFolders, assetItems, assetLibrary, onSelectAsset, onSelectWorkflowReference, onAddReferenceFiles, onResolvePastedMentions, onPasteUnresolvedMentions, skillEnabled, width = 880 }: {
+export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme, language, userApiKeys, dynamicModelOptions, onOpenSettings, onEnhancePrompt, isEnhancingPrompt, onChange, onPromptIntent, onRun, onStop, focusSignal, onDisconnectReference, onReorderReference, assetFolders, assetItems, assetLibrary, onSelectAsset, onSelectWorkflowReference, onAddReferenceFiles, onResolvePastedMentions, onPasteUnresolvedMentions, expanded = false, onToggleExpanded, width = 880 }: {
   node: WorkflowNode;
   nodes: WorkflowNode[];
   connections?: WorkflowConnection[];
@@ -99,8 +99,9 @@ export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme,
   onAddReferenceFiles?: (files: File[]) => void | Promise<void>;
   onResolvePastedMentions?: (mentions: MentionData[]) => Array<MentionData | null>;
   onPasteUnresolvedMentions?: (labels: string[]) => void;
-  /** Skill 分区是否可用；本轮默认 false 仅显示占位 */
-  skillEnabled?: boolean;
+  /** 放大编辑态（由画布居中放大），以及右上角切换回调 */
+  expanded?: boolean;
+  onToggleExpanded?: () => void;
     /** 根据工作流可用宽度收缩，保持底栏单行展示 */
   width?: number;
 }) {
@@ -341,7 +342,8 @@ export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme,
         onSelectWorkflowReference={onSelectWorkflowReference ? handleSelectWorkflowReference : undefined}
         onAddReferenceFiles={onAddReferenceFiles ? handleAddReferenceFiles : undefined}
         onSelectAsset={onSelectAsset ? handleSelectAsset : undefined}
-        skillEnabled={skillEnabled}
+        expanded={expanded}
+        onToggleExpanded={onToggleExpanded}
       />
     </div>
   );

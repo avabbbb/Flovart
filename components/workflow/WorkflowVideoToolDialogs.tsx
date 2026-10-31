@@ -1,4 +1,4 @@
-import { Button, Modal, Slider } from 'antd';
+import { Button, InputNumber, Modal, Slider } from 'antd';
 import { useEffect, useRef, useState } from 'react';
 import { getVideoDuration } from '../../services/videoTools';
 import { isFFmpegSupported, isMultiThreadAvailable } from '../../services/ffmpegClient';
@@ -45,6 +45,7 @@ function FFmpegStatus() {
 
 function TrimDialog(props: CommonProps & { onConfirm: (startSec: number, endSec: number) => void }) {
   const [duration, setDuration] = useState(0);
+  const [metaFailed, setMetaFailed] = useState(false);
   const [start, setStart] = useState(0);
   const [end, setEnd] = useState(0);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -52,25 +53,35 @@ function TrimDialog(props: CommonProps & { onConfirm: (startSec: number, endSec:
   useEffect(() => {
     let cancelled = false;
     void getVideoDuration(new Blob([''])).catch(() => {});
+    setMetaFailed(false);
     const video = document.createElement('video');
     video.preload = 'metadata';
     video.onloadedmetadata = () => {
       if (cancelled) return;
-      const d = video.duration || 0;
+      const d = Number.isFinite(video.duration) ? video.duration : 0;
+      if (d <= 0) { setMetaFailed(true); return; }
       setDuration(d);
       setEnd(d);
     };
+    // 元数据读不到时不能让 duration 停在 0 导致按钮永久禁用：改为手动输入秒数。
+    video.onerror = () => { if (!cancelled) setMetaFailed(true); };
     video.src = props.mediaUrl;
-    return () => { cancelled = true; video.onloadedmetadata = null; };
+    return () => { cancelled = true; video.onloadedmetadata = null; video.onerror = null; };
   }, [props.mediaUrl]);
 
   return <Modal {...modalProps(props, 720)} title="视频剪辑">
     <div className="workflow-image-tool__simple" data-workflow-overlay>
-      <div className="workflow-image-tool__preview"><video src={props.mediaUrl} controls style={{ maxWidth: '100%', maxHeight: 320 }} /></div>
+      <div className="workflow-image-tool__preview"><video ref={videoRef} src={props.mediaUrl} controls style={{ maxWidth: '100%', maxHeight: 320 }} /></div>
       <div className="workflow-image-tool__controls">
         <FFmpegStatus />
-        <label>开始时间<Slider min={0} max={Math.floor(duration)} value={start} onChange={v => { setStart(v); if (v >= end) setEnd(Math.min(v + 1, duration)); }} /></label>
-        <label>结束时间<Slider min={0} max={Math.floor(duration)} value={end} onChange={setEnd} /></label>
+        {metaFailed ? <>
+          <p className="workflow-image-tool__hint">无法读取视频时长，请手动输入开始和结束秒数。</p>
+          <label>开始时间（秒）<InputNumber min={0} step={0.1} value={start} onChange={v => setStart(typeof v === 'number' ? v : 0)} /></label>
+          <label>结束时间（秒）<InputNumber min={0} step={0.1} value={end} onChange={v => setEnd(typeof v === 'number' ? v : 0)} /></label>
+        </> : <>
+          <label>开始时间<Slider min={0} max={Math.floor(duration)} value={start} onChange={v => { setStart(v); if (v >= end) setEnd(Math.min(v + 1, duration)); }} /></label>
+          <label>结束时间<Slider min={0} max={Math.floor(duration)} value={end} onChange={setEnd} /></label>
+        </>}
         <p className="workflow-image-tool__hint">裁取 {start.toFixed(1)}s – {end.toFixed(1)}s（时长 {(end - start).toFixed(1)}s），使用 stream copy 无需重编码。</p>
         <DialogError error={props.error} />
         <Button type="primary" loading={props.busy} disabled={start >= end || !isFFmpegSupported()} onClick={() => props.onConfirm(start, end)}>裁取片段</Button>
@@ -95,20 +106,30 @@ function ExtractFrameDialog(props: CommonProps & { onConfirm: (currentTimeSec: n
   const [duration, setDuration] = useState(0);
   const [timeSec, setTimeSec] = useState(0);
   const [loaded, setLoaded] = useState(false);
+  const [metaFailed, setMetaFailed] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
+    setLoaded(false);
+    setMetaFailed(false);
+    const fail = () => {
+      if (cancelled) return;
+      setMetaFailed(true);
+      setLoaded(true);
+    };
     const video = document.createElement('video');
     video.preload = 'metadata';
     video.onloadedmetadata = () => {
       if (cancelled) return;
-      const d = video.duration || 0;
+      const d = Number.isFinite(video.duration) ? video.duration : 0;
+      if (d <= 0) { fail(); return; }
       setDuration(d);
       setTimeSec(d > 1 ? Math.floor(d / 2) : 0);
       setLoaded(true);
     };
+    video.onerror = fail;
     video.src = props.mediaUrl;
-    return () => { cancelled = true; video.onloadedmetadata = null; };
+    return () => { cancelled = true; video.onloadedmetadata = null; video.onerror = null; };
   }, [props.mediaUrl]);
 
   return <Modal {...modalProps(props, 720)} title="提取指定帧">
@@ -116,9 +137,11 @@ function ExtractFrameDialog(props: CommonProps & { onConfirm: (currentTimeSec: n
       <div className="workflow-image-tool__preview"><video src={props.mediaUrl} controls style={{ maxWidth: '100%', maxHeight: 320 }} /></div>
       <FFmpegStatus />
       <div className="workflow-image-tool__controls">
-        <label>选择时间点{loaded ? `（${timeSec.toFixed(1)}s / ${duration.toFixed(1)}s）` : '（读取时长中…）'}
-          <Slider min={0} max={Math.max(0, Math.floor(duration))} value={Math.min(timeSec, Math.max(0, Math.floor(duration)))} onChange={v => setTimeSec(v)} disabled={!loaded} />
-        </label>
+        {metaFailed
+          ? <label>无法读取视频时长，请手动输入时间点（秒）<InputNumber min={0} step={0.1} value={timeSec} onChange={v => setTimeSec(typeof v === 'number' ? v : 0)} /></label>
+          : <label>选择时间点{loaded ? '（' + timeSec.toFixed(1) + 's / ' + duration.toFixed(1) + 's）' : '（读取时长中…）'}
+            <Slider min={0} max={Math.max(0, Math.floor(duration))} value={Math.min(timeSec, Math.max(0, Math.floor(duration)))} onChange={v => setTimeSec(v)} disabled={!loaded} />
+          </label>}
         <p className="workflow-image-tool__hint">拖动滑块选择要提取的时间点，也可以先在预览播放器暂停到目标画面再看滑块位置。</p>
         <DialogError error={props.error} />
         <Button type="primary" loading={props.busy} disabled={!isFFmpegSupported() || !loaded} onClick={() => props.onConfirm(timeSec)}>提取此帧</Button>

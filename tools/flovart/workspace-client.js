@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 // 仓库开发时读 agent/config.js；npm 打包后读 managed-agent/config.js（prepare-package 复制）。
 // 用变量而非字面量：vite-ignore 注释只对非字面量生效；managed-agent/ 被 gitignore，CI 中不存在。
@@ -59,16 +60,22 @@ function normalizeConfig(config) {
   return { url: url.origin, token };
 }
 
+// 与 agent/session.js 的 LONG_RUNNING_COMMANDS 保持一致：这些命令要等生成或人工确认结束才回包。
+// 客户端上限略长于 sidecar（15 分钟），让 sidecar 的明确错误先到达。
+const LONG_RUNNING_COMMANDS = new Set(['workflow.node.run', 'workflow.node.tool', 'production.run', 'production.approve']);
+const LONG_RUNNING_TIMEOUT_MS = 16 * 60_000;
+
 export class FlovartWorkspaceClient {
   constructor(options = {}) {
     this.config = normalizeConfig(options.config || defaultConfig());
     this.fetch = options.fetch || globalThis.fetch;
     this.timeoutMs = options.timeoutMs || 35_000;
+    this.longRunningTimeoutMs = options.longRunningTimeoutMs || LONG_RUNNING_TIMEOUT_MS;
   }
 
-  async request(path, init = {}) {
+  async request(path, init = {}, timeoutMs = this.timeoutMs) {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
     let response;
     try {
       response = await this.fetch(new URL(path, this.config.url), {
@@ -81,6 +88,13 @@ export class FlovartWorkspaceClient {
         },
       });
     } catch {
+      if (controller.signal.aborted) {
+        throw workspaceError(
+          'WORKSPACE_TIMEOUT',
+          'Workspace Adapter ' + Math.round(timeoutMs / 1000) + 's 内没有返回结果；任务可能仍在 Flovart 中运行，请先 workflow.inspect 查看节点状态，重试时沿用同一个 idempotencyKey。',
+          { retryable: true },
+        );
+      }
       throw workspaceError(
         'WORKSPACE_UNAVAILABLE',
         'Flovart Workspace Adapter 未运行。请启动本地 Agent 服务，并在 Workflow 的本地 Agent 面板建立连接。',
@@ -131,17 +145,28 @@ export class FlovartWorkspaceClient {
   }
 
   async executeEnvelope(envelope) {
-    const body = await this.request('/api/tools', {
-      method: 'POST',
-      body: JSON.stringify({
-        command: envelope.command,
-        args: envelope.args || {},
-        source: envelope.source || 'cli',
-        idempotencyKey: envelope.idempotencyKey,
-        ...(envelope.caller ? { caller: envelope.caller } : {}),
-      }),
-    });
-    return body.result;
+    const longRunning = LONG_RUNNING_COMMANDS.has(envelope.command);
+    // 长任务即使调用方没传也带上幂等键：超时后用 details.idempotencyKey 重试，
+    // 浏览器端 dispatcher 会复用在途/已完成的那次执行，而不是重复提交生成。
+    const idempotencyKey = envelope.idempotencyKey || (longRunning ? randomUUID() : undefined);
+    try {
+      const body = await this.request('/api/tools', {
+        method: 'POST',
+        body: JSON.stringify({
+          command: envelope.command,
+          args: envelope.args || {},
+          source: envelope.source || 'cli',
+          idempotencyKey,
+          ...(envelope.caller ? { caller: envelope.caller } : {}),
+        }),
+      }, longRunning ? this.longRunningTimeoutMs : this.timeoutMs);
+      return body.result;
+    } catch (error) {
+      if (idempotencyKey && error instanceof WorkspaceClientError && error.code === 'WORKSPACE_TIMEOUT') {
+        error.details = { ...(error.details || {}), idempotencyKey };
+      }
+      throw error;
+    }
   }
 
   async execute(command, args = {}, source = 'mcp', options = {}) {

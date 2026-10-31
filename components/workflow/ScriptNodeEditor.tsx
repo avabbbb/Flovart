@@ -2,6 +2,7 @@ import { Bot, Clapperboard, FileText, Image as ImageIcon, Plus, Trash2, Video, X
 import { useState } from 'react';
 import { Button, Modal, Segmented } from 'antd';
 import { nanoid } from 'nanoid';
+import { z } from 'zod';
 import { generateTextWithProvider } from '../../services/aiGateway';
 import { resolveRouteMappingForSubmit, type RouteFallbackResolution } from '../../services/routeMapping';
 import type { UserApiKey } from '../../types';
@@ -36,34 +37,58 @@ const BREAKDOWN_SYSTEM_PROMPT = `你是一个专业的剧本拆解助手。用�
 - 尽量覆盖剧本的关键画面，通常 4-12 个分镜
 - assets 列出所有出现的角色、场景和道具`;
 
-function parseBreakdownResponse(text: string): ScriptBreakdown | null {
+// 项目未开启 strictNullChecks，布尔判别字段不会收窄联合，故两个成员都声明全部字段。
+type BreakdownParseResult =
+  | { ok: true; breakdown: ScriptBreakdown; reason?: undefined }
+  | { ok: false; reason: string; breakdown?: undefined };
+
+// 模型输出逐字段宽松校验：类型不对的字段丢弃，而不是让整次拆解失败。
+const OptionalText = z.unknown().transform(value => (typeof value === 'string' && value.trim() ? value.trim() : undefined));
+const RawShot = z.object({
+  index: z.number().optional().catch(undefined),
+  emotion: OptionalText,
+  action: OptionalText,
+  dialogue: OptionalText,
+  sfx: OptionalText,
+  scene: OptionalText,
+  imagePromptOverride: OptionalText,
+  videoPromptOverride: OptionalText,
+});
+const RawAsset = z.object({
+  kind: z.enum(['character', 'scene', 'prop']).catch('character'),
+  name: OptionalText,
+  description: OptionalText,
+});
+const RawBreakdown = z.object({
+  shots: z.array(z.unknown()),
+  assets: z.array(z.unknown()).catch([]),
+});
+
+function parseBreakdownResponse(text: string): BreakdownParseResult {
+  // 兼容模型在 JSON 外包代码块或前后缀文字：取第一个 { 到最后一个 }。
+  const start = text.indexOf('{');
+  const end = text.lastIndexOf('}');
+  if (start < 0 || end <= start) return { ok: false, reason: '模型没有返回 JSON 对象' };
+  let json: unknown;
   try {
-    const cleaned = text.replace(/^```json?\s*/i, '').replace(/\s*```$/i, '').trim();
-    const parsed = JSON.parse(cleaned);
-    if (!Array.isArray(parsed.shots)) return null;
-    return {
-      assets: Array.isArray(parsed.assets) ? parsed.assets.map((asset: any, index: number) => ({
-        id: nanoid(),
-        kind: asset.kind || 'character',
-        name: asset.name || `资产${index + 1}`,
-        description: asset.description,
-      })) : [],
-      shots: parsed.shots.map((shot: any) => ({
-        id: nanoid(),
-        index: typeof shot.index === 'number' ? shot.index : 0,
-        emotion: shot.emotion,
-        action: shot.action,
-        dialogue: shot.dialogue,
-        sfx: shot.sfx,
-        scene: shot.scene,
-        imagePromptOverride: shot.imagePromptOverride,
-        videoPromptOverride: shot.videoPromptOverride,
-      })),
-      sourceText: undefined,
-    };
+    json = JSON.parse(text.slice(start, end + 1));
   } catch {
-    return null;
+    return { ok: false, reason: 'JSON 不完整或格式错误，可能被输出长度上限截断' };
   }
+  const raw = RawBreakdown.safeParse(json);
+  if (!raw.success) return { ok: false, reason: '缺少 shots 数组' };
+  const shots: ScriptShot[] = raw.data.shots.flatMap((item, position) => {
+    const shot = RawShot.safeParse(item);
+    return shot.success ? [{ ...shot.data, id: nanoid(), index: shot.data.index ?? position }] : [];
+  });
+  if (!shots.length) return { ok: false, reason: 'shots 为空' };
+  const assets: ScriptAsset[] = raw.data.assets.flatMap((item, index) => {
+    const asset = RawAsset.safeParse(item);
+    return asset.success
+      ? [{ id: nanoid(), kind: asset.data.kind, name: asset.data.name || '资产' + (index + 1), description: asset.data.description }]
+      : [];
+  });
+  return { ok: true, breakdown: { assets, shots, sourceText: undefined } };
 }
 
 export function ScriptNodeEditor({ node, onChange, onClose, userApiKeys, confirmRouteFallback, onOpenSettings, onBatchGenerate }: {
@@ -99,10 +124,11 @@ export function ScriptNodeEditor({ node, onChange, onClose, userApiKeys, confirm
         systemPrompt: BREAKDOWN_SYSTEM_PROMPT,
         temperature: 0.7,
         maxTokens: 8192,
+        jsonMode: true,
       });
       const parsed = parseBreakdownResponse(result);
-      if (!parsed) { setError('AI 返回格式无法解析，请重试'); return; }
-      updateBreakdown({ ...parsed, sourceText });
+      if (!parsed.ok) { setError('AI 返回格式无法解析（' + parsed.reason + '），请重试'); return; }
+      updateBreakdown({ ...parsed.breakdown, sourceText });
     } catch (err) {
       setError(err instanceof Error ? err.message : '剧本拆解失败');
     } finally {

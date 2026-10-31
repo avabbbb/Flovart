@@ -100,3 +100,65 @@ const NUDGE: Record<string, (step: number) => readonly [number, number]> = {
 export function arrowNudge(key: string, fast: boolean): readonly [number, number] | null {
   return NUDGE[key]?.(fast ? 40 : 8) ?? null;
 }
+
+export type WorkflowArrangeLayout = 'grid' | 'row' | 'column';
+
+export interface WorkflowArrangeOptions {
+  layout: WorkflowArrangeLayout;
+  /** World-space gap between neighbours; defaults to 24. */
+  gap?: number;
+  /** Grid only; defaults to ceil(sqrt(n)). */
+  columns?: number;
+}
+
+/** Reading order: rows top-to-bottom (a node joins a row when its top sits within half the row's first height), then left-to-right. */
+export function arrangementOrder(nodes: WorkflowNodeData[], ids: readonly string[]): WorkflowNodeData[] {
+  const wanted = new Set(ids);
+  const byTop = nodes.filter(node => wanted.has(node.id)).sort((a, b) => a.position.y - b.position.y || a.position.x - b.position.x);
+  const rows: WorkflowNodeData[][] = [];
+  for (const node of byTop) {
+    const row = rows[rows.length - 1];
+    if (row && node.position.y < row[0].position.y + Math.max(1, row[0].height / 2)) row.push(node);
+    else rows.push([node]);
+  }
+  return rows.flatMap(row => row.sort((a, b) => a.position.x - b.position.x));
+}
+
+/**
+ * Lays the movable selection out as a grid, a row or a column from its top-left corner,
+ * in reading order. Locked nodes keep their place. Returns only positions that change,
+ * or null when fewer than two movable nodes are selected or nothing would move.
+ */
+export function arrangeNodePositions(nodes: WorkflowNodeData[], ids: readonly string[], options: WorkflowArrangeOptions): Record<string, { x: number; y: number }> | null {
+  const order = arrangementOrder(nodes, ids).filter(node => !node.isLocked);
+  if (order.length < 2) return null;
+  const gap = Number.isFinite(options.gap) ? Math.max(0, options.gap as number) : 24;
+  const cols = options.layout === 'row' ? order.length
+    : options.layout === 'column' ? 1
+    : Math.max(1, Math.min(order.length, Math.round(options.columns ?? Math.ceil(Math.sqrt(order.length)))));
+  const originX = Math.min(...order.map(node => node.position.x));
+  const originY = Math.min(...order.map(node => node.position.y));
+  const colWidths: number[] = Array(cols).fill(0);
+  const rowHeights: number[] = [];
+  order.forEach((node, index) => {
+    const col = index % cols;
+    const row = Math.floor(index / cols);
+    colWidths[col] = Math.max(colWidths[col], node.width);
+    rowHeights[row] = Math.max(rowHeights[row] ?? 0, node.height);
+  });
+  const offset = (sizes: number[], upTo: number) => sizes.slice(0, upTo).reduce((sum, size) => sum + size + gap, 0);
+  const next: Record<string, { x: number; y: number }> = {};
+  order.forEach((node, index) => {
+    const x = originX + offset(colWidths, index % cols);
+    const y = originY + offset(rowHeights, Math.floor(index / cols));
+    if (x !== node.position.x || y !== node.position.y) next[node.id] = { x, y };
+  });
+  return Object.keys(next).length ? next : null;
+}
+
+/** prefix_01, prefix_02 … (padding widens past 99). Unsafe filename characters become '_'. */
+export function sequencedFileNames(prefix: string, count: number, start = 1): string[] {
+  const safe = prefix.trim().replace(/[\\/:*?"<>|\s]+/g, '_') || 'flovart';
+  const width = Math.max(2, String(start + count - 1).length);
+  return Array.from({ length: Math.max(0, count) }, (_, index) => `${safe}_${String(start + index).padStart(width, '0')}`);
+}

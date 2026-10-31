@@ -15,7 +15,10 @@ vi.mock('../services/flovartRuntime', () => ({
   getFlovartRuntimeApi: () => ({ execute: runtimeExecute }),
 }));
 
-vi.mock('../services/modelFetcher', () => ({ fetchModelsForProvider }));
+vi.mock('../services/modelFetcher', () => ({
+  fetchModelsForProvider,
+  fetchModelsWithCache: (provider: string, apiKey: string, baseUrl?: string) => fetchModelsForProvider(provider, apiKey, baseUrl),
+}));
 
 function translate(language: 'en' | 'zho', key: string, ...args: unknown[]): string {
   const value = key.split('.').reduce<unknown>((current, part) => {

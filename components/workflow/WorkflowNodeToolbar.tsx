@@ -1,7 +1,7 @@
 import { AlignCenter, AlignLeft, AlignRight, ArrowDownToLine, ArrowUpToLine, AudioLines, ChevronsDown, ChevronsUp, Copy, Crop, Download, Eraser, Expand, FilePenLine, Frame, Grid2x2, Group, Layers, Layers3, Library, Lightbulb, Maximize2, MessageSquareText, Play, RefreshCw, RotateCw, ScanLine, ScanText, Scissors, SlidersHorizontal, Square, Trash2, Ungroup, ZoomIn, Gauge, Palette, PenTool, Move } from 'lucide-react';
-import { AlignHorizontalSpaceAround, AlignVerticalSpaceAround } from 'lucide-react';
-import type { WorkflowAlignment, WorkflowDistributeAxis } from './arrange';
-import { useRef } from 'react';
+import { AlignHorizontalSpaceAround, AlignVerticalSpaceAround, Bot, Camera, Focus, LayoutGrid, Mic, Music, StretchHorizontal, StretchVertical, Space } from 'lucide-react';
+import { sequencedFileNames, type WorkflowAlignment, type WorkflowArrangeLayout, type WorkflowDistributeAxis } from './arrange';
+import { useRef, useState } from 'react';
 import { MoreHorizontal } from 'lucide-react';
 import { saveMediaUrl } from '../../services/desktopNetwork';
 import { WorkflowToolbarActions, WorkflowToolbarMenu, WorkflowToolbarShell, type WorkflowToolbarAction } from './WorkflowToolbarPrimitives';
@@ -34,9 +34,11 @@ export interface WorkflowImageToolHandlers {
   storyboard?: (ids: string[]) => void;
 }
 
+export type WorkflowAvSplitAudio = 'full' | 'vocals' | 'background';
+
 export interface WorkflowVideoToolHandlers {
   trim?: (id: string) => void;
-  avSplit?: (id: string) => void;
+  avSplit?: (id: string, audio?: WorkflowAvSplitAudio) => void;
   merge?: (ids: string[]) => void;
   extractFrame?: (id: string, position: 'first' | 'current' | 'last', currentTimeSec?: number) => void;
   extractFrameAt?: (id: string) => void;
@@ -49,11 +51,12 @@ export interface WorkflowAudioToolHandlers {
 }
 
 // LibTV 式：常用媒体工具直接带文字露出，其余收进「更多」。
-const PRIMARY_KEYS = new Set(['stop', 'run', 'copy', 'group', 'execute-group', 'ungroup', 'export-selection', 'delete', 'upscale', 'remove-background', 'splitGrid', 'split', 'reverse-prompt', 'video-trim', 'video-av-split', 'video-frame-first', 'video-frame-last', 'video-frame-at', 'video-merge']);
+const PRIMARY_KEYS = new Set(['stop', 'run', 'copy', 'group', 'execute-group', 'ungroup', 'add-to-agent', 'export-selection', 'delete', 'upscale', 'remove-background', 'splitGrid', 'split', 'reverse-prompt', 'video-trim', 'video-merge']);
+const ARRANGE_GAPS = [0, 16, 24, 48, 96] as const;
 // LibTV 式：下载 / 放大预览放在工具条最右侧，只显示图标。
 const ICON_KEYS = new Set(['download', 'preview']);
 
-export function WorkflowNodeToolbar({ nodes, onCopy, onDelete, onExport, onRun, onStop, onPromptFocus, onSaveMedia, onReversePrompt, onReplaceMedia, onToggleFreeResize, onAlign, onDistribute, onLayer, onGroup, onUngroup, onExecuteGroup, onPreviewMedia, onFrameSelection, onDesignBoolean, onApplyFrameLayout, imageTools, imageToolBusy = false, videoTools, videoToolBusy = false, audioTools, audioToolBusy = false }: {
+export function WorkflowNodeToolbar({ nodes, onCopy, onDelete, onExport, onRun, onStop, onPromptFocus, onSaveMedia, onReversePrompt, onReplaceMedia, onToggleFreeResize, onAlign, onDistribute, onLayer, onGroup, onUngroup, onExecuteGroup, onArrange, onSequencedExport, onAddToAgent, onPreviewMedia, onFrameSelection, onDesignBoolean, onApplyFrameLayout, imageTools, imageToolBusy = false, videoTools, videoToolBusy = false, audioTools, audioToolBusy = false }: {
   nodes: WorkflowNode[];
   onCopy: (ids: string[]) => void;
   onDelete: (ids: string[]) => void;
@@ -71,6 +74,11 @@ export function WorkflowNodeToolbar({ nodes, onCopy, onDelete, onExport, onRun, 
   onGroup?: (ids: string[]) => void;
   onUngroup?: (ids: string[]) => void;
   onExecuteGroup?: (ids: string[]) => void;
+  /** 打组排列：网格 / 一行 / 一列，按阅读顺序，锁定节点不动。 */
+  onArrange?: (ids: string[], layout: WorkflowArrangeLayout, gap: number) => void;
+  /** 按排列顺序批量下载，文件名 prefix_01、prefix_02… */
+  onSequencedExport?: (ids: string[], prefix: string) => void;
+  onAddToAgent?: (ids: string[]) => void;
   onPreviewMedia?: (id: string) => void;
   /** 聚焦选中节点（Frame Selection，快捷键 F）。 */
   onFrameSelection?: () => void;
@@ -85,21 +93,33 @@ export function WorkflowNodeToolbar({ nodes, onCopy, onDelete, onExport, onRun, 
   audioToolBusy?: boolean;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const [arrangeGap, setArrangeGap] = useState<number>(24);
+  const [namingOpen, setNamingOpen] = useState(false);
+  const [namePrefix, setNamePrefix] = useState('');
   // Hook 必须在任何提前 return 之前无条件调用；nodes 为空时入参为 undefined。
   const node = nodes.length === 1 ? nodes[0] : null;
   const media = node && (node.type === 'image' || node.type === 'video' || node.type === 'audio') ? node : null;
-  const mediaUrl = useWorkflowMediaUrl(media?.metadata.storageKey, media?.metadata.href).url;
+  const mediaUrl = useWorkflowMediaUrl(media?.metadata.storageKey, media?.metadata.href, media?.metadata.artifactRef).url;
+  // 有媒体来源就显示媒体工具；mediaUrl 仍在解析（大文件/远端）时置灰，避免工具栏只剩「复制节点」。
+  const hasMediaSource = Boolean(media && (media.metadata.storageKey || media.metadata.href || media.metadata.artifactRef?.taskId));
+  const mediaPending = hasMediaSource && !mediaUrl;
   if (!nodes.length) return null;
   const ids = nodes.map(node => node.id);
   const selectedMedia = nodes.filter(item => item.type === 'image' || item.type === 'video' || item.type === 'audio');
   const advancedToolBusy = imageToolBusy || node?.metadata.status === 'loading';
   const actions: Array<WorkflowToolbarAction | null | false | undefined> = [
-    onFrameSelection && { key: 'frame-selection', label: '聚焦选中 (F)', icon: <Frame size={18} />, onClick: () => onFrameSelection() },
+    onFrameSelection && { key: 'frame-selection', label: '聚焦选中 (F)', icon: <Focus size={18} />, onClick: () => onFrameSelection() },
     { key: 'copy', label: '复制节点', icon: <Copy size={18} />, onClick: () => onCopy(ids) },
     nodes.length > 1 && onGroup && { key: 'group', label: '打组 (Ctrl+G)', icon: <Group size={18} />, onClick: () => onGroup(ids) },
     nodes.length > 1 && onExecuteGroup && { key: 'execute-group', label: '整组执行', icon: <Play size={18} />, onClick: () => onExecuteGroup(ids) },
     nodes.length > 1 && onUngroup && nodes.some(n => n.batchId) && { key: 'ungroup', label: '取消打组', icon: <Ungroup size={18} />, onClick: () => onUngroup(ids) },
     nodes.length > 1 && selectedMedia.length > 0 && onExport && { key: 'export-selection', label: '批量导出所选媒体', icon: <Download size={18} />, onClick: () => onExport(nodes) },
+    nodes.length > 1 && onAddToAgent && { key: 'add-to-agent', label: '添加到 Agent', icon: <Bot size={18} />, onClick: () => onAddToAgent(ids) },
+    nodes.length > 1 && onArrange && { key: 'arrange-grid', label: '网格排列', icon: <LayoutGrid size={18} />, onClick: () => onArrange(ids, 'grid', arrangeGap) },
+    nodes.length > 1 && onArrange && { key: 'arrange-row', label: '横向排成一行', icon: <StretchVertical size={18} />, onClick: () => onArrange(ids, 'row', arrangeGap) },
+    nodes.length > 1 && onArrange && { key: 'arrange-column', label: '纵向排成一列', icon: <StretchHorizontal size={18} />, onClick: () => onArrange(ids, 'column', arrangeGap) },
+    nodes.length > 1 && onArrange && { key: 'arrange-gap', label: `排列间距 ${arrangeGap}px`, icon: <Space size={18} />, onClick: () => setArrangeGap(gap => ARRANGE_GAPS[(ARRANGE_GAPS.indexOf(gap as typeof ARRANGE_GAPS[number]) + 1) % ARRANGE_GAPS.length]) },
+    nodes.length > 1 && selectedMedia.length > 0 && onSequencedExport && { key: 'sequenced-export', label: '按顺序批量下载…', icon: <Download size={18} />, active: namingOpen, onClick: () => setNamingOpen(open => !open) },
     ...(nodes.length > 1 && onDesignBoolean && nodes.every(item => item.type === 'design' && DESIGN_BOOLEAN_KINDS.has(item.metadata.design?.kind ?? ''))
       ? DESIGN_BOOLEAN_ORDER.map(operation => ({ key: 'design-boolean-' + operation, label: DESIGN_BOOLEAN_LABELS[operation], icon: <Layers3 size={18} />, onClick: () => onDesignBoolean(operation, ids) }))
       : []),
@@ -107,9 +127,9 @@ export function WorkflowNodeToolbar({ nodes, onCopy, onDelete, onExport, onRun, 
     onLayer && { key: 'front', label: '移到最前', icon: <ChevronsUp size={18} />, onClick: () => onLayer('front') },
     onLayer && { key: 'back', label: '移到最后', icon: <ChevronsDown size={18} />, onClick: () => onLayer('back') },
     node && onPromptFocus && node.type !== 'audio' && node.type !== 'script' && { key: 'prompt', label: '编辑提示词', icon: <MessageSquareText size={18} />, onClick: () => onPromptFocus(node.id) },
-    media && mediaUrl && { key: 'download', label: '下载媒体', icon: <Download size={18} />, onClick: () => { void saveMediaUrl(mediaUrl, media.metadata.name || media.id).catch(error => console.warn('[Workflow] Media download failed.', error)); } },
+    media && hasMediaSource && { key: 'download', label: '下载媒体', icon: <Download size={18} />, disabled: !mediaUrl, onClick: () => { if (mediaUrl) void saveMediaUrl(mediaUrl, media.metadata.name || media.id).catch(error => console.warn('[Workflow] Media download failed.', error)); } },
     media?.type === 'image' && onSaveMedia && { key: 'save', label: '保存到素材库', icon: <Library size={18} />, onClick: () => onSaveMedia(media.id) },
-    media && mediaUrl && onPreviewMedia && { key: 'preview', label: '放大预览', icon: <Maximize2 size={18} />, onClick: () => onPreviewMedia(media.id) },
+    media && hasMediaSource && onPreviewMedia && { key: 'preview', label: '放大预览', icon: <Maximize2 size={18} />, disabled: !mediaUrl, onClick: () => onPreviewMedia(media.id) },
     media?.type === 'image' && mediaUrl && onReversePrompt && { key: 'reverse-prompt', label: '反推 Prompt', icon: <ScanText size={18} />, disabled: advancedToolBusy, onClick: () => onReversePrompt(media.id, mediaUrl) },
     media && onReplaceMedia && { key: 'replace', label: '替换媒体', icon: <FilePenLine size={18} />, onClick: () => inputRef.current?.click() },
     node?.type === 'image' && mediaUrl && imageTools?.crop && { key: 'crop', label: WORKFLOW_NODE_TOOL_LABELS.crop, icon: <Crop size={18} />, disabled: advancedToolBusy, onClick: () => imageTools.crop?.(node.id) },
@@ -128,11 +148,7 @@ export function WorkflowNodeToolbar({ nodes, onCopy, onDelete, onExport, onRun, 
     node?.type === 'image' && mediaUrl && imageTools?.restyle && { key: 'restyle', label: '视角与风格', icon: <Palette size={18} />, disabled: advancedToolBusy, onClick: () => imageTools.restyle?.(node.id) },
     node?.type === 'image' && mediaUrl && imageTools?.layer && { key: 'layer', label: '叠加层', icon: <Layers size={18} />, disabled: advancedToolBusy, onClick: () => imageTools.layer?.(node.id) },
     selectedMedia.length > 1 && selectedMedia.every(n => n.type === 'image') && imageTools?.storyboard && { key: 'storyboard', label: '分镜组拼接', icon: <Frame size={18} />, disabled: advancedToolBusy, onClick: () => imageTools.storyboard?.(ids) },
-    node?.type === 'video' && mediaUrl && videoTools?.trim && { key: 'video-trim', label: WORKFLOW_NODE_TOOL_LABELS['video-trim'], icon: <Scissors size={18} />, disabled: videoToolBusy, onClick: () => videoTools.trim?.(node.id) },
-    node?.type === 'video' && mediaUrl && videoTools?.avSplit && { key: 'video-av-split', label: WORKFLOW_NODE_TOOL_LABELS['video-av-split'], icon: <ScanLine size={18} />, disabled: videoToolBusy, onClick: () => videoTools.avSplit?.(node.id) },
-    node?.type === 'video' && mediaUrl && videoTools?.extractFrame && { key: 'video-frame-first', label: '导出首帧为图片', icon: <ArrowUpToLine size={18} />, disabled: videoToolBusy, onClick: () => videoTools.extractFrame?.(node.id, 'first') },
-    node?.type === 'video' && mediaUrl && videoTools?.extractFrame && { key: 'video-frame-last', label: '导出尾帧为图片', icon: <ArrowDownToLine size={18} />, disabled: videoToolBusy, onClick: () => videoTools.extractFrame?.(node.id, 'last') },
-    node?.type === 'video' && mediaUrl && videoTools?.extractFrameAt && { key: 'video-frame-at', label: '提取指定帧', icon: <Frame size={18} />, disabled: videoToolBusy, onClick: () => videoTools.extractFrameAt?.(node.id) },
+    node?.type === 'video' && hasMediaSource && videoTools?.trim && { key: 'video-trim', label: WORKFLOW_NODE_TOOL_LABELS['video-trim'], icon: <Scissors size={18} />, disabled: videoToolBusy || mediaPending, onClick: () => videoTools.trim?.(node.id) },
     selectedMedia.length > 1 && selectedMedia.every(n => n.type === 'video') && videoTools?.merge && { key: 'video-merge', label: WORKFLOW_NODE_TOOL_LABELS['video-merge'], icon: <Frame size={18} />, disabled: videoToolBusy, onClick: () => videoTools.merge?.(ids) },
     node?.type === 'audio' && mediaUrl && audioTools?.trim && { key: 'audio-trim', label: WORKFLOW_NODE_TOOL_LABELS['audio-trim'], icon: <Scissors size={18} />, disabled: audioToolBusy, onClick: () => audioTools.trim?.(node.id) },
     node?.type === 'audio' && mediaUrl && audioTools?.speed && { key: 'audio-speed', label: WORKFLOW_NODE_TOOL_LABELS['audio-speed'], icon: <Gauge size={18} />, disabled: audioToolBusy, onClick: () => audioTools.speed?.(node.id) },
@@ -145,6 +161,19 @@ export function WorkflowNodeToolbar({ nodes, onCopy, onDelete, onExport, onRun, 
       : node && node.type !== 'audio' && node.type !== 'script' && node.metadata.status === 'error' && onRun && { key: 'run', label: '重试节点', icon: <RefreshCw size={18} />, onClick: () => onRun(node.id) },
     { key: 'delete', label: '删除节点', icon: <Trash2 size={18} />, danger: true, onClick: () => onDelete(ids) },
   ];
+  // LibTV 式：分离音视频与截帧各自收成一个下拉。媒体还在加载时置灰，而不是整组消失。
+  const videoNode = node?.type === 'video' && hasMediaSource ? node : null;
+  const videoBusy = videoToolBusy || mediaPending || videoNode?.metadata.status === 'loading';
+  const avSplitActions: WorkflowToolbarAction[] = videoNode && videoTools?.avSplit ? [
+    { key: 'video-av-split', label: '分离音视频', icon: <AudioLines size={16} />, disabled: videoBusy, onClick: () => videoTools.avSplit?.(videoNode.id, 'full') },
+    { key: 'video-vocals', label: '人声提取', icon: <Mic size={16} />, disabled: videoBusy, onClick: () => videoTools.avSplit?.(videoNode.id, 'vocals') },
+    { key: 'video-background', label: '背景音提取', icon: <Music size={16} />, disabled: videoBusy, onClick: () => videoTools.avSplit?.(videoNode.id, 'background') },
+  ] : [];
+  const frameActions: WorkflowToolbarAction[] = (videoNode ? [
+    videoTools?.extractFrame && { key: 'video-frame-first', label: '截取首帧', icon: <ArrowUpToLine size={16} />, disabled: videoBusy, onClick: () => videoTools.extractFrame?.(videoNode.id, 'first') },
+    videoTools?.extractFrame && { key: 'video-frame-last', label: '截取尾帧', icon: <ArrowDownToLine size={16} />, disabled: videoBusy, onClick: () => videoTools.extractFrame?.(videoNode.id, 'last') },
+    videoTools?.extractFrameAt && { key: 'video-frame-at', label: '截取指定帧…', icon: <Frame size={16} />, disabled: videoBusy, onClick: () => videoTools.extractFrameAt?.(videoNode.id) },
+  ] as Array<WorkflowToolbarAction | false | undefined> : []).filter((action): action is WorkflowToolbarAction => Boolean(action));
   const alignActions: WorkflowToolbarAction[] = nodes.length > 1 && onAlign ? [
     { key: 'left', label: '左对齐节点', icon: <AlignLeft size={16} />, onClick: () => onAlign('left') },
     { key: 'horizontal-center', label: '水平居中节点', icon: <AlignCenter size={16} />, onClick: () => onAlign('horizontal-center') },
@@ -168,8 +197,22 @@ export function WorkflowNodeToolbar({ nodes, onCopy, onDelete, onExport, onRun, 
         <input ref={inputRef} hidden type="file" accept={`${media.type}/*`} onChange={event => { const file = event.target.files?.[0]; if (file) onReplaceMedia(media.id, file); event.target.value = ''; }} />
       </>}
       <WorkflowToolbarActions showLabels actions={primary.filter(action => action.key !== 'delete')} />
+      {avSplitActions.length > 0 && <WorkflowToolbarMenu variant="labelled" label="分离音视频" icon={<AudioLines size={16} />} actions={avSplitActions} disabled={videoBusy} />}
       {overflow.length > 0 && <WorkflowToolbarMenu label="更多" icon={<MoreHorizontal size={18} />} actions={overflow} />}
+      {frameActions.length > 0 && <WorkflowToolbarMenu variant="icon-chevron" label="视频截帧" icon={<Camera size={16} />} actions={frameActions} />}
       <WorkflowToolbarActions actions={[...iconOnly, ...primary.filter(action => action.key === 'delete')]} />
+      {namingOpen && onSequencedExport && selectedMedia.length > 0 && (
+        <form
+          className="workflow-group-naming"
+          aria-label="批量下载命名"
+          style={{ position: 'absolute', top: 'calc(100% + 8px)', left: '50%', transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 12, background: 'var(--workflow-toolbar-bg, #1f1f23)', boxShadow: '0 8px 24px rgba(0,0,0,.35)', whiteSpace: 'nowrap', zIndex: 2 }}
+          onSubmit={event => { event.preventDefault(); onSequencedExport(ids, namePrefix); setNamingOpen(false); }}
+        >
+          <input aria-label="文件名前缀" autoFocus value={namePrefix} placeholder="flovart" onChange={event => setNamePrefix(event.target.value)} onKeyDown={event => { if (event.key === 'Escape') setNamingOpen(false); event.stopPropagation(); }} style={{ width: 140 }} />
+          <small>{sequencedFileNames(namePrefix, selectedMedia.length)[0]} … 共 {selectedMedia.length} 个</small>
+          <button type="submit">下载</button>
+        </form>
+      )}
     </WorkflowToolbarShell>
   );
 }

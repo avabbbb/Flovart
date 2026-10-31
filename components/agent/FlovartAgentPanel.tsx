@@ -1,4 +1,4 @@
-import { AtSign, Box, Check, Circle, Hand, History, Image as ImageIcon, KeyRound, LayoutGrid, Plus, RotateCw, Send, Settings2, ShieldCheck, Square, Trash2, Video, WandSparkles, X } from 'lucide-react';
+import { AtSign, Box, Check, ChevronDown, Hand, History, Image as ImageIcon, KeyRound, LayoutGrid, Plus, RotateCw, Send, Square, Trash2, Video, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getManagedAgentConnection } from '../../services/managedAgentConnection';
 import {
@@ -27,6 +27,11 @@ import { useWorkspaceStore } from '../../stores/useWorkspaceStore';
 import { translations } from '../../utils/translations';
 import { COMMUNITY_WORKFLOWS } from '../landing/communityTypes';
 import type { AssetLibrary, UserApiKey } from '../../types';
+import { AgentEmptyState, CreationModeControl, creationModeLabel, type AgentModelSelection, type AgentQuickAction } from './AgentComposerExtras';
+import { AgentModelPicker } from './AgentModelPicker';
+import { applyAgentTurnPreamble, recipeFromNodes, skillFromRecipe, type AgentCreationMode } from '../../services/canvasSkillRecipe';
+import { useAgentGroupInboxStore, type AgentGroupPayload } from '../../stores/useAgentGroupInboxStore';
+import { useMineSkillsStore } from './mineSkills';
 
 interface FlovartAgentPanelProps {
   project: WorkflowProject;
@@ -36,6 +41,9 @@ interface FlovartAgentPanelProps {
   onFocusNode?: (nodeId: string) => void;
   /** 浏览器内置 PI 内核的 agent-text 线路来源（OpenAI 兼容 Key 的模型映射） */
   userApiKeys?: UserApiKey[];
+  /** 模型选择器里新增 Key / 切换 agent-text 模型，直接写入全局 AI 服务设置 */
+  onAddApiKey?: (payload: Omit<UserApiKey, 'id' | 'createdAt' | 'updatedAt'>) => void;
+  onUpdateApiKey?: (id: string, patch: Partial<Omit<UserApiKey, 'id' | 'createdAt'>>) => void;
 }
 
 interface AgentReference {
@@ -105,7 +113,7 @@ function toolResultText(result: unknown, language: 'en' | 'zho') {
   return content?.filter(item => item.type === 'text').map(item => item.text).filter(Boolean).join('\n') || (language === 'en' ? 'Workflow operation completed.' : 'Workflow 操作已完成');
 }
 
-export function FlovartAgentPanel({ project, onActivityChange, onOpenSettings, assetLibrary, onFocusNode, userApiKeys = [] }: FlovartAgentPanelProps) {
+export function FlovartAgentPanel({ project, onActivityChange, onOpenSettings, assetLibrary, onFocusNode, userApiKeys = [], onAddApiKey, onUpdateApiKey }: FlovartAgentPanelProps) {
   const client = useRef<ManagedFlovartAgentClient | undefined>(undefined);
   const kernelRef = useRef<BrowserAgentKernel | undefined>(undefined);
   const unsubscribeRef = useRef<(() => void) | undefined>(undefined);
@@ -139,6 +147,16 @@ const userApiKeysRef = useRef(userApiKeys);
   const [mentionOpen, setMentionOpen] = useState(false);
   const [mentionQuery, setMentionQuery] = useState('');
   const [attachmentOpen, setAttachmentOpen] = useState(false);
+  const [creationMode, setCreationMode] = useState<AgentCreationMode>('all');
+  const [creationModeOpen, setCreationModeOpen] = useState(false);
+  const [preferredModel, setPreferredModel] = useState<AgentModelSelection | null>(null);
+  const [modelPickerOpen, setModelPickerOpen] = useState(false);
+  const [skillOpen, setSkillOpen] = useState(false);
+  // null = Skill picker not opened by typing "/"; otherwise the text after "/".
+  const [slashQuery, setSlashQuery] = useState<string | null>(null);
+  // ProductionSkillDeck 注册的键盘处理：返回 true 表示该按键已被 Skill 列表消费。
+  const skillNav = useRef<((key: string) => boolean) | null>(null);
+  const [groupBanner, setGroupBanner] = useState<(AgentGroupPayload & { saved?: boolean }) | null>(null);
   const askConfirmation = useRef((summary: string, request?: AgentConfirmRequest): Promise<boolean> => {
     const current = mandateRef.current;
     if (modeRef.current === 'auto' && current && request && evaluateSpendMandate(current, request).allow) {
@@ -206,7 +224,7 @@ const userApiKeysRef = useRef(userApiKeys);
   // click — the standard transient-layer contract. While open they cover the
   // composer textarea, so leaving them pinned is a real blocker.
   useEffect(() => {
-    const anyOpen = modeOpen || infoPanel !== null || sessionsOpen || mentionOpen || attachmentOpen;
+    const anyOpen = modeOpen || infoPanel !== null || sessionsOpen || mentionOpen || attachmentOpen || creationModeOpen || modelPickerOpen || skillOpen;
     if (!anyOpen) return;
     const closeAll = () => {
       setModeOpen(false);
@@ -214,6 +232,10 @@ const userApiKeysRef = useRef(userApiKeys);
       setSessionsOpen(false);
       setMentionOpen(false);
       setAttachmentOpen(false);
+      setCreationModeOpen(false);
+      setModelPickerOpen(false);
+      setSkillOpen(false);
+      setSlashQuery(null);
     };
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') closeAll();
@@ -239,7 +261,7 @@ const userApiKeysRef = useRef(userApiKeys);
       document.removeEventListener('keydown', onKey);
       document.removeEventListener('pointerdown', onPointer);
     };
-  }, [modeOpen, infoPanel, sessionsOpen, mentionOpen, attachmentOpen]);
+  }, [modeOpen, infoPanel, sessionsOpen, mentionOpen, attachmentOpen, creationModeOpen, modelPickerOpen, skillOpen]);
   useEffect(() => {
     // 与下方主连接 effect 相同的 active 防护：异步 settle 后组件可能已卸载/切换项目
     let active = true;
@@ -547,7 +569,10 @@ const userApiKeysRef = useRef(userApiKeys);
       return;
     }
     const referenceContext = references.length ? `引用上下文：\n${references.map(reference => `- @${reference.label}（${reference.type === 'node' ? `工作流节点 nodeId=${reference.id}` : `我的素材 assetId=${reference.id}`}）`).join('\n')}` : '';
-    const requestText = [text, referenceContext].filter(Boolean).join('\n\n');
+    const requestText = applyAgentTurnPreamble([text, referenceContext].filter(Boolean).join('\n\n'), {
+      creationMode,
+      preferredModel: preferredModel ? { capability: preferredModel.capability, name: preferredModel.name } : null,
+    });
     const displayText = [text, references.length ? `引用：${references.map(reference => `@${reference.label}`).join('、')}` : ''].filter(Boolean).join('\n\n');
     const assistantId = `stream-${crypto.randomUUID()}`;
     setMessages(items => [...items, { id: crypto.randomUUID(), role: 'user', text: displayText }]);
@@ -597,6 +622,9 @@ const userApiKeysRef = useRef(userApiKeys);
     const match = value.match(/@([^@\s]*)$/);
     setMentionOpen(Boolean(match));
     setMentionQuery(match?.[1] || '');
+    const slash = match ? null : value.match(/(?:^|\s)\/([^\s/]*)$/);
+    if (slash) { setSlashQuery(slash[1]); setSkillOpen(true); setModeOpen(false); setCreationModeOpen(false); }
+    else if (slashQuery !== null) { setSlashQuery(null); setSkillOpen(false); }
     setAttachmentOpen(false);
     setReplaceTarget(null);
   };
@@ -632,40 +660,85 @@ const userApiKeysRef = useRef(userApiKeys);
     ? reference.mediaType?.startsWith('video/') ? <Video size={13} /> : <ImageIcon size={13} />
     : reference.mediaType === 'video' ? <Video size={13} /> : reference.mediaType === 'image' ? <ImageIcon size={13} /> : <Box size={13} />;
 
+
+  // 画布「添加到 Agent」：分组节点变成引用 chip，并可保存为可复用的 Skill。
+  const pendingGroup = useAgentGroupInboxStore(state => state.pendingGroup);
+  useEffect(() => {
+    if (!pendingGroup) return;
+    const payload = useAgentGroupInboxStore.getState().consume();
+    if (!payload) return;
+    const byId = new Map(project.nodes.map(node => [node.id, node]));
+    const groupRefs = payload.nodeIds.flatMap(id => {
+      const node = byId.get(id);
+      return node ? [{ id: node.id, type: 'node' as const, label: node.title || '未命名节点', mediaType: node.type }] : [];
+    });
+    setReferences(current => [...current, ...groupRefs.filter(ref => !current.some(item => item.type === 'node' && item.id === ref.id))]);
+    setGroupBanner({ ...payload, nodeIds: groupRefs.map(ref => ref.id) });
+  }, [pendingGroup, project.nodes]);
+
+  const saveGroupAsSkill = async () => {
+    if (!groupBanner) return;
+    try {
+      const recipe = recipeFromNodes(project, groupBanner.nodeIds);
+      const skill = skillFromRecipe(recipe, { name: groupBanner.label, slug: groupBanner.label, description: language === 'zho' ? `画布分组「${groupBanner.label}」的操作流程（${recipe.steps.length} 步）` : `Canvas group "${groupBanner.label}" (${recipe.steps.length} steps)` });
+      await useMineSkillsStore.getState().save(skill);
+      setGroupBanner(current => (current ? { ...current, saved: true } : current));
+    } catch (error) {
+      setMessages(items => [...items, { id: crypto.randomUUID(), role: 'error', text: errorMessage(error) }]);
+    }
+  };
+
+  const focusComposer = () => window.requestAnimationFrame(() => textarea.current?.focus());
+  const runQuickAction = (action: Exclude<AgentQuickAction, 'adapt'>) => {
+    const zho = language === 'zho';
+    if (action === 'perceive') {
+      setPrompt(zho ? '请读取当前画布（优先看已引用和已选节点），总结现状，并给出接下来的创作步骤建议。' : 'Read the current canvas (referenced and selected nodes first), summarize it, and propose the next creative steps.');
+    } else if (action === 'preset') {
+      setCreationMode('storyboard');
+      setPrompt(zho ? '从爆款预设开始原创剧本：先给我 3 个当下热门的短片题材方向（每个含一句话梗概和看点），我选定后再展开分镜。' : 'Start an original script from a hit preset: give me 3 trending short-film directions (one-line logline and hook each); I will pick one before you break it into shots.');
+    } else {
+      const mediaRefs = project.nodes
+        .filter(node => node.isVisible !== false && (node.type === 'image' || node.type === 'video'))
+        .slice(0, 12)
+        .map(node => ({ id: node.id, type: 'node' as const, label: node.title || '未命名节点', mediaType: node.type }));
+      setReferences(current => (current.length ? current : mediaRefs));
+      setPrompt(zho ? '请批量优化引用的图片/视频节点的提示词：保持原意，补全主体、镜头、光影、风格，并直接更新到对应节点。' : 'Optimize the prompts of the referenced image/video nodes: keep the intent, add subject, camera, lighting and style, and update each node directly.');
+    }
+    focusComposer();
+  };
+  const activeSessionTitle = sessionList.find(session => session.id === activeSessionId)?.title || t('agentPanel.newChat');
+  const conversationEmpty = !messages.some(message => message.role === 'user' || message.role === 'assistant' || message.role === 'tool');
   const setupGate = Boolean(setupBlocker) && !browseFirst;
   return (
     <div ref={rootRef} className="workflow-agent is-embedded agent-conversation">
       <header className="workflow-agent__utility agent-conversation__header">
-        <strong>{t('agentPanel.title')}</strong>
-        <span className={`workflow-agent__status is-${needsConfiguration || workspaceStatus === 'error' ? 'error' : status === 'ready' && workspaceStatus === 'ready' ? 'connected' : status}`}>
-          <Circle size={8} />{status === 'connecting' ? t('agentPanel.statusConnecting') : status === 'error' ? t('agentPanel.statusError') : needsConfiguration ? t('agentPanel.statusNeedConfig') : workspaceStatus === 'error' ? t('agentPanel.statusWorkspaceDisconnected') : workspaceStatus !== 'ready' ? t('agentPanel.statusSyncing') : t('agentPanel.statusReady')}
-        </span>
-        {needsConfiguration && <button type="button" className="ml-2 flex items-center gap-1 text-[9px] font-semibold" onClick={onOpenSettings}><Settings2 size={10} />{t('agentPanel.openModelMapping')}</button>}
-        <span className="agent-conversation__history ml-auto">
-          <button
-            type="button"
-            aria-label={t('agentPanel.history')}
-            aria-expanded={sessionsOpen}
-            title={t('agentPanel.history')}
-            onClick={() => { setSessionsOpen(open => !open); if (!sessionsOpen) void refreshSessions(); }}
-          ><History size={13} />{sessionList.length ? `${sessionList.length}` : ''}</button>
-          {sessionsOpen && (
-            <div className="agent-session-menu" role="menu" aria-label={t('agentPanel.history')}>
-              <button type="button" role="menuitem" onClick={() => void handleNewConversation()}><Plus size={14} /><span><strong>{t('agentPanel.newChat')}</strong><small>{t('agentPanel.newChatHint')}</small></span></button>
-              <div className="agent-session-menu__list">
-                {sessionList.length === 0 && <p className="agent-session-menu__empty">{t('agentPanel.noHistory')}</p>}
-                {sessionList.map(session => (
-                  <div key={session.id} className={`agent-session-menu__item${session.id === activeSessionId ? ' is-active' : ''}`}>
-                    <button type="button" role="menuitem" onClick={() => void handleOpenSession(session.id)}>
-                      <strong>{session.title || t('agentPanel.newChat')}</strong>
-                      <small>{formatSessionTime(session.updatedAt, language)}</small>
-                    </button>
-                    <button type="button" aria-label={`删除对话 ${session.title}`} onClick={() => void handleDeleteSession(session.id)}><Trash2 size={12} /></button>
-                  </div>
-                ))}
-              </div>
+        <button
+          type="button"
+          className="agent-header-title"
+          aria-label={t('agentPanel.history')}
+          aria-expanded={sessionsOpen}
+          title={t('agentPanel.history')}
+          onClick={() => { setSessionsOpen(open => !open); if (!sessionsOpen) void refreshSessions(); }}
+        ><span>{activeSessionTitle}</span><ChevronDown size={13} /></button>
+        {sessionsOpen && (
+          <div className="agent-session-menu agent-header-menu is-left" role="menu" aria-label={t('agentPanel.history')}>
+            <button type="button" role="menuitem" onClick={() => void handleNewConversation()}><Plus size={14} /><span><strong>{t('agentPanel.newChat')}</strong><small>{t('agentPanel.newChatHint')}</small></span></button>
+            <div className="agent-session-menu__list">
+              {sessionList.length === 0 && <p className="agent-session-menu__empty">{t('agentPanel.noHistory')}</p>}
+              {sessionList.map(session => (
+                <div key={session.id} className={`agent-session-menu__item${session.id === activeSessionId ? ' is-active' : ''}`}>
+                  <button type="button" role="menuitem" onClick={() => void handleOpenSession(session.id)}>
+                    <strong>{session.title || t('agentPanel.newChat')}</strong>
+                    <small>{formatSessionTime(session.updatedAt, language)}</small>
+                  </button>
+                  <button type="button" aria-label={`删除对话 ${session.title}`} onClick={() => void handleDeleteSession(session.id)}><Trash2 size={12} /></button>
+                </div>
+              ))}
             </div>
-          )}
+          </div>
+        )}
+        <span className="agent-header-actions">
+          <button type="button" className="agent-icon-btn" aria-label={t('agentPanel.newChat')} title={t('agentPanel.newChat')} onClick={() => void handleNewConversation()}><Plus size={15} /></button>
         </span>
       </header>
       <section className="workflow-agent__body">
@@ -681,22 +754,28 @@ const userApiKeysRef = useRef(userApiKeys);
           </div>
         )}
         <BrowseFirstDeck
-          visible={!setupGate && !messages.some(message => message.role === 'user' || message.role === 'assistant' || message.role === 'tool')}
-          expanded={browseFirst || project.nodes.length === 0}
+          visible={!setupGate && conversationEmpty}
+          expanded={browseFirst}
           sessions={sessionList}
           activeSessionId={activeSessionId}
           onOpenSession={id => void handleOpenSession(id)}
-          onPickTemplate={value => { setPrompt(value); window.requestAnimationFrame(() => textarea.current?.focus()); }}
+          onPickTemplate={value => { setPrompt(value); focusComposer(); }}
           offline={browseFirst}
           t={t}
         />
-        {!setupGate && !messages.some(message => message.role === 'user' || message.role === 'assistant' || message.role === 'tool') && !skillAttachment && <ProductionSkillDeck
-          attachment={skillAttachment}
-          onChange={value => { skillAttachmentDirty.current = true; setSkillAttachment(value); }}
-          dropTargetRef={composer}
-          onPromptChange={setPrompt}
-          showWelcome
+        {!setupGate && !browseFirst && conversationEmpty && <AgentEmptyState
+          language={language}
+          onAction={runQuickAction}
+          onStoryText={text => { setPrompt(`${language === 'zho' ? '请把以下故事改编为分镜脚本：' : 'Adapt the following story into a shot-by-shot script:'}\n${text}`); setCreationMode('storyboard'); focusComposer(); }}
         />}
+        {groupBanner && <div className="agent-group-banner" role="status">
+          <LayoutGrid size={14} />
+          <span>{language === 'zho' ? `已添加分组「${groupBanner.label}」（${groupBanner.nodeIds.length} 个节点）` : `Added group "${groupBanner.label}" (${groupBanner.nodeIds.length} nodes)`}</span>
+          {groupBanner.saved
+            ? <small>{language === 'zho' ? '已保存到「我的」Skill' : 'Saved to My Skills'}</small>
+            : <button type="button" onClick={() => void saveGroupAsSkill()}>{language === 'zho' ? '保存为 Skill' : 'Save as Skill'}</button>}
+          <button type="button" aria-label={language === 'zho' ? '关闭' : 'Dismiss'} onClick={() => setGroupBanner(null)}><X size={12} /></button>
+        </div>}
         {confirmation && <div className="workflow-agent__confirm"><strong>{t('agentPanel.confirmTitle')}</strong><p>{confirmation.summary}</p>
           {confirmation.offerMandate && <div className="workflow-agent__mandate">
             {mandate && <small>{`自动授权已到上限（${describeSpendMandate(mandate)}），需要重新授权。`}</small>}
@@ -715,13 +794,35 @@ const userApiKeysRef = useRef(userApiKeys);
           </div>
         </div>}
         <div ref={composer} className="workflow-agent__composer">
-          <ProductionSkillDeck attachment={skillAttachment} onChange={value => { skillAttachmentDirty.current = true; setSkillAttachment(value); }} dropTargetRef={composer} />
+          <ProductionSkillDeck
+            attachment={skillAttachment}
+            onChange={value => {
+              skillAttachmentDirty.current = true;
+              setSkillAttachment(value);
+              if (value && slashQuery !== null) setPrompt(current => current.replace(/(^|\s)\/[^\s/]*$/, '$1'));
+              setSlashQuery(null);
+              if (value) focusComposer();
+            }}
+            dropTargetRef={composer}
+            open={skillOpen}
+            onOpenChange={next => {
+              setSkillOpen(next);
+              if (!next) setSlashQuery(null);
+              else { setModeOpen(false); setCreationModeOpen(false); setMentionOpen(false); setAttachmentOpen(false); }
+            }}
+            searchQuery={slashQuery ?? undefined}
+            keyboardRef={skillNav}
+          />
           {mentionOpen && <div className="agent-reference-picker" role="listbox" aria-label="@ 引用节点和资产">
             <div className="agent-reference-picker__search"><AtSign size={14} /><span>{replaceTarget ? `替换“${replaceTarget.label}”为…` : mentionQuery ? `搜索“${mentionQuery}”` : '引用节点或我的素材'}</span></div>
             <div className="agent-reference-picker__list">
               <ReferenceGroup label="节点" items={referenceGroups.nodes} onSelect={addReference} icon={referenceIcon} empty="没有匹配节点" />
               <ReferenceGroup label="资产" items={referenceGroups.assets} onSelect={addReference} icon={referenceIcon} empty={assetLibrary?.items.length ? '没有匹配资产' : '我的素材为空'} />
             </div>
+          </div>}
+          {(creationMode !== 'all' || preferredModel) && <div className="agent-reference-chips" aria-label={language === 'zho' ? '创作设置' : 'Creation settings'}>
+            {creationMode !== 'all' && <span className="agent-setting-chip">{creationModeLabel(creationMode, language)}<button type="button" aria-label={language === 'zho' ? '恢复全能创作' : 'Reset mode'} onClick={() => setCreationMode('all')}><X size={11} /></button></span>}
+            {preferredModel && <span className="agent-setting-chip">{preferredModel.capability === 'video' ? <Video size={11} /> : <ImageIcon size={11} />}{preferredModel.name}<button type="button" aria-label={language === 'zho' ? `移除模型 ${preferredModel.name}` : `Remove model ${preferredModel.name}`} onClick={() => setPreferredModel(null)}><X size={11} /></button></span>}
           </div>}
           {references.length > 0 && <div className="agent-reference-chips" aria-label="已引用内容">{references.map(reference => <span key={`${reference.type}:${reference.id}`} className="agent-reference-chip">
             <button type="button" className="agent-reference-chip__target" aria-label={reference.type === 'node' ? `定位节点 ${reference.label}` : `已引用资产 ${reference.label}`} onClick={() => reference.type === 'node' && onFocusNode?.(reference.id)}>{referenceIcon(reference)}<span>{reference.label}</span></button>
@@ -733,6 +834,8 @@ const userApiKeysRef = useRef(userApiKeys);
             value={prompt}
             onChange={event => updatePrompt(event.target.value)}
             onKeyDown={event => {
+              if (event.key === 'Escape' && skillOpen) { event.preventDefault(); setSkillOpen(false); setSlashQuery(null); return; }
+              if (skillOpen && !event.nativeEvent.isComposing && skillNav.current?.(event.key)) { event.preventDefault(); return; }
               if (event.key === 'Escape' && mentionOpen) { event.preventDefault(); setMentionOpen(false); setReplaceTarget(null); return; }
               if (event.key === 'Backspace' && !prompt && references.length) { event.preventDefault(); setReferences(current => current.slice(0, -1)); return; }
               if (event.key === 'Enter' && !event.shiftKey) {
@@ -753,21 +856,10 @@ const userApiKeysRef = useRef(userApiKeys);
                   <button type="button" role="menuitem" onClick={() => openReferencePicker('asset')}><ImageIcon size={15} /><span><strong>{t('agentPanel.referenceAssets')}</strong><small>{t('agentPanel.referenceAssetCount', assetLibrary?.items.length || 0)}</small></span></button>
                 </div>}
               </div>
+              <CreationModeControl value={creationMode} onChange={setCreationMode} open={creationModeOpen} onOpenChange={open => { setCreationModeOpen(open); if (open) { setModelPickerOpen(false); setModeOpen(false); setSkillOpen(false); } }} language={language} />
+              <AgentModelPicker userApiKeys={userApiKeys} onAddApiKey={onAddApiKey} onUpdateApiKey={onUpdateApiKey} open={modelPickerOpen} onOpenChange={open => { setModelPickerOpen(open); if (open) { setCreationModeOpen(false); setModeOpen(false); setSkillOpen(false); setMentionOpen(false); setAttachmentOpen(false); } }} language={language} />
               <div className="agent-mode-control">
-                <button type="button" aria-label={t('agentPanel.productionContext')} aria-expanded={infoPanel === 'context'} title={t('agentPanel.productionContext')} onClick={() => setInfoPanel(panel => panel === 'context' ? null : 'context')}><WandSparkles size={16} /></button>
-                {infoPanel === 'context' && <div className="agent-mode-menu" role="dialog" aria-label={t('agentPanel.productionContext')}>
-                  <div style={{ padding: '10px 12px' }}>
-                    <strong style={{ display: 'block', fontSize: 13 }}>{project.title}</strong>
-                    <div style={{ display: 'flex', gap: 14, marginTop: 8 }}>
-                      {[[project.nodes.length, t('agentPanel.nodes')], [project.connections.length, t('agentPanel.connections')], [(project.draftChangeSets || []).length, t('agentPanel.changes')]].map(([value, label]) => <span key={String(label)} style={{ fontSize: 11, color: 'var(--isl-ink-soft)' }}><b style={{ display: 'block', fontSize: 15, color: 'var(--isl-ink)' }}>{value}</b>{label}</span>)}
-                    </div>
-                    <p style={{ margin: '10px 0 0', fontSize: 10, lineHeight: 1.6, color: 'var(--isl-ink-ghost)' }}>Agent 自动读取当前 Workflow Draft，可逆操作直接进入画布时间线，无需手动同步。</p>
-                  </div>
-                </div>}
-              </div>
-              <button type="button" aria-label={t('agentPanel.resync')} title={t('agentPanel.resync')} onClick={() => void workspaceBridge.current?.pushSnapshot(project).catch(() => setWorkspaceStatus('error'))}><RotateCw size={15} /></button>
-              <div className="agent-mode-control">
-                <button type="button" aria-label={t('agentPanel.generationMode')} aria-expanded={modeOpen} onClick={() => setModeOpen(value => !value)}>{mode === 'manual' ? <Hand size={15} /> : <RotateCw size={15} />}<span>{mode === 'manual' ? t('agentPanel.manualMode') : t('agentPanel.autoMode')}</span></button>
+                <button type="button" aria-label={t('agentPanel.generationMode')} title={mode === 'manual' ? t('agentPanel.manualModeHint') : t('agentPanel.autoModeHint')} aria-expanded={modeOpen} onClick={() => { setModeOpen(value => !value); setCreationModeOpen(false); setModelPickerOpen(false); setSkillOpen(false); }}><Hand size={15} /><span>{mode === 'manual' ? t('agentPanel.manualMode') : t('agentPanel.autoMode')}</span></button>
                 {modeOpen && <div className="agent-mode-menu" role="menu" aria-label={t('agentPanel.generationMode')}>
                   <button type="button" role="menuitem" aria-pressed={mode === 'manual'} onClick={() => { modeRef.current = 'manual'; mandateRef.current = null; setMandate(null); setMode('manual'); setModeOpen(false); }}><Hand size={17} /><span><strong>{t('agentPanel.manualMode')}</strong><small>{t('agentPanel.manualModeHint')}</small></span>{mode === 'manual' && <Check size={15} />}</button>
                   <button type="button" role="menuitem" aria-pressed={mode === 'auto'} onClick={() => { modeRef.current = 'auto'; setMode('auto'); setModeOpen(false); }}><RotateCw size={17} /><span><strong>{t('agentPanel.autoMode')}</strong><small>{t('agentPanel.autoModeHint')}</small></span>{mode === 'auto' && <Check size={15} />}</button>

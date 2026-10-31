@@ -37,9 +37,14 @@ function sessionError(code, message, details) {
   return new WorkflowAgentSessionError(code, message, details);
 }
 
+// 这些命令要等真实生成或人工确认结束才回包（视频生成上限约 600s），不能套用普通 60s 超时，
+// 否则外部 Agent 会在任务仍在运行时收到「操作超时」并重复提交。
+export const LONG_RUNNING_COMMANDS = new Set(['workflow.node.run', 'workflow.node.tool', 'production.run', 'production.approve']);
+
 export class WorkflowAgentSession {
-  constructor({ timeoutMs = 60000, isKnownAgentIdentity, workspaceLease } = {}) {
+  constructor({ timeoutMs = 60000, longRunningTimeoutMs = 15 * 60_000, isKnownAgentIdentity, workspaceLease } = {}) {
     this.timeoutMs = timeoutMs;
+    this.longRunningTimeoutMs = longRunningTimeoutMs;
     this.clients = new Map();
     this.pending = new Map();
     this.snapshot = null;
@@ -403,7 +408,7 @@ export class WorkflowAgentSession {
         this.pending.delete(requestId);
         cleanup();
         reject(new Error('Workflow 操作超时'));
-      }, this.timeoutMs);
+      }, LONG_RUNNING_COMMANDS.has(command) ? this.longRunningTimeoutMs : this.timeoutMs);
       this.pending.set(requestId, {
         clientId,
         resolve: value => { clearTimeout(timer); cleanup(); resolve(value); },

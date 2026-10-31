@@ -66,9 +66,18 @@ export function BrowserImportBridge() {
 
   useEffect(() => {
     if (!desktop) return;
-    void refresh();
-    const timer = window.setInterval(() => void refresh(), 750);
-    return () => window.clearInterval(timer);
+    // 递归 setTimeout：上一轮 refresh 落定后再排下一轮，避免慢 IPC 时请求重叠、旧结果覆盖新结果。
+    let disposed = false;
+    let timer = 0;
+    const loop = async () => {
+      await refresh();
+      if (!disposed) timer = window.setTimeout(loop, 750);
+    };
+    void loop();
+    return () => {
+      disposed = true;
+      window.clearTimeout(timer);
+    };
   }, [desktop, refresh]);
 
   useEffect(() => {

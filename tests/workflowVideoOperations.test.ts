@@ -85,6 +85,27 @@ describe('workflow video operation executors', () => {
     expect(state.current.connections.filter(connection => connection.kind === 'operation-output').map(connection => connection.role)).toEqual(['result_video', 'result_audio']);
   });
 
+  it('extracts vocals from the split audio track and names outputs after the source node', async () => {
+    const state = harness();
+    const audioBlob = new Blob(['audio'], { type: 'audio/mpeg' });
+    const executeAudioStemSplit = vi.fn().mockResolvedValue({
+      vocalsBlob: new Blob(['vocals'], { type: 'audio/mpeg' }),
+      instrumentalBlob: new Blob(['bgm'], { type: 'audio/mpeg' }),
+    });
+    await runWorkflowVideoAvSplitOperation('project-video', 'video-1', {
+      ...state.runtime,
+      executeVideoAvSplit: vi.fn().mockResolvedValue({ videoBlob: new Blob(['video'], { type: 'video/mp4' }), audioBlob }),
+      executeAudioStemSplit,
+    }, 'vocals');
+    expect(executeAudioStemSplit).toHaveBeenCalledWith(audioBlob, 'audio-one.mp3');
+    const operation = state.current.nodes.find(node => node.type === 'operation');
+    expect(operation?.metadata.operation?.recipe.parameters).toEqual({ audio: 'vocals' });
+    const outputs = state.current.nodes.filter(node => node.metadata.sourceOperationNodeId === operation?.id);
+    const sourceTitle = state.current.nodes.find(node => node.id === 'video-1')!.title;
+    expect(outputs.map(node => node.title)).toEqual([sourceTitle + '_无声', sourceTitle + '_人声']);
+    expect(outputs.map(node => node.metadata.name)).toEqual(['video-only-one.mp4', 'vocals-one.mp3']);
+  });
+
   it('preserves ordered multi-video bindings for merge and reruns the same Operation', async () => {
     const state = harness();
     const executeVideoMerge = vi.fn().mockResolvedValue(new Blob(['merged'], { type: 'video/mp4' }));

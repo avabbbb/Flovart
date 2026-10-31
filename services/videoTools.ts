@@ -3,7 +3,7 @@
 // avSplit: 音视频分离
 // merge: 多片段拼接
 
-import { getFFmpeg } from './ffmpegClient';
+import { getFFmpeg, resetFFmpeg } from './ffmpegClient';
 import { fetchFile } from '@ffmpeg/util';
 import { nanoid } from 'nanoid';
 
@@ -23,8 +23,26 @@ export interface VideoAvSplitResult {
 // 经由该模块级串行队列执行，同一时刻只有一个任务占用 ffmpeg 实例。
 let ffmpegQueueTail: Promise<unknown> = Promise.resolve();
 
+// 单个任务的墙钟上限：wasm 卡死/OOM 时 exec 永不返回，没有上限就会永久锁死后续全部音视频操作。
+const FFMPEG_TASK_TIMEOUT_MS = 600_000;
+
+async function runWithDeadline<T>(task: () => Promise<T>): Promise<T> {
+  let rejectDeadline: (reason: Error) => void = () => undefined;
+  const deadline = new Promise<never>((_, reject) => { rejectDeadline = reject; });
+  const timer = setTimeout(() => {
+    // 卡死的实例不可复用：终止后下一个任务会重新加载。
+    resetFFmpeg();
+    rejectDeadline(new Error('ffmpeg 任务超过 10 分钟未完成，已终止。'));
+  }, FFMPEG_TASK_TIMEOUT_MS);
+  try {
+    return await Promise.race([task(), deadline]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export function enqueueFFmpegTask<T>(task: () => Promise<T>): Promise<T> {
-  const run = ffmpegQueueTail.then(task, task);
+  const run = ffmpegQueueTail.then(() => runWithDeadline(task), () => runWithDeadline(task));
   ffmpegQueueTail = run.then(() => undefined, () => undefined);
   return run;
 }

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, Reorder } from 'motion/react';
-import { KeyRound } from 'lucide-react';
+import { KeyRound, Maximize2, Minimize2 } from 'lucide-react';
 import type {
     AssetFolder,
     AssetLibrary,
@@ -133,7 +133,9 @@ export interface PromptBarProps {
     onSelectWorkflowReference?: (nodeId: string) => string | undefined;
     onAddReferenceFiles?: (files: File[]) => void | Promise<void>;
     onSelectAsset?: (assetId: string) => string | undefined;
-    skillEnabled?: boolean;
+    /** 放大编辑：右上角切换按钮；放大后的位置与尺寸由宿主决定 */
+    expanded?: boolean;
+    onToggleExpanded?: () => void;
 }
 
 type ExpandPanel = 'model' | 'submode' | 'parameters' | 'more' | 'batch' | null;
@@ -330,9 +332,19 @@ export const PromptBar: React.FC<PromptBarProps> = ({
     onSelectWorkflowReference,
     onAddReferenceFiles,
     onSelectAsset,
-    skillEnabled = false,
+    expanded = false,
+    onToggleExpanded,
 }) => {
     const ui = useCallback((zho: string, en: string) => language === 'zho' ? zho : en, [language]);
+    // 放大态按 Esc 收起；提及菜单等已消费 Esc（defaultPrevented）时不抢。
+    useEffect(() => {
+        if (!expanded || !onToggleExpanded) return;
+        const onKey = (event: KeyboardEvent) => {
+            if (event.key === 'Escape' && !event.defaultPrevented) onToggleExpanded();
+        };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, [expanded, onToggleExpanded]);
     const isDark = theme === 'dark';
     const getParamDisabledReason = (kind: 'resolution' | 'aspectRatio' | 'durationSec', value: string | number) => promptReasonCopy(paramDisabledReason(kind, value), language);
     const rootRef = useRef<HTMLDivElement>(null);
@@ -722,13 +734,27 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                         '--prompt-editor-placeholder': 'var(--isl-ink-ghost)',
                         '--prompt-editor-caret': 'var(--isl-mint-deep)',
                         '--prompt-editor-scrollbar': isDark ? '#4a3a26' : '#e3d7bd',
-                        '--prompt-editor-min-height': compactMode ? '76px' : '56px',
+                        '--prompt-editor-min-height': expanded ? 'min(360px, 48vh)' : compactMode ? '76px' : '56px',
+                        '--prompt-editor-max-height': expanded ? 'min(420px, 58vh)' : undefined,
                         '--prompt-editor-font-size': '14px',
                         '--prompt-editor-line-height': compactMode ? '1.4' : '1.5',
                     } as React.CSSProperties}
                 >
+                    {onToggleExpanded && (
+                        <button
+                            type="button"
+                            className="absolute right-2 top-2 z-10 inline-flex h-6 w-6 items-center justify-center rounded-md text-[var(--isl-ink-soft)] transition-colors hover:bg-[var(--isl-surface-2)] hover:text-[var(--isl-ink)]"
+                            data-testid="prompt-expand-toggle"
+                            aria-pressed={expanded}
+                            aria-label={expanded ? ui('收起编辑框', 'Collapse editor') : ui('放大编辑框', 'Expand editor')}
+                            title={expanded ? ui('收起（Esc）', 'Collapse (Esc)') : ui('放大编辑', 'Expand editor')}
+                            onClick={onToggleExpanded}
+                        >
+                            {expanded ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+                        </button>
+                    )}
                     {generationMode !== 'text' && (canOpenReferencePicker || Boolean(onAddAttachments) || !hideGenerationOptions) && (
-                        <div className="prompt-toolrow" data-testid="prompt-tool-row">
+                        <div className="prompt-toolrow" data-testid="prompt-tool-row" style={onToggleExpanded ? { paddingRight: 28 } : undefined}>
                             {(onAddAttachments || canOpenReferencePicker) && (
                                 <button type="button" className="prompt-toolchip" onClick={() => (onAddAttachments ? fileInputRef.current?.click() : setReferencePickerOpen(true))} title={ui('上传本地图片、视频或音频', 'Upload a local image, video, or audio file')}>
                                     <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>{ui('上传', 'Upload')}
@@ -830,7 +856,6 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                         onSelectAsset={onSelectAsset}
                         onResolvePastedMentions={onResolvePastedMentions}
                         onPasteUnresolvedMentions={onPasteUnresolvedMentions}
-                        skillEnabled={skillEnabled}
                     />
 
                     {variant !== 'inline' && (

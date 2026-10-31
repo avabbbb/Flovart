@@ -546,7 +546,19 @@ export async function generateVideo(
     }
     onProgress(progressMessages[messageIndex % progressMessages.length]);
     messageIndex++;
-    await new Promise(resolve => setTimeout(resolve, 10000));  // 每10秒检查一次
+    // 可取消的等待：停止后立即结束，不必等满 10 秒。
+    await new Promise<void>((resolve, reject) => {
+      const signal = options?.signal;
+      const onAbort = () => {
+        clearTimeout(timer);
+        reject(signal?.reason || new DOMException('已停止等待；供应商任务可能仍在运行。', 'AbortError'));
+      };
+      const timer = setTimeout(() => {
+        signal?.removeEventListener('abort', onAbort);
+        resolve();
+      }, 10_000);
+      signal?.addEventListener('abort', onAbort, { once: true });
+    });
     operation = await ai.operations.getVideosOperation({operation: operation});
   }
 

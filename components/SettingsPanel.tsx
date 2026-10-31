@@ -11,7 +11,7 @@ import {
     PROVIDER_LABELS,
 } from '../services/aiGateway';
 import { formatCost, type KeyUsageSummary } from '../utils/usageMonitor';
-import { fetchModelsForProvider, type FetchedModel } from '../services/modelFetcher';
+import { fetchModelsWithCache, type FetchedModel } from '../services/modelFetcher';
 import { normalizeProviderBaseUrl } from '../services/baseUrl';
 import { getProductModel, getProductModels, suggestProductRouteMappings } from '../services/productModelCatalog';
 import { getKeyModelIds } from '../utils/modelRefs';
@@ -822,7 +822,8 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
         }
         const fetchProvider: AIProvider = requestFormat === 'google' ? 'google' : targetProvider;
         try {
-            const result = await fetchModelsForProvider(fetchProvider, targetKey.trim(), targetBaseUrl?.trim() || undefined);
+            // 强制实时拉取，同时写入缓存，让随后的自动刷新直接命中。
+            const result = await fetchModelsWithCache(fetchProvider, targetKey.trim(), targetBaseUrl?.trim() || undefined, true);
             if (result.ok && result.models.length > 0) {
                 setFetchedModels(result.models);
                 setEndpointFlavor(result.endpointFlavor || null);

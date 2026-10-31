@@ -52,7 +52,11 @@ export const StudioRightDrawer: React.FC<StudioRightDrawerProps> = ({
     const move = (event: PointerEvent) => {
       const next = Math.min(maxWidth, Math.max(minWidth, startRef.current.width + startRef.current.x - event.clientX));
       // 拖拽期间直接操作 DOM，避免每帧触发 Workflow 巨型画布重渲染；松手时一次性 commit
-      if (asideRef.current) asideRef.current.style.width = `${next}px`;
+      const aside = asideRef.current;
+      if (aside) {
+        aside.style.setProperty('--drawer-width', `${next}px`);
+        aside.style.width = `${next}px`;
+      }
     };
     const stop = () => {
       setResizing(false);
@@ -105,7 +109,7 @@ export const StudioRightDrawer: React.FC<StudioRightDrawerProps> = ({
 
       <aside
         ref={asideRef}
-        className={`isl-panel compact-right-panel theme-aware ${docked ? 'relative' : 'absolute'} z-[78] flex min-h-0 flex-col overflow-hidden transition-[transform,opacity] duration-200 ${flush ? 'compact-right-panel--flush' : ''}`}
+        className={`isl-panel compact-right-panel theme-aware ${docked ? 'relative' : 'absolute'} z-[78] flex min-h-0 flex-col overflow-hidden ${resizing ? 'is-resizing select-none' : 'transition-[transform,opacity] duration-200'} ${flush ? 'compact-right-panel--flush' : ''}`}
         data-open={open ? 'true' : 'false'}
         data-docked={docked ? 'true' : 'false'}
         style={drawerStyle}

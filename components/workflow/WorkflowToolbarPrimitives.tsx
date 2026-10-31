@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState, type ReactNode } from 'react';
+import { ChevronDown } from 'lucide-react';
 
 export function WorkflowToolbarShell({ children, className = '', testId }: { children: ReactNode; className?: string; testId?: string }) {
   const stop = (event: React.SyntheticEvent) => event.stopPropagation();
@@ -38,7 +39,7 @@ export function WorkflowToolbarActions({ actions, showLabels = false }: { action
 }
 
 /** An overflow button whose actions are shown with their names, so nothing is an unlabelled mystery icon. */
-export function WorkflowToolbarMenu({ label, icon, actions }: { label: string; icon: ReactNode; actions: WorkflowToolbarAction[] }) {
+export function WorkflowToolbarMenu({ label, icon, actions, variant = 'icon', disabled = false }: { label: string; icon: ReactNode; actions: WorkflowToolbarAction[]; variant?: 'icon' | 'labelled' | 'icon-chevron'; disabled?: boolean }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -51,7 +52,7 @@ export function WorkflowToolbarMenu({ label, icon, actions }: { label: string; i
   }, [open]);
   return (
     <div ref={rootRef} className="workflow-toolbar-menu">
-      <button type="button" className={`isl-icon-btn h-9 w-9 ${open ? 'isl-icon-btn--active' : ''}`} aria-label={label} title={label} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(value => !value)}>{icon}</button>
+      <button type="button" disabled={disabled} className={['isl-icon-btn h-9 disabled:opacity-40', variant === 'labelled' ? 'workflow-toolbar-labelled w-auto gap-1.5 px-2.5' : variant === 'icon-chevron' ? 'w-auto gap-0.5 px-2' : 'w-9', open ? 'isl-icon-btn--active' : ''].join(' ')} aria-label={label} title={label} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(value => !value)}>{icon}{variant === 'labelled' && <span>{label}</span>}{variant !== 'icon' && <ChevronDown size={12} aria-hidden />}</button>
       {open && (
         <div role="menu" className="workflow-toolbar-menu__list">
           {actions.map(action => action.href ? (

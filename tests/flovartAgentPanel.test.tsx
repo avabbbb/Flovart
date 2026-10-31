@@ -56,11 +56,8 @@ describe('Flovart Agent panel', () => {
 
     render(<FlovartAgentPanel project={{ ...createWorkflowProject('Agent 项目'), id: 'project-1' }} onActivityChange={vi.fn()} onOpenSettings={onOpenSettings} />);
 
-    expect(await screen.findByText('需要配置')).toBeInTheDocument();
-    expect(screen.getByText('请在设置的“模型映射”中为 Agent 文本能力配置可用线路。')).toBeInTheDocument();
+    expect(await screen.findByText('请在设置的“模型映射”中为 Agent 文本能力配置可用线路。')).toBeInTheDocument();
     expect(screen.queryByText('No agent-text route is configured')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: '打开模型映射' }));
-    expect(onOpenSettings).toHaveBeenCalledOnce();
 
     const composer = screen.getByPlaceholderText('请先配置 Agent 文本模型映射');
     // Lane15 credential wall: the cold-open config error must carry a real
@@ -69,7 +66,7 @@ describe('Flovart Agent panel', () => {
     const card = screen.getByTestId('agent-setup-card');
     expect(card).toHaveTextContent('添加 API Key');
     fireEvent.click(screen.getByRole('button', { name: /添加 API Key/ }));
-    expect(onOpenSettings).toHaveBeenCalledTimes(2);
+    expect(onOpenSettings).toHaveBeenCalledOnce();
     fireEvent.click(screen.getByRole('button', { name: /试试离线模式/ }));
     expect(screen.queryByTestId('agent-setup-card')).not.toBeInTheDocument();
     expect(screen.getByTestId('agent-browse-first')).toBeInTheDocument();
@@ -101,7 +98,7 @@ describe('Flovart Agent panel', () => {
   });
 
 
-  it('mirrors the Agent opening flow with a Skill card, searchable picker, and autonomy menu', async () => {
+  it('mirrors the LibTV Agent opening flow: empty state quick actions, Skill picker, and autonomy menu', async () => {
     const project = { ...createWorkflowProject('Agent 空态'), id: 'project-empty' };
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
       sessionId: 'session-empty', projectId: project.id, running: false, messages: [],
@@ -109,7 +106,15 @@ describe('Flovart Agent panel', () => {
 
     render(<FlovartAgentPanel project={project} onActivityChange={vi.fn()} onOpenSettings={vi.fn()} />);
 
-    expect(await screen.findByText('每个 Skill，都是一个开场')).toBeInTheDocument();
+    expect(await screen.findByText('让 Flovart Agent 辅助你的无限创意')).toBeInTheDocument();
+    for (const label of ['感知画布开始创作', '从爆款预设开始剧本原创', '上传故事来改编', '批量优化提示词']) {
+      expect(screen.getByRole('button', { name: label })).toBeInTheDocument();
+    }
+    fireEvent.click(screen.getByRole('button', { name: '感知画布开始创作' }));
+    expect((screen.getByLabelText('开始你的创作，或者 @ 引用工作流/节点/资源') as HTMLTextAreaElement).value).toContain('读取当前画布');
+    fireEvent.click(screen.getByRole('button', { name: '创作模式' }));
+    fireEvent.click(screen.getByRole('menuitemradio', { name: /视频创作/ }));
+    expect(screen.getByRole('button', { name: '创作模式' })).toHaveTextContent('视频创作');
     fireEvent.click(screen.getByRole('button', { name: '选择制作 Skill' }));
     expect(screen.getByRole('dialog', { name: 'Skill' })).toBeInTheDocument();
     expect(screen.getByRole('textbox', { name: '搜索 Skill' })).toBeInTheDocument();
@@ -120,9 +125,9 @@ describe('Flovart Agent panel', () => {
     fireEvent.click(screen.getByRole('menuitem', { name: /自动模式/ }));
     expect(screen.getByRole('button', { name: '生成模式' })).toHaveTextContent('自动');
 
-    fireEvent.click(screen.getByRole('button', { name: '使用 Skill VOX Skill' }));
+    fireEvent.click(screen.getByRole('button', { name: '选择制作 Skill' }));
+    fireEvent.click(screen.getByRole('button', { name: '添加 VOX Skill' }));
     expect(await screen.findByRole('button', { name: '移除 VOX Skill' })).toBeInTheDocument();
-    expect((screen.getByLabelText('开始你的创作，或者 @ 引用工作流/节点/资源') as HTMLTextAreaElement).value).toContain('$vox-director');
   });
 
   it('applies reversible Agent edits directly and confirms only irreversible deletes', async () => {

@@ -35,7 +35,8 @@ import { summarizeWorkflowOps, topoSort, validateWorkflowConnection } from './op
 import { buildWorkflowPromptPasteOps } from './promptPaste';
 import { WorkflowConnections } from './WorkflowConnections';
 import { WorkflowContextMenu, type WorkflowContextMenuState } from './WorkflowContextMenu';
-import { alignNodes, arrowNudge, distributeNodes, duplicateNodes, offsetNodes } from './arrange';
+import { alignNodes, arrangeNodePositions, arrangementOrder, arrowNudge, distributeNodes, duplicateNodes, offsetNodes, sequencedFileNames } from './arrange';
+import { pushAgentGroup } from '../../stores/useAgentGroupInboxStore';
 import { WorkflowCreateMenu, type WorkflowCreateMenuState } from './WorkflowCreateMenu';
 import { DesignInspector } from './DesignInspector';
 import { createDesignTemplate } from '../../services/design/presets';
@@ -50,7 +51,7 @@ import { workflowNodePluginContextFromProject } from './nodePluginSdk';
 import { MediaPreviewModal } from './MediaPreviewModal';
 import { WorkflowNodePromptBar, type WorkflowModelOptions } from './WorkflowNodePromptBar';
 import type { PromptIntent } from './promptIntent';
-import { WorkflowNodeToolbar, type WorkflowImageToolHandlers, type WorkflowVideoToolHandlers, type WorkflowAudioToolHandlers } from './WorkflowNodeToolbar';
+import { WorkflowNodeToolbar, type WorkflowImageToolHandlers, type WorkflowVideoToolHandlers, type WorkflowAudioToolHandlers, type WorkflowAvSplitAudio } from './WorkflowNodeToolbar';
 import { WorkflowImageToolDialogs, type WorkflowImageToolConfirmation, type WorkflowImageToolState } from './WorkflowImageToolDialogs';
 import { WorkflowVideoToolDialogs, type WorkflowVideoToolConfirmation, type WorkflowVideoToolState } from './WorkflowVideoToolDialogs';
 import { WorkflowAudioToolDialogs, type WorkflowAudioToolConfirmation, type WorkflowAudioToolState } from './WorkflowAudioToolDialogs';
@@ -905,14 +906,40 @@ export function InfiniteWorkflow({
     }
   }, [currentFrame, imageToolRuntime, pushHistory]);
 
+  // 工具栏「分离音视频 / 人声提取 / 背景音提取」直接执行：输出无声视频 + 音频节点，媒体写入本地存储。
+  const handleAvSplit = useCallback(async (id: string, audio: WorkflowAvSplitAudio = 'full') => {
+    if (videoToolBusyRef.current) return;
+    const node = projectRef.current.nodes.find(item => item.id === id);
+    if (!node || node.type !== 'video' || node.metadata.status === 'loading') return;
+    const projectId = projectRef.current.id;
+    const frame = currentFrame();
+    const what = audio === 'vocals' ? '人声' : audio === 'background' ? '背景音' : '音频';
+    videoToolBusyRef.current = true;
+    setVideoToolBusy(true);
+    setVideoToolError(null);
+    setNotice(audio === 'full' ? '正在分离音视频…' : '正在提取' + what + '…');
+    try {
+      const result = await runWorkflowVideoAvSplitOperation(projectId, id, imageToolRuntime, audio);
+      if (result.status === 'committed' && projectRef.current.id === projectId) {
+        pushHistory(frame);
+        setNotice('已创建无声视频与' + what + '节点，素材已保存');
+      }
+    } catch (error) {
+      setNotice(displayError(error, audio === 'full' ? '音视频分离失败' : what + '提取失败'));
+    } finally {
+      videoToolBusyRef.current = false;
+      setVideoToolBusy(false);
+    }
+  }, [currentFrame, imageToolRuntime, pushHistory]);
+
   const builtInVideoTools = useMemo<WorkflowVideoToolHandlers>(() => ({
     trim: id => openVideoTool('trim', id),
-    avSplit: id => openVideoTool('av-split', id),
+    avSplit: (id, audio) => { void handleAvSplit(id, audio); },
     // merge 需要携带完整选中 id 列表，确认时回传真实选中集而非全库视频。
     merge: ids => { if (ids.length > 0) openVideoTool('merge', ids[0], ids); },
     extractFrame: handleExtractFrame,
     extractFrameAt: id => openVideoTool('extract-frame', id),
-  }), [openVideoTool, handleExtractFrame]);
+  }), [openVideoTool, handleExtractFrame, handleAvSplit]);
 
   // 自动派生（默认关闭）：视频节点新进入成功状态时，按设置串行执行截帧 / 音视频分离 Operation。
   const [autoMediaDerive, setAutoMediaDerive] = useState<AutoMediaDeriveSettings>(() => loadAutoMediaDeriveSettings());
@@ -944,7 +971,7 @@ export function InfiniteWorkflow({
   }, [project.id, project.nodes, autoMediaDerive, currentFrame, imageToolRuntime, pushHistory]);
 
   const activeVideoToolNode = videoTool ? project.nodes.find(node => node.id === videoTool.nodeId) || null : null;
-  const activeVideoToolMedia = useWorkflowMediaUrl(activeVideoToolNode?.metadata.storageKey, activeVideoToolNode?.metadata.href);
+  const activeVideoToolMedia = useWorkflowMediaUrl(activeVideoToolNode?.metadata.storageKey, activeVideoToolNode?.metadata.href, activeVideoToolNode?.metadata.artifactRef);
 
   const closeVideoTool = useCallback(() => {
     const transaction = videoToolTransactionRef.current;
@@ -975,7 +1002,7 @@ export function InfiniteWorkflow({
         successNotice = '视频剪辑完成';
       } else if (confirmation.kind === 'av-split') {
         result = await runWorkflowVideoAvSplitOperation(transaction.projectId, node.id, imageToolRuntime);
-        successNotice = '音视频分离完成';
+        successNotice = '已创建无声视频与音频节点，素材已保存';
       } else if (confirmation.kind === 'extract-frame') {
         result = await runWorkflowVideoExtractFrameOperation(transaction.projectId, node.id, confirmation.position, imageToolRuntime, confirmation.currentTimeSec);
         successNotice = `已提取 ${confirmation.currentTimeSec != null ? `${confirmation.currentTimeSec.toFixed(1)}s` : confirmation.position === 'last' ? '尾帧' : '首帧'}`;
@@ -1258,6 +1285,8 @@ export function InfiniteWorkflow({
   // Slash/分镜/整组等批量入口的 runNode 串行队列（按 projectId）：逐个发起，避免同一
   // 批次内多个 run 的 prepare 写回互相覆盖。onRunNode 契约返回 void；若适配器实际
   // 返回 thenable 则等它落定，否则让出一个宏任务再放行下一个。
+  // 执行器返回的 thenable 永不落定时不能永久堵住队列：超时后放行后续节点，该节点自身仍可继续运行。
+  const RUN_NODE_QUEUE_TIMEOUT_MS = 900_000;
   const runNodeQueueRef = useRef(new Map<string, Promise<unknown>>());
   const enqueueRunNode = useCallback((nodeId: string) => {
     const projectId = projectRef.current.id;
@@ -1265,8 +1294,17 @@ export function InfiniteWorkflow({
     const previous = queue.get(projectId) ?? Promise.resolve();
     const next = previous.then(async () => {
       const result = onRunNode(nodeId) as unknown;
-      if (result && typeof (result as Promise<unknown>).then === 'function') await result;
-      else await new Promise<void>(resolve => window.setTimeout(resolve, 0));
+      if (result && typeof (result as Promise<unknown>).then === 'function') {
+        let timer = 0;
+        const deadline = new Promise<void>(resolve => { timer = window.setTimeout(resolve, RUN_NODE_QUEUE_TIMEOUT_MS); });
+        try {
+          await Promise.race([Promise.resolve(result).then(() => undefined), deadline]);
+        } finally {
+          window.clearTimeout(timer);
+        }
+      } else {
+        await new Promise<void>(resolve => window.setTimeout(resolve, 0));
+      }
     });
     queue.set(projectId, next.catch(() => undefined));
   }, [onRunNode]);
@@ -2406,6 +2444,8 @@ export function InfiniteWorkflow({
     setContextMenu(null);
     closeCreateMenu();
     setSelectedConnectionId(null);
+    // 分组标签既是拖动手柄也是选中入口：选中整组后节点工具栏提供组操作。
+    selectNodes(batchNodes.map(item => item.id));
     const frame = currentFrame();
     interactionRef.current = {
       type: 'node',
@@ -2521,18 +2561,31 @@ export function InfiniteWorkflow({
     return eligibility.ok ? { nodeId: node.id, host: eligibility.source.host, status: undefined } : undefined;
   }, [project.nodes, project.connections, selectedNodeIds]);
   const selectedNodeData = displayNodes.filter(node => node.isVisible !== false && selectedNodes.has(node.id));
-  const exportSelectedMedia = async (nodes: WorkflowNodeData[]) => {
-    const media = nodes.filter(node => node.type === 'image' || node.type === 'video' || node.type === 'audio');
+  // 节点 PromptBar 放大编辑：记住放大的是哪个节点；切换或取消选中即复位。
+  const singleSelectedId = selectedNodeData.length === 1 ? selectedNodeData[0].id : null;
+  const [expandedPromptNodeId, setExpandedPromptNodeId] = useState<string | null>(null);
+  useEffect(() => {
+    setExpandedPromptNodeId(current => (current && current !== singleSelectedId ? null : current));
+  }, [singleSelectedId]);
+  const promptExpanded = singleSelectedId !== null && expandedPromptNodeId === singleSelectedId;
+  /** prefix 缺省：按工作流顺序导出原名；给出 prefix：按排列（阅读）顺序导出 prefix_01、prefix_02… */
+  const exportSelectedMedia = async (nodes: WorkflowNodeData[], prefix?: string) => {
+    const sequenced = prefix !== undefined;
+    const ordered = sequenced ? arrangementOrder(nodes, nodes.map(node => node.id)) : nodes;
+    const media = ordered.filter(node => node.type === 'image' || node.type === 'video' || node.type === 'audio');
+    const names = sequenced ? sequencedFileNames(prefix, media.length) : [];
+    const archiveName = sequenced ? names[0]?.replace(/_\d+$/, '') || 'flovart' : `Flovart-Workflow-${project.title}`;
     try {
-      const count = await exportMediaArchive(media.map(node => ({
+      const count = await exportMediaArchive(media.map((node, index) => ({
         id: node.id,
-        x: node.position.x,
-        y: node.position.y,
-        name: node.metadata.name || node.title,
+        // 顺序下载时用序号作坐标，保证归档顺序与排列顺序一致。
+        x: sequenced ? index : node.position.x,
+        y: sequenced ? 0 : node.position.y,
+        name: sequenced ? names[index] : node.metadata.name || node.title,
         mimeType: node.metadata.mimeType,
         loadBlob: () => loadWorkflowMediaBlob(node.metadata.storageKey, node.metadata.href),
-      })), `Flovart-Workflow-${project.title}`, project.title);
-      setNotice(count ? `已按工作流顺序导出 ${count} 个媒体文件。` : '已取消导出。');
+      })), archiveName, project.title);
+      setNotice(count ? (sequenced ? `已按排列顺序导出 ${count} 个文件（${names[0]} 起）。` : `已按工作流顺序导出 ${count} 个媒体文件。`) : '已取消导出。');
     } catch (error) {
       setNotice(displayError(error, '批量导出失败。'));
     }
@@ -2562,17 +2615,23 @@ export function InfiniteWorkflow({
   // The prompt bar belongs to the node but reads as a roomy composer (LibTV ratio):
   // about 1.4x the node's on-screen width, 520-760px, clamped to the workflow area.
   const overlayScreenWidth = overlayBounds ? (overlayBounds.right - overlayBounds.left) * project.viewport.k : 0;
-  const promptWidth = Math.min(promptWorkflowWidth - 16, Math.max(520, Math.min(760, overlayScreenWidth * 1.4)));
-  const promptLeft = Math.max(8, Math.min(overlayCenter - promptWidth / 2, promptWorkflowWidth - promptWidth - 8));
+  const compactPromptWidth = Math.min(promptWorkflowWidth - 16, Math.max(520, Math.min(760, overlayScreenWidth * 1.4)));
+  // 放大态（LibTV 式）：居中的大编辑框，宽 ≤720px，避开底部 dock。
+  const promptWidth = promptExpanded ? Math.max(360, Math.min(promptWorkflowWidth - 32, 720)) : compactPromptWidth;
+  const promptLeft = promptExpanded
+    ? Math.max(8, (promptWorkflowWidth - promptWidth) / 2)
+    : Math.max(8, Math.min(overlayCenter - promptWidth / 2, promptWorkflowWidth - promptWidth - 8));
   const configLeft = Math.max(8, Math.min(overlayCenter - 210, workflowWidth - 428));
-  const promptTop = overlayBounds ? (() => {
-    const rootHeight = rootSize?.height || 700;
-    const estimatedPromptHeight = 220;
-    const below = project.viewport.y + overlayBounds.bottom * project.viewport.k + 12;
-    const dockSafeTop = rootHeight - 60;
-    if (below + estimatedPromptHeight <= dockSafeTop) return below;
-    return Math.max(8, toolbarTop - estimatedPromptHeight - 8);
-  })() : 0;
+  const promptTop = promptExpanded
+    ? Math.max(8, ((rootSize?.height || 700) - 60 - 520) / 2)
+    : overlayBounds ? (() => {
+      const rootHeight = rootSize?.height || 700;
+      const estimatedPromptHeight = 220;
+      const below = project.viewport.y + overlayBounds.bottom * project.viewport.k + 12;
+      const dockSafeTop = rootHeight - 60;
+      if (below + estimatedPromptHeight <= dockSafeTop) return below;
+      return Math.max(8, toolbarTop - estimatedPromptHeight - 8);
+    })() : 0;
   const gridSize = (project.backgroundMode === 'dots' ? 20 : 24) * project.viewport.k;
 
   const batchGroups = useMemo(() => {
@@ -3060,6 +3119,19 @@ export function InfiniteWorkflow({
             onSaveMedia={onSaveWorkflowMedia}
             onGroup={ids => applyOps([{ type: 'group_nodes', ids, batchId: nanoid(), source: 'manual' }])}
             onUngroup={ids => applyOps([{ type: 'ungroup_nodes', ids }])}
+            onArrange={(ids, layout, gap) => {
+              const next = arrangeNodePositions(projectRef.current.nodes, ids, { layout, gap });
+              if (!next) { setNotice('至少需要两个未锁定的节点，或已经是该排列'); return; }
+              // update_node 走 applyOps，可撤销；锁定节点不在 next 中。
+              applyOps(Object.entries(next).map(([id, position]) => ({ type: 'update_node' as const, id, patch: { position } })));
+            }}
+            onSequencedExport={(ids, prefix) => { void exportSelectedMedia(projectRef.current.nodes.filter(item => ids.includes(item.id)), prefix); }}
+            onAddToAgent={ids => {
+              const members = projectRef.current.nodes.filter(item => ids.includes(item.id));
+              const batchId = members.find(item => item.batchId)?.batchId;
+              pushAgentGroup({ nodeIds: arrangementOrder(members, ids).map(item => item.id), label: `分组 · ${members.length} 个节点`, batchId });
+              setNotice('已添加到 Agent，可在侧边面板保存为 Skill');
+            }}
             onDesignBoolean={(operation, ids) => {
               // 按图层顺序（底到顶）取形状；结果替换原形状。
               const selected = projectRef.current.nodes.filter(item => ids.includes(item.id) && !item.isLocked);
@@ -3128,8 +3200,8 @@ export function InfiniteWorkflow({
         {selectedNodeData.length === 1 && selectedNodeData[0].type === 'design' && selectedNodeData[0].metadata.design && <div data-workflow-overlay style={{ position: 'absolute', zIndex: 69, left: configLeft, top: promptTop }} onWheel={event => event.stopPropagation()}>
           <DesignInspector node={selectedNodeData[0]} onChange={({ design, size }) => applyOps([{ type: 'update_node', id: selectedNodeData[0].id, metadata: { design }, ...(size ? { patch: size } : {}) }])} />
         </div>}
-        {selectedNodeData.length === 1 && ['image', 'video', 'text', 'operation'].includes(selectedNodeData[0].type) && <div data-workflow-overlay style={{ position: 'absolute', zIndex: 69, left: promptLeft, top: promptTop }}>
-      <WorkflowNodePromptBar width={promptWidth} node={selectedNodeData[0]} nodes={project.nodes} connections={project.connections} t={t} theme={theme} language={language} userApiKeys={userApiKeys} dynamicModelOptions={dynamicModelOptions} onOpenSettings={onOpenSettings} onEnhancePrompt={onEnhancePrompt} isEnhancingPrompt={isEnhancingPrompt} onChange={metadata => applyOps([{ type: 'update_node', id: selectedNodeData[0].id, metadata }])} onPromptIntent={intent => { promptIntentRef.current = intent; }} onRun={() => { const intent = promptIntentRef.current?.targetNodeId === selectedNodeData[0].id ? promptIntentRef.current : undefined; promptIntentRef.current = null; onRunNode(selectedNodeData[0].id, intent || undefined); }} onStop={onStopNode ? () => onStopNode(selectedNodeData[0].id) : undefined} focusSignal={promptFocusSignal} onDisconnectReference={fromNodeId => { const targetId = selectedNodeData[0].id; const conn = project.connections.find(c => c.toNodeId === targetId && c.fromNodeId === fromNodeId); if (!conn) return; applyOps([{ type: 'delete_connections', ids: [conn.id] }]); }} onReorderReference={nextIds => handleReorderReferences(selectedNodeData[0].id, nextIds)} assetFolders={assetFolders} assetItems={assetSuggestions} assetLibrary={assetLibrary} onSelectWorkflowReference={selectedNodeData[0] ? (nodeId => handleSelectWorkflowReference(nodeId, selectedNodeData[0].id)) : undefined} onAddReferenceFiles={selectedNodeData[0] ? (files => handleAddReferenceFiles(files, selectedNodeData[0].id)) : undefined} onSelectAsset={selectedNodeData[0] ? (assetId => handleSelectAsset(assetId, selectedNodeData[0].id)) : undefined} onResolvePastedMentions={mentions => handleResolvePastedMentions(mentions, selectedNodeData[0].id)} onPasteUnresolvedMentions={labels => setNotice(`未能唯一匹配引用：${labels.map(label => `@${label}`).join('、')}，已保留为普通文字。`)} skillEnabled={false} />
+        {selectedNodeData.length === 1 && ['image', 'video', 'text', 'operation'].includes(selectedNodeData[0].type) && <div data-workflow-overlay style={{ position: 'absolute', zIndex: promptExpanded ? 90 : 69, left: promptLeft, top: promptTop }}>
+      <WorkflowNodePromptBar width={promptWidth} expanded={promptExpanded} onToggleExpanded={() => { const id = selectedNodeData[0].id; setExpandedPromptNodeId(current => (current === id ? null : id)); }} node={selectedNodeData[0]} nodes={project.nodes} connections={project.connections} t={t} theme={theme} language={language} userApiKeys={userApiKeys} dynamicModelOptions={dynamicModelOptions} onOpenSettings={onOpenSettings} onEnhancePrompt={onEnhancePrompt} isEnhancingPrompt={isEnhancingPrompt} onChange={metadata => applyOps([{ type: 'update_node', id: selectedNodeData[0].id, metadata }])} onPromptIntent={intent => { promptIntentRef.current = intent; }} onRun={() => { const intent = promptIntentRef.current?.targetNodeId === selectedNodeData[0].id ? promptIntentRef.current : undefined; promptIntentRef.current = null; onRunNode(selectedNodeData[0].id, intent || undefined); }} onStop={onStopNode ? () => onStopNode(selectedNodeData[0].id) : undefined} focusSignal={promptFocusSignal} onDisconnectReference={fromNodeId => { const targetId = selectedNodeData[0].id; const conn = project.connections.find(c => c.toNodeId === targetId && c.fromNodeId === fromNodeId); if (!conn) return; applyOps([{ type: 'delete_connections', ids: [conn.id] }]); }} onReorderReference={nextIds => handleReorderReferences(selectedNodeData[0].id, nextIds)} assetFolders={assetFolders} assetItems={assetSuggestions} assetLibrary={assetLibrary} onSelectWorkflowReference={selectedNodeData[0] ? (nodeId => handleSelectWorkflowReference(nodeId, selectedNodeData[0].id)) : undefined} onAddReferenceFiles={selectedNodeData[0] ? (files => handleAddReferenceFiles(files, selectedNodeData[0].id)) : undefined} onSelectAsset={selectedNodeData[0] ? (assetId => handleSelectAsset(assetId, selectedNodeData[0].id)) : undefined} onResolvePastedMentions={mentions => handleResolvePastedMentions(mentions, selectedNodeData[0].id)} onPasteUnresolvedMentions={labels => setNotice('未能唯一匹配引用：' + labels.map(label => '@' + label).join('、') + '，已保留为普通文字。')} />
         </div>}
       </>}
       <WorkflowHostStrip clips={hostClips} language={language} onFocusClip={focusNode} />

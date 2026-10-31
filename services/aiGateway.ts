@@ -4,7 +4,7 @@ import { commitStreamUsage, createStreamUsageAccumulator, streamOutcome, type St
 import { fetchStreamWithUsageOptIn } from './streamUsageOptIn';
 import type { AICapability, AIProvider, ProductModelMode, PromptEnhanceRequest, PromptEnhanceResult, UserApiKey } from '../types';
 import { editImage, enhancePromptWithGemini, generateImageFromText, generateVideo, validateGeminiApiKey, getGeminiRestBaseUrl } from './geminiService';
-import { fetchModelsForProvider, type FetchModelsResult } from './modelFetcher';
+import { fetchModelsWithCache, type FetchModelsResult } from './modelFetcher';
 import { normalizeProviderBaseUrl } from './baseUrl';
 import { assertRunningHubModelEndpoint, rhUploadDataUrl, rhUploadFile } from './runningHubService';
 import { explainReferenceCompatibility, sanitizeProductGenerationParams } from './productModelCatalog';
@@ -593,7 +593,7 @@ export async function validateApiKey(provider: AIProvider, apiKey: string, baseU
     }
 
     if (provider === 'google') {
-        const result = await fetchModelsForProvider(provider, apiKey, baseUrl);
+        const result = await fetchModelsWithCache(provider, apiKey, baseUrl, true);
         if (!result.ok) return { ok: false, message: result.error };
         return {
             ok: true,
@@ -610,7 +610,7 @@ export async function validateApiKey(provider: AIProvider, apiKey: string, baseU
 
     // OpenAI-compatible: 不仅检查鉴权，还拿到能力摘要和协议类型
     if (provider === 'openai' || provider === 'qwen' || provider === 'deepseek' || provider === 'siliconflow' || provider === 'minimax' || provider === 'volcengine' || provider === 'openrouter' || provider === 'openai_compatible' || provider === 'custom') {
-        const result = await fetchModelsForProvider(provider, apiKey, baseUrl);
+        const result = await fetchModelsWithCache(provider, apiKey, baseUrl, true);
         if (!result.ok) return { ok: false, message: result.error };
         return {
             ok: true,
@@ -665,7 +665,7 @@ export async function validateApiKey(provider: AIProvider, apiKey: string, baseU
     // RunningHub: 32位 hex key 验证
     if (provider === 'runningHub') {
         try {
-            const result = await fetchModelsForProvider(provider, apiKey, normalizedInputBaseUrl);
+            const result = await fetchModelsWithCache(provider, apiKey, normalizedInputBaseUrl, true);
             if (!result.ok) return { ok: false, message: result.error || 'API Key 无效或权限不足' };
             return {
                 ok: true,
@@ -1033,6 +1033,8 @@ function parseTextResponseContent(json: any): string {
 // 改写、反推、结构化输出、工具调用等有标准答案的任务默认低温；创作类调用方显式传更高的 temperature。
 export const STABLE_TEXT_TEMPERATURE = 0.2;
 
+const JSON_OBJECT_PROVIDERS = new Set<AIProvider>(['openai', 'deepseek', 'qwen', 'siliconflow', 'volcengine', 'xai']);
+
 export async function generateTextWithProvider(
     prompt: string,
     model: string,
@@ -1044,6 +1046,9 @@ export async function generateTextWithProvider(
         // 仅 Google 与 OpenAI 兼容接口透传；Anthropic 无 seed 参数。第三方 API 即使固定 seed 也只保证尽力复现。
         seed?: number;
         signal?: AbortSignal;
+        // 要求供应商原生输出 JSON：Google 用 responseMimeType；已知支持 json_object 的 OpenAI 兼容供应商用 response_format；
+        // Anthropic 与自定义/聚合端点可能拒绝该参数，仍依赖提示词 + 调用方校验。
+        jsonMode?: boolean;
     },
 ): Promise<string> {
     assertResolvedUpstreamModel(model);
@@ -1051,6 +1056,7 @@ export async function generateTextWithProvider(
     const apiKey = requireApiKey(provider, key);
     const baseUrl = getBaseUrl(provider, key);
     const mappedModel = mapProviderModel(model, key);
+    const nativeJsonObject = Boolean(options?.jsonMode) && JSON_OBJECT_PROVIDERS.has(provider);
 
     return trackLatency({ op: 'text', provider, model: mappedModel }, options?.signal, async span => {
         if (provider === 'google') {
@@ -1066,6 +1072,7 @@ export async function generateTextWithProvider(
                         temperature: options?.temperature ?? STABLE_TEXT_TEMPERATURE,
                         maxOutputTokens: options?.maxTokens ?? 4096,
                         ...(options?.seed !== undefined ? { seed: options.seed } : {}),
+                        ...(options?.jsonMode ? { responseMimeType: 'application/json' } : {}),
                     },
                 }),
             });
@@ -1105,6 +1112,7 @@ export async function generateTextWithProvider(
                 temperature: options?.temperature ?? STABLE_TEXT_TEMPERATURE,
                 max_tokens: options?.maxTokens ?? 4096,
                 ...(options?.seed !== undefined ? { seed: options.seed } : {}),
+                ...(nativeJsonObject ? { response_format: { type: 'json_object' } } : {}),
                 messages: [
                     ...(options?.systemPrompt ? [{ role: 'system', content: options.systemPrompt }] : []),
                     { role: 'user', content: prompt },
@@ -2039,35 +2047,47 @@ function seedanceReferenceLabel(kind: MultimodalSlotKind, index: number): string
 }
 
 // 火山方舟官方示例：提示词直接用 图片N / 视频N / 音频N（也可写作 @图片N）指代 content 中同类素材的先后顺序，
-// 不需要额外的编号说明。这里把用户的 @名称 一次性改写为该素材在本次 content 里的序号，
+// 不需要额外的编号说明。这里把画布上的引用名一次性改写为该素材在本次 content 里的序号，
 // 避免画布上的编号（如上游第 2 张图）与实际传参顺序错位。
+// - @名称：任意画布标题都改写，结果保留 @。
+// - 纯文本 图片N / 视频N / 音频N（未按 Tab 转成引用）：仅当它正是某个已传素材的画布标签时改写，结果保持纯文本；
+//   自定义标题只认 @ 形式，避免误伤正文。
+// 单遍扫描，改写结果不会被二次匹配；标签后紧跟数字时不匹配（图片1 不吞掉 图片12），中文正文可直接紧跟在引用后。
+const SEEDANCE_ORDINAL_LABEL = /^(?:图片|视频|音频)\p{N}+$/u;
+
 export function buildSeedancePromptText(prompt: string, slots: MultimodalSlot[]): string {
     const counts: Partial<Record<MultimodalSlotKind, number>> = {};
     const aliasToLabel = new Map<string, string>();
     for (const slot of slots) {
         const index = counts[slot.kind] || 0;
         counts[slot.kind] = index + 1;
-        const alias = normalizeMentionLabel(slot.label);
+        const alias = normalizeMentionLabel(slot.label)?.replace(/^@/, '');
         if (alias && !aliasToLabel.has(alias)) aliasToLabel.set(alias, seedanceReferenceLabel(slot.kind, index));
     }
     const text = prompt.trim();
     if (!aliasToLabel.size) return text;
-    // 长名优先；只拦截紧跟数字的情况（@图片1 不吞掉 @图片12），中文正文可直接紧跟在引用后
+    // 长名优先
     const aliases = [...aliasToLabel.keys()].sort((left, right) => right.length - left.length);
+    const plainAliases = aliases.filter(alias => SEEDANCE_ORDINAL_LABEL.test(alias));
     const digit = /\p{N}/u;
+    const matchAt = (candidates: string[], start: number) => candidates.find(alias => text.startsWith(alias, start) && !digit.test(text.charAt(start + alias.length)));
     let output = '';
     let cursor = 0;
     while (cursor < text.length) {
-        const hit = text[cursor] === '@'
-            ? aliases.find(alias => text.startsWith(alias, cursor) && !digit.test(text.charAt(cursor + alias.length)))
-            : undefined;
-        if (hit) {
-            output += '@' + aliasToLabel.get(hit);
-            cursor += hit.length;
-        } else {
-            output += text[cursor];
-            cursor += 1;
+        const mentionHit = text[cursor] === '@' ? matchAt(aliases, cursor + 1) : undefined;
+        if (mentionHit) {
+            output += '@' + aliasToLabel.get(mentionHit);
+            cursor += 1 + mentionHit.length;
+            continue;
         }
+        const plainHit = text[cursor] !== '@' && !digit.test(text.charAt(cursor - 1)) ? matchAt(plainAliases, cursor) : undefined;
+        if (plainHit) {
+            output += aliasToLabel.get(plainHit);
+            cursor += plainHit.length;
+            continue;
+        }
+        output += text[cursor];
+        cursor += 1;
     }
     return output;
 }

@@ -1,6 +1,7 @@
 import { parseWorkflowOperationParameters } from '../components/workflow/operationRegistry';
 import { extractVideoFrame, type VideoFramePosition } from './videoFrameExtractor';
-import { mergeVideos, splitAudioVideo, trimVideo } from './videoTools';
+import { enqueueFFmpegTask, mergeVideos, splitAudioVideo, trimVideo } from './videoTools';
+import { splitAudioStems } from './audioTools';
 import { orderNodesByShot } from './shotPlanning';
 import {
   commitWorkflowOperation,
@@ -19,6 +20,7 @@ export interface WorkflowVideoOperationRuntime extends WorkflowOperationRuntime 
   executeVideoAvSplit?: typeof splitAudioVideo;
   executeVideoMerge?: typeof mergeVideos;
   executeVideoFrame?: typeof extractVideoFrame;
+  executeAudioStemSplit?: typeof splitAudioStems;
 }
 
 export async function runWorkflowVideoTrimOperation(
@@ -58,22 +60,28 @@ async function executeVideoTrim(
   }
 }
 
+export type VideoAvSplitAudio = 'full' | 'vocals' | 'background';
+
+const AV_SPLIT_AUDIO_SUFFIX: Record<VideoAvSplitAudio, string> = { full: '音频', vocals: '人声', background: '背景音' };
+
 export async function runWorkflowVideoAvSplitOperation(
   projectId: string,
   sourceNodeId: string,
   runtime: WorkflowVideoOperationRuntime,
+  audio: VideoAvSplitAudio = 'full',
 ): Promise<WorkflowOperationOutcome> {
   const started = await startWorkflowOperation({
     runtime, projectId, capabilityId: 'video.av-split@1',
     sources: [{ nodeId: sourceNodeId, role: 'source_video' }],
-    parameters: {},
+    parameters: { audio },
   });
-  return executeVideoAvSplit(projectId, started, runtime);
+  return executeVideoAvSplit(projectId, started, audio, runtime);
 }
 
 async function executeVideoAvSplit(
   projectId: string,
   started: StartedWorkflowOperation,
+  audio: VideoAvSplitAudio,
   runtime: WorkflowVideoOperationRuntime,
 ) {
   try {
@@ -81,9 +89,17 @@ async function executeVideoAvSplit(
     const blob = await loadWorkflowOperationSourceBlob(source, runtime);
     const result = await (runtime.executeVideoAvSplit || splitAudioVideo)(blob, source.metadata.name || 'video.mp4');
     const baseName = (source.metadata.name || 'video').replace(/\.[^.]+$/, '');
+    let audioBlob = result.audioBlob;
+    if (audio !== 'full') {
+      // 人声/背景音：在分离出的音轨上做相位抵消分离；与 videoTools 共享 ffmpeg 单例，必须走串行队列。
+      const stems = await enqueueFFmpegTask(() => (runtime.executeAudioStemSplit || splitAudioStems)(result.audioBlob, 'audio-' + baseName + '.mp3'));
+      audioBlob = audio === 'vocals' ? stems.vocalsBlob : stems.instrumentalBlob;
+    }
+    const label = source.title || baseName;
+    const suffix = AV_SPLIT_AUDIO_SUFFIX[audio];
     return await commitWorkflowOperation(runtime, projectId, started, [
-      { blob: result.videoBlob, title: '纯视频', fileName: `video-only-${source.metadata.name || 'video.mp4'}`, mimeType: result.videoBlob.type || 'video/mp4', role: 'result_video' },
-      { blob: result.audioBlob, title: '纯音频', fileName: `audio-${baseName}.mp3`, mimeType: result.audioBlob.type || 'audio/mpeg', role: 'result_audio' },
+      { blob: result.videoBlob, title: label + '_无声', fileName: 'video-only-' + (source.metadata.name || 'video.mp4'), mimeType: result.videoBlob.type || 'video/mp4', role: 'result_video' },
+      { blob: audioBlob, title: label + '_' + suffix, fileName: (audio === 'full' ? 'audio' : audio) + '-' + baseName + '.mp3', mimeType: audioBlob.type || 'audio/mpeg', role: 'result_audio' },
     ]);
   } catch (error) {
     await failWorkflowOperation(runtime, projectId, started, error);
@@ -177,7 +193,8 @@ export async function rerunWorkflowVideoOperation(
     return executeVideoTrim(projectId, await restartWorkflowOperation(runtime, projectId, operationNodeId), parameters, runtime);
   }
   if (record.capabilityId === 'video.av-split@1') {
-    return executeVideoAvSplit(projectId, await restartWorkflowOperation(runtime, projectId, operationNodeId), runtime);
+    const { audio } = parseWorkflowOperationParameters(record.capabilityId, record.recipe.parameters) as { audio: VideoAvSplitAudio };
+    return executeVideoAvSplit(projectId, await restartWorkflowOperation(runtime, projectId, operationNodeId), audio, runtime);
   }
   if (record.capabilityId === 'video.merge@1') {
     return executeVideoMerge(projectId, await restartWorkflowOperation(runtime, projectId, operationNodeId), runtime);
