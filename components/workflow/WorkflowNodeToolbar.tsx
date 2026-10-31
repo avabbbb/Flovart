@@ -148,7 +148,7 @@ export function WorkflowNodeToolbar({ nodes, onCopy, onDelete, onExport, onRun, 
     node?.type === 'image' && mediaUrl && imageTools?.restyle && { key: 'restyle', label: '视角与风格', icon: <Palette size={18} />, disabled: advancedToolBusy, onClick: () => imageTools.restyle?.(node.id) },
     node?.type === 'image' && mediaUrl && imageTools?.layer && { key: 'layer', label: '叠加层', icon: <Layers size={18} />, disabled: advancedToolBusy, onClick: () => imageTools.layer?.(node.id) },
     selectedMedia.length > 1 && selectedMedia.every(n => n.type === 'image') && imageTools?.storyboard && { key: 'storyboard', label: '分镜组拼接', icon: <Frame size={18} />, disabled: advancedToolBusy, onClick: () => imageTools.storyboard?.(ids) },
-    node?.type === 'video' && hasMediaSource && videoTools?.trim && { key: 'video-trim', label: WORKFLOW_NODE_TOOL_LABELS['video-trim'], icon: <Scissors size={18} />, disabled: videoToolBusy || mediaPending, onClick: () => videoTools.trim?.(node.id) },
+    node?.type === 'video' && videoTools?.trim && { key: 'video-trim', label: hasMediaSource ? WORKFLOW_NODE_TOOL_LABELS['video-trim'] : WORKFLOW_NODE_TOOL_LABELS['video-trim'] + '（请先上传视频）', icon: <Scissors size={18} />, disabled: videoToolBusy || mediaPending || !hasMediaSource, onClick: () => videoTools.trim?.(node.id) },
     selectedMedia.length > 1 && selectedMedia.every(n => n.type === 'video') && videoTools?.merge && { key: 'video-merge', label: WORKFLOW_NODE_TOOL_LABELS['video-merge'], icon: <Frame size={18} />, disabled: videoToolBusy, onClick: () => videoTools.merge?.(ids) },
     node?.type === 'audio' && mediaUrl && audioTools?.trim && { key: 'audio-trim', label: WORKFLOW_NODE_TOOL_LABELS['audio-trim'], icon: <Scissors size={18} />, disabled: audioToolBusy, onClick: () => audioTools.trim?.(node.id) },
     node?.type === 'audio' && mediaUrl && audioTools?.speed && { key: 'audio-speed', label: WORKFLOW_NODE_TOOL_LABELS['audio-speed'], icon: <Gauge size={18} />, disabled: audioToolBusy, onClick: () => audioTools.speed?.(node.id) },
@@ -161,9 +161,9 @@ export function WorkflowNodeToolbar({ nodes, onCopy, onDelete, onExport, onRun, 
       : node && node.type !== 'audio' && node.type !== 'script' && node.metadata.status === 'error' && onRun && { key: 'run', label: '重试节点', icon: <RefreshCw size={18} />, onClick: () => onRun(node.id) },
     { key: 'delete', label: '删除节点', icon: <Trash2 size={18} />, danger: true, onClick: () => onDelete(ids) },
   ];
-  // LibTV 式：分离音视频与截帧各自收成一个下拉。媒体还在加载时置灰，而不是整组消失。
-  const videoNode = node?.type === 'video' && hasMediaSource ? node : null;
-  const videoBusy = videoToolBusy || mediaPending || videoNode?.metadata.status === 'loading';
+  // LibTV 式：分离音视频与截帧各自收成一个下拉。空视频节点或媒体还在加载时置灰，而不是整组消失。
+  const videoNode = node?.type === 'video' ? node : null;
+  const videoBusy = videoToolBusy || mediaPending || !hasMediaSource || videoNode?.metadata.status === 'loading';
   const avSplitActions: WorkflowToolbarAction[] = videoNode && videoTools?.avSplit ? [
     { key: 'video-av-split', label: '分离音视频', icon: <AudioLines size={16} />, disabled: videoBusy, onClick: () => videoTools.avSplit?.(videoNode.id, 'full') },
     { key: 'video-vocals', label: '人声提取', icon: <Mic size={16} />, disabled: videoBusy, onClick: () => videoTools.avSplit?.(videoNode.id, 'vocals') },

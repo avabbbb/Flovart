@@ -66,6 +66,14 @@
 .agent-model-picker__group button small{color:var(--isl-ink-ghost);font-size:9px}
 /* composer-send-visible: 窄抽屉里工具栏不再把发送按钮挤出输入框 */
 .agent-conversation .agent-composer__controls{flex-wrap:nowrap;align-items:center;min-width:0}
-.agent-conversation .agent-composer__tools{min-width:0;flex:1 1 auto;flex-wrap:nowrap;overflow-x:auto;overflow-y:visible;scrollbar-width:none}
-.agent-conversation .agent-composer__tools::-webkit-scrollbar{display:none}
-.agent-conversation .agent-composer__send{position:relative;z-index:1;margin-left:auto;width:32px!important;height:32px!important;border-radius:10px!important;color:var(--isl-card)!important}
+.agent-conversation .agent-composer__tools{min-width:0;flex:1 1 auto;flex-wrap:nowrap;overflow:visible}
+/* 子项可收缩、文字省略；不能用 overflow-x:auto，否则 overflow-y 会被计算成 auto，把工具栏里的弹层裁掉 */
+.agent-conversation .agent-composer__tools>*{min-width:0;flex:0 1 auto}
+.agent-conversation .agent-composer__tools button>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.agent-conversation .agent-composer__send{position:relative;z-index:1;flex:0 0 auto;margin-left:auto;width:32px!important;height:32px!important;border-radius:10px!important;color:var(--isl-card)!important}
+/* composer-popover-solid: 全能创作 / 选择模型 / 自动模式 弹层用实色，不要毛玻璃（排在暗色玻璃规则之后、同级特异性以覆盖） */
+:root .agent-conversation .agent-composer__tools .agent-mode-menu{z-index:90;background:var(--isl-card)!important;-webkit-backdrop-filter:none!important;backdrop-filter:none!important}
+/* 弹层统一以输入框控件区为定位基准：从触发按钮展开时，靠右的「选择模型」「自动模式」会超出侧栏被裁掉 */
+.agent-conversation .agent-composer__controls{position:relative}
+.agent-conversation .agent-composer__tools,.agent-conversation .agent-composer__tools .agent-mode-control{position:static}
+:root .agent-conversation .agent-composer__tools .agent-mode-menu{left:0!important;right:auto!important;max-width:100%}
