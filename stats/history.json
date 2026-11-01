@@ -746,6 +746,14 @@
       "watchers": 0,
       "releases": 15,
       "downloads": 59
+    },
+    {
+      "date": "2026-11-01",
+      "stars": 144,
+      "forks": 36,
+      "watchers": 0,
+      "releases": 17,
+      "downloads": 59
     }
   ],
   "releaseAssets": [
@@ -838,6 +846,66 @@
       "name": "latest.json",
       "downloads": 1,
       "updatedAt": "2026-10-16T07:06:18Z"
+    },
+    {
+      "release": "nightly-153-7747d21",
+      "name": "Flovart_0.2.0_aarch64.dmg",
+      "downloads": 0,
+      "updatedAt": "2026-10-31T08:53:09Z"
+    },
+    {
+      "release": "nightly-153-7747d21",
+      "name": "Flovart_0.2.0_x64-setup.exe",
+      "downloads": 0,
+      "updatedAt": "2026-10-31T08:52:22Z"
+    },
+    {
+      "release": "nightly-153-7747d21",
+      "name": "Flovart_0.2.0_x64.dmg",
+      "downloads": 0,
+      "updatedAt": "2026-10-31T09:01:37Z"
+    },
+    {
+      "release": "nightly-153-7747d21",
+      "name": "Flovart_aarch64.app.tar.gz",
+      "downloads": 0,
+      "updatedAt": "2026-10-31T08:53:12Z"
+    },
+    {
+      "release": "nightly-153-7747d21",
+      "name": "Flovart_x64.app.tar.gz",
+      "downloads": 0,
+      "updatedAt": "2026-10-31T09:01:40Z"
+    },
+    {
+      "release": "nightly-152-cc11510",
+      "name": "Flovart_0.2.0_aarch64.dmg",
+      "downloads": 0,
+      "updatedAt": "2026-10-31T07:43:07Z"
+    },
+    {
+      "release": "nightly-152-cc11510",
+      "name": "Flovart_0.2.0_x64-setup.exe",
+      "downloads": 0,
+      "updatedAt": "2026-10-31T07:42:52Z"
+    },
+    {
+      "release": "nightly-152-cc11510",
+      "name": "Flovart_0.2.0_x64.dmg",
+      "downloads": 0,
+      "updatedAt": "2026-10-31T07:54:58Z"
+    },
+    {
+      "release": "nightly-152-cc11510",
+      "name": "Flovart_aarch64.app.tar.gz",
+      "downloads": 0,
+      "updatedAt": "2026-10-31T07:43:11Z"
+    },
+    {
+      "release": "nightly-152-cc11510",
+      "name": "Flovart_x64.app.tar.gz",
+      "downloads": 0,
+      "updatedAt": "2026-10-31T07:55:01Z"
     },
     {
       "release": "nightly-151-57e2b81",
@@ -1308,5 +1376,5 @@
       "updatedAt": "2026-10-16T06:47:58Z"
     }
   ],
-  "updatedAt": "2026-10-31T05:54:19.384Z"
+  "updatedAt": "2026-11-01T06:20:23.593Z"
 }
