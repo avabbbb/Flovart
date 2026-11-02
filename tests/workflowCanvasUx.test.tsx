@@ -127,10 +127,13 @@ describe('Lane17 verification', () => {
         onFocusNode={onFocusNode}
       />,
     );
-    fireEvent.click(screen.getByTitle('远端图片节点'));
+    fireEvent.doubleClick(screen.getByTitle('远端图片节点'));
     expect(onFocusNode).toHaveBeenCalledWith('far-away');
-    // 未接 onFocusNode 时退化为纯选择（向后兼容）。
-    expect(onProjectChange).not.toHaveBeenCalled();
+    // 单击只选中，不聚焦画布。
+    onFocusNode.mockClear();
+    fireEvent.click(screen.getByTitle('远端图片节点'));
+    expect(onFocusNode).not.toHaveBeenCalled();
+    expect(onProjectChange).toHaveBeenCalledWith({ selectedNodeIds: ['far-away'] });
   });
 
   it('WorkflowSidebar layer click without onFocusNode still selects', () => {

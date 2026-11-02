@@ -73,7 +73,7 @@
 .workflow-node__drag-handle { position: absolute; top: 0; left: 0; right: 0; height: 22px; z-index: 4; cursor: grab; }
 .workflow-node__drag-handle:active { cursor: grabbing; }
 .workflow-node__media-details { position: absolute; z-index:4; left: 8px; bottom: 8px; border-radius: 6px; padding: 4px 6px; color: rgba(255,255,255,.86); background: rgba(0,0,0,.58); backdrop-filter:blur(6px); font-size: 9px; line-height: 1; pointer-events: none; }
-.workflow-node__media-actions { position: absolute; z-index: 5; top: 7px; left: 50%; transform: translateX(-50%); display: flex; gap: 6px; opacity: 0; transition: opacity .15s; }
+.workflow-node__media-actions { position: absolute; z-index: 5; top: 8px; right: 8px; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; opacity: 0; transition: opacity .15s; }
 .workflow-node__video-activate { position:absolute; z-index:5; left:50%; top:50%; display:grid; width:42px; height:42px; place-items:center; transform:translate(-50%,-50%); border:1px solid rgba(255,255,255,.28); border-radius:50%; color:#fff; background:rgba(0,0,0,.48); box-shadow:0 6px 18px rgba(0,0,0,.2); backdrop-filter:blur(10px); cursor:pointer; transition:transform .16s ease,background .16s ease; }
 .workflow-node__video-activate:hover { transform:translate(-50%,-50%) scale(1.06); background:rgba(0,0,0,.68); }
 .workflow-node__video-controls { position:absolute; z-index:6; right:0; bottom:0; left:0; display:flex; height:50px; align-items:end; gap:7px; padding:0 9px 8px; opacity:0; background:linear-gradient(180deg,transparent,rgba(0,0,0,.68)); transition:opacity .16s ease; }
@@ -94,10 +94,14 @@
 .workflow-node__video-frame-menu { position:absolute;z-index:10;right:0;bottom:34px;width:118px;overflow:hidden;border:1px solid rgba(255,255,255,.18);border-radius:10px;padding:4px;background:rgba(18,18,18,.9);box-shadow:0 8px 24px rgba(0,0,0,.3);backdrop-filter:blur(14px); }
 .workflow-node__video-controls .workflow-node__video-frame-menu>button { display:flex;width:100%;height:30px;align-items:center;justify-content:flex-start;border-radius:7px;padding:0 9px;font-size:10px;white-space:nowrap; }
 .workflow-node--video .workflow-node__media-details { bottom:43px; }
-.workflow-node:hover .workflow-node__media-actions,.workflow-node.is-selected .workflow-node__media-actions { opacity: 1; }
-.workflow-node__media-actions button { display: inline-flex; align-items: center; gap: 4px; border: 0; border-radius: 6px; padding: 4px 8px; color: rgba(255,255,255,.92); background: rgba(0,0,0,.58); backdrop-filter: blur(6px); font-size: 10px; line-height: 1; cursor: pointer; transition: background .15s; }
-.workflow-node__media-actions button:hover { background: rgba(0,0,0,.78); }
-.workflow-node__media-actions button svg { flex: none; }
+.workflow-node:hover .workflow-node__media-actions,.workflow-node.is-selected .workflow-node__media-actions,.workflow-node__media-actions.is-open { opacity: 1; }
+.workflow-node__media-swap { display: grid; place-items: center; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 6px; color: rgba(255,255,255,.88); background: rgba(0,0,0,.42); backdrop-filter: blur(6px); cursor: pointer; transition: background .15s, color .15s; }
+.workflow-node__media-swap:hover,.workflow-node__media-actions.is-open .workflow-node__media-swap { color: #fff; background: rgba(0,0,0,.66); }
+.workflow-node__media-menu { display: flex; flex-direction: column; min-width: 96px; padding: 4px; border-radius: 8px; background: rgba(22,22,24,.86); backdrop-filter: blur(10px); box-shadow: 0 6px 18px rgba(0,0,0,.24); }
+.workflow-node__media-menu button { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border: 0; border-radius: 5px; color: rgba(255,255,255,.88); background: transparent; font-size: 11px; line-height: 1; text-align: left; cursor: pointer; }
+.workflow-node__media-menu button:hover { background: rgba(255,255,255,.1); }
+.workflow-node__media-menu button.is-danger:hover { color: #ff8a8a; }
+.workflow-node__media-menu button svg { flex: none; }
 .workflow-image-tool__grid { display:grid;grid-template-columns:minmax(280px,1fr) 300px;gap:24px; }
 .workflow-image-tool__preview,.workflow-image-tool__mask { position:relative;display:grid;place-items:center;min-height:360px;overflow:hidden;border:1px solid var(--wf-border);border-radius:10px;background:#101318; }
 .workflow-image-tool__preview img,.workflow-image-tool__mask img { display:block;max-width:100%;max-height:520px;object-fit:contain; }
@@ -476,6 +480,10 @@
 .agent-reference-chip__target>span { overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px; }
 .agent-reference-chip>button:last-child { width:24px;border-radius:6px; }
 .agent-reference-chip>button:hover { background:color-mix(in srgb,var(--isl-ink) 7%,transparent); }
+.agent-reference-thumb { width:18px;height:18px;flex:none;border-radius:4px;object-fit:cover;background:var(--agent-subtle); }
+.agent-reference-preview { position:fixed;z-index:1000;overflow:hidden;border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:4px;background:#161618;box-shadow:0 4px 12px rgba(0,0,0,.25),0 18px 40px rgba(0,0,0,.35);pointer-events:none; }
+.agent-reference-preview>img,.agent-reference-preview>video { display:block;width:100%;max-height:200px;border-radius:8px;object-fit:cover;background:#000; }
+.agent-reference-preview-empty { display:grid;height:120px;place-content:center;color:rgba(255,255,255,.6);font-size:11px; }
 .agent-attachment-control { position:relative; }
 .agent-attachment-control>button { display:flex;height:30px;align-items:center;justify-content:center;border:0;border-radius:8px;padding:0 7px;color:var(--isl-ink-soft);background:transparent;cursor:pointer; }
 .agent-attachment-control>button:hover { color:var(--isl-ink);background:var(--agent-subtle); }
@@ -560,7 +568,7 @@
 .workflow-operation-card__newer{color:var(--wf-muted)}
 .workflow-canvas-controls__revision{display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:11px;color:var(--wf-muted);background:color-mix(in srgb,var(--wf-accent) 12%,transparent);font-size:10px;font-weight:650;font-variant-numeric:tabular-nums;white-space:nowrap}
 @media (prefers-reduced-motion: reduce){.workflow-operation-card__versions button{transition:none}}
-.workflow-node__presence{position:absolute;z-index:6;top:6px;left:6px;display:inline-flex;align-items:center;gap:4px;height:18px;padding:0 7px;border-radius:9px;color:#fff;background:var(--isl-coral,#e8615a);font-size:10px;font-weight:650;line-height:1;white-space:nowrap;pointer-events:auto;cursor:help}
+.workflow-node__presence{position:absolute;z-index:6;top:-11px;right:28px;display:inline-flex;align-items:center;gap:4px;height:18px;padding:0 7px;border-radius:9px;color:#fff;background:var(--isl-coral,#e8615a);box-shadow:0 0 0 2px var(--wf-strong,#fff);font-size:10px;font-weight:650;line-height:1;white-space:nowrap;pointer-events:auto;cursor:help}
 .workflow-node__presence--cli{background:var(--isl-ink,#1f1d1a)}
 .workflow-node__presence--operator{background:var(--wf-accent)}
 .workflow-node__host-send{position:absolute;z-index:6;bottom:-22px;left:8px;display:inline-flex;align-items:center;height:18px;padding:0 7px;border-radius:9px;color:var(--wf-muted);background:var(--wf-panel);border:1px solid var(--wf-border);font-size:10px;font-weight:600;white-space:nowrap}
@@ -660,3 +668,47 @@
 
 /* 节点工具条：带文字的主操作 */
 .workflow-toolbar-labelled { display: inline-flex; align-items: center; font-size: 12px; font-weight: 500; white-space: nowrap; }
+/* LibTV 式立体感：所有节点叠一层柔和的分层阴影；悬停略抬升，选中保留强调描边。 */
+.workflow-node { --wf-node-shadow: 0 1px 2px rgba(15,17,21,.06), 0 4px 10px -2px rgba(15,17,21,.08), 0 16px 36px -10px rgba(15,17,21,.22); box-shadow: var(--wf-node-shadow); }
+.workflow-node:hover { --wf-node-shadow: 0 1px 2px rgba(15,17,21,.07), 0 6px 14px -3px rgba(15,17,21,.1), 0 22px 44px -12px rgba(15,17,21,.28); }
+.workflow-node.is-selected { box-shadow: 0 0 0 1px color-mix(in srgb,var(--wf-accent) 16%,transparent), var(--wf-node-shadow); }
+:root[data-theme='dark'] .workflow-node { --wf-node-shadow: inset 0 1px 0 rgba(255,255,255,.05), 0 1px 2px rgba(0,0,0,.4), 0 6px 14px -4px rgba(0,0,0,.45), 0 20px 44px -12px rgba(0,0,0,.6); }
+:root[data-theme='dark'] .workflow-node:hover { --wf-node-shadow: inset 0 1px 0 rgba(255,255,255,.06), 0 1px 2px rgba(0,0,0,.45), 0 8px 18px -4px rgba(0,0,0,.5), 0 26px 52px -12px rgba(0,0,0,.68); }
+@media (prefers-reduced-motion: reduce) { .workflow-node { transition: border-color .18s ease; } }
+
+/* LibTV 式文本节点排版：更宽的页边距、舒展的行距、细滚动条。 */
+.workflow-node--text .workflow-node__body textarea { padding: 16px 18px 18px; font-size: 12.5px; line-height: 1.75; letter-spacing: .01em; color: var(--wf-text); scrollbar-width: thin; scrollbar-color: color-mix(in srgb,var(--wf-muted) 35%,transparent) transparent; }
+.workflow-node--text .workflow-node__body textarea::placeholder { color: color-mix(in srgb,var(--wf-muted) 80%,transparent); }
+/* LibTV 式分镜表：表头吸顶、细分隔线、镜号强调色。 */
+.workflow-node__script-card { gap: 10px; padding: 12px 12px 10px; }
+.workflow-node__script-header { font-size: 13px; }
+.workflow-node__script-header .workflow-node__script-stats { margin-left: auto; font-weight: 400; }
+.workflow-node__script-table-wrap { flex: 1; min-height: 0; overflow: auto; border: 1px solid color-mix(in srgb,var(--wf-muted) 22%,transparent); border-radius: 10px; scrollbar-width: thin; }
+.workflow-node__script-table { width: 100%; border-collapse: separate; border-spacing: 0; table-layout: fixed; color: var(--wf-text); font-size: 11px; line-height: 1.55; }
+.workflow-node__script-table th { position: sticky; top: 0; z-index: 1; padding: 7px 8px; border-bottom: 1px solid color-mix(in srgb,var(--wf-muted) 22%,transparent); background: var(--isl-card); color: var(--wf-muted); font-weight: 600; text-align: left; white-space: nowrap; }
+.workflow-node__script-table th:nth-child(1) { width: 44px; }
+.workflow-node__script-table th:nth-child(2) { width: 48px; }
+.workflow-node__script-table th:nth-child(3) { width: 18%; }
+.workflow-node__script-table th:nth-child(5) { width: 15%; }
+.workflow-node__script-table th:nth-child(6) { width: 22%; }
+.workflow-node__script-table td { padding: 8px; border-bottom: 1px solid color-mix(in srgb,var(--wf-muted) 14%,transparent); vertical-align: top; overflow-wrap: anywhere; }
+.workflow-node__script-table tbody tr:last-child td { border-bottom: 0; }
+.workflow-node__script-table tbody tr:hover td { background: color-mix(in srgb,var(--wf-accent) 6%,transparent); }
+.workflow-node__script-table td.is-index { color: var(--wf-accent); font-weight: 700; font-variant-numeric: tabular-nums; }
+.workflow-node__script-table tr.is-success td.is-index::after { content: ' ✓'; }
+.workflow-node__script-table tr.is-error td.is-index { color: #e05252; }
+/* LibTV 式文本文档：标题层级 + 舒展正文，双击切回编辑。 */
+.workflow-text-doc { height: 100%; overflow: auto; padding: 16px 18px 18px; color: var(--wf-text); font-size: 12.5px; line-height: 1.75; letter-spacing: .01em; cursor: text; scrollbar-width: thin; scrollbar-color: color-mix(in srgb,var(--wf-muted) 35%,transparent) transparent; }
+.workflow-text-doc:focus-visible { outline: 2px solid color-mix(in srgb,var(--wf-accent) 45%,transparent); outline-offset: -2px; }
+.workflow-text-doc > :first-child { margin-top: 0; }
+.workflow-text-doc__h1 { margin: 4px 0 10px; font-size: 17px; font-weight: 700; line-height: 1.4; letter-spacing: 0; }
+.workflow-text-doc__h2 { margin: 14px 0 6px; padding-bottom: 6px; border-bottom: 1px solid color-mix(in srgb,var(--wf-muted) 18%,transparent); font-size: 14.5px; font-weight: 650; line-height: 1.45; }
+.workflow-text-doc__h3 { margin: 12px 0 4px; font-size: 13px; font-weight: 600; line-height: 1.5; }
+.workflow-text-doc__p { margin: 0 0 6px; }
+.workflow-text-doc__li { display: grid; grid-template-columns: 16px 1fr; margin: 0 0 4px; }
+.workflow-text-doc__li.is-ordered { grid-template-columns: 22px 1fr; }
+.workflow-text-doc__li > span:first-child { color: var(--wf-muted); font-variant-numeric: tabular-nums; }
+.workflow-text-doc__quote { margin: 6px 0; padding: 4px 10px; border-left: 3px solid color-mix(in srgb,var(--wf-accent) 50%,transparent); border-radius: 0 6px 6px 0; background: color-mix(in srgb,var(--wf-accent) 5%,transparent); color: var(--wf-muted); }
+.workflow-text-doc__hr { height: 1px; margin: 12px 0; background: color-mix(in srgb,var(--wf-muted) 20%,transparent); }
+.workflow-text-doc__gap { height: 6px; }
+.workflow-text-doc strong { color: var(--wf-text); font-weight: 650; }

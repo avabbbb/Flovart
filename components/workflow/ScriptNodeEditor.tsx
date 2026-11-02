@@ -7,6 +7,7 @@ import { generateTextWithProvider } from '../../services/aiGateway';
 import { resolveRouteMappingForSubmit, type RouteFallbackResolution } from '../../services/routeMapping';
 import type { UserApiKey } from '../../types';
 import type { ScriptAsset, ScriptBreakdown, ScriptShot, WorkflowNode, WorkflowNodeMetadata } from './types';
+import { CAMERA_MOVEMENTS } from './constants';
 
 const BREAKDOWN_SYSTEM_PROMPT = `你是一个专业的剧本拆解助手。用户会给你一段剧本或故事描述，你需要将其拆解为结构化的分镜数据。
 
@@ -321,7 +322,34 @@ function ShotCard({ shot, onChange, onDelete }: {
         {field('动作', 'action', '角色在做什么')}
         {field('场景', 'scene', '室内/室外')}
       </div>
-      <div className="script-editor__fields script-editor__fields--secondary" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginTop: 6 }}>
+      <div className="script-editor__fields script-editor__fields--secondary" style={{ display: 'grid', gridTemplateColumns: '76px 1fr 1fr 1fr', gap: 6, marginTop: 6 }}>
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <span style={{ fontSize: 10, color: 'var(--wf-muted)' }}>时长（秒）</span>
+          <input
+            type="number"
+            min={0}
+            step={0.5}
+            aria-label="镜头时长"
+            value={shot.durationSec ?? ''}
+            placeholder="3"
+            onChange={event => { const value = Number(event.target.value); onChange({ durationSec: event.target.value === '' || !Number.isFinite(value) || value <= 0 ? undefined : value }); }}
+            style={{ border: '1px solid var(--wf-border)', borderRadius: 4, padding: '3px 6px', background: 'var(--wf-bg)', color: 'var(--wf-text)', fontSize: 12, outline: 'none' }}
+          />
+        </label>
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <span style={{ fontSize: 10, color: 'var(--wf-muted)' }}>运镜</span>
+          <input
+            aria-label="运镜"
+            list={'script-shot-camera-' + shot.id}
+            value={shot.camera || ''}
+            placeholder="推进、横移、手持..."
+            onChange={event => onChange({ camera: event.target.value || undefined })}
+            style={{ border: '1px solid var(--wf-border)', borderRadius: 4, padding: '3px 6px', background: 'var(--wf-bg)', color: 'var(--wf-text)', fontSize: 12, outline: 'none' }}
+          />
+          <datalist id={'script-shot-camera-' + shot.id}>
+            {CAMERA_MOVEMENTS.map(movement => <option key={movement.id} value={movement.name} />)}
+          </datalist>
+        </label>
         {field('台词', 'dialogue', '角色说的话')}
         {field('音效', 'sfx', '背景音乐/音效')}
       </div>

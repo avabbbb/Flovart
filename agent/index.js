@@ -9,6 +9,7 @@ import { SkillRegistry, BUNDLED_SKILL_IDS } from './skill-registry.js';
 import { WorkflowAgentSession, WorkflowAgentSessionError } from './session.js';
 import { prepareAgentHostProjection } from './host-projection.js';
 import { importFlovartModule } from './flovart-modules.js';
+import { ReceiptError, ReceiptStore } from './receipts.js';
 
 const { discoverAgentHosts } = await importFlovartModule('host-discovery');
 const { getAgentIdentity } = await importFlovartModule('host-registry');
@@ -131,6 +132,7 @@ export function startHttpServer() {
     : Number(process.env.FLOVART_AGENT_PORT) || Number(new URL(config.url).port) || DEFAULT_AGENT_PORT;
   const bootstrapCredentials = new BootstrapCredentialStore();
   const session = new WorkflowAgentSession({ isKnownAgentIdentity: id => Boolean(getAgentIdentity(id)) });
+  const receiptStore = new ReceiptStore();
   // /crew/protocol 仍是对外 readiness 握手（local-agent.js inspectLocalAgent
   // 与 CLI bootstrap/status 路径依赖）。Crew/Director 业务面已移除，这里只保留
   // 协议版本与 Registry Hash 的自报能力。
@@ -242,6 +244,39 @@ export function startHttpServer() {
       }
       if (request.method === 'GET' && url.pathname === '/workspace/lease') {
         return json(response, 200, { ok: true, leases: session.workspaceLeaseState() });
+      }
+      if (request.method === 'GET' && url.pathname === '/activity') {
+        return json(response, 200, {
+          ok: true,
+          activity: session.activityLog(url.searchParams.get('limit')),
+          clients: session.clientsView(),
+          activeHostWriter: session.hostWriterState(),
+          leases: session.workspaceLeaseState(),
+          serverTime: new Date().toISOString(),
+        });
+      }
+      if (url.pathname === '/receipts' && (request.method === 'GET' || request.method === 'POST')) {
+        // Project-level shared context: read-only receipts any Agent can add and read.
+        try {
+          if (request.method === 'GET') {
+            const projectId = url.searchParams.get('projectId') || session.snapshot?.id || '';
+            const receipts = projectId ? await receiptStore.list(projectId, url.searchParams.get('limit')) : [];
+            return json(response, 200, { ok: true, projectId: projectId || null, receipts });
+          }
+          const body = await readBody(request);
+          const items = Array.isArray(body.receipts) ? body.receipts : [body];
+          const fallbackProjectId = session.snapshot?.id || null;
+          const agentIdentity = body.agentIdentity || session.hostWriterState()?.agentIdentity || null;
+          const result = await receiptStore.appendMany(
+            items.map(item => ({ ...item, projectId: item?.projectId || fallbackProjectId })),
+            { agentIdentity },
+          );
+          result.added.forEach(receipt => session.emit('receipt', receipt));
+          return json(response, 200, { ok: true, added: result.added.length, skipped: result.skipped, receipts: result.added });
+        } catch (error) {
+          if (error instanceof ReceiptError) return json(response, 400, { ok: false, error: { code: error.code, message: error.message } });
+          throw error;
+        }
       }
       if (request.method === 'POST' && url.pathname === '/workspace/lease/acquire') {
         const body = await readBody(request);

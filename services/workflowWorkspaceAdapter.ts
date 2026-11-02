@@ -2,6 +2,10 @@ import { getManagedAgentConnection, type ManagedAgentConnection } from './manage
 import { WorkflowAgentBridge, type WorkflowAgentBridgeOptions } from './workflowAgentBridge';
 import { useAgentConnectionStore } from '../stores/useAgentConnectionStore';
 import { consumeBrowserWriterAutoActivation } from './agentConnectionBootstrap';
+import { hydrateAgentActivity, toActivityEntry } from './agentActivity';
+import { hydrateAgentReceipts, toReceipt } from './agentReceipts';
+import { useAgentReceiptStore } from '../stores/useAgentReceiptStore';
+import { useAgentActivityStore } from '../stores/useAgentActivityStore';
 
 type AdapterStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
 type AdapterBridge = Pick<WorkflowAgentBridge, 'connect' | 'disconnect' | 'pushSnapshot'>
@@ -77,6 +81,15 @@ export class WorkflowWorkspaceAdapter {
             activeHostProjectId: typeof active?.projectId === 'string' ? active.projectId : null,
             error: null,
           });
+        } else if (type === 'activity') {
+          const entry = toActivityEntry(payload);
+          if (entry) useAgentActivityStore.getState().upsert(entry);
+        } else if (type === 'receipt') {
+          const receipt = toReceipt(payload);
+          if (receipt) useAgentReceiptStore.getState().upsert(receipt);
+        }
+        if (type === 'writer_changed' || type === 'writer_unavailable' || type === 'hello') {
+          void hydrateAgentActivity(connection).catch(() => undefined);
         }
       },
       onStatus: status => {
@@ -89,7 +102,11 @@ export class WorkflowWorkspaceAdapter {
           revision: revisionOf(this.latestProject),
           error: status === 'error' ? 'Flovart Agent 连接中断。' : null,
         });
-        if (this.connected) this.schedulePublish();
+        if (this.connected) {
+          this.schedulePublish();
+          void hydrateAgentActivity(connection).catch(() => undefined);
+          void hydrateAgentReceipts(connection, projectIdOf(this.latestProject)).catch(() => undefined);
+        }
       },
     });
     useAgentConnectionStore.getState().setStatus('connecting', {

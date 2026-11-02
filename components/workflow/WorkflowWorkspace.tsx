@@ -1,6 +1,6 @@
 import { WorkflowStartScreen } from './WorkflowStartScreen';
 import { nanoid } from 'nanoid';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { PromptEnhanceMode, PromptEnhanceResult, UserApiKey } from '../../types';
 import type { RouteFallbackResolution } from '../../services/routeMapping';
 import '../../styles/workflow.css';
@@ -239,6 +239,11 @@ export function WorkflowWorkspace({
   const createProject = useWorkflowStore(state => state.createProject);
   const updateProject = useWorkflowStore(state => state.updateProject);
   const activeProject = projects.find(project => project.id === activeProjectId) || null;
+  // 稳定引用：画布里 patchProject / selectNodes / focusNode 等都依赖它，
+  // 内联箭头会让它们每次渲染重建并重放依赖它们的 effect。
+  const updateActiveProject = useCallback((patch: Partial<WorkflowProject>) => {
+    if (activeProjectId) updateProject(activeProjectId, patch);
+  }, [activeProjectId, updateProject]);
   // Open in Flovart：读取 URL hash 中的宿主交接参数，处理后从地址栏移除，避免刷新重复执行。
   useEffect(() => {
     if (!activeProjectId || typeof window === 'undefined') return;
@@ -431,7 +436,7 @@ assetLibrary={assetLibrary}
           {activeProject ? (
             <InfiniteWorkflow
               project={activeProject}
-              updateProject={patch => updateProject(activeProject.id, patch)}
+              updateProject={updateActiveProject}
               onRunNode={(nodeId, promptIntent) => {
                 // 返回运行 Promise：画布的串行队列（整组执行 / 选择性重跑）据此等上游跑完再跑下游。
                 if (onRunNode) return onRunNode(activeProject.id, nodeId, promptIntent);

@@ -87,7 +87,7 @@ export function WorkflowCreateMenu({ state, onCreate, onClose }: {
             const Icon = option.icon;
             return (
               <motion.button
-                key={option.designKind ?? option.type}
+                key={option.designKind ? option.type + ':' + option.designKind : option.type}
                 type="button"
                 role="menuitem"
                 className="workflow-create-menu__item"

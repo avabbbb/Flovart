@@ -33,6 +33,19 @@ const hostWriterView = writer => writer
   }
   : null;
 
+const ACTIVITY_LIMIT = 200;
+const ACTIVITY_SUMMARY_KEYS = ['nodeId', 'type', 'title', 'label', 'toolId', 'from', 'to', 'sourceId', 'targetId'];
+
+function summarizeActivityArgs(args) {
+  if (!args || typeof args !== 'object') return null;
+  const parts = [];
+  for (const key of ACTIVITY_SUMMARY_KEYS) {
+    const value = args[key];
+    if (typeof value === 'string' && value) parts.push(key + '=' + value.slice(0, 60));
+  }
+  return parts.length ? parts.join(' ') : null;
+}
+
 function sessionError(code, message, details) {
   return new WorkflowAgentSessionError(code, message, details);
 }
@@ -53,6 +66,7 @@ export class WorkflowAgentSession {
     this.activeHostWriter = null;
     this.isKnownAgentIdentity = isKnownAgentIdentity;
     this.workspaceLease = workspaceLease || new WorkspaceLeaseManager();
+    this.activity = [];
   }
 
   health() {
@@ -341,7 +355,65 @@ export class WorkflowAgentSession {
     return true;
   }
 
+  recordActivity({ command, source, caller, args }) {
+    const entry = {
+      id: crypto.randomUUID(),
+      at: new Date().toISOString(),
+      command: String(command || ''),
+      source: String(source || ''),
+      agentIdentity: caller?.agentIdentity ? String(caller.agentIdentity) : (this.activeHostWriter?.agentIdentity || null),
+      projectId: args?.projectId ? String(args.projectId) : (this.snapshot?.id || null),
+      summary: summarizeActivityArgs(args),
+      status: 'running',
+      durationMs: null,
+      error: null,
+    };
+    this.activity.push(entry);
+    if (this.activity.length > ACTIVITY_LIMIT) this.activity.splice(0, this.activity.length - ACTIVITY_LIMIT);
+    this.emit('activity', { ...entry });
+    return entry;
+  }
+
+  finishActivity(entry, { ok, error } = {}) {
+    entry.status = ok ? 'ok' : 'error';
+    entry.durationMs = Date.now() - Date.parse(entry.at);
+    if (!ok) entry.error = { code: error?.code || null, message: String(error?.message || error || '').slice(0, 200) };
+    this.emit('activity', { ...entry });
+  }
+
+  activityLog(limit = ACTIVITY_LIMIT) {
+    const count = Math.max(1, Math.min(ACTIVITY_LIMIT, Number(limit) || ACTIVITY_LIMIT));
+    return this.activity.slice(-count).map(entry => ({ ...entry }));
+  }
+
+  clientsView() {
+    return [...this.clients.keys()].map(clientId => {
+      const snapshot = this.snapshots.get(clientId);
+      return {
+        clientId,
+        projectId: snapshot?.id || null,
+        projectTitle: typeof snapshot?.title === 'string' ? snapshot.title.slice(0, 80) : null,
+        active: clientId === this.activeClientId,
+        snapshotUpdatedAt: snapshot?.snapshotUpdatedAt || null,
+      };
+    });
+  }
+
   async callCommand(command, args = {}, source = 'mcp', idempotencyKey, signal, caller) {
+    if (command === 'status') return this.dispatchCommand(command, args, source, idempotencyKey, signal, caller);
+    const entry = this.recordActivity({ command, source, caller, args });
+    try {
+      const result = await this.dispatchCommand(command, args, source, idempotencyKey, signal, caller);
+      const failed = Boolean(result) && typeof result === 'object' && result.ok === false;
+      this.finishActivity(entry, failed ? { ok: false, error: result.error } : { ok: true });
+      return result;
+    } catch (error) {
+      this.finishActivity(entry, { ok: false, error });
+      throw error;
+    }
+  }
+
+  async dispatchCommand(command, args = {}, source = 'mcp', idempotencyKey, signal, caller) {
     if (command === 'status') {
       return {
         ok: true,

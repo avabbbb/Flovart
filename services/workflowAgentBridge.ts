@@ -253,7 +253,7 @@ export class WorkflowAgentBridge {
     });
     source.addEventListener('ping', event => this.emit('ping', this.parseEvent(event)));
     source.addEventListener('tool_call', event => void this.handleToolCall(this.parseEvent(event)));
-    ['agent_event', 'agent_log', 'agent_error', 'agent_done', 'writer_changed', 'writer_unavailable', 'host_writer_changed'].forEach(type => source.addEventListener(type, event => this.emit(type, this.parseEvent(event))));
+    ['agent_event', 'agent_log', 'agent_error', 'agent_done', 'writer_changed', 'writer_unavailable', 'host_writer_changed', 'activity', 'receipt'].forEach(type => source.addEventListener(type, event => this.emit(type, this.parseEvent(event))));
     source.onerror = () => {
       source.close();
       if (this.eventSource === source) this.eventSource = null;

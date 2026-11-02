@@ -27,6 +27,10 @@ export interface ScriptShot {
   scene?: string;
   imagePromptOverride?: string;
   videoPromptOverride?: string;
+  /** 分镜表：镜头时长（秒），由 Agent 或编辑器填写。 */
+  durationSec?: number;
+  /** 分镜表：运镜，如「推镜」「横移」「手持跟拍」。 */
+  camera?: string;
   colorTag?: string;
   imageNodeId?: string;
   videoNodeId?: string;

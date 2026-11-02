@@ -1,4 +1,4 @@
-import { Eye, EyeOff, Folder, FolderOpen, GripVertical, Image, Layers, Lock, Music, PanelLeftClose, SlidersHorizontal, Type, Unlock, Video, X } from 'lucide-react';
+import { Eye, EyeOff, Folder, FolderOpen, GripVertical, Image, Layers, Music, PanelLeftClose, Pencil, SlidersHorizontal, Type, Video, X } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
 import type { WorkflowNode, WorkflowProject } from './types';
 import { AssetLibraryBrowser } from '../studio/AssetLibraryBrowser';
@@ -251,11 +251,15 @@ export const WorkflowSidebar: React.FC<WorkflowSidebarProps> = ({
                       onDragLeave={() => setDropHint(hint => hint?.id === node.id ? null : hint)}
                       onDrop={event => { event.preventDefault(); reorder(node.id, dropZoneOf(event)); }}
                       onDragEnd={() => { setDraggedId(null); setDropHint(null); }}
-                      onDoubleClick={event => { event.stopPropagation(); setEditingId(node.id); }}
-                      onClick={() => {
+                      onDoubleClick={event => {
+                        event.stopPropagation();
                         if (!project) return;
                         if (onFocusNode) onFocusNode(node.id);
                         else onProjectChange({ selectedNodeIds: [node.id] });
+                      }}
+                      onClick={() => {
+                        if (!project) return;
+                        onProjectChange({ selectedNodeIds: [node.id] });
                       }}
                       className={`workflow-layer-card group mb-0.5 flex h-11 items-center gap-2 rounded-lg pl-1 pr-1.5 text-xs transition-colors duration-150 ${selected ? 'workflow-layer-card--selected' : ''}`}
                       style={{ color: 'var(--isl-ink)' }}
@@ -295,10 +299,12 @@ export const WorkflowSidebar: React.FC<WorkflowSidebarProps> = ({
                       <button
                         type="button"
                         className="workflow-layer-card__action shrink-0 rounded p-0.5 transition-opacity"
-                        onClick={event => { event.stopPropagation(); patchNode(node.id, { isLocked: !node.isLocked }); }}
-                        title={node.isLocked ? (language === 'zho' ? '解锁' : 'Unlock') : (language === 'zho' ? '锁定' : 'Lock')}
+                        onClick={event => { event.stopPropagation(); setEditingId(node.id); }}
+                        onDoubleClick={event => event.stopPropagation()}
+                        title={language === 'zho' ? '重命名' : 'Rename'}
+                        aria-label={language === 'zho' ? '重命名图层' : 'Rename layer'}
                       >
-                        {node.isLocked ? <Lock size={13} /> : <Unlock size={13} />}
+                        <Pencil size={13} />
                       </button>
                     </div>
                   );

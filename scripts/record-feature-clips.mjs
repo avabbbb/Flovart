@@ -156,9 +156,9 @@ const CATALOG = {
   'video-trim': { title: '视频剪辑', ...TOOL('video', '视频剪辑', '视频剪辑', async page => {
     await page.getByRole('button', { name: '裁取片段' }).click();
   }) },
-  'video-av-split': { title: '音视频分离', ...TOOL('video', '音视频分离', '音视频分离', async page => {
-    await page.getByRole('button', { name: '分离音视频' }).click();
-  }) },
+  'video-av-split': { title: '音视频分离', kind: 'node-tool', media: 'video',
+    // 新版：工具栏按钮打开菜单，菜单项直接执行，没有弹窗。
+    toolbarLabel: '分离音视频', menuItem: '分离音视频', waitText: /已创建无声视频|分离失败/ },
   'extract-last-frame': {
     title: '导出尾帧', kind: 'node-tool', media: 'video',
     toolbarLabel: '导出尾帧为图片', dialogTitle: null, action: null,
@@ -374,6 +374,25 @@ const CATALOG = {
       await link(find('风格参考'), find('成片镜头'), 'e2');
       await wait(900);
       await ccBtn(page, '一键整理节点').click();
+    },
+  },
+  // 内置 Agent：用自然语言让面板里的 Agent 搭工作流。只调用文本 LLM，不运行任何生成节点。
+  'agent-chat': {
+    title: '内置 Agent 搭工作流', kind: 'canvas', seed: [], llm: true,
+    run: async ({ page, sleep: wait }) => {
+      await page.locator('.workflow-toolbar').getByRole('button', { name: /^打开 Agent/ }).click();
+      const input = page.getByRole('textbox', { name: '开始你的创作，或者 @ 引用工作流/节点/资源' }).first();
+      await input.waitFor({ state: 'visible', timeout: 20_000 });
+      await wait(1200);
+      await input.click();
+      await input.type(process.env.FLOVART_README_AGENT_PROMPT
+        || '帮我搭一个产品宣传短片的工作流：两个参考图节点、一个视频节点，并把两张参考图连到视频节点上', { delay: 35 });
+      await wait(500);
+      const before = await page.locator('[data-workflow-node-id]').count();
+      await page.getByRole('button', { name: '发送', exact: true }).click();
+      await page.waitForFunction(n => document.querySelectorAll('[data-workflow-node-id]').length >= n + 3, before, { timeout: 180_000 })
+        .catch(() => console.log('[clip] agent did not create 3 nodes within 180s'));
+      await wait(4000);
     },
   },
 };
@@ -717,6 +736,19 @@ async function recordClip(key, clip, services, fixtureOrigin, runTag) {
     recordVideo: { dir: videoDir, size: { width: 1440, height: 900 } },
     args: ['--no-first-run', '--no-default-browser-check', '--window-size=1464,980'],
   });
+  if (clip.llm) {
+    // Key 只在本机 ~/.flovart-readme（仓库外），写进一次性 profile 的旧版明文键；应用启动时迁移进加密 vault。
+    const dir = join(homedir(), '.flovart-readme');
+    const model = process.env.FLOVART_README_LLM_MODEL || 'zen/deepseek-v4.1-flash-free';
+    const seeded = [{ id: 'readme-llm', provider: 'openai_compatible', capabilities: ['text', 'agent'],
+      key: readFileSync(join(dir, 'llm-key'), 'utf8').trim(), baseUrl: readFileSync(join(dir, 'llm-base'), 'utf8').trim(),
+      name: 'README demo', isDefault: true, status: 'ok', customModels: [model], defaultModel: model }];
+    await context.addInitScript(value => {
+      if (sessionStorage.getItem('readme-llm-seeded')) return;
+      sessionStorage.setItem('readme-llm-seeded', '1');
+      localStorage.setItem('userApiKeys.v1', value);
+    }, JSON.stringify(seeded));
+  }
   // Video capture starts with the context, so wall-clock deltas from here are
   // video offsets: marks let us cut dead lead-in/out deterministically.
   const recStart = Date.now();
@@ -874,6 +906,15 @@ async function recordClip(key, clip, services, fixtureOrigin, runTag) {
         console.log(`[clip] operation outcome: ${outcome}`);
       } else {
         mark('confirm');
+        if (clip.menuItem) {
+          await page.getByRole('menuitem', { name: clip.menuItem, exact: true }).first().click();
+        }
+        if (clip.waitText) {
+          const source = clip.waitText.source;
+          await page.waitForFunction(s => new RegExp(s).test(document.body.innerText), source, { timeout: 120_000 }).catch(() => {});
+          const notice = await page.evaluate(s => (document.body.innerText.match(new RegExp('[^\n]{0,200}(' + s + ')[^\n]{0,200}')) || ['none'])[0], source);
+          console.log('[clip] operation outcome: ' + notice);
+        }
       }
       await sleep(2600);
       mark('result');

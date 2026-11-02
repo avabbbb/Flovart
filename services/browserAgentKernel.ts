@@ -468,6 +468,7 @@ export function createBrowserAgentTools(dependencies: BrowserAgentToolDependenci
 // 内核：复刻 agent/kernel.js 的生命周期，浏览器实现（持久化/流/工具）
 // ---------------------------------------------------------------------------
 
+export { BROWSER_DEFAULT_SYSTEM_PROMPT };
 const BROWSER_DEFAULT_SYSTEM_PROMPT = `你是 Flovart Agent，负责把用户的创作目标整理为可审查的制作计划。
 你只能使用已注册的 Flovart 制作工具，不得访问 Shell、任意文件或 Provider Secret。
 处理当前项目时先调用 flovart_workflow_inspect；需要当前选区时再调用 flovart_workflow_selection_get，不得猜测项目、节点或连接 ID。

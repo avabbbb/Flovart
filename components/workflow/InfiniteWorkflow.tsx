@@ -14,7 +14,7 @@ import { STUDIO_MEDIA_DRAG_TYPE } from '../studio/StudioMediaBrowser';
 import { mediaKindOf } from '../studio/assetLibraryShared';
 import type { AssetSuggestion } from '../MentionList';
 import type { MentionData } from '../MediaMentionExtension';
-import { createWorkflowNode, WORKFLOW_NODE_SPECS } from './constants';
+import { createWorkflowNode, scriptNodeHeight, WORKFLOW_NODE_SPECS } from './constants';
 import { inheritGenerationConfig } from '../../services/generationInheritance';
 import { applyWorkflowMutation, redoWorkflowDraftChangeSet, undoWorkflowDraftChangeSet, workflowDocumentOperationsFromFrames } from './draftAuthority';
 import {
@@ -37,6 +37,7 @@ import { WorkflowConnections } from './WorkflowConnections';
 import { WorkflowContextMenu, type WorkflowContextMenuState } from './WorkflowContextMenu';
 import { alignNodes, arrangeNodePositions, arrangementOrder, arrowNudge, distributeNodes, duplicateNodes, offsetNodes, sequencedFileNames } from './arrange';
 import { pushAgentGroup } from '../../stores/useAgentGroupInboxStore';
+import { buildTextAssetPrompt, canGenerateTextAssets, textAssetSpec } from './textAssets';
 import { WorkflowCreateMenu, type WorkflowCreateMenuState } from './WorkflowCreateMenu';
 import { DesignInspector } from './DesignInspector';
 import { createDesignTemplate } from '../../services/design/presets';
@@ -436,10 +437,10 @@ export function InfiniteWorkflow({
   const mediaReferenceOwnerRef = useRef(`workflow-editor-${nanoid()}`);
   const [tool, setTool] = useState<WorkflowTool>('select');
   const [wheelMode, setWheelMode] = useState<'pan' | 'zoom'>('pan');
-  const [minimapOpen, setMinimapOpen] = useState(true);
-  const [snapEnabled, setSnapEnabled] = useState(false);
+  const [minimapOpen, setMinimapOpen] = useState(false);
+  const [snapEnabled, setSnapEnabled] = useState(true);
   const [edgesVisible, setEdgesVisible] = useState(true);
-  const snapEnabledRef = useRef(false);
+  const snapEnabledRef = useRef(true);
   snapEnabledRef.current = snapEnabled;
   const [snapGuides, setSnapGuides] = useState<{ x?: number[]; y?: number[] } | null>(null);
   const [layoutToast, setLayoutToast] = useState<{ prev: WorkflowNodeData[]; deadline: number } | null>(null);
@@ -1574,8 +1575,12 @@ export function InfiniteWorkflow({
     );
   }, [focusBounds]);
 
+  // focusNodeRequest 是一次性事件：按 nonce 只处理一次。否则 focusNode/selectNodes
+  // 随视口或选中变化重建时，旧请求会重放：动画每帧重启、视口被拉回、选中被抢回。
+  const handledFocusNonceRef = useRef<number | null>(null);
   useEffect(() => {
-    if (!focusNodeRequest) return;
+    if (!focusNodeRequest || handledFocusNonceRef.current === focusNodeRequest.nonce) return;
+    handledFocusNonceRef.current = focusNodeRequest.nonce;
     const node = projectRef.current.nodes.find(item => item.id === focusNodeRequest.nodeId);
     if (!node) return;
     selectNodes([node.id]);
@@ -3129,8 +3134,25 @@ export function InfiniteWorkflow({
             onAddToAgent={ids => {
               const members = projectRef.current.nodes.filter(item => ids.includes(item.id));
               const batchId = members.find(item => item.batchId)?.batchId;
-              pushAgentGroup({ nodeIds: arrangementOrder(members, ids).map(item => item.id), label: `分组 · ${members.length} 个节点`, batchId });
+              pushAgentGroup({ nodeIds: arrangementOrder(members, ids).map(item => item.id), label: members.length === 1 ? members[0].title : `分组 · ${members.length} 个节点`, batchId });
               setNotice('已添加到 Agent，可在侧边面板保存为 Skill');
+            }}
+            onGenerateAsset={(id, kind) => {
+              const source = projectRef.current.nodes.find(item => item.id === id);
+              if (!source || source.isLocked || !canGenerateTextAssets(source)) return;
+              const spec = textAssetSpec(kind);
+              // 同一文本已派生的节点向下错开，避免叠在一起。
+              const derived = projectRef.current.connections.filter(connection => connection.fromNodeId === id).length;
+              const node = {
+                ...createWorkflowNode(nanoid(), 'image', { x: source.position.x + source.width + 96, y: source.position.y + derived * 280 }, {
+                  prompt: buildTextAssetPrompt(kind),
+                  status: 'idle',
+                  config: { mode: 'image', aspectRatio: spec.aspectRatio },
+                }),
+                title: spec.title,
+              };
+              if (!applyOps([{ type: 'create_connected_node', fromNodeId: id, node }])) return;
+              setNotice(`已创建「${spec.title}」节点并连好文本：选好模型后在节点上运行`);
             }}
             onDesignBoolean={(operation, ids) => {
               // 按图层顺序（底到顶）取形状；结果替换原形状。
@@ -3234,7 +3256,7 @@ export function InfiniteWorkflow({
             transition={{ type: 'spring', stiffness: 420, damping: 30, mass: 0.7 }}
             onPointerDown={event => event.stopPropagation()}
             onClick={() => fitView()}
-            style={{ position: 'absolute', zIndex: 70, bottom: 28, left: '50%', translate: '-50% 0', display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 11px', border: 'none', borderRadius: 999, color: 'var(--wf-text-soft, var(--wf-text))', background: 'transparent', fontSize: 12, cursor: 'pointer' }}
+            style={{ position: 'absolute', zIndex: 70, bottom: 72, left: '50%', translate: '-50% 0', display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 11px', border: '1px solid var(--isl-border, var(--wf-border))', borderRadius: 999, color: 'var(--wf-text-soft, var(--wf-text))', background: 'var(--isl-card, var(--wf-panel))', boxShadow: 'var(--isl-shadow)', backdropFilter: 'blur(16px)', fontSize: 12, whiteSpace: 'nowrap', cursor: 'pointer' }}
           >
             <Maximize2 size={13} strokeWidth={2} />
             还原缩放
@@ -3349,7 +3371,10 @@ export function InfiniteWorkflow({
         return (
           <ScriptNodeEditor
             node={scriptNode}
-            onChange={metadata => applyOps([{ type: 'update_node', id: scriptNode.id, metadata }])}
+            onChange={metadata => {
+              const height = scriptNodeHeight(metadata.scriptBreakdown?.shots?.length ?? 0);
+              applyOps([{ type: 'update_node', id: scriptNode.id, metadata, ...(height !== scriptNode.height ? { patch: { height } } : {}) }]);
+            }}
             onClose={() => setScriptEditorNodeId(null)}
             userApiKeys={userApiKeys}
             confirmRouteFallback={confirmRouteFallback}

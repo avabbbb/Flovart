@@ -65,6 +65,22 @@ The 60-second Flovart promo cut:
 </p>
 
 
+<!-- storyboard-demo -->
+### Example: reference clip → 11-shot storyboard on the canvas
+
+<p align="center">
+  <img src="pic/readme/storyboard/storyboard-canvas.png" alt="Eleven shot-breakdown text nodes, each connected to its generated storyboard frame on the Flovart canvas" width="880" />
+  <br />
+  <sub><strong>A 15-second vertical reference clip broken into 11 shots, built on the canvas by an external agent.</strong><br />
+  Each text node holds one shot (timing, framing, camera move, motion, transition) and connects to its storyboard frame. Nodes, frames and edges were created through the typed CLI surface (<code>workflow.node.create</code> / <code>workflow.connect</code>), with no hand editing.</sub>
+</p>
+
+<p align="center">
+  <img src="pic/readme/storyboard/storyboard-overview.jpg" alt="Overview of the 11 generated storyboard frames with camera-move arrows and motion notes" width="880" />
+  <br />
+  <sub><strong>The 11 storyboard frames.</strong> Generated image-to-image from reference frames (RunningHub, Seedream 4.7), annotated with camera-move arrows and motion notes. 11 paid generations in total.</sub>
+</p>
+
 ## Product vision — the interaction we're building toward
 
 <p align="center">

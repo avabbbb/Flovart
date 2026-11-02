@@ -821,7 +821,9 @@ describe('InfiniteWorkflow surface interactions', () => {
     render(<Harness initial={initial} />);
 
     expect(await screen.findByText('媒体文件不存在，请重新选择文件')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '重新选择媒体文件' })).toBeInTheDocument();
+    const swap = node('target').querySelector<HTMLButtonElement>('[aria-label="替换素材"]')!;
+    expect(swap).toBeInTheDocument();
+    expect(swap).not.toHaveAttribute('aria-haspopup');
   });
 
   it('replaces media without moving its center and preserves the old Blob for undo', async () => {
@@ -862,14 +864,6 @@ describe('InfiniteWorkflow surface interactions', () => {
     const restoredBlob = await workflowMediaStorage.get('old-media');
     expect(restoredBlob).not.toBeNull();
     expect(editor().querySelector('[data-workflow-connection-id="media-connection"]')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: '移除媒体文件' }));
-    await waitFor(() => expect(projectNode('target').metadata.storageKey).toBeUndefined());
-    fireEvent.pointerDown(editor(), { button: 0, clientX: 20, clientY: 20 });
-    fireEvent.pointerUp(window, { clientX: 20, clientY: 20 });
-    fireEvent.click(screen.getByRole('button', { name: '撤销' }));
-    await waitFor(() => expect(projectNode('target').metadata.storageKey).toBe('old-media'));
-    expect(await workflowMediaStorage.get('old-media')).not.toBeNull();
   });
 
   it('keeps only the latest concurrent replacement and uses the node center after movement', async () => {

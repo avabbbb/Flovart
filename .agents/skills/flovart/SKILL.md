@@ -162,6 +162,25 @@ credentials, modify browser storage, use private routes, or create a second
 Workflow runtime. A missing reference or unsupported input must remain an
 explicit failure; never downgrade the requested media mode silently.
 
+## Generation must run on the canvas
+
+Image and video generation is a canvas operation, never a side script.
+
+- Build each shot as a generation config node on the canvas: prompt, model,
+  parameters, and reference nodes connected through the node's own inputs.
+  Then run it with workflow.node.run, or one batched run with nodeIds.
+- Never call a Provider API (RunningHub or any other) from a local script,
+  download the result, and push it onto the canvas as a static image node.
+  Such a node has no prompt, model, or reference connections, so the user
+  cannot fine-tune and rerun it; it is not a Flovart result.
+- Never copy an API key from the clipboard, environment, or settings into a
+  file. Credentials stay in Flovart's Provider settings.
+- If workflow.node.run returns RUNNER_UNAVAILABLE, or no node type can
+  express the request, stop and report the code. Do not work around it with a
+  direct call.
+- Before any paid workflow.node.run, tell the user the run count, model, and
+  purpose, and wait for their go-ahead.
+
 ## Resolve host boundary
 
 For DaVinci Resolve, use Resolve Studio's own native MCP for host context and

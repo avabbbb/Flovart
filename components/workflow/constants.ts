@@ -13,7 +13,7 @@ export const WORKFLOW_NODE_SPECS: Record<BuiltinWorkflowNodeType, { title: strin
   },
   script: {
     title: '脚本',
-    width: 480,
+    width: 720,
     height: 560,
     metadata: { status: 'idle', scriptBreakdown: { assets: [], shots: [] } },
   },
@@ -108,3 +108,9 @@ export const STYLE_PRESETS: StylePreset[] = [
   { id: 'uxiang', name: '国风', category: '艺术', promptPrefix: 'Chinese traditional style, guofeng, elegant' },
   { id: 'claymation', name: '黏土动画', category: '3D', promptPrefix: 'claymation, stop motion, clay texture' },
 ];
+
+// 分镜表节点按镜头数自适应高度：头部 + 表头约 96px，每镜约 56px；超过上限后表格内部滚动。
+export function scriptNodeHeight(shotCount: number): number {
+  if (shotCount <= 0) return 220;
+  return Math.min(900, Math.max(220, 96 + shotCount * 56));
+}

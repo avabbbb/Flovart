@@ -1,5 +1,5 @@
 import { AlignCenter, AlignLeft, AlignRight, ArrowDownToLine, ArrowUpToLine, AudioLines, ChevronsDown, ChevronsUp, Copy, Crop, Download, Eraser, Expand, FilePenLine, Frame, Grid2x2, Group, Layers, Layers3, Library, Lightbulb, Maximize2, MessageSquareText, Play, RefreshCw, RotateCw, ScanLine, ScanText, Scissors, SlidersHorizontal, Square, Trash2, Ungroup, ZoomIn, Gauge, Palette, PenTool, Move } from 'lucide-react';
-import { AlignHorizontalSpaceAround, AlignVerticalSpaceAround, Bot, Camera, Focus, LayoutGrid, Mic, Music, StretchHorizontal, StretchVertical, Space } from 'lucide-react';
+import { AlignHorizontalSpaceAround, AlignVerticalSpaceAround, Bot, Box, Camera, Focus, LayoutGrid, Mic, Mountain, Music, Sparkles, StretchHorizontal, StretchVertical, Space, UserRound } from 'lucide-react';
 import { sequencedFileNames, type WorkflowAlignment, type WorkflowArrangeLayout, type WorkflowDistributeAxis } from './arrange';
 import { useRef, useState } from 'react';
 import { MoreHorizontal } from 'lucide-react';
@@ -9,6 +9,7 @@ import { useWorkflowMediaUrl } from './media';
 import { WORKFLOW_NODE_TOOL_LABELS } from './nodeToolCatalog';
 import type { WorkflowNode } from './types';
 import { DESIGN_BOOLEAN_LABELS, type DesignBooleanOperation } from '../../services/design/booleanOps';
+import { WORKFLOW_TEXT_ASSET_KINDS, canGenerateTextAssets, type WorkflowTextAssetKind } from './textAssets';
 
 const DESIGN_BOOLEAN_ORDER: readonly DesignBooleanOperation[] = ['union', 'subtract', 'intersect', 'exclude'];
 const DESIGN_BOOLEAN_KINDS = new Set(['rect', 'ellipse', 'path']);
@@ -55,8 +56,9 @@ const PRIMARY_KEYS = new Set(['stop', 'run', 'copy', 'group', 'execute-group', '
 const ARRANGE_GAPS = [0, 16, 24, 48, 96] as const;
 // LibTV 式：下载 / 放大预览放在工具条最右侧，只显示图标。
 const ICON_KEYS = new Set(['download', 'preview']);
+const TEXT_ASSET_ICONS: Record<WorkflowTextAssetKind, typeof Box> = { character: UserRound, scene: Mountain, prop: Box };
 
-export function WorkflowNodeToolbar({ nodes, onCopy, onDelete, onExport, onRun, onStop, onPromptFocus, onSaveMedia, onReversePrompt, onReplaceMedia, onToggleFreeResize, onAlign, onDistribute, onLayer, onGroup, onUngroup, onExecuteGroup, onArrange, onSequencedExport, onAddToAgent, onPreviewMedia, onFrameSelection, onDesignBoolean, onApplyFrameLayout, imageTools, imageToolBusy = false, videoTools, videoToolBusy = false, audioTools, audioToolBusy = false }: {
+export function WorkflowNodeToolbar({ nodes, onCopy, onDelete, onExport, onRun, onStop, onPromptFocus, onSaveMedia, onReversePrompt, onReplaceMedia, onToggleFreeResize, onAlign, onDistribute, onLayer, onGroup, onUngroup, onExecuteGroup, onArrange, onSequencedExport, onAddToAgent, onGenerateAsset, onPreviewMedia, onFrameSelection, onDesignBoolean, onApplyFrameLayout, imageTools, imageToolBusy = false, videoTools, videoToolBusy = false, audioTools, audioToolBusy = false }: {
   nodes: WorkflowNode[];
   onCopy: (ids: string[]) => void;
   onDelete: (ids: string[]) => void;
@@ -79,6 +81,8 @@ export function WorkflowNodeToolbar({ nodes, onCopy, onDelete, onExport, onRun, 
   /** 按排列顺序批量下载，文件名 prefix_01、prefix_02… */
   onSequencedExport?: (ids: string[], prefix: string) => void;
   onAddToAgent?: (ids: string[]) => void;
+  /** 文本节点「生成资产」：派生一个连好线的图片生成节点（不自动运行）。 */
+  onGenerateAsset?: (id: string, kind: WorkflowTextAssetKind) => void;
   onPreviewMedia?: (id: string) => void;
   /** 聚焦选中节点（Frame Selection，快捷键 F）。 */
   onFrameSelection?: () => void;
@@ -114,7 +118,7 @@ export function WorkflowNodeToolbar({ nodes, onCopy, onDelete, onExport, onRun, 
     nodes.length > 1 && onExecuteGroup && { key: 'execute-group', label: '整组执行', icon: <Play size={18} />, onClick: () => onExecuteGroup(ids) },
     nodes.length > 1 && onUngroup && nodes.some(n => n.batchId) && { key: 'ungroup', label: '取消打组', icon: <Ungroup size={18} />, onClick: () => onUngroup(ids) },
     nodes.length > 1 && selectedMedia.length > 0 && onExport && { key: 'export-selection', label: '批量导出所选媒体', icon: <Download size={18} />, onClick: () => onExport(nodes) },
-    nodes.length > 1 && onAddToAgent && { key: 'add-to-agent', label: '添加到 Agent', icon: <Bot size={18} />, onClick: () => onAddToAgent(ids) },
+    (nodes.length > 1 || Boolean(node)) && onAddToAgent && { key: 'add-to-agent', label: nodes.length > 1 ? '添加到 Agent' : '加入 Agent 上下文', icon: <Bot size={18} />, onClick: () => onAddToAgent(ids) },
     nodes.length > 1 && onArrange && { key: 'arrange-grid', label: '网格排列', icon: <LayoutGrid size={18} />, onClick: () => onArrange(ids, 'grid', arrangeGap) },
     nodes.length > 1 && onArrange && { key: 'arrange-row', label: '横向排成一行', icon: <StretchVertical size={18} />, onClick: () => onArrange(ids, 'row', arrangeGap) },
     nodes.length > 1 && onArrange && { key: 'arrange-column', label: '纵向排成一列', icon: <StretchHorizontal size={18} />, onClick: () => onArrange(ids, 'column', arrangeGap) },
@@ -174,6 +178,12 @@ export function WorkflowNodeToolbar({ nodes, onCopy, onDelete, onExport, onRun, 
     videoTools?.extractFrame && { key: 'video-frame-last', label: '截取尾帧', icon: <ArrowDownToLine size={16} />, disabled: videoBusy, onClick: () => videoTools.extractFrame?.(videoNode.id, 'last') },
     videoTools?.extractFrameAt && { key: 'video-frame-at', label: '截取指定帧…', icon: <Frame size={16} />, disabled: videoBusy, onClick: () => videoTools.extractFrameAt?.(videoNode.id) },
   ] as Array<WorkflowToolbarAction | false | undefined> : []).filter((action): action is WorkflowToolbarAction => Boolean(action));
+  const textNode = node?.type === 'text' ? node : null;
+  const textAssetReady = canGenerateTextAssets(textNode);
+  const assetActions: WorkflowToolbarAction[] = textNode && onGenerateAsset ? WORKFLOW_TEXT_ASSET_KINDS.map(kind => {
+    const Icon = TEXT_ASSET_ICONS[kind.id];
+    return { key: 'text-asset-' + kind.id, label: kind.label, icon: <Icon size={16} />, disabled: !textAssetReady, onClick: () => onGenerateAsset(textNode.id, kind.id) };
+  }) : [];
   const alignActions: WorkflowToolbarAction[] = nodes.length > 1 && onAlign ? [
     { key: 'left', label: '左对齐节点', icon: <AlignLeft size={16} />, onClick: () => onAlign('left') },
     { key: 'horizontal-center', label: '水平居中节点', icon: <AlignCenter size={16} />, onClick: () => onAlign('horizontal-center') },
@@ -196,6 +206,7 @@ export function WorkflowNodeToolbar({ nodes, onCopy, onDelete, onExport, onRun, 
       {media && onReplaceMedia && <>
         <input ref={inputRef} hidden type="file" accept={`${media.type}/*`} onChange={event => { const file = event.target.files?.[0]; if (file) onReplaceMedia(media.id, file); event.target.value = ''; }} />
       </>}
+      {assetActions.length > 0 && <WorkflowToolbarMenu variant="labelled" label="生成资产" icon={<Sparkles size={16} />} actions={assetActions} disabled={!textAssetReady} />}
       <WorkflowToolbarActions showLabels actions={primary.filter(action => action.key !== 'delete')} />
       {avSplitActions.length > 0 && <WorkflowToolbarMenu variant="labelled" label="分离音视频" icon={<AudioLines size={16} />} actions={avSplitActions} disabled={videoBusy} />}
       {overflow.length > 0 && <WorkflowToolbarMenu label="更多" icon={<MoreHorizontal size={18} />} actions={overflow} />}

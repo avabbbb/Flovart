@@ -65,6 +65,22 @@ Flovart 60 秒宣传片：
 </p>
 
 
+<!-- storyboard-demo -->
+### 示例：参考片 → 画布上的 11 镜头分镜
+
+<p align="center">
+  <img src="pic/readme/storyboard/storyboard-canvas.png" alt="11 个镜头拆解文字节点，各自连到对应分镜图" width="880" />
+  <br />
+  <sub><strong>一段 15 秒竖屏参考片拆成 11 个镜头，由外部 Agent 在画布上搭建。</strong><br />
+  每个文字节点是一个镜头（时间、景别/机位、运镜、动效、转场），并连到对应分镜图。节点、图片和连线都通过类型化 CLI（<code>workflow.node.create</code> / <code>workflow.connect</code>）创建，没有手动编辑。</sub>
+</p>
+
+<p align="center">
+  <img src="pic/readme/storyboard/storyboard-overview.jpg" alt="11 张分镜图总览，带运镜箭头和动效标注" width="880" />
+  <br />
+  <sub><strong>11 张分镜图。</strong>以参考片抽帧做图生图（RunningHub、Seedream 4.7），标注运镜箭头和动效说明，共 11 次付费生成。</sub>
+</p>
+
 ## 产品愿景——我要做的就是视频里的这种交互与 UI
 
 <p align="center">

@@ -20,7 +20,9 @@ import {
 } from '../../services/productionSkillCatalog';
 import { createLocalSkillRegistry } from '../../services/localSkillRegistry';
 import { consumePendingProductionSkill } from '../../stores/useProductionSkillComposerStore';
-import { BrowserAgentKernel, createBrowserAgentTools, resolveBrowserAgentTextRoute } from '../../services/browserAgentKernel';
+import { BROWSER_DEFAULT_SYSTEM_PROMPT, BrowserAgentKernel, createBrowserAgentTools, resolveBrowserAgentTextRoute } from '../../services/browserAgentKernel';
+import { formatReceiptContext } from '../../services/agentReceipts';
+import { useAgentReceiptStore } from '../../stores/useAgentReceiptStore';
 import { displayError as toDisplayError } from '../../services/displayError';
 import { agentSetupMessage, classifyAgentSetupError, type AgentSetupBlocker } from '../../services/runtimeHealth';
 import { useWorkspaceStore } from '../../stores/useWorkspaceStore';
@@ -32,6 +34,7 @@ import { AgentModelPicker } from './AgentModelPicker';
 import { applyAgentTurnPreamble, recipeFromNodes, skillFromRecipe, type AgentCreationMode } from '../../services/canvasSkillRecipe';
 import { useAgentGroupInboxStore, type AgentGroupPayload } from '../../stores/useAgentGroupInboxStore';
 import { useMineSkillsStore } from './mineSkills';
+import { AgentReferenceChip } from './AgentReferenceChip';
 
 interface FlovartAgentPanelProps {
   project: WorkflowProject;
@@ -208,9 +211,11 @@ const userApiKeysRef = useRef(userApiKeys);
     const query = mentionQuery.trim().toLowerCase();
     const matches = (label: string) => !query || label.toLowerCase().includes(query);
     return {
+      // 图片/视频节点排在前面，方便 @ 引用画面素材。
       nodes: project.nodes
         .filter(node => node.isVisible !== false && matches(node.title || node.id))
-        .map(node => ({ id: node.id, type: 'node' as const, label: node.title || '未命名节点', mediaType: node.type })),
+        .map(node => ({ id: node.id, type: 'node' as const, label: node.title || '未命名节点', mediaType: node.type }))
+        .sort((a, b) => Number(a.mediaType !== 'image' && a.mediaType !== 'video') - Number(b.mediaType !== 'image' && b.mediaType !== 'video')),
       assets: (assetLibrary?.items || [])
         .filter(item => matches(item.name || '未命名素材'))
         .map(item => ({ id: item.id, type: 'asset' as const, label: item.name || '未命名素材', mediaType: item.mimeType })),
@@ -248,7 +253,7 @@ const userApiKeysRef = useRef(userApiKeys);
         // Click inside the panel — only dismiss if it landed outside the
         // popover/menu itself so clicks on menu items still register.
         const el = target as Element;
-        if (el.closest?.('.agent-mode-menu, .agent-session-menu, .agent-mention-menu, .agent-attachment-menu, [aria-expanded="true"]')) return;
+        if (el.closest?.('.agent-mode-menu, .agent-session-menu, .agent-mention-menu, .agent-reference-picker, .agent-attachment-menu, [aria-expanded="true"]')) return;
       }
       closeAll();
     };
@@ -334,11 +339,14 @@ const userApiKeysRef = useRef(userApiKeys);
         return;
       }
       const confirm = askConfirmation;
+      // Shared project receipts are read-only reference text, never merged memory.
+      const receiptContext = formatReceiptContext(useAgentReceiptStore.getState().byProject[project.id] || []);
       const kernel = new BrowserAgentKernel({
         projectId: project.id,
         route,
         tools: createBrowserAgentTools({ projectId: project.id, confirm, activeChangeSetId: '' }),
         confirm,
+        systemPrompt: BROWSER_DEFAULT_SYSTEM_PROMPT + receiptContext,
       });
       await kernel.openSession();
       if (!active) { await kernel.close(); return; }
@@ -770,8 +778,10 @@ const userApiKeysRef = useRef(userApiKeys);
         />}
         {groupBanner && <div className="agent-group-banner" role="status">
           <LayoutGrid size={14} />
-          <span>{language === 'zho' ? `已添加分组「${groupBanner.label}」（${groupBanner.nodeIds.length} 个节点）` : `Added group "${groupBanner.label}" (${groupBanner.nodeIds.length} nodes)`}</span>
-          {groupBanner.saved
+          <span>{groupBanner.nodeIds.length === 1
+            ? (language === 'zho' ? `已加入上下文「${groupBanner.label}」` : `Added "${groupBanner.label}" to context`)
+            : (language === 'zho' ? `已添加分组「${groupBanner.label}」（${groupBanner.nodeIds.length} 个节点）` : `Added group "${groupBanner.label}" (${groupBanner.nodeIds.length} nodes)`)}</span>
+          {groupBanner.nodeIds.length <= 1 ? null : groupBanner.saved
             ? <small>{language === 'zho' ? '已保存到「我的」Skill' : 'Saved to My Skills'}</small>
             : <button type="button" onClick={() => void saveGroupAsSkill()}>{language === 'zho' ? '保存为 Skill' : 'Save as Skill'}</button>}
           <button type="button" aria-label={language === 'zho' ? '关闭' : 'Dismiss'} onClick={() => setGroupBanner(null)}><X size={12} /></button>
@@ -824,11 +834,16 @@ const userApiKeysRef = useRef(userApiKeys);
             {creationMode !== 'all' && <span className="agent-setting-chip">{creationModeLabel(creationMode, language)}<button type="button" aria-label={language === 'zho' ? '恢复全能创作' : 'Reset mode'} onClick={() => setCreationMode('all')}><X size={11} /></button></span>}
             {preferredModel && <span className="agent-setting-chip">{preferredModel.capability === 'video' ? <Video size={11} /> : <ImageIcon size={11} />}{preferredModel.name}<button type="button" aria-label={language === 'zho' ? `移除模型 ${preferredModel.name}` : `Remove model ${preferredModel.name}`} onClick={() => setPreferredModel(null)}><X size={11} /></button></span>}
           </div>}
-          {references.length > 0 && <div className="agent-reference-chips" aria-label="已引用内容">{references.map(reference => <span key={`${reference.type}:${reference.id}`} className="agent-reference-chip">
-            <button type="button" className="agent-reference-chip__target" aria-label={reference.type === 'node' ? `定位节点 ${reference.label}` : `已引用资产 ${reference.label}`} onClick={() => reference.type === 'node' && onFocusNode?.(reference.id)}>{referenceIcon(reference)}<span>{reference.label}</span></button>
-            <button type="button" aria-label={`替换引用 ${reference.label}`} onClick={() => startReplace(reference)}><RotateCw size={12} /></button>
-            <button type="button" aria-label={`移除引用 ${reference.label}`} onClick={() => setReferences(current => current.filter(item => item !== reference))}><X size={12} /></button>
-          </span>)}</div>}
+          {references.length > 0 && <div className="agent-reference-chips" aria-label="已引用内容">{references.map(reference => <AgentReferenceChip
+            key={reference.type + ':' + reference.id}
+            node={reference.type === 'node' ? project.nodes.find(item => item.id === reference.id) : undefined}
+            icon={referenceIcon(reference)}
+            label={reference.label}
+            targetLabel={reference.type === 'node' ? '定位节点 ' + reference.label : '已引用资产 ' + reference.label}
+            onTarget={() => { if (reference.type === 'node') onFocusNode?.(reference.id); }}
+            onReplace={() => startReplace(reference)}
+            onRemove={() => setReferences(current => current.filter(item => item !== reference))}
+          />)}</div>}
           <textarea
             ref={textarea}
             value={prompt}
@@ -879,7 +894,7 @@ const userApiKeysRef = useRef(userApiKeys);
 
 function ReferenceGroup({ label, items, onSelect, icon, empty }: { label: string; items: AgentReference[]; onSelect: (reference: AgentReference) => void; icon: (reference: AgentReference) => React.ReactNode; empty: string }) {
   return <section className="agent-reference-group"><strong>{label}</strong>{items.length
-    ? items.slice(0, 12).map(item => <button type="button" role="option" key={`${item.type}:${item.id}`} onClick={() => onSelect(item)}>{icon(item)}<span>{item.label}</span><small>{item.type === 'node' ? item.mediaType : item.mediaType?.replace(/^\w+\//, '')}</small></button>)
+    ? items.slice(0, 60).map(item => <button type="button" role="option" key={item.type + ':' + item.id} onClick={() => onSelect(item)}>{icon(item)}<span>{item.label}</span><small>{item.type === 'node' ? item.mediaType : item.mediaType?.replace(/^\w+\//, '')}</small></button>)
     : <p>{empty}</p>}</section>;
 }
 

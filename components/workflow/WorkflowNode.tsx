@@ -1,4 +1,5 @@
-import { Bot, Camera, Check, ChevronsDown, Clapperboard, FileText, Image as ImageIcon, Music2, Pause, Pencil, Play, Plus, RefreshCw, Sparkles, Star, Upload, Video, Volume2, VolumeX, X } from 'lucide-react';
+import { TextNodeBody } from './TextNodeBody';
+import { ArrowLeftRight, Bot, Camera, Check, ChevronsDown, Clapperboard, FileText, Image as ImageIcon, Music2, Pause, Pencil, Play, Plus, RefreshCw, Sparkles, Star, Upload, Video, Volume2, VolumeX, X } from 'lucide-react';
 import { WorkflowNodeLasso } from './WorkflowNodeLasso';
 import type { LassoPoint } from './lasso';
 import { Component, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
@@ -101,7 +102,6 @@ export function WorkflowNode({
   onKeyboardResize,
   language = 'zho',
   onReplaceMedia,
-  onRemoveMedia,
   onActivateMedia,
   onDeactivateMedia,
   onExtractFrame,
@@ -285,9 +285,16 @@ export function WorkflowNode({
     videoLeaveTimer.current = window.setTimeout(() => onDeactivateMedia?.(), 520);
   };
   const mediaActions = isMedia && (
-    <div className="workflow-node__media-actions" data-workflow-overlay>
-      <button type="button" aria-label="重新选择媒体文件" onPointerDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); mediaInput.current?.click(); }}><Upload size={14} />重新选择</button>
-      {(node.metadata.storageKey || node.metadata.href || node.metadata.artifactRef?.taskId) && <button type="button" aria-label="移除媒体文件" onPointerDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); onRemoveMedia(); }}><X size={14} />移除</button>}
+    <div className="workflow-node__media-actions" data-workflow-overlay onPointerDown={event => event.stopPropagation()}>
+      <button
+        type="button"
+        className="workflow-node__media-swap"
+        aria-label="替换素材"
+        title="替换素材"
+        onClick={event => { event.stopPropagation(); mediaInput.current?.click(); }}
+      >
+        <ArrowLeftRight size={13} />
+      </button>
       <input ref={mediaInput} hidden type="file" accept={accept} onChange={event => { const file = event.target.files?.[0]; if (file) onReplaceMedia(file); event.currentTarget.value = ''; }} />
     </div>
   );
@@ -495,14 +502,7 @@ export function WorkflowNode({
         {node.type === 'audio' && (media.url
           ? <><audio src={media.url} controls preload="metadata" style={{ width: '100%' }} />{mediaActions}</>
           : <div className="workflow-node__empty"><Music2 size={26} /><span>{mediaError || '音频节点'}</span>{mediaActions}</div>)}
-        {node.type === 'text' && (
-          <textarea
-            value={node.metadata.content || ''}
-            placeholder="输入文本或提示词"
-            onPointerDown={event => event.stopPropagation()}
-            onChange={event => onChangeText(event.target.value)}
-          />
-        )}
+        {node.type === 'text' && <TextNodeBody value={node.metadata.content || ''} onChange={onChangeText} />}
         {node.type === 'config' && (
           <WorkflowConfigPanel node={node} onChange={onChangeMetadata} onRun={onRun} />
         )}
@@ -698,22 +698,50 @@ function formatBytes(bytes: number) {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
+function formatShotSeconds(seconds: number) {
+  return Number.isInteger(seconds) ? `${seconds}s` : `${seconds.toFixed(1)}s`;
+}
+
+/** LibTV 式分镜表：每镜一行，列为镜号 / 时长 / 场景 / 画面描述 / 运镜 / 台词与音效。 */
 function ScriptNodeCard({ node }: { node: WorkflowNodeData }) {
   const breakdown = node.metadata.scriptBreakdown;
-  const shotCount = breakdown?.shots?.length || 0;
+  const shots = breakdown?.shots || [];
   const assetCount = breakdown?.assets?.length || 0;
-  const completedShots = breakdown?.shots?.filter(shot => shot.status === 'success').length || 0;
+  const completedShots = shots.filter(shot => shot.status === 'success').length;
+  const totalSeconds = shots.reduce((sum, shot) => sum + (shot.durationSec || 0), 0);
   return (
     <div className="workflow-node__script-card">
       <div className="workflow-node__script-header">
-        <Clapperboard size={20} />
-        <span>{breakdown?.sourceText ? '剧本分镜' : '空脚本'}</span>
+        <Clapperboard size={16} />
+        <span>{breakdown?.sourceText || shots.length ? '分镜表' : '空脚本'}</span>
+        {shots.length > 0 && (
+          <span className="workflow-node__script-stats">
+            <span>{shots.length} 镜</span>
+            {totalSeconds > 0 && <span>{formatShotSeconds(totalSeconds)}</span>}
+            <span>{assetCount} 资产</span>
+            <span>{completedShots}/{shots.length} 完成</span>
+          </span>
+        )}
       </div>
-      {shotCount > 0 ? (
-        <div className="workflow-node__script-stats">
-          <span>{assetCount} 资产</span>
-          <span>{shotCount} 分镜</span>
-          <span>{completedShots}/{shotCount} 完成</span>
+      {shots.length > 0 ? (
+        <div className="workflow-node__script-table-wrap" onWheel={event => event.stopPropagation()}>
+          <table className="workflow-node__script-table">
+            <thead>
+              <tr><th>镜号</th><th>时长</th><th>场景</th><th>画面描述</th><th>运镜</th><th>台词 / 音效</th></tr>
+            </thead>
+            <tbody>
+              {shots.map(shot => (
+                <tr key={shot.id} className={shot.status ? `is-${shot.status}` : undefined}>
+                  <td className="is-index">{String(shot.index + 1).padStart(2, '0')}</td>
+                  <td>{shot.durationSec ? formatShotSeconds(shot.durationSec) : '—'}</td>
+                  <td>{shot.scene || '—'}</td>
+                  <td className="is-desc">{shot.action || shot.imagePromptOverride || shot.videoPromptOverride || '—'}</td>
+                  <td>{shot.camera || '—'}</td>
+                  <td>{[shot.dialogue, shot.sfx].filter(Boolean).join(' / ') || '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       ) : (
         <div className="workflow-node__script-empty">
@@ -721,13 +749,6 @@ function ScriptNodeCard({ node }: { node: WorkflowNodeData }) {
           <span>双击打开编辑器拆解剧本</span>
         </div>
       )}
-      {breakdown?.shots?.slice(0, 4).map(shot => (
-        <div key={shot.id} className="workflow-node__script-shot-row">
-          <span className="workflow-node__script-shot-index">#{shot.index + 1}</span>
-          <span className="workflow-node__script-shot-desc">{shot.dialogue || shot.action || shot.imagePromptOverride || shot.videoPromptOverride || '未描述'}</span>
-        </div>
-      ))}
-      {shotCount > 4 && <div className="workflow-node__script-more">+{shotCount - 4} 更多分镜</div>}
     </div>
   );
 }

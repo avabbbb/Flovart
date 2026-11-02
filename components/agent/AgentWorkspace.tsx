@@ -2,6 +2,7 @@ import { Sparkles } from 'lucide-react';
 import '../../styles/agent.css';
 import type { WorkflowProject } from '../workflow/types';
 import { AgentHostPicker } from './AgentHostPicker';
+import { AgentActivityPanel } from './AgentActivityPanel';
 
 /**
  * Dedicated top-level Agent surface.
@@ -26,6 +27,7 @@ export function AgentConnectionsPage({ project, language = 'zho' }: { project: W
           </header>
           <AgentHostPicker projectTitle={project?.title} language={language} />
         </section>
+        <AgentActivityPanel language={language} />
       </div>
     </div>
   );
