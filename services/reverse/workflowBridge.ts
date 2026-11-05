@@ -101,21 +101,3 @@ export async function sendReverseAsSubgraph(projectId: string, reverseProject: R
   const res = await applyOperations(project, operations, 'Reverse → Canvas sync: ' + reverseProject.title);
   return { ...res, nodeIds: res.ok ? [frame.id, ...plan.add.map((n) => n.id)] : [], frameId: frame.id, mode: 'sync' };
 }
-
-// 游戏素材：每个素材一个 text 节点承载规格提示词（不带原作图像），由人在 Workflow 里接生成节点并运行。
-export async function sendAssetSpecsToWorkflow(projectId: string, specs: Array<{ assetId: string; prompt: string }>): Promise<ReverseBridgeResult> {
-  const project = findProject(projectId);
-  if (!project) return { ok: false, nodeIds: [], message: 'no-workflow-project' };
-  if (!specs.length) return { ok: false, nodeIds: [], message: 'no-assets' };
-  const x = nextColumnX(project);
-  let y = 80;
-  const nodes = specs.map((spec) => {
-    const node = createWorkflowNode('reverse-asset-' + nanoid(8), 'text', { x, y }, { content: spec.prompt, prompt: spec.prompt });
-    node.title = spec.assetId;
-    y += ROW_GAP;
-    return node;
-  });
-  const intent = 'Reverse assets: ' + specs.length;
-  const res = await applyOperations(project, nodes.map((node) => ({ type: 'add_node' as const, node })), intent);
-  return { ok: res.ok, nodeIds: res.ok ? nodes.map((n) => n.id) : [], message: res.message };
-}

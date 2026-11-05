@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { buildShotsFromCuts, expandVariantMatrix, planRun, readReference, wordRangeForShot, wordsText } from '../../services/reverse/video';
 import type { ReferenceReading } from '../../services/reverse/video';
 import { parseTranscriptJson } from '../../services/reverse/evidence';
@@ -16,6 +16,7 @@ import type {
   ReverseVideoAnalysis,
   ReverseVideoProject,
 } from '../../services/reverse/types';
+import { REVERSE_STEPS, initialOpen, newlyUnlocked, reverseSteps, type ReverseStepId, type ReverseStepState } from '../../services/reverse/disclosure';
 
 export interface ReverseVideoPanelProps {
   project: ReverseVideoProject;
@@ -50,6 +51,10 @@ const TEXT = {
     converted: '已转为画布上的子画布；双击子画布可回到逆向。', synced: '已同步到子画布：只增改变化项，保留画布上已选的版本。', upToDate: '子画布已是最新，无需同步。', failed: '写入失败：',
     renderPlan: (gen: number, reused: number) => '需生成 ' + gen + ' 个镜头，按内容 key 复用 ' + reused + ' 个',
     total: (n: number) => '共 ' + n + ' 组',
+    optional: '可选', variants: '替换与变体', sumRefs: (n: number) => n + ' 个参考',
+    sumShots: (n: number, dur: string) => n + ' 个镜头 · ' + dur,
+    sumVariants: (s: number, a: number, v: number) => s + ' 个槽位 · ' + a + ' 条轴 · ' + v + ' 组',
+    sumCanvas: '已转为子画布',
   },
   en: {
     reference: 'Reference video', refLabel: 'Name', refLocator: 'URL or local path', refNotes: 'Reference notes: structure, pacing, what to keep', add: 'Add',
@@ -72,6 +77,10 @@ const TEXT = {
     converted: 'Converted to a subgraph on the canvas; double-click it to come back to Reverse.', synced: 'Subgraph synced: only changed items were added or updated; versions picked on the canvas are kept.', upToDate: 'The subgraph is already up to date.', failed: 'Write failed: ',
     renderPlan: (gen: number, reused: number) => gen + ' shots to generate, ' + reused + ' reused by content key',
     total: (n: number) => n + ' combos',
+    optional: 'Optional', variants: 'Slots & variants', sumRefs: (n: number) => n + (n === 1 ? ' reference' : ' references'),
+    sumShots: (n: number, dur: string) => n + ' shots · ' + dur,
+    sumVariants: (s: number, a: number, v: number) => s + ' slots · ' + a + ' axes · ' + v + ' combos',
+    sumCanvas: 'Converted to a subgraph',
   },
 };
 
@@ -130,16 +139,62 @@ function analysisFrom(
   return next;
 }
 
-function Card({ title, extra, children }: { title: string; extra?: React.ReactNode; children: React.ReactNode }) {
+interface StepProps {
+  id: ReverseStepId;
+  index: number;
+  title: string;
+  state: ReverseStepState;
+  open: boolean;
+  summary: string;
+  lockHint: string;
+  extra?: React.ReactNode;
+  onToggle: () => void;
+  children: React.ReactNode;
+}
+
+// 分步卡：未解锁只留标题和解锁条件；折叠时标题行显示摘要；点标题展开 / 收起。
+function Step({ id, index, title, state, open, summary, lockHint, extra, onToggle, children }: StepProps) {
+  const bodyId = 'reverse-step-body-' + id;
+  const expanded = state.unlocked && open;
   return (
-    <section className='settings-elevated settings-elevated--soft rounded-xl p-4' style={{ background: 'var(--isl-surface-2)' }}>
-      <div className='mb-3 flex items-center justify-between gap-2'>
-        <h3 className='text-xs font-bold'>{title}</h3>
-        {extra}
+    <section
+      className='settings-elevated settings-elevated--soft rounded-xl p-4'
+      style={{ background: 'var(--isl-surface-2)', opacity: state.unlocked ? 1 : 0.6 }}
+      data-testid={'reverse-step-' + id}
+      data-unlocked={state.unlocked}
+      data-complete={state.complete}
+    >
+      <div className='flex items-center justify-between gap-2'>
+        <h3 className='min-w-0 flex-1 text-xs font-bold'>
+          <button
+            type='button'
+            className='flex w-full min-w-0 items-center gap-2 text-left disabled:cursor-not-allowed'
+            disabled={!state.unlocked}
+            aria-expanded={expanded}
+            aria-controls={bodyId}
+            onClick={onToggle}
+            data-testid={'reverse-step-toggle-' + id}
+          >
+            <span
+              className='flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold'
+              style={state.complete ? { background: 'var(--isl-ink)', color: 'var(--isl-surface-2)' } : { background: 'rgba(127,127,127,0.18)' }}
+            >
+              {state.complete ? '✓' : index}
+            </span>
+            <span className='shrink-0'>{title}</span>
+            {!expanded && <span className='min-w-0 truncate text-[11px] font-normal' style={ghost}>{state.unlocked ? summary : lockHint}</span>}
+            {state.unlocked && <span aria-hidden className='ml-auto shrink-0 text-[10px] font-normal' style={ghost}>{expanded ? '▾' : '▸'}</span>}
+          </button>
+        </h3>
+        {state.unlocked && extra}
       </div>
-      {children}
+      {expanded && <div id={bodyId} className='mt-3'>{children}</div>}
     </section>
   );
+}
+
+function SubHead({ children }: { children: React.ReactNode }) {
+  return <h4 className='mb-2 mt-4 text-[11px] font-semibold' style={soft}>{children}</h4>;
 }
 
 function Diagnostics({ items, label }: { items: readonly ReverseScriptDiagnostic[]; label: (line: number) => string }) {
@@ -198,6 +253,30 @@ export function ReverseVideoPanel({ project, language, workflowProjectId, onUpda
   const timings = analysis?.alignment?.timings ?? [];
   const measured = timings.filter((x) => x.measured).length;
   const exactPct = Math.round((analysis?.alignment?.exactRatio ?? 0) / 0.01);
+
+  const steps = useMemo(() => reverseSteps({
+    references: project.references.length,
+    shots: shots.length,
+    hasTarget: Boolean(target),
+    axes: project.axes.length,
+    hasFrame: Boolean(frameId),
+  }), [project.references.length, shots.length, target, project.axes.length, frameId]);
+  const stepById = useMemo(() => new Map(steps.map((s) => [s.id, s] as const)), [steps]);
+  const [open, setOpen] = useState(() => initialOpen(steps));
+  const seenUnlocked = useRef(new Set<ReverseStepId>(steps.filter((s) => s.unlocked).map((s) => s.id)));
+  useEffect(() => {
+    const fresh = newlyUnlocked(seenUnlocked.current, steps);
+    seenUnlocked.current = new Set(steps.filter((s) => s.unlocked).map((s) => s.id));
+    if (fresh.length) setOpen((o) => ({ ...o, ...Object.fromEntries(fresh.map((id) => [id, true])) }));
+  }, [steps]);
+  const stepProps = (id: ReverseStepId) => ({
+    id,
+    index: REVERSE_STEPS.indexOf(id) + 1,
+    state: stepById.get(id)!,
+    open: open[id],
+    lockHint: t.needShots,
+    onToggle: () => setOpen((o) => ({ ...o, [id]: !o[id] })),
+  });
 
   const addReference = () => {
     const locator = refLocator.trim();
@@ -376,14 +455,7 @@ export function ReverseVideoPanel({ project, language, workflowProjectId, onUpda
 
   return (
     <div className='flex flex-col gap-4' data-testid='reverse-video-panel'>
-      <Card title={t.canvas} extra={<span className='text-[11px]' style={soft} data-testid='reverse-run-plan'>{t.renderPlan(run.toGenerate, run.reused)}</span>}>
-        <div className='flex flex-wrap items-center gap-2'>
-          <button type='button' className={btnClass} disabled={!workflowProjectId || !shots.length || busy} onClick={sendToCanvas} data-testid='reverse-to-canvas'>{frameId ? t.syncCanvas : t.toCanvas}</button>
-          {frameId && onOpenInCanvas && <button type='button' className={btnClass} onClick={() => onOpenInCanvas(frameId)} data-testid='reverse-open-canvas'>{t.openCanvas}</button>}
-          <span className='text-[11px]' style={ghost}>{notice ?? (!workflowProjectId ? t.needWorkflow : !shots.length ? t.needShots : '')}</span>
-        </div>
-      </Card>
-      <Card title={t.reference}>
+      <Step {...stepProps('reference')} title={t.reference} summary={project.references.length ? t.sumRefs(project.references.length) : t.optional}>
         {project.references.length > 0 && (
           <ul className='mb-3 flex flex-col gap-1'>
             {project.references.map((r) => (
@@ -401,16 +473,14 @@ export function ReverseVideoPanel({ project, language, workflowProjectId, onUpda
           <button type='button' className={btnClass} disabled={!refLocator.trim()} onClick={addReference}>{t.add}</button>
         </div>
         <textarea className={inputClass + ' mt-2'} style={inputStyle} rows={2} placeholder={t.refNotes} value={refNotes} onChange={(e) => setRefNotes(e.target.value)} />
-      </Card>
-
-      <Card title={t.briefTitle}>
+        <SubHead>{t.briefTitle}</SubHead>
         <div className='grid grid-cols-2 gap-2'>
           <textarea className={inputClass} style={inputStyle} rows={3} placeholder={t.brief} value={project.brief ?? ''} onChange={(e) => onUpdate((p) => ({ ...p, brief: e.target.value }))} data-testid='reverse-brief' />
           <textarea className={inputClass} style={inputStyle} rows={3} placeholder={t.treatment} value={project.treatment ?? ''} onChange={(e) => onUpdate((p) => ({ ...p, treatment: e.target.value }))} data-testid='reverse-treatment' />
         </div>
-      </Card>
+      </Step>
 
-      <Card title={t.analysis}>
+      <Step {...stepProps('analysis')} title={t.analysis} summary={analysis && shots.length ? t.sumShots(shots.length, fmt(analysis.durationMs)) : ''}>
         <div className='grid grid-cols-[8rem_1fr] gap-2'>
           <input className={inputClass} style={inputStyle} inputMode='decimal' placeholder={t.duration} value={durationSec} onChange={(e) => setDurationSec(e.target.value)} />
           <input className={inputClass} style={inputStyle} placeholder={t.cuts} value={cutsSec} onChange={(e) => setCutsSec(e.target.value)} />
@@ -479,9 +549,9 @@ export function ReverseVideoPanel({ project, language, workflowProjectId, onUpda
             <textarea className={inputClass + ' mt-3'} style={inputStyle} rows={3} placeholder={t.notes} value={analysis?.notes ?? ''} onChange={(e) => updateAnalysis({ notes: e.target.value })} data-testid='reverse-analysis-notes' />
           </>
         )}
-      </Card>
+      </Step>
 
-      <Card title={t.target}>
+      <Step {...stepProps('target')} title={t.target} summary={target ? t.targetHint(fmt(target.durationMs)) : ''}>
         <textarea className={inputClass + ' font-mono'} style={inputStyle} rows={3} placeholder={t.targetScript} value={project.targetScript ?? ''} onChange={(e) => onUpdate((p) => ({ ...p, targetScript: e.target.value }))} data-testid='reverse-target-script' />
         {target ? (
           <>
@@ -506,9 +576,10 @@ export function ReverseVideoPanel({ project, language, workflowProjectId, onUpda
         ) : (
           <p className='mt-1 text-[11px]' style={ghost}>{t.targetNeed}</p>
         )}
-      </Card>
+      </Step>
 
-      <Card title={t.slots}>
+      <Step {...stepProps('variants')} title={t.variants} summary={t.sumVariants(project.slots.length, project.axes.length, expansion.total)}>
+        <h4 className='mb-2 text-[11px] font-semibold' style={soft}>{t.slots}</h4>
         {project.slots.length > 0 && (
           <ul className='mb-3 flex flex-col gap-2'>
             {project.slots.map((sl) => (
@@ -529,9 +600,8 @@ export function ReverseVideoPanel({ project, language, workflowProjectId, onUpda
           <input className={inputClass} style={inputStyle} placeholder={t.slotOriginal} value={slotOriginal} onChange={(e) => setSlotOriginal(e.target.value)} />
           <button type='button' className={btnClass} disabled={!slotLabel.trim()} onClick={addSlot}>{t.add}</button>
         </div>
-      </Card>
 
-      <Card title={t.axes}>
+        <SubHead>{t.axes}</SubHead>
         {project.axes.length > 0 && (
           <ul className='mb-3 flex flex-col gap-2'>
             {project.axes.map((a) => (
@@ -554,9 +624,8 @@ export function ReverseVideoPanel({ project, language, workflowProjectId, onUpda
           <input className={inputClass} style={inputStyle} placeholder={t.axisOptions} value={axisOptions} onChange={(e) => setAxisOptions(e.target.value)} />
           <button type='button' className={btnClass} disabled={!axisLabel.trim() || !axisTarget || !axisOptions.trim()} onClick={addAxis}>{t.add}</button>
         </div>
-      </Card>
 
-      <Card title={t.matrix} extra={<span className='text-[11px]' style={soft}>{t.total(expansion.total)}</span>}>
+        <SubHead>{t.matrix + ' · ' + t.total(expansion.total)}</SubHead>
         {expansion.truncated && <p className='mb-2 text-[11px]' style={{ color: 'var(--isl-coral-deep)' }}>{t.truncated}</p>}
         <div className='flex flex-wrap gap-1.5' data-testid='reverse-matrix'>
           {expansion.variants.map((v) => (
@@ -565,7 +634,20 @@ export function ReverseVideoPanel({ project, language, workflowProjectId, onUpda
             </button>
           ))}
         </div>
-      </Card>
+      </Step>
+
+      <Step
+        {...stepProps('canvas')}
+        title={t.canvas}
+        summary={frameId ? t.sumCanvas : ''}
+        extra={<span className='shrink-0 text-[11px]' style={soft} data-testid='reverse-run-plan'>{t.renderPlan(run.toGenerate, run.reused)}</span>}
+      >
+        <div className='flex flex-wrap items-center gap-2'>
+          <button type='button' className={btnClass} disabled={!workflowProjectId || !shots.length || busy} onClick={sendToCanvas} data-testid='reverse-to-canvas'>{frameId ? t.syncCanvas : t.toCanvas}</button>
+          {frameId && onOpenInCanvas && <button type='button' className={btnClass} onClick={() => onOpenInCanvas(frameId)} data-testid='reverse-open-canvas'>{t.openCanvas}</button>}
+          <span className='text-[11px]' style={ghost}>{notice ?? (!workflowProjectId ? t.needWorkflow : '')}</span>
+        </div>
+      </Step>
     </div>
   );
 }

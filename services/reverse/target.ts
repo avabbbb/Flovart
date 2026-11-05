@@ -23,7 +23,7 @@ function isSentenceEnd(word: ReverseWord): boolean {
 }
 
 // 每个镜头窗口的台词词区间。先按词中点划分；下一镜头没有 cue（顺延）时，
-// 两镜头之间的边界吸附到最近的句末，避免台词在句中断开。镜头时长不变，只调词的归属。
+// 两镜头之间的边界吸附到最近的句末，避免台词在句中断开。只调词的归属；时长由 snapWindowsToSentences 跟进。
 export function dialogueRanges(words: readonly ReverseWord[], windows: readonly ShotWindow[]): Map<string, [number, number]> {
   const ranges = windows.map((w) => wordRangeForShot(words, w));
   const ends = words.filter(isSentenceEnd).map((w) => w.index).sort((a, b) => a - b);
@@ -48,8 +48,34 @@ export function dialogueRanges(words: readonly ReverseWord[], windows: readonly 
   return out;
 }
 
+// 镜头时长跟着句子走：顺延边界上，若前一镜头的台词以句末收尾，
+// 边界时间移到句末词结束与下一词开始的中点（无下一词时取句末词结束）。
+// 锚定（有 cue）的边界不动；边界夹在两镜头原窗口之间，保证单调、总时长不变。
+export function snapWindowsToSentences(
+  words: readonly ReverseWord[],
+  windows: readonly ShotWindow[],
+  ranges: ReadonlyMap<string, [number, number]>,
+): ShotWindow[] {
+  const byIndex = new Map(words.map((w) => [w.index, w] as const));
+  const out = windows.map((w) => ({ ...w }));
+  for (let i = 0; i + 1 < out.length; i += 1) {
+    const cur = out[i]!;
+    const next = out[i + 1]!;
+    if (next.anchored) continue;
+    const r = ranges.get(cur.shotId);
+    const last = r ? byIndex.get(r[1]) : undefined;
+    if (!last || last.endMs === undefined || !isSentenceEnd(last)) continue;
+    const following = byIndex.get(last.index + 1);
+    const boundary = following?.startMs !== undefined ? Math.round((last.endMs + following.startMs) / 2) : last.endMs;
+    const ms = Math.min(Math.max(boundary, cur.startMs), next.endMs);
+    cur.endMs = ms;
+    next.startMs = ms;
+  }
+  return out;
+}
+
 // 目标版：目标稿按参考语速估总时长（没有目标配音前只是估计），
-// 镜头按同名 cue 重定时，台词取目标稿落在该镜头窗口内的词（顺延边界吸附句末）。
+// 镜头按同名 cue 重定时，台词取目标稿落在该镜头窗口内的词（顺延边界吸附句末，时长随之调整）。
 export interface TargetPlan {
   reading: ReferenceReading;
   windows: ShotWindow[];
@@ -66,8 +92,9 @@ export function planTarget(project: Pick<ReverseVideoProject, 'analysis' | 'targ
   if (!refCount || !targetCount) return null;
   const durationMs = Math.round(analysis.durationMs / (refCount / targetCount));
   const reading = readReference(script, durationMs);
-  const windows = retimeShots(analysis.shots, reading.narrative, reading.alignment.timings);
-  const ranges = dialogueRanges(reading.words, windows);
+  const retimed = retimeShots(analysis.shots, reading.narrative, reading.alignment.timings);
+  const ranges = dialogueRanges(reading.words, retimed);
+  const windows = snapWindowsToSentences(reading.words, retimed, ranges);
   return {
     reading,
     windows,

@@ -4,11 +4,11 @@ import type { WorkflowAnchorKind } from '../../components/workflow/types';
 // 全部自行实现：Hypit 许可（附加条件的 Apache-2.0）与本仓库 MIT 不兼容，不引入其代码。
 // 只描述工作台状态；真正的生成仍走 Workflow 节点 / production.dry-run → approve → run。
 
-export type ReverseDirection = 'video' | 'game';
+export type ReverseDirection = 'video';
 export type ReverseStatus = 'draft' | 'analyzing' | 'ready' | 'generating' | 'review' | 'done' | 'error';
 
 // ── Reference
-export type ReverseReferenceKind = 'video-url' | 'video-file' | 'workflow-node' | 'game-manifest' | 'asset-map';
+export type ReverseReferenceKind = 'video-url' | 'video-file' | 'workflow-node';
 
 export interface ReverseReference {
   id: string;
@@ -212,46 +212,14 @@ export interface ReverseVariant {
   enabled: boolean;
 }
 
-// ── Game assets
-export type ReverseAssetCategory = 'character' | 'ui' | 'background' | 'effect' | 'icon' | 'prop' | 'audio' | 'other';
-export type ReverseAssetState = 'must-replace' | 'generating' | 'candidate' | 'approved' | 'rejected' | 'keep';
-
-export interface ReverseAssetEntry {
-  // 原作素材 id（manifest key / SWF id）。
-  id: string;
-  // asset-map 中的代码符号名，回填锚点。
-  symbols: string[];
-  category: ReverseAssetCategory;
-  mediaKind: 'image' | 'audio';
-  width?: number;
-  height?: number;
-  hasAlpha?: boolean;
-  sourcePath?: string;
-  state: ReverseAssetState;
-  // 已产出的候选（Workflow 节点 id 或 override 路径）。
-  candidates: ReverseOutputRef[];
-  rejectReason?: string;
-}
-
-export interface ReverseStyleBible {
-  palette: string[];
-  lineWork?: string;
-  texture?: string;
-  // 禁止沿用的原作特征。
-  forbidden: string[];
-  // 已批准风格锚点节点。
-  anchorNodeIds: string[];
-  notes?: string;
-}
-
 // ── Outputs / gates
 // 产物来源：本次新生成 / 工作区外部文件（保持活引用）/ 引用早先产物。
 export type ReverseOutputOrigin = 'generated' | 'external-file' | 'reused';
 
 export interface ReverseOutputRef {
   id: string;
-  // 产出属于哪个变体、素材、镜头或锚点。
-  ownerKind: 'variant' | 'asset' | 'shot' | 'anchor';
+  // 产出属于哪个变体、镜头或锚点。
+  ownerKind: 'variant' | 'shot' | 'anchor';
   ownerId: string;
   // 输入内容 key；key 相同才可作为候选复用。
   key?: string;
@@ -263,7 +231,7 @@ export interface ReverseOutputRef {
   reusedFrom?: string;
 }
 
-export type ReverseGateKind = 'anchor-approval' | 'similarity' | 'layout' | 'budget' | 'aigc-label';
+export type ReverseGateKind = 'anchor-approval' | 'layout' | 'budget' | 'aigc-label';
 export type ReverseGateStatus = 'pending' | 'passed' | 'failed' | 'waived';
 
 export interface ReverseGate {
@@ -271,7 +239,7 @@ export interface ReverseGate {
   kind: ReverseGateKind;
   targetId: string;
   status: ReverseGateStatus;
-  // similarity：0..1，越高越像原作；超过阈值即 failed。
+  // 0..1 的检查分数（如有）。
   score?: number;
   threshold?: number;
   message?: string;
@@ -315,14 +283,4 @@ export interface ReverseVideoProject extends ReverseProjectBase {
   variants: ReverseVariant[];
 }
 
-export interface ReverseGameProject extends ReverseProjectBase {
-  direction: 'game';
-  ledger: ReverseAssetEntry[];
-  styleBible: ReverseStyleBible;
-  // pHash 相似度上限，默认 0.85。
-  similarityThreshold: number;
-  // 回填目录（相对游戏工程根），默认 remake/assets/override/。
-  overrideDir: string;
-}
-
-export type ReverseProject = ReverseVideoProject | ReverseGameProject;
+export type ReverseProject = ReverseVideoProject;
