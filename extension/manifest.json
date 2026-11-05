@@ -29,6 +29,13 @@
     "scripting",
     "storage"
   ],
+  "externally_connectable": {
+    "matches": [
+      "https://flovart.avabbbb.com/*",
+      "http://127.0.0.1:37522/*",
+      "http://localhost:37522/*"
+    ]
+  },
   "optional_host_permissions": [
     "http://*/*",
     "https://*/*"

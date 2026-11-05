@@ -4,7 +4,7 @@
 
 ## 1. 职责
 
-一条生成路径：任务、Provider 路由与适配、费用确认、持久素材、本地控制服务。所有入口（宿主面板、Canvas、Table、CLI、MCP、Assistant）调用同一个任务函数。
+一条生成路径：任务、Provider 路由与适配、费用确认、持久素材、本地控制服务。所有入口（宿主面板、Canvas、Reverse、CLI、MCP、Assistant）调用同一个任务函数。
 
 ## 2. 当前实现
 

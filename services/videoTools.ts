@@ -6,6 +6,7 @@
 import { getFFmpeg, resetFFmpeg } from './ffmpegClient';
 import { fetchFile } from '@ffmpeg/util';
 import { nanoid } from 'nanoid';
+import { fitDimensionsToPixelRange } from './referenceTranscode';
 
 export interface VideoTrimResult {
   blob: Blob;
@@ -97,6 +98,46 @@ async function trimVideoOnFFmpeg(blob: Blob, startSec: number, endSec: number, o
 
     const data = await ffmpeg.readFile(outputName);
     return { blob: new Blob([data], { type: blob.type || `video/${format}` }), durationSec: endSec - startSec };
+  } finally {
+    await deleteFFmpegFiles(ffmpeg, [inputName, outputName]);
+  }
+}
+
+export interface VideoScaleResult {
+  blob: Blob;
+  width: number;
+  height: number;
+}
+
+
+export async function scaleVideoToPixelRange(
+  blob: Blob,
+  width: number,
+  height: number,
+  range: { min?: number; max?: number },
+  originalName = 'video.mp4',
+): Promise<VideoScaleResult> {
+  return enqueueFFmpegTask(() => scaleVideoOnFFmpeg(blob, fitDimensionsToPixelRange(width, height, range), originalName));
+}
+
+async function scaleVideoOnFFmpeg(blob: Blob, size: { width: number; height: number }, originalName: string): Promise<VideoScaleResult> {
+  const ffmpeg = await getFFmpeg();
+  const prefix = uniqueFFmpegPrefix('scale');
+  const inputName = prefix + 'input.' + guessFormat(originalName);
+  const outputName = prefix + 'output.mp4';
+  try {
+    await ffmpeg.writeFile(inputName, await fetchFile(blob));
+    const code = await ffmpeg.exec([
+      '-i', inputName,
+      '-vf', 'scale=' + size.width + ':' + size.height + ':flags=lanczos',
+      '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '18', '-pix_fmt', 'yuv420p',
+      '-c:a', 'copy',
+      '-movflags', '+faststart',
+      outputName,
+    ]);
+    assertFFmpegExitCode(code);
+    const data = await ffmpeg.readFile(outputName);
+    return { blob: new Blob([data], { type: 'video/mp4' }), width: size.width, height: size.height };
   } finally {
     await deleteFFmpegFiles(ffmpeg, [inputName, outputName]);
   }

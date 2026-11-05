@@ -4,18 +4,18 @@ Read [AGENTS.md](../AGENTS.md) first. The canonical document map is [docs/index.
 
 ## Current product truth
 
-- Top-level surfaces: **Canvas | Table | Agent**.
-- Canvas is the spatial Workflow.
-- Table is structured media processing with explicit commit back to Workflow/assets.
+- Top-level surfaces: Canvas | Reverse (逆向) | Agent. The old Table view has been removed.
+- Canvas is the spatial Workflow. A Reverse project can be converted into a Canvas subgraph node (type subgraph); double-clicking the subgraph returns to Reverse.
+- Reverse is reference reverse-engineering (video / game assets); it writes to Canvas only through workflow.apply.
 - Agent is the local/external coding-agent connection hub: discovery, preparation, status and switching.
-- Built-in **Assistant / Context / History** is a contextual right drawer beside Canvas/Table. Do not embed it inside Agent and do not put Host connection management in the Assistant drawer.
+- Built-in Assistant / Context / History is a contextual right drawer beside Canvas/Reverse. Do not embed it inside Agent and do not put Host connection management in the Assistant drawer.
 - Do not restore Production Crew / Director / Operator, Production Skill Marketplace, old Canvas/Art dual state, or enterprise org/credits/approval as mandatory product layers.
 
 ## Code boundaries
 
-- Root `App.tsx` composes the Studio surfaces; `components/studio/StudioTopMenu.tsx` owns the visible Canvas/Table/Agent switch.
+- Root App.tsx composes the Studio surfaces; components/studio/StudioTopMenu.tsx owns the visible Canvas/Reverse/Agent switch.
 - Workflow UI/state lives under `components/workflow/`.
-- Table lives under `components/table/`.
+- Reverse UI lives under components/reverse/; Reverse logic lives under services/reverse/.
 - Agent connection UI lives under `components/agent/`.
 - Shared contextual drawer/chrome lives under `components/studio/`.
 - Provider and execution logic stays in `services/`; do not duplicate it in UI or transports.

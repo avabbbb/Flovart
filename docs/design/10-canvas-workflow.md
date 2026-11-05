@@ -21,6 +21,8 @@ Canvas 是空间化的 Workflow 创作面：节点、素材、连线、生成与
 
 节点类型：图片、视频、音频、文本、配置；支持引用、连线、局部媒体工具（ffmpeg.wasm 在浏览器内运行）和可见结果。
 
+设计目标：内置 `subgraph` 节点（子画布）。由 Reverse 一键生成，metadata 记 `reverseProjectId` / `collapsed`，子节点用可选 `parentId` 归属；文档保持扁平 nodes + connections，修改仍走 `workflow.apply`。双击进入 Reverse。`batchId` 分组语义（同批候选）不复用。详见 [11-reverse](11-reverse.md)。
+
 ## 3. 数据与权威
 
 - **Browser Workflow 是稳定 Agent 操作的可见权威**（当前）。迁移权威必须先改 contract，再改实现和文档。

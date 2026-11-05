@@ -1,0 +1,117 @@
+{
+  "id": "runninghub-sparkvideo-2-multimodal",
+  "name": "RunningHub · SparkVideo 2.0 全能参考生视频",
+  "version": "1",
+  "endpoint": "https://www.runninghub.cn",
+  "capabilities": [
+    "reference-to-video"
+  ],
+  "supportedReferenceKinds": [
+    "image",
+    "video"
+  ],
+  "supportedReferenceRoles": [
+    "reference",
+    "character",
+    "style",
+    "first_frame",
+    "source_video"
+  ],
+  "maxReferences": {
+    "image": 9,
+    "video": 3,
+    "audio": 0
+  },
+  "referencePixelRange": {
+    "video": {
+      "min": 409600,
+      "max": 927408
+    }
+  },
+  "auth": {
+    "header": "Authorization",
+    "prefix": "Bearer "
+  },
+  "request": {
+    "method": "POST",
+    "path": "openapi/v2/rhart-video/sparkvideo-2.0/multimodal-video",
+    "body": {
+      "prompt": {
+        "$path": "input.prompt"
+      },
+      "imageUrls": {
+        "$map": {
+          "path": "input.references",
+          "where": {
+            "path": "$item.type",
+            "equals": "image"
+          },
+          "item": {
+            "$path": "$item.href"
+          }
+        }
+      },
+      "videoUrls": {
+        "$map": {
+          "path": "input.references",
+          "where": {
+            "path": "$item.type",
+            "equals": "video"
+          },
+          "item": {
+            "$path": "$item.href"
+          }
+        }
+      },
+      "ratio": {
+        "$path": "input.parameters.aspectRatio"
+      },
+      "duration": {
+        "$path": "input.parameters.duration"
+      },
+      "resolution": {
+        "$path": "input.parameters.resolution"
+      },
+      "generateAudio": false
+    }
+  },
+  "response": {
+    "kind": "video",
+    "taskIdPath": "taskId",
+    "statusPath": "status",
+    "errorPath": "errorMessage",
+    "failureStatuses": [
+      "failed",
+      "error",
+      "cancel",
+      "canceled",
+      "cancelled"
+    ]
+  },
+  "poll": {
+    "request": {
+      "method": "POST",
+      "path": "openapi/v2/query",
+      "body": {
+        "taskId": {
+          "$path": "taskId"
+        }
+      }
+    },
+    "response": {
+      "kind": "video",
+      "statusPath": "status",
+      "mediaUrlPath": "results.0.url",
+      "errorPath": "errorMessage",
+      "failureStatuses": [
+        "failed",
+        "error",
+        "cancel",
+        "canceled",
+        "cancelled"
+      ]
+    },
+    "intervalMs": 5000,
+    "timeoutMs": 1200000
+  }
+}

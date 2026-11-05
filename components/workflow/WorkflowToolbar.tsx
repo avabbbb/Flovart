@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'motion/react';
-import { Bot, Camera, FileDown, FileText, Focus, Grid2X2, Hand, History, ImageDown, Keyboard, Library, Magnet, Map, MousePointer2, Plus, Redo2, RotateCcw, Send, Settings2, SlidersHorizontal, Trash2, Type, Undo2, Video, Image, Music2, Workflow, Spline, ZoomIn, ZoomOut } from 'lucide-react';
+import { Bot, Camera, FileDown, FileText, Focus, Grid2X2, Hand, History, ImageDown, Keyboard, Library, Magnet, Map, MousePointer2, Plus, Redo2, RotateCcw, Send, SlidersHorizontal, Trash2, Type, Undo2, Video, Image, Music2, Workflow, Spline, ZoomIn, ZoomOut } from 'lucide-react';
 import { Tooltip } from 'antd';
 import type React from 'react';
 import { useMemo, useRef, useState } from 'react';
@@ -21,7 +21,6 @@ const ADD_OPTIONS: Array<{ type: WorkflowNodeType; icon: typeof Type }> = [
   { type: 'text', icon: Type },
   { type: 'script', icon: FileText },
   { type: 'audio', icon: Music2 },
-  { type: 'config', icon: Settings2 },
 ];
 
 const TOOLBAR_COPY = {

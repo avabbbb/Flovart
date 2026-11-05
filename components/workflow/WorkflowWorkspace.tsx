@@ -22,6 +22,7 @@ import { useMediaQuery } from '../../hooks/useMediaQuery';
 import type { WorkflowNodeMetadata, WorkflowProject } from './types';
 import type { PromptIntent } from './promptIntent';
 import { createWorkflowHostSourceNode, findWorkflowNodeForHandoff, parseWorkflowHostHandoff, stripWorkflowHostHandoff, type WorkflowHostHandoff } from './hostLink';
+import { parseWorkflowDeliveryLink, stripWorkflowDeliveryLink } from './deliveryLink';
 import { displayError } from '../../services/displayError';
 import { mediaKindOf } from '../studio/assetLibraryShared';
 
@@ -276,6 +277,26 @@ export function WorkflowWorkspace({
   useEffect(() => {
     if (hydrated && projects.length > 0 && !activeProjectId) setActiveProject(projects[0].id);
   }, [activeProjectId, hydrated, projects, setActiveProject]);
+
+  // Agent 交付链接 #/app?project=..&focus=a,b：切到对应工程并聚焦首个节点；处理后移除参数，避免刷新重放。
+  useEffect(() => {
+    if (!hydrated || typeof window === 'undefined') return;
+    const consume = () => {
+      const link = parseWorkflowDeliveryLink(window.location.hash);
+      if (!link) return;
+      window.history.replaceState(window.history.state, '', window.location.pathname + window.location.search + stripWorkflowDeliveryLink(window.location.hash));
+      const target = useWorkflowStore.getState().projects.find(project => project.id === link.projectId);
+      if (!target) {
+        setWorkspaceNotice('交付链接指向的工程不存在：' + link.projectId);
+        return;
+      }
+      setActiveProject(target.id);
+      if (link.focusNodeIds[0]) setLocalFocusRequest({ nodeId: link.focusNodeIds[0], nonce: Date.now() });
+    };
+    consume();
+    window.addEventListener('hashchange', consume);
+    return () => window.removeEventListener('hashchange', consume);
+  }, [hydrated, setActiveProject]);
 
   const commitProjectPatch = (projectId: string, patch: Partial<WorkflowProject>, intent: string) => {
     const result = commitWorkflowProjectPatch(projectId, patch, intent);

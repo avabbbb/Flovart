@@ -1,0 +1,13 @@
+{
+  "images": {
+    "hero_idle": { "path": "sprites/hero_idle.png", "width": 64, "height": 64, "hasAlpha": true },
+    "hero_run_01": { "path": "sprites/hero_run_01.png", "width": 64, "height": 64, "hasAlpha": true },
+    "bg_forest": { "path": "backgrounds/bg_forest.jpg", "width": 1280, "height": 720 },
+    "ui_button_start": { "path": "ui/button_start.png", "width": 200, "height": 64, "hasAlpha": true },
+    "icon_coin": { "path": "ui/icon_coin.png", "width": 32, "height": 32, "hasAlpha": true }
+  },
+  "sounds": {
+    "sfx_jump": { "path": "audio/sfx_jump.wav" },
+    "bgm_title": { "path": "audio/bgm_title.mp3" }
+  }
+}

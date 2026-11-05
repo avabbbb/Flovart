@@ -9,6 +9,7 @@ import { getWorkflowPersistenceError, useWorkflowStore } from '../components/wor
 import type { WorkflowConnection, WorkflowDocumentOperation, WorkflowMutationSource, WorkflowNode, WorkflowNodeMetadata, WorkflowNodeType, WorkflowProject } from '../components/workflow/types';
 import { normalizeWorkflowExecutionError, type WorkflowExecutor, type WorkflowRunCommand, type WorkflowRunResult } from './workflowExecutor';
 import { displayError } from './displayError';
+import { buildProductionBible } from '../components/workflow/productionBible';
 
 export interface WorkflowCommandEnvelope {
   id: string;
@@ -62,7 +63,7 @@ export interface WorkflowDispatcherDependencies {
 }
 
 const MAX_IDEMPOTENCY_ENTRIES = 256;
-const NODE_TYPES: WorkflowNodeType[] = ['image', 'text', 'video', 'audio', 'config'];
+const NODE_TYPES: WorkflowNodeType[] = ['image', 'text', 'video', 'audio'];
 const DOCUMENT_OPERATION_TYPES = new Set<WorkflowDocumentOperation['type']>([
   'add_node', 'create_connected_node', 'update_node', 'delete_nodes', 'delete_connections', 'connect_nodes',
   'move_nodes', 'reorder_nodes', 'group_nodes', 'ungroup_nodes', 'set_batch_primary',
@@ -165,6 +166,56 @@ function validatedNode(args: Record<string, unknown>, fallbackId?: string): Work
   return node;
 }
 
+const AUTO_LAYOUT_GAP_X = 96;
+const AUTO_LAYOUT_GAP_Y = 40;
+
+/**
+ * Agent 建节点未给 x/y 时的落位：放在上游节点（无上游时为全部节点）右侧一列，
+ * 从上游顶边开始向下避让已有节点。旧行为是一律落在 (0,0)，多个节点会叠在原点。
+ */
+export function autoPlaceWorkflowNode(nodes: WorkflowNode[], node: Pick<WorkflowNode, 'width' | 'height'>, upstreamIds: string[] = []): { x: number; y: number } {
+  const upstream = nodes.filter(item => upstreamIds.includes(item.id));
+  const anchors = upstream.length ? upstream : nodes;
+  if (!anchors.length) return { x: 0, y: 0 };
+  const x = Math.max(...anchors.map(item => item.position.x + item.width)) + AUTO_LAYOUT_GAP_X;
+  let y = Math.min(...anchors.map(item => item.position.y));
+  // y 单调下移，每个阻挡节点至多命中一次。
+  for (let guard = 0; guard <= nodes.length; guard += 1) {
+    const blocker = nodes.find(item => x < item.position.x + item.width + AUTO_LAYOUT_GAP_Y
+      && item.position.x < x + node.width + AUTO_LAYOUT_GAP_Y
+      && y < item.position.y + item.height + AUTO_LAYOUT_GAP_Y
+      && item.position.y < y + node.height + AUTO_LAYOUT_GAP_Y);
+    if (!blocker) break;
+    y = blocker.position.y + blocker.height + AUTO_LAYOUT_GAP_Y;
+  }
+  return { x, y };
+}
+
+function withSpecSize(node: WorkflowNode): WorkflowNode {
+  const spec = createWorkflowNode(node.id, node.type, node.position || { x: 0, y: 0 });
+  return { ...node, position: node.position || spec.position, width: node.width ?? spec.width, height: node.height ?? spec.height };
+}
+
+/** workflow.apply 里不带 position 的 add_node / create_connected_node 按同一规则落位；上游取 fromNodeId 或同批 connect_nodes。 */
+export function autoPlaceDocumentOperations(nodes: WorkflowNode[], operations: WorkflowDocumentOperation[]): WorkflowDocumentOperation[] {
+  const placed = [...nodes];
+  return operations.map(op => {
+    if (op.type !== 'add_node' && op.type !== 'create_connected_node') return op;
+    if (!op.node || typeof op.node !== 'object') return op;
+    const sized = withSpecSize(op.node);
+    if (op.node.position) {
+      placed.push(sized);
+      return op;
+    }
+    const upstreamIds = op.type === 'create_connected_node'
+      ? [op.fromNodeId]
+      : operations.flatMap(item => (item.type === 'connect_nodes' && item.toNodeId === op.node.id ? [item.fromNodeId] : []));
+    const node = { ...sized, position: autoPlaceWorkflowNode(placed, sized, upstreamIds) };
+    placed.push(node);
+    return { ...op, node };
+  });
+}
+
 function documentOperationsArg(value: unknown): WorkflowDocumentOperation[] {
   if (!Array.isArray(value) || value.length === 0) throw new Error('operations 必须是非空数组');
   value.forEach((operation, index) => {
@@ -178,6 +229,16 @@ function documentOperationsArg(value: unknown): WorkflowDocumentOperation[] {
 const mutationSource = (source: WorkflowCommandEnvelope['source']): WorkflowMutationSource => (
   source === 'operator' ? 'dsh' : source
 );
+
+// 节点来源：外部 Agent / CLI / 运维通道新建的节点标 origin='agent'，画布 UI 标 'user'；已显式给出的不覆盖。
+export function tagWorkflowNodeOrigin(operations: WorkflowDocumentOperation[], source: WorkflowCommandEnvelope['source']): WorkflowDocumentOperation[] {
+  const origin: 'agent' | 'user' = source === 'ui' ? 'user' : 'agent';
+  return operations.map(op => {
+    if (op.type !== 'add_node' && op.type !== 'create_connected_node') return op;
+    if (!op.node || typeof op.node !== 'object' || op.node.metadata?.origin) return op;
+    return { ...op, node: { ...op.node, metadata: { ...(op.node.metadata || {}), origin } } };
+  });
+}
 
 function validateEnvelope(envelope: WorkflowCommandEnvelope): WorkflowCommandResult | null {
   if (!envelope || typeof envelope !== 'object') return error('', 'BAD_REQUEST', '命令 envelope 无效。');
@@ -262,7 +323,8 @@ export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDepende
         result = { ok: true, commandId: envelope.id, result: { projectId } };
       } else if (command === 'workflow.inspect') {
         if (!project) return error(envelope.id, 'NOT_FOUND', '当前没有可用的 Workflow 项目。');
-        result = { ok: true, commandId: envelope.id, result: redactProject(project) };
+        // 制作圣经：结构化的锚点 / 镜头表 / 一致性问题，让 Agent 不必自己从节点里拼项目状态。
+        result = { ok: true, commandId: envelope.id, result: { ...redactProject(project), productionBible: buildProductionBible(project) } };
       } else if (command === 'workflow.selection.get') {
         if (!project) return error(envelope.id, 'NOT_FOUND', '当前没有可用的 Workflow 项目。');
         const selectedNodeIds = project.selectedNodeIds.filter(nodeId => project.nodes.some(node => node.id === nodeId));
@@ -377,11 +439,16 @@ export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDepende
         let operation: WorkflowDocumentOperation | undefined;
         let operations: WorkflowDocumentOperation[] | undefined;
         if (command === 'workflow.apply') {
-          operations = documentOperationsArg(args.operations || args.ops);
+          operations = autoPlaceDocumentOperations(project.nodes, documentOperationsArg(args.operations || args.ops));
         } else if (command === 'workflow.node.create') {
-          operation = { type: 'add_node', node: validatedNode(args, `node-${mutationId}`) };
+          const node = validatedNode(args, 'node-' + mutationId);
+          if (args.x === undefined && args.y === undefined) node.position = autoPlaceWorkflowNode(project.nodes, node);
+          operation = { type: 'add_node', node };
         } else if (command === 'workflow.node.create-connected') {
-          operation = { type: 'create_connected_node', fromNodeId: requiredString(args.fromNodeId || args.from, 'fromNodeId'), node: validatedNode(args, `node-${mutationId}`) };
+          const fromNodeId = requiredString(args.fromNodeId || args.from, 'fromNodeId');
+          const node = validatedNode(args, 'node-' + mutationId);
+          if (args.x === undefined && args.y === undefined) node.position = autoPlaceWorkflowNode(project.nodes, node, [fromNodeId]);
+          operation = { type: 'create_connected_node', fromNodeId, node };
         } else if (command === 'workflow.node.update') {
           const patch = recordArg(args.patch || args.updates, 'patch');
           if ('id' in patch) throw new Error('patch 不能修改节点 id');
@@ -415,7 +482,7 @@ export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDepende
         } else {
           return error(envelope.id, 'UNKNOWN_COMMAND', `未知 Workflow 命令：${command}`);
         }
-        operations = operations || [operation!];
+        operations = tagWorkflowNodeOrigin(operations || [operation!], envelope.source);
         const expectedObjectVersions = Object.fromEntries(Object.entries(recordArg(args.expectedObjectVersions, 'expectedObjectVersions')).map(([id, value]) => [id, positiveNumber(value, `expectedObjectVersions.${id}`)]));
         const intent = typeof args.intent === 'string' && args.intent.trim()
           ? args.intent.trim()

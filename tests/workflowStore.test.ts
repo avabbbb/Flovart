@@ -291,7 +291,13 @@ describe('workflow project persistence', () => {
       state: { projects: [project], activeProjectId: project.id },
       version: 1,
     });
-    await useWorkflowStore.persist.rehydrate();
+    // v1 数据触发迁移，迁移后 persist 会等待防抖写回；fake timers 下需推进计时器。
+    const rehydrating = useWorkflowStore.persist.rehydrate();
+    await vi.waitFor(async () => {
+      await vi.advanceTimersByTimeAsync(400);
+      expect(useWorkflowStore.persist.hasHydrated()).toBe(true);
+    });
+    await rehydrating;
 
     expect(useWorkflowStore.getState().projects[0].selectedNodeIds).toEqual(['text-1']);
   });

@@ -51,6 +51,7 @@ const definitions = new Map<string, WorkflowNodeDefinition>([
   ['config', { type: 'config', output: textOutput }],
   ['script', { type: 'script', output: () => [] }],
   ['operation', { type: 'operation', output: () => [] }],
+  ['subgraph', { type: 'subgraph', output: () => [] }],
 ]);
 
 /** 插件可注册同一输出契约；调用方只依赖这个接口，不依赖节点 metadata。 */

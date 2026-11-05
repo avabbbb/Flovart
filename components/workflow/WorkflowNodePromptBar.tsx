@@ -6,7 +6,7 @@ import { extractMentions, type MentionData } from '../MediaMentionExtension';
 import type { AssetSuggestion } from '../MentionList';
 import type { ReferencePickerWorkflowItem } from '../studio/AssetReferencePicker';
 import { resolveWorkflowDefaultModel } from '../../services/workflowPromptPolicy';
-import { getWorkflowOperationCapability, parseWorkflowOperationParameters, type WorkflowOperationCapability } from './operationRegistry';
+import { getWorkflowOperationCapability, localizeOperationLabel, localizeParameterControl, parseWorkflowOperationParameters, type WorkflowOperationCapability, type WorkflowOperationUiLanguage } from './operationRegistry';
 import { createPromptIntent, type PromptIntent, type PromptIntentAction } from './promptIntent';
 import {
   filterWorkflowInputIds,
@@ -25,10 +25,11 @@ export interface WorkflowModelOptions {
   video: string[];
 }
 
-function WorkflowOperationParameterPanel({ capability, parameters, onChange }: {
+function WorkflowOperationParameterPanel({ capability, parameters, onChange, language }: {
   capability: WorkflowOperationCapability;
   parameters: Record<string, unknown>;
   onChange: (parameters: Record<string, unknown>) => void;
+  language?: WorkflowOperationUiLanguage;
 }) {
   if (!capability.parameterControls?.length) return null;
   const update = (key: string, value: unknown) => {
@@ -38,8 +39,9 @@ function WorkflowOperationParameterPanel({ capability, parameters, onChange }: {
       // Keep the last valid Recipe while the user is editing a cross-field constraint.
     }
   };
-  return <div className="workflow-operation-parameters" role="group" aria-label={`${capability.label}参数`} data-testid="workflow-operation-parameters">
-    {capability.parameterControls.map(control => <label key={control.key}>
+  const controls = capability.parameterControls.map(control => localizeParameterControl(control, language));
+  return <div className="workflow-operation-parameters" role="group" aria-label={language === 'en' ? localizeOperationLabel(capability, language) + ' parameters' : capability.label + '参数'} data-testid="workflow-operation-parameters">
+    {controls.map(control => <label key={control.key}>
       <span>{control.label}</span>
       {control.kind === 'select'
         ? <select aria-label={control.label} value={String(parameters[control.key] ?? '')} onChange={event => update(control.key, event.target.value)}>
@@ -247,9 +249,10 @@ export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme,
         capability={operationCapability}
         parameters={node.metadata.operation?.recipe.parameters || {}}
         onChange={operationParameters => patchConfig({ operationParameters })}
+        language={language}
       />}
-      {prompts.length > 0 && <button type="button" className="workflow-node-prompt__library-button" aria-label="提示词库" title="提示词库" onClick={() => setLibraryOpen(open => !open)}><BookOpen size={15} /></button>}
-      {libraryOpen && <div className="workflow-node-prompt__library" role="menu" aria-label="提示词库">{promptAssets.map(asset => <button type="button" role="menuitem" key={asset.id} onClick={() => { emitPromptIntent(asset.text, [], 'edit'); onChange({ prompt: asset.text, richTextDocument: undefined }); setLibraryOpen(false); }}><strong>{asset.title}</strong><span>{asset.text}</span></button>)}</div>}
+      {prompts.length > 0 && <button type="button" className="workflow-node-prompt__library-button" aria-label={language === 'en' ? 'Prompt library' : '提示词库'} title={language === 'en' ? 'Prompt library' : '提示词库'} onClick={() => setLibraryOpen(open => !open)}><BookOpen size={15} /></button>}
+      {libraryOpen && <div className="workflow-node-prompt__library" role="menu" aria-label={language === 'en' ? 'Prompt library' : '提示词库'}>{promptAssets.map(asset => <button type="button" role="menuitem" key={asset.id} onClick={() => { emitPromptIntent(asset.text, [], 'edit'); onChange({ prompt: asset.text, richTextDocument: undefined }); setLibraryOpen(false); }}><strong>{asset.title}</strong><span>{asset.text}</span></button>)}</div>}
       <PromptBar
         t={t}
         theme={theme}
@@ -280,7 +283,7 @@ export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme,
         runWithoutPrompt={Boolean(operationCapability && !operationCapability.promptRequired)}
         providerOptional={isLocalOperation}
         hideGenerationOptions={isLocalOperation}
-        runLabel={operationCapability ? '运行' : undefined}
+        runLabel={operationCapability ? (language === 'en' ? 'Run' : '运行') : undefined}
         isLoading={node.metadata.status === 'loading'}
         isSelectionActive={false}
         selectedElementCount={1}

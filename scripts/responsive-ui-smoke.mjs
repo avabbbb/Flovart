@@ -112,7 +112,7 @@ await mkdir(resolve(outputDir, 'agent-link'), { recursive: true });
 await mkdir(resolve(outputDir, 'settings'), { recursive: true });
 await mkdir(resolve(outputDir, 'ai-services'), { recursive: true });
 await mkdir(resolve(outputDir, 'workflow-shell'), { recursive: true });
-await mkdir(resolve(outputDir, 'table'), { recursive: true });
+await mkdir(resolve(outputDir, 'reverse'), { recursive: true });
 
 let context = null;
 
@@ -177,17 +177,17 @@ try {
   await page.locator('.studio-top-menu__modes').getByRole('button', { name: '工作流', exact: true }).click();
   await sleep(1000);
   await captureMatrix(page, 'workflow-shell', '.workflow-workspace', { allowCanvasChildren: true });
-  await page.locator('.canvas-view-switch').getByRole('tab', { name: 'Table', exact: true }).click();
+  await page.locator('.canvas-view-switch').getByRole('tab', { name: /^(逆向|Reverse)$/ }).click();
   await sleep(900);
-  await capture(page, 'table', ['table-1024x768', 1024, 768], '.table-workspace', { allowCanvasChildren: true });
-  await capture(page, 'table', ['table-640x900', 640, 900], '.table-workspace', { allowCanvasChildren: true });
+  await capture(page, 'reverse', ['reverse-1024x768', 1024, 768], '.reverse-workbench', { allowCanvasChildren: true });
+  await capture(page, 'reverse', ['reverse-640x900', 640, 900], '.reverse-workbench', { allowCanvasChildren: true });
 
   const onboardingVisible = await page.locator('[data-testid="onboarding-dialog"]').isVisible().catch(() => false);
   console.log(JSON.stringify({ surface: 'onboarding', status: onboardingVisible ? 'captured' : 'not-mounted-by-current-first-run-state' }));
   if (!onboardingVisible) console.log('Onboarding browser capture skipped because current app state does not mount the wizard; component coverage remains in Vitest.');
 
   if (consoleErrors.length || pageErrors.length) throw new Error(`Browser errors: ${JSON.stringify({ consoleErrors, pageErrors })}`);
-  console.log(JSON.stringify({ ok: true, surfaces: ['agent-link', 'agent', 'settings', 'ai-services', 'workflow-shell', 'table'], artifacts: outputDir }));
+  console.log(JSON.stringify({ ok: true, surfaces: ['agent-link', 'agent', 'settings', 'ai-services', 'workflow-shell', 'reverse'], artifacts: outputDir }));
 } finally {
   await context?.close().catch(() => {});
   await rm(profileDir, { recursive: true, force: true });

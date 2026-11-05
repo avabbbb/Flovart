@@ -3,7 +3,6 @@ import { useRef } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AgentConnectionsPage } from '../components/agent/AgentWorkspace';
 import { ProductionSkillDeck } from '../components/agent/ProductionSkillDeck';
-import { TableWorkspace } from '../components/table/TableWorkspace';
 import { PromptBar } from '../components/PromptBar';
 import { useWorkspaceStore } from '../stores/useWorkspaceStore';
 
@@ -17,23 +16,6 @@ describe('foundation surfaces use the active locale', () => {
     expect(screen.getByRole('button', { name: 'Refresh connection status' })).toBeInTheDocument();
     expect(screen.queryByText('连接本地 Agent')).not.toBeInTheDocument();
     await vi.waitFor(() => expect(screen.getByText('Other agents')).toBeInTheDocument());
-  });
-
-  it('renders the Table empty state and actions in English', () => {
-    render(<TableWorkspace
-      project={null}
-      userApiKeys={[]}
-      language="en"
-      onCommit={vi.fn()}
-      onSaveAsset={vi.fn()}
-      onOpenWorkflow={vi.fn()}
-      onOpenSettings={vi.fn()}
-    />);
-    expect(screen.getByText('Single-asset workspace')).toBeInTheDocument();
-    expect(screen.getByText('Choose an input')).toBeInTheDocument();
-    expect(screen.getByText(/Table does not create a second node graph/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Import local media' })).toBeInTheDocument();
-    expect(screen.queryByText('单素材工作台')).not.toBeInTheDocument();
   });
 
   it('renders the PromptBar model picker in English with viewport-safe dialog labeling', async () => {

@@ -58,6 +58,42 @@ export interface WorkflowOperationCapability {
   summarizeParameters: (parameters: Record<string, unknown>) => string;
 }
 
+export type WorkflowOperationUiLanguage = 'en' | 'zho';
+
+// 英文显示文案。中文标签仍是注册表里的唯一源，这里只按 id / key / value 翻译，缺词时回落中文。
+const OPERATION_LABELS_EN: Readonly<Record<string, string>> = {
+  'image.generate@1': 'Image generation', 'image.crop@1': 'Crop image', 'image.upscale@1': 'Upscale',
+  'image.remove-background@1': 'Remove background', 'image.split-layers@1': 'Split layers', 'image.edit@1': 'Edit image',
+  'image.rotate@1': 'Rotate / flip', 'image.vectorize@1': 'Vectorize', 'image.split-grid@1': 'Split grid',
+  'image.layer@1': 'Overlay layer', 'video.trim@1': 'Trim video', 'video.av-split@1': 'Split audio and video',
+  'video.merge@1': 'Merge videos', 'video.extract-frame@1': 'Extract frame', 'audio.trim@1': 'Trim audio',
+  'audio.speed@1': 'Audio speed', 'audio.stem-split@1': 'Split vocals / accompaniment',
+};
+const PARAMETER_LABELS_EN: Readonly<Record<string, string>> = {
+  x: 'Left', y: 'Top', width: 'Width', height: 'Height', targetLongEdge: 'Long edge', algorithm: 'Algorithm',
+  action: 'Action', preset: 'Style', rows: 'Rows', cols: 'Columns', style: 'Style', count: 'Candidates',
+  startSec: 'Start', endSec: 'End', position: 'Position', speed: 'Speed',
+};
+const OPTION_LABELS_EN: Readonly<Record<string, string>> = {
+  high: 'High quality', bilinear: 'Smooth', nearest: 'Pixel',
+  'rotate-90': 'Rotate 90° CW', 'rotate-180': 'Rotate 180°', 'rotate-270': 'Rotate 90° CCW', 'flip-h': 'Flip horizontal', 'flip-v': 'Flip vertical',
+  detailed: 'Detailed', poster: 'Poster', line: 'Line art',
+  doodle: 'Doodle', glow: 'Glow', title: 'Title', sticker: 'Sticker',
+  first: 'First frame', current: 'Current frame', last: 'Last frame',
+};
+const SUFFIX_EN: Readonly<Record<string, string>> = { '秒': 's' };
+
+export function localizeOperationLabel(capability: Pick<WorkflowOperationCapability, 'id' | 'label'>, language?: WorkflowOperationUiLanguage): string {
+  return language === 'en' ? OPERATION_LABELS_EN[capability.id] || capability.label : capability.label;
+}
+
+export function localizeParameterControl(control: WorkflowOperationParameterControl, language?: WorkflowOperationUiLanguage): WorkflowOperationParameterControl {
+  if (language !== 'en') return control;
+  const label = PARAMETER_LABELS_EN[control.key] || control.label;
+  if (control.kind === 'select') return { ...control, label, options: control.options.map(option => ({ ...option, label: OPTION_LABELS_EN[option.value] || option.label })) };
+  return { ...control, label, suffix: control.suffix && (SUFFIX_EN[control.suffix] || control.suffix) };
+}
+
 const generateParameters = z.object({
   submode: z.enum(['text-to-image', 'image-to-image']).optional(),
   aspectRatio: z.string().min(1).optional(),

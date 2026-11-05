@@ -42,57 +42,13 @@
 
 **保留原片，描述变化，比较候选。** Flovart 把你自己的 Coding Agent 和可见创作 Workflow 放在一起：Canvas 做多步创作，Table 做批量处理，Agent 连接你习惯的助手。
 
-影片展示 Resolve-first 的设计目标：指出画面位置，生成创意层，比较多个版本，再送回选定结果。**这是更名前录制的概念片，片尾仍显示 Iris。** 宿主集成、透明叠加层和新增轨道仍属 Experimental / Planned；当前已验证起点是下方真实录屏中的 Agent → Workflow 操作。Resolve P0 只以显式 **Add to Media Pool** 为安全输出。
+影片展示 Resolve-first 的设计目标：指出画面位置，生成创意层，比较多个版本，再送回选定结果。**这是更名前录制的概念片，片尾仍显示 Iris。** 宿主集成、透明叠加层和新增轨道仍属 Experimental / Planned。Resolve P0 只以显式 **Add to Media Pool** 为安全输出。
 
 **0.2.0 内测版：** Windows EXE 与 macOS DMG 通过 [Releases](https://github.com/avabbbb/Flovart/releases) 分发。平台安装包分别验证，打包成功不等于宿主和付费 Provider 已认证；具体状态见 [Support Matrix](SUPPORT_MATRIX.md)。
 
-## 实际效果
+## 产品愿景——我们要做的交互与 UI
 
-Flovart 60 秒宣传片：
-
-<p align="center">
-  <video src="pic/readme/vision/Flovart_Promo_60s_v4.mp4" controls muted width="720"></video>
-  <br /><sub><strong>宣传片 v4。</strong>60 秒 · <a href="pic/readme/vision/Flovart_Promo_60s_v4.mp4">源文件</a></sub>
-</p>
-
-<p align="center">
-  <img src="pic/readme/hero-agent.gif" alt="外部 coding agent 正在编辑同一份可见的 Flovart Workflow" width="880" />
-  <br />
-  <sub><strong>当前已录制的 Agent / Workflow 能力——自然语言变成节点与连线。</strong><br />
-  这段录屏里没有任何人工操作：该 Agent（WorkBuddy codebuddy）全程经 typed CLI 驱动可见 Workflow，
-  现场创建 3 个节点与 2 条连线，没有改动任何源码。未执行生成步骤，因此没有调用付费模型服务。
-  Resolve native MCP → 候选 → Media Pool 的 Hero 仍属于真实宿主 External Gate，因此这里暂时不把它伪装成已完成。可复现记录见 <a href="docs/archive/2026-10-07/maintenance/readme/DEMO_RECORDING.md">DEMO_RECORDING.md</a>。</sub>
-</p>
-
-
-<!-- storyboard-demo -->
-### 示例：参考片 → 画布上的 11 镜头分镜
-
-<p align="center">
-  <img src="pic/readme/storyboard/storyboard-canvas.png" alt="11 个镜头拆解文字节点，各自连到对应分镜图" width="880" />
-  <br />
-  <sub><strong>一段 15 秒竖屏参考片拆成 11 个镜头，由外部 Agent 在画布上搭建。</strong><br />
-  每个文字节点是一个镜头（时间、景别/机位、运镜、动效、转场），并连到对应分镜图。节点、图片和连线都通过类型化 CLI（<code>workflow.node.create</code> / <code>workflow.connect</code>）创建，没有手动编辑。</sub>
-</p>
-
-<p align="center">
-  <img src="pic/readme/storyboard/storyboard-overview.jpg" alt="11 张分镜图总览，带运镜箭头和动效标注" width="880" />
-  <br />
-  <sub><strong>11 张分镜图。</strong>以参考片抽帧做图生图（RunningHub、Seedream 4.7），标注运镜箭头和动效说明，共 11 次付费生成。</sub>
-</p>
-
-## 产品愿景——我要做的就是视频里的这种交互与 UI
-
-<p align="center">
-  <a href="pic/readme/vision/Flovart_Vision_3min_v5.mp4">
-    <img src="pic/readme/vision/Flovart_Vision_3min_v5-poster.jpg" alt="Flovart 产品愿景：从 Resolve 内的 AI Layer 交互展开到 Flovart 可视化工作流" width="880" />
-  </a>
-  <br />
-  <sub><strong>Flovart Vision · 3 分钟。</strong>点击图片观看完整视频。<br />
-  <strong>这是概念片 / 设计目标，不代表视频里的每个画面今天都已经实现。</strong></sub>
-</p>
-
-这支视频就是 **Flovart 产品交互、UI 和宿主协作方式的 North Star**。产品最终应该尽量接近视频里的感觉：
+这是 **Flovart 产品交互、UI 和宿主协作方式的 North Star**，产品最终应该尽量接近这种感觉：
 
 - **先留在剪辑软件里。** Resolve 继续是工程与时间线的权威；Flovart 只围绕当前片段出现一个窄、轻、上下文明确的操作层。
 - **Draw where. Say what. Get a layer.** 直接在画面上指出区域，再用自然语言说想要什么，得到可审核的 AI 叠加层候选，而不是先把原片替掉。
@@ -102,38 +58,9 @@ Flovart 60 秒宣传片：
 - **结果非破坏性回到宿主。** 先经过可审核的交接进入 Media Pool；只有真实验证过宿主能力后，才进一步上新图层 / 新轨道，而不是直接改原素材。
 - **Local-first。** 素材、工程上下文和持久结果尽量留在本机；需要调用外部模型时明确告诉用户，并按 Provider 边界执行。
 
-下面的真实录屏仍然只负责说明**当前版本已经能证明的能力**；真实宿主与兼容状态以 [Support Matrix](SUPPORT_MATRIX.md) 为准。产品与系统边界见[主设计](docs/design/00-overview.md)、[Agent Integration](docs/design/12-agent.md)、[Adaptive Layout](docs/design/01-interaction.md) 和 [Resolve 21.1 Product & UI Spec](integrations/studio/resolve/PRODUCT_UI_SPEC.md)。
+真实宿主与兼容状态以 [Support Matrix](SUPPORT_MATRIX.md) 为准。产品与系统边界见[主设计](docs/design/00-overview.md)、[Agent Integration](docs/design/12-agent.md)、[Adaptive Layout](docs/design/01-interaction.md) 和 [Resolve 21.1 Product & UI Spec](integrations/studio/resolve/PRODUCT_UI_SPEC.md)。
 
-## Flovart 现在已经能做什么
-
-下面都是**当前版本真实录屏**，不是 Mock。Resolve native MCP → Candidate → Media Pool 仍然属于 External Gate，所以 README 顶部只展示今天已经有证据的能力。
-
-<table>
-  <tr>
-    <td align="center" width="50%">
-      <img src="pic/readme/features/agent-cli-live.gif" alt="Agent 通过 Flovart typed operations 修改同一份可见 Workflow。" width="420" />
-      <br /><sub><strong>Agent → 真实 Workflow。</strong>不是屏幕点击，操作直接落到同一个可编辑项目。</sub>
-    </td>
-    <td align="center" width="50%">
-      <img src="pic/readme/features/canvas-prompt.gif" alt="创作者直接在当前节点上修改 Prompt。" width="420" />
-      <br /><sub><strong>原地 Prompt。</strong>人和 Agent 最终落到同一份可见、可继续编辑的工作面。</sub>
-    </td>
-  </tr>
-  <tr>
-    <td align="center">
-      <img src="pic/readme/features/crop.gif" alt="在 Flovart 中裁剪图片并生成显式结果节点。" width="420" />
-      <br /><sub><strong>图片操作。</strong>本地编辑得到明确、可复用的结果。</sub>
-    </td>
-    <td align="center">
-      <img src="pic/readme/features/video-trim.gif" alt="在 Flovart 中对视频片段执行裁剪。" width="420" />
-      <br /><sub><strong>视频操作。</strong>裁剪等媒体工具直接在当前工作区本地运行。</sub>
-    </td>
-  </tr>
-</table>
-
-**更多真实操作 GIF 见下面的[完整功能演示](#功能演示)。**
-
-**快速跳转：** [快速开始](#快速开始) · [功能演示](#功能演示) · [为什么是 Flovart](#为什么是-flovart) · [核心能力](#核心能力) · [使用你自己的模型](#使用你自己的模型) · [集成与兼容性](#集成与兼容性) · [架构](#架构) · [本地优先与安全](#本地优先与安全) · [路线图](#创作软件路线图) · [参与贡献](#参与贡献)
+**快速跳转：** [快速开始](#快速开始) · [为什么是 Flovart](#为什么是-flovart) · [核心能力](#核心能力) · [使用你自己的模型](#使用你自己的模型) · [集成与兼容性](#集成与兼容性) · [架构](#架构) · [本地优先与安全](#本地优先与安全) · [路线图](#创作软件路线图) · [参与贡献](#参与贡献)
 
 ## 快速开始
 
@@ -168,147 +95,6 @@ npm run flovart:cli -- status --json
 然后对本地 Agent 说：**「打开 Flovart，在这个 Workflow 上干活。」**
 
 正常 Agent 循环是 `status`、`workflow.inspect`、`workflow.selection.get`、`workflow.apply` 和 `workflow.node.run`；连接准备和诊断用 `ensure` 和 `doctor`；仅供开发使用的浏览器检查见[快速开始](docs/overview/quick-start.md)。
-
-## 功能演示
-
-下面每一条都是运行中应用的真实录屏：一个操作，从头到尾，没有合成帧、没有效果图。每条都裁到动作本身。
-
-**Agent 原生，不是界面抓取。** 这些都是作用在同一份 Workflow 上的操作，而那份 Workflow 也可以由 Agent 驱动。上方 Hero 与[架构](#架构)段的 CLI 录屏是**全程由 Agent 驱动、没有任何人工操作**；下面的图库则是同一套界面由人手操作，因为那是新用户最先要走通的路径。节点的创建、连接、选择、视口、移动与缩放，以及各个节点工具，都已作为 typed operation 暴露给 Agent —— 走的是 revision 与幂等边界，而不是屏幕坐标。
-
-视频与音频工具在浏览器内跑 ffmpeg.wasm，录制动作前会先预热 core，因此片段展示的是操作本身，而不是一次性约 30MB 的 wasm 下载 —— **所以片段时长不等于首次使用时的等待时间**。录制方法、可复现命令与边界见 [DEMO_RECORDING.md](docs/archive/2026-10-07/maintenance/readme/DEMO_RECORDING.md)。
-
-### 画布操作
-
-<table>
-  <tr>
-    <td align="center">
-      <img src="pic/readme/features/canvas-add-node.gif" alt="从画布的添加节点菜单新增节点" width="420" />
-      <br /><sub><strong>添加节点。</strong>工具栏的添加菜单涵盖图片、视频、文本、脚本、音频、配置。</sub>
-    </td>
-    <td align="center">
-      <img src="pic/readme/features/canvas-connect.gif" alt="从一个节点拖出连线到另一个节点" width="420" />
-      <br /><sub><strong>连接。</strong>从节点的输出把手拖到另一个节点，它就成为了输入。</sub>
-    </td>
-  </tr>
-  <tr>
-    <td align="center">
-      <img src="pic/readme/features/canvas-drag.gif" alt="在画布上拖动节点" width="420" />
-      <br /><sub><strong>手动摆放。</strong>节点自由移动，图本身就是状态。</sub>
-    </td>
-    <td align="center">
-      <img src="pic/readme/features/canvas-tidy.gif" alt="一键整理画布布局" width="420" />
-      <br /><sub><strong>一键整理。</strong>点一下重排整张图。</sub>
-    </td>
-  </tr>
-  <tr>
-    <td colspan="2" align="center">
-      <img src="pic/readme/features/canvas-prompt.gif" alt="在选中的节点上直接输入提示词" width="860" />
-      <br /><sub><strong>就地写提示词。</strong>选中节点，直接在节点上写，不需要另开提示词对话框。</sub>
-    </td>
-  </tr>
-</table>
-
-### 图片节点
-
-四个本地操作，跑在同一张本地生成的测试图上，各自产出真实的结果节点。全程不联系任何模型服务。
-
-<table>
-  <tr>
-    <td align="center">
-      <img src="pic/readme/features/crop.gif" alt="裁剪图片节点" width="420" />
-      <br /><sub><strong>裁剪。</strong>设定裁剪范围后应用。</sub>
-    </td>
-    <td align="center">
-      <img src="pic/readme/features/rotate.gif" alt="把图片节点旋转四分之一圈" width="420" />
-      <br /><sub><strong>旋转与镜像。</strong>四分之一圈与翻转。</sub>
-    </td>
-  </tr>
-  <tr>
-    <td align="center">
-      <img src="pic/readme/features/split-grid.gif" alt="把图片切成多个独立节点" width="420" />
-      <br /><sub><strong>宫格切分。</strong>每一格成为独立且相连的图片节点。</sub>
-    </td>
-    <td align="center">
-      <img src="pic/readme/features/filter.gif" alt="调整图片节点的调色" width="420" />
-      <br /><sub><strong>调色。</strong>调整在应用前即可实时预览。</sub>
-    </td>
-  </tr>
-</table>
-
-### 视频节点
-
-同样是本地的、同样不联系模型服务：这几条走浏览器内的 ffmpeg core，每条都产出自己的结果节点（音视频分离会产出两个）。
-
-<table>
-  <tr>
-    <td align="center">
-      <img src="pic/readme/features/video-trim.gif" alt="对视频节点做剪辑" width="420" />
-      <br /><sub><strong>剪辑。</strong>设定起止点；剪切走 stream copy，不重编码。</sub>
-    </td>
-    <td align="center">
-      <img src="pic/readme/features/video-av-split.gif" alt="把视频拆成静音视频节点与音频节点" width="420" />
-      <br /><sub><strong>音视频分离。</strong>一个视频变成静音视频节点 + 一个音频节点。</sub>
-    </td>
-  </tr>
-  <tr>
-    <td align="center">
-      <img src="pic/readme/features/video-merge.gif" alt="按顺序拼接两个视频节点" width="420" />
-      <br /><sub><strong>拼接。</strong>选中多个视频节点，按顺序合成一个。</sub>
-    </td>
-    <td align="center">
-      <img src="pic/readme/features/extract-frame-at.gif" alt="按指定时间点导出视频帧" width="420" />
-      <br /><sub><strong>导出帧。</strong>选一个时间点，把视频里的那一帧变成图片节点。</sub>
-    </td>
-  </tr>
-  <tr>
-    <td align="center">
-      <img src="pic/readme/features/extract-first-frame.gif" alt="导出首帧为图片节点" width="420" />
-      <br /><sub><strong>首帧。</strong>一键得到图片节点。</sub>
-    </td>
-    <td align="center">
-      <img src="pic/readme/features/extract-last-frame.gif" alt="导出尾帧为图片节点" width="420" />
-      <br /><sub><strong>尾帧。</strong>同样一键，取片段末尾那帧。</sub>
-    </td>
-  </tr>
-</table>
-
-### 音频节点
-
-<table>
-  <tr>
-    <td align="center">
-      <img src="pic/readme/features/audio-trim.gif" alt="截取音频节点" width="420" />
-      <br /><sub><strong>截取。</strong>同样的起止点控件，同样的 stream copy 剪切。</sub>
-    </td>
-    <td align="center">
-      <img src="pic/readme/features/audio-speed.gif" alt="调整音频播放速度" width="420" />
-      <br /><sub><strong>变速。</strong>0.25×–4×，保持音调不变。</sub>
-    </td>
-  </tr>
-  <tr>
-    <td colspan="2" align="center">
-      <img src="pic/readme/features/audio-stem-split.gif" alt="把音频分离为人声与伴奏" width="860" />
-      <br /><sub><strong>人声/伴奏分离。</strong>输出两个音频节点；原理是立体声相位抵消，单声道或混音复杂的素材分离效果有限。</sub>
-    </td>
-  </tr>
-</table>
-
-### 外部 Agent 链路
-
-<table>
-  <tr>
-    <td align="center">
-      <img src="pic/readme/features/agent-cli-live.gif" alt="typed CLI 操作在可见画布上搭建节点图" width="420" />
-      <br /><sub><strong>操作直接落在画布上。</strong>全程由 Agent 驱动、没有任何人工操作：<code>workflow.node.create</code> 与 <code>workflow.connect</code> 通过 typed CLI 执行，可见 Workflow 同步更新——不靠界面抓取，也没有第二份隐藏副本。</sub>
-    </td>
-    <td align="center">
-      <img src="pic/readme/features/agent-open-panel.gif" alt="从画布工具栏打开 Agent 界面" width="420" />
-      <br /><sub><strong>打开 Agent 界面。</strong>入口就在同一根画布工具栏上。</sub>
-    </td>
-  </tr>
-</table>
-
-尚未录制、也刻意没有展示的：依赖模型的生成能力与依赖模型的图片工具（图片生成、高清放大、移除背景、拆分图层、图片编辑/扩图）——本机未配置任何 Provider，没有可诚实展示的结果。该缺口登记在[录制记录](docs/archive/2026-10-07/maintenance/readme/DEMO_RECORDING.md)里。
 
 ## 为什么是 Flovart？
 
@@ -391,15 +177,6 @@ flowchart LR
 ```
 
 现有 `flovart` CLI 名称在 Flovart 改名期间继续作为兼容入口。CLI 与实验性 stdio MCP 共用操作语义，当前都绑定可见的 Browser Workflow。确定性操作直接执行，不需要第二个 AI 再解释一遍。
-
-<p align="center">
-  <img src="pic/readme/agent-operations-live-workflow.gif" alt="Flovart 兼容 CLI 操作在可见 Workflow 中创建节点与连线" width="720" />
-  <br />
-  <sub><strong>同一主张的操作级视角。</strong>一个项目和三个节点由 <code>workflow.project.create</code>、
-  <code>workflow.node.create</code> 和 <code>workflow.connect</code> 创建（1.5 倍速播放）——
-  上面 Hero 里那个外部 Agent 会话端到端驱动的正是这些 typed 操作。录制记录：
-  <a href="docs/archive/2026-10-07/maintenance/readme/DEMO_RECORDING.md">DEMO_RECORDING.md</a>。</sub>
-</p>
 
 原生效果保持两条短路径：同一生成函数产出持久素材版本，宿主效果读取固定版本并本地渲染——不强制经过导演、Operator 或制作组层级。产品范围与系统边界统一见[主设计](docs/design/00-overview.md)，Agent transport/authority 见 [Agent Integration](docs/design/12-agent.md)；历史 CURRENT/TARGET 架构报告不再参与当前产品决策。
 

@@ -4,7 +4,7 @@
     "description": "扩展名称"
   },
   "extension_description": {
-    "message": "把你明确右键选择的网页图片安全传入 Flovart Desktop Workflow；不保存 API Key，不扫描整页。",
+    "message": "把你右键选择的网页图片与视频传入 Flovart Desktop 或已配对的网页画布；同步来的 API Key 本机加密保存，撤销配对即清空，不扫描整页。",
     "description": "扩展描述"
   }
 }

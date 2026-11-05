@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { PRODUCT_MODEL_ENTRIES, listProductModelEntries } from './product-models.js';
 import { discoverAgentHosts } from './host-discovery.js';
 import { getDistributionTarget, resolveDistributionTargetId } from './host-registry.js';
+import { PROVIDER_GUIDANCE, SEEDANCE_PROVIDER_IDS, readVaultProviderStatus } from './provider-vault.js';
 
 export { discoverAgentHosts };
 
@@ -150,7 +151,7 @@ function diagnoseSeedance2(provider) {
       ok: providerOk,
       model: videoModel,
       message: providerOk ? 'Video provider credential is configured.' : 'Video provider credential is missing.',
-      nextAction: providerOk ? undefined : 'provider.begin-setup --provider volcengine --purpose video',
+      nextAction: providerOk ? undefined : PROVIDER_GUIDANCE.video,
     },
     {
       id: 'video.seedance2Model',
@@ -158,7 +159,7 @@ function diagnoseSeedance2(provider) {
       model: videoModel,
       expectedProductModelIds: SEEDANCE2_PRODUCT_IDS,
       message: modelOk ? 'Seedance 2.0 model is selected.' : 'Selected video model is not a Seedance 2.0 model.',
-      nextAction: modelOk ? undefined : 'provider.select-model --video-model flovart:seedance-2',
+      nextAction: modelOk ? undefined : PROVIDER_GUIDANCE.seedanceModel,
     },
     {
       id: 'seedance2.multimodalLimits',
@@ -409,7 +410,7 @@ export function initCliHost(input = {}) {
   };
 }
 
-export function diagnoseAgentSetup(input = {}) {
+export async function diagnoseAgentSetup(input = {}) {
   const projectDir = resolve(String(input.projectDir || process.cwd()));
   const cliPath = resolve(projectDir, 'tools/flovart/cli.js');
   const packagePath = resolve(projectDir, 'package.json');
@@ -430,7 +431,21 @@ export function diagnoseAgentSetup(input = {}) {
     };
   })();
   const shadowState = readShadowStateSnapshot();
-  const provider = providerSnapshot(shadowState.state?.provider);
+  // Provider readiness comes from the masked Agent vault (mirror of browser
+  // Settings), never from the shadow state file.
+  const providerStatus = input.providerStatus || await readVaultProviderStatus({ timeoutMs: 800 }).catch(error => ({
+    ok: false,
+    source: 'agent-vault',
+    error: typeof error?.toJSON === 'function'
+      ? error.toJSON()
+      : { code: 'AGENT_UNAVAILABLE', message: error instanceof Error ? error.message : String(error), retryable: true },
+  }));
+  const vaultProviders = Array.isArray(providerStatus.providers) ? providerStatus.providers : [];
+  const provider = providerSnapshot({
+    configured: { video: vaultProviders.some(id => SEEDANCE_PROVIDER_IDS.includes(id)) },
+    selectedModels: { video: manageAgentPreferences({ action: 'get' }).preferences.videoModel },
+    providers: vaultProviders,
+  });
   const seedance2 = diagnoseSeedance2(provider);
   const surfaces = diagnoseGenerationSurfaces(shadowState, seedance2);
   // Diagnosis is a bounded readiness check; the picker can perform the
@@ -438,10 +453,9 @@ export function diagnoseAgentSetup(input = {}) {
   // executable's `--version` process.
   const hostDiscovery = discoverAgentHosts({ includeVersion: false });
   const nextSteps = Array.from(new Set([
-    'Run npm run flovart:cli -- status --json, then start --open if needed to verify the local Runtime and visible Workflow.',
-    'Run npm run flovart:cli -- init --target project-skill to install the Flovart Skill.',
+    ...(providerStatus.ok ? [] : ['运行 flovart ensure --json 启动本机 Agent 和可见画布，然后重新运行 doctor。']),
+    ...(agentSurface.skillInstalled ? [] : ['运行 npm run flovart:cli -- init --target project-skill 安装 Flovart Skill。']),
     ...seedance2.nextActions,
-    'Run flovart start --open and keep the visible Workflow available for provider-backed generation.',
   ]));
   return {
     ok: checks.every(check => check.ok || check.optional),
@@ -453,9 +467,13 @@ export function diagnoseAgentSetup(input = {}) {
     hostDiscovery,
     shadowState: { exists: shadowState.exists, file: shadowState.file },
     provider: {
-      configured: provider.configured,
+      source: providerStatus.source,
+      ok: providerStatus.ok,
+      keyringAvailable: providerStatus.keyring?.available ?? null,
+      count: providerStatus.count ?? 0,
+      providers: vaultProviders,
       selectedModels: provider.selectedModels,
-      providers: provider.providers,
+      error: providerStatus.error ?? null,
     },
     seedance2,
     surfaces,

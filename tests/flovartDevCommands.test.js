@@ -154,11 +154,24 @@ describe('flovart dev startup commands', () => {
     expect(probe).toHaveBeenCalledTimes(1);
   });
 
-  it('passes Windows bootstrap URLs through the OS handler without shell splitting', () => {
-    expect(buildBrowserOpenCommand('http://127.0.0.1:17373/?agentUrl=http%3A%2F%2F127.0.0.1%3A17373&agentToken=secret#/app', 'win32')).toEqual({
-      command: 'rundll32.exe',
-      args: ['url.dll,FileProtocolHandler', 'http://127.0.0.1:17373/?agentUrl=http%3A%2F%2F127.0.0.1%3A17373&agentToken=secret#/app'],
+  it('passes the whole Windows bootstrap URL to Start-Process as one literal', () => {
+    const url = '';
+    expect(buildBrowserOpenCommand(url, 'win32')).toEqual({
+      command: 'powershell.exe',
+      args: ['-NoProfile', '-NonInteractive', '-Command', "Start-Process '" + url + "'"],
     });
+  });
+
+  it('escapes single quotes so the URL cannot break out of the PowerShell literal', () => {
+    const base = '';
+    const { args } = buildBrowserOpenCommand(base + "/?q=it's", 'win32');
+    expect(args.at(-1)).toBe("Start-Process '" + base + "/?q=it''s'");
+  });
+
+  it('keeps macOS and Linux openers unchanged', () => {
+    const base = '';
+    expect(buildBrowserOpenCommand(base, 'darwin')).toEqual({ command: 'open', args: [base] });
+    expect(buildBrowserOpenCommand(base, 'linux')).toEqual({ command: 'xdg-open', args: [base] });
   });
 
   it('keeps ready services alive when only Browser binding is still pending', () => {

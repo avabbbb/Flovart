@@ -314,12 +314,9 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
       </div>
 
       <nav className="studio-top-menu__modes flex min-w-0 items-center justify-center gap-0.5" aria-label={isChinese ? '画布视图' : 'Canvas view'} role="tablist">
-        {/* Three product surfaces: Canvas and Table work on the Workflow; Agent
-            is the dedicated local-agent connection/control page. The built-in
-            assistant remains a separate in-context drawer beside Canvas/Table. */}
-        {(['spatial', 'table', 'agent'] as const).map(view => {
+        {(['spatial', 'reverse', 'agent'] as const).map(view => {
           const isActive = canvasView === view;
-          const label = view === 'spatial' ? (isChinese ? '画布' : 'Canvas') : view === 'table' ? 'Table' : 'Agent';
+          const label = view === 'spatial' ? (isChinese ? '画布' : 'Canvas') : view === 'reverse' ? (isChinese ? '逆向' : 'Reverse') : 'Agent';
           return (
             <button
               key={view}

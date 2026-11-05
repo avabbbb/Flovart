@@ -1,3 +1,5 @@
+import { PAIRINGS_KEY, readPairings, removePairing, setPairingStatus } from '../background/web-pairings.js';
+
 const statusDot = document.getElementById('statusDot');
 const statusTitle = document.getElementById('statusTitle');
 const statusMessage = document.getElementById('statusMessage');
@@ -57,6 +59,51 @@ chrome.storage.onChanged.addListener(changes => {
   if (changes.flovartBridgeStatus) render(changes.flovartBridgeStatus.newValue);
   if (changes[HISTORY_KEY]) renderHistory(changes[HISTORY_KEY].newValue);
 });
+const webPairings = document.getElementById('webPairings');
+const webPairingList = document.getElementById('webPairingList');
+
+function pairingButton(label, action) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.textContent = label;
+  button.addEventListener('click', () => {
+    button.disabled = true;
+    action()
+      .catch(error => render({ state: 'error', message: error instanceof Error ? error.message : String(error) }))
+      .finally(() => { button.disabled = false; });
+  });
+  return button;
+}
+
+// 网页画布配对：pending 显示允许/拒绝，approved 显示断开。拒绝与断开都会删除条目，网页可再次发起。
+function renderPairings(pairings) {
+  const entries = Object.entries(pairings && typeof pairings === 'object' ? pairings : {});
+  webPairings.hidden = entries.length === 0;
+  webPairingList.textContent = '';
+  for (const [origin, entry] of entries) {
+    const item = document.createElement('li');
+    const label = document.createElement('span');
+    label.textContent = origin;
+    const state = document.createElement('small');
+    const approved = entry?.status === 'approved';
+    state.textContent = approved ? '已连接：可导入媒体、同步配置' : '请求连接：确认是你自己打开的 Flovart 画布再允许';
+    item.append(label, state);
+    if (approved) {
+      item.append(pairingButton('断开', () => removePairing(origin)));
+    } else {
+      item.append(
+        pairingButton('允许', () => setPairingStatus(origin, 'approved')),
+        pairingButton('拒绝', () => removePairing(origin)),
+      );
+    }
+    webPairingList.appendChild(item);
+  }
+}
+
+readPairings().then(renderPairings);
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && changes[PAIRINGS_KEY]) renderPairings(changes[PAIRINGS_KEY].newValue);
+});
 
 connectButton.addEventListener('click', async () => {
   connectButton.disabled = true;
@@ -73,4 +120,42 @@ connectButton.addEventListener('click', async () => {
 clearHistoryButton.addEventListener('click', async () => {
   await chrome.storage.local.remove(HISTORY_KEY);
   renderHistory([]);
+});
+
+// 插件内反推结果：只在 chrome.storage.session（浏览器关闭即清空），可复制或发送到已配对的网页画布。
+const REVERSE_RESULT_KEY = 'flovartReversePrompt';
+const reverseSection = document.getElementById('reverse');
+const reversePrompt = document.getElementById('reversePrompt');
+const reverseMeta = document.getElementById('reverseMeta');
+const copyReverseButton = document.getElementById('copyReverse');
+const sendReverseButton = document.getElementById('sendReverse');
+
+function renderReverse(result) {
+  reverseSection.hidden = !result?.prompt;
+  if (!result?.prompt) return;
+  reversePrompt.textContent = result.prompt;
+  reverseMeta.textContent = result.provider + ' · ' + result.model;
+  copyReverseButton.textContent = '复制';
+  sendReverseButton.textContent = '发送到网页画布';
+}
+
+chrome.storage.session.get(REVERSE_RESULT_KEY).then(stored => renderReverse(stored[REVERSE_RESULT_KEY]));
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'session' && changes[REVERSE_RESULT_KEY]) renderReverse(changes[REVERSE_RESULT_KEY].newValue);
+});
+
+copyReverseButton.addEventListener('click', async () => {
+  await navigator.clipboard.writeText(reversePrompt.textContent || '');
+  copyReverseButton.textContent = '已复制';
+});
+
+sendReverseButton.addEventListener('click', async () => {
+  sendReverseButton.disabled = true;
+  try {
+    const response = await chrome.runtime.sendMessage({ type: 'FLOVART_REVERSE_TO_CANVAS' });
+    sendReverseButton.textContent = response?.ok ? '已发送' : '发送失败';
+    if (!response?.ok) reverseMeta.textContent = response?.error || '发送失败';
+  } finally {
+    sendReverseButton.disabled = false;
+  }
 });

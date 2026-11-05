@@ -25,6 +25,7 @@ export type FlovartAgentTurnEvent =
   | { type: 'snapshot'; snapshot: FlovartAgentSnapshot }
   | { type: 'status'; running: boolean }
   | { type: 'tool-start'; id: string; name: string; args: unknown }
+  | { type: 'tool-update'; id: string; name: string; partial: unknown }
   | { type: 'tool-end'; id: string; name: string; result: unknown; isError: boolean }
   | { type: 'error'; message: string };
 
@@ -101,6 +102,12 @@ export class ManagedFlovartAgentClient {
           id: String(event.data?.id || ''),
           name: String(event.data?.name || 'Workflow 工具'),
           args: event.data?.args,
+        });
+        else if (event.type === 'tool-update') emit({
+          type: 'tool-update',
+          id: String(event.data?.id || ''),
+          name: String(event.data?.name || 'Workflow 工具'),
+          partial: event.data?.partial,
         });
         else if (event.type === 'tool-end') emit({
           type: 'tool-end',

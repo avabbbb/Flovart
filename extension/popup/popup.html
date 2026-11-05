@@ -17,12 +17,25 @@
       <i id="statusDot"></i>
       <div><strong id="statusTitle">尚未连接</strong><span id="statusMessage">连接 Desktop 后即可右键导入图片</span></div>
     </section>
+    <section id="webPairings" class="history" hidden>
+      <span>网页画布</span>
+      <ul id="webPairingList"></ul>
+    </section>
     <button id="connectDesktop" type="button">连接 / 打开 Flovart Desktop</button>
-    <p class="hint">在网页图片上点击右键，选择“添加图片到 Flovart”。插件只传输你明确选择的图片，不保存 API Key，也不扫描整页。</p>
+    <p class="hint">在网页图片或视频上点击右键，可发送到 Flovart Desktop 或已配对的网页画布。插件只传输你明确选择的媒体，不扫描整页；网页画布同步来的 API Key 在本机加密保存，撤销配对即清空。</p>
     <section id="receipt" class="receipt" hidden>
       <span>最近一次导入</span>
       <strong id="receiptName"></strong>
       <small id="receiptDestination"></small>
+    </section>
+    <section id="reverse" class="receipt" hidden>
+      <span>最近一次反推</span>
+      <p id="reversePrompt" class="reverse-text"></p>
+      <small id="reverseMeta"></small>
+      <div class="reverse-actions">
+        <button id="copyReverse" type="button">复制</button>
+        <button id="sendReverse" type="button">发送到网页画布</button>
+      </div>
     </section>
     <section id="history" class="history" hidden>
       <div class="history__head"><span>导入历史</span><button id="clearHistory" type="button">清空</button></div>

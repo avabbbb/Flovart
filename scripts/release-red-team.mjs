@@ -47,7 +47,7 @@ observations.push(`agent-public-commands=${publicCommands.length}`);
 
 const agentKit = read('tools/flovart/agent-kit.js');
 requireCondition(
-  !/file-state runtime|command-queue\.json/i.test(agentKit) && agentKit.includes('status --json, then start --open'),
+  !/file-state runtime|command-queue\.json/i.test(agentKit) && (agentKit.includes('flovart ensure --json') || agentKit.includes('status --json, then start --open')),
   'Packaged Agent setup guidance still points at the retired file-state/command-queue path',
 );
 

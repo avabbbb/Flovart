@@ -7,7 +7,7 @@
 | [00 总体设计](design/00-overview.md) | 产品一句话、模块地图、原则、关键决策、状态归属、路线图、对外口径、术语 |
 | [01 交互设计](design/01-interaction.md) | 简单直接、不硬编码、不死锁三条总规则；通用状态模型；核心流程；布局；验收清单 |
 | [10 Canvas / Workflow](design/10-canvas-workflow.md) | 可见生产图、mutation、素材语义 |
-| [11 Table](design/11-table.md) | 结构化批量处理与显式提交 |
+| [11 Reverse](design/11-reverse.md) | Hypit 架构复刻的视频逆向、一键转 Canvas 子画布 |
 | [12 Agent](design/12-agent.md) | Skill + CLI、MCP 投影、连接中心、Assistant、安全边界 |
 | [13 Generation & Runtime](design/13-generation-runtime.md) | 一条生成路径、Provider 路由、任务、素材版本 |
 | [14 Creative Hosts](design/14-creative-hosts.md) | Resolve 首发、叠加层、上轨道、原生效果 |
@@ -38,6 +38,10 @@
 - [Studio host packages](../integrations/studio/README.md) 与各宿主 `*_REAL_HOST_CHECKLIST.md`
 - [Workflow CLI](../skills/flovart/commands/workflow.md)
 - [后端响应](content/docs/backend/api-response.mdx) / [数据库结构](content/docs/backend/backend-database.mdx)
+
+## 开发日志
+
+- [2026-11-03 浏览器插件 × 网页画布](blog/2026-11-03-extension-web-canvas-bridge.md)：配对、导入、密钥同步与插件内反推
 
 ## 历史
 

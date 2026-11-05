@@ -29,7 +29,25 @@ export const WORKFLOW_NODE_SPECS: Record<BuiltinWorkflowNodeType, { title: strin
     height: 160,
     metadata: { status: 'idle', design: { kind: 'rect', fill: { type: 'solid', color: '#5B8DEF' }, cornerRadius: 12 } },
   },
+  subgraph: {
+    title: '子画布',
+    width: 960,
+    height: 640,
+    metadata: { status: 'idle', collapsed: false, childKeys: [] },
+  },
 };
+
+const WORKFLOW_NODE_TITLES_EN: Record<string, string> = { '图片': 'Image', '文本': 'Text', '视频': 'Video', '音频': 'Audio', '配置': 'Config', '脚本': 'Script', '子画布': 'Subgraph' };
+
+/** 默认标题（类型名，或「类型名 + 序号」）在英文模式下显示为英文；用户自定义的标题原样返回。 */
+export function localizeWorkflowNodeTitle(title: string, language?: string): string {
+  if (language !== 'en' || !title) return title;
+  const parts = title.split(' ');
+  const english = WORKFLOW_NODE_TITLES_EN[parts[0]];
+  if (!english) return title;
+  if (parts.length > 2 || (parts.length === 2 && !/^[0-9]+$/.test(parts[1]))) return title;
+  return parts.length === 2 ? english + ' ' + parts[1] : english;
+}
 
 export const INITIAL_WORKFLOW_VIEWPORT = { x: 0, y: 0, k: 1 } as const;
 

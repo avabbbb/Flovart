@@ -35,6 +35,8 @@ import { applyAgentTurnPreamble, recipeFromNodes, skillFromRecipe, type AgentCre
 import { useAgentGroupInboxStore, type AgentGroupPayload } from '../../stores/useAgentGroupInboxStore';
 import { useMineSkillsStore } from './mineSkills';
 import { AgentReferenceChip } from './AgentReferenceChip';
+import { AgentTodoCard } from './AgentTodoCard';
+import { AGENT_TODO_TOOL_NAME, latestTodoFromMessages, todoFromToolResult, type AgentTodoItem } from './agentTodo';
 
 interface FlovartAgentPanelProps {
   project: WorkflowProject;
@@ -122,6 +124,11 @@ export function FlovartAgentPanel({ project, onActivityChange, onOpenSettings, a
   const unsubscribeRef = useRef<(() => void) | undefined>(undefined);
 const userApiKeysRef = useRef(userApiKeys);
   userApiKeysRef.current = userApiKeys;
+  // 内核只在 route 变化时重建：无 Key 打开面板后再导入 Key/切模型，必须重新解析 route，否则一直停在 credential 阻塞。
+  const browserRouteSignature = useMemo(() => {
+    const route = resolveBrowserAgentTextRoute(userApiKeys);
+    return route ? [route.provider, route.baseUrl, route.model, route.apiKey, route.streamUsage ?? ''].join('\u0000') : '';
+  }, [userApiKeys]);
   const workspaceBridge = useRef<WorkflowAgentBridge | undefined>(undefined);
   const abort = useRef<AbortController | undefined>(undefined);
   type PendingConfirmation = { summary: string; resolve: (approved: boolean) => void; request?: AgentConfirmRequest; offerMandate?: boolean };
@@ -358,6 +365,7 @@ const userApiKeysRef = useRef(userApiKeys);
       });
       unsubscribeRef.current = unsubscribe;
       setMessages(displayMessages(snapshot, language));
+      setTodoItems(latestTodoFromMessages((snapshot as FlovartAgentSnapshot).messages) || []);
       if (snapshot.boundProductionSkill) setSkillAttachment(snapshot.boundProductionSkill);
       setStatus('ready');
       setWorkspaceStatus('ready');
@@ -396,6 +404,7 @@ const userApiKeysRef = useRef(userApiKeys);
           await bridge.pushSnapshot(project);
         }
         setMessages(displayMessages(snapshot, language));
+        setTodoItems(latestTodoFromMessages(snapshot.messages) || []);
         if (!skillAttachmentDirty.current) setSkillAttachment(snapshot.boundProductionSkill);
         if (snapshot.productionSkillBindingError) {
           setMessages(items => [...items, { id: 'skill-binding-error', role: 'error', text: snapshot.productionSkillBindingError! }]);
@@ -430,19 +439,27 @@ const userApiKeysRef = useRef(userApiKeys);
       void kernelRef.current?.close();
       kernelRef.current = undefined;
     };
-  }, [project.id]);
+  }, [project.id, browserRouteSignature]);
 
   useEffect(() => {
     if (workspaceBridge.current) void workspaceBridge.current.pushSnapshot(project).catch(() => setWorkspaceStatus('error'));
   }, [project]);
 
+  // omp 风格的制作任务清单：取最近一次成功的 flovart_todo 结果，会话恢复时从快照重建。
+  const [todoItems, setTodoItems] = useState<AgentTodoItem[]>([]);
   const handleEventRef = useRef<(event: FlovartAgentTurnEvent, assistantId: string) => void>(() => undefined);
+  // 一条助手消息对应一个流式气泡：message_start 时换新 id，同一消息的 text_delta 共用。
+  const streamIdRef = useRef('stream-' + crypto.randomUUID());
   // 内置 PI 内核事件（pi-agent-core）→ 面板事件流（与 Managed Agent 的 SSE 事件同构）
   const mapKernelEvent = useCallback((event: { type: string; [key: string]: unknown }) => {
+    if (event.type === 'message_start') {
+      streamIdRef.current = 'stream-' + crypto.randomUUID();
+      return;
+    }
     if (event.type === 'message_update') {
       const update = (event as { assistantMessageEvent?: { type: string; delta?: string } }).assistantMessageEvent;
       if (update?.type === 'text_delta' && update.delta) {
-        handleEventRef.current({ type: 'text-delta', delta: update.delta }, `stream-${crypto.randomUUID()}`);
+        handleEventRef.current({ type: 'text-delta', delta: update.delta }, streamIdRef.current);
       }
       return;
     }
@@ -459,6 +476,15 @@ const userApiKeysRef = useRef(userApiKeys);
       }, `tool-${event.toolCallId || ''}`);
       return;
     }
+    if (event.type === 'tool_execution_update') {
+      handleEventRef.current({
+        type: 'tool-update',
+        id: String(event.toolCallId || ''),
+        name: String(event.toolName || ''),
+        partial: event.partialResult,
+      }, 'tool-' + String(event.toolCallId || ''));
+      return;
+    }
     if (event.type === 'tool_execution_end') {
       handleEventRef.current({
         type: 'tool-end',
@@ -471,7 +497,10 @@ const userApiKeysRef = useRef(userApiKeys);
     }
     if (event.type === 'session_switched') {
       const kernel = kernelRef.current;
-      if (kernel) void kernel.snapshot().then(snapshot => setMessages(displayMessages(snapshot as FlovartAgentSnapshot, languageRef.current)));
+      if (kernel) void kernel.snapshot().then(snapshot => {
+        setMessages(displayMessages(snapshot as FlovartAgentSnapshot, languageRef.current));
+        setTodoItems(latestTodoFromMessages((snapshot as FlovartAgentSnapshot).messages) || []);
+      });
       return;
     }
   }, []);
@@ -532,6 +561,7 @@ const userApiKeysRef = useRef(userApiKeys);
     } else if (event.type === 'snapshot') {
       setNeedsConfiguration(snapshotNeedsConfiguration(event.snapshot));
       setMessages(displayMessages(event.snapshot, language));
+      setTodoItems(latestTodoFromMessages(event.snapshot.messages) || []);
       skillAttachmentDirty.current = false;
       setSkillAttachment(event.snapshot.boundProductionSkill);
     } else if (event.type === 'tool-start') {
@@ -552,6 +582,12 @@ const userApiKeysRef = useRef(userApiKeys);
         detail: event.result,
         status: event.isError ? 'error' : 'success',
       } : item));
+      if (event.name === AGENT_TODO_TOOL_NAME && !event.isError) {
+        const todo = todoFromToolResult(event.result);
+        if (todo) setTodoItems(todo);
+      }
+    } else if (event.type === 'tool-update') {
+      setMessages(items => items.map(item => item.id === 'tool-' + event.id ? { ...item, detail: event.partial } : item));
     } else if (event.type === 'error') {
       // Mid-turn errors are usually transient; only a credential wall earns the
       // guided-action card — everything else stays a plain message.
@@ -752,6 +788,7 @@ const userApiKeysRef = useRef(userApiKeys);
       <section className="workflow-agent__body">
         {/* When setup is the blocker, the setup card is the one thing to read: drop the duplicate red config error and the browse/skill decks under it. */}
         <div className="agent-conversation__messages"><WorkflowAgentMessages messages={setupGate ? messages.filter(message => message.id !== 'agent-text-config') : messages} running={sending} language={language} /></div>
+        {todoItems.length > 0 && !setupGate && <div className='mx-3'><AgentTodoCard items={todoItems} language={language} /></div>}
         {setupBlocker && !browseFirst && (
           <div role="alert" data-testid="agent-setup-card" className="mx-3 mb-2 rounded-xl border px-3 py-2.5" style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-surface-2)' }}>
             <p style={{ margin: 0, fontSize: 12, lineHeight: 1.7, color: 'var(--isl-ink-soft)' }}>{localizedAgentSetupMessage(setupBlocker, undefined, language)}</p>

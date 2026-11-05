@@ -287,3 +287,37 @@ describe('workflow agent session', () => {
     expect(events).not.toContain('tool_call');
   });
 });
+
+describe('workflow agent session error codes', () => {
+  const connect = (session) => {
+    let events = '';
+    const response = { writeHead() {}, write(value) { events += value; }, on() {} };
+    session.openEvents(new URL('http' + ':/' + '/127.0.0.1/events?clientId=browser-1'), response);
+    session.updateSnapshot({ id: 'project-a', draftVersion: 1 }, 'browser-1');
+    return () => JSON.parse(events.match(/event: tool_call\ndata: (.+)\n\n/)?.[1] || '{}');
+  };
+
+  it('reports an unanswered browser call as COMMAND_TIMEOUT, not a generic error', async () => {
+    const session = new WorkflowAgentSession({ timeoutMs: 10 });
+    connect(session);
+    await expect(session.callCommand('workflow.inspect', { projectId: 'project-a' }, 'operator', 'timeout-inspect'))
+      .rejects.toMatchObject({ name: 'WorkflowAgentSessionError', code: 'COMMAND_TIMEOUT', retryable: false });
+  });
+
+  it('waits on the long timeout while a node delete sits behind the human confirmation', async () => {
+    const session = new WorkflowAgentSession({ timeoutMs: 10, longRunningTimeoutMs: 1000 });
+    const lastPayload = connect(session);
+    const call = session.callCommand('workflow.node.delete', { projectId: 'project-a', nodeId: 'n1' }, 'operator', 'confirm-delete');
+    await new Promise(resolve => setTimeout(resolve, 40));
+    session.resolveResult({ requestId: lastPayload().requestId, clientId: 'browser-1', result: { ok: true } });
+    await expect(call).resolves.toEqual({ ok: true });
+  });
+
+  it('surfaces a browser-side failure with a typed code', async () => {
+    const session = new WorkflowAgentSession({ timeoutMs: 1000 });
+    const lastPayload = connect(session);
+    const call = session.callCommand('workflow.inspect', { projectId: 'project-a' }, 'operator', 'browser-error');
+    session.resolveResult({ requestId: lastPayload().requestId, clientId: 'browser-1', error: 'Agent 命令执行失败。' });
+    await expect(call).rejects.toMatchObject({ code: 'WORKFLOW_COMMAND_FAILED', message: 'Agent 命令执行失败。' });
+  });
+});

@@ -6,6 +6,7 @@ import {
   SqliteSessionRepo,
 } from '@earendil-works/pi-storage-sqlite-node';
 import { resolveProductionSkillAttachment } from './production-skills.js';
+import { createTodoTool, TODO_TOOL_NAME } from './todo.js';
 
 const DEFAULT_SYSTEM_PROMPT = `你是 Iris Agent，负责把用户的创作目标整理为可审查的制作计划。
 你只能使用已注册的 Iris 制作工具，不得访问 Shell、任意文件或 Provider Secret。
@@ -23,6 +24,7 @@ Workflow 修改只使用 flovart_workflow_apply 的结构化 operations；节点
 3. 拆镜：锚点确认后，用一次 workflow.apply 建立分镜节点并连到锚点，每个镜头一个节点，标题写镜号与内容。
 4. 批量生成：互不依赖的节点用 flovart_workflow_node_run 的 nodeIds 一次提交，由用户一次确认费用；有依赖的节点等上游成功后再运行。
 5. 汇报：按节点标题说明成功与失败；失败只重跑失败节点，不整批重跑。
+6. 清单：多步制作开始前用 flovart_todo 建立任务清单，每完成、阻塞一步就更新一次；工具结果 ok:false 时读 error.code 决定改写提示词、重试或停下说明，预算不足或会话暂停时不得重试。
 绑定 Production Skill 时，镜头语言、风格和节奏以 Skill 为准；与用户要求冲突时以用户为准并说明。
 没有足够信息时先说明缺口；没有用户确认的 Production Mandate 时不得声称付费制作已经开始。`;
 const PRODUCTION_SKILL_BINDING_ENTRY = 'flovart.production-skill-binding';
@@ -79,7 +81,8 @@ export class FlovartAgentKernel {
     this.databasePath = databasePath;
     this.model = model;
     this.streamFn = streamFn;
-    this.tools = tools;
+    // 任务清单是内核自带的只读工具，不走 callCommand、不计费；调用方已提供同名工具时不重复注册。
+    this.tools = tools.some(tool => tool.name === TODO_TOOL_NAME) ? tools : [...tools, createTodoTool()];
     this.systemPrompt = systemPrompt;
     this.resolveProductionSkill = resolveProductionSkill;
     this.listeners = new Set();
@@ -117,10 +120,10 @@ export class FlovartAgentKernel {
       const context = await this.session.buildContext();
       const wrappedTools = this.tools.map(tool => tool.execute ? {
         ...tool,
-        execute: (toolCallId, input, signal) => tool.execute(toolCallId, {
+        execute: (toolCallId, input, signal, onUpdate) => tool.execute(toolCallId, {
           ...input,
           ...(this.activeChangeSetId ? { changeSetId: this.activeChangeSetId } : {}),
-        }, signal),
+        }, signal, onUpdate),
       } : tool);
       this.agent = new Agent({
         initialState: {
@@ -137,6 +140,8 @@ export class FlovartAgentKernel {
             ? undefined
             : { block: true, reason: `未注册的 Iris 工具：${toolCall.name}` }
         ),
+        // 预期内失败由工具以 details.isError 标记（见 tools.js / todo.js），这里统一翻成 isError，前端与模型都能看到失败状态。
+        afterToolCall: async ({ result }) => (result?.details?.isError ? { isError: true } : undefined),
       });
       this.unsubscribe = this.agent.subscribe(async event => {
         if (event.type === 'message_end') await this.session.appendMessage(event.message);

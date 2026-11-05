@@ -22,14 +22,14 @@ Flovart是 local-first、agent-native、BYOK 的创作工作台。用户的模�
 | 模块 | 职责一句话 | 设计文档 |
 | --- | --- | --- |
 | Canvas / Workflow | 空间化、可见的生产图；人和 Agent 编辑同一份状态 | [10-canvas-workflow](10-canvas-workflow.md) |
-| Table | 结构化批量媒体处理；结果显式提交回 Workflow / 素材库 | [11-table](11-table.md) |
+| Reverse | 按 Hypit 架构复刻的视频逆向；一键转为 Canvas 子画布 | [11-reverse](11-reverse.md) |
 | Agent | 外部 Agent 接入（Skill + CLI，MCP 为投影）、Agent 连接中心、内置 Assistant | [12-agent](12-agent.md) |
 | Generation & Runtime | 一条生成路径：任务、Provider 路由、费用、持久素材、本地服务 | [13-generation-runtime](13-generation-runtime.md) |
 | Creative Hosts | Resolve 首发；AE / PR / PS 后续；宿主轻面板、上轨道、原生效果 | [14-creative-hosts](14-creative-hosts.md) |
 | Web, Community & Extension | 网站后端、作品社区、浏览器导入扩展、安装与发行 | [15-web-community-extension](15-web-community-extension.md) |
 | 质量与治理 | 评测、证据、支持等级、文档治理 | [20-quality-and-governance](20-quality-and-governance.md) |
 
-顶级产品 surface 固定为 **Canvas | Table | Agent**；Assistant / Context / History 只在 Canvas、Table 旁的 contextual drawer 中出现。
+顶级产品 surface 固定为 **Canvas | Reverse | Agent**；Assistant / Context / History 只在 Canvas、Reverse 旁的 contextual drawer 中出现。
 
 ## 4. 设计原则
 
@@ -70,14 +70,14 @@ Flovart是 local-first、agent-native、BYOK 的创作工作台。用户的模�
 | 生成输入、任务状态、Provider 任务 ID、结果版本 | 本地生成服务 | taskId、进度、结果引用 |
 | 已生成媒体 | 持久素材目录（内容寻址） | 素材 ID、相对路径、校验和 |
 | Workflow 图 | Browser Workflow（当前权威） | 引用；修改走 mutation |
-| Table 处理图 | Table 自身 | 显式提交的结果引用 |
+| 逆向工程（Script、证据、对齐、变体） | Reverse 自身 | 子画布节点上的 reverseProjectId 与镜头 key |
 | Agent 主会话 | Agent 官方运行时（Codex、Claude…） | 非秘密会话引用与任务关联 |
 | Provider Key | 本机安全存储 | 永不进入宿主工程、Skill、日志、素材元数据 |
 
 ## 7. 系统主路径
 
 ~~~text
-生成：宿主面板 / Canvas / CLI / MCP → 同一任务函数 → Provider 适配 → 持久素材版本 → 宿主 / Workflow / Table 消费
+生成：宿主面板 / Canvas / CLI / MCP → 同一任务函数 → Provider 适配 → 持久素材版本 → 宿主 / Workflow / Reverse 消费
 渲染：宿主效果 → 读取固定素材版本 → 混合 → 输出当前帧（不联网、不等待模型、不依赖 Agent 在线）
 ~~~
 
@@ -112,9 +112,9 @@ Flovart是 local-first、agent-native、BYOK 的创作工作台。用户的模�
 | 术语 | 含义 | 避免 |
 | --- | --- | --- |
 | Canvas | 空间化 Workflow 创作面 | Canvas / Art 双系统 |
-| Table | 结构化媒体处理视图，不是第二份 Workflow 权威 | 隐式双写 |
+| Reverse | 按 Hypit 架构复刻的视频逆向；可一键转为 Canvas 子画布，不是第二份 Workflow 权威 | 隐式双写、复制 Hypit 源码 |
 | Agent surface | 顶栏的外部 Agent 连接中心：discover / prepare / status / switch | 全页聊天、Tasks / Artifacts 工作区 |
-| Assistant drawer | Canvas / Table 旁的内置助手抽屉 | Host picker、Agent 安装 |
+| Assistant drawer | Canvas / Reverse 旁的内置助手抽屉 | Host picker、Agent 安装 |
 | Stable Agent operations | `status`、`workflow.inspect`、`workflow.selection.get`、`workflow.apply`、`workflow.node.run` | 每个 API 一个 tool |
 | Layer（叠加层） | 带 Alpha、与源片段对齐的生成结果，不含源像素 | “替换原片” |
 | Candidate | 尚未被应用的生成结果，先进入 Media Pool / 候选区 | 自动应用 |

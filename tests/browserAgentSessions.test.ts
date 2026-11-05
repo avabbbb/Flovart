@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import localforage from 'localforage';
 import { BrowserAgentKernel, createBrowserAgentTools, resolveBrowserAgentTextRoute } from '../services/browserAgentKernel';
 import { workflowMediaStorage } from '../components/workflow/storage';
@@ -138,5 +138,25 @@ describe('browser agent multi-session history', () => {
     const list = await kernel.listSessions();
     expect(list).toHaveLength(1);
     expect(list[0].title).toBe('旧版对话标题来源');
+  });
+
+  it('persists the user message exactly once per send()', async () => {
+    // 回归：send() 曾手动 appendMessage(user)，agent.prompt() 的 message_end 又写一次，面板显示两条。
+    const sse = [
+      'data: ' + JSON.stringify({ id: 'c1', object: 'chat.completion.chunk', choices: [{ index: 0, delta: { role: 'assistant', content: 'OK' } }] }),
+      'data: ' + JSON.stringify({ id: 'c1', object: 'chat.completion.chunk', choices: [{ index: 0, delta: {}, finish_reason: 'stop' }] }),
+      'data: [DONE]',
+      '',
+    ].join('\n\n');
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response(sse, { status: 200, headers: { 'content-type': 'text/event-stream' } }));
+    try {
+      await kernel.openSession();
+      await kernel.send('只发一次');
+      const snapshot = (await kernel.snapshot()) as { messages: Array<{ role: string; text: string }> };
+      expect(snapshot.messages.filter(message => message.role === 'user' && message.text === '只发一次')).toHaveLength(1);
+      expect(snapshot.messages.some(message => message.role === 'assistant' && message.text.includes('OK'))).toBe(true);
+    } finally {
+      fetchMock.mockRestore();
+    }
   });
 });

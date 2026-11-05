@@ -79,6 +79,9 @@ export interface ResolvedWorkflowResource {
   storageKey?: string;
   artifactRef?: WorkflowArtifactRef;
   mimeType?: string;
+  /** 源节点记录的媒体像素尺寸；供 Provider 前置分辨率校验使用。 */
+  naturalWidth?: number;
+  naturalHeight?: number;
 }
 
 export type WorkflowMediaResource = ResolvedWorkflowResource & {
@@ -206,6 +209,9 @@ function resolveNodeResources(node: WorkflowNode, connection: WorkflowConnection
       text: locator.kind === 'inline-text' ? locator.text : undefined,
       ...legacy,
       mimeType: resource.mimeType || (locator.kind === 'runtime-artifact' ? locator.artifactRef.mimeType : undefined),
+      ...(node.metadata.naturalWidth && node.metadata.naturalHeight
+        ? { naturalWidth: node.metadata.naturalWidth, naturalHeight: node.metadata.naturalHeight }
+        : {}),
     };
   });
 }

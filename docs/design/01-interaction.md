@@ -1,6 +1,6 @@
 # Flovart 交互设计
 
-> 状态：**Current truth**。所有 surface（宿主面板、Canvas、Table、Agent 连接中心、Assistant）的交互都遵守本文。模块文档只补充本模块特有的界面，不得与本文冲突。
+> 状态：**Current truth**。所有 surface（宿主面板、Canvas、Reverse、Agent 连接中心、Assistant）的交互都遵守本文。模块文档只补充本模块特有的界面，不得与本文冲突。
 
 ## 1. 三条总规则
 
@@ -132,10 +132,10 @@ idle → planning → awaiting_approval → queued → running → completed
 - 运行中改参数：当前运行继续，修改标记为“下次运行生效”，不中断也不丢弃。
 - 晚到结果作为新版本出现，不覆盖用户已选定的版本。
 
-### 6.4 Table 提交
+### 6.4 Reverse → Canvas
 
-- Table 内的处理只改 Table 自身状态；“提交到 Workflow / 素材库”是唯一出口，提交前显示将新增 / 替换哪些项。
-- 大文件处理有进度、取消和内存上限提示；取消后已完成的部分可保留或丢弃，由用户选择。
+- Reverse 内的拆解、对齐、变体只改逆向工程自身；「转为画布 / 同步到画布」是写入 Workflow 的唯一出口，一次 `workflow.apply`，执行前列出将新增 / 更新的子画布节点，默认新增、不覆盖用户已选版本。
+- 转写导入、批量生成有进度与取消；取消后已完成部分可保留或丢弃，由用户选择。
 
 ### 6.5 Agent 连接中心
 
@@ -161,8 +161,8 @@ app-shell
 ├─ top bar
 └─ workspace
    └─ studio-layout
-      ├─ studio surface（Canvas | Table | Agent）
-      └─ Assistant drawer（仅 Canvas / Table）
+      ├─ studio surface（Canvas | Reverse | Agent）
+      └─ Assistant drawer（仅 Canvas / Reverse）
 ~~~
 
 - 布局由容器宽度决定，不由全局 viewport 状态驱动；断点只表达“容器能否容纳当前组合”。

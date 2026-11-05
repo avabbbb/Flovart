@@ -10,11 +10,13 @@ import { WorkflowAgentSession, WorkflowAgentSessionError } from './session.js';
 import { prepareAgentHostProjection } from './host-projection.js';
 import { importFlovartModule } from './flovart-modules.js';
 import { ReceiptError, ReceiptStore } from './receipts.js';
+import { AgentCredentialStore, CredentialError } from './credentials.js';
 
 const { discoverAgentHosts } = await importFlovartModule('host-discovery');
 const { getAgentIdentity } = await importFlovartModule('host-registry');
 const { getCanonicalRegistry } = await importFlovartModule('registry');
 const { AGENT_PUBLIC_COMMAND_SET } = await importFlovartModule('agent-surface');
+const { readWebDiscovery } = await importFlovartModule('web-discovery');
 
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PROJECT_ROOT = path.resolve(process.env.FLOVART_PROJECT_DIR || REPOSITORY_ROOT);
@@ -131,8 +133,15 @@ export function startHttpServer() {
     ? 0
     : Number(process.env.FLOVART_AGENT_PORT) || Number(new URL(config.url).port) || DEFAULT_AGENT_PORT;
   const bootstrapCredentials = new BootstrapCredentialStore();
-  const session = new WorkflowAgentSession({ isKnownAgentIdentity: id => Boolean(getAgentIdentity(id)) });
+  // webUrl 惰性解析：WebUI 往往晚于 Agent 启动；FLOVART_WEB_URL 可显式覆盖。
+  const session = new WorkflowAgentSession({
+    isKnownAgentIdentity: id => Boolean(getAgentIdentity(id)),
+    webUrl: () => process.env.FLOVART_WEB_URL || readWebDiscovery()?.url || null,
+  });
   const receiptStore = new ReceiptStore();
+  // 让会话内的复合命令（如 workflow.batch.pick）能写 decision 回执。
+  session.receiptStore = receiptStore;
+  const credentialStore = new AgentCredentialStore();
   // /crew/protocol 仍是对外 readiness 握手（local-agent.js inspectLocalAgent
   // 与 CLI bootstrap/status 路径依赖）。Crew/Director 业务面已移除，这里只保留
   // 协议版本与 Registry Hash 的自报能力。
@@ -244,6 +253,30 @@ export function startHttpServer() {
       }
       if (request.method === 'GET' && url.pathname === '/workspace/lease') {
         return json(response, 200, { ok: true, leases: session.workspaceLeaseState() });
+      }
+      if (url.pathname === '/credentials' || url.pathname.startsWith('/credentials/')) {
+        // Agent-side keyring vault: secrets go in, only masked metadata comes out.
+        try {
+          if (request.method === 'GET' && url.pathname === '/credentials') {
+            const status = await credentialStore.status();
+            const credentials = await credentialStore.list(url.searchParams.get('provider') || undefined);
+            return json(response, 200, { ok: true, ...status, credentials });
+          }
+          if (request.method === 'POST' && url.pathname === '/credentials/set') {
+            return json(response, 200, { ok: true, credential: await credentialStore.set(await readBody(request)) });
+          }
+          if (request.method === 'POST' && url.pathname === '/credentials/delete') {
+            return json(response, 200, { ok: true, removed: await credentialStore.delete(await readBody(request)) });
+          }
+          if (request.method === 'POST' && url.pathname === '/credentials/report-sync') {
+            return json(response, 200, { ok: true, sync: credentialStore.reportSync(await readBody(request)) });
+          }
+        } catch (error) {
+          if (error instanceof CredentialError) {
+            return json(response, error.code === 'INVALID_INPUT' ? 400 : 503, { ok: false, error: error.toJSON() });
+          }
+          throw error;
+        }
       }
       if (request.method === 'GET' && url.pathname === '/activity') {
         return json(response, 200, {
@@ -440,6 +473,11 @@ export function startHttpServer() {
             name: event.toolName,
             args: event.args,
           });
+          if (event.type === 'tool_execution_update') emit('tool-update', {
+            id: event.toolCallId,
+            name: event.toolName,
+            partial: event.partialResult,
+          });
           if (event.type === 'tool_execution_end') emit('tool-end', {
             id: event.toolCallId,
             name: event.toolName,
@@ -468,7 +506,10 @@ export function startHttpServer() {
       if (error instanceof WorkflowAgentSessionError) {
         const status = ['AGENT_WRITER_INACTIVE', 'AGENT_HOST_REQUIRED', 'AGENT_HOST_SESSION_MISMATCH', 'AGENT_PROJECT_INACTIVE', 'LEASE_EXPIRED', 'LEASE_TARGET_CHANGED', 'REVISION_CONFLICT'].includes(error.code)
           ? 409
-          : error.code === 'WORKSPACE_UNAVAILABLE' ? 503 : 400;
+          : error.code === 'WORKSPACE_UNAVAILABLE' ? 503
+            : error.code === 'COMMAND_TIMEOUT' ? 504
+              : error.code === 'CANCELLED' ? 499
+                : 400;
         return json(response, status, { ok: false, error: error.toJSON() });
       }
       return json(response, 500, { ok: false, error: { code: 'INTERNAL_ERROR', message: 'Agent 服务处理失败，请重试。' } });

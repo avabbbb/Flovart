@@ -99,3 +99,6 @@ tools/flovart/evaluations/**/*.wav
 tools/flovart/evaluations/**/*.png
 tools/flovart/evaluations/**/*.jpg
 tools/flovart/evaluations/**/*.jpeg
+
+# local reference clones (license-incompatible, never commit)
+_ref/

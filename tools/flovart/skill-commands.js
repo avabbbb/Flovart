@@ -8,6 +8,7 @@ import { spawn } from 'node:child_process';
 
 import { readSkillPackageEntries, SkillRegistry } from './skill-registry.js';
 import { parseProductionSkillManifest, safeSkillPackageName } from './skill-package.js';
+import { buildSkillDraft, evaluateSkillDraft } from './skill-draft.js';
 import {
   assertInstallableHubUrl,
   fetchHubSkillList,
@@ -43,6 +44,7 @@ const SKILL_COMMAND_NAMES = new Set([
   'skill.hub.list',
   'skill.init',
   'skill.validate',
+  'skill.draft',
   'web.open',
 ]);
 
@@ -217,6 +219,56 @@ export async function runSkillCommand(command, args = {}) {
       return okResult({ command, id, dir, files: Object.keys(files), next: ['skill.validate --from-dir ' + dir, 'skill.install ' + id + ' --from-dir ' + dir] });
     }
 
+    // 对话转 Skill：--from-snapshot 为 { projectId, project: workflow.inspect 的工程, receipts: receipts.list 的回执 }。
+    // 默认只写草稿到 .agents/skill-drafts/<handle>；带 --install 且基础验收全部通过才入库。
+    case 'skill.draft': {
+      if (!id) return error('INVALID_ARGUMENT', 'skill.draft 需要 <id>（如 community.my-flow）。');
+      const snapshotPath = String(args.fromSnapshot ?? args['from-snapshot'] ?? '').trim();
+      if (!snapshotPath) return error('INVALID_ARGUMENT', 'skill.draft 需要 --from-snapshot <json>。');
+      let snapshot;
+      try {
+        snapshot = JSON.parse(await fs.readFile(path.resolve(snapshotPath), 'utf8'));
+      } catch (cause) {
+        return error('INVALID_ARGUMENT', '无法读取快照：' + (cause instanceof Error ? cause.message : String(cause)));
+      }
+      let draft;
+      try {
+        draft = buildSkillDraft({
+          id,
+          name: args.name,
+          description: args.description,
+          projectId: snapshot?.projectId || snapshot?.project?.id,
+          project: snapshot?.project || snapshot,
+          receipts: snapshot?.receipts,
+          nodeIds: typeof args.nodes === 'string' ? args.nodes.split(',').map(item => item.trim()).filter(Boolean) : snapshot?.nodeIds,
+        });
+      } catch (cause) {
+        return error('INVALID_ARGUMENT', cause instanceof Error ? cause.message : String(cause));
+      }
+      const evaluation = evaluateSkillDraft(draft.files, id);
+      const dir = path.resolve(String(args.dir || path.join(projectDir, '.agents', 'skill-drafts', draft.handle)));
+      if (await dirExists(dir)) return error('ALREADY_EXISTS', '草稿目录已存在，拒绝覆盖：' + dir);
+      for (const [relative, content] of Object.entries(draft.files)) {
+        const target = path.join(dir, relative);
+        await fs.mkdir(path.dirname(target), { recursive: true });
+        await fs.writeFile(target, content, 'utf8');
+      }
+      const files = Object.keys(draft.files);
+      if (!args.install) {
+        return okResult({ command, id, dir, files, evaluation, next: evaluation.ok ? ['skill.install ' + id + ' --from-dir ' + dir] : [] });
+      }
+      if (!evaluation.ok) {
+        return { ok: false, error: { code: 'EVALUATION_FAILED', message: '基础验收未通过，草稿未入库：' + dir, retryable: false }, dir, evaluation };
+      }
+      try {
+        const registry = new SkillRegistry({ repoRoot: projectDir });
+        const skill = await registry.installPackage({ id, files: Object.entries(draft.files).map(([entryPath, content]) => ({ path: entryPath, content })) });
+        return okResult({ command, id, dir, files, evaluation, skill, installed: true });
+      } catch (cause) {
+        return error('REJECTED', cause instanceof Error ? cause.message : String(cause));
+      }
+    }
+
     case 'skill.validate': {
       const fromDir = String(args.fromDir ?? args['from-dir'] ?? args._?.[0] ?? '').trim();
       if (!fromDir) return error('INVALID_ARGUMENT', 'skill.validate 需要 --from-dir <dir>。');
@@ -315,8 +367,9 @@ export function openUrlNative(url) {
   }
 }
 
+// rundll32 url.dll 会丢掉 & 之后的 bootstrapToken；PowerShell 单引号字面量原样传整条 URL。
 export function buildNativeOpenCommand(url, os = platform()) {
   return os === 'win32'
-    ? { cmd: 'rundll32.exe', args: ['url.dll,FileProtocolHandler', url] }
+    ? { cmd: 'powershell.exe', args: ['-NoProfile', '-NonInteractive', '-Command', "Start-Process '" + url.replace(/'/g, "''") + "'"] }
     : { cmd: os === 'darwin' ? 'open' : 'xdg-open', args: [url] };
 }

@@ -19,6 +19,7 @@ import { workflowConfirmRequest } from './workflowAgentBridge';
 import type { AgentConfirmRequest } from './agentSpendMandate';
 import { COMMAND_ALIASES, COMMAND_REGISTRY } from '../tools/flovart/core.js';
 import { AGENT_BROWSER_COMMANDS } from '../tools/flovart/agent-surface.js';
+import { createTodoTool, TODO_TOOL_NAME } from '../agent/todo.js';
 import type { UserApiKey } from '../types';
 import { displayError } from './displayError';
 
@@ -486,6 +487,7 @@ Workflow 修改只使用 flovart_workflow_apply 的结构化 operations；节点
 3. 拆镜：锚点确认后，用一次 workflow.apply 建立分镜节点，每个镜头一个节点，标题写镜号与内容，并写入 shot: { index, durationSec, scene, camera, dialogue, anchorNodeIds }；生成时会自动连上已批准锚点。
 4. 批量生成：互不依赖的节点用 flovart_workflow_node_run 的 nodeIds 一次提交，由用户一次确认费用；有依赖的节点等上游成功后再运行。
 5. 汇报：按节点标题说明成功与失败；失败只重跑失败节点，不整批重跑。
+6. 清单：多步制作开始前用 flovart_todo 建立任务清单，每完成、阻塞一步就更新一次；工具结果 ok:false 时读 error.code 决定改写提示词、重试或停下说明，预算不足或会话暂停时不得重试。
 绑定 Production Skill 时，镜头语言、风格和节奏以 Skill 为准；与用户要求冲突时以用户为准并说明。
 Web 模式下 Production Runtime 不可用，production 相关命令会失败并返回明确错误；此时改用 Workflow 节点工具完成可逆编排。`;
 
@@ -548,7 +550,10 @@ export class BrowserAgentKernel {
   constructor(options: BrowserAgentKernelOptions) {
     this.projectId = options.projectId;
     this.route = options.route;
-    this.tools = options.tools;
+    // 与 Node 内核一致：任务清单是内核自带的只读工具，调用方已提供同名工具时不重复注册。
+    this.tools = options.tools.some(tool => tool.name === TODO_TOOL_NAME)
+      ? options.tools
+      : [...options.tools, createTodoTool() as unknown as AgentTool];
     this.confirm = options.confirm;
     this.initialSkillAttachment = options.skillAttachment ?? null;
     this.systemPrompt = options.systemPrompt ?? BROWSER_DEFAULT_SYSTEM_PROMPT;
@@ -596,10 +601,10 @@ export class BrowserAgentKernel {
     const context = await this.session.buildContext();
     const wrappedTools = this.tools.map(tool => tool.execute ? {
       ...tool,
-      execute: (toolCallId: string, input: Record<string, unknown>, signal: AbortSignal | undefined) => tool.execute(toolCallId, {
+      execute: (toolCallId: string, input: Record<string, unknown>, signal: AbortSignal | undefined, onUpdate?: (partial: unknown) => void) => tool.execute(toolCallId, {
         ...input,
         ...(this.activeChangeSetId ? { changeSetId: this.activeChangeSetId } : {}),
-      }, signal),
+      }, signal, onUpdate as never),
     } : tool);
 
     const skillContext = this.boundProductionSkill
@@ -636,6 +641,8 @@ export class BrowserAgentKernel {
           ? undefined
           : { block: true, reason: `未注册的 Flovart 工具：${toolCall.name}` }
       ),
+      // 预期内失败由工具以 details.isError 标记，这里统一翻成 isError。
+      afterToolCall: async ({ result }) => ((result as { details?: { isError?: boolean } } | undefined)?.details?.isError ? { isError: true } : undefined),
     });
 
     this.unsubscribe = this.agent.subscribe(async event => {
@@ -753,12 +760,6 @@ export class BrowserAgentKernel {
       });
     }
 
-    await this.session.appendMessage({
-      role: 'user',
-      content: [{ type: 'text', text: prompt }],
-      timestamp: Date.now(),
-    } as never);
-    await this.repo?.persist(this.session);
     await this.agent.prompt(prompt);
     return this.snapshot();
   }

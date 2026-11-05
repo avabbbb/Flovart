@@ -28,6 +28,9 @@ export default defineConfig(() => {
           'Cross-Origin-Embedder-Policy': 'require-corp',
           'Cache-Control': 'no-store',
         },
+        // 冷启动时浏览器首次请求才触发整张模块图编译（实测 26–48s），启动即预热入口，
+        // 避免 flovart start --open 打开的页面在绑定等待内挂载不完。
+        warmup: { clientFiles: ['./index.tsx', './RouterHost.tsx'] },
         // src-tauri/target is Rust build output; cargo locks flovart.exe while
         // compiling and chokidar crashes on EBUSY watching it. Exclude build dirs.
         watch: {
@@ -89,7 +92,7 @@ export default defineConfig(() => {
         maxWorkers: 4,
         // Stale worktrees, backups and build output carry their own React copies;
         // collecting tests from them fails with invalid hook calls.
-        exclude: [...configDefaults.exclude, '**/.tmp/**', '**/.temp/**', '**/.claude/**', '**/dist-*/**'],
+        exclude: [...configDefaults.exclude, '**/.tmp/**', '**/.temp/**', '**/.claude/**', '**/dist-*/**', '_ref/**'],
       },
     };
 });

@@ -51,7 +51,7 @@ export function createFlovartAgentTools(callCommand) {
       description: metadata.summary,
       parameters: agentParameters(metadata.args, write),
       executionMode: 'sequential',
-      async execute(_toolCallId, input, signal) {
+      async execute(_toolCallId, input, signal, onUpdate) {
         if (signal?.aborted) throw new Error('Workflow 操作已取消');
         const { idempotencyKey, changeSetId, ...args } = input;
         const commandArgs = command.startsWith('workflow.')
@@ -61,8 +61,13 @@ export function createFlovartAgentTools(callCommand) {
             ...(AGENT_WRITE_COMMANDS.has(command) && changeSetId ? { changeSetId } : {}),
           }
           : args;
+        onUpdate?.({ content: [{ type: 'text', text: JSON.stringify({ command, status: 'running' }) }], details: { command, status: 'running' } });
         const result = await callCommand(command, commandArgs, 'agent', idempotencyKey, signal);
-        if (result?.ok === false) throw new Error(result.error?.message || 'Flovart 操作失败');
+        if (result?.ok === false) {
+          // 预期内失败（预算、暂停、审核、版本冲突）作为结构化结果交还模型，由 kernel 的 afterToolCall 标记 isError，不再抛错。
+          const failure = { ok: false, error: { code: result.error?.code || 'COMMAND_FAILED', message: result.error?.message || 'Flovart 操作失败' } };
+          return { content: [{ type: 'text', text: JSON.stringify(failure) }], details: { command, result, isError: true } };
+        }
         return {
           content: [{ type: 'text', text: JSON.stringify(result) }],
           details: { command, result },

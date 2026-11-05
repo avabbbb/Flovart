@@ -1,9 +1,8 @@
-import { Circle, FileText, Frame, Image, Music2, PenTool, Settings2, Square, Type, Video, X } from 'lucide-react';
+import { FileText, Image, Music2, Type, Video, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useRef } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import type { WorkflowNodeType, WorkflowPoint } from './types';
-import type { DesignElementKind } from '../../services/design/designTypes';
 
 export interface WorkflowCreateMenuState {
   world: WorkflowPoint;
@@ -12,26 +11,22 @@ export interface WorkflowCreateMenuState {
   targetId?: string;
 }
 
-const OPTIONS: Array<{ type: WorkflowNodeType; designKind?: DesignElementKind; title: string; description: string; icon: typeof Type }> = [
-  { type: 'image', title: '图片生成', description: '创建图片生成节点', icon: Image },
-  { type: 'video', title: '视频生成', description: '创建视频生成节点', icon: Video },
-  { type: 'text', title: '文本生成', description: '脚本、文案和提示词', icon: Type },
-  { type: 'script', title: '脚本节点', description: '剧本拆解、分镜编排和批量生成', icon: FileText },
-  { type: 'audio', title: '音频参考', description: '添加音频参考输入', icon: Music2 },
-  { type: 'config', title: '配置节点', description: '模型、尺寸和生成参数', icon: Settings2 },
-  { type: 'design', designKind: 'frame', title: '画板', description: '手机、海报、A4 等尺寸画板', icon: Frame },
-  { type: 'design', designKind: 'rect', title: '矩形', description: '圆角矩形，支持渐变与描边', icon: Square },
-  { type: 'design', designKind: 'ellipse', title: '椭圆', description: '圆形与椭圆', icon: Circle },
-  { type: 'design', designKind: 'text', title: '文字', description: '排版文字，支持富文本', icon: Type },
-  { type: 'design', designKind: 'path', title: '钢笔', description: '贝塞尔矢量路径', icon: PenTool },
+const OPTIONS: Array<{ type: WorkflowNodeType; title: string; titleEn: string; description: string; descriptionEn: string; icon: typeof Type }> = [
+  { type: 'image', title: '图片生成', titleEn: 'Image', description: '创建图片生成节点', descriptionEn: 'Create an image generation node', icon: Image },
+  { type: 'video', title: '视频生成', titleEn: 'Video', description: '创建视频生成节点', descriptionEn: 'Create a video generation node', icon: Video },
+  { type: 'text', title: '文本生成', titleEn: 'Text', description: '脚本、文案和提示词', descriptionEn: 'Scripts, copy and prompts', icon: Type },
+  { type: 'script', title: '脚本节点', titleEn: 'Script', description: '剧本拆解、分镜编排和批量生成', descriptionEn: 'Break down scripts, plan shots, batch generate', icon: FileText },
+  { type: 'audio', title: '音频参考', titleEn: 'Audio reference', description: '添加音频参考输入', descriptionEn: 'Add an audio reference input', icon: Music2 },
 ];
 
-export function WorkflowCreateMenu({ state, onCreate, onClose }: {
+export function WorkflowCreateMenu({ state, onCreate, onClose, language = 'zho' }: {
   state: WorkflowCreateMenuState;
-  onCreate: (type: WorkflowNodeType, designKind?: DesignElementKind) => void;
+  onCreate: (type: WorkflowNodeType) => void;
   onClose: () => void;
+  language?: 'en' | 'zho';
 }) {
   const listRef = useRef<HTMLDivElement>(null);
+  const en = language === 'en';
 
   useEffect(() => {
     const first = listRef.current?.querySelector<HTMLButtonElement>('[role="menuitem"]');
@@ -64,7 +59,7 @@ export function WorkflowCreateMenu({ state, onCreate, onClose }: {
   return (
     <motion.div
       role="menu"
-      aria-label="新建节点"
+      aria-label={en ? 'New node' : '新建节点'}
       data-workflow-overlay
       data-workflow-create-menu
       className="workflow-create-menu"
@@ -78,8 +73,8 @@ export function WorkflowCreateMenu({ state, onCreate, onClose }: {
       onKeyDown={handleKeyDown}
     >
       <div className="workflow-create-menu__header">
-        <span>{state.sourceId ? '引用该节点生成' : state.targetId ? '为此节点创建上游' : '新建节点'}</span>
-        <button type="button" aria-label="关闭新建节点" onClick={onClose}><X size={15} /></button>
+        <span>{state.sourceId ? (en ? 'Generate from this node' : '引用该节点生成') : state.targetId ? (en ? 'Create upstream for this node' : '为此节点创建上游') : (en ? 'New node' : '新建节点')}</span>
+        <button type="button" aria-label={en ? 'Close new node menu' : '关闭新建节点'} onClick={onClose}><X size={15} /></button>
       </div>
       <div ref={listRef} className="workflow-create-menu__list">
         <AnimatePresence>
@@ -87,11 +82,11 @@ export function WorkflowCreateMenu({ state, onCreate, onClose }: {
             const Icon = option.icon;
             return (
               <motion.button
-                key={option.designKind ? option.type + ':' + option.designKind : option.type}
+                key={option.type}
                 type="button"
                 role="menuitem"
                 className="workflow-create-menu__item"
-                onClick={() => onCreate(option.type, option.designKind)}
+                onClick={() => onCreate(option.type)}
                 initial={{ opacity: 0, x: -12 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -12 }}
@@ -99,8 +94,8 @@ export function WorkflowCreateMenu({ state, onCreate, onClose }: {
               >
                 <span className="workflow-create-menu__item-icon"><Icon size={18} /></span>
                 <span className="workflow-create-menu__item-text">
-                  <span className="workflow-create-menu__item-title">{option.title}</span>
-                  <span className="workflow-create-menu__item-desc">{option.description}</span>
+                  <span className="workflow-create-menu__item-title">{en ? option.titleEn : option.title}</span>
+                  <span className="workflow-create-menu__item-desc">{en ? option.descriptionEn : option.description}</span>
                 </span>
               </motion.button>
             );

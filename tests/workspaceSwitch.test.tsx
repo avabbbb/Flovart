@@ -21,9 +21,9 @@ describe('workspace switching', () => {
     expect(useWorkspaceStore.getState().activeView).toBe('agent');
   });
 
-  it('keeps Table as a Canvas secondary view', () => {
-    useWorkspaceStore.getState().setCanvasView('table');
-    expect(useWorkspaceStore.getState().canvasView).toBe('table');
+  it('keeps Reverse as a Canvas secondary view', () => {
+    useWorkspaceStore.getState().setCanvasView('reverse');
+    expect(useWorkspaceStore.getState().canvasView).toBe('reverse');
 
     useWorkspaceStore.getState().setCanvasView('spatial');
     expect(useWorkspaceStore.getState().canvasView).toBe('spatial');

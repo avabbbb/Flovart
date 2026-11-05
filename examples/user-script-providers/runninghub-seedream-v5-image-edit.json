@@ -1,0 +1,92 @@
+{
+  "id": "runninghub-seedream-v5-image-edit",
+  "name": "RunningHub · Seedream v5 Pro 图生图（换角）",
+  "version": "1",
+  "endpoint": "https://www.runninghub.cn",
+  "capabilities": [
+    "image-edit"
+  ],
+  "supportedReferenceKinds": [
+    "image"
+  ],
+  "supportedReferenceRoles": [
+    "reference",
+    "character",
+    "style"
+  ],
+  "maxReferences": {
+    "image": 10,
+    "video": 0,
+    "audio": 0
+  },
+  "auth": {
+    "header": "Authorization",
+    "prefix": "Bearer "
+  },
+  "request": {
+    "method": "POST",
+    "path": "openapi/v2/seedream-v5-pro/image-to-image",
+    "body": {
+      "prompt": {
+        "$path": "input.prompt"
+      },
+      "imageUrls": {
+        "$map": {
+          "path": "input.references",
+          "where": {
+            "path": "$item.type",
+            "equals": "image"
+          },
+          "item": {
+            "$path": "$item.href"
+          }
+        }
+      },
+      "aspectRatio": {
+        "$path": "input.parameters.aspectRatio"
+      },
+      "resolution": {
+        "$path": "input.parameters.resolution"
+      }
+    }
+  },
+  "response": {
+    "kind": "image",
+    "taskIdPath": "taskId",
+    "statusPath": "status",
+    "errorPath": "errorMessage",
+    "failureStatuses": [
+      "failed",
+      "error",
+      "cancel",
+      "canceled",
+      "cancelled"
+    ]
+  },
+  "poll": {
+    "request": {
+      "method": "POST",
+      "path": "openapi/v2/query",
+      "body": {
+        "taskId": {
+          "$path": "taskId"
+        }
+      }
+    },
+    "response": {
+      "kind": "image",
+      "statusPath": "status",
+      "mediaUrlPath": "results.0.url",
+      "errorPath": "errorMessage",
+      "failureStatuses": [
+        "failed",
+        "error",
+        "cancel",
+        "canceled",
+        "cancelled"
+      ]
+    },
+    "intervalMs": 5000,
+    "timeoutMs": 300000
+  }
+}

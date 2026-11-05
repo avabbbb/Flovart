@@ -1,52 +1,28 @@
 ---
 name: open-flovart
-description: Prepare Flovart for a user's Workflow task. Use when a user asks to open Flovart or make it ready for workflow work.
+description: Open Flovart and make it ready for the user's Workflow task. Use when the user asks to open, start or prepare Flovart.
 ---
 
 # Open Flovart
 
-Flovart manages its local service, browser workspace, short-lived credentials,
-and recovery internally. Do not ask the user for connection details and do not
-recreate a connection flow in the conversation.
+This is the entry point only. All Workflow work follows the `flovart` Skill;
+read it before the first write.
 
-## Normal loop
+1. Run `flovart ensure --json` (in this source checkout, when the packaged
+   command is not installed: `npm run flovart:cli -- ensure --json`). Never
+   fall back to `npx flovart-cli`.
+2. Continue only when it returns `ok: true` and `state: "ready"`. Otherwise
+   tell the user the public state and error action it returned and stop. Do
+   not guess a port, read local config, or open a URL by hand.
+3. Confirm you are on the user's canvas:
+   `flovart status --json`, then
+   `flovart workflow.inspect --agent-identity <host> --json` with your host's
+   identity (`codex`, `claude-code`, `opencode`, `workbuddy`). Use the same
+   identity on every later write; without it writes fail with
+   `AGENT_HOST_REQUIRED`.
+4. Continue with "Prepare for this job" in the `flovart` Skill.
 
-Run the lifecycle command first:
-
-```bash
-flovart ensure --json
-```
-
-When working directly from this source checkout, use the repository entrypoint
-if the packaged `flovart` command is not installed:
-
-```bash
-npm run flovart:cli -- ensure --json
-```
-
-Do not use `npx flovart-cli` as an automatic fallback; an unpublished source
-checkout can make `npx` query an unrelated registry package.
-
-Continue only when the result has `ok: true` and `state: "ready"`. If it is
-not ready, report the returned public state and error action; do not guess a
-port, open a private URL, read a local config file, or retry with a new token.
-
-Then hand the task to the stable Flovart Skill:
-
-```bash
-flovart workflow.inspect --json
-```
-
-Use `npm run flovart:cli -- workflow.inspect --json` for the same source-checkout fallback.
-
-Use `workflow.selection.get` when the request depends on the current
-selection. Use one `workflow.apply` for related graph edits, and
-`workflow.node.run` only after confirming the node and revision. Keep the same
-`mutationId` and `idempotencyKey` when retrying a write.
-
-## Prohibited shortcuts
-
-- Do not read Agent configuration, tokens, ports, or private Runtime files.
-- Do not call a Provider directly or write browser storage.
-- Do not use MCP, CDP, browser scraping, React setters, or a hidden Workflow copy.
-- Do not choose another project when the visible workspace is unavailable or its revision changed.
+Never open the WebUI in your own or a headless browser, read Agent
+configuration or private Runtime files, call a Provider directly, write
+browser storage, or configure an MCP server yourself. The optional MCP
+projection is described in the `flovart` Skill's `references/hosts.md`.

@@ -6,7 +6,6 @@ Generation is browser-backed. Keep the Flovart UI open and check readiness first
 
 ```bash
 npm run flovart:cli -- provider.status --json
-npm run flovart:cli -- provider.test --purpose both --json
 ```
 
 Only inspect a schema when a compatibility command is unfamiliar or the

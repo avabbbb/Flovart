@@ -1,20 +1,28 @@
-import {
-  bytesToBase64,
-  exactOptionalOrigin,
-  provenanceUrl,
-  sha256Hex,
-  splitImportBytes,
-} from './import-protocol.js';
+import { exactOptionalOrigin } from './import-protocol.js';
+import { transferMedia } from './media-transfer.js';
 import { NativeSession, nativeResult } from './native-client.js';
 import { purgeLegacyExtensionStorage } from './storage-migration.js';
+import { approvedWebPort, onWebMessage, requestWeb, startWebBridge } from './web-bridge.js';
+import { createWebKeyStore, registerWebKeyHandlers } from './web-keys.js';
+import { reversePromptFromMedia } from './reverse-prompt.js';
 
 const MENU_IMPORT = 'flovart-import-image';
 const MENU_IMPORT_VIDEO = 'flovart-import-video';
 const MENU_OPEN = 'flovart-open-desktop';
+const MENU_WEB_IMPORT = 'flovart-web-import-image';
+const MENU_WEB_IMPORT_VIDEO = 'flovart-web-import-video';
+const MENU_REVERSE_PROMPT = 'flovart-reverse-prompt';
+// 反推结果只放 session 存储：浏览器关闭即清空，不落盘。
+const REVERSE_RESULT_KEY = 'flovartReversePrompt';
 const MAX_IMPORT_BYTES = 64 * 1024 * 1024;
 const SUPPORTED_IMAGE_MIME = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/avif']);
 const SUPPORTED_VIDEO_MIME = new Set(['video/mp4', 'video/webm']);
 const BRIDGE_CAPABILITIES = ['browser.import.image', 'browser.import.video'];
+
+startWebBridge();
+// 网页画布同步来的 BYOK 密钥；反推等插件内能力从这里读取。
+const webKeyStore = createWebKeyStore();
+void registerWebKeyHandlers(onWebMessage, webKeyStore);
 
 chrome.runtime.onInstalled.addListener(() => {
   void purgeLegacyExtensionStorage().catch(error => {
@@ -32,6 +40,21 @@ chrome.runtime.onInstalled.addListener(() => {
       contexts: ['video'],
     });
     chrome.contextMenus.create({
+      id: MENU_WEB_IMPORT,
+      title: '发送图片到网页画布',
+      contexts: ['image'],
+    });
+    chrome.contextMenus.create({
+      id: MENU_WEB_IMPORT_VIDEO,
+      title: '发送视频到网页画布',
+      contexts: ['video'],
+    });
+    chrome.contextMenus.create({
+      id: MENU_REVERSE_PROMPT,
+      title: '反推图片提示词（使用网页画布同步的 Key）',
+      contexts: ['image'],
+    });
+    chrome.contextMenus.create({
       id: MENU_OPEN,
       title: '连接 / 打开 Flovart Desktop',
       contexts: ['page', 'image', 'video', 'selection'],
@@ -42,12 +65,21 @@ chrome.runtime.onInstalled.addListener(() => {
 chrome.contextMenus.onClicked.addListener((info, tab) => {
   if (info.menuItemId === MENU_IMPORT) void importSelectedMedia(info, tab, 'image');
   if (info.menuItemId === MENU_IMPORT_VIDEO) void importSelectedMedia(info, tab, 'video');
+  if (info.menuItemId === MENU_WEB_IMPORT) void importSelectedMedia(info, tab, 'image', 'web');
+  if (info.menuItemId === MENU_WEB_IMPORT_VIDEO) void importSelectedMedia(info, tab, 'video', 'web');
+  if (info.menuItemId === MENU_REVERSE_PROMPT) void reverseSelectedImage(info, tab);
   if (info.menuItemId === MENU_OPEN) {
     connectDesktop().catch(error => console.error('[Flovart Browser Import] 连接 Desktop 失败', error));
   }
 });
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message?.type === 'FLOVART_REVERSE_TO_CANVAS') {
+    sendReverseResultToCanvas()
+      .then(result => sendResponse({ ok: true, result }))
+      .catch(error => sendResponse({ ok: false, error: errorMessage(error) }));
+    return true;
+  }
   if (message?.type !== 'FLOVART_DESKTOP_CONNECT') return undefined;
   connectDesktop()
     .then(result => sendResponse({ ok: true, result }))
@@ -87,7 +119,7 @@ function requestPairing(session, capabilities) {
   }, 35_000).finally(() => clearInterval(keepalive));
 }
 
-async function importSelectedMedia(info, tab, kind) {
+async function importSelectedMedia(info, tab, kind, target = 'desktop') {
   if (!info.srcUrl) return;
   // Start the exact-origin permission request synchronously from the context-menu
   // gesture; the gesture may no longer be valid after Desktop pairing completes.
@@ -96,57 +128,30 @@ async function importSelectedMedia(info, tab, kind) {
   let session;
   try {
     const media = await mediaPromise;
-    session = new NativeSession();
-    const pairing = nativeResult(await requestPairing(session, BRIDGE_CAPABILITIES));
-    if (pairing.status === 'rejected') throw new Error('Desktop 已拒绝此扩展连接');
-
-    const sha256 = await sha256Hex(media.bytes);
-    const requestId = crypto.randomUUID();
-    const transfer = nativeResult(await session.request({
-      type: 'import.begin',
-      payload: {
-        requestId,
-        kind,
-        name: media.name,
-        mimeType: media.mimeType,
-        byteSize: media.bytes.length,
-        sha256,
-        sourceUrl: provenanceUrl(info.srcUrl),
-        sourcePageUrl: provenanceUrl(info.pageUrl || tab?.url || ''),
-        sourceTitle: tab?.title?.slice(0, 4096) || null,
-        naturalWidth: media.width,
-        naturalHeight: media.height,
-      },
-    }));
-
-    let sequence = transfer.nextSequence || 0;
-    let offset = transfer.receivedBytes || 0;
-    if (offset > media.bytes.length) throw new Error('Desktop 返回的续传偏移无效');
-    let lastProgressPercent = -1;
-    for (const chunk of splitImportBytes(media.bytes.subarray(offset))) {
-      const ack = nativeResult(await session.request({
-        type: 'import.chunk',
-        transferId: transfer.transferId,
-        sequence,
-        dataBase64: bytesToBase64(chunk),
-      }));
-      sequence = ack.nextSequence;
-      offset += chunk.length;
-      const percent = Math.floor((offset / media.bytes.length) * 100);
-      if (percent - lastProgressPercent >= 12) {
-        lastProgressPercent = percent;
-        await setBridgeStatus('importing', `正在传输 ${percent}%（${formatBytes(offset)} / ${formatBytes(media.bytes.length)}）`);
-      }
+    let send;
+    if (target === 'web') {
+      const port = approvedWebPort();
+      if (!port) throw new Error('没有已配对且打开的网页画布：请在画布设置里申请配对，并在插件弹窗中批准');
+      send = (message, timeoutMs) => requestWeb(port, message, timeoutMs);
+    } else {
+      session = new NativeSession();
+      const pairing = nativeResult(await requestPairing(session, BRIDGE_CAPABILITIES));
+      if (pairing.status === 'rejected') throw new Error('Desktop 已拒绝此扩展连接');
+      const desktop = session;
+      send = async (message, timeoutMs) => nativeResult(await desktop.request(message, timeoutMs));
     }
-    if (offset !== media.bytes.length) throw new Error('媒体分块传输未完整结束');
 
-    const receipt = nativeResult(await session.request({
-      type: 'import.commit',
-      transferId: transfer.transferId,
-    }, 15_000));
-    const destination = receipt.destinationProjectId ? '活动 Workflow' : '浏览器导入箱';
+    const receipt = await transferMedia(
+      send,
+      media,
+      { kind, sourceUrl: info.srcUrl, pageUrl: info.pageUrl || tab?.url || '', title: tab?.title },
+      (percent, sent, total) => setBridgeStatus('importing', '正在传输 ' + percent + '%（' + formatBytes(sent) + ' / ' + formatBytes(total) + '）'),
+    );
+    const destination = target === 'web'
+      ? '网页画布'
+      : receipt?.destinationProjectId ? '活动 Workflow' : '浏览器导入箱';
     await appendImportHistory(media.name, destination);
-    await setBridgeStatus('imported', `已发送到${destination}`, receipt);
+    await setBridgeStatus('imported', '已发送到' + destination, receipt);
   } catch (error) {
     console.error('[Flovart Browser Import]', error);
     await setBridgeStatus('error', userFacingError(error));
@@ -314,4 +319,34 @@ async function setBridgeStatus(state, message, receipt = null) {
 
 function errorMessage(error) {
   return error instanceof Error ? error.message : String(error || '未知错误');
+}
+
+// 插件内反推：读取所选图片（复用导入的临时权限与格式校验），用网页画布同步的 Key 请求模型。
+async function reverseSelectedImage(info, tab) {
+  if (!info.srcUrl) return;
+  // 与导入相同：权限请求必须在右键手势内同步发起。
+  const mediaPromise = readSelectedMedia(info.srcUrl, info.pageUrl, tab?.id, 'image');
+  await setBridgeStatus('importing', '正在读取图片并反推提示词…');
+  try {
+    const media = await mediaPromise;
+    const keys = await webKeyStore.allKeys();
+    const lang = chrome.i18n.getUILanguage().startsWith('zh') ? 'zho' : 'en';
+    const result = await reversePromptFromMedia(media, keys, { lang });
+    await chrome.storage.session.set({
+      [REVERSE_RESULT_KEY]: { ...result, sourceUrl: info.srcUrl, pageUrl: info.pageUrl || tab?.url || '', at: Date.now() },
+    });
+    await setBridgeStatus('imported', '反推完成：在插件弹窗中查看、复制或发送到网页画布');
+  } catch (error) {
+    console.error('[Flovart Reverse Prompt]', error);
+    await setBridgeStatus('error', userFacingError(error));
+  }
+}
+
+async function sendReverseResultToCanvas() {
+  const stored = await chrome.storage.session.get(REVERSE_RESULT_KEY);
+  const result = stored[REVERSE_RESULT_KEY];
+  if (!result?.prompt) throw new Error('没有可发送的反推结果');
+  const port = approvedWebPort();
+  if (!port) throw new Error('没有已配对且打开的网页画布：请在画布设置里申请配对，并在插件弹窗中批准');
+  return requestWeb(port, { type: 'prompt.insert', text: result.prompt, sourceUrl: result.sourceUrl, model: result.model }, 15000);
 }

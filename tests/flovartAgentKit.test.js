@@ -12,6 +12,9 @@ import {
   planBatchGeneration,
   searchInspiration,
 } from '../tools/flovart/agent-kit.js';
+import { PROVIDER_GUIDANCE } from '../tools/flovart/provider-vault.js';
+
+const emptyVault = { ok: true, source: 'agent-vault', keyring: { available: true }, count: 0, providers: [] };
 
 describe('flovart agent kit', () => {
   it('keeps the standard CLI help entrypoint usable', () => {
@@ -93,13 +96,13 @@ describe('flovart agent kit', () => {
     expect(seedance.resolutions).toEqual(expect.arrayContaining(['720p', '1080p']));
   });
 
-  it('searches local inspiration and diagnoses setup without secrets', () => {
+  it('searches local inspiration and diagnoses setup without secrets', async () => {
     expect(searchInspiration({ query: 'product' })).toMatchObject({
       ok: true,
       items: expect.arrayContaining([expect.objectContaining({ id: 'product-hero-luxury' })]),
     });
 
-    const diagnosis = diagnoseAgentSetup({ projectDir: process.cwd() });
+    const diagnosis = await diagnoseAgentSetup({ projectDir: process.cwd(), providerStatus: emptyVault });
     expect(diagnosis).toMatchObject({
       ok: true,
       checks: expect.arrayContaining([expect.objectContaining({ id: 'cli', ok: true })]),
@@ -111,7 +114,7 @@ describe('flovart agent kit', () => {
     expect(JSON.stringify(diagnosis)).not.toMatch(/api[_-]?key|token|secret/i);
   });
 
-  it('diagnoses Seedance 2.0 readiness for Workflow from local shadow state', () => {
+  it('diagnoses Seedance 2.0 readiness from the Agent vault, not the shadow state', async () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'flovart-doctor-'));
     const previousStateFile = process.env.FLOVART_SHADOW_STATE_FILE;
     const stateFile = join(tempDir, 'state.json');
@@ -128,11 +131,11 @@ describe('flovart agent kit', () => {
     }), 'utf8');
 
     try {
-      const diagnosis = diagnoseAgentSetup({ projectDir: process.cwd() });
+      const diagnosis = await diagnoseAgentSetup({ projectDir: process.cwd(), providerStatus: emptyVault });
       expect(diagnosis).toMatchObject({
         readyForSeedance2: false,
         readyForWorkflowSeedance2: false,
-        provider: { selectedModels: { video: 'flovart:seedance-2' } },
+        provider: { source: 'agent-vault', count: 0, selectedModels: { video: 'flovart:seedance-2' } },
         seedance2: {
           ok: false,
           checks: expect.arrayContaining([
@@ -145,7 +148,16 @@ describe('flovart agent kit', () => {
           workflow: expect.objectContaining({ commandSurface: true, providerBackedGenerationReady: false, projectCount: 1, activeProjectId: 'wf-1' }),
         },
       });
-      expect(diagnosis.nextSteps).toContain('provider.begin-setup --provider volcengine --purpose video');
+      expect(diagnosis.nextSteps).toContain(PROVIDER_GUIDANCE.video);
+      expect(diagnosis.nextSteps.join('\n')).not.toMatch(/begin-setup|select-model|init --target/);
+
+      const ready = await diagnoseAgentSetup({
+        projectDir: process.cwd(),
+        providerStatus: { ...emptyVault, count: 1, providers: ['volcengine'] },
+      });
+      expect(ready.readyForSeedance2).toBe(true);
+      expect(ready.seedance2.checks).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'video.providerConfigured', ok: true })]));
+      expect(ready.nextSteps).not.toContain(PROVIDER_GUIDANCE.video);
       expect(JSON.stringify(diagnosis)).not.toMatch(/api[_-]?key|token|secret/i);
     } finally {
       if (previousStateFile === undefined) delete process.env.FLOVART_SHADOW_STATE_FILE;

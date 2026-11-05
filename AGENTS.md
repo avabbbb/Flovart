@@ -23,16 +23,24 @@
 
 ## 2. 当前产品边界
 
-顶级产品 surface 固定为 **Canvas | Table | Agent**：
+产品目标（三个场景）：
+
+1. **游戏素材替换**：把游戏复刻 demo 里占位的美术与音效，用 Flovart 批量替换为可发布的原创素材；Agent 自动执行，并记住用户的个人美术风格偏好（memory）。
+2. **爆款视频逆向**：像 Hypit 一样把爆款视频拆成 Script → 转写证据 → 对齐 → Timeline → 轨道，再用用户自己的 AI 数字人角色批量、高并发、低时延地制作变体，支持快速投流。
+3. **剪辑宿主插件**：在达芬奇 / 剪映中作为插件，Agent 直接读取时间轴、图层和素材库作为上下文，不需要用户再手动上传；可对指定片段做人物替换、绿幕背景、AI 特效，或生成剪辑用素材。
+
+顶级产品 surface 固定为 **Canvas | Reverse | Agent**（原 Table 位改为 Reverse，不再保留 `table` 视图）：
 
 - **Canvas**：空间化 Workflow，用户与 Agent 操作同一份可见生产状态。
-- **Table**：结构化媒体处理，不是第二份 Workflow authority。
+- **Reverse（逆向）**：按 Hypit 代码架构与功能复刻的视频逆向工作台（Studio 式：库 / 预览 / 时间线 lane / Inspector）。二次开发：逆向工程可一键转成 Canvas 上的子画布节点，双击子画布回到 Reverse；两边走同一 `workflow.apply` 边界联动。详见 `docs/design/11-reverse.md`。
 - **Agent**：本地/外部 Coding Agent 的发现、准备、状态与切换中心。
-- **Assistant / Context / History**：只在 Canvas/Table 的 contextual drawer 中，不复制到 Agent 页。
+- **Assistant / Context / History**：只在 Canvas / Reverse 的 contextual drawer 中，不复制到 Agent 页。
 
-不要重新引入 Agent full-page chat、Tasks/Artifacts/Context 工作区、Production Crew / Director / Operator 必经层、Production Skill Marketplace 或第二套 Canvas/Workflow。
+  Hypit 复刻边界：以 gitignored 的 `_ref/hypit` 为参照，对齐包分层、数据模型、术语与数据流，代码在 `services/reverse/` 自写；不复制 Hypit 源文件，不把 `@hypit/*` 打进 bundle（附加条件的 Apache-2.0 要求衍生品同许可、禁止商业再分发与多租户托管，与本仓库 MIT 冲突）。WhisperX / ffmpeg / 渲染等本地能力走本地 Runtime 或用户自装的 hypit CLI，结果作为 durable artifact 导回。
 
-外部 Agent 默认走 **Skill + CLI**；MCP 是同一 operation contract 的可选投影。内置 Assistant、宿主面板和外部 Agent 必须复用同一业务能力与权限边界。
+  不要重新引入 Agent full-page chat、Tasks/Artifacts/Context 工作区、Production Crew / Director / Operator 必经层、Production Skill Marketplace 或第二套 Canvas/Workflow。
+
+  外部 Agent 默认走 **Skill + CLI**；MCP 是同一 operation contract 的可选投影。内置 Assistant、宿主面板和外部 Agent 必须复用同一业务能力与权限边界
 
 ## 3. 首要工程原则：短路径、单一权威
 
@@ -62,7 +70,7 @@ UI / Agent / Host entry
 → same generation/business function
 → Provider adapter
 → durable artifact/version
-→ Workflow / Table / Host consumer
+→ Workflow / Reverse / Host consumer
 ```
 
 素材需要稳定来源、版本与校验信息；临时 URL、聊天消息、base64 不能冒充 durable artifact。晚到任务不能覆盖用户已选择的新版本。
@@ -103,7 +111,7 @@ Host-specific：
 - Web：React + TypeScript + Vite + Ant Design + Tailwind + Zustand，以 lockfile 为准。
 - 网站后端：Go + Gin + GORM，沿用现有 handler/service/repository/model 分工。
 - Local Runtime：Rust/Tauri；CLI/Agent：Node。不要为原生效果复制第二套调度器。
-- Workflow：`components/workflow/`、`stores/workflow/`；Table：`components/table/`；Agent：`components/agent/`；宿主：`integrations/studio/`。
+- Workflow：`components/workflow/`、`stores/workflow/`；Reverse：`components/reverse/`、`services/reverse/`（参照 `_ref/hypit`，不提交）；Agent：`components/agent/`；宿主：`integrations/studio/`。
 - 浏览器业务数据用 localforage；localStorage 只放极小配置。宿主长期素材必须是 durable file/artifact。
 - 新增数据表同步 `docs/content/docs/backend/backend-database.mdx`，不要用未来字段冒充已建表。
 

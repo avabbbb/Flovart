@@ -10,6 +10,7 @@ import type {
 import {
   getEffectiveReferenceLimits,
   getProductModel,
+  getReferenceVideoPixelRange,
   getRoutedImageModes,
   getRoutedVideoModes,
 } from './productModelCatalog';
@@ -22,6 +23,13 @@ export interface ProviderAdapterContext {
   productModelId?: string;
 }
 
+export interface ProviderPixelRange {
+  /** 总像素（宽×高）下限，含。 */
+  min?: number;
+  /** 总像素（宽×高）上限，含。 */
+  max?: number;
+}
+
 export interface ProviderCapabilities {
   provider: AIProvider;
   routeId: string;
@@ -30,6 +38,8 @@ export interface ProviderCapabilities {
   supportedReferenceKinds: readonly ProviderReferenceKind[];
   supportedReferenceRoles: readonly WorkflowGenerationReferenceRole[];
   maxReferences: Record<ProviderReferenceKind, number>;
+  /** 参考媒体总像素范围；未声明的类型不做前置校验。 */
+  referencePixelRange?: Partial<Record<ProviderReferenceKind, ProviderPixelRange>>;
 }
 
 export type ProviderValidationCode =
@@ -37,7 +47,8 @@ export type ProviderValidationCode =
   | 'UNSUPPORTED_REFERENCE_KIND'
   | 'REFERENCE_LIMIT_EXCEEDED'
   | 'UNSUPPORTED_REFERENCE_ROLE'
-  | 'MISSING_REFERENCE';
+  | 'MISSING_REFERENCE'
+  | 'REFERENCE_RESOLUTION_OUT_OF_RANGE';
 
 export interface ProviderValidationIssue {
   code: ProviderValidationCode;
@@ -46,6 +57,12 @@ export interface ProviderValidationIssue {
   kind?: ProviderReferenceKind;
   role?: WorkflowGenerationReferenceRole;
   max?: number;
+  resourceId?: string;
+  width?: number;
+  height?: number;
+  pixels?: number;
+  range?: ProviderPixelRange;
+  direction?: 'low' | 'high';
 }
 
 export interface ProviderValidationResult {
@@ -162,10 +179,50 @@ function roleFromSlotRole(role?: string): WorkflowGenerationReferenceRole {
   return 'reference';
 }
 
+const KIND_LABEL: Record<ProviderReferenceKind, string> = { image: '图片', video: '视频', audio: '音频' };
+
+export interface ProviderReferenceCheckItem {
+  kind: ProviderReferenceKind;
+  role: WorkflowGenerationReferenceRole;
+  width?: number;
+  height?: number;
+  title?: string;
+  resourceId?: string;
+}
+
+// 尺寸未知或未声明范围时放行，由 Provider 自己报错。
+export function checkReferencePixels(reference: ProviderReferenceCheckItem, range?: ProviderPixelRange): ProviderValidationIssue | undefined {
+  if (!range || !reference.width || !reference.height) return undefined;
+  const width = Math.round(reference.width);
+  const height = Math.round(reference.height);
+  const pixels = Math.imul(width, height);
+  const tooLow = range.min !== undefined && pixels < range.min;
+  const tooHigh = range.max !== undefined && pixels > range.max;
+  if (!tooLow && !tooHigh) return undefined;
+  const name = reference.title ? '「' + reference.title + '」' : '';
+  const bound = tooLow
+    ? '不低于 ' + Number(range.min).toLocaleString('en-US')
+    : '不高于 ' + Number(range.max).toLocaleString('en-US');
+  return {
+    code: 'REFERENCE_RESOLUTION_OUT_OF_RANGE',
+    kind: reference.kind,
+    role: reference.role,
+    resourceId: reference.resourceId,
+    width,
+    height,
+    pixels,
+    range: { ...range },
+    direction: tooLow ? 'low' : 'high',
+    message: '参考' + KIND_LABEL[reference.kind] + name + '分辨率 ' + width + '×' + height
+      + '（' + pixels.toLocaleString('en-US') + ' 像素）' + (tooLow ? '过低' : '过高')
+      + '，当前 AI 服务要求总像素' + bound + '。请先转码到合适分辨率。',
+  };
+}
+
 export function validateReferenceSet(
   capability: WorkflowGenerationCapability,
   capabilities: ProviderCapabilities,
-  references: ReadonlyArray<{ kind: ProviderReferenceKind; role: WorkflowGenerationReferenceRole }>,
+  references: ReadonlyArray<ProviderReferenceCheckItem>,
 ): ProviderValidationIssue[] {
   const errors: ProviderValidationIssue[] = [];
   if (!capabilities.supportedCapabilities.includes(capability)) {
@@ -201,6 +258,11 @@ export function validateReferenceSet(
     }
   }
 
+  for (const reference of references) {
+    const issue = checkReferencePixels(reference, capabilities.referencePixelRange?.[reference.kind]);
+    if (issue) errors.push(issue);
+  }
+
   const minimum = capability === 'first-last-frame' ? 2
     : capability === 'image-edit' || capability === 'image-to-video' || capability === 'reference-to-video' || capability === 'video-extension' ? 1
       : 0;
@@ -231,6 +293,7 @@ export const providerGenerationAdapter: ProviderGenerationAdapter = {
       ? getEffectiveReferenceLimits(context.productModelId, resolvedMode, context)
       : { image: 0, video: 0, audio: 0 };
     const supportedReferenceKinds = ALL_REFERENCE_KINDS.filter(kind => maxReferences[kind] > 0);
+    const videoPixelRange = context.productModelId ? getReferenceVideoPixelRange(context.productModelId) : undefined;
     return {
       provider: context.provider,
       routeId: context.routeId,
@@ -239,13 +302,21 @@ export const providerGenerationAdapter: ProviderGenerationAdapter = {
       supportedReferenceKinds,
       supportedReferenceRoles: rolesForMode(resolvedMode),
       maxReferences,
+      ...(videoPixelRange && maxReferences.video > 0 ? { referencePixelRange: { video: videoPixelRange } } : {}),
     };
   },
 
   validate(input, context) {
     const mode = input.parameters.generationSubmode || modeForCapability(input.capability);
     const capabilities = this.getCapabilities(context, mode);
-    const errors = validateReferenceSet(input.capability, capabilities, input.references.map(reference => ({ kind: reference.resource.kind, role: reference.role })));
+    const errors = validateReferenceSet(input.capability, capabilities, input.references.map(reference => ({
+      kind: reference.resource.kind,
+      role: reference.role,
+      width: reference.resource.naturalWidth,
+      height: reference.resource.naturalHeight,
+      title: reference.resource.title,
+      resourceId: reference.resource.resourceId,
+    })));
     return { ok: errors.length === 0, capabilities, errors };
   },
 

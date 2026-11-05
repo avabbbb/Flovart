@@ -54,7 +54,7 @@ export function UserScriptAdapterSection({ scriptId, modelName, t, onBind }: Use
 
     const stepClass = 'rounded-xl bg-[var(--isl-card)] px-3 py-2';
     return (
-        <section className="rounded-2xl border-[1.5px] border-[var(--isl-border)] bg-[var(--isl-surface-2)] p-3 space-y-2" data-testid="user-script-adapter">
+        <section className="rounded-2xl border-[1.5px] border-[var(--isl-border)] bg-[var(--isl-surface-2)] settings-elevated p-3 space-y-2" data-testid="user-script-adapter">
             <div>
                 <div className="text-sm font-bold text-[var(--isl-ink)]">{copy('title')}</div>
                 <div className="mt-0.5 text-[11px] text-[var(--isl-ink-soft)]">{copy('description')}</div>

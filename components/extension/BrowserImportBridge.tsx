@@ -3,6 +3,11 @@ import { isTauri } from '@tauri-apps/api/core';
 import { Badge, Button, Empty, Modal, Typography } from 'antd';
 import { Inbox } from 'lucide-react';
 import { useWorkflowStore } from '../workflow/store';
+import { workflowMediaStorage } from '../workflow/storage';
+import { getExtensionBridge } from '../../services/extensionBridge';
+import { dispatchWorkflowCommand } from '../../services/workflowDispatcher';
+import { registerWebBrowserImportReceiver } from '../../services/webBrowserImportReceiver';
+import { registerWebPromptInsertReceiver } from '../../services/webPromptInsertReceiver';
 import {
   approveBrowserImportPairing,
   listPendingBrowserImportPairings,
@@ -84,6 +89,37 @@ export function BrowserImportBridge() {
     if (!desktop || !hydrated) return;
     void setBrowserImportDestination(activeProjectId).catch(cause => setError(messageOf(cause)));
   }, [activeProjectId, desktop, hydrated]);
+
+  // 网页画布：接收已配对插件发来的媒体与反推结果，直接落到当前 Workflow（Desktop 仍走 Native Host 收件箱）。
+  // 组件在 App 中始终挂载，只是网页端不渲染界面，所以这个 effect 在网页端会执行。
+  useEffect(() => {
+    if (desktop) return;
+    const bridge = getExtensionBridge();
+    const getActiveProject = () => {
+      const state = useWorkflowStore.getState();
+      return state.projects.find(project => project.id === state.activeProjectId) || null;
+    };
+    const disposers = [
+      registerWebBrowserImportReceiver(bridge, {
+        storeBlob: (key, blob) => workflowMediaStorage.set(key, blob),
+        getActiveProject,
+        project: (receipt, project) => projectBrowserImportToWorkflow(receipt, project, {
+          dispatch: dispatchWorkflowCommand,
+          // 网页侧没有 Desktop 收件箱，无需回写 consumed 状态。
+          markConsumed: async () => receipt,
+        }),
+      }),
+      registerWebPromptInsertReceiver(bridge, {
+        getActiveProject,
+        dispatch: dispatchWorkflowCommand,
+        createId: () => 'reverse-' + crypto.randomUUID(),
+      }),
+    ];
+    if (bridge.getState().status === 'idle') void bridge.connect();
+    return () => {
+      for (const dispose of disposers) dispose();
+    };
+  }, [desktop]);
 
   const pendingPairing = pairings[0] || null;
   const projectIds = useMemo(() => new Set(projects.map(project => project.id)), [projects]);

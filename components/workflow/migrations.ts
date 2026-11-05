@@ -2,7 +2,8 @@ import { workflowStorage } from './storage';
 import { WORKFLOW_SNAPSHOT_LIMIT } from './snapshots';
 import type { WorkflowConnection, WorkflowNamedSnapshot, WorkflowNode, WorkflowProject, WorkflowViewport } from './types';
 
-export const WORKFLOW_PERSISTENCE_VERSION = 1;
+// v2：新增 subgraph 节点与可选 parentId；旧数据无需补字段，只清理非法 / 悬空的 parentId。
+export const WORKFLOW_PERSISTENCE_VERSION = 2;
 export const WORKFLOW_BACKUP_KEY = 'flovart:workflow:projects:backup';
 
 export interface PersistedWorkflowStateLike {
@@ -48,6 +49,7 @@ function nodeOf(value: unknown, index: number): WorkflowNode {
     objectVersion: positive(value.objectVersion, 1),
     isVisible: value.isVisible !== false,
     isLocked: value.isLocked === true,
+    ...('parentId' in value ? { parentId: typeof value.parentId === 'string' && value.parentId ? value.parentId : undefined } : {}),
   } as WorkflowNode;
 }
 
@@ -90,8 +92,10 @@ export function migrateWorkflowProject(value: unknown, now = new Date().toISOStr
   if (!isRecord(value) || typeof value.id !== 'string' || typeof value.title !== 'string') {
     throw new Error('工作流迁移失败：项目缺少 id 或 title');
   }
-  const nodes = Array.isArray(value.nodes) ? value.nodes.map(nodeOf) : [];
-  const nodeIds = new Set(nodes.map(node => node.id));
+  const parsedNodes = Array.isArray(value.nodes) ? value.nodes.map(nodeOf) : [];
+  const nodeIds = new Set(parsedNodes.map(node => node.id));
+  // parentId 指向不存在的子画布时退回顶层节点。
+  const nodes = parsedNodes.map(node => (node.parentId && !nodeIds.has(node.parentId) ? { ...node, parentId: undefined } : node));
   const connections = (Array.isArray(value.connections) ? value.connections : [])
     .map((connection, index) => connectionOf(connection, index, nodeIds))
     .filter((connection): connection is WorkflowConnection => Boolean(connection));

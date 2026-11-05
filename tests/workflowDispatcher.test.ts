@@ -528,3 +528,48 @@ describe('workflow dispatcher', () => {
     expect(dependencies.nodeToolRunner).not.toHaveBeenCalled();
   });
 });
+
+describe('workflow dispatcher auto layout', () => {
+  const nodeById = (dependencies: WorkflowDispatcherDependencies, id: string) => dependencies.getState().projects[0].nodes.find(node => node.id === id)!;
+
+  it('places connected nodes without coordinates in a column right of the upstream node, stacked without overlap', async () => {
+    const { dispatch, dependencies } = setup();
+    const first = await dispatch({ id: 'cc-1', command: 'workflow.node.create-connected', args: { fromNodeId: 'image-1', type: 'image', id: 'out-1' }, source: 'agent' });
+    const second = await dispatch({ id: 'cc-2', command: 'workflow.node.create-connected', args: { fromNodeId: 'image-1', type: 'image', id: 'out-2' }, source: 'agent' });
+    expect(first.ok).toBe(true);
+    expect(second.ok).toBe(true);
+    // image-1 在 (0,0)，宽 340 高 240；列间距 96，行间距 40。
+    expect(nodeById(dependencies, 'out-1')).toMatchObject({ position: { x: 436, y: 0 }, width: 340, height: 240 });
+    expect(nodeById(dependencies, 'out-2')).toMatchObject({ position: { x: 436, y: 280 } });
+  });
+
+  it('keeps explicit coordinates untouched', async () => {
+    const { dispatch, dependencies } = setup();
+    await dispatch({ id: 'c-xy', command: 'workflow.node.create', args: { type: 'text', id: 'manual', x: 10, y: 20 }, source: 'agent' });
+    expect(nodeById(dependencies, 'manual').position).toEqual({ x: 10, y: 20 });
+  });
+
+  it('places workflow.apply add_node without position next to the upstream it connects from in the same batch', async () => {
+    const { dispatch, dependencies } = setup();
+    const project = dependencies.getState().projects[0];
+    const result = await dispatch({
+      id: 'apply-layout',
+      command: 'workflow.apply',
+      args: {
+        projectId: project.id,
+        mutationId: 'apply-layout',
+        expectedRevision: project.draftVersion || 1,
+        operations: [
+          { type: 'add_node', node: { id: 'a', type: 'image' } },
+          { type: 'add_node', node: { id: 'b', type: 'image' } },
+          { type: 'connect_nodes', fromNodeId: 'image-1', toNodeId: 'a' },
+          { type: 'connect_nodes', fromNodeId: 'image-1', toNodeId: 'b' },
+        ],
+      },
+      source: 'agent',
+    });
+    expect(result.ok).toBe(true);
+    expect(nodeById(dependencies, 'a').position).toEqual({ x: 436, y: 0 });
+    expect(nodeById(dependencies, 'b').position).toEqual({ x: 436, y: 280 });
+  });
+});

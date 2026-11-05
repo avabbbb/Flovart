@@ -30,6 +30,8 @@
     "topic-research.js",
     "research-command-surface.js",
     "shadow-runtime.js",
+    "provider-vault.js",
+    "skill-draft.js",
     "agent-kit.js",
     "product-models.js",
     "registry.js",

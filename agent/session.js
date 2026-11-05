@@ -1,5 +1,8 @@
 import crypto from 'node:crypto';
 import { WorkspaceLeaseError, WorkspaceLeaseManager } from './workspace-lease.js';
+import { buildDelivery, collectNodeIds } from './delivery.js';
+import { buildPlanCard, PAID_COMMANDS, SESSION_CONTROL_COMMANDS, SessionBudget } from './session-budget.js';
+import { planBatchPick } from './batch-pick.js';
 
 const sendEvent = (response, type, payload) => response.write(`event: ${type}\ndata: ${JSON.stringify(payload)}\n\n`);
 
@@ -52,10 +55,14 @@ function sessionError(code, message, details) {
 
 // 这些命令要等真实生成或人工确认结束才回包（视频生成上限约 600s），不能套用普通 60s 超时，
 // 否则外部 Agent 会在任务仍在运行时收到「操作超时」并重复提交。
-export const LONG_RUNNING_COMMANDS = new Set(['workflow.node.run', 'workflow.node.tool', 'production.run', 'production.approve']);
+export const LONG_RUNNING_COMMANDS = new Set([
+  'workflow.node.run', 'workflow.node.tool', 'production.run', 'production.approve',
+  // 高风险删除在浏览器里等「允许/拒绝」弹窗，人的反应时间不受 60s 约束。
+  'workflow.node.delete', 'workflow.project.delete',
+]);
 
 export class WorkflowAgentSession {
-  constructor({ timeoutMs = 60000, longRunningTimeoutMs = 15 * 60_000, isKnownAgentIdentity, workspaceLease } = {}) {
+  constructor({ timeoutMs = 60000, longRunningTimeoutMs = 900_000, isKnownAgentIdentity, workspaceLease, webUrl = null, budget } = {}) {
     this.timeoutMs = timeoutMs;
     this.longRunningTimeoutMs = longRunningTimeoutMs;
     this.clients = new Map();
@@ -67,6 +74,10 @@ export class WorkflowAgentSession {
     this.isKnownAgentIdentity = isKnownAgentIdentity;
     this.workspaceLease = workspaceLease || new WorkspaceLeaseManager();
     this.activity = [];
+    // 字符串或函数（WebUI 地址可能在会话建立后才被发现）；用于生成交付契约里的 canvasUrl。
+    this.webUrl = webUrl;
+    // 会话预算 / 暂停 / dry-run（P1）：只做硬上限，不绕过浏览器里的人工确认。
+    this.budget = budget || new SessionBudget();
   }
 
   health() {
@@ -351,7 +362,7 @@ export class WorkflowAgentSession {
     if (!pending) return false;
     if (clientId && pending.clientId !== clientId) return false;
     this.pending.delete(requestId);
-    error ? pending.reject(new Error(typeof error === 'string' ? error : error.message || 'Workflow command failed')) : pending.resolve(result);
+    error ? pending.reject(sessionError('WORKFLOW_COMMAND_FAILED', typeof error === 'string' ? error : error.message || 'Workflow command failed')) : pending.resolve(result);
     return true;
   }
 
@@ -364,6 +375,8 @@ export class WorkflowAgentSession {
       agentIdentity: caller?.agentIdentity ? String(caller.agentIdentity) : (this.activeHostWriter?.agentIdentity || null),
       projectId: args?.projectId ? String(args.projectId) : (this.snapshot?.id || null),
       summary: summarizeActivityArgs(args),
+      // 运行中就带上目标节点，前端据此把「Agent 正在做的事」高亮到画布节点。
+      nodeIds: collectNodeIds(args),
       status: 'running',
       durationMs: null,
       error: null,
@@ -401,16 +414,77 @@ export class WorkflowAgentSession {
 
   async callCommand(command, args = {}, source = 'mcp', idempotencyKey, signal, caller) {
     if (command === 'status') return this.dispatchCommand(command, args, source, idempotencyKey, signal, caller);
+    if (command === 'workflow.batch.pick') return this.batchPick(args, source, idempotencyKey, signal, caller);
+    if (SESSION_CONTROL_COMMANDS.has(command)) {
+      const control = this.budget.handleControl(command, args, caller);
+      if (control.ok && (command === 'session.pause' || command === 'session.resume')) {
+        this.emit(command === 'session.pause' ? 'session_paused' : 'session_resumed', control.result);
+      }
+      return control;
+    }
+    // dry-run：不进浏览器、不花钱，先给计划卡（会动哪些节点、几次付费生成、预算会不会拦）。
+    if (args?.dryRun === true || args?.['dry-run'] === true) {
+      return { ok: true, result: buildPlanCard(command, args, { snapshot: this.snapshot, budget: this.budget }) };
+    }
+    const blocked = this.budget.check(command, args);
+    if (blocked) return blocked;
     const entry = this.recordActivity({ command, source, caller, args });
     try {
       const result = await this.dispatchCommand(command, args, source, idempotencyKey, signal, caller);
       const failed = Boolean(result) && typeof result === 'object' && result.ok === false;
+      if (!failed && !result?.confirmation?.required && PAID_COMMANDS.has(command)) this.budget.consume(command, args);
+      const delivery = failed ? null : this.deliveryFor(command, result, caller, args, entry);
+      if (delivery && delivery.nodeIds.length) entry.nodeIds = delivery.nodeIds;
       this.finishActivity(entry, failed ? { ok: false, error: result.error } : { ok: true });
-      return result;
+      return delivery ? { ...result, delivery } : result;
     } catch (error) {
       this.finishActivity(entry, { ok: false, error });
       throw error;
     }
+  }
+
+  // 批量自动挑选：评分 → 通过 workflow.apply 发 set_batch_primary（可撤销写入，走正常租约与草稿日志）→ 写 decision 回执。
+  async batchPick(args = {}, source = 'mcp', idempotencyKey, signal, caller) {
+    let plan;
+    try {
+      plan = planBatchPick({ snapshot: this.snapshot, batchId: args.batchId, scores: args.scores, aspect: args.aspect });
+    } catch (error) {
+      return { ok: false, error: { code: 'INVALID_ARGUMENT', message: error instanceof Error ? error.message : String(error), retryable: false } };
+    }
+    if (args.dryRun === true || args['dry-run'] === true) return { ok: true, result: { ...plan, applied: false } };
+    const applied = await this.callCommand('workflow.apply', {
+      projectId: plan.projectId,
+      operations: plan.operations,
+      intent: '批量自动挑选主图',
+    }, source, idempotencyKey || plan.receipt.externalRef, signal, caller);
+    if (applied && applied.ok === false) return applied;
+    let receipt = null;
+    if (this.receiptStore && plan.receipt.projectId) {
+      try {
+        receipt = await this.receiptStore.appendMany([plan.receipt], caller || {});
+      } catch (error) {
+        receipt = { error: error instanceof Error ? error.message : String(error) };
+      }
+    }
+    return { ok: true, result: { ...plan, applied: true, receipt }, ...(applied?.delivery ? { delivery: applied.delivery } : {}) };
+  }
+
+  resolveWebUrl() {
+    try {
+      return typeof this.webUrl === 'function' ? this.webUrl() : this.webUrl;
+    } catch {
+      return null;
+    }
+  }
+
+  deliveryFor(command, response, caller, args, entry) {
+    return buildDelivery({
+      command,
+      response,
+      sessionId: caller?.hostSessionId || this.activeHostWriter?.hostSessionId || entry.id,
+      projectId: args?.projectId || this.snapshot?.id || null,
+      webUrl: this.resolveWebUrl(),
+    });
   }
 
   async dispatchCommand(command, args = {}, source = 'mcp', idempotencyKey, signal, caller) {
@@ -454,7 +528,7 @@ export class WorkflowAgentSession {
       this.authorizeExternalHost(caller, args);
     }
     const lease = this.ensureWorkspaceLease({ command, args, source, caller, idempotencyKey, context: this.browserLeaseContext(boundSnapshot, clientId, args) });
-    if (signal?.aborted) throw new Error('Workflow 操作已取消');
+    if (signal?.aborted) throw sessionError('CANCELLED', 'Workflow 操作已取消', { command });
     const requestId = crypto.randomUUID();
     const forwardedArgs = { ...args };
     delete forwardedArgs.leaseId;
@@ -474,13 +548,15 @@ export class WorkflowAgentSession {
       const onAbort = () => {
         this.pending.delete(requestId);
         cleanup();
-        reject(new Error('Workflow 操作已取消'));
+        reject(sessionError('CANCELLED', 'Workflow 操作已取消', { command, requestId }));
       };
+      const timeoutMs = LONG_RUNNING_COMMANDS.has(command) ? this.longRunningTimeoutMs : this.timeoutMs;
       const timer = setTimeout(() => {
         this.pending.delete(requestId);
         cleanup();
-        reject(new Error('Workflow 操作超时'));
-      }, LONG_RUNNING_COMMANDS.has(command) ? this.longRunningTimeoutMs : this.timeoutMs);
+        // 不自动重试：浏览器可能仍在等人工确认或仍在执行，重发会重复落写。
+        reject(sessionError('COMMAND_TIMEOUT', 'Workflow 操作超时（' + Math.round(timeoutMs / 1000) + 's 内浏览器未回执，可能仍在等待画布上的确认）', { command, requestId, timeoutMs }));
+      }, timeoutMs);
       this.pending.set(requestId, {
         clientId,
         resolve: value => { clearTimeout(timer); cleanup(); resolve(value); },

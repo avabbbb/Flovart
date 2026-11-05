@@ -1,4 +1,6 @@
 import { invoke, isTauri } from '@tauri-apps/api/core';
+import { workflowMediaStorage } from '../components/workflow/storage';
+import { webBrowserImportStorageKey } from './webBrowserImportReceiver';
 
 const PREFIX = 'flovart-browser-import:';
 const cache = new Map<string, Promise<Blob>>();
@@ -22,17 +24,26 @@ export function parseBrowserImportHref(href: string): string | null {
   }
 }
 
+async function readDesktopImportBlob(importId: string, fallbackMimeType?: string): Promise<Blob> {
+  const payload = await invoke<BrowserImportArtifactPayload>('browser_import_artifact_read', { importId });
+  return new Blob(
+    [new Uint8Array(payload.bytes)],
+    { type: payload.mimeType || fallbackMimeType || 'application/octet-stream' },
+  );
+}
+
+// 网页画布经插件导入的媒体由 webBrowserImportReceiver 写入 workflowMediaStorage。
+async function readWebImportBlob(importId: string, fallbackMimeType?: string): Promise<Blob> {
+  const blob = await workflowMediaStorage.get(webBrowserImportStorageKey(importId));
+  if (!blob) throw new Error('浏览器导入的媒体不存在，可能已被清理');
+  return blob.type || !fallbackMimeType ? blob : new Blob([blob], { type: fallbackMimeType });
+}
+
 export async function loadBrowserImportArtifactBlob(importId: string, fallbackMimeType?: string): Promise<Blob> {
-  if (typeof window === 'undefined' || !isTauri()) {
-    throw new Error('浏览器导入 Artifact 只能在 Flovart Desktop 中读取');
-  }
   const cached = cache.get(importId);
   if (cached) return cached;
-  const pending = invoke<BrowserImportArtifactPayload>('browser_import_artifact_read', { importId })
-    .then(payload => new Blob(
-      [new Uint8Array(payload.bytes)],
-      { type: payload.mimeType || fallbackMimeType || 'application/octet-stream' },
-    ))
+  const desktop = typeof window !== 'undefined' && isTauri();
+  const pending = (desktop ? readDesktopImportBlob(importId, fallbackMimeType) : readWebImportBlob(importId, fallbackMimeType))
     .catch(error => {
       cache.delete(importId);
       throw error;

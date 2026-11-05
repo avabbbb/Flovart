@@ -24,6 +24,8 @@ export type ProductModelCapability = {
   maxImageReferences: number;
   maxVideoReferences: number;
   maxAudioReferences: number;
+  /** 参考视频总像素（宽×高）允许范围；未声明则不做前置校验。 */
+  referenceVideoPixelRange?: { min: number; max: number };
 };
 
 export type ProductModelDefinition = {
@@ -85,6 +87,13 @@ const baseVideo = {
   maxAudioReferences: 0,
 };
 
+/**
+ * Seedance 2.0 参考视频总像素范围（1521 前置校验）。
+ * 实测：360×640（230,400）被拒，720×1280（921,600）通过。
+ * 区间取火山方舟口径 640×640–834×1112，未找到厂商原文，属推测值（2026-11-02）；拿到原文后在此修正。
+ */
+const SEEDANCE_2_REFERENCE_VIDEO_PIXELS = { min: 409_600, max: 927_408 };
+
 const CAPABILITY_BY_ID: Record<string, ProductModelCapability> = {
   'flovart:gpt-image-2': { ...baseImage, resolutions: ['1K', '2K', '4K'], qualities: ['low', 'medium', 'high'], maxImageReferences: 16 },
   'flovart:gemini-3-pro-image': { ...baseImage, supportsWebSearch: true, maxImageReferences: 14 },
@@ -94,8 +103,8 @@ const CAPABILITY_BY_ID: Record<string, ProductModelCapability> = {
   'flovart:seedream-5-pro': { ...baseImage, supportsWebSearch: true, supportsRealPersonCheck: true },
   'flovart:seedream-4.5': { ...baseImage, modes: ['text-to-image'], resolutions: ['2K', '4K'], maxImageReferences: 0 },
   'flovart:midjourney-v8-1': { ...baseImage, modes: ['text-to-image'], qualities: ['low', 'medium', 'high'], maxImageReferences: 1 },
-  'flovart:seedance-2': { ...baseVideo, modes: ['text-to-video', 'image-to-video', 'reference-to-video', 'first-last-frame'], aspectRatios: ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9', 'adaptive'], durations: [-1, 4, 5, 6, 8, 10, 12, 15], resolutions: ['480p', '720p', '1080p'], audioControl: 'optional', supportsRealPersonCheck: true, supportsSeed: true, maxImageReferences: 9, maxVideoReferences: 3, maxAudioReferences: 3 },
-  'flovart:seedance-2-fast': { ...baseVideo, modes: ['text-to-video', 'image-to-video', 'reference-to-video'], aspectRatios: ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9', 'adaptive'], durations: [-1, 4, 5, 6, 8, 10, 12, 15], resolutions: ['480p', '720p'], audioControl: 'optional', supportsRealPersonCheck: true, supportsSeed: true, maxImageReferences: 9, maxVideoReferences: 3, maxAudioReferences: 3 },
+  'flovart:seedance-2': { ...baseVideo, modes: ['text-to-video', 'image-to-video', 'reference-to-video', 'first-last-frame'], aspectRatios: ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9', 'adaptive'], durations: [-1, 4, 5, 6, 8, 10, 12, 15], resolutions: ['480p', '720p', '1080p'], audioControl: 'optional', supportsRealPersonCheck: true, supportsSeed: true, maxImageReferences: 9, maxVideoReferences: 3, maxAudioReferences: 3, referenceVideoPixelRange: SEEDANCE_2_REFERENCE_VIDEO_PIXELS },
+  'flovart:seedance-2-fast': { ...baseVideo, modes: ['text-to-video', 'image-to-video', 'reference-to-video'], aspectRatios: ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9', 'adaptive'], durations: [-1, 4, 5, 6, 8, 10, 12, 15], resolutions: ['480p', '720p'], audioControl: 'optional', supportsRealPersonCheck: true, supportsSeed: true, maxImageReferences: 9, maxVideoReferences: 3, maxAudioReferences: 3, referenceVideoPixelRange: SEEDANCE_2_REFERENCE_VIDEO_PIXELS },
   'flovart:veo-3.1': { ...baseVideo, modes: ['text-to-video', 'image-to-video', 'reference-to-video', 'first-last-frame'], resolutions: ['720p', '1080p', '4K'], maxImageReferences: 3, supportsSeed: true },
   'flovart:veo-3.1-fast': { ...baseVideo, modes: ['text-to-video', 'image-to-video', 'reference-to-video', 'first-last-frame'], resolutions: ['720p', '1080p', '4K'], maxImageReferences: 3, supportsSeed: true },
   'flovart:veo-3.1-lite': { ...baseVideo, modes: ['text-to-video', 'image-to-video', 'first-last-frame'], supportsSeed: true },
@@ -279,6 +288,12 @@ export function getEffectiveReferenceLimits(
     video: product.capabilities.maxVideoReferences,
     audio: product.capabilities.maxAudioReferences,
   };
+}
+
+/** 参考视频总像素允许范围；undefined 表示该产品未声明，不做前置校验。 */
+export function getReferenceVideoPixelRange(productModelId: string): { min: number; max: number } | undefined {
+  const range = getProductModel(productModelId)?.capabilities.referenceVideoPixelRange;
+  return range ? { ...range } : undefined;
 }
 
 export function explainReferenceCompatibility(

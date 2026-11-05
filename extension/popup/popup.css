@@ -32,3 +32,6 @@ button:disabled { cursor: wait; opacity: .65; }
 .history li { display: flex; flex-direction: column; gap: 1px; overflow: hidden; border-radius: 8px; padding: 8px 10px; background: color-mix(in srgb, CanvasText 6%, transparent); }
 .history li span { overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .history li small { color: GrayText; font-size: 11px; }
+.reverse-text { margin: 0; max-height: 132px; overflow: auto; white-space: pre-wrap; word-break: break-word; font-size: 12px; line-height: 1.5; }
+.reverse-actions { display: flex; gap: 8px; margin-top: 6px; }
+.reverse-actions button { flex: 1; padding: 7px 10px; font-size: 12px; }

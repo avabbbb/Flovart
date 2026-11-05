@@ -251,7 +251,7 @@ export const DEFAULT_PROVIDER_MODELS: Partial<Record<AIProvider, ProviderModelMa
     volcengine: {
         text: ['doubao-1.5-pro-256k', 'doubao-1.5-pro-32k'],
         image: [],
-        video: ['doubao-seedance-2-0-260128', 'doubao-seedance-2-0-fast-260128'],
+        video: [],
     },
     openrouter: {
         text: ['openrouter/auto', 'google/gemini-3-flash-preview', 'anthropic/claude-opus-4-6', 'deepseek/deepseek-r1'],
@@ -2238,36 +2238,14 @@ export async function enhancePromptWithProvider(
     return result ?? { enhancedPrompt: request.prompt, negativePrompt: '', suggestions: [], notes: firstRaw || 'No response content returned by model.' };
 }
 
-/**
- * 构建反推 Prompt 的系统指令。
- * 根据 UI 语言 + 图片元数据动态生成，确保输出跟随用户语言偏好。
- * 风格统一为 AI 图像生成器可直接使用的自然语言描述。
- */
-function buildReversePromptInstruction(lang: 'en' | 'zho', meta?: { width?: number; height?: number }): string {
-    const metaHint = meta?.width && meta?.height
-        ? (lang === 'zho'
-            ? `\n图片尺寸 ${meta.width}×${meta.height}，宽高比约 ${(meta.width / meta.height).toFixed(2)}。请将宽高比信息融入描述。`
-            : `\nImage dimensions ${meta.width}×${meta.height}, aspect ratio ~${(meta.width / meta.height).toFixed(2)}. Incorporate aspect ratio context.`)
-        : '';
-    if (lang === 'zho') {
-        return [
-            '你是一名顶级 AI 图像提示词工程师。',
-            '分析给定图片，生成一段可用于 AI 图像生成器直接重现该图的详细提示词。',
-            '包含：主体、构图、拍摄角度、光线、色彩、情绪、艺术风格、媒介及精细细节。',
-            '如果画面中有明显应避免的元素（如水印、模糊、畸变），在末尾用「负面提示：」列出。',
-            '仅输出提示词文本，使用中文，不加解释、不加 markdown、不加前缀。',
-            metaHint,
-        ].filter(Boolean).join('\n');
-    }
-    return [
-        'You are an expert AI image prompt engineer.',
-        'Analyze the given image and generate a detailed prompt that could recreate it with an AI image generator.',
-        'Include: subject, composition, camera angle, lighting, color palette, mood, artistic style, medium, and fine details.',
-        'If there are obvious elements to avoid (e.g. watermarks, blur, distortion), append them at the end after "Negative prompt:".',
-        'Output ONLY the prompt text. No explanations, no markdown, no prefix.',
-        metaHint,
-    ].filter(Boolean).join('\n');
-}
+// 反推的系统指令、请求体、端点与响应解析抽到无依赖纯模块，网页与浏览器插件共用同一份。
+// ESM import 会被提升，放在使用处旁便于定位抽取边界。
+import {
+    buildReversePromptBody,
+    buildReversePromptInstruction,
+    parseReversePromptResponse,
+    reversePromptEndpoint,
+} from '../extension/background/reverse-prompt-core.js';
 
 /**
  * 【函数】图片反推提示词（Reverse Prompt / Describe Image）— 非流式版本
@@ -2296,21 +2274,13 @@ export async function reversePromptWithProvider(
     if (provider === 'google') {
         const apiKey = requireApiKey(provider, key);
         const effectiveModel = model || 'gemini-2.5-flash';
-        const base64Data = imageHref.includes(',') ? imageHref.split(',')[1] : imageHref;
         const googleBase = key?.baseUrl ? normalizeProviderBaseUrl('google', key.baseUrl) : getGeminiRestBaseUrl();
-        const url = `${googleBase}/models/${encodeURIComponent(effectiveModel)}:generateContent`;
-        const response = await fetch(url, {
+        const response = await fetch(reversePromptEndpoint('google', googleBase, effectiveModel), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
-            body: JSON.stringify({
-                contents: [{
-                    parts: [
-                        { text: instruction },
-                        { inlineData: { mimeType, data: base64Data } },
-                    ],
-                }],
-                generationConfig: { temperature: STABLE_TEXT_TEMPERATURE },
-            }),
+            body: JSON.stringify(buildReversePromptBody('google', {
+                model: effectiveModel, instruction, imageDataUrl: imageHref, mimeType, temperature: STABLE_TEXT_TEMPERATURE,
+            })),
         });
         if (!response.ok) {
             const text = await response.text().catch(() => '');
@@ -2318,33 +2288,22 @@ export async function reversePromptWithProvider(
         }
         const json = await response.json();
         recordTokenUsage({ provider, model: effectiveModel, source: 'reverse-prompt', raw: json });
-        return json?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+        return parseReversePromptResponse('google', json);
     }
 
     if (provider === 'anthropic') {
         const apiKey = requireApiKey(provider, key);
         const baseUrl = getBaseUrl(provider, key);
-        const base64Data = imageHref.includes(',') ? imageHref.split(',')[1] : imageHref;
-        const mediaType = mimeType || 'image/png';
-        const response = await fetch(`${baseUrl}/messages`, {
+        const response = await fetch(reversePromptEndpoint('anthropic', baseUrl), {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'x-api-key': apiKey,
                 'anthropic-version': '2023-06-01',
             },
-            body: JSON.stringify({
-                model: model || 'claude-sonnet-4-6',
-                max_tokens: 1024,
-                temperature: STABLE_TEXT_TEMPERATURE,
-                messages: [{
-                    role: 'user',
-                    content: [
-                        { type: 'text', text: instruction },
-                        { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64Data } },
-                    ],
-                }],
-            }),
+            body: JSON.stringify(buildReversePromptBody('anthropic', {
+                model: model || 'claude-sonnet-4-6', instruction, imageDataUrl: imageHref, mimeType, temperature: STABLE_TEXT_TEMPERATURE,
+            })),
         });
         if (!response.ok) {
             const text = await response.text().catch(() => '');
@@ -2352,29 +2311,18 @@ export async function reversePromptWithProvider(
         }
         const json = await response.json();
         recordTokenUsage({ provider, model: model || 'claude-sonnet-4-6', source: 'reverse-prompt', raw: json });
-        return (json?.content || []).map((b: { text?: string }) => b.text || '').join('\n').trim();
+        return parseReversePromptResponse('anthropic', json);
     }
 
     if (usesAnthropicRequestFormat(key)) {
         const apiKey = requireApiKey(provider, key);
         const baseUrl = getBaseUrl(provider, key);
-        const base64Data = imageHref.includes(',') ? imageHref.split(',')[1] : imageHref;
-        const mediaType = mimeType || 'image/png';
-        const response = await fetch(`${baseUrl}/messages`, {
+        const response = await fetch(reversePromptEndpoint('anthropic', baseUrl), {
             method: 'POST',
             headers: buildProviderHeaders(apiKey, key, { anthropic: true }),
-            body: JSON.stringify({
-                model: mapProviderModel(model, key),
-                max_tokens: 1024,
-                temperature: STABLE_TEXT_TEMPERATURE,
-                messages: [{
-                    role: 'user',
-                    content: [
-                        { type: 'text', text: instruction },
-                        { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64Data } },
-                    ],
-                }],
-            }),
+            body: JSON.stringify(buildReversePromptBody('anthropic', {
+                model: mapProviderModel(model, key), instruction, imageDataUrl: imageHref, mimeType, temperature: STABLE_TEXT_TEMPERATURE,
+            })),
         });
         if (!response.ok) {
             const text = await response.text().catch(() => '');
@@ -2382,7 +2330,7 @@ export async function reversePromptWithProvider(
         }
         const json = await response.json();
         recordTokenUsage({ provider, model: mapProviderModel(model, key), source: 'reverse-prompt', raw: json });
-        return (json?.content || []).map((b: { text?: string }) => b.text || '').join('\n').trim();
+        return parseReversePromptResponse('anthropic', json);
     }
 
     // OpenAI / OpenRouter / Custom / DeepSeek / Qwen / etc. (OpenAI-compatible vision)
@@ -2392,23 +2340,12 @@ export async function reversePromptWithProvider(
         ? buildOpenRouterHeaders(apiKey)
         : buildProviderHeaders(apiKey, key);
 
-    const imageContent = { type: 'image_url' as const, image_url: { url: imageHref } };
-
-    const response = await fetch(`${baseUrl}/chat/completions`, {
+    const response = await fetch(reversePromptEndpoint('openai', baseUrl), {
         method: 'POST',
         headers,
-        body: JSON.stringify({
-            model: mapProviderModel(model || 'gpt-5.4-mini', key),
-            max_tokens: 1024,
-            temperature: STABLE_TEXT_TEMPERATURE,
-            messages: [{
-                role: 'user',
-                content: [
-                    { type: 'text', text: instruction },
-                    imageContent,
-                ],
-            }],
-        }),
+        body: JSON.stringify(buildReversePromptBody('openai', {
+            model: mapProviderModel(model || 'gpt-5.4-mini', key), instruction, imageDataUrl: imageHref, mimeType, temperature: STABLE_TEXT_TEMPERATURE,
+        })),
     });
     if (!response.ok) {
         const text = await response.text().catch(() => '');
@@ -2416,7 +2353,7 @@ export async function reversePromptWithProvider(
     }
     const json = await response.json();
     recordTokenUsage({ provider, model: mapProviderModel(model || 'gpt-5.4-mini', key), source: 'reverse-prompt', raw: json });
-    return json?.choices?.[0]?.message?.content?.trim() || '';
+    return parseReversePromptResponse('openai', json);
 }
 
 /**

@@ -23,7 +23,7 @@ export interface BrowserImportReceipt {
   importId: string;
   artifactId: string;
   contentHash: string;
-  kind: 'image';
+  kind: 'image' | 'video';
   name: string;
   mimeType: string;
   byteSize: number;
@@ -88,10 +88,9 @@ export function createBrowserImportWorkflowMutation(
   receipt: BrowserImportReceipt,
   project: WorkflowProject,
 ): { nodeId: string; envelope: WorkflowCommandEnvelope } {
-  if (receipt.kind !== 'image') throw new Error(`不支持的浏览器导入类型：${receipt.kind}`);
   const nodeId = nodeIdForImport(receipt.importId);
   const { width, height } = fitWorkflowMediaSize(
-    'image',
+    receipt.kind,
     receipt.naturalWidth || undefined,
     receipt.naturalHeight || undefined,
   );
@@ -106,7 +105,7 @@ export function createBrowserImportWorkflowMutation(
       args: {
         projectId: project.id,
         id: nodeId,
-        type: 'image',
+        type: receipt.kind,
         title: receipt.name,
         x: (180 - project.viewport.x) / zoom,
         y: (140 - project.viewport.y) / zoom,

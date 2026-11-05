@@ -241,16 +241,20 @@ describe('web.open', () => {
   });
 
   it('keeps the native opener command loopback-safe', () => {
-    expect(buildNativeOpenCommand('http://127.0.0.1:37522', 'win32')).toEqual({
-      cmd: 'rundll32.exe',
-      args: ['url.dll,FileProtocolHandler', 'http://127.0.0.1:37522'],
+    const base = '';
+    expect(buildNativeOpenCommand(base, 'win32')).toEqual({
+      cmd: 'powershell.exe',
+      args: ['-NoProfile', '-NonInteractive', '-Command', "Start-Process '" + base + "'"],
     });
   });
 
-  it('keeps Windows bootstrap query parameters out of shell parsing', () => {
-    expect(buildNativeOpenCommand('http://127.0.0.1:17373/?agentToken=secret&next=%2Fapp', 'win32')).toEqual({
-      cmd: 'rundll32.exe',
-      args: ['url.dll,FileProtocolHandler', 'http://127.0.0.1:17373/?agentToken=secret&next=%2Fapp'],
+  it('keeps Windows bootstrap query parameters intact in one PowerShell literal', () => {
+    const url = '';
+    expect(buildNativeOpenCommand(url, 'win32')).toEqual({
+      cmd: 'powershell.exe',
+      args: ['-NoProfile', '-NonInteractive', '-Command', "Start-Process '" + url + "'"],
     });
+    const base = '';
+    expect(buildNativeOpenCommand(base + "/?q=it's", 'win32').args.at(-1)).toBe("Start-Process '" + base + "/?q=it''s'");
   });
 });

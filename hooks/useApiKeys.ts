@@ -24,6 +24,8 @@ import {
 import { syncRuntimeAgentTextRoutes } from '../services/runtimeAgentTextRoutes';
 import { mergeSuggestedProductRouteMappings } from '../services/aiServiceSetup';
 import { loadStoredUserScriptProviders } from '../services/userScriptAuthoring';
+import { getExtensionBridge } from '../services/extensionBridge';
+import { createExtensionKeySync, type ExtensionKeySync } from '../services/extensionKeySync';
 
 const generateId = () => `id_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
@@ -218,105 +220,21 @@ export function useApiKeys(isSettingsPanelOpen: boolean) {
         try { localStorage.setItem('security.clearKeysOnExit', clearKeysOnExit.toString()); } catch { /* non-critical */ }
     }, [clearKeysOnExit]);
 
-    // ─── Chrome Extension bridge V3: AES-GCM encrypted shared storage ───
-    // Storage key and encryption scheme must match extension/popup/popup.js
-    const STORAGE_KEY_V2 = 'flovart_api_keys_v2';
-    const EXT_ENC_SALT = 'flovart-ext-v3';
-
-    const getExtensionEncryptionKey = async (): Promise<CryptoKey | null> => {
-        try {
-            // In extension context, chrome.runtime.id is available as key material
-            const runtimeId = chrome?.runtime?.id;
-            if (!runtimeId) return null;
-            const enc = new TextEncoder();
-            const keyMaterial = await crypto.subtle.importKey(
-                'raw', enc.encode(runtimeId), 'PBKDF2', false, ['deriveKey']
-            );
-            return crypto.subtle.deriveKey(
-                { name: 'PBKDF2', salt: enc.encode(EXT_ENC_SALT), iterations: 100000, hash: 'SHA-256' },
-                keyMaterial, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']
-            );
-        } catch { return null; }
-    };
-
-    const encodeKeysForStorage = async (data: unknown): Promise<{ iv: number[]; ct: number[] } | string> => {
-        const aesKey = await getExtensionEncryptionKey();
-        if (aesKey) {
-            const enc = new TextEncoder();
-            const iv = crypto.getRandomValues(new Uint8Array(12));
-            const ct = await crypto.subtle.encrypt(
-                { name: 'AES-GCM', iv }, aesKey, enc.encode(JSON.stringify(data))
-            );
-            return { iv: Array.from(iv), ct: Array.from(new Uint8Array(ct)) };
-        }
-        // Fallback: base64 when not in extension context (shouldn't happen but safe)
-        const bytes = new TextEncoder().encode(JSON.stringify(data));
-        let s = '';
-        for (const b of bytes) s += String.fromCharCode(b);
-        return btoa(s);
-    };
-
-    const decodeKeysFromStorage = async (encoded: unknown): Promise<unknown> => {
-        try {
-            // V3: AES-GCM encrypted object { iv, ct }
-            if (encoded && typeof encoded === 'object' && 'iv' in encoded && 'ct' in encoded) {
-                const aesKey = await getExtensionEncryptionKey();
-                if (aesKey) {
-                    const obj = encoded as { iv: number[]; ct: number[] };
-                    const iv = new Uint8Array(obj.iv);
-                    const ct = new Uint8Array(obj.ct);
-                    const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, aesKey, ct);
-                    return JSON.parse(new TextDecoder().decode(pt));
-                }
-            }
-            // V2 fallback: base64 string
-            if (typeof encoded === 'string') {
-                const s = atob(encoded);
-                const bytes = new Uint8Array(s.length);
-                for (let i = 0; i < s.length; i++) bytes[i] = s.charCodeAt(i);
-                return JSON.parse(new TextDecoder().decode(bytes));
-            }
-            return null;
-        } catch { return null; }
-    };
-
-    // Chrome Extension bridge: sync API keys to chrome.storage.local (V3 encrypted) for content script access
-    const isWritingToChromeStorage = useRef(false);
+    // 已配对的浏览器插件：经 Port 同步 Key（全量 snapshot + 增量 delta），插件本地加密保存，撤销配对即清空。
+    // “退出时清除”开启时发送空列表，避免 Key 经插件落盘。
+    const extensionKeySyncRef = useRef<ExtensionKeySync | null>(null);
     useEffect(() => {
-        if (!apiKeysLoaded || typeof chrome === 'undefined' || !chrome?.storage?.local) return;
-        isWritingToChromeStorage.current = true;
-        encodeKeysForStorage(userApiKeys).then(encrypted => {
-            chrome.storage.local.set({
-                [STORAGE_KEY_V2]: { d: encrypted, v: 3 },
-            }, () => {
-                // 短暂延迟后重置标志，避免自己触发的 onChanged 导致循环
-                setTimeout(() => { isWritingToChromeStorage.current = false; }, 100);
-            });
-        }).catch(() => {
-            isWritingToChromeStorage.current = false;
-        });
-    }, [userApiKeys, apiKeysLoaded]);
-
-    // Chrome Extension bridge: listen for keys added from extension popup → merge into app (V3 encrypted)
-    useEffect(() => {
-        if (typeof chrome === 'undefined' || !chrome?.storage?.onChanged) return;
-        const handleStorageChange = (changes: Record<string, { oldValue?: unknown; newValue?: unknown }>, areaName: string) => {
-            if (areaName !== 'local' || !changes[STORAGE_KEY_V2]) return;
-            // 忽略自身写入触发的变更
-            if (isWritingToChromeStorage.current) return;
-
-            const newVal = changes[STORAGE_KEY_V2].newValue as { d?: unknown; v?: number } | undefined;
-            if (!newVal?.d) return;
-            decodeKeysFromStorage(newVal.d).then(extKeysRaw => {
-                const extKeys = extKeysRaw as Array<Partial<UserApiKey>> | null;
-                if (!Array.isArray(extKeys)) return;
-
-                setUserApiKeys(prev => mergeExtensionApiKeys(prev, extKeys));
-            });
+        const sync = createExtensionKeySync(getExtensionBridge());
+        extensionKeySyncRef.current = sync;
+        return () => {
+            sync.dispose();
+            extensionKeySyncRef.current = null;
         };
-        chrome.storage.onChanged.addListener(handleStorageChange);
-        return () => chrome.storage.onChanged.removeListener(handleStorageChange);
     }, []);
+    useEffect(() => {
+        if (!apiKeysLoaded) return;
+        void extensionKeySyncRef.current?.update(clearKeysOnExit ? [] : userApiKeys);
+    }, [userApiKeys, apiKeysLoaded, clearKeysOnExit]);
 
     // 启动时后台自动刷新所有 Provider 的模型列表（带缓存 TTL）
     const autoRefreshRan = useRef(false);

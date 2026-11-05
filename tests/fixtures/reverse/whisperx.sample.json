@@ -1,0 +1,23 @@
+{
+  "language": "en",
+  "segments": [
+    { "start": 0.12, "end": 1.9, "text": "Tired of slow coffee mornings?", "words": [
+      { "word": "Tired", "start": 0.12, "end": 0.41, "score": 0.97 },
+      { "word": "of", "start": 0.43, "end": 0.52, "score": 0.95 },
+      { "word": "slow", "start": 0.55, "end": 0.88, "score": 0.96 },
+      { "word": "coffee", "start": 0.9, "end": 1.31, "score": 0.98 },
+      { "word": "mornings?", "start": 1.33, "end": 1.9, "score": 0.94 }
+    ] },
+    { "start": 2.3, "end": 3.95, "text": "Meet the one-tap brewer.", "words": [
+      { "word": "Meet", "start": 2.3, "end": 2.55, "score": 0.97 },
+      { "word": "the", "start": 2.57, "end": 2.68, "score": 0.99 },
+      { "word": "one-tap", "start": 2.7, "end": 3.2, "score": 0.9 },
+      { "word": "brewer.", "start": 3.22, "end": 3.95, "score": 0.93 }
+    ] },
+    { "start": 4.4, "end": 5.6, "text": "Order yours today.", "words": [
+      { "word": "Order", "start": 4.4, "end": 4.72, "score": 0.96 },
+      { "word": "yours", "start": 4.74, "end": 5.05 },
+      { "word": "today.", "start": 5.07, "end": 5.6, "score": 0.95 }
+    ] }
+  ]
+}

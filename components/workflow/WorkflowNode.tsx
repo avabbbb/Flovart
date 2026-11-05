@@ -1,10 +1,10 @@
+import { localizeWorkflowNodeTitle } from './constants';
 import { TextNodeBody } from './TextNodeBody';
 import { ArrowLeftRight, Bot, Camera, Check, ChevronsDown, Clapperboard, FileText, Image as ImageIcon, Music2, Pause, Pencil, Play, Plus, RefreshCw, Sparkles, Star, Upload, Video, Volume2, VolumeX, X } from 'lucide-react';
 import { WorkflowNodeLasso } from './WorkflowNodeLasso';
 import type { LassoPoint } from './lasso';
 import { Component, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import { motion } from 'motion/react';
-import { WorkflowConfigPanel } from './WorkflowConfigPanel';
 import { getWorkflowOperationCapability } from './operationRegistry';
 import { buildCssFilter } from '../ImageFilterPanel';
 import { useWorkflowMediaUrl } from './media';
@@ -15,7 +15,6 @@ import type { WorkflowNodeRunInfo, WorkflowStaleReason } from './runState';
 import type { WorkflowNodePresence } from './presence';
 import type { WorkflowLayerPreview } from './layerPreview';
 import { WorkflowLayerCandidates } from './WorkflowLayerCandidates';
-import { renderDesignSvg } from '../../services/design/render';
 
 function WorkflowPluginSurface({ plugin, pluginContext }: { plugin: WorkflowNodePluginDefinition; pluginContext: WorkflowNodePluginContext }) {
   return <>
@@ -43,12 +42,34 @@ class WorkflowPluginErrorBoundary extends Component<{ children: ReactNode; plugi
   }
 }
 
-function DesignNodeSurface({ node }: { node: WorkflowNodeData }) {
-  const design = node.metadata.design;
-  if (!design) return <div className="workflow-node__empty"><ImageIcon size={26} /><span>图形节点</span></div>;
-  // renderDesignSvg 已对全部属性值与文本做 XML 转义，可安全作为 innerHTML。
-  const svg = renderDesignSvg(design, node.width, node.height, { idPrefix: `design-${node.id}`, fluid: true });
-  return <div className="workflow-node__design" data-testid="workflow-design-node" style={{ width: '100%', height: '100%' }} dangerouslySetInnerHTML={{ __html: svg }} />;
+// 子画布框：标题由节点标题栏显示（= 逆向工程名），框体只显示子节点数与折叠开关。
+function SubgraphFrameSurface({ node, childCount, onToggleCollapse, language }: { node: WorkflowNodeData; childCount: number; onToggleCollapse?: () => void; language: 'en' | 'zho' }) {
+  const collapsed = node.metadata.collapsed === true;
+  const en = language === 'en';
+  const toggleLabel = collapsed ? (en ? 'Expand subgraph' : '展开子画布') : (en ? 'Collapse subgraph' : '折叠子画布');
+  const hint = en ? 'Double-click to open in Reverse' : '双击在逆向中打开';
+  return <div className="workflow-subgraph" data-testid="workflow-subgraph-frame" data-collapsed={collapsed ? 'true' : 'false'}>
+    <div className="workflow-subgraph-header">
+      <Clapperboard size={14} />
+      <span className="workflow-subgraph-count">{en ? childCount + ' nodes' : childCount + ' 个节点'}</span>
+      {!collapsed && <span className="workflow-subgraph-hint" title={hint}>{hint}</span>}
+      {onToggleCollapse && <button
+        type="button"
+        className="workflow-subgraph-toggle"
+        data-workflow-overlay
+        aria-label={toggleLabel}
+        title={toggleLabel}
+        onPointerDown={event => event.stopPropagation()}
+        onDoubleClick={event => event.stopPropagation()}
+        onClick={event => { event.stopPropagation(); onToggleCollapse(); }}
+      ><ChevronsDown size={13} style={{ transform: collapsed ? 'rotate(-90deg)' : undefined }} /></button>}
+    </div>
+  </div>;
+}
+
+// 设计类节点已下线：旧项目里的设计节点仅显示占位，数据原样保留。
+function DesignNodeSurface({ language }: { node: WorkflowNodeData; language?: 'en' | 'zho' }) {
+  return <div className="workflow-node__empty" data-testid="workflow-design-node"><ImageIcon size={26} /><span>{language === 'en' ? 'Design node (removed)' : '设计节点（已下线）'}</span></div>;
 }
 
 // 连接点吸附（360°）：光标进入节点左右两侧的吸附区后，+ 圆点以该边上离光标最近的点为锚，
@@ -123,6 +144,8 @@ export function WorkflowNode({
   layerPreview,
   lassoActive,
   onLassoDone,
+  subgraphChildCount,
+  onToggleCollapse,
 }: {
   node: WorkflowNodeData;
   selected: boolean;
@@ -160,6 +183,10 @@ export function WorkflowNode({
   renameSignal?: number;
   /** 视频缺少封面时通知画布按需补齐（由画布持有请求，避免节点卸载后遗留缓存）。 */
   onNeedPoster?: () => void;
+  /** 仅 subgraph：子节点数。 */
+  subgraphChildCount?: number;
+  /** 仅 subgraph：切换折叠（画布用 update_node 写入）。 */
+  onToggleCollapse?: () => void;
   pluginContext?: WorkflowNodePluginContext;
   /** 派生运行状态（deriveWorkflowRunStates）；只用于显示，不改变节点数据。 */
   runState?: WorkflowNodeRunInfo;
@@ -177,7 +204,7 @@ export function WorkflowNode({
   const status = node.metadata.status || 'idle';
   const progress = Math.max(0, Math.min(100, Math.round(node.metadata.progress || 0)));
   const generationMode = node.metadata.config?.mode || node.type;
-  const generationLabel = node.type === 'operation' ? `${node.title}中` : generationMode === 'video' ? '视频生成中' : generationMode === 'text' ? '文本生成中' : '图片生成中';
+  const generationLabel = node.type === 'operation' ? `${node.title}中` : generationMode === 'video' ? (language === 'en' ? 'Generating video' : '视频生成中') : generationMode === 'text' ? (language === 'en' ? 'Generating text' : '文本生成中') : (language === 'en' ? 'Generating image' : '图片生成中');
   const generationMessage = node.metadata.generationMessage;
   const generationStartedAt = node.metadata.generationStartedAt;
   const [elapsedSec, setElapsedSec] = useState(0);
@@ -290,7 +317,7 @@ export function WorkflowNode({
         type="button"
         className="workflow-node__media-swap"
         aria-label="替换素材"
-        title="替换素材"
+        title={(language === 'en' ? 'Replace media' : '替换素材')}
         onClick={event => { event.stopPropagation(); mediaInput.current?.click(); }}
       >
         <ArrowLeftRight size={13} />
@@ -320,6 +347,7 @@ export function WorkflowNode({
       onDoubleClick={event => {
         if (plugin && pluginContext) { event.stopPropagation(); plugin.onDoubleClick?.(pluginContext); return; }
         if (node.type === 'script') { event.stopPropagation(); onDoubleClick?.(); return; }
+        if (node.type === 'subgraph') { event.stopPropagation(); onDoubleClick?.(); return; }
         event.stopPropagation();
         if (isMedia && !hasMediaReference) { mediaInput.current?.click(); return; }
         onFocusNode?.();
@@ -361,8 +389,8 @@ export function WorkflowNode({
       {node.metadata.hostSend && <WorkflowHostSendChip status={node.metadata.hostSend.status} host={node.metadata.hostSend.host} language={language} />}
       {batchCount && batchCount > 1 && (
         <div className="workflow-node__batch-actions" data-workflow-overlay>
-          {onCollapseBatch && <button type="button" title="收起结果" onPointerDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); onCollapseBatch(); }}><ChevronsDown size={13} />{batchCount}张</button>}
-          {isBatchPrimary ? <span><Check size={12} />主图</span> : onSetBatchPrimary && <button type="button" title="设为主图" onPointerDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); onSetBatchPrimary(); }}><Star size={12} />设为主图</button>}
+          {onCollapseBatch && <button type="button" title={(language === 'en' ? 'Collapse results' : '收起结果')} onPointerDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); onCollapseBatch(); }}><ChevronsDown size={13} />{batchCount}{language === 'en' ? '' : '张'}</button>}
+          {isBatchPrimary ? <span><Check size={12} />{(language === 'en' ? 'Primary' : '主图')}</span> : onSetBatchPrimary && <button type="button" title={(language === 'en' ? 'Set as primary' : '设为主图')} onPointerDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); onSetBatchPrimary(); }}><Star size={12} />{(language === 'en' ? 'Set as primary' : '设为主图')}</button>}
         </div>
       )}
       {isEditingTitle && onChangeTitle ? (
@@ -388,12 +416,14 @@ export function WorkflowNode({
           onPointerDown={event => event.stopPropagation()}
           onDoubleClick={event => {
             event.stopPropagation();
+            // 子画布：双击标题文字重命名；标题条其余区域双击回到逆向。
+            if (node.type === 'subgraph' && !(event.target instanceof Element && event.target.closest('.workflow-node__title-text,.workflow-node__title-edit-icon'))) { onDoubleClick?.(); return; }
             if (onChangeTitle) setEditingTitle(true);
           }}
-          title={onChangeTitle ? '双击重命名' : undefined}
+          title={onChangeTitle ? (language === 'en' ? 'Double-click to rename' : '双击重命名') : undefined}
         >
           <TitleIcon size={12} />
-          <span className="workflow-node__title-text">{node.title}</span>
+          <span className="workflow-node__title-text">{localizeWorkflowNodeTitle(node.title, language)}</span>
           <Pencil className="workflow-node__title-edit-icon" size={11} />
           {mediaDimensions && <span className="workflow-node__title-meta">{mediaDimensions}</span>}
           {node.anchor && (
@@ -430,7 +460,7 @@ export function WorkflowNode({
         {isMedia && (media.url || hasMediaReference) && <div className="workflow-node__drag-handle" data-workflow-drag-handle />}
         {node.type === 'image' && (media.url
           ? <><img src={media.url} alt={node.title} draggable={false} data-workflow-media-preview style={{ filter: buildCssFilter(node.metadata.filters) }} />{lassoActive && onLassoDone ? <WorkflowNodeLasso width={node.metadata.naturalWidth} height={node.metadata.naturalHeight} language={language} onDone={onLassoDone} /> : mediaActions}</>
-          : <div className="workflow-node__empty"><ImageIcon size={26} /><span>{mediaError || '图片节点'}</span>{mediaActions}</div>)}
+          : <div className="workflow-node__empty"><ImageIcon size={26} /><span>{mediaError || (language === 'en' ? 'Image node' : '图片节点')}</span>{mediaActions}</div>)}
         {node.type === 'video' && (hasMediaReference
           ? videoActive
             ? media.url
@@ -494,21 +524,19 @@ export function WorkflowNode({
               </>
               : <div className="workflow-node__empty"><Video size={26} /><span>{mediaError || '正在加载视频'}</span>{mediaActions}</div>
             : <>{posterMedia.url
-              ? <img src={posterMedia.url} alt={`${node.title} 视频封面`} draggable={false} loading="lazy" data-workflow-media-preview />
-              : <div className="workflow-node__empty workflow-video-placeholder" role="img" aria-label={`${node.title} 视频预览`} data-testid="workflow-video-placeholder" data-workflow-media-preview><Video size={26} /><span>视频预览</span></div>}
-              {onActivateMedia && <button type="button" className="workflow-node__video-activate" aria-label="加载视频播放器" title="加载视频播放器" data-workflow-overlay onPointerDown={event => event.stopPropagation()} onClick={onActivateMedia}><Play size={18} fill="currentColor" /></button>}
+              ? <img src={posterMedia.url} alt={`${node.title}${language === 'en' ? ' video poster' : ' 视频封面'}`} draggable={false} loading="lazy" data-workflow-media-preview />
+              : <div className="workflow-node__empty workflow-video-placeholder" role="img" aria-label={`${node.title}${language === 'en' ? ' video preview' : ' 视频预览'}`} data-testid="workflow-video-placeholder" data-workflow-media-preview><Video size={26} /><span>{(language === 'en' ? 'Video preview' : '视频预览')}</span></div>}
+              {onActivateMedia && <button type="button" className="workflow-node__video-activate" aria-label={(language === 'en' ? 'Load video player' : '加载视频播放器')} title={(language === 'en' ? 'Load video player' : '加载视频播放器')} data-workflow-overlay onPointerDown={event => event.stopPropagation()} onClick={onActivateMedia}><Play size={18} fill="currentColor" /></button>}
               {mediaActions}</>
-          : <div className="workflow-node__empty"><Video size={26} /><span>{mediaError || '视频节点'}</span>{mediaActions}</div>)}
+          : <div className="workflow-node__empty"><Video size={26} /><span>{mediaError || (language === 'en' ? 'Video node' : '视频节点')}</span>{mediaActions}</div>)}
         {node.type === 'audio' && (media.url
           ? <><audio src={media.url} controls preload="metadata" style={{ width: '100%' }} />{mediaActions}</>
-          : <div className="workflow-node__empty"><Music2 size={26} /><span>{mediaError || '音频节点'}</span>{mediaActions}</div>)}
+          : <div className="workflow-node__empty"><Music2 size={26} /><span>{mediaError || (language === 'en' ? 'Audio node' : '音频节点')}</span>{mediaActions}</div>)}
         {node.type === 'text' && <TextNodeBody value={node.metadata.content || ''} onChange={onChangeText} />}
-        {node.type === 'config' && (
-          <WorkflowConfigPanel node={node} onChange={onChangeMetadata} onRun={onRun} />
-        )}
         {node.type === 'script' && <ScriptNodeCard node={node} />}
         {node.type === 'operation' && <OperationNodeCard node={node} onRun={onRun} onStop={onStop} onSelectTake={onSelectTake} language={language} layerPreview={layerPreview} />}
-        {node.type === 'design' && <DesignNodeSurface node={node} />}
+        {node.type === 'design' && <DesignNodeSurface node={node} language={language} />}
+        {node.type === 'subgraph' && <SubgraphFrameSurface node={node} childCount={subgraphChildCount ?? 0} onToggleCollapse={onToggleCollapse} language={language} />}
           </>}
         {mediaDetails && <span className="workflow-node__media-details">{mediaDetails}</span>}
         {status === 'loading' && (

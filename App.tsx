@@ -23,9 +23,8 @@ import { consumeWorkflowAgentDrawerRequest, subscribeWorkflowAgentDrawer } from 
 import type { WorkflowSharedMedia } from './components/workflow/WorkflowConfigPanel';
 import { getGenerationCapability, type GenerationMode } from './services/generationCapabilities';
 import { cancelWorkflowGeneration, findInterruptedWorkflowNodes, runWorkflowGeneration } from './services/workflowGeneration';
-import { ingestWorkflowMedia, loadWorkflowMediaBlob, releaseWorkflowMediaRecord, workflowBlobToDataUrl } from './components/workflow/media';
+import { loadWorkflowMediaBlob, workflowBlobToDataUrl } from './components/workflow/media';
 import { insertSharedMediaIntoProject } from './components/workflow/WorkflowWorkspace';
-import { createWorkflowNode } from './components/workflow/constants';
 import { setWorkflowExecutor, setWorkflowNodeToolRunner } from './services/workflowDispatcher';
 import { createWorkflowExecutor, normalizeWorkflowExecutionError, WorkflowExecutionError, type WorkflowExecutionContext, type WorkflowRunAdapterResult, type WorkflowRunCommand } from './services/workflowExecutor';
 import type { CanonicalGenerationInput } from './components/workflow/inputResolver';
@@ -34,7 +33,6 @@ import type { WorkflowNodeToolName, WorkflowNodeToolRuntime } from './services/w
 import type { WorkflowProject } from './components/workflow/types';
 import { translations } from './utils/translations';
 import './styles/generation.css';
-import type { TableProcessResult } from './services/tableMediaProcessor';
 import { resolveRouteMappingForSubmit, type RouteFallbackResolution } from './services/routeMapping';
 import { ensureWorkflowImageGenerateOperation } from './components/workflow/operations';
 import { getWorkflowOperationCapability } from './components/workflow/operationRegistry';
@@ -46,9 +44,9 @@ const SettingsPanel = React.lazy(() => import('./components/SettingsPanel').then
 
 const WorkflowWorkspace = React.lazy(() => import('./components/workflow/WorkflowWorkspace').then(m => ({ default: m.WorkflowWorkspace })));
 const WorkflowContextPanel = React.lazy(() => import('./components/workflow/WorkflowWorkspace').then(m => ({ default: m.WorkflowContextPanel })));
-const TableWorkspace = React.lazy(() => import('./components/table/TableWorkspace').then(m => ({ default: m.TableWorkspace })));
 const AssetAddModal = React.lazy(() => import('./components/AssetAddModal').then(m => ({ default: m.AssetAddModal })));
 const BrowserImportBridge = React.lazy(() => import('./components/extension/BrowserImportBridge').then(m => ({ default: m.BrowserImportBridge })));
+const ReverseWorkbench = React.lazy(() => import('./components/reverse/ReverseWorkbench').then(m => ({ default: m.ReverseWorkbench })));
 
 type ThemePalette = {
     appBackground: string;
@@ -85,8 +83,7 @@ const App: React.FC = () => {
     const [systemTheme, setSystemTheme] = useState<'light' | 'dark'>('light');
     const [isEnhancingPrompt, setIsEnhancingPrompt] = useState(false);
     const [isAssetPanelOpen, setIsAssetPanelOpen] = useState(false);
-    const [tableSourceNodeId, setTableSourceNodeId] = useState<string | null>(null);
-    // Global right drawer: single Agent surface over BOTH Canvas and Table —
+    // Global right drawer: single Assistant surface beside Canvas and Reverse —
     // docked (reflow) on desktop, overlay on medium viewports.
     const mediumViewport = useMediaQuery('(max-width: 1023px)');
     const [desktopRightOpen, setDesktopRightOpen] = useState(() => {
@@ -551,53 +548,6 @@ const App: React.FC = () => {
         return reversePromptStreamWithProvider(imageHref, mimeType, route.routeId, route.key, () => undefined, undefined, language, { width: imgWidth, height: imgHeight });
     }, [confirmRouteFallback, language, userApiKeys]);
 
-    const handleOpenTable = useCallback((nodeId?: string) => {
-        setTableSourceNodeId(nodeId ?? null);
-        setActiveView('workflow');
-        setCanvasView('table');
-    }, [setActiveView, setCanvasView]);
-
-    const handleCommitTableResult = useCallback(async (result: TableProcessResult, sourceNodeId: string | null, name: string) => {
-        const project = useWorkflowStore.getState().projects.find(item => item.id === useWorkflowStore.getState().activeProjectId);
-        if (!project) throw new Error('请先创建 Workflow 项目。');
-        const extension = result.mimeType.includes('webm') ? 'webm' : result.mimeType.includes('png') ? 'png' : 'webp';
-        const file = new File([result.blob], `${name}.${extension}`, { type: result.mimeType, lastModified: Date.now() });
-        const record = await ingestWorkflowMedia(file);
-        const source = project.nodes.find(node => node.id === sourceNodeId);
-        const node = createWorkflowNode(generateId(), record.type, source
-            ? { x: source.position.x + source.width + 80, y: source.position.y }
-            : { x: -project.viewport.x / project.viewport.k + 180, y: -project.viewport.y / project.viewport.k + 140 }, { ...record, status: 'success' });
-        node.title = name;
-        if (record.naturalWidth && record.naturalHeight) {
-            node.width = Math.min(record.type === 'video' ? 480 : 420, record.naturalWidth);
-            node.height = Math.round(node.width * record.naturalHeight / record.naturalWidth);
-        }
-        const connection = source ? [{ id: generateId(), fromNodeId: source.id, toNodeId: node.id }] : [];
-        useWorkflowStore.getState().updateProject(project.id, {
-            nodes: [...project.nodes, node],
-            connections: [...project.connections, ...connection],
-            selectedNodeIds: [node.id],
-        });
-        releaseWorkflowMediaRecord(record.storageKey);
-        toast.show('预处理结果已发送到 Workflow。', 'success');
-    }, [toast]);
-
-    const handleSaveTableAsset = useCallback(async (result: TableProcessResult, name: string) => {
-        const dataUrl = await blobToDataUrl(result.blob);
-        setAssetLibrary(previous => addAsset(previous, {
-            id: generateId(),
-            name,
-            folderIds: [],
-            tags: ['Table 预处理'],
-            dataUrl,
-            mimeType: result.mimeType,
-            width: result.width,
-            height: result.height,
-            createdAt: Date.now(),
-            source: 'generation',
-        }));
-        toast.show('已保存到我的素材。', 'success');
-    }, [toast]);
 
     const hasAiService = userApiKeys.length > 0;
     const studioRuntimeStatus = useMemo(() => hasAiService ? {
@@ -640,8 +590,8 @@ const App: React.FC = () => {
     }, [toast]);
 
     const main = (
-        // One global right drawer spans both noun surfaces — Canvas and Table
-        // are two views of the same Workflow; Agent is the verb beside them.
+        // One global right drawer spans Canvas and Reverse; Agent is the
+        // connection/control page beside them.
         <div
             className="studio-layout relative flex h-full min-h-0 min-w-0"
             data-drawer-open={canvasView !== 'agent' && rightOpen ? 'true' : 'false'}
@@ -651,22 +601,12 @@ const App: React.FC = () => {
                 {/* Three top-level surfaces. Agent is connection management only;
                     the built-in assistant remains in the right drawer beside the
                     two Workflow views. */}
-                {canvasView === 'agent' ? (
-                    <AgentConnectionsPage project={activeWorkflowProject} language={language} />
-                ) : canvasView === 'table' ? (
-                    <Suspense fallback={<div className="grid h-full place-content-center text-sm opacity-40">{language === 'zho' ? '正在加载 Table...' : 'Loading Table...'}</div>}>
-                        <TableWorkspace
-                            project={activeWorkflowProject}
-                            userApiKeys={userApiKeys}
-                            confirmRouteFallback={confirmRouteFallback}
-                            initialNodeId={tableSourceNodeId}
-                            onCommit={handleCommitTableResult}
-                            onSaveAsset={handleSaveTableAsset}
-                            onOpenWorkflow={() => setCanvasView('spatial')}
-                            onOpenSettings={() => setIsSettingsPanelOpen(true)}
-                            language={language}
-                        />
+                {canvasView === 'reverse' ? (
+                    <Suspense fallback={<div className="grid h-full place-content-center text-sm opacity-40">{language === 'zho' ? '正在加载逆向工作台...' : 'Loading Reverse...'}</div>}>
+                        <ReverseWorkbench language={language} workflowProjectId={activeWorkflowProject?.id ?? null} onOpenInCanvas={handleFocusNodeFromDrawer} />
                     </Suspense>
+                ) : canvasView === 'agent' ? (
+                    <AgentConnectionsPage project={activeWorkflowProject} language={language} />
                 ) : (
                     <Suspense fallback={<div className="grid h-full place-content-center text-sm opacity-40">{language === 'zho' ? '正在加载 Workflow...' : 'Loading Workflow...'}</div>}>
                         <WorkflowWorkspace

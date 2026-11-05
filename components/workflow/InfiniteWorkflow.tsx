@@ -39,12 +39,9 @@ import { alignNodes, arrangeNodePositions, arrangementOrder, arrowNudge, distrib
 import { pushAgentGroup } from '../../stores/useAgentGroupInboxStore';
 import { buildTextAssetPrompt, canGenerateTextAssets, textAssetSpec } from './textAssets';
 import { WorkflowCreateMenu, type WorkflowCreateMenuState } from './WorkflowCreateMenu';
-import { DesignInspector } from './DesignInspector';
-import { createDesignTemplate } from '../../services/design/presets';
-import { buildBooleanElement, findFrameChildren, layoutFrameChildren } from '../../services/design/designActions';
-import { DESIGN_BOOLEAN_LABELS } from '../../services/design/booleanOps';
-import type { DesignElementKind } from '../../services/design/designTypes';
 import type { WorkflowSharedMedia } from './WorkflowConfigPanel';
+import { WorkflowStoryboard } from './WorkflowStoryboard';
+import { buildProductionBible } from './productionBible';
 import { WorkflowMiniMap } from './WorkflowMiniMap';
 import { WorkflowQuickToggles } from './WorkflowQuickToggles';
 import { WorkflowNode } from './WorkflowNode';
@@ -56,7 +53,6 @@ import { WorkflowNodeToolbar, type WorkflowImageToolHandlers, type WorkflowVideo
 import { WorkflowImageToolDialogs, type WorkflowImageToolConfirmation, type WorkflowImageToolState } from './WorkflowImageToolDialogs';
 import { WorkflowVideoToolDialogs, type WorkflowVideoToolConfirmation, type WorkflowVideoToolState } from './WorkflowVideoToolDialogs';
 import { WorkflowAudioToolDialogs, type WorkflowAudioToolConfirmation, type WorkflowAudioToolState } from './WorkflowAudioToolDialogs';
-import { WorkflowConfigPanel } from './WorkflowConfigPanel';
 import { ScriptNodeEditor } from './ScriptNodeEditor';
 import { SlashMenu } from './SlashMenu';
 import { WorkflowToolbar, type WorkflowTool } from './WorkflowToolbar';
@@ -65,6 +61,8 @@ import { deriveWorkflowPresence } from './presence';
 import { buildWorkflowHostSendPatch, listWorkflowHostClips, workflowHostSendEligibility } from './hostLink';
 import { WorkflowHostStrip } from './WorkflowHostStrip';
 import { selectWorkflowOperationTake } from './operations';
+import { useWorkspaceStore } from '../../stores/useWorkspaceStore';
+import { useReverseStore } from '../../stores/useReverseStore';
 import { useProductionProjectionAdapter } from './useProductionProjectionAdapter';
 import { composeImageGrid } from './gridComposer';
 import { LIGHTING_PRESETS, buildRelightPrompt } from './LightingPresets';
@@ -220,7 +218,7 @@ function WorkflowBatchStack({ head, count, historyOpen = false, onPointerDown, o
 
 const BATCH_GRID_GAP = 12;
 
-function WorkflowBatchCell({ node, index, count, column, row, cellWidth, cellHeight, primary, onCollapse, onSetPrimary, onPointerDown }: {
+function WorkflowBatchCell({ node, index, count, column, row, cellWidth, cellHeight, primary, onCollapse, onSetPrimary, onPointerDown, language }: {
   node: WorkflowNodeData;
   index: number;
   count: number;
@@ -232,7 +230,9 @@ function WorkflowBatchCell({ node, index, count, column, row, cellWidth, cellHei
   onCollapse: () => void;
   onSetPrimary: (nodeId: string) => void;
   onPointerDown: (event: ReactPointerEvent<HTMLDivElement>) => void;
+  language?: 'en' | 'zho';
 }) {
+  const en = language === 'en';
   const preview = useWorkflowMediaUrl(
     node.type === 'video' ? undefined : node.metadata.storageKey,
     node.type === 'video' ? undefined : node.metadata.href,
@@ -255,23 +255,24 @@ function WorkflowBatchCell({ node, index, count, column, row, cellWidth, cellHei
       {node.type === 'video'
         ? <WorkflowVideoPreview node={node} className="workflow-batch-cell__media" />
         : preview.url && <img src={preview.url} alt={node.title} className="workflow-batch-cell__media" draggable={false} />}
-      {primary && <span className="workflow-batch-cell__badge"><Check size={11} />主图</span>}
+      {primary && <span className="workflow-batch-cell__badge"><Check size={11} />{en ? 'Primary' : '主图'}</span>}
       <div className="workflow-batch-cell__actions" data-workflow-overlay onPointerDown={event => event.stopPropagation()}>
-        <button type="button" title="下载" aria-label={'下载第 ' + (index + 1) + ' 个结果'} disabled={!download.url} onClick={event => { event.stopPropagation(); if (!download.url) return; void saveMediaUrl(download.url, node.metadata.name || node.title || node.id).catch(error => console.warn('[Workflow] Batch item download failed.', error)); }}><Download size={12} />下载</button>
+        <button type="button" title={en ? 'Download' : '下载'} aria-label={en ? 'Download result ' + (index + 1) : '下载第 ' + (index + 1) + ' 个结果'} disabled={!download.url} onClick={event => { event.stopPropagation(); if (!download.url) return; void saveMediaUrl(download.url, node.metadata.name || node.title || node.id).catch(error => console.warn('[Workflow] Batch item download failed.', error)); }}><Download size={12} />{en ? 'Download' : '下载'}</button>
         {primary
-          ? <button type="button" title="收起结果" aria-label="收起结果" onClick={event => { event.stopPropagation(); onCollapse(); }}><Minimize2 size={12} />收起</button>
-          : <button type="button" title="设为主图" onClick={event => { event.stopPropagation(); onSetPrimary(node.id); }}><Star size={12} />设为主图</button>}
+          ? <button type="button" title={en ? 'Collapse results' : '收起结果'} aria-label={en ? 'Collapse results' : '收起结果'} onClick={event => { event.stopPropagation(); onCollapse(); }}><Minimize2 size={12} />{en ? 'Collapse' : '收起'}</button>
+          : <button type="button" title={en ? 'Set as primary' : '设为主图'} onClick={event => { event.stopPropagation(); onSetPrimary(node.id); }}><Star size={12} />{en ? 'Set as primary' : '设为主图'}</button>}
       </div>
     </motion.div>
   );
 }
 
 // LibTV 式展开：以主图为左上角铺成网格（≤4 两列，更多三列），每格带 下载 / 设为主图，主图格带 收起。
-function WorkflowBatchGallery({ group, onCollapse, onSetPrimary, onPointerDown }: {
+function WorkflowBatchGallery({ group, onCollapse, onSetPrimary, onPointerDown, language }: {
   group: WorkflowNodeData[];
   onCollapse: () => void;
   onSetPrimary: (nodeId: string) => void;
   onPointerDown: (event: ReactPointerEvent<HTMLDivElement>) => void;
+  language?: 'en' | 'zho';
 }) {
   const root = group.find(node => node.batchIndex === 0) || group[0];
   const primaryId = root.metadata.primaryImageId || root.id;
@@ -305,6 +306,7 @@ function WorkflowBatchGallery({ group, onCollapse, onSetPrimary, onPointerDown }
           onCollapse={onCollapse}
           onSetPrimary={onSetPrimary}
           onPointerDown={onPointerDown}
+          language={language}
         />
       ))}
     </motion.div>
@@ -1575,6 +1577,10 @@ export function InfiniteWorkflow({
     );
   }, [focusBounds]);
 
+  // 故事板（P2）：镜头表来自制作圣经，只在项目里有 shot 元数据时露出入口。
+  const [storyboardOpen, setStoryboardOpen] = useState(false);
+  const productionBible = useMemo(() => buildProductionBible(project), [project]);
+
   // focusNodeRequest 是一次性事件：按 nonce 只处理一次。否则 focusNode/selectNodes
   // 随视口或选中变化重建时，旧请求会重放：动画每帧重启、视口被拉回、选中被抢回。
   const handledFocusNonceRef = useRef<number | null>(null);
@@ -1648,9 +1654,10 @@ export function InfiniteWorkflow({
       .filter((n): n is WorkflowNodeData => Boolean(n));
     const sourceNodes = selectedNodes.filter(n => n.type === command.mode && n.metadata.status === 'success');
     if (sourceNodes.length < command.minSources) {
-      setNotice(command.minSources === 1
-        ? `请先选择至少 1 个已生成的${command.mode === 'image' ? '图片' : '视频'}节点作为源`
-        : `请先选择至少 ${command.minSources} 个已生成的${command.mode === 'image' ? '图片' : '视频'}节点作为源`);
+      const sourceKind = command.mode === 'image' ? (language === 'en' ? 'image' : '图片') : (language === 'en' ? 'video' : '视频');
+      setNotice(language === 'en'
+        ? 'Select at least ' + command.minSources + ' generated ' + sourceKind + ' node' + (command.minSources === 1 ? '' : 's') + ' as the source first.'
+        : '请先选择至少 ' + command.minSources + ' 个已生成的' + sourceKind + '节点作为源');
       return;
     }
     const usedSources = sourceNodes.slice(0, command.maxSources);
@@ -1692,7 +1699,7 @@ export function InfiniteWorkflow({
       newNodeIds.forEach(id => enqueueRunNode(id));
       selectNodes(newNodeIds);
     }
-  }, [applyOps, currentSnapshot, enqueueRunNode, selectNodes, viewportCenter]);
+  }, [applyOps, currentSnapshot, enqueueRunNode, language, selectNodes, viewportCenter]);
 
   const addMediaAt = useCallback(async (file: File, center: WorkflowPoint, expectedProjectId = projectRef.current.id) => {
     let record: WorkflowMediaRecord | undefined;
@@ -2184,13 +2191,32 @@ export function InfiniteWorkflow({
       setSelectedConnectionId(null);
       return;
     }
-    const deletableIds = selectedIdsRef.current.filter(id => !projectRef.current.nodes.find(node => node.id === id)?.isLocked);
+    const selected = selectedIdsRef.current;
+    // 删除子画布框时连同其子节点一起删除（同一次 apply，Ctrl+Z 整体恢复）。
+    const removedSubgraphs = new Set(projectRef.current.nodes.filter(node => node.type === 'subgraph' && !node.isLocked && selected.includes(node.id)).map(node => node.id));
+    const deletableIds = projectRef.current.nodes
+      .filter(node => !node.isLocked && (selected.includes(node.id) || Boolean(node.parentId && removedSubgraphs.has(node.parentId))))
+      .map(node => node.id);
     if (!deletableIds.length) return;
     applyOps([{ type: 'delete_nodes', ids: deletableIds }]);
     // UX-HEU-10: surface the destructive action so the user has a recovery path.
     // Ctrl+Z still restores the nodes — the toast advertises that affordance.
     onNotify?.(language === 'zho' ? `已删除 ${deletableIds.length} 个节点 — Ctrl+Z 撤销` : `Deleted ${deletableIds.length} node${deletableIds.length > 1 ? 's' : ''} — Ctrl+Z to undo`, 'info');
   }, [applyOps, commitFrame, language, onNotify, selectedConnectionId]);
+  // 双击子画布：切到 Reverse 并选中对应逆向工程。
+  const openSubgraphInReverse = useCallback((node: WorkflowNodeData) => {
+    const reverseProjectId = node.metadata.reverseProjectId;
+    if (!reverseProjectId) return;
+    const reverse = useReverseStore.getState();
+    const target = reverse.projects.find(item => item.id === reverseProjectId);
+    if (!target) {
+      onNotify?.(language === 'zho' ? '对应的逆向工程已不存在' : 'The linked Reverse project no longer exists', 'warning');
+      return;
+    }
+    reverse.setTab(target.direction);
+    reverse.setActive(target.direction, target.id);
+    useWorkspaceStore.getState().setCanvasView('reverse');
+  }, [language, onNotify]);
   const duplicateSelection = useCallback(() => {
     const result = duplicateNodes(projectRef.current.nodes, selectedIdsRef.current);
     if (!result) return;
@@ -2370,13 +2396,9 @@ export function InfiniteWorkflow({
       : item), projectRef.current.connections);
   }, [commitFrame]);
 
-  const createFromMenu = useCallback((type: WorkflowNodeType, designKind?: DesignElementKind) => {
+  const createFromMenu = useCallback((type: WorkflowNodeType) => {
     if (!createMenu) return;
-    let node = createWorkflowNode(nanoid(), type, createMenu.world);
-    if (type === 'design' && designKind) {
-      const template = createDesignTemplate(designKind);
-      node = { ...createWorkflowNode(node.id, 'design', createMenu.world, { design: template.design }), title: template.title, width: template.width, height: template.height };
-    }
+    const node = createWorkflowNode(nanoid(), type, createMenu.world);
     let success: boolean;
     if (createMenu.sourceId) {
       success = applyOps([{ type: 'create_connected_node', fromNodeId: createMenu.sourceId, node }]);
@@ -2438,6 +2460,13 @@ export function InfiniteWorkflow({
     };
   };
 
+  // 子画布框被拖动时，其未锁定的子节点（parentId 指向框）跟随；已在拖动集合中的不重复加入。折叠框的子节点同样跟随。
+  const subgraphDragChildren = (nodes: WorkflowNodeData[], ids: readonly string[]) => {
+    const dragged = new Set(ids);
+    const frames = new Set(nodes.filter(item => item.type === 'subgraph' && dragged.has(item.id)).map(item => item.id));
+    return nodes.filter(item => !item.isLocked && !dragged.has(item.id) && Boolean(item.parentId && frames.has(item.parentId)));
+  };
+
   const startBatchDrag = (event: ReactPointerEvent<HTMLDivElement>, batchId: string, batchNodes: WorkflowNodeData[]) => {
     if (event.button !== 0) return;
     event.stopPropagation();
@@ -2452,11 +2481,13 @@ export function InfiniteWorkflow({
     // 分组标签既是拖动手柄也是选中入口：选中整组后节点工具栏提供组操作。
     selectNodes(batchNodes.map(item => item.id));
     const frame = currentFrame();
+    // 与单选拖动一致：分组含子画布框时子节点跟随，松手时单次写入历史。
+    const children = subgraphDragChildren(frame.nodes, batchNodes.map(item => item.id));
     interactionRef.current = {
       type: 'node',
       pointerId: event.pointerId,
       start: screenToWorkflow(event.clientX, event.clientY),
-      positions: new Map(batchNodes.map(item => [item.id, { ...item.position }])),
+      positions: new Map([...batchNodes, ...children].map(item => [item.id, { ...item.position }])),
       frame,
       moved: false,
       batchId,
@@ -2499,11 +2530,13 @@ export function InfiniteWorkflow({
       return;
     }
     const frame = currentFrame();
+    // 拖动子画布框时子节点跟随：同一次移动、松手时单次写入。
+    const movingIds = new Set([...ids, ...subgraphDragChildren(frame.nodes, ids).map(item => item.id)]);
     interactionRef.current = {
       type: 'node',
       pointerId: event.pointerId,
       start: screenToWorkflow(event.clientX, event.clientY),
-      positions: new Map(frame.nodes.filter(item => ids.includes(item.id)).map(item => [item.id, { ...item.position }])),
+      positions: new Map(frame.nodes.filter(item => movingIds.has(item.id)).map(item => [item.id, { ...item.position }])),
       frame,
       moved: false,
     };
@@ -2704,6 +2737,21 @@ export function InfiniteWorkflow({
     return [{ batchId, group, manual, hue: hues[hash % hues.length], box: { left, top, width: right - left, height: bottom - top } }];
   }), [batchGroups, expandedBatches, hiddenByBatch]);
 
+  // 折叠的子画布隐藏其子节点（及相关连线）；文档仍是扁平 nodes，只影响渲染。
+  const subgraphChildren = useMemo(() => {
+    const subgraphs = new Map(displayNodes.filter(node => node.type === 'subgraph').map(node => [node.id, node]));
+    const counts = new Map<string, number>();
+    const hidden = new Set<string>();
+    for (const node of displayNodes) {
+      const parent = node.parentId ? subgraphs.get(node.parentId) : undefined;
+      if (!parent) continue;
+      counts.set(parent.id, (counts.get(parent.id) || 0) + 1);
+      if (parent.metadata.collapsed) hidden.add(node.id);
+    }
+    return { counts, hidden };
+  }, [displayNodes]);
+  const hiddenBySubgraph = subgraphChildren.hidden;
+
   // 视口裁剪：只挂载视口附近的节点 DOM；连线额外保留与可见节点相邻的一端，避免边线断裂。
   // 首帧尚未测量到容器尺寸时不裁剪，避免挂载瞬间丢节点（也兼容无布局的测试环境）。
   const cullingEnabled = Boolean(rootSize && rootSize.width > 0 && rootSize.height > 0);
@@ -2721,16 +2769,21 @@ export function InfiniteWorkflow({
     };
   }, [project.viewport.k, project.viewport.x, project.viewport.y, rootSize?.height, rootSize?.width]);
 
-  const renderNodes = useMemo(() => displayNodes.filter(node => {
-    if (node.isVisible === false || hiddenByBatch.has(node.id)) return false;
-    if (!cullingEnabled) return true;
-    if (selectedNodes.has(node.id)) return true;
-    if (interactionPreview?.kind === 'node' && interactionPreview.positions.has(node.id)) return true;
-    const width = node.width || 320;
-    const height = node.height || 200;
-    return node.position.x < visibleWorldRect.right && node.position.x + width > visibleWorldRect.left
-      && node.position.y < visibleWorldRect.bottom && node.position.y + height > visibleWorldRect.top;
-  }), [cullingEnabled, displayNodes, hiddenByBatch, interactionPreview, selectedNodes, visibleWorldRect]);
+  const renderNodes = useMemo(() => {
+    const visible = displayNodes.filter(node => {
+      if (node.isVisible === false || hiddenByBatch.has(node.id) || hiddenBySubgraph.has(node.id)) return false;
+      if (!cullingEnabled) return true;
+      if (selectedNodes.has(node.id)) return true;
+      if (interactionPreview?.kind === 'node' && interactionPreview.positions.has(node.id)) return true;
+      const width = node.width || 320;
+      const height = node.height || 200;
+      return node.position.x < visibleWorldRect.right && node.position.x + width > visibleWorldRect.left
+        && node.position.y < visibleWorldRect.bottom && node.position.y + height > visibleWorldRect.top;
+    });
+    // 子画布框先渲染（位于子节点下层）；折叠时只保留标题条高度。
+    const frames = visible.filter(node => node.type === 'subgraph').map(node => (node.metadata.collapsed ? { ...node, height: 72 } : node));
+    return [...frames, ...visible.filter(node => node.type !== 'subgraph')];
+  }, [cullingEnabled, displayNodes, hiddenByBatch, hiddenBySubgraph, interactionPreview, selectedNodes, visibleWorldRect]);
 
   const connectionNodes = useMemo(() => {
     const visibleIds = new Set(renderNodes.map(node => node.id));
@@ -2840,6 +2893,31 @@ export function InfiniteWorkflow({
         setContextMenu({ type: 'pane', x: event.clientX, y: event.clientY });
       }}
     >
+      {productionBible.shots.length > 0 && !storyboardOpen && (
+        <button
+          type="button"
+          data-workflow-overlay
+          style={{ position: 'absolute', right: 16, top: 72, zIndex: 80, display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 10px', borderRadius: 8, border: '1px solid rgba(127,127,127,0.3)', background: 'var(--workflow-panel-bg, rgba(255,255,255,0.97))', color: 'inherit', cursor: 'pointer' }}
+          onPointerDown={event => event.stopPropagation()}
+          onClick={() => setStoryboardOpen(true)}
+        >{(language === 'en' ? 'Storyboard · ' : '故事板 · ') + productionBible.shots.length}</button>
+      )}
+      {storyboardOpen && (
+        <WorkflowStoryboard
+          bible={productionBible}
+          language={language}
+          onClose={() => setStoryboardOpen(false)}
+          onFocus={id => { selectNodes([id]); focusNode(id); }}
+          onReference={ids => {
+            const members = projectRef.current.nodes.filter(item => ids.includes(item.id));
+            if (!members.length) return;
+            pushAgentGroup({
+              nodeIds: ids.filter(id => members.some(item => item.id === id)),
+              label: members.length === 1 ? members[0].title : (language === 'en' ? 'Storyboard · ' + members.length + ' shots' : '故事板 · ' + members.length + ' 个镜头'),
+            });
+          }}
+        />
+      )}
       <WorkflowToolbar
         tool={tool}
         revision={project.draftVersion}
@@ -2918,7 +2996,8 @@ export function InfiniteWorkflow({
           connections={edgesVisible === false ? [] : project.connections.filter(connection => {
             const from = project.nodes.find(node => node.id === connection.fromNodeId);
             const to = project.nodes.find(node => node.id === connection.toNodeId);
-            return from?.isVisible !== false && to?.isVisible !== false && !hiddenByBatch.has(connection.fromNodeId) && !hiddenByBatch.has(connection.toNodeId);
+            return from?.isVisible !== false && to?.isVisible !== false && !hiddenByBatch.has(connection.fromNodeId) && !hiddenByBatch.has(connection.toNodeId)
+              && !hiddenBySubgraph.has(connection.fromNodeId) && !hiddenBySubgraph.has(connection.toNodeId);
           })}
           selectedId={selectedConnectionId}
           active={connectionDrag}
@@ -2954,6 +3033,7 @@ export function InfiniteWorkflow({
           <WorkflowBatchGallery
             key={'batch-gallery-' + batchId}
             group={group}
+            language={language}
             onCollapse={() => toggleBatch(batchId)}
             onSetPrimary={nodeId => applyOps([{ type: 'set_batch_primary', batchId, nodeId }])}
             onPointerDown={event => startBatchDrag(event, batchId, group)}
@@ -3089,7 +3169,9 @@ export function InfiniteWorkflow({
             isBatchPrimary={expandedBatch ? node.id === primaryId : undefined}
             onCollapseBatch={expandedBatch ? () => toggleBatch(node.batchId!) : undefined}
             onSetBatchPrimary={expandedBatch && node.id !== primaryId ? () => applyOps([{ type: 'set_batch_primary', batchId: node.batchId!, nodeId: node.id }]) : undefined}
-            onDoubleClick={node.type === 'script' ? () => setScriptEditorNodeId(node.id) : undefined}
+            onDoubleClick={node.type === 'script' ? () => setScriptEditorNodeId(node.id) : node.type === 'subgraph' ? () => openSubgraphInReverse(node) : undefined}
+            subgraphChildCount={node.type === 'subgraph' ? subgraphChildren.counts.get(node.id) || 0 : undefined}
+            onToggleCollapse={node.type === 'subgraph' && !node.isLocked ? () => applyOps([{ type: 'update_node', id: node.id, metadata: { collapsed: !node.metadata.collapsed } }]) : undefined}
             onPreviewMedia={setPreviewNode}
             onNeedPoster={() => requestVideoPoster(node.id)}
             onChangeTitle={title => { if (!node.isLocked) applyOps([{ type: 'update_node', id: node.id, patch: { title } }]); }}
@@ -3114,6 +3196,7 @@ export function InfiniteWorkflow({
         <div data-workflow-overlay style={{ position: 'absolute', zIndex: 70, left: toolbarLeft, top: toolbarTop, transform: 'translateX(-50%)' }}>
           <WorkflowNodeToolbar
             nodes={selectedNodeData}
+            language={language}
             onCopy={ids => { const nodes = projectRef.current.nodes.filter(node => ids.includes(node.id)); clipboardRef.current = nodes; setClipboardVersion(version => version + 1); syncToSharedClipboard(nodes); }}
             onDelete={ids => applyOps([{ type: 'delete_nodes', ids }])}
             onExport={nodes => { void exportSelectedMedia(nodes); }}
@@ -3154,31 +3237,6 @@ export function InfiniteWorkflow({
               if (!applyOps([{ type: 'create_connected_node', fromNodeId: id, node }])) return;
               setNotice(`已创建「${spec.title}」节点并连好文本：选好模型后在节点上运行`);
             }}
-            onDesignBoolean={(operation, ids) => {
-              // 按图层顺序（底到顶）取形状；结果替换原形状。
-              const selected = projectRef.current.nodes.filter(item => ids.includes(item.id) && !item.isLocked);
-              const shapes = selected.flatMap(item => item.metadata.design ? [{ element: item.metadata.design, x: item.position.x, y: item.position.y, width: item.width, height: item.height }] : []);
-              const result = buildBooleanElement(operation, shapes);
-              if (!result) { setNotice(DESIGN_BOOLEAN_LABELS[operation] + '失败：需要至少两个有重叠的矩形、椭圆或路径'); return; }
-              const node = { ...createWorkflowNode(nanoid(), 'design', { x: result.box.x, y: result.box.y }, { design: result.element }), title: DESIGN_BOOLEAN_LABELS[operation], width: result.box.width, height: result.box.height };
-              applyOps([{ type: 'add_node', node }, { type: 'delete_nodes', ids: selected.map(item => item.id) }]);
-            }}
-            onApplyFrameLayout={id => {
-              const frameNode = projectRef.current.nodes.find(item => item.id === id);
-              const design = frameNode?.metadata.design;
-              const layout = design?.frame?.autoLayout;
-              if (!frameNode || !design || !layout || frameNode.isLocked) return;
-              const frameBox = { id: frameNode.id, x: frameNode.position.x, y: frameNode.position.y, width: frameNode.width, height: frameNode.height };
-              const candidates = projectRef.current.nodes
-                .filter(item => item.id !== id && !item.isLocked && item.isVisible !== false)
-                .map(item => ({ id: item.id, x: item.position.x, y: item.position.y, width: item.width, height: item.height }));
-              const update = layoutFrameChildren(design, frameBox, findFrameChildren(frameBox, candidates, layout.direction));
-              if (!update) { setNotice('画板内没有可排列的节点'); return; }
-              applyOps([
-                { type: 'update_node', id, patch: { position: { x: update.frame.x, y: update.frame.y }, width: update.frame.width, height: update.frame.height } },
-                ...Object.entries(update.children).map(([childId, box]) => ({ type: 'update_node' as const, id: childId, patch: { position: { x: box.x, y: box.y }, width: box.width, height: box.height } })),
-              ]);
-            }}
             onExecuteGroup={ids => topoSort(projectRef.current.nodes, projectRef.current.connections, ids).forEach(id => enqueueRunNode(id))}
             onReversePrompt={onReversePrompt ? (id, mediaUrl) => {
               const node = projectRef.current.nodes.find(item => item.id === id);
@@ -3216,12 +3274,6 @@ export function InfiniteWorkflow({
             }}
           />
         </div>
-        {selectedNodeData.length === 1 && selectedNodeData[0].type === 'config' && <div data-workflow-overlay style={{ position: 'absolute', zIndex: 69, left: configLeft, top: promptTop, width: 420 }} onWheel={event => event.stopPropagation()}>
-          <WorkflowConfigPanel node={selectedNodeData[0]} nodes={project.nodes} connections={project.connections} onChange={metadata => applyOps([{ type: 'update_node', id: selectedNodeData[0].id, metadata }])} onRun={() => onRunNode(selectedNodeData[0].id)} onStop={() => stopNode(selectedNodeData[0].id)} />
-        </div>}
-        {selectedNodeData.length === 1 && selectedNodeData[0].type === 'design' && selectedNodeData[0].metadata.design && <div data-workflow-overlay style={{ position: 'absolute', zIndex: 69, left: configLeft, top: promptTop }} onWheel={event => event.stopPropagation()}>
-          <DesignInspector node={selectedNodeData[0]} onChange={({ design, size }) => applyOps([{ type: 'update_node', id: selectedNodeData[0].id, metadata: { design }, ...(size ? { patch: size } : {}) }])} />
-        </div>}
         {selectedNodeData.length === 1 && ['image', 'video', 'text', 'operation'].includes(selectedNodeData[0].type) && <div data-workflow-overlay style={{ position: 'absolute', zIndex: promptExpanded ? 90 : 69, left: promptLeft, top: promptTop }}>
       <WorkflowNodePromptBar width={promptWidth} expanded={promptExpanded} onToggleExpanded={() => { const id = selectedNodeData[0].id; setExpandedPromptNodeId(current => (current === id ? null : id)); }} node={selectedNodeData[0]} nodes={project.nodes} connections={project.connections} t={t} theme={theme} language={language} userApiKeys={userApiKeys} dynamicModelOptions={dynamicModelOptions} onOpenSettings={onOpenSettings} onEnhancePrompt={onEnhancePrompt} isEnhancingPrompt={isEnhancingPrompt} onChange={metadata => applyOps([{ type: 'update_node', id: selectedNodeData[0].id, metadata }])} onPromptIntent={intent => { promptIntentRef.current = intent; }} onRun={() => { const intent = promptIntentRef.current?.targetNodeId === selectedNodeData[0].id ? promptIntentRef.current : undefined; promptIntentRef.current = null; onRunNode(selectedNodeData[0].id, intent || undefined); }} onStop={onStopNode ? () => onStopNode(selectedNodeData[0].id) : undefined} focusSignal={promptFocusSignal} onDisconnectReference={fromNodeId => { const targetId = selectedNodeData[0].id; const conn = project.connections.find(c => c.toNodeId === targetId && c.fromNodeId === fromNodeId); if (!conn) return; applyOps([{ type: 'delete_connections', ids: [conn.id] }]); }} onReorderReference={nextIds => handleReorderReferences(selectedNodeData[0].id, nextIds)} assetFolders={assetFolders} assetItems={assetSuggestions} assetLibrary={assetLibrary} onSelectWorkflowReference={selectedNodeData[0] ? (nodeId => handleSelectWorkflowReference(nodeId, selectedNodeData[0].id)) : undefined} onAddReferenceFiles={selectedNodeData[0] ? (files => handleAddReferenceFiles(files, selectedNodeData[0].id)) : undefined} onSelectAsset={selectedNodeData[0] ? (assetId => handleSelectAsset(assetId, selectedNodeData[0].id)) : undefined} onResolvePastedMentions={mentions => handleResolvePastedMentions(mentions, selectedNodeData[0].id)} onPasteUnresolvedMentions={labels => setNotice('未能唯一匹配引用：' + labels.map(label => '@' + label).join('、') + '，已保留为普通文字。')} />
         </div>}
@@ -3301,7 +3353,7 @@ export function InfiniteWorkflow({
         )}
       </AnimatePresence>
       <AnimatePresence>
-        {createMenu && <WorkflowCreateMenu state={createMenu} onCreate={createFromMenu} onClose={closeCreateMenu} />}
+        {createMenu && <WorkflowCreateMenu state={createMenu} onCreate={createFromMenu} onClose={closeCreateMenu} language={language} />}
       </AnimatePresence>
       {contextMenu && (() => {
           const ctxNode = contextMenu.type === 'node' ? projectRef.current.nodes.find(n => n.id === contextMenu.id) : null;

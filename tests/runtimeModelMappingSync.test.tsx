@@ -74,7 +74,7 @@ describe('Runtime-only RunningHub model mapping', () => {
     it('shows Runtime route recommendations for a Runtime-only RH credential', async () => {
         renderSettings();
 
-        fireEvent.click(screen.getByRole('button', { name: '模型映射' }));
+        fireEvent.click(screen.getByRole('tab', { name: '模型映射' }));
         await waitFor(() => expect(runtimeExecute).toHaveBeenCalledWith(expect.objectContaining({ command: 'provider.status' })));
         await screen.findByTestId('model-mapping-sections');
 
@@ -86,7 +86,7 @@ describe('Runtime-only RunningHub model mapping', () => {
     it('exposes non-secret route recommendations for Runtime-only RH', async () => {
         renderSettings();
 
-        fireEvent.click(screen.getByRole('button', { name: '模型映射' }));
+        fireEvent.click(screen.getByRole('tab', { name: '模型映射' }));
         await waitFor(() => expect(runtimeExecute).toHaveBeenCalled());
         await screen.findByTestId('model-mapping-sections');
 

@@ -9,6 +9,7 @@ import { RESEARCH_COMMANDS, RESEARCH_WRITE_COMMANDS } from './research-command-s
 import { collectTopicResearch } from './topic-research.js';
 import { runSkillCommand, SKILL_COMMAND_NAMES } from './skill-commands.js';
 import { getLocalStatus } from './local-status.js';
+import { ProviderVaultError, readVaultProviderStatus } from './provider-vault.js';
 import { ensureFlovart } from './ensure.js';
 import { AGENT_PUBLIC_COMMAND_SET } from './agent-surface.js';
 import { createOperationGateway } from './operation-gateway.js';
@@ -17,6 +18,7 @@ import {
   FlovartWorkspaceClient,
   WorkspaceClientError,
 } from './workspace-client.js';
+import { AGENT_SESSION_CONTROL_COMMANDS } from './agent-surface.js';
 
 const argv = process.argv.slice(2);
 
@@ -215,7 +217,44 @@ if (['install', 'start', 'update', 'uninstall'].includes(rawCommand)) {
       const runtimeError = error instanceof RuntimeClientError
         ? error.toJSON()
         : { code: 'RUNTIME_UNAVAILABLE', message: error instanceof Error ? error.message : String(error), retryable: true };
+      // Web mode has no desktop Runtime. The Agent vault mirrors the keys the
+      // browser Settings synced, so it is the masked fallback for provider.status.
+      if (routingCommand === 'provider.status' && runtimeError.code === 'RUNTIME_UNAVAILABLE') {
+        try {
+          const vault = await readVaultProviderStatus();
+          printCliResponse(true, command, { ...vault, runtimeUnavailable: runtimeError }, null, { runtime: 'agent-vault' });
+          return;
+        } catch (vaultError) {
+          runtimeError.details = {
+            ...(runtimeError.details || {}),
+            agentVault: vaultError instanceof ProviderVaultError
+              ? vaultError.toJSON()
+              : { code: 'AGENT_UNAVAILABLE', message: vaultError instanceof Error ? vaultError.message : String(vaultError), retryable: true },
+          };
+        }
+      }
       printCliResponse(false, command, null, runtimeError, { runtime: 'production-runtime' });
+    }
+    return;
+  }
+
+  // 会话预算 / 暂停：可信本地 CLI（持久 token、无 Origin）直达 Agent 会话，不经公开面白名单。
+  if (AGENT_SESSION_CONTROL_COMMANDS.includes(routingCommand)) {
+    const sessionArgs = {
+      ...(args.maxRuns ?? args['max-runs']) !== undefined ? { maxRuns: Number(args.maxRuns ?? args['max-runs']) } : {},
+      ...(args.ttlMs ?? args['ttl-ms']) !== undefined ? { ttlMs: Number(args.ttlMs ?? args['ttl-ms']) } : {},
+      ...typeof args.reason === 'string' ? { reason: args.reason } : {},
+    };
+    try {
+      const workspace = new FlovartWorkspaceClient();
+      const result = await workspace.execute(routingCommand, sessionArgs, 'cli');
+      const ok = isResultOk(result);
+      printCliResponse(ok, command, ok ? result.result ?? result : null, ok ? null : result.error || null, { runtime: 'agent-session' });
+    } catch (error) {
+      const workspaceError = error instanceof WorkspaceClientError
+        ? error.toJSON()
+        : { code: 'WORKSPACE_UNAVAILABLE', message: error instanceof Error ? error.message : String(error), retryable: true };
+      printCliResponse(false, command, null, workspaceError, { runtime: 'agent-session' });
     }
     return;
   }

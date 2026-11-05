@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { dirname, join } from 'node:path';
+import { PROVIDER_GUIDANCE } from './provider-vault.js';
 
 export const SHADOW_STATE_FILE = process.env.FLOVART_SHADOW_STATE_FILE
   || join(process.env.LOCALAPPDATA || process.cwd(), 'Flovart', 'shadow-runtime-state.json');
@@ -96,7 +97,7 @@ function buildProviderReadiness(provider = {}, purpose = 'both') {
       ok: !!configured.image,
       model: selectedModels.image,
       message: configured.image ? 'Image provider configured.' : 'Image provider credential missing.',
-      nextAction: configured.image ? undefined : 'provider.begin-setup --purpose image',
+      nextAction: configured.image ? undefined : PROVIDER_GUIDANCE.image,
     });
   }
   if (include('video')) {
@@ -108,7 +109,7 @@ function buildProviderReadiness(provider = {}, purpose = 'both') {
       ok: !!configured.video,
       model: videoModel,
       message: configured.video ? 'Video provider configured.' : 'Video provider credential missing.',
-      nextAction: configured.video ? undefined : 'provider.begin-setup --provider volcengine --purpose video',
+      nextAction: configured.video ? undefined : PROVIDER_GUIDANCE.video,
     });
     checks.push({
       id: 'video.seedance2Model',
@@ -120,7 +121,7 @@ function buildProviderReadiness(provider = {}, purpose = 'both') {
       slots: { image: 9, video: 3, audio: 3 },
       durationSec: { min: 4, max: 15 },
       resolutions: ['480p', '720p', '1080p'],
-      nextAction: seedanceReady ? undefined : 'provider.select-model --video-model flovart:seedance-2',
+      nextAction: seedanceReady ? undefined : PROVIDER_GUIDANCE.seedanceModel,
     });
   }
   if (include('text')) {
@@ -130,7 +131,7 @@ function buildProviderReadiness(provider = {}, purpose = 'both') {
       ok: !!configured.text,
       model: selectedModels.text,
       message: configured.text ? 'Text provider configured.' : 'Text provider credential missing.',
-      nextAction: configured.text ? undefined : 'provider.begin-setup --purpose text',
+      nextAction: configured.text ? undefined : PROVIDER_GUIDANCE.text,
     });
   }
   return checks;
@@ -159,7 +160,6 @@ function createWorkflowNode(type, args) {
     text: ['文本', 340, 220, { content: '', status: 'idle' }],
     video: ['视频', 420, 236, { status: 'idle' }],
     audio: ['音频', 380, 168, { status: 'idle' }],
-    config: ['生成配置', 360, 260, { prompt: '', status: 'idle', config: { mode: 'image' } }],
   }[type];
   if (!spec) return null;
   return {

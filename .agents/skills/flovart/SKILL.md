@@ -1,128 +1,130 @@
 ---
 name: flovart
-description: Use Flovart's visible Workflow through its stable Agent surface. Use when an agent must prepare the workspace, inspect the current graph, read selection, apply document changes, or run a Workflow node.
+description: Work in the user's visible Flovart Workflow canvas. Use when the user asks to open Flovart, look at or change their Workflow, build shots or generation nodes, or run image and video generation.
 ---
 
 # Flovart
 
-Flovart is the visible Workflow authority. The Link layer prepares the local
-session automatically. Do not ask the user for connection details and do not
-recreate a connection flow in the conversation.
+Flovart is the visible Workflow canvas the user is looking at. You change it
+through the local `flovart` CLI; the user sees every change live. Flovart
+prepares its own local session: never ask the user for connection details and
+never rebuild a connection flow in the conversation.
 
-This Skill expects Node.js 22.19.0 or newer when the local CLI is run.
+The CLI needs Node.js 22.19.0 or newer. In this source checkout, when the
+packaged `flovart` command is not installed, use the repository entrypoint
+instead, for example `npm run flovart:cli -- ensure --json`. Do not use `npx flovart-cli` as an automatic fallback: an unpublished checkout can make
+npx fetch an unrelated package.
 
-## Normal Browser Workflow loop
+## Prepare for this job
 
-Start every new Browser Workflow task with:
+Do these in order at the start of every task. Each step has a stop condition;
+never skip ahead. Details are in `references/environment.md`.
 
-```bash
-flovart ensure --json
-flovart workflow.inspect --agent-identity codex --json
-```
+1. **Understand the request.** Decide what the user wants to see on the canvas
+   when you are done, and whether it needs paid generation. Ask only when a
+   different reading would change the result.
+2. **Make Flovart ready.** Run `flovart ensure --json`. Continue only when it
+   returns `ok: true` and `state: "ready"`; otherwise tell the user the public
+   state it returned and stop. `ensure` also opens the user's browser on the
+   canvas when needed.
+3. **Get on the user's canvas.** Run `flovart status --json`, then
+   `flovart workflow.inspect --agent-identity <host> --json`. Compare the
+   project title, node titles and node count with what the user describes or
+   shows you. If they disagree, you are reading another canvas: stop and fix
+   that first (see "Operate the user's visible canvas").
+4. **Check AI services only when generation is needed.** Run
+   `flovart provider.status --json`. It lists configured services with masked
+   keys only. If the route you need is missing, tell the user where to add it
+   in Flovart Settings (`references/providers.md`). Never ask for a key in the
+   conversation, and never read, write or move one yourself.
+5. **Quote and agree.** Before any paid run, tell the user how many runs, which
+   model, and what each run is for, and wait for their go-ahead.
+6. **Work and narrate.** Make the change, inspect again, and tell the user what
+   is now on their canvas in their terms.
 
-When working directly from this source checkout, use the repository entrypoint
-if the packaged `flovart` command is not installed:
+## The stable surface
 
-```bash
-npm run flovart:cli -- ensure --json
-npm run flovart:cli -- workflow.inspect --agent-identity codex --json
-```
-
-Do not use `npx flovart-cli` as an automatic fallback; an unpublished source
-checkout can make `npx` query an unrelated registry package.
-
-Use only the stable Workflow surface for normal work:
-
-Use `ensure` as the bootstrap command. The five stable task operations are
+Use `ensure` to prepare, then these five operations for all normal work:
 `status`, `workflow.inspect`, `workflow.selection.get`, `workflow.apply`, and
 `workflow.node.run`.
 
-```text
-flovart ensure
-flovart status
-flovart workflow.inspect
-flovart workflow.selection.get
-flovart workflow.apply
-flovart workflow.node.run
+```bash
+flovart ensure --json
+flovart status --json
+flovart workflow.inspect --agent-identity codex --json
+flovart workflow.selection.get --agent-identity codex --json
 ```
 
-The same five operations are available through Iris's optional local stdio MCP
-projection for MCP-capable hosts such as TeleAgent. This is separate from any
-creative host's native MCP. The Iris MCP names are
-`flovart_status`, `flovart_workflow_inspect`, `flovart_workflow_selection`,
-`flovart_workflow_apply`, and `flovart_workflow_run`. MCP is a transport
-projection, not a second Workflow runtime; use the CLI path for Codex,
-Claude Code, OpenCode, and WorkBuddy's CLI Connector unless that host has a
-separately certified MCP integration.
+- `--agent-identity` names your host (`codex`, `claude-code`, `opencode`,
+  `workbuddy`). Pass the same value on `workflow.inspect` and on every write
+  or run; a write without it, or with a different one, fails with
+  `AGENT_HOST_REQUIRED`.
+- Before a change, read the real `projectId`, object IDs and revision from
+  `workflow.inspect`. Read `workflow.selection.get` when the request depends on
+  what the user selected.
+- Group related graph edits into one `workflow.apply`, with the project and
+  revision you read as preconditions and a stable `mutationId` and
+  `idempotencyKey`. Every write or run carries its own idempotency key.
+- After a write, inspect again. On failure, keep the structured error code,
+  inspect before retrying, and stop when the canvas is unavailable or the
+  target or revision changed. Never switch to another project and never
+  retry a mutation under a new identity.
 
-Before a change, read the real `projectId`, object IDs, and revision from
-`workflow.inspect`. Read `workflow.selection.get` when the request depends on
-the current selection. Group related graph edits into one `workflow.apply`.
-Pass the returned project and revision as preconditions, and use a stable
-`mutationId` and `idempotencyKey` for every write or run.
-After a write, inspect again. If a command fails, preserve its structured error
-code, inspect before retrying, and stop safely when the visible workspace is
-unavailable or the target/revision changed. Never choose another project or
-retry a mutation with a new identity.
+Other hosts (an optional local MCP projection, DaVinci Resolve) are described
+in `references/hosts.md`. Read it only when the task names such a host.
 
-## Resolve Studio 21.1 — no-provider Media Pool tracer
+## Operate the user's visible canvas
 
-Use this path only for the Resolve R0/R1 host-validation task. Resolve owns
-project, timeline, selection, and Media Pool state. Flovart CLI owns the local
-deterministic fixture task and its durable Artifact.
+The canvas the user is looking at is the only canvas that counts. Each rule
+below comes from a real session where an agent wrote to a canvas the user
+could not see, or said it could see their canvas when it could not.
 
-Before starting, verify the installed product is Resolve Studio 21.1 and that
-its native MCP is connected to the same local Resolve instance. Discover the
-tool names and current API through that MCP; do not guess from another Resolve
-version. If 21.1 or the native MCP is unavailable, stop and report the exact
-host gate instead of presenting a mock as Resolve evidence.
+1. Never drive your own browser tab. Do not open the WebUI in a headless or
+   agent-managed browser (Playwright, an eval browser, a hidden tab). Every
+   browser keeps its own local Workflow store: a project created there never
+   appears on the user's screen, and while that tab stays connected
+   `workflow.inspect` may read it instead of the user's canvas. If you opened
+   one, close it before you continue.
+2. Open the user's browser only through `flovart ensure` or `web.open`.
+   They hand the complete one-time link to the default browser. Never hand-roll an opener: on Windows
+   `rundll32 url.dll` drops everything after `&`, and `cmd /c start` treats `&`
+   as a command separator. The page then loads unconnected (its footer shows
+   本地优先) and the user keeps seeing an old canvas. The link expires after 60
+   seconds; if the page did not connect, open a fresh one instead of reusing an
+   old tab.
+3. Prove you are on the user's canvas before the first write (step 3 above).
+   `flovart status --json` must show the user's tab and no leftover agent tab.
+   Never tell the user you can see their canvas until this check passes.
+4. Do not create a project while the user has one open. A new project is only
+   for an empty, connected workspace. Demo or test nodes go into the user's
+   current project with a clear title and never trigger a paid run.
+5. When the user says they cannot see your change, assume you are on the wrong
+   canvas, not that their screen is stale. Redo step 3 before anything else.
 
-For the no-provider tracer:
+### Layout: left to right in flow order
 
-1. Use Resolve native MCP to read the current project, timeline, and selected
-   clip. Keep their stable identities and the timeline state for this task;
-   recheck them before a Resolve write. If the selected target changes, stop
-   instead of retargeting.
-2. Submit the fixed local fixture with one unique idempotency key:
+Place nodes in the order data flows: upstream on the left, downstream on the
+right, every connection from the left node's output to the right node's input.
 
-   ```bash
-   flovart runtime.test.fixture-image --idempotency-key <unique-key> --json
-   ```
+- `workflow.node.create-connected --from-node-id A` makes the new node
+  downstream of A. Put it to the right: x = A.x + A.width + 80, same y as A.
+- A node that feeds A (a script, a reference) is connected into A with
+  `workflow.connect --from-node-id <source> --to-node-id A` and placed to the
+  left: x = A.x - 80 - source.width.
+- Never put a downstream node left of, or directly below, its source. A
+  backward connection is drawn as an S-curve hidden behind the opaque cards,
+  so the user only sees stray stubs at the ports; a node directly below gets a
+  diagonal line that ends in a loop.
+- Fix a wrong layout with `workflow.disconnect --connection-id <id>`,
+  `workflow.connect` and `workflow.node.move --node-id <id> --x <x> --y <y>`,
+  each with its own idempotency key, then inspect again. Read node widths from
+  `workflow.inspect`; never assume them.
 
-   From this source checkout, use `npm run flovart:cli --` before the command.
-   If submission status is unknown, retry with the same key, never a new one.
-3. Poll the returned task ID with `flovart task.get --task-id <taskId> --json`
-   until it is completed. Stop on failure or cancellation.
-4. Resolve the completed file immediately before import:
-
-   ```bash
-   flovart artifact.locate --task-id <taskId> --json
-   ```
-
-   The result is a local path plus the verified MIME type, byte size, and
-   SHA-256. Use that path only for the immediate host import; do not write it
-   into project metadata.
-5. Use a bounded Media Pool import operation exposed by the installed Resolve
-   native MCP. Import into a root-level bin named `Flovart Candidates` (create it
-   with `MediaPool.AddSubFolder(root, "Flovart Candidates")` if missing, make it
-   current with `SetCurrentFolder`, then restore the user's previous folder
-   after import). Never rename, move, or delete existing bins. Do not add the fixture to the Timeline, replace a clip, delete
-   or overwrite media, or run unrestricted scripts. If the installed MCP has
-   no safe bounded import path, stop and report that concrete gap.
-6. Re-read the Media Pool and Timeline through Resolve MCP. Confirm the item
-   appears in the Media Pool and the Timeline state is unchanged.
-
-`runtime.test.fixture-image` imports the repository's fixed `public/favicon.png`
-as a no-provider fixture. It verifies the local task-to-file handoff only; it
-does not use the selected clip as a visual reference and is not AI generation.
-Never describe it as a generated scene or as a completed real-host tracer until
-Resolve visibly accepts the file and the Timeline comparison passes.
-
-## Cold start — no project open
+### Empty workspace
 
 `workflow.inspect` returns `WORKSPACE_UNAVAILABLE` when the browser is
-connected but no Workflow project is open. This is not a fatal stop: the task
-usually still wants a project. Create and activate one, then inspect again:
+connected but no project is open. That is not a stop: create and activate a
+project, then inspect again.
 
 ```bash
 npm run flovart:cli -- workflow.project.create --title "Product Video" --agent-identity codex --idempotency-key <key> --json
@@ -130,70 +132,63 @@ npm run flovart:cli -- workflow.project.use --project-id <project-id> --agent-id
 npm run flovart:cli -- workflow.inspect --agent-identity codex --json
 ```
 
-`workflow.project.list` shows existing projects. Only stop for the user when
-the browser itself is `offline` — not when the workspace is simply empty.
+`workflow.project.list` shows existing projects. Stop for the user only when
+the browser itself is offline.
 
-Every **write** command must carry the same `--agent-identity` used for
-`inspect` plus a stable `--idempotency-key`. Passing identity only to `inspect`
-and omitting it on `project.create`/`workflow.apply` makes the write fail with
-`AGENT_HOST_REQUIRED` — the active Host writer must match the caller identity.
+## Building and running
 
-## Intent mapping
+- “打开 Flovart” / “打开 Iris” → `ensure`, then `workflow.inspect`.
+- “看看当前 Workflow” → `workflow.inspect`. “当前选择” → `workflow.selection.get`.
+- Add, delete, move, resize, connect, disconnect or edit → one `workflow.apply`.
+- A sequence of new nodes → `workflow.node.create-connected`, which fills the
+  node defaults a bare `add_node` in `workflow.apply` needs:
 
-- “打开 Iris” → `ensure`, then `workflow.inspect`.
-- “查看当前 Workflow” → `workflow.inspect`.
-- “当前选择” → `workflow.selection.get`.
-- Add, delete, move, resize, connect, disconnect, or edit → one `workflow.apply`.
+  ```bash
+  npm run flovart:cli -- workflow.node.create-connected --from-node-id <id> --type text --title "Shot 2" --x 420 --y 120 --agent-identity codex --idempotency-key <key> --json
+  ```
+
 - Run a node → `workflow.node.run` after confirming the node from inspection.
-- Run several independent nodes → one `workflow.node.run` with `nodeIds`; the user confirms cost once for the batch and the result lists each node's outcome. Rerun only failed nodes.
+  Several independent nodes → one `workflow.node.run` with `nodeIds`; the user
+  agrees to the cost once and the result lists each node. Rerun only failed
+  nodes.
 
-For a sequence of nodes, the granular `workflow.node.create-connected` adapter
-is the reliable path — it fills the node defaults (including `storageKey`) that
-a bare `workflow.apply` `add_node` operation requires. Prefer it over a raw
-`add_node` when you only have a type/title/position:
+### Generation runs on the canvas
 
-```bash
-npm run flovart:cli -- workflow.node.create-connected --from-node-id <id> --type text --title "Shot 2" --x 420 --y 120 --agent-identity codex --idempotency-key <key> --json
-```
+- Build each shot as a generation node on the canvas: prompt, model,
+  parameters, and reference nodes connected to its inputs. Run it with
+  `workflow.node.run`.
+- Never call a Provider API from a local script and paste the result onto the
+  canvas as a static image. That node has no prompt, model or references, so
+  the user cannot adjust and rerun it; it is not a Flovart result.
+- Flovart owns Provider routing, credentials, cost confirmation and artifacts.
+  Do not store credentials, edit browser storage, use private routes, or start
+  a second Workflow runtime.
+- If `workflow.node.run` returns `RUNNER_UNAVAILABLE`, or no node type can
+  express the request, stop and report it. A missing reference or unsupported
+  input stays an explicit failure; never quietly downgrade the media mode.
 
-The UI and Flovart own Provider routing, credentials, cost confirmation,
-resource resolution, and artifacts. Do not call a Provider directly, store
-credentials, modify browser storage, use private routes, or create a second
-Workflow runtime. A missing reference or unsupported input must remain an
-explicit failure; never downgrade the requested media mode silently.
+## Talking to the user
 
-## Generation must run on the canvas
+Talk about the canvas, not the machinery behind it.
 
-Image and video generation is a canvas operation, never a side script.
-
-- Build each shot as a generation config node on the canvas: prompt, model,
-  parameters, and reference nodes connected through the node's own inputs.
-  Then run it with workflow.node.run, or one batched run with nodeIds.
-- Never call a Provider API (RunningHub or any other) from a local script,
-  download the result, and push it onto the canvas as a static image node.
-  Such a node has no prompt, model, or reference connections, so the user
-  cannot fine-tune and rerun it; it is not a Flovart result.
-- Never copy an API key from the clipboard, environment, or settings into a
-  file. Credentials stay in Flovart's Provider settings.
-- If workflow.node.run returns RUNNER_UNAVAILABLE, or no node type can
-  express the request, stop and report the code. Do not work around it with a
-  direct call.
-- Before any paid workflow.node.run, tell the user the run count, model, and
-  purpose, and wait for their go-ahead.
-
-## Resolve host boundary
-
-For DaVinci Resolve, use Resolve Studio's own native MCP for host context and
-project operations; do not create or configure a second Resolve MCP server.
-The current `flovart` CLI Workflow operations do not materialize a Runtime
-artifact into a durable local file that Resolve can import. Do not infer a file
-path from a task/artifact ID, call private Runtime endpoints, or report a Media
-Pool import from the task result alone. Until an explicit artifact handoff path
-is available and real-host verified, report this boundary clearly.
+- Never echo `projectId`, object IDs, revisions, mutation or idempotency keys,
+  or JSON back to the user. Say "the current project" or use node titles.
+- Never explain internal mechanics (host writer, lease, bridge, polling,
+  session recovery, transports). Describe what is visible: "the node is
+  running".
+- Pick sensible defaults for titles, positions and node types and keep moving.
+  Ask only when the request is genuinely ambiguous, spends credits, or
+  destroys existing work.
+- On failure, inspect before retrying. Make at most one automatic recovery for
+  the same failure; if it fails again, explain it in user terms and stop.
+- On timeout or lost contact, rejoin the same operation with the same
+  idempotency key. Never resubmit under a new key.
+- Report what was added or changed, what is running, and what finished.
+  Mention a structured error code only when the user must act on it.
 
 ## Ending a task: the outcome claim
 
-When a task is finished, stopped, or refused, make the very last line of your
+When a task is finished, stopped or refused, make the very last line of your
 final message one JSON object and nothing else, for example:
 
     {"flovartClaim":{"status":"succeeded"}}
@@ -201,37 +196,24 @@ final message one JSON object and nothing else, for example:
     {"flovartClaim":{"status":"unsupported","code":"UNKNOWN_COMMAND"}}
 
 - succeeded: every requested change or run is visible in the Workflow after a
-  fresh workflow.inspect. Never claim success from a command reply alone.
-- failed: the capability exists but this attempt did not complete; code is the
-  structured error code the failing command returned.
-- unsupported: the product refused the capability itself, for example the
-  operation is not part of the stable surface. Change nothing to work around
-  it, and give the refusal code exactly as returned.
+  fresh `workflow.inspect`. Never claim success from a command reply alone.
+- failed: the capability exists but this attempt did not complete; `code` is
+  the structured error code the failing command returned.
+- unsupported: the product refused the capability itself. Change nothing to
+  work around it, and give the refusal code exactly as returned.
 
-Give code for failed and unsupported, never invent one. The claim is checked
-against the real final Workflow: a success claim over an unfinished result
-counts against the run, and a claim never turns a failure into a pass. This
-line is a machine-readable ending, not part of what you tell the user.
+Give a code for failed and unsupported, never an invented one. The claim is
+checked against the real final Workflow, and a claim never turns a failure
+into a pass. This line is a machine-readable ending, not part of what you tell
+the user.
 
-## Conversation rules
+## References
 
-Talk to the user about the Workflow, not the machinery behind it.
-
-- Never echo raw `projectId`, object IDs, `revision`, `mutationId`,
-  `idempotencyKey`, or JSON payloads back to the user. Say "the current
-  project" or use the node's title instead.
-- Never explain internal mechanics — Host writer, lease, bridge, polling,
-  session recovery, or the MCP transport. Describe the visible result ("the
-  node is running"), not the mechanism.
-- Pick reasonable defaults and keep moving: choose a sensible title,
-  position, and node type instead of asking. Ask the user only when the
-  request is genuinely ambiguous, spends credits, or destroys existing work.
-- On failure, run `workflow.inspect` before retrying so the retry uses fresh
-  IDs and revision. Attempt at most one automatic recovery for the same
-  failure; if it fails again, report the error in user terms and stop.
-- On timeout or lost contact, rejoin the same operation with the same
-  `idempotencyKey`/`mutationId`. Never resubmit a duplicate mutation under a
-  new key.
-- Report results in user-facing terms only: what was added or changed on the
-  canvas, what is running, what finished. Surface a structured error code
-  only when the user must act on it.
+- `references/environment.md`: the four readiness layers and what to do when
+  each one is missing.
+- `references/providers.md`: AI service routes, what the user provides, where
+  they add it, and how to verify it.
+- `references/hosts.md`: the optional MCP projection and the DaVinci Resolve
+  tracer.
+- `commands/`: compatibility and diagnostic commands. Not needed for normal
+  work.

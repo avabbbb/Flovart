@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 
-const DEFAULT_BOOTSTRAP_TTL_MS = 60_000;
+// 须覆盖冷启动 Vite 首次挂载（实测最差约 48s）加浏览器启动时间；仍是一次性凭证。
+const DEFAULT_BOOTSTRAP_TTL_MS = 120_000;
 const DEFAULT_SESSION_TTL_MS = 8 * 60 * 60 * 1000;
 
 export class BootstrapCredentialError extends Error {

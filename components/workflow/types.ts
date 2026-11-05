@@ -1,7 +1,7 @@
 import type { ImageFilters, ProductModelMode } from '../../types';
 import type { DesignElement } from '../../services/design/designTypes';
 
-export type BuiltinWorkflowNodeType = 'image' | 'text' | 'video' | 'audio' | 'config' | 'script' | 'operation' | 'design';
+export type BuiltinWorkflowNodeType = 'image' | 'text' | 'video' | 'audio' | 'config' | 'script' | 'operation' | 'design' | 'subgraph';
 /** 外部 Node Plugin 可以使用稳定的自定义 type；内置交互仍只对 Builtin 类型做专门处理。 */
 export type WorkflowNodeType = BuiltinWorkflowNodeType | (string & {});
 export type WorkflowNodeStatus = 'idle' | 'loading' | 'success' | 'error';
@@ -263,6 +263,8 @@ export interface WorkflowNodeMetadata {
   richTextDocument?: WorkflowRichPromptDocument;
   /** 节点来源类型。'assetLibrary' = 素材库引用节点；'localFolder' = 本地文件夹直读引用，保存原文件而非副本。 */
   sourceType?: 'assetLibrary' | 'localFolder';
+  // 节点由谁创建：外部 Agent / CLI 新建为 'agent'，画布 UI 为 'user'；旧数据缺省视为 'user'。资产区据此分组。
+  origin?: 'agent' | 'user';
   /** 当 sourceType='assetLibrary' 时，对应 AssetItem.id，用于按 storageKey 反查 dataUrl */
   assetId?: string;
   href?: string;
@@ -328,6 +330,14 @@ export interface WorkflowNodeMetadata {
     stageKey?: string | null;
     capabilityId?: string | null;
   };
+  /** 仅 subgraph 节点：对应的逆向工程 id。 */
+  reverseProjectId?: string;
+  /** 仅 subgraph 节点：是否折叠（折叠时隐藏子节点及其连线）。 */
+  collapsed?: boolean;
+  /** 仅 subgraph 节点：子节点的稳定 reverseKey 列表。 */
+  childKeys?: string[];
+  /** 子画布内节点与逆向工程对象的稳定对应 key：'script' | 'shot:<id>' | 'slot:<id>'。 */
+  reverseKey?: string;
 }
 
 /** Canvas 登记的“发送到宿主”请求；宿主面板读取后经用户确认执行。 */
@@ -361,6 +371,8 @@ export interface WorkflowNode {
   batchId?: string;
   batchIndex?: number;
   batchGroupSource?: WorkflowBatchGroupSource;
+  /** 所属子画布（subgraph）节点 id；文档仍是扁平 nodes，缺省即顶层节点。 */
+  parentId?: string;
   /** 结构化分镜（LibTV/Higgsfield 式镜头表）：可选，缺省即普通节点。 */
   shot?: WorkflowShotMeta;
   /** 角色/场景/产品/风格锚点；仅 approved 时作为下游一致性参考。 */

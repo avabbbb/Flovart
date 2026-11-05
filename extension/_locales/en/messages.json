@@ -4,7 +4,7 @@
     "description": "Extension name"
   },
   "extension_description": {
-    "message": "Send only the web image you explicitly right-click to Flovart Desktop Workflow. No API keys and no full-page scanning.",
+    "message": "Send right-clicked images/videos to Flovart Desktop or a paired web canvas. Synced API keys are encrypted and cleared on unpair.",
     "description": "Extension description"
   }
 }

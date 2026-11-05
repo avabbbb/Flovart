@@ -27,7 +27,7 @@ export const StudioNavigationFrame: React.FC<StudioNavigationFrameProps> = ({
 }) => {
   const isChinese = language === 'zho';
   const activeProject = projects.find(project => project.id === activeProjectId);
-  const viewLabel = canvasView === 'spatial' ? (isChinese ? '画布' : 'Canvas') : canvasView === 'table' ? 'Table' : 'Agent';
+  const viewLabel = canvasView === 'spatial' ? (isChinese ? '画布' : 'Canvas') : canvasView === 'reverse' ? (isChinese ? '逆向' : 'Reverse') : 'Agent';
 
   return (
     <div className='studio-navigation-frame'>

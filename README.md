@@ -42,57 +42,13 @@
 
 **Keep the original. Describe the change. Compare candidates.** Flovart brings your coding Agent and a visible creative Workflow together. Canvas handles multi-step work, Table handles batches, and Agent connects your preferred assistant.
 
-The film shows the Resolve-first design target: point at a frame, generate creative layers, compare takes, and return an approved result. **Concept film, recorded before the Flovart name was restored; its closing card still says Iris.** Native host integration and alpha-layer/new-track output remain experimental or planned. Today, the recorded Agent → Workflow operations below are the verified starting point; Resolve P0 targets explicit **Add to Media Pool**.
+The film shows the Resolve-first design target: point at a frame, generate creative layers, compare takes, and return an approved result. **Concept film, recorded before the Flovart name was restored; its closing card still says Iris.** Native host integration and alpha-layer/new-track output remain experimental or planned. Resolve P0 targets explicit **Add to Media Pool**.
 
 **0.2.0 closed beta:** Windows EXE and macOS DMG builds are distributed through [Releases](https://github.com/avabbbb/Flovart/releases). Platform builds are tested separately; installers do not certify creative-host or paid-provider support. See the [Support Matrix](SUPPORT_MATRIX.md).
 
-## See Flovart in action
-
-The 60-second Flovart promo cut:
-
-<p align="center">
-  <video src="pic/readme/vision/Flovart_Promo_60s_v4.mp4" controls muted width="720"></video>
-  <br /><sub><strong>Promo cut v4.</strong> 60 seconds · <a href="pic/readme/vision/Flovart_Promo_60s_v4.mp4">source file</a></sub>
-</p>
-
-<p align="center">
-  <img src="pic/readme/hero-agent.gif" alt="An external coding agent editing the same live Flovart Workflow" width="880" />
-  <br />
-  <sub><strong>The current recorded Agent/Workflow surface — natural language becomes nodes and edges.</strong><br />
-  Nothing in this clip is done by hand: the agent (WorkBuddy codebuddy) drove the visible Workflow through the typed
-  CLI surface, creating three nodes and two connections live, with no source edits. No generation step was run, so no
-  paid model service was called. The Resolve-native MCP → candidate → Media Pool Hero remains an External Gate and is deliberately not presented here as finished. Reproduction record: <a href="docs/archive/2026-10-07/maintenance/readme/DEMO_RECORDING.md">DEMO_RECORDING.md</a>.</sub>
-</p>
-
-
-<!-- storyboard-demo -->
-### Example: reference clip → 11-shot storyboard on the canvas
-
-<p align="center">
-  <img src="pic/readme/storyboard/storyboard-canvas.png" alt="Eleven shot-breakdown text nodes, each connected to its generated storyboard frame on the Flovart canvas" width="880" />
-  <br />
-  <sub><strong>A 15-second vertical reference clip broken into 11 shots, built on the canvas by an external agent.</strong><br />
-  Each text node holds one shot (timing, framing, camera move, motion, transition) and connects to its storyboard frame. Nodes, frames and edges were created through the typed CLI surface (<code>workflow.node.create</code> / <code>workflow.connect</code>), with no hand editing.</sub>
-</p>
-
-<p align="center">
-  <img src="pic/readme/storyboard/storyboard-overview.jpg" alt="Overview of the 11 generated storyboard frames with camera-move arrows and motion notes" width="880" />
-  <br />
-  <sub><strong>The 11 storyboard frames.</strong> Generated image-to-image from reference frames (RunningHub, Seedream 4.7), annotated with camera-move arrows and motion notes. 11 paid generations in total.</sub>
-</p>
-
 ## Product vision — the interaction we're building toward
 
-<p align="center">
-  <a href="pic/readme/vision/Flovart_Vision_3min_v5.mp4">
-    <img src="pic/readme/vision/Flovart_Vision_3min_v5-poster.jpg" alt="Flovart product vision: Resolve-first AI layer workflow opening into the Flovart visual canvas" width="880" />
-  </a>
-  <br />
-  <sub><strong>Flovart Vision · 3 minutes.</strong> Click the image to watch the film.<br />
-  <strong>Concept film / design target — not a claim that every scene is implemented today.</strong></sub>
-</p>
-
-This film is the **north star for Flovart product interaction and UI**. The product we are building should feel like this:
+This is the **north star for Flovart product interaction and UI**. The product we are building should feel like this:
 
 - **Stay in the editor first.** Resolve remains the source of truth; Flovart appears as a narrow contextual layer around the clip you are already working on.
 - **Draw where. Say what. Get a layer.** Point at the frame, describe the intent, then generate reviewable AI-layer candidates instead of replacing the source clip.
@@ -102,38 +58,9 @@ This film is the **north star for Flovart product interaction and UI**. The prod
 - **Return to the host non-destructively.** Approved results flow back through a reviewable handoff — Media Pool first, then a new layer/track only when that host capability is actually verified.
 - **Local-first by default.** Footage, project context and durable results stay close to the creator's machine; external model calls are explicit and provider-scoped.
 
-The sections below remain the evidence for what the current build can prove today. For implementation status and real-host gates, see the [Support Matrix](SUPPORT_MATRIX.md). Product/system details live in the [main design](docs/design/00-overview.md), [Agent Integration](docs/design/12-agent.md), [Adaptive Layout](docs/design/01-interaction.md), and the [Resolve 21.1 Product & UI Spec](integrations/studio/resolve/PRODUCT_UI_SPEC.md).
+For implementation status and real-host gates, see the [Support Matrix](SUPPORT_MATRIX.md). Product/system details live in the [main design](docs/design/00-overview.md), [Agent Integration](docs/design/12-agent.md), [Adaptive Layout](docs/design/01-interaction.md), and the [Resolve 21.1 Product & UI Spec](integrations/studio/resolve/PRODUCT_UI_SPEC.md).
 
-## What Flovart can already do
-
-These are **real recordings from the current build**, not mockups. The Resolve-native MCP → candidate → Media Pool flow is still an External Gate, so the top of the README shows only capabilities we can prove today.
-
-<table>
-  <tr>
-    <td align="center" width="50%">
-      <img src="pic/readme/features/agent-cli-live.gif" alt="An Agent uses typed Flovart operations to build a visible Workflow." width="420" />
-      <br /><sub><strong>Agent → live Workflow.</strong> Typed operations update the same visible project — no screen scraping.</sub>
-    </td>
-    <td align="center" width="50%">
-      <img src="pic/readme/features/canvas-prompt.gif" alt="A creator edits a prompt directly on a selected Workflow node." width="420" />
-      <br /><sub><strong>Prompt in place.</strong> Human and Agent work converge on the same editable surface.</sub>
-    </td>
-  </tr>
-  <tr>
-    <td align="center">
-      <img src="pic/readme/features/crop.gif" alt="A creator crops an image and produces a result node." width="420" />
-      <br /><sub><strong>Image operations.</strong> Local edits produce explicit, reusable results.</sub>
-    </td>
-    <td align="center">
-      <img src="pic/readme/features/video-trim.gif" alt="A creator trims a video clip inside Flovart." width="420" />
-      <br /><sub><strong>Video operations.</strong> Trim and other media tools run locally in the current workspace.</sub>
-    </td>
-  </tr>
-</table>
-
-**More real operation GIFs are in the [full feature tour](#feature-tour).**
-
-**Jump to:** [Quick start](#quick-start) · [Feature tour](#feature-tour) · [Why Flovart?](#why-flovart) · [Core capabilities](#core-capabilities) · [Bring your own models](#bring-your-own-models) · [Compatibility](#integrations-and-compatibility) · [Architecture](#architecture) · [Local-first and security](#local-first-and-security) · [Roadmap](#creative-app-roadmap) · [Contributing](#contributing)
+**Jump to:** [Quick start](#quick-start) · [Why Flovart?](#why-flovart) · [Core capabilities](#core-capabilities) · [Bring your own models](#bring-your-own-models) · [Compatibility](#integrations-and-compatibility) · [Architecture](#architecture) · [Local-first and security](#local-first-and-security) · [Roadmap](#creative-app-roadmap) · [Contributing](#contributing)
 
 ## Quick start
 
@@ -170,147 +97,6 @@ Then ask your local agent: **“Open Flovart and work on this Workflow.”**
 Your agent learns Flovart through the **Agent Integration Skill** at `.agents/skills/flovart/` (mirrored for Claude under `.claude/skills/flovart/` and bundled for WorkBuddy under `integrations/workbuddy/flovart/skills/flovart/`). On a source checkout the harness auto-discovers it; the packaged CLI also ships it so `flovart ensure` can register it. This is a thin adapter — it teaches the agent the 5 operations below; it is not a Production Skill / Marketplace feature.
 
 The normal agent loop is `status`, `workflow.inspect`, `workflow.selection.get`, `workflow.apply` and `workflow.node.run`. Connection setup and diagnostics use `ensure` and `doctor`; development-only browser checks are covered in the [Getting Started guide](docs/overview/quick-start.en.md).
-
-## Feature tour
-
-Every clip below is a real recording of the running app — one operation, start to finish, with no composited frames and no mockups. Each is cut to the action.
-
-**Agent-native, not screen-scraping.** These are operations on the same Workflow an agent drives. The hero above and the CLI capture under [Architecture](#architecture) are agent-driven end to end, with no human input; the tour below is that same surface driven by hand, because that is the path a new user follows first. Node creation, connections, selection, viewport, node moves and resizes, and the node tools are all exposed to agents as typed operations — with revision and idempotency boundaries rather than coordinates on a screen.
-
-Video and audio tools run ffmpeg.wasm in the browser; their core is pre-warmed before the recorded action, so the clip shows the operation rather than the one-off ~30MB wasm download — **clip length is therefore not the wait time on a first run**. Registration, method and limits: [DEMO_RECORDING.md](docs/archive/2026-10-07/maintenance/readme/DEMO_RECORDING.md).
-
-### Canvas
-
-<table>
-  <tr>
-    <td align="center">
-      <img src="pic/readme/features/canvas-add-node.gif" alt="Adding nodes from the canvas add-node menu" width="420" />
-      <br /><sub><strong>Add nodes.</strong> The toolbar's add menu covers image, video, text, script, audio and config.</sub>
-    </td>
-    <td align="center">
-      <img src="pic/readme/features/canvas-connect.gif" alt="Dragging a connection from one node onto another" width="420" />
-      <br /><sub><strong>Connect.</strong> Drag from a node's source handle onto another node to feed it in.</sub>
-    </td>
-  </tr>
-  <tr>
-    <td align="center">
-      <img src="pic/readme/features/canvas-drag.gif" alt="Dragging a node across the canvas" width="420" />
-      <br /><sub><strong>Arrange by hand.</strong> Nodes move freely; the graph itself is the state.</sub>
-    </td>
-    <td align="center">
-      <img src="pic/readme/features/canvas-tidy.gif" alt="Re-laying out the canvas in one click" width="420" />
-      <br /><sub><strong>Tidy.</strong> One click re-lays out the whole graph.</sub>
-    </td>
-  </tr>
-  <tr>
-    <td colspan="2" align="center">
-      <img src="pic/readme/features/canvas-prompt.gif" alt="Typing a prompt directly on a selected node" width="860" />
-      <br /><sub><strong>Prompt in place.</strong> Select a node and write the prompt on the node itself — no separate prompt dialog.</sub>
-    </td>
-  </tr>
-</table>
-
-### Image nodes
-
-Four local operations on the same generated fixture plate, each producing a real result node. None of them contacts a model service.
-
-<table>
-  <tr>
-    <td align="center">
-      <img src="pic/readme/features/crop.gif" alt="Cropping an image node" width="420" />
-      <br /><sub><strong>Crop.</strong> Set the crop rectangle, then apply.</sub>
-    </td>
-    <td align="center">
-      <img src="pic/readme/features/rotate.gif" alt="Rotating an image node a quarter turn" width="420" />
-      <br /><sub><strong>Rotate and flip.</strong> Quarter turns and mirrors.</sub>
-    </td>
-  </tr>
-  <tr>
-    <td align="center">
-      <img src="pic/readme/features/split-grid.gif" alt="Splitting an image into a grid of separate nodes" width="420" />
-      <br /><sub><strong>Split to grid.</strong> Each cell becomes its own connected image node.</sub>
-    </td>
-    <td align="center">
-      <img src="pic/readme/features/filter.gif" alt="Adjusting colour on an image node" width="420" />
-      <br /><sub><strong>Grade.</strong> Colour adjustments preview live before they are applied.</sub>
-    </td>
-  </tr>
-</table>
-
-### Video nodes
-
-Also local, also without a model service: these run through the in-browser ffmpeg core, and each one creates its own result node (audio/video split creates two).
-
-<table>
-  <tr>
-    <td align="center">
-      <img src="pic/readme/features/video-trim.gif" alt="Trimming a video node" width="420" />
-      <br /><sub><strong>Trim.</strong> Set the in/out points; the cut uses stream copy, so nothing is re-encoded.</sub>
-    </td>
-    <td align="center">
-      <img src="pic/readme/features/video-av-split.gif" alt="Splitting a video into a silent video node and an audio node" width="420" />
-      <br /><sub><strong>Split audio and video.</strong> One video becomes a silent video node plus an audio node.</sub>
-    </td>
-  </tr>
-  <tr>
-    <td align="center">
-      <img src="pic/readme/features/video-merge.gif" alt="Merging two video nodes in order" width="420" />
-      <br /><sub><strong>Merge.</strong> Select several video nodes and join them in order.</sub>
-    </td>
-    <td align="center">
-      <img src="pic/readme/features/extract-frame-at.gif" alt="Extracting a frame at a chosen timecode" width="420" />
-      <br /><sub><strong>Extract a frame.</strong> Pick a timecode and get an image node out of the video.</sub>
-    </td>
-  </tr>
-  <tr>
-    <td align="center">
-      <img src="pic/readme/features/extract-first-frame.gif" alt="Extracting the first frame as an image node" width="420" />
-      <br /><sub><strong>First frame.</strong> One click, straight to an image node.</sub>
-    </td>
-    <td align="center">
-      <img src="pic/readme/features/extract-last-frame.gif" alt="Extracting the last frame as an image node" width="420" />
-      <br /><sub><strong>Last frame.</strong> Same, from the tail of the clip.</sub>
-    </td>
-  </tr>
-</table>
-
-### Audio nodes
-
-<table>
-  <tr>
-    <td align="center">
-      <img src="pic/readme/features/audio-trim.gif" alt="Trimming an audio node" width="420" />
-      <br /><sub><strong>Trim.</strong> Same in/out controls, same stream-copy cut.</sub>
-    </td>
-    <td align="center">
-      <img src="pic/readme/features/audio-speed.gif" alt="Changing audio playback speed" width="420" />
-      <br /><sub><strong>Speed.</strong> 0.25×–4× with pitch preserved.</sub>
-    </td>
-  </tr>
-  <tr>
-    <td colspan="2" align="center">
-      <img src="pic/readme/features/audio-stem-split.gif" alt="Separating an audio node into vocals and backing track" width="860" />
-      <br /><sub><strong>Separate vocals and backing.</strong> Two audio nodes come out; this is stereo phase cancellation, so mono or heavily mixed material separates less cleanly.</sub>
-    </td>
-  </tr>
-</table>
-
-### The external-agent link
-
-<table>
-  <tr>
-    <td align="center">
-      <img src="pic/readme/features/agent-cli-live.gif" alt="Typed CLI operations building a graph on the live canvas" width="420" />
-      <br /><sub><strong>Operations land on the canvas.</strong> Driven entirely by the agent — no human input — <code>workflow.node.create</code> and <code>workflow.connect</code> run through the typed CLI while the visible Workflow updates in place: no screen scraping, no hidden copy of the project.</sub>
-    </td>
-    <td align="center">
-      <img src="pic/readme/features/agent-open-panel.gif" alt="Opening the Agent surface from the canvas toolbar" width="420" />
-      <br /><sub><strong>Open the Agent surface.</strong> Reachable from the same canvas toolbar.</sub>
-    </td>
-  </tr>
-</table>
-
-Not filmed yet, and deliberately not shown: model-backed generation and the model-backed image tools (image generation, upscale, background removal, layer split, edit/outpaint) — this checkout configures no provider, so there is no honest result to record. That gap is logged in the [recording notes](docs/archive/2026-10-07/maintenance/readme/DEMO_RECORDING.md).
 
 ## Why Flovart?
 
@@ -393,15 +179,6 @@ flowchart LR
 ```
 
 The existing `flovart` CLI name is a compatibility surface during the Flovart rebrand. CLI and the experimental stdio MCP share operation semantics and the current Browser Workflow binding. Deterministic operations do not require a second AI to reinterpret them.
-
-<p align="center">
-  <img src="pic/readme/agent-operations-live-workflow.gif" alt="Flovart compatibility CLI operations creating nodes and connections in the live Workflow" width="720" />
-  <br />
-  <sub><strong>The operation-level view of the same claim.</strong> A project and three nodes are created through
-  <code>workflow.project.create</code>, <code>workflow.node.create</code> and <code>workflow.connect</code> (played at 1.5×) — the
-  typed operations the external-agent session above drives end-to-end. Capture record:
-  <a href="docs/archive/2026-10-07/maintenance/readme/DEMO_RECORDING.md">DEMO_RECORDING.md</a>.</sub>
-</p>
 
 Native-effect work keeps two short paths: one shared generation function produces durable media versions, and the host effect reads a fixed version and renders locally — no director/Operator/crew chain. Product scope and system boundaries live in the [main design](docs/design/00-overview.md); agent transport/authority details live in [Agent Integration](docs/design/12-agent.md). Historical target/current architecture reports no longer participate in product decisions.
 

@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1",
   "protocolVersion": "1",
-  "registryHash": "198e61b940551ad81046b367d8e3dd892d93c25832f9cd3725c73cab8b4dbd08",
+  "registryHash": "6759d6d8f01ebfe7f1c177ba1b316da73d74d299bad25a142de3e77748ca3304",
   "commands": [
     {
       "name": "runtime.status",
@@ -394,7 +394,7 @@
       "args": {
         "projectId": "string?",
         "id": "string?",
-        "type": "image|text|video|audio|config",
+        "type": "image|text|video|audio",
         "title": "string?",
         "x": "number?",
         "y": "number?",
@@ -412,7 +412,7 @@
         "projectId": "string?",
         "fromNodeId": "string",
         "id": "string?",
-        "type": "image|text|video|audio|config",
+        "type": "image|text|video|audio",
         "title": "string?",
         "x": "number?",
         "y": "number?",

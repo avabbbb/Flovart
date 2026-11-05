@@ -47,9 +47,14 @@ describe('SettingsPanel provider configuration UI', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /添加 API Key|添加供应商|添加 AI 服务/i }));
 
-    expect(screen.getByText('内置协议')).toBeTruthy();
-    expect(screen.getAllByText('OpenAI 兼容').length).toBeGreaterThan(0);
-    expect(screen.getByText('Gemini')).toBeTruthy();
+    const protocol = screen.getByRole('combobox', { name: '协议' });
+    expect(screen.queryByRole('listbox')).toBeNull();
+    fireEvent.click(protocol);
+    expect(protocol.getAttribute('aria-expanded')).toBe('true');
+    expect(screen.getAllByRole('option', { name: /^OpenAI 兼容/ }).length).toBeGreaterThan(0);
+    expect(screen.getByRole('option', { name: 'Gemini' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('option', { name: 'Gemini' }));
+    expect(screen.queryByRole('listbox')).toBeNull();
     expect(screen.queryByText('固定模型路由绑定')).toBeNull();
     expect(screen.getByText('价格规则')).toBeTruthy();
     expect(screen.getByText('预算策略')).toBeTruthy();
@@ -81,14 +86,14 @@ describe('SettingsPanel provider configuration UI', () => {
     expect(escapedDelete).not.toHaveBeenCalled();
     expect(input).toBeInTheDocument();
     expect(input.value).toBe('');
-    expect(screen.getByText('内置协议')).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: '协议' })).toBeInTheDocument();
     window.removeEventListener('keydown', escapedDelete);
   });
 
   it('shows one mapping center for text capabilities and media product routes', async () => {
     renderSettings();
 
-    fireEvent.click(screen.getByRole('button', { name: '模型映射' }));
+    fireEvent.click(screen.getByRole('tab', { name: '模型映射' }));
     await waitFor(() => expect(screen.getByText('提示词增强')).toBeTruthy());
     expect(screen.getByText('脚本拆解')).toBeTruthy();
     expect(screen.getByText('Agent 文本')).toBeTruthy();
@@ -113,7 +118,7 @@ describe('SettingsPanel provider configuration UI', () => {
     };
     renderSettings([key]);
 
-    fireEvent.click(screen.getByRole('button', { name: '模型映射' }));
+    fireEvent.click(screen.getByRole('tab', { name: '模型映射' }));
     fireEvent.change(await screen.findByLabelText('产品模型'), { target: { value: 'flovart:gpt-image-2' } });
     const imageRoutes = screen.getByLabelText('AI 服务线路') as HTMLSelectElement;
     expect(Array.from(imageRoutes.options).map(option => option.textContent)).toContain('Agnes · agnes-canvas-v2');
@@ -140,7 +145,7 @@ describe('SettingsPanel provider configuration UI', () => {
     ];
     renderSettings(keys, onUpdateApiKey);
 
-    fireEvent.click(screen.getByRole('button', { name: '模型映射' }));
+    fireEvent.click(screen.getByRole('tab', { name: '模型映射' }));
     const sections = await screen.findByTestId('model-mapping-sections');
     expect(sections.textContent?.indexOf('图像模型')).toBeLessThan(sections.textContent?.indexOf('视频模型') || 0);
     expect(sections.textContent?.indexOf('视频模型')).toBeLessThan(sections.textContent?.indexOf('文本与 Agent') || 0);
@@ -175,7 +180,7 @@ describe('SettingsPanel provider configuration UI', () => {
     };
     renderSettings([key], onUpdateApiKey);
 
-    fireEvent.click(screen.getByRole('button', { name: '模型映射' }));
+    fireEvent.click(screen.getByRole('tab', { name: '模型映射' }));
     fireEvent.click(await screen.findByRole('button', { name: /提示词增强/ }));
     const routeSelect = await screen.findByLabelText('为提示词增强添加线路');
     fireEvent.change(routeSelect, { target: { value: JSON.stringify(['text-key', 'gemini-3-flash']) } });
@@ -194,6 +199,7 @@ describe('SettingsPanel provider configuration UI', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /添加 API Key|添加供应商|添加 AI 服务/i }));
 
+    fireEvent.click(screen.getByRole('combobox', { name: '协议' }));
     expect(screen.getByText('Volcengine Seedance')).toBeTruthy();
     for (const removed of ['RunningHub 标准模型', 'RunningHub 海外站', 'Claude Official', 'DeepSeek', 'OpenRouter', 'SiliconFlow', 'Kling VIDEO']) {
       expect(screen.queryByText(removed)).toBeNull();

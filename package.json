@@ -54,6 +54,7 @@
     "@ffmpeg/util": "^0.12.2",
     "@google/genai": "^1.48.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
+    "@napi-rs/keyring": "^2.1.2",
     "@noble/hashes": "^2.4.0",
     "@tanstack/react-virtual": "^3.14.5",
     "@tauri-apps/api": "~2.12.0",

@@ -8,6 +8,7 @@ import {
 import { applyWorkflowMutation } from '../components/workflow/draftAuthority';
 import { workflowStorage } from '../components/workflow/storage';
 import type { WorkflowProject } from '../components/workflow/types';
+import { WORKFLOW_PERSISTENCE_VERSION } from '../components/workflow/migrations';
 
 function snapshot(project: WorkflowProject) {
   return JSON.stringify({
@@ -72,7 +73,7 @@ describe('release candidate persistence soak', () => {
     expect(hashes).toHaveLength(30);
     expect(new Set(hashes).size).toBe(30);
     const stored = await workflowStorage.get<{ state: { projects: WorkflowProject[] }; version: number }>(WORKFLOW_STORE_KEY);
-    expect(stored?.version).toBe(1);
+    expect(stored?.version).toBe(WORKFLOW_PERSISTENCE_VERSION);
     expect(snapshot(stored!.state.projects[0])).toBe(snapshot(expected));
   });
 

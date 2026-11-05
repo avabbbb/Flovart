@@ -17,6 +17,8 @@ import { requireWorkflowResourceHref, type CreativeHostResourceLocator } from '.
 import { applySelectedTakeMedia, beginWorkflowOperationTake, completeWorkflowOperationTake, pickTakeMedia } from '../components/workflow/operations';
 import { validateWorkflowOperationOutputs } from '../components/workflow/operationRegistry';
 import type { ProviderMaterializedReference } from './providerGenerationAdapter';
+import { applyReferenceTranscodes, planReferenceTranscodes, type ReferenceTranscodePlanItem, type ReferenceTranscodeRequest } from './referenceTranscode';
+import { requestUiConfirm } from './uiConfirm';
 import { resolveProviderGenerationExtension } from './userScriptProviderAdapter';
 import { displayError } from './displayError';
 import { fetchRemoteMediaBlob } from './desktopNetwork';
@@ -34,6 +36,10 @@ export interface WorkflowHistoryPayload {
 export interface WorkflowGenerationRuntime {
   userApiKeys: UserApiKey[];
   confirmRouteFallback?: (resolution: RouteFallbackResolution) => boolean | Promise<boolean>;
+  // 参考视频分辨率越界（1521）时询问是否转码；未提供时用全局确认弹窗，无 ConfirmHost（headless）时返回 false，不转码直接报错。
+  confirmReferenceTranscode?: (request: ReferenceTranscodeRequest) => boolean | Promise<boolean>;
+  // 测试/桌面端可注入；默认走浏览器 ffmpeg.wasm（videoTools.scaleVideoToPixelRange）。
+  transcodeReferenceVideo?: (blob: Blob, item: ReferenceTranscodePlanItem) => Promise<Blob>;
   executeMedia?: (input: UnifiedIgnitionInput) => Promise<UnifiedIgnitionResult>;
   executeText?: typeof generateTextWithProvider;
   runId?: string;
@@ -97,16 +103,18 @@ async function materializeCanonicalReferences(
   runtime: WorkflowGenerationRuntime,
   temporaryUrls: string[],
   allowArtifactReference: boolean,
+  overrides?: ReadonlyMap<string, string>,
 ): Promise<ProviderMaterializedReference[]> {
   return Promise.all(input.references.map(async ({ resource, role, label, order }) => {
     const kind = resource.kind as 'image' | 'video' | 'audio';
-    const href = await requireWorkflowResourceHref(resource, { loadMedia: runtime.loadMedia, loadCreativeHostResource: runtime.loadCreativeHostResource }, temporaryUrls, { allowArtifactReference });
+    const override = overrides?.get(resource.resourceId);
+    const href = override || await requireWorkflowResourceHref(resource, { loadMedia: runtime.loadMedia, loadCreativeHostResource: runtime.loadCreativeHostResource }, temporaryUrls, { allowArtifactReference });
     return {
       resourceId: resource.resourceId,
       type: kind,
       href,
-      artifactRef: resource.artifactRef,
-      mimeType: resource.mimeType,
+      artifactRef: override ? undefined : resource.artifactRef,
+      mimeType: override ? 'video/mp4' : resource.mimeType,
       label: label || resource.title,
       sourceName: resource.title,
       elementId: resource.sourceNodeId,
@@ -114,6 +122,23 @@ async function materializeCanonicalReferences(
       order,
     };
   }));
+}
+
+async function defaultTranscodeReferenceVideo(blob: Blob, item: ReferenceTranscodePlanItem): Promise<Blob> {
+  // 保留动态 import：videoTools 依赖浏览器 ffmpeg.wasm，静态引入会把 wasm 加载链带进 headless/Agent 与测试路径。
+  const { scaleVideoToPixelRange } = await import('./videoTools');
+  const result = await scaleVideoToPixelRange(blob, item.fromWidth, item.fromHeight, item.range, item.title);
+  return result.blob;
+}
+
+function defaultConfirmReferenceTranscode(request: ReferenceTranscodeRequest): Promise<boolean> {
+  const lines = request.items.map(item => '「' + item.title + '」' + item.fromWidth + '×' + item.fromHeight + ' → ' + item.toWidth + '×' + item.toHeight);
+  return requestUiConfirm({
+    title: '参考视频分辨率不符合要求',
+    body: '将在本机用 ffmpeg 转码后再提交：' + lines.join('；') + '。转码本身不收费，参考视频变大可能影响生成计费。',
+    confirmLabel: '转码并继续',
+    cancelLabel: '取消',
+  });
 }
 
 function patchInitiator(project: WorkflowProject, nodeId: string, metadata: Record<string, unknown>): WorkflowProject {
@@ -386,7 +411,7 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
         }
       }
     }
-    const canonicalInput = buildCanonicalGenerationInput({
+    let canonicalInput = buildCanonicalGenerationInput({
       targetNode: initiating,
       inputs: resolvedInputs,
       prompt: effectivePrompt,
@@ -410,11 +435,36 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
       routeId: resolved.routeId,
       productModelId: selectionRef,
     };
+    let referenceOverrides: Map<string, string> | undefined;
     if (mode !== 'text') {
-      const providerValidation = providerExtension.generation.validate(canonicalInput, providerContext);
+      let providerValidation = providerExtension.generation.validate(canonicalInput, providerContext);
+      const transcodePlan = providerValidation.ok ? null : planReferenceTranscodes(canonicalInput, providerValidation.errors);
+      if (transcodePlan && await (runtime.confirmReferenceTranscode || defaultConfirmReferenceTranscode)({ items: transcodePlan })) {
+        if (!stillActive()) throw abortError();
+        current = patchInitiator(canonical(runtime, current), nodeId, { status: 'loading', generationRequestId: requestId, generationMessage: '正在转码参考视频…' });
+        await publish(runtime, current);
+        const transcode = runtime.transcodeReferenceVideo || defaultTranscodeReferenceVideo;
+        referenceOverrides = new Map();
+        for (const item of transcodePlan) {
+          const reference = canonicalInput.references.find(entry => entry.resource.resourceId === item.resourceId);
+          if (!reference) throw new Error('参考视频「' + item.title + '」已不存在，无法转码。');
+          const sourceHref = await requireWorkflowResourceHref(reference.resource, { loadMedia: runtime.loadMedia, loadCreativeHostResource: runtime.loadCreativeHostResource }, temporaryUrls, { allowArtifactReference: false });
+          const sourceBlob = /^(?:blob|data):/i.test(sourceHref)
+            ? await fetch(sourceHref).then(response => response.blob())
+            : await (runtime.fetchMedia || (href => fetchRemoteMediaBlob(href, { signal: controller.signal })))(sourceHref);
+          const output = await transcode(sourceBlob, item);
+          if (!stillActive()) throw abortError();
+          const outputUrl = URL.createObjectURL(output);
+          temporaryUrls.push(outputUrl);
+          referenceOverrides.set(item.resourceId, outputUrl);
+        }
+        canonicalInput = applyReferenceTranscodes(canonicalInput, transcodePlan);
+        runtime.onCanonicalInput?.(canonicalInput);
+        providerValidation = providerExtension.generation.validate(canonicalInput, providerContext);
+      }
       if (!providerValidation.ok) throw new Error(providerValidation.errors[0]?.message || '当前 AI 服务不支持该生成输入。');
     }
-    const materializedReferences = await materializeCanonicalReferences(canonicalInput, runtime, temporaryUrls, Boolean(resolved.key.runtimeManaged));
+    const materializedReferences = await materializeCanonicalReferences(canonicalInput, runtime, temporaryUrls, Boolean(resolved.key.runtimeManaged), referenceOverrides);
     const providerRequest = providerExtension.generation.serialize(canonicalInput, materializedReferences, providerContext);
     const generationSubmode = providerRequest.generationSubmode;
     const references = providerRequest.references;

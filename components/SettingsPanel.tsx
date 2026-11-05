@@ -1,8 +1,10 @@
+import { ProtocolSelect } from './settings/ProtocolSelect';
 import { TokenUsageSection, usageTabLabel } from './TokenUsageSection';
 import { saveBlob } from '../services/desktopNetwork';
 import React from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import type { UserApiKey, AIProvider, AICapability, ModelItem, ProductModelMode, ApiPricingRule, ApiBudgetPolicy, RouteMappingBinding, RouteMappingTarget, RuntimeRouteCapability } from '../types';
+import { ChannelModelPicker } from './settings/ChannelModelPicker';
 import {
     DEFAULT_PROVIDER_MODELS,
     validateApiKey,
@@ -10,6 +12,7 @@ import {
     inferCapabilitiesByProvider,
     PROVIDER_LABELS,
 } from '../services/aiGateway';
+import { parseApiKeyText } from '../utils/apiKeyImport';
 import { formatCost, type KeyUsageSummary } from '../utils/usageMonitor';
 import { fetchModelsWithCache, type FetchedModel } from '../services/modelFetcher';
 import { normalizeProviderBaseUrl } from '../services/baseUrl';
@@ -17,6 +20,10 @@ import { getProductModel, getProductModels, suggestProductRouteMappings } from '
 import { getKeyModelIds } from '../utils/modelRefs';
 import { getFlovartRuntimeApi } from '../services/flovartRuntime';
 import { UserScriptAdapterSection } from './settings/UserScriptAdapterSection';
+import { ExtensionPairingSection } from './settings/ExtensionPairingSection';
+import { WebDavSettingsTab } from './settings/WebDavSettingsTab';
+import { LocalStorageTab } from './settings/LocalStorageTab';
+import { ChannelList } from './settings/ChannelList';
 import '../styles/settings.css';
 
 interface RuntimeProviderStatus {
@@ -326,7 +333,7 @@ function RouteMappingEditor({ userApiKeys, onUpdateApiKey, runtimeProviders, t }
                             {targetBody(target, mode)}
                         </div>)}
                     </div>, `mapping-card-${modelId}`);
-            }) : <div className="rounded-2xl border border-dashed border-[var(--isl-border)] px-3 py-4 text-xs text-[var(--isl-ink-soft)]">{t('settingsExtra.mapping.notApplied', title)}</div>}
+            }) : <div className="rounded-2xl border border-dashed border-[var(--isl-border)] settings-elevated settings-elevated--soft px-3 py-4 text-xs text-[var(--isl-ink-soft)]">{t('settingsExtra.mapping.notApplied', title)}</div>}
         </div>;
     };
     return <section className="space-y-3" data-testid="model-mapping-sections">
@@ -368,7 +375,7 @@ function RouteMappingEditor({ userApiKeys, onUpdateApiKey, runtimeProviders, t }
             </div>
         </div>
         <div className="space-y-2"><div><div className="text-sm font-extrabold text-[var(--isl-ink)]">{t('settingsExtra.mapping.textAndAgent')}</div><div className="mt-0.5 text-xs text-[var(--isl-ink-soft)]">{t('settingsExtra.mapping.textAndAgentDetails')}</div></div>{RUNTIME_TARGETS.map(capability => renderTarget({ kind: 'runtime-capability', capability }, t(`settingsExtra.runtimeTarget.${capability}.label`)))}</div>
-        {userApiKeys.length === 0 && runtimeSuggestions.length === 0 && <div className="rounded-2xl border border-dashed border-[var(--isl-border)] p-5 text-center text-xs text-[var(--isl-ink-soft)]">{t('settingsExtra.addMappingFirst')}</div>}
+        {userApiKeys.length === 0 && runtimeSuggestions.length === 0 && <div className="rounded-2xl border border-dashed border-[var(--isl-border)] settings-elevated settings-elevated--soft p-5 text-center text-xs text-[var(--isl-ink-soft)]">{t('settingsExtra.addMappingFirst')}</div>}
     </section>;
 }
 
@@ -430,8 +437,7 @@ const PROVIDER_PRESETS: ProviderPreset[] = [
         baseUrl: providerBaseUrl.volcengine,
         capabilities: ['video'],
         requestFormat: 'openai',
-        defaultModel: 'doubao-seedance-2-0-260128',
-        models: ['doubao-seedance-2-0-260128', 'doubao-seedance-2-0-fast-260128'],
+        models: [],
     },
 ];
 
@@ -464,6 +470,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
     // 模型管理
     const [editModels, setEditModels] = React.useState<ModelItem[]>([]);
     const [editDefaultModel, setEditDefaultModel] = React.useState('');
+    const [showModelPicker, setShowModelPicker] = React.useState(false);
     const [editPricingRules, setEditPricingRules] = React.useState<ApiPricingRule[]>([]);
     const [editBudgetPolicy, setEditBudgetPolicy] = React.useState<ApiBudgetPolicy>({ enabled: false, monthlyLimit: 100, warningPercent: 80, hardStop: true, currency: 'USD' });
     const [editStreamUsage, setEditStreamUsage] = React.useState(false);
@@ -480,7 +487,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
     const [autoDetectedProvider, setAutoDetectedProvider] = React.useState<AIProvider | null>(null);
     const [endpointFlavor, setEndpointFlavor] = React.useState<'google' | 'openai-compatible' | 'openrouter-compatible' | null>(null);
     const [detectedCapabilities, setDetectedCapabilities] = React.useState<AICapability[]>([]);
-    const [activeTab, setActiveTab] = React.useState<'api' | 'models' | 'security' | 'usage'>('api');
+    const [activeTab, setActiveTab] = React.useState<'api' | 'models' | 'security' | 'usage' | 'webdav' | 'storage'>('api');
     const [mobileDetailOpen, setMobileDetailOpen] = React.useState(false);
     const [showAdvancedApi, setShowAdvancedApi] = React.useState(false);
     const [runtimeProviders, setRuntimeProviders] = React.useState<RuntimeProviderStatus[] | null>(null);
@@ -521,7 +528,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
 
     const inputClass = 'isl-well w-full px-3 py-2.5 text-sm text-[var(--isl-ink)] outline-none placeholder:text-[var(--isl-ink-ghost)]';
     const chipClass = 'isl-chip px-3 py-2 text-sm';
-    const sectionPanelClass = 'rounded-2xl border-[1.5px] border-[var(--isl-border)] bg-[var(--isl-surface-2)] p-3';
+    const sectionPanelClass = 'rounded-2xl border-[1.5px] border-[var(--isl-border)] bg-[var(--isl-surface-2)] settings-elevated p-3';
 
     const addPricingRule = () => setEditPricingRules(current => [...current, {
         id: crypto.randomUUID(), unit: capabilities.includes('video') ? 'video_second' : 'image', rate: 0, currency: 'USD', source: 'manual',
@@ -931,16 +938,62 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
         void saveBlob(blob, `flovart-api-configs-${new Date().toISOString().slice(0, 10)}.json`).catch(error => console.warn('[Settings] Export failed.', error));
     };
 
-    /** 导入 JSON 配置文件 */
+    /** 从 .env/.txt 或剪贴板文本导入 Key：只在本页解析，走与手动添加相同的 onAddApiKey */
+    const importKeyText = (text: string) => {
+        const legalProviders = new Set(Object.keys(providerBaseUrl));
+        const entries = parseApiKeyText(text, key => inferProviderFromKey(key));
+        if (entries.length === 0) {
+            alert(t('settingsExtra.transfer.noKeysFound'));
+            return;
+        }
+        let importedCount = 0;
+        let skippedCount = 0;
+        for (const entry of entries) {
+            const provider = entry.provider && legalProviders.has(entry.provider)
+                ? entry.provider as UserApiKey['provider']
+                : null;
+            if (!provider || userApiKeys.some(k => k.provider === provider && k.key === entry.key)) {
+                skippedCount++;
+                continue;
+            }
+            onAddApiKey({
+                provider,
+                capabilities: inferCapabilitiesByProvider(provider),
+                key: entry.key,
+                name: entry.name || undefined,
+                status: 'unknown',
+                isDefault: false,
+            });
+            importedCount++;
+        }
+        alert(t('settingsExtra.transfer.importComplete', importedCount, skippedCount));
+    };
+
+    const handlePasteKeysFromClipboard = async () => {
+        let text = '';
+        try {
+            text = await navigator.clipboard.readText();
+        } catch {
+            alert(t('settingsExtra.transfer.clipboardUnavailable'));
+            return;
+        }
+        importKeyText(text);
+    };
+
+    /** 导入 JSON 配置文件，或写有 Key 的 .env/.txt */
     const handleImportKeys = () => {
         const input = document.createElement('input');
         input.type = 'file';
-        input.accept = '.json';
+        input.accept = '.json,.env,.txt,text/plain';
         input.onchange = async (e) => {
             const file = (e.target as HTMLInputElement).files?.[0];
             if (!file) return;
             try {
                 const text = await file.text();
+                if (!/\.json$/i.test(file.name) && !text.trim().startsWith('[')) {
+                    importKeyText(text);
+                    return;
+                }
                 const parsed = JSON.parse(text);
                 if (!Array.isArray(parsed)) throw new Error(t('settingsExtra.transfer.invalidFormat'));
                 const legalProviders = new Set(Object.keys(providerBaseUrl));
@@ -1044,6 +1097,23 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                         <h3 id="settings-title" className="text-xl font-extrabold text-[var(--isl-ink)]">{t('settingsExtra.title')}</h3>
                         <p className="mt-1 text-sm text-[var(--isl-ink-soft)]">{t('settingsExtra.description')}</p>
                     </div>
+                    <div className="flex items-center gap-2">
+                    <button
+                        type="button"
+                        data-testid="settings-header-import"
+                        onClick={handleImportKeys}
+                        className="rounded-lg border border-[var(--isl-border)] px-2.5 py-1 text-xs font-medium text-[var(--isl-ink-soft)] transition hover:text-[var(--isl-ink)]"
+                    >
+                        {t('settingsExtra.transfer.importConfig')}
+                    </button>
+                    <button
+                        type="button"
+                        data-testid="settings-header-export"
+                        onClick={handleExportKeys}
+                        className="rounded-lg border border-[var(--isl-border)] px-2.5 py-1 text-xs font-medium text-[var(--isl-ink-soft)] transition hover:text-[var(--isl-ink)]"
+                    >
+                        {t('settingsExtra.transfer.exportConfig')}
+                    </button>
                     <button
                         type="button"
                         aria-label={t('settingsExtra.close')}
@@ -1055,20 +1125,25 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                     >
                         ×
                     </button>
+                    </div>
                 </div>
 
                 {/* Wide/medium tabs; compact mode uses the same state as a
                     mobile master-detail list below. */}
-                <div className={`settings-dialog__tabs mb-6 flex gap-1 border-b border-[var(--isl-border)] ${mobileDetailOpen ? 'is-detail' : ''}`}>
+                <div role="tablist" aria-label={t('settingsExtra.categoryAria')} className={`settings-dialog__tabs mb-6 flex gap-1 border-b border-[var(--isl-border)] ${mobileDetailOpen ? 'is-detail' : ''}`}>
                     {([
                         { key: 'api', label: t('settingsExtra.apiTab') },
                         { key: 'models', label: t('settingsExtra.modelsTab') },
                         { key: 'security', label: t('settingsExtra.securityTab') },
                         { key: 'usage', label: usageTabLabel(t) },
+                        { key: 'webdav', label: t('settingsExtra.webdavTab') },
+                        { key: 'storage', label: t('settingsExtra.storageTab') },
                     ] as const).map(tab => (
                         <button
                             key={tab.key}
                             type="button"
+                            role="tab"
+                            aria-selected={activeTab === tab.key}
                             onClick={() => { setActiveTab(tab.key); setMobileDetailOpen(true); }}
                             className={`relative px-4 py-2.5 text-sm font-bold transition-colors ${
                                 activeTab === tab.key
@@ -1078,7 +1153,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                         >
                             {tab.label}
                             {activeTab === tab.key && (
-                                <span className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-[var(--isl-mint)]" />
+                                <motion.span layoutId="settings-tab-indicator" className="settings-dialog__tab-indicator" />
                             )}
                         </button>
                     ))}
@@ -1089,6 +1164,8 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                         { key: 'api', label: t('settingsExtra.apiTab'), detail: t('settingsExtra.apiTabDetail') },
                         { key: 'models', label: t('settingsExtra.modelsTab'), detail: t('settingsExtra.modelsTabDetail') },
                         { key: 'security', label: t('settingsExtra.securityTab'), detail: t('settingsExtra.securityTabDetail') },
+                        { key: 'webdav', label: t('settingsExtra.webdavTab'), detail: t('settingsExtra.webdavTabDetail') },
+                        { key: 'storage', label: t('settingsExtra.storageTab'), detail: t('settingsExtra.storageTabDetail') },
                     ] as const).map(item => (
                         <button key={item.key} type="button" onClick={() => { setActiveTab(item.key); setMobileDetailOpen(true); }}>
                             <span><strong>{item.label}</strong><small>{item.detail}</small></span><span aria-hidden="true">›</span>
@@ -1142,7 +1219,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                                     })}
                                 </div>
                             ) : (
-                                <div className="mt-3 rounded-xl border border-dashed border-[var(--isl-border)] px-3 py-3 text-xs text-[var(--isl-ink-soft)]">
+                                <div className="mt-3 rounded-xl border border-dashed border-[var(--isl-border)] settings-elevated settings-elevated--soft px-3 py-3 text-xs text-[var(--isl-ink-soft)]">
                                     {t('settingsExtra.runtime.noCredentials')}
                                 </div>
                             )}
@@ -1159,25 +1236,14 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                                 🔑 {t('settingsExtra.api.title')}
                             </div>
                             <div className="settings-api-actions flex items-center gap-2">
-                                {userApiKeys.length > 0 && (
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowAdvancedApi(current => !current)}
-                                        className={`rounded-full border px-2.5 py-1 text-[11px] font-medium transition ${
-                                            isDark ? 'border-[#2A3140] text-[#98A2B3] hover:bg-[#252C39]' : 'border-[#E4E7EC] text-[#667085] hover:bg-[#F2F4F7]'
-                                        }`}
-                                    >
-                                        {showAdvancedApi ? t('settingsExtra.api.collapseDetails') : t('settingsExtra.api.expandDetails')}
-                                    </button>
-                                )}
                                 <button
                                     type="button"
-                                    onClick={handleImportKeys}
+                                    onClick={() => { void handlePasteKeysFromClipboard(); }}
                                     className={`rounded-full border px-2.5 py-1 text-[11px] font-medium transition ${
                                         isDark ? 'border-[#2A3140] text-[#98A2B3] hover:bg-[#252C39]' : 'border-[#E4E7EC] text-[#667085] hover:bg-[#F2F4F7]'
                                     }`}
                                 >
-                                    {t('settingsExtra.api.import')}
+                                    {t('settingsExtra.transfer.pasteFromClipboard')}
                                 </button>
                                 <button
                                     type="button"
@@ -1186,7 +1252,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                                         isDark ? 'border-[#2A3140] text-[#98A2B3] hover:bg-[#252C39]' : 'border-[#E4E7EC] text-[#667085] hover:bg-[#F2F4F7]'
                                     }`}
                                 >
-                                    {t('settingsExtra.api.export')}
+                                    {t('settingsExtra.transfer.exportWithKeys')}
                                 </button>
                                 {userApiKeys.length > 0 && (
                                     <button
@@ -1214,128 +1280,18 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                         </div>
 
                         <div className="settings-service-list space-y-2">
-                            {userApiKeys.length > 0 && !showAdvancedApi ? (
-                                <div className="rounded-2xl border border-[var(--isl-border)] bg-[var(--isl-surface-2)] px-4 py-4 text-sm text-[var(--isl-ink)]">
-                                    <div className="font-medium">{t('settingsExtra.api.configuredCount', userApiKeys.length)}</div>
-                                    <div className="mt-1 text-xs text-[var(--isl-ink-soft)]">{t('settingsExtra.api.defaultService', userApiKeys.find(item => item.isDefault)?.name || t('settingsExtra.api.notSpecified'))}</div>
-                                </div>
-                            ) : userApiKeys.length === 0 ? (
-                                <div className={`rounded-2xl border border-dashed px-4 py-6 text-center text-sm ${
-                                    isDark ? 'border-[#3A4458] text-[#98A2B3]' : 'border-[#D0D5DD] text-[#667085]'
-                                }`}>
-                                    <div className="mb-2 text-lg">🔑</div>
-                                    <div className="font-medium">{t('settingsExtra.emptyServicesTitle')}</div>
-                                    <div className="mt-1 text-xs">{t('settingsExtra.emptyServicesHint')}</div>
-                                </div>
-                            ) : (
-                                <AnimatePresence initial={false}>
-                                {userApiKeys.map(item => (
-                                    <motion.div
-                                        key={item.id}
-                                        layout
-                                        initial={{ opacity: 0, y: -6, scale: 0.98 }}
-                                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                                        exit={{ opacity: 0, y: -6, scale: 0.98 }}
-                                        transition={{ type: 'spring', stiffness: 420, damping: 34 }}
-                                        className={`settings-service-card flex items-center justify-between rounded-2xl border px-4 py-3 ${
-                                        editingKeyId === item.id
-                                            ? isDark ? 'border-[#4B5B78] bg-[#1B2330]' : 'border-[#1D4ED8] bg-[#EFF6FF]'
-                                            : isDark ? 'border-[#2A3140] bg-[#161A22]' : 'border-[#E4E7EC] bg-white'
-                                    }`}>
-                                        <div className="flex min-w-0 items-start gap-3">
-                                            <div className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border text-sm font-semibold ${
-                                                isDark ? 'border-[#2A3140] bg-[#12151B] text-[#98A2B3]' : 'border-[#E4E7EC] bg-[#F8FAFC] text-[#667085]'
-                                            }`}>
-                                                {(item.name || PROVIDER_LABELS[item.provider] || item.provider).slice(0, 2).toUpperCase()}
-                                            </div>
-                                            <div className="min-w-0">
-                                            <div className="flex items-center gap-2">
-                                                <span className={`inline-block h-2 w-2 rounded-full ${
-                                                    item.status === 'ok' ? 'bg-green-500' : item.status === 'error' ? 'bg-red-400' : 'bg-yellow-400'
-                                                }`} title={item.status === 'ok' ? t('settingsExtra.api.verified') : item.status === 'error' ? t('settingsExtra.api.verificationFailed') : t('settingsExtra.api.unverified')} />
-                                                <span className={`truncate text-sm font-medium ${isDark ? 'text-[#F3F4F6]' : 'text-[#101828]'}`}>{item.name || PROVIDER_LABELS[item.provider] || item.provider}</span>
-                                                {editingKeyId === item.id && (
-                                                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                                                        isDark ? 'bg-[#1B2330] text-[#7CB4FF]' : 'bg-[#EFF6FF] text-[#1D4ED8]'
-                                                    }`}>{t('settingsExtra.api.editing')}</span>
-                                                )}
-                                            </div>
-                                            <div className={`mt-1 truncate text-xs ${isDark ? 'text-[#7CB4FF]' : 'text-[#175CD3]'}`}>
-                                                {item.extraConfig?.websiteUrl || item.baseUrl || t('settingsExtra.api.localConfiguration')}
-                                            </div>
-                                            <div className={`mt-1 text-[11px] ${isDark ? 'text-[#667085]' : 'text-[#98A2B3]'}`}>
-                                                {maskKey(item.key)}
-                                                {item.extraConfig?.requestFormat && <span> · {item.extraConfig.requestFormat}</span>}
-                                                {item.defaultModel && <span> · {t('settingsExtra.api.defaultModel')} {item.defaultModel}</span>}
-                                            </div>
-                                            <div className="mt-2 flex flex-wrap gap-1.5">
-                                                {(item.capabilities || []).map(capability => (
-                                                    <span key={capability} className={`rounded-full px-2 py-1 text-[11px] ${
-                                                        isDark ? 'bg-[#1B2029] text-[#98A2B3]' : 'bg-[#F2F4F7] text-[#667085]'
-                                                    }`}>
-                                                        {t(capabilityLabelKeys[capability])}
-                                                    </span>
-                                                ))}
-                                                <span className={`rounded-full px-2 py-1 text-[11px] ${isDark ? 'bg-[#1B2029] text-[#98A2B3]' : 'bg-[#F2F4F7] text-[#667085]'}`}>
-                                                    {t('settingsExtra.api.mappingCount', item.routeMappings?.length || 0)}
-                                                </span>
-                                                {item.budgetPolicy?.enabled && <span className="rounded-full bg-amber-500/10 px-2 py-1 text-[11px] text-amber-600">{t('settingsExtra.api.budget', item.budgetPolicy.currency, item.budgetPolicy.monthlyLimit)}</span>}
-                                            </div>
-                                            {/* Usage stats */}
-                                            {usageSummary?.get(item.id) && (() => {
-                                                const u = usageSummary.get(item.id)!;
-                                                if (u.totalCalls === 0) return null;
-                                                return (
-                                                    <div className={`settings-service-card__usage mt-1.5 flex gap-3 text-[10px] ${isDark ? 'text-[#667085]' : 'text-[#98A2B3]'}`}>
-                                                        <span>{t('settingsExtra.api.callCount', u.totalCalls)}</span>
-                                                        {u.errorCalls > 0 && <span className="text-red-400">{t('settingsExtra.api.failureCount', u.errorCalls)}</span>}
-                                                        <span>{t('settingsExtra.api.totalCost')} {formatCost(u.totalCostCents, u.currency)}</span>
-                                                        <span>{t('settingsExtra.api.monthCost')} {formatCost(u.currentMonthCostCents, u.currency)}</span>
-                                                        {u.pendingCostCalls > 0 && <span className="text-amber-500">{t('settingsExtra.api.pendingReconciliation', u.pendingCostCalls)}</span>}
-                                                        <span>{t('settingsExtra.api.last24Hours')} {u.last24h}</span>
-                                                    </div>
-                                                );
-                                            })()}
-                                            </div>
-                                        </div>
-                                        <div className="settings-service-actions ml-3 flex items-center gap-2">
-                                            {!item.isDefault ? (
-                                                <button type="button" onClick={() => onSetDefaultApiKey(item.id)} className={`${chipClass} flv-elastic`}>
-                                                    {t('settingsExtra.api.makeDefault')}
-                                                </button>
-                                            ) : (
-                                                <span className={`rounded-full px-3 py-2 text-xs font-medium ${
-                                                    isDark ? 'bg-[#123524] text-[#75E0A7]' : 'bg-[#ECFDF3] text-[#027A48]'
-                                                }`}>
-                                                    {t('settingsExtra.api.default')}
-                                                </span>
-                                            )}
-                                            <button
-                                                type="button"
-                                                onClick={() => handleStartEdit(item)}
-                                                className={`rounded-full border px-3 py-2 text-xs font-medium ${
-                                                    isDark ? 'border-[#2A3140] text-[#D0D5DD] hover:bg-[#252C39]' : 'border-[#E4E7EC] text-[#475467] hover:bg-[#F2F4F7]'
-                                                }`}
-                                            >
-                                                {t('settingsExtra.api.edit')}
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => {
-                                                    if (!confirm(t('settingsExtra.api.deleteConfirm', item.name || PROVIDER_LABELS[item.provider] || item.provider))) return;
-                                                    onDeleteApiKey(item.id);
-                                                }}
-                                                className={`rounded-full border px-3 py-2 text-xs font-medium ${
-                                                    isDark ? 'border-[#7A271A] text-[#FDA29B]' : 'border-[#FECACA] text-[#DC2626]'
-                                                }`}
-                                            >
-                                                {t('settingsExtra.api.delete')}
-                                            </button>
-                                        </div>
-                                    </motion.div>
-                                ))}
-                                </AnimatePresence>
-                            )}
+                            <ChannelList
+                                userApiKeys={userApiKeys}
+                                editingKeyId={editingKeyId}
+                                providerLabel={item => item.name || PROVIDER_LABELS[item.provider] || item.provider}
+                                onEdit={handleStartEdit}
+                                onDelete={item => {
+                                    if (!confirm(t('settingsExtra.api.deleteConfirm', item.name || PROVIDER_LABELS[item.provider] || item.provider))) return;
+                                    onDeleteApiKey(item.id);
+                                }}
+                                onSetDefault={onSetDefaultApiKey}
+                                t={t}
+                            />
                         </div>
                     </section>
                     </>
@@ -1376,9 +1332,12 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                         <div className={`rounded-2xl border p-3 text-xs ${isDark ? 'border-[#2A3140] text-[#667085]' : 'border-[#E4E7EC] text-[#98A2B3]'}`}>
                             ✅ {t('settingsExtra.security.encryptedStorage')}
                         </div>
+                        <ExtensionPairingSection isDark={isDark} t={t} />
                     </section>
                 )}
                 {activeTab === 'usage' && <TokenUsageSection t={t} />}
+                {activeTab === 'webdav' && <WebDavSettingsTab userApiKeys={userApiKeys} onUpdateApiKey={onUpdateApiKey} />}
+                {activeTab === 'storage' && <LocalStorageTab />}
                 </motion.div>
                 </AnimatePresence>
             </div>
@@ -1395,7 +1354,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                     onClick={handleCancelEdit}
                 >
                     <motion.div
-                        className="settings-key-positioner flex min-h-[100dvh] items-end justify-center p-2 sm:min-h-full sm:items-center sm:p-6"
+                        className="settings-key-positioner flex min-h-[100dvh] items-end justify-center p-2 sm:min-h-full sm:items-stretch sm:justify-end sm:p-0"
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
@@ -1406,9 +1365,9 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                         role="dialog"
                         aria-modal="true"
                         aria-labelledby="settings-key-dialog-title"
-                        initial={{ opacity: 0, y: 24, scale: 0.97 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: 16, scale: 0.98 }}
+                        initial={{ opacity: 0, x: 48 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: 48 }}
                         transition={{ type: 'spring', stiffness: 380, damping: 30 }}
                         onClick={(e) => e.stopPropagation()}
                     >
@@ -1422,88 +1381,40 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                         </div>
 
                         <div className="settings-key-dialog__body min-h-0 flex-1 space-y-3 overflow-y-auto px-6 pb-4">
-                            {/* Common AI service presets */}
-                            {!editingKeyId && (
-                                <div className={sectionPanelClass}>
-                                    <div className="mb-3 flex items-center justify-between gap-3">
-                                        <div>
-                                            <div className="text-sm font-bold text-[var(--isl-ink)]">{t('settingsExtra.keyDialog.commonServices')}</div>
-                                            <div className="mt-0.5 text-[11px] text-[var(--isl-ink-soft)]">{t('settingsExtra.keyDialog.commonServicesDetails')}</div>
-                                        </div>
-                                        <div className="shrink-0 rounded-full bg-[var(--isl-card)] px-2.5 py-1 text-[11px] text-[var(--isl-ink-soft)]">
-                                            {t('settingsExtra.keyDialog.canEdit')}
-                                        </div>
-                                    </div>
-                                    <div className="grid gap-2 sm:grid-cols-2">
-                                        {PROVIDER_PRESETS.map(preset => {
-                                            const presetActive = provider === preset.provider && (displayName === presetLabel(preset) || (preset.id === 'custom' && !displayName));
-                                            const rainbowStyle: React.CSSProperties = {
-                                                background: presetActive
-                                                    ? 'linear-gradient(135deg, rgba(255,75,145,.92), rgba(124,92,255,.92) 42%, rgba(0,214,255,.92) 72%, rgba(64,225,139,.92))'
-                                                    : 'linear-gradient(135deg, rgba(255,255,255,.9), rgba(255,75,145,.13), rgba(124,92,255,.14), rgba(0,214,255,.13), rgba(64,225,139,.12))',
-                                                borderColor: presetActive ? 'rgba(255,255,255,.45)' : 'rgba(124,92,255,.22)',
-                                                color: presetActive ? '#fff' : 'var(--isl-ink)',
-                                                boxShadow: presetActive ? '0 10px 28px rgba(124,92,255,.24)' : '0 6px 18px rgba(31,29,26,.08)',
-                                            };
-                                            return (
-                                            <motion.button
-                                                key={preset.id}
-                                                type="button"
-                                                onClick={() => applyProviderPreset(preset, { fillName: true })}
-                                                whileHover={{ y: -2, scale: 1.01 }}
-                                                whileTap={{ y: 0, scale: 0.985 }}
-                                                transition={{ type: 'spring', stiffness: 400, damping: 26 }}
-                                                className="flex min-h-[54px] items-center gap-2 rounded-2xl border px-3 py-2 text-left text-sm"
-                                                style={rainbowStyle}
-                                            >
-                                                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white/70 text-[11px] font-black text-[#4F46E5]">
-                                                    {presetShortLabel(preset)}
-                                                </span>
-                                                <span className="min-w-0 flex-1">
-                                                    <span className="block truncate font-bold">{presetLabel(preset)}</span>
-                                                    <span className="mt-0.5 block truncate text-[11px] opacity-75">
-                                                        {preset.defaultModel || (preset.id === 'custom'
-                                                            ? t('settingsExtra.preset.customEndpoint')
-                                                            : preset.provider === 'runningHub'
-                                                                ? t('settingsExtra.keyDialog.runningHubGetModels')
-                                                                : PROVIDER_LABELS[preset.provider] || preset.provider)}
-                                                    </span>
-                                                </span>
-                                                {preset.featured && (
-                                                    <span className="rounded-full bg-white/70 px-1.5 py-0.5 text-[10px] font-bold text-[#7C3AED]">
-                                                        {t('settingsExtra.keyDialog.recommended')}
-                                                    </span>
-                                                )}
-                                            </motion.button>
-                                            );
-                                        })}
-                                    </div>
+                            <div className="grid gap-3 sm:grid-cols-2" data-testid="key-dialog-basics">
+                                <label className="block min-w-0">
+                                    <span className="mb-1.5 block text-sm font-medium text-[var(--isl-ink)]">{t('settingsExtra.keyDialog.serviceName')}</span>
+                                    <input value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder={t('settingsExtra.keyDialog.serviceNamePlaceholder')} className={inputClass} data-testid="key-dialog-name" />
+                                </label>
+                                <div className="block min-w-0">
+                                    <span id="key-dialog-protocol-label" className="mb-1.5 block text-sm font-medium text-[var(--isl-ink)]">{t('settingsExtra.keyDialog.protocol')}</span>
+                                    <ProtocolSelect
+                                        labelledBy="key-dialog-protocol-label"
+                                        testId="key-dialog-protocol"
+                                        disabled={!!editingKeyId}
+                                        recommendedLabel={t('settingsExtra.keyDialog.recommended')}
+                                        value={(PROVIDER_PRESETS.find(item => item.provider === provider && displayName === presetLabel(item)) ?? PROVIDER_PRESETS.find(item => item.provider === provider) ?? PROVIDER_PRESETS[0]).id}
+                                        options={PROVIDER_PRESETS.map(preset => ({
+                                            id: preset.id,
+                                            label: presetLabel(preset),
+                                            badge: preset.shortName || presetLabel(preset).slice(0, 2),
+                                            detail: preset.capabilities.map(cap => t(capabilityLabelKeys[cap])).join(' · '),
+                                            featured: preset.featured,
+                                        }))}
+                                        onChange={(id) => {
+                                            const preset = PROVIDER_PRESETS.find(item => item.id === id);
+                                            if (!preset) return;
+                                            const nameIsDefault = !displayName.trim() || PROVIDER_PRESETS.some(item => presetLabel(item) === displayName);
+                                            applyProviderPreset(preset, { fillName: nameIsDefault });
+                                        }}
+                                    />
                                 </div>
-                            )}
-
-                            <details className="group rounded-2xl border border-[var(--isl-border)]" open={!!editingKeyId && !!(extraConfig.remark || extraConfig.websiteUrl)} data-testid="key-dialog-service-info">
-                                <summary className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-2xl px-3 py-2.5 [&::-webkit-details-marker]:hidden">
-                                    <span className="min-w-0"><span className="block text-sm font-bold text-[var(--isl-ink)]">{t('settingsExtra.keyDialog.serviceInfoTitle')}</span><span className="mt-0.5 block truncate text-[11px] text-[var(--isl-ink-soft)]">{displayName || t('settingsExtra.keyDialog.serviceInfoHint')}</span></span>
-                                    <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="shrink-0 opacity-60 transition-transform group-open:rotate-180"><path d="m6 9 6 6 6-6" /></svg>
-                                </summary>
-                                <div className="space-y-3 px-3 pb-3">
-                            <div className="grid gap-3 md:grid-cols-2">
-                                <label>
-                                    <span className="mb-1.5 block text-sm font-bold text-[var(--isl-ink)]">{t('settingsExtra.keyDialog.serviceName')}</span>
-                                    <input value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder={t('settingsExtra.keyDialog.serviceNamePlaceholder')} className={inputClass} />
-                                </label>
-                                <label>
-                                    <span className="mb-1.5 block text-sm font-bold text-[var(--isl-ink)]">{t('settingsExtra.keyDialog.notes')}</span>
-                                    <input value={extraConfig.remark || ''} onChange={(event) => updateExtraConfig('remark', event.target.value)} placeholder={t('settingsExtra.keyDialog.notesPlaceholder')} className={inputClass} />
-                                </label>
                             </div>
 
                             <label className="block">
-                                <span className="mb-1.5 block text-sm font-bold text-[var(--isl-ink)]">{t('settingsExtra.keyDialog.website')}</span>
-                                <input value={extraConfig.websiteUrl || ''} onChange={(event) => updateExtraConfig('websiteUrl', event.target.value)} placeholder={t('settingsExtra.keyDialog.websitePlaceholder')} className={inputClass} />
+                                <span className={`mb-1.5 block text-sm font-medium ${isDark ? 'text-[#D0D5DD]' : 'text-[#344054]'}`}>{t('settingsExtra.keyDialog.requestUrl')}</span>
+                                <input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} onKeyDown={event => event.stopPropagation()} onKeyUp={event => event.stopPropagation()} placeholder={t('settingsExtra.keyDialog.requestUrlPlaceholder')} className={`${inputClass} flv-safe-input`} name="baseUrl" autoComplete="url" inputMode="url" />
                             </label>
-                                </div>
-                            </details>
 
                             <div className="settings-key-dialog__key-row flex gap-2">
                                 <label className="min-w-0 flex-1">
@@ -1525,52 +1436,47 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                                 </button>
                             </div>
 
-                            {/* 自动识别结果提示 */}
-                            {autoDetectedProvider && (
-                                <div className={`flex items-center gap-2 rounded-xl px-3 py-2 text-xs ${
-                                    isDark ? 'bg-[#1B2330] text-[#7CB4FF]' : 'bg-[#EFF6FF] text-[#1D4ED8]'
-                                }`}>
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-                                    {t('settingsExtra.keyDialog.detectedProvider')} <strong>{PROVIDER_LABELS[autoDetectedProvider]}</strong>
-                                    {isFetchingModels && <span className="ml-1 animate-pulse">{t('settingsExtra.keyDialog.fetchingModels')}</span>}
-                                </div>
-                            )}
-
-                            {endpointFlavor && (
-                                <div className={`rounded-xl px-3 py-2 text-xs ${
-                                    isDark ? 'bg-[#161A22] text-[#D0D5DD]' : 'bg-[#F8FAFC] text-[#475467]'
-                                }`}>
-                                    {t('settingsExtra.keyDialog.endpointStyle')}
-                                    <strong className="ml-1">
-                                        {endpointFlavor === 'openrouter-compatible'
-                                            ? t('settingsExtra.keyDialog.openRouterStyle')
-                                            : endpointFlavor === 'openai-compatible'
-                                                ? t('settingsExtra.keyDialog.openAIStyle')
-                                                : t('settingsExtra.keyDialog.googleStyle')}
-                                    </strong>
-                                    {detectedCapabilities.length > 0 && (
-                                        <span className="ml-2">
-                                            {t('settingsExtra.keyDialog.capabilities', detectedCapabilities.map(cap => t(capabilityLabelKeys[cap])).join(t('settingsExtra.runtime.credentialSeparator')))}
+                            {(autoDetectedProvider || endpointFlavor) && (
+                                <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 px-1 text-[11px] text-[var(--isl-ink-soft)]" data-testid="key-dialog-detect-hint">
+                                    {autoDetectedProvider && <span>{t('settingsExtra.keyDialog.detectedProvider')} <strong className="text-[var(--isl-ink)]">{PROVIDER_LABELS[autoDetectedProvider]}</strong></span>}
+                                    {endpointFlavor && (
+                                        <span>
+                                            {t('settingsExtra.keyDialog.endpointStyle')}
+                                            <strong className="ml-1 text-[var(--isl-ink)]">
+                                                {endpointFlavor === 'openrouter-compatible'
+                                                    ? t('settingsExtra.keyDialog.openRouterStyle')
+                                                    : endpointFlavor === 'openai-compatible'
+                                                        ? t('settingsExtra.keyDialog.openAIStyle')
+                                                        : t('settingsExtra.keyDialog.googleStyle')}
+                                            </strong>
                                         </span>
                                     )}
-                                    {fetchedModels.length > 0 && <span className="ml-2">{t('settingsExtra.keyDialog.detectedModelCount', fetchedModels.length)}</span>}
+                                    {detectedCapabilities.length > 0 && <span>{t('settingsExtra.keyDialog.capabilities', detectedCapabilities.map(cap => t(capabilityLabelKeys[cap])).join(t('settingsExtra.runtime.credentialSeparator')))}</span>}
+                                    {fetchedModels.length > 0 && <span>{t('settingsExtra.keyDialog.detectedModelCount', fetchedModels.length)}</span>}
+                                    {isFetchingModels && <span className="animate-pulse">{t('settingsExtra.keyDialog.fetchingModels')}</span>}
                                 </div>
                             )}
 
-                            <label className="block">
-                                <span className={`mb-1.5 block text-sm font-medium ${isDark ? 'text-[#D0D5DD]' : 'text-[#344054]'}`}>{t('settingsExtra.keyDialog.requestUrl')}</span>
-                                <input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} onKeyDown={event => event.stopPropagation()} onKeyUp={event => event.stopPropagation()} placeholder={t('settingsExtra.keyDialog.requestUrlPlaceholder')} className={`${inputClass} flv-safe-input`} name="baseUrl" autoComplete="url" inputMode="url" />
-                            </label>
-
-                            {provider === 'custom' && (
-                                <div className={`rounded-xl px-3 py-2 text-xs ${isDark ? 'bg-[#161A22] text-[#98A2B3]' : 'bg-[#F8FAFC] text-[#667085]'}`}>
-                                    {t('settingsExtra.keyDialog.compatibilityNote')}
+                            <details className="group rounded-xl border border-dashed border-[var(--isl-border)]" open={!!editingKeyId && !!(extraConfig.remark || extraConfig.websiteUrl)} data-testid="key-dialog-service-info">
+                                <summary className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-xl px-3 py-2 text-xs font-medium text-[var(--isl-ink-soft)] [&::-webkit-details-marker]:hidden">
+                                    <span className="min-w-0 truncate">{t('settingsExtra.keyDialog.moreInfo')}</span>
+                                    <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="shrink-0 opacity-60 transition-transform group-open:rotate-180"><path d="m6 9 6 6 6-6" /></svg>
+                                </summary>
+                                <div className="grid gap-3 px-3 pb-3 md:grid-cols-2">
+                                    <label className="block min-w-0">
+                                        <span className="mb-1.5 block text-xs font-medium text-[var(--isl-ink)]">{t('settingsExtra.keyDialog.notes')}</span>
+                                        <input value={extraConfig.remark || ''} onChange={(event) => updateExtraConfig('remark', event.target.value)} placeholder={t('settingsExtra.keyDialog.notesPlaceholder')} className={inputClass} />
+                                    </label>
+                                    <label className="block min-w-0">
+                                        <span className="mb-1.5 block text-xs font-medium text-[var(--isl-ink)]">{t('settingsExtra.keyDialog.website')}</span>
+                                        <input value={extraConfig.websiteUrl || ''} onChange={(event) => updateExtraConfig('websiteUrl', event.target.value)} placeholder={t('settingsExtra.keyDialog.websitePlaceholder')} className={inputClass} />
+                                    </label>
                                 </div>
-                            )}
+                            </details>
 
                             {provider === 'custom' && (
-                                <details className="group rounded-2xl border border-[var(--isl-border)]" open={!!extraConfig.providerScriptId} data-testid="key-dialog-adapter-disclosure">
-                                    <summary className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-2xl px-3 py-2.5 [&::-webkit-details-marker]:hidden">
+                                <details className="group rounded-xl border border-dashed border-[var(--isl-border)]" open={!!extraConfig.providerScriptId} data-testid="key-dialog-adapter-disclosure">
+                                    <summary className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-xl px-3 py-2 [&::-webkit-details-marker]:hidden">
                                         <span className="min-w-0"><span className="block text-sm font-bold text-[var(--isl-ink)]">{t('settingsExtra.keyDialog.adapterToggle')}</span><span className="mt-0.5 block truncate text-[11px] text-[var(--isl-ink-soft)]">{t('settingsExtra.keyDialog.adapterToggleHint')}</span></span>
                                         <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="shrink-0 opacity-60 transition-transform group-open:rotate-180"><path d="m6 9 6 6 6-6" /></svg>
                                     </summary>
@@ -1629,11 +1535,14 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                                     <span className={`text-sm font-medium ${isDark ? 'text-[#D0D5DD]' : 'text-[#344054]'}`}>{t('settingsExtra.keyDialog.modelList')}</span>
                                     <button
                                         type="button"
+                                        onClick={() => {
+                                            setShowModelPicker(true);
+                                            void handleFetchModels(provider, apiKey, baseUrl);
+                                        }}
                                         disabled={!apiKey.trim() || isFetchingModels}
-                                        onClick={() => handleFetchModels(provider, apiKey, baseUrl)}
-                                        className={`rounded-full border px-2.5 py-1 text-[11px] font-medium transition disabled:opacity-40 ${
+                                        className={'rounded-full border px-2.5 py-1 text-[11px] font-medium transition disabled:opacity-40 ' + (
                                             isDark ? 'border-[#4B5B78] text-[#7CB4FF] hover:bg-[#1B2330]' : 'border-[#B2CCFF] text-[#175CD3] hover:bg-[#EEF4FF]'
-                                        }`}
+                                        )}
                                     >
                                         {isFetchingModels ? t('settingsExtra.keyDialog.fetching') : t('settingsExtra.keyDialog.fetchModels')}
                                     </button>
@@ -1665,7 +1574,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                                         placeholder={t('settingsExtra.keyDialog.addModelPlaceholder')}
                                         className={`${inputClass} flv-safe-input`}
                                     />
-                                    <button type="button" onClick={handleAddModel} className={`${chipClass} flv-elastic`}>{t('settingsExtra.mapping.add')}</button>
+                                    <button type="button" onClick={handleAddModel} className={`${chipClass} flv-elastic shrink-0 whitespace-nowrap`}>{t('settingsExtra.mapping.add')}</button>
                                 </div>
                                 {editModels.length > 0 && (
                                     <div className={`mt-1.5 text-[11px] ${isDark ? 'text-[#667085]' : 'text-[#98A2B3]'}`}>
@@ -1703,7 +1612,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                                             <button type="button" aria-label={t('settingsExtra.keyDialog.removePricingRule')} onClick={() => setEditPricingRules(current => current.filter(item => item.id !== rule.id))} className="isl-chip px-3 text-xs text-red-500">{t('settingsExtra.api.delete')}</button>
                                         </motion.div>
                                     ))}
-                                    {editPricingRules.length === 0 && <div className="rounded-2xl border border-dashed border-[var(--isl-border)] px-3 py-5 text-center text-xs text-[var(--isl-ink-soft)]">{t('settingsExtra.keyDialog.noPricingRules')}</div>}
+                                    {editPricingRules.length === 0 && <div className="rounded-2xl border border-dashed border-[var(--isl-border)] settings-elevated settings-elevated--soft px-3 py-5 text-center text-xs text-[var(--isl-ink-soft)]">{t('settingsExtra.keyDialog.noPricingRules')}</div>}
                                 </div>
                             </div>
 
@@ -1845,6 +1754,26 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 </motion.div>
             )}
             </AnimatePresence>
+            {showKeyModal && showModelPicker && (
+                <ChannelModelPicker
+                    existing={editModels}
+                    fetched={fetchedModels}
+                    fetching={isFetchingModels}
+                    fetchError={fetchError}
+                    canFetch={!!apiKey.trim()}
+                    onFetch={() => handleFetchModels(provider, apiKey, baseUrl)}
+                    onConfirm={next => {
+                        setEditModels(next);
+                        if (!next.some(model => model.id === editDefaultModel)) setEditDefaultModel(next[0]?.id || '');
+                        setShowModelPicker(false);
+                    }}
+                    onClose={baseline => {
+                        setEditModels(baseline);
+                        if (!baseline.some(model => model.id === editDefaultModel)) setEditDefaultModel(baseline[0]?.id || '');
+                        setShowModelPicker(false);
+                    }}
+                />
+            )}
         </div>
     );
 };

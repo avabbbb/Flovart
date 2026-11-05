@@ -32,7 +32,7 @@ export type UserScriptValue =
   | boolean
   | null
   | { $path: string }
-  | { $map: { path: string; item: UserScriptValue } }
+  | { $map: { path: string; item: UserScriptValue; where?: { path: string; equals: string | number | boolean | null } } }
   | UserScriptValue[]
   | { [key: string]: UserScriptValue };
 
@@ -71,6 +71,8 @@ export interface UserScriptProviderDefinition {
   supportedReferenceKinds: readonly ProviderReferenceKind[];
   supportedReferenceRoles: readonly WorkflowGenerationReferenceRole[];
   maxReferences: Readonly<Record<ProviderReferenceKind, number>>;
+  /** 参考媒体总像素范围（宽×高）；只对声明的类型做前置校验。 */
+  referencePixelRange?: Readonly<Partial<Record<ProviderReferenceKind, { min?: number; max?: number }>>>;
   auth?: { header: string; prefix?: string };
   request: UserScriptRequestDefinition;
   response: UserScriptResponseDefinition;
@@ -174,6 +176,16 @@ function validateDefinition(definition: UserScriptProviderDefinition): void {
   if (definition.supportedReferenceKinds.some(kind => definition.maxReferences[kind] <= 0)) {
     throw new Error('声明为 supported 的 reference kind 必须有大于 0 的 maxReferences。');
   }
+  for (const [kind, range] of Object.entries(definition.referencePixelRange || {})) {
+    if (!MEDIA_KINDS.has(kind as ProviderReferenceKind) || !range || typeof range !== 'object') {
+      throw new Error('User Provider referencePixelRange 类型无效：' + kind);
+    }
+    const { min, max } = range;
+    for (const bound of [min, max]) {
+      if (bound !== undefined && (!Number.isInteger(bound) || bound <= 0)) throw new Error('User Provider ' + kind + ' referencePixelRange 必须是正整数。');
+    }
+    if (min !== undefined && max !== undefined && min > max) throw new Error('User Provider ' + kind + ' referencePixelRange 的 min 不能大于 max。');
+  }
   if (!endpoint.pathname) throw new Error('User Provider endpoint 无效。');
 }
 
@@ -205,7 +217,9 @@ function resolveMapping(value: UserScriptValue, root: Record<string, unknown>, i
   if (isRecord(mapValue) && typeof mapValue.path === 'string' && 'item' in mapValue) {
     const source = readPath(root, mapValue.path);
     if (!Array.isArray(source)) return [];
-    return source.map(entry => resolveMapping(mapValue.item as UserScriptValue, root, entry));
+    const where = isRecord(mapValue.where) && typeof mapValue.where.path === 'string' ? mapValue.where : undefined;
+    const selected = where ? source.filter(entry => readPath(root, String(where.path), entry) === where.equals) : source;
+    return selected.map(entry => resolveMapping(mapValue.item as UserScriptValue, root, entry));
   }
   return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, resolveMapping(entry, root, item)]));
 }
@@ -368,6 +382,7 @@ export class UserScriptProviderAdapter {
       supportedReferenceKinds: [...this.definition.supportedReferenceKinds],
       supportedReferenceRoles: [...this.definition.supportedReferenceRoles],
       maxReferences: { ...this.definition.maxReferences },
+      ...(this.definition.referencePixelRange ? { referencePixelRange: { ...this.definition.referencePixelRange } } : {}),
     };
   }
 
@@ -376,7 +391,14 @@ export class UserScriptProviderAdapter {
     const errors = validateReferenceSet(
       input.capability,
       capabilities,
-      input.references.map(reference => ({ kind: reference.resource.kind as ProviderReferenceKind, role: reference.role })),
+      input.references.map(reference => ({
+        kind: reference.resource.kind as ProviderReferenceKind,
+        role: reference.role,
+        width: reference.resource.naturalWidth,
+        height: reference.resource.naturalHeight,
+        title: reference.resource.title,
+        resourceId: reference.resource.resourceId,
+      })),
     );
     return { ok: errors.length === 0, capabilities, errors };
   }

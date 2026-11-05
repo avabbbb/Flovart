@@ -662,6 +662,17 @@
 .workflow-group-frame__label { position: absolute; left: 10px; top: 6px; display: inline-flex; align-items: center; height: 22px; padding: 0 9px; border-radius: 7px; color: #fff; background: hsl(var(--group-hue) 45% 34% / .92); font-size: 12px; font-weight: 600; white-space: nowrap; pointer-events: auto; cursor: grab; user-select: none; }
 .workflow-group-frame__label:active { cursor: grabbing; }
 
+/* 子画布框（逆向工程 → Canvas） */
+.workflow-node--subgraph { background: hsl(210 40% 50% / .06); border: 1px dashed hsl(210 45% 45% / .55); box-shadow: none; }
+.workflow-subgraph { container-type: inline-size; display: flex; flex-direction: column; height: 100%; padding: 0 10px; pointer-events: none; }
+.workflow-subgraph-header { flex: 0 0 32px; height: 32px; display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; font-size: 12px; font-weight: 600; color: var(--isl-ink-soft); }
+.workflow-subgraph-header > svg, .workflow-subgraph-count { flex: 0 0 auto; white-space: nowrap; }
+.workflow-subgraph-toggle { display: inline-grid; place-items: center; flex: 0 0 auto; width: 22px; height: 22px; margin-left: auto; border-radius: 6px; pointer-events: auto; }
+.workflow-subgraph-toggle:hover { background: rgba(0, 0, 0, .06); }
+.workflow-subgraph-hint { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; font-weight: 400; color: var(--isl-ink-ghost); }
+@container (max-width: 260px) { .workflow-subgraph-hint { display: none; } }
+.workflow-node--subgraph .workflow-node__title-text { flex: 0 1 auto; }
+
 /* 图层缩略图 */
 .workflow-layer-card__thumb { flex: 0 0 auto; width: 32px; height: 32px; border-radius: 6px; object-fit: cover; background: var(--isl-surface-2); }
 .workflow-layer-card__thumb--icon { display: grid; place-items: center; color: var(--isl-ink-soft); }

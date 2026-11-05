@@ -631,7 +631,8 @@ async function startLocal(projectDir, plan) {
     } : undefined,
     launchWeb: async () => webProcess,
     open: plan.openBrowser,
-    timeoutMs: 45_000,
+    // 冷启动：页面首次挂载 26–48s + bootstrap 换取 + /hosts 探测 3–4s + 首帧快照，45s 不够。
+    timeoutMs: 90_000,
   });
   if (bootstrap.frontend.url && webProcess?.child) writeWebDiscovery({ url: bootstrap.frontend.url, pid: webProcess.child.pid }, env);
   if (bootstrap.ok) clearBrowserLaunchState(env);
@@ -776,18 +777,22 @@ export async function findExistingWebUi({ preferredPort, env = process.env, prob
   return null;
 }
 
+// rundll32 url.dll 实测会丢掉 & 之后的 bootstrapToken，cmd start 会把 & 当命令分隔符。
+// PowerShell 单引号字面量不做任何展开，整条 URL 原样交给默认浏览器（内部单引号写成两个）。
 export function buildBrowserOpenCommand(url, os = platform()) {
-  const command = os === 'win32' ? 'rundll32.exe' : os === 'darwin' ? 'open' : 'xdg-open';
-  // The Windows shell treats `&` in a bootstrap URL as a command separator;
-  // use the OS URL handler directly so the short-lived token arrives intact.
-  const args = os === 'win32' ? ['url.dll,FileProtocolHandler', url] : [url];
-  return { command, args };
+  if (os === 'win32') {
+    return {
+      command: 'powershell.exe',
+      args: ['-NoProfile', '-NonInteractive', '-Command', "Start-Process '" + url.replace(/'/g, "''") + "'"],
+    };
+  }
+  return { command: os === 'darwin' ? 'open' : 'xdg-open', args: [url] };
 }
 
 function openBrowser(url, options = {}) {
   const { command, args } = buildBrowserOpenCommand(url);
   try {
-    spawn(command, args, { detached: true, stdio: 'ignore', shell: false }).unref();
+    spawn(command, args, { detached: true, stdio: 'ignore', shell: false, windowsHide: true }).unref();
     if (!options.quiet) log('Opened browser: ' + redactBootstrapUrl(url));
     return true;
   } catch (e) {

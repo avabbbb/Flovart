@@ -87,7 +87,7 @@ describe('SettingsPanel locale', () => {
     expect(within(dialog).getByRole('button', { name: 'Close API key form' })).toBeInTheDocument();
     expect(within(dialog).getByPlaceholderText('Enter the API key here; other fields can be filled automatically')).toBeInTheDocument();
     expect(within(dialog).getByRole('button', { name: '🔄 Get models' })).toBeDisabled();
-    expect(within(dialog).getByText('OpenAI-compatible endpoint')).toBeInTheDocument();
+    expect(within(dialog).getByRole('combobox', { name: 'Protocol' })).toBeInTheDocument();
     expect(within(dialog).queryByText('常用 AI 服务')).not.toBeInTheDocument();
     expect(within(dialog).queryByText('价格规则')).not.toBeInTheDocument();
     expect(within(dialog).queryByText('预算策略')).not.toBeInTheDocument();
@@ -122,8 +122,7 @@ describe('SettingsPanel locale', () => {
     render(<SettingsLocaleFixture userApiKeys={[userService]} />);
     await waitFor(() => expect(runtimeExecute).toHaveBeenCalledWith(expect.objectContaining({ command: 'provider.status' })));
 
-    fireEvent.click(screen.getByRole('button', { name: 'Show details' }));
-    expect(screen.getByText('My private endpoint')).toBeInTheDocument();
+    expect(within(screen.getByTestId('settings-channel-list')).getByText('My private endpoint')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '+ Add AI service' }));
     const dialog = await screen.findByRole('dialog', { name: 'Add an AI service' });
     fireEvent.change(within(dialog).getByLabelText('API key'), { target: { value: 'test-key' } });
