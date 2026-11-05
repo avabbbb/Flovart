@@ -1,4 +1,4 @@
-import { AtSign, Box, Check, ChevronDown, Hand, History, Image as ImageIcon, KeyRound, LayoutGrid, Plus, RotateCw, Send, Square, Trash2, Video, X } from 'lucide-react';
+import { AtSign, Box, Check, ChevronDown, Hand, Image as ImageIcon, KeyRound, LayoutGrid, Plus, RotateCw, Send, Square, Trash2, Video, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getManagedAgentConnection } from '../../services/managedAgentConnection';
 import {
@@ -27,7 +27,6 @@ import { displayError as toDisplayError } from '../../services/displayError';
 import { agentSetupMessage, classifyAgentSetupError, type AgentSetupBlocker } from '../../services/runtimeHealth';
 import { useWorkspaceStore } from '../../stores/useWorkspaceStore';
 import { translations } from '../../utils/translations';
-import { COMMUNITY_WORKFLOWS } from '../landing/communityTypes';
 import type { AssetLibrary, UserApiKey } from '../../types';
 import { AgentEmptyState, CreationModeControl, creationModeLabel, type AgentModelSelection, type AgentQuickAction } from './AgentComposerExtras';
 import { AgentModelPicker } from './AgentModelPicker';
@@ -194,13 +193,10 @@ const userApiKeysRef = useRef(userApiKeys);
   const [sessionsOpen, setSessionsOpen] = useState(false);
   const [sessionList, setSessionList] = useState<Array<{ id: string; title: string; updatedAt: string }>>([]);
   const [activeSessionId, setActiveSessionId] = useState('');
-  // Lane15 first-run UX: `setupBlocker` classifies a cold-open/send failure via
+  // Lane15 first-run UX: setupBlocker classifies a cold-open/send failure via
   // the executor taxonomy (runtimeHealth) instead of raw strings, so the panel
-  // can render a real next step ('Add API key' / 'browse offline') instead of a
-  // jargon dead end. `browseFirst` is the offline-mode escape: it suppresses the
-  // blocker card and surfaces templates/recent sessions above the composer.
+  // can render a real next step ('Add API key') instead of a jargon dead end.
   const [setupBlocker, setSetupBlocker] = useState<AgentSetupBlocker | null>(null);
-  const [browseFirst, setBrowseFirst] = useState(false);
   const language = useWorkspaceStore(s => s.language);
   const languageRef = useRef(language);
   languageRef.current = language;
@@ -752,7 +748,7 @@ const userApiKeysRef = useRef(userApiKeys);
   };
   const activeSessionTitle = sessionList.find(session => session.id === activeSessionId)?.title || t('agentPanel.newChat');
   const conversationEmpty = !messages.some(message => message.role === 'user' || message.role === 'assistant' || message.role === 'tool');
-  const setupGate = Boolean(setupBlocker) && !browseFirst;
+  const setupGate = Boolean(setupBlocker);
   return (
     <div ref={rootRef} className="workflow-agent is-embedded agent-conversation">
       <header className="workflow-agent__utility agent-conversation__header">
@@ -789,26 +785,15 @@ const userApiKeysRef = useRef(userApiKeys);
         {/* When setup is the blocker, the setup card is the one thing to read: drop the duplicate red config error and the browse/skill decks under it. */}
         <div className="agent-conversation__messages"><WorkflowAgentMessages messages={setupGate ? messages.filter(message => message.id !== 'agent-text-config') : messages} running={sending} language={language} /></div>
         {todoItems.length > 0 && !setupGate && <div className='mx-3'><AgentTodoCard items={todoItems} language={language} /></div>}
-        {setupBlocker && !browseFirst && (
+        {setupBlocker && (
           <div role="alert" data-testid="agent-setup-card" className="mx-3 mb-2 rounded-xl border px-3 py-2.5" style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-surface-2)' }}>
             <p style={{ margin: 0, fontSize: 12, lineHeight: 1.7, color: 'var(--isl-ink-soft)' }}>{localizedAgentSetupMessage(setupBlocker, undefined, language)}</p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
               <button type="button" onClick={onOpenSettings} className="isl-chip flex items-center gap-1 px-3 py-1.5 text-xs font-semibold" style={{ color: 'var(--isl-mint-deep)' }}><KeyRound size={13} />{t('agentPanel.addApiKey')} →</button>
-              <button type="button" onClick={() => setBrowseFirst(true)} className="isl-chip flex items-center gap-1 px-3 py-1.5 text-xs font-semibold"><LayoutGrid size={13} />{t('agentPanel.tryOffline')} →</button>
             </div>
           </div>
         )}
-        <BrowseFirstDeck
-          visible={!setupGate && conversationEmpty}
-          expanded={browseFirst}
-          sessions={sessionList}
-          activeSessionId={activeSessionId}
-          onOpenSession={id => void handleOpenSession(id)}
-          onPickTemplate={value => { setPrompt(value); focusComposer(); }}
-          offline={browseFirst}
-          t={t}
-        />
-        {!setupGate && !browseFirst && conversationEmpty && <AgentEmptyState
+        {!setupGate && conversationEmpty && <AgentEmptyState
           language={language}
           onAction={runQuickAction}
           onStoryText={text => { setPrompt(`${language === 'zho' ? '请把以下故事改编为分镜脚本：' : 'Adapt the following story into a shot-by-shot script:'}\n${text}`); setCreationMode('storyboard'); focusComposer(); }}
@@ -935,72 +920,3 @@ function ReferenceGroup({ label, items, onSelect, icon, empty }: { label: string
     : <p>{empty}</p>}</section>;
 }
 
-
-/**
- * Browse-first strip (gap #9): a first-run user lands on a creation form with
- * nothing to react to. Before the composer this shows two zero-commitment
- * entries — recent sessions to reopen, and the built-in community template
- * gallery — each click prefills a starting brief instead of demanding a prompt
- * from scratch. Renders only while the conversation is empty; `expanded` marks
- * the first-run case (zero-node project or explicit offline browsing).
- */
-function BrowseFirstDeck({ visible, expanded, sessions, activeSessionId, onOpenSession, onPickTemplate, offline, t }: {
-  visible: boolean;
-  expanded: boolean;
-  sessions: Array<{ id: string; title: string; updatedAt: string }>;
-  activeSessionId: string;
-  onOpenSession: (id: string) => void;
-  onPickTemplate: (brief: string) => void;
-  offline: boolean;
-  t: (key: string, ...args: number[]) => string;
-}) {
-  if (!visible || !expanded) return null;
-  const templates = COMMUNITY_WORKFLOWS.slice(0, 4);
-  return (
-    <section aria-label={t('browse.title')} data-testid="agent-browse-first" className="mx-3 mb-2 rounded-xl border px-3 py-2.5" style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-surface)' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <LayoutGrid size={15} style={{ color: 'var(--isl-mint-deep)', flexShrink: 0 }} />
-        <div style={{ minWidth: 0 }}>
-          <strong style={{ display: 'block', fontSize: 12, color: 'var(--isl-ink)' }}>{offline ? t('browse.offlineMode') : t('browse.title')}</strong>
-          <small style={{ fontSize: 10, color: 'var(--isl-ink-ghost)' }}>{offline ? t('browse.offlineHint') : t('browse.subtitle')}</small>
-        </div>
-      </div>
-      {sessions.length > 0 && (
-        <div style={{ marginTop: 8 }} aria-label={t('browse.recent')}>
-          <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--isl-ink-ghost)' }}>{t('browse.recent')}</span>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
-            {sessions.slice(0, 3).map(session => (
-              <button
-                key={session.id}
-                type="button"
-                className="isl-chip flex items-center gap-1 px-2 py-1 text-[11px]"
-                style={session.id === activeSessionId ? { color: 'var(--isl-mint-deep)' } : undefined}
-                onClick={() => onOpenSession(session.id)}
-              >
-                <History size={12} />
-                <span>{session.title || t('agentPanel.newChat')}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-      <div style={{ marginTop: 8 }} aria-label={t('browse.templates')}>
-        <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--isl-ink-ghost)' }}>{t('browse.templates')}</span>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 6, marginTop: 4 }}>
-          {templates.map(item => (
-            <button
-              key={item.id}
-              type="button"
-              title={`${t('browse.useTemplate')}：${item.title}`}
-              onClick={() => onPickTemplate(`${item.title}：${item.description || item.workflowJson.nodes.map(node => node.metadata?.prompt || '').filter(Boolean)[0] || ''}`)}
-              style={{ background: item.gradient, border: 0, borderRadius: 9, padding: '10px 10px 8px', textAlign: 'left', color: '#fff', cursor: 'pointer' }}
-            >
-              <span style={{ display: 'block', fontSize: 11, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.title}</span>
-              <small style={{ fontSize: 9, opacity: 0.85 }}>{item.author.name}</small>
-            </button>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}

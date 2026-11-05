@@ -187,8 +187,6 @@ export const translations = {
         templates: 'Templates',
         emptyRecent: 'No recent sessions yet.',
         useTemplate: 'Use this template',
-        offlineMode: 'Offline browsing',
-        offlineHint: 'You can explore templates and drafts offline; add an API key when you are ready to generate.',
     },
     agentPanel: {
         title: 'Chat',
@@ -206,7 +204,6 @@ export const translations = {
         toolPreparingPlan: 'Reading or preparing the Production plan',
         toolUpdatingDraft: 'Updating the current Workflow draft',
         addApiKey: 'Add API key',
-        tryOffline: 'Try offline mode',
         openHosts: 'Pick a collaborator',
         history: 'Chat history',
         newChat: 'New chat',
@@ -691,8 +688,6 @@ export const translations = {
         templates: '模板',
         emptyRecent: '暂无最近会话。',
         useTemplate: '用这个模板',
-        offlineMode: '离线浏览中',
-        offlineHint: '离线也能浏览模板和草稿；想生成时再添加 API Key。',
     },
     agentPanel: {
         title: '对话',
@@ -710,7 +705,6 @@ export const translations = {
         toolPreparingPlan: '正在读取或编译 Production Plan',
         toolUpdatingDraft: '正在操作同一 Workflow Draft',
         addApiKey: '添加 API Key',
-        tryOffline: '试试离线模式',
         openHosts: '选择协作助手',
         history: '历史对话',
         newChat: '新对话',

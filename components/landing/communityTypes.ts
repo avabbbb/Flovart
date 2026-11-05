@@ -66,24 +66,6 @@ function makeWorkflow(
 
 export const COMMUNITY_WORKFLOWS: CommunityWorkflow[] = [
   {
-    id: 'cw1',
-    title: '赛博废土武侠短片',
-    description: '霓虹+水墨的赛博武侠分镜工作流，6 分镜一键生成',
-    thumbUrls: [],
-    gradient: 'linear-gradient(135deg, #1a1a2e 0%, #e94560 100%)',
-    author: { name: '阿浪' },
-    likes: 1240,
-    views: 5230,
-    forks: 86,
-    category: 'TV Show',
-    tags: ['赛博', '武侠', '分镜'],
-    workflowJson: makeWorkflow('赛博废土武侠', [
-      { type: 'text', prompt: '赛博武侠短片脚本，6 个分镜，霓虹+水墨混合风格', x: 80, y: 120 },
-      { type: 'image', prompt: '霓虹街道特写，赛博武士背影，水墨笔触，雨夜', x: 380, y: 120 },
-    ]),
-    createdAt: iso(1000 * 60 * 60 * 24),
-  },
-  {
     id: 'cw2',
     title: '花园精灵角色迭代',
     description: '从文字描述到角色 4 视图，连贯生成一组精灵造型',

@@ -26,13 +26,19 @@ async function getOrCreateSalt(): Promise<Uint8Array> {
 
 /**
  * 派生加密密钥。
- * 使用 origin + userAgent 与随机 salt 通过 PBKDF2 派生。
+ * v2：origin + 随机 salt 经 PBKDF2 派生，不依赖 userAgent，浏览器升级后仍能解密。
+ * legacy：旧版用 origin + userAgent，只用于读取旧密文，读出后立即以 v2 重写。
  * 这只保护浏览器静态存储，不等同于 Windows Credential Manager；
  * 同源脚本被攻破时仍可能代表用户使用 Secret。
  */
-async function deriveKey(salt: Uint8Array): Promise<CryptoKey> {
-    // 使用 origin + userAgent 作为伪设备指纹
-    const passphrase = `${location.origin}::${navigator.userAgent}`;
+type KeyDerivation = 'v2' | 'legacy';
+const V2_PREFIX = 'v2:';
+const VAULT_UNREADABLE_KEY = 'api_keys.unreadable';
+
+async function deriveKey(salt: Uint8Array, derivation: KeyDerivation = 'v2'): Promise<CryptoKey> {
+    const passphrase = derivation === 'v2'
+        ? 'flovart-vault-v2::' + location.origin
+        : location.origin + '::' + navigator.userAgent;
     const keyMaterial = await crypto.subtle.importKey(
         'raw',
         ENCODER.encode(passphrase),
@@ -59,14 +65,14 @@ export async function encryptKeys(data: unknown): Promise<string> {
     const packed = new Uint8Array(iv.length + new Uint8Array(ciphertext).length);
     packed.set(iv, 0);
     packed.set(new Uint8Array(ciphertext), iv.length);
-    return btoa(String.fromCharCode(...packed));
+    return V2_PREFIX + btoa(String.fromCharCode(...packed));
 }
 
-export async function decryptKeys<T = unknown>(encoded: string): Promise<T | null> {
+async function decryptWith<T>(packedBase64: string, derivation: KeyDerivation): Promise<T | null> {
     try {
         const salt = await getOrCreateSalt();
-        const key = await deriveKey(salt);
-        const packed = Uint8Array.from(atob(encoded), c => c.charCodeAt(0));
+        const key = await deriveKey(salt, derivation);
+        const packed = Uint8Array.from(atob(packedBase64), c => c.charCodeAt(0));
         const iv = packed.slice(0, 12);
         const ciphertext = packed.slice(12);
         const plaintext = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ciphertext);
@@ -74,6 +80,11 @@ export async function decryptKeys<T = unknown>(encoded: string): Promise<T | nul
     } catch {
         return null;
     }
+}
+
+export async function decryptKeys<T = unknown>(encoded: string): Promise<T | null> {
+    if (encoded.startsWith(V2_PREFIX)) return decryptWith<T>(encoded.slice(V2_PREFIX.length), 'v2');
+    return decryptWith<T>(encoded, 'legacy');
 }
 
 /**
@@ -93,11 +104,24 @@ export async function saveKeysEncrypted(keys: unknown): Promise<void> {
  */
 export async function loadKeysDecrypted<T = unknown>(): Promise<T | null> {
     const vault = await vaultStorage.getItem<string>(VAULT_STORAGE_KEY);
-    if (vault) {
-        const result = await decryptKeys<T>(vault);
-        if (result !== null) return result;
+    if (!vault) return null;
+    const result = await decryptKeys<T>(vault);
+    if (result !== null) {
+        // 旧派生（含 userAgent）的密文读出后立刻改写为 v2，下次浏览器升级不再读不出。
+        if (!vault.startsWith(V2_PREFIX)) await saveKeysEncrypted(result);
+        return result;
     }
+    // 解不开（典型：浏览器升级改了 userAgent）：先留存原密文，之后的保存不会把唯一副本覆盖掉。
+    if (!(await vaultStorage.getItem<string>(VAULT_UNREADABLE_KEY))) {
+        await vaultStorage.setItem(VAULT_UNREADABLE_KEY, vault);
+    }
+    console.warn('[Storage] Encrypted API keys could not be decrypted; original ciphertext kept as backup.');
     return null;
+}
+
+/** 解密失败时留存的原密文；为空表示没有需要恢复的旧 Key。 */
+export async function readUnreadableVaultBackup(): Promise<string | null> {
+    return vaultStorage.getItem<string>(VAULT_UNREADABLE_KEY);
 }
 
 /**

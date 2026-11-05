@@ -60,41 +60,33 @@ describe('Flovart Agent panel', () => {
     expect(screen.queryByText('No agent-text route is configured')).not.toBeInTheDocument();
 
     const composer = screen.getByPlaceholderText('请先配置 Agent 文本模型映射');
-    // Lane15 credential wall: the cold-open config error must carry a real
-    // product action — 'Add API key' opens Settings, 'Try offline' reveals the
-    // browse-first deck instead of leaving a jargon dead end.
+    // Lane15 credential wall: the cold-open config error carries one real
+    // product action, 'Add API key', which opens Settings. No offline mode.
     const card = screen.getByTestId('agent-setup-card');
     expect(card).toHaveTextContent('添加 API Key');
+    expect(card).not.toHaveTextContent('离线');
     fireEvent.click(screen.getByRole('button', { name: /添加 API Key/ }));
     expect(onOpenSettings).toHaveBeenCalledOnce();
-    fireEvent.click(screen.getByRole('button', { name: /试试离线模式/ }));
-    expect(screen.queryByTestId('agent-setup-card')).not.toBeInTheDocument();
-    expect(screen.getByTestId('agent-browse-first')).toBeInTheDocument();
+    expect(screen.queryByTestId('agent-browse-first')).not.toBeInTheDocument();
     expect(composer).toBeEnabled();
     fireEvent.change(composer, { target: { value: '配置完成后重试' } });
     await waitFor(() => expect(screen.getByRole('button', { name: '发送' })).toBeEnabled());
   });
 
-  it('surfaces a product-language offline notice and a browse-first deck on a zero-node project', async () => {
-    // Lane15 gaps #9/#15: with no managed agent AND no agent-text credential the
-    // panel must not die on '仅桌面端可用' — it explains the missing host in
-    // product language and still offers Recent/Templates before the composer.
+  it('surfaces a product-language setup notice without an offline mode on a zero-node project', async () => {
+    // Lane15 gap #15: with no managed agent AND no agent-text credential the
+    // panel must not die on '仅桌面端可用'; it explains the missing host in
+    // product language. The offline browsing deck was removed in 0.3.0.
     vi.mocked(getManagedAgentConnection).mockRejectedValueOnce(new Error('fetch failed'));
     const project = { ...createWorkflowProject('空白项目'), id: 'project-blank', nodes: [] };
     render(<FlovartAgentPanel project={project} onActivityChange={vi.fn()} onOpenSettings={vi.fn()} />);
 
-    // Cold-open connection failure is classified as offline, not raw jargon,
-    // and it is the one thing on screen: no deck stacked under it.
     const card = await screen.findByTestId('agent-setup-card');
     expect(card).toHaveTextContent('协作 Agent');
     expect(card).not.toHaveTextContent('spawn');
     expect(card).not.toHaveTextContent('仅桌面端');
+    expect(within(card).queryByRole('button', { name: /先逛逛|离线/ })).not.toBeInTheDocument();
     expect(screen.queryByTestId('agent-browse-first')).not.toBeInTheDocument();
-
-    // Choosing to look around first reveals the browse deck (Recent/Templates).
-    fireEvent.click(within(card).getByRole('button', { name: /先逛逛|离线/ }));
-    expect(await screen.findByTestId('agent-browse-first')).toBeInTheDocument();
-    expect(screen.getByText('赛博废土武侠短片')).toBeInTheDocument();
   });
 
 
