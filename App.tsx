@@ -46,7 +46,6 @@ const WorkflowWorkspace = React.lazy(() => import('./components/workflow/Workflo
 const WorkflowContextPanel = React.lazy(() => import('./components/workflow/WorkflowWorkspace').then(m => ({ default: m.WorkflowContextPanel })));
 const AssetAddModal = React.lazy(() => import('./components/AssetAddModal').then(m => ({ default: m.AssetAddModal })));
 const BrowserImportBridge = React.lazy(() => import('./components/extension/BrowserImportBridge').then(m => ({ default: m.BrowserImportBridge })));
-const ReverseWorkbench = React.lazy(() => import('./components/reverse/ReverseWorkbench').then(m => ({ default: m.ReverseWorkbench })));
 
 type ThemePalette = {
     appBackground: string;
@@ -602,9 +601,10 @@ const App: React.FC = () => {
                     the built-in assistant remains in the right drawer beside the
                     two Workflow views. */}
                 {canvasView === 'reverse' ? (
-                    <Suspense fallback={<div className="grid h-full place-content-center text-sm opacity-40">{language === 'zho' ? '正在加载逆向工作台...' : 'Loading Reverse...'}</div>}>
-                        <ReverseWorkbench language={language} workflowProjectId={activeWorkflowProject?.id ?? null} onOpenInCanvas={handleFocusNodeFromDrawer} />
-                    </Suspense>
+                    <div className="grid h-full place-content-center gap-2 px-6 text-center" style={{ color: 'var(--isl-ink)' }} data-testid="reverse-coming-soon">
+                        <div className="text-base font-bold">{language === 'zho' ? '逆向工作台正在优化' : 'Reverse is being refined'}</div>
+                        <div className="text-sm" style={{ color: 'var(--isl-ink-soft)' }}>{language === 'zho' ? '后续版本上线。内测期间请先使用画布与 Agent，已有的逆向工程数据会保留。' : 'Coming in a later release. Use Canvas and Agent during the beta; existing Reverse projects are kept.'}</div>
+                    </div>
                 ) : canvasView === 'agent' ? (
                     <AgentConnectionsPage project={activeWorkflowProject} language={language} />
                 ) : (

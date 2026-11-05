@@ -327,7 +327,7 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
               className={`shrink-0 whitespace-nowrap rounded-md px-2.5 py-1 text-xs font-bold transition ${isActive ? 'bg-black/5' : 'opacity-50 hover:opacity-80'}`}
               style={{ color: 'var(--isl-ink)' }}
             >
-              {label}
+              {label}{view === 'reverse' && <span className="ml-1 text-[9px] font-semibold opacity-60">{isChinese ? '优化中' : 'Soon'}</span>}
             </button>
           );
         })}
