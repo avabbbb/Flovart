@@ -778,6 +778,14 @@
       "watchers": 0,
       "releases": 18,
       "downloads": 85
+    },
+    {
+      "date": "2026-11-05",
+      "stars": 143,
+      "forks": 36,
+      "watchers": 0,
+      "releases": 18,
+      "downloads": 104
     }
   ],
   "releaseAssets": [
@@ -790,50 +798,98 @@
     {
       "release": "v0.1.0",
       "name": "flovart-agent-toolkit-win32-x64.tar.gz",
-      "downloads": 2,
+      "downloads": 3,
       "updatedAt": "2026-10-16T06:50:45Z"
     },
     {
       "release": "v0.1.0",
       "name": "Flovart_0.1.0_aarch64.dmg",
-      "downloads": 2,
+      "downloads": 3,
       "updatedAt": "2026-10-16T06:47:32Z"
+    },
+    {
+      "release": "v0.1.0",
+      "name": "Flovart_0.1.0_amd64.AppImage.sig",
+      "downloads": 3,
+      "updatedAt": "2026-10-16T06:47:33Z"
+    },
+    {
+      "release": "v0.1.0",
+      "name": "Flovart_0.1.0_amd64.deb",
+      "downloads": 3,
+      "updatedAt": "2026-10-16T06:47:26Z"
+    },
+    {
+      "release": "v0.1.0",
+      "name": "Flovart_0.1.0_amd64.deb.sig",
+      "downloads": 3,
+      "updatedAt": "2026-10-16T06:47:27Z"
+    },
+    {
+      "release": "v0.1.0",
+      "name": "Flovart_0.1.0_x64-setup.exe",
+      "downloads": 3,
+      "updatedAt": "2026-10-16T06:49:24Z"
+    },
+    {
+      "release": "v0.1.0",
+      "name": "Flovart_0.1.0_x64-setup.exe.sig",
+      "downloads": 3,
+      "updatedAt": "2026-10-16T06:49:25Z"
+    },
+    {
+      "release": "v0.1.0",
+      "name": "Flovart_aarch64.app.tar.gz.sig",
+      "downloads": 3,
+      "updatedAt": "2026-10-16T06:47:36Z"
+    },
+    {
+      "release": "v0.1.0",
+      "name": "Flovart_x64.app.tar.gz.sig",
+      "downloads": 3,
+      "updatedAt": "2026-10-16T07:06:16Z"
+    },
+    {
+      "release": "v0.1.0",
+      "name": "latest.json",
+      "downloads": 3,
+      "updatedAt": "2026-10-16T07:06:18Z"
+    },
+    {
+      "release": "v0.1.0",
+      "name": "flovart-agent-toolkit-manifest.json",
+      "downloads": 2,
+      "updatedAt": "2026-10-16T06:50:44Z"
+    },
+    {
+      "release": "v0.1.0",
+      "name": "flovart-macos-15-intel-sbom.spdx.json",
+      "downloads": 2,
+      "updatedAt": "2026-10-16T07:07:24Z"
+    },
+    {
+      "release": "v0.1.0",
+      "name": "flovart-macos-15-sbom.spdx.json",
+      "downloads": 2,
+      "updatedAt": "2026-10-16T06:48:11Z"
+    },
+    {
+      "release": "v0.1.0",
+      "name": "flovart-ubuntu-22.04-sbom.spdx.json",
+      "downloads": 2,
+      "updatedAt": "2026-10-16T06:47:58Z"
+    },
+    {
+      "release": "v0.1.0",
+      "name": "flovart-windows-latest-sbom.spdx.json",
+      "downloads": 2,
+      "updatedAt": "2026-10-16T06:49:49Z"
     },
     {
       "release": "v0.1.0",
       "name": "Flovart_0.1.0_amd64.AppImage",
       "downloads": 2,
       "updatedAt": "2026-10-16T06:47:32Z"
-    },
-    {
-      "release": "v0.1.0",
-      "name": "Flovart_0.1.0_amd64.AppImage.sig",
-      "downloads": 2,
-      "updatedAt": "2026-10-16T06:47:33Z"
-    },
-    {
-      "release": "v0.1.0",
-      "name": "Flovart_0.1.0_amd64.deb",
-      "downloads": 2,
-      "updatedAt": "2026-10-16T06:47:26Z"
-    },
-    {
-      "release": "v0.1.0",
-      "name": "Flovart_0.1.0_amd64.deb.sig",
-      "downloads": 2,
-      "updatedAt": "2026-10-16T06:47:27Z"
-    },
-    {
-      "release": "v0.1.0",
-      "name": "Flovart_0.1.0_x64-setup.exe",
-      "downloads": 2,
-      "updatedAt": "2026-10-16T06:49:24Z"
-    },
-    {
-      "release": "v0.1.0",
-      "name": "Flovart_0.1.0_x64-setup.exe.sig",
-      "downloads": 2,
-      "updatedAt": "2026-10-16T06:49:25Z"
     },
     {
       "release": "v0.1.0",
@@ -849,80 +905,32 @@
     },
     {
       "release": "v0.1.0",
-      "name": "Flovart_aarch64.app.tar.gz.sig",
-      "downloads": 2,
-      "updatedAt": "2026-10-16T06:47:36Z"
-    },
-    {
-      "release": "v0.1.0",
       "name": "Flovart_x64.app.tar.gz",
       "downloads": 2,
       "updatedAt": "2026-10-16T07:06:14Z"
     },
     {
       "release": "v0.1.0",
-      "name": "Flovart_x64.app.tar.gz.sig",
-      "downloads": 2,
-      "updatedAt": "2026-10-16T07:06:16Z"
-    },
-    {
-      "release": "v0.1.0",
-      "name": "latest.json",
-      "downloads": 2,
-      "updatedAt": "2026-10-16T07:06:18Z"
-    },
-    {
-      "release": "v0.1.0",
-      "name": "flovart-agent-toolkit-manifest.json",
-      "downloads": 1,
-      "updatedAt": "2026-10-16T06:50:44Z"
-    },
-    {
-      "release": "v0.1.0",
-      "name": "flovart-macos-15-intel-sbom.spdx.json",
-      "downloads": 1,
-      "updatedAt": "2026-10-16T07:07:24Z"
-    },
-    {
-      "release": "v0.1.0",
-      "name": "flovart-macos-15-sbom.spdx.json",
-      "downloads": 1,
-      "updatedAt": "2026-10-16T06:48:11Z"
-    },
-    {
-      "release": "v0.1.0",
-      "name": "flovart-ubuntu-22.04-sbom.spdx.json",
-      "downloads": 1,
-      "updatedAt": "2026-10-16T06:47:58Z"
-    },
-    {
-      "release": "v0.1.0",
-      "name": "flovart-windows-latest-sbom.spdx.json",
-      "downloads": 1,
-      "updatedAt": "2026-10-16T06:49:49Z"
-    },
-    {
-      "release": "v0.1.0",
       "name": "SHA256SUMS-aarch64-apple-darwin.txt",
-      "downloads": 1,
+      "downloads": 2,
       "updatedAt": "2026-10-16T06:48:11Z"
     },
     {
       "release": "v0.1.0",
       "name": "SHA256SUMS-x86_64-apple-darwin.txt",
-      "downloads": 1,
+      "downloads": 2,
       "updatedAt": "2026-10-16T07:07:23Z"
     },
     {
       "release": "v0.1.0",
       "name": "SHA256SUMS-x86_64-pc-windows-msvc.txt",
-      "downloads": 1,
+      "downloads": 2,
       "updatedAt": "2026-10-16T06:49:49Z"
     },
     {
       "release": "v0.1.0",
       "name": "SHA256SUMS-x86_64-unknown-linux-gnu.txt",
-      "downloads": 1,
+      "downloads": 2,
       "updatedAt": "2026-10-16T06:47:58Z"
     },
     {
@@ -1430,5 +1438,5 @@
       "updatedAt": "2026-10-16T03:30:20Z"
     }
   ],
-  "updatedAt": "2026-11-04T06:38:17.992Z"
+  "updatedAt": "2026-11-05T06:58:04.105Z"
 }
