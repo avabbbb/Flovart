@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createWorkflowNode } from '../components/workflow/constants';
 import { buildCanonicalGenerationInput, resolveWorkflowInputs } from '../components/workflow/inputResolver';
 import { createPromptIntent } from '../components/workflow/promptIntent';
@@ -22,6 +22,10 @@ function canonicalVideo(
 }
 
 describe('provider generation adapter', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it('declares route capabilities and serializes canonical references one-to-one', () => {
     const canonical = canonicalVideo('flovart:veo-3.1', 'image-to-video', [{ id: 'first', type: 'image', role: 'source_image' }]);
     const context = { provider: 'google' as const, productModelId: 'flovart:veo-3.1', routeId: 'veo-3.1-generate-preview' };
@@ -165,6 +169,8 @@ describe('provider generation adapter', () => {
       headers: { get: () => 'application/json' },
     });
     globalThis.fetch = fetchMock;
+    // 走 executeUnifiedIgnition 会带上进度回调；jsdom 的 XHR 绕过 fetch mock，这里去掉 XHR 让上传走 fetch。
+    vi.stubGlobal('XMLHttpRequest', undefined);
     const result = await executeUnifiedIgnition({
       elementId: 'target',
       prompt: '修改构图',

@@ -1611,6 +1611,7 @@ export function InfiniteWorkflow({
           generationRequestId: undefined,
           generationStartedAt: undefined,
           generationMessage: undefined,
+          generationTransfer: undefined,
         },
       }];
     });
@@ -1714,7 +1715,7 @@ export function InfiniteWorkflow({
       return;
     }
     // 入库可能要做解码探测、首次下载 ~31MB ffmpeg core 并转码，耗时数秒到数十秒：
-    // 先放「上传中」占位节点，避免拖入后画布毫无反应；完成后原地替换，失败则移除并提示。
+    // 先放「导入中」占位节点，避免拖入后画布毫无反应；完成后原地替换，失败则移除并提示。
     const nodeId = nanoid();
     const placeholderSize = fitWorkflowMediaSize(type);
     const placeholder = {

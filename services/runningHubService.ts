@@ -4,6 +4,7 @@
  */
 
 import { resolveRouteIdByDocId } from './runningHubRouteCatalog';
+import { requestWithUpload } from './fetchProgress';
 
 const RH_BASE = 'https://www.runninghub.cn/openapi/v2';
 const RH_HOST = 'https://www.runninghub.cn';
@@ -686,17 +687,19 @@ export async function rhUploadFile(
   apiKey: string,
   file: File | Blob,
   fileName?: string,
-  options: Pick<RHRunOptions, 'baseUrl' | 'signal'> = {},
+  options: Pick<RHRunOptions, 'baseUrl' | 'signal'> & { onUploadProgress?: (loaded: number, total?: number) => void } = {},
 ): Promise<string> {
   assertNotAborted(options.signal);
   const formData = new FormData();
   formData.append('file', file, fileName || 'upload.png');
   const uploadUrl = `${rhBase(options.baseUrl)}/media/upload/binary`;
-  const res = await fetchWithTimeout(uploadUrl, {
+  const res = await requestWithUpload(uploadUrl, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${apiKey}` },
+    headers: { Authorization: 'Bearer ' + apiKey },
     body: formData,
-  }, 30_000, options.signal);
+    signal: options.signal,
+    timeoutMs: 30_000,
+  }, options.onUploadProgress);
   if (!res.ok) {
     const text = await res.text();
     throw new Error(withRunningHubDebug(`RunningHub upload failed (${res.status}): ${text}`, {
@@ -737,7 +740,7 @@ function dataUrlToBlob(dataUrl: string): Blob {
 export async function rhUploadDataUrl(
   apiKey: string,
   dataUrl: string,
-  options: Pick<RHRunOptions, 'baseUrl' | 'signal'> = {},
+  options: Pick<RHRunOptions, 'baseUrl' | 'signal'> & { onUploadProgress?: (loaded: number, total?: number) => void } = {},
 ): Promise<string> {
   const blob = dataUrlToBlob(dataUrl);
   const ext = blob.type.split('/')[1] || 'png';

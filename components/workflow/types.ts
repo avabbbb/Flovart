@@ -8,6 +8,8 @@ export type WorkflowNodeStatus = 'idle' | 'loading' | 'success' | 'error';
 export type WorkflowGenerationMode = 'text' | 'image' | 'video' | 'audio';
 export type WorkflowBackgroundMode = 'dots' | 'lines' | 'none';
 export type WorkflowBatchGroupSource = 'auto' | 'manual';
+// 生成阶段的传输明细：上传/下载字节、轮询次数、已输出 token，仅用于节点进度展示。
+export type GenerationTransfer = { phase: 'upload' | 'queue' | 'generate' | 'download'; loaded?: number; total?: number; polls?: number; tokens?: number };
 
 export interface ScriptAsset {
   id: string;
@@ -309,6 +311,8 @@ export interface WorkflowNodeMetadata {
   generationActualTokens?: number;
   generationBillableState?: 'estimated' | 'actual' | 'unknown' | 'not_billable' | 'refunded';
   generationMessage?: string;
+  // 生成中的传输明细；与 progress 同生同灭，结束、失败、停止时一并清空。
+  generationTransfer?: GenerationTransfer;
   filters?: Partial<ImageFilters>;
   scriptBreakdown?: ScriptBreakdown;
   /** 设计元素（画板/矩形/椭圆/文字/钢笔路径）；仅 design 节点使用。 */

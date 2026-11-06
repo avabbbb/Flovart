@@ -414,7 +414,7 @@ const App: React.FC = () => {
             const latest = useWorkflowStore.getState().projects.find(item => item.id === projectId);
             if (!latest?.nodes.some(item => item.id === nodeId && item.metadata.status === 'loading')) return;
             useWorkflowStore.getState().updateProject(projectId, {
-                nodes: latest.nodes.map(item => item.id === nodeId ? { ...item, metadata: { ...item.metadata, status: 'idle', error: undefined, progress: undefined, generationRequestId: undefined, generationStartedAt: undefined, generationMessage: undefined } } : item),
+                nodes: latest.nodes.map(item => item.id === nodeId ? { ...item, metadata: { ...item.metadata, status: 'idle', error: undefined, progress: undefined, generationTransfer: undefined, generationRequestId: undefined, generationStartedAt: undefined, generationMessage: undefined } } : item),
             });
         },
     }), [handleRunWorkflowNode]);
@@ -436,7 +436,7 @@ const App: React.FC = () => {
                 if (latest) {
                     useWorkflowStore.getState().updateProject(project.id, {
                         nodes: latest.nodes.map(item => interruptedIds.has(item.id) && item.metadata.status === 'loading'
-                            ? { ...item, metadata: { ...item.metadata, status: 'error', error: message, generationMessage: undefined, progress: undefined, generationRequestId: undefined } }
+                            ? { ...item, metadata: { ...item.metadata, status: 'error', error: message, generationMessage: undefined, progress: undefined, generationTransfer: undefined, generationRequestId: undefined } }
                             : item),
                     });
                 }
@@ -473,7 +473,7 @@ const App: React.FC = () => {
                         const latest = useWorkflowStore.getState().projects.find(item => item.id === project.id);
                         if (latest) {
                             useWorkflowStore.getState().updateProject(project.id, {
-                                nodes: latest.nodes.map(item => item.id === node.id ? { ...item, metadata: { ...item.metadata, status: 'error', error: message, generationMessage: undefined, progress: undefined } } : item),
+                                nodes: latest.nodes.map(item => item.id === node.id ? { ...item, metadata: { ...item.metadata, status: 'error', error: message, generationMessage: undefined, progress: undefined, generationTransfer: undefined } } : item),
                             });
                         }
                     }

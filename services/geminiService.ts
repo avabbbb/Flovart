@@ -26,6 +26,8 @@
  * - 视频生成失败会中断操作并提示原因
  */
 
+import type { GenerationTransfer } from '../components/workflow/types';
+import { readBodyWithProgress } from './fetchProgress';
 import { GoogleGenAI, Modality, GenerateContentResponse, GenerateVideosOperation, VideoGenerationReferenceType } from "@google/genai";
 import type { PromptEnhanceRequest, PromptEnhanceResult } from "../types";
 
@@ -478,7 +480,7 @@ export async function generateImageFromText(prompt: string, apiKey?: string, sig
 export async function generateVideo(
   prompt: string,
   aspectRatio: '16:9' | '9:16' | '1:1' | '4:3' | '3:4' | '21:9',
-  onProgress: (message: string) => void,
+  onProgress: (message: string, detail?: GenerationTransfer) => void,
   image?: ImageInput,
   apiKey?: string,
   options?: { model?: string; durationSec?: number; resolution?: string; generateAudio?: boolean; signal?: AbortSignal; lastFrame?: ImageInput; referenceImages?: ImageInput[]; baseUrl?: string; pollTimeoutMs?: number },
@@ -544,7 +546,7 @@ export async function generateVideo(
     if (Date.now() - pollStart > MAX_POLL_MS) {
       throw new Error('Veo 视频生成超时（已等待超过 10 分钟）。');
     }
-    onProgress(progressMessages[messageIndex % progressMessages.length]);
+    onProgress(progressMessages[messageIndex % progressMessages.length], { phase: 'generate', polls: messageIndex });
     messageIndex++;
     // 可取消的等待：停止后立即结束，不必等满 10 秒。
     await new Promise<void>((resolve, reject) => {
@@ -585,7 +587,7 @@ export async function generateVideo(
   }
 
   // 步骤9：转换为 Blob 对象
-  const videoBlob = await response.blob();
+  const videoBlob = await readBodyWithProgress(response, (loaded, total) => onProgress('Downloading generated video...', { phase: 'download', loaded, total }), options?.signal);
   const mimeType = response.headers.get('Content-Type') || 'video/mp4';
 
   return { videoBlob, mimeType };

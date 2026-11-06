@@ -10,7 +10,7 @@ import { assertRunningHubModelEndpoint, rhUploadDataUrl, rhUploadFile } from './
 import { explainReferenceCompatibility, sanitizeProductGenerationParams } from './productModelCatalog';
 import { getRouteSchema, getRouteDurations, type RouteCapabilitySchema, type RouteMediaSpec } from './runningHubRouteCatalog';
 import { runRuntimeMediaGeneration } from './runtimeGeneration';
-import type { WorkflowArtifactRef } from '../components/workflow/types';
+import type { GenerationTransfer, WorkflowArtifactRef } from '../components/workflow/types';
 import type { CanonicalGenerationInput, WorkflowGenerationCapability } from '../components/workflow/inputResolver';
 import type { ProviderMaterializedReference } from './providerGenerationAdapter';
 import { validateLegacyProviderRequest } from './providerGenerationAdapter';
@@ -20,6 +20,7 @@ import { loadRuntimeArtifactBlob } from './runtimeArtifacts';
 import { displayError } from './displayError';
 import { fetchRemoteMediaBlob, RemoteMediaFetchError } from './desktopNetwork';
 import { startLatencySpan, trackLatency, type LatencySpan } from './providerLatency';
+import { readBodyWithProgress, requestWithUpload } from './fetchProgress';
 
 function blobToBase64(blob: Blob): Promise<string> {
     return new Promise((resolve, reject) => {
@@ -32,6 +33,24 @@ function blobToBase64(blob: Blob): Promise<string> {
         reader.onerror = () => reject(new Error('读取生成结果失败'));
         reader.readAsDataURL(blob);
     });
+}
+
+// 供应商内部进度回调：文案必填；detail 是传输明细；progress 只在上游给出真实百分比时传。
+type ProviderProgress = (message: string, detail?: GenerationTransfer, progress?: number) => void;
+
+type ProgressFields = { progress?: unknown; percent?: unknown; progress_percent?: unknown; data?: ProgressFields; output?: ProgressFields };
+
+// 上游轮询响应里的真实进度字段（progress / percent / progress_percent），兼容 0-1 与 0-100；没有就返回 undefined，不编造百分比。
+function extractReportedProgress(json: unknown): number | undefined {
+    // 上游 JSON 未校验：只读可选字段，下面逐个做类型检查。
+    const root = (json && typeof json === 'object' ? json : {}) as ProgressFields;
+    for (const candidate of [root.progress, root.percent, root.progress_percent, root.data?.progress, root.data?.percent, root.output?.progress]) {
+        const value = typeof candidate === 'string' ? Number.parseFloat(candidate) : candidate;
+        if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) continue;
+        // 小于 1 视为 0-1 比例；0-100 量纲下的 1 不能被当成 100%。
+        return Math.min(100, value < 1 ? value / 0.01 : value);
+    }
+    return undefined;
 }
 
 type ImageInput = { href: string; mimeType: string };
@@ -169,7 +188,7 @@ export interface UnifiedIgnitionInput {
     /** 浏览器刷新后仅恢复既有供应商任务，不重新提交生成请求。 */
     resumeProviderTaskId?: string;
     signal?: AbortSignal;
-    onProgress?: (progress: number, message: string) => void;
+    onProgress?: (progress: number | undefined, message: string, detail?: GenerationTransfer) => void;
     onProviderTaskLifecycle?: (event: ProviderTaskLifecycleEvent) => void | Promise<void>;
 }
 
@@ -1302,7 +1321,7 @@ function uploadFileNameFor(mimeType: string | undefined, label: string | undefin
 async function uploadLocalRunningHubReference(
     apiKey: string,
     ref: { href: string; mimeType: string; artifactRef?: WorkflowArtifactRef; label?: string },
-    options?: { baseUrl?: string; signal?: AbortSignal },
+    options?: { baseUrl?: string; signal?: AbortSignal; onUploadProgress?: (loaded: number, total?: number) => void },
 ): Promise<string | null> {
     let blob: Blob | null = null;
     try {
@@ -1321,7 +1340,7 @@ async function uploadLocalRunningHubReference(
 async function prepareRunningHubReferences(
     apiKey: string,
     references: VideoImage[] = [],
-    options?: { baseUrl?: string; signal?: AbortSignal },
+    options?: { baseUrl?: string; signal?: AbortSignal; onUploadProgress?: (loaded: number, total?: number) => void },
 ): Promise<VideoImage[]> {
     if (references.length === 0) return [];
     return Promise.all(references.map(async ref => {
@@ -1342,7 +1361,7 @@ async function prepareRunningHubReferences(
 async function prepareRunningHubSlots(
     apiKey: string,
     slots: MultimodalSlot[] = [],
-    options?: { baseUrl?: string; signal?: AbortSignal },
+    options?: { baseUrl?: string; signal?: AbortSignal; onUploadProgress?: (loaded: number, total?: number) => void },
 ): Promise<MultimodalSlot[]> {
     if (slots.length === 0) return [];
     return Promise.all(slots.map(async slot => {
@@ -1910,7 +1929,7 @@ async function generateVideoWithUnifiedAsyncApi(
     key: UserApiKey,
     options?: {
         aspectRatio?: VideoAspectRatio;
-        onProgress?: (message: string) => void;
+        onProgress?: ProviderProgress;
         references?: VideoImage[];
         signal?: AbortSignal;
         pollTimeoutMs?: number;
@@ -1981,13 +2000,16 @@ async function generateVideoWithUnifiedAsyncApi(
 
             let delay = 2000;
             const pollStart = Date.now();
+            let polls = 0;
             const MAX_POLL_MS = options?.pollTimeoutMs ?? 600_000; // 10 分钟超时
             while (true) {
                 throwIfAborted(options?.signal);
                 if (Date.now() - pollStart > MAX_POLL_MS) {
                     throw new Error(options?.pollTimeoutMs ? '视频生成超时，请稍后重试。' : '视频生成超时（已等待超过 10 分钟）');
                 }
-                onProgress(delay <= 2000 ? '任务已提交，正在排队...' : '正在生成视频，请稍候...');
+                polls += 1;
+                const queued = delay <= 2000;
+                onProgress(queued ? '任务已提交，正在排队...' : '正在生成视频，请稍候...', { phase: queued ? 'queue' : 'generate', polls });
                 const queryRes = await fetch(`${apiBase}/v2/videos/generations/${encodeURIComponent(taskId)}`, {
                     headers: { Authorization: `Bearer ${apiKey}` },
                     signal: unifiedVideoRequestSignal(options?.signal, 30_000),
@@ -2000,6 +2022,8 @@ async function generateVideoWithUnifiedAsyncApi(
 
                 const queryJson = await readJsonResponse<any>(queryRes, '统一视频接口查询响应');
                 const status = extractVideoStatus(queryJson);
+                const reportedProgress = extractReportedProgress(queryJson);
+                if (reportedProgress !== undefined && status !== 'succeeded') onProgress('正在生成视频，请稍候...', { phase: 'generate', polls }, reportedProgress);
 
                 if (status === 'failed') {
                     throw new Error(`视频生成失败: ${extractFailureReason(queryJson) || 'Unknown error'}`);
@@ -2017,7 +2041,7 @@ async function generateVideoWithUnifiedAsyncApi(
                     if (!videoRes.ok) {
                         throw new Error(`视频下载失败: ${videoRes.statusText}`);
                     }
-                    const videoBlob = await videoRes.blob();
+                    const videoBlob = await readBodyWithProgress(videoRes, (loaded, total) => onProgress('Downloading generated video...', { phase: 'download', loaded, total }), options?.signal);
                     const mimeType = videoRes.headers.get('Content-Type') || 'video/mp4';
                     span.end();
                     return { videoBlob, mimeType };
@@ -2573,7 +2597,7 @@ export async function generateImageWithProvider(
     model: string,
     key?: UserApiKey,
     images?: VideoImage[],
-    options?: { signal?: AbortSignal; aspectRatio?: VideoAspectRatio; resolution?: string; quality?: string; webSearch?: boolean; realPersonCheck?: boolean; resumeProviderTaskId?: string; onProviderTaskLifecycle?: (event: ProviderTaskLifecycleEvent) => void | Promise<void>; onProgress?: (message: string) => void },
+    options?: { signal?: AbortSignal; aspectRatio?: VideoAspectRatio; resolution?: string; quality?: string; webSearch?: boolean; realPersonCheck?: boolean; resumeProviderTaskId?: string; onProviderTaskLifecycle?: (event: ProviderTaskLifecycleEvent) => void | Promise<void>; onProgress?: ProviderProgress },
 ): Promise<{ newImageBase64: string | null; newImageMimeType: string | null; textResponse: string | null; /** 仅供溯源：远端图片原始 URL（RunningHub 等 24h 临时链接）；本地 base64 仍为内容来源。 */ remoteMediaUrl?: string }> {
     assertResolvedUpstreamModel(model);
     const provider = resolveGenerationProvider(model, key);
@@ -2627,6 +2651,9 @@ export async function generateImageWithProvider(
         const runningHubRefs = await prepareRunningHubReferences(apiKey, materializedRefs, {
             baseUrl,
             signal: options?.signal,
+            onUploadProgress: options?.onProgress
+                ? (loaded, total) => options.onProgress?.('Uploading references...', { phase: 'upload', loaded, total })
+                : undefined,
         });
         const { rhRunTask } = await import('./runningHubService');
         const result = await rhRunTask(apiKey, modelEndpoint, buildRunningHubStandardPayload(prompt, modelEndpoint, key, {
@@ -2645,7 +2672,7 @@ export async function generateImageWithProvider(
             // path; without this an image submit leaves no taskId to resume).
             resumeTaskId: options?.resumeProviderTaskId,
             onTaskId: taskId => options?.onProviderTaskLifecycle?.({ phase: 'submitted', providerTaskId: taskId, submittedAt: Date.now() }),
-            ...(options?.onProgress ? { onProgress: (status: string, attempt: number) => options.onProgress!(`RunningHub ${status} (${attempt})`) } : {}),
+            ...(options?.onProgress ? { onProgress: (status: string, attempt: number) => options.onProgress!('RunningHub ' + status + ' (' + attempt + ')', { phase: status === 'QUEUED' ? 'queue' : 'generate', polls: attempt }) } : {}),
         });
         const imageUrl = extractRunningHubMediaUrl(result, 'image');
         if (!imageUrl) {
@@ -2731,12 +2758,14 @@ export async function generateImageWithProvider(
             });
 
             try {
-                const editsRes = await fetch(`${baseUrl}/images/edits`, {
+                const editsRes = await requestWithUpload(baseUrl + '/images/edits', {
                     signal: options?.signal,
                     method: 'POST',
                     headers: buildProviderHeaders(apiKey, key, { contentType: false }),
                     body: formData,
-                });
+                }, options?.onProgress
+                    ? (loaded, total) => options.onProgress?.('Uploading references...', { phase: 'upload', loaded, total })
+                    : undefined);
                 if (editsRes.ok) {
                     const json = await readJsonResponse<any>(editsRes, `${PROVIDER_LABELS[provider]} 图片编辑响应`);
                     const parsed = await parseOpenAIImageResponse(json);
@@ -2870,7 +2899,7 @@ export async function editImageWithProvider(
     prompt: string,
     model: string,
     key?: UserApiKey,
-    options?: { mask?: ImageInput }
+    options?: { mask?: ImageInput; onUploadProgress?: (loaded: number, total?: number) => void }
 ): Promise<{ newImageBase64: string | null; newImageMimeType: string | null; textResponse: string | null }> {
     assertResolvedUpstreamModel(model);
     const provider = resolveGenerationProvider(model, key);
@@ -2977,11 +3006,11 @@ export async function editImageWithProvider(
 
         // 尝试 /images/edits 标准端点
         try {
-            const response = await fetch(`${baseUrl}/images/edits`, {
+            const response = await requestWithUpload(baseUrl + '/images/edits', {
                 method: 'POST',
                 headers: buildProviderHeaders(apiKey, key, { contentType: false }),
                 body: formData,
-            });
+            }, options?.onUploadProgress);
 
             if (response.ok) {
                 const json = await readJsonResponse<any>(response, `${PROVIDER_LABELS[provider]} 图片编辑响应`);
@@ -3186,13 +3215,13 @@ export async function pollSeedanceVideoTask(
     return { status: 'running', remoteStatus: status || undefined, raw: queryJson };
 }
 
-export async function downloadSeedanceVideoResult(videoUrl: string, options?: { signal?: AbortSignal }): Promise<{ videoBlob: Blob; mimeType: string }> {
+export async function downloadSeedanceVideoResult(videoUrl: string, options?: { signal?: AbortSignal; onProgress?: (loaded: number, total?: number) => void }): Promise<{ videoBlob: Blob; mimeType: string }> {
     throwIfAborted(options?.signal);
     const response = await fetch(videoUrl, { signal: options?.signal });
     if (!response.ok) {
         throw new Error(`视频下载失败: ${response.statusText}`);
     }
-    const blob = await response.blob();
+    const blob = await readBodyWithProgress(response, options?.onProgress, options?.signal);
     const mimeType = response.headers.get('Content-Type') || 'video/mp4';
     return { videoBlob: blob, mimeType };
 }
@@ -3409,7 +3438,7 @@ export async function generateVideoWithProvider(
     key?: UserApiKey,
     options?: {
         aspectRatio?: VideoAspectRatio;
-        onProgress?: (message: string) => void;
+        onProgress?: ProviderProgress;
         references?: VideoImage[];
         slots?: MultimodalSlot[];
         durationSec?: number;
@@ -3477,7 +3506,13 @@ export async function generateVideoWithProvider(
         const baseUrl = getBaseUrl(provider, key);
         const modelEndpoint = runningHubEndpoint!;
         const allImageRefs = references;
-        const uploadOptions = { baseUrl, signal: options?.signal };
+        const uploadOptions = {
+            baseUrl,
+            signal: options?.signal,
+            onUploadProgress: options?.onProgress
+                ? (loaded: number, total?: number) => onProgress('Uploading references...', { phase: 'upload', loaded, total })
+                : undefined,
+        };
         const runningHubRefs = await prepareRunningHubReferences(apiKey, allImageRefs, uploadOptions);
         const runningHubSlots = await prepareRunningHubSlots(apiKey, hasExplicitSlots ? multimodalSlots : [], uploadOptions);
         const { rhRunTask } = await import('./runningHubService');
@@ -3498,14 +3533,14 @@ export async function generateVideoWithProvider(
             signal: options?.signal,
             resumeTaskId: options?.resumeProviderTaskId,
             onTaskId: taskId => options?.onProviderTaskLifecycle?.({ phase: 'submitted', providerTaskId: taskId, submittedAt: Date.now() }),
-            onProgress: (status, attempt) => onProgress(`RunningHub ${status} (${attempt})`),
+            onProgress: (status, attempt) => onProgress('RunningHub ' + status + ' (' + attempt + ')', { phase: status === 'QUEUED' ? 'queue' : 'generate', polls: attempt }),
         });
         const videoUrl = extractRunningHubMediaUrl(result, 'video');
         if (!videoUrl) {
             throw new Error(result.results?.map(item => item.text).filter(Boolean).join('\n') || 'RunningHub 视频任务完成但未返回视频 URL。');
         }
         onProgress('Downloading generated video...');
-        const downloaded = await downloadSeedanceVideoResult(videoUrl, { signal: options?.signal });
+        const downloaded = await downloadSeedanceVideoResult(videoUrl, { signal: options?.signal, onProgress: (loaded, total) => onProgress('Downloading generated video...', { phase: 'download', loaded, total }) });
         return { ...downloaded, remoteMediaUrl: videoUrl };
     }
 
@@ -3567,11 +3602,13 @@ export async function generateVideoWithProvider(
 
         let fileId: string | undefined;
         const miniMaxPollStart = Date.now();
+        let miniMaxPolls = 0;
+        let miniMaxPhase: GenerationTransfer['phase'] = 'queue';
         while (true) {
             if (Date.now() - miniMaxPollStart > (options?.pollTimeoutMs ?? 600_000)) {
                 throw new Error('MiniMax 视频生成超时（已等待超过 10 分钟）');
             }
-            onProgress(progressMessages[messageIndex % progressMessages.length]);
+            onProgress(progressMessages[messageIndex % progressMessages.length], { phase: miniMaxPhase, polls: miniMaxPolls });
             messageIndex++;
             await sleep(10000, options?.signal);
 
@@ -3584,6 +3621,11 @@ export async function generateVideoWithProvider(
             }
             const queryJson = await readJsonResponse<any>(queryRes, 'MiniMax 任务查询响应');
             const status = queryJson?.status;
+            miniMaxPolls += 1;
+            // MiniMax 状态：Preparing / Queueing 仍在排队，Processing 才是生成中。
+            miniMaxPhase = status === 'Preparing' || status === 'Queueing' ? 'queue' : 'generate';
+            const miniMaxProgress = extractReportedProgress(queryJson);
+            if (miniMaxProgress !== undefined) onProgress(progressMessages[messageIndex % progressMessages.length], { phase: miniMaxPhase, polls: miniMaxPolls }, miniMaxProgress);
 
             if (status === 'Fail' || status === 'fail') {
                 throw new Error(`MiniMax 视频生成失败: ${queryJson?.status_msg || 'Unknown error'}`);
@@ -3618,7 +3660,7 @@ export async function generateVideoWithProvider(
         if (!videoRes.ok) {
             throw new Error(`视频下载失败: ${videoRes.statusText}`);
         }
-        const videoBlob = await videoRes.blob();
+        const videoBlob = await readBodyWithProgress(videoRes, (loaded, total) => onProgress('Downloading generated video...', { phase: 'download', loaded, total }), options?.signal);
         const mimeType = videoRes.headers.get('Content-Type') || 'video/mp4';
         return { videoBlob, mimeType };
     }
@@ -3701,7 +3743,7 @@ export async function generateVideoWithProvider(
         onProgress('Downloading generated video...');
         const videoRes = await fetch(videoUrl, { signal: options?.signal });
         if (!videoRes.ok) throw new Error(`视频下载失败: ${videoRes.statusText}`);
-        const videoBlob = await videoRes.blob();
+        const videoBlob = await readBodyWithProgress(videoRes, (loaded, total) => onProgress('Downloading generated video...', { phase: 'download', loaded, total }), options?.signal);
         const mimeType = videoRes.headers.get('Content-Type') || 'video/mp4';
         return { videoBlob, mimeType };
     }
@@ -3772,7 +3814,7 @@ export async function generateVideoWithProvider(
             if (Date.now() - xaiPollStart > (options?.pollTimeoutMs ?? 600_000)) {
                 throw new Error('xAI 视频生成超时（已等待超过 10 分钟）');
             }
-            onProgress(progressMessages[messageIndex % progressMessages.length]);
+            onProgress(progressMessages[messageIndex % progressMessages.length], { phase: 'generate', polls: messageIndex });
             messageIndex++;
             await sleep(10000, options?.signal);
 
@@ -3801,7 +3843,7 @@ export async function generateVideoWithProvider(
         }
 
         onProgress('Downloading generated video...');
-        return downloadSeedanceVideoResult(videoUrl, { signal: options?.signal });
+        return downloadSeedanceVideoResult(videoUrl, { signal: options?.signal, onProgress: (loaded, total) => onProgress('Downloading generated video...', { phase: 'download', loaded, total }) });
     }
 
     if (provider === 'volcengine') {
@@ -3815,6 +3857,7 @@ export async function generateVideoWithProvider(
         let seedanceMsgIndex = 0;
         onProgress('Generation started, this may take a few minutes.');
         const seedancePollStart = Date.now();
+        let seedancePhase: GenerationTransfer['phase'] = 'queue';
         let cancelPromise: Promise<SeedanceVideoCancelResult> | undefined;
         const requestUpstreamCancel = () => cancelPromise ||= cancelSeedanceVideoTask(handle, key, { reason: 'user_abort' }).then(async result => {
             await options?.onProviderTaskLifecycle?.({ phase: 'cancelled', providerTaskId: handle.taskId, canceled: result.canceled, upstreamStillRunning: result.upstreamStillRunning, message: result.message });
@@ -3832,7 +3875,7 @@ export async function generateVideoWithProvider(
                 if (Date.now() - seedancePollStart > (options?.pollTimeoutMs ?? 600_000)) {
                     throw new Error('Seedance 视频生成超时（已等待超过 10 分钟）');
                 }
-                onProgress(seedanceProgressMessages[seedanceMsgIndex % seedanceProgressMessages.length]);
+                onProgress(seedanceProgressMessages[seedanceMsgIndex % seedanceProgressMessages.length], { phase: seedancePhase, polls: seedanceMsgIndex });
                 seedanceMsgIndex++;
                 await sleep(10000, options?.signal);
 
@@ -3846,8 +3889,9 @@ export async function generateVideoWithProvider(
                     const usage = parseSeedanceVideoUsage(result.raw, 'succeeded');
                     await options?.onProviderTaskLifecycle?.({ phase: 'usage', providerTaskId: handle.taskId, status: usage.status, amount: usage.amount, currency: usage.currency, totalTokens: usage.totalTokens });
                     onProgress('Downloading generated video...');
-                    return downloadSeedanceVideoResult(result.videoUrl, { signal: options?.signal });
+                    return downloadSeedanceVideoResult(result.videoUrl, { signal: options?.signal, onProgress: (loaded, total) => onProgress('Downloading generated video...', { phase: 'download', loaded, total }) });
                 }
+                seedancePhase = result.remoteStatus === 'queued' ? 'queue' : 'generate';
                 await options?.onProviderTaskLifecycle?.({ phase: 'running', providerTaskId: handle.taskId, remoteStatus: result.remoteStatus });
             }
         } catch (error) {
@@ -3987,7 +4031,7 @@ export async function executeUnifiedIgnition(input: UnifiedIgnitionInput): Promi
                 slots: videoSlots,
                signal: input.signal,
                pollTimeoutMs: input.videoPollTimeoutMs,
-               onProgress: message => input.onProgress?.(35, message),
+               onProgress: (message, detail, progress) => input.onProgress?.(progress, message, detail),
                onProviderTaskLifecycle: input.onProviderTaskLifecycle,
                 resumeProviderTaskId: input.resumeProviderTaskId,
            });
@@ -4004,7 +4048,7 @@ export async function executeUnifiedIgnition(input: UnifiedIgnitionInput): Promi
             webSearch: params.webSearch, realPersonCheck: params.realPersonCheck,
             resumeProviderTaskId: input.resumeProviderTaskId,
             onProviderTaskLifecycle: input.onProviderTaskLifecycle,
-            onProgress: message => input.onProgress?.(35, message),
+            onProgress: (message, detail, progress) => input.onProgress?.(progress, message, detail),
         });
 
         if (!result.newImageBase64 || !result.newImageMimeType) {

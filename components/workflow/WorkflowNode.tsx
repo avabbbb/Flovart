@@ -208,7 +208,8 @@ export function WorkflowNode({
   onCancelUpload?: () => void;
 }) {
   const status = node.metadata.status || 'idle';
-  const progress = Math.max(0, Math.min(100, Math.round(node.metadata.progress || 0)));
+  // 只有上游给出的真实百分比才显示；undefined 表示没有百分比。
+  const progress = node.metadata.progress === undefined ? undefined : Math.max(0, Math.min(100, Math.round(node.metadata.progress)));
   const generationMode = node.metadata.config?.mode || node.type;
   const generationLabel = node.type === 'operation' ? `${node.title}中` : generationMode === 'video' ? (language === 'en' ? 'Generating video' : '视频生成中') : generationMode === 'text' ? (language === 'en' ? 'Generating text' : '文本生成中') : (language === 'en' ? 'Generating image' : '图片生成中');
   const generationMessage = node.metadata.generationMessage;
@@ -223,6 +224,35 @@ export function WorkflowNode({
   }, [status, generationStartedAt]);
   const elapsedLabel = elapsedSec > 0 ? `${Math.floor(elapsedSec / 60)}:${String(elapsedSec % 60).padStart(2, '0')}` : '';
   const staleHint = status === 'loading' && elapsedSec >= 180 ? '已等待较久，如长时间无响应可点击停止' : '';
+  // 传输速度：约 1 秒滑动窗口内已传/已下载字节的增量。
+  const transfer = node.metadata.generationTransfer;
+  const transferBytesPhase = transfer?.phase === 'upload' || transfer?.phase === 'download' ? transfer.phase : undefined;
+  const transferLoaded = transferBytesPhase ? transfer?.loaded : undefined;
+  const transferSamples = useRef<{ phase: string; at: number; loaded: number }[]>([]);
+  const [transferSpeed, setTransferSpeed] = useState<number | undefined>(undefined);
+  useEffect(() => {
+    if (!transferBytesPhase || transferLoaded === undefined) {
+      transferSamples.current = [];
+      setTransferSpeed(undefined);
+      return;
+    }
+    const now = Date.now();
+    const samples = transferSamples.current.filter(sample => sample.phase === transferBytesPhase && now - sample.at <= 1000 && sample.loaded <= transferLoaded);
+    samples.push({ phase: transferBytesPhase, at: now, loaded: transferLoaded });
+    transferSamples.current = samples;
+    const first = samples[0];
+    setTransferSpeed(now > first.at ? (transferLoaded - first.loaded) / ((now - first.at) / 1000) : undefined);
+  }, [transferBytesPhase, transferLoaded]);
+  const transferBytes = transferLoaded === undefined ? '' : transfer?.total ? (transferLoaded / 1048576).toFixed(1) + ' / ' + (transfer.total / 1048576).toFixed(1) + ' MB' : formatBytes(transferLoaded);
+  const transferLabel = !transfer ? ''
+    : transfer.phase === 'upload' ? [language === 'en' ? 'Uploading references' : '上传参考', transferBytes].filter(Boolean).join(' ')
+    : transfer.phase === 'download' ? [language === 'en' ? 'Downloading result' : '下载结果', transferBytes].filter(Boolean).join(' ')
+    : transfer.phase === 'queue' || transfer.polls
+      ? (transfer.phase === 'queue' ? (language === 'en' ? 'Queued' : '排队中') : (language === 'en' ? 'Generating' : '生成中'))
+        + (transfer.polls ? (language === 'en' ? ' · poll #' + transfer.polls : ' · 第 ' + transfer.polls + ' 次查询') : '')
+      : '';
+  const speedLabel = transferSpeed && transferSpeed > 0 ? (transferSpeed / 1048576).toFixed(1) + ' MB/s' : '';
+  const tokensLabel = transfer?.tokens ? (language === 'en' ? transfer.tokens + ' tokens out' : '已输出 ' + transfer.tokens + ' tokens') : '';
   const mediaInput = useRef<HTMLInputElement>(null);
   const needPosterRef = useRef(onNeedPoster);
   needPosterRef.current = onNeedPoster;
@@ -276,12 +306,13 @@ export function WorkflowNode({
   const uploading = Boolean(node.metadata.uploading);
   const uploadBytes = node.metadata.uploadBytes || 0;
   const uploadPercent = uploadStage?.progress !== undefined ? Math.round(uploadStage.progress / 0.01) + '%' : '';
-  const uploadLabel = !uploadStage ? (language === 'en' ? 'Uploading' : '上传中')
+  const uploadLabel = !uploadStage ? (language === 'en' ? 'Importing' : '导入中')
     : uploadStage.stage === 'probe' ? (language === 'en' ? 'Checking format' : '检测格式')
     : uploadStage.stage === 'download' ? (language === 'en' ? 'Downloading converter' : '下载转码组件')
     : uploadStage.stage === 'transcode' ? (language === 'en' ? 'Converting' : '转码中')
     : (language === 'en' ? 'Saving' : '保存中');
-  const uploadDetail = uploadPercent || formatBytes(uploadBytes);
+  // 本地入库不是网络上传：没有百分比时只标明文件大小。
+  const uploadDetail = uploadPercent || (language === 'en' ? 'File ' : '文件 ') + formatBytes(uploadBytes);
   const isLoading = status === 'loading' || uploading;
   const [isDropTarget, setDropTarget] = useState(false);
   const [isEditingTitle, setEditingTitle] = useState(false);
@@ -576,7 +607,14 @@ export function WorkflowNode({
               animate={{ x: '120%' }}
               transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut', repeatDelay: 0.5 }}
             />
-            <span className="flv-generation-glass__status">{generationLabel}<b>{progress}%</b></span>
+            <span className='flv-generation-glass__status'>{generationLabel}{progress !== undefined && <b>{progress}%</b>}</span>
+            {(transferLabel || tokensLabel) && (
+              <div className='workflow-node__generation-meta' data-testid='workflow-generation-transfer' data-workflow-overlay>
+                {transferLabel && <span>{transferLabel}</span>}
+                {speedLabel && <span>{speedLabel}</span>}
+                {tokensLabel && <span>{tokensLabel}</span>}
+              </div>
+            )}
             {(generationMessage || elapsedLabel) && (
               <div className="workflow-node__generation-meta" data-workflow-overlay>
                 {generationMessage && <span className="workflow-node__generation-message">{generationMessage}</span>}

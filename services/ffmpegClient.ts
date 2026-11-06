@@ -18,6 +18,7 @@
 // 两者的 baseURL 都必须落在 /dist/esm 上。
 
 import type { FFmpeg } from '@ffmpeg/ffmpeg';
+import { readBodyWithProgress } from './fetchProgress';
 
 const VERSION = '0.12.6';
 const HTTPS = 'https:';
@@ -44,23 +45,7 @@ function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promi
   return Promise.race([promise, deadline]).finally(() => clearTimeout(timer));
 }
 
-async function readBody(res: Response, onProgress?: (loaded: number, total: number) => void): Promise<Blob> {
-  if (!onProgress || !res.body) return res.blob();
-  const total = Number(res.headers.get('Content-Length')) || 0;
-  const reader = res.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let loaded = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    chunks.push(value);
-    loaded += value.byteLength;
-    onProgress(loaded, total);
-  }
-  return new Blob(chunks as BlobPart[]);
-}
-
-async function safeToBlobURL(url: string, expectedType: string, onProgress?: (loaded: number, total: number) => void): Promise<string> {
+async function safeToBlobURL(url: string, expectedType: string, onProgress?: (loaded: number, total?: number) => void): Promise<string> {
   const signal = AbortSignal.timeout(CORE_FETCH_TIMEOUT_MS);
   let blob: Blob;
   try {
@@ -78,7 +63,7 @@ async function safeToBlobURL(url: string, expectedType: string, onProgress?: (lo
         }
       }
     }
-    blob = await readBody(res, onProgress);
+    blob = await readBodyWithProgress(res, onProgress);
   } catch (error) {
     if (signal.aborted) throw new Error(`加载 ffmpeg core 超时（${CORE_FETCH_TIMEOUT_MS / 1000}s）：${url}`);
     throw error;
@@ -102,8 +87,8 @@ let loadingPromise: Promise<FFmpeg> | null = null;
 // 并发等待同一次加载的调用方都能收到下载进度。
 const downloadListeners = new Set<(ratio: number) => void>();
 
-function emitDownloadProgress(loaded: number, total: number) {
-  const ratio = Math.min(1, loaded / (total > 0 ? total : WASM_BYTES_ESTIMATE));
+function emitDownloadProgress(loaded: number, total?: number) {
+  const ratio = Math.min(1, loaded / (total || WASM_BYTES_ESTIMATE));
   downloadListeners.forEach(listener => listener(ratio));
 }
 

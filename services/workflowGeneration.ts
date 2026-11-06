@@ -4,7 +4,7 @@ import { CAMERA_MOVEMENTS, createWorkflowNode, STYLE_PRESETS } from '../componen
 import { buildCanonicalGenerationInput, resolveWorkflowInputs, type CanonicalGenerationInput, type WorkflowAssetReferenceInput } from '../components/workflow/inputResolver';
 import { promptIntentFromNode, type PromptIntent } from '../components/workflow/promptIntent';
 import { createWorkflowVideoPoster, discardWorkflowMediaRecord, fitWorkflowMediaSize, ingestWorkflowMedia, isWorkflowMediaKeyReferenced, releaseWorkflowMediaRecord, workflowDataUrlToBlob, type WorkflowMediaRecord } from '../components/workflow/media';
-import type { WorkflowGenerationMode, WorkflowNode, WorkflowProject } from '../components/workflow/types';
+import type { GenerationTransfer, WorkflowGenerationMode, WorkflowNode, WorkflowProject } from '../components/workflow/types';
 import type { ProductModelMode, UserApiKey } from '../types';
 import { executeUnifiedIgnition, generateTextWithProvider, SeedanceSubmissionUnknownError, type UnifiedIgnitionInput, type UnifiedIgnitionResult } from './aiGateway';
 import { getGenerationCapability } from './generationCapabilities';
@@ -211,7 +211,7 @@ function stoppedPatch(node: WorkflowNode | undefined) {
   const meta = node?.metadata;
   const billingUnknown = meta?.generationBillableState === 'unknown'
     || (Boolean(meta?.generationProviderTaskId) && meta?.generationBillableState !== 'refunded');
-  const cleared = { progress: undefined, generationRequestId: undefined, generationStartedAt: undefined, generationMessage: undefined };
+  const cleared = { progress: undefined, generationTransfer: undefined, generationRequestId: undefined, generationStartedAt: undefined, generationMessage: undefined };
   return billingUnknown
     ? { ...cleared, status: 'error' as const, error: STOPPED_BILLING_UNKNOWN, generationBillableState: 'unknown' as const }
     : { ...cleared, status: 'idle' as const, error: undefined };
@@ -491,7 +491,8 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
 
     for (let index = 0; index < count; index += 1) {
       if (!stillActive()) throw abortError();
-      current = patchInitiator(canonical(runtime, current), nodeId, { status: 'loading', progress: Math.round(index / count * 90), generationRequestId: requestId, generationStartedAt: Date.now(), generationMessage: undefined, error: undefined });
+      // 单节点没有真实百分比，不写 0%；批量时按已完成张数给出进度。
+      current = patchInitiator(canonical(runtime, current), nodeId, { status: 'loading', progress: batched ? Math.round(index / count * 90) : undefined, generationTransfer: undefined, generationRequestId: requestId, generationStartedAt: Date.now(), generationMessage: undefined, error: undefined });
       await publish(runtime, current);
 
       if (mode === 'text') {
@@ -541,6 +542,9 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
         });
         await publish(runtime, current);
       }
+      // 字节进度回调很密：同一阶段下字节增长不足约 1% 且距上次写入不足 250ms 时跳过，避免撤销栈与整张画布被高频刷新。
+      let lastTransfer: GenerationTransfer | undefined;
+      let lastTransferAt = 0;
       let result: UnifiedIgnitionResult;
       try {
         const provider = (runtime.executeMedia || executeUnifiedIgnition)({
@@ -561,10 +565,19 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
           // 指向已完结的上游任务，恢复它会跳过正常重跑。
           resumeProviderTaskId: runtime.resumeProviderTaskId
             || (initialNode.metadata.status === 'loading' ? initialNode.metadata.generationProviderTaskId : undefined),
-          onProgress: (progress, message) => {
+          onProgress: (progress, message, detail) => {
             if (!stillActive()) return;
-            current = patchInitiator(canonical(runtime, current), nodeId, { status: 'loading', progress: Math.max(0, Math.min(99, progress)), generationRequestId: requestId, generationMessage: message, generationStartedAt: current.nodes.find(node => node.id === nodeId)?.metadata.generationStartedAt || Date.now() });
-             void publish(runtime, current);
+            const now = Date.now();
+            if (progress === undefined && detail && lastTransfer?.phase === detail.phase && detail.loaded !== undefined && detail.loaded !== detail.total) {
+              const grown = detail.loaded - (lastTransfer.loaded ?? 0);
+              if (now - lastTransferAt < 250 && !(detail.total && grown >= detail.total / 100)) return;
+            }
+            lastTransfer = detail;
+            lastTransferAt = now;
+            const startedAt = current.nodes.find(node => node.id === nodeId)?.metadata.generationStartedAt || now;
+            // progress 为 undefined 表示上游没有真实百分比：保留原值，只更新文案与传输明细。
+            current = patchInitiator(canonical(runtime, current), nodeId, { status: 'loading', ...(progress === undefined ? {} : { progress: Math.max(0, Math.min(99, progress)) }), generationTransfer: detail, generationRequestId: requestId, generationMessage: message, generationStartedAt: startedAt });
+            void publish(runtime, current);
            },
           onProviderTaskLifecycle: async event => {
             if (!usage) return;
@@ -841,7 +854,7 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
     }
     current = patchInitiator(latest, nodeId, aborted
       ? stoppedPatch(latest.nodes.find(node => node.id === nodeId))
-      : { status: 'error', error: displayError(error, '生成失败，请重试。'), progress: undefined, generationRequestId: undefined, generationStartedAt: undefined, generationMessage: undefined });
+      : { status: 'error', error: displayError(error, '生成失败，请重试。'), progress: undefined, generationTransfer: undefined, generationRequestId: undefined, generationStartedAt: undefined, generationMessage: undefined });
     return publish(runtime, current);
   } finally {
     temporaryUrls.forEach(url => URL.revokeObjectURL(url));

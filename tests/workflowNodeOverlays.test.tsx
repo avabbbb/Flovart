@@ -505,6 +505,60 @@ describe('workflow node overlays', () => {
     expect(screen.getByTestId('workflow-generation-glass')).toHaveTextContent('42%');
   });
 
+  it('shows real download bytes and hides the percentage when the provider gives none', () => {
+    render(<WorkflowNode
+      node={{ ...node, metadata: { ...node.metadata, status: 'loading', generationTransfer: { phase: 'download', loaded: 8493466, total: 25165824 } } }}
+      selected={false}
+      onPointerDown={vi.fn()}
+      onConnectStart={vi.fn()}
+      onResizeStart={vi.fn()}
+      onChangeText={vi.fn()}
+      onChangeMetadata={vi.fn()}
+      onRun={vi.fn()}
+      onContextMenu={vi.fn()}
+      onReplaceMedia={vi.fn()}
+      onRemoveMedia={vi.fn()}
+    />);
+    expect(screen.getByTestId('workflow-generation-transfer')).toHaveTextContent('下载结果 8.1 / 24.0 MB');
+    expect(screen.getByTestId('workflow-generation-glass')).not.toHaveTextContent('%');
+  });
+
+  it('shows the queue state with the poll count', () => {
+    render(<WorkflowNode
+      node={{ ...node, metadata: { ...node.metadata, status: 'loading', generationTransfer: { phase: 'queue', polls: 3 } } }}
+      selected={false}
+      onPointerDown={vi.fn()}
+      onConnectStart={vi.fn()}
+      onResizeStart={vi.fn()}
+      onChangeText={vi.fn()}
+      onChangeMetadata={vi.fn()}
+      onRun={vi.fn()}
+      onContextMenu={vi.fn()}
+      onReplaceMedia={vi.fn()}
+      onRemoveMedia={vi.fn()}
+    />);
+    expect(screen.getByTestId('workflow-generation-transfer')).toHaveTextContent('排队中 · 第 3 次查询');
+  });
+
+  it('labels local ingest as importing with the file size', () => {
+    render(<WorkflowNode
+      node={{ ...node, metadata: { ...node.metadata, uploading: true, uploadBytes: 3145728 } }}
+      selected={false}
+      onPointerDown={vi.fn()}
+      onConnectStart={vi.fn()}
+      onResizeStart={vi.fn()}
+      onChangeText={vi.fn()}
+      onChangeMetadata={vi.fn()}
+      onRun={vi.fn()}
+      onContextMenu={vi.fn()}
+      onReplaceMedia={vi.fn()}
+      onRemoveMedia={vi.fn()}
+    />);
+    expect(screen.getByText('导入中')).toBeInTheDocument();
+    expect(screen.getByText('文件 3.0 MB')).toBeInTheDocument();
+    expect(screen.queryByText('上传中')).not.toBeInTheDocument();
+  });
+
   it('renders the media node label with source dimensions outside the card', () => {
     render(<WorkflowNode
       node={{ ...node, title: '角色定帧', metadata: { ...node.metadata, href: 'data:image/png;base64,AA==', naturalWidth: 2048, naturalHeight: 1152 } }}
