@@ -82,6 +82,9 @@ export interface ResolvedWorkflowResource {
   /** 源节点记录的媒体像素尺寸；供 Provider 前置分辨率校验使用。 */
   naturalWidth?: number;
   naturalHeight?: number;
+  // 源节点记录的时长与文件大小；供 Provider 前置时长/体积校验使用。
+  durationMs?: number;
+  bytes?: number;
 }
 
 export type WorkflowMediaResource = ResolvedWorkflowResource & {
@@ -212,6 +215,8 @@ function resolveNodeResources(node: WorkflowNode, connection: WorkflowConnection
       ...(node.metadata.naturalWidth && node.metadata.naturalHeight
         ? { naturalWidth: node.metadata.naturalWidth, naturalHeight: node.metadata.naturalHeight }
         : {}),
+      ...(node.metadata.durationMs ? { durationMs: node.metadata.durationMs } : {}),
+      ...(node.metadata.bytes ? { bytes: node.metadata.bytes } : {}),
     };
   });
 }

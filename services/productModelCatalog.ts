@@ -26,6 +26,17 @@ export type ProductModelCapability = {
   maxAudioReferences: number;
   /** 参考视频总像素（宽×高）允许范围；未声明则不做前置校验。 */
   referenceVideoPixelRange?: { min: number; max: number };
+  // 参考视频时长/体积/宽高比硬限制；未声明则不做前置校验。
+  referenceVideoLimits?: ReferenceVideoLimits;
+};
+
+export type ReferenceVideoLimits = {
+  minDurationSec?: number;
+  maxDurationSec?: number;
+  maxTotalDurationSec?: number;
+  maxBytes?: number;
+  minAspectRatio?: number;
+  maxAspectRatio?: number;
 };
 
 export type ProductModelDefinition = {
@@ -93,6 +104,8 @@ const baseVideo = {
  * 区间取火山方舟口径 640×640–834×1112，未找到厂商原文，属推测值（2026-11-02）；拿到原文后在此修正。
  */
 const SEEDANCE_2_REFERENCE_VIDEO_PIXELS = { min: 409_600, max: 927_408 };
+// 方舟 Seedance 2.0 文档：单段 2–15s、总长 ≤15s、≤200MB、宽高比 0.4–2.5；fps 24–60 节点未记录，无法前置校验。
+const SEEDANCE_2_REFERENCE_VIDEO_LIMITS: ReferenceVideoLimits = { minDurationSec: 2, maxDurationSec: 15, maxTotalDurationSec: 15, maxBytes: 209_715_200, minAspectRatio: 0.4, maxAspectRatio: 2.5 };
 
 const CAPABILITY_BY_ID: Record<string, ProductModelCapability> = {
   'flovart:gpt-image-2': { ...baseImage, resolutions: ['1K', '2K', '4K'], qualities: ['low', 'medium', 'high'], maxImageReferences: 16 },
@@ -103,8 +116,8 @@ const CAPABILITY_BY_ID: Record<string, ProductModelCapability> = {
   'flovart:seedream-5-pro': { ...baseImage, supportsWebSearch: true, supportsRealPersonCheck: true },
   'flovart:seedream-4.5': { ...baseImage, modes: ['text-to-image'], resolutions: ['2K', '4K'], maxImageReferences: 0 },
   'flovart:midjourney-v8-1': { ...baseImage, modes: ['text-to-image'], qualities: ['low', 'medium', 'high'], maxImageReferences: 1 },
-  'flovart:seedance-2': { ...baseVideo, modes: ['text-to-video', 'image-to-video', 'reference-to-video', 'first-last-frame'], aspectRatios: ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9', 'adaptive'], durations: [-1, 4, 5, 6, 8, 10, 12, 15], resolutions: ['480p', '720p', '1080p'], audioControl: 'optional', supportsRealPersonCheck: true, supportsSeed: true, maxImageReferences: 9, maxVideoReferences: 3, maxAudioReferences: 3, referenceVideoPixelRange: SEEDANCE_2_REFERENCE_VIDEO_PIXELS },
-  'flovart:seedance-2-fast': { ...baseVideo, modes: ['text-to-video', 'image-to-video', 'reference-to-video'], aspectRatios: ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9', 'adaptive'], durations: [-1, 4, 5, 6, 8, 10, 12, 15], resolutions: ['480p', '720p'], audioControl: 'optional', supportsRealPersonCheck: true, supportsSeed: true, maxImageReferences: 9, maxVideoReferences: 3, maxAudioReferences: 3, referenceVideoPixelRange: SEEDANCE_2_REFERENCE_VIDEO_PIXELS },
+  'flovart:seedance-2': { ...baseVideo, modes: ['text-to-video', 'image-to-video', 'reference-to-video', 'first-last-frame'], aspectRatios: ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9', 'adaptive'], durations: [-1, 4, 5, 6, 8, 10, 12, 15], resolutions: ['480p', '720p', '1080p'], audioControl: 'optional', supportsRealPersonCheck: true, supportsSeed: true, maxImageReferences: 9, maxVideoReferences: 3, maxAudioReferences: 3, referenceVideoPixelRange: SEEDANCE_2_REFERENCE_VIDEO_PIXELS, referenceVideoLimits: SEEDANCE_2_REFERENCE_VIDEO_LIMITS },
+  'flovart:seedance-2-fast': { ...baseVideo, modes: ['text-to-video', 'image-to-video', 'reference-to-video'], aspectRatios: ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9', 'adaptive'], durations: [-1, 4, 5, 6, 8, 10, 12, 15], resolutions: ['480p', '720p'], audioControl: 'optional', supportsRealPersonCheck: true, supportsSeed: true, maxImageReferences: 9, maxVideoReferences: 3, maxAudioReferences: 3, referenceVideoPixelRange: SEEDANCE_2_REFERENCE_VIDEO_PIXELS, referenceVideoLimits: SEEDANCE_2_REFERENCE_VIDEO_LIMITS },
   'flovart:veo-3.1': { ...baseVideo, modes: ['text-to-video', 'image-to-video', 'reference-to-video', 'first-last-frame'], resolutions: ['720p', '1080p', '4K'], maxImageReferences: 3, supportsSeed: true },
   'flovart:veo-3.1-fast': { ...baseVideo, modes: ['text-to-video', 'image-to-video', 'reference-to-video', 'first-last-frame'], resolutions: ['720p', '1080p', '4K'], maxImageReferences: 3, supportsSeed: true },
   'flovart:veo-3.1-lite': { ...baseVideo, modes: ['text-to-video', 'image-to-video', 'first-last-frame'], supportsSeed: true },
@@ -294,6 +307,12 @@ export function getEffectiveReferenceLimits(
 export function getReferenceVideoPixelRange(productModelId: string): { min: number; max: number } | undefined {
   const range = getProductModel(productModelId)?.capabilities.referenceVideoPixelRange;
   return range ? { ...range } : undefined;
+}
+
+// 参考视频时长/体积/宽高比硬限制；undefined 表示该产品未声明，不做前置校验。
+export function getReferenceVideoLimits(productModelId: string): ReferenceVideoLimits | undefined {
+  const limits = getProductModel(productModelId)?.capabilities.referenceVideoLimits;
+  return limits ? { ...limits } : undefined;
 }
 
 export function explainReferenceCompatibility(

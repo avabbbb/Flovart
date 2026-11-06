@@ -11,6 +11,8 @@ import {
   getEffectiveReferenceLimits,
   getProductModel,
   getReferenceVideoPixelRange,
+  getReferenceVideoLimits,
+  type ReferenceVideoLimits,
   getRoutedImageModes,
   getRoutedVideoModes,
 } from './productModelCatalog';
@@ -40,6 +42,8 @@ export interface ProviderCapabilities {
   maxReferences: Record<ProviderReferenceKind, number>;
   /** 参考媒体总像素范围；未声明的类型不做前置校验。 */
   referencePixelRange?: Partial<Record<ProviderReferenceKind, ProviderPixelRange>>;
+  // 参考视频时长/体积/宽高比硬限制；未声明则不做前置校验。
+  referenceVideoLimits?: ReferenceVideoLimits;
 }
 
 export type ProviderValidationCode =
@@ -48,7 +52,11 @@ export type ProviderValidationCode =
   | 'REFERENCE_LIMIT_EXCEEDED'
   | 'UNSUPPORTED_REFERENCE_ROLE'
   | 'MISSING_REFERENCE'
-  | 'REFERENCE_RESOLUTION_OUT_OF_RANGE';
+  | 'REFERENCE_RESOLUTION_OUT_OF_RANGE'
+  | 'REFERENCE_DURATION_OUT_OF_RANGE'
+  | 'REFERENCE_TOTAL_DURATION_EXCEEDED'
+  | 'REFERENCE_FILE_TOO_LARGE'
+  | 'REFERENCE_ASPECT_OUT_OF_RANGE';
 
 export interface ProviderValidationIssue {
   code: ProviderValidationCode;
@@ -187,6 +195,8 @@ export interface ProviderReferenceCheckItem {
   width?: number;
   height?: number;
   title?: string;
+  durationMs?: number;
+  bytes?: number;
   resourceId?: string;
 }
 
@@ -217,6 +227,42 @@ export function checkReferencePixels(reference: ProviderReferenceCheckItem, rang
       + '（' + pixels.toLocaleString('en-US') + ' 像素）' + (tooLow ? '过低' : '过高')
       + '，当前 AI 服务要求总像素' + bound + '。请先转码到合适分辨率。',
   };
+}
+
+// 时长、体积、宽高比未知或未声明限制时放行，由 Provider 自己报错。只校验视频。
+export function checkReferenceVideoLimits(references: ReadonlyArray<ProviderReferenceCheckItem>, limits?: ReferenceVideoLimits): ProviderValidationIssue[] {
+  if (!limits) return [];
+  const issues: ProviderValidationIssue[] = [];
+  let totalSec = 0;
+  for (const reference of references) {
+    if (reference.kind !== 'video') continue;
+    const name = reference.title ? '「' + reference.title + '」' : '';
+    const base = { kind: reference.kind, role: reference.role, resourceId: reference.resourceId };
+    if (reference.durationMs && reference.durationMs > 0) {
+      const sec = reference.durationMs / 1000;
+      totalSec += sec;
+      if (limits.minDurationSec !== undefined && sec < limits.minDurationSec) {
+        issues.push({ ...base, code: 'REFERENCE_DURATION_OUT_OF_RANGE', direction: 'low', message: '参考视频' + name + '时长 ' + sec.toFixed(1) + 's 过短，当前 AI 服务要求每段不少于 ' + limits.minDurationSec + 's。' });
+      } else if (limits.maxDurationSec !== undefined && sec > limits.maxDurationSec + 0.05) {
+        issues.push({ ...base, code: 'REFERENCE_DURATION_OUT_OF_RANGE', direction: 'high', message: '参考视频' + name + '时长 ' + sec.toFixed(1) + 's 过长，当前 AI 服务要求每段不超过 ' + limits.maxDurationSec + 's，请先裁剪。' });
+      }
+    }
+    if (reference.bytes && limits.maxBytes !== undefined && reference.bytes > limits.maxBytes) {
+      issues.push({ ...base, code: 'REFERENCE_FILE_TOO_LARGE', direction: 'high', message: '参考视频' + name + '大小 ' + (reference.bytes / 1048576).toFixed(1) + 'MB 超过当前 AI 服务上限 ' + (limits.maxBytes / 1048576).toFixed(0) + 'MB。' });
+    }
+    if (reference.width && reference.height) {
+      const ratio = reference.width / reference.height;
+      const tooNarrow = limits.minAspectRatio !== undefined && ratio < limits.minAspectRatio;
+      const tooWide = limits.maxAspectRatio !== undefined && ratio > limits.maxAspectRatio;
+      if (tooNarrow || tooWide) {
+        issues.push({ ...base, code: 'REFERENCE_ASPECT_OUT_OF_RANGE', width: reference.width, height: reference.height, direction: tooNarrow ? 'low' : 'high', message: '参考视频' + name + '宽高比 ' + ratio.toFixed(2) + ' 超出当前 AI 服务允许范围 ' + limits.minAspectRatio + '–' + limits.maxAspectRatio + '。' });
+      }
+    }
+  }
+  if (limits.maxTotalDurationSec !== undefined && totalSec > limits.maxTotalDurationSec + 0.05) {
+    issues.push({ code: 'REFERENCE_TOTAL_DURATION_EXCEEDED', kind: 'video', direction: 'high', message: '参考视频总时长 ' + totalSec.toFixed(1) + 's 超过当前 AI 服务上限 ' + limits.maxTotalDurationSec + 's，请减少或裁剪参考视频。' });
+  }
+  return issues;
 }
 
 export function validateReferenceSet(
@@ -262,6 +308,7 @@ export function validateReferenceSet(
     const issue = checkReferencePixels(reference, capabilities.referencePixelRange?.[reference.kind]);
     if (issue) errors.push(issue);
   }
+  errors.push(...checkReferenceVideoLimits(references, capabilities.referenceVideoLimits));
 
   const minimum = capability === 'first-last-frame' ? 2
     : capability === 'image-edit' || capability === 'image-to-video' || capability === 'reference-to-video' || capability === 'video-extension' ? 1
@@ -294,6 +341,7 @@ export const providerGenerationAdapter: ProviderGenerationAdapter = {
       : { image: 0, video: 0, audio: 0 };
     const supportedReferenceKinds = ALL_REFERENCE_KINDS.filter(kind => maxReferences[kind] > 0);
     const videoPixelRange = context.productModelId ? getReferenceVideoPixelRange(context.productModelId) : undefined;
+    const videoLimits = context.productModelId ? getReferenceVideoLimits(context.productModelId) : undefined;
     return {
       provider: context.provider,
       routeId: context.routeId,
@@ -303,6 +351,7 @@ export const providerGenerationAdapter: ProviderGenerationAdapter = {
       supportedReferenceRoles: rolesForMode(resolvedMode),
       maxReferences,
       ...(videoPixelRange && maxReferences.video > 0 ? { referencePixelRange: { video: videoPixelRange } } : {}),
+      ...(videoLimits && maxReferences.video > 0 ? { referenceVideoLimits: videoLimits } : {}),
     };
   },
 
@@ -314,6 +363,8 @@ export const providerGenerationAdapter: ProviderGenerationAdapter = {
       role: reference.role,
       width: reference.resource.naturalWidth,
       height: reference.resource.naturalHeight,
+      durationMs: reference.resource.durationMs,
+      bytes: reference.resource.bytes,
       title: reference.resource.title,
       resourceId: reference.resource.resourceId,
     })));
