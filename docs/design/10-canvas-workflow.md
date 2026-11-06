@@ -31,6 +31,10 @@ Canvas 是空间化的 Workflow 创作面：节点、素材、连线、生成与
 - 素材进入节点的两种语义：
   - **导入副本**（粘贴、拖入、外部来源）：`ingestWorkflowMedia` 写入浏览器媒体存储。
   - **引用**（用户授权的本地文件夹）：`local-folder:<folderId>/<相对路径>`，不复制字节；失效时提示重新定位，不按文件名猜。
+- **视频编码兼容（已知坑，很多网站都有）**：浏览器 `<video>` 只稳定支持 H.264（及 VP9/AV1）。H.265/HEVC 即使系统和 Chrome 支持，也只限 4:2:0 的 Main/Main10；剪映等导出的 HEVC Rext 4:2:2（`yuv422p`）、ProRes 解不了。症状：元数据正常（有宽高、时长）但首帧解不出来 → 黑屏、无封面；或只解出音轨（`videoWidth === 0`）。排查用 `ffprobe -show_entries stream=codec_name,profile,pix_fmt`。
+  - 处理：`ingestWorkflowMedia` 先用 `isBrowserDecodableVideo` 探测，以首帧 `loadeddata` 为准（不能只看 `loadedmetadata`）；不可解码就经 `transcodeVideoToH264`（ffmpeg.wasm，libx264 + yuv420p + AAC）转 H.264 MP4 再入库。上传、拖入、节点「替换」都走这条路径。
+  - 局限：修复前已入库的节点不会自动转码，需「替换」重新导入；本地文件夹**引用**不复制字节，也不转码。
+  - ffmpeg.wasm 默认单线程 core：core-mt 在 COOP/COEP（crossOriginIsolated）下会把渲染进程搞崩（`Crashpad_NotConnectedToHandler`，try/catch 接不住），见 `services/ffmpegClient.ts`。
 - 结果有版本；晚到结果作为新版本，不覆盖用户已选版本。
 
 ## 4. 交互要点（补充交互设计）
