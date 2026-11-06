@@ -259,7 +259,7 @@ export function WorkflowNode({
   const videoActive = node.type === 'video' && Boolean(mediaActive);
   const resolveSourceMedia = node.type !== 'video' || videoActive;
   const media = useWorkflowMediaUrl(
-    resolveSourceMedia ? node.metadata.storageKey : undefined,
+    resolveSourceMedia ? (node.type === 'video' && node.metadata.previewStorageKey) || node.metadata.storageKey : undefined,
     resolveSourceMedia ? node.metadata.href : undefined,
     resolveSourceMedia ? node.metadata.artifactRef : undefined,
   );

@@ -285,6 +285,8 @@ export interface WorkflowNodeMetadata {
   poster?: string;
   /** 本地视频首帧 JPEG 的独立持久化键；不得内嵌为项目 JSON 的 base64。 */
   posterStorageKey?: string;
+  // 浏览器解不了原编码时生成的 H.264 低清预览代理键；只用于画布播放，生成参考与下载用 storageKey 原文件。
+  previewStorageKey?: string;
   storageKey?: string;
   name?: string;
   mimeType?: string;

@@ -45,6 +45,7 @@ function collectNodeKeys(nodes: WorkflowNode[], keys = new Set<string>()) {
     const metadata = node.metadata || {};
     if (metadata.storageKey) keys.add(metadata.storageKey);
     if (metadata.posterStorageKey) keys.add(metadata.posterStorageKey);
+    if (metadata.previewStorageKey) keys.add(metadata.previewStorageKey);
     // 原位生成的旧版本媒体挂在 Take 上，仍可被切回，必须保持可达。
     metadata.operation?.takes?.forEach(take => {
       if (take.outputMedia?.storageKey) keys.add(take.outputMedia.storageKey);
@@ -94,16 +95,13 @@ export async function pruneWorkflowMedia() {
 export function releaseWorkflowMediaRecord(storageKey: string) {
   pendingReferences.delete(storageKey);
   pendingReferences.delete(workflowPosterStorageKey(storageKey));
+  pendingReferences.delete(workflowPreviewStorageKey(storageKey));
 }
 
 export async function discardWorkflowMediaRecord(storageKey: string) {
-  pendingReferences.delete(storageKey);
-  const posterStorageKey = workflowPosterStorageKey(storageKey);
-  pendingReferences.delete(posterStorageKey);
-  await Promise.all([
-    workflowMediaStorage.remove(storageKey).catch(() => undefined),
-    workflowMediaStorage.remove(posterStorageKey).catch(() => undefined),
-  ]);
+  const keys = [storageKey, workflowPosterStorageKey(storageKey), workflowPreviewStorageKey(storageKey)];
+  keys.forEach(key => pendingReferences.delete(key));
+  await Promise.all(keys.map(key => workflowMediaStorage.remove(key).catch(() => undefined)));
 }
 
 /** 判断一个 storageKey 是否仍被项目节点或已注册的临时引用（撤销历史/剪贴板）持有。 */
@@ -215,24 +213,28 @@ export interface WorkflowMediaIngestOptions {
   signal?: AbortSignal;
 }
 
-async function ensureDecodableVideo(file: File, { onStage, signal }: WorkflowMediaIngestOptions): Promise<{ file: File; warning?: string }> {
+// 画布预览代理：长边 1280（约 720p），只用于画布内播放；生成参考与下载仍用原文件。
+const VIDEO_PREVIEW_MAX_EDGE = 1280;
+
+async function ensureDecodableVideo(file: File, { onStage, signal }: WorkflowMediaIngestOptions): Promise<{ preview?: File; warning?: string }> {
   onStage?.({ stage: 'probe' });
-  if (await isBrowserDecodableVideo(file)) return { file };
+  if (await isBrowserDecodableVideo(file)) return {};
   signal?.throwIfAborted();
   onStage?.({ stage: 'transcode', progress: 0 });
   try {
     const converted = await transcodeVideoToH264(file, file.name, {
       signal,
+      maxEdge: VIDEO_PREVIEW_MAX_EDGE,
       onDownloadProgress: progress => onStage?.({ stage: 'download', progress }),
       onProgress: progress => onStage?.({ stage: 'transcode', progress }),
     });
-    const name = file.name.replace(/\.[^.]+$/, '') + '.mp4';
-    return { file: new File([converted], name, { type: 'video/mp4', lastModified: file.lastModified }) };
+    const name = file.name.replace(/\.[^.]+$/, '') + '-preview.mp4';
+    return { preview: new File([converted], name, { type: 'video/mp4', lastModified: file.lastModified }) };
   } catch (error) {
     signal?.throwIfAborted();
-    // 转码失败不丢素材：保留原文件入库（仍可下载、作参考上传），仅画布内预览可能黑屏。
+    // 预览代理失败不丢素材：原文件照常入库（可下载、作参考上传），仅画布内可能无法预览。
     const reason = error instanceof Error ? error.message : String(error);
-    return { file, warning: '浏览器无法解码该视频，转码为 H.264 失败，已保留原文件（画布内可能无法预览）：' + reason };
+    return { warning: '浏览器无法解码该视频，生成画布预览失败，已保留原文件（画布内可能无法预览）：' + reason };
   }
 }
 
@@ -283,6 +285,10 @@ export async function createWorkflowVideoPoster(blob: Blob, maxWidth = 640): Pro
 
 export function workflowPosterStorageKey(storageKey: string) {
   return `${storageKey}-poster`;
+}
+
+export function workflowPreviewStorageKey(storageKey: string) {
+  return storageKey + '-preview';
 }
 
 /** 浏览用缩略图：只缩小尺寸，不改变比例，也不写回项目状态。 */
@@ -363,22 +369,24 @@ export async function ingestWorkflowMedia(
   const type = workflowMediaType(file);
   const declaredMimeType = workflowMediaMimeType(file);
   const declaredFile = declaredMimeType === file.type ? file : new File([file], file.name, { type: declaredMimeType, lastModified: file.lastModified });
-  const ensured = type === 'video' ? await ensureDecodableVideo(declaredFile, options) : { file: declaredFile, warning: undefined };
-  const mediaFile = ensured.file;
-  const warning = ensured.warning;
-  const mimeType = mediaFile === declaredFile ? declaredMimeType : mediaFile.type;
+  const { preview, warning }: { preview?: File; warning?: string } = type === 'video' ? await ensureDecodableVideo(declaredFile, options) : {};
   options.signal?.throwIfAborted();
   options.onStage?.({ stage: 'store' });
-  // 降级保留的原文件可能连元数据都读不出：尺寸缺省，不阻断入库。
-  const inspected = warning ? await inspectWorkflowMediaLenient(mediaFile) : await inspectWorkflowMedia(mediaFile);
-  const storageKey = `workflow-media-${nanoid()}`;
+  // 浏览器解不了的原文件可能连元数据都读不出：宽高缺省时取预览代理的（比例一致），不阻断入库。
+  const inspected = preview || warning ? await inspectWorkflowMediaLenient(declaredFile) : await inspectWorkflowMedia(declaredFile);
+  const dimensions = preview && !inspected.naturalWidth ? { ...inspected, ...(await inspectWorkflowMediaLenient(preview)) } : inspected;
+  const storageKey = 'workflow-media-' + nanoid();
   const reservedPosterStorageKey = type === 'video' ? workflowPosterStorageKey(storageKey) : undefined;
+  const previewStorageKey = preview ? workflowPreviewStorageKey(storageKey) : undefined;
   pendingReferences.add(storageKey);
   if (reservedPosterStorageKey) pendingReferences.add(reservedPosterStorageKey);
+  if (previewStorageKey) pendingReferences.add(previewStorageKey);
   try {
-    await workflowMediaStorage.set(storageKey, mediaFile);
+    await workflowMediaStorage.set(storageKey, declaredFile);
+    if (previewStorageKey && preview) await workflowMediaStorage.set(previewStorageKey, preview);
+    // 封面从可解码的那份取：有代理用代理。
     const posterStorageKey = type === 'video'
-      ? await persistWorkflowVideoPoster(storageKey, mediaFile, createPoster)
+      ? await persistWorkflowVideoPoster(storageKey, preview || declaredFile, createPoster)
       : undefined;
     if (reservedPosterStorageKey && !posterStorageKey) pendingReferences.delete(reservedPosterStorageKey);
     return {
@@ -386,21 +394,16 @@ export async function ingestWorkflowMedia(
       storageKey,
       poster: undefined,
       posterStorageKey,
-      name: mediaFile.name,
-      mimeType,
-      bytes: mediaFile.size,
-      ...inspected,
+      ...(previewStorageKey ? { previewStorageKey } : {}),
+      name: declaredFile.name,
+      mimeType: declaredMimeType,
+      bytes: declaredFile.size,
+      ...dimensions,
       status: 'success',
       ...(warning ? { warning } : {}),
     };
   } catch (error) {
-    pendingReferences.delete(storageKey);
-    const posterStorageKey = workflowPosterStorageKey(storageKey);
-    pendingReferences.delete(posterStorageKey);
-    await Promise.all([
-      workflowMediaStorage.remove(storageKey).catch(() => undefined),
-      workflowMediaStorage.remove(posterStorageKey).catch(() => undefined),
-    ]);
+    await discardWorkflowMediaRecord(storageKey);
     throw error;
   }
 }

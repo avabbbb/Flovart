@@ -152,6 +152,8 @@ export interface VideoTranscodeOptions {
   onProgress?: (ratio: number) => void;
   // 取消：终止 ffmpeg 实例并以 AbortError 拒绝；下一个任务重新加载干净实例。
   signal?: AbortSignal;
+  // 输出长边上限（只缩不放），默认 1920。
+  maxEdge?: number;
 }
 
 // 入库转码只为让浏览器能解码预览、作参考素材：ultrafast + 长边限 1920（≈1080p），比 veryfast 原分辨率快数倍。
@@ -162,7 +164,7 @@ export async function transcodeVideoToH264(blob: Blob, originalName = 'video.mp4
   return enqueueFFmpegTask(() => transcodeVideoToH264OnFFmpeg(blob, originalName, options));
 }
 
-async function transcodeVideoToH264OnFFmpeg(blob: Blob, originalName: string, { onDownloadProgress, onProgress, signal }: VideoTranscodeOptions): Promise<Blob> {
+async function transcodeVideoToH264OnFFmpeg(blob: Blob, originalName: string, { onDownloadProgress, onProgress, signal, maxEdge = H264_MAX_EDGE }: VideoTranscodeOptions): Promise<Blob> {
   // 排队期间可能已被取消。
   signal?.throwIfAborted();
   const ffmpeg = await getFFmpeg({ onDownloadProgress });
@@ -183,7 +185,7 @@ async function transcodeVideoToH264OnFFmpeg(blob: Blob, originalName: string, { 
       '-i', inputName,
       '-map', '0:v:0', '-map', '0:a:0?',
       // 只缩不放：小于 1920 的保持原尺寸；宽高取偶数满足 yuv420p。
-      '-vf', "scale='min(iw," + H264_MAX_EDGE + ")':'min(ih," + H264_MAX_EDGE + ")':force_original_aspect_ratio=decrease:force_divisible_by=2",
+      '-vf', "scale='min(iw," + maxEdge + ")':'min(ih," + maxEdge + ")':force_original_aspect_ratio=decrease:force_divisible_by=2",
       '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23', '-pix_fmt', 'yuv420p',
       '-c:a', 'aac', '-b:a', '160k',
       '-movflags', '+faststart',

@@ -2388,18 +2388,18 @@ export function InfiniteWorkflow({
         await discardWorkflowMediaRecord(record.storageKey);
         return;
       }
-      const { type: _type, ...metadata } = record;
+      const { type: _type, warning, ...metadata } = record;
       const size = fitWorkflowMediaSize(currentNode.type as WorkflowMediaRecord['type'], record.naturalWidth, record.naturalHeight);
       const center = { x: currentNode.position.x + currentNode.width / 2, y: currentNode.position.y + currentNode.height / 2 };
       const updated = projectRef.current.nodes.map(item => item.id === node.id ? {
         ...item,
         ...size,
         position: { x: center.x - size.width / 2, y: center.y - size.height / 2 },
-        metadata: { ...item.metadata, ...metadata, href: undefined, error: undefined, uploading: false },
+        metadata: { ...item.metadata, previewStorageKey: undefined, ...metadata, href: undefined, error: undefined, uploading: false },
       } : item);
       commitFrame(updated, projectRef.current.connections);
       releaseWorkflowMediaRecord(record.storageKey);
-      setNotice(null);
+      setNotice(warning ?? null);
     } catch (error) {
       if (record) await discardWorkflowMediaRecord(record.storageKey);
       if (mountedRef.current
@@ -2422,6 +2422,7 @@ export function InfiniteWorkflow({
     const {
       storageKey: _storageKey,
       posterStorageKey: _posterStorageKey,
+      previewStorageKey: _previewStorageKey,
       name: _name,
       mimeType: _mimeType,
       bytes: _bytes,

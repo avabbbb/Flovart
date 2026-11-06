@@ -40,6 +40,7 @@ function portableProject(project: WorkflowProject): WorkflowProject {
           ...node.metadata,
           storageKey: undefined,
           posterStorageKey: undefined,
+          previewStorageKey: undefined,
           href: node.metadata.storageKey ? undefined : href,
           poster: node.metadata.poster && /^(data:|blob:|file:)/i.test(node.metadata.poster) ? undefined : node.metadata.poster,
         },
@@ -200,7 +201,7 @@ export async function parseWorkflowProjectFile(
           ? undefined
           : node.metadata.poster;
         if (!asset) {
-          nodes.push({ ...node, metadata: { ...node.metadata, storageKey: undefined, posterStorageKey: undefined, poster: portablePoster } });
+          nodes.push({ ...node, metadata: { ...node.metadata, storageKey: undefined, posterStorageKey: undefined, previewStorageKey: undefined, poster: portablePoster } });
           continue;
         }
         const blob = await workflowDataUrlToBlob(asset.dataUrl);
