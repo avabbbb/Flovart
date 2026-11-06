@@ -21,6 +21,18 @@ import { buildBrowserBootstrapUrl, inspectLocalAgent, issueBrowserBootstrapToken
 
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]']);
 
+// 受信的 https 线上 WebUI 主机：web.open 仅对这些来源附带一次性 bootstrap token。
+// 可用 FLOVART_TRUSTED_WEB_HOSTS="a.example,b.example" 追加（仅 https、默认端口）；须与 Agent 侧一致。
+const DEFAULT_TRUSTED_WEB_HOSTS = ['flovart.avabbbb.com'];
+
+function isTrustedWebOrigin(origin) {
+  let url;
+  try { url = new URL(origin); } catch { return false; }
+  if (url.protocol !== 'https:' || url.port) return false;
+  const extra = String(process.env.FLOVART_TRUSTED_WEB_HOSTS || '').split(',').map(item => item.trim().toLowerCase()).filter(Boolean);
+  return [...DEFAULT_TRUSTED_WEB_HOSTS, ...extra].includes(url.hostname.toLowerCase());
+}
+
 // Default local WebUI endpoints, in probe order (dev Vite first, then toolkit web).
 // Override with FLOVART_WEBUI_PORTS="http://127.0.0.1:8080,http://127.0.0.1:9000".
 const DEFAULT_WEBUI_CANDIDATES = [
@@ -345,7 +357,9 @@ export async function openWebUi(explicitUrl = '', options = {}) {
       throw new SkillHubError('INVALID_URL', 'web.open 只接受 http(s) 地址。');
     }
     target = url.toString();
-    return openVerifiedWebUi(target, isLoopbackUrl(target) && await probeCandidate(target), opener);
+    // 本机 WebUI 需先探活；受信的 https 线上站直接附带一次性 bootstrap token，任意外部站点不附带。
+    const verified = (isLoopbackUrl(target) && await probeCandidate(target)) || isTrustedWebOrigin(url.origin);
+    return openVerifiedWebUi(target, verified, opener);
   }
   for (const candidate of webuiCandidates()) {
     if (await probeCandidate(candidate)) {

@@ -83,8 +83,42 @@ function isLoopbackOrigin(origin) {
   }
 }
 
+// 可发起 bootstrap 交换的浏览器来源：本机 loopback HTTP，或受信的 https 线上站（默认官方站，
+// 可用 FLOVART_TRUSTED_WEB_HOSTS 逗号分隔追加主机名，须与启动器一致）。bootstrap token 一次性、120s 过期，
+// 只由本机启动器签发；持久 token 从不离开启动器。
+const DEFAULT_TRUSTED_WEB_HOSTS = ['flovart.avabbbb.com'];
+
+function isTrustedWebOrigin(origin) {
+  let url;
+  try { url = new URL(origin); } catch { return false; }
+  if (url.protocol !== 'https:' || url.port) return false;
+  const extra = String(process.env.FLOVART_TRUSTED_WEB_HOSTS || '').split(',').map(item => item.trim().toLowerCase()).filter(Boolean);
+  return [...DEFAULT_TRUSTED_WEB_HOSTS, ...extra].includes(url.hostname.toLowerCase());
+}
+
+function isBootstrapOrigin(origin) {
+  return isLoopbackOrigin(origin) || isTrustedWebOrigin(origin);
+}
+
+const MAX_AUTHORIZED_ORIGINS = 8;
+
+// 已授权来源列表；兼容旧版单值 config.origin。
+function authorizedOrigins(config) {
+  const list = Array.isArray(config.origins) ? config.origins.filter(item => typeof item === 'string' && item) : [];
+  if (config.origin && !list.includes(config.origin)) list.push(config.origin);
+  return list;
+}
+
+// 本机开发站与线上站可同时连接，不再互相抢占单一 origin 绑定。
+function rememberOrigin(config, origin) {
+  const list = authorizedOrigins(config).filter(item => item !== origin);
+  config.origins = [origin, ...list].slice(0, MAX_AUTHORIZED_ORIGINS);
+  config.origin = origin;
+  saveAgentConfig(config);
+}
+
 function originTokenAllowed(request, url, config, credentials) {
-  return config.origin === request.headers.origin
+  return authorizedOrigins(config).includes(request.headers.origin)
     || credentials.isSessionToken(url.searchParams.get('token'))
     || credentials.isSessionToken(requestToken(request));
 }
@@ -107,8 +141,9 @@ function setCors(request, response, url, config, credentials) {
     return true;
   }
   if (url.pathname === '/bootstrap/exchange') {
-    if (isLoopbackOrigin(origin)) applyCorsHeaders();
-    return isLoopbackOrigin(origin);
+    const allowed = isBootstrapOrigin(origin);
+    if (allowed) applyCorsHeaders();
+    return allowed;
   }
   if (url.pathname === '/bootstrap/issue') return false;
   // /health、/config 是无鉴权就绪探针：保持跨源可读（浏览器首连依赖），
@@ -118,10 +153,11 @@ function setCors(request, response, url, config, credentials) {
     return true;
   }
   // 其余端点先完成 origin/token 判定，仅判定通过时才回写 ACAO。
-  if (config.origin !== origin && validPersistentToken(request, config.token)) {
-    config.origin = origin;
-    saveAgentConfig(config);
-  }
+  // 持久 token 或有效 session token 通过时把来源记入已授权列表（不替换其它来源）。
+  const tokenOk = validPersistentToken(request, config.token)
+    || credentials.isSessionToken(url.searchParams.get('token'))
+    || credentials.isSessionToken(requestToken(request));
+  if (tokenOk && !authorizedOrigins(config).includes(origin)) rememberOrigin(config, origin);
   const allowed = originTokenAllowed(request, url, config, credentials);
   if (allowed) applyCorsHeaders();
   return allowed;
