@@ -17,6 +17,7 @@ import type { ProviderCancelResult, ProviderTaskHandle } from './providerAdapter
 import {
   providerGenerationAdapter,
   serializeProviderGenerationRequest,
+  toReferenceCheckItems,
   validateReferenceSet,
 } from './providerGenerationAdapter';
 import { displayError } from './displayError';
@@ -388,18 +389,7 @@ export class UserScriptProviderAdapter {
 
   validate(input: CanonicalGenerationInput, context: ProviderAdapterContext): ProviderValidationResult {
     const capabilities = this.getCapabilities(context, input.parameters.generationSubmode);
-    const errors = validateReferenceSet(
-      input.capability,
-      capabilities,
-      input.references.map(reference => ({
-        kind: reference.resource.kind as ProviderReferenceKind,
-        role: reference.role,
-        width: reference.resource.naturalWidth,
-        height: reference.resource.naturalHeight,
-        title: reference.resource.title,
-        resourceId: reference.resource.resourceId,
-      })),
-    );
+    const errors = validateReferenceSet(input.capability, capabilities, toReferenceCheckItems(input.references));
     return { ok: errors.length === 0, capabilities, errors };
   }
 

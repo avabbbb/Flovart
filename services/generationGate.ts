@@ -1,7 +1,7 @@
 import type { UserApiKey } from '../types';
 import type { WorkflowNode } from '../components/workflow/types';
 import { resolveAnyProductRoute, resolveProductModelRoute } from './productModelCatalog';
-import { estimateApiCost } from '../utils/usageMonitor';
+import { explainApiCost, type ApiCostEstimate } from '../utils/usageMonitor';
 
 type GenerationCapability = {
     executor?: string;
@@ -15,6 +15,37 @@ export interface GenerationGateDetails {
   taskCount: number;
   /** null/undefined means no pricing rule matched; the gate must still say the cost is unknown. */
   estimatedCost?: { amount: number; currency: 'USD' | 'CNY' } | null;
+  routeLabel?: string;
+  resolution?: string;
+  durationSec?: number;
+  aspectRatio?: string;
+  nodeTitle?: string;
+  costBasis?: 'pricing-rule' | 'unknown';
+  costComponents?: ApiCostEstimate['components'];
+  references?: PlanReference[];
+  budget?: { used: number; limit: number; currency: 'USD' | 'CNY'; wouldExceed: boolean };
+  /** 可继续，卡上提示。 */
+  warnings?: PlanNotice[];
+  /** 有任一项则确认按钮禁用。 */
+  blockers?: PlanNotice[];
+}
+
+export interface PlanReference {
+  title: string;
+  kind: 'image' | 'video' | 'audio';
+  durationSec?: number;
+  sizeBytes?: number;
+  width?: number;
+  height?: number;
+  status: 'ok' | 'warn' | 'block';
+  /** 与运行时预检同一文案（validateReferenceSet）。 */
+  message?: string;
+}
+
+export interface PlanNotice {
+  /** 已知：retry-new-task、route-fallback、cost-unknown、budget-near、budget-exceeded、reference-limit。 */
+  code: string;
+  message: string;
 }
 
 const PROVIDER_LABELS: Record<string, string> = {
@@ -52,7 +83,7 @@ function findService(keys: UserApiKey[], mediaType: 'image' | 'video') {
 }
 
 export function getGenerationGateDetails(
-  node: Pick<WorkflowNode, 'type' | 'metadata'>,
+  node: Pick<WorkflowNode, 'type' | 'title' | 'metadata'>,
   capability: GenerationCapability | undefined,
   keys: UserApiKey[],
 ): GenerationGateDetails {
@@ -72,7 +103,7 @@ export function getGenerationGateDetails(
       if (route) break;
     }
   }
-  const estimatedCost = route ? estimateApiCost({
+  const estimate = route ? explainApiCost({
     key: route.key,
     productModelId: route.model.id,
     routeId: route.routeId,
@@ -82,12 +113,22 @@ export function getGenerationGateDetails(
     resolution: typeof params.resolution === 'string' ? params.resolution : undefined,
     quality: typeof params.quality === 'string' ? params.quality : undefined,
   }) : null;
+  const resolution = typeof params.resolution === 'string' ? params.resolution : undefined;
+  const durationSec = mediaType === 'video' && typeof params.durationSec === 'number' && params.durationSec > 0 ? params.durationSec : undefined;
+  const aspectRatio = typeof params.aspectRatio === 'string' ? params.aspectRatio : undefined;
   return {
     serviceLabel: route ? (route.key.name || PROVIDER_LABELS[route.key.provider] || '当前 AI 服务') : findService(keys, mediaType),
     modelLabel: displayModel(modelId),
     mediaType,
     taskCount,
-    estimatedCost,
+    estimatedCost: estimate ? { amount: estimate.amount, currency: estimate.currency } : null,
+    routeLabel: route?.routeId,
+    resolution,
+    durationSec,
+    aspectRatio,
+    nodeTitle: node.title,
+    costBasis: estimate ? 'pricing-rule' : 'unknown',
+    costComponents: estimate?.components,
   };
 }
 

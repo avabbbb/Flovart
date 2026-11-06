@@ -18,6 +18,7 @@ import { applySelectedTakeMedia, beginWorkflowOperationTake, completeWorkflowOpe
 import { validateWorkflowOperationOutputs } from '../components/workflow/operationRegistry';
 import type { ProviderMaterializedReference } from './providerGenerationAdapter';
 import { applyReferenceTranscodes, planReferenceTranscodes, type ReferenceTranscodePlanItem, type ReferenceTranscodeRequest } from './referenceTranscode';
+import { deriveProductMode } from './generationPlan';
 import { requestUiConfirm } from './uiConfirm';
 import { resolveProviderGenerationExtension } from './userScriptProviderAdapter';
 import { displayError } from './displayError';
@@ -321,20 +322,12 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
       hostTarget: 'workflow',
       revision: project.draftVersion || 1,
     });
-    let productMode: ProductModelMode = (config.submode as ProductModelMode | undefined)
-      || (mode === 'video' ? 'text-to-video' : 'text-to-image');
-    // 未显式选择 submode 时，只从同一份 ResolvedNodeInputs 推导输入模式。
-    if (!config.submode && productModel) {
-      const earlyMedia = resolvedInputs.references.map(reference => reference.resource);
-      if (mode === 'image' && earlyMedia.some(resource => resource.kind === 'image') && productModel.capabilities.modes.includes('image-to-image')) {
-        productMode = 'image-to-image';
-      } else if (mode === 'video' && earlyMedia.length > 0) {
-        const imageCount = earlyMedia.filter(resource => resource.kind === 'image').length;
-        const needsGeneralReference = earlyMedia.some(resource => resource.kind === 'video' || resource.kind === 'audio') || imageCount > 1;
-        if (needsGeneralReference && productModel.capabilities.modes.includes('reference-to-video')) productMode = 'reference-to-video';
-        else if (imageCount > 0 && productModel.capabilities.modes.includes('image-to-video')) productMode = 'image-to-video';
-      }
-    }
+    let productMode: ProductModelMode = deriveProductMode(
+      mode,
+      config.submode as ProductModelMode | undefined,
+      productModel,
+      resolvedInputs.references.map(reference => reference.resource),
+    );
     const resolved = await resolveRouteMappingForSubmit(
       mode === 'text'
         ? { kind: 'runtime-capability', capability: 'agent-text' }

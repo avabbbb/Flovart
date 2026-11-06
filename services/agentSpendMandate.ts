@@ -37,7 +37,7 @@ export interface AgentSpendDemand {
   cost: { amount: number; currency: SpendCurrency } | null;
 }
 
-export type MandateDenyReason = 'not-generation' | 'no-mandate' | 'unknown-demand' | 'tasks-exceeded' | 'cost-exceeded' | 'cost-unknown';
+export type MandateDenyReason = 'not-generation' | 'plan-blocked' | 'no-mandate' | 'unknown-demand' | 'tasks-exceeded' | 'cost-exceeded' | 'cost-unknown';
 
 export type MandateDecision = { allow: true } | { allow: false; reason: MandateDenyReason };
 
@@ -63,6 +63,7 @@ export function spendDemand(gates: readonly GenerationGateDetails[] = []): Agent
 
 export function evaluateSpendMandate(mandate: AgentSpendMandate | null | undefined, request: AgentConfirmRequest | undefined): MandateDecision {
   if (!request || request.kind !== 'generation') return { allow: false, reason: 'not-generation' };
+  if (planBlocked(request)) return { allow: false, reason: 'plan-blocked' };
   if (!mandate) return { allow: false, reason: 'no-mandate' };
   const demand = spendDemand(request.gates);
   if (demand.tasks <= 0) return { allow: false, reason: 'unknown-demand' };
@@ -97,4 +98,28 @@ export function describeSpendMandate(mandate: AgentSpendMandate): string {
   if (!mandate.maxCost) return tasks;
   const symbol = mandate.maxCost.currency === 'USD' ? '$' : '¥';
   return `${tasks}，${symbol}${mandate.usedCost.toFixed(2)}/${symbol}${mandate.maxCost.amount.toFixed(2)}`;
+}
+
+/** 任一节点有 blocker：整批不可批准（v1 不做部分批准）。 */
+export function planBlocked(request: AgentConfirmRequest | undefined): boolean {
+  return Boolean(request?.gates?.some(gate => gate.blockers?.length));
+}
+
+/** 卡上的授权说明：自动模式被拒的原因；无授权、允许或与生成无关时为 undefined。 */
+export function describeMandateDenial(mandate: AgentSpendMandate | null | undefined, request: AgentConfirmRequest | undefined): string | undefined {
+  if (!mandate || !request || request.kind !== 'generation') return undefined;
+  const decision = evaluateSpendMandate(mandate, request);
+  if (!('reason' in decision)) return undefined;
+  const batch = spendDemand(request.gates).tasks;
+  switch (decision.reason) {
+    case 'tasks-exceeded':
+    case 'cost-exceeded':
+      return '超出本次授权：' + describeSpendMandate(mandate) + '，本批 ' + batch + ' 个';
+    case 'cost-unknown':
+      return '本批费用未知，不能按金额上限自动批准（' + describeSpendMandate(mandate) + '）';
+    case 'plan-blocked':
+      return '本批有节点无法生成，整批不可批准。';
+    default:
+      return undefined;
+  }
 }

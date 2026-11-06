@@ -10,7 +10,7 @@ import { setAgentGateKeysProvider, WorkflowAgentBridge } from '../../services/wo
 import { WorkflowAgentMessages, type WorkflowAgentDisplayMessage } from '../workflow/WorkflowAgentMessages';
 import type { WorkflowProject } from '../workflow/types';
 import type { AgentPanelStatus } from './agentWorkspaceStore';
-import { consumeSpendMandate, createSpendMandate, defaultMandateTasks, describeSpendMandate, evaluateSpendMandate, spendDemand, type AgentConfirmRequest, type AgentSpendMandate } from '../../services/agentSpendMandate';
+import { consumeSpendMandate, createSpendMandate, defaultMandateTasks, describeMandateDenial, evaluateSpendMandate, planBlocked, spendDemand, type AgentConfirmRequest, type AgentSpendMandate } from '../../services/agentSpendMandate';
 import { ProductionSkillDeck } from './ProductionSkillDeck';
 import {
   createProductionSkillAttachment,
@@ -37,6 +37,7 @@ import { AgentReferenceChip } from './AgentReferenceChip';
 import { AgentTodoCard } from './AgentTodoCard';
 import { AGENT_TODO_TOOL_NAME, latestTodoFromMessages, todoFromToolResult, type AgentTodoItem } from './agentTodo';
 import { AgentHeaderLeadingContext } from './agentHeaderSlot';
+import { GenerationPlanCard } from '../GenerationPlanCard';
 
 interface FlovartAgentPanelProps {
   project: WorkflowProject;
@@ -131,7 +132,7 @@ const userApiKeysRef = useRef(userApiKeys);
   }, [userApiKeys]);
   const workspaceBridge = useRef<WorkflowAgentBridge | undefined>(undefined);
   const abort = useRef<AbortController | undefined>(undefined);
-  type PendingConfirmation = { summary: string; resolve: (approved: boolean) => void; request?: AgentConfirmRequest; offerMandate?: boolean };
+  type PendingConfirmation = { summary: string; resolve: (approved: boolean) => void; request?: AgentConfirmRequest; offerMandate?: boolean; blocked?: boolean };
   const composer = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const textarea = useRef<HTMLTextAreaElement>(null);
@@ -176,9 +177,10 @@ const userApiKeysRef = useRef(userApiKeys);
       return Promise.resolve(true);
     }
     return new Promise<boolean>(resolve => {
-      const offerMandate = modeRef.current === 'auto' && request?.kind === 'generation' && (request.gates?.length ?? 0) > 0;
+      const offerMandate = modeRef.current === 'auto' && request?.kind === 'generation' && (request.gates?.length ?? 0) > 0 && !planBlocked(request);
       if (offerMandate) setMandateTasks(defaultMandateTasks(request));
-      const next: PendingConfirmation = { summary, resolve, request, offerMandate };
+      // 有计划时由 GenerationPlanCard 展示，文本摘要只给 CLI/无宿主。
+      const next: PendingConfirmation = { summary: request?.gates?.length ? '' : summary, resolve, request, offerMandate, blocked: planBlocked(request) };
       confirmationRef.current?.resolve(false); // a newer request supersedes; never leave the agent waiting
       confirmationRef.current = next;
       setConfirmation(next);
@@ -812,8 +814,8 @@ const userApiKeysRef = useRef(userApiKeys);
           <button type="button" aria-label={language === 'zho' ? '关闭' : 'Dismiss'} onClick={() => setGroupBanner(null)}><X size={12} /></button>
         </div>}
         {confirmation && <div className="workflow-agent__confirm"><strong>{t('agentPanel.confirmTitle')}</strong><p>{confirmation.summary}</p>
+          {confirmation.request?.gates?.length ? <GenerationPlanCard plan={{ items: [...confirmation.request.gates], mandate: describeMandateDenial(mandate, confirmation.request) }} /> : null}
           {confirmation.offerMandate && <div className="workflow-agent__mandate">
-            {mandate && <small>{`自动授权已到上限（${describeSpendMandate(mandate)}），需要重新授权。`}</small>}
             <label>批准后，本会话自动模式最多自动生成 <input type="number" min={1} value={mandateTasks} onChange={event => setMandateTasks(Math.max(1, Math.floor(Number(event.target.value) || 1)))} aria-label="自动生成任务上限" /> 个任务（含本批），超出会再次询问；删除、取消始终单独确认。</label>
           </div>}
           <div>
@@ -825,7 +827,7 @@ const userApiKeysRef = useRef(userApiKeys);
               setMandate(granted);
               confirmationRef.current = undefined; confirmation.resolve(true); setConfirmation(undefined); activity.current('running');
             }}>批准并自动进行</button>}
-            <button type="button" onClick={() => { confirmationRef.current = undefined; confirmation.resolve(true); setConfirmation(undefined); activity.current('running'); }}>{confirmation.offerMandate ? '仅批准本次' : t('agentPanel.allow')}</button>
+            <button type={'button'} disabled={confirmation.blocked} onClick={() => { confirmationRef.current = undefined; confirmation.resolve(true); setConfirmation(undefined); activity.current('running'); }}>{confirmation.offerMandate ? '仅批准本次' : t('agentPanel.allow')}</button>
           </div>
         </div>}
         <div ref={composer} className="workflow-agent__composer">

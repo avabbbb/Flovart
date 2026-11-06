@@ -1481,10 +1481,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                         {error && onRetry && (
                             <button
                                 type="button"
-                                onClick={() => {
-                                    if (isSeedanceVideoModel && !window.confirm(ui('Seedance 重试会创建一个全新任务，可能再次消耗额度。确定继续吗？', 'Retrying Seedance creates a new task and may use credits again. Continue?'))) return;
-                                    onRetry();
-                                }}
+                                onClick={() => onRetry()}
                                 className={`${triggerClass} ${compactMode ? 'h-9 px-3 text-xs' : 'h-10 px-4 text-sm'}`}
                                 style={{ color: 'var(--isl-coral-deep)' }}
                                 title={isSeedanceVideoModel ? ui('创建新的 Seedance 任务，可能再次扣费', 'Create a new Seedance task; this may use credits again') : ui('使用相同参数重新生成', 'Generate again with the same settings')}

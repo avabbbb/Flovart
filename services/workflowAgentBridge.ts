@@ -2,15 +2,16 @@ import { requestUiConfirm } from './uiConfirm';
 import { executeFlovartCommand } from '../tools/flovart/core.js';
 import { canonicalize } from 'json-canonicalize';
 import { useWorkflowStore } from '../components/workflow/store';
-import type { WorkflowProject } from '../components/workflow/types';
+import type { WorkflowNode, WorkflowProject } from '../components/workflow/types';
 import { getFlovartRuntimeApi, type RuntimeCommandEnvelope } from './flovartRuntime';
 import { createBrowserWorkflowContract, type BrowserWorkflowContract } from './browserWorkflowContract';
 import { redactWorkflowAgentValue, withWorkflowHumanApproval, type WorkflowCommandEnvelope, type WorkflowCommandResult } from './workflowDispatcher';
 import { workflowCommandSummary } from '../components/workflow/agentOps';
 import { getWorkflowOperationCapabilityByNodeTool } from '../components/workflow/operationRegistry';
 import { displayError } from './displayError';
-import { buildGenerationGateSummary, getGenerationGateDetails } from './generationGate';
-import type { AgentConfirmRequest } from './agentSpendMandate';
+import { buildGenerationGateSummary, getGenerationGateDetails, type GenerationGateDetails } from './generationGate';
+import { planBlocked, type AgentConfirmRequest } from './agentSpendMandate';
+import { applyPlanChecks, buildGenerationPlanChecks } from './generationPlan';
 import type { UserApiKey as GateApiKey } from '../types';
 
 let agentGateKeysProvider: () => GateApiKey[] = () => [];
@@ -79,31 +80,54 @@ function workflowRunNodes(envelope: WorkflowCommandEnvelope) {
     const node = project?.nodes.find(item => item.id === nodeId);
     return node ? [node] : [];
   });
-  return { nodeIds, nodes };
+  return { nodeIds, nodes, project };
 }
 
 /** 结构化确认请求：自动模式的付费授权只认 generation，且要求每个目标节点都能解析。 */
 export function workflowConfirmRequest(envelope: WorkflowCommandEnvelope): AgentConfirmRequest {
   if (envelope.command === 'workflow.node.run') {
-    const { nodeIds, nodes } = workflowRunNodes(envelope);
+    const { nodeIds, nodes, project } = workflowRunNodes(envelope);
     return {
       kind: 'generation',
       command: envelope.command,
-      gates: nodes.length === nodeIds.length ? nodes.map(node => getGenerationGateDetails(node, undefined, agentGateKeys())) : [],
+      gates: nodes.length === nodeIds.length ? nodes.map(node => agentPlanGate(node, project)) : [],
     };
   }
   if (envelope.command.endsWith('.delete')) return { kind: 'destructive', command: envelope.command };
   return { kind: 'other', command: envelope.command };
 }
 
+/** 与画布入口同一份计划：门禁详情 + 提交前检查；操作节点（recipe）不预检，运行时仍兜底。 */
+function agentPlanGate(
+  node: WorkflowNode,
+  project: WorkflowProject | undefined,
+): GenerationGateDetails {
+  const keys = agentGateKeys();
+  const details = getGenerationGateDetails(node, undefined, keys);
+  if (!project || node.metadata.operation) return details;
+  return applyPlanChecks(details, buildGenerationPlanChecks({ node, project, keys, mode: details.mediaType }));
+}
+
+/** CLI/无宿主时的文本 body：与卡同一份计划，blocker 与提醒逐条列出。 */
+export function planGateText(details: GenerationGateDetails) {
+  return [
+    buildGenerationGateSummary(details),
+    ...(details.blockers ?? []).map(item => '无法生成：' + item.message),
+    ...(details.warnings ?? []).map(item => '注意：' + item.message),
+  ].join('\n');
+}
+
 function workflowConfirmationSummary(envelope: WorkflowCommandEnvelope) {
   if (envelope.command === 'workflow.node.run') {
-    const { nodeIds, nodes } = workflowRunNodes(envelope);
-    if (nodeIds.length === 1 && nodes.length === 1) return buildGenerationGateSummary(getGenerationGateDetails(nodes[0], undefined, agentGateKeys()));
+    const { nodeIds, nodes, project } = workflowRunNodes(envelope);
+    if (nodeIds.length === 1 && nodes.length === 1) return planGateText(agentPlanGate(nodes[0], project));
     if (nodes.length > 1) {
+      const gates = nodes.map(node => agentPlanGate(node, project));
+      const blocked = nodes.filter((_, index) => gates[index].blockers?.length).map(node => '「' + node.title + '」');
       return [
         '批量运行 ' + nodes.length + ' 个节点，一次确认覆盖本批：',
-        ...nodes.map(node => '「' + node.title + '」\n' + buildGenerationGateSummary(getGenerationGateDetails(node, undefined, agentGateKeys()))),
+        ...(blocked.length ? ['以下节点无法生成，整批不可批准：' + blocked.join('、')] : []),
+        ...nodes.map((node, index) => '「' + node.title + '」\n' + planGateText(gates[index])),
       ].join('\n\n');
     }
   }
@@ -352,7 +376,17 @@ export class WorkflowAgentBridge {
   }
 
   private confirm(summary: string, request?: AgentConfirmRequest) {
-    return this.options.confirm ? this.options.confirm(summary, request) : requestUiConfirm({ title: 'Agent 请求执行', body: summary, confirmLabel: '允许', cancelLabel: '拒绝' });
+    if (this.options.confirm) return this.options.confirm(summary, request);
+    const items = request?.kind === 'generation' ? [...(request.gates ?? [])] : [];
+    const blocked = planBlocked(request);
+    return requestUiConfirm({
+      title: blocked ? '暂时无法生成' : 'Agent 请求执行',
+      body: summary,
+      ...(items.length ? { plan: { items } } : {}),
+      confirmDisabled: blocked,
+      confirmLabel: '允许',
+      cancelLabel: blocked ? '关闭' : '拒绝',
+    });
   }
 
   private post(path: string, body: unknown, params?: Record<string, string>) {

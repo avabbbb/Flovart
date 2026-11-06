@@ -66,7 +66,20 @@ function pricingRulesFor(key: UserApiKey, productModelId: string | undefined, ro
   return compatible.filter(rule => Number(Boolean(rule.resolution)) + Number(Boolean(rule.quality)) === maxSpecificity);
 }
 
-export function estimateApiCost(input: {
+export interface ApiCostComponent {
+  rate: number;
+  unit: ApiPricingRule['unit'];
+  units: number;
+  amount: number;
+}
+
+export interface ApiCostEstimate {
+  amount: number;
+  currency: 'USD' | 'CNY';
+  components: ApiCostComponent[];
+}
+
+export function explainApiCost(input: {
   key: UserApiKey;
   productModelId?: string;
   routeId: string;
@@ -75,16 +88,22 @@ export function estimateApiCost(input: {
   count?: number;
   resolution?: string;
   quality?: string;
-}): { amount: number; currency: 'USD' | 'CNY' } | null {
+}): ApiCostEstimate | null {
   const rules = pricingRulesFor(input.key, input.productModelId, input.routeId, input.type, input.resolution, input.quality)
     .filter(rule => rule.unit !== 'input_token' && rule.unit !== 'output_token');
   if (!rules.length || new Set(rules.map(rule => rule.currency)).size !== 1) return null;
   const count = Math.max(1, input.count || 1);
-  const amount = rules.reduce((sum, rule) => {
+  const components = rules.map(rule => {
     const units = rule.unit === 'video_second' ? Math.max(1, input.durationSec || 1) * count : count;
-    return sum + rule.rate * units;
-  }, 0);
-  return { amount, currency: rules[0].currency };
+    return { rate: rule.rate, unit: rule.unit, units, amount: rule.rate * units };
+  });
+  const amount = components.reduce((sum, component) => sum + component.amount, 0);
+  return { amount, currency: rules[0].currency, components };
+}
+
+export function estimateApiCost(input: Parameters<typeof explainApiCost>[0]): { amount: number; currency: 'USD' | 'CNY' } | null {
+  const estimate = explainApiCost(input);
+  return estimate ? { amount: estimate.amount, currency: estimate.currency } : null;
 }
 
 export async function assertApiBudget(input: Parameters<typeof estimateApiCost>[0]): Promise<void> {

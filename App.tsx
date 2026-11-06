@@ -37,6 +37,7 @@ import { resolveRouteMappingForSubmit, type RouteFallbackResolution } from './se
 import { ensureWorkflowImageGenerateOperation } from './components/workflow/operations';
 import { getWorkflowOperationCapability } from './components/workflow/operationRegistry';
 import { buildGenerationGateSummary, getGenerationGateDetails, requiresExternalGenerationGate } from './services/generationGate';
+import { applyPlanChecks, buildGenerationPlanChecks } from './services/generationPlan';
 import { loadCreativeHostResource } from './services/studio/hostResourceRegistry';
 import { registerWorkflowArtifact } from './services/studio/artifactRegistry';
 
@@ -497,11 +498,20 @@ const App: React.FC = () => {
         }
         // Non-blocking: the canvas stays usable while the user decides, and an
         // unanswered request cancels itself instead of holding the node.
-        const details = getGenerationGateDetails(node, capability, userApiKeys);
+        const baseDetails = getGenerationGateDetails(node, capability, userApiKeys);
+        const project = useWorkflowStore.getState().projects.find(item => item.id === projectId);
+        // 操作节点（recipe）走各自的参数，不做参考预检；运行时仍会兜底校验。
+        const details = project && !node.metadata.operation
+            ? applyPlanChecks(baseDetails, buildGenerationPlanChecks({ node, project, keys: userApiKeys, mode: baseDetails.mediaType }))
+            : baseDetails;
+        const blocked = Boolean(details.blockers?.length);
         void requestUiConfirm({
-            title: details.mediaType === 'video' ? '开始生成视频？' : '开始生成图片？',
+            title: blocked ? '暂时无法生成' : details.mediaType === 'video' ? '开始生成视频？' : '开始生成图片？',
             body: buildGenerationGateSummary(details),
+            plan: { items: [details] },
+            confirmDisabled: blocked,
             confirmLabel: '生成',
+            ...(blocked ? { cancelLabel: '关闭' } : {}),
             onDismissed: () => toast.show(language === 'en' ? 'The generation request expired and nothing was submitted. Press Run again.' : '生成确认已过期，未提交任何任务。请重新点击运行。', 'warning'),
         }).then(approved => { if (approved) run(); });
     }, [language, toast, userApiKeys, workflowExecutor]);

@@ -76,3 +76,14 @@
 .flovart-confirm__actions button[data-tone] { background: var(--isl-mint); border-color: var(--isl-mint); color: #fff; }
 .flovart-confirm__actions button[data-tone='danger'] { background: var(--isl-coral); border-color: var(--isl-coral); }
 .flovart-confirm__actions button:focus-visible { outline: 2px solid var(--isl-mint-deep); outline-offset: 2px; }
+.flovart-confirm button:disabled { opacity: 0.45; cursor: not-allowed; }
+.flovart-confirm--plan { width: min(440px, calc(100vw - 32px)); }
+.flovart-plan { margin-top: 8px; display: grid; gap: 10px; max-height: 60vh; overflow: auto; font-size: 12px; line-height: 1.5; }
+.flovart-planitem { display: grid; gap: 4px; }
+.flovart-planitem + .flovart-planitem { padding-top: 8px; border-top: 1px solid var(--isl-border); }
+.flovart-plantitle { font-weight: 600; }
+.flovart-planmuted { color: var(--isl-ink-soft); }
+.flovart-planrefs, .flovart-plannotices { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; }
+.flovart-planrefs li[data-status='warn'], .flovart-plannotices[data-kind='warning'] li { color: var(--isl-ink-soft); }
+.flovart-planrefs li[data-status='block'], .flovart-plannotices[data-kind='blocker'] li, .flovart-planrow[data-exceed] { color: var(--isl-coral); }
+.flovart-plansummary, .flovart-planmandate { padding-top: 8px; border-top: 1px solid var(--isl-border); font-weight: 600; }

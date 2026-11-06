@@ -332,6 +332,20 @@ export function validateReferenceSet(
   return errors;
 }
 
+/** canonical 参考 → 硬限制检查项；provider / userScript 适配器与计划卡共用，保证同一输入同一文案。 */
+export function toReferenceCheckItems(references: CanonicalGenerationInput['references']): ProviderReferenceCheckItem[] {
+  return references.map(reference => ({
+    kind: reference.resource.kind,
+    role: reference.role,
+    width: reference.resource.naturalWidth,
+    height: reference.resource.naturalHeight,
+    durationMs: reference.resource.durationMs,
+    bytes: reference.resource.bytes,
+    title: reference.resource.title,
+    resourceId: reference.resource.resourceId,
+  }));
+}
+
 export const providerGenerationAdapter: ProviderGenerationAdapter = {
   getCapabilities(context, mode) {
     const resolvedMode = mode;
@@ -358,16 +372,7 @@ export const providerGenerationAdapter: ProviderGenerationAdapter = {
   validate(input, context) {
     const mode = input.parameters.generationSubmode || modeForCapability(input.capability);
     const capabilities = this.getCapabilities(context, mode);
-    const errors = validateReferenceSet(input.capability, capabilities, input.references.map(reference => ({
-      kind: reference.resource.kind,
-      role: reference.role,
-      width: reference.resource.naturalWidth,
-      height: reference.resource.naturalHeight,
-      durationMs: reference.resource.durationMs,
-      bytes: reference.resource.bytes,
-      title: reference.resource.title,
-      resourceId: reference.resource.resourceId,
-    })));
+    const errors = validateReferenceSet(input.capability, capabilities, toReferenceCheckItems(input.references));
     return { ok: errors.length === 0, capabilities, errors };
   },
 

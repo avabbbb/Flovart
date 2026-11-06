@@ -8,6 +8,14 @@
  * If no host is mounted it resolves false immediately instead of hanging.
  */
 import { useSyncExternalStore } from 'react';
+import type { GenerationGateDetails } from './generationGate';
+
+/** 生成计划卡数据；有 plan 时 ConfirmHost 渲染 GenerationPlanCard，body 仍作文本兜底。 */
+export interface UiConfirmPlan {
+  items: GenerationGateDetails[];
+  /** 授权余量/拒绝原因，如「已用 8/10，本批 4 个」。 */
+  mandate?: string;
+}
 
 export interface UiConfirmRequest {
   id: number;
@@ -18,6 +26,9 @@ export interface UiConfirmRequest {
   tone: 'default' | 'danger';
   extraLabel?: string;
   expiresAt: number | null;
+  plan?: UiConfirmPlan;
+  /** true 时确认按钮禁用，answerUiConfirm(id, true) 被忽略。 */
+  confirmDisabled?: boolean;
 }
 
 export interface UiConfirmOptions {
@@ -32,6 +43,8 @@ export interface UiConfirmOptions {
   timeoutMs?: number;
   /** Called when the request closes without a user answer, so callers can tell the user nothing was submitted. */
   onDismissed?: (reason: 'timeout' | 'replaced' | 'unmounted') => void;
+  plan?: UiConfirmPlan;
+  confirmDisabled?: boolean;
 }
 
 type Pending = { request: UiConfirmRequest; resolve: (value: boolean) => void; timer?: number; onDismissed?: UiConfirmOptions['onDismissed']; extraRun?: () => void };
@@ -67,6 +80,8 @@ export function requestUiConfirm(options: UiConfirmOptions): Promise<boolean> {
     tone: options.tone || 'default',
     ...(options.extraAction ? { extraLabel: options.extraAction.label } : {}),
     expiresAt: timeoutMs > 0 ? Date.now() + timeoutMs : null,
+    ...(options.plan ? { plan: options.plan } : {}),
+    ...(options.confirmDisabled ? { confirmDisabled: true } : {}),
   };
   return new Promise<boolean>(resolve => {
     pending = { request, resolve, onDismissed: options.onDismissed, extraRun: options.extraAction?.run };
@@ -75,7 +90,10 @@ export function requestUiConfirm(options: UiConfirmOptions): Promise<boolean> {
   });
 }
 
-export function answerUiConfirm(id: number, value: boolean) { settle(id, value); }
+export function answerUiConfirm(id: number, value: boolean) {
+  if (value && pending?.request.id === id && pending.request.confirmDisabled) return;
+  settle(id, value);
+}
 
 export function runUiConfirmExtra(id: number) { if (pending?.request.id === id) pending.extraRun?.(); }
 
