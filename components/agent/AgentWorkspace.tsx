@@ -1,8 +1,6 @@
 import { Sparkles } from 'lucide-react';
 import '../../styles/agent.css';
 import type { WorkflowProject } from '../workflow/types';
-import { AgentHostPicker } from './AgentHostPicker';
-import { AgentActivityPanel } from './AgentActivityPanel';
 
 /**
  * Dedicated top-level Agent surface.
@@ -13,21 +11,24 @@ import { AgentActivityPanel } from './AgentActivityPanel';
  * right drawer so users can keep the work visible while chatting.
  */
 export function AgentConnectionsPage({ project, language = 'zho' }: { project: WorkflowProject | null; language?: 'en' | 'zho' }) {
+  void project;
   const copy = language === 'zho'
-    ? { connect: '连接本地 Agent', intro: '连接 Codex、WorkBuddy 等本地 Agent。这里负责连接和状态；内置助手仍在画布右侧使用。' }
-    : { connect: 'Connect a local Agent', intro: 'Connect local agents such as Codex or WorkBuddy. Manage connections here; use the built-in assistant beside the canvas.' };
+    ? { tag: 'Agent', title: '正在优化，后续上线', body: '连接本地 Agent、协作 Agent、实时操作与项目共享回执正在重做。你的连接与数据都会保留，上线后自动恢复。现在可以在画布右侧的助手面板继续工作。' }
+    : { tag: 'Agent', title: 'Being reworked, coming soon', body: 'Local-agent connection, collaborators, live activity and shared receipts are being rebuilt. Your connections and data are kept and return automatically once it ships. Use the assistant panel beside the canvas in the meantime.' };
   return (
     <div className="h-full min-h-0 overflow-y-auto" data-testid="agent-connections-page" style={{ color: 'var(--isl-ink)' }}>
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 p-4 sm:p-6">
         <section className="agent-connections-page__surface" data-testid="agent-connections-surface" aria-labelledby="agent-connections-title">
           <header className="agent-connections-page__header">
-            <span className="text-[10px] font-bold uppercase tracking-[0.12em]" style={{ color: 'var(--isl-ink-ghost)' }}>Agent</span>
-            <h1 id="agent-connections-title">{copy.connect}</h1>
-            <p>{copy.intro}</p>
+            <span className="text-[10px] font-bold uppercase tracking-[0.12em]" style={{ color: 'var(--isl-ink-ghost)' }}>{copy.tag}</span>
+            <h1 id="agent-connections-title">{copy.title}</h1>
+            <p>{copy.body}</p>
           </header>
-          <AgentHostPicker projectTitle={project?.title} language={language} />
+          <div className="m-3 flex flex-col items-center gap-2 rounded-xl border p-6 text-center" style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-surface)' }}>
+            <Sparkles size={22} style={{ color: 'var(--isl-mint)' }} />
+            <strong className="text-sm">{copy.title}</strong>
+          </div>
         </section>
-        <AgentActivityPanel language={language} />
       </div>
     </div>
   );

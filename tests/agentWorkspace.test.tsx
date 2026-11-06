@@ -11,9 +11,9 @@ describe('Agent surfaces', () => {
     expect(screen.getByTestId('agent-connections-page')).toBeInTheDocument();
     expect(screen.getByTestId('agent-connections-surface')).toHaveClass('agent-connections-page__surface');
     expect(screen.getByTestId('agent-connections-surface')).toHaveAttribute('aria-labelledby', 'agent-connections-title');
-    expect(screen.getByRole('heading', { name: '连接本地 Agent' })).toBeInTheDocument();
-    expect(screen.getByTestId('agent-host-picker')).toBeInTheDocument();
-    expect(screen.getByText(/内置助手仍在画布右侧使用/)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '正在优化，后续上线' })).toBeInTheDocument();
+    expect(screen.queryByTestId('agent-host-picker')).not.toBeInTheDocument();
+    expect(screen.getByText(/你的连接与数据都会保留/)).toBeInTheDocument();
     expect(screen.queryByRole('textbox', { name: /开始你的创作/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Brief/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /时间线/ })).not.toBeInTheDocument();

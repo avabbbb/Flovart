@@ -2525,7 +2525,7 @@ export function InfiniteWorkflow({
     // Previously [data-workflow-media-preview] was also excluded, which made
     // the whole media body undraggable: dropped/inserted media nodes could be
     // selected but never moved.
-    if (target?.closest('video,audio')) {
+    if (target?.closest('video[controls],audio[controls]')) {
       setOverlayHidden(false);
       return;
     }

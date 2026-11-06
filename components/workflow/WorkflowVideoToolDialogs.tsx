@@ -1,7 +1,7 @@
 import { Button, InputNumber, Modal, Slider } from 'antd';
 import { useEffect, useRef, useState } from 'react';
 import { getVideoDuration } from '../../services/videoTools';
-import { isFFmpegSupported, isMultiThreadAvailable } from '../../services/ffmpegClient';
+import { isFFmpegSupported } from '../../services/ffmpegClient';
 
 export type WorkflowVideoToolKind = 'trim' | 'av-split' | 'merge' | 'extract-frame';
 /** nodeIds：merge 工具持久保存的选中节点 id 列表，确认时原样回传。 */
@@ -39,7 +39,6 @@ function DialogError({ error }: { error: string | null }) {
 
 function FFmpegStatus() {
   if (!isFFmpegSupported()) return <p className="workflow-image-tool__error">当前浏览器不支持 WebAssembly，无法使用视频工具。</p>;
-  if (!isMultiThreadAvailable()) return <p className="workflow-image-tool__hint">提示: 未启用多线程，处理速度较慢。COOP/COEP headers 需正确配置。</p>;
   return null;
 }
 

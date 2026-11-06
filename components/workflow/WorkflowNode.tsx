@@ -234,6 +234,10 @@ export function WorkflowNode({
   const videoRef = useRef<HTMLVideoElement>(null);
   const videoLeaveTimer = useRef<number | undefined>(undefined);
   const [videoPlaying, setVideoPlaying] = useState(false);
+  const [videoDecodeError, setVideoDecodeError] = useState<string | null>(null);
+  const videoDecodeMessage = language === 'en'
+    ? 'This browser cannot decode the video (often H.265/HEVC). Convert it to H.264 MP4 and upload again.'
+    : '浏览器无法解码该视频（常见于 H.265/HEVC 编码），请转码为 H.264 MP4 后重新上传';
   const [videoCurrentTime, setVideoCurrentTime] = useState(0);
   const [videoDuration, setVideoDuration] = useState(() => (node.metadata.durationMs || 0) / 1000);
   const [videoVolume, setVideoVolume] = useState(.5);
@@ -251,6 +255,9 @@ export function WorkflowNode({
   useEffect(() => {
     if (videoRef.current) videoRef.current.volume = videoVolume;
   }, [videoActive, videoVolume]);
+  useEffect(() => {
+    setVideoDecodeError(null);
+  }, [media.url]);
   const isMedia = node.type === 'image' || node.type === 'video' || node.type === 'audio';
   const hasMediaReference = Boolean(node.metadata.storageKey || node.metadata.href || node.metadata.artifactRef?.taskId);
   const posterSourceKey = node.type === 'video' ? `${node.metadata.storageKey || ''}|${node.metadata.href || ''}|${node.metadata.artifactRef?.taskId || ''}` : '';
@@ -463,7 +470,7 @@ export function WorkflowNode({
           : <div className="workflow-node__empty"><ImageIcon size={26} /><span>{mediaError || (language === 'en' ? 'Image node' : '图片节点')}</span>{mediaActions}</div>)}
         {node.type === 'video' && (hasMediaReference
           ? videoActive
-            ? media.url
+            ? media.url && !videoDecodeError
               ? <>
                 <video
                   ref={videoRef}
@@ -476,7 +483,10 @@ export function WorkflowNode({
                   onLoadedMetadata={event => {
                     event.currentTarget.volume = videoVolume;
                     setVideoDuration(Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0);
+                    // 不支持的视频编码在 Chrome 里只解出音轨：videoWidth 为 0，画面永远黑屏。
+                    if (event.currentTarget.videoWidth === 0) setVideoDecodeError(videoDecodeMessage);
                   }}
+                  onError={() => setVideoDecodeError(videoDecodeMessage)}
                   onDurationChange={event => setVideoDuration(Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0)}
                   onTimeUpdate={event => setVideoCurrentTime(event.currentTarget.currentTime)}
                   onPlay={() => setVideoPlaying(true)}
@@ -522,7 +532,7 @@ export function WorkflowNode({
                 </div>
                 {mediaActions}
               </>
-              : <div className="workflow-node__empty"><Video size={26} /><span>{mediaError || '正在加载视频'}</span>{mediaActions}</div>
+              : <div className="workflow-node__empty"><Video size={26} /><span>{videoDecodeError || mediaError || '正在加载视频'}</span>{mediaActions}</div>
             : <>{posterMedia.url
               ? <img src={posterMedia.url} alt={`${node.title}${language === 'en' ? ' video poster' : ' 视频封面'}`} draggable={false} loading="lazy" data-workflow-media-preview />
               : <div className="workflow-node__empty workflow-video-placeholder" role="img" aria-label={`${node.title}${language === 'en' ? ' video preview' : ' 视频预览'}`} data-testid="workflow-video-placeholder" data-workflow-media-preview><Video size={26} /><span>{(language === 'en' ? 'Video preview' : '视频预览')}</span></div>}

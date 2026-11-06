@@ -11,11 +11,9 @@ afterEach(() => useWorkspaceStore.setState({ language: 'zho' }));
 describe('foundation surfaces use the active locale', () => {
   it('renders the Agent connection surface in English', async () => {
     render(<AgentConnectionsPage project={null} language="en" />);
-    expect(screen.getByRole('heading', { name: 'Connect a local Agent' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Collaborating agent' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Refresh connection status' })).toBeInTheDocument();
-    expect(screen.queryByText('连接本地 Agent')).not.toBeInTheDocument();
-    await vi.waitFor(() => expect(screen.getByText('Other agents')).toBeInTheDocument());
+    expect(screen.getByRole('heading', { name: 'Being reworked, coming soon' })).toBeInTheDocument();
+    expect(screen.getByText(/Your connections and data are kept/)).toBeInTheDocument();
+    expect(screen.queryByText('正在优化，后续上线')).not.toBeInTheDocument();
   });
 
   it('renders the PromptBar model picker in English with viewport-safe dialog labeling', async () => {

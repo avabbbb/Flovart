@@ -137,6 +137,14 @@ export function isFFmpegSupported(): boolean {
   return typeof WebAssembly !== 'undefined';
 }
 
+// core-mt 在浏览器里不稳定：线上站开启 COOP/COEP 后会走多线程，分离音视频时直接崩掉整个渲染进程
+// （Crashpad_NotConnectedToHandler），无法被 try/catch 兜住。默认单线程；确需多线程时用
+// localStorage `flovart.ffmpeg.mt` = '1' 显式开启。
 export function isMultiThreadAvailable(): boolean {
-  return typeof SharedArrayBuffer !== 'undefined' && window.crossOriginIsolated === true;
+  if (typeof SharedArrayBuffer === 'undefined' || window.crossOriginIsolated !== true) return false;
+  try {
+    return localStorage.getItem('flovart.ffmpeg.mt') === '1';
+  } catch {
+    return false;
+  }
 }
