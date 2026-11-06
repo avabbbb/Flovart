@@ -194,7 +194,7 @@ export interface UnifiedIgnitionInput {
 
 export type UnifiedIgnitionResult =
     | { ok: true; elementId: string; mediaUrl: string; mimeType: string; capability: ElementMediaCapability; textResponse?: string | null; /** 仅供溯源：远端已下载结果的原始 URL（RunningHub 等 24h 临时链接）。持久化层据此保留来源，节点媒体仍以本地存储为准。 */ remoteMediaUrl?: string }
-    | { ok: false; elementId: string; errorMessage: string; capability: ElementMediaCapability; /** 用户停止（非超时）导致的失败；调用方据此区分停止与真实失败，不要匹配文案。 */ aborted?: boolean };
+    | { ok: false; elementId: string; errorMessage: string; capability: ElementMediaCapability; /** 用户停止（非超时）导致的失败；调用方据此区分停止与真实失败，不要匹配文案。 */ aborted?: boolean; /** 提交已发出但结果未知：禁止自动重提。 */ submissionUnknown?: boolean; /** 供应商已生成完成但下载失败：用此任务 ID 重新下载。 */ downloadPendingTaskId?: string };
 
 export type ElementMediaCapability = 'image' | 'video';
 
@@ -1948,6 +1948,8 @@ async function generateVideoWithUnifiedAsyncApi(
     for (const apiBase of apiBaseCandidates) {
         // 任务一旦在某个候选地址创建（或正在恢复），换下一个地址只会重复提交、重复扣费。
         let taskCommitted = Boolean(options?.resumeProviderTaskId);
+        // 供应商已明确拒绝（非 404/405）：换地址只会重复请求，直接报错。
+        let definitive = false;
         try {
             let taskId = options?.resumeProviderTaskId;
             if (!taskId) {
@@ -1965,15 +1967,23 @@ async function generateVideoWithUnifiedAsyncApi(
                     createBody.images = imageHrefs;
                 }
 
-                const createRes = await fetch(`${apiBase}/v2/videos/generations`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        Authorization: `Bearer ${apiKey}`,
-                    },
-                    body: JSON.stringify(createBody),
-                    signal: options?.signal,
-                });
+                let createRes: Response;
+                try {
+                    createRes = await fetch(apiBase + '/v2/videos/generations', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            Authorization: 'Bearer ' + apiKey,
+                        },
+                        body: JSON.stringify(createBody),
+                        signal: unifiedVideoRequestSignal(options?.signal, 60_000),
+                    });
+                } catch (submitError) {
+                    if (options?.signal?.aborted) throw submitError;
+                    // 请求已发出却没拿到响应：上游可能已建任务并计费，禁止换地址重提。
+                    taskCommitted = true;
+                    throw new ProviderSubmissionUnknownError('视频任务提交结果未知：请求已发出但未收到响应，供应商可能已创建任务并计费。已禁止自动重试或切换线路，请先到供应商任务记录核对。', submitError);
+                }
 
                 if (!createRes.ok) {
                     const failure = await readErrorResponse(createRes, '统一视频接口提交失败');
@@ -1981,15 +1991,21 @@ async function generateVideoWithUnifiedAsyncApi(
                         lastError = new Error(failure);
                         continue;
                     }
+                    definitive = true;
                     throw new Error(failure);
                 }
                 taskCommitted = true;
                 span.mark('submitted');
 
-                const createJson = await readJsonResponse<any>(createRes, '统一视频接口提交响应');
+                let createJson: unknown;
+                try {
+                    createJson = await readJsonResponse<unknown>(createRes, '统一视频接口提交响应');
+                } catch (parseError) {
+                    throw new ProviderSubmissionUnknownError('视频任务提交结果未知：供应商响应无法解析，可能已创建任务并计费。已禁止自动重试，请先到供应商任务记录核对。', parseError);
+                }
                 taskId = extractTaskId(createJson);
                 if (!taskId) {
-                    throw new Error('统一视频接口未返回 task_id');
+                    throw new ProviderSubmissionUnknownError('视频任务提交结果未知：供应商未返回 task_id，可能已创建任务并计费。已禁止自动重试，请先到供应商任务记录核对。');
                 }
             }
             await options?.onProviderTaskLifecycle?.({
@@ -2037,12 +2053,20 @@ async function generateVideoWithUnifiedAsyncApi(
                     }
 
                     onProgress('Downloading generated video...');
-                    const videoRes = await fetch(outputUrl, { signal: unifiedVideoRequestSignal(options?.signal, 120_000) });
-                    if (!videoRes.ok) {
-                        throw new Error(`视频下载失败: ${videoRes.statusText}`);
+                    let videoBlob: Blob;
+                    let mimeType: string;
+                    try {
+                        const videoRes = await fetch(outputUrl, { signal: unifiedVideoRequestSignal(options?.signal, 120_000) });
+                        if (!videoRes.ok) {
+                            throw new Error(('HTTP ' + videoRes.status + ' ' + videoRes.statusText).trim());
+                        }
+                        videoBlob = await readBodyWithProgress(videoRes, (loaded, total) => onProgress('Downloading generated video...', { phase: 'download', loaded, total }), options?.signal);
+                        mimeType = videoRes.headers.get('Content-Type') || 'video/mp4';
+                    } catch (downloadError) {
+                        if (options?.signal?.aborted) throw downloadError;
+                        const reason = downloadError instanceof Error ? downloadError.message : String(downloadError);
+                        throw new ProviderDownloadError('视频已生成，但下载失败：' + reason + '。可重试下载，不会重新提交。', taskId, outputUrl, downloadError);
                     }
-                    const videoBlob = await readBodyWithProgress(videoRes, (loaded, total) => onProgress('Downloading generated video...', { phase: 'download', loaded, total }), options?.signal);
-                    const mimeType = videoRes.headers.get('Content-Type') || 'video/mp4';
                     span.end();
                     return { videoBlob, mimeType };
                 }
@@ -2051,7 +2075,7 @@ async function generateVideoWithUnifiedAsyncApi(
                 delay = Math.min(delay * 2, 8000);
             }
         } catch (error) {
-            if (options?.signal?.aborted || taskCommitted) {
+            if (options?.signal?.aborted || taskCommitted || definitive) {
                 span.fail(error, options?.signal);
                 throw error;
             }
@@ -3085,6 +3109,28 @@ export class SeedanceSubmissionUnknownError extends Error {
     }
 }
 
+/** 提交请求已发出但结果未知（无响应、响应无法解析或缺 task_id）。禁止自动重试或切换线路。 */
+export class ProviderSubmissionUnknownError extends Error {
+    readonly code = 'PROVIDER_SUBMISSION_UNKNOWN';
+    constructor(message: string, cause?: unknown) {
+        super(message, { cause });
+        this.name = 'ProviderSubmissionUnknownError';
+    }
+}
+
+/** 供应商已生成完成，但下载结果失败。携带任务 ID，重试时只重新查询并下载，不重新提交。 */
+export class ProviderDownloadError extends Error {
+    readonly code = 'PROVIDER_DOWNLOAD_FAILED';
+    readonly providerTaskId: string;
+    readonly outputUrl: string;
+    constructor(message: string, providerTaskId: string, outputUrl: string, cause?: unknown) {
+        super(message, { cause });
+        this.name = 'ProviderDownloadError';
+        this.providerTaskId = providerTaskId;
+        this.outputUrl = outputUrl;
+    }
+}
+
 export async function submitSeedanceVideoTask(
     prompt: string,
     model: string,
@@ -4081,6 +4127,8 @@ export async function executeUnifiedIgnition(input: UnifiedIgnitionInput): Promi
             errorMessage: aborted
                 ? (timedOut ? (reason as Error).message : '生成已停止，可重新发起。')
                 : displayError(message, message),
+            ...(!aborted && (error instanceof ProviderSubmissionUnknownError || error instanceof SeedanceSubmissionUnknownError) ? { submissionUnknown: true } : {}),
+            ...(!aborted && error instanceof ProviderDownloadError ? { downloadPendingTaskId: error.providerTaskId, errorMessage: error.message } : {}),
         };
     }
 }

@@ -6,7 +6,7 @@ import { promptIntentFromNode, type PromptIntent } from '../components/workflow/
 import { createWorkflowVideoPoster, discardWorkflowMediaRecord, fitWorkflowMediaSize, ingestWorkflowMedia, isWorkflowMediaKeyReferenced, releaseWorkflowMediaRecord, workflowDataUrlToBlob, type WorkflowMediaRecord } from '../components/workflow/media';
 import type { GenerationTransfer, WorkflowGenerationMode, WorkflowNode, WorkflowProject } from '../components/workflow/types';
 import type { ProductModelMode, UserApiKey } from '../types';
-import { executeUnifiedIgnition, generateTextWithProvider, SeedanceSubmissionUnknownError, type UnifiedIgnitionInput, type UnifiedIgnitionResult } from './aiGateway';
+import { executeUnifiedIgnition, generateTextWithProvider, ProviderDownloadError, ProviderSubmissionUnknownError, SeedanceSubmissionUnknownError, type UnifiedIgnitionInput, type UnifiedIgnitionResult } from './aiGateway';
 import { getGenerationCapability } from './generationCapabilities';
 import { runPreflight } from './promptPreflight';
 import { getProductModel, getRoutedImageModes, getRoutedVideoModes, sanitizeProductGenerationParams } from './productModelCatalog';
@@ -556,8 +556,9 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
           // 用它判断会把"已完成/已失败"节点误当成在途。仅 run 前就是 'loading' 才说明
           // 供应商任务可能仍在跑；success/error/idle 是终态，其上残留的 generationProviderTaskId
           // 指向已完结的上游任务，恢复它会跳过正常重跑。
+          // loading 中断或仅下载失败时恢复原任务：只查询并下载，绝不重新提交。
           resumeProviderTaskId: runtime.resumeProviderTaskId
-            || (initialNode.metadata.status === 'loading' ? initialNode.metadata.generationProviderTaskId : undefined),
+            || (initialNode.metadata.status === 'loading' || initialNode.metadata.generationDownloadPending ? initialNode.metadata.generationProviderTaskId : undefined),
           onProgress: (progress, message, detail) => {
             if (!stillActive()) return;
             const now = Date.now();
@@ -616,8 +617,11 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
         // 用户停止后供应商可能抛出非 AbortError（如 fetch 中断的 TypeError），以 signal 状态为准。
         const aborted = isAbort(error) || controller.signal.aborted;
         if (usage) await updateApiUsage(usage.id, {
-          status: error instanceof SeedanceSubmissionUnknownError || (aborted && (isSeedance || submittedProviderTaskId)) ? 'submission_unknown' : aborted ? 'canceled' : 'failed',
-          ...(submittedProviderTaskId ? { providerTaskId: submittedProviderTaskId } : {}),
+          // 下载失败时供应商已生成完成：计费与生成状态记为成功，与本地保存分开。
+          status: error instanceof ProviderDownloadError ? 'succeeded'
+            : error instanceof SeedanceSubmissionUnknownError || error instanceof ProviderSubmissionUnknownError || (aborted && (isSeedance || submittedProviderTaskId)) ? 'submission_unknown'
+            : aborted ? 'canceled' : 'failed',
+          ...(error instanceof ProviderDownloadError ? { providerTaskId: error.providerTaskId } : submittedProviderTaskId ? { providerTaskId: submittedProviderTaskId } : {}),
           ...(usageReconciled ? {} : { billableState: 'unknown' as const }),
           error: aborted ? '生成已停止' : error instanceof Error ? error.message : '生成失败',
         });
@@ -631,6 +635,15 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
           throw abortError();
         }
         const errorMessage = 'errorMessage' in result ? result.errorMessage : '生成失败';
+        if ('downloadPendingTaskId' in result && result.downloadPendingTaskId) {
+          // 生成已完成，只是下载失败：用量记成功，节点保留任务 ID 供重新下载。
+          if (usage) await updateApiUsage(usage.id, { status: 'succeeded', providerTaskId: result.downloadPendingTaskId, error: errorMessage });
+          throw new ProviderDownloadError(errorMessage, result.downloadPendingTaskId, '');
+        }
+        if ('submissionUnknown' in result && result.submissionUnknown) {
+          if (usage) await updateApiUsage(usage.id, { status: 'submission_unknown', billableState: 'unknown', ...(submittedProviderTaskId ? { providerTaskId: submittedProviderTaskId } : {}), error: errorMessage });
+          throw new ProviderSubmissionUnknownError(errorMessage);
+        }
         if (usage) await updateApiUsage(usage.id, { status: 'failed', billableState: 'unknown', error: errorMessage });
         throw new Error(errorMessage);
       }
@@ -724,7 +737,7 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
       const latest = canonical(runtime, current);
       current = {
         ...latest,
-        nodes: [...latest.nodes.map(node => node.id === nodeId ? { ...node, metadata: { ...node.metadata, status: 'success' as const, error: undefined, progress: 100, generationRequestId: undefined, generationStartedAt: undefined, generationMessage: undefined } } : node), ...preparedNodes],
+        nodes: [...latest.nodes.map(node => node.id === nodeId ? { ...node, metadata: { ...node.metadata, status: 'success' as const, error: undefined, progress: 100, generationRequestId: undefined, generationStartedAt: undefined, generationMessage: undefined, generationDownloadPending: undefined } } : node), ...preparedNodes],
         connections: [...latest.connections, ...preparedConnections],
       };
     } else {
@@ -767,6 +780,7 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
                 generationRequestId: undefined,
                 generationStartedAt: undefined,
                 generationMessage: undefined,
+                generationDownloadPending: undefined,
               },
             };
           }
@@ -786,6 +800,7 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
               generationRequestId: undefined,
               generationStartedAt: undefined,
               generationMessage: undefined,
+              generationDownloadPending: undefined,
               ...(operationTakeId ? { operationTakeId, sourceOperationNodeId: nodeId } : {}),
             },
           };
@@ -847,7 +862,9 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
     }
     current = patchInitiator(latest, nodeId, aborted
       ? stoppedPatch(latest.nodes.find(node => node.id === nodeId))
-      : { status: 'error', error: displayError(error, '生成失败，请重试。'), progress: undefined, generationTransfer: undefined, generationRequestId: undefined, generationStartedAt: undefined, generationMessage: undefined });
+      : error instanceof ProviderDownloadError
+        ? { status: 'error', error: displayError(error, '视频已生成，但下载失败，可重试下载。'), progress: undefined, generationTransfer: undefined, generationRequestId: undefined, generationStartedAt: undefined, generationMessage: undefined, generationProviderTaskId: error.providerTaskId, generationDownloadPending: true }
+        : { status: 'error', error: displayError(error, '生成失败，请重试。'), progress: undefined, generationTransfer: undefined, generationRequestId: undefined, generationStartedAt: undefined, generationMessage: undefined });
     return publish(runtime, current);
   } finally {
     temporaryUrls.forEach(url => URL.revokeObjectURL(url));

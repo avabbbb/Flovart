@@ -10,7 +10,7 @@ const DEFAULT_MODELS = [
   { id: 'gpt-image-2', name: 'GPT Image 2', categoryName: 'image' },
   { id: 'grok-imagine-video', name: 'Grok Imagine Video', categoryName: 'video' },
 ];
-const VALID_MODES = new Set(['success', 'slow', 'timeout', 'unauthorized', 'rate_limit', 'invalid_request', 'provider_error', 'polling_timeout', 'malformed_response']);
+const VALID_MODES = new Set(['success', 'slow', 'timeout', 'unauthorized', 'rate_limit', 'invalid_request', 'provider_error', 'polling_timeout', 'malformed_response', 'submit_lost', 'submit_no_task_id', 'poll_error', 'download_error']);
 
 const sleep = ms => new Promise(resolveSleep => setTimeout(resolveSleep, ms));
 
@@ -66,6 +66,10 @@ function requestSummary(req, body) {
     referenceRoles: Array.isArray(json?.reference_roles) ? json.reference_roles.map(String).slice(0, 16) : [],
     hasMask: /name="mask"/.test(text) || typeof json?.mask === 'string',
     bodyType: json ? 'json' : req.headers['content-type']?.split(';')[0] || 'unknown',
+    bodyKeys: json && typeof json === 'object' ? Object.keys(json).sort() : [],
+    aspectRatio: typeof json?.aspect_ratio === 'string' ? json.aspect_ratio : undefined,
+    duration: json?.duration ?? json?.duration_sec ?? json?.seconds,
+    resolution: typeof json?.resolution === 'string' ? json.resolution : undefined,
   };
 }
 
@@ -118,6 +122,7 @@ export function createFakeProviderServer(options = {}) {
       }
       if ((path === '/fixtures/video.mp4' || /^\/v1\/videos\/[^/]+\/content$/.test(path)) && req.method === 'GET') {
         requests.push({ method: req.method, path, headers: redactHeaders(req.headers), bodyBytes: 0, bodyType: 'artifact-download' });
+        if (mode === 'download_error') return send(res, 502, { error: { message: 'artifact download failed fixture' } });
         const video = await readFile(VIDEO_FIXTURE);
         res.writeHead(200, { 'Access-Control-Allow-Origin': '*', 'Cross-Origin-Resource-Policy': 'cross-origin', 'Content-Type': 'video/mp4', 'Content-Length': video.length, 'Cache-Control': 'no-store' });
         return res.end(video);
@@ -148,6 +153,10 @@ export function createFakeProviderServer(options = {}) {
       if ((path === '/v1/videos' || path === '/v2/videos/generations') && req.method === 'POST') {
         const id = `fake-video-${++taskCounter}`;
         tasks.set(id, { id, pollCount: 0 });
+        // submit_lost: the provider accepted the task, but the response never reaches the client.
+        if (mode === 'submit_lost') return req.socket.destroy();
+        // submit_no_task_id: accepted (and billable) but the response omits the task id.
+        if (mode === 'submit_no_task_id') return send(res, 200, { status: 'queued' });
         return send(res, 200, { id, task_id: id, status: 'queued' });
       }
       const taskMatch = path.match(/^\/(?:v1\/videos|v2\/videos\/generations)\/([^/]+)$/);
@@ -156,6 +165,7 @@ export function createFakeProviderServer(options = {}) {
         const task = tasks.get(id);
         if (!task) return send(res, 404, { error: { message: 'task not found' } });
        task.pollCount += 1;
+        if (mode === 'poll_error') return send(res, 503, { error: { message: 'task query failed fixture' } });
        if (mode === 'polling_timeout') return send(res, 200, { id, status: 'processing' });
         if (mode === 'slow' && task.pollCount <= 2) return send(res, 200, { id, status: 'processing' });
        return send(res, 200, { id, status: 'succeeded', data: { output: `${url.origin}/v1/videos/${id}/content` }, output: `${url.origin}/v1/videos/${id}/content` });
