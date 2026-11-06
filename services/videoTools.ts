@@ -154,17 +154,20 @@ export interface VideoTranscodeOptions {
   signal?: AbortSignal;
   // 输出长边上限（只缩不放），默认 1920。
   maxEdge?: number;
+  // 仅作画布预览：去音轨、帧率上限 24、CRF 28，换取数倍转码速度。
+  previewOnly?: boolean;
 }
 
 // 入库转码只为让浏览器能解码预览、作参考素材：ultrafast + 长边限 1920（≈1080p），比 veryfast 原分辨率快数倍。
 const H264_MAX_EDGE = 1920;
+const PREVIEW_MAX_FPS = '24';
 
 export async function transcodeVideoToH264(blob: Blob, originalName = 'video.mp4', options: VideoTranscodeOptions = {}): Promise<Blob> {
   options.signal?.throwIfAborted();
   return enqueueFFmpegTask(() => transcodeVideoToH264OnFFmpeg(blob, originalName, options));
 }
 
-async function transcodeVideoToH264OnFFmpeg(blob: Blob, originalName: string, { onDownloadProgress, onProgress, signal, maxEdge = H264_MAX_EDGE }: VideoTranscodeOptions): Promise<Blob> {
+async function transcodeVideoToH264OnFFmpeg(blob: Blob, originalName: string, { onDownloadProgress, onProgress, signal, maxEdge = H264_MAX_EDGE, previewOnly = false }: VideoTranscodeOptions): Promise<Blob> {
   // 排队期间可能已被取消。
   signal?.throwIfAborted();
   const ffmpeg = await getFFmpeg({ onDownloadProgress });
@@ -183,11 +186,12 @@ async function transcodeVideoToH264OnFFmpeg(blob: Blob, originalName: string, { 
     await ffmpeg.writeFile(inputName, await fetchFile(blob));
     const code = await ffmpeg.exec([
       '-i', inputName,
-      '-map', '0:v:0', '-map', '0:a:0?',
-      // 只缩不放：小于 1920 的保持原尺寸；宽高取偶数满足 yuv420p。
+      '-map', '0:v:0', ...(previewOnly ? ['-an'] : ['-map', '0:a:0?']),
+      // 只缩不放：小于 maxEdge 的保持原尺寸；宽高取偶数满足 yuv420p。
       '-vf', "scale='min(iw," + maxEdge + ")':'min(ih," + maxEdge + ")':force_original_aspect_ratio=decrease:force_divisible_by=2",
-      '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23', '-pix_fmt', 'yuv420p',
-      '-c:a', 'aac', '-b:a', '160k',
+      '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', previewOnly ? '28' : '23', '-pix_fmt', 'yuv420p',
+      // 预览只降不升帧率（-fpsmax，低于 24fps 的源保持原样）；完整转码保留音轨。
+      ...(previewOnly ? ['-fpsmax', PREVIEW_MAX_FPS] : ['-c:a', 'aac', '-b:a', '160k']),
       '-movflags', '+faststart',
       outputName,
     ]);

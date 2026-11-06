@@ -22,6 +22,7 @@ import {
   discardWorkflowMediaRecord,
   ensureWorkflowVideoPoster,
   fitWorkflowMediaSize,
+  generateWorkflowVideoPreview,
   ingestWorkflowMedia,
   loadWorkflowMediaBlob,
   pruneWorkflowMedia,
@@ -1715,6 +1716,40 @@ export function InfiniteWorkflow({
     if (next && node && !node.isLocked) await replaceMediaRef.current?.(node, next);
   }, []);
 
+  // 浏览器解不了的视频：原文件已落到节点上可直接使用，预览代理在后台转码，完成后不进撤销栈地写回。
+  // 进度沿用 ingestStages，但节点不处于 uploading，只显示角标不挡操作；取消只停预览，不动节点。
+  const buildVideoPreviewInBackground = useCallback(async (nodeId: string, storageKey: string, file: File) => {
+    const controller = new AbortController();
+    ingestAbortRef.current.set(nodeId, controller);
+    let lastStageKey = '';
+    try {
+      const result = await generateWorkflowVideoPreview(storageKey, file, {
+        signal: controller.signal,
+        onStage: stage => {
+          const key = stage.stage + ('progress' in stage ? Math.round(stage.progress / 0.01) : '');
+          if (key === lastStageKey) return;
+          lastStageKey = key;
+          setIngestStages(current => ({ ...current, [nodeId]: stage }));
+        },
+      });
+      if (mountedRef.current && projectRef.current.nodes.some(item => item.id === nodeId && item.metadata.storageKey === storageKey)) {
+        patchProject({ nodes: projectRef.current.nodes.map(item => item.id === nodeId ? { ...item, metadata: { ...item.metadata, ...result } } : item) });
+      }
+      // 写回后由项目引用接管；节点已删除或已换素材时交给 prune 回收。
+      releaseWorkflowMediaRecord(storageKey);
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') return;
+      if (mountedRef.current && projectRef.current.nodes.some(item => item.id === nodeId && item.metadata.storageKey === storageKey)) {
+        void offerUndecodableVideoFix(nodeId, file.name);
+      }
+    } finally {
+      if (ingestAbortRef.current.get(nodeId) === controller) {
+        ingestAbortRef.current.delete(nodeId);
+        setIngestStages(({ [nodeId]: _done, ...rest }) => rest);
+      }
+    }
+  }, [offerUndecodableVideoFix, patchProject]);
+
   const addMediaAt = useCallback(async (file: File, center: WorkflowPoint, expectedProjectId = projectRef.current.id) => {
     let type: WorkflowMediaRecord['type'];
     try {
@@ -1734,6 +1769,7 @@ export function InfiniteWorkflow({
     };
     if (!applyOps([{ type: 'add_node', node: placeholder }])) return;
     let record: WorkflowMediaRecord | undefined;
+    let backgroundPreview = false;
     try {
       const controller = new AbortController();
       ingestAbortRef.current.set(nodeId, controller);
@@ -1741,6 +1777,7 @@ export function InfiniteWorkflow({
       let lastStageKey = '';
       record = await ingestWorkflowMedia(file, undefined, {
         signal: controller.signal,
+        deferPreview: true,
         onStage: stage => {
           const key = stage.stage + ('progress' in stage ? Math.round(stage.progress / 0.01) : '');
           if (key === lastStageKey) return;
@@ -1753,7 +1790,7 @@ export function InfiniteWorkflow({
         await discardWorkflowMediaRecord(record.storageKey);
         return;
       }
-      const { type: _type, warning, ...metadata } = record;
+      const { type: _type, warning, pendingPreview, ...metadata } = record;
       const size = fitWorkflowMediaSize(type, record.naturalWidth, record.naturalHeight);
       const nodeCenter = { x: currentNode.position.x + currentNode.width / 2, y: currentNode.position.y + currentNode.height / 2 };
       commitFrame(projectRef.current.nodes.map(item => item.id === nodeId ? {
@@ -1763,9 +1800,11 @@ export function InfiniteWorkflow({
         metadata: { ...item.metadata, ...metadata, error: undefined, uploading: false },
       } : item), projectRef.current.connections);
       releaseWorkflowMediaRecord(record.storageKey);
-      // 转码失败已降级为保留原文件：解不了的视频弹窗给出换文件/转换方案，其它降级只提示。
-      if (warning && record.type === 'video' && !record.previewStorageKey) void offerUndecodableVideoFix(nodeId, file.name);
-      else if (warning) setNotice(warning);
+      // 浏览器解不了的视频：节点已可用，预览代理后台生成；其它降级只提示。
+      if (pendingPreview) {
+        backgroundPreview = true;
+        void buildVideoPreviewInBackground(nodeId, record.storageKey, file);
+      } else if (warning) setNotice(warning);
     } catch (error) {
       if (record) await discardWorkflowMediaRecord(record.storageKey);
       if (!mountedRef.current || projectRef.current.id !== expectedProjectId) return;
@@ -1773,10 +1812,13 @@ export function InfiniteWorkflow({
       // 用户主动取消：静默移除占位。
       if (!(error instanceof DOMException && error.name === 'AbortError')) setNotice(displayError(error, '媒体文件导入失败'));
     } finally {
-      ingestAbortRef.current.delete(nodeId);
-      setIngestStages(({ [nodeId]: _done, ...rest }) => rest);
+      // 已转交后台预览时，取消句柄与进度归后台任务所有。
+      if (!backgroundPreview) {
+        ingestAbortRef.current.delete(nodeId);
+        setIngestStages(({ [nodeId]: _done, ...rest }) => rest);
+      }
     }
-  }, [applyOps, commitFrame, offerUndecodableVideoFix]);
+  }, [applyOps, buildVideoPreviewInBackground, commitFrame]);
 
   const addSharedMediaAt = useCallback(async (media: WorkflowSharedMedia, center: WorkflowPoint) => {
     if (/^https?:\/\//i.test(media.href)) {
@@ -2379,6 +2421,8 @@ export function InfiniteWorkflow({
 
   const replaceMedia = useCallback(async (node: WorkflowNodeData, file: File) => {
     if (node.isLocked) return;
+    // 换素材：正在后台生成的旧预览作废。
+    ingestAbortRef.current.get(node.id)?.abort();
     setActiveMedia(current => current?.nodeId === node.id ? null : current);
     const expectedProjectId = projectRef.current.id;
     const sequence = (replaceSequenceRef.current.get(node.id) || 0) + 1;
@@ -2389,7 +2433,7 @@ export function InfiniteWorkflow({
       commitFrame(projectRef.current.nodes.map(item => item.id === node.id
         ? { ...item, metadata: { ...item.metadata, uploading: true, uploadBytes: file.size } }
         : item), projectRef.current.connections);
-      record = await ingestWorkflowMedia(file);
+      record = await ingestWorkflowMedia(file, undefined, { deferPreview: true });
       const currentNode = projectRef.current.nodes.find(item => item.id === node.id);
       if (!mountedRef.current
         || projectRef.current.id !== expectedProjectId
@@ -2398,7 +2442,7 @@ export function InfiniteWorkflow({
         await discardWorkflowMediaRecord(record.storageKey);
         return;
       }
-      const { type: _type, warning, ...metadata } = record;
+      const { type: _type, warning, pendingPreview, ...metadata } = record;
       const size = fitWorkflowMediaSize(currentNode.type as WorkflowMediaRecord['type'], record.naturalWidth, record.naturalHeight);
       const center = { x: currentNode.position.x + currentNode.width / 2, y: currentNode.position.y + currentNode.height / 2 };
       const updated = projectRef.current.nodes.map(item => item.id === node.id ? {
@@ -2409,9 +2453,9 @@ export function InfiniteWorkflow({
       } : item);
       commitFrame(updated, projectRef.current.connections);
       releaseWorkflowMediaRecord(record.storageKey);
-      if (warning && record.type === 'video' && !record.previewStorageKey) {
+      if (pendingPreview) {
         setNotice(null);
-        void offerUndecodableVideoFix(node.id, file.name);
+        void buildVideoPreviewInBackground(node.id, record.storageKey, file);
       } else {
         setNotice(warning ?? null);
       }
@@ -2426,7 +2470,7 @@ export function InfiniteWorkflow({
         setNotice(displayError(error, '媒体文件替换失败'));
       }
     }
-  }, [commitFrame, offerUndecodableVideoFix]);
+  }, [buildVideoPreviewInBackground, commitFrame]);
   useEffect(() => { replaceMediaRef.current = replaceMedia; }, [replaceMedia]);
 
   const addSharedMedia = useCallback(async (media: WorkflowSharedMedia) => {

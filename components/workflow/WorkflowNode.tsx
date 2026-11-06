@@ -624,6 +624,16 @@ export function WorkflowNode({
             {staleHint && <div className="workflow-node__generation-stale" data-workflow-overlay>{staleHint}</div>}
           </motion.div>
         )}
+        {!uploading && uploadStage && (
+          <span
+            data-workflow-overlay
+            className="workflow-node__preview-badge"
+            title={language === 'en' ? 'Preparing canvas preview in the background; the node is ready to use' : '画布预览后台生成中，节点可正常使用'}
+            style={{ position: 'absolute', right: 8, bottom: 8, padding: '2px 8px', borderRadius: 999, fontSize: 11, lineHeight: '18px', background: 'rgba(0,0,0,.55)', color: '#fff', pointerEvents: 'none' }}
+          >
+            {uploadLabel}{uploadPercent ? ' ' + uploadPercent : ''}
+          </span>
+        )}
         {uploading && (
           <motion.div
             className="flv-generation-glass workflow-node__generation-glass"

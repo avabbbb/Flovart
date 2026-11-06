@@ -20,6 +20,8 @@ export interface WorkflowMediaRecord extends WorkflowNodeMetadata {
   name: string;
   /** 入库降级提示（例如转码失败、保留原文件）；调用方展示后不得写进节点 metadata。 */
   warning?: string;
+  /** 浏览器解不了、预览代理待后台生成（deferPreview）；调用方据此调用 generateWorkflowVideoPreview，不得写进节点 metadata。 */
+  pendingPreview?: boolean;
   mimeType: string;
   bytes: number;
 }
@@ -211,31 +213,40 @@ export interface WorkflowMediaIngestOptions {
   onStage?: (stage: WorkflowMediaIngestStage) => void;
   /** 取消入库：终止转码并以 AbortError 拒绝。 */
   signal?: AbortSignal;
+  /** 浏览器解不了的视频不在入库时转码：原文件先入库并返回 pendingPreview，预览代理交给 generateWorkflowVideoPreview 后台生成。 */
+  deferPreview?: boolean;
 }
 
-// 画布预览代理：长边 1280（约 720p），只用于画布内播放；生成参考与下载仍用原文件。
-const VIDEO_PREVIEW_MAX_EDGE = 1280;
+// 画布预览代理：长边 854（约 480p）、去音轨、限 24fps，只用于画布内播放；生成参考与下载仍用原文件。
+// 单线程 ffmpeg.wasm 下 libx264 耗时约与像素数×帧数成正比：比原先 1280 长边快 2 倍以上。
+const VIDEO_PREVIEW_MAX_EDGE = 854;
 
-async function ensureDecodableVideo(file: File, { onStage, signal }: WorkflowMediaIngestOptions): Promise<{ preview?: File; warning?: string }> {
+async function ensureDecodableVideo(file: File, { onStage, signal, deferPreview }: WorkflowMediaIngestOptions): Promise<{ preview?: File; warning?: string; pendingPreview?: boolean }> {
   onStage?.({ stage: 'probe' });
   if (await isBrowserDecodableVideo(file)) return {};
   signal?.throwIfAborted();
-  onStage?.({ stage: 'transcode', progress: 0 });
+  if (deferPreview) return { pendingPreview: true };
   try {
-    const converted = await transcodeVideoToH264(file, file.name, {
-      signal,
-      maxEdge: VIDEO_PREVIEW_MAX_EDGE,
-      onDownloadProgress: progress => onStage?.({ stage: 'download', progress }),
-      onProgress: progress => onStage?.({ stage: 'transcode', progress }),
-    });
-    const name = file.name.replace(/\.[^.]+$/, '') + '-preview.mp4';
-    return { preview: new File([converted], name, { type: 'video/mp4', lastModified: file.lastModified }) };
+    return { preview: await transcodeWorkflowVideoPreview(file, { onStage, signal }) };
   } catch (error) {
     signal?.throwIfAborted();
     // 预览代理失败不丢素材：原文件照常入库（可下载、作参考上传），仅画布内可能无法预览。
     const reason = error instanceof Error ? error.message : String(error);
     return { warning: '浏览器无法解码该视频，生成画布预览失败，已保留原文件（画布内可能无法预览）：' + reason };
   }
+}
+
+async function transcodeWorkflowVideoPreview(file: File, { onStage, signal }: WorkflowMediaIngestOptions): Promise<File> {
+  onStage?.({ stage: 'transcode', progress: 0 });
+  const converted = await transcodeVideoToH264(file, file.name, {
+    signal,
+    maxEdge: VIDEO_PREVIEW_MAX_EDGE,
+    previewOnly: true,
+    onDownloadProgress: progress => onStage?.({ stage: 'download', progress }),
+    onProgress: progress => onStage?.({ stage: 'transcode', progress }),
+  });
+  const name = file.name.replace(/\.[^.]+$/, '') + '-preview.mp4';
+  return new File([converted], name, { type: 'video/mp4', lastModified: file.lastModified });
 }
 
 // 不支持的编码可能既不触发 loadeddata 也不触发 error：封面/元数据读取必须有上限，不能让入库永远挂起。
@@ -369,12 +380,14 @@ export async function ingestWorkflowMedia(
   const type = workflowMediaType(file);
   const declaredMimeType = workflowMediaMimeType(file);
   const declaredFile = declaredMimeType === file.type ? file : new File([file], file.name, { type: declaredMimeType, lastModified: file.lastModified });
-  const { preview, warning }: { preview?: File; warning?: string } = type === 'video' ? await ensureDecodableVideo(declaredFile, options) : {};
+  const { preview, warning, pendingPreview }: { preview?: File; warning?: string; pendingPreview?: boolean } = type === 'video' ? await ensureDecodableVideo(declaredFile, options) : {};
   options.signal?.throwIfAborted();
   options.onStage?.({ stage: 'store' });
-  // 浏览器解不了的原文件可能连元数据都读不出：宽高缺省时取预览代理的（比例一致），不阻断入库。
-  const inspected = preview || warning ? await inspectWorkflowMediaLenient(declaredFile) : await inspectWorkflowMedia(declaredFile);
-  const dimensions = preview && !inspected.naturalWidth ? { ...inspected, ...(await inspectWorkflowMediaLenient(preview)) } : inspected;
+  // 浏览器解不了的原文件可能连元数据都读不出：与预览代理并行读取，原文件缺宽高时取代理的（比例一致），不串行白等超时。
+  const [inspected, previewInspected] = preview
+    ? await Promise.all([inspectWorkflowMediaLenient(declaredFile), inspectWorkflowMediaLenient(preview)])
+    : [warning || pendingPreview ? await inspectWorkflowMediaLenient(declaredFile) : await inspectWorkflowMedia(declaredFile), undefined];
+  const dimensions = previewInspected && !inspected.naturalWidth ? { ...inspected, ...previewInspected } : inspected;
   const storageKey = 'workflow-media-' + nanoid();
   const reservedPosterStorageKey = type === 'video' ? workflowPosterStorageKey(storageKey) : undefined;
   const previewStorageKey = preview ? workflowPreviewStorageKey(storageKey) : undefined;
@@ -384,8 +397,8 @@ export async function ingestWorkflowMedia(
   try {
     await workflowMediaStorage.set(storageKey, declaredFile);
     if (previewStorageKey && preview) await workflowMediaStorage.set(previewStorageKey, preview);
-    // 封面从可解码的那份取：有代理用代理。
-    const posterStorageKey = type === 'video'
+    // 封面从可解码的那份取：有代理用代理；预览待后台生成时原文件取不出首帧，跳过以免白等封面超时。
+    const posterStorageKey = type === 'video' && !pendingPreview
       ? await persistWorkflowVideoPoster(storageKey, preview || declaredFile, createPoster)
       : undefined;
     if (reservedPosterStorageKey && !posterStorageKey) pendingReferences.delete(reservedPosterStorageKey);
@@ -401,9 +414,42 @@ export async function ingestWorkflowMedia(
       ...dimensions,
       status: 'success',
       ...(warning ? { warning } : {}),
+      ...(pendingPreview ? { pendingPreview } : {}),
     };
   } catch (error) {
     await discardWorkflowMediaRecord(storageKey);
+    throw error;
+  }
+}
+
+/**
+ * 后台为浏览器解不了的视频生成画布预览代理与封面，写入 storageKey 对应的预览/封面键。
+ * 返回的键登记为 pending 引用：调用方写回节点 metadata 后调用 releaseWorkflowMediaRecord；
+ * 节点已删除或已换素材时直接 release，由 prune 回收。失败或取消时抛错，原文件不受影响。
+ */
+export async function generateWorkflowVideoPreview(
+  storageKey: string,
+  file: File,
+  options: WorkflowMediaIngestOptions = {},
+  createPoster: (blob: Blob) => Promise<Blob | null> = createWorkflowVideoPoster,
+): Promise<{ previewStorageKey: string; posterStorageKey?: string }> {
+  const preview = await transcodeWorkflowVideoPreview(file, options);
+  options.signal?.throwIfAborted();
+  const previewStorageKey = workflowPreviewStorageKey(storageKey);
+  const reservedPosterStorageKey = workflowPosterStorageKey(storageKey);
+  pendingReferences.add(previewStorageKey);
+  pendingReferences.add(reservedPosterStorageKey);
+  try {
+    await workflowMediaStorage.set(previewStorageKey, preview);
+    const posterStorageKey = await persistWorkflowVideoPoster(storageKey, preview, createPoster);
+    if (!posterStorageKey) pendingReferences.delete(reservedPosterStorageKey);
+    return { previewStorageKey, ...(posterStorageKey ? { posterStorageKey } : {}) };
+  } catch (error) {
+    // 只丢预览与封面，原文件归节点所有。
+    await Promise.all([previewStorageKey, reservedPosterStorageKey].map(key => {
+      pendingReferences.delete(key);
+      return workflowMediaStorage.remove(key).catch(() => undefined);
+    }));
     throw error;
   }
 }
